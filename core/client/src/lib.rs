@@ -114,7 +114,7 @@ pub use crate::call_executor::{CallExecutor, LocalCallExecutor};
 pub use crate::client::{
 	new_with_backend,
 	new_in_mem,
-	BlockBody, BlockStatus, ImportNotifications, FinalityNotifications, BlockchainEvents,
+	BlockBody, ImportNotifications, FinalityNotifications, BlockchainEvents,
 	BlockImportNotification, Client, ClientInfo, ExecutionStrategies, FinalityNotification,
 	LongestChain, BlockOf, ProvideUncles, ForkBlocks,
 	utils, apply_aux,

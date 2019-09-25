@@ -257,14 +257,14 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 		};
 
 		// make sure to use different prefix for head and elements.
-		let final_head_key = if let Some(instance) = instance {
+		let head_key = if let Some(instance) = instance {
 			let const_name = Ident::new(
 				&format!("{}{}", HEAD_KEY_FOR, name.to_string()), proc_macro2::Span::call_site()
 			);
 			quote!{ #instance::#const_name.as_bytes() }
 		} else {
-			let final_head_key = format!("head of {}", prefix);
-			quote!{ #final_head_key.as_bytes() }
+			let head_key = format!("head of {}", prefix);
+			quote!{ #head_key.as_bytes() }
 		};
 
 		let DeclStorageTypeInfos { typ, value_type, is_option, .. } = type_infos;
@@ -308,8 +308,8 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 					#final_prefix
 				}
 
-				fn final_head_key() -> &'static [u8] {
-					#final_head_key
+				fn head_key() -> &'static [u8] {
+					#head_key
 				}
 
 				fn from_optional_value_to_query(v: Option<#typ>) -> Self::Query {

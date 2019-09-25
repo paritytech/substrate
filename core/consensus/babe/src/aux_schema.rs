@@ -22,10 +22,15 @@ use codec::{Decode, Encode};
 use client::backend::AuxStore;
 use client::error::{Result as ClientResult, Error as ClientError};
 use sr_primitives::traits::Block as BlockT;
+use babe_primitives::BabeBlockWeight;
 
-use super::{EpochChanges, SharedEpochChanges};
+use super::{epoch_changes::EpochChangesFor, SharedEpochChanges};
 
 const BABE_EPOCH_CHANGES: &[u8] = b"babe_epoch_changes";
+
+fn block_weight_key<H: Encode>(block_hash: H) -> Vec<u8> {
+	(b"block_weight", block_hash).encode()
+}
 
 fn load_decode<B, T>(backend: &B, key: &[u8]) -> ClientResult<Option<T>>
 	where
@@ -45,7 +50,7 @@ fn load_decode<B, T>(backend: &B, key: &[u8]) -> ClientResult<Option<T>>
 pub(crate) fn load_epoch_changes<Block: BlockT, B: AuxStore>(
 	backend: &B,
 ) -> ClientResult<SharedEpochChanges<Block>> {
-	let epoch_changes = load_decode::<_, EpochChanges<Block>>(backend, BABE_EPOCH_CHANGES)?
+	let epoch_changes = load_decode::<_, EpochChangesFor<Block>>(backend, BABE_EPOCH_CHANGES)?
 		.map(Into::into)
 		.unwrap_or_else(|| {
 			info!(target: "babe",
@@ -59,7 +64,7 @@ pub(crate) fn load_epoch_changes<Block: BlockT, B: AuxStore>(
 
 /// Update the epoch changes on disk after a change.
 pub(crate) fn write_epoch_changes<Block: BlockT, F, R>(
-	epoch_changes: &EpochChanges<Block>,
+	epoch_changes: &EpochChangesFor<Block>,
 	write_aux: F,
 ) -> R where
 	F: FnOnce(&[(&'static [u8], &[u8])]) -> R,
@@ -68,4 +73,29 @@ pub(crate) fn write_epoch_changes<Block: BlockT, F, R>(
 	write_aux(
 		&[(BABE_EPOCH_CHANGES, encoded_epoch_changes.as_slice())],
 	)
+}
+
+/// Write the cumulative chain-weight of a block ot aux storage.
+pub(crate) fn write_block_weight<H: Encode, F, R>(
+	block_hash: H,
+	block_weight: &BabeBlockWeight,
+	write_aux: F,
+) -> R where
+	F: FnOnce(&[(Vec<u8>, &[u8])]) -> R,
+{
+
+	let key = block_weight_key(block_hash);
+	block_weight.using_encoded(|s|
+		write_aux(
+			&[(key, s)],
+		)
+	)
+}
+
+/// Load the cumulative chain-weight associated with a block.
+pub(crate) fn load_block_weight<H: Encode, B: AuxStore>(
+	backend: &B,
+	block_hash: H,
+) -> ClientResult<Option<BabeBlockWeight>> {
+	load_decode(backend, block_weight_key(block_hash).as_slice())
 }

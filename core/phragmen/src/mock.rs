@@ -18,10 +18,12 @@
 
 #![cfg(test)]
 
-use crate::{elect, ACCURACY, PhragmenResult};
-use sr_primitives::traits::{Convert, Member, SaturatedConversion};
+use crate::{elect, PhragmenResult, PhragmenAssignment};
+use sr_primitives::{
+	assert_eq_error_rate, Perbill,
+	traits::{Convert, Member, SaturatedConversion}
+};
 use rstd::collections::btree_map::BTreeMap;
-use support::assert_eq_error_rate;
 
 pub(crate) struct TestCurrencyToVote;
 impl Convert<Balance, u64> for TestCurrencyToVote {
@@ -343,6 +345,14 @@ pub(crate) fn create_stake_of(stakes: &[(AccountId, Balance)])
 	Box::new(stake_of)
 }
 
+
+pub fn check_assignments(assignments: Vec<(AccountId, Vec<PhragmenAssignment<AccountId>>)>) {
+	for (_, a) in assignments {
+		let sum: u32 = a.iter().map(|(_, p)| p.deconstruct()).sum();
+		assert_eq_error_rate!(sum, Perbill::accuracy(), 5);
+	}
+}
+
 pub(crate) fn run_and_compare(
 	candidates: Vec<AccountId>,
 	voters: Vec<(AccountId, Vec<AccountId>)>,
@@ -375,9 +385,13 @@ pub(crate) fn run_and_compare(
 
 	for (nominator, assigned) in assignments.clone() {
 		if let Some(float_assignments) = truth_value.assignments.iter().find(|x| x.0 == nominator) {
-			for (candidate, ratio) in assigned {
+			for (candidate, per_thingy) in assigned {
 				if let Some(float_assignment) = float_assignments.1.iter().find(|x| x.0 == candidate ) {
-					assert_eq_error_rate!((float_assignment.1 * ACCURACY as f64).round() as u128, ratio, 1);
+					assert_eq_error_rate!(
+						Perbill::from_fraction(float_assignment.1).deconstruct(),
+						per_thingy.deconstruct(),
+						1,
+					);
 				} else {
 					panic!("candidate mismatch. This should never happen.")
 				}
@@ -386,6 +400,8 @@ pub(crate) fn run_and_compare(
 			panic!("nominator mismatch. This should never happen.")
 		}
 	}
+
+	check_assignments(assignments);
 }
 
 pub(crate) fn build_support_map<FS>(
@@ -414,6 +430,5 @@ pub(crate) fn build_support_map<FS>(
 			*r = other_stake;
 		}
 	}
-
 	supports
 }

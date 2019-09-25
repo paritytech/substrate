@@ -30,7 +30,7 @@
 
 use app_crypto::RuntimeAppPublic;
 use rstd::prelude::*;
-use support::{decl_module, decl_storage, StorageValue};
+use support::{decl_module, decl_storage};
 
 pub trait Trait: system::Trait + session::Trait + im_online::Trait {}
 

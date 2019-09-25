@@ -20,7 +20,6 @@ use std::iter;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::net::Ipv4Addr;
 use std::time::Duration;
-use std::collections::HashMap;
 use log::info;
 use futures::{Future, Stream, Poll};
 use tempdir::TempDir;
@@ -36,7 +35,6 @@ use service::{
 use network::{multiaddr, Multiaddr};
 use network::config::{NetworkConfiguration, TransportConfig, NodeKeyConfig, Secret, NonReservedPeerMode};
 use sr_primitives::{generic::BlockId, traits::Block as BlockT};
-use consensus::{BlockImportParams, BlockImport};
 
 /// Maximum duration of single wait call.
 const MAX_WAIT_TIME: Duration = Duration::from_secs(60 * 3);
@@ -280,7 +278,13 @@ impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 	}
 }
 
-pub fn connectivity<G, E, Fb, F, Lb, L>(spec: ChainSpec<G, E>, full_builder: Fb, light_builder: Lb) where
+pub fn connectivity<G, E, Fb, F, Lb, L>(
+	spec: ChainSpec<G>,
+	full_builder: Fb,
+	light_builder: Lb,
+	light_node_interconnectivity: bool, // should normally be false, unless the light nodes
+	// aren't actually light.
+) where
 	E: Clone,
 	Fb: Fn(Configuration<(), G, E>) -> Result<F, Error>,
 	F: AbstractService,
@@ -289,6 +293,14 @@ pub fn connectivity<G, E, Fb, F, Lb, L>(spec: ChainSpec<G, E>, full_builder: Fb,
 {
 	const NUM_FULL_NODES: usize = 5;
 	const NUM_LIGHT_NODES: usize = 5;
+
+	let expected_full_connections = NUM_FULL_NODES - 1 + NUM_LIGHT_NODES;
+	let expected_light_connections = if light_node_interconnectivity {
+		expected_full_connections
+	} else {
+		NUM_FULL_NODES
+	};
+
 	{
 		let temp = TempDir::new("substrate-connectivity-test").expect("Error creating test dir");
 		let runtime = {
@@ -312,11 +324,14 @@ pub fn connectivity<G, E, Fb, F, Lb, L>(spec: ChainSpec<G, E>, full_builder: Fb,
 				service.get().network().add_reserved_peer(first_address.to_string())
 					.expect("Error adding reserved peer");
 			}
+
 			network.run_until_all_full(
-				|_index, service| service.get().network().num_connected() == NUM_FULL_NODES - 1
-					+ NUM_LIGHT_NODES,
-				|_index, service| service.get().network().num_connected() == NUM_FULL_NODES,
+				move |_index, service| service.get().network().num_connected()
+					== expected_full_connections,
+				move |_index, service| service.get().network().num_connected()
+					== expected_light_connections,
 			);
+
 			network.runtime
 		};
 
@@ -355,10 +370,12 @@ pub fn connectivity<G, E, Fb, F, Lb, L>(spec: ChainSpec<G, E>, full_builder: Fb,
 					address = node_id.clone();
 				}
 			}
+
 			network.run_until_all_full(
-				|_index, service| service.get().network().num_connected() == NUM_FULL_NODES - 1
-					+ NUM_LIGHT_NODES,
-				|_index, service| service.get().network().num_connected() == NUM_FULL_NODES,
+				move |_index, service| service.get().network().num_connected()
+					== expected_full_connections,
+				move |_index, service| service.get().network().num_connected()
+					== expected_light_connections,
 			);
 		}
 		temp.close().expect("Error removing temp dir");
@@ -369,14 +386,14 @@ pub fn sync<G, E, Fb, F, Lb, L, B, ExF, U>(
 	spec: ChainSpec<G, E>,
 	full_builder: Fb,
 	light_builder: Lb,
-	mut block_factory: B,
-	mut extrinsic_factory: ExF,
+	mut make_block_and_import: B,
+	mut extrinsic_factory: ExF
 ) where
 	Fb: Fn(Configuration<(), G, E>) -> Result<(F, U), Error>,
 	F: AbstractService,
 	Lb: Fn(Configuration<(), G, E>) -> Result<L, Error>,
 	L: AbstractService,
-	B: FnMut(&F, &U) -> BlockImportParams<F::Block>,
+	B: FnMut(&F, &mut U),
 	ExF: FnMut(&F, &U) -> <F::Block as BlockT>::Extrinsic,
 	U: Clone + Send + 'static,
 	E: Clone,
@@ -398,15 +415,13 @@ pub fn sync<G, E, Fb, F, Lb, L, B, ExF, U>(
 	);
 	info!("Checking block sync");
 	let first_address = {
-		let first_service = &network.full_nodes[0].1;
-		let first_user_data = &network.full_nodes[0].2;
-		let mut client = first_service.get().client();
+		let &mut (_, ref first_service, ref mut first_user_data, _) = &mut network.full_nodes[0];
 		for i in 0 .. NUM_BLOCKS {
 			if i % 128 == 0 {
-				info!("Generating #{}", i);
+				info!("Generating #{}", i + 1);
 			}
-			let import_data = block_factory(&first_service.get(), first_user_data);
-			client.import_block(import_data, HashMap::new()).expect("Error importing test block");
+
+			make_block_and_import(&first_service.get(), first_user_data);
 		}
 		network.full_nodes[0].3.clone()
 	};
