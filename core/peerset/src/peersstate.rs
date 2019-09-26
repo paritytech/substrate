@@ -548,7 +548,7 @@ mod tests {
 
 	#[test]
 	fn full_slots_in() {
-		let mut peers_state = PeersState::new(1, 1);
+		let mut peers_state = PeersState::new(1, 1, false);
 		let id1 = PeerId::random();
 		let id2 = PeerId::random();
 
@@ -563,7 +563,7 @@ mod tests {
 
 	#[test]
 	fn priority_node_doesnt_use_slot() {
-		let mut peers_state = PeersState::new(1, 1);
+		let mut peers_state = PeersState::new(1, 1, false);
 		let id1 = PeerId::random();
 		let id2 = PeerId::random();
 
@@ -579,7 +579,7 @@ mod tests {
 
 	#[test]
 	fn disconnecting_frees_slot() {
-		let mut peers_state = PeersState::new(1, 1);
+		let mut peers_state = PeersState::new(1, 1, false);
 		let id1 = PeerId::random();
 		let id2 = PeerId::random();
 
@@ -591,7 +591,7 @@ mod tests {
 
 	#[test]
 	fn priority_not_connected_peer() {
-		let mut peers_state = PeersState::new(25, 25);
+		let mut peers_state = PeersState::new(25, 25, false);
 		let id1 = PeerId::random();
 		let id2 = PeerId::random();
 
@@ -610,7 +610,7 @@ mod tests {
 
 	#[test]
 	fn highest_not_connected_peer() {
-		let mut peers_state = PeersState::new(25, 25);
+		let mut peers_state = PeersState::new(25, 25, false);
 		let id1 = PeerId::random();
 		let id2 = PeerId::random();
 
@@ -631,7 +631,7 @@ mod tests {
 
 	#[test]
 	fn disconnect_priority_doesnt_panic() {
-		let mut peers_state = PeersState::new(1, 1);
+		let mut peers_state = PeersState::new(1, 1, false);
 		let id = PeerId::random();
 		peers_state.set_priority_group("test", vec![id.clone()].into_iter().collect());
 		let peer = peers_state.peer(&id).into_not_connected().unwrap().try_outgoing().unwrap();
@@ -640,7 +640,7 @@ mod tests {
 
 	#[test]
 	fn multiple_priority_groups_slot_count() {
-		let mut peers_state = PeersState::new(1, 1);
+		let mut peers_state = PeersState::new(1, 1, false);
 		let id = PeerId::random();
 
 		if let Peer::Unknown(p) = peers_state.peer(&id) {
