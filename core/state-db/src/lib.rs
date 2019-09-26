@@ -77,7 +77,7 @@ pub trait NodeDb {
 /// build on load, with a persistence for this
 /// data it would be more direct to use a
 /// tuple of block number and branchindex.
-pub trait OffstateDb<State: Hash> {
+pub trait OffstateDb<State> {
 	type Error: fmt::Debug;
 
 	/// Get state trie node.
@@ -235,6 +235,7 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		mut changeset: ChangeSet<Key>,
 		mut offstate_changeset: ChangeSet<OffstateKey>,
 	) -> Result<CommitSet<Key>, Error<E>> {
+
 		match self.mode {
 			PruningMode::ArchiveAll => {
 				changeset.deleted.clear();
@@ -369,21 +370,21 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		db.get(key.as_ref()).map_err(|e| Error::Db(e))
 	}
 
-	pub fn get_offstate<D: OffstateDb<BlockHash>>(
+	pub fn get_offstate<D: OffstateDb<Option<u64>>>(
 		&self,
 		key: &[u8],
-		state: &BlockHash,
+		state: &(BranchRanges, u64),
 		db: &D,
 	) -> Result<Option<DBValue>, Error<D::Error>>	{
-		if let Some(value) = self.non_canonical.get_offstate(key, state) {
+		if let Some(value) = self.non_canonical.get_offstate(key, &state.0) {
 			return Ok(Some(value));
 		}
-		db.get_offstate(key, state).map_err(|e| Error::Db(e))
+		db.get_offstate(key, &Some(state.1)).map_err(|e| Error::Db(e))
 	}
 
-	pub fn get_offstate_pairs<D: OffstateDb<BlockHash>>(
+	pub fn get_offstate_pairs<D: OffstateDb<Option<u64>>>(
 		&self,
-		state: &BlockHash,
+		state: &(BranchRanges, u64),
 		db: &D,
 	) -> Vec<(OffstateKey, DBValue)> {
 		// TODO get non_canonical optional values and then filter
@@ -464,19 +465,19 @@ impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
 	}
 
 	/// Get a value from non-canonical/pruning overlay or the backing DB.
-	pub fn get_offstate<D: OffstateDb<BlockHash>>(
+	pub fn get_offstate<D: OffstateDb<Option<u64>>>(
 		&self,
 		key: &[u8],
-		state: &BlockHash,
+		state: &(BranchRanges, u64),
 		db: &D,
 	) -> Result<Option<DBValue>, Error<D::Error>> {
 		self.db.read().get_offstate(key, state, db)
 	}
 
 	/// Get pairs values offstate.
-	pub fn get_offstate_pairs<D: OffstateDb<BlockHash>>(
+	pub fn get_offstate_pairs<D: OffstateDb<Option<u64>>>(
 		&self,
-		state: &BlockHash,
+		state: &(BranchRanges, u64),
 		db: &D,
 	) -> Vec<(OffstateKey, DBValue)> {
 		self.db.read().get_offstate_pairs(state, db)

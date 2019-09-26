@@ -35,14 +35,14 @@ impl MetaDb for TestDb {
 	}
 }
 
-impl OffstateDb<H256> for TestDb {
+impl OffstateDb<Option<u64>> for TestDb {
 	type Error = ();
 
-	fn get_offstate(&self, key: &[u8], state: &H256) -> Result<Option<DBValue>, ()> {
+	fn get_offstate(&self, key: &[u8], state: &Option<u64>) -> Result<Option<DBValue>, ()> {
 		Ok(self.offstate.get(key).cloned())
 	}
 
-	fn get_offstate_pairs(&self, state: &H256) -> Vec<(OffstateKey, DBValue)> {
+	fn get_offstate_pairs(&self, state: &Option<u64>) -> Vec<(OffstateKey, DBValue)> {
 		self.offstate.iter().map(|(a, b)| (a.clone(), b.clone())).collect()
 	}
 }

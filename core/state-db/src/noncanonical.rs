@@ -91,6 +91,7 @@ impl OffstatePendingGC {
 			}
 		}
 	}
+
 	fn pin(&mut self, branch_index: u64, set: &RangeSet) -> BranchRanges {
 		let range = set.branch_ranges_from_cache(branch_index);
 		if let Some(pending) = self.pending_canonicalisation_query {
@@ -100,6 +101,7 @@ impl OffstatePendingGC {
 		}
 		range
 	}
+
 	fn max_pinned_index<K, V>(
 		&self,
 		pinned: &HashMap<K, (V, u64)>,
@@ -550,13 +552,13 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 	}
 
 	fn apply_canonicalizations(&mut self) {
-		let count = self.pending_canonicalizations.len() as u64;
-		let last_block_number = self.last_canonicalized.as_ref().map(|(_, n)| n + count).unwrap_or(count - 1);
 		let last = self.pending_canonicalizations.last().cloned();
+		let count = self.pending_canonicalizations.len() as u64;
 		if let Some(branch_index_cannonicalize) = last.as_ref().and_then(|last| self.parents.get(last))
 			.map(|(_, index)| *index) {
 			// set branch state synchronously
-			self.branches.finalize_full(branch_index_cannonicalize, Some(last_block_number));
+			let block_number = self.last_canonicalized.as_ref().map(|(_, n)| n + count).unwrap_or(count - 1);
+			self.branches.finalize_full(branch_index_cannonicalize, Some(block_number));
 			self.offstate_gc.set_pending_gc(branch_index_cannonicalize);
 			// try to run the garbage collection (can run later if there is
 			// pinned process).
@@ -596,7 +598,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 			}
 		}
 		if let Some(hash) = last {
-			let last_canonicalized = (hash, last_block_number);
+			let last_canonicalized = (hash, self.last_canonicalized.as_ref().map(|(_, n)| n + count).unwrap_or(count - 1));
 			self.last_canonicalized = Some(last_canonicalized);
 		}
 	}
@@ -623,11 +625,12 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 	/// TODO also need branch ix as parameter... (need context)
 	/// or maybe a Number is enough (considering the way levels
 	/// seems to work).
-	pub fn get_offstate(&self, key: &[u8], state: &BlockHash) -> Option<DBValue> {
-		if let Some((_, value)) = self.offstate_values.get(key) {
+	pub fn get_offstate(&self, key: &[u8], state: &BranchRanges) -> Option<DBValue> {
+		unimplemented!("TODO");
+/*		if let Some((_, value)) = self.offstate_values.get(key) {
 			return Some(value.clone());
 		}
-		None
+		None*/
 	}
 
 	/// Check if the block is in the canonicalization queue. 
@@ -712,13 +715,15 @@ mod tests {
 	use super::{NonCanonicalOverlay, to_journal_key};
 	use crate::{ChangeSet, CommitSet, OffstateKey};
 	use crate::test::{make_db, make_changeset, make_offstate_changeset};
+	use crate::branch::BranchRanges;
 
 	fn contains(overlay: &NonCanonicalOverlay<H256, H256>, key: u64) -> bool {
 		overlay.get(&H256::from_low_u64_be(key)) == Some(H256::from_low_u64_be(key).as_bytes().to_vec())
 	}
 
 	fn contains_offstate(overlay: &NonCanonicalOverlay<H256, H256>, key: u64, state: &H256) -> bool {
-		overlay.get_offstate(&H256::from_low_u64_be(key).as_bytes().to_vec(), state)
+		overlay.get_branch_range(state).and_then(|state|
+			overlay.get_offstate(&H256::from_low_u64_be(key).as_bytes().to_vec(), &state))
 			== Some(H256::from_low_u64_be(key).as_bytes().to_vec())
 	}
 

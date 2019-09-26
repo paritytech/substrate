@@ -67,6 +67,7 @@ use crate::utils::{Meta, db_err, meta_keys, read_db, block_id_to_lookup_key, rea
 use client::leaves::{LeafSet, FinalizationDisplaced};
 use client::children;
 use state_db::StateDb;
+use state_db::BranchRanges;
 use crate::storage_cache::{CachingState, SharedCache, new_shared_cache};
 use log::{trace, debug, warn};
 pub use state_db::PruningMode;
@@ -86,7 +87,7 @@ const DEFAULT_CHILD_RATIO: (usize, usize) = (1, 10);
 pub type DbState = state_machine::TrieBackend<
 	Arc<dyn state_machine::Storage<Blake2Hasher>>,
 	Blake2Hasher,
-	Arc<dyn state_machine::OffstateStorage<H256>>,
+	Arc<dyn state_machine::OffstateStorage<(BranchRanges, u64)>>,
 >;
 
 /// A reference tracking state.
@@ -604,28 +605,27 @@ impl<Block: BlockT> state_db::NodeDb for StorageDb<Block> {
 	}
 }
 
-// TODO EMCH try with Block::Hash but no real hope
-impl<Block: BlockT> state_db::OffstateDb<Block::Hash> for StorageDb<Block> {
+impl<Block: BlockT> state_db::OffstateDb<Option<u64>> for StorageDb<Block> {
 
 	type Error = io::Error;
 
-	fn get_offstate(&self, key: &[u8], state: &Block::Hash) -> Result<Option<Vec<u8>>, Self::Error> {
+	fn get_offstate(&self, key: &[u8], state: &Option<u64>) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.db.get(columns::OFFSTATE, key);
 		unimplemented!("TODO map with history fetch at requested block")
 	}
 
-	fn get_offstate_pairs(&self, state: &Block::Hash) -> Vec<(Vec<u8>, Vec<u8>)> {
+	fn get_offstate_pairs(&self, state: &Option<u64>) -> Vec<(Vec<u8>, Vec<u8>)> {
 		unimplemented!("TODO need to be an iterator")
 	}
 }
 
-impl<Block: BlockT> state_machine::OffstateStorage<Block::Hash> for StorageDbAt<Block, Block::Hash> {
+impl<Block: BlockT> state_machine::OffstateStorage<(BranchRanges, u64)> for StorageDbAt<Block, (BranchRanges, u64)> {
 
-	fn state(&self) -> &Block::Hash {
+	fn state(&self) -> &(BranchRanges, u64) {
 		&self.state
 	}
 
-	fn change_state(&mut self, state: Block::Hash) -> Block::Hash {
+	fn change_state(&mut self, state: (BranchRanges, u64)) -> (BranchRanges, u64) {
 		std::mem::replace(&mut self.state, state)
 	}
 
@@ -1570,7 +1570,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 				// TODO EMCH see genesis impl: that is empty storage
 				let genesis_offstate = TODO2At {
 					storage_db: TODO2,
-					state: h,
+					state: Default::default(),
 				};
 				let db_state = DbState::new(Arc::new(genesis_storage), root, Arc::new(genesis_offstate));
 				let state = RefTrackingState::new(db_state, self.storage.clone(), None);
@@ -1582,13 +1582,12 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 		match self.blockchain.header(block) {
 			Ok(Some(ref hdr)) => {
 				let hash = hdr.hash();
-				if let Ok(Some(range)) = self.storage.state_db.pin(&hash) {
+				if let Ok(range) = self.storage.state_db.pin(&hash) {
 					let root = H256::from_slice(hdr.state_root().as_ref());
-					//let block_number = hdr.number().clone();
-					//let db_state = DbState::new(self.storage.clone(), root, Arc::new(TODO::new(block_number)));
+					let block_number = hdr.number().clone().saturated_into::<u64>();
 					let offstate = StorageDbAt {
 						storage_db: self.storage.clone(),
-						state: hash.clone(),
+						state: (range.unwrap_or_else(Default::default), block_number),
 					};
 					let db_state = DbState::new(self.storage.clone(), root, Arc::new(offstate));
 					let state = RefTrackingState::new(db_state, self.storage.clone(), Some(hash.clone()));
