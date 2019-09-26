@@ -21,11 +21,11 @@
 //! `revert_pending`
 
 use std::fmt;
-use std::collections::{HashMap, VecDeque, hash_map::Entry};
+use std::collections::{HashMap, VecDeque, hash_map::Entry, HashSet};
 use super::{Error, DBValue, ChangeSet, CommitSet, MetaDb, Hash, to_meta_key, OffstateKey};
 use codec::{Encode, Decode};
 use log::trace;
-use crate::branch::RangeSet;
+use crate::branch::{RangeSet, BranchRanges};
 
 const NON_CANONICAL_JOURNAL: &[u8] = b"noncanonical_journal";
 const NON_CANONICAL_OFFSTATE_JOURNAL: &[u8] = b"offstate_noncanonical_journal";
@@ -49,9 +49,86 @@ pub struct NonCanonicalOverlay<BlockHash: Hash, Key: Hash> {
 	// TODO EMCH sense if pinning offstate? done while using state_at
 	// -> that is import processing (so we can revert) -> should be good
 	// to use on offstate too
-	pinned: HashMap<BlockHash, (HashMap<Key, DBValue>, HashMap<OffstateKey, DBValue>)>,
+	//
+	/// second value is offstate pinned index: used in order to determine if the pinned 
+	/// thread should block garbage collection.
+	pinned: HashMap<BlockHash, (HashMap<Key, DBValue>, u64)>,
+	offstate_gc: OffstatePendingGC,
 }
 
+#[derive(Default)]
+/// offstate gc only happen when all pinned threads that where
+/// running at the time of cannonicalisation are finished.
+struct OffstatePendingGC {
+	/// Keep trace of last cannonicalization branch index height.
+	/// All data in state are added after this value (branch is
+	/// set as non modifiable on canonicalisation).
+  pending_canonicalisation_query: Option<u64>,
+	/// keys to gc that got their journal removed.
+	keys_pending_gc: HashSet<OffstateKey>,
+	/// branch index that are not garbage collected.
+	/// Note that it can also contain branch index created after cannonicalisation
+	/// query.
+	keep_indexes: Vec<BranchRanges>,
+}
+
+impl OffstatePendingGC {
+	fn set_pending_gc(&mut self, branch_index: u64) {
+		self.pending_canonicalisation_query = Some(branch_index);
+		self.keep_indexes.clear();
+	}
+	fn try_gc<K, V>(
+		&mut self,
+		pinned: &HashMap<K, (V, u64)>,
+	) {
+		if let Some(pending) = self.pending_canonicalisation_query {
+			if pending < self.max_pinned_index(pinned) {
+
+				unimplemented!("TODO feed keepindexes with branch at pending then actual gc");
+
+				self.pending_canonicalisation_query = None;
+				self.keep_indexes.clear();
+			}
+		}
+	}
+	fn pin(&mut self, branch_index: u64, set: &RangeSet) -> BranchRanges {
+		let range = set.branch_ranges_from_cache(branch_index);
+		if let Some(pending) = self.pending_canonicalisation_query {
+			// pending is set non modifiable before setting pending gc.
+			debug_assert!(pending < branch_index);
+			self.keep_indexes.push(range.clone());
+		}
+		range
+	}
+	fn max_pinned_index<K, V>(
+		&self,
+		pinned: &HashMap<K, (V, u64)>,
+	) -> u64 {
+		let mut max = 0;
+		if let Some(pending) = self.pending_canonicalisation_query {
+			// max up to pending only
+			for (_, (_, index)) in pinned.iter() {
+				if *index > max && *index <= pending {
+					max = *index;
+				}
+			}
+		} else {
+			// global max
+			for (_, (_, index)) in pinned.iter() {
+				if *index > max {
+					max = *index;
+				}
+			}
+		}
+		max
+	}
+}
+struct OffstatePinnedThread {
+	/// index of branch which was pinned
+	branch_index: u64,
+	
+	
+}
 #[derive(Encode, Decode)]
 struct JournalRecord<BlockHash: Hash, Key: Hash> {
 	hash: BlockHash,
@@ -98,6 +175,9 @@ fn discard_values<Key: Hash>(
 	inserted: Vec<Key>,
 	mut into: Option<&mut HashMap<Key, DBValue>>,
 ) {
+	if into.is_none() {
+		return;
+	}
 	for k in inserted {
 		match values.entry(k) {
 			Entry::Occupied(mut e) => {
@@ -117,13 +197,37 @@ fn discard_values<Key: Hash>(
 	}
 }
 
+fn discard_offset_values(
+	values: &mut HashMap<OffstateKey, (u32, DBValue)>,
+	inserted: Vec<OffstateKey>,
+	into: &mut OffstatePendingGC,
+) {
+	for k in inserted {
+		match values.entry(k) {
+			Entry::Occupied(mut e) => {
+				let (ref mut counter, _) = e.get_mut();
+				*counter -= 1;
+				if *counter == 0 {
+					let (key, _) = e.remove_entry();
+					into.keys_pending_gc.insert(key);
+				}
+			},
+			Entry::Vacant(_) => {
+				debug_assert!(false, "Trying to discard missing value");
+			}
+		}
+	}
+}
+
+
 fn discard_descendants<BlockHash: Hash, Key: Hash>(
 	levels: &mut VecDeque<Vec<BlockOverlay<BlockHash, Key>>>,
 	mut values: &mut HashMap<Key, (u32, DBValue)>,
 	mut offstate_values: &mut HashMap<OffstateKey, (u32, DBValue)>,
 	index: usize,
 	parents: &mut HashMap<BlockHash, (BlockHash, u64)>,
-	pinned: &mut HashMap<BlockHash, (HashMap<Key, DBValue>, HashMap<OffstateKey, DBValue>)>,
+	pinned: &mut HashMap<BlockHash, (HashMap<Key, DBValue>, u64)>,
+	offstate_gc: &mut OffstatePendingGC,
 	hash: &BlockHash,
 ) {
 	let mut discarded = Vec::new();
@@ -135,10 +239,10 @@ fn discard_descendants<BlockHash: Hash, Key: Hash>(
 				discarded.push(overlay.hash);
 				let mut pinned = pinned.get_mut(hash);
 				discard_values(&mut values, overlay.inserted, pinned.as_mut().map(|p| &mut p.0));
-				discard_values(
+				discard_offset_values(
 					&mut offstate_values,
 					overlay.offstate_inserted,
-					pinned.as_mut().map(|p| &mut p.1),
+					offstate_gc,
 				);
 				None
 			} else {
@@ -147,7 +251,7 @@ fn discard_descendants<BlockHash: Hash, Key: Hash>(
 		}).collect();
 	}
 	for hash in discarded {
-		discard_descendants(levels, values, offstate_values, index + 1, parents, pinned, &hash);
+		discard_descendants(levels, values, offstate_values, index + 1, parents, pinned, offstate_gc, &hash);
 	}
 }
 
@@ -250,6 +354,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 			pinned: Default::default(),
 			values,
 			offstate_values,
+			offstate_gc: Default::default(),
 			branches,
 		})
 	}
@@ -445,12 +550,18 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 	}
 
 	fn apply_canonicalizations(&mut self) {
-		let last = self.pending_canonicalizations.last().cloned();
-		if let Some((_, branch_index_cannonicalize)) = last.as_ref().and_then(|last| self.parents.get(last)) {
-			// using costy finalize
-			self.branches.update_finalize_treshold(*branch_index_cannonicalize, true);
-		}
 		let count = self.pending_canonicalizations.len() as u64;
+		let last_block_number = self.last_canonicalized.as_ref().map(|(_, n)| n + count).unwrap_or(count - 1);
+		let last = self.pending_canonicalizations.last().cloned();
+		if let Some(branch_index_cannonicalize) = last.as_ref().and_then(|last| self.parents.get(last))
+			.map(|(_, index)| *index) {
+			// set branch state synchronously
+			self.branches.finalize_full(branch_index_cannonicalize, Some(last_block_number));
+			self.offstate_gc.set_pending_gc(branch_index_cannonicalize);
+			// try to run the garbage collection (can run later if there is
+			// pinned process).
+			self.offstate_gc.try_gc(&self.pinned);
+		}
 		for hash in self.pending_canonicalizations.drain(..) {
 			trace!(target: "state-db", "Post canonicalizing {:?}", hash);
 			let level = self.levels.pop_front().expect("Hash validity is checked in `canonicalize`");
@@ -470,21 +581,22 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 						0,
 						&mut self.parents,
 						&mut self.pinned,
+						&mut self.offstate_gc,
 						&overlay.hash,
 					);
 				}
 
 				let mut pinned = self.pinned.get_mut(&overlay.hash);
 				discard_values(&mut self.values, overlay.inserted, pinned.as_mut().map(|p| &mut p.0));
-				discard_values(
+				discard_offset_values(
 					&mut self.offstate_values,
 					overlay.offstate_inserted,
-					pinned.as_mut().map(|p| &mut p.1),
+					&mut self.offstate_gc,
 				);
 			}
 		}
 		if let Some(hash) = last {
-			let last_canonicalized = (hash, self.last_canonicalized.as_ref().map(|(_, n)| n + count).unwrap_or(count - 1));
+			let last_canonicalized = (hash, last_block_number);
 			self.last_canonicalized = Some(last_canonicalized);
 		}
 	}
@@ -515,11 +627,6 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 		if let Some((_, value)) = self.offstate_values.get(key) {
 			return Some(value.clone());
 		}
-		for pinned in self.pinned.values() {
-			if let Some(value) = pinned.1.get(key) {
-				return Some(value.clone());
-			}
-		}
 		None
 	}
 
@@ -535,7 +642,9 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 			let mut commit = CommitSet::default();
 			for overlay in level.into_iter() {
 				commit.meta.deleted.push(overlay.journal_key);
-				self.parents.remove(&overlay.hash);
+				if let Some((_, branch_index)) = self.parents.remove(&overlay.hash) {
+					self.branches.revert(branch_index);
+				}
 				discard_values(&mut self.values, overlay.inserted, None);
 				discard_values(&mut self.offstate_values, overlay.offstate_inserted, None);
 			}
@@ -576,8 +685,18 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 	}
 
 	/// Pin state values in memory
-	pub fn pin(&mut self, hash: &BlockHash) {
-		self.pinned.insert(hash.clone(), Default::default());
+	pub fn pin(&mut self, hash: &BlockHash) -> Option<BranchRanges> {
+		self.parents.get(hash).map(|(_, branch_index)| *branch_index).map(|branch_index| {
+			self.pinned.insert(hash.clone(), (Default::default(), branch_index));
+			self.offstate_gc.pin(branch_index, &self.branches)
+		})
+	}
+
+	/// TODO EMCH aka get state for hash to query offstate storage.
+	pub fn get_branch_range(&self, hash: &BlockHash) -> Option<BranchRanges> {
+		self.parents.get(hash).map(|(_, branch_index)| *branch_index).map(|branch_index| {
+		  self.branches.branch_ranges_from_cache(branch_index)
+		})
 	}
 
 	/// Discard pinned state

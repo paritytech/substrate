@@ -59,6 +59,7 @@ pub struct LinearStatesRef {
 /// unknown db value as `None`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RangeSet {
+	// TODO EMCH using a option value makes not sense when all in memory
 	storage: BTreeMap<u64, Option<LinearStates>>,
 	last_index: u64,
 	treshold: u64,
@@ -270,14 +271,17 @@ impl RangeSet {
 		} else {
 			let new_storage = self.storage.split_off(&(self.treshold));
 			self.storage = new_storage;
-			self.finalize_full(branch_index);
+			self.finalize_full(branch_index, None);
 		};
 	}
 
 	/// Apply a post finalize without considering treshold.
-	fn finalize_full(
+	/// TODO EMCH rename as it is also use to prepare a gc
+	/// without moving the treshould first.
+	pub fn finalize_full(
 		&mut self,
 		branch_index: u64,
+		linear_index: Option<u64>,
 	) {
 		// TODO EMCH consider working directly on ordered vec (should be fastest in most cases)
 		let mut finalize_branches_map: BTreeMap<_, _> = self.branch_ranges_from_cache(branch_index)
@@ -285,12 +289,24 @@ impl RangeSet {
 
 		for (index, state) in self.storage.iter_mut() {
 			if let Some(final_state) = finalize_branches_map.remove(&index) {
-				// update for case where end of range differs (see `branch_ranges_from_cache`).
 				state.as_mut().map(|state| {
+					// update for case where end of range differs
+					// (see `branch_ranges_from_cache`).
 					if state.state != final_state {
 						state.state = final_state;
 						state.can_append = false;
 					}
+					if *index == branch_index {
+						if let Some(linear_index) = linear_index {
+							state.state.end = std::cmp::min(linear_index + 1, state.state.end);
+						}
+						// set this branch as non appendable (ensure it get gc
+						// at some point even if there is no branching).
+						// Also if gc and treshold happen after this call,
+						// ensure this branch can get remove.
+						state.can_append = false;
+					}
+
 				});
 			} else {
 				*state = None;
@@ -303,7 +319,7 @@ impl RangeSet {
 		&mut self,
 		branch_index: u64,
 	) {
-		self.finalize_full(branch_index);
+		self.finalize_full(branch_index, None);
 	}
 
 	/// Revert some ranges, without any way to revert.

@@ -41,6 +41,7 @@ use std::collections::{HashMap, hash_map::Entry};
 use noncanonical::NonCanonicalOverlay;
 use pruning::RefWindow;
 use log::trace;
+pub use branch::BranchRanges;
 
 /// Database value type.
 pub type DBValue = Vec<u8>;
@@ -322,9 +323,9 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		}
 	}
 
-	pub fn pin(&mut self, hash: &BlockHash) -> Result<(), PinError> {
+	pub fn pin(&mut self, hash: &BlockHash) -> Result<Option<BranchRanges>, PinError> {
 		match self.mode {
-			PruningMode::ArchiveAll => Ok(()),
+			PruningMode::ArchiveAll => Ok(self.non_canonical.get_branch_range(hash)),
 			PruningMode::ArchiveCanonical | PruningMode::Constrained(_) => {
 				if self.non_canonical.have_block(hash) ||
 					self.pruning.as_ref().map_or(false, |pruning| pruning.have_block(hash))
@@ -335,7 +336,7 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 						self.non_canonical.pin(hash);
 					}
 					*refs += 1;
-					Ok(())
+					Ok(self.non_canonical.get_branch_range(hash))
 				} else {
 					Err(PinError::InvalidBlock)
 				}
@@ -446,7 +447,7 @@ impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
 	}
 
 	/// Prevents pruning of specified block and its descendants.
-	pub fn pin(&self, hash: &BlockHash) -> Result<(), PinError> {
+	pub fn pin(&self, hash: &BlockHash) -> Result<Option<BranchRanges>, PinError> {
 		self.db.write().pin(hash)
 	}
 
