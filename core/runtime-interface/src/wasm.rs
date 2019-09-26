@@ -16,7 +16,7 @@
 
 //! Traits required by the runtime interface from the wasm side.
 
-use crate::{RIType, pointer_and_len_to_u64, pointer_and_len_from_u64};
+use crate::{RIType, pointer_and_len_to_u64, pointer_and_len_from_u64, PassedAsEncoded};
 
 use rstd::{any::TypeId, mem, marker::PhantomData};
 
@@ -157,3 +157,21 @@ impl<T: 'static + Decode> FromFFIValue for Vec<T> {
 	}
 }
 
+impl<T: PassedAsEncoded> AsWrappedFFIValue for T {
+	type RTOwned = Vec<u8>;
+	type RTBorrowed = [u8];
+
+	fn as_wrapped_ffi_value<'a>(&'a self) -> WrappedFFIValue<'a, u64, Vec<u8>, [u8]> {
+		WrappedFFIValue::from_owned(self.encode())
+	}
+}
+
+impl<T: PassedAsEncoded> FromFFIValue for T {
+	fn from_ffi_value(arg: u64) -> Self {
+		let (ptr, len) = pointer_and_len_from_u64(arg);
+		let len = len as usize;
+
+		let slice = unsafe { std::slice::from_raw_parts(ptr as *const u8, len) };
+		Self::decode(&mut &slice[..]).expect("Host to wasm values are encoded correctly; qed")
+	}
+}

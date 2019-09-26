@@ -27,6 +27,8 @@
 #[doc(hidden)]
 pub use primitives::Blake2Hasher;
 
+use codec::Codec;
+
 #[doc(hidden)]
 #[cfg(feature = "std")]
 pub use primitives::traits::Externalities;
@@ -49,7 +51,8 @@ pub mod wasm;
 
 /// Something that can be used by the runtime interface as type to communicate between wasm and the host.
 ///
-/// Every type that should be used as in a runtime interface function needs to implement this trait.
+/// Every type that should be used in a runtime interface function signature needs to implement
+/// this trait.
 pub trait RIType {
 	/// The ffi type that is used to represent `Self`.
 	#[cfg(feature = "std")]
@@ -69,6 +72,27 @@ impl<T> RIType for Vec<T> {
 impl<T> RIType for [T] {
 	type FFIType = u64;
 }
+
+/// Marker trait for types that should be passed to between wasm and the host by using SCALE codec.
+///
+/// # Example
+/// ```
+/// # use substrate_runtime_interface::PassedAsEncoded;
+/// #[derive(codec::Encode, codec::Decode)]
+/// struct Test;
+///
+/// // It is sufficient to implement the trait for the desired type.
+/// impl PassedAsEncoded for Test {}
+/// ```
+pub trait PassedAsEncoded: Codec {}
+
+impl<T: PassedAsEncoded> RIType for T {
+	type FFIType = u64;
+}
+
+impl<T: Codec> PassedAsEncoded for Option<T> {}
+
+impl<T: Codec, E: Codec> PassedAsEncoded for Result<T, E> {}
 
 /// Converts a pointer and length into an `u64`.
 fn pointer_and_len_to_u64(ptr: u32, len: u32) -> u64 {
@@ -112,6 +136,11 @@ mod tests {
 	#[test]
 	fn test_return_data() {
 		call_wasm_method::<HostFunctions>("test_return_data");
+	}
+
+	#[test]
+	fn test_return_option_data() {
+		call_wasm_method::<HostFunctions>("test_return_option_data");
 	}
 
 	#[test]

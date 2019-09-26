@@ -41,6 +41,11 @@ trait TestApi {
 		let res = "hello";
 		data[..res.as_bytes().len()].copy_from_slice(res.as_bytes());
 	}
+
+	/// Returns the input data wrapped in an `Option` as result.
+	fn return_option_input(data: Vec<u8>) -> Option<Vec<u8>> {
+		Some(data)
+	}
 }
 
 #[no_mangle]
@@ -49,6 +54,14 @@ pub fn test_return_data() {
 	let res = test_api::return_input(input.clone());
 
 	assert_eq!(input, res);
+}
+
+#[no_mangle]
+pub fn test_return_option_data() {
+	let input = vec![1, 2, 3, 4, 5, 6];
+	let res = test_api::return_option_input(input.clone());
+
+	assert_eq!(Some(input), res);
 }
 
 #[no_mangle]

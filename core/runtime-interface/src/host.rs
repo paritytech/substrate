@@ -16,7 +16,7 @@
 
 //! Traits required by the runtime interface from the host side.
 
-use crate::{RIType, pointer_and_len_from_u64, pointer_and_len_to_u64};
+use crate::{RIType, pointer_and_len_from_u64, pointer_and_len_to_u64, PassedAsEncoded};
 
 use wasm_interface::{FunctionContext, Pointer, Result};
 
@@ -128,3 +128,22 @@ impl IntoPreallocatedFFIValue for [u8] {
 	}
 }
 
+impl<T: PassedAsEncoded> IntoFFIValue for T {
+	fn into_ffi_value(self, context: &mut dyn FunctionContext) -> Result<u64> {
+		let vec = self.encode();
+		let ptr = context.allocate_memory(vec.len() as u32)?;
+		context.write_memory(ptr, &vec)?;
+
+		Ok(pointer_and_len_to_u64(ptr.into(), vec.len() as u32))
+	}
+}
+
+impl<T: PassedAsEncoded + Sized> FromFFIValue for T {
+	type SelfInstance = Self;
+
+	fn from_ffi_value(context: &mut dyn FunctionContext, arg: u64) -> Result<Self> {
+		let (ptr, len) = pointer_and_len_from_u64(arg);
+		let vec = context.read_memory(Pointer::new(ptr), len)?;
+		Ok(Self::decode(&mut &vec[..]).expect("Wasm to host values are encoded correctly; qed"))
+	}
+}
