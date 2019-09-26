@@ -22,7 +22,15 @@ use crate::{storage::{self, unhashed, hashed::StorageHasher}, traits::Len};
 
 /// Generator for `StorageMap` used by `decl_storage`.
 ///
-/// For each key value is stored at `Hasher(prefix ++ key)`.
+/// For each key value is stored at:
+/// ```nocompile
+/// Hasher(prefix ++ key)
+/// ```
+///
+/// # Warning
+///
+/// If the keys are not trusted (e.g. can be set by a user), a cryptographic `hasher` such as
+/// `blake2_256` must be used.  Otherwise, other values in storage can be compromised.
 pub trait StorageMap<K: Codec, V: Codec> {
 	/// The type that get/take returns.
 	type Query;

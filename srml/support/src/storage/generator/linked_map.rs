@@ -23,8 +23,26 @@ use rstd::{
 
 /// Generator for `StorageLinkedMap` used by `decl_storage`.
 ///
-/// For each key value is stored at `Hasher(prefix ++ key)` along with a linkage used for
-/// enumeration.
+/// # Mapping of keys to a storage path
+///
+/// The key for the head of the map is stored at one fixed path:
+/// ```nocompile
+/// Hasher(head_key)
+/// ```
+///
+/// For each key, the value stored under that key is appended with a
+/// [`Linkage`](struct.Linkage.html) (which hold previous and next key) at the path:
+/// ```nocompile
+/// Hasher(prefix ++ key)
+/// ```
+///
+/// Enumeration is done by getting the head of the linked map and then iterating getting the
+/// value and linkage stored at the key until the found linkage has no next key.
+///
+/// # Warning
+///
+/// If the keys are not trusted (e.g. can be set by a user), a cryptographic `hasher` such as
+/// `blake2_256` must be used. Otherwise, other values in storage can be compromised.
 pub trait StorageLinkedMap<K: Codec, V: Codec> {
 	/// The type that get/take returns.
 	type Query;
