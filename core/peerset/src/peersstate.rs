@@ -657,4 +657,60 @@ mod tests {
 		peers_state.set_priority_group("test2", vec![].into_iter().collect());
 		assert_eq!(peers_state.num_in, 1);
 	}
+
+	#[test]
+	fn priority_only_mode_ignores_drops_unknown_nodes() {
+		// test whether connection to/from given peer is allowed
+		let test_connection = |peers_state: &mut PeersState, id| {
+			if let Peer::Unknown(p) = peers_state.peer(id) {
+				p.discover();
+			}
+
+			let incoming = if let Peer::NotConnected(p) = peers_state.peer(id) {
+				p.try_accept_incoming().is_ok()
+			} else {
+				panic!()
+			};
+
+			if incoming {
+				peers_state.peer(id).into_connected().map(|p| p.disconnect());
+			}
+
+			let outgoing = if let Peer::NotConnected(p) = peers_state.peer(id) {
+				p.try_outgoing().is_ok()
+			} else {
+				panic!()
+			};
+
+			if outgoing {
+				peers_state.peer(id).into_connected().map(|p| p.disconnect());
+			}
+
+			incoming || outgoing
+		};
+
+		let mut peers_state = PeersState::new(1, 1, true);
+		let id = PeerId::random();
+
+		// this is an unknown peer and our peer state is set to only allow
+		// priority peers so any connection attempt should be denied.
+		assert!(!test_connection(&mut peers_state, &id));
+
+		// disabling priority only mode should allow the connection to go
+		// through.
+		peers_state.set_priority_only(false);
+		assert!(test_connection(&mut peers_state, &id));
+
+		// re-enabling it we should again deny connections from the peer.
+		peers_state.set_priority_only(true);
+		assert!(!test_connection(&mut peers_state, &id));
+
+		// but if we add the peer to a priority group it should be accepted.
+		peers_state.set_priority_group("TEST_GROUP", vec![id.clone()].into_iter().collect());
+		assert!(test_connection(&mut peers_state, &id));
+
+		// and removing it will cause the connection to once again be denied.
+		peers_state.remove_from_priority_group("TEST_GROUP", &id);
+		assert!(!test_connection(&mut peers_state, &id));
+	}
 }
