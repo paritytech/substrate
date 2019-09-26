@@ -25,22 +25,30 @@ use std::collections::{HashMap, VecDeque, hash_map::Entry};
 use super::{Error, DBValue, ChangeSet, CommitSet, MetaDb, Hash, to_meta_key, OffstateKey};
 use codec::{Encode, Decode};
 use log::trace;
+use crate::branch::RangeSet;
 
 const NON_CANONICAL_JOURNAL: &[u8] = b"noncanonical_journal";
 const NON_CANONICAL_OFFSTATE_JOURNAL: &[u8] = b"offstate_noncanonical_journal";
 const LAST_CANONICAL: &[u8] = b"last_canonical";
 
+type BranchIndex = u64;
+
+type BlockNumber = u64;
+
 /// See module documentation.
 pub struct NonCanonicalOverlay<BlockHash: Hash, Key: Hash> {
-	last_canonicalized: Option<(BlockHash, u64)>,
+	last_canonicalized: Option<(BlockHash, BlockNumber)>,
 	levels: VecDeque<Vec<BlockOverlay<BlockHash, Key>>>,
-	parents: HashMap<BlockHash, BlockHash>,
+	parents: HashMap<BlockHash, (BlockHash, BranchIndex)>,
 	pending_canonicalizations: Vec<BlockHash>,
 	pending_insertions: Vec<BlockHash>,
 	values: HashMap<Key, (u32, DBValue)>, //ref counted
+	branches: RangeSet,
 	offstate_values: HashMap<OffstateKey, (u32, DBValue)>, //ref counted
-	//would be deleted but kept around because block is pinned
-	// TODO EMCH sense if pinning offstate?
+	// would be deleted but kept around because block is pinned
+	// TODO EMCH sense if pinning offstate? done while using state_at
+	// -> that is import processing (so we can revert) -> should be good
+	// to use on offstate too
 	pinned: HashMap<BlockHash, (HashMap<Key, DBValue>, HashMap<OffstateKey, DBValue>)>,
 }
 
@@ -58,11 +66,11 @@ struct OffstateJournalRecord {
 	deleted: Vec<OffstateKey>,
 }
 
-fn to_journal_key(block: u64, index: u64) -> Vec<u8> {
+fn to_journal_key(block: BlockNumber, index: u64) -> Vec<u8> {
 	to_meta_key(NON_CANONICAL_JOURNAL, &(block, index))
 }
 
-fn to_offstate_journal_key(block: u64, index: u64) -> Vec<u8> {
+fn to_offstate_journal_key(block: BlockNumber, index: u64) -> Vec<u8> {
 	to_meta_key(NON_CANONICAL_OFFSTATE_JOURNAL, &(block, index))
 }
 
@@ -114,14 +122,14 @@ fn discard_descendants<BlockHash: Hash, Key: Hash>(
 	mut values: &mut HashMap<Key, (u32, DBValue)>,
 	mut offstate_values: &mut HashMap<OffstateKey, (u32, DBValue)>,
 	index: usize,
-	parents: &mut HashMap<BlockHash, BlockHash>,
+	parents: &mut HashMap<BlockHash, (BlockHash, u64)>,
 	pinned: &mut HashMap<BlockHash, (HashMap<Key, DBValue>, HashMap<OffstateKey, DBValue>)>,
 	hash: &BlockHash,
 ) {
 	let mut discarded = Vec::new();
 	if let Some(level) = levels.get_mut(index) {
 		*level = level.drain(..).filter_map(|overlay| {
-			let parent = parents.get(&overlay.hash).expect("there is a parent entry for each entry in levels; qed").clone();
+			let parent = parents.get(&overlay.hash).expect("there is a parent entry for each entry in levels; qed").0.clone();
 			if parent == *hash {
 				parents.remove(&overlay.hash);
 				discarded.push(overlay.hash);
@@ -149,17 +157,20 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 		let last_canonicalized = db.get_meta(&to_meta_key(LAST_CANONICAL, &()))
 			.map_err(|e| Error::Db(e))?;
 		let last_canonicalized = match last_canonicalized {
-			Some(buffer) => Some(<(BlockHash, u64)>::decode(&mut buffer.as_slice())?),
+			Some(buffer) => Some(<(BlockHash, BlockNumber)>::decode(&mut buffer.as_slice())?),
 			None => None,
 		};
 		let mut levels = VecDeque::new();
 		let mut parents = HashMap::new();
 		let mut values = HashMap::new();
 		let mut offstate_values = HashMap::new();
+		let mut branches = RangeSet::default();
 		if let Some((ref hash, mut block)) = last_canonicalized {
 			// read the journal
 			trace!(target: "state-db", "Reading uncanonicalized journal. Last canonicalized #{} ({:?})", block, hash);
 			let mut total: u64 = 0;
+			let mut parent_branch_index = 0u64;
+			let mut parent_branch_range = None;
 			block += 1;
 			loop {
 				let mut index: u64 = 0;
@@ -170,6 +181,18 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 					match db.get_meta(&journal_key).map_err(|e| Error::Db(e))? {
 						Some(record) => {
 							let record: JournalRecord<BlockHash, Key> = Decode::decode(&mut record.as_slice())?;
+
+							// TODO EMCh following two range fetch can be optimize when parent level
+							// got a single element.
+							// fetch parent info
+							parent_branch_index = parents.get(&record.parent_hash).map(|(_, i)| *i).unwrap_or(0);
+							parent_branch_range = Some(branches.branch_ranges_from_cache(parent_branch_index));
+							let (_branch_range, branch_index) = branches.import(
+								block,
+								parent_branch_index,
+								parent_branch_range,
+							);
+
 							let (offstate_record_inserted, offstate_record_deleted) = if let Some(record) = db
 								.get_meta(&offstate_journal_key).map_err(|e| Error::Db(e))? {
 									let record = OffstateJournalRecord::decode(&mut record.as_slice())?;
@@ -203,7 +226,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 								overlay.offstate_deleted.len(),
 							);
 							level.push(overlay);
-							parents.insert(record.hash, record.parent_hash);
+							parents.insert(record.hash, (record.parent_hash, branch_index));
 							index += 1;
 							total += 1;
 						},
@@ -225,16 +248,18 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 			pending_canonicalizations: Default::default(),
 			pending_insertions: Default::default(),
 			pinned: Default::default(),
-			values: values,
-			offstate_values: offstate_values,
+			values,
+			offstate_values,
+			branches,
 		})
 	}
 
-	/// Insert a new block into the overlay. If inserted on the second level or lover expects parent to be present in the window.
+	/// Insert a new block into the overlay. If inserted on the second level or lower
+	/// expects parent to be present in the window.
 	pub fn insert<E: fmt::Debug>(
 		&mut self, hash:
 		&BlockHash,
-		number: u64,
+		number: BlockNumber,
 		parent_hash: &BlockHash,
 		changeset: ChangeSet<Key>,
 		offstate_changeset: ChangeSet<OffstateKey>,
@@ -288,7 +313,15 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 			offstate_deleted: offstate_changeset.deleted.clone(),
 		};
 		level.push(overlay);
-		self.parents.insert(hash.clone(), parent_hash.clone());
+		let	parent_branch_index = self.parents.get(&parent_hash).map(|(_, i)| *i).unwrap_or(0);
+		let	parent_branch_range = Some(self.branches.branch_ranges_from_cache(parent_branch_index));
+		let (_branch_range, branch_index) = self.branches.import(
+			number,
+			parent_branch_index,
+			parent_branch_range,
+		);
+
+		self.parents.insert(hash.clone(), (parent_hash.clone(), branch_index));
 		let journal_record = JournalRecord {
 			hash: hash.clone(),
 			parent_hash: parent_hash.clone(),
@@ -327,8 +360,9 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 	) {
 		if let Some(level) = self.levels.get(level_index) {
 			level.iter().for_each(|overlay| {
-				let parent = self.parents.get(&overlay.hash).expect("there is a parent entry for each entry in levels; qed").clone();
-				if parent == *hash {
+				let (parent, _branch_index) = self.parents.get(&overlay.hash)
+					.expect("there is a parent entry for each entry in levels; qed");
+				if parent == hash {
 					discarded_journals.push(overlay.journal_key.clone());
 					discarded_journals.push(overlay.offstate_journal_key.clone());
 					discarded_blocks.push(overlay.hash.clone());
@@ -338,11 +372,11 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 		}
 	}
 
-	fn front_block_number(&self) -> u64 {
+	fn front_block_number(&self) -> BlockNumber {
 		self.last_canonicalized.as_ref().map(|&(_, n)| n + 1).unwrap_or(0)
 	}
 
-	pub fn last_canonicalized_block_number(&self) -> Option<u64> {
+	pub fn last_canonicalized_block_number(&self) -> Option<BlockNumber> {
 		match self.last_canonicalized.as_ref().map(|&(_, n)| n) {
 			Some(n) => Some(n + self.pending_canonicalizations.len() as u64),
 			None if !self.pending_canonicalizations.is_empty() => Some(self.pending_canonicalizations.len() as u64),
@@ -412,6 +446,10 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 
 	fn apply_canonicalizations(&mut self) {
 		let last = self.pending_canonicalizations.last().cloned();
+		if let Some((_, branch_index_cannonicalize)) = last.as_ref().and_then(|last| self.parents.get(last)) {
+			// using costy finalize
+			self.branches.update_finalize_treshold(*branch_index_cannonicalize, true);
+		}
 		let count = self.pending_canonicalizations.len() as u64;
 		for hash in self.pending_canonicalizations.drain(..) {
 			trace!(target: "state-db", "Post canonicalizing {:?}", hash);
