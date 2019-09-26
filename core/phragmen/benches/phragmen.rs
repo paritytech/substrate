@@ -61,8 +61,7 @@ fn do_phragmen(
 	// prefix to distinguish the validator and nominator account ranges.
 	let np = 10_000;
 
-	let mut candidates = vec![];
-	let mut voters = vec![];
+	let mut candidates = Vec::with_capacity(num_vals as usize);
 	let mut slashable_balance_of: BTreeMap<AccountId, Balance> = BTreeMap::new();
 
 	(1 ..= num_vals)
@@ -71,6 +70,7 @@ fn do_phragmen(
 			slashable_balance_of.insert(acc, STAKE + rr(10, 50));
 		});
 
+	let mut voters = Vec::with_capacity(num_noms as usize);
 	(np ..= (np + num_noms))
 		.for_each(|acc| {
 			let mut stashes_to_vote = candidates.clone();
