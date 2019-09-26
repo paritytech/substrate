@@ -33,6 +33,16 @@ use transaction_pool::{self, txpool::{Pool as TransactionPool}};
 use inherents::InherentDataProviders;
 use network::construct_simple_protocol;
 
+use substrate_service::{NewService, NetworkStatus};
+use client::{Client, LocalCallExecutor};
+use client_db::Backend;
+use sr_primitives::traits::{Block as BlockT};
+use node_executor::NativeExecutor;
+use network::NetworkService;
+use offchain::OffchainWorkers;
+use transaction_pool::ChainApi;
+use primitives::Blake2Hasher;
+
 construct_simple_protocol! {
 	/// Demo protocol attachment for substrate.
 	pub struct NodeProtocol where Block = Block { }
@@ -218,6 +228,39 @@ macro_rules! new_full {
 /// Builds a new service for a full client.
 pub fn new_full<C: Send + Default + 'static>(config: Configuration<C, GenesisConfig>)
 -> Result<impl AbstractService, ServiceError> {
+	new_full!(config).map(|(service, _)| service)
+}
+
+#[allow(dead_code)]
+type ConcreteBlock = node_primitives::Block;
+#[allow(dead_code)]
+type ConcreteClient = Client<Backend<node_primitives::Block>, LocalCallExecutor<Backend<ConcreteBlock>, NativeExecutor<node_executor::Executor>>, ConcreteBlock, node_runtime::RuntimeApi>;
+#[allow(dead_code)]
+type ConcreteBackend = Backend<ConcreteBlock>;
+
+/// Builds a new service for a full client.
+/// This function returns a [NewService](substrate_service::NewService) rather than `AbstractService`.
+/// It might be handy when you need additional features from service that are not implemented by `AbrtractService`.
+/// Examples might include `service.client().runtime_api()` which is not accessible in `AbstractService` instance
+#[allow(dead_code)]
+pub fn new_full_concrete<C: Send + Default + 'static>(config: Configuration<C, GenesisConfig>)
+-> Result<
+	NewService<
+		ConcreteBlock,
+		ConcreteClient,
+		LongestChain<ConcreteBackend, ConcreteBlock>,
+		NetworkStatus<ConcreteBlock>,
+		NetworkService<ConcreteBlock, crate::service::NodeProtocol, <ConcreteBlock as BlockT>::Hash>,
+		TransactionPool<ChainApi<ConcreteClient, ConcreteBlock>>,
+		OffchainWorkers<
+			ConcreteClient,
+			<ConcreteBackend as client::backend::Backend<Block, Blake2Hasher>>::OffchainStorage,
+			ConcreteBlock
+		>
+	>,
+	ServiceError
+>
+{
 	new_full!(config).map(|(service, _)| service)
 }
 
