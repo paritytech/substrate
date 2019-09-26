@@ -32,7 +32,6 @@ use primitives::offchain::{
 };
 use sr_primitives::{generic::BlockId, traits::{self, Extrinsic}};
 use transaction_pool::txpool::{Pool, ChainApi};
-use rand::{Rng, rngs::OsRng};
 
 mod http;
 mod timestamp;
@@ -54,7 +53,6 @@ pub(crate) struct Api<Storage, Block: traits::Block> {
 	is_validator: bool,
 	/// Everything HTTP-related is handled by a different struct.
 	http: http::HttpApi,
-	rng: OsRng
 }
 
 fn unavailable_yet<R: Default>(name: &str) -> R {
@@ -103,7 +101,7 @@ where
 	}
 
 	fn random_seed(&mut self) -> [u8; 32] {
-		self.rng.gen()
+		rand::random()
 	}
 
 	fn local_storage_set(&mut self, kind: StorageKind, key: &[u8], value: &[u8]) {
@@ -283,7 +281,6 @@ impl<A: ChainApi> AsyncApi<A> {
 			_at: at,
 			is_validator,
 			http: http_api,
-			rng: OsRng::default()
 		};
 
 		let async_api = AsyncApi {
