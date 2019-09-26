@@ -93,6 +93,7 @@ pub struct NetworkConfigurationParams {
 	pub reserved_nodes: Vec<String>,
 
 	/// Whether to only allow connections to/from reserved nodes.
+	///
 	/// If you are a validator your node might still connect to other validator
 	/// nodes regardless of whether they are defined as reserved nodes.
 	#[structopt(long = "reserved-only")]
