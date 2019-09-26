@@ -7,4 +7,18 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false }
+session = { package = "srml-session", path = "../session", default-features = false, features = ["historical"] }
+sr-primitives = { path = "../../core/sr-primitives", default-features = false }
 support = { package = "srml-support", path = "../support", default-features = false }
+system = { package = "srml-system", path = "../system", default-features = false }
+
+[features]
+default = ["std"]
+std = [
+	"codec/std",
+	"session/std",
+	"sr-primitives/std",
+	"support/std",
+	"system/std",
+]
