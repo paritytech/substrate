@@ -62,9 +62,6 @@ pub struct RangeSet {
 	storage: BTreeMap<u64, Option<LinearStates>>,
 	last_index: u64,
 	treshold: u64,
-	// change and removed concern both storage and appendable
-	changed: BTreeSet<u64>,
-	removed: BTreeSet<u64>,
 }
 
 const DEFAULT_START_TRESHOLD: u64 = 1;
@@ -75,8 +72,6 @@ impl Default for RangeSet {
 			storage: BTreeMap::new(),
 			last_index: 0,
 			treshold: DEFAULT_START_TRESHOLD,
-			changed: BTreeSet::new(),
-			removed: BTreeSet::new(),
 		}
 	}
 }
@@ -102,8 +97,6 @@ impl RangeSet {
 			storage: BTreeMap::new(),
 			last_index,
 			treshold,
-			changed: BTreeSet::new(),
-			removed: BTreeSet::new(),
 		}
 	}
 
@@ -162,11 +155,9 @@ impl RangeSet {
 			Some(Some(branch_state)) => {
 				if let Some(drop_index) = branch_state.drop_state() {
 					if drop_index == 0 {
-						self.removed.insert(branch_index);
 						do_remove = Some(branch_state.parent_branch_index);
 					} else {
 						branch_state.can_append = false;
-						self.changed.insert(branch_index);
 					}
 				} else {
 					// deleted branch, do nothing
@@ -200,7 +191,6 @@ impl RangeSet {
 			Some(Some(branch_state)) => {
 				if branch_state.can_append && branch_state.can_add(number) {
 					branch_state.add_state();
-					self.changed.insert(branch_index);
 				} else {
 					create_new = true;
 				}
@@ -217,7 +207,6 @@ impl RangeSet {
 
 			let state = StatesBranch::new(number, branch_index);
 			self.storage.insert(self.last_index, Some(state));
-			self.changed.insert(self.last_index);
 			Ok(self.last_index)
 		} else {
 			Ok(branch_index)
@@ -274,23 +263,20 @@ impl RangeSet {
 		// we do not finalize current branch cause it
 		// can contains other blocks
 		self.treshold = branch_index;
-		let removed_ranges = if branch_index == 0 || !full {
+		if branch_index == 0 || !full {
 			// remove cached value under treshold only
 			let new_storage = self.storage.split_off(&(self.treshold));
-			std::mem::replace(&mut self.storage, new_storage)
+			self.storage = new_storage;
 		} else {
 			let new_storage = self.storage.split_off(&(self.treshold));
-			let mut removed = std::mem::replace(&mut self.storage, new_storage);
-			self.finalize_full(&mut removed, branch_index);
-			removed
+			self.storage = new_storage;
+			self.finalize_full(branch_index);
 		};
-		self.removed.extend(removed_ranges.keys().cloned());
 	}
 
 	/// Apply a post finalize without considering treshold.
 	fn finalize_full(
 		&mut self,
-		output: &mut BTreeMap<u64, Option<LinearStates>>,
 		branch_index: u64,
 	) {
 		// TODO EMCH consider working directly on ordered vec (should be fastest in most cases)
@@ -302,13 +288,12 @@ impl RangeSet {
 				// update for case where end of range differs (see `branch_ranges_from_cache`).
 				state.as_mut().map(|state| {
 					if state.state != final_state {
-						output.insert(*index, Some(state.clone()));
 						state.state = final_state;
 						state.can_append = false;
 					}
 				});
 			} else {
-				output.insert(*index, state.take());
+				*state = None;
 			}
 		}
 	}
@@ -318,9 +303,7 @@ impl RangeSet {
 		&mut self,
 		branch_index: u64,
 	) {
-		let mut removed_ranges = BTreeMap::new();
-		self.finalize_full(&mut removed_ranges, branch_index);
-		self.removed.extend(removed_ranges.keys().cloned());
+		self.finalize_full(branch_index);
 	}
 
 	/// Revert some ranges, without any way to revert.
