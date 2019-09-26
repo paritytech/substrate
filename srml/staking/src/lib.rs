@@ -326,7 +326,7 @@ pub enum StakerStatus<AccountId> {
 
 /// A destination account for payment.
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Debug)]
 pub enum RewardDestination {
 	/// Pay into the stash account, increasing the amount at stake accordingly.
 	Staked,
@@ -344,7 +344,7 @@ impl Default for RewardDestination {
 
 /// Preference of what happens on a slash event.
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Debug)]
 pub struct ValidatorPrefs<Balance: HasCompact> {
 	/// Reward that validator takes up-front; only the rest is split between themselves and
 	/// nominators.
@@ -362,7 +362,7 @@ impl<B: Default + HasCompact + Copy> Default for ValidatorPrefs<B> {
 
 /// Just a Balance/BlockNumber tuple to encode when a chunk of funds will be unlocked.
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Debug)]
 pub struct UnlockChunk<Balance: HasCompact> {
 	/// Amount of funds to be unlocked.
 	#[codec(compact)]
@@ -374,7 +374,7 @@ pub struct UnlockChunk<Balance: HasCompact> {
 
 /// The ledger of a (bonded) stash.
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Debug)]
 pub struct StakingLedger<AccountId, Balance: HasCompact> {
 	/// The stash account whose balance is actually locked and at stake.
 	pub stash: AccountId,
@@ -413,7 +413,7 @@ impl<
 
 /// The amount of exposure (to slashing) than an individual nominator has.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Debug)]
 pub struct IndividualExposure<AccountId, Balance: HasCompact> {
 	/// The stash account of the nominator in question.
 	who: AccountId,
@@ -424,7 +424,7 @@ pub struct IndividualExposure<AccountId, Balance: HasCompact> {
 
 /// A snapshot of the stake backing a single validator in the system.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Debug)]
 pub struct Exposure<AccountId, Balance: HasCompact> {
 	/// The total balance backing this validator.
 	#[codec(compact)]
@@ -438,7 +438,7 @@ pub struct Exposure<AccountId, Balance: HasCompact> {
 
 /// A slashing event occurred, slashing a validator for a given amount of balance.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Debug)]
 pub struct SlashJournalEntry<AccountId, Balance: HasCompact> {
 	who: AccountId,
 	amount: Balance,

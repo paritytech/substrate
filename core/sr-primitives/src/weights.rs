@@ -34,7 +34,7 @@ pub type Weight = u32;
 
 /// A generalized group of dispatch types. This is only distinguishing normal, user-triggered transactions
 /// (`Normal`) and anything beyond which serves a higher purpose to the system (`Operational`).
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Debug)]
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub enum DispatchClass {
 	/// A normal dispatch.
@@ -173,7 +173,7 @@ impl Default for SimpleDispatchInfo {
 ///
 /// This is basically a wrapper for the `Fixed64` type a slightly tailored multiplication to u32
 /// in the form of the `apply_to` method.
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Debug)]
 #[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct WeightMultiplier(Fixed64);
 

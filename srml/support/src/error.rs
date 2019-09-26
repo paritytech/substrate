@@ -56,7 +56,7 @@ macro_rules! decl_error {
 		}
 	) => {
 		#[derive(Clone, PartialEq, Eq)]
-		#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Debug)]
 		$(#[$attr])*
 		pub enum $error {
 			Other(&'static str),

@@ -744,7 +744,7 @@ pub trait CryptoType {
 /// Values whose first character is `_` are reserved for private use and won't conflict with any
 /// public modules.
 #[derive(Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Debug)]
 pub struct KeyTypeId(pub [u8; 4]);
 
 impl From<u32> for KeyTypeId {

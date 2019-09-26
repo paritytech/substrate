@@ -24,7 +24,8 @@ use rstd::ops::{Add, Mul, Div, Rem};
 
 /// A means of determining if a vote is past pass threshold.
 #[derive(Clone, Copy, PartialEq, Eq, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(Debug)]
 pub enum VoteThreshold {
 	/// A supermajority of approvals is needed to pass this vote.
 	SuperMajorityApprove,

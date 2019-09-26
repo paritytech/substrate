@@ -147,14 +147,14 @@ const DB_KEY: &[u8] = b"srml/im-online-worker-status";
 /// if we need to recover and resume gossipping or if there is already
 /// another off-chain worker in the process of gossipping.
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Debug)]
 struct WorkerStatus<BlockNumber> {
 	done: bool,
 	gossipping_at: BlockNumber,
 }
 
 /// Error which may occur while executing the off-chain code.
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Debug)]
 enum OffchainErr {
 	DecodeWorkerStatus,
 	FailedSigning,
@@ -177,7 +177,7 @@ pub type AuthIndex = u32;
 
 /// Heartbeat which is sent/received.
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Debug)]
 pub struct Heartbeat<BlockNumber>
 	where BlockNumber: PartialEq + Eq + Decode + Encode,
 {

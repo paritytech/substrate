@@ -55,7 +55,7 @@ const DEN: u128 = u128::max_value();
 
 /// A candidate entity for phragmen election.
 #[derive(Clone, Default)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Debug)]
 pub struct Candidate<AccountId> {
 	/// Identifier.
 	pub who: AccountId,
@@ -69,7 +69,7 @@ pub struct Candidate<AccountId> {
 
 /// A voter entity.
 #[derive(Clone, Default)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Debug)]
 pub struct Voter<AccountId> {
 	/// Identifier.
 	who: AccountId,
@@ -83,7 +83,7 @@ pub struct Voter<AccountId> {
 
 /// A candidate being backed by a voter.
 #[derive(Clone, Default)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Debug)]
 pub struct Edge<AccountId> {
 	/// Identifier.
 	who: AccountId,
@@ -100,7 +100,7 @@ pub type PhragmenAssignment<AccountId> = (AccountId, Perbill);
 pub type PhragmenStakedAssignment<AccountId> = (AccountId, ExtendedBalance);
 
 /// Final result of the phragmen election.
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Debug)]
 pub struct PhragmenResult<AccountId> {
 	/// Just winners zipped with their approval stake. Note that the approval stake is merely the
 	/// sub of their received stake and could be used for very basic sorting and approval voting.
@@ -118,7 +118,7 @@ pub struct PhragmenResult<AccountId> {
 /// This, at the current version, resembles the `Exposure` defined in the staking SRML module, yet
 /// they do not necessarily have to be the same.
 #[derive(Default)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Debug)]
 pub struct Support<AccountId> {
 	/// The amount of support as the effect of self-vote.
 	pub own: ExtendedBalance,

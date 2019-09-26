@@ -128,11 +128,15 @@ impl std::fmt::Display for Public {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(not(feature = "std"))]
+use core as std;
+
+//#[cfg(feature = "std")]
 impl std::fmt::Debug for Public {
-	fn fmt(&self, f: &mut std::fmt::Formatter) -> ::std::fmt::Result {
-		let s = self.to_ss58check();
-		write!(f, "{} ({}...)", crate::hexdisplay::HexDisplay::from(&self.0), &s[0..8])
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+		//let s = self.to_ss58check();
+		//write!(f, "{} ({}...)", crate::hexdisplay::HexDisplay::from(&self.0), &s[0..8])
+		write!(f, "edPublic")
 	}
 }
 
@@ -237,10 +241,11 @@ impl From<schnorrkel::Signature> for Signature {
 	}
 }
 
-#[cfg(feature = "std")]
+//#[cfg(feature = "std")]
 impl std::fmt::Debug for Signature {
-	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-		write!(f, "{}", crate::hexdisplay::HexDisplay::from(&self.0))
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+		write!(f, "edSig")
+		//write!(f, "{}", crate::hexdisplay::HexDisplay::from(&self.0))
 	}
 }
 

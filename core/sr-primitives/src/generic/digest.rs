@@ -73,7 +73,7 @@ impl<Hash: Encode + Decode> Digest<Hash> {
 /// Digest item that is able to encode/decode 'system' digest items and
 /// provide opaque access to other items.
 #[derive(PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Debug)]
 pub enum DigestItem<Hash> {
 	/// System digest item that contains the root of changes trie at given
 	/// block. It is created for every block iff runtime supports changes
@@ -124,7 +124,7 @@ impl<'a, Hash: Decode> serde::Deserialize<'a> for DigestItem<Hash> {
 /// A 'referencing view' for digest item. Does not own its contents. Used by
 /// final runtime implementations for encoding/decoding its log items.
 #[derive(PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Debug)]
 pub enum DigestItemRef<'a, Hash: 'a> {
 	/// Reference to `DigestItem::ChangesTrieRoot`.
 	ChangesTrieRoot(&'a Hash),

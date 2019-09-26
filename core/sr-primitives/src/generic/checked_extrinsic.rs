@@ -27,7 +27,7 @@ use crate::transaction_validity::TransactionValidity;
 /// existence implies that it has been checked and is good, particularly with
 /// regards to the signature.
 #[derive(PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Debug)]
 pub struct CheckedExtrinsic<AccountId, Call, Extra> {
 	/// Who this purports to be from and the number of extrinsics have come before
 	/// from the same signer, if anyone (note this is not a signature).

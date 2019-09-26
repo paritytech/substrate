@@ -162,7 +162,7 @@ pub type ConsensusEngineId = [u8; 4];
 
 /// Signature verify that can work with any known signature types..
 #[derive(Eq, PartialEq, Clone, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
+//#[derive(Debug)]
 pub enum MultiSignature {
 	/// An Ed25519 signature.
 	Ed25519(ed25519::Signature),
@@ -337,7 +337,8 @@ impl From<DispatchError> for ApplyOutcome {
 pub type ApplyResult = Result<ApplyOutcome, ApplyError>;
 
 #[derive(Eq, PartialEq, Clone, Copy, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+#[cfg_attr(feature = "std", derive(Serialize))]
+#[derive(Debug)]
 /// Reason why a dispatch call failed
 pub struct DispatchError {
 	/// Module index, matching the metadata module index

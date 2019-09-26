@@ -174,7 +174,7 @@ pub trait Trait: 'static + Eq + Clone {
 	/// The output of the `Hashing` function.
 	type Hash:
 		Parameter + Member + MaybeSerializeDebug + MaybeDisplay + SimpleBitOps + Default + Copy + CheckEqual
-		+ rstd::hash::Hash + AsRef<[u8]> + AsMut<[u8]>;
+		+ rstd::hash::Hash + AsRef<[u8]> + AsMut<[u8]> + core::fmt::Debug;
 
 	/// The hashing system (algorithm) being used in the runtime (e.g. Blake2).
 	type Hashing: Hash<Output = Self::Hash>;
@@ -204,7 +204,7 @@ pub trait Trait: 'static + Eq + Clone {
 	>;
 
 	/// The aggregated event type of the runtime.
-	type Event: Parameter + Member + From<Event>;
+	type Event: Parameter + Member + From<Event> + core::fmt::Debug;
 
 	/// Maximum number of block number to block hash mappings to keep (oldest pruned first).
 	type BlockHashCount: Get<Self::BlockNumber>;
@@ -282,8 +282,8 @@ decl_module! {
 }
 
 /// A phase of a block's execution.
-#[derive(Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Serialize, PartialEq, Eq, Clone, Debug))]
+#[derive(Encode, Decode, Debug)]
+#[cfg_attr(feature = "std", derive(Serialize, PartialEq, Eq, Clone))]
 pub enum Phase {
 	/// Applying an extrinsic.
 	ApplyExtrinsic(u32),
@@ -292,8 +292,8 @@ pub enum Phase {
 }
 
 /// Record of an event happening.
-#[derive(Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Serialize, PartialEq, Eq, Clone, Debug))]
+#[derive(Encode, Decode, Debug)]
+#[cfg_attr(feature = "std", derive(Serialize, PartialEq, Eq, Clone))]
 pub struct EventRecord<E: Parameter + Member, T> {
 	/// The phase of the block it happened in.
 	pub phase: Phase,
@@ -326,7 +326,7 @@ decl_error! {
 
 /// Origin for the System module.
 #[derive(PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Debug)]
 pub enum RawOrigin<AccountId> {
 	/// The system itself ordained this dispatch to happen: this is the highest privilege level.
 	Root,
@@ -555,6 +555,8 @@ impl<T: Trait> Module<T> {
 			event,
 			topics: topics.iter().cloned().collect::<Vec<_>>(),
 		};
+
+		runtime_io::debug(&event);
 
 		// Index of the to be added event.
 		let event_idx = {

@@ -128,12 +128,15 @@ impl std::fmt::Display for Public {
 		write!(f, "{}", self.to_ss58check())
 	}
 }
+#[cfg(not(feature = "std"))]
+use core as std;
 
-#[cfg(feature = "std")]
+//#[cfg(feature = "std")]
 impl std::fmt::Debug for Public {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-		let s = self.to_ss58check();
-		write!(f, "{} ({}...)", crate::hexdisplay::HexDisplay::from(&self.0), &s[0..8])
+		write!(f, "edPublic")
+		// let s = self.to_ss58check();
+		// write!(f, "{} ({}...)", crate::hexdisplay::HexDisplay::from(&self.0), &s[0..8])
 	}
 }
 
@@ -229,10 +232,11 @@ impl AsMut<[u8]> for Signature {
 	}
 }
 
-#[cfg(feature = "std")]
+//#[cfg(feature = "std")]
 impl std::fmt::Debug for Signature {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-		write!(f, "{}", crate::hexdisplay::HexDisplay::from(&self.0))
+		write!(f, "edPublic")
+		//write!(f, "{}", crate::hexdisplay::HexDisplay::from(&self.0))
 	}
 }
 

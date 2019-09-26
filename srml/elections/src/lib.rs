@@ -99,7 +99,7 @@ mod tests;
 
 /// The activity status of a voter.
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, Default)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Debug)]
 pub struct VoterInfo<Balance> {
 	/// Last VoteIndex in which this voter assigned (or initialized) approvals.
 	last_active: VoteIndex,
@@ -115,7 +115,7 @@ pub struct VoterInfo<Balance> {
 
 /// Used to demonstrate the status of a particular index in the global voter list.
 #[derive(PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Debug)]
 pub enum CellStatus {
 	/// Any out of bound index. Means a push a must happen to the chunk pointed by `NextVoterSet<T>`.
 	/// Voting fee is applied in case a new chunk is created.

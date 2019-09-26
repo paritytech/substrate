@@ -49,7 +49,7 @@ pub type ReferendumIndex = u32;
 
 /// A value denoting the strength of conviction of a vote.
 #[derive(Encode, Decode, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Debug)]
 pub enum Conviction {
 	/// 0.1x votes, unlocked.
 	None,
@@ -149,7 +149,7 @@ const MAX_RECURSION_LIMIT: u32 = 16;
 
 /// A number of lock periods, plus a vote, one way or the other.
 #[derive(Copy, Clone, Eq, PartialEq, Default)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Debug)]
 pub struct Vote {
 	pub aye: bool,
 	pub conviction: Conviction,
@@ -232,7 +232,7 @@ pub trait Trait: system::Trait + Sized {
 
 /// Info regarding an ongoing referendum.
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Debug)]
 pub struct ReferendumInfo<BlockNumber: Parameter, Proposal: Parameter> {
 	/// When voting on this referendum will end.
 	end: BlockNumber,

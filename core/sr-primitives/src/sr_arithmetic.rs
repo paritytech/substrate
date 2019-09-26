@@ -34,7 +34,8 @@ macro_rules! implement_per_thing {
 		/// A fixed point representation of a number between in the range [0, 1].
 		///
 		#[doc = $title]
-		#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug, Ord, PartialOrd))]
+		#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Ord, PartialOrd))]
+		#[derive(Debug)]
 		#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq)]
 		pub struct $name($type);
 
@@ -544,7 +545,7 @@ implement_per_thing!(
 
 /// An unsigned fixed point number. Can hold any value in the range [-9_223_372_036, 9_223_372_036]
 /// with fixed point accuracy of one billion.
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Debug)]
 #[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Fixed64(i64);
 
@@ -787,7 +788,7 @@ pub mod helpers_128bit {
 
 /// A wrapper for any rational number with a 128 bit numerator and denominator.
 #[derive(Clone, Copy, Default, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Debug)]
 pub struct Rational128(u128, u128);
 
 impl Rational128 {

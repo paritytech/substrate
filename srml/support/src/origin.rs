@@ -153,7 +153,7 @@ macro_rules! impl_outer_origin {
 		$crate::paste::item! {
 			// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 			#[derive(Clone, PartialEq, Eq)]
-			#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Debug)]
 			$(#[$attr])*
 			#[allow(non_camel_case_types)]
 			pub enum $name {

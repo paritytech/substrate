@@ -36,7 +36,7 @@ support::decl_error! {
 
 /// Origin for the system module.
 #[derive(PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Debug)]
 pub enum RawOrigin<AccountId> {
 	Root,
 	Signed(AccountId),

@@ -228,7 +228,7 @@ macro_rules! __assert_eq_uvec {
 /// The void type - it cannot exist.
 // Oh rust, you crack me up...
 #[derive(Clone, Eq, PartialEq)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Debug)]
 pub enum Void {}
 
 #[cfg(feature = "std")]

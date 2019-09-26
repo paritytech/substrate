@@ -174,7 +174,7 @@ impl Into<TransactionValidity> for UnknownTransaction {
 
 /// Information concerning a valid transaction.
 #[derive(Clone, PartialEq, Eq, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Debug)]
 pub struct ValidTransaction {
 	/// Priority of the transaction.
 	///

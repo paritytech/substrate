@@ -147,7 +147,7 @@ impl RuntimeVersion {
 }
 
 #[cfg(feature = "std")]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Debug)]
 pub struct NativeVersion {
 	/// Basic runtime version info.
 	pub runtime_version: RuntimeVersion,
