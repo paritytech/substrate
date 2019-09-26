@@ -611,7 +611,7 @@ pub trait IsMember<MemberId> {
 }
 
 /// Something which fulfills the abstract idea of a Substrate header. It has types for a `Number`,
-/// a `Hash` and a `Digest`. It provides access to an `extrinsics_root`, `state_root` and
+/// a `Hash` and a `Hashing`. It provides access to an `extrinsics_root`, `state_root` and
 /// `parent_hash`, as well as a `digest` and a block `number`.
 ///
 /// You can also create a `new` one from those fields.
@@ -767,8 +767,6 @@ pub trait Dispatchable {
 	/// generated from. In the case of a signed extrinsic (transaction), the origin contains an
 	/// identifier for the caller. The origin can be empty in the case of an inherent extrinsic.
 	type Origin;
-	/// ...
-	type Trait;
 	/// The error type returned by this dispatchable.
 	type Error: Into<crate::DispatchError>;
 	/// Actually dispatch this call and result the result of it.
