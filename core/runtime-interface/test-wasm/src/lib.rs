@@ -58,3 +58,13 @@ pub fn test_set_storage() {
 
 	test_api::set_storage(key.as_bytes(), value.as_bytes());
 }
+
+#[no_mangle]
+pub fn test_return_value_into_mutable_reference() {
+	let mut data = vec![1, 2, 3, 4, 5, 6];
+
+	test_api::return_value_into_mutable_reference(&mut data);
+
+	let expected = "hello";
+	assert_eq!(expected.as_bytes(), &data[..expected.len()]);
+}
