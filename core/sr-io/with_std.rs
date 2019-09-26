@@ -195,6 +195,10 @@ impl OtherApi for () {
 	fn print_hex(data: &[u8]) {
 		println!("{}", HexDisplay::from(&data));
 	}
+
+	fn debug(data: &impl rstd::fmt::Debug) {
+		dbg!("{:?}", data);
+	}
 }
 
 impl CryptoApi for () {

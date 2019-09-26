@@ -161,6 +161,13 @@ export_api! {
 		fn print_utf8(utf8: &[u8]);
 		/// Print any `u8` slice as hex.
 		fn print_hex(data: &[u8]);
+		/// Print a debuggable struct.
+		///
+		/// Might do nothing if debugging is not enabled.
+		#[cfg(feature = "std")]
+		fn debug(data: &impl std::fmt::Debug);
+		#[cfg(not(feature = "std"))]
+		fn debug(data: &impl core::fmt::Debug);
 	}
 }
 

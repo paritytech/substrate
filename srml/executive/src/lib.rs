@@ -169,6 +169,7 @@ where
 
 	/// Actually execute all transitions for `block`.
 	pub fn execute_block(block: Block) {
+		runtime_io::debug(&block);
 		Self::initialize_block(block.header());
 
 		// any initial checks

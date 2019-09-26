@@ -780,6 +780,24 @@ impl OtherApi for () {
 			ext_print_hex.get()(data.as_ptr(), data.len() as u32);
 		}
 	}
+
+	fn debug(data: &impl core::fmt::Debug) {
+		use core::fmt::Write;
+		struct Writer(Vec<u8>);
+		impl Write for Writer {
+			fn write_str(&mut self, s: &str) -> Result<(), core::fmt::Error> {
+				self.0.extend(s.as_bytes());
+				Ok(())
+			}
+		}
+
+		let mut w = Writer(Vec::new());
+		core::write!(&mut w, "{:?}", data).unwrap();
+
+		unsafe {
+			ext_print_utf8.get()(w.0.as_ptr(), w.0.len() as u32);
+		}
+	}
 }
 
 impl HashingApi for () {
