@@ -628,27 +628,27 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn load_keys(v: &T::ValidatorId) -> Option<T::Keys> {
-		<NextKeys<T>>::get(&DEDUP_KEY_PREFIX, v)
+		<NextKeys<T>>::get(DEDUP_KEY_PREFIX, v)
 	}
 
 	fn take_keys(v: &T::ValidatorId) -> Option<T::Keys> {
-		<NextKeys<T>>::take(&DEDUP_KEY_PREFIX, v)
+		<NextKeys<T>>::take(DEDUP_KEY_PREFIX, v)
 	}
 
 	fn put_keys(v: &T::ValidatorId, keys: &T::Keys) {
-		<NextKeys<T>>::insert(&DEDUP_KEY_PREFIX, v, keys);
+		<NextKeys<T>>::insert(DEDUP_KEY_PREFIX, v, keys);
 	}
 
 	fn key_owner(id: KeyTypeId, key_data: &[u8]) -> Option<T::ValidatorId> {
-		<KeyOwner<T>>::get(&DEDUP_KEY_PREFIX, &(id, key_data))
+		<KeyOwner<T>>::get(DEDUP_KEY_PREFIX, (id, key_data))
 	}
 
 	fn put_key_owner(id: KeyTypeId, key_data: &[u8], v: &T::ValidatorId) {
-		<KeyOwner<T>>::insert(&DEDUP_KEY_PREFIX, &(id, key_data), v)
+		<KeyOwner<T>>::insert(DEDUP_KEY_PREFIX, (id, key_data), v)
 	}
 
 	fn clear_key_owner(id: KeyTypeId, key_data: &[u8]) {
-		<KeyOwner<T>>::remove(&DEDUP_KEY_PREFIX, &(id, key_data));
+		<KeyOwner<T>>::remove(DEDUP_KEY_PREFIX, (id, key_data));
 	}
 }
 
