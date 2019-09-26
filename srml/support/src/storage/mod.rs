@@ -18,7 +18,7 @@
 
 use crate::rstd::prelude::*;
 use crate::rstd::{borrow::Borrow, iter::FromIterator};
-use codec::{Codec, Encode, Decode, KeyedVec, EncodeAppend};
+use codec::{Codec, Encode, Decode, EncodeAppend};
 use crate::traits::Len;
 
 #[macro_use]
@@ -27,6 +27,8 @@ pub mod unhashed;
 pub mod hashed;
 pub mod child;
 pub mod generator;
+pub mod storage_vec;
+pub mod storage_vec_hashed;
 
 /// A trait for working with macro-generated storage values under the substrate storage API.
 pub trait StorageValue<T: Codec> {

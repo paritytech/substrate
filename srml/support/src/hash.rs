@@ -14,13 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Hashable trait.
+//! Hash utilities.
 
-use crate::codec::Codec;
-use runtime_io::{blake2_128, blake2_256, twox_128, twox_256};
-use crate::storage::hashed::StorageHasher;
-use crate::Twox64Concat;
-use crate::rstd::prelude::Vec;
+use codec::Codec;
+use rstd::prelude::Vec;
+use runtime_io::{blake2_128, blake2_256, twox_64, twox_128, twox_256};
 
 // This trait must be kept coherent with srml-support-procedural HasherKind usage
 pub trait Hashable: Sized {
@@ -48,3 +46,65 @@ impl<T: Codec> Hashable for T {
 		self.using_encoded(Twox64Concat::hash)
 	}
 }
+
+/// Hasher to use to hash keys to insert to storage.
+pub trait StorageHasher: 'static {
+	type Output: AsRef<[u8]>;
+	fn hash(x: &[u8]) -> Self::Output;
+}
+
+/// Hash storage keys with `concat(twox64(key), key)`
+pub struct Twox64Concat;
+impl StorageHasher for Twox64Concat {
+	type Output = Vec<u8>;
+	fn hash(x: &[u8]) -> Vec<u8> {
+		twox_64(x)
+			.into_iter()
+			.chain(x.into_iter())
+			.cloned()
+			.collect::<Vec<_>>()
+	}
+}
+
+#[test]
+fn test_twox_64_concat() {
+	let r = Twox64Concat::hash(b"foo");
+	assert_eq!(r.split_at(8), (&twox_128(b"foo")[..8], &b"foo"[..]))
+}
+
+/// Hash storage keys with blake2 128
+pub struct Blake2_128;
+impl StorageHasher for Blake2_128 {
+	type Output = [u8; 16];
+	fn hash(x: &[u8]) -> [u8; 16] {
+		blake2_128(x)
+	}
+}
+
+/// Hash storage keys with blake2 256
+pub struct Blake2_256;
+impl StorageHasher for Blake2_256 {
+	type Output = [u8; 32];
+	fn hash(x: &[u8]) -> [u8; 32] {
+		blake2_256(x)
+	}
+}
+
+/// Hash storage keys with twox 128
+pub struct Twox128;
+impl StorageHasher for Twox128 {
+	type Output = [u8; 16];
+	fn hash(x: &[u8]) -> [u8; 16] {
+		twox_128(x)
+	}
+}
+
+/// Hash storage keys with twox 256
+pub struct Twox256;
+impl StorageHasher for Twox256 {
+	type Output = [u8; 32];
+	fn hash(x: &[u8]) -> [u8; 32] {
+		twox_256(x)
+	}
+}
+
