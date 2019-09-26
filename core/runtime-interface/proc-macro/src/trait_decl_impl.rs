@@ -16,19 +16,19 @@
 
 //! Checks the trait declaration, folds and implements it.
 
-use crate::utils::generate_crate_access;
+use crate::utils::{generate_crate_access, get_function_argument_types_without_ref};
 
 use syn::{
 	ItemTrait, TraitItemMethod, Result, TraitItem, Error, fold::{self, Fold}, spanned::Spanned,
-	Visibility, Receiver
+	Visibility, Receiver, Type,
 };
 
 use proc_macro2::TokenStream;
 
 use quote::quote;
 
-/// Process the given trait definition, by checking that the definition is valid, fold and
-/// implement it.
+/// Process the given trait definition, by checking that the definition is valid, fold it to the
+/// essential definition and implement this essential definition for `dyn Externalities<Blake2Hasher>`.
 pub fn process(trait_def: &ItemTrait) -> Result<TokenStream> {
 	let impl_trait = impl_trait_for_externalities(trait_def)?;
 	let essential_trait_def = ToEssentialTraitDef::convert(trait_def.clone())?;
@@ -80,6 +80,14 @@ impl Fold for ToEssentialTraitDef {
 		if method.default.take().is_none() {
 			self.push_error(&method, "Methods need to have an implementation");
 		}
+
+		let arg_types = get_function_argument_types_without_ref(&method.sig);
+		arg_types.filter_map(|ty|
+			match &**ty {
+				Type::ImplTrait(impl_trait) => Some(impl_trait),
+				_ => None
+			}
+		).for_each(|invalid| self.push_error(invalid, "`impl Trait` syntax not supported."));
 
 		method
 	}

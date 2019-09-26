@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+//! Tests for the runtime interface traits and proc macros.
+
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use runtime_interface::runtime_interface;
@@ -25,7 +27,7 @@ use rstd::{vec, vec::Vec};
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
 #[runtime_interface]
-trait TestApi {
+pub trait TestApi {
 	/// Returns the input data as result.
 	fn return_input(data: Vec<u8>) -> Vec<u8> {
 		data

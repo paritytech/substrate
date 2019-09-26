@@ -14,7 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Generates the extern host function for wasm and the host functions interface for native.
+//! Generates the extern host function declarations as well as the implementation for these host
+//! functions. The implementation of these host functions will call the native bare functions.
 
 use crate::utils::{
 	generate_crate_access, create_host_function_ident, get_function_argument_names,
