@@ -29,12 +29,12 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use app_crypto::RuntimeAppPublic;
+use codec::{Decode, Encode};
 use rstd::prelude::*;
 use support::{decl_module, decl_storage};
-use codec::{Decode, Encode};
 
 pub trait Trait: system::Trait + session::Trait {
-    type AuthorityId: RuntimeAppPublic + Default + Decode + Encode + PartialEq;
+	type AuthorityId: RuntimeAppPublic + Default + Decode + Encode + PartialEq;
 }
 
 decl_storage! {
@@ -78,7 +78,12 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Sign the given payload with the private key corresponding to the given authority id.
-	pub fn sign(payload: &Vec<u8>) -> Option<(<<T as Trait>::AuthorityId as RuntimeAppPublic>::Signature, T::AuthorityId)> {
+	pub fn sign(
+		payload: &Vec<u8>,
+	) -> Option<(
+		<<T as Trait>::AuthorityId as RuntimeAppPublic>::Signature,
+		T::AuthorityId,
+	)> {
 		let authority_id = Module::<T>::authority_id()?;
 		authority_id.sign(payload).map(|s| (s, authority_id))
 	}
@@ -336,7 +341,11 @@ mod tests {
 			let payload = String::from("test payload").into_bytes();
 			let (sig, authority_id) = AuthorityDiscovery::sign(&payload).expect("signature");
 
-			assert!(AuthorityDiscovery::verify(&payload, sig.clone(), authority_id.clone(),));
+			assert!(AuthorityDiscovery::verify(
+				&payload,
+				sig.clone(),
+				authority_id.clone(),
+			));
 
 			assert!(!AuthorityDiscovery::verify(
 				&String::from("other payload").into_bytes(),
