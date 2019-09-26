@@ -234,7 +234,14 @@ pub fn new_full<C: Send + Default + 'static>(config: Configuration<C, GenesisCon
 #[allow(dead_code)]
 type ConcreteBlock = node_primitives::Block;
 #[allow(dead_code)]
-type ConcreteClient = Client<Backend<node_primitives::Block>, LocalCallExecutor<Backend<ConcreteBlock>, NativeExecutor<node_executor::Executor>>, ConcreteBlock, node_runtime::RuntimeApi>;
+type ConcreteClient =
+	Client<
+		Backend<ConcreteBlock>,
+		LocalCallExecutor<Backend<ConcreteBlock>,
+		NativeExecutor<node_executor::Executor>>,
+		ConcreteBlock,
+		node_runtime::RuntimeApi
+	>;
 #[allow(dead_code)]
 type ConcreteBackend = Backend<ConcreteBlock>;
 
