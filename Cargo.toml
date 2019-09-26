@@ -71,6 +71,7 @@ members = [
 	"srml/assets",
 	"srml/aura",
 	"srml/balances",
+	"srml/bridge",
 	"srml/contracts",
 	"srml/contracts/rpc",
 	"srml/collective",
