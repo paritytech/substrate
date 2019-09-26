@@ -315,7 +315,7 @@ fn aura_err<B: BlockT>(error: Error<B>) -> Error<B> {
 
 #[derive(derive_more::Display)]
 enum Error<B: BlockT> {
-	#[display(fmt = "Multiple AuRa pre-runtime headers")]
+	#[display(fmt = "Multiple Aura pre-runtime headers")]
 	MultipleHeaders,
 	#[display(fmt = "No Aura pre-runtime digest found")]
 	NoDigestFound,
