@@ -1842,7 +1842,7 @@ mod tests {
 				body: vec![1, 2, 3, 4],
 				headers: vec![("X-Auth".to_owned(), "test".to_owned())],
 				sent: true,
-				response: vec![1, 2, 3],
+				response: Some(vec![1, 2, 3]),
 				response_headers: vec![("X-Auth".to_owned(), "hello".to_owned())],
 				..Default::default()
 			},
