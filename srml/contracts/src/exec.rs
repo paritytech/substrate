@@ -754,7 +754,7 @@ where
 	}
 
 	fn random(&self, subject: &[u8]) -> SeedOf<T> {
-		system::Module::<T>::random(subject)
+		randomness::Module::<T>::random(subject)
 	}
 
 	fn now(&self) -> &T::Moment {
