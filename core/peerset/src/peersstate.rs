@@ -50,6 +50,9 @@ pub struct PeersState {
 
 	/// Priority groups. Each group is identified by a string ID and contains a set of peer IDs.
 	priority_nodes: HashMap<String, HashSet<PeerId>>,
+
+	/// Only allow connections to/from peers in a priority group.
+	priority_only: bool,
 }
 
 /// State of a single node that we know about.
@@ -96,7 +99,7 @@ impl ConnectionState {
 
 impl PeersState {
 	/// Builds a new empty `PeersState`.
-	pub fn new(in_peers: u32, out_peers: u32) -> Self {
+	pub fn new(in_peers: u32, out_peers: u32, priority_only: bool) -> Self {
 		PeersState {
 			nodes: HashMap::new(),
 			num_in: 0,
@@ -104,6 +107,7 @@ impl PeersState {
 			max_in: in_peers,
 			max_out: out_peers,
 			priority_nodes: HashMap::new(),
+			priority_only,
 		}
 	}
 
@@ -220,9 +224,15 @@ impl PeersState {
 
 	/// Sets the peer as connected with an outgoing connection.
 	fn try_outgoing(&mut self, peer_id: &PeerId) -> bool {
+		let is_priority = self.is_priority(peer_id);
+
+		// We are only accepting connections from priority nodes.
+		if !is_priority && self.priority_only {
+			return false;
+		}
+
 		// Note that it is possible for num_out to be strictly superior to the max, in case we were
 		// connected to reserved node then marked them as not reserved.
-		let is_priority = self.is_priority(peer_id);
 		if self.num_out >= self.max_out && !is_priority {
 			return false;
 		}
@@ -245,6 +255,12 @@ impl PeersState {
 	/// Note that reserved nodes don't count towards the number of slots.
 	fn try_accept_incoming(&mut self, peer_id: &PeerId) -> bool {
 		let is_priority = self.is_priority(peer_id);
+
+		// We are only accepting connections from priority nodes.
+		if !is_priority && self.priority_only {
+			return false;
+		}
+
 		// Note that it is possible for num_in to be strictly superior to the max, in case we were
 		// connected to reserved node then marked them as not reserved.
 		if self.num_in >= self.max_in && !is_priority {
@@ -313,6 +329,11 @@ impl PeersState {
 	/// Get priority group content.
 	pub fn get_priority_group(&self, group_id: &str) -> Option<HashSet<PeerId>> {
 		self.priority_nodes.get(group_id).cloned()
+	}
+
+	/// Set whether to only allow connections to/from peers in a priority group.
+	pub fn set_priority_only(&mut self, priority: bool) {
+		self.priority_only = priority;
 	}
 
 	/// Check that node is any priority group.
