@@ -1512,9 +1512,9 @@ impl<HF: HostFunctions> WasmExecutor<HF> {
 		})?;
 
 		let parameters = parameters.into_iter().map(Into::into).collect::<Vec<_>>();
-		let result = runtime_io::with_externalities(
+		let result = runtime_interface::set_and_run_with_externalities(
 			ext,
-			|| module_instance.invoke_export(method, &parameters, &mut fec),
+			|| module_instance.invoke_export(method, &parameters, &mut fec)
 		);
 
 		match result {

@@ -50,3 +50,11 @@ pub fn test_return_data() {
 
 	assert_eq!(input, res);
 }
+
+#[no_mangle]
+pub fn test_set_storage() {
+	let key = "hello";
+	let value = "world";
+
+	test_api::set_storage(key.as_bytes(), value.as_bytes());
+}

@@ -15,8 +15,8 @@ codec = { package = "parity-scale-codec", version = "1.0.0", default-features = 
 hash-db = { version = "0.15.2", default-features = false }
 libsecp256k1 = { version = "0.2.1", optional = true }
 tiny-keccak = { version = "1.4.2", optional = true }
-environmental = { version = "1.0.1", optional = true }
 substrate-state-machine = { path = "../state-machine", optional = true }
+runtime-interface = { package = "substrate-runtime-interface", path = "../runtime-interface", optional = true }
 trie = { package = "substrate-trie", path = "../trie", optional = true }
 
 [dev-dependencies]
@@ -30,10 +30,10 @@ std = [
 	"rstd/std",
 	"hash-db/std",
 	"trie",
-	"environmental",
 	"substrate-state-machine",
 	"libsecp256k1",
-	"tiny-keccak"
+	"tiny-keccak",
+	"runtime-interface",
 ]
 nightly = []
 strict = []

@@ -19,7 +19,7 @@
 use rstd::{any::TypeId, borrow::Cow, mem};
 
 #[cfg(feature = "std")]
-use wasm_interface::{FunctionContext, IntoValue, TryFromValue, Pointer, Result};
+use wasm_interface::{FunctionContext, Pointer, Result};
 
 use codec::{Encode, Decode};
 
@@ -37,10 +37,10 @@ pub use wasm_interface;
 pub use substrate_runtime_interface_proc_macro::runtime_interface;
 
 #[cfg(feature = "std")]
-pub fn with_externalities<F: FnOnce(&mut dyn Externalities<Blake2Hasher>) -> R, R>(f: F) -> R {
-	println!("HEY");
-	unimplemented!()
-}
+pub use externalities::{set_and_run_with_externalities, with_externalities};
+
+#[cfg(feature = "std")]
+mod externalities;
 
 pub trait AsFFIArg {
 	/// The owned rust type that converts into `Self::FFIType`.
@@ -262,37 +262,42 @@ mod tests {
 	use super::*;
 	use test_wasm::{WASM_BINARY, test_api::HostFunctions};
 	use executor::WasmExecutor;
+	use wasm_interface::HostFunctions as HostFunctionsT;
 
 	type TestExternalities<H> = state_machine::TestExternalities<H, u64>;
 
-	#[test]
-	fn test_return_data() {
+	fn call_wasm_method<HF: HostFunctionsT>(method: &str) -> TestExternalities<Blake2Hasher> {
 		let mut ext = TestExternalities::default();
-		let executor = WasmExecutor::<HostFunctions>::new();
+		let executor = WasmExecutor::<HF>::new();
 
 		executor.call_with_custom_signature::<_, _, _, ()>(
 			&mut ext,
 			8,
 			&WASM_BINARY[..],
-			"test_return_data",
+			method,
 			|_| Ok(Vec::new()),
 			|res, _| if res.is_none() { Ok(Some(())) } else { Err("Invalid return value!".into()) },
-		).unwrap();
+		).expect(&format!("Executes `{}`", method));
+
+		ext
+	}
+
+	#[test]
+	fn test_return_data() {
+		call_wasm_method::<HostFunctions>("test_return_data");
+	}
+
+	#[test]
+	fn test_set_storage() {
+		let ext = call_wasm_method::<HostFunctions>("test_set_storage");
+
+		let expected = "world";
+		assert_eq!(expected.as_bytes(), &ext.storage("hello".as_bytes()).unwrap()[..]);
 	}
 
 	#[test]
 	#[should_panic(expected = "Wasmi(Instantiation(\"Export ext_test_api_return_input not found\"))")]
 	fn host_function_not_found() {
-		let mut ext = TestExternalities::default();
-		let executor = <WasmExecutor>::new();
-
-		executor.call_with_custom_signature::<_, _, _, ()>(
-			&mut ext,
-			8,
-			&WASM_BINARY[..],
-			"test_return_data",
-			|_| Ok(Vec::new()),
-			|res, _| Ok(None),
-		).unwrap();
+		call_wasm_method::<()>("test_return_data");
 	}
 }

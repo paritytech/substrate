@@ -21,11 +21,14 @@ use crate::utils::{
 	get_function_argument_names, get_function_argument_types_without_ref,
 };
 
-use syn::{Ident, ItemTrait, TraitItemMethod, FnArg, Signature, Result, ReturnType, TraitItem};
+use syn::{
+	Ident, ItemTrait, TraitItemMethod, FnArg, Signature, Result, ReturnType, TraitItem,
+	spanned::Spanned,
+};
 
 use proc_macro2::{TokenStream, Span};
 
-use quote::quote;
+use quote::{quote, quote_spanned};
 
 /// Generate the bare-function interface.
 pub fn generate(trait_def: &ItemTrait) -> Result<TokenStream> {
@@ -111,13 +114,19 @@ fn function_std_impl(trait_name: &Ident, method: &TraitItemMethod) -> Result<Tok
 	let arg_names = get_function_argument_names(&method.sig);
 	let crate_ = generate_crate_access();
 	let return_value = &method.sig.output;
+	let expect_msg = format!(
+		"`{}` called outside of an Externalities-provided environment.",
+		method_name,
+	);
 
 	let call_to_trait = if takes_self_argument(&method.sig) {
-		quote! {
-			#crate_::with_externalities(|mut ext| #trait_name::#method_name(&mut ext, #( #arg_names, )*))
+		quote_spanned! { method.span() =>
+			#crate_::with_externalities(
+				|mut ext| #trait_name::#method_name(&mut ext, #( #arg_names, )*)
+			).expect(#expect_msg)
 		}
 	} else {
-		quote! {
+		quote_spanned! { method.span() =>
 			<&mut dyn #crate_::Externalities<#crate_::Blake2Hasher> as #trait_name>::#method_name(
 				#( #arg_names, )*
 			)
@@ -125,7 +134,7 @@ fn function_std_impl(trait_name: &Ident, method: &TraitItemMethod) -> Result<Tok
 	};
 
 	Ok(
-		quote! {
+		quote_spanned! { method.span() =>
 			#[cfg(feature = "std")]
 			fn #function_name( #( #args, )* ) #return_value {
 				#call_to_trait
