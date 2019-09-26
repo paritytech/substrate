@@ -32,7 +32,6 @@ use regex::Regex;
 use base58::{FromBase58, ToBase58};
 #[cfg(feature = "std")]
 use std::hash::Hash;
-// extern crate zeroize;
 use zeroize::Zeroize;
 #[doc(hidden)]
 pub use rstd::ops::Deref;
