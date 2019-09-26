@@ -82,7 +82,7 @@ fn function_no_std_impl(trait_name: &Ident, method: &TraitItemMethod) -> Result<
 	let convert_return_value = match return_value {
 		ReturnType::Default => quote!(),
 		ReturnType::Type(_, ref ty) => quote! {
-			<#ty as #crate_::FromFFIArg<_>>::from_ffi_arg(result)
+			<#ty as #crate_::wasm::FromFFIValue>::from_ffi_value(result)
 		}
 	};
 
@@ -90,15 +90,17 @@ fn function_no_std_impl(trait_name: &Ident, method: &TraitItemMethod) -> Result<
 		quote! {
 			#[cfg(not(feature = "std"))]
 			fn #function_name( #( #args, )* ) #return_value {
-				use #crate_::IntoFFIArg as _;
+				use #crate_::wasm::IntoFFIValue as _;
 
-				// Generate all ffi arg wrappers.
+				// Generate all wrapped ffi value.
 				#(
-					let #arg_names = <#arg_types as #crate_::AsFFIArg>::as_ffi_arg(&#arg_names);
+					let #arg_names = <#arg_types as #crate_::wasm::AsWrappedFFIValue>::as_wrapped_ffi_value(
+						&#arg_names,
+					);
 				)*
 
 				// Call the host function
-				let result = unsafe { #host_function_name( #( #arg_names2.into_ffi_arg(), )* ) };
+				let result = unsafe { #host_function_name( #( #arg_names2.into_ffi_value(), )* ) };
 
 				#convert_return_value
 			}

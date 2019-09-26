@@ -32,6 +32,7 @@ use proc_macro2::{TokenStream, Span};
 use quote::{quote, ToTokens};
 
 use inflector::Inflector;
+
 use std::iter::Iterator;
 
 /// Generate the extern host functions for wasm and the `HostFunctions` struct that provides the
@@ -69,7 +70,7 @@ fn generate_extern_host_function(method: &TraitItemMethod, trait_name: &Ident) -
 	let output = match method.sig.output {
 		ReturnType::Default => quote!(),
 		ReturnType::Type(_, ref ty) => quote! {
-			-> <#ty as #crate_::AsFFIArg>::FFIType
+			-> <#ty as #crate_::RIType>::FFIType
 		}
 	};
 
@@ -78,7 +79,7 @@ fn generate_extern_host_function(method: &TraitItemMethod, trait_name: &Ident) -
 			#[cfg(not(feature = "std"))]
 			extern "C" {
 				pub fn #function (
-					#( #arg_names: <#arg_types as #crate_::AsFFIArg>::FFIType ),*
+					#( #arg_names: <#arg_types as #crate_::RIType>::FFIType ),*
 				) #output;
 			}
 		}
@@ -143,7 +144,7 @@ fn generate_host_function_implementation(
 	let wasm_to_ffi_values = generate_wasm_to_ffi_values(&method.sig).collect::<Result<Vec<_>>>()?;
 	let ffi_to_host_values = generate_ffi_to_host_value(&method.sig).collect::<Result<Vec<_>>>()?;
 	let host_function_call = generate_host_function_call(&method.sig);
-	let into_preallocated_ffi_arg = generate_into_preallocated_ffi_arg(&method.sig)?;
+	let into_preallocated_ffi_value = generate_into_preallocated_ffi_value(&method.sig)?;
 	let convert_return_value = generate_return_value_into_wasm_value(&method.sig);
 
 	Ok(
@@ -169,7 +170,7 @@ fn generate_host_function_implementation(
 						#( #wasm_to_ffi_values )*
 						#( #ffi_to_host_values )*
 						#host_function_call
-						#into_preallocated_ffi_arg
+						#into_preallocated_ffi_value
 						#convert_return_value
 					}
 				}
@@ -186,13 +187,13 @@ fn generate_wasm_interface_signature_for_host_function(sig: &Signature) -> Resul
 	let return_value = match &sig.output {
 		ReturnType::Type(_, ty) =>
 			quote! {
-				Some( <<#ty as #crate_::AsFFIArg>::FFIType as #crate_::wasm_interface::IntoValue>::VALUE_TYPE )
+				Some( <<#ty as #crate_::RIType>::FFIType as #crate_::wasm_interface::IntoValue>::VALUE_TYPE )
 			},
 		ReturnType::Default => quote!( None ),
 	};
 	let arg_types = get_function_argument_types_without_ref(sig)
 		.map(|ty| quote! {
-			<<#ty as #crate_::AsFFIArg>::FFIType as #crate_::wasm_interface::IntoValue>::VALUE_TYPE
+			<<#ty as #crate_::RIType>::FFIType as #crate_::wasm_interface::IntoValue>::VALUE_TYPE
 		});
 
 	Ok(
@@ -230,13 +231,13 @@ fn generate_wasm_to_ffi_values<'a>(
 			Ok(quote! {
 				let val = args.next().ok_or_else(|| #error_message)?;
 				let #var_name = <
-					<#ty as #crate_::AsFFIArg>::FFIType as #crate_::wasm_interface::TryFromValue
+					<#ty as #crate_::RIType>::FFIType as #crate_::wasm_interface::TryFromValue
 				>::try_from_value(val).ok_or_else(|| #try_from_error)?;
 			})
 		})
 }
 
-/// Generate the code to convert the ffi values on the host to the host values using `FromWasmFFIArg`.
+/// Generate the code to convert the ffi values on the host to the host values using `FromFFIValue`.
 fn generate_ffi_to_host_value<'a>(
 	sig: &'a Signature,
 ) -> impl Iterator<Item = Result<TokenStream>> + 'a {
@@ -250,7 +251,7 @@ fn generate_ffi_to_host_value<'a>(
 
 			Ok(
 				quote! {
-					let #mut_access #name = <#ty as #crate_::FromWasmFFIArg<_>>::from_wasm_ffi_arg(
+					let #mut_access #name = <#ty as #crate_::host::FromFFIValue>::from_ffi_value(
 						context,
 						#ffi_value_var_name,
 					)?;
@@ -301,8 +302,8 @@ fn generate_ffi_value_var_name(pat: &Pat) -> Result<Ident> {
 /// Generate code that copies data from the host back to preallocated wasm memory.
 ///
 /// Any argument that is given as `&mut` is interpreted as preallocated memory and it is expected
-/// that the type implements `IntoPreAllocatedWasmFFIArg`.
-fn generate_into_preallocated_ffi_arg(sig: &Signature) -> Result<TokenStream> {
+/// that the type implements `IntoPreAllocatedFFIValue`.
+fn generate_into_preallocated_ffi_value(sig: &Signature) -> Result<TokenStream> {
 	let crate_ = generate_crate_access();
 	let ref_and_mut = get_function_argument_types_ref_and_mut(sig).map(|ram|
 		ram.and_then(|(vr, vm)| vm.map(|v| (vr, v)))
@@ -316,7 +317,7 @@ fn generate_into_preallocated_ffi_arg(sig: &Signature) -> Result<TokenStream> {
 
 			Ok(
 				quote! {
-					<#ty as #crate_::IntoPreAllocatedWasmFFIArg<_>>::into_wasm_ffi_arg(
+					<#ty as #crate_::host::IntoPreallocatedFFIValue>::into_preallocated_ffi_value(
 						#name,
 						context,
 						#ffi_var_name,
@@ -337,7 +338,7 @@ fn generate_return_value_into_wasm_value(sig: &Signature) -> TokenStream {
 			let result_var_name = generate_host_function_result_var_name(&sig.ident);
 
 			quote! {
-				<#ty as #crate_::IntoWasmFFIArg<_>>::into_wasm_ffi_arg(#result_var_name, context)
+				<#ty as #crate_::host::IntoFFIValue>::into_ffi_value(#result_var_name, context)
 					.map(#crate_::wasm_interface::IntoValue::into_value)
 					.map(Some)
 			}

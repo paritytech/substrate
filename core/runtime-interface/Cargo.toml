@@ -11,6 +11,7 @@ primitives = { package = "substrate-primitives", path = "../primitives", default
 substrate-runtime-interface-proc-macro = { path = "proc-macro" }
 codec = { package = "parity-scale-codec", version = "1.0.5", default-features = false }
 environmental = { version = "1.0.2", optional = true }
+static_assertions = "0.3.4"
 
 [dev-dependencies]
 executor = { package = "substrate-executor", path = "../executor" }
