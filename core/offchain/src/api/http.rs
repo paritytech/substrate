@@ -848,7 +848,7 @@ mod tests {
 			_ => panic!()
 		};
 
-		let id = api.request_start("GET", &format!("http://{}", addr)).unwrap();
+		let id = api.request_start("POST", &format!("http://{}", addr)).unwrap();
 		api.request_write_body(id, &[1, 2, 3, 4], None).unwrap();
 		api.request_write_body(id, &[1, 2, 3, 4], None).unwrap();
 		api.request_write_body(id, &[], None).unwrap();
@@ -857,7 +857,7 @@ mod tests {
 			_ => panic!()
 		};
 
-		let id = api.request_start("GET", &format!("http://{}", addr)).unwrap();
+		let id = api.request_start("POST", &format!("http://{}", addr)).unwrap();
 		api.request_write_body(id, &[1, 2, 3, 4], None).unwrap();
 		api.request_write_body(id, &[1, 2, 3, 4], None).unwrap();
 		api.request_write_body(id, &[], None).unwrap();
@@ -866,7 +866,7 @@ mod tests {
 			_ => panic!()
 		};
 
-		let id = api.request_start("GET", &format!("http://{}", addr)).unwrap();
+		let id = api.request_start("POST", &format!("http://{}", addr)).unwrap();
 		api.request_write_body(id, &[1, 2, 3, 4], None).unwrap();
 		api.response_wait(&[id], None);
 		match api.request_write_body(id, &[], None) {
@@ -874,7 +874,7 @@ mod tests {
 			_ => panic!()
 		};
 
-		let id = api.request_start("GET", &format!("http://{}", addr)).unwrap();
+		let id = api.request_start("POST", &format!("http://{}", addr)).unwrap();
 		api.request_write_body(id, &[1, 2, 3, 4], None).unwrap();
 		api.response_wait(&[id], None);
 		match api.request_write_body(id, &[1, 2, 3, 4], None) {
@@ -882,28 +882,28 @@ mod tests {
 			_ => panic!()
 		};
 
-		let id = api.request_start("GET", &format!("http://{}", addr)).unwrap();
+		let id = api.request_start("POST", &format!("http://{}", addr)).unwrap();
 		api.response_headers(id);
 		match api.request_write_body(id, &[1, 2, 3, 4], None) {
 			Err(HttpError::Invalid) => {}
 			_ => panic!()
 		};
 
-		let id = api.request_start("GET", &format!("http://{}", addr)).unwrap();
+		let id = api.request_start("POST", &format!("http://{}", addr)).unwrap();
 		api.response_headers(id);
 		match api.request_write_body(id, &[], None) {
 			Err(HttpError::Invalid) => {}
 			_ => panic!()
 		};
 
-		let id = api.request_start("GET", &format!("http://{}", addr)).unwrap();
+		let id = api.request_start("POST", &format!("http://{}", addr)).unwrap();
 		api.response_read_body(id, &mut [], None).unwrap();
 		match api.request_write_body(id, &[1, 2, 3, 4], None) {
 			Err(HttpError::Invalid) => {}
 			_ => panic!()
 		};
 
-		let id = api.request_start("GET", &format!("http://{}", addr)).unwrap();
+		let id = api.request_start("POST", &format!("http://{}", addr)).unwrap();
 		api.response_read_body(id, &mut [], None).unwrap();
 		match api.request_write_body(id, &[], None) {
 			Err(HttpError::Invalid) => {}
