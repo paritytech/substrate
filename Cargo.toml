@@ -123,4 +123,4 @@ is-it-maintained-open-issues = { repository = "paritytech/substrate" }
 panic = "unwind"
 
 [patch.crates-io]
-parity-scale-codec = { git = "https://github.com/paritytech/parity-scale-codec", branch = "gui-wip-append-2" }
+parity-scale-codec = { git = "https://github.com/paritytech/parity-scale-codec", branch = "gui-new-release" }
