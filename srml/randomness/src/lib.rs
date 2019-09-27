@@ -275,4 +275,30 @@ mod tests {
 			assert_ne!(random_material[0], genesis_hash);
 		});
 	}
+
+	#[test]
+	fn test_random() {
+		with_externalities(&mut new_test_ext(), || {
+			let mut parent_hash = System::parent_hash();
+
+			for i in 2..164 {
+				System::initialize(&i, &parent_hash, &Default::default(), &Default::default());
+				Randomness::on_initialize(i);
+
+				let header = System::finalize();
+				parent_hash = header.hash();
+				// Why is this needed?
+				System::set_block_number(*header.number());
+			}
+
+			assert_eq!(System::block_number(), 163);
+			assert_eq!(Randomness::random_seed(), Randomness::random_seed());
+			assert_ne!(Randomness::random(b"random_1"), Randomness::random(b"random_2"));
+
+			let random = Randomness::random_seed();
+
+			assert_ne!(random, H256::zero());
+			assert!(!Randomness::random_material().contains(&random));
+		});
+	}
 }
