@@ -18,11 +18,14 @@
 use rstd::prelude::*;
 use rstd::{borrow::Borrow, iter::FromIterator};
 use codec::{Codec, Encode};
-use crate::{storage::{self, unhashed, hashed::{Twox128, StorageHasher}}, traits::Len};
+use crate::{storage::{self, unhashed}, hash::{Twox128, StorageHasher}, traits::Len};
 
 /// Generator for `StorageValue` used by `decl_storage`.
 ///
-/// Value is stored at `Twox128(unhashed_key)`.
+/// Value is stored at:
+/// ```nocompile
+/// Twox128(unhashed_key)
+/// ```
 pub trait StorageValue<T: Codec> {
 	/// The type that get/take returns.
 	type Query;

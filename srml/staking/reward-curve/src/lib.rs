@@ -337,8 +337,8 @@ fn generate_piecewise_linear(points: Vec<(u32, u32)>) -> TokenStream2 {
 
 		points_tokens.extend(quote!(
 			(
-				_sr_primitives::Perbill::from_const_parts(#x_perbill),
-				_sr_primitives::Perbill::from_const_parts(#y_perbill),
+				_sr_primitives::Perbill::from_parts(#x_perbill),
+				_sr_primitives::Perbill::from_parts(#y_perbill),
 			),
 		));
 	}

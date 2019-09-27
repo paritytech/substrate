@@ -15,8 +15,9 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use rstd::prelude::*;
+use rstd::borrow::Borrow;
 use codec::{Codec, Encode, EncodeAppend};
-use crate::{storage::{self, unhashed, hashed::StorageHasher}, rstd::borrow::Borrow};
+use crate::{storage::{self, unhashed}, hash::StorageHasher};
 
 /// Generator for `StorageDoubleMap` used by `decl_storage`.
 ///
@@ -26,10 +27,18 @@ use crate::{storage::{self, unhashed, hashed::StorageHasher}, rstd::borrow::Borr
 /// The first part is a hash of a concatenation of the `key1_prefix` and `Key1`. And the second part
 /// is a hash of a `Key2`.
 ///
-/// Thus value for (key1, key2) is stored at `Hasher1(key1_prefix ++ key1) ++ Hasher2(key2)`.
+/// Thus value for (key1, key2) is stored at:
+/// ```nocompile
+/// Hasher1(key1_prefix ++ key1) ++ Hasher2(key2)
+/// ```
 ///
-/// /!\ be careful while choosing the Hash, indeed malicious could craft second keys to lower the
-/// trie.
+/// # Warning
+///
+/// If the key1s are not trusted (e.g. can be set by a user), a cryptographic `hasher` such as
+/// `blake2_256` must be used for Hasher1. Otherwise, other values in storage can be compromised.
+/// If the key2s are not trusted (e.g. can be set by a user), a cryptographic `hasher` such as
+/// `blake2_256` must be used for Hasher2. Otherwise, other items in storage with the same first
+/// key can be compromised.
 pub trait StorageDoubleMap<K1: Encode, K2: Encode, V: Codec> {
 	/// The type that get/take returns.
 	type Query;
