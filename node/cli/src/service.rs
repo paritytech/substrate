@@ -265,7 +265,7 @@ pub fn new_full_concrete<C: Send + Default + 'static>(config: Configuration<C, G
 			ConcreteBlock,
 		>
 	>,
-	ServiceError
+	ServiceError,
 >
 {
 	new_full!(config).map(|(service, _)| service)
