@@ -18,7 +18,6 @@
 //!
 //! The Randomness module provides a [`random`](./struct.Module.html#method.random) function that
 //! generates low-influence random values based on the block hashes from the previous 81 blocks.
-//! This randomness source to be [`initialized`](./struct.Module.html#method.initialize) each block.
 //!
 //! ## Public Functions
 //!
@@ -59,7 +58,16 @@ use system::Trait;
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		fn on_initialize() {
+			let parent_hash = <system::Module<T>>::parent_hash();
 
+			<RandomMaterial<T>>::mutate(|&mut(ref mut index, ref mut values)| if values.len() < 81 {
+				values.push(parent_hash)
+			} else {
+				values[*index as usize] = parent_hash;
+				*index = (*index + 1) % 81;
+			});
+		}
 	}
 }
 
@@ -72,16 +80,6 @@ decl_storage! {
 }
 
 impl<T: Trait> Module<T> {
-	/// Initialize the random material for a particular block.
-	pub fn initialize(parent_hash: &T::Hash) {
-		<RandomMaterial<T>>::mutate(|&mut(ref mut index, ref mut values)| if values.len() < 81 {
-			values.push(parent_hash.clone())
-		} else {
-			values[*index as usize] = parent_hash.clone();
-			*index = (*index + 1) % 81;
-		});
-	}
-
 	/// Get the basic random seed.
 	///
 	/// In general you won't want to use this, but rather `Self::random` which
