@@ -24,6 +24,7 @@ use lru::LruCache;
 /// Set to the expected max difference between `best` and `finalized` blocks at sync.
 const LRU_CACHE_SIZE: usize = 5_000;
 
+/// Implements useful algorithms over the tree of headers.
 pub trait TreeBackend<Block: BlockT>: HeaderMetadata<Block, Metadata=CachedHeaderMetadata<Block>> {
 	/// Get lowest common ancestor between two blocks in the tree.
 	///
@@ -209,6 +210,7 @@ impl<Block: BlockT> TreeRoute<Block> {
 	}
 }
 
+/// Handles header metadata: hash, number, parent hash, etc.
 pub trait HeaderMetadata<Block: BlockT> {
 	type Metadata;
 	type Error;
@@ -218,6 +220,7 @@ pub trait HeaderMetadata<Block: BlockT> {
 	fn remove_header_metadata(&self, hash: Block::Hash);
 }
 
+/// Caches header metadata in an in-memory LRU cache.
 pub struct HeaderMetadataCache<Block: BlockT> {
 	cache: RwLock<LruCache<Block::Hash, CachedHeaderMetadata<Block>>>,
 }
