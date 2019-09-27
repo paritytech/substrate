@@ -79,7 +79,6 @@ pub type LightExecutor = client::light::call_executor::GenesisCallExecutor<
 		client::light::backend::Backend<
 			client_db::light::LightStorage<runtime::Block>,
 			Blake2Hasher,
-			runtime::Block,
 		>,
 		NativeExecutor<LocalExecutor>
 	>

@@ -27,7 +27,7 @@ use state_machine::backend::{Backend as StateBackend, InMemory};
 use state_machine::{self, InMemoryChangesTrieStorage, ChangesTrieAnchorBlockId, ChangesTrieTransaction};
 use hash_db::{Hasher, Prefix};
 use trie::MemoryDB;
-use header_metadata::{HeaderMetadataCache, CachedHeaderMetadata, HeaderMetadata, TreeBackend};
+use header_metadata::{CachedHeaderMetadata, HeaderMetadata, TreeBackend};
 
 use crate::error;
 use crate::backend::{self, NewBlockState, StorageCollection, ChildStorageCollection};
@@ -105,16 +105,13 @@ struct BlockchainStorage<Block: BlockT> {
 /// In-memory blockchain. Supports concurrent reads.
 pub struct Blockchain<Block: BlockT> {
 	storage: Arc<RwLock<BlockchainStorage<Block>>>,
-	header_metadata_cache: Arc<HeaderMetadataCache<Block>>,
 }
 
 impl<Block: BlockT + Clone> Clone for Blockchain<Block> {
 	fn clone(&self) -> Self {
 		let storage = Arc::new(RwLock::new(self.storage.read().clone()));
-		let header_metadata_cache = Arc::new(HeaderMetadataCache::default());
 		Blockchain {
 			storage: storage.clone(),
-			header_metadata_cache: header_metadata_cache.clone(),
 		}
 	}
 }
@@ -146,7 +143,6 @@ impl<Block: BlockT> Blockchain<Block> {
 			}));
 		Blockchain {
 			storage: storage.clone(),
-			header_metadata_cache: Arc::new(HeaderMetadataCache::default()),
 		}
 	}
 
@@ -328,26 +324,15 @@ impl<Block: BlockT> HeaderMetadata<Block> for Blockchain<Block> {
 	type Error = error::Error;
 
 	fn header_metadata(&self, hash: Block::Hash) -> Result<Self::Metadata, Self::Error> {
-		if let Ok(header_data) = self.header_metadata_cache.header_metadata(hash) {
-			Ok(header_data)
-		} else {
-			self.header(BlockId::hash(hash))?.map(|header| {
-				let header_metadata = CachedHeaderMetadata::from(&header);
-				self.header_metadata_cache.insert_header_metadata(
-					header_metadata.hash,
-					header_metadata.clone(),
-				);
-				header_metadata
-			}).ok_or(error::Error::Backend("header not found in db".to_owned()))
-		}
+			self.header(BlockId::hash(hash))?.map(|header| CachedHeaderMetadata::from(&header))
+				.ok_or(error::Error::UnknownBlock("header not found".to_owned()))
 	}
 
-	fn insert_header_metadata(&self, hash: Block::Hash, metadata: Self::Metadata) {
-		self.header_metadata_cache.insert_header_metadata(hash, metadata)
+	fn insert_header_metadata(&self, _hash: Block::Hash, _metadata: Self::Metadata) {
+		// No need to implement.
 	}
-
-	fn remove_header_metadata(&self, hash: Block::Hash) {
-		self.header_metadata_cache.remove_header_metadata(hash)
+	fn remove_header_metadata(&self, _hash: Block::Hash) {
+		// No need to implement.
 	}
 }
 

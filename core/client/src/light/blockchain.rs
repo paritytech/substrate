@@ -302,6 +302,20 @@ pub mod tests {
 		}
 	}
 
+	impl HeaderMetadata<Block> for DummyStorage {
+		type Metadata = CachedHeaderMetadata<Block>;
+		type Error = ClientError;
+
+		fn header_metadata(&self, hash: Hash) -> Result<Self::Metadata, Self::Error> {
+				self.header(BlockId::hash(hash))?.map(|header| CachedHeaderMetadata::from(&header))
+					.ok_or(ClientError::UnknownBlock("header not found".to_owned()))
+		}
+		fn insert_header_metadata(&self, _hash: Hash, _metadata: Self::Metadata) {}
+		fn remove_header_metadata(&self, _hash: Hash) {}
+	}
+
+	impl TreeBackend<Block> for DummyStorage {}
+
 	impl AuxStore for DummyStorage {
 		fn insert_aux<
 			'a,

@@ -1331,35 +1331,7 @@ impl<B, E, Block, RA> HeaderMetadata<Block> for Client<B, E, Block, RA> where
 	}
 }
 
-
 impl<B, E, Block, RA> TreeBackend<Block> for Client<B, E, Block, RA> where
-	B: backend::Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher>,
-	Block: BlockT<Hash=H256>,
-{}
-
-impl<B, E, Block, RA> HeaderMetadata<Block> for &Client<B, E, Block, RA> where
-	B: backend::Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher>,
-	Block: BlockT<Hash=H256>,
-{
-	type Metadata = CachedHeaderMetadata<Block>;
-	type Error = error::Error;
-
-	fn header_metadata(&self, hash: Block::Hash) -> Result<Self::Metadata, Self::Error> {
-		(**self).backend.blockchain().header_metadata(hash)
-	}
-
-	fn insert_header_metadata(&self, hash: Block::Hash, metadata: Self::Metadata) {
-		(**self).backend.blockchain().insert_header_metadata(hash, metadata)
-	}
-
-	fn remove_header_metadata(&self, hash: Block::Hash) {
-		(**self).backend.blockchain().remove_header_metadata(hash)
-	}
-}
-
-impl<B, E, Block, RA> TreeBackend<Block> for &Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher>,
 	Block: BlockT<Hash=H256>,
