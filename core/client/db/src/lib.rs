@@ -1510,8 +1510,8 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 		Some(&self.changes_tries_storage)
 	}
 
-	fn offchain_storage(&self) -> Option<Self::OffchainStorage> {
-		Some(self.offchain_storage.clone())
+	fn offchain_storage(&self) -> Option<&Self::OffchainStorage> {
+		Some(&self.offchain_storage)
 	}
 
 	fn revert(&self, n: NumberFor<Block>) -> Result<NumberFor<Block>, client::error::Error> {
@@ -1766,6 +1766,7 @@ mod tests {
 			).0.into();
 			let hash = header.hash();
 
+			// TODO EMCH implement for offstate in another pr (need also build genesis).
 			op.reset_storage(storage.iter().cloned().collect(), Default::default()).unwrap();
 			op.set_block_data(
 				header.clone(),
@@ -1801,7 +1802,12 @@ mod tests {
 				(vec![5, 5, 5], Some(vec![4, 5, 6])),
 			];
 
-			let (root, overlay) = op.old_state.storage_root(storage.iter().cloned());
+			let child: Option<(_, Option<_>)> = None;
+			let (root, overlay) = op.old_state.full_storage_root(
+				storage.iter().cloned(),
+				child,
+				storage.iter().cloned(),
+			);
 			op.update_db_storage(overlay).unwrap();
 			header.state_root = root.into();
 
@@ -1819,6 +1825,11 @@ mod tests {
 			assert_eq!(state.storage(&[1, 3, 5]).unwrap(), None);
 			assert_eq!(state.storage(&[1, 2, 3]).unwrap(), Some(vec![9, 9, 9]));
 			assert_eq!(state.storage(&[5, 5, 5]).unwrap(), Some(vec![4, 5, 6]));
+			// TODO EMCH have a offstate get method
+			assert_eq!(state.offstate_pairs(), vec![(vec![5, 5, 5], vec![4, 5, 6])]);
+			let state = db.state_at(BlockId::Number(0)).unwrap();
+			assert_eq!(state.offstate_pairs(), vec![]);
+
 		}
 	}
 

@@ -673,7 +673,7 @@ where
 		Some(&self.changes_trie_storage)
 	}
 
-	fn offchain_storage(&self) -> Option<Self::OffchainStorage> {
+	fn offchain_storage(&self) -> Option<&Self::OffchainStorage> {
 		None
 	}
 

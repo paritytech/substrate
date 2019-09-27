@@ -211,7 +211,7 @@ macro_rules! new_impl {
 		let offchain_storage = backend.offchain_storage();
 		let offchain_workers = match ($config.offchain_worker, offchain_storage) {
 			(true, Some(db)) => {
-				Some(Arc::new(offchain::OffchainWorkers::new(client.clone(), db)))
+				Some(Arc::new(offchain::OffchainWorkers::new(client.clone(), db.clone())))
 			},
 			(true, None) => {
 				log::warn!("Offchain workers disabled, due to lack of offchain storage support in backend.");
