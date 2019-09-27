@@ -463,7 +463,7 @@ where
 					loop {
 						if *target_header.number() < target_number {
 							unreachable!(
-								"we are traversing backwards from a know block; \
+								"we are traversing backwards from a known block; \
 								 blocks are stored contiguously; \
 								 qed"
 							);
