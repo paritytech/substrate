@@ -369,13 +369,13 @@ impl_wasm_host_interface! {
 	impl SubstrateExternals where context {
 		ext_malloc(size: WordSize) -> Pointer<u8> {
 			let r = context.allocate_memory(size)?;
-			debug_trace!(target: "sr-io", "malloc {} bytes at {}", size, r);
+			debug_trace!(target: "sr-io", "malloc {} bytes at {:?}", size, r);
 			Ok(r)
 		}
 
 		ext_free(addr: Pointer<u8>) {
 			context.deallocate_memory(addr)?;
-			debug_trace!(target: "sr-io", "free {}", addr);
+			debug_trace!(target: "sr-io", "free {:?}", addr);
 			Ok(())
 		}
 
@@ -1842,7 +1842,7 @@ mod tests {
 				body: vec![1, 2, 3, 4],
 				headers: vec![("X-Auth".to_owned(), "test".to_owned())],
 				sent: true,
-				response: vec![1, 2, 3],
+				response: Some(vec![1, 2, 3]),
 				response_headers: vec![("X-Auth".to_owned(), "hello".to_owned())],
 				..Default::default()
 			},

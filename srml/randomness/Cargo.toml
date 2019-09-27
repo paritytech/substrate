@@ -1,11 +1,11 @@
 [package]
 name = "srml-randomness"
-version = "1.0.0"
+version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-safe-mix = { version = "1.0", default-features = false}
+safe-mix = { version = "1.0", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 sr-primitives = { path = "../../core/sr-primitives", default-features = false }
 support = { package = "srml-support", path = "../support", default-features = false }

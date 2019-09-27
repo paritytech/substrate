@@ -22,7 +22,10 @@ use crate::{storage::{self, unhashed, hashed::{Twox128, StorageHasher}}, traits:
 
 /// Generator for `StorageValue` used by `decl_storage`.
 ///
-/// Value is stored at `Twox128(unhashed_key)`.
+/// Value is stored at:
+/// ```nocompile
+/// Twox128(unhashed_key)
+/// ```
 pub trait StorageValue<T: Codec> {
 	/// The type that get/take returns.
 	type Query;
