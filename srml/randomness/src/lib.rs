@@ -129,7 +129,7 @@ impl<T: Trait> Module<T> {
 	/// can determine the value of `parent_hash`.
 	pub fn random(subject: &[u8]) -> T::Hash {
 		let (index, hash_series) = <RandomMaterial<T>>::get();
-		if hash_series.len() > 0 {
+		if !hash_series.is_empty() {
 			// Always the case after block 1 is initialised.
 			hash_series.iter()
 				.cycle()
