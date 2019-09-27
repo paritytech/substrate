@@ -632,19 +632,22 @@ where
 	/// has changed (e.g. as signalled by a voter command).
 	fn rebuild_voter(&mut self) {
 		debug!(target: "afg", "{}: Starting new voter with set ID {}", self.env.config.name(), self.env.set_id);
+
+		let authority_id = is_voter(&self.env.voters, &self.env.config.keystore)
+			.map(|ap| ap.public())
+			.unwrap_or(Default::default());
+
 		telemetry!(CONSENSUS_DEBUG; "afg.starting_new_voter";
-			"name" => ?self.env.config.name(), "set_id" => ?self.env.set_id
+			"name" => ?self.env.config.name(),
+			"set_id" => ?self.env.set_id,
+			"authority_id" => authority_id.to_string(),
 		);
 
 		let chain_info = self.env.inner.info();
-
-		let maybe_authority_id = is_voter(&self.env.voters, &self.env.config.keystore)
-			.map(|ap| ap.public())
-			.unwrap_or(Default::default());
 		telemetry!(CONSENSUS_INFO; "afg.authority_set";
 			"number" => ?chain_info.chain.finalized_number,
 			"hash" => ?chain_info.chain.finalized_hash,
-			"authority_id" => maybe_authority_id.to_string(),
+			"authority_id" => authority_id.to_string(),
 			"authority_set_id" => ?self.env.set_id,
 			"authorities" => {
 				let authorities: Vec<String> = self.env.voters.voters()
