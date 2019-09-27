@@ -50,22 +50,29 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use rstd::prelude::*;
-use sr_primitives::traits::Hash;
+use sr_primitives::traits::{Hash, UniqueSaturatedInto};
 use support::{decl_module, decl_storage};
 use safe_mix::TripletMix;
 use codec::Encode;
 use system::Trait;
 
+
+// TODO: this is less than ideal and needs testing
+fn block_number_to_index<T: Trait>(block_number: T::BlockNumber) -> usize {
+	let index = block_number % 81.into();
+	index.unique_saturated_into() as usize
+}
+
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn on_initialize() {
+		fn on_initialize(block_number: T::BlockNumber) {
 			let parent_hash = <system::Module<T>>::parent_hash();
 
-			<RandomMaterial<T>>::mutate(|&mut(ref mut index, ref mut values)| if values.len() < 81 {
+			<RandomMaterial<T>>::mutate(|ref mut values| if values.len() < 81 {
 				values.push(parent_hash)
 			} else {
-				values[*index as usize] = parent_hash;
-				*index = (*index + 1) % 81;
+				let index = block_number_to_index::<T>(block_number);
+				values[index] = parent_hash;
 			});
 		}
 	}
@@ -73,9 +80,10 @@ decl_module! {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as System {
-		/// Series of block headers from the last 81 blocks that acts as random seed material. This is arranged as a
-		/// ring buffer with the `i8` prefix being the index into the `Vec` of the oldest hash.
-		RandomMaterial get(random_material): (i8, Vec<T::Hash>);
+		/// Series of block headers from the last 81 blocks that acts as random seed material. This
+		/// is arranged as a ring buffer with `block_number % 81` being the index into the `Vec` of
+		/// the oldest hash.
+		RandomMaterial get(random_material): Vec<T::Hash>;
 	}
 }
 
@@ -128,12 +136,15 @@ impl<T: Trait> Module<T> {
 	/// value are entirely manipulatable by the author of the parent block, who
 	/// can determine the value of `parent_hash`.
 	pub fn random(subject: &[u8]) -> T::Hash {
-		let (index, hash_series) = <RandomMaterial<T>>::get();
+		let block_number = <system::Module<T>>::block_number();
+		let index = block_number_to_index::<T>(block_number);
+
+		let hash_series = <RandomMaterial<T>>::get();
 		if !hash_series.is_empty() {
 			// Always the case after block 1 is initialised.
 			hash_series.iter()
 				.cycle()
-				.skip(index as usize)
+				.skip(index)
 				.take(81)
 				.enumerate()
 				.map(|(i, h)| (i as i8, subject, h).using_encoded(T::Hashing::hash))
