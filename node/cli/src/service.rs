@@ -262,7 +262,7 @@ pub fn new_full_concrete<C: Send + Default + 'static>(config: Configuration<C, G
 		OffchainWorkers<
 			ConcreteClient,
 			<ConcreteBackend as client::backend::Backend<Block, Blake2Hasher>>::OffchainStorage,
-			ConcreteBlock
+			ConcreteBlock,
 		>
 	>,
 	ServiceError
