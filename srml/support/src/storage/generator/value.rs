@@ -16,7 +16,6 @@
 
 #[cfg(not(feature = "std"))]
 use rstd::prelude::*;
-use rstd::{borrow::Borrow, iter::FromIterator};
 use codec::{FullCodec, Encode, EncodeAppend, EncodeLike};
 use crate::{storage::{self, unhashed}, hash::{Twox128, StorageHasher}, traits::Len};
 

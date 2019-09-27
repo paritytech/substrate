@@ -16,8 +16,7 @@
 
 //! Stuff to do with the runtime's storage.
 
-use crate::rstd::prelude::*;
-use crate::rstd::{borrow::Borrow, iter::FromIterator};
+use rstd::prelude::*;
 use codec::{FullCodec, FullEncode, Encode, EncodeAppend, EncodeLike};
 use crate::traits::Len;
 
