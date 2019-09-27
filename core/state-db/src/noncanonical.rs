@@ -35,6 +35,8 @@ type BranchIndex = u64;
 
 type BlockNumber = u64;
 
+type GcIndex = u64;
+
 /// See module documentation.
 pub struct NonCanonicalOverlay<BlockHash: Hash, Key: Hash> {
 	last_canonicalized: Option<(BlockHash, BlockNumber)>,
@@ -52,7 +54,7 @@ pub struct NonCanonicalOverlay<BlockHash: Hash, Key: Hash> {
 	//
 	/// second value is offstate pinned index: used in order to determine if the pinned 
 	/// thread should block garbage collection.
-	pinned: HashMap<BlockHash, (HashMap<Key, DBValue>, u64)>,
+	pinned: HashMap<BlockHash, (HashMap<Key, DBValue>, GcIndex)>,
 	offstate_gc: OffstatePendingGC,
 }
 
@@ -60,71 +62,67 @@ pub struct NonCanonicalOverlay<BlockHash: Hash, Key: Hash> {
 /// offstate gc only happen when all pinned threads that where
 /// running at the time of cannonicalisation are finished.
 struct OffstatePendingGC {
+	/// Each gc call uses a new index.
+	gc_last_index: GcIndex,
 	/// Keep trace of last cannonicalization branch index height.
 	/// All data in state are added after this value (branch is
 	/// set as non modifiable on canonicalisation).
   pending_canonicalisation_query: Option<u64>,
 	/// keys to gc that got their journal removed.
 	keys_pending_gc: HashSet<OffstateKey>,
-	/// branch index that are not garbage collected.
-	/// Note that it can also contain branch index created after cannonicalisation
-	/// query.
-	keep_indexes: Vec<BranchRanges>,
+	/// store keys while waiting for a gc.
+	next_keys_pending_gc: HashSet<OffstateKey>,
 }
 
 impl OffstatePendingGC {
 	fn set_pending_gc(&mut self, branch_index: u64) {
+		self.gc_last_index += 1;
+		if self.pending_canonicalisation_query.is_some() {
+			// TODO EMCH some better merge
+			self.keys_pending_gc.extend(self.next_keys_pending_gc.drain());
+		}
 		self.pending_canonicalisation_query = Some(branch_index);
-		self.keep_indexes.clear();
 	}
+
 	fn try_gc<K, V>(
 		&mut self,
 		pinned: &HashMap<K, (V, u64)>,
 	) {
 		if let Some(pending) = self.pending_canonicalisation_query {
-			if pending < self.max_pinned_index(pinned) {
+			if pending < self.min_pinned_index(pinned) {
 
 				unimplemented!("TODO feed keepindexes with branch at pending then actual gc");
 
 				self.pending_canonicalisation_query = None;
-				self.keep_indexes.clear();
 			}
 		}
 	}
 
-	fn pin(&mut self, branch_index: u64, set: &RangeSet) -> BranchRanges {
-		let range = set.branch_ranges_from_cache(branch_index);
-		if let Some(pending) = self.pending_canonicalisation_query {
-			// pending is set non modifiable before setting pending gc.
-			debug_assert!(pending < branch_index);
-			self.keep_indexes.push(range.clone());
-		}
-		range
-	}
-
-	fn max_pinned_index<K, V>(
+	fn min_pinned_index<K, V>(
 		&self,
 		pinned: &HashMap<K, (V, u64)>,
 	) -> u64 {
-		let mut max = 0;
-		if let Some(pending) = self.pending_canonicalisation_query {
-			// max up to pending only
-			for (_, (_, index)) in pinned.iter() {
-				if *index > max && *index <= pending {
-					max = *index;
-				}
-			}
-		} else {
-			// global max
-			for (_, (_, index)) in pinned.iter() {
-				if *index > max {
-					max = *index;
-				}
+		let mut min = u64::max_value();
+		// global min
+		for (_, (_, index)) in pinned.iter() {
+			if *index < min {
+				min = *index;
 			}
 		}
-		max
+		min
 	}
+
+	// TODO is it of any use??
+	fn revert(&mut self) {
+		self.pending_canonicalisation_query = None;
+		// TODO EMCH here reverting on a double set_pending_gc
+		// will fail: need to stack those offstatepending_gc??
+		self.keys_pending_gc.clear();
+		self.next_keys_pending_gc.clear();
+	}
+
 }
+
 struct OffstatePinnedThread {
 	/// index of branch which was pinned
 	branch_index: u64,
@@ -204,6 +202,11 @@ fn discard_offset_values(
 	inserted: Vec<OffstateKey>,
 	into: &mut OffstatePendingGC,
 ) {
+	let into = if into.pending_canonicalisation_query.is_some() {
+		&mut into.next_keys_pending_gc
+	} else {
+		&mut into.keys_pending_gc
+	};
 	for k in inserted {
 		match values.entry(k) {
 			Entry::Occupied(mut e) => {
@@ -211,7 +214,7 @@ fn discard_offset_values(
 				*counter -= 1;
 				if *counter == 0 {
 					let (key, _) = e.remove_entry();
-					into.keys_pending_gc.insert(key);
+					into.insert(key);
 				}
 			},
 			Entry::Vacant(_) => {
@@ -275,8 +278,6 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 			// read the journal
 			trace!(target: "state-db", "Reading uncanonicalized journal. Last canonicalized #{} ({:?})", block, hash);
 			let mut total: u64 = 0;
-			let mut parent_branch_index = 0u64;
-			let mut parent_branch_range = None;
 			block += 1;
 			loop {
 				let mut index: u64 = 0;
@@ -291,8 +292,8 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 							// TODO EMCh following two range fetch can be optimize when parent level
 							// got a single element.
 							// fetch parent info
-							parent_branch_index = parents.get(&record.parent_hash).map(|(_, i)| *i).unwrap_or(0);
-							parent_branch_range = Some(branches.branch_ranges_from_cache(parent_branch_index));
+							let parent_branch_index = parents.get(&record.parent_hash).map(|(_, i)| *i).unwrap_or(0);
+							let parent_branch_range = Some(branches.branch_ranges_from_cache(parent_branch_index));
 							let (_branch_range, branch_index) = branches.import(
 								block,
 								parent_branch_index,
@@ -554,16 +555,6 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 	fn apply_canonicalizations(&mut self) {
 		let last = self.pending_canonicalizations.last().cloned();
 		let count = self.pending_canonicalizations.len() as u64;
-		if let Some(branch_index_cannonicalize) = last.as_ref().and_then(|last| self.parents.get(last))
-			.map(|(_, index)| *index) {
-			// set branch state synchronously
-			let block_number = self.last_canonicalized.as_ref().map(|(_, n)| n + count).unwrap_or(count - 1);
-			self.branches.finalize_full(branch_index_cannonicalize, Some(block_number));
-			self.offstate_gc.set_pending_gc(branch_index_cannonicalize);
-			// try to run the garbage collection (can run later if there is
-			// pinned process).
-			self.offstate_gc.try_gc(&self.pinned);
-		}
 		for hash in self.pending_canonicalizations.drain(..) {
 			trace!(target: "state-db", "Post canonicalizing {:?}", hash);
 			let level = self.levels.pop_front().expect("Hash validity is checked in `canonicalize`");
@@ -597,6 +588,19 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 				);
 			}
 		}
+
+		if let Some(branch_index_cannonicalize) = last.as_ref().and_then(|last| self.parents.get(last))
+			.map(|(_, index)| *index) {
+			// set branch state synchronously
+			let block_number = self.last_canonicalized.as_ref().map(|(_, n)| n + count).unwrap_or(count - 1);
+			// this needs to be call after parents update
+			self.branches.update_finalize_treshold(branch_index_cannonicalize, Some(block_number), true);
+			self.offstate_gc.set_pending_gc(branch_index_cannonicalize);
+			// try to run the garbage collection (can run later if there is
+			// pinned process).
+			self.offstate_gc.try_gc(&self.pinned);
+		}
+
 		if let Some(hash) = last {
 			let last_canonicalized = (hash, self.last_canonicalized.as_ref().map(|(_, n)| n + count).unwrap_or(count - 1));
 			self.last_canonicalized = Some(last_canonicalized);
@@ -688,11 +692,8 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 	}
 
 	/// Pin state values in memory
-	pub fn pin(&mut self, hash: &BlockHash) -> Option<BranchRanges> {
-		self.parents.get(hash).map(|(_, branch_index)| *branch_index).map(|branch_index| {
-			self.pinned.insert(hash.clone(), (Default::default(), branch_index));
-			self.offstate_gc.pin(branch_index, &self.branches)
-		})
+	pub fn pin(&mut self, hash: &BlockHash) {
+		self.pinned.insert(hash.clone(), (Default::default(), self.offstate_gc.gc_last_index));
 	}
 
 	/// TODO EMCH aka get state for hash to query offstate storage.
@@ -705,6 +706,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 	/// Discard pinned state
 	pub fn unpin(&mut self, hash: &BlockHash) {
 		self.pinned.remove(hash);
+		self.offstate_gc.try_gc(&self.pinned);
 	}
 }
 

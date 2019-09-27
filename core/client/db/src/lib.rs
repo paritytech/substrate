@@ -1582,7 +1582,8 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 		match self.blockchain.header(block) {
 			Ok(Some(ref hdr)) => {
 				let hash = hdr.hash();
-				if let Ok(range) = self.storage.state_db.pin(&hash) {
+				if let Ok(()) = self.storage.state_db.pin(&hash) {
+					let range = self.storage.state_db.get_branch_range(&hash);
 					let root = H256::from_slice(hdr.state_root().as_ref());
 					let block_number = hdr.number().clone().saturated_into::<u64>();
 					let offstate = StorageDbAt {

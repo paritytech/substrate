@@ -52,8 +52,7 @@ pub struct LinearStatesRef {
 /// numbers.
 ///
 /// New branches index are using `last_index`.
-/// `treshold` is a branch index under which branches are undefined
-/// but data there is seen as finalized.
+/// `treshold` is a branch index under which branches are undefined.
 ///
 /// Also acts as a cache, storage can store
 /// unknown db value as `None`.
@@ -253,6 +252,7 @@ impl RangeSet {
 	pub fn update_finalize_treshold(
 		&mut self,
 		branch_index: u64,
+		linear_index: Option<u64>,
 		full: bool,
 	) {
 
@@ -268,6 +268,13 @@ impl RangeSet {
 			// remove cached value under treshold only
 			let new_storage = self.storage.split_off(&(self.treshold));
 			self.storage = new_storage;
+			// set this branch as non appendable (ensure it get gc
+			// at some point even if there is no branching).
+			// Also if gc and treshold happen after this call,
+			// ensure this branch can get remove.
+			// TODO EMCH this can also make sense for full
+			self.storage.get_mut(&branch_index)
+				.map(|state| state.as_mut().map(|state| state.can_append = false));
 		} else {
 			let new_storage = self.storage.split_off(&(self.treshold));
 			self.storage = new_storage;
@@ -283,35 +290,27 @@ impl RangeSet {
 		branch_index: u64,
 		linear_index: Option<u64>,
 	) {
-		// TODO EMCH consider working directly on ordered vec (should be fastest in most cases)
-		let mut finalize_branches_map: BTreeMap<_, _> = self.branch_ranges_from_cache(branch_index)
-			.into_iter().map(|r| (r.branch_index, r.state)).collect();
-
-		for (index, state) in self.storage.iter_mut() {
-			if let Some(final_state) = finalize_branches_map.remove(&index) {
-				state.as_mut().map(|state| {
-					// update for case where end of range differs
-					// (see `branch_ranges_from_cache`).
-					if state.state != final_state {
-						state.state = final_state;
-						state.can_append = false;
+		if let Some(Some(state)) = self.storage.remove(&branch_index) {
+			let mut child_anchor: LinearStates = state.clone();
+			child_anchor.state.start = linear_index.unwrap_or(child_anchor.state.start);
+			let old_storage = std::mem::replace(&mut self.storage, BTreeMap::new());
+			self.storage.insert(branch_index, Some(child_anchor));
+			for (index, state) in old_storage.into_iter().filter_map(|(k, v)| v.map(|v| (k, v))) {
+				// ordered property of branch index allows to skip in depth branch search
+				if let Some(Some(parent_state)) = self.storage.get(&state.parent_branch_index) {
+					// first state is splitted
+					// use property that start of a branch - 1 is origin of parent
+					// this is obvious for parent is first branch (truncated), but also
+					// true for case where we revert some state.
+					let linear_index_parent = state.state.start - 1;
+					if linear_index_parent < parent_state.state.end
+						&& linear_index_parent >= parent_state.state.start {
+						self.storage.insert(index, Some(state));
 					}
-					if *index == branch_index {
-						if let Some(linear_index) = linear_index {
-							state.state.end = std::cmp::min(linear_index + 1, state.state.end);
-						}
-						// set this branch as non appendable (ensure it get gc
-						// at some point even if there is no branching).
-						// Also if gc and treshold happen after this call,
-						// ensure this branch can get remove.
-						state.can_append = false;
-					}
-
-				});
-			} else {
-				*state = None;
+				}
 			}
 		}
+	
 	}
 
 	#[cfg(test)]
@@ -435,7 +434,8 @@ mod test {
 	// 0
 	// |> 1: [10,1]
 	// |> 2: [10,2] [11,1]
-	//       |> 3:  [11,2]
+	//       |> 3:  [11,2] [12, 2]
+	//		          | > 5: [12,1]
 	//       |> 4:  [11,123] [12,1]
 	// full finalize: 3
 	// 0
@@ -446,9 +446,11 @@ mod test {
 		set.import(10, 0, None);
 		let (b1, anchor_1) = set.import(10, 0, None);
 		set.import(11, anchor_1, Some(b1.clone()));
-		let (_, finalize) = set.import(11, anchor_1, Some(b1.clone()));
+		let (bf, finalize) = set.import(11, anchor_1, Some(b1.clone()));
 		let (b2, anchor_2) = set.import(11, anchor_1, Some(b1));
 		set.import(12, anchor_2, Some(b2));
+		set.import(12, finalize, Some(bf.clone()));
+		set.import(12, finalize, Some(bf));
 
 		(set, finalize)
 	}
@@ -462,20 +464,10 @@ mod test {
 			full: bool,
 			ranges_valid: &[(u64, u64)],
 			not_ranges: &[(u64, u64)],
-			ranges2: Option<&[(u64, u64)]>,
 		| {
 			let (mut ranges, finalize) = build_finalize_set();
 
-			// test ranges changes
-			if let Some(range2) = ranges2 {
-				let mut ranges2 = ranges.clone();
-				let _ = ranges2.test_finalize_full(finalize);
-				for (range, size) in range2 {
-					assert!(ranges2.contains_range(*range, *size), "{} {}", range, size);
-				}
-			}
-
-			let _ = ranges.update_finalize_treshold(finalize, full);
+			let _ = ranges.update_finalize_treshold(finalize, None, full);
 
 			assert!(ranges.range_treshold() == 3);
 
@@ -489,15 +481,12 @@ mod test {
 		};
 
 		with_full_finalize(false,
-			&[(3, 1), (4, 2)][..],
+			&[(3, 2), (4, 2), (5, 1)][..],
 			&[(1, 1), (2, 2)][..],
-			None,
 		);
 		with_full_finalize(true,
-			&[(3, 1)][..],
+			&[(3, 2), (5, 1)][..],
 			&[(1, 1), (2, 2), (4, 2)][..],
-			// here 2, 1 test state removal from finalize branch
-			Some(&[(2, 1), (3, 1)][..]),
 		);
 	}
 

@@ -324,9 +324,14 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		}
 	}
 
-	pub fn pin(&mut self, hash: &BlockHash) -> Result<Option<BranchRanges>, PinError> {
+	/// TODO EMCH
+	pub fn get_branch_range(&self, hash: &BlockHash) -> Option<BranchRanges> {
+		self.non_canonical.get_branch_range(hash)
+	}
+
+	pub fn pin(&mut self, hash: &BlockHash) -> Result<(), PinError> {
 		match self.mode {
-			PruningMode::ArchiveAll => Ok(self.non_canonical.get_branch_range(hash)),
+			PruningMode::ArchiveAll => Ok(()),
 			PruningMode::ArchiveCanonical | PruningMode::Constrained(_) => {
 				if self.non_canonical.have_block(hash) ||
 					self.pruning.as_ref().map_or(false, |pruning| pruning.have_block(hash))
@@ -337,7 +342,7 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 						self.non_canonical.pin(hash);
 					}
 					*refs += 1;
-					Ok(self.non_canonical.get_branch_range(hash))
+					Ok(())
 				} else {
 					Err(PinError::InvalidBlock)
 				}
@@ -447,8 +452,13 @@ impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
 		self.db.write().canonicalize_block(hash)
 	}
 
+	/// TODO EMCH
+	pub fn get_branch_range(&self, hash: &BlockHash) -> Option<BranchRanges> {
+		self.db.read().get_branch_range(hash)
+	}
+
 	/// Prevents pruning of specified block and its descendants.
-	pub fn pin(&self, hash: &BlockHash) -> Result<Option<BranchRanges>, PinError> {
+	pub fn pin(&self, hash: &BlockHash) -> Result<(), PinError> {
 		self.db.write().pin(hash)
 	}
 
