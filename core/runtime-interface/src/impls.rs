@@ -30,7 +30,10 @@ use wasm_interface::{FunctionContext, Pointer, Result};
 
 use codec::{Encode, Decode};
 
-use rstd::{any::TypeId, mem, borrow::Cow};
+use rstd::{any::TypeId, mem};
+
+#[cfg(feature = "std")]
+use rstd::borrow::Cow;
 
 /// Implement the traits for the given primitive traits.
 macro_rules! impl_traits_for_primitives {
@@ -45,19 +48,11 @@ macro_rules! impl_traits_for_primitives {
 			}
 
 			#[cfg(not(feature = "std"))]
-			impl AsWrappedFFIValue for $rty {
-				type RTOwned = $fty;
-				type RTBorrowed = $fty;
-
-				fn as_wrapped_ffi_value<'a>(&'a self) -> WrappedFFIValue<'a, $fty, $fty> {
-					WrappedFFIValue::from_owned(*self)
-				}
-			}
-
-			#[cfg(not(feature = "std"))]
 			impl IntoFFIValue for $rty {
-				fn into_ffi_value(&self) -> $fty {
-					(*self as $fty).to_le()
+				type Owned = ();
+
+				fn into_ffi_value(&self) -> WrappedFFIValue<$fty> {
+					(*self as $fty).to_le().into()
 				}
 			}
 
@@ -103,12 +98,11 @@ impl RIType for bool {
 }
 
 #[cfg(not(feature = "std"))]
-impl AsWrappedFFIValue for bool {
-	type RTOwned = u8;
-	type RTBorrowed = u8;
+impl IntoFFIValue for bool {
+	type Owned = ();
 
-	fn as_wrapped_ffi_value<'a>(&'a self) -> WrappedFFIValue<'a, u8, u8> {
-		WrappedFFIValue::from_owned(if *self { 1 } else { 0 })
+	fn into_ffi_value(&self) -> WrappedFFIValue<u8> {
+		if *self { 1 } else { 0 }.into()
 	}
 }
 
@@ -231,43 +225,27 @@ assert_eq_size!(usize_check; usize, u32);
 assert_eq_size!(ptr_check; *const u8, u32);
 
 #[cfg(not(feature = "std"))]
-impl IntoFFIValue for [u8] {
-	fn into_ffi_value(&self) -> u64 {
-		let data = self.as_ref();
-		let ptr_address = data.as_ptr() as u32;
+impl<T: 'static + Encode> IntoFFIValue for [T] {
+	type Owned = Vec<u8>;
 
-		pointer_and_len_to_u64(ptr_address, data.len() as u32)
-	}
-}
-
-#[cfg(not(feature = "std"))]
-impl IntoFFIValue for Vec<u8> {
-	fn into_ffi_value(&self) -> u64 {
-		self[..].into_ffi_value()
-	}
-}
-
-#[cfg(not(feature = "std"))]
-impl<T: 'static + Encode> AsWrappedFFIValue for [T] {
-	type RTOwned = Vec<u8>;
-	type RTBorrowed = [u8];
-
-	fn as_wrapped_ffi_value<'a>(&'a self) -> WrappedFFIValue<'a, u64, Vec<u8>, [u8]> {
+	fn into_ffi_value(&self) -> WrappedFFIValue<u64, Vec<u8>> {
 		if TypeId::of::<T>() == TypeId::of::<u8>() {
-			WrappedFFIValue::from_ref(unsafe { mem::transmute::<&[T], &[u8]>(self) })
+			let slice = unsafe { mem::transmute::<&[T], &[u8]>(self) };
+			pointer_and_len_to_u64(slice.as_ptr() as u32, slice.len() as u32).into()
 		} else {
-			WrappedFFIValue::from_owned(self.encode())
+			let data = self.encode();
+			let ffi_value = pointer_and_len_to_u64(data.as_ptr() as u32, data.len() as u32);
+			(ffi_value, data).into()
 		}
 	}
 }
 
 #[cfg(not(feature = "std"))]
-impl<T: 'static + Encode> AsWrappedFFIValue for Vec<T> {
-	type RTOwned = Vec<u8>;
-	type RTBorrowed = [u8];
+impl<T: 'static + Encode> IntoFFIValue for Vec<T> {
+	type Owned = Vec<u8>;
 
-	fn as_wrapped_ffi_value<'a>(&'a self) -> WrappedFFIValue<'a, u64, Vec<u8>, [u8]> {
-		self[..].as_wrapped_ffi_value()
+	fn into_ffi_value(&self) -> WrappedFFIValue<u64, Vec<u8>> {
+		self[..].into_ffi_value()
 	}
 }
 
@@ -287,12 +265,13 @@ impl<T: 'static + Decode> FromFFIValue for Vec<T> {
 }
 
 #[cfg(not(feature = "std"))]
-impl<T: PassedAsEncoded> AsWrappedFFIValue for T {
-	type RTOwned = Vec<u8>;
-	type RTBorrowed = [u8];
+impl<T: PassedAsEncoded> IntoFFIValue for T {
+	type Owned = Vec<u8>;
 
-	fn as_wrapped_ffi_value<'a>(&'a self) -> WrappedFFIValue<'a, u64, Vec<u8>, [u8]> {
-		WrappedFFIValue::from_owned(self.encode())
+	fn into_ffi_value(&self) -> WrappedFFIValue<u64, Vec<u8>> {
+		let data = self.encode();
+		let ffi_value = pointer_and_len_to_u64(data.as_ptr() as u32, data.len() as u32);
+		(ffi_value, data).into()
 	}
 }
 

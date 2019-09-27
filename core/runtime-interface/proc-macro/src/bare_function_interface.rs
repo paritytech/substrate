@@ -90,17 +90,15 @@ fn function_no_std_impl(trait_name: &Ident, method: &TraitItemMethod) -> Result<
 		quote! {
 			#[cfg(not(feature = "std"))]
 			fn #function_name( #( #args, )* ) #return_value {
-				use #crate_::wasm::IntoFFIValue as _;
-
 				// Generate all wrapped ffi value.
 				#(
-					let #arg_names = <#arg_types as #crate_::wasm::AsWrappedFFIValue>::as_wrapped_ffi_value(
+					let #arg_names = <#arg_types as #crate_::wasm::IntoFFIValue>::into_ffi_value(
 						&#arg_names,
 					);
 				)*
 
 				// Call the host function
-				let result = unsafe { #host_function_name( #( #arg_names2.into_ffi_value(), )* ) };
+				let result = unsafe { #host_function_name( #( #arg_names2.get(), )* ) };
 
 				#convert_return_value
 			}

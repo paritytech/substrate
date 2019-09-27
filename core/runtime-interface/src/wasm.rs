@@ -18,21 +18,6 @@
 
 use crate::RIType;
 
-use rstd::marker::PhantomData;
-
-/// Something that can be converted into a [`WrappedFFIValue`].
-pub trait AsWrappedFFIValue: RIType {
-	/// The owned rust type that converts into `Self::FFIType`.
-	type RTOwned;
-	/// The borrowed rust type that converts into `Self::FFIType`.
-	type RTBorrowed: ?Sized;
-
-	/// Returns `self` as a [`WrappedFFIValue`] that can be converted into `Self::FFIType`.
-	fn as_wrapped_ffi_value<'a>(
-		&'a self,
-	) -> WrappedFFIValue<'a, Self::FFIType, Self::RTOwned, Self::RTBorrowed>;
-}
-
 /// Something that can be created from a ffi value.
 pub trait FromFFIValue: Sized + RIType {
 	/// Create `Self` from the given ffi value.
@@ -41,38 +26,43 @@ pub trait FromFFIValue: Sized + RIType {
 
 /// Something that can be converted into a ffi value.
 pub trait IntoFFIValue: RIType {
-	/// Convert `self` into a ffi value.
-	fn into_ffi_value(&self) -> Self::FFIType;
+	/// The owned rust type that is stored with the ffi value in [`WrappedFFIValue`].
+	///
+	/// If no owned value is required, `()` can be used as a type.
+	type Owned;
+
+	/// Convert `self` into a [`WrappedFFIValue`].
+	fn into_ffi_value(&self) -> WrappedFFIValue<Self::FFIType, Self::Owned>;
 }
 
-/// Represents a wrapped ffi value that either holds a reference or an owned value of a rust type.
+/// Represents a wrapped ffi value.
 ///
-/// The reference and the owned value need to be convertible into the same ffi value.
-pub enum WrappedFFIValue<'a, T, O, R: ?Sized = O> {
-	Ref(&'a R, PhantomData<T>),
-	Owned(O),
+/// It is either the ffi value itself or the ffi value plus some other owned value. By providing
+/// support for storing another owned value besides the actual ffi value certain performance
+/// optimizations can be applied. For example using the pointer to a `Vec<u8>`, while using the
+/// pointer to a SCALE encoded `Vec<u8>` that is stored in this wrapper for any other `Vec<T>`.
+pub enum WrappedFFIValue<T, O = ()> {
+	Wrapped(T),
+	WrappedAndOwned(T, O),
 }
 
-impl<'a, T, O, R> WrappedFFIValue<'a, T, O, R>
-where
-	O: IntoFFIValue<FFIType = T>,
-	R: ?Sized + IntoFFIValue<FFIType = T>,
-{
-	/// Create `Self` from an owned value.
-	pub fn from_owned(o: O) -> Self {
-		Self::Owned(o)
-	}
-
-	/// Create `Self` from a reference value.
-	pub fn from_ref(r: &'a R) -> Self {
-		Self::Ref(r, Default::default())
-	}
-
-	/// Convert into the ffi value.
-	pub fn into_ffi_value(&self) -> T {
+impl<T: Copy, O> WrappedFFIValue<T, O> {
+	/// Returns the wrapped ffi value.
+	pub fn get(&self) -> T {
 		match self {
-			Self::Ref(data, _) => data.into_ffi_value(),
-			Self::Owned(ref data) => data.into_ffi_value(),
+			Self::Wrapped(data) | Self::WrappedAndOwned(data, _) => *data,
 		}
+	}
+}
+
+impl<T, O> From<T> for WrappedFFIValue<T, O> {
+	fn from(val: T) -> Self {
+		WrappedFFIValue::Wrapped(val)
+	}
+}
+
+impl<T, O> From<(T, O)> for WrappedFFIValue<T, O> {
+	fn from(val: (T, O)) -> Self {
+		WrappedFFIValue::WrappedAndOwned(val.0, val.1)
 	}
 }
