@@ -6,7 +6,7 @@ description = "Substrate CLI interface."
 edition = "2018"
 
 [dependencies]
-clap = "~2.32"
+clap = "2.32"
 derive_more = "0.14.0"
 env_logger = "0.6"
 log = "0.4"
