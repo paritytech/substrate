@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use codec::{Codec, Encode, Decode};
-use crate::{storage::{self, unhashed, hashed::StorageHasher}, traits::Len};
+use crate::{storage::{self, unhashed}, hash::StorageHasher, traits::Len};
 use rstd::{
 	borrow::Borrow,
 	marker::PhantomData,
