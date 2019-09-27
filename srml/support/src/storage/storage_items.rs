@@ -256,7 +256,6 @@ mod tests {
 	use crate::metadata::*;
 	use crate::metadata::StorageHasher;
 	use crate::rstd::marker::PhantomData;
-	use crate::storage::{StorageValue, StorageMap};
 	use crate::codec::{Encode, Decode, EncodeLike};
 
 	storage_items! {
