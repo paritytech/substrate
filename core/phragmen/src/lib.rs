@@ -478,18 +478,20 @@ fn do_equalize<Balance, AccountId, C>(
 
 	let mut cumulative_stake: ExtendedBalance = 0;
 	let mut last_index = elected_edges.len() - 1;
-	elected_edges.iter_mut().enumerate().for_each(|(idx, e)| {
+	let mut idx = 0usize;
+	for e in &mut elected_edges[..] {
 		if let Some(support) = support_map.get_mut(&e.0) {
-			let stake: ExtendedBalance = support.total;
+			let stake = support.total;
 			let stake_mul = stake.saturating_mul(idx as ExtendedBalance);
 			let stake_sub = stake_mul.saturating_sub(cumulative_stake);
 			if stake_sub > budget {
 				last_index = idx.checked_sub(1).unwrap_or(0);
-				return
+				break;
 			}
 			cumulative_stake = cumulative_stake.saturating_add(stake);
 		}
-	});
+		idx += 1;
+	}
 
 	let last_stake = elected_edges[last_index].1;
 	let split_ways = last_index + 1;

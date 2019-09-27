@@ -13,7 +13,7 @@ codec = { package = "parity-scale-codec", version = "1.0.0", default-features = 
 environmental = { version = "1.0.1", optional = true }
 hash-db = { version = "0.15.2", default-features = false }
 impl-trait-for-tuples = "0.1"
-libsecp256k1 = { version = "0.2.1", optional = true }
+libsecp256k1 = { version = "0.3", optional = true }
 primitives = { package = "substrate-primitives", path = "../primitives", default-features = false }
 rstd = { package = "sr-std", path = "../sr-std", default-features = false }
 substrate-state-machine = { path = "../state-machine", optional = true }

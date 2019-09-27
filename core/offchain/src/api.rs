@@ -101,7 +101,7 @@ where
 	}
 
 	fn random_seed(&mut self) -> [u8; 32] {
-		unavailable_yet("random_seed")
+		rand::random()
 	}
 
 	fn local_storage_set(&mut self, kind: StorageKind, key: &[u8], value: &[u8]) {
@@ -465,5 +465,14 @@ mod tests {
 
 		// then
 		assert_eq!(state, converted_back_state);
+	}
+
+	#[test]
+	fn should_get_random_seed() {
+		// given
+		let mut api = offchain_api().0;
+		let seed = api.random_seed();
+		// then
+		assert_ne!(seed, [0; 32]);
 	}
 }
