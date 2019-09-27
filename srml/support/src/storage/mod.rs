@@ -27,8 +27,6 @@ pub mod unhashed;
 pub mod hashed;
 pub mod child;
 pub mod generator;
-pub mod storage_vec;
-pub mod storage_vec_hashed;
 
 /// A trait for working with macro-generated storage values under the substrate storage API.
 pub trait StorageValue<T: Codec> {
