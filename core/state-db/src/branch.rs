@@ -491,3 +491,34 @@ mod test {
 	}
 
 }
+
+
+// TODO EMCH use from historied data on merge. (this is just a stub)
+
+#[derive(Debug, Clone)]
+pub struct History<V>(Vec<()>, Option<V>);
+
+impl<V> Default for History<V> {
+	fn default() -> Self {
+		History(Vec::new(), None)
+	}
+}
+
+
+impl<V> History<V> {
+
+	pub fn set(&mut self, state: &BranchRanges, value: V) {
+		unimplemented!()
+	}
+
+	pub fn get(&self, state: &BranchRanges) -> Option<&V> {
+		unimplemented!()
+	}
+
+	pub fn gc(&mut self, state: &RangeSet) {
+		unimplemented!()
+	}
+
+}
+
+// End TODO EMCH

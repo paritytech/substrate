@@ -25,7 +25,7 @@ use std::collections::{HashMap, VecDeque, hash_map::Entry, HashSet};
 use super::{Error, DBValue, ChangeSet, CommitSet, MetaDb, Hash, to_meta_key, OffstateKey};
 use codec::{Encode, Decode};
 use log::trace;
-use crate::branch::{RangeSet, BranchRanges};
+use crate::branch::{RangeSet, BranchRanges, History};
 
 const NON_CANONICAL_JOURNAL: &[u8] = b"noncanonical_journal";
 const NON_CANONICAL_OFFSTATE_JOURNAL: &[u8] = b"offstate_noncanonical_journal";
@@ -46,12 +46,7 @@ pub struct NonCanonicalOverlay<BlockHash: Hash, Key: Hash> {
 	pending_insertions: Vec<BlockHash>,
 	values: HashMap<Key, (u32, DBValue)>, //ref counted
 	branches: RangeSet,
-	offstate_values: HashMap<OffstateKey, (u32, DBValue)>, //ref counted
-	// would be deleted but kept around because block is pinned
-	// TODO EMCH sense if pinning offstate? done while using state_at
-	// -> that is import processing (so we can revert) -> should be good
-	// to use on offstate too
-	//
+	offstate_values: HashMap<OffstateKey, History<DBValue>>,
 	/// second value is offstate pinned index: used in order to determine if the pinned 
 	/// thread should block garbage collection.
 	pinned: HashMap<BlockHash, (HashMap<Key, DBValue>, GcIndex)>,
@@ -170,6 +165,17 @@ fn insert_values<Key: Hash>(values: &mut HashMap<Key, (u32, DBValue)>, inserted:
 	}
 }
 
+fn insert_offstate_values<Key: Hash>(
+	state: &BranchRanges,
+	values: &mut HashMap<Key, History<DBValue>>,
+	inserted: Vec<(Key, DBValue)>,
+) {
+	for (k, v) in inserted {
+		let entry = values.entry(k).or_insert_with(|| Default::default());
+		entry.set(state, v);
+	}
+}
+
 fn discard_values<Key: Hash>(
 	values: &mut HashMap<Key, (u32, DBValue)>,
 	inserted: Vec<Key>,
@@ -198,7 +204,6 @@ fn discard_values<Key: Hash>(
 }
 
 fn discard_offset_values(
-	values: &mut HashMap<OffstateKey, (u32, DBValue)>,
 	inserted: Vec<OffstateKey>,
 	into: &mut OffstatePendingGC,
 ) {
@@ -207,28 +212,13 @@ fn discard_offset_values(
 	} else {
 		&mut into.keys_pending_gc
 	};
-	for k in inserted {
-		match values.entry(k) {
-			Entry::Occupied(mut e) => {
-				let (ref mut counter, _) = e.get_mut();
-				*counter -= 1;
-				if *counter == 0 {
-					let (key, _) = e.remove_entry();
-					into.insert(key);
-				}
-			},
-			Entry::Vacant(_) => {
-				debug_assert!(false, "Trying to discard missing value");
-			}
-		}
-	}
+	into.extend(inserted);
 }
 
 
 fn discard_descendants<BlockHash: Hash, Key: Hash>(
 	levels: &mut VecDeque<Vec<BlockOverlay<BlockHash, Key>>>,
 	mut values: &mut HashMap<Key, (u32, DBValue)>,
-	mut offstate_values: &mut HashMap<OffstateKey, (u32, DBValue)>,
 	index: usize,
 	parents: &mut HashMap<BlockHash, (BlockHash, u64)>,
 	pinned: &mut HashMap<BlockHash, (HashMap<Key, DBValue>, u64)>,
@@ -245,7 +235,6 @@ fn discard_descendants<BlockHash: Hash, Key: Hash>(
 				let mut pinned = pinned.get_mut(hash);
 				discard_values(&mut values, overlay.inserted, pinned.as_mut().map(|p| &mut p.0));
 				discard_offset_values(
-					&mut offstate_values,
 					overlay.offstate_inserted,
 					offstate_gc,
 				);
@@ -256,7 +245,7 @@ fn discard_descendants<BlockHash: Hash, Key: Hash>(
 		}).collect();
 	}
 	for hash in discarded {
-		discard_descendants(levels, values, offstate_values, index + 1, parents, pinned, offstate_gc, &hash);
+		discard_descendants(levels, values, index + 1, parents, pinned, offstate_gc, &hash);
 	}
 }
 
@@ -294,7 +283,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 							// fetch parent info
 							let parent_branch_index = parents.get(&record.parent_hash).map(|(_, i)| *i).unwrap_or(0);
 							let parent_branch_range = Some(branches.branch_ranges_from_cache(parent_branch_index));
-							let (_branch_range, branch_index) = branches.import(
+							let (branch_range, branch_index) = branches.import(
 								block,
 								parent_branch_index,
 								parent_branch_range,
@@ -320,7 +309,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 							};
 							insert_values(&mut values, record.inserted);
 							if let Some(inserted) = offstate_record_inserted {
-								insert_values(&mut offstate_values, inserted);
+								insert_offstate_values(&branch_range, &mut offstate_values, inserted);
 							}
 							trace!(
 								target: "state-db",
@@ -365,8 +354,8 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 	/// Insert a new block into the overlay. If inserted on the second level or lower
 	/// expects parent to be present in the window.
 	pub fn insert<E: fmt::Debug>(
-		&mut self, hash:
-		&BlockHash,
+		&mut self,
+		hash: &BlockHash,
 		number: BlockNumber,
 		parent_hash: &BlockHash,
 		changeset: ChangeSet<Key>,
@@ -423,7 +412,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 		level.push(overlay);
 		let	parent_branch_index = self.parents.get(&parent_hash).map(|(_, i)| *i).unwrap_or(0);
 		let	parent_branch_range = Some(self.branches.branch_ranges_from_cache(parent_branch_index));
-		let (_branch_range, branch_index) = self.branches.import(
+		let (branch_range, branch_index) = self.branches.import(
 			number,
 			parent_branch_index,
 			parent_branch_range,
@@ -454,7 +443,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 			offstate_journal_record.deleted.len(),
 		);
 		insert_values(&mut self.values, journal_record.inserted);
-		insert_values(&mut self.offstate_values, offstate_journal_record.inserted);
+		insert_offstate_values(&branch_range, &mut self.offstate_values, offstate_journal_record.inserted);
 		self.pending_insertions.push(hash.clone());
 		Ok(commit)
 	}
@@ -539,9 +528,20 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 		commit.data.inserted.extend(overlay.inserted.iter()
 			.map(|k| (k.clone(), self.values.get(k).expect("For each key in overlays there's a value in values").1.clone())));
 		commit.data.deleted.extend(overlay.deleted.clone());
-		commit.offstate.inserted.extend(overlay.offstate_inserted.iter()
-			.map(|k| (k.clone(), self.offstate_values.get(k)
-					.expect("For each key in overlays there's a value in values").1.clone())));
+		if !overlay.offstate_inserted.is_empty() {
+			// canonicalization is not frequent enough that we pass range
+			// in parameter for now
+			// TODO EMCH it seems bad ide to maintain this commit offstate
+			// field as his: simply delta of state could be better??
+			if let Some(range) = self.get_branch_range(hash) {
+				commit.offstate.inserted.extend(overlay.offstate_inserted.iter()
+					.map(|k| (k.clone(), self.offstate_values.get(k)
+						.expect("For each key in overlays there's a value in values")
+						.get(&range)
+						.expect("For each key in overlays there's a historied entry in values")
+						.clone())));
+			}
+		}
 		commit.offstate.deleted.extend(overlay.offstate_deleted.clone());
 
 		commit.meta.deleted.append(&mut discarded_journals);
@@ -570,7 +570,6 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 					discard_descendants(
 						&mut self.levels,
 						&mut self.values,
-						&mut self.offstate_values,
 						0,
 						&mut self.parents,
 						&mut self.pinned,
@@ -582,7 +581,6 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 				let mut pinned = self.pinned.get_mut(&overlay.hash);
 				discard_values(&mut self.values, overlay.inserted, pinned.as_mut().map(|p| &mut p.0));
 				discard_offset_values(
-					&mut self.offstate_values,
 					overlay.offstate_inserted,
 					&mut self.offstate_gc,
 				);
@@ -594,7 +592,9 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 			// set branch state synchronously
 			let block_number = self.last_canonicalized.as_ref().map(|(_, n)| n + count).unwrap_or(count - 1);
 			// this needs to be call after parents update
+			// TODO EMCH may be needed in 'canonicalize', and restore or commit here
 			self.branches.update_finalize_treshold(branch_index_cannonicalize, Some(block_number), true);
+			// gc is at the right place
 			self.offstate_gc.set_pending_gc(branch_index_cannonicalize);
 			// try to run the garbage collection (can run later if there is
 			// pinned process).
@@ -653,7 +653,6 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 					self.branches.revert(branch_index);
 				}
 				discard_values(&mut self.values, overlay.inserted, None);
-				discard_values(&mut self.offstate_values, overlay.offstate_inserted, None);
 			}
 			commit
 		})
@@ -671,7 +670,8 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 
 			let	overlay = self.levels[level_index].pop().expect("Empty levels are not allowed in self.levels");
 			discard_values(&mut self.values, overlay.inserted, None);
-			discard_values(&mut self.offstate_values, overlay.offstate_inserted, None);
+			// TODO EMCH we need discard state?? from  update finalize treshold here!! see discard value
+			// usgage
 			if self.levels[level_index].is_empty() {
 				debug_assert_eq!(level_index, self.levels.len() - 1);
 				self.levels.pop_back();
