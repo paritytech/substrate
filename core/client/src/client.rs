@@ -47,7 +47,7 @@ use state_machine::{
 };
 use executor::{RuntimeVersion, RuntimeInfo};
 use consensus::{
-	Error as ConsensusError, BlockStatus, BlockImportParams,
+	Error as ConsensusError, BlockStatus, BlockImportParams, BlockCheckParams,
 	ImportResult, BlockOrigin, ForkChoiceStrategy,
 	SelectChain, self,
 };
@@ -1507,10 +1507,9 @@ impl<'a, B, E, Block, RA> consensus::BlockImport<Block> for &'a Client<B, E, Blo
 	/// Check block preconditions.
 	fn check_block(
 		&mut self,
-		hash: Block::Hash,
-		number: NumberFor<Block>,
-		parent_hash: Block::Hash,
+		block: BlockCheckParams<Block>,
 	) -> Result<ImportResult, Self::Error> {
+		let BlockCheckParams { hash, number, parent_hash } = block;
 
 		if let Some(h) = self.fork_blocks.as_ref().and_then(|x| x.get(&number)) {
 			if &hash != h  {
@@ -1562,11 +1561,9 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 
 	fn check_block(
 		&mut self,
-		hash: Block::Hash,
-		number: NumberFor<Block>,
-		parent_hash: Block::Hash,
+		block: BlockCheckParams<Block>,
 	) -> Result<ImportResult, Self::Error> {
-		(&*self).check_block(hash, number, parent_hash)
+		(&*self).check_block(block)
 	}
 }
 

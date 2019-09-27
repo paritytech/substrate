@@ -68,7 +68,7 @@ use consensus_common::import_queue::{
 };
 use sr_primitives::{generic::{BlockId, OpaqueDigestItemId}, Justification};
 use sr_primitives::traits::{
-	Block as BlockT, Header, DigestItemFor, ProvideRuntimeApi, NumberFor,
+	Block as BlockT, Header, DigestItemFor, ProvideRuntimeApi,
 	Zero,
 };
 use keystore::KeyStorePtr;
@@ -89,7 +89,7 @@ use schnorrkel::{
 	},
 };
 use consensus_common::{
-	self, BlockImport, Environment, Proposer,
+	self, BlockImport, Environment, Proposer, BlockCheckParams,
 	ForkChoiceStrategy, BlockImportParams, BlockOrigin, Error as ConsensusError,
 };
 use srml_babe::{
@@ -1367,11 +1367,9 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 
 	fn check_block(
 		&mut self,
-		hash: Block::Hash,
-		number: NumberFor<Block>,
-		parent_hash: Block::Hash,
+		block: BlockCheckParams<Block>,
 	) -> Result<ImportResult, Self::Error> {
-		self.inner.check_block(hash, number, parent_hash).map_err(Into::into)
+		self.inner.check_block(block).map_err(Into::into)
 	}
 }
 

@@ -44,7 +44,7 @@ use consensus::import_queue::{
 };
 use consensus::block_import::{BlockImport, ImportResult};
 use consensus::Error as ConsensusError;
-use consensus::{BlockOrigin, ForkChoiceStrategy, BlockImportParams, JustificationImport};
+use consensus::{BlockOrigin, ForkChoiceStrategy, BlockImportParams, BlockCheckParams, JustificationImport};
 use futures::prelude::*;
 use futures03::{StreamExt as _, TryStreamExt as _};
 use crate::{NetworkWorker, NetworkService, config::ProtocolId};
@@ -423,11 +423,9 @@ impl<T: ?Sized + BlockImport<Block>> BlockImport<Block> for BlockImportAdapter<T
 
 	fn check_block(
 		&mut self,
-		hash: Hash,
-		number: NumberFor<Block>,
-		parent_hash: Hash,
+		block: BlockCheckParams<Block>,
 	) -> Result<ImportResult, Self::Error> {
-		self.0.lock().check_block(hash, number, parent_hash)
+		self.0.lock().check_block(block)
 	}
 
 	fn import_block(
