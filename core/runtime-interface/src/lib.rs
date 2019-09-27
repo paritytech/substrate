@@ -71,40 +71,27 @@ impl<T> RIType for [T] {
 	type FFIType = u64;
 }
 
-/// Marker trait for types that should be passed to between wasm and the host by using SCALE codec.
+/// Marker trait for types that should be passed between wasm and the host by using SCALE codec.
 ///
 /// # Example
 /// ```
-/// # use substrate_runtime_interface::PassedAsEncoded;
+/// # use substrate_runtime_interface::PassByCodec;
 /// #[derive(codec::Encode, codec::Decode)]
 /// struct Test;
 ///
-/// // It is sufficient to implement the trait for the desired type.
-/// impl PassedAsEncoded for Test {}
+/// // It is sufficient to implement the trait for the desired type and it will be usable with
+/// // the runtime interface.
+/// impl PassByCodec for Test {}
 /// ```
-pub trait PassedAsEncoded: Codec {}
+pub trait PassByCodec: Codec {}
 
-impl<T: PassedAsEncoded> RIType for T {
+impl<T: PassByCodec> RIType for T {
 	type FFIType = u64;
 }
 
-impl<T: Codec> PassedAsEncoded for Option<T> {}
+impl<T: Codec> PassByCodec for Option<T> {}
 
-impl<T: Codec, E: Codec> PassedAsEncoded for Result<T, E> {}
-
-/// Converts a pointer and length into an `u64`.
-fn pointer_and_len_to_u64(ptr: u32, len: u32) -> u64 {
-	((len as u64) | u64::from(ptr) << 32).to_le()
-}
-
-/// Splits an `u64` into the pointer and length.
-fn pointer_and_len_from_u64(val: u64) -> (u32, u32) {
-	let val = u64::from_le(val);
-	let len = (val & (!0u32 as u64)) as u32;
-	let ptr = (val >> 32) as u32;
-
-	(ptr, len)
-}
+impl<T: Codec, E: Codec> PassByCodec for Result<T, E> {}
 
 #[cfg(test)]
 mod tests {

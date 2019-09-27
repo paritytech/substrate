@@ -16,7 +16,7 @@
 
 //! Provides implementations for the runtime interface traits.
 
-use crate::{RIType, pointer_and_len_to_u64, pointer_and_len_from_u64, PassedAsEncoded};
+use crate::{RIType, PassByCodec};
 #[cfg(feature = "std")]
 use crate::host::*;
 #[cfg(not(feature = "std"))]
@@ -34,6 +34,20 @@ use rstd::{any::TypeId, mem};
 
 #[cfg(feature = "std")]
 use rstd::borrow::Cow;
+
+/// Converts a pointer and length into an `u64`.
+fn pointer_and_len_to_u64(ptr: u32, len: u32) -> u64 {
+	((len as u64) | u64::from(ptr) << 32).to_le()
+}
+
+/// Splits an `u64` into the pointer and length.
+fn pointer_and_len_from_u64(val: u64) -> (u32, u32) {
+	let val = u64::from_le(val);
+	let len = (val & (!0u32 as u64)) as u32;
+	let ptr = (val >> 32) as u32;
+
+	(ptr, len)
+}
 
 /// Implement the traits for the given primitive traits.
 macro_rules! impl_traits_for_primitives {
@@ -197,7 +211,7 @@ impl IntoPreallocatedFFIValue for [u8] {
 }
 
 #[cfg(feature = "std")]
-impl<T: PassedAsEncoded> IntoFFIValue for T {
+impl<T: PassByCodec> IntoFFIValue for T {
 	fn into_ffi_value(self, context: &mut dyn FunctionContext) -> Result<u64> {
 		let vec = self.encode();
 		let ptr = context.allocate_memory(vec.len() as u32)?;
@@ -208,7 +222,7 @@ impl<T: PassedAsEncoded> IntoFFIValue for T {
 }
 
 #[cfg(feature = "std")]
-impl<T: PassedAsEncoded + Sized> FromFFIValue for T {
+impl<T: PassByCodec> FromFFIValue for T {
 	type SelfInstance = Self;
 
 	fn from_ffi_value(context: &mut dyn FunctionContext, arg: u64) -> Result<Self> {
@@ -265,7 +279,7 @@ impl<T: 'static + Decode> FromFFIValue for Vec<T> {
 }
 
 #[cfg(not(feature = "std"))]
-impl<T: PassedAsEncoded> IntoFFIValue for T {
+impl<T: PassByCodec> IntoFFIValue for T {
 	type Owned = Vec<u8>;
 
 	fn into_ffi_value(&self) -> WrappedFFIValue<u64, Vec<u8>> {
@@ -276,7 +290,7 @@ impl<T: PassedAsEncoded> IntoFFIValue for T {
 }
 
 #[cfg(not(feature = "std"))]
-impl<T: PassedAsEncoded> FromFFIValue for T {
+impl<T: PassByCodec> FromFFIValue for T {
 	fn from_ffi_value(arg: u64) -> Self {
 		let (ptr, len) = pointer_and_len_from_u64(arg);
 		let len = len as usize;
