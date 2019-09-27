@@ -34,12 +34,12 @@
 //! ```
 //! use support::{decl_module, dispatch::Result};
 //!
-//! trait Trait: system::Trait {}
+//! pub trait Trait: system::Trait {}
 //!
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 //! 		pub fn random_module_example(origin) -> Result {
-//! 			let _random_seed = <srml_random::Module<T>>::random_seed();
+//! 			let _random_seed = <srml_randomness::Module<T>>::random_seed();
 //! 			Ok(())
 //! 		}
 //! 	}
