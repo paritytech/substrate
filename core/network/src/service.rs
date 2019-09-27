@@ -496,13 +496,13 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 		Ok(())
 	}
 
-	/// Adds a `PeerId` and its address as reserved.
+	/// Configure an explicit fork sync request.
 	/// Note that this function should not be used for recent blocks.
 	/// Sync should be able to download all the recent forks normally.
-	/// `sync_fork` should only be used if external code detects that there's
+	/// `set_sync_fork_request` should only be used if external code detects that there's
 	/// a stale fork missing.
 	/// Passing empty `peers` set effectively removes the sync request.
-	pub fn sync_fork(&self, peers: Vec<PeerId>, hash: B::Hash, number: NumberFor<B>) {
+	pub fn set_sync_fork_request(&self, peers: Vec<PeerId>, hash: B::Hash, number: NumberFor<B>) {
 		let _ = self
 			.to_worker
 			.unbounded_send(ServerToWorkerMsg::SyncFork(peers, hash, number));
@@ -678,7 +678,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Stream for Ne
 				ServerToWorkerMsg::AddKnownAddress(peer_id, addr) =>
 					self.network_service.add_known_address(peer_id, addr),
 				ServerToWorkerMsg::SyncFork(peer_ids, hash, number) =>
-					self.network_service.user_protocol_mut().sync_fork(peer_ids, &hash, number),
+					self.network_service.user_protocol_mut().set_sync_fork_request(peer_ids, &hash, number),
 			}
 		}
 

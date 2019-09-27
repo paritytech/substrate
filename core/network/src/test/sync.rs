@@ -568,7 +568,7 @@ fn can_sync_explicit_forks() {
 
 	// request explicit sync
 	let first_peer_id = net.peer(0).id();
-	net.peer(1).sync_fork(vec![first_peer_id], small_hash, small_number);
+	net.peer(1).set_sync_fork_request(vec![first_peer_id], small_hash, small_number);
 
 	// peer 1 downloads the block.
 	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| -> Result<_, ()> {

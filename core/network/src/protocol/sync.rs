@@ -459,8 +459,8 @@ impl<B: BlockT> ChainSync<B> {
 	}
 
 	/// Request syncing for the given block from given set of peers.
-	// This is similar to on_block_announce with unknown parent hash.
-	pub fn sync_fork(&mut self, peers: Vec<PeerId>, hash: &B::Hash, number: NumberFor<B>) {
+	// The implementation is similar to on_block_announce with unknown parent hash.
+	pub fn set_sync_fork_request(&mut self, peers: Vec<PeerId>, hash: &B::Hash, number: NumberFor<B>) {
 		if peers.is_empty() {
 			if let Some(_) = self.sync_requests.remove(hash) {
 				debug!(target: "sync", "Cleared sync request for block {:?} with {:?}", hash, peers);
