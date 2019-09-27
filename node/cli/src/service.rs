@@ -225,12 +225,6 @@ macro_rules! new_full {
 	}}
 }
 
-/// Builds a new service for a full client.
-pub fn new_full<C: Send + Default + 'static>(config: Configuration<C, GenesisConfig>)
--> Result<impl AbstractService, ServiceError> {
-	new_full!(config).map(|(service, _)| service)
-}
-
 #[allow(dead_code)]
 type ConcreteBlock = node_primitives::Block;
 #[allow(dead_code)]
@@ -246,11 +240,7 @@ type ConcreteClient =
 type ConcreteBackend = Backend<ConcreteBlock>;
 
 /// Builds a new service for a full client.
-/// This function returns a [NewService](substrate_service::NewService) rather than `AbstractService`.
-/// It might be handy when you need additional features from service that are not implemented by `AbrtractService`.
-/// Examples might include `service.client().runtime_api()` which is not accessible in `AbstractService` instance
-#[allow(dead_code)]
-pub fn new_full_concrete<C: Send + Default + 'static>(config: Configuration<C, GenesisConfig>)
+pub fn new_full<C: Send + Default + 'static>(config: Configuration<C, GenesisConfig>)
 -> Result<
 	NewService<
 		ConcreteBlock,
