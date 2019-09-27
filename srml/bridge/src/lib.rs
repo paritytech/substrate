@@ -32,13 +32,8 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::{Decode, Encode};
-use sr_primitives::{
-	generic::BlockId,
-	traits::{Block as BlockT, Header as HeaderT},
-};
-use support::{decl_error, decl_event, decl_module, decl_storage, dispatch::Result};
-use system::{ensure_root, ensure_signed};
+use support::{decl_error, decl_event, decl_module, decl_storage};
+use system::{ensure_signed};
 
 // struct Bridge {}
 //
@@ -59,19 +54,14 @@ decl_storage! {
 		/// Get the ID of the current bridge
 		pub BridgeId get(bridge_id): T::Hash;
 
-		/// Get the ID of the current bridge
-		// TODO: Figure out how to ge a Block here
-		pub LastFinalizedBlock get(last_finalized_block): u64; // Block;
-
 		/// Get latest block number included in the chain
-		pub BlockNumber get(lastest_block_num): T::BlockNumber;
+		pub LastBlockNumber get(lastest_block_num): T::BlockNumber;
 
-		// What I want to have wrt to the Block are:
-		// 1. Block Number
-		// 2. Block Hash
-		// 3. State Root
-		// Can I get these from a `Block`, or do they need to
-		// be stored individually?
+		/// Get the latest block header included in  the chain
+		pub LastBlockHeader get(lastest_block_header): Option<T::Header>;
+
+		/// Get the latest state root included in  the chain
+		pub LastStateRoot get(lastest_state_root): T::Hash;
 
 		/// Latest set of validators
 		pub Validators get(validators): Vec<T::ValidatorId>;
@@ -81,18 +71,15 @@ decl_storage! {
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		// TODO: Figure out the proper type for these proofs
-		fn new(origin, block_header: T::Header, validator_set: Vec<T::ValidatorId>, validator_set_proof: Vec<u8>, storage_proof: Vec<u8>) {
-		//
-		// The macro can't handle arguments like this :(
-		// fn new(
-		// 	origin,
-		// 	block_header: T::Header,
-		// 	validator_set: Vec<T::ValidatorId>,
-		// 	validator_set_proof: Vec<u8>,
-		// 	storage_proof: Vec<u8>,
-		// ) {
-
+		fn new(
+			origin,
+			_block_header: T::Header,
+			_validator_set: Vec<T::ValidatorId>,
+			_validator_set_proof: Vec<u8>,
+			_storage_proof: Vec<u8>,
+		) {
 			// NOTE: Should this be a root call?
+			// Use srml/collective/src/lib.rs?
 			let _sender = ensure_signed(origin)?;
 
 			Self::check_storage_proof()?;
@@ -107,7 +94,6 @@ decl_module! {
 			let _sender = ensure_signed(origin)?;
 		}
 	}
-
 }
 
 decl_error! {
@@ -119,14 +105,12 @@ decl_error! {
 }
 
 impl<T: Trait> Module<T> {
-	// fn check_storage_proof() -> Result<(), Error> {
-	fn check_storage_proof() -> Result {
+	fn check_storage_proof() -> std::result::Result<(), Error> {
 		// ... Do some math ...
 		Ok(()) // Otherwise, Error::InvalidStorageProof
 	}
 
-	// fn check_validator_set_proof() -> Result<(), Error> {
-	fn check_validator_set_proof() -> Result {
+	fn check_validator_set_proof() -> std::result::Result<(), Error> {
 		// ... Do some math ...
 		Ok(()) // Otherwise, Error::InvalidValidatorSetProof
 	}
