@@ -24,7 +24,7 @@ use kvdb::{KeyValueDB, DBTransaction};
 
 use client::backend::{AuxStore, NewBlockState};
 use client::blockchain::{
-	BlockStatus, Cache as BlockchainCache, LightHeader,
+	BlockStatus, Cache as BlockchainCache,
 	HeaderBackend as BlockchainHeaderBackend, Info as BlockchainInfo,
 	well_known_cache_keys,
 };
@@ -35,10 +35,10 @@ use codec::{Decode, Encode};
 use primitives::Blake2Hasher;
 use sr_primitives::generic::{DigestItem, BlockId};
 use sr_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One, NumberFor};
+use header_metadata::{CachedHeaderMetadata, HeaderMetadata, HeaderMetadataCache, TreeBackend};
 use crate::cache::{DbCacheSync, DbCache, ComplexBlockId, EntryType as CacheEntryType};
 use crate::utils::{self, meta_keys, Meta, db_err, read_db, block_id_to_lookup_key, read_meta};
 use crate::DatabaseSettings;
-use crate::{HeaderCache, LIGHT_HEADER_CACHE_SIZE};
 use log::{trace, warn, debug};
 
 pub(crate) mod columns {
@@ -61,7 +61,7 @@ pub struct LightStorage<Block: BlockT> {
 	db: Arc<dyn KeyValueDB>,
 	meta: RwLock<Meta<NumberFor<Block>, Block::Hash>>,
 	cache: Arc<DbCacheSync<Block>>,
-	header_cache: RwLock<HeaderCache<Block>>,
+	header_metadata_cache: HeaderMetadataCache<Block>,
 }
 
 impl<Block> LightStorage<Block>
@@ -111,7 +111,7 @@ impl<Block> LightStorage<Block>
 			db,
 			meta: RwLock::new(meta),
 			cache: Arc::new(DbCacheSync(RwLock::new(cache))),
-			header_cache: RwLock::new(HeaderCache::new(LIGHT_HEADER_CACHE_SIZE)),
+			header_metadata_cache: HeaderMetadataCache::default(),
 		})
 	}
 
@@ -152,31 +152,6 @@ impl<Block> BlockchainHeaderBackend<Block> for LightStorage<Block>
 {
 	fn header(&self, id: BlockId<Block>) -> ClientResult<Option<Block::Header>> {
 		utils::read_header(&*self.db, columns::KEY_LOOKUP, columns::HEADER, id)
-	}
-
-	fn set_light_header(&self, data: LightHeader<Block>) {
-		self.header_cache.write().put_data(data)
-	}
-
-	fn get_light_header(&self, id: BlockId<Block>) -> ClientResult<Option<LightHeader<Block>>> {
-		let mut header_cache = self.header_cache.write();
-		if let Some(header_data) = header_cache.get_data(id) {
-			Ok(Some(header_data))
-		} else {
-			self.header(id).and_then(|maybe_header| match maybe_header {
-				Some(header) => {
-					let light_header = LightHeader {
-						hash: header.hash(),
-						number: *header.number(),
-						parent: *header.parent_hash(),
-						ancestor: *header.parent_hash(),
-					};
-					header_cache.put_data(light_header.clone());
-					Ok(Some(light_header))
-				},
-				None => Ok(None),
-			})
-		}
 	}
 
 	fn info(&self) -> BlockchainInfo<Block> {
@@ -220,6 +195,35 @@ impl<Block> BlockchainHeaderBackend<Block> for LightStorage<Block>
 	}
 }
 
+impl<Block: BlockT> HeaderMetadata<Block> for LightStorage<Block> {
+	type Metadata = CachedHeaderMetadata<Block>;
+	type Error = ClientError;
+
+	fn header_metadata(&self, hash: Block::Hash) -> Result<Self::Metadata, Self::Error> {
+		self.header_metadata_cache.header_metadata(hash).or_else(|_| {
+			self.header(BlockId::hash(hash))?.map(|header| {
+					let header_metadata = CachedHeaderMetadata::from(&header);
+					self.header_metadata_cache.insert_header_metadata(
+						header_metadata.hash,
+						header_metadata.clone(),
+					);
+					header_metadata
+				}
+			).ok_or(ClientError::UnknownBlock("header not found in db".to_owned()))
+		})
+	}
+
+	fn insert_header_metadata(&self, hash: Block::Hash, metadata: Self::Metadata) {
+		self.header_metadata_cache.insert_header_metadata(hash, metadata)
+	}
+
+	fn remove_header_metadata(&self, hash: Block::Hash) {
+		self.header_metadata_cache.remove_header_metadata(hash);
+	}
+}
+
+impl<Block: BlockT> TreeBackend<Block> for LightStorage<Block> {}
+
 impl<Block: BlockT> LightStorage<Block> {
 	// Get block changes trie root, if available.
 	fn changes_trie_root(&self, block: BlockId<Block>) -> ClientResult<Option<Block::Hash>> {
@@ -247,12 +251,7 @@ impl<Block: BlockT> LightStorage<Block> {
 		// handle reorg.
 		let meta = self.meta.read();
 		if meta.best_hash != Default::default() {
-			let tree_route = ::client::blockchain::tree_route(
-				|id| self.get_light_header(id)?
-					.ok_or_else(|| client::error::Error::UnknownBlock(format!("{:?}", id))),
-				BlockId::Hash(meta.best_hash),
-				BlockId::Hash(route_to),
-			)?;
+			let tree_route = self.tree_route(meta.best_hash, route_to)?;
 
 			// update block number to hash lookup entries.
 			for retracted in tree_route.retracted() {
@@ -452,13 +451,10 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 		)?;
 		transaction.put(columns::HEADER, &lookup_key, &header.encode());
 
-		self.set_light_header(
-			LightHeader {
-				hash: header.hash().clone(),
-				number: header.number().clone(),
-				parent: header.parent_hash().clone(),
-				ancestor: header.parent_hash().clone(),
-			}
+		let header_metadata = CachedHeaderMetadata::from(&header);
+		self.header_metadata_cache.insert_header_metadata(
+			header.hash().clone(),
+			header_metadata,
 		);
 
 		let is_genesis = number.is_zero();
@@ -824,12 +820,7 @@ pub(crate) mod tests {
 		let b2 = insert_block(&db, HashMap::new(), || default_header(&b1, 2));
 
 		{
-			let tree_route = ::client::blockchain::tree_route(
-				|id| db.get_light_header(id)?
-					.ok_or_else(|| client::error::Error::UnknownBlock(format!("{:?}", id))),
-				BlockId::Hash(a3),
-				BlockId::Hash(b2)
-			).unwrap();
+			let tree_route = db.tree_route(a3, b2).unwrap();
 
 			assert_eq!(tree_route.common_block().hash, block0);
 			assert_eq!(tree_route.retracted().iter().map(|r| r.hash).collect::<Vec<_>>(), vec![a3, a2, a1]);
@@ -837,12 +828,7 @@ pub(crate) mod tests {
 		}
 
 		{
-			let tree_route = ::client::blockchain::tree_route(
-				|id| db.get_light_header(id)?
-					.ok_or_else(|| client::error::Error::UnknownBlock(format!("{:?}", id))),
-				BlockId::Hash(a1),
-				BlockId::Hash(a3),
-			).unwrap();
+			let tree_route = db.tree_route(a1, a3).unwrap();
 
 			assert_eq!(tree_route.common_block().hash, a1);
 			assert!(tree_route.retracted().is_empty());
@@ -850,12 +836,7 @@ pub(crate) mod tests {
 		}
 
 		{
-			let tree_route = ::client::blockchain::tree_route(
-				|id| db.get_light_header(id)?
-					.ok_or_else(|| client::error::Error::UnknownBlock(format!("{:?}", id))),
-				BlockId::Hash(a3),
-				BlockId::Hash(a1),
-			).unwrap();
+			let tree_route = db.tree_route(a3, a1).unwrap();
 
 			assert_eq!(tree_route.common_block().hash, a1);
 			assert_eq!(tree_route.retracted().iter().map(|r| r.hash).collect::<Vec<_>>(), vec![a3, a2]);
@@ -863,12 +844,7 @@ pub(crate) mod tests {
 		}
 
 		{
-			let tree_route = ::client::blockchain::tree_route(
-				|id| db.get_light_header(id)?
-					.ok_or_else(|| client::error::Error::UnknownBlock(format!("{:?}", id))),
-				BlockId::Hash(a2),
-				BlockId::Hash(a2),
-			).unwrap();
+			let tree_route = db.tree_route(a2, a2).unwrap();
 
 			assert_eq!(tree_route.common_block().hash, a2);
 			assert!(tree_route.retracted().is_empty());
@@ -891,55 +867,31 @@ pub(crate) mod tests {
 		let b2 = insert_block(&db, HashMap::new(), || default_header(&b1, 2));
 
 		{
-			let lca = ::client::blockchain::lowest_common_ancestor(
-				|id| db.get_light_header(id)?
-					.ok_or_else(|| client::error::Error::UnknownBlock(format!("{:?}", id))),
-				|data| db.set_light_header(data),
-				BlockId::Hash(a3),
-				BlockId::Hash(b2)
-			).unwrap();
+			let lca = db.lowest_common_ancestor(a3, b2).unwrap();
 
-			assert_eq!(lca.0, block0);
-			assert_eq!(lca.1, 0);
+			assert_eq!(lca.hash, block0);
+			assert_eq!(lca.number, 0);
 		}
 
 		{
-			let lca = ::client::blockchain::lowest_common_ancestor(
-				|id| db.get_light_header(id)?
-					.ok_or_else(|| client::error::Error::UnknownBlock(format!("{:?}", id))),
-				|data| db.set_light_header(data),
-				BlockId::Hash(a1),
-				BlockId::Hash(a3),
-			).unwrap();
+			let lca = db.lowest_common_ancestor(a1, a3).unwrap();
 
-			assert_eq!(lca.0, a1);
-			assert_eq!(lca.1, 1);
+			assert_eq!(lca.hash, a1);
+			assert_eq!(lca.number, 1);
 		}
 
 		{
-			let lca = ::client::blockchain::lowest_common_ancestor(
-				|id| db.get_light_header(id)?
-					.ok_or_else(|| client::error::Error::UnknownBlock(format!("{:?}", id))),
-				|data| db.set_light_header(data),
-				BlockId::Hash(a3),
-				BlockId::Hash(a1),
-			).unwrap();
+			let lca = db.lowest_common_ancestor(a3, a1).unwrap();
 
-			assert_eq!(lca.0, a1);
-			assert_eq!(lca.1, 1);
+			assert_eq!(lca.hash, a1);
+			assert_eq!(lca.number, 1);
 		}
 
 		{
-			let lca = ::client::blockchain::lowest_common_ancestor(
-				|id| db.get_light_header(id)?
-					.ok_or_else(|| client::error::Error::UnknownBlock(format!("{:?}", id))),
-				|data| db.set_light_header(data),
-				BlockId::Hash(a2),
-				BlockId::Hash(a2),
-			).unwrap();
+			let lca = db.lowest_common_ancestor(a2, a2).unwrap();
 
-			assert_eq!(lca.0, a2);
-			assert_eq!(lca.1, 2);
+			assert_eq!(lca.hash, a2);
+			assert_eq!(lca.number, 2);
 		}
 	}
 

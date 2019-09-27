@@ -21,6 +21,7 @@ substrate-telemetry = { path = "../../telemetry" }
 keystore = { package = "substrate-keystore", path = "../../keystore" }
 srml-babe = { path = "../../../srml/babe" }
 client = { package = "substrate-client", path = "../../client" }
+header-metadata = { package = "substrate-header-metadata", path = "../../client/header-metadata" }
 consensus-common = { package = "substrate-consensus-common", path = "../common" }
 uncles = { package = "substrate-consensus-uncles", path = "../uncles" }
 slots = { package = "substrate-consensus-slots", path = "../slots"  }

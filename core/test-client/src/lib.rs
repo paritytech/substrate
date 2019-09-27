@@ -45,6 +45,7 @@ use client::LocalCallExecutor;
 pub type LightBackend<Block> = client::light::backend::Backend<
 	client_db::light::LightStorage<Block>,
 	Blake2Hasher,
+	Block,
 >;
 
 /// A genesis storage initialisation trait.

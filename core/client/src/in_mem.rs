@@ -27,13 +27,14 @@ use state_machine::backend::{Backend as StateBackend, InMemory};
 use state_machine::{self, InMemoryChangesTrieStorage, ChangesTrieAnchorBlockId, ChangesTrieTransaction};
 use hash_db::{Hasher, Prefix};
 use trie::MemoryDB;
+use header_metadata::{HeaderMetadataCache, CachedHeaderMetadata, HeaderMetadata, TreeBackend};
 
 use crate::error;
 use crate::backend::{self, NewBlockState, StorageCollection, ChildStorageCollection};
 use crate::light;
 use crate::leaves::LeafSet;
 use crate::blockchain::{
-	self, BlockStatus, HeaderBackend, LightHeader, well_known_cache_keys::Id as CacheKeyId
+	self, BlockStatus, HeaderBackend, well_known_cache_keys::Id as CacheKeyId
 };
 
 struct PendingBlock<B: BlockT> {
@@ -104,13 +105,16 @@ struct BlockchainStorage<Block: BlockT> {
 /// In-memory blockchain. Supports concurrent reads.
 pub struct Blockchain<Block: BlockT> {
 	storage: Arc<RwLock<BlockchainStorage<Block>>>,
+	header_metadata_cache: Arc<HeaderMetadataCache<Block>>,
 }
 
 impl<Block: BlockT + Clone> Clone for Blockchain<Block> {
 	fn clone(&self) -> Self {
 		let storage = Arc::new(RwLock::new(self.storage.read().clone()));
+		let header_metadata_cache = Arc::new(HeaderMetadataCache::default());
 		Blockchain {
 			storage: storage.clone(),
+			header_metadata_cache: header_metadata_cache.clone(),
 		}
 	}
 }
@@ -142,6 +146,7 @@ impl<Block: BlockT> Blockchain<Block> {
 			}));
 		Blockchain {
 			storage: storage.clone(),
+			header_metadata_cache: Arc::new(HeaderMetadataCache::default()),
 		}
 	}
 
@@ -223,12 +228,7 @@ impl<Block: BlockT> Blockchain<Block> {
 			if &best_hash == header.parent_hash() {
 				None
 			} else {
-				let route = crate::blockchain::tree_route(
-					|id| self.get_light_header(id)?
-						.ok_or_else(|| error::Error::UnknownBlock(format!("{:?}", id))),
-					BlockId::Hash(best_hash),
-					BlockId::Hash(*header.parent_hash()),
-				)?;
+				let route = self.tree_route(best_hash, *header.parent_hash())?;
 				Some(route)
 			}
 		};
@@ -296,23 +296,6 @@ impl<Block: BlockT> HeaderBackend<Block> for Blockchain<Block> {
 		}))
 	}
 
-	fn set_light_header(&self, _data: LightHeader<Block>) {
-		unimplemented!()
-	}
-
-	fn get_light_header(&self, id: BlockId<Block>) -> error::Result<Option<LightHeader<Block>>> {
-		Ok(self.id(id).and_then(|hash| {
-			self.storage.read().blocks.get(&hash).map(
-				|b| LightHeader {
-					hash: b.header().hash().clone(),
-					number: b.header().number().clone(),
-					parent: b.header().parent_hash().clone(),
-					ancestor: b.header().parent_hash().clone(),
-				}
-			)
-		}))
-	}
-
 	fn info(&self) -> blockchain::Info<Block> {
 		let storage = self.storage.read();
 		blockchain::Info {
@@ -340,6 +323,35 @@ impl<Block: BlockT> HeaderBackend<Block> for Blockchain<Block> {
 	}
 }
 
+impl<Block: BlockT> HeaderMetadata<Block> for Blockchain<Block> {
+	type Metadata = CachedHeaderMetadata<Block>;
+	type Error = error::Error;
+
+	fn header_metadata(&self, hash: Block::Hash) -> Result<Self::Metadata, Self::Error> {
+		if let Ok(header_data) = self.header_metadata_cache.header_metadata(hash) {
+			Ok(header_data)
+		} else {
+			self.header(BlockId::hash(hash))?.map(|header| {
+				let header_metadata = CachedHeaderMetadata::from(&header);
+				self.header_metadata_cache.insert_header_metadata(
+					header_metadata.hash,
+					header_metadata.clone(),
+				);
+				header_metadata
+			}).ok_or(error::Error::Backend("header not found in db".to_owned()))
+		}
+	}
+
+	fn insert_header_metadata(&self, hash: Block::Hash, metadata: Self::Metadata) {
+		self.header_metadata_cache.insert_header_metadata(hash, metadata)
+	}
+
+	fn remove_header_metadata(&self, hash: Block::Hash) {
+		self.header_metadata_cache.remove_header_metadata(hash)
+	}
+}
+
+impl<Block: BlockT> TreeBackend<Block> for Blockchain<Block> {}
 
 impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
 	fn body(&self, id: BlockId<Block>) -> error::Result<Option<Vec<<Block as BlockT>::Extrinsic>>> {

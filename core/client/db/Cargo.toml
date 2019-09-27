@@ -13,7 +13,6 @@ kvdb-rocksdb = { git = "https://github.com/paritytech/parity-common", rev="b0317
 kvdb-memorydb = { git = "https://github.com/paritytech/parity-common", rev="b0317f649ab2c665b7987b8475878fc4d2e1f81d" }
 linked-hash-map = "0.5"
 hash-db = { version = "0.15.2" }
-lru = { version = "0.1.17" }
 primitives = { package = "substrate-primitives", path = "../../primitives" }
 sr-primitives = {  path = "../../sr-primitives" }
 client = { package = "substrate-client", path = "../../client" }
@@ -23,6 +22,7 @@ executor = { package = "substrate-executor", path = "../../executor" }
 state_db = { package = "substrate-state-db", path = "../../state-db" }
 trie = { package = "substrate-trie", path = "../../trie" }
 consensus_common = { package = "substrate-consensus-common", path = "../../consensus/common" }
+header_metadata = { package = "substrate-header-metadata", path = "../header-metadata" }
 
 [dev-dependencies]
 substrate-keyring = { path = "../../keyring" }

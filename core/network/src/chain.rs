@@ -24,6 +24,7 @@ use sr_primitives::traits::{Block as BlockT, Header as HeaderT};
 use sr_primitives::generic::{BlockId};
 use sr_primitives::Justification;
 use primitives::{H256, Blake2Hasher, storage::StorageKey};
+use header_metadata::TreeBackend;
 
 /// Local client abstraction for the network.
 pub trait Client<Block: BlockT>: Send + Sync {
@@ -153,14 +154,8 @@ impl<B, E, Block, RA> Client<Block> for SubstrateClient<B, E, Block, RA> where
 			return Ok(false);
 		}
 
-		let ancestor = ::client::blockchain::lowest_common_ancestor(
-			|id| self.get_light_header(&id)?
-				.ok_or_else(|| client::error::Error::UnknownBlock(format!("{:?}", id))),
-			|data| self.set_light_header(data),
-			BlockId::Hash(*block),
-			BlockId::Hash(*base),
-		)?;
+		let ancestor = self.lowest_common_ancestor(*block, *base)?;
 
-		Ok(ancestor.0 == *base)
+		Ok(ancestor.hash == *base)
 	}
 }
