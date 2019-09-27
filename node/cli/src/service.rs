@@ -36,7 +36,7 @@ use network::construct_simple_protocol;
 use substrate_service::{NewService, NetworkStatus};
 use client::{Client, LocalCallExecutor};
 use client_db::Backend;
-use sr_primitives::traits::{Block as BlockT};
+use sr_primitives::traits::Block as BlockT;
 use node_executor::NativeExecutor;
 use network::NetworkService;
 use offchain::OffchainWorkers;
