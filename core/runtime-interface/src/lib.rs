@@ -44,6 +44,7 @@ pub use externalities::{set_and_run_with_externalities, with_externalities};
 
 #[cfg(feature = "std")]
 mod externalities;
+mod impls;
 #[cfg(feature = "std")]
 pub mod host;
 #[cfg(not(feature = "std"))]
@@ -61,9 +62,6 @@ pub trait RIType {
 	type FFIType;
 }
 
-impl RIType for u32 {
-	type FFIType = u32;
-}
 
 impl<T> RIType for Vec<T> {
 	type FFIType = u64;

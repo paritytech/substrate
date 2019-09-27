@@ -16,13 +16,9 @@
 
 //! Traits required by the runtime interface from the wasm side.
 
-use crate::{RIType, pointer_and_len_to_u64, pointer_and_len_from_u64, PassedAsEncoded};
+use crate::RIType;
 
-use rstd::{any::TypeId, mem, marker::PhantomData};
-
-use codec::{Encode, Decode};
-
-use static_assertions::assert_eq_size;
+use rstd::marker::PhantomData;
 
 /// Something that can be converted into a [`WrappedFFIValue`].
 pub trait AsWrappedFFIValue: RIType {
@@ -78,100 +74,5 @@ where
 			Self::Ref(data, _) => data.into_ffi_value(),
 			Self::Owned(ref data) => data.into_ffi_value(),
 		}
-	}
-}
-
-impl AsWrappedFFIValue for u32 {
-	type RTOwned = u32;
-	type RTBorrowed = u32;
-
-	fn as_wrapped_ffi_value<'a>(&'a self) -> WrappedFFIValue<'a, u32, u32> {
-		WrappedFFIValue::from_owned(*self)
-	}
-}
-
-impl IntoFFIValue for u32 {
-	fn into_ffi_value(&self) -> u32 {
-		self.to_le()
-	}
-}
-
-impl FromFFIValue for u32 {
-	fn from_ffi_value(arg: u32) -> u32 {
-		u32::from_le(arg)
-	}
-}
-
-// Make sure that our assumptions for storing a pointer + its size in `u64` is valid.
-assert_eq_size!(usize_check; usize, u32);
-assert_eq_size!(ptr_check; *const u8, u32);
-
-impl IntoFFIValue for [u8] {
-	fn into_ffi_value(&self) -> u64 {
-		let data = self.as_ref();
-		let ptr_address = data.as_ptr() as u32;
-
-		pointer_and_len_to_u64(ptr_address, data.len() as u32)
-	}
-}
-
-impl IntoFFIValue for Vec<u8> {
-	fn into_ffi_value(&self) -> u64 {
-		self[..].into_ffi_value()
-	}
-}
-
-impl<T: 'static + Encode> AsWrappedFFIValue for [T] {
-	type RTOwned = Vec<u8>;
-	type RTBorrowed = [u8];
-
-	fn as_wrapped_ffi_value<'a>(&'a self) -> WrappedFFIValue<'a, u64, Vec<u8>, [u8]> {
-		if TypeId::of::<T>() == TypeId::of::<u8>() {
-			WrappedFFIValue::from_ref(unsafe { mem::transmute::<&[T], &[u8]>(self) })
-		} else {
-			WrappedFFIValue::from_owned(self.encode())
-		}
-	}
-}
-
-impl<T: 'static + Encode> AsWrappedFFIValue for Vec<T> {
-	type RTOwned = Vec<u8>;
-	type RTBorrowed = [u8];
-
-	fn as_wrapped_ffi_value<'a>(&'a self) -> WrappedFFIValue<'a, u64, Vec<u8>, [u8]> {
-		self[..].as_wrapped_ffi_value()
-	}
-}
-
-impl<T: 'static + Decode> FromFFIValue for Vec<T> {
-	fn from_ffi_value(arg: u64) -> Vec<T> {
-		let (ptr, len) = pointer_and_len_from_u64(arg);
-		let len = len as usize;
-
-		if TypeId::of::<T>() == TypeId::of::<u8>() {
-			unsafe { std::mem::transmute(Vec::from_raw_parts(ptr as *mut u8, len, len)) }
-		} else {
-			let slice = unsafe { std::slice::from_raw_parts(ptr as *const u8, len) };
-			Self::decode(&mut &slice[..]).expect("Host to wasm values are encoded correctly; qed")
-		}
-	}
-}
-
-impl<T: PassedAsEncoded> AsWrappedFFIValue for T {
-	type RTOwned = Vec<u8>;
-	type RTBorrowed = [u8];
-
-	fn as_wrapped_ffi_value<'a>(&'a self) -> WrappedFFIValue<'a, u64, Vec<u8>, [u8]> {
-		WrappedFFIValue::from_owned(self.encode())
-	}
-}
-
-impl<T: PassedAsEncoded> FromFFIValue for T {
-	fn from_ffi_value(arg: u64) -> Self {
-		let (ptr, len) = pointer_and_len_from_u64(arg);
-		let len = len as usize;
-
-		let slice = unsafe { std::slice::from_raw_parts(ptr as *const u8, len) };
-		Self::decode(&mut &slice[..]).expect("Host to wasm values are encoded correctly; qed")
 	}
 }

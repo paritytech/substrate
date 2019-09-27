@@ -340,9 +340,13 @@ macro_rules! impl_into_and_from_value {
 }
 
 impl_into_and_from_value! {
+	u8, I32,
+	u16, I32,
 	u32, I32,
-	i32, I32,
 	u64, I64,
+	i8, I32,
+	i16, I32,
+	i32, I32,
 	i64, I64,
 }
 
