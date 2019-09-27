@@ -256,7 +256,6 @@ mod tests {
 	use crate::metadata::*;
 	use crate::metadata::StorageHasher;
 	use crate::rstd::marker::PhantomData;
-	use crate::storage::{StorageValue, StorageMap};
 
 	storage_items! {
 		Value: b"a" => u32;
