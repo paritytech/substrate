@@ -266,8 +266,7 @@ use sr_primitives::{
 	curve::PiecewiseLinear,
 	weights::SimpleDispatchInfo,
 	traits::{
-		Convert, Zero, One, StaticLookup, CheckedSub, Saturating, Bounded, SimpleArithmetic,
-		SaturatedConversion,
+		Convert, Zero, One, StaticLookup, CheckedSub, Saturating, Bounded, SaturatedConversion,
 	}
 };
 use sr_staking_primitives::{
