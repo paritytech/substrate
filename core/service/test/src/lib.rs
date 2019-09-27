@@ -148,7 +148,7 @@ fn node_config<G> (
 		],
 		public_addresses: vec![],
 		boot_nodes: vec![],
-		node_key: NodeKeyConfig::Ed25519(Secret::New),
+		node_key: NodeKeyConfig::Ed25519(Secret::new_random_ed25519()),
 		in_peers: 50,
 		out_peers: 450,
 		reserved_nodes: vec![],

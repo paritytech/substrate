@@ -272,7 +272,7 @@ impl Default for NetworkConfiguration {
 			listen_addresses: Vec::new(),
 			public_addresses: Vec::new(),
 			boot_nodes: Vec::new(),
-			node_key: NodeKeyConfig::Ed25519(Secret::New),
+			node_key: NodeKeyConfig::Ed25519(Secret::new_random_ed25519()),
 			in_peers: 25,
 			out_peers: 75,
 			reserved_nodes: Vec::new(),
@@ -388,8 +388,20 @@ pub enum Secret<K> {
 	///   * `secp256k1::SecretKey`: An unencoded 32 bytes Secp256k1 secret key.
 	///   * `ed25519::SecretKey`: An unencoded 32 bytes Ed25519 secret key.
 	File(PathBuf),
-	/// Always generate a new secret key `K`.
-	New
+}
+
+impl Secret<ed25519::SecretKey> {
+	/// Generates a random ed25519 secret key
+	pub fn new_random_ed25519() -> Self {
+		Self::Input(ed25519::SecretKey::generate())
+	}
+}
+
+impl Secret<secp256k1::SecretKey> {
+	/// Generates a random secp256k1 secret key
+	pub fn new_random_secp256k1() -> Self {
+		Self::Input(secp256k1::SecretKey::generate())
+	}
 }
 
 impl NodeKeyConfig {
@@ -406,9 +418,6 @@ impl NodeKeyConfig {
 	pub fn into_keypair(self) -> io::Result<Keypair> {
 		use NodeKeyConfig::*;
 		match self {
-			Secp256k1(Secret::New) =>
-				Ok(Keypair::generate_secp256k1()),
-
 			Secp256k1(Secret::Input(k)) =>
 				Ok(Keypair::Secp256k1(k.into())),
 
@@ -419,9 +428,6 @@ impl NodeKeyConfig {
 					|b| b.to_bytes().to_vec())
 				.map(secp256k1::Keypair::from)
 				.map(Keypair::Secp256k1),
-
-			Ed25519(Secret::New) =>
-				Ok(Keypair::generate_ed25519()),
 
 			Ed25519(Secret::Input(k)) =>
 				Ok(Keypair::Ed25519(k.into())),
@@ -534,8 +540,8 @@ mod tests {
 
 	#[test]
 	fn test_secret_new() {
-		let kp1 = NodeKeyConfig::Ed25519(Secret::New).into_keypair().unwrap();
-		let kp2 = NodeKeyConfig::Ed25519(Secret::New).into_keypair().unwrap();
+		let kp1 = NodeKeyConfig::Ed25519(Secret::new_random_ed25519()).into_keypair().unwrap();
+		let kp2 = NodeKeyConfig::Ed25519(Secret::new_random_ed25519()).into_keypair().unwrap();
 		assert!(secret_bytes(&kp1) != secret_bytes(&kp2));
 	}
 }

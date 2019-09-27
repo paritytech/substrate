@@ -477,7 +477,7 @@ where
 				Ok(params.node_key_file
 					.or_else(|| net_config_file(net_config_dir, NODE_KEY_SECP256K1_FILE))
 					.map(network::config::Secret::File)
-					.unwrap_or(network::config::Secret::New)))
+					.unwrap_or(network::config::Secret::new_random_secp256k1())))
 				.map(NodeKeyConfig::Secp256k1),
 
 		NodeKeyType::Ed25519 =>
@@ -485,7 +485,7 @@ where
 				Ok(params.node_key_file
 					.or_else(|| net_config_file(net_config_dir, NODE_KEY_ED25519_FILE))
 					.map(network::config::Secret::File)
-					.unwrap_or(network::config::Secret::New)))
+					.unwrap_or(network::config::Secret::new_random_ed25519())))
 				.map(NodeKeyConfig::Ed25519)
 	}
 }
@@ -1001,10 +1001,8 @@ mod tests {
 				let typ = params.node_key_type;
 				node_key_config::<String>(params, &None)
 					.and_then(|c| match c {
-						NodeKeyConfig::Secp256k1(network::config::Secret::New)
-							if typ == NodeKeyType::Secp256k1 => Ok(()),
-						NodeKeyConfig::Ed25519(network::config::Secret::New)
-							if typ == NodeKeyType::Ed25519 => Ok(()),
+						NodeKeyConfig::Secp256k1(_) if typ == NodeKeyType::Secp256k1 => Ok(()),
+						NodeKeyConfig::Ed25519(_) if typ == NodeKeyType::Ed25519 => Ok(()),
 						_ => Err(error::Error::Input("Unexpected node key config".into()))
 					})
 			})
