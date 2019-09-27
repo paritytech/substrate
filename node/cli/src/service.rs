@@ -33,6 +33,16 @@ use transaction_pool::{self, txpool::{Pool as TransactionPool}};
 use inherents::InherentDataProviders;
 use network::construct_simple_protocol;
 
+use substrate_service::{NewService, NetworkStatus};
+use client::{Client, LocalCallExecutor};
+use client_db::Backend;
+use sr_primitives::traits::Block as BlockT;
+use node_executor::NativeExecutor;
+use network::NetworkService;
+use offchain::OffchainWorkers;
+use transaction_pool::ChainApi;
+use primitives::Blake2Hasher;
+
 construct_simple_protocol! {
 	/// Demo protocol attachment for substrate.
 	pub struct NodeProtocol where Block = Block { }
@@ -215,9 +225,39 @@ macro_rules! new_full {
 	}}
 }
 
+#[allow(dead_code)]
+type ConcreteBlock = node_primitives::Block;
+#[allow(dead_code)]
+type ConcreteClient =
+	Client<
+		Backend<ConcreteBlock>,
+		LocalCallExecutor<Backend<ConcreteBlock>,
+		NativeExecutor<node_executor::Executor>>,
+		ConcreteBlock,
+		node_runtime::RuntimeApi
+	>;
+#[allow(dead_code)]
+type ConcreteBackend = Backend<ConcreteBlock>;
+
 /// Builds a new service for a full client.
 pub fn new_full<C: Send + Default + 'static>(config: Configuration<C, GenesisConfig>)
--> Result<impl AbstractService, ServiceError> {
+-> Result<
+	NewService<
+		ConcreteBlock,
+		ConcreteClient,
+		LongestChain<ConcreteBackend, ConcreteBlock>,
+		NetworkStatus<ConcreteBlock>,
+		NetworkService<ConcreteBlock, crate::service::NodeProtocol, <ConcreteBlock as BlockT>::Hash>,
+		TransactionPool<ChainApi<ConcreteClient, ConcreteBlock>>,
+		OffchainWorkers<
+			ConcreteClient,
+			<ConcreteBackend as client::backend::Backend<Block, Blake2Hasher>>::OffchainStorage,
+			ConcreteBlock,
+		>
+	>,
+	ServiceError,
+>
+{
 	new_full!(config).map(|(service, _)| service)
 }
 
