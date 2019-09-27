@@ -16,8 +16,7 @@
 
 //! Generic implementation of an unchecked (pre-verification) extrinsic.
 
-#[cfg(feature = "std")]
-use std::fmt;
+use core::fmt;
 
 use rstd::prelude::*;
 use runtime_io::blake2_256;
@@ -249,7 +248,6 @@ impl<Address: Encode, Signature: Encode, Call: Encode, Extra: SignedExtension> s
 	}
 }
 
-#[cfg(feature = "std")]
 impl<Address, Call, Signature, Extra> fmt::Debug
 	for UncheckedExtrinsic<Address, Call, Signature, Extra>
 where

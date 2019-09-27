@@ -29,7 +29,8 @@ pub type Phase = u64;
 
 /// An era to describe the longevity of a transaction.
 #[derive(PartialEq, Eq, Clone, Copy)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(Debug)]
 pub enum Era {
 	/// The transaction is valid forever. The genesis hash must be present in the signed content.
 	Immortal,

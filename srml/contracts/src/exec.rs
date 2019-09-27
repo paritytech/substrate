@@ -232,7 +232,8 @@ impl<T: Trait> Token<T> for ExecFeeToken {
 	}
 }
 
-#[cfg_attr(any(feature = "std", test), derive(Debug, PartialEq, Eq, Clone))]
+#[cfg_attr(any(feature = "std", test), derive(PartialEq, Eq, Clone))]
+#[derive(Debug)]
 pub enum DeferredAction<T: Trait> {
 	DepositEvent {
 		/// A list of topics this event will be deposited with.

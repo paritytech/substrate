@@ -472,7 +472,8 @@ pub trait Hash: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {
 
 /// Blake2-256 Hash implementation.
 #[derive(PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(Debug)]
 pub struct BlakeTwo256;
 
 impl Hash for BlakeTwo256 {
@@ -547,41 +548,59 @@ impl<H: PartialEq + Eq + MaybeDebug> CheckEqual for super::generic::DigestItem<H
 }
 
 macro_rules! impl_maybe_marker {
-	( $( $(#[$doc:meta])+ $trait_name:ident: $($trait_bound:path),+ );+ ) => {
-		$(
-			$(#[$doc])+
-			#[cfg(feature = "std")]
-			pub trait $trait_name: $($trait_bound +)+ {}
-			#[cfg(feature = "std")]
-			impl<T: $($trait_bound +)+> $trait_name for T {}
+	( @ $(#[$doc:meta])+ $trait_name:ident: $($trait_bound:path),+ ) => {
+		// TODO [ToDr] Do proper
+		$(#[$doc])+
+		#[cfg(feature = "std")]
+		pub trait $trait_name: $($trait_bound +)+ {}
+		#[cfg(feature = "std")]
+		impl<T: $($trait_bound +)+> $trait_name for T {}
 
-			$(#[$doc])+
-			#[cfg(not(feature = "std"))]
-			pub trait $trait_name {}
-			#[cfg(not(feature = "std"))]
-			impl<T> $trait_name for T {}
+
+		$(#[$doc])+
+		#[cfg(not(feature = "std"))]
+		pub trait $trait_name {}
+		#[cfg(not(feature = "std"))]
+		impl<T> $trait_name for T {}
+	};
+	( @ $(#[$doc:meta])+ $trait_name:ident: + Debug + $($trait_bound:path),+ ) => {
+		// TODO [ToDr] Do proper
+		$(#[$doc])+
+		#[cfg(feature = "std")]
+		pub trait $trait_name: std::fmt::Debug + $($trait_bound +)+ {}
+		#[cfg(feature = "std")]
+		impl<T: std::fmt::Debug + $($trait_bound +)+> $trait_name for T {}
+
+		$(#[$doc])+
+		#[cfg(not(feature = "std"))]
+		pub trait $trait_name: core::fmt::Debug {}
+		#[cfg(not(feature = "std"))]
+		impl<T: core::fmt::Debug> $trait_name for T {}
+	};
+	( $( $(#[$doc:meta])+ $trait_name:ident: $( + $x:ident + )* $($trait_bound:path),+ );+ ) => {
+		$(
+			impl_maybe_marker!( @ $(#[$doc])+ $trait_name : $( + $x + )* $( $trait_bound ),+ );
 		)+
-	}
+	};
 }
 
-impl_maybe_marker!(
-	/// A type that implements Debug when in std environment.
-	MaybeDebug: Debug;
+use core::fmt::Debug as MaybeDebug;
 
+impl_maybe_marker!(
 	/// A type that implements Display when in std environment.
 	MaybeDisplay: Display;
 
 	/// A type that implements Hash when in std environment.
-	MaybeHash: ::rstd::hash::Hash;
+	MaybeHash: rstd::hash::Hash;
 
 	/// A type that implements Serialize when in std environment.
 	MaybeSerialize: Serialize;
 
 	/// A type that implements Serialize, DeserializeOwned and Debug when in std environment.
-	MaybeSerializeDebug: Debug, DeserializeOwned, Serialize;
+	MaybeSerializeDebug: + Debug + DeserializeOwned, Serialize;
 
 	/// A type that implements Serialize and Debug when in std environment.
-	MaybeSerializeDebugButNotDeserialize: Debug, Serialize
+	MaybeSerializeDebugButNotDeserialize: + Debug + Serialize
 );
 
 /// A type that provides a randomness beacon.
@@ -1203,7 +1222,8 @@ macro_rules! impl_opaque_keys {
 		}
 	) => {
 		#[derive(Default, Clone, PartialEq, Eq, $crate::codec::Encode, $crate::codec::Decode)]
-		#[cfg_attr(feature = "std", derive(Debug, $crate::serde::Serialize, $crate::serde::Deserialize))]
+		#[cfg_attr(feature = "std", derive($crate::serde::Serialize, $crate::serde::Deserialize))]
+#[derive(Debug)]
 		pub struct $name {
 			$(
 				pub $field: $type,

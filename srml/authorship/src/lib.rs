@@ -196,7 +196,8 @@ where
 }
 
 #[derive(Encode, Decode)]
-#[cfg_attr(any(feature = "std", test), derive(PartialEq, Debug))]
+#[cfg_attr(any(feature = "std", test), derive(PartialEq))]
+#[derive(Debug)]
 enum UncleEntryItem<BlockNumber, Hash, Author> {
 	InclusionHeight(BlockNumber),
 	Uncle(Hash, Option<Author>),

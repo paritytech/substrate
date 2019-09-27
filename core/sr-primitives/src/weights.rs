@@ -64,7 +64,8 @@ impl From<SimpleDispatchInfo> for DispatchClass {
 }
 
 /// A bundle of static information collected from the `#[weight = $x]` attributes.
-#[cfg_attr(feature = "std", derive(PartialEq, Eq, Debug))]
+#[cfg_attr(feature = "std", derive(PartialEq, Eq))]
+#[derive(Debug)]
 #[derive(Clone, Copy, Default)]
 pub struct DispatchInfo {
 	/// Weight of this transaction.

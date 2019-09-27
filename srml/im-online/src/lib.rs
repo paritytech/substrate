@@ -537,7 +537,8 @@ impl<T: Trait> support::unsigned::ValidateUnsigned for Module<T> {
 }
 
 /// An offence that is filed if a validator didn't send a heartbeat message.
-#[cfg_attr(feature = "std", derive(Clone, Debug, PartialEq, Eq))]
+#[cfg_attr(feature = "std", derive(Clone, PartialEq, Eq))]
+#[derive(Debug)]
 pub struct UnresponsivenessOffence<Offender> {
 	/// The current session index in which we report the unresponsive validators.
 	///

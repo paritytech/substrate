@@ -46,9 +46,11 @@ impl<T: std::fmt::Debug + std::hash::Hash> MaybeDebugHash for T {}
 
 /// Type which implements Debug and Hash in std, not when no-std (no-std variant).
 #[cfg(not(feature = "std"))]
-pub trait MaybeDebugHash {}
+pub trait MaybeDebugHash: core::fmt::Debug {}
+// TODO [ToDr] do it proper
+//
 #[cfg(not(feature = "std"))]
-impl<T> MaybeDebugHash for T {}
+impl<T: core::fmt::Debug> MaybeDebugHash for T {}
 
 /// A application's public key.
 pub trait AppPublic: AppKey + Public + Ord + PartialOrd + Eq + PartialEq + MaybeDebugHash + codec::Codec {

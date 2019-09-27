@@ -213,7 +213,8 @@ decl_module! {
 }
 
 /// A spending proposal.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(Debug)]
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
 pub struct Proposal<AccountId, Balance> {
 	proposer: AccountId,

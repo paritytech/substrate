@@ -890,7 +890,8 @@ impl<T: Trait> Config<T> {
 }
 
 /// Definition of the cost schedule and other parameterizations for wasm vm.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(Debug)]
 #[derive(Clone, Encode, Decode, PartialEq, Eq)]
 pub struct Schedule {
 	/// Version of the schedule.
@@ -987,10 +988,9 @@ impl<T: Trait + Send + Sync> Default for CheckBlockGasLimit<T> {
 	}
 }
 
-#[cfg(feature = "std")]
-impl<T: Trait + Send + Sync> std::fmt::Debug for CheckBlockGasLimit<T> {
-	fn fmt(&self, _: &mut std::fmt::Formatter) -> std::fmt::Result {
-		Ok(())
+impl<T: Trait + Send + Sync> core::fmt::Debug for CheckBlockGasLimit<T> {
+	fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+		write!(f, "CheckBlockGasLimit<T>")
 	}
 }
 

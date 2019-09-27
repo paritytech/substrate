@@ -17,9 +17,8 @@
 //! Dispatch system. Contains a macro for defining runtime modules and
 //! generating values representing lazy module function calls.
 
+pub use core::fmt;
 pub use crate::rstd::{result, prelude::{Vec, Clone, Eq, PartialEq}, marker};
-#[cfg(feature = "std")]
-pub use std::fmt;
 pub use crate::codec::{Codec, Decode, Encode, Input, Output, HasCompact, EncodeAsRef};
 pub use srml_metadata::{
 	FunctionMetadata, DecodeDifferent, DecodeDifferentArray, FunctionArgumentMetadata,
@@ -54,11 +53,12 @@ pub trait Parameter: Codec + Clone + Eq + fmt::Debug {}
 #[cfg(feature = "std")]
 impl<T> Parameter for T where T: Codec + Clone + Eq + fmt::Debug {}
 
+// TODO [ToDr] Do proper
 #[cfg(not(feature = "std"))]
-pub trait Parameter: Codec + Clone + Eq {}
+pub trait Parameter: Codec + Clone + Eq + core::fmt::Debug {}
 
 #[cfg(not(feature = "std"))]
-impl<T> Parameter for T where T: Codec + Clone + Eq {}
+impl<T> Parameter for T where T: Codec + Clone + Eq + core::fmt::Debug {}
 
 /// Declares a `Module` struct and a `Call` enum, which implements the dispatch logic.
 ///
@@ -1072,7 +1072,7 @@ macro_rules! decl_module {
 
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 		#[derive(Clone, Copy, PartialEq, Eq)]
-		#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Debug)]
 		pub struct $mod_type<
 			$trait_instance: $trait_name
 			$(<I>, $instance: $instantiable $( = $module_default_instance)?)?
@@ -1223,7 +1223,6 @@ macro_rules! decl_module {
 			for $call_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
 		{}
 
-		#[cfg(feature = "std")]
 		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::fmt::Debug
 			for $call_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
 		{
@@ -1318,7 +1317,7 @@ macro_rules! impl_outer_dispatch {
 	) => {
 		$(#[$attr])*
 		#[derive(Clone, PartialEq, Eq, $crate::codec::Encode, $crate::codec::Decode)]
-		#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Debug)]
 		pub enum $call_type {
 			$(
 				$camelcase ( $crate::dispatch::CallableCallFor<$camelcase, $runtime> )

@@ -59,7 +59,8 @@ pub type SetId = u64;
 pub type RoundNumber = u64;
 
 /// A scheduled change of authority set.
-#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+#[cfg_attr(feature = "std", derive(Serialize))]
+#[derive(Debug)]
 #[derive(Clone, Eq, PartialEq, Encode, Decode)]
 pub struct ScheduledChange<N> {
 	/// The new authorities after the change, along with their respective weights.
@@ -69,7 +70,8 @@ pub struct ScheduledChange<N> {
 }
 
 /// An consensus log item for GRANDPA.
-#[cfg_attr(feature = "std", derive(Serialize, Debug))]
+#[cfg_attr(feature = "std", derive(Serialize))]
+#[derive(Debug)]
 #[derive(Decode, Encode, PartialEq, Eq, Clone)]
 pub enum ConsensusLog<N: Codec> {
 	/// Schedule an authority set change.

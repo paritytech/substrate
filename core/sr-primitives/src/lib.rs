@@ -190,7 +190,8 @@ impl Default for MultiSignature {
 
 /// Public key for any known crypto algorithm.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(Debug)]
 pub enum MultiSigner {
 	/// An Ed25519 identity.
 	Ed25519(ed25519::Public),
@@ -256,7 +257,8 @@ impl Verify for MultiSignature {
 
 /// Signature verify that can work with any known signature types..
 #[derive(Eq, PartialEq, Clone, Default, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(Debug)]
 pub struct AnySignature(H512);
 
 impl Verify for AnySignature {
@@ -285,7 +287,8 @@ impl From<ed25519::Signature> for AnySignature {
 }
 
 #[derive(Eq, PartialEq, Clone, Copy, Decode, Encode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+#[cfg_attr(feature = "std", derive(Serialize))]
+#[derive(Debug)]
 /// Reason why an extrinsic couldn't be applied (i.e. invalid extrinsic).
 pub enum ApplyError {
 	/// General error to do with the permissions of the sender.
@@ -566,6 +569,14 @@ impl std::fmt::Debug for OpaqueExtrinsic {
 		write!(fmt, "{}", primitives::hexdisplay::HexDisplay::from(&self.0))
 	}
 }
+
+#[cfg(not(feature = "std"))]
+impl core::fmt::Debug for OpaqueExtrinsic {
+	fn fmt(&self, fmt: &mut core::fmt::Formatter) -> core::fmt::Result {
+		write!(fmt, "OpaqueExtrinsic")
+	}
+}
+
 
 #[cfg(feature = "std")]
 impl ::serde::Serialize for OpaqueExtrinsic {

@@ -112,7 +112,8 @@ pub type InherentType = u64;
 
 /// Errors that can occur while checking the timestamp inherent.
 #[derive(Encode)]
-#[cfg_attr(feature = "std", derive(Debug, Decode))]
+#[cfg_attr(feature = "std", derive(Decode))]
+#[derive(Debug)]
 pub enum InherentError {
 	/// The timestamp is valid in the future.
 	/// This is a non-fatal-error and will not stop checking the inherents.

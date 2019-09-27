@@ -22,10 +22,12 @@ use client::decl_runtime_apis;
 use rstd::vec::Vec;
 
 #[derive(codec::Encode, codec::Decode, Eq, PartialEq, Clone)]
-#[cfg_attr(feature = "std", derive(Debug, Hash))]
+#[cfg_attr(feature = "std", derive(Hash))]
+#[derive(Debug)]
 pub struct Signature(pub Vec<u8>);
 #[derive(codec::Encode, codec::Decode, Eq, PartialEq, Clone)]
-#[cfg_attr(feature = "std", derive(Debug, Hash))]
+#[cfg_attr(feature = "std", derive(Hash))]
+#[derive(Debug)]
 pub struct AuthorityId(pub Vec<u8>);
 
 decl_runtime_apis! {

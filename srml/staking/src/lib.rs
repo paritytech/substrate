@@ -314,7 +314,8 @@ impl EraPoints {
 }
 
 /// Indicates the initial status of the staker.
-#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(Debug)]
 pub enum StakerStatus<AccountId> {
 	/// Chilling.
 	Idle,
@@ -534,7 +535,8 @@ pub trait Trait: system::Trait {
 
 /// Mode of era-forcing.
 #[derive(Copy, Clone, PartialEq, Eq, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(Debug)]
 pub enum Forcing {
 	/// Not forcing anything - just let whatever happen.
 	NotForcing,

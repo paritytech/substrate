@@ -946,9 +946,8 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 	}
 }
 
-#[cfg(feature = "std")]
-impl<T: Trait + Send + Sync> rstd::fmt::Debug for CheckWeight<T> {
-	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+impl<T: Trait + Send + Sync> core::fmt::Debug for CheckWeight<T> {
+	fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
 		write!(f, "CheckWeight<T>")
 	}
 }
@@ -964,9 +963,8 @@ impl<T: Trait> CheckNonce<T> {
 	}
 }
 
-#[cfg(feature = "std")]
-impl<T: Trait> rstd::fmt::Debug for CheckNonce<T> {
-	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+impl<T: Trait> core::fmt::Debug for CheckNonce<T> {
+	fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
 		self.0.fmt(f)
 	}
 }
@@ -1042,9 +1040,8 @@ impl<T: Trait + Send + Sync> CheckEra<T> {
 	}
 }
 
-#[cfg(feature = "std")]
-impl<T: Trait + Send + Sync> rstd::fmt::Debug for CheckEra<T> {
-	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+impl<T: Trait + Send + Sync> core::fmt::Debug for CheckEra<T> {
+	fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
 		self.0.fmt(f)
 	}
 }
@@ -1085,10 +1082,9 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckEra<T> {
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
 pub struct CheckGenesis<T: Trait + Send + Sync>(rstd::marker::PhantomData<T>);
 
-#[cfg(feature = "std")]
-impl<T: Trait + Send + Sync> rstd::fmt::Debug for CheckGenesis<T> {
-	fn fmt(&self, _f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
-		Ok(())
+impl<T: Trait + Send + Sync> core::fmt::Debug for CheckGenesis<T> {
+	fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+		write!(f, "CheckGenesis<T>")
 	}
 }
 
@@ -1114,10 +1110,9 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckGenesis<T> {
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
 pub struct CheckVersion<T: Trait + Send + Sync>(rstd::marker::PhantomData<T>);
 
-#[cfg(feature = "std")]
-impl<T: Trait + Send + Sync> rstd::fmt::Debug for CheckVersion<T> {
-	fn fmt(&self, _f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
-		Ok(())
+impl<T: Trait + Send + Sync> core::fmt::Debug for CheckVersion<T> {
+	fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+		write!(f, "CheckVersion<T>")
 	}
 }
 
