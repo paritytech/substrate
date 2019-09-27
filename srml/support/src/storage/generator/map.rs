@@ -18,7 +18,7 @@
 use rstd::prelude::*;
 use rstd::borrow::Borrow;
 use codec::{FullCodec, FullEncode, Encode, EncodeLike, Ref, EncodeAppend};
-use crate::{storage::{self, unhashed, hashed::StorageHasher}, traits::Len};
+use crate::{storage::{self, unhashed}, hash::StorageHasher, traits::Len};
 
 /// Generator for `StorageMap` used by `decl_storage`.
 ///

@@ -15,8 +15,9 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use rstd::prelude::*;
+use rstd::borrow::Borrow;
 use codec::{Ref, FullCodec, FullEncode, Encode, EncodeLike, EncodeAppend};
-use crate::{storage::{self, unhashed, hashed::StorageHasher}, rstd::borrow::Borrow};
+use crate::{storage::{self, unhashed}, hash::StorageHasher};
 
 /// Generator for `StorageDoubleMap` used by `decl_storage`.
 ///

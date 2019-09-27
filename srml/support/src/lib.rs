@@ -38,14 +38,14 @@ pub use paste;
 #[cfg(feature = "std")]
 #[doc(hidden)]
 pub use runtime_io::with_storage;
-
-pub use self::storage::hashed::{Twox256, Twox128, Blake2_256, Blake2_128, Twox64Concat};
+#[doc(hidden)]
+pub use runtime_io::storage_root;
 
 #[macro_use]
 pub mod dispatch;
 #[macro_use]
 pub mod storage;
-mod hashable;
+mod hash;
 #[macro_use]
 pub mod event;
 #[macro_use]
@@ -60,14 +60,11 @@ pub mod inherent;
 pub mod unsigned;
 #[macro_use]
 pub mod error;
-mod double_map;
 pub mod traits;
 
+pub use self::hash::{Twox256, Twox128, Blake2_256, Blake2_128, Twox64Concat, Hashable};
 pub use self::storage::{StorageValue, StorageMap, StorageLinkedMap, StorageDoubleMap};
-pub use self::hashable::Hashable;
 pub use self::dispatch::{Parameter, Callable, IsSubType};
-pub use self::double_map::StorageDoubleMapWithHasher;
-pub use runtime_io::storage_root;
 pub use sr_primitives::{self, ConsensusEngineId, print, traits::Printable};
 
 /// Macro for easily creating a new implementation of the `Get` trait. Use similarly to
