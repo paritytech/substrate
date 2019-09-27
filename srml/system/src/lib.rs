@@ -65,7 +65,7 @@
 //!
 //! Import the System module and derive your module's configuration trait from the system trait.
 //!
-//! ### Example - Get random seed and extrinsic count for the current block
+//! ### Example - Get extrinsic count and parent hash for the current block
 //!
 //! ```
 //! use support::{decl_module, dispatch::Result};
@@ -78,6 +78,7 @@
 //! 		pub fn system_module_example(origin) -> Result {
 //! 			let _sender = ensure_signed(origin)?;
 //! 			let _extrinsic_count = <system::Module<T>>::extrinsic_count();
+//! 			let _parent_hash = <system::Module<T>>::parent_hash();
 //! 			Ok(())
 //! 		}
 //! 	}
