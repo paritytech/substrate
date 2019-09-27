@@ -332,6 +332,10 @@ impl PeersState {
 	}
 
 	/// Set whether to only allow connections to/from peers in a priority group.
+	/// Calling this method does not affect any existing connection, e.g.
+	/// enabling priority only will not disconnect from any non-priority peers
+	/// we are already connected to, only future incoming/outgoing connection
+	/// attempts will be affected.
 	pub fn set_priority_only(&mut self, priority: bool) {
 		self.priority_only = priority;
 	}
