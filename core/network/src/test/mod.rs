@@ -229,6 +229,11 @@ pub struct Peer<D, S: NetworkSpecialization<Block>> {
 }
 
 impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
+	/// Get this peer ID.
+	pub fn id(&self) -> PeerId {
+		self.network.service().local_peer_id()
+	}
+
 	/// Returns true if we're major syncing.
 	pub fn is_major_syncing(&self) -> bool {
 		self.network.service().is_major_syncing()
@@ -257,6 +262,11 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 	/// Announces an important block on the network.
 	pub fn announce_block(&self, hash: <Block as BlockT>::Hash, data: Vec<u8>) {
 		self.network.service().announce_block(hash, data);
+	}
+
+	/// Request explicit fork sync.
+	pub fn set_sync_fork_request(&self, peers: Vec<PeerId>, hash: <Block as BlockT>::Hash, number: NumberFor<Block>) {
+		self.network.service().set_sync_fork_request(peers, hash, number);
 	}
 
 	/// Add blocks to the peer -- edit the block before adding
