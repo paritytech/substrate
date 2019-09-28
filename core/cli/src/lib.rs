@@ -550,7 +550,8 @@ fn fill_network_configuration(
 	);
 	config.net_config_path = config.config_path.clone();
 	config.reserved_nodes.extend(cli.reserved_nodes.into_iter());
-	if !config.reserved_nodes.is_empty() {
+
+	if cli.reserved_only {
 		config.non_reserved_mode = NonReservedPeerMode::Deny;
 	}
 
