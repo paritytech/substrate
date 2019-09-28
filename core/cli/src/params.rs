@@ -92,6 +92,13 @@ pub struct NetworkConfigurationParams {
 	#[structopt(long = "reserved-nodes", value_name = "URL")]
 	pub reserved_nodes: Vec<String>,
 
+	/// Whether to only allow connections to/from reserved nodes.
+	///
+	/// If you are a validator your node might still connect to other validator
+	/// nodes regardless of whether they are defined as reserved nodes.
+	#[structopt(long = "reserved-only")]
+	pub reserved_only: bool,
+
 	/// Listen on this multiaddress.
 	#[structopt(long = "listen-addr", value_name = "LISTEN_ADDR")]
 	pub listen_addr: Vec<String>,
