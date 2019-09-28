@@ -295,7 +295,9 @@ impl<TBl, TRtApi, TCfg, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNet
 	/// Defines which head-of-chain strategy to use.
 	pub fn with_opt_select_chain<USc>(
 		self,
-		select_chain_builder: impl FnOnce(&Configuration<TCfg, TGen, TCSExt>, &Arc<Backend>) -> Result<Option<USc>, Error>
+		select_chain_builder: impl FnOnce(
+			&Configuration<TCfg, TGen, TCSExt>, &Arc<Backend>
+		) -> Result<Option<USc>, Error>
 	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCSExt, TCl, TFchr, USc, TImpQu, TFprb, TFpp,
 		TNetP, TExPool, TRpc, TRpcB, Backend>, Error> {
 		let select_chain = select_chain_builder(&self.config, &self.backend)?;
@@ -719,10 +721,14 @@ pub trait ServiceBuilderRevert {
 	) -> Result<(), Error>;
 }
 
-impl<TBl, TRtApi, TCfg, TGen, TCSExt, TBackend, TExec, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc, TRpcB, Backend>
-	ServiceBuilderImport for ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCSExt, Client<TBackend, TExec, TBl, TRtApi>,
-		TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc, TRpcB, Backend>
-where
+impl<
+	TBl, TRtApi, TCfg, TGen, TCSExt, TBackend,
+	TExec, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP,
+	TExPool, TRpc, TRpcB, Backend
+> ServiceBuilderImport for ServiceBuilder<
+	TBl, TRtApi, TCfg, TGen, TCSExt, Client<TBackend, TExec, TBl, TRtApi>,
+	TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc, TRpcB, Backend
+> where
 	TBl: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
 	TBackend: 'static + client::backend::Backend<TBl, Blake2Hasher> + Send,
 	TExec: 'static + client::CallExecutor<TBl, Blake2Hasher> + Send + Sync + Clone,

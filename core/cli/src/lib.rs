@@ -33,8 +33,11 @@ use service::{
 	RuntimeGenesis, ChainSpecExtension, PruningMode, ChainSpec,
 };
 use network::{
-	self, multiaddr::Protocol,
-	config::{NetworkConfiguration, TransportConfig, NonReservedPeerMode, NodeKeyConfig, build_multiaddr},
+	self,
+	multiaddr::Protocol,
+	config::{
+		NetworkConfiguration, TransportConfig, NonReservedPeerMode, NodeKeyConfig, build_multiaddr
+	},
 };
 use primitives::H256;
 
@@ -279,7 +282,9 @@ impl<'a, RP> ParseAndPrepareRun<'a, RP> {
 		Exit: IntoExit,
 		RS: FnOnce(Exit, RunCmd, RP, Configuration<C, G, E>) -> Result<(), String>
 	{
-		let config = create_run_node_config(self.params.left.clone(), spec_factory, self.impl_name, self.version)?;
+		let config = create_run_node_config(
+			self.params.left.clone(), spec_factory, self.impl_name, self.version
+		)?;
 
 		run_service(exit, self.params.left, self.params.right, config).map_err(Into::into)
 	}
@@ -412,7 +417,9 @@ impl<'a> ParseAndPreparePurge<'a> {
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
 	{
-		let config = create_config_with_db_path::<(), _, _, _>(spec_factory, &self.params.shared_params, self.version)?;
+		let config = create_config_with_db_path::<(), _, _, _>(
+			spec_factory, &self.params.shared_params, self.version
+		)?;
 		let db_path = config.database_path;
 
 		if !self.params.yes {
@@ -466,7 +473,9 @@ impl<'a> ParseAndPrepareRevert<'a> {
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
 	{
-		let config = create_config_with_db_path(spec_factory, &self.params.shared_params, self.version)?;
+		let config = create_config_with_db_path(
+			spec_factory, &self.params.shared_params, self.version
+		)?;
 		let blocks = self.params.num;
 		builder(config)?.revert_chain(blocks.into())?;
 		Ok(())
@@ -666,8 +675,8 @@ where
 	config.pruning = match cli.pruning {
 		Some(ref s) if s == "archive" => PruningMode::ArchiveAll,
 		None => PruningMode::default(),
-		Some(s) => PruningMode::keep_blocks(
-			s.parse().map_err(|_| error::Error::Input("Invalid pruning mode specified".to_string()))?
+		Some(s) => PruningMode::keep_blocks(s.parse()
+			.map_err(|_| error::Error::Input("Invalid pruning mode specified".to_string()))?
 		),
 	};
 

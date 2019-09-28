@@ -53,14 +53,15 @@ impl<G: RuntimeGenesis> GenesisSource<G> {
 
 		match self {
 			GenesisSource::File(path) => {
-				let file = File::open(path).map_err(|e| format!("Error opening spec file: {}", e))?;
-				let genesis: GenesisContainer<G> =
-					json::from_reader(file).map_err(|e| format!("Error parsing spec file: {}", e))?;
+				let file = File::open(path)
+					.map_err(|e| format!("Error opening spec file: {}", e))?;
+				let genesis: GenesisContainer<G> = json::from_reader(file)
+					.map_err(|e| format!("Error parsing spec file: {}", e))?;
 				Ok(genesis.genesis)
 			},
 			GenesisSource::Binary(buf) => {
-				let genesis: GenesisContainer<G> =
-					json::from_reader(buf.as_ref()).map_err(|e| format!("Error parsing embedded file: {}", e))?;
+				let genesis: GenesisContainer<G> = json::from_reader(buf.as_ref())
+					.map_err(|e| format!("Error parsing embedded file: {}", e))?;
 				Ok(genesis.genesis)
 			},
 			GenesisSource::Factory(f) => Ok(Genesis::Runtime(f())),
@@ -82,7 +83,10 @@ impl<'a, G: RuntimeGenesis, E> BuildStorage for &'a ChainSpec<G, E> {
 		}
 	}
 
-	fn assimilate_storage(self, _: &mut (StorageOverlay, ChildrenStorageOverlay)) -> Result<(), String> {
+	fn assimilate_storage(
+		self,
+		_: &mut (StorageOverlay, ChildrenStorageOverlay)
+	) -> Result<(), String> {
 		Err("`assimilate_storage` not implemented for `ChainSpec`.".into())
 	}
 }
@@ -216,7 +220,8 @@ impl<G, E: serde::de::DeserializeOwned> ChainSpec<G, E> {
 	/// Parse json content into a `ChainSpec`
 	pub fn from_json_bytes(json: impl Into<Cow<'static, [u8]>>) -> Result<Self, String> {
 		let json = json.into();
-		let spec = json::from_slice(json.as_ref()).map_err(|e| format!("Error parsing spec file: {}", e))?;
+		let spec = json::from_slice(json.as_ref())
+			.map_err(|e| format!("Error parsing spec file: {}", e))?;
 		Ok(ChainSpec {
 			spec,
 			genesis: GenesisSource::Binary(json),
@@ -225,8 +230,10 @@ impl<G, E: serde::de::DeserializeOwned> ChainSpec<G, E> {
 
 	/// Parse json file into a `ChainSpec`
 	pub fn from_json_file(path: PathBuf) -> Result<Self, String> {
-		let file = File::open(&path).map_err(|e| format!("Error opening spec file: {}", e))?;
-		let spec = json::from_reader(file).map_err(|e| format!("Error parsing spec file: {}", e))?;
+		let file = File::open(&path)
+			.map_err(|e| format!("Error opening spec file: {}", e))?;
+		let spec = json::from_reader(file)
+			.map_err(|e| format!("Error parsing spec file: {}", e))?;
 		Ok(ChainSpec {
 			spec,
 			genesis: GenesisSource::File(path),
@@ -267,7 +274,8 @@ impl<G: RuntimeGenesis, E: serde::Serialize> ChainSpec<G, E> {
 			spec: self.spec,
 			genesis,
 		};
-		json::to_string_pretty(&spec).map_err(|e| format!("Error generating spec json: {}", e))
+		json::to_string_pretty(&spec)
+			.map_err(|e| format!("Error generating spec json: {}", e))
 	}
 }
 
