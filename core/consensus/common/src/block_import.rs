@@ -90,7 +90,17 @@ pub enum ForkChoiceStrategy {
 	Custom(bool),
 }
 
-/// Data required to import a Block
+/// Data required to check validity of a Block.
+pub struct BlockCheckParams<Block: BlockT> {
+	/// Hash of the block that we verify.
+	pub hash: Block::Hash,
+	/// Block number of the block that we verify.
+	pub number: NumberFor<Block>,
+	/// Parent hash of the block that we verify.
+	pub parent_hash: Block::Hash,
+}
+
+/// Data required to import a Block.
 pub struct BlockImportParams<Block: BlockT> {
 	/// Origin of the Block
 	pub origin: BlockOrigin,
@@ -172,8 +182,7 @@ pub trait BlockImport<B: BlockT> {
 	/// Check block preconditions.
 	fn check_block(
 		&mut self,
-		hash: B::Hash,
-		parent_hash: B::Hash,
+		block: BlockCheckParams<B>,
 	) -> Result<ImportResult, Self::Error>;
 
 	/// Import a block.
@@ -192,10 +201,9 @@ impl<B: BlockT> BlockImport<B> for crate::import_queue::BoxBlockImport<B> {
 	/// Check block preconditions.
 	fn check_block(
 		&mut self,
-		hash: B::Hash,
-		parent_hash: B::Hash,
+		block: BlockCheckParams<B>,
 	) -> Result<ImportResult, Self::Error> {
-		(**self).check_block(hash, parent_hash)
+		(**self).check_block(block)
 	}
 
 	/// Import a block.
@@ -217,10 +225,9 @@ where for<'r> &'r T: BlockImport<B, Error = E>
 
 	fn check_block(
 		&mut self,
-		hash: B::Hash,
-		parent_hash: B::Hash,
+		block: BlockCheckParams<B>,
 	) -> Result<ImportResult, Self::Error> {
-		(&**self).check_block(hash, parent_hash)
+		(&**self).check_block(block)
 	}
 
 	fn import_block(

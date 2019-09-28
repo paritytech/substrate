@@ -27,7 +27,7 @@ use client::backend::Backend;
 use client::utils::is_descendent_of;
 use consensus_common::{
 	BlockImport, Error as ConsensusError,
-	BlockImportParams, ImportResult, JustificationImport,
+	BlockCheckParams, BlockImportParams, ImportResult, JustificationImport,
 	SelectChain,
 };
 use fg_primitives::{GRANDPA_ENGINE_ID, ScheduledChange, ConsensusLog};
@@ -386,9 +386,11 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, SC> BlockImport<Block>
 {
 	type Error = ConsensusError;
 
-	fn import_block(&mut self, mut block: BlockImportParams<Block>, new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>)
-		-> Result<ImportResult, Self::Error>
-	{
+	fn import_block(
+		&mut self,
+		mut block: BlockImportParams<Block>,
+		new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
+	) -> Result<ImportResult, Self::Error> {
 		let hash = block.post_header().hash();
 		let number = block.header.number().clone();
 
@@ -500,10 +502,9 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, SC> BlockImport<Block>
 
 	fn check_block(
 		&mut self,
-		hash: Block::Hash,
-		parent_hash: Block::Hash,
+		block: BlockCheckParams<Block>,
 	) -> Result<ImportResult, Self::Error> {
-		self.inner.check_block(hash, parent_hash)
+		self.inner.check_block(block)
 	}
 }
 

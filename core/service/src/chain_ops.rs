@@ -16,9 +16,8 @@
 
 //! Chain utilities.
 
-use crate::RuntimeGenesis;
 use crate::error;
-use crate::chain_spec::ChainSpec;
+use chain_spec::{ChainSpec, RuntimeGenesis, Extension};
 
 /// Defines the logic for an operation exporting blocks within a range.
 #[macro_export]
@@ -222,8 +221,9 @@ macro_rules! revert_chain {
 }
 
 /// Build a chain spec json
-pub fn build_spec<G>(spec: ChainSpec<G>, raw: bool) -> error::Result<String>
-	where G: RuntimeGenesis,
+pub fn build_spec<G, E>(spec: ChainSpec<G, E>, raw: bool) -> error::Result<String> where
+	G: RuntimeGenesis,
+	E: Extension,
 {
 	Ok(spec.to_json(raw)?)
 }
