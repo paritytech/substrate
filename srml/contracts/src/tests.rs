@@ -161,6 +161,7 @@ parameter_types! {
 }
 impl Trait for Test {
 	type Currency = Balances;
+	type Time = Timestamp;
 	type Call = Call;
 	type DetermineContractAddress = DummyContractAddressFor;
 	type Event = MetaEvent;
@@ -186,6 +187,7 @@ impl Trait for Test {
 }
 
 type Balances = balances::Module<Test>;
+type Timestamp = timestamp::Module<Test>;
 type Contract = Module<Test>;
 type System = system::Module<Test>;
 

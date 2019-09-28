@@ -391,6 +391,7 @@ parameter_types! {
 
 impl contracts::Trait for Runtime {
 	type Currency = Balances;
+	type Time = Timestamp;
 	type Call = Call;
 	type Event = Event;
 	type DetermineContractAddress = contracts::SimpleAddressDeterminator<Runtime>;
