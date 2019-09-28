@@ -37,5 +37,10 @@ std = [
 ]
 nightly = []
 strict = []
+
+# These two features are used for `no_std` builds for the environments which already provides
+# `#[panic_handler]` and `#[alloc_error_handler]`.
+#
+# For the regular wasm runtime builds those are not used.
 no_panic_handler = []
 no_oom = []
