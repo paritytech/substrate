@@ -1048,24 +1048,22 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 
 		operation.apply_aux(&mut transaction);
 
-		let mut meta_updates = Vec::new();
+		let mut meta_updates = Vec::with_capacity(operation.finalized_blocks.len());
 		let mut last_finalized_hash = self.blockchain.meta.read().finalized_hash;
 
-		if !operation.finalized_blocks.is_empty() {
-			for (block, justification) in operation.finalized_blocks {
-				let block_hash = self.blockchain.expect_block_hash_from_id(&block)?;
-				let block_header = self.blockchain.expect_header(BlockId::Hash(block_hash))?;
+		for (block, justification) in operation.finalized_blocks {
+			let block_hash = self.blockchain.expect_block_hash_from_id(&block)?;
+			let block_header = self.blockchain.expect_header(BlockId::Hash(block_hash))?;
 
-				meta_updates.push(self.finalize_block_with_transaction(
-					&mut transaction,
-					&block_hash,
-					&block_header,
-					Some(last_finalized_hash),
-					justification,
-					&mut finalization_displaced_leaves,
-				)?);
-				last_finalized_hash = block_hash;
-			}
+			meta_updates.push(self.finalize_block_with_transaction(
+				&mut transaction,
+				&block_hash,
+				&block_header,
+				Some(last_finalized_hash),
+				justification,
+				&mut finalization_displaced_leaves,
+			)?);
+			last_finalized_hash = block_hash;
 		}
 
 		let imported = if let Some(pending_block) = operation.pending_block {
