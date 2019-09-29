@@ -18,6 +18,7 @@
 //!
 //! The Randomness module provides a [`random`](./struct.Module.html#method.random) function that
 //! generates low-influence random values based on the block hashes from the previous 81 blocks.
+//! Low-influence randomness can be useful when defending against relatively weak adversaries.
 //!
 //! ## Public Functions
 //!
@@ -90,51 +91,50 @@ decl_storage! {
 impl<T: Trait> Module<T> {
 	/// Get the basic random seed.
 	///
-	/// In general you won't want to use this, but rather `Self::random` which
-	/// allows you to give a subject for the random result and whose value will
-	/// be independently low-influence random from any other such seeds.
+	/// In general you won't want to use this, but rather `Self::random` which allows you to give a
+	/// subject for the random result and whose value will be independently low-influence random
+	/// from any other such seeds.
 	pub fn random_seed() -> T::Hash {
 		Self::random(&[][..])
 	}
 
 	/// Get a low-influence "random" value.
 	///
-	/// Being a deterministic block chain, real randomness is difficult to come
-	/// by. This gives you something that approximates it. `subject` is a
-	/// context identifier and allows you to get a different result to other
-	/// callers of this function; use it like `random(&b"my context"[..])`.
-	///
-	/// This is initially implemented through a low-influence "triplet mix"
-	/// convolution of previous block hash values. In the future it will be
-	/// generated from a secure verifiable random function (VRF).
+	/// Being a deterministic block chain, real randomness is difficult to come by. This gives you
+	/// something that approximates it. `subject` is a context identifier and allows you to get a
+	/// different result to other callers of this function; use it like
+	/// `random(&b"my context"[..])`. This is initially implemented through a low-influence
+	/// "triplet mix" convolution of previous block hash values. In the future it will be generated
+	/// from a secure verifiable random function (VRF).
 	///
 	/// ### Security Notes
 	///
-	/// This randomness uses a low-influence function, drawing upon the block
-	/// hashes from the previous 81 blocks. Its result for any given subject
-	/// will be known in advance by the block producer of this block (and,
-	/// indeed, anyone who knows the block's `parent_hash`). However, it is
-	/// mostly impossible for the producer of this block *alone* to influence
-	/// the value of this hash. A sizable minority of dishonest and coordinating
-	/// block producers would be required in order to affect this value. If that
-	/// is an insufficient security guarantee then two things can be used to
-	/// improve this randomness:
+	/// This randomness uses a low-influence function, drawing upon the block hashes from the
+	/// previous 81 blocks. Its result for any given subject will be known far in advance by anyone
+	/// observing the chain. Any block producer has significant influence over their block hashes
+	/// bounded only by their computational resources. Our low-influence function reduces the actual
+	/// block producer's influence over the randomness, but increases the influence of small
+	/// colluding groups of recent block producers.
 	///
-	/// - Name, in advance, the block number whose random value will be used;
-	///   ensure your module retains a buffer of previous random values for its
-	///   subject and then index into these in order to obviate the ability of
-	///   your user to look up the parent hash and choose when to transact based
-	///   upon it.
-	/// - Require your user to first commit to an additional value by first
-	///   posting its hash. Require them to reveal the value to determine the
-	///   final result, hashing it with the output of this random function. This
-	///   reduces the ability of a cabal of block producers from conspiring
-	///   against individuals.
+	/// Some BABE blocks have VRF outputs where the block producer has exactly one bit of influence,
+	/// either they make the block or they do not make the block and thus someone else makes the
+	/// next block. Yet, this randomness is not fresh in all BABE blocks.
 	///
-	/// WARNING: Hashing the result of this function will remove any
-	/// low-influence properties it has and mean that all bits of the resulting
-	/// value are entirely manipulatable by the author of the parent block, who
-	/// can determine the value of `parent_hash`.
+	/// If that is an insufficient security guarantee then two things can be used to improve this
+	/// randomness:
+	///
+	/// - Name, in advance, the block number whose random value will be used; ensure your module
+	///   retains a buffer of previous random values for its subject and then index into these in
+	///   order to obviate the ability of your user to look up the parent hash and choose when to
+	///   transact based upon it.
+	/// - Require your user to first commit to an additional value by first posting its hash.
+	///   Require them to reveal the value to determine the final result, hashing it with the
+	///   output of this random function. This reduces the ability of a cabal of block producers
+	///   from conspiring against individuals.
+	///
+	/// WARNING: Hashing the result of this function will remove any low-influence properties it has
+	/// and mean that all bits of the resulting value are entirely manipulatable by the author of
+	/// the parent block, who can determine the value of `parent_hash`.
 	pub fn random(subject: &[u8]) -> T::Hash {
 		let block_number = <system::Module<T>>::block_number();
 		let index = block_number_to_index::<T>(block_number);
