@@ -360,6 +360,7 @@ macro_rules! new_impl {
 
 
 		let _ = to_spawn_tx.unbounded_send(Box::new(build_network_future(
+			$config.roles,
 			network_mut,
 			client.clone(),
 			network_status_sinks.clone(),
@@ -654,6 +655,7 @@ fn build_network_future<
 	S: network::specialization::NetworkSpecialization<B>,
 	H: network::ExHashT
 > (
+	roles: Roles,
 	mut network: network::NetworkWorker<B, S, H>,
 	client: Arc<C>,
 	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<(NetworkStatus<B>, NetworkState)>>>>,
@@ -715,6 +717,23 @@ fn build_network_future<
 				rpc::system::Request::NetworkState(sender) => {
 					if let Some(network_state) = serde_json::to_value(&network.network_state()).ok() {
 						let _ = sender.send(network_state);
+					}
+				}
+				rpc::system::Request::NodeRole(sender) => {
+					use rpc::system::NodeRole;
+
+					let role = if roles.is_authority() {
+						Some(NodeRole::Authority)
+					} else if roles.is_full() {
+						Some(NodeRole::Full)
+					} else if roles.is_light() {
+						Some(NodeRole::LightClient)
+					} else {
+						None
+					};
+
+					if let Some(role) = role {
+						let _ = sender.send(role);
 					}
 				}
 			};

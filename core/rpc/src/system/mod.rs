@@ -25,7 +25,7 @@ use sr_primitives::traits::{self, Header as HeaderT};
 use self::error::Result;
 
 pub use api::system::*;
-pub use self::helpers::{Properties, SystemInfo, Health, PeerInfo};
+pub use self::helpers::{Properties, SystemInfo, Health, PeerInfo, NodeRole};
 pub use self::gen_client::Client as SystemClient;
 
 /// System API implementation
@@ -42,6 +42,7 @@ pub enum Request<B: traits::Block> {
 	Peers(oneshot::Sender<Vec<PeerInfo<B::Hash, <B::Header as HeaderT>::Number>>>),
 	/// Must return the state of the network.
 	NetworkState(oneshot::Sender<rpc::Value>),
+	NodeRole(oneshot::Sender<NodeRole>)
 }
 
 impl<B: traits::Block> System<B> {
@@ -92,6 +93,12 @@ impl<B: traits::Block> SystemApi<B::Hash, <B::Header as HeaderT>::Number> for Sy
 	fn system_network_state(&self) -> Receiver<rpc::Value> {
 		let (tx, rx) = oneshot::channel();
 		let _ = self.send_back.unbounded_send(Request::NetworkState(tx));
+		Receiver(Compat::new(rx))
+	}
+
+	fn system_node_role(&self) -> Receiver<NodeRole> {
+		let (tx, rx) = oneshot::channel();
+		let _ = self.send_back.unbounded_send(Request::NodeRole(tx));
 		Receiver(Compat::new(rx))
 	}
 }

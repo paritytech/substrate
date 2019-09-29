@@ -50,6 +50,14 @@ pub struct Health {
 	pub should_have_peers: bool,
 }
 
+impl fmt::Display for Health {
+	fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+		write!(fmt, "{} peers ({})", self.peers, if self.is_syncing {
+			"syncing"
+		} else { "idle" })
+	}
+}
+
 /// Network Peer information
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -66,12 +74,14 @@ pub struct PeerInfo<Hash, Number> {
 	pub best_number: Number,
 }
 
-impl fmt::Display for Health {
-	fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-		write!(fmt, "{} peers ({})", self.peers, if self.is_syncing {
-			"syncing"
-		} else { "idle" })
-	}
+#[derive(Serialize, Deserialize)]
+pub enum NodeRole {
+	/// The node is full
+	Full,
+	/// The node is a light client
+	LightClient,
+	/// The node is an authority
+	Authority
 }
 
 #[cfg(test)]
