@@ -35,6 +35,7 @@ pub use num_traits::{
 	Zero, One, Bounded, CheckedAdd, CheckedSub, CheckedMul, CheckedDiv,
 	CheckedShl, CheckedShr
 };
+pub use type_id::TypeId;
 use rstd::ops::{
 	Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, DivAssign,
 	RemAssign, Shl, Shr
@@ -1121,12 +1122,6 @@ pub trait AccountIdConversion<AccountId>: Sized {
 
 	/// Try to convert an account ID into this type. Might not succeed.
 	fn try_from_sub_account<S: Decode>(x: &AccountId) -> Option<(Self, S)>;
-}
-
-/// Provide a simple 4 byte identifier for a type.
-pub trait TypeId {
-	/// Simple 4 byte identifier.
-	const TYPE_ID: [u8; 4];
 }
 
 /// Format is TYPE_ID ++ encode(parachain ID) ++ 00.... where 00... is indefinite trailing zeroes to

@@ -3847,6 +3847,7 @@ dependencies = [
  "sr-std 2.0.0",
  "substrate-application-crypto 2.0.0",
  "substrate-primitives 2.0.0",
+ "substrate-type-id 2.0.0",
 ]
 
 [[package]]
@@ -5474,6 +5475,10 @@ dependencies = [
  "trie-root 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "trie-standardmap 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
+
+[[package]]
+name = "substrate-type-id"
+version = "2.0.0"
 
 [[package]]
 name = "substrate-wasm-builder"

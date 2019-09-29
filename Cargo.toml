@@ -66,6 +66,7 @@ members = [
 	"core/utils/fork-tree",
 	"core/utils/wasm-builder",
 	"core/utils/wasm-builder-runner",
+	"core/utils/type-id",
 	"core/wasm-interface",
 	"srml/support",
 	"srml/support/procedural",
