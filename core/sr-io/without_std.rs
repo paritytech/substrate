@@ -737,8 +737,8 @@ impl StorageApi for () {
 	}
 
 	fn blake2_256_ordered_trie_root(input: Vec<Vec<u8>>) -> H256 {
-		let mut values = Vec::new();
-		let mut lengths = Vec::new();
+		let mut values = Vec::with_capacity(input.len());
+		let mut lengths = Vec::with_capacity(input.len());
 		for v in input {
 			values.extend_from_slice(&v);
 			lengths.push((v.len() as u32).to_le());

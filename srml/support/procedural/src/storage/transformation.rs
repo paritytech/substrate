@@ -600,15 +600,15 @@ fn create_and_impl_instance(
 	instance_prefix: &str,
 	ident: &Ident,
 	doc: &TokenStream2,
-	const_names: &[(Ident, String)],
+	const_names: &[(Ident, String, String)],
 	scrate: &TokenStream2,
 	instantiable: &Ident,
 	cratename: &Ident,
 ) -> TokenStream2 {
 	let mut const_impls = TokenStream2::new();
 
-	for (const_name, partial_const_value) in const_names {
-		let const_value = format!("{}{}", instance_prefix, partial_const_value);
+	for (const_name, const_value_prefix, const_value_suffix) in const_names {
+		let const_value = format!("{}{}{}", const_value_prefix, instance_prefix, const_value_suffix);
 		const_impls.extend(quote! {
 			const #const_name: &'static str = #const_value;
 		});
@@ -666,15 +666,13 @@ fn decl_storage_items(
 		let const_name = syn::Ident::new(
 			&format!("{}{}", impls::PREFIX_FOR, name.to_string()), proc_macro2::Span::call_site()
 		);
-		let partial_const_value = prefix.clone();
-		const_names.push((const_name, partial_const_value));
+		const_names.push((const_name, String::new(), prefix.clone()));
 
 		if let DeclStorageTypeInfosKind::Map { is_linked: true, .. } = type_infos.kind {
 			let const_name = syn::Ident::new(
 				&format!("{}{}", impls::HEAD_KEY_FOR, name.to_string()), proc_macro2::Span::call_site()
 			);
-			let partial_const_value = format!("head of {}", prefix);
-			const_names.push((const_name, partial_const_value));
+			const_names.push((const_name, "head of ".into(), prefix));
 		}
 	}
 
@@ -685,7 +683,7 @@ fn decl_storage_items(
 	// Declare Instance trait
 	{
 		let mut const_impls = TokenStream2::new();
-		for (const_name, _) in &const_names {
+		for (const_name, ..) in &const_names {
 			const_impls.extend(quote! {
 				const #const_name: &'static str;
 			});

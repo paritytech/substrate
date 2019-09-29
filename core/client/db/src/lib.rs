@@ -40,7 +40,7 @@ use std::collections::{HashMap, HashSet};
 
 use client::backend::NewBlockState;
 use client::blockchain::{well_known_cache_keys, HeaderBackend};
-use client::ExecutionStrategies;
+use client::{ForkBlocks, ExecutionStrategies};
 use client::backend::{StorageCollection, ChildStorageCollection};
 use codec::{Decode, Encode};
 use hash_db::{Hasher, Prefix};
@@ -206,6 +206,7 @@ pub fn new_client<E, S, Block, RA>(
 	settings: DatabaseSettings,
 	executor: E,
 	genesis_storage: S,
+	fork_blocks: ForkBlocks<Block>,
 	execution_strategies: ExecutionStrategies,
 	keystore: Option<primitives::traits::BareCryptoStorePtr>,
 ) -> Result<(
@@ -227,7 +228,7 @@ pub fn new_client<E, S, Block, RA>(
 	let backend = Arc::new(Backend::new(settings, CANONICALIZATION_DELAY)?);
 	let executor = client::LocalCallExecutor::new(backend.clone(), executor, keystore);
 	Ok((
-		client::Client::new(backend.clone(), executor, genesis_storage, execution_strategies)?,
+		client::Client::new(backend.clone(), executor, genesis_storage, fork_blocks, execution_strategies)?,
 		backend,
 	))
 }
@@ -1048,24 +1049,22 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 
 		operation.apply_aux(&mut transaction);
 
-		let mut meta_updates = Vec::new();
+		let mut meta_updates = Vec::with_capacity(operation.finalized_blocks.len());
 		let mut last_finalized_hash = self.blockchain.meta.read().finalized_hash;
 
-		if !operation.finalized_blocks.is_empty() {
-			for (block, justification) in operation.finalized_blocks {
-				let block_hash = self.blockchain.expect_block_hash_from_id(&block)?;
-				let block_header = self.blockchain.expect_header(BlockId::Hash(block_hash))?;
+		for (block, justification) in operation.finalized_blocks {
+			let block_hash = self.blockchain.expect_block_hash_from_id(&block)?;
+			let block_header = self.blockchain.expect_header(BlockId::Hash(block_hash))?;
 
-				meta_updates.push(self.finalize_block_with_transaction(
-					&mut transaction,
-					&block_hash,
-					&block_header,
-					Some(last_finalized_hash),
-					justification,
-					&mut finalization_displaced_leaves,
-				)?);
-				last_finalized_hash = block_hash;
-			}
+			meta_updates.push(self.finalize_block_with_transaction(
+				&mut transaction,
+				&block_hash,
+				&block_header,
+				Some(last_finalized_hash),
+				justification,
+				&mut finalization_displaced_leaves,
+			)?);
+			last_finalized_hash = block_hash;
 		}
 
 		let imported = if let Some(pending_block) = operation.pending_block {

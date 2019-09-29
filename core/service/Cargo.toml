@@ -15,7 +15,7 @@ slog = { version = "2.5.2", features = ["nested-values"] }
 tokio-executor = "0.1.8"
 tokio-timer = "0.2.11"
 exit-future = "0.1.4"
-serde = { version = "1.0.100", features = ["derive"] }
+serde = { version = "1.0.101", features = ["derive"] }
 serde_json = "1.0.40"
 sysinfo = "0.9.4"
 target_info = "0.1.0"
@@ -27,6 +27,7 @@ session = { package = "substrate-session", path = "../session" }
 app-crypto = { package = "substrate-application-crypto", path = "../application-crypto" }
 consensus_common = { package = "substrate-consensus-common", path = "../../core/consensus/common" }
 network = { package = "substrate-network", path = "../../core/network" }
+chain-spec = { package = "substrate-chain-spec", path = "../chain-spec" }
 client = { package = "substrate-client", path = "../../core/client" }
 client_db = { package = "substrate-client-db", path = "../../core/client/db", features = ["kvdb-rocksdb"] }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
