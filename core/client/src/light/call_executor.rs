@@ -99,7 +99,7 @@ impl<Block, B, Local> CallExecutor<Block, Blake2Hasher> for
 			Result<NativeOrEncoded<R>, Self::Error>
 		) -> Result<NativeOrEncoded<R>, Self::Error>,
 		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
+		NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
 	>(
 		&self,
 		initialize_block_fn: IB,
@@ -160,7 +160,7 @@ impl<Block, B, Local> CallExecutor<Block, Blake2Hasher> for
 			Result<NativeOrEncoded<R>, Self::Error>
 		) -> Result<NativeOrEncoded<R>, Self::Error>,
 		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
+		NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
 	>(&self,
 		_state: &S,
 		_changes: &mut OverlayedChanges,
@@ -334,7 +334,7 @@ mod tests {
 				Result<NativeOrEncoded<R>, Self::Error>
 			) -> Result<NativeOrEncoded<R>, Self::Error>,
 			R: Encode + Decode + PartialEq,
-			NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
+			NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
 		>(
 			&self,
 			_initialize_block_fn: IB,
@@ -364,7 +364,7 @@ mod tests {
 				Result<NativeOrEncoded<R>, Self::Error>
 			) -> Result<NativeOrEncoded<R>, Self::Error>,
 			R: Encode + Decode + PartialEq,
-			NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
+			NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
 		>(&self,
 			_state: &S,
 			_overlay: &mut OverlayedChanges,

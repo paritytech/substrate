@@ -282,7 +282,7 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 		impl<C: #crate_::runtime_api::CallRuntimeAt<#block>> #crate_::runtime_api::ApiExt<#block>
 			for RuntimeApiImpl<C>
 		{
-			fn map_api_result<F: FnOnce(&Self) -> ::std::result::Result<R, E>, R, E>(
+			fn map_api_result<F: FnOnce(&Self) -> std::result::Result<R, E>, R, E>(
 				&self,
 				map_call: F
 			) -> ::std::result::Result<R, E> where Self: Sized {
