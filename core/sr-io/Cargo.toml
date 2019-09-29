@@ -34,8 +34,6 @@ std = [
 	"substrate-state-machine",
 	"libsecp256k1",
 	"tiny-keccak",
-	"no_oom",
-	"no_panic_handler",
 ]
 nightly = []
 strict = []

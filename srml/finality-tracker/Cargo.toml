@@ -16,7 +16,7 @@ impl-trait-for-tuples = "0.1.1"
 
 [dev-dependencies]
 primitives = { package = "substrate-primitives",  path = "../../core/primitives", default-features = false }
-runtime-io = { package = "sr-io", path = "../../core/sr-io" }
+runtime-io = { package = "sr-io", path = "../../core/sr-io", default-features = false }
 
 [features]
 default = ["std"]
