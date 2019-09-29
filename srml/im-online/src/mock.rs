@@ -125,6 +125,10 @@ parameter_types! {
 	pub const Offset: u64 = 0;
 }
 
+parameter_types! {
+	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(33);
+}
+
 impl session::Trait for Runtime {
 	type ShouldEndSession = session::PeriodicSessions<Period, Offset>;
 	type OnSessionEnding = session::historical::NoteHistoricalRoot<Runtime, TestOnSessionEnding>;
@@ -134,6 +138,7 @@ impl session::Trait for Runtime {
 	type Keys = UintAuthorityId;
 	type Event = ();
 	type SelectInitialValidators = ();
+	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
 }
 
 impl session::historical::Trait for Runtime {

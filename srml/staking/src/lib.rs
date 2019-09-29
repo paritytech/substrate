@@ -254,20 +254,21 @@ pub mod inflation;
 use rstd::{prelude::*, result};
 use codec::{HasCompact, Encode, Decode};
 use support::{
-	StorageValue, StorageMap, StorageLinkedMap, decl_module, decl_event,
-	decl_storage, ensure, traits::{
+	decl_module, decl_event, decl_storage, ensure,
+	traits::{
 		Currency, OnFreeBalanceZero, OnDilution, LockIdentifier, LockableCurrency,
 		WithdrawReasons, OnUnbalanced, Imbalance, Get, Time
 	}
 };
 use session::{historical::OnSessionEnding, SelectInitialValidators};
-use sr_primitives::Perbill;
-use sr_primitives::weights::SimpleDispatchInfo;
-use sr_primitives::traits::{
-	Convert, Zero, One, StaticLookup, CheckedSub, Saturating, Bounded, SimpleArithmetic,
-	SaturatedConversion,
+use sr_primitives::{
+	Perbill,
+	curve::PiecewiseLinear,
+	weights::SimpleDispatchInfo,
+	traits::{
+		Convert, Zero, One, StaticLookup, CheckedSub, Saturating, Bounded, SaturatedConversion,
+	}
 };
-use phragmen::{elect, equalize, Support, SupportMap, ExtendedBalance, ACCURACY};
 use sr_staking_primitives::{
 	SessionIndex,
 	offence::{OnOffenceHandler, OffenceDetails, Offence, ReportOffence},
@@ -275,6 +276,8 @@ use sr_staking_primitives::{
 #[cfg(feature = "std")]
 use sr_primitives::{Serialize, Deserialize};
 use system::{ensure_signed, ensure_root};
+
+use phragmen::{elect, equalize, ExtendedBalance, Support, SupportMap, PhragmenStakedAssignment};
 
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
 const MAX_NOMINATIONS: usize = 16;
@@ -454,7 +457,11 @@ type MomentOf<T>= <<T as Trait>::Time as Time>::Moment;
 /// This is needed because `Staking` sets the `ValidatorIdOf` of the `session::Trait`
 pub trait SessionInterface<AccountId>: system::Trait {
 	/// Disable a given validator by stash ID.
-	fn disable_validator(validator: &AccountId) -> Result<(), ()>;
+	///
+	/// Returns `true` if new era should be forced at the end of this session.
+	/// This allows preventing a situation where there is too many validators
+	/// disabled and block production stalls.
+	fn disable_validator(validator: &AccountId) -> Result<bool, ()>;
 	/// Get the validators from session.
 	fn validators() -> Vec<AccountId>;
 	/// Prune historical session tries up to but not including the given index.
@@ -472,7 +479,7 @@ impl<T: Trait> SessionInterface<<T as system::Trait>::AccountId> for T where
 	T::SelectInitialValidators: session::SelectInitialValidators<<T as system::Trait>::AccountId>,
 	T::ValidatorIdOf: Convert<<T as system::Trait>::AccountId, Option<<T as system::Trait>::AccountId>>
 {
-	fn disable_validator(validator: &<T as system::Trait>::AccountId) -> Result<(), ()> {
+	fn disable_validator(validator: &<T as system::Trait>::AccountId) -> Result<bool, ()> {
 		<session::Module<T>>::disable(validator)
 	}
 
@@ -519,6 +526,9 @@ pub trait Trait: system::Trait {
 
 	/// Interface for interacting with a session module.
 	type SessionInterface: self::SessionInterface<Self::AccountId>;
+
+	/// The NPoS reward curve to use.
+	type RewardCurve: Get<&'static PiecewiseLinear<'static>>;
 }
 
 /// Mode of era-forcing.
@@ -1169,6 +1179,7 @@ impl<T: Trait> Module<T> {
 			let total_rewarded_stake = Self::slot_stake() * validator_len;
 
 			let total_payout = inflation::compute_total_payout(
+				&T::RewardCurve::get(),
 				total_rewarded_stake.clone(),
 				T::Currency::total_issuance(),
 				// Duration of era; more than u64::MAX is rewarded as u64::MAX.
@@ -1179,7 +1190,7 @@ impl<T: Trait> Module<T> {
 
 			for (v, p) in validators.iter().zip(points.individual.into_iter()) {
 				if p != 0 {
-					let reward = multiply_by_rational(total_payout, p, points.total);
+					let reward = Perbill::from_rational_approximation(p, points.total) * total_payout;
 					total_imbalance.subsume(Self::reward_validator(v, reward));
 				}
 			}
@@ -1241,21 +1252,15 @@ impl<T: Trait> Module<T> {
 		);
 
 		if let Some(phragmen_result) = maybe_phragmen_result {
-			let elected_stashes = phragmen_result.winners;
-			let mut assignments = phragmen_result.assignments;
+			let elected_stashes = phragmen_result.winners.iter()
+				.map(|(s, _)| s.clone())
+				.collect::<Vec<T::AccountId>>();
+			let assignments = phragmen_result.assignments;
 
-			// helper closure.
-			let to_balance = |b: ExtendedBalance|
-				<T::CurrencyToVote as Convert<ExtendedBalance, BalanceOf<T>>>::convert(b);
 			let to_votes = |b: BalanceOf<T>|
 				<T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(b) as ExtendedBalance;
-
-			// The return value of this is safe to be converted to u64.
-			// The original balance, `b` is within the scope of u64. It is just extended to u128
-			// to be properly multiplied by a ratio, which will lead to another value
-			// less than u64 for sure. The result can then be safely passed to `to_balance`.
-			// For now the backward convert is used. A simple `TryFrom<u64>` is also safe.
-			let ratio_of = |b, r: ExtendedBalance| r.saturating_mul(to_votes(b)) / ACCURACY;
+			let to_balance = |e: ExtendedBalance|
+				<T::CurrencyToVote as Convert<ExtendedBalance, BalanceOf<T>>>::convert(e);
 
 			// Initialize the support of each candidate.
 			let mut supports = <SupportMap<T::AccountId>>::new();
@@ -1267,28 +1272,42 @@ impl<T: Trait> Module<T> {
 					supports.insert(e.clone(), item);
 				});
 
-			// convert the ratio in-place (and replace) to the balance but still in the extended
-			// balance type.
-			for (n, assignment) in assignments.iter_mut() {
-				for (c, r) in assignment.iter_mut() {
-					let nominator_stake = Self::slashable_balance_of(n);
-					let other_stake = ratio_of(nominator_stake, *r);
+			// build support struct.
+			for (n, assignment) in assignments.iter() {
+				for (c, per_thing) in assignment.iter() {
+					let nominator_stake = to_votes(Self::slashable_balance_of(n));
+					// AUDIT: it is crucially important for the `Mul` implementation of all
+					// per-things to be sound.
+					let other_stake = *per_thing * nominator_stake;
 					if let Some(support) = supports.get_mut(c) {
-						// This for an astronomically rich validator with more astronomically rich
+						// For an astronomically rich validator with more astronomically rich
 						// set of nominators, this might saturate.
 						support.total = support.total.saturating_add(other_stake);
 						support.others.push((n.clone(), other_stake));
 					}
-					// convert the ratio to extended balance
-					*r = other_stake;
 				}
 			}
 
 			if cfg!(feature = "equalize") {
+				let mut staked_assignments
+					: Vec<(T::AccountId, Vec<PhragmenStakedAssignment<T::AccountId>>)>
+					= Vec::with_capacity(assignments.len());
+				for (n, assignment) in assignments.iter() {
+					let mut staked_assignment
+						: Vec<PhragmenStakedAssignment<T::AccountId>>
+						= Vec::with_capacity(assignment.len());
+					for (c, per_thing) in assignment.iter() {
+						let nominator_stake = to_votes(Self::slashable_balance_of(n));
+						let other_stake = *per_thing * nominator_stake;
+						staked_assignment.push((c.clone(), other_stake));
+					}
+					staked_assignments.push((n.clone(), staked_assignment));
+				}
+
 				let tolerance = 0_u128;
 				let iterations = 2_usize;
-				equalize::<_, _, _, T::CurrencyToVote>(
-					assignments,
+				equalize::<_, _, T::CurrencyToVote, _>(
+					staked_assignments,
 					&mut supports,
 					tolerance,
 					iterations,
@@ -1438,31 +1457,6 @@ impl<T: Trait + authorship::Trait> authorship::EventHandler<T::AccountId, T::Blo
 	}
 }
 
-// This is guarantee not to overflow on whatever values.
-// `num` must be inferior to `den` otherwise it will be reduce to `den`.
-fn multiply_by_rational<N>(value: N, num: u32, den: u32) -> N
-	where N: SimpleArithmetic + Clone
-{
-	let num = num.min(den);
-
-	let result_divisor_part = value.clone() / den.into() * num.into();
-
-	let result_remainder_part = {
-		let rem = value % den.into();
-
-		// Fits into u32 because den is u32 and remainder < den
-		let rem_u32 = rem.saturated_into::<u32>();
-
-		// Multiplication fits into u64 as both term are u32
-		let rem_part = rem_u32 as u64 * num as u64 / den as u64;
-
-		// Result fits into u32 as num < total_points
-		(rem_part as u32).into()
-	};
-
-	result_divisor_part + result_remainder_part
-}
-
 /// A `Convert` implementation that finds the stash of the given controller account,
 /// if any.
 pub struct StashOf<T>(rstd::marker::PhantomData<T>);
@@ -1530,10 +1524,11 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, session::historical::Identificati
 				continue;
 			}
 
-			// make sure to disable validator in next sessions
-			let _ = T::SessionInterface::disable_validator(stash);
-			// force a new era, to select a new validator set
-			ForceEra::put(Forcing::ForceNew);
+			// make sure to disable validator till the end of this session
+			if T::SessionInterface::disable_validator(stash).unwrap_or(false) {
+				// force a new era, to select a new validator set
+				ForceEra::put(Forcing::ForceNew);
+			}
 			// actually slash the validator
 			let slashed_amount = Self::slash_validator(stash, amount, exposure, &mut journal);
 

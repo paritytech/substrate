@@ -18,11 +18,13 @@
 //!
 //! NOTE: If you're looking for `parameter_types`, it has moved in to the top-level module.
 
-use crate::rstd::{prelude::*, result, marker::PhantomData, ops::Div};
-use crate::codec::{Codec, Encode, Decode};
+use rstd::{prelude::*, result, marker::PhantomData, ops::Div};
+use codec::{Codec, Encode, Decode};
 use primitives::u32_trait::Value as U32;
-use crate::sr_primitives::traits::{MaybeSerializeDebug, SimpleArithmetic, Saturating};
-use crate::sr_primitives::ConsensusEngineId;
+use sr_primitives::{
+	ConsensusEngineId,
+	traits::{MaybeSerializeDebug, SimpleArithmetic, Saturating},
+};
 
 /// Anything that can have a `::len()` method.
 pub trait Len {
@@ -659,6 +661,16 @@ pub trait ChangeMembers<AccountId: Clone + Ord> {
 	/// Set the new members; they **must already be sorted**. This will compute the diff and use it to
 	/// call `change_members_sorted`.
 	fn set_members_sorted(new_members: &[AccountId], old_members: &[AccountId]) {
+		let (incoming, outgoing) = Self::compute_members_diff(new_members, old_members);
+		Self::change_members_sorted(&incoming[..], &outgoing[..], &new_members);
+	}
+
+	/// Set the new members; they **must already be sorted**. This will compute the diff and use it to
+	/// call `change_members_sorted`.
+	fn compute_members_diff(
+		new_members: &[AccountId],
+		old_members: &[AccountId]
+	) -> (Vec<AccountId>, Vec<AccountId>) {
 		let mut old_iter = old_members.iter();
 		let mut new_iter = new_members.iter();
 		let mut incoming = Vec::new();
@@ -686,8 +698,7 @@ pub trait ChangeMembers<AccountId: Clone + Ord> {
 				}
 			}
 		}
-
-		Self::change_members_sorted(&incoming[..], &outgoing[..], &new_members);
+		(incoming, outgoing)
 	}
 }
 
