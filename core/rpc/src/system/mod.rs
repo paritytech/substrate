@@ -42,6 +42,7 @@ pub enum Request<B: traits::Block> {
 	Peers(oneshot::Sender<Vec<PeerInfo<B::Hash, <B::Header as HeaderT>::Number>>>),
 	/// Must return the state of the network.
 	NetworkState(oneshot::Sender<rpc::Value>),
+	/// Must return the node role.
 	NodeRole(oneshot::Sender<NodeRole>)
 }
 

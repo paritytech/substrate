@@ -74,9 +74,10 @@ pub struct PeerInfo<Hash, Number> {
 	pub best_number: Number,
 }
 
+/// The role the node is running as
 #[derive(Serialize, Deserialize)]
 pub enum NodeRole {
-	/// The node is full
+	/// The node is a full node
 	Full,
 	/// The node is a light client
 	LightClient,

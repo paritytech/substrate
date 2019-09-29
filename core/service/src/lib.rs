@@ -722,14 +722,11 @@ fn build_network_future<
 				rpc::system::Request::NodeRole(sender) => {
 					use rpc::system::NodeRole;
 
-					let role = if roles.is_authority() {
-						Some(NodeRole::Authority)
-					} else if roles.is_full() {
-						Some(NodeRole::Full)
-					} else if roles.is_light() {
-						Some(NodeRole::LightClient)
-					} else {
-						None
+					let role = match roles {
+						Roles::AUTHORITY => Some(NodeRole::Authority),
+						Roles::FULL => Some(NodeRole::Full),
+						Roles::LIGHT => Some(NodeRole::LightClient),
+						_ => None
 					};
 
 					if let Some(role) = role {

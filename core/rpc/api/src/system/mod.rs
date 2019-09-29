@@ -65,6 +65,7 @@ pub trait SystemApi<Hash, Number> {
 	#[rpc(name = "system_networkState", returns = "jsonrpc_core::Value")]
 	fn system_network_state(&self) -> Receiver<jsonrpc_core::Value>;
 
+	/// Returns the role the node is running as.
 	#[rpc(name = "system_nodeRole", returns = "NodeRole")]
 	fn system_node_role(&self) -> Receiver<NodeRole>;
 }
