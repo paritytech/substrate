@@ -211,19 +211,25 @@ mod tests {
 		}
 	}
 
+	fn setup_blocks(blocks: u64) {
+		let mut parent_hash = System::parent_hash();
+
+		for i in 2 .. (blocks + 2) {
+			System::initialize(&i, &parent_hash, &Default::default(), &Default::default());
+			Randomness::on_initialize(i);
+
+			let header = System::finalize();
+			parent_hash = header.hash();
+			System::set_block_number(*header.number());
+		}
+	}
+
 	#[test]
 	fn test_random_material_parital() {
 		with_externalities(&mut new_test_ext(), || {
 			let genesis_hash = System::parent_hash();
-			let mut parent_hash = genesis_hash;
 
-			for i in 2..40 {
-				System::initialize(&i, &parent_hash, &Default::default(), &Default::default());
-				Randomness::on_initialize(i);
-
-				let header = System::finalize();
-				parent_hash = header.hash();
-			}
+			setup_blocks(38);
 
 			let random_material = Randomness::random_material();
 
@@ -236,15 +242,8 @@ mod tests {
 	fn test_random_material_filled() {
 		with_externalities(&mut new_test_ext(), || {
 			let genesis_hash = System::parent_hash();
-			let mut parent_hash = genesis_hash;
 
-			for i in 2..83 {
-				System::initialize(&i, &parent_hash, &Default::default(), &Default::default());
-				Randomness::on_initialize(i);
-
-				let header = System::finalize();
-				parent_hash = header.hash();
-			}
+			setup_blocks(81);
 
 			let random_material = Randomness::random_material();
 
@@ -258,15 +257,8 @@ mod tests {
 	fn test_random_material_filled_twice() {
 		with_externalities(&mut new_test_ext(), || {
 			let genesis_hash = System::parent_hash();
-			let mut parent_hash = genesis_hash;
 
-			for i in 2..164 {
-				System::initialize(&i, &parent_hash, &Default::default(), &Default::default());
-				Randomness::on_initialize(i);
-
-				let header = System::finalize();
-				parent_hash = header.hash();
-			}
+			setup_blocks(162);
 
 			let random_material = Randomness::random_material();
 
@@ -279,17 +271,7 @@ mod tests {
 	#[test]
 	fn test_random() {
 		with_externalities(&mut new_test_ext(), || {
-			let mut parent_hash = System::parent_hash();
-
-			for i in 2..164 {
-				System::initialize(&i, &parent_hash, &Default::default(), &Default::default());
-				Randomness::on_initialize(i);
-
-				let header = System::finalize();
-				parent_hash = header.hash();
-				// Why is this needed?
-				System::set_block_number(*header.number());
-			}
+			setup_blocks(162);
 
 			assert_eq!(System::block_number(), 163);
 			assert_eq!(Randomness::random_seed(), Randomness::random_seed());
