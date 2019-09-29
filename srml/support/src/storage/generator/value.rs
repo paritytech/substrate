@@ -18,7 +18,7 @@
 use rstd::prelude::*;
 use rstd::{borrow::Borrow, iter::FromIterator};
 use codec::{Codec, Encode};
-use crate::{storage::{self, unhashed, hashed::{Twox128, StorageHasher}}, traits::Len};
+use crate::{storage::{self, unhashed}, hash::{Twox128, StorageHasher}, traits::Len};
 
 /// Generator for `StorageValue` used by `decl_storage`.
 ///

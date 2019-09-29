@@ -4,7 +4,7 @@ use std::cell::RefCell;
 use tokio::runtime::Runtime;
 pub use substrate_cli::{VersionInfo, IntoExit, error};
 use substrate_cli::{informant, parse_and_prepare, ParseAndPrepare, NoCustom};
-use substrate_service::{AbstractService, Roles as ServiceRoles};
+use substrate_service::{AbstractService, Roles as ServiceRoles, Configuration};
 use crate::chain_spec;
 use log::info;
 
@@ -14,9 +14,10 @@ pub fn run<I, T, E>(args: I, exit: E, version: VersionInfo) -> error::Result<()>
 	T: Into<std::ffi::OsString> + Clone,
 	E: IntoExit,
 {
+	type Config<T> = Configuration<(), T>;
 	match parse_and_prepare::<NoCustom, NoCustom, _>(&version, "substrate-node", args) {
-		ParseAndPrepare::Run(cmd) => cmd.run::<(), _, _, _, _>(load_spec, exit,
-		|exit, _cli_args, _custom_args, config| {
+		ParseAndPrepare::Run(cmd) => cmd.run(load_spec, exit,
+		|exit, _cli_args, _custom_args, config: Config<_>| {
 			info!("{}", version.name);
 			info!("  version {}", config.full_version());
 			info!("  by {}, 2017, 2018", version.author);
@@ -38,12 +39,12 @@ pub fn run<I, T, E>(args: I, exit: E, version: VersionInfo) -> error::Result<()>
 			}.map_err(|e| format!("{:?}", e))
 		}),
 		ParseAndPrepare::BuildSpec(cmd) => cmd.run(load_spec),
-		ParseAndPrepare::ExportBlocks(cmd) => cmd.run_with_builder::<(), _, _, _, _, _>(|config|
+		ParseAndPrepare::ExportBlocks(cmd) => cmd.run_with_builder(|config: Config<_>|
 			Ok(new_full_start!(config).0), load_spec, exit),
-		ParseAndPrepare::ImportBlocks(cmd) => cmd.run_with_builder::<(), _, _, _, _, _>(|config|
+		ParseAndPrepare::ImportBlocks(cmd) => cmd.run_with_builder(|config: Config<_>|
 			Ok(new_full_start!(config).0), load_spec, exit),
 		ParseAndPrepare::PurgeChain(cmd) => cmd.run(load_spec),
-		ParseAndPrepare::RevertChain(cmd) => cmd.run_with_builder::<(), _, _, _, _>(|config|
+		ParseAndPrepare::RevertChain(cmd) => cmd.run_with_builder(|config: Config<_>|
 			Ok(new_full_start!(config).0), load_spec),
 		ParseAndPrepare::CustomCommand(_) => Ok(())
 	}?;

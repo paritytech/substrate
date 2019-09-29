@@ -38,7 +38,7 @@ fn generate_chain_spec() -> String {
 		None,
 		None,
 		None,
-		None,
+		Default::default(),
 	);
 	build_spec(chain_spec, false).unwrap()
 }

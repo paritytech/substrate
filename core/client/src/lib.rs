@@ -67,7 +67,8 @@
 //!		),
 //! 	// This parameter provides the storage for the chain genesis.
 //! 	<(StorageOverlay, ChildrenStorageOverlay)>::default(),
-//! 	Default::default()
+//! 	Default::default(),
+//! 	Default::default(),
 //! );
 //! ```
 //!
@@ -115,7 +116,7 @@ pub use crate::client::{
 	new_in_mem,
 	BlockBody, ImportNotifications, FinalityNotifications, BlockchainEvents,
 	BlockImportNotification, Client, ClientInfo, ExecutionStrategies, FinalityNotification,
-	LongestChain, BlockOf, ProvideUncles,
+	LongestChain, BlockOf, ProvideUncles, ForkBlocks,
 	utils, apply_aux,
 };
 #[cfg(feature = "std")]

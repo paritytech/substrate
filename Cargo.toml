@@ -21,6 +21,8 @@ vergen = "3"
 members = [
 	"core/authority-discovery",
 	"core/application-crypto",
+	"core/chain-spec",
+	"core/chain-spec/derive",
 	"core/cli",
 	"core/client",
 	"core/client/db",
