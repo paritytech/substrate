@@ -75,7 +75,7 @@ pub struct PeerInfo<Hash, Number> {
 }
 
 /// The role the node is running as
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub enum NodeRole {
 	/// The node is a full node
 	Full,
