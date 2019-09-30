@@ -14,7 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Provides implementations for the runtime interface traits.
+//! Provides the [`PassBy`] trait to simplify the implementation of the runtime interface traits
+//! for custom types. [`Codec`] and [`Inner`] are the two provided strategy implementations.
 
 use crate::{RIType, impls::{pointer_and_len_from_u64, pointer_and_len_to_u64}};
 
