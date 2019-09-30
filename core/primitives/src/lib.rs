@@ -44,9 +44,9 @@ pub use codec::{Encode, Decode};// << for macro
 #[cfg(feature = "std")]
 pub use impl_serde::serialize as bytes;
 
-#[cfg(feature = "std")]
+#[cfg(feature = "with_crypto")]
 pub mod hashing;
-#[cfg(feature = "std")]
+#[cfg(feature = "with_crypto")]
 pub use hashing::{blake2_128, blake2_256, twox_64, twox_128, twox_256};
 #[cfg(feature = "std")]
 pub mod hexdisplay;
@@ -73,7 +73,7 @@ mod tests;
 pub use self::hash::{H160, H256, H512, convert_hash};
 pub use self::uint::U256;
 pub use changes_trie::ChangesTrieConfiguration;
-#[cfg(feature = "std")]
+#[cfg(feature = "with_crypto")]
 pub use crypto::{DeriveJunction, Pair, Public};
 
 pub use hash_db::Hasher;

@@ -20,8 +20,8 @@
 //! Note: `CHAIN_CODE_LENGTH` must be equal to `crate::crypto::JUNCTION_ID_LEN`
 //! for this to work.
 // end::description[]
-
-#[cfg(feature = "std")]
+use rstd::vec::Vec;
+#[cfg(feature = "with_crypto")]
 use schnorrkel::{signing_context, ExpansionMode, Keypair, SecretKey, MiniSecretKey, PublicKey,
 	derive::{Derivation, ChainCode, CHAIN_CODE_LENGTH}
 };
@@ -29,7 +29,7 @@ use schnorrkel::{signing_context, ExpansionMode, Keypair, SecretKey, MiniSecretK
 use substrate_bip39::mini_secret_from_entropy;
 #[cfg(feature = "std")]
 use bip39::{Mnemonic, Language, MnemonicType};
-#[cfg(feature = "std")]
+#[cfg(feature = "with_crypto")]
 use crate::crypto::{
 	Pair as TraitPair, DeriveJunction, Infallible, SecretStringError, Ss58Codec
 };
@@ -39,11 +39,11 @@ use codec::{Encode, Decode};
 
 #[cfg(feature = "std")]
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
-#[cfg(feature = "std")]
+#[cfg(feature = "with_crypto")]
 use schnorrkel::keys::{MINI_SECRET_KEY_LENGTH, SECRET_KEY_LENGTH};
 
 // signing context
-#[cfg(feature = "std")]
+#[cfg(feature = "with_crypto")]
 const SIGNING_CTX: &[u8] = b"substrate";
 
 /// An Schnorrkel/Ristretto x25519 ("sr25519") public key.
@@ -51,10 +51,10 @@ const SIGNING_CTX: &[u8] = b"substrate";
 pub struct Public(pub [u8; 32]);
 
 /// An Schnorrkel/Ristretto x25519 ("sr25519") key pair.
-#[cfg(feature = "std")]
+#[cfg(feature = "with_crypto")]
 pub struct Pair(Keypair);
 
-#[cfg(feature = "std")]
+#[cfg(feature = "with_crypto")]
 impl Clone for Pair {
 	fn clone(&self) -> Self {
 		Pair(schnorrkel::Keypair {
@@ -151,9 +151,9 @@ impl<'de> Deserialize<'de> for Public {
 	}
 }
 
-#[cfg(feature = "std")]
-impl std::hash::Hash for Public {
-	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+#[cfg(feature = "with_crypto")]
+impl core::hash::Hash for Public {
+	fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
 		self.0.hash(state);
 	}
 }
@@ -230,7 +230,7 @@ impl AsMut<[u8]> for Signature {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "with_crypto")]
 impl From<schnorrkel::Signature> for Signature {
 	fn from(s: schnorrkel::Signature) -> Signature {
 		Signature(s.to_bytes())
@@ -244,10 +244,10 @@ impl std::fmt::Debug for Signature {
 	}
 }
 
-#[cfg(feature = "std")]
-impl std::hash::Hash for Signature {
-	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-		std::hash::Hash::hash(&self.0[..], state);
+#[cfg(feature = "with_crypto")]
+impl core::hash::Hash for Signature {
+	fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+		core::hash::Hash::hash(&self.0[..], state);
 	}
 }
 
@@ -358,21 +358,21 @@ impl From<SecretKey> for Pair {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "with_crypto")]
 impl From<schnorrkel::Keypair> for Pair {
 	fn from(p: schnorrkel::Keypair) -> Pair {
 		Pair(p)
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "with_crypto")]
 impl From<Pair> for schnorrkel::Keypair {
 	fn from(p: Pair) -> schnorrkel::Keypair {
 		p.0
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "with_crypto")]
 impl AsRef<schnorrkel::Keypair> for Pair {
 	fn as_ref(&self) -> &schnorrkel::Keypair {
 		&self.0
@@ -380,16 +380,16 @@ impl AsRef<schnorrkel::Keypair> for Pair {
 }
 
 /// Derive a single hard junction.
-#[cfg(feature = "std")]
+#[cfg(feature = "with_crypto")]
 fn derive_hard_junction(secret: &SecretKey, cc: &[u8; CHAIN_CODE_LENGTH]) -> SecretKey {
 	secret.hard_derive_mini_secret_key(Some(ChainCode(cc.clone())), b"").0.expand(ExpansionMode::Ed25519)
 }
 
 /// The raw secret seed, which can be used to recreate the `Pair`.
-#[cfg(feature = "std")]
+#[cfg(feature = "with_crypto")]
 type Seed = [u8; MINI_SECRET_KEY_LENGTH];
 
-#[cfg(feature = "std")]
+#[cfg(feature = "with_crypto")]
 impl TraitPair for Pair {
 	type Public = Public;
 	type Seed = Seed;
@@ -438,6 +438,7 @@ impl TraitPair for Pair {
 	}
 
 	/// Generate a key from the phrase, password and derivation path.
+	#[cfg(feature = "std")]
 	fn from_standard_components<I: Iterator<Item=DeriveJunction>>(
 		phrase: &str,
 		password: Option<&str>,
@@ -447,7 +448,7 @@ impl TraitPair for Pair {
 			.derive(path)
 			.map_err(|_| SecretStringError::InvalidPath)
 	}
-
+	#[cfg(feature = "std")]
 	fn generate_with_phrase(password: Option<&str>) -> (Pair, String, Seed) {
 		let mnemonic = Mnemonic::new(MnemonicType::Words12, Language::English);
 		let phrase = mnemonic.phrase();
@@ -459,7 +460,7 @@ impl TraitPair for Pair {
 			seed,
 		)
 	}
-
+	#[cfg(feature = "std")]
 	fn from_phrase(phrase: &str, password: Option<&str>) -> Result<(Pair, Seed), SecretStringError> {
 		Mnemonic::from_phrase(phrase, Language::English)
 			.map_err(|_| SecretStringError::InvalidPhrase)
@@ -520,16 +521,16 @@ impl Pair {
 }
 
 impl CryptoType for Public {
-	#[cfg(feature="std")]
+	#[cfg(feature = "with_crypto")]
 	type Pair = Pair;
 }
 
 impl CryptoType for Signature {
-	#[cfg(feature="std")]
+	#[cfg(feature = "with_crypto")]
 	type Pair = Pair;
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "with_crypto")]
 impl CryptoType for Pair {
 	type Pair = Pair;
 }
