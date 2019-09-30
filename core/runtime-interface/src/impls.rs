@@ -16,7 +16,7 @@
 
 //! Provides implementations for the runtime interface traits.
 
-use crate::{RIType, PassByCodec};
+use crate::{RIType, pass_by::{PassBy, Inner, Codec}};
 #[cfg(feature = "std")]
 use crate::host::*;
 #[cfg(not(feature = "std"))]
@@ -39,12 +39,12 @@ use rstd::borrow::Cow;
 use rstd::slice;
 
 /// Converts a pointer and length into an `u64`.
-fn pointer_and_len_to_u64(ptr: u32, len: u32) -> u64 {
+pub fn pointer_and_len_to_u64(ptr: u32, len: u32) -> u64 {
 	((len as u64) | u64::from(ptr) << 32).to_le()
 }
 
 /// Splits an `u64` into the pointer and length.
-fn pointer_and_len_from_u64(val: u64) -> (u32, u32) {
+pub fn pointer_and_len_from_u64(val: u64) -> (u32, u32) {
 	let val = u64::from_le(val);
 	let len = (val & (!0u32 as u64)) as u32;
 	let ptr = (val >> 32) as u32;
@@ -146,11 +146,15 @@ impl IntoFFIValue for bool {
 	}
 }
 
+impl<T> RIType for Vec<T> {
+	type FFIType = u64;
+}
+
 #[cfg(feature = "std")]
 impl<T: 'static + Encode> IntoFFIValue for Vec<T> {
 	fn into_ffi_value(self, context: &mut dyn FunctionContext) -> Result<u64> {
 		let vec: Cow<'_, [u8]> = if TypeId::of::<T>() == TypeId::of::<u8>() {
-			unsafe { Cow::Borrowed(std::mem::transmute(&self[..])) }
+			unsafe { Cow::Borrowed(mem::transmute(&self[..])) }
 		} else {
 			Cow::Owned(self.encode())
 		};
@@ -169,6 +173,10 @@ impl<T: 'static + Decode> FromFFIValue for Vec<T> {
 	fn from_ffi_value(context: &mut dyn FunctionContext, arg: u64) -> Result<Vec<T>> {
 		<[T] as FromFFIValue>::from_ffi_value(context, arg)
 	}
+}
+
+impl<T> RIType for [T] {
+	type FFIType = u64;
 }
 
 #[cfg(feature = "std")]
@@ -213,28 +221,6 @@ impl IntoPreallocatedFFIValue for [u8] {
 	}
 }
 
-#[cfg(feature = "std")]
-impl<T: PassByCodec> IntoFFIValue for T {
-	fn into_ffi_value(self, context: &mut dyn FunctionContext) -> Result<u64> {
-		let vec = self.encode();
-		let ptr = context.allocate_memory(vec.len() as u32)?;
-		context.write_memory(ptr, &vec)?;
-
-		Ok(pointer_and_len_to_u64(ptr.into(), vec.len() as u32))
-	}
-}
-
-#[cfg(feature = "std")]
-impl<T: PassByCodec> FromFFIValue for T {
-	type SelfInstance = Self;
-
-	fn from_ffi_value(context: &mut dyn FunctionContext, arg: u64) -> Result<Self> {
-		let (ptr, len) = pointer_and_len_from_u64(arg);
-		let vec = context.read_memory(Pointer::new(ptr), len)?;
-		Ok(Self::decode(&mut &vec[..]).expect("Wasm to host values are encoded correctly; qed"))
-	}
-}
-
 // Make sure that our assumptions for storing a pointer + its size in `u64` is valid.
 #[cfg(not(feature = "std"))]
 assert_eq_size!(usize_check; usize, u32);
@@ -273,33 +259,11 @@ impl<T: 'static + Decode> FromFFIValue for Vec<T> {
 		let len = len as usize;
 
 		if TypeId::of::<T>() == TypeId::of::<u8>() {
-			unsafe { std::mem::transmute(Vec::from_raw_parts(ptr as *mut u8, len, len)) }
+			unsafe { mem::transmute(Vec::from_raw_parts(ptr as *mut u8, len, len)) }
 		} else {
-			let slice = unsafe { std::slice::from_raw_parts(ptr as *const u8, len) };
+			let slice = unsafe { slice::from_raw_parts(ptr as *const u8, len) };
 			Self::decode(&mut &slice[..]).expect("Host to wasm values are encoded correctly; qed")
 		}
-	}
-}
-
-#[cfg(not(feature = "std"))]
-impl<T: PassByCodec> IntoFFIValue for T {
-	type Owned = Vec<u8>;
-
-	fn into_ffi_value(&self) -> WrappedFFIValue<u64, Vec<u8>> {
-		let data = self.encode();
-		let ffi_value = pointer_and_len_to_u64(data.as_ptr() as u32, data.len() as u32);
-		(ffi_value, data).into()
-	}
-}
-
-#[cfg(not(feature = "std"))]
-impl<T: PassByCodec> FromFFIValue for T {
-	fn from_ffi_value(arg: u64) -> Self {
-		let (ptr, len) = pointer_and_len_from_u64(arg);
-		let len = len as usize;
-
-		let slice = unsafe { std::slice::from_raw_parts(ptr as *const u8, len) };
-		Self::decode(&mut &slice[..]).expect("Host to wasm values are encoded correctly; qed")
 	}
 }
 
@@ -379,4 +343,12 @@ impl_traits_for_arrays! {
 	1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26,
 	27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50,
 	51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64
+}
+
+impl<T: codec::Codec> PassBy for Option<T> {
+	type PassBy = Codec<Self>;
+}
+
+impl<T: codec::Codec, E: codec::Codec> PassBy for rstd::result::Result<T, E> {
+	type PassBy = Codec<Self>;
 }

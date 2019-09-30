@@ -27,8 +27,6 @@
 #[doc(hidden)]
 pub use primitives::Blake2Hasher;
 
-use codec::Codec;
-
 #[doc(hidden)]
 #[cfg(feature = "std")]
 pub use primitives::traits::Externalities;
@@ -44,13 +42,15 @@ pub use externalities::{set_and_run_with_externalities, with_externalities};
 
 #[cfg(feature = "std")]
 mod externalities;
-mod impls;
+pub(crate) mod impls;
 #[cfg(feature = "std")]
 pub mod host;
 #[cfg(not(feature = "std"))]
 pub mod wasm;
+pub mod pass_by;
 
-/// Something that can be used by the runtime interface as type to communicate between wasm and the host.
+/// Something that can be used by the runtime interface as type to communicate between wasm and the
+/// host.
 ///
 /// Every type that should be used in a runtime interface function signature needs to implement
 /// this trait.
@@ -61,37 +61,6 @@ pub trait RIType {
 	#[cfg(not(feature = "std"))]
 	type FFIType;
 }
-
-
-impl<T> RIType for Vec<T> {
-	type FFIType = u64;
-}
-
-impl<T> RIType for [T] {
-	type FFIType = u64;
-}
-
-/// Marker trait for types that should be passed between wasm and the host by using SCALE codec.
-///
-/// # Example
-/// ```
-/// # use substrate_runtime_interface::PassByCodec;
-/// #[derive(codec::Encode, codec::Decode)]
-/// struct Test;
-///
-/// // It is sufficient to implement the trait for the desired type and it will be usable with
-/// // the runtime interface.
-/// impl PassByCodec for Test {}
-/// ```
-pub trait PassByCodec: Codec {}
-
-impl<T: PassByCodec> RIType for T {
-	type FFIType = u64;
-}
-
-impl<T: Codec> PassByCodec for Option<T> {}
-
-impl<T: Codec, E: Codec> PassByCodec for Result<T, E> {}
 
 #[cfg(test)]
 mod tests {
