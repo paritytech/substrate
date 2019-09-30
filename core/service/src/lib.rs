@@ -663,7 +663,7 @@ fn build_network_future<
 	should_have_peers: bool,
 	dht_event_tx: Option<mpsc::Sender<DhtEvent>>,
 ) -> impl Future<Item = (), Error = ()> {
-	// Compatibility shim while we're transitionning to stable Futures.
+	// Compatibility shim while we're transitioning to stable Futures.
 	// See https://github.com/paritytech/substrate/issues/3099
 	let mut rpc_rx = futures03::compat::Compat::new(rpc_rx.map(|v| Ok::<_, ()>(v)));
 
@@ -722,11 +722,14 @@ fn build_network_future<
 				rpc::system::Request::NodeRole(sender) => {
 					use rpc::system::NodeRole;
 
-					let role = match roles {
-						Roles::AUTHORITY => Some(NodeRole::Authority),
-						Roles::FULL => Some(NodeRole::Full),
-						Roles::LIGHT => Some(NodeRole::LightClient),
-						_ => None
+					let role = if roles.intersects(Roles::AUTHORITY) {
+						Some(NodeRole::Authority)
+					} else if roles.intersects(Roles::FULL) {
+						Some(NodeRole::Full)
+					} else if roles.intersects(Roles::LIGHT) {
+						Some(NodeRole::LightClient)
+					} else {
+						None
 					};
 
 					if let Some(role) = role {
