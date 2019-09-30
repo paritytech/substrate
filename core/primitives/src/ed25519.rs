@@ -153,7 +153,14 @@ impl<'de> Deserialize<'de> for Public {
 	}
 }
 
-#[cfg(feature = "with_crypto")]
+#[cfg(all(feature = "with_crypto", feature = "std"))]
+impl std::hash::Hash for Public {
+	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+		self.0.hash(state);
+	}
+}
+
+#[cfg(all(feature = "with_crypto", not(feature = "std")))]
 impl core::hash::Hash for Public {
 	fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
 		self.0.hash(state);
@@ -237,12 +244,20 @@ impl std::fmt::Debug for Signature {
 	}
 }
 
-#[cfg(feature = "with_crypto")]
+#[cfg(all(feature = "with_crypto", feature = "std"))]
+impl std::hash::Hash for Signature {
+	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+		std::hash::Hash::hash(&self.0[..], state);
+	}
+}
+
+#[cfg(all(feature = "with_crypto", not(feature = "std")))]
 impl core::hash::Hash for Signature {
 	fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
 		core::hash::Hash::hash(&self.0[..], state);
 	}
 }
+
 
 impl Signature {
 	/// A new instance from the given 64-byte `data`.
