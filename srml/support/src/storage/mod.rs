@@ -18,7 +18,7 @@
 
 use crate::rstd::prelude::*;
 use crate::rstd::{borrow::Borrow, iter::FromIterator};
-use codec::{Codec, Encode, Decode, KeyedVec, EncodeAppend};
+use codec::{Codec, Encode, Decode, EncodeAppend};
 use crate::traits::Len;
 
 #[macro_use]

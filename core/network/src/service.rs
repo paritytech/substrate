@@ -496,6 +496,18 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 		Ok(())
 	}
 
+	/// Configure an explicit fork sync request.
+	/// Note that this function should not be used for recent blocks.
+	/// Sync should be able to download all the recent forks normally.
+	/// `set_sync_fork_request` should only be used if external code detects that there's
+	/// a stale fork missing.
+	/// Passing empty `peers` set effectively removes the sync request.
+	pub fn set_sync_fork_request(&self, peers: Vec<PeerId>, hash: B::Hash, number: NumberFor<B>) {
+		let _ = self
+			.to_worker
+			.unbounded_send(ServerToWorkerMsg::SyncFork(peers, hash, number));
+	}
+
 	/// Modify a peerset priority group.
 	pub fn set_priority_group(&self, group_id: String, peers: HashSet<Multiaddr>) -> Result<(), String> {
 		let peers = peers.into_iter().map(|p| {
@@ -586,6 +598,7 @@ enum ServerToWorkerMsg<B: BlockT, S: NetworkSpecialization<B>> {
 	GetValue(record::Key),
 	PutValue(record::Key, Vec<u8>),
 	AddKnownAddress(PeerId, Multiaddr),
+	SyncFork(Vec<PeerId>, B::Hash, NumberFor<B>),
 }
 
 /// Main network worker. Must be polled in order for the network to advance.
@@ -664,6 +677,8 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Stream for Ne
 					self.network_service.put_value(key, value),
 				ServerToWorkerMsg::AddKnownAddress(peer_id, addr) =>
 					self.network_service.add_known_address(peer_id, addr),
+				ServerToWorkerMsg::SyncFork(peer_ids, hash, number) =>
+					self.network_service.user_protocol_mut().set_sync_fork_request(peer_ids, &hash, number),
 			}
 		}
 
