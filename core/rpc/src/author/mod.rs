@@ -26,10 +26,10 @@ use log::{error, warn};
 use client::{self, Client};
 use rpc::futures::{
 	Sink, Future,
-	future::{Executor, result},
+	future::result,
 };
 use futures03::{StreamExt as _, compat::Compat};
-use api::Subscriptions;
+use api::{Subscriptions, TaskExecutor};
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use codec::{Encode, Decode};
 use primitives::{Bytes, Blake2Hasher, H256, traits::BareCryptoStorePtr};
@@ -53,7 +53,7 @@ use self::error::{Error, FutureResult, Result};
 /// Authoring API
 pub struct Author<B, E, P, RA> where P: PoolChainApi + Sync + Send + 'static {
 	/// Futures executor.
-	executor: Arc<dyn Executor<Box<dyn Future<Item = (), Error = ()> + Send>> + Send + Sync>,
+	executor: TaskExecutor,
 	/// Substrate client
 	client: Arc<Client<B, E, <P as PoolChainApi>::Block, RA>>,
 	/// Transactions pool
@@ -67,7 +67,7 @@ pub struct Author<B, E, P, RA> where P: PoolChainApi + Sync + Send + 'static {
 impl<B, E, P, RA> Author<B, E, P, RA> where P: PoolChainApi + Sync + Send + 'static {
 	/// Create new instance of Authoring API.
 	pub fn new(
-		executor: Arc<dyn Executor<Box<dyn Future<Item = (), Error = ()> + Send>> + Send + Sync>,
+		executor: TaskExecutor,
 		client: Arc<Client<B, E, <P as PoolChainApi>::Block, RA>>,
 		pool: Arc<Pool<P>>,
 		subscriptions: Subscriptions,
@@ -124,7 +124,6 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 		let best_block_hash = self.client.info().chain.best_hash;
 		Box::new(self.pool
 			.submit_one(&generic::BlockId::hash(best_block_hash), xt)
-			.boxed()
 			.compat()
 			.map_err(|e| e.into_pool_error()
 				.map(Into::into)
