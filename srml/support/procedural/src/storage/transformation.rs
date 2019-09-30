@@ -122,7 +122,7 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 		&cratename,
 		&storage_lines,
 		&where_clause,
-	);
+	).unwrap_or_else(|err| err.to_compile_error());
 
 	let decl_store_items = decl_store_items(
 		&storage_lines,
@@ -600,15 +600,15 @@ fn create_and_impl_instance(
 	instance_prefix: &str,
 	ident: &Ident,
 	doc: &TokenStream2,
-	const_names: &[(Ident, String)],
+	const_names: &[(Ident, String, String)],
 	scrate: &TokenStream2,
 	instantiable: &Ident,
 	cratename: &Ident,
 ) -> TokenStream2 {
 	let mut const_impls = TokenStream2::new();
 
-	for (const_name, partial_const_value) in const_names {
-		let const_value = format!("{}{}", instance_prefix, partial_const_value);
+	for (const_name, const_value_prefix, const_value_suffix) in const_names {
+		let const_value = format!("{}{}{}", const_value_prefix, instance_prefix, const_value_suffix);
 		const_impls.extend(quote! {
 			const #const_name: &'static str = #const_value;
 		});
@@ -637,7 +637,7 @@ fn decl_storage_items(
 	cratename: &Ident,
 	storage_lines: &ext::Punctuated<DeclStorageLine, Token![;]>,
 	where_clause: &Option<WhereClause>,
-) -> TokenStream2 {
+) -> syn::Result<TokenStream2> {
 	let mut impls = TokenStream2::new();
 
 	let InstanceOpts {
@@ -666,15 +666,13 @@ fn decl_storage_items(
 		let const_name = syn::Ident::new(
 			&format!("{}{}", impls::PREFIX_FOR, name.to_string()), proc_macro2::Span::call_site()
 		);
-		let partial_const_value = prefix.clone();
-		const_names.push((const_name, partial_const_value));
+		const_names.push((const_name, String::new(), prefix.clone()));
 
 		if let DeclStorageTypeInfosKind::Map { is_linked: true, .. } = type_infos.kind {
 			let const_name = syn::Ident::new(
 				&format!("{}{}", impls::HEAD_KEY_FOR, name.to_string()), proc_macro2::Span::call_site()
 			);
-			let partial_const_value = format!("head of {}", prefix);
-			const_names.push((const_name, partial_const_value));
+			const_names.push((const_name, "head of ".into(), prefix));
 		}
 	}
 
@@ -685,7 +683,7 @@ fn decl_storage_items(
 	// Declare Instance trait
 	{
 		let mut const_impls = TokenStream2::new();
-		for (const_name, _) in &const_names {
+		for (const_name, ..) in &const_names {
 			const_impls.extend(quote! {
 				const #const_name: &'static str;
 			});
@@ -768,6 +766,14 @@ fn decl_storage_items(
 		} = sline;
 
 		let type_infos = get_type_infos(storage_type);
+
+		if type_infos.is_option && default_value.inner.is_some() {
+			return Err(syn::Error::new_spanned(
+				default_value,
+				"Default values for Option types are not supported"
+			));
+		}
+
 		let fielddefault = default_value.inner
 			.as_ref()
 			.map(|d| &d.expr)
@@ -808,7 +814,8 @@ fn decl_storage_items(
 		};
 		impls.extend(implementation)
 	}
-	impls
+
+	Ok(impls)
 }
 
 fn decl_store_items(storage_lines: &ext::Punctuated<DeclStorageLine, Token![;]>) -> TokenStream2 {

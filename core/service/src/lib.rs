@@ -19,7 +19,6 @@
 
 #![warn(missing_docs)]
 
-mod chain_spec;
 pub mod config;
 #[macro_use]
 pub mod chain_ops;
@@ -31,7 +30,6 @@ use std::net::SocketAddr;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
-use serde::{Serialize, de::DeserializeOwned};
 use futures::sync::mpsc;
 use parking_lot::Mutex;
 
@@ -49,14 +47,13 @@ use network::{
 use log::{log, warn, debug, error, Level};
 use codec::{Encode, Decode};
 use primitives::{Blake2Hasher, H256};
-use sr_primitives::BuildStorage;
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::NumberFor;
 
 pub use self::error::Error;
 pub use self::builder::{ServiceBuilder, ServiceBuilderExport, ServiceBuilderImport, ServiceBuilderRevert};
 pub use config::{Configuration, Roles, PruningMode};
-pub use chain_spec::{ChainSpec, Properties};
+pub use chain_spec::{ChainSpec, Properties, RuntimeGenesis, Extension as ChainSpecExtension};
 pub use transaction_pool::txpool::{
 	self, Pool as TransactionPool, Options as TransactionPoolOptions, ChainApi, IntoPoolError
 };
@@ -105,10 +102,6 @@ pub struct NewService<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
 	keystore: keystore::KeyStorePtr,
 	marker: PhantomData<TBl>,
 }
-
-/// A set of traits for the runtime genesis config.
-pub trait RuntimeGenesis: Serialize + DeserializeOwned + BuildStorage {}
-impl<T: Serialize + DeserializeOwned + BuildStorage> RuntimeGenesis for T {}
 
 /// Alias for a an implementation of `futures::future::Executor`.
 pub type TaskExecutor = Arc<dyn Executor<Box<dyn Future<Item = (), Error = ()> + Send>> + Send + Sync>;
@@ -357,7 +350,7 @@ macro_rules! new_impl {
 				chain_name: $config.chain_spec.name().into(),
 				impl_name: $config.impl_name.into(),
 				impl_version: $config.impl_version.into(),
-				properties: $config.chain_spec.properties(),
+				properties: $config.chain_spec.properties().clone(),
 			};
 			$start_rpc(
 				client.clone(),
@@ -813,8 +806,8 @@ impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Drop for
 
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
 #[cfg(not(target_os = "unknown"))]
-fn start_rpc_servers<C, G, H: FnMut() -> rpc_servers::RpcHandler<rpc::Metadata>>(
-	config: &Configuration<C, G>,
+fn start_rpc_servers<C, G, E, H: FnMut() -> rpc_servers::RpcHandler<rpc::Metadata>>(
+	config: &Configuration<C, G, E>,
 	mut gen_handler: H
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
 	fn maybe_start_server<T, F>(address: Option<SocketAddr>, mut start: F) -> Result<Option<T>, io::Error>
@@ -854,8 +847,8 @@ fn start_rpc_servers<C, G, H: FnMut() -> rpc_servers::RpcHandler<rpc::Metadata>>
 
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
 #[cfg(target_os = "unknown")]
-fn start_rpc_servers<C, G, H: FnMut() -> components::RpcHandler>(
-	_: &Configuration<C, G>,
+fn start_rpc_servers<C, G, E, H: FnMut() -> components::RpcHandler>(
+	_: &Configuration<C, G, E>,
 	_: H
 ) -> Result<Box<std::any::Any + Send + Sync>, error::Error> {
 	Ok(Box::new(()))
@@ -897,7 +890,7 @@ fn transactions_to_propagate<PoolApi, B, H, E>(pool: &TransactionPool<PoolApi>)
 where
 	PoolApi: ChainApi<Block=B, Hash=H, Error=E>,
 	B: BlockT,
-	H: std::hash::Hash + Eq + sr_primitives::traits::Member + serde::Serialize,
+	H: std::hash::Hash + Eq + sr_primitives::traits::Member + sr_primitives::traits::MaybeSerialize,
 	E: txpool::error::IntoPoolError + From<txpool::error::Error>,
 {
 	pool.ready()
@@ -916,7 +909,7 @@ where
 	C: network::ClientHandle<B> + Send + Sync,
 	PoolApi: 'static + ChainApi<Block=B, Hash=H, Error=E>,
 	B: BlockT,
-	H: std::hash::Hash + Eq + sr_primitives::traits::Member + serde::Serialize,
+	H: std::hash::Hash + Eq + sr_primitives::traits::Member + sr_primitives::traits::MaybeSerialize,
 	E: txpool::error::IntoPoolError + From<txpool::error::Error>,
 {
 	fn transactions(&self) -> Vec<(H, <B as BlockT>::Extrinsic)> {

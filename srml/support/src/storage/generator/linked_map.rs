@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use codec::{Codec, Encode, Decode};
-use crate::{storage::{self, unhashed, hashed::StorageHasher}, traits::Len};
+use crate::{storage::{self, unhashed}, hash::StorageHasher, traits::Len};
 use rstd::{
 	borrow::Borrow,
 	marker::PhantomData,
@@ -23,8 +23,26 @@ use rstd::{
 
 /// Generator for `StorageLinkedMap` used by `decl_storage`.
 ///
-/// For each key value is stored at `Hasher(prefix ++ key)` along with a linkage used for
-/// enumeration.
+/// # Mapping of keys to a storage path
+///
+/// The key for the head of the map is stored at one fixed path:
+/// ```nocompile
+/// Hasher(head_key)
+/// ```
+///
+/// For each key, the value stored under that key is appended with a
+/// [`Linkage`](struct.Linkage.html) (which hold previous and next key) at the path:
+/// ```nocompile
+/// Hasher(prefix ++ key)
+/// ```
+///
+/// Enumeration is done by getting the head of the linked map and then iterating getting the
+/// value and linkage stored at the key until the found linkage has no next key.
+///
+/// # Warning
+///
+/// If the keys are not trusted (e.g. can be set by a user), a cryptographic `hasher` such as
+/// `blake2_256` must be used. Otherwise, other values in storage can be compromised.
 pub trait StorageLinkedMap<K: Codec, V: Codec> {
 	/// The type that get/take returns.
 	type Query;
@@ -36,7 +54,7 @@ pub trait StorageLinkedMap<K: Codec, V: Codec> {
 	fn prefix() -> &'static [u8];
 
 	/// Key used to store linked map head.
-	fn final_head_key() -> &'static [u8];
+	fn head_key() -> &'static [u8];
 
 	/// Convert an optionnal value retrieved from storage to the type queried.
 	fn from_optional_value_to_query(v: Option<V>) -> Self::Query;
@@ -52,6 +70,11 @@ pub trait StorageLinkedMap<K: Codec, V: Codec> {
 		let mut final_key = Self::prefix().to_vec();
 		key.borrow().encode_to(&mut final_key);
 		Self::Hasher::hash(&final_key)
+	}
+
+	/// Generate the hashed key for head
+	fn storage_linked_map_final_head_key() -> <Self::Hasher as StorageHasher>::Output {
+		Self::Hasher::hash(Self::head_key())
 	}
 }
 
@@ -181,7 +204,7 @@ where
 	V: Codec,
 	G: StorageLinkedMap<K, V>
 {
-	unhashed::get(G::final_head_key())
+	unhashed::get(G::storage_linked_map_final_head_key().as_ref())
 }
 
 /// Overwrite current head pointer.
@@ -194,8 +217,8 @@ where
 	G: StorageLinkedMap<K, V>
 {
 	match head {
-		Some(head) => unhashed::put(G::final_head_key(), head),
-		None => unhashed::kill(G::final_head_key()),
+		Some(head) => unhashed::put(G::storage_linked_map_final_head_key().as_ref(), head),
+		None => unhashed::kill(G::storage_linked_map_final_head_key().as_ref()),
 	}
 }
 
