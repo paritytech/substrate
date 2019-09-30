@@ -20,11 +20,14 @@
 
 use runtime_interface::runtime_interface;
 
-use rstd::{vec, vec::Vec};
+use rstd::{vec, vec::Vec, mem};
 
 // Inlucde the WASM binary
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
+
+/// Used in the `test_array_as_mutable_reference` test.
+const TEST_ARRAY: [u8; 16] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
 
 #[runtime_interface]
 pub trait TestApi {
@@ -47,6 +50,18 @@ pub trait TestApi {
 	/// Returns the input data wrapped in an `Option` as result.
 	fn return_option_input(data: Vec<u8>) -> Option<Vec<u8>> {
 		Some(data)
+	}
+
+	/// Get an array as input and returns a subset of this array.
+	fn get_and_return_array(data: [u8; 34]) -> [u8; 16] {
+		let mut res = [0u8; 16];
+		res.copy_from_slice(&data[..16]);
+		res
+	}
+
+	/// Take and fill mutable array.
+	fn array_as_mutable_reference(data: &mut [u8; 16]) {
+		data.copy_from_slice(&TEST_ARRAY);
 	}
 }
 
@@ -82,4 +97,25 @@ pub fn test_return_value_into_mutable_reference() {
 
 	let expected = "hello";
 	assert_eq!(expected.as_bytes(), &data[..expected.len()]);
+}
+
+#[no_mangle]
+pub fn test_get_and_return_array() {
+	let mut input = unsafe { mem::MaybeUninit::<[u8; 34]>::zeroed().assume_init() };
+	input.copy_from_slice(&[
+		24, 3, 23, 20, 2, 16, 32, 1, 12, 26, 27, 8, 29, 31, 6, 5, 4, 19, 10, 28, 34, 21, 18, 33, 9,
+		13, 22, 25, 15, 11, 30, 7, 14, 17,
+	]);
+
+	let res = test_api::get_and_return_array(input);
+
+	assert_eq!(&res, &input[..16]);
+}
+
+#[no_mangle]
+pub fn test_array_as_mutable_reference() {
+	let mut array = [0u8; 16];
+	test_api::array_as_mutable_reference(&mut array);
+
+	assert_eq!(array, TEST_ARRAY);
 }

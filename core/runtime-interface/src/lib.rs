@@ -142,6 +142,16 @@ mod tests {
 	}
 
 	#[test]
+	fn test_get_and_return_array() {
+		call_wasm_method::<HostFunctions>("test_get_and_return_array");
+	}
+
+	#[test]
+	fn test_array_as_mutable_reference() {
+		call_wasm_method::<HostFunctions>("test_array_as_mutable_reference");
+	}
+
+	#[test]
 	#[should_panic(expected = "Wasmi(Instantiation(\"Export ext_test_api_return_input not found\"))")]
 	fn host_function_not_found() {
 		call_wasm_method::<()>("test_return_data");
