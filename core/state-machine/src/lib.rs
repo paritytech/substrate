@@ -250,7 +250,7 @@ impl<'a, B, H, N, T, O, Exec> StateMachine<'a, B, H, N, T, O, Exec> where
 		Option<ChangesTrieTransaction<H, N>>,
 	) where
 		R: Decode + Encode + PartialEq,
-		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
+		NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
 	{
 		let mut externalities = ext::Ext::new(
 			self.overlay,
@@ -295,7 +295,7 @@ impl<'a, B, H, N, T, O, Exec> StateMachine<'a, B, H, N, T, O, Exec> where
 		on_consensus_failure: Handler,
 	) -> (CallResult<R, Exec::Error>, Option<(B::Transaction, H::Out)>, Option<ChangesTrieTransaction<H, N>>) where
 		R: Decode + Encode + PartialEq,
-		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
+		NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
 		Handler: FnOnce(
 			CallResult<R, Exec::Error>,
 			CallResult<R, Exec::Error>
@@ -334,7 +334,7 @@ impl<'a, B, H, N, T, O, Exec> StateMachine<'a, B, H, N, T, O, Exec> where
 		orig_prospective: OverlayedChangeSet,
 	) -> (CallResult<R, Exec::Error>, Option<(B::Transaction, H::Out)>, Option<ChangesTrieTransaction<H, N>>) where
 		R: Decode + Encode + PartialEq,
-		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
+		NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
 	{
 		let (result, was_native, storage_delta, changes_delta) = self.execute_aux(
 			compute_tx,
@@ -374,7 +374,7 @@ impl<'a, B, H, N, T, O, Exec> StateMachine<'a, B, H, N, T, O, Exec> where
 		Option<ChangesTrieTransaction<H, N>>,
 	), Box<dyn Error>> where
 		R: Decode + Encode + PartialEq,
-		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
+		NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
 		Handler: FnOnce(
 			CallResult<R, Exec::Error>,
 			CallResult<R, Exec::Error>,
@@ -753,7 +753,7 @@ mod tests {
 	impl<H: Hasher> CodeExecutor<H> for DummyCodeExecutor {
 		type Error = u8;
 
-		fn call<E: Externalities<H>, R: Encode + Decode + PartialEq, NC: FnOnce() -> result::Result<R, &'static str>>(
+		fn call<E: Externalities<H>, R: Encode + Decode + PartialEq, NC: FnOnce() -> result::Result<R, String>>(
 			&self,
 			ext: &mut E,
 			_method: &str,
