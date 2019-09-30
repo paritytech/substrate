@@ -25,6 +25,7 @@ hex-literal = "0.2"
 substrate-rpc = { package = "substrate-rpc", path = "../../core/rpc" }
 substrate-basic-authorship = { path = "../../core/basic-authorship" }
 substrate-service = { path = "../../core/service" }
+chain-spec = { package = "substrate-chain-spec", path = "../../core/chain-spec" }
 transaction_pool = { package = "substrate-transaction-pool", path = "../../core/transaction-pool" }
 network = { package = "substrate-network", path = "../../core/network" }
 babe = { package = "substrate-consensus-babe", path = "../../core/consensus/babe" }
@@ -48,9 +49,9 @@ support = { package = "srml-support", path = "../../srml/support", default-featu
 im_online = { package = "srml-im-online", path = "../../srml/im-online", default-features = false }
 sr-authority-discovery = { package = "srml-authority-discovery", path = "../../srml/authority-discovery", default-features = false }
 authority-discovery = { package = "substrate-authority-discovery", path = "../../core/authority-discovery"}
+serde = { version = "1.0", features = [ "derive" ] }
 client_db = { package = "substrate-client-db", path = "../../core/client/db", features = ["kvdb-rocksdb"] }
 offchain = { package = "substrate-offchain", path = "../../core/offchain" }
-
 
 [dev-dependencies]
 keystore = { package = "substrate-keystore", path = "../../core/keystore" }

@@ -92,7 +92,7 @@ pub struct TelemetryConfig {
 /// maximum verbosity level.
 ///
 /// The URL string can be either a URL or a multiaddress.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct TelemetryEndpoints(Vec<(String, u8)>);
 
 impl TelemetryEndpoints {
