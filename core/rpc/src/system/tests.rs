@@ -81,7 +81,7 @@ fn api<T: Into<Option<Status>>>(sync: T) -> System<Block> {
 					}).unwrap());
 				},
 				Request::NodeRole(sender) => {
-					let _ = sender.send(NodeRole::Full);
+					let _ = sender.send(NodeRole::Authority);
 				}
 			};
 
@@ -229,6 +229,6 @@ fn system_network_state() {
 fn system_node_role() {
 	assert_eq!(
 		wait_receiver(api(None).system_node_role()),
-		NodeRole::Full
+		NodeRole::Authority
 	);
 }
