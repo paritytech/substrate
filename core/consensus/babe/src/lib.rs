@@ -96,16 +96,15 @@ use client::{
 	error::Result as ClientResult, backend::{AuxStore, Backend},
 	ProvideUncles,
 };
-use ::slots::{CheckedHeader, check_equivocation};
+use slots::{CheckedHeader, check_equivocation};
 use futures::prelude::*;
 use log::{warn, debug, info, trace};
-use ::slots::{SlotWorker, SlotData, SlotInfo, SlotCompatible};
+use slots::{SlotWorker, SlotData, SlotInfo, SlotCompatible};
 use epoch_changes::descendent_query;
 mod aux_schema;
 mod verification;
 mod epoch_changes;
 mod authorship;
-mod slots;
 #[cfg(test)]
 mod tests;
 pub use babe_primitives::{
@@ -136,7 +135,7 @@ macro_rules! babe_info {
 // and `super::babe::Config` can be eliminated.
 // https://github.com/paritytech/substrate/issues/2434
 #[derive(Clone)]
-pub struct Config(::slots::SlotDuration<BabeConfiguration>);
+pub struct Config(slots::SlotDuration<BabeConfiguration>);
 
 impl Config {
 	/// Either fetch the slot duration from disk or compute it from the genesis
@@ -145,7 +144,7 @@ impl Config {
 		C: AuxStore + ProvideRuntimeApi, C::Api: BabeApi<B>,
 	{
 		trace!(target: "babe", "Getting slot duration");
-		match ::slots::SlotDuration::get_or_compute(client, |a, b| a.configuration(b)).map(Self) {
+		match slots::SlotDuration::get_or_compute(client, |a, b| a.configuration(b)).map(Self) {
 			Ok(s) => Ok(s),
 			Err(s) => {
 				warn!(target: "babe", "Failed to get slot duration");
@@ -272,7 +271,7 @@ pub fn start_babe<B, C, SC, E, I, SO, Error>(BabeParams {
 		});
 
 	babe_info!("Starting BABE Authorship worker");
-	let slot_worker = ::slots::start_slot_worker(
+	let slot_worker = slots::start_slot_worker(
 		config.0,
 		select_chain,
 		worker,
@@ -295,7 +294,7 @@ struct BabeWorker<B: BlockT, C, E, I, SO> {
 	config: Config,
 }
 
-impl<B, C, E, I, Error, SO> ::slots::SimpleSlotWorker<B> for BabeWorker<B, C, E, I, SO> where
+impl<B, C, E, I, Error, SO> slots::SimpleSlotWorker<B> for BabeWorker<B, C, E, I, SO> where
 	B: BlockT<Hash=H256>,
 	C: ProvideRuntimeApi + ProvideCache<B> + HeaderBackend<B>,
 	C::Api: BabeApi<B>,
@@ -344,7 +343,7 @@ impl<B, C, E, I, Error, SO> ::slots::SimpleSlotWorker<B> for BabeWorker<B, C, E,
 		epoch_data: &Epoch,
 	) -> Option<Self::Claim> {
 		debug!(target: "babe", "Attempting to claim slot {}", slot_number);
-		let s = slots::claim_slot(
+		let s = authorship::claim_slot(
 			slot_number,
 			epoch_data,
 			&*self.config,
@@ -421,7 +420,7 @@ impl<B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<B, C, E, I, SO> where
 	type OnSlot = Pin<Box<dyn Future<Output = Result<(), consensus_common::Error>> + Send>>;
 
 	fn on_slot(&mut self, chain_head: B::Header, slot_info: SlotInfo) -> Self::OnSlot {
-		<Self as ::slots::SimpleSlotWorker<B>>::on_slot(self, chain_head, slot_info)
+		<Self as slots::SimpleSlotWorker<B>>::on_slot(self, chain_head, slot_info)
 	}
 }
 
@@ -1084,7 +1083,7 @@ pub mod test_helpers {
 			|slot| link.config.genesis_epoch(slot),
 		).unwrap().unwrap();
 
-		crate::slots::claim_slot(
+		authorship::claim_slot(
 			slot_number,
 			epoch.as_ref(),
 			&link.config,
