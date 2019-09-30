@@ -79,7 +79,6 @@
 use sr_primitives::{print, traits::{Zero, StaticLookup, Bounded, Convert}};
 use sr_primitives::weights::SimpleDispatchInfo;
 use srml_support::{
-	StorageValue, StorageMap, StorageLinkedMap,
 	decl_storage, decl_event, ensure, decl_module, dispatch,
 	traits::{
 		Currency, Get, LockableCurrency, LockIdentifier, ReservableCurrency, WithdrawReasons,

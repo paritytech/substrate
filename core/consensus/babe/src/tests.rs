@@ -30,7 +30,7 @@ use consensus_common::import_queue::{
 use network::test::*;
 use network::test::{Block as TestBlock, PeersClient};
 use network::config::BoxFinalityProofRequestBuilder;
-use sr_primitives::{generic::DigestItem, traits::{Block as BlockT, DigestFor}};
+use sr_primitives::{generic::DigestItem, traits::{Block as BlockT, DigestFor, NumberFor}};
 use network::config::ProtocolConfig;
 use tokio::runtime::current_thread;
 use client::BlockchainEvents;
@@ -179,10 +179,9 @@ impl<B: BlockImport<TestBlock>> BlockImport<TestBlock> for PanickingBlockImport<
 
 	fn check_block(
 		&mut self,
-		hash: Hash,
-		parent_hash: Hash,
+		block: BlockCheckParams<TestBlock>,
 	) -> Result<ImportResult, Self::Error> {
-		Ok(self.0.check_block(hash, parent_hash).expect("checking block failed"))
+		Ok(self.0.check_block(block).expect("checking block failed"))
 	}
 }
 

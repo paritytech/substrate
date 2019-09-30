@@ -26,7 +26,7 @@ use crate::chain::{Client, FinalityProofProvider};
 use crate::on_demand_layer::OnDemand;
 use crate::service::{ExHashT, TransactionPool};
 use bitflags::bitflags;
-use consensus::import_queue::ImportQueue;
+use consensus::{block_validation::BlockAnnounceValidator, import_queue::ImportQueue};
 use sr_primitives::traits::{Block as BlockT};
 use std::sync::Arc;
 use libp2p::identity::{Keypair, secp256k1, ed25519};
@@ -80,6 +80,9 @@ pub struct Params<B: BlockT, S, H: ExHashT> {
 
 	/// Customization of the network. Use this to plug additional networking capabilities.
 	pub specialization: S,
+
+	/// Type to check incoming block announcements.
+	pub block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>
 }
 
 bitflags! {

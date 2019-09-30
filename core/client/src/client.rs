@@ -47,7 +47,7 @@ use state_machine::{
 };
 use executor::{RuntimeVersion, RuntimeInfo};
 use consensus::{
-	Error as ConsensusError, BlockImportParams,
+	Error as ConsensusError, BlockStatus, BlockImportParams, BlockCheckParams,
 	ImportResult, BlockOrigin, ForkChoiceStrategy,
 	SelectChain, self,
 };
@@ -87,6 +87,11 @@ type StorageUpdate<B, Block> = <
 	>::State as state_machine::Backend<Blake2Hasher>>::Transaction;
 type ChangesUpdate<Block> = ChangesTrieTransaction<Blake2Hasher, NumberFor<Block>>;
 
+/// Expected hashes of blocks at given heights.
+///
+/// This may be used as chain spec extension to filter out known, unwanted forks.
+pub type ForkBlocks<Block> = Option<HashMap<NumberFor<Block>, <Block as BlockT>::Hash>>;
+
 /// Execution strategies settings.
 #[derive(Debug, Clone)]
 pub struct ExecutionStrategies {
@@ -123,6 +128,7 @@ pub struct Client<B, E, Block, RA> where Block: BlockT {
 	finality_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<FinalityNotification<Block>>>>,
 	// holds the block hash currently being imported. TODO: replace this with block queue
 	importing_block: RwLock<Option<Block::Hash>>,
+	fork_blocks: ForkBlocks<Block>,
 	execution_strategies: ExecutionStrategies,
 	_phantom: PhantomData<RA>,
 }
@@ -169,21 +175,6 @@ pub struct ClientInfo<Block: BlockT> {
 	pub chain: ChainInfo<Block>,
 	/// State Cache Size currently used by the backend
 	pub used_state_cache_size: Option<usize>,
-}
-
-/// Block status.
-#[derive(Debug, PartialEq, Eq)]
-pub enum BlockStatus {
-	/// Added to the import queue.
-	Queued,
-	/// Already in the blockchain and the state is available.
-	InChainWithState,
-	/// In the blockchain, but the state is not available.
-	InChainPruned,
-	/// Block or parent is known to be bad.
-	KnownBad,
-	/// Not in the queue or the blockchain.
-	Unknown,
 }
 
 /// Summary of an imported block
@@ -278,7 +269,7 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 		B: backend::LocalBackend<Block, Blake2Hasher>
 {
 	let call_executor = LocalCallExecutor::new(backend.clone(), executor, keystore);
-	Client::new(backend, call_executor, build_genesis_storage, Default::default())
+	Client::new(backend, call_executor, build_genesis_storage, Default::default(), Default::default())
 }
 
 /// Figure out the block type for a given type (for now, just a `Client`).
@@ -305,6 +296,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		backend: Arc<B>,
 		executor: E,
 		build_genesis_storage: S,
+		fork_blocks: ForkBlocks<Block>,
 		execution_strategies: ExecutionStrategies
 	) -> error::Result<Self> {
 		if backend.blockchain().header(BlockId::Number(Zero::zero()))?.is_none() {
@@ -333,6 +325,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			import_notification_sinks: Default::default(),
 			finality_notification_sinks: Default::default(),
 			importing_block: Default::default(),
+			fork_blocks,
 			execution_strategies,
 			_phantom: Default::default(),
 		})
@@ -1187,10 +1180,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		Ok(())
 	}
 
-	fn notify_imported(
-		&self,
-		notify_import: ImportSummary<Block>,
-	) -> error::Result<()> {
+	fn notify_imported(&self, notify_import: ImportSummary<Block>) -> error::Result<()> {
 		if let Some(storage_changes) = notify_import.storage_changes {
 			// TODO [ToDr] How to handle re-orgs? Should we re-emit all storage changes?
 			self.storage_notifications.lock()
@@ -1429,7 +1419,7 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 	fn call_api_at<
 		'a,
 		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
+		NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
 		C: CoreApi<Block>,
 	>(
 		&self,
@@ -1517,9 +1507,22 @@ impl<'a, B, E, Block, RA> consensus::BlockImport<Block> for &'a Client<B, E, Blo
 	/// Check block preconditions.
 	fn check_block(
 		&mut self,
-		hash: Block::Hash,
-		parent_hash: Block::Hash,
+		block: BlockCheckParams<Block>,
 	) -> Result<ImportResult, Self::Error> {
+		let BlockCheckParams { hash, number, parent_hash } = block;
+
+		if let Some(h) = self.fork_blocks.as_ref().and_then(|x| x.get(&number)) {
+			if &hash != h  {
+				trace!(
+					"Rejecting block from known invalid fork. Got {:?}, expected: {:?} at height {}",
+					hash,
+					h,
+					number
+				);
+				return Ok(ImportResult::KnownBad);
+			}
+		}
+
 		match self.block_status(&BlockId::Hash(parent_hash))
 			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
 		{
@@ -1535,6 +1538,7 @@ impl<'a, B, E, Block, RA> consensus::BlockImport<Block> for &'a Client<B, E, Blo
 			BlockStatus::Unknown | BlockStatus::InChainPruned => {},
 			BlockStatus::KnownBad => return Ok(ImportResult::KnownBad),
 		}
+
 
 		Ok(ImportResult::imported(false))
 	}
@@ -1557,10 +1561,9 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 
 	fn check_block(
 		&mut self,
-		hash: Block::Hash,
-		parent_hash: Block::Hash,
+		block: BlockCheckParams<Block>,
 	) -> Result<ImportResult, Self::Error> {
-		(&*self).check_block(hash, parent_hash)
+		(&*self).check_block(block)
 	}
 }
 
@@ -1668,127 +1671,12 @@ where
 
 	fn best_block_header(&self) -> error::Result<<Block as BlockT>::Header> {
 		let info = self.backend.blockchain().info();
-		let best_hash = self.best_containing(info.best_hash, None)?
+		let import_lock = self.backend.get_import_lock();
+		let best_hash = self.backend.blockchain().best_containing(info.best_hash, None, import_lock)?
 			.unwrap_or(info.best_hash);
 
 		Ok(self.backend.blockchain().header(BlockId::Hash(best_hash))?
 			.expect("given block hash was fetched from block in db; qed"))
-	}
-
-	/// Get the most recent block hash of the best (longest) chains
-	/// that contain block with the given `target_hash`.
-	///
-	/// The search space is always limited to blocks which are in the finalized
-	/// chain or descendents of it.
-	///
-	/// If `maybe_max_block_number` is `Some(max_block_number)`
-	/// the search is limited to block `numbers <= max_block_number`.
-	/// in other words as if there were no blocks greater `max_block_number`.
-	/// Returns `Ok(None)` if `target_hash` is not found in search space.
-	/// TODO: document time complexity of this, see [#1444](https://github.com/paritytech/substrate/issues/1444)
-	fn best_containing(
-		&self,
-		target_hash: Block::Hash,
-		maybe_max_number: Option<NumberFor<Block>>
-	) -> error::Result<Option<Block::Hash>> {
-		let target_header = {
-			match self.backend.blockchain().header(BlockId::Hash(target_hash))? {
-				Some(x) => x,
-				// target not in blockchain
-				None => { return Ok(None); },
-			}
-		};
-
-		if let Some(max_number) = maybe_max_number {
-			// target outside search range
-			if target_header.number() > &max_number {
-				return Ok(None);
-			}
-		}
-
-		let leaves = {
-			// ensure no blocks are imported during this code block.
-			// an import could trigger a reorg which could change the canonical chain.
-			// we depend on the canonical chain staying the same during this code block.
-			let _import_lock = self.backend.get_import_lock().lock();
-
-			let info = self.backend.blockchain().info();
-
-			// this can be `None` if the best chain is shorter than the target header.
-			let maybe_canon_hash = self.backend.blockchain().hash(*target_header.number())?;
-
-			if maybe_canon_hash.as_ref() == Some(&target_hash) {
-				// if a `max_number` is given we try to fetch the block at the
-				// given depth, if it doesn't exist or `max_number` is not
-				// provided, we continue to search from all leaves below.
-				if let Some(max_number) = maybe_max_number {
-					if let Some(header) = self.backend.blockchain().hash(max_number)? {
-						return Ok(Some(header));
-					}
-				}
-			} else if info.finalized_number >= *target_header.number() {
-				// header is on a dead fork.
-				return Ok(None);
-			}
-
-			self.backend.blockchain().leaves()?
-		};
-
-		// for each chain. longest chain first. shortest last
-		for leaf_hash in leaves {
-			// start at the leaf
-			let mut current_hash = leaf_hash;
-
-			// if search is not restricted then the leaf is the best
-			let mut best_hash = leaf_hash;
-
-			// go backwards entering the search space
-			// waiting until we are <= max_number
-			if let Some(max_number) = maybe_max_number {
-				loop {
-					let current_header = self.backend.blockchain().header(BlockId::Hash(current_hash.clone()))?
-						.ok_or_else(|| error::Error::from(format!("failed to get header for hash {}", current_hash)))?;
-
-					if current_header.number() <= &max_number {
-						best_hash = current_header.hash();
-						break;
-					}
-
-					current_hash = *current_header.parent_hash();
-				}
-			}
-
-			// go backwards through the chain (via parent links)
-			loop {
-				// until we find target
-				if current_hash == target_hash {
-					return Ok(Some(best_hash));
-				}
-
-				let current_header = self.backend.blockchain().header(BlockId::Hash(current_hash.clone()))?
-					.ok_or_else(|| error::Error::from(format!("failed to get header for hash {}", current_hash)))?;
-
-				// stop search in this chain once we go below the target's block number
-				if current_header.number() < target_header.number() {
-					break;
-				}
-
-				current_hash = *current_header.parent_hash();
-			}
-		}
-
-		// header may be on a dead fork -- the only leaves that are considered are
-		// those which can still be finalized.
-		//
-		// FIXME #1558 only issue this warning when not on a dead fork
-		warn!(
-			"Block {:?} exists in chain but not found when following all \
-			leaves backwards. Number limit = {:?}",
-			target_hash,
-			maybe_max_number,
-		);
-
-		Ok(None)
 	}
 
 	fn leaves(&self) -> Result<Vec<<Block as BlockT>::Hash>, error::Error> {
@@ -1819,7 +1707,8 @@ where
 		target_hash: Block::Hash,
 		maybe_max_number: Option<NumberFor<Block>>
 	) -> Result<Option<Block::Hash>, ConsensusError> {
-		LongestChain::best_containing(self, target_hash, maybe_max_number)
+		let import_lock = self.backend.get_import_lock();
+		self.backend.blockchain().best_containing(target_hash, maybe_max_number, import_lock)
 			.map_err(|e| ConsensusError::ChainLookup(e.to_string()).into())
 	}
 }
@@ -1950,6 +1839,16 @@ pub mod utils {
 
 			Ok(tree_route.common_block().hash == *base)
 		}
+	}
+}
+
+impl<BE, E, B, RA> consensus::block_validation::Chain<B> for Client<BE, E, B, RA>
+	where BE: backend::Backend<B, Blake2Hasher>,
+		  E: CallExecutor<B, Blake2Hasher>,
+		  B: BlockT<Hash = H256>
+{
+	fn block_status(&self, id: &BlockId<B>) -> Result<BlockStatus, Box<dyn std::error::Error + Send>> {
+		Client::block_status(self, id).map_err(|e| Box::new(e) as Box<_>)
 	}
 }
 

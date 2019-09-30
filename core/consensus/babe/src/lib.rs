@@ -89,7 +89,7 @@ use schnorrkel::{
 	},
 };
 use consensus_common::{
-	self, BlockImport, Environment, Proposer,
+	self, BlockImport, Environment, Proposer, BlockCheckParams,
 	ForkChoiceStrategy, BlockImportParams, BlockOrigin, Error as ConsensusError,
 };
 use srml_babe::{
@@ -780,8 +780,8 @@ fn median_algorithm(
 			t + Duration::new(secs, nanos)
 		}).collect();
 
-		// FIXME #2926: use a selection algorithm instead of a full sorting algorithm.
-		new_list.sort_unstable();
+		// Use a partial sort to move the median timestamp to the middle of the list
+		pdqselect::select(&mut new_list, num_timestamps / 2);
 
 		let &median = new_list
 			.get(num_timestamps / 2)
@@ -1367,10 +1367,9 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 
 	fn check_block(
 		&mut self,
-		hash: Block::Hash,
-		parent_hash: Block::Hash,
+		block: BlockCheckParams<Block>,
 	) -> Result<ImportResult, Self::Error> {
-		self.inner.check_block(hash, parent_hash).map_err(Into::into)
+		self.inner.check_block(block).map_err(Into::into)
 	}
 }
 

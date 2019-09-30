@@ -130,7 +130,7 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use support::{StorageValue, StorageMap, Parameter, decl_module, decl_event, decl_storage, ensure};
+use support::{Parameter, decl_module, decl_event, decl_storage, ensure};
 use sr_primitives::traits::{Member, SimpleArithmetic, Zero, StaticLookup};
 use system::ensure_signed;
 use sr_primitives::traits::One;
