@@ -8,11 +8,12 @@ build = "build.rs"
 [dependencies]
 runtime-interface = { package = "substrate-runtime-interface", path = "../", default-features = false }
 rstd = { package = "sr-std", path = "../../sr-std", default-features = false }
+primitives = { package = "substrate-primitives", path = "../../primitives", default-features = false }
 
 [build-dependencies]
 wasm-builder-runner = { package = "substrate-wasm-builder-runner", version = "1.0.3", path = "../../utils/wasm-builder-runner" }
 
 [features]
 default = [ "std" ]
-std = [ "runtime-interface/std", "rstd/std" ]
+std = [ "runtime-interface/std", "rstd/std", "primitives/std" ]
 no_std = []

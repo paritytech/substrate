@@ -20,7 +20,9 @@
 
 use runtime_interface::runtime_interface;
 
-use rstd::{vec, vec::Vec, mem};
+use rstd::{vec, vec::Vec, mem, convert::TryFrom};
+
+use primitives::sr25519::Public;
 
 // Inlucde the WASM binary
 #[cfg(feature = "std")]
@@ -62,6 +64,11 @@ pub trait TestApi {
 	/// Take and fill mutable array.
 	fn array_as_mutable_reference(data: &mut [u8; 16]) {
 		data.copy_from_slice(&TEST_ARRAY);
+	}
+
+	/// Returns the given public key as result.
+	fn return_input_public_key(key: Public) -> Public {
+		key
 	}
 }
 
@@ -118,4 +125,19 @@ pub fn test_array_as_mutable_reference() {
 	test_api::array_as_mutable_reference(&mut array);
 
 	assert_eq!(array, TEST_ARRAY);
+}
+
+#[no_mangle]
+pub fn test_return_input_public_key() {
+	let key = Public::try_from(
+		&[
+			1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+			25, 26, 27, 28, 29, 30, 31, 32,
+		][..],
+	).unwrap();
+	let ret_key = test_api::return_input_public_key(key.clone());
+
+	let key_data: &[u8] = key.as_ref();
+	let ret_key_data: &[u8] = ret_key.as_ref();
+	assert_eq!(key_data, ret_key_data);
 }

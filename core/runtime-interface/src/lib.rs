@@ -121,6 +121,11 @@ mod tests {
 	}
 
 	#[test]
+	fn test_return_input_public_key() {
+		call_wasm_method::<HostFunctions>("test_return_input_public_key");
+	}
+
+	#[test]
 	#[should_panic(expected = "Wasmi(Instantiation(\"Export ext_test_api_return_input not found\"))")]
 	fn host_function_not_found() {
 		call_wasm_method::<()>("test_return_data");
