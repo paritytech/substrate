@@ -126,7 +126,7 @@ impl<D: NativeExecutionDispatch> CodeExecutor<Blake2Hasher> for NativeExecutor<D
 	<
 		E: Externalities<Blake2Hasher>,
 		R:Decode + Encode + PartialEq,
-		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe
+		NC: FnOnce() -> result::Result<R, String> + UnwindSafe
 	>(
 		&self,
 		ext: &mut E,
