@@ -34,7 +34,7 @@ pub trait VotingRule<Block, B>: Send + Sync where
 	/// Restrict the given `current_target` vote, returning the block hash and
 	/// number of the block to vote on, and `None` in case the vote should not
 	/// be restricted. `base` is the block that we're basing our votes on in
-	/// order to pick our target (e.g. last finalized block), and `best_target`
+	/// order to pick our target (e.g. last round estimate), and `best_target`
 	/// is the initial best vote target before any vote rules were applied. When
 	/// applying multiple `VotingRule`s both `base` and `best_target` should
 	/// remain unchanged.
