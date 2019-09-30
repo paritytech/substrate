@@ -23,7 +23,6 @@ use transaction_pool::{
 	txpool::Pool,
 	FullChainApi,
 };
-use futures::Stream;
 use primitives::{
 	H256, blake2_256, hexdisplay::HexDisplay, traits::BareCryptoStore,
 	testing::{ED25519, SR25519, KeyStore}, ed25519, crypto::Pair
@@ -50,7 +49,6 @@ fn submit_transaction_should_not_cause_error() {
 	let client = Arc::new(test_client::new());
 	let keystore = KeyStore::new();
 	let p = Author {
-		executor: Arc::new(runtime.executor()),
 		client: client.clone(),
 		pool: Arc::new(Pool::new(Default::default(), FullChainApi::new(client))),
 		subscriptions: Subscriptions::new(Arc::new(runtime.executor())),
@@ -74,7 +72,6 @@ fn submit_rich_transaction_should_not_cause_error() {
 	let client = Arc::new(test_client::new());
 	let keystore = KeyStore::new();
 	let p = Author {
-		executor: Arc::new(runtime.executor()),
 		client: client.clone(),
 		pool: Arc::new(Pool::new(Default::default(), FullChainApi::new(client.clone()))),
 		subscriptions: Subscriptions::new(Arc::new(runtime.executor())),
@@ -100,7 +97,6 @@ fn should_watch_extrinsic() {
 	let pool = Arc::new(Pool::new(Default::default(), FullChainApi::new(client.clone())));
 	let keystore = KeyStore::new();
 	let p = Author {
-		executor: Arc::new(runtime.executor()),
 		client,
 		pool: pool.clone(),
 		subscriptions: Subscriptions::new(Arc::new(runtime.executor())),
@@ -143,7 +139,6 @@ fn should_return_pending_extrinsics() {
 	let pool = Arc::new(Pool::new(Default::default(), FullChainApi::new(client.clone())));
 	let keystore = KeyStore::new();
 	let p = Author {
-		executor: Arc::new(runtime.executor()),
 		client,
 		pool: pool.clone(),
 		subscriptions: Subscriptions::new(Arc::new(runtime.executor())),
@@ -164,7 +159,6 @@ fn should_remove_extrinsics() {
 	let pool = Arc::new(Pool::new(Default::default(), FullChainApi::new(client.clone())));
 	let keystore = KeyStore::new();
 	let p = Author {
-		executor: Arc::new(runtime.executor()),
 		client,
 		pool: pool.clone(),
 		subscriptions: Subscriptions::new(Arc::new(runtime.executor())),
@@ -194,7 +188,6 @@ fn should_insert_key() {
 	let client = Arc::new(test_client::new());
 	let keystore = KeyStore::new();
 	let p = Author {
-		executor: Arc::new(runtime.executor()),
 		client: client.clone(),
 		pool: Arc::new(Pool::new(Default::default(), FullChainApi::new(client))),
 		subscriptions: Subscriptions::new(Arc::new(runtime.executor())),
@@ -221,7 +214,6 @@ fn should_rotate_keys() {
 	let keystore = KeyStore::new();
 	let client = Arc::new(test_client::TestClientBuilder::new().set_keystore(keystore.clone()).build());
 	let p = Author {
-		executor: Arc::new(runtime.executor()),
 		client: client.clone(),
 		pool: Arc::new(Pool::new(Default::default(), FullChainApi::new(client))),
 		subscriptions: Subscriptions::new(Arc::new(runtime.executor())),

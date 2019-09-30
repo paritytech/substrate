@@ -21,15 +21,16 @@ mod tests;
 
 use std::{sync::Arc, convert::TryInto};
 use futures03::future::{FutureExt, TryFutureExt};
-use log::{error, warn};
+use log::warn;
 
 use client::{self, Client};
 use rpc::futures::{
 	Sink, Future,
+	stream::Stream as _,
 	future::result,
 };
 use futures03::{StreamExt as _, compat::Compat};
-use api::{Subscriptions, TaskExecutor};
+use api::Subscriptions;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use codec::{Encode, Decode};
 use primitives::{Bytes, Blake2Hasher, H256, traits::BareCryptoStorePtr};
@@ -52,8 +53,6 @@ use self::error::{Error, FutureResult, Result};
 
 /// Authoring API
 pub struct Author<B, E, P, RA> where P: PoolChainApi + Sync + Send + 'static {
-	/// Futures executor.
-	executor: TaskExecutor,
 	/// Substrate client
 	client: Arc<Client<B, E, <P as PoolChainApi>::Block, RA>>,
 	/// Transactions pool
@@ -67,14 +66,12 @@ pub struct Author<B, E, P, RA> where P: PoolChainApi + Sync + Send + 'static {
 impl<B, E, P, RA> Author<B, E, P, RA> where P: PoolChainApi + Sync + Send + 'static {
 	/// Create new instance of Authoring API.
 	pub fn new(
-		executor: TaskExecutor,
 		client: Arc<Client<B, E, <P as PoolChainApi>::Block, RA>>,
 		pool: Arc<Pool<P>>,
 		subscriptions: Subscriptions,
 		keystore: BareCryptoStorePtr,
 	) -> Self {
 		Author {
-			executor,
 			client,
 			pool,
 			subscriptions,
@@ -184,19 +181,23 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 			},
 		};
 
-		let subscriptions = self.subscriptions.clone();
-		let subscription_future = future_watcher
+		// make 'future' watcher be a future with output = stream of watcher events
+		let future_watcher = future_watcher
 			.map_err(|err| { warn!("Failed to submit extrinsic: {}", err); })
-			.map(move |watcher| subscriptions.add(subscriber, move |sink| {
-				sink
-					.sink_map_err(|e| warn!("Error sending notifications: {:?}", e))
-					.send_all(Compat::new(watcher.into_stream().map(|v| Ok::<_, ()>(Ok(v)))))
-					.map(|_| ())
-			}));
+			.map(|watcher| Compat::new(watcher.into_stream().map(|v| Ok::<_, ()>(Ok(v)))));
 
-		if self.executor.execute(Box::new(subscription_future)).is_err() {
-			error!("Failed to spawn watch extrinsic task");
-		}
+		// convert a 'future' watcher into the stream with single element = stream of watcher events
+		let watcher_stream = future_watcher.into_stream();
+
+		// and now flatten the 'watcher_stream' so that we'll have the stream with watcher events
+		let watcher_stream = watcher_stream.flatten();
+
+		self.subscriptions.add(subscriber, move |sink| {
+			sink
+				.sink_map_err(|e| warn!("Error sending notifications: {:?}", e))
+				.send_all(watcher_stream)
+				.map(|_| ())
+		});
 	}
 
 	fn unwatch_extrinsic(&self, _metadata: Option<Self::Metadata>, id: SubscriptionId) -> Result<bool> {

@@ -899,11 +899,10 @@ where
 	RpcB: RpcBuilder<Block, Backend, Executor, Api>,
 {
 	use rpc::{chain, state, author, system};
-	let subscriptions = rpc::Subscriptions::new(task_executor.clone());
+	let subscriptions = rpc::Subscriptions::new(task_executor);
 	let chain = rpc_builder.build_chain(subscriptions.clone());
 	let state = rpc_builder.build_state(subscriptions.clone());
 	let author = rpc::author::Author::new(
-		task_executor.clone(),
 		client,
 		transaction_pool,
 		subscriptions,
