@@ -332,13 +332,13 @@ impl<Block: BlockT, T: CacheItemT, S: Storage<Block, T>> ListCache<Block, T, S> 
 		// iterate all unfinalized forks and truncate/destroy if required
 		let mut updated = BTreeMap::new();
 		for (index, fork) in self.unfinalized.iter().enumerate() {
-			// we only need to truncate fork if its head is connected to truncated block
-			if !chain::is_connected_to_block(&self.storage, reverted_block, &fork.head.valid_from)? {
+			// we only need to truncate fork if its head is ancestor of truncated block
+			if fork.head.valid_from.number < reverted_block.number {
 				continue;
 			}
 
-			// we only need to truncate fork if its head is ancestor of truncated block
-			if fork.head.valid_from.number < reverted_block.number {
+			// we only need to truncate fork if its head is connected to truncated block
+			if !chain::is_connected_to_block(&self.storage, reverted_block, &fork.head.valid_from)? {
 				continue;
 			}
 
