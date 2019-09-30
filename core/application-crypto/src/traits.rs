@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use primitives::crypto::{KeyTypeId, CryptoType, IsWrappedBy, Public};
-#[cfg(feature = "std")]
+#[cfg(feature = "with_crypto")]
 use primitives::crypto::Pair;
 use codec::Codec;
 
@@ -28,7 +28,7 @@ pub trait AppKey: 'static + Send + Sync + Sized + CryptoType + Clone {
 	type Public: AppPublic;
 
 	/// The corresponding key pair type in this application scheme.
-	#[cfg(feature="std")]
+	#[cfg(feature = "with_crypto")]
 	type Pair: AppPair;
 
 	/// The corresponding signature type in this application scheme.
@@ -44,11 +44,17 @@ pub trait MaybeDebugHash: std::fmt::Debug + std::hash::Hash {}
 #[cfg(feature = "std")]
 impl<T: std::fmt::Debug + std::hash::Hash> MaybeDebugHash for T {}
 
-/// Type which implements Debug and Hash in std, not when no-std (no-std variant).
-#[cfg(not(feature = "std"))]
+/// Type which implements Debug and Hash in std, not when no-std (no-std variant without crypto).
+#[cfg(all(not(feature = "std"), not(feature = "with_crypto")))]
 pub trait MaybeDebugHash {}
-#[cfg(not(feature = "std"))]
+#[cfg(all(not(feature = "std"), not(feature = "with_crypto")))]
 impl<T> MaybeDebugHash for T {}
+
+/// Type which implements Debug and Hash in std, not when no-std (no-std variant with crypto).
+#[cfg(all(not(feature = "std"), feature = "with_crypto"))]
+pub trait MaybeDebugHash: core::hash::Hash  {}
+#[cfg(all(not(feature = "std"), feature = "with_crypto"))]
+impl<T: core::hash::Hash> MaybeDebugHash for T {}
 
 /// A application's public key.
 pub trait AppPublic: AppKey + Public + Ord + PartialOrd + Eq + PartialEq + MaybeDebugHash + codec::Codec {
@@ -58,7 +64,7 @@ pub trait AppPublic: AppKey + Public + Ord + PartialOrd + Eq + PartialEq + Maybe
 }
 
 /// A application's key pair.
-#[cfg(feature = "std")]
+#[cfg(feature = "with_crypto")]
 pub trait AppPair: AppKey + Pair<Public=<Self as AppKey>::Public> {
 	/// The wrapped type which is just a plain instance of `Pair`.
 	type Generic: IsWrappedBy<Self> + Pair<Public=<<Self as AppKey>::Public as AppPublic>::Generic>;

@@ -21,13 +21,14 @@ use crate::{RuntimePublic, KeyTypeId};
 pub use primitives::ed25519::*;
 
 mod app {
+	use crate::Vec;
 	use primitives::testing::ED25519;
 	crate::app_crypto!(super, ED25519);
 }
 
 pub use app::Public as AppPublic;
 pub use app::Signature as AppSignature;
-#[cfg(feature="std")]
+#[cfg(feature = "with_crypto")]
 pub use app::Pair as AppPair;
 
 impl RuntimePublic for Public {
