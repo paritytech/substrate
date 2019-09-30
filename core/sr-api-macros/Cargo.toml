@@ -26,11 +26,6 @@ consensus_common = { package = "substrate-consensus-common", path = "../consensu
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 trybuild = "1.0"
 rustversion = "0.1"
-# The protobuf crate introduced a breaking change within its semver minor update
-# from 2.8.1 to 2.9.0. The dependency bound below ensures sr-api-macros uses
-# anything within the 2.8 minor releases. Remove once
-# https://github.com/stepancheg/rust-protobuf/issues/453 is resolved.
-protobuf = "~2.8.0"
 
 [[bench]]
 name = "bench"
