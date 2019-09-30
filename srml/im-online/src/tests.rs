@@ -219,10 +219,6 @@ fn should_generate_heartbeats() {
 
 #[test]
 fn should_cleanup_received_heartbeats_on_session_end() {
-	let mut ext = new_test_ext();
-	let (offchain, state) = TestOffchainExt::new();
-	ext.set_offchain_externalities(offchain);
-
 	with_externalities(&mut new_test_ext(), || {
 		advance_session();
 
