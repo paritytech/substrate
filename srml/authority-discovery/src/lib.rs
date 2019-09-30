@@ -33,6 +33,7 @@ use codec::{Decode, Encode};
 use rstd::prelude::*;
 use support::{decl_module, decl_storage};
 
+/// The module's config trait.
 pub trait Trait: system::Trait + session::Trait {
 	type AuthorityId: RuntimeAppPublic + Default + Decode + Encode + PartialEq;
 }
