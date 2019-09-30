@@ -556,8 +556,6 @@ impl<T: Trait> Module<T> {
 			topics: topics.iter().cloned().collect::<Vec<_>>(),
 		};
 
-		runtime_io::debug(&event);
-
 		// Index of the to be added event.
 		let event_idx = {
 			let old_event_count = EventCount::get();
