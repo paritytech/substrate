@@ -25,6 +25,7 @@ use log::{debug, trace};
 use super::{find_pre_digest, BlockT};
 use super::authorship::{make_transcript, calculate_primary_threshold, check_primary_threshold, secondary_slot_author};
 
+/// BABE verification parameters
 pub(super) struct VerificationParams<'a, B: 'a + BlockT> {
 	/// the header being verified.
 	pub(super) header: B::Header,
