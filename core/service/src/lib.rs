@@ -19,7 +19,6 @@
 
 #![warn(missing_docs)]
 
-mod chain_spec;
 pub mod config;
 #[macro_use]
 pub mod chain_ops;
@@ -31,26 +30,30 @@ use std::net::SocketAddr;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
-use serde::{Serialize, de::DeserializeOwned};
 use futures::sync::mpsc;
 use parking_lot::Mutex;
 
 use client::{runtime_api::BlockT, Client};
 use exit_future::Signal;
 use futures::prelude::*;
-use futures03::stream::{StreamExt as _, TryStreamExt as _};
-use network::{NetworkService, NetworkState, specialization::NetworkSpecialization, Event, DhtEvent};
+use futures03::{
+	future::{ready, FutureExt as _, TryFutureExt as _},
+	stream::{StreamExt as _, TryStreamExt as _},
+};
+use network::{
+	NetworkService, NetworkState, specialization::NetworkSpecialization,
+	Event, DhtEvent, PeerId, ReportHandle,
+};
 use log::{log, warn, debug, error, Level};
 use codec::{Encode, Decode};
 use primitives::{Blake2Hasher, H256};
-use sr_primitives::BuildStorage;
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::NumberFor;
 
 pub use self::error::Error;
 pub use self::builder::{ServiceBuilder, ServiceBuilderExport, ServiceBuilderImport, ServiceBuilderRevert};
 pub use config::{Configuration, Roles, PruningMode};
-pub use chain_spec::{ChainSpec, Properties};
+pub use chain_spec::{ChainSpec, Properties, RuntimeGenesis, Extension as ChainSpecExtension};
 pub use transaction_pool::txpool::{
 	self, Pool as TransactionPool, Options as TransactionPoolOptions, ChainApi, IntoPoolError
 };
@@ -99,10 +102,6 @@ pub struct NewService<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
 	keystore: keystore::KeyStorePtr,
 	marker: PhantomData<TBl>,
 }
-
-/// A set of traits for the runtime genesis config.
-pub trait RuntimeGenesis: Serialize + DeserializeOwned + BuildStorage {}
-impl<T: Serialize + DeserializeOwned + BuildStorage> RuntimeGenesis for T {}
 
 /// Alias for a an implementation of `futures::future::Executor`.
 pub type TaskExecutor = Arc<dyn Executor<Box<dyn Future<Item = (), Error = ()> + Send>> + Send + Sync>;
@@ -175,6 +174,7 @@ macro_rules! new_impl {
 			imports_external_transactions: !$config.roles.is_light(),
 			pool: transaction_pool.clone(),
 			client: client.clone(),
+			executor: Arc::new(SpawnTaskHandle { sender: to_spawn_tx.clone(), on_exit: exit.clone() }),
 		});
 
 		let protocol_id = {
@@ -240,12 +240,13 @@ macro_rules! new_impl {
 					let txpool = txpool.upgrade();
 
 					if let (Some(txpool), Some(client)) = (txpool.as_ref(), wclient.upgrade()) {
-						$maintain_transaction_pool(
+						let future = $maintain_transaction_pool(
 							&BlockId::hash(notification.hash),
-							&*client,
+							&client,
 							&*txpool,
 							&notification.retracted,
 						).map_err(|e| warn!("Pool error processing new block: {:?}", e))?;
+						let _ = to_spawn_tx_.unbounded_send(future);
 					}
 
 					let offchain = offchain.as_ref().and_then(|o| o.upgrade());
@@ -349,7 +350,7 @@ macro_rules! new_impl {
 				chain_name: $config.chain_spec.name().into(),
 				impl_name: $config.impl_name.into(),
 				impl_version: $config.impl_version.into(),
-				properties: $config.chain_spec.properties(),
+				properties: $config.chain_spec.properties().clone(),
 			};
 			$start_rpc(
 				client.clone(),
@@ -805,8 +806,8 @@ impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Drop for
 
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
 #[cfg(not(target_os = "unknown"))]
-fn start_rpc_servers<C, G, H: FnMut() -> rpc_servers::RpcHandler<rpc::Metadata>>(
-	config: &Configuration<C, G>,
+fn start_rpc_servers<C, G, E, H: FnMut() -> rpc_servers::RpcHandler<rpc::Metadata>>(
+	config: &Configuration<C, G, E>,
 	mut gen_handler: H
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
 	fn maybe_start_server<T, F>(address: Option<SocketAddr>, mut start: F) -> Result<Option<T>, io::Error>
@@ -846,8 +847,8 @@ fn start_rpc_servers<C, G, H: FnMut() -> rpc_servers::RpcHandler<rpc::Metadata>>
 
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
 #[cfg(target_os = "unknown")]
-fn start_rpc_servers<C, G, H: FnMut() -> components::RpcHandler>(
-	_: &Configuration<C, G>,
+fn start_rpc_servers<C, G, E, H: FnMut() -> components::RpcHandler>(
+	_: &Configuration<C, G, E>,
 	_: H
 ) -> Result<Box<std::any::Any + Send + Sync>, error::Error> {
 	Ok(Box::new(()))
@@ -878,6 +879,7 @@ pub struct TransactionPoolAdapter<C, P> {
 	imports_external_transactions: bool,
 	pool: Arc<P>,
 	client: Arc<C>,
+	executor: TaskExecutor,
 }
 
 /// Get transactions for propagation.
@@ -888,7 +890,7 @@ fn transactions_to_propagate<PoolApi, B, H, E>(pool: &TransactionPool<PoolApi>)
 where
 	PoolApi: ChainApi<Block=B, Hash=H, Error=E>,
 	B: BlockT,
-	H: std::hash::Hash + Eq + sr_primitives::traits::Member + serde::Serialize,
+	H: std::hash::Hash + Eq + sr_primitives::traits::Member + sr_primitives::traits::MaybeSerialize,
 	E: txpool::error::IntoPoolError + From<txpool::error::Error>,
 {
 	pool.ready()
@@ -905,47 +907,49 @@ impl<B, H, C, PoolApi, E> network::TransactionPool<H, B> for
 	TransactionPoolAdapter<C, TransactionPool<PoolApi>>
 where
 	C: network::ClientHandle<B> + Send + Sync,
-	PoolApi: ChainApi<Block=B, Hash=H, Error=E>,
+	PoolApi: 'static + ChainApi<Block=B, Hash=H, Error=E>,
 	B: BlockT,
-	H: std::hash::Hash + Eq + sr_primitives::traits::Member + serde::Serialize,
+	H: std::hash::Hash + Eq + sr_primitives::traits::Member + sr_primitives::traits::MaybeSerialize,
 	E: txpool::error::IntoPoolError + From<txpool::error::Error>,
 {
 	fn transactions(&self) -> Vec<(H, <B as BlockT>::Extrinsic)> {
 		transactions_to_propagate(&self.pool)
 	}
 
-	fn import(&self, transaction: &<B as BlockT>::Extrinsic) -> Option<H> {
+	fn hash_of(&self, transaction: &B::Extrinsic) -> H {
+		self.pool.hash_of(transaction)
+	}
+
+	fn import(&self, report_handle: ReportHandle, who: PeerId, reputation_change: i32, transaction: B::Extrinsic) {
 		if !self.imports_external_transactions {
 			debug!("Transaction rejected");
-			return None;
+			return;
 		}
 
 		let encoded = transaction.encode();
 		match Decode::decode(&mut &encoded[..]) {
 			Ok(uxt) => {
 				let best_block_id = BlockId::hash(self.client.info().chain.best_hash);
-				match self.pool.submit_one(&best_block_id, uxt) {
-					Ok(hash) => Some(hash),
-					Err(e) => match e.into_pool_error() {
-						Ok(txpool::error::Error::AlreadyImported(hash)) => {
-							hash.downcast::<H>().ok()
-								.map(|x| x.as_ref().clone())
-						},
-						Ok(e) => {
-							debug!("Error adding transaction to the pool: {:?}", e);
-							None
-						},
-						Err(e) => {
-							debug!("Error converting pool error: {:?}", e);
-							None
-						},
-					}
+				let import_future = self.pool.submit_one(&best_block_id, uxt);
+				let import_future = import_future
+					.then(move |import_result| {
+						match import_result {
+							Ok(_) => report_handle.report_peer(who, reputation_change),
+							Err(e) => match e.into_pool_error() {
+								Ok(txpool::error::Error::AlreadyImported(_)) => (),
+								Ok(e) => debug!("Error adding transaction to the pool: {:?}", e),
+								Err(e) => debug!("Error converting pool error: {:?}", e),
+							}
+						}
+						ready(Ok(()))
+					})
+					.compat();
+
+				if let Err(e) = self.executor.execute(Box::new(import_future)) {
+					warn!("Error scheduling extrinsic import: {:?}", e);
 				}
 			}
-			Err(e) => {
-				debug!("Error decoding transaction {}", e);
-				None
-			}
+			Err(e) => debug!("Error decoding transaction {}", e),
 		}
 	}
 
@@ -957,6 +961,7 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use futures03::executor::block_on;
 	use consensus_common::SelectChain;
 	use sr_primitives::traits::BlindCheckable;
 	use substrate_test_runtime_client::{prelude::*, runtime::{Extrinsic, Transfer}};
@@ -968,7 +973,7 @@ mod tests {
 		let client = Arc::new(client);
 		let pool = Arc::new(TransactionPool::new(
 			Default::default(),
-			transaction_pool::ChainApi::new(client.clone())
+			transaction_pool::FullChainApi::new(client.clone())
 		));
 		let best = longest_chain.best_chain().unwrap();
 		let transaction = Transfer {
@@ -977,8 +982,8 @@ mod tests {
 			from: AccountKeyring::Alice.into(),
 			to: Default::default(),
 		}.into_signed_tx();
-		pool.submit_one(&BlockId::hash(best.hash()), transaction.clone()).unwrap();
-		pool.submit_one(&BlockId::hash(best.hash()), Extrinsic::IncludeData(vec![1])).unwrap();
+		block_on(pool.submit_one(&BlockId::hash(best.hash()), transaction.clone())).unwrap();
+		block_on(pool.submit_one(&BlockId::hash(best.hash()), Extrinsic::IncludeData(vec![1]))).unwrap();
 		assert_eq!(pool.status().ready, 2);
 
 		// when

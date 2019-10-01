@@ -437,9 +437,6 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	fn on_new_session<'a, I: 'a>(_changed: bool, validators: I, _queued_validators: I)
 		where I: Iterator<Item=(&'a T::AccountId, T::AuthorityId)>
 	{
-		// Reset heartbeats
-		<ReceivedHeartbeats>::remove_prefix(&<session::Module<T>>::current_index());
-
 		// Tell the offchain worker to start making the next session's heartbeats.
 		<GossipAt<T>>::put(<system::Module<T>>::block_number());
 
@@ -484,6 +481,10 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 		};
 
 		T::ReportUnresponsiveness::report_offence(vec![], offence);
+
+		// Remove all received heartbeats from the current session, they have
+		// already been processed and won't be needed anymore.
+		<ReceivedHeartbeats>::remove_prefix(&<session::Module<T>>::current_index());
 	}
 
 	fn on_disabled(_i: usize) {

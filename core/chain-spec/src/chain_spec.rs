@@ -53,14 +53,15 @@ impl<G: RuntimeGenesis> GenesisSource<G> {
 
 		match self {
 			GenesisSource::File(path) => {
-				let file = File::open(path).map_err(|e| format!("Error opening spec file: {}", e))?;
-				let genesis: GenesisContainer<G> =
-					json::from_reader(file).map_err(|e| format!("Error parsing spec file: {}", e))?;
+				let file = File::open(path)
+					.map_err(|e| format!("Error opening spec file: {}", e))?;
+				let genesis: GenesisContainer<G> = json::from_reader(file)
+					.map_err(|e| format!("Error parsing spec file: {}", e))?;
 				Ok(genesis.genesis)
 			},
 			GenesisSource::Binary(buf) => {
-				let genesis: GenesisContainer<G> =
-					json::from_reader(buf.as_ref()).map_err(|e| format!("Error parsing embedded file: {}", e))?;
+				let genesis: GenesisContainer<G> = json::from_reader(buf.as_ref())
+					.map_err(|e| format!("Error parsing embedded file: {}", e))?;
 				Ok(genesis.genesis)
 			},
 			GenesisSource::Factory(f) => Ok(Genesis::Runtime(f())),
@@ -68,7 +69,7 @@ impl<G: RuntimeGenesis> GenesisSource<G> {
 	}
 }
 
-impl<'a, G: RuntimeGenesis> BuildStorage for &'a ChainSpec<G> {
+impl<'a, G: RuntimeGenesis, E> BuildStorage for &'a ChainSpec<G, E> {
 	fn build_storage(self) -> Result<(StorageOverlay, ChildrenStorageOverlay), String> {
 		match self.genesis.resolve()? {
 			Genesis::Runtime(gc) => gc.build_storage(),
@@ -82,7 +83,10 @@ impl<'a, G: RuntimeGenesis> BuildStorage for &'a ChainSpec<G> {
 		}
 	}
 
-	fn assimilate_storage(self, _: &mut (StorageOverlay, ChildrenStorageOverlay)) -> Result<(), String> {
+	fn assimilate_storage(
+		self,
+		_: &mut (StorageOverlay, ChildrenStorageOverlay)
+	) -> Result<(), String> {
 		Err("`assimilate_storage` not implemented for `ChainSpec`.".into())
 	}
 }
@@ -98,28 +102,39 @@ enum Genesis<G> {
 	),
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
-struct ChainSpecFile {
+#[serde(deny_unknown_fields)]
+struct ChainSpecFile<E> {
 	pub name: String,
 	pub id: String,
 	pub boot_nodes: Vec<String>,
 	pub telemetry_endpoints: Option<TelemetryEndpoints>,
 	pub protocol_id: Option<String>,
-	pub consensus_engine: Option<String>,
 	pub properties: Option<Properties>,
+	#[serde(flatten)]
+	pub extensions: E,
+	// Never used, left only for backward compatibility.
+	consensus_engine: (),
+	#[serde(skip_serializing)]
+	genesis: serde::de::IgnoredAny,
 }
 
 /// Arbitrary properties defined in chain spec as a JSON object
 pub type Properties = json::map::Map<String, json::Value>;
 
+/// A type denoting empty extensions.
+///
+/// We use `Option` here since `()` is not flattenable by serde.
+pub type NoExtension = Option<()>;
+
 /// A configuration of a chain. Can be used to build a genesis block.
-pub struct ChainSpec<G> {
-	spec: ChainSpecFile,
+pub struct ChainSpec<G, E = NoExtension> {
+	spec: ChainSpecFile<E>,
 	genesis: GenesisSource<G>,
 }
 
-impl<G> Clone for ChainSpec<G> {
+impl<G, E: Clone> Clone for ChainSpec<G, E> {
 	fn clone(&self) -> Self {
 		ChainSpec {
 			spec: self.spec.clone(),
@@ -128,7 +143,7 @@ impl<G> Clone for ChainSpec<G> {
 	}
 }
 
-impl<G> ChainSpec<G> {
+impl<G, E> ChainSpec<G, E> {
 	/// A list of bootnode addresses.
 	pub fn boot_nodes(&self) -> &[String] {
 		&self.spec.boot_nodes
@@ -154,14 +169,10 @@ impl<G> ChainSpec<G> {
 		self.spec.protocol_id.as_ref().map(String::as_str)
 	}
 
-	/// Name of the consensus engine.
-	pub fn consensus_engine(&self) -> Option<&str> {
-		self.spec.consensus_engine.as_ref().map(String::as_str)
-	}
-
 	/// Additional loosly-typed properties of the chain.
+	///
+	/// Returns an empty JSON object if 'properties' not defined in config
 	pub fn properties(&self) -> Properties {
-		// Return an empty JSON object if 'properties' not defined in config
 		self.spec.properties.as_ref().unwrap_or(&json::map::Map::new()).clone()
 	}
 
@@ -170,24 +181,9 @@ impl<G> ChainSpec<G> {
 		self.spec.boot_nodes.push(addr.to_string())
 	}
 
-	/// Parse json content into a `ChainSpec`
-	pub fn from_json_bytes(json: impl Into<Cow<'static, [u8]>>) -> Result<Self, String> {
-		let json = json.into();
-		let spec = json::from_slice(json.as_ref()).map_err(|e| format!("Error parsing spec file: {}", e))?;
-		Ok(ChainSpec {
-			spec,
-			genesis: GenesisSource::Binary(json),
-		})
-	}
-
-	/// Parse json file into a `ChainSpec`
-	pub fn from_json_file(path: PathBuf) -> Result<Self, String> {
-		let file = File::open(&path).map_err(|e| format!("Error opening spec file: {}", e))?;
-		let spec = json::from_reader(file).map_err(|e| format!("Error parsing spec file: {}", e))?;
-		Ok(ChainSpec {
-			spec,
-			genesis: GenesisSource::File(path),
-		})
+	/// Returns a reference to defined chain spec extensions.
+	pub fn extensions(&self) -> &E {
+		&self.spec.extensions
 	}
 
 	/// Create hardcoded spec.
@@ -198,19 +194,21 @@ impl<G> ChainSpec<G> {
 		boot_nodes: Vec<String>,
 		telemetry_endpoints: Option<TelemetryEndpoints>,
 		protocol_id: Option<&str>,
-		consensus_engine: Option<&str>,
 		properties: Option<Properties>,
-	) -> Self
-	{
+		extensions: E,
+	) -> Self {
 		let spec = ChainSpecFile {
 			name: name.to_owned(),
 			id: id.to_owned(),
 			boot_nodes: boot_nodes,
 			telemetry_endpoints,
 			protocol_id: protocol_id.map(str::to_owned),
-			consensus_engine: consensus_engine.map(str::to_owned),
 			properties,
+			extensions,
+			consensus_engine: (),
+			genesis: Default::default(),
 		};
+
 		ChainSpec {
 			spec,
 			genesis: GenesisSource::Factory(constructor),
@@ -218,13 +216,38 @@ impl<G> ChainSpec<G> {
 	}
 }
 
-impl<G: RuntimeGenesis> ChainSpec<G> {
+impl<G, E: serde::de::DeserializeOwned> ChainSpec<G, E> {
+	/// Parse json content into a `ChainSpec`
+	pub fn from_json_bytes(json: impl Into<Cow<'static, [u8]>>) -> Result<Self, String> {
+		let json = json.into();
+		let spec = json::from_slice(json.as_ref())
+			.map_err(|e| format!("Error parsing spec file: {}", e))?;
+		Ok(ChainSpec {
+			spec,
+			genesis: GenesisSource::Binary(json),
+		})
+	}
+
+	/// Parse json file into a `ChainSpec`
+	pub fn from_json_file(path: PathBuf) -> Result<Self, String> {
+		let file = File::open(&path)
+			.map_err(|e| format!("Error opening spec file: {}", e))?;
+		let spec = json::from_reader(file)
+			.map_err(|e| format!("Error parsing spec file: {}", e))?;
+		Ok(ChainSpec {
+			spec,
+			genesis: GenesisSource::File(path),
+		})
+	}
+}
+
+impl<G: RuntimeGenesis, E: serde::Serialize> ChainSpec<G, E> {
 	/// Dump to json string.
 	pub fn to_json(self, raw: bool) -> Result<String, String> {
 		#[derive(Serialize, Deserialize)]
-		struct Container<G> {
+		struct Container<G, E> {
 			#[serde(flatten)]
-			spec: ChainSpecFile,
+			spec: ChainSpecFile<E>,
 			genesis: Genesis<G>,
 
 		};
@@ -251,6 +274,58 @@ impl<G: RuntimeGenesis> ChainSpec<G> {
 			spec: self.spec,
 			genesis,
 		};
-		json::to_string_pretty(&spec).map_err(|e| format!("Error generating spec json: {}", e))
+		json::to_string_pretty(&spec)
+			.map_err(|e| format!("Error generating spec json: {}", e))
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[derive(Debug, Serialize, Deserialize)]
+	struct Genesis(HashMap<String, String>);
+
+	impl BuildStorage for Genesis {
+		fn assimilate_storage(
+			self,
+			storage: &mut (StorageOverlay, ChildrenStorageOverlay),
+		) -> Result<(), String> {
+			storage.0.extend(
+				self.0.into_iter().map(|(a, b)| (a.into_bytes(), b.into_bytes()))
+			);
+			Ok(())
+		}
+	}
+
+	type TestSpec = ChainSpec<Genesis>;
+
+	#[test]
+	fn should_deserailize_example_chain_spec() {
+		let spec1 = TestSpec::from_json_bytes(Cow::Owned(
+			include_bytes!("../res/chain_spec.json").to_vec()
+		)).unwrap();
+		let spec2 = TestSpec::from_json_file(
+			PathBuf::from("./res/chain_spec.json")
+		).unwrap();
+
+		assert_eq!(spec1.to_json(false), spec2.to_json(false));
+	}
+
+	#[derive(Debug, Serialize, Deserialize)]
+	#[serde(rename_all = "camelCase")]
+	struct Extension1 {
+		my_property: String,
+	}
+
+	type TestSpec2 = ChainSpec<Genesis, Extension1>;
+
+	#[test]
+	fn should_deserialize_chain_spec_with_extensions() {
+		let spec = TestSpec2::from_json_bytes(Cow::Owned(
+			include_bytes!("../res/chain_spec2.json").to_vec()
+		)).unwrap();
+
+		assert_eq!(spec.extensions().my_property, "Test Extension");
 	}
 }
