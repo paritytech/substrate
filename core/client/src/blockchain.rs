@@ -24,7 +24,7 @@ use sr_primitives::Justification;
 use log::warn;
 use parking_lot::Mutex;
 
-use header_metadata::TreeBackend;
+use header_metadata::HeaderMetadata;
 
 use crate::error::{Error, Result};
 
@@ -76,7 +76,7 @@ pub trait HeaderBackend<Block: BlockT>: Send + Sync {
 }
 
 /// Blockchain database backend. Does not perform any validation.
-pub trait Backend<Block: BlockT>: HeaderBackend<Block> + TreeBackend<Block, Error=Error> {
+pub trait Backend<Block: BlockT>: HeaderBackend<Block> + HeaderMetadata<Block, Error=Error> {
 	/// Get block body. Returns `None` if block is not found.
 	fn body(&self, id: BlockId<Block>) -> Result<Option<Vec<<Block as BlockT>::Extrinsic>>>;
 	/// Get block justification. Returns `None` if justification does not exist.

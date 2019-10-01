@@ -66,7 +66,7 @@ use crate::utils::{Meta, db_err, meta_keys, read_db, read_meta};
 use client::leaves::{LeafSet, FinalizationDisplaced};
 use client::children;
 use state_db::StateDb;
-use header_metadata::{HeaderMetadata, HeaderMetadataCache, CachedHeaderMetadata, TreeBackend};
+use header_metadata::{HeaderMetadata, HeaderMetadataCache, CachedHeaderMetadata, tree_route};
 use crate::storage_cache::{CachingState, SharedCache, new_shared_cache};
 use log::{trace, debug, warn};
 pub use state_db::PruningMode;
@@ -406,10 +406,9 @@ impl<Block: BlockT> client::blockchain::ProvideCache<Block> for BlockchainDb<Blo
 }
 
 impl<Block: BlockT> HeaderMetadata<Block> for BlockchainDb<Block> {
-	type Metadata = CachedHeaderMetadata<Block>;
 	type Error = client::error::Error;
 
-	fn header_metadata(&self, hash: Block::Hash) -> Result<Self::Metadata, Self::Error> {
+	fn header_metadata(&self, hash: Block::Hash) -> Result<CachedHeaderMetadata<Block>, Self::Error> {
 		self.header_metadata_cache.header_metadata(hash).or_else(|_| {
 			self.header(BlockId::hash(hash))?.map(|header| {
 				let header_metadata = CachedHeaderMetadata::from(&header);
@@ -422,7 +421,7 @@ impl<Block: BlockT> HeaderMetadata<Block> for BlockchainDb<Block> {
 		})
 	}
 
-	fn insert_header_metadata(&self, hash: Block::Hash, metadata: Self::Metadata) {
+	fn insert_header_metadata(&self, hash: Block::Hash, metadata: CachedHeaderMetadata<Block>) {
 		self.header_metadata_cache.insert_header_metadata(hash, metadata)
 	}
 
@@ -431,7 +430,30 @@ impl<Block: BlockT> HeaderMetadata<Block> for BlockchainDb<Block> {
 	}
 }
 
-impl<Block: BlockT> TreeBackend<Block> for BlockchainDb<Block> {}
+impl<Block: BlockT> HeaderMetadata<Block> for &BlockchainDb<Block> {
+	type Error = client::error::Error;
+
+	fn header_metadata(&self, hash: Block::Hash) -> Result<CachedHeaderMetadata<Block>, Self::Error> {
+		self.header_metadata_cache.header_metadata(hash).or_else(|_| {
+			self.header(BlockId::hash(hash))?.map(|header| {
+				let header_metadata = CachedHeaderMetadata::from(&header);
+				self.header_metadata_cache.insert_header_metadata(
+					header_metadata.hash,
+					header_metadata.clone(),
+				);
+				header_metadata
+			}).ok_or(client::error::Error::UnknownBlock("header not found in db".to_owned()))
+		})
+	}
+
+	fn insert_header_metadata(&self, hash: Block::Hash, metadata: CachedHeaderMetadata<Block>) {
+		self.header_metadata_cache.insert_header_metadata(hash, metadata)
+	}
+
+	fn remove_header_metadata(&self, hash: Block::Hash) {
+		self.header_metadata_cache.remove_header_metadata(hash);
+	}
+}
 
 /// Database transaction
 pub struct BlockImportOperation<Block: BlockT, H: Hasher> {
@@ -944,7 +966,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 
 		// cannot find tree route with empty DB.
 		if meta.best_hash != Default::default() {
-			let tree_route = self.blockchain.tree_route(meta.best_hash, route_to)?;
+			let tree_route = tree_route(&self.blockchain, meta.best_hash, route_to)?;
 
 			// uncanonicalize: check safety violations and ensure the numbers no longer
 			// point to these block hashes in the key mapping.
@@ -1529,6 +1551,8 @@ mod tests {
 	use sr_primitives::testing::{Header, Block as RawBlock, ExtrinsicWrapper};
 	use sr_primitives::traits::{Hash, BlakeTwo256};
 	use state_machine::{TrieMut, TrieDBMut, ChangesTrieRootsStorage, ChangesTrieStorage};
+	use header_metadata::lowest_common_ancestor;
+
 	use test_client;
 
 	type Block = RawBlock<ExtrinsicWrapper<u64>>;
@@ -2112,7 +2136,7 @@ mod tests {
 		let b2 = insert_header(&backend, 2, b1, Vec::new(), Default::default());
 
 		{
-			let tree_route = blockchain.tree_route(a3, b2).unwrap();
+			let tree_route = tree_route(&blockchain, a3, b2).unwrap();
 
 			assert_eq!(tree_route.common_block().hash, block0);
 			assert_eq!(tree_route.retracted().iter().map(|r| r.hash).collect::<Vec<_>>(), vec![a3, a2, a1]);
@@ -2120,7 +2144,7 @@ mod tests {
 		}
 
 		{
-			let tree_route = blockchain.tree_route(a1, a3).unwrap();
+			let tree_route = tree_route(&blockchain, a1, a3).unwrap();
 
 			assert_eq!(tree_route.common_block().hash, a1);
 			assert!(tree_route.retracted().is_empty());
@@ -2128,7 +2152,7 @@ mod tests {
 		}
 
 		{
-			let tree_route = blockchain.tree_route(a3, a1).unwrap();
+			let tree_route = tree_route(&blockchain, a3, a1).unwrap();
 
 			assert_eq!(tree_route.common_block().hash, a1);
 			assert_eq!(tree_route.retracted().iter().map(|r| r.hash).collect::<Vec<_>>(), vec![a3, a2]);
@@ -2136,7 +2160,7 @@ mod tests {
 		}
 
 		{
-			let tree_route = blockchain.tree_route(a2, a2).unwrap();
+			let tree_route = tree_route(&blockchain, a2, a2).unwrap();
 
 			assert_eq!(tree_route.common_block().hash, a2);
 			assert!(tree_route.retracted().is_empty());
@@ -2153,7 +2177,7 @@ mod tests {
 		let block1 = insert_header(&backend, 1, block0, Vec::new(), Default::default());
 
 		{
-			let tree_route = blockchain.tree_route(block0, block1).unwrap();
+			let tree_route = tree_route(&blockchain, block0, block1).unwrap();
 
 			assert_eq!(tree_route.common_block().hash, block0);
 			assert!(tree_route.retracted().is_empty());
@@ -2177,28 +2201,28 @@ mod tests {
 		let b2 = insert_header(&backend, 2, b1, Vec::new(), Default::default());
 
 		{
-			let lca = blockchain.lowest_common_ancestor(a3, b2).unwrap();
+			let lca = lowest_common_ancestor(&blockchain, a3, b2).unwrap();
 
 			assert_eq!(lca.hash, block0);
 			assert_eq!(lca.number, 0);
 		}
 
 		{
-			let lca = blockchain.lowest_common_ancestor(a1, a3).unwrap();
+			let lca = lowest_common_ancestor(&blockchain, a1, a3).unwrap();
 
 			assert_eq!(lca.hash, a1);
 			assert_eq!(lca.number, 1);
 		}
 
 		{
-			let lca = blockchain.lowest_common_ancestor(a3, a1).unwrap();
+			let lca = lowest_common_ancestor(&blockchain, a3, a1).unwrap();
 
 			assert_eq!(lca.hash, a1);
 			assert_eq!(lca.number, 1);
 		}
 
 		{
-			let lca = blockchain.lowest_common_ancestor(a2, a2).unwrap();
+			let lca = lowest_common_ancestor(&blockchain, a2, a2).unwrap();
 
 			assert_eq!(lca.hash, a2);
 			assert_eq!(lca.number, 2);

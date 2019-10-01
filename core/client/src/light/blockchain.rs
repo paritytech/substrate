@@ -23,7 +23,7 @@ use std::{sync::Arc, collections::HashMap};
 use sr_primitives::{Justification, generic::BlockId};
 use sr_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero};
 
-use header_metadata::{HeaderMetadata, CachedHeaderMetadata, TreeBackend};
+use header_metadata::{HeaderMetadata, CachedHeaderMetadata};
 
 use crate::backend::{AuxStore, NewBlockState};
 use crate::blockchain::{
@@ -36,7 +36,7 @@ use crate::error::{Error as ClientError, Result as ClientResult};
 use crate::light::fetcher::{Fetcher, RemoteHeaderRequest};
 
 /// Light client blockchain storage.
-pub trait Storage<Block: BlockT>: AuxStore + BlockchainHeaderBackend<Block> + TreeBackend<Block, Error=ClientError> {
+pub trait Storage<Block: BlockT>: AuxStore + BlockchainHeaderBackend<Block> + HeaderMetadata<Block, Error=ClientError> {
 	/// Store new header. Should refuse to revert any finalized blocks.
 	///
 	/// Takes new authorities, the leaf state of the new block, and
@@ -143,14 +143,13 @@ impl<S, Block> BlockchainHeaderBackend<Block> for Blockchain<S> where Block: Blo
 }
 
 impl<S, Block> HeaderMetadata<Block> for Blockchain<S> where Block: BlockT, S: Storage<Block> {
-	type Metadata = CachedHeaderMetadata<Block>;
 	type Error = ClientError;
 
-	fn header_metadata(&self, hash: Block::Hash) -> Result<Self::Metadata, Self::Error> {
+	fn header_metadata(&self, hash: Block::Hash) -> Result<CachedHeaderMetadata<Block>, Self::Error> {
 		self.storage.header_metadata(hash)
 	}
 
-	fn insert_header_metadata(&self, hash: Block::Hash, metadata: Self::Metadata) {
+	fn insert_header_metadata(&self, hash: Block::Hash, metadata: CachedHeaderMetadata<Block>) {
 		self.storage.insert_header_metadata(hash, metadata)
 	}
 
@@ -158,8 +157,6 @@ impl<S, Block> HeaderMetadata<Block> for Blockchain<S> where Block: BlockT, S: S
 		self.storage.remove_header_metadata(hash)
 	}
 }
-
-impl<S, Block> TreeBackend<Block> for Blockchain<S> where Block: BlockT, S: Storage<Block> {}
 
 impl<S, Block> BlockchainBackend<Block> for Blockchain<S> where Block: BlockT, S: Storage<Block> {
 	fn body(&self, _id: BlockId<Block>) -> ClientResult<Option<Vec<Block::Extrinsic>>> {
@@ -303,18 +300,15 @@ pub mod tests {
 	}
 
 	impl HeaderMetadata<Block> for DummyStorage {
-		type Metadata = CachedHeaderMetadata<Block>;
 		type Error = ClientError;
 
-		fn header_metadata(&self, hash: Hash) -> Result<Self::Metadata, Self::Error> {
+		fn header_metadata(&self, hash: Hash) -> Result<CachedHeaderMetadata<Block>, Self::Error> {
 			self.header(BlockId::hash(hash))?.map(|header| CachedHeaderMetadata::from(&header))
 				.ok_or(ClientError::UnknownBlock("header not found".to_owned()))
 		}
-		fn insert_header_metadata(&self, _hash: Hash, _metadata: Self::Metadata) {}
+		fn insert_header_metadata(&self, _hash: Hash, _metadata: CachedHeaderMetadata<Block>) {}
 		fn remove_header_metadata(&self, _hash: Hash) {}
 	}
-
-	impl TreeBackend<Block> for DummyStorage {}
 
 	impl AuxStore for DummyStorage {
 		fn insert_aux<

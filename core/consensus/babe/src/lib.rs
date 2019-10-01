@@ -101,6 +101,8 @@ use futures::prelude::*;
 use log::{warn, debug, info, trace};
 use slots::{SlotWorker, SlotData, SlotInfo, SlotCompatible};
 use epoch_changes::descendent_query;
+use header_metadata::HeaderMetadata;
+
 mod aux_schema;
 mod verification;
 mod epoch_changes;
@@ -223,7 +225,7 @@ pub fn start_babe<B, C, SC, E, I, SO, Error>(BabeParams {
 > where
 	B: BlockT<Hash=H256>,
 	C: ProvideRuntimeApi + ProvideCache<B> + ProvideUncles<B> + BlockchainEvents<B>
-		+ HeaderBackend<B> + TreeBackend<B, Error=ClientError> + Send + Sync + 'static,
+		+ HeaderBackend<B> + HeaderMetadata<B, Error=ClientError> + Send + Sync + 'static,
 	C::Api: BabeApi<B>,
 	SC: SelectChain<B> + 'static,
 	E: Environment<B, Error=Error> + Send + Sync,
@@ -296,7 +298,7 @@ struct BabeWorker<B: BlockT, C, E, I, SO> {
 
 impl<B, C, E, I, Error, SO> slots::SimpleSlotWorker<B> for BabeWorker<B, C, E, I, SO> where
 	B: BlockT<Hash=H256>,
-	C: ProvideRuntimeApi + ProvideCache<B> + HeaderBackend<B> + TreeBackend<B, Error=ClientError>,
+	C: ProvideRuntimeApi + ProvideCache<B> + HeaderBackend<B> + HeaderMetadata<B, Error=ClientError>,
 	C::Api: BabeApi<B>,
 	E: Environment<B, Error=Error>,
 	E::Proposer: Proposer<B, Error=Error>,
@@ -408,7 +410,7 @@ impl<B, C, E, I, Error, SO> slots::SimpleSlotWorker<B> for BabeWorker<B, C, E, I
 
 impl<B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<B, C, E, I, SO> where
 	B: BlockT<Hash=H256>,
-	C: ProvideRuntimeApi + ProvideCache<B> + HeaderBackend<B> + TreeBackend<B, Error=ClientError> + Send + Sync,
+	C: ProvideRuntimeApi + ProvideCache<B> + HeaderBackend<B> + HeaderMetadata<B, Error=ClientError> + Send + Sync,
 	C::Api: BabeApi<B>,
 	E: Environment<B, Error=Error> + Send + Sync,
 	E::Proposer: Proposer<B, Error=Error>,
@@ -1071,7 +1073,7 @@ pub mod test_helpers {
 		link: &BabeLink<B>,
 	) -> Option<BabePreDigest> where
 		B: BlockT<Hash=H256>,
-		C: ProvideRuntimeApi + ProvideCache<B> + HeaderBackend<B> + TreeBackend<B, Error=ClientError>,
+		C: ProvideRuntimeApi + ProvideCache<B> + HeaderBackend<B> + HeaderMetadata<B, Error=ClientError>,
 		C::Api: BabeApi<B>,
 	{
 		let epoch = link.epoch_changes.lock().epoch_for_child_of(

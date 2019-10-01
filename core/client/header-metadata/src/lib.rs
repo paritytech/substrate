@@ -24,133 +24,130 @@ use lru_cache::LruCache;
 /// Set to the expected max difference between `best` and `finalized` blocks at sync.
 const LRU_CACHE_SIZE: usize = 5_000;
 
-/// Implements useful algorithms over the tree of headers.
-pub trait TreeBackend<Block: BlockT>: HeaderMetadata<Block, Metadata=CachedHeaderMetadata<Block>> {
-	/// Get lowest common ancestor between two blocks in the tree.
-	///
-	/// This implementation is efficient because our trees have very few and
-	/// small branches, and because of our current query pattern:
-	/// lca(best, final), lca(best + 1, final), lca(best + 2, final), etc.
-	/// The first call is O(h) but the others are O(1).
-	fn lowest_common_ancestor(
-		&self,
-		id_one: Block::Hash,
-		id_two: Block::Hash,
-	) -> Result<HashAndNumber<Block>, Self::Error> {
-		let mut header_one = self.header_metadata(id_one)?;
-		let mut header_two = self.header_metadata(id_two)?;
+/// Get lowest common ancestor between two blocks in the tree.
+///
+/// This implementation is efficient because our trees have very few and
+/// small branches, and because of our current query pattern:
+/// lca(best, final), lca(best + 1, final), lca(best + 2, final), etc.
+/// The first call is O(h) but the others are O(1).
+pub fn lowest_common_ancestor<Block: BlockT, T: HeaderMetadata<Block>>(
+	backend: &T,
+	id_one: Block::Hash,
+	id_two: Block::Hash,
+) -> Result<HashAndNumber<Block>, T::Error> {
+	let mut header_one = backend.header_metadata(id_one)?;
+	let mut header_two = backend.header_metadata(id_two)?;
 
-		let mut orig_header_one = header_one.clone();
-		let mut orig_header_two = header_two.clone();
+	let mut orig_header_one = header_one.clone();
+	let mut orig_header_two = header_two.clone();
 
-		// We move through ancestor links as much as possible, since ancestor >= parent.
+	// We move through ancestor links as much as possible, since ancestor >= parent.
 
-		while header_one.number > header_two.number {
-			let ancestor_one = self.header_metadata(header_one.ancestor)?;
+	while header_one.number > header_two.number {
+		let ancestor_one = backend.header_metadata(header_one.ancestor)?;
 
-			if ancestor_one.number >= header_two.number {
-				header_one = ancestor_one;
-			} else {
-				break
-			}
+		if ancestor_one.number >= header_two.number {
+			header_one = ancestor_one;
+		} else {
+			break
 		}
-
-		while header_one.number < header_two.number {
-			let ancestor_two = self.header_metadata(header_two.ancestor)?;
-
-			if ancestor_two.number >= header_one.number {
-				header_two = ancestor_two;
-			} else {
-				break
-			}
-		}
-
-		// Then we move the remaining path using parent links.
-
-		while header_one.hash != header_two.hash {
-			if header_one.number > header_two.number {
-				header_one = self.header_metadata(header_one.parent)?;
-			} else {
-				header_two = self.header_metadata(header_two.parent)?;
-			}
-		}
-
-		// Update cached ancestor links.
-
-		if orig_header_one.number > header_one.number {
-			orig_header_one.ancestor = header_one.hash;
-			self.insert_header_metadata(orig_header_one.hash, orig_header_one);
-		}
-
-		if orig_header_two.number > header_one.number {
-			orig_header_two.ancestor = header_one.hash;
-			self.insert_header_metadata(orig_header_two.hash, orig_header_two);
-		}
-
-		Ok(HashAndNumber {
-			hash: header_one.hash,
-			number: header_one.number,
-		})
 	}
 
-	/// Compute a tree-route between two blocks. See tree-route docs for more details.
-	fn tree_route(
-		&self,
-		from: Block::Hash,
-		to: Block::Hash,
-	) -> Result<TreeRoute<Block>, Self::Error> {
-		let mut from = self.header_metadata(from)?;
-		let mut to = self.header_metadata(to)?;
+	while header_one.number < header_two.number {
+		let ancestor_two = backend.header_metadata(header_two.ancestor)?;
 
-		let mut from_branch = Vec::new();
-		let mut to_branch = Vec::new();
-
-		while to.number > from.number {
-			to_branch.push(HashAndNumber {
-				number: to.number,
-				hash: to.hash,
-			});
-
-			to = self.header_metadata(to.parent)?;
+		if ancestor_two.number >= header_one.number {
+			header_two = ancestor_two;
+		} else {
+			break
 		}
+	}
 
-		while from.number > to.number {
-			from_branch.push(HashAndNumber {
-				number: from.number,
-				hash: from.hash,
-			});
-			from = self.header_metadata(from.parent)?;
+	// Then we move the remaining path using parent links.
+
+	while header_one.hash != header_two.hash {
+		if header_one.number > header_two.number {
+			header_one = backend.header_metadata(header_one.parent)?;
+		} else {
+			header_two = backend.header_metadata(header_two.parent)?;
 		}
+	}
 
-		// numbers are equal now. walk backwards until the block is the same
+	// Update cached ancestor links.
 
-		while to != from {
-			to_branch.push(HashAndNumber {
-				number: to.number,
-				hash: to.hash,
-			});
-			to = self.header_metadata(to.parent)?;
+	if orig_header_one.number > header_one.number {
+		orig_header_one.ancestor = header_one.hash;
+		backend.insert_header_metadata(orig_header_one.hash, orig_header_one);
+	}
 
-			from_branch.push(HashAndNumber {
-				number: from.number,
-				hash: from.hash,
-			});
-			from = self.header_metadata(from.parent)?;
-		}
+	if orig_header_two.number > header_one.number {
+		orig_header_two.ancestor = header_one.hash;
+		backend.insert_header_metadata(orig_header_two.hash, orig_header_two);
+	}
 
-		// add the pivot block. and append the reversed to-branch (note that it's reverse order originals)
-		let pivot = from_branch.len();
-		from_branch.push(HashAndNumber {
+	Ok(HashAndNumber {
+		hash: header_one.hash,
+		number: header_one.number,
+	})
+}
+
+/// Compute a tree-route between two blocks. See tree-route docs for more details.
+pub fn tree_route<Block: BlockT, T: HeaderMetadata<Block>>(
+	backend: &T,
+	from: Block::Hash,
+	to: Block::Hash,
+) -> Result<TreeRoute<Block>, T::Error> {
+	let mut from = backend.header_metadata(from)?;
+	let mut to = backend.header_metadata(to)?;
+
+	let mut from_branch = Vec::new();
+	let mut to_branch = Vec::new();
+
+	while to.number > from.number {
+		to_branch.push(HashAndNumber {
 			number: to.number,
 			hash: to.hash,
 		});
-		from_branch.extend(to_branch.into_iter().rev());
 
-		Ok(TreeRoute {
-			route: from_branch,
-			pivot,
-		})
+		to = backend.header_metadata(to.parent)?;
 	}
+
+	while from.number > to.number {
+		from_branch.push(HashAndNumber {
+			number: from.number,
+			hash: from.hash,
+		});
+		from = backend.header_metadata(from.parent)?;
+	}
+
+	// numbers are equal now. walk backwards until the block is the same
+
+	while to != from {
+		to_branch.push(HashAndNumber {
+			number: to.number,
+			hash: to.hash,
+		});
+		to = backend.header_metadata(to.parent)?;
+
+		from_branch.push(HashAndNumber {
+			number: from.number,
+			hash: from.hash,
+		});
+		from = backend.header_metadata(from.parent)?;
+	}
+
+	// add the pivot block. and append the reversed to-branch (note that it's reverse order originals)
+	let pivot = from_branch.len();
+	from_branch.push(HashAndNumber {
+		number: to.number,
+		hash: to.hash,
+	});
+	from_branch.extend(to_branch.into_iter().rev());
+
+	Ok(TreeRoute {
+		route: from_branch,
+		pivot,
+	})
 }
 
 /// Hash and number of a block.
@@ -212,13 +209,11 @@ impl<Block: BlockT> TreeRoute<Block> {
 
 /// Handles header metadata: hash, number, parent hash, etc.
 pub trait HeaderMetadata<Block: BlockT> {
-	/// Header metadata, can contains fields such as hash, number, parent hash.
-	type Metadata;
 	/// Error used in case the header metadata is not found.
 	type Error;
 
-	fn header_metadata(&self, hash: Block::Hash) -> Result<Self::Metadata, Self::Error>;
-	fn insert_header_metadata(&self, hash: Block::Hash, header_metadata: Self::Metadata);
+	fn header_metadata(&self, hash: Block::Hash) -> Result<CachedHeaderMetadata<Block>, Self::Error>;
+	fn insert_header_metadata(&self, hash: Block::Hash, header_metadata: CachedHeaderMetadata<Block>);
 	fn remove_header_metadata(&self, hash: Block::Hash);
 }
 
@@ -245,15 +240,14 @@ impl<Block: BlockT> Default for HeaderMetadataCache<Block> {
 }
 
 impl<Block: BlockT> HeaderMetadata<Block> for HeaderMetadataCache<Block> {
-	type Metadata = CachedHeaderMetadata<Block>;
 	type Error = String;
 
-	fn header_metadata(&self, hash: Block::Hash) -> Result<Self::Metadata, Self::Error> {
+	fn header_metadata(&self, hash: Block::Hash) -> Result<CachedHeaderMetadata<Block>, Self::Error> {
 		self.cache.write().get_mut(&hash).cloned()
 			.ok_or("header metadata not found in cache".to_owned())
 	}
 
-	fn insert_header_metadata(&self, hash: Block::Hash, metadata: Self::Metadata) {
+	fn insert_header_metadata(&self, hash: Block::Hash, metadata: CachedHeaderMetadata<Block>) {
 		self.cache.write().insert(hash, metadata);
 	}
 

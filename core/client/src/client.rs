@@ -51,7 +51,7 @@ use consensus::{
 	ImportResult, BlockOrigin, ForkChoiceStrategy,
 	SelectChain, self,
 };
-use header_metadata::{HeaderMetadata, TreeBackend, CachedHeaderMetadata};
+use header_metadata::{HeaderMetadata, CachedHeaderMetadata, tree_route, lowest_common_ancestor};
 
 use crate::{
 	runtime_api::{
@@ -967,7 +967,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		};
 
 		let retracted = if is_new_best {
-			let route_from_best = self.backend.blockchain().tree_route(info.best_hash, parent_hash)?;
+			let route_from_best = tree_route(self.backend.blockchain(), info.best_hash, parent_hash)?;
 			route_from_best.retracted().iter().rev().map(|e| e.hash.clone()).collect()
 		} else {
 			Vec::default()
@@ -1097,7 +1097,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			return Ok(());
 		}
 
-		let route_from_finalized = self.backend.blockchain().tree_route(last_finalized, block)?;
+		let route_from_finalized = tree_route(self.backend.blockchain(), last_finalized, block)?;
 
 		if let Some(retracted) = route_from_finalized.retracted().get(0) {
 			warn!("Safety violation: attempted to revert finalized block {:?} which is not in the \
@@ -1106,7 +1106,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			return Err(error::Error::NotInFinalizedChain);
 		}
 
-		let route_from_best = self.backend.blockchain().tree_route(best_block, block)?;
+		let route_from_best = tree_route(self.backend.blockchain(), best_block, block)?;
 
 		// if the block is not a direct ancestor of the current best chain,
 		// then some other block is the common ancestor.
@@ -1315,14 +1315,13 @@ impl<B, E, Block, RA> HeaderMetadata<Block> for Client<B, E, Block, RA> where
 	E: CallExecutor<Block, Blake2Hasher>,
 	Block: BlockT<Hash=H256>,
 {
-	type Metadata = CachedHeaderMetadata<Block>;
 	type Error = error::Error;
 
-	fn header_metadata(&self, hash: Block::Hash) -> Result<Self::Metadata, Self::Error> {
+	fn header_metadata(&self, hash: Block::Hash) -> Result<CachedHeaderMetadata<Block>, Self::Error> {
 		self.backend.blockchain().header_metadata(hash)
 	}
 
-	fn insert_header_metadata(&self, hash: Block::Hash, metadata: Self::Metadata) {
+	fn insert_header_metadata(&self, hash: Block::Hash, metadata: CachedHeaderMetadata<Block>) {
 		self.backend.blockchain().insert_header_metadata(hash, metadata)
 	}
 
@@ -1330,12 +1329,6 @@ impl<B, E, Block, RA> HeaderMetadata<Block> for Client<B, E, Block, RA> where
 		self.backend.blockchain().remove_header_metadata(hash)
 	}
 }
-
-impl<B, E, Block, RA> TreeBackend<Block> for Client<B, E, Block, RA> where
-	B: backend::Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher>,
-	Block: BlockT<Hash=H256>,
-{}
 
 impl<B, E, Block, RA> ProvideUncles<Block> for Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
@@ -1828,7 +1821,7 @@ pub mod utils {
 		client: &'a T,
 		current: Option<(H, H)>,
 	) -> impl Fn(&H256, &H256) -> Result<bool, error::Error> + 'a
-		where T: ChainHeaderBackend<Block> + TreeBackend<Block, Error=error::Error>,
+		where T: ChainHeaderBackend<Block> + HeaderMetadata<Block, Error=error::Error>,
 	{
 		move |base, hash| {
 			if base == hash { return Ok(false); }
@@ -1847,7 +1840,7 @@ pub mod utils {
 				}
 			}
 
-			let ancestor = client.lowest_common_ancestor(*hash, *base)?;
+			let ancestor = lowest_common_ancestor(client, *hash, *base)?;
 
 			Ok(ancestor.hash == *base)
 		}
