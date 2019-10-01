@@ -537,6 +537,7 @@ mod tests {
 			import_notifications,
 			block_status,
 			global_rx.map_err(|_| panic!("should never error")),
+			"global",
 		);
 
 		global_tx.unbounded_send(msg).unwrap();
@@ -562,6 +563,7 @@ mod tests {
 			import_notifications,
 			block_status,
 			global_rx.map_err(|_| panic!("should never error")),
+			"global",
 		);
 
 		global_tx.unbounded_send(msg).unwrap();
