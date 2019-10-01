@@ -555,6 +555,7 @@ impl<T: Trait> Module<T> {
 	/// This will update storage entries that correspond to the specified topics.
 	/// It is expected that light-clients could subscribe to this topics.
 	pub fn deposit_event_indexed(topics: &[T::Hash], event: T::Event) {
+		runtime_io::debug(&event);
 		let extrinsic_index = Self::extrinsic_index();
 		let phase = extrinsic_index.map_or(Phase::Finalization, |c| Phase::ApplyExtrinsic(c));
 		let event = EventRecord {
