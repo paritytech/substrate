@@ -19,7 +19,7 @@
 //! This will eventually have some useful documentation.
 //! For now though, enjoy this cow's wisdom.
 //!
-//! ________________________________________
+//!________________________________________
 //! / You are only young once, but you can  \
 //! \ stay immature indefinitely.           /
 //! ----------------------------------------
@@ -32,39 +32,37 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use support::{decl_error, decl_event, decl_module, decl_storage};
+use sr_primitives::traits::Member;
+use support::{
+	decl_error, decl_module, decl_storage,
+	Parameter,
+};
 use system::{ensure_signed};
 
-// struct Bridge {}
-//
-// impl Bridge {
-// 	pub fn new() -> Self {}
-// 	pub fn submit_claim() -> Result<(), Err> {}
-// 	pub fn get_id(&self) -> u64 {}
-// 	pub fn get_recently_finalized_block(&self) -> Block {}
-// }
-
-pub trait Trait: system::Trait + session::Trait {
+pub trait Trait: system::Trait {
 	// The identifier type for an authority.
 	// type AuthorityId: Member + Parameter + RuntimeAppPublic + Default;
+	/// A stable ID for a validator.
+	type ValidatorId: Member + Parameter;
 }
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Bridge {
-		/// Get the ID of the current bridge
-		pub BridgeId get(bridge_id): T::Hash;
+		// Get the ID of the current bridge
+		pub BridgeId get(bridge_id) config(): u64;
 
-		/// Get latest block number included in the chain
-		pub LastBlockNumber get(lastest_block_num): T::BlockNumber;
+		// Get latest block number included in the chain
+		pub LastBlockNumber get(latest_block_num) config(): T::BlockNumber;
+		// pub BlockNum get(block_num) config(): u64;
 
-		/// Get the latest block header included in  the chain
-		pub LastBlockHeader get(lastest_block_header): Option<T::Header>;
+		// Get the latest block header included in the chain
+		pub LastBlockHeader get(latest_block_header): Option<T::Header>;
 
-		/// Get the latest state root included in  the chain
-		pub LastStateRoot get(lastest_state_root): T::Hash;
+		// Get the latest state root included in the chain
+		// pub LastStateRoot get(latest_state_root) config(): T::Hash;
 
-		/// Latest set of validators
-		pub Validators get(validators): Vec<T::ValidatorId>;
+		// Latest set of validators
+		pub Validators get(validators) config(): Vec<T::ValidatorId>;
 	}
 }
 
@@ -85,9 +83,8 @@ decl_module! {
 			Self::check_storage_proof()?;
 			Self::check_validator_set_proof()?;
 
-			// TODO: Do something better than this
-			let bridge_id = <system::Module<T>>::random(b"this_is_not_a_good_source_of_randomness");
-			<BridgeId<T>>::put(bridge_id);
+			let new_bridge_id = BridgeId::get() + 1;
+			BridgeId::put(new_bridge_id);
 		}
 
 		fn submit_finalized_headers(origin) {
@@ -120,35 +117,94 @@ impl<T: Trait> Module<T> {
 mod tests {
 	use super::*;
 
-	#[test]
-	fn should_initialize_default_bridge_module() {
-		let bridge = Bridge::default();
+	use primitives::{H256, Blake2Hasher};
+	use sr_primitives::{
+		Perbill, traits::IdentityLookup, testing::Header, generic::Digest
+	};
+	use support::{assert_ok, impl_outer_origin, parameter_types};
+	use runtime_io::with_externalities;
+
+	// NOTE: What's this for?
+	impl_outer_origin! {
+		pub enum Origin for Test {}
+	}
+
+	#[derive(Clone, PartialEq, Eq, Debug)]
+	pub struct Test;
+
+	type System = system::Module<Test>;
+	type Bridge = Module<Test>;
+
+	// TODO: Figure out what I actually need from here
+	parameter_types! {
+		pub const BlockHashCount: u64 = 250;
+		pub const MaximumBlockWeight: u32 = 1024;
+		pub const MaximumBlockLength: u32 = 2 * 1024;
+		pub const MinimumPeriod: u64 = 5;
+		pub const AvailableBlockRatio: Perbill = Perbill::one();
+	}
+
+	type DummyValidatorId = u64;
+
+	impl system::Trait for Test {
+		type Origin = Origin;
+		type Index = u64;
+		type BlockNumber = u64;
+		type Call = ();
+		type Hash = H256;
+		type Hashing = sr_primitives::traits::BlakeTwo256;
+		type AccountId = DummyValidatorId;
+		type Lookup = IdentityLookup<Self::AccountId>;
+		type Header = Header;
+		type WeightMultiplierUpdate = ();
+		type Event = ();
+		type BlockHashCount = ();
+		type MaximumBlockWeight = ();
+		type AvailableBlockRatio = ();
+		type MaximumBlockLength = ();
+		type Version = ();
+	}
+
+	impl Trait for Test {
+		type ValidatorId = DummyValidatorId;
+	}
+
+	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		GenesisConfig::<Test> {
+			bridge_id: 0,
+			latest_block_num: 0,
+			//latest_block_header: None,
+
+			// How do I get a default Hash?
+			// latest_state_root: Hash::default(),
+			validators: vec![],
+		}.assimilate_storage(&mut t).unwrap();
+		t.into()
 	}
 
 	#[test]
-	fn should_initialize_bridge_module() {
-		let bridge = Bridge::new(header, validator_set, v_set_proof, code_hash);
+	fn it_works_for_default_value() {
+		with_externalities(&mut new_test_ext(), || {
+			assert_eq!(Bridge::bridge_id(), 0);
+			assert_eq!(Bridge::latest_block_num(), 0);
+		});
 	}
 
 	#[test]
-	fn should_accept_finalized_headers() {
-		let bridge = Bridge::default();
-		bridge.submit_finalized_header(last_block_hash, header, ancestry_proof, grandpa_proof);
-	}
+	fn it_creates_a_new_bridge() {
+		let test_header = Header {
+			parent_hash: H256::default(),
+			number: 0,
+			state_root: H256::default(),
+			extrinsics_root: H256::default(),
+			digest: Digest::default(),
+		};
 
-	#[test]
-	fn should_get_recently_finalized_block() {}
-
-	#[test]
-	fn should_do_all_the_things() {
-		let bridge = Bridge::new(); // or Bridge::default();
-		bridge.track_chain(); // Maybe part of init process?
-
-		while curr_chain.has_blocks() {
-			// Using Fred's spec this would be something like `submit_claim()`
-			bridge.submit_finalized_headers();
-		}
-
-		bridge.close();
+		with_externalities(&mut new_test_ext(), || {
+			assert_eq!(Bridge::bridge_id(), 0);
+			assert_ok!(Bridge::new(Origin::signed(1), test_header, vec![], vec![], vec![]));
+			assert_eq!(Bridge::bridge_id(), 1);
+		});
 	}
 }
