@@ -16,14 +16,16 @@
 
 #[cfg(not(feature = "std"))]
 use rstd::prelude::*;
-use rstd::{borrow::Borrow, iter::FromIterator};
-use codec::{Codec, Encode};
-use crate::{storage::{self, unhashed, hashed::{Twox128, StorageHasher}}, traits::Len};
+use codec::{FullCodec, Encode, EncodeAppend, EncodeLike};
+use crate::{storage::{self, unhashed}, hash::{Twox128, StorageHasher}, traits::Len};
 
 /// Generator for `StorageValue` used by `decl_storage`.
 ///
-/// Value is stored at `Twox128(unhashed_key)`.
-pub trait StorageValue<T: Codec> {
+/// Value is stored at:
+/// ```nocompile
+/// Twox128(unhashed_key)
+/// ```
+pub trait StorageValue<T: FullCodec> {
 	/// The type that get/take returns.
 	type Query;
 
@@ -42,7 +44,7 @@ pub trait StorageValue<T: Codec> {
 	}
 }
 
-impl<T: Codec, G: StorageValue<T>> storage::StorageValue<T> for G {
+impl<T: FullCodec, G: StorageValue<T>> storage::StorageValue<T> for G {
 	type Query = G::Query;
 
 	fn hashed_key() -> [u8; 16] {
@@ -58,12 +60,8 @@ impl<T: Codec, G: StorageValue<T>> storage::StorageValue<T> for G {
 		G::from_optional_value_to_query(value)
 	}
 
-	fn put<Arg: Borrow<T>>(val: Arg) {
-		unhashed::put(&Self::storage_value_final_key(), val.borrow())
-	}
-
-	fn put_ref<Arg: ?Sized + Encode>(val: &Arg) where T: AsRef<Arg> {
-		val.using_encoded(|b| unhashed::put_raw(&Self::storage_value_final_key(), b))
+	fn put<Arg: EncodeLike<T>>(val: Arg) {
+		unhashed::put(&Self::storage_value_final_key(), &val)
 	}
 
 	fn kill() {
@@ -93,12 +91,13 @@ impl<T: Codec, G: StorageValue<T>> storage::StorageValue<T> for G {
 	/// Append the given items to the value in the storage.
 	///
 	/// `T` is required to implement `codec::EncodeAppend`.
-	fn append<'a, I, R>(items: R) -> Result<(), &'static str>
+	fn append<Items, Item, EncodeLikeItem>(items: Items) -> Result<(), &'static str>
 	where
-		I: 'a + codec::Encode,
-		T: codec::EncodeAppend<Item=I>,
-		R: IntoIterator<Item=&'a I>,
-		R::IntoIter: ExactSizeIterator,
+		Item: Encode,
+		EncodeLikeItem: EncodeLike<Item>,
+		T: EncodeAppend<Item=Item>,
+		Items: IntoIterator<Item=EncodeLikeItem>,
+		Items::IntoIter: ExactSizeIterator,
 	{
 		let key = Self::storage_value_final_key();
 		let encoded_value = unhashed::get_raw(&key)
@@ -109,7 +108,7 @@ impl<T: Codec, G: StorageValue<T>> storage::StorageValue<T> for G {
 				}
 			});
 
-		let new_val = T::append(
+		let new_val = T::append_or_new(
 			encoded_value,
 			items,
 		).map_err(|_| "Could not append given item")?;
@@ -121,15 +120,14 @@ impl<T: Codec, G: StorageValue<T>> storage::StorageValue<T> for G {
 	/// old (presumably corrupt) value is replaced with the given `items`.
 	///
 	/// `T` is required to implement `codec::EncodeAppend`.
-	fn append_or_put<'a, I, R>(items: R)
-	where
-		I: 'a + codec::Encode + Clone,
-		T: codec::EncodeAppend<Item=I> + FromIterator<I>,
-		R: IntoIterator<Item=&'a I> + Clone,
-		R::IntoIter: ExactSizeIterator,
+	fn append_or_put<Items, Item, EncodeLikeItem>(items: Items) where
+		Item: Encode,
+		EncodeLikeItem: EncodeLike<Item>,
+		T: EncodeAppend<Item=Item>,
+		Items: IntoIterator<Item=EncodeLikeItem> + Clone + EncodeLike<T>,
+		Items::IntoIter: ExactSizeIterator
 	{
-		Self::append(items.clone())
-			.unwrap_or_else(|_| Self::put(&items.into_iter().cloned().collect()));
+		Self::append(items.clone()).unwrap_or_else(|_| Self::put(items));
 	}
 
 	/// Read the length of the value in a fast way, without decoding the entire value.

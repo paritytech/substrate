@@ -79,7 +79,6 @@
 use sr_primitives::{print, traits::{Zero, StaticLookup, Bounded, Convert}};
 use sr_primitives::weights::SimpleDispatchInfo;
 use srml_support::{
-	StorageValue, StorageMap, StorageLinkedMap,
 	decl_storage, decl_event, ensure, decl_module, dispatch,
 	traits::{
 		Currency, Get, LockableCurrency, LockIdentifier, ReservableCurrency, WithdrawReasons,
@@ -540,7 +539,7 @@ impl<T: Trait> Module<T> {
 
 			// sort and save the members.
 			new_members.sort();
-			<Members<T>>::put(new_members.clone());
+			<Members<T>>::put(&new_members);
 
 			// save the runners as-is
 			<RunnersUp<T>>::put(runners_up);

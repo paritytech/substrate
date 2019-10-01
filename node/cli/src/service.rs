@@ -33,6 +33,15 @@ use transaction_pool::{self, txpool::{Pool as TransactionPool}};
 use inherents::InherentDataProviders;
 use network::construct_simple_protocol;
 
+use substrate_service::{NewService, NetworkStatus};
+use client::{Client, LocalCallExecutor};
+use client_db::Backend;
+use sr_primitives::traits::Block as BlockT;
+use node_executor::NativeExecutor;
+use network::NetworkService;
+use offchain::OffchainWorkers;
+use primitives::Blake2Hasher;
+
 construct_simple_protocol! {
 	/// Demo protocol attachment for substrate.
 	pub struct NodeProtocol where Block = Block { }
@@ -55,14 +64,14 @@ macro_rules! new_full_start {
 				Ok(client::LongestChain::new(backend.clone()))
 			})?
 			.with_transaction_pool(|config, client|
-				Ok(transaction_pool::txpool::Pool::new(config, transaction_pool::ChainApi::new(client)))
+				Ok(transaction_pool::txpool::Pool::new(config, transaction_pool::FullChainApi::new(client)))
 			)?
 			.with_import_queue(|_config, client, mut select_chain, _transaction_pool| {
 				let select_chain = select_chain.take()
 					.ok_or_else(|| substrate_service::Error::SelectChainRequired)?;
 				let (grandpa_block_import, grandpa_link) =
 					grandpa::block_import::<_, _, _, node_runtime::RuntimeApi, _, _>(
-						client.clone(), client.clone(), select_chain
+						client.clone(), &*client, select_chain
 					)?;
 				let justification_import = grandpa_block_import.clone();
 
@@ -172,7 +181,7 @@ macro_rules! new_full {
 		let config = grandpa::Config {
 			// FIXME #1578 make this available through chainspec
 			gossip_duration: std::time::Duration::from_millis(333),
-			justification_period: 4096,
+			justification_period: 512,
 			name: Some(name),
 			keystore: Some(service.keystore()),
 		};
@@ -215,14 +224,47 @@ macro_rules! new_full {
 	}}
 }
 
+#[allow(dead_code)]
+type ConcreteBlock = node_primitives::Block;
+#[allow(dead_code)]
+type ConcreteClient =
+	Client<
+		Backend<ConcreteBlock>,
+		LocalCallExecutor<Backend<ConcreteBlock>,
+		NativeExecutor<node_executor::Executor>>,
+		ConcreteBlock,
+		node_runtime::RuntimeApi
+	>;
+#[allow(dead_code)]
+type ConcreteBackend = Backend<ConcreteBlock>;
+
+/// A specialized configuration object for setting up the node..
+pub type NodeConfiguration<C> = Configuration<C, GenesisConfig, crate::chain_spec::Extensions>;
+
 /// Builds a new service for a full client.
-pub fn new_full<C: Send + Default + 'static>(config: Configuration<C, GenesisConfig>)
--> Result<impl AbstractService, ServiceError> {
+pub fn new_full<C: Send + Default + 'static>(config: NodeConfiguration<C>)
+-> Result<
+	NewService<
+		ConcreteBlock,
+		ConcreteClient,
+		LongestChain<ConcreteBackend, ConcreteBlock>,
+		NetworkStatus<ConcreteBlock>,
+		NetworkService<ConcreteBlock, crate::service::NodeProtocol, <ConcreteBlock as BlockT>::Hash>,
+		TransactionPool<transaction_pool::FullChainApi<ConcreteClient, ConcreteBlock>>,
+		OffchainWorkers<
+			ConcreteClient,
+			<ConcreteBackend as client::backend::Backend<Block, Blake2Hasher>>::OffchainStorage,
+			ConcreteBlock,
+		>
+	>,
+	ServiceError,
+>
+{
 	new_full!(config).map(|(service, _)| service)
 }
 
 /// Builds a new service for a light client.
-pub fn new_light<C: Send + Default + 'static>(config: Configuration<C, GenesisConfig>)
+pub fn new_light<C: Send + Default + 'static>(config: NodeConfiguration<C>)
 -> Result<impl AbstractService, ServiceError> {
 	type RpcExtension = jsonrpc_core::IoHandler<substrate_rpc::Metadata>;
 	let inherent_data_providers = InherentDataProviders::new();
@@ -232,7 +274,7 @@ pub fn new_light<C: Send + Default + 'static>(config: Configuration<C, GenesisCo
 			Ok(LongestChain::new(backend.clone()))
 		})?
 		.with_transaction_pool(|config, client|
-			Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client)))
+			Ok(TransactionPool::new(config, transaction_pool::FullChainApi::new(client)))
 		)?
 		.with_import_queue_and_fprb(|_config, client, backend, fetcher, _select_chain, _tx_pool| {
 			let fetch_checker = fetcher

@@ -273,6 +273,8 @@ pub mod generic {
 		pub header: H,
 		/// Block state. TODO: Remove `Option` and custom encoding when v4 becomes common.
 		pub state: Option<BlockState>,
+		/// Data associated with this block announcement, e.g. a candidate message.
+		pub data: Option<Vec<u8>>,
 	}
 
 	// Custom Encode/Decode impl to maintain backwards compatibility with v3.
@@ -284,6 +286,9 @@ pub mod generic {
 			if let Some(state) = &self.state {
 				state.encode_to(dest);
 			}
+			if let Some(data) = &self.data {
+				data.encode_to(dest)
+			}
 		}
 	}
 
@@ -291,9 +296,11 @@ pub mod generic {
 		fn decode<I: Input>(input: &mut I) -> Result<Self, codec::Error> {
 			let header = H::decode(input)?;
 			let state = BlockState::decode(input).ok();
+			let data = Vec::decode(input).ok();
 			Ok(BlockAnnounce {
 				header,
 				state,
+				data,
 			})
 		}
 	}

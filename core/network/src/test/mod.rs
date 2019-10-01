@@ -37,16 +37,17 @@ use client::{
 use client::block_builder::BlockBuilder;
 use client::backend::{AuxStore, Backend, Finalizer};
 use crate::config::Roles;
+use consensus::block_validation::DefaultBlockAnnounceValidator;
 use consensus::import_queue::BasicQueue;
 use consensus::import_queue::{
 	BoxBlockImport, BoxJustificationImport, Verifier, BoxFinalityProofImport,
 };
 use consensus::block_import::{BlockImport, ImportResult};
 use consensus::Error as ConsensusError;
-use consensus::{BlockOrigin, ForkChoiceStrategy, BlockImportParams, JustificationImport};
+use consensus::{BlockOrigin, ForkChoiceStrategy, BlockImportParams, BlockCheckParams, JustificationImport};
 use futures::prelude::*;
 use futures03::{StreamExt as _, TryStreamExt as _};
-use crate::{NetworkWorker, NetworkService, config::ProtocolId};
+use crate::{NetworkWorker, NetworkService, ReportHandle, config::ProtocolId};
 use crate::config::{NetworkConfiguration, TransportConfig, BoxFinalityProofRequestBuilder};
 use libp2p::PeerId;
 use parking_lot::Mutex;
@@ -228,6 +229,11 @@ pub struct Peer<D, S: NetworkSpecialization<Block>> {
 }
 
 impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
+	/// Get this peer ID.
+	pub fn id(&self) -> PeerId {
+		self.network.service().local_peer_id()
+	}
+
 	/// Returns true if we're major syncing.
 	pub fn is_major_syncing(&self) -> bool {
 		self.network.service().is_major_syncing()
@@ -254,8 +260,13 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 	}
 
 	/// Announces an important block on the network.
-	pub fn announce_block(&self, hash: <Block as BlockT>::Hash) {
-		self.network.service().announce_block(hash);
+	pub fn announce_block(&self, hash: <Block as BlockT>::Hash, data: Vec<u8>) {
+		self.network.service().announce_block(hash, data);
+	}
+
+	/// Request explicit fork sync.
+	pub fn set_sync_fork_request(&self, peers: Vec<PeerId>, hash: <Block as BlockT>::Hash, number: NumberFor<Block>) {
+		self.network.service().set_sync_fork_request(peers, hash, number);
 	}
 
 	/// Add blocks to the peer -- edit the block before adding
@@ -302,11 +313,11 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 				Default::default()
 			};
 			self.block_import.import_block(import_block, cache).expect("block_import failed");
-			self.network.on_block_imported(hash, header, true);
+			self.network.on_block_imported(hash, header, Vec::new(), true);
 			at = hash;
 		}
 
-		self.network.service().announce_block(at.clone());
+		self.network.service().announce_block(at.clone(), Vec::new());
 		at
 	}
 
@@ -389,9 +400,11 @@ impl TransactionPool<Hash, Block> for EmptyTransactionPool {
 		Vec::new()
 	}
 
-	fn import(&self, _transaction: &Extrinsic) -> Option<Hash> {
-		None
+	fn hash_of(&self, _transaction: &Extrinsic) -> Hash {
+		Hash::default()
 	}
+
+	fn import(&self, _report_handle: ReportHandle, _who: PeerId, _rep_change: i32, _transaction: Extrinsic) {}
 
 	fn on_broadcasted(&self, _: HashMap<Hash, Vec<String>>) {}
 }
@@ -420,8 +433,11 @@ impl<T: ?Sized> Clone for BlockImportAdapter<T> {
 impl<T: ?Sized + BlockImport<Block>> BlockImport<Block> for BlockImportAdapter<T> {
 	type Error = T::Error;
 
-	fn check_block(&mut self, hash: Hash, parent_hash: Hash) -> Result<ImportResult, Self::Error> {
-		self.0.lock().check_block(hash, parent_hash)
+	fn check_block(
+		&mut self,
+		block: BlockCheckParams<Block>,
+	) -> Result<ImportResult, Self::Error> {
+		self.0.lock().check_block(block)
 	}
 
 	fn import_block(
@@ -555,6 +571,7 @@ pub trait TestNetFactory: Sized {
 			protocol_id: ProtocolId::from(&b"test-protocol-name"[..]),
 			import_queue,
 			specialization: self::SpecializationFactory::create(),
+			block_announce_validator: Box::new(DefaultBlockAnnounceValidator::new(client.clone()))
 		}).unwrap();
 
 		self.mut_peers(|peers| {
@@ -628,6 +645,7 @@ pub trait TestNetFactory: Sized {
 			protocol_id: ProtocolId::from(&b"test-protocol-name"[..]),
 			import_queue,
 			specialization: self::SpecializationFactory::create(),
+			block_announce_validator: Box::new(DefaultBlockAnnounceValidator::new(client.clone()))
 		}).unwrap();
 
 		self.mut_peers(|peers| {
@@ -690,7 +708,7 @@ pub trait TestNetFactory: Sized {
 
 				// We poll `imported_blocks_stream`.
 				while let Ok(Async::Ready(Some(notification))) = peer.imported_blocks_stream.poll() {
-					peer.network.on_block_imported(notification.hash, notification.header, true);
+					peer.network.on_block_imported(notification.hash, notification.header, Vec::new(), true);
 				}
 
 				// We poll `finality_notification_stream`, but we only take the last event.

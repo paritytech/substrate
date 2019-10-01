@@ -16,9 +16,8 @@
 
 //! Stuff to do with the runtime's storage.
 
-use crate::rstd::prelude::*;
-use crate::rstd::{borrow::Borrow, iter::FromIterator};
-use codec::{Codec, Encode, Decode, KeyedVec, EncodeAppend};
+use rstd::prelude::*;
+use codec::{FullCodec, FullEncode, Encode, EncodeAppend, EncodeLike};
 use crate::traits::Len;
 
 #[macro_use]
@@ -29,7 +28,7 @@ pub mod child;
 pub mod generator;
 
 /// A trait for working with macro-generated storage values under the substrate storage API.
-pub trait StorageValue<T: Codec> {
+pub trait StorageValue<T: FullCodec> {
 	/// The type that get/take return.
 	type Query;
 
@@ -43,11 +42,7 @@ pub trait StorageValue<T: Codec> {
 	fn get() -> Self::Query;
 
 	/// Store a value under this key into the provided storage instance.
-	fn put<Arg: Borrow<T>>(val: Arg);
-
-	/// Store a value under this key into the provided storage instance; this can take any reference
-	/// type that derefs to `T` (and has `Encode` implemented).
-	fn put_ref<Arg: ?Sized + Encode>(val: &Arg) where T: AsRef<Arg>;
+	fn put<Arg: EncodeLike<T>>(val: Arg);
 
 	/// Mutate the value
 	fn mutate<R, F: FnOnce(&mut Self::Query) -> R>(f: F) -> R;
@@ -61,11 +56,13 @@ pub trait StorageValue<T: Codec> {
 	/// Append the given item to the value in the storage.
 	///
 	/// `T` is required to implement `codec::EncodeAppend`.
-	fn append<'a, I, R>(items: R) -> Result<(), &'static str> where
-		I: 'a + Encode,
-		T: EncodeAppend<Item=I>,
-		R: IntoIterator<Item=&'a I>,
-		R::IntoIter: ExactSizeIterator;
+	fn append<Items, Item, EncodeLikeItem>(items: Items) -> Result<(), &'static str>
+	where
+		Item: Encode,
+		EncodeLikeItem: EncodeLike<Item>,
+		T: EncodeAppend<Item=Item>,
+		Items: IntoIterator<Item=EncodeLikeItem>,
+		Items::IntoIter: ExactSizeIterator;
 
 	/// Append the given items to the value in the storage.
 	///
@@ -78,11 +75,13 @@ pub trait StorageValue<T: Codec> {
 	///
 	/// use with care; if your use-case is not _exactly_ as what this function is doing,
 	/// you should use append and sensibly handle failure within the runtime code if it happens.
-	fn append_or_put<'a, I, R>(items: R) where
-		I: 'a + Encode + Clone,
-		T: EncodeAppend<Item=I> + FromIterator<I>,
-		R: IntoIterator<Item=&'a I> + Clone,
-		R::IntoIter: ExactSizeIterator;
+	fn append_or_put<Items, Item, EncodeLikeItem>(items: Items) where
+		Item: Encode,
+		EncodeLikeItem: EncodeLike<Item>,
+		T: EncodeAppend<Item=Item>,
+		Items: IntoIterator<Item=EncodeLikeItem> + Clone + EncodeLike<T>,
+		Items::IntoIter: ExactSizeIterator;
+
 
 	/// Read the length of the value in a fast way, without decoding the entire value.
 	///
@@ -92,60 +91,58 @@ pub trait StorageValue<T: Codec> {
 }
 
 /// A strongly-typed map in storage.
-pub trait StorageMap<K: Codec, V: Codec> {
+pub trait StorageMap<K: FullEncode, V: FullCodec> {
 	/// The type that get/take return.
 	type Query;
 
 	/// Get the storage key used to fetch a value corresponding to a specific key.
-	fn hashed_key_for<KeyArg: Borrow<K>>(key: KeyArg) -> Vec<u8>;
+	fn hashed_key_for<KeyArg: EncodeLike<K>>(key: KeyArg) -> Vec<u8>;
 
 	/// Does the value (explicitly) exist in storage?
-	fn exists<KeyArg: Borrow<K>>(key: KeyArg) -> bool;
+	fn exists<KeyArg: EncodeLike<K>>(key: KeyArg) -> bool;
 
 	/// Load the value associated with the given key from the map.
-	fn get<KeyArg: Borrow<K>>(key: KeyArg) -> Self::Query;
+	fn get<KeyArg: EncodeLike<K>>(key: KeyArg) -> Self::Query;
 
 	/// Swap the values of two keys.
-	fn swap<KeyArg1: Borrow<K>, KeyArg2: Borrow<K>>(key1: KeyArg1, key2: KeyArg2);
+	fn swap<KeyArg1: EncodeLike<K>, KeyArg2: EncodeLike<K>>(key1: KeyArg1, key2: KeyArg2);
 
 	/// Store a value to be associated with the given key from the map.
-	fn insert<KeyArg: Borrow<K>, ValArg: Borrow<V>>(key: KeyArg, val: ValArg);
-
-	/// Store a value under this key into the provided storage instance; this can take any reference
-	/// type that derefs to `T` (and has `Encode` implemented).
-	fn insert_ref<KeyArg: Borrow<K>, ValArg: ?Sized + Encode>(key: KeyArg, val: &ValArg) where V: AsRef<ValArg>;
+	fn insert<KeyArg: EncodeLike<K>, ValArg: EncodeLike<V>>(key: KeyArg, val: ValArg);
 
 	/// Remove the value under a key.
-	fn remove<KeyArg: Borrow<K>>(key: KeyArg);
+	fn remove<KeyArg: EncodeLike<K>>(key: KeyArg);
 
 	/// Mutate the value under a key.
-	fn mutate<KeyArg: Borrow<K>, R, F: FnOnce(&mut Self::Query) -> R>(key: KeyArg, f: F) -> R;
+	fn mutate<KeyArg: EncodeLike<K>, R, F: FnOnce(&mut Self::Query) -> R>(key: KeyArg, f: F) -> R;
 
 	/// Take the value under a key.
-	fn take<KeyArg: Borrow<K>>(key: KeyArg) -> Self::Query;
+	fn take<KeyArg: EncodeLike<K>>(key: KeyArg) -> Self::Query;
 
 	/// Append the given items to the value in the storage.
 	///
 	/// `V` is required to implement `codec::EncodeAppend`.
-	fn append<'a, I, R, KeyArg>(key: KeyArg, items: R) -> Result<(), &'static str>
+	fn append<Items, Item, EncodeLikeItem, KeyArg>(key: KeyArg, items: Items) -> Result<(), &'static str>
 	where
-		KeyArg: Borrow<K>,
-		I: 'a + codec::Encode,
-		V: codec::EncodeAppend<Item=I>,
-		R: IntoIterator<Item=&'a I> + Clone,
-		R::IntoIter: ExactSizeIterator;
+		KeyArg: EncodeLike<K>,
+		Item: Encode,
+		EncodeLikeItem: EncodeLike<Item>,
+		V: EncodeAppend<Item=Item>,
+		Items: IntoIterator<Item=EncodeLikeItem>,
+		Items::IntoIter: ExactSizeIterator;
 
 	/// Safely append the given items to the value in the storage. If a codec error occurs, then the
 	/// old (presumably corrupt) value is replaced with the given `items`.
 	///
-	/// `T` is required to implement `codec::EncodeAppend`.
-	fn append_or_insert<'a, I, R, KeyArg>(key: KeyArg, items: R)
+	/// `V` is required to implement `codec::EncodeAppend`.
+	fn append_or_insert<Items, Item, EncodeLikeItem, KeyArg>(key: KeyArg, items: Items)
 	where
-		KeyArg: Borrow<K>,
-		I: 'a + codec::Encode + Clone,
-		V: codec::EncodeAppend<Item=I> + crate::rstd::iter::FromIterator<I>,
-		R: IntoIterator<Item=&'a I> + Clone,
-		R::IntoIter: ExactSizeIterator;
+		KeyArg: EncodeLike<K>,
+		Item: Encode,
+		EncodeLikeItem: EncodeLike<Item>,
+		V: EncodeAppend<Item=Item>,
+		Items: IntoIterator<Item=EncodeLikeItem> + Clone + EncodeLike<V>,
+		Items::IntoIter: ExactSizeIterator;
 
 	/// Read the length of the value in a fast way, without decoding the entire value.
 	///
@@ -154,14 +151,14 @@ pub trait StorageMap<K: Codec, V: Codec> {
 	/// Note that `0` is returned as the default value if no encoded value exists at the given key.
 	/// Therefore, this function cannot be used as a sign of _existence_. use the `::exists()`
 	/// function for this purpose.
-	fn decode_len<KeyArg: Borrow<K>>(key: KeyArg) -> Result<usize, &'static str>
+	fn decode_len<KeyArg: EncodeLike<K>>(key: KeyArg) -> Result<usize, &'static str>
 		where V: codec::DecodeLength + Len;
 }
 
 /// A strongly-typed linked map in storage.
 ///
 /// Similar to `StorageMap` but allows to enumerate other elements and doesn't implement append.
-pub trait StorageLinkedMap<K: Codec, V: Codec> {
+pub trait StorageLinkedMap<K: FullCodec, V: FullCodec> {
 	/// The type that get/take return.
 	type Query;
 
@@ -169,29 +166,25 @@ pub trait StorageLinkedMap<K: Codec, V: Codec> {
 	type Enumerator: Iterator<Item = (K, V)>;
 
 	/// Does the value (explicitly) exist in storage?
-	fn exists<KeyArg: Borrow<K>>(key: KeyArg) -> bool;
+	fn exists<KeyArg: EncodeLike<K>>(key: KeyArg) -> bool;
 
 	/// Load the value associated with the given key from the map.
-	fn get<KeyArg: Borrow<K>>(key: KeyArg) -> Self::Query;
+	fn get<KeyArg: EncodeLike<K>>(key: KeyArg) -> Self::Query;
 
 	/// Swap the values of two keys.
-	fn swap<KeyArg1: Borrow<K>, KeyArg2: Borrow<K>>(key1: KeyArg1, key2: KeyArg2);
+	fn swap<KeyArg1: EncodeLike<K>, KeyArg2: EncodeLike<K>>(key1: KeyArg1, key2: KeyArg2);
 
 	/// Store a value to be associated with the given key from the map.
-	fn insert<KeyArg: Borrow<K>, ValArg: Borrow<V>>(key: KeyArg, val: ValArg);
-
-	/// Store a value under this key into the provided storage instance; this can take any reference
-	/// type that derefs to `T` (and has `Encode` implemented).
-	fn insert_ref<KeyArg: Borrow<K>, ValArg: ?Sized + Encode>(key: KeyArg, val: &ValArg) where V: AsRef<ValArg>;
+	fn insert<KeyArg: EncodeLike<K>, ValArg: EncodeLike<V>>(key: KeyArg, val: ValArg);
 
 	/// Remove the value under a key.
-	fn remove<KeyArg: Borrow<K>>(key: KeyArg);
+	fn remove<KeyArg: EncodeLike<K>>(key: KeyArg);
 
 	/// Mutate the value under a key.
-	fn mutate<KeyArg: Borrow<K>, R, F: FnOnce(&mut Self::Query) -> R>(key: KeyArg, f: F) -> R;
+	fn mutate<KeyArg: EncodeLike<K>, R, F: FnOnce(&mut Self::Query) -> R>(key: KeyArg, f: F) -> R;
 
 	/// Take the value under a key.
-	fn take<KeyArg: Borrow<K>>(key: KeyArg) -> Self::Query;
+	fn take<KeyArg: EncodeLike<K>>(key: KeyArg) -> Self::Query;
 
 	/// Return current head element.
 	fn head() -> Option<K>;
@@ -206,7 +199,7 @@ pub trait StorageLinkedMap<K: Codec, V: Codec> {
 	/// Note that `0` is returned as the default value if no encoded value exists at the given key.
 	/// Therefore, this function cannot be used as a sign of _existence_. use the `::exists()`
 	/// function for this purpose.
-	fn decode_len<KeyArg: Borrow<K>>(key: KeyArg) -> Result<usize, &'static str>
+	fn decode_len<KeyArg: EncodeLike<K>>(key: KeyArg) -> Result<usize, &'static str>
 		where V: codec::DecodeLength + Len;
 }
 
@@ -214,67 +207,69 @@ pub trait StorageLinkedMap<K: Codec, V: Codec> {
 ///
 /// It provides an important ability to efficiently remove all entries
 /// that have a common first key.
-pub trait StorageDoubleMap<K1: Encode, K2: Encode, V: Codec> {
+pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 	/// The type that get/take returns.
 	type Query;
 
-	fn exists<KArg1, KArg2>(k1: &KArg1, k2: &KArg2) -> bool
+	fn exists<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> bool
 	where
-		K1: Borrow<KArg1>,
-		K2: Borrow<KArg2>,
-		KArg1: ?Sized + Encode,
-		KArg2: ?Sized + Encode;
+		KArg1: EncodeLike<K1>,
+		KArg2: EncodeLike<K2>;
 
-	fn get<KArg1, KArg2>(k1: &KArg1, k2: &KArg2) -> Self::Query
+	fn get<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> Self::Query
 	where
-		K1: Borrow<KArg1>,
-		K2: Borrow<KArg2>,
-		KArg1: ?Sized + Encode,
-		KArg2: ?Sized + Encode;
+		KArg1: EncodeLike<K1>,
+		KArg2: EncodeLike<K2>;
 
-	fn take<KArg1, KArg2>(k1: &KArg1, k2: &KArg2) -> Self::Query
+	fn take<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> Self::Query
 	where
-		K1: Borrow<KArg1>,
-		K2: Borrow<KArg2>,
-		KArg1: ?Sized + Encode,
-		KArg2: ?Sized + Encode;
+		KArg1: EncodeLike<K1>,
+		KArg2: EncodeLike<K2>;
 
-	fn insert<KArg1, KArg2, VArg>(k1: &KArg1, k2: &KArg2, val: &VArg)
+	fn insert<KArg1, KArg2, VArg>(k1: KArg1, k2: KArg2, val: VArg)
 	where
-		K1: Borrow<KArg1>,
-		K2: Borrow<KArg2>,
-		V: Borrow<VArg>,
-		KArg1: ?Sized + Encode,
-		KArg2: ?Sized + Encode,
-		VArg: ?Sized + Encode;
+		KArg1: EncodeLike<K1>,
+		KArg2: EncodeLike<K2>,
+		VArg: EncodeLike<V>;
 
-	fn remove<KArg1, KArg2>(k1: &KArg1, k2: &KArg2)
+	fn remove<KArg1, KArg2>(k1: KArg1, k2: KArg2)
 	where
-		K1: Borrow<KArg1>,
-		K2: Borrow<KArg2>,
-		KArg1: ?Sized + Encode,
-		KArg2: ?Sized + Encode;
+		KArg1: EncodeLike<K1>,
+		KArg2: EncodeLike<K2>;
 
-	fn remove_prefix<KArg1>(k1: &KArg1) where KArg1: ?Sized + Encode, K1: Borrow<KArg1>;
+	fn remove_prefix<KArg1>(k1: KArg1) where KArg1: ?Sized + EncodeLike<K1>;
 
-	fn mutate<KArg1, KArg2, R, F>(k1: &KArg1, k2: &KArg2, f: F) -> R
+	fn mutate<KArg1, KArg2, R, F>(k1: KArg1, k2: KArg2, f: F) -> R
 	where
-		K1: Borrow<KArg1>,
-		K2: Borrow<KArg2>,
-		KArg1: ?Sized + Encode,
-		KArg2: ?Sized + Encode,
+		KArg1: EncodeLike<K1>,
+		KArg2: EncodeLike<K2>,
 		F: FnOnce(&mut Self::Query) -> R;
 
-	fn append<KArg1, KArg2, I>(
-		k1: &KArg1,
-		k2: &KArg2,
-		items: &[I],
+	fn append<Items, Item, EncodeLikeItem, KArg1, KArg2>(
+		k1: KArg1,
+		k2: KArg2,
+		items: Items,
 	) -> Result<(), &'static str>
 	where
-		K1: Borrow<KArg1>,
-		K2: Borrow<KArg2>,
-		KArg1: ?Sized + Encode,
-		KArg2: ?Sized + Encode,
-		I: codec::Encode,
-		V: EncodeAppend<Item=I>;
+		KArg1: EncodeLike<K1>,
+		KArg2: EncodeLike<K2>,
+		Item: Encode,
+		EncodeLikeItem: EncodeLike<Item>,
+		V: EncodeAppend<Item=Item>,
+		Items: IntoIterator<Item=EncodeLikeItem>,
+		Items::IntoIter: ExactSizeIterator;
+
+	fn append_or_insert<Items, Item, EncodeLikeItem, KArg1, KArg2>(
+		k1: KArg1,
+		k2: KArg2,
+		items: Items,
+	)
+	where
+		KArg1: EncodeLike<K1>,
+		KArg2: EncodeLike<K2>,
+		Item: Encode,
+		EncodeLikeItem: EncodeLike<Item>,
+		V: EncodeAppend<Item=Item>,
+		Items: IntoIterator<Item=EncodeLikeItem> + Clone + EncodeLike<V>,
+		Items::IntoIter: ExactSizeIterator;
 }

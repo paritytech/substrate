@@ -68,7 +68,7 @@ use fg_primitives::{GrandpaApi, AuthorityPair};
 use keystore::KeyStorePtr;
 use inherents::InherentDataProviders;
 use consensus_common::SelectChain;
-use primitives::{H256, Blake2Hasher};
+use primitives::{H256, Blake2Hasher, Pair};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG, CONSENSUS_WARN};
 use serde_json;
 
@@ -339,10 +339,10 @@ pub struct LinkHalf<B, E, Block: BlockT<Hash=H256>, RA, SC> {
 /// to it.
 pub fn block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC>(
 	client: Arc<Client<B, E, Block, RA>>,
-	api: Arc<PRA>,
+	api: &PRA,
 	select_chain: SC,
 ) -> Result<(
-		GrandpaBlockImport<B, E, Block, RA, PRA, SC>,
+		GrandpaBlockImport<B, E, Block, RA, SC>,
 		LinkHalf<B, E, Block, RA, SC>
 	), ClientError>
 where
@@ -381,7 +381,6 @@ where
 			persistent_data.authority_set.clone(),
 			voter_commands_tx,
 			persistent_data.consensus_changes.clone(),
-			api,
 		),
 		LinkHalf {
 			client,
@@ -428,6 +427,7 @@ fn global_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 		client.import_notification_stream(),
 		client.clone(),
 		global_in,
+		"global",
 	);
 
 	let global_in = global_in.map_err(CommandOrError::from);
@@ -523,20 +523,25 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 
 	register_finality_tracker_inherent_data_provider(client.clone(), &inherent_data_providers)?;
 
+	let conf = config.clone();
 	let telemetry_task = if let Some(telemetry_on_connect) = telemetry_on_connect {
 		let authorities = persistent_data.authority_set.clone();
 		let events = telemetry_on_connect
 			.for_each(move |_| {
+				let curr = authorities.current_authorities();
+				let mut auths = curr.voters().into_iter().map(|(p, _)| p);
+				let maybe_authority_id = authority_id(&mut auths, &conf.keystore)
+					.unwrap_or(Default::default());
+
 				telemetry!(CONSENSUS_INFO; "afg.authority_set";
-					 "authority_set_id" => ?authorities.set_id(),
-					 "authorities" => {
-						let curr = authorities.current_authorities();
-						let voters = curr.voters();
-						let authorities: Vec<String> =
-							voters.iter().map(|(id, _)| id.to_string()).collect();
+					"authority_id" => maybe_authority_id.to_string(),
+					"authority_set_id" => ?authorities.set_id(),
+					"authorities" => {
+						let authorities: Vec<String> = curr.voters()
+							.iter().map(|(id, _)| id.to_string()).collect();
 						serde_json::to_string(&authorities)
 							.expect("authorities is always at least an empty vector; elements are always of type string")
-					 }
+					}
 				);
 				Ok(())
 			})
@@ -628,14 +633,33 @@ where
 	/// has changed (e.g. as signalled by a voter command).
 	fn rebuild_voter(&mut self) {
 		debug!(target: "afg", "{}: Starting new voter with set ID {}", self.env.config.name(), self.env.set_id);
+
+		let authority_id = is_voter(&self.env.voters, &self.env.config.keystore)
+			.map(|ap| ap.public())
+			.unwrap_or(Default::default());
+
 		telemetry!(CONSENSUS_DEBUG; "afg.starting_new_voter";
-			"name" => ?self.env.config.name(), "set_id" => ?self.env.set_id
+			"name" => ?self.env.config.name(),
+			"set_id" => ?self.env.set_id,
+			"authority_id" => authority_id.to_string(),
+		);
+
+		let chain_info = self.env.inner.info();
+		telemetry!(CONSENSUS_INFO; "afg.authority_set";
+			"number" => ?chain_info.chain.finalized_number,
+			"hash" => ?chain_info.chain.finalized_hash,
+			"authority_id" => authority_id.to_string(),
+			"authority_set_id" => ?self.env.set_id,
+			"authorities" => {
+				let authorities: Vec<String> = self.env.voters.voters()
+					.iter().map(|(id, _)| id.to_string()).collect();
+				serde_json::to_string(&authorities)
+					.expect("authorities is always at least an empty vector; elements are always of type string")
+			},
 		);
 
 		match &*self.env.voter_set_state.read() {
 			VoterSetState::Live { completed_rounds, .. } => {
-				let chain_info = self.env.inner.info();
-
 				let last_finalized = (
 					chain_info.chain.finalized_hash,
 					chain_info.chain.finalized_number,
@@ -839,6 +863,26 @@ fn is_voter(
 	match keystore {
 		Some(keystore) => voters.voters().iter()
 			.find_map(|(p, _)| keystore.read().key_pair::<AuthorityPair>(&p).ok()),
+		None => None,
+	}
+}
+
+/// Returns the authority id of this node, if available.
+fn authority_id<'a, I>(
+	authorities: &mut I,
+	keystore: &Option<KeyStorePtr>,
+) -> Option<AuthorityId> where
+	I: Iterator<Item = &'a AuthorityId>,
+{
+	match keystore {
+		Some(keystore) => {
+			authorities
+				.find_map(|p| {
+					keystore.read().key_pair::<AuthorityPair>(&p)
+						.ok()
+						.map(|ap| ap.public())
+				})
+		}
 		None => None,
 	}
 }

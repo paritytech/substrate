@@ -247,10 +247,12 @@ mod tests {
 	fn should_cease_building_block_when_deadline_is_reached() {
 		// given
 		let client = Arc::new(test_client::new());
-		let chain_api = transaction_pool::ChainApi::new(client.clone());
+		let chain_api = transaction_pool::FullChainApi::new(client.clone());
 		let txpool = Arc::new(TransactionPool::new(Default::default(), chain_api));
 
-		txpool.submit_at(&BlockId::number(0), vec![extrinsic(0), extrinsic(1)], false).unwrap();
+		futures::executor::block_on(
+			txpool.submit_at(&BlockId::number(0), vec![extrinsic(0), extrinsic(1)], false)
+		).unwrap();
 
 		let mut proposer_factory = ProposerFactory {
 			client: client.clone(),

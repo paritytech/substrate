@@ -90,7 +90,7 @@ use rstd::prelude::*;
 use sr_primitives::{
 	traits::{StaticLookup, Dispatchable}, weights::SimpleDispatchInfo, DispatchError,
 };
-use support::{StorageValue, Parameter, decl_module, decl_event, decl_storage, ensure};
+use support::{Parameter, decl_module, decl_event, decl_storage, ensure};
 use system::ensure_signed;
 
 pub trait Trait: system::Trait {
