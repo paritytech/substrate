@@ -20,7 +20,7 @@
 use crate::utils::{
 	generate_crate_access, create_host_function_ident, get_function_argument_names,
 	get_function_argument_types_without_ref, get_function_argument_types_ref_and_mut,
-	get_function_argument_names_and_types_without_ref,
+	get_function_argument_names_and_types_without_ref, get_trait_methods,
 };
 
 use syn::{
@@ -40,22 +40,32 @@ use std::iter::Iterator;
 /// implementations for the host functions on the host.
 pub fn generate(trait_def: &ItemTrait) -> Result<TokenStream> {
 	let trait_name = &trait_def.ident;
-	let extern_host_functions = trait_def
-		.items
-		.iter()
-		.filter_map(|i| match i {
-			TraitItem::Method(ref method) => Some(method),
-			_ => None,
-		})
+	let extern_host_function_impls = get_trait_methods(trait_def)
 		.try_fold(TokenStream::new(), |mut t, m| {
 			t.extend(generate_extern_host_function(m, trait_name)?);
+			Ok::<_, Error>(t)
+		})?;
+	let extern_host_exchangeable_functions = get_trait_methods(trait_def)
+		.try_fold(TokenStream::new(), |mut t, m| {
+			t.extend(generate_extern_host_exchangeable_function(m, trait_name)?);
 			Ok::<_, Error>(t)
 		})?;
 	let host_functions_struct = generate_host_functions_struct(trait_def)?;
 
 	Ok(
 		quote! {
-			#extern_host_functions
+			/// The implementations of the extern host functions. This special implementation module
+			/// is required to change the extern host functions signature to
+			/// `unsafe fn name(args) -> ret` to make the function implementations exchangeable.
+			#[cfg(not(feature = "std"))]
+			pub mod extern_host_function_impls {
+				use super::*;
+
+				#extern_host_function_impls
+			}
+
+			#extern_host_exchangeable_functions
+
 			#host_functions_struct
 		}
 	)
@@ -65,8 +75,51 @@ pub fn generate(trait_def: &ItemTrait) -> Result<TokenStream> {
 fn generate_extern_host_function(method: &TraitItemMethod, trait_name: &Ident) -> Result<TokenStream> {
 	let crate_ = generate_crate_access();
 	let arg_types = get_function_argument_types_without_ref(&method.sig);
+	let arg_types2 = get_function_argument_types_without_ref(&method.sig);
 	let arg_names = get_function_argument_names(&method.sig);
+	let arg_names2 = get_function_argument_names(&method.sig);
+	let arg_names3 = get_function_argument_names(&method.sig);
 	let function = create_host_function_ident(&method.sig.ident, trait_name);
+	let doc_string = format!(" Default extern host function implementation for [`../{}`].", function);
+
+	let output = match method.sig.output {
+		ReturnType::Default => quote!(),
+		ReturnType::Type(_, ref ty) => quote! {
+			-> <#ty as #crate_::RIType>::FFIType
+		}
+	};
+
+	Ok(
+		quote! {
+			#[doc(#doc_string)]
+			pub unsafe fn #function (
+				#( #arg_names: <#arg_types as #crate_::RIType>::FFIType ),*
+			) #output {
+				mod implementation {
+					use super::*;
+
+					extern "C" {
+						pub fn #function (
+							#( #arg_names2: <#arg_types2 as #crate_::RIType>::FFIType ),*
+						) #output;
+					}
+				}
+
+				implementation::#function( #( #arg_names3 ),* )
+			}
+		}
+	)
+}
+
+/// Generate the extern host exchangeable function for the given method.
+fn generate_extern_host_exchangeable_function(
+	method: &TraitItemMethod,
+	trait_name: &Ident,
+) -> Result<TokenStream> {
+	let crate_ = generate_crate_access();
+	let arg_types = get_function_argument_types_without_ref(&method.sig);
+	let function = create_host_function_ident(&method.sig.ident, trait_name);
+	let doc_string = format!(" Exchangeable extern host function used by [`{}`].", method.sig.ident);
 
 	let output = match method.sig.output {
 		ReturnType::Default => quote!(),
@@ -78,11 +131,11 @@ fn generate_extern_host_function(method: &TraitItemMethod, trait_name: &Ident) -
 	Ok(
 		quote! {
 			#[cfg(not(feature = "std"))]
-			extern "C" {
-				pub fn #function (
-					#( #arg_names: <#arg_types as #crate_::RIType>::FFIType ),*
-				) #output;
-			}
+			#[allow(non_upper_case_globals)]
+			#[doc(#doc_string)]
+			pub static #function : #crate_::wasm::ExchangeableFunction<
+				unsafe fn ( #( <#arg_types as #crate_::RIType>::FFIType ),* ) #output
+			> = #crate_::wasm::ExchangeableFunction::new(extern_host_function_impls::#function);
 		}
 	)
 }

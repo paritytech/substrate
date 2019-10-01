@@ -22,6 +22,7 @@ use core::{intrinsics, panic::PanicInfo};
 use rstd::{vec::Vec, cell::Cell, convert::TryInto};
 use primitives::{offchain, Blake2Hasher};
 use codec::Decode;
+use runtime_interface::wasm::ExchangeableFunction;
 
 #[cfg(not(feature = "no_panic_handler"))]
 #[panic_handler]
@@ -59,72 +60,6 @@ pub extern fn oom(_: core::alloc::Layout) -> ! {
 /// External (Host) APIs
 pub mod ext {
 	use super::*;
-
-	/// The state of an exchangeable function.
-	#[derive(Clone, Copy)]
-	enum ExchangeableFunctionState {
-		/// Original function is present
-		Original,
-		/// The function has been replaced.
-		Replaced,
-	}
-
-	/// A function which implementation can be exchanged.
-	///
-	/// Internally this works by swapping function pointers.
-	pub struct ExchangeableFunction<T>(Cell<(T, ExchangeableFunctionState)>);
-
-	impl<T> ExchangeableFunction<T> {
-		/// Create a new instance of `ExchangeableFunction`.
-		pub const fn new(impl_: T) -> Self {
-			Self(Cell::new((impl_, ExchangeableFunctionState::Original)))
-		}
-	}
-
-	impl<T: Copy> ExchangeableFunction<T> {
-		/// Replace the implementation with `new_impl`.
-		///
-		/// # Panics
-		///
-		/// Panics when trying to replace an already replaced implementation.
-		///
-		/// # Returns
-		///
-		/// Returns the original implementation wrapped in [`RestoreImplementation`].
-		pub fn replace_implementation(&'static self, new_impl: T)  -> RestoreImplementation<T> {
-			if let ExchangeableFunctionState::Replaced = self.0.get().1 {
-				panic!("Trying to replace an already replaced implementation!")
-			}
-
-			let old = self.0.replace((new_impl, ExchangeableFunctionState::Replaced));
-
-			RestoreImplementation(self, Some(old.0))
-		}
-
-		/// Restore the original implementation.
-		fn restore_orig_implementation(&self, orig: T) {
-			self.0.set((orig, ExchangeableFunctionState::Original));
-		}
-
-		/// Returns the internal function pointer.
-		pub fn get(&self) -> T {
-			self.0.get().0
-		}
-	}
-
-	// WASM does not support threads, so this is safe; qed.
-	unsafe impl<T> Sync for ExchangeableFunction<T> {}
-
-	/// Restores a function implementation on drop.
-	///
-	/// Stores a static reference to the function object and the original implementation.
-	pub struct RestoreImplementation<T: 'static + Copy>(&'static ExchangeableFunction<T>, Option<T>);
-
-	impl<T: Copy> Drop for RestoreImplementation<T> {
-		fn drop(&mut self) {
-			self.0.restore_orig_implementation(self.1.take().expect("Value is only taken on drop; qed"));
-		}
-	}
 
 	/// Declare extern functions
 	macro_rules! extern_functions {

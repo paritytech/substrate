@@ -18,12 +18,11 @@
 
 use crate::utils::{
 	generate_crate_access, create_host_function_ident, get_function_arguments,
-	get_function_argument_names, get_function_argument_types_without_ref,
+	get_function_argument_names, get_function_argument_types_without_ref, get_trait_methods,
 };
 
 use syn::{
-	Ident, ItemTrait, TraitItemMethod, FnArg, Signature, Result, ReturnType, TraitItem,
-	spanned::Spanned,
+	Ident, ItemTrait, TraitItemMethod, FnArg, Signature, Result, ReturnType, spanned::Spanned,
 };
 
 use proc_macro2::{TokenStream, Span};
@@ -33,17 +32,10 @@ use quote::{quote, quote_spanned};
 /// Generate the bare-function interface.
 pub fn generate(trait_def: &ItemTrait) -> Result<TokenStream> {
 	let trait_name = &trait_def.ident;
-	trait_def
-		.items
-		.iter()
-		.filter_map(|i| match i {
-			TraitItem::Method(ref method) => Some(method),
-			_ => None,
-		})
-		.try_fold(TokenStream::new(), |mut t, m| {
-			t.extend(function_for_method(trait_name, m)?);
-			Ok(t)
-		})
+	get_trait_methods(trait_def).try_fold(TokenStream::new(), |mut t, m| {
+		t.extend(function_for_method(trait_name, m)?);
+		Ok(t)
+	})
 }
 
 /// Generates the bare function implementation for the given method.
@@ -55,9 +47,11 @@ fn function_for_method(trait_name: &Ident, method: &TraitItemMethod) -> Result<T
 	let args = get_function_arguments(&method.sig);
 	let arg_names = get_function_argument_names(&method.sig);
 	let return_value = &method.sig.output;
+	let attrs = &method.attrs;
 
 	Ok(
 		quote! {
+			#( #attrs )*
 			pub fn #function_name( #( #args, )* ) #return_value {
 				#std_impl
 
@@ -98,7 +92,7 @@ fn function_no_std_impl(trait_name: &Ident, method: &TraitItemMethod) -> Result<
 				)*
 
 				// Call the host function
-				let result = unsafe { #host_function_name( #( #arg_names2.get(), )* ) };
+				let result = unsafe { #host_function_name.get()( #( #arg_names2.get(), )* ) };
 
 				#convert_return_value
 			}

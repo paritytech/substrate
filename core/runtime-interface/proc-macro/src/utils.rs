@@ -18,7 +18,9 @@
 
 use proc_macro2::{TokenStream, Span};
 
-use syn::{Ident, Error, Signature, Pat, PatType, FnArg, Type, token};
+use syn::{
+	Ident, Error, Signature, Pat, PatType, FnArg, Type, token, TraitItemMethod, ItemTrait, TraitItem
+};
 
 use proc_macro_crate::crate_name;
 
@@ -119,6 +121,17 @@ pub fn get_function_argument_types_ref_and_mut<'a>(
 		.map(|pt| &pt.ty)
 		.map(|ty| match &**ty {
 			Type::Reference(type_ref) => Some((&type_ref.and_token, type_ref.mutability.as_ref())),
+			_ => None,
+		})
+}
+
+/// Returns an iterator over all trait methods for the given trait definition.
+pub fn get_trait_methods<'a>(trait_def: &'a ItemTrait) -> impl Iterator<Item = &'a TraitItemMethod> {
+	trait_def
+		.items
+		.iter()
+		.filter_map(|i| match i {
+			TraitItem::Method(ref method) => Some(method),
 			_ => None,
 		})
 }

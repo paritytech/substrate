@@ -36,6 +36,8 @@ use primitives::{
 	},
 };
 
+use runtime_interface::runtime_interface;
+
 /// Error verifying ECDSA signature
 pub enum EcdsaVerifyError {
 	/// Incorrect value of R or S
