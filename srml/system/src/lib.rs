@@ -278,6 +278,13 @@ decl_module! {
 				storage::unhashed::kill(&key);
 			}
 		}
+
+		/// Kill all storage items with a key that starts with the given prefix.
+		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
+		fn kill_prefix(origin, prefix: Key) {
+			ensure_root(origin)?;
+			storage::unhashed::kill_prefix(&prefix);
+		}
 	}
 }
 

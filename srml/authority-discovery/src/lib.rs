@@ -22,29 +22,29 @@
 //!
 //! ## Dependencies
 //!
-//! This module depends on the [I’m online module](../srml_im_online/index.html)
-//! using its session key.
+//! This module depends on an externally defined session key type, specified via
+//! `Trait::AuthorityId` in the respective node runtime implementation.
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use app_crypto::RuntimeAppPublic;
+use codec::{Decode, Encode};
 use rstd::prelude::*;
 use support::{decl_module, decl_storage};
 
-pub trait Trait: system::Trait + session::Trait + im_online::Trait {}
-
-type AuthorityIdFor<T> = <T as im_online::Trait>::AuthorityId;
-type AuthoritySignatureFor<T> =
-	<<T as im_online::Trait>::AuthorityId as RuntimeAppPublic>::Signature;
+/// The module's config trait.
+pub trait Trait: system::Trait + session::Trait {
+	type AuthorityId: RuntimeAppPublic + Default + Decode + Encode + PartialEq;
+}
 
 decl_storage! {
 	trait Store for Module<T: Trait> as AuthorityDiscovery {
 		/// The current set of keys that may issue a heartbeat.
-		Keys get(keys): Vec<AuthorityIdFor<T>>;
+		Keys get(keys): Vec<T::AuthorityId>;
 	}
 	add_extra_genesis {
-		config(keys): Vec<AuthorityIdFor<T>>;
+		config(keys): Vec<T::AuthorityId>;
 		build(|config| Module::<T>::initialize_keys(&config.keys))
 	}
 }
@@ -59,10 +59,10 @@ impl<T: Trait> Module<T> {
 	/// set, otherwise this function returns None. The restriction might be
 	/// softened in the future in case a consumer needs to learn own authority
 	/// identifier.
-	fn authority_id() -> Option<AuthorityIdFor<T>> {
+	fn authority_id() -> Option<T::AuthorityId> {
 		let authorities = Keys::<T>::get();
 
-		let local_keys = <AuthorityIdFor<T>>::all();
+		let local_keys = T::AuthorityId::all();
 
 		authorities.into_iter().find_map(|authority| {
 			if local_keys.contains(&authority) {
@@ -74,12 +74,17 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Retrieve authority identifiers of the current authority set.
-	pub fn authorities() -> Vec<AuthorityIdFor<T>> {
+	pub fn authorities() -> Vec<T::AuthorityId> {
 		Keys::<T>::get()
 	}
 
 	/// Sign the given payload with the private key corresponding to the given authority id.
-	pub fn sign(payload: &Vec<u8>) -> Option<(AuthoritySignatureFor<T>, AuthorityIdFor<T>)> {
+	pub fn sign(
+		payload: &Vec<u8>,
+	) -> Option<(
+		<<T as Trait>::AuthorityId as RuntimeAppPublic>::Signature,
+		T::AuthorityId,
+	)> {
 		let authority_id = Module::<T>::authority_id()?;
 		authority_id.sign(payload).map(|s| (s, authority_id))
 	}
@@ -88,13 +93,13 @@ impl<T: Trait> Module<T> {
 	/// authority identifier.
 	pub fn verify(
 		payload: &Vec<u8>,
-		signature: AuthoritySignatureFor<T>,
-		authority_id: AuthorityIdFor<T>,
+		signature: <<T as Trait>::AuthorityId as RuntimeAppPublic>::Signature,
+		authority_id: T::AuthorityId,
 	) -> bool {
 		authority_id.verify(payload, &signature)
 	}
 
-	fn initialize_keys(keys: &[AuthorityIdFor<T>]) {
+	fn initialize_keys(keys: &[T::AuthorityId]) {
 		if !keys.is_empty() {
 			assert!(Keys::<T>::get().is_empty(), "Keys are already initialized!");
 			Keys::<T>::put_ref(keys);
@@ -103,7 +108,7 @@ impl<T: Trait> Module<T> {
 }
 
 impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
-	type Key = AuthorityIdFor<T>;
+	type Key = T::AuthorityId;
 
 	fn on_genesis_session<'a, I: 'a>(validators: I)
 	where
@@ -144,9 +149,11 @@ mod tests {
 
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
-	impl Trait for Test {}
+	impl Trait for Test {
+		type AuthorityId = babe_primitives::AuthorityId;
+	}
 
-	type AuthorityId = im_online::sr25519::AuthorityId;
+	type AuthorityId = babe_primitives::AuthorityId;
 
 	pub struct TestOnSessionEnding;
 	impl session::OnSessionEnding<AuthorityId> for TestOnSessionEnding {
@@ -174,18 +181,6 @@ mod tests {
 	impl session::historical::Trait for Test {
 		type FullIdentification = ();
 		type FullIdentificationOf = ();
-	}
-
-	impl im_online::Trait for Test {
-		type AuthorityId = AuthorityId;
-		type Call = im_online::Call<Test>;
-		type Event = ();
-		type SubmitTransaction = system::offchain::TransactionSubmitter<
-			(),
-			im_online::Call<Test>,
-			UncheckedExtrinsic<(), im_online::Call<Test>, (), ()>,
-		>;
-		type ReportUnresponsiveness = ();
 	}
 
 	pub type BlockNumber = u64;
@@ -243,13 +238,13 @@ mod tests {
 		let key_store = KeyStore::new();
 		key_store
 			.write()
-			.sr25519_generate_new(key_types::IM_ONLINE, None)
+			.sr25519_generate_new(key_types::BABE, None)
 			.expect("Generates key.");
 
 		// Retrieve key to later check if we got the right one.
 		let public_key = key_store
 			.read()
-			.sr25519_public_keys(key_types::IM_ONLINE)
+			.sr25519_public_keys(key_types::BABE)
 			.pop()
 			.unwrap();
 		let authority_id = AuthorityId::from(public_key);
@@ -283,7 +278,7 @@ mod tests {
 		let key_store = KeyStore::new();
 		key_store
 			.write()
-			.sr25519_generate_new(key_types::IM_ONLINE, None)
+			.sr25519_generate_new(key_types::BABE, None)
 			.expect("Generates key.");
 
 		// Build genesis.
@@ -317,13 +312,13 @@ mod tests {
 		let key_store = KeyStore::new();
 		key_store
 			.write()
-			.sr25519_generate_new(key_types::IM_ONLINE, None)
+			.sr25519_generate_new(key_types::BABE, None)
 			.expect("Generates key.");
 
 		// Retrieve key to later check if we got the right one.
 		let public_key = key_store
 			.read()
-			.sr25519_public_keys(key_types::IM_ONLINE)
+			.sr25519_public_keys(key_types::BABE)
 			.pop()
 			.unwrap();
 		let authority_id = AuthorityId::from(public_key);
@@ -347,7 +342,11 @@ mod tests {
 			let payload = String::from("test payload").into_bytes();
 			let (sig, authority_id) = AuthorityDiscovery::sign(&payload).expect("signature");
 
-			assert!(AuthorityDiscovery::verify(&payload, sig.clone(), authority_id.clone(),));
+			assert!(AuthorityDiscovery::verify(
+				&payload,
+				sig.clone(),
+				authority_id.clone(),
+			));
 
 			assert!(!AuthorityDiscovery::verify(
 				&String::from("other payload").into_bytes(),
