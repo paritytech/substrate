@@ -394,11 +394,6 @@ pub fn check_nominator_exposure(stash: u64) {
 	);
 }
 
-pub fn assert_total_expo(stash: u64, val: u64) {
-	let expo = Staking::stakers(&stash);
-	assert_eq!(expo.total, val, "total exposure mismatch {:?} != {:?}", expo.total, val);
-}
-
 pub fn assert_is_stash(acc: u64) {
 	assert!(Staking::bonded(&acc).is_some(), "Not a stash.");
 }
