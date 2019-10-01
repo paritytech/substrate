@@ -26,7 +26,7 @@ use codec::{Encode, Decode, Input, Output, Error};
 /// an index.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Hash))]
-#[derive(sr_primitives::RuntimeDebug)]
+#[derive(Debug)]
 pub enum Address<AccountId, AccountIndex> where
 	AccountId: Member,
 	AccountIndex: Member,

@@ -51,7 +51,7 @@ mod imp {
 }
 
 /// Error that can occur while using this crate.
-#[derive(primitives::RuntimeDebug)]
+#[derive(Debug)]
 pub enum Error {
 	/// Module is not valid, couldn't be instantiated.
 	Module,

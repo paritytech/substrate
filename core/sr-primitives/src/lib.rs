@@ -166,7 +166,7 @@ pub type ConsensusEngineId = [u8; 4];
 /// Signature verify that can work with any known signature types..
 #[derive(Eq, PartialEq, Clone, Encode, Decode)]
 // TODO [ToDr] Do proper
-//#[derive(primitives::RuntimeDebug)]
+#[derive(Debug)]
 pub enum MultiSignature {
 	/// An Ed25519 signature.
 	Ed25519(ed25519::Signature),
@@ -195,7 +195,7 @@ impl Default for MultiSignature {
 /// Public key for any known crypto algorithm.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[derive(primitives::RuntimeDebug)]
+#[derive(Debug)]
 pub enum MultiSigner {
 	/// An Ed25519 identity.
 	Ed25519(ed25519::Public),
@@ -262,7 +262,7 @@ impl Verify for MultiSignature {
 /// Signature verify that can work with any known signature types..
 #[derive(Eq, PartialEq, Clone, Default, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[derive(primitives::RuntimeDebug)]
+#[derive(Debug)]
 pub struct AnySignature(H512);
 
 impl Verify for AnySignature {
@@ -292,7 +292,7 @@ impl From<ed25519::Signature> for AnySignature {
 
 #[derive(Eq, PartialEq, Clone, Copy, Decode, Encode)]
 #[cfg_attr(feature = "std", derive(Serialize))]
-#[derive(primitives::RuntimeDebug)]
+#[derive(Debug)]
 /// Reason why an extrinsic couldn't be applied (i.e. invalid extrinsic).
 pub enum ApplyError {
 	/// General error to do with the permissions of the sender.
@@ -345,7 +345,7 @@ pub type ApplyResult = Result<ApplyOutcome, ApplyError>;
 
 #[derive(Eq, PartialEq, Clone, Copy, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Serialize))]
-#[derive(primitives::RuntimeDebug)]
+#[derive(Debug)]
 /// Reason why a dispatch call failed
 pub struct DispatchError {
 	/// Module index, matching the metadata module index

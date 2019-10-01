@@ -23,11 +23,11 @@ use rstd::vec::Vec;
 
 #[derive(codec::Encode, codec::Decode, Eq, PartialEq, Clone)]
 #[cfg_attr(feature = "std", derive(Hash))]
-#[derive(sr_primitives::RuntimeDebug)]
+#[derive(Debug)]
 pub struct Signature(pub Vec<u8>);
 #[derive(codec::Encode, codec::Decode, Eq, PartialEq, Clone)]
 #[cfg_attr(feature = "std", derive(Hash))]
-#[derive(sr_primitives::RuntimeDebug)]
+#[derive(Debug)]
 pub struct AuthorityId(pub Vec<u8>);
 
 decl_runtime_apis! {

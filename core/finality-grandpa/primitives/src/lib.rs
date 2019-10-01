@@ -60,7 +60,7 @@ pub type RoundNumber = u64;
 
 /// A scheduled change of authority set.
 #[cfg_attr(feature = "std", derive(Serialize))]
-#[derive(sr_primitives::RuntimeDebug)]
+#[derive(Debug)]
 #[derive(Clone, Eq, PartialEq, Encode, Decode)]
 pub struct ScheduledChange<N> {
 	/// The new authorities after the change, along with their respective weights.
@@ -71,7 +71,7 @@ pub struct ScheduledChange<N> {
 
 /// An consensus log item for GRANDPA.
 #[cfg_attr(feature = "std", derive(Serialize))]
-#[derive(sr_primitives::RuntimeDebug)]
+#[derive(Debug)]
 #[derive(Decode, Encode, PartialEq, Eq, Clone)]
 pub enum ConsensusLog<N: Codec> {
 	/// Schedule an authority set change.
