@@ -358,7 +358,7 @@ impl<T: Trait> Module<T> {
 		} else {
 			// move onto the next segment and update the index.
 			let segment_idx = segment_idx + 1;
-			<UnderConstruction>::insert(&segment_idx, vec![*vrf_output].as_ref());
+			<UnderConstruction>::insert(&segment_idx, &vec![*vrf_output]);
 			<SegmentIndex>::put(&segment_idx);
 		}
 	}
@@ -438,7 +438,7 @@ impl<T: Trait> Module<T> {
 	fn initialize_authorities(authorities: &[(AuthorityId, BabeAuthorityWeight)]) {
 		if !authorities.is_empty() {
 			assert!(Authorities::get().is_empty(), "Authorities are already initialized!");
-			Authorities::put_ref(authorities);
+			Authorities::put(authorities);
 		}
 	}
 }

@@ -722,7 +722,7 @@ decl_module! {
 
 			// You're auto-bonded forever, here. We might improve this by only bonding when
 			// you actually validate/nominate and remove once you unbond __everything__.
-			<Bonded<T>>::insert(&stash, controller.clone());
+			<Bonded<T>>::insert(&stash, &controller);
 			<Payee<T>>::insert(&stash, payee);
 
 			let stash_balance = T::Currency::free_balance(&stash);
@@ -1339,7 +1339,7 @@ impl<T: Trait> Module<T> {
 				if exposure.total < slot_stake {
 					slot_stake = exposure.total;
 				}
-				<Stakers<T>>::insert(c.clone(), exposure.clone());
+				<Stakers<T>>::insert(&c, exposure.clone());
 			}
 
 			// Update slot stake.

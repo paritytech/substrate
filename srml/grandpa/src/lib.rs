@@ -333,7 +333,7 @@ impl<T: Trait> Module<T> {
 	fn initialize_authorities(authorities: &[(AuthorityId, AuthorityWeight)]) {
 		if !authorities.is_empty() {
 			assert!(Authorities::get().is_empty(), "Authorities are already initialized!");
-			Authorities::put_ref(authorities);
+			Authorities::put(authorities);
 		}
 	}
 }
