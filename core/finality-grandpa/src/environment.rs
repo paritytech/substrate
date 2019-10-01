@@ -587,6 +587,7 @@ where
 			self.inner.import_notification_stream(),
 			self.inner.clone(),
 			incoming,
+			"round",
 		).map_err(Into::into));
 
 		// schedule network message cleanup when sink drops.

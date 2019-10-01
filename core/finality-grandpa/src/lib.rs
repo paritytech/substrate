@@ -427,6 +427,7 @@ fn global_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 		client.import_notification_stream(),
 		client.clone(),
 		global_in,
+		"global",
 	);
 
 	let global_in = global_in.map_err(CommandOrError::from);
