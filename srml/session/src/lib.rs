@@ -640,15 +640,15 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn key_owner(id: KeyTypeId, key_data: &[u8]) -> Option<T::ValidatorId> {
-		<KeyOwner<T>>::get(DEDUP_KEY_PREFIX, &(id, key_data.to_vec()))
+		<KeyOwner<T>>::get(DEDUP_KEY_PREFIX, (id, key_data))
 	}
 
 	fn put_key_owner(id: KeyTypeId, key_data: &[u8], v: &T::ValidatorId) {
-		<KeyOwner<T>>::insert(DEDUP_KEY_PREFIX, &(id, key_data.to_vec()), v)
+		<KeyOwner<T>>::insert(DEDUP_KEY_PREFIX, (id, key_data), v)
 	}
 
 	fn clear_key_owner(id: KeyTypeId, key_data: &[u8]) {
-		<KeyOwner<T>>::remove(DEDUP_KEY_PREFIX, &(id, key_data.to_vec()));
+		<KeyOwner<T>>::remove(DEDUP_KEY_PREFIX, (id, key_data));
 	}
 }
 

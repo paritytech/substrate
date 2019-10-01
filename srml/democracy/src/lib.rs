@@ -24,7 +24,7 @@ use sr_primitives::{
 	traits::{Zero, Bounded, CheckedMul, CheckedDiv, EnsureOrigin, Hash, Dispatchable},
 	weights::SimpleDispatchInfo,
 };
-use codec::{Encode, Decode, Input, Output, Error};
+use codec::{Ref, Encode, Decode, Input, Output, Error};
 use support::{
 	decl_module, decl_storage, decl_event, ensure,
 	Parameter,
@@ -377,10 +377,10 @@ decl_module! {
 
 			let index = Self::public_prop_count();
 			PublicPropCount::put(index + 1);
-			<DepositOf<T>>::insert(index, (value, vec![who.clone()]));
+			<DepositOf<T>>::insert(index, (value, &[&who][..]));
 
-			let new_prop = (index, (*proposal).clone(), who);
-			<PublicProps<T>>::append_or_put([new_prop].into_iter());
+			let new_prop = (index, proposal, who);
+			<PublicProps<T>>::append_or_put(&[Ref::from(&new_prop)][..]);
 
 			Self::deposit_event(RawEvent::Proposed(index, value));
 		}
@@ -609,7 +609,7 @@ decl_module! {
 		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
 		pub fn delegate(origin, to: T::AccountId, conviction: Conviction) {
 			let who = ensure_signed(origin)?;
-			<Delegations<T>>::insert(who.clone(), (to.clone(), conviction));
+			<Delegations<T>>::insert(&who, (&to, conviction));
 			// Currency is locked indefinitely as long as it's delegated.
 			T::Currency::extend_lock(
 				DEMOCRACY_ID,
@@ -788,10 +788,10 @@ impl<T: Trait> Module<T> {
 	/// Actually enact a vote, if legit.
 	fn do_vote(who: T::AccountId, ref_index: ReferendumIndex, vote: Vote) -> Result {
 		ensure!(Self::is_active_referendum(ref_index), "vote given for invalid referendum.");
-		if !<VoteOf<T>>::exists(&(ref_index, who.clone())) {
-			<VotersFor<T>>::append_or_insert(ref_index, [who.clone()].into_iter());
+		if !<VoteOf<T>>::exists((ref_index, &who)) {
+			<VotersFor<T>>::append_or_insert(ref_index, &[&who][..]);
 		}
-		<VoteOf<T>>::insert(&(ref_index, who), vote);
+		<VoteOf<T>>::insert((ref_index, &who), vote);
 		Ok(())
 	}
 
@@ -929,7 +929,7 @@ impl<T: Trait> Module<T> {
 			} else {
 				<DispatchQueue<T>>::append_or_insert(
 					now + info.delay,
-					[Some((info.proposal, index))].into_iter()
+					&[Some((info.proposal, index))][..]
 				);
 			}
 		} else {
