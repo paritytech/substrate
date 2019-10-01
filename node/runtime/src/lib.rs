@@ -29,7 +29,7 @@ use node_primitives::{
 	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index,
 	Moment, Signature, ContractExecResult,
 };
-use babe_primitives::{AuthorityId as BabeId};
+use babe_primitives::{AuthorityId as BabeId, AuthoritySignature as BabeSignature};
 use grandpa::fg_primitives;
 use client::{
 	block_builder::api::{self as block_builder_api, InherentData, CheckInherentsResult},
@@ -50,7 +50,7 @@ use elections::VoteIndex;
 use version::NativeVersion;
 use primitives::OpaqueMetadata;
 use grandpa::{AuthorityId as GrandpaId, AuthorityWeight as GrandpaWeight};
-use im_online::sr25519::{AuthorityId as ImOnlineId, AuthoritySignature as ImOnlineSignature};
+use im_online::sr25519::{AuthorityId as ImOnlineId};
 use authority_discovery_primitives::{AuthorityId as EncodedAuthorityId, Signature as EncodedSignature};
 use codec::{Encode, Decode};
 use system::offchain::TransactionSubmitter;
@@ -84,8 +84,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to equal spec_version. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 167,
-	impl_version: 167,
+	spec_version: 168,
+	impl_version: 168,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -437,7 +437,9 @@ impl offences::Trait for Runtime {
 	type OnOffenceHandler = Staking;
 }
 
-impl authority_discovery::Trait for Runtime {}
+impl authority_discovery::Trait for Runtime {
+    type AuthorityId = BabeId;
+}
 
 impl grandpa::Trait for Runtime {
 	type Event = Event;
@@ -635,12 +637,12 @@ impl_runtime_apis! {
 		}
 
 		fn verify(payload: &Vec<u8>, signature: &EncodedSignature, authority_id: &EncodedAuthorityId) -> bool {
-			let signature = match ImOnlineSignature::decode(&mut &signature.0[..]) {
+			let signature = match BabeSignature::decode(&mut &signature.0[..]) {
 				Ok(s) => s,
 				_ => return false,
 			};
 
-			let authority_id = match ImOnlineId::decode(&mut &authority_id.0[..]) {
+			let authority_id = match BabeId::decode(&mut &authority_id.0[..]) {
 				Ok(id) => id,
 				_ => return false,
 			};
