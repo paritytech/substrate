@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Implements tree backend, cached header metadata and algorithms
-//! to compute efficiently over the tree of headers.
+//! to compute routes efficiently over the tree of headers.
 
 use sr_primitives::traits::{Block as BlockT, NumberFor, Header};
 use parking_lot::RwLock;
@@ -212,7 +212,9 @@ impl<Block: BlockT> TreeRoute<Block> {
 
 /// Handles header metadata: hash, number, parent hash, etc.
 pub trait HeaderMetadata<Block: BlockT> {
+	/// Header metadata, can contains fields such as hash, number, parent hash.
 	type Metadata;
+	/// Error used in case the header metadata is not found.
 	type Error;
 
 	fn header_metadata(&self, hash: Block::Hash) -> Result<Self::Metadata, Self::Error>;
@@ -226,6 +228,7 @@ pub struct HeaderMetadataCache<Block: BlockT> {
 }
 
 impl<Block: BlockT> HeaderMetadataCache<Block> {
+	/// Creates a new LRU header metadata cache with `capacity`.
 	pub fn new(capacity: usize) -> Self {
 		HeaderMetadataCache {
 			cache: RwLock::new(LruCache::new(capacity)),
