@@ -29,13 +29,13 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use app_crypto::RuntimeAppPublic;
-use codec::{Decode, Encode};
+use codec::FullCodec;
 use rstd::prelude::*;
 use support::{decl_module, decl_storage};
 
 /// The module's config trait.
 pub trait Trait: system::Trait + session::Trait {
-	type AuthorityId: RuntimeAppPublic + Default + Decode + Encode + PartialEq;
+	type AuthorityId: RuntimeAppPublic + Default + FullCodec + PartialEq;
 }
 
 decl_storage! {
