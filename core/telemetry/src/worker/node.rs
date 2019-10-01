@@ -36,8 +36,8 @@ pub struct Node<TTrans: Transport> {
 	socket: NodeSocket<TTrans>,
 	/// Transport used to establish new connections.
 	transport: TTrans,
-    /// Timeout for a connection to the node that is writing data.
-    connection_timeout: Option<Delay>,
+	/// Timeout for a connection to the node that is writing data.
+	connection_timeout: Option<Delay>,
 }
 
 enum NodeSocket<TTrans: Transport> {
@@ -225,7 +225,7 @@ where TTrans::Output: Sink<BytesMut, Error = TSinkErr>
 		cx: &mut Context,
 		my_addr: &Multiaddr,
 		is_writing_data: &mut bool,
-	) -> Poll<Result<(), TSinkErr>> {
+	) -> Poll<Result<futures::never::Never, TSinkErr>> {
 		loop {
 			if let Some(item) = self.pending.pop_front() {
 				if let Poll::Pending = Sink::poll_ready(Pin::new(&mut self.sink), cx) {
