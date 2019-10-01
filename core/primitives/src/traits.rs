@@ -193,7 +193,7 @@ pub trait CodeExecutor<H: Hasher>: Sized + Send + Sync {
 	fn call<
 		E: Externalities<H>,
 		R: codec::Codec + PartialEq,
-		NC: FnOnce() -> Result<R, &'static str> + UnwindSafe,
+		NC: FnOnce() -> Result<R, String> + UnwindSafe,
 	>(
 		&self,
 		ext: &mut E,

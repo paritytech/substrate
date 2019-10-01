@@ -29,6 +29,7 @@ mod listener;
 mod pool;
 mod ready;
 mod rotator;
+mod validated_pool;
 
 pub mod base_pool;
 pub mod error;
@@ -36,4 +37,8 @@ pub mod watcher;
 
 pub use self::error::IntoPoolError;
 pub use self::base_pool::{Transaction, Status};
-pub use self::pool::{Pool, Options, ChainApi, EventStream, ExtrinsicFor, BlockHash, ExHash, NumberFor, TransactionFor};
+pub use self::pool::{
+	Pool,
+	Options, ChainApi, EventStream, ExtrinsicFor,
+	BlockHash, ExHash, NumberFor, TransactionFor,
+};
