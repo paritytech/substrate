@@ -24,7 +24,7 @@
 //!
 //!
 //! Example:
-//! ```rust
+//! ```rust,no_run
 //! use sr_primitives::offchain::http::Request;
 //!
 //! // initiate a GET request to localhost:1234
