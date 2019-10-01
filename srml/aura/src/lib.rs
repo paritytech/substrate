@@ -177,7 +177,7 @@ impl<T: Trait> Module<T> {
 	fn initialize_authorities(authorities: &[T::AuthorityId]) {
 		if !authorities.is_empty() {
 			assert!(<Authorities<T>>::get().is_empty(), "Authorities are already initialized!");
-			<Authorities<T>>::put_ref(authorities);
+			<Authorities<T>>::put(authorities);
 		}
 	}
 }

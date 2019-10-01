@@ -16,7 +16,7 @@ primitives = { package = "substrate-primitives", path = "../primitives" }
 panic-handler = { package = "substrate-panic-handler", path = "../panic-handler" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 num-traits = "0.2.8"
-rand = "0.7.1"
+rand = "0.7.2"
 
 [dev-dependencies]
 hex-literal = "0.2.1"

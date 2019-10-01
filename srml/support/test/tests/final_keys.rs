@@ -20,11 +20,11 @@ use codec::Encode;
 use support::{StorageDoubleMap, StorageLinkedMap, StorageMap, StorageValue};
 
 mod no_instance {
-	use codec::{Encode, Decode};
+	use codec::{Encode, Decode, EncodeLike};
 
 	pub trait Trait {
 		type Origin;
-		type BlockNumber: Encode + Decode + Default + Clone;
+		type BlockNumber: Encode + Decode + EncodeLike + Default + Clone;
 	}
 
 	support::decl_module! {

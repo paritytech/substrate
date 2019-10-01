@@ -40,7 +40,7 @@ transaction-factory = { path = "../../test-utils/transaction-factory" }
 keyring = { package = "substrate-keyring", path = "../../core/keyring" }
 indices = { package = "srml-indices", path = "../../srml/indices" }
 timestamp = { package = "srml-timestamp", path = "../../srml/timestamp", default-features = false }
-rand = "0.7.0"
+rand = "0.7.2"
 finality_tracker = { package = "srml-finality-tracker", path = "../../srml/finality-tracker", default-features = false }
 contracts = { package = "srml-contracts", path = "../../srml/contracts" }
 system = { package = "srml-system", path = "../../srml/system" }
@@ -49,7 +49,7 @@ support = { package = "srml-support", path = "../../srml/support", default-featu
 im_online = { package = "srml-im-online", path = "../../srml/im-online", default-features = false }
 sr-authority-discovery = { package = "srml-authority-discovery", path = "../../srml/authority-discovery", default-features = false }
 authority-discovery = { package = "substrate-authority-discovery", path = "../../core/authority-discovery"}
-serde = { version = "1.0", features = [ "derive" ] }
+serde = { version = "1.0.101", features = [ "derive" ] }
 client_db = { package = "substrate-client-db", path = "../../core/client/db", features = ["kvdb-rocksdb"] }
 offchain = { package = "substrate-offchain", path = "../../core/offchain" }
 

@@ -8,7 +8,7 @@ edition = "2018"
 jsonrpc-core = "13.2.0"
 pubsub = { package = "jsonrpc-pubsub", version = "13.2.0" }
 log = "0.4.8"
-serde = "1.0.100"
+serde = "1.0.101"
 serde_json = "1.0"
 sr-primitives = { path = "../sr-primitives" }
 
