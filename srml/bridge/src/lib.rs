@@ -32,36 +32,53 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use codec::{Encode, Decode};
 use sr_primitives::traits::Member;
+#[cfg(feature = "std")]
+use sr_primitives::{Serialize, Deserialize};
 use support::{
 	decl_error, decl_module, decl_storage,
 	Parameter,
 };
 use system::{ensure_signed};
 
+
+#[derive(Encode, Decode, Default, Clone, PartialEq)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+pub struct Bridge;
+
+impl Bridge {
+	pub fn new() -> Self {
+		Bridge
+	}
+}
+
+type BridgeId = u64;
+
 pub trait Trait: system::Trait {
-	// The identifier type for an authority.
-	// type AuthorityId: Member + Parameter + RuntimeAppPublic + Default;
 	/// A stable ID for a validator.
 	type ValidatorId: Member + Parameter;
 }
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Bridge {
-		// Get the ID of the current bridge
-		pub BridgeId get(bridge_id) config(): u64;
+		/// The number of current bridges managed by the module.
+		pub NumBridges get(num_bridges) config(): BridgeId;
 
-		// Get latest block number included in the chain
+		/// Maps a bridge id to a bridge struct. Allows a single
+		/// `bridge` module to manage multiple bridges.
+		pub BridgeFoo get(bridge_foo) config(): map BridgeId => Bridge;
+
+		/// Get latest block number included in the chain
 		pub LastBlockNumber get(latest_block_num) config(): T::BlockNumber;
-		// pub BlockNum get(block_num) config(): u64;
 
-		// Get the latest block header included in the chain
+		/// Get the latest block header included in the chain
 		pub LastBlockHeader get(latest_block_header): Option<T::Header>;
 
 		// Get the latest state root included in the chain
 		// pub LastStateRoot get(latest_state_root) config(): T::Hash;
 
-		// Latest set of validators
+		/// Latest set of validators
 		pub Validators get(validators) config(): Vec<T::ValidatorId>;
 	}
 }
@@ -69,7 +86,7 @@ decl_storage! {
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		// TODO: Figure out the proper type for these proofs
-		fn new(
+		fn initialize_bridge(
 			origin,
 			_block_header: T::Header,
 			_validator_set: Vec<T::ValidatorId>,
@@ -83,8 +100,13 @@ decl_module! {
 			Self::check_storage_proof()?;
 			Self::check_validator_set_proof()?;
 
-			let new_bridge_id = BridgeId::get() + 1;
-			BridgeId::put(new_bridge_id);
+			let new_bridge_id = NumBridges::get() + 1;
+
+			// Hmm, can this call fail?
+			BridgeFoo::insert(new_bridge_id, Bridge::new());
+
+			// Only increase the number of bridges if the insert call succeeds
+			NumBridges::put(new_bridge_id);
 		}
 
 		fn submit_finalized_headers(origin) {
@@ -133,7 +155,8 @@ mod tests {
 	pub struct Test;
 
 	type System = system::Module<Test>;
-	type Bridge = Module<Test>;
+	// type Bridge = Module<Test>; // With the Bridge struct this isn't great
+	type MockBridge = Module<Test>;
 
 	// TODO: Figure out what I actually need from here
 	parameter_types! {
@@ -172,9 +195,9 @@ mod tests {
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		GenesisConfig::<Test> {
-			bridge_id: 0,
+			num_bridges: 0,
 			latest_block_num: 0,
-			//latest_block_header: None,
+			bridge_foo: vec![(0, Bridge::new()), (1, Bridge::new())],
 
 			// How do I get a default Hash?
 			// latest_state_root: Hash::default(),
@@ -186,8 +209,8 @@ mod tests {
 	#[test]
 	fn it_works_for_default_value() {
 		with_externalities(&mut new_test_ext(), || {
-			assert_eq!(Bridge::bridge_id(), 0);
-			assert_eq!(Bridge::latest_block_num(), 0);
+			assert_eq!(MockBridge::num_bridges(), 0);
+			assert_eq!(MockBridge::latest_block_num(), 0);
 		});
 	}
 
@@ -202,9 +225,11 @@ mod tests {
 		};
 
 		with_externalities(&mut new_test_ext(), || {
-			assert_eq!(Bridge::bridge_id(), 0);
-			assert_ok!(Bridge::new(Origin::signed(1), test_header, vec![], vec![], vec![]));
-			assert_eq!(Bridge::bridge_id(), 1);
+			assert_eq!(MockBridge::num_bridges(), 0);
+			assert_eq!(MockBridge::bridge_foo(0), Bridge::new());
+			assert_ok!(MockBridge::initialize_bridge(Origin::signed(1), test_header, vec![], vec![], vec![]));
+			assert_eq!(MockBridge::bridge_foo(1), Bridge::new());
+			assert_eq!(MockBridge::num_bridges(), 1);
 		});
 	}
 }
