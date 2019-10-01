@@ -182,9 +182,6 @@ fn discard_values<Key: Hash>(
 	inserted: Vec<Key>,
 	mut into: Option<&mut HashMap<Key, DBValue>>,
 ) {
-	if into.is_none() {
-		return;
-	}
 	for k in inserted {
 		match values.entry(k) {
 			Entry::Occupied(mut e) => {
@@ -622,20 +619,11 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 	}
 
 	/// Get a value from the node overlay. This searches in every existing changeset.
-	/// TODO EMCH this approach does not work !!! I need the previous historied-data
-	/// on trie for it (put branch ix in offstate journal record) and remove
-	/// pinned values (or pinned btreemap<branchindex, orderedvec<hashmap>>, but
-	/// I mostly prefer my historied data struct.
-	///
-	/// TODO also need branch ix as parameter... (need context)
-	/// or maybe a Number is enough (considering the way levels
-	/// seems to work).
-	pub fn get_offstate(&self, key: &[u8], state: &BranchRanges) -> Option<DBValue> {
-		unimplemented!("TODO");
-/*		if let Some((_, value)) = self.offstate_values.get(key) {
-			return Some(value.clone());
+	pub fn get_offstate(&self, key: &[u8], state: &BranchRanges) -> Option<&DBValue> {
+		if let Some(value) = self.offstate_values.get(key) {
+			return value.get(state);
 		}
-		None*/
+		None
 	}
 
 	/// Check if the block is in the canonicalization queue. 
@@ -650,10 +638,12 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 			let mut commit = CommitSet::default();
 			for overlay in level.into_iter() {
 				commit.meta.deleted.push(overlay.journal_key);
+				commit.meta.deleted.push(overlay.offstate_journal_key);
 				if let Some((_, branch_index)) = self.parents.remove(&overlay.hash) {
 					self.branches.revert(branch_index);
 				}
 				discard_values(&mut self.values, overlay.inserted, None);
+				discard_offset_values(overlay.offstate_inserted, &mut self.offstate_gc);
 			}
 			commit
 		})
@@ -725,9 +715,9 @@ mod tests {
 	}
 
 	fn contains_offstate(overlay: &NonCanonicalOverlay<H256, H256>, key: u64, state: &H256) -> bool {
-		overlay.get_branch_range(state).and_then(|state|
-			overlay.get_offstate(&H256::from_low_u64_be(key).as_bytes().to_vec(), &state))
-			== Some(H256::from_low_u64_be(key).as_bytes().to_vec())
+		overlay.get_branch_range(state).and_then(|state| {
+			overlay.get_offstate(&H256::from_low_u64_be(key).as_bytes().to_vec(), &state)
+		}) == Some(&H256::from_low_u64_be(key).as_bytes().to_vec())
 	}
 
 	fn contains_both(overlay: &NonCanonicalOverlay<H256, H256>, key: u64, state: &H256) -> bool {
@@ -838,7 +828,8 @@ mod tests {
 		assert_eq!(insertion.data.deleted.len(), 0);
 		assert_eq!(insertion.offstate.inserted.len(), 0);
 		assert_eq!(insertion.offstate.deleted.len(), 0);
-		assert_eq!(insertion.meta.inserted.len(), 2);
+		// last cannonical, journal_record and offstate_journal_record
+		assert_eq!(insertion.meta.inserted.len(), 3);
 		assert_eq!(insertion.meta.deleted.len(), 0);
 		db.commit(&insertion);
 		let mut finalization = CommitSet::default();
@@ -848,7 +839,8 @@ mod tests {
 		assert_eq!(finalization.offstate.inserted.len(), offstate_changeset.inserted.len());
 		assert_eq!(finalization.offstate.deleted.len(), offstate_changeset.deleted.len());
 		assert_eq!(finalization.meta.inserted.len(), 1);
-		assert_eq!(finalization.meta.deleted.len(), 1);
+		// normal and offstate discarded journall
+		assert_eq!(finalization.meta.deleted.len(), 2);
 		db.commit(&finalization);
 		assert!(db.data_eq(&make_db(&[1, 3, 4])));
 		assert!(db.offstate_eq(&[1, 3, 4]));
@@ -1145,8 +1137,9 @@ mod tests {
 		assert!(contains_both(&overlay, 7, &h2));
 		db.commit(&overlay.revert_one().unwrap());
 		assert_eq!(overlay.parents.len(), 1);
-		assert!(contains_both(&overlay, 5, &h2));
-		assert!(!contains_any(&overlay, 7, &h2));
+		assert!(contains_both(&overlay, 5, &h1));
+		assert!(!contains(&overlay, 7));
+		assert!(!contains_any(&overlay, 7, &h1));
 		db.commit(&overlay.revert_one().unwrap());
 		assert_eq!(overlay.levels.len(), 0);
 		assert_eq!(overlay.parents.len(), 0);

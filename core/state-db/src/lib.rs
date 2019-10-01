@@ -382,7 +382,7 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		db: &D,
 	) -> Result<Option<DBValue>, Error<D::Error>>	{
 		if let Some(value) = self.non_canonical.get_offstate(key, &state.0) {
-			return Ok(Some(value));
+			return Ok(Some(value.clone()));
 		}
 		db.get_offstate(key, &Some(state.1)).map_err(|e| Error::Db(e))
 	}

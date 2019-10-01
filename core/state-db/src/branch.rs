@@ -36,7 +36,6 @@ use historied_data::tree::{TreeStateTrait, BranchStateTrait, StatesBranchRef, Br
 pub struct BranchRanges(Vec<StatesBranchRef>);
 
 impl<'a> TreeStateTrait<bool, u64, u64> for &'a BranchRanges {
-	// TODO do we need parent ix field of statesbranchref??
 	type Branch = &'a StatesBranchRef;
 	type Iter = BranchRangesIter<'a>;
 
