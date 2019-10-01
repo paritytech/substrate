@@ -91,7 +91,7 @@ mod tests;
 use codec::FullCodec;
 use rstd::prelude::*;
 use support::{
-	StorageValue, StorageMap, decl_module, decl_storage, decl_event, ensure,
+	StorageValue, decl_module, decl_storage, decl_event, ensure,
 	traits::{ChangeMembers, InitializeMembers, Currency, Get, ReservableCurrency},
 };
 use system::{self, ensure_root, ensure_signed};
