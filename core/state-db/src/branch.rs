@@ -22,8 +22,9 @@ use std::cmp::Reverse;
 use crate::Error;
 use std::hash::Hash as StdHash;
 use std::convert::TryInto;
+use historied_data::tree::{TreeStateTrait, BranchStateTrait, StatesBranchRef, BranchStateRef};
 
-
+#[derive(Clone, Default, Debug)]
 /// Reference to state that is enough for query updates, but not
 /// for gc.
 /// Values are ordered by branch_ix,
@@ -32,20 +33,55 @@ use std::convert::TryInto;
 /// Note that an alternative could be a pointer to a full state
 /// branch for a given branch index, here we use an in memory
 /// copied representation in relation to an actual use case.
-pub type BranchRanges = Vec<StatesBranchRef>;
+pub struct BranchRanges(Vec<StatesBranchRef>);
 
+impl<'a> TreeStateTrait<bool, u64, u64> for &'a BranchRanges {
+	// TODO do we need parent ix field of statesbranchref??
+	type Branch = &'a StatesBranchRef;
+	type Iter = BranchRangesIter<'a>;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StatesBranchRef {
-	pub branch_index: u64,
-	pub state: LinearStatesRef,
+	fn get_branch(self, i: u64) -> Option<Self::Branch> {
+		for (b, bi) in self.iter() {
+			if bi == i {
+				return Some(b);
+			} else if bi < i {
+				break;
+			}
+		}
+		None
+	}
+
+	fn last_index(self) -> u64 {
+		let l = self.0.len();
+		if l > 0 {
+			self.0[l - 1].branch_index
+		} else {
+			0
+		}
+	}
+
+	fn iter(self) -> Self::Iter {
+		BranchRangesIter(self, self.0.len())
+	}
+
 }
 
-/// This is a simple range, end non inclusive.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LinearStatesRef {
-	pub start: u64,
-	pub end: u64,
+/// Iterator, contains index of last inner struct.
+pub struct BranchRangesIter<'a>(&'a BranchRanges, usize);
+
+impl<'a> Iterator for BranchRangesIter<'a> {
+	type Item = (&'a StatesBranchRef, u64);
+
+	fn next(&mut self) -> Option<Self::Item> {
+		if self.1 > 0 {
+			Some((
+				&(self.0).0[self.1 - 1],
+				(self.0).0[self.1 - 1].branch_index,
+			))
+		} else {
+			None
+		}
+	}
 }
 
 /// current branches range definition, indexed by branch
@@ -110,14 +146,14 @@ impl RangeSet {
 		// (avoid some intermediatory Vec (eg when building Hashset)
 		let mut result = Vec::new();
 		if branch_index < self.treshold {
-			return result;
+			return BranchRanges(result);
 		}
 		let mut previous_start = u64::max_value();
 		loop {
 			if let Some(Some(StatesBranch{ state, parent_branch_index, .. })) = self.storage.get(&branch_index) {
 				// TODO EMCH consider vecdeque ??
 				let state = if state.end > previous_start {
-					LinearStatesRef {
+					BranchStateRef {
 						start: state.start,
 						end: previous_start,
 					}
@@ -139,7 +175,7 @@ impl RangeSet {
 				break;
 			}
 		}
-		result
+		BranchRanges(result)
 	}
 
 
@@ -235,14 +271,14 @@ impl RangeSet {
 			let anchor_index = self.add_state(parent_branch_index, number)
 				.expect("coherent branch index state"); // TODO EMCH fail in add_state
 			if anchor_index == parent_branch_index {
-				branch_ranges.pop();
+				branch_ranges.0.pop();
 			}
-			branch_ranges.push(self.state_ref(anchor_index).expect("added just above"));
+			branch_ranges.0.push(self.state_ref(anchor_index).expect("added just above"));
 			(branch_ranges, anchor_index)
 		} else {
 			let anchor_index = self.add_state(parent_branch_index, number)
 				.expect("coherent branch index state"); // TODO EMCH fail in add_state
-			(vec![self.state_ref(anchor_index).expect("added just above")], anchor_index)
+			(BranchRanges(vec![self.state_ref(anchor_index).expect("added just above")]), anchor_index)
 		}
 	}
 
@@ -348,7 +384,7 @@ impl RangeSet {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StatesBranch {
-	state: LinearStatesRef,
+	state: BranchStateRef,
 	can_append: bool,
 	parent_branch_index: u64,
 }
@@ -369,7 +405,7 @@ impl LinearStates {
 	pub fn new(offset: u64, parent_branch_index: u64) -> Self {
 		let offset = offset as u64;
 		LinearStates {
-			state: LinearStatesRef {
+			state: BranchStateRef {
 				start: offset,
 				end: offset + 1,
 			},
@@ -378,7 +414,7 @@ impl LinearStates {
 		}
 	}
 
-	pub fn state_ref(&self) -> LinearStatesRef {
+	pub fn state_ref(&self) -> BranchStateRef {
 		self.state.clone()
 	}
 
@@ -426,7 +462,7 @@ impl LinearStates {
 }
 
 // TODO EMCH end from historied - data
-//
+#[cfg(test)]
 mod test {
 	use super::*;
 
@@ -457,9 +493,6 @@ mod test {
 
 	#[test]
 	fn branch_range_finalize() {
-		const PREFIX: &[u8] = b"prefix";
-		const TRESHOLD: &[u8] = b"hijkl";
-		const LAST_INDEX: &[u8] = b"mnopq";
 		let with_full_finalize = |
 			full: bool,
 			ranges_valid: &[(u64, u64)],
@@ -492,33 +525,3 @@ mod test {
 
 }
 
-
-// TODO EMCH use from historied data on merge. (this is just a stub)
-
-#[derive(Debug, Clone)]
-pub struct History<V>(Vec<()>, Option<V>);
-
-impl<V> Default for History<V> {
-	fn default() -> Self {
-		History(Vec::new(), None)
-	}
-}
-
-
-impl<V> History<V> {
-
-	pub fn set(&mut self, state: &BranchRanges, value: V) {
-		unimplemented!()
-	}
-
-	pub fn get(&self, state: &BranchRanges) -> Option<&V> {
-		unimplemented!()
-	}
-
-	pub fn gc(&mut self, state: &RangeSet) {
-		unimplemented!()
-	}
-
-}
-
-// End TODO EMCH

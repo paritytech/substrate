@@ -33,6 +33,9 @@ use rstd::vec::Vec;
 use rstd::collections::btree_map::BTreeMap;
 use rstd::convert::{TryFrom, TryInto};
 
+/// Trait defining a state for querying or modifying a tree.
+/// This is therefore the representation of a branch.
+/// TODO EMCH rename to BranchesStateTrait?
 pub trait TreeStateTrait<S, I, BI> {
 	type Branch: BranchStateTrait<S, BI>;
 	type Iter: Iterator<Item = (Self::Branch, I)>;
@@ -46,6 +49,8 @@ pub trait TreeStateTrait<S, I, BI> {
 	fn iter(self) -> Self::Iter;
 }
 
+/// Trait defining a state for querying or modifying a branch.
+/// This is therefore the representation of a branch state.
 pub trait BranchStateTrait<S, I> {
 
 	fn get_node(&self, i: I) -> S;
@@ -53,7 +58,6 @@ pub trait BranchStateTrait<S, I> {
 	/// Inclusive.
 	fn last_index(&self) -> I;
 }
-
 
 impl<'a> TreeStateTrait<bool, u64, u64> for &'a StatesRef {
 	type Branch = (&'a StatesBranchRef, Option<u64>);
@@ -98,7 +102,7 @@ impl<'a> TreeStateTrait<bool, u64, u64> for &'a StatesRef {
 }
 
 #[derive(Debug, Clone)]
-#[cfg_attr(any(test, feature = "test"), derive(PartialEq))]
+#[cfg_attr(any(test, feature = "test"), derive(PartialEq, Eq))]
 pub struct BranchState {
 	/// Index of first element (only use for indexed access).
 	/// Element before offset are not in state.
@@ -113,11 +117,10 @@ pub struct BranchState {
 }
 
 /// This is a simple range, end non inclusive.
-#[derive(Debug, Clone)]
-#[cfg_attr(any(test, feature = "test"), derive(PartialEq))]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BranchStateRef {
-	start: u64,
-	end: u64,
+	pub start: u64,
+	pub end: u64,
 }
 
 impl<'a> BranchStateTrait<bool, u64> for (&'a StatesBranchRef, Option<u64>) {
@@ -135,6 +138,21 @@ impl<'a> BranchStateTrait<bool, u64> for (&'a StatesBranchRef, Option<u64>) {
 	}
 
 }
+
+impl<'a> BranchStateTrait<bool, u64> for &'a StatesBranchRef {
+
+	fn get_node(&self, i: u64) -> bool {
+		i >= self.state.start && i < self.state.end
+	}
+
+	fn last_index(&self) -> u64 {
+		// underflow should not happen as long as branchstateref are not allowed to be empty.
+		self.state.end - 1
+	}
+
+}
+
+
 
 impl Default for BranchState {
 	// initialize with one element
@@ -243,7 +261,7 @@ impl Default for TestStates {
 }
 
 #[derive(Debug, Clone)]
-#[cfg_attr(any(test, feature = "test"), derive(PartialEq))]
+#[cfg_attr(any(test, feature = "test"), derive(PartialEq, Eq))]
 pub struct StatesBranch {
 	// this is the key (need to growth unless full gc (can still have
 	// content pointing to it even if it seems safe to reuse a previously
@@ -256,11 +274,10 @@ pub struct StatesBranch {
 	state: BranchState,
 }
 
-#[derive(Debug, Clone)]
-#[cfg_attr(any(test, feature = "test"), derive(PartialEq))]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StatesBranchRef {
-	branch_index: u64,
-	state: BranchStateRef,
+	pub branch_index: u64,
+	pub state: BranchStateRef,
 }
 
 
@@ -336,7 +353,7 @@ impl TestStates {
 					branch_ref.state.end = previous_origin_node_index + 1;
 				}
 				previous_origin_node_index = branch.origin_node_index;
-				// TODO EMCH consider reversing state_ref
+				// vecdeque would be better suited
 				result.insert(0, branch_ref);
 				branch_index = branch.origin_branch_index;
 			} else {
@@ -447,6 +464,7 @@ impl TestStates {
 /// First field is the actual history against which we run
 /// the state.
 /// Second field is an optional value for the no match case.
+/// TODO EMCH consider removing second field (not use out of test)
 #[derive(Debug, Clone)]
 #[cfg_attr(any(test, feature = "test"), derive(PartialEq))]
 pub struct History<V>(Vec<HistoryBranch<V>>, Option<V>);
@@ -564,7 +582,7 @@ impl<V> History<V> {
 			return self.1.as_ref();
 		}
 
-		// TODO EMCH reverse loops ? probably.
+		// TODO EMCH switch loops ? probably.
 		for (state_branch, state_index) in state.iter() {
 			while index > 0 {
 				index -= 1;
@@ -805,7 +823,6 @@ mod test {
 		// cannot create when dropped happen on branch
 		assert_eq!(Some(false), states.branch_state_mut(1).map(|ls| ls.add_state()));
 
-		// TODO add content through branching
 		assert!(states.get(1, 1));
 		// 0> 1: _ _ X
 		// |			 |> 3: 1

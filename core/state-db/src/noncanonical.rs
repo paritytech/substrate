@@ -25,7 +25,8 @@ use std::collections::{HashMap, VecDeque, hash_map::Entry, HashSet};
 use super::{Error, DBValue, ChangeSet, CommitSet, MetaDb, Hash, to_meta_key, OffstateKey};
 use codec::{Encode, Decode};
 use log::trace;
-use crate::branch::{RangeSet, BranchRanges, History};
+use crate::branch::{RangeSet, BranchRanges};
+use historied_data::tree::History;
 
 const NON_CANONICAL_JOURNAL: &[u8] = b"noncanonical_journal";
 const NON_CANONICAL_OFFSTATE_JOURNAL: &[u8] = b"offstate_noncanonical_journal";

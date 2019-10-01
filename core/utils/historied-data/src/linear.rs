@@ -268,7 +268,6 @@ impl<'a, F: SerializedConfig> Serialized<'a, F> {
 	}
 
 	// Usize encoded as le u64 (only for internal indexing).
-	// TODO EMCH change usize encoding to u32?
 	fn read_le_usize(&self, pos: usize) -> usize {
 		let mut buffer = [0u8; SIZE_BYTE_LEN];
 		buffer.copy_from_slice(&self.0[pos..pos + SIZE_BYTE_LEN]);

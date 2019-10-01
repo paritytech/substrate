@@ -9,6 +9,8 @@ parking_lot = "0.9.0"
 log = "0.4"
 primitives = { package = "substrate-primitives", path = "../../core/primitives" }
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
+historied-data = { path = "../../core/utils/historied-data" }
 
 [dev-dependencies]
 env_logger = "0.6"
+historied-data = { path = "../../core/utils/historied-data", features = ["test"] }
