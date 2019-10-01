@@ -40,7 +40,7 @@ use sr_primitives::traits::Block as BlockT;
 use node_executor::NativeExecutor;
 use network::NetworkService;
 use offchain::OffchainWorkers;
-use transaction_pool::ChainApi;
+use transaction_pool::FullChainApi;
 use primitives::Blake2Hasher;
 
 construct_simple_protocol! {
