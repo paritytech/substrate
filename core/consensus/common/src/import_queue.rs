@@ -30,7 +30,7 @@ use sr_primitives::{Justification, traits::{Block as BlockT, Header as _, Number
 use crate::error::Error as ConsensusError;
 use crate::block_import::{
 	BlockImport, BlockOrigin, BlockImportParams, ImportedAux, JustificationImport, ImportResult,
-	FinalityProofImport,
+	BlockCheckParams, FinalityProofImport,
 };
 
 pub use basic_queue::BasicQueue;
@@ -194,7 +194,7 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>>(
 
 	let number = header.number().clone();
 	let hash = header.hash();
-	let parent = header.parent_hash().clone();
+	let parent_hash = header.parent_hash().clone();
 
 	let import_error = |e| {
 		match e {
@@ -204,7 +204,7 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>>(
 			},
 			Ok(ImportResult::Imported(aux)) => Ok(BlockImportResult::ImportedUnknown(number, aux, peer.clone())),
 			Ok(ImportResult::UnknownParent) => {
-				debug!(target: "sync", "Block with unknown parent {}: {:?}, parent: {:?}", number, hash, parent);
+				debug!(target: "sync", "Block with unknown parent {}: {:?}, parent: {:?}", number, hash, parent_hash);
 				Err(BlockImportError::UnknownParent)
 			},
 			Ok(ImportResult::KnownBad) => {
@@ -217,8 +217,7 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>>(
 			}
 		}
 	};
-
-	match import_error(import_handle.check_block(hash, parent))? {
+	match import_error(import_handle.check_block(BlockCheckParams { hash, number, parent_hash }))? {
 		BlockImportResult::ImportedUnknown { .. } => (),
 		r => return Ok(r), // Any other successful result means that the block is already imported.
 	}

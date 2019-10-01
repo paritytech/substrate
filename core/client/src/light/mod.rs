@@ -67,7 +67,7 @@ pub fn new_light<B, S, GS, RA, E>(
 {
 	let local_executor = LocalCallExecutor::new(backend.clone(), code_executor, None);
 	let executor = GenesisCallExecutor::new(backend.clone(), local_executor);
-	Client::new(backend, executor, genesis_storage, Default::default())
+	Client::new(backend, executor, genesis_storage, Default::default(), Default::default())
 }
 
 /// Create an instance of fetch data checker.

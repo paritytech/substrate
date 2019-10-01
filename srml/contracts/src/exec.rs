@@ -22,12 +22,11 @@ use crate::rent;
 
 use rstd::prelude::*;
 use sr_primitives::traits::{Bounded, CheckedAdd, CheckedSub, Zero};
-use support::traits::{WithdrawReason, Currency};
-use timestamp;
+use support::traits::{WithdrawReason, Currency, Time};
 
 pub type AccountIdOf<T> = <T as system::Trait>::AccountId;
 pub type CallOf<T> = <T as Trait>::Call;
-pub type MomentOf<T> = <T as timestamp::Trait>::Moment;
+pub type MomentOf<T> = <<T as Trait>::Time as Time>::Moment;
 pub type SeedOf<T> = <T as system::Trait>::Hash;
 pub type BlockNumberOf<T> = <T as system::Trait>::BlockNumber;
 
@@ -271,7 +270,7 @@ pub struct ExecutionContext<'a, T: Trait + 'a, V, L> {
 	pub config: &'a Config<T>,
 	pub vm: &'a V,
 	pub loader: &'a L,
-	pub timestamp: T::Moment,
+	pub timestamp: MomentOf<T>,
 	pub block_number: T::BlockNumber,
 }
 
@@ -296,7 +295,7 @@ where
 			config: &cfg,
 			vm: &vm,
 			loader: &loader,
-			timestamp: <timestamp::Module<T>>::now(),
+			timestamp: T::Time::now(),
 			block_number: <system::Module<T>>::block_number(),
 		}
 	}
@@ -665,7 +664,7 @@ struct CallContext<'a, 'b: 'a, T: Trait + 'b, V: Vm<T> + 'b, L: Loader<T>> {
 	ctx: &'a mut ExecutionContext<'b, T, V, L>,
 	caller: T::AccountId,
 	value_transferred: BalanceOf<T>,
-	timestamp: T::Moment,
+	timestamp: MomentOf<T>,
 	block_number: T::BlockNumber,
 }
 
@@ -757,7 +756,7 @@ where
 		system::Module::<T>::random(subject)
 	}
 
-	fn now(&self) -> &T::Moment {
+	fn now(&self) -> &MomentOf<T> {
 		&self.timestamp
 	}
 

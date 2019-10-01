@@ -124,10 +124,9 @@ use support::{
 	Parameter, decl_module, decl_event, decl_storage, storage::child,
 	parameter_types,
 };
-use support::{traits::{OnFreeBalanceZero, OnUnbalanced, Currency, Get}, IsSubType};
+use support::{traits::{OnFreeBalanceZero, OnUnbalanced, Currency, Get, Time}, IsSubType};
 use system::{ensure_signed, RawOrigin, ensure_root};
 use primitives::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX;
-use timestamp;
 
 pub type CodeHash<T> = <T as system::Trait>::Hash;
 pub type TrieId = Vec<u8>;
@@ -333,8 +332,9 @@ parameter_types! {
 	pub const DefaultBlockGasLimit: u32 = 10_000_000;
 }
 
-pub trait Trait: timestamp::Trait {
+pub trait Trait: system::Trait {
 	type Currency: Currency<Self::AccountId>;
+	type Time: Time;
 
 	/// The outer call dispatch type.
 	type Call: Parameter + Dispatchable<Origin=<Self as system::Trait>::Origin> + IsSubType<Module<Self>, Self>;

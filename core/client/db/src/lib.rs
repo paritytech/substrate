@@ -40,7 +40,7 @@ use std::collections::{HashMap, HashSet};
 
 use client::backend::NewBlockState;
 use client::blockchain::{well_known_cache_keys, HeaderBackend};
-use client::ExecutionStrategies;
+use client::{ForkBlocks, ExecutionStrategies};
 use client::backend::{StorageCollection, ChildStorageCollection};
 use codec::{Decode, Encode};
 use hash_db::{Hasher, Prefix};
@@ -206,6 +206,7 @@ pub fn new_client<E, S, Block, RA>(
 	settings: DatabaseSettings,
 	executor: E,
 	genesis_storage: S,
+	fork_blocks: ForkBlocks<Block>,
 	execution_strategies: ExecutionStrategies,
 	keystore: Option<primitives::traits::BareCryptoStorePtr>,
 ) -> Result<(
@@ -227,7 +228,7 @@ pub fn new_client<E, S, Block, RA>(
 	let backend = Arc::new(Backend::new(settings, CANONICALIZATION_DELAY)?);
 	let executor = client::LocalCallExecutor::new(backend.clone(), executor, keystore);
 	Ok((
-		client::Client::new(backend.clone(), executor, genesis_storage, execution_strategies)?,
+		client::Client::new(backend.clone(), executor, genesis_storage, fork_blocks, execution_strategies)?,
 		backend,
 	))
 }
