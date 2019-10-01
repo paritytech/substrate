@@ -64,7 +64,7 @@ macro_rules! create_apis_vec {
 /// absolutely not `impl_version` since they change the semantics of the runtime.
 #[derive(Clone, PartialEq, Eq, Encode, Default)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Decode))]
-#[derive(Debug)]
+#[derive(sr_primitives::RuntimeDebug)]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 pub struct RuntimeVersion {
 	/// Identifies the different Substrate runtimes. There'll be at least polkadot and node.
@@ -148,7 +148,7 @@ impl RuntimeVersion {
 }
 
 #[cfg(feature = "std")]
-#[derive(Debug)]
+#[derive(sr_primitives::RuntimeDebug)]
 pub struct NativeVersion {
 	/// Basic runtime version info.
 	pub runtime_version: RuntimeVersion,

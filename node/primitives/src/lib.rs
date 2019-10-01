@@ -75,7 +75,7 @@ pub type UncheckedExtrinsic = OpaqueExtrinsic;
 /// A result of execution of a contract.
 #[derive(Eq, PartialEq, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[derive(Debug)]
+#[derive(primitives::RuntimeDebug)]
 pub enum ContractExecResult {
 	/// The contract returned successfully.
 	///

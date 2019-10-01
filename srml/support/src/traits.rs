@@ -598,12 +598,10 @@ pub trait LockableCurrency<AccountId>: Currency<AccountId> {
 bitmask! {
 	/// Reasons for moving funds out of an account.
 	#[derive(Encode, Decode)]
-	#[cfg_attr(not(feature = "std"), derive(Debug))]
 	pub mask WithdrawReasons: i8 where
 
 	/// Reason for moving funds out of an account.
 	#[derive(Encode, Decode)]
-	#[cfg_attr(not(feature = "std"), derive(Debug))]
 	flags WithdrawReason {
 		/// In order to pay for (system) transaction costs.
 		TransactionPayment = 0b00000001,

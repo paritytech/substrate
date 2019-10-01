@@ -122,7 +122,7 @@ macro_rules! decl_event {
 	) => {
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 		#[derive(Clone, PartialEq, Eq, $crate::codec::Encode, $crate::codec::Decode)]
-#[derive(Debug)]
+#[derive($crate::RuntimeDebug)]
 		/// Events for this module.
 		///
 		$(#[$attr])*
@@ -262,7 +262,7 @@ macro_rules! __decl_generic_event {
 
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 		#[derive(Clone, PartialEq, Eq, $crate::codec::Encode, $crate::codec::Decode)]
-#[derive(Debug)]
+#[derive($crate::RuntimeDebug)]
 		/// Events for this module.
 		///
 		$(#[$attr])*
@@ -453,7 +453,7 @@ macro_rules! impl_outer_event {
 	) => {
 		$crate::paste::item! {
 			#[derive(Clone, PartialEq, Eq, $crate::codec::Encode, $crate::codec::Decode)]
-#[derive(Debug)]
+#[derive($crate::RuntimeDebug)]
 			$(#[$attr])*
 			#[allow(non_camel_case_types)]
 			pub enum $name {

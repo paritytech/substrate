@@ -192,7 +192,7 @@ macro_rules! construct_runtime {
 		};
 	) => {
 		#[derive(Clone, Copy, PartialEq, Eq)]
-#[derive(Debug)]
+#[derive($crate::RuntimeDebug)]
 		pub struct $runtime;
 		impl $crate::sr_primitives::traits::GetNodeBlockType for $runtime {
 			type NodeBlock = $node_block;

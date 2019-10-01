@@ -143,7 +143,7 @@ macro_rules! app_crypto {
 				$crate::codec::Decode,
 			)]
 			#[cfg_attr(feature = "std", derive(Hash))]
-#[derive(Debug)]
+			#[derive($crate::RuntimeDebug)]
 			pub struct Public($public);
 		}
 
@@ -242,7 +242,7 @@ macro_rules! app_crypto {
 			/// A generic `AppPublic` wrapper type over $public crypto; this has no specific App.
 			#[derive(Clone, Default, Eq, PartialEq, $crate::codec::Encode, $crate::codec::Decode)]
 			#[cfg_attr(feature = "std", derive(Hash))]
-#[derive(Debug)]
+			#[derive($crate::RuntimeDebug)]
 			pub struct Signature($sig);
 		}
 

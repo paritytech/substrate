@@ -29,7 +29,7 @@ use primitives::offchain::{
 
 /// Request method (HTTP verb)
 #[derive(Clone, PartialEq, Eq)]
-#[derive(Debug)]
+#[derive(primitives::RuntimeDebug)]
 pub enum Method {
 	/// GET request
 	Get,
@@ -63,7 +63,7 @@ mod header {
 
 	/// A header type.
 	#[derive(Clone, PartialEq, Eq)]
-#[derive(Debug)]
+#[derive(primitives::RuntimeDebug)]
 	pub struct Header {
 		name: Vec<u8>,
 		value: Vec<u8>,
@@ -98,7 +98,7 @@ mod header {
 
 /// An HTTP request builder.
 #[derive(Clone, PartialEq, Eq)]
-#[derive(Debug)]
+#[derive(primitives::RuntimeDebug)]
 pub struct Request<'a, T = Vec<&'static [u8]>> {
 	/// Request method
 	pub method: Method,
@@ -219,7 +219,7 @@ impl<'a, I: AsRef<[u8]>, T: IntoIterator<Item=I>> Request<'a, T> {
 
 /// A request error
 #[derive(Clone, PartialEq, Eq)]
-#[derive(Debug)]
+#[derive(primitives::RuntimeDebug)]
 pub enum Error {
 	/// Deadline has been reached.
 	DeadlineReached,
@@ -231,7 +231,7 @@ pub enum Error {
 
 /// A struct representing an uncompleted http request.
 #[derive(PartialEq, Eq)]
-#[derive(Debug)]
+#[derive(primitives::RuntimeDebug)]
 pub struct PendingRequest {
 	/// Request ID
 	pub id: RequestId,
@@ -292,7 +292,7 @@ impl PendingRequest {
 }
 
 /// A HTTP response.
-#[derive(Debug)]
+#[derive(primitives::RuntimeDebug)]
 pub struct Response {
 	/// Request id
 	pub id: RequestId,
@@ -422,7 +422,7 @@ impl Iterator for ResponseBody {
 
 /// A collection of Headers in the response.
 #[derive(Clone, PartialEq, Eq)]
-#[derive(Debug)]
+#[derive(primitives::RuntimeDebug)]
 pub struct Headers {
 	/// Raw headers
 	pub raw: Vec<(Vec<u8>, Vec<u8>)>,
@@ -453,7 +453,7 @@ impl Headers {
 
 /// A custom iterator traversing all the headers.
 #[derive(Clone)]
-#[derive(Debug)]
+#[derive(primitives::RuntimeDebug)]
 pub struct HeadersIterator<'a> {
 	collection: &'a [(Vec<u8>, Vec<u8>)],
 	index: Option<usize>,

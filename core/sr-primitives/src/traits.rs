@@ -473,7 +473,7 @@ pub trait Hash: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {
 /// Blake2-256 Hash implementation.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[derive(Debug)]
+#[derive(primitives::RuntimeDebug)]
 pub struct BlakeTwo256;
 
 impl Hash for BlakeTwo256 {
@@ -1223,7 +1223,7 @@ macro_rules! impl_opaque_keys {
 	) => {
 		#[derive(Default, Clone, PartialEq, Eq, $crate::codec::Encode, $crate::codec::Decode)]
 		#[cfg_attr(feature = "std", derive($crate::serde::Serialize, $crate::serde::Deserialize))]
-#[derive(Debug)]
+#[derive(primitives::RuntimeDebug)]
 		pub struct $name {
 			$(
 				pub $field: $type,

@@ -202,7 +202,7 @@ impl<T: Trait> Subtrait for T {
 }
 
 /// Asset creation options.
-#[derive(Debug)]
+#[derive(sr_primitives::RuntimeDebug)]
 #[derive(Clone, Encode, Decode, PartialEq, Eq)]
 pub struct AssetOptions<Balance: HasCompact, AccountId> {
 	/// Initial issuance of this asset. All deposit to the creater of the asset.
@@ -213,7 +213,7 @@ pub struct AssetOptions<Balance: HasCompact, AccountId> {
 }
 
 /// Owner of an asset.
-#[derive(Debug)]
+#[derive(sr_primitives::RuntimeDebug)]
 #[derive(Clone, Encode, Decode, PartialEq, Eq)]
 pub enum Owner<AccountId> {
 	/// No owner.
@@ -229,7 +229,7 @@ impl<AccountId> Default for Owner<AccountId> {
 }
 
 /// Asset permissions
-#[derive(Debug)]
+#[derive(sr_primitives::RuntimeDebug)]
 #[derive(Clone, Encode, Decode, PartialEq, Eq)]
 pub struct PermissionsV1<AccountId> {
 	/// Who have permission to update asset permission
@@ -240,7 +240,7 @@ pub struct PermissionsV1<AccountId> {
 	pub burn: Owner<AccountId>,
 }
 
-#[derive(Debug)]
+#[derive(sr_primitives::RuntimeDebug)]
 #[derive(Clone, Encode, Decode, PartialEq, Eq)]
 #[repr(u8)]
 enum PermissionVersionNumber {
@@ -248,7 +248,7 @@ enum PermissionVersionNumber {
 }
 
 /// Versioned asset permission
-#[derive(Debug)]
+#[derive(sr_primitives::RuntimeDebug)]
 #[derive(Clone, PartialEq, Eq)]
 pub enum PermissionVersions<AccountId> {
 	V1(PermissionsV1<AccountId>),
@@ -436,7 +436,7 @@ decl_module! {
 }
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
-#[derive(Debug)]
+#[derive(sr_primitives::RuntimeDebug)]
 pub struct BalanceLock<Balance, BlockNumber> {
 	pub id: LockIdentifier,
 	pub amount: Balance,
@@ -1067,7 +1067,7 @@ impl<T: Subtrait> Trait for ElevatedTrait<T> {
 }
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
-#[derive(Debug)]
+#[derive(sr_primitives::RuntimeDebug)]
 pub struct AssetCurrency<T, U>(rstd::marker::PhantomData<T>, rstd::marker::PhantomData<U>);
 
 impl<T, U> Currency<T::AccountId> for AssetCurrency<T, U>

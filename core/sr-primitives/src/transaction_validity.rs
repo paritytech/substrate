@@ -32,7 +32,7 @@ pub type TransactionTag = Vec<u8>;
 /// An invalid transaction validity.
 #[derive(Clone, PartialEq, Eq, Encode, Decode, Copy)]
 #[cfg_attr(feature = "std", derive(serde::Serialize))]
-#[derive(Debug)]
+#[derive(primitives::RuntimeDebug)]
 pub enum InvalidTransaction {
 	/// The call of the transaction is not expected.
 	Call,
@@ -84,7 +84,7 @@ impl From<InvalidTransaction> for &'static str {
 /// An unknown transaction validity.
 #[derive(Clone, PartialEq, Eq, Encode, Decode, Copy)]
 #[cfg_attr(feature = "std", derive(serde::Serialize))]
-#[derive(Debug)]
+#[derive(primitives::RuntimeDebug)]
 pub enum UnknownTransaction {
 	/// Could not lookup some information that is required to validate the transaction.
 	CannotLookup,
@@ -109,7 +109,7 @@ impl From<UnknownTransaction> for &'static str {
 /// Errors that can occur while checking the validity of a transaction.
 #[derive(Clone, PartialEq, Eq, Encode, Decode, Copy)]
 #[cfg_attr(feature = "std", derive(serde::Serialize))]
-#[derive(Debug)]
+#[derive(primitives::RuntimeDebug)]
 pub enum TransactionValidityError {
 	/// The transaction is invalid.
 	Invalid(InvalidTransaction),
@@ -177,7 +177,7 @@ impl Into<TransactionValidity> for UnknownTransaction {
 
 /// Information concerning a valid transaction.
 #[derive(Clone, PartialEq, Eq, Encode, Decode)]
-#[derive(Debug)]
+#[derive(primitives::RuntimeDebug)]
 pub struct ValidTransaction {
 	/// Priority of the transaction.
 	///

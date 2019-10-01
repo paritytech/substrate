@@ -56,7 +56,7 @@ pub trait Trait<I=DefaultInstance>: system::Trait {
 
 /// Origin for the collective module.
 #[derive(PartialEq, Eq, Clone)]
-#[derive(Debug)]
+#[derive(sr_primitives::RuntimeDebug)]
 pub enum RawOrigin<AccountId, I> {
 	/// It has been condoned by a given number of members of the collective from a given total.
 	Members(MemberCount, MemberCount),
@@ -70,7 +70,7 @@ pub enum RawOrigin<AccountId, I> {
 pub type Origin<T, I=DefaultInstance> = RawOrigin<<T as system::Trait>::AccountId, I>;
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
-#[derive(Debug)]
+#[derive(sr_primitives::RuntimeDebug)]
 /// Info for keeping track of a motion being voted on.
 pub struct Votes<AccountId> {
 	/// The proposal's unique index.
