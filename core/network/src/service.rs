@@ -65,8 +65,18 @@ impl<T> ExHashT for T where
 pub trait TransactionPool<H: ExHashT, B: BlockT>: Send + Sync {
 	/// Get transactions from the pool that are ready to be propagated.
 	fn transactions(&self) -> Vec<(H, B::Extrinsic)>;
+	/// Get hash of transaction.
+	fn hash_of(&self, transaction: &B::Extrinsic) -> H;
 	/// Import a transaction into the pool.
-	fn import(&self, transaction: &B::Extrinsic) -> Option<H>;
+	///
+	/// Peer reputation is changed by reputation_change if transaction is accepted by the pool.
+	fn import(
+		&self,
+		report_handle: ReportHandle,
+		who: PeerId,
+		reputation_change: i32,
+		transaction: B::Extrinsic,
+	);
 	/// Notify the pool about transactions broadcast.
 	fn on_broadcasted(&self, propagations: HashMap<H, Vec<String>>);
 }
@@ -75,6 +85,12 @@ pub trait TransactionPool<H: ExHashT, B: BlockT>: Send + Sync {
 #[derive(Clone)]
 pub struct ReportHandle {
 	inner: PeersetHandle, // wraps it so we don't have to worry about breaking API.
+}
+
+impl From<PeersetHandle> for ReportHandle {
+	fn from(peerset_handle: PeersetHandle) -> Self {
+		ReportHandle { inner: peerset_handle }
+	}
 }
 
 impl ReportHandle {

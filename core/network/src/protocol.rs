@@ -963,6 +963,14 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		who: PeerId,
 		extrinsics: message::Transactions<B::Extrinsic>
 	) {
+		// sending extrinsic to light node is considered a bad behavior
+		if !self.config.roles.is_full() {
+			trace!(target: "sync", "Peer {} is trying to send extrinsic to the light node", who);
+			self.behaviour.disconnect_peer(&who);
+			self.peerset_handle.report_peer(who, i32::min_value());
+			return;
+		}
+
 		// Accept extrinsics only when fully synced
 		if self.sync.status().state != SyncState::Idle {
 			trace!(target: "sync", "{} Ignoring extrinsics while syncing", who);
@@ -971,12 +979,15 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		trace!(target: "sync", "Received {} extrinsics from {}", extrinsics.len(), who);
 		if let Some(ref mut peer) = self.context_data.peers.get_mut(&who) {
 			for t in extrinsics {
-				if let Some(hash) = self.transaction_pool.import(&t) {
-					self.peerset_handle.report_peer(who.clone(), NEW_EXTRINSIC_REPUTATION_CHANGE);
-					peer.known_extrinsics.insert(hash);
-				} else {
-					trace!(target: "sync", "Extrinsic rejected");
-				}
+				let hash = self.transaction_pool.hash_of(&t);
+				peer.known_extrinsics.insert(hash);
+
+				self.transaction_pool.import(
+					self.peerset_handle.clone().into(),
+					who.clone(),
+					NEW_EXTRINSIC_REPUTATION_CHANGE,
+					t,
+				);
 			}
 		}
 	}
@@ -995,6 +1006,11 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		let extrinsics = self.transaction_pool.transactions();
 		let mut propagated_to = HashMap::new();
 		for (who, peer) in self.context_data.peers.iter_mut() {
+			// never send extrinsics to the light node
+			if !peer.info.roles.is_full() {
+				continue;
+			}
+
 			let (hashes, to_send): (Vec<_>, Vec<_>) = extrinsics
 				.iter()
 				.filter(|&(ref hash, _)| peer.known_extrinsics.insert(hash.clone()))

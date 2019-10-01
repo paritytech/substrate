@@ -47,7 +47,7 @@ use consensus::Error as ConsensusError;
 use consensus::{BlockOrigin, ForkChoiceStrategy, BlockImportParams, BlockCheckParams, JustificationImport};
 use futures::prelude::*;
 use futures03::{StreamExt as _, TryStreamExt as _};
-use crate::{NetworkWorker, NetworkService, config::ProtocolId};
+use crate::{NetworkWorker, NetworkService, ReportHandle, config::ProtocolId};
 use crate::config::{NetworkConfiguration, TransportConfig, BoxFinalityProofRequestBuilder};
 use libp2p::PeerId;
 use parking_lot::Mutex;
@@ -400,9 +400,11 @@ impl TransactionPool<Hash, Block> for EmptyTransactionPool {
 		Vec::new()
 	}
 
-	fn import(&self, _transaction: &Extrinsic) -> Option<Hash> {
-		None
+	fn hash_of(&self, _transaction: &Extrinsic) -> Hash {
+		Hash::default()
 	}
+
+	fn import(&self, _report_handle: ReportHandle, _who: PeerId, _rep_change: i32, _transaction: Extrinsic) {}
 
 	fn on_broadcasted(&self, _: HashMap<Hash, Vec<String>>) {}
 }
