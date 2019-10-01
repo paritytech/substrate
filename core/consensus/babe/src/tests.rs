@@ -20,7 +20,7 @@
 // https://github.com/paritytech/substrate/issues/2532
 #![allow(deprecated)]
 use super::*;
-use crate::slots::claim_slot;
+use authorship::claim_slot;
 
 use babe_primitives::{AuthorityPair, SlotNumber};
 use client::block_builder::BlockBuilder;
