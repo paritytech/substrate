@@ -196,7 +196,7 @@ impl Decode for BabePreDigest {
 /// Information about the next epoch. This is broadcast in the first block
 /// of the epoch.
 #[derive(Decode, Encode, Default, PartialEq, Eq, Clone)]
-#[derive(Debug)]
+#[derive(sr_primitives::RuntimeDebug)]
 pub struct NextEpochDescriptor {
 	/// The authorities.
 	pub authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,

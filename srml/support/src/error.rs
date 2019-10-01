@@ -56,7 +56,7 @@ macro_rules! decl_error {
 		}
 	) => {
 		#[derive(Clone, PartialEq, Eq)]
-#[derive(Debug)]
+#[derive($crate::RuntimeDebug)]
 		$(#[$attr])*
 		pub enum $error {
 			Other(&'static str),

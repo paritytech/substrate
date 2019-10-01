@@ -618,7 +618,7 @@ fn create_and_impl_instance(
 
 	quote! {
 		// Those trait are derived because of wrong bounds for generics
-#[derive(Debug)]
+#[derive(#scrate::RuntimeDebug)]
 		#[derive(Clone, Eq, PartialEq, #scrate::codec::Encode, #scrate::codec::Decode)]
 		#doc
 		pub struct #ident;

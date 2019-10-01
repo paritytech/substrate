@@ -36,8 +36,6 @@ pub use app_crypto;
 #[cfg(feature = "std")]
 pub use runtime_io::{StorageOverlay, ChildrenStorageOverlay};
 
-pub use substrate_debug_derive::RuntimeDebug;
-
 use rstd::prelude::*;
 use rstd::convert::TryFrom;
 use primitives::{crypto, ed25519, sr25519, hash::{H256, H512}};
@@ -60,6 +58,9 @@ pub use generic::{DigestItem, Digest};
 /// Re-export this since it's part of the API of this crate.
 pub use primitives::crypto::{key_types, KeyTypeId, CryptoType};
 pub use app_crypto::RuntimeAppPublic;
+
+/// Re-export `RuntimeDebug`, to avoid dependency clutter.
+pub use primitives::RuntimeDebug;
 
 /// Re-export arithmetic stuff.
 pub use sr_arithmetic::{
@@ -165,7 +166,7 @@ pub type ConsensusEngineId = [u8; 4];
 /// Signature verify that can work with any known signature types..
 #[derive(Eq, PartialEq, Clone, Encode, Decode)]
 // TODO [ToDr] Do proper
-//#[derive(Debug)]
+//#[derive(primitives::RuntimeDebug)]
 pub enum MultiSignature {
 	/// An Ed25519 signature.
 	Ed25519(ed25519::Signature),
@@ -194,7 +195,7 @@ impl Default for MultiSignature {
 /// Public key for any known crypto algorithm.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[derive(RuntimeDebug)]
+#[derive(primitives::RuntimeDebug)]
 pub enum MultiSigner {
 	/// An Ed25519 identity.
 	Ed25519(ed25519::Public),
@@ -261,7 +262,7 @@ impl Verify for MultiSignature {
 /// Signature verify that can work with any known signature types..
 #[derive(Eq, PartialEq, Clone, Default, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[derive(RuntimeDebug)]
+#[derive(primitives::RuntimeDebug)]
 pub struct AnySignature(H512);
 
 impl Verify for AnySignature {
@@ -291,7 +292,7 @@ impl From<ed25519::Signature> for AnySignature {
 
 #[derive(Eq, PartialEq, Clone, Copy, Decode, Encode)]
 #[cfg_attr(feature = "std", derive(Serialize))]
-#[derive(RuntimeDebug)]
+#[derive(primitives::RuntimeDebug)]
 /// Reason why an extrinsic couldn't be applied (i.e. invalid extrinsic).
 pub enum ApplyError {
 	/// General error to do with the permissions of the sender.
@@ -344,7 +345,7 @@ pub type ApplyResult = Result<ApplyOutcome, ApplyError>;
 
 #[derive(Eq, PartialEq, Clone, Copy, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Serialize))]
-#[derive(RuntimeDebug)]
+#[derive(primitives::RuntimeDebug)]
 /// Reason why a dispatch call failed
 pub struct DispatchError {
 	/// Module index, matching the metadata module index

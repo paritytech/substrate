@@ -24,7 +24,7 @@ pub fn debug_derive(ast: &DeriveInput) -> proc_macro::TokenStream {
 
 	let gen = quote!{
 		impl #impl_generics core::fmt::Debug for #name #ty_generics #where_clause {
-			fn fmt(&self, fmt: core::fmt::Formatter) -> core::fmt::Result<()> {
+			fn fmt(&self, fmt: &mut core::fmt::Formatter) -> core::fmt::Result {
 				write!(fmt, #name_str)
 			}
 		}

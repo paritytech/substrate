@@ -326,7 +326,7 @@ decl_error! {
 
 /// Origin for the System module.
 #[derive(PartialEq, Eq, Clone)]
-#[derive(Debug)]
+#[derive(sr_primitives::RuntimeDebug)]
 pub enum RawOrigin<AccountId> {
 	/// The system itself ordained this dispatch to happen: this is the highest privilege level.
 	Root,

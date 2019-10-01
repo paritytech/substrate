@@ -94,7 +94,7 @@ pub fn native_version() -> NativeVersion {
 
 /// Calls in transactions.
 #[derive(Clone, PartialEq, Eq, Encode, Decode)]
-#[derive(Debug)]
+#[derive(primitives::RuntimeDebug)]
 pub struct Transfer {
 	pub from: AccountId,
 	pub to: AccountId,
@@ -114,7 +114,7 @@ impl Transfer {
 
 /// Extrinsic for test-runtime.
 #[derive(Clone, PartialEq, Eq, Encode, Decode)]
-#[derive(Debug)]
+#[derive(primitives::RuntimeDebug)]
 pub enum Extrinsic {
 	AuthoritiesChange(Vec<AuthorityId>),
 	Transfer(Transfer, AccountSignature),
@@ -354,7 +354,7 @@ impl_outer_origin!{
 }
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq)]
-#[derive(Debug)]
+#[derive(primitives::RuntimeDebug)]
 pub struct Event;
 
 impl From<srml_system::Event> for Event {

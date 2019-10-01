@@ -28,7 +28,9 @@ pub use sr_primitives::{
 	weights::{
 		SimpleDispatchInfo, GetDispatchInfo, DispatchInfo, WeighData, ClassifyDispatch,
 		TransactionPriority
-	}, traits::{Dispatchable, DispatchResult, ModuleDispatchError}, DispatchError
+	},
+	traits::{Dispatchable, DispatchResult, ModuleDispatchError},
+	DispatchError,
 };
 
 /// A type that cannot be instantiated.
@@ -1072,7 +1074,7 @@ macro_rules! decl_module {
 
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 		#[derive(Clone, Copy, PartialEq, Eq)]
-#[derive(Debug)]
+#[derive($crate::RuntimeDebug)]
 		pub struct $mod_type<
 			$trait_instance: $trait_name
 			$(<I>, $instance: $instantiable $( = $module_default_instance)?)?
@@ -1317,7 +1319,7 @@ macro_rules! impl_outer_dispatch {
 	) => {
 		$(#[$attr])*
 		#[derive(Clone, PartialEq, Eq, $crate::codec::Encode, $crate::codec::Decode)]
-#[derive(Debug)]
+#[derive($crate::RuntimeDebug)]
 		pub enum $call_type {
 			$(
 				$camelcase ( $crate::dispatch::CallableCallFor<$camelcase, $runtime> )

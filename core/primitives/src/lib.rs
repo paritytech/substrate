@@ -41,6 +41,8 @@ use serde::{Serialize, Deserialize};
 pub use serde;// << for macro
 pub use codec::{Encode, Decode};// << for macro
 
+pub use substrate_debug_derive::RuntimeDebug;
+
 #[cfg(feature = "std")]
 pub use impl_serde::serialize as bytes;
 
@@ -113,7 +115,7 @@ impl ExecutionContext {
 /// Hex-serialized shim for `Vec<u8>`.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Hash, PartialOrd, Ord))]
-#[derive(Debug)]
+#[derive(crate::RuntimeDebug)]
 pub struct Bytes(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
 impl From<Vec<u8>> for Bytes {
