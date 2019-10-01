@@ -61,7 +61,7 @@ use system::Trait;
 fn block_number_to_index<T: Trait>(block_number: T::BlockNumber) -> usize {
 	// '- 2' because on_initialize is called on the first block after genesis - block 2
 	let index = (block_number - 2.into()) % 81.into();
-	index.try_into().ok().expect("something % 81 should always be less than usize")
+	index.try_into().ok().expect("Something % 81 is always smaller than usize; qed")
 }
 
 decl_module! {
