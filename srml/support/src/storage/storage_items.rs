@@ -19,7 +19,7 @@
 //! This crate exports a macro `storage_items!` and traits describing behavior of generated
 //! structs.
 //!
-//! Three kinds of data types are currently supported:
+//! Two kinds of data types are currently supported:
 //!   - values
 //!   - maps
 //!
@@ -758,7 +758,7 @@ mod test3 {
 #[cfg(test)]
 #[allow(dead_code)]
 mod test_append_and_len {
-	use crate::storage::{StorageMap, StorageValue};
+	use crate::storage::{StorageValue};
 	use runtime_io::{with_externalities, TestExternalities};
 	use codec::{Encode, Decode};
 

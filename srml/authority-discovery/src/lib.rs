@@ -138,7 +138,6 @@ mod tests {
 	use primitives::testing::KeyStore;
 	use primitives::{crypto::key_types, sr25519, traits::BareCryptoStore, H256};
 	use runtime_io::{with_externalities, TestExternalities};
-	use sr_primitives::generic::UncheckedExtrinsic;
 	use sr_primitives::testing::{Header, UintAuthorityId};
 	use sr_primitives::traits::{ConvertInto, IdentityLookup, OpaqueKeys};
 	use sr_primitives::Perbill;
