@@ -56,7 +56,6 @@ pub trait StorageValue<T: FullCodec> {
 	/// Append the given item to the value in the storage.
 	///
 	/// `T` is required to implement `codec::EncodeAppend`.
-	///
 	fn append<Items, Item, EncodeLikeItem>(items: Items) -> Result<(), &'static str>
 	where
 		Item: Encode,
