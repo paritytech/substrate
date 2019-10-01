@@ -39,7 +39,7 @@ use codec::Decode;
 use sr_primitives::traits::{ApiRef, ProvideRuntimeApi, Header as HeaderT};
 use sr_primitives::generic::{BlockId, DigestItem};
 use primitives::{NativeOrEncoded, ExecutionContext, crypto::Public};
-use fg_primitives::{GRANDPA_ENGINE_ID, AuthorityId};
+use fg_primitives::{GRANDPA_ENGINE_ID, AuthorityList};
 
 use authorities::AuthoritySet;
 use finality_proof::{FinalityProofProvider, AuthoritySetForFinalityProver, AuthoritySetForFinalityChecker};
@@ -187,11 +187,11 @@ impl Future for Exit {
 
 #[derive(Default, Clone)]
 pub(crate) struct TestApi {
-	genesis_authorities: Vec<(AuthorityId, u64)>,
+	genesis_authorities: AuthorityList,
 }
 
 impl TestApi {
-	pub fn new(genesis_authorities: Vec<(AuthorityId, u64)>) -> Self {
+	pub fn new(genesis_authorities: AuthorityList) -> Self {
 		TestApi {
 			genesis_authorities,
 		}
@@ -270,13 +270,13 @@ impl GrandpaApi<Block> for RuntimeApi {
 		_: ExecutionContext,
 		_: Option<()>,
 		_: Vec<u8>,
-	) -> Result<NativeOrEncoded<Vec<(AuthorityId, u64)>>> {
+	) -> Result<NativeOrEncoded<AuthorityList>> {
 		Ok(self.inner.genesis_authorities.clone()).map(NativeOrEncoded::Native)
 	}
 }
 
 impl AuthoritySetForFinalityProver<Block> for TestApi {
-	fn authorities(&self, block: &BlockId<Block>) -> Result<Vec<(AuthorityId, u64)>> {
+	fn authorities(&self, block: &BlockId<Block>) -> Result<AuthorityList> {
 		let runtime_api = RuntimeApi { inner: self.clone() };
 		runtime_api.GrandpaApi_grandpa_authorities_runtime_api_impl(block, ExecutionContext::Syncing, None, Vec::new())
 			.map(|v| match v {
@@ -296,7 +296,7 @@ impl AuthoritySetForFinalityChecker<Block> for TestApi {
 		_hash: <Block as BlockT>::Hash,
 		_header: <Block as BlockT>::Header,
 		proof: Vec<Vec<u8>>,
-	) -> Result<Vec<(AuthorityId, u64)>> {
+	) -> Result<AuthorityList> {
 		Decode::decode(&mut &proof[0][..])
 			.map_err(|_| unreachable!("incorrect value is passed as GRANDPA authorities proof"))
 	}
@@ -304,7 +304,7 @@ impl AuthoritySetForFinalityChecker<Block> for TestApi {
 
 const TEST_GOSSIP_DURATION: Duration = Duration::from_millis(500);
 
-fn make_ids(keys: &[Ed25519Keyring]) -> Vec<(AuthorityId, u64)> {
+fn make_ids(keys: &[Ed25519Keyring]) -> AuthorityList {
 	keys.iter().map(|key| key.clone().public().into()).map(|id| (id, 1)).collect()
 }
 

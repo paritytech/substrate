@@ -58,12 +58,15 @@ pub type SetId = u64;
 /// The round indicator.
 pub type RoundNumber = u64;
 
+// A list of Grandpa authorities with associated weights.
+pub type AuthorityList = Vec<(AuthorityId, AuthorityWeight)>;
+
 /// A scheduled change of authority set.
 #[cfg_attr(feature = "std", derive(Serialize))]
 #[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug)]
 pub struct ScheduledChange<N> {
 	/// The new authorities after the change, along with their respective weights.
-	pub next_authorities: Vec<(AuthorityId, AuthorityWeight)>,
+	pub next_authorities: AuthorityList,
 	/// The number of blocks to delay.
 	pub delay: N,
 }
@@ -172,6 +175,6 @@ decl_runtime_apis! {
 		/// When called at block B, it will return the set of authorities that should be
 		/// used to finalize descendants of this block (B+1, B+2, ...). The block B itself
 		/// is finalized by the authorities from block B-1.
-		fn grandpa_authorities() -> Vec<(AuthorityId, AuthorityWeight)>;
+		fn grandpa_authorities() -> AuthorityList;
 	}
 }

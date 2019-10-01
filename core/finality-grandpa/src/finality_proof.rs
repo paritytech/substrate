@@ -50,7 +50,7 @@ use sr_primitives::{
 };
 use primitives::{H256, Blake2Hasher};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
-use fg_primitives::AuthorityId;
+use fg_primitives::{AuthorityId, AuthorityList};
 
 use crate::justification::GrandpaJustification;
 
@@ -60,7 +60,7 @@ const MAX_FRAGMENTS_IN_PROOF: usize = 8;
 /// GRANDPA authority set related methods for the finality proof provider.
 pub trait AuthoritySetForFinalityProver<Block: BlockT>: Send + Sync {
 	/// Call GrandpaApi::grandpa_authorities at given block.
-	fn authorities(&self, block: &BlockId<Block>) -> ClientResult<Vec<(AuthorityId, u64)>>;
+	fn authorities(&self, block: &BlockId<Block>) -> ClientResult<AuthorityList>;
 	/// Prove call of GrandpaApi::grandpa_authorities at given block.
 	fn prove_authorities(&self, block: &BlockId<Block>) -> ClientResult<Vec<Vec<u8>>>;
 }
@@ -72,7 +72,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> AuthoritySetForFinalityProver<Block> fo
 		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 		RA: Send + Sync,
 {
-	fn authorities(&self, block: &BlockId<Block>) -> ClientResult<Vec<(AuthorityId, u64)>> {
+	fn authorities(&self, block: &BlockId<Block>) -> ClientResult<AuthorityList> {
 		self.executor().call(
 			block,
 			"GrandpaApi_grandpa_authorities",
@@ -98,7 +98,7 @@ pub trait AuthoritySetForFinalityChecker<Block: BlockT>: Send + Sync {
 		hash: Block::Hash,
 		header: Block::Header,
 		proof: Vec<Vec<u8>>,
-	) -> ClientResult<Vec<(AuthorityId, u64)>>;
+	) -> ClientResult<AuthorityList>;
 }
 
 /// FetchChecker-based implementation of AuthoritySetForFinalityChecker.
@@ -108,7 +108,7 @@ impl<Block: BlockT> AuthoritySetForFinalityChecker<Block> for Arc<dyn FetchCheck
 		hash: Block::Hash,
 		header: Block::Header,
 		proof: Vec<Vec<u8>>,
-	) -> ClientResult<Vec<(AuthorityId, u64)>> {
+	) -> ClientResult<AuthorityList> {
 		let request = RemoteCallRequest {
 			block: hash,
 			header,
@@ -119,7 +119,7 @@ impl<Block: BlockT> AuthoritySetForFinalityChecker<Block> for Arc<dyn FetchCheck
 
 		self.check_execution_proof(&request, proof)
 			.and_then(|authorities| {
-				let authorities: Vec<(AuthorityId, u64)> = Decode::decode(&mut &authorities[..])
+				let authorities: AuthorityList = Decode::decode(&mut &authorities[..])
 					.map_err(|err| ClientError::CallResultDecode(
 						"failed to decode GRANDPA authorities set proof".into(), err
 					))?;
@@ -189,7 +189,7 @@ pub struct FinalityEffects<Header: HeaderT> {
 	/// New authorities set id that should be applied starting from block.
 	pub new_set_id: u64,
 	/// New authorities set that should be applied starting from block.
-	pub new_authorities: Vec<(AuthorityId, u64)>,
+	pub new_authorities: AuthorityList,
 }
 
 /// Single fragment of proof-of-finality.
@@ -408,7 +408,7 @@ pub(crate) fn prove_finality<Block: BlockT<Hash=H256>, B: BlockchainBackend<Bloc
 pub(crate) fn check_finality_proof<Block: BlockT<Hash=H256>, B>(
 	blockchain: &B,
 	current_set_id: u64,
-	current_authorities: Vec<(AuthorityId, u64)>,
+	current_authorities: AuthorityList,
 	authorities_provider: &dyn AuthoritySetForFinalityChecker<Block>,
 	remote_proof: Vec<u8>,
 ) -> ClientResult<FinalityEffects<Block::Header>>
@@ -427,7 +427,7 @@ pub(crate) fn check_finality_proof<Block: BlockT<Hash=H256>, B>(
 fn do_check_finality_proof<Block: BlockT<Hash=H256>, B, J>(
 	blockchain: &B,
 	current_set_id: u64,
-	current_authorities: Vec<(AuthorityId, u64)>,
+	current_authorities: AuthorityList,
 	authorities_provider: &dyn AuthoritySetForFinalityChecker<Block>,
 	remote_proof: Vec<u8>,
 ) -> ClientResult<FinalityEffects<Block::Header>>
@@ -522,12 +522,12 @@ fn check_finality_proof_fragment<Block: BlockT<Hash=H256>, B, J>(
 
 /// Authorities set from initial authorities set or finality effects.
 enum AuthoritiesOrEffects<Header: HeaderT> {
-	Authorities(u64, Vec<(AuthorityId, u64)>),
+	Authorities(u64, AuthorityList),
 	Effects(FinalityEffects<Header>),
 }
 
 impl<Header: HeaderT> AuthoritiesOrEffects<Header> {
-	pub fn extract_authorities(self) -> (u64, Vec<(AuthorityId, u64)>) {
+	pub fn extract_authorities(self) -> (u64, AuthorityList) {
 		match self {
 			AuthoritiesOrEffects::Authorities(set_id, authorities) => (set_id, authorities),
 			AuthoritiesOrEffects::Effects(effects) => (effects.new_set_id, effects.new_authorities),
@@ -581,10 +581,10 @@ pub(crate) mod tests {
 
 	impl<GetAuthorities, ProveAuthorities> AuthoritySetForFinalityProver<Block> for (GetAuthorities, ProveAuthorities)
 		where
-			GetAuthorities: Send + Sync + Fn(BlockId<Block>) -> ClientResult<Vec<(AuthorityId, u64)>>,
+			GetAuthorities: Send + Sync + Fn(BlockId<Block>) -> ClientResult<AuthorityList>,
 			ProveAuthorities: Send + Sync + Fn(BlockId<Block>) -> ClientResult<Vec<Vec<u8>>>,
 	{
-		fn authorities(&self, block: &BlockId<Block>) -> ClientResult<Vec<(AuthorityId, u64)>> {
+		fn authorities(&self, block: &BlockId<Block>) -> ClientResult<AuthorityList> {
 			self.0(*block)
 		}
 
@@ -597,14 +597,14 @@ pub(crate) mod tests {
 
 	impl<Closure> AuthoritySetForFinalityChecker<Block> for ClosureAuthoritySetForFinalityChecker<Closure>
 		where
-			Closure: Send + Sync + Fn(H256, Header, Vec<Vec<u8>>) -> ClientResult<Vec<(AuthorityId, u64)>>,
+			Closure: Send + Sync + Fn(H256, Header, Vec<Vec<u8>>) -> ClientResult<AuthorityList>,
 	{
 		fn check_authorities_proof(
 			&self,
 			hash: H256,
 			header: Header,
 			proof: Vec<Vec<u8>>,
-		) -> ClientResult<Vec<(AuthorityId, u64)>> {
+		) -> ClientResult<AuthorityList> {
 			self.0(hash, header, proof)
 		}
 	}

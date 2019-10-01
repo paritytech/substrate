@@ -37,7 +37,7 @@ use sr_primitives::Justification;
 use sr_primitives::traits::{
 	NumberFor, Block as BlockT, Header as HeaderT, ProvideRuntimeApi, DigestFor,
 };
-use fg_primitives::{self, GrandpaApi, AuthorityId};
+use fg_primitives::{self, GrandpaApi, AuthorityId, AuthorityList};
 use sr_primitives::generic::BlockId;
 use primitives::{H256, Blake2Hasher};
 
@@ -110,7 +110,7 @@ struct LightImportData<Block: BlockT<Hash=H256>> {
 #[derive(Debug, Encode, Decode)]
 struct LightAuthoritySet {
 	set_id: u64,
-	authorities: Vec<(AuthorityId, u64)>,
+	authorities: AuthorityList,
 }
 
 impl<B, E, Block: BlockT<Hash=H256>, RA> GrandpaLightBlockImport<B, E, Block, RA> {
@@ -194,7 +194,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> FinalityProofImport<Block>
 
 impl LightAuthoritySet {
 	/// Get a genesis set with given authorities.
-	pub fn genesis(initial: Vec<(AuthorityId, u64)>) -> Self {
+	pub fn genesis(initial: AuthorityList) -> Self {
 		LightAuthoritySet {
 			set_id: fg_primitives::SetId::default(),
 			authorities: initial,
@@ -207,12 +207,12 @@ impl LightAuthoritySet {
 	}
 
 	/// Get latest authorities set.
-	pub fn authorities(&self) -> Vec<(AuthorityId, u64)> {
+	pub fn authorities(&self) -> AuthorityList {
 		self.authorities.clone()
 	}
 
 	/// Set new authorities set.
-	pub fn update(&mut self, set_id: u64, authorities: Vec<(AuthorityId, u64)>) {
+	pub fn update(&mut self, set_id: u64, authorities: AuthorityList) {
 		self.set_id = set_id;
 		std::mem::replace(&mut self.authorities, authorities);
 	}

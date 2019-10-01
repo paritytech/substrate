@@ -64,7 +64,7 @@ use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{
 	NumberFor, Block as BlockT, DigestFor, ProvideRuntimeApi
 };
-use fg_primitives::{GrandpaApi, AuthorityPair};
+use fg_primitives::{GrandpaApi, AuthorityList, AuthorityPair};
 use keystore::KeyStorePtr;
 use inherents::InherentDataProviders;
 use consensus_common::SelectChain;
@@ -108,7 +108,7 @@ use environment::{Environment, VoterSetState};
 use import::GrandpaBlockImport;
 use until_imported::UntilGlobalMessageBlocksImported;
 use communication::NetworkBridge;
-use fg_primitives::{AuthoritySignature, SetId, AuthorityWeight};
+use fg_primitives::{AuthoritySignature, SetId};
 
 // Re-export these two because it's just so damn convenient.
 pub use fg_primitives::{AuthorityId, ScheduledChange};
@@ -295,7 +295,7 @@ pub(crate) struct NewAuthoritySet<H, N> {
 	pub(crate) canon_number: N,
 	pub(crate) canon_hash: H,
 	pub(crate) set_id: SetId,
-	pub(crate) authorities: Vec<(AuthorityId, AuthorityWeight)>,
+	pub(crate) authorities: AuthorityList,
 }
 
 /// Commands issued to the voter.

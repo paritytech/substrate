@@ -43,7 +43,7 @@ use sr_staking_primitives::{
 	offence::{Offence, Kind},
 };
 use fg_primitives::{GRANDPA_ENGINE_ID, ScheduledChange, ConsensusLog, SetId, RoundNumber};
-pub use fg_primitives::{AuthorityId, AuthorityWeight};
+pub use fg_primitives::{AuthorityId, AuthorityList, AuthorityWeight};
 use system::{ensure_signed, DigestOf};
 
 mod mock;
@@ -64,7 +64,7 @@ pub struct OldStoredPendingChange<N> {
 	/// The delay in blocks until it will be applied.
 	pub delay: N,
 	/// The next authority set.
-	pub next_authorities: Vec<(AuthorityId, AuthorityWeight)>,
+	pub next_authorities: AuthorityList,
 }
 
 /// A stored pending change.
@@ -75,7 +75,7 @@ pub struct StoredPendingChange<N> {
 	/// The delay in blocks until it will be applied.
 	pub delay: N,
 	/// The next authority set.
-	pub next_authorities: Vec<(AuthorityId, AuthorityWeight)>,
+	pub next_authorities: AuthorityList,
 	/// If defined it means the change was forced and the given block number
 	/// indicates the median last finalized block when the change was signaled.
 	pub forced: Option<N>,
@@ -126,7 +126,7 @@ pub enum StoredState<N> {
 decl_event!(
 	pub enum Event {
 		/// New authority set has been applied.
-		NewAuthorities(Vec<(AuthorityId, AuthorityWeight)>),
+		NewAuthorities(AuthorityList),
 		/// Current authority set has been paused.
 		Paused,
 		/// Current authority set has been resumed.
@@ -137,7 +137,7 @@ decl_event!(
 decl_storage! {
 	trait Store for Module<T: Trait> as GrandpaFinality {
 		/// The current authority set.
-		Authorities get(fn authorities): Vec<(AuthorityId, AuthorityWeight)>;
+		Authorities get(fn authorities): AuthorityList;
 
 		/// State of the current authority set.
 		State get(fn state): StoredState<T::BlockNumber> = StoredState::Live;
@@ -159,7 +159,7 @@ decl_storage! {
 		SetIdSession get(fn session_for_set): map SetId => Option<SessionIndex>;
 	}
 	add_extra_genesis {
-		config(authorities): Vec<(AuthorityId, AuthorityWeight)>;
+		config(authorities): AuthorityList;
 		build(|config| Module::<T>::initialize_authorities(&config.authorities))
 	}
 }
@@ -241,7 +241,7 @@ decl_module! {
 
 impl<T: Trait> Module<T> {
 	/// Get the current set of authorities, along with their respective weights.
-	pub fn grandpa_authorities() -> Vec<(AuthorityId, AuthorityWeight)> {
+	pub fn grandpa_authorities() -> AuthorityList {
 		Authorities::get()
 	}
 
@@ -293,7 +293,7 @@ impl<T: Trait> Module<T> {
 	/// No change should be signaled while any change is pending. Returns
 	/// an error if a change is already pending.
 	pub fn schedule_change(
-		next_authorities: Vec<(AuthorityId, AuthorityWeight)>,
+		next_authorities: AuthorityList,
 		in_blocks: T::BlockNumber,
 		forced: Option<T::BlockNumber>,
 	) -> Result {

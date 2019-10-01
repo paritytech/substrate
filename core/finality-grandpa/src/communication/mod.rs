@@ -52,7 +52,8 @@ use gossip::{
 	GossipMessage, FullCatchUpMessage, FullCommitMessage, VoteMessage, GossipValidator
 };
 use fg_primitives::{
-	AuthorityPair, AuthorityId, AuthoritySignature, SetId as SetIdNumber, RoundNumber,
+	AuthorityPair, AuthorityId, AuthorityList, AuthoritySignature,
+	SetId as SetIdNumber, RoundNumber,
 };
 
 pub mod gossip;
