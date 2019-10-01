@@ -28,8 +28,9 @@ use codec::Encode;
 use sr_primitives::traits::NumberFor;
 
 use crate::environment::SharedVoterSetState;
+use fg_primitives::AuthorityList;
 use super::gossip::{self, GossipValidator};
-use super::{AuthorityId, AuthorityList, VoterSet, Round, SetId};
+use super::{AuthorityId, VoterSet, Round, SetId};
 
 enum Event {
 	MessagesFor(Hash, mpsc::UnboundedSender<network_gossip::TopicNotification>),

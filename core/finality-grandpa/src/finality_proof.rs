@@ -34,13 +34,14 @@
 //! finality proof (that finalizes some block C that is ancestor of the B and descendant
 //! of the U) could be returned.
 
+use std::iter;
 use std::sync::Arc;
 use log::{trace, warn};
 
 use client::{
 	backend::Backend, blockchain::Backend as BlockchainBackend, CallExecutor, Client,
 	error::{Error as ClientError, Result as ClientResult},
-	light::fetcher::{FetchChecker, RemoteCallRequest}, ExecutionStrategy,
+	light::fetcher::{FetchChecker, RemoteReadRequest},
 };
 use codec::{Encode, Decode};
 use grandpa::BlockNumberOps;
@@ -48,9 +49,9 @@ use sr_primitives::{
 	Justification, generic::BlockId,
 	traits::{NumberFor, Block as BlockT, Header as HeaderT, One},
 };
-use primitives::{H256, Blake2Hasher};
+use primitives::{H256, Blake2Hasher, storage::StorageKey};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
-use fg_primitives::{AuthorityId, AuthorityList};
+use fg_primitives::{AuthorityId, AuthorityList, GRANDPA_AUTHORITIES_KEY};
 
 use crate::justification::GrandpaJustification;
 
@@ -59,9 +60,9 @@ const MAX_FRAGMENTS_IN_PROOF: usize = 8;
 
 /// GRANDPA authority set related methods for the finality proof provider.
 pub trait AuthoritySetForFinalityProver<Block: BlockT>: Send + Sync {
-	/// Call GrandpaApi::grandpa_authorities at given block.
+	/// Read GRANDPA_AUTHORITIES_KEY from storage at given block.
 	fn authorities(&self, block: &BlockId<Block>) -> ClientResult<AuthorityList>;
-	/// Prove call of GrandpaApi::grandpa_authorities at given block.
+	/// Prove storage read of GRANDPA_AUTHORITIES_KEY at given block.
 	fn prove_authorities(&self, block: &BlockId<Block>) -> ClientResult<Vec<Vec<u8>>>;
 }
 
@@ -73,26 +74,20 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> AuthoritySetForFinalityProver<Block> fo
 		RA: Send + Sync,
 {
 	fn authorities(&self, block: &BlockId<Block>) -> ClientResult<AuthorityList> {
-		self.executor().call(
-			block,
-			"GrandpaApi_grandpa_authorities",
-			&[],
-			ExecutionStrategy::NativeElseWasm,
-			None,
-		).and_then(|call_result| Decode::decode(&mut &call_result[..])
-			.map_err(|err| ClientError::CallResultDecode(
-				"failed to decode GRANDPA authorities set proof".into(), err
-			)))
+		let storage_key = StorageKey(GRANDPA_AUTHORITIES_KEY.to_vec());
+		self.storage(block, &storage_key)?
+			.and_then(|encoded| AuthorityList::decode(&mut encoded.0.as_slice()).ok())
+			.ok_or(ClientError::InvalidAuthoritiesSet)
 	}
 
 	fn prove_authorities(&self, block: &BlockId<Block>) -> ClientResult<Vec<Vec<u8>>> {
-		self.execution_proof(block, "GrandpaApi_grandpa_authorities",&[]).map(|(_, proof)| proof)
+		self.read_proof(block, iter::once(GRANDPA_AUTHORITIES_KEY))
 	}
 }
 
 /// GRANDPA authority set related methods for the finality proof checker.
 pub trait AuthoritySetForFinalityChecker<Block: BlockT>: Send + Sync {
-	/// Check execution proof of Grandpa::grandpa_authorities at given block.
+	/// Check storage read proof of GRANDPA_AUTHORITIES_KEY at given block.
 	fn check_authorities_proof(
 		&self,
 		hash: Block::Hash,
@@ -109,21 +104,26 @@ impl<Block: BlockT> AuthoritySetForFinalityChecker<Block> for Arc<dyn FetchCheck
 		header: Block::Header,
 		proof: Vec<Vec<u8>>,
 	) -> ClientResult<AuthorityList> {
-		let request = RemoteCallRequest {
+		let storage_key = GRANDPA_AUTHORITIES_KEY.to_vec();
+		let request = RemoteReadRequest {
 			block: hash,
 			header,
-			method: "GrandpaApi_grandpa_authorities".into(),
-			call_data: vec![],
+			keys: vec![storage_key.clone()],
 			retry_count: None,
 		};
 
-		self.check_execution_proof(&request, proof)
-			.and_then(|authorities| {
-				let authorities: AuthorityList = Decode::decode(&mut &authorities[..])
-					.map_err(|err| ClientError::CallResultDecode(
-						"failed to decode GRANDPA authorities set proof".into(), err
-					))?;
-				Ok(authorities.into_iter().collect())
+		self.check_read_proof(&request, proof)
+			.and_then(|results| {
+				let maybe_encoded = results.get(&storage_key)
+					.expect(
+						"storage_key is listed in the request keys; \
+						check_read_proof must return a value for each requested key;
+						qed"
+					);
+				maybe_encoded
+					.as_ref()
+					.and_then(|encoded| AuthorityList::decode(&mut encoded.as_slice()).ok())
+					.ok_or(ClientError::InvalidAuthoritiesSet)
 			})
 	}
 }

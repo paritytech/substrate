@@ -25,7 +25,7 @@ use fork_tree::ForkTree;
 use grandpa::round::State as RoundState;
 use sr_primitives::traits::{Block as BlockT, NumberFor};
 use log::{info, warn};
-use fg_primitives::{AuthorityId, AuthorityList, SetId, RoundNumber};
+use fg_primitives::{AuthorityList, SetId, RoundNumber};
 
 use crate::authorities::{AuthoritySet, SharedAuthoritySet, PendingChange, DelayKind};
 use crate::consensus_changes::{SharedConsensusChanges, ConsensusChanges};
@@ -426,6 +426,7 @@ pub(crate) fn load_authorities<B: AuxStore, H: Decode, N: Decode>(backend: &B)
 
 #[cfg(test)]
 mod test {
+	use fg_primitives::AuthorityId;
 	use primitives::H256;
 	use test_client;
 	use super::*;

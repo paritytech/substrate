@@ -32,9 +32,7 @@ pub use substrate_finality_grandpa_primitives as fg_primitives;
 
 use rstd::prelude::*;
 use codec::{self as codec, Encode, Decode, Error};
-use support::{
-	decl_event, decl_storage, decl_module, dispatch::Result,
-};
+use support::{decl_event, decl_storage, decl_module, dispatch::Result, storage};
 use sr_primitives::{
 	generic::{DigestItem, OpaqueDigestItemId}, traits::Zero, Perbill,
 };
@@ -42,7 +40,9 @@ use sr_staking_primitives::{
 	SessionIndex,
 	offence::{Offence, Kind},
 };
-use fg_primitives::{GRANDPA_ENGINE_ID, ScheduledChange, ConsensusLog, SetId, RoundNumber};
+use fg_primitives::{
+	GRANDPA_AUTHORITIES_KEY, GRANDPA_ENGINE_ID, ScheduledChange, ConsensusLog, SetId, RoundNumber,
+};
 pub use fg_primitives::{AuthorityId, AuthorityList, AuthorityWeight};
 use system::{ensure_signed, DigestOf};
 
@@ -136,9 +136,6 @@ decl_event!(
 
 decl_storage! {
 	trait Store for Module<T: Trait> as GrandpaFinality {
-		/// The current authority set.
-		Authorities get(fn authorities): AuthorityList;
-
 		/// State of the current authority set.
 		State get(fn state): StoredState<T::BlockNumber> = StoredState::Live;
 
@@ -199,7 +196,7 @@ decl_module! {
 
 				// enact the change if we've reached the enacting block
 				if block_number == pending_change.scheduled_at + pending_change.delay {
-					Authorities::put(&pending_change.next_authorities);
+					Self::set_grandpa_authorities(&pending_change.next_authorities);
 					Self::deposit_event(
 						Event::NewAuthorities(pending_change.next_authorities)
 					);
@@ -242,7 +239,12 @@ decl_module! {
 impl<T: Trait> Module<T> {
 	/// Get the current set of authorities, along with their respective weights.
 	pub fn grandpa_authorities() -> AuthorityList {
-		Authorities::get()
+		storage::unhashed::get_or_default(GRANDPA_AUTHORITIES_KEY)
+	}
+
+	/// Set the current set of authorities, along with their respective weights.
+	fn set_grandpa_authorities(authorities: &AuthorityList) {
+		storage::unhashed::put(GRANDPA_AUTHORITIES_KEY, authorities)
 	}
 
 	/// Schedule GRANDPA to pause starting in the given number of blocks.
@@ -329,10 +331,13 @@ impl<T: Trait> Module<T> {
 		<system::Module<T>>::deposit_log(log.into());
 	}
 
-	fn initialize_authorities(authorities: &[(AuthorityId, AuthorityWeight)]) {
+	fn initialize_authorities(authorities: &AuthorityList) {
 		if !authorities.is_empty() {
-			assert!(Authorities::get().is_empty(), "Authorities are already initialized!");
-			Authorities::put(authorities);
+			assert!(
+				Self::grandpa_authorities().is_empty(),
+				"Authorities are already initialized!"
+			);
+			Self::set_grandpa_authorities(authorities);
 		}
 	}
 }

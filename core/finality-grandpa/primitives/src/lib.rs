@@ -46,6 +46,10 @@ pub type AuthoritySignature = app::Signature;
 /// The `ConsensusEngineId` of GRANDPA.
 pub const GRANDPA_ENGINE_ID: ConsensusEngineId = *b"FRNK";
 
+/// The storage key for the current set of weighted Grandpa authorities.
+/// The value stored is an encoded AuthorityList.
+pub const GRANDPA_AUTHORITIES_KEY: &'static [u8] = b":grandpa_authorities";
+
 /// The weight of an authority.
 pub type AuthorityWeight = u64;
 
@@ -58,7 +62,7 @@ pub type SetId = u64;
 /// The round indicator.
 pub type RoundNumber = u64;
 
-// A list of Grandpa authorities with associated weights.
+/// A list of Grandpa authorities with associated weights.
 pub type AuthorityList = Vec<(AuthorityId, AuthorityWeight)>;
 
 /// A scheduled change of authority set.

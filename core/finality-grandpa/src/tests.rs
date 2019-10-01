@@ -136,8 +136,8 @@ impl TestNetFactory for GrandpaTestNet {
 				let import = light_block_import_without_justifications(
 					client.clone(),
 					backend.clone(),
+					&self.test_config,
 					authorities_provider,
-					Arc::new(self.test_config.clone())
 				).expect("Could not create block import for fresh peer.");
 				let finality_proof_req_builder = import.0.create_finality_proof_request_builder();
 				let proof_import = Box::new(import.clone());
@@ -198,15 +198,13 @@ impl TestApi {
 	}
 }
 
-pub(crate) struct RuntimeApi {
-	inner: TestApi,
-}
+pub(crate) struct RuntimeApi;
 
 impl ProvideRuntimeApi for TestApi {
 	type Api = RuntimeApi;
 
 	fn runtime_api<'a>(&'a self) -> ApiRef<'a, Self::Api> {
-		RuntimeApi { inner: self.clone() }.into()
+		RuntimeApi.into()
 	}
 }
 
@@ -263,30 +261,19 @@ impl ApiExt<Block> for RuntimeApi {
 	}
 }
 
-impl GrandpaApi<Block> for RuntimeApi {
-	fn GrandpaApi_grandpa_authorities_runtime_api_impl(
-		&self,
-		_: &BlockId<Block>,
-		_: ExecutionContext,
-		_: Option<()>,
-		_: Vec<u8>,
-	) -> Result<NativeOrEncoded<AuthorityList>> {
-		Ok(self.inner.genesis_authorities.clone()).map(NativeOrEncoded::Native)
+impl GenesisAuthoritySetProvider<Block> for TestApi {
+	fn get(&self) -> Result<AuthorityList> {
+		Ok(self.genesis_authorities.clone())
 	}
 }
 
 impl AuthoritySetForFinalityProver<Block> for TestApi {
-	fn authorities(&self, block: &BlockId<Block>) -> Result<AuthorityList> {
-		let runtime_api = RuntimeApi { inner: self.clone() };
-		runtime_api.GrandpaApi_grandpa_authorities_runtime_api_impl(block, ExecutionContext::Syncing, None, Vec::new())
-			.map(|v| match v {
-				NativeOrEncoded::Native(value) => value,
-				_ => unreachable!("only providing native values"),
-			})
+	fn authorities(&self, _block: &BlockId<Block>) -> Result<AuthorityList> {
+		Ok(self.genesis_authorities.clone())
 	}
 
-	fn prove_authorities(&self, block: &BlockId<Block>) -> Result<Vec<Vec<u8>>> {
-		self.authorities(block).map(|auth| vec![auth.encode()])
+	fn prove_authorities(&self, _block: &BlockId<Block>) -> Result<Vec<Vec<u8>>> {
+		Ok(vec![self.genesis_authorities.encode()])
 	}
 }
 
