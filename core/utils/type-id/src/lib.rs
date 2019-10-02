@@ -16,7 +16,7 @@
 
 //! Single trait to provide convenient 4-byte identifier for a type.
 
-#![cfg(no_std)]
+#![cfg_attr(not(feature = "std"), no_std)]
 
 /// Provide a simple 4 byte identifier for a type.
 pub trait TypeId {

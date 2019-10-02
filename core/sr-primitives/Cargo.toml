@@ -35,5 +35,5 @@ std = [
 	"codec/std",
 	"primitives/std",
 	"app-crypto/std",
-	"rand",
+	"rand"
 ]
