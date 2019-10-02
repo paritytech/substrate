@@ -72,21 +72,13 @@ use sr_primitives::traits::{
 	Zero,
 };
 use keystore::KeyStorePtr;
-use codec::Encode;
 use parking_lot::Mutex;
-use primitives::{blake2_256, Blake2Hasher, H256, Pair, Public, U256};
-use merlin::Transcript;
+use primitives::{Blake2Hasher, H256, Pair};
 use inherents::{InherentDataProviders, InherentData};
 use substrate_telemetry::{
 	telemetry,
 	CONSENSUS_TRACE,
 	CONSENSUS_DEBUG,
-};
-use schnorrkel::{
-	keys::Keypair,
-	vrf::{
-		VRFProof, VRFInOut, VRFOutput,
-	},
 };
 use consensus_common::{
 	self, BlockImport, Environment, Proposer, BlockCheckParams,
@@ -107,12 +99,12 @@ use client::{
 use slots::{CheckedHeader, check_equivocation};
 use futures::prelude::*;
 use log::{warn, debug, info, trace};
-
 use slots::{SlotWorker, SlotData, SlotInfo, SlotCompatible};
 use epoch_changes::descendent_query;
-
 mod aux_schema;
+mod verification;
 mod epoch_changes;
+mod authorship;
 #[cfg(test)]
 mod tests;
 pub use babe_primitives::{
@@ -351,7 +343,7 @@ impl<B, C, E, I, Error, SO> slots::SimpleSlotWorker<B> for BabeWorker<B, C, E, I
 		epoch_data: &Epoch,
 	) -> Option<Self::Claim> {
 		debug!(target: "babe", "Attempting to claim slot {}", slot_number);
-		let s = claim_slot(
+		let s = authorship::claim_slot(
 			slot_number,
 			epoch_data,
 			&*self.config,
@@ -434,8 +426,7 @@ impl<B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<B, C, E, I, SO> where
 
 /// Extract the BABE pre digest from the given header. Pre-runtime digests are
 /// mandatory, the function will return `Err` if none is found.
-fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<BabePreDigest, String>
-	where DigestItemFor<B>: CompatibleDigestItem,
+fn find_pre_digest<H: Header>(header: &H) -> Result<BabePreDigest, String>
 {
 	// genesis block doesn't contain a pre digest so let's generate a
 	// dummy one to not break any invariants in the rest of the code
@@ -477,221 +468,6 @@ fn find_next_epoch_digest<B: BlockT>(header: &B::Header)
 	Ok(epoch_digest)
 }
 
-struct VerificationParams<'a, B: 'a + BlockT> {
-	/// the header being verified.
-	header: B::Header,
-	/// the pre-digest of the header being verified. this is optional - if prior
-	/// verification code had to read it, it can be included here to avoid duplicate
-	/// work.
-	pre_digest: Option<BabePreDigest>,
-	/// the slot number of the current time.
-	slot_now: SlotNumber,
-	/// epoch descriptor of the epoch this block _should_ be under, if it's valid.
-	epoch: &'a Epoch,
-	/// genesis config of this BABE chain.
-	config: &'a Config,
-}
-
-struct VerifiedHeaderInfo<B: BlockT> {
-	pre_digest: DigestItemFor<B>,
-	seal: DigestItemFor<B>,
-}
-
-/// Check a header has been signed by the right key. If the slot is too far in
-/// the future, an error will be returned. If successful, returns the pre-header
-/// and the digest item containing the seal.
-///
-/// The seal must be the last digest.  Otherwise, the whole header is considered
-/// unsigned.  This is required for security and must not be changed.
-///
-/// This digest item will always return `Some` when used with `as_babe_pre_digest`.
-///
-/// The given header can either be from a primary or secondary slot assignment,
-/// with each having different validation logic.
-fn check_header<B: BlockT + Sized, C: AuxStore>(
-	params: VerificationParams<B>,
-	client: &C,
-) -> Result<CheckedHeader<B::Header, VerifiedHeaderInfo<B>>, String> where
-	DigestItemFor<B>: CompatibleDigestItem,
-{
-	let VerificationParams {
-		mut header,
-		pre_digest,
-		slot_now,
-		epoch,
-		config,
-	} = params;
-
-	let authorities = &epoch.authorities;
-	let pre_digest = pre_digest.map(Ok).unwrap_or_else(|| find_pre_digest::<B>(&header))?;
-
-	trace!(target: "babe", "Checking header");
-	let seal = match header.digest_mut().pop() {
-		Some(x) => x,
-		None => return Err(babe_err!("Header {:?} is unsealed", header.hash())),
-	};
-
-	let sig = seal.as_babe_seal().ok_or_else(|| {
-		babe_err!("Header {:?} has a bad seal", header.hash())
-	})?;
-
-	// the pre-hash of the header doesn't include the seal
-	// and that's what we sign
-	let pre_hash = header.hash();
-
-	if pre_digest.slot_number() > slot_now {
-		header.digest_mut().push(seal);
-		return Ok(CheckedHeader::Deferred(header, pre_digest.slot_number()));
-	}
-
-	if pre_digest.authority_index() > authorities.len() as u32 {
-		return Err(babe_err!("Slot author not found"));
-	}
-
-	match &pre_digest {
-		BabePreDigest::Primary { vrf_output, vrf_proof, authority_index, slot_number } => {
-			debug!(target: "babe", "Verifying Primary block");
-
-			let digest = (vrf_output, vrf_proof, *authority_index, *slot_number);
-
-			check_primary_header::<B>(
-				pre_hash,
-				digest,
-				sig,
-				&epoch,
-				config.c,
-			)?;
-		},
-		BabePreDigest::Secondary { authority_index, slot_number } if config.secondary_slots => {
-			debug!(target: "babe", "Verifying Secondary block");
-
-			let digest = (*authority_index, *slot_number);
-
-			check_secondary_header::<B>(
-				pre_hash,
-				digest,
-				sig,
-				&epoch,
-			)?;
-		},
-		_ => {
-			return Err(babe_err!("Secondary slot assignments are disabled for the current epoch."));
-		}
-	}
-
-	let author = &authorities[pre_digest.authority_index() as usize].0;
-
-	// the header is valid but let's check if there was something else already
-	// proposed at the same slot by the given author
-	if let Some(equivocation_proof) = check_equivocation(
-		client,
-		slot_now,
-		pre_digest.slot_number(),
-		&header,
-		author,
-	).map_err(|e| e.to_string())? {
-		babe_info!(
-			"Slot author {:?} is equivocating at slot {} with headers {:?} and {:?}",
-			author,
-			pre_digest.slot_number(),
-			equivocation_proof.fst_header().hash(),
-			equivocation_proof.snd_header().hash()
-		);
-	}
-
-	let info = VerifiedHeaderInfo {
-		pre_digest: CompatibleDigestItem::babe_pre_digest(pre_digest),
-		seal,
-	};
-	Ok(CheckedHeader::Checked(header, info))
-}
-
-/// Check a primary slot proposal header. We validate that the given header is
-/// properly signed by the expected authority, and that the contained VRF proof
-/// is valid. Additionally, the weight of this block must increase compared to
-/// its parent since it is a primary block.
-fn check_primary_header<B: BlockT + Sized>(
-	pre_hash: B::Hash,
-	pre_digest: (&VRFOutput, &VRFProof, AuthorityIndex, SlotNumber),
-	signature: AuthoritySignature,
-	epoch: &Epoch,
-	c: (u64, u64),
-) -> Result<(), String>
-	where DigestItemFor<B>: CompatibleDigestItem,
-{
-	let (vrf_output, vrf_proof, authority_index, slot_number) = pre_digest;
-
-	let author = &epoch.authorities[authority_index as usize].0;
-
-	if AuthorityPair::verify(&signature, pre_hash, &author) {
-		let (inout, _) = {
-			let transcript = make_transcript(
-				&epoch.randomness,
-				slot_number,
-				epoch.epoch_index,
-			);
-
-			schnorrkel::PublicKey::from_bytes(author.as_slice()).and_then(|p| {
-				p.vrf_verify(transcript, vrf_output, vrf_proof)
-			}).map_err(|s| {
-				babe_err!("VRF verification failed: {:?}", s)
-			})?
-		};
-
-		let threshold = calculate_primary_threshold(
-			c,
-			&epoch.authorities,
-			authority_index as usize,
-		);
-
-		if !check_primary_threshold(&inout, threshold) {
-			return Err(babe_err!("VRF verification of block by author {:?} failed: \
-								  threshold {} exceeded", author, threshold));
-		}
-
-		Ok(())
-	} else {
-		Err(babe_err!("Bad signature on {:?}", pre_hash))
-	}
-}
-
-/// Check a secondary slot proposal header. We validate that the given header is
-/// properly signed by the expected authority, which we have a deterministic way
-/// of computing. Additionally, the weight of this block must stay the same
-/// compared to its parent since it is a secondary block.
-fn check_secondary_header<B: BlockT>(
-	pre_hash: B::Hash,
-	pre_digest: (AuthorityIndex, SlotNumber),
-	signature: AuthoritySignature,
-	epoch: &Epoch,
-) -> Result<(), String> {
-	let (authority_index, slot_number) = pre_digest;
-
-	// check the signature is valid under the expected authority and
-	// chain state.
-	let expected_author = secondary_slot_author(
-		slot_number,
-		&epoch.authorities,
-		epoch.randomness,
-	).ok_or_else(|| "No secondary author expected.".to_string())?;
-
-	let author = &epoch.authorities[authority_index as usize].0;
-
-	if expected_author != author {
-		let msg = format!("Invalid author: Expected secondary author: {:?}, got: {:?}.",
-			expected_author,
-			author,
-		);
-
-		return Err(msg);
-	}
-
-	if AuthorityPair::verify(&signature, pre_hash.as_ref(), author) {
-		Ok(())
-	} else {
-		Err(format!("Bad signature on {:?}", pre_hash))
-	}
-}
 
 #[derive(Default, Clone)]
 struct TimeSource(Arc<Mutex<(Option<Duration>, Vec<(Instant, u64)>)>>);
@@ -717,7 +493,6 @@ pub struct BabeLink<Block: BlockT> {
 	epoch_changes: SharedEpochChanges<Block>,
 	config: Config,
 }
-
 /// A verifier for Babe blocks.
 pub struct BabeVerifier<B, E, Block: BlockT, RA, PRA> {
 	client: Arc<Client<B, E, Block, RA>>,
@@ -838,7 +613,7 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA
 			.map_err(|e| format!("Could not fetch parent header {:?}: {:?}", parent_hash, e))?
 			.ok_or_else(|| format!("Parent header {:?} not found.", parent_hash))?;
 
-		let pre_digest = find_pre_digest::<Block>(&header)?;
+		let pre_digest = find_pre_digest::<Block::Header>(&header)?;
 		let epoch = {
 			let epoch_changes = self.epoch_changes.lock();
 			epoch_changes.epoch_for_child_of(
@@ -854,21 +629,40 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA
 
 		// We add one to the current slot to allow for some small drift.
 		// FIXME #1019 in the future, alter this queue to allow deferring of headers
-		let v_params = VerificationParams {
-			header,
+		let v_params = verification::VerificationParams {
+			header: header.clone(),
 			pre_digest: Some(pre_digest.clone()),
 			slot_now: slot_now + 1,
 			epoch: epoch.as_ref(),
 			config: &self.config,
 		};
-		let checked_header = check_header::<Block, PRA>(v_params, &self.api)?;
 
-		match checked_header {
+		match verification::check_header::<Block>(v_params)? {
 			CheckedHeader::Checked(pre_header, verified_info) => {
 				let babe_pre_digest = verified_info.pre_digest.as_babe_pre_digest()
 					.expect("check_header always returns a pre-digest digest item; qed");
 
 				let slot_number = babe_pre_digest.slot_number();
+
+				let author = verified_info.author;
+
+				// the header is valid but let's check if there was something else already
+				// proposed at the same slot by the given author
+				if let Some(equivocation_proof) = check_equivocation(
+					&*self.api,
+					slot_now,
+					babe_pre_digest.slot_number(),
+					&header,
+					&author,
+				).map_err(|e| e.to_string())? {
+					info!(
+						"Slot author {:?} is equivocating at slot {} with headers {:?} and {:?}",
+						author,
+						babe_pre_digest.slot_number(),
+						equivocation_proof.fst_header().hash(),
+						equivocation_proof.snd_header().hash(),
+					);
+				}
 
 				// if the body is passed through, we need to use the runtime
 				// to check that the internally-set timestamp in the inherents
@@ -937,193 +731,6 @@ fn register_babe_inherent_data_provider(
 	} else {
 		Ok(())
 	}
-}
-
-fn get_keypair(q: &AuthorityPair) -> &Keypair {
-	use primitives::crypto::IsWrappedBy;
-	primitives::sr25519::Pair::from_ref(q).as_ref()
-}
-
-#[allow(deprecated)]
-fn make_transcript(
-	randomness: &[u8],
-	slot_number: u64,
-	epoch: u64,
-) -> Transcript {
-	let mut transcript = Transcript::new(&BABE_ENGINE_ID);
-	transcript.commit_bytes(b"slot number", &slot_number.to_le_bytes());
-	transcript.commit_bytes(b"current epoch", &epoch.to_le_bytes());
-	transcript.commit_bytes(b"chain randomness", randomness);
-	transcript
-}
-
-/// Returns true if the given VRF output is lower than the given threshold,
-/// false otherwise.
-fn check_primary_threshold(inout: &VRFInOut, threshold: u128) -> bool {
-	u128::from_le_bytes(inout.make_bytes::<[u8; 16]>(BABE_VRF_PREFIX)) < threshold
-}
-
-/// Calculates the primary selection threshold for a given authority, taking
-/// into account `c` (`1 - c` represents the probability of a slot being empty).
-fn calculate_primary_threshold(
-	c: (u64, u64),
-	authorities: &[(AuthorityId, BabeAuthorityWeight)],
-	authority_index: usize,
-) -> u128 {
-	use num_bigint::BigUint;
-	use num_rational::BigRational;
-	use num_traits::{cast::ToPrimitive, identities::One};
-
-	let c = c.0 as f64 / c.1 as f64;
-
-	let theta =
-		authorities[authority_index].1 as f64 /
-		authorities.iter().map(|(_, weight)| weight).sum::<u64>() as f64;
-
-	let calc = || {
-		let p = BigRational::from_float(1f64 - (1f64 - c).powf(theta))?;
-		let numer = p.numer().to_biguint()?;
-		let denom = p.denom().to_biguint()?;
-		((BigUint::one() << 128) * numer / denom).to_u128()
-	};
-
-	calc().unwrap_or(u128::max_value())
-}
-
-/// Tries to claim the given slot number. This method starts by trying to claim
-/// a primary VRF based slot. If we are not able to claim it, then if we have
-/// secondary slots enabled for the given epoch, we will fallback to trying to
-/// claim a secondary slot.
-fn claim_slot(
-	slot_number: SlotNumber,
-	epoch: &Epoch,
-	config: &BabeConfiguration,
-	keystore: &KeyStorePtr,
-) -> Option<(BabePreDigest, AuthorityPair)> {
-	claim_primary_slot(slot_number, epoch, config.c, keystore)
-		.or_else(|| {
-			if config.secondary_slots {
-				claim_secondary_slot(
-					slot_number,
-					&epoch.authorities,
-					keystore,
-					epoch.randomness,
-				)
-			} else {
-				None
-			}
-		})
-}
-
-/// Claim a primary slot if it is our turn.  Returns `None` if it is not our turn.
-/// This hashes the slot number, epoch, genesis hash, and chain randomness into
-/// the VRF.  If the VRF produces a value less than `threshold`, it is our turn,
-/// so it returns `Some(_)`. Otherwise, it returns `None`.
-fn claim_primary_slot(
-	slot_number: SlotNumber,
-	epoch: &Epoch,
-	c: (u64, u64),
-	keystore: &KeyStorePtr,
-) -> Option<(BabePreDigest, AuthorityPair)> {
-	let Epoch { authorities, randomness, epoch_index, .. } = epoch;
-	let keystore = keystore.read();
-
-	for (pair, authority_index) in authorities.iter()
-		.enumerate()
-		.flat_map(|(i, a)| {
-			keystore.key_pair::<AuthorityPair>(&a.0).ok().map(|kp| (kp, i))
-		})
-	{
-		let transcript = make_transcript(randomness, slot_number, *epoch_index);
-
-		// Compute the threshold we will use.
-		//
-		// We already checked that authorities contains `key.public()`, so it can't
-		// be empty.  Therefore, this division in `calculate_threshold` is safe.
-		let threshold = calculate_primary_threshold(c, authorities, authority_index);
-
-		let pre_digest = get_keypair(&pair)
-			.vrf_sign_after_check(transcript, |inout| check_primary_threshold(inout, threshold))
-			.map(|s| {
-				BabePreDigest::Primary {
-					slot_number,
-					vrf_output: s.0.to_output(),
-					vrf_proof: s.1,
-					authority_index: authority_index as u32,
-				}
-			});
-
-		// early exit on first successful claim
-		if let Some(pre_digest) = pre_digest {
-			return Some((pre_digest, pair));
-		}
-	}
-
-	None
-}
-
-/// Get the expected secondary author for the given slot and with given
-/// authorities. This should always assign the slot to some authority unless the
-/// authorities list is empty.
-fn secondary_slot_author(
-	slot_number: u64,
-	authorities: &[(AuthorityId, BabeAuthorityWeight)],
-	randomness: [u8; 32],
-) -> Option<&AuthorityId> {
-	if authorities.is_empty() {
-		return None;
-	}
-
-	let rand = U256::from((randomness, slot_number).using_encoded(blake2_256));
-
-	let authorities_len = U256::from(authorities.len());
-	let idx = rand % authorities_len;
-
-	let expected_author = authorities.get(idx.as_u32() as usize)
-		.expect("authorities not empty; index constrained to list length; \
-				this is a valid index; qed");
-
-	Some(&expected_author.0)
-}
-
-/// Claim a secondary slot if it is our turn to propose, returning the
-/// pre-digest to use when authoring the block, or `None` if it is not our turn
-/// to propose.
-fn claim_secondary_slot(
-	slot_number: SlotNumber,
-	authorities: &[(AuthorityId, BabeAuthorityWeight)],
-	keystore: &KeyStorePtr,
-	randomness: [u8; 32],
-) -> Option<(BabePreDigest, AuthorityPair)> {
-	if authorities.is_empty() {
-		return None;
-	}
-
-	let expected_author = secondary_slot_author(
-		slot_number,
-		authorities,
-		randomness,
-	)?;
-
-	let keystore = keystore.read();
-
-	for (pair, authority_index) in authorities.iter()
-		.enumerate()
-		.flat_map(|(i, a)| {
-			keystore.key_pair::<AuthorityPair>(&a.0).ok().map(|kp| (kp, i))
-		})
-	{
-		if pair.public() == *expected_author {
-			let pre_digest = BabePreDigest::Secondary {
-				slot_number,
-				authority_index: authority_index as u32,
-			};
-
-			return Some((pre_digest, pair));
-		}
-	}
-
-	None
 }
 
 /// A block-import handler for BABE.
@@ -1200,7 +807,7 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 			Err(e) => return Err(ConsensusError::ClientImport(e.to_string()).into()),
 		}
 
-		let pre_digest = find_pre_digest::<Block>(&block.header)
+		let pre_digest = find_pre_digest::<Block::Header>(&block.header)
 			.expect("valid babe headers must contain a predigest; \
 					 header has been already verified; qed");
 		let slot_number = pre_digest.slot_number();
@@ -1222,7 +829,7 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 					hash
 				)))?;
 
-			let parent_slot = find_pre_digest::<Block>(&parent_header)
+			let parent_slot = find_pre_digest::<Block::Header>(&parent_header)
 				.map(|d| d.slot_number())
 				.expect("parent is non-genesis; valid BABE headers contain a pre-digest; \
 						 header has already been verified; qed");
@@ -1475,7 +1082,7 @@ pub mod test_helpers {
 			|slot| link.config.genesis_epoch(slot),
 		).unwrap().unwrap();
 
-		super::claim_slot(
+		authorship::claim_slot(
 			slot_number,
 			epoch.as_ref(),
 			&link.config,
