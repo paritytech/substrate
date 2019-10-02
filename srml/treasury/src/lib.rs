@@ -471,8 +471,6 @@ mod tests {
 				let init_total_issuance = Balances::total_issuance();
 				Treasury::on_dilution(minted, portion);
 
-				println!("{},{}",minted, portion);
-
 				assert_eq!(
 					Treasury::pot(),
 					(((init_total_issuance - portion) * minted) as f32 / portion as f32)
