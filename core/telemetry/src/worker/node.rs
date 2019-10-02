@@ -206,7 +206,7 @@ fn gen_rand_reconnect_delay() -> Delay {
 
 impl<TTrans: Transport, TSinkErr> NodeSocketConnected<TTrans>
 where TTrans::Output: Sink<BytesMut, Error = TSinkErr>
-	+ Stream<Item=Result<BytesMut,  TSinkErr>>
+	+ Stream<Item=Result<BytesMut, TSinkErr>>
 	+ Unpin
 {
 	/// Processes the queue of messages for the connected socket.
