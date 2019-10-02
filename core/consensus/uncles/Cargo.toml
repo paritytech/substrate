@@ -12,4 +12,4 @@ sr-primitives = {  path = "../../sr-primitives" }
 srml-authorship = {  path = "../../../srml/authorship" }
 consensus_common = { package = "substrate-consensus-common", path = "../common" }
 inherents = { package = "substrate-inherents", path = "../../inherents" }
-log = "0.4"
+log = "0.4.8"
