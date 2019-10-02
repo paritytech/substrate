@@ -629,7 +629,7 @@ impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Future for
 
 		// Polling all the `to_poll` futures.
 		while let Some(pos) = self.to_poll.iter_mut().position(|t| t.poll().map(|t| t.is_ready()).unwrap_or(true)) {
-			self.to_poll.remove(pos);
+			let _ = self.to_poll.remove(pos);
 		}
 
 		// The service future never ends.

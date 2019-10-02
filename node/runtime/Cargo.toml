@@ -10,7 +10,7 @@ codec = { package = "parity-scale-codec", version = "1.0.0", default-features = 
 integer-sqrt = { version = "0.1.2" }
 rustc-hex = { version = "2.0", optional = true }
 safe-mix = { version = "1.0", default-features = false }
-serde = { version = "1.0", optional = true }
+serde = { version = "1.0.101", optional = true }
 
 authority-discovery-primitives = { package = "substrate-authority-discovery-primitives", path = "../../core/authority-discovery/primitives", default-features = false }
 babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../../core/consensus/babe/primitives", default-features = false }

@@ -27,16 +27,15 @@ use wasmi::{
 	Module, ModuleInstance, MemoryInstance, MemoryRef, TableRef, ImportsBuilder, ModuleRef,
 	memory_units::Pages, RuntimeValue::{I32, I64, self},
 };
-use crate::error::{Error, Result};
+use super::{sandbox, allocator, error::{Error, Result}};
 use codec::{Encode, Decode};
 use primitives::{
 	blake2_128, blake2_256, twox_64, twox_128, twox_256, ed25519, sr25519, Pair, crypto::KeyTypeId,
 	offchain, sandbox as sandbox_primitives, Blake2Hasher,
 	traits::Externalities,
 };
-use trie::{TrieConfiguration, trie_types::Layout};
-use crate::sandbox;
-use crate::allocator;
+use trie::TrieConfiguration;
+use trie::trie_types::Layout;
 use log::trace;
 use wasm_interface::{
 	FunctionContext, HostFunctions, Pointer, WordSize, Sandbox, MemoryId, PointerType,

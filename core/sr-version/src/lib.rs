@@ -188,10 +188,10 @@ mod apis_serialize {
 		seq.end()
 	}
 
-	pub fn serialize_bytesref<S>(apis: &&super::ApiId, ser: S) -> Result<S::Ok, S::Error> where
+	pub fn serialize_bytesref<S>(&apis: &&super::ApiId, ser: S) -> Result<S::Ok, S::Error> where
 		S: Serializer,
 	{
-		bytes::serialize(*apis, ser)
+		bytes::serialize(apis, ser)
 	}
 
 	#[derive(Deserialize)]
@@ -228,9 +228,8 @@ mod apis_serialize {
 	pub fn deserialize_bytes<'de, D>(d: D) -> Result<super::ApiId, D::Error> where
 		D: de::Deserializer<'de>
 	{
-		let bytes = bytes::deserialize_check_len(d, bytes::ExpectedLen::Exact(8))?;
 		let mut arr = [0; 8];
-		arr.copy_from_slice(&bytes);
+		bytes::deserialize_check_len(d, bytes::ExpectedLen::Exact(&mut arr[..]))?;
 		Ok(arr)
 	}
 }
