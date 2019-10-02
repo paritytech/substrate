@@ -57,7 +57,6 @@ use safe_mix::TripletMix;
 use codec::Encode;
 use system::Trait;
 
-
 fn block_number_to_index<T: Trait>(block_number: T::BlockNumber) -> usize {
 	// '- 2' because on_initialize is called on the first block after genesis - block 2
 	let index = (block_number - 2.into()) % 81.into();
