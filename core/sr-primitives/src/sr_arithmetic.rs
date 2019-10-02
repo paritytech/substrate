@@ -21,11 +21,11 @@ use crate::serde::{Serialize, Deserialize};
 
 use rstd::{
 	ops, cell, prelude::*, cmp::Ordering,
-	convert::{TryInto, TryFrom},
+	convert::{TryFrom, TryInto},
 };
 use codec::{Encode, Decode};
 use crate::traits::{
-	SaturatedConversion, CheckedSub, CheckedAdd, CheckedMul, Bounded, UniqueSaturatedInto,
+	SaturatedConversion, CheckedSub, CheckedAdd, Bounded, UniqueSaturatedInto,
 	Saturating, Zero, One,
 };
 
@@ -669,20 +669,24 @@ impl CheckedAdd for Fixed64 {
 	}
 }
 
-pub mod big_int {
-	use super::{Zero, One, CheckedAdd, CheckedMul, cell::RefCell};
+pub mod big_num {
+	use super::{Zero, One, cell::RefCell};
+	use rstd::convert::TryFrom;
 
-	// TODO: due to wasm being 32 bit, maybe it would be better to actually do this in 32 bit.
-	type Single = u8;
-	type Double = u16;
-	const SHIFT: usize = 8;
-	// const SHIFT: usize = 64;
+	// A sensible value for this would be half of the word size of the host machine. Since the
+	// runtime is compiled to 32bit webassembly, using 32 and 64 for single and double respectively
+	// should yield the most performance.
+	/// A representation of a single limb.
+	pub type Single = u32;
+	/// A representation of a double limb.
+	pub type Double = u64;
+	/// Difference in the number of limbs of [`Single`] and [`Double`].
+	const SHIFT: usize = 32;
+	/// short form of _Base_. Analogous to the value 10 in base-10 decimal numbers.
 	const B: Double = Single::max_value() as Double + 1;
-	const MASK: Single = Single::max_value();
 
-
-	/// Splits a double limb into a tuple of two single limb numbers
-	fn split(a: Double) -> (Single, Single) {
+	/// Splits a [`Double`] limb number into a tuple of two [`Single`] limb numbers.
+	pub fn split(a: Double) -> (Single, Single) {
 		let al = a as Single;
 		let ah = (a >> SHIFT) as Single;
 		(ah, al)
@@ -690,7 +694,7 @@ pub mod big_int {
 
 	/// Assumed as a given primitive. A multiplication of two single limbs, which at most takes
 	/// a double limb of space.
-	fn mul_single(a: Single, b: Single) -> Double {
+	pub fn mul_single(a: Single, b: Single) -> Double {
 		let a: Double = a.into();
 		let b: Double = b.into();
 		let r = a * b;
@@ -699,7 +703,7 @@ pub mod big_int {
 
 	/// Assumed as a given primitive. An Addition of two single limbs, which at most takes a Single
 	/// limb of result and a carry, returned as a tuple respectively.
-	fn _add_single(a: Single, b: Single) -> (Single, Single) {
+	pub fn add_single(a: Single, b: Single) -> (Single, Single) {
 		let a: Double = a.into();
 		let b: Double = b.into();
 		let q = a + b;
@@ -718,32 +722,17 @@ pub mod big_int {
 	}
 
 	/// Simple wrapper around an infinitely large integer, represented as limbs of [`Single`].
-	// #[cfg_attr(feature = "std", derive(Debug))]
 	#[derive(Clone, Default)]
 	struct Number {
-		/// digits of this number. [msd -> lsd]
+		/// digits (limbs) of this number (sorted as msd -> lsd).
 		pub(crate) digits: Vec<Single>,
-	}
-
-	#[cfg(feature = "std")]
-	impl rstd::fmt::Debug for Number{
-		fn fmt(&self, f: &mut rstd::fmt::Formatter<'_>) -> rstd::fmt::Result {
-			write!(f, "Number {{ {:?} ([{:?}])}}", self.digits, self._try_into::<u128>())
-		}
-	}
-
-	impl PartialEq for Number {
-		fn eq(&self, other: &Self) -> bool {
-			// TODO: avoid re-allocation here.
-			self.clone().lstrip();
-			other.clone().lstrip();
-			self.digits.eq(&other.digits)
-		}
 	}
 
 	impl Number {
 		/// Create a new instance with `size` limbs. This prevents any number with zero limbs to be
-		/// created. TODO: use digit or limb. not both
+		/// created.
+		///
+		/// The behavior of the type is undefined with zero limbs
 		pub fn with_capacity(size: usize) -> Self {
 			Self { digits: vec![0; size.max(1)] }
 		}
@@ -771,27 +760,26 @@ pub mod big_int {
 			self.digits[len - 1 - index] = value;
 		}
 
-		/// returns the least significant digit of the number.
+		/// returns the least significant limb of the number.
 		///
 		/// #### Panics
 		///
 		/// While the constructor of the type prevents this, this can panic if `self` has no digits.
-		fn lsb(&self) -> Single {
+		pub fn lsb(&self) -> Single {
 			self.digits[self.len() - 1]
 		}
 
-		/// returns the most significant digit of the number.
+		/// returns the most significant limb of the number.
 		///
 		/// #### Panics
 		///
 		/// While the constructor of the type prevents this, this can panic if `self` has no digits.
-		fn msb(&self) -> Single {
+		pub fn msb(&self) -> Single {
 			self.digits[0]
 		}
 
-		/// Strips zeros from the left side of `self`.
-		fn lstrip(&mut self) {
-			// TOOD: maybe write this better with iters.
+		/// Strips zeros from the left side of `self`, if any.
+		pub fn lstrip(&mut self) {
 			let mut index = 0;
 			for elem in self.digits.iter() {
 				if *elem != 0 { break } else { index += 1 }
@@ -801,9 +789,9 @@ pub mod big_int {
 			}
 		}
 
-		/// Pad `self` from left to reach the `size` limbs. Will not make any difference if `self`
-		/// already bigger than `size` limbs.
-		fn lpad(&mut self, size: usize) {
+		/// Zero-pad `self` from left to reach the `size` limbs. Will not make any difference if
+		/// `self` is already bigger than `size` limbs.
+		pub fn lpad(&mut self, size: usize) {
 			let n = self.len();
 			if n >= size { return; }
 			let pad = size - n;
@@ -812,8 +800,9 @@ pub mod big_int {
 			self.digits = new_digits;
 		}
 
-		/// Extends either one of `self` or `other` to meet the size of the other one.
-		fn resize(&mut self, other: &mut Self) {
+		/// Extends either one of `self` or `other` to meet the size of the other one. Equivalent of
+		/// using `lpad()` of the smaller one with the size of the bigger one.
+		pub fn resize(&mut self, other: &mut Self) {
 			if self.len() > other.len() {
 				other.lpad(self.len())
 			} else if other.len() > self.len() {
@@ -821,29 +810,14 @@ pub mod big_int {
 			}
 		}
 
-		/// TODO: this must be generalized into a generic type.
-		fn _try_into<T>(&self) -> Option<T>
-			where T: Zero + One + From<Single> + From<Double> + CheckedAdd + CheckedMul
-		{
-			let checked_pow = |a: T, b: u32| -> Option<T> {
-				let mut acc: T = One::one();
-				for _ in 0..b { acc = acc.checked_mul(&a)?; }
-				Some(acc)
-			};
-
-			let mut acc: T = Zero::zero();
-			for (i, d) in self.digits.iter().rev().cloned().enumerate() {
-				let d: T = d.into();
-				let b: T = B.into();
-				let m = checked_pow(b, i as u32)?;
-				let multiplier = T::from(m);
-				let value = d.checked_mul(&multiplier)?;
-				acc = acc.checked_add(&value)?;
-			}
-			Some(acc)
-		}
-
-		fn add(mut self, mut other: Self) -> Self {
+		/// Adds `self` with `other`. self and other do not have to have any particular size. Given
+		/// that the `n = max{size(self), size(other)}`, it may produce a number of size `n + 1`.
+		///
+		/// This function does not strip the output and returns the original allocated `n + 1`
+		/// limbs. The caller may strip the output if desired.
+		///
+		/// Taken from "The Art of Computer Programming" by D.E. Knuth, vol 2, chapter 4.
+		pub fn add(mut self, mut other: Self) -> Self {
 			Self::resize(&mut self, &mut other);
 			let n = self.len();
 			let mut k: Double = 0;
@@ -861,20 +835,24 @@ pub mod big_int {
 			w
 		}
 
-		fn sub(mut self, mut other: Self) -> Result<Self, Self> {
+		/// Subtracts `other` from `self`. self and other do not have to have any particular size.
+		/// Given that the `n = max{size(self), size(other)}`, it may produce a number of size `n`.
+		///
+		/// If `other` is bigger than `self`, `Err(B - borrow)` is returned.
+		///
+		/// Taken from "The Art of Computer Programming" by D.E. Knuth, vol 2, chapter 4.
+		pub fn sub(mut self, mut other: Self) -> Result<Self, Self> {
 			Self::resize(&mut self, &mut other);
 			let n = self.len();
 			let mut k = 0;
 			let mut w = Self::with_capacity(n);
 			for j in 0..n {
-				// safely compute u_j - v_j + k, and return if it had a borrow or not.
 				let s = {
 					let u = Double::from(self.get(j));
 					let v = Double::from(other.get(j));
 					let mut needs_borrow = false;
 					let mut t = 0;
 
-					// TODO: this might be able to be re-written better.
 					if let Some(v) = u.checked_sub(v) {
 						if let Some(v2) = v.checked_sub(k) {
 							t = v2 % B;
@@ -891,20 +869,28 @@ pub mod big_int {
 					}
 					t
 				};
-				// TODO: prove this is safe.
+				// PROOF: t either comes from `v2 % B`, or from `u + B - v - k`. The former is
+				// trivial. The latter will not overflow this branch will only happen if the sum of
+				// `u - v - k` part has been negative, hence `u + B - v - k < b`.
 				w.set(j, s as Single);
 			}
 
 			if k.is_zero() {
 				Ok(w)
 			} else {
-				println!("This is the negative number {:?}", w);
 				Err(w)
 			}
 		}
 
-		/// Taken from Knuth.
-		fn mul(self, other: Self) -> Self {
+		/// Multiplies n-limb number `self` with m-limb number `other`.
+		///
+		/// The resulting number will always have `n + m` limbs.
+		///
+		/// This function does not strip the output and returns the original allocated `n + m`
+		/// limbs. The caller may strip the output if desired.
+		///
+		/// Taken from "The Art of Computer Programming" by D.E. Knuth, vol 2, chapter 4.
+		pub fn mul(self, other: Self) -> Self {
 			let n = self.len();
 			let m = other.len();
 			let mut w = Self::with_capacity(m + n);
@@ -917,29 +903,35 @@ pub mod big_int {
 
 				let mut k = 0;
 				for i in 0..m {
-					// this fucker does not overflow! explain why
+					// PROOF: (B−1) × (B−1) + (B−1) + (B−1) = B^2 −1 < B^2. addition is safe.
 					let t =
 						mul_single(self.get(j), other.get(i))
 						+ Double::from(w.get(i + j))
 						+ Double::from(k);
 					w.set(i + j, (t % B) as Single);
-					// this fucker as well.
+					// PROOF: (B^2 - 1) / B < B. conversion is safe.
 					k = (t / B) as Single;
 				}
 				w.set(j + m, k);
 			}
-			// w.lstrip();
 			w
 		}
 
+		/// Divides an `n + m` limb self by a `n` limb `other`. The result is a `m + 1` limb
+		/// quotient and a `n` limb remainder, if enabled by passing `true` in `rem` argument, both
+		/// in the form of an option's `Ok`.
 		///
+		/// - requires `other` to be stripped and have no leading zeros.
+		/// - requires `self` to be stripped and have no leading zeros.
+		/// - requires `other` to have at least two limbs.
+		/// - requires `self` to have a greater or equal length compared to `other`.
 		///
-		/// - requires `other` to be stripped with no leading zeros.
-		/// - requires `self` to have a greater or equal length of digits compared to `other`, even
-		///   if it is padded with zeros.
-		fn div(self, mut other: Self, rem: bool) -> Option<(Self, Self)> {
-			// TODO: must have test cases for all cases: self > other, self == other, self > other.
-			if other.len() <= 1 || other.msb() == 0 || self.len() <= other.len() {
+		/// All arguments are examined without being stripped for the above conditions. If any of
+		/// the above fails, `None` is returned.`
+		///
+		/// Taken from "The Art of Computer Programming" by D.E. Knuth, vol 2, chapter 4.
+		pub fn div(self, other: Self, rem: bool) -> Option<(Self, Self)> {
+			if other.len() <= 1 || other.msb() == 0 || self.msb() == 0 || self.len() <= other.len() {
 				return None
 			}
 			let n = other.len();
@@ -950,23 +942,22 @@ pub mod big_int {
 
 			debug_assert!(other.msb() != 0);
 
-			// PROOF: `other.msb() > 0`, hence `B_hat = B / other.msb()+1 < and B_hat < B`.
-			// Since `B = Single::max_value() + 1`, `B_hat < Single::max_value`; qed.
-			let mut d = Self::from((B / (other.msb() as Double + 1)) as Single);
+			// PROOF: 0 <= normalizer_bits < SHIFT 0 <= normalizer < B. all conversions are
+			// safe.
+			let normalizer_bits = other.msb().leading_zeros() as Single;
+			let normalizer = (2 as Single).pow(normalizer_bits as u32) as Single;
 
 			// step D1.
-			let mut self_norm = self.mul(d.clone());
-			let mut other_norm = other.mul(d.clone());
+			let mut self_norm = self.mul(Self::from(normalizer));
+			let mut other_norm = other.mul(Self::from(normalizer));
 
 			// defensive only; the mul implementation should always create this.
 			self_norm.lpad(n + m + 1);
-			// TODO: create a test case where this is stripping and where it is not.
 			other_norm.lstrip();
-
 
 			// step D2.
 			for j in (0..=m).rev() {
-				// step D3.
+				// step D3.0 Find an estimate of q[j], named qhat.
 				let (qhat, rhat) = {
 					// PROOF: this always fits into `Double`. In the context of Single = u8, and
 					// Double = u16, think of 255 * 256 + 255 which is just u16::max_value().
@@ -978,15 +969,16 @@ pub mod big_int {
 					div_single(dividend, divisor.into())
 				};
 
-				// D3 test step
+				// D3.1 test qhat
 				// replace qhat and rhat with RefCells. This helps share state with the closure
 				let qhat = RefCell::new(qhat);
 				let rhat = RefCell::new(rhat as Double);
 
 				let test = || {
+					// decrease qhat if it is bigger than the base (B)
 					let qhat_local = *qhat.borrow();
 					let rhat_local = *rhat.borrow();
-					let predicate_1 = qhat_local > B;
+					let predicate_1 = qhat_local >= B;
 					let predicate_2 = {
 						let lhs = qhat_local * other_norm.get(n - 2) as Double;
 						let rhs = B * rhat_local + self_norm.get(j + n - 2) as Double;
@@ -1007,57 +999,107 @@ pub mod big_int {
 				}
 
 				let qhat = qhat.into_inner();
-				let rhat =rhat.into_inner();
+				// we don't need rhat anymore. just let it go out of scope when it does.
 
 				// step D4
-
 				let lhs = Self { digits: (j..=j+n).rev().map(|d| self_norm.get(d)).collect() };
 				let rhs = other_norm.clone().mul(Self::from(qhat));
 
-				dbg!(lhs.clone());
-				dbg!(rhs.clone());
-
 				let maybe_sub = lhs.sub(rhs);
 				let mut negative = false;
-				match maybe_sub {
-					Ok(t) => {
-						(j..=j+n).for_each(|d| { self_norm.set(d, t.get(d - j)); });
-					},
-					Err(t) => {
-						negative = true;
-						(j..=j+n).for_each(|d| { self_norm.set(d, t.get(d - j)); });
-					},
+				let sub = match maybe_sub {
+					Ok(t) => t,
+					Err(t) => { negative = true; t }
 				};
+				(j..=j+n).for_each(|d| { self_norm.set(d, sub.get(d - j)); });
 
 				// step D5
-				// TODO: I am not sure about this. qhat can be 2 digits. What the heck.
-				// NOTE: no, totally safe
+				// PROOF: the `test()` specifically decreases qhat until it is below `B`. conversion
+				// is safe.
 				q.set(j, qhat as Single);
 
-				// step D6: add back
+				// step D6: add back if negative happened.
 				if negative {
-					let qj = q.get(j);
-					q.set(j, qj - 1);
+					q.set(j, q.get(j) - 1);
 					let u = Self { digits: (j..=j+n).rev().map(|d| self_norm.get(d)).collect() };
 					let r = other_norm.clone().add(u);
 					(j..=j+n).rev().for_each(|d| { self_norm.set(d, r.get(d - j)); })
 				}
-
-				dbg!(q.clone());
 			}
 
-			// TODO: use a proper conversion from d to d.0;
+			// if requested, calculate remainder.
 			if rem {
-				d.lpad(2);
-				dbg!("HERE", self_norm.clone(), d.clone());
-				r = self_norm.div(d, false).unwrap().0;
-				dbg!(r.clone());
+				// undo the normalization.
+				if normalizer_bits > 0 {
+					let s = SHIFT as u32;
+					let nb = normalizer_bits;
+					for d in 0..n-1 {
+						let v = self_norm.get(d) >> nb
+							| self_norm.get(d + 1).overflowing_shl(s - nb).0;
+						r.set(d, v);
+					}
+					r.set(n - 1, self_norm.get(n - 1) >> normalizer_bits);
+				} else {
+					r = self_norm;
+				}
 			}
+
 			Some((q, r))
 		}
 	}
 
-	macro_rules! impl_from_for {
+	#[cfg(feature = "std")]
+	impl rstd::fmt::Debug for Number{
+		fn fmt(&self, f: &mut rstd::fmt::Formatter<'_>) -> rstd::fmt::Result {
+			write!(
+				f,
+				"Number {{ {:?} ([{:?}])}}",
+				self.digits,
+				u128::try_from(self.clone()).unwrap()
+			)
+		}
+	}
+
+	impl PartialEq for Number {
+		fn eq(&self, other: &Self) -> bool {
+			// sadly, we have to reallocate here as strip mutably uses self.
+			let mut lhs = self.clone();
+			let mut rhs = other.clone();
+			lhs.lstrip();
+			rhs.lstrip();
+			lhs.digits.eq(&rhs.digits)
+		}
+	}
+
+	impl TryFrom<Number> for u128 {
+		type Error = &'static str;
+		fn try_from(mut value: Number) -> Result<u128, Self::Error> {
+			value.lstrip();
+			if value.len() * SHIFT > 128 {
+				Err("cannot fit a number into u128")
+			} else {
+				let checked_pow = |a: u128, b: u32| -> Option<u128> {
+					let mut acc: u128 = One::one();
+					for _ in 0..b {
+						acc = acc.checked_mul(a)?;
+					}
+					Some(acc)
+				};
+				let mut acc: u128 = Zero::zero();
+				for (i, d) in value.digits.iter().rev().cloned().enumerate() {
+					let d: u128 = d.into();
+					let b: u128 = B.into();
+					let m = checked_pow(b, i as u32).ok_or("cannot fit number into u128")?;
+					let multiplier = u128::from(m);
+					let value = d.checked_mul(multiplier).ok_or("cannot fit number into u128")?;
+					acc = acc.checked_add(value).ok_or("cannot fit number into u128")?;
+				}
+				Ok(acc)
+			}
+		}
+	}
+
+	macro_rules! impl_from_for_smaller_than_word {
 		($($type:ty),+) => {
 			$(impl From<$type> for Number {
 				fn from(a: $type) -> Self {
@@ -1066,10 +1108,10 @@ pub mod big_int {
 			})*
 		}
 	}
+	impl_from_for_smaller_than_word!(u8, u16, Single);
 
-	impl_from_for!(Single);
-	// impl_from_for!(u8, u16, u32, Single);
-
+	// TODO: allow from for all numeric types bigger than double in a nice way.
+	// TODO: add an implementation for `trait Zero`.
 	impl From<Double> for Number {
 		fn from(a: Double) -> Self {
 			let (ah, al) = split(a);
@@ -1078,9 +1120,11 @@ pub mod big_int {
 	}
 
 	#[cfg(test)]
-	mod tests_big_int {
+	mod tests_big_num {
 		use super::*;
 		use rand::Rng;
+
+		const FUZZ_COUNT: usize = 1_000_000;
 
 		fn run_with_data_set<F>(
 			count: usize,
@@ -1094,9 +1138,11 @@ pub mod big_int {
 			let mut rng = rand::thread_rng();
 			for _ in 0..count {
 				let digits_len_1 = if exact { limbs_ub_1 } else { rng.gen_range(1, limbs_ub_1) };
-				let digits_1 = (0..digits_len_1).map(|_| rng.gen_range(0, Single::max_value())).collect();
+				let digits_1 = (0..digits_len_1)
+					.map(|_| rng.gen_range(0, Single::max_value())).collect();
 				let digits_len_2 = if exact { limbs_ub_2 } else { rng.gen_range(1, limbs_ub_2) };
-				let digits_2 = (0..digits_len_2).map(|_| rng.gen_range(0, Single::max_value())).collect();
+				let digits_2 = (0..digits_len_2)
+					.map(|_| rng.gen_range(0, Single::max_value())).collect();
 				let u = Number { digits: digits_1 };
 				let v = Number { digits: digits_2 };
 				assertion(u, v);
@@ -1104,23 +1150,66 @@ pub mod big_int {
 		}
 
 		#[test]
+		fn split_works() {
+			let a = SHIFT / 2;
+			let b = SHIFT * 3 / 2;
+			let num: Double = 1 << a | 1 << b;
+			// example when `Single = u8`
+			// assert_eq!(num, 0b_0001_0000_0001_0000)
+			assert_eq!(split(num), (1 << a, 1 << a));
+		}
+
+		#[test]
+		fn equality_works() {
+			assert_eq!(
+				Number { digits: vec![1, 2, 3] } == Number { digits: vec![1, 2, 3] },
+				true,
+			);
+			assert_eq!(
+				Number { digits: vec![3, 2, 3] } == Number { digits: vec![1, 2, 3] },
+				false,
+			);
+			assert_eq!(
+				Number { digits: vec![0, 1, 2, 3] } == Number { digits: vec![1, 2, 3] },
+				true,
+			);
+		}
+
+		#[test]
 		fn basic_random_add_works() {
 			type S = u128;
-			run_with_data_set(1000, 8, 8, false, |u, v| {
-				let expected = u._try_into::<S>().unwrap() + v._try_into::<S>().unwrap();
+			run_with_data_set(FUZZ_COUNT, 2, 2, false, |u, v| {
+				let expected = S::try_from(u.clone()).unwrap() + S::try_from(v.clone()).unwrap();
 				let t = u.clone().add(v.clone());
 				assert_eq!(
-					t._try_into::<S>().unwrap(), expected,
+					S::try_from(t.clone()).unwrap(), expected,
 					"{:?} + {:?} ===> {:?} != {:?}", u, v, t, expected,
 				);
 			})
 		}
 
 		#[test]
+		fn sub_negative_works() {
+			assert_eq!(
+				Number::from(10 as Single).sub(Number::from(5 as Single)).unwrap(),
+				Number::from(5 as Single)
+			);
+			assert_eq!(
+				Number::from(10 as Single).sub(Number::from(10 as Single)).unwrap(),
+				Number::from(0 as Single)
+			);
+			assert_eq!(
+				Number::from(10 as Single).sub(Number::from(13 as Single)).unwrap_err(),
+				Number::from((B - 3) as Single),
+			);
+		}
+
+		#[test]
 		fn basic_random_sub_works() {
 			type S = u128;
-			run_with_data_set(1000, 8, 8, false, |u, v| {
-				let expected = u._try_into::<S>().unwrap().checked_sub(v._try_into::<S>().unwrap());
+			run_with_data_set(FUZZ_COUNT, 2, 2, false, |u, v| {
+				let expected = S::try_from(u.clone()).unwrap()
+					.checked_sub(S::try_from(v.clone()).unwrap());
 				let t = u.clone().sub(v.clone());
 				if expected.is_none() {
 					assert!(t.is_err())
@@ -1128,7 +1217,7 @@ pub mod big_int {
 					let t = t.unwrap();
 					let expected = expected.unwrap();
 					assert_eq!(
-						t._try_into::<S>().unwrap(), expected,
+						S::try_from(t.clone()).unwrap(), expected,
 						"{:?} - {:?} ===> {:?} != {:?}", u, v, t, expected,
 					);
 				}
@@ -1138,11 +1227,11 @@ pub mod big_int {
 		#[test]
 		fn basic_random_mul_works() {
 			type S = u128;
-			run_with_data_set(1000, 8, 8, false, |u, v| {
-				let expected = u._try_into::<S>().unwrap() * v._try_into::<S>().unwrap();
+			run_with_data_set(FUZZ_COUNT, 2, 2, false, |u, v| {
+				let expected = S::try_from(u.clone()).unwrap() * S::try_from(v.clone()).unwrap();
 				let t = u.clone().mul(v.clone());
 				assert_eq!(
-					t._try_into::<S>().unwrap(), expected,
+					S::try_from(t.clone()).unwrap(), expected,
 					"{:?} * {:?} ===> {:?} != {:?}", u, v, t, expected,
 				);
 			})
@@ -1150,8 +1239,8 @@ pub mod big_int {
 
 		#[test]
 		fn mul_always_appends_one_digit() {
-			let a = Number::from(10u8);
-			let b = Number::from(4u8);
+			let a = Number::from(10 as Single);
+			let b = Number::from(4 as Single);
 			assert_eq!(a.len(), 1);
 			assert_eq!(b.len(), 1);
 
@@ -1162,36 +1251,39 @@ pub mod big_int {
 		}
 
 		#[test]
-		fn basic_random_div_works() {
-			type S = u128;
-			run_with_data_set(1000, 8, 4, true, |u, v| {
-				let ue = u._try_into::<S>().unwrap();
-				let ve = v._try_into::<S>().unwrap();
-				let (q, r) = (ue / ve, ue % ve);
-				if let Some((qq, rr)) = u.clone().div(v.clone(), true) {
-					assert_eq!(
-						qq._try_into::<S>().unwrap(), q,
-						"{:?} / {:?} ===> {:?} != {:?}", u, v, qq, q,
-					);
-					assert_eq!(
-						rr._try_into::<S>().unwrap(), r,
-						"{:?} % {:?} ===> {:?} != {:?}", u, v, rr, r,
-					);
-				} else {
-					println!("ue = {:?}", ue);
-					println!("ve = {:?}", ve);
-				}
-			})
+		fn div_conditions_work() {
+			let a = Number { digits: vec![2] };
+			let b = Number { digits: vec![1, 2] };
+			let c = Number { digits: vec![1, 1, 2] };
+			let d = Number { digits: vec![0, 2] };
+			let e = Number { digits: vec![0, 1, 1, 2] };
+
+			assert!(a.clone().div(b.clone(), true).is_none());
+			assert!(c.clone().div(a.clone(), true).is_none());
+			assert!(c.clone().div(d.clone(), true).is_none());
+			assert!(e.clone().div(a.clone(), true).is_none());
+
+			assert!(c.clone().div(b.clone(), true).is_some());
 		}
 
 		#[test]
-		fn unit() {
-			let u = Number { digits: vec![77, 80, 219, 60, 239, 143, 239, 163] };
-			let v = Number { digits: vec![157, 112, 89, 123] };
-			dbg!(u.clone(), v.clone());
-			let p  = u.div(v, true).unwrap();
-			println!("{:?}", p);
-			assert_eq!(p.0._try_into::<u128>().unwrap(), 2109193471u128);
+		fn basic_random_div_works() {
+			type S = u128;
+			run_with_data_set(FUZZ_COUNT, 4, 2, true, |u, v| {
+				let ue = S::try_from(u.clone()).unwrap();
+				let ve = S::try_from(v.clone()).unwrap();
+				let (q, r) = (ue / ve, ue % ve);
+				if let Some((qq, rr)) = u.clone().div(v.clone(), true) {
+					assert_eq!(
+						S::try_from(qq.clone()).unwrap(), q,
+						"{:?} / {:?} ===> {:?} != {:?}", u, v, qq, q,
+					);
+					assert_eq!(
+						S::try_from(rr.clone()).unwrap(), r,
+						"{:?} % {:?} ===> {:?} != {:?}", u, v, rr, r,
+					);
+				}
+			})
 		}
 	}
 
