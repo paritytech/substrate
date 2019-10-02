@@ -71,6 +71,7 @@ pub(crate) struct UntilImported<Block: BlockT, Status, I, M: BlockUntilImported<
 	ready: VecDeque<M::Blocked>,
 	check_pending: Interval,
 	pending: HashMap<Block::Hash, (Instant, Vec<M>)>,
+	identifier: &'static str,
 }
 
 impl<Block: BlockT, Status, I: Stream, M> UntilImported<Block, Status, I, M>
@@ -81,6 +82,7 @@ impl<Block: BlockT, Status, I: Stream, M> UntilImported<Block, Status, I, M>
 		import_notifications: ImportNotifications<Block>,
 		status_check: Status,
 		stream: I,
+		identifier: &'static str,
 	) -> Self {
 		// how often to check if pending messages that are waiting for blocks to be
 		// imported can be checked.
@@ -101,6 +103,7 @@ impl<Block: BlockT, Status, I: Stream, M> UntilImported<Block, Status, I, M>
 			ready: VecDeque::new(),
 			check_pending,
 			pending: HashMap::new(),
+			identifier,
 		}
 	}
 }
@@ -170,8 +173,9 @@ impl<Block: BlockT, Status, I, M> Stream for UntilImported<Block, Status, I, M> 
 					if Instant::now() <= next_log {
 						debug!(
 							target: "afg",
-							"Waiting to import block {} before {} votes can be imported. \
+							"Waiting to import block {} before {} {} messages can be imported. \
 							Possible fork?",
+							self.identifier,
 							block_hash,
 							v.len(),
 						);
@@ -533,6 +537,7 @@ mod tests {
 			import_notifications,
 			block_status,
 			global_rx.map_err(|_| panic!("should never error")),
+			"global",
 		);
 
 		global_tx.unbounded_send(msg).unwrap();
@@ -558,6 +563,7 @@ mod tests {
 			import_notifications,
 			block_status,
 			global_rx.map_err(|_| panic!("should never error")),
+			"global",
 		);
 
 		global_tx.unbounded_send(msg).unwrap();

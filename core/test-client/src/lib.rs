@@ -187,6 +187,7 @@ impl<Executor, Backend, G: GenesisInit> TestClientBuilder<Executor, Backend, G> 
 			self.backend.clone(),
 			executor,
 			storage,
+			Default::default(),
 			self.execution_strategies,
 		).expect("Creates new client");
 

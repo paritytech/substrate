@@ -76,7 +76,7 @@ use primitives::offchain::{OpaqueNetworkState, StorageKind};
 use rstd::prelude::*;
 use session::historical::IdentificationTuple;
 use sr_primitives::{
-	traits::{Convert, Member, Printable}, Perbill,
+	traits::{Convert, Member, Printable, Saturating}, Perbill,
 	transaction_validity::{
 		TransactionValidity, TransactionLongevity, ValidTransaction, InvalidTransaction,
 	},
@@ -86,8 +86,7 @@ use sr_staking_primitives::{
 	offence::{ReportOffence, Offence, Kind},
 };
 use support::{
-	decl_module, decl_event, decl_storage, print, ensure,
-	Parameter, StorageValue, StorageDoubleMap,
+	decl_module, decl_event, decl_storage, print, ensure, Parameter
 };
 use system::ensure_none;
 use system::offchain::SubmitUnsignedTransaction;
@@ -419,7 +418,7 @@ impl<T: Trait> Module<T> {
 	fn initialize_keys(keys: &[T::AuthorityId]) {
 		if !keys.is_empty() {
 			assert!(Keys::<T>::get().is_empty(), "Keys are already initialized!");
-			Keys::<T>::put_ref(keys);
+			Keys::<T>::put(keys);
 		}
 	}
 }
@@ -438,9 +437,6 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	fn on_new_session<'a, I: 'a>(_changed: bool, validators: I, _queued_validators: I)
 		where I: Iterator<Item=(&'a T::AccountId, T::AuthorityId)>
 	{
-		// Reset heartbeats
-		<ReceivedHeartbeats>::remove_prefix(&<session::Module<T>>::current_index());
-
 		// Tell the offchain worker to start making the next session's heartbeats.
 		<GossipAt<T>>::put(<system::Module<T>>::block_number());
 
@@ -485,6 +481,10 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 		};
 
 		T::ReportUnresponsiveness::report_offence(vec![], offence);
+
+		// Remove all received heartbeats from the current session, they have
+		// already been processed and won't be needed anymore.
+		<ReceivedHeartbeats>::remove_prefix(&<session::Module<T>>::current_index());
 	}
 
 	fn on_disabled(_i: usize) {
@@ -574,12 +574,6 @@ impl<Offender: Clone> Offence<Offender> for UnresponsivenessOffence<Offender> {
 	fn slash_fraction(offenders: u32, validator_set_count: u32) -> Perbill {
 		// the formula is min((3 * (k - 1)) / n, 1) * 0.05
 		let x = Perbill::from_rational_approximation(3 * (offenders - 1), validator_set_count);
-
-		// _ * 0.05
-		// For now, Perbill doesn't support multiplication other than an integer so we perform
-		// a manual scaling.
-		// TODO: #3189 should fix this.
-		let p = (x.into_parts() as u64 * 50_000_000u64) / 1_000_000_000u64;
-		Perbill::from_parts(p as u32)
+		x.saturating_mul(Perbill::from_percent(5))
 	}
 }

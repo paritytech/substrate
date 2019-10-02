@@ -29,7 +29,7 @@ use sr_primitives::traits::{Hash, EnsureOrigin};
 use sr_primitives::weights::SimpleDispatchInfo;
 use support::{
 	dispatch::{Dispatchable, Parameter}, codec::{Encode, Decode},
-	traits::{ChangeMembers, InitializeMembers}, StorageValue, StorageMap, decl_module, decl_event,
+	traits::{ChangeMembers, InitializeMembers}, decl_module, decl_event,
 	decl_storage, ensure,
 };
 use system::{self, ensure_signed, ensure_root};
@@ -281,7 +281,7 @@ impl<T: Trait<I>, I: Instance> ChangeMembers<T::AccountId> for Module<T, I> {
 				}
 			);
 		}
-		<Members<T, I>>::put_ref(new);
+		<Members<T, I>>::put(new);
 	}
 }
 
@@ -289,7 +289,7 @@ impl<T: Trait<I>, I: Instance> InitializeMembers<T::AccountId> for Module<T, I> 
 	fn initialize_members(members: &[T::AccountId]) {
 		if !members.is_empty() {
 			assert!(<Members<T, I>>::get().is_empty(), "Members are already initialized!");
-			<Members<T, I>>::put_ref(members);
+			<Members<T, I>>::put(members);
 		}
 	}
 }

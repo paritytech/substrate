@@ -21,22 +21,20 @@ use codec::Encode;
 use futures::sync::mpsc;
 use parking_lot::RwLockWriteGuard;
 
-use client::{blockchain, CallExecutor, Client};
+use client::{blockchain, CallExecutor, Client, well_known_cache_keys};
 use client::blockchain::HeaderBackend;
 use client::backend::Backend;
-use client::runtime_api::ApiExt;
 use client::utils::is_descendent_of;
 use consensus_common::{
 	BlockImport, Error as ConsensusError,
-	BlockImportParams, ImportResult, JustificationImport, well_known_cache_keys,
+	BlockCheckParams, BlockImportParams, ImportResult, JustificationImport,
 	SelectChain,
 };
-use fg_primitives::GrandpaApi;
+use fg_primitives::{GRANDPA_ENGINE_ID, ScheduledChange, ConsensusLog};
 use sr_primitives::Justification;
-use sr_primitives::generic::BlockId;
+use sr_primitives::generic::{BlockId, OpaqueDigestItemId};
 use sr_primitives::traits::{
-	Block as BlockT, DigestFor,
-	Header as HeaderT, NumberFor, ProvideRuntimeApi,
+	Block as BlockT, DigestFor, Header as HeaderT, NumberFor,
 };
 use primitives::{H256, Blake2Hasher};
 
@@ -55,17 +53,16 @@ use crate::justification::GrandpaJustification;
 ///
 /// When using GRANDPA, the block import worker should be using this block import
 /// object.
-pub struct GrandpaBlockImport<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC> {
+pub struct GrandpaBlockImport<B, E, Block: BlockT<Hash=H256>, RA, SC> {
 	inner: Arc<Client<B, E, Block, RA>>,
 	select_chain: SC,
 	authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	send_voter_commands: mpsc::UnboundedSender<VoterCommand<Block::Hash, NumberFor<Block>>>,
 	consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
-	api: Arc<PRA>,
 }
 
-impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC: Clone> Clone for
-	GrandpaBlockImport<B, E, Block, RA, PRA, SC>
+impl<B, E, Block: BlockT<Hash=H256>, RA, SC: Clone> Clone for
+	GrandpaBlockImport<B, E, Block, RA, SC>
 {
 	fn clone(&self) -> Self {
 		GrandpaBlockImport {
@@ -74,20 +71,17 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC: Clone> Clone for
 			authority_set: self.authority_set.clone(),
 			send_voter_commands: self.send_voter_commands.clone(),
 			consensus_changes: self.consensus_changes.clone(),
-			api: self.api.clone(),
 		}
 	}
 }
 
-impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC> JustificationImport<Block>
-	for GrandpaBlockImport<B, E, Block, RA, PRA, SC> where
+impl<B, E, Block: BlockT<Hash=H256>, RA, SC> JustificationImport<Block>
+	for GrandpaBlockImport<B, E, Block, RA, SC> where
 		NumberFor<Block>: grandpa::BlockNumberOps,
 		B: Backend<Block, Blake2Hasher> + 'static,
 		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 		DigestFor<Block>: Encode,
 		RA: Send + Sync,
-		PRA: ProvideRuntimeApi,
-		PRA::Api: GrandpaApi<Block>,
 		SC: SelectChain<Block>,
 {
 	type Error = ConsensusError;
@@ -174,75 +168,69 @@ impl<'a, Block: 'a + BlockT> Drop for PendingSetChanges<'a, Block> {
 	}
 }
 
-impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC>
-	GrandpaBlockImport<B, E, Block, RA, PRA, SC>
+fn find_scheduled_change<B: BlockT>(header: &B::Header)
+	-> Option<ScheduledChange<NumberFor<B>>>
+{
+	let id = OpaqueDigestItemId::Consensus(&GRANDPA_ENGINE_ID);
+
+	let filter_log = |log: ConsensusLog<NumberFor<B>>| match log {
+		ConsensusLog::ScheduledChange(change) => Some(change),
+		_ => None,
+	};
+
+	// find the first consensus digest with the right ID which converts to
+	// the right kind of consensus log.
+	header.digest().convert_first(|l| l.try_to(id).and_then(filter_log))
+}
+
+fn find_forced_change<B: BlockT>(header: &B::Header)
+	-> Option<(NumberFor<B>, ScheduledChange<NumberFor<B>>)>
+{
+	let id = OpaqueDigestItemId::Consensus(&GRANDPA_ENGINE_ID);
+
+	let filter_log = |log: ConsensusLog<NumberFor<B>>| match log {
+		ConsensusLog::ForcedChange(delay, change) => Some((delay, change)),
+		_ => None,
+	};
+
+	// find the first consensus digest with the right ID which converts to
+	// the right kind of consensus log.
+	header.digest().convert_first(|l| l.try_to(id).and_then(filter_log))
+}
+
+impl<B, E, Block: BlockT<Hash=H256>, RA, SC>
+	GrandpaBlockImport<B, E, Block, RA, SC>
 where
 	NumberFor<Block>: grandpa::BlockNumberOps,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 	DigestFor<Block>: Encode,
 	RA: Send + Sync,
-	PRA: ProvideRuntimeApi,
-	PRA::Api: GrandpaApi<Block>,
 {
 	// check for a new authority set change.
 	fn check_new_change(&self, header: &Block::Header, hash: Block::Hash)
-		-> Result<Option<PendingChange<Block::Hash, NumberFor<Block>>>, ConsensusError>
+		-> Option<PendingChange<Block::Hash, NumberFor<Block>>>
 	{
-		let at = BlockId::hash(*header.parent_hash());
-		let digest = header.digest();
-
-		let api = self.api.runtime_api();
-
 		// check for forced change.
-		{
-			let maybe_change = api.grandpa_forced_change(
-				&at,
-				digest,
-			);
-
-			match maybe_change {
-				Err(e) => match api.has_api_with::<dyn GrandpaApi<Block>, _>(&at, |v| v >= 2) {
-					Err(e) => return Err(ConsensusError::ClientImport(e.to_string()).into()),
-					Ok(true) => {
-						// API version is high enough to support forced changes
-						// but got error, so it is legitimate.
-						return Err(ConsensusError::ClientImport(e.to_string()).into())
-					},
-					Ok(false) => {
-						// API version isn't high enough to support forced changes
-					},
-				},
-				Ok(None) => {},
-				Ok(Some((median_last_finalized, change))) => return Ok(Some(PendingChange {
-					next_authorities: change.next_authorities,
-					delay: change.delay,
-					canon_height: *header.number(),
-					canon_hash: hash,
-					delay_kind: DelayKind::Best { median_last_finalized },
-				})),
-			}
+		if let Some((median_last_finalized, change)) = find_forced_change::<Block>(header) {
+			return Some(PendingChange {
+				next_authorities: change.next_authorities,
+				delay: change.delay,
+				canon_height: *header.number(),
+				canon_hash: hash,
+				delay_kind: DelayKind::Best { median_last_finalized },
+			});
 		}
 
 		// check normal scheduled change.
-		{
-			let maybe_change = api.grandpa_pending_change(
-				&at,
-				digest,
-			);
-
-			match maybe_change {
-				Err(e) => Err(ConsensusError::ClientImport(e.to_string()).into()),
-				Ok(Some(change)) => Ok(Some(PendingChange {
-					next_authorities: change.next_authorities,
-					delay: change.delay,
-					canon_height: *header.number(),
-					canon_hash: hash,
-					delay_kind: DelayKind::Finalized,
-				})),
-				Ok(None) => Ok(None),
-			}
-		}
+		let change = find_scheduled_change::<Block>(header)?;
+		Some(PendingChange {
+			next_authorities: change.next_authorities,
+			delay: change.delay,
+			canon_height: *header.number(),
+			canon_hash: hash,
+			delay_kind: DelayKind::Finalized,
+		})
 	}
 
 	fn make_authorities_changes<'a>(&'a self, block: &mut BlockImportParams<Block>, hash: Block::Hash)
@@ -289,12 +277,12 @@ where
 		let maybe_change = self.check_new_change(
 			&block.header,
 			hash,
-		)?;
+		);
 
 		// returns a function for checking whether a block is a descendent of another
 		// consistent with querying client directly after importing the block.
 		let parent_hash = *block.header.parent_hash();
-		let is_descendent_of = is_descendent_of(&self.inner, Some((&hash, &parent_hash)));
+		let is_descendent_of = is_descendent_of(&*self.inner, Some((&hash, &parent_hash)));
 
 		let mut guard = InnerGuard {
 			guard: Some(self.authority_set.inner().write()),
@@ -388,21 +376,21 @@ where
 	}
 }
 
-impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC> BlockImport<Block>
-	for GrandpaBlockImport<B, E, Block, RA, PRA, SC> where
+impl<B, E, Block: BlockT<Hash=H256>, RA, SC> BlockImport<Block>
+	for GrandpaBlockImport<B, E, Block, RA, SC> where
 		NumberFor<Block>: grandpa::BlockNumberOps,
 		B: Backend<Block, Blake2Hasher> + 'static,
 		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 		DigestFor<Block>: Encode,
 		RA: Send + Sync,
-		PRA: ProvideRuntimeApi,
-		PRA::Api: GrandpaApi<Block>,
 {
 	type Error = ConsensusError;
 
-	fn import_block(&mut self, mut block: BlockImportParams<Block>, new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>)
-		-> Result<ImportResult, Self::Error>
-	{
+	fn import_block(
+		&mut self,
+		mut block: BlockImportParams<Block>,
+		new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
+	) -> Result<ImportResult, Self::Error> {
 		let hash = block.post_header().hash();
 		let number = block.header.number().clone();
 
@@ -514,15 +502,14 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC> BlockImport<Block>
 
 	fn check_block(
 		&mut self,
-		hash: Block::Hash,
-		parent_hash: Block::Hash,
+		block: BlockCheckParams<Block>,
 	) -> Result<ImportResult, Self::Error> {
-		self.inner.check_block(hash, parent_hash)
+		self.inner.check_block(block)
 	}
 }
 
-impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC>
-	GrandpaBlockImport<B, E, Block, RA, PRA, SC>
+impl<B, E, Block: BlockT<Hash=H256>, RA, SC>
+	GrandpaBlockImport<B, E, Block, RA, SC>
 {
 	pub(crate) fn new(
 		inner: Arc<Client<B, E, Block, RA>>,
@@ -530,21 +517,19 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC>
 		authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 		send_voter_commands: mpsc::UnboundedSender<VoterCommand<Block::Hash, NumberFor<Block>>>,
 		consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
-		api: Arc<PRA>,
-	) -> GrandpaBlockImport<B, E, Block, RA, PRA, SC> {
+	) -> GrandpaBlockImport<B, E, Block, RA, SC> {
 		GrandpaBlockImport {
 			inner,
 			select_chain,
 			authority_set,
 			send_voter_commands,
 			consensus_changes,
-			api,
 		}
 	}
 }
 
-impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC>
-	GrandpaBlockImport<B, E, Block, RA, PRA, SC>
+impl<B, E, Block: BlockT<Hash=H256>, RA, SC>
+	GrandpaBlockImport<B, E, Block, RA, SC>
 where
 	NumberFor<Block>: grandpa::BlockNumberOps,
 	B: Backend<Block, Blake2Hasher> + 'static,
