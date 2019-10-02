@@ -24,6 +24,8 @@ use sr_primitives::Justification;
 use log::warn;
 use parking_lot::Mutex;
 
+use header_metadata::HeaderMetadata;
+
 use crate::error::{Error, Result};
 
 /// Blockchain database header backend. Does not perform any validation.
@@ -74,7 +76,7 @@ pub trait HeaderBackend<Block: BlockT>: Send + Sync {
 }
 
 /// Blockchain database backend. Does not perform any validation.
-pub trait Backend<Block: BlockT>: HeaderBackend<Block> {
+pub trait Backend<Block: BlockT>: HeaderBackend<Block> + HeaderMetadata<Block, Error=Error> {
 	/// Get block body. Returns `None` if block is not found.
 	fn body(&self, id: BlockId<Block>) -> Result<Option<Vec<<Block as BlockT>::Extrinsic>>>;
 	/// Get block justification. Returns `None` if justification does not exist.
@@ -255,122 +257,6 @@ pub enum BlockStatus {
 	InChain,
 	/// Not in the queue or the blockchain.
 	Unknown,
-}
-
-/// An entry in a tree route.
-#[derive(Debug)]
-pub struct RouteEntry<Block: BlockT> {
-	/// The number of the block.
-	pub number: <Block::Header as HeaderT>::Number,
-	/// The hash of the block.
-	pub hash: Block::Hash,
-}
-
-/// A tree-route from one block to another in the chain.
-///
-/// All blocks prior to the pivot in the deque is the reverse-order unique ancestry
-/// of the first block, the block at the pivot index is the common ancestor,
-/// and all blocks after the pivot is the ancestry of the second block, in
-/// order.
-///
-/// The ancestry sets will include the given blocks, and thus the tree-route is
-/// never empty.
-///
-/// ```text
-/// Tree route from R1 to E2. Retracted is [R1, R2, R3], Common is C, enacted [E1, E2]
-///   <- R3 <- R2 <- R1
-///  /
-/// C
-///  \-> E1 -> E2
-/// ```
-///
-/// ```text
-/// Tree route from C to E2. Retracted empty. Common is C, enacted [E1, E2]
-/// C -> E1 -> E2
-/// ```
-#[derive(Debug)]
-pub struct TreeRoute<Block: BlockT> {
-	route: Vec<RouteEntry<Block>>,
-	pivot: usize,
-}
-
-impl<Block: BlockT> TreeRoute<Block> {
-	/// Get a slice of all retracted blocks in reverse order (towards common ancestor)
-	pub fn retracted(&self) -> &[RouteEntry<Block>] {
-		&self.route[..self.pivot]
-	}
-
-	/// Get the common ancestor block. This might be one of the two blocks of the
-	/// route.
-	pub fn common_block(&self) -> &RouteEntry<Block> {
-		self.route.get(self.pivot).expect("tree-routes are computed between blocks; \
-			which are included in the route; \
-			thus it is never empty; qed")
-	}
-
-	/// Get a slice of enacted blocks (descendents of the common ancestor)
-	pub fn enacted(&self) -> &[RouteEntry<Block>] {
-		&self.route[self.pivot + 1 ..]
-	}
-}
-
-/// Compute a tree-route between two blocks. See tree-route docs for more details.
-pub fn tree_route<Block: BlockT, F: Fn(BlockId<Block>) -> Result<<Block as BlockT>::Header>>(
-	load_header: F,
-	from: BlockId<Block>,
-	to: BlockId<Block>,
-) -> Result<TreeRoute<Block>> {
-	let mut from = load_header(from)?;
-	let mut to = load_header(to)?;
-
-	let mut from_branch = Vec::new();
-	let mut to_branch = Vec::new();
-
-	while to.number() > from.number() {
-		to_branch.push(RouteEntry {
-			number: to.number().clone(),
-			hash: to.hash(),
-		});
-
-		to = load_header(BlockId::Hash(*to.parent_hash()))?;
-	}
-
-	while from.number() > to.number() {
-		from_branch.push(RouteEntry {
-			number: from.number().clone(),
-			hash: from.hash(),
-		});
-		from = load_header(BlockId::Hash(*from.parent_hash()))?;
-	}
-
-	// numbers are equal now. walk backwards until the block is the same
-
-	while to != from {
-		to_branch.push(RouteEntry {
-			number: to.number().clone(),
-			hash: to.hash(),
-		});
-		to = load_header(BlockId::Hash(*to.parent_hash()))?;
-
-		from_branch.push(RouteEntry {
-			number: from.number().clone(),
-			hash: from.hash(),
-		});
-		from = load_header(BlockId::Hash(*from.parent_hash()))?;
-	}
-
-	// add the pivot block. and append the reversed to-branch (note that it's reverse order originalls)
-	let pivot = from_branch.len();
-	from_branch.push(RouteEntry {
-		number: to.number().clone(),
-		hash: to.hash(),
-	});
-	from_branch.extend(to_branch.into_iter().rev());
-
-	Ok(TreeRoute {
-		route: from_branch,
-		pivot,
-	})
 }
 
 /// A list of all well known keys in the blockchain cache.

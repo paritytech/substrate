@@ -21,6 +21,7 @@ substrate-telemetry = { path = "../telemetry" }
 keystore = { package = "substrate-keystore", path = "../keystore" }
 serde_json = "1.0"
 client = { package = "substrate-client", path = "../client" }
+header-metadata = { package = "substrate-header-metadata", path = "../client/header-metadata" }
 inherents = { package = "substrate-inherents", path = "../../core/inherents" }
 network = { package = "substrate-network", path = "../network" }
 srml-finality-tracker = { path = "../../srml/finality-tracker" }

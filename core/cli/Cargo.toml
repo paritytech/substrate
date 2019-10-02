@@ -24,6 +24,7 @@ exit-future = "0.1"
 serde_json = "1.0"
 panic-handler = { package = "substrate-panic-handler", path = "../../core/panic-handler" }
 client = { package = "substrate-client", path = "../../core/client" }
+header-metadata = { package = "substrate-header-metadata", path = "../../core/client/header-metadata" }
 network = { package = "substrate-network", path = "../../core/network" }
 sr-primitives = { path = "../../core/sr-primitives" }
 primitives = { package = "substrate-primitives", path = "../../core/primitives" }
