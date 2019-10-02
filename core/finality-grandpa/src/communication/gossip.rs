@@ -299,6 +299,15 @@ pub(super) struct NeighborPacket<N> {
 	pub(super) set_id: SetId,
 	/// The highest finalizing commit observed.
 	pub(super) commit_finalized_height: N,
+	/// Hashes of the blocks which:
+	///
+	/// - the node has synced
+	///
+	/// - have been mentioned by nodes in vote (Prevote, Precommit) messages
+	///
+	/// - within the advertised Round set in `round` field.
+	// TODO: Replace `()` with some hash trait bound.
+	pub(super) known_vote_blocks: Vec<()>,
 }
 
 /// A versioned neighbor packet.
