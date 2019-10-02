@@ -37,8 +37,6 @@ pub struct RefWindow<BlockHash: Hash, Key: Hash> {
 	death_rows: VecDeque<DeathRow<BlockHash, Key>>,
 	/// An index that maps each key from `death_rows` to block number.
 	death_index: HashMap<Key, u64>,
-	/// An index that maps each key from `death_rows` to block number.
-	offstate_death_index: HashMap<OffstateKey, u64>,
 	/// Block number that corresponts to the front of `death_rows`
 	pending_number: u64,
 	/// Number of call of `note_canonical` after
@@ -55,7 +53,7 @@ struct DeathRow<BlockHash: Hash, Key: Hash> {
 	journal_key: Vec<u8>,
 	offstate_journal_key: Vec<u8>,
 	deleted: HashSet<Key>,
-	offstate_deleted: HashSet<OffstateKey>,
+	offstate_modified: HashSet<OffstateKey>,
 }
 
 #[derive(Encode, Decode)]
@@ -67,8 +65,7 @@ struct JournalRecord<BlockHash: Hash, Key: Hash> {
 
 #[derive(Encode, Decode)]
 struct OffstateJournalRecord {
-	inserted: Vec<OffstateKey>,
-	deleted: Vec<OffstateKey>,
+	modified: Vec<OffstateKey>,
 }
 
 fn to_journal_key(block: u64) -> Vec<u8> {
@@ -91,7 +88,6 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 		let mut pruning = RefWindow {
 			death_rows: Default::default(),
 			death_index: Default::default(),
-			offstate_death_index: Default::default(),
 			pending_number: pending_number,
 			pending_canonicalizations: 0,
 			pending_prunings: 0,
@@ -104,20 +100,19 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 			match db.get_meta(&journal_key).map_err(|e| Error::Db(e))? {
 				Some(record) => {
 					let record: JournalRecord<BlockHash, Key> = Decode::decode(&mut record.as_slice())?;
-					let (offstate_record_inserted, offstate_record_deleted) = if let Some(record) = db
+					let offstate_record_inserted = if let Some(record) = db
 						.get_meta(&offstate_journal_key).map_err(|e| Error::Db(e))? {
 						let record = OffstateJournalRecord::decode(&mut record.as_slice())?;
-						(record.inserted, record.deleted)
-					} else { (Vec::new(), Vec::new()) };
+						record.modified
+					} else { Vec::new() };
 	
 					trace!(
 						target: "state-db",
-						"Pruning journal entry {} ({} {} inserted, {} {} deleted)",
+						"Pruning journal entry {} ({} {} inserted, {} deleted)",
 						block,
 						record.inserted.len(),
 						offstate_record_inserted.len(),
 						record.deleted.len(),
-						offstate_record_deleted.len(),
 					);
 					pruning.import(
 						&record.hash,
@@ -126,7 +121,6 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 						record.inserted.into_iter(),
 						record.deleted,
 						offstate_record_inserted.into_iter(),
-						offstate_record_deleted,
 					);
 				},
 				None => break,
@@ -144,17 +138,11 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 		inserted: I,
 		deleted: Vec<Key>,
 		offstate_inserted: I2,
-		offstate_deleted: Vec<OffstateKey>,
 	) {
 		// remove all re-inserted keys from death rows
 		for k in inserted {
 			if let Some(block) = self.death_index.remove(&k) {
 				self.death_rows[(block - self.pending_number) as usize].deleted.remove(&k);
-			}
-		}
-		for k in offstate_inserted {
-			if let Some(block) = self.offstate_death_index.remove(&k) {
-				self.death_rows[(block - self.pending_number) as usize].offstate_deleted.remove(&k);
 			}
 		}
 
@@ -163,14 +151,12 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 		for k in deleted.iter() {
 			self.death_index.insert(k.clone(), imported_block);
 		}
-		for k in offstate_deleted.iter() {
-			self.offstate_death_index.insert(k.clone(), imported_block);
-		}
 		self.death_rows.push_back(
 			DeathRow {
 				hash: hash.clone(),
 				deleted: deleted.into_iter().collect(),
-				offstate_deleted: offstate_deleted.into_iter().collect(),
+				// TODO EMCH is it possible to change type to directly set ??
+				offstate_modified: offstate_inserted.into_iter().collect(),
 				journal_key,
 				offstate_journal_key,
 			}
@@ -203,7 +189,6 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 			trace!(target: "state-db", "Pruning {:?} ({} deleted)", pruned.hash, pruned.deleted.len());
 			let index = self.pending_number + self.pending_prunings as u64;
 			commit.data.deleted.extend(pruned.deleted.iter().cloned());
-			commit.offstate.deleted.extend(pruned.offstate_deleted.iter().cloned());
 			commit.meta.inserted.push((to_meta_key(LAST_PRUNED, &()), index.encode()));
 			commit.meta.deleted.push(pruned.journal_key.clone());
 			self.pending_prunings += 1;
@@ -216,17 +201,15 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 	pub fn note_canonical(&mut self, hash: &BlockHash, commit: &mut CommitSet<Key>) {
 		trace!(target: "state-db", "Adding to pruning window: {:?} ({} inserted, {} deleted)", hash, commit.data.inserted.len(), commit.data.deleted.len());
 		let inserted = commit.data.inserted.iter().map(|(k, _)| k.clone()).collect();
-		let offstate_inserted = commit.offstate.inserted.iter().map(|(k, _)| k.clone()).collect();
+		let offstate_modified = commit.offstate.iter().map(|(k, _)| k.clone()).collect();
 		let deleted = ::std::mem::replace(&mut commit.data.deleted, Vec::new());
-		let offstate_deleted = ::std::mem::replace(&mut commit.offstate.deleted, Vec::new());
 		let journal_record = JournalRecord {
 			hash: hash.clone(),
 			inserted,
 			deleted,
 		};
 		let offstate_journal_record = OffstateJournalRecord {
-			inserted: offstate_inserted,
-			deleted: offstate_deleted,
+			modified: offstate_modified,
 		};
 		let block = self.pending_number + self.death_rows.len() as u64;
 		let journal_key = to_journal_key(block);
@@ -239,8 +222,7 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 			offstate_journal_key,
 			journal_record.inserted.into_iter(),
 			journal_record.deleted,
-			offstate_journal_record.inserted.into_iter(),
-			offstate_journal_record.deleted,
+			offstate_journal_record.modified.into_iter(),
 		);
 		self.pending_canonicalizations += 1;
 	}
@@ -253,9 +235,6 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 			trace!(target: "state-db", "Applying pruning {:?} ({} deleted)", pruned.hash, pruned.deleted.len());
 			for k in pruned.deleted.iter() {
 				self.death_index.remove(&k);
-			}
-			for k in pruned.offstate_deleted.iter() {
-				self.offstate_death_index.remove(k);
 			}
 			self.pending_number += 1;
 		}
@@ -288,7 +267,6 @@ mod tests {
 		assert_eq!(pruning.pending_number, restored.pending_number);
 		assert_eq!(pruning.death_rows, restored.death_rows);
 		assert_eq!(pruning.death_index, restored.death_index);
-		assert_eq!(pruning.offstate_death_index, restored.offstate_death_index);
 	}
 
 	#[test]
@@ -298,19 +276,6 @@ mod tests {
 		assert_eq!(pruning.pending_number, 0);
 		assert!(pruning.death_rows.is_empty());
 		assert!(pruning.death_index.is_empty());
-		assert!(pruning.offstate_death_index.is_empty());
-	}
-
-	#[test]
-	fn prune_empty() {
-		let db = make_db(&[]);
-		let mut pruning: RefWindow<H256, H256> = RefWindow::new(&db).unwrap();
-		let mut commit = CommitSet::default();
-		pruning.prune_one(&mut commit);
-		assert_eq!(pruning.pending_number, 0);
-		assert!(pruning.death_rows.is_empty());
-		assert!(pruning.death_index.is_empty());
-		assert!(pruning.offstate_death_index.is_empty());
 		assert!(pruning.pending_prunings == 0);
 		assert!(pruning.pending_canonicalizations == 0);
 	}
@@ -323,17 +288,18 @@ mod tests {
 		let mut commit = make_commit_both(&[4, 5], &[1, 3]);
 		commit.initialize_offstate(&[4, 5], &[1, 3]);
 		let h = H256::random();
+		assert!(!commit.data.deleted.is_empty());
 		pruning.note_canonical(&h, &mut commit);
 		db.commit(&commit);
 		assert!(pruning.have_block(&h));
 		pruning.apply_pending();
 		assert!(pruning.have_block(&h));
 		assert!(commit.data.deleted.is_empty());
-		assert!(commit.offstate.deleted.is_empty());
+		//assert!(commit.offstate.is_empty());
 		assert_eq!(pruning.death_rows.len(), 1);
 		assert_eq!(pruning.death_index.len(), 2);
-		assert_eq!(pruning.offstate_death_index.len(), 2);
 		assert!(db.data_eq(&make_db(&[1, 2, 3, 4, 5])));
+		println!("{:?}", db.offstate);
 		assert!(db.offstate_eq(&[1, 2, 3, 4, 5]));
 		check_journal(&pruning, &db);
 
@@ -347,7 +313,6 @@ mod tests {
 		assert!(db.offstate_eq(&[2, 4, 5]));
 		assert!(pruning.death_rows.is_empty());
 		assert!(pruning.death_index.is_empty());
-		assert!(pruning.offstate_death_index.is_empty());
 		assert_eq!(pruning.pending_number, 1);
 	}
 

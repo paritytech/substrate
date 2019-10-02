@@ -152,6 +152,20 @@ impl<'a> BranchStateTrait<bool, u64> for &'a BranchStateRef {
 
 }
 
+/// u64 is use a a state target so it is implemented as
+/// a upper bound.
+impl<'a> BranchStateTrait<bool, u64> for u64 {
+
+	fn get_node(&self, i: u64) -> bool {
+		&i <= self
+	}
+
+	fn last_index(&self) -> u64 {
+		*self
+	}
+
+}
+
 
 
 impl Default for BranchState {
@@ -786,6 +800,12 @@ impl<'a, F: SerializedConfig> Serialized<'a, F> {
 /// Serialized implementation when transaction support is not
 /// needed.
 pub struct Serialized<'a, F>(SerializedInner<'a, F>);
+
+impl<'a, F> Into<Serialized<'a, F>> for &'a[u8] {
+	fn into(self) -> Serialized<'a, F> {
+		Serialized(self.into())
+	}
+}
 
 impl<'a, F> Into<Serialized<'a, F>> for SerializedInner<'a, F> {
 	fn into(self) -> Serialized<'a, F> {

@@ -1222,16 +1222,10 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 					changeset.deleted.push(key);
 				}
 			}
-			// remove duplicate
-			let mut map_offstate: HashMap<_, _> = operation.db_updates.1.into_iter().collect();
-			let mut offstate_changeset: state_db::ChangeSet<Vec<u8>> = state_db::ChangeSet::default();
-			for (key, option_val) in map_offstate.drain() {
-				if let Some(val) = option_val {
-					offstate_changeset.inserted.push((key, val.to_vec()));
-				} else {
-					offstate_changeset.deleted.push(key);
-				}
-			}
+			// remove duplicate TODO EMCH very bad
+			let map_offstate: HashMap<_, _> = operation.db_updates.1.into_iter().collect();
+			// TODO EMCH !!! keep map_offstate for OffstateChangeSet type???
+			let offstate_changeset: state_db::OffstateChangeSet<Vec<u8>> = map_offstate.into_iter().collect();
 			let number_u64 = number.saturated_into::<u64>();
 			let commit = self.storage.state_db.insert_block(
 				&hash,
@@ -1392,6 +1386,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 }
 
 fn apply_state_commit(transaction: &mut DBTransaction, commit: state_db::CommitSet<Vec<u8>>) {
+	// TODO EMCH unimplemented commit of offstate
 	for (key, val) in commit.data.inserted.into_iter() {
 		transaction.put(columns::STATE, &key[..], &val);
 	}
@@ -1583,9 +1578,9 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 			Ok(Some(ref hdr)) => {
 				let hash = hdr.hash();
 				if let Ok(()) = self.storage.state_db.pin(&hash) {
-					let range = self.storage.state_db.get_branch_range(&hash);
-					let root = H256::from_slice(hdr.state_root().as_ref());
 					let block_number = hdr.number().clone().saturated_into::<u64>();
+					let range = self.storage.state_db.get_branch_range(&hash, block_number);
+					let root = H256::from_slice(hdr.state_root().as_ref());
 					let offstate = StorageDbAt {
 						storage_db: self.storage.clone(),
 						state: (range.unwrap_or_else(Default::default), block_number),

@@ -147,6 +147,7 @@ impl RangeSet {
 	pub fn branch_ranges_from_cache(
 		&self,
 		mut branch_index: u64,
+		block: Option<u64>,
 	) -> BranchRanges {
 		// TODO EMCH transform this method to an iterator!!!
 		// (avoid some intermediatory Vec (eg when building Hashset)
@@ -154,7 +155,7 @@ impl RangeSet {
 		if branch_index < self.treshold {
 			return BranchRanges(result);
 		}
-		let mut previous_start = u64::max_value();
+		let mut previous_start = block.map(|b| b + 1).unwrap_or(u64::max_value());
 		loop {
 			if let Some(Some(StatesBranch{ state, parent_branch_index, .. })) = self.storage.get(&branch_index) {
 				// TODO EMCH consider vecdeque ??
@@ -365,6 +366,7 @@ impl RangeSet {
 
 	/// Revert some ranges, without any way to revert.
 	/// Returning ranges for the parent index.
+	/// TODO EMCH can remove ??
 	pub fn revert(&mut self, branch_ix: u64) -> BranchRanges {
 		let parent_branch_index = if branch_ix != 0 {
 			self.drop_state(branch_ix)
@@ -374,7 +376,7 @@ impl RangeSet {
 			0
 		};
 
-		self.branch_ranges_from_cache(parent_branch_index)
+		self.branch_ranges_from_cache(parent_branch_index, None)
 	}
 
 	#[cfg(test)]

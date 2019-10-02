@@ -137,6 +137,8 @@ pub struct ChangeSet<H: Hash> {
 	pub deleted: Vec<H>,
 }
 
+/// A set of offstate state values changes.
+pub type OffstateChangeSet<H> = Vec<(H, Option<DBValue>)>;
 
 /// A set of changes to the backing database.
 #[derive(Default, Debug, Clone)]
@@ -146,7 +148,7 @@ pub struct CommitSet<H: Hash> {
 	/// Metadata changes.
 	pub meta: ChangeSet<Vec<u8>>,
 	/// Offstate data changes.
-	pub offstate: ChangeSet<OffstateKey>,
+	pub offstate: OffstateChangeSet<OffstateKey>,
 }
 
 /// Pruning constraints. If none are specified pruning is
@@ -233,13 +235,12 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		number: u64,
 		parent_hash: &BlockHash,
 		mut changeset: ChangeSet<Key>,
-		mut offstate_changeset: ChangeSet<OffstateKey>,
+		mut offstate_changeset: OffstateChangeSet<OffstateKey>,
 	) -> Result<CommitSet<Key>, Error<E>> {
 
 		match self.mode {
 			PruningMode::ArchiveAll => {
 				changeset.deleted.clear();
-				offstate_changeset.deleted.clear();
 				// write changes immediately
 				Ok(CommitSet {
 					data: changeset,
@@ -262,7 +263,6 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 			Ok(()) => {
 				if self.mode == PruningMode::ArchiveCanonical {
 					commit.data.deleted.clear();
-					commit.offstate.deleted.clear();
 				}
 			}
 			Err(e) => return Err(e),
@@ -326,8 +326,8 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 	}
 
 	/// TODO EMCH
-	pub fn get_branch_range(&self, hash: &BlockHash) -> Option<BranchRanges> {
-		self.non_canonical.get_branch_range(hash)
+	pub fn get_branch_range(&self, hash: &BlockHash, number: u64) -> Option<BranchRanges> {
+		self.non_canonical.get_branch_range(hash, number)
 	}
 
 	pub fn pin(&mut self, hash: &BlockHash) -> Result<(), PinError> {
@@ -383,7 +383,7 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		db: &D,
 	) -> Result<Option<DBValue>, Error<D::Error>>	{
 		if let Some(value) = self.non_canonical.get_offstate(key, &state.0) {
-			return Ok(Some(value.clone()));
+			return Ok(value.clone());
 		}
 		db.get_offstate(key, &Some(state.1)).map_err(|e| Error::Db(e))
 	}
@@ -393,10 +393,8 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		state: &(BranchRanges, u64),
 		db: &D,
 	) -> Vec<(OffstateKey, DBValue)> {
-		// TODO get non_canonical optional values and then filter
-		// db pairs over it : TODO -> db.get_offstate would return
-		// an iterator.
-		unimplemented!()
+		unimplemented!("TODO some filtering ever non canonical");
+		Default::default()
 	}
 
 
@@ -443,7 +441,7 @@ impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
 		number: u64,
 		parent_hash: &BlockHash,
 		changeset: ChangeSet<Key>,
-		offstate_changeset: ChangeSet<OffstateKey>,
+		offstate_changeset: OffstateChangeSet<OffstateKey>,
 	) -> Result<CommitSet<Key>, Error<E>> {
 		self.db.write().insert_block(hash, number, parent_hash, changeset, offstate_changeset)
 	}
@@ -454,8 +452,8 @@ impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
 	}
 
 	/// TODO EMCH
-	pub fn get_branch_range(&self, hash: &BlockHash) -> Option<BranchRanges> {
-		self.db.read().get_branch_range(hash)
+	pub fn get_branch_range(&self, hash: &BlockHash, number: u64) -> Option<BranchRanges> {
+		self.db.read().get_branch_range(hash, number)
 	}
 
 	/// Prevents pruning of specified block and its descendants.

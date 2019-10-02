@@ -234,6 +234,13 @@ impl<'a, F: SerializedConfig> Default for Serialized<'a, F> {
 	}
 }
 
+impl<'a, F> Into<Serialized<'a, F>> for &'a[u8] {
+	fn into(self) -> Serialized<'a, F> {
+		Serialized(Cow::Borrowed(self), PhantomData)
+	}
+}
+
+
 // Utility function for basis implementation.
 impl<'a, F: SerializedConfig> Serialized<'a, F> {
 	
