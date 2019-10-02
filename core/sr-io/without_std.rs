@@ -22,7 +22,6 @@ use core::{intrinsics, panic::PanicInfo};
 use rstd::{vec::Vec, cell::Cell, convert::TryInto};
 use primitives::{offchain, Blake2Hasher};
 use codec::Decode;
-use runtime_interface::wasm::ExchangeableFunction;
 
 #[cfg(not(feature = "no_panic_handler"))]
 #[panic_handler]
