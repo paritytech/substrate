@@ -262,6 +262,7 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 			Ok(()) => {
 				if self.mode == PruningMode::ArchiveCanonical {
 					commit.data.deleted.clear();
+					commit.offstate.deleted.clear();
 				}
 			}
 			Err(e) => return Err(e),

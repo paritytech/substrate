@@ -209,7 +209,7 @@ fn discard_values<Key: Hash>(
 	}
 }
 
-fn discard_offset_values(
+fn discard_offstate_values(
 	inserted: Vec<OffstateKey>,
 	into: &mut OffstatePendingGC,
 ) {
@@ -240,7 +240,7 @@ fn discard_descendants<BlockHash: Hash, Key: Hash>(
 				discarded.push(overlay.hash);
 				let mut pinned = pinned.get_mut(hash);
 				discard_values(&mut values, overlay.inserted, pinned.as_mut().map(|p| &mut p.0));
-				discard_offset_values(
+				discard_offstate_values(
 					overlay.offstate_inserted,
 					offstate_gc,
 				);
@@ -588,7 +588,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 
 				let mut pinned = self.pinned.get_mut(&overlay.hash);
 				discard_values(&mut self.values, overlay.inserted, pinned.as_mut().map(|p| &mut p.0));
-				discard_offset_values(
+				discard_offstate_values(
 					overlay.offstate_inserted,
 					&mut self.offstate_gc,
 				);
@@ -650,7 +650,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 					self.branches.revert(branch_index);
 				}
 				discard_values(&mut self.values, overlay.inserted, None);
-				discard_offset_values(overlay.offstate_inserted, &mut self.offstate_gc);
+				discard_offstate_values(overlay.offstate_inserted, &mut self.offstate_gc);
 			}
 			commit
 		})
@@ -830,6 +830,7 @@ mod tests {
 	fn insert_canonicalize_one() {
 		let h1 = H256::random();
 		let mut db = make_db(&[1, 2]);
+		db.initialize_offstate(&[1, 2]);
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
 		let changeset = make_changeset(&[3, 4], &[2]);
 		let offstate_changeset = make_offstate_changeset(&[3, 4], &[2]);
@@ -864,6 +865,7 @@ mod tests {
 		let h1 = H256::random();
 		let h2 = H256::random();
 		let mut db = make_db(&[1, 2]);
+		db.initialize_offstate(&[1, 2]);
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
 		db.commit(&overlay.insert::<io::Error>(
 			&h1, 10, &H256::default(),
@@ -888,6 +890,7 @@ mod tests {
 		let h1 = H256::random();
 		let h2 = H256::random();
 		let mut db = make_db(&[1, 2]);
+		db.initialize_offstate(&[1, 2]);
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
 		db.commit(&overlay.insert::<io::Error>(
 			&h1, 10, &H256::default(),
@@ -916,6 +919,7 @@ mod tests {
 		let h1 = H256::random();
 		let h2 = H256::random();
 		let mut db = make_db(&[1, 2, 3, 4]);
+		db.initialize_offstate(&[1, 2, 3, 4]);
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
 		let changeset1 = make_changeset(&[5, 6], &[2]);
 		let changeset2 = make_changeset(&[7, 8], &[5, 3]);
@@ -1137,6 +1141,7 @@ mod tests {
 		let h1 = H256::random();
 		let h2 = H256::random();
 		let mut db = make_db(&[1, 2, 3, 4]);
+		db.initialize_offstate(&[1, 2, 3, 4]);
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
 		assert!(overlay.revert_one().is_none());
 		let changeset1 = make_changeset(&[5, 6], &[2]);
@@ -1218,21 +1223,15 @@ mod tests {
 		let h1_context = overlay.get_branch_range(&h_1).unwrap();
 	
 		let mut commit = CommitSet::default();
-		println!("b1{:?}", overlay.branches);
 		overlay.canonicalize::<io::Error>(&h_2, &mut commit).unwrap();
-		println!("b2{:?}", overlay.branches);
 		db.commit(&commit);
-		println!("b3{:?}", overlay.branches);
 		overlay.apply_pending();
 		assert!(contains(&overlay, 1));
 		// we cannot use contains_offstate because offstate pining is relying on
 		// asumption that pinned context memoïzed its branch state.
 		assert!(contains_offstate2(&overlay, 1, &h1_context));
 		assert!(!contains_offstate(&overlay, 1, &h_1));
-		println!("b4{:?}", overlay.branches);
-		println!("{:?}", overlay.offstate_values);
 		overlay.unpin(&h_1);
-		println!("{:?}", overlay.offstate_values);
 		assert!(!contains(&overlay, 1));
 		assert!(!contains_offstate2(&overlay, 1, &h1_context));
 	}

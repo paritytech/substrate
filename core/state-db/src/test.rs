@@ -120,6 +120,14 @@ pub fn make_commit(inserted: &[u64], deleted: &[u64]) -> CommitSet<H256> {
 	}
 }
 
+pub fn make_commit_both(inserted: &[u64], deleted: &[u64]) -> CommitSet<H256> {
+	CommitSet {
+		data: make_changeset(inserted, deleted),
+		meta: ChangeSet::default(),
+		offstate: make_offstate_changeset(inserted, deleted),
+	}
+}
+
 impl CommitSet<H256> {
 	pub fn initialize_offstate(&mut self, inserted: &[u64], deleted: &[u64]) {
 		let data = make_offstate_changeset(inserted, deleted);
@@ -136,13 +144,7 @@ pub fn make_db(inserted: &[u64]) -> TestDb {
 			})
 			.collect(),
 		meta: Default::default(),
-		offstate:  inserted
-			.iter()
-			.map(|v| (
-				H256::from_low_u64_be(*v).as_bytes().to_vec(),
-				H256::from_low_u64_be(*v).as_bytes().to_vec(),
-			))
-			.collect(),
+		offstate: Default::default(),
 	}
 }
 
