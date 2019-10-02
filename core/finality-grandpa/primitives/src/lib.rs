@@ -53,9 +53,11 @@ pub type AuthorityWeight = u64;
 pub type AuthorityIndex = u64;
 
 /// The identifier of a GRANDPA set.
+// TODO: Explain what a set is. A set of notes participating in the grandpa process?
 pub type SetId = u64;
 
 /// The round indicator.
+// TODO: Explain what a round is and how it relates to a set. A round in which each participant within the set votes?
 pub type RoundNumber = u64;
 
 /// A scheduled change of authority set.

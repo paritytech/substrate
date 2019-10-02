@@ -102,6 +102,7 @@ pub trait Network<Block: BlockT>: Clone + Send + 'static {
 	/// A stream of input messages for a topic.
 	type In: Stream<Item=network_gossip::TopicNotification,Error=()>;
 
+	// TODO: Why are the topics block hashes?
 	/// Get a stream of messages for a specific gossip topic.
 	fn messages_for(&self, topic: Block::Hash) -> Self::In;
 
@@ -147,6 +148,9 @@ impl<B, S, H> Network<B> for Arc<NetworkService<B, S, H>> where
 {
 	type In = NetworkStream;
 
+	// TODO: This is very complex. If I understood correctly we are passing a closure to the network in which we pass a
+	// stream back via a oneshot. The other end of the oneshot is embedded in the `NetworkStream`, which retrieves the
+	// actual stream from the oneshot and polls it from now on. Couldn't `gossip.messages_for` return a stream?
 	fn messages_for(&self, topic: B::Hash) -> Self::In {
 		let (tx, rx) = oneshot::channel();
 		self.with_gossip(move |gossip, _| {
@@ -335,6 +339,8 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 			|to, neighbor| self.neighbor_sender.send(to, neighbor),
 		);
 
+		// TODO: Why doesn't `validator.note_round` return the messages and we pass them into the `neighbor_sender`? Why
+		// the indirection through the closure?
 		self.validator.note_round(
 			round,
 			|to, neighbor| self.neighbor_sender.send(to, neighbor),
@@ -342,6 +348,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 	}
 
 	/// Get the round messages for a round in the current set ID. These are signature-checked.
+	// TODO: Why is the doc comment 'Get' when this function returns a Sink?
 	pub(crate) fn round_communication(
 		&self,
 		round: Round,
@@ -632,6 +639,8 @@ fn localized_payload<E: Encode>(round: RoundNumber, set_id: SetIdNumber, message
 
 /// Type-safe wrapper around a round number.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Encode, Decode)]
+// TODO: Given that this is not the round itself, but the round number, this should be called `RoundId` to be consistent
+// with `SetId`, right?
 pub struct Round(pub RoundNumber);
 
 /// Type-safe wrapper around a set ID.

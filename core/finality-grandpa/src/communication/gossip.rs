@@ -29,9 +29,9 @@
 //! an earlier voter set. It is extremely impolite to send messages
 //! from a future voter set. "future-set" messages can be dropped and ignored.
 //!
-//! If a peer is at round r, is impolite to send messages about r-2 or earlier and extremely
-//! impolite to send messages about r+1 or later. "future-round" messages can
-//!  be dropped and ignored.
+//! If a peer is at round r, it is impolite to send messages about r-2 or
+//! earlier and extremely impolite to send messages about r+1 or later.
+//! "future-round" messages can be dropped and ignored.
 //!
 //! It is impolite to send a neighbor packet which moves backwards in protocol state.
 //!
@@ -70,8 +70,8 @@
 //!
 //! The logic for issuing and tracking pending catch up requests is implemented
 //! in the `GossipValidator`. A catch up request is issued anytime we see a
-//! neighbor packet from a peer at a round `CATCH_UP_THRESHOLD` higher than at
-//! we are.
+//! neighbor packet from a peer at a round `CATCH_UP_THRESHOLD` higher than the
+//! one we are at.
 //!
 //! ## Expiration
 //!
@@ -80,7 +80,7 @@
 //!
 //! ## Message Validation
 //!
-//! We only send polite messages to peers,
+//! We only send polite messages to peers.
 
 use sr_primitives::traits::{NumberFor, Block as BlockT, Zero};
 use network::consensus_gossip::{self as network_gossip, MessageIntent, ValidatorContext};
@@ -184,6 +184,7 @@ impl<N: Ord> View<N> {
 const KEEP_RECENT_ROUNDS: usize = 3;
 
 /// Tracks topics we keep messages for.
+// TODO: What is a topic? What is a KeepTopic? Maybe more of a TopicsToKeep?
 struct KeepTopics<B: BlockT> {
 	current_set: SetId,
 	rounds: VecDeque<(Round, SetId)>,
@@ -266,6 +267,8 @@ impl<Block: BlockT> From<NeighborPacket<NumberFor<Block>>> for GossipMessage<Blo
 
 /// Network level message with topic information.
 #[derive(Debug, Encode, Decode)]
+// TODO: Are both *prevote* and *precommit* *vote* messages? If so, this would need to be called
+// PrevoteOrPrecommitMessage, right?
 pub(super) struct VoteOrPrecommitMessage<Block: BlockT> {
 	/// The round this message is from.
 	pub(super) round: Round,
@@ -337,9 +340,9 @@ pub(super) struct FullCatchUpMessage<Block: BlockT> {
 /// peer.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) enum Misbehavior {
-	// invalid neighbor message, considering the last one.
+	// Invalid neighbor message, considering the last one.
 	InvalidViewChange,
-	// could not decode neighbor message. bytes-length of the packet.
+	// Could not decode neighbor message. Bytes-length of the packet.
 	UndecodablePacket(i32),
 	// Bad catch up message (invalid signatures).
 	BadCatchUpMessage {
@@ -398,7 +401,7 @@ impl<N> PeerInfo<N> {
 	}
 }
 
-/// The peers we're connected do in gossip.
+/// The peers we're connected to in gossip.
 struct Peers<N> {
 	inner: HashMap<PeerId, PeerInfo<N>>,
 }
@@ -471,6 +474,7 @@ impl<N: Ord> Peers<N> {
 }
 
 #[derive(Debug, PartialEq)]
+// TODO: Why not use the new-type pattern for i32 (cost)?
 pub(super) enum Action<H>  {
 	// repropagate under given topic, to the given peers, applying cost/benefit to originator.
 	Keep(H, i32),
@@ -497,6 +501,8 @@ enum PendingCatchUp {
 	},
 }
 
+/// The inner lock-protected struct of a GossipValidator, enabling GossipValidator itself to be std::marker::Sync.
+// TODO: Why does GossipValidator need to be Sync? Does Grandpa logic need to be parallel?
 struct Inner<Block: BlockT> {
 	local_view: Option<View<NumberFor<Block>>>,
 	peers: Peers<NumberFor<Block>>,
@@ -921,7 +927,9 @@ impl<Block: BlockT> Inner<Block> {
 }
 
 /// A validator for GRANDPA gossip messages.
+// TODO: The name `GossipValidator` seems confusing, as it does more than validating (e.g. constructing new messages).
 pub(super) struct GossipValidator<Block: BlockT> {
+	// TODO: Why does all of core/grandpa need to be Sync, hence the RwLock?
 	inner: parking_lot::RwLock<Inner<Block>>,
 	set_state: environment::SharedVoterSetState<Block>,
 	report_sender: mpsc::UnboundedSender<PeerReport>,
@@ -986,6 +994,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 		let _ = self.report_sender.unbounded_send(PeerReport { who, cost_benefit });
 	}
 
+	// TODO: @Max this is the place where we could track voted block hashes for the current round.
 	pub(super) fn do_validate(&self, who: &PeerId, mut data: &[u8])
 		-> (Action<Block::Hash>, Vec<Block::Hash>, Option<GossipMessage<Block>>)
 	{

@@ -458,6 +458,7 @@ impl<B: BlockT> ChainSync<B> {
 		})
 	}
 
+	// TODO: We might want a way to extend the given set of nodes to sync from, not overwrite it.
 	/// Request syncing for the given block from given set of peers.
 	// The implementation is similar to on_block_announce with unknown parent hash.
 	pub fn set_sync_fork_request(&mut self, peers: Vec<PeerId>, hash: &B::Hash, number: NumberFor<B>) {
@@ -1325,4 +1326,3 @@ fn explicit_sync_request<B: BlockT>(
 	}
 	None
 }
-
