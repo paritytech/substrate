@@ -20,7 +20,7 @@ See also https://www.parity.io/what-is-substrate/.
 
 Substrate is still an early stage project, and while it has already been used as the basis of major projects like Polkadot, using it is still a significant undertaking. In particular, you should have a good knowledge of blockchain concepts and basic cryptography. Terminology like header, block, client, hash, transaction and signature should be familiar. At present you will need a working knowledge of Rust to be able to do anything interesting (though eventually, we aim for this not to be the case).
 
-Substrate is designed to be used in one of three ways:
+Substrate is designed for use in one of three ways:
 
 **1. Trivial**: By running the Substrate binary `substrate` and configuring it with a genesis block that includes the current demonstration runtime. In this case, you just build Substrate, configure a JSON file, and launch your own blockchain. This affords you the least amount of customizability, primarily allowing you to change the genesis parameters of the various included runtime modules such as balances, staking, block-period, fees, and governance.
 
