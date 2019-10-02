@@ -208,7 +208,6 @@ macro_rules! import_blocks {
 
 /// Revert the chain some number of blocks.
 #[macro_export]
-/// Revert a chain
 macro_rules! revert_chain {
 ($client:ident, $blocks:ident) => {{
 	let reverted = $client.revert($blocks)?;
