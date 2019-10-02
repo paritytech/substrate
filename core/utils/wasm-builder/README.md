@@ -9,7 +9,6 @@ A project that should be compiled as a WASM binary needs to:
 
 1. Add a `build.rs` file.
 2. Add `substrate-wasm-builder-runner` as dependency into `build-dependencies`.
-3. Add a feature called `no-std`.
 
 The `build.rs` file needs to contain the following code:
 
@@ -25,8 +24,6 @@ fn main() {
 	);
 }
 ```
-
-The `no-std` feature will be enabled by WASM builder while compiling your project to WASM.
 
 As the final step, you need to add the following to your project:
 

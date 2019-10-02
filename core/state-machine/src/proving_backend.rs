@@ -139,6 +139,12 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
 	}
 }
 
+impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> std::fmt::Debug for ProvingBackend<'a, S, H> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "ProvingBackend")
+	}
+}
+
 impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 	where
 		S: 'a + TrieBackendStorage<H>,

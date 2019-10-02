@@ -37,7 +37,7 @@ pub struct ChangeEntry<T: Trait> {
 	/// If Some(_), then the account balance is modified to the value. If None and `reset` is false,
 	/// the balance unmodified. If None and `reset` is true, the balance is reset to 0.
 	balance: Option<BalanceOf<T>>,
-	/// If Some(_), then a contract is created with the code hash. If None and `reset` is false,
+	/// If Some(_), then a contract is instantiated with the code hash. If None and `reset` is false,
 	/// then the contract code is unmodified. If None and `reset` is true, the contract is deleted.
 	code_hash: Option<CodeHash<T>>,
 	/// If Some(_), then the rent allowance is set to the value. If None and `reset` is false, then
@@ -189,7 +189,7 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 							last_write: None,
 						}
 					}
-					// New contract is being created.
+					// New contract is being instantiated.
 					(_, None, Some(code_hash)) => {
 						AliveContractInfo::<T> {
 							code_hash,
@@ -200,7 +200,7 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 							last_write: None,
 						}
 					}
-					// There is no existing at the address nor a new one to be created.
+					// There is no existing at the address nor a new one to be instantiated.
 					(_, None, None) => continue,
 				};
 
@@ -278,7 +278,7 @@ impl<'a, T: Trait> OverlayAccountDb<'a, T> {
 	}
 
 	/// Return an error if contract already exists (either if it is alive or tombstone)
-	pub fn create_contract(
+	pub fn instantiate_contract(
 		&mut self,
 		account: &T::AccountId,
 		code_hash: CodeHash<T>,

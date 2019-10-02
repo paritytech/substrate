@@ -36,11 +36,7 @@ pub fn check() -> Option<&'static str> {
 		return Some("`wasm-gc` not installed, please install it!")
 	}
 
-	if !check_wasm_toolchain_installed() {
-		return Some("Rust WASM toolchain not installed, please install it!")
-	}
-
-	None
+	check_wasm_toolchain_installed()
 }
 
 fn check_nightly_installed() -> bool {
@@ -48,7 +44,7 @@ fn check_nightly_installed() -> bool {
 	command.is_nightly()
 }
 
-fn check_wasm_toolchain_installed() -> bool {
+fn check_wasm_toolchain_installed() -> Option<&'static str> {
 	let temp = tempdir().expect("Creating temp dir does not fail; qed");
 	fs::create_dir_all(temp.path().join("src")).expect("Creating src dir does not fail; qed");
 
@@ -72,13 +68,24 @@ fn check_wasm_toolchain_installed() -> bool {
 	fs::write(&test_file, "pub fn test() {}")
 		.expect("Writing to the test file does not fail; qed");
 
+	let err_msg = "Rust WASM toolchain not installed, please install it!";
 	let manifest_path = manifest_path.display().to_string();
 	crate::get_nightly_cargo()
 		.command()
 		.args(&["build", "--target=wasm32-unknown-unknown", "--manifest-path", &manifest_path])
-		.stdout(Stdio::null())
-		.stderr(Stdio::null())
-		.status()
-		.map(|s| s.success())
-		.unwrap_or(false)
+		.output()
+		.map_err(|_| err_msg)
+		.and_then(|s|
+			if s.status.success() {
+				Ok(())
+			} else {
+				match String::from_utf8(s.stderr) {
+					Ok(ref err) if err.contains("linker `rust-lld` not found") => {
+						Err("`rust-lld` not found, please install it!")
+					},
+					_ => Err(err_msg)
+				}
+			}
+		)
+		.err()
 }

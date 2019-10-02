@@ -25,7 +25,14 @@ pub mod system;
 use rstd::{prelude::*, marker::PhantomData};
 use codec::{Encode, Decode, Input, Error};
 
-use primitives::{Blake2Hasher, OpaqueMetadata};
+use primitives::{
+	Blake2Hasher,
+	OpaqueMetadata,
+	testing::{
+		ED25519,
+		SR25519,
+	}
+};
 use app_crypto::{ed25519, sr25519, RuntimeAppPublic};
 pub use app_crypto;
 use trie_db::{TrieMut, Trie};
@@ -47,7 +54,7 @@ use sr_primitives::{
 	},
 };
 use runtime_version::RuntimeVersion;
-pub use primitives::{hash::H256, crypto::key_types};
+pub use primitives::{hash::H256};
 #[cfg(any(feature = "std", test))]
 use runtime_version::NativeVersion;
 use runtime_support::{impl_outer_origin, parameter_types};
@@ -446,9 +453,9 @@ fn code_using_trie() -> u64 {
 
 impl_opaque_keys! {
 	pub struct SessionKeys {
-		#[id(key_types::ED25519)]
+		#[id(ED25519)]
 		pub ed25519: ed25519::AppPublic,
-		#[id(key_types::SR25519)]
+		#[id(SR25519)]
 		pub sr25519: sr25519::AppPublic,
 	}
 }
@@ -612,25 +619,15 @@ cfg_if! {
 			}
 
 			impl babe_primitives::BabeApi<Block> for Runtime {
-				fn startup_data() -> babe_primitives::BabeConfiguration {
+				fn configuration() -> babe_primitives::BabeConfiguration {
 					babe_primitives::BabeConfiguration {
-						median_required_blocks: 0,
-						slot_duration: 3000,
+						slot_duration: 1000,
+						epoch_length: EpochDuration::get(),
 						c: (3, 10),
-					}
-				}
-
-				fn epoch() -> babe_primitives::Epoch {
-					let authorities = system::authorities();
-					let authorities: Vec<_> = authorities.into_iter().map(|x|(x, 1)).collect();
-
-					babe_primitives::Epoch {
-						start_slot: <srml_babe::Module<Runtime>>::epoch_start_slot(),
-						authorities,
+						genesis_authorities: system::authorities()
+							.into_iter().map(|x|(x, 1)).collect(),
 						randomness: <srml_babe::Module<Runtime>>::randomness(),
-						epoch_index: <srml_babe::Module<Runtime>>::epoch_index(),
-						duration: EpochDuration::get(),
-						secondary_slots: <srml_babe::Module<Runtime>>::secondary_slots().0,
+						secondary_slots: true,
 					}
 				}
 			}
@@ -832,25 +829,15 @@ cfg_if! {
 			}
 
 			impl babe_primitives::BabeApi<Block> for Runtime {
-				fn startup_data() -> babe_primitives::BabeConfiguration {
+				fn configuration() -> babe_primitives::BabeConfiguration {
 					babe_primitives::BabeConfiguration {
-						median_required_blocks: 0,
 						slot_duration: 1000,
+						epoch_length: EpochDuration::get(),
 						c: (3, 10),
-					}
-				}
-
-				fn epoch() -> babe_primitives::Epoch {
-					let authorities = system::authorities();
-					let authorities: Vec<_> = authorities.into_iter().map(|x|(x, 1)).collect();
-
-					babe_primitives::Epoch {
-						start_slot: <srml_babe::Module<Runtime>>::epoch_start_slot(),
-						authorities,
+						genesis_authorities: system::authorities()
+							.into_iter().map(|x|(x, 1)).collect(),
 						randomness: <srml_babe::Module<Runtime>>::randomness(),
-						epoch_index: <srml_babe::Module<Runtime>>::epoch_index(),
-						duration: EpochDuration::get(),
-						secondary_slots: <srml_babe::Module<Runtime>>::secondary_slots().0,
+						secondary_slots: true,
 					}
 				}
 			}

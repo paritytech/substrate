@@ -130,7 +130,7 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use support::{StorageValue, StorageMap, Parameter, decl_module, decl_event, decl_storage, ensure};
+use support::{Parameter, decl_module, decl_event, decl_storage, ensure};
 use sr_primitives::traits::{Member, SimpleArithmetic, Zero, StaticLookup};
 use system::ensure_signed;
 use sr_primitives::traits::One;
@@ -159,7 +159,7 @@ decl_module! {
 			let id = Self::next_asset_id();
 			<NextAssetId<T>>::mutate(|id| *id += One::one());
 
-			<Balances<T>>::insert((id, origin.clone()), total);
+			<Balances<T>>::insert((id, &origin), total);
 			<TotalSupply<T>>::insert(id, total);
 
 			Self::deposit_event(RawEvent::Issued(id, origin, total));
@@ -186,7 +186,7 @@ decl_module! {
 		/// Destroy any assets of `id` owned by `origin`.
 		fn destroy(origin, #[compact] id: T::AssetId) {
 			let origin = ensure_signed(origin)?;
-			let balance = <Balances<T>>::take((id, origin.clone()));
+			let balance = <Balances<T>>::take((id, &origin));
 			ensure!(!balance.is_zero(), "origin balance should be non-zero");
 
 			<TotalSupply<T>>::mutate(id, |total_supply| *total_supply -= balance);

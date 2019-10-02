@@ -35,6 +35,7 @@ use sr_primitives::traits::{Block as BlockT, DigestFor};
 use futures::prelude::*;
 pub use inherents::InherentData;
 
+pub mod block_validation;
 pub mod offline_tracker;
 pub mod error;
 pub mod block_import;
@@ -47,10 +48,25 @@ const MAX_BLOCK_SIZE: usize = 4 * 1024 * 1024 + 512;
 
 pub use self::error::Error;
 pub use block_import::{
-	BlockImport, BlockOrigin, ForkChoiceStrategy, ImportedAux, BlockImportParams, ImportResult,
+	BlockImport, BlockOrigin, ForkChoiceStrategy, ImportedAux, BlockImportParams, BlockCheckParams, ImportResult,
 	JustificationImport, FinalityProofImport,
 };
 pub use select_chain::SelectChain;
+
+/// Block status.
+#[derive(Debug, PartialEq, Eq)]
+pub enum BlockStatus {
+	/// Added to the import queue.
+	Queued,
+	/// Already in the blockchain and the state is available.
+	InChainWithState,
+	/// In the blockchain, but the state is not available.
+	InChainPruned,
+	/// Block or parent is known to be bad.
+	KnownBad,
+	/// Not in the queue or the blockchain.
+	Unknown,
+}
 
 /// Environment producer for a Consensus instance. Creates proposer instance and communication streams.
 pub trait Environment<B: BlockT> {
@@ -116,16 +132,4 @@ where T: ?Sized, for<'r> &'r T: SyncOracle
 	fn is_offline(&mut self) -> bool {
 		<&T>::is_offline(&mut &**self)
 	}
-}
-
-/// A list of all well known keys in the cache.
-pub mod well_known_cache_keys {
-	/// The type representing cache keys.
-	pub type Id = [u8; 4];
-
-	/// A list of authorities.
-	pub const AUTHORITIES: Id = *b"auth";
-
-	/// Current Epoch data.
-	pub const EPOCH: Id = *b"epch";
 }

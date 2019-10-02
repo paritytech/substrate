@@ -107,6 +107,15 @@ pub enum Direction {
 	Descending = 1,
 }
 
+/// Block state in the chain.
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Encode, Decode)]
+pub enum BlockState {
+	/// Block is not part of the best chain.
+	Normal,
+	/// Latest best block.
+	Best,
+}
+
 /// Remote call response.
 #[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 pub struct RemoteCallResponse {
@@ -127,12 +136,13 @@ pub struct RemoteReadResponse {
 
 /// Generic types.
 pub mod generic {
-	use codec::{Encode, Decode};
+	use codec::{Encode, Decode, Input, Output};
 	use sr_primitives::Justification;
 	use crate::config::Roles;
 	use super::{
 		RemoteReadResponse, Transactions, Direction,
 		RequestId, BlockAttributes, RemoteCallResponse, ConsensusEngineId,
+		BlockState,
 	};
 	/// Consensus is mostly opaque to us
 	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
@@ -257,10 +267,42 @@ pub mod generic {
 	}
 
 	/// Announce a new complete relay chain block on the network.
-	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
+	#[derive(Debug, PartialEq, Eq, Clone)]
 	pub struct BlockAnnounce<H> {
 		/// New block header.
 		pub header: H,
+		/// Block state. TODO: Remove `Option` and custom encoding when v4 becomes common.
+		pub state: Option<BlockState>,
+		/// Data associated with this block announcement, e.g. a candidate message.
+		pub data: Option<Vec<u8>>,
+	}
+
+	// Custom Encode/Decode impl to maintain backwards compatibility with v3.
+	// This assumes that the packet contains nothing but the announcement message.
+	// TODO: Get rid of it once protocol v4 is common.
+	impl<H: Encode> Encode for BlockAnnounce<H> {
+		fn encode_to<T: Output>(&self, dest: &mut T) {
+			self.header.encode_to(dest);
+			if let Some(state) = &self.state {
+				state.encode_to(dest);
+			}
+			if let Some(data) = &self.data {
+				data.encode_to(dest)
+			}
+		}
+	}
+
+	impl<H: Decode> Decode for BlockAnnounce<H> {
+		fn decode<I: Input>(input: &mut I) -> Result<Self, codec::Error> {
+			let header = H::decode(input)?;
+			let state = BlockState::decode(input).ok();
+			let data = Vec::decode(input).ok();
+			Ok(BlockAnnounce {
+				header,
+				state,
+				data,
+			})
+		}
 	}
 
 	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
@@ -284,7 +326,7 @@ pub mod generic {
 		/// Block at which to perform call.
 		pub block: H,
 		/// Storage key.
-		pub key: Vec<u8>,
+		pub keys: Vec<Vec<u8>>,
 	}
 
 	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
@@ -297,7 +339,7 @@ pub mod generic {
 		/// Child Storage key.
 		pub storage_key: Vec<u8>,
 		/// Storage key.
-		pub key: Vec<u8>,
+		pub keys: Vec<Vec<u8>>,
 	}
 
 	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]

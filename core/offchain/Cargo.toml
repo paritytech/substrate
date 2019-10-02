@@ -11,8 +11,8 @@ bytes = "0.4"
 client = { package = "substrate-client", path = "../../core/client" }
 fnv = "1.0"
 futures01 = { package = "futures", version = "0.1" }
-futures-preview = "=0.3.0-alpha.17"
-futures-timer = "0.2.1"
+futures-preview = "0.3.0-alpha.18"
+futures-timer = "0.3"
 hyper = "0.12.33"
 hyper-tls = "0.3.2"
 log = "0.4"
