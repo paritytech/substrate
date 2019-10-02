@@ -3854,7 +3854,6 @@ dependencies = [
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc_version 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-std 2.0.0",
- "substrate-offchain 2.0.0",
  "substrate-primitives 2.0.0",
  "substrate-state-machine 2.0.0",
  "substrate-trie 2.0.0",
@@ -3878,6 +3877,7 @@ dependencies = [
  "sr-io 2.0.0",
  "sr-std 2.0.0",
  "substrate-application-crypto 2.0.0",
+ "substrate-offchain 2.0.0",
  "substrate-primitives 2.0.0",
 ]
 
