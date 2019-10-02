@@ -58,15 +58,28 @@ arg_enum! {
 /// Shared parameters used by all `CoreParams`.
 #[derive(Debug, StructOpt, Clone)]
 pub struct SharedParams {
-	/// Specify the chain specification (one of dev, local or staging).
+	/// Specify the chain specification
+	///
+	/// Can be any of dev, local or staging or a path to a local json definition
 	#[structopt(long = "chain", value_name = "CHAIN_SPEC")]
 	pub chain: Option<String>,
 
-	/// Specify the development chain.
+	/// Specify to run in development setup.
+	///
+	/// It allows the chain to author even if no peers are present.
+	/// Unless any set otherwise, it also implies:
+	///   --chain dev
+	///   --alice
+	///   --base-path ./.local
+	///   --validator
+	///   --no-mdns
+	///   --rpc-cors *
 	#[structopt(long = "dev")]
 	pub dev: bool,
 
-	/// Specify custom base path.
+	/// Specify the base path for the database, keystore and other state
+    ///
+	/// Defaults to the operating systems default location for apps.
 	#[structopt(long = "base-path", short = "d", value_name = "PATH", parse(from_os_str))]
 	pub base_path: Option<PathBuf>,
 
