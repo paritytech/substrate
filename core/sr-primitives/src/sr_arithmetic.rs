@@ -20,7 +20,7 @@
 use crate::serde::{Serialize, Deserialize};
 
 use rstd::{
-	ops, cell, prelude::*, cmp::Ordering,
+	ops, prelude::*, cmp::Ordering,
 	convert::{TryFrom, TryInto},
 };
 use codec::{Encode, Decode};
@@ -670,13 +670,15 @@ impl CheckedAdd for Fixed64 {
 }
 
 pub mod big_num {
-	use super::{Zero, One, cell::RefCell};
-	use rstd::convert::TryFrom;
+	use super::{Zero, One};
+	use rstd::{cell::RefCell, convert::TryFrom, cmp::Ordering};
+
 
 	// A sensible value for this would be half of the word size of the host machine. Since the
 	// runtime is compiled to 32bit webassembly, using 32 and 64 for single and double respectively
 	// should yield the most performance.
 	/// A representation of a single limb.
+	/// TODO
 	pub type Single = u32;
 	/// A representation of a double limb.
 	pub type Double = u64;
@@ -717,7 +719,7 @@ pub mod big_num {
 		let b: Double = b.into();
 		let q = a / b;
 		let r = a % b;
-		// Both can never overflow. TODO: argue why (quite simple)
+		// both conversions are trivially safe.
 		(q, r as Single)
 	}
 
