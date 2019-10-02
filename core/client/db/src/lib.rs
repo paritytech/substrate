@@ -2222,6 +2222,20 @@ mod tests {
 		}
 
 		{
+			let lca = lowest_common_ancestor(&blockchain, a2, a3).unwrap();
+
+			assert_eq!(lca.hash, a2);
+			assert_eq!(lca.number, 2);
+		}
+
+		{
+			let lca = lowest_common_ancestor(&blockchain, a2, a1).unwrap();
+
+			assert_eq!(lca.hash, a1);
+			assert_eq!(lca.number, 1);
+		}
+
+		{
 			let lca = lowest_common_ancestor(&blockchain, a2, a2).unwrap();
 
 			assert_eq!(lca.hash, a2);
