@@ -58,8 +58,8 @@ use codec::Encode;
 use system::Trait;
 
 fn block_number_to_index<T: Trait>(block_number: T::BlockNumber) -> usize {
-	// '- 2' because on_initialize is called on the first block after genesis - block 2
-	let index = (block_number - 2.into()) % 81.into();
+	// on_initialize is called on the first block after genesis
+	let index = (block_number - 1.into()) % 81.into();
 	index.try_into().ok().expect("Something % 81 is always smaller than usize; qed")
 }
 
@@ -205,15 +205,15 @@ mod tests {
 
 	#[test]
 	fn test_block_number_to_index() {
-		for i in 2 .. 1000 {
-			assert_eq!((i - 2) as usize % 81, block_number_to_index::<Test>(i));
+		for i in 1 .. 1000 {
+			assert_eq!((i - 1) as usize % 81, block_number_to_index::<Test>(i));
 		}
 	}
 
 	fn setup_blocks(blocks: u64) {
 		let mut parent_hash = System::parent_hash();
 
-		for i in 2 .. (blocks + 2) {
+		for i in 1 .. (blocks + 1) {
 			System::initialize(&i, &parent_hash, &Default::default(), &Default::default());
 			Randomness::on_initialize(i);
 
@@ -272,7 +272,7 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			setup_blocks(162);
 
-			assert_eq!(System::block_number(), 163);
+			assert_eq!(System::block_number(), 162);
 			assert_eq!(Randomness::random_seed(), Randomness::random_seed());
 			assert_ne!(Randomness::random(b"random_1"), Randomness::random(b"random_2"));
 
