@@ -235,7 +235,7 @@ pub use serde::{Serialize, Deserialize};
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use codec::Codec;
+	use codec::{Codec, EncodeLike};
 	use runtime_io::with_externalities;
 	use primitives::Blake2Hasher;
 	pub use srml_metadata::{
@@ -245,7 +245,7 @@ mod tests {
 	pub use rstd::marker::PhantomData;
 
 	pub trait Trait {
-		type BlockNumber: Codec + Default;
+		type BlockNumber: Codec + EncodeLike + Default;
 		type Origin;
 	}
 
