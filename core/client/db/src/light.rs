@@ -201,14 +201,13 @@ impl<Block: BlockT> HeaderMetadata<Block> for LightStorage<Block> {
 	fn header_metadata(&self, hash: Block::Hash) -> Result<CachedHeaderMetadata<Block>, Self::Error> {
 		self.header_metadata_cache.header_metadata(hash).or_else(|_| {
 			self.header(BlockId::hash(hash))?.map(|header| {
-					let header_metadata = CachedHeaderMetadata::from(&header);
-					self.header_metadata_cache.insert_header_metadata(
-						header_metadata.hash,
-						header_metadata.clone(),
-					);
-					header_metadata
-				}
-			).ok_or(ClientError::UnknownBlock("header not found in db".to_owned()))
+				let header_metadata = CachedHeaderMetadata::from(&header);
+				self.header_metadata_cache.insert_header_metadata(
+					header_metadata.hash,
+					header_metadata.clone(),
+				);
+				header_metadata
+			}).ok_or(ClientError::UnknownBlock("header not found in db".to_owned()))
 		})
 	}
 
