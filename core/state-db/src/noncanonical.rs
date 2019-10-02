@@ -704,6 +704,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 #[cfg(test)]
 mod tests {
 	use std::io;
+	use std::collections::BTreeMap;
 	use primitives::H256;
 	use super::{NonCanonicalOverlay, to_journal_key};
 	use crate::{ChangeSet, CommitSet, OffstateKey};
@@ -1063,7 +1064,11 @@ mod tests {
 		// check if restoration from journal results in the same tree
 		let overlay2 = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
 		assert_eq!(overlay.levels, overlay2.levels);
-		assert_eq!(overlay.parents, overlay2.parents);
+		let parents_no_iter: BTreeMap<_, _> = overlay.parents.iter()
+			.map(|(k, (v, _))| (k.clone(), v.clone())).collect();
+		let parents_no_iter2: BTreeMap<_, _> = overlay2.parents.iter()
+			.map(|(k, (v, _))| (k.clone(), v.clone())).collect();
+		assert_eq!(parents_no_iter, parents_no_iter2);
 		assert_eq!(overlay.last_canonicalized, overlay2.last_canonicalized);
 
 		// canonicalize 1. 2 and all its children should be discarded

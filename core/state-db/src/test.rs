@@ -59,9 +59,12 @@ impl NodeDb for TestDb {
 impl TestDb {
 	pub fn commit(&mut self, commit: &CommitSet<H256>) {
 		self.data.extend(commit.data.inserted.iter().cloned());
-		self.meta.extend(commit.meta.inserted.iter().cloned());
 		for k in commit.data.deleted.iter() {
 			self.data.remove(k);
+		}
+		self.offstate.extend(commit.offstate.inserted.iter().cloned());
+		for k in commit.offstate.deleted.iter() {
+			self.offstate.remove(k);
 		}
 		self.meta.extend(commit.meta.inserted.iter().cloned());
 		for k in commit.meta.deleted.iter() {
