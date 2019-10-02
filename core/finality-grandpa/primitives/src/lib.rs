@@ -25,7 +25,6 @@ extern crate alloc;
 use serde::Serialize;
 use codec::{Encode, Decode, Codec};
 use sr_primitives::{ConsensusEngineId, RuntimeDebug};
-use client::decl_runtime_apis;
 use rstd::vec::Vec;
 
 mod app {
@@ -160,25 +159,3 @@ impl<N: Codec> ConsensusLog<N> {
 pub const PENDING_CHANGE_CALL: &str = "grandpa_pending_change";
 /// WASM function call to get current GRANDPA authorities.
 pub const AUTHORITIES_CALL: &str = "grandpa_authorities";
-
-decl_runtime_apis! {
-	/// APIs for integrating the GRANDPA finality gadget into runtimes.
-	/// This should be implemented on the runtime side.
-	///
-	/// This is primarily used for negotiating authority-set changes for the
-	/// gadget. GRANDPA uses a signaling model of changing authority sets:
-	/// changes should be signaled with a delay of N blocks, and then automatically
-	/// applied in the runtime after those N blocks have passed.
-	///
-	/// The consensus protocol will coordinate the handoff externally.
-	#[api_version(2)]
-	pub trait GrandpaApi {
-		/// Get the current GRANDPA authorities and weights. This should not change except
-		/// for when changes are scheduled and the corresponding delay has passed.
-		///
-		/// When called at block B, it will return the set of authorities that should be
-		/// used to finalize descendants of this block (B+1, B+2, ...). The block B itself
-		/// is finalized by the authorities from block B-1.
-		fn grandpa_authorities() -> AuthorityList;
-	}
-}

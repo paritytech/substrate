@@ -21,9 +21,6 @@
 //!
 //! In the future, it will also handle misbehavior reports, and on-chain
 //! finality notifications.
-//!
-//! For full integration with GRANDPA, the `GrandpaApi` should be implemented.
-//! The necessary items are re-exported via the `fg_primitives` crate.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 

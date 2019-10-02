@@ -29,7 +29,6 @@ use node_primitives::{
 	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index,
 	Moment, Signature,
 };
-use grandpa::fg_primitives;
 use client::{
 	block_builder::api::{self as block_builder_api, InherentData, CheckInherentsResult},
 	runtime_api as client_api, impl_runtime_apis
@@ -46,7 +45,7 @@ use version::RuntimeVersion;
 #[cfg(any(feature = "std", test))]
 use version::NativeVersion;
 use primitives::OpaqueMetadata;
-use grandpa::{AuthorityId as GrandpaId, AuthorityWeight as GrandpaWeight};
+use grandpa::AuthorityId as GrandpaId;
 use im_online::sr25519::{AuthorityId as ImOnlineId};
 use transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
 use contracts_rpc_runtime_api::ContractExecResult;
@@ -608,12 +607,6 @@ impl_runtime_apis! {
 	impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
 		fn offchain_worker(number: NumberFor<Block>) {
 			Executive::offchain_worker(number)
-		}
-	}
-
-	impl fg_primitives::GrandpaApi<Block> for Runtime {
-		fn grandpa_authorities() -> Vec<(GrandpaId, GrandpaWeight)> {
-			Grandpa::grandpa_authorities()
 		}
 	}
 
