@@ -28,7 +28,7 @@ pub fn log2(p: u32, q: u32) -> u32 {
 		if k == 0 {
 			(_2_div_ln_2 as u128 * (y_num as u128).pow(1) / (y_den as u128).pow(1))
 				.try_into().unwrap()
-	 	} else {
+		} else {
 			let mut res = _2_div_ln_2 as u128 * (y_num as u128).pow(3) / (y_den as u128).pow(3);
 			for _ in 1..k {
 				res = res * (y_num as u128).pow(2) / (y_den as u128).pow(2);

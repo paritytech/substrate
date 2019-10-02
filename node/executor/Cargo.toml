@@ -29,7 +29,7 @@ treasury = { package = "srml-treasury", path = "../../srml/treasury" }
 contracts = { package = "srml-contracts", path = "../../srml/contracts" }
 grandpa = { package = "srml-grandpa", path = "../../srml/grandpa" }
 indices = { package = "srml-indices", path = "../../srml/indices" }
-wabt = "~0.7.4"
+wabt = "0.9.2"
 
 [features]
 benchmarks = []

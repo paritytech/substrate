@@ -11,10 +11,10 @@ jsonrpc-core-client = "13.2.0"
 jsonrpc-derive = "13.2.0"
 jsonrpc-pubsub = "13.2.0"
 keyring = { package = "substrate-keyring", path = "../../core/keyring" }
-log = "0.4"
+log = "0.4.8"
 node-primitives = { path = "../primitives" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
-serde = { version = "1.0", features = ["derive"] }
+serde = { version = "1.0.101", features = ["derive"] }
 sr-primitives = { path = "../../core/sr-primitives" }
 substrate-primitives = { path = "../../core/primitives" }
 rpc-primitives = { package = "substrate-rpc-primitives", path = "../../core/rpc/primitives" }
@@ -23,5 +23,5 @@ transaction_pool = { package = "substrate-transaction-pool", path = "../../core/
 [dev-dependencies]
 node-testing = { path = "../testing" }
 node-runtime = { path = "../runtime" }
-env_logger = "0.6"
-futures03 = { package = "futures-preview", version = "=0.3.0-alpha.18" }
+env_logger = "0.6.2"
+futures03 = { package = "futures-preview", version = "=0.3.0-alpha.19" }
