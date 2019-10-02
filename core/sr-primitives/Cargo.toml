@@ -22,6 +22,7 @@ impl-trait-for-tuples = "0.1.2"
 serde_json = "1.0.40"
 primitive-types = "0.5.1"
 rand = "0.7.2"
+substrate-offchain = { path = "../offchain" }
 
 [features]
 default = ["std"]
