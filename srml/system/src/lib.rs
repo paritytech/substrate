@@ -106,6 +106,7 @@ use sr_primitives::{
 		self, CheckEqual, SimpleArithmetic, Zero, SignedExtension, Convert, Lookup, LookupError,
 		SimpleBitOps, Hash, Member, MaybeDisplay, EnsureOrigin, SaturatedConversion,
 		MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup, One, Bounded,
+		Dispatchable
 	},
 };
 
@@ -159,7 +160,7 @@ pub trait Trait: 'static + Eq + Clone {
 	type Origin: Into<Result<RawOrigin<Self::AccountId>, Self::Origin>> + From<RawOrigin<Self::AccountId>>;
 
 	/// The aggregated `Call` type.
-	type Call;
+	type Call: Parameter + Dispatchable<Origin=Self::Origin>;
 
 	/// Account index (aka nonce) type. This stores the number of previous transactions associated with a sender
 	/// account.
@@ -242,27 +243,27 @@ decl_module! {
 		}
 
 		/// Make some on-chain remark.
-		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
+		#[weight = SimpleDispatchInfo::FreeNormal]
 		fn remark(origin, _remark: Vec<u8>) {
 			ensure_signed(origin)?;
 		}
 
 		/// Set the number of pages in the WebAssembly environment's heap.
-		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
+		#[weight = SimpleDispatchInfo::FreeOperational]
 		fn set_heap_pages(origin, pages: u64) {
 			ensure_root(origin)?;
 			storage::unhashed::put_raw(well_known_keys::HEAP_PAGES, &pages.encode());
 		}
 
 		/// Set the new code.
-		#[weight = SimpleDispatchInfo::FixedOperational(200_000)]
+		#[weight = SimpleDispatchInfo::FreeOperational]
 		pub fn set_code(origin, new: Vec<u8>) {
 			ensure_root(origin)?;
 			storage::unhashed::put_raw(well_known_keys::CODE, &new);
 		}
 
 		/// Set some items of storage.
-		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
+		#[weight = SimpleDispatchInfo::FreeOperational]
 		fn set_storage(origin, items: Vec<KeyValue>) {
 			ensure_root(origin)?;
 			for i in &items {
@@ -270,8 +271,17 @@ decl_module! {
 			}
 		}
 
+		/// Set some items of storage.
+		#[weight = SimpleDispatchInfo::FreeOperational]
+		fn batch(origin, calls: Vec<T::Call>) {
+			ensure_root(origin)?;
+			for call in calls {
+				let _ = call.dispatch(RawOrigin::Root.into());
+			}
+		}
+
 		/// Kill some items from storage.
-		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
+		#[weight = SimpleDispatchInfo::FreeOperational]
 		fn kill_storage(origin, keys: Vec<Key>) {
 			ensure_root(origin)?;
 			for key in &keys {
@@ -280,7 +290,7 @@ decl_module! {
 		}
 
 		/// Kill all storage items with a key that starts with the given prefix.
-		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
+		#[weight = SimpleDispatchInfo::FreeOperational]
 		fn kill_prefix(origin, prefix: Key) {
 			ensure_root(origin)?;
 			storage::unhashed::kill_prefix(&prefix);
