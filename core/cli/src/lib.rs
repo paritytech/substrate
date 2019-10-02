@@ -140,13 +140,17 @@ fn load_spec<F, G, E>(cli: &SharedParams, factory: F) -> error::Result<ChainSpec
 fn base_path(cli: &SharedParams, version: &VersionInfo) -> PathBuf {
 	cli.base_path.clone()
 		.unwrap_or_else(||
-			app_dirs::get_app_root(
-				AppDataType::UserData,
-				&AppInfo {
-					name: version.executable_name,
-					author: version.author
-				}
-			).expect("app directories exist on all supported platforms; qed")
+			if cli.dev {
+				"./.local/".into()
+			} else {
+				app_dirs::get_app_root(
+					AppDataType::UserData,
+					&AppInfo {
+						name: version.executable_name,
+						author: version.author
+					}
+				).expect("app directories exist on all supported platforms; qed")
+			}
 		)
 }
 
