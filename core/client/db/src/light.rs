@@ -35,7 +35,7 @@ use codec::{Decode, Encode};
 use primitives::Blake2Hasher;
 use sr_primitives::generic::{DigestItem, BlockId};
 use sr_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One, NumberFor};
-use header_metadata::{CachedHeaderMetadata, HeaderMetadata, HeaderMetadataCache, tree_route};
+use header_metadata::{CachedHeaderMetadata, HeaderMetadata, HeaderMetadataCache};
 use crate::cache::{DbCacheSync, DbCache, ComplexBlockId, EntryType as CacheEntryType};
 use crate::utils::{self, meta_keys, Meta, db_err, read_db, block_id_to_lookup_key, read_meta};
 use crate::DatabaseSettings;
@@ -248,7 +248,7 @@ impl<Block: BlockT> LightStorage<Block> {
 		// handle reorg.
 		let meta = self.meta.read();
 		if meta.best_hash != Default::default() {
-			let tree_route = tree_route(self, meta.best_hash, route_to)?;
+			let tree_route = header_metadata::tree_route(self, meta.best_hash, route_to)?;
 
 			// update block number to hash lookup entries.
 			for retracted in tree_route.retracted() {

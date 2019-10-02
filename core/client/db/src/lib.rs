@@ -66,7 +66,7 @@ use crate::utils::{Meta, db_err, meta_keys, read_db, read_meta};
 use client::leaves::{LeafSet, FinalizationDisplaced};
 use client::children;
 use state_db::StateDb;
-use header_metadata::{HeaderMetadata, HeaderMetadataCache, CachedHeaderMetadata, tree_route};
+use header_metadata::{CachedHeaderMetadata, HeaderMetadata, HeaderMetadataCache};
 use crate::storage_cache::{CachingState, SharedCache, new_shared_cache};
 use log::{trace, debug, warn};
 pub use state_db::PruningMode;
@@ -406,31 +406,6 @@ impl<Block: BlockT> client::blockchain::ProvideCache<Block> for BlockchainDb<Blo
 }
 
 impl<Block: BlockT> HeaderMetadata<Block> for BlockchainDb<Block> {
-	type Error = client::error::Error;
-
-	fn header_metadata(&self, hash: Block::Hash) -> Result<CachedHeaderMetadata<Block>, Self::Error> {
-		self.header_metadata_cache.header_metadata(hash).or_else(|_| {
-			self.header(BlockId::hash(hash))?.map(|header| {
-				let header_metadata = CachedHeaderMetadata::from(&header);
-				self.header_metadata_cache.insert_header_metadata(
-					header_metadata.hash,
-					header_metadata.clone(),
-				);
-				header_metadata
-			}).ok_or(client::error::Error::UnknownBlock("header not found in db".to_owned()))
-		})
-	}
-
-	fn insert_header_metadata(&self, hash: Block::Hash, metadata: CachedHeaderMetadata<Block>) {
-		self.header_metadata_cache.insert_header_metadata(hash, metadata)
-	}
-
-	fn remove_header_metadata(&self, hash: Block::Hash) {
-		self.header_metadata_cache.remove_header_metadata(hash);
-	}
-}
-
-impl<Block: BlockT> HeaderMetadata<Block> for &BlockchainDb<Block> {
 	type Error = client::error::Error;
 
 	fn header_metadata(&self, hash: Block::Hash) -> Result<CachedHeaderMetadata<Block>, Self::Error> {
@@ -966,7 +941,11 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 
 		// cannot find tree route with empty DB.
 		if meta.best_hash != Default::default() {
-			let tree_route = tree_route(&self.blockchain, meta.best_hash, route_to)?;
+			let tree_route = header_metadata::tree_route(
+				&self.blockchain,
+				meta.best_hash,
+				route_to,
+			)?;
 
 			// uncanonicalize: check safety violations and ensure the numbers no longer
 			// point to these block hashes in the key mapping.

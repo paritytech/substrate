@@ -51,7 +51,7 @@ use consensus::{
 	ImportResult, BlockOrigin, ForkChoiceStrategy,
 	SelectChain, self,
 };
-use header_metadata::{HeaderMetadata, CachedHeaderMetadata, tree_route, lowest_common_ancestor};
+use header_metadata::{HeaderMetadata, CachedHeaderMetadata};
 
 use crate::{
 	runtime_api::{
@@ -967,7 +967,11 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		};
 
 		let retracted = if is_new_best {
-			let route_from_best = tree_route(self.backend.blockchain(), info.best_hash, parent_hash)?;
+			let route_from_best = header_metadata::tree_route(
+				self.backend.blockchain(),
+				info.best_hash,
+				parent_hash,
+			)?;
 			route_from_best.retracted().iter().rev().map(|e| e.hash.clone()).collect()
 		} else {
 			Vec::default()
@@ -1097,7 +1101,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			return Ok(());
 		}
 
-		let route_from_finalized = tree_route(self.backend.blockchain(), last_finalized, block)?;
+		let route_from_finalized = header_metadata::tree_route(self.backend.blockchain(), last_finalized, block)?;
 
 		if let Some(retracted) = route_from_finalized.retracted().get(0) {
 			warn!("Safety violation: attempted to revert finalized block {:?} which is not in the \
@@ -1106,7 +1110,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			return Err(error::Error::NotInFinalizedChain);
 		}
 
-		let route_from_best = tree_route(self.backend.blockchain(), best_block, block)?;
+		let route_from_best = header_metadata::tree_route(self.backend.blockchain(), best_block, block)?;
 
 		// if the block is not a direct ancestor of the current best chain,
 		// then some other block is the common ancestor.
@@ -1840,7 +1844,7 @@ pub mod utils {
 				}
 			}
 
-			let ancestor = lowest_common_ancestor(client, *hash, *base)?;
+			let ancestor = header_metadata::lowest_common_ancestor(client, *hash, *base)?;
 
 			Ok(ancestor.hash == *base)
 		}
