@@ -36,8 +36,6 @@ pub struct Node<TTrans: Transport> {
 	socket: NodeSocket<TTrans>,
 	/// Transport used to establish new connections.
 	transport: TTrans,
-	/// Timeout for a connection to the node that is writing data.
-	connection_timeout: Option<Delay>,
 }
 
 enum NodeSocket<TTrans: Transport> {
@@ -60,6 +58,8 @@ struct NodeSocketConnected<TTrans: Transport> {
 	pending: VecDeque<BytesMut>,
 	/// If true, we need to flush the sink.
 	need_flush: bool,
+	/// Whether the socket is currently writing data.
+	is_writing_data: bool,
 }
 
 /// Event that can happen with this node.
@@ -71,6 +71,15 @@ pub enum NodeEvent<TSinkErr> {
 	Disconnected(TSinkErr),
 }
 
+#[derive(Debug)]
+/// Error used by NodeSocketConnected.
+pub enum ConnectionError<TSinkErr> {
+	/// The connection timed-out.
+	Timeout,
+	/// The sink errored.
+	Sink(TSinkErr),
+}
+
 impl<TTrans: Transport> Node<TTrans> {
 	/// Builds a new node handler.
 	pub fn new(transport: TTrans, addr: Multiaddr) -> Self {
@@ -78,7 +87,6 @@ impl<TTrans: Transport> Node<TTrans> {
 			addr,
 			socket: NodeSocket::ReconnectNow,
 			transport,
-			connection_timeout: None,
 		}
 	}
 
@@ -120,35 +128,35 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 		self.socket = loop {
 			match socket {
 				NodeSocket::Connected(mut conn) => {
-					let mut is_writing_data = self.connection_timeout.is_some();
-					match NodeSocketConnected::poll(Pin::new(&mut conn), cx, &self.addr, &mut is_writing_data) {
+					match NodeSocketConnected::poll(Pin::new(&mut conn), cx, &self.addr) {
 						Poll::Ready(Ok(_)) => {
-							self.connection_timeout = None;
 							break NodeSocket::Connected(conn)
 						},
 						Poll::Pending => {
-							if is_writing_data {
-								if self.connection_timeout.is_none() {
-									self.connection_timeout = Some(Delay::new(Duration::from_millis(5000)));
-								}
-							} else {
-								self.connection_timeout = None;
-							}
 							break NodeSocket::Connected(conn)
 						},
-						Poll::Ready(Err(err)) => {
-							self.connection_timeout = None;
+						Poll::Ready(Err(ConnectionError::Sink(err))) => {
 							warn!(target: "telemetry", "Disconnected from {}: {:?}", self.addr, err);
 							let timeout = gen_rand_reconnect_delay();
 							self.socket = NodeSocket::WaitingReconnect(timeout);
 							return Poll::Ready(NodeEvent::Disconnected(err))
+						}
+						Poll::Ready(Err(ConnectionError::Timeout)) => {
+							warn!(target: "telemetry", "Connection timeout from {}", self.addr);
+							let timeout = gen_rand_reconnect_delay();
+							break NodeSocket::WaitingReconnect(timeout)
 						}
 					}
 				}
 				NodeSocket::Dialing(mut s) => match Future::poll(Pin::new(&mut s), cx) {
 					Poll::Ready(Ok(sink)) => {
 						debug!(target: "telemetry", "Connected to {}", self.addr);
-						let conn = NodeSocketConnected { sink, pending: VecDeque::new(), need_flush: false };
+						let conn = NodeSocketConnected {
+							sink,
+							pending: VecDeque::new(),
+							need_flush: false,
+							is_writing_data: false,
+						};
 						self.socket = NodeSocket::Connected(conn);
 						return Poll::Ready(NodeEvent::Connected)
 					},
@@ -183,22 +191,6 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 			}
 		};
 
-		if let Some(mut timeout) = self.connection_timeout.as_mut() {
-			match Future::poll(Pin::new(&mut timeout), cx) {
-				Poll::Pending => {},
-				Poll::Ready(Err(err)) => {
-					warn!(target: "telemetry", "Connection timeout error for {} {:?}", self.addr, err);
-					self.connection_timeout = None;
-				}
-				Poll::Ready(Ok(_)) => {
-					warn!(target: "telemetry", "Server unresponsive from {}", self.addr);
-					self.connection_timeout = None;
-					let timeout = gen_rand_reconnect_delay();
-					self.socket = NodeSocket::WaitingReconnect(timeout);
-				}
-			}
-		}
-
 		Poll::Pending
 	}
 }
@@ -214,7 +206,7 @@ fn gen_rand_reconnect_delay() -> Delay {
 
 impl<TTrans: Transport, TSinkErr> NodeSocketConnected<TTrans>
 where TTrans::Output: Sink<BytesMut, Error = TSinkErr>
-	+ Stream<Item=Result<BytesMut, TSinkErr>>
+	+ Stream<Item=Result<BytesMut,  TSinkErr>>
 	+ Unpin
 {
 	/// Processes the queue of messages for the connected socket.
@@ -224,8 +216,7 @@ where TTrans::Output: Sink<BytesMut, Error = TSinkErr>
 		mut self: Pin<&mut Self>,
 		cx: &mut Context,
 		my_addr: &Multiaddr,
-		is_writing_data: &mut bool,
-	) -> Poll<Result<futures::never::Never, TSinkErr>> {
+	) -> Poll<Result<futures::never::Never, ConnectionError<TSinkErr>>> {
 		loop {
 			if let Some(item) = self.pending.pop_front() {
 				if let Poll::Pending = Sink::poll_ready(Pin::new(&mut self.sink), cx) {
@@ -234,11 +225,23 @@ where TTrans::Output: Sink<BytesMut, Error = TSinkErr>
 				}
 
 				let item_len = item.len();
-				*is_writing_data = true;
+				self.is_writing_data = true;
+				let mut timeout = Delay::new(Duration::from_millis(5000));
+				match Future::poll(Pin::new(&mut timeout), cx) {
+					Poll::Pending => {},
+					Poll::Ready(Err(err)) => {
+						warn!(target: "telemetry", "Connection timeout error for {} {:?}", my_addr, err);
+					}
+					Poll::Ready(Ok(_)) => {
+						if self.is_writing_data {
+							return Poll::Ready(Err(ConnectionError::Timeout))
+						}
+					}
+				}
 
 				if let Err(err) = Sink::start_send(Pin::new(&mut self.sink), item) {
-					*is_writing_data = false;
-					return Poll::Ready(Err(err))
+					self.is_writing_data = false;
+					return Poll::Ready(Err(ConnectionError::Sink(err)))
 				}
 				trace!(
 					target: "telemetry", "Successfully sent {:?} bytes message to {}",
@@ -250,11 +253,11 @@ where TTrans::Output: Sink<BytesMut, Error = TSinkErr>
 				match Sink::poll_flush(Pin::new(&mut self.sink), cx) {
 					Poll::Pending => return Poll::Pending,
 					Poll::Ready(Err(err)) => {
-						*is_writing_data = false;
-						return Poll::Ready(Err(err))
+						self.is_writing_data = false;
+						return Poll::Ready(Err(ConnectionError::Sink(err)))
 					},
 					Poll::Ready(Ok(())) => {
-						*is_writing_data = false;
+						self.is_writing_data = false;
 						self.need_flush = false;
 					},
 				}
@@ -266,7 +269,7 @@ where TTrans::Output: Sink<BytesMut, Error = TSinkErr>
 						// We don't do anything with incoming messages, however.
 					},
 					Poll::Ready(Some(Err(err))) => {
-						return Poll::Ready(Err(err))
+						return Poll::Ready(Err(ConnectionError::Sink(err)))
 					},
 					Poll::Pending | Poll::Ready(None) => break,
 				}
