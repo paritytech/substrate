@@ -36,7 +36,7 @@ use historied_data::tree::{TreeStateTrait, BranchStateTrait, StatesBranchRef, Br
 pub struct BranchRanges(Vec<StatesBranchRef>);
 
 impl<'a> TreeStateTrait<bool, u64, u64> for &'a BranchRanges {
-	type Branch = &'a StatesBranchRef;
+	type Branch = &'a BranchStateRef;
 	type Iter = BranchRangesIter<'a>;
 
 	fn get_branch(self, i: u64) -> Option<Self::Branch> {
@@ -69,12 +69,12 @@ impl<'a> TreeStateTrait<bool, u64, u64> for &'a BranchRanges {
 pub struct BranchRangesIter<'a>(&'a BranchRanges, usize);
 
 impl<'a> Iterator for BranchRangesIter<'a> {
-	type Item = (&'a StatesBranchRef, u64);
+	type Item = (&'a BranchStateRef, u64);
 
 	fn next(&mut self) -> Option<Self::Item> {
 		if self.1 > 0 {
 			Some((
-				&(self.0).0[self.1 - 1],
+				&(self.0).0[self.1 - 1].state,
 				(self.0).0[self.1 - 1].branch_index,
 			))
 		} else {
@@ -95,7 +95,9 @@ impl<'a> Iterator for BranchRangesIter<'a> {
 pub struct RangeSet {
 	// TODO EMCH using a option value makes not sense when all in memory
 	storage: BTreeMap<u64, Option<LinearStates>>,
+	// TODO EMCH remove this?
 	last_index: u64,
+	// TODO EMCH remove this?
 	treshold: u64,
 }
 
@@ -133,6 +135,11 @@ impl RangeSet {
 			last_index,
 			treshold,
 		}
+	}
+
+	/// Iterator over all its range sets.
+	pub fn reverse_iter_ranges(&self) -> impl Iterator<Item = (&BranchStateRef, u64)> {
+		self.storage.iter().rev().filter_map(|(k, v)| v.as_ref().map(|v| (&v.state, *k)))
 	}
 
 	// TODO EMCH can rw lock over the latest accessed range (lru) and

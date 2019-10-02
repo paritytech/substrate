@@ -136,7 +136,13 @@ pub fn make_db(inserted: &[u64]) -> TestDb {
 			})
 			.collect(),
 		meta: Default::default(),
-		offstate: Default::default(),
+		offstate:  inserted
+			.iter()
+			.map(|v| (
+				H256::from_low_u64_be(*v).as_bytes().to_vec(),
+				H256::from_low_u64_be(*v).as_bytes().to_vec(),
+			))
+			.collect(),
 	}
 }
 

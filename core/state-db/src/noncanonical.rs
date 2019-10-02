@@ -82,12 +82,20 @@ impl OffstatePendingGC {
 
 	fn try_gc<K, V>(
 		&mut self,
+		offstate_values: &mut HashMap<OffstateKey, History<DBValue>>,
+		branches: &RangeSet,
 		pinned: &HashMap<K, (V, u64)>,
 	) {
 		if let Some(pending) = self.pending_canonicalisation_query {
 			if pending < self.min_pinned_index(pinned) {
 
-				unimplemented!("TODO feed keepindexes with branch at pending then actual gc");
+				// TODO EMCH double get is rather inefficient, see if it is possible
+				// to reuse the hash of the hashset into the hashmap
+				for key in self.keys_pending_gc.drain() {
+					offstate_values.get_mut(&key).map(|historied_value| {
+						historied_value.gc(branches.reverse_iter_ranges());
+					});
+				}
 
 				self.pending_canonicalisation_query = None;
 			}
@@ -552,6 +560,8 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 
 	fn apply_canonicalizations(&mut self) {
 		let last = self.pending_canonicalizations.last().cloned();
+		let last_index = last.as_ref().and_then(|last| self.parents.get(last))
+			.map(|(_, index)| *index);
 		let count = self.pending_canonicalizations.len() as u64;
 		for hash in self.pending_canonicalizations.drain(..) {
 			trace!(target: "state-db", "Post canonicalizing {:?}", hash);
@@ -584,25 +594,22 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 				);
 			}
 		}
-
-		if let Some(branch_index_cannonicalize) = last.as_ref().and_then(|last| self.parents.get(last))
-			.map(|(_, index)| *index) {
-			// set branch state synchronously
-			let block_number = self.last_canonicalized.as_ref().map(|(_, n)| n + count).unwrap_or(count - 1);
-			// this needs to be call after parents update
-			// TODO EMCH may be needed in 'canonicalize', and restore or commit here
-			self.branches.update_finalize_treshold(branch_index_cannonicalize, Some(block_number), true);
-			// gc is at the right place
-			self.offstate_gc.set_pending_gc(branch_index_cannonicalize);
-			// try to run the garbage collection (can run later if there is
-			// pinned process).
-			self.offstate_gc.try_gc(&self.pinned);
-		}
-
 		if let Some(hash) = last {
-			let last_canonicalized = (hash, self.last_canonicalized.as_ref().map(|(_, n)| n + count).unwrap_or(count - 1));
-			self.last_canonicalized = Some(last_canonicalized);
+			let block_number = self.last_canonicalized.as_ref().map(|(_, n)| n + count).unwrap_or(count - 1);
+			self.last_canonicalized = Some((hash, block_number));
+
+			if let Some(branch_index_cannonicalize) = last_index {
+				// this needs to be call after parents update
+				// TODO EMCH may be needed in 'canonicalize', and restore or commit here
+				self.branches.update_finalize_treshold(branch_index_cannonicalize, Some(block_number), true);
+				// gc is at the right place
+				self.offstate_gc.set_pending_gc(branch_index_cannonicalize);
+				// try to run the garbage collection (can run later if there is
+				// pinned process).
+				self.offstate_gc.try_gc(&mut self.offstate_values, &self.branches, &self.pinned);
+			}
 		}
+
 	}
 
 	/// Get a value from the node overlay. This searches in every existing changeset.
@@ -697,7 +704,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 	/// Discard pinned state
 	pub fn unpin(&mut self, hash: &BlockHash) {
 		self.pinned.remove(hash);
-		self.offstate_gc.try_gc(&self.pinned);
+		self.offstate_gc.try_gc(&mut self.offstate_values, &self.branches, &self.pinned);
 	}
 }
 
@@ -719,6 +726,11 @@ mod tests {
 		overlay.get_branch_range(state).and_then(|state| {
 			overlay.get_offstate(&H256::from_low_u64_be(key).as_bytes().to_vec(), &state)
 		}) == Some(&H256::from_low_u64_be(key).as_bytes().to_vec())
+	}
+
+	fn contains_offstate2(overlay: &NonCanonicalOverlay<H256, H256>, key: u64, state: &BranchRanges) -> bool {
+		overlay.get_offstate(&H256::from_low_u64_be(key).as_bytes().to_vec(), &state)
+			== Some(&H256::from_low_u64_be(key).as_bytes().to_vec())
 	}
 
 	fn contains_both(overlay: &NonCanonicalOverlay<H256, H256>, key: u64, state: &H256) -> bool {
@@ -863,7 +875,7 @@ mod tests {
 			make_changeset(&[5], &[3]),
 			make_offstate_changeset(&[5], &[3]),
 		).unwrap());
-		assert_eq!(db.meta.len(), 3);
+		assert_eq!(db.meta.len(), 5);
 
 		let overlay2 = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
 		assert_eq!(overlay.levels, overlay2.levels);
@@ -1203,13 +1215,25 @@ mod tests {
 		db.commit(&overlay.insert::<io::Error>(&h_2, 1, &H256::default(), c_2, o_c_2).unwrap());
 
 		overlay.pin(&h_1);
-
+		let h1_context = overlay.get_branch_range(&h_1).unwrap();
+	
 		let mut commit = CommitSet::default();
+		println!("b1{:?}", overlay.branches);
 		overlay.canonicalize::<io::Error>(&h_2, &mut commit).unwrap();
+		println!("b2{:?}", overlay.branches);
 		db.commit(&commit);
+		println!("b3{:?}", overlay.branches);
 		overlay.apply_pending();
-		assert!(contains_both(&overlay, 1, &h_1));
+		assert!(contains(&overlay, 1));
+		// we cannot use contains_offstate because offstate pining is relying on
+		// asumption that pinned context memoïzed its branch state.
+		assert!(contains_offstate2(&overlay, 1, &h1_context));
+		assert!(!contains_offstate(&overlay, 1, &h_1));
+		println!("b4{:?}", overlay.branches);
+		println!("{:?}", overlay.offstate_values);
 		overlay.unpin(&h_1);
-		assert!(!contains_any(&overlay, 1, &h_1));
+		println!("{:?}", overlay.offstate_values);
+		assert!(!contains(&overlay, 1));
+		assert!(!contains_offstate2(&overlay, 1, &h1_context));
 	}
 }

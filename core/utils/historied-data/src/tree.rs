@@ -60,7 +60,7 @@ pub trait BranchStateTrait<S, I> {
 }
 
 impl<'a> TreeStateTrait<bool, u64, u64> for &'a StatesRef {
-	type Branch = (&'a StatesBranchRef, Option<u64>);
+	type Branch = (&'a BranchStateRef, Option<u64>);
 	type Iter = StatesRefIter<'a>;
 
 	fn get_branch(self, i: u64) -> Option<Self::Branch> {
@@ -123,31 +123,31 @@ pub struct BranchStateRef {
 	pub end: u64,
 }
 
-impl<'a> BranchStateTrait<bool, u64> for (&'a StatesBranchRef, Option<u64>) {
+impl<'a> BranchStateTrait<bool, u64> for (&'a BranchStateRef, Option<u64>) {
 
 	fn get_node(&self, i: u64) -> bool {
-		let l = self.0.state.end;
+		let l = self.0.end;
 		let upper = self.1.map(|u| rstd::cmp::min(u + 1, l)).unwrap_or(l);
-		i >= self.0.state.start && i < upper
+		i >= self.0.start && i < upper
 	}
 
 	fn last_index(&self) -> u64 {
 		// underflow should not happen as long as branchstateref are not allowed to be empty.
-		let state_end = self.0.state.end - 1;
+		let state_end = self.0.end - 1;
 		self.1.map(|bound| rstd::cmp::min(state_end, bound)).unwrap_or(state_end)
 	}
 
 }
 
-impl<'a> BranchStateTrait<bool, u64> for &'a StatesBranchRef {
+impl<'a> BranchStateTrait<bool, u64> for &'a BranchStateRef {
 
 	fn get_node(&self, i: u64) -> bool {
-		i >= self.state.start && i < self.state.end
+		i >= self.start && i < self.end
 	}
 
 	fn last_index(&self) -> u64 {
 		// underflow should not happen as long as branchstateref are not allowed to be empty.
-		self.state.end - 1
+		self.end - 1
 	}
 
 }
@@ -300,13 +300,13 @@ pub struct StatesRef {
 pub struct StatesRefIter<'a>(&'a StatesRef, usize, Option<u64>);
 
 impl<'a> Iterator for StatesRefIter<'a> {
-	type Item = ((&'a StatesBranchRef, Option<u64>), u64);
+	type Item = ((&'a BranchStateRef, Option<u64>), u64);
 
 	fn next(&mut self) -> Option<Self::Item> {
 		if self.1 > 0 {
 			let upper_node_index = self.2.take();
 			Some((
-				(&self.0.history[self.1 - 1], upper_node_index),
+				(&self.0.history[self.1 - 1].state, upper_node_index),
 				self.0.history[self.1 - 1].branch_index,
 			))
 		} else {
@@ -659,13 +659,14 @@ impl<V> History<V> {
 							if self.0[branch_index].history.len() == 0 {
 								let _ = self.0.remove(branch_index);
 							}
-							current_state = states.next();
 							break;
 						} else {
-							self.0.remove(branch_index);
+							let _ = self.0.remove(branch_index);
 							break;
 						}
 					}
+					self.0.remove(branch_index);
+					break;
 				} else {
 					break;
 				}
@@ -958,7 +959,7 @@ mod test {
 		states1.get_mut(&1).map(|br| br.state.len = 1);
 		let states1: BTreeMap<_, _> = states1.iter().map(|(k,v)| (k, v.branch_ref())).collect();
 		let mut item1 = item.clone();
-		item1.gc(states1.iter().map(|(k, v)| ((v, None), **k)).rev());
+		item1.gc(states1.iter().map(|(k, v)| ((&v.state, None), **k)).rev());
 		assert_eq!(item1.get(&states.state_ref(1)), None);
 		for a in action.iter().skip(1) {
 			if a.1 {
