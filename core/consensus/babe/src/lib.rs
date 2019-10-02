@@ -1280,12 +1280,25 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 			// order, otherwise if pruning after import the `is_descendent_of`
 			// used by pruning may not know about the block that is being
 			// imported.
-			let prune_and_import = || -> Result<(), fork_tree::Error<client::error::Error>> {
+			let prune_and_import = || {
+				let finalized_slot = {
+					let finalized_header = self.client.header(&BlockId::Hash(info.finalized_hash))
+						.map_err(|e| ConsensusError::ClientImport(format!("{:?}", e)))?
+						.expect("best finalized hash was given by client; \
+								finalized headers must exist in db; qed");
+
+					find_pre_digest::<Block>(&finalized_header)
+						.expect("finalized header must be valid; \
+								valid blocks have a pre-digest; qed")
+						.slot_number()
+				};
+
 				epoch_changes.prune_finalized(
 					descendent_query(&*self.client),
 					&info.finalized_hash,
 					info.finalized_number,
-				)?;
+					finalized_slot,
+				).map_err(|e| ConsensusError::ClientImport(format!("{:?}", e)))?;
 
 				epoch_changes.import(
 					descendent_query(&*self.client),
@@ -1293,16 +1306,15 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 					number,
 					*block.header.parent_hash(),
 					next_epoch,
-				)?;
+				).map_err(|e| ConsensusError::ClientImport(format!("{:?}", e)))?;
 
 				Ok(())
 			};
 
 			if let Err(e) = prune_and_import() {
-				let err = ConsensusError::ClientImport(format!("{:?}", e));
 				babe_err!("Failed to launch next epoch: {:?}", e);
 				*epoch_changes = old_epoch_changes.expect("set `Some` above and not taken; qed");
-				return Err(err);
+				return Err(e);
 			}
 
 			crate::aux_schema::write_epoch_changes::<Block, _, _>(
