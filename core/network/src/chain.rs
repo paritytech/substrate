@@ -153,14 +153,8 @@ impl<B, E, Block, RA> Client<Block> for SubstrateClient<B, E, Block, RA> where
 			return Ok(false);
 		}
 
-		let tree_route = ::client::blockchain::tree_route(
-			|id| self.header(&id)?.ok_or_else(||
-				client::error::Error::UnknownBlock(format!("{:?}", id))
-			),
-			BlockId::Hash(*block),
-			BlockId::Hash(*base),
-		)?;
+		let ancestor = header_metadata::lowest_common_ancestor(self, *block, *base)?;
 
-		Ok(tree_route.common_block().hash == *base)
+		Ok(ancestor.hash == *base)
 	}
 }
