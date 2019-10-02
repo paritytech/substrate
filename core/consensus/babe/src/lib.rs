@@ -260,24 +260,6 @@ pub fn start_babe<B, C, SC, E, I, SO, Error>(BabeParams {
 		&inherent_data_providers,
 	)?;
 
-	let epoch_changes = babe_link.epoch_changes.clone();
-	let pruning_task = client.finality_notification_stream()
-		.for_each(move |notification| {
-			// TODO: supply is-descendent-of and maybe write to disk _now_
-			// as opposed to waiting for the next epoch?
-			let res = epoch_changes.lock().prune_finalized(
-				descendent_query(&*client),
-				&notification.hash,
-				*notification.header.number(),
-			);
-
-			if let Err(e) = res {
-				babe_err!("Could not prune expired epoch changes: {:?}", e);
-			}
-
-			future::ready(())
-		});
-
 	babe_info!("Starting BABE Authorship worker");
 	let slot_worker = slots::start_slot_worker(
 		config.0,
@@ -286,9 +268,9 @@ pub fn start_babe<B, C, SC, E, I, SO, Error>(BabeParams {
 		sync_oracle,
 		inherent_data_providers,
 		babe_link.time_source,
-	).map(|_| ());
+	);
 
-	Ok(future::select(slot_worker, pruning_task).map(|_| Ok::<(), ()>(())).compat())
+	Ok(slot_worker.map(|_| Ok::<(), ()>(())).compat())
 }
 
 struct BabeWorker<B: BlockT, C, E, I, SO> {
@@ -1280,6 +1262,8 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 		// this way we can revert it if there's any error
 		let mut old_epoch_changes = None;
 
+		let info = self.client.info().chain;
+
 		if let Some(next_epoch_descriptor) = next_epoch_digest {
 			let next_epoch = epoch.increment(next_epoch_descriptor);
 
@@ -1289,17 +1273,32 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 				epoch.as_ref().epoch_index, hash, slot_number, epoch.as_ref().start_slot);
 			babe_info!("Next epoch starts at slot {}", next_epoch.as_ref().start_slot);
 
-			// track the epoch change in the fork tree
-			let res = epoch_changes.import(
-				descendent_query(&*self.client),
-				hash,
-				number,
-				*block.header.parent_hash(),
-				next_epoch,
-			);
+			// prune the tree out of epochs not part of the finalized chain or
+			// that are not live anymore, and then track the given epoch change
+			// in the tree.
+			// NOTE: it is important that these operations are done in this
+			// order, otherwise if pruning after import the `is_descendent_of`
+			// used by pruning may not know about the block that is being
+			// imported.
+			let prune_and_import = || -> Result<(), fork_tree::Error<client::error::Error>> {
+				epoch_changes.prune_finalized(
+					descendent_query(&*self.client),
+					&info.finalized_hash,
+					info.finalized_number,
+				)?;
 
+				epoch_changes.import(
+					descendent_query(&*self.client),
+					hash,
+					number,
+					*block.header.parent_hash(),
+					next_epoch,
+				)?;
 
-			if let Err(e) = res {
+				Ok(())
+			};
+
+			if let Err(e) = prune_and_import() {
 				let err = ConsensusError::ClientImport(format!("{:?}", e));
 				babe_err!("Failed to launch next epoch: {:?}", e);
 				*epoch_changes = old_epoch_changes.expect("set `Some` above and not taken; qed");
@@ -1326,10 +1325,7 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 		// more primary blocks), if there's a tie we go with the longest
 		// chain.
 		block.fork_choice = {
-			let (last_best, last_best_number) = {
-				let info = self.client.info().chain;
-				(info.best_hash, info.best_number)
-			};
+			let (last_best, last_best_number) = (info.best_hash, info.best_number);
 
 			let last_best_weight = if &last_best == block.header.parent_hash() {
 				// the parent=genesis case is already covered for loading parent weight,
