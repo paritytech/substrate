@@ -669,9 +669,10 @@ impl CheckedAdd for Fixed64 {
 	}
 }
 
+/// Infinite precision unsigned integer for substrate runtime.
 pub mod big_num {
 	use super::{Zero, One};
-	use rstd::{cell::RefCell, convert::TryFrom, cmp::Ordering};
+	use rstd::{prelude::*, cell::RefCell, convert::TryFrom};
 
 
 	// A sensible value for this would be half of the word size of the host machine. Since the
@@ -725,7 +726,7 @@ pub mod big_num {
 
 	/// Simple wrapper around an infinitely large integer, represented as limbs of [`Single`].
 	#[derive(Clone, Default)]
-	struct Number {
+	pub struct Number {
 		/// digits (limbs) of this number (sorted as msd -> lsd).
 		pub(crate) digits: Vec<Single>,
 	}

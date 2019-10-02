@@ -59,13 +59,15 @@ pub use generic::{DigestItem, Digest};
 pub use primitives::crypto::{key_types, KeyTypeId, CryptoType};
 pub use app_crypto::RuntimeAppPublic;
 
-/// Re-export arithmetic stuff.
+/// Re-export top-level arithmetic stuff.
 pub use sr_arithmetic::{
 	Perquintill, Perbill, Permill, Percent,
 	Rational128, Fixed64
 };
-/// Re-export 128 bit helpers from sr_arithmetic
+/// Re-export 128 bit helpers.
 pub use sr_arithmetic::helpers_128bit;
+/// Re-export big_num stiff.
+pub use sr_arithmetic::big_num;
 
 /// An abstraction over justification for a block's validity under a consensus algorithm.
 ///
