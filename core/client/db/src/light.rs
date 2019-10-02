@@ -573,7 +573,7 @@ pub(crate) mod tests {
 	use client::cht;
 	use sr_primitives::generic::DigestItem;
 	use sr_primitives::testing::{H256 as Hash, Header, Block as RawBlock, ExtrinsicWrapper};
-	use header_metadata::lowest_common_ancestor;
+	use header_metadata::{lowest_common_ancestor, tree_route};
 	use super::*;
 
 	type Block = RawBlock<ExtrinsicWrapper<u32>>;
