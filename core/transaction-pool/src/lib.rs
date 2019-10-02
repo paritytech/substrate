@@ -25,5 +25,5 @@ mod tests;
 
 pub mod error;
 
-pub use api::ChainApi;
+pub use api::FullChainApi;
 pub use txpool;

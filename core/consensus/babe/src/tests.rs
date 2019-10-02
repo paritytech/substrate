@@ -30,7 +30,7 @@ use consensus_common::import_queue::{
 use network::test::*;
 use network::test::{Block as TestBlock, PeersClient};
 use network::config::BoxFinalityProofRequestBuilder;
-use sr_primitives::{generic::DigestItem, traits::{Block as BlockT, DigestFor, NumberFor}};
+use sr_primitives::{generic::DigestItem, traits::{Block as BlockT, DigestFor}};
 use network::config::ProtocolConfig;
 use tokio::runtime::current_thread;
 use client::BlockchainEvents;
