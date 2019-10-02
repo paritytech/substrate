@@ -284,6 +284,12 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 		KArg1: EncodeLike<K1>,
 		KArg2: EncodeLike<K2>;
 
+	/// Swap the values of two key-pairs.
+	fn swap<KArg1, KArg2>(key11: KArg1, key12: KArg2, key21: KArg1, key22: KArg2)
+	where
+		KArg1: EncodeLike<K1>,
+		KArg2: EncodeLike<K2>;
+
 	fn insert<KArg1, KArg2, VArg>(k1: KArg1, k2: KArg2, val: VArg)
 	where
 		KArg1: EncodeLike<K1>,
@@ -330,4 +336,17 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 		V: EncodeAppend<Item=Item>,
 		Items: IntoIterator<Item=EncodeLikeItem> + Clone + EncodeLike<V>,
 		Items::IntoIter: ExactSizeIterator;
+
+	/// Read the length of the value in a fast way, without decoding the entire value.
+	///
+	/// `T` is required to implement `Codec::DecodeLength`.
+	///
+	/// Note that `0` is returned as the default value if no encoded value exists at the given key.
+	/// Therefore, this function cannot be used as a sign of _existence_. use the `::exists()`
+	/// function for this purpose.
+	fn decode_len<KArg1, KArg2>(key1: KArg1, key2: KArg2) -> Result<usize, &'static str>
+		where
+			KArg1: EncodeLike<K1>,
+			KArg2: EncodeLike<K2>,
+			V: codec::DecodeLength + Len;
 }
