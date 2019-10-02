@@ -26,6 +26,7 @@ libp2p = { version = "0.12.0", default-features = false, features = ["secp256k1"
 fork-tree = { path = "../../core/utils/fork-tree" }
 consensus = { package = "substrate-consensus-common", path = "../../core/consensus/common" }
 client = { package = "substrate-client", path = "../../core/client" }
+header_metadata = { package = "substrate-header-metadata", path = "../../core/client/header-metadata" }
 sr-primitives = { path = "../../core/sr-primitives" }
 primitives = { package = "substrate-primitives", path = "../../core/primitives" }
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }

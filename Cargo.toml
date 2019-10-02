@@ -26,6 +26,7 @@ members = [
 	"core/cli",
 	"core/client",
 	"core/client/db",
+	"core/client/header-metadata",
 	"core/consensus/aura",
 	"core/consensus/babe",
 	"core/consensus/common",
