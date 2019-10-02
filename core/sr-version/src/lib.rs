@@ -229,7 +229,7 @@ mod apis_serialize {
 		D: de::Deserializer<'de>
 	{
 		let mut arr = [0; 8];
-		let _ = bytes::deserialize_check_len(d, bytes::ExpectedLen::Exact(&mut arr[..]))?;
+		bytes::deserialize_check_len(d, bytes::ExpectedLen::Exact(&mut arr[..]))?;
 		Ok(arr)
 	}
 }
