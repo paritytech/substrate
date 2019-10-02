@@ -44,13 +44,13 @@ use codec::{Encode, Decode};
 #[cfg(feature = "std")]
 pub mod testing;
 
-pub mod weights;
-pub mod traits;
 pub mod curve;
-
 pub mod generic;
-pub mod transaction_validity;
+pub mod offchain;
 pub mod sr_arithmetic;
+pub mod traits;
+pub mod transaction_validity;
+pub mod weights;
 
 /// Re-export these since they're only "kind of" generic.
 pub use generic::{DigestItem, Digest};

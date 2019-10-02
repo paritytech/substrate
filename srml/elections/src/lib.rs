@@ -816,7 +816,7 @@ impl<T: Trait> Module<T> {
 					if set_len + 1 == VOTER_SET_SIZE {
 						NextVoterSet::put(next + 1);
 					}
-					<Voters<T>>::append_or_insert(next, [Some(who.clone())].into_iter())
+					<Voters<T>>::append_or_insert(next, &[Some(who.clone())][..])
 				}
 			}
 
@@ -862,7 +862,7 @@ impl<T: Trait> Module<T> {
 
 			// initialize leaderboard.
 			let leaderboard_size = empty_seats + T::CarryCount::get() as usize;
-			<Leaderboard<T>>::put(vec![(Zero::zero(), T::AccountId::default()); leaderboard_size]);
+			<Leaderboard<T>>::put(vec![(BalanceOf::<T>::zero(), T::AccountId::default()); leaderboard_size]);
 
 			Self::deposit_event(RawEvent::TallyStarted(empty_seats as u32));
 		}
@@ -1027,7 +1027,7 @@ impl<T: Trait> Module<T> {
 			.chunks(APPROVAL_SET_SIZE)
 			.enumerate()
 			.for_each(|(index, slice)| <ApprovalsOf<T>>::insert(
-				(who.clone(), index as SetIndex), slice.to_vec())
+				(&who, index as SetIndex), slice)
 			);
 	}
 

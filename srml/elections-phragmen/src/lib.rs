@@ -539,7 +539,7 @@ impl<T: Trait> Module<T> {
 
 			// sort and save the members.
 			new_members.sort();
-			<Members<T>>::put(new_members.clone());
+			<Members<T>>::put(&new_members);
 
 			// save the runners as-is
 			<RunnersUp<T>>::put(runners_up);
