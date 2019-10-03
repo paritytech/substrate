@@ -258,13 +258,53 @@ use support::{dispatch::Result, decl_module, decl_storage, decl_event};
 use system::{ensure_signed, ensure_root};
 use codec::{Encode, Decode};
 use sr_primitives::{
-	traits::{SignedExtension, Bounded}, weights::{SimpleDispatchInfo, DispatchInfo},
+	traits::{SignedExtension, Bounded, SimpleArithmetic, SaturatedConversion},
+	weights::{SimpleDispatchInfo, DispatchInfo, DispatchClass, ClassifyDispatch, WeighData, Weight},
 	transaction_validity::{
 		ValidTransaction, TransactionValidityError, InvalidTransaction, TransactionValidity,
 	},
 };
 
-/// Our module's configuration trait. All our types and consts go in here. If the
+/// A custom weight calculator tailored for the dispatch call `set_dummy()` that actually examines
+/// the arguments and makes a decision based on that.
+///
+/// The arguments are passed to `WeighData` as an unbounded generic type `T`. This means that in
+/// order to have any meaningful interpretation, you must explicitly tell the rust compiler what
+/// traits does `T` have. This struct demonstrates how you can customize one _weight calculator_ for
+/// a particular call and fully extract the `T::Balance` argument out of it. This is
+/// quite some boilerplate to determine the weight of just one call. The reasons for that being:
+///   - This is tailored for a call that only accepts a `T::Balance`. If you want to examine the
+///     argument, there must be one struct per call, because these arguments' type are determined at
+///     compile time and it cannot be a _one size fits all_. In other words, the generic type `T` in
+///     `WeighData<T>` can only be one thing at a time. Of course, this depends on how deeply you
+///     want to examine your arguments. As an example, If you just want to interpret your arguments
+///     in an encoded manner, you can bound `T` to `T: Encode` and you will be able to encode `T`
+///     and examine it.
+///   - Note that you this is a non-runtime code and we cannot directly access a `Call` instance,
+///     hence the arguments are examined as a generic `T`, which you can bound to some traits if
+///     that suits you.
+struct WeightForSetDummy<B>(B);
+
+impl<B> From<B> for WeightForSetDummy<B> {
+	fn from(multiplier: B) -> Self {
+		Self(multiplier)
+	}
+}
+
+impl<'a, B: 'a + SimpleArithmetic + Copy, T: Into<(&'a B,)>> WeighData<T> for WeightForSetDummy<B>  {
+	fn weigh_data(&self, target: T) -> Weight {
+		let arg: B = *target.into().0;
+		(arg * self.0).saturated_into()
+	}
+}
+
+impl<B, T> ClassifyDispatch<T> for WeightForSetDummy<B> {
+	fn classify_dispatch(&self, _: T) -> DispatchClass {
+		DispatchClass::default()
+	}
+}
+
+/// Our module's configuration trait. All our types and constants go in here. If the
 /// module is dependent on specific other modules, then their configuration traits
 /// should be added to our implied traits list.
 ///
@@ -454,6 +494,7 @@ decl_module! {
 		// without worrying about gameability or attack scenarios.
 		// If you not specify `Result` explicitly as return value, it will be added automatically
 		// for you and `Ok(())` will be returned.
+		#[weight = WeightForSetDummy::from(T::Balance::from(10u32))]
 		fn set_dummy(origin, #[compact] new_value: T::Balance) {
 			ensure_root(origin)?;
 			// Put the new value into storage.
@@ -600,7 +641,10 @@ mod tests {
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
 	use sr_primitives::{
-		Perbill, traits::{BlakeTwo256, OnInitialize, OnFinalize, IdentityLookup}, testing::Header
+		Perbill,
+		traits::{BlakeTwo256, OnInitialize, OnFinalize, IdentityLookup},
+		weights::GetDispatchInfo,
+		testing::Header
 	};
 
 	impl_outer_origin! {
@@ -725,5 +769,19 @@ mod tests {
 				InvalidTransaction::ExhaustsResources.into(),
 			);
 		})
+	}
+
+	#[test]
+	fn weights_work() {
+		// must have a default weight.
+		let default_call = <Call<Test>>::accumulate_dummy(10);
+		let info = default_call.get_dispatch_info();
+		// aka. `let info = <Call<Test> as GetDispatchInfo>::get_dispatch_info(&default_call);`
+		assert_eq!(info.weight, 10_000);
+
+		// must have a custom weight of `10 * arg = 2000`
+		let custom_call = <Call<Test>>::set_dummy(200);
+		let info = custom_call.get_dispatch_info();
+		assert_eq!(info.weight, 2000);
 	}
 }
