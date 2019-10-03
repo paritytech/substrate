@@ -737,7 +737,16 @@ impl<V> History<V> {
 }
 
 impl<'a, F: SerializedConfig> Serialized<'a, F> {
-	pub fn get<I, S> (&self, state: S) -> Option<&[u8]> 
+
+	pub fn into_owned(self) -> Serialized<'static, F> {
+    Serialized(self.0.into_owned())
+  }
+
+	pub fn into_vec(self) -> Vec<u8> {
+    self.0.into_vec()
+  }
+
+	pub fn get<I, S> (&self, state: S) -> Option<Option<&[u8]>> 
 		where
 			S: BranchStateTrait<bool, I>,
 			I: Copy + Eq + TryFrom<usize> + TryInto<usize>,
@@ -750,7 +759,12 @@ impl<'a, F: SerializedConfig> Serialized<'a, F> {
 			index -= 1;
 			let HistoriedValue { value, index: state_index } = self.0.get_state(index);
 			if state.get_node(as_i(state_index as usize)) {
-				return Some(value)
+				// Note this extra byte is note optimal, should be part of index encoding
+				if value.len() > 0 {
+					return Some(Some(&value[..value.len() - 1]));
+				} else {
+					return Some(None);
+				}
 			}
 		}
 		None
@@ -758,7 +772,7 @@ impl<'a, F: SerializedConfig> Serialized<'a, F> {
 
 	/// This append the value, and can only be use in an
 	/// orderly fashion.
-	pub fn push<S, I, BI>(&mut self, state: S, value: &[u8]) 
+	pub fn push<S, I>(&mut self, state: S, value: Option<&[u8]>) 
 		where
 			S: BranchStateTrait<bool, I>,
 			I: Copy + Eq + TryFrom<usize> + TryInto<usize>,
@@ -766,34 +780,73 @@ impl<'a, F: SerializedConfig> Serialized<'a, F> {
 		let target_state_index = as_usize(state.last_index()) as u64;
 		let index = self.0.len();
 		if index > 0 {
-			let last = self.0.get_state(index);
+			let last = self.0.get_state(index - 1);
 			debug_assert!(target_state_index >= last.index); 
 			if target_state_index == last.index {
 				self.0.pop();
 			}
 		}
-		self.0.push(HistoriedValue {value, index: target_state_index});
+		match value {
+			Some(value) => 
+				self.0.push_extra(HistoriedValue {value, index: target_state_index}, &[0][..]),
+			None => 
+				self.0.push(HistoriedValue {value: &[], index: target_state_index}),
+		}
 	}
 
-	/// keep an single history before the state.
-	pub fn prune<S, I, BI>(&mut self, index: I) 
+	/// keep a single with value history before the state.
+	pub fn prune<I>(&mut self, index: I) -> crate::PruneResult
 		where
 			I: Copy + Eq + TryFrom<usize> + TryInto<usize>,
 	{
 		let from = as_usize(index) as u64;
 		let len = self.0.len();
-		for index in 0..len {
+		let mut last_index_with_value = None;
+		let mut index = 0;
+						println!("from {}", from);
+		while index < len {
 			let history = self.0.get_state(index);
-			if history.index >= from {
-				// delete all index up to index 
-				self.0.truncate_start(index);
-				break;
+			if history.index == from + 1 {
+				// new first content
+				if history.value.len() == 0 {
+					// delete so first content is after (if any)
+					last_index_with_value = None;
+				} else {
+					println!("start val: {}", index);
+					// start value over a value drop until here
+					last_index_with_value = Some(index + 1);
+					break;
+				}
+			} else if history.index > from {
+				if history.value.len() == 0 
+				  && last_index_with_value.is_none() {
+						// delete on delete, continue
+				} else {
+					break;
+				}
 			}
+			if history.value.len() > 0 {
+				last_index_with_value = Some(index);
+			} else {
+				last_index_with_value = None;
+			}
+			index += 1;
 		}
+
+		if let Some(last_index_with_value) = last_index_with_value {
+			if last_index_with_value > 1 {
+				self.0.truncate_start(last_index_with_value - 1);
+				return crate::PruneResult::Changed;
+			}
+		} else {
+			self.0.clear();
+			return crate::PruneResult::Cleared;
+		}
+
+		crate::PruneResult::Unchanged
 	}
 	
 }
-
 
 #[derive(Debug, Clone)]
 #[cfg_attr(any(test, feature = "test"), derive(PartialEq))]
@@ -801,30 +854,43 @@ impl<'a, F: SerializedConfig> Serialized<'a, F> {
 /// needed.
 pub struct Serialized<'a, F>(SerializedInner<'a, F>);
 
-impl<'a, F> Into<Serialized<'a, F>> for &'a[u8] {
+impl<'a, F> Serialized<'a, F> {
+	pub fn from_slice(s: &'a [u8]) -> Serialized<'a, F> {
+		Serialized(s.into())
+	}
+
+	pub fn from_vec(s: Vec<u8>) -> Serialized<'static, F> {
+		Serialized(s.into())
+	}
+
+	pub fn from_mut(s: &'a mut Vec<u8>) -> Serialized<'a, F> {
+		Serialized(s.into())
+	}
+}
+
+impl<'a, F> Into<Serialized<'a, F>> for &'a [u8] {
 	fn into(self) -> Serialized<'a, F> {
 		Serialized(self.into())
 	}
 }
 
-impl<'a, F> Into<Serialized<'a, F>> for SerializedInner<'a, F> {
+impl<'a, F> Into<Serialized<'a, F>> for &'a mut Vec<u8> {
 	fn into(self) -> Serialized<'a, F> {
-		Serialized(self)
+		Serialized(self.into())
 	}
 }
 
-impl<'a, F> Into<SerializedInner<'a, F>> for Serialized<'a, F> {
-	fn into(self) -> SerializedInner<'a, F> {
-		self.0
+impl<F> Into<Serialized<'static, F>> for Vec<u8> {
+	fn into(self) -> Serialized<'static, F> {
+		Serialized(self.into())
 	}
 }
 
 impl<'a, F: SerializedConfig> Default for Serialized<'a, F> {
 	fn default() -> Self {
-		SerializedInner::<'a, F>::default().into()
+		Serialized(SerializedInner::<'a, F>::default())
 	}
 }
-
 
 #[cfg(test)]
 mod test {

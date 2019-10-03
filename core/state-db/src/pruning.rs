@@ -53,6 +53,9 @@ struct DeathRow<BlockHash: Hash, Key: Hash> {
 	journal_key: Vec<u8>,
 	offstate_journal_key: Vec<u8>,
 	deleted: HashSet<Key>,
+	// TODO EMCH for offstate there is no need to put
+	// in memory so we can make it lazy (load from
+	// pruning journal on actual prune).
 	offstate_modified: HashSet<OffstateKey>,
 }
 
@@ -189,8 +192,18 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 			trace!(target: "state-db", "Pruning {:?} ({} deleted)", pruned.hash, pruned.deleted.len());
 			let index = self.pending_number + self.pending_prunings as u64;
 			commit.data.deleted.extend(pruned.deleted.iter().cloned());
+			if let Some(offstate) = commit.offstate_prune.as_mut() {
+				offstate.0 = std::cmp::max(offstate.0, index);
+				offstate.1.extend(pruned.offstate_modified.iter().cloned());
+			} else {
+				commit.offstate_prune = Some((
+					index,
+					pruned.offstate_modified.iter().cloned().collect(),
+				));
+			}
 			commit.meta.inserted.push((to_meta_key(LAST_PRUNED, &()), index.encode()));
 			commit.meta.deleted.push(pruned.journal_key.clone());
+			commit.meta.deleted.push(pruned.offstate_journal_key.clone());
 			self.pending_prunings += 1;
 		} else {
 			warn!(target: "state-db", "Trying to prune when there's nothing to prune");
@@ -299,8 +312,8 @@ mod tests {
 		assert_eq!(pruning.death_rows.len(), 1);
 		assert_eq!(pruning.death_index.len(), 2);
 		assert!(db.data_eq(&make_db(&[1, 2, 3, 4, 5])));
-		println!("{:?}", db.offstate);
-		assert!(db.offstate_eq(&[1, 2, 3, 4, 5]));
+		assert!(db.offstate_eq_at(&[1, 2, 3], Some(0)));
+		assert!(db.offstate_eq(&[2, 4, 5]));
 		check_journal(&pruning, &db);
 
 		let mut commit = CommitSet::default();
@@ -310,6 +323,8 @@ mod tests {
 		pruning.apply_pending();
 		assert!(!pruning.have_block(&h));
 		assert!(db.data_eq(&make_db(&[2, 4, 5])));
+		// two remains since it is still valid next
+		assert!(db.offstate_eq_at(&[2], Some(0)));
 		assert!(db.offstate_eq(&[2, 4, 5]));
 		assert!(pruning.death_rows.is_empty());
 		assert!(pruning.death_index.is_empty());
@@ -321,7 +336,7 @@ mod tests {
 		let mut db = make_db(&[1, 2, 3]);
 		db.initialize_offstate(&[1, 2, 3]);
 		let mut pruning: RefWindow<H256, H256> = RefWindow::new(&db).unwrap();
-		let mut commit = make_commit_both(&[4], &[1]);
+		let mut commit = make_commit_both(&[3, 4], &[1]);
 		pruning.note_canonical(&H256::random(), &mut commit);
 		db.commit(&commit);
 		let mut commit = make_commit_both(&[5], &[2]);
@@ -329,7 +344,9 @@ mod tests {
 		db.commit(&commit);
 		pruning.apply_pending();
 		assert!(db.data_eq(&make_db(&[1, 2, 3, 4, 5])));
-		assert!(db.offstate_eq(&[1, 2, 3, 4, 5]));
+		assert!(db.offstate_eq_at(&[1, 2, 3], Some(0)));
+		assert!(db.offstate_eq_at(&[2, 3, 4], Some(1)));
+		assert!(db.offstate_eq(&[3, 4, 5]));
 
 		check_journal(&pruning, &db);
 
@@ -338,12 +355,17 @@ mod tests {
 		db.commit(&commit);
 		pruning.apply_pending();
 		assert!(db.data_eq(&make_db(&[2, 3, 4, 5])));
-		assert!(db.offstate_eq(&[2, 3, 4, 5]));
+		// 3 exists at 0 and 1 so 0 removed
+		assert!(db.offstate_eq_at(&[2], Some(0)));
+		assert!(db.offstate_eq_at(&[2, 3, 4], Some(1)));
+		assert!(db.offstate_eq(&[3, 4, 5]));
 		let mut commit = CommitSet::default();
 		pruning.prune_one(&mut commit);
 		db.commit(&commit);
 		pruning.apply_pending();
 		assert!(db.data_eq(&make_db(&[3, 4, 5])));
+		assert!(db.offstate_eq_at(&[], Some(0)));
+		assert!(db.offstate_eq_at(&[3, 4], Some(1)));
 		assert!(db.offstate_eq(&[3, 4, 5]));
 		assert_eq!(pruning.pending_number, 2);
 	}
@@ -356,21 +378,27 @@ mod tests {
 		let mut commit = make_commit_both(&[4], &[1]);
 		pruning.note_canonical(&H256::random(), &mut commit);
 		db.commit(&commit);
-		let mut commit = make_commit_both(&[5], &[2]);
+		let mut commit = make_commit_both(&[3, 5], &[2]);
 		pruning.note_canonical(&H256::random(), &mut commit);
 		db.commit(&commit);
 		assert!(db.data_eq(&make_db(&[1, 2, 3, 4, 5])));
-		assert!(db.offstate_eq(&[1, 2, 3, 4, 5]));
+		assert!(db.offstate_eq_at(&[1, 2, 3], Some(0)));
+		assert!(db.offstate_eq_at(&[2, 3, 4], Some(1)));
+		assert!(db.offstate_eq(&[3, 4, 5]));
 		let mut commit = CommitSet::default();
 		pruning.prune_one(&mut commit);
 		db.commit(&commit);
 		assert!(db.data_eq(&make_db(&[2, 3, 4, 5])));
-		assert!(db.offstate_eq(&[2, 3, 4, 5]));
+		assert!(db.offstate_eq_at(&[2, 3], Some(0)));
+		assert!(db.offstate_eq_at(&[2, 3, 4], Some(1)));
+		assert!(db.offstate_eq(&[3, 4, 5]));
 		let mut commit = CommitSet::default();
 		pruning.prune_one(&mut commit);
 		db.commit(&commit);
 		pruning.apply_pending();
 		assert!(db.data_eq(&make_db(&[3, 4, 5])));
+		assert!(db.offstate_eq_at(&[], Some(0)));
+		assert!(db.offstate_eq_at(&[4], Some(1)));
 		assert!(db.offstate_eq(&[3, 4, 5]));
 		assert_eq!(pruning.pending_number, 2);
 	}

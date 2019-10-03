@@ -80,3 +80,11 @@ fn as_i<I: TryFrom<usize>>(i: usize) -> I {
 		Err(_) => panic!("historied value index underflow"),
 	}
 }
+
+/// Prunning result to be able to proceed
+/// with further update if the value needs it.
+pub enum PruneResult {
+	Unchanged,
+	Changed,
+	Cleared,
+}

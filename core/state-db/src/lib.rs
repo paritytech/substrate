@@ -37,7 +37,7 @@ mod branch;
 use std::fmt;
 use parking_lot::RwLock;
 use codec::Codec;
-use std::collections::{HashMap, hash_map::Entry};
+use std::collections::{HashSet, HashMap, hash_map::Entry};
 use noncanonical::NonCanonicalOverlay;
 use pruning::RefWindow;
 use log::trace;
@@ -138,9 +138,21 @@ pub struct ChangeSet<H: Hash> {
 }
 
 /// A set of offstate state values changes.
+/// TODO EMCH note that this could really benefit from batching
+/// the change set (need to change from client to run over
+/// the whole range for offstate: then we can get prepare
+/// insertion of batch values for history in db such as :
+/// pub type OffstateChangeSet<H> = Vec<(H, Vec(u64, Option<DBValue>))>;
+/// ),
+/// but it just need to be build from client (no need to change
+/// it here except to extract faster).
 pub type OffstateChangeSet<H> = Vec<(H, Option<DBValue>)>;
 
+/// Info for pruning offstate: a last prune index and keys to prune.
+pub type OffstateChangeSetPrune<H> = Option<(u64, HashSet<H>)>;
+
 /// A set of changes to the backing database.
+/// It only contain a single block change set.
 #[derive(Default, Debug, Clone)]
 pub struct CommitSet<H: Hash> {
 	/// State node changes.
@@ -149,6 +161,8 @@ pub struct CommitSet<H: Hash> {
 	pub meta: ChangeSet<Vec<u8>>,
 	/// Offstate data changes.
 	pub offstate: OffstateChangeSet<OffstateKey>,
+	/// Offstate data changes good for prunning.
+	pub offstate_prune: OffstateChangeSetPrune<OffstateKey>,
 }
 
 /// Pruning constraints. If none are specified pruning is
@@ -246,6 +260,7 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 					data: changeset,
 					meta: Default::default(),
 					offstate: offstate_changeset,
+					offstate_prune: None,
 				})
 			},
 			PruningMode::Constrained(_) | PruningMode::ArchiveCanonical => {

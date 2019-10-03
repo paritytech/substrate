@@ -146,7 +146,8 @@ struct JournalRecord<BlockHash: Hash, Key: Hash> {
 
 #[derive(Encode, Decode)]
 struct OffstateJournalRecord {
-	inserted: Vec<(OffstateKey, Option<DBValue>)>,
+	inserted: Vec<(OffstateKey, DBValue)>,
+	deleted: Vec<OffstateKey>,
 }
 
 fn to_journal_key(block: BlockNumber, index: u64) -> Vec<u8> {
@@ -165,6 +166,7 @@ struct BlockOverlay<BlockHash: Hash, Key: Hash> {
 	inserted: Vec<Key>,
 	deleted: Vec<Key>,
 	offstate_inserted: Vec<OffstateKey>,
+	offstate_deleted: Vec<OffstateKey>,
 }
 
 fn insert_values<Key: Hash>(values: &mut HashMap<Key, (u32, DBValue)>, inserted: Vec<(Key, DBValue)>) {
@@ -178,11 +180,16 @@ fn insert_values<Key: Hash>(values: &mut HashMap<Key, (u32, DBValue)>, inserted:
 fn insert_offstate_values<Key: Hash>(
 	state: &BranchRanges,
 	values: &mut HashMap<Key, History<Option<DBValue>>>,
-	inserted: Vec<(Key, Option<DBValue>)>,
+	inserted: Vec<(Key, DBValue)>,
+	deleted: Vec<Key>,
 ) {
 	for (k, v) in inserted {
 		let entry = values.entry(k).or_insert_with(|| Default::default());
-		entry.set(state, v);
+		entry.set(state, Some(v));
+	}
+	for k in deleted {
+		let entry = values.entry(k).or_insert_with(|| Default::default());
+		entry.set(state, None);
 	}
 }
 
@@ -212,6 +219,7 @@ fn discard_values<Key: Hash>(
 
 fn discard_offstate_values(
 	inserted: Vec<OffstateKey>,
+	deleted: Vec<OffstateKey>,
 	into: &mut OffstatePendingGC,
 ) {
 	let into = if into.pending_canonicalisation_query.is_some() {
@@ -220,6 +228,7 @@ fn discard_offstate_values(
 		&mut into.keys_pending_gc
 	};
 	into.extend(inserted);
+	into.extend(deleted);
 }
 
 
@@ -243,6 +252,7 @@ fn discard_descendants<BlockHash: Hash, Key: Hash>(
 				discard_values(&mut values, overlay.inserted, pinned.as_mut().map(|p| &mut p.0));
 				discard_offstate_values(
 					overlay.offstate_inserted,
+					overlay.offstate_deleted,
 					offstate_gc,
 				);
 				None
@@ -296,35 +306,43 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 								parent_branch_range,
 							);
 
-							let offstate_record_inserted = if let Some(record) = db
+							let (offstate_record_inserted, offstate_record_deleted) = if let Some(record) = db
 								.get_meta(&offstate_journal_key).map_err(|e| Error::Db(e))? {
 									let record = OffstateJournalRecord::decode(&mut record.as_slice())?;
-									Some(record.inserted)
-							} else { None };
+									(Some(record.inserted), Some(record.deleted))
+							} else { (None, None) };
 							let inserted = record.inserted.iter().map(|(k, _)| k.clone()).collect();
 							let offstate_inserted = offstate_record_inserted.as_ref()
 								.map(|inserted| inserted.iter().map(|(k, _)| k.clone()).collect())
 								.unwrap_or(Vec::new());
+							let offstate_deleted = offstate_record_deleted.clone().unwrap_or(Vec::new());
 							let overlay = BlockOverlay {
 								hash: record.hash.clone(),
 								journal_key,
 								offstate_journal_key,
 								inserted: inserted,
 								deleted: record.deleted,
-								offstate_inserted: offstate_inserted,
+								offstate_inserted,
+								offstate_deleted,
 							};
 							insert_values(&mut values, record.inserted);
-							if let Some(inserted) = offstate_record_inserted {
-								insert_offstate_values(&branch_range, &mut offstate_values, inserted);
+							if offstate_record_inserted.is_some() || offstate_record_deleted.is_some() {
+								insert_offstate_values(
+									&branch_range,
+									&mut offstate_values,
+									offstate_record_inserted.unwrap_or(Vec::new()),
+									offstate_record_deleted.unwrap_or(Vec::new()),
+								);
 							}
 							trace!(
 								target: "state-db",
-								"Uncanonicalized journal entry {}.{} ({} {} inserted, {} deleted)",
+								"Uncanonicalized journal entry {}.{} ({} {} inserted, {} {} deleted)",
 								block,
 								index,
 								overlay.inserted.len(),
 								overlay.offstate_inserted.len(),
 								overlay.deleted.len(),
+								overlay.offstate_deleted.len(),
 							);
 							level.push(overlay);
 							parents.insert(record.hash, (record.parent_hash, branch_index));
@@ -404,14 +422,25 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 		let offstate_journal_key = to_offstate_journal_key(number, index);
 
 		let inserted = changeset.inserted.iter().map(|(k, _)| k.clone()).collect();
-		let offstate_inserted = offstate_changeset.iter().map(|(k, _)| k.clone()).collect();
+		let mut offstate_inserted = Vec::new();
+		let mut offstate_inserted_value = Vec::new();
+		let mut offstate_deleted = Vec::new();
+		for (k, v) in offstate_changeset.into_iter() {
+			if let Some(v) = v {
+				offstate_inserted.push(k.clone());
+				offstate_inserted_value.push((k, v));
+			} else {
+				offstate_deleted.push(k);
+			}
+		}
 		let overlay = BlockOverlay {
 			hash: hash.clone(),
 			journal_key: journal_key.clone(),
 			offstate_journal_key: offstate_journal_key.clone(),
 			inserted: inserted,
 			deleted: changeset.deleted.clone(),
-			offstate_inserted: offstate_inserted,
+			offstate_inserted,
+			offstate_deleted: offstate_deleted.clone(),
 		};
 		level.push(overlay);
 		let	parent_branch_index = self.parents.get(&parent_hash).map(|(_, i)| *i).unwrap_or(0);
@@ -431,7 +460,8 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 		};
 		commit.meta.inserted.push((journal_key, journal_record.encode()));
 		let offstate_journal_record = OffstateJournalRecord {
-			inserted: offstate_changeset,
+			inserted: offstate_inserted_value,
+			deleted: offstate_deleted,
 		};
 		commit.meta.inserted.push((offstate_journal_key, offstate_journal_record.encode()));
 	
@@ -445,7 +475,12 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 			journal_record.deleted.len(),
 		);
 		insert_values(&mut self.values, journal_record.inserted);
-		insert_offstate_values(&branch_range, &mut self.offstate_values, offstate_journal_record.inserted);
+		insert_offstate_values(
+			&branch_range,
+			&mut self.offstate_values,
+			offstate_journal_record.inserted,
+			offstate_journal_record.deleted,
+		);
 		self.pending_insertions.push(hash.clone());
 		Ok(commit)
 	}
@@ -531,13 +566,13 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 			.map(|k| (k.clone(), self.values.get(k).expect("For each key in overlays there's a value in values").1.clone())));
 		commit.data.deleted.extend(overlay.deleted.clone());
 		let block_number = self.front_block_number() + self.pending_canonicalizations.len() as u64;
-		if !overlay.offstate_inserted.is_empty() {
+		if !overlay.offstate_inserted.is_empty() || !overlay.offstate_deleted.is_empty() {
 			// canonicalization is not frequent enough that we pass range
 			// in parameter for now
-			// TODO EMCH it seems bad idea to maintain this commit offstate
-			// field as his: simply delta of state could be better??
 			if let Some(range) = self.get_branch_range(hash, block_number) {
-				commit.offstate.extend(overlay.offstate_inserted.iter()
+				commit.offstate.extend(
+					overlay.offstate_inserted.iter()
+					.chain(overlay.offstate_deleted.iter())
 					.map(|k| (k.clone(), self.offstate_values.get(k)
 						.expect("For each key in overlays there's a value in values")
 						.get(&range)
@@ -586,6 +621,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 				discard_values(&mut self.values, overlay.inserted, pinned.as_mut().map(|p| &mut p.0));
 				discard_offstate_values(
 					overlay.offstate_inserted,
+					overlay.offstate_deleted,
 					&mut self.offstate_gc,
 				);
 			}
@@ -648,7 +684,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 					self.branches.revert(branch_index);
 				}
 				discard_values(&mut self.values, overlay.inserted, None);
-				discard_offstate_values(overlay.offstate_inserted, &mut self.offstate_gc);
+				discard_offstate_values(overlay.offstate_inserted, overlay.offstate_deleted, &mut self.offstate_gc);
 			}
 			commit
 		})

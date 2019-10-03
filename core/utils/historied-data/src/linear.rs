@@ -47,8 +47,57 @@ const ALLOCATED_HISTORY: usize = 2;
 /// Can be written as is in underlying
 /// storage.
 /// Could be use for direct access memory to.
-pub struct Serialized<'a, F>(Cow<'a, [u8]>, PhantomData<F>);
+pub struct Serialized<'a, F>(SerializedBuff<'a>, PhantomData<F>);
 
+#[derive(Debug)]
+#[cfg_attr(any(test, feature = "test"), derive(PartialEq))]
+enum SerializedBuff<'a> {
+	Cow(Cow<'a, [u8]>),
+	Mut(&'a mut Vec<u8>),
+}
+
+impl<'a> SerializedBuff<'a> {
+	pub fn to_mut(&mut self) -> &mut Vec<u8> {
+		match self {
+			SerializedBuff::Cow(c) => c.to_mut(),
+			SerializedBuff::Mut(m) => m,
+		}
+	}
+	pub fn into_owned(self) -> Vec<u8> {
+		match self {
+			SerializedBuff::Cow(c) => c.into_owned(),
+			SerializedBuff::Mut(m) => m.clone(),
+		}
+	}
+}
+
+impl<'a> rstd::ops::Deref for SerializedBuff<'a> {
+	type Target = [u8];
+	fn deref(&self) -> &Self::Target {
+		match self {
+			SerializedBuff::Cow(c) => c.deref(),
+			SerializedBuff::Mut(m) => m.deref(),
+		}
+	}
+}
+
+impl<'a> rstd::ops::DerefMut for SerializedBuff<'a> {
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.to_mut()[..]
+	}
+}
+
+impl<'a> Clone for SerializedBuff<'a> {
+	fn clone(&self) -> Self {
+		match self {
+			SerializedBuff::Cow(c) => SerializedBuff::Cow(c.clone()),
+			SerializedBuff::Mut(m) => {
+				let m: Vec<u8> = (*m).clone();
+				SerializedBuff::Cow(Cow::Owned(m))
+			}
+		}
+	}
+}
 /// Serialized specific behavior.
 pub trait SerializedConfig {
 	/// encoded empty slice
@@ -90,7 +139,11 @@ const SIZE_BYTE_LEN: usize = 8;
 impl<'a, F: SerializedConfig> Serialized<'a, F> {
 
 	pub fn into_owned(self) -> Serialized<'static, F> {
-    Serialized(Cow::from(self.0.into_owned()), PhantomData)
+    Serialized(SerializedBuff::Cow(Cow::from(self.0.into_owned())), PhantomData)
+  }
+
+	pub fn into_vec(self) -> Vec<u8> {
+    self.0.into_owned()
   }
 
 	pub(crate) fn len(&self) -> usize {
@@ -98,7 +151,7 @@ impl<'a, F: SerializedConfig> Serialized<'a, F> {
 		self.read_le_usize(len - SIZE_BYTE_LEN) as usize
 	}
 
-	fn clear(&mut self) {
+	pub(crate) fn clear(&mut self) {
 		self.write_le_usize(F::version_len(), 0);
 		self.0.to_mut().truncate(F::version_len() + SIZE_BYTE_LEN);
 	}
@@ -148,6 +201,11 @@ impl<'a, F: SerializedConfig> Serialized<'a, F> {
 	}
 
 	pub(crate) fn push(&mut self, val: HistoriedValue<&[u8], u64>) {
+		self.push_extra(val, &[])
+	}
+
+	/// variant of push where part of the value is in a second slice.
+	pub(crate) fn push_extra(&mut self, val: HistoriedValue<&[u8], u64>, extra: &[u8]) {
 		let len = self.len();
 		let start_ix = self.index_start();
 		let end_ix = self.0.len();
@@ -158,6 +216,7 @@ impl<'a, F: SerializedConfig> Serialized<'a, F> {
 		self.0.to_mut().truncate(start_ix + SIZE_BYTE_LEN);
 		self.write_le_u64(start_ix, val.index);
 		self.0.to_mut().extend_from_slice(val.value);
+		self.0.to_mut().extend_from_slice(extra);
 		self.0.to_mut().append(&mut new_ix);
 		if len > 0 {
 			self.write_le_usize(self.0.len() - SIZE_BYTE_LEN, start_ix);
@@ -173,8 +232,11 @@ impl<'a, F: SerializedConfig> Serialized<'a, F> {
 	}
 
 	fn remove_range(&mut self, index: usize, end: usize) {
+		if end == 0 {
+			return;
+		}
 		let len = self.len();
-		if len == 1 && index == 0 {
+		if len <= end - index && index == 0 {
 			self.clear();
 			return;
 		}
@@ -230,13 +292,25 @@ const DEFAULT_VERSION_EMPTY_SERIALIZED: [u8; SIZE_BYTE_LEN + 1] = {
 
 impl<'a, F: SerializedConfig> Default for Serialized<'a, F> {
 	fn default() -> Self {
-		Serialized(Cow::Borrowed(F::empty()), PhantomData)
+		Serialized(SerializedBuff::Cow(Cow::Borrowed(F::empty())), PhantomData)
 	}
 }
 
 impl<'a, F> Into<Serialized<'a, F>> for &'a[u8] {
 	fn into(self) -> Serialized<'a, F> {
-		Serialized(Cow::Borrowed(self), PhantomData)
+		Serialized(SerializedBuff::Cow(Cow::Borrowed(self)), PhantomData)
+	}
+}
+
+impl<F> Into<Serialized<'static, F>> for Vec<u8> {
+	fn into(self) -> Serialized<'static, F> {
+		Serialized(SerializedBuff::Cow(Cow::Owned(self)), PhantomData)
+	}
+}
+
+impl<'a, F> Into<Serialized<'a, F>> for &'a mut Vec<u8> {
+	fn into(self) -> Serialized<'a, F> {
+		Serialized(SerializedBuff::Mut(self), PhantomData)
 	}
 }
 

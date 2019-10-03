@@ -16,13 +16,14 @@
 
 //! Test utils
 
-use std::collections::HashMap;
+use std::collections::{HashMap, BTreeMap};
 use primitives::H256;
 use crate::{
 	DBValue, ChangeSet, OffstateChangeSet, CommitSet, MetaDb, NodeDb, OffstateDb,
 	OffstateKey,
 };
 use historied_data::tree::Serialized;
+use historied_data::PruneResult;
 use historied_data::linear::DefaultVersion;
 
 type Ser<'a> = Serialized<'a, DefaultVersion>;
@@ -49,18 +50,19 @@ impl OffstateDb<Option<u64>> for TestDb {
 	fn get_offstate(&self, key: &[u8], state: &Option<u64>) -> Result<Option<DBValue>, ()> {
 		let state = state.unwrap_or(self.last_block);
 		Ok(self.offstate.get(key)
-			.map(|s| Ser::from(s.as_slice().into()))
+			.map(|s| Ser::from_slice(s.as_slice()))
 			.and_then(|s| s.get(state)
+				.unwrap_or(None) // flatten
 				.map(Into::into)
 		))
-		
 	}
 
 	fn get_offstate_pairs(&self, state: &Option<u64>) -> Vec<(OffstateKey, DBValue)> {
 		let state = state.unwrap_or(self.last_block);
 		self.offstate.iter().filter_map(|(a, s)| (
-			Ser::from(s.as_slice().into())
+			Ser::from_slice(s.as_slice())
 				.get(state)
+				.unwrap_or(None) // flatten
 				.map(|v| (a.clone(), v.to_vec()))
 		)).collect()
 	}
@@ -77,15 +79,33 @@ impl NodeDb for TestDb {
 
 impl TestDb {
 	pub fn commit(&mut self, commit: &CommitSet<H256>) {
+		self.last_block += 1;
 		self.data.extend(commit.data.inserted.iter().cloned());
 		for k in commit.data.deleted.iter() {
 			self.data.remove(k);
 		}
 		for (k, o) in commit.offstate.iter() {
-			if let Some(v) = o {
-				self.offstate.insert(k.to_vec(), v.to_vec());
-			} else {
-				self.offstate.remove(k);
+			let encoded = self.offstate.entry(k.clone())
+				.or_insert_with(|| Ser::default().into_vec());
+			let mut ser = Ser::from_mut(&mut (*encoded));
+			ser.push(self.last_block, o.as_ref().map(|v| v.as_slice()));
+		}
+		if let Some((block_prune, offstate_prune_key)) = commit.offstate_prune.as_ref() {
+			for k in offstate_prune_key.iter() {
+				match self.offstate.get_mut(k).map(|v| {
+					println!("t{}", *block_prune);
+					println!("t{:?}", k);
+					println!("ser{:?}", v);
+					let mut ser = Ser::from_mut(v);
+					let r = ser.prune(*block_prune);
+					println!("ser{:?}", ser.into_vec());
+					r
+				}) {
+					Some(PruneResult::Cleared) => { let _ = self.offstate.remove(k); },
+					Some(PruneResult::Changed) // changed applyied on mutable buffer without copy.
+					| Some(PruneResult::Unchanged)
+					| None => (),
+				}
 			}
 		}
 		self.meta.extend(commit.meta.inserted.iter().cloned());
@@ -98,14 +118,27 @@ impl TestDb {
 		self.data == other.data
 	}
 
-	pub fn offstate_eq(&self, values: &[u64]) -> bool {
+	pub fn offstate_eq_at(&self, values: &[u64], block: Option<u64>) -> bool {
 		let data = make_offstate_changeset(values, &[]);
-		self.offstate == data.into_iter().filter_map(|(k, v)| v.map(|v| (k,v))).collect()
+		let self_offstate: BTreeMap<_, _> = self.get_offstate_pairs(&block).into_iter().collect();
+		println!("---{:?}", self_offstate);
+		self_offstate == data.into_iter().filter_map(|(k, v)| v.map(|v| (k,v))).collect()
+	}
+
+	pub fn offstate_eq(&self, values: &[u64]) -> bool {
+		self.offstate_eq_at(values, None)
 	}
 
 	pub fn initialize_offstate(&mut self, inserted: &[u64]) {
 		let data = make_offstate_changeset(inserted, &[]);
-		self.offstate = data.into_iter().filter_map(|(k, v)| v.map(|v| (k,v))).collect();
+		self.offstate = data.into_iter()
+			.filter_map(|(k, v)| v.map(|v| (k,v)))
+			.map(|(k, v)| {
+				let mut ser = Ser::default();
+				ser.push(self.last_block, Some(v.as_slice()));
+				(k, ser.into_vec())
+			})
+			.collect();
 	}
 }
 
@@ -140,6 +173,7 @@ pub fn make_commit(inserted: &[u64], deleted: &[u64]) -> CommitSet<H256> {
 		data: make_changeset(inserted, deleted),
 		meta: ChangeSet::default(),
 		offstate: OffstateChangeSet::default(),
+		offstate_prune: None,
 	}
 }
 
@@ -148,6 +182,7 @@ pub fn make_commit_both(inserted: &[u64], deleted: &[u64]) -> CommitSet<H256> {
 		data: make_changeset(inserted, deleted),
 		meta: ChangeSet::default(),
 		offstate: make_offstate_changeset(inserted, deleted),
+		offstate_prune: None,
 	}
 }
 
