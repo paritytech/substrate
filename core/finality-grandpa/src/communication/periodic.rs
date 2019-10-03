@@ -26,7 +26,7 @@ use log::{debug, warn};
 use tokio_timer::Delay;
 
 use network::PeerId;
-use sr_primitives::traits::{NumberFor, Block as BlockT};
+use sr_primitives::traits::{Block as BlockT};
 use super::{gossip::{NeighborPacket, GossipMessage}, Network};
 
 // how often to rebroadcast, if no other
@@ -44,7 +44,7 @@ fn rebroadcast_instant() -> Instant {
 /// A sender used to send neighbor packets to a background job.
 #[derive(Clone)]
 pub(super) struct NeighborPacketSender<B: BlockT>(
-	mpsc::UnboundedSender<(Vec<PeerId>, NeighborPacket<NumberFor<B>>)>
+	mpsc::UnboundedSender<(Vec<PeerId>, NeighborPacket<B>)>
 );
 
 impl<B: BlockT> NeighborPacketSender<B> {
@@ -52,7 +52,7 @@ impl<B: BlockT> NeighborPacketSender<B> {
 	pub fn send(
 		&self,
 		who: Vec<network::PeerId>,
-		neighbor_packet: NeighborPacket<NumberFor<B>>,
+		neighbor_packet: NeighborPacket<B>,
 	) {
 		if let Err(err) = self.0.unbounded_send((who, neighbor_packet)) {
 			debug!(target: "afg", "Failed to send neighbor packet: {:?}", err);
@@ -72,7 +72,7 @@ pub(super) fn neighbor_packet_worker<B, N>(net: N) -> (
 	N: Network<B>,
 {
 	let mut last = None;
-	let (tx, mut rx) = mpsc::unbounded::<(Vec<PeerId>, NeighborPacket<NumberFor<B>>)>();
+	let (tx, mut rx) = mpsc::unbounded::<(Vec<PeerId>, NeighborPacket<B>)>();
 	let mut delay = Delay::new(rebroadcast_instant());
 
 	let work = futures::future::poll_fn(move || {

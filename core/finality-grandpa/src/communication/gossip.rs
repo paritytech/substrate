@@ -93,7 +93,7 @@ use log::{trace, debug, warn};
 use futures::prelude::*;
 use futures::sync::mpsc;
 
-use crate::{environment, CatchUp, CompactCommit, SignedMessage, BlockImportedChecker};
+use crate::{environment, CatchUp, CompactCommit, SignedMessage, BlockStatus};
 use super::{cost, benefit, Round, SetId};
 
 use std::collections::{HashMap, VecDeque};
@@ -252,15 +252,15 @@ pub(super) enum GossipMessage<Block: BlockT> {
 	/// Grandpa commit message with round and set info.
 	Commit(FullCommitMessage<Block>),
 	/// A neighbor packet. Not repropagated.
-	Neighbor(VersionedNeighborPacket<NumberFor<Block>>),
+	Neighbor(VersionedNeighborPacket<Block>),
 	/// Grandpa catch up request message with round and set info. Not repropagated.
 	CatchUpRequest(CatchUpRequestMessage),
 	/// Grandpa catch up message with round and set info. Not repropagated.
 	CatchUp(FullCatchUpMessage<Block>),
 }
 
-impl<Block: BlockT> From<NeighborPacket<NumberFor<Block>>> for GossipMessage<Block> {
-	fn from(neighbor: NeighborPacket<NumberFor<Block>>) -> Self {
+impl<Block: BlockT> From<NeighborPacket<Block>> for GossipMessage<Block> {
+	fn from(neighbor: NeighborPacket<Block>) -> Self {
 		GossipMessage::Neighbor(VersionedNeighborPacket::V1(neighbor))
 	}
 }
@@ -292,13 +292,15 @@ pub(super) struct FullCommitMessage<Block: BlockT> {
 /// V1 neighbor packet. Neighbor packets are sent from nodes to their peers
 /// and are not repropagated. These contain information about the node's state.
 #[derive(Debug, Encode, Decode, Clone)]
-pub(super) struct NeighborPacket<N> {
+pub(super) struct NeighborPacket<Block: BlockT> where
+	NumberFor<Block>: Ord,
+{
 	/// The round the node is currently at.
 	pub(super) round: Round,
 	/// The set ID the node is currently at.
 	pub(super) set_id: SetId,
 	/// The highest finalizing commit observed.
-	pub(super) commit_finalized_height: N,
+	pub(super) commit_finalized_height: NumberFor<Block>,
 	/// Hashes of the blocks which:
 	///
 	/// - the node has synced
@@ -306,19 +308,19 @@ pub(super) struct NeighborPacket<N> {
 	/// - have been mentioned by nodes in vote (Prevote, Precommit) messages
 	///
 	/// - within the advertised Round set in `round` field.
-	// TODO: Replace `()` with some hash trait bound.
-	pub(super) known_vote_blocks: Vec<()>,
+	pub(super) known_vote_blocks: Vec<Block::Hash>,
 }
 
 /// A versioned neighbor packet.
 #[derive(Debug, Encode, Decode)]
-pub(super) enum VersionedNeighborPacket<N> {
+pub(super) enum VersionedNeighborPacket<Block: BlockT> {
+	// TODO: Should we be updating this version given that this effort is a breaking change?
 	#[codec(index = "1")]
-	V1(NeighborPacket<N>),
+	V1(NeighborPacket<Block>),
 }
 
-impl<N> VersionedNeighborPacket<N> {
-	fn into_neighbor_packet(self) -> NeighborPacket<N> {
+impl<Block: BlockT> VersionedNeighborPacket<Block> {
+	fn into_neighbor_packet(self) -> NeighborPacket<Block> {
 		match self {
 			VersionedNeighborPacket::V1(p) => p,
 		}
@@ -411,17 +413,20 @@ impl<N> PeerInfo<N> {
 }
 
 /// The peers we're connected to in gossip.
-struct Peers<N> {
-	inner: HashMap<PeerId, PeerInfo<N>>,
+struct Peers<Block: BlockT> {
+	inner: HashMap<PeerId, PeerInfo<NumberFor<Block>>>,
 }
 
-impl<N> Default for Peers<N> {
+impl<Block: BlockT> Default for Peers<Block> {
 	fn default() -> Self {
 		Peers { inner: HashMap::new() }
 	}
 }
 
-impl<N: Ord> Peers<N> {
+impl<Block> Peers<Block> where
+	Block: BlockT,
+	NumberFor<Block>: Ord,
+{
 	fn new_peer(&mut self, who: PeerId, roles: Roles) {
 		self.inner.insert(who, PeerInfo::new(roles));
 	}
@@ -431,8 +436,8 @@ impl<N: Ord> Peers<N> {
 	}
 
 	// returns a reference to the new view, if the peer is known.
-	fn update_peer_state(&mut self, who: &PeerId, update: NeighborPacket<N>)
-		-> Result<Option<&View<N>>, Misbehavior>
+	fn update_peer_state(&mut self, who: &PeerId, update: NeighborPacket<Block>)
+		-> Result<Option<&View<NumberFor<Block>>>, Misbehavior>
 	{
 		let peer = match self.inner.get_mut(who) {
 			None => return Ok(None),
@@ -459,7 +464,7 @@ impl<N: Ord> Peers<N> {
 		Ok(Some(&peer.view))
 	}
 
-	fn update_commit_height(&mut self, who: &PeerId, new_height: N) -> Result<(), Misbehavior> {
+	fn update_commit_height(&mut self, who: &PeerId, new_height: NumberFor<Block>) -> Result<(), Misbehavior> {
 		let peer = match self.inner.get_mut(who) {
 			None => return Ok(()),
 			Some(p) => p,
@@ -477,7 +482,7 @@ impl<N: Ord> Peers<N> {
 		Ok(())
 	}
 
-	fn peer<'a>(&'a self, who: &PeerId) -> Option<&'a PeerInfo<N>> {
+	fn peer<'a>(&'a self, who: &PeerId) -> Option<&'a PeerInfo<NumberFor<Block>>> {
 		self.inner.get(who)
 	}
 }
@@ -511,10 +516,12 @@ enum PendingCatchUp {
 }
 
 /// The inner lock-protected struct of a GossipValidator, enabling GossipValidator itself to be std::marker::Sync.
-// TODO: Why does GossipValidator need to be Sync? Does Grandpa logic need to be parallel?
+// TODO: Why does GossipValidator need to be Sync? Does Grandpa logic need to be parallel? I guess in this case related
+// to the fact that the GossipValidator also acts as a network Validator (trait) thus is shared by two substrate
+// components (network & finality-grandpa).
 struct Inner<Block: BlockT, Client> {
 	local_view: Option<View<NumberFor<Block>>>,
-	peers: Peers<NumberFor<Block>>,
+	peers: Peers<Block>,
 	live_topics: KeepTopics<Block>,
 	authorities: Vec<AuthorityId>,
 	config: crate::Config,
@@ -522,11 +529,14 @@ struct Inner<Block: BlockT, Client> {
 	pending_catch_up: PendingCatchUp,
 	catch_up_enabled: bool,
 	client: Client,
+	// TODO: Add doc comment
+	/// Blocks we have seen mentioned in votes. One need to check ad-hoc whether they are available locally.
+	known_vote_blocks: Vec<Block::Hash>,
 }
 
-type MaybeMessage<Block> = Option<(Vec<PeerId>, NeighborPacket<NumberFor<Block>>)>;
+type MaybeMessage<Block> = Option<(Vec<PeerId>, NeighborPacket<Block>)>;
 
-impl<Block: BlockT, Client> Inner<Block, Client> {
+impl<Block: BlockT, Client: BlockStatus<Block>> Inner<Block, Client> {
 	fn new(config: crate::Config, catch_up_enabled: bool, client: Client) -> Self {
 		Inner {
 			local_view: None,
@@ -538,12 +548,16 @@ impl<Block: BlockT, Client> Inner<Block, Client> {
 			catch_up_enabled,
 			config,
 			client,
+			known_vote_blocks: vec![],
 		}
 	}
 
 	/// Note a round in the current set has started.
 	fn note_round(&mut self, round: Round) -> MaybeMessage<Block> {
 		{
+			// Given that we start a new round, reset the known vote blocks tracking blocks of the last round.
+			self.known_vote_blocks = vec![];
+
 			let local_view = match self.local_view {
 				None => return None,
 				Some(ref mut v) => if v.round == round {
@@ -648,6 +662,13 @@ impl<Block: BlockT, Client> Inner<Block, Client> {
 			telemetry!(CONSENSUS_DEBUG; "afg.bad_msg_signature"; "signature" => ?full.message.id);
 			return Action::Discard(cost::BAD_SIGNATURE);
 		}
+
+		// TODO: Adding a block in a function called 'validate' seems missleading.
+		//
+		// TODO: Is it save to give these vote and commit messages any attention at this point? Do they need to be
+		// further validated before we add their block hash to the list?
+		//
+		// self.known_vote_blocks.push(/* hash of the block*/);
 
 		let topic = super::round_topic::<Block>(full.round.0, full.set_id.0);
 		Action::Keep(topic, benefit::ROUND_MESSAGE)
@@ -867,7 +888,7 @@ impl<Block: BlockT, Client> Inner<Block, Client> {
 		(catch_up, report)
 	}
 
-	fn import_neighbor_message(&mut self, who: &PeerId, update: NeighborPacket<NumberFor<Block>>)
+	fn import_neighbor_message(&mut self, who: &PeerId, update: NeighborPacket<Block>)
 		-> (Vec<Block::Hash>, Action<Block::Hash>, Option<GossipMessage<Block>>, Option<Report>)
 	{
 		let update_res = self.peers.update_peer_state(who, update);
@@ -894,11 +915,16 @@ impl<Block: BlockT, Client> Inner<Block, Client> {
 
 	fn multicast_neighbor_packet(&self) -> MaybeMessage<Block> {
 		self.local_view.as_ref().map(|local_view| {
+			let known_vote_blocks = self.known_vote_blocks.iter().filter(|h| {
+				// TODO: Remove unwrap.
+				self.client.block_number(**h).unwrap().map(|_| true).unwrap_or(false)
+			}).map(|h| h.clone()).collect();
+
 			let packet = NeighborPacket {
 				round: local_view.round,
 				set_id: local_view.set_id,
 				commit_finalized_height: local_view.last_commit.unwrap_or(Zero::zero()),
-				known_vote_blocks: vec![],
+				known_vote_blocks: known_vote_blocks,
 			};
 
 			let peers = self.peers.inner.keys().cloned().collect();
@@ -947,7 +973,7 @@ pub(super) struct GossipValidator<Block: BlockT, Client> {
 	report_sender: mpsc::UnboundedSender<PeerReport>,
 }
 
-impl<Block: BlockT, Client> GossipValidator<Block, Client> {
+impl<Block: BlockT, Client: BlockStatus<Block>> GossipValidator<Block, Client> {
 	/// Create a new gossip-validator. The current set is initialized to 0. If
 	/// `catch_up_enabled` is set to false then the validator will not issue any
 	/// catch up requests (useful e.g. when running just the GRANDPA observer).
@@ -969,7 +995,7 @@ impl<Block: BlockT, Client> GossipValidator<Block, Client> {
 
 	/// Note a round in the current set has started.
 	pub(super) fn note_round<F>(&self, round: Round, send_neighbor: F)
-		where F: FnOnce(Vec<PeerId>, NeighborPacket<NumberFor<Block>>)
+		where F: FnOnce(Vec<PeerId>, NeighborPacket<Block>)
 	{
 		let maybe_msg = self.inner.write().note_round(round);
 		if let Some((to, msg)) = maybe_msg {
@@ -980,7 +1006,7 @@ impl<Block: BlockT, Client> GossipValidator<Block, Client> {
 	/// Note that a voter set with given ID has started. Updates the current set to given
 	/// value and initializes the round to 0.
 	pub(super) fn note_set<F>(&self, set_id: SetId, authorities: Vec<AuthorityId>, send_neighbor: F)
-		where F: FnOnce(Vec<PeerId>, NeighborPacket<NumberFor<Block>>)
+		where F: FnOnce(Vec<PeerId>, NeighborPacket<Block>)
 	{
 		let maybe_msg = self.inner.write().note_set(set_id, authorities);
 		if let Some((to, msg)) = maybe_msg {
@@ -990,7 +1016,7 @@ impl<Block: BlockT, Client> GossipValidator<Block, Client> {
 
 	/// Note that we've imported a commit finalizing a given block.
 	pub(super) fn note_commit_finalized<F>(&self, finalized: NumberFor<Block>, send_neighbor: F)
-		where F: FnOnce(Vec<PeerId>, NeighborPacket<NumberFor<Block>>)
+		where F: FnOnce(Vec<PeerId>, NeighborPacket<Block>)
 	{
 		let maybe_msg = self.inner.write().note_commit_finalized(finalized);
 		if let Some((to, msg)) = maybe_msg {
@@ -1059,7 +1085,7 @@ impl<Block: BlockT, Client> GossipValidator<Block, Client> {
 	}
 }
 
-impl<Block: BlockT, Client: Send + Sync> network_gossip::Validator<Block> for GossipValidator<Block, Client> {
+impl<Block: BlockT, Client: BlockStatus<Block> + Send + Sync> network_gossip::Validator<Block> for GossipValidator<Block, Client> {
 	fn new_peer(&self, context: &mut dyn ValidatorContext<Block>, who: &PeerId, roles: Roles) {
 		let packet = {
 			let mut inner = self.inner.write();

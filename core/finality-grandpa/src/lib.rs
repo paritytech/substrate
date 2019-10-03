@@ -887,13 +887,3 @@ fn authority_id<'a, I>(
 		None => None,
 	}
 }
-
-pub(crate) trait BlockImportedChecker<Block: BlockT> {
-	fn is_imported(h: Block::Hash) -> bool;
-}
-
-impl<Backend, E, Block: BlockT, RA> BlockImportedChecker<Block> for Arc<Client<Backend, E, Block, RA>>{
-	fn is_imported(_h: Block::Hash) -> bool {
-		false
-	}
-}

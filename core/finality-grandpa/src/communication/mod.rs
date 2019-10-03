@@ -43,8 +43,7 @@ use substrate_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_INFO};
 use tokio_executor::Executor;
 
 use crate::{
-	CatchUp, Commit, CommunicationIn, CommunicationOut, CompactCommit, Error,
-	Message, SignedMessage, BlockImportedChecker,
+	BlockStatus, CatchUp, Commit, CommunicationIn, CommunicationOut, CompactCommit, Error, Message, SignedMessage,
 };
 use crate::environment::HasVoted;
 use gossip::{
@@ -233,14 +232,14 @@ impl Stream for NetworkStream {
 }
 
 /// Bridge between the underlying network service, gossiping consensus messages and Grandpa
-pub(crate) struct NetworkBridge<B: BlockT, N: Network<B>, Client: BlockImportedChecker<B>> {
+pub(crate) struct NetworkBridge<B: BlockT, N: Network<B>, Client> {
 	service: N,
 	validator: Arc<GossipValidator<B, Client>>,
 	neighbor_sender: periodic::NeighborPacketSender<B>,
 	announce_sender: periodic::BlockAnnounceSender<B>,
 }
 
-impl<B: BlockT, N: Network<B>, Client: BlockImportedChecker<B> + Send + Sync + 'static> NetworkBridge<B, N, Client> {
+impl<B: BlockT, N: Network<B>, Client: BlockStatus<B> + Send + Sync + 'static> NetworkBridge<B, N, Client> {
 	/// Create a new NetworkBridge to the given NetworkService. Returns the service
 	/// handle and a future that must be polled to completion to finish startup.
 	/// On creation it will register previous rounds' votes with the gossip
@@ -493,7 +492,7 @@ impl<B: BlockT, N: Network<B>, Client: BlockImportedChecker<B> + Send + Sync + '
 	}
 }
 
-fn incoming_global<B: BlockT, N: Network<B>, Client: Send + Sync + 'static>(
+fn incoming_global<B: BlockT, N: Network<B>, Client: BlockStatus<B> + Send + Sync + 'static>(
 	mut service: N,
 	topic: B::Hash,
 	voters: Arc<VoterSet<AuthorityId>>,
@@ -624,7 +623,7 @@ fn incoming_global<B: BlockT, N: Network<B>, Client: Send + Sync + 'static>(
 		.map_err(|()| Error::Network(format!("Failed to receive message on unbounded stream")))
 }
 
-impl<B: BlockT, N: Network<B>, Client: BlockImportedChecker<B>> Clone for NetworkBridge<B, N, Client> {
+impl<B: BlockT, N: Network<B>, Client> Clone for NetworkBridge<B, N, Client> {
 	fn clone(&self) -> Self {
 		NetworkBridge {
 			service: self.service.clone(),
@@ -955,7 +954,7 @@ impl<Block: BlockT, N: Network<Block>, Client> CommitsOut<Block, N, Client> {
 	}
 }
 
-impl<Block: BlockT, N: Network<Block>, Client> Sink for CommitsOut<Block, N, Client> {
+impl<Block: BlockT, N: Network<Block>, Client: BlockStatus<Block>> Sink for CommitsOut<Block, N, Client> {
 	type SinkItem = (RoundNumber, Commit<Block>);
 	type SinkError = Error;
 
