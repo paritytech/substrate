@@ -51,7 +51,6 @@ macro_rules! decl_error {
 		pub enum $error:ident {
 			$(
 				$( #[doc = $doc_attr:tt] )*
-				$( #[$variant_attr:meta] )*
 				$name:ident
 			),*
 			$(,)?
@@ -64,8 +63,7 @@ macro_rules! decl_error {
 			Other(&'static str),
 			CannotLookup,
 			$(
-				$(#[$doc_attr])*
-				$(#[$variant_attr])*
+				$( #[doc = $doc_attr ] )*
 				$name
 			),*
 		}
