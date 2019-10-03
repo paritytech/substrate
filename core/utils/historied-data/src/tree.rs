@@ -787,9 +787,9 @@ impl<'a, F: SerializedConfig> Serialized<'a, F> {
 			}
 		}
 		match value {
-			Some(value) => 
+			Some(value) =>
 				self.0.push_extra(HistoriedValue {value, index: target_state_index}, &[0][..]),
-			None => 
+			None =>
 				self.0.push(HistoriedValue {value: &[], index: target_state_index}),
 		}
 	}
@@ -809,19 +809,27 @@ impl<'a, F: SerializedConfig> Serialized<'a, F> {
 			if history.index == from + 1 {
 				// new first content
 				if history.value.len() == 0 {
+				println!("yoop");
 					// delete so first content is after (if any)
 					last_index_with_value = None;
 				} else {
 					println!("start val: {}", index);
 					// start value over a value drop until here
-					last_index_with_value = Some(index + 1);
+					last_index_with_value = Some(index);
 					break;
 				}
 			} else if history.index > from {
+				println!("IN {}", history.index);
 				if history.value.len() == 0 
 				  && last_index_with_value.is_none() {
+				println!("doo");
 						// delete on delete, continue
 				} else {
+				println!("daa");
+					if last_index_with_value.is_none() {
+						// first value, use this index
+						last_index_with_value = Some(index);
+					}
 					break;
 				}
 			}
@@ -834,8 +842,9 @@ impl<'a, F: SerializedConfig> Serialized<'a, F> {
 		}
 
 		if let Some(last_index_with_value) = last_index_with_value {
-			if last_index_with_value > 1 {
-				self.0.truncate_start(last_index_with_value - 1);
+			if last_index_with_value > 0 {
+				println!("IN {}", last_index_with_value);
+				self.0.truncate_until(last_index_with_value);
 				return crate::PruneResult::Changed;
 			}
 		} else {

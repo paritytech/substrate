@@ -175,7 +175,7 @@ impl<'a, F: SerializedConfig> Serialized<'a, F> {
 	}
 
 	// index stay in truncated content
-	pub(crate) fn truncate_start(&mut self, index: usize) {
+	pub(crate) fn truncate_until(&mut self, index: usize) {
 		self.remove_range(0, index);
 	}
 
@@ -254,9 +254,9 @@ impl<'a, F: SerializedConfig> Serialized<'a, F> {
 			let _ = self.0.to_mut().remove(elt_start);
 		}
 		let start_ix = start_ix - delete_size;
-		for i in 1..len - index - 1 {
+		for i in end..end + (end - index) - 1 {
 			let old_value = self.read_le_usize(start_ix + i * SIZE_BYTE_LEN);
-			self.write_le_usize(start_ix + (i - 1) * SIZE_BYTE_LEN, old_value - delete_size);
+			self.write_le_usize(start_ix + (i - (end - index)) * SIZE_BYTE_LEN, old_value - delete_size);
 		}
 		let len = len - (end - index);
 		let end_index = start_ix + len * SIZE_BYTE_LEN;
@@ -417,12 +417,12 @@ mod test {
 		assert_eq!(ser.get_state(0), (v2, 2).into());
 		ser.push((v1, 1).into());
 		ser.push((v3, 3).into());
-		ser.truncate_start(1);
+		ser.truncate_until(1);
 		assert_eq!(ser.len(), 2);
 		assert_eq!(ser.get_state(0), (v1, 1).into());
 		assert_eq!(ser.get_state(1), (v3, 3).into());
 		ser.push((v2, 2).into());
-		ser.truncate_start(2);
+		ser.truncate_until(2);
 		assert_eq!(ser.len(), 1);
 		assert_eq!(ser.get_state(0), (v2, 2).into());
 
