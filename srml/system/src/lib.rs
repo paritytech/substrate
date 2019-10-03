@@ -271,7 +271,7 @@ decl_module! {
 			}
 		}
 
-		/// Set some items of storage.
+		/// Send a batch of dispatch calls (only root).
 		#[weight = SimpleDispatchInfo::FreeOperational]
 		fn batch(origin, calls: Vec<T::Call>) {
 			ensure_root(origin)?;
