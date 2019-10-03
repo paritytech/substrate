@@ -219,17 +219,12 @@ pub struct ErrorMetadata {
 
 /// All the metadata about errors in a module.
 pub trait ModuleErrorMetadata {
-	fn metadata() -> &'static[ ErrorMetadata ];
+	fn metadata() -> &'static[ErrorMetadata];
 }
 
 impl ModuleErrorMetadata for &'static str {
-	fn metadata() -> &'static[ ErrorMetadata ] {
-		&[
-			ErrorMetadata {
-				name: DecodeDifferent::Encode("Other"),
-				documentation: DecodeDifferent::Encode(&["Other unspecified error"]),
-			},
-		]
+	fn metadata() -> &'static[ErrorMetadata] {
+		&[]
 	}
 }
 

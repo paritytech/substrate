@@ -118,7 +118,7 @@ macro_rules! decl_error {
 		}
 
 		impl $crate::error::ModuleErrorMetadata for $error {
-			fn metadata() -> &'static [ $crate::error::ErrorMetadata] {
+			fn metadata() -> &'static [$crate::error::ErrorMetadata] {
 				&[
 					$crate::error::ErrorMetadata {
 						name: $crate::error::DecodeDifferent::Encode("Other"),
