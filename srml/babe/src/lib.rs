@@ -391,7 +391,7 @@ impl<T: Trait> Module<T> {
 				debug_assert_ne!(GenesisSlot::get(), 0);
 
 				// deposit a log because this is the first block in epoch #0
-				// we use the same values as genesis because we haven't collected any 
+				// we use the same values as genesis because we haven't collected any
 				// randomness yet.
 				let next = NextEpochDescriptor {
 					authorities: Self::authorities(),

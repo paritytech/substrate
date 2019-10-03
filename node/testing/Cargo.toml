@@ -27,4 +27,4 @@ system = { package = "srml-system", path = "../../srml/system" }
 test-client = { package = "substrate-test-client", path = "../../core/test-client" }
 timestamp = { package = "srml-timestamp", path = "../../srml/timestamp" }
 treasury = { package = "srml-treasury", path = "../../srml/treasury" }
-wabt = "~0.7.4"
+wabt = "0.9.2"
