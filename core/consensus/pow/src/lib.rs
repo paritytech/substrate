@@ -443,6 +443,7 @@ fn mine_loop<B: BlockT<Hash=H256>, C, Algorithm, E, SO>(
 		let best_hash = client.info().best_hash;
 		let best_aux = PowAux::<Algorithm::Difficulty>::read(client, &best_hash)?;
 
+		// if the best block has changed in the meantime drop our proposal
 		if best_aux.total_difficulty > aux.total_difficulty {
 			continue 'outer
 		}
