@@ -58,8 +58,8 @@ struct NodeSocketConnected<TTrans: Transport> {
 	pending: VecDeque<BytesMut>,
 	/// If true, we need to flush the sink.
 	need_flush: bool,
-	/// Whether the socket is currently writing data.
-	is_writing_data: bool,
+	/// A timeout for the socket to write data.
+	timeout: Option<Delay>,
 }
 
 /// Event that can happen with this node.
@@ -155,7 +155,7 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 							sink,
 							pending: VecDeque::new(),
 							need_flush: false,
-							is_writing_data: false,
+							timeout: None,
 						};
 						self.socket = NodeSocket::Connected(conn);
 						return Poll::Ready(NodeEvent::Connected)
@@ -225,22 +225,21 @@ where TTrans::Output: Sink<BytesMut, Error = TSinkErr>
 				}
 
 				let item_len = item.len();
-				self.is_writing_data = true;
-				let mut timeout = Delay::new(Duration::from_millis(5000));
-				match Future::poll(Pin::new(&mut timeout), cx) {
-					Poll::Pending => {},
-					Poll::Ready(Err(err)) => {
-						warn!(target: "telemetry", "Connection timeout error for {} {:?}", my_addr, err);
-					}
-					Poll::Ready(Ok(_)) => {
-						if self.is_writing_data {
+				self.timeout = Some(Delay::new(Duration::from_millis(5000)));
+				if let Some(mut timeout) = self.timeout.as_mut() {
+					match Future::poll(Pin::new(&mut timeout), cx) {
+						Poll::Pending => {},
+						Poll::Ready(Err(err)) => {
+							warn!(target: "telemetry", "Connection timeout error for {} {:?}", my_addr, err);
+						}
+						Poll::Ready(Ok(_)) => {
 							return Poll::Ready(Err(ConnectionError::Timeout))
 						}
 					}
 				}
 
 				if let Err(err) = Sink::start_send(Pin::new(&mut self.sink), item) {
-					self.is_writing_data = false;
+					self.timeout = None;
 					return Poll::Ready(Err(ConnectionError::Sink(err)))
 				}
 				trace!(
@@ -253,11 +252,11 @@ where TTrans::Output: Sink<BytesMut, Error = TSinkErr>
 				match Sink::poll_flush(Pin::new(&mut self.sink), cx) {
 					Poll::Pending => return Poll::Pending,
 					Poll::Ready(Err(err)) => {
-						self.is_writing_data = false;
+						self.timeout = None;
 						return Poll::Ready(Err(ConnectionError::Sink(err)))
 					},
 					Poll::Ready(Ok(())) => {
-						self.is_writing_data = false;
+						self.timeout = None;
 						self.need_flush = false;
 					},
 				}
