@@ -188,11 +188,11 @@ fn generate_native_call_generators(decl: &ItemTrait) -> Result<TokenStream> {
 		fn convert_between_block_types
 			<I: #crate_::runtime_api::Encode, R: #crate_::runtime_api::Decode>(
 				input: &I, error_desc: &'static str,
-			) -> ::std::result::Result<R, &'static str>
+			) -> std::result::Result<R, String>
 		{
 			<R as #crate_::runtime_api::Decode>::decode(
-				&mut &#crate_::runtime_api::Encode::encode(input)[..]
-			).map_err(|_| error_desc)
+				&mut &#crate_::runtime_api::Encode::encode(input)[..],
+			).map_err(|e| format!("{} {}", error_desc, e.what()))
 		}
 	));
 
@@ -203,13 +203,13 @@ fn generate_native_call_generators(decl: &ItemTrait) -> Result<TokenStream> {
 		let fn_name = generate_native_call_generator_fn_name(&fn_.ident);
 		let output = return_type_replace_block_with_node_block(fn_.decl.output.clone());
 		let output_ty = return_type_extract_type(&output);
-		let output = quote!( ::std::result::Result<#output_ty, &'static str> );
+		let output = quote!( std::result::Result<#output_ty, String> );
 
 		// Every type that is using the `Block` generic parameter, we need to encode/decode,
 		// to make it compatible between the runtime/node.
 		let conversions = params.iter().filter(|v| type_is_using_block(&v.1)).map(|(n, t, _)| {
 			let name_str = format!(
-				"Could not convert parameter `{}` between node and runtime!", quote!(#n)
+				"Could not convert parameter `{}` between node and runtime:", quote!(#n)
 			);
 			quote!(
 				let #n: #t = convert_between_block_types(&#n, #name_str)?;
@@ -398,7 +398,7 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 			#[cfg(any(feature = "std", test))]
 			pub fn #fn_name<
 				R: #crate_::runtime_api::Encode + #crate_::runtime_api::Decode + PartialEq,
-				NC: FnOnce() -> ::std::result::Result<R, &'static str> + ::std::panic::UnwindSafe,
+				NC: FnOnce() -> std::result::Result<R, String> + std::panic::UnwindSafe,
 				Block: #crate_::runtime_api::BlockT,
 				T: #crate_::runtime_api::CallRuntimeAt<Block>,
 				C: #crate_::runtime_api::Core<Block>,

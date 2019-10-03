@@ -111,8 +111,8 @@ use sr_primitives::{
 
 use primitives::storage::well_known_keys;
 use support::{
-	storage, decl_module, decl_event, decl_storage, StorageDoubleMap, StorageValue, StorageMap,
-	Parameter, traits::{Contains, Get}, decl_error,
+	decl_module, decl_event, decl_storage, decl_error, storage, Parameter,
+	traits::{Contains, Get},
 };
 use safe_mix::TripletMix;
 use codec::{Encode, Decode};
@@ -277,6 +277,13 @@ decl_module! {
 			for key in &keys {
 				storage::unhashed::kill(&key);
 			}
+		}
+
+		/// Kill all storage items with a key that starts with the given prefix.
+		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
+		fn kill_prefix(origin, prefix: Key) {
+			ensure_root(origin)?;
+			storage::unhashed::kill_prefix(&prefix);
 		}
 	}
 }

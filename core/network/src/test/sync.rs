@@ -444,7 +444,7 @@ fn can_sync_small_non_best_forks() {
 	assert!(net.peer(0).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
 	assert!(!net.peer(1).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
 
-	net.peer(0).announce_block(small_hash);
+	net.peer(0).announce_block(small_hash, Vec::new());
 
 	// after announcing, peer 1 downloads the block.
 
@@ -499,7 +499,7 @@ fn light_peer_imports_header_from_announce() {
 	let mut runtime = current_thread::Runtime::new().unwrap();
 
 	fn import_with_announce(net: &mut TestNet, runtime: &mut current_thread::Runtime, hash: H256) {
-		net.peer(0).announce_block(hash);
+		net.peer(0).announce_block(hash, Vec::new());
 
 		runtime.block_on(futures::future::poll_fn::<(), (), _>(|| {
 			net.poll();
@@ -525,4 +525,59 @@ fn light_peer_imports_header_from_announce() {
 	// check that KNOWN STALE block is imported from announce message
 	let known_stale_hash = net.peer(0).push_blocks_at(BlockId::Number(0), 1, true);
 	import_with_announce(&mut net, &mut runtime, known_stale_hash);
+}
+
+#[test]
+fn can_sync_explicit_forks() {
+	let _ = ::env_logger::try_init();
+	let mut runtime = current_thread::Runtime::new().unwrap();
+	let mut net = TestNet::new(2);
+	net.peer(0).push_blocks(30, false);
+	net.peer(1).push_blocks(30, false);
+
+	// small fork + reorg on peer 1.
+	net.peer(0).push_blocks_at(BlockId::Number(30), 2, true);
+	let small_hash = net.peer(0).client().info().chain.best_hash;
+	let small_number = net.peer(0).client().info().chain.best_number;
+	net.peer(0).push_blocks_at(BlockId::Number(30), 10, false);
+	assert_eq!(net.peer(0).client().info().chain.best_number, 40);
+
+	// peer 1 only ever had the long fork.
+	net.peer(1).push_blocks(10, false);
+	assert_eq!(net.peer(1).client().info().chain.best_number, 40);
+
+	assert!(net.peer(0).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
+	assert!(net.peer(1).client().header(&BlockId::Hash(small_hash)).unwrap().is_none());
+
+	// poll until the two nodes connect, otherwise announcing the block will not work
+	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| -> Result<_, ()> {
+		net.poll();
+		if net.peer(0).num_peers() == 0  || net.peer(1).num_peers() == 0 {
+			Ok(Async::NotReady)
+		} else {
+			Ok(Async::Ready(()))
+		}
+	})).unwrap();
+
+	// synchronization: 0 synced to longer chain and 1 didn't sync to small chain.
+
+	assert_eq!(net.peer(0).client().info().chain.best_number, 40);
+
+	assert!(net.peer(0).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
+	assert!(!net.peer(1).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
+
+	// request explicit sync
+	let first_peer_id = net.peer(0).id();
+	net.peer(1).set_sync_fork_request(vec![first_peer_id], small_hash, small_number);
+
+	// peer 1 downloads the block.
+	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| -> Result<_, ()> {
+		net.poll();
+
+		assert!(net.peer(0).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
+		if net.peer(1).client().header(&BlockId::Hash(small_hash)).unwrap().is_none() {
+			return Ok(Async::NotReady)
+		}
+		Ok(Async::Ready(()))
+	})).unwrap();
 }

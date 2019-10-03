@@ -24,7 +24,7 @@ use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use primitives::{
 	Bytes
 };
-use self::error::Result;
+use self::error::{FutureResult, Result};
 use txpool::watcher::Status;
 
 pub use self::gen_client::Client as AuthorClient;
@@ -37,7 +37,7 @@ pub trait AuthorApi<Hash, BlockHash> {
 
 	/// Submit hex-encoded extrinsic for inclusion in block.
 	#[rpc(name = "author_submitExtrinsic")]
-	fn submit_extrinsic(&self, extrinsic: Bytes) -> Result<Hash>;
+	fn submit_extrinsic(&self, extrinsic: Bytes) -> FutureResult<Hash>;
 
 	/// Insert a key into the keystore.
 	#[rpc(name = "author_insertKey")]

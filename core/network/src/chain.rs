@@ -16,10 +16,10 @@
 
 //! Blockchain access trait
 
-use client::{self, Client as SubstrateClient, ClientInfo, BlockStatus, CallExecutor};
+use client::{self, Client as SubstrateClient, ClientInfo, CallExecutor};
 use client::error::Error;
 use client::light::fetcher::ChangesProof;
-use consensus::{BlockImport, Error as ConsensusError};
+use consensus::{BlockImport, BlockStatus, Error as ConsensusError};
 use sr_primitives::traits::{Block as BlockT, Header as HeaderT};
 use sr_primitives::generic::{BlockId};
 use sr_primitives::Justification;
@@ -159,14 +159,8 @@ impl<B, E, Block, RA> Client<Block> for SubstrateClient<B, E, Block, RA> where
 			return Ok(false);
 		}
 
-		let tree_route = ::client::blockchain::tree_route(
-			|id| self.header(&id)?.ok_or_else(||
-				client::error::Error::UnknownBlock(format!("{:?}", id))
-			),
-			BlockId::Hash(*block),
-			BlockId::Hash(*base),
-		)?;
+		let ancestor = header_metadata::lowest_common_ancestor(self, *block, *base)?;
 
-		Ok(tree_route.common_block().hash == *base)
+		Ok(ancestor.hash == *base)
 	}
 }

@@ -151,7 +151,7 @@ parameter_types! {
 	pub const Period: BlockNumber = 1;
 	pub const Offset: BlockNumber = 0;
 	pub const UncleGenerations: u64 = 0;
-	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(33);
+	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(25);
 }
 impl session::Trait for Test {
 	type OnSessionEnding = session::historical::NoteHistoricalRoot<Test, Staking>;
@@ -392,11 +392,6 @@ pub fn check_nominator_exposure(stash: u64) {
 		nominator_stake >= sum,
 		"failed: Nominator({}) stake({}) >= sum divided({})", stash, nominator_stake, sum,
 	);
-}
-
-pub fn assert_total_expo(stash: u64, val: u64) {
-	let expo = Staking::stakers(&stash);
-	assert_eq!(expo.total, val);
 }
 
 pub fn assert_is_stash(acc: u64) {

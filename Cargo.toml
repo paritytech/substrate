@@ -11,19 +11,22 @@ edition = "2018"
 
 [dependencies]
 cli = { package = "node-cli", path = "node/cli" }
-futures = "0.1"
-ctrlc = { version = "3.0", features = ["termination"] }
+futures = "0.1.29"
+ctrlc = { version = "3.1.3", features = ["termination"] }
 
 [build-dependencies]
-vergen = "3"
+vergen = "3.0.4"
 
 [workspace]
 members = [
 	"core/authority-discovery",
 	"core/application-crypto",
+	"core/chain-spec",
+	"core/chain-spec/derive",
 	"core/cli",
 	"core/client",
 	"core/client/db",
+	"core/client/header-metadata",
 	"core/consensus/aura",
 	"core/consensus/babe",
 	"core/consensus/common",
@@ -96,7 +99,6 @@ members = [
 	"srml/session",
 	"srml/staking",
 	"srml/staking/reward-curve",
-	"srml/staking/reward-curve/test",
 	"srml/sudo",
 	"srml/system",
 	"srml/timestamp",

@@ -619,25 +619,15 @@ cfg_if! {
 			}
 
 			impl babe_primitives::BabeApi<Block> for Runtime {
-				fn startup_data() -> babe_primitives::BabeConfiguration {
+				fn configuration() -> babe_primitives::BabeConfiguration {
 					babe_primitives::BabeConfiguration {
-						median_required_blocks: 0,
-						slot_duration: 3000,
+						slot_duration: 1000,
+						epoch_length: EpochDuration::get(),
 						c: (3, 10),
-					}
-				}
-
-				fn epoch() -> babe_primitives::Epoch {
-					let authorities = system::authorities();
-					let authorities: Vec<_> = authorities.into_iter().map(|x|(x, 1)).collect();
-
-					babe_primitives::Epoch {
-						start_slot: <srml_babe::Module<Runtime>>::epoch_start_slot(),
-						authorities,
+						genesis_authorities: system::authorities()
+							.into_iter().map(|x|(x, 1)).collect(),
 						randomness: <srml_babe::Module<Runtime>>::randomness(),
-						epoch_index: <srml_babe::Module<Runtime>>::epoch_index(),
-						duration: EpochDuration::get(),
-						secondary_slots: <srml_babe::Module<Runtime>>::secondary_slots().0,
+						secondary_slots: true,
 					}
 				}
 			}
@@ -839,25 +829,15 @@ cfg_if! {
 			}
 
 			impl babe_primitives::BabeApi<Block> for Runtime {
-				fn startup_data() -> babe_primitives::BabeConfiguration {
+				fn configuration() -> babe_primitives::BabeConfiguration {
 					babe_primitives::BabeConfiguration {
-						median_required_blocks: 0,
 						slot_duration: 1000,
+						epoch_length: EpochDuration::get(),
 						c: (3, 10),
-					}
-				}
-
-				fn epoch() -> babe_primitives::Epoch {
-					let authorities = system::authorities();
-					let authorities: Vec<_> = authorities.into_iter().map(|x|(x, 1)).collect();
-
-					babe_primitives::Epoch {
-						start_slot: <srml_babe::Module<Runtime>>::epoch_start_slot(),
-						authorities,
+						genesis_authorities: system::authorities()
+							.into_iter().map(|x|(x, 1)).collect(),
 						randomness: <srml_babe::Module<Runtime>>::randomness(),
-						epoch_index: <srml_babe::Module<Runtime>>::epoch_index(),
-						duration: EpochDuration::get(),
-						secondary_slots: <srml_babe::Module<Runtime>>::secondary_slots().0,
+						secondary_slots: true,
 					}
 				}
 			}

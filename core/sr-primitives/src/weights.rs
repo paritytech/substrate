@@ -188,7 +188,7 @@ impl WeightMultiplier {
 	/// build self from raw parts per billion.
 	#[cfg(feature = "std")]
 	pub fn from_parts(parts: i64) -> Self {
-		Self(Fixed64(parts))
+		Self(Fixed64::from_parts(parts))
 	}
 
 	/// build self from a fixed64 value.
