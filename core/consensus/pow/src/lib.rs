@@ -230,7 +230,7 @@ impl<B: BlockT<Hash=H256>, C, Algorithm> Verifier<B> for PowVerifier<B, C, Algor
 			BlockId::Hash(parent_hash),
 		)?;
 		aux.difficulty = difficulty;
-		aux.total_difficulty.add(difficulty);
+		aux.total_difficulty.increment(difficulty);
 
 		if let Some(inner_body) = body.take() {
 			let block = B::new(checked_header.clone(), inner_body);
@@ -432,7 +432,7 @@ fn mine_loop<B: BlockT<Hash=H256>, C, Algorithm, E, SO>(
 		};
 
 		aux.difficulty = difficulty;
-		aux.total_difficulty.add(difficulty);
+		aux.total_difficulty.increment(difficulty);
 		let hash = {
 			let mut header = header.clone();
 			header.digest_mut().push(DigestItem::Seal(POW_ENGINE_ID, seal.clone()));
