@@ -177,6 +177,7 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, SC>(
 		persistent_data.set_state.clone(),
 		on_exit.clone(),
 		false,
+		client.clone(),
 	);
 
 	let observer_work = ObserverWork::new(
@@ -203,7 +204,7 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, SC>(
 struct ObserverWork<B: BlockT<Hash=H256>, N: Network<B>, E, Backend, RA> {
 	observer: Box<dyn Future<Item = (), Error = CommandOrError<B::Hash, NumberFor<B>>> + Send>,
 	client: Arc<Client<Backend, E, B, RA>>,
-	network: NetworkBridge<B, N>,
+	network: NetworkBridge<B, N, Arc<Client<Backend, E, B, RA>>>,
 	persistent_data: PersistentData<B>,
 	keystore: Option<keystore::KeyStorePtr>,
 	voter_commands_rx: mpsc::UnboundedReceiver<VoterCommand<B::Hash, NumberFor<B>>>,
@@ -221,7 +222,7 @@ where
 {
 	fn new(
 		client: Arc<Client<Bk, E, B, RA>>,
-		network: NetworkBridge<B, N>,
+		network: NetworkBridge<B, N, Arc<Client<Bk, E, B, RA>>>,
 		persistent_data: PersistentData<B>,
 		keystore: Option<keystore::KeyStorePtr>,
 		voter_commands_rx: mpsc::UnboundedReceiver<VoterCommand<B::Hash, NumberFor<B>>>,

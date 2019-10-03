@@ -44,7 +44,7 @@ use tokio_executor::Executor;
 
 use crate::{
 	CatchUp, Commit, CommunicationIn, CommunicationOut, CompactCommit, Error,
-	Message, SignedMessage,
+	Message, SignedMessage, BlockImportedChecker,
 };
 use crate::environment::HasVoted;
 use gossip::{
@@ -233,14 +233,16 @@ impl Stream for NetworkStream {
 }
 
 /// Bridge between the underlying network service, gossiping consensus messages and Grandpa
-pub(crate) struct NetworkBridge<B: BlockT, N: Network<B>> {
+pub(crate) struct NetworkBridge<B: BlockT, N: Network<B>, C: BlockImportedChecker<B>> {
 	service: N,
 	validator: Arc<GossipValidator<B>>,
 	neighbor_sender: periodic::NeighborPacketSender<B>,
 	announce_sender: periodic::BlockAnnounceSender<B>,
+	// TODO: 'client' might be misleading as it is not the original client.
+	client: C,
 }
 
-impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
+impl<B: BlockT, N: Network<B>, Client: BlockImportedChecker<B>> NetworkBridge<B, N, Client> {
 	/// Create a new NetworkBridge to the given NetworkService. Returns the service
 	/// handle and a future that must be polled to completion to finish startup.
 	/// On creation it will register previous rounds' votes with the gossip
@@ -251,6 +253,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		set_state: crate::environment::SharedVoterSetState<B>,
 		on_exit: impl Future<Item=(),Error=()> + Clone + Send + 'static,
 		catch_up_enabled: bool,
+		client: Client,
 	) -> (
 		Self,
 		impl futures::Future<Item = (), Error = ()> + Send + 'static,
@@ -307,7 +310,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		let (announce_job, announce_sender) = periodic::block_announce_worker(service.clone());
 		let reporting_job = report_stream.consume(service.clone());
 
-		let bridge = NetworkBridge { service, validator, neighbor_sender, announce_sender };
+		let bridge = NetworkBridge { service, validator, neighbor_sender, announce_sender, client };
 
 		let startup_work = futures::future::lazy(move || {
 			// lazily spawn these jobs onto their own tasks. the lazy future has access
@@ -622,13 +625,14 @@ fn incoming_global<B: BlockT, N: Network<B>>(
 		.map_err(|()| Error::Network(format!("Failed to receive message on unbounded stream")))
 }
 
-impl<B: BlockT, N: Network<B>> Clone for NetworkBridge<B, N> {
+impl<B: BlockT, N: Network<B>, Client: BlockImportedChecker<B> + Clone> Clone for NetworkBridge<B, N, Client> {
 	fn clone(&self) -> Self {
 		NetworkBridge {
 			service: self.service.clone(),
 			validator: Arc::clone(&self.validator),
 			neighbor_sender: self.neighbor_sender.clone(),
 			announce_sender: self.announce_sender.clone(),
+			client: self.client.clone(),
 		}
 	}
 }

@@ -896,6 +896,7 @@ impl<Block: BlockT> Inner<Block> {
 				round: local_view.round,
 				set_id: local_view.set_id,
 				commit_finalized_height: local_view.last_commit.unwrap_or(Zero::zero()),
+				known_vote_blocks: vec![],
 			};
 
 			let peers = self.peers.inner.keys().cloned().collect();
@@ -1066,6 +1067,7 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 					round: v.round,
 					set_id: v.set_id,
 					commit_finalized_height: v.last_commit.unwrap_or(Zero::zero()),
+					known_vote_blocks: vec![],
 				}
 			})
 		};

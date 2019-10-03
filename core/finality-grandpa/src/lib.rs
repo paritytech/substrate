@@ -395,7 +395,7 @@ fn global_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 	set_id: SetId,
 	voters: &Arc<VoterSet<AuthorityId>>,
 	client: &Arc<Client<B, E, Block, RA>>,
-	network: &NetworkBridge<Block, N>,
+	network: &NetworkBridge<Block, N, Arc<Client<B, E, Block, RA>>>,
 	keystore: &Option<KeyStorePtr>,
 ) -> (
 	impl Stream<
@@ -519,6 +519,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 		persistent_data.set_state.clone(),
 		on_exit.clone(),
 		true,
+		client.clone(),
 	);
 
 	register_finality_tracker_inherent_data_provider(client.clone(), &inherent_data_providers)?;
@@ -598,7 +599,7 @@ where
 	fn new(
 		client: Arc<Client<B, E, Block, RA>>,
 		config: Config,
-		network: NetworkBridge<Block, N>,
+		network: NetworkBridge<Block, N, Arc<Client<B, E, Block, RA>>>,
 		select_chain: SC,
 		persistent_data: PersistentData<Block>,
 		voter_commands_rx: mpsc::UnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
@@ -884,5 +885,15 @@ fn authority_id<'a, I>(
 				})
 		}
 		None => None,
+	}
+}
+
+pub(crate) trait BlockImportedChecker<Block: BlockT> {
+	fn is_imported(h: Block::Hash) -> bool;
+}
+
+impl<Backend, E, Block: BlockT, RA> BlockImportedChecker<Block> for Arc<Client<Backend, E, Block, RA>>{
+	fn is_imported(_h: Block::Hash) -> bool {
+		false
 	}
 }
