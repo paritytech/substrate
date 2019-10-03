@@ -23,7 +23,7 @@ use runtime_io;
 use std::fmt::{Debug, Display};
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize, de::DeserializeOwned};
-use primitives::{self, Hasher, Blake2Hasher};
+use primitives::{self, Hasher, Blake2Hasher, TypeId};
 use crate::codec::{Codec, Encode, Decode, HasCompact};
 use crate::transaction_validity::{
 	ValidTransaction, TransactionValidity, TransactionValidityError, UnknownTransaction,
@@ -35,7 +35,6 @@ pub use num_traits::{
 	Zero, One, Bounded, CheckedAdd, CheckedSub, CheckedMul, CheckedDiv,
 	CheckedShl, CheckedShr
 };
-pub use substrate_type_id::TypeId;
 use rstd::ops::{
 	Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, DivAssign,
 	RemAssign, Shl, Shr

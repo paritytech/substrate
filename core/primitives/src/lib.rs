@@ -219,3 +219,8 @@ impl codec::Decode for NeverNativeValue {
 	}
 }
 
+/// Provide a simple 4 byte identifier for a type.
+pub trait TypeId {
+	/// Simple 4 byte identifier.
+	const TYPE_ID: [u8; 4];
+}
