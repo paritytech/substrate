@@ -344,7 +344,7 @@ decl_module! {
 			votes: Vec<bool>,
 			#[compact] index: VoteIndex,
 			hint: SetIndex,
-			value: BalanceOf<T>
+			#[compact] value: BalanceOf<T>
 		) -> Result {
 			let who = ensure_signed(origin)?;
 			Self::do_set_approvals(who, votes, index, hint, value)
@@ -361,7 +361,7 @@ decl_module! {
 			votes: Vec<bool>,
 			#[compact] index: VoteIndex,
 			hint: SetIndex,
-			value: BalanceOf<T>
+			#[compact] value: BalanceOf<T>
 		) -> Result {
 			let who = Self::proxy(ensure_signed(origin)?).ok_or("not a proxy")?;
 			Self::do_set_approvals(who, votes, index, hint, value)
