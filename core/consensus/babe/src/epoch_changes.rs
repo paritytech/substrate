@@ -28,6 +28,7 @@ use codec::{Encode, Decode};
 use client::error::Error as ClientError;
 use client::utils as client_utils;
 use client::blockchain::HeaderBackend;
+use header_metadata::HeaderMetadata;
 use primitives::H256;
 use std::ops::Add;
 
@@ -62,7 +63,7 @@ pub(crate) struct HeaderBackendDescendentBuilder<H, Block>(H, std::marker::Phant
 // https://github.com/paritytech/substrate/issues/3624
 impl<'a, H, Block> IsDescendentOfBuilder<H256>
 	for HeaderBackendDescendentBuilder<&'a H, Block> where
-	H: HeaderBackend<Block>,
+	H: HeaderBackend<Block> + HeaderMetadata<Block, Error=ClientError>,
 	Block: BlockT<Hash = H256>,
 {
 	type Error = ClientError;

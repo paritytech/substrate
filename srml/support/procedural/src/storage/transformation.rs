@@ -1087,7 +1087,9 @@ fn store_functions_to_metadata (
 
 			#[cfg(feature = "std")]
 			#[allow(non_upper_case_globals)]
-			static #cache_name: #scrate::once_cell::sync::OnceCell<#scrate::rstd::vec::Vec<u8>> = #scrate::once_cell::sync::OnceCell::INIT;
+			static #cache_name: #scrate::once_cell::sync::OnceCell<
+				#scrate::rstd::vec::Vec<u8>
+			> = #scrate::once_cell::sync::OnceCell::new();
 
 			#[cfg(feature = "std")]
 			impl<#traitinstance: #traittype, #instance #bound_instantiable> #scrate::metadata::DefaultByte

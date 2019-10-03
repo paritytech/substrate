@@ -155,7 +155,7 @@ impl FreeingBumpHeapAllocator {
 
 	/// Deallocates the space which was allocated for a pointer.
 	///
- 	/// # Arguments
+	/// # Arguments
 	///
 	/// - `mem` - a slice representing the linear memory on which this allocator operates.
 	/// - `ptr` - pointer to the allocated chunk

@@ -4,7 +4,7 @@ Parity Technologies is committed to resolving security vulnerabilities in our so
 
 ## Reporting a Vulnerability
 
-Security vulnerabilities in Parity software should be reported by email to security@parity.io. If you think your report might be eligible for the Parity Bug Bounty Program, your email should be send to bugbounty@parity.io. 
+Security vulnerabilities in Parity software should be reported by email to security@parity.io. If you think your report might be eligible for the Parity Bug Bounty Program, your email should be send to bugbounty@parity.io.
 
 Your report should include the following:
 
@@ -19,7 +19,7 @@ Try to include as much information in your report as you can, including a descri
 
 You'll receive a response to your email within two business days indicating the next steps in handling your report. We encourage finders to use encrypted communication channels to protect the confidentiality of vulnerability reports. You can encrypt your report using our public key. This key is [on MIT's key server](https://pgp.mit.edu/pks/lookup?op=get&search=0x5D0F03018D07DE73) server and reproduced below.
 
-After the initial reply to your report, our team will endeavor to keep you informed of the progress being made towards a fix. These updates will be sent at least every five business days. 
+After the initial reply to your report, our team will endeavor to keep you informed of the progress being made towards a fix. These updates will be sent at least every five business days.
 
 Thank you for taking the time to responsibly disclose any vulnerabilities you find.
 
@@ -36,7 +36,7 @@ Responsible investigation and reporting includes, but isn't limited to, the foll
 
 ## Bug Bounty Program
 
-Our Bug Bounty Program allows us to recognise and reward members of the Parity community for helping us find and address significant bugs, in accordance with the terms of the Parity Bug Bounty Program. A detailed description on eligibility, rewards, legal information and terms & conditions for contributors can be found on [our website](https://paritytech.io/bug-bounty.html). 
+Our Bug Bounty Program allows us to recognise and reward members of the Parity community for helping us find and address significant bugs, in accordance with the terms of the Parity Bug Bounty Program. A detailed description on eligibility, rewards, legal information and terms & conditions for contributors can be found on [our website](https://paritytech.io/bug-bounty.html).
 
 
 

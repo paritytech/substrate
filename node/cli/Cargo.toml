@@ -7,10 +7,10 @@ build = "build.rs"
 edition = "2018"
 
 [dependencies]
-log = "0.4"
-tokio = "0.1.7"
-futures = "0.1"
-exit-future = "0.1"
+log = "0.4.8"
+tokio = "0.1.22"
+futures = "0.1.29"
+exit-future = "0.1.4"
 jsonrpc-core = "13.2.0"
 cli = { package = "substrate-cli", path = "../../core/cli" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
@@ -21,7 +21,7 @@ inherents = { package = "substrate-inherents", path = "../../core/inherents" }
 node-runtime = { path = "../runtime" }
 node-rpc = { path = "../rpc" }
 node-primitives = { path = "../primitives" }
-hex-literal = "0.2"
+hex-literal = "0.2.1"
 substrate-rpc = { package = "substrate-rpc", path = "../../core/rpc" }
 substrate-basic-authorship = { path = "../../core/basic-authorship" }
 substrate-service = { path = "../../core/service" }
@@ -35,12 +35,12 @@ grandpa_primitives = { package = "substrate-finality-grandpa-primitives", path =
 sr-primitives = { path = "../../core/sr-primitives" }
 node-executor = { path = "../executor" }
 substrate-telemetry = { package = "substrate-telemetry", path = "../../core/telemetry" }
-structopt = "0.2"
+structopt = "0.2.0"
 transaction-factory = { path = "../../test-utils/transaction-factory" }
 keyring = { package = "substrate-keyring", path = "../../core/keyring" }
 indices = { package = "srml-indices", path = "../../srml/indices" }
 timestamp = { package = "srml-timestamp", path = "../../srml/timestamp", default-features = false }
-rand = "0.6"
+rand = "0.7.2"
 finality_tracker = { package = "srml-finality-tracker", path = "../../srml/finality-tracker", default-features = false }
 contracts = { package = "srml-contracts", path = "../../srml/contracts" }
 system = { package = "srml-system", path = "../../srml/system" }
@@ -49,7 +49,7 @@ support = { package = "srml-support", path = "../../srml/support", default-featu
 im_online = { package = "srml-im-online", path = "../../srml/im-online", default-features = false }
 sr-authority-discovery = { package = "srml-authority-discovery", path = "../../srml/authority-discovery", default-features = false }
 authority-discovery = { package = "substrate-authority-discovery", path = "../../core/authority-discovery"}
-serde = { version = "1.0", features = [ "derive" ] }
+serde = { version = "1.0.101", features = [ "derive" ] }
 client_db = { package = "substrate-client-db", path = "../../core/client/db", features = ["kvdb-rocksdb"] }
 offchain = { package = "substrate-offchain", path = "../../core/offchain" }
 
@@ -58,9 +58,9 @@ keystore = { package = "substrate-keystore", path = "../../core/keystore" }
 babe = { package = "substrate-consensus-babe", path = "../../core/consensus/babe", features = ["test-helpers"] }
 consensus-common = { package = "substrate-consensus-common", path = "../../core/consensus/common" }
 service-test = { package = "substrate-service-test", path = "../../core/service/test" }
-futures03 = { package = "futures-preview", version = "0.3.0-alpha.18" }
-tempfile = "3.1"
+futures03 = { package = "futures-preview", version = "0.3.0-alpha.19" }
+tempfile = "3.1.0"
 
 [build-dependencies]
 cli = { package = "substrate-cli", path = "../../core/cli" }
-structopt = "0.2"
+structopt = "0.2.0"
