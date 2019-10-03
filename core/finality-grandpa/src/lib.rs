@@ -391,7 +391,7 @@ where
 	))
 }
 
-fn global_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
+fn global_communication<Block: BlockT<Hash=H256>, B: 'static, E: 'static, N, RA: 'static>(
 	set_id: SetId,
 	voters: &Arc<VoterSet<AuthorityId>>,
 	client: &Arc<Client<B, E, Block, RA>>,

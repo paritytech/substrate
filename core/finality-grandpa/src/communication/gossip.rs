@@ -93,7 +93,7 @@ use log::{trace, debug, warn};
 use futures::prelude::*;
 use futures::sync::mpsc;
 
-use crate::{environment, CatchUp, CompactCommit, SignedMessage};
+use crate::{environment, CatchUp, CompactCommit, SignedMessage, BlockImportedChecker};
 use super::{cost, benefit, Round, SetId};
 
 use std::collections::{HashMap, VecDeque};
@@ -512,7 +512,7 @@ enum PendingCatchUp {
 
 /// The inner lock-protected struct of a GossipValidator, enabling GossipValidator itself to be std::marker::Sync.
 // TODO: Why does GossipValidator need to be Sync? Does Grandpa logic need to be parallel?
-struct Inner<Block: BlockT> {
+struct Inner<Block: BlockT, Client> {
 	local_view: Option<View<NumberFor<Block>>>,
 	peers: Peers<NumberFor<Block>>,
 	live_topics: KeepTopics<Block>,
@@ -521,12 +521,13 @@ struct Inner<Block: BlockT> {
 	next_rebroadcast: Instant,
 	pending_catch_up: PendingCatchUp,
 	catch_up_enabled: bool,
+	client: Client,
 }
 
 type MaybeMessage<Block> = Option<(Vec<PeerId>, NeighborPacket<NumberFor<Block>>)>;
 
-impl<Block: BlockT> Inner<Block> {
-	fn new(config: crate::Config, catch_up_enabled: bool) -> Self {
+impl<Block: BlockT, Client> Inner<Block, Client> {
+	fn new(config: crate::Config, catch_up_enabled: bool, client: Client) -> Self {
 		Inner {
 			local_view: None,
 			peers: Peers::default(),
@@ -536,6 +537,7 @@ impl<Block: BlockT> Inner<Block> {
 			pending_catch_up: PendingCatchUp::None,
 			catch_up_enabled,
 			config,
+			client,
 		}
 	}
 
@@ -938,14 +940,14 @@ impl<Block: BlockT> Inner<Block> {
 
 /// A validator for GRANDPA gossip messages.
 // TODO: The name `GossipValidator` seems confusing, as it does more than validating (e.g. constructing new messages).
-pub(super) struct GossipValidator<Block: BlockT> {
+pub(super) struct GossipValidator<Block: BlockT, Client> {
 	// TODO: Why does all of core/grandpa need to be Sync, hence the RwLock?
-	inner: parking_lot::RwLock<Inner<Block>>,
+	inner: parking_lot::RwLock<Inner<Block, Client>>,
 	set_state: environment::SharedVoterSetState<Block>,
 	report_sender: mpsc::UnboundedSender<PeerReport>,
 }
 
-impl<Block: BlockT> GossipValidator<Block> {
+impl<Block: BlockT, Client> GossipValidator<Block, Client> {
 	/// Create a new gossip-validator. The current set is initialized to 0. If
 	/// `catch_up_enabled` is set to false then the validator will not issue any
 	/// catch up requests (useful e.g. when running just the GRANDPA observer).
@@ -953,10 +955,11 @@ impl<Block: BlockT> GossipValidator<Block> {
 		config: crate::Config,
 		set_state: environment::SharedVoterSetState<Block>,
 		catch_up_enabled: bool,
-	) -> (GossipValidator<Block>, ReportStream)	{
+		client: Client,
+	) -> (GossipValidator<Block, Client>, ReportStream)	{
 		let (tx, rx) = mpsc::unbounded();
 		let val = GossipValidator {
-			inner: parking_lot::RwLock::new(Inner::new(config, catch_up_enabled)),
+			inner: parking_lot::RwLock::new(Inner::new(config, catch_up_enabled, client)),
 			set_state,
 			report_sender: tx,
 		};
@@ -1056,7 +1059,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 	}
 }
 
-impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> {
+impl<Block: BlockT, Client: Send + Sync> network_gossip::Validator<Block> for GossipValidator<Block, Client> {
 	fn new_peer(&self, context: &mut dyn ValidatorContext<Block>, who: &PeerId, roles: Roles) {
 		let packet = {
 			let mut inner = self.inner.write();

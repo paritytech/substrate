@@ -233,16 +233,14 @@ impl Stream for NetworkStream {
 }
 
 /// Bridge between the underlying network service, gossiping consensus messages and Grandpa
-pub(crate) struct NetworkBridge<B: BlockT, N: Network<B>, C: BlockImportedChecker<B>> {
+pub(crate) struct NetworkBridge<B: BlockT, N: Network<B>, Client: BlockImportedChecker<B>> {
 	service: N,
-	validator: Arc<GossipValidator<B>>,
+	validator: Arc<GossipValidator<B, Client>>,
 	neighbor_sender: periodic::NeighborPacketSender<B>,
 	announce_sender: periodic::BlockAnnounceSender<B>,
-	// TODO: 'client' might be misleading as it is not the original client.
-	client: C,
 }
 
-impl<B: BlockT, N: Network<B>, Client: BlockImportedChecker<B>> NetworkBridge<B, N, Client> {
+impl<B: BlockT, N: Network<B>, Client: BlockImportedChecker<B> + Send + Sync + 'static> NetworkBridge<B, N, Client> {
 	/// Create a new NetworkBridge to the given NetworkService. Returns the service
 	/// handle and a future that must be polled to completion to finish startup.
 	/// On creation it will register previous rounds' votes with the gossip
@@ -263,6 +261,7 @@ impl<B: BlockT, N: Network<B>, Client: BlockImportedChecker<B>> NetworkBridge<B,
 			config,
 			set_state.clone(),
 			catch_up_enabled,
+			client,
 		);
 
 		let validator = Arc::new(validator);
@@ -310,7 +309,7 @@ impl<B: BlockT, N: Network<B>, Client: BlockImportedChecker<B>> NetworkBridge<B,
 		let (announce_job, announce_sender) = periodic::block_announce_worker(service.clone());
 		let reporting_job = report_stream.consume(service.clone());
 
-		let bridge = NetworkBridge { service, validator, neighbor_sender, announce_sender, client };
+		let bridge = NetworkBridge { service, validator, neighbor_sender, announce_sender };
 
 		let startup_work = futures::future::lazy(move || {
 			// lazily spawn these jobs onto their own tasks. the lazy future has access
@@ -477,7 +476,7 @@ impl<B: BlockT, N: Network<B>, Client: BlockImportedChecker<B>> NetworkBridge<B,
 			self.neighbor_sender.clone(),
 		);
 
-		let outgoing = CommitsOut::<B, N>::new(
+		let outgoing = CommitsOut::<B, N, Client>::new(
 			self.service.clone(),
 			set_id.0,
 			is_voter,
@@ -494,18 +493,18 @@ impl<B: BlockT, N: Network<B>, Client: BlockImportedChecker<B>> NetworkBridge<B,
 	}
 }
 
-fn incoming_global<B: BlockT, N: Network<B>>(
+fn incoming_global<B: BlockT, N: Network<B>, Client: Send + Sync + 'static>(
 	mut service: N,
 	topic: B::Hash,
 	voters: Arc<VoterSet<AuthorityId>>,
-	gossip_validator: Arc<GossipValidator<B>>,
+	gossip_validator: Arc<GossipValidator<B, Client>>,
 	neighbor_sender: periodic::NeighborPacketSender<B>,
 ) -> impl Stream<Item = CommunicationIn<B>, Error = Error> {
 	let process_commit = move |
 		msg: FullCommitMessage<B>,
 		mut notification: network_gossip::TopicNotification,
 		service: &mut N,
-		gossip_validator: &Arc<GossipValidator<B>>,
+		gossip_validator: &Arc<GossipValidator<B, Client>>,
 		voters: &VoterSet<AuthorityId>,
 	| {
 		let precommits_signed_by: Vec<String> =
@@ -567,7 +566,7 @@ fn incoming_global<B: BlockT, N: Network<B>>(
 		msg: FullCatchUpMessage<B>,
 		mut notification: network_gossip::TopicNotification,
 		service: &mut N,
-		gossip_validator: &Arc<GossipValidator<B>>,
+		gossip_validator: &Arc<GossipValidator<B, Client>>,
 		voters: &VoterSet<AuthorityId>,
 	| {
 		let gossip_validator = gossip_validator.clone();
@@ -625,14 +624,13 @@ fn incoming_global<B: BlockT, N: Network<B>>(
 		.map_err(|()| Error::Network(format!("Failed to receive message on unbounded stream")))
 }
 
-impl<B: BlockT, N: Network<B>, Client: BlockImportedChecker<B> + Clone> Clone for NetworkBridge<B, N, Client> {
+impl<B: BlockT, N: Network<B>, Client: BlockImportedChecker<B>> Clone for NetworkBridge<B, N, Client> {
 	fn clone(&self) -> Self {
 		NetworkBridge {
 			service: self.service.clone(),
 			validator: Arc::clone(&self.validator),
 			neighbor_sender: self.neighbor_sender.clone(),
 			announce_sender: self.announce_sender.clone(),
-			client: self.client.clone(),
 		}
 	}
 }
@@ -930,21 +928,21 @@ fn check_catch_up<Block: BlockT>(
 }
 
 /// An output sink for commit messages.
-struct CommitsOut<Block: BlockT, N: Network<Block>> {
+struct CommitsOut<Block: BlockT, N: Network<Block>, Client> {
 	network: N,
 	set_id: SetId,
 	is_voter: bool,
-	gossip_validator: Arc<GossipValidator<Block>>,
+	gossip_validator: Arc<GossipValidator<Block, Client>>,
 	neighbor_sender: periodic::NeighborPacketSender<Block>,
 }
 
-impl<Block: BlockT, N: Network<Block>> CommitsOut<Block, N> {
+impl<Block: BlockT, N: Network<Block>, Client> CommitsOut<Block, N, Client> {
 	/// Create a new commit output stream.
 	pub(crate) fn new(
 		network: N,
 		set_id: SetIdNumber,
 		is_voter: bool,
-		gossip_validator: Arc<GossipValidator<Block>>,
+		gossip_validator: Arc<GossipValidator<Block, Client>>,
 		neighbor_sender: periodic::NeighborPacketSender<Block>,
 	) -> Self {
 		CommitsOut {
@@ -957,7 +955,7 @@ impl<Block: BlockT, N: Network<Block>> CommitsOut<Block, N> {
 	}
 }
 
-impl<Block: BlockT, N: Network<Block>> Sink for CommitsOut<Block, N> {
+impl<Block: BlockT, N: Network<Block>, Client> Sink for CommitsOut<Block, N, Client> {
 	type SinkItem = (RoundNumber, Commit<Block>);
 	type SinkError = Error;
 
