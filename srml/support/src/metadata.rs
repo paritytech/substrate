@@ -96,6 +96,11 @@ macro_rules! __runtime_modules_to_metadata {
 					$crate::metadata::FnEncode(
 						$mod::$module::<$runtime $(, $mod::$instance )?>::module_constants_metadata
 					)
+				),
+				error: $crate::metadata::DecodeDifferent::Encode(
+					$crate::metadata::FnEncode(
+						$mod::$module::<$runtime $(, $mod::$instance )?>::Error::metadata
+					)
 				)
 			};
 			$( $rest )*
