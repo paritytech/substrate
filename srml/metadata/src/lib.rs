@@ -217,6 +217,22 @@ pub struct ErrorMetadata {
 	pub documentation: DecodeDifferentArray<&'static str, StringBuf>,
 }
 
+/// All the metadata about errors in a module.
+pub trait ModuleErrorMetadata {
+	fn metadata() -> &'static[ ErrorMetadata ];
+}
+
+impl ModuleErrorMetadata for &'static str {
+	fn metadata() -> &'static[ ErrorMetadata ] {
+		&[
+			ErrorMetadata {
+				name: DecodeDifferent::Encode("Other"),
+				documentation: DecodeDifferent::Encode(&["Other unspecified error"]),
+			},
+		]
+	}
+}
+
 /// A technical trait to store lazy initiated vec value as static dyn pointer.
 pub trait DefaultByte: Send + Sync {
 	fn default_byte(&self) -> Vec<u8>;
@@ -377,7 +393,7 @@ pub struct ModuleMetadata {
 	pub calls: ODFnA<FunctionMetadata>,
 	pub event: ODFnA<EventMetadata>,
 	pub constants: DFnA<ModuleConstantMetadata>,
-	pub errors: ODFnA<ErrorMetadata>,
+	pub errors: DFnA<ErrorMetadata>,
 }
 
 type ODFnA<T> = Option<DFnA<T>>;

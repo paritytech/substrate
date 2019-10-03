@@ -18,7 +18,7 @@
 
 #[doc(hidden)]
 pub use sr_primitives::traits::LookupError;
-pub use srml_metadata::{ErrorMetadata, DecodeDifferent};
+pub use srml_metadata::{ModuleErrorMetadata, ErrorMetadata, DecodeDifferent};
 
 /// Declare an error type for a runtime module.
 ///
@@ -119,9 +119,8 @@ macro_rules! decl_error {
 			}
 		}
 
-		impl $error {
-			#[doc(hidden)]
-			pub fn metadata() -> &'static [ $crate::error::ErrorMetadata] {
+		impl $crate::error::ModuleErrorMetadata for $error {
+			fn metadata() -> &'static [ $crate::error::ErrorMetadata] {
 				&[
 					$crate::error::ErrorMetadata {
 						name: $crate::error::DecodeDifferent::Encode("Other"),

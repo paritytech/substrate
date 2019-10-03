@@ -17,7 +17,7 @@
 pub use srml_metadata::{
 	DecodeDifferent, FnEncode, RuntimeMetadata, ModuleMetadata, RuntimeMetadataLastVersion,
 	DefaultByteGetter, RuntimeMetadataPrefixed, StorageEntryMetadata, StorageMetadata,
-	StorageEntryType, StorageEntryModifier, DefaultByte, StorageHasher
+	StorageEntryType, StorageEntryModifier, DefaultByte, StorageHasher, ModuleErrorMetadata
 };
 
 /// Implements the metadata support for the given runtime and all its modules.
@@ -97,9 +97,9 @@ macro_rules! __runtime_modules_to_metadata {
 						$mod::$module::<$runtime $(, $mod::$instance )?>::module_constants_metadata
 					)
 				),
-				error: $crate::metadata::DecodeDifferent::Encode(
+				errors: $crate::metadata::DecodeDifferent::Encode(
 					$crate::metadata::FnEncode(
-						$mod::$module::<$runtime $(, $mod::$instance )?>::Error::metadata
+						<$mod::$module::<$runtime $(, $mod::$instance )?> as $crate::metadata::ModuleErrorMetadata>::metadata
 					)
 				)
 			};
