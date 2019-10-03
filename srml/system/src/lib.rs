@@ -159,7 +159,7 @@ pub trait Trait: 'static + Eq + Clone {
 	type Origin: Into<Result<RawOrigin<Self::AccountId>, Self::Origin>> + From<RawOrigin<Self::AccountId>>;
 
 	/// The aggregated `Call` type.
-	type Call;
+	type Call: rstd::fmt::Debug;
 
 	/// Account index (aka nonce) type. This stores the number of previous transactions associated with a sender
 	/// account.
@@ -174,7 +174,7 @@ pub trait Trait: 'static + Eq + Clone {
 	/// The output of the `Hashing` function.
 	type Hash:
 		Parameter + Member + MaybeSerializeDebug + MaybeDisplay + SimpleBitOps + Default + Copy + CheckEqual
-		+ rstd::hash::Hash + AsRef<[u8]> + AsMut<[u8]> + core::fmt::Debug;
+		+ rstd::hash::Hash + AsRef<[u8]> + AsMut<[u8]> + rstd::fmt::Debug;
 
 	/// The hashing system (algorithm) being used in the runtime (e.g. Blake2).
 	type Hashing: Hash<Output = Self::Hash>;
@@ -204,7 +204,7 @@ pub trait Trait: 'static + Eq + Clone {
 	>;
 
 	/// The aggregated event type of the runtime.
-	type Event: Parameter + Member + From<Event> + core::fmt::Debug;
+	type Event: Parameter + Member + From<Event> + rstd::fmt::Debug;
 
 	/// Maximum number of block number to block hash mappings to keep (oldest pruned first).
 	type BlockHashCount: Get<Self::BlockNumber>;
@@ -923,6 +923,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 		info: DispatchInfo,
 		len: usize,
 	) -> Result<(), ApplyError> {
+		runtime_io::debug(_call);
 		let next_len = Self::check_block_length(info, len)?;
 		AllExtrinsicsLen::put(next_len);
 		let next_weight = Self::check_weight(info)?;
@@ -952,8 +953,8 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 	}
 }
 
-impl<T: Trait + Send + Sync> core::fmt::Debug for CheckWeight<T> {
-	fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+impl<T: Trait + Send + Sync> rstd::fmt::Debug for CheckWeight<T> {
+	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
 		write!(f, "CheckWeight<T>")
 	}
 }
@@ -969,8 +970,8 @@ impl<T: Trait> CheckNonce<T> {
 	}
 }
 
-impl<T: Trait> core::fmt::Debug for CheckNonce<T> {
-	fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+impl<T: Trait> rstd::fmt::Debug for CheckNonce<T> {
+	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
 		self.0.fmt(f)
 	}
 }
@@ -1046,8 +1047,8 @@ impl<T: Trait + Send + Sync> CheckEra<T> {
 	}
 }
 
-impl<T: Trait + Send + Sync> core::fmt::Debug for CheckEra<T> {
-	fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+impl<T: Trait + Send + Sync> rstd::fmt::Debug for CheckEra<T> {
+	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
 		self.0.fmt(f)
 	}
 }
@@ -1088,8 +1089,8 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckEra<T> {
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
 pub struct CheckGenesis<T: Trait + Send + Sync>(rstd::marker::PhantomData<T>);
 
-impl<T: Trait + Send + Sync> core::fmt::Debug for CheckGenesis<T> {
-	fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+impl<T: Trait + Send + Sync> rstd::fmt::Debug for CheckGenesis<T> {
+	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
 		write!(f, "CheckGenesis<T>")
 	}
 }
@@ -1116,8 +1117,8 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckGenesis<T> {
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
 pub struct CheckVersion<T: Trait + Send + Sync>(rstd::marker::PhantomData<T>);
 
-impl<T: Trait + Send + Sync> core::fmt::Debug for CheckVersion<T> {
-	fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+impl<T: Trait + Send + Sync> rstd::fmt::Debug for CheckVersion<T> {
+	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
 		write!(f, "CheckVersion<T>")
 	}
 }

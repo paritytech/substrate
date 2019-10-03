@@ -15,20 +15,208 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use quote::quote;
-use syn::DeriveInput;
+use proc_macro2::{Span, TokenStream};
+use syn::{Ident, Data, Field, DeriveInput, parse_quote};
+
+fn ident2str(name: &Ident) -> String {
+	format!("{}", name)
+}
 
 pub fn debug_derive(ast: &DeriveInput) -> proc_macro::TokenStream {
+	let name_str = ident2str(&ast.ident);
+	let implementation = implementation::derive(&name_str, &ast.data);
 	let name = &ast.ident;
-	let name_str = format!("{}", name);
-	let (impl_generics, ty_generics, where_clause) = ast.generics.split_for_impl();
-
+	let mut generics = ast.generics.clone();
+	let (impl_generics, ty_generics, where_clause) = {
+		let wh = generics.make_where_clause();
+		for t in ast.generics.type_params() {
+			let name = &t.ident;
+			wh.predicates.push(parse_quote!{ #name : core::fmt::Debug });
+		}
+		generics.split_for_impl()
+	};
 	let gen = quote!{
 		impl #impl_generics core::fmt::Debug for #name #ty_generics #where_clause {
 			fn fmt(&self, fmt: &mut core::fmt::Formatter) -> core::fmt::Result {
-				write!(fmt, #name_str)
+				#implementation
 			}
 		}
 	};
 
+	println!("{}", gen);
+
 	gen.into()
+}
+
+#[cfg(not(any(test, feature = "std")))]
+mod implementation {
+	use super::*;
+
+	/// Derive the inner implementation of `Debug::fmt` function.
+	///
+	/// Non-std environment. We do nothing to prevent bloating the size of runtime.
+	/// Implement `Printable` if you need to print the details.
+	pub fn derive(name_str: &str, data: &Data) -> TokenStream {
+		quote! {
+			let _ = fmt;
+			Ok(())
+		}
+	}
+}
+
+#[cfg(any(test, feature = "std"))]
+mod implementation {
+	use super::*;
+
+	/// Derive the inner implementation of `Debug::fmt` function.
+	pub fn derive(name_str: &str, data: &Data) -> TokenStream {
+		match *data {
+			Data::Struct(ref s) => derive_struct(&name_str, &s.fields),
+			Data::Union(ref u) => derive_fields(&name_str, Fields::new(u.fields.named.iter(), None)),
+			Data::Enum(ref e) => derive_enum(&name_str, &e),
+		}
+	}
+
+	enum Fields {
+		Indexed {
+			indices: Vec<syn::Index>,
+		},
+		Unnamed {
+			vars: Vec<Ident>,
+		},
+		Named {
+			names: Vec<Ident>,
+			this: Option<Ident>,
+		},
+	}
+
+	impl Fields {
+		fn new<'a>(fields: impl Iterator<Item=&'a Field>, this: Option<Ident>) -> Self {
+			let mut indices = vec![];
+			let mut names = vec![];
+
+			for (i, f) in fields.enumerate() {
+				if let Some(ident) = f.ident.clone() {
+					names.push(ident);
+				} else {
+					indices.push(syn::Index::from(i));
+				}
+			}
+
+			if names.is_empty() {
+				Self::Indexed {
+					indices,
+				}
+			} else {
+				Self::Named {
+					names,
+					this,
+				}
+			}
+		}
+	}
+
+	fn derive_fields<'a>(
+		name_str: &str,
+		fields: Fields,
+	) -> TokenStream {
+		match fields {
+			Fields::Named { names, this } => {
+				let names_str: Vec<_> = names.iter()
+					.map(ident2str)
+					.collect();
+
+				let fields = match this {
+					None => quote! { #( .field(#names_str, #names) )* },
+					Some(this) => quote! { #( .field(#names_str, &#this.#names) )* },
+				};
+
+				quote! {
+					fmt.debug_struct(#name_str)
+						#fields
+						.finish()
+				}
+
+			},
+			Fields::Indexed { indices }  => {
+				quote! {
+					fmt.debug_tuple(#name_str)
+						#( .field(&self.#indices) )*
+						.finish()
+				}
+			},
+			Fields::Unnamed { vars }  => {
+				quote! {
+					fmt.debug_tuple(#name_str)
+						#( .field(#vars) )*
+						.finish()
+				}
+			},
+		}
+	}
+
+	fn derive_enum(
+		name: &str,
+		e: &syn::DataEnum,
+	) -> TokenStream {
+		let v = e.variants
+			.iter()
+			.map(|v| {
+				let name = format!("{}::{}", name, ident2str(&v.ident));
+				let ident = &v.ident;
+				match v.fields {
+					syn::Fields::Named(ref f) => {
+						let names: Vec<_> = f.named.iter().flat_map(|f| f.ident.clone()).collect();
+						let fields_impl = derive_fields(&name, Fields::Named {
+							names: names.clone(),
+							this: None,
+						});
+						(ident, (quote!{ { #( ref #names ),* } }, fields_impl))
+					},
+					syn::Fields::Unnamed(ref f) => {
+						let names = f.unnamed.iter()
+							.enumerate()
+							.map(|(id, _)| Ident::new(&format!("a{}", id), Span::call_site()))
+							.collect::<Vec<_>>();
+						let fields_impl = derive_fields(&name, Fields::Unnamed { vars: names.clone() });
+						(ident, (quote! { ( #( ref #names ),* ) }, fields_impl))
+					},
+					syn::Fields::Unit => {
+						let fields_impl = derive_fields(&name, Fields::Indexed { indices: vec![] });
+						(ident, (quote! { }, fields_impl))
+					},
+				}
+			});
+
+		type Vecs<A, B> = (Vec<A>, Vec<B>);
+		let (variants, others): Vecs<_, _> = v.unzip();
+		let (match_fields, variants_impl): Vecs<_, _> = others.into_iter().unzip();
+
+		quote! {
+			match self {
+				#( Self::#variants #match_fields => #variants_impl, )*
+				_ => Ok(()),
+			}
+		}
+	}
+
+	fn derive_struct(
+		name_str: &str,
+		fields: &syn::Fields,
+	) -> TokenStream {
+		match *fields {
+			syn::Fields::Named(ref f) => derive_fields(
+				name_str,
+				Fields::new(f.named.iter(), Some(Ident::new("self", Span::call_site()))),
+			),
+			syn::Fields::Unnamed(ref f) => derive_fields(
+				name_str,
+				Fields::new(f.unnamed.iter(), None),
+			),
+			syn::Fields::Unit => derive_fields(
+				name_str,
+				Fields::Indexed { indices: vec![] },
+			),
+		}
+	}
 }

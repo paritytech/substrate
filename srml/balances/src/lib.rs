@@ -1230,8 +1230,8 @@ impl<T: Trait<I>, I: Instance> TakeFees<T, I> {
 	}
 }
 
-impl<T: Trait<I>, I: Instance> core::fmt::Debug for TakeFees<T, I> {
-	fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+impl<T: Trait<I>, I: Instance> rstd::fmt::Debug for TakeFees<T, I> {
+	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
 		self.0.fmt(f)
 	}
 }

@@ -567,17 +567,15 @@ macro_rules! assert_eq_error_rate {
 #[derive(PartialEq, Eq, Clone, Default, Encode, Decode)]
 pub struct OpaqueExtrinsic(pub Vec<u8>);
 
-#[cfg(feature = "std")]
 impl std::fmt::Debug for OpaqueExtrinsic {
-	fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+	#[cfg(feature = "std")]
+	fn fmt(&self, fmt: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
 		write!(fmt, "{}", primitives::hexdisplay::HexDisplay::from(&self.0))
 	}
-}
 
-#[cfg(not(feature = "std"))]
-impl core::fmt::Debug for OpaqueExtrinsic {
-	fn fmt(&self, fmt: &mut core::fmt::Formatter) -> core::fmt::Result {
-		write!(fmt, "OpaqueExtrinsic")
+	#[cfg(not(feature = "std"))]
+	fn fmt(&self, _fmt: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+		Ok(())
 	}
 }
 

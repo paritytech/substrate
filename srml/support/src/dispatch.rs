@@ -49,18 +49,8 @@ pub trait Callable<T> {
 // https://github.com/rust-lang/rust/issues/51331
 pub type CallableCallFor<A, T> = <A as Callable<T>>::Call;
 
-#[cfg(feature = "std")]
 pub trait Parameter: Codec + Clone + Eq + fmt::Debug {}
-
-#[cfg(feature = "std")]
 impl<T> Parameter for T where T: Codec + Clone + Eq + fmt::Debug {}
-
-// TODO [ToDr] Do proper
-#[cfg(not(feature = "std"))]
-pub trait Parameter: Codec + Clone + Eq + core::fmt::Debug {}
-
-#[cfg(not(feature = "std"))]
-impl<T> Parameter for T where T: Codec + Clone + Eq + core::fmt::Debug {}
 
 /// Declares a `Module` struct and a `Call` enum, which implements the dispatch logic.
 ///

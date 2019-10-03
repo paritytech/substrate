@@ -113,9 +113,8 @@ impl ExecutionContext {
 }
 
 /// Hex-serialized shim for `Vec<u8>`.
-#[derive(PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Hash, PartialOrd, Ord))]
-#[derive(crate::RuntimeDebug)]
 pub struct Bytes(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
 impl From<Vec<u8>> for Bytes {
@@ -160,8 +159,8 @@ pub enum NativeOrEncoded<R> {
 }
 
 #[cfg(feature = "std")]
-impl<R: codec::Encode> ::std::fmt::Debug for NativeOrEncoded<R> {
-	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+impl<R: codec::Encode> rstd::fmt::Debug for NativeOrEncoded<R> {
+	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
 		hexdisplay::HexDisplay::from(&self.as_encoded().as_ref()).fmt(f)
 	}
 }

@@ -84,12 +84,12 @@ impl<B, O> Eq for DecodeDifferent<B, O>
 	where B: Encode + Eq + PartialEq + 'static, O: Encode + Eq + PartialEq + 'static
 {}
 
-impl<B, O> core::fmt::Debug for DecodeDifferent<B, O>
+impl<B, O> rstd::fmt::Debug for DecodeDifferent<B, O>
 	where
-		B: core::fmt::Debug + Eq + 'static,
-		O: core::fmt::Debug + Eq + 'static,
+		B: rstd::fmt::Debug + Eq + 'static,
+		O: rstd::fmt::Debug + Eq + 'static,
 {
-	fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
 		match self {
 			DecodeDifferent::Encode(b) => b.fmt(f),
 			DecodeDifferent::Decoded(o) => o.fmt(f),
@@ -152,8 +152,8 @@ impl<E: Encode + PartialEq> PartialEq for FnEncode<E> {
 	}
 }
 
-impl<E: Encode + core::fmt::Debug> core::fmt::Debug for FnEncode<E> {
-	fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+impl<E: Encode + rstd::fmt::Debug> rstd::fmt::Debug for FnEncode<E> {
+	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
 		self.0().fmt(f)
 	}
 }
@@ -247,8 +247,8 @@ impl serde::Serialize for DefaultByteGetter {
 	}
 }
 
-impl core::fmt::Debug for DefaultByteGetter {
-	fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+impl rstd::fmt::Debug for DefaultByteGetter {
+	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
 		self.0.default_byte().fmt(f)
 	}
 }

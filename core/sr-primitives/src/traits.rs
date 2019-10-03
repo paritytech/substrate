@@ -17,7 +17,7 @@
 //! Primitives for the runtime modules.
 
 use rstd::prelude::*;
-use rstd::{self, result, marker::PhantomData, convert::{TryFrom, TryInto}};
+use rstd::{self, result, marker::PhantomData, convert::{TryFrom, TryInto}, fmt::Debug};
 use runtime_io;
 #[cfg(feature = "std")]
 use std::fmt::Display;
@@ -151,7 +151,7 @@ pub trait Lookup {
 /// context.
 pub trait StaticLookup {
 	/// Type to lookup from.
-	type Source: Codec + Clone + PartialEq + MaybeDebug;
+	type Source: Codec + Clone + PartialEq + Debug;
 	/// Type to lookup into.
 	type Target;
 	/// Attempt a lookup.
@@ -163,7 +163,7 @@ pub trait StaticLookup {
 /// A lookup implementation returning the input value.
 #[derive(Default)]
 pub struct IdentityLookup<T>(PhantomData<T>);
-impl<T: Codec + Clone + PartialEq + MaybeDebug> StaticLookup for IdentityLookup<T> {
+impl<T: Codec + Clone + PartialEq + Debug> StaticLookup for IdentityLookup<T> {
 	type Source = T;
 	type Target = T;
 	fn lookup(x: T) -> Result<T, LookupError> { Ok(x) }
@@ -529,7 +529,7 @@ impl CheckEqual for primitives::H256 {
 	}
 }
 
-impl<H: PartialEq + Eq + MaybeDebug> CheckEqual for super::generic::DigestItem<H> where H: Encode {
+impl<H: PartialEq + Eq + Debug> CheckEqual for super::generic::DigestItem<H> where H: Encode {
 	#[cfg(feature = "std")]
 	fn check_equal(&self, other: &Self) {
 		if self != other {
@@ -548,43 +548,22 @@ impl<H: PartialEq + Eq + MaybeDebug> CheckEqual for super::generic::DigestItem<H
 }
 
 macro_rules! impl_maybe_marker {
-	( @ $(#[$doc:meta])+ $trait_name:ident: $($trait_bound:path),+ ) => {
-		// TODO [ToDr] Do proper
-		$(#[$doc])+
-		#[cfg(feature = "std")]
-		pub trait $trait_name: $($trait_bound +)+ {}
-		#[cfg(feature = "std")]
-		impl<T: $($trait_bound +)+> $trait_name for T {}
-
-
-		$(#[$doc])+
-		#[cfg(not(feature = "std"))]
-		pub trait $trait_name {}
-		#[cfg(not(feature = "std"))]
-		impl<T> $trait_name for T {}
-	};
-	( @ $(#[$doc:meta])+ $trait_name:ident: + Debug + $($trait_bound:path),+ ) => {
-		// TODO [ToDr] Do proper
-		$(#[$doc])+
-		#[cfg(feature = "std")]
-		pub trait $trait_name: std::fmt::Debug + $($trait_bound +)+ {}
-		#[cfg(feature = "std")]
-		impl<T: std::fmt::Debug + $($trait_bound +)+> $trait_name for T {}
-
-		$(#[$doc])+
-		#[cfg(not(feature = "std"))]
-		pub trait $trait_name: core::fmt::Debug {}
-		#[cfg(not(feature = "std"))]
-		impl<T: core::fmt::Debug> $trait_name for T {}
-	};
-	( $( $(#[$doc:meta])+ $trait_name:ident: $( + $x:ident + )* $($trait_bound:path),+ );+ ) => {
+	( $( $(#[$doc:meta])+ $trait_name:ident: $($trait_bound:path),+ );+ ) => {
 		$(
-			impl_maybe_marker!( @ $(#[$doc])+ $trait_name : $( + $x + )* $( $trait_bound ),+ );
-		)+
-	};
-}
+			$(#[$doc])+
+			#[cfg(feature = "std")]
+			pub trait $trait_name: $($trait_bound +)+ {}
+			#[cfg(feature = "std")]
+			impl<T: $($trait_bound +)+> $trait_name for T {}
 
-use core::fmt::Debug as MaybeDebug;
+			$(#[$doc])+
+			#[cfg(not(feature = "std"))]
+			pub trait $trait_name {}
+			#[cfg(not(feature = "std"))]
+			impl<T> $trait_name for T {}
+		)+
+	}
+}
 
 impl_maybe_marker!(
 	/// A type that implements Display when in std environment.
@@ -597,10 +576,7 @@ impl_maybe_marker!(
 	MaybeSerialize: Serialize;
 
 	/// A type that implements Serialize, DeserializeOwned and Debug when in std environment.
-	MaybeSerializeDebug: + Debug + DeserializeOwned, Serialize;
-
-	/// A type that implements Serialize and Debug when in std environment.
-	MaybeSerializeDebugButNotDeserialize: + Debug + Serialize
+	MaybeSerializeDeserialize: DeserializeOwned, Serialize;
 );
 
 /// A type that provides a randomness beacon.
@@ -620,8 +596,8 @@ pub trait RandomnessBeacon {
 }
 
 /// A type that can be used in runtime structures.
-pub trait Member: Send + Sync + Sized + MaybeDebug + Eq + PartialEq + Clone + 'static {}
-impl<T: Send + Sync + Sized + MaybeDebug + Eq + PartialEq + Clone + 'static> Member for T {}
+pub trait Member: Send + Sync + Sized + Debug + Eq + PartialEq + Clone + 'static {}
+impl<T: Send + Sync + Sized + Debug + Eq + PartialEq + Clone + 'static> Member for T {}
 
 /// Determine if a `MemberId` is a valid member.
 pub trait IsMember<MemberId> {
@@ -796,7 +772,7 @@ pub trait Dispatchable {
 
 /// Means by which a transaction may be extended. This type embodies both the data and the logic
 /// that should be additionally associated with the transaction. It should be plain old data.
-pub trait SignedExtension: Codec + MaybeDebug + Sync + Send + Clone + Eq + PartialEq {
+pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq {
 	/// The type which encodes the sender identity.
 	type AccountId;
 

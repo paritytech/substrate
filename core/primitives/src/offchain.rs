@@ -22,8 +22,6 @@ use rstd::convert::TryFrom;
 
 pub use crate::crypto::KeyTypeId;
 
-pub use core::fmt::Debug as RuntimeDebug;
-
 /// A type of supported crypto.
 #[derive(Clone, Copy, PartialEq, Eq, Encode, Decode)]
 #[derive(crate::RuntimeDebug)]

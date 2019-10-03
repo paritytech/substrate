@@ -988,8 +988,8 @@ impl<T: Trait + Send + Sync> Default for CheckBlockGasLimit<T> {
 	}
 }
 
-impl<T: Trait + Send + Sync> core::fmt::Debug for CheckBlockGasLimit<T> {
-	fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+impl<T: Trait + Send + Sync> rstd::fmt::Debug for CheckBlockGasLimit<T> {
+	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
 		write!(f, "CheckBlockGasLimit<T>")
 	}
 }
