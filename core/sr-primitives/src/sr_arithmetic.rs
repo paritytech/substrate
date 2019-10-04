@@ -672,7 +672,7 @@ impl CheckedAdd for Fixed64 {
 /// Infinite precision unsigned integer for substrate runtime.
 pub mod big_num {
 	use super::{Zero, One};
-	use rstd::{prelude::*, cell::RefCell, convert::TryFrom};
+	use rstd::{ops, prelude::*, cell::RefCell, convert::TryFrom};
 
 
 	// A sensible value for this would be half of the word size of the host machine. Since the
@@ -1074,33 +1074,66 @@ pub mod big_num {
 		}
 	}
 
-	impl TryFrom<Number> for u128 {
-		type Error = &'static str;
-		fn try_from(mut value: Number) -> Result<u128, Self::Error> {
-			value.lstrip();
-			if value.len() * SHIFT > 128 {
-				Err("cannot fit a number into u128")
-			} else {
-				let checked_pow = |a: u128, b: u32| -> Option<u128> {
-					let mut acc: u128 = One::one();
-					for _ in 0..b {
-						acc = acc.checked_mul(a)?;
-					}
-					Some(acc)
-				};
-				let mut acc: u128 = Zero::zero();
-				for (i, d) in value.digits.iter().rev().cloned().enumerate() {
-					let d: u128 = d.into();
-					let b: u128 = B.into();
-					let m = checked_pow(b, i as u32).ok_or("cannot fit number into u128")?;
-					let multiplier = u128::from(m);
-					let value = d.checked_mul(multiplier).ok_or("cannot fit number into u128")?;
-					acc = acc.checked_add(value).ok_or("cannot fit number into u128")?;
-				}
-				Ok(acc)
-			}
+	impl ops::Add for Number {
+		type Output = Self;
+		fn add(self, rhs: Self) -> Self::Output {
+			self.add(rhs)
 		}
 	}
+
+	impl ops::Sub for Number {
+		type Output = Self;
+		fn sub(self, rhs: Self) -> Self::Output {
+			self.sub(rhs).unwrap_or_else(|e| e)
+		}
+	}
+
+	impl Zero for Number {
+		fn zero() -> Self {
+			Self { digits: vec![Zero::zero()] }
+		}
+		#[inline]
+		fn is_zero(&self) -> bool {
+			self.digits.iter().all(|d| d.is_zero())
+		}
+	}
+
+	macro_rules! impl_try_from_number_for {
+		($([$type:ty, $len:expr]),+) => {
+			$(
+				impl TryFrom<Number> for $type {
+					type Error = &'static str;
+					fn try_from(mut value: Number) -> Result<$type, Self::Error> {
+						value.lstrip();
+						let error_message = concat!("cannot fit a number into ", stringify!($type));
+						if value.len() * SHIFT > $len {
+							Err(error_message)
+						} else {
+							let checked_pow = |a: $type, b: u32| -> Option<$type> {
+								let mut acc: $type = One::one();
+								for _ in 0..b {
+									acc = acc.checked_mul(a)?;
+								}
+								Some(acc)
+							};
+							let mut acc: $type = Zero::zero();
+							for (i, d) in value.digits.iter().rev().cloned().enumerate() {
+								let d: $type = d.into();
+								let b: $type = B.into();
+								let m = checked_pow(b, i as u32).ok_or(error_message)?;
+								let multiplier = <$type>::from(m);
+								let value = d.checked_mul(multiplier).ok_or(error_message)?;
+								acc = acc.checked_add(value).ok_or(error_message)?;
+							}
+							Ok(acc)
+						}
+					}
+				}
+			)*
+		};
+	}
+	// can only be implemented for sizes bigger than two limb.
+	impl_try_from_number_for!([u128, 128], [u64, 64]);
 
 	macro_rules! impl_from_for_smaller_than_word {
 		($($type:ty),+) => {
@@ -1113,8 +1146,6 @@ pub mod big_num {
 	}
 	impl_from_for_smaller_than_word!(u8, u16, Single);
 
-	// TODO: allow from for all numeric types bigger than double in a nice way.
-	// TODO: add an implementation for `trait Zero`.
 	impl From<Double> for Number {
 		fn from(a: Double) -> Self {
 			let (ah, al) = split(a);
@@ -1152,6 +1183,10 @@ pub mod big_num {
 			}
 		}
 
+		fn with_limbs(n: usize) -> Number {
+			Number { digits: vec![1; n] }
+		}
+
 		#[test]
 		fn split_works() {
 			let a = SHIFT / 2;
@@ -1176,6 +1211,28 @@ pub mod big_num {
 				Number { digits: vec![0, 1, 2, 3] } == Number { digits: vec![1, 2, 3] },
 				true,
 			);
+		}
+
+		#[test]
+		fn can_try_build_numbers_from_types() {
+			use rstd::convert::TryFrom;
+			assert_eq!(u64::try_from(with_limbs(1)).unwrap(), 1);
+			assert_eq!(u64::try_from(with_limbs(2)).unwrap(), u32::max_value() as u64 + 2);
+			assert_eq!(
+				u64::try_from(with_limbs(3)).unwrap_err(),
+				"cannot fit a number into u64",
+			);
+			assert_eq!(
+				u128::try_from(with_limbs(3)).unwrap(),
+				u32::max_value() as u128 + u64::max_value() as u128 + 3
+			);
+		}
+
+		#[test]
+		fn zero_works() {
+			assert_eq!(Number::zero(), Number { digits: vec![0] });
+			assert_eq!(Number { digits: vec![0, 1, 0] }.is_zero(), false);
+			assert_eq!(Number { digits: vec![0, 0, 0] }.is_zero(), true);
 		}
 
 		#[test]
