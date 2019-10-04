@@ -135,7 +135,7 @@ impl system::Trait for Runtime {
 }
 
 impl utility::Trait for Runtime {
-	type Origin = Origin;
+	type Event = Event;
 	type Call = Call;
 }
 
@@ -496,7 +496,7 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
 		System: system::{Module, Call, Storage, Config, Event},
-		Utility: utility::{Module, Call, Event},
+		Utility: utility::{Module, Call, Event<T>},
 		Babe: babe::{Module, Call, Storage, Config, Inherent(Timestamp)},
 		Timestamp: timestamp::{Module, Call, Storage, Inherent},
 		Authorship: authorship::{Module, Call, Storage, Inherent},
