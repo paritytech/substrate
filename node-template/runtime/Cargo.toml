@@ -26,6 +26,7 @@ sudo = { package = "srml-sudo", path = "../../srml/sudo", default_features = fal
 sr-primitives = { path = "../../core/sr-primitives", default_features = false }
 client = { package = "substrate-client", path = "../../core/client", default_features = false }
 offchain-primitives = { package = "substrate-offchain-primitives", path = "../../core/offchain/primitives", default-features = false }
+module-template = { path = "module-template", default_features = false }
 
 [build-dependencies]
 wasm-builder-runner = { package = "substrate-wasm-builder-runner", version = "1.0.2" }
@@ -54,4 +55,5 @@ std = [
 	"safe-mix/std",
 	"offchain-primitives/std",
 	"substrate-session/std",
+	"module-template/std",
 ]
