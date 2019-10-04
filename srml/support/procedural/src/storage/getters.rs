@@ -38,9 +38,7 @@ pub fn impl_getters(scrate: &TokenStream2, def: &super::DeclStorageDefExt) -> To
 					}
 				}
 			},
-			super::StorageLineTypeDef::Map(map)
-				| super::StorageLineTypeDef::LinkedMap(map)
-			=> {
+			super::StorageLineTypeDef::Map(map) | super::StorageLineTypeDef::LinkedMap(map) => {
 				let key = &map.key;
 				let value = &map.value;
 				quote!{
@@ -49,7 +47,7 @@ pub fn impl_getters(scrate: &TokenStream2, def: &super::DeclStorageDefExt) -> To
 						<#storage_struct as #scrate::#storage_trait>::get(key)
 					}
 				}
-			}
+			},
 			super::StorageLineTypeDef::DoubleMap(map) => {
 				let key1 = &map.key1;
 				let key2 = &map.key2;
@@ -63,7 +61,7 @@ pub fn impl_getters(scrate: &TokenStream2, def: &super::DeclStorageDefExt) -> To
 						<#storage_struct as #scrate::#storage_trait>::get(k1, k2)
 					}
 				}
-			}
+			},
 		};
 		getters.extend(getter);
 	}

@@ -34,11 +34,10 @@ pub fn impl_genesis_config(scrate: &TokenStream2, def: &super::DeclStorageDefExt
 	let mut builders_clone_bound = Vec::new();
 
 	for line in def.storage_lines.iter() {
-		let opt_build = line.build.as_ref()
-			.map(|b| {
-				assimilate_require_generic |= ext::expr_contains_ident(&b, &def.module_runtime_generic);
-				quote!( #b )
-			});
+		let opt_build = line.build.as_ref().map(|b| {
+			assimilate_require_generic |= ext::expr_contains_ident(&b, &def.module_runtime_generic);
+			quote!( #b )
+		});
 
 		// need build line
 		let builder = if let Some(config_field) = &line.config {
@@ -64,9 +63,7 @@ pub fn impl_genesis_config(scrate: &TokenStream2, def: &super::DeclStorageDefExt
 						quote!( #( #[ #attrs ] )* pub #config_field: #value_type, )
 					);
 				},
-				super::StorageLineTypeDef::Map(map)
-					| super::StorageLineTypeDef::LinkedMap(map)
-				=> {
+				super::StorageLineTypeDef::Map(map) | super::StorageLineTypeDef::LinkedMap(map) => {
 					let key = &map.key;
 					serde_complete_bound.push(quote!( #key ));
 
