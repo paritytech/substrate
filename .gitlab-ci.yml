@@ -127,6 +127,7 @@ test-linux-stable:                 &test-linux
     variables:
       - $DEPLOY_TAG
   script:
+    - BUILD_DUMMY_WASM_BINARY=1 RUSTDOCFLAGS="--html-in-header $(pwd)/rustdoc-header.html" time cargo +nightly doc --release --all --verbose
     - time cargo test --all --release --verbose --locked |
         tee output.log
     - sccache -s
