@@ -27,12 +27,15 @@ use state_machine::backend::{Backend as StateBackend, InMemory};
 use state_machine::{self, InMemoryChangesTrieStorage, ChangesTrieAnchorBlockId, ChangesTrieTransaction};
 use hash_db::{Hasher, Prefix};
 use trie::MemoryDB;
+use header_metadata::{CachedHeaderMetadata, HeaderMetadata};
 
 use crate::error;
 use crate::backend::{self, NewBlockState, StorageCollection, ChildStorageCollection};
 use crate::light;
 use crate::leaves::LeafSet;
-use crate::blockchain::{self, BlockStatus, HeaderBackend, well_known_cache_keys::Id as CacheKeyId};
+use crate::blockchain::{
+	self, BlockStatus, HeaderBackend, well_known_cache_keys::Id as CacheKeyId
+};
 
 struct PendingBlock<B: BlockT> {
 	block: StoredBlock<B>,
@@ -221,11 +224,7 @@ impl<Block: BlockT> Blockchain<Block> {
 			if &best_hash == header.parent_hash() {
 				None
 			} else {
-				let route = crate::blockchain::tree_route(
-					|id| self.header(id)?.ok_or_else(|| error::Error::UnknownBlock(format!("{:?}", id))),
-					BlockId::Hash(best_hash),
-					BlockId::Hash(*header.parent_hash()),
-				)?;
+				let route = header_metadata::tree_route(self, best_hash, *header.parent_hash())?;
 				Some(route)
 			}
 		};
@@ -320,6 +319,21 @@ impl<Block: BlockT> HeaderBackend<Block> for Blockchain<Block> {
 	}
 }
 
+impl<Block: BlockT> HeaderMetadata<Block> for Blockchain<Block> {
+	type Error = error::Error;
+
+	fn header_metadata(&self, hash: Block::Hash) -> Result<CachedHeaderMetadata<Block>, Self::Error> {
+		self.header(BlockId::hash(hash))?.map(|header| CachedHeaderMetadata::from(&header))
+			.ok_or(error::Error::UnknownBlock("header not found".to_owned()))
+	}
+
+	fn insert_header_metadata(&self, _hash: Block::Hash, _metadata: CachedHeaderMetadata<Block>) {
+		// No need to implement.
+	}
+	fn remove_header_metadata(&self, _hash: Block::Hash) {
+		// No need to implement.
+	}
+}
 
 impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
 	fn body(&self, id: BlockId<Block>) -> error::Result<Option<Vec<<Block as BlockT>::Extrinsic>>> {

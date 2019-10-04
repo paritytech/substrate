@@ -216,3 +216,32 @@ fn should_generate_heartbeats() {
 		});
 	});
 }
+
+#[test]
+fn should_cleanup_received_heartbeats_on_session_end() {
+	with_externalities(&mut new_test_ext(), || {
+		advance_session();
+
+		VALIDATORS.with(|l| *l.borrow_mut() = Some(vec![1, 2, 3]));
+		assert_eq!(Session::validators(), Vec::<u64>::new());
+
+		// enact the change and buffer another one
+		advance_session();
+
+		assert_eq!(Session::current_index(), 2);
+		assert_eq!(Session::validators(), vec![1, 2, 3]);
+
+		// send an heartbeat from authority id 0 at session 2
+		let _ = heartbeat(1, 2, 0, 1.into()).unwrap();
+
+		// the heartbeat is stored
+		assert!(!ImOnline::received_heartbeats(&2, &0).is_empty());
+
+		advance_session();
+
+		// after the session has ended we have already processed the heartbeat
+		// message, so any messages received on the previous session should have
+		// been pruned.
+		assert!(ImOnline::received_heartbeats(&2, &0).is_empty());
+	});
+}

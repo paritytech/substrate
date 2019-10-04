@@ -14,7 +14,38 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! A non-std set of HTTP types.
+//! A high-level helpers for making HTTP requests from Offchain Workers.
+//!
+//! `sr-io` crate exposes a low level methods to make and control HTTP requests
+//! available only for Offchain Workers. Those might be hard to use
+//! and usually that level of control is not really necessary.
+//! This module aims to provide high-level wrappers for those APIs
+//! to simplify making HTTP requests.
+//!
+//!
+//! Example:
+//! ```rust,no_run
+//! use sr_primitives::offchain::http::Request;
+//!
+//! // initiate a GET request to localhost:1234
+//! let request: Request = Request::get("http://localhost:1234");
+//! let pending = request
+//! 	.add_header("X-Auth", "hunter2")
+//! 	.send()
+//! 	.unwrap();
+//!
+//! // wait for the response indefinitely
+//! let mut response = pending.wait().unwrap();
+//!
+//! // then check the headers
+//! let mut headers = response.headers().into_iter();
+//! assert_eq!(headers.current(), None);
+//!
+//! // and collect the body
+//! let body = response.body();
+//! assert_eq!(body.clone().collect::<Vec<_>>(), b"1234".to_vec());
+//! assert_eq!(body.error(), &None);
+//! ```
 
 use rstd::str;
 use rstd::prelude::Vec;
@@ -192,11 +223,11 @@ impl<'a, I: AsRef<[u8]>, T: IntoIterator<Item=I>> Request<'a, T> {
 		let meta = &[];
 
 		// start an http request.
-		let id = crate::http_request_start(self.method.as_ref(), self.url, meta).map_err(|_| HttpError::IoError)?;
+		let id = runtime_io::http_request_start(self.method.as_ref(), self.url, meta).map_err(|_| HttpError::IoError)?;
 
 		// add custom headers
 		for header in &self.headers {
-			crate::http_request_add_header(
+			runtime_io::http_request_add_header(
 				id,
 				header.name(),
 				header.value(),
@@ -205,11 +236,11 @@ impl<'a, I: AsRef<[u8]>, T: IntoIterator<Item=I>> Request<'a, T> {
 
 		// write body
 		for chunk in self.body {
-			crate::http_request_write_body(id, chunk.as_ref(), self.deadline)?;
+			runtime_io::http_request_write_body(id, chunk.as_ref(), self.deadline)?;
 		}
 
 		// finalise the request
-		crate::http_request_write_body(id, &[], self.deadline)?;
+		runtime_io::http_request_write_body(id, &[], self.deadline)?;
 
 		Ok(PendingRequest {
 			id,
@@ -276,7 +307,7 @@ impl PendingRequest {
 		deadline: impl Into<Option<Timestamp>>
 	) -> Vec<Result<HttpResult, PendingRequest>> {
 		let ids = requests.iter().map(|r| r.id).collect::<Vec<_>>();
-		let statuses = crate::http_response_wait(&ids, deadline.into());
+		let statuses = runtime_io::http_response_wait(&ids, deadline.into());
 
 		statuses
 			.into_iter()
@@ -314,7 +345,7 @@ impl Response {
 	/// Retrieve the headers for this response.
 	pub fn headers(&mut self) -> &Headers {
 		if self.headers.is_none() {
-			self.headers = Some(Headers { raw: crate::http_response_headers(self.id) });
+			self.headers = Some(Headers { raw: runtime_io::http_response_headers(self.id) });
 		}
 		self.headers.as_ref().expect("Headers were just set; qed")
 	}
@@ -393,7 +424,7 @@ impl Iterator for ResponseBody {
 		}
 
 		if self.filled_up_to.is_none() {
-			let result = crate::http_response_read_body(self.id, &mut self.buffer, self.deadline);
+			let result = runtime_io::http_response_read_body(self.id, &mut self.buffer, self.deadline);
 			match result {
 				Err(e) => {
 					self.error = Some(e);
@@ -481,7 +512,7 @@ impl<'a> HeadersIterator<'a> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{TestExternalities, with_externalities};
+	use runtime_io::{TestExternalities, with_externalities};
 	use substrate_offchain::testing;
 
 	#[test]

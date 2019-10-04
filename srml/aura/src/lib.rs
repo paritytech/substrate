@@ -50,7 +50,7 @@ pub use timestamp;
 use rstd::{result, prelude::*};
 use codec::{Encode, Decode};
 use support::{
-	decl_storage, decl_module, Parameter, storage::StorageValue, traits::{Get, FindAuthor},
+	decl_storage, decl_module, Parameter, traits::{Get, FindAuthor},
 	ConsensusEngineId,
 };
 use sr_primitives::{
@@ -177,7 +177,7 @@ impl<T: Trait> Module<T> {
 	fn initialize_authorities(authorities: &[T::AuthorityId]) {
 		if !authorities.is_empty() {
 			assert!(<Authorities<T>>::get().is_empty(), "Authorities are already initialized!");
-			<Authorities<T>>::put_ref(authorities);
+			<Authorities<T>>::put(authorities);
 		}
 	}
 }

@@ -122,7 +122,7 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 		&cratename,
 		&storage_lines,
 		&where_clause,
-	);
+	).unwrap_or_else(|err| err.to_compile_error());
 
 	let decl_store_items = decl_store_items(
 		&storage_lines,
@@ -155,6 +155,13 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 	} = instance_opts;
 
 	let expanded = quote! {
+		use #scrate::{
+			StorageValue as _,
+			StorageMap as _,
+			StorageLinkedMap as _,
+			StorageDoubleMap as _
+		};
+
 		#scrate_decl
 		#decl_storage_items
 		#visibility trait #storetype {
@@ -331,7 +338,7 @@ fn decl_store_extra_genesis(
 						<
 							#name<#struct_trait #instance> as
 							#scrate::storage::StorageValue<#typ>
-						>::put(&v);
+						>::put::<#typ>(v);
 					}}
 				},
 				DeclStorageTypeInfosKind::Map { key_type, is_linked, .. } => {
@@ -356,7 +363,7 @@ fn decl_store_extra_genesis(
 							<
 								#name<#struct_trait #instance> as
 								#scrate::storage::#map<#key_type, #typ>
-							>::insert(&k, &v);
+							>::insert::<#key_type, #typ>(k, v);
 						});
 					}}
 				},
@@ -377,7 +384,7 @@ fn decl_store_extra_genesis(
 							<
 								#name<#struct_trait #instance> as
 								#scrate::storage::StorageDoubleMap<#key1_type, #key2_type, #typ>
-							>::insert(&k1, &k2, &v);
+							>::insert::<#key1_type, #key2_type, #typ>(k1, k2, v);
 						});
 					}}
 				},
@@ -593,15 +600,15 @@ fn create_and_impl_instance(
 	instance_prefix: &str,
 	ident: &Ident,
 	doc: &TokenStream2,
-	const_names: &[(Ident, String)],
+	const_names: &[(Ident, String, String)],
 	scrate: &TokenStream2,
 	instantiable: &Ident,
 	cratename: &Ident,
 ) -> TokenStream2 {
 	let mut const_impls = TokenStream2::new();
 
-	for (const_name, partial_const_value) in const_names {
-		let const_value = format!("{}{}", instance_prefix, partial_const_value);
+	for (const_name, const_value_prefix, const_value_suffix) in const_names {
+		let const_value = format!("{}{}{}", const_value_prefix, instance_prefix, const_value_suffix);
 		const_impls.extend(quote! {
 			const #const_name: &'static str = #const_value;
 		});
@@ -630,7 +637,7 @@ fn decl_storage_items(
 	cratename: &Ident,
 	storage_lines: &ext::Punctuated<DeclStorageLine, Token![;]>,
 	where_clause: &Option<WhereClause>,
-) -> TokenStream2 {
+) -> syn::Result<TokenStream2> {
 	let mut impls = TokenStream2::new();
 
 	let InstanceOpts {
@@ -659,15 +666,13 @@ fn decl_storage_items(
 		let const_name = syn::Ident::new(
 			&format!("{}{}", impls::PREFIX_FOR, name.to_string()), proc_macro2::Span::call_site()
 		);
-		let partial_const_value = prefix.clone();
-		const_names.push((const_name, partial_const_value));
+		const_names.push((const_name, String::new(), prefix.clone()));
 
 		if let DeclStorageTypeInfosKind::Map { is_linked: true, .. } = type_infos.kind {
 			let const_name = syn::Ident::new(
 				&format!("{}{}", impls::HEAD_KEY_FOR, name.to_string()), proc_macro2::Span::call_site()
 			);
-			let partial_const_value = format!("head of {}", prefix);
-			const_names.push((const_name, partial_const_value));
+			const_names.push((const_name, "head of ".into(), prefix));
 		}
 	}
 
@@ -678,7 +683,7 @@ fn decl_storage_items(
 	// Declare Instance trait
 	{
 		let mut const_impls = TokenStream2::new();
-		for (const_name, _) in &const_names {
+		for (const_name, ..) in &const_names {
 			const_impls.extend(quote! {
 				const #const_name: &'static str;
 			});
@@ -761,6 +766,14 @@ fn decl_storage_items(
 		} = sline;
 
 		let type_infos = get_type_infos(storage_type);
+
+		if type_infos.is_option && default_value.inner.is_some() {
+			return Err(syn::Error::new_spanned(
+				default_value,
+				"Default values for Option types are not supported"
+			));
+		}
+
 		let fielddefault = default_value.inner
 			.as_ref()
 			.map(|d| &d.expr)
@@ -801,7 +814,8 @@ fn decl_storage_items(
 		};
 		impls.extend(implementation)
 	}
-	impls
+
+	Ok(impls)
 }
 
 fn decl_store_items(storage_lines: &ext::Punctuated<DeclStorageLine, Token![;]>) -> TokenStream2 {
@@ -913,11 +927,11 @@ fn impl_store_fns(
 
 					quote!{
 						#( #[ #attrs ] )*
-						pub fn #get_fn<K: #scrate::rstd::borrow::Borrow<#key_type>>(key: K) -> #value_type {
+						pub fn #get_fn<K: #scrate::codec::EncodeLike<#key_type>>(key: K) -> #value_type {
 							<
 								#name<#struct_trait #instance> as
 								#scrate::storage::#map<#key_type, #typ>
-							>::get(key.borrow())
+							>::get(key)
 						}
 					}
 				}
@@ -932,12 +946,10 @@ fn impl_store_fns(
 					};
 
 					quote!{
-						pub fn #get_fn<KArg1, KArg2>(k1: &KArg1, k2: &KArg2) -> #value_type
+						pub fn #get_fn<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> #value_type
 						where
-							#key1_type: #scrate::rstd::borrow::Borrow<KArg1>,
-							#key2_type: #scrate::rstd::borrow::Borrow<KArg2>,
-							KArg1: ?Sized + #scrate::codec::Encode,
-							KArg2: ?Sized + #scrate::codec::Encode,
+							KArg1: #scrate::codec::EncodeLike<#key1_type>,
+							KArg2: #scrate::codec::EncodeLike<#key2_type>,
 						{
 							<
 								#name<#struct_trait #instance> as
@@ -1075,7 +1087,9 @@ fn store_functions_to_metadata (
 
 			#[cfg(feature = "std")]
 			#[allow(non_upper_case_globals)]
-			static #cache_name: #scrate::once_cell::sync::OnceCell<#scrate::rstd::vec::Vec<u8>> = #scrate::once_cell::sync::OnceCell::INIT;
+			static #cache_name: #scrate::once_cell::sync::OnceCell<
+				#scrate::rstd::vec::Vec<u8>
+			> = #scrate::once_cell::sync::OnceCell::new();
 
 			#[cfg(feature = "std")]
 			impl<#traitinstance: #traittype, #instance #bound_instantiable> #scrate::metadata::DefaultByte

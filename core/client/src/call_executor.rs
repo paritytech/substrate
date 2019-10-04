@@ -72,7 +72,7 @@ where
 			Result<NativeOrEncoded<R>, Self::Error>
 		) -> Result<NativeOrEncoded<R>, Self::Error>,
 		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
+		NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
 	>(
 		&self,
 		initialize_block_fn: IB,
@@ -104,7 +104,7 @@ where
 			Result<NativeOrEncoded<R>, Self::Error>
 		) -> Result<NativeOrEncoded<R>, Self::Error>,
 		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
+		NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
 	>(&self,
 		state: &S,
 		overlay: &mut OverlayedChanges,
@@ -237,7 +237,7 @@ where
 			Result<NativeOrEncoded<R>, Self::Error>
 		) -> Result<NativeOrEncoded<R>, Self::Error>,
 		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
+		NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
 	>(
 		&self,
 		initialize_block_fn: IB,
@@ -345,7 +345,7 @@ where
 			Result<NativeOrEncoded<R>, Self::Error>
 		) -> Result<NativeOrEncoded<R>, Self::Error>,
 		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
+		NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
 	>(&self,
 		state: &S,
 		changes: &mut OverlayedChanges,

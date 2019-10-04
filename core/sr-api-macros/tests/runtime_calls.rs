@@ -50,7 +50,10 @@ fn calling_wasm_runtime_function() {
 }
 
 #[test]
-#[should_panic(expected = "Could not convert parameter `param` between node and runtime!")]
+#[should_panic(
+	expected =
+		"Could not convert parameter `param` between node and runtime: DecodeFails always fails"
+)]
 fn calling_native_runtime_function_with_non_decodable_parameter() {
 	let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::NativeWhenPossible).build();
 	let runtime_api = client.runtime_api();

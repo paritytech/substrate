@@ -111,6 +111,7 @@ where
 mod tests {
 	use super::*;
 
+	use futures03::executor::block_on;
 	use node_runtime::{CheckedExtrinsic, Call, TimestampCall};
 	use codec::Decode;
 	use node_testing::{
@@ -125,7 +126,7 @@ mod tests {
 		// given
 		let _ = env_logger::try_init();
 		let client = Arc::new(TestClientBuilder::new().build());
-		let pool = Arc::new(Pool::new(Default::default(), transaction_pool::ChainApi::new(client.clone())));
+		let pool = Arc::new(Pool::new(Default::default(), transaction_pool::FullChainApi::new(client.clone())));
 
 		let new_transaction = |extra| {
 			let ex = CheckedExtrinsic {
@@ -139,9 +140,9 @@ mod tests {
 		};
 		// Populate the pool
 		let ext0 = new_transaction(signed_extra(0, 0));
-		pool.submit_one(&BlockId::number(0), ext0).unwrap();
+		block_on(pool.submit_one(&BlockId::number(0), ext0)).unwrap();
 		let ext1 = new_transaction(signed_extra(1, 0));
-		pool.submit_one(&BlockId::number(0), ext1).unwrap();
+		block_on(pool.submit_one(&BlockId::number(0), ext1)).unwrap();
 
 		let accounts = Accounts::new(client, pool);
 

@@ -14,11 +14,11 @@ use sr_primitives::{
 	ApplyResult, transaction_validity::TransactionValidity, generic, create_runtime_str,
 	impl_opaque_keys, AnySignature
 };
-use sr_primitives::traits::{NumberFor, BlakeTwo256, Block as BlockT, DigestFor, StaticLookup, Verify, ConvertInto};
+use sr_primitives::traits::{NumberFor, BlakeTwo256, Block as BlockT, StaticLookup, Verify, ConvertInto};
 use sr_primitives::weights::Weight;
 use babe::{AuthorityId as BabeId};
 use grandpa::{AuthorityId as GrandpaId, AuthorityWeight as GrandpaWeight};
-use grandpa::fg_primitives::{self, ScheduledChange};
+use grandpa::fg_primitives;
 use client::{
 	block_builder::api::{CheckInherentsResult, InherentData, self as block_builder_api},
 	runtime_api as client_api, impl_runtime_apis
@@ -189,6 +189,7 @@ parameter_types! {
 impl babe::Trait for Runtime {
 	type EpochDuration = EpochDuration;
 	type ExpectedBlockTime = ExpectedBlockTime;
+	type EpochChangeTrigger = babe::SameAuthoritiesForever;
 }
 
 impl grandpa::Trait for Runtime {
@@ -356,45 +357,25 @@ impl_runtime_apis! {
 	}
 
 	impl fg_primitives::GrandpaApi<Block> for Runtime {
-		fn grandpa_pending_change(digest: &DigestFor<Block>)
-			-> Option<ScheduledChange<NumberFor<Block>>>
-		{
-			Grandpa::pending_change(digest)
-		}
-
-		fn grandpa_forced_change(digest: &DigestFor<Block>)
-			-> Option<(NumberFor<Block>, ScheduledChange<NumberFor<Block>>)>
-		{
-			Grandpa::forced_change(digest)
-		}
-
 		fn grandpa_authorities() -> Vec<(GrandpaId, GrandpaWeight)> {
 			Grandpa::grandpa_authorities()
 		}
 	}
 
 	impl babe_primitives::BabeApi<Block> for Runtime {
-		fn startup_data() -> babe_primitives::BabeConfiguration {
+		fn configuration() -> babe_primitives::BabeConfiguration {
 			// The choice of `c` parameter (where `1 - c` represents the
 			// probability of a slot being empty), is done in accordance to the
 			// slot duration and expected target block time, for safely
 			// resisting network delays of maximum two seconds.
 			// <https://research.web3.foundation/en/latest/polkadot/BABE/Babe/#6-practical-results>
 			babe_primitives::BabeConfiguration {
-				median_required_blocks: 1000,
 				slot_duration: Babe::slot_duration(),
+				epoch_length: EpochDuration::get(),
 				c: PRIMARY_PROBABILITY,
-			}
-		}
-
-		fn epoch() -> babe_primitives::Epoch {
-			babe_primitives::Epoch {
-				start_slot: Babe::epoch_start_slot(),
-				authorities: Babe::authorities(),
-				epoch_index: Babe::epoch_index(),
+				genesis_authorities: Babe::authorities(),
 				randomness: Babe::randomness(),
-				duration: EpochDuration::get(),
-				secondary_slots: Babe::secondary_slots().0,
+				secondary_slots: true,
 			}
 		}
 	}

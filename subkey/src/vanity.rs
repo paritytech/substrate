@@ -76,7 +76,7 @@ pub(super) fn generate_key<C: Crypto>(desired: &str) -> Result<KeyPair<C>, &str>
 
 	loop {
 		if done % 100000 == 0 {
-			OsRng::new().unwrap().fill_bytes(seed.as_mut());
+			OsRng.fill_bytes(seed.as_mut());
 		} else {
 			next_seed(seed.as_mut());
 		}

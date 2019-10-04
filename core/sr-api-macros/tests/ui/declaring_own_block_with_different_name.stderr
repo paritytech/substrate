@@ -10,4 +10,4 @@ warning: unused import: `sr_primitives::traits::Block as BlockT`
 1 | use sr_primitives::traits::Block as BlockT;
   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   |
-  = note: #[warn(unused_imports)] on by default
+  = note: `#[warn(unused_imports)]` on by default

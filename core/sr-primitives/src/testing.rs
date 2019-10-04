@@ -25,7 +25,7 @@ use crate::traits::{
 };
 use crate::{generic, KeyTypeId, ApplyResult};
 use crate::weights::{GetDispatchInfo, DispatchInfo};
-pub use primitives::H256;
+pub use primitives::{H256, sr25519};
 use primitives::{crypto::{CryptoType, Dummy, key_types, Public}, U256};
 use crate::transaction_validity::{TransactionValidity, TransactionValidityError};
 
