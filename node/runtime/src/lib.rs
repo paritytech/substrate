@@ -84,7 +84,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to equal spec_version. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 170,
+	spec_version: 171,
 	impl_version: 171,
 	apis: RUNTIME_API_VERSIONS,
 };
@@ -132,6 +132,11 @@ impl system::Trait for Runtime {
 	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = Version;
+}
+
+impl utility::Trait for Runtime {
+	type Origin = Origin;
+	type Call = Call;
 }
 
 parameter_types! {
@@ -491,6 +496,7 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
 		System: system::{Module, Call, Storage, Config, Event},
+		Utility: utility::{Module, Call, Event},
 		Babe: babe::{Module, Call, Storage, Config, Inherent(Timestamp)},
 		Timestamp: timestamp::{Module, Call, Storage, Inherent},
 		Authorship: authorship::{Module, Call, Storage, Inherent},

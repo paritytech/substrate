@@ -48,6 +48,7 @@ support = { package = "srml-support", path = "../../srml/support", default-featu
 system = { package = "srml-system", path = "../../srml/system", default-features = false }
 timestamp = { package = "srml-timestamp", path = "../../srml/timestamp", default-features = false }
 treasury = { package = "srml-treasury", path = "../../srml/treasury", default-features = false }
+utility = { package = "srml-utility", path = "../../srml/utility", default-features = false }
 
 [build-dependencies]
 wasm-builder-runner = { package = "substrate-wasm-builder-runner", version = "1.0.2", path = "../../core/utils/wasm-builder-runner" }
@@ -92,5 +93,6 @@ std = [
 	"system/std",
 	"timestamp/std",
 	"treasury/std",
+	"utility/std",
 	"version/std",
 ]
