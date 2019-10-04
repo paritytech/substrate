@@ -146,6 +146,9 @@ pub struct ChangeSet<H: Hash> {
 /// ),
 /// but it just need to be build from client (no need to change
 /// it here except to extract faster).
+///
+/// This assumes that we only commit block per block (otherwhise
+/// we need to inclued block number value here).
 pub type OffstateChangeSet<H> = Vec<(H, Option<DBValue>)>;
 
 /// Info for pruning offstate: a last prune index and keys to prune.
@@ -259,6 +262,12 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 				Ok(CommitSet {
 					data: changeset,
 					meta: Default::default(),
+					// TODO EMCH no current support for archive all,
+					// this would require managing branch index at
+					// client level (was implemented in another branch:
+					// client-db-branch-ix)
+					// and use and ordered tuple (branchix, blocknumber)
+					// index to run.
 					offstate: offstate_changeset,
 					offstate_prune: None,
 				})
@@ -278,6 +287,9 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 			Ok(()) => {
 				if self.mode == PruningMode::ArchiveCanonical {
 					commit.data.deleted.clear();
+					// TODO EMCH use pruning mode in statedb to avoid feeding that
+					// in the first place.
+					commit.offstate_prune = None;
 				}
 			}
 			Err(e) => return Err(e),
@@ -618,7 +630,9 @@ mod tests {
 	fn full_archive_keeps_everything() {
 		let (db, sdb) = make_test_db(PruningMode::ArchiveAll);
 		assert!(db.data_eq(&make_db(&[1, 21, 22, 3, 4, 91, 921, 922, 93, 94])));
-		assert!(db.offstate_eq(&[1, 21, 22, 3, 4, 81, 821, 822, 83, 84]));
+
+		// TODO EMCH implement full for test db and test for offstate
+	
 		assert!(!sdb.is_pruned(&H256::from_low_u64_be(0), 0));
 	}
 
@@ -626,7 +640,11 @@ mod tests {
 	fn canonical_archive_keeps_canonical() {
 		let (db, _) = make_test_db(PruningMode::ArchiveCanonical);
 		assert!(db.data_eq(&make_db(&[1, 21, 3, 91, 921, 922, 93, 94])));
-		assert!(db.offstate_eq(&[1, 21, 3, 81, 821, 822, 83, 84]));
+		assert!(db.offstate_eq_at(&[81, 821, 822, 83, 84], Some(0)));
+		assert!(db.offstate_eq_at(&[1, 821, 822, 83, 84], Some(1)));
+		assert!(db.offstate_eq_at(&[21, 822, 83, 84], Some(2)));
+		assert!(db.offstate_eq_at(&[3, 21, 822, 84], Some(3)));
+		assert!(db.offstate_eq(&[3, 21, 822, 84]));
 	}
 
 	#[test]

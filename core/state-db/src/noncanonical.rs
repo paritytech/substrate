@@ -95,9 +95,12 @@ impl OffstatePendingGC {
 				// TODO EMCH double get is rather inefficient, see if it is possible
 				// to reuse the hash of the hashset into the hashmap
 				for key in self.keys_pending_gc.drain() {
-					offstate_values.get_mut(&key).map(|historied_value| {
-						historied_value.gc(branches.reverse_iter_ranges());
-					});
+					match offstate_values.get_mut(&key).map(|historied_value| {
+						historied_value.gc(branches.reverse_iter_ranges())
+					}) {
+						Some(historied_data::PruneResult::Cleared) => { let _ = offstate_values.remove(&key); },
+						_ => (),
+					}
 				}
 
 				self.pending_canonicalisation_query = None;
@@ -572,12 +575,23 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 			if let Some(range) = self.get_branch_range(hash, block_number) {
 				commit.offstate.extend(
 					overlay.offstate_inserted.iter()
-					.chain(overlay.offstate_deleted.iter())
 					.map(|k| (k.clone(), self.offstate_values.get(k)
 						.expect("For each key in overlays there's a value in values")
 						.get(&range)
 						.expect("For each key in overlays there's a historied entry in values")
 						.clone())));
+				// some deletion can be pruned if in first block so handle is
+				// a bit less restrictive
+				commit.offstate.extend(
+					overlay.offstate_deleted.iter()
+					.filter_map(|k| self.offstate_values.get(k)
+						.map(|v| (k.clone(), v.get(&range)
+							.expect("For each key in overlays there's a historied entry \
+								in values, and pruned empty value are cleared")
+							.clone())
+						)
+					)
+				);
 			}
 		}
 
@@ -633,7 +647,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 			if let Some(branch_index_cannonicalize) = last_index {
 				// this needs to be call after parents update
 				// TODO EMCH may be needed in 'canonicalize', and restore or commit here
-				self.branches.update_finalize_treshold(branch_index_cannonicalize, Some(block_number), true);
+				self.branches.update_finalize_treshold(branch_index_cannonicalize, Some(block_number + 1), true);
 				// gc is at the right place
 				self.offstate_gc.set_pending_gc(branch_index_cannonicalize);
 				// try to run the garbage collection (can run later if there is

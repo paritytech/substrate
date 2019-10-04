@@ -33,6 +33,10 @@ pub struct TestDb {
 	pub data: HashMap<H256, DBValue>,
 	pub meta: HashMap<Vec<u8>, DBValue>,
 	pub offstate: HashMap<OffstateKey, DBValue>,
+	// big heuristic to increment this for canonicalize transaction only
+	// by checking if there is value in offstate change set.
+	// If empty change set needed, this need to be change manually.
+	// TODO EMCH consider changing commit fun to use last block number explicitely.
 	pub last_block: u64,
 }
 
@@ -79,7 +83,9 @@ impl NodeDb for TestDb {
 
 impl TestDb {
 	pub fn commit(&mut self, commit: &CommitSet<H256>) {
-		self.last_block += 1;
+		if commit.offstate.len() > 0 {
+			self.last_block += 1;
+		}
 		self.data.extend(commit.data.inserted.iter().cloned());
 		for k in commit.data.deleted.iter() {
 			self.data.remove(k);

@@ -27,6 +27,7 @@ use crate::linear::{
 	SerializedConfig,
 };
 use crate::HistoriedValue;
+use crate::PruneResult;
 use crate::{as_usize, as_i};
 use rstd::rc::Rc;
 use rstd::vec::Vec;
@@ -639,12 +640,13 @@ impl<V> History<V> {
 
 	/// Gc an historied value other its possible values.
 	/// Iterator need to be reversed ordered by branch index.
-	pub fn gc<IT, S, I>(&mut self, mut states: IT) 
+	pub fn gc<IT, S, I>(&mut self, mut states: IT) -> PruneResult
 		where
 			IT: Iterator<Item = (S, I)>,
 			S: BranchStateTrait<bool, I>,
 			I: Copy + Eq + TryFrom<usize> + TryInto<usize>,
 	{
+		let mut changed = false;
 		// state is likely bigger than history.
 		let mut current_state = states.next();
 		for branch_index in (0..self.0.len()).rev() {
@@ -663,28 +665,44 @@ impl<V> History<V> {
 								if let Ok(node_index) = node_index.try_into() {
 									if !state.0.get_node(node_index) {
 										if history_index == len - 1 {
-											let _ = self.0[branch_index].history.pop();
+											changed = self.0[branch_index]
+												.history.pop().is_some() || changed;
 										} else {
-											let _ = self.0[branch_index].history.remove(history_index);
+											self.0[branch_index]
+												.history.remove(history_index);
+											changed = true;
 										}
 									}
 								}
 							}
 							if self.0[branch_index].history.len() == 0 {
-								let _ = self.0.remove(branch_index);
+								self.0.remove(branch_index);
+								changed = true;
 							}
 							break;
 						} else {
-							let _ = self.0.remove(branch_index);
+							self.0.remove(branch_index);
+							changed = true;
 							break;
 						}
 					}
 					self.0.remove(branch_index);
+					changed = true;
 					break;
 				} else {
 					break;
 				}
 			}
+		}
+		if changed {
+			if self.0.len() == 0 {
+				PruneResult::Cleared
+			} else {
+				PruneResult::Changed
+			}
+
+		} else {
+			PruneResult::Unchanged
 		}
 	}
 	
@@ -795,7 +813,7 @@ impl<'a, F: SerializedConfig> Serialized<'a, F> {
 	}
 
 	/// keep a single with value history before the state.
-	pub fn prune<I>(&mut self, index: I) -> crate::PruneResult
+	pub fn prune<I>(&mut self, index: I) -> PruneResult
 		where
 			I: Copy + Eq + TryFrom<usize> + TryInto<usize>,
 	{
@@ -845,14 +863,14 @@ impl<'a, F: SerializedConfig> Serialized<'a, F> {
 			if last_index_with_value > 0 {
 				println!("IN {}", last_index_with_value);
 				self.0.truncate_until(last_index_with_value);
-				return crate::PruneResult::Changed;
+				return PruneResult::Changed;
 			}
 		} else {
 			self.0.clear();
-			return crate::PruneResult::Cleared;
+			return PruneResult::Cleared;
 		}
 
-		crate::PruneResult::Unchanged
+		PruneResult::Unchanged
 	}
 	
 }

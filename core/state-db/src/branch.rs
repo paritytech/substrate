@@ -299,7 +299,10 @@ impl RangeSet {
 		full: bool,
 	) {
 
-		if branch_index <= self.treshold {
+		if branch_index < self.treshold {
+			return;
+		}
+		if branch_index == self.treshold && linear_index.is_none() {
 			return;
 		}
 		// range set update
@@ -307,7 +310,7 @@ impl RangeSet {
 		// we do not finalize current branch cause it
 		// can contains other blocks
 		self.treshold = branch_index;
-		if branch_index == 0 || !full {
+		if (branch_index == 0 && linear_index.is_none()) || !full {
 			// remove cached value under treshold only
 			let new_storage = self.storage.split_off(&(self.treshold));
 			self.storage = new_storage;
@@ -321,7 +324,7 @@ impl RangeSet {
 		} else {
 			let new_storage = self.storage.split_off(&(self.treshold));
 			self.storage = new_storage;
-			self.finalize_full(branch_index, None);
+			self.finalize_full(branch_index, linear_index);
 		};
 	}
 
