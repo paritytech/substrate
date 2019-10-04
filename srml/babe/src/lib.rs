@@ -122,8 +122,52 @@ impl ProvideInherentData for InherentDataProvider {
 }
 
 pub trait Trait: timestamp::Trait {
+	/// The amount of time, in slots, that each epoch should last.
 	type EpochDuration: Get<SlotNumber>;
+
+	/// The expected average block time at which BABE should be creating
+	/// blocks. Since BABE is probabilistic it is not trivial to figure out
+	/// what the expected average block time should be based on the slot
+	/// duration and the security parameter `c` (where `1 - c` represents
+	/// the probability of a slot being empty).
 	type ExpectedBlockTime: Get<Self::Moment>;
+
+	/// BABE requires some logic to be triggered on every block to query for whether an epoch
+	/// has ended and to perform the transition to the next epoch.
+	///
+	/// Typically, the `ExternalTrigger` type should be used. An internal trigger should only be used
+	/// when no other module is responsible for changing authority set.
+	type EpochChangeTrigger: EpochChangeTrigger;
+}
+
+/// Trigger an epoch change, if any should take place.
+pub trait EpochChangeTrigger {
+	/// Trigger an epoch change, if any should take place. This should be called
+	/// during every block, after initialization is done.
+	fn trigger<T: Trait>(now: T::BlockNumber);
+}
+
+/// A type signifying to BABE that an external trigger
+/// for epoch changes (e.g. srml-session) is used.
+pub struct ExternalTrigger;
+
+impl EpochChangeTrigger for ExternalTrigger {
+	fn trigger<T: Trait>(_: T::BlockNumber) { } // nothing - trigger is external.
+}
+
+/// A type signifying to BABE that it should perform epoch changes
+/// with an internal trigger, recycling the same authorities forever.
+pub struct SameAuthoritiesForever;
+
+impl EpochChangeTrigger for SameAuthoritiesForever {
+	fn trigger<T: Trait>(now: T::BlockNumber) {
+		if <Module<T>>::should_epoch_change(now) {
+			let authorities = <Module<T>>::authorities();
+			let next_authorities = authorities.clone();
+
+			<Module<T>>::enact_epoch_change(authorities, next_authorities);
+		}
+	}
 }
 
 /// The length of the BABE randomness
@@ -203,8 +247,8 @@ decl_module! {
 		const ExpectedBlockTime: T::Moment = T::ExpectedBlockTime::get();
 
 		/// Initialization
-		fn on_initialize() {
-			Self::do_initialize();
+		fn on_initialize(now: T::BlockNumber) {
+			Self::do_initialize(now);
 		}
 
 		/// Block finalization
@@ -263,21 +307,10 @@ impl<T: Trait> session::ShouldEndSession<T::BlockNumber> for Module<T> {
 		// it might be (and it is in current implementation) that session module is calling
 		// should_end_session() from it's own on_initialize() handler
 		// => because session on_initialize() is called earlier than ours, let's ensure
-		// that we have synced with digest before checking if session should be ended
-		Self::do_initialize();
+		// that we have synced with digest before checking if session should be ended.
+		Self::do_initialize(now);
 
-		// The session has technically ended during the passage of time
-		// between this block and the last, but we have to "end" the session now,
-		// since there is no earlier possible block we could have done it.
-		//
-		// The exception is for block 1: the genesis has slot 0, so we treat
-		// epoch 0 as having started at the slot of block 1. We want to use
-		// the same randomness and validator set as signalled in the genesis,
-		// so we don't rotate the session.
-		now != sr_primitives::traits::One::one() && {
-			let diff = CurrentSlot::get().saturating_sub(Self::current_epoch_start());
-			diff >= T::EpochDuration::get()
-		}
+		Self::should_epoch_change(now)
 	}
 }
 
@@ -336,6 +369,69 @@ impl<T: Trait> Module<T> {
 		<T as timestamp::Trait>::MinimumPeriod::get().saturating_mul(2.into())
 	}
 
+	/// Determine whether an epoch change should take place at this block.
+	/// Assumes that initialization has already taken place.
+	pub fn should_epoch_change(now: T::BlockNumber) -> bool {
+		// The epoch has technically ended during the passage of time
+		// between this block and the last, but we have to "end" the epoch now,
+		// since there is no earlier possible block we could have done it.
+		//
+		// The exception is for block 1: the genesis has slot 0, so we treat
+		// epoch 0 as having started at the slot of block 1. We want to use
+		// the same randomness and validator set as signalled in the genesis,
+		// so we don't rotate the epoch.
+		now != sr_primitives::traits::One::one() && {
+			let diff = CurrentSlot::get().saturating_sub(Self::current_epoch_start());
+			diff >= T::EpochDuration::get()
+		}
+	}
+
+	/// DANGEROUS: Enact an epoch change. Should be done on every block where `should_epoch_change` has returned `true`,
+	/// and the caller is the only caller of this function.
+	///
+	/// Typically, this is not handled directly by the user, but by higher-level validator-set manager logic like
+	/// `srml-session`.
+	pub fn enact_epoch_change(
+		authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
+		next_authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
+	) {
+		// PRECONDITION: caller has done initialization and is guaranteed
+		// by the session module to be called before this.
+		#[cfg(debug_assertions)]
+		{
+			assert!(Self::initialized().is_some())
+		}
+
+		// Update epoch index
+		let epoch_index = EpochIndex::get()
+			.checked_add(1)
+			.expect("epoch indices will never reach 2^64 before the death of the universe; qed");
+
+		EpochIndex::put(epoch_index);
+		Authorities::put(authorities);
+
+		// Update epoch randomness.
+		let next_epoch_index = epoch_index
+			.checked_add(1)
+			.expect("epoch indices will never reach 2^64 before the death of the universe; qed");
+
+		// Returns randomness for the current epoch and computes the *next*
+		// epoch randomness.
+		let randomness = Self::randomness_change_epoch(next_epoch_index);
+		Randomness::put(randomness);
+
+		// After we update the current epoch, we signal the *next* epoch change
+		// so that nodes can track changes.
+		let next_randomness = NextRandomness::get();
+
+		let next = NextEpochDescriptor {
+			authorities: next_authorities,
+			randomness: next_randomness,
+		};
+
+		Self::deposit_consensus(ConsensusLog::NextEpochData(next))
+	}
+
 	// finds the start slot of the current epoch. only guaranteed to
 	// give correct results after `do_initialize` of the first block
 	// in the chain (as its result is based off of `GenesisSlot`).
@@ -363,7 +459,7 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	fn do_initialize() {
+	fn do_initialize(now: T::BlockNumber) {
 		// since do_initialize can be called twice (if session module is present)
 		// => let's ensure that we only modify the storage once per block
 		let initialized = Self::initialized().is_some();
@@ -414,6 +510,9 @@ impl<T: Trait> Module<T> {
 		});
 
 		Initialized::put(maybe_vrf);
+
+		// enact epoch change, if necessary.
+		T::EpochChangeTrigger::trigger::<T>(now)
 	}
 
 	/// Call this function exactly once when an epoch changes, to update the
@@ -460,51 +559,15 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	fn on_new_session<'a, I: 'a>(_changed: bool, validators: I, queued_validators: I)
 		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
 	{
-		// PRECONDITION: `should_end_session` has done initialization and is guaranteed
-		// by the session module to be called before this.
-		#[cfg(debug_assertions)]
-		{
-			assert!(Self::initialized().is_some())
-		}
-
-		// Update epoch index
-		let epoch_index = EpochIndex::get()
-			.checked_add(1)
-			.expect("epoch indices will never reach 2^64 before the death of the universe; qed");
-
-		EpochIndex::put(epoch_index);
-
-		// Update authorities.
 		let authorities = validators.map(|(_account, k)| {
 			(k, 1)
 		}).collect::<Vec<_>>();
 
-		Authorities::put(authorities);
-
-		// Update epoch randomness.
-		let next_epoch_index = epoch_index
-			.checked_add(1)
-			.expect("epoch indices will never reach 2^64 before the death of the universe; qed");
-
-		// Returns randomness for the current epoch and computes the *next*
-		// epoch randomness.
-		let randomness = Self::randomness_change_epoch(next_epoch_index);
-		Randomness::put(randomness);
-
-		// After we update the current epoch, we signal the *next* epoch change
-		// so that nodes can track changes.
 		let next_authorities = queued_validators.map(|(_account, k)| {
 			(k, 1)
 		}).collect::<Vec<_>>();
 
-		let next_randomness = NextRandomness::get();
-
-		let next = NextEpochDescriptor {
-			authorities: next_authorities,
-			randomness: next_randomness,
-		};
-
-		Self::deposit_consensus(ConsensusLog::NextEpochData(next))
+		Self::enact_epoch_change(authorities, next_authorities)
 	}
 
 	fn on_disabled(i: usize) {
