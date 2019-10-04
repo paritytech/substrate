@@ -70,8 +70,6 @@ mod tests {
 	use support::{assert_ok, assert_noop, impl_outer_origin, parameter_types, impl_outer_dispatch};
 	use runtime_io::with_externalities;
 	use primitives::{H256, Blake2Hasher};
-	// The testing primitives are very useful for avoiding having to work with signatures
-	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
 	use sr_primitives::{
 		Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header
 	};
@@ -145,11 +143,8 @@ mod tests {
 	type Balances = balances::Module<Test>;
 	type Utility = Module<Test>;
 
-	// This function basically just builds a genesis storage key/value store according to
-	// our desired mockup.
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		// We use default for brevity, but you can configure as desired if needed.
 		balances::GenesisConfig::<Test> {
 			balances: vec![(1, 10), (2, 0)],
 			vesting: vec![],
@@ -160,6 +155,8 @@ mod tests {
 	#[test]
 	fn batch_works() {
 		with_externalities(&mut new_test_ext(), || {
+			assert_eq!(Balances::free_balance(1), 10);
+			assert_eq!(Balances::free_balance(2), 0);
 			assert_noop!(Utility::batch(Origin::signed(1), vec![
 				Call::Balances(balances::Call::force_transfer(1, 2, 5)),
 				Call::Balances(balances::Call::force_transfer(1, 2, 5))
