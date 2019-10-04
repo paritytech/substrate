@@ -43,16 +43,12 @@ use substrate_client::{
 	runtime_api as client_api, block_builder::api as block_builder_api, decl_runtime_apis,
 	impl_runtime_apis,
 };
-use sr_primitives::{
-	ApplyResult, create_runtime_str, Perbill, impl_opaque_keys,
-	transaction_validity::{
-		TransactionValidity, ValidTransaction, TransactionValidityError, InvalidTransaction,
-	},
-	traits::{
-		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
-		GetNodeBlockType, GetRuntimeBlockType, Verify, IdentityLookup,
-	},
-};
+use sr_primitives::{ApplyResult, create_runtime_str, Perbill, impl_opaque_keys, transaction_validity::{
+	TransactionValidity, ValidTransaction, TransactionValidityError, InvalidTransaction,
+}, traits::{
+	BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
+	GetNodeBlockType, GetRuntimeBlockType, Verify, IdentityLookup,
+}, DispatchError};
 use runtime_version::RuntimeVersion;
 pub use primitives::{hash::H256};
 #[cfg(any(feature = "std", test))]
@@ -63,6 +59,8 @@ use cfg_if::cfg_if;
 
 // Ensure Babe and Aura use the same crypto to simplify things a bit.
 pub use babe_primitives::AuthorityId;
+use sr_primitives::traits::{Dispatchable, DispatchResult};
+
 pub type AuraId = aura_primitives::sr25519::AuthorityId;
 
 // Inlucde the WASM binary
@@ -170,6 +168,24 @@ impl Extrinsic {
 		match self {
 			Extrinsic::Transfer(ref transfer, _) => transfer,
 			_ => panic!("cannot convert to transfer ref"),
+		}
+	}
+}
+
+impl Dispatchable for Extrinsic {
+	type Origin = Origin;
+	type Trait = Runtime;
+	type Error = DispatchError;
+	/// Actually dispatch this call and result the result of it.
+	fn dispatch(self, _origin: Self::Origin) -> DispatchResult<Self::Error> {
+		match self {
+			Extrinsic::Transfer(_transfer, _) => {
+				// Here is where we would actually enact the transfer, but we don't bother as it's
+				// not something that we test. To do so would require some storage items setting up
+				// in order to track balances.
+				Ok(())
+			}
+			_ => Ok(()),
 		}
 	}
 }
