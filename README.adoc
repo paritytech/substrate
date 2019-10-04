@@ -253,6 +253,13 @@ If you are trying to set up Substrate on Windows, you should do the following:
 	[System.Environment]::SetEnvironmentVariable('OPENSSL_DIR', $env:OPENSSL_DIR, [System.EnvironmentVariableTarget]::User)
 	[System.Environment]::SetEnvironmentVariable('OPENSSL_STATIC', $env:OPENSSL_STATIC, [System.EnvironmentVariableTarget]::User)
 
+    * If the procedure above does not work, go manual. First, start typing "env" in your Windows start menu search bar to summon the Environment Variables option. Click on it, then click on "Environment Variables" in the popup which appears. Following that, use the "New" button to add two new values into either the User section (upper) or the System section (lower). Follow the images below for a step by step process.
+
+    * image:https://imgur.com/4HCbJLY.png[image]	
+    * image:https://imgur.com/CDkg5Rp.png[image]
+    * image:https://imgur.com/HHFgFF3.png[image]
+    * image:https://imgur.com/sTpWqKW.png[image]
+
 8. Finally, you need to install `cmake`: https://cmake.org/download/
 
 ==== Shared Steps
