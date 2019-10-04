@@ -111,7 +111,16 @@ impl<H, N, V> ForkTree<H, N, V> where
 		)?;
 
 		if let Some(root) = new_root {
-			self.roots = vec![root.clone()];
+			let mut root = root.clone();
+
+			// we found the deepest ancestor of the finalized block, so we prune
+			// out any children that don't include the finalized block.
+			root.children.retain(|node| {
+				node.number == *number && node.hash == *hash ||
+					node.number < *number && is_descendent_of(&node.hash, hash).unwrap_or(false)
+			});
+
+			self.roots = vec![root];
 		}
 
 		Ok(())
