@@ -103,6 +103,7 @@ impl DummyProposer {
 			&BlockId::Hash(self.parent_hash),
 			pre_digests,
 		).unwrap();
+
 		let mut block = match block_builder.bake().map_err(|e| e.into()) {
 			Ok(b) => b,
 			Err(e) => return future::ready(Err(e)),
@@ -596,4 +597,164 @@ fn importing_block_one_sets_genesis_epoch() {
 		|slot| data.link.config.genesis_epoch(slot),
 	).unwrap().unwrap().into_inner();
 	assert_eq!(epoch_for_second_block, genesis_epoch);
+}
+
+#[test]
+fn importing_epoch_change_block_prunes_tree() {
+	use client::backend::Finalizer;
+
+	let mut net = BabeTestNet::new(1);
+
+	let peer = net.peer(0);
+	let data = peer.data.as_ref().expect("babe link set up during initialization");
+
+	let client = peer.client().as_full().expect("Only full clients are used in tests").clone();
+	let mut block_import = data.block_import.lock().take().expect("import set up during init");
+	let epoch_changes = data.link.epoch_changes.clone();
+
+	// This is just boilerplate code for proposing and importing a valid BABE
+	// block that's built on top of the given parent. The proposer takes care
+	// of producing epoch change digests according to the epoch duration (which
+	// is set to 6 slots in the test runtime).
+	let mut propose_and_import_block = |parent_header| {
+		let mut environ = DummyFactory {
+			client: client.clone(),
+			config: data.link.config.clone(),
+			epoch_changes: data.link.epoch_changes.clone(),
+			mutator: Arc::new(|_, _| ()),
+		};
+
+		let mut proposer = environ.init(&parent_header).unwrap();
+		let parent_pre_digest = find_pre_digest::<Block>(&parent_header).unwrap();
+
+		let pre_digest = sr_primitives::generic::Digest {
+			logs: vec![
+				Item::babe_pre_digest(
+					BabePreDigest::Secondary {
+						authority_index: 0,
+						slot_number: parent_pre_digest.slot_number() + 1,
+					},
+				),
+			],
+		};
+
+		let mut block = futures::executor::block_on(proposer.propose_with(pre_digest)).unwrap();
+
+		let seal = {
+			// sign the pre-sealed hash of the block and then
+			// add it to a digest item.
+			let pair = AuthorityPair::from_seed(&[1; 32]);
+			let pre_hash = block.header.hash();
+			let signature = pair.sign(pre_hash.as_ref());
+			Item::babe_seal(signature)
+		};
+
+		let post_hash = {
+			block.header.digest_mut().push(seal.clone());
+			let h = block.header.hash();
+			block.header.digest_mut().pop();
+			h
+		};
+
+		let next_epoch_digest =
+			find_next_epoch_digest::<Block>(&block.header).unwrap();
+
+		let import_result = block_import.import_block(
+			BlockImportParams {
+				origin: BlockOrigin::Own,
+				header: block.header,
+				justification: None,
+				post_digests: vec![seal],
+				body: Some(block.extrinsics),
+				finalized: false,
+				auxiliary: Vec::new(),
+				fork_choice: ForkChoiceStrategy::LongestChain,
+			},
+			Default::default(),
+		).unwrap();
+
+		match import_result {
+			ImportResult::Imported(_) => {},
+			_ => panic!("expected block to be imported"),
+		}
+
+		(post_hash, next_epoch_digest)
+	};
+
+	let mut propose_and_import_blocks = |parent_id, n| {
+		let mut hashes = Vec::new();
+		let mut parent_header = client.header(&parent_id).unwrap().unwrap();
+
+		for _ in 0..n {
+			let (block_hash, _) = propose_and_import_block(parent_header);
+			hashes.push(block_hash);
+			parent_header = client.header(&BlockId::Hash(block_hash)).unwrap().unwrap();
+		}
+
+		hashes
+	};
+
+	// This is the block tree that we're going to use in this test. Each node
+	// represents an epoch change block, the epoch duration is 6 slots.
+	//
+	//    *---- F (#7)
+	//   /                 *------ G (#19) - H (#25)
+	//  /                 /
+	// A (#1) - B (#7) - C (#13) - D (#19) - E (#25)
+	//                              \
+	//                               *------ I (#25)
+
+	// Create and import the canon chain and keep track of fork blocks (A, C, D)
+	// from the diagram above.
+	let canon_hashes = propose_and_import_blocks(BlockId::Number(0), 30);
+
+	// Create the forks
+	let fork_1 = propose_and_import_blocks(BlockId::Hash(canon_hashes[0]), 10);
+	let fork_2 = propose_and_import_blocks(BlockId::Hash(canon_hashes[12]), 15);
+	let fork_3 = propose_and_import_blocks(BlockId::Hash(canon_hashes[18]), 10);
+
+	// We should be tracking a total of 9 epochs in the fork tree
+	assert_eq!(
+		epoch_changes.lock().tree().iter().count(),
+		9,
+	);
+
+	// And only one root
+	assert_eq!(
+		epoch_changes.lock().tree().roots().count(),
+		1,
+	);
+
+	// We finalize block #13 from the canon chain, so on the next epoch
+	// change the tree should be pruned, to not contain F (#7).
+	client.finalize_block(BlockId::Hash(canon_hashes[12]), None, false).unwrap();
+	propose_and_import_blocks(BlockId::Hash(client.info().chain.best_hash), 7);
+
+	// at this point no hashes from the first fork must exist on the tree
+	assert!(
+		!epoch_changes.lock().tree().iter().map(|(h, _, _)| h).any(|h| fork_1.contains(h)),
+	);
+
+	// but the epoch changes from the other forks must still exist
+	assert!(
+		epoch_changes.lock().tree().iter().map(|(h, _, _)| h).any(|h| fork_2.contains(h))
+	);
+
+	assert!(
+		epoch_changes.lock().tree().iter().map(|(h, _, _)| h).any(|h| fork_3.contains(h)),
+	);
+
+	// finalizing block #25 from the canon chain should prune out the second fork
+	client.finalize_block(BlockId::Hash(canon_hashes[24]), None, false).unwrap();
+	propose_and_import_blocks(BlockId::Hash(client.info().chain.best_hash), 8);
+
+	// at this point no hashes from the second fork must exist on the tree
+	assert!(
+		!epoch_changes.lock().tree().iter().map(|(h, _, _)| h).any(|h| fork_2.contains(h)),
+	);
+
+	// while epoch changes from the last fork should still exist
+	assert!(
+		epoch_changes.lock().tree().iter().map(|(h, _, _)| h).any(|h| fork_3.contains(h)),
+	);
 }

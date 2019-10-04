@@ -83,6 +83,12 @@ pub trait FinalityProofProvider<Block: BlockT>: Send + Sync {
 	fn prove_finality(&self, for_block: Block::Hash, request: &[u8]) -> Result<Option<Vec<u8>>, Error>;
 }
 
+impl<Block: BlockT> FinalityProofProvider<Block> for () {
+	fn prove_finality(&self, _for_block: Block::Hash, _request: &[u8]) -> Result<Option<Vec<u8>>, Error> {
+		Ok(None)
+	}
+}
+
 impl<B, E, Block, RA> Client<Block> for SubstrateClient<B, E, Block, RA> where
 	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
