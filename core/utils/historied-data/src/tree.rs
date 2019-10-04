@@ -167,8 +167,6 @@ impl<'a> BranchStateTrait<bool, u64> for u64 {
 
 }
 
-
-
 impl Default for BranchState {
 	// initialize with one element
 	fn default() -> Self {

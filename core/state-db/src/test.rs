@@ -48,24 +48,22 @@ impl MetaDb for TestDb {
 	}
 }
 
-impl OffstateDb<Option<u64>> for TestDb {
+impl OffstateDb<u64> for TestDb {
 	type Error = ();
 
-	fn get_offstate(&self, key: &[u8], state: &Option<u64>) -> Result<Option<DBValue>, ()> {
-		let state = state.unwrap_or(self.last_block);
+	fn get_offstate(&self, key: &[u8], state: &u64) -> Result<Option<DBValue>, ()> {
 		Ok(self.offstate.get(key)
 			.map(|s| Ser::from_slice(s.as_slice()))
-			.and_then(|s| s.get(state)
+			.and_then(|s| s.get(*state)
 				.unwrap_or(None) // flatten
 				.map(Into::into)
 		))
 	}
 
-	fn get_offstate_pairs(&self, state: &Option<u64>) -> Vec<(OffstateKey, DBValue)> {
-		let state = state.unwrap_or(self.last_block);
+	fn get_offstate_pairs(&self, state: &u64) -> Vec<(OffstateKey, DBValue)> {
 		self.offstate.iter().filter_map(|(a, s)| (
 			Ser::from_slice(s.as_slice())
-				.get(state)
+				.get(*state)
 				.unwrap_or(None) // flatten
 				.map(|v| (a.clone(), v.to_vec()))
 		)).collect()
@@ -120,6 +118,7 @@ impl TestDb {
 	}
 
 	pub fn offstate_eq_at(&self, values: &[u64], block: Option<u64>) -> bool {
+		let block = block.unwrap_or(self.last_block);
 		let data = make_offstate_changeset(values, &[]);
 		let self_offstate: BTreeMap<_, _> = self.get_offstate_pairs(&block).into_iter().collect();
 println!("of_eq {:?}", self_offstate);

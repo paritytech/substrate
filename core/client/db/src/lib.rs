@@ -610,24 +610,23 @@ impl<Block: BlockT> state_db::NodeDb for StorageDb<Block> {
 	}
 }
 
-impl<Block: BlockT> state_db::OffstateDb<Option<u64>> for StorageDb<Block> {
+impl<Block: BlockT> state_db::OffstateDb<u64> for StorageDb<Block> {
 
 	type Error = io::Error;
 
-	fn get_offstate(&self, key: &[u8], state: &Option<u64>) -> Result<Option<Vec<u8>>, Self::Error> {
-		let state = state.unwrap_or(self.last_block);
+	fn get_offstate(&self, key: &[u8], state: &u64) -> Result<Option<Vec<u8>>, Self::Error> {
 		Ok(self.db.get(columns::OFFSTATE, key)?
+			.as_ref()
 			.map(|s| Ser::from_slice(&s[..]))
-			.and_then(|s| s.get(state)
+			.and_then(|s| s.get(*state)
 				.unwrap_or(None) // flatten
 				.map(Into::into)
 		))
 	}
 
-	fn get_offstate_pairs(&self, state: &Option<u64>) -> Vec<(Vec<u8>, Vec<u8>)> {
-		let state = state.unwrap_or(self.last_block);
+	fn get_offstate_pairs(&self, state: &u64) -> Vec<(Vec<u8>, Vec<u8>)> {
 		self.db.iter(columns::OFFSTATE).filter_map(|(k, v)| 
-			Ser::from_slice(&v[..]).get(state)
+			Ser::from_slice(&v[..]).get(*state)
 				.unwrap_or(None) // flatten
 				.map(Into::into)
 				.map(|v| (k.to_vec(), v))
@@ -1162,7 +1161,11 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 			trace!(target: "db", "Canonicalize block #{} ({:?})", new_canonical, hash);
 			let commit = self.storage.state_db.canonicalize_block(&hash)
 				.map_err(|e: state_db::Error<io::Error>| client::error::Error::from(format!("State database error: {:?}", e)))?;
-			apply_state_commit(transaction, commit);
+			apply_state_commit(transaction, commit, &self.storage.db, number_u64).map_err(|err|
+				client::error::Error::Backend(
+					format!("Error building commit transaction : {}", err)
+				)
+			)?;
 		};
 
 		Ok(())
@@ -1251,8 +1254,15 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 				offstate_changeset,
 			).map_err(|e: state_db::Error<io::Error>|
 				client::error::Error::from(format!("State database error: {:?}", e)))?;
-			apply_state_commit(&mut transaction, commit);
-
+			// TODO EMCH wrong block number: there is no offstate change on block insert
+			// TODO split apply_state_commit and do an assertion in apply_state_commit
+			// that there is no offstate stuff anymore
+			apply_state_commit(&mut transaction, commit, &self.storage.db, number_u64).map_err(|err|
+				client::error::Error::Backend(
+					format!("Error building commit transaction : {}", err)
+				)
+			)?;
+	
 			// Check if need to finalize. Genesis is always finalized instantly.
 			let finalized = number_u64 == 0 || pending_block.leaf_state.is_final();
 
@@ -1377,13 +1387,19 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 
 		if self.storage.state_db.best_canonical().map(|c| f_num.saturated_into::<u64>() > c).unwrap_or(true) {
 			let parent_hash = f_header.parent_hash().clone();
+			let number = f_header.number().clone();
+			let number_u64 = number.saturated_into::<u64>();
 
 			let lookup_key = utils::number_and_hash_to_lookup_key(f_num, f_hash.clone())?;
 			transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, &lookup_key);
 
 			let commit = self.storage.state_db.canonicalize_block(&f_hash)
 				.map_err(|e: state_db::Error<io::Error>| client::error::Error::from(format!("State database error: {:?}", e)))?;
-			apply_state_commit(transaction, commit);
+			apply_state_commit(transaction, commit, &self.storage.db, number_u64).map_err(|err|
+				client::error::Error::Backend(
+					format!("Error building commit transaction : {}", err)
+				)
+			)?;
 
 			let changes_trie_config = self.changes_trie_config(parent_hash)?;
 			if let Some(changes_trie_config) = changes_trie_config {
@@ -1401,8 +1417,44 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 	}
 }
 
-fn apply_state_commit(transaction: &mut DBTransaction, commit: state_db::CommitSet<Vec<u8>>) {
-	// TODO EMCH unimplemented commit of offstate
+fn apply_state_commit(
+	transaction: &mut DBTransaction,
+	commit: state_db::CommitSet<Vec<u8>>,
+	db: &Arc<dyn KeyValueDB>,
+	last_block: u64,
+) -> Result<(), io::Error> {
+
+	for (key, o) in commit.offstate.iter() {
+		let mut ser = if let Some(stored) = db.get(columns::OFFSTATE, key)? {
+			Ser::from_vec(stored.to_vec())
+		} else {
+			if let Some(value) = o {
+				Ser::default()
+			} else {
+				break;
+			}
+		};
+		ser.push(last_block, o.as_ref().map(|v| v.as_slice()));
+		transaction.put(columns::OFFSTATE, &key[..], &ser.into_vec())
+	}
+	if let Some((block_prune, offstate_prune_key)) = commit.offstate_prune.as_ref() {
+		for key in offstate_prune_key.iter() {
+			// TODO EMCH should we prune less often (wait on pruning journals for instance)
+			// or make it out of this context just stored the block prune and do asynch
+			let mut ser = if let Some(stored) = db.get(columns::OFFSTATE, key)? {
+				Ser::from_vec(stored.to_vec())
+			} else {
+				break;
+			};
+
+			match ser.prune(*block_prune) {
+				PruneResult::Cleared => transaction.delete(columns::OFFSTATE, &key),
+				PruneResult::Changed => transaction.put(columns::OFFSTATE, &key[..], &ser.into_vec()),
+				PruneResult::Unchanged => (),
+			}
+		}
+	}
+
 	for (key, val) in commit.data.inserted.into_iter() {
 		transaction.put(columns::STATE, &key[..], &val);
 	}
@@ -1415,6 +1467,7 @@ fn apply_state_commit(transaction: &mut DBTransaction, commit: state_db::CommitS
 	for key in commit.meta.deleted.into_iter() {
 		transaction.delete(columns::STATE_META, &key[..]);
 	}
+	Ok(())
 }
 
 impl<Block> client::backend::AuxStore for Backend<Block> where Block: BlockT<Hash=H256> {
@@ -1538,7 +1591,14 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 			let mut transaction = DBTransaction::new();
 			match self.storage.state_db.revert_one() {
 				Some(commit) => {
-					apply_state_commit(&mut transaction, commit);
+					// TODO EMCH: here we have a list of key and we need a new method similar to
+					// gc but for dropping n last state -> samething do not do one block per one
+					// block.
+					apply_state_commit(&mut transaction, commit, &self.storage.db, c).map_err(|err|
+						client::error::Error::Backend(
+							format!("Error building commit transaction : {}", err)
+						)
+					)?;
 					let removed = self.blockchain.header(BlockId::Number(best))?.ok_or_else(
 						|| client::error::Error::UnknownBlock(
 							format!("Error reverting to {}. Block hash not found.", best)))?;

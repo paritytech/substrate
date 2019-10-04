@@ -403,7 +403,7 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		db.get(key.as_ref()).map_err(|e| Error::Db(e))
 	}
 
-	pub fn get_offstate<D: OffstateDb<Option<u64>>>(
+	pub fn get_offstate<D: OffstateDb<u64>>(
 		&self,
 		key: &[u8],
 		state: &(BranchRanges, u64),
@@ -412,10 +412,10 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		if let Some(value) = self.non_canonical.get_offstate(key, &state.0) {
 			return Ok(value.clone());
 		}
-		db.get_offstate(key, &Some(state.1)).map_err(|e| Error::Db(e))
+		db.get_offstate(key, &state.1).map_err(|e| Error::Db(e))
 	}
 
-	pub fn get_offstate_pairs<D: OffstateDb<Option<u64>>>(
+	pub fn get_offstate_pairs<D: OffstateDb<u64>>(
 		&self,
 		state: &(BranchRanges, u64),
 		db: &D,
@@ -429,7 +429,7 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 			filter.insert(k.clone());
 		}
 		result.extend(
-			db.get_offstate_pairs(&Some(state.1)).into_iter()
+			db.get_offstate_pairs(&state.1).into_iter()
 				.filter(|kv| !filter.contains(&kv.0))
 		);
 		result
@@ -511,7 +511,7 @@ impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
 	}
 
 	/// Get a value from non-canonical/pruning overlay or the backing DB.
-	pub fn get_offstate<D: OffstateDb<Option<u64>>>(
+	pub fn get_offstate<D: OffstateDb<u64>>(
 		&self,
 		key: &[u8],
 		state: &(BranchRanges, u64),
@@ -521,7 +521,7 @@ impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
 	}
 
 	/// Get pairs values offstate.
-	pub fn get_offstate_pairs<D: OffstateDb<Option<u64>>>(
+	pub fn get_offstate_pairs<D: OffstateDb<u64>>(
 		&self,
 		state: &(BranchRanges, u64),
 		db: &D,
