@@ -896,7 +896,7 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 						.expect("best finalized hash was given by client; \
 								finalized headers must exist in db; qed");
 
-					find_pre_digest::<Block>(&finalized_header)
+					find_pre_digest::<Block::Header>(&finalized_header)
 						.expect("finalized header must be valid; \
 								valid blocks have a pre-digest; qed")
 						.slot_number()
