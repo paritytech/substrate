@@ -190,7 +190,7 @@ impl<Hash, Number> EpochChanges<Hash, Number> where
 	}
 
 	/// Prune out finalized epochs, except for the ancestor of the finalized
-	/// block, the given slot should be the slot number at which the finalized
+	/// block. The given slot should be the slot number at which the finalized
 	/// block was authored.
 	pub fn prune_finalized<D: IsDescendentOfBuilder<Hash>>(
 		&mut self,

@@ -86,10 +86,10 @@ impl<H, N, V> ForkTree<H, N, V> where
 	N: Ord + Clone,
 	V: Clone,
 {
-	/// Prune the tree out of all non-canonical nodes. We find the node in the
+	/// Prune the tree, removing all non-canonical nodes. We find the node in the
 	/// tree that is the deepest ancestor of the given hash and that passes the
 	/// given predicate. If such a node exists, we re-root the tree to this
-	/// node, otherwise the tree remains unchanged. The given function
+	/// node. Otherwise the tree remains unchanged. The given function
 	/// `is_descendent_of` should return `true` if the second hash (target) is a
 	/// descendent of the first hash (base).
 	pub fn prune<F, E, P>(

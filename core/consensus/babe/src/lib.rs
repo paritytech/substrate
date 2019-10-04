@@ -1273,7 +1273,7 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 				epoch.as_ref().epoch_index, hash, slot_number, epoch.as_ref().start_slot);
 			babe_info!("Next epoch starts at slot {}", next_epoch.as_ref().start_slot);
 
-			// prune the tree out of epochs not part of the finalized chain or
+			// prune the tree of epochs not part of the finalized chain or
 			// that are not live anymore, and then track the given epoch change
 			// in the tree.
 			// NOTE: it is important that these operations are done in this
