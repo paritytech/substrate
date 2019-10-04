@@ -311,6 +311,12 @@ impl<Hash, Number> EpochChanges<Hash, Number> where
 			Err(e) => Err(e),
 		}
 	}
+
+	/// Return the inner fork tree, useful for testing purposes.
+	#[cfg(test)]
+	pub fn tree(&self) -> &ForkTree<Hash, Number, PersistedEpoch> {
+		&self.inner
+	}
 }
 
 /// Type alias to produce the epoch-changes tree from a block type.
