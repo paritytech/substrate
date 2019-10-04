@@ -51,7 +51,7 @@ use sr_primitives::{
 };
 use primitives::{H256, Blake2Hasher, storage::StorageKey};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
-use fg_primitives::{AuthorityId, AuthorityList, GRANDPA_AUTHORITIES_KEY};
+use fg_primitives::{AuthorityId, AuthorityList, VersionedAuthorityList, GRANDPA_AUTHORITIES_KEY};
 
 use crate::justification::GrandpaJustification;
 
@@ -76,7 +76,8 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> AuthoritySetForFinalityProver<Block> fo
 	fn authorities(&self, block: &BlockId<Block>) -> ClientResult<AuthorityList> {
 		let storage_key = StorageKey(GRANDPA_AUTHORITIES_KEY.to_vec());
 		self.storage(block, &storage_key)?
-			.and_then(|encoded| AuthorityList::decode(&mut encoded.0.as_slice()).ok())
+			.and_then(|encoded| VersionedAuthorityList::decode(&mut encoded.0.as_slice()).ok())
+			.map(|versioned| versioned.into())
 			.ok_or(ClientError::InvalidAuthoritiesSet)
 	}
 
@@ -122,7 +123,10 @@ impl<Block: BlockT> AuthoritySetForFinalityChecker<Block> for Arc<dyn FetchCheck
 					);
 				maybe_encoded
 					.as_ref()
-					.and_then(|encoded| AuthorityList::decode(&mut encoded.as_slice()).ok())
+					.and_then(|encoded| {
+						VersionedAuthorityList::decode(&mut encoded.as_slice()).ok()
+					})
+					.map(|versioned| versioned.into())
 					.ok_or(ClientError::InvalidAuthoritiesSet)
 			})
 	}
