@@ -251,14 +251,18 @@ impl<'a, F: SerializedConfig> Serialized<'a, F> {
 		};
 		let delete_size = elt_end - elt_start;
 		for _ in elt_start..elt_end {
-			let _ = self.0.to_mut().remove(elt_start);
+			let _ = self.0.to_mut().remove(elt_start); // TODO EMCH slice copy instead of that horror
 		}
 		let start_ix = start_ix - delete_size;
-		for i in end..end + (end - index) - 1 {
-			let old_value = self.read_le_usize(start_ix + i * SIZE_BYTE_LEN);
-			self.write_le_usize(start_ix + (i - (end - index)) * SIZE_BYTE_LEN, old_value - delete_size);
-		}
+
 		let len = len - (end - index);
+		for i in index..end {
+			let pos = i + (end - index);
+			if pos < len {
+				let old_value = self.read_le_usize(start_ix + pos * SIZE_BYTE_LEN);
+				self.write_le_usize(start_ix + i * SIZE_BYTE_LEN, old_value - delete_size);
+			}
+		}
 		let end_index = start_ix + len * SIZE_BYTE_LEN;
 		self.write_le_usize(end_index - SIZE_BYTE_LEN, len);
 		self.0.to_mut().truncate(end_index);

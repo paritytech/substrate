@@ -654,7 +654,11 @@ mod tests {
 			max_mem: None,
 		}));
 		assert!(db.data_eq(&make_db(&[21, 3, 922, 94])));
-		assert!(db.offstate_eq(&[21, 3, 822, 84]));
+		assert!(db.offstate_eq_at(&[822, 84], Some(0)));
+		assert!(db.offstate_eq_at(&[822, 84], Some(1)));
+		assert!(db.offstate_eq_at(&[21, 822, 84], Some(2)));
+		assert!(db.offstate_eq_at(&[3, 21, 822, 84], Some(3)));
+		assert!(db.offstate_eq(&[3, 21, 822, 84]));
 	}
 
 	#[test]
@@ -668,7 +672,11 @@ mod tests {
 		assert!(sdb.is_pruned(&H256::from_low_u64_be(21), 2));
 		assert!(sdb.is_pruned(&H256::from_low_u64_be(22), 2));
 		assert!(db.data_eq(&make_db(&[21, 3, 922, 93, 94])));
-		assert!(db.offstate_eq(&[21, 3, 822, 83, 84]));
+		assert!(db.offstate_eq_at(&[822, 83, 84], Some(0)));
+		assert!(db.offstate_eq_at(&[822, 83, 84], Some(1)));
+		assert!(db.offstate_eq_at(&[21, 822, 83, 84], Some(2)));
+		assert!(db.offstate_eq_at(&[3, 21, 822, 84], Some(3)));
+		assert!(db.offstate_eq(&[3, 21, 822, 84]));
 	}
 
 	#[test]
@@ -682,6 +690,10 @@ mod tests {
 		assert!(!sdb.is_pruned(&H256::from_low_u64_be(21), 2));
 		assert!(sdb.is_pruned(&H256::from_low_u64_be(22), 2));
 		assert!(db.data_eq(&make_db(&[1, 21, 3, 921, 922, 93, 94])));
-		assert!(db.offstate_eq(&[1, 21, 3, 821, 822, 83, 84]));
+		assert!(db.offstate_eq_at(&[821, 822, 83, 84], Some(0)));
+		assert!(db.offstate_eq_at(&[1, 821, 822, 83, 84], Some(1)));
+		assert!(db.offstate_eq_at(&[21, 822, 83, 84], Some(2)));
+		assert!(db.offstate_eq_at(&[3, 21, 822, 84], Some(3)));
+		assert!(db.offstate_eq(&[3, 21, 822, 84]));
 	}
 }

@@ -98,7 +98,9 @@ impl OffstatePendingGC {
 					match offstate_values.get_mut(&key).map(|historied_value| {
 						historied_value.gc(branches.reverse_iter_ranges())
 					}) {
-						Some(historied_data::PruneResult::Cleared) => { let _ = offstate_values.remove(&key); },
+						Some(historied_data::PruneResult::Cleared) => {
+							let _ = offstate_values.remove(&key);
+						},
 						_ => (),
 					}
 				}
@@ -647,7 +649,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 			if let Some(branch_index_cannonicalize) = last_index {
 				// this needs to be call after parents update
 				// TODO EMCH may be needed in 'canonicalize', and restore or commit here
-				self.branches.update_finalize_treshold(branch_index_cannonicalize, Some(block_number + 1), true);
+				self.branches.update_finalize_treshold(branch_index_cannonicalize, block_number, true);
 				// gc is at the right place
 				self.offstate_gc.set_pending_gc(branch_index_cannonicalize);
 				// try to run the garbage collection (can run later if there is
@@ -673,9 +675,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 
 	/// Get a value from the node overlay. This searches in every existing changeset.
 	pub fn get_offstate(&self, key: &[u8], state: &BranchRanges) -> Option<&Option<DBValue>> {
-			println!("b: {:?}", state);
 		if let Some(value) = self.offstate_values.get(key) {
-			println!("v: {:?}", value);
 			return value.get(state);
 		}
 		None
@@ -1147,6 +1147,7 @@ mod tests {
 		assert!(!contains_any(&overlay, 22, &h_2_2, 2));
 		assert!(!contains_any(&overlay, 211, &h_2_1_1, 3));
 		assert!(contains_both(&overlay, 111, &h_1_1_1, 3));
+		assert!(contains_both(&overlay, 12, &h_1_2, 2));
 		// check that journals are deleted
 		assert!(db.get_meta(&to_journal_key(1, 0)).unwrap().is_none());
 		assert!(db.get_meta(&to_journal_key(1, 1)).unwrap().is_none());
@@ -1270,6 +1271,7 @@ mod tests {
 
 		overlay.pin(&h_1);
 		let h1_context = overlay.get_branch_range(&h_1, 1).unwrap();
+		let h2_context = overlay.get_branch_range(&h_2, 1).unwrap();
 	
 		let mut commit = CommitSet::default();
 		overlay.canonicalize::<io::Error>(&h_2, &mut commit).unwrap();

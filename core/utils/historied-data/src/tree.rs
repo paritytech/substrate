@@ -640,6 +640,7 @@ impl<V> History<V> {
 
 	/// Gc an historied value other its possible values.
 	/// Iterator need to be reversed ordered by branch index.
+	/// TODO EMCH this needs rewrite and proper testing!!
 	pub fn gc<IT, S, I>(&mut self, mut states: IT) -> PruneResult
 		where
 			IT: Iterator<Item = (S, I)>,
@@ -686,10 +687,9 @@ impl<V> History<V> {
 							break;
 						}
 					}
+				} else {
 					self.0.remove(branch_index);
 					changed = true;
-					break;
-				} else {
 					break;
 				}
 			}
@@ -821,29 +821,23 @@ impl<'a, F: SerializedConfig> Serialized<'a, F> {
 		let len = self.0.len();
 		let mut last_index_with_value = None;
 		let mut index = 0;
-						println!("from {}", from);
 		while index < len {
 			let history = self.0.get_state(index);
 			if history.index == from + 1 {
 				// new first content
 				if history.value.len() == 0 {
-				println!("yoop");
 					// delete so first content is after (if any)
 					last_index_with_value = None;
 				} else {
-					println!("start val: {}", index);
 					// start value over a value drop until here
 					last_index_with_value = Some(index);
 					break;
 				}
 			} else if history.index > from {
-				println!("IN {}", history.index);
 				if history.value.len() == 0 
 				  && last_index_with_value.is_none() {
-				println!("doo");
 						// delete on delete, continue
 				} else {
-				println!("daa");
 					if last_index_with_value.is_none() {
 						// first value, use this index
 						last_index_with_value = Some(index);
@@ -861,7 +855,6 @@ impl<'a, F: SerializedConfig> Serialized<'a, F> {
 
 		if let Some(last_index_with_value) = last_index_with_value {
 			if last_index_with_value > 0 {
-				println!("IN {}", last_index_with_value);
 				self.0.truncate_until(last_index_with_value);
 				return PruneResult::Changed;
 			}

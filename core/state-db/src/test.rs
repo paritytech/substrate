@@ -99,13 +99,8 @@ impl TestDb {
 		if let Some((block_prune, offstate_prune_key)) = commit.offstate_prune.as_ref() {
 			for k in offstate_prune_key.iter() {
 				match self.offstate.get_mut(k).map(|v| {
-					println!("t{}", *block_prune);
-					println!("t{:?}", k);
-					println!("ser{:?}", v);
 					let mut ser = Ser::from_mut(v);
-					let r = ser.prune(*block_prune);
-					println!("ser{:?}", ser.into_vec());
-					r
+					ser.prune(*block_prune)
 				}) {
 					Some(PruneResult::Cleared) => { let _ = self.offstate.remove(k); },
 					Some(PruneResult::Changed) // changed applyied on mutable buffer without copy.
@@ -127,7 +122,7 @@ impl TestDb {
 	pub fn offstate_eq_at(&self, values: &[u64], block: Option<u64>) -> bool {
 		let data = make_offstate_changeset(values, &[]);
 		let self_offstate: BTreeMap<_, _> = self.get_offstate_pairs(&block).into_iter().collect();
-		println!("---{:?}", self_offstate);
+println!("of_eq {:?}", self_offstate);
 		self_offstate == data.into_iter().filter_map(|(k, v)| v.map(|v| (k,v))).collect()
 	}
 

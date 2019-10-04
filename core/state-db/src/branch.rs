@@ -160,6 +160,10 @@ impl RangeSet {
 			if let Some(Some(StatesBranch{ state, parent_branch_index, .. })) = self.storage.get(&branch_index) {
 				// TODO EMCH consider vecdeque ??
 				let state = if state.end > previous_start {
+					if state.start >= previous_start {
+						// empty branch stop here
+						break;
+					}
 					BranchStateRef {
 						start: state.start,
 						end: previous_start,
@@ -295,14 +299,11 @@ impl RangeSet {
 	pub fn update_finalize_treshold(
 		&mut self,
 		branch_index: u64,
-		linear_index: Option<u64>,
+		linear_index: u64,
 		full: bool,
 	) {
 
 		if branch_index < self.treshold {
-			return;
-		}
-		if branch_index == self.treshold && linear_index.is_none() {
 			return;
 		}
 		// range set update
@@ -310,7 +311,7 @@ impl RangeSet {
 		// we do not finalize current branch cause it
 		// can contains other blocks
 		self.treshold = branch_index;
-		if (branch_index == 0 && linear_index.is_none()) || !full {
+		if !full {
 			// remove cached value under treshold only
 			let new_storage = self.storage.split_off(&(self.treshold));
 			self.storage = new_storage;
@@ -330,17 +331,19 @@ impl RangeSet {
 
 	/// Apply a post finalize without considering treshold.
 	/// TODO EMCH rename as it is also use to prepare a gc
-	/// without moving the treshould first.
+	/// without moving the treshold first.
+	///
 	pub fn finalize_full(
 		&mut self,
 		branch_index: u64,
-		linear_index: Option<u64>,
+		linear_index: u64,
 	) {
 		if let Some(Some(state)) = self.storage.remove(&branch_index) {
 			let mut child_anchor: LinearStates = state.clone();
-			child_anchor.state.start = linear_index.unwrap_or(child_anchor.state.start);
+			child_anchor.state.start = linear_index;
 			let old_storage = std::mem::replace(&mut self.storage, BTreeMap::new());
-			self.storage.insert(branch_index, Some(child_anchor));
+			// insert anchor
+			self.storage.insert(branch_index, Some(child_anchor.clone()));
 			for (index, state) in old_storage.into_iter().filter_map(|(k, v)| v.map(|v| (k, v))) {
 				// ordered property of branch index allows to skip in depth branch search
 				if let Some(Some(parent_state)) = self.storage.get(&state.parent_branch_index) {
@@ -355,16 +358,15 @@ impl RangeSet {
 					}
 				}
 			}
+			// remove anchor block
+			child_anchor.state.start += 1;
+			if child_anchor.state.start < child_anchor.state.end {
+				self.storage.insert(branch_index, Some(child_anchor.clone()));
+			} else {
+				self.storage.remove(&branch_index);
+			}
 		}
 	
-	}
-
-	#[cfg(test)]
-	pub fn test_finalize_full(
-		&mut self,
-		branch_index: u64,
-	) {
-		self.finalize_full(branch_index, None);
 	}
 
 	/// Revert some ranges, without any way to revert.
@@ -488,7 +490,7 @@ mod test {
 	// 0
 	// |> 2: [10,2]
 	//       |> 3:  [11,2]
-	fn build_finalize_set() ->  (RangeSet, u64) {
+	fn build_finalize_set() ->  (RangeSet, (u64, u64)) {
 		let mut set = RangeSet::default();
 		set.import(10, 0, None);
 		let (b1, anchor_1) = set.import(10, 0, None);
@@ -499,7 +501,7 @@ mod test {
 		set.import(12, finalize, Some(bf.clone()));
 		set.import(12, finalize, Some(bf));
 
-		(set, finalize)
+		(set, (finalize, 11))
 	}
 
 	#[test]
@@ -511,7 +513,7 @@ mod test {
 		| {
 			let (mut ranges, finalize) = build_finalize_set();
 
-			let _ = ranges.update_finalize_treshold(finalize, None, full);
+			let _ = ranges.update_finalize_treshold(finalize.0, finalize.1, full);
 
 			assert!(ranges.range_treshold() == 3);
 
@@ -529,7 +531,8 @@ mod test {
 			&[(1, 1), (2, 2)][..],
 		);
 		with_full_finalize(true,
-			&[(3, 2), (5, 1)][..],
+			// (3, 1) because finalized block is removed
+			&[(3, 1), (5, 1)][..],
 			&[(1, 1), (2, 2), (4, 2)][..],
 		);
 	}
