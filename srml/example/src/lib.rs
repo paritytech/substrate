@@ -265,44 +265,43 @@ use sr_primitives::{
 	},
 };
 
-/// A custom weight calculator tailored for the dispatch call `set_dummy()` that actually examines
-/// the arguments and makes a decision based on that.
-///
-/// The arguments are passed to `WeighData` as an unbounded generic type `T`. This means that in
-/// order to have any meaningful interpretation, you must explicitly tell the rust compiler what
-/// traits does `T` have. This struct demonstrates how you can customize one _weight calculator_ for
-/// a particular call and fully extract the `T::Balance` argument out of it. This is
-/// quite some boilerplate to determine the weight of just one call. The reasons for that being:
-///   - This is tailored for a call that only accepts a `T::Balance`. If you want to examine the
-///     argument, there must be one struct per call, because these arguments' type are determined at
-///     compile time and it cannot be a _one size fits all_. In other words, the generic type `T` in
-///     `WeighData<T>` can only be one thing at a time. Of course, this depends on how deeply you
-///     want to examine your arguments. As an example, If you just want to interpret your arguments
-///     in an encoded manner, you can bound `T` to `T: Encode` and you will be able to encode `T`
-///     and examine it.
-///   - Note that you this is a non-runtime code and we cannot directly access a `Call` instance,
-///     hence the arguments are examined as a generic `T`, which you can bound to some traits if
-///     that suits you.
-struct WeightForSetDummy<B>(B);
+// A custom weight calculator tailored for the dispatch call `set_dummy()`. This actually examines
+// the arguments and makes a decision based upon them.
+//
+// The `WeightData<T>` trait has access to the arguments of the dispatch that it wants to assign a
+// weight to. Nonetheless, the trait itself can not make any assumptions about what that type
+// generic type of the arguments, `T`, is. Based on our needs, we could replace `T` with a more
+// concrete type while implementing the trait. The `decl_module!` expects whatever implements
+// `WeighData<T>` to replace `T` with a tuple of the dispatch arguments. This is exactly how we will
+// craft the implementation below.
+//
+// The rules of `WeightForSetDummy` is as follows:
+// - The final weight of each dispatch is calculated as the argument of the call multiplied by the
+//   parameter given to the `WeightForSetDummy`'s constructor.
+// - assigns a dispatch class `operational` if the argument of the call is more than 1000.
+struct WeightForSetDummy<T: balances::Trait>(BalanceOf<T>);
 
-impl<B> From<B> for WeightForSetDummy<B> {
-	fn from(multiplier: B) -> Self {
-		Self(multiplier)
+impl<T: balances::Trait> WeighData<(&BalanceOf<T>,)> for WeightForSetDummy<T>
+	where BalanceOf<T>: SimpleArithmetic
+{
+	fn weigh_data(&self, target: (&BalanceOf<T>,)) -> Weight {
+		let multiplier = self.0;
+		(*target.0 * multiplier).saturated_into()
 	}
 }
 
-impl<'a, B: 'a + SimpleArithmetic + Copy, T: Into<(&'a B,)>> WeighData<T> for WeightForSetDummy<B>  {
-	fn weigh_data(&self, target: T) -> Weight {
-		let arg: B = *target.into().0;
-		(arg * self.0).saturated_into()
+impl<T: balances::Trait> ClassifyDispatch<(&BalanceOf<T>,)> for WeightForSetDummy<T> {
+	fn classify_dispatch(&self, target: (&BalanceOf<T>,)) -> DispatchClass {
+		if *target.0 > <BalanceOf<T>>::from(1000u32) {
+			DispatchClass::Operational
+		} else {
+			DispatchClass::Normal
+		}
 	}
 }
 
-impl<B, T> ClassifyDispatch<T> for WeightForSetDummy<B> {
-	fn classify_dispatch(&self, _: T) -> DispatchClass {
-		DispatchClass::default()
-	}
-}
+/// A type alias for the balance type from this module's point of view.
+type BalanceOf<T> = <T as balances::Trait>::Balance;
 
 /// Our module's configuration trait. All our types and constants go in here. If the
 /// module is dependent on specific other modules, then their configuration traits
@@ -494,7 +493,7 @@ decl_module! {
 		// without worrying about gameability or attack scenarios.
 		// If you not specify `Result` explicitly as return value, it will be added automatically
 		// for you and `Ok(())` will be returned.
-		#[weight = WeightForSetDummy::from(T::Balance::from(10u32))]
+		#[weight = WeightForSetDummy::<T>(<BalanceOf<T>>::from(100u32))]
 		fn set_dummy(origin, #[compact] new_value: T::Balance) {
 			ensure_root(origin)?;
 			// Put the new value into storage.
@@ -779,8 +778,8 @@ mod tests {
 		// aka. `let info = <Call<Test> as GetDispatchInfo>::get_dispatch_info(&default_call);`
 		assert_eq!(info.weight, 10_000);
 
-		// must have a custom weight of `10 * arg = 2000`
-		let custom_call = <Call<Test>>::set_dummy(200);
+		// must have a custom weight of `100 * arg = 2000`
+		let custom_call = <Call<Test>>::set_dummy(20);
 		let info = custom_call.get_dispatch_info();
 		assert_eq!(info.weight, 2000);
 	}
