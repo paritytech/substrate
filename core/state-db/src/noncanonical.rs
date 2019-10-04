@@ -758,6 +758,14 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 		self.pinned.remove(hash);
 		self.offstate_gc.try_gc(&mut self.offstate_values, &self.branches, &self.pinned);
 	}
+
+	/// Iterator over values at a given state. Deletion are included in the result as a None value.
+	pub fn offstate_iter<'a>(&'a self, state: &'a BranchRanges) -> impl Iterator<Item = (&'a OffstateKey, &'a Option<DBValue>)> {
+		let state = state.clone();
+		self.offstate_values.iter().filter_map(move |(k, v)| {
+			v.get(&state).map(|v| (k, v))
+		})
+	}
 }
 
 #[cfg(test)]

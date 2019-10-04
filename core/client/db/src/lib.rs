@@ -71,6 +71,11 @@ use state_db::BranchRanges;
 use crate::storage_cache::{CachingState, SharedCache, new_shared_cache};
 use log::{trace, debug, warn};
 pub use state_db::PruningMode;
+use historied_data::tree::Serialized;
+use historied_data::PruneResult;
+use historied_data::linear::DefaultVersion;
+
+type Ser<'a> = Serialized<'a, DefaultVersion>;
 
 #[cfg(feature = "test-helpers")]
 use client::in_mem::Backend as InMemoryBackend;
@@ -610,12 +615,23 @@ impl<Block: BlockT> state_db::OffstateDb<Option<u64>> for StorageDb<Block> {
 	type Error = io::Error;
 
 	fn get_offstate(&self, key: &[u8], state: &Option<u64>) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.db.get(columns::OFFSTATE, key);
-		unimplemented!("TODO map with history fetch at requested block")
+		let state = state.unwrap_or(self.last_block);
+		Ok(self.db.get(columns::OFFSTATE, key)?
+			.map(|s| Ser::from_slice(&s[..]))
+			.and_then(|s| s.get(state)
+				.unwrap_or(None) // flatten
+				.map(Into::into)
+		))
 	}
 
 	fn get_offstate_pairs(&self, state: &Option<u64>) -> Vec<(Vec<u8>, Vec<u8>)> {
-		unimplemented!("TODO need to be an iterator")
+		let state = state.unwrap_or(self.last_block);
+		self.db.iter(columns::OFFSTATE).filter_map(|(k, v)| 
+			Ser::from_slice(&v[..]).get(state)
+				.unwrap_or(None) // flatten
+				.map(Into::into)
+				.map(|v| (k.to_vec(), v))
+		).collect()
 	}
 }
 

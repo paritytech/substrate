@@ -420,10 +420,20 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		state: &(BranchRanges, u64),
 		db: &D,
 	) -> Vec<(OffstateKey, DBValue)> {
-		unimplemented!("TODO some filtering ever non canonical");
-		Default::default()
+		let mut result = Vec::new();
+		let mut filter = HashSet::new();
+		for (k, o) in self.non_canonical.offstate_iter(&state.0) {
+			if let Some(v) = o.as_ref() {
+				result.push((k.clone(), v.clone()));
+			}
+			filter.insert(k.clone());
+		}
+		result.extend(
+			db.get_offstate_pairs(&Some(state.1)).into_iter()
+				.filter(|kv| !filter.contains(&kv.0))
+		);
+		result
 	}
-
 
 	pub fn apply_pending(&mut self) {
 		self.non_canonical.apply_pending();
