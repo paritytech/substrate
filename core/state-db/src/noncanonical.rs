@@ -449,7 +449,11 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 		};
 		level.push(overlay);
 		let	parent_branch_index = self.parents.get(&parent_hash).map(|(_, i)| *i).unwrap_or(0);
-		let	parent_branch_range = Some(self.branches.branch_ranges_from_cache(parent_branch_index, Some(number - 1)));
+		let	parent_branch_range = if number == 0 {
+			None
+		} else {
+			Some(self.branches.branch_ranges_from_cache(parent_branch_index, Some(number - 1)))
+		};
 		let (branch_range, branch_index) = self.branches.import(
 			number,
 			parent_branch_index,
