@@ -46,6 +46,7 @@ use codec::{HasCompact, Encode, Decode};
 
 // A range of start..end eras for a slashing span.
 #[derive(Encode, Decode)]
+#[cfg_attr(test, derive(Debug, PartialEq))]
 struct SlashingSpan {
 	start: EraIndex,
 	length: Option<EraIndex>, // the ongoing slashing span has indeterminate length.
@@ -63,7 +64,7 @@ pub struct SlashingSpans {
 
 impl SlashingSpans {
 	// an iterator over all slashing spans in _reverse_ order - most recent first.
-	fn iter(&'_ self, ) -> impl Iterator<Item = SlashingSpan> + '_ {
+	fn iter(&'_ self) -> impl Iterator<Item = SlashingSpan> + '_ {
 		let mut last_start = self.last_start;
 		let last = SlashingSpan { start: last_start, length: None };
 		let prior = self.prior.iter().cloned().map(move |length| {
@@ -74,5 +75,120 @@ impl SlashingSpans {
 		});
 
 		rstd::iter::once(last).chain(prior)
+	}
+
+	// prune the slashing spans against a window, whose start era index is given.
+	fn prune(&mut self, window_start: EraIndex) {
+		let old_idx = self.iter()
+			.skip(1) // skip ongoing span.
+			.position(|span| span.length.map_or(false, |len| span.start + len <= window_start));
+
+		if let Some(o) = old_idx {
+			self.prior.truncate(o);
+		}
+
+		// readjust the ongoing span, if it started before the beginning of the winow.
+		self.last_start = rstd::cmp::max(self.last_start, window_start);
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn single_slashing_span() {
+		let spans = SlashingSpans {
+			last_start: 1000,
+			prior: Vec::new(),
+		};
+
+		assert_eq!(spans.iter().collect::<Vec<_>>(), vec![SlashingSpan { start: 1000, length: None }]);
+	}
+
+	#[test]
+	fn many_prior_spans() {
+		let spans = SlashingSpans {
+			last_start: 1000,
+			prior: vec![10, 9, 8, 10],
+		};
+
+		assert_eq!(
+			spans.iter().collect::<Vec<_>>(),
+			vec![
+				SlashingSpan { start: 1000, length: None },
+				SlashingSpan { start: 990, length: Some(10) },
+				SlashingSpan { start: 981, length: Some(9) },
+				SlashingSpan { start: 973, length: Some(8) },
+				SlashingSpan { start: 963, length: Some(10) },
+			],
+		)
+	}
+
+	#[test]
+	fn pruning_spans() {
+		let mut spans = SlashingSpans {
+			last_start: 1000,
+			prior: vec![10, 9, 8, 10],
+		};
+
+		spans.prune(981);
+		assert_eq!(
+			spans.iter().collect::<Vec<_>>(),
+			vec![
+				SlashingSpan { start: 1000, length: None },
+				SlashingSpan { start: 990, length: Some(10) },
+				SlashingSpan { start: 981, length: Some(9) },
+			],
+		);
+
+		spans.prune(982);
+		assert_eq!(
+			spans.iter().collect::<Vec<_>>(),
+			vec![
+				SlashingSpan { start: 1000, length: None },
+				SlashingSpan { start: 990, length: Some(10) },
+				SlashingSpan { start: 981, length: Some(9) },
+			],
+		);
+
+		spans.prune(989);
+		assert_eq!(
+			spans.iter().collect::<Vec<_>>(),
+			vec![
+				SlashingSpan { start: 1000, length: None },
+				SlashingSpan { start: 990, length: Some(10) },
+				SlashingSpan { start: 981, length: Some(9) },
+			],
+		);
+
+		spans.prune(1000);
+		assert_eq!(
+			spans.iter().collect::<Vec<_>>(),
+			vec![
+				SlashingSpan { start: 1000, length: None },
+			],
+		);
+
+		spans.prune(2000);
+		assert_eq!(
+			spans.iter().collect::<Vec<_>>(),
+			vec![
+				SlashingSpan { start: 2000, length: None },
+			],
+		);
+
+		// now all in one shot.
+		let mut spans = SlashingSpans {
+			last_start: 1000,
+			prior: vec![10, 9, 8, 10],
+		};
+		spans.prune(2000);
+		assert_eq!(
+			spans.iter().collect::<Vec<_>>(),
+			vec![
+				SlashingSpan { start: 2000, length: None },
+			],
+		);
 	}
 }
