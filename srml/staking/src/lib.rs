@@ -248,6 +248,7 @@
 mod mock;
 #[cfg(test)]
 mod tests;
+mod slashing;
 
 pub mod inflation;
 
