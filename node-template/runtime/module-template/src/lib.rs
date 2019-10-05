@@ -1,4 +1,6 @@
-/// A runtime module template with necessary imports
+//! A runtime module template with necessary imports
+
+#![cfg_attr(not(feature = "std"), no_std)]
 
 /// Feel free to remove or edit this file as needed.
 /// If you change the name of this file, make sure to update its references in runtime/src/lib.rs
