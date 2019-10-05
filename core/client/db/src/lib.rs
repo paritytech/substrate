@@ -411,11 +411,29 @@ impl<Block: BlockT> HeaderMetadata<Block> for BlockchainDb<Block> {
 	fn header_metadata(&self, hash: Block::Hash) -> Result<CachedHeaderMetadata<Block>, Self::Error> {
 		self.header_metadata_cache.header_metadata(hash).or_else(|_| {
 			self.header(BlockId::hash(hash))?.map(|header| {
-				let header_metadata = CachedHeaderMetadata::from(&header);
+				let mut ancestor = header.parent_hash().clone();
+				let number = *header.number();
+				let parent = *header.parent_hash();
+				let section_size = 500;
+
+				if  number % section_size.into() != Zero::zero() && number > One::one() {
+					if let Ok(parent) = self.header_metadata(ancestor) {
+						ancestor = parent.ancestor;
+					}
+				}
+
+				let header_metadata = CachedHeaderMetadata {
+					hash,
+					number,
+					parent,
+					ancestor,
+				};
+
 				self.header_metadata_cache.insert_header_metadata(
 					header_metadata.hash,
 					header_metadata.clone(),
 				);
+
 				header_metadata
 			}).ok_or(client::error::Error::UnknownBlock("header not found in db".to_owned()))
 		})
@@ -1114,12 +1132,6 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 				number,
 				hash,
 			)?;
-
-			let header_metadata = CachedHeaderMetadata::from(&pending_block.header);
-			self.blockchain.insert_header_metadata(
-				header_metadata.hash,
-				header_metadata,
-			);
 
 			transaction.put(columns::HEADER, &lookup_key, &pending_block.header.encode());
 			if let Some(body) = pending_block.body {

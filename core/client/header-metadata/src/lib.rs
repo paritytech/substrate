@@ -22,7 +22,7 @@ use parking_lot::RwLock;
 use lru_cache::LruCache;
 
 /// Set to the expected max difference between `best` and `finalized` blocks at sync.
-const LRU_CACHE_SIZE: usize = 5_000;
+const LRU_CACHE_SIZE: usize = 10_000;
 
 /// Get lowest common ancestor between two blocks in the tree.
 ///
@@ -37,9 +37,6 @@ pub fn lowest_common_ancestor<Block: BlockT, T: HeaderMetadata<Block>>(
 ) -> Result<HashAndNumber<Block>, T::Error> {
 	let mut header_one = backend.header_metadata(id_one)?;
 	let mut header_two = backend.header_metadata(id_two)?;
-
-	let mut orig_header_one = header_one.clone();
-	let mut orig_header_two = header_two.clone();
 
 	// We move through ancestor links as much as possible, since ancestor >= parent.
 
@@ -71,18 +68,6 @@ pub fn lowest_common_ancestor<Block: BlockT, T: HeaderMetadata<Block>>(
 		} else {
 			header_two = backend.header_metadata(header_two.parent)?;
 		}
-	}
-
-	// Update cached ancestor links.
-
-	if orig_header_one.number > header_one.number {
-		orig_header_one.ancestor = header_one.hash;
-		backend.insert_header_metadata(orig_header_one.hash, orig_header_one);
-	}
-
-	if orig_header_two.number > header_one.number {
-		orig_header_two.ancestor = header_one.hash;
-		backend.insert_header_metadata(orig_header_two.hash, orig_header_two);
 	}
 
 	Ok(HashAndNumber {
@@ -244,7 +229,7 @@ impl<Block: BlockT> HeaderMetadata<Block> for HeaderMetadataCache<Block> {
 
 	fn header_metadata(&self, hash: Block::Hash) -> Result<CachedHeaderMetadata<Block>, Self::Error> {
 		self.cache.write().get_mut(&hash).cloned()
-			.ok_or("header metadata not found in cache".to_owned())
+			.ok_or(format!("header metadata not found in cache: {}", hash))
 	}
 
 	fn insert_header_metadata(&self, hash: Block::Hash, metadata: CachedHeaderMetadata<Block>) {
@@ -266,7 +251,7 @@ pub struct CachedHeaderMetadata<Block: BlockT> {
 	/// Hash of parent header.
 	pub parent: Block::Hash,
 	/// Hash of an ancestor header. Used to jump through the tree.
-	ancestor: Block::Hash,
+	pub ancestor: Block::Hash,
 }
 
 impl<Block: BlockT> From<&Block::Header> for CachedHeaderMetadata<Block> {
