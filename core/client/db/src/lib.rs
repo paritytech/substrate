@@ -42,7 +42,7 @@ use client::backend::NewBlockState;
 use client::blockchain::{well_known_cache_keys, HeaderBackend};
 use client::{ForkBlocks, ExecutionStrategies};
 use client::backend::{StorageCollection, ChildStorageCollection};
-use client::error::Result as ClientResult;
+use client::error::{Result as ClientResult, Error as ClientError};
 use codec::{Decode, Encode};
 use hash_db::{Hasher, Prefix};
 use kvdb::{KeyValueDB, DBTransaction};
@@ -417,7 +417,7 @@ impl<Block: BlockT> HeaderMetadata<Block> for BlockchainDb<Block> {
 					header_metadata.clone(),
 				);
 				header_metadata
-			}).ok_or(client::error::Error::UnknownBlock("header not found in db".to_owned()))
+			}).ok_or(ClientError::UnknownBlock(format!("header not found in db: {}", hash)))
 		})
 	}
 

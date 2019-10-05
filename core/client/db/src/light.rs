@@ -207,7 +207,7 @@ impl<Block: BlockT> HeaderMetadata<Block> for LightStorage<Block> {
 					header_metadata.clone(),
 				);
 				header_metadata
-			}).ok_or(ClientError::UnknownBlock("header not found in db".to_owned()))
+			}).ok_or(ClientError::UnknownBlock(format!("header not found in db: {}", hash)))
 		})
 	}
 
