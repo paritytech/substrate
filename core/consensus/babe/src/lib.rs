@@ -593,9 +593,8 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA
 		let hash = header.hash();
 		let parent_hash = *header.parent_hash();
 
-		let parent_header = self.client.header(&BlockId::Hash(parent_hash))
-			.map_err(|e| format!("Could not fetch parent header {:?}: {:?}", parent_hash, e))?
-			.ok_or_else(|| format!("Parent header {:?} not found.", parent_hash))?;
+		let parent_header_metadata = self.client.header_metadata(parent_hash)
+			.map_err(|e| format!("Could not fetch parent header: {:?}", e))?;
 
 		let pre_digest = find_pre_digest::<Block::Header>(&header)?;
 		let epoch = {
@@ -603,7 +602,7 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA
 			epoch_changes.epoch_for_child_of(
 				descendent_query(&*self.client),
 				&parent_hash,
-				parent_header.number().clone(),
+				parent_header_metadata.number,
 				pre_digest.slot_number(),
 				|slot| self.config.genesis_epoch(slot),
 			)
