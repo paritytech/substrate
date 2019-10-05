@@ -39,6 +39,11 @@ default_features = false
 package = 'sr-primitives'
 path ="../../../core/sr-primitives"
 
+[dependencies.runtime-io]
+default-features = false
+package = "sr-io"
+path = "../../../core/sr-io"
+
 [dev-dependencies.primitives]
 package = 'substrate-primitives'
 path = "../../../core/primitives"
