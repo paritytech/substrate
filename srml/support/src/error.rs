@@ -120,14 +120,6 @@ macro_rules! decl_error {
 		impl $crate::error::ModuleErrorMetadata for $error {
 			fn metadata() -> &'static [$crate::error::ErrorMetadata] {
 				&[
-					$crate::error::ErrorMetadata {
-						name: $crate::error::DecodeDifferent::Encode("Other"),
-						documentation: $crate::error::DecodeDifferent::Encode(&["Other unspecified error"]),
-					},
-					$crate::error::ErrorMetadata {
-						name: $crate::error::DecodeDifferent::Encode("CannotLookup"),
-						documentation: $crate::error::DecodeDifferent::Encode(&["Can not lookup"]),
-					},
 					$(
 						$crate::error::ErrorMetadata {
 							name: $crate::error::DecodeDifferent::Encode(stringify!($name)),

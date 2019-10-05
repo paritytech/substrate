@@ -465,12 +465,7 @@ mod tests {
 						}
 					])
 				),
-				errors: DecodeDifferent::Encode(FnEncode(|| &[
-					ErrorMetadata {
-						name: DecodeDifferent::Encode("Other"),
-						documentation: DecodeDifferent::Encode(&["Other unspecified error"]),
-					},
-				])),
+				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
 			},
 			ModuleMetadata {
 				name: DecodeDifferent::Encode("Module"),
@@ -494,14 +489,6 @@ mod tests {
 				)),
 				constants: DecodeDifferent::Encode(FnEncode(|| &[])),
 				errors: DecodeDifferent::Encode(FnEncode(|| &[
-					ErrorMetadata {
-						name: DecodeDifferent::Encode("Other"),
-						documentation: DecodeDifferent::Encode(&["Other unspecified error"]),
-					},
-					ErrorMetadata {
-						name: DecodeDifferent::Encode("CannotLookup"),
-						documentation: DecodeDifferent::Encode(&["Can not lookup"]),
-					},
 					ErrorMetadata {
 						name: DecodeDifferent::Encode("UserInputError"),
 						documentation: DecodeDifferent::Encode(&[" Some user input error"]),
@@ -550,12 +537,7 @@ mod tests {
 					])
 				)),
 				constants: DecodeDifferent::Encode(FnEncode(|| &[])),
-				errors: DecodeDifferent::Encode(FnEncode(|| &[
-					ErrorMetadata {
-						name: DecodeDifferent::Encode("Other"),
-						documentation: DecodeDifferent::Encode(&["Other unspecified error"]),
-					},
-				])),
+				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
 			},
 		])
 	};
