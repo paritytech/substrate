@@ -45,8 +45,6 @@ pub enum EcdsaVerifyError {
 	BadSignature,
 }
 
-pub mod offchain;
-
 /// Converts a public trait definition into a private trait and set of public functions
 /// that assume the trait is implemented for `()` for ease of calling.
 macro_rules! export_api {
