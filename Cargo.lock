@@ -2132,6 +2132,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "macro_test"
+version = "0.1.0"
+dependencies = [
+ "srml-support 2.0.0",
+]
+
+[[package]]
 name = "malloc_size_of_derive"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

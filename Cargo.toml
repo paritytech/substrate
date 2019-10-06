@@ -74,6 +74,7 @@ members = [
 	"srml/support/procedural/tools",
 	"srml/support/procedural/tools/derive",
 	"srml/support/test",
+	"srml/support/macro_test",
 	"srml/authorship",
 	"srml/assets",
 	"srml/aura",

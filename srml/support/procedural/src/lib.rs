@@ -23,6 +23,7 @@
 extern crate proc_macro;
 
 mod storage;
+mod construct_runtime;
 
 use proc_macro::TokenStream;
 
@@ -214,4 +215,9 @@ use proc_macro::TokenStream;
 #[proc_macro]
 pub fn decl_storage(input: TokenStream) -> TokenStream {
 	storage::transformation::decl_storage_impl(input)
+}
+
+#[proc_macro]
+pub fn construct_runtime2(input: TokenStream) -> TokenStream {
+	construct_runtime::construct_runtime(input)
 }

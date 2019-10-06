@@ -110,7 +110,7 @@ macro_rules! parameter_types {
 }
 
 #[doc(inline)]
-pub use srml_support_procedural::decl_storage;
+pub use srml_support_procedural::{decl_storage, construct_runtime2};
 
 /// Return Err of the expression: `return Err($expression);`.
 ///
