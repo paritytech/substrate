@@ -292,6 +292,35 @@ mod tests {
 		});
 	}
 
+	fn double_map_swap_works() {
+		with_externalities(&mut new_test_ext(), || {
+			type DoubleMap = DataDM;
+			DataDM::insert(0, 1, 0);
+			DataDM::insert(0, 2, 1);
+			DataDM::insert(0, 3, 2);
+			DataDM::insert(0, 4, 3);
+
+			let collect = || DataDM::enumerate().collect::<Vec<_>>();
+			assert_eq!(collect(), vec![(3, 3), (2, 2), (1, 1), (0, 0)]);
+
+			// Two existing
+			DataDM::swap(0, 1, 0, 2);
+			assert_eq!(collect(), vec![(3, 3), (2, 1), (1, 2), (0, 0)]);
+
+			// Back to normal
+			DataDM::swap(0, 2, 0, 1);
+			assert_eq!(collect(), vec![(3, 3), (2, 2), (1, 1), (0, 0)]);
+
+			// Left existing
+			DataDM::swap(0, 2, 0, 5);
+			assert_eq!(collect(), vec![(5, 2), (3, 3), (1, 1), (0, 0)]);
+
+			// Right existing
+			DataDM::swap(0, 5, 0, 2);
+			assert_eq!(collect(), vec![(2, 2), (3, 3), (1, 1), (0, 0)]);
+		});
+	}
+
 	#[test]
 	fn linked_map_basic_insert_remove_should_work() {
 		new_test_ext().execute_with(|| {

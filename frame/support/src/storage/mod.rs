@@ -339,7 +339,7 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 
 	/// Read the length of the value in a fast way, without decoding the entire value.
 	///
-	/// `T` is required to implement `Codec::DecodeLength`.
+	/// `V` is required to implement `Codec::DecodeLength`.
 	///
 	/// Note that `0` is returned as the default value if no encoded value exists at the given key.
 	/// Therefore, this function cannot be used as a sign of _existence_. use the `::exists()`
