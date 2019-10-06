@@ -70,7 +70,7 @@ mod tests {
 	use super::*;
 
 	use runtime_io::with_externalities;
-	use primitives::{H256, Blake2Hasher};
+	use primitives::H256;
 	use support::{impl_outer_origin, assert_ok, parameter_types};
 	use sr_primitives::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 	use sr_primitives::weights::Weight;
@@ -116,7 +116,7 @@ mod tests {
 
 	// This function basically just builds a genesis storage key/value store according to
 	// our desired mockup.
-	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+	fn new_test_ext() -> runtime_io::TestExternalities {
 		system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
 	}
 

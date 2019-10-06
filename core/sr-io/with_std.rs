@@ -16,8 +16,8 @@
 
 use primitives::{
 	blake2_128, blake2_256, twox_128, twox_256, twox_64, ed25519, Blake2Hasher, sr25519, Pair, H256,
-	traits::Externalities, child_storage_key::ChildStorageKey, hexdisplay::HexDisplay, offchain,
-	Hasher,
+	traits::{Externalities, ExternalitiesExt, BareCryptoStorePtr}, storage::ChildStorageKey,
+	hexdisplay::HexDisplay, Hasher, offchain::{self, OffchainExt},
 };
 // Switch to this after PoC-3
 // pub use primitives::BlakeHasher;
@@ -28,7 +28,7 @@ use trie::{TrieConfiguration, trie_types::Layout};
 
 use std::{collections::HashMap, convert::TryFrom};
 
-environmental!(ext: trait Externalities<Blake2Hasher>);
+environmental!(ext: trait Externalities);
 
 /// Additional bounds for `Hasher` trait for with_std.
 pub trait HasherBounds {}
@@ -200,7 +200,7 @@ impl OtherApi for () {
 impl CryptoApi for () {
 	fn ed25519_public_keys(id: KeyTypeId) -> Vec<ed25519::Public> {
 		ext::with(|ext| {
-			ext.keystore()
+			ext.extension::<BareCryptoStorePtr>()
 				.expect("No `keystore` associated for the current context!")
 				.read()
 				.ed25519_public_keys(id)
@@ -209,7 +209,7 @@ impl CryptoApi for () {
 
 	fn ed25519_generate(id: KeyTypeId, seed: Option<&str>) -> ed25519::Public {
 		ext::with(|ext| {
-			ext.keystore()
+			ext.extension::<BareCryptoStorePtr>()
 				.expect("No `keystore` associated for the current context!")
 				.write()
 				.ed25519_generate_new(id, seed)
@@ -225,7 +225,7 @@ impl CryptoApi for () {
 		let pub_key = ed25519::Public::try_from(pubkey.as_ref()).ok()?;
 
 		ext::with(|ext| {
-			ext.keystore()
+			ext.extension::<BareCryptoStorePtr>()
 				.expect("No `keystore` associated for the current context!")
 				.read()
 				.ed25519_key_pair(id, &pub_key)
@@ -239,7 +239,7 @@ impl CryptoApi for () {
 
 	fn sr25519_public_keys(id: KeyTypeId) -> Vec<sr25519::Public> {
 		ext::with(|ext| {
-			ext.keystore()
+			ext.extension::<BareCryptoStorePtr>()
 				.expect("No `keystore` associated for the current context!")
 				.read()
 				.sr25519_public_keys(id)
@@ -248,7 +248,7 @@ impl CryptoApi for () {
 
 	fn sr25519_generate(id: KeyTypeId, seed: Option<&str>) -> sr25519::Public {
 		ext::with(|ext| {
-			ext.keystore()
+			ext.extension::<BareCryptoStorePtr>()
 				.expect("No `keystore` associated for the current context!")
 				.write()
 				.sr25519_generate_new(id, seed)
@@ -264,7 +264,7 @@ impl CryptoApi for () {
 		let pub_key = sr25519::Public::try_from(pubkey.as_ref()).ok()?;
 
 		ext::with(|ext| {
-			ext.keystore()
+			ext.extension::<BareCryptoStorePtr>()
 				.expect("No `keystore` associated for the current context!")
 				.read()
 				.sr25519_key_pair(id, &pub_key)
@@ -317,8 +317,8 @@ impl HashingApi for () {
 
 fn with_offchain<R>(f: impl FnOnce(&mut dyn offchain::Externalities) -> R, msg: &'static str) -> R {
 	ext::with(|ext| ext
-		.offchain()
-		.map(|ext| f(ext))
+		.extension::<OffchainExt>()
+		.map(|ext| f(&mut **ext))
 		.expect(msg)
 	).expect("offchain-worker functions cannot be called outside of an Externalities-provided environment.")
 }
@@ -446,7 +446,7 @@ impl Api for () {}
 /// Execute the given closure with global function available whose functionality routes into the
 /// externalities `ext`. Forwards the value that the closure returns.
 // NOTE: need a concrete hasher here due to limitations of the `environmental!` macro, otherwise a type param would have been fine I think.
-pub fn with_externalities<R, F: FnOnce() -> R>(ext: &mut dyn Externalities<Blake2Hasher>, f: F) -> R {
+pub fn with_externalities<R, F: FnOnce() -> R>(ext: &mut dyn Externalities, f: F) -> R {
 	ext::using(ext, f)
 }
 

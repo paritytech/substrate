@@ -136,7 +136,7 @@ mod tests {
 	use super::*;
 	use app_crypto::Pair;
 	use primitives::testing::KeyStore;
-	use primitives::{crypto::key_types, sr25519, traits::BareCryptoStore, H256};
+	use primitives::{crypto::key_types, sr25519, H256};
 	use runtime_io::{with_externalities, TestExternalities};
 	use sr_primitives::testing::{Header, UintAuthorityId};
 	use sr_primitives::traits::{ConvertInto, IdentityLookup, OpaqueKeys};
@@ -261,7 +261,7 @@ mod tests {
 
 		// Create externalities.
 		let mut externalities = TestExternalities::new(t);
-		externalities.set_keystore(key_store);
+		externalities.register_extension(key_store);
 
 		with_externalities(&mut externalities, || {
 			assert_eq!(
@@ -298,7 +298,7 @@ mod tests {
 
 		// Create externalities.
 		let mut externalities = TestExternalities::new(t);
-		externalities.set_keystore(key_store);
+		externalities.register_extension(key_store);
 
 		with_externalities(&mut externalities, || {
 			assert_eq!(None, AuthorityDiscovery::authority_id());
@@ -335,7 +335,7 @@ mod tests {
 
 		// Create externalities.
 		let mut externalities = TestExternalities::new(t);
-		externalities.set_keystore(key_store);
+		externalities.register_extension(key_store);
 
 		with_externalities(&mut externalities, || {
 			let payload = String::from("test payload").into_bytes();

@@ -357,7 +357,7 @@ mod tests {
 
 	use runtime_io::with_externalities;
 	use support::{assert_noop, assert_ok, impl_outer_origin, parameter_types};
-	use primitives::{H256, Blake2Hasher};
+	use primitives::H256;
 	use sr_primitives::{
 		traits::{BlakeTwo256, OnFinalize, IdentityLookup},
 		testing::Header,
@@ -437,7 +437,7 @@ mod tests {
 	type Balances = balances::Module<Test>;
 	type Treasury = Module<Test>;
 
-	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+	fn new_test_ext() -> runtime_io::TestExternalities {
 		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		balances::GenesisConfig::<Test>{
 			balances: vec![(0, 100), (1, 99), (2, 1)],

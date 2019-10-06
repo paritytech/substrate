@@ -20,7 +20,7 @@ use crate::wasm_executor::WasmExecutor;
 use runtime_version::{NativeVersion, RuntimeVersion};
 use codec::{Decode, Encode};
 use crate::RuntimeInfo;
-use primitives::{Blake2Hasher, NativeOrEncoded, traits::{CodeExecutor, Externalities}};
+use primitives::{NativeOrEncoded, traits::{CodeExecutor, Externalities}};
 use log::{trace, warn};
 
 use crate::RuntimesCache;
@@ -40,7 +40,7 @@ fn safe_call<F, U>(f: F) -> Result<U>
 /// Set up the externalities and safe calling environment to execute calls to a native runtime.
 ///
 /// If the inner closure panics, it will be caught and return an error.
-pub fn with_native_environment<F, U>(ext: &mut dyn Externalities<Blake2Hasher>, f: F) -> Result<U>
+pub fn with_native_environment<F, U>(ext: &mut dyn Externalities, f: F) -> Result<U>
 	where F: UnwindSafe + FnOnce() -> U
 {
 	runtime_io::with_externalities(ext, move || safe_call(f))
@@ -53,7 +53,7 @@ pub trait NativeExecutionDispatch: Send + Sync {
 	/// Dispatch a method in the runtime.
 	///
 	/// If the method with the specified name doesn't exist then `Err` is returned.
-	fn dispatch(ext: &mut dyn Externalities<Blake2Hasher>, method: &str, data: &[u8]) -> Result<Vec<u8>>;
+	fn dispatch(ext: &mut dyn Externalities, method: &str, data: &[u8]) -> Result<Vec<u8>>;
 
 	/// Provide native runtime version.
 	fn native_version() -> NativeVersion;
@@ -101,7 +101,7 @@ impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 		&self.native_version
 	}
 
-	fn runtime_version<E: Externalities<Blake2Hasher>>(
+	fn runtime_version<E: Externalities>(
 		&self,
 		ext: &mut E,
 	) -> Option<RuntimeVersion> {
@@ -119,12 +119,12 @@ impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 	}
 }
 
-impl<D: NativeExecutionDispatch> CodeExecutor<Blake2Hasher> for NativeExecutor<D> {
+impl<D: NativeExecutionDispatch> CodeExecutor for NativeExecutor<D> {
 	type Error = Error;
 
 	fn call
 	<
-		E: Externalities<Blake2Hasher>,
+		E: Externalities,
 		R:Decode + Encode + PartialEq,
 		NC: FnOnce() -> result::Result<R, String> + UnwindSafe
 	>(
@@ -219,7 +219,7 @@ macro_rules! native_executor_instance {
 	(IMPL $name:ident, $dispatcher:path, $version:path) => {
 		impl $crate::NativeExecutionDispatch for $name {
 			fn dispatch(
-				ext: &mut $crate::Externalities<$crate::Blake2Hasher>,
+				ext: &mut $crate::Externalities,
 				method: &str,
 				data: &[u8]
 			) -> $crate::error::Result<Vec<u8>> {

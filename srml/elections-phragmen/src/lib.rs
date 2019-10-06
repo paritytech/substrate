@@ -592,7 +592,7 @@ mod tests {
 	use std::cell::RefCell;
 	use srml_support::{assert_ok, assert_noop, parameter_types, assert_eq_uvec};
 	use runtime_io::with_externalities;
-	use primitives::{H256, Blake2Hasher};
+	use primitives::H256;
 	use sr_primitives::{Perbill, testing::Header, BuildStorage,
 		traits::{BlakeTwo256, IdentityLookup, Block as BlockT}
 	};
@@ -730,7 +730,7 @@ mod tests {
 			self.desired_runners_up = count;
 			self
 		}
-		pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
+		pub fn build(self) -> runtime_io::TestExternalities {
 			VOTING_BOND.with(|v| *v.borrow_mut() = self.voter_bond);
 			GenesisConfig {
 				balances: Some(balances::GenesisConfig::<Test>{

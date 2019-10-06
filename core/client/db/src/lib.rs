@@ -224,7 +224,7 @@ pub fn new_client<E, S, Block, RA>(
 >
 	where
 		Block: BlockT<Hash=H256>,
-		E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
+		E: CodeExecutor + RuntimeInfo,
 		S: BuildStorage,
 {
 	let backend = Arc::new(Backend::new(settings, CANONICALIZATION_DELAY)?);
@@ -456,8 +456,7 @@ impl<Block: BlockT, H: Hasher> BlockImportOperation<Block, H> {
 }
 
 impl<Block> client::backend::BlockImportOperation<Block, Blake2Hasher>
-for BlockImportOperation<Block, Blake2Hasher>
-where Block: BlockT<Hash=H256>,
+	for BlockImportOperation<Block, Blake2Hasher> where Block: BlockT<Hash=H256>,
 {
 	type State = CachingState<Blake2Hasher, RefTrackingState<Block>, Block>;
 

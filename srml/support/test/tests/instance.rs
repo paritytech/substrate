@@ -28,7 +28,7 @@ use support::{
 use inherents::{
 	ProvideInherent, InherentData, InherentIdentifier, RuntimeString, MakeFatalError
 };
-use primitives::{H256, sr25519, Blake2Hasher};
+use primitives::{H256, sr25519};
 
 mod system;
 
@@ -275,7 +275,7 @@ pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, Call, Signature, ()>;
 
-fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+fn new_test_ext() -> runtime_io::TestExternalities {
 	GenesisConfig{
 		module1_Instance1: Some(module1::GenesisConfig {
 			value: 3,

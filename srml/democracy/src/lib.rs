@@ -976,7 +976,7 @@ mod tests {
 		impl_outer_origin, impl_outer_dispatch, assert_noop, assert_ok, parameter_types,
 		traits::Contains
 	};
-	use primitives::{H256, Blake2Hasher};
+	use primitives::H256;
 	use sr_primitives::{traits::{BlakeTwo256, IdentityLookup, Bounded}, testing::Header};
 	use sr_primitives::Perbill;
 	use balances::BalanceLock;
@@ -1084,7 +1084,7 @@ mod tests {
 		type CooloffPeriod = CooloffPeriod;
 	}
 
-	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+	fn new_test_ext() -> runtime_io::TestExternalities {
 		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		balances::GenesisConfig::<Test>{
 			balances: vec![(1, 10), (2, 20), (3, 30), (4, 40), (5, 50), (6, 60)],

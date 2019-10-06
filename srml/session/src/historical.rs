@@ -313,7 +313,7 @@ impl<T: Trait, D: AsRef<[u8]>> support::traits::KeyOwnerProofSystem<(KeyTypeId, 
 mod tests {
 	use super::*;
 	use runtime_io::with_externalities;
-	use primitives::{Blake2Hasher, crypto::key_types::DUMMY};
+	use primitives::crypto::key_types::DUMMY;
 	use sr_primitives::{traits::OnInitialize, testing::UintAuthorityId};
 	use crate::mock::{
 		NEXT_VALIDATORS, force_new_session,
@@ -323,7 +323,7 @@ mod tests {
 
 	type Historical = Module<Test>;
 
-	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+	fn new_test_ext() -> runtime_io::TestExternalities {
 		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		crate::GenesisConfig::<Test> {
 			keys: NEXT_VALIDATORS.with(|l|

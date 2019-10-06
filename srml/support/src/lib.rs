@@ -237,7 +237,6 @@ mod tests {
 	use super::*;
 	use codec::{Codec, EncodeLike};
 	use runtime_io::with_externalities;
-	use primitives::Blake2Hasher;
 	pub use srml_metadata::{
 		DecodeDifferent, StorageEntryMetadata, StorageMetadata, StorageEntryType,
 		StorageEntryModifier, DefaultByte, DefaultByteGetter, StorageHasher
@@ -281,7 +280,7 @@ mod tests {
 		type Origin = u32;
 	}
 
-	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+	fn new_test_ext() -> runtime_io::TestExternalities {
 		GenesisConfig::default().build_storage().unwrap().into()
 	}
 

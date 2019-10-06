@@ -681,7 +681,7 @@ mod tests {
 	use super::*;
 	use support::assert_ok;
 	use runtime_io::with_externalities;
-	use primitives::{Blake2Hasher, crypto::key_types::DUMMY};
+	use primitives::crypto::key_types::DUMMY;
 	use sr_primitives::{
 		traits::OnInitialize,
 		testing::UintAuthorityId,
@@ -692,7 +692,7 @@ mod tests {
 		reset_before_session_end_called, before_session_end_called,
 	};
 
-	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+	fn new_test_ext() -> runtime_io::TestExternalities {
 		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		GenesisConfig::<Test> {
 			keys: NEXT_VALIDATORS.with(|l|

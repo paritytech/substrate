@@ -294,7 +294,7 @@ where
 mod tests {
 	use super::*;
 	use runtime_io::with_externalities;
-	use primitives::{H256, Blake2Hasher};
+	use primitives::H256;
 	use sr_primitives::{
 		generic::Era, Perbill, DispatchError, weights::Weight, testing::{Digest, Header, Block},
 		traits::{Bounded, Header as HeaderT, BlakeTwo256, IdentityLookup, ConvertInto},
@@ -419,7 +419,7 @@ mod tests {
 		}.assimilate_storage(&mut t).unwrap();
 		let xt = sr_primitives::testing::TestXt(sign_extra(1, 0, 0), Call::Balances(BalancesCall::transfer(2, 69)));
 		let weight = xt.get_dispatch_info().weight as u64;
-		let mut t = runtime_io::TestExternalities::<Blake2Hasher>::new(t);
+		let mut t = runtime_io::TestExternalities::new(t);
 		with_externalities(&mut t, || {
 			Executive::initialize_block(&Header::new(
 				1,
@@ -435,7 +435,7 @@ mod tests {
 		});
 	}
 
-	fn new_test_ext(balance_factor: u64) -> runtime_io::TestExternalities<Blake2Hasher> {
+	fn new_test_ext(balance_factor: u64) -> runtime_io::TestExternalities {
 		let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 		balances::GenesisConfig::<Runtime> {
 			balances: vec![(1, 111 * balance_factor)],

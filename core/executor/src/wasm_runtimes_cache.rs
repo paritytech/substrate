@@ -21,7 +21,7 @@ use crate::wasm_executor::WasmExecutor;
 use log::{trace, warn};
 use codec::Decode;
 use parity_wasm::elements::{deserialize_buffer, DataSegment, Instruction, Module as RawModule};
-use primitives::{storage::well_known_keys, Blake2Hasher, traits::Externalities};
+use primitives::{storage::well_known_keys, traits::Externalities};
 use runtime_version::RuntimeVersion;
 use std::{collections::hash_map::{Entry, HashMap}, mem, rc::Rc};
 use wasmi::{Module as WasmModule, ModuleRef as WasmModuleInstanceRef, RuntimeValue};
@@ -241,7 +241,7 @@ impl RuntimesCache {
 	///
 	/// `Error::InvalidMemoryReference` is returned if no memory export with the
 	/// identifier `memory` can be found in the runtime.
-	pub fn fetch_runtime<E: Externalities<Blake2Hasher>>(
+	pub fn fetch_runtime<E: Externalities>(
 		&mut self,
 		wasm_executor: &WasmExecutor,
 		ext: &mut E,
@@ -296,7 +296,7 @@ impl RuntimesCache {
 		}
 	}
 
-	fn create_wasm_instance<E: Externalities<Blake2Hasher>>(
+	fn create_wasm_instance<E: Externalities>(
 		wasm_executor: &WasmExecutor,
 		ext: &mut E,
 		heap_pages: u64,

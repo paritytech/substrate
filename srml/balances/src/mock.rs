@@ -20,7 +20,7 @@
 
 use sr_primitives::{Perbill, traits::{Convert, IdentityLookup}, testing::Header,
 	weights::{DispatchInfo, Weight}};
-use primitives::{H256, Blake2Hasher};
+use primitives::H256;
 use runtime_io;
 use support::{impl_outer_origin, parameter_types};
 use support::traits::Get;
@@ -179,7 +179,7 @@ impl ExtBuilder {
 		TRANSACTION_BYTE_FEE.with(|v| *v.borrow_mut() = self.transaction_byte_fee);
 		WEIGHT_TO_FEE.with(|v| *v.borrow_mut() = self.weight_to_fee);
 	}
-	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
+	pub fn build(self) -> runtime_io::TestExternalities {
 		self.set_associated_consts();
 		let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 		GenesisConfig::<Runtime> {

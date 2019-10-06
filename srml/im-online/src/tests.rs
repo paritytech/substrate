@@ -21,7 +21,7 @@
 use super::*;
 use crate::mock::*;
 use offchain::testing::TestOffchainExt;
-use primitives::offchain::OpaquePeerId;
+use primitives::offchain::{OpaquePeerId, OffchainExt};
 use runtime_io::with_externalities;
 use support::{dispatch, assert_noop};
 use sr_primitives::testing::UintAuthorityId;
@@ -181,7 +181,7 @@ fn late_heartbeat_should_fail() {
 fn should_generate_heartbeats() {
 	let mut ext = new_test_ext();
 	let (offchain, state) = TestOffchainExt::new();
-	ext.set_offchain_externalities(offchain);
+	ext.register_extension(OffchainExt::new(offchain));
 
 	with_externalities(&mut ext, || {
 		// given

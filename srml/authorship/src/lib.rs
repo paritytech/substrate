@@ -413,7 +413,7 @@ impl<T: Trait> ProvideInherent for Module<T> {
 mod tests {
 	use super::*;
 	use runtime_io::with_externalities;
-	use primitives::{H256, Blake2Hasher};
+	use primitives::H256;
 	use sr_primitives::traits::{BlakeTwo256, IdentityLookup};
 	use sr_primitives::testing::Header;
 	use sr_primitives::generic::DigestItem;
@@ -535,7 +535,7 @@ mod tests {
 		)
 	}
 
-	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+	fn new_test_ext() -> runtime_io::TestExternalities {
 		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		t.into()
 	}

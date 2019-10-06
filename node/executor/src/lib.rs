@@ -121,7 +121,7 @@ mod tests {
 		substrate_executor::NativeExecutor::new(None)
 	}
 
-	fn set_heap_pages<E: Externalities<Blake2Hasher>>(ext: &mut E, heap_pages: u64) {
+	fn set_heap_pages<E: Externalities>(ext: &mut E, heap_pages: u64) {
 		ext.place_storage(well_known_keys::HEAP_PAGES.to_vec(), Some(heap_pages.encode()));
 	}
 

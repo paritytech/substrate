@@ -121,7 +121,7 @@ use codec::{Encode, Decode};
 use runtime_io::TestExternalities;
 
 #[cfg(any(feature = "std", test))]
-use primitives::{ChangesTrieConfiguration, Blake2Hasher};
+use primitives::ChangesTrieConfiguration;
 
 pub mod offchain;
 
@@ -705,7 +705,7 @@ impl<T: Trait> Module<T> {
 
 	/// Get the basic externalities for this module, useful for tests.
 	#[cfg(any(feature = "std", test))]
-	pub fn externalities() -> TestExternalities<Blake2Hasher> {
+	pub fn externalities() -> TestExternalities {
 		TestExternalities::new((map![
 			<BlockHash<T>>::hashed_key_for(T::BlockNumber::zero()) => [69u8; 32].encode(),
 			<Number<T>>::hashed_key().to_vec() => T::BlockNumber::one().encode(),
@@ -1214,7 +1214,7 @@ mod tests {
 
 	const CALL: &<Test as Trait>::Call = &();
 
-	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+	fn new_test_ext() -> runtime_io::TestExternalities {
 		GenesisConfig::default().build_storage::<Test>().unwrap().into()
 	}
 

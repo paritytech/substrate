@@ -1436,7 +1436,7 @@ impl WasmExecutor {
 	/// Signature of this method needs to be `(I32, I32) -> I64`.
 	///
 	/// This should be used for tests only.
-	pub fn call<E: Externalities<Blake2Hasher>>(
+	pub fn call<E: Externalities>(
 		&self,
 		ext: &mut E,
 		heap_pages: usize,
@@ -1454,7 +1454,7 @@ impl WasmExecutor {
 	///
 	/// This should be used for tests only.
 	pub fn call_with_custom_signature<
-		E: Externalities<Blake2Hasher>,
+		E: Externalities,
 		F: FnOnce(&mut dyn FnMut(&[u8]) -> Result<u32>) -> Result<Vec<RuntimeValue>>,
 		FR: FnOnce(Option<RuntimeValue>, &MemoryRef) -> Result<Option<R>>,
 		R,
@@ -1505,7 +1505,7 @@ impl WasmExecutor {
 	}
 
 	/// Call a given method in the given wasm-module runtime.
-	pub fn call_in_wasm_module<E: Externalities<Blake2Hasher>>(
+	pub fn call_in_wasm_module<E: Externalities>(
 		&self,
 		ext: &mut E,
 		module_instance: &ModuleRef,
@@ -1534,7 +1534,7 @@ impl WasmExecutor {
 
 	/// Call a given method in the given wasm-module runtime.
 	fn call_in_wasm_module_with_custom_signature<
-		E: Externalities<Blake2Hasher>,
+		E: Externalities,
 		F: FnOnce(&mut dyn FnMut(&[u8]) -> Result<u32>) -> Result<Vec<RuntimeValue>>,
 		FR: FnOnce(Option<RuntimeValue>, &MemoryRef) -> Result<Option<R>>,
 		R,
@@ -1623,11 +1623,11 @@ mod tests {
 
 	use state_machine::TestExternalities as CoreTestExternalities;
 	use hex_literal::hex;
-	use primitives::map;
+	use primitives::{map, Blake2Hasher, offchain::OffchainExt};
 	use runtime_test::WASM_BINARY;
 	use substrate_offchain::testing;
 
-	type TestExternalities<H> = CoreTestExternalities<H, u64>;
+	type TestExternalities = CoreTestExternalities<Blake2Hasher, u64>;
 
 	#[test]
 	fn returning_should_work() {
@@ -1752,7 +1752,7 @@ mod tests {
 
 	#[test]
 	fn ed25519_verify_should_work() {
-		let mut ext = TestExternalities::<Blake2Hasher>::default();
+		let mut ext = TestExternalities::default();
 		let test_code = WASM_BINARY;
 		let key = ed25519::Pair::from_seed(&blake2_256(b"test"));
 		let sig = key.sign(b"all ok!");
@@ -1778,7 +1778,7 @@ mod tests {
 
 	#[test]
 	fn sr25519_verify_should_work() {
-		let mut ext = TestExternalities::<Blake2Hasher>::default();
+		let mut ext = TestExternalities::default();
 		let test_code = WASM_BINARY;
 		let key = sr25519::Pair::from_seed(&blake2_256(b"test"));
 		let sig = key.sign(b"all ok!");
@@ -1804,7 +1804,7 @@ mod tests {
 
 	#[test]
 	fn ordered_trie_root_should_work() {
-		let mut ext = TestExternalities::<Blake2Hasher>::default();
+		let mut ext = TestExternalities::default();
 		let trie_input = vec![b"zero".to_vec(), b"one".to_vec(), b"two".to_vec()];
 		let test_code = WASM_BINARY;
 		assert_eq!(
@@ -1817,9 +1817,9 @@ mod tests {
 	fn offchain_local_storage_should_work() {
 		use substrate_client::backend::OffchainStorage;
 
-		let mut ext = TestExternalities::<Blake2Hasher>::default();
+		let mut ext = TestExternalities::default();
 		let (offchain, state) = testing::TestOffchainExt::new();
-		ext.set_offchain_externalities(offchain);
+		ext.register_extension(OffchainExt::new(offchain));
 		let test_code = WASM_BINARY;
 		assert_eq!(
 			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_offchain_local_storage", &[]).unwrap(),
@@ -1830,9 +1830,9 @@ mod tests {
 
 	#[test]
 	fn offchain_http_should_work() {
-		let mut ext = TestExternalities::<Blake2Hasher>::default();
+		let mut ext = TestExternalities::default();
 		let (offchain, state) = testing::TestOffchainExt::new();
-		ext.set_offchain_externalities(offchain);
+		ext.register_extension(OffchainExt::new(offchain));
 		state.write().expect_request(
 			0,
 			testing::PendingRequest {

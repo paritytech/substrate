@@ -18,17 +18,13 @@
 
 #![warn(missing_docs)]
 
-use std::{
-	fmt, result, collections::HashMap,
-	marker::PhantomData, panic::UnwindSafe,
-};
+use std::{fmt, result, collections::HashMap, panic::UnwindSafe};
 use log::{warn, trace};
 use hash_db::Hasher;
 use codec::{Decode, Encode};
 use primitives::{
-	storage::well_known_keys, NativeOrEncoded, NeverNativeValue, offchain::{self, NeverOffchainExt},
-	traits::{BareCryptoStorePtr, CodeExecutor},
-	hexdisplay::HexDisplay,
+	storage::well_known_keys, NativeOrEncoded, NeverNativeValue, offchain::OffchainExt,
+	traits::{BareCryptoStorePtr, CodeExecutor}, hexdisplay::HexDisplay, hash::H256,
 };
 
 pub mod backend;
@@ -167,48 +163,52 @@ fn always_untrusted_wasm<E, R: Decode>() -> ExecutionManager<DefaultHandler<R, E
 }
 
 /// The substrate state machine.
-pub struct StateMachine<'a, B, H, N, T, O, Exec> {
-	backend: B,
-	changes_trie_storage: Option<&'a T>,
-	offchain_ext: Option<&'a mut O>,
-	overlay: &'a mut OverlayedChanges,
+pub struct StateMachine<'a, B, H, N, T, Exec> where H: Hasher<Out=H256>, B: Backend<H> {
+	backend: &'a B,
 	exec: &'a Exec,
 	method: &'a str,
 	call_data: &'a [u8],
-	keystore: Option<BareCryptoStorePtr>,
-	_hasher: PhantomData<(H, N)>,
+	ext: Ext<'a, H, N, B, T>,
 }
 
-impl<'a, B, H, N, T, O, Exec> StateMachine<'a, B, H, N, T, O, Exec> where
-	H: Hasher,
-	Exec: CodeExecutor<H>,
+impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec> where
+	H: Hasher<Out=H256>,
+	Exec: CodeExecutor,
 	B: Backend<H>,
 	T: ChangesTrieStorage<H, N>,
-	O: offchain::Externalities,
-	H::Out: Ord + 'static,
 	N: crate::changes_trie::BlockNumber,
 {
 	/// Creates new substrate state machine.
 	pub fn new(
-		backend: B,
+		backend: &'a B,
 		changes_trie_storage: Option<&'a T>,
-		offchain_ext: Option<&'a mut O>,
+		offchain_ext: Option<OffchainExt>,
 		overlay: &'a mut OverlayedChanges,
 		exec: &'a Exec,
 		method: &'a str,
 		call_data: &'a [u8],
 		keystore: Option<BareCryptoStorePtr>,
 	) -> Self {
-		Self {
+		let mut ext = ext::Ext::new(
+			overlay,
 			backend,
 			changes_trie_storage,
-			offchain_ext,
-			overlay,
+		);
+
+		if let Some(keystore) = keystore {
+			ext.register_extension(keystore);
+		}
+
+		if let Some(offchain) = offchain_ext {
+			ext.register_extension(offchain);
+		}
+
+		Self {
+			backend,
 			exec,
 			method,
 			call_data,
-			keystore,
-			_hasher: PhantomData,
+			ext,
 		}
 	}
 
@@ -220,10 +220,10 @@ impl<'a, B, H, N, T, O, Exec> StateMachine<'a, B, H, N, T, O, Exec> where
 	///
 	/// Note: changes to code will be in place if this call is made again. For running partial
 	/// blocks (e.g. a transaction at a time), ensure a different method is used.
-	pub fn execute(
-		&mut self,
-		strategy: ExecutionStrategy,
-	) -> Result<(Vec<u8>, (B::Transaction, H::Out), Option<ChangesTrieTransaction<H, N>>), Box<dyn Error>> {
+	pub fn execute(&mut self, strategy: ExecutionStrategy) -> Result<
+		(Vec<u8>, (B::Transaction, H::Out), Option<ChangesTrieTransaction<H, N>>),
+		Box<dyn Error>,
+	> {
 		// We are not giving a native call and thus we are sure that the result can never be a native
 		// value.
 		self.execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
@@ -252,38 +252,39 @@ impl<'a, B, H, N, T, O, Exec> StateMachine<'a, B, H, N, T, O, Exec> where
 		R: Decode + Encode + PartialEq,
 		NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
 	{
-		let mut externalities = ext::Ext::new(
-			self.overlay,
-			&self.backend,
-			self.changes_trie_storage,
-			self.offchain_ext.as_mut().map(|x| &mut **x),
-			self.keystore.clone(),
-		);
-		let id = externalities.id;
-		trace!(target: "state-trace", "{:04x}: Call {} at {:?}. Input={:?}",
+		let id = self.ext.id;
+		trace!(
+			target: "state-trace", "{:04x}: Call {} at {:?}. Input={:?}",
 			id,
 			self.method,
 			self.backend,
 			HexDisplay::from(&self.call_data),
 		);
+
 		let (result, was_native) = self.exec.call(
-			&mut externalities,
+			&mut self.ext,
 			self.method,
 			self.call_data,
 			use_native,
 			native_call,
 		);
+
 		let (storage_delta, changes_delta) = if compute_tx {
-			let (storage_delta, changes_delta) = externalities.transaction();
+			let (storage_delta, changes_delta) = self.ext.transaction();
 			(Some(storage_delta), changes_delta)
 		} else {
 			(None, None)
 		};
-		trace!(target: "state-trace", "{:04x}: Return. Native={:?}, Result={:?}",
+
+		trace!(
+			target: "state-trace", "{:04x}: Return. Native={:?}, Result={:?}",
 			id,
 			was_native,
 			result,
 		);
+
+		self.ext.reset();
+
 		(result, was_native, storage_delta, changes_delta)
 	}
 
@@ -293,12 +294,16 @@ impl<'a, B, H, N, T, O, Exec> StateMachine<'a, B, H, N, T, O, Exec> where
 		mut native_call: Option<NC>,
 		orig_prospective: OverlayedChangeSet,
 		on_consensus_failure: Handler,
-	) -> (CallResult<R, Exec::Error>, Option<(B::Transaction, H::Out)>, Option<ChangesTrieTransaction<H, N>>) where
+	) -> (
+		CallResult<R, Exec::Error>,
+		Option<(B::Transaction, H::Out)>,
+		Option<ChangesTrieTransaction<H, N>>,
+	) where
 		R: Decode + Encode + PartialEq,
 		NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
 		Handler: FnOnce(
 			CallResult<R, Exec::Error>,
-			CallResult<R, Exec::Error>
+			CallResult<R, Exec::Error>,
 		) -> CallResult<R, Exec::Error>
 	{
 		let (result, was_native, storage_delta, changes_delta) = self.execute_aux(
@@ -308,7 +313,7 @@ impl<'a, B, H, N, T, O, Exec> StateMachine<'a, B, H, N, T, O, Exec> where
 		);
 
 		if was_native {
-			self.overlay.prospective = orig_prospective.clone();
+			self.ext.mut_overlayed_changes().prospective = orig_prospective.clone();
 			let (wasm_result, _, wasm_storage_delta, wasm_changes_delta) = self.execute_aux(
 				compute_tx,
 				false,
@@ -317,7 +322,8 @@ impl<'a, B, H, N, T, O, Exec> StateMachine<'a, B, H, N, T, O, Exec> where
 
 			if (result.is_ok() && wasm_result.is_ok()
 				&& result.as_ref().ok() == wasm_result.as_ref().ok())
-				|| result.is_err() && wasm_result.is_err() {
+				|| result.is_err() && wasm_result.is_err()
+			{
 				(result, storage_delta, changes_delta)
 			} else {
 				(on_consensus_failure(wasm_result, result), wasm_storage_delta, wasm_changes_delta)
@@ -332,7 +338,11 @@ impl<'a, B, H, N, T, O, Exec> StateMachine<'a, B, H, N, T, O, Exec> where
 		compute_tx: bool,
 		mut native_call: Option<NC>,
 		orig_prospective: OverlayedChangeSet,
-	) -> (CallResult<R, Exec::Error>, Option<(B::Transaction, H::Out)>, Option<ChangesTrieTransaction<H, N>>) where
+	) -> (
+		CallResult<R, Exec::Error>,
+		Option<(B::Transaction, H::Out)>,
+		Option<ChangesTrieTransaction<H, N>>,
+	) where
 		R: Decode + Encode + PartialEq,
 		NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
 	{
@@ -345,7 +355,7 @@ impl<'a, B, H, N, T, O, Exec> StateMachine<'a, B, H, N, T, O, Exec> where
 		if !was_native || result.is_ok() {
 			(result, storage_delta, changes_delta)
 		} else {
-			self.overlay.prospective = orig_prospective.clone();
+			self.ext.mut_overlayed_changes().prospective = orig_prospective.clone();
 			let (wasm_result, _, wasm_storage_delta, wasm_changes_delta) = self.execute_aux(
 				compute_tx,
 				false,
@@ -393,10 +403,10 @@ impl<'a, B, H, N, T, O, Exec> StateMachine<'a, B, H, N, T, O, Exec> where
 			)?;
 			set_changes_trie_config(overlay, changes_trie_config, final_check)
 		};
-		init_overlay(self.overlay, false, &self.backend)?;
+		init_overlay(self.ext.mut_overlayed_changes(), false, &self.backend)?;
 
 		let result = {
-			let orig_prospective = self.overlay.prospective.clone();
+			let orig_prospective = self.ext.mut_overlayed_changes().prospective.clone();
 
 			let (result, storage_delta, changes_delta) = match manager {
 				ExecutionManager::Both(on_consensus_failure) => {
@@ -431,7 +441,7 @@ impl<'a, B, H, N, T, O, Exec> StateMachine<'a, B, H, N, T, O, Exec> where
 		};
 
 		if result.is_ok() {
-			init_overlay(self.overlay, true, &self.backend)?;
+			init_overlay(self.ext.mut_overlayed_changes(), true, self.backend)?;
 		}
 
 		result.map_err(|e| Box::new(e) as _)
@@ -449,9 +459,8 @@ pub fn prove_execution<B, H, Exec>(
 ) -> Result<(Vec<u8>, Vec<Vec<u8>>), Box<dyn Error>>
 where
 	B: Backend<H>,
-	H: Hasher,
-	Exec: CodeExecutor<H>,
-	H::Out: Ord + 'static,
+	H: Hasher<Out=H256>,
+	Exec: CodeExecutor,
 {
 	let trie_backend = backend.as_trie_backend()
 		.ok_or_else(|| Box::new(ExecutionError::UnableToGenerateProof) as Box<dyn Error>)?;
@@ -477,13 +486,12 @@ pub fn prove_execution_on_trie_backend<S, H, Exec>(
 ) -> Result<(Vec<u8>, Vec<Vec<u8>>), Box<dyn Error>>
 where
 	S: trie_backend_essence::TrieBackendStorage<H>,
-	H: Hasher,
-	Exec: CodeExecutor<H>,
-	H::Out: Ord + 'static,
+	H: Hasher<Out=H256>,
+	Exec: CodeExecutor,
 {
 	let proving_backend = proving_backend::ProvingBackend::new(trie_backend);
-	let mut sm = StateMachine::<_, H, _, InMemoryChangesTrieStorage<H, u64>, _, Exec>::new(
-		proving_backend, None, NeverOffchainExt::new(), overlay, exec, method, call_data, keystore,
+	let mut sm = StateMachine::<_, H, _, InMemoryChangesTrieStorage<H, u64>, Exec>::new(
+		&proving_backend, None, None, overlay, exec, method, call_data, keystore,
 	);
 
 	let (result, _, _) = sm.execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
@@ -506,8 +514,8 @@ pub fn execution_proof_check<H, Exec>(
 	keystore: Option<BareCryptoStorePtr>,
 ) -> Result<Vec<u8>, Box<dyn Error>>
 where
-	H: Hasher,
-	Exec: CodeExecutor<H>,
+	H: Hasher<Out=H256>,
+	Exec: CodeExecutor,
 	H::Out: Ord + 'static,
 {
 	let trie_backend = create_proof_check_backend::<H>(root.into(), proof)?;
@@ -524,12 +532,11 @@ pub fn execution_proof_check_on_trie_backend<H, Exec>(
 	keystore: Option<BareCryptoStorePtr>,
 ) -> Result<Vec<u8>, Box<dyn Error>>
 where
-	H: Hasher,
-	Exec: CodeExecutor<H>,
-	H::Out: Ord + 'static,
+	H: Hasher<Out=H256>,
+	Exec: CodeExecutor,
 {
-	let mut sm = StateMachine::<_, H, _, InMemoryChangesTrieStorage<H, u64>, _, Exec>::new(
-		trie_backend, None, NeverOffchainExt::new(), overlay, exec, method, call_data, keystore,
+	let mut sm = StateMachine::<_, H, _, InMemoryChangesTrieStorage<H, u64>, Exec>::new(
+		trie_backend, None, None, overlay, exec, method, call_data, keystore,
 	);
 
 	sm.execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
@@ -546,7 +553,7 @@ pub fn prove_read<B, H, I>(
 ) -> Result<Vec<Vec<u8>>, Box<dyn Error>>
 where
 	B: Backend<H>,
-	H: Hasher,
+	H: Hasher<Out=H256>,
 	H::Out: Ord,
 	I: IntoIterator,
 	I::Item: AsRef<[u8]>,
@@ -741,7 +748,7 @@ mod tests {
 		InMemoryStorage as InMemoryChangesTrieStorage,
 		Configuration as ChangesTrieConfig,
 	};
-	use primitives::{Blake2Hasher, map, traits::Externalities, child_storage_key::ChildStorageKey};
+	use primitives::{Blake2Hasher, map, traits::Externalities, storage::ChildStorageKey};
 
 	struct DummyCodeExecutor {
 		change_changes_trie_config: bool,
@@ -750,10 +757,14 @@ mod tests {
 		fallback_succeeds: bool,
 	}
 
-	impl<H: Hasher> CodeExecutor<H> for DummyCodeExecutor {
+	impl CodeExecutor for DummyCodeExecutor {
 		type Error = u8;
 
-		fn call<E: Externalities<H>, R: Encode + Decode + PartialEq, NC: FnOnce() -> result::Result<R, String>>(
+		fn call<
+			E: Externalities,
+			R: Encode + Decode + PartialEq,
+			NC: FnOnce() -> result::Result<R, String>,
+		>(
 			&self,
 			ext: &mut E,
 			_method: &str,
@@ -800,9 +811,9 @@ mod tests {
 		let changes_trie_storage = InMemoryChangesTrieStorage::<Blake2Hasher, u64>::new();
 
 		let mut state_machine = StateMachine::new(
-			backend,
+			&backend,
 			Some(&changes_trie_storage),
-			NeverOffchainExt::new(),
+			None,
 			&mut overlayed_changes,
 			&DummyCodeExecutor {
 				change_changes_trie_config: false,
@@ -829,9 +840,9 @@ mod tests {
 		let changes_trie_storage = InMemoryChangesTrieStorage::<Blake2Hasher, u64>::new();
 
 		let mut state_machine = StateMachine::new(
-			backend,
+			&backend,
 			Some(&changes_trie_storage),
-			NeverOffchainExt::new(),
+			None,
 			&mut overlayed_changes,
 			&DummyCodeExecutor {
 				change_changes_trie_config: false,
@@ -855,9 +866,9 @@ mod tests {
 		let changes_trie_storage = InMemoryChangesTrieStorage::<Blake2Hasher, u64>::new();
 
 		let mut state_machine = StateMachine::new(
-			backend,
+			&backend,
 			Some(&changes_trie_storage),
-			NeverOffchainExt::new(),
+			None,
 			&mut overlayed_changes,
 			&DummyCodeExecutor {
 				change_changes_trie_config: false,
@@ -948,8 +959,6 @@ mod tests {
 				&mut overlay,
 				backend,
 				Some(&changes_trie_storage),
-				NeverOffchainExt::new(),
-				None,
 			);
 			ext.clear_prefix(b"ab");
 		}
@@ -979,8 +988,6 @@ mod tests {
 			&mut overlay,
 			backend,
 			Some(&changes_trie_storage),
-			NeverOffchainExt::new(),
-			None,
 		);
 
 		ext.set_child_storage(
@@ -1067,9 +1074,9 @@ mod tests {
 		let changes_trie_storage = InMemoryChangesTrieStorage::<Blake2Hasher, u64>::new();
 
 		let mut state_machine = StateMachine::new(
-			backend,
+			&backend,
 			Some(&changes_trie_storage),
-			NeverOffchainExt::new(),
+			None,
 			&mut overlayed_changes,
 			&DummyCodeExecutor {
 				change_changes_trie_config: true,
@@ -1092,9 +1099,9 @@ mod tests {
 		let changes_trie_storage = InMemoryChangesTrieStorage::<Blake2Hasher, u64>::new();
 
 		let mut state_machine = StateMachine::new(
-			backend,
+			&backend,
 			Some(&changes_trie_storage),
-			NeverOffchainExt::new(),
+			None,
 			&mut overlayed_changes,
 			&DummyCodeExecutor {
 				change_changes_trie_config: true,

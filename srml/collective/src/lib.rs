@@ -383,7 +383,7 @@ mod tests {
 	use system::{EventRecord, Phase};
 	use hex_literal::hex;
 	use runtime_io::with_externalities;
-	use primitives::{H256, Blake2Hasher};
+	use primitives::H256;
 	use sr_primitives::{
 		Perbill, traits::{BlakeTwo256, IdentityLookup, Block as BlockT}, testing::Header, BuildStorage
 	};
@@ -439,7 +439,7 @@ mod tests {
 		}
 	);
 
-	fn make_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+	fn make_ext() -> runtime_io::TestExternalities {
 		GenesisConfig {
 			collective_Instance1: Some(collective::GenesisConfig {
 				members: vec![1, 2, 3],

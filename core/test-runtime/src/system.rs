@@ -322,10 +322,10 @@ mod tests {
 	use runtime_io::{with_externalities, TestExternalities};
 	use substrate_test_runtime_client::{AccountKeyring, Sr25519Keyring};
 	use crate::{Header, Transfer, WASM_BINARY};
-	use primitives::{Blake2Hasher, map};
+	use primitives::map;
 	use substrate_executor::WasmExecutor;
 
-	fn new_test_ext() -> TestExternalities<Blake2Hasher> {
+	fn new_test_ext() -> TestExternalities {
 		let authorities = vec![
 			Sr25519Keyring::Alice.to_raw_public(),
 			Sr25519Keyring::Bob.to_raw_public(),
@@ -340,7 +340,7 @@ mod tests {
 		], map![]))
 	}
 
-	fn block_import_works<F>(block_executor: F) where F: Fn(Block, &mut TestExternalities<Blake2Hasher>) {
+	fn block_import_works<F>(block_executor: F) where F: Fn(Block, &mut TestExternalities) {
 		let h = Header {
 			parent_hash: [69u8; 32].into(),
 			number: 1,
@@ -370,11 +370,15 @@ mod tests {
 	#[test]
 	fn block_import_works_wasm() {
 		block_import_works(|b, ext| {
-			WasmExecutor::new().call(ext, 8, &WASM_BINARY, "Core_execute_block", &b.encode()).unwrap();
+			WasmExecutor::new()
+				.call(ext, 8, &WASM_BINARY, "Core_execute_block", &b.encode())
+				.unwrap();
 		})
 	}
 
-	fn block_import_with_transaction_works<F>(block_executor: F) where F: Fn(Block, &mut TestExternalities<Blake2Hasher>) {
+	fn block_import_with_transaction_works<F>(block_executor: F)
+		where F: Fn(Block, &mut TestExternalities)
+	{
 		let mut b1 = Block {
 			header: Header {
 				parent_hash: [69u8; 32].into(),

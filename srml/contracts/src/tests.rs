@@ -41,7 +41,7 @@ use support::{
 	storage::child, StorageMap, StorageValue, traits::{Currency, Get},
 };
 use std::{cell::RefCell, sync::atomic::{AtomicUsize, Ordering}};
-use primitives::{storage::well_known_keys, Blake2Hasher};
+use primitives::storage::well_known_keys;
 use system::{self, EventRecord, Phase};
 
 mod contract {
@@ -275,7 +275,7 @@ impl ExtBuilder {
 		INSTANTIATION_FEE.with(|v| *v.borrow_mut() = self.instantiation_fee);
 		BLOCK_GAS_LIMIT.with(|v| *v.borrow_mut() = self.block_gas_limit);
 	}
-	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
+	pub fn build(self) -> runtime_io::TestExternalities {
 		self.set_associated_consts();
 		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		balances::GenesisConfig::<Test> {
