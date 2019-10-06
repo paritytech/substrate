@@ -77,8 +77,9 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	/// A handle to a `BlockImport`.
 	fn block_import(&self) -> Arc<Mutex<Self::BlockImport>>;
 
-	/// Returns the epoch data necessary for authoring.
-	fn epoch_data(&self, block: &B::Hash) -> Result<Self::EpochData, consensus_common::Error>;
+	/// Returns the epoch data necessary for authoring. For time-dependent epochs,
+	/// use the provided slot number as a canonical source of time.
+	fn epoch_data(&self, header: &B::Header, slot_number: u64) -> Result<Self::EpochData, consensus_common::Error>;
 
 	/// Returns the number of authorities given the epoch data.
 	fn authorities_len(&self, epoch_data: &Self::EpochData) -> usize;
@@ -95,7 +96,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	fn pre_digest_data(&self, slot_number: u64, claim: &Self::Claim) -> Vec<sr_primitives::DigestItem<B::Hash>>;
 
 	/// Returns a function which produces a `BlockImportParams`.
-	fn import_block(&self) -> Box<dyn Fn(
+	fn block_import_params(&self) -> Box<dyn Fn(
 		B::Header,
 		&B::Hash,
 		Vec<B::Extrinsic>,
@@ -120,7 +121,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		let (timestamp, slot_number, slot_duration) =
 			(slot_info.timestamp, slot_info.number, slot_info.duration);
 
-		let epoch_data = match self.epoch_data(&chain_head.hash()) {
+		let epoch_data = match self.epoch_data(&chain_head, slot_number) {
 			Ok(epoch_data) => epoch_data,
 			Err(err) => {
 				warn!("Unable to fetch epoch data at block {:?}: {:?}", chain_head.hash(), err);
@@ -198,7 +199,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			futures::future::Either::Right((Err(err), _)) => Err(err),
 		});
 
-		let import_block = self.import_block();
+		let block_import_params_maker = self.block_import_params();
 		let block_import = self.block_import();
 		let logging_target = self.logging_target();
 
@@ -208,6 +209,9 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			let slot_after_building = SignedDuration::default().slot_now(slot_duration);
 			if slot_after_building != slot_number {
 				info!("Discarding proposal for slot {}; block production took too long", slot_number);
+				// If the node was compiled with debug, tell the user to use release optimizations.
+				#[cfg(build_type="debug")]
+				info!("Recompile your node in `--release` mode to mitigate this problem.");
 				telemetry!(CONSENSUS_INFO; "slots.discarding_proposal_took_too_long";
 					"slot" => slot_number,
 				);
@@ -220,7 +224,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			let header_hash = header.hash();
 			let parent_hash = header.parent_hash().clone();
 
-			let import_block = import_block(
+			let block_import_params = block_import_params_maker(
 				header,
 				&header_hash,
 				body,
@@ -229,17 +233,17 @@ pub trait SimpleSlotWorker<B: BlockT> {
 
 			info!("Pre-sealed block for proposal at {}. Hash now {:?}, previously {:?}.",
 					header_num,
-					import_block.post_header().hash(),
+					block_import_params.post_header().hash(),
 					header_hash,
 			);
 
 			telemetry!(CONSENSUS_INFO; "slots.pre_sealed_block";
 				"header_num" => ?header_num,
-				"hash_now" => ?import_block.post_header().hash(),
+				"hash_now" => ?block_import_params.post_header().hash(),
 				"hash_previously" => ?header_hash,
 			);
 
-			if let Err(err) = block_import.lock().import_block(import_block, Default::default()) {
+			if let Err(err) = block_import.lock().import_block(block_import_params, Default::default()) {
 				warn!(target: logging_target,
 					"Error with block built on {:?}: {:?}",
 					parent_hash,
@@ -356,7 +360,8 @@ impl SlotData for u64 {
 }
 
 /// A slot duration. Create with `get_or_compute`.
-// The internal member should stay private here.
+// The internal member should stay private here to maintain invariants of
+// `get_or_compute`.
 #[derive(Clone, Copy, Debug, Encode, Decode, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub struct SlotDuration<T>(T);
 
@@ -394,7 +399,7 @@ impl<T: Clone> SlotDuration<T> {
 			Some(v) => <T as codec::Decode>::decode(&mut &v[..])
 				.map(SlotDuration)
 				.map_err(|_| {
-					::client::error::Error::Backend({
+					client::error::Error::Backend({
 						error!(target: "slots", "slot duration kept in invalid format");
 						format!("slot duration kept in invalid format")
 					})

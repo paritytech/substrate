@@ -21,11 +21,12 @@ substrate-telemetry = { path = "../../telemetry" }
 keystore = { package = "substrate-keystore", path = "../../keystore" }
 consensus_common = { package = "substrate-consensus-common", path = "../common" }
 sr-primitives = {  path = "../../sr-primitives" }
-futures-preview = { version = "=0.3.0-alpha.17", features = ["compat"] }
+futures-preview = { version = "0.3.0-alpha.19", features = ["compat"] }
 futures01 = { package = "futures", version = "0.1" }
-futures-timer = "0.2.1"
+futures-timer = "0.4.0"
 parking_lot = "0.9.0"
-log = "0.4"
+log = "0.4.8"
+derive_more = "0.15.0"
 
 [dev-dependencies]
 keyring = { package = "substrate-keyring", path = "../../keyring" }
@@ -33,6 +34,6 @@ substrate-executor = { path = "../../executor" }
 network = { package = "substrate-network", path = "../../network", features = ["test-helpers"]}
 service = { package = "substrate-service", path = "../../service" }
 test-client = { package = "substrate-test-runtime-client", path = "../../test-runtime/client" }
-tokio = "0.1.7"
-env_logger = "0.6"
-tempfile = "3.1"
+tokio = "0.1.22"
+env_logger = "0.6.2"
+tempfile = "3.1.0"

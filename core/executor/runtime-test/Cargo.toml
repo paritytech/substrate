@@ -17,5 +17,4 @@ wasm-builder-runner = { package = "substrate-wasm-builder-runner", version = "1.
 
 [features]
 default = [ "std" ]
-std = []
-no_std = []
+std = ["runtime_io/std", "sandbox/std", "rstd/std"]

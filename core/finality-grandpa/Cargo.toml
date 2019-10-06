@@ -6,21 +6,22 @@ edition = "2018"
 
 [dependencies]
 fork-tree = { path = "../../core/utils/fork-tree" }
-futures = "0.1"
-futures03 = { package = "futures-preview", version = "=0.3.0-alpha.17", features = ["compat"] }
-log = "0.4"
+futures = "0.1.29"
+futures03 = { package = "futures-preview", version = "0.3.0-alpha.19", features = ["compat"] }
+log = "0.4.8"
 parking_lot = "0.9.0"
-tokio-executor = "0.1.7"
+tokio-executor = "0.1.8"
 tokio-timer = "0.2.11"
-rand = "0.6"
+rand = "0.7.2"
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
 sr-primitives = {  path = "../sr-primitives" }
 consensus_common = { package = "substrate-consensus-common", path = "../consensus/common" }
 primitives = { package = "substrate-primitives",  path = "../primitives" }
 substrate-telemetry = { path = "../telemetry" }
 keystore = { package = "substrate-keystore", path = "../keystore" }
-serde_json = "1.0"
+serde_json = "1.0.40"
 client = { package = "substrate-client", path = "../client" }
+header-metadata = { package = "substrate-header-metadata", path = "../client/header-metadata" }
 inherents = { package = "substrate-inherents", path = "../../core/inherents" }
 network = { package = "substrate-network", path = "../network" }
 srml-finality-tracker = { path = "../../srml/finality-tracker" }
@@ -33,6 +34,6 @@ network = { package = "substrate-network", path = "../network", features = ["tes
 keyring = { package = "substrate-keyring", path = "../keyring" }
 test-client = { package = "substrate-test-runtime-client", path = "../test-runtime/client"}
 babe_primitives = { package = "substrate-consensus-babe-primitives", path = "../consensus/babe/primitives" }
-env_logger = "0.6"
-tokio = "0.1.17"
-tempfile = "3.1"
+env_logger = "0.6.2"
+tokio = "0.1.22"
+tempfile = "3.1.0"

@@ -25,6 +25,9 @@ use jsonrpc_core::futures::{Future, future};
 
 type Id = u64;
 
+/// Alias for a an implementation of `futures::future::Executor`.
+pub type TaskExecutor = Arc<dyn future::Executor<Box<dyn Future<Item = (), Error = ()> + Send>> + Send + Sync>;
+
 /// Generate unique ids for subscriptions.
 #[derive(Clone, Debug)]
 pub struct IdProvider {
@@ -53,12 +56,12 @@ impl IdProvider {
 pub struct Subscriptions {
 	next_id: IdProvider,
 	active_subscriptions: Arc<Mutex<HashMap<Id, oneshot::Sender<()>>>>,
-	executor: Arc<dyn future::Executor<Box<dyn Future<Item = (), Error = ()> + Send>> + Send + Sync>,
+	executor: TaskExecutor,
 }
 
 impl Subscriptions {
 	/// Creates new `Subscriptions` object.
-	pub fn new(executor: Arc<dyn future::Executor<Box<dyn Future<Item = (), Error = ()> + Send>> + Send + Sync>) -> Self {
+	pub fn new(executor: TaskExecutor) -> Self {
 		Subscriptions {
 			next_id: Default::default(),
 			active_subscriptions: Default::default(),

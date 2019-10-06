@@ -24,7 +24,7 @@
 
 use rstd::prelude::*;
 use support::{
-	StorageValue, decl_module, decl_storage, decl_event, traits::{ChangeMembers, InitializeMembers},
+	decl_module, decl_storage, decl_event, traits::{ChangeMembers, InitializeMembers},
 };
 use system::ensure_root;
 use sr_primitives::{traits::EnsureOrigin, weights::SimpleDispatchInfo};

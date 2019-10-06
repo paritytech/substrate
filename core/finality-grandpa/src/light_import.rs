@@ -24,12 +24,13 @@ use client::{
 	backend::{AuxStore, Backend, Finalizer},
 	blockchain::HeaderBackend,
 	error::Error as ClientError,
+	well_known_cache_keys,
 };
 use codec::{Encode, Decode};
 use consensus_common::{
-	import_queue::Verifier, well_known_cache_keys,
+	import_queue::Verifier,
 	BlockOrigin, BlockImport, FinalityProofImport, BlockImportParams, ImportResult, ImportedAux,
-	Error as ConsensusError,
+	BlockCheckParams, Error as ConsensusError,
 };
 use network::config::{BoxFinalityProofRequestBuilder, FinalityProofRequestBuilder};
 use sr_primitives::Justification;
@@ -141,10 +142,9 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> BlockImport<Block>
 
 	fn check_block(
 		&mut self,
-		hash: Block::Hash,
-		parent_hash: Block::Hash,
+		block: BlockCheckParams<Block>,
 	) -> Result<ImportResult, Self::Error> {
-		self.client.check_block(hash, parent_hash)
+		self.client.check_block(block)
 	}
 }
 
@@ -590,10 +590,9 @@ pub mod tests {
 
 		fn check_block(
 			&mut self,
-			hash: Block::Hash,
-			parent_hash: Block::Hash,
+			block: BlockCheckParams<Block>,
 		) -> Result<ImportResult, Self::Error> {
-			self.0.check_block(hash, parent_hash)
+			self.0.check_block(block)
 		}
 	}
 

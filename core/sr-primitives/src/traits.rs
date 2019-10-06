@@ -23,7 +23,7 @@ use runtime_io;
 use std::fmt::{Debug, Display};
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize, de::DeserializeOwned};
-use primitives::{self, Hasher, Blake2Hasher};
+use primitives::{self, Hasher, Blake2Hasher, TypeId};
 use crate::codec::{Codec, Encode, Decode, HasCompact};
 use crate::transaction_validity::{
 	ValidTransaction, TransactionValidity, TransactionValidityError, UnknownTransaction,
@@ -1123,12 +1123,6 @@ pub trait AccountIdConversion<AccountId>: Sized {
 	fn try_from_sub_account<S: Decode>(x: &AccountId) -> Option<(Self, S)>;
 }
 
-/// Provide a simple 4 byte identifier for a type.
-pub trait TypeId {
-	/// Simple 4 byte identifier.
-	const TYPE_ID: [u8; 4];
-}
-
 /// Format is TYPE_ID ++ encode(parachain ID) ++ 00.... where 00... is indefinite trailing zeroes to
 /// fill AccountId.
 impl<T: Encode + Decode + Default, Id: Encode + Decode + TypeId> AccountIdConversion<T> for Id {
@@ -1180,13 +1174,14 @@ macro_rules! count {
 /// just the bytes of the key.
 ///
 /// ```rust
-/// use sr_primitives::{impl_opaque_keys, key_types, KeyTypeId, app_crypto::{sr25519, ed25519}};
+/// use sr_primitives::{impl_opaque_keys, KeyTypeId, app_crypto::{sr25519, ed25519}};
+/// use primitives::testing::{SR25519, ED25519};
 ///
 /// impl_opaque_keys! {
 /// 	pub struct Keys {
-/// 		#[id(key_types::ED25519)]
+/// 		#[id(ED25519)]
 /// 		pub ed25519: ed25519::AppPublic,
-/// 		#[id(key_types::SR25519)]
+/// 		#[id(SR25519)]
 /// 		pub sr25519: sr25519::AppPublic,
 /// 	}
 /// }

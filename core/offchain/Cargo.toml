@@ -7,30 +7,30 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-bytes = "0.4"
+bytes = "0.4.12"
 client = { package = "substrate-client", path = "../../core/client" }
-fnv = "1.0"
+fnv = "1.0.6"
 futures01 = { package = "futures", version = "0.1" }
-futures-preview = "=0.3.0-alpha.17"
-futures-timer = "0.2.1"
-hyper = "0.12.33"
+futures-preview = "0.3.0-alpha.19"
+futures-timer = "0.4.0"
+hyper = "0.12.35"
 hyper-tls = "0.3.2"
-log = "0.4"
+log = "0.4.8"
 offchain-primitives = { package = "substrate-offchain-primitives", path = "./primitives" }
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
 parking_lot = "0.9.0"
 primitives = { package = "substrate-primitives", path = "../../core/primitives" }
-rand = "0.7"
+rand = "0.7.2"
 sr-primitives = { path = "../../core/sr-primitives" }
 transaction_pool = { package = "substrate-transaction-pool", path = "../../core/transaction-pool" }
 network = { package = "substrate-network", path = "../../core/network" }
 keystore = { package = "substrate-keystore", path = "../keystore" }
 
 [dev-dependencies]
-env_logger = "0.6"
+env_logger = "0.6.2"
 client-db = { package = "substrate-client-db", path = "../../core/client/db/", default-features = true }
 test-client = { package = "substrate-test-runtime-client", path = "../../core/test-runtime/client" }
-tokio = "0.1"
+tokio = "0.1.22"
 
 [features]
 default = []

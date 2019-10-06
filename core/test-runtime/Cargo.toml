@@ -6,8 +6,8 @@ edition = "2018"
 build = "build.rs"
 
 [dependencies]
-log = { version = "0.4", optional = true }
-serde = { version = "1.0", optional = true, features = ["derive"] }
+log = { version = "0.4.8", optional = true }
+serde = { version = "1.0.101", optional = true, features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 keyring = { package = "substrate-keyring", path = "../keyring", optional = true }
 substrate-client = { path = "../client", default-features = false }
@@ -27,7 +27,7 @@ trie-db = { version = "0.15.2", default-features = false }
 memory-db = { version = "0.15.2", default-features = false }
 offchain-primitives = { package = "substrate-offchain-primitives", path = "../offchain/primitives", default-features = false}
 executive = { package = "srml-executive", path = "../../srml/executive", default-features = false }
-cfg-if = "0.1.6"
+cfg-if = "0.1.10"
 srml-babe = { path = "../../srml/babe", default-features = false }
 srml-timestamp = { path = "../../srml/timestamp", default-features = false }
 srml-system = { path = "../../srml/system", default-features = false }
@@ -44,7 +44,6 @@ wasm-builder-runner = { package = "substrate-wasm-builder-runner", version = "1.
 default = [
 	"std",
 ]
-no_std = []
 std = [
 	"log",
 	"serde",

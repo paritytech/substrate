@@ -7,54 +7,55 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-bytes = "0.4"
-derive_more = "0.14.0"
-either = "1.5.2"
-log = "0.4"
+bytes = "0.4.12"
+derive_more = "0.15.0"
+either = "1.5.3"
+log = "0.4.8"
 parking_lot = "0.9.0"
-bitflags = "1.0"
-fnv = "1.0"
-futures = "0.1.17"
-futures03 = { package = "futures-preview", version = "=0.3.0-alpha.17", features = ["compat"] }
-futures-timer = "0.2.1"
-linked-hash-map = "0.5"
+bitflags = "1.2.0"
+fnv = "1.0.6"
+futures = "0.1.29"
+futures03 = { package = "futures-preview", version = "0.3.0-alpha.19", features = ["compat"] }
+futures-timer = "0.4.0"
+linked-hash-map = "0.5.2"
 linked_hash_set = "0.1.3"
-lru-cache = "0.1.1"
-rustc-hex = "2.0"
-rand = "0.6"
+lru-cache = "0.1.2"
+rustc-hex = "2.0.1"
+rand = "0.7.2"
 libp2p = { version = "0.12.0", default-features = false, features = ["secp256k1", "libp2p-websocket"] }
 fork-tree = { path = "../../core/utils/fork-tree" }
 consensus = { package = "substrate-consensus-common", path = "../../core/consensus/common" }
 client = { package = "substrate-client", path = "../../core/client" }
+header_metadata = { package = "substrate-header-metadata", path = "../../core/client/header-metadata" }
 sr-primitives = { path = "../../core/sr-primitives" }
 primitives = { package = "substrate-primitives", path = "../../core/primitives" }
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
 peerset = { package = "substrate-peerset", path = "../../core/peerset" }
-serde = { version = "1.0.70", features = ["derive"] }
-serde_json = "1.0.24"
-slog = { version = "^2", features = ["nested-values"] }
+serde = { version = "1.0.101", features = ["derive"] }
+serde_json = "1.0.40"
+slog = { version = "2.5.2", features = ["nested-values"] }
 slog_derive = "0.1.1"
-smallvec = "0.6"
-tokio-io = "0.1"
-tokio = { version = "0.1.11", optional = true }
-unsigned-varint = { version = "0.2.1", features = ["codec"] }
+smallvec = "0.6.10"
+tokio-io = "0.1.12"
+tokio = { version = "0.1.22", optional = true }
+unsigned-varint = { version = "0.2.2", features = ["codec"] }
 keyring = { package = "substrate-keyring", path = "../../core/keyring", optional = true }
 test_client = { package = "substrate-test-client", path = "../../core/test-client", optional = true }
 test-client = { package = "substrate-test-runtime-client", path = "../../core/test-runtime/client", optional = true }
 erased-serde = "0.3.9"
-void = "1.0"
-zeroize = "0.9.0"
+void = "1.0.2"
+zeroize = "0.10.1"
 babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../consensus/babe/primitives" }
 
 [dev-dependencies]
-env_logger = { version = "0.6" }
+env_logger = "0.6.2"
 keyring = { package = "substrate-keyring", path = "../../core/keyring" }
-quickcheck = "0.8.5"
-rand = "0.6.5"
+quickcheck = "0.9.0"
+rand = "0.7.2"
 test-client = { package = "substrate-test-runtime-client", path = "../../core/test-runtime/client" }
 test_runtime = { package = "substrate-test-runtime", path = "../../core/test-runtime" }
-tempdir = "0.3"
-tokio = "0.1.11"
+tempdir = "0.3.7"
+tokio = "0.1.22"
 
 [features]
 default = []

@@ -20,7 +20,7 @@ pub use rstd::{mem, slice};
 
 use core::{intrinsics, panic::PanicInfo};
 use rstd::{vec::Vec, cell::Cell, convert::TryInto};
-use primitives::{offchain, Blake2Hasher};
+use primitives::offchain;
 use codec::Decode;
 
 #[cfg(not(feature = "no_panic_handler"))]
@@ -28,19 +28,8 @@ use codec::Decode;
 #[no_mangle]
 pub fn panic(info: &PanicInfo) -> ! {
 	unsafe {
-		#[cfg(feature = "wasm-nice-panic-message")]
-		{
-			let message = rstd::alloc::format!("{}", info);
-			extern_functions_host_impl::ext_print_utf8(message.as_ptr() as *const u8, message.len() as u32);
-		}
-		#[cfg(not(feature = "wasm-nice-panic-message"))]
-		{
-			if let Some(loc) = info.location() {
-				extern_functions_host_impl::ext_print_utf8(loc.file().as_ptr() as *const u8, loc.file().len() as u32);
-				extern_functions_host_impl::ext_print_num(loc.line() as u64);
-				extern_functions_host_impl::ext_print_num(loc.column() as u64);
-			}
-		}
+		let message = rstd::alloc::format!("{}", info);
+		extern_functions_host_impl::ext_print_utf8(message.as_ptr() as *const u8, message.len() as u32);
 		intrinsics::abort()
 	}
 }
@@ -743,13 +732,13 @@ impl StorageApi for () {
 	}
 
 
-	fn blake2_256_trie_root(input: Vec<(Vec<u8>, Vec<u8>)>) -> H256 {
+	fn blake2_256_trie_root(_input: Vec<(Vec<u8>, Vec<u8>)>) -> H256 {
 		unimplemented!()
 	}
 
 	fn blake2_256_ordered_trie_root(input: Vec<Vec<u8>>) -> H256 {
-		let mut values = Vec::new();
-		let mut lengths = Vec::new();
+		let mut values = Vec::with_capacity(input.len());
+		let mut lengths = Vec::with_capacity(input.len());
 		for v in input {
 			values.extend_from_slice(&v);
 			lengths.push((v.len() as u32).to_le());
@@ -1202,4 +1191,3 @@ unsafe fn from_raw_parts(ptr: *mut u8, len: u32) -> Option<Vec<u8>> {
 }
 
 impl Api for () {}
-

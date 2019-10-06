@@ -20,7 +20,6 @@ use std::iter;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::net::Ipv4Addr;
 use std::time::Duration;
-use std::collections::HashMap;
 use log::info;
 use futures::{Future, Stream, Poll};
 use tempdir::TempDir;
@@ -36,17 +35,16 @@ use service::{
 use network::{multiaddr, Multiaddr};
 use network::config::{NetworkConfiguration, TransportConfig, NodeKeyConfig, Secret, NonReservedPeerMode};
 use sr_primitives::{generic::BlockId, traits::Block as BlockT};
-use consensus::{BlockImportParams, BlockImport};
 
 /// Maximum duration of single wait call.
 const MAX_WAIT_TIME: Duration = Duration::from_secs(60 * 3);
 
-struct TestNet<G, F, L, U> {
+struct TestNet<G, E, F, L, U> {
 	runtime: Runtime,
 	authority_nodes: Vec<(usize, SyncService<F>, U, Multiaddr)>,
 	full_nodes: Vec<(usize, SyncService<F>, U, Multiaddr)>,
 	light_nodes: Vec<(usize, SyncService<L>, Multiaddr)>,
-	chain_spec: ChainSpec<G>,
+	chain_spec: ChainSpec<G, E>,
 	base_port: u16,
 	nodes: usize,
 }
@@ -81,7 +79,7 @@ impl<T: Future<Item=(), Error=service::Error>> Future for SyncService<T> {
 	}
 }
 
-impl<G, F, L, U> TestNet<G, F, L, U>
+impl<G, E, F, L, U> TestNet<G, E, F, L, U>
 where F: Send + 'static, L: Send +'static, U: Clone + Send + 'static
 {
 	pub fn run_until_all_full<FP, LP>(
@@ -126,14 +124,14 @@ where F: Send + 'static, L: Send +'static, U: Clone + Send + 'static
 	}
 }
 
-fn node_config<G> (
+fn node_config<G, E: Clone> (
 	index: usize,
-	spec: &ChainSpec<G>,
+	spec: &ChainSpec<G, E>,
 	role: Roles,
 	key_seed: Option<String>,
 	base_port: u16,
 	root: &TempDir,
-) -> Configuration<(), G>
+) -> Configuration<(), G, E>
 {
 	let root = root.path().join(format!("node-{}", index));
 
@@ -195,18 +193,22 @@ fn node_config<G> (
 	}
 }
 
-impl<G, F, L, U> TestNet<G, F, L, U> where
+impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 	F: AbstractService,
 	L: AbstractService,
+	E: Clone,
 {
 	fn new(
 		temp: &TempDir,
-		spec: ChainSpec<G>,
-		full: impl Iterator<Item = impl FnOnce(Configuration<(), G>) -> Result<(F, U), Error>>,
-		light: impl Iterator<Item = impl FnOnce(Configuration<(), G>) -> Result<L, Error>>,
-		authorities: impl Iterator<Item = (String, impl FnOnce(Configuration<(), G>) -> Result<(F, U), Error>)>,
+		spec: ChainSpec<G, E>,
+		full: impl Iterator<Item = impl FnOnce(Configuration<(), G, E>) -> Result<(F, U), Error>>,
+		light: impl Iterator<Item = impl FnOnce(Configuration<(), G, E>) -> Result<L, Error>>,
+		authorities: impl Iterator<Item = (
+			String,
+			impl FnOnce(Configuration<(), G, E>) -> Result<(F, U), Error>
+		)>,
 		base_port: u16
-	) -> TestNet<G, F, L, U> {
+	) -> TestNet<G, E, F, L, U> {
 		let _ = env_logger::try_init();
 		fdlimit::raise_fd_limit();
 		let runtime = Runtime::new().expect("Error creating tokio runtime");
@@ -226,9 +228,9 @@ impl<G, F, L, U> TestNet<G, F, L, U> where
 	fn insert_nodes(
 		&mut self,
 		temp: &TempDir,
-		full: impl Iterator<Item = impl FnOnce(Configuration<(), G>) -> Result<(F, U), Error>>,
-		light: impl Iterator<Item = impl FnOnce(Configuration<(), G>) -> Result<L, Error>>,
-		authorities: impl Iterator<Item = (String, impl FnOnce(Configuration<(), G>) -> Result<(F, U), Error>)>
+		full: impl Iterator<Item = impl FnOnce(Configuration<(), G, E>) -> Result<(F, U), Error>>,
+		light: impl Iterator<Item = impl FnOnce(Configuration<(), G, E>) -> Result<L, Error>>,
+		authorities: impl Iterator<Item = (String, impl FnOnce(Configuration<(), G, E>) -> Result<(F, U), Error>)>
 	) {
 		let executor = self.runtime.executor();
 
@@ -276,14 +278,29 @@ impl<G, F, L, U> TestNet<G, F, L, U> where
 	}
 }
 
-pub fn connectivity<G, Fb, F, Lb, L>(spec: ChainSpec<G>, full_builder: Fb, light_builder: Lb) where
-	Fb: Fn(Configuration<(), G>) -> Result<F, Error>,
+pub fn connectivity<G, E, Fb, F, Lb, L>(
+	spec: ChainSpec<G, E>,
+	full_builder: Fb,
+	light_builder: Lb,
+	light_node_interconnectivity: bool, // should normally be false, unless the light nodes
+	// aren't actually light.
+) where
+	E: Clone,
+	Fb: Fn(Configuration<(), G, E>) -> Result<F, Error>,
 	F: AbstractService,
-	Lb: Fn(Configuration<(), G>) -> Result<L, Error>,
+	Lb: Fn(Configuration<(), G, E>) -> Result<L, Error>,
 	L: AbstractService,
 {
 	const NUM_FULL_NODES: usize = 5;
 	const NUM_LIGHT_NODES: usize = 5;
+
+	let expected_full_connections = NUM_FULL_NODES - 1 + NUM_LIGHT_NODES;
+	let expected_light_connections = if light_node_interconnectivity {
+		expected_full_connections
+	} else {
+		NUM_FULL_NODES
+	};
+
 	{
 		let temp = TempDir::new("substrate-connectivity-test").expect("Error creating test dir");
 		let runtime = {
@@ -307,11 +324,14 @@ pub fn connectivity<G, Fb, F, Lb, L>(spec: ChainSpec<G>, full_builder: Fb, light
 				service.get().network().add_reserved_peer(first_address.to_string())
 					.expect("Error adding reserved peer");
 			}
+
 			network.run_until_all_full(
-				|_index, service| service.get().network().num_connected() == NUM_FULL_NODES - 1
-					+ NUM_LIGHT_NODES,
-				|_index, service| service.get().network().num_connected() == NUM_FULL_NODES,
+				move |_index, service| service.get().network().num_connected()
+					== expected_full_connections,
+				move |_index, service| service.get().network().num_connected()
+					== expected_light_connections,
 			);
+
 			network.runtime
 		};
 
@@ -350,30 +370,33 @@ pub fn connectivity<G, Fb, F, Lb, L>(spec: ChainSpec<G>, full_builder: Fb, light
 					address = node_id.clone();
 				}
 			}
+
 			network.run_until_all_full(
-				|_index, service| service.get().network().num_connected() == NUM_FULL_NODES - 1
-					+ NUM_LIGHT_NODES,
-				|_index, service| service.get().network().num_connected() == NUM_FULL_NODES,
+				move |_index, service| service.get().network().num_connected()
+					== expected_full_connections,
+				move |_index, service| service.get().network().num_connected()
+					== expected_light_connections,
 			);
 		}
 		temp.close().expect("Error removing temp dir");
 	}
 }
 
-pub fn sync<G, Fb, F, Lb, L, B, E, U>(
-	spec: ChainSpec<G>,
+pub fn sync<G, E, Fb, F, Lb, L, B, ExF, U>(
+	spec: ChainSpec<G, E>,
 	full_builder: Fb,
 	light_builder: Lb,
-	mut block_factory: B,
-	mut extrinsic_factory: E
+	mut make_block_and_import: B,
+	mut extrinsic_factory: ExF
 ) where
-	Fb: Fn(Configuration<(), G>) -> Result<(F, U), Error>,
+	Fb: Fn(Configuration<(), G, E>) -> Result<(F, U), Error>,
 	F: AbstractService,
-	Lb: Fn(Configuration<(), G>) -> Result<L, Error>,
+	Lb: Fn(Configuration<(), G, E>) -> Result<L, Error>,
 	L: AbstractService,
-	B: FnMut(&F, &U) -> BlockImportParams<F::Block>,
-	E: FnMut(&F, &U) -> <F::Block as BlockT>::Extrinsic,
+	B: FnMut(&F, &mut U),
+	ExF: FnMut(&F, &U) -> <F::Block as BlockT>::Extrinsic,
 	U: Clone + Send + 'static,
+	E: Clone,
 {
 	const NUM_FULL_NODES: usize = 10;
 	// FIXME: BABE light client support is currently not working.
@@ -392,15 +415,13 @@ pub fn sync<G, Fb, F, Lb, L, B, E, U>(
 	);
 	info!("Checking block sync");
 	let first_address = {
-		let first_service = &network.full_nodes[0].1;
-		let first_user_data = &network.full_nodes[0].2;
-		let mut client = first_service.get().client();
+		let &mut (_, ref first_service, ref mut first_user_data, _) = &mut network.full_nodes[0];
 		for i in 0 .. NUM_BLOCKS {
 			if i % 128 == 0 {
-				info!("Generating #{}", i);
+				info!("Generating #{}", i + 1);
 			}
-			let import_data = block_factory(&first_service.get(), first_user_data);
-			client.import_block(import_data, HashMap::new()).expect("Error importing test block");
+
+			make_block_and_import(&first_service.get(), first_user_data);
 		}
 		network.full_nodes[0].3.clone()
 	};
@@ -424,23 +445,24 @@ pub fn sync<G, Fb, F, Lb, L, B, E, U>(
 	let first_user_data = &network.full_nodes[0].2;
 	let best_block = BlockId::number(first_service.get().client().info().chain.best_number);
 	let extrinsic = extrinsic_factory(&first_service.get(), first_user_data);
-	first_service.get().transaction_pool().submit_one(&best_block, extrinsic).unwrap();
+	futures03::executor::block_on(first_service.get().transaction_pool().submit_one(&best_block, extrinsic)).unwrap();
 	network.run_until_all_full(
 		|_index, service| service.get().transaction_pool().ready().count() == 1,
 		|_index, _service| true,
 	);
 }
 
-pub fn consensus<G, Fb, F, Lb, L>(
-	spec: ChainSpec<G>,
+pub fn consensus<G, E, Fb, F, Lb, L>(
+	spec: ChainSpec<G, E>,
 	full_builder: Fb,
 	light_builder: Lb,
 	authorities: impl IntoIterator<Item = String>
 ) where
-	Fb: Fn(Configuration<(), G>) -> Result<F, Error>,
+	Fb: Fn(Configuration<(), G, E>) -> Result<F, Error>,
 	F: AbstractService,
-	Lb: Fn(Configuration<(), G>) -> Result<L, Error>,
+	Lb: Fn(Configuration<(), G, E>) -> Result<L, Error>,
 	L: AbstractService,
+	E: Clone,
 {
 	const NUM_FULL_NODES: usize = 10;
 	const NUM_LIGHT_NODES: usize = 10;

@@ -159,7 +159,7 @@ pub enum NativeOrEncoded<R> {
 #[cfg(feature = "std")]
 impl<R: codec::Encode> ::std::fmt::Debug for NativeOrEncoded<R> {
 	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-		self.as_encoded().as_ref().fmt(f)
+		hexdisplay::HexDisplay::from(&self.as_encoded().as_ref()).fmt(f)
 	}
 }
 
@@ -219,3 +219,8 @@ impl codec::Decode for NeverNativeValue {
 	}
 }
 
+/// Provide a simple 4 byte identifier for a type.
+pub trait TypeId {
+	/// Simple 4 byte identifier.
+	const TYPE_ID: [u8; 4];
+}

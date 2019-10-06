@@ -8,12 +8,12 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-futures-preview = "=0.3.0-alpha.17"
+futures-preview = "0.3.0-alpha.19"
 libp2p = { version = "0.12.0", default-features = false }
-linked-hash-map = "0.5"
-log = "0.4"
+linked-hash-map = "0.5.2"
+log = "0.4.8"
 lru-cache = "0.1.2"
-serde_json = "1.0.24"
+serde_json = "1.0.40"
 
 [dev-dependencies]
-rand = "0.6"
+rand = "0.7.2"

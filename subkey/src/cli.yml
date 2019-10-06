@@ -23,7 +23,7 @@ args:
       long: network
       takes_value: true
       required: false
-      help: Specify a network. One of substrate (default), polkadot and kusama.
+      help: Specify a network. One of substrate (default), polkadot, kusama, or dothereum.
 subcommands:
   - generate:
       about: Generate a random account

@@ -18,10 +18,12 @@
 
 #![cfg(test)]
 
-use crate::{elect, ACCURACY, PhragmenResult};
-use sr_primitives::traits::{Convert, Member, SaturatedConversion};
+use crate::{elect, PhragmenResult, PhragmenAssignment};
+use sr_primitives::{
+	assert_eq_error_rate, Perbill,
+	traits::{Convert, Member, SaturatedConversion}
+};
 use rstd::collections::btree_map::BTreeMap;
-use support::assert_eq_error_rate;
 
 pub(crate) struct TestCurrencyToVote;
 impl Convert<Balance, u64> for TestCurrencyToVote {
@@ -69,7 +71,7 @@ pub(crate) type AccountId = u64;
 
 #[derive(Debug, Clone)]
 pub(crate) struct _PhragmenResult<A: Clone> {
-	pub winners: Vec<A>,
+	pub winners: Vec<(A, Balance)>,
 	pub assignments: Vec<(A, Vec<_PhragmenAssignment<A>>)>
 }
 
@@ -84,7 +86,7 @@ pub(crate) fn elect_float<A, FS>(
 	A: Default + Ord + Member + Copy,
 	for<'r> FS: Fn(&'r A) -> Balance,
 {
-	let mut elected_candidates: Vec<A>;
+	let mut elected_candidates: Vec<(A, Balance)>;
 	let mut assigned: Vec<(A, Vec<_PhragmenAssignment<A>>)>;
 	let mut c_idx_cache = BTreeMap::<A, usize>::new();
 	let num_voters = initial_candidates.len() + initial_voters.len();
@@ -178,7 +180,7 @@ pub(crate) fn elect_float<A, FS>(
 				}
 			}
 
-			elected_candidates.push(winner.who.clone());
+			elected_candidates.push((winner.who.clone(), winner.approval_stake as Balance));
 		} else {
 			break
 		}
@@ -187,7 +189,7 @@ pub(crate) fn elect_float<A, FS>(
 	for n in &mut voters {
 		let mut assignment = (n.who.clone(), vec![]);
 		for e in &mut n.edges {
-			if let Some(c) = elected_candidates.iter().cloned().find(|c| *c == e.who) {
+			if let Some(c) = elected_candidates.iter().cloned().map(|(c, _)| c).find(|c| *c == e.who) {
 				if c != n.who {
 					let ratio = e.load / n.load;
 					assignment.1.push((e.who.clone(), ratio));
@@ -343,6 +345,14 @@ pub(crate) fn create_stake_of(stakes: &[(AccountId, Balance)])
 	Box::new(stake_of)
 }
 
+
+pub fn check_assignments(assignments: Vec<(AccountId, Vec<PhragmenAssignment<AccountId>>)>) {
+	for (_, a) in assignments {
+		let sum: u32 = a.iter().map(|(_, p)| p.deconstruct()).sum();
+		assert_eq_error_rate!(sum, Perbill::accuracy(), 5);
+	}
+}
+
 pub(crate) fn run_and_compare(
 	candidates: Vec<AccountId>,
 	voters: Vec<(AccountId, Vec<AccountId>)>,
@@ -375,9 +385,13 @@ pub(crate) fn run_and_compare(
 
 	for (nominator, assigned) in assignments.clone() {
 		if let Some(float_assignments) = truth_value.assignments.iter().find(|x| x.0 == nominator) {
-			for (candidate, ratio) in assigned {
+			for (candidate, per_thingy) in assigned {
 				if let Some(float_assignment) = float_assignments.1.iter().find(|x| x.0 == candidate ) {
-					assert_eq_error_rate!((float_assignment.1 * ACCURACY as f64).round() as u128, ratio, 1);
+					assert_eq_error_rate!(
+						Perbill::from_fraction(float_assignment.1).deconstruct(),
+						per_thingy.deconstruct(),
+						1,
+					);
 				} else {
 					panic!("candidate mismatch. This should never happen.")
 				}
@@ -386,6 +400,8 @@ pub(crate) fn run_and_compare(
 			panic!("nominator mismatch. This should never happen.")
 		}
 	}
+
+	check_assignments(assignments);
 }
 
 pub(crate) fn build_support_map<FS>(
@@ -397,7 +413,7 @@ pub(crate) fn build_support_map<FS>(
 	let mut supports = <_SupportMap<AccountId>>::new();
 	result.winners
 		.iter()
-		.map(|e| (e, stake_of(e) as f64))
+		.map(|(e, _)| (e, stake_of(e) as f64))
 		.for_each(|(e, s)| {
 			let item = _Support { own: s, total: s, ..Default::default() };
 			supports.insert(e.clone(), item);
@@ -414,6 +430,5 @@ pub(crate) fn build_support_map<FS>(
 			*r = other_stake;
 		}
 	}
-
 	supports
 }

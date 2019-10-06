@@ -21,12 +21,11 @@ use assert_matches::assert_matches;
 use codec::Encode;
 use transaction_pool::{
 	txpool::Pool,
-	ChainApi,
+	FullChainApi,
 };
-use futures::Stream;
 use primitives::{
-	H256, blake2_256, hexdisplay::HexDisplay, traits::BareCryptoStore, testing::KeyStore,
-	ed25519, crypto::{key_types, Pair},
+	H256, blake2_256, hexdisplay::HexDisplay, traits::BareCryptoStore,
+	testing::{ED25519, SR25519, KeyStore}, ed25519, crypto::Pair
 };
 use test_client::{
 	self, AccountKeyring, runtime::{Extrinsic, Transfer, SessionKeys}, DefaultTestClientBuilderExt,
@@ -51,7 +50,7 @@ fn submit_transaction_should_not_cause_error() {
 	let keystore = KeyStore::new();
 	let p = Author {
 		client: client.clone(),
-		pool: Arc::new(Pool::new(Default::default(), ChainApi::new(client))),
+		pool: Arc::new(Pool::new(Default::default(), FullChainApi::new(client))),
 		subscriptions: Subscriptions::new(Arc::new(runtime.executor())),
 		keystore: keystore.clone(),
 	};
@@ -59,11 +58,11 @@ fn submit_transaction_should_not_cause_error() {
 	let h: H256 = blake2_256(&xt).into();
 
 	assert_matches!(
-		AuthorApi::submit_extrinsic(&p, xt.clone().into()),
+		AuthorApi::submit_extrinsic(&p, xt.clone().into()).wait(),
 		Ok(h2) if h == h2
 	);
 	assert!(
-		AuthorApi::submit_extrinsic(&p, xt.into()).is_err()
+		AuthorApi::submit_extrinsic(&p, xt.into()).wait().is_err()
 	);
 }
 
@@ -74,7 +73,7 @@ fn submit_rich_transaction_should_not_cause_error() {
 	let keystore = KeyStore::new();
 	let p = Author {
 		client: client.clone(),
-		pool: Arc::new(Pool::new(Default::default(), ChainApi::new(client.clone()))),
+		pool: Arc::new(Pool::new(Default::default(), FullChainApi::new(client.clone()))),
 		subscriptions: Subscriptions::new(Arc::new(runtime.executor())),
 		keystore: keystore.clone(),
 	};
@@ -82,11 +81,11 @@ fn submit_rich_transaction_should_not_cause_error() {
 	let h: H256 = blake2_256(&xt).into();
 
 	assert_matches!(
-		AuthorApi::submit_extrinsic(&p, xt.clone().into()),
+		AuthorApi::submit_extrinsic(&p, xt.clone().into()).wait(),
 		Ok(h2) if h == h2
 	);
 	assert!(
-		AuthorApi::submit_extrinsic(&p, xt.into()).is_err()
+		AuthorApi::submit_extrinsic(&p, xt.into()).wait().is_err()
 	);
 }
 
@@ -95,7 +94,7 @@ fn should_watch_extrinsic() {
 	//given
 	let mut runtime = runtime::Runtime::new().unwrap();
 	let client = Arc::new(test_client::new());
-	let pool = Arc::new(Pool::new(Default::default(), ChainApi::new(client.clone())));
+	let pool = Arc::new(Pool::new(Default::default(), FullChainApi::new(client.clone())));
 	let keystore = KeyStore::new();
 	let p = Author {
 		client,
@@ -120,7 +119,7 @@ fn should_watch_extrinsic() {
 		};
 		tx.into_signed_tx()
 	};
-	AuthorApi::submit_extrinsic(&p, replacement.encode().into()).unwrap();
+	AuthorApi::submit_extrinsic(&p, replacement.encode().into()).wait().unwrap();
 	let (res, data) = runtime.block_on(data.into_future()).unwrap();
 	assert_eq!(
 		res,
@@ -137,7 +136,7 @@ fn should_watch_extrinsic() {
 fn should_return_pending_extrinsics() {
 	let runtime = runtime::Runtime::new().unwrap();
 	let client = Arc::new(test_client::new());
-	let pool = Arc::new(Pool::new(Default::default(), ChainApi::new(client.clone())));
+	let pool = Arc::new(Pool::new(Default::default(), FullChainApi::new(client.clone())));
 	let keystore = KeyStore::new();
 	let p = Author {
 		client,
@@ -146,7 +145,7 @@ fn should_return_pending_extrinsics() {
 		keystore: keystore.clone(),
 	};
 	let ex = uxt(AccountKeyring::Alice, 0);
-	AuthorApi::submit_extrinsic(&p, ex.encode().into()).unwrap();
+	AuthorApi::submit_extrinsic(&p, ex.encode().into()).wait().unwrap();
  	assert_matches!(
 		p.pending_extrinsics(),
 		Ok(ref expected) if *expected == vec![Bytes(ex.encode())]
@@ -157,7 +156,7 @@ fn should_return_pending_extrinsics() {
 fn should_remove_extrinsics() {
 	let runtime = runtime::Runtime::new().unwrap();
 	let client = Arc::new(test_client::new());
-	let pool = Arc::new(Pool::new(Default::default(), ChainApi::new(client.clone())));
+	let pool = Arc::new(Pool::new(Default::default(), FullChainApi::new(client.clone())));
 	let keystore = KeyStore::new();
 	let p = Author {
 		client,
@@ -166,11 +165,11 @@ fn should_remove_extrinsics() {
 		keystore: keystore.clone(),
 	};
 	let ex1 = uxt(AccountKeyring::Alice, 0);
-	p.submit_extrinsic(ex1.encode().into()).unwrap();
+	p.submit_extrinsic(ex1.encode().into()).wait().unwrap();
 	let ex2 = uxt(AccountKeyring::Alice, 1);
-	p.submit_extrinsic(ex2.encode().into()).unwrap();
+	p.submit_extrinsic(ex2.encode().into()).wait().unwrap();
 	let ex3 = uxt(AccountKeyring::Bob, 0);
-	let hash3 = p.submit_extrinsic(ex3.encode().into()).unwrap();
+	let hash3 = p.submit_extrinsic(ex3.encode().into()).wait().unwrap();
 	assert_eq!(pool.status().ready, 3);
 
 	// now remove all 3
@@ -190,7 +189,7 @@ fn should_insert_key() {
 	let keystore = KeyStore::new();
 	let p = Author {
 		client: client.clone(),
-		pool: Arc::new(Pool::new(Default::default(), ChainApi::new(client))),
+		pool: Arc::new(Pool::new(Default::default(), FullChainApi::new(client))),
 		subscriptions: Subscriptions::new(Arc::new(runtime.executor())),
 		keystore: keystore.clone(),
 	};
@@ -198,13 +197,13 @@ fn should_insert_key() {
 	let suri = "//Alice";
 	let key_pair = ed25519::Pair::from_string(suri, None).expect("Generates keypair");
 	p.insert_key(
-		String::from_utf8(key_types::ED25519.0.to_vec()).expect("Keytype is a valid string"),
+		String::from_utf8(ED25519.0.to_vec()).expect("Keytype is a valid string"),
 		suri.to_string(),
 		key_pair.public().0.to_vec().into(),
 	).expect("Insert key");
 
 	let store_key_pair = keystore.read()
-		.ed25519_key_pair(key_types::ED25519, &key_pair.public()).expect("Key exists in store");
+		.ed25519_key_pair(ED25519, &key_pair.public()).expect("Key exists in store");
 
 	assert_eq!(key_pair.public(), store_key_pair.public());
 }
@@ -216,7 +215,7 @@ fn should_rotate_keys() {
 	let client = Arc::new(test_client::TestClientBuilder::new().set_keystore(keystore.clone()).build());
 	let p = Author {
 		client: client.clone(),
-		pool: Arc::new(Pool::new(Default::default(), ChainApi::new(client))),
+		pool: Arc::new(Pool::new(Default::default(), FullChainApi::new(client))),
 		subscriptions: Subscriptions::new(Arc::new(runtime.executor())),
 		keystore: keystore.clone(),
 	};
@@ -227,12 +226,12 @@ fn should_rotate_keys() {
 		.expect("SessionKeys decode successfully");
 
 	let ed25519_key_pair = keystore.read().ed25519_key_pair(
-		key_types::ED25519,
+		ED25519,
 		&session_keys.ed25519.clone().into(),
 	).expect("ed25519 key exists in store");
 
 	let sr25519_key_pair = keystore.read().sr25519_key_pair(
-		key_types::SR25519,
+		SR25519,
 		&session_keys.sr25519.clone().into(),
 	).expect("sr25519 key exists in store");
 

@@ -1,0 +1,17 @@
+[package]
+name = "srml-staking-reward-curve"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { version = "1.0", features = [ "full", "visit" ] }
+quote = "1.0"
+proc-macro2 = "1.0.4"
+proc-macro-crate = "0.1.4"
+
+[dev-dependencies]
+sr-primitives = { path = "../../../core/sr-primitives" }

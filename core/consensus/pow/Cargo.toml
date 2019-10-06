@@ -14,5 +14,5 @@ srml-timestamp = { path = "../../../srml/timestamp" }
 inherents = { package = "substrate-inherents", path = "../../inherents" }
 pow-primitives = { package = "substrate-consensus-pow-primitives", path = "primitives" }
 consensus-common = { package = "substrate-consensus-common", path = "../common" }
-log = "0.4"
-futures-preview = { version = "=0.3.0-alpha.17", features = ["compat"] }
+log = "0.4.8"
+futures-preview = { version = "0.3.0-alpha.19", features = ["compat"] }
