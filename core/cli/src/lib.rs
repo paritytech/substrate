@@ -423,7 +423,7 @@ impl<'a> ParseAndPreparePurge<'a> {
 		let db_path = config.database_path;
 
 		if !self.params.yes {
-			print!("Are you sure to remove {:?}? (y/n)", &db_path);
+			print!("Are you sure to remove {:?}? [y/N]: ", &db_path);
 			stdout().flush().expect("failed to flush stdout");
 
 			let mut input = String::new();
