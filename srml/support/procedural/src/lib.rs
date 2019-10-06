@@ -26,6 +26,7 @@ mod storage;
 mod construct_runtime;
 
 use proc_macro::TokenStream;
+use proc_macro2::{TokenStream as TokenStream2};
 
 /// Declares strongly-typed wrappers around codec-compatible types in storage.
 ///
