@@ -73,6 +73,7 @@ fn as_u<U: num_traits::Bounded, I: TryInto<U>>(i: I) -> U {
 	}
 }
 
+#[cfg_attr(any(test, feature = "test"), derive(PartialEq, Debug))]
 /// Prunning result to be able to proceed
 /// with further update if the value needs it.
 pub enum PruneResult {

@@ -98,6 +98,7 @@ impl<'a> Clone for SerializedBuff<'a> {
 		}
 	}
 }
+
 /// Serialized specific behavior.
 pub trait SerializedConfig {
 	/// encoded empty slice
@@ -105,9 +106,14 @@ pub trait SerializedConfig {
 	/// size at start for encoding version.
 	fn version_len() -> usize;
 }
+
+#[derive(Debug, Clone)]
+#[cfg_attr(any(test, feature = "test"), derive(PartialEq))]
 /// Serialize without versioning.
 pub struct NoVersion;
 
+#[derive(Debug, Clone)]
+#[cfg_attr(any(test, feature = "test"), derive(PartialEq))]
 /// Serialize with default verison
 pub struct DefaultVersion;
 

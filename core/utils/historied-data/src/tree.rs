@@ -453,7 +453,7 @@ impl TestStates {
 	}
 
 	/// this function can go into deep recursion with full scan, it indicates
-	/// that the in memory model use here should only be use for small data or
+	/// that the tree model use here should only be use for small data or
 	/// tests.
 	pub fn apply_drop_state(&mut self, branch_index: u64, node_index: u64) {
 		let mut to_delete = Vec::new();
@@ -1005,6 +1005,77 @@ mod test {
 				assert_eq!(item1.get(&states.state_ref(a.0)), None);
 			}
 		}
+	}
+
+	#[test]
+	fn test_prune() {
+		let mut item: Serialized<crate::linear::NoVersion> = Default::default();
+		// setting value respecting branch build order
+		for i in 1..6 {
+			item.push(i, Some(&[i as u8]));
+		}
+
+		for a in 1..6 {
+			assert_eq!(item.get(a), Some(Some(&[a as u8][..])));
+		}
+		item.prune(1);
+		assert_eq!(item.get(1), None);
+		for a in 2..6 {
+			assert_eq!(item.get(a), Some(Some(&[a as u8][..])));
+		}
+	
+		item.prune(4);
+		for a in 1..5 {
+			assert_eq!(item.get(a), None);
+		}
+		for a in 5..6 {
+			assert_eq!(item.get(a), Some(Some(&[a as u8][..])));
+		}
+	
+		item.prune(80);
+		for a in 1..4 {
+			assert_eq!(item.get(a), None);
+		}
+		// pruning preserve last valid value
+		for a in 5..11 {
+			assert_eq!(item.get(a), Some(Some(&[5 as u8][..])));
+		}
+
+		// prune skip unrelevant delete
+		let mut item: Serialized<crate::linear::NoVersion> = Default::default();
+		item.push(1, Some(&[1 as u8]));
+		item.push(2, None);
+		item.push(3, Some(&[3 as u8]));
+		assert_eq!(item.get(1), Some(Some(&[1][..])));
+		assert_eq!(item.get(2), Some(None));
+		assert_eq!(item.get(3), Some(Some(&[3][..])));
+		assert_eq!(item.0.len(), 3);
+		item.prune(1);
+		assert_eq!(item.0.len(), 1);
+		assert_eq!(item.get(1), None);
+		assert_eq!(item.get(2), None);
+		assert_eq!(item.get(3), Some(Some(&[3][..])));
+	
+		// prune skip unrelevant delete
+		let mut item: Serialized<crate::linear::NoVersion> = Default::default();
+		item.push(1, Some(&[1 as u8]));
+		item.push(3, None);
+		item.push(4, Some(&[4 as u8]));
+		assert_eq!(item.get(1), Some(Some(&[1][..])));
+		assert_eq!(item.get(2), Some(Some(&[1][..])));
+		assert_eq!(item.get(3), Some(None));
+		assert_eq!(item.get(4), Some(Some(&[4][..])));
+		assert_eq!(item.0.len(), 3);
+		// 1 needed for state two
+		assert_eq!(PruneResult::Unchanged, item.prune(1));
+		// 3 unneeded
+		item.prune(2);
+		assert_eq!(item.0.len(), 1);
+		assert_eq!(item.get(1), None);
+		assert_eq!(item.get(2), None);
+		assert_eq!(item.get(3), None);
+		assert_eq!(item.get(4), Some(Some(&[4][..])));
+	
 	}
 
 }
