@@ -311,10 +311,9 @@ pub mod tests {
 			}
 		}
 		// empty history.
-		let offstate = crate::offstate_backend::InMemory::default();
-		// TODO EMCH add a block in offstate or use an actual implementation of
-		// offstate that do not use history (a test implementation most likely)
-		// TODO EMCH feed offstate with keyspace for roots.
+		let mut offstate = crate::offstate_backend::InMemory::default();
+		offstate.insert(b"offstate1", b"off_value1");
+		offstate.insert(b"offstate2", b"off_value2");
 		(mdb, root, offstate)
 	}
 
