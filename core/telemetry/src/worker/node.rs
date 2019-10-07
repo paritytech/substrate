@@ -129,10 +129,7 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 			match socket {
 				NodeSocket::Connected(mut conn) => {
 					match NodeSocketConnected::poll(Pin::new(&mut conn), cx, &self.addr) {
-						Poll::Ready(Ok(_)) => {
-							break NodeSocket::Connected(conn)
-						},
-						Poll::Pending => {
+						Poll::Ready(Ok(_)) | Poll::Pending => {
 							break NodeSocket::Connected(conn)
 						},
 						Poll::Ready(Err(ConnectionError::Sink(err))) => {
@@ -163,6 +160,7 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 					Poll::Pending => break NodeSocket::Dialing(s),
 					Poll::Ready(Err(err)) => {
 						warn!(target: "telemetry", "Error while dialing {}: {:?}", self.addr, err);
+						println!("Reconnecting");
 						let timeout = gen_rand_reconnect_delay();
 						socket = NodeSocket::WaitingReconnect(timeout);
 					}
@@ -221,22 +219,23 @@ where TTrans::Output: Sink<BytesMut, Error = TSinkErr>
 			if let Some(item) = self.pending.pop_front() {
 				if let Poll::Pending = Sink::poll_ready(Pin::new(&mut self.sink), cx) {
 					self.pending.push_front(item);
+					self.timeout = Some(Delay::new(Duration::from_millis(5000)));
+					if let Some(mut timeout) = self.timeout.as_mut() {
+						match Future::poll(Pin::new(&mut timeout), cx) {
+							Poll::Pending => {},
+							Poll::Ready(Err(err)) => {
+								warn!(target: "telemetry", "Connection timeout error for {} {:?}", my_addr, err);
+							}
+							Poll::Ready(Ok(_)) => {
+								println!("Timed out");
+								return Poll::Ready(Err(ConnectionError::Timeout))
+							}
+						}
+					}
 					return Poll::Pending
 				}
 
 				let item_len = item.len();
-				self.timeout = Some(Delay::new(Duration::from_millis(5000)));
-				if let Some(mut timeout) = self.timeout.as_mut() {
-					match Future::poll(Pin::new(&mut timeout), cx) {
-						Poll::Pending => {},
-						Poll::Ready(Err(err)) => {
-							warn!(target: "telemetry", "Connection timeout error for {} {:?}", my_addr, err);
-						}
-						Poll::Ready(Ok(_)) => {
-							return Poll::Ready(Err(ConnectionError::Timeout))
-						}
-					}
-				}
 
 				if let Err(err) = Sink::start_send(Pin::new(&mut self.sink), item) {
 					self.timeout = None;
@@ -253,10 +252,12 @@ where TTrans::Output: Sink<BytesMut, Error = TSinkErr>
 					Poll::Pending => return Poll::Pending,
 					Poll::Ready(Err(err)) => {
 						self.timeout = None;
+						println!("Timed out set to None(1)");
 						return Poll::Ready(Err(ConnectionError::Sink(err)))
 					},
 					Poll::Ready(Ok(())) => {
 						self.timeout = None;
+						println!("Timed out set to None(2)");
 						self.need_flush = false;
 					},
 				}
