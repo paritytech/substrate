@@ -284,11 +284,19 @@ fn get_inline_builders(
 }
 
 /// Return if inline builders or extra genesis builder require generic trait.
+// TODO TODO join this with the actual implementation so it is more closer
 fn generic_builders(def: &DeclStorageDefExt) -> bool {
-	def.storage_lines.iter()
-		.filter_map(|l| l.build.as_ref())
-		.chain(def.extra_genesis_build.as_ref())
-		.any(|expr| ext::expr_contains_ident(&expr, &def.module_runtime_generic))
+	let generic_extra = def.extra_genesis_build.as_ref()
+		.map(|expr| ext::expr_contains_ident(&expr, &def.module_runtime_generic))
+		.unwrap_or(false);
+
+	let generic_inline = def.storage_lines.iter()
+		.filter_map(|line| line.build.as_ref().map(|build| (line, build)))
+		.any(|(line, expr)| {
+			line.is_generic || ext::expr_contains_ident(&expr, &def.module_runtime_generic)
+		});
+
+	generic_extra || generic_inline
 }
 
 fn impl_build_storage(

@@ -167,14 +167,13 @@ pub struct StorageLineDefExt {
 	optional_storage_where_clause: Option<proc_macro2::TokenStream>,
 	storage_trait: proc_macro2::TokenStream,
 	storage_generator_trait: proc_macro2::TokenStream,
-	#[allow(unused)]
-	is_generic_over_runtime: bool,
+	is_generic: bool,
 	is_option: bool,
 }
 
 impl StorageLineDefExt {
 	fn from_def(storage_def: StorageLineDef, def: &DeclStorageDef) -> Self {
-		let is_generic_over_runtime = match &storage_def.storage_type {
+		let is_generic = match &storage_def.storage_type {
 			StorageLineTypeDef::Simple(value) => {
 				ext::type_contains_ident(&value, &def.module_runtime_generic)
 			},
@@ -204,12 +203,12 @@ impl StorageLineDefExt {
 
 		let module_runtime_generic = &def.module_runtime_generic;
 		let module_runtime_trait = &def.module_runtime_trait;
-		let optional_storage_runtime_comma = if is_generic_over_runtime {
+		let optional_storage_runtime_comma = if is_generic {
 			Some(quote!( #module_runtime_generic, ))
 		} else {
 			None
 		};
-		let optional_storage_runtime_bound_comma = if is_generic_over_runtime {
+		let optional_storage_runtime_bound_comma = if is_generic {
 			Some(quote!( #module_runtime_generic: #module_runtime_trait, ))
 		} else {
 			None
@@ -224,7 +223,7 @@ impl StorageLineDefExt {
 			#storage_name<#optional_storage_runtime_comma #optional_instance_generic>
 		);
 
-		let optional_storage_where_clause = if is_generic_over_runtime {
+		let optional_storage_where_clause = if is_generic {
 			def.where_clause.as_ref().map(|w| quote!( #w ))
 		} else {
 			None
@@ -275,7 +274,7 @@ impl StorageLineDefExt {
 			optional_storage_where_clause,
 			storage_trait,
 			storage_generator_trait,
-			is_generic_over_runtime,
+			is_generic,
 			is_option,
 		}
 	}
