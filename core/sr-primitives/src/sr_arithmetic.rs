@@ -20,7 +20,7 @@
 use crate::serde::{Serialize, Deserialize};
 
 use rstd::{
-	ops, prelude::*, cmp::Ordering,
+	ops, cmp::Ordering, prelude::*,
 	convert::{TryFrom, TryInto},
 };
 use codec::{Encode, Decode};
@@ -674,16 +674,14 @@ pub mod big_num {
 	use super::{Zero, One};
 	use rstd::{cmp::Ordering, ops, prelude::*, cell::RefCell, convert::TryFrom};
 
-
-	// A sensible value for this would be half of the word size of the host machine. Since the
+	// A sensible value for this would be half of the dword size of the host machine. Since the
 	// runtime is compiled to 32bit webassembly, using 32 and 64 for single and double respectively
-	// should yield the most performance.
-	/// A representation of a single limb.
-	/// TODO
+	// should yield the most performance. TODO #3745 we could benchmark this and verify.
+	/// Representation of a single limb.
 	pub type Single = u32;
-	/// A representation of a double limb.
+	/// Representation of two limbs.
 	pub type Double = u64;
-	/// Difference in the number of limbs of [`Single`] and [`Double`].
+	/// Difference in the number of bits of [`Single`] and [`Double`].
 	const SHIFT: usize = 32;
 	/// short form of _Base_. Analogous to the value 10 in base-10 decimal numbers.
 	const B: Double = Single::max_value() as Double + 1;
@@ -695,8 +693,9 @@ pub mod big_num {
 		(ah, al)
 	}
 
-	/// Assumed as a given primitive. A multiplication of two single limbs, which at most takes
-	/// a double limb of space.
+	/// Assumed as a given primitive.
+	///
+	/// Multiplication of two singles, which at most yields 1 double.
 	pub fn mul_single(a: Single, b: Single) -> Double {
 		let a: Double = a.into();
 		let b: Double = b.into();
@@ -704,8 +703,10 @@ pub mod big_num {
 		r
 	}
 
-	/// Assumed as a given primitive. An Addition of two single limbs, which at most takes a Single
-	/// limb of result and a carry, returned as a tuple respectively.
+	/// Assumed as a given primitive.
+	///
+	/// Addition of two singles, which at most takes a single limb of result and a carry,
+	/// returned as a tuple respectively.
 	pub fn add_single(a: Single, b: Single) -> (Single, Single) {
 		let a: Double = a.into();
 		let b: Double = b.into();
@@ -714,8 +715,10 @@ pub mod big_num {
 		(r, carry)
 	}
 
-	/// Assumed as a given primitive. A Division of double size, which always returns a double limb
-	/// of quotient and a single limb of remainder.
+	/// Assumed as a given primitive.
+	///
+	/// Division of double by a single limb. Always returns a double limb of quotient and a single
+	/// limb of remainder.
 	fn div_single(a: Double, b: Single) -> (Double, Single) {
 		let b: Double = b.into();
 		let q = a / b;
@@ -727,7 +730,7 @@ pub mod big_num {
 	/// Simple wrapper around an infinitely large integer, represented as limbs of [`Single`].
 	#[derive(Clone, Default)]
 	pub struct Number {
-		/// digits (limbs) of this number (sorted as msd -> lsd).
+		/// digits (limbs) of this number (sorted as msb -> lsd).
 		pub(crate) digits: Vec<Single>,
 	}
 
@@ -735,7 +738,7 @@ pub mod big_num {
 		/// Create a new instance with `size` limbs. This prevents any number with zero limbs to be
 		/// created.
 		///
-		/// The behavior of the type is undefined with zero limbs
+		/// The behavior of the type is undefined with zero limbs.
 		pub fn with_capacity(size: usize) -> Self {
 			Self { digits: vec![0; size.max(1)] }
 		}
@@ -793,9 +796,9 @@ pub mod big_num {
 
 		/// Strips zeros from the left side of `self`, if any.
 		pub fn lstrip(&mut self) {
-			// by definition, a big-int number should never have zero limbs. This function has the
-			// ability to cause this. There is nothing to do if the number already has 1 limb only.
-			// call it a day and return.
+			// by definition, a big-int number should never have leading zero limbs. This function
+			// has the ability to cause this. There is nothing to do if the number already has 1
+			// limb only. call it a day and return.
 			if self.len().is_zero() { return; }
 			let mut index = 0;
 			for elem in self.digits.iter() {
@@ -806,8 +809,8 @@ pub mod big_num {
 			}
 		}
 
-		/// Zero-pad `self` from left to reach the `size` limbs. Will not make any difference if
-		/// `self` is already bigger than `size` limbs.
+		/// Zero-pad `self` from left to reach `size` limbs. Will not make any difference if `self`
+		/// is already bigger than `size` limbs.
 		pub fn lpad(&mut self, size: usize) {
 			let n = self.len();
 			if n >= size { return; }
@@ -828,7 +831,8 @@ pub mod big_num {
 		}
 
 		/// Adds `self` with `other`. self and other do not have to have any particular size. Given
-		/// that the `n = max{size(self), size(other)}`, it may produce a number of size `n + 1`.
+		/// that the `n = max{size(self), size(other)}`, it will produce a number with `n + 1`
+		/// limbs.
 		///
 		/// This function does not strip the output and returns the original allocated `n + 1`
 		/// limbs. The caller may strip the output if desired.
@@ -853,7 +857,7 @@ pub mod big_num {
 		}
 
 		/// Subtracts `other` from `self`. self and other do not have to have any particular size.
-		/// Given that the `n = max{size(self), size(other)}`, it may produce a number of size `n`.
+		/// Given that the `n = max{size(self), size(other)}`, it will produce a number of size `n`.
 		///
 		/// If `other` is bigger than `self`, `Err(B - borrow)` is returned.
 		///
@@ -935,9 +939,9 @@ pub mod big_num {
 		}
 
 		/// Divides `self` by a single limb `other`. This can be used in cases where the original
-		/// division cannot work due to the quotient being just one limb.
+		/// division cannot work due to the divisor (`other`) being just one limb.
 		///
-		/// Invariant: other cannot be zero.
+		/// Invariant: `other` cannot be zero.
 		pub fn div_unit(self, mut other: Single) -> Self {
 			other = other.max(1);
 			let n = self.len();
@@ -967,7 +971,11 @@ pub mod big_num {
 		///
 		/// Taken from "The Art of Computer Programming" by D.E. Knuth, vol 2, chapter 4.
 		pub fn div(self, other: Self, rem: bool) -> Option<(Self, Self)> {
-			if other.len() <= 1 || other.msb() == 0 || self.msb() == 0 || self.len() <= other.len() {
+			if other.len() <= 1
+				|| other.msb() == 0
+				|| self.msb() == 0
+				|| self.len() <= other.len()
+			{
 				return None
 			}
 			let n = other.len();
@@ -1164,7 +1172,7 @@ pub mod big_num {
 		fn zero() -> Self {
 			Self { digits: vec![Zero::zero()] }
 		}
-		#[inline]
+
 		fn is_zero(&self) -> bool {
 			self.digits.iter().all(|d| d.is_zero())
 		}
@@ -1231,7 +1239,7 @@ pub mod big_num {
 		use rand::Rng;
 
 		// TODO move into a proper fuzzer #3745
-		const FUZZ_COUNT: usize = 1_000_00;
+		const FUZZ_COUNT: usize = 100_000;
 
 		fn run_with_data_set<F>(
 			count: usize,
@@ -1334,7 +1342,7 @@ pub mod big_num {
 		#[test]
 		fn basic_random_add_works() {
 			type S = u128;
-			run_with_data_set(FUZZ_COUNT, 2, 2, false, |u, v| {
+			run_with_data_set(FUZZ_COUNT, 3, 3, false, |u, v| {
 				let expected = S::try_from(u.clone()).unwrap() + S::try_from(v.clone()).unwrap();
 				let t = u.clone().add(v.clone());
 				assert_eq!(
@@ -1363,7 +1371,7 @@ pub mod big_num {
 		#[test]
 		fn basic_random_sub_works() {
 			type S = u128;
-			run_with_data_set(FUZZ_COUNT, 2, 2, false, |u, v| {
+			run_with_data_set(FUZZ_COUNT, 4, 4, false, |u, v| {
 				let expected = S::try_from(u.clone()).unwrap()
 					.checked_sub(S::try_from(v.clone()).unwrap());
 				let t = u.clone().sub(v.clone());
@@ -1962,7 +1970,7 @@ mod test_rational128 {
 	}
 
 	// TODO $# move into a proper fuzzer #3745
-	const FUZZ_COUNT: usize = 10_000;
+	const FUZZ_COUNT: usize = 100_000;
 
 	#[test]
 	fn fuzz_multiply_by_rational_32() {
