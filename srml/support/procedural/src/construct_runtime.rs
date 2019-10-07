@@ -1,9 +1,9 @@
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
-use quote::quote;
+use quote::{quote, ToTokens};
 use srml_support_procedural_tools::{syn_ext as ext, Parse, ToTokens};
 use std::collections::{HashMap, HashSet};
-use syn::{token, Ident, Token, spanned::Spanned};
+use syn::{token, Ident, Token, spanned::Spanned, parse::{Parse, ParseStream}, Result};
 
 #[derive(Parse, ToTokens, Debug)]
 struct RuntimeDefinition {
@@ -12,13 +12,54 @@ struct RuntimeDefinition {
 	pub name: Ident,
 	pub where_token: Token![where],
 	pub where_clauses: ext::Punctuated<WhereLine, Token![,]>,
+	pub where_t: Token![if],
+	// pub opening_brace: Token![{{],
+	// pub modules: ext::Punctuated<DeclModulesLine, Token![;]>
+	// pub closing_brace: Token![}}],
+	// pub modules: ext::Braces<ext::Punctuated<DeclModulesLine, Token![;]>>
 }
 
 #[derive(Parse, ToTokens, Debug)]
 struct WhereLine {
-	pub name: Ident,
+	pub name: WhereParamName,
 	pub eq_token: Token![=],
 	pub module_path: syn::TypePath,
+}
+
+#[derive(Parse, ToTokens, Debug)]
+struct DeclModulesLine {
+	pub name: Ident,
+}
+
+#[derive(Debug)]
+enum WhereParamName {
+	Block,
+	NodeBlock,
+	UncheckedExtrinsic,
+}
+
+impl Parse for WhereParamName {
+	fn parse(input: ParseStream) -> Result<Self> {
+		let ident: Ident = input.parse()?;
+		let ident_name = format!("{}", ident);
+		match ident_name.as_ref() {
+			"Block" => Ok(WhereParamName::Block),
+			"NodeBlock" => Ok(WhereParamName::NodeBlock),
+			"UncheckedExtrinsic" => Ok(WhereParamName::UncheckedExtrinsic),
+			_ => Err(syn::Error::new(ident.span(), "Expected one of Block / NodeBlock / UncheckedExtrinsic")),
+		}
+	}
+}
+
+impl ToTokens for WhereParamName {
+	fn to_tokens(&self, tokens: &mut TokenStream2) {
+		let stream = match self {
+			WhereParamName::Block => quote!(Block),
+			WhereParamName::NodeBlock => quote!(NodeBlock),
+			WhereParamName::UncheckedExtrinsic => quote!(UncheckedExtrinsic),
+		};
+		tokens.extend(stream);
+	}
 }
 
 pub fn construct_runtime(input: TokenStream) -> TokenStream {
@@ -51,7 +92,7 @@ fn extract_where_types(
 	let where_data: HashMap<String, syn::TypePath> = where_clauses
 		.inner
 		.iter()
-		.map(|WhereLine { name, module_path, .. }| (format!("{}", name), module_path.clone()))
+		.map(|WhereLine {name, module_path, ..}| (format!("{:?}", name), module_path.clone()))
 		.collect();
 	let where_names: HashSet<String> = where_data.keys().cloned().collect();
 	let required_where_names: HashSet<String> = ["Block", "NodeBlock", "UncheckedExtrinsic"]
