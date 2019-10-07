@@ -503,9 +503,6 @@ impl<V> History<V> {
 			I: Copy + Eq + TryFrom<usize> + TryInto<usize>,
 			BI: Copy + Eq + TryFrom<usize> + TryInto<usize>,
 	{
-		// TODO EMCH it does not seem stricly needed to pass
-		// a full state, double index looks enough.
-		// but this api can help using consistent state.
 		if let Some((state_branch, state_index)) = state.iter().next() {
 			if let Ok(state_index_usize) = state_index.try_into() {
 				let state_index_u64 = state_index_usize as u64;
@@ -637,7 +634,6 @@ impl<V> History<V> {
 
 	/// Gc an historied value other its possible values.
 	/// Iterator need to be reversed ordered by branch index.
-	/// TODO EMCH this needs rewrite and proper testing!!
 	pub fn gc<IT, S, I>(&mut self, mut states: IT) -> PruneResult
 		where
 			IT: Iterator<Item = (S, I)>,
@@ -1022,7 +1018,6 @@ mod test {
 				assert_eq!(item1.get(&states.state_ref(a.0)), None);
 			}
 		}
-
 	}
 
 }

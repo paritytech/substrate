@@ -1835,7 +1835,6 @@ mod tests {
 			).0.into();
 			let hash = header.hash();
 
-			// TODO EMCH implement for offstate in another pr (need also build genesis).
 			op.reset_storage(storage.iter().cloned().collect(), Default::default()).unwrap();
 			op.set_block_data(
 				header.clone(),
@@ -1894,7 +1893,6 @@ mod tests {
 			assert_eq!(state.storage(&[1, 3, 5]).unwrap(), None);
 			assert_eq!(state.storage(&[1, 2, 3]).unwrap(), Some(vec![9, 9, 9]));
 			assert_eq!(state.storage(&[5, 5, 5]).unwrap(), Some(vec![4, 5, 6]));
-			// TODO EMCH have a offstate get method
 			assert_eq!(state.offstate_pairs(), vec![(vec![5, 5, 5], vec![4, 5, 6])]);
 			let state = db.state_at(BlockId::Number(0)).unwrap();
 			assert_eq!(state.offstate_pairs(), vec![]);

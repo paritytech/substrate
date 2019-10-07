@@ -290,8 +290,6 @@ mod tests {
 	use super::*;
 	use primitives::{Blake2Hasher, child_storage_key::ChildStorageKey};
 
-	// TODO this need an actual in momery with possibly content
-	// as the test uses a prefixed memory db.
 	type OffstateBackend = InMemoryOffstateBackend;
 
 	fn test_proving<'a>(
