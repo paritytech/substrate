@@ -551,7 +551,7 @@ mod dummy {
 		fn from_standard_components<
 			I: Iterator<Item=DeriveJunction>
 		>(
-			_: &str,
+			_: Option<&str>,
 			_: Option<&str>,
 			_: I
 		) -> Result<Self, SecretStringError> { Ok(Self) }
@@ -622,7 +622,11 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 	/// Construct a key from a phrase, password and path.
 	fn from_standard_components<
 		I: Iterator<Item=DeriveJunction>
-	>(phrase: &str, password: Option<&str>, path: I) -> Result<Self, SecretStringError>;
+	>(phrase: Option<&str>, password: Option<&str>, path: I) -> Result<Self, SecretStringError> {
+		Self::from_phrase(phrase.unwrap_or(DEV_PHRASE), password)?.0
+			.derive(path)
+			.map_err(|_| SecretStringError::InvalidPath)
+	}
 
 	/// Sign a message.
 	fn sign(&self, message: &[u8]) -> Self::Signature;
@@ -635,6 +639,22 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 
 	/// Get the public key.
 	fn public(&self) -> Self::Public;
+
+	/// Interpret a suri into its standard components.
+	fn parse_suri(suri: &str) -> Result<(Option<&str>, Option<&str>, Vec<DeriveJunction>), SecretStringError> {
+		let re = Regex::new(r"^(?P<phrase>\w+( \w+)*)?(?P<path>(//?[^/]+)*)(///(?P<password>.*))?$")
+			.expect("constructed from known-good static value; qed");
+		let cap = re.captures(suri).ok_or(SecretStringError::InvalidFormat)?;
+		let re_junction = Regex::new(r"/(/?[^/]+)")
+			.expect("constructed from known-good static value; qed");
+		let path = re_junction.captures_iter(&cap["path"])
+			.map(|f| DeriveJunction::from(&f[1]));
+		Ok((
+			cap.name("phrase").map(|r| r.as_str()),
+			cap.name("password").map(|m| m.as_str()),
+			path.collect(),
+		))
+	}
 
 	/// Interprets the string `s` in order to generate a key Pair.
 	///
@@ -662,30 +682,26 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 	/// be equivalent to no password at all.
 	///
 	/// `None` is returned if no matches are found.
-	fn from_string(s: &str, password_override: Option<&str>) -> Result<Self, SecretStringError> {
+	fn from_string(
+		s: &str,
+		password_override: Option<&str>,
+	) -> Result<Self, SecretStringError> {
 		let hex_seed = if s.starts_with("0x") {
 			&s[2..]
 		} else {
 			s
 		};
-
 		if let Ok(d) = hex::decode(hex_seed) {
 			if let Ok(r) = Self::from_seed_slice(&d) {
 				return Ok(r)
 			}
 		}
 
-		let re = Regex::new(r"^(?P<phrase>\w+( \w+)*)?(?P<path>(//?[^/]+)*)(///(?P<password>.*))?$")
-			.expect("constructed from known-good static value; qed");
-		let cap = re.captures(s).ok_or(SecretStringError::InvalidFormat)?;
-		let re_junction = Regex::new(r"/(/?[^/]+)")
-			.expect("constructed from known-good static value; qed");
-		let path = re_junction.captures_iter(&cap["path"])
-			.map(|f| DeriveJunction::from(&f[1]));
+		let (phrase, password, path) = Self::parse_suri(s)?;
 		Self::from_standard_components(
-			cap.name("phrase").map(|r| r.as_str()).unwrap_or(DEV_PHRASE),
-			password_override.or_else(|| cap.name("password").map(|m| m.as_str())),
-			path,
+			phrase,
+			password_override.or_else(|| password),
+			path.into_iter(),
 		)
 	}
 
@@ -877,12 +893,12 @@ mod tests {
 		) -> bool { true }
 		fn public(&self) -> Self::Public { TestPublic }
 		fn from_standard_components<I: Iterator<Item=DeriveJunction>>(
-			phrase: &str,
+			phrase: Option<&str>,
 			password: Option<&str>,
 			path: I
 		) -> Result<Self, SecretStringError> {
 			Ok(TestPair::Standard {
-				phrase: phrase.to_owned(),
+				phrase: phrase.unwrap_or("").to_owned(),
 				password: password.map(ToOwned::to_owned),
 				path: path.collect()
 			})

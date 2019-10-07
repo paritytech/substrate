@@ -1210,6 +1210,11 @@ dependencies = [
 ]
 
 [[package]]
+name = "hex-view"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
 name = "hmac"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4510,6 +4515,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "subhd"
+version = "0.1.0"
+dependencies = [
+ "cc 1.0.45 (registry+https://github.com/rust-lang/crates.io-index)",
+ "hex-view 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "substrate-primitives 2.0.0",
+ "wookong-solo 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "subkey"
 version = "2.0.0"
 dependencies = [
@@ -4524,6 +4539,7 @@ dependencies = [
  "sr-primitives 2.0.0",
  "srml-balances 2.0.0",
  "srml-system 2.0.0",
+ "subhd 0.1.0",
  "substrate-bip39 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-primitives 2.0.0",
  "tiny-bip39 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -6456,6 +6472,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "wookong-solo"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "cc 1.0.45 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "ws"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6683,6 +6707,7 @@ dependencies = [
 "checksum hex 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)" = "805026a5d0141ffc30abb3be3173848ad46a1b1664fe632428479619a3644d77"
 "checksum hex-literal 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)" = "961de220ec9a91af2e1e5bd80d02109155695e516771762381ef8581317066e0"
 "checksum hex-literal-impl 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)" = "9d4c5c844e2fee0bf673d54c2c177f1713b3d2af2ff6e666b49cb7572e6cf42d"
+"checksum hex-view 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)" = "494e16c9fe4dd02a88f3fe9ec0f27e38045691ea0ceb11603670f220ff5ca97f"
 "checksum hmac 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)" = "7a13f4163aa0c5ca1be584aace0e2212b2e41be5478218d4f657f5f778b2ae2a"
 "checksum hmac 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)" = "5dcb5e64cda4c23119ab41ba960d1e170a774c8e4b9d9e6a9bc18aabf5e59695"
 "checksum hmac-drbg 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "4fe727d41d2eec0a6574d887914347e5ff96a3b87177817e2a9820c5c87fecc2"
@@ -7016,6 +7041,7 @@ dependencies = [
 "checksum winapi-util 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "7168bab6e1daee33b4557efd0e95d5ca70a03706d39fa5f3fe7a236f584b03c9"
 "checksum winapi-x86_64-pc-windows-gnu 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
 "checksum wincolor 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)" = "96f5016b18804d24db43cebf3c77269e7569b8954a8464501c216cc5e070eaa9"
+"checksum wookong-solo 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "0a3e16d3d99ef2f01516a185c626c8c6680ef27b56717bf5fafdf8f34c59b341"
 "checksum ws 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)" = "8a6f5bb86663ff4d1639408410f50bf6050367a8525d644d49a6894cd618a631"
 "checksum ws2_32-sys 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)" = "d59cefebd0c892fa2dd6de581e937301d8552cb44489cdff035c6187cb63fa5e"
 "checksum x25519-dalek 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)" = "7ee1585dc1484373cbc1cee7aafda26634665cf449436fd6e24bfd1fad230538"

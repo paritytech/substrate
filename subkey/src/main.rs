@@ -35,7 +35,7 @@ use std::{
 	str::FromStr,
 };
 
-use subhd::{HDDevice, HDwallet};
+use subhd::{Wallet, Wookong};
 
 mod vanity;
 
@@ -55,10 +55,11 @@ trait Crypto: Sized {
 		uri: &str,
 		password: Option<&str>,
 		network_override: Option<Ss58AddressFormat>,
+		public_override: Option<Self::Public>,
 	) where
 		<Self::Pair as Pair>::Public: PublicT,
 	{
-		if let Ok((pair, seed)) = Self::Pair::from_phrase(uri, password) {
+		if let (None, Ok((pair, seed))) = (public_override, Self::Pair::from_phrase(uri, password)) {
 			let public_key = Self::public_from_pair(&pair);
 			println!("Secret phrase `{}` is account:\n  Secret seed: {}\n  Public key (hex): {}\n  Address (SS58): {}",
 				uri,
@@ -66,13 +67,25 @@ trait Crypto: Sized {
 				format_public_key::<Self>(public_key),
 				Self::ss58_from_pair(&pair)
 			);
-		} else if let Ok(pair) = Self::Pair::from_string(uri, password) {
+		} else if let (None, Ok(pair)) = (public_override, Self::Pair::from_string(uri, password)) {
 			let public_key = Self::public_from_pair(&pair);
 			println!(
 				"Secret Key URI `{}` is account:\n  Public key (hex): {}\n  Address (SS58): {}",
 				uri,
 				format_public_key::<Self>(public_key),
 				Self::ss58_from_pair(&pair)
+			);
+		} else if let Some(public_key) = public_override {
+			let pks = if let Some(v) = network_override {
+				public_key.to_ss58check_with_version(v)
+			} else {
+				public_key.to_ss58check()
+			};
+			println!("Public Key URI `{}` is account:\n  Network ID/version: {}\n  Public key (hex): {}\n  Address (SS58): {}",
+				uri,
+				String::from(v),
+				format_public_key::<Self>(public_key.clone()),
+				pks
 			);
 		} else if let Ok((public_key, v)) =
 			<Self::Pair as Pair>::Public::from_string_with_version(uri)
@@ -147,24 +160,87 @@ where
 	if let Some(network) = maybe_network {
 		set_default_ss58_version(network);
 	}
-	let dev = HDDevice;
+	let hardware: Option<Box<Wallet>> = if matches.is_present("wookong") {
+		Some(Box::new(Wookong))
+	} else {
+		None
+	};
+	let hardware = hardware.as_ref();
+	let kill_wallet = |w| match (w.public(), matches.is_present("kill-wallet")) {
+		(Err(subhd::Error::DeviceNotInit), _) => {}
+		(_, true) => w.hd_format().unwrap_or_else(|e| panic!("Device format error: {:?}", e)),
+		_ => panic!("Use --kill-wallet to confirm you understand this operation will irreversibly\n\
+							delete any existing data on your hardware wallet."),
+	};
+
+	let pubkey = || hardware
+		.map(|w| w.public().unwrap_or_else(|e| panic!("Hardware wallet failure: {:?}", e)));
+
+	let from_stdin = || {
+		let mut res;
+		stdin().lock().read_to_end(&mut res).expect("Error reading from stdin");
+		String::from_utf8(res).expect("Binary data not supported")
+	};
 
 	match matches.subcommand() {
 		("generate", Some(matches)) => {
 			let mnemonic = generate_mnemonic(matches);
-			C::print_from_uri(mnemonic.phrase(), password, maybe_network);
+			let phrase = mnemonic.phrase();
+			if let Some(w) = hardware {
+				let seed = C::Pair::from_phrase(phrase)
+					.expect("Phrase was correctly generated; qed").1;
+				kill_wallet(w);
+				w.import(seed).unwrap_or_else(|e| panic!("Device import error: {:?}", e));
+			}
+			C::print_from_uri(phrase, password, maybe_network, None);
 		}
 		("inspect", Some(matches)) => {
 			let uri = matches
 				.value_of("uri")
 				.expect("URI parameter is required; thus it can't be None; qed");
-			C::print_from_uri(uri, password, maybe_network);
+			if let Some(w) = hardware {
+				let (phrase, password, path) = <C::Pair as Pair>::parse_suri(uri)?;
+				if phrase.is_some() {
+					panic!("When using hardware wallet, phrase part of URI must be empty.");
+				}
+				let public = w.public(&path, password)
+					.unwrap_or_else(|e| panic!("Device error: {:?}, e"));
+				C::print_from_uri(uri, password, maybe_network, Some(public));
+			} else {
+				C::print_from_uri(uri, password, maybe_network, None);
+			}
+		}
+		("import", Some(matches)) => {
+			let uri = matches
+				.value_of("uri")
+				.unwrap_or_else(from_stdin);
+			if let Some(w) = hardware {
+				let (phrase, password, path) = <C::Pair as Pair>::parse_suri(uri)?;
+				let seed = <C::Pair as Pair>::from_phrase(phrase)
+					.expect("Invalid phrase component in the URI given.");
+				kill_wallet(w);
+				w.import(seed).unwrap_or_else(|e| panic!("Device import error: {:?}", e));
+				if !path.is_empty() || password.is_some() {
+					println!("NOTE: When importing to a hardware wallet, only phrases are imported:\n\
+						Paths and passwords are not and must be provided when the wallet is used.");
+				}
+				C::print_from_uri(uri, password, maybe_network, None);
+			} else {
+				panic!("Hardware wallet required for import");
+			}
 		}
 		("sign", Some(matches)) => {
 			let should_decode = matches.is_present("hex");
 			let message = read_message_from_stdin(should_decode);
-			let signature = do_sign::<C>(matches, message, password);
-			println!("{}", signature);
+			if let Some(w) = hardware {
+				let suri = matches.value_of("suri").unwrap_or("");
+				let (phrase, password, path) = <C::Pair as Pair>::parse_suri(suri)
+					.unwrap_or_else(|e| panic!("Bad derivation path: {:?}", e));
+				w.sign(path.collect(), password, &message)
+			} else {
+				do_sign::<C>(matches, message, password)
+			};
+			println!("{}", format_signature::<C>(&signature));
 		}
 		("verify", Some(matches)) => {
 			let should_decode = matches.is_present("hex");
@@ -182,8 +258,8 @@ where
 				.map(str::to_string)
 				.unwrap_or_default();
 			let result = vanity::generate_key::<C>(&desired).expect("Key generation failed");
-			let formated_seed = format_seed::<C>(result.seed);
-			C::print_from_uri(&formated_seed, None, maybe_network);
+			let formatted_seed = format_seed::<C>(result.seed);
+			C::print_from_uri(&formatted_seed, None, maybe_network, None);
 		}
 		("transfer", Some(matches)) => {
 			let signer = read_pair::<Sr25519>(matches.value_of("from"), password);
@@ -195,6 +271,7 @@ where
 			let function = Call::Balances(BalancesCall::transfer(to.into(), amount));
 
 			let extrinsic = create_extrinsic(function, index, signer, genesis_hash);
+			// TODO: make work with `hardware`
 
 			print_extrinsic(extrinsic);
 		}
@@ -210,131 +287,9 @@ where
 				.unwrap();
 
 			let extrinsic = create_extrinsic(function, index, signer, genesis_hash);
+			// TODO: make work with `hardware`
 
 			print_extrinsic(extrinsic);
-		}
-		("hard-sign", Some(matches)) => {
-			let mut message = vec![];
-			stdin().lock().read_to_end(&mut message).expect("Error reading from stdin");
-			if matches.is_present("hex") {
-				message = hex::decode(&message).expect("Invalid hex in message");
-				println!("message {:#?}", message);
-			}
-			let sig = dev.hd_sign(&message);
-			match sig {
-    			Ok(v) => {
-       				println!("signature: {:?}", v);
-   				 }
-   				 Err(e) => {
-       				 println!("sign error: {:?}", e);
-    			}
-			}	 
-		}
-		("hard-format", Some(_matches)) => {
-			match  dev.hd_format() {
-    			Ok(_v) => {
-       				println!("format ok");
-   				 }
-   				 Err(e) => {
-       				 println!("format error: {:?}", e);
-    			}
-			}	 
-		}
-		("hard-gen", Some(_matches)) => {
-			 match dev.hd_generate() {
-    			Ok(v) => {
-       				println!("seed: {}",HDDevice::to_hex(&dev,&v));
-   				 }
-   				 Err(e) => {
-       				 println!("generate error: {:?}", e);
-    			}
-			}	 
-		}
-		("hard-getpub", Some(_matches)) => {
-			match dev.hd_getpub() {
-    			Ok(v) => {
-       				println!("address: 0x{}",v);
-   				 }
-   				 Err(e) => {
-       				 println!("generate error: {:?}", e);
-    			}
-			}
-			let pk:[u8;32] = dev.hd_getpub().unwrap().into();
-			println!("public: 0x{}",HDDevice::to_hex(&dev,&pk));
-		}
-		("hard-import", Some(matches)) => {
-			let mut seed = vec![];
-			stdin().lock().read_to_end(&mut seed).expect("Error reading from stdin");
-			if matches.is_present("hex") {
-				seed = hex::decode(&seed).expect("Invalid hex in message");
-				println!("seed {:#?}", seed);
-			}
-			match dev.hd_import(&seed) {
-    			Ok(_v) => {
-       				println!("import success!");
-   				 }
-   				 Err(e) => {
-       				 println!("import error: {:?}", e);
-    			}
-			}
-		}
-		("hard-transfer", Some(matches)) => {
-			let to = matches.value_of("to")
-				.expect("parameter is required; thus it can't be None; qed");
-			let to = sr25519::Public::from_string(to).ok().or_else(||
-				sr25519::Pair::from_string(to, password).ok().map(|p| p.public())
-			).expect("Invalid 'to' URI; expecting either a secret URI or a public URI.");
-
-			let amount = matches.value_of("amount")
-				.expect("parameter is required; thus it can't be None; qed");
-			let amount = str::parse::<Balance>(amount)
-				.expect("Invalid 'amount' parameter; expecting an integer.");
-
-			let index = matches.value_of("index")
-				.expect("parameter is required; thus it can't be None; qed");
-			let index = str::parse::<Index>(index)
-				.expect("Invalid 'index' parameter; expecting an integer.");
-
-			let function = Call::Balances(BalancesCall::transfer(to.into(), amount));
-			let genesis_hash: Hash = match matches.value_of("genesis").unwrap_or("alex") {
-				"elm" => hex!["10c08714a10c7da78f40a60f6f732cf0dba97acfb5e2035445b032386157d5c3"].into(),
-				"alex" => hex!["dcd1346701ca8396496e52aa2785b1748deb6db09551b72159dcb3e08991025b"].into(),
-				h => hex::decode(h).ok().and_then(|x| Decode::decode(&mut &x[..]).ok())
-					.expect("Invalid genesis hash or unrecognised chain identifier"),
-			};
-			println!("Using a genesis hash of {}", HexDisplay::from(&genesis_hash.as_ref()));
-			
-			let extra = |i: Index, f: Balance| {
-				(
-					system::CheckVersion::<Runtime>::new(),
-					system::CheckGenesis::<Runtime>::new(),
-					system::CheckEra::<Runtime>::from(Era::Immortal),
-					system::CheckNonce::<Runtime>::from(i),
-					system::CheckWeight::<Runtime>::new(),
-					balances::TakeFees::<Runtime>::from(f),
-					Default::default(),
-				)
-			};//just let it work first
-			let raw_payload = SignedPayload::from_raw(
-				function,
-				extra(index, 0),
-				(VERSION.spec_version as u32, genesis_hash, genesis_hash, (), (), (), ()),
-			);
-			let signature = raw_payload.using_encoded(|payload| {
-				println!("Signing {}", HexDisplay::from(&payload));
-				dev.hd_sign(payload)
-			});
-			let (function, extra, _) = raw_payload.deconstruct();
-			println!("signature: {:?}",signature.clone().unwrap());
-			let public_key = dev.hd_getpub().unwrap();
-			let extrinsic = UncheckedExtrinsic::new_signed(
-				function,
-				public_key.into(),
-				signature.unwrap().into(),
-				extra,
-			);
-
-			println!("extrinsic: 0x{}", hex::encode(&extrinsic.encode()));
 		}
 		_ => print_usage(&matches),
 	}
@@ -359,8 +314,7 @@ where
 	PublicOf<C>: PublicT,
 {
 	let pair = read_pair::<C>(matches.value_of("suri"), password);
-	let signature = pair.sign(&message);
-	format_signature::<C>(&signature)
+	pair.sign(&message)
 }
 
 fn do_verify<C: Crypto>(matches: &ArgMatches, message: Vec<u8>, password: Option<&str>) -> bool
