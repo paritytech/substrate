@@ -246,7 +246,7 @@ If you are trying to set up Substrate on Windows, you should do the following:
 	.\bootstrap-vcpkg.bat
 	.\vcpkg.exe install openssl:x64-windows-static
 
-7. After, you need to add OpenSSL to your System Variables:
+7. After, you need to add OpenSSL to your System Variables. Note that in order for the following commands to work, you need to use Windows Powershell:
 
 	$env:OPENSSL_DIR = 'C:\Tools\vcpkg\installed\x64-windows-static'
 	$env:OPENSSL_STATIC = 'Yes'
