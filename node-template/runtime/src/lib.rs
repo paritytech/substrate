@@ -272,7 +272,7 @@ construct_runtime!(
 		Sudo: sudo,
 		// Used for the module template in `./template.rs`
 		TemplateModule: template::{Module, Call, Storage, Event<T>},
-		Randomness: randomness::{Module, Call, Storage},
+		RandomnessCollectiveFlip: randomness_collective_flip::{Module, Call, Storage},
 	}
 );
 
@@ -341,7 +341,7 @@ impl_runtime_apis! {
 		}
 
 		fn random_seed() -> <Block as BlockT>::Hash {
-			Randomness::random_seed()
+			RandomnessCollectiveFlip::random_seed()
 		}
 	}
 
