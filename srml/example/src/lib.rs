@@ -258,7 +258,7 @@ use support::{dispatch::Result, decl_module, decl_storage, decl_event};
 use system::{ensure_signed, ensure_root};
 use codec::{Encode, Decode};
 use sr_primitives::{
-	traits::{SignedExtension, Bounded, SimpleArithmetic, SaturatedConversion},
+	traits::{SignedExtension, Bounded, SaturatedConversion},
 	weights::{SimpleDispatchInfo, DispatchInfo, DispatchClass, ClassifyDispatch, WeighData, Weight},
 	transaction_validity::{
 		ValidTransaction, TransactionValidityError, InvalidTransaction, TransactionValidity,
@@ -282,11 +282,10 @@ use sr_primitives::{
 struct WeightForSetDummy<T: balances::Trait>(BalanceOf<T>);
 
 impl<T: balances::Trait> WeighData<(&BalanceOf<T>,)> for WeightForSetDummy<T>
-	where BalanceOf<T>: SimpleArithmetic
 {
 	fn weigh_data(&self, target: (&BalanceOf<T>,)) -> Weight {
 		let multiplier = self.0;
-		(*target.0 * multiplier).saturated_into()
+		(*target.0 * multiplier).saturated_into::<u32>()
 	}
 }
 
