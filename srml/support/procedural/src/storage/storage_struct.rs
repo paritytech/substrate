@@ -14,12 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use proc_macro2::TokenStream as TokenStream2;
+use proc_macro2::TokenStream;
 use quote::quote;
+use super::{
+	DeclStorageDefExt, StorageLineTypeDef,
+	instance_trait::{PREFIX_FOR, HEAD_KEY_FOR},
+};
 
-use super::instance_trait::{PREFIX_FOR, HEAD_KEY_FOR};
-
-fn from_optional_value_to_query(is_option: bool, default: &Option<syn::Expr>) -> TokenStream2 {
+fn from_optional_value_to_query(is_option: bool, default: &Option<syn::Expr>) -> TokenStream {
 	let default = default.as_ref().map(|d| quote!( #d ))
 		.unwrap_or_else(|| quote!( Default::default() ));
 
@@ -32,7 +34,7 @@ fn from_optional_value_to_query(is_option: bool, default: &Option<syn::Expr>) ->
 	}
 }
 
-fn from_query_to_optional_value(is_option: bool) -> TokenStream2 {
+fn from_query_to_optional_value(is_option: bool) -> TokenStream {
 	if !is_option {
 		// raw type case
 		quote!( Some(v) )
@@ -42,8 +44,8 @@ fn from_query_to_optional_value(is_option: bool) -> TokenStream2 {
 	}
 }
 
-pub fn decl_and_impl(scrate: &TokenStream2, def: &super::DeclStorageDefExt) -> TokenStream2 {
-	let mut impl_ = TokenStream2::new();
+pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStream {
+	let mut impls = TokenStream::new();
 
 	for line in &def.storage_lines {
 
@@ -93,7 +95,7 @@ pub fn decl_and_impl(scrate: &TokenStream2, def: &super::DeclStorageDefExt) -> T
 		let query_type = &line.query_type;
 
 		let struct_impl = match &line.storage_type {
-			super::StorageLineTypeDef::Simple(_) => {
+			StorageLineTypeDef::Simple(_) => {
 				quote!(
 					impl<#impl_trait> #scrate::#storage_generator_trait for #storage_struct
 					#optional_storage_where_clause
@@ -114,7 +116,7 @@ pub fn decl_and_impl(scrate: &TokenStream2, def: &super::DeclStorageDefExt) -> T
 					}
 				)
 			},
-			super::StorageLineTypeDef::Map(map) => {
+			StorageLineTypeDef::Map(map) => {
 				let hasher = map.hasher.to_storage_hasher_struct();
 				quote!(
 					impl<#impl_trait> #scrate::#storage_generator_trait for #storage_struct
@@ -137,7 +139,7 @@ pub fn decl_and_impl(scrate: &TokenStream2, def: &super::DeclStorageDefExt) -> T
 					}
 				)
 			},
-			super::StorageLineTypeDef::LinkedMap(map) => {
+			StorageLineTypeDef::LinkedMap(map) => {
 				let hasher = map.hasher.to_storage_hasher_struct();
 
 				// make sure to use different prefix for head and elements.
@@ -177,7 +179,7 @@ pub fn decl_and_impl(scrate: &TokenStream2, def: &super::DeclStorageDefExt) -> T
 					}
 				)
 			},
-			super::StorageLineTypeDef::DoubleMap(map) => {
+			StorageLineTypeDef::DoubleMap(map) => {
 				let hasher1 = map.hasher1.to_storage_hasher_struct();
 				let hasher2 = map.hasher2.to_storage_hasher_struct();
 				quote!(
@@ -206,11 +208,11 @@ pub fn decl_and_impl(scrate: &TokenStream2, def: &super::DeclStorageDefExt) -> T
 			}
 		};
 
-		impl_.extend(quote!(
+		impls.extend(quote!(
 			#struct_decl
 			#struct_impl
 		))
 	}
 
-	impl_
+	impls
 }

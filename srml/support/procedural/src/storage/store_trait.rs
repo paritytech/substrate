@@ -14,20 +14,20 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use proc_macro2::{TokenStream as TokenStream2};
+use proc_macro2::TokenStream;
 use quote::quote;
+use super::DeclStorageDefExt;
 
-
-pub fn decl_and_impl(def: &super::DeclStorageDefExt) -> TokenStream2 {
+pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 	let decl_store_items = def.storage_lines.iter()
 		.map(|sline| &sline.name)
-		.fold(TokenStream2::new(), |mut items, name| {
+		.fold(TokenStream::new(), |mut items, name| {
 			items.extend(quote!(type #name;));
 			items
 		});
 
 	let impl_store_items = def.storage_lines.iter()
-		.fold(TokenStream2::new(), |mut items, line| {
+		.fold(TokenStream::new(), |mut items, line| {
 			let name = &line.name;
 			let storage_struct = &line.storage_struct;
 

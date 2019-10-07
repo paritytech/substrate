@@ -160,13 +160,14 @@ pub struct StorageLineDefExt {
 	storage_type: StorageLineTypeDef,
 	doc_attrs: Vec<syn::Meta>,
 	query_type: syn::Type,
-	value_type: proc_macro2::TokenStream,
+	value_type: syn::Type,
 	storage_struct: proc_macro2::TokenStream,
 	optional_storage_runtime_comma: Option<proc_macro2::TokenStream>,
 	optional_storage_runtime_bound_comma: Option<proc_macro2::TokenStream>,
 	optional_storage_where_clause: Option<proc_macro2::TokenStream>,
 	storage_trait: proc_macro2::TokenStream,
 	storage_generator_trait: proc_macro2::TokenStream,
+	#[allow(unused)]
 	is_generic_over_runtime: bool,
 	is_option: bool,
 }
@@ -198,8 +199,8 @@ impl StorageLineDefExt {
 			StorageLineTypeDef::LinkedMap(map) => map.value.clone(),
 			StorageLineTypeDef::DoubleMap(map) => map.value.clone(),
 		};
-		let value_type = ext::extract_type_option(&query_type).unwrap_or(quote!( #query_type ));
 		let is_option = ext::extract_type_option(&query_type).is_some();
+		let value_type = ext::extract_type_option(&query_type).unwrap_or(query_type.clone());
 
 		let module_runtime_generic = &def.module_runtime_generic;
 		let module_runtime_trait = &def.module_runtime_trait;
@@ -353,7 +354,7 @@ pub fn decl_storage_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStr
 	let getters = getters::impl_getters(&scrate, &def_ext);
 	let metadata = metadata::impl_metadata(&scrate, &def_ext);
 	let instance_trait = instance_trait::decl_and_impl(&scrate, &def_ext);
-	let genesis_config = genesis_config::impl_genesis_config(&scrate, &def_ext);
+	let genesis_config = genesis_config::genesis_config_and_build_storage(&scrate, &def_ext);
 	let storage_struct = storage_struct::decl_and_impl(&scrate, &def_ext);
 
 	quote!(

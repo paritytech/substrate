@@ -14,23 +14,23 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use proc_macro2::TokenStream as TokenStream2;
+use proc_macro2::TokenStream;
 use quote::quote;
+use super::{DeclStorageDefExt, StorageLineTypeDef};
 
-pub fn impl_getters(scrate: &TokenStream2, def: &super::DeclStorageDefExt) -> TokenStream2 {
-	let mut getters = TokenStream2::new();
+pub fn impl_getters(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStream {
+	let mut getters = TokenStream::new();
 
 	for (get_fn, line) in def.storage_lines.iter()
 		.filter_map(|line| line.getter.as_ref().map(|get_fn| (get_fn, line)))
 	{
-		// Propagate doc attributes.
 		let attrs = &line.doc_attrs;
 
 		let storage_struct = &line.storage_struct;
 		let storage_trait = &line.storage_trait;
 
 		let getter = match &line.storage_type {
-			super::StorageLineTypeDef::Simple(value) => {
+			StorageLineTypeDef::Simple(value) => {
 				quote!{
 					#( #[ #attrs ] )*
 					pub fn #get_fn() -> #value {
@@ -38,7 +38,7 @@ pub fn impl_getters(scrate: &TokenStream2, def: &super::DeclStorageDefExt) -> To
 					}
 				}
 			},
-			super::StorageLineTypeDef::Map(map) | super::StorageLineTypeDef::LinkedMap(map) => {
+			StorageLineTypeDef::Map(map) | StorageLineTypeDef::LinkedMap(map) => {
 				let key = &map.key;
 				let value = &map.value;
 				quote!{
@@ -48,7 +48,7 @@ pub fn impl_getters(scrate: &TokenStream2, def: &super::DeclStorageDefExt) -> To
 					}
 				}
 			},
-			super::StorageLineTypeDef::DoubleMap(map) => {
+			StorageLineTypeDef::DoubleMap(map) => {
 				let key1 = &map.key1;
 				let key2 = &map.key2;
 				let value = &map.value;

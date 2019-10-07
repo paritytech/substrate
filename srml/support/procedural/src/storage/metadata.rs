@@ -17,22 +17,22 @@
 //! `decl_storage` macro transformation
 
 use srml_support_procedural_tools::clean_type_string;
-use proc_macro2::TokenStream as TokenStream2;
+use proc_macro2::TokenStream;
 use quote::quote;
+use super::{DeclStorageDefExt, StorageLineDefExt, StorageLineTypeDef};
 
-fn storage_line_metadata_type(scrate: &TokenStream2, line: &super::StorageLineDefExt)
-	-> TokenStream2
-{
-	let value_type = clean_type_string(&line.value_type.to_string());
+fn storage_line_metadata_type(scrate: &TokenStream, line: &StorageLineDefExt) -> TokenStream {
+	let value_type = &line.value_type;
+	let value_type = clean_type_string(&quote!( #value_type ).to_string());
 	match &line.storage_type {
-		super::StorageLineTypeDef::Simple(_) => {
+		StorageLineTypeDef::Simple(_) => {
 			quote!{
 				#scrate::metadata::StorageEntryType::Plain(
 					#scrate::metadata::DecodeDifferent::Encode(#value_type),
 				)
 			}
 		},
-		super::StorageLineTypeDef::Map(map) => {
+		StorageLineTypeDef::Map(map) => {
 			let hasher = map.hasher.into_metadata();
 			let key = &map.key;
 			let key = clean_type_string(&quote!(#key).to_string());
@@ -45,7 +45,7 @@ fn storage_line_metadata_type(scrate: &TokenStream2, line: &super::StorageLineDe
 				}
 			}
 		},
-		super::StorageLineTypeDef::LinkedMap(map) => {
+		StorageLineTypeDef::LinkedMap(map) => {
 			let hasher = map.hasher.into_metadata();
 			let key = &map.key;
 			let key = clean_type_string(&quote!(#key).to_string());
@@ -58,7 +58,7 @@ fn storage_line_metadata_type(scrate: &TokenStream2, line: &super::StorageLineDe
 				}
 			}
 		},
-		super::StorageLineTypeDef::DoubleMap(map) => {
+		StorageLineTypeDef::DoubleMap(map) => {
 			let hasher1 = map.hasher1.into_metadata();
 			let hasher2 = map.hasher2.into_metadata();
 			let key1 = &map.key1;
@@ -79,10 +79,10 @@ fn storage_line_metadata_type(scrate: &TokenStream2, line: &super::StorageLineDe
 }
 
 fn default_byte_getter(
-	scrate: &TokenStream2,
-	line: &super::StorageLineDefExt,
-	def: &super::DeclStorageDefExt,
-) -> (TokenStream2, TokenStream2) {
+	scrate: &TokenStream,
+	line: &StorageLineDefExt,
+	def: &DeclStorageDefExt,
+) -> (TokenStream, TokenStream) {
 	let default = line.default_value.as_ref().map(|d| quote!( #d ))
 		.unwrap_or_else(|| quote!( Default::default() ));
 
@@ -152,9 +152,9 @@ fn default_byte_getter(
 	(struct_def, struct_instance)
 }
 
-pub fn impl_metadata(scrate: &TokenStream2, def: &super::DeclStorageDefExt) -> TokenStream2 {
-	let mut entries = TokenStream2::new();
-	let mut default_byte_getter_struct_defs = TokenStream2::new();
+pub fn impl_metadata(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStream {
+	let mut entries = TokenStream::new();
+	let mut default_byte_getter_struct_defs = TokenStream::new();
 
 	for line in def.storage_lines.iter() {
 		let str_name = line.name.to_string();
@@ -172,7 +172,7 @@ pub fn impl_metadata(scrate: &TokenStream2, def: &super::DeclStorageDefExt) -> T
 			default_byte_getter_struct_instance,
 		) = default_byte_getter(scrate, line, def);
 
-		let mut docs = TokenStream2::new();
+		let mut docs = TokenStream::new();
 		for attr in line.attrs.iter().filter_map(|v| v.parse_meta().ok()) {
 			if let syn::Meta::NameValue(meta) = attr {
 				if meta.ident == "doc" {

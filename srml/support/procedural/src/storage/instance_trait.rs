@@ -14,8 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use proc_macro2::{TokenStream as TokenStream2, Span};
+use proc_macro2::{TokenStream, Span};
 use quote::quote;
+use super::{DeclStorageDefExt, StorageLineTypeDef};
 
 const NUMBER_OF_INSTANCE: usize = 16;
 const INHERENT_INSTANCE_NAME: &str = "__InherentHiddenInstance";
@@ -26,7 +27,7 @@ pub(crate) const PREFIX_FOR: &str = "PREFIX_FOR_";
 pub(crate) const HEAD_KEY_FOR: &str = "HEAD_KEY_FOR_";
 
 // Used to generate the const:
-// `const $name: &'static str = $value_prefix ++ instance_name ++ $value_suffix`
+// `const $name: &'static str = $value_prefix ++ instance_prefix ++ $value_suffix`
 struct InstanceConstDef {
 	name: syn::Ident,
 	value_prefix: String,
@@ -37,13 +38,12 @@ struct InstanceConstDef {
 struct InstanceDef {
 	prefix: String,
 	instance_struct: syn::Ident,
-	doc: TokenStream2,
+	doc: TokenStream,
 }
 
-pub fn decl_and_impl(scrate: &TokenStream2, def: &super::DeclStorageDefExt) -> TokenStream2 {
-	let mut impls = TokenStream2::new();
+pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStream {
+	let mut impls = TokenStream::new();
 
-	// Build Instantiable trait
 	let mut const_defs = vec![];
 
 	for line in def.storage_lines.iter() {
@@ -58,7 +58,7 @@ pub fn decl_and_impl(scrate: &TokenStream2, def: &super::DeclStorageDefExt) -> T
 			value_suffix: storage_prefix.clone(),
 		});
 
-		if let super::StorageLineTypeDef::LinkedMap(_) = line.storage_type {
+		if let StorageLineTypeDef::LinkedMap(_) = line.storage_type {
 			let const_name = syn::Ident::new(
 				&format!("{}{}", HEAD_KEY_FOR, line.name.to_string()), proc_macro2::Span::call_site()
 			);
@@ -70,38 +70,9 @@ pub fn decl_and_impl(scrate: &TokenStream2, def: &super::DeclStorageDefExt) -> T
 		}
 	}
 
-	let instance_trait = def.module_instance.as_ref().map(|i| i.instance_trait.clone())
-		.unwrap_or_else(|| syn::Ident::new(DEFAULT_INSTANTIABLE_TRAIT_NAME, Span::call_site()));
+	impls.extend(create_instance_trait(&const_defs, def));
 
-	// Declare Instance trait
-	{
-		let mut const_impls = TokenStream2::new();
-		for const_def in &const_defs {
-			let const_name = &const_def.name;
-			const_impls.extend(quote! {
-				const #const_name: &'static str;
-			});
-		}
-
-		let optional_hide = if def.module_instance.is_some() {
-			quote!()
-		} else {
-			quote!(#[doc(hidden)])
-		};
-
-		impls.extend(quote! {
-			/// Tag a type as an instance of a module.
-			///
-			/// Defines storage prefixes, they must be unique.
-			#optional_hide
-			pub trait #instance_trait: 'static {
-				/// The prefix used by any storage entry of an instance.
-				const PREFIX: &'static str;
-				#const_impls
-			}
-		});
-	}
-
+	// Implementation of instances.
 	if let Some(module_instance) = &def.module_instance {
 		let instance_defs = (0..NUMBER_OF_INSTANCE)
 			.map(|i| {
@@ -120,7 +91,6 @@ pub fn decl_and_impl(scrate: &TokenStream2, def: &super::DeclStorageDefExt) -> T
 				})
 			);
 
-		// Impl Instance trait for instances
 		for instance_def in instance_defs {
 			impls.extend(create_and_impl_instance_struct(scrate, &instance_def, &const_defs, def));
 		}
@@ -129,6 +99,7 @@ pub fn decl_and_impl(scrate: &TokenStream2, def: &super::DeclStorageDefExt) -> T
 	// The name of the inherently available instance.
 	let inherent_instance = syn::Ident::new(INHERENT_INSTANCE_NAME, Span::call_site());
 
+	// Implementation of inherent instance.
 	if let Some(default_instance) = def.module_instance.as_ref()
 		.and_then(|i| i.instance_default.as_ref())
 	{
@@ -148,13 +119,47 @@ pub fn decl_and_impl(scrate: &TokenStream2, def: &super::DeclStorageDefExt) -> T
 	impls
 }
 
+fn create_instance_trait(
+	const_defs: &[InstanceConstDef],
+	def: &DeclStorageDefExt,
+) -> TokenStream {
+	let instance_trait = def.module_instance.as_ref().map(|i| i.instance_trait.clone())
+		.unwrap_or_else(|| syn::Ident::new(DEFAULT_INSTANTIABLE_TRAIT_NAME, Span::call_site()));
+
+	let mut const_impls = TokenStream::new();
+	for const_def in const_defs {
+		let const_name = &const_def.name;
+		const_impls.extend(quote! {
+			const #const_name: &'static str;
+		});
+	}
+
+	let optional_hide = if def.module_instance.is_some() {
+		quote!()
+	} else {
+		quote!(#[doc(hidden)])
+	};
+
+	quote! {
+		/// Tag a type as an instance of a module.
+		///
+		/// Defines storage prefixes, they must be unique.
+		#optional_hide
+		pub trait #instance_trait: 'static {
+			/// The prefix used by any storage entry of an instance.
+			const PREFIX: &'static str;
+			#const_impls
+		}
+	}
+}
+
 fn create_and_impl_instance_struct(
-	scrate: &TokenStream2,
+	scrate: &TokenStream,
 	instance_def: &InstanceDef,
 	const_defs: &[InstanceConstDef],
-	def: &super::DeclStorageDefExt,
-) -> TokenStream2 {
-	let mut const_impls = TokenStream2::new();
+	def: &DeclStorageDefExt,
+) -> TokenStream {
+	let mut const_impls = TokenStream::new();
 
 	for const_def in const_defs {
 		let const_value = format!(
