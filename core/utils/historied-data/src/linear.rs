@@ -251,7 +251,7 @@ impl<'a, F: SerializedConfig> Serialized<'a, F> {
 		};
 		let delete_size = elt_end - elt_start;
 		for _ in elt_start..elt_end {
-			let _ = self.0.to_mut().remove(elt_start); // TODO EMCH slice copy instead of that horror
+			let _ = self.0.to_mut().remove(elt_start);
 		}
 		let start_ix = start_ix - delete_size;
 

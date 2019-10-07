@@ -252,7 +252,7 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		number: u64,
 		parent_hash: &BlockHash,
 		mut changeset: ChangeSet<Key>,
-		mut offstate_changeset: OffstateChangeSet<OffstateKey>,
+		offstate_changeset: OffstateChangeSet<OffstateKey>,
 	) -> Result<CommitSet<Key>, Error<E>> {
 
 		match self.mode {

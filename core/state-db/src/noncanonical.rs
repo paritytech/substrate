@@ -124,23 +124,8 @@ impl OffstatePendingGC {
 		min
 	}
 
-	// TODO is it of any use??
-	fn revert(&mut self) {
-		self.pending_canonicalisation_query = None;
-		// TODO EMCH here reverting on a double set_pending_gc
-		// will fail: need to stack those offstatepending_gc??
-		self.keys_pending_gc.clear();
-		self.next_keys_pending_gc.clear();
-	}
-
 }
 
-struct OffstatePinnedThread {
-	/// index of branch which was pinned
-	branch_index: u64,
-	
-	
-}
 #[derive(Encode, Decode)]
 struct JournalRecord<BlockHash: Hash, Key: Hash> {
 	hash: BlockHash,

@@ -17,12 +17,9 @@
 
 //! Helper for managing the set of indexed available branches.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap, btree_map::Entry};
-use std::cmp::Reverse;
+use std::collections::{BTreeMap};
 use crate::Error;
-use std::hash::Hash as StdHash;
-use std::convert::TryInto;
-use historied_data::tree::{BranchesStateTrait, BranchStateTrait, StatesBranchRef, BranchStateRef};
+use historied_data::tree::{BranchesStateTrait, BranchStatesRef, BranchStateRef};
 
 #[derive(Clone, Default, Debug)]
 /// Reference to state that is enough for query updates, but not
@@ -33,7 +30,7 @@ use historied_data::tree::{BranchesStateTrait, BranchStateTrait, StatesBranchRef
 /// Note that an alternative could be a pointer to a full state
 /// branch for a given branch index, here we use an in memory
 /// copied representation in relation to an actual use case.
-pub struct BranchRanges(Vec<StatesBranchRef>);
+pub struct BranchRanges(Vec<BranchStatesRef>);
 
 impl<'a> BranchesStateTrait<bool, u64, u64> for &'a BranchRanges {
 	type Branch = &'a BranchStateRef;
@@ -87,17 +84,17 @@ impl<'a> Iterator for BranchRangesIter<'a> {
 /// numbers.
 ///
 /// New branches index are using `last_index`.
-/// `treshold` is a branch index under which branches are undefined.
 ///
 /// Also acts as a cache, storage can store
 /// unknown db value as `None`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RangeSet {
 	// TODO EMCH using a option value makes not sense when all in memory
-	storage: BTreeMap<u64, Option<LinearStates>>,
+	storage: BTreeMap<u64, Option<BranchStates>>,
 	// TODO EMCH remove this?
 	last_index: u64,
-	// TODO EMCH remove this?
+	/// treshold for possible node value, correspond
+	/// roughly to last cannonical block branch index.
 	treshold: u64,
 }
 
@@ -123,18 +120,8 @@ impl RangeSet {
 
 	#[cfg(test)]
 	/// test access to strage.
-	pub fn inner_storage(&self) -> &BTreeMap<u64, Option<LinearStates>> {
+	pub fn inner_storage(&self) -> &BTreeMap<u64, Option<BranchStates>> {
 		&self.storage
-	}
-
-
-	/// Construct a new range set
-	pub fn new(treshold: u64, last_index: u64) -> Self {
-		RangeSet {
-			storage: BTreeMap::new(),
-			last_index,
-			treshold,
-		}
 	}
 
 	/// Iterator over all its range sets.
@@ -157,7 +144,7 @@ impl RangeSet {
 		}
 		let mut previous_start = block.map(|b| b + 1).unwrap_or(u64::max_value());
 		loop {
-			if let Some(Some(StatesBranch{ state, parent_branch_index, .. })) = self.storage.get(&branch_index) {
+			if let Some(Some(BranchStates{ state, parent_branch_index, .. })) = self.storage.get(&branch_index) {
 				// TODO EMCH consider vecdeque ??
 				let state = if state.end > previous_start {
 					if state.start >= previous_start {
@@ -172,7 +159,7 @@ impl RangeSet {
 
 				previous_start = state.start;
 
-				result.insert(0, StatesBranchRef {
+				result.insert(0, BranchStatesRef {
 					state,
 					branch_index,
 				});
@@ -252,7 +239,7 @@ impl RangeSet {
 			self.last_index += 1;
 
 
-			let state = StatesBranch::new(number, branch_index);
+			let state = BranchStates::new(number, branch_index);
 			self.storage.insert(self.last_index, Some(state));
 			Ok(self.last_index)
 		} else {
@@ -262,9 +249,9 @@ impl RangeSet {
 
 	// TODO EMCH this access can be optimize at multiple places (by returning ref
 	// instead of an anchor_id).
-	pub fn state_ref(&self, branch_index: u64) -> Option<StatesBranchRef> {
+	pub fn state_ref(&self, branch_index: u64) -> Option<BranchStatesRef> {
 		self.storage.get(&branch_index).and_then(|v| v.as_ref().map(|v| v.state_ref()))
-			.map(|state| StatesBranchRef {
+			.map(|state| BranchStatesRef {
 				branch_index,
 				state,
 			})
@@ -306,8 +293,6 @@ impl RangeSet {
 		if branch_index < self.treshold {
 			return;
 		}
-		// range set update
-		let old_treshold = self.treshold;
 		// we do not finalize current branch cause it
 		// can contains other blocks
 		self.treshold = branch_index;
@@ -339,7 +324,7 @@ impl RangeSet {
 		linear_index: u64,
 	) {
 		if let Some(Some(state)) = self.storage.remove(&branch_index) {
-			let mut child_anchor: LinearStates = state.clone();
+			let mut child_anchor: BranchStates = state.clone();
 			child_anchor.state.start = linear_index;
 			let old_storage = std::mem::replace(&mut self.storage, BTreeMap::new());
 			// insert anchor
@@ -395,29 +380,27 @@ impl RangeSet {
 
 }
 
+/// Stored states for a branch, it contains branch reference information,
+/// structural information (index of parent branch) and fork tree building
+/// information (is branch appendable).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StatesBranch {
+pub struct BranchStates {
 	state: BranchStateRef,
 	can_append: bool,
 	parent_branch_index: u64,
 }
 
-
-// TODO EMCH temporary structs until merge with historied-data branch.
-
-type LinearStates = StatesBranch;
-
-impl Default for LinearStates {
+impl Default for BranchStates {
 	// initialize with one element
 	fn default() -> Self {
 		Self::new(0, 0)
 	}
 }
 
-impl LinearStates {
+impl BranchStates {
 	pub fn new(offset: u64, parent_branch_index: u64) -> Self {
 		let offset = offset as u64;
-		LinearStates {
+		BranchStates {
 			state: BranchStateRef {
 				start: offset,
 				end: offset + 1,
@@ -454,22 +437,9 @@ impl LinearStates {
 		}
 	}
 
-	/// Return true if state exists.
-	pub fn get_state(&self, index: u64) -> bool {
-		index < self.state.end && index >= self.state.start
-	}
-
 	/// Return true if you can add this index.
 	pub fn can_add(&self, index: u64) -> bool {
 		index == self.state.end
-	}
-
-	pub fn latest_ix(&self) -> Option<u64> {
-		if self.state.end - self.state.start > 0 {
-			Some(self.state.end - 1)
-		} else {
-			None
-		}
 	}
 
 }

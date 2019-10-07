@@ -255,8 +255,8 @@ pub struct TestStates {
 }
 
 impl StatesBranch {
-	pub fn branch_ref(&self) -> StatesBranchRef {
-		StatesBranchRef {
+	pub fn branch_ref(&self) -> BranchStatesRef {
+		BranchStatesRef {
 			branch_index: self.branch_index,
 			state: self.state.state_ref(),
 		}
@@ -288,7 +288,7 @@ pub struct StatesBranch {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StatesBranchRef {
+pub struct BranchStatesRef {
 	pub branch_index: u64,
 	pub state: BranchStateRef,
 }
@@ -302,7 +302,7 @@ pub struct StatesBranchRef {
 /// tree state with a defined branch index implementing an iterator.
 pub struct StatesRef {
 	/// Oredered by branch index linear branch states.
-	history: Rc<Vec<StatesBranchRef>>,
+	history: Rc<Vec<BranchStatesRef>>,
 	/// Index is included, acts as length of history.
 	upper_branch_index: Option<u64>,
 	/// Index is included, acts as a branch ref end value.
@@ -477,7 +477,6 @@ impl TestStates {
 /// First field is the actual history against which we run
 /// the state.
 /// Second field is an optional value for the no match case.
-/// TODO EMCH consider removing second field (not use out of test)
 #[derive(Debug, Clone)]
 #[cfg_attr(any(test, feature = "test"), derive(PartialEq))]
 pub struct History<V>(Vec<HistoryBranch<V>>);
@@ -777,10 +776,7 @@ impl<'a, F: SerializedConfig> Serialized<'a, F> {
 			let history = self.0.get_state(index);
 			if history.index == from + 1 {
 				// new first content
-				if history.value.len() == 0 {
-					// delete so first content is after (if any)
-					last_index_with_value = None;
-				} else {
+				if history.value.len() != 0 {
 					// start value over a value drop until here
 					last_index_with_value = Some(index);
 					break;
@@ -907,11 +903,11 @@ mod test {
 	fn test_state_refs() {
 		let states = test_states();
 		let ref_3 = vec![
-			StatesBranchRef {
+			BranchStatesRef {
 				branch_index: 1,
 				state: BranchStateRef { start: 0, end: 2 },
 			},
-			StatesBranchRef {
+			BranchStatesRef {
 				branch_index: 3,
 				state: BranchStateRef { start: 0, end: 1 },
 			},
@@ -922,11 +918,11 @@ mod test {
 
 		assert_eq!(states.create_branch(1, 1, Some(0)), Some(6));
 		let ref_6 = vec![
-			StatesBranchRef {
+			BranchStatesRef {
 				branch_index: 1,
 				state: BranchStateRef { start: 0, end: 1 },
 			},
-			StatesBranchRef {
+			BranchStatesRef {
 				branch_index: 6,
 				state: BranchStateRef { start: 0, end: 1 },
 			},
