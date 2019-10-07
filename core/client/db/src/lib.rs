@@ -61,7 +61,7 @@ use sr_primitives::traits::{
 use executor::RuntimeInfo;
 use state_machine::{
 	DBValue, ChangesTrieTransaction, ChangesTrieCacheAction, ChangesTrieBuildCache,
-	backend::Backend as StateBackend,
+	backend::Backend as StateBackend, TODO2,
 };
 use crate::utils::{Meta, db_err, meta_keys, read_db, read_meta};
 use client::leaves::{LeafSet, FinalizationDisplaced};
@@ -660,14 +660,6 @@ impl<Block: BlockT> state_db::OffstateDb<u64> for StorageDb<Block> {
 
 impl<Block: BlockT> state_machine::OffstateStorage<(BranchRanges, u64)> for StorageDbAt<Block, (BranchRanges, u64)> {
 
-	fn state(&self) -> &(BranchRanges, u64) {
-		&self.state
-	}
-
-	fn change_state(&mut self, state: (BranchRanges, u64)) -> (BranchRanges, u64) {
-		std::mem::replace(&mut self.state, state)
-	}
-
 	fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
 		self.storage_db.state_db.get_offstate(key, &self.state, self.storage_db.deref())
 			.map_err(|e| format!("Database backend error: {:?}", e))
@@ -679,14 +671,6 @@ impl<Block: BlockT> state_machine::OffstateStorage<(BranchRanges, u64)> for Stor
 }
 
 impl<S: Send + Sync> state_machine::OffstateStorage<S> for TODO2At<S> {
-
-	fn state(&self) -> &S {
-		&self.state
-	}
-
-	fn change_state(&mut self, state: S) -> S {
-		std::mem::replace(&mut self.state, state)
-	}
 
 	fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
 		self.storage_db.get(key)
@@ -1459,7 +1443,7 @@ fn apply_state_commit(
 		let mut ser = if let Some(stored) = db.get(columns::OFFSTATE, key)? {
 			Ser::from_vec(stored.to_vec())
 		} else {
-			if let Some(value) = o {
+			if o.is_some() {
 				Ser::default()
 			} else {
 				break;

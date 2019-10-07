@@ -26,7 +26,7 @@ use crate::offstate_backend::OffstateBackendStorage;
 use primitives::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX;
 
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
-/// TODO EMCH with offstaet in backend this should be renamed eg StateBackend.
+/// TODO EMCH with offstate in backend this should be renamed eg StateBackend.
 pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher, O: OffstateBackendStorage> {
 	essence: TrieBackendEssence<S, H>,
 	offstate_storage: O,
