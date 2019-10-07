@@ -35,9 +35,9 @@ use rstd::collections::btree_map::BTreeMap;
 use rstd::convert::{TryFrom, TryInto};
 
 /// Trait defining a state for querying or modifying a tree.
-/// This is therefore the representation of a branch.
-/// TODO EMCH rename to BranchesStateTrait?
-pub trait TreeStateTrait<S, I, BI> {
+/// This is a collection of branches index, corresponding
+/// to a tree path.
+pub trait BranchesStateTrait<S, I, BI> {
 	type Branch: BranchStateTrait<S, BI>;
 	type Iter: Iterator<Item = (Self::Branch, I)>;
 
@@ -60,7 +60,7 @@ pub trait BranchStateTrait<S, I> {
 	fn last_index(&self) -> I;
 }
 
-impl<'a> TreeStateTrait<bool, u64, u64> for &'a StatesRef {
+impl<'a> BranchesStateTrait<bool, u64, u64> for &'a StatesRef {
 	type Branch = (&'a BranchStateRef, Option<u64>);
 	type Iter = StatesRefIter<'a>;
 
@@ -480,13 +480,25 @@ impl TestStates {
 /// TODO EMCH consider removing second field (not use out of test)
 #[derive(Debug, Clone)]
 #[cfg_attr(any(test, feature = "test"), derive(PartialEq))]
-pub struct History<V>(Vec<HistoryBranch<V>>, Option<V>);
+pub struct History<V>(Vec<HistoryBranch<V>>);
+
+#[derive(Debug, Clone)]
+#[cfg_attr(any(test, feature = "test"), derive(PartialEq))]
+pub struct HistoryWithDefault<V>(History<V>, Option<V>);
+
 
 impl<V> Default for History<V> {
 	fn default() -> Self {
-		History(Vec::new(), None)
+		History(Vec::new())
 	}
 }
+
+impl<V> Default for HistoryWithDefault<V> {
+	fn default() -> Self {
+		HistoryWithDefault(History::default(), None)
+	}
+}
+
 
 #[derive(Debug, Clone)]
 #[cfg_attr(any(test, feature = "test"), derive(PartialEq))]
@@ -500,7 +512,7 @@ impl<V> History<V> {
 	/// Set or update value for a given state.
 	pub fn set<S, I, BI>(&mut self, state: S, value: V) 
 		where
-			S: TreeStateTrait<bool, I, BI>,
+			S: BranchesStateTrait<bool, I, BI>,
 			I: Copy + Eq + TryFrom<usize> + TryInto<usize>,
 			BI: Copy + Eq + TryFrom<usize> + TryInto<usize>,
 	{
@@ -583,7 +595,7 @@ impl<V> History<V> {
 	/// When possible please use `get_mut` as it can free some memory.
 	pub fn get<I, BI, S> (&self, state: S) -> Option<&V> 
 		where
-			S: TreeStateTrait<bool, I, BI>,
+			S: BranchesStateTrait<bool, I, BI>,
 			I: Copy + Eq + TryFrom<usize> + TryInto<usize>,
 			BI: Copy + Eq + TryFrom<usize> + TryInto<usize>,
 	{
@@ -592,7 +604,7 @@ impl<V> History<V> {
 		// along a branch (no state containing unordered branch_index
 		// and no history containing unorderd branch_index).
 		if index == 0 {
-			return self.1.as_ref();
+			return None;
 		}
 
 		// TODO EMCH switch loops ? probably.
@@ -613,7 +625,7 @@ impl<V> History<V> {
 				break;
 			}
 		}
-		self.1.as_ref()
+		None
 	}
 
 	fn branch_get<S, I>(&self, index: usize, state: &S) -> Option<&V>
@@ -703,54 +715,48 @@ impl<V> History<V> {
 			PruneResult::Unchanged
 		}
 	}
-	
-/*
-	/// Access to last valid value (non dropped state in history).
-	/// When possible please use `get_mut` as it can free some memory.
-	pub fn get_mut(&mut self, state: &StatesRef) -> Option<&mut V> {
-		let mut index = self.0.len();
-		let mut index_state = state.history.len() - 1;
 
-		// note that we expect branch index to be linearily set
-		// along a branch (no state containing unordered branch_index
-		// and no history containing unorderd branch_index).
-		if index == 0 || index_state == 0 {
-			return self.1.as_mut();
-		}
-		while index > 0 && index_state > 0 {
-			index -= 1;
-			let branch_index = self.0[index].branch_index;
-
-			while index_state > 0 && state.history[index_state].branch_index > branch_index {
-				index_state -= 1;
-			}
-			if state.history[index_state].branch_index == branch_index {
-				if let Some(result) = self.branch_get_unchecked_mut(branch_index, &state.history[index_state]) {
-					return Some(result)
-				}
-			}
-		}
-		self.1.as_mut()
-	}
-
-	fn branch_get_unchecked_mut(&mut self, branch_index: u64, state: &StatesBranchRef) -> Option<&mut V> {
-		let history = &mut self.0[branch_index as usize];
-		let mut index = history.history.len();
-		if index == 0 {
-			return None;
-		}
-		while index > 0 {
-			index -= 1;
-			if let Some(&mut v) = history.history.get_mut(index).as_mut() {
-				if v.index < state.state.end {
-					return Some(&mut v.value);
-				}
-			}
-		}
-		None
-	}
-*/
 }
+
+impl<V> HistoryWithDefault<V> {
+
+	/// See `set` for History.
+	pub fn set<S, I, BI>(&mut self, state: S, value: V) 
+		where
+			S: BranchesStateTrait<bool, I, BI>,
+			I: Copy + Eq + TryFrom<usize> + TryInto<usize>,
+			BI: Copy + Eq + TryFrom<usize> + TryInto<usize>,
+	{
+		self.0.set(state, value)
+	}
+
+	/// See `get` for History.
+	pub fn get<I, BI, S> (&self, state: S) -> Option<&V> 
+		where
+			S: BranchesStateTrait<bool, I, BI>,
+			I: Copy + Eq + TryFrom<usize> + TryInto<usize>,
+			BI: Copy + Eq + TryFrom<usize> + TryInto<usize>,
+	{
+		let result = self.0.get(state);
+		if result.is_none() {
+			self.1.as_ref()
+		} else {
+			result
+		}
+	}
+
+	/// See `gc` for History.
+	pub fn gc<IT, S, I>(&mut self, states: IT) -> PruneResult
+		where
+			IT: Iterator<Item = (S, I)>,
+			S: BranchStateTrait<bool, I>,
+			I: Copy + Eq + TryFrom<usize> + TryInto<usize>,
+	{
+		self.0.gc(states)
+	}
+
+}
+
 
 impl<'a, F: SerializedConfig> Serialized<'a, F> {
 

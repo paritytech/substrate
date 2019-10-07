@@ -22,7 +22,7 @@ use std::cmp::Reverse;
 use crate::Error;
 use std::hash::Hash as StdHash;
 use std::convert::TryInto;
-use historied_data::tree::{TreeStateTrait, BranchStateTrait, StatesBranchRef, BranchStateRef};
+use historied_data::tree::{BranchesStateTrait, BranchStateTrait, StatesBranchRef, BranchStateRef};
 
 #[derive(Clone, Default, Debug)]
 /// Reference to state that is enough for query updates, but not
@@ -35,7 +35,7 @@ use historied_data::tree::{TreeStateTrait, BranchStateTrait, StatesBranchRef, Br
 /// copied representation in relation to an actual use case.
 pub struct BranchRanges(Vec<StatesBranchRef>);
 
-impl<'a> TreeStateTrait<bool, u64, u64> for &'a BranchRanges {
+impl<'a> BranchesStateTrait<bool, u64, u64> for &'a BranchRanges {
 	type Branch = &'a BranchStateRef;
 	type Iter = BranchRangesIter<'a>;
 
