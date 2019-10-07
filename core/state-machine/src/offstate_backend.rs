@@ -17,41 +17,41 @@
 //! Backend for storing data without a state.
 
 use std::sync::Arc;
+use std::collections::HashMap;
 use std::ops::Deref;
 
+/// This covers offstate values access.
+/// It target a single history state (state machine
+/// only run for a single history state).
 pub trait OffstateBackend: Send + Sync {
 	/// Retrieve a value from storage under given key.
 	fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, String>;
 
-	/// Return in memory all values for this backend, mainly for
-	/// tests.
+	/// Return all values (in memory) for this backend, mainly for
+	/// tests. This method should only be use for testing or
+	/// for small offstate.
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)>;
-
 }
 
-impl OffstateBackend for TODO2 {
+/// need to keep multiple block state.
+pub type InMemory = HashMap<Vec<u8>, Vec<u8>>;
 
+impl OffstateBackend for InMemory {
 	fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
-		unimplemented!()
+		Ok(self.get(key).map(Clone::clone))
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
-		unimplemented!()
+		self.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
 	}
-
 }
 
 impl OffstateBackend for Arc<dyn OffstateBackend> {
 	fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
 		OffstateBackend::get(self.deref(), key)
 	}
+
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
 		OffstateBackend::pairs(self.deref())
 	}
 }
-
-
-/// need to keep multiple block state.
-/// TODO rename to something like SingleState
-pub struct TODO2;
-

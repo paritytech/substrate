@@ -33,7 +33,7 @@ use state_machine::backend::InMemory as InMemoryState;
 use state_machine::backend::InMemoryTransaction;
 use state_machine::{MemoryDB, TrieBackend, Backend as StateBackend,
 	prove_read_on_trie_backend, read_proof_check, read_proof_check_on_proving_backend};
-use state_machine::offstate_backend::TODO2;
+use state_machine::offstate_backend::InMemory as OffstateBackend;
 
 use crate::error::{Error as ClientError, Result as ClientResult};
 
@@ -148,7 +148,7 @@ pub fn check_proof_on_proving_backend<Header, Hasher>(
 	local_root: Header::Hash,
 	local_number: Header::Number,
 	remote_hash: Header::Hash,
-	proving_backend: &TrieBackend<MemoryDB<Hasher>, Hasher, TODO2>,
+	proving_backend: &TrieBackend<MemoryDB<Hasher>, Hasher, OffstateBackend>,
 ) -> ClientResult<()>
 	where
 		Header: HeaderT,

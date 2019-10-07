@@ -28,7 +28,7 @@ pub use trie::trie_types::{Layout, TrieError};
 use crate::trie_backend::TrieBackend;
 use crate::trie_backend_essence::{Ephemeral, TrieBackendEssence, TrieBackendStorage};
 use crate::{Error, ExecutionError, Backend};
-use crate::offstate_backend::{OffstateBackend, TODO2};
+use crate::offstate_backend::{OffstateBackend, InMemory as InMemoryOffstateBackend};
 
 /// Patricia trie-based backend essence which also tracks all touched storage trie values.
 /// These can be sent to remote node and used as a proof of execution.
@@ -253,14 +253,17 @@ impl<'a, S, H, O> Backend<H> for ProvingBackend<'a, S, H, O>
 pub fn create_proof_check_backend<H>(
 	root: H::Out,
 	proof: Vec<Vec<u8>>
-) -> Result<TrieBackend<MemoryDB<H>, H, TODO2>, Box<dyn Error>>
+) -> Result<TrieBackend<MemoryDB<H>, H, InMemoryOffstateBackend>, Box<dyn Error>>
 where
 	H: Hasher,
 {
 	let db = create_proof_check_backend_storage(proof);
+	// run on empty offstate (current proof does not require
+	// offstate).
+	let offstate = InMemoryOffstateBackend::default(); 
 
 	if db.contains(&root, EMPTY_PREFIX) {
-		Ok(TrieBackend::new(db, root, TODO2))
+		Ok(TrieBackend::new(db, root, offstate))
 	} else {
 		Err(Box::new(ExecutionError::InvalidProof))
 	}
@@ -289,7 +292,7 @@ mod tests {
 
 	// TODO this need an actual in momery with possibly content
 	// as the test uses a prefixed memory db.
-	type OffstateBackend = TODO2;
+	type OffstateBackend = InMemoryOffstateBackend;
 
 	fn test_proving<'a>(
 		trie_backend: &'a TrieBackend<PrefixedMemoryDB<Blake2Hasher>, Blake2Hasher, OffstateBackend>,

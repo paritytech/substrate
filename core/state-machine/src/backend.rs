@@ -21,7 +21,7 @@ use log::warn;
 use hash_db::Hasher;
 use crate::trie_backend::TrieBackend;
 use crate::trie_backend_essence::TrieBackendStorage;
-use crate::offstate_backend::{OffstateBackend, TODO2};
+use crate::offstate_backend::{OffstateBackend, InMemory as InMemoryOffstateBackend};
 use trie::{
 	TrieMut, MemoryDB, child_trie_root, default_child_trie_root, TrieConfiguration,
 	trie_types::{TrieDBMut, Layout},
@@ -41,8 +41,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	/// Type of trie backend storage.
 	type TrieBackendStorage: TrieBackendStorage<H>;
 
-	/// Type of trie backend storage. TODO EMCH move to OffstateBackend
-	/// after implementated.
+	/// Type of trie backend storage.
 	type OffstateBackend: OffstateBackend;
 
 	/// Get keyed storage or None if there is nothing associated.
@@ -271,7 +270,7 @@ impl<U> Consolidate for Vec<U> {
 }
 
 impl<U: Consolidate, V: Consolidate> Consolidate for (U, V) {
-	fn consolidate(&mut self, mut other: Self) {
+	fn consolidate(&mut self, other: Self) {
 		self.0.consolidate(other.0);
 		self.1.consolidate(other.1);
 	}
@@ -310,8 +309,8 @@ impl error::Error for Void {
 /// tests.
 pub struct InMemory<H: Hasher> {
 	inner: HashMap<Option<Vec<u8>>, HashMap<Vec<u8>, Vec<u8>>>,
-	trie: Option<TrieBackend<MemoryDB<H>, H, TODO2>>,
-	offstate: HashMap<Vec<u8>, Vec<u8>>,
+	offstate: Option<InMemoryOffstateBackend>,
+	trie: Option<TrieBackend<MemoryDB<H>, H, InMemoryOffstateBackend>>,
 	_hasher: PhantomData<H>,
 }
 
@@ -326,7 +325,7 @@ impl<H: Hasher> Default for InMemory<H> {
 		InMemory {
 			inner: Default::default(),
 			trie: None,
-			offstate: Default::default(),
+			offstate: Some(Default::default()),
 			_hasher: PhantomData,
 		}
 	}
@@ -346,15 +345,42 @@ impl<H: Hasher> Clone for InMemory<H> {
 impl<H: Hasher> PartialEq for InMemory<H> {
 	fn eq(&self, other: &Self) -> bool {
 		self.inner.eq(&other.inner)
-		&& self.offstate.eq(&other.offstate)
+		&& self.offstate().eq(other.offstate()) 
 	}
 }
 
 impl<H: Hasher> InMemory<H> {
+	fn offstate(&self) -> &InMemoryOffstateBackend {
+		if let Some(offstate) = self.offstate.as_ref() {
+			offstate
+		} else {
+			&self.trie.as_ref().unwrap().offstate_storage
+		}
+	}
+
+	fn offstate_mut(&mut self) -> &mut InMemoryOffstateBackend {
+		if let Some(offstate) = self.offstate.as_mut() {
+			offstate
+		} else {
+			&mut self.trie.as_mut().unwrap().offstate_storage
+		}
+	}
+
+	fn extract_offstate(&mut self) -> InMemoryOffstateBackend {
+		if let Some(offstate) = self.offstate.take() {
+			offstate
+		} else {
+			std::mem::replace(
+				&mut self.trie.as_mut().unwrap().offstate_storage,
+				Default::default(),
+			)	
+		}
+	}
+
 	/// Copy the state, with applied updates
 	pub fn update(&self, changes: <Self as Backend<H>>::Transaction) -> Self {
 		let mut inner: HashMap<_, _> = self.inner.clone();
-		let mut offstate: HashMap<_, _> = self.offstate.clone();
+		let mut offstate: HashMap<_, _> = self.offstate().clone();
 		for (storage_key, key, val) in changes.storage {
 			match val {
 				Some(v) => { inner.entry(storage_key).or_default().insert(key, v); },
@@ -368,6 +394,7 @@ impl<H: Hasher> InMemory<H> {
 			}
 		}
 
+		let offstate = Some(offstate);
 		InMemory { inner, offstate, trie: None, _hasher: PhantomData }
 	}
 }
@@ -377,7 +404,7 @@ impl<H: Hasher> From<HashMap<Option<Vec<u8>>, HashMap<Vec<u8>, Vec<u8>>>> for In
 		InMemory {
 			inner: inner,
 			trie: None,
-			offstate: Default::default(),
+			offstate: Some(Default::default()),
 			_hasher: PhantomData,
 		}
 	}
@@ -397,7 +424,7 @@ impl<H: Hasher> From<(
 		InMemory {
 			inner: inner,
 			trie: None,
-			offstate: Default::default(),
+			offstate: Some(Default::default()),
 			_hasher: PhantomData,
 		}
 	}
@@ -410,7 +437,7 @@ impl<H: Hasher> From<HashMap<Vec<u8>, Vec<u8>>> for InMemory<H> {
 		InMemory {
 			inner: expanded,
 			trie: None,
-			offstate: Default::default(),
+			offstate: Some(Default::default()),
 			_hasher: PhantomData,
 		}
 	}
@@ -437,7 +464,7 @@ impl<H: Hasher> From<InMemoryTransaction> for InMemory<H> {
 			}
 		}
 		let mut result: InMemory<H> = expanded.into();
-		result.offstate.extend(inner.offstate.into_iter()
+		result.offstate_mut().extend(inner.offstate.into_iter().into_iter()
 			.filter_map(|(k, v)| v.map(|v| (k, v))));
 		result
 	}
@@ -466,7 +493,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 	type Error = Void;
 	type Transaction = InMemoryTransaction;
 	type TrieBackendStorage = MemoryDB<H>;
-	type OffstateBackend = TODO2;
+	type OffstateBackend = InMemoryOffstateBackend;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		Ok(self.inner.get(&None).and_then(|map| map.get(key).map(Clone::clone)))
@@ -573,7 +600,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 	}
 
 	fn offstate_pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
-		self.offstate.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+		self.offstate().iter().map(|(k, v)| (k.clone(), v.clone())).collect()
 	}
 
 	fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> {
@@ -619,7 +646,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 		// Since we are running on a memorydb (not a prefixed memory db), content
 		// is not collision free, so an empty offtrie state can be use (no need
 		// for keyspace).
-		self.trie = Some(TrieBackend::new(mdb, root, TODO2));
+		self.trie = Some(TrieBackend::new(mdb, root, self.extract_offstate()));
 		self.trie.as_ref()
 	}
 }

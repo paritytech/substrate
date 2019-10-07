@@ -350,8 +350,9 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>> LightDataChecker<E, H, B, S> {
 				}
 
 				// using empty offstate as light do not use offstate information
-				// (things being fetch proved).
-				let offstate = state_machine::TODO2;
+				// (things being fetch proved and proof currently do not rely on
+				// offstate).
+				let offstate = state_machine::InMemoryOffstateBackend::default();
 
 				// check proof for single changes trie root
 				let proving_backend = TrieBackend::new(storage, cht_root, offstate);

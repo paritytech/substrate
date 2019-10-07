@@ -61,7 +61,7 @@ use sr_primitives::traits::{
 use executor::RuntimeInfo;
 use state_machine::{
 	DBValue, ChangesTrieTransaction, ChangesTrieCacheAction, ChangesTrieBuildCache,
-	backend::Backend as StateBackend, TODO2,
+	backend::Backend as StateBackend, InMemoryOffstateBackend,
 };
 use crate::utils::{Meta, db_err, meta_keys, read_db, read_meta};
 use client::leaves::{LeafSet, FinalizationDisplaced};
@@ -1639,7 +1639,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 				let genesis_storage = DbGenesisStorage::new();
 				let root = genesis_storage.0.clone();
 				// TODO EMCH see genesis impl: that is empty storage
-				let genesis_offstate = TODO2;
+				let genesis_offstate = InMemoryOffstateBackend::default();
 				let db_state = DbState::new(Arc::new(genesis_storage), root, Arc::new(genesis_offstate));
 				let state = RefTrackingState::new(db_state, self.storage.clone(), None);
 				return Ok(CachingState::new(state, self.shared_cache.clone(), None));

@@ -29,7 +29,7 @@ use primitives::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX;
 /// TODO EMCH with offstate in backend this should be renamed eg StateBackend.
 pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher, O: OffstateBackend> {
 	essence: TrieBackendEssence<S, H>,
-	offstate_storage: O,
+	pub offstate_storage: O,
 }
 
 impl<S: TrieBackendStorage<H>, O: OffstateBackend, H: Hasher> TrieBackend<S, H, O> {
@@ -90,7 +90,6 @@ impl<
 	type Error = String;
 	type Transaction = (S::Overlay, Vec<(Vec<u8>, Option<Vec<u8>>)>);
 	type TrieBackendStorage = S;
-	// TODO EMCH this does not make sens : split as a OffstateBackend from trait.
 	type OffstateBackend = O;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -99,7 +98,6 @@ impl<
 
 	fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 
-		// TODO EMCH PROTO: remove before pr. TODO test it when implemented!!
 //		let keyspace = self.child_keyspace(storage_key);
 		// Then change essence functions to use keyspace as input.
 
@@ -288,9 +286,7 @@ pub mod tests {
 	use trie::{TrieMut, PrefixedMemoryDB, trie_types::TrieDBMut};
 	use super::*;
 
-	// TODO this need an actual in momery with possibly content
-	// as the test uses a prefixed memory db.
-	type OffstateBackend = crate::offstate_backend::TODO2;
+	type OffstateBackend = crate::offstate_backend::InMemory;
 
 	fn test_db() -> (PrefixedMemoryDB<Blake2Hasher>, H256, OffstateBackend) {
 		let mut root = H256::default();
@@ -315,7 +311,7 @@ pub mod tests {
 			}
 		}
 		// empty history.
-		let offstate = crate::offstate_backend::TODO2;
+		let offstate = crate::offstate_backend::InMemory::default();
 		// TODO EMCH add a block in offstate or use an actual implementation of
 		// offstate that do not use history (a test implementation most likely)
 		// TODO EMCH feed offstate with keyspace for roots.
@@ -345,9 +341,9 @@ pub mod tests {
 	#[test]
 	fn pairs_are_empty_on_empty_storage() {
 		assert!(TrieBackend::<PrefixedMemoryDB<Blake2Hasher>, Blake2Hasher, OffstateBackend>::new(
-			PrefixedMemoryDB::default(),
 			Default::default(),
-			crate::offstate_backend::TODO2,
+			Default::default(),
+			Default::default(),
 		).pairs().is_empty());
 	}
 
