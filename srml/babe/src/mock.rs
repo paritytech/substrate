@@ -98,6 +98,7 @@ impl timestamp::Trait for Test {
 impl Trait for Test {
 	type EpochDuration = EpochDuration;
 	type ExpectedBlockTime = ExpectedBlockTime;
+	type EpochChangeTrigger = crate::ExternalTrigger;
 }
 
 pub fn new_test_ext(authorities: Vec<DummyValidatorId>) -> runtime_io::TestExternalities<Blake2Hasher> {

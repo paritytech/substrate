@@ -44,19 +44,19 @@ use codec::{Encode, Decode};
 #[cfg(feature = "std")]
 pub mod testing;
 
-pub mod weights;
-pub mod traits;
 pub mod curve;
-
 pub mod generic;
-pub mod transaction_validity;
+pub mod offchain;
 pub mod sr_arithmetic;
+pub mod traits;
+pub mod transaction_validity;
+pub mod weights;
 
 /// Re-export these since they're only "kind of" generic.
 pub use generic::{DigestItem, Digest};
 
 /// Re-export this since it's part of the API of this crate.
-pub use primitives::crypto::{key_types, KeyTypeId, CryptoType};
+pub use primitives::{TypeId, crypto::{key_types, KeyTypeId, CryptoType}};
 pub use app_crypto::RuntimeAppPublic;
 
 /// Re-export arithmetic stuff.
@@ -82,7 +82,7 @@ use traits::{Verify, Lazy};
 #[derive(Clone, Copy, Eq, PartialEq, Encode, Decode)]
 pub struct ModuleId(pub [u8; 8]);
 
-impl traits::TypeId for ModuleId {
+impl TypeId for ModuleId {
 	const TYPE_ID: [u8; 4] = *b"modl";
 }
 

@@ -47,7 +47,7 @@ When reviewing a pull request, the end-goal is to suggest useful changes to the 
 
 === Updating Polkadot as well
 
-If your PR changes the external APIs or interfaces used by Polkadot, **a corresponding PR on Polkadot must** be submitted as well. If you tagged the PR with `breaksapi` or `breaksconsensus` this is most certainly the case, in all other cases check for it by running step 1. 
+If your PR changes the external APIs or interfaces used by Polkadot, **a corresponding PR on Polkadot must** be submitted as well. If you tagged the PR with `breaksapi` or `breaksconsensus` this is most certainly the case, in all other cases check for it by running step 1.
 
 To update a corresponding Polkadot PR:
 

@@ -121,4 +121,3 @@ use sr_primitives::BuildStorage;
 /// A set of traits for the runtime genesis config.
 pub trait RuntimeGenesis: Serialize + DeserializeOwned + BuildStorage {}
 impl<T: Serialize + DeserializeOwned + BuildStorage> RuntimeGenesis for T {}
-
