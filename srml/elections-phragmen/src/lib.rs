@@ -181,7 +181,7 @@ decl_module! {
 		/// Writes: O(V) given `V` votes. V is bounded by 16.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(100_000)]
-		fn vote(origin, votes: Vec<T::AccountId>, value: BalanceOf<T>) {
+		fn vote(origin, votes: Vec<T::AccountId>, #[compact] value: BalanceOf<T>) {
 			let who = ensure_signed(origin)?;
 
 			let candidates_count = <Candidates<T>>::decode_len().unwrap_or(0) as usize;
@@ -539,7 +539,7 @@ impl<T: Trait> Module<T> {
 
 			// sort and save the members.
 			new_members.sort();
-			<Members<T>>::put(new_members.clone());
+			<Members<T>>::put(&new_members);
 
 			// save the runners as-is
 			<RunnersUp<T>>::put(runners_up);

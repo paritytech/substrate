@@ -47,10 +47,11 @@ use state_machine::{
 };
 use executor::{RuntimeVersion, RuntimeInfo};
 use consensus::{
-	Error as ConsensusError, BlockStatus, BlockImportParams,
+	Error as ConsensusError, BlockStatus, BlockImportParams, BlockCheckParams,
 	ImportResult, BlockOrigin, ForkChoiceStrategy,
 	SelectChain, self,
 };
+use header_metadata::{HeaderMetadata, CachedHeaderMetadata};
 
 use crate::{
 	runtime_api::{
@@ -86,6 +87,11 @@ type StorageUpdate<B, Block> = <
 			as BlockImportOperation<Block, Blake2Hasher>
 	>::State as state_machine::Backend<Blake2Hasher>>::Transaction;
 type ChangesUpdate<Block> = ChangesTrieTransaction<Blake2Hasher, NumberFor<Block>>;
+
+/// Expected hashes of blocks at given heights.
+///
+/// This may be used as chain spec extension to filter out known, unwanted forks.
+pub type ForkBlocks<Block> = Option<HashMap<NumberFor<Block>, <Block as BlockT>::Hash>>;
 
 /// Execution strategies settings.
 #[derive(Debug, Clone)]
@@ -123,6 +129,7 @@ pub struct Client<B, E, Block, RA> where Block: BlockT {
 	finality_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<FinalityNotification<Block>>>>,
 	// holds the block hash currently being imported. TODO: replace this with block queue
 	importing_block: RwLock<Option<Block::Hash>>,
+	fork_blocks: ForkBlocks<Block>,
 	execution_strategies: ExecutionStrategies,
 	_phantom: PhantomData<RA>,
 }
@@ -263,7 +270,7 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 		B: backend::LocalBackend<Block, Blake2Hasher>
 {
 	let call_executor = LocalCallExecutor::new(backend.clone(), executor, keystore);
-	Client::new(backend, call_executor, build_genesis_storage, Default::default())
+	Client::new(backend, call_executor, build_genesis_storage, Default::default(), Default::default())
 }
 
 /// Figure out the block type for a given type (for now, just a `Client`).
@@ -290,6 +297,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		backend: Arc<B>,
 		executor: E,
 		build_genesis_storage: S,
+		fork_blocks: ForkBlocks<Block>,
 		execution_strategies: ExecutionStrategies
 	) -> error::Result<Self> {
 		if backend.blockchain().header(BlockId::Number(Zero::zero()))?.is_none() {
@@ -318,6 +326,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			import_notification_sinks: Default::default(),
 			finality_notification_sinks: Default::default(),
 			importing_block: Default::default(),
+			fork_blocks,
 			execution_strategies,
 			_phantom: Default::default(),
 		})
@@ -958,10 +967,10 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		};
 
 		let retracted = if is_new_best {
-			let route_from_best = crate::blockchain::tree_route(
-				|id| self.header(&id)?.ok_or_else(|| Error::UnknownBlock(format!("{:?}", id))),
-				BlockId::Hash(info.best_hash),
-				BlockId::Hash(parent_hash),
+			let route_from_best = header_metadata::tree_route(
+				self.backend.blockchain(),
+				info.best_hash,
+				parent_hash,
 			)?;
 			route_from_best.retracted().iter().rev().map(|e| e.hash.clone()).collect()
 		} else {
@@ -1092,11 +1101,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			return Ok(());
 		}
 
-		let route_from_finalized = crate::blockchain::tree_route(
-			|id| self.header(&id)?.ok_or_else(|| Error::UnknownBlock(format!("{:?}", id))),
-			BlockId::Hash(last_finalized),
-			BlockId::Hash(block),
-		)?;
+		let route_from_finalized = header_metadata::tree_route(self.backend.blockchain(), last_finalized, block)?;
 
 		if let Some(retracted) = route_from_finalized.retracted().get(0) {
 			warn!("Safety violation: attempted to revert finalized block {:?} which is not in the \
@@ -1105,11 +1110,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			return Err(error::Error::NotInFinalizedChain);
 		}
 
-		let route_from_best = crate::blockchain::tree_route(
-			|id| self.header(&id)?.ok_or_else(|| Error::UnknownBlock(format!("{:?}", id))),
-			BlockId::Hash(best_block),
-			BlockId::Hash(block),
-		)?;
+		let route_from_best = header_metadata::tree_route(self.backend.blockchain(), best_block, block)?;
 
 		// if the block is not a direct ancestor of the current best chain,
 		// then some other block is the common ancestor.
@@ -1313,6 +1314,26 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	}
 }
 
+impl<B, E, Block, RA> HeaderMetadata<Block> for Client<B, E, Block, RA> where
+	B: backend::Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher>,
+	Block: BlockT<Hash=H256>,
+{
+	type Error = error::Error;
+
+	fn header_metadata(&self, hash: Block::Hash) -> Result<CachedHeaderMetadata<Block>, Self::Error> {
+		self.backend.blockchain().header_metadata(hash)
+	}
+
+	fn insert_header_metadata(&self, hash: Block::Hash, metadata: CachedHeaderMetadata<Block>) {
+		self.backend.blockchain().insert_header_metadata(hash, metadata)
+	}
+
+	fn remove_header_metadata(&self, hash: Block::Hash) {
+		self.backend.blockchain().remove_header_metadata(hash)
+	}
+}
+
 impl<B, E, Block, RA> ProvideUncles<Block> for Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher>,
@@ -1411,7 +1432,7 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 	fn call_api_at<
 		'a,
 		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
+		NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
 		C: CoreApi<Block>,
 	>(
 		&self,
@@ -1499,9 +1520,22 @@ impl<'a, B, E, Block, RA> consensus::BlockImport<Block> for &'a Client<B, E, Blo
 	/// Check block preconditions.
 	fn check_block(
 		&mut self,
-		hash: Block::Hash,
-		parent_hash: Block::Hash,
+		block: BlockCheckParams<Block>,
 	) -> Result<ImportResult, Self::Error> {
+		let BlockCheckParams { hash, number, parent_hash } = block;
+
+		if let Some(h) = self.fork_blocks.as_ref().and_then(|x| x.get(&number)) {
+			if &hash != h  {
+				trace!(
+					"Rejecting block from known invalid fork. Got {:?}, expected: {:?} at height {}",
+					hash,
+					h,
+					number
+				);
+				return Ok(ImportResult::KnownBad);
+			}
+		}
+
 		match self.block_status(&BlockId::Hash(parent_hash))
 			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
 		{
@@ -1517,6 +1551,7 @@ impl<'a, B, E, Block, RA> consensus::BlockImport<Block> for &'a Client<B, E, Blo
 			BlockStatus::Unknown | BlockStatus::InChainPruned => {},
 			BlockStatus::KnownBad => return Ok(ImportResult::KnownBad),
 		}
+
 
 		Ok(ImportResult::imported(false))
 	}
@@ -1539,10 +1574,9 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 
 	fn check_block(
 		&mut self,
-		hash: Block::Hash,
-		parent_hash: Block::Hash,
+		block: BlockCheckParams<Block>,
 	) -> Result<ImportResult, Self::Error> {
-		(&*self).check_block(hash, parent_hash)
+		(&*self).check_block(block)
 	}
 }
 
@@ -1777,7 +1811,7 @@ where
 /// Utility methods for the client.
 pub mod utils {
 	use super::*;
-	use crate::{blockchain, error};
+	use crate::error;
 	use primitives::H256;
 	use std::borrow::Borrow;
 
@@ -1791,7 +1825,7 @@ pub mod utils {
 		client: &'a T,
 		current: Option<(H, H)>,
 	) -> impl Fn(&H256, &H256) -> Result<bool, error::Error> + 'a
-		where T: ChainHeaderBackend<Block>,
+		where T: ChainHeaderBackend<Block> + HeaderMetadata<Block, Error=error::Error>,
 	{
 		move |base, hash| {
 			if base == hash { return Ok(false); }
@@ -1810,13 +1844,9 @@ pub mod utils {
 				}
 			}
 
-			let tree_route = blockchain::tree_route(
-				|id| client.header(id)?.ok_or_else(|| Error::UnknownBlock(format!("{:?}", id))),
-				BlockId::Hash(*hash),
-				BlockId::Hash(*base),
-			)?;
+			let ancestor = header_metadata::lowest_common_ancestor(client, *hash, *base)?;
 
-			Ok(tree_route.common_block().hash == *base)
+			Ok(ancestor.hash == *base)
 		}
 	}
 }

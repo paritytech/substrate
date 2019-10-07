@@ -23,18 +23,20 @@ use std::{sync::Arc, collections::HashMap};
 use sr_primitives::{Justification, generic::BlockId};
 use sr_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero};
 
+use header_metadata::{HeaderMetadata, CachedHeaderMetadata};
+
 use crate::backend::{AuxStore, NewBlockState};
 use crate::blockchain::{
 	Backend as BlockchainBackend, BlockStatus, Cache as BlockchainCache,
 	HeaderBackend as BlockchainHeaderBackend, Info as BlockchainInfo, ProvideCache,
-	well_known_cache_keys,
+	well_known_cache_keys
 };
 use crate::cht;
 use crate::error::{Error as ClientError, Result as ClientResult};
 use crate::light::fetcher::{Fetcher, RemoteHeaderRequest};
 
 /// Light client blockchain storage.
-pub trait Storage<Block: BlockT>: AuxStore + BlockchainHeaderBackend<Block> {
+pub trait Storage<Block: BlockT>: AuxStore + BlockchainHeaderBackend<Block> + HeaderMetadata<Block, Error=ClientError> {
 	/// Store new header. Should refuse to revert any finalized blocks.
 	///
 	/// Takes new authorities, the leaf state of the new block, and
@@ -137,6 +139,22 @@ impl<S, Block> BlockchainHeaderBackend<Block> for Blockchain<S> where Block: Blo
 
 	fn hash(&self, number: <<Block as BlockT>::Header as HeaderT>::Number) -> ClientResult<Option<Block::Hash>> {
 		self.storage.hash(number)
+	}
+}
+
+impl<S, Block> HeaderMetadata<Block> for Blockchain<S> where Block: BlockT, S: Storage<Block> {
+	type Error = ClientError;
+
+	fn header_metadata(&self, hash: Block::Hash) -> Result<CachedHeaderMetadata<Block>, Self::Error> {
+		self.storage.header_metadata(hash)
+	}
+
+	fn insert_header_metadata(&self, hash: Block::Hash, metadata: CachedHeaderMetadata<Block>) {
+		self.storage.insert_header_metadata(hash, metadata)
+	}
+
+	fn remove_header_metadata(&self, hash: Block::Hash) {
+		self.storage.remove_header_metadata(hash)
 	}
 }
 
@@ -279,6 +297,17 @@ pub mod tests {
 				Err(ClientError::Backend("Test error".into()))
 			}
 		}
+	}
+
+	impl HeaderMetadata<Block> for DummyStorage {
+		type Error = ClientError;
+
+		fn header_metadata(&self, hash: Hash) -> Result<CachedHeaderMetadata<Block>, Self::Error> {
+			self.header(BlockId::hash(hash))?.map(|header| CachedHeaderMetadata::from(&header))
+				.ok_or(ClientError::UnknownBlock("header not found".to_owned()))
+		}
+		fn insert_header_metadata(&self, _hash: Hash, _metadata: CachedHeaderMetadata<Block>) {}
+		fn remove_header_metadata(&self, _hash: Hash) {}
 	}
 
 	impl AuxStore for DummyStorage {

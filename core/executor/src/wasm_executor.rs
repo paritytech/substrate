@@ -27,16 +27,15 @@ use wasmi::{
 	Module, ModuleInstance, MemoryInstance, MemoryRef, TableRef, ImportsBuilder, ModuleRef,
 	memory_units::Pages, RuntimeValue::{I32, I64, self},
 };
-use crate::error::{Error, Result};
+use super::{sandbox, allocator, error::{Error, Result}};
 use codec::{Encode, Decode};
 use primitives::{
 	blake2_128, blake2_256, twox_64, twox_128, twox_256, ed25519, sr25519, Pair, crypto::KeyTypeId,
 	offchain, sandbox as sandbox_primitives, Blake2Hasher,
 	traits::Externalities,
 };
-use trie::{TrieConfiguration, trie_types::Layout};
-use crate::sandbox;
-use crate::allocator;
+use trie::TrieConfiguration;
+use trie::trie_types::Layout;
 use log::trace;
 use wasm_interface::{
 	FunctionContext, HostFunctions, Pointer, WordSize, Sandbox, MemoryId, PointerType,
@@ -369,13 +368,13 @@ impl_wasm_host_interface! {
 	impl SubstrateExternals where context {
 		ext_malloc(size: WordSize) -> Pointer<u8> {
 			let r = context.allocate_memory(size)?;
-			debug_trace!(target: "sr-io", "malloc {} bytes at {}", size, r);
+			debug_trace!(target: "sr-io", "malloc {} bytes at {:?}", size, r);
 			Ok(r)
 		}
 
 		ext_free(addr: Pointer<u8>) {
 			context.deallocate_memory(addr)?;
-			debug_trace!(target: "sr-io", "free {}", addr);
+			debug_trace!(target: "sr-io", "free {:?}", addr);
 			Ok(())
 		}
 
@@ -1842,7 +1841,7 @@ mod tests {
 				body: vec![1, 2, 3, 4],
 				headers: vec![("X-Auth".to_owned(), "test".to_owned())],
 				sent: true,
-				response: vec![1, 2, 3],
+				response: Some(vec![1, 2, 3]),
 				response_headers: vec![("X-Auth".to_owned(), "hello".to_owned())],
 				..Default::default()
 			},

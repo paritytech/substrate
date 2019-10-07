@@ -1,0 +1,31 @@
+{
+	"name": "Flaming Fir",
+	"id": "flaming-fir",
+	"properties": {
+		"tokenDecimals": 15,
+		"tokenSymbol": "FIR"
+	},
+	"bootNodes": [
+		"/ip4/35.246.224.91/tcp/30333/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV",
+		"/ip4/35.246.224.91/tcp/30334/ws/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV",
+		"/ip4/35.246.210.11/tcp/30333/p2p/QmWv9Ww7znzgLFyCzf21SR6tUKXrmHCZH9KhebeH4gyE9f",
+		"/ip4/35.246.210.11/tcp/30334/ws/p2p/QmWv9Ww7znzgLFyCzf21SR6tUKXrmHCZH9KhebeH4gyE9f",
+		"/ip4/35.198.110.45/tcp/30333/p2p/QmTtcYKJho9vFmqtMA548QBSmLbmwAkBSiEKK3kWKfb6bJ",
+		"/ip4/35.198.110.45/tcp/30334/ws/p2p/QmTtcYKJho9vFmqtMA548QBSmLbmwAkBSiEKK3kWKfb6bJ",
+		"/ip4/35.198.114.154/tcp/30333/p2p/QmQJmDorK9c8KjMF5PdWiH2WGUXyzJtgTeJ55S5gggdju6",
+		"/ip4/35.198.114.154/tcp/30334/ws/p2p/QmQJmDorK9c8KjMF5PdWiH2WGUXyzJtgTeJ55S5gggdju6"
+	],
+	"telemetryEndpoints": [
+		["wss://telemetry.polkadot.io/submit/", 0]
+	],
+	"protocolId": "fir",
+	"consensusEngine": null,
+	"genesis": {
+		"raw": [
+			{
+				"0xb2029f8665aac509629f2d28cea790a3": "0x10f26cdb14b5aec7b2789fd5ca80f979cef3761897ae1f37ffb3e154cbcc1c26633919132b851ef0fd2dae42a7e734fe547af5a6b809006100f48944d7fae8e8ef00299981a2b92f878baaf5dbeba5c18d4e70f2a1fcd9c61b32ea18daf38f437800299981a2b92f878baaf5dbeba5c18d4e70f2a1fcd9c61b32ea18daf38f4378547ff0ab649283a7ae01dbc2eb73932eba2fb09075e9485ff369082a2ff38d655633b70b80a6c8bb16270f82cca6d56b27ed7b76c8fd5af2986a25a4788ce440482a3389a6cf42d8ed83888cfd920fec738ea30f97e44699ada7323f08c3380a482a3389a6cf42d8ed83888cfd920fec738ea30f97e44699ada7323f08c3380a68655684472b743e456907b398d3a44c113f189e56d1bbfd55e889e295dfde787932cff431e748892fa48e10c63c17d30f80ca42e4de3921e641249cd7fa3c2f482dbd7297a39fa145c570552249c2ca9dd47e281f0c500c971b59c9dcdcd82e482dbd7297a39fa145c570552249c2ca9dd47e281f0c500c971b59c9dcdcd82e9c7a2ee14e565db0c69f78c7b4cd839fbf52b607d867e9e9c5a79042898a0d129becad03e6dcac03cee07edebca5475314861492cdfc96a2144a67bbe96993326e7e4eb42cbd2e0ab4cae8708ce5509580b8c04d11f6758dbf686d50fe9f91066e7e4eb42cbd2e0ab4cae8708ce5509580b8c04d11f6758dbf686d50fe9f9106"
+			},
+			{}
+		]
+	}
+}
