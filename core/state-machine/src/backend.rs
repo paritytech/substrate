@@ -570,7 +570,11 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 
 		let is_default = root == default_child_trie_root::<Layout<H>>(&storage_key);
 
-		(root, is_default, InMemoryTransaction { storage: full_transaction, offstate: Default::default() })
+		(
+			root,
+			is_default,
+			InMemoryTransaction { storage: full_transaction, offstate: Default::default() },
+		)
 	}
 
 	fn offstate_transaction<I>(&self, delta: I) -> Self::Transaction

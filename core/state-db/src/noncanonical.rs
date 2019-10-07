@@ -288,8 +288,11 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 							// TODO EMCh following two range fetch can be optimize when parent level
 							// got a single element.
 							// fetch parent info
-							let parent_branch_index = parents.get(&record.parent_hash).map(|(_, i)| *i).unwrap_or(0);
-							let parent_branch_range = Some(branches.branch_ranges_from_cache(parent_branch_index, Some(block - 1)));
+							let parent_branch_index = parents.get(&record.parent_hash)
+								.map(|(_, i)| *i).unwrap_or(0);
+							let parent_branch_range = Some(
+								branches.branch_ranges_from_cache(parent_branch_index, Some(block - 1))
+							);
 							let (branch_range, branch_index) = branches.import(
 								block,
 								parent_branch_index,
@@ -632,7 +635,8 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 			}
 		}
 		if let Some(hash) = last {
-			let block_number = self.last_canonicalized.as_ref().map(|(_, n)| n + count).unwrap_or(count - 1);
+			let block_number = self.last_canonicalized.as_ref()
+				.map(|(_, n)| n + count).unwrap_or(count - 1);
 			self.last_canonicalized = Some((hash, block_number));
 
 			if let Some(branch_index_cannonicalize) = last_index {
@@ -687,7 +691,11 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 					self.branches.revert(branch_index);
 				}
 				discard_values(&mut self.values, overlay.inserted, None);
-				discard_offstate_values(overlay.offstate_inserted, overlay.offstate_deleted, &mut self.offstate_gc);
+				discard_offstate_values(
+					overlay.offstate_inserted,
+					overlay.offstate_deleted,
+					&mut self.offstate_gc,
+				);
 			}
 			commit
 		})
@@ -745,7 +753,10 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 	}
 
 	/// Iterator over values at a given state. Deletion are included in the result as a None value.
-	pub fn offstate_iter<'a>(&'a self, state: &'a BranchRanges) -> impl Iterator<Item = (&'a OffstateKey, &'a Option<DBValue>)> {
+	pub fn offstate_iter<'a>(
+		&'a self,
+		state: &'a BranchRanges,
+	) -> impl Iterator<Item = (&'a OffstateKey, &'a Option<DBValue>)> {
 		let state = state.clone();
 		self.offstate_values.iter().filter_map(move |(k, v)| {
 			v.get(&state).map(|v| (k, v))
@@ -767,22 +778,41 @@ mod tests {
 		overlay.get(&H256::from_low_u64_be(key)) == Some(H256::from_low_u64_be(key).as_bytes().to_vec())
 	}
 
-	fn contains_offstate(overlay: &NonCanonicalOverlay<H256, H256>, key: u64, state: &H256, block: u64) -> bool {
+	fn contains_offstate(
+		overlay: &NonCanonicalOverlay<H256, H256>,
+		key: u64,
+		state: &H256,
+		block: u64,
+	) -> bool {
 		overlay.get_branch_range(state, block).and_then(|state| {
 			overlay.get_offstate(&H256::from_low_u64_be(key).as_bytes().to_vec(), &state)
 		}) == Some(&Some(H256::from_low_u64_be(key).as_bytes().to_vec()))
 	}
 
-	fn contains_offstate2(overlay: &NonCanonicalOverlay<H256, H256>, key: u64, state: &BranchRanges) -> bool {
+	fn contains_offstate2(
+		overlay: &NonCanonicalOverlay<H256, H256>,
+		key: u64,
+		state: &BranchRanges,
+	) -> bool {
 		overlay.get_offstate(&H256::from_low_u64_be(key).as_bytes().to_vec(), &state)
 			== Some(&Some(H256::from_low_u64_be(key).as_bytes().to_vec()))
 	}
 
-	fn contains_both(overlay: &NonCanonicalOverlay<H256, H256>, key: u64, state: &H256, block: u64) -> bool {
+	fn contains_both(
+		overlay: &NonCanonicalOverlay<H256, H256>,
+		key: u64,
+		state: &H256,
+		block: u64,
+	) -> bool {
 		contains(overlay, key) && contains_offstate(overlay, key, state, block)
 	}
 
-	fn contains_any(overlay: &NonCanonicalOverlay<H256, H256>, key: u64, state: &H256, block: u64) -> bool {
+	fn contains_any(
+		overlay: &NonCanonicalOverlay<H256, H256>,
+		key: u64,
+		state: &H256,
+		block: u64,
+	) -> bool {
 		contains(overlay, key) || contains_offstate(overlay, key, state, block)
 	}
 

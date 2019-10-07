@@ -317,7 +317,8 @@ pub mod tests {
 		(mdb, root, offstate)
 	}
 
-	pub(crate) fn test_trie() -> TrieBackend<PrefixedMemoryDB<Blake2Hasher>, Blake2Hasher, OffstateBackend> {
+	pub(crate) fn test_trie(
+	) -> TrieBackend<PrefixedMemoryDB<Blake2Hasher>, Blake2Hasher, OffstateBackend> {
 		let (mdb, root, offstate) = test_db();
 		TrieBackend::new(mdb, root, offstate)
 	}

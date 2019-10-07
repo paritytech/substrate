@@ -144,7 +144,11 @@ impl RangeSet {
 		}
 		let mut previous_start = block.map(|b| b + 1).unwrap_or(u64::max_value());
 		loop {
-			if let Some(Some(BranchStates{ state, parent_branch_index, .. })) = self.storage.get(&branch_index) {
+			if let Some(Some(BranchStates{
+				state,
+				parent_branch_index,
+				..
+			})) = self.storage.get(&branch_index) {
 				// TODO EMCH consider vecdeque ??
 				let state = if state.end > previous_start {
 					if state.start >= previous_start {
@@ -276,7 +280,10 @@ impl RangeSet {
 		} else {
 			let anchor_index = self.add_state(parent_branch_index, number)
 				.expect("coherent branch index state"); // TODO EMCH fail in add_state
-			(BranchRanges(vec![self.state_ref(anchor_index).expect("added just above")]), anchor_index)
+			(
+				BranchRanges(vec![self.state_ref(anchor_index).expect("added just above")]),
+				anchor_index,
+			)
 		}
 	}
 
@@ -508,4 +515,3 @@ mod test {
 	}
 
 }
-

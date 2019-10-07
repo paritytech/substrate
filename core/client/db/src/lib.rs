@@ -524,10 +524,7 @@ where Block: BlockT<Hash=H256>,
 		// Currently cache isn't implemented on full nodes.
 	}
 
-	fn update_db_storage(
-		&mut self,
-		update: (PrefixedMemoryDB<Blake2Hasher>, Vec<(Vec<u8>, Option<Vec<u8>>)>),
-	) -> ClientResult<()> {
+	fn update_db_storage(&mut self, update: PrefixedMemoryDB<Blake2Hasher>) -> ClientResult<()> {
 		self.db_updates = update;
 		Ok(())
 	}
@@ -964,7 +961,8 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 			let justification = self.blockchain.justification(id).unwrap();
 			let body = self.blockchain.body(id).unwrap();
 			let state = self.state_at(id).unwrap();
-			let mut storage: Vec<_> = state.pairs().into_iter().map(|(k, v)| (None, k, Some(v))).collect();
+			let mut storage: Vec<_> = state.pairs().into_iter()
+				.map(|(k, v)| (None, k, Some(v))).collect();
 			for child_key in state.children_storage_keys() {
 				storage.extend(state.child_pairs(child_key.as_slice())
 					.into_iter().map(|(k, v)| (Some(child_key.clone()), k, Some(v))));
@@ -981,7 +979,8 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 			op.set_block_data(header, body, justification, new_block_state).unwrap();
 			op.update_db_storage(InMemoryTransaction {
 				storage,
-				offstate: state.offstate_pairs().into_iter().map(|(k, v)| (k, Some(v))).collect(),
+				offstate: state.offstate_pairs().into_iter()
+					.map(|(k, v)| (k, Some(v))).collect(),
 			}).unwrap();
 			inmem.commit_operation(op).unwrap();
 		}
@@ -1240,7 +1239,8 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 			// remove duplicate TODO EMCH very bad
 			let map_offstate: HashMap<_, _> = operation.db_updates.1.into_iter().collect();
 			// TODO EMCH !!! keep map_offstate for OffstateChangeSet type???
-			let offstate_changeset: state_db::OffstateChangeSet<Vec<u8>> = map_offstate.into_iter().collect();
+			let offstate_changeset: state_db::OffstateChangeSet<Vec<u8>> = map_offstate.into_iter()
+				.collect();
 			let number_u64 = number.saturated_into::<u64>();
 			let commit = self.storage.state_db.insert_block(
 				&hash,
@@ -1293,9 +1293,20 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 				displaced_leaf
 			};
 
-			let mut children = children::read_children(&*self.storage.db, columns::META, meta_keys::CHILDREN_PREFIX, parent_hash)?;
+			let mut children = children::read_children(
+				&*self.storage.db,
+				columns::META,
+				meta_keys::CHILDREN_PREFIX,
+				parent_hash,
+			)?;
 			children.push(hash);
-			children::write_children(&mut transaction, columns::META, meta_keys::CHILDREN_PREFIX, parent_hash, children);
+			children::write_children(
+				&mut transaction,
+				columns::META,
+				meta_keys::CHILDREN_PREFIX,
+				parent_hash,
+				children,
+			);
 
 			meta_updates.push((hash, number, pending_block.leaf_state.is_best(), finalized));
 
@@ -1381,7 +1392,9 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 	{
 		let f_num = f_header.number().clone();
 
-		if self.storage.state_db.best_canonical().map(|c| f_num.saturated_into::<u64>() > c).unwrap_or(true) {
+		if self.storage.state_db.best_canonical()
+			.map(|c| f_num.saturated_into::<u64>() > c)
+			.unwrap_or(true) {
 			let parent_hash = f_header.parent_hash().clone();
 			let number = f_header.number().clone();
 			let number_u64 = number.saturated_into::<u64>();
@@ -1390,7 +1403,9 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 			transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, &lookup_key);
 
 			let commit = self.storage.state_db.canonicalize_block(&f_hash)
-				.map_err(|e: state_db::Error<io::Error>| client::error::Error::from(format!("State database error: {:?}", e)))?;
+				.map_err(|e: state_db::Error<io::Error>|
+					client::error::Error::from(format!("State database error: {:?}", e))
+				)?;
 			apply_state_commit(transaction, commit, &self.storage.db, number_u64).map_err(|err|
 				client::error::Error::Backend(
 					format!("Error building commit transaction : {}", err)

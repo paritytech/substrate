@@ -121,7 +121,6 @@ impl TestDb {
 		let block = block.unwrap_or(self.last_block);
 		let data = make_offstate_changeset(values, &[]);
 		let self_offstate: BTreeMap<_, _> = self.get_offstate_pairs(&block).into_iter().collect();
-println!("of_eq {:?}", self_offstate);
 		self_offstate == data.into_iter().filter_map(|(k, v)| v.map(|v| (k,v))).collect()
 	}
 
@@ -154,7 +153,10 @@ pub fn make_changeset(inserted: &[u64], deleted: &[u64]) -> ChangeSet<H256> {
 	}
 }
 
-pub fn make_offstate_changeset(inserted: &[u64], deleted: &[u64]) -> OffstateChangeSet<OffstateKey> {
+pub fn make_offstate_changeset(
+	inserted: &[u64],
+	deleted: &[u64],
+) -> OffstateChangeSet<OffstateKey> {
 	inserted.iter()
 		.map(|v| (
 			H256::from_low_u64_be(*v).as_bytes().to_vec(),
@@ -206,4 +208,3 @@ pub fn make_db(inserted: &[u64]) -> TestDb {
 		last_block: Default::default(),
 	}
 }
-
