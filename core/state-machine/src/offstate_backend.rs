@@ -16,22 +16,10 @@
 
 //! Backend for storing data without a state.
 
-/// TODO EMCH merge offstate storage and offstate backend storage ??
-
 use std::sync::Arc;
 use std::ops::Deref;
 
-pub trait OffstateStorage<State>: Send + Sync {
-
-	/// Retrieve a value from storage under given key.
-	fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, String>;
-
-	/// Return in memory all values for this backend, mainly for
-	/// tests.
-	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)>;
-}
-
-pub trait OffstateBackendStorage: Send + Sync {
+pub trait OffstateBackend: Send + Sync {
 	/// Retrieve a value from storage under given key.
 	fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, String>;
 
@@ -41,7 +29,7 @@ pub trait OffstateBackendStorage: Send + Sync {
 
 }
 
-impl OffstateBackendStorage for TODO2 {
+impl OffstateBackend for TODO2 {
 
 	fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
 		unimplemented!()
@@ -53,27 +41,13 @@ impl OffstateBackendStorage for TODO2 {
 
 }
 
-// This implementation is used by normal storage trie clients.
-impl<S> OffstateBackendStorage for Arc<dyn OffstateStorage<S>> {
+impl OffstateBackend for Arc<dyn OffstateBackend> {
 	fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
-		OffstateStorage::get(self.deref(), key)
+		OffstateBackend::get(self.deref(), key)
 	}
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
-		OffstateStorage::pairs(self.deref())
+		OffstateBackend::pairs(self.deref())
 	}
-}
-
-// TODO EMCH remove??
-impl OffstateStorage<()> for TODO2 {
-
-	fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
-		<Self as OffstateBackendStorage>::get(&self, key)
-	}
-
-	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
-		unimplemented!()
-	}
-
 }
 
 

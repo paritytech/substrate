@@ -28,7 +28,7 @@ pub use trie::trie_types::{Layout, TrieError};
 use crate::trie_backend::TrieBackend;
 use crate::trie_backend_essence::{Ephemeral, TrieBackendEssence, TrieBackendStorage};
 use crate::{Error, ExecutionError, Backend};
-use crate::offstate_backend::{OffstateBackendStorage, TODO2};
+use crate::offstate_backend::{OffstateBackend, TODO2};
 
 /// Patricia trie-based backend essence which also tracks all touched storage trie values.
 /// These can be sent to remote node and used as a proof of execution.
@@ -107,7 +107,7 @@ impl<'a, S, H> ProvingBackendEssence<'a, S, H>
 pub struct ProvingBackend<'a,
 	S: 'a + TrieBackendStorage<H>,
 	H: 'a + Hasher,
-	O: 'a + OffstateBackendStorage,
+	O: 'a + OffstateBackend,
 > {
 	backend: &'a TrieBackend<S, H, O>,
 	proof_recorder: Rc<RefCell<Recorder<H::Out>>>,
@@ -116,7 +116,7 @@ pub struct ProvingBackend<'a,
 impl<'a,
 	S: 'a + TrieBackendStorage<H>,
 	H: 'a + Hasher,
-	O: 'a + OffstateBackendStorage,
+	O: 'a + OffstateBackend,
 > ProvingBackend<'a, S, H, O> {
 	/// Create new proving backend.
 	pub fn new(backend: &'a TrieBackend<S, H, O>) -> Self {
@@ -151,7 +151,7 @@ impl<'a,
 impl<'a,
 	S: 'a + TrieBackendStorage<H>,
 	H: 'a + Hasher,
-	O: 'a + OffstateBackendStorage,
+	O: 'a + OffstateBackend,
 > std::fmt::Debug for ProvingBackend<'a, S, H, O> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "ProvingBackend")
@@ -163,12 +163,12 @@ impl<'a, S, H, O> Backend<H> for ProvingBackend<'a, S, H, O>
 		S: 'a + TrieBackendStorage<H>,
 		H: 'a + Hasher,
 		H::Out: Ord,
-		O: 'a + OffstateBackendStorage,
+		O: 'a + OffstateBackend,
 {
 	type Error = String;
 	type Transaction = (S::Overlay, Vec<(Vec<u8>, Option<Vec<u8>>)>);
 	type TrieBackendStorage = PrefixedMemoryDB<H>;
-	type OffstateBackendStorage = O;
+	type OffstateBackend = O;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		ProvingBackendEssence {

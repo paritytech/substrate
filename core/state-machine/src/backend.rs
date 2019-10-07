@@ -21,7 +21,7 @@ use log::warn;
 use hash_db::Hasher;
 use crate::trie_backend::TrieBackend;
 use crate::trie_backend_essence::TrieBackendStorage;
-use crate::offstate_backend::{OffstateBackendStorage, TODO2};
+use crate::offstate_backend::{OffstateBackend, TODO2};
 use trie::{
 	TrieMut, MemoryDB, child_trie_root, default_child_trie_root, TrieConfiguration,
 	trie_types::{TrieDBMut, Layout},
@@ -43,7 +43,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 
 	/// Type of trie backend storage. TODO EMCH move to OffstateBackend
 	/// after implementated.
-	type OffstateBackendStorage: OffstateBackendStorage;
+	type OffstateBackend: OffstateBackend;
 
 	/// Get keyed storage or None if there is nothing associated.
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
@@ -138,7 +138,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 
 	/// Try convert into trie backend.
 	fn as_trie_backend(&mut self) -> Option<
-		&TrieBackend<Self::TrieBackendStorage, H, Self::OffstateBackendStorage>
+		&TrieBackend<Self::TrieBackendStorage, H, Self::OffstateBackend>
 	> {
 		None
 	}
@@ -185,7 +185,7 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 	type Error = T::Error;
 	type Transaction = T::Transaction;
 	type TrieBackendStorage = T::TrieBackendStorage;
-	type OffstateBackendStorage = T::OffstateBackendStorage;
+	type OffstateBackend = T::OffstateBackend;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		(*self).storage(key)
@@ -466,7 +466,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 	type Error = Void;
 	type Transaction = InMemoryTransaction;
 	type TrieBackendStorage = MemoryDB<H>;
-	type OffstateBackendStorage = TODO2;
+	type OffstateBackend = TODO2;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		Ok(self.inner.get(&None).and_then(|map| map.get(key).map(Clone::clone)))
@@ -591,7 +591,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 	}
 
 	fn as_trie_backend(&mut self)-> Option<
-		&TrieBackend<Self::TrieBackendStorage, H, Self::OffstateBackendStorage>
+		&TrieBackend<Self::TrieBackendStorage, H, Self::OffstateBackend>
 	> {
 		let mut mdb = MemoryDB::default();
 		let mut root = None;

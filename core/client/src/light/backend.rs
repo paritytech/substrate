@@ -344,7 +344,7 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 	type Error = ClientError;
 	type Transaction = ();
 	type TrieBackendStorage = MemoryDB<H>;
-	type OffstateBackendStorage = state_machine::offstate_backend::TODO2;
+	type OffstateBackend = state_machine::offstate_backend::TODO2;
 
 	fn storage(&self, key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
 		match *self {
@@ -464,7 +464,7 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 	}
 
 	fn as_trie_backend(&mut self) -> Option<
-		&TrieBackend<Self::TrieBackendStorage, H, Self::OffstateBackendStorage>
+		&TrieBackend<Self::TrieBackendStorage, H, Self::OffstateBackend>
 	> {
 		match self {
 			GenesisOrUnavailableState::Genesis(ref mut state) => state.as_trie_backend(),

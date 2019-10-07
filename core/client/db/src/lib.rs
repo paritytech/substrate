@@ -93,7 +93,7 @@ const DEFAULT_CHILD_RATIO: (usize, usize) = (1, 10);
 pub type DbState = state_machine::TrieBackend<
 	Arc<dyn state_machine::Storage<Blake2Hasher>>,
 	Blake2Hasher,
-	Arc<dyn state_machine::OffstateStorage<(BranchRanges, u64)>>,
+	Arc<dyn state_machine::OffstateBackend>,
 >;
 
 /// A reference tracking state.
@@ -134,7 +134,7 @@ impl<B: BlockT> StateBackend<Blake2Hasher> for RefTrackingState<B> {
 	type Error =  <DbState as StateBackend<Blake2Hasher>>::Error;
 	type Transaction = <DbState as StateBackend<Blake2Hasher>>::Transaction;
 	type TrieBackendStorage = <DbState as StateBackend<Blake2Hasher>>::TrieBackendStorage;
-	type OffstateBackendStorage = <DbState as StateBackend<Blake2Hasher>>::OffstateBackendStorage;
+	type OffstateBackend = <DbState as StateBackend<Blake2Hasher>>::OffstateBackend;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.state.storage(key)
@@ -218,7 +218,7 @@ impl<B: BlockT> StateBackend<Blake2Hasher> for RefTrackingState<B> {
 	}
 
 	fn as_trie_backend(&mut self) -> Option<
-		&state_machine::TrieBackend<Self::TrieBackendStorage, Blake2Hasher, Self::OffstateBackendStorage>
+		&state_machine::TrieBackend<Self::TrieBackendStorage, Blake2Hasher, Self::OffstateBackend>
 	> {
 		self.state.as_trie_backend()
 	}
@@ -610,13 +610,6 @@ struct StorageDbAt<Block: BlockT, State> {
 	pub state: State,
 }
 
-// Semantic is one block statedb with block in todo2,
-// state is here for compatibility only.
-struct TODO2At<State> {
-	pub storage_db: TODO2,
-	pub state: State,
-}
-
 impl<Block: BlockT> state_machine::Storage<Blake2Hasher> for StorageDb<Block> {
 	fn get(&self, key: &H256, prefix: Prefix) -> Result<Option<DBValue>, String> {
 		let key = prefixed_key::<Blake2Hasher>(key, prefix);
@@ -658,7 +651,7 @@ impl<Block: BlockT> state_db::OffstateDb<u64> for StorageDb<Block> {
 	}
 }
 
-impl<Block: BlockT> state_machine::OffstateStorage<(BranchRanges, u64)> for StorageDbAt<Block, (BranchRanges, u64)> {
+impl<Block: BlockT> state_machine::OffstateBackend for StorageDbAt<Block, (BranchRanges, u64)> {
 
 	fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
 		self.storage_db.state_db.get_offstate(key, &self.state, self.storage_db.deref())
@@ -669,18 +662,6 @@ impl<Block: BlockT> state_machine::OffstateStorage<(BranchRanges, u64)> for Stor
 		self.storage_db.state_db.get_offstate_pairs(&self.state, self.storage_db.deref())
 	}
 }
-
-impl<S: Send + Sync> state_machine::OffstateStorage<S> for TODO2At<S> {
-
-	fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
-		self.storage_db.get(key)
-			.map_err(|e| format!("Database backend error: {:?}", e))
-	}
-	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
-		self.storage_db.pairs()
-	}
-}
-
 
 struct DbGenesisStorage(pub H256);
 
@@ -1658,10 +1639,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 				let genesis_storage = DbGenesisStorage::new();
 				let root = genesis_storage.0.clone();
 				// TODO EMCH see genesis impl: that is empty storage
-				let genesis_offstate = TODO2At {
-					storage_db: TODO2,
-					state: Default::default(),
-				};
+				let genesis_offstate = TODO2;
 				let db_state = DbState::new(Arc::new(genesis_storage), root, Arc::new(genesis_offstate));
 				let state = RefTrackingState::new(db_state, self.storage.clone(), None);
 				return Ok(CachingState::new(state, self.shared_cache.clone(), None));

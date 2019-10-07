@@ -179,7 +179,7 @@ impl<Block, B, Local> CallExecutor<Block, Blake2Hasher> for
 
 	fn prove_at_trie_state<
 		S: state_machine::TrieBackendStorage<Blake2Hasher>,
-		O: state_machine::OffstateBackendStorage,
+		O: state_machine::OffstateBackend,
 	>(
 		&self,
 		_state: &state_machine::TrieBackend<S, Blake2Hasher, O>,
@@ -389,7 +389,7 @@ mod tests {
 
 		fn prove_at_trie_state<
 			S: state_machine::TrieBackendStorage<Blake2Hasher>,
-			O: state_machine::OffstateBackendStorage,
+			O: state_machine::OffstateBackend,
 		>(
 			&self,
 			_trie_state: &state_machine::TrieBackend<S, Blake2Hasher, O>,

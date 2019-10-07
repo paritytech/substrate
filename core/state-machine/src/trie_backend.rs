@@ -22,17 +22,17 @@ use trie::{Trie, delta_trie_root, default_child_trie_root, child_delta_trie_root
 use trie::trie_types::{TrieDB, TrieError, Layout};
 use crate::trie_backend_essence::{TrieBackendEssence, TrieBackendStorage, Ephemeral};
 use crate::Backend;
-use crate::offstate_backend::OffstateBackendStorage;
+use crate::offstate_backend::OffstateBackend;
 use primitives::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX;
 
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
 /// TODO EMCH with offstate in backend this should be renamed eg StateBackend.
-pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher, O: OffstateBackendStorage> {
+pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher, O: OffstateBackend> {
 	essence: TrieBackendEssence<S, H>,
 	offstate_storage: O,
 }
 
-impl<S: TrieBackendStorage<H>, O: OffstateBackendStorage, H: Hasher> TrieBackend<S, H, O> {
+impl<S: TrieBackendStorage<H>, O: OffstateBackend, H: Hasher> TrieBackend<S, H, O> {
 	/// Create new trie-based backend.
 	pub fn new(storage: S, root: H::Out, offstate_storage: O) -> Self {
 		TrieBackend {
@@ -73,7 +73,7 @@ impl<S: TrieBackendStorage<H>, O: OffstateBackendStorage, H: Hasher> TrieBackend
 impl<
 	S: TrieBackendStorage<H>,
 	H: Hasher,
-	O: OffstateBackendStorage,
+	O: OffstateBackend,
 > std::fmt::Debug for TrieBackend<S, H, O> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "TrieBackend")
@@ -83,7 +83,7 @@ impl<
 impl<
 	S: TrieBackendStorage<H>,
 	H: Hasher,
-	O: OffstateBackendStorage,
+	O: OffstateBackend,
 > Backend<H> for TrieBackend<S, H, O> where
 	H::Out: Ord,
 {
@@ -91,7 +91,7 @@ impl<
 	type Transaction = (S::Overlay, Vec<(Vec<u8>, Option<Vec<u8>>)>);
 	type TrieBackendStorage = S;
 	// TODO EMCH this does not make sens : split as a OffstateBackend from trait.
-	type OffstateBackendStorage = O;
+	type OffstateBackend = O;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.essence.storage(key)
@@ -274,7 +274,7 @@ impl<
 	}
 
 	fn as_trie_backend(&mut self) -> Option<
-		&TrieBackend<Self::TrieBackendStorage, H, Self::OffstateBackendStorage>
+		&TrieBackend<Self::TrieBackendStorage, H, Self::OffstateBackend>
 	> {
 		Some(self)
 	}

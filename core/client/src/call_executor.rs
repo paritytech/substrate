@@ -145,7 +145,7 @@ where
 	/// No changes are made.
 	fn prove_at_trie_state<
 		S: state_machine::TrieBackendStorage<H>,
-		O: state_machine::OffstateBackendStorage,
+		O: state_machine::OffstateBackend,
 	>(
 		&self,
 		trie_state: &state_machine::TrieBackend<S, H, O>,
@@ -383,7 +383,7 @@ where
 
 	fn prove_at_trie_state<
 		S: state_machine::TrieBackendStorage<Blake2Hasher>,
-		O: state_machine::OffstateBackendStorage,
+		O: state_machine::OffstateBackend,
 	>(
 		&self,
 		trie_state: &state_machine::TrieBackend<S, Blake2Hasher, O>,

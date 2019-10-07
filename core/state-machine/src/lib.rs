@@ -30,7 +30,7 @@ use primitives::{
 	traits::{BareCryptoStorePtr, CodeExecutor},
 	hexdisplay::HexDisplay,
 };
-pub use crate::offstate_backend::{OffstateStorage, OffstateBackendStorage, TODO2};
+pub use crate::offstate_backend::{OffstateBackend, TODO2};
 
 pub mod backend;
 mod changes_trie;
@@ -480,7 +480,7 @@ pub fn prove_execution_on_trie_backend<S, H, O, Exec>(
 ) -> Result<(Vec<u8>, Vec<Vec<u8>>), Box<dyn Error>>
 where
 	S: trie_backend_essence::TrieBackendStorage<H>,
-	O: OffstateBackendStorage,
+	O: OffstateBackend,
 	H: Hasher,
 	Exec: CodeExecutor<H>,
 	H::Out: Ord + 'static,
@@ -589,7 +589,7 @@ where
 	S: trie_backend_essence::TrieBackendStorage<H>,
 	H: Hasher,
 	H::Out: Ord,
-	O: OffstateBackendStorage,
+	O: OffstateBackend,
 	I: IntoIterator,
 	I::Item: AsRef<[u8]>,
 {
@@ -612,7 +612,7 @@ where
 	S: trie_backend_essence::TrieBackendStorage<H>,
 	H: Hasher,
 	H::Out: Ord,
-	O: OffstateBackendStorage,
+	O: OffstateBackend,
 	I: IntoIterator,
 	I::Item: AsRef<[u8]>,
 {
