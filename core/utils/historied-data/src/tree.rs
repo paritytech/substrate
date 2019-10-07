@@ -28,11 +28,12 @@ use crate::linear::{
 };
 use crate::HistoriedValue;
 use crate::PruneResult;
-use crate::{as_usize, as_i};
+use crate::as_u;
 use rstd::rc::Rc;
 use rstd::vec::Vec;
 use rstd::collections::btree_map::BTreeMap;
 use rstd::convert::{TryFrom, TryInto};
+use num_traits::Bounded;
 
 /// Trait defining a state for querying or modifying a tree.
 /// This is a collection of branches index, corresponding
@@ -500,46 +501,42 @@ impl<V> History<V> {
 	pub fn set<S, I, BI>(&mut self, state: S, value: V) 
 		where
 			S: BranchesStateTrait<bool, I, BI>,
-			I: Copy + Eq + TryFrom<usize> + TryInto<usize>,
-			BI: Copy + Eq + TryFrom<usize> + TryInto<usize>,
+			I: Copy + Eq + TryFrom<u64> + TryInto<u64>,
+			BI: Copy + Eq + TryFrom<u64> + TryInto<u64>,
 	{
 		if let Some((state_branch, state_index)) = state.iter().next() {
-			if let Ok(state_index_usize) = state_index.try_into() {
-				let state_index_u64 = state_index_usize as u64;
-				let mut i = self.0.len();
-				let (branch_position, new_branch) = loop {
-					if i == 0 {
-						break (0, true);
-					}
-					let branch_index = self.0[i - 1].branch_index;
-					if branch_index == state_index_u64 {
-						break (i - 1, false);
-					} else if branch_index < state_index_u64 {
-						break (i, true);
-					}
-					i -= 1;
-				};
-				if new_branch {
-					if let Ok(index_usize) = state_branch.last_index().try_into() {
-						let index = index_usize as u64;
-						let mut history = BranchBackend::<V, u64>::default();
-						history.push(HistoriedValue {
-							value,
-							index,
-						});
-						let h_value = HistoryBranch {
-							branch_index: state_index_u64,
-							history,
-						};
-						if branch_position == self.0.len() {
-							self.0.push(h_value);
-						} else {
-							self.0.insert(branch_position, h_value);
-						}
-					}
-				} else {
-					self.node_set(branch_position, &state_branch, value)
+			let state_index_u64 = as_u(state_index);
+			let mut i = self.0.len();
+			let (branch_position, new_branch) = loop {
+				if i == 0 {
+					break (0, true);
 				}
+				let branch_index = self.0[i - 1].branch_index;
+				if branch_index == state_index_u64 {
+					break (i - 1, false);
+					} else if branch_index < state_index_u64 {
+					break (i, true);
+				}
+				i -= 1;
+			};
+			if new_branch {
+				let index = as_u(state_branch.last_index());
+				let mut history = BranchBackend::<V, u64>::default();
+				history.push(HistoriedValue {
+					value,
+					index,
+				});
+				let h_value = HistoryBranch {
+					branch_index: state_index_u64,
+					history,
+				};
+				if branch_position == self.0.len() {
+					self.0.push(h_value);
+				} else {
+					self.0.insert(branch_position, h_value);
+				}
+			} else {
+				self.node_set(branch_position, &state_branch, value)
 			}
 		}
 	}
@@ -547,31 +544,29 @@ impl<V> History<V> {
 	fn node_set<S, I>(&mut self, branch_index: usize, state: &S, value: V)
 		where
 			S: BranchStateTrait<bool, I>,
-			I: Copy + Eq + TryFrom<usize> + TryInto<usize>,
+			I: Copy + Eq + TryFrom<u64> + TryInto<u64>,
 	{
-		if let Ok(node_index_usize) = state.last_index().try_into() {
-			let node_index_u64 = node_index_usize as u64;
-			let history = &mut self.0[branch_index];
-			let mut index = history.history.len();
-			debug_assert!(index > 0);
-			loop {
-				if index == 0 || history.history[index - 1].index < node_index_u64 {
-					let h_value = HistoriedValue {
-						value,
-						index: node_index_u64
-					};
-					if index == history.history.len() {
-						history.history.push(h_value);
-					} else {
-						history.history.insert(index, h_value);
-					}
-					break;
-				} else if history.history[index - 1].index == node_index_u64 {
-					history.history[index - 1].value = value;
-					break;
+		let node_index_u64 = as_u(state.last_index());
+		let history = &mut self.0[branch_index];
+		let mut index = history.history.len();
+		debug_assert!(index > 0);
+		loop {
+			if index == 0 || history.history[index - 1].index < node_index_u64 {
+				let h_value = HistoriedValue {
+					value,
+					index: node_index_u64
+				};
+				if index == history.history.len() {
+					history.history.push(h_value);
+				} else {
+					history.history.insert(index, h_value);
 				}
-				index -= 1;
+				break;
+			} else if history.history[index - 1].index == node_index_u64 {
+				history.history[index - 1].value = value;
+				break;
 			}
+			index -= 1;
 		}
 	}
 
@@ -580,8 +575,8 @@ impl<V> History<V> {
 	pub fn get<I, BI, S> (&self, state: S) -> Option<&V> 
 		where
 			S: BranchesStateTrait<bool, I, BI>,
-			I: Copy + Eq + TryFrom<usize> + TryInto<usize>,
-			BI: Copy + Eq + TryFrom<usize> + TryInto<usize>,
+			I: Copy + Eq + TryFrom<u64> + TryInto<u64>,
+			BI: Copy + Eq + TryFrom<u64> + TryInto<u64> + Bounded,
 	{
 		let mut index = self.0.len();
 		// note that we expect branch index to be linearily set
@@ -595,13 +590,11 @@ impl<V> History<V> {
 		for (state_branch, state_index) in state.iter() {
 			while index > 0 {
 				index -= 1;
-				if let Ok(branch_index) = self.0[index].branch_index.try_into() {
-					if let Ok(state_index) = state_index.try_into() {
-						if state_index == branch_index {
-							if let Some(result) = self.branch_get(index, &state_branch) {
-								return Some(result)
-							}
-						}
+				let branch_index = as_u(self.0[index].branch_index);
+				let state_index = as_u(state_index);
+				if state_index == branch_index {
+					if let Some(result) = self.branch_get(index, &state_branch) {
+						return Some(result)
 					}
 				}
 			}
@@ -615,17 +608,16 @@ impl<V> History<V> {
 	fn branch_get<S, I>(&self, index: usize, state: &S) -> Option<&V>
 		where
 			S: BranchStateTrait<bool, I>,
-			I: Copy + Eq + TryFrom<usize> + TryInto<usize>,
+			I: Copy + Eq + TryFrom<u64> + TryInto<u64> + Bounded,
 	{
 		let history = &self.0[index];
 		let mut index = history.history.len();
 		while index > 0 {
 			index -= 1;
 			if let Some(&v) = history.history.get(index).as_ref() {
-				if let Ok(i) = (v.index as usize).try_into() {
-					if state.get_node(i) {
-						return Some(&v.value);
-					}
+				let i = as_u(v.index);
+				if state.get_node(i) {
+					return Some(&v.value);
 				}
 			}
 		}
@@ -638,7 +630,7 @@ impl<V> History<V> {
 		where
 			IT: Iterator<Item = (S, I)>,
 			S: BranchStateTrait<bool, I>,
-			I: Copy + Eq + TryFrom<usize> + TryInto<usize>,
+			I: Copy + Eq + TryFrom<u64> + TryInto<u64> + Bounded,
 	{
 		let mut changed = false;
 		// state is likely bigger than history.
@@ -647,38 +639,33 @@ impl<V> History<V> {
 			let history_branch = self.0[branch_index].branch_index;
 			loop {
 				if let Some(state) = current_state.as_ref() {
-					if let Ok(state_index_usize) = state.1.try_into() {
-						let state_index_u64 = state_index_usize as u64;
-						if history_branch < state_index_u64 {
-							current_state = states.next();
-						} else if history_branch == state_index_u64 {
-							let len = self.0[branch_index].history.len();
-							for history_index in (0..len).rev() {
-									
-								let node_index = self.0[branch_index].history[history_index].index as usize;
-								if let Ok(node_index) = node_index.try_into() {
-									if !state.0.get_node(node_index) {
-										if history_index == len - 1 {
-											changed = self.0[branch_index]
-												.history.pop().is_some() || changed;
-										} else {
-											self.0[branch_index]
-												.history.remove(history_index);
-											changed = true;
-										}
-									}
+					let state_index_u64 = as_u(state.1);
+					if history_branch < state_index_u64 {
+						current_state = states.next();
+					} else if history_branch == state_index_u64 {
+						let len = self.0[branch_index].history.len();
+						for history_index in (0..len).rev() {
+							let node_index = as_u(self.0[branch_index].history[history_index].index);
+							if !state.0.get_node(node_index) {
+								if history_index == len - 1 {
+									changed = self.0[branch_index]
+										.history.pop().is_some() || changed;
+								} else {
+									self.0[branch_index]
+										.history.remove(history_index);
+									changed = true;
 								}
 							}
-							if self.0[branch_index].history.len() == 0 {
-								self.0.remove(branch_index);
-								changed = true;
-							}
-							break;
-						} else {
+						}
+						if self.0[branch_index].history.len() == 0 {
 							self.0.remove(branch_index);
 							changed = true;
-							break;
 						}
+						break;
+					} else {
+						self.0.remove(branch_index);
+						changed = true;
+						break;
 					}
 				} else {
 					self.0.remove(branch_index);
@@ -714,7 +701,7 @@ impl<'a, F: SerializedConfig> Serialized<'a, F> {
 	pub fn get<I, S> (&self, state: S) -> Option<Option<&[u8]>> 
 		where
 			S: BranchStateTrait<bool, I>,
-			I: Copy + Eq + TryFrom<usize> + TryInto<usize>,
+			I: Copy + Eq + TryFrom<u64> + TryInto<u64> + Bounded,
 	{
 		let mut index = self.0.len();
 		if index == 0 {
@@ -723,7 +710,8 @@ impl<'a, F: SerializedConfig> Serialized<'a, F> {
 		while index > 0 {
 			index -= 1;
 			let HistoriedValue { value, index: state_index } = self.0.get_state(index);
-			if state.get_node(as_i(state_index as usize)) {
+			let state_index = as_u(state_index);
+			if state.get_node(state_index) {
 				// Note this extra byte is note optimal, should be part of index encoding
 				if value.len() > 0 {
 					return Some(Some(&value[..value.len() - 1]));
@@ -740,9 +728,9 @@ impl<'a, F: SerializedConfig> Serialized<'a, F> {
 	pub fn push<S, I>(&mut self, state: S, value: Option<&[u8]>) 
 		where
 			S: BranchStateTrait<bool, I>,
-			I: Copy + Eq + TryFrom<usize> + TryInto<usize>,
+			I: Copy + Eq + TryFrom<u64> + TryInto<u64>,
 	{
-		let target_state_index = as_usize(state.last_index()) as u64;
+		let target_state_index = as_u(state.last_index());
 		let index = self.0.len();
 		if index > 0 {
 			let last = self.0.get_state(index - 1);
@@ -762,9 +750,9 @@ impl<'a, F: SerializedConfig> Serialized<'a, F> {
 	/// keep a single with value history before the state.
 	pub fn prune<I>(&mut self, index: I) -> PruneResult
 		where
-			I: Copy + Eq + TryFrom<usize> + TryInto<usize>,
+			I: Copy + Eq + TryFrom<u64> + TryInto<u64>,
 	{
-		let from = as_usize(index) as u64;
+		let from = as_u(index);
 		let len = self.0.len();
 		let mut last_index_with_value = None;
 		let mut index = 0;

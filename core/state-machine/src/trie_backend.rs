@@ -312,8 +312,8 @@ pub mod tests {
 		}
 		// empty history.
 		let mut offstate = crate::offstate_backend::InMemory::default();
-		offstate.insert(b"offstate1", b"off_value1");
-		offstate.insert(b"offstate2", b"off_value2");
+		offstate.insert(b"offstate1".to_vec(), b"off_value1".to_vec());
+		offstate.insert(b"offstate2".to_vec(), b"off_value2".to_vec());
 		(mdb, root, offstate)
 	}
 

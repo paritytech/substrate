@@ -20,7 +20,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::convert::{TryFrom, TryInto};
+use rstd::convert::TryInto;
 
 pub mod tree;
 pub mod linear;
@@ -66,18 +66,10 @@ impl<V, I: Copy> HistoriedValue<V, I> {
 }
 
 // utility function for panicking cast (similar to a `as` cast for number).
-fn as_usize<I: TryInto<usize>>(i: I) -> usize {
+fn as_u<U: num_traits::Bounded, I: TryInto<U>>(i: I) -> U {
 	match i.try_into() {
 		Ok(index) => index,
-		Err(_) => panic!("historied value index overflow"),
-	}
-}
-
-// utility function for panicking cast (similar to a `as` cast for number).
-fn as_i<I: TryFrom<usize>>(i: usize) -> I {
-	match i.try_into() {
-		Ok(index) => index,
-		Err(_) => panic!("historied value index underflow"),
+		Err(_) => <U as num_traits::Bounded>::max_value(),
 	}
 }
 

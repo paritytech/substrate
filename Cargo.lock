@@ -1213,6 +1213,7 @@ dependencies = [
 name = "historied-data"
 version = "2.0.0"
 dependencies = [
+ "num-traits 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "smallvec 0.6.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-std 2.0.0",
 ]
