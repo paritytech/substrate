@@ -215,21 +215,24 @@ where TTrans::Output: Sink<BytesMut, Error = TSinkErr>
 		cx: &mut Context,
 		my_addr: &Multiaddr,
 	) -> Poll<Result<futures::never::Never, ConnectionError<TSinkErr>>> {
+		if let Some(mut timeout) = self.timeout.as_mut() {
+			match Future::poll(Pin::new(&mut timeout), cx) {
+				Poll::Pending => {},
+				Poll::Ready(Err(err)) => {
+					warn!(target: "telemetry", "Connection timeout error for {} {:?}", my_addr, err);
+				}
+				Poll::Ready(Ok(_)) => {
+					return Poll::Ready(Err(ConnectionError::Timeout))
+				}
+			}
+		}
 		loop {
 			if let Some(item) = self.pending.pop_front() {
 				if let Poll::Pending = Sink::poll_ready(Pin::new(&mut self.sink), cx) {
 					self.pending.push_front(item);
 					self.timeout = Some(Delay::new(Duration::from_millis(5000)));
 					if let Some(mut timeout) = self.timeout.as_mut() {
-						match Future::poll(Pin::new(&mut timeout), cx) {
-							Poll::Pending => {},
-							Poll::Ready(Err(err)) => {
-								warn!(target: "telemetry", "Connection timeout error for {} {:?}", my_addr, err);
-							}
-							Poll::Ready(Ok(_)) => {
-								return Poll::Ready(Err(ConnectionError::Timeout))
-							}
-						}
+						let _ = Future::poll(Pin::new(&mut timeout), cx);
 					}
 					return Poll::Pending
 				}
