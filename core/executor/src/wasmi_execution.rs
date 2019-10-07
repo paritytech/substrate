@@ -14,10 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Wasm interface module.
-//!
-//! This module defines and implements the wasm part of Substrate Host Interface and provides
-//! an interface for calling into the wasm runtime.
+//! Implementation of a Wasm runtime using the Wasmi interpreter.
 
 use std::{str, mem};
 use wasmi::{
@@ -318,25 +315,6 @@ impl wasmi::Externals for FunctionExecutor {
 	}
 }
 
-/// Call a given method in the given code.
-///
-/// Signature of this method needs to be `(I32, I32) -> I64`.
-///
-/// This should be used for tests only.
-#[cfg(test)]
-pub fn call(
-	ext: &mut dyn Externalities<Blake2Hasher>,
-	heap_pages: usize,
-	code: &[u8],
-	method: &str,
-	data: &[u8],
-) -> Result<Vec<u8>, Error> {
-	let module = wasmi::Module::from_buffer(code)?;
-	let module = instantiate_module(heap_pages, &module)?;
-
-	call_in_wasm_module(ext, &module, method, data)
-}
-
 fn get_mem_instance(module: &ModuleRef) -> Result<MemoryRef, Error> {
 	Ok(module
 		.export_by_name("memory")
@@ -606,7 +584,7 @@ impl WasmiRuntime {
 }
 
 impl WasmRuntime for WasmiRuntime {
-	fn set_heap_pages(&mut self, heap_pages: u64) -> bool {
+	fn update_heap_pages(&mut self, heap_pages: u64) -> bool {
 		self.state_snapshot.heap_pages == heap_pages
 	}
 
@@ -684,6 +662,18 @@ mod tests {
 	use trie::{TrieConfiguration, trie_types::Layout};
 
 	type TestExternalities<H> = CoreTestExternalities<H, u64>;
+
+	fn call<E: Externalities<Blake2Hasher>>(
+		ext: &mut E,
+		heap_pages: u64,
+		code: &[u8],
+		method: &str,
+		data: &[u8],
+	) -> Result<Vec<u8>, Error> {
+		let mut instance = create_instance(ext, code, heap_pages)
+			.map_err(|err| err.to_string())?;
+		instance.call(ext, method, data)
+	}
 
 	#[test]
 	fn returning_should_work() {

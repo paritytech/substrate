@@ -503,7 +503,7 @@ pub mod tests {
 	use parking_lot::Mutex;
 	use codec::Decode;
 	use crate::client::tests::prepare_client_with_key_changes;
-	use executor::{self, NativeExecutor, WasmExecutionMethod};
+	use executor::{NativeExecutor, WasmExecutionMethod};
 	use crate::error::Error as ClientError;
 	use test_client::{
 		self, ClientExt, blockchain::HeaderBackend, AccountKeyring,

@@ -14,7 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Implements a cache for pre-created Wasm runtime module instances.
+//! Traits and accessor functions for calling into the Substrate Wasm runtime.
+//!
+//! The primary means of accessing the runtimes is through a cache which saves the reusable
+//! components of the runtime that are expensive to initialize.
 
 use crate::error::{Error, WasmError};
 use crate::wasmi_execution;
@@ -24,13 +27,13 @@ use primitives::{storage::well_known_keys, Blake2Hasher, traits::Externalities};
 use runtime_version::RuntimeVersion;
 use std::{collections::hash_map::{Entry, HashMap}};
 
-/// The Wasm Substrate runtime.
+/// The Substrate Wasm runtime.
 pub trait WasmRuntime {
-	/// Attempt to set the number of heap pages available during execution.
+	/// Attempt to update the number of heap pages available during execution.
 	///
-	/// Returns false if the heap pages cannot be changed to the given value. Always returns true
-	/// if the heap pages is set to the value already configured.
-	fn set_heap_pages(&mut self, heap_pages: u64) -> bool;
+	/// Returns false if the update cannot be applied. The function is guaranteed to return true if
+	/// the heap pages would not change from its current value.
+	fn update_heap_pages(&mut self, heap_pages: u64) -> bool;
 
 	/// Call a method in the Substrate runtime by name. Returns the encoded result on success.
 	fn call(&mut self, ext: &mut dyn Externalities<Blake2Hasher>, method: &str, data: &[u8])
@@ -125,7 +128,7 @@ impl RuntimesCache {
 			Entry::Occupied(o) => {
 				let result = o.into_mut();
 				if let Ok(ref mut cached_runtime) = result {
-					if !cached_runtime.set_heap_pages(heap_pages) {
+					if !cached_runtime.update_heap_pages(heap_pages) {
 						trace!(
 							target: "runtimes_cache",
 							"heap_pages were changed. Reinstantiating the instance"

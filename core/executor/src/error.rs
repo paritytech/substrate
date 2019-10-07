@@ -100,7 +100,7 @@ impl From<String> for Error {
 }
 
 /// Type for errors occurring during Wasm runtime construction.
-#[derive(Debug)]
+#[derive(Debug, derive_more::Display)]
 pub enum WasmError {
 	/// Code could not be read from the state.
 	CodeNotFound,

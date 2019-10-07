@@ -14,8 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Definition of the Substrate Wasm externals interface. These are the host functions callable
-//! from within the runtime.
+//! Definition and implementation of the Substrate Wasm host interface.
+//!
+//! These are the host functions callable from within the Substrate runtime.
 
 use crate::error::{Error, Result};
 
