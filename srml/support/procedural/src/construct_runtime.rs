@@ -3,7 +3,11 @@ use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, ToTokens};
 use srml_support_procedural_tools::{syn_ext as ext, Parse, ToTokens};
 use std::collections::{HashMap, HashSet};
-use syn::{token, Ident, Token, spanned::Spanned, parse::{Parse, ParseStream}, Result};
+use syn::{
+	parse::{Parse, ParseStream},
+	spanned::Spanned,
+	token, Ident, Result, Token,
+};
 
 mod keyword {
 	syn::custom_keyword!(Block);
@@ -17,7 +21,7 @@ struct RuntimeDefinition {
 	pub enum_token: Token![enum],
 	pub name: Ident,
 	pub where_section: WhereSection,
-	pub modules: ext::Braces<ext::Punctuated<DeclModulesLine, Token![;]>>
+	pub modules: ext::Braces<ext::Punctuated<DeclModulesLine, Token![;]>>,
 }
 
 #[derive(Parse, ToTokens, Debug)]
@@ -44,7 +48,14 @@ struct DeclModulesLine {
 pub fn construct_runtime(input: TokenStream) -> TokenStream {
 	let definition = syn::parse_macro_input!(input as RuntimeDefinition);
 	let RuntimeDefinition {
-		name, where_section: WhereSection { block, node_block, unchecked_extrinsic, .. }, ..
+		name,
+		where_section: WhereSection {
+			block,
+			node_block,
+			unchecked_extrinsic,
+			..
+		},
+		..
 	} = definition;
 	quote!(
 		#[derive(Clone, Copy, PartialEq, Eq)]
