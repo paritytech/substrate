@@ -227,7 +227,6 @@ where TTrans::Output: Sink<BytesMut, Error = TSinkErr>
 								warn!(target: "telemetry", "Connection timeout error for {} {:?}", my_addr, err);
 							}
 							Poll::Ready(Ok(_)) => {
-								println!("Timed out");
 								return Poll::Ready(Err(ConnectionError::Timeout))
 							}
 						}
@@ -252,12 +251,10 @@ where TTrans::Output: Sink<BytesMut, Error = TSinkErr>
 					Poll::Pending => return Poll::Pending,
 					Poll::Ready(Err(err)) => {
 						self.timeout = None;
-						println!("Timed out set to None(1)");
 						return Poll::Ready(Err(ConnectionError::Sink(err)))
 					},
 					Poll::Ready(Ok(())) => {
 						self.timeout = None;
-						println!("Timed out set to None(2)");
 						self.need_flush = false;
 					},
 				}
