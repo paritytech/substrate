@@ -26,7 +26,7 @@ use crate::chain::{Client, FinalityProofProvider};
 use crate::on_demand_layer::OnDemand;
 use crate::service::{ExHashT, TransactionPool};
 use bitflags::bitflags;
-use consensus::import_queue::ImportQueue;
+use consensus::{block_validation::BlockAnnounceValidator, import_queue::ImportQueue};
 use sr_primitives::traits::{Block as BlockT};
 use std::sync::Arc;
 use libp2p::identity::{Keypair, secp256k1, ed25519};
@@ -80,6 +80,9 @@ pub struct Params<B: BlockT, S, H: ExHashT> {
 
 	/// Customization of the network. Use this to plug additional networking capabilities.
 	pub specialization: S,
+
+	/// Type to check incoming block announcements.
+	pub block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>
 }
 
 bitflags! {
@@ -205,23 +208,23 @@ pub enum ParseErr {
 }
 
 impl fmt::Display for ParseErr {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ParseErr::MultiaddrParse(err) => write!(f, "{}", err),
-            ParseErr::InvalidPeerId => write!(f, "Peer id at the end of the address is invalid"),
-            ParseErr::PeerIdMissing => write!(f, "Peer id is missing from the address"),
-        }
-    }
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		match self {
+			ParseErr::MultiaddrParse(err) => write!(f, "{}", err),
+			ParseErr::InvalidPeerId => write!(f, "Peer id at the end of the address is invalid"),
+			ParseErr::PeerIdMissing => write!(f, "Peer id is missing from the address"),
+		}
+	}
 }
 
 impl std::error::Error for ParseErr {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            ParseErr::MultiaddrParse(err) => Some(err),
-            ParseErr::InvalidPeerId => None,
-            ParseErr::PeerIdMissing => None,
-        }
-    }
+	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+		match self {
+			ParseErr::MultiaddrParse(err) => Some(err),
+			ParseErr::InvalidPeerId => None,
+			ParseErr::PeerIdMissing => None,
+		}
+	}
 }
 
 impl From<multiaddr::Error> for ParseErr {

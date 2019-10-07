@@ -43,7 +43,7 @@ use client::runtime_api::ApiExt;
 use futures::future::Future;
 use log::{debug, warn};
 use network::NetworkStateInfo;
-use primitives::ExecutionContext;
+use primitives::{offchain, ExecutionContext};
 use sr_primitives::{generic::BlockId, traits::{self, ProvideRuntimeApi}};
 use transaction_pool::txpool::{Pool, ChainApi};
 
@@ -122,7 +122,7 @@ impl<Client, Storage, Block> OffchainWorkers<
 				debug!("Running offchain workers at {:?}", at);
 				let run = runtime.offchain_worker_with_context(
 					&at,
-					ExecutionContext::OffchainWorker(api),
+					ExecutionContext::OffchainCall(Some((api, offchain::Capabilities::all()))),
 					number,
 				);
 				if let Err(e) =	run {
@@ -171,7 +171,7 @@ mod tests {
 		// given
 		let _ = env_logger::try_init();
 		let client = Arc::new(test_client::new());
-		let pool = Arc::new(Pool::new(Default::default(), transaction_pool::ChainApi::new(client.clone())));
+		let pool = Arc::new(Pool::new(Default::default(), transaction_pool::FullChainApi::new(client.clone())));
 		let db = client_db::offchain::LocalStorage::new_test();
 		let network_state = Arc::new(MockNetworkStateInfo());
 

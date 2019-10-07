@@ -21,7 +21,7 @@ use crate::{RuntimePublic, KeyTypeId};
 pub use primitives::ed25519::*;
 
 mod app {
-	use crate::key_types::ED25519;
+	use primitives::testing::ED25519;
 	crate::app_crypto!(super, ED25519);
 }
 
@@ -34,26 +34,33 @@ impl RuntimePublic for Public {
 	type Signature = Signature;
 
 	fn all(key_type: KeyTypeId) -> crate::Vec<Self> {
-		rio::ed25519_public_keys(key_type)
+		runtime_io::ed25519_public_keys(key_type)
 	}
 
 	fn generate_pair(key_type: KeyTypeId, seed: Option<&str>) -> Self {
-		rio::ed25519_generate(key_type, seed)
+		runtime_io::ed25519_generate(key_type, seed)
 	}
 
 	fn sign<M: AsRef<[u8]>>(&self, key_type: KeyTypeId, msg: &M) -> Option<Self::Signature> {
-		rio::ed25519_sign(key_type, self, msg)
+		runtime_io::ed25519_sign(key_type, self, msg.as_ref())
 	}
 
 	fn verify<M: AsRef<[u8]>>(&self, msg: &M, signature: &Self::Signature) -> bool {
-		rio::ed25519_verify(&signature, msg.as_ref(), self)
+		runtime_io::ed25519_verify(&signature, msg.as_ref(), self)
 	}
 }
 
 #[cfg(test)]
 mod tests {
 	use sr_primitives::{generic::BlockId, traits::ProvideRuntimeApi};
-	use primitives::{testing::KeyStore, crypto::Pair, traits::BareCryptoStore as _};
+	use primitives::{
+				testing::{
+						KeyStore,
+						ED25519,
+				},
+				crypto::Pair,
+				traits::BareCryptoStore as _,
+		};
 	use test_client::{
 		TestClientBuilder, DefaultTestClientBuilderExt, TestClientBuilderExt,
 		runtime::{TestAPI, app_crypto::ed25519::{AppPair, AppPublic}},
@@ -67,7 +74,7 @@ mod tests {
 			.test_ed25519_crypto(&BlockId::Number(0))
 			.expect("Tests `ed25519` crypto.");
 
-		let key_pair = keystore.read().ed25519_key_pair(crate::key_types::ED25519, &public.as_ref())
+		let key_pair = keystore.read().ed25519_key_pair(ED25519, &public.as_ref())
 			.expect("There should be at a `ed25519` key in the keystore for the given public key.");
 
 		assert!(AppPair::verify(&signature, "ed25519", &AppPublic::from(key_pair.public())));

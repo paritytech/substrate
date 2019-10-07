@@ -452,31 +452,44 @@ macro_rules! impl_outer_event {
 		$( $module_name:ident::Event $( <$generic_param:ident> )? $( { $generic_instance:ident } )?, )*;
 	) => {
 		$crate::paste::item! {
-		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-		#[derive(Clone, PartialEq, Eq, $crate::codec::Encode, $crate::codec::Decode)]
-		#[cfg_attr(feature = "std", derive(Debug))]
-		$(#[$attr])*
-		#[allow(non_camel_case_types)]
-		pub enum $name {
-			system($system::Event),
-			$(
-				[< $module_name $(_ $generic_instance )? >](
-					$module_name::Event < $( $generic_param )? $(, $module_name::$generic_instance )? >
-				),
-			)*
-		}
-		impl From<$system::Event> for $name {
-			fn from(x: $system::Event) -> Self {
-				$name::system(x)
+			#[derive(Clone, PartialEq, Eq, $crate::codec::Encode, $crate::codec::Decode)]
+			#[cfg_attr(feature = "std", derive(Debug))]
+			$(#[$attr])*
+			#[allow(non_camel_case_types)]
+			pub enum $name {
+				system($system::Event),
+				$(
+					[< $module_name $(_ $generic_instance )? >](
+						$module_name::Event < $( $generic_param )? $(, $module_name::$generic_instance )? >
+					),
+				)*
 			}
-		}
-		$(
-			impl From<$module_name::Event < $( $generic_param, )? $( $module_name::$generic_instance )? >> for $name {
-				fn from(x: $module_name::Event < $( $generic_param, )? $( $module_name::$generic_instance )? >) -> Self {
-					$name::[< $module_name $(_ $generic_instance )? >](x)
+			impl From<$system::Event> for $name {
+				fn from(x: $system::Event) -> Self {
+					$name::system(x)
 				}
 			}
-		)*
+			$(
+				impl From<$module_name::Event < $( $generic_param, )? $( $module_name::$generic_instance )? >> for $name {
+					fn from(x: $module_name::Event < $( $generic_param, )? $( $module_name::$generic_instance )? >) -> Self {
+						$name::[< $module_name $(_ $generic_instance )? >](x)
+					}
+				}
+				impl $crate::rstd::convert::TryInto<
+					$module_name::Event < $( $generic_param, )? $( $module_name::$generic_instance )? >
+				> for $name {
+					type Error = ();
+
+					fn try_into(self) -> $crate::rstd::result::Result<
+						$module_name::Event < $( $generic_param, )? $( $module_name::$generic_instance )? >, Self::Error
+					> {
+						match self {
+							Self::[< $module_name $(_ $generic_instance )? >](evt) => Ok(evt),
+							_ => Err(()),
+						}
+					}
+				}
+			)*
 		}
 		$crate::__impl_outer_event_json_metadata!(
 			$runtime;

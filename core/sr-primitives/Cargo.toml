@@ -5,21 +5,24 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-num-traits = { version = "0.2", default-features = false }
-integer-sqrt = { version = "0.1.2" }
-serde = { version = "1.0", optional = true, features = ["derive"] }
+num-traits = { version = "0.2.8", default-features = false }
+integer-sqrt = "0.1.2"
+serde = { version = "1.0.101", optional = true, features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 primitives = { package = "substrate-primitives",  path = "../primitives", default-features = false }
 app-crypto = { package = "substrate-application-crypto",  path = "../application-crypto", default-features = false }
 rstd = { package = "sr-std", path = "../sr-std", default-features = false }
 runtime_io = { package = "sr-io", path = "../sr-io", default-features = false }
-log = { version = "0.4", optional = true }
-paste = { version = "0.1"}
-rand = { version = "0.7.0", optional = true }
+log = { version = "0.4.8", optional = true }
+paste = "0.1.6"
+rand = { version = "0.7.2", optional = true }
+impl-trait-for-tuples = "0.1.2"
 
 [dev-dependencies]
-serde_json = "1.0"
-primitive-types = "0.5.0"
+serde_json = "1.0.40"
+primitive-types = "0.5.1"
+rand = "0.7.2"
+substrate-offchain = { path = "../offchain" }
 
 [features]
 default = ["std"]

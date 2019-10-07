@@ -23,16 +23,23 @@ use std::{collections::HashMap, rc::Rc};
 use codec::{Decode, Encode};
 use primitives::sandbox as sandbox_primitives;
 use wasmi::{
-	Externals, FuncRef, ImportResolver, MemoryInstance, MemoryRef, Module, ModuleInstance,
+	Externals, ImportResolver, MemoryInstance, MemoryRef, Module, ModuleInstance,
 	ModuleRef, RuntimeArgs, RuntimeValue, Trap, TrapKind, memory_units::Pages,
 };
+use wasm_interface::{Pointer, WordSize};
 
 /// Index of a function inside the supervisor.
 ///
 /// This is a typically an index in the default table of the supervisor, however
 /// the exact meaning of this index is depends on the implementation of dispatch function.
 #[derive(Copy, Clone, Debug, PartialEq)]
-struct SupervisorFuncIndex(usize);
+pub struct SupervisorFuncIndex(usize);
+
+impl From<SupervisorFuncIndex> for usize {
+	fn from(index: SupervisorFuncIndex) -> Self {
+		index.0
+	}
+}
 
 /// Index of a function within guest index space.
 ///
@@ -72,7 +79,7 @@ impl ImportResolver for Imports {
 		module_name: &str,
 		field_name: &str,
 		signature: &::wasmi::Signature,
-	) -> std::result::Result<FuncRef, wasmi::Error> {
+	) -> std::result::Result<wasmi::FuncRef, wasmi::Error> {
 		let key = (
 			module_name.as_bytes().to_owned(),
 			field_name.as_bytes().to_owned(),
@@ -137,11 +144,14 @@ impl ImportResolver for Imports {
 ///
 /// Note that this functions are only called in the `supervisor` context.
 pub trait SandboxCapabilities {
+	/// Represents a function reference into the supervisor environment.
+	type SupervisorFuncRef;
+
 	/// Returns a reference to an associated sandbox `Store`.
-	fn store(&self) -> &Store;
+	fn store(&self) -> &Store<Self::SupervisorFuncRef>;
 
 	/// Returns a mutable reference to an associated sandbox `Store`.
-	fn store_mut(&mut self) -> &mut Store;
+	fn store_mut(&mut self) -> &mut Store<Self::SupervisorFuncRef>;
 
 	/// Allocate space of the specified length in the supervisor memory.
 	///
@@ -150,7 +160,7 @@ pub trait SandboxCapabilities {
 	/// Returns `Err` if allocation not possible or errors during heap management.
 	///
 	/// Returns pointer to the allocated block.
-	fn allocate(&mut self, len: u32) -> Result<u32>;
+	fn allocate(&mut self, len: WordSize) -> Result<Pointer<u8>>;
 
 	/// Deallocate space specified by the pointer that was previously returned by [`allocate`].
 	///
@@ -159,35 +169,57 @@ pub trait SandboxCapabilities {
 	/// Returns `Err` if deallocation not possible or because of errors in heap management.
 	///
 	/// [`allocate`]: #tymethod.allocate
-	fn deallocate(&mut self, ptr: u32) -> Result<()>;
+	fn deallocate(&mut self, ptr: Pointer<u8>) -> Result<()>;
 
 	/// Write `data` into the supervisor memory at offset specified by `ptr`.
 	///
 	/// # Errors
 	///
 	/// Returns `Err` if `ptr + data.len()` is out of bounds.
-	fn write_memory(&mut self, ptr: u32, data: &[u8]) -> Result<()>;
+	fn write_memory(&mut self, ptr: Pointer<u8>, data: &[u8]) -> Result<()>;
 
 	/// Read `len` bytes from the supervisor memory.
 	///
 	/// # Errors
 	///
 	/// Returns `Err` if `ptr + len` is out of bounds.
-	fn read_memory(&self, ptr: u32, len: u32) -> Result<Vec<u8>>;
+	fn read_memory(&self, ptr: Pointer<u8>, len: WordSize) -> Result<Vec<u8>>;
+
+	/// Invoke a function in the supervisor environment.
+	///
+	/// This first invokes the dispatch_thunk function, passing in the function index of the
+	/// desired function to call and serialized arguments. The thunk calls the desired function
+	/// with the deserialized arguments, then serializes the result into memory and returns
+	/// reference. The pointer to and length of the result in linear memory is encoded into an i64,
+	/// with the upper 32 bits representing the pointer and the lower 32 bits representing the
+	/// length.
+	///
+	/// # Errors
+	///
+	/// Returns `Err` if the dispatch_thunk function has an incorrect signature or traps during
+	/// execution.
+	fn invoke(
+		&mut self,
+		dispatch_thunk: &Self::SupervisorFuncRef,
+		invoke_args_ptr: Pointer<u8>,
+		invoke_args_len: WordSize,
+		state: u32,
+		func_idx: SupervisorFuncIndex,
+	) -> Result<i64>;
 }
 
 /// Implementation of [`Externals`] that allows execution of guest module with
 /// [externals][`Externals`] that might refer functions defined by supervisor.
 ///
 /// [`Externals`]: ../../wasmi/trait.Externals.html
-pub struct GuestExternals<'a, FE: SandboxCapabilities + Externals + 'a> {
+pub struct GuestExternals<'a, FE: SandboxCapabilities + 'a> {
 	supervisor_externals: &'a mut FE,
-	sandbox_instance: &'a SandboxInstance,
+	sandbox_instance: &'a SandboxInstance<FE::SupervisorFuncRef>,
 	state: u32,
 }
 
 fn trap(msg: &'static str) -> Trap {
-	TrapKind::Host(Box::new(Error::Other(msg))).into()
+	TrapKind::Host(Box::new(Error::Other(msg.into()))).into()
 }
 
 fn deserialize_result(serialized_result: &[u8]) -> std::result::Result<Option<RuntimeValue>, Trap> {
@@ -204,7 +236,7 @@ fn deserialize_result(serialized_result: &[u8]) -> std::result::Result<Option<Ru
 	}
 }
 
-impl<'a, FE: SandboxCapabilities + Externals + 'a> Externals for GuestExternals<'a, FE> {
+impl<'a, FE: SandboxCapabilities + 'a> Externals for GuestExternals<'a, FE> {
 	fn invoke_index(
 		&mut self,
 		index: usize,
@@ -213,7 +245,6 @@ impl<'a, FE: SandboxCapabilities + Externals + 'a> Externals for GuestExternals<
 		// Make `index` typesafe again.
 		let index = GuestFuncIndex(index);
 
-		let dispatch_thunk = self.sandbox_instance.dispatch_thunk.clone();
 		let func_idx = self.sandbox_instance
 			.guest_to_supervisor_mapping
 			.func_by_guest_index(index)
@@ -236,34 +267,26 @@ impl<'a, FE: SandboxCapabilities + Externals + 'a> Externals for GuestExternals<
 
 		// Move serialized arguments inside the memory and invoke dispatch thunk and
 		// then free allocated memory.
-		let invoke_args_ptr = self.supervisor_externals
-			.allocate(invoke_args_data.len() as u32)?;
-		self.supervisor_externals
-			.write_memory(invoke_args_ptr, &invoke_args_data)?;
-		let result = ::wasmi::FuncInstance::invoke(
-			&dispatch_thunk,
-			&[
-				RuntimeValue::I32(invoke_args_ptr as i32),
-				RuntimeValue::I32(invoke_args_data.len() as i32),
-				RuntimeValue::I32(state as i32),
-				RuntimeValue::I32(func_idx.0 as i32),
-			],
-			self.supervisor_externals,
-		);
+		let invoke_args_len = invoke_args_data.len() as WordSize;
+		let invoke_args_ptr = self.supervisor_externals.allocate(invoke_args_len)?;
+		self.supervisor_externals.write_memory(invoke_args_ptr, &invoke_args_data)?;
+		let result = self.supervisor_externals.invoke(
+			&self.sandbox_instance.dispatch_thunk,
+			invoke_args_ptr,
+			invoke_args_len,
+			state,
+			func_idx,
+		)?;
 		self.supervisor_externals.deallocate(invoke_args_ptr)?;
 
 		// dispatch_thunk returns pointer to serialized arguments.
-		let (serialized_result_val_ptr, serialized_result_val_len) = match result {
-			// Unpack pointer and len of the serialized result data.
-			Ok(Some(RuntimeValue::I64(v))) => {
-				// Cast to u64 to use zero-extension.
-				let v = v as u64;
-				let ptr = (v as u64 >> 32) as u32;
-				let len = (v & 0xFFFFFFFF) as u32;
-				(ptr, len)
-			}
-			Ok(_) => return Err(trap("Supervisor function returned unexpected result!")),
-			Err(_) => return Err(trap("Supervisor function trapped!")),
+		// Unpack pointer and len of the serialized result data.
+		let (serialized_result_val_ptr, serialized_result_val_len) = {
+			// Cast to u64 to use zero-extension.
+			let v = result as u64;
+			let ptr = (v as u64 >> 32) as u32;
+			let len = (v & 0xFFFFFFFF) as u32;
+			(Pointer::new(ptr), len)
 		};
 
 		let serialized_result_val = self.supervisor_externals
@@ -271,21 +294,18 @@ impl<'a, FE: SandboxCapabilities + Externals + 'a> Externals for GuestExternals<
 		self.supervisor_externals
 			.deallocate(serialized_result_val_ptr)?;
 
-		// We do not have to check the signature here, because it's automatically
-		// checked by wasmi.
-
 		deserialize_result(&serialized_result_val)
 	}
 }
 
 fn with_guest_externals<FE, R, F>(
 	supervisor_externals: &mut FE,
-	sandbox_instance: &SandboxInstance,
+	sandbox_instance: &SandboxInstance<FE::SupervisorFuncRef>,
 	state: u32,
 	f: F,
 ) -> R
 where
-	FE: SandboxCapabilities + Externals,
+	FE: SandboxCapabilities,
 	F: FnOnce(&mut GuestExternals<FE>) -> R,
 {
 	let mut guest_externals = GuestExternals {
@@ -307,14 +327,16 @@ where
 /// it's required to provide supervisor externals: it will be used to execute
 /// code in the supervisor context.
 ///
+/// This is generic over a supervisor function reference type.
+///
 /// [`invoke`]: #method.invoke
-pub struct SandboxInstance {
+pub struct SandboxInstance<FR> {
 	instance: ModuleRef,
-	dispatch_thunk: FuncRef,
+	dispatch_thunk: FR,
 	guest_to_supervisor_mapping: GuestToSupervisorFunctionMapping,
 }
 
-impl SandboxInstance {
+impl<FR> SandboxInstance<FR> {
 	/// Invoke an exported function by a name.
 	///
 	/// `supervisor_externals` is required to execute the implementations
@@ -322,7 +344,7 @@ impl SandboxInstance {
 	///
 	/// The `state` parameter can be used to provide custom data for
 	/// these syscall implementations.
-	pub fn invoke<FE: SandboxCapabilities + Externals>(
+	pub fn invoke<FE: SandboxCapabilities<SupervisorFuncRef=FR>>(
 		&self,
 		export_name: &str,
 		args: &[RuntimeValue],
@@ -411,9 +433,9 @@ fn decode_environment_definition(
 /// - Module in `wasm` is invalid or couldn't be instantiated.
 ///
 /// [`EnvironmentDefinition`]: ../../sandbox/struct.EnvironmentDefinition.html
-pub fn instantiate<FE: SandboxCapabilities + Externals>(
+pub fn instantiate<FE: SandboxCapabilities>(
 	supervisor_externals: &mut FE,
-	dispatch_thunk: FuncRef,
+	dispatch_thunk: FE::SupervisorFuncRef,
 	wasm: &[u8],
 	raw_env_def: &[u8],
 	state: u32,
@@ -452,15 +474,17 @@ pub fn instantiate<FE: SandboxCapabilities + Externals>(
 }
 
 /// This struct keeps track of all sandboxed components.
-pub struct Store {
+///
+/// This is generic over a supervisor function reference type.
+pub struct Store<FR> {
 	// Memories and instances are `Some` untill torndown.
-	instances: Vec<Option<Rc<SandboxInstance>>>,
+	instances: Vec<Option<Rc<SandboxInstance<FR>>>>,
 	memories: Vec<Option<MemoryRef>>,
 }
 
-impl Store {
+impl<FR> Store<FR> {
 	/// Create a new empty sandbox store.
-	pub fn new() -> Store {
+	pub fn new() -> Self {
 		Store {
 			instances: Vec::new(),
 			memories: Vec::new(),
@@ -496,7 +520,7 @@ impl Store {
 	///
 	/// Returns `Err` If `instance_idx` isn't a valid index of an instance or
 	/// instance is already torndown.
-	pub fn instance(&self, instance_idx: u32) -> Result<Rc<SandboxInstance>> {
+	pub fn instance(&self, instance_idx: u32) -> Result<Rc<SandboxInstance<FR>>> {
 		self.instances
 			.get(instance_idx as usize)
 			.cloned()
@@ -552,7 +576,7 @@ impl Store {
 		}
 	}
 
-	fn register_sandbox_instance(&mut self, sandbox_instance: Rc<SandboxInstance>) -> u32 {
+	fn register_sandbox_instance(&mut self, sandbox_instance: Rc<SandboxInstance<FR>>) -> u32 {
 		let instance_idx = self.instances.len();
 		self.instances.push(Some(sandbox_instance));
 		instance_idx as u32
@@ -643,7 +667,10 @@ mod tests {
 		if let Err(err) = res {
 			assert_eq!(
 				format!("{}", err),
-				format!("{}", wasmi::Error::Trap(Error::AllocatorOutOfSpace.into()))
+				format!(
+					"{}",
+					wasmi::Error::Trap(Error::FunctionExecution("AllocatorOutOfSpace".into()).into()),
+				),
 			);
 		}
 	}

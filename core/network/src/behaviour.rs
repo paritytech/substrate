@@ -23,9 +23,9 @@ use crate::protocol::{CustomMessageOutcome, Protocol};
 use futures::prelude::*;
 use libp2p::NetworkBehaviour;
 use libp2p::core::{Multiaddr, PeerId, PublicKey};
+use libp2p::kad::record;
 use libp2p::swarm::{NetworkBehaviourAction, NetworkBehaviourEventProcess};
 use libp2p::core::{nodes::Substream, muxing::StreamMuxerBox};
-use libp2p::multihash::Multihash;
 use log::warn;
 use sr_primitives::traits::Block as BlockT;
 use std::iter;
@@ -101,12 +101,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Behaviour<B, S, H> {
 	}
 
 	/// Start querying a record from the DHT. Will later produce either a `ValueFound` or a `ValueNotFound` event.
-	pub fn get_value(&mut self, key: &Multihash) {
+	pub fn get_value(&mut self, key: &record::Key) {
 		self.discovery.get_value(key);
 	}
 
 	/// Starts putting a record into DHT. Will later produce either a `ValuePut` or a `ValuePutFailed` event.
-	pub fn put_value(&mut self, key: Multihash, value: Vec<u8>) {
+	pub fn put_value(&mut self, key: record::Key, value: Vec<u8>) {
 		self.discovery.put_value(key, value);
 	}
 }

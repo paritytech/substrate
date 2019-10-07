@@ -31,7 +31,7 @@ use crate::wasm::{prepare, runtime::Env, PrefabWasmModule};
 use crate::{CodeHash, CodeStorage, PristineCode, Schedule, Trait};
 use rstd::prelude::*;
 use sr_primitives::traits::{Hash, Bounded};
-use srml_support::StorageMap;
+use support::StorageMap;
 
 /// Gas metering token that used for charging storing code into the code storage.
 ///
@@ -98,7 +98,7 @@ pub fn load<T: Trait>(
 		let original_code =
 			<PristineCode<T>>::get(code_hash).ok_or_else(|| "pristine code is not found")?;
 		prefab_module = prepare::prepare_contract::<Env>(&original_code, schedule)?;
-		<CodeStorage<T>>::insert(code_hash, prefab_module.clone());
+		<CodeStorage<T>>::insert(&code_hash, &prefab_module);
 	}
 	Ok(prefab_module)
 }

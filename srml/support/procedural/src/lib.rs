@@ -44,44 +44,71 @@ use proc_macro::TokenStream;
 /// with `Store` a (pub) trait generated associating each storage item to the `Module` and
 /// `as Example` setting the prefix used for storage items of this module. `Example` must be unique:
 /// another module with the same name and the same inner storage item name will conflict.
+/// `Example` is called the module prefix.
+///
+/// note: For instantiable modules the module prefix is prepended with instance
+/// prefix. Instance prefix is "" for default instance and "Instance$n" for instance number $n.
+/// Thus, instance 3 of module Example has a module prefix of `Instance3Example`
 ///
 /// Basic storage consists of a name and a type; supported types are:
 ///
-/// * Value: `Foo: type`: Implements the [`StorageValue`](../srml_support/storage/trait.StorageValue.html) trait.
+/// * Value: `Foo: type`: Implements the
+///   [`StorageValue`](../srml_support/storage/trait.StorageValue.html) trait using the
+///   [`StorageValue generator`](../srml_support/storage/generator/trait.StorageValue.html).
+///   The generator `unhashed_key` is `$module_prefix ++ " " ++ $storage_name`
+///
 /// * Map: `Foo: map hasher($hash) type => type`: Implements the
-///   [`StorageMap`](../srml_support/storage/trait.StorageMap.html) trait
-///   with `$hash` representing a choice of hashing algorithms available in the
+///   [`StorageMap`](../srml_support/storage/trait.StorageMap.html) trait using the
+///   [`StorageMap generator`](../srml_support/storage/generator/trait.StorageMap.html).
+///
+///   `$hash` representing a choice of hashing algorithms available in the
 ///   [`Hashable`](../srml_support/trait.Hashable.html) trait.
+///
+///   `hasher($hash)` is optional and its default is `blake2_256`. One should use another hasher
+///   with care, see generator documentation.
+///
+///   The generator is implemented with:
+///   * `prefix`: `$module_prefix ++ " " ++ $storage_name`
+///   * `Hasher`: $hash
+///
+/// * Linked map: `Foo: linked_map hasher($hash) type => type`: Implements the
+///   [`StorageLinkedMap`](../srml_support/storage/trait.StorageLinkedMap.html) trait using the
+///   [`StorageLinkedMap generator`](../srml_support/storage/generator/trait.StorageLinkedMap.html).
+///
+///   `$hash` representing a choice of hashing algorithms available in the
+///   [`Hashable`](../srml_support/trait.Hashable.html) trait.
+///
+///   `hasher($hash)` is optional and its default is `blake2_256`. One should use another hasher
+///   with care, see generator documentation.
+///
+///   The generator is implemented with:
+///   * `prefix`: `$module_prefix ++ " " ++ $storage_name`
+///   * `head_key`: `"head of " ++ $module_prefix ++ " " ++ $storage_name`
+///   * `Hasher`: $hash
+///
+/// * Double map: `Foo: double_map hasher($hash1) u32, $hash2(u32) => u32`: Implements the
+///   [`StorageDoubleMap`](../srml_support/storage/trait.StorageDoubleMap.html) trait using the
+///   [`StorageDoubleMap generator`](../srml_support/storage/generator/trait.StorageDoubleMap.html).
+///
+///   `$hash1` and `$hash2` representing choices of hashing algorithms available in the
+///   [`Hashable`](../srml_support/trait.Hashable.html) trait. They must be choosen with care, see
+///   generator documentation.
 ///
 ///   `hasher($hash)` is optional and its default is `blake2_256`.
 ///
-///   /!\ Be careful with each key in the map that is inserted in the trie
-///   `$hash(module_name ++ " " ++ storage_name ++ encoding(key))`.
-///   If the keys are not trusted (e.g. can be set by a user), a cryptographic `hasher` such as
-///   `blake2_256` must be used. Otherwise, other values in storage can be compromised.
-///
-/// * Linked map: `Foo: linked_map hasher($hash) type => type`: Same as `Map` but also implements
-///   the [`EnumerableStorageMap`](../srml_support/storage/trait.EnumerableStorageMap.html) trait.
-///
-/// * Double map: `Foo: double_map hasher($hash) u32, $hash2(u32) => u32`: Implements the
-///   [`StorageDoubleMap`](../srml_support/storage/trait.StorageDoubleMap.html) trait with
-///   `$hash` and `$hash2` representing choices of hashing algorithms available in the
-///   [`Hashable`](../srml_support/trait.Hashable.html) trait.
-///
-///   `hasher($hash)` is optional and its default is `blake2_256`.
-///
-///   /!\ Be careful with each key pair in the double map that is inserted in the trie.
-///   The final key is calculated as follows:
-///
-///   ```nocompile
-///   $hash(module_name ++ " " ++ storage_name ++ encoding(first_key)) ++ $hash2(encoding(second_key))
-///   ```
+///   `hasher($hash)` is optional and its default is `blake2_256`. One should use another hasher
+///   with care, see generator documentation.
 ///
 ///   If the first key is untrusted, a cryptographic `hasher` such as `blake2_256` must be used.
 ///   Otherwise, other values of all storage items can be compromised.
 ///
 ///   If the second key is untrusted, a cryptographic `hasher` such as `blake2_256` must be used.
 ///   Otherwise, other items in storage with the same first key can be compromised.
+///
+///   The generator is implemented with:
+///   * `key1_prefix`: `$module_prefix ++ " " ++ $storage_name`
+///   * `Hasher1`: $hash1
+///   * `Hasher2`: $hash2
 ///
 /// Supported hashers (ordered from least to best security):
 ///
@@ -126,14 +153,24 @@ use proc_macro::TokenStream;
 ///			config(genesis_field): GenesisFieldType;
 ///			config(genesis_field2): GenesisFieldType;
 ///			...
-///			build(|_: &mut StorageOverlay, _: &mut ChildrenStorageOverlay, _: &GenesisConfig<T>| {
+///			build(|_: &Self| {
 ///				// Modification of storage
 ///			})
 ///		}
 /// }
 /// ```
 ///
-/// This struct can be exposed as `Config` by the `decl_runtime!` macro.
+/// This struct can be exposed as `ExampleConfig` by the `construct_runtime!` macro like follows:
+///
+/// ```nocompile
+/// construct_runtime!(
+/// 	pub enum Runtume with ... {
+///         ...,
+///         Example: example::{Module, Storage, ..., Config<T>},
+///         ...,
+///	}
+/// );
+/// ```
 ///
 /// ### Module with Instances
 ///

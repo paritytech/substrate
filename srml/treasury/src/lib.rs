@@ -70,14 +70,14 @@
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 use rstd::prelude::*;
-use srml_support::{StorageValue, StorageMap, decl_module, decl_storage, decl_event, ensure, print};
-use srml_support::traits::{
+use support::{decl_module, decl_storage, decl_event, ensure, print};
+use support::traits::{
 	Currency, ExistenceRequirement, Get, Imbalance, OnDilution, OnUnbalanced,
 	ReservableCurrency, WithdrawReason
 };
-use sr_primitives::{Permill, ModuleId};
+use sr_primitives::{Permill, Perbill, ModuleId};
 use sr_primitives::traits::{
-	Zero, EnsureOrigin, StaticLookup, CheckedSub, CheckedMul, AccountIdConversion
+	Zero, EnsureOrigin, StaticLookup, AccountIdConversion, CheckedSub
 };
 use sr_primitives::weights::SimpleDispatchInfo;
 use codec::{Encode, Decode};
@@ -88,11 +88,6 @@ type PositiveImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::
 type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
 
 const MODULE_ID: ModuleId = ModuleId(*b"py/trsry");
-
-pub const DEFAULT_PROPOSAL_BOND: u32 = 0;
-pub const DEFAULT_PROPOSAL_BOND_MINIMUM: u32 = 0;
-pub const DEFAULT_SPEND_PERIOD: u32 = 0;
-pub const DEFAULT_BURN: u32 = 0;
 
 pub trait Trait: system::Trait {
 	/// The staking balance.
@@ -144,7 +139,7 @@ decl_module! {
 		/// Percentage of spare funds (if any) that are burnt per spend period.
 		const Burn: Permill = T::Burn::get();
 
-		fn deposit_event<T>() = default;
+		fn deposit_event() = default;
 		/// Put forward a suggestion for spending. A deposit proportional to the value
 		/// is reserved and slashed if the proposal is rejected. It is returned once the
 		/// proposal is awarded.
@@ -348,10 +343,9 @@ impl<T: Trait> OnDilution<BalanceOf<T>> for Module<T> {
 		if !minted.is_zero() && !portion.is_zero() {
 			let total_issuance = T::Currency::total_issuance();
 			if let Some(funding) = total_issuance.checked_sub(&portion) {
-				let funding = funding / portion;
-				if let Some(funding) = funding.checked_mul(&minted) {
-					Self::on_unbalanced(T::Currency::issue(funding));
-				}
+				let increase_ratio = Perbill::from_rational_approximation(minted, portion);
+				let funding = increase_ratio * funding;
+				Self::on_unbalanced(T::Currency::issue(funding));
 			}
 		}
 	}
@@ -362,9 +356,13 @@ mod tests {
 	use super::*;
 
 	use runtime_io::with_externalities;
-	use srml_support::{assert_noop, assert_ok, impl_outer_origin, parameter_types};
+	use support::{assert_noop, assert_ok, impl_outer_origin, parameter_types};
 	use primitives::{H256, Blake2Hasher};
-	use sr_primitives::{Perbill, traits::{BlakeTwo256, OnFinalize, IdentityLookup}, testing::Header};
+	use sr_primitives::{
+		traits::{BlakeTwo256, OnFinalize, IdentityLookup},
+		testing::Header,
+		assert_eq_error_rate,
+	};
 
 	impl_outer_origin! {
 		pub enum Origin for Test {}
@@ -394,6 +392,7 @@ mod tests {
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
+		type Version = ();
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 0;
@@ -465,6 +464,32 @@ mod tests {
 	}
 
 	#[test]
+	fn minting_works_2() {
+		let tests = [(1, 10), (1, 20), (40, 130), (2, 66), (2, 67), (2, 100), (2, 101), (2, 134)];
+		for &(minted, portion) in &tests {
+			with_externalities(&mut new_test_ext(), || {
+				let init_total_issuance = Balances::total_issuance();
+				Treasury::on_dilution(minted, portion);
+
+				assert_eq!(
+					Treasury::pot(),
+					(((init_total_issuance - portion) * minted) as f32 / portion as f32)
+						.round() as u64
+				);
+
+				// Assert:
+				// portion / init_total_issuance
+				// == (portion + minted) / (init_total_issuance + Treasury::pot() + minted),
+				assert_eq_error_rate!(
+					portion * 1_000 / init_total_issuance,
+					(portion + minted) * 1_000 / (init_total_issuance + Treasury::pot() + minted),
+					2,
+				);
+			});
+		}
+	}
+
+	#[test]
 	fn spend_proposal_takes_min_deposit() {
 		with_externalities(&mut new_test_ext(), || {
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 1, 3));
@@ -506,10 +531,13 @@ mod tests {
 	#[test]
 	fn unused_pot_should_diminish() {
 		with_externalities(&mut new_test_ext(), || {
+			let init_total_issuance = Balances::total_issuance();
 			Treasury::on_dilution(100, 100);
+			assert_eq!(Balances::total_issuance(), init_total_issuance + 100);
 
 			<Treasury as OnFinalize<u64>>::on_finalize(2);
 			assert_eq!(Treasury::pot(), 50);
+			assert_eq!(Balances::total_issuance(), init_total_issuance + 50);
 		});
 	}
 
@@ -575,37 +603,6 @@ mod tests {
 			<Treasury as OnFinalize<u64>>::on_finalize(2);
 			assert_eq!(Balances::free_balance(&3), 100);
 			assert_eq!(Treasury::pot(), 0);
-		});
-	}
-
-	#[test]
-	// Note: This test demonstrates that `on_dilution` does not increase the pot with good resolution
-	// with large amounts of the network staked. https://github.com/paritytech/substrate/issues/2579
-	// A fix to 2579 should include a change of this test.
-	fn on_dilution_quantization_effects() {
-		with_externalities(&mut new_test_ext(), || {
-			// minted = 1% of total issuance for all cases
-			assert_eq!(Balances::total_issuance(), 200);
-
-			Treasury::on_dilution(2, 66);   // portion = 33% of total issuance
-			assert_eq!(Treasury::pot(), 4); // should increase by 4 (200 - 66) / 66 * 2
-			Balances::make_free_balance_be(&Treasury::account_id(), 0);
-
-			Treasury::on_dilution(2, 67);   // portion = 33+eps% of total issuance
-			assert_eq!(Treasury::pot(), 2); // should increase by 2 (200 - 67) / 67 * 2
-			Balances::make_free_balance_be(&Treasury::account_id(), 0);
-
-			Treasury::on_dilution(2, 100);  // portion = 50% of total issuance
-			assert_eq!(Treasury::pot(), 2); // should increase by 2 (200 - 100) / 100 * 2
-			Balances::make_free_balance_be(&Treasury::account_id(), 0);
-
-			// If any more than 50% of the network is staked (i.e. (2 * portion) > total_issuance)
-			// then the pot will not increase.
-			Treasury::on_dilution(2, 101);  // portion = 50+eps% of total issuance
-			assert_eq!(Treasury::pot(), 0); // should increase by 0 (200 - 101) / 101 * 2
-
-			Treasury::on_dilution(2, 134);  // portion = 67% of total issuance
-			assert_eq!(Treasury::pot(), 0); // should increase by 0 (200 - 134) / 134 * 2
 		});
 	}
 

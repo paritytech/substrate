@@ -14,9 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use srml_support::sr_primitives::generic;
-use srml_support::sr_primitives::traits::{BlakeTwo256, Block as _, Verify};
-use srml_support::codec::{Encode, Decode};
+use support::sr_primitives::generic;
+use support::sr_primitives::traits::{BlakeTwo256, Block as _, Verify};
+use support::codec::{Encode, Decode};
 use primitives::{H256, sr25519};
 use serde::{Serialize, Deserialize};
 
@@ -82,7 +82,7 @@ mod module {
 
 	pub trait Trait: system::Trait {}
 
-	srml_support::decl_module! {
+	support::decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 	}
 
@@ -99,7 +99,7 @@ mod module {
 		}
 	}
 
-	srml_support::decl_storage! {
+	support::decl_storage! {
 		trait Store for Module<T: Trait> as Actors {
 			/// requirements to enter and maintain status in roles
 			pub Parameters get(parameters) build(|config: &GenesisConfig| {
@@ -164,7 +164,7 @@ impl system::Trait for Runtime {
 
 impl module::Trait for Runtime {}
 
-srml_support::construct_runtime!(
+support::construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
 		NodeBlock = Block,

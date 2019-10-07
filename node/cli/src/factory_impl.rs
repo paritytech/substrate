@@ -23,7 +23,10 @@ use rand::rngs::StdRng;
 
 use codec::{Encode, Decode};
 use keyring::sr25519::Keyring;
-use node_runtime::{Call, CheckedExtrinsic, UncheckedExtrinsic, SignedExtra, BalancesCall, ExistentialDeposit};
+use node_runtime::{
+	Call, CheckedExtrinsic, UncheckedExtrinsic, SignedExtra, BalancesCall, ExistentialDeposit,
+	MinimumPeriod,
+};
 use primitives::{sr25519, crypto::Pair};
 use sr_primitives::{generic::Era, traits::{Block as BlockT, Header as HeaderT, SignedExtension}};
 use transaction_factory::RuntimeAdapter;
@@ -31,9 +34,6 @@ use transaction_factory::modes::Mode;
 use inherents::InherentData;
 use timestamp;
 use finality_tracker;
-
-// TODO get via api: <T as timestamp::Trait>::MinimumPeriod::get(). See #2587.
-const MINIMUM_PERIOD: u64 = 99;
 
 pub struct FactoryState<N> {
 	block_no: N,
@@ -51,11 +51,13 @@ type Number = <<node_primitives::Block as BlockT>::Header as HeaderT>::Number;
 impl<Number> FactoryState<Number> {
 	fn build_extra(index: node_primitives::Index, phase: u64) -> node_runtime::SignedExtra {
 		(
+			system::CheckVersion::new(),
 			system::CheckGenesis::new(),
 			system::CheckEra::from(Era::mortal(256, phase)),
 			system::CheckNonce::from(index),
 			system::CheckWeight::new(),
-			balances::TakeFees::from(0)
+			balances::TakeFees::from(0),
+			Default::default(),
 		)
 	}
 }
@@ -132,12 +134,12 @@ impl RuntimeAdapter for FactoryState<Number> {
 		key: &Self::Secret,
 		destination: &Self::AccountId,
 		amount: &Self::Balance,
+		version: u32,
 		genesis_hash: &<Self::Block as BlockT>::Hash,
 		prior_block_hash: &<Self::Block as BlockT>::Hash,
 	) -> <Self::Block as BlockT>::Extrinsic {
 		let index = self.extract_index(&sender, prior_block_hash);
 		let phase = self.extract_phase(*prior_block_hash);
-
 		sign::<Self>(CheckedExtrinsic {
 			signed: Some((sender.clone(), Self::build_extra(index, phase))),
 			function: Call::Balances(
@@ -146,11 +148,11 @@ impl RuntimeAdapter for FactoryState<Number> {
 					(*amount).into()
 				)
 			)
-		}, key, (genesis_hash.clone(), prior_block_hash.clone(), (), (), ()))
+		}, key, (version, genesis_hash.clone(), prior_block_hash.clone(), (), (), (), ()))
 	}
 
 	fn inherent_extrinsics(&self) -> InherentData {
-		let timestamp = self.block_no as u64 * MINIMUM_PERIOD;
+		let timestamp = (self.block_no as u64 + 1) * MinimumPeriod::get();
 
 		let mut inherent = InherentData::new();
 		inherent.put_data(timestamp::INHERENT_IDENTIFIER, &timestamp)
@@ -161,7 +163,6 @@ impl RuntimeAdapter for FactoryState<Number> {
 	}
 
 	fn minimum_balance() -> Self::Balance {
-		// TODO get correct amount via api. See #2587.
 		ExistentialDeposit::get()
 	}
 

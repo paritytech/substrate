@@ -29,7 +29,7 @@ use rstd::mem;
 use codec::{Decode, Encode};
 use sr_primitives::traits::{Bounded, SaturatedConversion};
 
-/// The value returned from ext_call and ext_create contract external functions if the call or
+/// The value returned from ext_call and ext_instantiate contract external functions if the call or
 /// instantiation traps. This value is chosen as if the execution does not trap, the return value
 /// will always be an 8-bit integer, so 0x0100 is the smallest value that could not be returned.
 const TRAP_RETURN_CODE: u32 = 0x0100;
@@ -69,10 +69,6 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 			gas_meter,
 			special_trap: None,
 		}
-	}
-
-	fn memory(&self) -> &sandbox::Memory {
-		&self.memory
 	}
 }
 
@@ -436,11 +432,12 @@ define_env!(Env, <E: Ext>,
 	// by the code hash.
 	//
 	// If the constructor runs to completion, then this returns the status code that the newly
-	// created contract returns on exit in the bottom 8 bits of the return value. The top 24 bits
-	// are 0s. A status code of 0 indicates success, and any other code indicates a failure. On
-	// failure, any state changes made by the called contract are reverted and the contract is not
-	// instantiated. On a success status, the scratch buffer is filled with the encoded address of
-	// the newly created contract. In the case of a failure status, the scratch buffer is cleared.
+	// instantiated contract returns on exit in the bottom 8 bits of the return value. The top 24
+	// bits are 0s. A status code of 0 indicates success, and any other code indicates a failure.
+	// On failure, any state changes made by the called contract are reverted and the contract is
+	// not instantiated. On a success status, the scratch buffer is filled with the encoded address
+	// of the newly instantiated contract. In the case of a failure status, the scratch buffer is
+	// cleared.
 	//
 	// If the contract traps during execution or otherwise fails to complete successfully, then
 	// this function clears the scratch buffer and returns 0x0100. As with a failure status, any
@@ -449,8 +446,9 @@ define_env!(Env, <E: Ext>,
 	// This function creates an account and executes initializer code. After the execution,
 	// the returned buffer is saved as the code of the created account.
 	//
-	// Returns 0 on the successful contract creation and puts the address of the created contract
-	// into the scratch buffer. Otherwise, returns non-zero value and clears the scratch buffer.
+	// Returns 0 on the successful contract instantiation and puts the address of the instantiated
+	// contract into the scratch buffer. Otherwise, returns non-zero value and clears the scratch
+	// buffer.
 	//
 	// - code_hash_ptr: a pointer to the buffer that contains the initializer code.
 	// - code_hash_len: length of the initializer code buffer.
@@ -460,7 +458,7 @@ define_env!(Env, <E: Ext>,
 	// - value_len: length of the value buffer.
 	// - input_data_ptr: a pointer to a buffer to be used as input data to the initializer code.
 	// - input_data_len: length of the input data buffer.
-	ext_create(
+	ext_instantiate(
 		ctx,
 		code_hash_ptr: u32,
 		code_hash_len: u32,
@@ -539,9 +537,9 @@ define_env!(Env, <E: Ext>,
 
 	// Stores the address of the caller into the scratch buffer.
 	//
-	// If this is a top-level call (i.e. initiated by an extrinsic) the origin address of the extrinsic
-	// will be returned. Otherwise, if this call is initiated by another contract then the address
-	// of the contract will be returned.
+	// If this is a top-level call (i.e. initiated by an extrinsic) the origin address of the
+	// extrinsic will be returned. Otherwise, if this call is initiated by another contract then the
+	// address of the contract will be returned.
 	ext_caller(ctx) => {
 		ctx.scratch_buf.clear();
 		ctx.ext.caller().encode_to(&mut ctx.scratch_buf);
@@ -612,6 +610,16 @@ define_env!(Env, <E: Ext>,
 	ext_now(ctx) => {
 		ctx.scratch_buf.clear();
 		ctx.ext.now().encode_to(&mut ctx.scratch_buf);
+		Ok(())
+	},
+
+	// Stores the minimum balance (a.k.a. existential deposit) into the scratch buffer.
+	//
+	// The data is encoded as T::Balance. The current contents of the scratch buffer are
+	// overwritten.
+	ext_minimum_balance(ctx) => {
+		ctx.scratch_buf.clear();
+		ctx.ext.minimum_balance().encode_to(&mut ctx.scratch_buf);
 		Ok(())
 	},
 
@@ -711,8 +719,8 @@ define_env!(Env, <E: Ext>,
 		Ok(ctx.scratch_buf.len() as u32)
 	},
 
-	// Copy data from the scratch buffer starting from `offset` with length `len` into the contract memory.
-	// The region at which the data should be put is specified by `dest_ptr`.
+	// Copy data from the scratch buffer starting from `offset` with length `len` into the contract
+	// memory. The region at which the data should be put is specified by `dest_ptr`.
 	//
 	// In order to get size of the scratch buffer use `ext_scratch_size`. At the start of contract
 	// execution, the scratch buffer is filled with the input data. Whenever a contract calls
@@ -816,7 +824,7 @@ define_env!(Env, <E: Ext>,
 	ext_println(ctx, str_ptr: u32, str_len: u32) => {
 		let data = read_sandbox_memory(ctx, str_ptr, str_len)?;
 		if let Ok(utf8) = core::str::from_utf8(&data) {
-			runtime_io::print(utf8);
+			sr_primitives::print(utf8);
 		}
 		Ok(())
 	},

@@ -16,27 +16,17 @@
 
 //! Console informant. Prints sync progress and block events. Runs on the calling thread.
 
-use client::{backend::Backend, BlockchainEvents};
+use client::BlockchainEvents;
 use futures::{Future, Stream};
 use futures03::{StreamExt as _, TryStreamExt as _};
 use log::{info, warn};
-use sr_primitives::{generic::BlockId, traits::Header};
-use service::{Service, Components};
-use tokio::runtime::TaskExecutor;
+use sr_primitives::traits::Header;
+use service::AbstractService;
 
 mod display;
 
-/// Spawn informant on the event loop
-#[deprecated(note = "Please use informant::build instead, and then create the task manually")]
-pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExecutor) where
-	C: Components,
-{
-	handle.spawn(exit.until(build(service)).map(|_| ()));
-}
-
 /// Creates an informant in the form of a `Future` that must be polled regularly.
-pub fn build<C>(service: &Service<C>) -> impl Future<Item = (), Error = ()>
-where C: Components {
+pub fn build(service: &impl AbstractService) -> impl Future<Item = (), Error = ()> {
 	let client = service.client();
 
 	let mut display = display::InformantDisplay::new();
@@ -57,19 +47,18 @@ where C: Components {
 		// detect and log reorganizations.
 		if let Some((ref last_num, ref last_hash)) = last_best {
 			if n.header.parent_hash() != last_hash && n.is_new_best  {
-				let tree_route = ::client::blockchain::tree_route(
-					#[allow(deprecated)]
-					client.backend().blockchain(),
-					BlockId::Hash(last_hash.clone()),
-					BlockId::Hash(n.hash),
+				let maybe_ancestor = header_metadata::lowest_common_ancestor(
+					&*client,
+					last_hash.clone(),
+					n.hash,
 				);
 
-				match tree_route {
-					Ok(ref t) if !t.retracted().is_empty() => info!(
+				match maybe_ancestor {
+					Ok(ref ancestor) if ancestor.hash != *last_hash => info!(
 						"Reorg from #{},{} to #{},{}, common ancestor #{},{}",
 						last_num, last_hash,
 						n.header.number(), n.hash,
-						t.common_block().number, t.common_block().hash,
+						ancestor.number, ancestor.hash,
 					),
 					Ok(_) => {},
 					Err(e) => warn!("Error computing tree route: {}", e),

@@ -8,7 +8,7 @@
 /// For more guidance on Substrate modules, see the example module
 /// https://github.com/paritytech/substrate/blob/master/srml/example/src/lib.rs
 
-use support::{decl_module, decl_storage, decl_event, StorageValue, dispatch::Result};
+use support::{decl_module, decl_storage, decl_event, dispatch::Result};
 use system::ensure_signed;
 
 /// The module's configuration trait.
@@ -35,7 +35,7 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		// Initializing events
 		// this is needed only if you are using events in your module
-		fn deposit_event<T>() = default;
+		fn deposit_event() = default;
 
 		// Just a dummy entry point.
 		// function that can be called by the external world as an extrinsics call
@@ -107,6 +107,7 @@ mod tests {
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type MaximumBlockLength = MaximumBlockLength;
 		type AvailableBlockRatio = AvailableBlockRatio;
+		type Version = ();
 	}
 	impl Trait for Test {
 		type Event = ();

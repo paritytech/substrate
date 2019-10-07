@@ -27,7 +27,7 @@ extern crate bitmask;
 #[cfg(feature = "std")]
 pub use serde;
 #[doc(hidden)]
-pub use sr_std as rstd;
+pub use rstd;
 #[doc(hidden)]
 pub use codec;
 #[cfg(feature = "std")]
@@ -35,17 +35,17 @@ pub use codec;
 pub use once_cell;
 #[doc(hidden)]
 pub use paste;
-
-pub use self::storage::hashed::generator::{
-	HashedStorage, Twox256, Twox128, Blake2_256, Blake2_128, Twox64Concat
-};
-pub use self::storage::unhashed::generator::UnhashedStorage;
+#[cfg(feature = "std")]
+#[doc(hidden)]
+pub use runtime_io::with_storage;
+#[doc(hidden)]
+pub use runtime_io::storage_root;
 
 #[macro_use]
 pub mod dispatch;
 #[macro_use]
 pub mod storage;
-mod hashable;
+mod hash;
 #[macro_use]
 pub mod event;
 #[macro_use]
@@ -58,17 +58,14 @@ mod runtime;
 pub mod inherent;
 #[macro_use]
 pub mod unsigned;
-mod double_map;
+#[macro_use]
+pub mod error;
 pub mod traits;
 
-pub use self::storage::{
-	StorageValue, StorageMap, EnumerableStorageMap, StorageDoubleMap, AppendableStorageMap
-};
-pub use self::hashable::Hashable;
-pub use self::dispatch::{Parameter, Dispatchable, Callable, IsSubType};
-pub use self::double_map::StorageDoubleMapWithHasher;
-pub use runtime_io::{print, storage_root};
-pub use sr_primitives::{self, ConsensusEngineId};
+pub use self::hash::{Twox256, Twox128, Blake2_256, Blake2_128, Twox64Concat, Hashable};
+pub use self::storage::{StorageValue, StorageMap, StorageLinkedMap, StorageDoubleMap};
+pub use self::dispatch::{Parameter, Callable, IsSubType};
+pub use sr_primitives::{self, ConsensusEngineId, print, traits::Printable};
 
 /// Macro for easily creating a new implementation of the `Get` trait. Use similarly to
 /// how you would declare a `const`:
@@ -130,7 +127,7 @@ macro_rules! fail {
 /// Used as `ensure!(expression_to_ensure, expression_to_return_on_false)`.
 #[macro_export]
 macro_rules! ensure {
-	( $x:expr, $y:expr ) => {{
+	( $x:expr, $y:expr $(,)? ) => {{
 		if !$x {
 			$crate::fail!($y);
 		}
@@ -144,7 +141,10 @@ macro_rules! ensure {
 #[macro_export]
 #[cfg(feature = "std")]
 macro_rules! assert_noop {
-	( $x:expr , $y:expr ) => {
+	(
+		$x:expr,
+		$y:expr $(,)?
+	) => {
 		let h = $crate::storage_root();
 		$crate::assert_err!($x, $y);
 		assert_eq!(h, $crate::storage_root());
@@ -161,7 +161,7 @@ macro_rules! assert_noop {
 #[macro_export]
 #[cfg(feature = "std")]
 macro_rules! assert_err {
-	( $x:expr , $y:expr ) => {
+	( $x:expr , $y:expr $(,)? ) => {
 		assert_eq!($x, Err($y));
 	}
 }
@@ -222,37 +222,6 @@ macro_rules! __assert_eq_uvec {
 	}
 }
 
-/// Checks that `$x` is equal to `$y` with an error rate of `$error`.
-///
-/// # Example
-///
-/// ```rust
-/// # fn main() {
-/// srml_support::assert_eq_error_rate!(10, 10, 0);
-/// srml_support::assert_eq_error_rate!(10, 11, 1);
-/// srml_support::assert_eq_error_rate!(12, 10, 2);
-/// # }
-/// ```
-///
-/// ```rust,should_panic
-/// # fn main() {
-/// srml_support::assert_eq_error_rate!(12, 10, 1);
-/// # }
-/// ```
-#[macro_export]
-#[cfg(feature = "std")]
-macro_rules! assert_eq_error_rate {
-	($x:expr, $y:expr, $error:expr) => {
-		assert!(
-			($x) >= (($y) - ($error)) && ($x) <= (($y) + ($error)),
-			"{:?} != {:?} (with error rate {:?})",
-			$x,
-			$y,
-			$error,
-		);
-	};
-}
-
 /// The void type - it cannot exist.
 // Oh rust, you crack me up...
 #[derive(Clone, Eq, PartialEq)]
@@ -263,26 +232,12 @@ pub enum Void {}
 #[doc(hidden)]
 pub use serde::{Serialize, Deserialize};
 
-/// Programatically create derivations for tuples of up to 19 elements. You provide a second macro
-/// which is called once per tuple size, along with a number of identifiers, one for each element
-/// of the tuple.
-#[macro_export]
-macro_rules! for_each_tuple {
-	($m:ident) => {
-		for_each_tuple! { @IMPL $m !! A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, }
-	};
-	(@IMPL $m:ident !!) => { $m! { } };
-	(@IMPL $m:ident !! $h:ident, $($t:ident,)*) => {
-		$m! { $h $($t)* }
-		for_each_tuple! { @IMPL $m !! $($t,)* }
-	}
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use codec::Codec;
-	use runtime_io::{with_externalities, Blake2Hasher};
+	use codec::{Codec, EncodeLike};
+	use runtime_io::with_externalities;
+	use primitives::Blake2Hasher;
 	pub use srml_metadata::{
 		DecodeDifferent, StorageEntryMetadata, StorageMetadata, StorageEntryType,
 		StorageEntryModifier, DefaultByte, DefaultByteGetter, StorageHasher
@@ -290,7 +245,7 @@ mod tests {
 	pub use rstd::marker::PhantomData;
 
 	pub trait Trait {
-		type BlockNumber: Codec + Default;
+		type BlockNumber: Codec + EncodeLike + Default;
 		type Origin;
 	}
 
@@ -339,6 +294,35 @@ mod tests {
 			assert_eq!(OptionLinkedMap::get(1), Some(1));
 			OptionLinkedMap::insert(1, 2);
 			assert_eq!(OptionLinkedMap::get(1), Some(2));
+		});
+	}
+
+	#[test]
+	fn linked_map_swap_works() {
+		with_externalities(&mut new_test_ext(), || {
+			OptionLinkedMap::insert(0, 0);
+			OptionLinkedMap::insert(1, 1);
+			OptionLinkedMap::insert(2, 2);
+			OptionLinkedMap::insert(3, 3);
+
+			let collect = || OptionLinkedMap::enumerate().collect::<Vec<_>>();
+			assert_eq!(collect(), vec![(3, 3), (2, 2), (1, 1), (0, 0)]);
+
+			// Two existing
+			OptionLinkedMap::swap(1, 2);
+			assert_eq!(collect(), vec![(3, 3), (2, 1), (1, 2), (0, 0)]);
+
+			// Back to normal
+			OptionLinkedMap::swap(2, 1);
+			assert_eq!(collect(), vec![(3, 3), (2, 2), (1, 1), (0, 0)]);
+
+			// Left existing
+			OptionLinkedMap::swap(2, 5);
+			assert_eq!(collect(), vec![(5, 2), (3, 3), (1, 1), (0, 0)]);
+
+			// Right existing
+			OptionLinkedMap::swap(5, 2);
+			assert_eq!(collect(), vec![(2, 2), (3, 3), (1, 1), (0, 0)]);
 		});
 	}
 

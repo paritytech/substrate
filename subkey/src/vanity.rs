@@ -14,15 +14,15 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use rand::{rngs::OsRng, RngCore};
 use super::Crypto;
 use primitives::Pair;
+use rand::{rngs::OsRng, RngCore};
 
 fn good_waypoint(done: u64) -> u64 {
 	match done {
-		0 ..= 1_000_000 => 100_000,
-		0 ..= 10_000_000 => 1_000_000,
-		0 ..= 100_000_000 => 10_000_000,
+		0..=1_000_000 => 100_000,
+		0..=10_000_000 => 1_000_000,
+		0..=100_000_000 => 10_000_000,
 		_ => 100_000_000,
 	}
 }
@@ -30,8 +30,13 @@ fn good_waypoint(done: u64) -> u64 {
 fn next_seed(seed: &mut [u8]) {
 	for i in 0..seed.len() {
 		match seed[i] {
-			255 => { seed[i] = 0; }
-			_ => { seed[i] += 1; break; }
+			255 => {
+				seed[i] = 0;
+			}
+			_ => {
+				seed[i] += 1;
+				break;
+			}
 		}
 	}
 }
@@ -71,7 +76,7 @@ pub(super) fn generate_key<C: Crypto>(desired: &str) -> Result<KeyPair<C>, &str>
 
 	loop {
 		if done % 100000 == 0 {
-			OsRng::new().unwrap().fill_bytes(seed.as_mut());
+			OsRng.fill_bytes(seed.as_mut());
 		} else {
 			next_seed(seed.as_mut());
 		}
@@ -101,15 +106,20 @@ pub(super) fn generate_key<C: Crypto>(desired: &str) -> Result<KeyPair<C>, &str>
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use super::super::Ed25519;
-	use primitives::{Pair, crypto::Ss58Codec};
+	use super::*;
+	use primitives::{crypto::Ss58Codec, Pair};
 	#[cfg(feature = "bench")]
 	use test::Bencher;
 
 	#[test]
 	fn test_generation_with_single_char() {
-		assert!(generate_key::<Ed25519>("j").unwrap().pair.public().to_ss58check().contains("j"));
+		assert!(generate_key::<Ed25519>("j")
+			.unwrap()
+			.pair
+			.public()
+			.to_ss58check()
+			.contains("j"));
 	}
 
 	#[test]
@@ -120,34 +130,45 @@ mod tests {
 
 	#[test]
 	fn test_score_100() {
-		let score = calculate_score("Polkadot", "5PolkadotwHY5k9GpdTgpqs9xjuNvtv8EcwCFpEeyEf3KHim");
+		let score = calculate_score(
+			"Polkadot",
+			"5PolkadotwHY5k9GpdTgpqs9xjuNvtv8EcwCFpEeyEf3KHim",
+		);
 		assert_eq!(score, 430);
 	}
 
 	#[test]
 	fn test_score_50_2() {
 		// 50% for the position + 50% for the size
-		assert_eq!(calculate_score("Polkadot", "5PolkXXXXwHY5k9GpdTgpqs9xjuNvtv8EcwCFpEeyEf3KHim"), 238);
+		assert_eq!(
+			calculate_score(
+				"Polkadot",
+				"5PolkXXXXwHY5k9GpdTgpqs9xjuNvtv8EcwCFpEeyEf3KHim"
+			),
+			238
+		);
 	}
 
 	#[test]
 	fn test_score_0() {
-		assert_eq!(calculate_score("Polkadot", "5GUWv4bLCchGUHJrzULXnh4JgXsMpTKRnjuXTY7Qo1Kh9uYK"), 0);
+		assert_eq!(
+			calculate_score(
+				"Polkadot",
+				"5GUWv4bLCchGUHJrzULXnh4JgXsMpTKRnjuXTY7Qo1Kh9uYK"
+			),
+			0
+		);
 	}
 
 	#[cfg(feature = "bench")]
 	#[bench]
 	fn bench_paranoiac(b: &mut Bencher) {
-		b.iter(|| {
-			generate_key("polk")
-		});
+		b.iter(|| generate_key("polk"));
 	}
 
 	#[cfg(feature = "bench")]
 	#[bench]
 	fn bench_not_paranoiac(b: &mut Bencher) {
-		b.iter(|| {
-			generate_key("polk")
-		});
+		b.iter(|| generate_key("polk"));
 	}
 }

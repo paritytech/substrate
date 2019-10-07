@@ -192,6 +192,7 @@ pub use service::{
 	NetworkStateInfo,
 };
 pub use protocol::{PeerInfo, Context, consensus_gossip, message, specialization};
+pub use protocol::event::{Event, DhtEvent};
 pub use protocol::sync::SyncState;
 pub use libp2p::{Multiaddr, PeerId};
 #[doc(inline)]
@@ -286,8 +287,8 @@ pub enum NetworkStatePeerEndpoint {
 	Dialing(Multiaddr),
 	/// We are listening.
 	Listening {
-		/// Address we're listening on that received the connection.
-		listen_addr: Multiaddr,
+		/// Local address of the connection.
+		local_addr: Multiaddr,
 		/// Address data is sent back to.
 		send_back_addr: Multiaddr,
 	},
@@ -298,9 +299,9 @@ impl From<ConnectedPoint> for NetworkStatePeerEndpoint {
 		match endpoint {
 			ConnectedPoint::Dialer { address } =>
 				NetworkStatePeerEndpoint::Dialing(address),
-			ConnectedPoint::Listener { listen_addr, send_back_addr } =>
+			ConnectedPoint::Listener { local_addr, send_back_addr } =>
 				NetworkStatePeerEndpoint::Listening {
-					listen_addr,
+					local_addr,
 					send_back_addr
 				}
 		}

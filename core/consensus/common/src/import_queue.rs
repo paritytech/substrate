@@ -27,10 +27,10 @@
 
 use std::collections::HashMap;
 use sr_primitives::{Justification, traits::{Block as BlockT, Header as _, NumberFor}};
-use crate::{error::Error as ConsensusError, well_known_cache_keys::Id as CacheKeyId};
+use crate::error::Error as ConsensusError;
 use crate::block_import::{
 	BlockImport, BlockOrigin, BlockImportParams, ImportedAux, JustificationImport, ImportResult,
-	FinalityProofImport,
+	BlockCheckParams, FinalityProofImport,
 };
 
 pub use basic_queue::BasicQueue;
@@ -64,6 +64,9 @@ pub struct IncomingBlock<B: BlockT> {
 	/// The peer, we received this from
 	pub origin: Option<Origin>,
 }
+
+/// Type of keys in the blockchain cache that consensus module could use for its needs.
+pub type CacheKeyId = [u8; 4];
 
 /// Verify a justification of a block
 pub trait Verifier<B: BlockT>: Send + Sync {
@@ -102,6 +105,7 @@ pub trait ImportQueue<B: BlockT>: Send {
 		number: NumberFor<B>,
 		finality_proof: Vec<u8>
 	);
+
 	/// Polls for actions to perform on the network.
 	///
 	/// This method should behave in a way similar to `Future::poll`. It can register the current
@@ -190,7 +194,7 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>>(
 
 	let number = header.number().clone();
 	let hash = header.hash();
-	let parent = header.parent_hash().clone();
+	let parent_hash = header.parent_hash().clone();
 
 	let import_error = |e| {
 		match e {
@@ -200,7 +204,7 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>>(
 			},
 			Ok(ImportResult::Imported(aux)) => Ok(BlockImportResult::ImportedUnknown(number, aux, peer.clone())),
 			Ok(ImportResult::UnknownParent) => {
-				debug!(target: "sync", "Block with unknown parent {}: {:?}, parent: {:?}", number, hash, parent);
+				debug!(target: "sync", "Block with unknown parent {}: {:?}, parent: {:?}", number, hash, parent_hash);
 				Err(BlockImportError::UnknownParent)
 			},
 			Ok(ImportResult::KnownBad) => {
@@ -213,8 +217,7 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>>(
 			}
 		}
 	};
-
-	match import_error(import_handle.check_block(hash, parent))? {
+	match import_error(import_handle.check_block(BlockCheckParams { hash, number, parent_hash }))? {
 		BlockImportResult::ImportedUnknown { .. } => (),
 		r => return Ok(r), // Any other successful result means that the block is already imported.
 	}

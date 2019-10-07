@@ -10,11 +10,11 @@ rstd = { package = "sr-std", path = "../../sr-std", default-features = false }
 runtime_io = { package = "sr-io", path = "../../sr-io", default-features = false }
 sandbox = { package = "sr-sandbox", path = "../../sr-sandbox", default-features = false }
 primitives = { package = "substrate-primitives",  path = "../../primitives", default-features = false }
+sr-primitives = { package = "sr-primitives",  path = "../../sr-primitives", default-features = false }
 
 [build-dependencies]
 wasm-builder-runner = { package = "substrate-wasm-builder-runner", version = "1.0.2", path = "../../utils/wasm-builder-runner" }
 
 [features]
 default = [ "std" ]
-std = []
-no_std = []
+std = ["runtime_io/std", "sandbox/std", "rstd/std"]

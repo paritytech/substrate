@@ -45,6 +45,21 @@ When reviewing a pull request, the end-goal is to suggest useful changes to the 
 . There exists a somewhat cleaner/better/faster way of accomplishing the same feature/fix.
 . It does not fit well with some other contributors' longer-term vision for the project.
 
+=== Updating Polkadot as well
+
+If your PR changes the external APIs or interfaces used by Polkadot, **a corresponding PR on Polkadot must** be submitted as well. If you tagged the PR with `breaksapi` or `breaksconsensus` this is most certainly the case, in all other cases check for it by running step 1.
+
+To update a corresponding Polkadot PR:
+
+0. Pull lastet Polkadot master (or clone it, if you haven't yet).
+1. Replace `polkadot-master` in all `Cargo.toml` with the name of the PR-branch - e.g. by running `find . -name "Cargo.toml" -exec sed -i "s/polkadot-master/PR_BRANCH/g" {}` (and to your repo, if the branch is not on mainline); Commit this change.
+2. Make the changes required to pass the build again.
+3. Submit all this as a PR against the Polkadot Repo, link that new PR in the existing substrate PR for reference
+4. Wait for reviews on both
+5. Once both PRs have been green lit, merge the Substrate PR into master and sync the changes onto the `polkadot-master` on mainline (push it). Now revert that first commit in your Polkadot PR, reverting the name back to `polkadot-master`, push and wait for the CI to confirm all is fine. Then merge the Polkadot PR.
+
+As there might be multiple pending PRs that might conflict with one another, a) you should not merge the substrate PR until the Polkadot PR has also been reviewed and b) both should be merged pretty quickly after another to not block others.
+
 == Helping out
 
 We use https://github.com/paritytech/substrate/labels[labels] to manage PRs and issues and communicate state of a PR. Please familiarize yourself with them. Furthermore we are organizing issues in https://github.com/paritytech/substrate/milestones[milestones]. Best way to get started is to a pick a ticket from the current milestone tagged https://github.com/paritytech/substrate/issues?q=is%3Aissue+is%3Aopen+label%3AQ2-easy[`easy`] or https://github.com/paritytech/substrate/issues?q=is%3Aissue+is%3Aopen+label%3AQ3-medium[`medium`] and get going or https://github.com/paritytech/substrate/issues?q=is%3Aissue+is%3Aopen+label%3AX1-mentor[`mentor`] and get in contact with the mentor offering their support on that larger task.

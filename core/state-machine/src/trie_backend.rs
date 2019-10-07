@@ -57,7 +57,11 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> {
 	}
 }
 
-impl super::Error for String {}
+impl<S: TrieBackendStorage<H>, H: Hasher> std::fmt::Debug for TrieBackend<S, H> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "TrieBackend")
+	}
+}
 
 impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 	H::Out: Ord,
@@ -76,6 +80,10 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
 		self.essence.for_keys_with_prefix(prefix, f)
+	}
+
+	fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], f: F) {
+		self.essence.for_key_values_with_prefix(prefix, f)
 	}
 
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], f: F) {

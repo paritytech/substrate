@@ -52,12 +52,21 @@ use crate::cache::{CacheItemT, ComplexBlockId, EntryType};
 use crate::cache::list_entry::{Entry, StorageEntry};
 use crate::cache::list_storage::{Storage, StorageTransaction, Metadata};
 
+/// Pruning strategy.
+#[derive(Debug, Clone, Copy)]
+pub enum PruningStrategy<N> {
+	/// Prune entries when they're too far behind best finalized block.
+	ByDepth(N),
+	/// Do not prune old entries at all.
+	NeverPrune,
+}
+
 /// List-based cache.
 pub struct ListCache<Block: BlockT, T: CacheItemT, S: Storage<Block, T>> {
 	/// Cache storage.
 	storage: S,
-	/// Prune depth.
-	prune_depth: NumberFor<Block>,
+	/// Pruning strategy.
+	pruning_strategy: PruningStrategy<NumberFor<Block>>,
 	/// Best finalized block.
 	best_finalized_block: ComplexBlockId<Block>,
 	/// Best finalized entry (if exists).
@@ -110,7 +119,11 @@ pub enum ForkAppendResult<Block: BlockT> {
 
 impl<Block: BlockT, T: CacheItemT, S: Storage<Block, T>> ListCache<Block, T, S> {
 	/// Create new db list cache entry.
-	pub fn new(storage: S, prune_depth: NumberFor<Block>, best_finalized_block: ComplexBlockId<Block>) -> Self {
+	pub fn new(
+		storage: S,
+		pruning_strategy: PruningStrategy<NumberFor<Block>>,
+		best_finalized_block: ComplexBlockId<Block>,
+	) -> Self {
 		let (best_finalized_entry, unfinalized) = storage.read_meta()
 			.and_then(|meta| read_forks(&storage, meta))
 			.unwrap_or_else(|error| {
@@ -120,7 +133,7 @@ impl<Block: BlockT, T: CacheItemT, S: Storage<Block, T>> ListCache<Block, T, S> 
 
 		ListCache {
 			storage,
-			prune_depth,
+			pruning_strategy,
 			best_finalized_block,
 			best_finalized_entry,
 			unfinalized,
@@ -133,7 +146,10 @@ impl<Block: BlockT, T: CacheItemT, S: Storage<Block, T>> ListCache<Block, T, S> 
 	}
 
 	/// Get value valid at block.
-	pub fn value_at_block(&self, at: &ComplexBlockId<Block>) -> ClientResult<Option<T>> {
+	pub fn value_at_block(
+		&self,
+		at: &ComplexBlockId<Block>,
+	) -> ClientResult<Option<(ComplexBlockId<Block>, Option<ComplexBlockId<Block>>, T)>> {
 		let head = if at.number <= self.best_finalized_block.number {
 			// if the block is older than the best known finalized block
 			// => we're should search for the finalized value
@@ -167,7 +183,7 @@ impl<Block: BlockT, T: CacheItemT, S: Storage<Block, T>> ListCache<Block, T, S> 
 
 		match head {
 			Some(head) => head.search_best_before(&self.storage, at.number)
-				.map(|e| e.map(|e| e.0.value)),
+				.map(|e| e.map(|e| (e.0.valid_from, e.1, e.0.value))),
 			None => Ok(None),
 		}
 	}
@@ -408,9 +424,14 @@ impl<Block: BlockT, T: CacheItemT, S: Storage<Block, T>> ListCache<Block, T, S> 
 		tx: &mut Tx,
 		block: &ComplexBlockId<Block>
 	) {
+		let prune_depth = match self.pruning_strategy {
+			PruningStrategy::ByDepth(prune_depth) => prune_depth,
+			PruningStrategy::NeverPrune => return,
+		};
+
 		let mut do_pruning = || -> ClientResult<()> {
 			// calculate last ancient block number
-			let ancient_block = match block.number.checked_sub(&self.prune_depth) {
+			let ancient_block = match block.number.checked_sub(&prune_depth) {
 				Some(number) => match self.storage.read_id(number)? {
 					Some(hash) => ComplexBlockId::new(hash, number),
 					None => return Ok(()),
@@ -752,7 +773,7 @@ pub mod tests {
 		// when block is earlier than best finalized block AND it is not finalized
 		// --- 50 ---
 		// ----------> [100]
-		assert_eq!(ListCache::<_, u64, _>::new(DummyStorage::new(), 1024, test_id(100))
+		assert_eq!(ListCache::<_, u64, _>::new(DummyStorage::new(), PruningStrategy::ByDepth(1024), test_id(100))
 			.value_at_block(&test_id(50)).unwrap(), None);
 		// when block is earlier than best finalized block AND it is finalized AND value is some
 		// [30] ---- 50 ---> [100]
@@ -762,8 +783,8 @@ pub mod tests {
 				.with_id(50, H256::from_low_u64_be(50))
 				.with_entry(test_id(100), StorageEntry { prev_valid_from: Some(test_id(30)), value: 100 })
 				.with_entry(test_id(30), StorageEntry { prev_valid_from: None, value: 30 }),
-			1024, test_id(100)
-		).value_at_block(&test_id(50)).unwrap(), Some(30));
+			PruningStrategy::ByDepth(1024), test_id(100)
+		).value_at_block(&test_id(50)).unwrap(), Some((test_id(30), Some(test_id(100)), 30)));
 		// when block is the best finalized block AND value is some
 		// ---> [100]
 		assert_eq!(ListCache::new(
@@ -772,8 +793,8 @@ pub mod tests {
 				.with_id(100, H256::from_low_u64_be(100))
 				.with_entry(test_id(100), StorageEntry { prev_valid_from: Some(test_id(30)), value: 100 })
 				.with_entry(test_id(30), StorageEntry { prev_valid_from: None, value: 30 }),
-			1024, test_id(100)
-		).value_at_block(&test_id(100)).unwrap(), Some(100));
+			PruningStrategy::ByDepth(1024), test_id(100)
+		).value_at_block(&test_id(100)).unwrap(), Some((test_id(100), None, 100)));
 		// when block is parallel to the best finalized block
 		// ---- 100
 		// ---> [100]
@@ -783,7 +804,7 @@ pub mod tests {
 				.with_id(50, H256::from_low_u64_be(50))
 				.with_entry(test_id(100), StorageEntry { prev_valid_from: Some(test_id(30)), value: 100 })
 				.with_entry(test_id(30), StorageEntry { prev_valid_from: None, value: 30 }),
-			1024, test_id(100)
+			PruningStrategy::ByDepth(1024), test_id(100)
 		).value_at_block(&ComplexBlockId::new(H256::from_low_u64_be(2), 100)).unwrap(), None);
 
 		// when block is later than last finalized block AND there are no forks AND finalized value is Some
@@ -793,8 +814,8 @@ pub mod tests {
 				.with_meta(Some(test_id(100)), Vec::new())
 				.with_id(50, H256::from_low_u64_be(50))
 				.with_entry(test_id(100), StorageEntry { prev_valid_from: Some(test_id(30)), value: 100 }),
-			1024, test_id(100)
-		).value_at_block(&test_id(200)).unwrap(), Some(100));
+			PruningStrategy::ByDepth(1024), test_id(100)
+		).value_at_block(&test_id(200)).unwrap(), Some((test_id(100), None, 100)));
 
 		// when block is later than last finalized block AND there are no matching forks
 		// AND block is connected to finalized block AND finalized value is Some
@@ -809,8 +830,8 @@ pub mod tests {
 				.with_header(test_header(3))
 				.with_header(test_header(4))
 				.with_header(fork_header(0, 2, 3)),
-			1024, test_id(2)
-		).value_at_block(&fork_id(0, 2, 3)).unwrap(), Some(2));
+			PruningStrategy::ByDepth(1024), test_id(2)
+		).value_at_block(&fork_id(0, 2, 3)).unwrap(), Some((correct_id(2), None, 2)));
 		// when block is later than last finalized block AND there are no matching forks
 		// AND block is not connected to finalized block
 		//    ---   2  --- 3
@@ -826,7 +847,7 @@ pub mod tests {
 				.with_header(test_header(4))
 				.with_header(fork_header(0, 1, 3))
 				.with_header(fork_header(0, 1, 2)),
-			1024, test_id(2)
+			PruningStrategy::ByDepth(1024), test_id(2)
 		).value_at_block(&fork_id(0, 1, 3)).unwrap(), None);
 
 		// when block is later than last finalized block AND it appends to unfinalized fork from the end
@@ -839,8 +860,8 @@ pub mod tests {
 				.with_entry(correct_id(4), StorageEntry { prev_valid_from: Some(correct_id(2)), value: 4 })
 				.with_header(test_header(4))
 				.with_header(test_header(5)),
-			1024, test_id(2)
-		).value_at_block(&correct_id(5)).unwrap(), Some(4));
+			PruningStrategy::ByDepth(1024), test_id(2)
+		).value_at_block(&correct_id(5)).unwrap(), Some((correct_id(4), None, 4)));
 		// when block is later than last finalized block AND it does not fits unfinalized fork
 		// AND it is connected to the finalized block AND finalized value is Some
 		// ---> [2] ----------> [4]
@@ -854,8 +875,8 @@ pub mod tests {
 				.with_header(test_header(3))
 				.with_header(test_header(4))
 				.with_header(fork_header(0, 2, 3)),
-			1024, test_id(2)
-		).value_at_block(&fork_id(0, 2, 3)).unwrap(), Some(2));
+			PruningStrategy::ByDepth(1024), test_id(2)
+		).value_at_block(&fork_id(0, 2, 3)).unwrap(), Some((correct_id(2), None, 2)));
 	}
 
 	#[test]
@@ -864,7 +885,7 @@ pub mod tests {
 		let fin = EntryType::Final;
 
 		// when trying to insert block < finalized number
-		assert!(ListCache::new(DummyStorage::new(), 1024, test_id(100))
+		assert!(ListCache::new(DummyStorage::new(), PruningStrategy::ByDepth(1024), test_id(100))
 			.on_block_insert(
 				&mut DummyTransaction::new(),
 				test_id(49),
@@ -873,7 +894,7 @@ pub mod tests {
 				nfin,
 			).unwrap().is_none());
 		// when trying to insert block @ finalized number
-		assert!(ListCache::new(DummyStorage::new(), 1024, test_id(100))
+		assert!(ListCache::new(DummyStorage::new(), PruningStrategy::ByDepth(1024), test_id(100))
 			.on_block_insert(
 				&mut DummyTransaction::new(),
 				test_id(99),
@@ -888,7 +909,7 @@ pub mod tests {
 			DummyStorage::new()
 				.with_meta(None, vec![test_id(4)])
 				.with_entry(test_id(4), StorageEntry { prev_valid_from: None, value: 4 }),
-			1024, test_id(2)
+			PruningStrategy::ByDepth(1024), test_id(2)
 		);
 		cache.unfinalized[0].best_block = Some(test_id(4));
 		let mut tx = DummyTransaction::new();
@@ -913,7 +934,7 @@ pub mod tests {
 				.with_meta(None, vec![correct_id(4)])
 				.with_entry(correct_id(4), StorageEntry { prev_valid_from: None, value: 4 })
 				.with_header(test_header(4)),
-			1024, test_id(2)
+			PruningStrategy::ByDepth(1024), test_id(2)
 		);
 		let mut tx = DummyTransaction::new();
 		assert_eq!(cache.on_block_insert(&mut tx, correct_id(4), correct_id(5), Some(4), nfin).unwrap(),
@@ -939,7 +960,7 @@ pub mod tests {
 				.with_header(test_header(2))
 				.with_header(test_header(3))
 				.with_header(test_header(4)),
-			1024, correct_id(2)
+			PruningStrategy::ByDepth(1024), correct_id(2)
 		);
 		let mut tx = DummyTransaction::new();
 		assert_eq!(cache.on_block_insert(&mut tx, correct_id(3), fork_id(0, 3, 4), Some(14), nfin).unwrap(),
@@ -954,7 +975,7 @@ pub mod tests {
 			DummyStorage::new()
 				.with_meta(Some(correct_id(2)), vec![])
 				.with_entry(correct_id(2), StorageEntry { prev_valid_from: None, value: 2 }),
-			1024, correct_id(2)
+			PruningStrategy::ByDepth(1024), correct_id(2)
 		);
 		let mut tx = DummyTransaction::new();
 		assert_eq!(cache.on_block_insert(&mut tx, correct_id(2), correct_id(3), Some(2), nfin).unwrap(), None);
@@ -967,7 +988,7 @@ pub mod tests {
 			DummyStorage::new()
 				.with_meta(Some(correct_id(2)), vec![])
 				.with_entry(correct_id(2), StorageEntry { prev_valid_from: None, value: 2 }),
-			1024, correct_id(2)
+			PruningStrategy::ByDepth(1024), correct_id(2)
 		);
 		let mut tx = DummyTransaction::new();
 		assert_eq!(cache.on_block_insert(&mut tx, correct_id(2), correct_id(3), Some(3), nfin).unwrap(),
@@ -977,7 +998,7 @@ pub mod tests {
 		assert_eq!(*tx.updated_meta(), Some(Metadata { finalized: Some(correct_id(2)), unfinalized: vec![correct_id(3)] }));
 
 		// when inserting finalized entry AND there are no previous finalized entries
-		let cache = ListCache::new(DummyStorage::new(), 1024, correct_id(2));
+		let cache = ListCache::new(DummyStorage::new(), PruningStrategy::ByDepth(1024), correct_id(2));
 		let mut tx = DummyTransaction::new();
 		assert_eq!(
 			cache.on_block_insert(&mut tx, correct_id(2), correct_id(3), Some(3), fin).unwrap(),
@@ -995,7 +1016,7 @@ pub mod tests {
 			DummyStorage::new()
 				.with_meta(Some(correct_id(2)), vec![])
 				.with_entry(correct_id(2), StorageEntry { prev_valid_from: None, value: 2 }),
-			1024, correct_id(2)
+			PruningStrategy::ByDepth(1024), correct_id(2)
 		);
 		let mut tx = DummyTransaction::new();
 		assert_eq!(cache.on_block_insert(&mut tx, correct_id(2), correct_id(3), Some(2), fin).unwrap(),
@@ -1023,7 +1044,7 @@ pub mod tests {
 				.with_meta(Some(correct_id(2)), vec![fork_id(0, 1, 3)])
 				.with_entry(correct_id(2), StorageEntry { prev_valid_from: None, value: 2 })
 				.with_entry(fork_id(0, 1, 3), StorageEntry { prev_valid_from: None, value: 13 }),
-			1024, correct_id(2)
+			PruningStrategy::ByDepth(1024), correct_id(2)
 		);
 		let mut tx = DummyTransaction::new();
 		assert_eq!(cache.on_block_insert(&mut tx, correct_id(2), correct_id(3), Some(2), fin).unwrap(),
@@ -1038,7 +1059,7 @@ pub mod tests {
 				.with_meta(Some(correct_id(2)), vec![correct_id(5)])
 				.with_entry(correct_id(2), StorageEntry { prev_valid_from: None, value: 2 })
 				.with_entry(correct_id(5), StorageEntry { prev_valid_from: Some(correct_id(2)), value: 5 }),
-			1024, correct_id(2)
+			PruningStrategy::ByDepth(1024), correct_id(2)
 		);
 		let mut tx = DummyTransaction::new();
 		assert_eq!(cache.on_block_finalize(&mut tx, correct_id(2), correct_id(3)).unwrap(),
@@ -1052,7 +1073,7 @@ pub mod tests {
 				.with_meta(Some(correct_id(2)), vec![correct_id(5)])
 				.with_entry(correct_id(2), StorageEntry { prev_valid_from: None, value: 2 })
 				.with_entry(correct_id(5), StorageEntry { prev_valid_from: Some(correct_id(2)), value: 5 }),
-			1024, correct_id(4)
+			PruningStrategy::ByDepth(1024), correct_id(4)
 		);
 		let mut tx = DummyTransaction::new();
 		assert_eq!(
@@ -1072,7 +1093,7 @@ pub mod tests {
 				.with_meta(Some(correct_id(2)), vec![fork_id(0, 1, 3)])
 				.with_entry(correct_id(2), StorageEntry { prev_valid_from: None, value: 2 })
 				.with_entry(fork_id(0, 1, 3), StorageEntry { prev_valid_from: None, value: 13 }),
-			1024, correct_id(2)
+			PruningStrategy::ByDepth(1024), correct_id(2)
 		);
 		let mut tx = DummyTransaction::new();
 		assert_eq!(cache.on_block_finalize(&mut tx, correct_id(2), correct_id(3)).unwrap(),
@@ -1087,7 +1108,7 @@ pub mod tests {
 				.with_entry(correct_id(2), StorageEntry { prev_valid_from: None, value: 2 })
 				.with_entry(correct_id(5), StorageEntry { prev_valid_from: Some(correct_id(2)), value: 5 })
 				.with_entry(correct_id(6), StorageEntry { prev_valid_from: Some(correct_id(5)), value: 6 }),
-			1024, correct_id(2)
+			PruningStrategy::ByDepth(1024), correct_id(2)
 		);
 
 		// when new block is appended to unfinalized fork
@@ -1126,7 +1147,7 @@ pub mod tests {
 				.with_header(test_header(3))
 				.with_header(test_header(4))
 				.with_header(test_header(5)),
-			1024, correct_id(0)
+			PruningStrategy::ByDepth(1024), correct_id(0)
 		).find_unfinalized_fork(&correct_id(4)).unwrap().unwrap().head.valid_from, correct_id(5));
 		// --- [2] ---------------> [5]
 		// ----------> [3] ---> 4
@@ -1143,7 +1164,7 @@ pub mod tests {
 				.with_header(fork_header(0, 1, 2))
 				.with_header(fork_header(0, 1, 3))
 				.with_header(fork_header(0, 1, 4)),
-			1024, correct_id(0)
+			PruningStrategy::ByDepth(1024), correct_id(0)
 		).find_unfinalized_fork(&fork_id(0, 1, 4)).unwrap().unwrap().head.valid_from, fork_id(0, 1, 3));
 		// --- [2] ---------------> [5]
 		// ----------> [3]
@@ -1163,7 +1184,7 @@ pub mod tests {
 				.with_header(fork_header(1, 1, 2))
 				.with_header(fork_header(1, 1, 3))
 				.with_header(fork_header(1, 1, 4)),
-			1024, correct_id(0)
+			PruningStrategy::ByDepth(1024), correct_id(0)
 		).find_unfinalized_fork(&fork_id(1, 1, 4)).unwrap().is_none());
 	}
 
@@ -1424,33 +1445,46 @@ pub mod tests {
 	}
 
 	#[test]
-	fn ancient_entries_are_pruned() {
-		let cache = ListCache::new(DummyStorage::new()
-			.with_id(10, H256::from_low_u64_be(10))
-			.with_id(20, H256::from_low_u64_be(20))
-			.with_id(30, H256::from_low_u64_be(30))
-			.with_entry(test_id(10), StorageEntry { prev_valid_from: None, value: 10 })
-			.with_entry(test_id(20), StorageEntry { prev_valid_from: Some(test_id(10)), value: 20 })
-			.with_entry(test_id(30), StorageEntry { prev_valid_from: Some(test_id(20)), value: 30 }),
-		10, test_id(9));
-		let mut tx = DummyTransaction::new();
+	fn ancient_entries_are_pruned_when_pruning_enabled() {
+		fn do_test(strategy: PruningStrategy<u64>) {
+			let cache = ListCache::new(DummyStorage::new()
+				.with_id(10, H256::from_low_u64_be(10))
+				.with_id(20, H256::from_low_u64_be(20))
+				.with_id(30, H256::from_low_u64_be(30))
+				.with_entry(test_id(10), StorageEntry { prev_valid_from: None, value: 10 })
+				.with_entry(test_id(20), StorageEntry { prev_valid_from: Some(test_id(10)), value: 20 })
+				.with_entry(test_id(30), StorageEntry { prev_valid_from: Some(test_id(20)), value: 30 }),
+			strategy, test_id(9));
+			let mut tx = DummyTransaction::new();
 
-		// when finalizing entry #10: no entries pruned
-		cache.prune_finalized_entries(&mut tx, &test_id(10));
-		assert!(tx.removed_entries().is_empty());
-		assert!(tx.inserted_entries().is_empty());
-		// when finalizing entry #19: no entries pruned
-		cache.prune_finalized_entries(&mut tx, &test_id(19));
-		assert!(tx.removed_entries().is_empty());
-		assert!(tx.inserted_entries().is_empty());
-		// when finalizing entry #20: no entries pruned
-		cache.prune_finalized_entries(&mut tx, &test_id(20));
-		assert!(tx.removed_entries().is_empty());
-		assert!(tx.inserted_entries().is_empty());
-		// when finalizing entry #30: entry 10 pruned + entry 20 is truncated
-		cache.prune_finalized_entries(&mut tx, &test_id(30));
-		assert_eq!(*tx.removed_entries(), vec![test_id(10).hash].into_iter().collect());
-		assert_eq!(*tx.inserted_entries(), vec![test_id(20).hash].into_iter().collect());
+			// when finalizing entry #10: no entries pruned
+			cache.prune_finalized_entries(&mut tx, &test_id(10));
+			assert!(tx.removed_entries().is_empty());
+			assert!(tx.inserted_entries().is_empty());
+			// when finalizing entry #19: no entries pruned
+			cache.prune_finalized_entries(&mut tx, &test_id(19));
+			assert!(tx.removed_entries().is_empty());
+			assert!(tx.inserted_entries().is_empty());
+			// when finalizing entry #20: no entries pruned
+			cache.prune_finalized_entries(&mut tx, &test_id(20));
+			assert!(tx.removed_entries().is_empty());
+			assert!(tx.inserted_entries().is_empty());
+			// when finalizing entry #30: entry 10 pruned + entry 20 is truncated (if pruning is enabled)
+			cache.prune_finalized_entries(&mut tx, &test_id(30));
+			match strategy {
+				PruningStrategy::NeverPrune => {
+					assert!(tx.removed_entries().is_empty());
+					assert!(tx.inserted_entries().is_empty());
+				},
+				PruningStrategy::ByDepth(_) => {
+					assert_eq!(*tx.removed_entries(), vec![test_id(10).hash].into_iter().collect());
+					assert_eq!(*tx.inserted_entries(), vec![test_id(20).hash].into_iter().collect());
+				},
+			}
+		}
+
+		do_test(PruningStrategy::ByDepth(10));
+		do_test(PruningStrategy::NeverPrune)
 	}
 
 	#[test]

@@ -29,12 +29,15 @@ pub mod informant;
 use client::ExecutionStrategies;
 use service::{
 	config::Configuration,
-	ServiceFactory, FactoryFullConfiguration, RuntimeGenesis,
-	FactoryGenesis, PruningMode, ChainSpec,
+	ServiceBuilderExport, ServiceBuilderImport, ServiceBuilderRevert,
+	RuntimeGenesis, ChainSpecExtension, PruningMode, ChainSpec,
 };
 use network::{
-	self, multiaddr::Protocol,
-	config::{NetworkConfiguration, TransportConfig, NonReservedPeerMode, NodeKeyConfig, build_multiaddr},
+	self,
+	multiaddr::Protocol,
+	config::{
+		NetworkConfiguration, TransportConfig, NonReservedPeerMode, NodeKeyConfig, build_multiaddr
+	},
 };
 use primitives::H256;
 
@@ -77,7 +80,7 @@ const NODE_KEY_ED25519_FILE: &str = "secret_ed25519";
 
 /// Executable version. Used to pass version information from the root crate.
 pub struct VersionInfo {
-	/// Implemtation name.
+	/// Implementaiton name.
 	pub name: &'static str,
 	/// Implementation version.
 	pub version: &'static str,
@@ -121,8 +124,10 @@ fn generate_node_name() -> String {
 	result
 }
 
-fn load_spec<F, G>(cli: &SharedParams, factory: F) -> error::Result<ChainSpec<G>>
-	where G: RuntimeGenesis, F: FnOnce(&str) -> Result<Option<ChainSpec<G>>, String>,
+fn load_spec<F, G, E>(cli: &SharedParams, factory: F) -> error::Result<ChainSpec<G, E>> where
+	G: RuntimeGenesis,
+	E: ChainSpecExtension,
+	F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
 {
 	let chain_key = get_chain_key(cli);
 	let spec = match factory(&chain_key)? {
@@ -191,12 +196,12 @@ where
 	I: IntoIterator,
 	<I as IntoIterator>::Item: Into<std::ffi::OsString> + Clone,
 {
-	panic_handler::set(version.support_url);
-
 	let full_version = service::config::full_version_from_strs(
 		version.version,
 		version.commit
 	);
+
+	panic_handler::set(version.support_url, &full_version);
 
 	let matches = CoreParams::<CC, RP>::clap()
 		.name(version.executable_name)
@@ -263,20 +268,23 @@ pub struct ParseAndPrepareRun<'a, RP> {
 
 impl<'a, RP> ParseAndPrepareRun<'a, RP> {
 	/// Runs the command and runs the main client.
-	pub fn run<C, G, S, E, RS>(
+	pub fn run<C, G, E, S, Exit, RS>(
 		self,
 		spec_factory: S,
-		exit: E,
+		exit: Exit,
 		run_service: RS,
 	) -> error::Result<()>
-	where S: FnOnce(&str) -> Result<Option<ChainSpec<G>>, String>,
+	where S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
 		RP: StructOpt + Clone,
 		C: Default,
 		G: RuntimeGenesis,
-		E: IntoExit,
-		RS: FnOnce(E, RunCmd, RP, Configuration<C, G>) -> Result<(), String>
+		E: ChainSpecExtension,
+		Exit: IntoExit,
+		RS: FnOnce(Exit, RunCmd, RP, Configuration<C, G, E>) -> Result<(), String>
 	{
-		let config = create_run_node_config(self.params.left.clone(), spec_factory, self.impl_name, self.version)?;
+		let config = create_run_node_config(
+			self.params.left.clone(), spec_factory, self.impl_name, self.version
+		)?;
 
 		run_service(exit, self.params.left, self.params.right, config).map_err(Into::into)
 	}
@@ -290,12 +298,13 @@ pub struct ParseAndPrepareBuildSpec<'a> {
 
 impl<'a> ParseAndPrepareBuildSpec<'a> {
 	/// Runs the command and build the chain specs.
-	pub fn run<G, S>(
+	pub fn run<G, S, E>(
 		self,
 		spec_factory: S
-	) -> error::Result<()>
-	where S: FnOnce(&str) -> Result<Option<ChainSpec<G>>, String>,
-		G: RuntimeGenesis
+	) -> error::Result<()> where
+		S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
+		G: RuntimeGenesis,
+		E: ChainSpecExtension,
 	{
 		info!("Building chain spec");
 		let raw_output = self.params.raw;
@@ -317,14 +326,19 @@ pub struct ParseAndPrepareExport<'a> {
 
 impl<'a> ParseAndPrepareExport<'a> {
 	/// Runs the command and exports from the chain.
-	pub fn run<F, S, E>(
+	pub fn run_with_builder<C, G, E, F, B, S, Exit>(
 		self,
+		builder: F,
 		spec_factory: S,
-		exit: E,
+		exit: Exit,
 	) -> error::Result<()>
-	where S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
-		F: ServiceFactory,
-		E: IntoExit
+	where S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
+		F: FnOnce(Configuration<C, G, E>) -> Result<B, error::Error>,
+		B: ServiceBuilderExport,
+		C: Default,
+		G: RuntimeGenesis,
+		E: ChainSpecExtension,
+		Exit: IntoExit
 	{
 		let config = create_config_with_db_path(spec_factory, &self.params.shared_params, self.version)?;
 
@@ -338,9 +352,8 @@ impl<'a> ParseAndPrepareExport<'a> {
 			None => Box::new(stdout()),
 		};
 
-		service::chain_ops::export_blocks::<F, _, _>(
-			config, exit.into_exit(), file, from.into(), to.map(Into::into), json
-		).map_err(Into::into)
+		builder(config)?.export_blocks(exit.into_exit(), file, from.into(), to.map(Into::into), json)?;
+		Ok(())
 	}
 }
 
@@ -352,14 +365,19 @@ pub struct ParseAndPrepareImport<'a> {
 
 impl<'a> ParseAndPrepareImport<'a> {
 	/// Runs the command and imports to the chain.
-	pub fn run<F, S, E>(
+	pub fn run_with_builder<C, G, E, F, B, S, Exit>(
 		self,
+		builder: F,
 		spec_factory: S,
-		exit: E,
+		exit: Exit,
 	) -> error::Result<()>
-	where S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
-		F: ServiceFactory,
-		E: IntoExit
+	where S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
+		F: FnOnce(Configuration<C, G, E>) -> Result<B, error::Error>,
+		B: ServiceBuilderImport,
+		C: Default,
+		G: RuntimeGenesis,
+		E: ChainSpecExtension,
+		Exit: IntoExit
 	{
 		let mut config = create_config_with_db_path(spec_factory, &self.params.shared_params, self.version)?;
 		config.execution_strategies = ExecutionStrategies {
@@ -377,7 +395,7 @@ impl<'a> ParseAndPrepareImport<'a> {
 			},
 		};
 
-		let fut = service::chain_ops::import_blocks::<F, _, _>(config, exit.into_exit(), file)?;
+		let fut = builder(config)?.import_blocks(exit.into_exit(), file)?;
 		tokio::run(fut);
 		Ok(())
 	}
@@ -391,18 +409,21 @@ pub struct ParseAndPreparePurge<'a> {
 
 impl<'a> ParseAndPreparePurge<'a> {
 	/// Runs the command and purges the chain.
-	pub fn run<G, S>(
+	pub fn run<G, E, S>(
 		self,
 		spec_factory: S
-	) -> error::Result<()>
-	where S: FnOnce(&str) -> Result<Option<ChainSpec<G>>, String>,
-		G: RuntimeGenesis
+	) -> error::Result<()> where
+		S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
+		G: RuntimeGenesis,
+		E: ChainSpecExtension,
 	{
-		let config = create_config_with_db_path::<(), _, _>(spec_factory, &self.params.shared_params, self.version)?;
+		let config = create_config_with_db_path::<(), _, _, _>(
+			spec_factory, &self.params.shared_params, self.version
+		)?;
 		let db_path = config.database_path;
 
 		if !self.params.yes {
-			print!("Are you sure to remove {:?}? (y/n)", &db_path);
+			print!("Are you sure to remove {:?}? [y/N]: ", &db_path);
 			stdout().flush().expect("failed to flush stdout");
 
 			let mut input = String::new();
@@ -440,65 +461,25 @@ pub struct ParseAndPrepareRevert<'a> {
 
 impl<'a> ParseAndPrepareRevert<'a> {
 	/// Runs the command and reverts the chain.
-	pub fn run<F, S>(
+	pub fn run_with_builder<C, G, E, F, B, S>(
 		self,
+		builder: F,
 		spec_factory: S
-	) -> error::Result<()>
-	where S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
-		F: ServiceFactory {
-		let config = create_config_with_db_path(spec_factory, &self.params.shared_params, self.version)?;
+	) -> error::Result<()> where
+		S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
+		F: FnOnce(Configuration<C, G, E>) -> Result<B, error::Error>,
+		B: ServiceBuilderRevert,
+		C: Default,
+		G: RuntimeGenesis,
+		E: ChainSpecExtension,
+	{
+		let config = create_config_with_db_path(
+			spec_factory, &self.params.shared_params, self.version
+		)?;
 		let blocks = self.params.num;
-		Ok(service::chain_ops::revert_chain::<F>(config, blocks.into())?)
+		builder(config)?.revert_chain(blocks.into())?;
+		Ok(())
 	}
-}
-
-/// Parse command line interface arguments and executes the desired command.
-///
-/// # Return value
-///
-/// A result that indicates if any error occurred.
-/// If no error occurred and a custom subcommand was found, the subcommand is returned.
-/// The user needs to handle this subcommand on its own.
-///
-/// # Remarks
-///
-/// `CC` is a custom subcommand. This needs to be an `enum`! If no custom subcommand is required,
-/// `NoCustom` can be used as type here.
-/// `RP` are custom parameters for the run command. This needs to be a `struct`! The custom
-/// parameters are visible to the user as if they were normal run command parameters. If no custom
-/// parameters are required, `NoCustom` can be used as type here.
-#[deprecated(
-	note = "Use parse_and_prepare instead; see the source code of parse_and_execute for how to transition"
-)]
-pub fn parse_and_execute<'a, F, CC, RP, S, RS, E, I, T>(
-	spec_factory: S,
-	version: &VersionInfo,
-	impl_name: &'static str,
-	args: I,
-	exit: E,
-	run_service: RS,
-) -> error::Result<Option<CC>>
-where
-	F: ServiceFactory,
-	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
-	CC: StructOpt + Clone + GetLogFilter,
-	RP: StructOpt + Clone + AugmentClap,
-	E: IntoExit,
-	RS: FnOnce(E, RunCmd, RP, FactoryFullConfiguration<F>) -> Result<(), String>,
-	I: IntoIterator<Item = T>,
-	T: Into<std::ffi::OsString> + Clone,
-{
-	match parse_and_prepare::<CC, RP, _>(version, impl_name, args) {
-		ParseAndPrepare::Run(cmd) => cmd.run(spec_factory, exit, run_service),
-		ParseAndPrepare::BuildSpec(cmd) => cmd.run(spec_factory),
-		ParseAndPrepare::ExportBlocks(cmd) => cmd.run::<F, _, _>(spec_factory, exit),
-		ParseAndPrepare::ImportBlocks(cmd) => cmd.run::<F, _, _>(spec_factory, exit),
-		ParseAndPrepare::PurgeChain(cmd) => cmd.run(spec_factory),
-		ParseAndPrepare::RevertChain(cmd) => cmd.run::<F, _>(spec_factory),
-		ParseAndPrepare::CustomCommand(cmd) => return Ok(Some(cmd))
-	}?;
-
-	Ok(None)
 }
 
 /// Create a `NodeKeyConfig` from the given `NodeKeyParams` in the context
@@ -556,8 +537,8 @@ fn parse_ed25519_secret(hex: &String) -> error::Result<network::config::Ed25519S
 }
 
 /// Fill the given `PoolConfiguration` by looking at the cli parameters.
-fn fill_transaction_pool_configuration<C, G>(
-	options: &mut Configuration<C, G>,
+fn fill_transaction_pool_configuration<C, G, E>(
+	options: &mut Configuration<C, G, E>,
 	params: TransactionPoolParams,
 ) -> error::Result<()> {
 	// ready queue
@@ -587,7 +568,8 @@ fn fill_network_configuration(
 	);
 	config.net_config_path = config.config_path.clone();
 	config.reserved_nodes.extend(cli.reserved_nodes.into_iter());
-	if !config.reserved_nodes.is_empty() {
+
+	if cli.reserved_only {
 		config.non_reserved_mode = NonReservedPeerMode::Deny;
 	}
 
@@ -631,8 +613,8 @@ fn input_keystore_password() -> Result<String, String> {
 }
 
 /// Fill the password field of the given config instance.
-fn fill_config_keystore_password<C, G>(
-	config: &mut service::Configuration<C, G>,
+fn fill_config_keystore_password<C, G, E>(
+	config: &mut service::Configuration<C, G, E>,
 	cli: &RunCmd,
 ) -> Result<(), String> {
 	config.keystore_password = if cli.password_interactive {
@@ -648,13 +630,14 @@ fn fill_config_keystore_password<C, G>(
 	Ok(())
 }
 
-fn create_run_node_config<C, G, S>(
+fn create_run_node_config<C, G, E, S>(
 	cli: RunCmd, spec_factory: S, impl_name: &'static str, version: &VersionInfo
-) -> error::Result<Configuration<C, G>>
+) -> error::Result<Configuration<C, G, E>>
 where
 	C: Default,
 	G: RuntimeGenesis,
-	S: FnOnce(&str) -> Result<Option<ChainSpec<G>>, String>,
+	E: ChainSpecExtension,
+	S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
 {
 	let spec = load_spec(&cli.shared_params, spec_factory)?;
 	let mut config = service::Configuration::default_with_spec(spec.clone());
@@ -693,8 +676,8 @@ where
 	config.pruning = match cli.pruning {
 		Some(ref s) if s == "archive" => PruningMode::ArchiveAll,
 		None => PruningMode::default(),
-		Some(s) => PruningMode::keep_blocks(
-			s.parse().map_err(|_| error::Error::Input("Invalid pruning mode specified".to_string()))?
+		Some(s) => PruningMode::keep_blocks(s.parse()
+			.map_err(|_| error::Error::Input("Invalid pruning mode specified".to_string()))?
 		),
 	};
 
@@ -792,13 +775,14 @@ where
 // 9803-9874		Unassigned
 // 9926-9949		Unassigned
 
-fn with_default_boot_node<G>(
-	spec: &mut ChainSpec<G>,
+fn with_default_boot_node<G, E>(
+	spec: &mut ChainSpec<G, E>,
 	cli: BuildSpecCmd,
 	version: &VersionInfo,
 ) -> error::Result<()>
 where
-	G: RuntimeGenesis
+	G: RuntimeGenesis,
+	E: ChainSpecExtension,
 {
 	if spec.boot_nodes().is_empty() {
 		let base_path = base_path(&cli.shared_params, version);
@@ -817,13 +801,14 @@ where
 }
 
 /// Creates a configuration including the database path.
-pub fn create_config_with_db_path<C, G, S>(
+pub fn create_config_with_db_path<C, G, E, S>(
 	spec_factory: S, cli: &SharedParams, version: &VersionInfo,
-) -> error::Result<Configuration<C, G>>
+) -> error::Result<Configuration<C, G, E>>
 where
 	C: Default,
 	G: RuntimeGenesis,
-	S: FnOnce(&str) -> Result<Option<ChainSpec<G>>, String>,
+	E: ChainSpecExtension,
+	S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
 {
 	let spec = load_spec(cli, spec_factory)?;
 	let base_path = base_path(cli, version);

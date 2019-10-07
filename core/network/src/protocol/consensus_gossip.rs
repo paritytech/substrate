@@ -14,8 +14,34 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Utility for gossip of network messages between authorities.
+//! Utility for gossip of network messages between nodes.
 //! Handles chain-specific and standard BFT messages.
+//!
+//! Gossip messages are separated by two categories: "topics" and consensus engine ID.
+//! The consensus engine ID is sent over the wire with the message, while the topic is not,
+//! with the expectation that the topic can be derived implicitly from the content of the
+//! message, assuming it is valid.
+//!
+//! Topics are a single 32-byte tag associated with a message, used to group those messages
+//! in an opaque way. Consensus code can invoke `broadcast_topic` to attempt to send all messages
+//! under a single topic to all peers who don't have them yet, and `send_topic` to
+//! send all messages under a single topic to a specific peer.
+//!
+//! Each consensus engine ID must have an associated,
+//! registered `Validator` for all gossip messages. The primary role of this `Validator` is
+//! to process incoming messages from peers, and decide whether to discard them or process
+//! them. It also decides whether to re-broadcast the message.
+//!
+//! The secondary role of the `Validator` is to check if a message is allowed to be sent to a given
+//! peer. All messages, before being sent, will be checked against this filter.
+//! This enables the validator to use information it's aware of about connected peers to decide
+//! whether to send messages to them at any given moment in time - In particular, to wait until
+//! peers can accept and process the message before sending it.
+//!
+//! Lastly, the fact that gossip validators can decide not to rebroadcast messages
+//! opens the door for neighbor status packets to be baked into the gossip protocol.
+//! These status packets will typically contain light pieces of information
+//! used to inform peers of a current view of protocol state.
 
 use std::collections::{HashMap, HashSet, hash_map::Entry};
 use std::sync::Arc;

@@ -22,9 +22,10 @@ use crate::backend::{Backend, InMemory};
 use hash_db::Hasher;
 use trie::{TrieConfiguration, default_child_trie_root};
 use trie::trie_types::Layout;
-use primitives::offchain;
-use primitives::storage::well_known_keys::is_child_storage_key;
-use super::{ChildStorageKey, Externalities};
+use primitives::{
+	storage::well_known_keys::is_child_storage_key, child_storage_key::ChildStorageKey, offchain,
+	traits::Externalities,
+};
 use log::warn;
 
 /// Simple HashMap-based Externalities impl.
@@ -35,7 +36,6 @@ pub struct BasicExternalities {
 }
 
 impl BasicExternalities {
-
 	/// Create a new instance of `BasicExternalities`
 	pub fn new(
 		top: HashMap<Vec<u8>, Vec<u8>>,
@@ -97,11 +97,11 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord {
 		Externalities::<H>::storage(self, key)
 	}
 
-	fn child_storage(&self, storage_key: ChildStorageKey<H>, key: &[u8]) -> Option<Vec<u8>> {
+	fn child_storage(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<Vec<u8>> {
 		self.children.get(storage_key.as_ref()).and_then(|child| child.get(key)).cloned()
 	}
 
-	fn original_child_storage(&self, storage_key: ChildStorageKey<H>, key: &[u8]) -> Option<Vec<u8>> {
+	fn original_child_storage(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<Vec<u8>> {
 		Externalities::<H>::child_storage(self, storage_key, key)
 	}
 
@@ -119,9 +119,9 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord {
 
 	fn place_child_storage(
 		&mut self,
-		storage_key: ChildStorageKey<H>,
+		storage_key: ChildStorageKey,
 		key: Vec<u8>,
-		value: Option<Vec<u8>>
+		value: Option<Vec<u8>>,
 	) {
 		let child_map = self.children.entry(storage_key.into_owned()).or_default();
 		if let Some(value) = value {
@@ -131,7 +131,7 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord {
 		}
 	}
 
-	fn kill_child_storage(&mut self, storage_key: ChildStorageKey<H>) {
+	fn kill_child_storage(&mut self, storage_key: ChildStorageKey) {
 		self.children.remove(storage_key.as_ref());
 	}
 
@@ -147,7 +147,7 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord {
 		self.top.retain(|key, _| !key.starts_with(prefix));
 	}
 
-	fn clear_child_prefix(&mut self, storage_key: ChildStorageKey<H>, prefix: &[u8]) {
+	fn clear_child_prefix(&mut self, storage_key: ChildStorageKey, prefix: &[u8]) {
 		if let Some(child) = self.children.get_mut(storage_key.as_ref()) {
 			child.retain(|key, _| !key.starts_with(prefix));
 		}
@@ -163,9 +163,10 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord {
 		// type of child trie support.
 		let empty_hash = default_child_trie_root::<Layout<H>>(&[]);
 		for storage_key in keys {
-			let child_root = self.child_storage_root(
-				ChildStorageKey::<H>::from_slice(storage_key.as_slice())
-					.expect("Map only feed by valid keys; qed")
+			let child_root = Externalities::<H>::child_storage_root(
+				self,
+				ChildStorageKey::from_slice(storage_key.as_slice())
+					.expect("Map only feed by valid keys; qed"),
 			);
 			if &empty_hash[..] == &child_root[..] {
 				top.remove(&storage_key);
@@ -173,10 +174,11 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord {
 				top.insert(storage_key, child_root);
 			}
 		}
+
 		Layout::<H>::trie_root(self.top.clone())
 	}
 
-	fn child_storage_root(&mut self, storage_key: ChildStorageKey<H>) -> Vec<u8> {
+	fn child_storage_root(&mut self, storage_key: ChildStorageKey) -> Vec<u8> {
 		if let Some(child) = self.children.get(storage_key.as_ref()) {
 			let delta = child.clone().into_iter().map(|(k, v)| (k, Some(v)));
 

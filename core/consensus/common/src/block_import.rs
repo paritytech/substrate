@@ -21,9 +21,8 @@ use sr_primitives::Justification;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
-use crate::well_known_cache_keys;
 
-use crate::import_queue::Verifier;
+use crate::import_queue::{Verifier, CacheKeyId};
 
 /// Block import result.
 #[derive(Debug, PartialEq, Eq)]
@@ -39,7 +38,7 @@ pub enum ImportResult {
 }
 
 /// Auxiliary data associated with an imported block result.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Default, PartialEq, Eq)]
 pub struct ImportedAux {
 	/// Clear all pending justification requests.
 	pub clear_justification_requests: bool,
@@ -49,24 +48,19 @@ pub struct ImportedAux {
 	pub bad_justification: bool,
 	/// Request a finality proof for the given block.
 	pub needs_finality_proof: bool,
-}
-
-impl Default for ImportedAux {
-	fn default() -> ImportedAux {
-		ImportedAux {
-			clear_justification_requests: false,
-			needs_justification: false,
-			bad_justification: false,
-			needs_finality_proof: false,
-		}
-	}
+	/// Whether the block that was imported is the new best block.
+	pub is_new_best: bool,
 }
 
 impl ImportResult {
-	/// Returns default value for `ImportResult::Imported` with both
-	/// `clear_justification_requests` and `needs_justification` set to false.
-	pub fn imported() -> ImportResult {
-		ImportResult::Imported(ImportedAux::default())
+	/// Returns default value for `ImportResult::Imported` with
+	/// `clear_justification_requests`, `needs_justification`,
+	/// `bad_justification` and `needs_finality_proof` set to false.
+	pub fn imported(is_new_best: bool) -> ImportResult {
+		let mut aux = ImportedAux::default();
+		aux.is_new_best = is_new_best;
+
+		ImportResult::Imported(aux)
 	}
 }
 
@@ -96,7 +90,17 @@ pub enum ForkChoiceStrategy {
 	Custom(bool),
 }
 
-/// Data required to import a Block
+/// Data required to check validity of a Block.
+pub struct BlockCheckParams<Block: BlockT> {
+	/// Hash of the block that we verify.
+	pub hash: Block::Hash,
+	/// Block number of the block that we verify.
+	pub number: NumberFor<Block>,
+	/// Parent hash of the block that we verify.
+	pub parent_hash: Block::Hash,
+}
+
+/// Data required to import a Block.
 pub struct BlockImportParams<Block: BlockT> {
 	/// Origin of the Block
 	pub origin: BlockOrigin,
@@ -126,7 +130,8 @@ pub struct BlockImportParams<Block: BlockT> {
 	/// Contains a list of key-value pairs. If values are `None`, the keys
 	/// will be deleted.
 	pub auxiliary: Vec<(Vec<u8>, Option<Vec<u8>>)>,
-	/// Fork choice strategy of this import.
+	/// Fork choice strategy of this import. This should only be set by a
+	/// synchronous import, otherwise it may race against other imports.
 	pub fork_choice: ForkChoiceStrategy,
 }
 
@@ -177,8 +182,7 @@ pub trait BlockImport<B: BlockT> {
 	/// Check block preconditions.
 	fn check_block(
 		&mut self,
-		hash: B::Hash,
-		parent_hash: B::Hash,
+		block: BlockCheckParams<B>,
 	) -> Result<ImportResult, Self::Error>;
 
 	/// Import a block.
@@ -187,27 +191,49 @@ pub trait BlockImport<B: BlockT> {
 	fn import_block(
 		&mut self,
 		block: BlockImportParams<B>,
-		cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
+		cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error>;
 }
 
-impl<B: BlockT, T, E: ::std::error::Error + Send + 'static> BlockImport<B> for Arc<T>
+impl<B: BlockT> BlockImport<B> for crate::import_queue::BoxBlockImport<B> {
+	type Error = crate::error::Error;
+
+	/// Check block preconditions.
+	fn check_block(
+		&mut self,
+		block: BlockCheckParams<B>,
+	) -> Result<ImportResult, Self::Error> {
+		(**self).check_block(block)
+	}
+
+	/// Import a block.
+	///
+	/// Cached data can be accessed through the blockchain cache.
+	fn import_block(
+		&mut self,
+		block: BlockImportParams<B>,
+		cache: HashMap<CacheKeyId, Vec<u8>>,
+	) -> Result<ImportResult, Self::Error> {
+		(**self).import_block(block, cache)
+	}
+}
+
+impl<B: BlockT, T, E: std::error::Error + Send + 'static> BlockImport<B> for Arc<T>
 where for<'r> &'r T: BlockImport<B, Error = E>
 {
 	type Error = E;
 
 	fn check_block(
 		&mut self,
-		hash: B::Hash,
-		parent_hash: B::Hash,
+		block: BlockCheckParams<B>,
 	) -> Result<ImportResult, Self::Error> {
-		(&**self).check_block(hash, parent_hash)
+		(&**self).check_block(block)
 	}
 
 	fn import_block(
 		&mut self,
 		block: BlockImportParams<B>,
-		cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
+		cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
 		(&**self).import_block(block, cache)
 	}

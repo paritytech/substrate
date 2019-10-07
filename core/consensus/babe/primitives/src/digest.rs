@@ -17,12 +17,10 @@
 //! Private implementation details of BABE digests.
 
 #[cfg(feature = "std")]
-use super::AuthoritySignature;
-#[cfg(feature = "std")]
-use super::{BABE_ENGINE_ID, Epoch};
+use super::{BABE_ENGINE_ID, AuthoritySignature};
 #[cfg(not(feature = "std"))]
 use super::{VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH};
-use super::SlotNumber;
+use super::{AuthorityId, AuthorityIndex, SlotNumber, BabeAuthorityWeight};
 #[cfg(feature = "std")]
 use sr_primitives::{DigestItem, generic::OpaqueDigestItemId};
 #[cfg(feature = "std")]
@@ -35,19 +33,61 @@ use schnorrkel::{
 	SignatureError, errors::MultiSignatureStage,
 	vrf::{VRFProof, VRFOutput, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH}
 };
+use rstd::vec::Vec;
 
-/// A BABE pre-digest
+
+/// A BABE pre-runtime digest. This contains all data required to validate a
+/// block and for the BABE runtime module. Slots can be assigned to a primary
+/// (VRF based) and to a secondary (slot number based).
 #[cfg(feature = "std")]
 #[derive(Clone, Debug)]
-pub struct BabePreDigest {
-	/// VRF output
-	pub vrf_output: VRFOutput,
-	/// VRF proof
-	pub vrf_proof: VRFProof,
-	/// Authority index
-	pub authority_index: super::AuthorityIndex,
-	/// Slot number
-	pub slot_number: SlotNumber,
+pub enum BabePreDigest {
+	/// A primary VRF-based slot assignment.
+	Primary {
+		/// VRF output
+		vrf_output: VRFOutput,
+		/// VRF proof
+		vrf_proof: VRFProof,
+		/// Authority index
+		authority_index: super::AuthorityIndex,
+		/// Slot number
+		slot_number: SlotNumber,
+	},
+	/// A secondary deterministic slot assignment.
+	Secondary {
+		/// Authority index
+		authority_index: super::AuthorityIndex,
+		/// Slot number
+		slot_number: SlotNumber,
+	},
+}
+
+#[cfg(feature = "std")]
+impl BabePreDigest {
+	/// Returns the slot number of the pre digest.
+	pub fn authority_index(&self) -> AuthorityIndex {
+		match self {
+			BabePreDigest::Primary { authority_index, .. } => *authority_index,
+			BabePreDigest::Secondary { authority_index, .. } => *authority_index,
+		}
+	}
+
+	/// Returns the slot number of the pre digest.
+	pub fn slot_number(&self) -> SlotNumber {
+		match self {
+			BabePreDigest::Primary { slot_number, .. } => *slot_number,
+			BabePreDigest::Secondary { slot_number, .. } => *slot_number,
+		}
+	}
+
+	/// Returns the weight _added_ by this digest, not the cumulative weight
+	/// of the chain.
+	pub fn added_weight(&self) -> crate::BabeBlockWeight {
+		match self {
+			BabePreDigest::Primary { .. } => 1,
+			BabePreDigest::Secondary { .. } => 0,
+		}
+	}
 }
 
 /// The prefix used by BABE for its VRF keys.
@@ -55,27 +95,73 @@ pub const BABE_VRF_PREFIX: &'static [u8] = b"substrate-babe-vrf";
 
 /// A raw version of `BabePreDigest`, usable on `no_std`.
 #[derive(Copy, Clone, Encode, Decode)]
-pub struct RawBabePreDigest {
-	/// Slot number
-	pub slot_number: SlotNumber,
-	/// Authority index
-	pub authority_index: super::AuthorityIndex,
-	/// VRF output
-	pub vrf_output: [u8; VRF_OUTPUT_LENGTH],
-	/// VRF proof
-	pub vrf_proof: [u8; VRF_PROOF_LENGTH],
+pub enum RawBabePreDigest {
+	/// A primary VRF-based slot assignment.
+	#[codec(index = "1")]
+	Primary {
+		/// Authority index
+		authority_index: AuthorityIndex,
+		/// Slot number
+		slot_number: SlotNumber,
+		/// VRF output
+		vrf_output: [u8; VRF_OUTPUT_LENGTH],
+		/// VRF proof
+		vrf_proof: [u8; VRF_PROOF_LENGTH],
+	},
+	/// A secondary deterministic slot assignment.
+	#[codec(index = "2")]
+	Secondary {
+		/// Authority index
+		///
+		/// This is not strictly-speaking necessary, since the secondary slots
+		/// are assigned based on slot number and epoch randomness. But including
+		/// it makes things easier for higher-level users of the chain data to
+		/// be aware of the author of a secondary-slot block.
+		authority_index: AuthorityIndex,
+		/// Slot number
+		slot_number: SlotNumber,
+	},
+}
+
+impl RawBabePreDigest {
+	/// Returns the slot number of the pre digest.
+	pub fn slot_number(&self) -> SlotNumber {
+		match self {
+			RawBabePreDigest::Primary { slot_number, .. } => *slot_number,
+			RawBabePreDigest::Secondary { slot_number, .. } => *slot_number,
+		}
+	}
 }
 
 #[cfg(feature = "std")]
 impl Encode for BabePreDigest {
 	fn encode(&self) -> Vec<u8> {
-		let tmp =  RawBabePreDigest {
-			vrf_output: *self.vrf_output.as_bytes(),
-			vrf_proof: self.vrf_proof.to_bytes(),
-			authority_index: self.authority_index,
-			slot_number: self.slot_number,
+		let raw = match self {
+			BabePreDigest::Primary {
+				vrf_output,
+				vrf_proof,
+				authority_index,
+				slot_number,
+			} => {
+				RawBabePreDigest::Primary {
+					vrf_output: *vrf_output.as_bytes(),
+					vrf_proof: vrf_proof.to_bytes(),
+					authority_index: *authority_index,
+					slot_number: *slot_number,
+				}
+			},
+			BabePreDigest::Secondary {
+				authority_index,
+				slot_number,
+			} => {
+				RawBabePreDigest::Secondary {
+					authority_index: *authority_index,
+					slot_number: *slot_number,
+				}
+			},
 		};
-		codec::Encode::encode(&tmp)
+
+		codec::Encode::encode(&raw)
 	}
 }
 
@@ -85,20 +171,38 @@ impl codec::EncodeLike for BabePreDigest {}
 #[cfg(feature = "std")]
 impl Decode for BabePreDigest {
 	fn decode<R: Input>(i: &mut R) -> Result<Self, Error> {
-		let RawBabePreDigest { vrf_output, vrf_proof, authority_index, slot_number } = Decode::decode(i)?;
+		let pre_digest = match Decode::decode(i)? {
+			RawBabePreDigest::Primary { vrf_output, vrf_proof, authority_index, slot_number } => {
+				// Verify (at compile time) that the sizes in babe_primitives are correct
+				let _: [u8; super::VRF_OUTPUT_LENGTH] = vrf_output;
+				let _: [u8; super::VRF_PROOF_LENGTH] = vrf_proof;
 
-		// Verify (at compile time) that the sizes in babe_primitives are correct
-		let _: [u8; super::VRF_OUTPUT_LENGTH] = vrf_output;
-		let _: [u8; super::VRF_PROOF_LENGTH] = vrf_proof;
-		Ok(BabePreDigest {
-			vrf_proof: VRFProof::from_bytes(&vrf_proof)
-				.map_err(convert_error)?,
-			vrf_output: VRFOutput::from_bytes(&vrf_output)
-				.map_err(convert_error)?,
-			authority_index,
-			slot_number,
-		})
+				BabePreDigest::Primary {
+					vrf_proof: VRFProof::from_bytes(&vrf_proof).map_err(convert_error)?,
+					vrf_output: VRFOutput::from_bytes(&vrf_output).map_err(convert_error)?,
+					authority_index,
+					slot_number,
+				}
+			},
+			RawBabePreDigest::Secondary { authority_index, slot_number } => {
+				BabePreDigest::Secondary { authority_index, slot_number }
+			},
+		};
+
+		Ok(pre_digest)
 	}
+}
+
+/// Information about the next epoch. This is broadcast in the first block
+/// of the epoch.
+#[derive(Decode, Encode, Default, PartialEq, Eq, Clone)]
+#[cfg_attr(any(feature = "std", test), derive(Debug))]
+pub struct NextEpochDescriptor {
+	/// The authorities.
+	pub authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
+
+	/// The value of randomness to use for the slot-assignment.
+	pub randomness: [u8; VRF_OUTPUT_LENGTH],
 }
 
 /// A digest item which is usable with BABE consensus.
@@ -117,7 +221,7 @@ pub trait CompatibleDigestItem: Sized {
 	fn as_babe_seal(&self) -> Option<AuthoritySignature>;
 
 	/// If this item is a BABE epoch, return it.
-	fn as_babe_epoch(&self) -> Option<Epoch>;
+	fn as_next_epoch_descriptor(&self) -> Option<NextEpochDescriptor>;
 }
 
 #[cfg(feature = "std")]
@@ -140,8 +244,12 @@ impl<Hash> CompatibleDigestItem for DigestItem<Hash> where
 		self.try_to(OpaqueDigestItemId::Seal(&BABE_ENGINE_ID))
 	}
 
-	fn as_babe_epoch(&self) -> Option<Epoch> {
+	fn as_next_epoch_descriptor(&self) -> Option<NextEpochDescriptor> {
 		self.try_to(OpaqueDigestItemId::Consensus(&BABE_ENGINE_ID))
+			.and_then(|x: super::ConsensusLog| match x {
+				super::ConsensusLog::NextEpochData(n) => Some(n),
+				_ => None,
+			})
 	}
 }
 

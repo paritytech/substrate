@@ -69,7 +69,7 @@ fn api<T: Into<Option<Status>>>(sync: T) -> System<Block> {
 					let _ = sender.send(peers);
 				}
 				Request::NetworkState(sender) => {
-					let _ = sender.send(network::NetworkState {
+					let _ = sender.send(serde_json::to_value(&network::NetworkState {
 						peer_id: String::new(),
 						listened_addresses: Default::default(),
 						external_addresses: Default::default(),
@@ -78,7 +78,7 @@ fn api<T: Into<Option<Status>>>(sync: T) -> System<Block> {
 						average_download_per_sec: 0,
 						average_upload_per_sec: 0,
 						peerset: serde_json::Value::Null,
-					});
+					}).unwrap());
 				}
 			};
 
@@ -206,8 +206,9 @@ fn system_peers() {
 
 #[test]
 fn system_network_state() {
+	let res = wait_receiver(api(None).system_network_state());
 	assert_eq!(
-		wait_receiver(api(None).system_network_state()),
+		serde_json::from_value::<network::NetworkState>(res).unwrap(),
 		network::NetworkState {
 			peer_id: String::new(),
 			listened_addresses: Default::default(),

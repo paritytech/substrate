@@ -52,14 +52,13 @@ use libp2p::core::{ConnectedPoint, Multiaddr, PeerId, PublicKey};
 use libp2p::swarm::{ProtocolsHandler, NetworkBehaviour, NetworkBehaviourAction, PollParameters};
 use libp2p::kad::{Kademlia, KademliaEvent, Quorum, Record};
 use libp2p::kad::GetClosestPeersError;
-use libp2p::kad::record::store::MemoryStore;
+use libp2p::kad::record::{self, store::MemoryStore};
 #[cfg(not(target_os = "unknown"))]
 use libp2p::{swarm::toggle::Toggle};
 #[cfg(not(target_os = "unknown"))]
 use libp2p::core::{nodes::Substream, muxing::StreamMuxerBox};
 #[cfg(not(target_os = "unknown"))]
 use libp2p::mdns::{Mdns, MdnsEvent};
-use libp2p::multihash::Multihash;
 use libp2p::multiaddr::Protocol;
 use log::{debug, info, trace, warn};
 use std::{cmp, collections::VecDeque, time::Duration};
@@ -159,7 +158,7 @@ impl<TSubstream> DiscoveryBehaviour<TSubstream> {
 	/// Start fetching a record from the DHT.
 	///
 	/// A corresponding `ValueFound` or `ValueNotFound` event will later be generated.
-	pub fn get_value(&mut self, key: &Multihash) {
+	pub fn get_value(&mut self, key: &record::Key) {
 		self.kademlia.get_record(key, Quorum::One)
 	}
 
@@ -167,7 +166,7 @@ impl<TSubstream> DiscoveryBehaviour<TSubstream> {
 	/// `get_value`.
 	///
 	/// A corresponding `ValuePut` or `ValuePutFailed` event will later be generated.
-	pub fn put_value(&mut self, key: Multihash, value: Vec<u8>) {
+	pub fn put_value(&mut self, key: record::Key, value: Vec<u8>) {
 		self.kademlia.put_record(Record::new(key, value), Quorum::All);
 	}
 }
@@ -187,16 +186,16 @@ pub enum DiscoveryOut {
 	UnroutablePeer(PeerId),
 
 	/// The DHT yeided results for the record request, grouped in (key, value) pairs.
-	ValueFound(Vec<(Multihash, Vec<u8>)>),
+	ValueFound(Vec<(record::Key, Vec<u8>)>),
 
 	/// The record requested was not found in the DHT.
-	ValueNotFound(Multihash),
+	ValueNotFound(record::Key),
 
 	/// The record with a given key was successfully inserted into the DHT.
-	ValuePut(Multihash),
+	ValuePut(record::Key),
 
 	/// Inserting a value into the DHT failed.
-	ValuePutFailed(Multihash),
+	ValuePutFailed(record::Key),
 }
 
 impl<TSubstream> NetworkBehaviour for DiscoveryBehaviour<TSubstream>

@@ -54,6 +54,7 @@ pub mod crypto;
 
 pub mod u32_trait;
 
+pub mod child_storage_key;
 pub mod ed25519;
 pub mod sr25519;
 pub mod hash;
@@ -88,19 +89,23 @@ pub enum ExecutionContext {
 	Syncing,
 	/// Context used for block construction.
 	BlockConstruction,
-	/// Offchain worker context.
-	OffchainWorker(Box<dyn offchain::Externalities>),
-	/// Context used for other calls.
-	Other,
+	/// Context used for offchain calls.
+	///
+	/// This allows passing offchain extension and customizing available capabilities.
+	OffchainCall(Option<(Box<dyn offchain::Externalities>, offchain::Capabilities)>),
 }
 
 impl ExecutionContext {
-	/// Returns if the keystore should be enabled for the current context.
-	pub fn enable_keystore(&self) -> bool {
+	/// Returns the capabilities of particular context.
+	pub fn capabilities(&self) -> offchain::Capabilities {
 		use ExecutionContext::*;
+
 		match self {
-			Importing | Syncing | BlockConstruction => false,
-			OffchainWorker(_) | Other => true,
+			Importing | Syncing | BlockConstruction =>
+				offchain::Capabilities::none(),
+			// Enable keystore by default for offchain calls. CC @bkchr
+			OffchainCall(None) => [offchain::Capability::Keystore][..].into(),
+			OffchainCall(Some((_, capabilities))) => *capabilities,
 		}
 	}
 }
@@ -154,7 +159,7 @@ pub enum NativeOrEncoded<R> {
 #[cfg(feature = "std")]
 impl<R: codec::Encode> ::std::fmt::Debug for NativeOrEncoded<R> {
 	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-		self.as_encoded().as_ref().fmt(f)
+		hexdisplay::HexDisplay::from(&self.as_encoded().as_ref()).fmt(f)
 	}
 }
 
@@ -214,3 +219,8 @@ impl codec::Decode for NeverNativeValue {
 	}
 }
 
+/// Provide a simple 4 byte identifier for a type.
+pub trait TypeId {
+	/// Simple 4 byte identifier.
+	const TYPE_ID: [u8; 4];
+}

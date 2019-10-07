@@ -16,29 +16,28 @@
 
 //! Changes trie storage utilities.
 
-use std::collections::BTreeMap;
-use hash_db::{Hasher, Prefix};
+use std::collections::{BTreeMap, HashSet, HashMap};
+use hash_db::{Hasher, Prefix, EMPTY_PREFIX};
 use trie::DBValue;
 use trie::MemoryDB;
 use parking_lot::RwLock;
-use crate::changes_trie::{RootsStorage, Storage, AnchorBlockId, BlockNumber};
+use crate::changes_trie::{BuildCache, RootsStorage, Storage, AnchorBlockId, BlockNumber};
 use crate::trie_backend_essence::TrieBackendStorage;
 
 #[cfg(test)]
-use std::collections::HashSet;
-#[cfg(test)]
 use crate::backend::insert_into_memory_db;
 #[cfg(test)]
-use crate::changes_trie::input::InputPair;
+use crate::changes_trie::input::{InputPair, ChildIndex};
 
 /// In-memory implementation of changes trie storage.
 pub struct InMemoryStorage<H: Hasher, Number: BlockNumber> {
 	data: RwLock<InMemoryStorageData<H, Number>>,
+	cache: BuildCache<H::Out, Number>,
 }
 
 /// Adapter for using changes trie storage as a TrieBackendEssence' storage.
-pub struct TrieBackendAdapter<'a, H: Hasher, Number: BlockNumber, S: 'a + Storage<H, Number>> {
-	storage: &'a S,
+pub struct TrieBackendAdapter<'a, H: Hasher, Number: BlockNumber> {
+	storage: &'a dyn Storage<H, Number>,
 	_hasher: ::std::marker::PhantomData<(H, Number)>,
 }
 
@@ -48,19 +47,36 @@ struct InMemoryStorageData<H: Hasher, Number: BlockNumber> {
 }
 
 impl<H: Hasher, Number: BlockNumber> InMemoryStorage<H, Number> {
-	/// Create the storage from given in-memory database.
+	/// Creates storage from given in-memory database.
 	pub fn with_db(mdb: MemoryDB<H>) -> Self {
 		Self {
 			data: RwLock::new(InMemoryStorageData {
 				roots: BTreeMap::new(),
 				mdb,
 			}),
+			cache: BuildCache::new(),
 		}
 	}
 
-	/// Create the storage with empty database.
+	/// Creates storage with empty database.
 	pub fn new() -> Self {
 		Self::with_db(Default::default())
+	}
+
+	/// Creates storage with given proof.
+	pub fn with_proof(proof: Vec<Vec<u8>>) -> Self {
+		use hash_db::HashDB;
+
+ 		let mut proof_db = MemoryDB::<H>::default();
+		for item in proof {
+			proof_db.insert(EMPTY_PREFIX, &item);
+		}
+		Self::with_db(proof_db)
+	}
+
+	/// Get mutable cache reference.
+	pub fn cache_mut(&mut self) -> &mut BuildCache<H::Out, Number> {
+		&mut self.cache
 	}
 
 	/// Create the storage with given blocks.
@@ -70,14 +86,37 @@ impl<H: Hasher, Number: BlockNumber> InMemoryStorage<H, Number> {
 				roots: blocks.into_iter().collect(),
 				mdb: MemoryDB::default(),
 			}),
+			cache: BuildCache::new(),
 		}
 	}
 
 	#[cfg(test)]
-	pub fn with_inputs(inputs: Vec<(Number, Vec<InputPair<Number>>)>) -> Self {
+	pub fn with_inputs(
+		mut top_inputs: Vec<(Number, Vec<InputPair<Number>>)>,
+		children_inputs: Vec<(Vec<u8>, Vec<(Number, Vec<InputPair<Number>>)>)>,
+	) -> Self {
 		let mut mdb = MemoryDB::default();
 		let mut roots = BTreeMap::new();
-		for (block, pairs) in inputs {
+		for (storage_key, child_input) in children_inputs {
+			for (block, pairs) in child_input {
+				let root = insert_into_memory_db::<H, _>(&mut mdb, pairs.into_iter().map(Into::into));
+
+				if let Some(root) = root {
+					let ix = if let Some(ix) = top_inputs.iter().position(|v| v.0 == block) {
+						ix
+					} else {
+						top_inputs.push((block.clone(), Default::default()));
+						top_inputs.len() - 1
+					};
+					top_inputs[ix].1.push(InputPair::ChildIndex(
+						ChildIndex { block: block.clone(), storage_key: storage_key.clone() },
+						root.as_ref().to_vec(),
+					));
+				}
+			}
+		}
+
+		for (block, pairs) in top_inputs {
 			let root = insert_into_memory_db::<H, _>(&mut mdb, pairs.into_iter().map(Into::into));
 			if let Some(root) = root {
 				roots.insert(block, root);
@@ -89,6 +128,7 @@ impl<H: Hasher, Number: BlockNumber> InMemoryStorage<H, Number> {
 				roots,
 				mdb,
 			}),
+			cache: BuildCache::new(),
 		}
 	}
 
@@ -132,20 +172,31 @@ impl<H: Hasher, Number: BlockNumber> RootsStorage<H, Number> for InMemoryStorage
 }
 
 impl<H: Hasher, Number: BlockNumber> Storage<H, Number> for InMemoryStorage<H, Number> {
+	fn as_roots_storage(&self) -> &dyn RootsStorage<H, Number> {
+		self
+	}
+
+	fn with_cached_changed_keys(
+		&self,
+		root: &H::Out,
+		functor: &mut dyn FnMut(&HashMap<Option<Vec<u8>>, HashSet<Vec<u8>>>),
+	) -> bool {
+		self.cache.with_changed_keys(root, functor)
+	}
+
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
 		MemoryDB::<H>::get(&self.data.read().mdb, key, prefix)
 	}
 }
 
-impl<'a, H: Hasher, Number: BlockNumber, S: 'a + Storage<H, Number>> TrieBackendAdapter<'a, H, Number, S> {
-	pub fn new(storage: &'a S) -> Self {
+impl<'a, H: Hasher, Number: BlockNumber> TrieBackendAdapter<'a, H, Number> {
+	pub fn new(storage: &'a dyn Storage<H, Number>) -> Self {
 		Self { storage, _hasher: Default::default() }
 	}
 }
 
-impl<'a, H, Number, S> TrieBackendStorage<H> for TrieBackendAdapter<'a, H, Number, S>
+impl<'a, H, Number> TrieBackendStorage<H> for TrieBackendAdapter<'a, H, Number>
 	where
-		S: 'a + Storage<H, Number>,
 		Number: BlockNumber,
 		H: Hasher,
 {

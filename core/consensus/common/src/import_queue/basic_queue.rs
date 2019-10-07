@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::{mem, pin::Pin, time::Duration};
-use futures::{prelude::*, channel::mpsc, task::SpawnExt as _, task::Context, task::Poll};
+use futures::{prelude::*, channel::mpsc, task::Context, task::Poll};
 use futures_timer::Delay;
 use sr_primitives::{Justification, traits::{Block as BlockT, Header as HeaderT, NumberFor}};
 
@@ -70,9 +70,7 @@ impl<B: BlockT> BasicQueue<B> {
 
 		let manual_poll;
 		if let Some(pool) = &mut pool {
-			// TODO: this expect() can be removed once
-			// https://github.com/rust-lang-nursery/futures-rs/pull/1750 is merged and deployed
-			pool.spawn(future).expect("ThreadPool can never fail to spawn tasks; QED");
+			pool.spawn_ok(future);
 			manual_poll = None;
 		} else {
 			manual_poll = Some(Box::pin(future) as Pin<Box<_>>);
