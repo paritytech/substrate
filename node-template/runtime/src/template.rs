@@ -69,12 +69,12 @@ decl_event!(
 mod tests {
 	use super::*;
 
-	use runtime_io::with_externalities;
 	use primitives::H256;
 	use support::{impl_outer_origin, assert_ok, parameter_types};
-	use sr_primitives::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
-	use sr_primitives::weights::Weight;
-	use sr_primitives::Perbill;
+	use sr_primitives::{
+		set_and_run_with_externalities, traits::{BlakeTwo256, IdentityLookup}, testing::Header,
+		weights::Weight, Perbill,
+	};
 
 	impl_outer_origin! {
 		pub enum Origin for Test {}
@@ -122,7 +122,7 @@ mod tests {
 
 	#[test]
 	fn it_works_for_default_value() {
-		with_externalities(&mut new_test_ext(), || {
+		set_and_run_with_externalities(&mut new_test_ext(), || {
 			// Just a dummy test for the dummy funtion `do_something`
 			// calling the `do_something` function with a value 42
 			assert_ok!(TemplateModule::do_something(Origin::signed(1), 42));

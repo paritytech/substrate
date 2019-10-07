@@ -319,8 +319,9 @@ fn info_expect_equal_hash(given: &Hash, expected: &Hash) {
 mod tests {
 	use super::*;
 
-	use runtime_io::{with_externalities, TestExternalities};
+	use runtime_io::TestExternalities;
 	use substrate_test_runtime_client::{AccountKeyring, Sr25519Keyring};
+	use sr_primitives::set_and_run_with_externalities;
 	use crate::{Header, Transfer, WASM_BINARY};
 	use primitives::map;
 	use substrate_executor::WasmExecutor;
@@ -353,7 +354,7 @@ mod tests {
 			extrinsics: vec![],
 		};
 
-		with_externalities(&mut new_test_ext(), || polish_block(&mut b));
+		set_and_run_with_externalities(&mut new_test_ext(), || polish_block(&mut b));
 
 		block_executor(b, &mut new_test_ext());
 	}
@@ -361,7 +362,7 @@ mod tests {
 	#[test]
 	fn block_import_works_native() {
 		block_import_works(|b, ext| {
-			with_externalities(ext, || {
+			set_and_run_with_externalities(ext, || {
 				execute_block(b);
 			});
 		});
@@ -398,7 +399,7 @@ mod tests {
 		};
 
 		let mut dummy_ext = new_test_ext();
-		with_externalities(&mut dummy_ext, || polish_block(&mut b1));
+		set_and_run_with_externalities(&mut dummy_ext, || polish_block(&mut b1));
 
 		let mut b2 = Block {
 			header: Header {
@@ -424,26 +425,26 @@ mod tests {
 			],
 		};
 
-		with_externalities(&mut dummy_ext, || polish_block(&mut b2));
+		set_and_run_with_externalities(&mut dummy_ext, || polish_block(&mut b2));
 		drop(dummy_ext);
 
 		let mut t = new_test_ext();
 
-		with_externalities(&mut t, || {
+		set_and_run_with_externalities(&mut t, || {
 			assert_eq!(balance_of(AccountKeyring::Alice.into()), 111);
 			assert_eq!(balance_of(AccountKeyring::Bob.into()), 0);
 		});
 
 		block_executor(b1, &mut t);
 
-		with_externalities(&mut t, || {
+		set_and_run_with_externalities(&mut t, || {
 			assert_eq!(balance_of(AccountKeyring::Alice.into()), 42);
 			assert_eq!(balance_of(AccountKeyring::Bob.into()), 69);
 		});
 
 		block_executor(b2, &mut t);
 
-		with_externalities(&mut t, || {
+		set_and_run_with_externalities(&mut t, || {
 			assert_eq!(balance_of(AccountKeyring::Alice.into()), 0);
 			assert_eq!(balance_of(AccountKeyring::Bob.into()), 42);
 			assert_eq!(balance_of(AccountKeyring::Charlie.into()), 69);
@@ -453,7 +454,7 @@ mod tests {
 	#[test]
 	fn block_import_with_transaction_works_native() {
 		block_import_with_transaction_works(|b, ext| {
-			with_externalities(ext, || {
+			set_and_run_with_externalities(ext, || {
 				execute_block(b);
 			});
 		});

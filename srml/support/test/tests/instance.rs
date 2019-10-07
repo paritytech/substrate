@@ -15,13 +15,15 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 #![recursion_limit="128"]
 
-use runtime_io::with_externalities;
+use sr_primitives::{
+	generic, BuildStorage, traits::{BlakeTwo256, Block as _, Verify},
+	set_and_run_with_externalities,
+};
 use support::{
 	Parameter, traits::Get, parameter_types,
-	sr_primitives::{generic, BuildStorage, traits::{BlakeTwo256, Block as _, Verify}},
 	metadata::{
 		DecodeDifferent, StorageMetadata, StorageEntryModifier, StorageEntryType, DefaultByteGetter,
-		StorageEntryMetadata, StorageHasher
+		StorageEntryMetadata, StorageHasher,
 	},
 	StorageValue, StorageMap, StorageLinkedMap, StorageDoubleMap,
 };
@@ -329,7 +331,7 @@ fn storage_instance_independance() {
 
 #[test]
 fn storage_with_instance_basic_operation() {
-	with_externalities(&mut new_test_ext(), || {
+	set_and_run_with_externalities(&mut new_test_ext(), || {
 		type Value = module2::Value<Runtime, module2::Instance1>;
 		type Map = module2::Map<module2::Instance1>;
 		type LinkedMap = module2::LinkedMap<module2::Instance1>;

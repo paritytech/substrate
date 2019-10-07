@@ -1565,7 +1565,7 @@ impl WasmExecutor {
 			fec.write_memory(offset, data).map(|_| offset.into()).map_err(Into::into)
 		})?;
 
-		let result = runtime_io::with_externalities(
+		let result = externalities::set_and_run_with_externalities(
 			ext,
 			|| module_instance.invoke_export(method, &parameters, &mut fec),
 		);

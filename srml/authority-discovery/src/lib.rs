@@ -135,12 +135,12 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 mod tests {
 	use super::*;
 	use app_crypto::Pair;
-	use primitives::testing::KeyStore;
-	use primitives::{crypto::key_types, sr25519, H256};
-	use runtime_io::{with_externalities, TestExternalities};
-	use sr_primitives::testing::{Header, UintAuthorityId};
-	use sr_primitives::traits::{ConvertInto, IdentityLookup, OpaqueKeys};
-	use sr_primitives::Perbill;
+	use primitives::{testing::KeyStore, crypto::key_types, sr25519, H256};
+	use runtime_io::TestExternalities;
+	use sr_primitives::{
+		testing::{Header, UintAuthorityId}, traits::{ConvertInto, IdentityLookup, OpaqueKeys},
+		Perbill, set_and_run_with_externalities,
+	};
 	use support::{impl_outer_origin, parameter_types};
 
 	type AuthorityDiscovery = Module<Test>;
@@ -263,7 +263,7 @@ mod tests {
 		let mut externalities = TestExternalities::new(t);
 		externalities.register_extension(key_store);
 
-		with_externalities(&mut externalities, || {
+		set_and_run_with_externalities(&mut externalities, || {
 			assert_eq!(
 				authority_id,
 				AuthorityDiscovery::authority_id().expect("Retrieving public key.")
@@ -300,7 +300,7 @@ mod tests {
 		let mut externalities = TestExternalities::new(t);
 		externalities.register_extension(key_store);
 
-		with_externalities(&mut externalities, || {
+		set_and_run_with_externalities(&mut externalities, || {
 			assert_eq!(None, AuthorityDiscovery::authority_id());
 		});
 	}
@@ -337,7 +337,7 @@ mod tests {
 		let mut externalities = TestExternalities::new(t);
 		externalities.register_extension(key_store);
 
-		with_externalities(&mut externalities, || {
+		set_and_run_with_externalities(&mut externalities, || {
 			let payload = String::from("test payload").into_bytes();
 			let (sig, authority_id) = AuthorityDiscovery::sign(&payload).expect("signature");
 

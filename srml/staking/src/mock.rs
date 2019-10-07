@@ -341,7 +341,7 @@ impl ExtBuilder {
 		}.assimilate_storage(&mut storage);
 
 		let mut ext = storage.into();
-		runtime_io::with_externalities(&mut ext, || {
+		sr_primitives::set_and_run_with_externalities(&mut ext, || {
 			let validators = Session::validators();
 			SESSION.with(|x|
 				*x.borrow_mut() = (validators.clone(), HashSet::new())

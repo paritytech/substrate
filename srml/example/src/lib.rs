@@ -595,12 +595,12 @@ mod tests {
 	use super::*;
 
 	use support::{assert_ok, impl_outer_origin, parameter_types};
-	use runtime_io::with_externalities;
 	use primitives::H256;
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
 	use sr_primitives::{
-		Perbill, traits::{BlakeTwo256, OnInitialize, OnFinalize, IdentityLookup}, testing::Header
+		set_and_run_with_externalities, Perbill,
+		traits::{BlakeTwo256, OnInitialize, OnFinalize, IdentityLookup}, testing::Header,
 	};
 
 	impl_outer_origin! {
@@ -680,7 +680,7 @@ mod tests {
 
 	#[test]
 	fn it_works_for_optional_value() {
-		with_externalities(&mut new_test_ext(), || {
+		set_and_run_with_externalities(&mut new_test_ext(), || {
 			// Check that GenesisBuilder works properly.
 			assert_eq!(Example::dummy(), Some(42));
 
@@ -701,7 +701,7 @@ mod tests {
 
 	#[test]
 	fn it_works_for_default_value() {
-		with_externalities(&mut new_test_ext(), || {
+		set_and_run_with_externalities(&mut new_test_ext(), || {
 			assert_eq!(Example::foo(), 24);
 			assert_ok!(Example::accumulate_foo(Origin::signed(1), 1));
 			assert_eq!(Example::foo(), 25);
@@ -710,7 +710,7 @@ mod tests {
 
 	#[test]
 	fn signed_ext_watch_dummy_works() {
-		with_externalities(&mut new_test_ext(), || {
+		set_and_run_with_externalities(&mut new_test_ext(), || {
 			let call = <Call<Test>>::set_dummy(10);
 			let info = DispatchInfo::default();
 

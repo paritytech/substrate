@@ -3796,12 +3796,12 @@ dependencies = [
 name = "sr-io"
 version = "2.0.0"
 dependencies = [
- "environmental 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "hash-db 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "libsecp256k1 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc_version 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-std 2.0.0",
+ "substrate-externalities 2.0.0",
  "substrate-primitives 2.0.0",
  "substrate-state-machine 2.0.0",
  "substrate-trie 2.0.0",
@@ -3825,6 +3825,7 @@ dependencies = [
  "sr-io 2.0.0",
  "sr-std 2.0.0",
  "substrate-application-crypto 2.0.0",
+ "substrate-externalities 2.0.0",
  "substrate-offchain 2.0.0",
  "substrate-primitives 2.0.0",
 ]
@@ -4367,6 +4368,7 @@ dependencies = [
  "pretty_assertions 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.101 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 2.0.0",
+ "sr-primitives 2.0.0",
  "srml-support 2.0.0",
  "substrate-inherents 2.0.0",
  "substrate-primitives 2.0.0",
@@ -4938,6 +4940,7 @@ dependencies = [
  "sr-io 2.0.0",
  "sr-version 2.0.0",
  "substrate-client 2.0.0",
+ "substrate-externalities 2.0.0",
  "substrate-offchain 2.0.0",
  "substrate-panic-handler 2.0.0",
  "substrate-primitives 2.0.0",
@@ -4955,6 +4958,7 @@ dependencies = [
 name = "substrate-externalities"
 version = "2.0.0"
 dependencies = [
+ "environmental 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "primitive-types 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-std 2.0.0",
  "substrate-primitives-storage 2.0.0",

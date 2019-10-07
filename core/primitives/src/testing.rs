@@ -132,7 +132,7 @@ impl crate::traits::BareCryptoStore for KeyStore {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{sr25519, traits::BareCryptoStore};
+	use crate::sr25519;
 	use crate::testing::{ED25519, SR25519};
 
 
