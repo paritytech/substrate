@@ -42,7 +42,7 @@ use client::backend::NewBlockState;
 use client::blockchain::{well_known_cache_keys, HeaderBackend};
 use client::{ForkBlocks, ExecutionStrategies};
 use client::backend::{StorageCollection, ChildStorageCollection};
-use client::error::Result as ClientResult;
+use client::error::{Result as ClientResult, Error as ClientError};
 use codec::{Decode, Encode};
 use hash_db::{Hasher, Prefix};
 use kvdb::{KeyValueDB, DBTransaction};
@@ -417,7 +417,7 @@ impl<Block: BlockT> HeaderMetadata<Block> for BlockchainDb<Block> {
 					header_metadata.clone(),
 				);
 				header_metadata
-			}).ok_or(client::error::Error::UnknownBlock("header not found in db".to_owned()))
+			}).ok_or(ClientError::UnknownBlock(format!("header not found in db: {}", hash)))
 		})
 	}
 
@@ -2220,6 +2220,40 @@ mod tests {
 			assert_eq!(lca.hash, a2);
 			assert_eq!(lca.number, 2);
 		}
+	}
+
+	#[test]
+	fn test_tree_route_regression() {
+		// NOTE: this is a test for a regression introduced in #3665, the result
+		// of tree_route would be erroneously computed, since it was taking into
+		// account the `ancestor` in `CachedHeaderMetadata` for the comparison.
+		// in this test we simulate the same behavior with the side-effect
+		// triggering the issue being eviction of a previously fetched record
+		// from the cache, therefore this test is dependent on the LRU cache
+		// size for header metadata, which is currently set to 5000 elements.
+		let backend = Backend::<Block>::new_test(10000, 10000);
+		let blockchain = backend.blockchain();
+
+		let genesis = insert_header(&backend, 0, Default::default(), Vec::new(), Default::default());
+
+		let block100 = (1..=100).fold(genesis, |parent, n| {
+			insert_header(&backend, n, parent, Vec::new(), Default::default())
+		});
+
+		let block7000 = (101..=7000).fold(block100, |parent, n| {
+			insert_header(&backend, n, parent, Vec::new(), Default::default())
+		});
+
+		// This will cause the ancestor of `block100` to be set to `genesis` as a side-effect.
+		lowest_common_ancestor(blockchain, genesis, block100).unwrap();
+
+		// While traversing the tree we will have to do 6900 calls to
+		// `header_metadata`, which will make sure we will exhaust our cache
+		// which only takes 5000 elements. In particular, the `CachedHeaderMetadata` struct for
+		// block #100 will be evicted and will get a new value (with ancestor set to its parent).
+		let tree_route = tree_route(blockchain, block100, block7000).unwrap();
+
+		assert!(tree_route.retracted().is_empty());
 	}
 
 	#[test]

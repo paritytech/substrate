@@ -115,10 +115,11 @@ impl<H, N, V> ForkTree<H, N, V> where
 
 			// we found the deepest ancestor of the finalized block, so we prune
 			// out any children that don't include the finalized block.
-			root.children.retain(|node| {
+			let children = std::mem::replace(&mut root.children, Vec::new());
+			root.children = children.into_iter().filter(|node| {
 				node.number == *number && node.hash == *hash ||
 					node.number < *number && is_descendent_of(&node.hash, hash).unwrap_or(false)
-			});
+			}).take(1).collect();
 
 			self.roots = vec![root];
 		}

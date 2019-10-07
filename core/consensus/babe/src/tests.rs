@@ -625,7 +625,7 @@ fn importing_epoch_change_block_prunes_tree() {
 		};
 
 		let mut proposer = environ.init(&parent_header).unwrap();
-		let parent_pre_digest = find_pre_digest::<Block>(&parent_header).unwrap();
+		let parent_pre_digest = find_pre_digest(&parent_header).unwrap();
 
 		let pre_digest = sr_primitives::generic::Digest {
 			logs: vec![

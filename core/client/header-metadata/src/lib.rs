@@ -122,7 +122,7 @@ pub fn tree_route<Block: BlockT, T: HeaderMetadata<Block>>(
 
 	// numbers are equal now. walk backwards until the block is the same
 
-	while to != from {
+	while to.hash != from.hash {
 		to_branch.push(HashAndNumber {
 			number: to.number,
 			hash: to.hash,
@@ -257,7 +257,7 @@ impl<Block: BlockT> HeaderMetadata<Block> for HeaderMetadataCache<Block> {
 }
 
 /// Cached header metadata. Used to efficiently traverse the tree.
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct CachedHeaderMetadata<Block: BlockT> {
 	/// Hash of the header.
 	pub hash: Block::Hash,
