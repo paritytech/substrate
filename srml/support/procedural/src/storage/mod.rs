@@ -159,7 +159,9 @@ pub struct StorageLineDefExt {
 	default_value: Option<syn::Expr>,
 	storage_type: StorageLineTypeDef,
 	doc_attrs: Vec<syn::Meta>,
+	/// Either the type stored in storage or wrapped in an Option.
 	query_type: syn::Type,
+	/// The type stored in storage.
 	value_type: syn::Type,
 	storage_struct: proc_macro2::TokenStream,
 	optional_storage_runtime_comma: Option<proc_macro2::TokenStream>,
