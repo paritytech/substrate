@@ -196,10 +196,11 @@ decl_module! {
 }
 
 decl_event!(
-	pub enum Event<T>
-		where <T as system::Trait>::AccountId,
-		      <T as Trait>::Balance,
-		      <T as Trait>::AssetId {
+	pub enum Event<T> where
+		<T as system::Trait>::AccountId,
+		<T as Trait>::Balance,
+		<T as Trait>::AssetId,
+	{
 		/// Some assets were issued.
 		Issued(AssetId, AccountId, Balance),
 		/// Some assets were transferred.
