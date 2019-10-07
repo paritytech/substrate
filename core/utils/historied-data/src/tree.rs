@@ -482,23 +482,11 @@ impl TestStates {
 #[cfg_attr(any(test, feature = "test"), derive(PartialEq))]
 pub struct History<V>(Vec<HistoryBranch<V>>);
 
-#[derive(Debug, Clone)]
-#[cfg_attr(any(test, feature = "test"), derive(PartialEq))]
-pub struct HistoryWithDefault<V>(History<V>, Option<V>);
-
-
 impl<V> Default for History<V> {
 	fn default() -> Self {
 		History(Vec::new())
 	}
 }
-
-impl<V> Default for HistoryWithDefault<V> {
-	fn default() -> Self {
-		HistoryWithDefault(History::default(), None)
-	}
-}
-
 
 #[derive(Debug, Clone)]
 #[cfg_attr(any(test, feature = "test"), derive(PartialEq))]
@@ -717,46 +705,6 @@ impl<V> History<V> {
 	}
 
 }
-
-impl<V> HistoryWithDefault<V> {
-
-	/// See `set` for History.
-	pub fn set<S, I, BI>(&mut self, state: S, value: V) 
-		where
-			S: BranchesStateTrait<bool, I, BI>,
-			I: Copy + Eq + TryFrom<usize> + TryInto<usize>,
-			BI: Copy + Eq + TryFrom<usize> + TryInto<usize>,
-	{
-		self.0.set(state, value)
-	}
-
-	/// See `get` for History.
-	pub fn get<I, BI, S> (&self, state: S) -> Option<&V> 
-		where
-			S: BranchesStateTrait<bool, I, BI>,
-			I: Copy + Eq + TryFrom<usize> + TryInto<usize>,
-			BI: Copy + Eq + TryFrom<usize> + TryInto<usize>,
-	{
-		let result = self.0.get(state);
-		if result.is_none() {
-			self.1.as_ref()
-		} else {
-			result
-		}
-	}
-
-	/// See `gc` for History.
-	pub fn gc<IT, S, I>(&mut self, states: IT) -> PruneResult
-		where
-			IT: Iterator<Item = (S, I)>,
-			S: BranchStateTrait<bool, I>,
-			I: Copy + Eq + TryFrom<usize> + TryInto<usize>,
-	{
-		self.0.gc(states)
-	}
-
-}
-
 
 impl<'a, F: SerializedConfig> Serialized<'a, F> {
 
