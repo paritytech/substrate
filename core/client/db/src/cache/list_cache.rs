@@ -1514,7 +1514,7 @@ pub mod tests {
 				.with_header(fork_header(1, 2, 4))
 				.with_header(fork_header(1, 2, 5))
 				.with_header(fork_header(2, 4, 5)),
-			1024, correct_id(1)
+			PruningStrategy::ByDepth(1024), correct_id(1)
 		);
 
 		// when 5 is reverted: entry 5 is truncated
