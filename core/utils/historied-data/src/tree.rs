@@ -276,7 +276,7 @@ impl Default for TestStates {
 
 #[derive(Debug, Clone)]
 #[cfg_attr(any(test, feature = "test"), derive(PartialEq, Eq))]
-pub struct StatesBranch {
+struct StatesBranch {
 	// this is the key (need to growth unless full gc (can still have
 	// content pointing to it even if it seems safe to reuse a previously
 	// use ix).
@@ -293,7 +293,6 @@ pub struct BranchStatesRef {
 	pub branch_index: u64,
 	pub state: BranchStateRef,
 }
-
 
 #[derive(Clone)]
 /// Reference to state to use for query updates.
