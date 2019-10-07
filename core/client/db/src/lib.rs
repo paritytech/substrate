@@ -524,7 +524,10 @@ where Block: BlockT<Hash=H256>,
 		// Currently cache isn't implemented on full nodes.
 	}
 
-	fn update_db_storage(&mut self, update: PrefixedMemoryDB<Blake2Hasher>) -> ClientResult<()> {
+	fn update_db_storage(
+		&mut self,
+		update: (PrefixedMemoryDB<Blake2Hasher>, Vec<(Vec<u8>, Option<Vec<u8>>)>),
+	) -> ClientResult<()> {
 		self.db_updates = update;
 		Ok(())
 	}
