@@ -35,6 +35,8 @@ use std::{
 	str::FromStr,
 };
 
+use subhd::{HDDevice, HDwallet};
+
 mod vanity;
 
 trait Crypto: Sized {
@@ -145,6 +147,8 @@ where
 	if let Some(network) = maybe_network {
 		set_default_ss58_version(network);
 	}
+	let dev = HDDevice;
+
 	match matches.subcommand() {
 		("generate", Some(matches)) => {
 			let mnemonic = generate_mnemonic(matches);
@@ -208,6 +212,129 @@ where
 			let extrinsic = create_extrinsic(function, index, signer, genesis_hash);
 
 			print_extrinsic(extrinsic);
+		}
+		("hard-sign", Some(matches)) => {
+			let mut message = vec![];
+			stdin().lock().read_to_end(&mut message).expect("Error reading from stdin");
+			if matches.is_present("hex") {
+				message = hex::decode(&message).expect("Invalid hex in message");
+				println!("message {:#?}", message);
+			}
+			let sig = dev.hd_sign(&message);
+			match sig {
+    			Ok(v) => {
+       				println!("signature: {:?}", v);
+   				 }
+   				 Err(e) => {
+       				 println!("sign error: {:?}", e);
+    			}
+			}	 
+		}
+		("hard-format", Some(_matches)) => {
+			match  dev.hd_format() {
+    			Ok(_v) => {
+       				println!("format ok");
+   				 }
+   				 Err(e) => {
+       				 println!("format error: {:?}", e);
+    			}
+			}	 
+		}
+		("hard-gen", Some(_matches)) => {
+			 match dev.hd_generate() {
+    			Ok(v) => {
+       				println!("seed: {}",HDDevice::to_hex(&dev,&v));
+   				 }
+   				 Err(e) => {
+       				 println!("generate error: {:?}", e);
+    			}
+			}	 
+		}
+		("hard-getpub", Some(_matches)) => {
+			match dev.hd_getpub() {
+    			Ok(v) => {
+       				println!("address: 0x{}",v);
+   				 }
+   				 Err(e) => {
+       				 println!("generate error: {:?}", e);
+    			}
+			}
+			let pk:[u8;32] = dev.hd_getpub().unwrap().into();
+			println!("public: 0x{}",HDDevice::to_hex(&dev,&pk));
+		}
+		("hard-import", Some(matches)) => {
+			let mut seed = vec![];
+			stdin().lock().read_to_end(&mut seed).expect("Error reading from stdin");
+			if matches.is_present("hex") {
+				seed = hex::decode(&seed).expect("Invalid hex in message");
+				println!("seed {:#?}", seed);
+			}
+			match dev.hd_import(&seed) {
+    			Ok(_v) => {
+       				println!("import success!");
+   				 }
+   				 Err(e) => {
+       				 println!("import error: {:?}", e);
+    			}
+			}
+		}
+		("hard-transfer", Some(matches)) => {
+			let to = matches.value_of("to")
+				.expect("parameter is required; thus it can't be None; qed");
+			let to = sr25519::Public::from_string(to).ok().or_else(||
+				sr25519::Pair::from_string(to, password).ok().map(|p| p.public())
+			).expect("Invalid 'to' URI; expecting either a secret URI or a public URI.");
+
+			let amount = matches.value_of("amount")
+				.expect("parameter is required; thus it can't be None; qed");
+			let amount = str::parse::<Balance>(amount)
+				.expect("Invalid 'amount' parameter; expecting an integer.");
+
+			let index = matches.value_of("index")
+				.expect("parameter is required; thus it can't be None; qed");
+			let index = str::parse::<Index>(index)
+				.expect("Invalid 'index' parameter; expecting an integer.");
+
+			let function = Call::Balances(BalancesCall::transfer(to.into(), amount));
+			let genesis_hash: Hash = match matches.value_of("genesis").unwrap_or("alex") {
+				"elm" => hex!["10c08714a10c7da78f40a60f6f732cf0dba97acfb5e2035445b032386157d5c3"].into(),
+				"alex" => hex!["dcd1346701ca8396496e52aa2785b1748deb6db09551b72159dcb3e08991025b"].into(),
+				h => hex::decode(h).ok().and_then(|x| Decode::decode(&mut &x[..]).ok())
+					.expect("Invalid genesis hash or unrecognised chain identifier"),
+			};
+			println!("Using a genesis hash of {}", HexDisplay::from(&genesis_hash.as_ref()));
+			
+			let extra = |i: Index, f: Balance| {
+				(
+					system::CheckVersion::<Runtime>::new(),
+					system::CheckGenesis::<Runtime>::new(),
+					system::CheckEra::<Runtime>::from(Era::Immortal),
+					system::CheckNonce::<Runtime>::from(i),
+					system::CheckWeight::<Runtime>::new(),
+					balances::TakeFees::<Runtime>::from(f),
+					Default::default(),
+				)
+			};//just let it work first
+			let raw_payload = SignedPayload::from_raw(
+				function,
+				extra(index, 0),
+				(VERSION.spec_version as u32, genesis_hash, genesis_hash, (), (), (), ()),
+			);
+			let signature = raw_payload.using_encoded(|payload| {
+				println!("Signing {}", HexDisplay::from(&payload));
+				dev.hd_sign(payload)
+			});
+			let (function, extra, _) = raw_payload.deconstruct();
+			println!("signature: {:?}",signature.clone().unwrap());
+			let public_key = dev.hd_getpub().unwrap();
+			let extrinsic = UncheckedExtrinsic::new_signed(
+				function,
+				public_key.into(),
+				signature.unwrap().into(),
+				extra,
+			);
+
+			println!("extrinsic: 0x{}", hex::encode(&extrinsic.encode()));
 		}
 		_ => print_usage(&matches),
 	}
