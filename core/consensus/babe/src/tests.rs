@@ -736,3 +736,43 @@ fn importing_epoch_change_block_prunes_tree() {
 		epoch_changes.lock().tree().iter().map(|(h, _, _)| h).any(|h| fork_3.contains(h)),
 	);
 }
+
+#[test]
+#[should_panic]
+fn verify_slots_are_strictly_increasing() {
+	let mut net = BabeTestNet::new(1);
+
+	let peer = net.peer(0);
+	let data = peer.data.as_ref().expect("babe link set up during initialization");
+
+	let client = peer.client().as_full().expect("Only full clients are used in tests").clone();
+	let mut block_import = data.block_import.lock().take().expect("import set up during init");
+
+	let mut proposer_factory = DummyFactory {
+		client: client.clone(),
+		config: data.link.config.clone(),
+		epoch_changes: data.link.epoch_changes.clone(),
+		mutator: Arc::new(|_, _| ()),
+	};
+
+	let genesis_header = client.header(&BlockId::Number(0)).unwrap().unwrap();
+
+	// we should have no issue importing this block
+	let b1 = propose_and_import_block(
+		&genesis_header,
+		Some(999),
+		&mut proposer_factory,
+		&mut block_import,
+	);
+
+	let b1 = client.header(&BlockId::Hash(b1)).unwrap().unwrap();
+
+	// we should fail to import this block since the slot number didn't increase.
+	// we will panic due to the `PanickingBlockImport` defined above.
+	propose_and_import_block(
+		&b1,
+		Some(999),
+		&mut proposer_factory,
+		&mut block_import,
+	);
+}
