@@ -1,6 +1,6 @@
 use primitives::{Pair, Public};
 use node_template_runtime::{
-	AccountId, AuraConfig, BalancesConfig, GenesisConfig,
+	AuraId, AccountId, AuraConfig, BalancesConfig, GenesisConfig,
 	SudoConfig, IndicesConfig, SystemConfig, WASM_BINARY, 
 };
 use aura_primitives::sr25519::AuthorityPair as AuraPair;
