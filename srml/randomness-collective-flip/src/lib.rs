@@ -16,9 +16,10 @@
 
 //! # Randomness Module
 //!
-//! The Randomness module provides a [`random`](./struct.Module.html#method.random) function that
-//! generates low-influence random values based on the block hashes from the previous 81 blocks.
-//! Low-influence randomness can be useful when defending against relatively weak adversaries.
+//! The Randomness Collective Flip module provides a [`random`](./struct.Module.html#method.random)
+//! function that generates low-influence random values based on the block hashes from the previous
+//! 81 blocks. Low-influence randomness can be useful when defending against relatively weak
+//! adversaries.
 //!
 //! ## Public Functions
 //!
@@ -28,7 +29,8 @@
 //!
 //! ### Prerequisites
 //!
-//! Import the Randomness module and derive your module's configuration trait from the system trait.
+//! Import the Randomness Collective Flip module and derive your module's configuration trait from
+//! the system trait.
 //!
 //! ### Example - Get random seed for the current block
 //!
@@ -40,7 +42,7 @@
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 //! 		pub fn random_module_example(origin) -> Result {
-//! 			let _random_seed = <srml_randomness::Module<T>>::random_seed();
+//! 			let _random_seed = <srml_randomness_collective_flip::Module<T>>::random_seed();
 //! 			Ok(())
 //! 		}
 //! 	}
@@ -57,9 +59,11 @@ use safe_mix::TripletMix;
 use codec::Encode;
 use system::Trait;
 
+const RANDOM_MATERIAL_LEN: u32 = 81;
+
 fn block_number_to_index<T: Trait>(block_number: T::BlockNumber) -> usize {
 	// on_initialize is called on the first block after genesis
-	let index = (block_number - 1.into()) % 81.into();
+	let index = (block_number - 1.into()) % RANDOM_MATERIAL_LEN.into();
 	index.try_into().ok().expect("Something % 81 is always smaller than usize; qed")
 }
 
@@ -68,7 +72,7 @@ decl_module! {
 		fn on_initialize(block_number: T::BlockNumber) {
 			let parent_hash = <system::Module<T>>::parent_hash();
 
-			<RandomMaterial<T>>::mutate(|ref mut values| if values.len() < 81 {
+			<RandomMaterial<T>>::mutate(|ref mut values| if values.len() < RANDOM_MATERIAL_LEN as usize {
 				values.push(parent_hash)
 			} else {
 				let index = block_number_to_index::<T>(block_number);
@@ -144,7 +148,7 @@ impl<T: Trait> Module<T> {
 			hash_series.iter()
 				.cycle()
 				.skip(index)
-				.take(81)
+				.take(RANDOM_MATERIAL_LEN as usize)
 				.enumerate()
 				.map(|(i, h)| (i as i8, subject, h).using_encoded(T::Hashing::hash))
 				.triplet_mix()
