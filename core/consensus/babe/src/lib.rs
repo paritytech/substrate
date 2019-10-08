@@ -795,6 +795,31 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 					 header has been already verified; qed");
 		let slot_number = pre_digest.slot_number();
 
+		let parent_hash = *block.header.parent_hash();
+		let parent_header = self.client.header(&BlockId::Hash(parent_hash))
+			.map_err(|e| ConsensusError::ChainLookup(e.to_string()))?
+			.ok_or_else(|| ConsensusError::ChainLookup(babe_err!(
+				"Parent ({}) of {} unavailable. Cannot import",
+				parent_hash,
+				hash
+			)))?;
+
+		let parent_slot = find_pre_digest::<Block::Header>(&parent_header)
+			.map(|d| d.slot_number())
+			.expect("parent is non-genesis; valid BABE headers contain a pre-digest; \
+					header has already been verified; qed");
+
+		// make sure that slot number is strictly increasing
+		if slot_number <= parent_slot {
+			return Err(
+				ConsensusError::ClientImport(babe_err!(
+					"Slot number must increase: parent slot: {}, this slot: {}",
+					parent_slot,
+					slot_number
+				))
+			);
+		}
+
 		let mut epoch_changes = self.epoch_changes.lock();
 
 		// check if there's any epoch change expected to happen at this slot.
@@ -803,20 +828,6 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 		//
 		// also provides the total weight of the chain, including the imported block.
 		let (epoch, first_in_epoch, parent_weight) = {
-			let parent_hash = *block.header.parent_hash();
-			let parent_header = self.client.header(&BlockId::Hash(parent_hash))
-				.map_err(|e| ConsensusError::ChainLookup(e.to_string()))?
-				.ok_or_else(|| ConsensusError::ChainLookup(babe_err!(
-					"Parent ({}) of {} unavailable. Cannot import",
-					parent_hash,
-					hash
-				)))?;
-
-			let parent_slot = find_pre_digest::<Block::Header>(&parent_header)
-				.map(|d| d.slot_number())
-				.expect("parent is non-genesis; valid BABE headers contain a pre-digest; \
-						 header has already been verified; qed");
-
 			let parent_weight = if *parent_header.number() == Zero::zero() {
 				0
 			} else {
