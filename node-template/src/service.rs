@@ -3,8 +3,6 @@
 use std::sync::Arc;
 use std::time::Duration;
 use substrate_client::LongestChain;
-use babe;
-use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider};
 use futures::prelude::*;
 use node_template_runtime::{self, GenesisConfig, opaque::Block, RuntimeApi};
 use substrate_service::{error::{Error as ServiceError}, AbstractService, Configuration, ServiceBuilder};
