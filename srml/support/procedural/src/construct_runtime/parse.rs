@@ -21,7 +21,7 @@ pub struct RuntimeDefinition {
 	pub enum_token: Token![enum],
 	pub name: Ident,
 	pub where_section: WhereSection,
-	pub modules: ext::Braces<ext::Punctuated<DeclModulesLine, Token![,]>>,
+	pub modules: ext::Braces<ext::Punctuated<ModuleDeclaration, Token![,]>>,
 }
 
 #[derive(Parse, ToTokens, Debug)]
@@ -41,7 +41,7 @@ pub struct WhereSection {
 }
 
 #[derive(Parse, ToTokens, Debug)]
-pub struct DeclModulesLine {
+pub struct ModuleDeclaration {
 	pub name: Ident,
 	pub name_colon: Token![:],
 	pub module: Ident,
