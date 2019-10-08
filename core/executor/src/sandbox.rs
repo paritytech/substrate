@@ -586,13 +586,26 @@ impl<FR> Store<FR> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use primitives::{Blake2Hasher};
-	use crate::wasm_executor::WasmExecutor;
+	use primitives::{Blake2Hasher, traits::Externalities};
+	use crate::wasm_runtime::WasmRuntime;
+	use crate::wasmi_execution;
 	use state_machine::TestExternalities as CoreTestExternalities;
 	use wabt;
 	use runtime_test::WASM_BINARY;
 
 	type TestExternalities<H> = CoreTestExternalities<H, u64>;
+
+	fn call_wasm<E: Externalities<Blake2Hasher>>(
+		ext: &mut E,
+		heap_pages: u64,
+		code: &[u8],
+		method: &str,
+		data: &[u8],
+	) -> Result<Vec<u8>> {
+		let mut instance = wasmi_execution::create_instance(ext, code, heap_pages)
+			.map_err(|err| err.to_string())?;
+		instance.call(ext, method, data)
+	}
 
 	#[test]
 	fn sandbox_should_work() {
@@ -621,7 +634,7 @@ mod tests {
 		"#).unwrap();
 
 		assert_eq!(
-			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_sandbox", &code).unwrap(),
+			call_wasm(&mut ext, 8, &test_code[..], "test_sandbox", &code).unwrap(),
 			vec![1],
 		);
 	}
@@ -642,7 +655,7 @@ mod tests {
 		"#).unwrap();
 
 		assert_eq!(
-			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_sandbox", &code).unwrap(),
+			call_wasm(&mut ext, 8, &test_code[..], "test_sandbox", &code).unwrap(),
 			vec![0],
 		);
 	}
@@ -662,7 +675,7 @@ mod tests {
 		)
 		"#).unwrap();
 
-		let res = WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_exhaust_heap", &code);
+		let res = call_wasm(&mut ext, 8, &test_code[..], "test_exhaust_heap", &code);
 		assert_eq!(res.is_err(), true);
 		if let Err(err) = res {
 			assert_eq!(
@@ -708,7 +721,7 @@ mod tests {
 		"#).unwrap();
 
 		assert_eq!(
-			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_sandbox", &code).unwrap(),
+			call_wasm(&mut ext, 8, &test_code[..], "test_sandbox", &code).unwrap(),
 			vec![1],
 		);
 	}
@@ -742,7 +755,7 @@ mod tests {
 		"#).unwrap();
 
 		assert_eq!(
-			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_sandbox_args", &code).unwrap(),
+			call_wasm(&mut ext, 8, &test_code[..], "test_sandbox_args", &code).unwrap(),
 			vec![1],
 		);
 	}
@@ -764,7 +777,7 @@ mod tests {
 		"#).unwrap();
 
 		assert_eq!(
-			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_sandbox_return_val", &code).unwrap(),
+			call_wasm(&mut ext, 8, &test_code[..], "test_sandbox_return_val", &code).unwrap(),
 			vec![1],
 		);
 	}
@@ -784,7 +797,7 @@ mod tests {
 		"#).unwrap();
 
 		assert_eq!(
-			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_sandbox_instantiate", &code).unwrap(),
+			call_wasm(&mut ext, 8, &test_code[..], "test_sandbox_instantiate", &code).unwrap(),
 			vec![1],
 		);
 	}
@@ -798,7 +811,7 @@ mod tests {
 		let code = &[0, 0, 0, 0, 1, 0, 0, 0];
 
 		assert_eq!(
-			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_sandbox_instantiate", code).unwrap(),
+			call_wasm(&mut ext, 8, &test_code[..], "test_sandbox_instantiate", code).unwrap(),
 			vec![1],
 		);
 	}
@@ -821,7 +834,7 @@ mod tests {
 		"#).unwrap();
 
 		assert_eq!(
-			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_sandbox_instantiate", &code).unwrap(),
+			call_wasm(&mut ext, 8, &test_code[..], "test_sandbox_instantiate", &code).unwrap(),
 			vec![0],
 		);
 	}
@@ -845,7 +858,7 @@ mod tests {
 		"#).unwrap();
 
 		assert_eq!(
-			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_sandbox_instantiate", &code).unwrap(),
+			call_wasm(&mut ext, 8, &test_code[..], "test_sandbox_instantiate", &code).unwrap(),
 			vec![2],
 		);
 	}

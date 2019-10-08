@@ -322,8 +322,19 @@ mod tests {
 	use runtime_io::{with_externalities, TestExternalities};
 	use substrate_test_runtime_client::{AccountKeyring, Sr25519Keyring};
 	use crate::{Header, Transfer, WASM_BINARY};
-	use primitives::{Blake2Hasher, map};
-	use substrate_executor::WasmExecutor;
+	use primitives::{Blake2Hasher, NeverNativeValue, map, traits::CodeExecutor};
+	use substrate_executor::{NativeExecutor, WasmExecutionMethod, native_executor_instance};
+
+	// Declare an instance of the native executor dispatch for the test runtime.
+	native_executor_instance!(
+		NativeDispatch,
+		crate::api::dispatch,
+		crate::native_version
+	);
+
+	fn executor() -> NativeExecutor<NativeDispatch> {
+		NativeExecutor::new(WasmExecutionMethod::Interpreted, None)
+	}
 
 	fn new_test_ext() -> TestExternalities<Blake2Hasher> {
 		let authorities = vec![
@@ -331,13 +342,19 @@ mod tests {
 			Sr25519Keyring::Bob.to_raw_public(),
 			Sr25519Keyring::Charlie.to_raw_public()
 		];
-		TestExternalities::new((map![
-			twox_128(b"latest").to_vec() => vec![69u8; 32],
-			twox_128(b"sys:auth").to_vec() => authorities.encode(),
-			blake2_256(&AccountKeyring::Alice.to_raw_public().to_keyed_vec(b"balance:")).to_vec() => {
-				vec![111u8, 0, 0, 0, 0, 0, 0, 0]
-			}
-		], map![]))
+		TestExternalities::new_with_code(
+			WASM_BINARY,
+			(
+				map![
+					twox_128(b"latest").to_vec() => vec![69u8; 32],
+					twox_128(b"sys:auth").to_vec() => authorities.encode(),
+					blake2_256(&AccountKeyring::Alice.to_raw_public().to_keyed_vec(b"balance:")).to_vec() => {
+						vec![111u8, 0, 0, 0, 0, 0, 0, 0]
+					}
+				],
+				map![],
+			)
+		)
 	}
 
 	fn block_import_works<F>(block_executor: F) where F: Fn(Block, &mut TestExternalities<Blake2Hasher>) {
@@ -370,7 +387,13 @@ mod tests {
 	#[test]
 	fn block_import_works_wasm() {
 		block_import_works(|b, ext| {
-			WasmExecutor::new().call(ext, 8, &WASM_BINARY, "Core_execute_block", &b.encode()).unwrap();
+			executor().call::<_, NeverNativeValue, fn() -> _>(
+				ext,
+				"Core_execute_block",
+				&b.encode(),
+				false,
+				None,
+			).0.unwrap();
 		})
 	}
 
@@ -458,7 +481,13 @@ mod tests {
 	#[test]
 	fn block_import_with_transaction_works_wasm() {
 		block_import_with_transaction_works(|b, ext| {
-			WasmExecutor::new().call(ext, 8, &WASM_BINARY, "Core_execute_block", &b.encode()).unwrap();
+			executor().call::<_, NeverNativeValue, fn() -> _>(
+				ext,
+				"Core_execute_block",
+				&b.encode(),
+				false,
+				None,
+			).0.unwrap();
 		})
 	}
 }
