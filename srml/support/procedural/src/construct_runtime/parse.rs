@@ -16,7 +16,7 @@ mod keyword {
 }
 
 #[derive(Parse, ToTokens, Debug)]
-struct RuntimeDefinition {
+pub struct RuntimeDefinition {
 	pub visibility_token: Token![pub],
 	pub enum_token: Token![enum],
 	pub name: Ident,
@@ -25,7 +25,7 @@ struct RuntimeDefinition {
 }
 
 #[derive(Parse, ToTokens, Debug)]
-struct WhereSection {
+pub struct WhereSection {
 	pub token: Token![where],
 	pub block_token: keyword::Block,
 	pub block_eq: Token![=],
@@ -41,7 +41,7 @@ struct WhereSection {
 }
 
 #[derive(Parse, ToTokens, Debug)]
-struct DeclModulesLine {
+pub struct DeclModulesLine {
 	pub name: Ident,
 	pub name_colon: Token![:],
 	pub module: Ident,
@@ -50,7 +50,7 @@ struct DeclModulesLine {
 }
 
 #[derive(Parse, ToTokens, Debug)]
-struct ModuleInstance {
+pub struct ModuleInstance {
 	pub colons: Token![::],
 	pub lt: Token![<],
 	pub name: Ident,
@@ -58,58 +58,34 @@ struct ModuleInstance {
 }
 
 #[derive(Parse, ToTokens, Debug)]
-struct ModuleDetails {
+pub struct ModuleDetails {
 	pub colons: Token![::],
-	pub entries: ext::Braces<ext::Punctuated<ModuleEntryWrapper, Token![,]>>
+	pub entries: ext::Braces<ext::Punctuated<ModuleEntryWrapper, Token![,]>>,
 }
 
 #[derive(ToTokens, Debug)]
-struct ModuleEntryWrapper {
+pub struct ModuleEntryWrapper {
 	pub inner: ModuleEntry,
 }
 
 impl Parse for ModuleEntryWrapper {
 	fn parse(input: ParseStream) -> Result<Self> {
-		ModuleEntry::parse(input).map(|inner| ModuleEntryWrapper { inner } ).map_err(|_| input.error("Expected `default` or module export name (e.g. Call, Event, etc.)"))
+		ModuleEntry::parse(input)
+			.map(|inner| ModuleEntryWrapper { inner })
+			.map_err(|_| input.error("Expected `default` or module export name (e.g. Call, Event, etc.)"))
 	}
 }
 
 #[derive(Parse, ToTokens, Debug)]
-enum ModuleEntry {
+pub enum ModuleEntry {
 	Default(Token![default]),
 	Part(ModulePart),
 }
 
 #[derive(Parse, ToTokens, Debug)]
-struct ModulePart {
+pub struct ModulePart {
 	pub name: Ident,
 	// This deviates from macro $( <$modules_generic:ident> )*
 	pub generics: ext::Opt<syn::Generics>,
 	pub args: ext::Opt<ext::Parens<ext::Punctuated<Ident, Token![,]>>>,
-}
-
-pub fn construct_runtime(input: TokenStream) -> TokenStream {
-	let definition = syn::parse_macro_input!(input as RuntimeDefinition);
-	let RuntimeDefinition {
-		name,
-		where_section: WhereSection {
-			block,
-			node_block,
-			unchecked_extrinsic,
-			..
-		},
-		..
-	} = definition;
-	quote!(
-		#[derive(Clone, Copy, PartialEq, Eq)]
-		#[cfg_attr(feature = "std", derive(Debug))]
-		pub struct #name;
-		impl $crate::sr_primitives::traits::GetNodeBlockType for #name {
-			type NodeBlock = #node_block;
-		}
-		impl $crate::sr_primitives::traits::GetRuntimeBlockType for #name {
-			type RuntimeBlock = #block;
-		}
-	)
-	.into()
 }
