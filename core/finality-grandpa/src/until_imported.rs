@@ -71,7 +71,10 @@ pub(crate) struct UntilImported<Block: BlockT, Status, I, M: BlockUntilImported<
 	inner: Fuse<I>,
 	ready: VecDeque<M::Blocked>,
 	check_pending: Interval,
-	pending: HashMap<Block::Hash, (Instant, Vec<M>)>,
+	/// Mapping block hashes to the point in time it was first encountered (Instant), nodes that have the corresponding
+	/// block (inferred by the fact that they send a message referencing it) and a list of Grandpa messages referencing
+	/// the block hash.
+	pending: HashMap<Block::Hash, (Instant, Vec<network::PeerId>, Vec<(M)>)>,
 	identifier: &'static str,
 }
 
@@ -122,7 +125,6 @@ impl<Block: BlockT, Status, I, M> Stream for UntilImported<Block, Status, I, M> 
 			match self.inner.poll()? {
 				Async::Ready(None) => return Ok(Async::Ready(None)),
 				Async::Ready(Some((sender, input))) => {
-					// TODO @mxinden: Do something with sender.
 
 					// new input: schedule wait of any parts which require
 					// blocks to be known.
@@ -131,11 +133,19 @@ impl<Block: BlockT, Status, I, M> Stream for UntilImported<Block, Status, I, M> 
 					M::schedule_wait(
 						input,
 						&self.status_check,
-						|target_hash, wait| pending
-							.entry(target_hash)
-							.or_insert_with(|| (Instant::now(), Vec::new()))
-							.1
-							.push(wait),
+						|target_hash, wait| {
+							let entry = pending
+								.entry(target_hash)
+								.or_insert_with(|| (Instant::now(), Vec::new(), Vec::new()));
+							// Given that we received the message from the sender, we expect to be able to download the
+							// referenced block from them later in case we don't already download it automatically from
+							// elsewhere.
+							// TODO: Can we get around the clone?
+							if let Some(sender) = sender.clone() {
+								entry.1.push(sender);
+							}
+							entry.2.push(wait);
+						} ,
 						|ready_item| ready.push_back(ready_item),
 					)?;
 				}
@@ -149,7 +159,7 @@ impl<Block: BlockT, Status, I, M> Stream for UntilImported<Block, Status, I, M> 
 				Ok(Async::Ready(None)) => return Ok(Async::Ready(None)),
 				Ok(Async::Ready(Some(notification))) => {
 					// new block imported. queue up all messages tied to that hash.
-					if let Some((_, messages)) = self.pending.remove(&notification.hash) {
+					if let Some((_, _, messages)) = self.pending.remove(&notification.hash) {
 						let canon_number = notification.header.number().clone();
 						let ready_messages = messages.into_iter()
 							.filter_map(|m| m.wait_completed(canon_number));
@@ -168,7 +178,7 @@ impl<Block: BlockT, Status, I, M> Stream for UntilImported<Block, Status, I, M> 
 
 		if update_interval {
 			let mut known_keys = Vec::new();
-			for (&block_hash, &mut (ref mut last_log, ref v)) in &mut self.pending {
+			for (&block_hash, &mut (ref mut last_log, ref _senders, ref v)) in &mut self.pending {
 				if let Some(number) = self.status_check.block_number(block_hash)? {
 					known_keys.push((block_hash, number));
 				} else {
@@ -183,7 +193,7 @@ impl<Block: BlockT, Status, I, M> Stream for UntilImported<Block, Status, I, M> 
 							v.len(),
 						);
 
-						// TODO: This seems like THE place to be!
+						// TODO: This seems like THE place to be! Pass the senders down to the network sync service.
 
 						*last_log = next_log;
 					}
@@ -191,7 +201,7 @@ impl<Block: BlockT, Status, I, M> Stream for UntilImported<Block, Status, I, M> 
 			}
 
 			for (known_hash, canon_number) in known_keys {
-				if let Some((_, pending_messages)) = self.pending.remove(&known_hash) {
+				if let Some((_, _, pending_messages)) = self.pending.remove(&known_hash) {
 					let ready_messages = pending_messages.into_iter()
 						.filter_map(|m| m.wait_completed(canon_number));
 
