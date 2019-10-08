@@ -1436,44 +1436,44 @@ fn apply_state_commit(
 	db: &Arc<dyn KeyValueDB>,
 	last_block: u64,
 ) -> Result<(), io::Error> {
+	apply_state_commit_inner(transaction, commit, db, last_block, None)
+}
+
+fn apply_state_commit_inner(
+	transaction: &mut DBTransaction,
+	commit: state_db::CommitSet<Vec<u8>>,
+	db: &Arc<dyn KeyValueDB>,
+	last_block: u64,
+	mut offstate_prune_key: state_db::OffstateChangeSetPrune,
+) -> Result<(), io::Error> {
 
 	for (key, o) in commit.offstate.iter() {
-		let mut ser = if let Some(stored) = db.get(columns::OFFSTATE, key)? {
-			Ser::from_vec(stored.to_vec())
+		let (mut ser, new) = if let Some(stored) = db.get(columns::OFFSTATE, key)? {
+			(Ser::from_vec(stored.to_vec()), false)
 		} else {
 			if o.is_some() {
-				Ser::default()
+				(Ser::default(), true)
 			} else {
 				break;
 			}
 		};
 		ser.push(last_block, o.as_ref().map(|v| v.as_slice()));
-		transaction.put(columns::OFFSTATE, &key[..], &ser.into_vec())
+		if let Some((block_prune, offstate_prune_keys)) = offstate_prune_key.as_mut() {
+			if !new && offstate_prune_keys.remove(key) {
+				match ser.prune(*block_prune) {
+					PruneResult::Cleared => transaction.delete(columns::OFFSTATE, &key),
+					PruneResult::Changed
+					| PruneResult::Unchanged => transaction.put(columns::OFFSTATE, &key[..], &ser.into_vec()),
+				}
+			} else {
+				transaction.put(columns::OFFSTATE, &key[..], &ser.into_vec())
+			}
+		} else {
+			transaction.put(columns::OFFSTATE, &key[..], &ser.into_vec())
+		}
 	}
-	for (key, val) in commit.data.inserted.into_iter() {
-		transaction.put(columns::STATE, &key[..], &val);
-	}
-	for key in commit.data.deleted.into_iter() {
-		transaction.delete(columns::STATE, &key[..]);
-	}
-	for (key, val) in commit.meta.inserted.into_iter() {
-		transaction.put(columns::STATE_META, &key[..], &val);
-	}
-	for key in commit.meta.deleted.into_iter() {
-		transaction.delete(columns::STATE_META, &key[..]);
-	}
-	Ok(())
-}
 
-fn apply_state_commit_canonical(
-	transaction: &mut DBTransaction,
-	commit: state_db::CommitSetCanonical<Vec<u8>>,
-	db: &Arc<dyn KeyValueDB>,
-	last_block: u64,
-) -> Result<(), io::Error> {
-	apply_state_commit(transaction, commit.0, db, last_block)?;
-
-	if let Some((block_prune, offstate_prune_key)) = commit.1 {
+	if let Some((block_prune, offstate_prune_key)) = offstate_prune_key {
 		// no need to into_iter
 		for key in offstate_prune_key.iter() {
 			// TODO EMCH should we prune less often (wait on pruning journals for instance)
@@ -1490,8 +1490,32 @@ fn apply_state_commit_canonical(
 				PruneResult::Unchanged => (),
 			}
 		}
+	
+	}
+
+	for (key, val) in commit.data.inserted.into_iter() {
+		transaction.put(columns::STATE, &key[..], &val);
+	}
+	for key in commit.data.deleted.into_iter() {
+		transaction.delete(columns::STATE, &key[..]);
+	}
+	for (key, val) in commit.meta.inserted.into_iter() {
+		transaction.put(columns::STATE_META, &key[..], &val);
+	}
+	for key in commit.meta.deleted.into_iter() {
+		transaction.delete(columns::STATE_META, &key[..]);
 	}
 	Ok(())
+}
+
+
+fn apply_state_commit_canonical(
+	transaction: &mut DBTransaction,
+	commit: state_db::CommitSetCanonical<Vec<u8>>,
+	db: &Arc<dyn KeyValueDB>,
+	last_block: u64,
+) -> Result<(), io::Error> {
+	apply_state_commit_inner(transaction, commit.0, db, last_block, commit.1)
 }
 
 impl<Block> client::backend::AuxStore for Backend<Block> where Block: BlockT<Hash=H256> {
