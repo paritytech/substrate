@@ -25,8 +25,7 @@ use rstd::{
 };
 use codec::{Encode, Decode};
 use crate::traits::{
-	SaturatedConversion, CheckedSub, CheckedAdd, Bounded, UniqueSaturatedInto,
-	Saturating, Zero, One,
+	SaturatedConversion, CheckedSub, CheckedAdd, Bounded, UniqueSaturatedInto, Saturating, Zero,
 };
 
 macro_rules! implement_per_thing {
@@ -1235,12 +1234,21 @@ pub mod big_num {
 	}
 
 	#[cfg(test)]
-	mod tests_big_num {
+	pub mod tests_big_num {
 		use super::*;
 		use rand::Rng;
+		use rstd::convert::TryInto;
+		#[cfg(feature = "bench")]
+		use test::Bencher;
 
 		// TODO move into a proper fuzzer #3745
 		const FUZZ_COUNT: usize = 100_000;
+
+		pub fn random_big_num(size: usize) -> Number {
+			let mut rng = rand::thread_rng();
+			let digits = (0..size).map(|_| rng.gen_range(0, Single::max_value())).collect();
+			Number { digits }
+		}
 
 		fn run_with_data_set<F>(
 			count: usize,
@@ -1254,13 +1262,10 @@ pub mod big_num {
 			let mut rng = rand::thread_rng();
 			for _ in 0..count {
 				let digits_len_1 = if exact { limbs_ub_1 } else { rng.gen_range(1, limbs_ub_1) };
-				let digits_1 = (0..digits_len_1)
-					.map(|_| rng.gen_range(0, Single::max_value())).collect();
 				let digits_len_2 = if exact { limbs_ub_2 } else { rng.gen_range(1, limbs_ub_2) };
-				let digits_2 = (0..digits_len_2)
-					.map(|_| rng.gen_range(0, Single::max_value())).collect();
-				let u = Number { digits: digits_1 };
-				let v = Number { digits: digits_2 };
+
+				let u = random_big_num(digits_len_1);
+				let v = random_big_num(digits_len_2);
 				assertion(u, v);
 			}
 		}
@@ -1530,13 +1535,77 @@ pub mod big_num {
 				}
 			})
 		}
-	}
 
-	#[cfg(feature = "bench")]
-	mod bench_big_num {
-		#![feature(test)]
-	}
+		#[cfg(feature = "bench")]
+		#[bench]
+		fn bench_addition_2_digit(bencher: &mut Bencher) {
+			let a = random_big_num(2);
+			let b = random_big_num(2);
+			bencher.iter(|| {
+				let _ = a.clone().add(b.clone());
+			});
+		}
 
+		#[cfg(feature = "bench")]
+		#[bench]
+		fn bench_addition_4_digit(bencher: &mut Bencher) {
+			let a = random_big_num(4);
+			let b = random_big_num(4);
+			bencher.iter(|| {
+				let _ = a.clone().add(b.clone());
+			});
+		}
+
+		#[cfg(feature = "bench")]
+		#[bench]
+		fn bench_subtraction_2_digit(bencher: &mut Bencher) {
+			let a = random_big_num(2);
+			let b = random_big_num(2);
+			bencher.iter(|| {
+				let _ = a.clone().sub(b.clone());
+			});
+		}
+
+		#[cfg(feature = "bench")]
+		#[bench]
+		fn bench_subtraction_4_digit(bencher: &mut Bencher) {
+			let a = random_big_num(4);
+			let b = random_big_num(4);
+			bencher.iter(|| {
+				let _ = a.clone().sub(b.clone());
+			});
+		}
+
+		#[cfg(feature = "bench")]
+		#[bench]
+		fn bench_multiplication_2_digit(bencher: &mut Bencher) {
+			let a = random_big_num(2);
+			let b = random_big_num(2);
+			bencher.iter(|| {
+				let _ = a.clone().mul(b.clone());
+			});
+		}
+
+		#[cfg(feature = "bench")]
+		#[bench]
+		fn bench_multiplication_4_digit(bencher: &mut Bencher) {
+			let a = random_big_num(4);
+			let b = random_big_num(4);
+			bencher.iter(|| {
+				let _ = a.clone().mul(b.clone());
+			});
+		}
+
+		#[cfg(feature = "bench")]
+		#[bench]
+		fn bench_division_4_digit(bencher: &mut Bencher) {
+			let a = random_big_num(4);
+			let b = random_big_num(2);
+			bencher.iter(|| {
+				let _ = a.clone().div(b.clone(), true);
+			});
+		}
+	}
 }
 
 /// Some helper functions to work with 128bit numbers. Note that the functionality provided here is
