@@ -65,7 +65,7 @@
 //!
 //! Import the System module and derive your module's configuration trait from the system trait.
 //!
-//! ### Example - Get random seed and extrinsic count for the current block
+//! ### Example - Get extrinsic count and parent hash for the current block
 //!
 //! ```
 //! use support::{decl_module, dispatch::Result};
@@ -77,8 +77,8 @@
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 //! 		pub fn system_module_example(origin) -> Result {
 //! 			let _sender = ensure_signed(origin)?;
-//! 			let _random_seed = <system::Module<T>>::random_seed();
 //! 			let _extrinsic_count = <system::Module<T>>::extrinsic_count();
+//! 			let _parent_hash = <system::Module<T>>::parent_hash();
 //! 			Ok(())
 //! 		}
 //! 	}
@@ -114,7 +114,6 @@ use support::{
 	decl_module, decl_event, decl_storage, decl_error, storage, Parameter,
 	traits::{Contains, Get},
 };
-use safe_mix::TripletMix;
 use codec::{Encode, Decode};
 
 #[cfg(any(feature = "std", test))]
@@ -389,9 +388,6 @@ decl_storage! {
 		pub BlockHash get(block_hash) build(|_| vec![(T::BlockNumber::zero(), hash69())]): map T::BlockNumber => T::Hash;
 		/// Extrinsics data for the current block (maps an extrinsic's index to its data).
 		ExtrinsicData get(extrinsic_data): map u32 => Vec<u8>;
-		/// Series of block headers from the last 81 blocks that acts as random seed material. This is arranged as a
-		/// ring buffer with the `i8` prefix being the index into the `Vec` of the oldest hash.
-		RandomMaterial get(random_material): (i8, Vec<T::Hash>);
 		/// The current block number being processed. Set by `execute_block`.
 		Number get(block_number) build(|_| 1.into()): T::BlockNumber;
 		/// Hash of the previous block.
@@ -641,12 +637,6 @@ impl<T: Trait> Module<T> {
 		<ParentHash<T>>::put(parent_hash);
 		<BlockHash<T>>::insert(*number - One::one(), parent_hash);
 		<ExtrinsicsRoot<T>>::put(txs_root);
-		<RandomMaterial<T>>::mutate(|&mut(ref mut index, ref mut values)| if values.len() < 81 {
-			values.push(parent_hash.clone())
-		} else {
-			values[*index as usize] = parent_hash.clone();
-			*index = (*index + 1) % 81;
-		});
 		<Events<T>>::kill();
 		EventCount::kill();
 		<EventTopics<T>>::remove_prefix(&());
@@ -735,69 +725,6 @@ impl<T: Trait> Module<T> {
 
 	/// Return the chain's current runtime version.
 	pub fn runtime_version() -> RuntimeVersion { T::Version::get() }
-
-	/// Get the basic random seed.
-	///
-	/// In general you won't want to use this, but rather `Self::random` which
-	/// allows you to give a subject for the random result and whose value will
-	/// be independently low-influence random from any other such seeds.
-	pub fn random_seed() -> T::Hash {
-		Self::random(&[][..])
-	}
-
-	/// Get a low-influence "random" value.
-	///
-	/// Being a deterministic block chain, real randomness is difficult to come
-	/// by. This gives you something that approximates it. `subject` is a
-	/// context identifier and allows you to get a different result to other
-	/// callers of this function; use it like `random(&b"my context"[..])`.
-	///
-	/// This is initially implemented through a low-influence "triplet mix"
-	/// convolution of previous block hash values. In the future it will be
-	/// generated from a secure verifiable random function (VRF).
-	///
-	/// ### Security Notes
-	///
-	/// This randomness uses a low-influence function, drawing upon the block
-	/// hashes from the previous 81 blocks. Its result for any given subject
-	/// will be known in advance by the block producer of this block (and,
-	/// indeed, anyone who knows the block's `parent_hash`). However, it is
-	/// mostly impossible for the producer of this block *alone* to influence
-	/// the value of this hash. A sizable minority of dishonest and coordinating
-	/// block producers would be required in order to affect this value. If that
-	/// is an insufficient security guarantee then two things can be used to
-	/// improve this randomness:
-	///
-	/// - Name, in advance, the block number whose random value will be used;
-	///   ensure your module retains a buffer of previous random values for its
-	///   subject and then index into these in order to obviate the ability of
-	///   your user to look up the parent hash and choose when to transact based
-	///   upon it.
-	/// - Require your user to first commit to an additional value by first
-	///   posting its hash. Require them to reveal the value to determine the
-	///   final result, hashing it with the output of this random function. This
-	///   reduces the ability of a cabal of block producers from conspiring
-	///   against individuals.
-	///
-	/// WARNING: Hashing the result of this function will remove any
-	/// low-influnce properties it has and mean that all bits of the resulting
-	/// value are entirely manipulatable by the author of the parent block, who
-	/// can determine the value of `parent_hash`.
-	pub fn random(subject: &[u8]) -> T::Hash {
-		let (index, hash_series) = <RandomMaterial<T>>::get();
-		if hash_series.len() > 0 {
-			// Always the case after block 1 is initialised.
-			hash_series.iter()
-				.cycle()
-				.skip(index as usize)
-				.take(81)
-				.enumerate()
-				.map(|(i, h)| (i as i8, subject, h).using_encoded(T::Hashing::hash))
-				.triplet_mix()
-		} else {
-			T::Hash::default()
-		}
-	}
 
 	/// Increment a particular account's nonce by 1.
 	pub fn inc_account_nonce(who: &T::AccountId) {

@@ -95,6 +95,7 @@ members = [
 	"srml/membership",
 	"srml/metadata",
 	"srml/offences",
+	"srml/randomness-collective-flip",
 	"srml/scored-pool",
 	"srml/session",
 	"srml/staking",

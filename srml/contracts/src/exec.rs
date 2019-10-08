@@ -753,7 +753,7 @@ where
 	}
 
 	fn random(&self, subject: &[u8]) -> SeedOf<T> {
-		system::Module::<T>::random(subject)
+		randomness_collective_flip::Module::<T>::random(subject)
 	}
 
 	fn now(&self) -> &MomentOf<T> {
