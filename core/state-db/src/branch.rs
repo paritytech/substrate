@@ -89,8 +89,7 @@ impl<'a> Iterator for BranchRangesIter<'a> {
 /// unknown db value as `None`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RangeSet {
-	// TODO EMCH using a option value makes not sense when all in memory
-	storage: BTreeMap<u64, Option<BranchStates>>,
+	storage: BTreeMap<u64, BranchStates>,
 	// TODO EMCH remove this?
 	last_index: u64,
 	/// treshold for possible node value, correspond
@@ -120,7 +119,7 @@ impl RangeSet {
 
 	/// Iterator over all its range sets.
 	pub fn reverse_iter_ranges(&self) -> impl Iterator<Item = (&BranchStateRef, u64)> {
-		self.storage.iter().rev().filter_map(|(k, v)| v.as_ref().map(|v| (&v.state, *k)))
+		self.storage.iter().rev().map(|(k, v)| (&v.state, *k))
 	}
 
 	// TODO EMCH can rw lock over the latest accessed range (lru) and
@@ -138,11 +137,11 @@ impl RangeSet {
 		}
 		let mut previous_start = block.map(|b| b + 1).unwrap_or(u64::max_value());
 		loop {
-			if let Some(Some(BranchStates{
+			if let Some(BranchStates{
 				state,
 				parent_branch_index,
 				..
-			})) = self.storage.get(&branch_index) {
+			}) = self.storage.get(&branch_index) {
 				// TODO EMCH consider vecdeque ??
 				let state = if state.end > previous_start {
 					if state.start >= previous_start {
@@ -180,10 +179,10 @@ impl RangeSet {
 	pub fn drop_state(
 		&mut self,
 		branch_index: u64,
-	) -> Result<u64, Error<()>> {
+	) -> u64 {
 		let mut do_remove = None;
 		match self.storage.get_mut(&branch_index) {
-			Some(Some(branch_state)) => {
+			Some(branch_state) => {
 				if let Some(drop_index) = branch_state.drop_state() {
 					if drop_index == 0 {
 						do_remove = Some(branch_state.parent_branch_index);
@@ -194,16 +193,14 @@ impl RangeSet {
 					// deleted branch, do nothing
 				}
 			},
-			Some(None) => (), // already dropped.
-			None => // TODO not sure keeping this error (we may want to clear storage)
-				return Err(Error::InvalidRange),
+			None => (),
 		}
 
 		if let Some(parent_index) = do_remove {
 			self.storage.remove(&branch_index);
-			Ok(parent_index)
+			parent_index
 		} else {
-			Ok(branch_index)
+			branch_index
 		}
 	}
 
@@ -219,16 +216,14 @@ impl RangeSet {
 		if branch_index == 0 || branch_index < self.treshold {
 			create_new = true;
 		} else { match self.storage.get_mut(&branch_index) {
-			Some(Some(branch_state)) => {
+			Some(branch_state) => {
 				if branch_state.can_append && branch_state.can_add(number) {
 					branch_state.add_state();
 				} else {
 					create_new = true;
 				}
 			},
-			Some(None) => 
-				return Err(Error::InvalidRange),
-			None => // TODO not sure keeping this error (we may want to clear storage)
+			None => // TODO EMCH not sure keeping this error (we may want to clear storage)
 				return Err(Error::InvalidRange),
 		}}
 
@@ -237,17 +232,15 @@ impl RangeSet {
 
 
 			let state = BranchStates::new(number, branch_index);
-			self.storage.insert(self.last_index, Some(state));
+			self.storage.insert(self.last_index, state);
 			Ok(self.last_index)
 		} else {
 			Ok(branch_index)
 		}
 	}
 
-	// TODO EMCH this access can be optimize at multiple places (by returning ref
-	// instead of an anchor_id).
 	pub fn state_ref(&self, branch_index: u64) -> Option<BranchStatesRef> {
-		self.storage.get(&branch_index).and_then(|v| v.as_ref().map(|v| v.state_ref()))
+		self.storage.get(&branch_index).map(|v| v.state_ref())
 			.map(|state| BranchStatesRef {
 				branch_index,
 				state,
@@ -304,9 +297,8 @@ impl RangeSet {
 			// at some point even if there is no branching).
 			// Also if gc and treshold happen after this call,
 			// ensure this branch can get remove.
-			// TODO EMCH this can also make sense for full
 			self.storage.get_mut(&branch_index)
-				.map(|state| state.as_mut().map(|state| state.can_append = false));
+				.map(|state| state.can_append = false);
 		} else {
 			let new_storage = self.storage.split_off(&(self.treshold));
 			self.storage = new_storage;
@@ -323,15 +315,15 @@ impl RangeSet {
 		branch_index: u64,
 		linear_index: u64,
 	) {
-		if let Some(Some(state)) = self.storage.remove(&branch_index) {
+		if let Some(state) = self.storage.remove(&branch_index) {
 			let mut child_anchor: BranchStates = state.clone();
 			child_anchor.state.start = linear_index;
 			let old_storage = std::mem::replace(&mut self.storage, BTreeMap::new());
 			// insert anchor
-			self.storage.insert(branch_index, Some(child_anchor.clone()));
-			for (index, state) in old_storage.into_iter().filter_map(|(k, v)| v.map(|v| (k, v))) {
+			self.storage.insert(branch_index, child_anchor.clone());
+			for (index, state) in old_storage.into_iter() {
 				// ordered property of branch index allows to skip in depth branch search
-				if let Some(Some(parent_state)) = self.storage.get(&state.parent_branch_index) {
+				if let Some(parent_state) = self.storage.get(&state.parent_branch_index) {
 					// first state is splitted
 					// use property that start of a branch - 1 is origin of parent
 					// this is obvious for parent is first branch (truncated), but also
@@ -339,14 +331,14 @@ impl RangeSet {
 					let linear_index_parent = state.state.start - 1;
 					if linear_index_parent < parent_state.state.end
 						&& linear_index_parent >= parent_state.state.start {
-						self.storage.insert(index, Some(state));
+						self.storage.insert(index, state);
 					}
 				}
 			}
 			// remove anchor block
 			child_anchor.state.start += 1;
 			if child_anchor.state.start < child_anchor.state.end {
-				self.storage.insert(branch_index, Some(child_anchor.clone()));
+				self.storage.insert(branch_index, child_anchor.clone());
 			} else {
 				self.storage.remove(&branch_index);
 			}
@@ -359,8 +351,6 @@ impl RangeSet {
 	pub fn revert(&mut self, branch_ix: u64) -> u64 {
 		if branch_ix != 0 {
 			self.drop_state(branch_ix)
-				// silenced error
-				.unwrap_or(0)
 		} else {
 			0
 		}
@@ -368,7 +358,7 @@ impl RangeSet {
 
 	#[cfg(test)]
 	pub fn contains_range(&self, branch_index: u64, size: u64) -> bool {
-		if let Some(Some(s)) = self.storage.get(&branch_index) {
+		if let Some(s) = self.storage.get(&branch_index) {
 			(s.state_ref().end - s.state_ref().start) == size
 		} else {
 			false
