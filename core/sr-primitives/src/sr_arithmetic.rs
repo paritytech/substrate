@@ -671,7 +671,7 @@ impl CheckedAdd for Fixed64 {
 
 /// Infinite precision unsigned integer for substrate runtime.
 pub mod big_num {
-	use super::{Zero, One};
+	use super::Zero;
 	use rstd::{cmp::Ordering, ops, prelude::*, cell::RefCell, convert::TryFrom};
 
 	// A sensible value for this would be half of the dword size of the host machine. Since the
@@ -918,7 +918,8 @@ pub mod big_num {
 
 			for j in 0..n {
 				if self.get(j) == 0 {
-					w.set(j + m, 0);
+					// Note: `with_capacity` allocates with 0. Explicitly set j + m to zero if
+					// otherwise.
 					continue;
 				}
 
@@ -1119,25 +1120,36 @@ pub mod big_num {
 
 	impl Ord for Number {
 		fn cmp(&self, other: &Self) -> Ordering {
-			// sadly, we have to reallocate here as strip mutably uses self.
-			let mut lhs = self.clone();
-			let mut rhs = other.clone();
-			// strip both
-			lhs.lstrip();
-			rhs.lstrip();
-			// then resize to max
-			lhs.resize(&mut rhs);
-			// then we can iterate safely
-			let mut r = Ordering::Equal;
-			for (i, p) in lhs.digits.iter().enumerate() {
-				let q = rhs.digits[i];
-				match p.cmp(&q) {
-					Ordering::Less => { r = Ordering::Less; break} ,
-					Ordering::Greater => { r = Ordering::Greater; break} ,
-					_ => continue,
+			let lhs_first = self.digits.iter().position(|&e| e != 0);
+			let rhs_first = other.digits.iter().position(|&e| e != 0);
+
+			match (lhs_first, rhs_first) {
+				// edge cases that should not happen. This basically means that one or both were
+				// zero.
+				(None, None) => Ordering::Equal,
+				(Some(_), None) => Ordering::Greater,
+				(None, Some(_)) => Ordering::Less,
+				(Some(lhs_idx), Some(rhs_idx)) => {
+					let lhs = &self.digits[lhs_idx..];
+					let rhs = &other.digits[rhs_idx..];
+					let len_cmp = lhs.len().cmp(&rhs.len());
+					match len_cmp {
+						Ordering::Equal => {
+							let mut r = Ordering::Equal;
+							for (i, p) in lhs.iter().enumerate() {
+								let q = rhs[i];
+								match p.cmp(&q) {
+									Ordering::Less => { r = Ordering::Less; break} ,
+									Ordering::Greater => { r = Ordering::Greater; break} ,
+									_ => continue,
+								}
+							}
+							r
+						}
+						_ => len_cmp,
+					}
 				}
 			}
-			r
 		}
 	}
 
@@ -1189,21 +1201,10 @@ pub mod big_num {
 						if value.len() * SHIFT > $len {
 							Err(error_message)
 						} else {
-							let checked_pow = |a: $type, b: u32| -> Option<$type> {
-								let mut acc: $type = One::one();
-								for _ in 0..b {
-									acc = acc.checked_mul(a)?;
-								}
-								Some(acc)
-							};
 							let mut acc: $type = Zero::zero();
 							for (i, d) in value.digits.iter().rev().cloned().enumerate() {
 								let d: $type = d.into();
-								let b: $type = B.into();
-								let m = checked_pow(b, i as u32).ok_or(error_message)?;
-								let multiplier = <$type>::from(m);
-								let value = d.checked_mul(multiplier).ok_or(error_message)?;
-								acc = acc.checked_add(value).ok_or(error_message)?;
+								acc += d << (SHIFT * i);
 							}
 							Ok(acc)
 						}
@@ -1279,6 +1280,49 @@ pub mod big_num {
 		}
 
 		#[test]
+		fn strip_works() {
+			let mut a = Number::from_limbs(&[0, 1, 0]);
+			a.lstrip();
+			assert_eq!(a, Number { digits: vec![1, 0] });
+
+			let mut a = Number::from_limbs(&[0, 0, 1]);
+			a.lstrip();
+			assert_eq!(a, Number { digits: vec![1] });
+
+			let mut a = Number::from_limbs(&[0, 0]);
+			a.lstrip();
+			assert_eq!(a, Number { digits: vec![0] });
+
+			let mut a = Number::from_limbs(&[0, 0, 0]);
+			a.lstrip();
+			assert_eq!(a, Number { digits: vec![0] });
+		}
+
+		#[test]
+		fn resize_works() {
+			let mut a = Number::from_limbs(&[0, 1, 0]);
+			let mut b = Number::from_limbs(&[0, 1]);
+			a.resize(&mut b);
+			assert_eq!(a.digits, vec![0, 1, 0]);
+			assert_eq!(b.digits, vec![0, 0, 1]);
+		}
+
+		#[test]
+		fn lpad_works() {
+			let mut a = Number::from_limbs(&[0, 1, 0]);
+			a.lpad(2);
+			assert_eq!(a.digits, vec![0, 1, 0]);
+
+			let mut a = Number::from_limbs(&[0, 1, 0]);
+			a.lpad(3);
+			assert_eq!(a.digits, vec![0, 1, 0]);
+
+			let mut a = Number::from_limbs(&[0, 1, 0]);
+			a.lpad(4);
+			assert_eq!(a.digits, vec![0, 0, 1, 0]);
+		}
+
+		#[test]
 		fn equality_works() {
 			assert_eq!(
 				Number { digits: vec![1, 2, 3] } == Number { digits: vec![1, 2, 3] },
@@ -1296,6 +1340,12 @@ pub mod big_num {
 
 		#[test]
 		fn ordering_works() {
+			assert!(Number { digits: vec![0] } < Number { digits: vec![1] });
+			assert!(Number { digits: vec![0] } == Number { digits: vec![0] });
+			assert!(Number { digits: vec![] } == Number { digits: vec![0] });
+			assert!(Number { digits: vec![] } == Number { digits: vec![] });
+			assert!(Number { digits: vec![] } < Number { digits: vec![1] });
+
 			assert!(Number { digits: vec![1, 2, 3] } == Number { digits: vec![1, 2, 3] });
 			assert!(Number { digits: vec![0, 1, 2, 3] } == Number { digits: vec![1, 2, 3] });
 
@@ -1337,6 +1387,11 @@ pub mod big_num {
 			assert_eq!(Number::zero(), Number { digits: vec![0] });
 			assert_eq!(Number { digits: vec![0, 1, 0] }.is_zero(), false);
 			assert_eq!(Number { digits: vec![0, 0, 0] }.is_zero(), true);
+
+			let a = Number::zero();
+			let b = Number::zero();
+			let c = a * b;
+			assert_eq!(c.digits, vec![0, 0]);
 		}
 
 		#[test]
@@ -1475,6 +1530,11 @@ pub mod big_num {
 				}
 			})
 		}
+	}
+
+	#[cfg(feature = "bench")]
+	mod bench_big_num {
+		#![feature(test)]
 	}
 
 }
@@ -1706,7 +1766,6 @@ impl PartialEq for Rational128 {
 		}
     }
 }
-
 
 #[cfg(test)]
 mod test_rational128 {
@@ -2011,7 +2070,6 @@ mod test_rational128 {
 		do_fuzz_multiply_by_rational(FUZZ_COUNT, 127, 0, false, false, f);
 	}
 }
-
 
 #[cfg(test)]
 mod tests_fixed64 {
