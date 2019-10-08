@@ -20,23 +20,23 @@ use std::sync::Arc;
 use std::collections::HashMap;
 use std::ops::Deref;
 
-/// This covers offstate values access.
+/// This covers kv values access.
 /// It target a single history state (state machine
 /// only run for a single history state).
-pub trait OffstateBackend: Send + Sync {
+pub trait KvBackend: Send + Sync {
 	/// Retrieve a value from storage under given key.
 	fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, String>;
 
 	/// Return all values (in memory) for this backend, mainly for
 	/// tests. This method should only be use for testing or
-	/// for small offstate.
+	/// for small kv.
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)>;
 }
 
 /// need to keep multiple block state.
 pub type InMemory = HashMap<Vec<u8>, Vec<u8>>;
 
-impl OffstateBackend for InMemory {
+impl KvBackend for InMemory {
 	fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
 		Ok(self.get(key).map(Clone::clone))
 	}
@@ -46,12 +46,12 @@ impl OffstateBackend for InMemory {
 	}
 }
 
-impl OffstateBackend for Arc<dyn OffstateBackend> {
+impl KvBackend for Arc<dyn KvBackend> {
 	fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
-		OffstateBackend::get(self.deref(), key)
+		KvBackend::get(self.deref(), key)
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
-		OffstateBackend::pairs(self.deref())
+		KvBackend::pairs(self.deref())
 	}
 }

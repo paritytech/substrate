@@ -23,8 +23,8 @@
 use std::fmt;
 use std::collections::{HashMap, VecDeque, hash_map::Entry, HashSet};
 use super::{
-	Error, DBValue, ChangeSet, OffstateChangeSet, CommitSet, MetaDb, Hash,
-	to_meta_key, OffstateKey,
+	Error, DBValue, ChangeSet, KvChangeSet, CommitSet, MetaDb, Hash,
+	to_meta_key, KvKey,
 };
 use codec::{Encode, Decode};
 use log::trace;
@@ -32,7 +32,7 @@ use crate::branch::{RangeSet, BranchRanges};
 use historied_data::tree::History;
 
 const NON_CANONICAL_JOURNAL: &[u8] = b"noncanonical_journal";
-const NON_CANONICAL_OFFSTATE_JOURNAL: &[u8] = b"offstate_noncanonical_journal";
+const NON_CANONICAL_OFFSTATE_JOURNAL: &[u8] = b"kv_noncanonical_journal";
 const LAST_CANONICAL: &[u8] = b"last_canonical";
 
 type BranchIndex = u64;
@@ -50,30 +50,30 @@ pub struct NonCanonicalOverlay<BlockHash: Hash, Key: Hash> {
 	pending_insertions: Vec<BlockHash>,
 	values: HashMap<Key, (u32, DBValue)>, //ref counted
 	branches: RangeSet,
-	offstate_values: HashMap<OffstateKey, History<Option<DBValue>>>,
-	/// second value is offstate pinned index: used in order to determine if the pinned 
+	kv_values: HashMap<KvKey, History<Option<DBValue>>>,
+	/// second value is kv pinned index: used in order to determine if the pinned 
 	/// thread should block garbage collection.
 	pinned: HashMap<BlockHash, (HashMap<Key, DBValue>, GcIndex)>,
-	offstate_gc: OffstatePendingGC,
+	kv_gc: KvPendingGC,
 }
 
 #[derive(Default)]
-/// offstate gc only happen when all pinned threads that where
+/// kv gc only happen when all pinned threads that where
 /// running at the time of cannonicalisation are finished.
-struct OffstatePendingGC {
+struct KvPendingGC {
 	/// Each gc call uses a new index.
 	gc_last_index: GcIndex,
 	/// Keep trace of last cannonicalization branch index height.
 	/// All data in state are added after this value (branch is
 	/// set as non modifiable on canonicalisation).
-  pending_canonicalisation_query: Option<u64>,
+	pending_canonicalisation_query: Option<u64>,
 	/// keys to gc that got their journal removed.
-	keys_pending_gc: HashSet<OffstateKey>,
+	keys_pending_gc: HashSet<KvKey>,
 	/// store keys while waiting for a gc.
-	next_keys_pending_gc: HashSet<OffstateKey>,
+	next_keys_pending_gc: HashSet<KvKey>,
 }
 
-impl OffstatePendingGC {
+impl KvPendingGC {
 	fn set_pending_gc(&mut self, branch_index: u64) {
 		self.gc_last_index += 1;
 		if self.pending_canonicalisation_query.is_some() {
@@ -85,7 +85,7 @@ impl OffstatePendingGC {
 
 	fn try_gc<K, V>(
 		&mut self,
-		offstate_values: &mut HashMap<OffstateKey, History<Option<DBValue>>>,
+		kv_values: &mut HashMap<KvKey, History<Option<DBValue>>>,
 		branches: &RangeSet,
 		pinned: &HashMap<K, (V, u64)>,
 	) {
@@ -95,11 +95,11 @@ impl OffstatePendingGC {
 				// TODO EMCH double get is rather inefficient, see if it is possible
 				// to reuse the hash of the hashset into the hashmap
 				for key in self.keys_pending_gc.drain() {
-					match offstate_values.get_mut(&key).map(|historied_value| {
+					match kv_values.get_mut(&key).map(|historied_value| {
 						historied_value.gc(branches.reverse_iter_ranges())
 					}) {
 						Some(historied_data::PruneResult::Cleared) => {
-							let _ = offstate_values.remove(&key);
+							let _ = kv_values.remove(&key);
 						},
 						_ => (),
 					}
@@ -135,16 +135,16 @@ struct JournalRecord<BlockHash: Hash, Key: Hash> {
 }
 
 #[derive(Encode, Decode)]
-struct OffstateJournalRecord {
-	inserted: Vec<(OffstateKey, DBValue)>,
-	deleted: Vec<OffstateKey>,
+struct KvJournalRecord {
+	inserted: Vec<(KvKey, DBValue)>,
+	deleted: Vec<KvKey>,
 }
 
 fn to_journal_key(block: BlockNumber, index: u64) -> Vec<u8> {
 	to_meta_key(NON_CANONICAL_JOURNAL, &(block, index))
 }
 
-fn to_offstate_journal_key(block: BlockNumber, index: u64) -> Vec<u8> {
+fn to_kv_journal_key(block: BlockNumber, index: u64) -> Vec<u8> {
 	to_meta_key(NON_CANONICAL_OFFSTATE_JOURNAL, &(block, index))
 }
 
@@ -152,11 +152,11 @@ fn to_offstate_journal_key(block: BlockNumber, index: u64) -> Vec<u8> {
 struct BlockOverlay<BlockHash: Hash, Key: Hash> {
 	hash: BlockHash,
 	journal_key: Vec<u8>,
-	offstate_journal_key: Vec<u8>,
+	kv_journal_key: Vec<u8>,
 	inserted: Vec<Key>,
 	deleted: Vec<Key>,
-	offstate_inserted: Vec<OffstateKey>,
-	offstate_deleted: Vec<OffstateKey>,
+	kv_inserted: Vec<KvKey>,
+	kv_deleted: Vec<KvKey>,
 }
 
 fn insert_values<Key: Hash>(values: &mut HashMap<Key, (u32, DBValue)>, inserted: Vec<(Key, DBValue)>) {
@@ -167,7 +167,7 @@ fn insert_values<Key: Hash>(values: &mut HashMap<Key, (u32, DBValue)>, inserted:
 	}
 }
 
-fn insert_offstate_values<Key: Hash>(
+fn insert_kv_values<Key: Hash>(
 	state: &BranchRanges,
 	values: &mut HashMap<Key, History<Option<DBValue>>>,
 	inserted: Vec<(Key, DBValue)>,
@@ -207,10 +207,10 @@ fn discard_values<Key: Hash>(
 	}
 }
 
-fn discard_offstate_values(
-	inserted: Vec<OffstateKey>,
-	deleted: Vec<OffstateKey>,
-	into: &mut OffstatePendingGC,
+fn discard_kv_values(
+	inserted: Vec<KvKey>,
+	deleted: Vec<KvKey>,
+	into: &mut KvPendingGC,
 ) {
 	let into = if into.pending_canonicalisation_query.is_some() {
 		&mut into.next_keys_pending_gc
@@ -221,14 +221,13 @@ fn discard_offstate_values(
 	into.extend(deleted);
 }
 
-
 fn discard_descendants<BlockHash: Hash, Key: Hash>(
 	levels: &mut VecDeque<Vec<BlockOverlay<BlockHash, Key>>>,
 	mut values: &mut HashMap<Key, (u32, DBValue)>,
 	index: usize,
 	parents: &mut HashMap<BlockHash, (BlockHash, BranchIndex)>,
 	pinned: &mut HashMap<BlockHash, (HashMap<Key, DBValue>, u64)>,
-	offstate_gc: &mut OffstatePendingGC,
+	kv_gc: &mut KvPendingGC,
 	hash: &BlockHash,
 ) {
 	let mut discarded = Vec::new();
@@ -240,10 +239,10 @@ fn discard_descendants<BlockHash: Hash, Key: Hash>(
 				discarded.push(overlay.hash);
 				let mut pinned = pinned.get_mut(hash);
 				discard_values(&mut values, overlay.inserted, pinned.as_mut().map(|p| &mut p.0));
-				discard_offstate_values(
-					overlay.offstate_inserted,
-					overlay.offstate_deleted,
-					offstate_gc,
+				discard_kv_values(
+					overlay.kv_inserted,
+					overlay.kv_deleted,
+					kv_gc,
 				);
 				None
 			} else {
@@ -252,7 +251,7 @@ fn discard_descendants<BlockHash: Hash, Key: Hash>(
 		}).collect();
 	}
 	for hash in discarded {
-		discard_descendants(levels, values, index + 1, parents, pinned, offstate_gc, &hash);
+		discard_descendants(levels, values, index + 1, parents, pinned, kv_gc, &hash);
 	}
 }
 
@@ -268,7 +267,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 		let mut levels = VecDeque::new();
 		let mut parents = HashMap::new();
 		let mut values = HashMap::new();
-		let mut offstate_values = HashMap::new();
+		let mut kv_values = HashMap::new();
 		let mut branches = RangeSet::default();
 		if let Some((ref hash, mut block)) = last_canonicalized {
 			// read the journal
@@ -280,7 +279,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 				let mut level = Vec::new();
 				loop {
 					let journal_key = to_journal_key(block, index);
-					let offstate_journal_key = to_offstate_journal_key(block, index);
+					let kv_journal_key = to_kv_journal_key(block, index);
 					match db.get_meta(&journal_key).map_err(|e| Error::Db(e))? {
 						Some(record) => {
 							let record: JournalRecord<BlockHash, Key> = Decode::decode(&mut record.as_slice())?;
@@ -291,7 +290,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 							let parent_branch_index = parents.get(&record.parent_hash)
 								.map(|(_, i)| *i).unwrap_or(0);
 							let parent_branch_range = Some(
-								branches.branch_ranges_from_cache(parent_branch_index, Some(block - 1))
+								branches.branch_ranges(parent_branch_index, Some(block - 1))
 							);
 							let (branch_range, branch_index) = branches.import(
 								block,
@@ -299,32 +298,32 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 								parent_branch_range,
 							);
 
-							let (offstate_record_inserted, offstate_record_deleted) = if let Some(record) = db
-								.get_meta(&offstate_journal_key).map_err(|e| Error::Db(e))? {
-									let record = OffstateJournalRecord::decode(&mut record.as_slice())?;
+							let (kv_record_inserted, kv_record_deleted) = if let Some(record) = db
+								.get_meta(&kv_journal_key).map_err(|e| Error::Db(e))? {
+									let record = KvJournalRecord::decode(&mut record.as_slice())?;
 									(Some(record.inserted), Some(record.deleted))
 							} else { (None, None) };
 							let inserted = record.inserted.iter().map(|(k, _)| k.clone()).collect();
-							let offstate_inserted = offstate_record_inserted.as_ref()
+							let kv_inserted = kv_record_inserted.as_ref()
 								.map(|inserted| inserted.iter().map(|(k, _)| k.clone()).collect())
 								.unwrap_or(Vec::new());
-							let offstate_deleted = offstate_record_deleted.clone().unwrap_or(Vec::new());
+							let kv_deleted = kv_record_deleted.clone().unwrap_or(Vec::new());
 							let overlay = BlockOverlay {
 								hash: record.hash.clone(),
 								journal_key,
-								offstate_journal_key,
+								kv_journal_key,
 								inserted: inserted,
 								deleted: record.deleted,
-								offstate_inserted,
-								offstate_deleted,
+								kv_inserted,
+								kv_deleted,
 							};
 							insert_values(&mut values, record.inserted);
-							if offstate_record_inserted.is_some() || offstate_record_deleted.is_some() {
-								insert_offstate_values(
+							if kv_record_inserted.is_some() || kv_record_deleted.is_some() {
+								insert_kv_values(
 									&branch_range,
-									&mut offstate_values,
-									offstate_record_inserted.unwrap_or(Vec::new()),
-									offstate_record_deleted.unwrap_or(Vec::new()),
+									&mut kv_values,
+									kv_record_inserted.unwrap_or(Vec::new()),
+									kv_record_deleted.unwrap_or(Vec::new()),
 								);
 							}
 							trace!(
@@ -333,9 +332,9 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 								block,
 								index,
 								overlay.inserted.len(),
-								overlay.offstate_inserted.len(),
+								overlay.kv_inserted.len(),
 								overlay.deleted.len(),
-								overlay.offstate_deleted.len(),
+								overlay.kv_deleted.len(),
 							);
 							level.push(overlay);
 							parents.insert(record.hash, (record.parent_hash, branch_index));
@@ -361,8 +360,8 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 			pending_insertions: Default::default(),
 			pinned: Default::default(),
 			values,
-			offstate_values,
-			offstate_gc: Default::default(),
+			kv_values,
+			kv_gc: Default::default(),
 			branches,
 		})
 	}
@@ -375,7 +374,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 		number: BlockNumber,
 		parent_hash: &BlockHash,
 		changeset: ChangeSet<Key>,
-		offstate_changeset: OffstateChangeSet<OffstateKey>,
+		kv_changeset: KvChangeSet<KvKey>,
 	) -> Result<CommitSet<Key>, Error<E>> {
 		let mut commit = CommitSet::default();
 		let front_block_number = self.front_block_number();
@@ -412,35 +411,35 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 
 		let index = level.len() as u64;
 		let journal_key = to_journal_key(number, index);
-		let offstate_journal_key = to_offstate_journal_key(number, index);
+		let kv_journal_key = to_kv_journal_key(number, index);
 
 		let inserted = changeset.inserted.iter().map(|(k, _)| k.clone()).collect();
-		let mut offstate_inserted = Vec::new();
-		let mut offstate_inserted_value = Vec::new();
-		let mut offstate_deleted = Vec::new();
-		for (k, v) in offstate_changeset.into_iter() {
+		let mut kv_inserted = Vec::new();
+		let mut kv_inserted_value = Vec::new();
+		let mut kv_deleted = Vec::new();
+		for (k, v) in kv_changeset.into_iter() {
 			if let Some(v) = v {
-				offstate_inserted.push(k.clone());
-				offstate_inserted_value.push((k, v));
+				kv_inserted.push(k.clone());
+				kv_inserted_value.push((k, v));
 			} else {
-				offstate_deleted.push(k);
+				kv_deleted.push(k);
 			}
 		}
 		let overlay = BlockOverlay {
 			hash: hash.clone(),
 			journal_key: journal_key.clone(),
-			offstate_journal_key: offstate_journal_key.clone(),
+			kv_journal_key: kv_journal_key.clone(),
 			inserted: inserted,
 			deleted: changeset.deleted.clone(),
-			offstate_inserted,
-			offstate_deleted: offstate_deleted.clone(),
+			kv_inserted,
+			kv_deleted: kv_deleted.clone(),
 		};
 		level.push(overlay);
 		let	parent_branch_index = self.parents.get(&parent_hash).map(|(_, i)| *i).unwrap_or(0);
 		let	parent_branch_range = if number == 0 {
 			None
 		} else {
-			Some(self.branches.branch_ranges_from_cache(parent_branch_index, Some(number - 1)))
+			Some(self.branches.branch_ranges(parent_branch_index, Some(number - 1)))
 		};
 		let (branch_range, branch_index) = self.branches.import(
 			number,
@@ -456,11 +455,11 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 			deleted: changeset.deleted,
 		};
 		commit.meta.inserted.push((journal_key, journal_record.encode()));
-		let offstate_journal_record = OffstateJournalRecord {
-			inserted: offstate_inserted_value,
-			deleted: offstate_deleted,
+		let kv_journal_record = KvJournalRecord {
+			inserted: kv_inserted_value,
+			deleted: kv_deleted,
 		};
-		commit.meta.inserted.push((offstate_journal_key, offstate_journal_record.encode()));
+		commit.meta.inserted.push((kv_journal_key, kv_journal_record.encode()));
 	
 		trace!(
 			target: "state-db",
@@ -468,15 +467,15 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 			number,
 			index,
 			journal_record.inserted.len(),
-			offstate_journal_record.inserted.len(),
+			kv_journal_record.inserted.len(),
 			journal_record.deleted.len(),
 		);
 		insert_values(&mut self.values, journal_record.inserted);
-		insert_offstate_values(
+		insert_kv_values(
 			&branch_range,
-			&mut self.offstate_values,
-			offstate_journal_record.inserted,
-			offstate_journal_record.deleted,
+			&mut self.kv_values,
+			kv_journal_record.inserted,
+			kv_journal_record.deleted,
 		);
 		self.pending_insertions.push(hash.clone());
 		Ok(commit)
@@ -495,7 +494,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 					.expect("there is a parent entry for each entry in levels; qed");
 				if parent == hash {
 					discarded_journals.push(overlay.journal_key.clone());
-					discarded_journals.push(overlay.offstate_journal_key.clone());
+					discarded_journals.push(overlay.kv_journal_key.clone());
 					discarded_blocks.push(overlay.hash.clone());
 					self.discard_journals(level_index + 1, discarded_journals, discarded_blocks, &overlay.hash);
 				}
@@ -553,7 +552,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 				);
 			}
 			discarded_journals.push(overlay.journal_key.clone());
-			discarded_journals.push(overlay.offstate_journal_key.clone());
+			discarded_journals.push(overlay.kv_journal_key.clone());
 			discarded_blocks.push(overlay.hash.clone());
 		}
 
@@ -563,22 +562,22 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 			.map(|k| (k.clone(), self.values.get(k).expect("For each key in overlays there's a value in values").1.clone())));
 		commit.data.deleted.extend(overlay.deleted.clone());
 		let block_number = self.front_block_number() + self.pending_canonicalizations.len() as u64;
-		if !overlay.offstate_inserted.is_empty() || !overlay.offstate_deleted.is_empty() {
+		if !overlay.kv_inserted.is_empty() || !overlay.kv_deleted.is_empty() {
 			// canonicalization is not frequent enough that we pass range
 			// in parameter for now
 			if let Some(range) = self.get_branch_range(hash, block_number) {
-				commit.offstate.extend(
-					overlay.offstate_inserted.iter()
-					.map(|k| (k.clone(), self.offstate_values.get(k)
+				commit.kv.extend(
+					overlay.kv_inserted.iter()
+					.map(|k| (k.clone(), self.kv_values.get(k)
 						.expect("For each key in overlays there's a value in values")
 						.get(&range)
 						.expect("For each key in overlays there's a historied entry in values")
 						.clone())));
 				// some deletion can be pruned if in first block so handle is
 				// a bit less restrictive
-				commit.offstate.extend(
-					overlay.offstate_deleted.iter()
-					.filter_map(|k| self.offstate_values.get(k)
+				commit.kv.extend(
+					overlay.kv_deleted.iter()
+					.filter_map(|k| self.kv_values.get(k)
 						.map(|v| (k.clone(), v.get(&range)
 							.expect("For each key in overlays there's a historied entry \
 								in values, and pruned empty value are cleared")
@@ -620,17 +619,17 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 						0,
 						&mut self.parents,
 						&mut self.pinned,
-						&mut self.offstate_gc,
+						&mut self.kv_gc,
 						&overlay.hash,
 					);
 				}
 
 				let mut pinned = self.pinned.get_mut(&overlay.hash);
 				discard_values(&mut self.values, overlay.inserted, pinned.as_mut().map(|p| &mut p.0));
-				discard_offstate_values(
-					overlay.offstate_inserted,
-					overlay.offstate_deleted,
-					&mut self.offstate_gc,
+				discard_kv_values(
+					overlay.kv_inserted,
+					overlay.kv_deleted,
+					&mut self.kv_gc,
 				);
 			}
 		}
@@ -644,10 +643,10 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 				// TODO EMCH may be needed in 'canonicalize', and restore or commit here
 				self.branches.update_finalize_treshold(branch_index_cannonicalize, block_number, true);
 				// gc is at the right place
-				self.offstate_gc.set_pending_gc(branch_index_cannonicalize);
+				self.kv_gc.set_pending_gc(branch_index_cannonicalize);
 				// try to run the garbage collection (can run later if there is
 				// pinned process).
-				self.offstate_gc.try_gc(&mut self.offstate_values, &self.branches, &self.pinned);
+				self.kv_gc.try_gc(&mut self.kv_values, &self.branches, &self.pinned);
 			}
 		}
 
@@ -667,8 +666,8 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 	}
 
 	/// Get a value from the node overlay. This searches in every existing changeset.
-	pub fn get_offstate(&self, key: &[u8], state: &BranchRanges) -> Option<&Option<DBValue>> {
-		if let Some(value) = self.offstate_values.get(key) {
+	pub fn get_kv(&self, key: &[u8], state: &BranchRanges) -> Option<&Option<DBValue>> {
+		if let Some(value) = self.kv_values.get(key) {
 			return value.get(state);
 		}
 		None
@@ -686,15 +685,15 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 			let mut commit = CommitSet::default();
 			for overlay in level.into_iter() {
 				commit.meta.deleted.push(overlay.journal_key);
-				commit.meta.deleted.push(overlay.offstate_journal_key);
+				commit.meta.deleted.push(overlay.kv_journal_key);
 				if let Some((_, branch_index)) = self.parents.remove(&overlay.hash) {
 					self.branches.revert(branch_index);
 				}
 				discard_values(&mut self.values, overlay.inserted, None);
-				discard_offstate_values(
-					overlay.offstate_inserted,
-					overlay.offstate_deleted,
-					&mut self.offstate_gc,
+				discard_kv_values(
+					overlay.kv_inserted,
+					overlay.kv_deleted,
+					&mut self.kv_gc,
 				);
 			}
 			commit
@@ -713,8 +712,6 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 
 			let	overlay = self.levels[level_index].pop().expect("Empty levels are not allowed in self.levels");
 			discard_values(&mut self.values, overlay.inserted, None);
-			// TODO EMCH we need discard state?? from  update finalize treshold here!! see discard value
-			// usgage
 			if self.levels[level_index].is_empty() {
 				debug_assert_eq!(level_index, self.levels.len() - 1);
 				self.levels.pop_back();
@@ -736,29 +733,30 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 
 	/// Pin state values in memory
 	pub fn pin(&mut self, hash: &BlockHash) {
-		self.pinned.insert(hash.clone(), (Default::default(), self.offstate_gc.gc_last_index));
+		self.pinned.insert(hash.clone(), (Default::default(), self.kv_gc.gc_last_index));
 	}
 
-	/// TODO EMCH aka get state for hash to query offstate storage.
+	/// For a a given block return its path in the block tree.
+	/// Note that using `number` is use to skip a query to block number for hash.
 	pub fn get_branch_range(&self, hash: &BlockHash, number: BlockNumber) -> Option<BranchRanges> {
 		self.parents.get(hash).map(|(_, branch_index)| *branch_index).map(|branch_index| {
-		  self.branches.branch_ranges_from_cache(branch_index, Some(number))
+			self.branches.branch_ranges(branch_index, Some(number))
 		})
 	}
 
 	/// Discard pinned state
 	pub fn unpin(&mut self, hash: &BlockHash) {
 		self.pinned.remove(hash);
-		self.offstate_gc.try_gc(&mut self.offstate_values, &self.branches, &self.pinned);
+		self.kv_gc.try_gc(&mut self.kv_values, &self.branches, &self.pinned);
 	}
 
 	/// Iterator over values at a given state. Deletion are included in the result as a None value.
-	pub fn offstate_iter<'a>(
+	pub fn kv_iter<'a>(
 		&'a self,
 		state: &'a BranchRanges,
-	) -> impl Iterator<Item = (&'a OffstateKey, &'a Option<DBValue>)> {
+	) -> impl Iterator<Item = (&'a KvKey, &'a Option<DBValue>)> {
 		let state = state.clone();
-		self.offstate_values.iter().filter_map(move |(k, v)| {
+		self.kv_values.iter().filter_map(move |(k, v)| {
 			v.get(&state).map(|v| (k, v))
 		})
 	}
@@ -770,31 +768,31 @@ mod tests {
 	use std::collections::BTreeMap;
 	use primitives::H256;
 	use super::{NonCanonicalOverlay, to_journal_key};
-	use crate::{ChangeSet, OffstateChangeSet, CommitSet, OffstateKey};
-	use crate::test::{make_db, make_changeset, make_offstate_changeset};
+	use crate::{ChangeSet, KvChangeSet, CommitSet, KvKey};
+	use crate::test::{make_db, make_changeset, make_kv_changeset};
 	use crate::branch::BranchRanges;
 
 	fn contains(overlay: &NonCanonicalOverlay<H256, H256>, key: u64) -> bool {
 		overlay.get(&H256::from_low_u64_be(key)) == Some(H256::from_low_u64_be(key).as_bytes().to_vec())
 	}
 
-	fn contains_offstate(
+	fn contains_kv(
 		overlay: &NonCanonicalOverlay<H256, H256>,
 		key: u64,
 		state: &H256,
 		block: u64,
 	) -> bool {
 		overlay.get_branch_range(state, block).and_then(|state| {
-			overlay.get_offstate(&H256::from_low_u64_be(key).as_bytes().to_vec(), &state)
+			overlay.get_kv(&H256::from_low_u64_be(key).as_bytes().to_vec(), &state)
 		}) == Some(&Some(H256::from_low_u64_be(key).as_bytes().to_vec()))
 	}
 
-	fn contains_offstate2(
+	fn contains_kv2(
 		overlay: &NonCanonicalOverlay<H256, H256>,
 		key: u64,
 		state: &BranchRanges,
 	) -> bool {
-		overlay.get_offstate(&H256::from_low_u64_be(key).as_bytes().to_vec(), &state)
+		overlay.get_kv(&H256::from_low_u64_be(key).as_bytes().to_vec(), &state)
 			== Some(&Some(H256::from_low_u64_be(key).as_bytes().to_vec()))
 	}
 
@@ -804,7 +802,7 @@ mod tests {
 		state: &H256,
 		block: u64,
 	) -> bool {
-		contains(overlay, key) && contains_offstate(overlay, key, state, block)
+		contains(overlay, key) && contains_kv(overlay, key, state, block)
 	}
 
 	fn contains_any(
@@ -813,7 +811,7 @@ mod tests {
 		state: &H256,
 		block: u64,
 	) -> bool {
-		contains(overlay, key) || contains_offstate(overlay, key, state, block)
+		contains(overlay, key) || contains_kv(overlay, key, state, block)
 	}
 
 	#[test]
@@ -843,11 +841,11 @@ mod tests {
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
 		overlay.insert::<io::Error>(
 			&h1, 2, &H256::default(),
-			ChangeSet::default(), OffstateChangeSet::default(),
+			ChangeSet::default(), KvChangeSet::default(),
 		).unwrap();
 		overlay.insert::<io::Error>(
 			&h2, 1, &h1,
-			ChangeSet::default(), OffstateChangeSet::default(),
+			ChangeSet::default(), KvChangeSet::default(),
 		).unwrap();
 	}
 
@@ -860,11 +858,11 @@ mod tests {
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
 		overlay.insert::<io::Error>(
 			&h1, 1, &H256::default(),
-			ChangeSet::default(), OffstateChangeSet::default(),
+			ChangeSet::default(), KvChangeSet::default(),
 		).unwrap();
 		overlay.insert::<io::Error>(
 			&h2, 3, &h1,
-			ChangeSet::default(), OffstateChangeSet::default(),
+			ChangeSet::default(), KvChangeSet::default(),
 		).unwrap();
 	}
 
@@ -877,11 +875,11 @@ mod tests {
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
 		overlay.insert::<io::Error>(
 			&h1, 1, &H256::default(),
-			ChangeSet::default(), OffstateChangeSet::default(),
+			ChangeSet::default(), KvChangeSet::default(),
 		).unwrap();
 		overlay.insert::<io::Error>(
 			&h2, 2, &H256::default(),
-			ChangeSet::default(), OffstateChangeSet::default(),
+			ChangeSet::default(), KvChangeSet::default(),
 		).unwrap();
 	}
 
@@ -894,7 +892,7 @@ mod tests {
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
 		overlay.insert::<io::Error>(
 			&h1, 1, &H256::default(),
-			ChangeSet::default(), OffstateChangeSet::default(),
+			ChangeSet::default(), KvChangeSet::default(),
 		).unwrap();
 		let mut commit = CommitSet::default();
 		overlay.canonicalize::<io::Error>(&h2, &mut commit).unwrap();
@@ -904,18 +902,18 @@ mod tests {
 	fn insert_canonicalize_one() {
 		let h1 = H256::random();
 		let mut db = make_db(&[1, 2]);
-		db.initialize_offstate(&[1, 2]);
+		db.initialize_kv(&[1, 2]);
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
 		let changeset = make_changeset(&[3, 4], &[2]);
-		let offstate_changeset = make_offstate_changeset(&[3, 4], &[2]);
+		let kv_changeset = make_kv_changeset(&[3, 4], &[2]);
 		let insertion = overlay.insert::<io::Error>(
 			&h1, 1, &H256::default(),
-			changeset.clone(), offstate_changeset.clone(),
+			changeset.clone(), kv_changeset.clone(),
 		).unwrap();
 		assert_eq!(insertion.data.inserted.len(), 0);
 		assert_eq!(insertion.data.deleted.len(), 0);
-		assert_eq!(insertion.offstate.len(), 0);
-		// last cannonical, journal_record and offstate_journal_record
+		assert_eq!(insertion.kv.len(), 0);
+		// last cannonical, journal_record and kv_journal_record
 		assert_eq!(insertion.meta.inserted.len(), 3);
 		assert_eq!(insertion.meta.deleted.len(), 0);
 		db.commit(&insertion);
@@ -923,13 +921,13 @@ mod tests {
 		overlay.canonicalize::<io::Error>(&h1, &mut finalization).unwrap();
 		assert_eq!(finalization.data.inserted.len(), changeset.inserted.len());
 		assert_eq!(finalization.data.deleted.len(), changeset.deleted.len());
-		assert_eq!(finalization.offstate.len(), offstate_changeset.len());
+		assert_eq!(finalization.kv.len(), kv_changeset.len());
 		assert_eq!(finalization.meta.inserted.len(), 1);
-		// normal and offstate discarded journall
+		// normal and kv discarded journall
 		assert_eq!(finalization.meta.deleted.len(), 2);
 		db.commit(&finalization);
 		assert!(db.data_eq(&make_db(&[1, 3, 4])));
-		assert!(db.offstate_eq(&[1, 3, 4]));
+		assert!(db.kv_eq(&[1, 3, 4]));
 	}
 
 	#[test]
@@ -937,17 +935,17 @@ mod tests {
 		let h1 = H256::random();
 		let h2 = H256::random();
 		let mut db = make_db(&[1, 2]);
-		db.initialize_offstate(&[1, 2]);
+		db.initialize_kv(&[1, 2]);
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
 		db.commit(&overlay.insert::<io::Error>(
 			&h1, 10, &H256::default(),
 			make_changeset(&[3, 4], &[2]),
-			make_offstate_changeset(&[3, 4], &[2]),
+			make_kv_changeset(&[3, 4], &[2]),
 		).unwrap());
 		db.commit(&overlay.insert::<io::Error>(
 			&h2, 11, &h1,
 			make_changeset(&[5], &[3]),
-			make_offstate_changeset(&[5], &[3]),
+			make_kv_changeset(&[5], &[3]),
 		).unwrap());
 		assert_eq!(db.meta.len(), 5);
 
@@ -962,17 +960,17 @@ mod tests {
 		let h1 = H256::random();
 		let h2 = H256::random();
 		let mut db = make_db(&[1, 2]);
-		db.initialize_offstate(&[1, 2]);
+		db.initialize_kv(&[1, 2]);
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
 		db.commit(&overlay.insert::<io::Error>(
 			&h1, 10, &H256::default(),
 			make_changeset(&[3, 4], &[2]),
-			make_offstate_changeset(&[3, 4], &[2]),
+			make_kv_changeset(&[3, 4], &[2]),
 		).unwrap());
 		db.commit(&overlay.insert::<io::Error>(
 			&h2,11, &h1,
 			make_changeset(&[5], &[3]),
-			make_offstate_changeset(&[5], &[3]),
+			make_kv_changeset(&[5], &[3]),
 		).unwrap());
 		let mut commit = CommitSet::default();
 		overlay.canonicalize::<io::Error>(&h1, &mut commit).unwrap();
@@ -991,24 +989,24 @@ mod tests {
 		let h1 = H256::random();
 		let h2 = H256::random();
 		let mut db = make_db(&[1, 2, 3, 4]);
-		db.initialize_offstate(&[1, 2, 3, 4]);
+		db.initialize_kv(&[1, 2, 3, 4]);
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
 		let changeset1 = make_changeset(&[5, 6], &[2]);
 		let changeset2 = make_changeset(&[7, 8], &[5, 3]);
-		let offstate_changeset1 = make_offstate_changeset(&[5, 6], &[2]);
-		let offstate_changeset2 = make_offstate_changeset(&[7, 8], &[5, 3]);
+		let kv_changeset1 = make_kv_changeset(&[5, 6], &[2]);
+		let kv_changeset2 = make_kv_changeset(&[7, 8], &[5, 3]);
 		db.commit(&overlay.insert::<io::Error>(
 			&h1, 1, &H256::default(),
-			changeset1, offstate_changeset1,
+			changeset1, kv_changeset1,
 		).unwrap());
 		assert!(contains_both(&overlay, 5, &h1, 1));
 		db.commit(&overlay.insert::<io::Error>(
 			&h2, 2, &h1,
-			changeset2, offstate_changeset2,
+			changeset2, kv_changeset2,
 		).unwrap());
 		assert!(contains_both(&overlay, 7, &h2, 2));
-		assert!(!contains_offstate(&overlay, 5, &h2, 2));
-		assert!(contains_offstate(&overlay, 5, &h1, 1));
+		assert!(!contains_kv(&overlay, 5, &h2, 2));
+		assert!(contains_kv(&overlay, 5, &h1, 1));
 		assert!(contains_both(&overlay, 5, &h1, 1));
 		assert_eq!(overlay.levels.len(), 2);
 		assert_eq!(overlay.parents.len(), 2);
@@ -1030,7 +1028,7 @@ mod tests {
 		assert_eq!(overlay.levels.len(), 0);
 		assert_eq!(overlay.parents.len(), 0);
 		assert!(db.data_eq(&make_db(&[1, 4, 6, 7, 8])));
-		assert!(db.offstate_eq(&[1, 4, 6, 7, 8]));
+		assert!(db.kv_eq(&[1, 4, 6, 7, 8]));
 	}
 
 	#[test]
@@ -1038,8 +1036,8 @@ mod tests {
 		let mut db = make_db(&[]);
 		let (h_1, c_1) = (H256::random(), make_changeset(&[1], &[]));
 		let (h_2, c_2) = (H256::random(), make_changeset(&[1], &[]));
-		let o_c_1 = make_offstate_changeset(&[1], &[]);
-		let o_c_2 = make_offstate_changeset(&[1], &[]);
+		let o_c_1 = make_kv_changeset(&[1], &[]);
+		let o_c_2 = make_kv_changeset(&[1], &[]);
 
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
 		db.commit(&overlay.insert::<io::Error>(&h_1, 1, &H256::default(), c_1, o_c_1).unwrap());
@@ -1061,7 +1059,7 @@ mod tests {
 		let mut db = make_db(&[]);
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
 		let changeset = make_changeset(&[], &[]);
-		let ochangeset = make_offstate_changeset(&[], &[]);
+		let ochangeset = make_kv_changeset(&[], &[]);
 		db.commit(&overlay.insert::<io::Error>(
 			&h1, 1, &H256::default(),
 			changeset.clone(), ochangeset.clone(),
@@ -1086,12 +1084,12 @@ mod tests {
 	fn make_both_changeset(inserted: &[u64], deleted: &[u64]) -> (
 		H256,
 		ChangeSet<H256>,
-		OffstateChangeSet<OffstateKey>,
+		KvChangeSet<KvKey>,
 	) {
 		(
 			H256::random(),
 			make_changeset(inserted, deleted),
-			make_offstate_changeset(inserted, deleted),
+			make_kv_changeset(inserted, deleted),
 		)
 	}
 
@@ -1207,7 +1205,7 @@ mod tests {
 		assert_eq!(overlay.levels.len(), 0);
 		assert_eq!(overlay.parents.len(), 0);
 		assert!(db.data_eq(&make_db(&[1, 12, 122])));
-		assert!(db.offstate_eq(&[1, 12, 122]));
+		assert!(db.kv_eq(&[1, 12, 122]));
 		assert_eq!(overlay.last_canonicalized, Some((h_1_2_2, 3)));
 	}
 
@@ -1216,13 +1214,13 @@ mod tests {
 		let h1 = H256::random();
 		let h2 = H256::random();
 		let mut db = make_db(&[1, 2, 3, 4]);
-		db.initialize_offstate(&[1, 2, 3, 4]);
+		db.initialize_kv(&[1, 2, 3, 4]);
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
 		assert!(overlay.revert_one().is_none());
 		let changeset1 = make_changeset(&[5, 6], &[2]);
-		let ochangeset1 = make_offstate_changeset(&[5, 6], &[2]);
+		let ochangeset1 = make_kv_changeset(&[5, 6], &[2]);
 		let changeset2 = make_changeset(&[7, 8], &[5, 3]);
-		let ochangeset2 = make_offstate_changeset(&[7, 8], &[5, 3]);
+		let ochangeset2 = make_kv_changeset(&[7, 8], &[5, 3]);
 		db.commit(&overlay.insert::<io::Error>(
 			&h1, 1, &H256::default(),
 			changeset1, ochangeset1,
@@ -1251,11 +1249,11 @@ mod tests {
 		let db = make_db(&[]);
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
 		let changeset1 = make_changeset(&[5, 6], &[2]);
-		let ochangeset1 = make_offstate_changeset(&[5, 6], &[2]);
+		let ochangeset1 = make_kv_changeset(&[5, 6], &[2]);
 		let changeset2 = make_changeset(&[7, 8], &[5, 3]);
-		let ochangeset2 = make_offstate_changeset(&[7, 8], &[5, 3]);
+		let ochangeset2 = make_kv_changeset(&[7, 8], &[5, 3]);
 		let changeset3 = make_changeset(&[9], &[]);
-		let ochangeset3 = make_offstate_changeset(&[9], &[]);
+		let ochangeset3 = make_kv_changeset(&[9], &[]);
 		overlay.insert::<io::Error>(
 			&h1, 1, &H256::default(),
 			changeset1, ochangeset1,
@@ -1269,9 +1267,9 @@ mod tests {
 			&h2_2, 2, &h1,
 			changeset3, ochangeset3,
 		).unwrap();
-		assert!(contains_offstate(&overlay, 5, &h1, 1));
+		assert!(contains_kv(&overlay, 5, &h1, 1));
 		assert!(contains_both(&overlay, 7, &h2_1, 2));
-		assert!(!contains_offstate(&overlay, 5, &h2_1, 2));
+		assert!(!contains_kv(&overlay, 5, &h2_1, 2));
 		assert!(contains(&overlay, 5));
 		assert!(contains_both(&overlay, 9, &h2_2, 2));
 		assert_eq!(overlay.levels.len(), 2);
@@ -1304,12 +1302,12 @@ mod tests {
 		db.commit(&commit);
 		overlay.apply_pending();
 		assert!(contains(&overlay, 1));
-		// we cannot use contains_offstate because offstate pining is relying on
+		// we cannot use contains_kv because kv pining is relying on
 		// asumption that pinned context memoïzed its branch state.
-		assert!(contains_offstate2(&overlay, 1, &h1_context));
-		assert!(!contains_offstate(&overlay, 1, &h_1, 1));
+		assert!(contains_kv2(&overlay, 1, &h1_context));
+		assert!(!contains_kv(&overlay, 1, &h_1, 1));
 		overlay.unpin(&h_1);
 		assert!(!contains(&overlay, 1));
-		assert!(!contains_offstate2(&overlay, 1, &h1_context));
+		assert!(!contains_kv2(&overlay, 1, &h1_context));
 	}
 }

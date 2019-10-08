@@ -122,15 +122,17 @@ impl RangeSet {
 		self.storage.iter().rev().map(|(k, v)| (&v.state, *k))
 	}
 
-	// TODO EMCH can rw lock over the latest accessed range (lru) and
-	// return an clone of it (arc of the value so it will be fine). this is call by state_at that is call a lot!!!
-	pub fn branch_ranges_from_cache(
+	/// For a a given branch, return its path if the tree of ranges.
+	/// If block number is undefined, return the path up to the latest block
+	/// of the branch index.
+	///
+	/// Note that this method is a bit costy and a caching could be use.
+	/// Similarily in some case using an iterator instead could make sense.
+	pub fn branch_ranges(
 		&self,
 		mut branch_index: u64,
 		block: Option<u64>,
 	) -> BranchRanges {
-		// TODO EMCH transform this method to an iterator!!!
-		// (avoid some intermediatory Vec (eg when building Hashset)
 		let mut result = Vec::new();
 		if branch_index < self.treshold {
 			return BranchRanges(result);

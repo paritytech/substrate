@@ -1023,7 +1023,7 @@ mod test {
 		for a in 2..6 {
 			assert_eq!(item.get(a), Some(Some(&[a as u8][..])));
 		}
-	
+
 		item.prune(4);
 		for a in 1..5 {
 			assert_eq!(item.get(a), None);
@@ -1031,7 +1031,7 @@ mod test {
 		for a in 5..6 {
 			assert_eq!(item.get(a), Some(Some(&[a as u8][..])));
 		}
-	
+
 		item.prune(80);
 		for a in 1..4 {
 			assert_eq!(item.get(a), None);
@@ -1055,7 +1055,7 @@ mod test {
 		assert_eq!(item.get(1), None);
 		assert_eq!(item.get(2), None);
 		assert_eq!(item.get(3), Some(Some(&[3][..])));
-	
+
 		// prune skip unrelevant delete
 		let mut item: Serialized<crate::linear::NoVersion> = Default::default();
 		item.push(1, Some(&[1 as u8]));
@@ -1075,7 +1075,7 @@ mod test {
 		assert_eq!(item.get(2), None);
 		assert_eq!(item.get(3), None);
 		assert_eq!(item.get(4), Some(Some(&[4][..])));
-	
+
 		// prune delete at block
 		let mut item: Serialized<crate::linear::DefaultVersion> = Default::default();
 		item.push(0, Some(&[0 as u8]));

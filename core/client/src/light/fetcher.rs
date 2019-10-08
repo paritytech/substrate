@@ -349,13 +349,13 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>> LightDataChecker<E, H, B, S> {
 					return Err(ClientError::InvalidCHTProof.into());
 				}
 
-				// using empty offstate as light do not use offstate information
+				// using empty kv as light do not use kv information
 				// (things being fetch proved and proof currently do not rely on
-				// offstate).
-				let offstate = state_machine::InMemoryOffstateBackend::default();
+				// kv).
+				let kv = state_machine::InMemoryKvBackend::default();
 
 				// check proof for single changes trie root
-				let proving_backend = TrieBackend::new(storage, cht_root, offstate);
+				let proving_backend = TrieBackend::new(storage, cht_root, kv);
 				let remote_changes_trie_root = remote_roots[&block];
 				cht::check_proof_on_proving_backend::<B::Header, H>(
 					local_cht_root,

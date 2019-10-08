@@ -28,7 +28,7 @@ pub use trie::trie_types::{Layout, TrieError};
 use crate::trie_backend::TrieBackend;
 use crate::trie_backend_essence::{Ephemeral, TrieBackendEssence, TrieBackendStorage};
 use crate::{Error, ExecutionError, Backend};
-use crate::offstate_backend::{OffstateBackend, InMemory as InMemoryOffstateBackend};
+use crate::kv_backend::{KvBackend, InMemory as InMemoryKvBackend};
 
 /// Patricia trie-based backend essence which also tracks all touched storage trie values.
 /// These can be sent to remote node and used as a proof of execution.
@@ -107,7 +107,7 @@ impl<'a, S, H> ProvingBackendEssence<'a, S, H>
 pub struct ProvingBackend<'a,
 	S: 'a + TrieBackendStorage<H>,
 	H: 'a + Hasher,
-	O: 'a + OffstateBackend,
+	O: 'a + KvBackend,
 > {
 	backend: &'a TrieBackend<S, H, O>,
 	proof_recorder: Rc<RefCell<Recorder<H::Out>>>,
@@ -116,7 +116,7 @@ pub struct ProvingBackend<'a,
 impl<'a,
 	S: 'a + TrieBackendStorage<H>,
 	H: 'a + Hasher,
-	O: 'a + OffstateBackend,
+	O: 'a + KvBackend,
 > ProvingBackend<'a, S, H, O> {
 	/// Create new proving backend.
 	pub fn new(backend: &'a TrieBackend<S, H, O>) -> Self {
@@ -151,7 +151,7 @@ impl<'a,
 impl<'a,
 	S: 'a + TrieBackendStorage<H>,
 	H: 'a + Hasher,
-	O: 'a + OffstateBackend,
+	O: 'a + KvBackend,
 > std::fmt::Debug for ProvingBackend<'a, S, H, O> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "ProvingBackend")
@@ -163,12 +163,12 @@ impl<'a, S, H, O> Backend<H> for ProvingBackend<'a, S, H, O>
 		S: 'a + TrieBackendStorage<H>,
 		H: 'a + Hasher,
 		H::Out: Ord,
-		O: 'a + OffstateBackend,
+		O: 'a + KvBackend,
 {
 	type Error = String;
 	type Transaction = (S::Overlay, Vec<(Vec<u8>, Option<Vec<u8>>)>);
 	type TrieBackendStorage = PrefixedMemoryDB<H>;
-	type OffstateBackend = O;
+	type KvBackend = O;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		ProvingBackendEssence {
@@ -214,8 +214,8 @@ impl<'a, S, H, O> Backend<H> for ProvingBackend<'a, S, H, O>
 		self.backend.child_pairs(storage_key)
 	}
 
-	fn offstate_pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
-		self.backend.offstate_pairs()
+	fn kv_pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
+		self.backend.kv_pairs()
 	}
 
 	fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> {
@@ -240,11 +240,11 @@ impl<'a, S, H, O> Backend<H> for ProvingBackend<'a, S, H, O>
 		self.backend.child_storage_root(storage_key, delta)
 	}
 
-	fn offstate_transaction<I>(&self, delta: I) -> Self::Transaction
+	fn kv_transaction<I>(&self, delta: I) -> Self::Transaction
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
-		self.backend.offstate_transaction(delta)
+		self.backend.kv_transaction(delta)
 	}
 
 }
@@ -253,17 +253,17 @@ impl<'a, S, H, O> Backend<H> for ProvingBackend<'a, S, H, O>
 pub fn create_proof_check_backend<H>(
 	root: H::Out,
 	proof: Vec<Vec<u8>>
-) -> Result<TrieBackend<MemoryDB<H>, H, InMemoryOffstateBackend>, Box<dyn Error>>
+) -> Result<TrieBackend<MemoryDB<H>, H, InMemoryKvBackend>, Box<dyn Error>>
 where
 	H: Hasher,
 {
 	let db = create_proof_check_backend_storage(proof);
-	// run on empty offstate (current proof does not require
-	// offstate).
-	let offstate = InMemoryOffstateBackend::default(); 
+	// run on empty kv (current proof does not require
+	// kv).
+	let kv = InMemoryKvBackend::default(); 
 
 	if db.contains(&root, EMPTY_PREFIX) {
-		Ok(TrieBackend::new(db, root, offstate))
+		Ok(TrieBackend::new(db, root, kv))
 	} else {
 		Err(Box::new(ExecutionError::InvalidProof))
 	}
@@ -290,11 +290,11 @@ mod tests {
 	use super::*;
 	use primitives::{Blake2Hasher, child_storage_key::ChildStorageKey};
 
-	type OffstateBackend = InMemoryOffstateBackend;
+	type KvBackend = InMemoryKvBackend;
 
 	fn test_proving<'a>(
-		trie_backend: &'a TrieBackend<PrefixedMemoryDB<Blake2Hasher>, Blake2Hasher, OffstateBackend>,
-	) -> ProvingBackend<'a, PrefixedMemoryDB<Blake2Hasher>, Blake2Hasher, OffstateBackend> {
+		trie_backend: &'a TrieBackend<PrefixedMemoryDB<Blake2Hasher>, Blake2Hasher, KvBackend>,
+	) -> ProvingBackend<'a, PrefixedMemoryDB<Blake2Hasher>, Blake2Hasher, KvBackend> {
 		ProvingBackend::new(trie_backend)
 	}
 
@@ -338,7 +338,7 @@ mod tests {
 		let in_memory = InMemory::<Blake2Hasher>::default();
 		let mut in_memory = in_memory.update(InMemoryTransaction {
 			storage: contents,
-			offstate: Default::default(),
+			kv: Default::default(),
 		});
 
 		let in_memory_root = in_memory.storage_root(::std::iter::empty()).0;
@@ -371,7 +371,7 @@ mod tests {
 		let in_memory = InMemory::<Blake2Hasher>::default();
 		let mut in_memory = in_memory.update(InMemoryTransaction {
 			storage: contents,
-			offstate: Default::default(),
+			kv: Default::default(),
 		});
 		let in_memory_root = in_memory.full_storage_root::<_, Vec<_>, _, _>(
 			::std::iter::empty(),

@@ -46,8 +46,8 @@ pub use branch::BranchRanges;
 /// Database value type.
 pub type DBValue = Vec<u8>;
 
-/// Offstate storage key definition.
-pub type OffstateKey = Vec<u8>;
+/// Kv storage key definition.
+pub type KvKey = Vec<u8>;
 
 /// Basic set of requirements for the Block hash and node key types.
 pub trait Hash: Send + Sync + Sized + Eq + PartialEq + Clone + Default + fmt::Debug + Codec + std::hash::Hash + 'static {}
@@ -72,19 +72,19 @@ pub trait NodeDb {
 
 /// Backend database trait. Read-only.
 ///
-/// State parameter indicate where to query offstate storage,
+/// State parameter indicate where to query kv storage,
 /// this is a Block hash, as branch index are
 /// build on load, with a persistence for this
 /// data it would be more direct to use a
 /// tuple of block number and branchindex.
-pub trait OffstateDb<State> {
+pub trait KvDb<State> {
 	type Error: fmt::Debug;
 
 	/// Get state trie node.
-	fn get_offstate(&self, key: &[u8], state: &State) -> Result<Option<DBValue>, Self::Error>;
+	fn get_kv(&self, key: &[u8], state: &State) -> Result<Option<DBValue>, Self::Error>;
 
 	/// Get all pairs of key at current state.
-	fn get_offstate_pairs(&self, state: &State) -> Vec<(OffstateKey, DBValue)>;
+	fn get_kv_pairs(&self, state: &State) -> Vec<(KvKey, DBValue)>;
 }
 
 /// Error type.
@@ -137,29 +137,29 @@ pub struct ChangeSet<H: Hash> {
 	pub deleted: Vec<H>,
 }
 
-/// A set of offstate state values changes.
+/// A set of kv state values changes.
 /// TODO EMCH note that this could really benefit from batching
 /// the change set (need to change from client to run over
-/// the whole range for offstate: then we can get prepare
+/// the whole range for kv: then we can get prepare
 /// insertion of batch values for history in db such as :
-/// pub type OffstateChangeSet<H> = Vec<(H, Vec(u64, Option<DBValue>))>;
+/// pub type KvChangeSet<H> = Vec<(H, Vec(u64, Option<DBValue>))>;
 /// ),
 /// but it just need to be build from client (no need to change
 /// it here except to extract faster).
 ///
 /// This assumes that we only commit block per block (otherwhise
 /// we need to inclued block number value here).
-pub type OffstateChangeSet<H> = Vec<(H, Option<DBValue>)>;
+pub type KvChangeSet<H> = Vec<(H, Option<DBValue>)>;
 
-/// Info for pruning offstate: a last prune index and keys to prune.
+/// Info for pruning kv: a last prune index and keys to prune.
 /// Is set to none when not initialized.
-pub type OffstateChangeSetPrune = Option<(u64, HashSet<OffstateKey>)>;
+pub type KvChangeSetPrune = Option<(u64, HashSet<KvKey>)>;
 
-/// Info for reverting offstate of a canonical backend.
-pub type OffstateChangeSetRevert = u64;
+/// Info for reverting kv of a canonical backend.
+pub type KvChangeSetRevert = u64;
 
 /// Commit set on canonical operation.
-pub type CommitSetCanonical<H> = (CommitSet<H>, OffstateChangeSetPrune);
+pub type CommitSetCanonical<H> = (CommitSet<H>, KvChangeSetPrune);
 
 /// A set of changes to the backing database.
 /// It only contain a single block change set.
@@ -169,8 +169,8 @@ pub struct CommitSet<H: Hash> {
 	pub data: ChangeSet<H>,
 	/// Metadata changes.
 	pub meta: ChangeSet<Vec<u8>>,
-	/// Offstate data changes.
-	pub offstate: OffstateChangeSet<OffstateKey>,
+	/// Kv data changes.
+	pub kv: KvChangeSet<KvKey>,
 }
 
 /// Pruning constraints. If none are specified pruning is
@@ -257,7 +257,7 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		number: u64,
 		parent_hash: &BlockHash,
 		mut changeset: ChangeSet<Key>,
-		offstate_changeset: OffstateChangeSet<OffstateKey>,
+		kv_changeset: KvChangeSet<KvKey>,
 	) -> Result<CommitSet<Key>, Error<E>> {
 
 		match self.mode {
@@ -273,11 +273,11 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 					// client-db-branch-ix)
 					// and use and ordered tuple (branchix, blocknumber)
 					// index to run.
-					offstate: offstate_changeset,
+					kv: kv_changeset,
 				})
 			},
 			PruningMode::Constrained(_) | PruningMode::ArchiveCanonical => {
-				self.non_canonical.insert(hash, number, parent_hash, changeset, offstate_changeset)
+				self.non_canonical.insert(hash, number, parent_hash, changeset, kv_changeset)
 			}
 		}
 	}
@@ -408,33 +408,33 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		db.get(key.as_ref()).map_err(|e| Error::Db(e))
 	}
 
-	pub fn get_offstate<D: OffstateDb<u64>>(
+	pub fn get_kv<D: KvDb<u64>>(
 		&self,
 		key: &[u8],
 		state: &(BranchRanges, u64),
 		db: &D,
 	) -> Result<Option<DBValue>, Error<D::Error>>	{
-		if let Some(value) = self.non_canonical.get_offstate(key, &state.0) {
+		if let Some(value) = self.non_canonical.get_kv(key, &state.0) {
 			return Ok(value.clone());
 		}
-		db.get_offstate(key, &state.1).map_err(|e| Error::Db(e))
+		db.get_kv(key, &state.1).map_err(|e| Error::Db(e))
 	}
 
-	pub fn get_offstate_pairs<D: OffstateDb<u64>>(
+	pub fn get_kv_pairs<D: KvDb<u64>>(
 		&self,
 		state: &(BranchRanges, u64),
 		db: &D,
-	) -> Vec<(OffstateKey, DBValue)> {
+	) -> Vec<(KvKey, DBValue)> {
 		let mut result = Vec::new();
 		let mut filter = HashSet::new();
-		for (k, o) in self.non_canonical.offstate_iter(&state.0) {
+		for (k, o) in self.non_canonical.kv_iter(&state.0) {
 			if let Some(v) = o.as_ref() {
 				result.push((k.clone(), v.clone()));
 			}
 			filter.insert(k.clone());
 		}
 		result.extend(
-			db.get_offstate_pairs(&state.1).into_iter()
+			db.get_kv_pairs(&state.1).into_iter()
 				.filter(|kv| !filter.contains(&kv.0))
 		);
 		result
@@ -483,9 +483,9 @@ impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
 		number: u64,
 		parent_hash: &BlockHash,
 		changeset: ChangeSet<Key>,
-		offstate_changeset: OffstateChangeSet<OffstateKey>,
+		kv_changeset: KvChangeSet<KvKey>,
 	) -> Result<CommitSet<Key>, Error<E>> {
-		self.db.write().insert_block(hash, number, parent_hash, changeset, offstate_changeset)
+		self.db.write().insert_block(hash, number, parent_hash, changeset, kv_changeset)
 	}
 
 	/// Finalize a previously inserted block.
@@ -496,7 +496,8 @@ impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
 		self.db.write().canonicalize_block(hash)
 	}
 
-	/// TODO EMCH
+	/// For a a given block return its path in the block tree.
+	/// Note that using `number` is use to skip a query to block number for hash.
 	pub fn get_branch_range(&self, hash: &BlockHash, number: u64) -> Option<BranchRanges> {
 		self.db.read().get_branch_range(hash, number)
 	}
@@ -519,22 +520,22 @@ impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
 	}
 
 	/// Get a value from non-canonical/pruning overlay or the backing DB.
-	pub fn get_offstate<D: OffstateDb<u64>>(
+	pub fn get_kv<D: KvDb<u64>>(
 		&self,
 		key: &[u8],
 		state: &(BranchRanges, u64),
 		db: &D,
 	) -> Result<Option<DBValue>, Error<D::Error>> {
-		self.db.read().get_offstate(key, state, db)
+		self.db.read().get_kv(key, state, db)
 	}
 
-	/// Get pairs values offstate.
-	pub fn get_offstate_pairs<D: OffstateDb<u64>>(
+	/// Get pairs values kv.
+	pub fn get_kv_pairs<D: KvDb<u64>>(
 		&self,
 		state: &(BranchRanges, u64),
 		db: &D,
-	) -> Vec<(OffstateKey, DBValue)> {
-		self.db.read().get_offstate_pairs(state, db)
+	) -> Vec<(KvKey, DBValue)> {
+		self.db.read().get_kv_pairs(state, db)
 	}
 	
 	/// Revert all non-canonical blocks with the best block number.
@@ -570,11 +571,11 @@ mod tests {
 	use std::io;
 	use primitives::H256;
 	use crate::{StateDb, PruningMode, Constraints};
-	use crate::test::{make_db, make_changeset, make_offstate_changeset, TestDb};
+	use crate::test::{make_db, make_changeset, make_kv_changeset, TestDb};
 
 	fn make_test_db(settings: PruningMode) -> (TestDb, StateDb<H256, H256>) {
 		let mut db = make_db(&[91, 921, 922, 93, 94]);
-		db.initialize_offstate(&[81, 821, 822, 83, 84]);
+		db.initialize_kv(&[81, 821, 822, 83, 84]);
 		let state_db = StateDb::new(settings, &db).unwrap();
 
 		db.commit(
@@ -584,7 +585,7 @@ mod tests {
 					1,
 					&H256::from_low_u64_be(0),
 					make_changeset(&[1], &[91]),
-					make_offstate_changeset(&[1], &[81]),
+					make_kv_changeset(&[1], &[81]),
 				)
 				.unwrap(),
 		);
@@ -595,7 +596,7 @@ mod tests {
 					2,
 					&H256::from_low_u64_be(1),
 					make_changeset(&[21], &[921, 1]),
-					make_offstate_changeset(&[21], &[821, 1]),
+					make_kv_changeset(&[21], &[821, 1]),
 				)
 				.unwrap(),
 		);
@@ -606,7 +607,7 @@ mod tests {
 					2,
 					&H256::from_low_u64_be(1),
 					make_changeset(&[22], &[922]),
-					make_offstate_changeset(&[22], &[822]),
+					make_kv_changeset(&[22], &[822]),
 				)
 				.unwrap(),
 		);
@@ -617,7 +618,7 @@ mod tests {
 					3,
 					&H256::from_low_u64_be(21),
 					make_changeset(&[3], &[93]),
-					make_offstate_changeset(&[3], &[83]),
+					make_kv_changeset(&[3], &[83]),
 				)
 				.unwrap(),
 		);
@@ -634,7 +635,7 @@ mod tests {
 					4,
 					&H256::from_low_u64_be(3),
 					make_changeset(&[4], &[94]),
-					make_offstate_changeset(&[4], &[84]),
+					make_kv_changeset(&[4], &[84]),
 				)
 				.unwrap(),
 		);
@@ -658,7 +659,7 @@ mod tests {
 		let (db, sdb) = make_test_db(PruningMode::ArchiveAll);
 		assert!(db.data_eq(&make_db(&[1, 21, 22, 3, 4, 91, 921, 922, 93, 94])));
 
-		// TODO EMCH implement full for test db and test for offstate
+		// TODO EMCH implement full for test db and test for kv
 	
 		assert!(!sdb.is_pruned(&H256::from_low_u64_be(0), 0));
 	}
@@ -667,11 +668,11 @@ mod tests {
 	fn canonical_archive_keeps_canonical() {
 		let (db, _) = make_test_db(PruningMode::ArchiveCanonical);
 		assert!(db.data_eq(&make_db(&[1, 21, 3, 91, 921, 922, 93, 94])));
-		assert!(db.offstate_eq_at(&[81, 821, 822, 83, 84], Some(0)));
-		assert!(db.offstate_eq_at(&[1, 821, 822, 83, 84], Some(1)));
-		assert!(db.offstate_eq_at(&[21, 822, 83, 84], Some(2)));
-		assert!(db.offstate_eq_at(&[3, 21, 822, 84], Some(3)));
-		assert!(db.offstate_eq(&[3, 21, 822, 84]));
+		assert!(db.kv_eq_at(&[81, 821, 822, 83, 84], Some(0)));
+		assert!(db.kv_eq_at(&[1, 821, 822, 83, 84], Some(1)));
+		assert!(db.kv_eq_at(&[21, 822, 83, 84], Some(2)));
+		assert!(db.kv_eq_at(&[3, 21, 822, 84], Some(3)));
+		assert!(db.kv_eq(&[3, 21, 822, 84]));
 	}
 
 	#[test]
@@ -681,11 +682,11 @@ mod tests {
 			max_mem: None,
 		}));
 		assert!(db.data_eq(&make_db(&[21, 3, 922, 94])));
-		assert!(db.offstate_eq_at(&[822, 84], Some(0)));
-		assert!(db.offstate_eq_at(&[822, 84], Some(1)));
-		assert!(db.offstate_eq_at(&[21, 822, 84], Some(2)));
-		assert!(db.offstate_eq_at(&[3, 21, 822, 84], Some(3)));
-		assert!(db.offstate_eq(&[3, 21, 822, 84]));
+		assert!(db.kv_eq_at(&[822, 84], Some(0)));
+		assert!(db.kv_eq_at(&[822, 84], Some(1)));
+		assert!(db.kv_eq_at(&[21, 822, 84], Some(2)));
+		assert!(db.kv_eq_at(&[3, 21, 822, 84], Some(3)));
+		assert!(db.kv_eq(&[3, 21, 822, 84]));
 	}
 
 	#[test]
@@ -699,11 +700,11 @@ mod tests {
 		assert!(sdb.is_pruned(&H256::from_low_u64_be(21), 2));
 		assert!(sdb.is_pruned(&H256::from_low_u64_be(22), 2));
 		assert!(db.data_eq(&make_db(&[21, 3, 922, 93, 94])));
-		assert!(db.offstate_eq_at(&[822, 83, 84], Some(0)));
-		assert!(db.offstate_eq_at(&[822, 83, 84], Some(1)));
-		assert!(db.offstate_eq_at(&[21, 822, 83, 84], Some(2)));
-		assert!(db.offstate_eq_at(&[3, 21, 822, 84], Some(3)));
-		assert!(db.offstate_eq(&[3, 21, 822, 84]));
+		assert!(db.kv_eq_at(&[822, 83, 84], Some(0)));
+		assert!(db.kv_eq_at(&[822, 83, 84], Some(1)));
+		assert!(db.kv_eq_at(&[21, 822, 83, 84], Some(2)));
+		assert!(db.kv_eq_at(&[3, 21, 822, 84], Some(3)));
+		assert!(db.kv_eq(&[3, 21, 822, 84]));
 	}
 
 	#[test]
@@ -717,10 +718,10 @@ mod tests {
 		assert!(!sdb.is_pruned(&H256::from_low_u64_be(21), 2));
 		assert!(sdb.is_pruned(&H256::from_low_u64_be(22), 2));
 		assert!(db.data_eq(&make_db(&[1, 21, 3, 921, 922, 93, 94])));
-		assert!(db.offstate_eq_at(&[821, 822, 83, 84], Some(0)));
-		assert!(db.offstate_eq_at(&[1, 821, 822, 83, 84], Some(1)));
-		assert!(db.offstate_eq_at(&[21, 822, 83, 84], Some(2)));
-		assert!(db.offstate_eq_at(&[3, 21, 822, 84], Some(3)));
-		assert!(db.offstate_eq(&[3, 21, 822, 84]));
+		assert!(db.kv_eq_at(&[821, 822, 83, 84], Some(0)));
+		assert!(db.kv_eq_at(&[1, 821, 822, 83, 84], Some(1)));
+		assert!(db.kv_eq_at(&[21, 822, 83, 84], Some(2)));
+		assert!(db.kv_eq_at(&[3, 21, 822, 84], Some(3)));
+		assert!(db.kv_eq(&[3, 21, 822, 84]));
 	}
 }

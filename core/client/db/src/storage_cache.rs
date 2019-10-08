@@ -470,7 +470,7 @@ impl<H: Hasher, S: StateBackend<H>, B: BlockT> StateBackend<H> for CachingState<
 	type Error = S::Error;
 	type Transaction = S::Transaction;
 	type TrieBackendStorage = S::TrieBackendStorage;
-	type OffstateBackend = S::OffstateBackend;
+	type KvBackend = S::KvBackend;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		let local_cache = self.cache.local_cache.upgradable_read();
@@ -571,11 +571,11 @@ impl<H: Hasher, S: StateBackend<H>, B: BlockT> StateBackend<H> for CachingState<
 		self.state.child_storage_root(storage_key, delta)
 	}
 
-	fn offstate_transaction<I>(&self, delta: I) -> Self::Transaction
+	fn kv_transaction<I>(&self, delta: I) -> Self::Transaction
 		where
 			I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 	{
-		self.state.offstate_transaction(delta)
+		self.state.kv_transaction(delta)
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
@@ -590,8 +590,8 @@ impl<H: Hasher, S: StateBackend<H>, B: BlockT> StateBackend<H> for CachingState<
 		self.state.child_pairs(storage_key)
 	}
 
-	fn offstate_pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
-		self.state.offstate_pairs()
+	fn kv_pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
+		self.state.kv_pairs()
 	}
 
 	fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> {
@@ -603,7 +603,7 @@ impl<H: Hasher, S: StateBackend<H>, B: BlockT> StateBackend<H> for CachingState<
 	}
 
 	fn as_trie_backend(&mut self) -> Option<
-		&TrieBackend<Self::TrieBackendStorage, H, Self::OffstateBackend>
+		&TrieBackend<Self::TrieBackendStorage, H, Self::KvBackend>
 	> {
 		self.state.as_trie_backend()
 	}

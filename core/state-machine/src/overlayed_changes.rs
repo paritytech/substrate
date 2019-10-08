@@ -57,8 +57,8 @@ pub struct OverlayedChangeSet {
 	pub top: HashMap<Vec<u8>, OverlayedValue>,
 	/// Child storage changes.
 	pub children: HashMap<Vec<u8>, HashMap<Vec<u8>, OverlayedValue>>,
-	/// Offstate storage changes.
-	pub offstate: HashMap<Vec<u8>, Option<Vec<u8>>>,
+	/// Kv storage changes.
+	pub kv: HashMap<Vec<u8>, Option<Vec<u8>>>,
 }
 
 #[cfg(test)]
@@ -67,7 +67,7 @@ impl FromIterator<(Vec<u8>, OverlayedValue)> for OverlayedChangeSet {
 		Self {
 			top: iter.into_iter().collect(),
 			children: Default::default(),
-			offstate: Default::default(),
+			kv: Default::default(),
 		}
 	}
 }
@@ -75,14 +75,14 @@ impl FromIterator<(Vec<u8>, OverlayedValue)> for OverlayedChangeSet {
 impl OverlayedChangeSet {
 	/// Whether the change set is empty.
 	pub fn is_empty(&self) -> bool {
-		self.top.is_empty() && self.children.is_empty() && self.offstate.is_empty()
+		self.top.is_empty() && self.children.is_empty() && self.kv.is_empty()
 	}
 
 	/// Clear the change set.
 	pub fn clear(&mut self) {
 		self.top.clear();
 		self.children.clear();
-		self.offstate.clear();
+		self.kv.clear();
 	}
 }
 
@@ -139,9 +139,9 @@ impl OverlayedChanges {
 	/// Returns a double-Option: None if the key is unknown (i.e. and the query should be refered
 	/// to the backend); Some(None) if the key has been deleted. Some(Some(...)) for a key whose
 	/// value has been set.
-	pub fn offstate_storage(&self, key: &[u8]) -> Option<Option<&[u8]>> {
-		self.prospective.offstate.get(key)
-			.or_else(|| self.committed.offstate.get(key))
+	pub fn kv_storage(&self, key: &[u8]) -> Option<Option<&[u8]>> {
+		self.prospective.kv.get(key)
+			.or_else(|| self.committed.kv.get(key))
 			.map(|x| x.as_ref().map(AsRef::as_ref))
 	}
 
@@ -177,8 +177,8 @@ impl OverlayedChanges {
 	/// Inserts the given key-value pair as an auxilliary data.
 	///
 	/// `None` can be used to delete a value specified by the given key.
-	pub(crate) fn set_offstate_storage(&mut self, key: Vec<u8>, val: Option<Vec<u8>>) {
-		self.prospective.offstate.insert(key, val);
+	pub(crate) fn set_kv_storage(&mut self, key: Vec<u8>, val: Option<Vec<u8>>) {
+		self.prospective.kv.insert(key, val);
 	}
 
 	/// Clear child storage of given storage key.
@@ -305,8 +305,8 @@ impl OverlayedChanges {
 						.extend(prospective_extrinsics);
 				}
 			}
-			for (key, val) in self.prospective.offstate.drain() {
-				self.committed.offstate.insert(key, val);
+			for (key, val) in self.prospective.kv.drain() {
+				self.committed.kv.insert(key, val);
 			}
 			for (storage_key, mut map) in self.prospective.children.drain() {
 				let map_dest = self.committed.children.entry(storage_key).or_default();
@@ -336,7 +336,7 @@ impl OverlayedChanges {
 		(self.committed.top.into_iter().map(|(k, v)| (k, v.value)),
 			self.committed.children.into_iter()
 				.map(|(sk, v)| (sk, v.into_iter().map(|(k, v)| (k, v.value)))),
-			self.committed.offstate.into_iter())
+			self.committed.kv.into_iter())
 	}
 
 	/// Inserts storage entry responsible for current extrinsic index.
@@ -395,39 +395,39 @@ mod tests {
 		let mut overlayed = OverlayedChanges::default();
 
 		let key = vec![42, 69, 169, 142];
-		let offstate_key = vec![43, 69, 169, 142];
+		let kv_key = vec![43, 69, 169, 142];
 
 		assert!(overlayed.storage(&key).is_none());
 
 		overlayed.set_storage(key.clone(), Some(vec![1, 2, 3]));
-		overlayed.set_offstate_storage(offstate_key.clone(), Some(vec![1, 2, 2]));
+		overlayed.set_kv_storage(kv_key.clone(), Some(vec![1, 2, 2]));
 		assert_eq!(overlayed.storage(&key).unwrap(), Some(&[1, 2, 3][..]));
-		assert_eq!(overlayed.offstate_storage(&offstate_key).unwrap(), Some(&[1, 2, 2][..]));
+		assert_eq!(overlayed.kv_storage(&kv_key).unwrap(), Some(&[1, 2, 2][..]));
 
 		overlayed.commit_prospective();
 		assert_eq!(overlayed.storage(&key).unwrap(), Some(&[1, 2, 3][..]));
-		assert_eq!(overlayed.offstate_storage(&offstate_key).unwrap(), Some(&[1, 2, 2][..]));
+		assert_eq!(overlayed.kv_storage(&kv_key).unwrap(), Some(&[1, 2, 2][..]));
 
 		overlayed.set_storage(key.clone(), Some(vec![]));
-		overlayed.set_offstate_storage(offstate_key.clone(), Some(vec![2]));
+		overlayed.set_kv_storage(kv_key.clone(), Some(vec![2]));
 		assert_eq!(overlayed.storage(&key).unwrap(), Some(&[][..]));
-		assert_eq!(overlayed.offstate_storage(&offstate_key).unwrap(), Some(&[2][..]));
+		assert_eq!(overlayed.kv_storage(&kv_key).unwrap(), Some(&[2][..]));
 
 		overlayed.set_storage(key.clone(), None);
-		overlayed.set_offstate_storage(offstate_key.clone(), None);
+		overlayed.set_kv_storage(kv_key.clone(), None);
 		assert!(overlayed.storage(&key).unwrap().is_none());
-		assert!(overlayed.offstate_storage(&offstate_key).unwrap().is_none());
+		assert!(overlayed.kv_storage(&kv_key).unwrap().is_none());
 
 
 		overlayed.discard_prospective();
 		assert_eq!(overlayed.storage(&key).unwrap(), Some(&[1, 2, 3][..]));
-		assert_eq!(overlayed.offstate_storage(&offstate_key).unwrap(), Some(&[1, 2, 2][..]));
+		assert_eq!(overlayed.kv_storage(&kv_key).unwrap(), Some(&[1, 2, 2][..]));
 
 		overlayed.set_storage(key.clone(), None);
-		overlayed.set_offstate_storage(offstate_key.clone(), None);
+		overlayed.set_kv_storage(kv_key.clone(), None);
 		overlayed.commit_prospective();
 		assert!(overlayed.storage(&key).unwrap().is_none());
-		assert!(overlayed.offstate_storage(&offstate_key).unwrap().is_none());
+		assert!(overlayed.kv_storage(&kv_key).unwrap().is_none());
 	}
 
 	#[test]

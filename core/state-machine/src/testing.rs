@@ -84,15 +84,15 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 	pub fn insert(&mut self, k: Vec<u8>, v: Vec<u8>) {
 		self.backend = self.backend.update(InMemoryTransaction {
 			storage: vec![(None, k, Some(v))],
-			offstate: Default::default(),
+			kv: Default::default(),
 		});
 	}
 
 	/// Insert key/value into ofstate information backend
-	pub fn insert_offstate(&mut self, k: Vec<u8>, v: Vec<u8>) {
+	pub fn insert_kv(&mut self, k: Vec<u8>, v: Vec<u8>) {
 		self.backend = self.backend.update(InMemoryTransaction {
 			storage: Default::default(),
-			offstate: vec![(k, Some(v))],
+			kv: vec![(k, Some(v))],
 		});
 	}
 
@@ -125,12 +125,12 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 					.collect::<Vec<_>>()
 			});
 
-		let offstate = self.overlay.committed.offstate.clone().into_iter()
-			.chain(self.overlay.prospective.offstate.clone().into_iter());
+		let kv = self.overlay.committed.kv.clone().into_iter()
+			.chain(self.overlay.prospective.kv.clone().into_iter());
 
 		self.backend.update(InMemoryTransaction {
 			storage: top.chain(children).collect(),
-			offstate: offstate.collect(),
+			kv: kv.collect(),
 		})
 	}
 }
@@ -263,7 +263,7 @@ impl<H, N> Externalities<H> for TestExternalities<H, N> where
 		let delta = self.overlay.committed.top.iter().map(|(k, v)| (k.clone(), v.value.clone()))
 			.chain(self.overlay.prospective.top.iter().map(|(k, v)| (k.clone(), v.value.clone())));
 
-		// transaction not used afterward, so not using offstate.
+		// transaction not used afterward, so not using kv.
 		self.backend.full_storage_root(delta, child_delta_iter, None).0
 
 	}

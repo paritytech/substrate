@@ -61,7 +61,7 @@ use sr_primitives::traits::{
 use executor::RuntimeInfo;
 use state_machine::{
 	DBValue, ChangesTrieTransaction, ChangesTrieCacheAction, ChangesTrieBuildCache,
-	backend::Backend as StateBackend, InMemoryOffstateBackend,
+	backend::Backend as StateBackend, InMemoryKvBackend,
 };
 use crate::utils::{Meta, db_err, meta_keys, read_db, read_meta};
 use client::leaves::{LeafSet, FinalizationDisplaced};
@@ -93,7 +93,7 @@ const DEFAULT_CHILD_RATIO: (usize, usize) = (1, 10);
 pub type DbState = state_machine::TrieBackend<
 	Arc<dyn state_machine::Storage<Blake2Hasher>>,
 	Blake2Hasher,
-	Arc<dyn state_machine::OffstateBackend>,
+	Arc<dyn state_machine::KvBackend>,
 >;
 
 /// A reference tracking state.
@@ -134,7 +134,7 @@ impl<B: BlockT> StateBackend<Blake2Hasher> for RefTrackingState<B> {
 	type Error =  <DbState as StateBackend<Blake2Hasher>>::Error;
 	type Transaction = <DbState as StateBackend<Blake2Hasher>>::Transaction;
 	type TrieBackendStorage = <DbState as StateBackend<Blake2Hasher>>::TrieBackendStorage;
-	type OffstateBackend = <DbState as StateBackend<Blake2Hasher>>::OffstateBackend;
+	type KvBackend = <DbState as StateBackend<Blake2Hasher>>::KvBackend;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.state.storage(key)
@@ -186,11 +186,11 @@ impl<B: BlockT> StateBackend<Blake2Hasher> for RefTrackingState<B> {
 		self.state.child_storage_root(storage_key, delta)
 	}
 
-	fn offstate_transaction<I>(&self, delta: I) -> Self::Transaction
+	fn kv_transaction<I>(&self, delta: I) -> Self::Transaction
 		where
 			I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
-		self.state.offstate_transaction(delta)
+		self.state.kv_transaction(delta)
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
@@ -205,8 +205,8 @@ impl<B: BlockT> StateBackend<Blake2Hasher> for RefTrackingState<B> {
 		self.state.child_pairs(child_storage_key)
 	}
 
-	fn offstate_pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
-		self.state.offstate_pairs()
+	fn kv_pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
+		self.state.kv_pairs()
 	}
 
 	fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> {
@@ -218,7 +218,7 @@ impl<B: BlockT> StateBackend<Blake2Hasher> for RefTrackingState<B> {
 	}
 
 	fn as_trie_backend(&mut self) -> Option<
-		&state_machine::TrieBackend<Self::TrieBackendStorage, Blake2Hasher, Self::OffstateBackend>
+		&state_machine::TrieBackend<Self::TrieBackendStorage, Blake2Hasher, Self::KvBackend>
 	> {
 		self.state.as_trie_backend()
 	}
@@ -283,7 +283,7 @@ pub(crate) mod columns {
 	pub const AUX: Option<u32> = Some(8);
 	/// Offchain workers local storage
 	pub const OFFCHAIN: Option<u32> = Some(9);
-	/// Offstate data
+	/// Kv data
 	pub const OFFSTATE: Option<u32> = Some(10);
 }
 
@@ -473,7 +473,7 @@ pub struct BlockImportOperation<Block: BlockT, H: Hasher> {
 	db_updates: (PrefixedMemoryDB<H>, Vec<(Vec<u8>, Option<Vec<u8>>)>),
 	storage_updates: StorageCollection,
 	child_storage_updates: ChildStorageCollection,
-	// TODO EMCH offstate update and offstate values in cache
+	// TODO EMCH kv update and kv values in cache
 	changes_trie_updates: MemoryDB<H>,
 	changes_trie_cache_update: Option<ChangesTrieCacheAction<H::Out, NumberFor<Block>>>,
 	pending_block: Option<PendingBlock<Block>>,
@@ -627,11 +627,11 @@ impl<Block: BlockT> state_db::NodeDb for StorageDb<Block> {
 	}
 }
 
-impl<Block: BlockT> state_db::OffstateDb<u64> for StorageDb<Block> {
+impl<Block: BlockT> state_db::KvDb<u64> for StorageDb<Block> {
 
 	type Error = io::Error;
 
-	fn get_offstate(&self, key: &[u8], state: &u64) -> Result<Option<Vec<u8>>, Self::Error> {
+	fn get_kv(&self, key: &[u8], state: &u64) -> Result<Option<Vec<u8>>, Self::Error> {
 		Ok(self.db.get(columns::OFFSTATE, key)?
 			.as_ref()
 			.map(|s| Ser::from_slice(&s[..]))
@@ -641,8 +641,8 @@ impl<Block: BlockT> state_db::OffstateDb<u64> for StorageDb<Block> {
 		))
 	}
 
-	fn get_offstate_pairs(&self, state: &u64) -> Vec<(Vec<u8>, Vec<u8>)> {
-		self.db.iter(columns::OFFSTATE).filter_map(|(k, v)| 
+	fn get_kv_pairs(&self, state: &u64) -> Vec<(Vec<u8>, Vec<u8>)> {
+		self.db.iter(columns::OFFSTATE).filter_map(|(k, v)|
 			Ser::from_slice(&v[..]).get(*state)
 				.unwrap_or(None) // flatten
 				.map(Into::into)
@@ -651,15 +651,15 @@ impl<Block: BlockT> state_db::OffstateDb<u64> for StorageDb<Block> {
 	}
 }
 
-impl<Block: BlockT> state_machine::OffstateBackend for StorageDbAt<Block, (BranchRanges, u64)> {
+impl<Block: BlockT> state_machine::KvBackend for StorageDbAt<Block, (BranchRanges, u64)> {
 
 	fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
-		self.storage_db.state_db.get_offstate(key, &self.state, self.storage_db.deref())
+		self.storage_db.state_db.get_kv(key, &self.state, self.storage_db.deref())
 			.map_err(|e| format!("Database backend error: {:?}", e))
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
-		self.storage_db.state_db.get_offstate_pairs(&self.state, self.storage_db.deref())
+		self.storage_db.state_db.get_kv_pairs(&self.state, self.storage_db.deref())
 	}
 }
 
@@ -982,7 +982,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 			op.set_block_data(header, body, justification, new_block_state).unwrap();
 			op.update_db_storage(InMemoryTransaction {
 				storage,
-				offstate: state.offstate_pairs().into_iter()
+				kv: state.kv_pairs().into_iter()
 					.map(|(k, v)| (k, Some(v))).collect(),
 			}).unwrap();
 			inmem.commit_operation(op).unwrap();
@@ -1240,9 +1240,9 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 				}
 			}
 			// remove duplicate TODO EMCH very bad
-			let map_offstate: HashMap<_, _> = operation.db_updates.1.into_iter().collect();
-			// TODO EMCH !!! keep map_offstate for OffstateChangeSet type???
-			let offstate_changeset: state_db::OffstateChangeSet<Vec<u8>> = map_offstate.into_iter()
+			let map_kv: HashMap<_, _> = operation.db_updates.1.into_iter().collect();
+			// TODO EMCH !!! keep map_kv for KvChangeSet type???
+			let kv_changeset: state_db::KvChangeSet<Vec<u8>> = map_kv.into_iter()
 				.collect();
 			let number_u64 = number.saturated_into::<u64>();
 			let commit = self.storage.state_db.insert_block(
@@ -1250,18 +1250,18 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 				number_u64,
 				&pending_block.header.parent_hash(),
 				changeset,
-				offstate_changeset,
+				kv_changeset,
 			).map_err(|e: state_db::Error<io::Error>|
 				client::error::Error::from(format!("State database error: {:?}", e)))?;
-			// TODO EMCH wrong block number: there is no offstate change on block insert
+			// TODO EMCH wrong block number: there is no kv change on block insert
 			// TODO split apply_state_commit and do an assertion in apply_state_commit
-			// that there is no offstate stuff anymore
+			// that there is no kv stuff anymore
 			apply_state_commit(&mut transaction, commit, &self.storage.db, number_u64).map_err(|err|
 				client::error::Error::Backend(
 					format!("Error building commit transaction : {}", err)
 				)
 			)?;
-	
+
 			// Check if need to finalize. Genesis is always finalized instantly.
 			let finalized = number_u64 == 0 || pending_block.leaf_state.is_final();
 
@@ -1444,10 +1444,10 @@ fn apply_state_commit_inner(
 	commit: state_db::CommitSet<Vec<u8>>,
 	db: &Arc<dyn KeyValueDB>,
 	last_block: u64,
-	mut offstate_prune_key: state_db::OffstateChangeSetPrune,
+	mut kv_prune_key: state_db::KvChangeSetPrune,
 ) -> Result<(), io::Error> {
 
-	for (key, o) in commit.offstate.iter() {
+	for (key, o) in commit.kv.iter() {
 		let (mut ser, new) = if let Some(stored) = db.get(columns::OFFSTATE, key)? {
 			(Ser::from_vec(stored.to_vec()), false)
 		} else {
@@ -1458,8 +1458,8 @@ fn apply_state_commit_inner(
 			}
 		};
 		ser.push(last_block, o.as_ref().map(|v| v.as_slice()));
-		if let Some((block_prune, offstate_prune_keys)) = offstate_prune_key.as_mut() {
-			if !new && offstate_prune_keys.remove(key) {
+		if let Some((block_prune, kv_prune_keys)) = kv_prune_key.as_mut() {
+			if !new && kv_prune_keys.remove(key) {
 				match ser.prune(*block_prune) {
 					PruneResult::Cleared => transaction.delete(columns::OFFSTATE, &key),
 					PruneResult::Changed
@@ -1473,9 +1473,9 @@ fn apply_state_commit_inner(
 		}
 	}
 
-	if let Some((block_prune, offstate_prune_key)) = offstate_prune_key {
+	if let Some((block_prune, kv_prune_key)) = kv_prune_key {
 		// no need to into_iter
-		for key in offstate_prune_key.iter() {
+		for key in kv_prune_key.iter() {
 			// TODO EMCH should we prune less often (wait on pruning journals for instance)
 			// or make it out of this context just stored the block prune and do asynch
 			let mut ser = if let Some(stored) = db.get(columns::OFFSTATE, key)? {
@@ -1490,7 +1490,7 @@ fn apply_state_commit_inner(
 				PruneResult::Unchanged => (),
 			}
 		}
-	
+
 	}
 
 	for (key, val) in commit.data.inserted.into_iter() {
@@ -1688,8 +1688,8 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 				let genesis_storage = DbGenesisStorage::new();
 				let root = genesis_storage.0.clone();
 				// TODO EMCH see genesis impl: that is empty storage
-				let genesis_offstate = InMemoryOffstateBackend::default();
-				let db_state = DbState::new(Arc::new(genesis_storage), root, Arc::new(genesis_offstate));
+				let genesis_kv = InMemoryKvBackend::default();
+				let db_state = DbState::new(Arc::new(genesis_storage), root, Arc::new(genesis_kv));
 				let state = RefTrackingState::new(db_state, self.storage.clone(), None);
 				return Ok(CachingState::new(state, self.shared_cache.clone(), None));
 			},
@@ -1703,11 +1703,11 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 					let block_number = hdr.number().clone().saturated_into::<u64>();
 					let range = self.storage.state_db.get_branch_range(&hash, block_number);
 					let root = H256::from_slice(hdr.state_root().as_ref());
-					let offstate = StorageDbAt {
+					let kv = StorageDbAt {
 						storage_db: self.storage.clone(),
 						state: (range.unwrap_or_else(Default::default), block_number),
 					};
-					let db_state = DbState::new(self.storage.clone(), root, Arc::new(offstate));
+					let db_state = DbState::new(self.storage.clone(), root, Arc::new(kv));
 					let state = RefTrackingState::new(db_state, self.storage.clone(), Some(hash.clone()));
 					Ok(CachingState::new(state, self.shared_cache.clone(), Some(hash)))
 				} else {
@@ -1942,9 +1942,9 @@ mod tests {
 			assert_eq!(state.storage(&[1, 3, 5]).unwrap(), None);
 			assert_eq!(state.storage(&[1, 2, 3]).unwrap(), Some(vec![9, 9, 9]));
 			assert_eq!(state.storage(&[5, 5, 5]).unwrap(), Some(vec![4, 5, 6]));
-			assert_eq!(state.offstate_pairs(), vec![(vec![5, 5, 5], vec![4, 5, 6])]);
+			assert_eq!(state.kv_pairs(), vec![(vec![5, 5, 5], vec![4, 5, 6])]);
 			let state = db.state_at(BlockId::Number(0)).unwrap();
-			assert_eq!(state.offstate_pairs(), vec![]);
+			assert_eq!(state.kv_pairs(), vec![]);
 
 		}
 	}

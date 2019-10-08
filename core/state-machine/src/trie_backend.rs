@@ -22,22 +22,22 @@ use trie::{Trie, delta_trie_root, default_child_trie_root, child_delta_trie_root
 use trie::trie_types::{TrieDB, TrieError, Layout};
 use crate::trie_backend_essence::{TrieBackendEssence, TrieBackendStorage, Ephemeral};
 use crate::Backend;
-use crate::offstate_backend::OffstateBackend;
+use crate::kv_backend::KvBackend;
 use primitives::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX;
 
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
-/// TODO EMCH with offstate in backend this should be renamed eg StateBackend.
-pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher, O: OffstateBackend> {
+/// TODO EMCH with kv in backend this should be renamed eg StateBackend.
+pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher, O: KvBackend> {
 	essence: TrieBackendEssence<S, H>,
-	pub offstate_storage: O,
+	kv_storage: O,
 }
 
-impl<S: TrieBackendStorage<H>, O: OffstateBackend, H: Hasher> TrieBackend<S, H, O> {
+impl<S: TrieBackendStorage<H>, O: KvBackend, H: Hasher> TrieBackend<S, H, O> {
 	/// Create new trie-based backend.
-	pub fn new(storage: S, root: H::Out, offstate_storage: O) -> Self {
+	pub fn new(storage: S, root: H::Out, kv_storage: O) -> Self {
 		TrieBackend {
 			essence: TrieBackendEssence::new(storage, root),
-			offstate_storage,
+			kv_storage,
 		}
 	}
 
@@ -49,6 +49,16 @@ impl<S: TrieBackendStorage<H>, O: OffstateBackend, H: Hasher> TrieBackend<S, H, 
 	/// Get backend storage reference.
 	pub fn backend_storage(&self) -> &S {
 		self.essence.backend_storage()
+	}
+
+	/// Get key value storage backend reference.
+	pub fn kv_backend(&self) -> &O {
+		&self.kv_storage
+	}
+
+	/// Get key value storage backend mutable reference.
+	pub fn kv_backend_mut(&mut self) -> &mut O {
+		&mut self.kv_storage
 	}
 
 	/// Get trie root.
@@ -63,9 +73,9 @@ impl<S: TrieBackendStorage<H>, O: OffstateBackend, H: Hasher> TrieBackend<S, H, 
 
 	// TODO EMCH PROTO: remove before pr.
 	pub fn child_keyspace(&self, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
-		const PREFIX_KEYSPACE: &'static[u8] = b"offstate_keyspace";
+		const PREFIX_KEYSPACE: &'static[u8] = b"kv_keyspace";
 		// TODO EMCH do prefixing manually.
-		self.offstate_storage.get(key)
+		self.kv_storage.get(key)
 	}
 
 }
@@ -73,7 +83,7 @@ impl<S: TrieBackendStorage<H>, O: OffstateBackend, H: Hasher> TrieBackend<S, H, 
 impl<
 	S: TrieBackendStorage<H>,
 	H: Hasher,
-	O: OffstateBackend,
+	O: KvBackend,
 > std::fmt::Debug for TrieBackend<S, H, O> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "TrieBackend")
@@ -83,14 +93,14 @@ impl<
 impl<
 	S: TrieBackendStorage<H>,
 	H: Hasher,
-	O: OffstateBackend,
+	O: KvBackend,
 > Backend<H> for TrieBackend<S, H, O> where
 	H::Out: Ord,
 {
 	type Error = String;
 	type Transaction = (S::Overlay, Vec<(Vec<u8>, Option<Vec<u8>>)>);
 	type TrieBackendStorage = S;
-	type OffstateBackend = O;
+	type KvBackend = O;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.essence.storage(key)
@@ -181,8 +191,8 @@ impl<
 		}
 	}
 
-	fn offstate_pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
-		self.offstate_storage.pairs()
+	fn kv_pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
+		self.kv_storage.pairs()
 	}
 
 	fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> {
@@ -264,7 +274,7 @@ impl<
 		(root, is_default, (write_overlay, Default::default()))
 	}
 
-	fn offstate_transaction<I>(&self, delta: I) -> Self::Transaction
+	fn kv_transaction<I>(&self, delta: I) -> Self::Transaction
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
@@ -272,7 +282,7 @@ impl<
 	}
 
 	fn as_trie_backend(&mut self) -> Option<
-		&TrieBackend<Self::TrieBackendStorage, H, Self::OffstateBackend>
+		&TrieBackend<Self::TrieBackendStorage, H, Self::KvBackend>
 	> {
 		Some(self)
 	}
@@ -286,9 +296,9 @@ pub mod tests {
 	use trie::{TrieMut, PrefixedMemoryDB, trie_types::TrieDBMut};
 	use super::*;
 
-	type OffstateBackend = crate::offstate_backend::InMemory;
+	type KvBackend = crate::kv_backend::InMemory;
 
-	fn test_db() -> (PrefixedMemoryDB<Blake2Hasher>, H256, OffstateBackend) {
+	fn test_db() -> (PrefixedMemoryDB<Blake2Hasher>, H256, KvBackend) {
 		let mut root = H256::default();
 		let mut mdb = PrefixedMemoryDB::<Blake2Hasher>::default();
 		{
@@ -311,16 +321,16 @@ pub mod tests {
 			}
 		}
 		// empty history.
-		let mut offstate = crate::offstate_backend::InMemory::default();
-		offstate.insert(b"offstate1".to_vec(), b"off_value1".to_vec());
-		offstate.insert(b"offstate2".to_vec(), b"off_value2".to_vec());
-		(mdb, root, offstate)
+		let mut kv = crate::kv_backend::InMemory::default();
+		kv.insert(b"kv1".to_vec(), b"kv_value1".to_vec());
+		kv.insert(b"kv2".to_vec(), b"kv_value2".to_vec());
+		(mdb, root, kv)
 	}
 
 	pub(crate) fn test_trie(
-	) -> TrieBackend<PrefixedMemoryDB<Blake2Hasher>, Blake2Hasher, OffstateBackend> {
-		let (mdb, root, offstate) = test_db();
-		TrieBackend::new(mdb, root, offstate)
+	) -> TrieBackend<PrefixedMemoryDB<Blake2Hasher>, Blake2Hasher, KvBackend> {
+		let (mdb, root, kv) = test_db();
+		TrieBackend::new(mdb, root, kv)
 	}
 
 	#[test]
@@ -340,7 +350,7 @@ pub mod tests {
 
 	#[test]
 	fn pairs_are_empty_on_empty_storage() {
-		assert!(TrieBackend::<PrefixedMemoryDB<Blake2Hasher>, Blake2Hasher, OffstateBackend>::new(
+		assert!(TrieBackend::<PrefixedMemoryDB<Blake2Hasher>, Blake2Hasher, KvBackend>::new(
 			Default::default(),
 			Default::default(),
 			Default::default(),

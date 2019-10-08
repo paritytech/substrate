@@ -344,7 +344,7 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 	type Error = ClientError;
 	type Transaction = ();
 	type TrieBackendStorage = MemoryDB<H>;
-	type OffstateBackend = state_machine::InMemoryOffstateBackend;
+	type KvBackend = state_machine::InMemoryKvBackend;
 
 	fn storage(&self, key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
 		match *self {
@@ -421,7 +421,7 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 		}
 	}
 
-	fn offstate_transaction<I>(&self, _delta: I) -> Self::Transaction
+	fn kv_transaction<I>(&self, _delta: I) -> Self::Transaction
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
@@ -449,9 +449,9 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 		}
 	}
 
-	fn offstate_pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
+	fn kv_pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
 		match *self {
-			GenesisOrUnavailableState::Genesis(ref state) => state.offstate_pairs(),
+			GenesisOrUnavailableState::Genesis(ref state) => state.kv_pairs(),
 			GenesisOrUnavailableState::Unavailable => Vec::new(),
 		}
 	}
@@ -464,7 +464,7 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 	}
 
 	fn as_trie_backend(&mut self) -> Option<
-		&TrieBackend<Self::TrieBackendStorage, H, Self::OffstateBackend>
+		&TrieBackend<Self::TrieBackendStorage, H, Self::KvBackend>
 	> {
 		match self {
 			GenesisOrUnavailableState::Genesis(ref mut state) => state.as_trie_backend(),

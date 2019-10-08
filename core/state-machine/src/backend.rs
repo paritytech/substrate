@@ -21,7 +21,7 @@ use log::warn;
 use hash_db::Hasher;
 use crate::trie_backend::TrieBackend;
 use crate::trie_backend_essence::TrieBackendStorage;
-use crate::offstate_backend::{OffstateBackend, InMemory as InMemoryOffstateBackend};
+use crate::kv_backend::{KvBackend, InMemory as InMemoryKvBackend};
 use trie::{
 	TrieMut, MemoryDB, child_trie_root, default_child_trie_root, TrieConfiguration,
 	trie_types::{TrieDBMut, Layout},
@@ -42,7 +42,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	type TrieBackendStorage: TrieBackendStorage<H>;
 
 	/// Type of trie backend storage.
-	type OffstateBackend: OffstateBackend;
+	type KvBackend: KvBackend;
 
 	/// Get keyed storage or None if there is nothing associated.
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
@@ -104,8 +104,8 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		H::Out: Ord;
 
-	/// Produce transaction for a given offstate information deltas.
-	fn offstate_transaction<I>(&self, delta: I) -> Self::Transaction
+	/// Produce transaction for a given kv information deltas.
+	fn kv_transaction<I>(&self, delta: I) -> Self::Transaction
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>;
 
@@ -118,8 +118,8 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	/// Get all key/value pairs into a Vec for a child storage.
 	fn child_pairs(&self, child_storage_key: &[u8]) -> Vec<(Vec<u8>, Vec<u8>)>;
 
-	/// Get all key/value pairs of offstate storage. 
-	fn offstate_pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)>;
+	/// Get all key/value pairs of kv storage. 
+	fn kv_pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)>;
 
 	/// Get all keys with given prefix
 	fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> {
@@ -137,7 +137,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 
 	/// Try convert into trie backend.
 	fn as_trie_backend(&mut self) -> Option<
-		&TrieBackend<Self::TrieBackendStorage, H, Self::OffstateBackend>
+		&TrieBackend<Self::TrieBackendStorage, H, Self::KvBackend>
 	> {
 		None
 	}
@@ -149,7 +149,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 		&self,
 		delta: I1,
 		child_deltas: I2,
-		offstate_deltas: I3,
+		kv_deltas: I3,
 	) -> (H::Out, Self::Transaction)
 	where
 		I1: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
@@ -158,7 +158,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 		I3: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		<H as Hasher>::Out: Ord,
 	{
-		let mut txs: Self::Transaction = self.offstate_transaction(offstate_deltas);
+		let mut txs: Self::Transaction = self.kv_transaction(kv_deltas);
 
 		let mut child_roots: Vec<_> = Default::default();
 		// child first
@@ -184,7 +184,7 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 	type Error = T::Error;
 	type Transaction = T::Transaction;
 	type TrieBackendStorage = T::TrieBackendStorage;
-	type OffstateBackend = T::OffstateBackend;
+	type KvBackend = T::KvBackend;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		(*self).storage(key)
@@ -222,11 +222,11 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 		(*self).child_storage_root(storage_key, delta)
 	}
 
-	fn offstate_transaction<I>(&self, delta: I) -> Self::Transaction
+	fn kv_transaction<I>(&self, delta: I) -> Self::Transaction
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
-		(*self).offstate_transaction(delta)
+		(*self).kv_transaction(delta)
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
@@ -241,8 +241,8 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 		(*self).child_pairs(child_storage_key)
 	}
 
-	fn offstate_pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
-		(*self).offstate_pairs()
+	fn kv_pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
+		(*self).kv_pairs()
 	}
 
 
@@ -280,7 +280,7 @@ impl<U: Consolidate, V: Consolidate> Consolidate for (U, V) {
 impl Consolidate for InMemoryTransaction {
 	fn consolidate(&mut self, other: Self) {
 		self.storage.consolidate(other.storage);
-		self.offstate.consolidate(other.offstate);
+		self.kv.consolidate(other.kv);
 	}
 }
 
@@ -309,8 +309,8 @@ impl error::Error for Void {
 /// tests.
 pub struct InMemory<H: Hasher> {
 	inner: HashMap<Option<Vec<u8>>, HashMap<Vec<u8>, Vec<u8>>>,
-	offstate: Option<InMemoryOffstateBackend>,
-	trie: Option<TrieBackend<MemoryDB<H>, H, InMemoryOffstateBackend>>,
+	kv: Option<InMemoryKvBackend>,
+	trie: Option<TrieBackend<MemoryDB<H>, H, InMemoryKvBackend>>,
 	_hasher: PhantomData<H>,
 }
 
@@ -325,7 +325,7 @@ impl<H: Hasher> Default for InMemory<H> {
 		InMemory {
 			inner: Default::default(),
 			trie: None,
-			offstate: Some(Default::default()),
+			kv: Some(Default::default()),
 			_hasher: PhantomData,
 		}
 	}
@@ -336,7 +336,7 @@ impl<H: Hasher> Clone for InMemory<H> {
 		InMemory {
 			inner: self.inner.clone(),
 			trie: None,
-			offstate: self.offstate.clone(),
+			kv: self.kv.clone(),
 			_hasher: PhantomData,
 		}
 	}
@@ -345,33 +345,33 @@ impl<H: Hasher> Clone for InMemory<H> {
 impl<H: Hasher> PartialEq for InMemory<H> {
 	fn eq(&self, other: &Self) -> bool {
 		self.inner.eq(&other.inner)
-		&& self.offstate().eq(other.offstate()) 
+		&& self.kv().eq(other.kv()) 
 	}
 }
 
 impl<H: Hasher> InMemory<H> {
-	fn offstate(&self) -> &InMemoryOffstateBackend {
-		if let Some(offstate) = self.offstate.as_ref() {
-			offstate
+	fn kv(&self) -> &InMemoryKvBackend {
+		if let Some(kv) = self.kv.as_ref() {
+			kv
 		} else {
-			&self.trie.as_ref().unwrap().offstate_storage
+			self.trie.as_ref().unwrap().kv_backend()
 		}
 	}
 
-	fn offstate_mut(&mut self) -> &mut InMemoryOffstateBackend {
-		if let Some(offstate) = self.offstate.as_mut() {
-			offstate
+	fn kv_mut(&mut self) -> &mut InMemoryKvBackend {
+		if let Some(kv) = self.kv.as_mut() {
+			kv
 		} else {
-			&mut self.trie.as_mut().unwrap().offstate_storage
+			self.trie.as_mut().unwrap().kv_backend_mut()
 		}
 	}
 
-	fn extract_offstate(&mut self) -> InMemoryOffstateBackend {
-		if let Some(offstate) = self.offstate.take() {
-			offstate
+	fn extract_kv(&mut self) -> InMemoryKvBackend {
+		if let Some(kv) = self.kv.take() {
+			kv
 		} else {
 			std::mem::replace(
-				&mut self.trie.as_mut().unwrap().offstate_storage,
+				self.trie.as_mut().unwrap().kv_backend_mut(),
 				Default::default(),
 			)	
 		}
@@ -380,22 +380,22 @@ impl<H: Hasher> InMemory<H> {
 	/// Copy the state, with applied updates
 	pub fn update(&self, changes: <Self as Backend<H>>::Transaction) -> Self {
 		let mut inner: HashMap<_, _> = self.inner.clone();
-		let mut offstate: HashMap<_, _> = self.offstate().clone();
+		let mut kv: HashMap<_, _> = self.kv().clone();
 		for (storage_key, key, val) in changes.storage {
 			match val {
 				Some(v) => { inner.entry(storage_key).or_default().insert(key, v); },
 				None => { inner.entry(storage_key).or_default().remove(&key); },
 			}
 		}
-		for (key, val) in changes.offstate {
+		for (key, val) in changes.kv {
 			match val {
-				Some(v) => { offstate.insert(key, v); },
-				None => { offstate.remove(&key); },
+				Some(v) => { kv.insert(key, v); },
+				None => { kv.remove(&key); },
 			}
 		}
 
-		let offstate = Some(offstate);
-		InMemory { inner, offstate, trie: None, _hasher: PhantomData }
+		let kv = Some(kv);
+		InMemory { inner, kv, trie: None, _hasher: PhantomData }
 	}
 }
 
@@ -404,7 +404,7 @@ impl<H: Hasher> From<HashMap<Option<Vec<u8>>, HashMap<Vec<u8>, Vec<u8>>>> for In
 		InMemory {
 			inner: inner,
 			trie: None,
-			offstate: Some(Default::default()),
+			kv: Some(Default::default()),
 			_hasher: PhantomData,
 		}
 	}
@@ -424,7 +424,7 @@ impl<H: Hasher> From<(
 		InMemory {
 			inner: inner,
 			trie: None,
-			offstate: Some(Default::default()),
+			kv: Some(Default::default()),
 			_hasher: PhantomData,
 		}
 	}
@@ -437,7 +437,7 @@ impl<H: Hasher> From<HashMap<Vec<u8>, Vec<u8>>> for InMemory<H> {
 		InMemory {
 			inner: expanded,
 			trie: None,
-			offstate: Some(Default::default()),
+			kv: Some(Default::default()),
 			_hasher: PhantomData,
 		}
 	}
@@ -464,7 +464,7 @@ impl<H: Hasher> From<InMemoryTransaction> for InMemory<H> {
 			}
 		}
 		let mut result: InMemory<H> = expanded.into();
-		result.offstate_mut().extend(inner.offstate.into_iter().into_iter()
+		result.kv_mut().extend(inner.kv.into_iter().into_iter()
 			.filter_map(|(k, v)| v.map(|v| (k, v))));
 		result
 	}
@@ -486,14 +486,14 @@ pub struct InMemoryTransaction {
 	/// State trie key values changes (both top and child trie).
 	pub storage: Vec<(Option<Vec<u8>>, Vec<u8>, Option<Vec<u8>>)>,
 	/// Changes to auxilliary data.
-	pub offstate: Vec<(Vec<u8>, Option<Vec<u8>>)>,
+	pub kv: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 }
 
 impl<H: Hasher> Backend<H> for InMemory<H> {
 	type Error = Void;
 	type Transaction = InMemoryTransaction;
 	type TrieBackendStorage = MemoryDB<H>;
-	type OffstateBackend = InMemoryOffstateBackend;
+	type KvBackend = InMemoryKvBackend;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		Ok(self.inner.get(&None).and_then(|map| map.get(key).map(Clone::clone)))
@@ -543,7 +543,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 
 		let full_transaction = transaction.into_iter().map(|(k, v)| (None, k, v)).collect();
 
-		(root, InMemoryTransaction { storage: full_transaction, offstate: Default::default() })
+		(root, InMemoryTransaction { storage: full_transaction, kv: Default::default() })
 	}
 
 	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (Vec<u8>, bool, Self::Transaction)
@@ -573,16 +573,16 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 		(
 			root,
 			is_default,
-			InMemoryTransaction { storage: full_transaction, offstate: Default::default() },
+			InMemoryTransaction { storage: full_transaction, kv: Default::default() },
 		)
 	}
 
-	fn offstate_transaction<I>(&self, delta: I) -> Self::Transaction
+	fn kv_transaction<I>(&self, delta: I) -> Self::Transaction
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
-		let offstate = delta.into_iter().collect();
-		InMemoryTransaction { storage: Default::default(), offstate}
+		let kv = delta.into_iter().collect();
+		InMemoryTransaction { storage: Default::default(), kv}
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
@@ -603,8 +603,8 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 			.collect()
 	}
 
-	fn offstate_pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
-		self.offstate().iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+	fn kv_pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
+		self.kv().iter().map(|(k, v)| (k.clone(), v.clone())).collect()
 	}
 
 	fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> {
@@ -622,7 +622,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 	}
 
 	fn as_trie_backend(&mut self)-> Option<
-		&TrieBackend<Self::TrieBackendStorage, H, Self::OffstateBackend>
+		&TrieBackend<Self::TrieBackendStorage, H, Self::KvBackend>
 	> {
 		let mut mdb = MemoryDB::default();
 		let mut root = None;
@@ -650,7 +650,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 		// Since we are running on a memorydb (not a prefixed memory db), content
 		// is not collision free, so an empty offtrie state can be use (no need
 		// for keyspace).
-		self.trie = Some(TrieBackend::new(mdb, root, self.extract_offstate()));
+		self.trie = Some(TrieBackend::new(mdb, root, self.extract_kv()));
 		self.trie.as_ref()
 	}
 }

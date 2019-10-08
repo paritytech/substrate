@@ -19,7 +19,7 @@
 use std::collections::{HashMap, BTreeMap};
 use primitives::H256;
 use crate::{
-	DBValue, ChangeSet, OffstateChangeSet, OffstateKey, MetaDb, NodeDb, OffstateDb,
+	DBValue, ChangeSet, KvChangeSet, KvKey, MetaDb, NodeDb, KvDb,
 	CommitSet, CommitSetCanonical,
 };
 use historied_data::tree::Serialized;
@@ -32,9 +32,9 @@ type Ser<'a> = Serialized<'a, DefaultVersion>;
 pub struct TestDb {
 	pub data: HashMap<H256, DBValue>,
 	pub meta: HashMap<Vec<u8>, DBValue>,
-	pub offstate: HashMap<OffstateKey, DBValue>,
+	pub kv: HashMap<KvKey, DBValue>,
 	// big heuristic to increment this for canonicalize transaction only
-	// by checking if there is value in offstate change set.
+	// by checking if there is value in kv change set.
 	// If empty change set needed, this need to be change manually.
 	// TODO EMCH consider changing commit fun to use last block number explicitely.
 	pub last_block: u64,
@@ -48,11 +48,11 @@ impl MetaDb for TestDb {
 	}
 }
 
-impl OffstateDb<u64> for TestDb {
+impl KvDb<u64> for TestDb {
 	type Error = ();
 
-	fn get_offstate(&self, key: &[u8], state: &u64) -> Result<Option<DBValue>, ()> {
-		Ok(self.offstate.get(key)
+	fn get_kv(&self, key: &[u8], state: &u64) -> Result<Option<DBValue>, ()> {
+		Ok(self.kv.get(key)
 			.map(|s| Ser::from_slice(s.as_slice()))
 			.and_then(|s| s.get(*state)
 				.unwrap_or(None) // flatten
@@ -60,8 +60,8 @@ impl OffstateDb<u64> for TestDb {
 		))
 	}
 
-	fn get_offstate_pairs(&self, state: &u64) -> Vec<(OffstateKey, DBValue)> {
-		self.offstate.iter().filter_map(|(a, s)| (
+	fn get_kv_pairs(&self, state: &u64) -> Vec<(KvKey, DBValue)> {
+		self.kv.iter().filter_map(|(a, s)| (
 			Ser::from_slice(s.as_slice())
 				.get(*state)
 				.unwrap_or(None) // flatten
@@ -81,15 +81,15 @@ impl NodeDb for TestDb {
 
 impl TestDb {
 	pub fn commit(&mut self, commit: &CommitSet<H256>) {
-		if commit.offstate.len() > 0 {
+		if commit.kv.len() > 0 {
 			self.last_block += 1;
 		}
 		self.data.extend(commit.data.inserted.iter().cloned());
 		for k in commit.data.deleted.iter() {
 			self.data.remove(k);
 		}
-		for (k, o) in commit.offstate.iter() {
-			let encoded = self.offstate.entry(k.clone())
+		for (k, o) in commit.kv.iter() {
+			let encoded = self.kv.entry(k.clone())
 				.or_insert_with(|| Ser::default().into_vec());
 			let mut ser = Ser::from_mut(&mut (*encoded));
 			ser.push(self.last_block, o.as_ref().map(|v| v.as_slice()));
@@ -103,13 +103,13 @@ impl TestDb {
 	pub fn commit_canonical(&mut self, commit: &CommitSetCanonical<H256>) {
 		self.commit(&commit.0);
 
-		if let Some((block_prune, offstate_prune_key)) = commit.1.as_ref() {
-			for k in offstate_prune_key.iter() {
-				match self.offstate.get_mut(k).map(|v| {
+		if let Some((block_prune, kv_prune_key)) = commit.1.as_ref() {
+			for k in kv_prune_key.iter() {
+				match self.kv.get_mut(k).map(|v| {
 					let mut ser = Ser::from_mut(v);
 					ser.prune(*block_prune)
 				}) {
-					Some(PruneResult::Cleared) => { let _ = self.offstate.remove(k); },
+					Some(PruneResult::Cleared) => { let _ = self.kv.remove(k); },
 					Some(PruneResult::Changed) // changed applyied on mutable buffer without copy.
 					| Some(PruneResult::Unchanged)
 					| None => (),
@@ -122,20 +122,20 @@ impl TestDb {
 		self.data == other.data
 	}
 
-	pub fn offstate_eq_at(&self, values: &[u64], block: Option<u64>) -> bool {
+	pub fn kv_eq_at(&self, values: &[u64], block: Option<u64>) -> bool {
 		let block = block.unwrap_or(self.last_block);
-		let data = make_offstate_changeset(values, &[]);
-		let self_offstate: BTreeMap<_, _> = self.get_offstate_pairs(&block).into_iter().collect();
-		self_offstate == data.into_iter().filter_map(|(k, v)| v.map(|v| (k,v))).collect()
+		let data = make_kv_changeset(values, &[]);
+		let self_kv: BTreeMap<_, _> = self.get_kv_pairs(&block).into_iter().collect();
+		self_kv == data.into_iter().filter_map(|(k, v)| v.map(|v| (k,v))).collect()
 	}
 
-	pub fn offstate_eq(&self, values: &[u64]) -> bool {
-		self.offstate_eq_at(values, None)
+	pub fn kv_eq(&self, values: &[u64]) -> bool {
+		self.kv_eq_at(values, None)
 	}
 
-	pub fn initialize_offstate(&mut self, inserted: &[u64]) {
-		let data = make_offstate_changeset(inserted, &[]);
-		self.offstate = data.into_iter()
+	pub fn initialize_kv(&mut self, inserted: &[u64]) {
+		let data = make_kv_changeset(inserted, &[]);
+		self.kv = data.into_iter()
 			.filter_map(|(k, v)| v.map(|v| (k,v)))
 			.map(|(k, v)| {
 				let mut ser = Ser::default();
@@ -158,10 +158,10 @@ pub fn make_changeset(inserted: &[u64], deleted: &[u64]) -> ChangeSet<H256> {
 	}
 }
 
-pub fn make_offstate_changeset(
+pub fn make_kv_changeset(
 	inserted: &[u64],
 	deleted: &[u64],
-) -> OffstateChangeSet<OffstateKey> {
+) -> KvChangeSet<KvKey> {
 	inserted.iter()
 		.map(|v| (
 			H256::from_low_u64_be(*v).as_bytes().to_vec(),
@@ -179,7 +179,7 @@ pub fn make_commit(inserted: &[u64], deleted: &[u64]) -> CommitSet<H256> {
 	CommitSet {
 		data: make_changeset(inserted, deleted),
 		meta: ChangeSet::default(),
-		offstate: OffstateChangeSet::default(),
+		kv: KvChangeSet::default(),
 	}
 }
 
@@ -187,14 +187,14 @@ pub fn make_commit_both(inserted: &[u64], deleted: &[u64]) -> CommitSet<H256> {
 	CommitSet {
 		data: make_changeset(inserted, deleted),
 		meta: ChangeSet::default(),
-		offstate: make_offstate_changeset(inserted, deleted),
+		kv: make_kv_changeset(inserted, deleted),
 	}
 }
 
 impl CommitSet<H256> {
-	pub fn initialize_offstate(&mut self, inserted: &[u64], deleted: &[u64]) {
-		let data = make_offstate_changeset(inserted, deleted);
-		self.offstate = data;
+	pub fn initialize_kv(&mut self, inserted: &[u64], deleted: &[u64]) {
+		let data = make_kv_changeset(inserted, deleted);
+		self.kv = data;
 	}
 }
 
@@ -207,7 +207,7 @@ pub fn make_db(inserted: &[u64]) -> TestDb {
 			})
 			.collect(),
 		meta: Default::default(),
-		offstate: Default::default(),
+		kv: Default::default(),
 		last_block: Default::default(),
 	}
 }
