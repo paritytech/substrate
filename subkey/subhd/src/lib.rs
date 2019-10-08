@@ -16,9 +16,9 @@
 
 //! hd wallet layer for subkey
 use hex_view::HexView;
-
 use primitives::{sr25519, sr25519::{ Signature,Public}};
 use wookong_solo::{wk_getpub, wk_sign, wk_generate, wk_format, wk_import};
+
 /// Error define
 /// DeviceNotfound: device not connected
 /// DeviceNotInit: empty device, generate or import first
