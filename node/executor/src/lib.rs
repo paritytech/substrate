@@ -22,7 +22,6 @@
 #[cfg(feature = "benchmarks")] extern crate test;
 
 pub use substrate_executor::NativeExecutor;
-pub use substrate_executor::RuntimesCache;
 use substrate_executor::native_executor_instance;
 
 // Declare an instance of the native executor named `Executor`. Include the wasm binary as the
@@ -53,6 +52,7 @@ mod tests {
 		transaction_validity::InvalidTransaction, weights::{WeightMultiplier, GetDispatchInfo},
 	};
 	use contracts::ContractAddressFor;
+	use substrate_executor::{NativeExecutor, WasmExecutionMethod};
 	use system::{EventRecord, Phase};
 	use node_runtime::{
 		Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances, BuildStorage,
@@ -117,8 +117,8 @@ mod tests {
 		Header::new(n, Default::default(), Default::default(), [69; 32].into(), Default::default())
 	}
 
-	fn executor() -> ::substrate_executor::NativeExecutor<Executor> {
-		substrate_executor::NativeExecutor::new(None)
+	fn executor() -> NativeExecutor<Executor> {
+		NativeExecutor::new(WasmExecutionMethod::Interpreted, None)
 	}
 
 	fn set_heap_pages<E: Externalities<Blake2Hasher>>(ext: &mut E, heap_pages: u64) {
