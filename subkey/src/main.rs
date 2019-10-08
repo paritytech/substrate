@@ -281,9 +281,10 @@ where
 		("hard-transfer", Some(matches)) => {
 			let to = matches.value_of("to")
 				.expect("parameter is required; thus it can't be None; qed");
-			let to = sr25519::Public::from_string(to).ok().or_else(||
-				sr25519::Pair::from_string(to, password).ok().map(|p| p.public())
-			).expect("Invalid 'to' URI; expecting either a secret URI or a public URI.");
+			let to = sr25519::Public::from_string(to)
+			.ok()
+			.or_else(||sr25519::Pair::from_string(to, password).ok().map(|p| p.public()))
+			.expect("Invalid 'to' URI; expecting either a secret URI or a public URI.");
 
 			let amount = matches.value_of("amount")
 				.expect("parameter is required; thus it can't be None; qed");

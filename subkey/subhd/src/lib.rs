@@ -1,15 +1,20 @@
-// -*- mode: rust; -*-
-//
-// This file is part of subhd, substrate.
-// Copyright (c) 2017-2019 Chester Li and extropies.com
-// See LICENSE for licensing information.
-//
-// Authors:
-// - Chester Li<chester@lichester.com>
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// This file is part of Substrate.
+
+// Substrate is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// Substrate is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! hd wallet layer for subkey
-extern crate wookong_solo;
-extern crate hex_view;
 use hex_view::HexView;
 
 use primitives::{sr25519, sr25519::{ Signature,Public}};
