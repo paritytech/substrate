@@ -30,7 +30,7 @@ use wookong_solo::{wk_getpub, wk_sign, wk_generate, wk_format, wk_import};
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub enum Error {
 	/// Device not connected.
-	DeviceNotfound,
+	DeviceNotFound,
 	/// Empty device; key must be generated or imported first.
 	DeviceNotInit,
 	/// General error of command.
@@ -42,37 +42,49 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 /// Interface for the manager of a key.
 pub trait Wallet {
+	/// The keypair type.
+	type Pair: TraitPair;
 	/// Retrieve public key, if device is initialized.
-	fn public(&self, path: &[DeriveJunction], password: Option<&str>) -> Result<Public>;
+	fn derive_public(&self, path: &[DeriveJunction]) -> Result<<Self::Pair as TraitPair>::Public>;
 	/// Sign the message.
-	fn sign(&self, path: &[DeriveJunction], password: Option<&str>, message: &[u8]) -> Result<Signature>;
+	fn sign(&self, path: &[DeriveJunction], message: &[u8]) -> Result<<Self::Pair as TraitPair>::Signature>;
 	/// Generate keypair and return seed.
-	fn generate(&self) -> Result<Pair>;
+	fn generate(&self) -> Result<Self::Pair>;
 	/// Import seed.
-	fn import(&self, seed: &[u8; 32]) -> Result<()>;
+	fn import(&self, seed: &<Self::Pair as TraitPair>::Seed) -> Result<()>;
 	/// Clear the device to empty.
 	fn reset(&self) -> Result<()>;
+}
+
+impl<T: TraitPair> Wallet for T {
+	type Pair = T;
+	fn derive_public(&self, _: &[DeriveJunction]) -> Result<<Self::Pair as TraitPair>::Public> { Err(Error::DeviceNotFound) }
+	fn sign(&self, _: &[DeriveJunction], _: &[u8]) -> Result<<Self::Pair as TraitPair>::Signature> { Err(Error::DeviceNotFound) }
+	fn generate(&self) -> Result<Self::Pair> { Err(Error::DeviceNotFound) }
+	fn import(&self, _: &<Self::Pair as TraitPair>::Seed) -> Result<()> { Err(Error::DeviceNotFound) }
+	fn reset(&self) -> Result<()> { Err(Error::DeviceNotFound) }
 }
 
 /// Unit type representing the Wookong hardware wallet.
 pub struct Wookong;
 
 impl Wallet for Wookong {
-	fn public(&self, _path: &[DeriveJunction], _password: Option<&str>) -> Result<Public> {
+	type Pair = sr25519::Pair;
+	fn derive_public(&self, _path: &[DeriveJunction]) -> Result<Public> {
 		// TODO: pass through _path and _password to mutate the key on the device accordingly.
 		let mut pk: [u8; 32] = [0u8; 32];
 		let rv = wk_getpub(&mut pk);
 		if rv == 242 {
 			return Err(Error::DeviceNotInit);
 		} else if rv != 0 {
-			return Err(Error::DeviceNotfound);
+			return Err(Error::DeviceNotFound);
 		} else if rv == 0 {
 			Ok(sr25519::Public::from_raw(pk))
 		} else {
 			return Err(Error::DeviceError);
 		}
 	}
-	fn sign(&self, _path: &[DeriveJunction], _password: Option<&str>, message: &[u8]) -> Result<Signature> {
+	fn sign(&self, _path: &[DeriveJunction], message: &[u8]) -> Result<Signature> {
 		// TODO: pass through _path and _password to mutate the key on the device accordingly.
 		let mut sig: [u8; 64] = [0u8; 64];
 		let rv = wk_sign(message, &mut sig);
@@ -96,8 +108,8 @@ impl Wallet for Wookong {
 		}
 		Ok(())
 	}
-	fn import(&self, seed: &[u8; 32]) -> Result<()> {
-		let rv = wk_import(&seed[..]);
+	fn import(&self, seed: &<Pair as TraitPair>::Seed) -> Result<()> {
+		let rv = wk_import(seed.as_ref());
 		if rv != 0 {
 			return Err(Error::DeviceError);
 		}

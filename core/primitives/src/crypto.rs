@@ -407,6 +407,14 @@ pub fn set_default_ss58_version(version: Ss58AddressFormat) {
 	*DEFAULT_VERSION.lock() = version
 }
 
+/// Get the default "version" that is used for encoding and decoding SS58 addresses.
+///
+/// See also `set_default_ss58_version`.
+#[cfg(feature = "std")]
+pub fn default_ss58_version() -> Ss58AddressFormat {
+	*DEFAULT_VERSION.lock()
+}
+
 #[cfg(feature = "std")]
 impl<T: AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
 	fn from_ss58check_with_version(s: &str) -> Result<(Self, Ss58AddressFormat), PublicError> {

@@ -25,13 +25,13 @@ use hex_literal::hex;
 use node_primitives::{Balance, Hash, Index};
 use node_runtime::{BalancesCall, Call, Runtime, SignedPayload, UncheckedExtrinsic, VERSION};
 use primitives::{
-	crypto::{set_default_ss58_version, Ss58AddressFormat, Ss58Codec},
+	crypto::{set_default_ss58_version, default_ss58_version, Ss58AddressFormat, Ss58Codec},
 	ed25519, sr25519, Pair, Public, H256, hexdisplay::HexDisplay,
 };
 use sr_primitives::generic::Era;
 use std::{
 	convert::TryInto,
-	io::{stdin, Read},
+	io::{stdin, Read, BufRead},
 	str::FromStr,
 };
 
@@ -59,7 +59,7 @@ trait Crypto: Sized {
 	) where
 		<Self::Pair as Pair>::Public: PublicT,
 	{
-		if let (None, Ok((pair, seed))) = (public_override, Self::Pair::from_phrase(uri, password)) {
+		if let (&None, Ok((pair, seed))) = (&public_override.as_ref(), Self::Pair::from_phrase(uri, password)) {
 			let public_key = Self::public_from_pair(&pair);
 			println!("Secret phrase `{}` is account:\n  Secret seed: {}\n  Public key (hex): {}\n  Address (SS58): {}",
 				uri,
@@ -67,7 +67,7 @@ trait Crypto: Sized {
 				format_public_key::<Self>(public_key),
 				Self::ss58_from_pair(&pair)
 			);
-		} else if let (None, Ok(pair)) = (public_override, Self::Pair::from_string(uri, password)) {
+		} else if let (&None, Ok(pair)) = (&public_override, Self::Pair::from_string(uri, password)) {
 			let public_key = Self::public_from_pair(&pair);
 			println!(
 				"Secret Key URI `{}` is account:\n  Public key (hex): {}\n  Address (SS58): {}",
@@ -83,7 +83,7 @@ trait Crypto: Sized {
 			};
 			println!("Public Key URI `{}` is account:\n  Network ID/version: {}\n  Public key (hex): {}\n  Address (SS58): {}",
 				uri,
-				String::from(v),
+				String::from(network_override.unwrap_or_else(default_ss58_version)),
 				format_public_key::<Self>(public_key.clone()),
 				pks
 			);
@@ -139,14 +139,30 @@ fn main() {
 		.version(env!("CARGO_PKG_VERSION"))
 		.get_matches();
 
-	if matches.is_present("ed25519") {
-		execute::<Ed25519>(matches)
+	if matches.is_present("wookong") {
+		execute::<Sr25519, Wookong>(matches, Some(Wookong))
 	} else {
-		execute::<Sr25519>(matches)
+		if matches.is_present("ed25519") {
+			execute::<Ed25519, ed25519::Pair>(matches, None)
+		} else {
+			execute::<Sr25519, sr25519::Pair>(matches, None)
+		}
 	}
 }
 
-fn execute<C: Crypto>(matches: ArgMatches)
+trait UnwrapOrBail {
+	type Value;
+	fn unwrap_or_bail(self) -> Self::Value;
+}
+
+impl<T> UnwrapOrBail for Result<T, subhd::Error> {
+	type Value = T;
+	fn unwrap_or_bail(self) -> Self::Value {
+		self.unwrap_or_else(|e| panic!("Device error: {:?}", e))
+	}
+}
+
+fn execute<C: Crypto, W: Wallet<Pair = C::Pair>>(matches: ArgMatches, wallet: Option<W>)
 where
 	SignatureOf<C>: SignatureT,
 	PublicOf<C>: PublicT,
@@ -160,84 +176,96 @@ where
 	if let Some(network) = maybe_network {
 		set_default_ss58_version(network);
 	}
-	let hardware: Option<Box<Wallet>> = if matches.is_present("wookong") {
-		Some(Box::new(Wookong))
-	} else {
-		None
-	};
-	let hardware = hardware.as_ref();
-	let kill_wallet = |w| match (w.public(), matches.is_present("kill-wallet")) {
-		(Err(subhd::Error::DeviceNotInit), _) => {}
-		(_, true) => w.hd_format().unwrap_or_else(|e| panic!("Device format error: {:?}", e)),
-		_ => panic!("Use --kill-wallet to confirm you understand this operation will irreversibly\n\
+	let kill_wallet = || {
+		let w = wallet.as_ref().expect("We only call this when wallet is_some; qed");
+		match (w.derive_public(&[]), matches.is_present("kill-wallet")) {
+			(Err(subhd::Error::DeviceNotInit), _) => {}
+			(_, true) => w.reset().unwrap_or_bail(),
+			_ => panic!("Use --kill-wallet to confirm you understand this operation will irreversibly\n\
 							delete any existing data on your hardware wallet."),
+		};
 	};
-
-	let pubkey = || hardware
-		.map(|w| w.public().unwrap_or_else(|e| panic!("Hardware wallet failure: {:?}", e)));
 
 	let from_stdin = || {
-		let mut res;
-		stdin().lock().read_to_end(&mut res).expect("Error reading from stdin");
+		let mut res = vec![];
+		stdin().lock().read_to_end(&mut res).expect("Error reading from standard input");
 		String::from_utf8(res).expect("Binary data not supported")
 	};
 
+	let line_from_stdin = || {
+		let mut res= String::new();
+		stdin().lock().read_line(&mut res).expect("Error reading from standard input");
+		res
+	};
+
 	match matches.subcommand() {
-		("generate", Some(matches)) => {
-			let mnemonic = generate_mnemonic(matches);
-			let phrase = mnemonic.phrase();
-			if let Some(w) = hardware {
-				let seed = C::Pair::from_phrase(phrase)
-					.expect("Phrase was correctly generated; qed").1;
-				kill_wallet(w);
-				w.import(seed).unwrap_or_else(|e| panic!("Device import error: {:?}", e));
-			}
-			C::print_from_uri(phrase, password, maybe_network, None);
-		}
 		("inspect", Some(matches)) => {
 			let uri = matches
 				.value_of("uri")
 				.expect("URI parameter is required; thus it can't be None; qed");
-			if let Some(w) = hardware {
-				let (phrase, password, path) = <C::Pair as Pair>::parse_suri(uri)?;
-				if phrase.is_some() {
-					panic!("When using hardware wallet, phrase part of URI must be empty.");
+			if let Some(w) = wallet {
+				if password.is_some() {
+					panic!("When using hardware wallet password should be left empty.");
 				}
-				let public = w.public(&path, password)
-					.unwrap_or_else(|e| panic!("Device error: {:?}, e"));
-				C::print_from_uri(uri, password, maybe_network, Some(public));
+				let (phrase, password, path) = <C::Pair as Pair>::parse_suri(uri)
+					.expect("Invalid secret URI parameter given.");
+				if phrase.is_some() || password.is_some() {
+					panic!("When using hardware wallet, phrase and password part of URI must be empty.");
+				}
+				let public = w.derive_public(&path).unwrap_or_bail();
+				C::print_from_uri(uri, None, maybe_network, Some(public));
 			} else {
-				C::print_from_uri(uri, password, maybe_network, None);
+				C::print_from_uri(uri, None, maybe_network, None);
 			}
+		}
+		("generate", Some(matches)) => {
+			let mnemonic = generate_mnemonic(matches);
+			let phrase = mnemonic.phrase();
+			if let Some(w) = wallet.as_ref() {
+				let seed: <W::Pair as Pair>::Seed = C::Pair::from_phrase(phrase, password)
+					.expect("Phrase was correctly generated; qed").1;
+				kill_wallet();
+				w.import(&seed).unwrap_or_bail();
+			}
+			C::print_from_uri(phrase, password, maybe_network, None);
 		}
 		("import", Some(matches)) => {
 			let uri = matches
 				.value_of("uri")
-				.unwrap_or_else(from_stdin);
-			if let Some(w) = hardware {
-				let (phrase, password, path) = <C::Pair as Pair>::parse_suri(uri)?;
-				let seed = <C::Pair as Pair>::from_phrase(phrase)
-					.expect("Invalid phrase component in the URI given.");
-				kill_wallet(w);
-				w.import(seed).unwrap_or_else(|e| panic!("Device import error: {:?}", e));
-				if !path.is_empty() || password.is_some() {
-					println!("NOTE: When importing to a hardware wallet, only phrases are imported:\n\
-						Paths and passwords are not and must be provided when the wallet is used.");
+				.map_or_else(from_stdin, Into::into);
+			if let Some(ref w) = wallet {
+				let (phrase, uri_password, path) = <C::Pair as Pair>::parse_suri(&uri)
+					.expect("Invalid secret URI parameter given.");
+				let phrase = phrase.expect("Phrase part of secret URI must be provided.");
+
+				let password = uri_password.or_else(|| password);
+				let seed = <C::Pair as Pair>::from_phrase(phrase, password)
+					.expect("Invalid phrase component in the URI given.").1;
+				kill_wallet();
+				w.import(&seed).unwrap_or_bail();
+				if !path.is_empty() {
+					println!("NOTE: When importing to a hardware wallet, only phrases and passwords\n\
+						are imported: Paths are not and must be provided when the wallet is used.");
 				}
-				C::print_from_uri(uri, password, maybe_network, None);
+				C::print_from_uri(&uri, password, maybe_network, None);
 			} else {
 				panic!("Hardware wallet required for import");
 			}
 		}
 		("sign", Some(matches)) => {
 			let should_decode = matches.is_present("hex");
-			let message = read_message_from_stdin(should_decode);
-			if let Some(w) = hardware {
-				let suri = matches.value_of("suri").unwrap_or("");
-				let (phrase, password, path) = <C::Pair as Pair>::parse_suri(suri)
+			let signature = if let Some(w) = wallet {
+				let suri = matches.value_of("suri").map_or_else(line_from_stdin, Into::into);
+				let (phrase, password, path) = <C::Pair as Pair>::parse_suri(&suri)
 					.unwrap_or_else(|e| panic!("Bad derivation path: {:?}", e));
-				w.sign(path.collect(), password, &message)
+				if phrase.is_some() || password.is_some() {
+					panic!("When using hardware wallet, phrase and password part of URI must be empty.");
+				}
+
+				let message = read_message_from_stdin(should_decode);
+				w.sign(&path, &message).unwrap_or_bail()
 			} else {
+				let message = read_message_from_stdin(should_decode);
 				do_sign::<C>(matches, message, password)
 			};
 			println!("{}", format_signature::<C>(&signature));
@@ -308,13 +336,16 @@ fn generate_mnemonic(matches: &ArgMatches) -> Mnemonic {
 	Mnemonic::new(words, Language::English)
 }
 
-fn do_sign<C: Crypto>(matches: &ArgMatches, message: Vec<u8>, password: Option<&str>) -> String
-where
+fn do_sign<C: Crypto>(
+	matches: &ArgMatches,
+	message: Vec<u8>,
+	password: Option<&str>
+) -> SignatureOf<C> where
 	SignatureOf<C>: SignatureT,
 	PublicOf<C>: PublicT,
 {
 	let pair = read_pair::<C>(matches.value_of("suri"), password);
-	pair.sign(&message)
+	Pair::sign(&pair, &message)
 }
 
 fn do_verify<C: Crypto>(matches: &ArgMatches, message: Vec<u8>, password: Option<&str>) -> bool
@@ -461,7 +492,7 @@ fn create_extrinsic(
 			(),
 		),
 	);
-	let signature = raw_payload.using_encoded(|payload| signer.sign(payload));
+	let signature = raw_payload.using_encoded(|payload| Pair::sign(&signer, payload));
 	let (function, extra, _) = raw_payload.deconstruct();
 
 	UncheckedExtrinsic::new_signed(
@@ -514,6 +545,7 @@ mod tests {
 		let matches = matches.subcommand().1.unwrap();
 		let message = "Blah Blah\n".as_bytes().to_vec();
 		let signature = do_sign::<CryptoType>(matches, message.clone(), password);
+		let signature = format_signature::<CryptoType>(&signature);
 
 		// Verify the previous signature.
 		let arg_vec = vec!["subkey", "verify", &signature[..], &public_key[..]];
