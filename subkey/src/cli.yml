@@ -28,7 +28,7 @@ args:
       long: wookong
       takes_value: false
       required: false
-      help: Use the Wookong hardware wallet instead of any public or secret keys passed in.
+      help: Use the Wookong hardware wallet
   - kill-wallet:
       long: kill-wallet
       takes_value: false
@@ -49,7 +49,7 @@ subcommands:
         - uri:
             index: 1
             required: false
-            help: A Key URI to be inspected. May be a secret seed, secret URI (with derivation paths and password), SS58 or public URI. Ignored if --wookong is provided.
+            help: A Key URI to be inspected. May be a secret seed, secret URI (with derivation paths and password), SS58 or public URI.
   - sign:
       about: Sign a message, provided on STDIN, with a given (secret) key
       args:
@@ -63,7 +63,7 @@ subcommands:
             help: The message on STDIN is hex-encoded data
             takes_value: false
   - import:
-      about: Import a given secret key into the hardware wallet. This is irreversible, so don't do it unless you know there's nothing on there to save.
+      about: Import a given secret key into the hardware wallet.
       args:
         - suri:
             index: 1

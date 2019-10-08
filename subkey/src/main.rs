@@ -152,14 +152,26 @@ fn main() {
 
 trait UnwrapOrBail {
 	type Value;
-	fn unwrap_or_bail(self) -> Self::Value;
+	fn unwrap_or_bail(self, message: &str) -> Self::Value;
 }
 
-impl<T> UnwrapOrBail for Result<T, subhd::Error> {
+impl<T, E: std::fmt::Debug> UnwrapOrBail for Result<T, E> {
 	type Value = T;
-	fn unwrap_or_bail(self) -> Self::Value {
-		self.unwrap_or_else(|e| panic!("Device error: {:?}", e))
+	fn unwrap_or_bail(self, message: &str) -> Self::Value {
+		self.unwrap_or_else(|e| bail(&format!("{}: {:?}", message, e)))
 	}
+}
+
+impl<T> UnwrapOrBail for Option<T> {
+	type Value = T;
+	fn unwrap_or_bail(self, message: &str) -> Self::Value {
+		self.unwrap_or_else(|| bail(message))
+	}
+}
+
+fn bail(message: &str) -> ! {
+	println!("{}", message);
+	::std::process::exit(-1);
 }
 
 fn execute<C: Crypto, W: Wallet<Pair = C::Pair>>(matches: ArgMatches, wallet: Option<W>)
@@ -177,11 +189,11 @@ where
 		set_default_ss58_version(network);
 	}
 	let kill_wallet = || {
-		let w = wallet.as_ref().expect("We only call this when wallet is_some; qed");
+		let w = wallet.as_ref().unwrap_or_bail("We only call this when wallet is_some; qed");
 		match (w.derive_public(&[]), matches.is_present("kill-wallet")) {
 			(Err(subhd::Error::DeviceNotInit), _) => {}
-			(_, true) => w.reset().unwrap_or_bail(),
-			_ => panic!("Use --kill-wallet to confirm you understand this operation will irreversibly\n\
+			(_, true) => w.reset().unwrap_or_bail("Hardware wallet error"),
+			_ => bail("Use --kill-wallet to confirm you understand this operation will irreversibly\n\
 							delete any existing data on your hardware wallet."),
 		};
 	};
@@ -189,7 +201,7 @@ where
 	let from_stdin = || {
 		let mut res = vec![];
 		stdin().lock().read_to_end(&mut res).expect("Error reading from standard input");
-		String::from_utf8(res).expect("Binary data not supported")
+		String::from_utf8(res).unwrap_or_bail("Binary data not supported")
 	};
 
 	let line_from_stdin = || {
@@ -200,21 +212,20 @@ where
 
 	match matches.subcommand() {
 		("inspect", Some(matches)) => {
-			let uri = matches
-				.value_of("uri")
-				.expect("URI parameter is required; thus it can't be None; qed");
+			let uri = matches.value_of("uri");
 			if let Some(w) = wallet {
 				if password.is_some() {
-					panic!("When using hardware wallet password should be left empty.");
+					bail("When using hardware wallet password should be left empty.");
 				}
-				let (phrase, password, path) = <C::Pair as Pair>::parse_suri(uri)
-					.expect("Invalid secret URI parameter given.");
+				let (phrase, password, path) = <C::Pair as Pair>::parse_suri(uri.unwrap_or_default())
+					.unwrap_or_bail("Invalid secret URI parameter given.");
 				if phrase.is_some() || password.is_some() {
-					panic!("When using hardware wallet, phrase and password part of URI must be empty.");
+					bail("When using hardware wallet, phrase and password part of URI must be empty.");
 				}
-				let public = w.derive_public(&path).unwrap_or_bail();
-				C::print_from_uri(uri, None, maybe_network, Some(public));
+				let public = w.derive_public(&path).unwrap_or_bail("Unable to derive public key");
+				C::print_from_uri(uri.unwrap_or_default(), None, maybe_network, Some(public));
 			} else {
+				let uri = uri.unwrap_or_bail("URI is required.");
 				C::print_from_uri(uri, None, maybe_network, None);
 			}
 		}
@@ -225,7 +236,7 @@ where
 				let seed: <W::Pair as Pair>::Seed = C::Pair::from_phrase(phrase, password)
 					.expect("Phrase was correctly generated; qed").1;
 				kill_wallet();
-				w.import(&seed).unwrap_or_bail();
+				w.import(&seed).unwrap_or_bail("Unable to import");
 			}
 			C::print_from_uri(phrase, password, maybe_network, None);
 		}
@@ -235,21 +246,21 @@ where
 				.map_or_else(from_stdin, Into::into);
 			if let Some(ref w) = wallet {
 				let (phrase, uri_password, path) = <C::Pair as Pair>::parse_suri(&uri)
-					.expect("Invalid secret URI parameter given.");
-				let phrase = phrase.expect("Phrase part of secret URI must be provided.");
+					.unwrap_or_bail("Invalid secret URI parameter given.");
+				let phrase = phrase.unwrap_or_bail("Phrase part of secret URI must be provided.");
 
 				let password = uri_password.or_else(|| password);
 				let seed = <C::Pair as Pair>::from_phrase(phrase, password)
-					.expect("Invalid phrase component in the URI given.").1;
+					.unwrap_or_bail("Invalid phrase component in the URI given.").1;
 				kill_wallet();
-				w.import(&seed).unwrap_or_bail();
+				w.import(&seed).unwrap_or_bail("Unable to import");
 				if !path.is_empty() {
 					println!("NOTE: When importing to a hardware wallet, only phrases and passwords\n\
 						are imported: Paths are not and must be provided when the wallet is used.");
 				}
 				C::print_from_uri(&uri, password, maybe_network, None);
 			} else {
-				panic!("Hardware wallet required for import");
+				bail("Hardware wallet required for import");
 			}
 		}
 		("sign", Some(matches)) => {
@@ -257,13 +268,13 @@ where
 			let signature = if let Some(w) = wallet {
 				let suri = matches.value_of("suri").map_or_else(line_from_stdin, Into::into);
 				let (phrase, password, path) = <C::Pair as Pair>::parse_suri(&suri)
-					.unwrap_or_else(|e| panic!("Bad derivation path: {:?}", e));
+					.unwrap_or_bail("Bad derivation path");
 				if phrase.is_some() || password.is_some() {
-					panic!("When using hardware wallet, phrase and password part of URI must be empty.");
+					bail("When using hardware wallet, phrase and password part of URI must be empty.");
 				}
 
 				let message = read_message_from_stdin(should_decode);
-				w.sign(&path, &message).unwrap_or_bail()
+				w.sign(&path, &message).unwrap_or_bail("Unable to sign")
 			} else {
 				let message = read_message_from_stdin(should_decode);
 				do_sign::<C>(matches, message, password)
@@ -285,7 +296,8 @@ where
 				.value_of("pattern")
 				.map(str::to_string)
 				.unwrap_or_default();
-			let result = vanity::generate_key::<C>(&desired).expect("Key generation failed");
+			let result = vanity::generate_key::<C>(&desired)
+				.unwrap_or_bail("Key generation failed");
 			let formatted_seed = format_seed::<C>(result.seed);
 			C::print_from_uri(&formatted_seed, None, maybe_network, None);
 		}
