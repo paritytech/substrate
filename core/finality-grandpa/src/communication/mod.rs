@@ -350,7 +350,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		local_key: Option<AuthorityPair>,
 		has_voted: HasVoted<B>,
 	) -> (
-		impl Stream<Item=SignedMessage<B>,Error=Error>,
+		impl Stream<Item=(Option<network::PeerId>, SignedMessage<B>),Error=Error>,
 		impl Sink<SinkItem=Message<B>,SinkError=Error>,
 	) {
 		self.note_round(
@@ -375,9 +375,9 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 				if let Err(ref e) = decoded {
 					debug!(target: "afg", "Skipping malformed message {:?}: {}", notification, e);
 				}
-				decoded.ok()
+				decoded.ok().map(|msg| (notification.sender, msg))
 			})
-			.and_then(move |msg| {
+			.and_then(move |(sender, msg)| {
 				match msg {
 					GossipMessage::VoteOrPrecommit(msg) => {
 						// check signature.
@@ -410,7 +410,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 							},
 						};
 
-						Ok(Some(msg.message))
+						Ok(Some((sender, msg.message)))
 					}
 					_ => {
 						debug!(target: "afg", "Skipping unknown message type");
@@ -436,7 +436,9 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 			format!("Failed to receive on unbounded receiver for round {}", round.0)
 		));
 
-		let incoming = incoming.select(out_rx);
+		// TODO: Do I understand correctly that we combine the incoming Grandpa messages with the messages we are
+		// sending out to other nodes and in addition thereby also send to ourself?
+		let incoming = incoming.select(out_rx.map(|msg| (None, msg)));
 
 		(incoming, outgoing)
 	}
@@ -448,7 +450,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		voters: Arc<VoterSet<AuthorityId>>,
 		is_voter: bool,
 	) -> (
-		impl Stream<Item = CommunicationIn<B>, Error = Error>,
+		impl Stream<Item = (Option<network::PeerId>, CommunicationIn<B>), Error = Error>,
 		impl Sink<SinkItem = CommunicationOut<B>, SinkError = Error>,
 	) {
 		self.validator.note_set(
@@ -490,7 +492,7 @@ fn incoming_global<B: BlockT, N: Network<B>>(
 	voters: Arc<VoterSet<AuthorityId>>,
 	gossip_validator: Arc<GossipValidator<B>>,
 	neighbor_sender: periodic::NeighborPacketSender<B>,
-) -> impl Stream<Item = CommunicationIn<B>, Error = Error> {
+) -> impl Stream<Item = (Option<network::PeerId>, CommunicationIn<B>), Error = Error> {
 	let process_commit = move |
 		msg: FullCommitMessage<B>,
 		mut notification: network_gossip::TopicNotification,
@@ -603,9 +605,11 @@ fn incoming_global<B: BlockT, N: Network<B>>(
 		.filter_map(move |(notification, msg)| {
 			match msg {
 				GossipMessage::Commit(msg) =>
-					process_commit(msg, notification, &mut service, &gossip_validator, &*voters),
+					// TODO @mxinden: Might be able to be a bit smarter than just clone here.
+					process_commit(msg, notification.clone(), &mut service, &gossip_validator, &*voters).map(|c| (notification.sender, c)),
 				GossipMessage::CatchUp(msg) =>
-					process_catch_up(msg, notification, &mut service, &gossip_validator, &*voters),
+					// TODO @mxinden: Might be able to be a bit smarter than just clone here.
+					process_catch_up(msg, notification.clone(), &mut service, &gossip_validator, &*voters).map(|cu| (notification.sender, cu)),
 				_ => {
 					debug!(target: "afg", "Skipping unknown message type");
 					return None;
@@ -667,6 +671,7 @@ struct OutgoingMessages<Block: BlockT, N: Network<Block>> {
 	round: RoundNumber,
 	set_id: SetIdNumber,
 	locals: Option<(AuthorityPair, AuthorityId)>,
+	// TODO: This sender is going back to ourself, right? That should be documented.
 	sender: mpsc::UnboundedSender<SignedMessage<Block>>,
 	announce_sender: periodic::BlockAnnounceSender<Block>,
 	network: N,

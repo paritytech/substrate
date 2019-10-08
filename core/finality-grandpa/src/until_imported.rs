@@ -67,6 +67,7 @@ pub(crate) trait BlockUntilImported<Block: BlockT>: Sized {
 pub(crate) struct UntilImported<Block: BlockT, Status, I, M: BlockUntilImported<Block>> {
 	import_notifications: Fuse<Box<dyn Stream<Item = BlockImportNotification<Block>, Error = ()> + Send>>,
 	status_check: Status,
+	// TODO: Why is this called inner? Why not being more descriptive and say finality_msg_stream?
 	inner: Fuse<I>,
 	ready: VecDeque<M::Blocked>,
 	check_pending: Interval,
@@ -110,7 +111,7 @@ impl<Block: BlockT, Status, I: Stream, M> UntilImported<Block, Status, I, M>
 
 impl<Block: BlockT, Status, I, M> Stream for UntilImported<Block, Status, I, M> where
 	Status: BlockStatus<Block>,
-	I: Stream<Item=M::Blocked,Error=Error>,
+	I: Stream<Item=(Option<network::PeerId>, M::Blocked),Error=Error>,
 	M: BlockUntilImported<Block>,
 {
 	type Item = M::Blocked;
@@ -120,7 +121,9 @@ impl<Block: BlockT, Status, I, M> Stream for UntilImported<Block, Status, I, M> 
 		loop {
 			match self.inner.poll()? {
 				Async::Ready(None) => return Ok(Async::Ready(None)),
-				Async::Ready(Some(input)) => {
+				Async::Ready(Some((sender, input))) => {
+					// TODO @mxinden: Do something with sender.
+
 					// new input: schedule wait of any parts which require
 					// blocks to be known.
 					let ready = &mut self.ready;
@@ -179,6 +182,8 @@ impl<Block: BlockT, Status, I, M> Stream for UntilImported<Block, Status, I, M> 
 							block_hash,
 							v.len(),
 						);
+
+						// TODO: This seems like THE place to be!
 
 						*last_log = next_log;
 					}

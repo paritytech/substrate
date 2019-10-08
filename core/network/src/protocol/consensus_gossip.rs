@@ -77,7 +77,7 @@ struct PeerConsensus<H> {
 }
 
 /// Topic stream message with sender.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub struct TopicNotification {
 	/// Message data.
 	pub message: Vec<u8>,
