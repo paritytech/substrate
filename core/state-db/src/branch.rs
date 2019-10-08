@@ -174,7 +174,6 @@ impl RangeSet {
 		BranchRanges(result)
 	}
 
-
 	/// Return anchor index for this branch history:
 	/// - same index as input if branch is not empty
 	/// - parent index if branch is empty
@@ -357,17 +356,14 @@ impl RangeSet {
 
 	/// Revert some ranges, without any way to revert.
 	/// Returning ranges for the parent index.
-	/// TODO EMCH can remove ??
-	pub fn revert(&mut self, branch_ix: u64) -> BranchRanges {
-		let parent_branch_index = if branch_ix != 0 {
+	pub fn revert(&mut self, branch_ix: u64) -> u64 {
+		if branch_ix != 0 {
 			self.drop_state(branch_ix)
 				// silenced error
 				.unwrap_or(0)
 		} else {
 			0
-		};
-
-		self.branch_ranges_from_cache(parent_branch_index, None)
+		}
 	}
 
 	#[cfg(test)]

@@ -356,7 +356,8 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		}
 	}
 
-	/// TODO EMCH
+	/// For a a given block return its path in the block tree.
+	/// Note that using `number` is use to skip a query to block number for hash.
 	pub fn get_branch_range(&self, hash: &BlockHash, number: u64) -> Option<BranchRanges> {
 		self.non_canonical.get_branch_range(hash, number)
 	}

@@ -1643,9 +1643,6 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 			let mut transaction = DBTransaction::new();
 			match self.storage.state_db.revert_one() {
 				Some(commit) => {
-					// TODO EMCH: here we have a list of key and we need a new method similar to
-					// gc but for dropping n last state -> samething do not do one block per one
-					// block.
 					apply_state_commit(&mut transaction, commit, &self.storage.db, c).map_err(|err|
 						client::error::Error::Backend(
 							format!("Error building commit transaction : {}", err)
