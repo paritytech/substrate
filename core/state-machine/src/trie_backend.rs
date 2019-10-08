@@ -24,6 +24,7 @@ use crate::trie_backend_essence::{TrieBackendEssence, TrieBackendStorage, Epheme
 use crate::Backend;
 use crate::kv_backend::KvBackend;
 use primitives::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX;
+use std::collections::HashMap;
 
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
 /// TODO EMCH with kv in backend this should be renamed eg StateBackend.
@@ -98,7 +99,7 @@ impl<
 	H::Out: Ord,
 {
 	type Error = String;
-	type Transaction = (S::Overlay, Vec<(Vec<u8>, Option<Vec<u8>>)>);
+	type Transaction = (S::Overlay, HashMap<Vec<u8>, Option<Vec<u8>>>);
 	type TrieBackendStorage = S;
 	type KvBackend = O;
 
@@ -191,7 +192,7 @@ impl<
 		}
 	}
 
-	fn kv_pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
+	fn kv_pairs(&self) -> HashMap<Vec<u8>, Option<Vec<u8>>> {
 		self.kv_storage.pairs()
 	}
 
@@ -278,7 +279,9 @@ impl<
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
-		(Default::default(), delta.into_iter().collect())
+		let mut result = self.kv_storage.pairs();
+		result.extend(delta.into_iter());
+		(Default::default(), result)
 	}
 
 	fn as_trie_backend(&mut self) -> Option<
@@ -322,8 +325,8 @@ pub mod tests {
 		}
 		// empty history.
 		let mut kv = crate::kv_backend::InMemory::default();
-		kv.insert(b"kv1".to_vec(), b"kv_value1".to_vec());
-		kv.insert(b"kv2".to_vec(), b"kv_value2".to_vec());
+		kv.insert(b"kv1".to_vec(), Some(b"kv_value1".to_vec()));
+		kv.insert(b"kv2".to_vec(), Some(b"kv_value2".to_vec()));
 		(mdb, root, kv)
 	}
 

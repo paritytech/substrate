@@ -30,19 +30,21 @@ pub trait KvBackend: Send + Sync {
 	/// Return all values (in memory) for this backend, mainly for
 	/// tests. This method should only be use for testing or
 	/// for small kv.
-	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)>;
+	/// It returns a map to be aligned with internal in memory storage
+	/// types.
+	fn pairs(&self) -> HashMap<Vec<u8>, Option<Vec<u8>>>;
 }
 
 /// need to keep multiple block state.
-pub type InMemory = HashMap<Vec<u8>, Vec<u8>>;
+pub type InMemory = HashMap<Vec<u8>, Option<Vec<u8>>>;
 
 impl KvBackend for InMemory {
 	fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
-		Ok(self.get(key).map(Clone::clone))
+		Ok(self.get(key).map(Clone::clone).unwrap_or(None))
 	}
 
-	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
-		self.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+	fn pairs(&self) -> HashMap<Vec<u8>, Option<Vec<u8>>> {
+		self.clone()
 	}
 }
 
@@ -51,7 +53,7 @@ impl KvBackend for Arc<dyn KvBackend> {
 		KvBackend::get(self.deref(), key)
 	}
 
-	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
+	fn pairs(&self) -> HashMap<Vec<u8>, Option<Vec<u8>>> {
 		KvBackend::pairs(self.deref())
 	}
 }

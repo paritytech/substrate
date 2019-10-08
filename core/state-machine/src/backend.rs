@@ -119,7 +119,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	fn child_pairs(&self, child_storage_key: &[u8]) -> Vec<(Vec<u8>, Vec<u8>)>;
 
 	/// Get all key/value pairs of kv storage. 
-	fn kv_pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)>;
+	fn kv_pairs(&self) -> HashMap<Vec<u8>, Option<Vec<u8>>>;
 
 	/// Get all keys with given prefix
 	fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> {
@@ -241,7 +241,7 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 		(*self).child_pairs(child_storage_key)
 	}
 
-	fn kv_pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
+	fn kv_pairs(&self) -> HashMap<Vec<u8>, Option<Vec<u8>>> {
 		(*self).kv_pairs()
 	}
 
@@ -266,6 +266,12 @@ impl Consolidate for () {
 impl<U> Consolidate for Vec<U> {
 	fn consolidate(&mut self, mut other: Self) {
 		self.append(&mut other);
+	}
+}
+
+impl<K: Eq + std::hash::Hash, V> Consolidate for HashMap<K, V> {
+	fn consolidate(&mut self, other: Self) {
+		self.extend(other);
 	}
 }
 
@@ -387,12 +393,7 @@ impl<H: Hasher> InMemory<H> {
 				None => { inner.entry(storage_key).or_default().remove(&key); },
 			}
 		}
-		for (key, val) in changes.kv {
-			match val {
-				Some(v) => { kv.insert(key, v); },
-				None => { kv.remove(&key); },
-			}
-		}
+		kv.extend(changes.kv);
 
 		let kv = Some(kv);
 		InMemory { inner, kv, trie: None, _hasher: PhantomData }
@@ -464,8 +465,7 @@ impl<H: Hasher> From<InMemoryTransaction> for InMemory<H> {
 			}
 		}
 		let mut result: InMemory<H> = expanded.into();
-		result.kv_mut().extend(inner.kv.into_iter().into_iter()
-			.filter_map(|(k, v)| v.map(|v| (k, v))));
+		*result.kv_mut() = inner.kv;
 		result
 	}
 }
@@ -485,8 +485,8 @@ impl<H: Hasher> InMemory<H> {
 pub struct InMemoryTransaction {
 	/// State trie key values changes (both top and child trie).
 	pub storage: Vec<(Option<Vec<u8>>, Vec<u8>, Option<Vec<u8>>)>,
-	/// Changes to auxilliary data.
-	pub kv: Vec<(Vec<u8>, Option<Vec<u8>>)>,
+	/// Changes to non trie key value datas.
+	pub kv: HashMap<Vec<u8>, Option<Vec<u8>>>,
 }
 
 impl<H: Hasher> Backend<H> for InMemory<H> {
@@ -581,7 +581,8 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
-		let kv = delta.into_iter().collect();
+		let mut kv = self.kv().clone();
+		kv.extend(delta.into_iter());
 		InMemoryTransaction { storage: Default::default(), kv}
 	}
 
@@ -603,8 +604,8 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 			.collect()
 	}
 
-	fn kv_pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
-		self.kv().iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+	fn kv_pairs(&self) -> HashMap<Vec<u8>, Option<Vec<u8>>> {
+		self.kv().clone()
 	}
 
 	fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> {

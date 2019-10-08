@@ -205,7 +205,7 @@ impl<B: BlockT> StateBackend<Blake2Hasher> for RefTrackingState<B> {
 		self.state.child_pairs(child_storage_key)
 	}
 
-	fn kv_pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
+	fn kv_pairs(&self) -> HashMap<Vec<u8>, Option<Vec<u8>>> {
 		self.state.kv_pairs()
 	}
 
@@ -470,10 +470,9 @@ impl<Block: BlockT> HeaderMetadata<Block> for BlockchainDb<Block> {
 /// Database transaction
 pub struct BlockImportOperation<Block: BlockT, H: Hasher> {
 	old_state: CachingState<Blake2Hasher, RefTrackingState<Block>, Block>,
-	db_updates: (PrefixedMemoryDB<H>, Vec<(Vec<u8>, Option<Vec<u8>>)>),
+	db_updates: (PrefixedMemoryDB<H>, HashMap<Vec<u8>, Option<Vec<u8>>>),
 	storage_updates: StorageCollection,
 	child_storage_updates: ChildStorageCollection,
-	// TODO EMCH kv update and kv values in cache
 	changes_trie_updates: MemoryDB<H>,
 	changes_trie_cache_update: Option<ChangesTrieCacheAction<H::Out, NumberFor<Block>>>,
 	pending_block: Option<PendingBlock<Block>>,
@@ -526,7 +525,7 @@ where Block: BlockT<Hash=H256>,
 
 	fn update_db_storage(
 		&mut self,
-		update: (PrefixedMemoryDB<Blake2Hasher>, Vec<(Vec<u8>, Option<Vec<u8>>)>),
+		update: (PrefixedMemoryDB<Blake2Hasher>, HashMap<Vec<u8>, Option<Vec<u8>>>),
 	) -> ClientResult<()> {
 		self.db_updates = update;
 		Ok(())
@@ -658,8 +657,12 @@ impl<Block: BlockT> state_machine::KvBackend for StorageDbAt<Block, (BranchRange
 			.map_err(|e| format!("Database backend error: {:?}", e))
 	}
 
-	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
+	fn pairs(&self) -> HashMap<Vec<u8>, Option<Vec<u8>>> {
 		self.storage_db.state_db.get_kv_pairs(&self.state, self.storage_db.deref())
+			// function pairs should not be call except for testing so the conversion
+			// should be fine here. Note that storage.
+			// TODO EMCH try delete this
+			.into_iter().map(|(k, v)| (k, Some(v))).collect()
 	}
 }
 
@@ -982,8 +985,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 			op.set_block_data(header, body, justification, new_block_state).unwrap();
 			op.update_db_storage(InMemoryTransaction {
 				storage,
-				kv: state.kv_pairs().into_iter()
-					.map(|(k, v)| (k, Some(v))).collect(),
+				kv: state.kv_pairs().clone(),
 			}).unwrap();
 			inmem.commit_operation(op).unwrap();
 		}
@@ -1239,11 +1241,9 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 					changeset.deleted.push(key);
 				}
 			}
-			// remove duplicate TODO EMCH very bad
-			let map_kv: HashMap<_, _> = operation.db_updates.1.into_iter().collect();
-			// TODO EMCH !!! keep map_kv for KvChangeSet type???
-			let kv_changeset: state_db::KvChangeSet<Vec<u8>> = map_kv.into_iter()
-				.collect();
+			let kv_changeset: state_db::KvChangeSet<Vec<u8>> = operation.db_updates.1
+				// use as vec from hash map
+				.into_iter().collect();
 			let number_u64 = number.saturated_into::<u64>();
 			let commit = self.storage.state_db.insert_block(
 				&hash,
@@ -1942,9 +1942,11 @@ mod tests {
 			assert_eq!(state.storage(&[1, 3, 5]).unwrap(), None);
 			assert_eq!(state.storage(&[1, 2, 3]).unwrap(), Some(vec![9, 9, 9]));
 			assert_eq!(state.storage(&[5, 5, 5]).unwrap(), Some(vec![4, 5, 6]));
-			assert_eq!(state.kv_pairs(), vec![(vec![5, 5, 5], vec![4, 5, 6])]);
+			assert_eq!(state.kv_pairs(), vec![
+				(vec![5, 5, 5], Some(vec![4, 5, 6]))
+			].into_iter().collect());
 			let state = db.state_at(BlockId::Number(0)).unwrap();
-			assert_eq!(state.kv_pairs(), vec![]);
+			assert_eq!(state.kv_pairs(), vec![].into_iter().collect());
 
 		}
 	}

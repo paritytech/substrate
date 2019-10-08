@@ -23,6 +23,7 @@ use trie::{
 	MemoryDB, PrefixedMemoryDB, default_child_trie_root,
 	read_trie_value_with, read_child_trie_value_with, record_all_keys
 };
+use std::collections::HashMap;
 pub use trie::Recorder;
 pub use trie::trie_types::{Layout, TrieError};
 use crate::trie_backend::TrieBackend;
@@ -166,7 +167,7 @@ impl<'a, S, H, O> Backend<H> for ProvingBackend<'a, S, H, O>
 		O: 'a + KvBackend,
 {
 	type Error = String;
-	type Transaction = (S::Overlay, Vec<(Vec<u8>, Option<Vec<u8>>)>);
+	type Transaction = (S::Overlay, HashMap<Vec<u8>, Option<Vec<u8>>>);
 	type TrieBackendStorage = PrefixedMemoryDB<H>;
 	type KvBackend = O;
 
@@ -214,7 +215,7 @@ impl<'a, S, H, O> Backend<H> for ProvingBackend<'a, S, H, O>
 		self.backend.child_pairs(storage_key)
 	}
 
-	fn kv_pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
+	fn kv_pairs(&self) -> HashMap<Vec<u8>, Option<Vec<u8>>> {
 		self.backend.kv_pairs()
 	}
 

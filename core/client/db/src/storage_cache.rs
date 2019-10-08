@@ -590,7 +590,7 @@ impl<H: Hasher, S: StateBackend<H>, B: BlockT> StateBackend<H> for CachingState<
 		self.state.child_pairs(storage_key)
 	}
 
-	fn kv_pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
+	fn kv_pairs(&self) -> HashMap<Vec<u8>, Option<Vec<u8>>> {
 		self.state.kv_pairs()
 	}
 

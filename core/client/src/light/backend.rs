@@ -449,10 +449,10 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 		}
 	}
 
-	fn kv_pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
+	fn kv_pairs(&self) -> HashMap<Vec<u8>, Option<Vec<u8>>> {
 		match *self {
 			GenesisOrUnavailableState::Genesis(ref state) => state.kv_pairs(),
-			GenesisOrUnavailableState::Unavailable => Vec::new(),
+			GenesisOrUnavailableState::Unavailable => Default::default(),
 		}
 	}
 

@@ -92,7 +92,7 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 	pub fn insert_kv(&mut self, k: Vec<u8>, v: Vec<u8>) {
 		self.backend = self.backend.update(InMemoryTransaction {
 			storage: Default::default(),
-			kv: vec![(k, Some(v))],
+			kv: Some((k, Some(v))).into_iter().collect(),
 		});
 	}
 
