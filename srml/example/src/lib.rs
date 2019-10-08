@@ -258,13 +258,51 @@ use support::{dispatch::Result, decl_module, decl_storage, decl_event};
 use system::{ensure_signed, ensure_root};
 use codec::{Encode, Decode};
 use sr_primitives::{
-	traits::{SignedExtension, Bounded}, weights::{SimpleDispatchInfo, DispatchInfo},
+	traits::{SignedExtension, Bounded, SaturatedConversion},
+	weights::{SimpleDispatchInfo, DispatchInfo, DispatchClass, ClassifyDispatch, WeighData, Weight},
 	transaction_validity::{
 		ValidTransaction, TransactionValidityError, InvalidTransaction, TransactionValidity,
 	},
 };
 
-/// Our module's configuration trait. All our types and consts go in here. If the
+// A custom weight calculator tailored for the dispatch call `set_dummy()`. This actually examines
+// the arguments and makes a decision based upon them.
+//
+// The `WeightData<T>` trait has access to the arguments of the dispatch that it wants to assign a
+// weight to. Nonetheless, the trait itself can not make any assumptions about what that type
+// generic type of the arguments, `T`, is. Based on our needs, we could replace `T` with a more
+// concrete type while implementing the trait. The `decl_module!` expects whatever implements
+// `WeighData<T>` to replace `T` with a tuple of the dispatch arguments. This is exactly how we will
+// craft the implementation below.
+//
+// The rules of `WeightForSetDummy` is as follows:
+// - The final weight of each dispatch is calculated as the argument of the call multiplied by the
+//   parameter given to the `WeightForSetDummy`'s constructor.
+// - assigns a dispatch class `operational` if the argument of the call is more than 1000.
+struct WeightForSetDummy<T: balances::Trait>(BalanceOf<T>);
+
+impl<T: balances::Trait> WeighData<(&BalanceOf<T>,)> for WeightForSetDummy<T>
+{
+	fn weigh_data(&self, target: (&BalanceOf<T>,)) -> Weight {
+		let multiplier = self.0;
+		(*target.0 * multiplier).saturated_into::<u32>()
+	}
+}
+
+impl<T: balances::Trait> ClassifyDispatch<(&BalanceOf<T>,)> for WeightForSetDummy<T> {
+	fn classify_dispatch(&self, target: (&BalanceOf<T>,)) -> DispatchClass {
+		if *target.0 > <BalanceOf<T>>::from(1000u32) {
+			DispatchClass::Operational
+		} else {
+			DispatchClass::Normal
+		}
+	}
+}
+
+/// A type alias for the balance type from this module's point of view.
+type BalanceOf<T> = <T as balances::Trait>::Balance;
+
+/// Our module's configuration trait. All our types and constants go in here. If the
 /// module is dependent on specific other modules, then their configuration traits
 /// should be added to our implied traits list.
 ///
@@ -454,6 +492,7 @@ decl_module! {
 		// without worrying about gameability or attack scenarios.
 		// If you not specify `Result` explicitly as return value, it will be added automatically
 		// for you and `Ok(())` will be returned.
+		#[weight = WeightForSetDummy::<T>(<BalanceOf<T>>::from(100u32))]
 		fn set_dummy(origin, #[compact] new_value: T::Balance) {
 			ensure_root(origin)?;
 			// Put the new value into storage.
@@ -600,7 +639,10 @@ mod tests {
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
 	use sr_primitives::{
-		Perbill, traits::{BlakeTwo256, OnInitialize, OnFinalize, IdentityLookup}, testing::Header
+		Perbill,
+		traits::{BlakeTwo256, OnInitialize, OnFinalize, IdentityLookup},
+		weights::GetDispatchInfo,
+		testing::Header
 	};
 
 	impl_outer_origin! {
@@ -725,5 +767,19 @@ mod tests {
 				InvalidTransaction::ExhaustsResources.into(),
 			);
 		})
+	}
+
+	#[test]
+	fn weights_work() {
+		// must have a default weight.
+		let default_call = <Call<Test>>::accumulate_dummy(10);
+		let info = default_call.get_dispatch_info();
+		// aka. `let info = <Call<Test> as GetDispatchInfo>::get_dispatch_info(&default_call);`
+		assert_eq!(info.weight, 10_000);
+
+		// must have a custom weight of `100 * arg = 2000`
+		let custom_call = <Call<Test>>::set_dummy(20);
+		let info = custom_call.get_dispatch_info();
+		assert_eq!(info.weight, 2000);
 	}
 }
