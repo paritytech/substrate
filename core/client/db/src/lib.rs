@@ -1155,7 +1155,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 			trace!(target: "db", "Canonicalize block #{} ({:?})", new_canonical, hash);
 			let commit = self.storage.state_db.canonicalize_block(&hash)
 				.map_err(|e: state_db::Error<io::Error>| client::error::Error::from(format!("State database error: {:?}", e)))?;
-			apply_state_commit(transaction, commit, &self.storage.db, number_u64).map_err(|err|
+			apply_state_commit_canonical(transaction, commit, &self.storage.db, number_u64).map_err(|err|
 				client::error::Error::Backend(
 					format!("Error building commit transaction : {}", err)
 				)
@@ -1409,11 +1409,10 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 				.map_err(|e: state_db::Error<io::Error>|
 					client::error::Error::from(format!("State database error: {:?}", e))
 				)?;
-			apply_state_commit(transaction, commit, &self.storage.db, number_u64).map_err(|err|
-				client::error::Error::Backend(
+			apply_state_commit_canonical(transaction, commit, &self.storage.db, number_u64)
+				.map_err(|err| client::error::Error::Backend(
 					format!("Error building commit transaction : {}", err)
-				)
-			)?;
+				))?;
 
 			let changes_trie_config = self.changes_trie_config(parent_hash)?;
 			if let Some(changes_trie_config) = changes_trie_config {
@@ -1451,24 +1450,6 @@ fn apply_state_commit(
 		ser.push(last_block, o.as_ref().map(|v| v.as_slice()));
 		transaction.put(columns::OFFSTATE, &key[..], &ser.into_vec())
 	}
-	if let Some((block_prune, offstate_prune_key)) = commit.offstate_prune.as_ref() {
-		for key in offstate_prune_key.iter() {
-			// TODO EMCH should we prune less often (wait on pruning journals for instance)
-			// or make it out of this context just stored the block prune and do asynch
-			let mut ser = if let Some(stored) = db.get(columns::OFFSTATE, key)? {
-				Ser::from_vec(stored.to_vec())
-			} else {
-				break;
-			};
-
-			match ser.prune(*block_prune) {
-				PruneResult::Cleared => transaction.delete(columns::OFFSTATE, &key),
-				PruneResult::Changed => transaction.put(columns::OFFSTATE, &key[..], &ser.into_vec()),
-				PruneResult::Unchanged => (),
-			}
-		}
-	}
-
 	for (key, val) in commit.data.inserted.into_iter() {
 		transaction.put(columns::STATE, &key[..], &val);
 	}
@@ -1480,6 +1461,35 @@ fn apply_state_commit(
 	}
 	for key in commit.meta.deleted.into_iter() {
 		transaction.delete(columns::STATE_META, &key[..]);
+	}
+	Ok(())
+}
+
+fn apply_state_commit_canonical(
+	transaction: &mut DBTransaction,
+	commit: state_db::CommitSetCanonical<Vec<u8>>,
+	db: &Arc<dyn KeyValueDB>,
+	last_block: u64,
+) -> Result<(), io::Error> {
+	apply_state_commit(transaction, commit.0, db, last_block)?;
+
+	if let Some((block_prune, offstate_prune_key)) = commit.1 {
+		// no need to into_iter
+		for key in offstate_prune_key.iter() {
+			// TODO EMCH should we prune less often (wait on pruning journals for instance)
+			// or make it out of this context just stored the block prune and do asynch
+			let mut ser = if let Some(stored) = db.get(columns::OFFSTATE, key)? {
+				Ser::from_vec(stored.to_vec())
+			} else {
+				break;
+			};
+
+			match ser.prune(block_prune) {
+				PruneResult::Cleared => transaction.delete(columns::OFFSTATE, &key),
+				PruneResult::Changed => transaction.put(columns::OFFSTATE, &key[..], &ser.into_vec()),
+				PruneResult::Unchanged => (),
+			}
+		}
 	}
 	Ok(())
 }

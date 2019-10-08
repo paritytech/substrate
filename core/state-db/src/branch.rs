@@ -118,12 +118,6 @@ impl RangeSet {
 		self.treshold
 	}
 
-	#[cfg(test)]
-	/// test access to strage.
-	pub fn inner_storage(&self) -> &BTreeMap<u64, Option<BranchStates>> {
-		&self.storage
-	}
-
 	/// Iterator over all its range sets.
 	pub fn reverse_iter_ranges(&self) -> impl Iterator<Item = (&BranchStateRef, u64)> {
 		self.storage.iter().rev().filter_map(|(k, v)| v.as_ref().map(|v| (&v.state, *k)))

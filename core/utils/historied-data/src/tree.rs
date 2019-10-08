@@ -1076,6 +1076,17 @@ mod test {
 		assert_eq!(item.get(3), None);
 		assert_eq!(item.get(4), Some(Some(&[4][..])));
 	
+		// prune delete at block
+		let mut item: Serialized<crate::linear::DefaultVersion> = Default::default();
+		item.push(0, Some(&[0 as u8]));
+		item.push(1, None);
+		assert_eq!(item.get(0), Some(Some(&[0][..])));
+		assert_eq!(item.get(1), Some(None));
+		item.prune(0);
+		assert_eq!(item.get(0), None);
+		assert_eq!(item.get(1), None);
+		assert_eq!(item.0.len(), 0);
+
 	}
 
 }

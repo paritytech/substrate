@@ -1298,7 +1298,6 @@ mod tests {
 
 		overlay.pin(&h_1);
 		let h1_context = overlay.get_branch_range(&h_1, 1).unwrap();
-		let h2_context = overlay.get_branch_range(&h_2, 1).unwrap();
 	
 		let mut commit = CommitSet::default();
 		overlay.canonicalize::<io::Error>(&h_2, &mut commit).unwrap();

@@ -19,8 +19,8 @@
 use std::collections::{HashMap, BTreeMap};
 use primitives::H256;
 use crate::{
-	DBValue, ChangeSet, OffstateChangeSet, CommitSet, MetaDb, NodeDb, OffstateDb,
-	OffstateKey,
+	DBValue, ChangeSet, OffstateChangeSet, OffstateKey, MetaDb, NodeDb, OffstateDb,
+	CommitSet, CommitSetCanonical,
 };
 use historied_data::tree::Serialized;
 use historied_data::PruneResult;
@@ -94,7 +94,16 @@ impl TestDb {
 			let mut ser = Ser::from_mut(&mut (*encoded));
 			ser.push(self.last_block, o.as_ref().map(|v| v.as_slice()));
 		}
-		if let Some((block_prune, offstate_prune_key)) = commit.offstate_prune.as_ref() {
+		self.meta.extend(commit.meta.inserted.iter().cloned());
+		for k in commit.meta.deleted.iter() {
+			self.meta.remove(k);
+		}
+	}
+
+	pub fn commit_canonical(&mut self, commit: &CommitSetCanonical<H256>) {
+		self.commit(&commit.0);
+
+		if let Some((block_prune, offstate_prune_key)) = commit.1.as_ref() {
 			for k in offstate_prune_key.iter() {
 				match self.offstate.get_mut(k).map(|v| {
 					let mut ser = Ser::from_mut(v);
@@ -106,10 +115,6 @@ impl TestDb {
 					| None => (),
 				}
 			}
-		}
-		self.meta.extend(commit.meta.inserted.iter().cloned());
-		for k in commit.meta.deleted.iter() {
-			self.meta.remove(k);
 		}
 	}
 
@@ -175,7 +180,6 @@ pub fn make_commit(inserted: &[u64], deleted: &[u64]) -> CommitSet<H256> {
 		data: make_changeset(inserted, deleted),
 		meta: ChangeSet::default(),
 		offstate: OffstateChangeSet::default(),
-		offstate_prune: None,
 	}
 }
 
@@ -184,7 +188,6 @@ pub fn make_commit_both(inserted: &[u64], deleted: &[u64]) -> CommitSet<H256> {
 		data: make_changeset(inserted, deleted),
 		meta: ChangeSet::default(),
 		offstate: make_offstate_changeset(inserted, deleted),
-		offstate_prune: None,
 	}
 }
 

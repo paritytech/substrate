@@ -24,7 +24,8 @@
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use codec::{Encode, Decode};
-use crate::{CommitSet, Error, MetaDb, to_meta_key, Hash, OffstateKey};
+use crate::{CommitSet, CommitSetCanonical, Error, MetaDb, to_meta_key, Hash,
+	OffstateKey};
 use log::{trace, warn};
 
 const LAST_PRUNED: &[u8] = b"last_pruned";
@@ -140,7 +141,7 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 		offstate_journal_key: Vec<u8>,
 		inserted: I,
 		deleted: Vec<Key>,
-		offstate_inserted: I2,
+		offstate_modified: I2,
 	) {
 		// remove all re-inserted keys from death rows
 		for k in inserted {
@@ -154,12 +155,13 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 		for k in deleted.iter() {
 			self.death_index.insert(k.clone(), imported_block);
 		}
+			// TODO EMCH is it possible to change type to directly set ??
+		let offstate_modified = offstate_modified.into_iter().collect();
 		self.death_rows.push_back(
 			DeathRow {
 				hash: hash.clone(),
 				deleted: deleted.into_iter().collect(),
-				// TODO EMCH is it possible to change type to directly set ??
-				offstate_modified: offstate_inserted.into_iter().collect(),
+				offstate_modified,
 				journal_key,
 				offstate_journal_key,
 			}
@@ -186,17 +188,23 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 		self.death_rows.iter().skip(self.pending_prunings).any(|r| r.hash == *hash)
 	}
 
-	/// Prune next block. Expects at least one block in the window. Adds changes to `commit`.
-	pub fn prune_one(&mut self, commit: &mut CommitSet<Key>) {
+	/// Prune next block. Expects at least one block in the window.
+	/// Adds changes to `commit`.
+	/// `offstate_prune` to None indicates archive mode.
+	pub fn prune_one(
+		&mut self,
+		commit: &mut CommitSetCanonical<Key>,
+	) {
+		let (commit, offstate_prune) = commit;
 		if let Some(pruned) = self.death_rows.get(self.pending_prunings) {
 			trace!(target: "state-db", "Pruning {:?} ({} deleted)", pruned.hash, pruned.deleted.len());
 			let index = self.pending_number + self.pending_prunings as u64;
 			commit.data.deleted.extend(pruned.deleted.iter().cloned());
-			if let Some(offstate) = commit.offstate_prune.as_mut() {
+			if let Some(offstate) = offstate_prune.as_mut() {
 				offstate.0 = std::cmp::max(offstate.0, index);
 				offstate.1.extend(pruned.offstate_modified.iter().cloned());
 			} else {
-				commit.offstate_prune = Some((
+				*offstate_prune = Some((
 					index,
 					pruned.offstate_modified.iter().cloned().collect(),
 				));
@@ -272,7 +280,7 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 mod tests {
 	use super::RefWindow;
 	use primitives::H256;
-	use crate::CommitSet;
+	use crate::CommitSetCanonical;
 	use crate::test::{make_db, make_commit_both, TestDb, make_commit};
 
 	fn check_journal(pruning: &RefWindow<H256, H256>, db: &TestDb) {
@@ -298,16 +306,16 @@ mod tests {
 		let mut db = make_db(&[1, 2, 3]);
 		db.initialize_offstate(&[1, 2, 3]);
 		let mut pruning: RefWindow<H256, H256> = RefWindow::new(&db).unwrap();
-		let mut commit = make_commit_both(&[4, 5], &[1, 3]);
-		commit.initialize_offstate(&[4, 5], &[1, 3]);
+		let mut commit = (make_commit_both(&[4, 5], &[1, 3]), None);
+		commit.0.initialize_offstate(&[4, 5], &[1, 3]);
 		let h = H256::random();
-		assert!(!commit.data.deleted.is_empty());
-		pruning.note_canonical(&h, &mut commit);
-		db.commit(&commit);
+		assert!(!commit.0.data.deleted.is_empty());
+		pruning.note_canonical(&h, &mut commit.0);
+		db.commit_canonical(&commit);
 		assert!(pruning.have_block(&h));
 		pruning.apply_pending();
 		assert!(pruning.have_block(&h));
-		assert!(commit.data.deleted.is_empty());
+		assert!(commit.0.data.deleted.is_empty());
 		//assert!(commit.offstate.is_empty());
 		assert_eq!(pruning.death_rows.len(), 1);
 		assert_eq!(pruning.death_index.len(), 2);
@@ -316,10 +324,10 @@ mod tests {
 		assert!(db.offstate_eq(&[2, 4, 5]));
 		check_journal(&pruning, &db);
 
-		let mut commit = CommitSet::default();
+		let mut commit = CommitSetCanonical::default();
 		pruning.prune_one(&mut commit);
 		assert!(!pruning.have_block(&h));
-		db.commit(&commit);
+		db.commit_canonical(&commit);
 		pruning.apply_pending();
 		assert!(!pruning.have_block(&h));
 		assert!(db.data_eq(&make_db(&[2, 4, 5])));
@@ -350,18 +358,18 @@ mod tests {
 
 		check_journal(&pruning, &db);
 
-		let mut commit = CommitSet::default();
+		let mut commit = CommitSetCanonical::default();
 		pruning.prune_one(&mut commit);
-		db.commit(&commit);
+		db.commit_canonical(&commit);
 		pruning.apply_pending();
 		assert!(db.data_eq(&make_db(&[2, 3, 4, 5])));
 		// 3 exists at 0 and 1 so 0 removed
 		assert!(db.offstate_eq_at(&[2], Some(0)));
 		assert!(db.offstate_eq_at(&[2, 3, 4], Some(1)));
 		assert!(db.offstate_eq(&[3, 4, 5]));
-		let mut commit = CommitSet::default();
+		let mut commit = CommitSetCanonical::default();
 		pruning.prune_one(&mut commit);
-		db.commit(&commit);
+		db.commit_canonical(&commit);
 		pruning.apply_pending();
 		assert!(db.data_eq(&make_db(&[3, 4, 5])));
 		assert!(db.offstate_eq_at(&[], Some(0)));
@@ -375,26 +383,26 @@ mod tests {
 		let mut db = make_db(&[1, 2, 3]);
 		db.initialize_offstate(&[1, 2, 3]);
 		let mut pruning: RefWindow<H256, H256> = RefWindow::new(&db).unwrap();
-		let mut commit = make_commit_both(&[4], &[1]);
-		pruning.note_canonical(&H256::random(), &mut commit);
-		db.commit(&commit);
-		let mut commit = make_commit_both(&[3, 5], &[2]);
-		pruning.note_canonical(&H256::random(), &mut commit);
-		db.commit(&commit);
+		let mut commit = (make_commit_both(&[4], &[1]), None);
+		pruning.note_canonical(&H256::random(), &mut commit.0);
+		db.commit_canonical(&commit);
+		let mut commit = (make_commit_both(&[3, 5], &[2]), None);
+		pruning.note_canonical(&H256::random(), &mut commit.0);
+		db.commit_canonical(&commit);
 		assert!(db.data_eq(&make_db(&[1, 2, 3, 4, 5])));
 		assert!(db.offstate_eq_at(&[1, 2, 3], Some(0)));
 		assert!(db.offstate_eq_at(&[2, 3, 4], Some(1)));
 		assert!(db.offstate_eq(&[3, 4, 5]));
-		let mut commit = CommitSet::default();
+		let mut commit = CommitSetCanonical::default();
 		pruning.prune_one(&mut commit);
-		db.commit(&commit);
+		db.commit_canonical(&commit);
 		assert!(db.data_eq(&make_db(&[2, 3, 4, 5])));
 		assert!(db.offstate_eq_at(&[2, 3], Some(0)));
 		assert!(db.offstate_eq_at(&[2, 3, 4], Some(1)));
 		assert!(db.offstate_eq(&[3, 4, 5]));
-		let mut commit = CommitSet::default();
+		let mut commit = CommitSetCanonical::default();
 		pruning.prune_one(&mut commit);
-		db.commit(&commit);
+		db.commit_canonical(&commit);
 		pruning.apply_pending();
 		assert!(db.data_eq(&make_db(&[3, 4, 5])));
 		assert!(db.offstate_eq_at(&[], Some(0)));
@@ -408,16 +416,16 @@ mod tests {
 		let mut db = make_db(&[1, 2, 3]);
 		db.initialize_offstate(&[1, 2, 3]);
 		let mut pruning: RefWindow<H256, H256> = RefWindow::new(&db).unwrap();
-		let mut commit = make_commit_both(&[], &[2]);
-		commit.initialize_offstate(&[], &[2]);
-		pruning.note_canonical(&H256::random(), &mut commit);
-		db.commit(&commit);
-		let mut commit = make_commit_both(&[2], &[]);
-		pruning.note_canonical(&H256::random(), &mut commit);
-		db.commit(&commit);
-		let mut commit = make_commit_both(&[], &[2]);
-		pruning.note_canonical(&H256::random(), &mut commit);
-		db.commit(&commit);
+		let mut commit = (make_commit_both(&[], &[2]), None);
+		commit.0.initialize_offstate(&[], &[2]);
+		pruning.note_canonical(&H256::random(), &mut commit.0);
+		db.commit_canonical(&commit);
+		let mut commit = (make_commit_both(&[2], &[]), None);
+		pruning.note_canonical(&H256::random(), &mut commit.0);
+		db.commit_canonical(&commit);
+		let mut commit = (make_commit_both(&[], &[2]), None);
+		pruning.note_canonical(&H256::random(), &mut commit.0);
+		db.commit_canonical(&commit);
 		assert!(db.data_eq(&make_db(&[1, 2, 3])));
 		assert!(db.offstate_eq_at(&[1, 2, 3], Some(0)));
 		assert!(db.offstate_eq_at(&[1, 3], Some(1)));
@@ -427,24 +435,24 @@ mod tests {
 
 		check_journal(&pruning, &db);
 
-		let mut commit = CommitSet::default();
+		let mut commit = CommitSetCanonical::default();
 		pruning.prune_one(&mut commit);
-		db.commit(&commit);
+		db.commit_canonical(&commit);
 		assert!(db.data_eq(&make_db(&[1, 2, 3])));
 		assert!(db.offstate_eq_at(&[1, 3], Some(0)));
 		assert!(db.offstate_eq_at(&[1, 3], Some(1)));
 		assert!(db.offstate_eq_at(&[1, 2, 3], Some(2)));
 		assert!(db.offstate_eq(&[1, 3]));
-		let mut commit = CommitSet::default();
+		let mut commit = CommitSetCanonical::default();
 		pruning.prune_one(&mut commit);
-		db.commit(&commit);
+		db.commit_canonical(&commit);
 		assert!(db.data_eq(&make_db(&[1, 2, 3])));
 		assert!(db.offstate_eq_at(&[1, 3], Some(0)));
 		assert!(db.offstate_eq_at(&[1, 3], Some(1)));
 		assert!(db.offstate_eq_at(&[1, 2, 3], Some(2)));
 		assert!(db.offstate_eq(&[1, 3]));
 		pruning.prune_one(&mut commit);
-		db.commit(&commit);
+		db.commit_canonical(&commit);
 		assert!(db.data_eq(&make_db(&[1, 3])));
 		assert!(db.offstate_eq_at(&[1, 3], Some(0)));
 		assert!(db.offstate_eq_at(&[1, 3], Some(1)));
@@ -469,16 +477,16 @@ mod tests {
 		db.commit(&commit);
 		assert!(db.data_eq(&make_db(&[1, 2, 3])));
 
-		let mut commit = CommitSet::default();
+		let mut commit = CommitSetCanonical::default();
 		pruning.prune_one(&mut commit);
-		db.commit(&commit);
+		db.commit_canonical(&commit);
 		assert!(db.data_eq(&make_db(&[1, 2, 3])));
-		let mut commit = CommitSet::default();
+		let mut commit = CommitSetCanonical::default();
 		pruning.prune_one(&mut commit);
-		db.commit(&commit);
+		db.commit_canonical(&commit);
 		assert!(db.data_eq(&make_db(&[1, 2, 3])));
 		pruning.prune_one(&mut commit);
-		db.commit(&commit);
+		db.commit_canonical(&commit);
 		assert!(db.data_eq(&make_db(&[1, 3])));
 		pruning.apply_pending();
 		assert_eq!(pruning.pending_number, 3);

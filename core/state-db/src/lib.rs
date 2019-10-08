@@ -152,7 +152,14 @@ pub struct ChangeSet<H: Hash> {
 pub type OffstateChangeSet<H> = Vec<(H, Option<DBValue>)>;
 
 /// Info for pruning offstate: a last prune index and keys to prune.
-pub type OffstateChangeSetPrune<H> = Option<(u64, HashSet<H>)>;
+/// Is set to none when not initialized.
+pub type OffstateChangeSetPrune = Option<(u64, HashSet<OffstateKey>)>;
+
+/// Info for reverting offstate of a canonical backend.
+pub type OffstateChangeSetRevert = u64;
+
+/// Commit set on canonical operation.
+pub type CommitSetCanonical<H> = (CommitSet<H>, OffstateChangeSetPrune);
 
 /// A set of changes to the backing database.
 /// It only contain a single block change set.
@@ -164,8 +171,6 @@ pub struct CommitSet<H: Hash> {
 	pub meta: ChangeSet<Vec<u8>>,
 	/// Offstate data changes.
 	pub offstate: OffstateChangeSet<OffstateKey>,
-	/// Offstate data changes good for prunning.
-	pub offstate_prune: OffstateChangeSetPrune<OffstateKey>,
 }
 
 /// Pruning constraints. If none are specified pruning is
@@ -269,7 +274,6 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 					// and use and ordered tuple (branchix, blocknumber)
 					// index to run.
 					offstate: offstate_changeset,
-					offstate_prune: None,
 				})
 			},
 			PruningMode::Constrained(_) | PruningMode::ArchiveCanonical => {
@@ -278,24 +282,24 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		}
 	}
 
-	pub fn canonicalize_block<E: fmt::Debug>(&mut self, hash: &BlockHash) -> Result<CommitSet<Key>, Error<E>> {
-		let mut commit = CommitSet::default();
+	pub fn canonicalize_block<E: fmt::Debug>(
+		&mut self,
+		hash: &BlockHash,
+	) -> Result<CommitSetCanonical<Key>, Error<E>> {
+		let mut commit = (CommitSet::default(), None);
 		if self.mode == PruningMode::ArchiveAll {
 			return Ok(commit)
 		}
-		match self.non_canonical.canonicalize(&hash, &mut commit) {
+		match self.non_canonical.canonicalize(&hash, &mut commit.0) {
 			Ok(()) => {
 				if self.mode == PruningMode::ArchiveCanonical {
-					commit.data.deleted.clear();
-					// TODO EMCH use pruning mode in statedb to avoid feeding that
-					// in the first place.
-					commit.offstate_prune = None;
+					commit.0.data.deleted.clear();
 				}
 			}
 			Err(e) => return Err(e),
 		};
 		if let Some(ref mut pruning) = self.pruning {
-			pruning.note_canonical(&hash, &mut commit);
+			pruning.note_canonical(&hash, &mut commit.0);
 		}
 		self.prune(&mut commit);
 		Ok(commit)
@@ -318,7 +322,7 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		}
 	}
 
-	fn prune(&mut self, commit: &mut CommitSet<Key>) {
+	fn prune(&mut self, commit: &mut CommitSetCanonical<Key>) {
 		if let (&mut Some(ref mut pruning), &PruningMode::Constrained(ref constraints)) = (&mut self.pruning, &self.mode) {
 			loop {
 				if pruning.window_size() <= constraints.max_blocks.unwrap_or(0) as u64 {
@@ -484,7 +488,10 @@ impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
 	}
 
 	/// Finalize a previously inserted block.
-	pub fn canonicalize_block<E: fmt::Debug>(&self, hash: &BlockHash) -> Result<CommitSet<Key>, Error<E>> {
+	pub fn canonicalize_block<E: fmt::Debug>(
+		&self,
+		hash: &BlockHash,
+	) -> Result<CommitSetCanonical<Key>, Error<E>> {
 		self.db.write().canonicalize_block(hash)
 	}
 
@@ -614,7 +621,10 @@ mod tests {
 				.unwrap(),
 		);
 		state_db.apply_pending();
-		db.commit(&state_db.canonicalize_block::<io::Error>(&H256::from_low_u64_be(1)).unwrap());
+		db.commit_canonical(
+			&state_db.canonicalize_block::<io::Error>(&H256::from_low_u64_be(1))
+				.unwrap()
+		);
 		state_db.apply_pending();
 		db.commit(
 			&state_db
@@ -628,9 +638,15 @@ mod tests {
 				.unwrap(),
 		);
 		state_db.apply_pending();
-		db.commit(&state_db.canonicalize_block::<io::Error>(&H256::from_low_u64_be(21)).unwrap());
+		db.commit_canonical(
+			&state_db.canonicalize_block::<io::Error>(&H256::from_low_u64_be(21))
+				.unwrap()
+		);
 		state_db.apply_pending();
-		db.commit(&state_db.canonicalize_block::<io::Error>(&H256::from_low_u64_be(3)).unwrap());
+		db.commit_canonical(
+			&state_db.canonicalize_block::<io::Error>(&H256::from_low_u64_be(3))
+				.unwrap()
+		);
 		state_db.apply_pending();
 
 		(db, state_db)
