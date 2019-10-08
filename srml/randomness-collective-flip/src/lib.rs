@@ -83,7 +83,7 @@ decl_module! {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as System {
+	trait Store for Module<T: Trait> as RandomnessCollectiveFlip {
 		/// Series of block headers from the last 81 blocks that acts as random seed material. This
 		/// is arranged as a ring buffer with `block_number % 81` being the index into the `Vec` of
 		/// the oldest hash.
