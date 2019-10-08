@@ -126,3 +126,6 @@ is-it-maintained-open-issues = { repository = "paritytech/substrate" }
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"
+
+[patch.crates-io]
+tiny-bip39 = { git = "https://github.com/paritytech/tiny-bip39" }

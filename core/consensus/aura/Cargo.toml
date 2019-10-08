@@ -35,5 +35,5 @@ network = { package = "substrate-network", path = "../../network", features = ["
 service = { package = "substrate-service", path = "../../service" }
 test-client = { package = "substrate-test-runtime-client", path = "../../test-runtime/client" }
 tokio = "0.1.22"
-env_logger = "0.6.2"
+env_logger = "0.7.0"
 tempfile = "3.1.0"
