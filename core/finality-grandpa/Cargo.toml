@@ -19,7 +19,7 @@ consensus_common = { package = "substrate-consensus-common", path = "../consensu
 primitives = { package = "substrate-primitives",  path = "../primitives" }
 substrate-telemetry = { path = "../telemetry" }
 keystore = { package = "substrate-keystore", path = "../keystore" }
-serde_json = "1.0.40"
+serde_json = "1.0.41"
 client = { package = "substrate-client", path = "../client" }
 header-metadata = { package = "substrate-header-metadata", path = "../client/header-metadata" }
 inherents = { package = "substrate-inherents", path = "../../core/inherents" }
@@ -34,6 +34,6 @@ network = { package = "substrate-network", path = "../network", features = ["tes
 keyring = { package = "substrate-keyring", path = "../keyring" }
 test-client = { package = "substrate-test-runtime-client", path = "../test-runtime/client"}
 babe_primitives = { package = "substrate-consensus-babe-primitives", path = "../consensus/babe/primitives" }
-env_logger = "0.6.2"
+env_logger = "0.7.0"
 tokio = "0.1.22"
 tempfile = "3.1.0"
