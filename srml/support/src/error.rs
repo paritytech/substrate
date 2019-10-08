@@ -63,7 +63,7 @@ macro_rules! decl_error {
 			Other(&'static str),
 			CannotLookup,
 			$(
-				$( #[doc = $doc_attr ] )*
+				$( #[doc = $doc_attr] )*
 				$name
 			),*
 		}
