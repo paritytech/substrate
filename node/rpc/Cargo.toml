@@ -6,6 +6,7 @@ edition = "2018"
 
 [dependencies]
 client = { package = "substrate-client", path = "../../core/client" }
+codec = { package = "parity-scale-codec", version = "1.0.0" }
 jsonrpc-core = "13.2.0"
 jsonrpc-core-client = "13.2.0"
 jsonrpc-derive = "13.2.0"
@@ -13,11 +14,11 @@ jsonrpc-pubsub = "13.2.0"
 keyring = { package = "substrate-keyring", path = "../../core/keyring" }
 log = "0.4.8"
 node-primitives = { path = "../primitives" }
-codec = { package = "parity-scale-codec", version = "1.0.0" }
+rpc-primitives = { package = "substrate-rpc-primitives", path = "../../core/rpc/primitives" }
 serde = { version = "1.0.101", features = ["derive"] }
 sr-primitives = { path = "../../core/sr-primitives" }
+srml-system-rpc = { path = "../../srml/system/rpc/" }
 substrate-primitives = { path = "../../core/primitives" }
-rpc-primitives = { package = "substrate-rpc-primitives", path = "../../core/rpc/primitives" }
 transaction_pool = { package = "substrate-transaction-pool", path = "../../core/transaction-pool" }
 
 [dev-dependencies]

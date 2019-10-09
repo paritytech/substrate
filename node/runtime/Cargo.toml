@@ -46,6 +46,7 @@ srml-staking-reward-curve = { path = "../../srml/staking/reward-curve"}
 sudo = { package = "srml-sudo", path = "../../srml/sudo", default-features = false }
 support = { package = "srml-support", path = "../../srml/support", default-features = false }
 system = { package = "srml-system", path = "../../srml/system", default-features = false }
+system-rpc-runtime-api = { package = "srml-system-rpc-runtime-api", path = "../../srml/system/rpc/runtime-api/", default-features = false }
 timestamp = { package = "srml-timestamp", path = "../../srml/timestamp", default-features = false }
 treasury = { package = "srml-treasury", path = "../../srml/treasury", default-features = false }
 utility = { package = "srml-utility", path = "../../srml/utility", default-features = false }
@@ -91,6 +92,7 @@ std = [
 	"sudo/std",
 	"support/std",
 	"system/std",
+	"system-rpc-runtime-api/std",
 	"timestamp/std",
 	"treasury/std",
 	"utility/std",

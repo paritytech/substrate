@@ -92,12 +92,6 @@ pub enum ContractExecResult {
 }
 
 client::decl_runtime_apis! {
-	/// The API to query account account nonce (aka index).
-	pub trait AccountNonceApi {
-		/// Get current account nonce of given `AccountId`.
-		fn account_nonce(account: AccountId) -> Index;
-	}
-
 	/// The API to interact with contracts without using executive.
 	pub trait ContractsApi {
 		/// Perform a call from a specified account to a given contract.

@@ -31,11 +31,10 @@
 
 use std::sync::Arc;
 
-use node_primitives::{Block, AccountNonceApi, ContractsApi};
+use node_primitives::{Block, ContractsApi, AccountId, Index};
 use sr_primitives::traits::ProvideRuntimeApi;
 use transaction_pool::txpool::{ChainApi, Pool};
 
-pub mod accounts;
 pub mod contracts;
 
 mod constants {
@@ -50,18 +49,19 @@ pub fn create<C, P, M>(client: Arc<C>, pool: Arc<Pool<P>>) -> jsonrpc_core::IoHa
 	C: ProvideRuntimeApi,
 	C: client::blockchain::HeaderBackend<Block>,
 	C: Send + Sync + 'static,
-	C::Api: AccountNonceApi<Block> + ContractsApi<Block>,
+	C::Api: srml_system_rpc::AccountNonceApi<Block, AccountId, Index>,
+	C::Api: ContractsApi<Block>,
 	P: ChainApi + Sync + Send + 'static,
 	M: jsonrpc_core::Metadata + Default,
 {
+	use srml_system_rpc::{System, SystemApi};
 	use self::{
-		accounts::{Accounts, AccountsApi},
 		contracts::{Contracts, ContractsApi},
 	};
 
 	let mut io = jsonrpc_core::IoHandler::default();
 	io.extend_with(
-		AccountsApi::to_delegate(Accounts::new(client.clone(), pool))
+		SystemApi::to_delegate(System::new(client.clone(), pool))
 	);
 	io.extend_with(
 		ContractsApi::to_delegate(Contracts::new(client))
