@@ -662,34 +662,17 @@ impl<T: Externalities> Externalities for LimitedExternalities<T> {
 	}
 }
 
-/// The extension that will be registered at the Substrate externalities.
 #[cfg(feature = "std")]
-pub struct OffchainExt(Box<dyn Externalities>);
+externalities::decl_extension! {
+	/// The offchain extension that will be registered at the Substrate externalities.
+	pub struct OffchainExt(Box<dyn Externalities>);
+}
 
 #[cfg(feature = "std")]
 impl OffchainExt {
 	/// Create a new instance of `Self`.
-	pub fn new<O: Externalities + 'static>(ext: O) -> Self {
-		Self(Box::new(ext))
-	}
-}
-
-#[cfg(feature = "std")]
-impl externalities::Extension for OffchainExt {}
-
-#[cfg(feature = "std")]
-impl std::ops::Deref for OffchainExt {
-	type Target = dyn Externalities;
-
-	fn deref(&self) -> &Self::Target {
-		&*self.0
-	}
-}
-
-#[cfg(feature = "std")]
-impl std::ops::DerefMut for OffchainExt {
-	fn deref_mut(&mut self) -> &mut Self::Target {
-		&mut *self.0
+	pub fn new<O: Externalities + 'static>(offchain: O) -> Self {
+		Self(Box::new(offchain))
 	}
 }
 

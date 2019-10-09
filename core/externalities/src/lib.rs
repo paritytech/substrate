@@ -31,7 +31,7 @@ use primitives_storage::ChildStorageKey;
 pub use scope_limited::{set_and_run_with_externalities, with_externalities};
 pub use extensions::{Extension, Extensions};
 
-pub mod extensions;
+mod extensions;
 mod scope_limited;
 
 /// The Substrate externalities.

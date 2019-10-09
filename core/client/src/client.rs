@@ -1467,9 +1467,11 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 
 		let capabilities = context.capabilities();
 		let offchain_extensions = match context {
-			ExecutionContext::OffchainCall(ext) => ext.map(|x| x.0),
+			ExecutionContext::OffchainCall(Some(ext)) => Some(
+				OffchainExt::new(offchain::LimitedExternalities::new(capabilities, ext.0))
+			),
 			_ => None,
-		}.map(|ext| offchain::LimitedExternalities::new(capabilities, ext)).map(OffchainExt::new);
+		};
 
 		self.executor.contextual_call::<_, fn(_,_) -> _,_,_>(
 			|| core_api.initialize_block(at, &self.prepare_environment_block(at)?),

@@ -261,7 +261,7 @@ mod tests {
 
 		// Create externalities.
 		let mut externalities = TestExternalities::new(t);
-		externalities.register_extension(KeystoreExt::new(key_store));
+		externalities.register_extension(KeystoreExt(key_store));
 
 		set_and_run_with_externalities(&mut externalities, || {
 			assert_eq!(
@@ -298,7 +298,7 @@ mod tests {
 
 		// Create externalities.
 		let mut externalities = TestExternalities::new(t);
-		externalities.register_extension(KeystoreExt::new(key_store));
+		externalities.register_extension(KeystoreExt(key_store));
 
 		set_and_run_with_externalities(&mut externalities, || {
 			assert_eq!(None, AuthorityDiscovery::authority_id());
@@ -335,7 +335,7 @@ mod tests {
 
 		// Create externalities.
 		let mut externalities = TestExternalities::new(t);
-		externalities.register_extension(KeystoreExt::new(key_store));
+		externalities.register_extension(KeystoreExt(key_store));
 
 		set_and_run_with_externalities(&mut externalities, || {
 			let payload = String::from("test payload").into_bytes();
@@ -350,7 +350,7 @@ mod tests {
 			assert!(!AuthorityDiscovery::verify(
 				&String::from("other payload").into_bytes(),
 				sig,
-				authority_id
+				authority_id,
 			))
 		});
 	}

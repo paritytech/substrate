@@ -16,13 +16,13 @@
 
 //! Shareable Substrate traits.
 
-#[cfg(feature = "std")]
 use crate::{crypto::KeyTypeId, ed25519, sr25519};
-#[cfg(feature = "std")]
+
 use std::{fmt::{Debug, Display}, panic::UnwindSafe};
 
+pub use externalities::{Externalities, ExternalitiesExt};
+
 /// Something that generates, stores and provides access to keys.
-#[cfg(feature = "std")]
 pub trait BareCryptoStore: Send + Sync {
 	/// Returns all sr25519 public keys for the given key type.
 	fn sr25519_public_keys(&self, id: KeyTypeId) -> Vec<sr25519::Public>;
@@ -68,45 +68,14 @@ pub trait BareCryptoStore: Send + Sync {
 }
 
 /// A pointer to the key store.
-#[cfg(feature = "std")]
 pub type BareCryptoStorePtr = std::sync::Arc<parking_lot::RwLock<dyn BareCryptoStore>>;
 
-/// The keystore extension to register/retrieve from the externalities.
-#[cfg(feature = "std")]
-pub struct KeystoreExt(BareCryptoStorePtr);
-
-#[cfg(feature = "std")]
-impl KeystoreExt {
-	/// Create new instance of `Self`.
-	pub fn new(keystore: BareCryptoStorePtr) -> Self {
-		Self(keystore)
-	}
+externalities::decl_extension! {
+	/// The keystore extension to register/retrieve from the externalities.
+	pub struct KeystoreExt(BareCryptoStorePtr);
 }
-
-#[cfg(feature = "std")]
-impl externalities::Extension for KeystoreExt {}
-
-#[cfg(feature = "std")]
-impl std::ops::Deref for KeystoreExt {
-	type Target = BareCryptoStorePtr;
-
-	fn deref(&self) -> &Self::Target {
-		&self.0
-	}
-}
-
-#[cfg(feature = "std")]
-impl std::ops::DerefMut for KeystoreExt {
-	fn deref_mut(&mut self) -> &mut Self::Target {
-		&mut self.0
-	}
-}
-
-#[cfg(feature = "std")]
-pub use externalities::{Externalities, ExternalitiesExt};
 
 /// Code execution engine.
-#[cfg(feature = "std")]
 pub trait CodeExecutor: Sized + Send + Sync {
 	/// Externalities error type.
 	type Error: Display + Debug + Send + 'static;

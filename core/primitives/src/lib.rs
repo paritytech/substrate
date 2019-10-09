@@ -62,6 +62,7 @@ pub mod offchain;
 pub mod sandbox;
 pub mod uint;
 mod changes_trie;
+#[cfg(feature = "std")]
 pub mod traits;
 pub mod testing;
 

@@ -23,11 +23,51 @@
 
 use std::{collections::HashMap, any::{Any, TypeId}, ops::DerefMut};
 
-/// Marker trait for types that should be registered as `Externalities` extension.
+/// Marker trait for types that should be registered as [`Externalities`](crate::Externalities) extension.
 ///
 /// As extensions are stored as `Box<Any>`, this trait should give more confidence that the correct
 /// type is registered and requested.
 pub trait Extension: Sized {}
+
+/// Macro for declaring an extension that usable with [`Extensions`].
+///
+/// The extension will be an unit wrapper struct that implements [`Extension`], `Deref` and
+/// `DerefMut`. The wrapped type is given by the user.
+///
+/// # Example
+/// ```
+/// # use substrate_externalities::decl_extension;
+/// decl_extension! {
+///     /// Some test extension
+///     struct TestExt(String);
+/// }
+/// ```
+#[macro_export]
+macro_rules! decl_extension {
+	(
+		$( #[ $attr:meta ] )*
+		$vis:vis struct $ext_name:ident ($inner:ty);
+	) => {
+		$( #[ $attr ] )*
+		$vis struct $ext_name (pub $inner);
+
+		impl $crate::Extension for $ext_name {}
+
+		impl std::ops::Deref for $ext_name {
+			type Target = $inner;
+
+			fn deref(&self) -> &Self::Target {
+				&self.0
+			}
+		}
+
+		impl std::ops::DerefMut for $ext_name {
+			fn deref_mut(&mut self) -> &mut Self::Target {
+				&mut self.0
+			}
+		}
+	}
+}
 
 /// Stores extensions that should be made available through the externalities.
 #[derive(Default)]

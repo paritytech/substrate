@@ -210,7 +210,7 @@ where
 			&self.executor,
 			method,
 			call_data,
-			self.keystore.clone().map(KeystoreExt::new),
+			self.keystore.clone().map(KeystoreExt),
 		).execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
 			strategy.get_manager(),
 			false,
@@ -254,7 +254,7 @@ where
 		}
 
 		let keystore = if enable_keystore {
-			self.keystore.clone().map(KeystoreExt::new)
+			self.keystore.clone().map(KeystoreExt)
 		} else {
 			None
 		};
@@ -357,7 +357,7 @@ where
 			&self.executor,
 			method,
 			call_data,
-			self.keystore.clone().map(KeystoreExt::new),
+			self.keystore.clone().map(KeystoreExt),
 		).execute_using_consensus_failure_handler(
 			manager,
 			true,
@@ -384,7 +384,7 @@ where
 			&self.executor,
 			method,
 			call_data,
-			self.keystore.clone().map(KeystoreExt::new),
+			self.keystore.clone().map(KeystoreExt),
 		)
 		.map_err(Into::into)
 	}
