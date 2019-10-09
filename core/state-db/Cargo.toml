@@ -11,4 +11,4 @@ primitives = { package = "substrate-primitives", path = "../../core/primitives" 
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
 
 [dev-dependencies]
-env_logger = "0.6.2"
+env_logger = "0.7.0"
