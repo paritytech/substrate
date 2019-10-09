@@ -90,6 +90,7 @@ const MIN_BLOCKS_TO_KEEP_CHANGES_TRIES_FOR: u32 = 32768;
 const DEFAULT_CHILD_RATIO: (usize, usize) = (1, 10);
 
 /// DB-backed patricia trie state, transaction type is an overlay of changes to commit.
+/// A simple key value backend is also accessible for direct key value storage.
 pub type DbState = state_machine::TrieBackend<
 	Arc<dyn state_machine::Storage<Blake2Hasher>>,
 	Blake2Hasher,
@@ -659,9 +660,8 @@ impl<Block: BlockT> state_machine::KvBackend for StorageDbAt<Block, (BranchRange
 
 	fn pairs(&self) -> HashMap<Vec<u8>, Option<Vec<u8>>> {
 		self.storage_db.state_db.get_kv_pairs(&self.state, self.storage_db.deref())
-			// function pairs should not be call except for testing so the conversion
-			// should be fine here. Note that storage.
-			// TODO EMCH try delete this
+			// Not that we do not store deletion.
+			// Function pairs should not really be call for this backend.
 			.into_iter().map(|(k, v)| (k, Some(v))).collect()
 	}
 }
@@ -1253,9 +1253,6 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 				kv_changeset,
 			).map_err(|e: state_db::Error<io::Error>|
 				client::error::Error::from(format!("State database error: {:?}", e)))?;
-			// TODO EMCH wrong block number: there is no kv change on block insert
-			// TODO split apply_state_commit and do an assertion in apply_state_commit
-			// that there is no kv stuff anymore
 			apply_state_commit(&mut transaction, commit, &self.storage.db, number_u64).map_err(|err|
 				client::error::Error::Backend(
 					format!("Error building commit transaction : {}", err)
@@ -1492,6 +1489,14 @@ fn apply_state_commit_inner(
 		}
 
 	}
+	apply_state_commit_no_kv(transaction, commit, db);
+	Ok(())
+}
+
+fn apply_state_commit_no_kv(
+	transaction: &mut DBTransaction,
+	commit: state_db::CommitSet<Vec<u8>>,
+	db: &Arc<dyn KeyValueDB>) {
 
 	for (key, val) in commit.data.inserted.into_iter() {
 		transaction.put(columns::STATE, &key[..], &val);
@@ -1505,7 +1510,7 @@ fn apply_state_commit_inner(
 	for key in commit.meta.deleted.into_iter() {
 		transaction.delete(columns::STATE_META, &key[..]);
 	}
-	Ok(())
+
 }
 
 
@@ -1643,11 +1648,8 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 			let mut transaction = DBTransaction::new();
 			match self.storage.state_db.revert_one() {
 				Some(commit) => {
-					apply_state_commit(&mut transaction, commit, &self.storage.db, c).map_err(|err|
-						client::error::Error::Backend(
-							format!("Error building commit transaction : {}", err)
-						)
-					)?;
+					debug_assert!(commit.kv.is_empty(), "revert do not change key value store");
+					apply_state_commit_no_kv(&mut transaction, commit, &self.storage.db);
 					let removed = self.blockchain.header(BlockId::Number(best))?.ok_or_else(
 						|| client::error::Error::UnknownBlock(
 							format!("Error reverting to {}. Block hash not found.", best)))?;

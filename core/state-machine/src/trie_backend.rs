@@ -27,7 +27,7 @@ use primitives::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX;
 use std::collections::HashMap;
 
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
-/// TODO EMCH with kv in backend this should be renamed eg StateBackend.
+/// A simple key value backend is also accessible for direct key value storage.
 pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher, O: KvBackend> {
 	essence: TrieBackendEssence<S, H>,
 	kv_storage: O,
