@@ -9,7 +9,7 @@ tempdir = "0.3.7"
 tokio = "0.1.22"
 futures = "0.1.29"
 log = "0.4.8"
-env_logger = "0.6.2"
+env_logger = "0.7.0"
 fdlimit = "0.1.1"
 futures03 = { package = "futures-preview", version = "=0.3.0-alpha.19", features = ["compat"] }
 service = { package = "substrate-service", path = "../../../core/service" }
