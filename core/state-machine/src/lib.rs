@@ -18,14 +18,16 @@
 
 #![warn(missing_docs)]
 
-use std::{fmt, result, collections::HashMap, panic::UnwindSafe};
+use std::{fmt, result, collections::HashMap, panic::UnwindSafe, marker::PhantomData};
 use log::{warn, trace};
 use hash_db::Hasher;
 use codec::{Decode, Encode};
 use primitives::{
 	storage::well_known_keys, NativeOrEncoded, NeverNativeValue, offchain::OffchainExt,
-	traits::{BareCryptoStorePtr, CodeExecutor}, hexdisplay::HexDisplay, hash::H256,
+	traits::{KeystoreExt, CodeExecutor}, hexdisplay::HexDisplay, hash::H256,
 };
+use overlayed_changes::OverlayedChangeSet;
+use externalities::Extensions;
 
 pub mod backend;
 mod changes_trie;
@@ -38,9 +40,7 @@ mod proving_backend;
 mod trie_backend;
 mod trie_backend_essence;
 
-use overlayed_changes::OverlayedChangeSet;
-pub use trie::{TrieMut, DBValue, MemoryDB};
-pub use trie::trie_types::{Layout, TrieDBMut};
+pub use trie::{trie_types::{Layout, TrieDBMut}, TrieMut, DBValue, MemoryDB};
 pub use testing::TestExternalities;
 pub use basic::BasicExternalities;
 pub use ext::Ext;
@@ -168,7 +168,10 @@ pub struct StateMachine<'a, B, H, N, T, Exec> where H: Hasher<Out=H256>, B: Back
 	exec: &'a Exec,
 	method: &'a str,
 	call_data: &'a [u8],
-	ext: Ext<'a, H, N, B, T>,
+	overlay: &'a mut OverlayedChanges,
+	extensions: Extensions,
+	changes_trie_storage: Option<&'a T>,
+	_marker: PhantomData<(H, N)>,
 }
 
 impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec> where
@@ -187,20 +190,16 @@ impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec> where
 		exec: &'a Exec,
 		method: &'a str,
 		call_data: &'a [u8],
-		keystore: Option<BareCryptoStorePtr>,
+		keystore: Option<KeystoreExt>,
 	) -> Self {
-		let mut ext = ext::Ext::new(
-			overlay,
-			backend,
-			changes_trie_storage,
-		);
+		let mut extensions = Extensions::new();
 
 		if let Some(keystore) = keystore {
-			ext.register_extension(keystore);
+			extensions.register(keystore);
 		}
 
 		if let Some(offchain) = offchain_ext {
-			ext.register_extension(offchain);
+			extensions.register(offchain);
 		}
 
 		Self {
@@ -208,7 +207,10 @@ impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec> where
 			exec,
 			method,
 			call_data,
-			ext,
+			extensions,
+			overlay,
+			changes_trie_storage,
+			_marker: PhantomData,
 		}
 	}
 
@@ -252,7 +254,14 @@ impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec> where
 		R: Decode + Encode + PartialEq,
 		NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
 	{
-		let id = self.ext.id;
+		let mut ext = Ext::new(
+			self.overlay,
+			self.backend,
+			self.changes_trie_storage.clone(),
+			Some(&mut self.extensions),
+		);
+
+		let id = ext.id;
 		trace!(
 			target: "state-trace", "{:04x}: Call {} at {:?}. Input={:?}",
 			id,
@@ -262,7 +271,7 @@ impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec> where
 		);
 
 		let (result, was_native) = self.exec.call(
-			&mut self.ext,
+			&mut ext,
 			self.method,
 			self.call_data,
 			use_native,
@@ -270,7 +279,7 @@ impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec> where
 		);
 
 		let (storage_delta, changes_delta) = if compute_tx {
-			let (storage_delta, changes_delta) = self.ext.transaction();
+			let (storage_delta, changes_delta) = ext.transaction();
 			(Some(storage_delta), changes_delta)
 		} else {
 			(None, None)
@@ -282,8 +291,6 @@ impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec> where
 			was_native,
 			result,
 		);
-
-		self.ext.reset();
 
 		(result, was_native, storage_delta, changes_delta)
 	}
@@ -313,7 +320,7 @@ impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec> where
 		);
 
 		if was_native {
-			self.ext.mut_overlayed_changes().prospective = orig_prospective.clone();
+			self.overlay.prospective = orig_prospective.clone();
 			let (wasm_result, _, wasm_storage_delta, wasm_changes_delta) = self.execute_aux(
 				compute_tx,
 				false,
@@ -355,7 +362,7 @@ impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec> where
 		if !was_native || result.is_ok() {
 			(result, storage_delta, changes_delta)
 		} else {
-			self.ext.mut_overlayed_changes().prospective = orig_prospective.clone();
+			self.overlay.prospective = orig_prospective.clone();
 			let (wasm_result, _, wasm_storage_delta, wasm_changes_delta) = self.execute_aux(
 				compute_tx,
 				false,
@@ -403,10 +410,10 @@ impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec> where
 			)?;
 			set_changes_trie_config(overlay, changes_trie_config, final_check)
 		};
-		init_overlay(self.ext.mut_overlayed_changes(), false, &self.backend)?;
+		init_overlay(self.overlay, false, &self.backend)?;
 
 		let result = {
-			let orig_prospective = self.ext.mut_overlayed_changes().prospective.clone();
+			let orig_prospective = self.overlay.prospective.clone();
 
 			let (result, storage_delta, changes_delta) = match manager {
 				ExecutionManager::Both(on_consensus_failure) => {
@@ -441,7 +448,7 @@ impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec> where
 		};
 
 		if result.is_ok() {
-			init_overlay(self.ext.mut_overlayed_changes(), true, self.backend)?;
+			init_overlay(self.overlay, true, self.backend)?;
 		}
 
 		result.map_err(|e| Box::new(e) as _)
@@ -455,7 +462,7 @@ pub fn prove_execution<B, H, Exec>(
 	exec: &Exec,
 	method: &str,
 	call_data: &[u8],
-	keystore: Option<BareCryptoStorePtr>,
+	keystore: Option<KeystoreExt>,
 ) -> Result<(Vec<u8>, Vec<Vec<u8>>), Box<dyn Error>>
 where
 	B: Backend<H>,
@@ -482,7 +489,7 @@ pub fn prove_execution_on_trie_backend<S, H, Exec>(
 	exec: &Exec,
 	method: &str,
 	call_data: &[u8],
-	keystore: Option<BareCryptoStorePtr>,
+	keystore: Option<KeystoreExt>,
 ) -> Result<(Vec<u8>, Vec<Vec<u8>>), Box<dyn Error>>
 where
 	S: trie_backend_essence::TrieBackendStorage<H>,
@@ -511,7 +518,7 @@ pub fn execution_proof_check<H, Exec>(
 	exec: &Exec,
 	method: &str,
 	call_data: &[u8],
-	keystore: Option<BareCryptoStorePtr>,
+	keystore: Option<KeystoreExt>,
 ) -> Result<Vec<u8>, Box<dyn Error>>
 where
 	H: Hasher<Out=H256>,
@@ -529,7 +536,7 @@ pub fn execution_proof_check_on_trie_backend<H, Exec>(
 	exec: &Exec,
 	method: &str,
 	call_data: &[u8],
-	keystore: Option<BareCryptoStorePtr>,
+	keystore: Option<KeystoreExt>,
 ) -> Result<Vec<u8>, Box<dyn Error>>
 where
 	H: Hasher<Out=H256>,
@@ -959,6 +966,7 @@ mod tests {
 				&mut overlay,
 				backend,
 				Some(&changes_trie_storage),
+				None,
 			);
 			ext.clear_prefix(b"ab");
 		}
@@ -988,6 +996,7 @@ mod tests {
 			&mut overlay,
 			backend,
 			Some(&changes_trie_storage),
+			None,
 		);
 
 		ext.set_child_storage(

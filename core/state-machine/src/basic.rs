@@ -207,7 +207,7 @@ impl Externalities for BasicExternalities {
 	}
 
 	fn extension_by_type_id(&mut self, _: TypeId) -> Option<&mut dyn Any> {
-		warn!("Extensions are not supported byt `BasicExternalities`.");
+		warn!("Extensions are not supported by `BasicExternalities`.");
 		None
 	}
 }

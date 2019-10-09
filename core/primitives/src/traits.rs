@@ -71,6 +71,37 @@ pub trait BareCryptoStore: Send + Sync {
 #[cfg(feature = "std")]
 pub type BareCryptoStorePtr = std::sync::Arc<parking_lot::RwLock<dyn BareCryptoStore>>;
 
+/// The keystore extension to register/retrieve from the externalities.
+#[cfg(feature = "std")]
+pub struct KeystoreExt(BareCryptoStorePtr);
+
+#[cfg(feature = "std")]
+impl KeystoreExt {
+	/// Create new instance of `Self`.
+	pub fn new(keystore: BareCryptoStorePtr) -> Self {
+		Self(keystore)
+	}
+}
+
+#[cfg(feature = "std")]
+impl externalities::Extension for KeystoreExt {}
+
+#[cfg(feature = "std")]
+impl std::ops::Deref for KeystoreExt {
+	type Target = BareCryptoStorePtr;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
+
+#[cfg(feature = "std")]
+impl std::ops::DerefMut for KeystoreExt {
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.0
+	}
+}
+
 #[cfg(feature = "std")]
 pub use externalities::{Externalities, ExternalitiesExt};
 
@@ -83,7 +114,7 @@ pub trait CodeExecutor: Sized + Send + Sync {
 	/// Call a given method in the runtime. Returns a tuple of the result (either the output data
 	/// or an execution error) together with a `bool`, which is true if native execution was used.
 	fn call<
-		E: externalities::Externalities,
+		E: Externalities,
 		R: codec::Codec + PartialEq,
 		NC: FnOnce() -> Result<R, String> + UnwindSafe,
 	>(

@@ -420,6 +420,7 @@ mod tests {
 			&mut overlay,
 			&backend,
 			Some(&changes_trie_storage),
+			None,
 		);
 		const ROOT: [u8; 32] = hex!("39245109cef3758c2eed2ccba8d9b370a917850af3824bc8348d505df2c298fa");
 

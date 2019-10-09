@@ -135,7 +135,7 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 mod tests {
 	use super::*;
 	use app_crypto::Pair;
-	use primitives::{testing::KeyStore, crypto::key_types, sr25519, H256};
+	use primitives::{testing::KeyStore, crypto::key_types, sr25519, H256, traits::KeystoreExt};
 	use runtime_io::TestExternalities;
 	use sr_primitives::{
 		testing::{Header, UintAuthorityId}, traits::{ConvertInto, IdentityLookup, OpaqueKeys},
@@ -261,7 +261,7 @@ mod tests {
 
 		// Create externalities.
 		let mut externalities = TestExternalities::new(t);
-		externalities.register_extension(key_store);
+		externalities.register_extension(KeystoreExt::new(key_store));
 
 		set_and_run_with_externalities(&mut externalities, || {
 			assert_eq!(
@@ -298,7 +298,7 @@ mod tests {
 
 		// Create externalities.
 		let mut externalities = TestExternalities::new(t);
-		externalities.register_extension(key_store);
+		externalities.register_extension(KeystoreExt::new(key_store));
 
 		set_and_run_with_externalities(&mut externalities, || {
 			assert_eq!(None, AuthorityDiscovery::authority_id());
@@ -335,7 +335,7 @@ mod tests {
 
 		// Create externalities.
 		let mut externalities = TestExternalities::new(t);
-		externalities.register_extension(key_store);
+		externalities.register_extension(KeystoreExt::new(key_store));
 
 		set_and_run_with_externalities(&mut externalities, || {
 			let payload = String::from("test payload").into_bytes();

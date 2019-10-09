@@ -27,7 +27,7 @@ use executor::{RuntimeVersion, RuntimeInfo, NativeVersion};
 use hash_db::Hasher;
 use primitives::{
 	offchain::OffchainExt, H256, Blake2Hasher, NativeOrEncoded, NeverNativeValue,
-	traits::CodeExecutor,
+	traits::{CodeExecutor, KeystoreExt},
 };
 
 use crate::runtime_api::{ProofRecorder, InitializeBlock};
@@ -210,7 +210,7 @@ where
 			&self.executor,
 			method,
 			call_data,
-			self.keystore.clone(),
+			self.keystore.clone().map(KeystoreExt::new),
 		).execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
 			strategy.get_manager(),
 			false,
@@ -254,7 +254,7 @@ where
 		}
 
 		let keystore = if enable_keystore {
-			self.keystore.clone()
+			self.keystore.clone().map(KeystoreExt::new)
 		} else {
 			None
 		};
@@ -321,6 +321,7 @@ where
 			&mut overlay,
 			&state,
 			self.backend.changes_trie_storage(),
+			None,
 		);
 		let version = self.executor.runtime_version(&mut ext);
 		self.backend.destroy_state(state)?;
@@ -356,7 +357,7 @@ where
 			&self.executor,
 			method,
 			call_data,
-			self.keystore.clone(),
+			self.keystore.clone().map(KeystoreExt::new),
 		).execute_using_consensus_failure_handler(
 			manager,
 			true,
@@ -383,7 +384,7 @@ where
 			&self.executor,
 			method,
 			call_data,
-			self.keystore.clone(),
+			self.keystore.clone().map(KeystoreExt::new),
 		)
 		.map_err(Into::into)
 	}

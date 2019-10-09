@@ -33,6 +33,7 @@ use primitives::{
 	traits::Externalities, hash::H256, Blake2Hasher,
 };
 use codec::Encode;
+use externalities::{Extensions, Extension};
 
 const EXT_NOT_ALLOWED_TO_FAIL: &str = "Externalities not allowed to fail within runtime";
 
@@ -43,7 +44,7 @@ pub struct TestExternalities<H: Hasher<Out=H256>=Blake2Hasher, N: ChangesTrieBlo
 	overlay: OverlayedChanges,
 	backend: InMemory<H>,
 	changes_trie_storage: ChangesTrieInMemoryStorage<H, N>,
-	extensions: externalities::extensions::Extensions,
+	extensions: Extensions,
 }
 
 impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
@@ -87,7 +88,7 @@ impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 	}
 
 	/// Registers the given extension for this instance.
-	pub fn register_extension<E: Any>(&mut self, ext: E) {
+	pub fn register_extension<E: Any + Extension>(&mut self, ext: E) {
 		self.extensions.register(ext);
 	}
 

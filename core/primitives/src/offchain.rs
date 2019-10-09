@@ -675,6 +675,9 @@ impl OffchainExt {
 }
 
 #[cfg(feature = "std")]
+impl externalities::Extension for OffchainExt {}
+
+#[cfg(feature = "std")]
 impl std::ops::Deref for OffchainExt {
 	type Target = dyn Externalities;
 

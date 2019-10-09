@@ -29,6 +29,7 @@ use std::any::{Any, TypeId};
 use primitives_storage::ChildStorageKey;
 
 pub use scope_limited::{set_and_run_with_externalities, with_externalities};
+pub use extensions::{Extension, Extensions};
 
 pub mod extensions;
 mod scope_limited;
@@ -126,19 +127,19 @@ pub trait Externalities {
 
 	/// Tries to find a registered extension by the given `type_id` and returns it as a `&mut dyn Any`.
 	///
-	/// This function should not be used directly and instead [`Externalities::extension`] should
-	/// be used.
+	/// It is advised to use [`ExternalitiesExt::extension`] instead of this function to get type
+	/// system support and automatic type downcasting.
 	fn extension_by_type_id(&mut self, type_id: TypeId) -> Option<&mut dyn Any>;
 }
 
 /// Extension for the [`Externalities`] trait.
 pub trait ExternalitiesExt {
 	/// Tries to find a registered extension and returns a mutable reference.
-	fn extension<T: Any>(&mut self) -> Option<&mut T>;
+	fn extension<T: Any + Extension>(&mut self) -> Option<&mut T>;
 }
 
 impl<T: Externalities + ?Sized> ExternalitiesExt for T {
-	fn extension<A: Any>(&mut self) -> Option<&mut A> {
+	fn extension<A: Any + Extension>(&mut self) -> Option<&mut A> {
 		self.extension_by_type_id(TypeId::of::<A>()).and_then(Any::downcast_mut)
 	}
 }

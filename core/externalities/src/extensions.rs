@@ -18,8 +18,16 @@
 //!
 //! Externalities support to register a wide variety custom extensions. The [`Extensions`] provides
 //! some convenience functionality to store and retrieve these extensions.
+//!
+//! It is required that each extension implements the [`Extension`] trait.
 
 use std::{collections::HashMap, any::{Any, TypeId}, ops::DerefMut};
+
+/// Marker trait for types that should be registered as `Externalities` extension.
+///
+/// As extensions are stored as `Box<Any>`, this trait should give more confidence that the correct
+/// type is registered and requested.
+pub trait Extension: Sized {}
 
 /// Stores extensions that should be made available through the externalities.
 #[derive(Default)]
@@ -34,7 +42,7 @@ impl Extensions {
 	}
 
 	/// Register the given extension.
-	pub fn register<E: Any>(&mut self, ext: E) {
+	pub fn register<E: Any + Extension>(&mut self, ext: E) {
 		self.extensions.insert(ext.type_id(), Box::new(ext));
 	}
 
@@ -49,7 +57,10 @@ mod tests {
 	use super::*;
 
 	struct DummyExt(u32);
+	impl Extension for DummyExt {}
+
 	struct DummyExt2(u32);
+	impl Extension for DummyExt2 {}
 
 	#[test]
 	fn register_and_retrieve_extension() {

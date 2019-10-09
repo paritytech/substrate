@@ -16,8 +16,8 @@
 
 use primitives::{
 	blake2_128, blake2_256, twox_128, twox_256, twox_64, ed25519, Blake2Hasher, sr25519, Pair, H256,
-	traits::{BareCryptoStorePtr}, storage::ChildStorageKey,
-	hexdisplay::HexDisplay, Hasher, offchain::{self, OffchainExt},
+	traits::KeystoreExt, storage::ChildStorageKey, hexdisplay::HexDisplay, Hasher,
+	offchain::{self, OffchainExt},
 };
 // Switch to this after PoC-3
 // pub use primitives::BlakeHasher;
@@ -197,7 +197,7 @@ impl OtherApi for () {
 impl CryptoApi for () {
 	fn ed25519_public_keys(id: KeyTypeId) -> Vec<ed25519::Public> {
 		with_externalities(|ext| {
-			ext.extension::<BareCryptoStorePtr>()
+			ext.extension::<KeystoreExt>()
 				.expect("No `keystore` associated for the current context!")
 				.read()
 				.ed25519_public_keys(id)
@@ -206,7 +206,7 @@ impl CryptoApi for () {
 
 	fn ed25519_generate(id: KeyTypeId, seed: Option<&str>) -> ed25519::Public {
 		with_externalities(|ext| {
-			ext.extension::<BareCryptoStorePtr>()
+			ext.extension::<KeystoreExt>()
 				.expect("No `keystore` associated for the current context!")
 				.write()
 				.ed25519_generate_new(id, seed)
@@ -222,7 +222,7 @@ impl CryptoApi for () {
 		let pub_key = ed25519::Public::try_from(pubkey.as_ref()).ok()?;
 
 		with_externalities(|ext| {
-			ext.extension::<BareCryptoStorePtr>()
+			ext.extension::<KeystoreExt>()
 				.expect("No `keystore` associated for the current context!")
 				.read()
 				.ed25519_key_pair(id, &pub_key)
@@ -236,7 +236,7 @@ impl CryptoApi for () {
 
 	fn sr25519_public_keys(id: KeyTypeId) -> Vec<sr25519::Public> {
 		with_externalities(|ext| {
-			ext.extension::<BareCryptoStorePtr>()
+			ext.extension::<KeystoreExt>()
 				.expect("No `keystore` associated for the current context!")
 				.read()
 				.sr25519_public_keys(id)
@@ -245,7 +245,7 @@ impl CryptoApi for () {
 
 	fn sr25519_generate(id: KeyTypeId, seed: Option<&str>) -> sr25519::Public {
 		with_externalities(|ext| {
-			ext.extension::<BareCryptoStorePtr>()
+			ext.extension::<KeystoreExt>()
 				.expect("No `keystore` associated for the current context!")
 				.write()
 				.sr25519_generate_new(id, seed)
@@ -261,7 +261,7 @@ impl CryptoApi for () {
 		let pub_key = sr25519::Public::try_from(pubkey.as_ref()).ok()?;
 
 		with_externalities(|ext| {
-			ext.extension::<BareCryptoStorePtr>()
+			ext.extension::<KeystoreExt>()
 				.expect("No `keystore` associated for the current context!")
 				.read()
 				.sr25519_key_pair(id, &pub_key)

@@ -16,21 +16,24 @@
 
 //! Concrete externalities implementation.
 
-use std::{error, fmt, any::{Any, TypeId}};
-use log::{warn, trace};
 use crate::{
 	backend::Backend, OverlayedChanges,
 	changes_trie::{
 		Storage as ChangesTrieStorage, CacheAction as ChangesTrieCacheAction, build_changes_trie,
 	},
 };
+
 use hash_db::Hasher;
 use primitives::{
 	storage::{ChildStorageKey, well_known_keys::is_child_storage_key},
 	traits::Externalities, hexdisplay::HexDisplay, hash::H256,
 };
-use trie::{MemoryDB, default_child_trie_root};
-use trie::trie_types::Layout;
+use trie::{trie_types::Layout, MemoryDB, default_child_trie_root};
+use externalities::Extensions;
+
+use std::{error, fmt, any::{Any, TypeId}};
+
+use log::{warn, trace};
 
 const EXT_NOT_ALLOWED_TO_FAIL: &str = "Externalities not allowed to fail within runtime";
 
@@ -86,7 +89,7 @@ pub struct Ext<'a, H, N, B, T> where H: Hasher<Out=H256>, B: 'a + Backend<H> {
 	/// Dummy usage of N arg.
 	_phantom: std::marker::PhantomData<N>,
 	/// Extensions registered with this instance.
-	extensions: externalities::extensions::Extensions,
+	extensions: Option<&'a mut Extensions>,
 }
 
 impl<'a, H, N, B, T> Ext<'a, H, N, B, T>
@@ -101,6 +104,7 @@ where
 		overlay: &'a mut OverlayedChanges,
 		backend: &'a B,
 		changes_trie_storage: Option<&'a T>,
+		extensions: Option<&'a mut Extensions>,
 	) -> Self {
 		Ext {
 			overlay,
@@ -110,7 +114,7 @@ where
 			changes_trie_transaction: None,
 			id: rand::random(),
 			_phantom: Default::default(),
-			extensions: Default::default(),
+			extensions,
 		}
 	}
 
@@ -141,24 +145,6 @@ where
 	/// Called when there are changes that likely will invalidate the storage root.
 	fn mark_dirty(&mut self) {
 		self.storage_transaction = None;
-	}
-
-	/// Register the given extension for this instance.
-	pub fn register_extension<E: Any + Sized>(&mut self, ext: E) {
-		println!("REGISTER: {:?} {}", ext.type_id(), std::any::type_name::<E>());
-		self.extensions.register(ext);
-	}
-
-	/// Reset the internal state.
-	pub fn reset(&mut self) {
-		self.storage_transaction = None;
-		self.changes_trie_transaction = None;
-		self.id = rand::random();
-	}
-
-	/// Returns a mutable reference to the overlayed changes.
-	pub fn mut_overlayed_changes(&mut self) -> &mut OverlayedChanges {
-		&mut self.overlay
 	}
 }
 
@@ -520,8 +506,7 @@ where
 	}
 
 	fn extension_by_type_id(&mut self, type_id: TypeId) -> Option<&mut dyn Any> {
-		println!("REQUEST: {:?}", type_id);
-		self.extensions.get_mut(type_id)
+		self.extensions.as_mut().and_then(|exts| exts.get_mut(type_id))
 	}
 
 }
@@ -567,7 +552,7 @@ mod tests {
 	fn storage_changes_root_is_none_when_storage_is_not_provided() {
 		let mut overlay = prepare_overlay_with_changes();
 		let backend = TestBackend::default();
-		let mut ext = TestExt::new(&mut overlay, &backend, None);
+		let mut ext = TestExt::new(&mut overlay, &backend, None, None);
 		assert_eq!(ext.storage_changes_root(Default::default()).unwrap(), None);
 	}
 
@@ -577,7 +562,7 @@ mod tests {
 		overlay.changes_trie_config = None;
 		let storage = TestChangesTrieStorage::with_blocks(vec![(100, Default::default())]);
 		let backend = TestBackend::default();
-		let mut ext = TestExt::new(&mut overlay, &backend, Some(&storage));
+		let mut ext = TestExt::new(&mut overlay, &backend, Some(&storage), None);
 		assert_eq!(ext.storage_changes_root(Default::default()).unwrap(), None);
 	}
 
@@ -586,7 +571,7 @@ mod tests {
 		let mut overlay = prepare_overlay_with_changes();
 		let storage = TestChangesTrieStorage::with_blocks(vec![(99, Default::default())]);
 		let backend = TestBackend::default();
-		let mut ext = TestExt::new(&mut overlay, &backend, Some(&storage));
+		let mut ext = TestExt::new(&mut overlay, &backend, Some(&storage), None);
 		assert_eq!(
 			ext.storage_changes_root(Default::default()).unwrap(),
 			Some(hex!("bb0c2ef6e1d36d5490f9766cfcc7dfe2a6ca804504c3bb206053890d6dd02376").into()),
@@ -599,7 +584,7 @@ mod tests {
 		overlay.prospective.top.get_mut(&vec![1]).unwrap().value = None;
 		let storage = TestChangesTrieStorage::with_blocks(vec![(99, Default::default())]);
 		let backend = TestBackend::default();
-		let mut ext = TestExt::new(&mut overlay, &backend, Some(&storage));
+		let mut ext = TestExt::new(&mut overlay, &backend, Some(&storage), None);
 		assert_eq!(
 			ext.storage_changes_root(Default::default()).unwrap(),
 			Some(hex!("96f5aae4690e7302737b6f9b7f8567d5bbb9eac1c315f80101235a92d9ec27f4").into()),
