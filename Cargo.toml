@@ -130,3 +130,45 @@ panic = "unwind"
 
 [patch.crates-io]
 tiny-bip39 = { git = "https://github.com/paritytech/tiny-bip39" }
+yamux = { git = "https://github.com/paritytech/yamux", branch = "demi-upgrade-deps" }
+# contract-address = { git = "https://github.com/paritytech/parity-common", branch = "upgrade-deps" }
+# ethereum-types = { git = "https://github.com/paritytech/parity-common", branch = "upgrade-deps" }
+# ethbloom = { git = "https://github.com/paritytech/parity-common", branch = "upgrade-deps" }
+# fixed-hash = { git = "https://github.com/paritytech/parity-common", branch = "upgrade-deps" }
+# keccak-hash = { git = "https://github.com/paritytech/parity-common", branch = "upgrade-deps" }
+# kvdb-memorydb = { git = "https://github.com/paritytech/parity-common", branch = "upgrade-deps" }
+# kvdb-rocksdb = { git = "https://github.com/paritytech/parity-common", branch = "upgrade-deps" }
+# kvdb-web = { git = "https://github.com/paritytech/parity-common", branch = "upgrade-deps" }
+# kvdb = { git = "https://github.com/paritytech/parity-common", branch = "upgrade-deps" }
+# parity-bytes = { git = "https://github.com/paritytech/parity-common", branch = "upgrade-deps" }
+# parity-crypto = { git = "https://github.com/paritytech/parity-common", branch = "upgrade-deps" }
+parity-util-mem = { git = "https://github.com/paritytech/parity-common", branch = "upgrade-deps" }
+# plain_hasher = { git = "https://github.com/paritytech/parity-common", branch = "upgrade-deps" }
+# primitive-types = { git = "https://github.com/paritytech/parity-common", branch = "upgrade-deps" }
+# impl-rlp = { git = "https://github.com/paritytech/parity-common", branch = "upgrade-deps" }
+impl-serde = { git = "https://github.com/paritytech/parity-common", branch = "upgrade-deps" }
+# rlp = { git = "https://github.com/paritytech/parity-common", branch = "upgrade-deps" }
+# trace-time = { git = "https://github.com/paritytech/parity-common", branch = "upgrade-deps" }
+# transaction-pool = { git = "https://github.com/paritytech/parity-common", branch = "upgrade-deps" }
+# triehash = { git = "https://github.com/paritytech/parity-common", branch = "upgrade-deps" }
+uint = { git = "https://github.com/paritytech/parity-common", branch = "upgrade-deps" }
+libp2p-core = { git = "https://github.com/DemiMarie-parity/rust-libp2p", branch = "demi-upgrade-deps" }
+libp2p-deflate = { git = "https://github.com/DemiMarie-parity/rust-libp2p", branch = "demi-upgrade-deps" }
+libp2p-core-derive = { git = "https://github.com/DemiMarie-parity/rust-libp2p", branch = "demi-upgrade-deps" }
+libp2p-dns = { git = "https://github.com/DemiMarie-parity/rust-libp2p", branch = "demi-upgrade-deps" }
+libp2p-floodsub = { git = "https://github.com/DemiMarie-parity/rust-libp2p", branch = "demi-upgrade-deps" }
+libp2p-identify = { git = "https://github.com/DemiMarie-parity/rust-libp2p", branch = "demi-upgrade-deps" }
+libp2p-mdns = { git = "https://github.com/DemiMarie-parity/rust-libp2p", branch = "demi-upgrade-deps" }
+libp2p-mplex = { git = "https://github.com/DemiMarie-parity/rust-libp2p", branch = "demi-upgrade-deps" }
+libp2p-noise = { git = "https://github.com/DemiMarie-parity/rust-libp2p", branch = "demi-upgrade-deps" }
+libp2p-ping = { git = "https://github.com/DemiMarie-parity/rust-libp2p", branch = "demi-upgrade-deps" }
+libp2p-plaintext = { git = "https://github.com/DemiMarie-parity/rust-libp2p", branch = "demi-upgrade-deps" }
+parity-multiaddr = { git = "https://github.com/DemiMarie-parity/rust-libp2p", branch = "demi-upgrade-deps" }
+libp2p-secio = { git = "https://github.com/DemiMarie-parity/rust-libp2p", branch = "demi-upgrade-deps" }
+libp2p-swarm = { git = "https://github.com/DemiMarie-parity/rust-libp2p", branch = "demi-upgrade-deps" }
+libp2p-tcp = { git = "https://github.com/DemiMarie-parity/rust-libp2p", branch = "demi-upgrade-deps" }
+libp2p-uds = { git = "https://github.com/DemiMarie-parity/rust-libp2p", branch = "demi-upgrade-deps" }
+libp2p-wasm-ext = { git = "https://github.com/DemiMarie-parity/rust-libp2p", branch = "demi-upgrade-deps" }
+libp2p-websocket = { git = "https://github.com/DemiMarie-parity/rust-libp2p", branch = "demi-upgrade-deps" }
+libp2p-yamux = { git = "https://github.com/DemiMarie-parity/rust-libp2p", branch = "demi-upgrade-deps" }
+schnorrkel = { git = "https://github.com/paritytech/schnorrkel" }
