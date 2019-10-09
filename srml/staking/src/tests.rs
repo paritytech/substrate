@@ -18,16 +18,14 @@
 
 use super::*;
 use mock::*;
-use runtime_io::with_externalities;
-use sr_primitives::{assert_eq_error_rate, traits::OnInitialize};
+use sr_primitives::{assert_eq_error_rate, traits::OnInitialize, set_and_run_with_externalities};
 use sr_staking_primitives::offence::{OffenceDetails, OnOffenceHandler};
-use support::{assert_ok, assert_noop, assert_eq_uvec};
-use support::traits::{Currency, ReservableCurrency};
+use support::{assert_ok, assert_noop, assert_eq_uvec, traits::{Currency, ReservableCurrency}};
 
 #[test]
 fn basic_setup_works() {
 	// Verifies initial conditions of mock
-	with_externalities(&mut ExtBuilder::default()
+	set_and_run_with_externalities(&mut ExtBuilder::default()
 		.build(),
 	|| {
 		// Account 11 is stashed and locked, and account 10 is the controller
@@ -109,7 +107,7 @@ fn basic_setup_works() {
 
 #[test]
 fn change_controller_works() {
-	with_externalities(&mut ExtBuilder::default().build(),
+	set_and_run_with_externalities(&mut ExtBuilder::default().build(),
 	|| {
 		assert_eq!(Staking::bonded(&11), Some(10));
 
@@ -136,7 +134,7 @@ fn rewards_should_work() {
 	// * rewards get recorded per session
 	// * rewards get paid per Era
 	// * Check that nominators are also rewarded
-	with_externalities(&mut ExtBuilder::default()
+	set_and_run_with_externalities(&mut ExtBuilder::default()
 		.nominate(false)
 		.build(),
 	|| {
@@ -217,7 +215,7 @@ fn multi_era_reward_should_work() {
 	// Should check that:
 	// The value of current_session_reward is set at the end of each era, based on
 	// slot_stake and session_reward.
-	with_externalities(&mut ExtBuilder::default()
+	set_and_run_with_externalities(&mut ExtBuilder::default()
 		.nominate(false)
 		.build(),
 	|| {
@@ -260,7 +258,7 @@ fn staking_should_work() {
 	// * new validators can be added to the default set
 	// * new ones will be chosen per era
 	// * either one can unlock the stash and back-down from being a validator via `chill`ing.
-	with_externalities(&mut ExtBuilder::default()
+	set_and_run_with_externalities(&mut ExtBuilder::default()
 		.nominate(false)
 		.fair(false) // to give 20 more staked value
 		.build(),
@@ -322,7 +320,7 @@ fn staking_should_work() {
 
 #[test]
 fn less_than_needed_candidates_works() {
-	with_externalities(&mut ExtBuilder::default()
+	set_and_run_with_externalities(&mut ExtBuilder::default()
 		.minimum_validator_count(1)
 		.validator_count(4)
 		.nominate(false)
@@ -349,7 +347,7 @@ fn less_than_needed_candidates_works() {
 
 #[test]
 fn no_candidate_emergency_condition() {
-	with_externalities(&mut ExtBuilder::default()
+	set_and_run_with_externalities(&mut ExtBuilder::default()
 		.minimum_validator_count(10)
 		.validator_count(15)
 		.num_validators(4)
@@ -415,7 +413,7 @@ fn nominating_and_rewards_should_work() {
 	// 10  with stake  400.0 20  with stake  600.0 30  with stake  0
 	// 4  has load  0.0005555555555555556 and supported
 	// 10  with stake  600.0 20  with stake  400.0 40  with stake  0.0
-	with_externalities(&mut ExtBuilder::default()
+	set_and_run_with_externalities(&mut ExtBuilder::default()
 		.nominate(false)
 		.validator_pool(true)
 		.build(),
@@ -599,7 +597,7 @@ fn nominators_also_get_slashed() {
 	// 10 - is the controller of 11
 	// 11 - is the stash.
 	// 2 - is the nominator of 20, 10
-	with_externalities(&mut ExtBuilder::default().nominate(false).build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().nominate(false).build(), || {
 		assert_eq!(Staking::validator_count(), 2);
 
 		// Set payee to controller
@@ -659,7 +657,7 @@ fn double_staking_should_fail() {
 	// * an account already bonded as stash cannot be be stashed again.
 	// * an account already bonded as stash cannot nominate.
 	// * an account already bonded as controller can nominate.
-	with_externalities(&mut ExtBuilder::default()
+	set_and_run_with_externalities(&mut ExtBuilder::default()
 		.build(),
 		|| {
 			let arbitrary_value = 5;
@@ -684,7 +682,7 @@ fn double_staking_should_fail() {
 fn double_controlling_should_fail() {
 	// should test (in the same order):
 	// * an account already bonded as controller CANNOT be reused as the controller of another account.
-	with_externalities(&mut ExtBuilder::default()
+	set_and_run_with_externalities(&mut ExtBuilder::default()
 		.build(),
 		|| {
 			let arbitrary_value = 5;
@@ -703,7 +701,7 @@ fn double_controlling_should_fail() {
 
 #[test]
 fn session_and_eras_work() {
-	with_externalities(&mut ExtBuilder::default()
+	set_and_run_with_externalities(&mut ExtBuilder::default()
 		.build(),
 	|| {
 		assert_eq!(Staking::current_era(), 0);
@@ -747,7 +745,7 @@ fn session_and_eras_work() {
 
 #[test]
 fn forcing_new_era_works() {
-	with_externalities(&mut ExtBuilder::default().build(),|| {
+	set_and_run_with_externalities(&mut ExtBuilder::default().build(),|| {
 		// normal flow of session.
 		assert_eq!(Staking::current_era(), 0);
 		start_session(0);
@@ -786,7 +784,7 @@ fn forcing_new_era_works() {
 #[test]
 fn cannot_transfer_staked_balance() {
 	// Tests that a stash account cannot transfer funds
-	with_externalities(&mut ExtBuilder::default().nominate(false).build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().nominate(false).build(), || {
 		// Confirm account 11 is stashed
 		assert_eq!(Staking::bonded(&11), Some(10));
 		// Confirm account 11 has some free balance
@@ -811,7 +809,7 @@ fn cannot_transfer_staked_balance_2() {
 	// Tests that a stash account cannot transfer funds
 	// Same test as above but with 20, and more accurate.
 	// 21 has 2000 free balance but 1000 at stake
-	with_externalities(&mut ExtBuilder::default()
+	set_and_run_with_externalities(&mut ExtBuilder::default()
 		.nominate(false)
 		.fair(true)
 		.build(),
@@ -834,7 +832,7 @@ fn cannot_transfer_staked_balance_2() {
 #[test]
 fn cannot_reserve_staked_balance() {
 	// Checks that a bonded account cannot reserve balance from free balance
-	with_externalities(&mut ExtBuilder::default().build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
 		// Confirm account 11 is stashed
 		assert_eq!(Staking::bonded(&11), Some(10));
 		// Confirm account 11 has some free balance
@@ -854,7 +852,7 @@ fn cannot_reserve_staked_balance() {
 #[test]
 fn reward_destination_works() {
 	// Rewards go to the correct destination as determined in Payee
-	with_externalities(&mut ExtBuilder::default().nominate(false).build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().nominate(false).build(), || {
 		// Check that account 11 is a validator
 		assert!(Staking::current_elected().contains(&11));
 		// Check the balance of the validator account
@@ -946,7 +944,7 @@ fn validator_payment_prefs_work() {
 	// Test that validator preferences are correctly honored
 	// Note: unstake threshold is being directly tested in slashing tests.
 	// This test will focus on validator payment.
-	with_externalities(&mut ExtBuilder::default()
+	set_and_run_with_externalities(&mut ExtBuilder::default()
 		.build(),
 	|| {
 		// Initial config
@@ -998,7 +996,7 @@ fn bond_extra_works() {
 	// Tests that extra `free_balance` in the stash can be added to stake
 	// NOTE: this tests only verifies `StakingLedger` for correct updates
 	// See `bond_extra_and_withdraw_unbonded_works` for more details and updates on `Exposure`.
-	with_externalities(&mut ExtBuilder::default().build(),
+	set_and_run_with_externalities(&mut ExtBuilder::default().build(),
 	|| {
 		// Check that account 10 is a validator
 		assert!(<Validators<Test>>::exists(11));
@@ -1044,7 +1042,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 	// * It can add extra funds to the bonded account.
 	// * it can unbond a portion of its funds from the stash account.
 	// * Once the unbonding period is done, it can actually take the funds out of the stash.
-	with_externalities(&mut ExtBuilder::default()
+	set_and_run_with_externalities(&mut ExtBuilder::default()
 		.nominate(false)
 		.build(),
 	|| {
@@ -1131,7 +1129,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 
 #[test]
 fn too_many_unbond_calls_should_not_work() {
-	with_externalities(&mut ExtBuilder::default().build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
 		// locked at era 0 until 3
 		for _ in 0..MAX_UNLOCKING_CHUNKS-1 {
 			assert_ok!(Staking::unbond(Origin::signed(10), 1));
@@ -1160,7 +1158,7 @@ fn too_many_unbond_calls_should_not_work() {
 fn slot_stake_is_least_staked_validator_and_exposure_defines_maximum_punishment() {
 	// Test that slot_stake is determined by the least staked validator
 	// Test that slot_stake is the maximum punishment that can happen to a validator
-	with_externalities(&mut ExtBuilder::default()
+	set_and_run_with_externalities(&mut ExtBuilder::default()
 		.nominate(false)
 		.fair(false)
 		.build(),
@@ -1213,7 +1211,7 @@ fn slot_stake_is_least_staked_validator_and_exposure_defines_maximum_punishment(
 fn on_free_balance_zero_stash_removes_validator() {
 	// Tests that validator storage items are cleaned up when stash is empty
 	// Tests that storage items are untouched when controller is empty
-	with_externalities(&mut ExtBuilder::default()
+	set_and_run_with_externalities(&mut ExtBuilder::default()
 		.existential_deposit(10)
 		.build(),
 	|| {
@@ -1266,7 +1264,7 @@ fn on_free_balance_zero_stash_removes_validator() {
 fn on_free_balance_zero_stash_removes_nominator() {
 	// Tests that nominator storage items are cleaned up when stash is empty
 	// Tests that storage items are untouched when controller is empty
-	with_externalities(&mut ExtBuilder::default()
+	set_and_run_with_externalities(&mut ExtBuilder::default()
 		.existential_deposit(10)
 		.build(),
 	|| {
@@ -1322,7 +1320,7 @@ fn on_free_balance_zero_stash_removes_nominator() {
 #[test]
 fn switching_roles() {
 	// Test that it should be possible to switch between roles (nominator, validator, idle) with minimal overhead.
-	with_externalities(&mut ExtBuilder::default()
+	set_and_run_with_externalities(&mut ExtBuilder::default()
 		.nominate(false)
 		.build(),
 	|| {
@@ -1391,7 +1389,7 @@ fn switching_roles() {
 
 #[test]
 fn wrong_vote_is_null() {
-	with_externalities(&mut ExtBuilder::default()
+	set_and_run_with_externalities(&mut ExtBuilder::default()
 		.nominate(false)
 		.validator_pool(true)
 	.build(),
@@ -1419,7 +1417,7 @@ fn wrong_vote_is_null() {
 fn bond_with_no_staked_value() {
 	// Behavior when someone bonds with no staked value.
 	// Particularly when she votes and the candidate is elected.
-	with_externalities(&mut ExtBuilder::default()
+	set_and_run_with_externalities(&mut ExtBuilder::default()
 	.validator_count(3)
 	.existential_deposit(5)
 	.nominate(false)
@@ -1467,7 +1465,7 @@ fn bond_with_no_staked_value() {
 fn bond_with_little_staked_value_bounded_by_slot_stake() {
 	// Behavior when someone bonds with little staked value.
 	// Particularly when she votes and the candidate is elected.
-	with_externalities(&mut ExtBuilder::default()
+	set_and_run_with_externalities(&mut ExtBuilder::default()
 		.validator_count(3)
 		.nominate(false)
 		.minimum_validator_count(1)
@@ -1517,7 +1515,7 @@ fn bond_with_little_staked_value_bounded_by_slot_stake() {
 #[cfg(feature = "equalize")]
 #[test]
 fn phragmen_linear_worse_case_equalize() {
-	with_externalities(&mut ExtBuilder::default()
+	set_and_run_with_externalities(&mut ExtBuilder::default()
 		.nominate(false)
 		.validator_pool(true)
 		.fair(true)
@@ -1562,7 +1560,7 @@ fn phragmen_linear_worse_case_equalize() {
 
 #[test]
 fn new_era_elects_correct_number_of_validators() {
-	with_externalities(&mut ExtBuilder::default()
+	set_and_run_with_externalities(&mut ExtBuilder::default()
 		.nominate(true)
 		.validator_pool(true)
 		.fair(true)
@@ -1583,7 +1581,7 @@ fn new_era_elects_correct_number_of_validators() {
 
 #[test]
 fn phragmen_should_not_overflow_validators() {
-	with_externalities(&mut ExtBuilder::default()
+	set_and_run_with_externalities(&mut ExtBuilder::default()
 		.nominate(false)
 		.build(),
 	|| {
@@ -1609,7 +1607,7 @@ fn phragmen_should_not_overflow_validators() {
 
 #[test]
 fn phragmen_should_not_overflow_nominators() {
-	with_externalities(&mut ExtBuilder::default()
+	set_and_run_with_externalities(&mut ExtBuilder::default()
 		.nominate(false)
 		.build(),
 	|| {
@@ -1634,7 +1632,7 @@ fn phragmen_should_not_overflow_nominators() {
 
 #[test]
 fn phragmen_should_not_overflow_ultimate() {
-	with_externalities(&mut ExtBuilder::default()
+	set_and_run_with_externalities(&mut ExtBuilder::default()
 		.nominate(false)
 		.build(),
 	|| {
@@ -1656,7 +1654,7 @@ fn phragmen_should_not_overflow_ultimate() {
 
 #[test]
 fn reward_validator_slashing_validator_doesnt_overflow() {
-	with_externalities(&mut ExtBuilder::default()
+	set_and_run_with_externalities(&mut ExtBuilder::default()
 		.build(),
 	|| {
 		let stake = u32::max_value() as u64 * 2;
@@ -1689,7 +1687,7 @@ fn reward_validator_slashing_validator_doesnt_overflow() {
 
 #[test]
 fn reward_from_authorship_event_handler_works() {
-	with_externalities(&mut ExtBuilder::default()
+	set_and_run_with_externalities(&mut ExtBuilder::default()
 		.build(),
 	|| {
 		use authorship::EventHandler;
@@ -1716,7 +1714,7 @@ fn reward_from_authorship_event_handler_works() {
 
 #[test]
 fn add_reward_points_fns_works() {
-	with_externalities(&mut ExtBuilder::default()
+	set_and_run_with_externalities(&mut ExtBuilder::default()
 		.build(),
 	|| {
 		let validators = <Module<Test>>::current_elected();
@@ -1744,7 +1742,7 @@ fn add_reward_points_fns_works() {
 
 #[test]
 fn unbonded_balance_is_not_slashable() {
-	with_externalities(&mut ExtBuilder::default().build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
 		// total amount staked is slashable.
 		assert_eq!(Staking::slashable_balance_of(&11), 1000);
 
@@ -1759,7 +1757,7 @@ fn unbonded_balance_is_not_slashable() {
 fn era_is_always_same_length() {
 	// This ensures that the sessions is always of the same length if there is no forcing no
 	// session changes.
-	with_externalities(&mut ExtBuilder::default().build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
 		start_era(1);
 		assert_eq!(Staking::current_era_start_session_index(), SessionsPerEra::get());
 
@@ -1779,7 +1777,7 @@ fn era_is_always_same_length() {
 
 #[test]
 fn offence_forces_new_era() {
-	with_externalities(&mut ExtBuilder::default().build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
 		Staking::on_offence(
 			&[OffenceDetails {
 				offender: (
@@ -1799,7 +1797,7 @@ fn offence_forces_new_era() {
 fn slashing_performed_according_exposure() {
 	// This test checks that slashing is performed according the exposure (or more precisely,
 	// historical exposure), not the current balance.
-	with_externalities(&mut ExtBuilder::default().build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
 		assert_eq!(Staking::stakers(&11).own, 1000);
 
 		// Handle an offence with a historical exposure.
@@ -1827,7 +1825,7 @@ fn slashing_performed_according_exposure() {
 fn reporters_receive_their_slice() {
 	// This test verifies that the reporters of the offence receive their slice from the slashed
 	// amount.
-	with_externalities(&mut ExtBuilder::default().build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
 		// The reporters' reward is calculated from the total exposure.
 		#[cfg(feature = "equalize")]
 		let initial_balance = 1250;
@@ -1857,7 +1855,7 @@ fn reporters_receive_their_slice() {
 #[test]
 fn invulnerables_are_not_slashed() {
 	// For invulnerable validators no slashing is performed.
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default().invulnerables(vec![11]).build(),
 		|| {
 			#[cfg(feature = "equalize")]
@@ -1894,7 +1892,7 @@ fn invulnerables_are_not_slashed() {
 #[test]
 fn dont_slash_if_fraction_is_zero() {
 	// Don't slash if the fraction is zero.
-	with_externalities(&mut ExtBuilder::default().build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
 		assert_eq!(Balances::free_balance(&11), 1000);
 
 		Staking::on_offence(

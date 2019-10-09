@@ -803,16 +803,12 @@ mod tests {
 		BalanceOf, ExecFeeToken, ExecutionContext, Ext, Loader, TransferFeeKind, TransferFeeToken,
 		Vm, ExecResult, RawEvent, DeferredAction,
 	};
-	use crate::account_db::AccountDb;
-	use crate::exec::{ExecReturnValue, ExecError, STATUS_SUCCESS};
-	use crate::gas::GasMeter;
-	use crate::tests::{ExtBuilder, Test};
-	use crate::{CodeHash, Config};
-	use runtime_io::with_externalities;
-	use std::cell::RefCell;
-	use std::rc::Rc;
-	use std::collections::HashMap;
-	use std::marker::PhantomData;
+	use crate::{
+		account_db::AccountDb, gas::GasMeter, tests::{ExtBuilder, Test},
+		exec::{ExecReturnValue, ExecError, STATUS_SUCCESS}, CodeHash, Config,
+	};
+	use sr_primitives::set_and_run_with_externalities;
+	use std::{cell::RefCell, rc::Rc, collections::HashMap, marker::PhantomData};
 	use assert_matches::assert_matches;
 
 	const ALICE: u64 = 1;
@@ -937,7 +933,7 @@ mod tests {
 			exec_success()
 		});
 
-		with_externalities(&mut ExtBuilder::default().build(), || {
+		set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
 			let cfg = Config::preload();
 			let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
 			ctx.overlay.instantiate_contract(&BOB, exec_ch).unwrap();
@@ -957,7 +953,7 @@ mod tests {
 		let dest = BOB;
 
 		// This test verifies that base fee for call is taken.
-		with_externalities(&mut ExtBuilder::default().build(), || {
+		set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
 			let vm = MockVm::new();
 			let loader = MockLoader::empty();
 			let cfg = Config::preload();
@@ -975,7 +971,7 @@ mod tests {
 		});
 
 		// This test verifies that base fee for instantiation is taken.
-		with_externalities(&mut ExtBuilder::default().build(), || {
+		set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
 			let mut loader = MockLoader::empty();
 			let code = loader.insert(|_| exec_success());
 
@@ -1005,7 +1001,7 @@ mod tests {
 		let vm = MockVm::new();
 		let loader = MockLoader::empty();
 
-		with_externalities(&mut ExtBuilder::default().build(), || {
+		set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
 			let cfg = Config::preload();
 			let mut ctx = ExecutionContext::top_level(origin, &cfg, &vm, &loader);
 			ctx.overlay.set_balance(&origin, 100);
@@ -1037,7 +1033,7 @@ mod tests {
 			|_| Ok(ExecReturnValue { status: 1, data: Vec::new() })
 		);
 
-		with_externalities(&mut ExtBuilder::default().build(), || {
+		set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
 			let cfg = Config::preload();
 			let mut ctx = ExecutionContext::top_level(origin, &cfg, &vm, &loader);
 			ctx.overlay.instantiate_contract(&BOB, return_ch).unwrap();
@@ -1065,7 +1061,7 @@ mod tests {
 		// This test sends 50 units of currency to a non-existent account.
 		// This should lead to creation of a new account thus
 		// a fee should be charged.
-		with_externalities(
+		set_and_run_with_externalities(
 			&mut ExtBuilder::default().existential_deposit(15).build(),
 			|| {
 				let vm = MockVm::new();
@@ -1094,7 +1090,7 @@ mod tests {
 
 		// This one is similar to the previous one but transfer to an existing account.
 		// In this test we expect that a regular transfer fee is charged.
-		with_externalities(
+		set_and_run_with_externalities(
 			&mut ExtBuilder::default().existential_deposit(15).build(),
 			|| {
 				let vm = MockVm::new();
@@ -1123,7 +1119,7 @@ mod tests {
 
 		// This test sends 50 units of currency as an endownment to a newly
 		// instantiated contract.
-		with_externalities(
+		set_and_run_with_externalities(
 			&mut ExtBuilder::default().existential_deposit(15).build(),
 			|| {
 				let mut loader = MockLoader::empty();
@@ -1164,7 +1160,7 @@ mod tests {
 		let vm = MockVm::new();
 		let loader = MockLoader::empty();
 
-		with_externalities(&mut ExtBuilder::default().build(), || {
+		set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
 			let cfg = Config::preload();
 			let mut ctx = ExecutionContext::top_level(origin, &cfg, &vm, &loader);
 			ctx.overlay.set_balance(&origin, 0);
@@ -1198,7 +1194,7 @@ mod tests {
 			|_| Ok(ExecReturnValue { status: STATUS_SUCCESS, data: vec![1, 2, 3, 4] })
 		);
 
-		with_externalities(&mut ExtBuilder::default().build(), || {
+		set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
 			let cfg = Config::preload();
 			let mut ctx = ExecutionContext::top_level(origin, &cfg, &vm, &loader);
 			ctx.overlay.instantiate_contract(&BOB, return_ch).unwrap();
@@ -1229,7 +1225,7 @@ mod tests {
 			|_| Ok(ExecReturnValue { status: 1, data: vec![1, 2, 3, 4] })
 		);
 
-		with_externalities(&mut ExtBuilder::default().build(), || {
+		set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
 			let cfg = Config::preload();
 			let mut ctx = ExecutionContext::top_level(origin, &cfg, &vm, &loader);
 			ctx.overlay.instantiate_contract(&BOB, return_ch).unwrap();
@@ -1257,7 +1253,7 @@ mod tests {
 		});
 
 		// This one tests passing the input data into a contract via call.
-		with_externalities(&mut ExtBuilder::default().build(), || {
+		set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
 			let cfg = Config::preload();
 			let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
 			ctx.overlay.instantiate_contract(&BOB, input_data_ch).unwrap();
@@ -1282,7 +1278,7 @@ mod tests {
 		});
 
 		// This one tests passing the input data into a contract via instantiate.
-		with_externalities(&mut ExtBuilder::default().build(), || {
+		set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
 			let cfg = Config::preload();
 			let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
 
@@ -1326,7 +1322,7 @@ mod tests {
 			exec_success()
 		});
 
-		with_externalities(&mut ExtBuilder::default().build(), || {
+		set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
 			let cfg = Config::preload();
 			let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
 			ctx.overlay.instantiate_contract(&BOB, recurse_ch).unwrap();
@@ -1370,7 +1366,7 @@ mod tests {
 			exec_success()
 		});
 
-		with_externalities(&mut ExtBuilder::default().build(), || {
+		set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
 			let cfg = Config::preload();
 
 			let mut ctx = ExecutionContext::top_level(origin, &cfg, &vm, &loader);
@@ -1412,7 +1408,7 @@ mod tests {
 			exec_success()
 		});
 
-		with_externalities(&mut ExtBuilder::default().build(), || {
+		set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
 			let cfg = Config::preload();
 			let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
 			ctx.overlay.instantiate_contract(&BOB, bob_ch).unwrap();
@@ -1436,7 +1432,7 @@ mod tests {
 		let mut loader = MockLoader::empty();
 		let dummy_ch = loader.insert(|_| exec_success());
 
-		with_externalities(
+		set_and_run_with_externalities(
 			&mut ExtBuilder::default().existential_deposit(15).build(),
 			|| {
 				let cfg = Config::preload();
@@ -1464,7 +1460,7 @@ mod tests {
 			|_| Ok(ExecReturnValue { status: STATUS_SUCCESS, data: vec![80, 65, 83, 83] })
 		);
 
-		with_externalities(
+		set_and_run_with_externalities(
 			&mut ExtBuilder::default().existential_deposit(15).build(),
 			|| {
 				let cfg = Config::preload();
@@ -1507,7 +1503,7 @@ mod tests {
 			|_| Ok(ExecReturnValue { status: 1, data: vec![70, 65, 73, 76] })
 		);
 
-		with_externalities(
+		set_and_run_with_externalities(
 			&mut ExtBuilder::default().existential_deposit(15).build(),
 			|| {
 				let cfg = Config::preload();
@@ -1555,7 +1551,7 @@ mod tests {
 			}
 		});
 
-		with_externalities(
+		set_and_run_with_externalities(
 			&mut ExtBuilder::default().existential_deposit(15).build(),
 			|| {
 				let cfg = Config::preload();
@@ -1617,7 +1613,7 @@ mod tests {
 			}
 		});
 
-		with_externalities(
+		set_and_run_with_externalities(
 			&mut ExtBuilder::default().existential_deposit(15).build(),
 			|| {
 				let cfg = Config::preload();
@@ -1653,7 +1649,7 @@ mod tests {
 			exec_success()
 		});
 
-		with_externalities(&mut ExtBuilder::default().build(), || {
+		set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
 			let cfg = Config::preload();
 			let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
 

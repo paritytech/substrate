@@ -20,11 +20,11 @@
 
 use super::*;
 use crate::mock::{Indices, new_test_ext, make_account, kill_account, TestIsDeadAccount};
-use runtime_io::with_externalities;
+use sr_primitives::set_and_run_with_externalities;
 
 #[test]
 fn indexing_lookup_should_work() {
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut new_test_ext(),
 		|| {
 			assert_eq!(Indices::lookup_index(0), Some(1));
@@ -38,7 +38,7 @@ fn indexing_lookup_should_work() {
 
 #[test]
 fn default_indexing_on_new_accounts_should_work() {
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut new_test_ext(),
 		|| {
 			assert_eq!(Indices::lookup_index(4), None);
@@ -50,7 +50,7 @@ fn default_indexing_on_new_accounts_should_work() {
 
 #[test]
 fn reclaim_indexing_on_new_accounts_should_work() {
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut new_test_ext(),
 		|| {
 			assert_eq!(Indices::lookup_index(1), Some(2));
@@ -66,7 +66,7 @@ fn reclaim_indexing_on_new_accounts_should_work() {
 
 #[test]
 fn alive_account_should_prevent_reclaim() {
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut new_test_ext(),
 		|| {
 			assert!(!TestIsDeadAccount::is_dead_account(&2));

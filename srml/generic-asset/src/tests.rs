@@ -22,14 +22,14 @@
 
 use super::*;
 use crate::mock::{new_test_ext, ExtBuilder, GenericAsset, Origin, System, Test, TestEvent};
-use runtime_io::with_externalities;
+use sr_primitives::set_and_run_with_externalities;
 use support::{assert_noop, assert_ok};
 
 #[test]
 fn issuing_asset_units_to_issuer_should_work() {
 	let balance = 100;
 
-	with_externalities(&mut ExtBuilder::default().free_balance((16000, 1, 100)).build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().free_balance((16000, 1, 100)).build(), || {
 		let default_permission = PermissionLatest {
 			update: Owner::Address(1),
 			mint: Owner::Address(1),
@@ -51,7 +51,7 @@ fn issuing_asset_units_to_issuer_should_work() {
 
 #[test]
 fn issuing_with_next_asset_id_overflow_should_not_work() {
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default().free_balance((16000, 1, 100000)).build(),
 		|| {
 			NextAssetId::<Test>::put(u32::max_value());
@@ -79,7 +79,7 @@ fn issuing_with_next_asset_id_overflow_should_not_work() {
 fn querying_total_supply_should_work() {
 	let asset_id = 1000;
 
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default().free_balance((16000, 1, 100000)).build(),
 		|| {
 			let default_permission = PermissionLatest {
@@ -127,7 +127,7 @@ fn querying_total_supply_should_work() {
 fn transferring_amount_should_work() {
 	let asset_id = 1000;
 	let free_balance = 100;
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default().free_balance((16000, 1, 100000)).build(),
 		|| {
 			let default_permission = PermissionLatest {
@@ -168,7 +168,7 @@ fn transferring_amount_should_work() {
 #[test]
 fn transferring_amount_should_fail_when_transferring_more_than_free_balance() {
 	let asset_id = 1000;
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default().free_balance((16000, 1, 100000)).build(),
 		|| {
 			let default_permission = PermissionLatest {
@@ -195,7 +195,7 @@ fn transferring_amount_should_fail_when_transferring_more_than_free_balance() {
 fn transferring_less_than_one_unit_should_not_work() {
 	let asset_id = 1000;
 
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default().free_balance((16000, 1, 100000)).build(),
 		|| {
 			let default_permission = PermissionLatest {
@@ -233,7 +233,7 @@ fn self_transfer_should_fail() {
 	let asset_id = 1000;
 	let balance = 100;
 
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default().free_balance((16000, 1, 100000)).build(),
 		|| {
 			let default_permission = PermissionLatest {
@@ -259,7 +259,7 @@ fn self_transfer_should_fail() {
 #[test]
 fn transferring_more_units_than_total_supply_should_not_work() {
 	let asset_id = 1000;
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default().free_balance((16000, 1, 100000)).build(),
 		|| {
 			let default_permission = PermissionLatest {
@@ -286,7 +286,7 @@ fn transferring_more_units_than_total_supply_should_not_work() {
 // Ensures it uses fake money for staking asset id.
 #[test]
 fn staking_asset_id_should_return_0() {
-	with_externalities(&mut ExtBuilder::default().build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
 		assert_eq!(GenericAsset::staking_asset_id(), 16000);
 	});
 }
@@ -294,7 +294,7 @@ fn staking_asset_id_should_return_0() {
 // Ensures it uses fake money for spending asset id.
 #[test]
 fn spending_asset_id_should_return_10() {
-	with_externalities(&mut ExtBuilder::default().build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
 		assert_eq!(GenericAsset::spending_asset_id(), 16001);
 	});
 }
@@ -305,7 +305,7 @@ fn spending_asset_id_should_return_10() {
 // -Â total_balance should return 0
 #[test]
 fn total_balance_should_be_zero() {
-	with_externalities(&mut new_test_ext(), || {
+	set_and_run_with_externalities(&mut new_test_ext(), || {
 		assert_eq!(GenericAsset::total_balance(&0, &0), 0);
 	});
 }
@@ -323,7 +323,7 @@ fn total_balance_should_be_equal_to_account_balance() {
 		mint: Owner::Address(1),
 		burn: Owner::Address(1),
 	};
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default().free_balance((16000, 1, 100000)).build(),
 		|| {
 			assert_ok!(GenericAsset::create(
@@ -348,7 +348,7 @@ fn total_balance_should_be_equal_to_account_balance() {
 // -Â free_balance should return 50.
 #[test]
 fn free_balance_should_only_return_account_free_balance() {
-	with_externalities(&mut ExtBuilder::default().free_balance((1, 0, 50)).build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().free_balance((1, 0, 50)).build(), || {
 		GenericAsset::set_reserved_balance(&1, &0, 70);
 		assert_eq!(GenericAsset::free_balance(&1, &0), 50);
 	});
@@ -363,7 +363,7 @@ fn free_balance_should_only_return_account_free_balance() {
 // -Â total_balance should equals to account balance + free balance.
 #[test]
 fn total_balance_should_be_equal_to_sum_of_account_balance_and_free_balance() {
-	with_externalities(&mut ExtBuilder::default().free_balance((1, 0, 50)).build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().free_balance((1, 0, 50)).build(), || {
 		GenericAsset::set_reserved_balance(&1, &0, 70);
 		assert_eq!(GenericAsset::total_balance(&1, &0), 120);
 	});
@@ -378,7 +378,7 @@ fn total_balance_should_be_equal_to_sum_of_account_balance_and_free_balance() {
 // - reserved_balance should return 70.
 #[test]
 fn reserved_balance_should_only_return_account_reserved_balance() {
-	with_externalities(&mut ExtBuilder::default().free_balance((1, 0, 50)).build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().free_balance((1, 0, 50)).build(), || {
 		GenericAsset::set_reserved_balance(&1, &0, 70);
 		assert_eq!(GenericAsset::reserved_balance(&1, &0), 70);
 	});
@@ -394,7 +394,7 @@ fn reserved_balance_should_only_return_account_reserved_balance() {
 // - reserved_balance = amount
 #[test]
 fn set_reserved_balance_should_add_balance_as_reserved() {
-	with_externalities(&mut ExtBuilder::default().build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
 		GenericAsset::set_reserved_balance(&1, &0, 50);
 		assert_eq!(GenericAsset::reserved_balance(&1, &0), 50);
 	});
@@ -410,7 +410,7 @@ fn set_reserved_balance_should_add_balance_as_reserved() {
 // - New free_balance should replace older free_balance.
 #[test]
 fn set_free_balance_should_add_amount_as_free_balance() {
-	with_externalities(&mut ExtBuilder::default().free_balance((1, 0, 100)).build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().free_balance((1, 0, 100)).build(), || {
 		GenericAsset::set_free_balance(&1, &0, 50);
 		assert_eq!(GenericAsset::free_balance(&1, &0), 50);
 	});
@@ -429,7 +429,7 @@ fn set_free_balance_should_add_amount_as_free_balance() {
 // - new reserved_balance = original free balance + reserved amount
 #[test]
 fn reserve_should_moves_amount_from_balance_to_reserved_balance() {
-	with_externalities(&mut ExtBuilder::default().free_balance((1, 0, 100)).build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().free_balance((1, 0, 100)).build(), || {
 		assert_ok!(GenericAsset::reserve(&1, &0, 70));
 		assert_eq!(GenericAsset::free_balance(&1, &0), 30);
 		assert_eq!(GenericAsset::reserved_balance(&1, &0), 70);
@@ -448,7 +448,7 @@ fn reserve_should_moves_amount_from_balance_to_reserved_balance() {
 // - Should throw an error.
 #[test]
 fn reserve_should_not_moves_amount_from_balance_to_reserved_balance() {
-	with_externalities(&mut ExtBuilder::default().free_balance((1, 0, 100)).build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().free_balance((1, 0, 100)).build(), || {
 		assert_noop!(GenericAsset::reserve(&1, &0, 120), "not enough free funds");
 		assert_eq!(GenericAsset::free_balance(&1, &0), 100);
 		assert_eq!(GenericAsset::reserved_balance(&1, &0), 0);
@@ -466,7 +466,7 @@ fn reserve_should_not_moves_amount_from_balance_to_reserved_balance() {
 // - unreserved should return 20.
 #[test]
 fn unreserve_should_return_substratced_value_from_unreserved_amount_by_actual_acount_balance() {
-	with_externalities(&mut ExtBuilder::default().free_balance((1, 0, 100)).build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().free_balance((1, 0, 100)).build(), || {
 		GenericAsset::set_reserved_balance(&1, &0, 100);
 		assert_eq!(GenericAsset::unreserve(&1, &0, 120), 20);
 	});
@@ -483,7 +483,7 @@ fn unreserve_should_return_substratced_value_from_unreserved_amount_by_actual_ac
 // - unreserved should return None.
 #[test]
 fn unreserve_should_return_none() {
-	with_externalities(&mut ExtBuilder::default().free_balance((1, 0, 100)).build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().free_balance((1, 0, 100)).build(), || {
 		GenericAsset::set_reserved_balance(&1, &0, 100);
 		assert_eq!(GenericAsset::unreserve(&1, &0, 50), 0);
 	});
@@ -500,7 +500,7 @@ fn unreserve_should_return_none() {
 // - free_balance should be 200.
 #[test]
 fn unreserve_should_increase_free_balance_by_reserved_balance() {
-	with_externalities(&mut ExtBuilder::default().free_balance((1, 0, 100)).build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().free_balance((1, 0, 100)).build(), || {
 		GenericAsset::set_reserved_balance(&1, &0, 100);
 		GenericAsset::unreserve(&1, &0, 120);
 		assert_eq!(GenericAsset::free_balance(&1, &0), 200);
@@ -518,7 +518,7 @@ fn unreserve_should_increase_free_balance_by_reserved_balance() {
 // - reserved_balance should be 0.
 #[test]
 fn unreserve_should_deduct_reserved_balance_by_reserved_amount() {
-	with_externalities(&mut ExtBuilder::default().free_balance((1, 0, 100)).build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().free_balance((1, 0, 100)).build(), || {
 		GenericAsset::set_free_balance(&1, &0, 100);
 		GenericAsset::unreserve(&1, &0, 120);
 		assert_eq!(GenericAsset::reserved_balance(&1, &0), 0);
@@ -536,7 +536,7 @@ fn unreserve_should_deduct_reserved_balance_by_reserved_amount() {
 // - slash should return None.
 #[test]
 fn slash_should_return_slash_reserved_amount() {
-	with_externalities(&mut ExtBuilder::default().free_balance((1, 0, 100)).build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().free_balance((1, 0, 100)).build(), || {
 		GenericAsset::set_reserved_balance(&1, &0, 100);
 		assert_eq!(GenericAsset::slash(&1, &0, 70), None);
 	});
@@ -550,7 +550,7 @@ fn slash_should_return_slash_reserved_amount() {
 // - Should return slashed_reserved - reserved_balance.
 #[test]
 fn slash_reserved_should_deducts_up_to_amount_from_reserved_balance() {
-	with_externalities(&mut ExtBuilder::default().build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
 		GenericAsset::set_reserved_balance(&1, &0, 100);
 		assert_eq!(GenericAsset::slash_reserved(&1, &0, 150), Some(50));
 	});
@@ -564,7 +564,7 @@ fn slash_reserved_should_deducts_up_to_amount_from_reserved_balance() {
 // - Should return None.
 #[test]
 fn slash_reserved_should_return_none() {
-	with_externalities(&mut ExtBuilder::default().build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
 		GenericAsset::set_reserved_balance(&1, &0, 100);
 		assert_eq!(GenericAsset::slash_reserved(&1, &0, 100), None);
 	});
@@ -579,7 +579,7 @@ fn slash_reserved_should_return_none() {
 // - Should not return None.
 #[test]
 fn repatriate_reserved_return_amount_substracted_by_slash_amount() {
-	with_externalities(&mut ExtBuilder::default().build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
 		GenericAsset::set_reserved_balance(&1, &0, 100);
 		assert_eq!(GenericAsset::repatriate_reserved(&1, &0, &1, 130), 30);
 	});
@@ -594,7 +594,7 @@ fn repatriate_reserved_return_amount_substracted_by_slash_amount() {
 // - Should return None.
 #[test]
 fn repatriate_reserved_return_none() {
-	with_externalities(&mut ExtBuilder::default().build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
 		GenericAsset::set_reserved_balance(&1, &0, 100);
 		assert_eq!(GenericAsset::repatriate_reserved(&1, &0, &1, 90), 0);
 	});
@@ -608,7 +608,7 @@ fn repatriate_reserved_return_none() {
 // - Should create a new reserved asset.
 #[test]
 fn create_reserved_should_create_a_default_account_with_the_balance_given() {
-	with_externalities(&mut ExtBuilder::default().next_asset_id(10).build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().next_asset_id(10).build(), || {
 		let default_permission = PermissionLatest {
 			update: Owner::Address(1),
 			mint: Owner::Address(1),
@@ -643,7 +643,7 @@ fn create_reserved_should_create_a_default_account_with_the_balance_given() {
 // - Should throw a permission error
 #[test]
 fn mint_should_throw_permission_error() {
-	with_externalities(&mut ExtBuilder::default().build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
 		let origin = 1;
 		let asset_id = 4;
 		let to_account = 2;
@@ -666,7 +666,7 @@ fn mint_should_throw_permission_error() {
 // - Should not change `origins`  free_balance.
 #[test]
 fn mint_should_increase_asset() {
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default().free_balance((16000, 1, 100000)).build(),
 		|| {
 			let origin = 1;
@@ -707,7 +707,7 @@ fn mint_should_increase_asset() {
 // - Should throw a permission error.
 #[test]
 fn burn_should_throw_permission_error() {
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default().free_balance((16000, 1, 100000)).build(),
 		|| {
 			let origin = 1;
@@ -733,7 +733,7 @@ fn burn_should_throw_permission_error() {
 // - Should not change `origin`'s  free_balance.
 #[test]
 fn burn_should_burn_an_asset() {
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default().free_balance((16000, 1, 100000)).build(),
 		|| {
 			let origin = 1;
@@ -779,7 +779,7 @@ fn burn_should_burn_an_asset() {
 // - The account origin should have burn, mint and update permissions.
 #[test]
 fn check_permission_should_return_correct_permission() {
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default().free_balance((16000, 1, 100000)).build(),
 		|| {
 			let origin = 1;
@@ -825,7 +825,7 @@ fn check_permission_should_return_correct_permission() {
 // - The account origin should not have burn, mint and update permissions.
 #[test]
 fn check_permission_should_return_false_for_no_permission() {
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default().free_balance((16000, 1, 100000)).build(),
 		|| {
 			let origin = 1;
@@ -871,7 +871,7 @@ fn check_permission_should_return_false_for_no_permission() {
 // - The account origin should have update and mint permissions.
 #[test]
 fn update_permission_should_change_permission() {
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default().free_balance((16000, 1, 100000)).build(),
 		|| {
 			let origin = 1;
@@ -923,7 +923,7 @@ fn update_permission_should_change_permission() {
 // - Should throw an error stating "Origin does not have enough permission to update permissions."
 #[test]
 fn update_permission_should_throw_error_when_lack_of_permissions() {
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default().free_balance((16000, 1, 100000)).build(),
 		|| {
 			let origin = 1;
@@ -974,7 +974,7 @@ fn update_permission_should_throw_error_when_lack_of_permissions() {
 // - Permissions must have burn, mint and updatePermission for the given asset_id.
 #[test]
 fn create_asset_works_with_given_asset_id_and_from_account() {
-	with_externalities(&mut ExtBuilder::default().next_asset_id(10).build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().next_asset_id(10).build(), || {
 		let origin = 1;
 		let from_account: Option<<Test as system::Trait>::AccountId> = Some(1);
 
@@ -1011,7 +1011,7 @@ fn create_asset_works_with_given_asset_id_and_from_account() {
 // - `create_asset` should not work.
 #[test]
 fn create_asset_with_non_reserved_asset_id_should_not_work() {
-	with_externalities(&mut ExtBuilder::default().next_asset_id(10).build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().next_asset_id(10).build(), || {
 		let origin = 1;
 		let from_account: Option<<Test as system::Trait>::AccountId> = Some(1);
 
@@ -1045,7 +1045,7 @@ fn create_asset_with_non_reserved_asset_id_should_not_work() {
 // - `create_asset` should not work.
 #[test]
 fn create_asset_with_a_taken_asset_id_should_not_work() {
-	with_externalities(&mut ExtBuilder::default().next_asset_id(10).build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().next_asset_id(10).build(), || {
 		let origin = 1;
 		let from_account: Option<<Test as system::Trait>::AccountId> = Some(1);
 
@@ -1090,7 +1090,7 @@ fn create_asset_with_a_taken_asset_id_should_not_work() {
 // - Should create a reserved token.
 #[test]
 fn create_asset_should_create_a_reserved_asset_when_from_account_is_none() {
-	with_externalities(&mut ExtBuilder::default().next_asset_id(10).build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().next_asset_id(10).build(), || {
 		let origin = 1;
 		let from_account: Option<<Test as system::Trait>::AccountId> = None;
 
@@ -1133,7 +1133,7 @@ fn create_asset_should_create_a_reserved_asset_when_from_account_is_none() {
 // - Should not create a `reserved_asset`.
 #[test]
 fn create_asset_should_create_a_user_asset() {
-	with_externalities(&mut ExtBuilder::default().next_asset_id(10).build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().next_asset_id(10).build(), || {
 		let origin = 1;
 		let from_account: Option<<Test as system::Trait>::AccountId> = None;
 
@@ -1180,7 +1180,7 @@ fn update_permission_should_raise_event() {
 		burn: Owner::Address(origin),
 	};
 
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default()
 			.next_asset_id(asset_id)
 			.free_balance((staking_asset_id, origin, initial_balance))
@@ -1223,7 +1223,7 @@ fn mint_should_raise_event() {
 	let to = 2;
 	let amount = 100;
 
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default()
 			.next_asset_id(asset_id)
 			.free_balance((staking_asset_id, origin, initial_balance))
@@ -1262,7 +1262,7 @@ fn burn_should_raise_event() {
 	};
 	let amount = 100;
 
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default()
 			.next_asset_id(asset_id)
 			.free_balance((staking_asset_id, origin, initial_balance))

@@ -293,12 +293,12 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use runtime_io::with_externalities;
-	use primitives::{H256, Blake2Hasher};
+	use primitives::H256;
 	use sr_primitives::{
 		generic::Era, Perbill, DispatchError, weights::Weight, testing::{Digest, Header, Block},
 		traits::{Bounded, Header as HeaderT, BlakeTwo256, IdentityLookup, ConvertInto},
 		transaction_validity::{InvalidTransaction, UnknownTransaction}, ApplyError,
+		set_and_run_with_externalities,
 	};
 	use support::{
 		impl_outer_event, impl_outer_origin, parameter_types, impl_outer_dispatch,
@@ -419,8 +419,8 @@ mod tests {
 		}.assimilate_storage(&mut t).unwrap();
 		let xt = sr_primitives::testing::TestXt(sign_extra(1, 0, 0), Call::Balances(BalancesCall::transfer(2, 69)));
 		let weight = xt.get_dispatch_info().weight as u64;
-		let mut t = runtime_io::TestExternalities::<Blake2Hasher>::new(t);
-		with_externalities(&mut t, || {
+		let mut t = runtime_io::TestExternalities::new(t);
+		set_and_run_with_externalities(&mut t, || {
 			Executive::initialize_block(&Header::new(
 				1,
 				H256::default(),
@@ -435,7 +435,7 @@ mod tests {
 		});
 	}
 
-	fn new_test_ext(balance_factor: u64) -> runtime_io::TestExternalities<Blake2Hasher> {
+	fn new_test_ext(balance_factor: u64) -> runtime_io::TestExternalities {
 		let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 		balances::GenesisConfig::<Runtime> {
 			balances: vec![(1, 111 * balance_factor)],
@@ -446,7 +446,7 @@ mod tests {
 
 	#[test]
 	fn block_import_works() {
-		with_externalities(&mut new_test_ext(1), || {
+		set_and_run_with_externalities(&mut new_test_ext(1), || {
 			Executive::execute_block(Block {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
@@ -463,7 +463,7 @@ mod tests {
 	#[test]
 	#[should_panic]
 	fn block_import_of_bad_state_root_fails() {
-		with_externalities(&mut new_test_ext(1), || {
+		set_and_run_with_externalities(&mut new_test_ext(1), || {
 			Executive::execute_block(Block {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
@@ -480,7 +480,7 @@ mod tests {
 	#[test]
 	#[should_panic]
 	fn block_import_of_bad_extrinsic_root_fails() {
-		with_externalities(&mut new_test_ext(1), || {
+		set_and_run_with_externalities(&mut new_test_ext(1), || {
 			Executive::execute_block(Block {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
@@ -499,7 +499,7 @@ mod tests {
 		let mut t = new_test_ext(1);
 		// bad nonce check!
 		let xt = sr_primitives::testing::TestXt(sign_extra(1, 30, 0), Call::Balances(BalancesCall::transfer(33, 69)));
-		with_externalities(&mut t, || {
+		set_and_run_with_externalities(&mut t, || {
 			Executive::initialize_block(&Header::new(
 				1,
 				H256::default(),
@@ -521,7 +521,7 @@ mod tests {
 		let encoded_len = encoded.len() as Weight;
 		let limit = AvailableBlockRatio::get() * MaximumBlockWeight::get();
 		let num_to_exhaust_block = limit / encoded_len;
-		with_externalities(&mut t, || {
+		set_and_run_with_externalities(&mut t, || {
 			Executive::initialize_block(&Header::new(
 				1,
 				H256::default(),
@@ -557,7 +557,7 @@ mod tests {
 		let x2 = sr_primitives::testing::TestXt(sign_extra(1, 2, 0), Call::Balances(BalancesCall::transfer(33, 0)));
 		let len = xt.clone().encode().len() as u32;
 		let mut t = new_test_ext(1);
-		with_externalities(&mut t, || {
+		set_and_run_with_externalities(&mut t, || {
 			assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 0);
 			assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 0);
 
@@ -581,7 +581,7 @@ mod tests {
 		let xt = sr_primitives::testing::TestXt(None, Call::Balances(BalancesCall::set_balance(33, 69, 69)));
 		let mut t = new_test_ext(1);
 
-		with_externalities(&mut t, || {
+		set_and_run_with_externalities(&mut t, || {
 			assert_eq!(Executive::validate_transaction(xt.clone()), Ok(Default::default()));
 			assert_eq!(
 				Executive::apply_extrinsic(xt),
@@ -599,7 +599,7 @@ mod tests {
 		let id: LockIdentifier = *b"0       ";
 		let execute_with_lock = |lock: WithdrawReasons| {
 			let mut t = new_test_ext(1);
-			with_externalities(&mut t, || {
+			set_and_run_with_externalities(&mut t, || {
 				<balances::Module<Runtime> as LockableCurrency<u64>>::set_lock(
 					id,
 					&1,
