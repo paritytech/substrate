@@ -119,9 +119,9 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 
 		let children = self.overlay.committed.children.clone().into_iter()
 			.chain(self.overlay.prospective.children.clone().into_iter())
-			.flat_map(|(keyspace, map)| {
+			.flat_map(|(storage_key, (keyspace, map))| {
 				map.into_iter()
-					.map(|(k, v)| (Some(keyspace.clone()), k, v.value))
+					.map(|(k, v)| (Some((storage_key.clone(), keyspace.clone())), k, v.value))
 					.collect::<Vec<_>>()
 			});
 

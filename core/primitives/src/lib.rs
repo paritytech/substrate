@@ -64,6 +64,7 @@ pub mod sandbox;
 pub mod storage;
 pub mod uint;
 mod changes_trie;
+pub mod child_trie;
 pub mod traits;
 pub mod testing;
 

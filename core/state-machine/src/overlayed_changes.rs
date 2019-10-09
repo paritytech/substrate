@@ -22,6 +22,7 @@ use std::collections::{HashMap, BTreeSet};
 use codec::Decode;
 use crate::changes_trie::{NO_EXTRINSIC_INDEX, Configuration as ChangesTrieConfig};
 use primitives::storage::well_known_keys::EXTRINSIC_INDEX;
+use primitives::child_trie::KeySpace;
 
 /// The overlayed changes to state to be queried on top of the backend.
 ///
@@ -56,7 +57,7 @@ pub struct OverlayedChangeSet {
 	/// Top level storage changes.
 	pub top: HashMap<Vec<u8>, OverlayedValue>,
 	/// Child storage changes.
-	pub children: HashMap<Vec<u8>, HashMap<Vec<u8>, OverlayedValue>>,
+	pub children: HashMap<Vec<u8>, (KeySpace, HashMap<Vec<u8>, OverlayedValue>)>,
 	/// Non trie key value storage changes.
 	pub kv: HashMap<Vec<u8>, Option<Vec<u8>>>,
 }
@@ -329,13 +330,13 @@ impl OverlayedChanges {
 	/// Will panic if there are any uncommitted prospective changes.
 	pub fn into_committed(self) -> (
 		impl Iterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
-		impl Iterator<Item=(Vec<u8>, impl Iterator<Item=(Vec<u8>, Option<Vec<u8>>)>)>,
+		impl Iterator<Item=(Vec<u8>, KeySpace, impl Iterator<Item=(Vec<u8>, Option<Vec<u8>>)>)>,
 		impl Iterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 	){
 		assert!(self.prospective.is_empty());
 		(self.committed.top.into_iter().map(|(k, v)| (k, v.value)),
 			self.committed.children.into_iter()
-				.map(|(sk, v)| (sk, v.into_iter().map(|(k, v)| (k, v.value)))),
+				.map(|(sk, v)| (sk, v.0, v.1.into_iter().map(|(k, v)| (k, v.value)))),
 			self.committed.kv.into_iter())
 	}
 
