@@ -17,7 +17,7 @@
 use criterion::{Criterion, criterion_group, criterion_main, black_box};
 use srml_system as system;
 use support::{decl_module, decl_event, impl_outer_origin, impl_outer_event};
-use primitives::{H256, Blake2Hasher};
+use primitives::H256;
 use sr_primitives::{
 	set_and_run_with_externalities, Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header,
 };
@@ -83,7 +83,7 @@ impl module::Trait for Runtime {
 	type Event = Event;
 }
 
-fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+fn new_test_ext() -> runtime_io::TestExternalities {
 	system::GenesisConfig::default().build_storage::<Runtime>().unwrap().into()
 }
 
