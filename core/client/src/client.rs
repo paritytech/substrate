@@ -1058,15 +1058,18 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 						}),
 					}
 				};
+
+				let encoded_block = <Block as BlockT>::new(
+					import_headers.pre().clone(),
+					body.unwrap_or_default(),
+				).encode();
+
 				let (_, storage_update, changes_update) = self.executor
 					.call_at_state::<_, _, NeverNativeValue, fn() -> _>(
 						transaction_state,
 						&mut overlay,
 						"Core_execute_block",
-						&<Block as BlockT>::new(
-							import_headers.pre().clone(),
-							body.unwrap_or_default(),
-						).encode(),
+						&encoded_block,
 						match origin {
 							BlockOrigin::NetworkInitialSync => get_execution_manager(
 								self.execution_strategies().syncing,
@@ -1466,11 +1469,10 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 		};
 
 		let capabilities = context.capabilities();
-		let offchain_extensions = match context {
-			ExecutionContext::OffchainCall(Some(ext)) => Some(
-				OffchainExt::new(offchain::LimitedExternalities::new(capabilities, ext.0))
-			),
-			_ => None,
+		let offchain_extensions = if let ExecutionContext::OffchainCall(Some(ext)) = context {
+			Some(OffchainExt::new(offchain::LimitedExternalities::new(capabilities, ext.0)))
+		} else {
+			None
 		};
 
 		self.executor.contextual_call::<_, fn(_,_) -> _,_,_>(
