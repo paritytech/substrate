@@ -287,7 +287,12 @@ impl<H, N> Externalities for TestExternalities<H, N> where
 			parent,
 		)?.map(|(_, root, _)| root))
 	}
+}
 
+impl<H, N> externalities::ExtensionStore for TestExternalities<H, N> where
+	H: Hasher<Out=H256>,
+	N: ChangesTrieBlockNumber,
+{
 	fn extension_by_type_id(&mut self, type_id: TypeId) -> Option<&mut dyn Any> {
 		self.extensions.get_mut(type_id)
 	}

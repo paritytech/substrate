@@ -69,6 +69,17 @@ macro_rules! decl_extension {
 	}
 }
 
+/// Something that provides access to the [`Extensions`] store.
+///
+/// This is a super trait of the [`Externalities`](crate::Externalities).
+pub trait ExtensionStore {
+	/// Tries to find a registered extension by the given `type_id` and returns it as a `&mut dyn Any`.
+	///
+	/// It is advised to use [`ExternalitiesExt::extension`](crate::ExternalitiesExt::extension)
+	/// instead of this function to get type system support and automatic type downcasting.
+	fn extension_by_type_id(&mut self, type_id: TypeId) -> Option<&mut dyn Any>;
+}
+
 /// Stores extensions that should be made available through the externalities.
 #[derive(Default)]
 pub struct Extensions {

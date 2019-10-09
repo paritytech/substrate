@@ -504,11 +504,18 @@ where
 		);
 		result
 	}
+}
 
+impl<'a, H, B, T, N> externalities::ExtensionStore for Ext<'a, H, N, B, T>
+where
+	H: Hasher<Out=H256>,
+	B: 'a + Backend<H>,
+	T: 'a + ChangesTrieStorage<H, N>,
+	N: crate::changes_trie::BlockNumber,
+{
 	fn extension_by_type_id(&mut self, type_id: TypeId) -> Option<&mut dyn Any> {
 		self.extensions.as_mut().and_then(|exts| exts.get_mut(type_id))
 	}
-
 }
 
 #[cfg(test)]

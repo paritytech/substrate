@@ -29,7 +29,7 @@ use std::any::{Any, TypeId};
 use primitives_storage::ChildStorageKey;
 
 pub use scope_limited::{set_and_run_with_externalities, with_externalities};
-pub use extensions::{Extension, Extensions};
+pub use extensions::{Extension, Extensions, ExtensionStore};
 
 mod extensions;
 mod scope_limited;
@@ -37,7 +37,7 @@ mod scope_limited;
 /// The Substrate externalities.
 ///
 /// Provides access to the storage and to other registered extensions.
-pub trait Externalities {
+pub trait Externalities: ExtensionStore {
 	/// Read runtime storage.
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>>;
 
@@ -124,12 +124,6 @@ pub trait Externalities {
 
 	/// Get the change trie root of the current storage overlay at a block with given parent.
 	fn storage_changes_root(&mut self, parent: H256) -> Result<Option<H256>, ()>;
-
-	/// Tries to find a registered extension by the given `type_id` and returns it as a `&mut dyn Any`.
-	///
-	/// It is advised to use [`ExternalitiesExt::extension`] instead of this function to get type
-	/// system support and automatic type downcasting.
-	fn extension_by_type_id(&mut self, type_id: TypeId) -> Option<&mut dyn Any>;
 }
 
 /// Extension for the [`Externalities`] trait.

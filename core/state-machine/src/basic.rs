@@ -205,7 +205,9 @@ impl Externalities for BasicExternalities {
 	fn storage_changes_root(&mut self, _parent: H256) -> Result<Option<H256>, ()> {
 		Ok(None)
 	}
+}
 
+impl externalities::ExtensionStore for BasicExternalities {
 	fn extension_by_type_id(&mut self, _: TypeId) -> Option<&mut dyn Any> {
 		warn!("Extensions are not supported by `BasicExternalities`.");
 		None
