@@ -304,7 +304,7 @@ mod tests {
 	use consensus::BlockOrigin;
 	use primitives::offchain::NeverOffchainExt;
 	use test_client::{self, runtime::{Header, Digest, Block}, ClientExt, TestClient};
-	use executor::NativeExecutor;
+	use executor::{NativeExecutor, WasmExecutionMethod};
 	use crate::backend::{Backend, NewBlockState};
 	use crate::in_mem::Backend as InMemBackend;
 	use super::*;
@@ -399,6 +399,10 @@ mod tests {
 		}
 	}
 
+	fn local_executor() -> NativeExecutor<test_client::LocalExecutor> {
+		NativeExecutor::new(WasmExecutionMethod::Interpreted, None)
+	}
+
 	#[test]
 	fn execution_proof_is_generated_and_checked() {
 		fn execute(remote_client: &TestClient, at: u64, method: &'static str) -> (Vec<u8>, Vec<u8>) {
@@ -413,8 +417,7 @@ mod tests {
 			).unwrap();
 
 			// check remote execution proof locally
-			let local_executor = NativeExecutor::<test_client::LocalExecutor>::new(None);
-			let local_result = check_execution_proof(&local_executor, &RemoteCallRequest {
+			let local_result = check_execution_proof(&local_executor(), &RemoteCallRequest {
 				block: test_client::runtime::Hash::default(),
 				header: remote_header,
 				method: method.into(),
@@ -437,9 +440,8 @@ mod tests {
 			).unwrap();
 
 			// check remote execution proof locally
-			let local_executor = NativeExecutor::<test_client::LocalExecutor>::new(None);
 			let execution_result = check_execution_proof_with_make_header(
-				&local_executor,
+				&local_executor(),
 				&RemoteCallRequest {
 					block: test_client::runtime::Hash::default(),
 					header: remote_header,

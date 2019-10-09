@@ -18,7 +18,6 @@ use crate::traits::{AugmentClap, GetLogFilter};
 
 use std::path::PathBuf;
 use structopt::{StructOpt, clap::{arg_enum, App, AppSettings, _clap_count_exprs, SubCommand, Arg}};
-use client;
 
 pub use crate::execution_strategy::ExecutionStrategy;
 
@@ -40,6 +39,24 @@ impl Into<client::ExecutionStrategy> for ExecutionStrategy {
 			ExecutionStrategy::Wasm => client::ExecutionStrategy::AlwaysWasm,
 			ExecutionStrategy::Both => client::ExecutionStrategy::Both,
 			ExecutionStrategy::NativeElseWasm => client::ExecutionStrategy::NativeElseWasm,
+		}
+	}
+}
+
+arg_enum! {
+	/// How to execute Wasm runtime code
+	#[allow(missing_docs)]
+	#[derive(Debug, Clone)]
+	pub enum WasmExecutionMethod {
+		// Uses an interpreter.
+		Interpreted,
+	}
+}
+
+impl Into<service::config::WasmExecutionMethod> for WasmExecutionMethod {
+	fn into(self) -> service::config::WasmExecutionMethod {
+		match self {
+			WasmExecutionMethod::Interpreted => service::config::WasmExecutionMethod::Interpreted,
 		}
 	}
 }
@@ -404,6 +421,18 @@ pub struct RunCmd {
 	)]
 	pub offchain_worker: OffchainWorkerEnabled,
 
+	/// Method for executing Wasm runtime code.
+	#[structopt(
+		long = "wasm-execution",
+		value_name = "METHOD",
+		raw(
+			possible_values = "&WasmExecutionMethod::variants()",
+			case_insensitive = "true",
+			default_value = r#""Interpreted""#
+		)
+	)]
+	pub wasm_method: WasmExecutionMethod,
+
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub execution_strategies: ExecutionStrategies,
@@ -650,6 +679,18 @@ pub struct ImportBlocksCmd {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
+
+	/// Method for executing Wasm runtime code.
+	#[structopt(
+		long = "wasm-execution",
+		value_name = "METHOD",
+		raw(
+			possible_values = "&WasmExecutionMethod::variants()",
+			case_insensitive = "true",
+			default_value = r#""Interpreted""#
+		)
+	)]
+	pub wasm_method: WasmExecutionMethod,
 
 	/// The means of execution used when calling into the runtime while importing blocks.
 	#[structopt(
