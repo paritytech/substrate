@@ -133,11 +133,7 @@ fn prepare_extrinsics_input_inner<'a, B, H, Number>(
 		Number: BlockNumber,
 {
 	let (committed, prospective) = if let Some(sk) = storage_key.as_ref() {
-		// keyspace is ignored for change trie
-		(
-			changes.committed.children.get(sk).as_ref().map(|v| &v.1),
-			changes.prospective.children.get(sk).as_ref().map(|v| &v.1),
-		)
+		(changes.committed.children.get(sk), changes.prospective.children.get(sk))
 	} else {
 		(Some(&changes.committed.top), Some(&changes.prospective.top))
 	};

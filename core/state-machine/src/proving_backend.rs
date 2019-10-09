@@ -340,7 +340,7 @@ mod tests {
 
 	#[test]
 	fn proof_recorded_and_checked() {
-		let contents = (0..64).map(|i| (None, vec![i], Some(vec![i]))).collect::<Vec<_>>();
+		let contents = (0..64).map(|i| (None, None, vec![i], Some(vec![i]))).collect::<Vec<_>>();
 		let in_memory = InMemory::<Blake2Hasher>::default();
 		let mut in_memory = in_memory.update(InMemoryTransaction {
 			storage: contents,
@@ -370,9 +370,9 @@ mod tests {
 		let subtrie2 = ChildStorageKey::from_slice(b":child_storage:default:sub2").unwrap();
 		let own1 = subtrie1.into_owned();
 		let own2 = subtrie2.into_owned();
-		let contents = (0..64).map(|i| (None, vec![i], Some(vec![i])))
-			.chain((28..65).map(|i| (Some(own1.clone()), vec![i], Some(vec![i]))))
-			.chain((10..15).map(|i| (Some(own2.clone()), vec![i], Some(vec![i]))))
+		let contents = (0..64).map(|i| (None, None, vec![i], Some(vec![i])))
+			.chain((28..65).map(|i| (Some(own1.clone()), None, vec![i], Some(vec![i]))))
+			.chain((10..15).map(|i| (Some(own2.clone()), None, vec![i], Some(vec![i]))))
 			.collect::<Vec<_>>();
 		let in_memory = InMemory::<Blake2Hasher>::default();
 		let mut in_memory = in_memory.update(InMemoryTransaction {

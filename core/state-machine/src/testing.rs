@@ -112,6 +112,14 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 		&mut self.changes_trie_storage
 	}
 
+	fn get_child_keyspace(&self, storage_key: &[u8]) -> Result<Option<KeySpace>, ()> {
+		if let Some(change) = self.overlay.get_child_keyspace(storage_key) {
+			return Ok(change);
+		}
+
+		self.backend.get_child_keyspace(storage_key).map_err(|_|())
+	}
+
 	/// Return a new backend with all pending value.
 	pub fn commit_all(&self) -> InMemory<H> {
 		let top = self.overlay.committed.top.clone().into_iter()
@@ -120,9 +128,11 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 
 		let children = self.overlay.committed.children.clone().into_iter()
 			.chain(self.overlay.prospective.children.clone().into_iter())
-			.flat_map(|(storage_key, (keyspace, map))| {
+			.flat_map(|(storage_key, map)| {
+				let keyspace = self.get_child_keyspace(storage_key.as_slice())
+					.expect("Test backend do not produce db error");
 				map.into_iter()
-					.map(|(k, v)| (Some(storage_key.clone()), Some(keyspace.clone()), k, v.value))
+					.map(|(k, v)| (Some(storage_key.clone()), keyspace.clone(), k, v.value))
 					.collect::<Vec<_>>()
 			});
 
@@ -254,10 +264,10 @@ impl<H, N> Externalities<H> for TestExternalities<H, N> where
 		let child_delta_iter = child_storage_keys.map(|storage_key|
 			(storage_key.clone(), self.overlay.committed.children.get(storage_key)
 				.into_iter()
-				.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.value.clone())))
+				.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), v.value.clone())))
 				.chain(self.overlay.prospective.children.get(storage_key)
 					.into_iter()
-					.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.value.clone()))))));
+					.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), v.value.clone()))))));
 
 
 		// compute and memoize
@@ -275,10 +285,10 @@ impl<H, N> Externalities<H> for TestExternalities<H, N> where
 		let (root, is_empty, _) = {
 			let delta = self.overlay.committed.children.get(storage_key)
 				.into_iter()
-				.flat_map(|map| map.1.clone().into_iter().map(|(k, v)| (k, v.value)))
+				.flat_map(|map| map.clone().into_iter().map(|(k, v)| (k, v.value)))
 				.chain(self.overlay.prospective.children.get(storage_key)
 						.into_iter()
-						.flat_map(|map| map.1.clone().into_iter().map(|(k, v)| (k, v.value))));
+						.flat_map(|map| map.clone().into_iter().map(|(k, v)| (k, v.value))));
 
 			self.backend.child_storage_root(storage_key, delta)
 		};

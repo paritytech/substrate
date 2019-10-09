@@ -396,7 +396,10 @@ impl<H: Hasher> InMemory<H> {
 		let mut inner: HashMap<_, _> = self.inner.clone();
 		let mut kv: HashMap<_, _> = self.kv().clone();
 		for (storage_key, keyspace, key, val) in changes.storage {
-			let mut entry = inner.entry(storage_key).or_insert_with(|| (
+			let entry = inner.entry(storage_key).or_insert_with(|| (
+				// TODO EMCH here we need to assert storage key is none
+				// otherwhise it is undefined key leading to new keyspace
+				// creation.
 				keyspace.unwrap_or_else(|| NO_CHILD_KEYSPACE.to_vec()),
 				Default::default(),
 			));
@@ -594,7 +597,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 				.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))
 		);
 
-		let keyspace = self.inner.get(&storage_key).map(|t| t.0);
+		let keyspace = self.inner.get(&storage_key).map(|t| t.0.clone());
 		let full_transaction = transaction.into_iter()
 			.map(|(k, v)| (storage_key.clone(), keyspace.clone(), k, v)).collect();
 

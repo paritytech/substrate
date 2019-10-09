@@ -22,7 +22,7 @@ use std::collections::{HashMap, BTreeSet};
 use codec::Decode;
 use crate::changes_trie::{NO_EXTRINSIC_INDEX, Configuration as ChangesTrieConfig};
 use primitives::storage::well_known_keys::EXTRINSIC_INDEX;
-use primitives::child_trie::KeySpace;
+use primitives::child_trie::{KeySpace, prefixed_keyspace_kv};
 
 /// The overlayed changes to state to be queried on top of the backend.
 ///
@@ -57,11 +57,7 @@ pub struct OverlayedChangeSet {
 	/// Top level storage changes.
 	pub top: HashMap<Vec<u8>, OverlayedValue>,
 	/// Child storage changes.
-	/// TODO EMCH keyspace storage is a bit redundant with 'kv' containing
-	/// keyspace change, but it still seems pretty convenient.
-	/// TODO EMCH if keeping it, maybe change to Option<KeySpace> for lazy
-	/// keyspace creation of new children
-	pub children: HashMap<Vec<u8>, (KeySpace, HashMap<Vec<u8>, OverlayedValue>)>,
+	pub children: HashMap<Vec<u8>, HashMap<Vec<u8>, OverlayedValue>>,
 	/// Non trie key value storage changes.
 	pub kv: HashMap<Vec<u8>, Option<Vec<u8>>>,
 }
@@ -127,13 +123,13 @@ impl OverlayedChanges {
 	/// value has been set.
 	pub fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Option<Option<&[u8]>> {
 		if let Some(map) = self.prospective.children.get(storage_key) {
-			if let Some(val) = map.1.get(key) {
+			if let Some(val) = map.get(key) {
 				return Some(val.value.as_ref().map(AsRef::as_ref));
 			}
 		}
 
 		if let Some(map) = self.committed.children.get(storage_key) {
-			if let Some(val) = map.1.get(key) {
+			if let Some(val) = map.get(key) {
 				return Some(val.value.as_ref().map(AsRef::as_ref));
 			}
 		}
@@ -328,19 +324,36 @@ impl OverlayedChanges {
 		}
 	}
 
+	/// Get current changed keyspace value return `Some(None)` if deleted.
+	pub fn get_child_keyspace(&self, storage_key: &[u8]) -> Option<Option<KeySpace>> {
+			self.prospective.kv.get(&prefixed_keyspace_kv(&storage_key))
+				.or_else(|| self.committed.kv.get(&prefixed_keyspace_kv(&storage_key)))
+				.map(Clone::clone)
+	}
+
 	/// Consume `OverlayedChanges` and take committed set.
+	///
+	/// The child keyspace is only added if it was change in the
+	/// commit set.
 	///
 	/// Panics:
 	/// Will panic if there are any uncommitted prospective changes.
 	pub fn into_committed(self) -> (
 		impl Iterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
-		impl Iterator<Item=(Vec<u8>, KeySpace, impl Iterator<Item=(Vec<u8>, Option<Vec<u8>>)>)>,
+		impl Iterator<Item=(Vec<u8>, impl Iterator<Item=(Vec<u8>, Option<Vec<u8>>)>)>,
 		impl Iterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 	){
 		assert!(self.prospective.is_empty());
 		(self.committed.top.into_iter().map(|(k, v)| (k, v.value)),
 			self.committed.children.into_iter()
-				.map(|(sk, v)| (sk, v.0, v.1.into_iter().map(|(k, v)| (k, v.value)))),
+				.map(|(sk, v)| {
+					// TODO EMCH bad design do not include keyspace ???
+					// could we do a later resolution: commenting for now
+/*					let keyspace = self.committed.kv.get(&prefixed_keyspace_kv(&sk))
+						.map(Clone::clone)
+						.unwrap_or(None);*/
+					(sk, v.into_iter().map(|(k, v)| (k, v.value)))
+				}),
 			self.committed.kv.into_iter())
 	}
 
