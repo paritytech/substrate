@@ -57,6 +57,10 @@ pub struct OverlayedChangeSet {
 	/// Top level storage changes.
 	pub top: HashMap<Vec<u8>, OverlayedValue>,
 	/// Child storage changes.
+	/// TODO EMCH keyspace storage is a bit redundant with 'kv' containing
+	/// keyspace change, but it still seems pretty convenient.
+	/// TODO EMCH if keeping it, maybe change to Option<KeySpace> for lazy
+	/// keyspace creation of new children
 	pub children: HashMap<Vec<u8>, (KeySpace, HashMap<Vec<u8>, OverlayedValue>)>,
 	/// Non trie key value storage changes.
 	pub kv: HashMap<Vec<u8>, Option<Vec<u8>>>,
@@ -123,13 +127,13 @@ impl OverlayedChanges {
 	/// value has been set.
 	pub fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Option<Option<&[u8]>> {
 		if let Some(map) = self.prospective.children.get(storage_key) {
-			if let Some(val) = map.get(key) {
+			if let Some(val) = map.1.get(key) {
 				return Some(val.value.as_ref().map(AsRef::as_ref));
 			}
 		}
 
 		if let Some(map) = self.committed.children.get(storage_key) {
-			if let Some(val) = map.get(key) {
+			if let Some(val) = map.1.get(key) {
 				return Some(val.value.as_ref().map(AsRef::as_ref));
 			}
 		}

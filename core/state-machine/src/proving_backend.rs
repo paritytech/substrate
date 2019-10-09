@@ -30,6 +30,7 @@ use crate::trie_backend::TrieBackend;
 use crate::trie_backend_essence::{Ephemeral, TrieBackendEssence, TrieBackendStorage};
 use crate::{Error, ExecutionError, Backend};
 use crate::kv_backend::{KvBackend, InMemory as InMemoryKvBackend};
+use primitives::child_trie::KeySpace;
 
 /// Patricia trie-based backend essence which also tracks all touched storage trie values.
 /// These can be sent to remote node and used as a proof of execution.
@@ -185,6 +186,10 @@ impl<'a, S, H, O> Backend<H> for ProvingBackend<'a, S, H, O>
 			proof_recorder: &mut *self.proof_recorder.try_borrow_mut()
 				.expect("only fails when already borrowed; child_storage() is non-reentrant; qed"),
 		}.child_storage(storage_key, key)
+	}
+
+	fn get_child_keyspace(&self, storage_key: &[u8]) -> Result<Option<KeySpace>, Self::Error> {
+		self.backend.get_child_keyspace(storage_key)
 	}
 
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], f: F) {

@@ -28,12 +28,13 @@ use crate::{
 use primitives::{
 	storage::well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES, is_child_storage_key},
 	traits::{BareCryptoStorePtr, Externalities}, offchain, child_storage_key::ChildStorageKey,
+	child_trie::{KeySpace, NO_CHILD_KEYSPACE},
 };
 use codec::Encode;
 
 const EXT_NOT_ALLOWED_TO_FAIL: &str = "Externalities not allowed to fail within runtime";
 
-type StorageTuple = (HashMap<Vec<u8>, Vec<u8>>, HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>);
+type StorageTuple = (HashMap<Vec<u8>, Vec<u8>>, HashMap<Vec<u8>, (KeySpace, HashMap<Vec<u8>, Vec<u8>>)>);
 
 /// Simple HashMap-based Externalities impl.
 pub struct TestExternalities<H: Hasher, N: ChangesTrieBlockNumber> {
@@ -68,7 +69,7 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 
 		let backend: HashMap<_, _> = storage.1.into_iter()
 			.map(|(keyspace, map)| (Some(keyspace), map))
-			.chain(Some((None, storage.0)).into_iter())
+			.chain(Some((None, (NO_CHILD_KEYSPACE.to_vec(), storage.0))).into_iter())
 			.collect();
 
 		TestExternalities {
@@ -83,7 +84,7 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 	/// Insert key/value into backend
 	pub fn insert(&mut self, k: Vec<u8>, v: Vec<u8>) {
 		self.backend = self.backend.update(InMemoryTransaction {
-			storage: vec![(None, k, Some(v))],
+			storage: vec![(None, None, k, Some(v))],
 			kv: Default::default(),
 		});
 	}
@@ -115,13 +116,13 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 	pub fn commit_all(&self) -> InMemory<H> {
 		let top = self.overlay.committed.top.clone().into_iter()
 			.chain(self.overlay.prospective.top.clone().into_iter())
-			.map(|(k, v)| (None, k, v.value));
+			.map(|(k, v)| (None, None, k, v.value));
 
 		let children = self.overlay.committed.children.clone().into_iter()
 			.chain(self.overlay.prospective.children.clone().into_iter())
 			.flat_map(|(storage_key, (keyspace, map))| {
 				map.into_iter()
-					.map(|(k, v)| (Some((storage_key.clone(), keyspace.clone())), k, v.value))
+					.map(|(k, v)| (Some(storage_key.clone()), Some(keyspace.clone()), k, v.value))
 					.collect::<Vec<_>>()
 			});
 
@@ -253,10 +254,10 @@ impl<H, N> Externalities<H> for TestExternalities<H, N> where
 		let child_delta_iter = child_storage_keys.map(|storage_key|
 			(storage_key.clone(), self.overlay.committed.children.get(storage_key)
 				.into_iter()
-				.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), v.value.clone())))
+				.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.value.clone())))
 				.chain(self.overlay.prospective.children.get(storage_key)
 					.into_iter()
-					.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), v.value.clone()))))));
+					.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.value.clone()))))));
 
 
 		// compute and memoize
@@ -274,10 +275,10 @@ impl<H, N> Externalities<H> for TestExternalities<H, N> where
 		let (root, is_empty, _) = {
 			let delta = self.overlay.committed.children.get(storage_key)
 				.into_iter()
-				.flat_map(|map| map.clone().into_iter().map(|(k, v)| (k, v.value)))
+				.flat_map(|map| map.1.clone().into_iter().map(|(k, v)| (k, v.value)))
 				.chain(self.overlay.prospective.children.get(storage_key)
 						.into_iter()
-						.flat_map(|map| map.clone().into_iter().map(|(k, v)| (k, v.value))));
+						.flat_map(|map| map.1.clone().into_iter().map(|(k, v)| (k, v.value))));
 
 			self.backend.child_storage_root(storage_key, delta)
 		};

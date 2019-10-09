@@ -26,7 +26,7 @@ use trie::{
 	TrieMut, MemoryDB, child_trie_root, default_child_trie_root, TrieConfiguration,
 	trie_types::{TrieDBMut, Layout},
 };
-use primitives::child_trie::{KeySpace, NO_CHILD_KEYSPACE};
+use primitives::child_trie::{KeySpace, NO_CHILD_KEYSPACE, prefixed_keyspace_kv};
 
 /// A state backend is used to read state data and can have changes committed
 /// to it.
@@ -60,6 +60,9 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	fn child_storage_hash(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<H::Out>, Self::Error> {
 		self.child_storage(storage_key, key).map(|v| v.map(|v| H::hash(&v)))
 	}
+
+	/// Get technical keyspace use for child storage key.
+	fn get_child_keyspace(&self, storage_key: &[u8]) -> Result<Option<KeySpace>, Self::Error>;
 
 	/// true if a key exists in storage.
 	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {
@@ -193,6 +196,10 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 
 	fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		(*self).child_storage(storage_key, key)
+	}
+
+	fn get_child_keyspace(&self, storage_key: &[u8]) -> Result<Option<KeySpace>, Self::Error> {
+		(*self).get_child_keyspace(storage_key)
 	}
 
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], f: F) {
@@ -513,26 +520,37 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 		Ok(self.inner.get(&Some(storage_key.to_vec())).and_then(|map| map.1.get(key).map(Clone::clone)))
 	}
 
+	fn get_child_keyspace(&self, storage_key: &[u8]) -> Result<Option<KeySpace>, Self::Error> {
+		Ok(self.inner.get(&Some(storage_key.to_vec()))
+			.map(|(ks, _)| ks)
+			.map(Clone::clone)
+			.or_else(|| self.kv().get(&prefixed_keyspace_kv(storage_key)[..])
+				.map(Clone::clone)
+				.unwrap_or(None)
+			)
+		)
+	}
+
 	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {
 		Ok(self.inner.get(&None).map(|map| map.1.get(key).is_some()).unwrap_or(false))
 	}
 
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
-		self.inner.get(&None).map(|map| map.keys().filter(|key| key.starts_with(prefix)).map(|k| &**k).for_each(f));
+		self.inner.get(&None).map(|map| map.1.keys().filter(|key| key.starts_with(prefix)).map(|k| &**k).for_each(f));
 	}
 
 	fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], mut f: F) {
-		self.inner.get(&None).map(|map| map.iter().filter(|(key, _val)| key.starts_with(prefix))
+		self.inner.get(&None).map(|map| map.1.iter().filter(|(key, _val)| key.starts_with(prefix))
 			.for_each(|(k, v)| f(k, v)));
 	}
 
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], mut f: F) {
-		self.inner.get(&Some(storage_key.to_vec())).map(|map| map.keys().for_each(|k| f(&k)));
+		self.inner.get(&Some(storage_key.to_vec())).map(|map| map.1.keys().for_each(|k| f(&k)));
 	}
 
 	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(&self, storage_key: &[u8], prefix: &[u8], f: F) {
 		self.inner.get(&Some(storage_key.to_vec()))
-			.map(|map| map.keys().filter(|key| key.starts_with(prefix)).map(|k| &**k).for_each(f));
+			.map(|map| map.1.keys().filter(|key| key.starts_with(prefix)).map(|k| &**k).for_each(f));
 	}
 
 	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
@@ -542,7 +560,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 	{
 		let existing_pairs = self.inner.get(&None)
 			.into_iter()
-			.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), Some(v.clone()))));
+			.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), Some(v.clone()))));
 
 		let transaction: Vec<_> = delta.into_iter().collect();
 		let root = Layout::<H>::trie_root(existing_pairs.chain(transaction.iter().cloned())
@@ -551,7 +569,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 			.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))
 		);
 
-		let full_transaction = transaction.into_iter().map(|(k, v)| (None, k, v)).collect();
+		let full_transaction = transaction.into_iter().map(|(k, v)| (None, None, k, v)).collect();
 
 		(root, InMemoryTransaction { storage: full_transaction, kv: Default::default() })
 	}
@@ -561,24 +579,28 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		H::Out: Ord
 	{
-		let storage_key = storage_key.to_vec();
+		let storage_key = Some(storage_key.to_vec());
 
-		let existing_pairs = self.inner.get(&Some(storage_key.clone()))
+		let existing_pairs = self.inner.get(&storage_key)
 			.into_iter()
-			.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), Some(v.clone()))));
+			.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), Some(v.clone()))));
 
 		let transaction: Vec<_> = delta.into_iter().collect();
 		let root = child_trie_root::<Layout<H>, _, _, _>(
-			&storage_key,
+			storage_key.as_ref().expect("Initialized to some"),
 			existing_pairs.chain(transaction.iter().cloned())
 				.collect::<HashMap<_, _>>()
 				.into_iter()
 				.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))
 		);
 
-		let full_transaction = transaction.into_iter().map(|(k, v)| (Some(storage_key.clone()), k, v)).collect();
+		let keyspace = self.inner.get(&storage_key).map(|t| t.0);
+		let full_transaction = transaction.into_iter()
+			.map(|(k, v)| (storage_key.clone(), keyspace.clone(), k, v)).collect();
 
-		let is_default = root == default_child_trie_root::<Layout<H>>(&storage_key);
+		let is_default = root == default_child_trie_root::<Layout<H>>(
+			storage_key.as_ref().expect("Initialized to some")
+		);
 
 		(
 			root,
@@ -599,7 +621,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
 		self.inner.get(&None)
 			.into_iter()
-			.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), v.clone())))
+			.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone())))
 			.collect()
 	}
 
@@ -610,7 +632,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 	fn child_pairs(&self, storage_key: &[u8]) -> Vec<(Vec<u8>, Vec<u8>)> {
 		self.inner.get(&Some(storage_key.to_vec()))
 			.into_iter()
-			.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), v.clone())))
+			.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone())))
 			.collect()
 	}
 
@@ -621,14 +643,14 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 	fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> {
 		self.inner.get(&None)
 			.into_iter()
-			.flat_map(|map| map.keys().filter(|k| k.starts_with(prefix)).cloned())
+			.flat_map(|map| map.1.keys().filter(|k| k.starts_with(prefix)).cloned())
 			.collect()
 	}
 
 	fn child_keys(&self, storage_key: &[u8], prefix: &[u8]) -> Vec<Vec<u8>> {
 		self.inner.get(&Some(storage_key.to_vec()))
 			.into_iter()
-			.flat_map(|map| map.keys().filter(|k| k.starts_with(prefix)).cloned())
+			.flat_map(|map| map.1.keys().filter(|k| k.starts_with(prefix)).cloned())
 			.collect()
 	}
 
@@ -641,7 +663,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 		let mut root_map = None;
 		for (storage_key, map) in &self.inner {
 			if let Some(storage_key) = storage_key.as_ref() {
-				let ch = insert_into_memory_db::<H, _>(&mut mdb, map.clone().into_iter())?;
+				let ch = insert_into_memory_db::<H, _>(&mut mdb, map.1.clone().into_iter())?;
 				new_child_roots.push((storage_key.clone(), ch.as_ref().into()));
 			} else {
 				root_map = Some(map);
@@ -651,7 +673,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 		if let Some(map) = root_map.take() {
 			root = Some(insert_into_memory_db::<H, _>(
 				&mut mdb,
-				map.clone().into_iter().chain(new_child_roots.into_iter())
+				map.1.clone().into_iter().chain(new_child_roots.into_iter())
 			)?);
 		}
 		let root = match root {

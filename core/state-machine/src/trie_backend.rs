@@ -25,6 +25,7 @@ use crate::Backend;
 use crate::kv_backend::KvBackend;
 use primitives::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX;
 use std::collections::HashMap;
+use primitives::child_trie::{KeySpace, prefixed_keyspace_kv};
 
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
 /// A simple key value backend is also accessible for direct key value storage.
@@ -72,13 +73,6 @@ impl<S: TrieBackendStorage<H>, O: KvBackend, H: Hasher> TrieBackend<S, H, O> {
 		self.essence.into_storage()
 	}
 
-	// TODO EMCH PROTO: remove before pr.
-	pub fn child_keyspace(&self, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
-		const PREFIX_KEYSPACE: &'static[u8] = b"kv_keyspace";
-		// TODO EMCH do prefixing manually.
-		self.kv_storage.get(key)
-	}
-
 }
 
 impl<
@@ -108,11 +102,15 @@ impl<
 	}
 
 	fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-
+// TODO EMCHEMCH
 //		let keyspace = self.child_keyspace(storage_key);
 		// Then change essence functions to use keyspace as input.
 
 		self.essence.child_storage(storage_key, key)
+	}
+
+	fn get_child_keyspace(&self, storage_key: &[u8]) -> Result<Option<KeySpace>, Self::Error> {
+		self.kv_storage.get(&prefixed_keyspace_kv(storage_key)[..])
 	}
 
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {

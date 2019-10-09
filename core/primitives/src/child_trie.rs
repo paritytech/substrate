@@ -55,6 +55,28 @@ pub type KeySpace = Vec<u8>;
 /// Keyspace to use for the parent trie key.
 pub const NO_CHILD_KEYSPACE: [u8;1] = [0];
 
+/// Prefix for keyspace in key value storage.
+/// TODO EMCH consider using its own column
+const KEYSPACE_PREFIX: &'static [u8;9] = b"ks_prefix";
+
+/// Address of local keyspace counter. For allowing
+/// archive node with prunning, this counter should be
+/// global (shared between all block evaluation: so
+/// a mutex protected value that shall be initialized from
+/// aux and updated every time a block is written to db), but
+/// with current storage that allows only canonical
+/// counter in key value storage works.
+/// TODO EMCH consider directly using a global counter.
+pub const KEYSPACE_COUNTER: &'static [u8;10] = b"ks_counter";
+
+/// Produce a new keyspace from current state counter.
+/// TODO EMCH remove if using column
+pub fn prefixed_keyspace_kv(key: &[u8]) -> Vec<u8> {
+	let mut resu = Vec::with_capacity(KEYSPACE_PREFIX.len() + key.len());
+	resu.extend_from_slice(&KEYSPACE_PREFIX[..]);
+	resu.extend_from_slice(key);
+	resu
+}
 
 /// Produce a new keyspace from current state counter.
 pub fn produce_keyspace(child_counter: u128) -> Vec<u8> {
