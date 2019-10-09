@@ -70,16 +70,17 @@ fn find_system_module<'a>(mut module_declarations: impl Iterator<Item = &'a Modu
 		.map(|decl| &decl.module)
 }
 
-fn find_module_entry<'a>(module_declaration: &'a ModuleDeclaration, name: &'a str) -> Option<ModulePart> {
+/// `Name` could be only one of module names included in `default` keyword
+fn find_module_entry<'a>(module_declaration: &'a ModuleDeclaration, name: &'a Ident) -> Option<ModulePart> {
 	let details = module_declaration.details.inner.as_ref()?;
 	for entry in details.entries.content.inner.iter() {
 		match &entry.inner {
 			ModuleEntry::Default(default_token) => {
-				let event_tokens = quote!(Event<T>);
+				let event_tokens = quote!(#name<T>);
 				return Some(syn::parse2(event_tokens).unwrap());
 			},
 			ModuleEntry::Part(part) => {
-				if part.name.to_string().as_str() == name {
+				if part.name == *name {
 					return Some(part.clone())
 				}
 			},
