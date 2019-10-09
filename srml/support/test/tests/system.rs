@@ -1,12 +1,12 @@
-use support::codec::{Encode, Decode};
+use support::codec::{Encode, Decode, EncodeLike};
 
 pub trait Trait: 'static + Eq + Clone {
 	type Origin: Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>
 		+ From<RawOrigin<Self::AccountId>>;
 
-	type BlockNumber: Decode + Encode + Clone + Default;
+	type BlockNumber: Decode + Encode + EncodeLike + Clone + Default;
 	type Hash;
-	type AccountId: Encode + Decode;
+	type AccountId: Encode + EncodeLike + Decode;
 	type Event: From<Event>;
 }
 

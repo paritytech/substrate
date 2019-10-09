@@ -20,7 +20,7 @@ pub use rstd::{mem, slice};
 
 use core::{intrinsics, panic::PanicInfo};
 use rstd::{vec::Vec, cell::Cell, convert::TryInto};
-use primitives::{offchain, Blake2Hasher};
+use primitives::offchain;
 use codec::Decode;
 
 #[cfg(not(feature = "no_panic_handler"))]
@@ -732,13 +732,13 @@ impl StorageApi for () {
 	}
 
 
-	fn blake2_256_trie_root(input: Vec<(Vec<u8>, Vec<u8>)>) -> H256 {
+	fn blake2_256_trie_root(_input: Vec<(Vec<u8>, Vec<u8>)>) -> H256 {
 		unimplemented!()
 	}
 
 	fn blake2_256_ordered_trie_root(input: Vec<Vec<u8>>) -> H256 {
-		let mut values = Vec::new();
-		let mut lengths = Vec::new();
+		let mut values = Vec::with_capacity(input.len());
+		let mut lengths = Vec::with_capacity(input.len());
 		for v in input {
 			values.extend_from_slice(&v);
 			lengths.push((v.len() as u32).to_le());
@@ -1191,4 +1191,3 @@ unsafe fn from_raw_parts(ptr: *mut u8, len: u32) -> Option<Vec<u8>> {
 }
 
 impl Api for () {}
-

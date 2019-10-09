@@ -1,5 +1,6 @@
+// Copyright (c) 2017-2019 Chester Li and extropies.com
 // Copyright 2018-2019 Parity Technologies (UK) Ltd.
-// This file is part of Substrate.
+// This file is part of Substrate/subhd.
 
 // Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -13,101 +14,105 @@
 
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// See LICENSE for licensing information.
+//
+// Original author:
+// - Chester Li<chester@lichester.com>
 
-//! hd wallet layer for subkey
-use hex_view::HexView;
-use primitives::{sr25519, sr25519::{ Signature,Public}};
+//! Rust bindings for Wookong hardware wallet.
+
+use primitives::{
+	sr25519::{self, Signature, Public, Pair}, crypto::{DeriveJunction, Pair as TraitPair}
+};
 use wookong_solo::{wk_getpub, wk_sign, wk_generate, wk_format, wk_import};
 
 /// Error define
-/// DeviceNotfound: device not connected
-/// DeviceNotInit: empty device, generate or import first
-/// DeviceError: general error of command
-/// TODO: give detail error
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
-pub enum HDWalletError {
-    DeviceNotfound,
-    DeviceNotInit,
-    DeviceError
-}
-/// seed type
-type Seed = [u8; 32];
-/// subhd Result
-pub type HDWalleResult<T> = Result<T, HDWalletError>;
-/// struct device
-pub struct HDDevice;
-/// method of subhd
-pub trait HDwallet{
-    /// get public key
-    /// Address in defualt return
-    /// .into make it into public key
-    fn hd_getpub(&self) ->  HDWalleResult<Public>;
-    /// sign the message
-    fn hd_sign(&self, message:&[u8]) -> HDWalleResult<Signature>;
-    /// generate keypair and return seed
-    fn hd_generate(&self) -> HDWalleResult<Seed>;
-    /// import seed
-    fn hd_import(&self, seed:&[u8]) -> HDWalleResult<()>;
-    /// clear the device to empty
-    fn hd_format(&self) -> HDWalleResult<()>;
-    /// format seed hex string
-    fn to_hex(&self, data:&[u8]) -> String;
+pub enum Error {
+	/// Device not connected.
+	DeviceNotFound,
+	/// Empty device; key must be generated or imported first.
+	DeviceNotInit,
+	/// General error of command.
+	DeviceError,
 }
 
-/// implement of methods
-impl HDwallet for HDDevice {
-    /// get public key
-    /// Address in defualt return
-    /// .into make it into public key
-    fn hd_getpub(&self) ->  HDWalleResult<Public>{
-        let mut pk:[u8;32] = [0u8;32];
-        let rv = wk_getpub(&mut pk);
-        if rv==242{
-            return Err(HDWalletError::DeviceNotInit);
-        }else if rv!=0{
-            return Err(HDWalletError::DeviceNotfound);
-        }else if rv==0{
-            Ok(sr25519::Public::from_raw(pk))
-        }else{
-            return Err(HDWalletError::DeviceError);
-        }
-    }
-    /// sign the message
-    fn hd_sign(&self, message:&[u8]) -> HDWalleResult<Signature>{
-        let mut sig:[u8;64] = [0u8;64];
-        let rv = wk_sign(message, &mut sig);
-        if rv!=0 {
-            return Err(HDWalletError::DeviceError);
-        }
-        Ok(sr25519::Signature::from_raw(sig))
-    }
-    /// generate keypair and return seed
-    fn hd_generate(&self) -> HDWalleResult<Seed>{
-        let mut seed:[u8;32] = [0u8;32];
-        let rv = wk_generate(&mut seed);
-        if rv!=0 {
-            return Err(HDWalletError::DeviceError);
-        }
-        Ok(seed)
-    }
-    /// clear the device to empty
-    fn hd_format(&self) -> HDWalleResult<()>{
-        let rv = wk_format();
-        if rv!=0 {
-            return Err(HDWalletError::DeviceError);
-        }
-        Ok(())
-    }
-    /// import seed 
-    fn hd_import(&self, seed:&[u8]) -> HDWalleResult<()>{
-        let rv = wk_import(seed);
-        if rv!=0 {
-            return Err(HDWalletError::DeviceError);
-        }
-        Ok(())
-    }
-    /// format seed hex string
-    fn to_hex(&self, data:&[u8]) -> String{
-         format!("{:x}", HexView::from(&data[..]))
-    }
+/// Result type.
+pub type Result<T> = std::result::Result<T, Error>;
+
+/// Interface for the manager of a key.
+pub trait Wallet {
+	/// The keypair type.
+	type Pair: TraitPair;
+	/// Retrieve public key, if device is initialized.
+	fn derive_public(&self, path: &[DeriveJunction]) -> Result<<Self::Pair as TraitPair>::Public>;
+	/// Sign the message.
+	fn sign(&self, path: &[DeriveJunction], message: &[u8]) -> Result<<Self::Pair as TraitPair>::Signature>;
+	/// Generate keypair and return seed.
+	fn generate(&self) -> Result<Self::Pair>;
+	/// Import seed.
+	fn import(&self, seed: &<Self::Pair as TraitPair>::Seed) -> Result<()>;
+	/// Clear the device to empty.
+	fn reset(&self) -> Result<()>;
+}
+
+impl<T: TraitPair> Wallet for T {
+	type Pair = T;
+	fn derive_public(&self, _: &[DeriveJunction]) -> Result<<Self::Pair as TraitPair>::Public> { Err(Error::DeviceNotFound) }
+	fn sign(&self, _: &[DeriveJunction], _: &[u8]) -> Result<<Self::Pair as TraitPair>::Signature> { Err(Error::DeviceNotFound) }
+	fn generate(&self) -> Result<Self::Pair> { Err(Error::DeviceNotFound) }
+	fn import(&self, _: &<Self::Pair as TraitPair>::Seed) -> Result<()> { Err(Error::DeviceNotFound) }
+	fn reset(&self) -> Result<()> { Err(Error::DeviceNotFound) }
+}
+
+/// Unit type representing the Wookong hardware wallet.
+pub struct Wookong;
+
+impl Wallet for Wookong {
+	type Pair = sr25519::Pair;
+	fn derive_public(&self, _path: &[DeriveJunction]) -> Result<Public> {
+		// TODO: pass through _path and _password to mutate the key on the device accordingly.
+		let mut pk: [u8; 32] = [0u8; 32];
+		let rv = wk_getpub(&mut pk);
+		if rv == 242 {
+			return Err(Error::DeviceNotInit);
+		} else if rv != 0 {
+			return Err(Error::DeviceNotFound);
+		} else if rv == 0 {
+			Ok(sr25519::Public::from_raw(pk))
+		} else {
+			return Err(Error::DeviceError);
+		}
+	}
+	fn sign(&self, _path: &[DeriveJunction], message: &[u8]) -> Result<Signature> {
+		// TODO: pass through _path and _password to mutate the key on the device accordingly.
+		let mut sig: [u8; 64] = [0u8; 64];
+		let rv = wk_sign(message, &mut sig);
+		if rv != 0 {
+			return Err(Error::DeviceError);
+		}
+		Ok(sr25519::Signature::from_raw(sig))
+	}
+	fn generate(&self) -> Result<Pair> {
+		let mut seed: [u8; 32] = [0u8; 32];
+		let rv = wk_generate(&mut seed);
+		if rv != 0 {
+			return Err(Error::DeviceError);
+		}
+		Ok(Pair::from_seed(&seed))
+	}
+	fn reset(&self) -> Result<()> {
+		let rv = wk_format();
+		if rv != 0 {
+			return Err(Error::DeviceError);
+		}
+		Ok(())
+	}
+	fn import(&self, seed: &<Pair as TraitPair>::Seed) -> Result<()> {
+		let rv = wk_import(seed.as_ref());
+		if rv != 0 {
+			return Err(Error::DeviceError);
+		}
+		Ok(())
+	}
 }

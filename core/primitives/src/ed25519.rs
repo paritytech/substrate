@@ -397,7 +397,7 @@ impl TraitPair for Pair {
 	fn from_seed_slice(seed_slice: &[u8]) -> Result<Pair, SecretStringError> {
 		let secret = ed25519_dalek::SecretKey::from_bytes(seed_slice)
 			.map_err(|_| SecretStringError::InvalidSeedLength)?;
-		let public = ed25519_dalek::PublicKey::from(&secret);
+		let public = ed25519_dalek::PublicKey::from(secret.expand::<sha2::Sha512>());
 		Ok(Pair(ed25519_dalek::Keypair { secret, public }))
 	}
 
@@ -413,17 +413,6 @@ impl TraitPair for Pair {
 		Ok(Self::from_seed(&acc))
 	}
 
-	/// Generate a key from the phrase, password and derivation path.
-	fn from_standard_components<I: Iterator<Item=DeriveJunction>>(
-		phrase: &str,
-		password: Option<&str>,
-		path: I
-	) -> Result<Pair, SecretStringError> {
-		Self::from_phrase(phrase, password)?.0
-			.derive(path)
-			.map_err(|_| SecretStringError::InvalidPath)
-	}
-
 	/// Get the public key.
 	fn public(&self) -> Public {
 		let mut r = [0u8; 32];
@@ -434,7 +423,7 @@ impl TraitPair for Pair {
 
 	/// Sign a message.
 	fn sign(&self, message: &[u8]) -> Signature {
-		let r = self.0.sign(message).to_bytes();
+		let r = self.0.sign::<sha2::Sha512>(message).to_bytes();
 		Signature::from_raw(r)
 	}
 
@@ -458,7 +447,7 @@ impl TraitPair for Pair {
 			Err(_) => return false
 		};
 
-		match public_key.verify(message.as_ref(), &sig) {
+		match public_key.verify::<sha2::Sha512>(message.as_ref(), &sig) {
 			Ok(_) => true,
 			_ => false,
 		}

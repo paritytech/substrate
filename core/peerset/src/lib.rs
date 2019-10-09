@@ -178,7 +178,7 @@ impl Peerset {
 		};
 
 		let mut peerset = Peerset {
-			data: peersstate::PeersState::new(config.in_peers, config.out_peers),
+			data: peersstate::PeersState::new(config.in_peers, config.out_peers, config.reserved_only),
 			tx,
 			rx,
 			reserved_only: config.reserved_only,
@@ -224,9 +224,11 @@ impl Peerset {
 	}
 
 	fn on_set_reserved_only(&mut self, reserved_only: bool) {
-		// Disconnect non-reserved nodes.
 		self.reserved_only = reserved_only;
+		self.data.set_priority_only(reserved_only);
+
 		if self.reserved_only {
+			// Disconnect non-reserved nodes.
 			let reserved = self.data.get_priority_group(RESERVED_NODES).unwrap_or_default();
 			for peer_id in self.data.connected_peers().cloned().collect::<Vec<_>>().into_iter() {
 				let peer = self.data.peer(&peer_id).into_connected()

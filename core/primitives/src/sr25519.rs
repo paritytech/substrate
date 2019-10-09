@@ -437,17 +437,6 @@ impl TraitPair for Pair {
 		}
 	}
 
-	/// Generate a key from the phrase, password and derivation path.
-	fn from_standard_components<I: Iterator<Item=DeriveJunction>>(
-		phrase: &str,
-		password: Option<&str>,
-		path: I
-	) -> Result<Pair, SecretStringError> {
-		Self::from_phrase(phrase, password)?.0
-			.derive(path)
-			.map_err(|_| SecretStringError::InvalidPath)
-	}
-
 	fn generate_with_phrase(password: Option<&str>) -> (Pair, String, Seed) {
 		let mnemonic = Mnemonic::new(MnemonicType::Words12, Language::English);
 		let phrase = mnemonic.phrase();

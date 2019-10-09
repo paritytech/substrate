@@ -25,6 +25,9 @@ use jsonrpc_core::futures::{Future, future};
 
 type Id = u64;
 
+/// Alias for a an implementation of `futures::future::Executor`.
+pub type TaskExecutor = Arc<dyn future::Executor<Box<dyn Future<Item = (), Error = ()> + Send>> + Send + Sync>;
+
 /// Generate unique ids for subscriptions.
 #[derive(Clone, Debug)]
 pub struct IdProvider {
@@ -53,12 +56,12 @@ impl IdProvider {
 pub struct Subscriptions {
 	next_id: IdProvider,
 	active_subscriptions: Arc<Mutex<HashMap<Id, oneshot::Sender<()>>>>,
-	executor: Arc<dyn future::Executor<Box<dyn Future<Item = (), Error = ()> + Send>> + Send + Sync>,
+	executor: TaskExecutor,
 }
 
 impl Subscriptions {
 	/// Creates new `Subscriptions` object.
-	pub fn new(executor: Arc<dyn future::Executor<Box<dyn Future<Item = (), Error = ()> + Send>> + Send + Sync>) -> Self {
+	pub fn new(executor: TaskExecutor) -> Self {
 		Subscriptions {
 			next_id: Default::default(),
 			active_subscriptions: Default::default(),
@@ -71,13 +74,14 @@ impl Subscriptions {
 	/// Second parameter is a function that converts Subscriber sink into a future.
 	/// This future will be driven to completion by the underlying event loop
 	/// or will be cancelled in case #cancel is invoked.
-	pub fn add<T, E, G, R, F>(&self, subscriber: Subscriber<T, E>, into_future: G) where
+	pub fn add<T, E, G, R, F>(&self, subscriber: Subscriber<T, E>, into_future: G) -> SubscriptionId where
 		G: FnOnce(Sink<T, E>) -> R,
 		R: future::IntoFuture<Future=F, Item=(), Error=()>,
 		F: future::Future<Item=(), Error=()> + Send + 'static,
 	{
 		let id = self.next_id.next_id();
-		if let Ok(sink) = subscriber.assign_id(id.into()) {
+		let subscription_id: SubscriptionId = id.into();
+		if let Ok(sink) = subscriber.assign_id(subscription_id.clone()) {
 			let (tx, rx) = oneshot::channel();
 			let future = into_future(sink)
 				.into_future()
@@ -89,6 +93,8 @@ impl Subscriptions {
 				error!("Failed to spawn RPC subscription task");
 			}
 		}
+
+		subscription_id
 	}
 
 	/// Cancel subscription.

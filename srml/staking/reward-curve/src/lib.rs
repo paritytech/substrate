@@ -279,6 +279,8 @@ fn compute_points(input: &INposInput) -> Vec<(u32, u32)> {
 	let mut delta_y = max_length;
 	let mut y = input.max_inflation;
 
+	// The algorithm divide the curve in segment with vertical len and horizontal len less
+	// than `max_length`. This is not very accurate in case of very consequent steep.
 	while delta_y != 0 {
 		let next_y = y - delta_y;
 
@@ -335,8 +337,8 @@ fn generate_piecewise_linear(points: Vec<(u32, u32)>) -> TokenStream2 {
 
 		points_tokens.extend(quote!(
 			(
-				_sr_primitives::Perbill::from_const_parts(#x_perbill),
-				_sr_primitives::Perbill::from_const_parts(#y_perbill),
+				_sr_primitives::Perbill::from_parts(#x_perbill),
+				_sr_primitives::Perbill::from_parts(#y_perbill),
 			),
 		));
 	}

@@ -88,7 +88,7 @@ impl super::Network<Block> for TestNetwork {
 	}
 
 	/// Inform peers that a block with given hash should be downloaded.
-	fn announce(&self, block: Hash) {
+	fn announce(&self, block: Hash, _associated_data: Vec<u8>) {
 		let _ = self.sender.unbounded_send(Event::Announce(block));
 	}
 }
@@ -559,7 +559,7 @@ fn periodically_reannounce_voted_blocks_on_stall() {
 			for _ in 0..=12 {
 				let hash = Hash::random();
 				hashes.lock().push(hash);
-				announce_sender.send(hash);
+				announce_sender.send(hash, Vec::new());
 			}
 
 			// we should see an event for each of those announcements

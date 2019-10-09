@@ -29,9 +29,7 @@ use rstd::prelude::*;
 use codec::{Encode, Decode};
 use sr_primitives::KeyTypeId;
 use sr_primitives::traits::{Convert, OpaqueKeys, Hash as HashT};
-use support::{
-	StorageValue, StorageMap, decl_module, decl_storage,
-};
+use support::{decl_module, decl_storage};
 use support::{Parameter, print};
 use substrate_trie::{MemoryDB, Trie, TrieMut, Recorder, EMPTY_PREFIX};
 use substrate_trie::trie_types::{TrieDBMut, TrieDB};

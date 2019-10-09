@@ -12,5 +12,5 @@ srml-support-procedural-tools = { package = "srml-support-procedural-tools", pat
 sr-api-macros = { path = "../../../core/sr-api-macros" }
 
 proc-macro2 = "0.4.27"
-quote = { version = "0.6.12" }
-syn = { version = "0.15.32", features = ["full"] }
+quote = "0.6.12"
+syn = { version = "0.15.44", features = ["full"] }

@@ -498,11 +498,7 @@ pub(crate) fn ancestry<B, Block: BlockT<Hash=H256>, E, RA>(
 {
 	if base == block { return Err(GrandpaError::NotDescendent) }
 
-	let tree_route_res = ::client::blockchain::tree_route(
-		|id| client.header(&id)?.ok_or(client::error::Error::UnknownBlock(format!("{:?}", id))),
-		BlockId::Hash(block),
-		BlockId::Hash(base),
-	);
+	let tree_route_res = header_metadata::tree_route(client, block, base);
 
 	let tree_route = match tree_route_res {
 		Ok(tree_route) => tree_route,
@@ -587,6 +583,7 @@ where
 			self.inner.import_notification_stream(),
 			self.inner.clone(),
 			incoming,
+			"round",
 		).map_err(Into::into));
 
 		// schedule network message cleanup when sink drops.
@@ -906,7 +903,7 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 		let status = authority_set.apply_standard_changes(
 			hash,
 			number,
-			&is_descendent_of(client, None),
+			&is_descendent_of::<_, _, Block::Hash>(client, None),
 		).map_err(|e| Error::Safety(e.to_string()))?;
 
 		// check if this is this is the first finalization of some consensus changes

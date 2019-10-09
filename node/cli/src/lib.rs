@@ -28,7 +28,7 @@ mod factory_impl;
 use tokio::prelude::Future;
 use tokio::runtime::{Builder as RuntimeBuilder, Runtime};
 pub use cli::{VersionInfo, IntoExit, NoCustom, SharedParams, ExecutionStrategyParam};
-use substrate_service::{AbstractService, Roles as ServiceRoles};
+use substrate_service::{AbstractService, Roles as ServiceRoles, Configuration};
 use log::info;
 use structopt::{StructOpt, clap::App};
 use cli::{AugmentClap, GetLogFilter, parse_and_prepare, ParseAndPrepare};
@@ -158,9 +158,11 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 	T: Into<std::ffi::OsString> + Clone,
 	E: IntoExit,
 {
+	type Config<A, B> = Configuration<(), A, B>;
+
 	match parse_and_prepare::<CustomSubcommands, NoCustom, _>(&version, "substrate-node", args) {
-		ParseAndPrepare::Run(cmd) => cmd.run::<(), _, _, _, _>(load_spec, exit,
-		|exit, _cli_args, _custom_args, config| {
+		ParseAndPrepare::Run(cmd) => cmd.run(load_spec, exit,
+		|exit, _cli_args, _custom_args, config: Config<_, _>| {
 			info!("{}", version.name);
 			info!("  version {}", config.full_version());
 			info!("  by Parity Technologies, 2017-2019");
@@ -183,15 +185,15 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 			}.map_err(|e| format!("{:?}", e))
 		}),
 		ParseAndPrepare::BuildSpec(cmd) => cmd.run(load_spec),
-		ParseAndPrepare::ExportBlocks(cmd) => cmd.run_with_builder::<(), _, _, _, _, _>(|config|
+		ParseAndPrepare::ExportBlocks(cmd) => cmd.run_with_builder(|config: Config<_, _>|
 			Ok(new_full_start!(config).0), load_spec, exit),
-		ParseAndPrepare::ImportBlocks(cmd) => cmd.run_with_builder::<(), _, _, _, _, _>(|config|
+		ParseAndPrepare::ImportBlocks(cmd) => cmd.run_with_builder(|config: Config<_, _>|
 			Ok(new_full_start!(config).0), load_spec, exit),
 		ParseAndPrepare::PurgeChain(cmd) => cmd.run(load_spec),
-		ParseAndPrepare::RevertChain(cmd) => cmd.run_with_builder::<(), _, _, _, _>(|config|
+		ParseAndPrepare::RevertChain(cmd) => cmd.run_with_builder(|config: Config<_, _>|
 			Ok(new_full_start!(config).0), load_spec),
 		ParseAndPrepare::CustomCommand(CustomSubcommands::Factory(cli_args)) => {
-			let mut config = cli::create_config_with_db_path::<(), _, _>(
+			let mut config: Config<_, _> = cli::create_config_with_db_path(
 				load_spec,
 				&cli_args.shared_params,
 				&version,

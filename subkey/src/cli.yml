@@ -24,9 +24,19 @@ args:
       takes_value: true
       required: false
       help: Specify a network. One of substrate (default), polkadot, kusama, or dothereum.
+  - wookong:
+      long: wookong
+      takes_value: false
+      required: false
+      help: Use the Wookong hardware wallet
+  - kill-wallet:
+      long: kill-wallet
+      takes_value: false
+      required: false
+      help: Must be used to confirm the replacement or removal of a key in the hardware wallet
 subcommands:
   - generate:
-      about: Generate a random account
+      about: Generate a random account. If a hardware wallet is configured and if --kill-wallet given, then it will replace its key.
       args:
         - words:
             short: w
@@ -34,85 +44,54 @@ subcommands:
             help: The number of words in the phrase to generate. One of 12 (default), 15, 18, 21 and 24.
             takes_value: true
   - inspect:
-      about: Gets a public key and a SS58 address from the provided Secret URI
+      about: Gets a public key and a SS58 address from the provided Secret URI.
       args:
         - uri:
             index: 1
-            required: true
+            required: false
             help: A Key URI to be inspected. May be a secret seed, secret URI (with derivation paths and password), SS58 or public URI.
   - sign:
       about: Sign a message, provided on STDIN, with a given (secret) key
       args:
         - suri:
             index: 1
-            required: true
+            required: false
             help: The secret key URI.
         - hex:
             short: h
             long: hex
             help: The message on STDIN is hex-encoded data
             takes_value: false
-  - hard-sign:
-      about: Sign data by wookong hardware
+  - import:
+      about: Import a given secret key into the hardware wallet.
       args:
-        - hex:
-            short: h
-            long: hex
-            help: The message on STDIN is hex-encoded data
-            takes_value: false
-  - hard-gen:
-     about: generate seed by wookong hardware
-  - hard-format:
-      about: format wookong hardware
-  - hard-getpub:
-      about: get public key from wookong hardware
-  - hard-import:
-      about: import seed to wookong hardware
-      args:
-        - hex:
-            short: h
-            long: hex
-            help: The message on STDIN is hex-encoded data
-            takes_value: false
-  - hard-transfer:
-      about: make transfer by using secret in wookong hardware
-      args:
-        - to:
+        - suri:
             index: 1
-            required: true
-            help: The destination account public key URI.
-        - amount:
-            index: 2
-            required: true
-            help: The number of units to transfer.
-        - index:
-            index: 3
-            required: true
-            help: The signing account's transaction index.
-        - genesis:
-            short: g
-            long: genesis
-            help: The genesis hash or a recognised chain identifier (dev, elm, alex).
-            takes_value: true
+            required: false
+            help: The secret key URI. If not given, it will be read from standard input.
   - transfer:
       about: Author and sign a Node balances::Transfer transaction with a given (secret) key
       args:
-        - from:
-            index: 1
-            required: true
-            help: The signing secret key URI.
         - to:
-            index: 2
+            index: 1
             required: true
             help: The destination account public key URI.
         - amount:
-            index: 3
+            index: 2
             required: true
             help: The number of units to transfer.
-        - index:
-            index: 4
+        - signer:
+            long: signer
+            short: s
+            help: The secret key URI of the signer ("from"). If not given it will be read from standard input.
+            takes_value: true
+            required: false
+        - nonce:
+            short: n
+            long: nonce
+            help: The transaction index of the sender account.
+            takes_value: true
             required: true
-            help: The signing account's transaction index.
         - genesis:
             short: g
             long: genesis
@@ -127,7 +106,7 @@ subcommands:
             help: Signature, hex-encoded.
         - uri:
             index: 2
-            required: true
+            required: false
             help: The public or secret key URI.
         - hex:
             short: h
@@ -150,32 +129,23 @@ subcommands:
       about: Sign transaction from encoded Call. Returns a signed and encoded UncheckedMortalCompactExtrinsic as hex.
       args:
         - call:
-            short: c
-            long: call
+            index: 1
             help: The call, hex-encoded.
-            takes_value: true
             required: true
+        - signer:
+            long: signer
+            short: s
+            help: The secret key URI. Ignored if a hardware wallet is specified.
+            takes_value: true
+            required: false
         - nonce:
             short: n
             long: nonce
-            help: The nonce.
+            help: The transaction index of the sender account.
             takes_value: true
             required: true
-        - suri:
-            long: suri
-            short: s
-            help: The secret key URI.
+        - genesis:
+            short: g
+            long: genesis
+            help: The genesis hash or a recognised chain identifier (dev, elm, alex).
             takes_value: true
-            required: true
-        - password:
-            short: p
-            long: password
-            takes_value: true
-            help: The password for the key.
-            required: true
-        - prior-block-hash:
-            short: h
-            long: prior-block-hash
-            help: The prior block hash, hex-encoded.
-            takes_value: true
-            required: true

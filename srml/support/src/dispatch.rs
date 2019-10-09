@@ -20,7 +20,7 @@
 pub use crate::rstd::{result, prelude::{Vec, Clone, Eq, PartialEq}, marker};
 #[cfg(feature = "std")]
 pub use std::fmt;
-pub use crate::codec::{Codec, Decode, Encode, Input, Output, HasCompact, EncodeAsRef};
+pub use crate::codec::{Codec, EncodeLike, Decode, Encode, Input, Output, HasCompact, EncodeAsRef};
 pub use srml_metadata::{
 	FunctionMetadata, DecodeDifferent, DecodeDifferentArray, FunctionArgumentMetadata,
 	ModuleConstantMetadata, DefaultByte, DefaultByteGetter,
@@ -49,16 +49,16 @@ pub trait Callable<T> {
 pub type CallableCallFor<A, T> = <A as Callable<T>>::Call;
 
 #[cfg(feature = "std")]
-pub trait Parameter: Codec + Clone + Eq + fmt::Debug {}
+pub trait Parameter: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 
 #[cfg(feature = "std")]
-impl<T> Parameter for T where T: Codec + Clone + Eq + fmt::Debug {}
+impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 
 #[cfg(not(feature = "std"))]
-pub trait Parameter: Codec + Clone + Eq {}
+pub trait Parameter: Codec + EncodeLike + Clone + Eq {}
 
 #[cfg(not(feature = "std"))]
-impl<T> Parameter for T where T: Codec + Clone + Eq {}
+impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq {}
 
 /// Declares a `Module` struct and a `Call` enum, which implements the dispatch logic.
 ///
@@ -342,7 +342,7 @@ macro_rules! decl_module {
 		{ $( $error_type:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
-		fn on_finalize($($param_name:ident : $param:ty),* ) { $( $impl:tt )* }
+		fn on_finalize( $( $param_name:ident : $param:ty ),* $(,)? ) { $( $impl:tt )* }
 		$($rest:tt)*
 	) => {
 		$crate::decl_module!(@normalize
@@ -373,7 +373,7 @@ macro_rules! decl_module {
 		{ $( $error_type:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
-		fn on_initialize($($param_name:ident : $param:ty),* ) { $( $impl:tt )* }
+		fn on_initialize( $( $param_name:ident : $param:ty ),* $(,)? ) { $( $impl:tt )* }
 		$($rest:tt)*
 	) => {
 		$crate::decl_module!(@normalize
@@ -407,7 +407,7 @@ macro_rules! decl_module {
 		{ $( $error_type:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
-		fn offchain_worker($($param_name:ident : $param:ty),* ) { $( $impl:tt )* }
+		fn offchain_worker( $( $param_name:ident : $param:ty ),* $(,)? ) { $( $impl:tt )* }
 		$($rest:tt)*
 	) => {
 		$crate::decl_module!(@normalize
@@ -563,7 +563,7 @@ macro_rules! decl_module {
 		$(#[doc = $doc_attr:tt])*
 		#[weight = $weight:expr]
 		$fn_vis:vis fn $fn_name:ident(
-			$origin:ident $(, $(#[$codec_attr:ident])* $param_name:ident : $param:ty)*
+			$origin:ident $( , $(#[$codec_attr:ident])* $param_name:ident : $param:ty )* $(,)?
 		) $( -> $result:ty )* { $( $impl:tt )* }
 		$($rest:tt)*
 	) => {
@@ -610,7 +610,7 @@ macro_rules! decl_module {
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		$fn_vis:vis fn $fn_name:ident(
-			$from:ident $(, $(#[$codec_attr:ident])* $param_name:ident : $param:ty)*
+			$from:ident $( , $( #[$codec_attr:ident] )* $param_name:ident : $param:ty )* $(,)?
 		) $( -> $result:ty )* { $( $impl:tt )* }
 		$($rest:tt)*
 	) => {
@@ -652,7 +652,7 @@ macro_rules! decl_module {
 		$(#[doc = $doc_attr:tt])*
 		$(#[weight = $weight:expr])?
 		$fn_vis:vis fn $fn_name:ident(
-			$origin:ident : T::Origin $(, $(#[$codec_attr:ident])* $param_name:ident : $param:ty)*
+			$origin:ident : T::Origin $( , $( #[$codec_attr:ident] )* $param_name:ident : $param:ty )* $(,)?
 		) $( -> $result:ty )* { $( $impl:tt )* }
 		$($rest:tt)*
 	) => {
@@ -677,7 +677,7 @@ macro_rules! decl_module {
 		$(#[doc = $doc_attr:tt])*
 		$(#[weight = $weight:expr])?
 		$fn_vis:vis fn $fn_name:ident(
-			origin : $origin:ty $(, $(#[$codec_attr:ident])* $param_name:ident : $param:ty)*
+			origin : $origin:ty $( , $( #[$codec_attr:ident] )* $param_name:ident : $param:ty )* $(,)?
 		) $( -> $result:ty )* { $( $impl:tt )* }
 		$($rest:tt)*
 	) => {
@@ -702,7 +702,7 @@ macro_rules! decl_module {
 		$(#[doc = $doc_attr:tt])*
 		$(#[weight = $weight:expr])?
 		$fn_vis:vis fn $fn_name:ident(
-			$( $(#[$codec_attr:ident])* $param_name:ident : $param:ty),*
+			$( $(#[$codec_attr:ident])* $param_name:ident : $param:ty ),* $(,)?
 		) $( -> $result:ty )* { $( $impl:tt )* }
 		$($rest:tt)*
 	) => {
@@ -1730,19 +1730,19 @@ mod tests {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin, T::AccountId: From<u32> {
 			/// Hi, this is a comment.
 			fn aux_0(_origin) -> Result { unreachable!() }
-			fn aux_1(_origin, #[compact] _data: u32) -> Result { unreachable!() }
+			fn aux_1(_origin, #[compact] _data: u32,) -> Result { unreachable!() }
 			fn aux_2(_origin, _data: i32, _data2: String) -> Result { unreachable!() }
 			#[weight = SimpleDispatchInfo::FixedNormal(3)]
 			fn aux_3(_origin) -> Result { unreachable!() }
 			fn aux_4(_origin, _data: i32) -> Result { unreachable!() }
-			fn aux_5(_origin, _data: i32, #[compact] _data2: u32) -> Result { unreachable!() }
+			fn aux_5(_origin, _data: i32, #[compact] _data2: u32,) -> Result { unreachable!() }
 
-			fn on_initialize(n: T::BlockNumber) { if n.into() == 42 { panic!("on_initialize") } }
+			fn on_initialize(n: T::BlockNumber,) { if n.into() == 42 { panic!("on_initialize") } }
 			fn on_finalize(n: T::BlockNumber) { if n.into() == 42 { panic!("on_finalize") } }
 			fn offchain_worker() {}
 
 			#[weight = SimpleDispatchInfo::FixedOperational(5)]
-			fn operational(_origin) { unreachable!() }
+			fn operational(_origin,) { unreachable!() }
 		}
 	}
 

@@ -20,7 +20,7 @@ use client::BlockchainEvents;
 use futures::{Future, Stream};
 use futures03::{StreamExt as _, TryStreamExt as _};
 use log::{info, warn};
-use sr_primitives::{generic::BlockId, traits::Header};
+use sr_primitives::traits::Header;
 use service::AbstractService;
 
 mod display;
@@ -47,19 +47,18 @@ pub fn build(service: &impl AbstractService) -> impl Future<Item = (), Error = (
 		// detect and log reorganizations.
 		if let Some((ref last_num, ref last_hash)) = last_best {
 			if n.header.parent_hash() != last_hash && n.is_new_best  {
-				let tree_route = ::client::blockchain::tree_route(
-					|id| client.header(&id)?.ok_or_else(
-						|| client::error::Error::UnknownBlock(format!("{:?}", id))),
-					BlockId::Hash(last_hash.clone()),
-					BlockId::Hash(n.hash),
+				let maybe_ancestor = header_metadata::lowest_common_ancestor(
+					&*client,
+					last_hash.clone(),
+					n.hash,
 				);
 
-				match tree_route {
-					Ok(ref t) if !t.retracted().is_empty() => info!(
+				match maybe_ancestor {
+					Ok(ref ancestor) if ancestor.hash != *last_hash => info!(
 						"Reorg from #{},{} to #{},{}, common ancestor #{},{}",
 						last_num, last_hash,
 						n.header.number(), n.hash,
-						t.common_block().number, t.common_block().hash,
+						ancestor.number, ancestor.hash,
 					),
 					Ok(_) => {},
 					Err(e) => warn!("Error computing tree route: {}", e),
