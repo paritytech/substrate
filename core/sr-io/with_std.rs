@@ -16,8 +16,8 @@
 
 use primitives::{
 	blake2_128, blake2_256, twox_128, twox_256, twox_64, ed25519, Blake2Hasher, sr25519, Pair, H256,
-	traits::Externalities, child_storage_key::ChildStorageKey, hexdisplay::HexDisplay, offchain,
-	Hasher,
+	traits::KeystoreExt, storage::ChildStorageKey, hexdisplay::HexDisplay, Hasher,
+	offchain::{self, OffchainExt},
 };
 // Switch to this after PoC-3
 // pub use primitives::BlakeHasher;
@@ -26,8 +26,6 @@ pub use substrate_state_machine::{BasicExternalities, TestExternalities};
 use trie::{TrieConfiguration, trie_types::Layout};
 
 use std::{collections::HashMap, convert::TryFrom};
-
-use runtime_interface::with_externalities as with_ext;
 
 /// Additional bounds for `Hasher` trait for with_std.
 pub trait HasherBounds {}
@@ -74,7 +72,7 @@ mod std_tests {
 	#[test]
 	fn storage_works() {
 		let mut t = BasicExternalities::default();
-		assert!(with_externalities(&mut t, || {
+		assert!(set_and_run_with_externalities(&mut t, || {
 			assert_eq!(storage(b"hello"), None);
 			set_storage(b"hello", b"world");
 			assert_eq!(storage(b"hello"), Some(b"world".to_vec()));
@@ -85,7 +83,7 @@ mod std_tests {
 
 		t = BasicExternalities::new(map![b"foo".to_vec() => b"bar".to_vec()], map![]);
 
-		assert!(!with_externalities(&mut t, || {
+		assert!(!set_and_run_with_externalities(&mut t, || {
 			assert_eq!(storage(b"hello"), None);
 			assert_eq!(storage(b"foo"), Some(b"bar".to_vec()));
 			false
@@ -98,7 +96,7 @@ mod std_tests {
 			b":test".to_vec() => b"\x0b\0\0\0Hello world".to_vec()
 		], map![]);
 
-		with_externalities(&mut t, || {
+		set_and_run_with_externalities(&mut t, || {
 			let mut v = [0u8; 4];
 			assert!(read_storage(b":test", &mut v[..], 0).unwrap() >= 4);
 			assert_eq!(v, [11u8, 0, 0, 0]);
@@ -117,7 +115,7 @@ mod std_tests {
 			b":abdd".to_vec() => b"\x0b\0\0\0Hello world".to_vec()
 		], map![]);
 
-		with_externalities(&mut t, || {
+		set_and_run_with_externalities(&mut t, || {
 			clear_prefix(b":abc");
 
 			assert!(storage(b":a").is_some());

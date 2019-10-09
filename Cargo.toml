@@ -11,11 +11,11 @@ edition = "2018"
 
 [dependencies]
 cli = { package = "node-cli", path = "node/cli" }
-futures = "0.1"
-ctrlc = { version = "3.0", features = ["termination"] }
+futures = "0.1.29"
+ctrlc = { version = "3.1.3", features = ["termination"] }
 
 [build-dependencies]
-vergen = "3"
+vergen = "3.0.4"
 
 [workspace]
 members = [
@@ -26,6 +26,7 @@ members = [
 	"core/cli",
 	"core/client",
 	"core/client/db",
+	"core/client/header-metadata",
 	"core/consensus/aura",
 	"core/consensus/babe",
 	"core/consensus/common",
@@ -35,6 +36,7 @@ members = [
 	"core/consensus/pow",
 	"core/executor",
 	"core/executor/runtime-test",
+	"core/externalities",
 	"core/finality-grandpa",
 	"core/finality-grandpa/primitives",
 	"core/inherents",
@@ -97,6 +99,7 @@ members = [
 	"srml/membership",
 	"srml/metadata",
 	"srml/offences",
+	"srml/randomness-collective-flip",
 	"srml/scored-pool",
 	"srml/session",
 	"srml/staking",
@@ -105,6 +108,7 @@ members = [
 	"srml/system",
 	"srml/timestamp",
 	"srml/treasury",
+	"srml/utility",
 	"node/cli",
 	"node/executor",
 	"node/primitives",

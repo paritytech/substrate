@@ -63,7 +63,7 @@ pub fn new_light<B, S, GS, RA, E>(
 		B: BlockT<Hash=H256>,
 		S: BlockchainStorage<B> + 'static,
 		GS: BuildStorage,
-		E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
+		E: CodeExecutor + RuntimeInfo,
 {
 	let local_executor = LocalCallExecutor::new(backend.clone(), code_executor, None);
 	let executor = GenesisCallExecutor::new(backend.clone(), local_executor);
@@ -76,7 +76,7 @@ pub fn new_fetch_checker<E, B: BlockT, S: BlockchainStorage<B>>(
 	executor: E,
 ) -> LightDataChecker<E, Blake2Hasher, B, S>
 	where
-		E: CodeExecutor<Blake2Hasher>,
+		E: CodeExecutor,
 {
 	LightDataChecker::new(blockchain, executor)
 }

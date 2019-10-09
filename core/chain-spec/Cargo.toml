@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 chain-spec-derive = { package = "substrate-chain-spec-derive", path = "./derive" }
-impl-trait-for-tuples = "0.1.1"
+impl-trait-for-tuples = "0.1.2"
 network = { package = "substrate-network", path = "../../core/network" }
 primitives = { package = "substrate-primitives", path = "../primitives" }
 serde = { version = "1.0.101", features = ["derive"] }

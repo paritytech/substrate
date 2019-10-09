@@ -86,55 +86,46 @@ impl<H, N, V> ForkTree<H, N, V> where
 	N: Ord + Clone,
 	V: Clone,
 {
-	/// Prune all nodes that are not descendents of `hash` according to
-	/// `is_descendent_of`. The given function `is_descendent_of` should return
-	/// `true` if the second hash (target) is a descendent of the first hash
-	/// (base). After pruning the tree it should have one or zero roots. The
-	/// number and order of calls to `is_descendent_of` is unspecified and
-	/// subject to change.
-	pub fn prune<F, E>(
+	/// Prune the tree, removing all non-canonical nodes. We find the node in the
+	/// tree that is the deepest ancestor of the given hash and that passes the
+	/// given predicate. If such a node exists, we re-root the tree to this
+	/// node. Otherwise the tree remains unchanged. The given function
+	/// `is_descendent_of` should return `true` if the second hash (target) is a
+	/// descendent of the first hash (base).
+	pub fn prune<F, E, P>(
 		&mut self,
 		hash: &H,
-		number: N,
-		is_descendent_of: &F
+		number: &N,
+		is_descendent_of: &F,
+		predicate: &P,
 	) -> Result<(), Error<E>>
 		where E: std::error::Error,
-			  F: Fn(&H, &H) -> Result<bool, E>
+			  F: Fn(&H, &H) -> Result<bool, E>,
+			  P: Fn(&V) -> bool,
 	{
-		let mut new_root = None;
-		for node in self.node_iter() {
-			// if the node has a lower number than the one being finalized then
-			// we only keep if it has no children and the finalized block is a
-			// descendent of this node
-			if node.number < number  {
-				if !node.children.is_empty() || !is_descendent_of(&node.hash, hash)? {
-					continue;
-				}
-			}
-
-			// if the node has the same number as the finalized block then it
-			// must have the same hash
-			if node.number == number && node.hash != *hash {
-				continue;
-			}
-
-			// if the node has a higher number then we keep it if it is a
-			// descendent of the finalized block
-			if node.number > number && !is_descendent_of(hash, &node.hash)? {
-				continue;
-			}
-
-			new_root = Some(node);
-			break;
-		}
+		let new_root = self.find_node_where(
+			hash,
+			number,
+			is_descendent_of,
+			predicate,
+		)?;
 
 		if let Some(root) = new_root {
-			self.roots = vec![root.clone()];
+			let mut root = root.clone();
+
+			// we found the deepest ancestor of the finalized block, so we prune
+			// out any children that don't include the finalized block.
+			let children = std::mem::replace(&mut root.children, Vec::new());
+			root.children = children.into_iter().filter(|node| {
+				node.number == *number && node.hash == *hash ||
+					node.number < *number && is_descendent_of(&node.hash, hash).unwrap_or(false)
+			}).take(1).collect();
+
+			self.roots = vec![root];
 		}
 
 		Ok(())
 	}
-
 }
 
 impl<H, N, V> ForkTree<H, N, V> where
@@ -1203,18 +1194,36 @@ mod test {
 
 		tree.prune(
 			&"C",
-			3,
+			&3,
 			&is_descendent_of,
+			&|_| true,
 		).unwrap();
 
 		assert_eq!(
 			tree.roots.iter().map(|node| node.hash).collect::<Vec<_>>(),
-			vec!["C"],
+			vec!["B"],
 		);
 
 		assert_eq!(
 			tree.iter().map(|(hash, _, _)| *hash).collect::<Vec<_>>(),
-			vec!["C", "D", "E"],
+			vec!["B", "C", "D", "E"],
+		);
+
+		tree.prune(
+			&"E",
+			&5,
+			&is_descendent_of,
+			&|_| true,
+		).unwrap();
+
+		assert_eq!(
+			tree.roots.iter().map(|node| node.hash).collect::<Vec<_>>(),
+			vec!["D"],
+		);
+
+		assert_eq!(
+			tree.iter().map(|(hash, _, _)| *hash).collect::<Vec<_>>(),
+			vec!["D", "E"],
 		);
 	}
 

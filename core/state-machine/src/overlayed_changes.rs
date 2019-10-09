@@ -420,7 +420,6 @@ mod tests {
 			&mut overlay,
 			&backend,
 			Some(&changes_trie_storage),
-			crate::NeverOffchainExt::new(),
 			None,
 		);
 		const ROOT: [u8; 32] = hex!("39245109cef3758c2eed2ccba8d9b370a917850af3824bc8348d505df2c298fa");
@@ -432,9 +431,12 @@ mod tests {
 	fn changes_trie_configuration_is_saved() {
 		let mut overlay = OverlayedChanges::default();
 		assert!(overlay.changes_trie_config.is_none());
-		assert_eq!(overlay.set_changes_trie_config(ChangesTrieConfig {
-			digest_interval: 4, digest_levels: 1,
-		}), true);
+		assert_eq!(
+			overlay.set_changes_trie_config(
+				ChangesTrieConfig { digest_interval: 4, digest_levels: 1, },
+			),
+			true,
+		);
 		assert!(overlay.changes_trie_config.is_some());
 	}
 
