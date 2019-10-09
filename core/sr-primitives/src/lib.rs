@@ -70,8 +70,8 @@ pub use sr_arithmetic::{
 };
 /// Re-export 128 bit helpers.
 pub use sr_arithmetic::helpers_128bit;
-/// Re-export big_num stiff.
-pub use sr_arithmetic::big_num;
+/// Re-export big_uint stiff.
+pub use sr_arithmetic::biguint;
 
 /// An abstraction over justification for a block's validity under a consensus algorithm.
 ///
