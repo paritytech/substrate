@@ -837,8 +837,8 @@ pub mod big_num {
 		/// limbs. The caller may strip the output if desired.
 		///
 		/// Taken from "The Art of Computer Programming" by D.E. Knuth, vol 2, chapter 4.
-		pub fn add(mut self, mut other: Self) -> Self {
-			Self::resize(&mut self, &mut other);
+		pub fn add(mut self, other: &mut Self) -> Self {
+			Self::resize(&mut self, other);
 			let n = self.len();
 			let mut k: Double = 0;
 			let mut w = Self::with_capacity(n + 1);
@@ -861,8 +861,8 @@ pub mod big_num {
 		/// If `other` is bigger than `self`, `Err(B - borrow)` is returned.
 		///
 		/// Taken from "The Art of Computer Programming" by D.E. Knuth, vol 2, chapter 4.
-		pub fn sub(mut self, mut other: Self) -> Result<Self, Self> {
-			Self::resize(&mut self, &mut other);
+		pub fn sub(mut self, other: &mut Self) -> Result<Self, Self> {
+			Self::resize(&mut self, other);
 			let n = self.len();
 			let mut k = 0;
 			let mut w = Self::with_capacity(n);
@@ -910,7 +910,7 @@ pub mod big_num {
 		/// limbs. The caller may strip the output if desired.
 		///
 		/// Taken from "The Art of Computer Programming" by D.E. Knuth, vol 2, chapter 4.
-		pub fn mul(self, other: Self) -> Self {
+		pub fn mul(self, other: &mut Self) -> Self {
 			let n = self.len();
 			let m = other.len();
 			let mut w = Self::with_capacity(m + n);
@@ -970,7 +970,7 @@ pub mod big_num {
 		/// the above fails, `None` is returned.`
 		///
 		/// Taken from "The Art of Computer Programming" by D.E. Knuth, vol 2, chapter 4.
-		pub fn div(self, other: Self, rem: bool) -> Option<(Self, Self)> {
+		pub fn div(self, other: &mut Self, rem: bool) -> Option<(Self, Self)> {
 			if other.len() <= 1
 				|| other.msb() == 0
 				|| self.msb() == 0
@@ -992,8 +992,8 @@ pub mod big_num {
 			let normalizer = (2 as Single).pow(normalizer_bits as u32) as Single;
 
 			// step D1.
-			let mut self_norm = self.mul(Self::from(normalizer));
-			let mut other_norm = other.mul(Self::from(normalizer));
+			let mut self_norm = self.mul(&mut Self::from(normalizer));
+			let mut other_norm = other.clone().mul(&mut Self::from(normalizer));
 
 			// defensive only; the mul implementation should always create this.
 			self_norm.lpad(n + m + 1);
@@ -1047,9 +1047,9 @@ pub mod big_num {
 
 				// step D4
 				let lhs = Self { digits: (j..=j+n).rev().map(|d| self_norm.get(d)).collect() };
-				let rhs = other_norm.clone().mul(Self::from(qhat));
+				let mut rhs = other_norm.clone().mul(&mut Self::from(qhat));
 
-				let maybe_sub = lhs.sub(rhs);
+				let maybe_sub = lhs.sub(&mut rhs);
 				let mut negative = false;
 				let sub = match maybe_sub {
 					Ok(t) => t,
@@ -1065,8 +1065,8 @@ pub mod big_num {
 				// step D6: add back if negative happened.
 				if negative {
 					q.set(j, q.get(j) - 1);
-					let u = Self { digits: (j..=j+n).rev().map(|d| self_norm.get(d)).collect() };
-					let r = other_norm.clone().add(u);
+					let mut u = Self { digits: (j..=j+n).rev().map(|d| self_norm.get(d)).collect() };
+					let r = other_norm.clone().add(&mut u);
 					(j..=j+n).rev().for_each(|d| { self_norm.set(d, r.get(d - j)); })
 				}
 			}
@@ -1133,18 +1133,7 @@ pub mod big_num {
 					let rhs = &other.digits[rhs_idx..];
 					let len_cmp = lhs.len().cmp(&rhs.len());
 					match len_cmp {
-						Ordering::Equal => {
-							let mut r = Ordering::Equal;
-							for (i, p) in lhs.iter().enumerate() {
-								let q = rhs[i];
-								match p.cmp(&q) {
-									Ordering::Less => { r = Ordering::Less; break} ,
-									Ordering::Greater => { r = Ordering::Greater; break} ,
-									_ => continue,
-								}
-							}
-							r
-						}
+						Ordering::Equal => lhs.cmp(rhs),
 						_ => len_cmp,
 					}
 				}
@@ -1160,22 +1149,22 @@ pub mod big_num {
 
 	impl ops::Add for Number {
 		type Output = Self;
-		fn add(self, rhs: Self) -> Self::Output {
-			self.add(rhs)
+		fn add(self, mut rhs: Self) -> Self::Output {
+			self.add(&mut rhs)
 		}
 	}
 
 	impl ops::Sub for Number {
 		type Output = Self;
-		fn sub(self, rhs: Self) -> Self::Output {
-			self.sub(rhs).unwrap_or_else(|e| e)
+		fn sub(self, mut rhs: Self) -> Self::Output {
+			self.sub(&mut rhs).unwrap_or_else(|e| e)
 		}
 	}
 
 	impl ops::Mul for Number {
 		type Output = Self;
-		fn mul(self, rhs: Self) -> Self::Output {
-			self.mul(rhs)
+		fn mul(self, mut rhs: Self) -> Self::Output {
+			self.mul(&mut rhs)
 		}
 	}
 
@@ -1237,7 +1226,6 @@ pub mod big_num {
 	pub mod tests_big_num {
 		use super::*;
 		use rand::Rng;
-		use rstd::convert::TryInto;
 		#[cfg(feature = "bench")]
 		use test::Bencher;
 
@@ -1402,9 +1390,9 @@ pub mod big_num {
 		#[test]
 		fn basic_random_add_works() {
 			type S = u128;
-			run_with_data_set(FUZZ_COUNT, 3, 3, false, |u, v| {
+			run_with_data_set(FUZZ_COUNT, 3, 3, false, |u, mut v| {
 				let expected = S::try_from(u.clone()).unwrap() + S::try_from(v.clone()).unwrap();
-				let t = u.clone().add(v.clone());
+				let t = u.clone().add(&mut v);
 				assert_eq!(
 					S::try_from(t.clone()).unwrap(), expected,
 					"{:?} + {:?} ===> {:?} != {:?}", u, v, t, expected,
@@ -1415,15 +1403,15 @@ pub mod big_num {
 		#[test]
 		fn sub_negative_works() {
 			assert_eq!(
-				Number::from(10 as Single).sub(Number::from(5 as Single)).unwrap(),
+				Number::from(10 as Single).sub(&mut Number::from(5 as Single)).unwrap(),
 				Number::from(5 as Single)
 			);
 			assert_eq!(
-				Number::from(10 as Single).sub(Number::from(10 as Single)).unwrap(),
+				Number::from(10 as Single).sub(&mut Number::from(10 as Single)).unwrap(),
 				Number::from(0 as Single)
 			);
 			assert_eq!(
-				Number::from(10 as Single).sub(Number::from(13 as Single)).unwrap_err(),
+				Number::from(10 as Single).sub(&mut Number::from(13 as Single)).unwrap_err(),
 				Number::from((B - 3) as Single),
 			);
 		}
@@ -1431,10 +1419,10 @@ pub mod big_num {
 		#[test]
 		fn basic_random_sub_works() {
 			type S = u128;
-			run_with_data_set(FUZZ_COUNT, 4, 4, false, |u, v| {
+			run_with_data_set(FUZZ_COUNT, 4, 4, false, |u, mut v| {
 				let expected = S::try_from(u.clone()).unwrap()
 					.checked_sub(S::try_from(v.clone()).unwrap());
-				let t = u.clone().sub(v.clone());
+				let t = u.clone().sub(&mut v);
 				if expected.is_none() {
 					assert!(t.is_err())
 				} else {
@@ -1451,9 +1439,9 @@ pub mod big_num {
 		#[test]
 		fn basic_random_mul_works() {
 			type S = u128;
-			run_with_data_set(FUZZ_COUNT, 2, 2, false, |u, v| {
+			run_with_data_set(FUZZ_COUNT, 2, 2, false, |u, mut v| {
 				let expected = S::try_from(u.clone()).unwrap() * S::try_from(v.clone()).unwrap();
-				let t = u.clone().mul(v.clone());
+				let t = u.clone().mul(&mut v);
 				assert_eq!(
 					S::try_from(t.clone()).unwrap(), expected,
 					"{:?} * {:?} ===> {:?} != {:?}", u, v, t, expected,
@@ -1464,11 +1452,11 @@ pub mod big_num {
 		#[test]
 		fn mul_always_appends_one_digit() {
 			let a = Number::from(10 as Single);
-			let b = Number::from(4 as Single);
+			let mut b = Number::from(4 as Single);
 			assert_eq!(a.len(), 1);
 			assert_eq!(b.len(), 1);
 
-			let n = a.mul(b);
+			let n = a.mul(&mut b);
 
 			assert_eq!(n.len(), 2);
 			assert_eq!(n.digits, vec![0, 40]);
@@ -1476,18 +1464,18 @@ pub mod big_num {
 
 		#[test]
 		fn div_conditions_work() {
-			let a = Number { digits: vec![2] };
-			let b = Number { digits: vec![1, 2] };
+			let mut a = Number { digits: vec![2] };
+			let mut b = Number { digits: vec![1, 2] };
 			let c = Number { digits: vec![1, 1, 2] };
-			let d = Number { digits: vec![0, 2] };
+			let mut d = Number { digits: vec![0, 2] };
 			let e = Number { digits: vec![0, 1, 1, 2] };
 
-			assert!(a.clone().div(b.clone(), true).is_none());
-			assert!(c.clone().div(a.clone(), true).is_none());
-			assert!(c.clone().div(d.clone(), true).is_none());
-			assert!(e.clone().div(a.clone(), true).is_none());
+			assert!(a.clone().div(&mut b, true).is_none());
+			assert!(c.clone().div(&mut a, true).is_none());
+			assert!(c.clone().div(&mut d, true).is_none());
+			assert!(e.clone().div(&mut a, true).is_none());
 
-			assert!(c.clone().div(b.clone(), true).is_some());
+			assert!(c.clone().div(&mut b, true).is_some());
 		}
 
 		#[test]
@@ -1510,11 +1498,11 @@ pub mod big_num {
 		#[test]
 		fn basic_random_div_works() {
 			type S = u128;
-			run_with_data_set(FUZZ_COUNT, 4, 4, false, |u, v| {
+			run_with_data_set(FUZZ_COUNT, 4, 4, false, |u, mut v| {
 				let ue = S::try_from(u.clone()).unwrap();
 				let ve = S::try_from(v.clone()).unwrap();
 				let (q, r) = (ue / ve, ue % ve);
-				if let Some((qq, rr)) = u.clone().div(v.clone(), true) {
+				if let Some((qq, rr)) = u.clone().div(&mut v, true) {
 					assert_eq!(
 						S::try_from(qq.clone()).unwrap(), q,
 						"{:?} / {:?} ===> {:?} != {:?}", u, v, qq, q,
@@ -1540,9 +1528,9 @@ pub mod big_num {
 		#[bench]
 		fn bench_addition_2_digit(bencher: &mut Bencher) {
 			let a = random_big_num(2);
-			let b = random_big_num(2);
+			let mut b = random_big_num(2);
 			bencher.iter(|| {
-				let _ = a.clone().add(b.clone());
+				let _ = a.clone().add(&mut b);
 			});
 		}
 
@@ -1550,9 +1538,9 @@ pub mod big_num {
 		#[bench]
 		fn bench_addition_4_digit(bencher: &mut Bencher) {
 			let a = random_big_num(4);
-			let b = random_big_num(4);
+			let mut b = random_big_num(4);
 			bencher.iter(|| {
-				let _ = a.clone().add(b.clone());
+				let _ = a.clone().add(&mut b);
 			});
 		}
 
@@ -1560,9 +1548,9 @@ pub mod big_num {
 		#[bench]
 		fn bench_subtraction_2_digit(bencher: &mut Bencher) {
 			let a = random_big_num(2);
-			let b = random_big_num(2);
+			let mut b = random_big_num(2);
 			bencher.iter(|| {
-				let _ = a.clone().sub(b.clone());
+				let _ = a.clone().sub(&mut b);
 			});
 		}
 
@@ -1570,9 +1558,9 @@ pub mod big_num {
 		#[bench]
 		fn bench_subtraction_4_digit(bencher: &mut Bencher) {
 			let a = random_big_num(4);
-			let b = random_big_num(4);
+			let mut b = random_big_num(4);
 			bencher.iter(|| {
-				let _ = a.clone().sub(b.clone());
+				let _ = a.clone().sub(&mut b);
 			});
 		}
 
@@ -1580,9 +1568,9 @@ pub mod big_num {
 		#[bench]
 		fn bench_multiplication_2_digit(bencher: &mut Bencher) {
 			let a = random_big_num(2);
-			let b = random_big_num(2);
+			let mut b = random_big_num(2);
 			bencher.iter(|| {
-				let _ = a.clone().mul(b.clone());
+				let _ = a.clone().mul(&mut b);
 			});
 		}
 
@@ -1590,9 +1578,9 @@ pub mod big_num {
 		#[bench]
 		fn bench_multiplication_4_digit(bencher: &mut Bencher) {
 			let a = random_big_num(4);
-			let b = random_big_num(4);
+			let mut b = random_big_num(4);
 			bencher.iter(|| {
-				let _ = a.clone().mul(b.clone());
+				let _ = a.clone().mul(&mut b);
 			});
 		}
 
@@ -1600,9 +1588,9 @@ pub mod big_num {
 		#[bench]
 		fn bench_division_4_digit(bencher: &mut Bencher) {
 			let a = random_big_num(4);
-			let b = random_big_num(2);
+			let mut b = random_big_num(2);
 			bencher.iter(|| {
-				let _ = a.clone().div(b.clone(), true);
+				let _ = a.clone().div(&mut b, true);
 			});
 		}
 	}
@@ -1672,7 +1660,7 @@ pub mod helpers_128bit {
 		} else {
 			let a_num = to_big_num(a);
 			let b_num = to_big_num(b);
-			let c_num = to_big_num(c);
+			let mut c_num = to_big_num(c);
 
 			let mut ab = a_num * b_num;
 			ab.lstrip();
@@ -1684,10 +1672,10 @@ pub mod helpers_128bit {
 				// the previous branch would handle. The only case where `div` might return none is
 				// if dividend is smaller than divisor, in which case `Zero` is exactly what we
 				// want.
-				let (mut q, r) = ab.div(c_num, true).unwrap_or((Zero::zero(), Zero::zero()));
+				let (mut q, r) = ab.div(&mut c_num, true).unwrap_or((Zero::zero(), Zero::zero()));
 				let r: u128 = r.try_into()
 					.expect("reminder of div by c is always less than c; qed");
-				if r > (c / 2) { q = q.add(to_big_num(1)); }
+				if r > (c / 2) { q = q.add(&mut to_big_num(1)); }
 				q
 			};
 			q.lstrip();
