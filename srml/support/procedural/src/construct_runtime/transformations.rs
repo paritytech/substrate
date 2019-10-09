@@ -1,4 +1,4 @@
-use super::parse::{ModuleDeclaration, RuntimeDefinition, WhereSection};
+use super::parse::{ModuleDeclaration, RuntimeDefinition, WhereSection, ModulePart, ModuleEntry};
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
@@ -26,7 +26,7 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 		None => {
 			return syn::Error::new(
 				modules_token.span,
-				"`System` module declaration is required. \
+				"`System` module declaration is missing. \
 				 Please add this line: `System: system::{Module, Call, Storage, Config, Event},`",
 			)
 			.to_compile_error()
@@ -68,4 +68,24 @@ fn find_system_module<'a>(mut module_declarations: impl Iterator<Item = &'a Modu
 	module_declarations
 		.find(|decl| decl.name.to_string().as_str() == "System")
 		.map(|decl| &decl.module)
+}
+
+fn find_module_entry<'a>(module_declaration: &'a ModuleDeclaration, name: &'a str) -> Option<ModulePart> {
+	let details = module_declaration.details.inner.as_ref()?;
+	for entry in details.entries.content.inner.iter() {
+		match &entry.inner {
+			ModuleEntry::Default(default_token) => {
+				let event_tokens = quote!(Event<T>);
+				return Some(syn::parse2(event_tokens).unwrap());
+			},
+			ModuleEntry::Part(part) => {
+				if part.name.to_string().as_str() == name {
+					return Some(part.clone())
+				}
+			},
+			_ => {},
+		}
+	}
+
+	None
 }

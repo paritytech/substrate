@@ -45,8 +45,8 @@ pub struct ModuleDeclaration {
 	pub name: Ident,
 	pub name_colon: Token![:],
 	pub module: Ident,
-	pub module_instance: ext::Opt<ModuleInstance>,
-	pub module_details: ext::Opt<ModuleDetails>,
+	pub instance: ext::Opt<ModuleInstance>,
+	pub details: ext::Opt<ModuleDetails>,
 }
 
 #[derive(Parse, ToTokens, Debug)]
@@ -82,7 +82,7 @@ pub enum ModuleEntry {
 	Part(ModulePart),
 }
 
-#[derive(Parse, ToTokens, Debug)]
+#[derive(Parse, ToTokens, Debug, Clone)]
 pub struct ModulePart {
 	pub name: Ident,
 	// This deviates from macro $( <$modules_generic:ident> )*
