@@ -1661,9 +1661,10 @@ pub mod helpers_128bit {
 				ab.div_unit(c as biguint::Single)
 			} else {
 				// PROOF: both `ab` and `c` cannot have leading zero limbs; if length of `c` is 1,
-				// the previous branch would handle. The only case where `div` might return none is
-				// if dividend is smaller than divisor, in which case `Zero` is exactly what we
-				// want.
+				// the previous branch would handle. Also, if ab for sure has a bigger size than
+				// c, because `a.checked_mul(b)` has failed, hence ab must be at least one limb
+				// bigger than c. In this case, returning zero is defensive-only and div should
+				// always return Some.
 				let (mut q, r) = ab.div(&c_num, true).unwrap_or((Zero::zero(), Zero::zero()));
 				let r: u128 = r.try_into()
 					.expect("reminder of div by c is always less than c; qed");
