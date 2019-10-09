@@ -20,7 +20,7 @@
 
 use super::*;
 use mock::{Balances, ExtBuilder, Runtime, System, info_from_weight, CALL};
-use runtime_io::with_externalities;
+use sr_primitives::set_and_run_with_externalities;
 use support::{
 	assert_noop, assert_ok, assert_err,
 	traits::{LockableCurrency, LockIdentifier, WithdrawReason, WithdrawReasons,
@@ -34,7 +34,7 @@ const ID_3: LockIdentifier = *b"3       ";
 
 #[test]
 fn basic_locking_should_work() {
-	with_externalities(&mut ExtBuilder::default().existential_deposit(1).monied(true).build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().existential_deposit(1).monied(true).build(), || {
 		assert_eq!(Balances::free_balance(&1), 10);
 		Balances::set_lock(ID_1, &1, 9, u64::max_value(), WithdrawReasons::all());
 		assert_noop!(
@@ -46,7 +46,7 @@ fn basic_locking_should_work() {
 
 #[test]
 fn partial_locking_should_work() {
-	with_externalities(&mut ExtBuilder::default().existential_deposit(1).monied(true).build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().existential_deposit(1).monied(true).build(), || {
 		Balances::set_lock(ID_1, &1, 5, u64::max_value(), WithdrawReasons::all());
 		assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1));
 	});
@@ -54,7 +54,7 @@ fn partial_locking_should_work() {
 
 #[test]
 fn lock_removal_should_work() {
-	with_externalities(&mut ExtBuilder::default().existential_deposit(1).monied(true).build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().existential_deposit(1).monied(true).build(), || {
 		Balances::set_lock(ID_1, &1, u64::max_value(), u64::max_value(), WithdrawReasons::all());
 		Balances::remove_lock(ID_1, &1);
 		assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1));
@@ -63,7 +63,7 @@ fn lock_removal_should_work() {
 
 #[test]
 fn lock_replacement_should_work() {
-	with_externalities(&mut ExtBuilder::default().existential_deposit(1).monied(true).build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().existential_deposit(1).monied(true).build(), || {
 		Balances::set_lock(ID_1, &1, u64::max_value(), u64::max_value(), WithdrawReasons::all());
 		Balances::set_lock(ID_1, &1, 5, u64::max_value(), WithdrawReasons::all());
 		assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1));
@@ -72,7 +72,7 @@ fn lock_replacement_should_work() {
 
 #[test]
 fn double_locking_should_work() {
-	with_externalities(&mut ExtBuilder::default().existential_deposit(1).monied(true).build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().existential_deposit(1).monied(true).build(), || {
 		Balances::set_lock(ID_1, &1, 5, u64::max_value(), WithdrawReasons::all());
 		Balances::set_lock(ID_2, &1, 5, u64::max_value(), WithdrawReasons::all());
 		assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1));
@@ -81,7 +81,7 @@ fn double_locking_should_work() {
 
 #[test]
 fn combination_locking_should_work() {
-	with_externalities(&mut ExtBuilder::default().existential_deposit(1).monied(true).build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().existential_deposit(1).monied(true).build(), || {
 		Balances::set_lock(ID_1, &1, u64::max_value(), 0, WithdrawReasons::none());
 		Balances::set_lock(ID_2, &1, 0, u64::max_value(), WithdrawReasons::none());
 		Balances::set_lock(ID_3, &1, 0, 0, WithdrawReasons::all());
@@ -91,7 +91,7 @@ fn combination_locking_should_work() {
 
 #[test]
 fn lock_value_extension_should_work() {
-	with_externalities(&mut ExtBuilder::default().existential_deposit(1).monied(true).build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().existential_deposit(1).monied(true).build(), || {
 		Balances::set_lock(ID_1, &1, 5, u64::max_value(), WithdrawReasons::all());
 		assert_noop!(
 			<Balances as Currency<_>>::transfer(&1, &2, 6),
@@ -112,7 +112,7 @@ fn lock_value_extension_should_work() {
 
 #[test]
 fn lock_reasons_should_work() {
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default()
 			.existential_deposit(1)
 			.monied(true).transaction_fees(0, 1, 0)
@@ -163,7 +163,7 @@ fn lock_reasons_should_work() {
 
 #[test]
 fn lock_block_number_should_work() {
-	with_externalities(&mut ExtBuilder::default().existential_deposit(1).monied(true).build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().existential_deposit(1).monied(true).build(), || {
 		Balances::set_lock(ID_1, &1, 10, 2, WithdrawReasons::all());
 		assert_noop!(
 			<Balances as Currency<_>>::transfer(&1, &2, 1),
@@ -177,7 +177,7 @@ fn lock_block_number_should_work() {
 
 #[test]
 fn lock_block_number_extension_should_work() {
-	with_externalities(&mut ExtBuilder::default().existential_deposit(1).monied(true).build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().existential_deposit(1).monied(true).build(), || {
 		Balances::set_lock(ID_1, &1, 10, 2, WithdrawReasons::all());
 		assert_noop!(
 			<Balances as Currency<_>>::transfer(&1, &2, 6),
@@ -199,7 +199,7 @@ fn lock_block_number_extension_should_work() {
 
 #[test]
 fn lock_reasons_extension_should_work() {
-	with_externalities(&mut ExtBuilder::default().existential_deposit(1).monied(true).build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().existential_deposit(1).monied(true).build(), || {
 		Balances::set_lock(ID_1, &1, 10, 10, WithdrawReason::Transfer.into());
 		assert_noop!(
 			<Balances as Currency<_>>::transfer(&1, &2, 6),
@@ -220,7 +220,7 @@ fn lock_reasons_extension_should_work() {
 
 #[test]
 fn default_indexing_on_new_accounts_should_not_work2() {
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default()
 			.existential_deposit(10)
 			.creation_fee(50)
@@ -242,7 +242,7 @@ fn default_indexing_on_new_accounts_should_not_work2() {
 
 #[test]
 fn reserved_balance_should_prevent_reclaim_count() {
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default()
 			.existential_deposit(256 * 1)
 			.monied(true)
@@ -281,7 +281,7 @@ fn reserved_balance_should_prevent_reclaim_count() {
 
 #[test]
 fn reward_should_work() {
-	with_externalities(&mut ExtBuilder::default().monied(true).build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().monied(true).build(), || {
 		assert_eq!(Balances::total_balance(&1), 10);
 		assert_ok!(Balances::deposit_into_existing(&1, 10).map(drop));
 		assert_eq!(Balances::total_balance(&1), 20);
@@ -291,7 +291,7 @@ fn reward_should_work() {
 
 #[test]
 fn dust_account_removal_should_work() {
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default()
 			.existential_deposit(100)
 			.monied(true)
@@ -311,7 +311,7 @@ fn dust_account_removal_should_work() {
 
 #[test]
 fn dust_account_removal_should_work2() {
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default()
 			.existential_deposit(100)
 			.creation_fee(50)
@@ -332,7 +332,7 @@ fn dust_account_removal_should_work2() {
 
 #[test]
 fn balance_works() {
-	with_externalities(&mut ExtBuilder::default().build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
 		let _ = Balances::deposit_creating(&1, 42);
 		assert_eq!(Balances::free_balance(&1), 42);
 		assert_eq!(Balances::reserved_balance(&1), 0);
@@ -345,7 +345,7 @@ fn balance_works() {
 
 #[test]
 fn balance_transfer_works() {
-	with_externalities(&mut ExtBuilder::default().build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
 		let _ = Balances::deposit_creating(&1, 111);
 		assert_ok!(Balances::transfer(Some(1).into(), 2, 69));
 		assert_eq!(Balances::total_balance(&1), 42);
@@ -355,7 +355,7 @@ fn balance_transfer_works() {
 
 #[test]
 fn force_transfer_works() {
-	with_externalities(&mut ExtBuilder::default().build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
 		let _ = Balances::deposit_creating(&1, 111);
 		assert_noop!(
 			Balances::force_transfer(Some(2).into(), 1, 2, 69),
@@ -369,7 +369,7 @@ fn force_transfer_works() {
 
 #[test]
 fn reserving_balance_should_work() {
-	with_externalities(&mut ExtBuilder::default().build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
 		let _ = Balances::deposit_creating(&1, 111);
 
 		assert_eq!(Balances::total_balance(&1), 111);
@@ -386,7 +386,7 @@ fn reserving_balance_should_work() {
 
 #[test]
 fn balance_transfer_when_reserved_should_not_work() {
-	with_externalities(&mut ExtBuilder::default().build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
 		let _ = Balances::deposit_creating(&1, 111);
 		assert_ok!(Balances::reserve(&1, 69));
 		assert_noop!(
@@ -398,7 +398,7 @@ fn balance_transfer_when_reserved_should_not_work() {
 
 #[test]
 fn deducting_balance_should_work() {
-	with_externalities(&mut ExtBuilder::default().build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
 		let _ = Balances::deposit_creating(&1, 111);
 		assert_ok!(Balances::reserve(&1, 69));
 		assert_eq!(Balances::free_balance(&1), 42);
@@ -407,7 +407,7 @@ fn deducting_balance_should_work() {
 
 #[test]
 fn refunding_balance_should_work() {
-	with_externalities(&mut ExtBuilder::default().build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
 		let _ = Balances::deposit_creating(&1, 42);
 		Balances::set_reserved_balance(&1, 69);
 		Balances::unreserve(&1, 69);
@@ -418,7 +418,7 @@ fn refunding_balance_should_work() {
 
 #[test]
 fn slashing_balance_should_work() {
-	with_externalities(&mut ExtBuilder::default().build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
 		let _ = Balances::deposit_creating(&1, 111);
 		assert_ok!(Balances::reserve(&1, 69));
 		assert!(Balances::slash(&1, 69).1.is_zero());
@@ -430,7 +430,7 @@ fn slashing_balance_should_work() {
 
 #[test]
 fn slashing_incomplete_balance_should_work() {
-	with_externalities(&mut ExtBuilder::default().build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
 		let _ = Balances::deposit_creating(&1, 42);
 		assert_ok!(Balances::reserve(&1, 21));
 		assert_eq!(Balances::slash(&1, 69).1, 27);
@@ -442,7 +442,7 @@ fn slashing_incomplete_balance_should_work() {
 
 #[test]
 fn unreserving_balance_should_work() {
-	with_externalities(&mut ExtBuilder::default().build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
 		let _ = Balances::deposit_creating(&1, 111);
 		assert_ok!(Balances::reserve(&1, 111));
 		Balances::unreserve(&1, 42);
@@ -453,7 +453,7 @@ fn unreserving_balance_should_work() {
 
 #[test]
 fn slashing_reserved_balance_should_work() {
-	with_externalities(&mut ExtBuilder::default().build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
 		let _ = Balances::deposit_creating(&1, 111);
 		assert_ok!(Balances::reserve(&1, 111));
 		assert_eq!(Balances::slash_reserved(&1, 42).1, 0);
@@ -465,7 +465,7 @@ fn slashing_reserved_balance_should_work() {
 
 #[test]
 fn slashing_incomplete_reserved_balance_should_work() {
-	with_externalities(&mut ExtBuilder::default().build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
 		let _ = Balances::deposit_creating(&1, 111);
 		assert_ok!(Balances::reserve(&1, 42));
 		assert_eq!(Balances::slash_reserved(&1, 69).1, 27);
@@ -477,7 +477,7 @@ fn slashing_incomplete_reserved_balance_should_work() {
 
 #[test]
 fn transferring_reserved_balance_should_work() {
-	with_externalities(&mut ExtBuilder::default().build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
 		let _ = Balances::deposit_creating(&1, 110);
 		let _ = Balances::deposit_creating(&2, 1);
 		assert_ok!(Balances::reserve(&1, 110));
@@ -491,7 +491,7 @@ fn transferring_reserved_balance_should_work() {
 
 #[test]
 fn transferring_reserved_balance_to_nonexistent_should_fail() {
-	with_externalities(&mut ExtBuilder::default().build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
 		let _ = Balances::deposit_creating(&1, 111);
 		assert_ok!(Balances::reserve(&1, 111));
 		assert_noop!(Balances::repatriate_reserved(&1, &2, 42), "beneficiary account must pre-exist");
@@ -500,7 +500,7 @@ fn transferring_reserved_balance_to_nonexistent_should_fail() {
 
 #[test]
 fn transferring_incomplete_reserved_balance_should_work() {
-	with_externalities(&mut ExtBuilder::default().build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
 		let _ = Balances::deposit_creating(&1, 110);
 		let _ = Balances::deposit_creating(&2, 1);
 		assert_ok!(Balances::reserve(&1, 41));
@@ -514,7 +514,7 @@ fn transferring_incomplete_reserved_balance_should_work() {
 
 #[test]
 fn transferring_too_high_value_should_not_panic() {
-	with_externalities(&mut ExtBuilder::default().build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
 		<FreeBalance<Runtime>>::insert(1, u64::max_value());
 		<FreeBalance<Runtime>>::insert(2, 1);
 
@@ -530,7 +530,7 @@ fn transferring_too_high_value_should_not_panic() {
 
 #[test]
 fn account_create_on_free_too_low_with_other() {
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default().existential_deposit(100).build(),
 		|| {
 			let _ = Balances::deposit_creating(&1, 100);
@@ -547,7 +547,7 @@ fn account_create_on_free_too_low_with_other() {
 
 #[test]
 fn account_create_on_free_too_low() {
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default().existential_deposit(100).build(),
 		|| {
 			// No-op.
@@ -560,7 +560,7 @@ fn account_create_on_free_too_low() {
 
 #[test]
 fn account_removal_on_free_too_low() {
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default().existential_deposit(100).build(),
 		|| {
 			assert_eq!(<TotalIssuance<Runtime>>::get(), 0);
@@ -590,7 +590,7 @@ fn account_removal_on_free_too_low() {
 
 #[test]
 fn transfer_overflow_isnt_exploitable() {
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default().creation_fee(50).build(),
 		|| {
 			// Craft a value that will overflow if summed with `creation_fee`.
@@ -606,7 +606,7 @@ fn transfer_overflow_isnt_exploitable() {
 
 #[test]
 fn check_vesting_status() {
-		with_externalities(
+		set_and_run_with_externalities(
 		&mut ExtBuilder::default()
 			.existential_deposit(256)
 			.monied(true)
@@ -669,7 +669,7 @@ fn check_vesting_status() {
 
 #[test]
 fn unvested_balance_should_not_transfer() {
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default()
 			.existential_deposit(10)
 			.monied(true)
@@ -691,7 +691,7 @@ fn unvested_balance_should_not_transfer() {
 
 #[test]
 fn vested_balance_should_transfer() {
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default()
 			.existential_deposit(10)
 			.monied(true)
@@ -710,7 +710,7 @@ fn vested_balance_should_transfer() {
 
 #[test]
 fn extra_balance_should_transfer() {
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default()
 			.existential_deposit(10)
 			.monied(true)
@@ -740,7 +740,7 @@ fn extra_balance_should_transfer() {
 
 #[test]
 fn liquid_funds_should_transfer_with_delayed_vesting() {
-		with_externalities(
+		set_and_run_with_externalities(
 		&mut ExtBuilder::default()
 			.existential_deposit(256)
 			.monied(true)
@@ -770,7 +770,7 @@ fn liquid_funds_should_transfer_with_delayed_vesting() {
 
 #[test]
 fn signed_extension_take_fees_work() {
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default()
 			.existential_deposit(10)
 			.transaction_fees(10, 1, 5)
@@ -788,7 +788,7 @@ fn signed_extension_take_fees_work() {
 
 #[test]
 fn signed_extension_take_fees_is_bounded() {
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default()
 			.existential_deposit(1000)
 			.transaction_fees(0, 0, 1)
@@ -810,7 +810,7 @@ fn signed_extension_take_fees_is_bounded() {
 
 #[test]
 fn burn_must_work() {
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default()
 			.monied(true)
 			.build(),

@@ -23,7 +23,7 @@ use crate::error::{Error, WasmError};
 use crate::wasmi_execution;
 use log::{trace, warn};
 use codec::Decode;
-use primitives::{storage::well_known_keys, Blake2Hasher, traits::Externalities};
+use primitives::{storage::well_known_keys, traits::Externalities};
 use runtime_version::RuntimeVersion;
 use std::{collections::hash_map::{Entry, HashMap}};
 
@@ -36,8 +36,8 @@ pub trait WasmRuntime {
 	fn update_heap_pages(&mut self, heap_pages: u64) -> bool;
 
 	/// Call a method in the Substrate runtime by name. Returns the encoded result on success.
-	fn call(&mut self, ext: &mut dyn Externalities<Blake2Hasher>, method: &str, data: &[u8])
-			-> Result<Vec<u8>, Error>;
+	fn call(&mut self, ext: &mut dyn Externalities, method: &str, data: &[u8])
+		-> Result<Vec<u8>, Error>;
 
 	/// Returns the version of this runtime.
 	///
@@ -109,7 +109,7 @@ impl RuntimesCache {
 	///
 	/// `Error::InvalidMemoryReference` is returned if no memory export with the
 	/// identifier `memory` can be found in the runtime.
-	pub fn fetch_runtime<E: Externalities<Blake2Hasher>>(
+	pub fn fetch_runtime<E: Externalities>(
 		&mut self,
 		ext: &mut E,
 		wasm_method: WasmExecutionMethod,
@@ -157,7 +157,7 @@ impl RuntimesCache {
 	}
 }
 
-fn create_wasm_runtime<E: Externalities<Blake2Hasher>>(
+fn create_wasm_runtime<E: Externalities>(
 	ext: &mut E,
 	wasm_method: WasmExecutionMethod,
 	heap_pages: u64,

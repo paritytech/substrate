@@ -45,7 +45,7 @@ pub use native_executor::{with_native_environment, NativeExecutor, NativeExecuti
 pub use runtime_version::{RuntimeVersion, NativeVersion};
 pub use codec::Codec;
 #[doc(hidden)]
-pub use primitives::{Blake2Hasher, traits::Externalities};
+pub use primitives::traits::Externalities;
 #[doc(hidden)]
 pub use wasm_interface;
 pub use wasm_runtime::WasmExecutionMethod;
@@ -56,7 +56,7 @@ pub trait RuntimeInfo {
 	fn native_version(&self) -> &NativeVersion;
 
 	/// Extract RuntimeVersion of given :code block
-	fn runtime_version<E: Externalities<Blake2Hasher>> (
+	fn runtime_version<E: Externalities> (
 		&self,
 		ext: &mut E,
 	) -> Option<RuntimeVersion>;

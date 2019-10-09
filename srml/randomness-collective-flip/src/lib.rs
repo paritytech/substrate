@@ -161,10 +161,12 @@ impl<T: Trait> Module<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use primitives::{H256, Blake2Hasher};
-	use sr_primitives::{Perbill, traits::{BlakeTwo256, OnInitialize, Header as _, IdentityLookup}, testing::Header};
+	use primitives::H256;
+	use sr_primitives::{
+		Perbill, traits::{BlakeTwo256, OnInitialize, Header as _, IdentityLookup}, testing::Header,
+		set_and_run_with_externalities,
+	};
 	use support::{impl_outer_origin, parameter_types};
-	use runtime_io::with_externalities;
 
 	#[derive(Clone, PartialEq, Eq)]
 	pub struct Test;
@@ -202,7 +204,7 @@ mod tests {
 	type System = system::Module<Test>;
 	type Randomness = Module<Test>;
 
-	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+	fn new_test_ext() -> runtime_io::TestExternalities {
 		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		t.into()
 	}
@@ -229,7 +231,7 @@ mod tests {
 
 	#[test]
 	fn test_random_material_parital() {
-		with_externalities(&mut new_test_ext(), || {
+		set_and_run_with_externalities(&mut new_test_ext(), || {
 			let genesis_hash = System::parent_hash();
 
 			setup_blocks(38);
@@ -243,7 +245,7 @@ mod tests {
 
 	#[test]
 	fn test_random_material_filled() {
-		with_externalities(&mut new_test_ext(), || {
+		set_and_run_with_externalities(&mut new_test_ext(), || {
 			let genesis_hash = System::parent_hash();
 
 			setup_blocks(81);
@@ -258,7 +260,7 @@ mod tests {
 
 	#[test]
 	fn test_random_material_filled_twice() {
-		with_externalities(&mut new_test_ext(), || {
+		set_and_run_with_externalities(&mut new_test_ext(), || {
 			let genesis_hash = System::parent_hash();
 
 			setup_blocks(162);
@@ -273,7 +275,7 @@ mod tests {
 
 	#[test]
 	fn test_random() {
-		with_externalities(&mut new_test_ext(), || {
+		set_and_run_with_externalities(&mut new_test_ext(), || {
 			setup_blocks(162);
 
 			assert_eq!(System::block_number(), 162);

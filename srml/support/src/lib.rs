@@ -236,13 +236,12 @@ pub use serde::{Serialize, Deserialize};
 mod tests {
 	use super::*;
 	use codec::{Codec, EncodeLike};
-	use runtime_io::with_externalities;
-	use primitives::Blake2Hasher;
-	pub use srml_metadata::{
+	use sr_primitives::set_and_run_with_externalities;
+	use srml_metadata::{
 		DecodeDifferent, StorageEntryMetadata, StorageMetadata, StorageEntryType,
-		StorageEntryModifier, DefaultByte, DefaultByteGetter, StorageHasher
+		StorageEntryModifier, DefaultByteGetter, StorageHasher,
 	};
-	pub use rstd::marker::PhantomData;
+	use rstd::marker::PhantomData;
 
 	pub trait Trait {
 		type BlockNumber: Codec + EncodeLike + Default;
@@ -281,7 +280,7 @@ mod tests {
 		type Origin = u32;
 	}
 
-	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+	fn new_test_ext() -> runtime_io::TestExternalities {
 		GenesisConfig::default().build_storage().unwrap().into()
 	}
 
@@ -289,7 +288,7 @@ mod tests {
 
 	#[test]
 	fn linked_map_issue_3318() {
-		with_externalities(&mut new_test_ext(), || {
+		set_and_run_with_externalities(&mut new_test_ext(), || {
 			OptionLinkedMap::insert(1, 1);
 			assert_eq!(OptionLinkedMap::get(1), Some(1));
 			OptionLinkedMap::insert(1, 2);
@@ -299,7 +298,7 @@ mod tests {
 
 	#[test]
 	fn linked_map_swap_works() {
-		with_externalities(&mut new_test_ext(), || {
+		set_and_run_with_externalities(&mut new_test_ext(), || {
 			OptionLinkedMap::insert(0, 0);
 			OptionLinkedMap::insert(1, 1);
 			OptionLinkedMap::insert(2, 2);
@@ -328,7 +327,7 @@ mod tests {
 
 	#[test]
 	fn linked_map_basic_insert_remove_should_work() {
-		with_externalities(&mut new_test_ext(), || {
+		set_and_run_with_externalities(&mut new_test_ext(), || {
 			// initialized during genesis
 			assert_eq!(Map::get(&15u32), 42u64);
 
@@ -354,7 +353,7 @@ mod tests {
 
 	#[test]
 	fn linked_map_enumeration_and_head_should_work() {
-		with_externalities(&mut new_test_ext(), || {
+		set_and_run_with_externalities(&mut new_test_ext(), || {
 			assert_eq!(Map::head(), Some(15));
 			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![(15, 42)]);
 			// insert / remove
@@ -406,7 +405,7 @@ mod tests {
 
 	#[test]
 	fn double_map_basic_insert_remove_remove_prefix_should_work() {
-		with_externalities(&mut new_test_ext(), || {
+		set_and_run_with_externalities(&mut new_test_ext(), || {
 			type DoubleMap = DataDM;
 			// initialized during genesis
 			assert_eq!(DoubleMap::get(&15u32, &16u32), 42u64);
@@ -446,7 +445,7 @@ mod tests {
 
 	#[test]
 	fn double_map_append_should_work() {
-		with_externalities(&mut new_test_ext(), || {
+		set_and_run_with_externalities(&mut new_test_ext(), || {
 			type DoubleMap = AppendableDM<Test>;
 
 			let key1 = 17u32;
