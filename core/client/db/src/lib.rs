@@ -1489,14 +1489,14 @@ fn apply_state_commit_inner(
 		}
 
 	}
-	apply_state_commit_no_kv(transaction, commit, db);
+	apply_state_commit_no_kv(transaction, commit);
 	Ok(())
 }
 
 fn apply_state_commit_no_kv(
 	transaction: &mut DBTransaction,
 	commit: state_db::CommitSet<Vec<u8>>,
-	db: &Arc<dyn KeyValueDB>) {
+	) {
 
 	for (key, val) in commit.data.inserted.into_iter() {
 		transaction.put(columns::STATE, &key[..], &val);
@@ -1649,7 +1649,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 			match self.storage.state_db.revert_one() {
 				Some(commit) => {
 					debug_assert!(commit.kv.is_empty(), "revert do not change key value store");
-					apply_state_commit_no_kv(&mut transaction, commit, &self.storage.db);
+					apply_state_commit_no_kv(&mut transaction, commit);
 					let removed = self.blockchain.header(BlockId::Number(best))?.ok_or_else(
 						|| client::error::Error::UnknownBlock(
 							format!("Error reverting to {}. Block hash not found.", best)))?;
@@ -1689,7 +1689,6 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 			BlockId::Hash(h) if h == Default::default() => {
 				let genesis_storage = DbGenesisStorage::new();
 				let root = genesis_storage.0.clone();
-				// TODO EMCH see genesis impl: that is empty storage
 				let genesis_kv = InMemoryKvBackend::default();
 				let db_state = DbState::new(Arc::new(genesis_storage), root, Arc::new(genesis_kv));
 				let state = RefTrackingState::new(db_state, self.storage.clone(), None);
