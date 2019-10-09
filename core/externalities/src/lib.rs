@@ -132,7 +132,7 @@ pub trait ExternalitiesExt {
 	fn extension<T: Any + Extension>(&mut self) -> Option<&mut T>;
 }
 
-impl<T: Externalities + ?Sized> ExternalitiesExt for T {
+impl<T: ExtensionStore + ?Sized> ExternalitiesExt for T {
 	fn extension<A: Any + Extension>(&mut self) -> Option<&mut A> {
 		self.extension_by_type_id(TypeId::of::<A>()).and_then(Any::downcast_mut)
 	}
