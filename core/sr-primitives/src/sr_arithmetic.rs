@@ -761,8 +761,21 @@ pub mod biguint {
 		///
 		/// This panics if index is out of range.
 		pub fn get(&self, index: usize) -> Single {
-			let len = self.digits.len();
-			self.digits[len - 1 - index]
+			self.digits[self.len() - 1 - index]
+		}
+
+		/// A naive getter for limb at `index`. Note that the order is lsb -> msb.
+		///
+		/// #### Panics
+		///
+		/// This panics if index is out of range.
+		pub fn checked_get(&self, index: usize) -> Option<Single> {
+			if let Some(i) = self.len().checked_sub(1) {
+				if let Some(j) = i.checked_sub(index) {
+					return self.digits.get(j).cloned();
+				}
+			}
+			return None;
 		}
 
 		/// A naive setter for limb at `index`. Note that the order is lsb -> msb.
@@ -837,15 +850,14 @@ pub mod biguint {
 		/// limbs. The caller may strip the output if desired.
 		///
 		/// Taken from "The Art of Computer Programming" by D.E. Knuth, vol 2, chapter 4.
-		pub fn add(mut self, other: &mut Self) -> Self {
-			Self::resize(&mut self, other);
-			let n = self.len();
+		pub fn add(self, other: &Self) -> Self {
+			let n = self.len().max(other.len());
 			let mut k: Double = 0;
 			let mut w = Self::with_capacity(n + 1);
 
 			for j in 0..n {
-				let u = Double::from(self.get(j));
-				let v = Double::from(other.get(j));
+				let u = Double::from(self.checked_get(j).unwrap_or(0));
+				let v = Double::from(other.checked_get(j).unwrap_or(0));
 				let s = u + v + k;
 				w.set(j, (s % B) as Single);
 				k = s / B;
@@ -861,15 +873,14 @@ pub mod biguint {
 		/// If `other` is bigger than `self`, `Err(B - borrow)` is returned.
 		///
 		/// Taken from "The Art of Computer Programming" by D.E. Knuth, vol 2, chapter 4.
-		pub fn sub(mut self, other: &mut Self) -> Result<Self, Self> {
-			Self::resize(&mut self, other);
-			let n = self.len();
+		pub fn sub(self, other: &Self) -> Result<Self, Self> {
+			let n = self.len().max(other.len());
 			let mut k = 0;
 			let mut w = Self::with_capacity(n);
 			for j in 0..n {
 				let s = {
-					let u = Double::from(self.get(j));
-					let v = Double::from(other.get(j));
+					let u = Double::from(self.checked_get(j).unwrap_or(0));
+					let v = Double::from(other.checked_get(j).unwrap_or(0));
 					let mut needs_borrow = false;
 					let mut t = 0;
 
@@ -910,7 +921,7 @@ pub mod biguint {
 		/// limbs. The caller may strip the output if desired.
 		///
 		/// Taken from "The Art of Computer Programming" by D.E. Knuth, vol 2, chapter 4.
-		pub fn mul(self, other: &mut Self) -> Self {
+		pub fn mul(self, other: &Self) -> Self {
 			let n = self.len();
 			let m = other.len();
 			let mut w = Self::with_capacity(m + n);
@@ -970,7 +981,7 @@ pub mod biguint {
 		/// the above fails, `None` is returned.`
 		///
 		/// Taken from "The Art of Computer Programming" by D.E. Knuth, vol 2, chapter 4.
-		pub fn div(self, other: &mut Self, rem: bool) -> Option<(Self, Self)> {
+		pub fn div(self, other: &Self, rem: bool) -> Option<(Self, Self)> {
 			if other.len() <= 1
 				|| other.msb() == 0
 				|| self.msb() == 0
@@ -992,8 +1003,8 @@ pub mod biguint {
 			let normalizer = (2 as Single).pow(normalizer_bits as u32) as Single;
 
 			// step D1.
-			let mut self_norm = self.mul(&mut Self::from(normalizer));
-			let mut other_norm = other.clone().mul(&mut Self::from(normalizer));
+			let mut self_norm = self.mul(&Self::from(normalizer));
+			let mut other_norm = other.clone().mul(&Self::from(normalizer));
 
 			// defensive only; the mul implementation should always create this.
 			self_norm.lpad(n + m + 1);
@@ -1047,9 +1058,9 @@ pub mod biguint {
 
 				// step D4
 				let lhs = Self { digits: (j..=j+n).rev().map(|d| self_norm.get(d)).collect() };
-				let mut rhs = other_norm.clone().mul(&mut Self::from(qhat));
+				let rhs = other_norm.clone().mul(&Self::from(qhat));
 
-				let maybe_sub = lhs.sub(&mut rhs);
+				let maybe_sub = lhs.sub(&rhs);
 				let mut negative = false;
 				let sub = match maybe_sub {
 					Ok(t) => t,
@@ -1065,8 +1076,8 @@ pub mod biguint {
 				// step D6: add back if negative happened.
 				if negative {
 					q.set(j, q.get(j) - 1);
-					let mut u = Self { digits: (j..=j+n).rev().map(|d| self_norm.get(d)).collect() };
-					let r = other_norm.clone().add(&mut u);
+					let u = Self { digits: (j..=j+n).rev().map(|d| self_norm.get(d)).collect() };
+					let r = other_norm.clone().add(&u);
 					(j..=j+n).rev().for_each(|d| { self_norm.set(d, r.get(d - j)); })
 				}
 			}
@@ -1149,22 +1160,22 @@ pub mod biguint {
 
 	impl ops::Add for BigUint {
 		type Output = Self;
-		fn add(self, mut rhs: Self) -> Self::Output {
-			self.add(&mut rhs)
+		fn add(self, rhs: Self) -> Self::Output {
+			self.add(&rhs)
 		}
 	}
 
 	impl ops::Sub for BigUint {
 		type Output = Self;
-		fn sub(self, mut rhs: Self) -> Self::Output {
-			self.sub(&mut rhs).unwrap_or_else(|e| e)
+		fn sub(self, rhs: Self) -> Self::Output {
+			self.sub(&rhs).unwrap_or_else(|e| e)
 		}
 	}
 
 	impl ops::Mul for BigUint {
 		type Output = Self;
-		fn mul(self, mut rhs: Self) -> Self::Output {
-			self.mul(&mut rhs)
+		fn mul(self, rhs: Self) -> Self::Output {
+			self.mul(&rhs)
 		}
 	}
 
@@ -1390,9 +1401,9 @@ pub mod biguint {
 		#[test]
 		fn basic_random_add_works() {
 			type S = u128;
-			run_with_data_set(FUZZ_COUNT, 3, 3, false, |u, mut v| {
+			run_with_data_set(FUZZ_COUNT, 3, 3, false, |u, v| {
 				let expected = S::try_from(u.clone()).unwrap() + S::try_from(v.clone()).unwrap();
-				let t = u.clone().add(&mut v);
+				let t = u.clone().add(&v);
 				assert_eq!(
 					S::try_from(t.clone()).unwrap(), expected,
 					"{:?} + {:?} ===> {:?} != {:?}", u, v, t, expected,
@@ -1403,15 +1414,15 @@ pub mod biguint {
 		#[test]
 		fn sub_negative_works() {
 			assert_eq!(
-				BigUint::from(10 as Single).sub(&mut BigUint::from(5 as Single)).unwrap(),
+				BigUint::from(10 as Single).sub(&BigUint::from(5 as Single)).unwrap(),
 				BigUint::from(5 as Single)
 			);
 			assert_eq!(
-				BigUint::from(10 as Single).sub(&mut BigUint::from(10 as Single)).unwrap(),
+				BigUint::from(10 as Single).sub(&BigUint::from(10 as Single)).unwrap(),
 				BigUint::from(0 as Single)
 			);
 			assert_eq!(
-				BigUint::from(10 as Single).sub(&mut BigUint::from(13 as Single)).unwrap_err(),
+				BigUint::from(10 as Single).sub(&BigUint::from(13 as Single)).unwrap_err(),
 				BigUint::from((B - 3) as Single),
 			);
 		}
@@ -1419,10 +1430,10 @@ pub mod biguint {
 		#[test]
 		fn basic_random_sub_works() {
 			type S = u128;
-			run_with_data_set(FUZZ_COUNT, 4, 4, false, |u, mut v| {
+			run_with_data_set(FUZZ_COUNT, 4, 4, false, |u, v| {
 				let expected = S::try_from(u.clone()).unwrap()
 					.checked_sub(S::try_from(v.clone()).unwrap());
-				let t = u.clone().sub(&mut v);
+				let t = u.clone().sub(&v);
 				if expected.is_none() {
 					assert!(t.is_err())
 				} else {
@@ -1439,9 +1450,9 @@ pub mod biguint {
 		#[test]
 		fn basic_random_mul_works() {
 			type S = u128;
-			run_with_data_set(FUZZ_COUNT, 2, 2, false, |u, mut v| {
+			run_with_data_set(FUZZ_COUNT, 2, 2, false, |u, v| {
 				let expected = S::try_from(u.clone()).unwrap() * S::try_from(v.clone()).unwrap();
-				let t = u.clone().mul(&mut v);
+				let t = u.clone().mul(&v);
 				assert_eq!(
 					S::try_from(t.clone()).unwrap(), expected,
 					"{:?} * {:?} ===> {:?} != {:?}", u, v, t, expected,
@@ -1452,11 +1463,11 @@ pub mod biguint {
 		#[test]
 		fn mul_always_appends_one_digit() {
 			let a = BigUint::from(10 as Single);
-			let mut b = BigUint::from(4 as Single);
+			let b = BigUint::from(4 as Single);
 			assert_eq!(a.len(), 1);
 			assert_eq!(b.len(), 1);
 
-			let n = a.mul(&mut b);
+			let n = a.mul(&b);
 
 			assert_eq!(n.len(), 2);
 			assert_eq!(n.digits, vec![0, 40]);
@@ -1464,18 +1475,18 @@ pub mod biguint {
 
 		#[test]
 		fn div_conditions_work() {
-			let mut a = BigUint { digits: vec![2] };
-			let mut b = BigUint { digits: vec![1, 2] };
+			let a = BigUint { digits: vec![2] };
+			let b = BigUint { digits: vec![1, 2] };
 			let c = BigUint { digits: vec![1, 1, 2] };
-			let mut d = BigUint { digits: vec![0, 2] };
+			let d = BigUint { digits: vec![0, 2] };
 			let e = BigUint { digits: vec![0, 1, 1, 2] };
 
-			assert!(a.clone().div(&mut b, true).is_none());
-			assert!(c.clone().div(&mut a, true).is_none());
-			assert!(c.clone().div(&mut d, true).is_none());
-			assert!(e.clone().div(&mut a, true).is_none());
+			assert!(a.clone().div(&b, true).is_none());
+			assert!(c.clone().div(&a, true).is_none());
+			assert!(c.clone().div(&d, true).is_none());
+			assert!(e.clone().div(&a, true).is_none());
 
-			assert!(c.clone().div(&mut b, true).is_some());
+			assert!(c.clone().div(&b, true).is_some());
 		}
 
 		#[test]
@@ -1498,11 +1509,11 @@ pub mod biguint {
 		#[test]
 		fn basic_random_div_works() {
 			type S = u128;
-			run_with_data_set(FUZZ_COUNT, 4, 4, false, |u, mut v| {
+			run_with_data_set(FUZZ_COUNT, 4, 4, false, |u, v| {
 				let ue = S::try_from(u.clone()).unwrap();
 				let ve = S::try_from(v.clone()).unwrap();
 				let (q, r) = (ue / ve, ue % ve);
-				if let Some((qq, rr)) = u.clone().div(&mut v, true) {
+				if let Some((qq, rr)) = u.clone().div(&v, true) {
 					assert_eq!(
 						S::try_from(qq.clone()).unwrap(), q,
 						"{:?} / {:?} ===> {:?} != {:?}", u, v, qq, q,
@@ -1528,9 +1539,9 @@ pub mod biguint {
 		#[bench]
 		fn bench_addition_2_digit(bencher: &mut Bencher) {
 			let a = random_big_uint(2);
-			let mut b = random_big_uint(2);
+			let b = random_big_uint(2);
 			bencher.iter(|| {
-				let _ = a.clone().add(&mut b);
+				let _ = a.clone().add(&b);
 			});
 		}
 
@@ -1538,9 +1549,9 @@ pub mod biguint {
 		#[bench]
 		fn bench_addition_4_digit(bencher: &mut Bencher) {
 			let a = random_big_uint(4);
-			let mut b = random_big_uint(4);
+			let b = random_big_uint(4);
 			bencher.iter(|| {
-				let _ = a.clone().add(&mut b);
+				let _ = a.clone().add(&b);
 			});
 		}
 
@@ -1548,9 +1559,9 @@ pub mod biguint {
 		#[bench]
 		fn bench_subtraction_2_digit(bencher: &mut Bencher) {
 			let a = random_big_uint(2);
-			let mut b = random_big_uint(2);
+			let b = random_big_uint(2);
 			bencher.iter(|| {
-				let _ = a.clone().sub(&mut b);
+				let _ = a.clone().sub(&b);
 			});
 		}
 
@@ -1558,9 +1569,9 @@ pub mod biguint {
 		#[bench]
 		fn bench_subtraction_4_digit(bencher: &mut Bencher) {
 			let a = random_big_uint(4);
-			let mut b = random_big_uint(4);
+			let b = random_big_uint(4);
 			bencher.iter(|| {
-				let _ = a.clone().sub(&mut b);
+				let _ = a.clone().sub(&b);
 			});
 		}
 
@@ -1568,9 +1579,9 @@ pub mod biguint {
 		#[bench]
 		fn bench_multiplication_2_digit(bencher: &mut Bencher) {
 			let a = random_big_uint(2);
-			let mut b = random_big_uint(2);
+			let b = random_big_uint(2);
 			bencher.iter(|| {
-				let _ = a.clone().mul(&mut b);
+				let _ = a.clone().mul(&b);
 			});
 		}
 
@@ -1578,9 +1589,9 @@ pub mod biguint {
 		#[bench]
 		fn bench_multiplication_4_digit(bencher: &mut Bencher) {
 			let a = random_big_uint(4);
-			let mut b = random_big_uint(4);
+			let b = random_big_uint(4);
 			bencher.iter(|| {
-				let _ = a.clone().mul(&mut b);
+				let _ = a.clone().mul(&b);
 			});
 		}
 
@@ -1588,9 +1599,9 @@ pub mod biguint {
 		#[bench]
 		fn bench_division_4_digit(bencher: &mut Bencher) {
 			let a = random_big_uint(4);
-			let mut b = random_big_uint(2);
+			let b = random_big_uint(2);
 			bencher.iter(|| {
-				let _ = a.clone().div(&mut b, true);
+				let _ = a.clone().div(&b, true);
 			});
 		}
 	}
@@ -1660,7 +1671,7 @@ pub mod helpers_128bit {
 		} else {
 			let a_num = to_big_uint(a);
 			let b_num = to_big_uint(b);
-			let mut c_num = to_big_uint(c);
+			let c_num = to_big_uint(c);
 
 			let mut ab = a_num * b_num;
 			ab.lstrip();
@@ -1672,10 +1683,10 @@ pub mod helpers_128bit {
 				// the previous branch would handle. The only case where `div` might return none is
 				// if dividend is smaller than divisor, in which case `Zero` is exactly what we
 				// want.
-				let (mut q, r) = ab.div(&mut c_num, true).unwrap_or((Zero::zero(), Zero::zero()));
+				let (mut q, r) = ab.div(&c_num, true).unwrap_or((Zero::zero(), Zero::zero()));
 				let r: u128 = r.try_into()
 					.expect("reminder of div by c is always less than c; qed");
-				if r > (c / 2) { q = q.add(&mut to_big_uint(1)); }
+				if r > (c / 2) { q = q.add(&to_big_uint(1)); }
 				q
 			};
 			q.lstrip();
