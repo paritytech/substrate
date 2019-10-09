@@ -63,7 +63,7 @@ mod tests {
 	);
 
 	fn executor() -> executor::NativeExecutor<Executor> {
-		executor::NativeExecutor::new(None)
+		executor::NativeExecutor::new(executor::WasmExecutionMethod::Interpreted, None)
 	}
 
 	fn construct_block(

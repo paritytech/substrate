@@ -39,7 +39,7 @@ pub mod prelude {
 	// Client structs
 	pub use super::{
 		TestClient, TestClientBuilder, Backend, LightBackend,
-		Executor, LightExecutor, LocalExecutor, NativeExecutor,
+		Executor, LightExecutor, LocalExecutor, NativeExecutor, WasmExecutionMethod,
 	};
 	// Keyring
 	pub use super::{AccountKeyring, Sr25519Keyring};
@@ -261,7 +261,7 @@ pub fn new_light() -> (
 	let storage = client_db::light::LightStorage::new_test();
 	let blockchain = Arc::new(client::light::blockchain::Blockchain::new(storage));
 	let backend = Arc::new(LightBackend::new(blockchain.clone()));
-	let executor = NativeExecutor::new(None);
+	let executor = NativeExecutor::new(WasmExecutionMethod::Interpreted, None);
 	let local_call_executor = client::LocalCallExecutor::new(backend.clone(), executor, None);
 	let call_executor = LightExecutor::new(
 		backend.clone(),

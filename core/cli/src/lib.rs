@@ -380,6 +380,7 @@ impl<'a> ParseAndPrepareImport<'a> {
 		Exit: IntoExit
 	{
 		let mut config = create_config_with_db_path(spec_factory, &self.params.shared_params, self.version)?;
+		config.wasm_method = self.params.wasm_method.into();
 		config.execution_strategies = ExecutionStrategies {
 			importing: self.params.execution.into(),
 			other: self.params.execution.into(),
@@ -691,6 +692,8 @@ where
 		} else {
 			service::Roles::FULL
 		};
+
+	config.wasm_method = cli.wasm_method.into();
 
 	let exec = cli.execution_strategies;
 	let exec_all_or = |strat: params::ExecutionStrategy| exec.execution.unwrap_or(strat).into();

@@ -167,7 +167,10 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 			pruning: config.pruning.clone(),
 		};
 
-		let executor = NativeExecutor::<TExecDisp>::new(config.default_heap_pages);
+		let executor = NativeExecutor::<TExecDisp>::new(
+			config.wasm_method,
+			config.default_heap_pages,
+		);
 
 		let fork_blocks = config.chain_spec
 			.extensions()
@@ -239,7 +242,10 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 			pruning: config.pruning.clone(),
 		};
 
-		let executor = NativeExecutor::<TExecDisp>::new(config.default_heap_pages);
+		let executor = NativeExecutor::<TExecDisp>::new(
+			config.wasm_method,
+			config.default_heap_pages,
+		);
 
 		let db_storage = client_db::light::LightStorage::new(db_settings)?;
 		let light_blockchain = client::light::new_light_blockchain(db_storage);
