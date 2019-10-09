@@ -832,16 +832,6 @@ pub mod biguint {
 			self.digits = new_digits;
 		}
 
-		/// Extends either one of `self` or `other` to meet the size of the other one. Equivalent of
-		/// using `lpad()` of the smaller one with the size of the bigger one.
-		pub fn resize(&mut self, other: &mut Self) {
-			if self.len() >= other.len() {
-				other.lpad(self.len())
-			} else if other.len() > self.len() {
-				self.lpad(other.len())
-			}
-		}
-
 		/// Adds `self` with `other`. self and other do not have to have any particular size. Given
 		/// that the `n = max{size(self), size(other)}`, it will produce a number with `n + 1`
 		/// limbs.
@@ -1300,15 +1290,6 @@ pub mod biguint {
 			let mut a = BigUint::from_limbs(&[0, 0, 0]);
 			a.lstrip();
 			assert_eq!(a, BigUint { digits: vec![0] });
-		}
-
-		#[test]
-		fn resize_works() {
-			let mut a = BigUint::from_limbs(&[0, 1, 0]);
-			let mut b = BigUint::from_limbs(&[0, 1]);
-			a.resize(&mut b);
-			assert_eq!(a.digits, vec![0, 1, 0]);
-			assert_eq!(b.digits, vec![0, 0, 1]);
 		}
 
 		#[test]
