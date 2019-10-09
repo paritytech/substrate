@@ -44,6 +44,8 @@ pub trait SystemApi<AccountId, Index> {
 	fn nonce(&self, account: AccountId) -> Result<Index>;
 }
 
+const RUNTIME_ERROR: i64 = 1;
+
 /// An implementation of System-specific RPC methods.
 pub struct System<P: txpool::ChainApi, C, B> {
 	client: Arc<C>,
@@ -79,8 +81,7 @@ where
 		let at = BlockId::hash(best);
 
 		let nonce = api.account_nonce(&at, account.clone()).map_err(|e| Error {
-			// TODO [ToDr] Move to constant
-			code: ErrorCode::ServerError(1),
+			code: ErrorCode::ServerError(RUNTIME_ERROR),
 			message: "Unable to query nonce.".into(),
 			data: Some(format!("{:?}", e).into()),
 		})?;
@@ -119,42 +120,37 @@ mod tests {
 	use super::*;
 
 	use futures03::executor::block_on;
-	use node_runtime::{CheckedExtrinsic, Call, TimestampCall};
-	use codec::Decode;
-	use node_testing::{
-		client::{ClientExt, TestClientBuilder, TestClientBuilderExt},
-		keyring::{self, alice, signed_extra},
+	use test_client::{
+		runtime::Transfer,
+		AccountKeyring,
 	};
-
-	const VERSION: u32 = node_runtime::VERSION.spec_version;
 
 	#[test]
 	fn should_return_next_nonce_for_some_account() {
 		// given
 		let _ = env_logger::try_init();
-		let client = Arc::new(TestClientBuilder::new().build());
+		let client = Arc::new(test_client::new());
 		let pool = Arc::new(Pool::new(Default::default(), transaction_pool::FullChainApi::new(client.clone())));
 
-		let new_transaction = |extra| {
-			let ex = CheckedExtrinsic {
-				signed: Some((alice().into(), extra)),
-				function: Call::Timestamp(TimestampCall::set(5)),
+		let new_transaction = |nonce: u64| {
+			let t = Transfer {
+				from: AccountKeyring::Alice.into(),
+				to: AccountKeyring::Bob.into(),
+				amount: 5,
+				nonce,
 			};
-			let xt = keyring::sign(ex, VERSION, client.genesis_hash().into());
-			// Convert to OpaqueExtrinsic
-			let encoded = xt.encode();
-			node_primitives::UncheckedExtrinsic::decode(&mut &*encoded).unwrap()
+			t.into_signed_tx()
 		};
 		// Populate the pool
-		let ext0 = new_transaction(signed_extra(0, 0));
+		let ext0 = new_transaction(0);
 		block_on(pool.submit_one(&BlockId::number(0), ext0)).unwrap();
-		let ext1 = new_transaction(signed_extra(1, 0));
+		let ext1 = new_transaction(1);
 		block_on(pool.submit_one(&BlockId::number(0), ext1)).unwrap();
 
 		let accounts = System::new(client, pool);
 
 		// when
-		let nonce = accounts.nonce(alice().into());
+		let nonce = accounts.nonce(AccountKeyring::Alice.into());
 
 		// then
 		assert_eq!(nonce.unwrap(), 2);

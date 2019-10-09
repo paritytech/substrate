@@ -21,7 +21,6 @@ transaction_pool = { package = "substrate-transaction-pool", path = "../../../co
 srml-system-rpc-runtime-api = { path = "./runtime-api" }
 
 [dev-dependencies]
-node-testing = { path = "../../../node/testing" }
-node-runtime = { path = "../../../node/runtime" }
+test-client = { package = "substrate-test-runtime-client", path = "../../../core/test-runtime/client" }
 env_logger = "0.6.2"
 futures03 = { package = "futures-preview", version = "=0.3.0-alpha.19" }

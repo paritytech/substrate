@@ -32,4 +32,3 @@ client::decl_runtime_apis! {
 		fn account_nonce(account: AccountId) -> Index;
 	}
 }
-
