@@ -965,7 +965,7 @@ pub mod biguint {
 		/// - requires `other` to be stripped and have no leading zeros.
 		/// - requires `self` to be stripped and have no leading zeros.
 		/// - requires `other` to have at least two limbs.
-		/// - requires `self` to have a greater or equal length compared to `other`.
+		/// - requires `self` to have a greater length compared to `other`.
 		///
 		/// All arguments are examined without being stripped for the above conditions. If any of
 		/// the above fails, `None` is returned.`
