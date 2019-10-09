@@ -16,7 +16,7 @@
 
 //! Provides implementations for the runtime interface traits.
 
-use crate::{RIType, pass_by::{PassBy, Inner, Codec, PassByInner}};
+use crate::{RIType, pass_by::{PassBy, Codec}};
 #[cfg(feature = "std")]
 use crate::host::*;
 #[cfg(not(feature = "std"))]
@@ -37,8 +37,6 @@ use rstd::borrow::Cow;
 
 #[cfg(not(feature = "std"))]
 use rstd::slice;
-
-use primitives::{sr25519, ed25519};
 
 /// Converts a pointer and length into an `u64`.
 pub fn pointer_and_len_to_u64(ptr: u32, len: u32) -> u64 {
@@ -353,84 +351,4 @@ impl<T: codec::Codec> PassBy for Option<T> {
 
 impl<T: codec::Codec, E: codec::Codec> PassBy for rstd::result::Result<T, E> {
 	type PassBy = Codec<Self>;
-}
-
-impl PassBy for sr25519::Public {
-	type PassBy = Inner<Self, [u8; 32]>;
-}
-
-impl PassByInner for sr25519::Public {
-	type Inner = [u8; 32];
-
-	fn into_inner(self) -> Self::Inner {
-		self.0
-	}
-
-	fn inner(&self) -> &Self::Inner {
-		&self.0
-	}
-
-	fn from_inner(inner: Self::Inner) -> Self {
-		Self(inner)
-	}
-}
-
-impl PassBy for sr25519::Signature {
-	type PassBy = Inner<Self, [u8; 64]>;
-}
-
-impl PassByInner for sr25519::Signature {
-	type Inner = [u8; 64];
-
-	fn into_inner(self) -> Self::Inner {
-		self.0
-	}
-
-	fn inner(&self) -> &Self::Inner {
-		&self.0
-	}
-
-	fn from_inner(inner: Self::Inner) -> Self {
-		Self(inner)
-	}
-}
-
-impl PassBy for ed25519::Public {
-	type PassBy = Inner<Self, [u8; 32]>;
-}
-
-impl PassByInner for ed25519::Public {
-	type Inner = [u8; 32];
-
-	fn into_inner(self) -> Self::Inner {
-		self.0
-	}
-
-	fn inner(&self) -> &Self::Inner {
-		&self.0
-	}
-
-	fn from_inner(inner: Self::Inner) -> Self {
-		Self(inner)
-	}
-}
-
-impl PassBy for ed25519::Signature {
-	type PassBy = Inner<Self, [u8; 64]>;
-}
-
-impl PassByInner for ed25519::Signature {
-	type Inner = [u8; 64];
-
-	fn into_inner(self) -> Self::Inner {
-		self.0
-	}
-
-	fn inner(&self) -> &Self::Inner {
-		&self.0
-	}
-
-	fn from_inner(inner: Self::Inner) -> Self {
-		Self(inner)
-	}
 }

@@ -15,6 +15,17 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Generates the bare function interface for a given trait definition.
+//!
+//! The bare functions are the ones that will be called by the user. On the native/host side, these
+//! functions directly execute the provided implementation. On the wasm side, these
+//! functions will prepare the parameters for the FFI boundary, call the external host function
+//! exported into wasm and convert back the result.
+//!
+//! [`generate`] is the entry point for generating for each trait method one bare function.
+//!
+//! [`function_for_method`] generates the bare function per trait method. Each bare function
+//! contains both implementations. The implementations are feature-gated, so that one is compiled
+//! for the native and the other for the wasm side.
 
 use crate::utils::{
 	generate_crate_access, create_host_function_ident, get_function_arguments,
@@ -29,7 +40,8 @@ use proc_macro2::{TokenStream, Span};
 
 use quote::{quote, quote_spanned};
 
-/// Generate the bare-function interface.
+/// Generate one bare function per trait method. The name of the bare function is equal to the name
+/// of the trait method.
 pub fn generate(trait_def: &ItemTrait) -> Result<TokenStream> {
 	let trait_name = &trait_def.ident;
 	get_trait_methods(trait_def).try_fold(TokenStream::new(), |mut t, m| {
@@ -121,7 +133,7 @@ fn function_std_impl(trait_name: &Ident, method: &TraitItemMethod) -> Result<Tok
 		}
 	} else {
 		quote_spanned! { method.span() =>
-			<&mut dyn #crate_::Externalities<#crate_::Blake2Hasher> as #trait_name>::#method_name(
+			<&mut dyn #crate_::Externalities as #trait_name>::#method_name(
 				#( #arg_names, )*
 			)
 		}

@@ -5355,7 +5355,7 @@ dependencies = [
  "sr-std 2.0.0",
  "static_assertions 0.3.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-executor 2.0.0",
- "substrate-primitives 2.0.0",
+ "substrate-externalities 2.0.0",
  "substrate-runtime-interface-proc-macro 2.0.0",
  "substrate-runtime-interface-test-wasm 2.0.0",
  "substrate-state-machine 2.0.0",

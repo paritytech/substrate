@@ -25,23 +25,15 @@
 //! the stack while we call into the host.
 
 #[doc(hidden)]
-pub use primitives::Blake2Hasher;
-
-#[doc(hidden)]
-#[cfg(feature = "std")]
-pub use primitives::traits::Externalities;
-
-#[doc(hidden)]
 #[cfg(feature = "std")]
 pub use wasm_interface;
 
 pub use substrate_runtime_interface_proc_macro::runtime_interface;
 
+#[doc(hidden)]
 #[cfg(feature = "std")]
-pub use externalities::{set_and_run_with_externalities, with_externalities};
+pub use externalities::{set_and_run_with_externalities, with_externalities, Externalities};
 
-#[cfg(feature = "std")]
-mod externalities;
 pub(crate) mod impls;
 #[cfg(feature = "std")]
 pub mod host;
