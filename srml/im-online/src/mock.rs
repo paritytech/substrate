@@ -25,7 +25,7 @@ use sr_primitives::Perbill;
 use sr_staking_primitives::{SessionIndex, offence::ReportOffence};
 use sr_primitives::testing::{Header, UintAuthorityId, TestXt};
 use sr_primitives::traits::{IdentityLookup, BlakeTwo256, ConvertInto};
-use primitives::{H256, Blake2Hasher};
+use primitives::H256;
 use support::{impl_outer_origin, impl_outer_dispatch, parameter_types};
 use {runtime_io, system};
 
@@ -85,7 +85,7 @@ impl ReportOffence<u64, IdentificationTuple, Offence> for OffenceHandler {
 	}
 }
 
-pub fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+pub fn new_test_ext() -> runtime_io::TestExternalities {
 	let t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 	t.into()
 }

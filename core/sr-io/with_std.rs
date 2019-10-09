@@ -16,19 +16,18 @@
 
 use primitives::{
 	blake2_128, blake2_256, twox_128, twox_256, twox_64, ed25519, Blake2Hasher, sr25519, Pair, H256,
-	traits::Externalities, child_storage_key::ChildStorageKey, hexdisplay::HexDisplay, offchain,
-	Hasher,
+	traits::KeystoreExt, storage::ChildStorageKey, hexdisplay::HexDisplay, Hasher,
+	offchain::{self, OffchainExt},
 };
 // Switch to this after PoC-3
 // pub use primitives::BlakeHasher;
 pub use substrate_state_machine::{BasicExternalities, TestExternalities};
 
-use environmental::environmental;
 use trie::{TrieConfiguration, trie_types::Layout};
 
 use std::{collections::HashMap, convert::TryFrom};
 
-environmental!(ext: trait Externalities<Blake2Hasher>);
+use externalities::{with_externalities, set_and_run_with_externalities, ExternalitiesExt};
 
 /// Additional bounds for `Hasher` trait for with_std.
 pub trait HasherBounds {}
@@ -48,12 +47,12 @@ fn child_storage_key_or_panic(storage_key: &[u8]) -> ChildStorageKey {
 
 impl StorageApi for () {
 	fn storage(key: &[u8]) -> Option<Vec<u8>> {
-		ext::with(|ext| ext.storage(key).map(|s| s.to_vec()))
+		with_externalities(|ext| ext.storage(key).map(|s| s.to_vec()))
 			.expect("storage cannot be called outside of an Externalities-provided environment.")
 	}
 
 	fn read_storage(key: &[u8], value_out: &mut [u8], value_offset: usize) -> Option<usize> {
-		ext::with(|ext| ext.storage(key).map(|value| {
+		with_externalities(|ext| ext.storage(key).map(|value| {
 			let data = &value[value_offset.min(value.len())..];
 			let written = std::cmp::min(data.len(), value_out.len());
 			value_out[..written].copy_from_slice(&data[..written]);
@@ -62,7 +61,7 @@ impl StorageApi for () {
 	}
 
 	fn child_storage(storage_key: &[u8], key: &[u8]) -> Option<Vec<u8>> {
-		ext::with(|ext| {
+		with_externalities(|ext| {
 			let storage_key = child_storage_key_or_panic(storage_key);
 			ext.child_storage(storage_key, key).map(|s| s.to_vec())
 		})
@@ -70,7 +69,7 @@ impl StorageApi for () {
 	}
 
 	fn set_storage(key: &[u8], value: &[u8]) {
-		ext::with(|ext|
+		with_externalities(|ext|
 			ext.set_storage(key.to_vec(), value.to_vec())
 		);
 	}
@@ -81,7 +80,7 @@ impl StorageApi for () {
 		value_out: &mut [u8],
 		value_offset: usize,
 	) -> Option<usize> {
-		ext::with(|ext| {
+		with_externalities(|ext| {
 			let storage_key = child_storage_key_or_panic(storage_key);
 			ext.child_storage(storage_key, key)
 				.map(|value| {
@@ -95,73 +94,71 @@ impl StorageApi for () {
 	}
 
 	fn set_child_storage(storage_key: &[u8], key: &[u8], value: &[u8]) {
-		ext::with(|ext| {
+		with_externalities(|ext| {
 			let storage_key = child_storage_key_or_panic(storage_key);
 			ext.set_child_storage(storage_key, key.to_vec(), value.to_vec())
 		});
 	}
 
 	fn clear_storage(key: &[u8]) {
-		ext::with(|ext|
+		with_externalities(|ext|
 			ext.clear_storage(key)
 		);
 	}
 
 	fn clear_child_storage(storage_key: &[u8], key: &[u8]) {
-		ext::with(|ext| {
+		with_externalities(|ext| {
 			let storage_key = child_storage_key_or_panic(storage_key);
 			ext.clear_child_storage(storage_key, key)
 		});
 	}
 
 	fn kill_child_storage(storage_key: &[u8]) {
-		ext::with(|ext| {
+		with_externalities(|ext| {
 			let storage_key = child_storage_key_or_panic(storage_key);
 			ext.kill_child_storage(storage_key)
 		});
 	}
 
 	fn exists_storage(key: &[u8]) -> bool {
-		ext::with(|ext|
+		with_externalities(|ext|
 			ext.exists_storage(key)
 		).unwrap_or(false)
 	}
 
 	fn exists_child_storage(storage_key: &[u8], key: &[u8]) -> bool {
-		ext::with(|ext| {
+		with_externalities(|ext| {
 			let storage_key = child_storage_key_or_panic(storage_key);
 			ext.exists_child_storage(storage_key, key)
 		}).unwrap_or(false)
 	}
 
 	fn clear_prefix(prefix: &[u8]) {
-		ext::with(|ext|
-			ext.clear_prefix(prefix)
-		);
+		with_externalities(|ext| ext.clear_prefix(prefix));
 	}
 
 	fn clear_child_prefix(storage_key: &[u8], prefix: &[u8]) {
-		ext::with(|ext| {
+		with_externalities(|ext| {
 			let storage_key = child_storage_key_or_panic(storage_key);
 			ext.clear_child_prefix(storage_key, prefix)
 		});
 	}
 
 	fn storage_root() -> [u8; 32] {
-		ext::with(|ext|
+		with_externalities(|ext|
 			ext.storage_root()
 		).unwrap_or(H256::zero()).into()
 	}
 
 	fn child_storage_root(storage_key: &[u8]) -> Vec<u8> {
-		ext::with(|ext| {
+		with_externalities(|ext| {
 			let storage_key = child_storage_key_or_panic(storage_key);
 			ext.child_storage_root(storage_key)
 		}).expect("child_storage_root cannot be called outside of an Externalities-provided environment.")
 	}
 
 	fn storage_changes_root(parent_hash: [u8; 32]) -> Option<[u8; 32]> {
-		ext::with(|ext|
+		with_externalities(|ext|
 			ext.storage_changes_root(parent_hash.into()).map(|h| h.map(|h| h.into()))
 		).unwrap_or(Ok(None)).expect("Invalid parent hash passed to storage_changes_root")
 	}
@@ -177,7 +174,7 @@ impl StorageApi for () {
 
 impl OtherApi for () {
 	fn chain_id() -> u64 {
-		ext::with(|ext|
+		with_externalities(|ext|
 			ext.chain_id()
 		).unwrap_or(0)
 	}
@@ -199,8 +196,8 @@ impl OtherApi for () {
 
 impl CryptoApi for () {
 	fn ed25519_public_keys(id: KeyTypeId) -> Vec<ed25519::Public> {
-		ext::with(|ext| {
-			ext.keystore()
+		with_externalities(|ext| {
+			ext.extension::<KeystoreExt>()
 				.expect("No `keystore` associated for the current context!")
 				.read()
 				.ed25519_public_keys(id)
@@ -208,8 +205,8 @@ impl CryptoApi for () {
 	}
 
 	fn ed25519_generate(id: KeyTypeId, seed: Option<&str>) -> ed25519::Public {
-		ext::with(|ext| {
-			ext.keystore()
+		with_externalities(|ext| {
+			ext.extension::<KeystoreExt>()
 				.expect("No `keystore` associated for the current context!")
 				.write()
 				.ed25519_generate_new(id, seed)
@@ -224,8 +221,8 @@ impl CryptoApi for () {
 	) -> Option<ed25519::Signature> {
 		let pub_key = ed25519::Public::try_from(pubkey.as_ref()).ok()?;
 
-		ext::with(|ext| {
-			ext.keystore()
+		with_externalities(|ext| {
+			ext.extension::<KeystoreExt>()
 				.expect("No `keystore` associated for the current context!")
 				.read()
 				.ed25519_key_pair(id, &pub_key)
@@ -238,8 +235,8 @@ impl CryptoApi for () {
 	}
 
 	fn sr25519_public_keys(id: KeyTypeId) -> Vec<sr25519::Public> {
-		ext::with(|ext| {
-			ext.keystore()
+		with_externalities(|ext| {
+			ext.extension::<KeystoreExt>()
 				.expect("No `keystore` associated for the current context!")
 				.read()
 				.sr25519_public_keys(id)
@@ -247,8 +244,8 @@ impl CryptoApi for () {
 	}
 
 	fn sr25519_generate(id: KeyTypeId, seed: Option<&str>) -> sr25519::Public {
-		ext::with(|ext| {
-			ext.keystore()
+		with_externalities(|ext| {
+			ext.extension::<KeystoreExt>()
 				.expect("No `keystore` associated for the current context!")
 				.write()
 				.sr25519_generate_new(id, seed)
@@ -263,8 +260,8 @@ impl CryptoApi for () {
 	) -> Option<sr25519::Signature> {
 		let pub_key = sr25519::Public::try_from(pubkey.as_ref()).ok()?;
 
-		ext::with(|ext| {
-			ext.keystore()
+		with_externalities(|ext| {
+			ext.extension::<KeystoreExt>()
 				.expect("No `keystore` associated for the current context!")
 				.read()
 				.sr25519_key_pair(id, &pub_key)
@@ -316,9 +313,9 @@ impl HashingApi for () {
 }
 
 fn with_offchain<R>(f: impl FnOnce(&mut dyn offchain::Externalities) -> R, msg: &'static str) -> R {
-	ext::with(|ext| ext
-		.offchain()
-		.map(|ext| f(ext))
+	with_externalities(|ext| ext
+		.extension::<OffchainExt>()
+		.map(|ext| f(&mut **ext))
 		.expect(msg)
 	).expect("offchain-worker functions cannot be called outside of an Externalities-provided environment.")
 }
@@ -443,13 +440,6 @@ impl OffchainApi for () {
 
 impl Api for () {}
 
-/// Execute the given closure with global function available whose functionality routes into the
-/// externalities `ext`. Forwards the value that the closure returns.
-// NOTE: need a concrete hasher here due to limitations of the `environmental!` macro, otherwise a type param would have been fine I think.
-pub fn with_externalities<R, F: FnOnce() -> R>(ext: &mut dyn Externalities<Blake2Hasher>, f: F) -> R {
-	ext::using(ext, f)
-}
-
 /// A set of key value pairs for storage.
 pub type StorageOverlay = HashMap<Vec<u8>, Vec<u8>>;
 
@@ -467,7 +457,7 @@ pub fn with_storage<R, F: FnOnce() -> R>(
 	rstd::mem::swap(&mut alt_storage, storage);
 
 	let mut ext = BasicExternalities::new(alt_storage.0, alt_storage.1);
-	let r = ext::using(&mut ext, f);
+	let r = set_and_run_with_externalities(&mut ext, f);
 
 	*storage = ext.into_storages();
 
@@ -482,7 +472,7 @@ mod std_tests {
 	#[test]
 	fn storage_works() {
 		let mut t = BasicExternalities::default();
-		assert!(with_externalities(&mut t, || {
+		assert!(set_and_run_with_externalities(&mut t, || {
 			assert_eq!(storage(b"hello"), None);
 			set_storage(b"hello", b"world");
 			assert_eq!(storage(b"hello"), Some(b"world".to_vec()));
@@ -493,7 +483,7 @@ mod std_tests {
 
 		t = BasicExternalities::new(map![b"foo".to_vec() => b"bar".to_vec()], map![]);
 
-		assert!(!with_externalities(&mut t, || {
+		assert!(!set_and_run_with_externalities(&mut t, || {
 			assert_eq!(storage(b"hello"), None);
 			assert_eq!(storage(b"foo"), Some(b"bar".to_vec()));
 			false
@@ -506,7 +496,7 @@ mod std_tests {
 			b":test".to_vec() => b"\x0b\0\0\0Hello world".to_vec()
 		], map![]);
 
-		with_externalities(&mut t, || {
+		set_and_run_with_externalities(&mut t, || {
 			let mut v = [0u8; 4];
 			assert!(read_storage(b":test", &mut v[..], 0).unwrap() >= 4);
 			assert_eq!(v, [11u8, 0, 0, 0]);
@@ -525,7 +515,7 @@ mod std_tests {
 			b":abdd".to_vec() => b"\x0b\0\0\0Hello world".to_vec()
 		], map![]);
 
-		with_externalities(&mut t, || {
+		set_and_run_with_externalities(&mut t, || {
 			clear_prefix(b":abc");
 
 			assert!(storage(b":a").is_some());

@@ -179,7 +179,7 @@ pub struct OuterEventMetadata {
 	>,
 }
 
-/// All the metadata about a event.
+/// All the metadata about an event.
 #[derive(Clone, PartialEq, Eq, Encode)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub struct EventMetadata {
@@ -207,6 +207,25 @@ pub struct ModuleConstantMetadata {
 	pub ty: DecodeDifferentStr,
 	pub value: ByteGetter,
 	pub documentation: DecodeDifferentArray<&'static str, StringBuf>,
+}
+
+/// All the metadata about a module error.
+#[derive(Clone, PartialEq, Eq, Encode)]
+#[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
+pub struct ErrorMetadata {
+	pub name: DecodeDifferentStr,
+	pub documentation: DecodeDifferentArray<&'static str, StringBuf>,
+}
+
+/// All the metadata about errors in a module.
+pub trait ModuleErrorMetadata {
+	fn metadata() -> &'static [ErrorMetadata];
+}
+
+impl ModuleErrorMetadata for &'static str {
+	fn metadata() -> &'static [ErrorMetadata] {
+		&[]
+	}
 }
 
 /// A technical trait to store lazy initiated vec value as static dyn pointer.
@@ -326,8 +345,10 @@ pub enum RuntimeMetadata {
 	V5(RuntimeMetadataDeprecated),
 	/// Version 6 for runtime metadata. No longer used.
 	V6(RuntimeMetadataDeprecated),
-	/// Version 7 for runtime metadata.
-	V7(RuntimeMetadataV7),
+	/// Version 7 for runtime metadata. No longer used.
+	V7(RuntimeMetadataDeprecated),
+	/// Version 8 for runtime metadata.
+	V8(RuntimeMetadataV8),
 }
 
 /// Enum that should fail.
@@ -351,12 +372,12 @@ impl Decode for RuntimeMetadataDeprecated {
 /// The metadata of a runtime.
 #[derive(Eq, Encode, PartialEq)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
-pub struct RuntimeMetadataV7 {
+pub struct RuntimeMetadataV8 {
 	pub modules: DecodeDifferentArray<ModuleMetadata>,
 }
 
 /// The latest version of the metadata.
-pub type RuntimeMetadataLastVersion = RuntimeMetadataV7;
+pub type RuntimeMetadataLastVersion = RuntimeMetadataV8;
 
 /// All metadata about an runtime module.
 #[derive(Clone, PartialEq, Eq, Encode)]
@@ -367,6 +388,7 @@ pub struct ModuleMetadata {
 	pub calls: ODFnA<FunctionMetadata>,
 	pub event: ODFnA<EventMetadata>,
 	pub constants: DFnA<ModuleConstantMetadata>,
+	pub errors: DFnA<ErrorMetadata>,
 }
 
 type ODFnA<T> = Option<DFnA<T>>;
@@ -380,6 +402,6 @@ impl Into<primitives::OpaqueMetadata> for RuntimeMetadataPrefixed {
 
 impl Into<RuntimeMetadataPrefixed> for RuntimeMetadataLastVersion {
 	fn into(self) -> RuntimeMetadataPrefixed {
-		RuntimeMetadataPrefixed(META_RESERVED, RuntimeMetadata::V7(self))
+		RuntimeMetadataPrefixed(META_RESERVED, RuntimeMetadata::V8(self))
 	}
 }
