@@ -1094,7 +1094,7 @@ pub mod biguint {
 	}
 
 	#[cfg(feature = "std")]
-	impl rstd::fmt::Debug for BigUint{
+	impl rstd::fmt::Debug for BigUint {
 		fn fmt(&self, f: &mut rstd::fmt::Formatter<'_>) -> rstd::fmt::Result {
 			write!(
 				f,
