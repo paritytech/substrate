@@ -23,7 +23,7 @@ use wasmi::{
 };
 use crate::error::{Error, WasmError};
 use codec::{Encode, Decode};
-use primitives::{sandbox as sandbox_primitives, Blake2Hasher, traits::Externalities};
+use primitives::{sandbox as sandbox_primitives, traits::Externalities};
 use crate::host_interface::SubstrateExternals;
 use crate::sandbox;
 use crate::allocator;
@@ -342,7 +342,7 @@ fn get_heap_base(module: &ModuleRef) -> Result<u32, Error> {
 
 /// Call a given method in the given wasm-module runtime.
 fn call_in_wasm_module(
-	ext: &mut dyn Externalities<Blake2Hasher>,
+	ext: &mut dyn Externalities,
 	module_instance: &ModuleRef,
 	method: &str,
 	data: &[u8],
@@ -373,7 +373,7 @@ fn call_in_wasm_module_with_custom_signature<
 	FR: FnOnce(Option<RuntimeValue>, &MemoryRef) -> Result<Option<R>, Error>,
 	R,
 >(
-	ext: &mut dyn Externalities<Blake2Hasher>,
+	ext: &mut dyn Externalities,
 	module_instance: &ModuleRef,
 	method: &str,
 	create_parameters: F,
@@ -398,7 +398,7 @@ fn call_in_wasm_module_with_custom_signature<
 		fec.write_memory(offset, data).map(|_| offset.into()).map_err(Into::into)
 	})?;
 
-	let result = runtime_io::with_externalities(
+	let result = externalities::set_and_run_with_externalities(
 		ext,
 		|| module_instance.invoke_export(method, &parameters, &mut fec),
 	);
@@ -588,7 +588,7 @@ impl WasmRuntime for WasmiRuntime {
 		self.state_snapshot.heap_pages == heap_pages
 	}
 
-	fn call(&mut self, ext: &mut dyn Externalities<Blake2Hasher>, method: &str, data: &[u8])
+	fn call(&mut self, ext: &mut dyn Externalities, method: &str, data: &[u8])
 			-> Result<Vec<u8>, Error>
 	{
 		self.with(|module| {
@@ -601,7 +601,7 @@ impl WasmRuntime for WasmiRuntime {
 	}
 }
 
-pub fn create_instance<E: Externalities<Blake2Hasher>>(ext: &mut E, code: &[u8], heap_pages: u64)
+pub fn create_instance<E: Externalities>(ext: &mut E, code: &[u8], heap_pages: u64)
 	-> Result<WasmiRuntime, WasmError>
 {
 	let module = Module::from_buffer(&code).map_err(|_| WasmError::InvalidModule)?;
@@ -656,14 +656,16 @@ mod tests {
 
 	use state_machine::TestExternalities as CoreTestExternalities;
 	use hex_literal::hex;
-	use primitives::{blake2_128, blake2_256, ed25519, sr25519, map, Pair};
+	use primitives::{
+		Blake2Hasher, blake2_128, blake2_256, ed25519, sr25519, map, Pair, offchain::OffchainExt,
+	};
 	use runtime_test::WASM_BINARY;
 	use substrate_offchain::testing;
 	use trie::{TrieConfiguration, trie_types::Layout};
 
-	type TestExternalities<H> = CoreTestExternalities<H, u64>;
+	type TestExternalities = CoreTestExternalities<Blake2Hasher, u64>;
 
-	fn call<E: Externalities<Blake2Hasher>>(
+	fn call<E: Externalities>(
 		ext: &mut E,
 		heap_pages: u64,
 		code: &[u8],
@@ -798,7 +800,7 @@ mod tests {
 
 	#[test]
 	fn ed25519_verify_should_work() {
-		let mut ext = TestExternalities::<Blake2Hasher>::default();
+		let mut ext = TestExternalities::default();
 		let test_code = WASM_BINARY;
 		let key = ed25519::Pair::from_seed(&blake2_256(b"test"));
 		let sig = key.sign(b"all ok!");
@@ -824,7 +826,7 @@ mod tests {
 
 	#[test]
 	fn sr25519_verify_should_work() {
-		let mut ext = TestExternalities::<Blake2Hasher>::default();
+		let mut ext = TestExternalities::default();
 		let test_code = WASM_BINARY;
 		let key = sr25519::Pair::from_seed(&blake2_256(b"test"));
 		let sig = key.sign(b"all ok!");
@@ -850,7 +852,7 @@ mod tests {
 
 	#[test]
 	fn ordered_trie_root_should_work() {
-		let mut ext = TestExternalities::<Blake2Hasher>::default();
+		let mut ext = TestExternalities::default();
 		let trie_input = vec![b"zero".to_vec(), b"one".to_vec(), b"two".to_vec()];
 		let test_code = WASM_BINARY;
 		assert_eq!(
@@ -863,9 +865,9 @@ mod tests {
 	fn offchain_local_storage_should_work() {
 		use substrate_client::backend::OffchainStorage;
 
-		let mut ext = TestExternalities::<Blake2Hasher>::default();
+		let mut ext = TestExternalities::default();
 		let (offchain, state) = testing::TestOffchainExt::new();
-		ext.set_offchain_externalities(offchain);
+		ext.register_extension(OffchainExt::new(offchain));
 		let test_code = WASM_BINARY;
 		assert_eq!(
 			call(&mut ext, 8, &test_code[..], "test_offchain_local_storage", &[]).unwrap(),
@@ -876,9 +878,9 @@ mod tests {
 
 	#[test]
 	fn offchain_http_should_work() {
-		let mut ext = TestExternalities::<Blake2Hasher>::default();
+		let mut ext = TestExternalities::default();
 		let (offchain, state) = testing::TestOffchainExt::new();
-		ext.set_offchain_externalities(offchain);
+		ext.register_extension(OffchainExt::new(offchain));
 		state.write().expect_request(
 			0,
 			testing::PendingRequest {

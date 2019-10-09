@@ -120,7 +120,7 @@ use codec::{Encode, Decode};
 use runtime_io::TestExternalities;
 
 #[cfg(any(feature = "std", test))]
-use primitives::{ChangesTrieConfiguration, Blake2Hasher};
+use primitives::ChangesTrieConfiguration;
 
 pub mod offchain;
 
@@ -695,7 +695,7 @@ impl<T: Trait> Module<T> {
 
 	/// Get the basic externalities for this module, useful for tests.
 	#[cfg(any(feature = "std", test))]
-	pub fn externalities() -> TestExternalities<Blake2Hasher> {
+	pub fn externalities() -> TestExternalities {
 		TestExternalities::new((map![
 			<BlockHash<T>>::hashed_key_for(T::BlockNumber::zero()) => [69u8; 32].encode(),
 			<Number<T>>::hashed_key().to_vec() => T::BlockNumber::one().encode(),
@@ -1090,9 +1090,11 @@ impl<T: Trait> Lookup for ChainContext<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use runtime_io::with_externalities;
 	use primitives::H256;
-	use sr_primitives::{traits::{BlakeTwo256, IdentityLookup}, testing::Header, DispatchError};
+	use sr_primitives::{
+		traits::{BlakeTwo256, IdentityLookup}, testing::Header, DispatchError,
+		set_and_run_with_externalities,
+	};
 	use support::{impl_outer_origin, parameter_types};
 
 	impl_outer_origin! {
@@ -1141,7 +1143,7 @@ mod tests {
 
 	const CALL: &<Test as Trait>::Call = &();
 
-	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+	fn new_test_ext() -> runtime_io::TestExternalities {
 		GenesisConfig::default().build_storage::<Test>().unwrap().into()
 	}
 
@@ -1162,7 +1164,7 @@ mod tests {
 
 	#[test]
 	fn deposit_event_should_work() {
-		with_externalities(&mut new_test_ext(), || {
+		set_and_run_with_externalities(&mut new_test_ext(), || {
 			System::initialize(&1, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
 			System::note_finished_extrinsics();
 			System::deposit_event(1u16);
@@ -1199,7 +1201,7 @@ mod tests {
 
 	#[test]
 	fn deposit_event_topics() {
-		with_externalities(&mut new_test_ext(), || {
+		set_and_run_with_externalities(&mut new_test_ext(), || {
 			const BLOCK_NUMBER: u64 = 1;
 
 			System::initialize(&BLOCK_NUMBER, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
@@ -1259,7 +1261,7 @@ mod tests {
 
 	#[test]
 	fn prunes_block_hash_mappings() {
-		with_externalities(&mut new_test_ext(), || {
+		set_and_run_with_externalities(&mut new_test_ext(), || {
 			// simulate import of 15 blocks
 			for n in 1..=15 {
 				System::initialize(
@@ -1292,7 +1294,7 @@ mod tests {
 
 	#[test]
 	fn signed_ext_check_nonce_works() {
-		with_externalities(&mut new_test_ext(), || {
+		set_and_run_with_externalities(&mut new_test_ext(), || {
 			<AccountNonce<Test>>::insert(1, 1);
 			let info = DispatchInfo::default();
 			let len = 0_usize;
@@ -1310,7 +1312,7 @@ mod tests {
 
 	#[test]
 	fn signed_ext_check_weight_works_normal_tx() {
-		with_externalities(&mut new_test_ext(), || {
+		set_and_run_with_externalities(&mut new_test_ext(), || {
 			let normal_limit = normal_weight_limit();
 			let small = DispatchInfo { weight: 100, ..Default::default() };
 			let medium = DispatchInfo {
@@ -1337,7 +1339,7 @@ mod tests {
 
 	#[test]
 	fn signed_ext_check_weight_fee_works() {
-		with_externalities(&mut new_test_ext(), || {
+		set_and_run_with_externalities(&mut new_test_ext(), || {
 			let free = DispatchInfo { weight: 0, ..Default::default() };
 			let len = 0_usize;
 
@@ -1350,7 +1352,7 @@ mod tests {
 
 	#[test]
 	fn signed_ext_check_weight_max_works() {
-		with_externalities(&mut new_test_ext(), || {
+		set_and_run_with_externalities(&mut new_test_ext(), || {
 			let max = DispatchInfo { weight: Weight::max_value(), ..Default::default() };
 			let len = 0_usize;
 			let normal_limit = normal_weight_limit();
@@ -1364,7 +1366,7 @@ mod tests {
 
 	#[test]
 	fn signed_ext_check_weight_works_operational_tx() {
-		with_externalities(&mut new_test_ext(), || {
+		set_and_run_with_externalities(&mut new_test_ext(), || {
 			let normal = DispatchInfo { weight: 100, ..Default::default() };
 			let op = DispatchInfo { weight: 100, class: DispatchClass::Operational };
 			let len = 0_usize;
@@ -1387,7 +1389,7 @@ mod tests {
 
 	#[test]
 	fn signed_ext_check_weight_priority_works() {
-		with_externalities(&mut new_test_ext(), || {
+		set_and_run_with_externalities(&mut new_test_ext(), || {
 			let normal = DispatchInfo { weight: 100, class: DispatchClass::Normal };
 			let op = DispatchInfo { weight: 100, class: DispatchClass::Operational };
 			let len = 0_usize;
@@ -1408,7 +1410,7 @@ mod tests {
 
 	#[test]
 	fn signed_ext_check_weight_block_size_works() {
-		with_externalities(&mut new_test_ext(), || {
+		set_and_run_with_externalities(&mut new_test_ext(), || {
 			let normal = DispatchInfo::default();
 			let normal_limit = normal_weight_limit() as usize;
 			let reset_check_weight = |tx, s, f| {
@@ -1432,7 +1434,7 @@ mod tests {
 
 	#[test]
 	fn signed_ext_check_era_should_work() {
-		with_externalities(&mut new_test_ext(), || {
+		set_and_run_with_externalities(&mut new_test_ext(), || {
 			// future
 			assert_eq!(
 				CheckEra::<Test>::from(Era::mortal(4, 2)).additional_signed().err().unwrap(),
@@ -1448,7 +1450,7 @@ mod tests {
 
 	#[test]
 	fn signed_ext_check_era_should_change_longevity() {
-		with_externalities(&mut new_test_ext(), || {
+		set_and_run_with_externalities(&mut new_test_ext(), || {
 			let normal = DispatchInfo { weight: 100, class: DispatchClass::Normal };
 			let len = 0_usize;
 			let ext = (

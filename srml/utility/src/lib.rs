@@ -64,10 +64,10 @@ mod tests {
 	use super::*;
 
 	use support::{assert_ok, assert_noop, impl_outer_origin, parameter_types, impl_outer_dispatch};
-	use runtime_io::with_externalities;
-	use primitives::{H256, Blake2Hasher};
+	use primitives::H256;
 	use sr_primitives::{
-		Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header
+		Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header,
+		set_and_run_with_externalities,
 	};
 
 	impl_outer_origin! {
@@ -139,7 +139,7 @@ mod tests {
 	type Balances = balances::Module<Test>;
 	type Utility = Module<Test>;
 
-	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+	fn new_test_ext() -> runtime_io::TestExternalities {
 		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		balances::GenesisConfig::<Test> {
 			balances: vec![(1, 10), (2, 0)],
@@ -150,7 +150,7 @@ mod tests {
 
 	#[test]
 	fn batch_works() {
-		with_externalities(&mut new_test_ext(), || {
+		set_and_run_with_externalities(&mut new_test_ext(), || {
 			assert_eq!(Balances::free_balance(1), 10);
 			assert_eq!(Balances::free_balance(2), 0);
 			assert_noop!(Utility::batch(Origin::signed(1), vec![

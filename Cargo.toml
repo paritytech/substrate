@@ -36,6 +36,7 @@ members = [
 	"core/consensus/pow",
 	"core/executor",
 	"core/executor/runtime-test",
+	"core/externalities",
 	"core/finality-grandpa",
 	"core/finality-grandpa/primitives",
 	"core/inherents",

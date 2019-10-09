@@ -193,12 +193,12 @@ mod tests {
 
 	use std::cell::RefCell;
 	use support::{assert_ok, assert_noop, impl_outer_origin, parameter_types};
-	use runtime_io::with_externalities;
-	use primitives::{H256, Blake2Hasher};
+	use primitives::H256;
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are requried.
 	use sr_primitives::{
-		Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header
+		Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header,
+		set_and_run_with_externalities,
 	};
 	use system::EnsureSignedBy;
 
@@ -281,7 +281,7 @@ mod tests {
 
 	// This function basically just builds a genesis storage key/value store according to
 	// our desired mockup.
-	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+	fn new_test_ext() -> runtime_io::TestExternalities {
 		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		// We use default for brevity, but you can configure as desired if needed.
 		GenesisConfig::<Test>{
@@ -293,7 +293,7 @@ mod tests {
 
 	#[test]
 	fn query_membership_works() {
-		with_externalities(&mut new_test_ext(), || {
+		set_and_run_with_externalities(&mut new_test_ext(), || {
 			assert_eq!(Membership::members(), vec![10, 20, 30]);
 			assert_eq!(MEMBERS.with(|m| m.borrow().clone()), vec![10, 20, 30]);
 		});
@@ -301,7 +301,7 @@ mod tests {
 
 	#[test]
 	fn add_member_works() {
-		with_externalities(&mut new_test_ext(), || {
+		set_and_run_with_externalities(&mut new_test_ext(), || {
 			assert_noop!(Membership::add_member(Origin::signed(5), 15), "bad origin");
 			assert_noop!(Membership::add_member(Origin::signed(1), 10), "already a member");
 			assert_ok!(Membership::add_member(Origin::signed(1), 15));
@@ -312,7 +312,7 @@ mod tests {
 
 	#[test]
 	fn remove_member_works() {
-		with_externalities(&mut new_test_ext(), || {
+		set_and_run_with_externalities(&mut new_test_ext(), || {
 			assert_noop!(Membership::remove_member(Origin::signed(5), 20), "bad origin");
 			assert_noop!(Membership::remove_member(Origin::signed(2), 15), "not a member");
 			assert_ok!(Membership::remove_member(Origin::signed(2), 20));
@@ -323,7 +323,7 @@ mod tests {
 
 	#[test]
 	fn swap_member_works() {
-		with_externalities(&mut new_test_ext(), || {
+		set_and_run_with_externalities(&mut new_test_ext(), || {
 			assert_noop!(Membership::swap_member(Origin::signed(5), 10, 25), "bad origin");
 			assert_noop!(Membership::swap_member(Origin::signed(3), 15, 25), "not a member");
 			assert_noop!(Membership::swap_member(Origin::signed(3), 10, 30), "already a member");
@@ -337,7 +337,7 @@ mod tests {
 
 	#[test]
 	fn reset_members_works() {
-		with_externalities(&mut new_test_ext(), || {
+		set_and_run_with_externalities(&mut new_test_ext(), || {
 			assert_noop!(Membership::reset_members(Origin::signed(1), vec![20, 40, 30]), "bad origin");
 			assert_ok!(Membership::reset_members(Origin::signed(4), vec![20, 40, 30]));
 			assert_eq!(Membership::members(), vec![20, 30, 40]);

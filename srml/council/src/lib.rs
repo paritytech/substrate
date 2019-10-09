@@ -38,7 +38,6 @@ impl<T> OnMembersChanged<T> for () {
 mod tests {
 	// These re-exports are here for a reason, edit with care
 	pub use super::*;
-	pub use runtime_io::with_externalities;
 	use support::{impl_outer_origin, impl_outer_event, impl_outer_dispatch, parameter_types};
 	use support::traits::Get;
 	pub use primitives::{H256, Blake2Hasher, u32_trait::{_1, _2, _3, _4}};

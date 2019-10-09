@@ -512,16 +512,18 @@ impl<'a> HeadersIterator<'a> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use runtime_io::{TestExternalities, with_externalities};
+	use crate::set_and_run_with_externalities;
+	use runtime_io::TestExternalities;
 	use substrate_offchain::testing;
+	use primitives::offchain::OffchainExt;
 
 	#[test]
 	fn should_send_a_basic_request_and_get_response() {
 		let (offchain, state) = testing::TestOffchainExt::new();
 		let mut t = TestExternalities::default();
-		t.set_offchain_externalities(offchain);
+		t.register_extension(OffchainExt::new(offchain));
 
-		with_externalities(&mut t, || {
+		set_and_run_with_externalities(&mut t, || {
 			let request: Request = Request::get("http://localhost:1234");
 			let pending = request
 				.add_header("X-Auth", "hunter2")
@@ -560,9 +562,9 @@ mod tests {
 	fn should_send_a_post_request() {
 		let (offchain, state) = testing::TestOffchainExt::new();
 		let mut t = TestExternalities::default();
-		t.set_offchain_externalities(offchain);
+		t.register_extension(OffchainExt::new(offchain));
 
-		with_externalities(&mut t, || {
+		set_and_run_with_externalities(&mut t, || {
 			let pending = Request::default()
 				.method(Method::Post)
 				.url("http://localhost:1234")
