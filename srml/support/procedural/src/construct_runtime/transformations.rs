@@ -5,6 +5,8 @@ use quote::quote;
 use srml_support_procedural_tools::syn_ext as ext;
 use syn::Ident;
 
+extern crate self as macros;
+
 pub fn construct_runtime(input: TokenStream) -> TokenStream {
 	let definition = syn::parse_macro_input!(input as RuntimeDefinition);
 	let RuntimeDefinition {
@@ -38,10 +40,10 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 		#[derive(Clone, Copy, PartialEq, Eq)]
 		#[cfg_attr(feature = "std", derive(Debug))]
 		pub struct #name;
-		impl $crate::sr_primitives::traits::GetNodeBlockType for #name {
+		impl macros::sr_primitives::traits::GetNodeBlockType for #name {
 			type NodeBlock = #node_block;
 		}
-		impl $crate::sr_primitives::traits::GetRuntimeBlockType for #name {
+		impl macros::sr_primitives::traits::GetRuntimeBlockType for #name {
 			type RuntimeBlock = #block;
 		}
 
@@ -55,10 +57,24 @@ fn decl_outer_event<'a>(
 	module_declarations: impl Iterator<Item = &'a ModuleDeclaration>,
 	system_name: &'a Ident,
 ) -> TokenStream2 {
+	let mut modules_tokens = TokenStream2::new();
+	for module_declaration in module_declarations {
+		let event_ident = Ident::new("Event", module_declaration.name.span());
+		match find_module_entry(module_declaration, &event_ident) {
+			Some(module_entry) => {
+				let name = &module_declaration.name;
+				let instance = module_declaration.instance.inner.as_ref().map(|instance| &instance.name);
+				let generics_tokens = &module_entry.generics;
+				let tokens = quote!(#name #instance #generics_tokens);
+				modules_tokens.extend(tokens);
+			}
+			None => {}
+		}
+	}
 	quote!(
-		$crate::impl_outer_event! {
+		macros::impl_outer_event! {
 			pub enum Event for #runtime_name where system = #system_name {
-
+				#modules_tokens
 			}
 		}
 	)
