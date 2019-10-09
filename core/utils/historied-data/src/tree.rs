@@ -42,12 +42,13 @@ pub trait BranchesStateTrait<S, I, BI> {
 	type Branch: BranchStateTrait<S, BI>;
 	type Iter: Iterator<Item = (Self::Branch, I)>;
 
+	/// Get branch state for node at a given index.
 	fn get_branch(self, index: I) -> Option<Self::Branch>;
 
-	/// Inclusive.
+	/// Get the last index for the state, inclusive.
 	fn last_index(self) -> I;
 
-	/// Iterator.
+	/// Iterator over the branch states.
 	fn iter(self) -> Self::Iter;
 }
 
@@ -55,9 +56,10 @@ pub trait BranchesStateTrait<S, I, BI> {
 /// This is therefore the representation of a branch state.
 pub trait BranchStateTrait<S, I> {
 
+	/// Get state for node at a given index.
 	fn get_node(&self, i: I) -> S;
 
-	/// Inclusive.
+	/// Get the last index for the state, inclusive.
 	fn last_index(&self) -> I;
 }
 
@@ -679,7 +681,6 @@ impl<V> History<V> {
 			} else {
 				PruneResult::Changed
 			}
-
 		} else {
 			PruneResult::Unchanged
 		}
@@ -690,12 +691,12 @@ impl<V> History<V> {
 impl<'a, F: SerializedConfig> Serialized<'a, F> {
 
 	pub fn into_owned(self) -> Serialized<'static, F> {
-    Serialized(self.0.into_owned())
-  }
+		Serialized(self.0.into_owned())
+	}
 
 	pub fn into_vec(self) -> Vec<u8> {
-    self.0.into_vec()
-  }
+		self.0.into_vec()
+	}
 
 	pub fn get<I, S> (&self, state: S) -> Option<Option<&[u8]>> 
 		where
@@ -766,7 +767,7 @@ impl<'a, F: SerializedConfig> Serialized<'a, F> {
 				}
 			} else if history.index > from {
 				if history.value.len() == 0 
-				  && last_index_with_value.is_none() {
+					&& last_index_with_value.is_none() {
 						// delete on delete, continue
 				} else {
 					if last_index_with_value.is_none() {

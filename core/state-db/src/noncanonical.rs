@@ -77,7 +77,6 @@ impl KvPendingGC {
 	fn set_pending_gc(&mut self, branch_index: u64) {
 		self.gc_last_index += 1;
 		if self.pending_canonicalisation_query.is_some() {
-			// TODO EMCH some better merge
 			self.keys_pending_gc.extend(self.next_keys_pending_gc.drain());
 		}
 		self.pending_canonicalisation_query = Some(branch_index);
@@ -284,9 +283,6 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 						Some(record) => {
 							let record: JournalRecord<BlockHash, Key> = Decode::decode(&mut record.as_slice())?;
 
-							// TODO EMCh following two range fetch can be optimize when parent level
-							// got a single element.
-							// fetch parent info
 							let parent_branch_index = parents.get(&record.parent_hash)
 								.map(|(_, i)| *i).unwrap_or(0);
 							let parent_branch_range = Some(
@@ -640,9 +636,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 
 			if let Some(branch_index_cannonicalize) = last_index {
 				// this needs to be call after parents update
-				// TODO EMCH may be needed in 'canonicalize', and restore or commit here
 				self.branches.update_finalize_treshold(branch_index_cannonicalize, block_number, true);
-				// gc is at the right place
 				self.kv_gc.set_pending_gc(branch_index_cannonicalize);
 				// try to run the garbage collection (can run later if there is
 				// pinned process).

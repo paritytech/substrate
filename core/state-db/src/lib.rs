@@ -99,8 +99,6 @@ pub enum Error<E: fmt::Debug> {
 	InvalidBlockNumber,
 	/// Trying to insert block with unknown parent.
 	InvalidParent,
-	/// branch range access error
-	InvalidRange,
 }
 
 /// Pinning error type.
@@ -123,7 +121,6 @@ impl<E: fmt::Debug> fmt::Debug for Error<E> {
 			Error::InvalidBlock => write!(f, "Trying to canonicalize invalid block"),
 			Error::InvalidBlockNumber => write!(f, "Trying to insert block with invalid number"),
 			Error::InvalidParent => write!(f, "Trying to insert block with unknown parent"),
-			Error::InvalidRange => write!(f, "Trying to use invalid branch range"),
 		}
 	}
 }
@@ -138,17 +135,10 @@ pub struct ChangeSet<H: Hash> {
 }
 
 /// A set of kv state values changes.
-/// TODO EMCH note that this could really benefit from batching
-/// the change set (need to change from client to run over
-/// the whole range for kv: then we can get prepare
-/// insertion of batch values for history in db such as :
-/// pub type KvChangeSet<H> = Vec<(H, Vec(u64, Option<DBValue>))>;
-/// ),
-/// but it just need to be build from client (no need to change
-/// it here except to extract faster).
 ///
 /// This assumes that we only commit block per block (otherwhise
-/// we need to inclued block number value here).
+/// we need to include block number value here and
+/// implement a more efficient batching update).
 pub type KvChangeSet<H> = Vec<(H, Option<DBValue>)>;
 
 /// Info for pruning kv: a last prune index and keys to prune.
@@ -268,7 +258,7 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 					data: changeset,
 					meta: Default::default(),
 					// TODO EMCH no current support for archive all,
-					// this would require managing branch index at
+					// it would require managing branch index at
 					// client level (was implemented in another branch:
 					// client-db-branch-ix)
 					// and use and ordered tuple (branchix, blocknumber)
@@ -659,7 +649,8 @@ mod tests {
 		let (db, sdb) = make_test_db(PruningMode::ArchiveAll);
 		assert!(db.data_eq(&make_db(&[1, 21, 22, 3, 4, 91, 921, 922, 93, 94])));
 
-		// TODO EMCH implement full for test db and test for kv
+		// TODO EMCH implement archive all support for test db and complete this
+		// test for kv store.
 	
 		assert!(!sdb.is_pruned(&H256::from_low_u64_be(0), 0));
 	}

@@ -18,18 +18,21 @@
 //! Helper for managing the set of indexed available branches.
 
 use std::collections::{BTreeMap};
-use crate::Error;
 use historied_data::tree::{BranchesStateTrait, BranchStatesRef, BranchStateRef};
 
 #[derive(Clone, Default, Debug)]
-/// Reference to state that is enough for query updates, but not
-/// for gc.
+/// State needed for query updates.
+/// That is a subset of the full branch ranges set.
+///
 /// Values are ordered by branch_ix,
 /// and only a logic branch path should be present.
 ///
-/// Note that an alternative could be a pointer to a full state
-/// branch for a given branch index, here we use an in memory
-/// copied representation in relation to an actual use case.
+/// Note that an alternative could be a pointer to the full state
+/// a branch index corresponding to the leaf for the fork.
+/// Here we use an in memory copy of the path because it seems
+/// to fit query at a given state with multiple operations
+/// (block processing), that way we iterate on a vec rather than 
+/// hoping over linked branches.
 pub struct BranchRanges(Vec<BranchStatesRef>);
 
 impl<'a> BranchesStateTrait<bool, u64, u64> for &'a BranchRanges {
@@ -90,7 +93,6 @@ impl<'a> Iterator for BranchRangesIter<'a> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RangeSet {
 	storage: BTreeMap<u64, BranchStates>,
-	// TODO EMCH remove this?
 	last_index: u64,
 	/// treshold for possible node value, correspond
 	/// roughly to last cannonical block branch index.
@@ -213,34 +215,32 @@ impl RangeSet {
 		&mut self,
 		branch_index: u64,
 		number: u64,
-	) -> Result<u64, Error<()>> {
+	) -> u64 {
 		let mut create_new = false;
 		if branch_index == 0 || branch_index < self.treshold {
 			create_new = true;
-		} else { match self.storage.get_mut(&branch_index) {
-			Some(branch_state) => {
-				if branch_state.can_append && branch_state.can_add(number) {
-					branch_state.add_state();
-				} else {
-					create_new = true;
-				}
-			},
-			None => // TODO EMCH not sure keeping this error (we may want to clear storage)
-				return Err(Error::InvalidRange),
-		}}
+		} else { 
+			let branch_state = self.storage.get_mut(&branch_index)
+				.expect("Inconsistent state on new block");
+			if branch_state.can_append && branch_state.can_add(number) {
+				branch_state.add_state();
+			} else {
+				create_new = true;
+			}
+		}
 
 		if create_new {
 			self.last_index += 1;
 
-
 			let state = BranchStates::new(number, branch_index);
 			self.storage.insert(self.last_index, state);
-			Ok(self.last_index)
+			self.last_index
 		} else {
-			Ok(branch_index)
+			branch_index
 		}
 	}
 
+	/// Get the branch reference for a given branch index if it exists.
 	pub fn state_ref(&self, branch_index: u64) -> Option<BranchStatesRef> {
 		self.storage.get(&branch_index).map(|v| v.state_ref())
 			.map(|state| BranchStatesRef {
@@ -249,7 +249,8 @@ impl RangeSet {
 			})
 	}
 
-	/// update the range set on import. returns a displaced leaf if there was one.
+	/// Updates the range set on import (defined by its number in branch (block number).
+	/// Returns the corresponding branch ranges and the branch index for this block.
 	pub fn import(
 		&mut self,
 		number: u64,
@@ -258,16 +259,14 @@ impl RangeSet {
 	) -> (BranchRanges, u64) {
 
 		if let Some(mut branch_ranges) = parent_branch_range {
-			let anchor_index = self.add_state(parent_branch_index, number)
-				.expect("coherent branch index state"); // TODO EMCH fail in add_state
+			let anchor_index = self.add_state(parent_branch_index, number);
 			if anchor_index == parent_branch_index {
 				branch_ranges.0.pop();
 			}
 			branch_ranges.0.push(self.state_ref(anchor_index).expect("added just above"));
 			(branch_ranges, anchor_index)
 		} else {
-			let anchor_index = self.add_state(parent_branch_index, number)
-				.expect("coherent branch index state"); // TODO EMCH fail in add_state
+			let anchor_index = self.add_state(parent_branch_index, number);
 			(
 				BranchRanges(vec![self.state_ref(anchor_index).expect("added just above")]),
 				anchor_index,
@@ -309,9 +308,6 @@ impl RangeSet {
 	}
 
 	/// Apply a post finalize without considering treshold.
-	/// TODO EMCH rename as it is also use to prepare a gc
-	/// without moving the treshold first.
-	///
 	pub fn finalize_full(
 		&mut self,
 		branch_index: u64,
@@ -433,7 +429,6 @@ impl BranchStates {
 
 }
 
-// TODO EMCH end from historied - data
 #[cfg(test)]
 mod test {
 	use super::*;

@@ -470,8 +470,6 @@ impl<H: Hasher> From<InMemoryTransaction> for InMemory<H> {
 	}
 }
 
-
-
 impl<H: Hasher> InMemory<H> {
 	/// child storage key iterator
 	pub fn child_storage_keys(&self) -> impl Iterator<Item=&[u8]> {
@@ -648,9 +646,6 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 			Some(root) => root,
 			None => insert_into_memory_db::<H, _>(&mut mdb, ::std::iter::empty())?,
 		};
-		// Since we are running on a memorydb (not a prefixed memory db), content
-		// is not collision free, so an empty offtrie state can be use (no need
-		// for keyspace).
 		self.trie = Some(TrieBackend::new(mdb, root, self.extract_kv()));
 		self.trie.as_ref()
 	}

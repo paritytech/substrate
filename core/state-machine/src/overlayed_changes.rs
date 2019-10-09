@@ -57,7 +57,7 @@ pub struct OverlayedChangeSet {
 	pub top: HashMap<Vec<u8>, OverlayedValue>,
 	/// Child storage changes.
 	pub children: HashMap<Vec<u8>, HashMap<Vec<u8>, OverlayedValue>>,
-	/// Kv storage changes.
+	/// Non trie key value storage changes.
 	pub kv: HashMap<Vec<u8>, Option<Vec<u8>>>,
 }
 

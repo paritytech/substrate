@@ -238,9 +238,9 @@ impl<
 	}
 
 	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (Vec<u8>, bool, Self::Transaction)
-	where
-		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
-		H::Out: Ord
+		where
+			I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
+			H::Out: Ord
 	{
 		let default_root = default_child_trie_root::<Layout<H>>(storage_key);
 
@@ -276,8 +276,8 @@ impl<
 	}
 
 	fn kv_transaction<I>(&self, delta: I) -> Self::Transaction
-	where
-		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
+		where
+			I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
 		let mut result = self.kv_storage.pairs();
 		result.extend(delta.into_iter());
