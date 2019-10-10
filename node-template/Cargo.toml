@@ -29,7 +29,6 @@ transaction-pool = { package = "substrate-transaction-pool", path = "../core/tra
 network = { package = "substrate-network", path = "../core/network" }
 aura = { package = "substrate-consensus-aura", path = "../core/consensus/aura" }
 aura-primitives = { package = "substrate-consensus-aura-primitives", path = "../core/consensus/aura/primitives" }
-grandpa-primitives = { package = "substrate-finality-grandpa-primitives", path = "../core/finality-grandpa/primitives" }
 substrate-client = {  path = "../core/client" }
 basic-authorship = { package = "substrate-basic-authorship", path = "../core/basic-authorship" }
 node-template-runtime = { path = "runtime" }
