@@ -32,7 +32,7 @@ use rstd::marker::PhantomData;
 #[cfg(not(feature = "std"))]
 use rstd::slice;
 
-pub use substrate_runtime_interface_proc_macro::PassByCodec;
+pub use substrate_runtime_interface_proc_macro::{PassByCodec, PassByInner};
 
 /// Something that should be passed between wasm and the host using the given strategy.
 ///
