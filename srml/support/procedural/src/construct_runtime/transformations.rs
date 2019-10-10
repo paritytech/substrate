@@ -6,7 +6,15 @@ use srml_support_procedural_tools::syn_ext as ext;
 use srml_support_procedural_tools::{generate_crate_access, generate_hidden_includes};
 use syn::Ident;
 
-extern crate self as macros;
+// try macro but returning tokenized error
+macro_rules! try_tok(( $expre : expr ) => {
+	match $expre {
+		Ok(r) => r,
+		Err (err) => {
+			return err.to_compile_error().into()
+		}
+	}
+});
 
 pub fn construct_runtime(input: TokenStream) -> TokenStream {
 	let definition = syn::parse_macro_input!(input as RuntimeDefinition);
@@ -39,12 +47,12 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 	let hidden_crate_name = "construct_runtime";
 	let scrate = generate_crate_access(&hidden_crate_name, "srml-support");
 	let scrate_decl = generate_hidden_includes(&hidden_crate_name, "srml-support");
-	let outer_event = decl_outer_event(
+	let outer_event = try_tok!(decl_outer_event(
 		&name,
 		modules.iter().filter(|module| module.name.to_string() != "System"),
 		&system_module,
 		&scrate,
-	);
+	));
 	let res: TokenStream = quote!(
 		#scrate_decl
 
@@ -71,7 +79,7 @@ fn decl_outer_event<'a>(
 	module_declarations: impl Iterator<Item = &'a ModuleDeclaration>,
 	system_name: &'a Ident,
 	scrate: &'a TokenStream2,
-) -> TokenStream2 {
+) -> syn::Result<TokenStream2> {
 	let mut modules_tokens = TokenStream2::new();
 	for module_declaration in module_declarations {
 		let event_ident = Ident::new("Event", module_declaration.name.span());
@@ -83,19 +91,30 @@ fn decl_outer_event<'a>(
 					.inner
 					.as_ref()
 					.map(|instance| &instance.name);
-				let generics_tokens = &module_entry.generics;
-				let tokens = quote!(#module #instance #generics_tokens ,);
+				let generics = &module_entry.generics;
+				// println!("Module `{}`, instance present: `{}`, generics present: `{}`", module, instance.is_some(), generics.inner.is_some());
+				if instance.is_some() && generics.params.len() == 0 {
+					let msg = format!(
+						"Instantiable module with no generic `Event` cannot \
+						 be constructed: module `{}` must have generic `Event`",
+						module_declaration.name
+					);
+					return Err(syn::Error::new(module_declaration.name.span(), msg));
+				}
+				let tokens = quote!(#module #instance #generics ,);
 				modules_tokens.extend(tokens);
 			}
 			None => {}
 		}
 	}
-	quote!(
-		#scrate::impl_outer_event! {
-			pub enum Event for #runtime_name where system = #system_name {
-				#modules_tokens
+	Ok(
+		quote!(
+			#scrate::impl_outer_event! {
+				pub enum Event for #runtime_name where system = #system_name {
+					#modules_tokens
+				}
 			}
-		}
+		)
 	)
 }
 

@@ -86,6 +86,6 @@ pub enum ModuleEntry {
 pub struct ModulePart {
 	pub name: Ident,
 	// This deviates from macro $( <$modules_generic:ident> )*
-	pub generics: ext::Opt<syn::Generics>,
+	pub generics: syn::Generics,
 	pub args: ext::Opt<ext::Parens<ext::Punctuated<Ident, Token![,]>>>,
 }
