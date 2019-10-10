@@ -139,7 +139,7 @@ mod tests {
 	use runtime_io::TestExternalities;
 	use sr_primitives::{
 		testing::{Header, UintAuthorityId}, traits::{ConvertInto, IdentityLookup, OpaqueKeys},
-		Perbill, set_and_run_with_externalities,
+		Perbill,
 	};
 	use support::{impl_outer_origin, parameter_types};
 
@@ -263,7 +263,7 @@ mod tests {
 		let mut externalities = TestExternalities::new(t);
 		externalities.register_extension(KeystoreExt(key_store));
 
-		set_and_run_with_externalities(&mut externalities, || {
+		externalities.execute_with(|| {
 			assert_eq!(
 				authority_id,
 				AuthorityDiscovery::authority_id().expect("Retrieving public key.")
@@ -300,7 +300,7 @@ mod tests {
 		let mut externalities = TestExternalities::new(t);
 		externalities.register_extension(KeystoreExt(key_store));
 
-		set_and_run_with_externalities(&mut externalities, || {
+		externalities.execute_with(|| {
 			assert_eq!(None, AuthorityDiscovery::authority_id());
 		});
 	}
@@ -337,7 +337,7 @@ mod tests {
 		let mut externalities = TestExternalities::new(t);
 		externalities.register_extension(KeystoreExt(key_store));
 
-		set_and_run_with_externalities(&mut externalities, || {
+		externalities.execute_with(|| {
 			let payload = String::from("test payload").into_bytes();
 			let (sig, authority_id) = AuthorityDiscovery::sign(&payload).expect("signature");
 

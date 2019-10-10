@@ -16,16 +16,16 @@ runtime_io = { package = "sr-io", path = "../sr-io", default-features = false }
 log = { version = "0.4.8", optional = true }
 paste = "0.1.6"
 rand = { version = "0.7.2", optional = true }
-externalities = { package = "substrate-externalities", path = "../externalities", optional = true }
 impl-trait-for-tuples = "0.1.2"
 
 [dev-dependencies]
-serde_json = "1.0.40"
+serde_json = "1.0.41"
 primitive-types = "0.5.1"
 rand = "0.7.2"
 substrate-offchain = { path = "../offchain" }
 
 [features]
+bench = []
 default = ["std"]
 std = [
 	"num-traits/std",
@@ -37,5 +37,4 @@ std = [
 	"primitives/std",
 	"app-crypto/std",
 	"rand",
-	"externalities",
 ]

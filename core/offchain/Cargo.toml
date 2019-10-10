@@ -27,7 +27,7 @@ network = { package = "substrate-network", path = "../../core/network" }
 keystore = { package = "substrate-keystore", path = "../keystore" }
 
 [dev-dependencies]
-env_logger = "0.6.2"
+env_logger = "0.7.0"
 client-db = { package = "substrate-client-db", path = "../../core/client/db/", default-features = true }
 test-client = { package = "substrate-test-runtime-client", path = "../../core/test-runtime/client" }
 tokio = "0.1.22"

@@ -15,10 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 #![recursion_limit="128"]
 
-use sr_primitives::{
-	generic, BuildStorage, traits::{BlakeTwo256, Block as _, Verify},
-	set_and_run_with_externalities,
-};
+use sr_primitives::{generic, BuildStorage, traits::{BlakeTwo256, Block as _, Verify}};
 use support::{
 	Parameter, traits::Get, parameter_types,
 	metadata::{
@@ -331,7 +328,7 @@ fn storage_instance_independance() {
 
 #[test]
 fn storage_with_instance_basic_operation() {
-	set_and_run_with_externalities(&mut new_test_ext(), || {
+	new_test_ext().execute_with(|| {
 		type Value = module2::Value<Runtime, module2::Instance1>;
 		type Map = module2::Map<module2::Instance1>;
 		type LinkedMap = module2::LinkedMap<module2::Instance1>;

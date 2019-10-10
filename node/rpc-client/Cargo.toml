@@ -5,7 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-env_logger = "0.6.2"
+env_logger = "0.7.0"
 futures = "0.1.29"
 hyper = "0.12.35"
 jsonrpc-core-client = { version = "13.1.0", features = ["http", "ws"] }

@@ -17,8 +17,6 @@ rstd = { package = "sr-std", path = "../../core/sr-std", default-features = fals
 sandbox = { package = "sr-sandbox", path = "../../core/sr-sandbox", default-features = false }
 support = { package = "srml-support", path = "../support", default-features = false }
 system = { package = "srml-system", path = "../system", default-features = false }
-randomness-collective-flip = { package = "srml-randomness-collective-flip", path = "../randomness-collective-flip", default-features = false }
-timestamp = { package = "srml-timestamp", path = "../timestamp", default-features = false }
 
 [dev-dependencies]
 wabt = "0.9.2"
@@ -27,6 +25,7 @@ hex-literal = "0.2.1"
 balances = { package = "srml-balances", path = "../balances" }
 hex = "0.3.2"
 timestamp = { package = "srml-timestamp", path = "../timestamp" }
+randomness-collective-flip = { package = "srml-randomness-collective-flip", path = "../randomness-collective-flip" }
 
 [features]
 default = ["std"]
@@ -35,7 +34,6 @@ std = [
 	"codec/std",
 	"primitives/std",
 	"sr-primitives/std",
-	"randomness-collective-flip/std",
 	"runtime-io/std",
 	"rstd/std",
 	"sandbox/std",
