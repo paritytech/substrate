@@ -1261,7 +1261,7 @@ impl<T: Trait<I>, I: Instance + Clone + Eq> SignedExtension for TakeFees<T, I> {
 		) {
 			Ok(imbalance) => imbalance,
 			Err(msg) => {
-				// TODO: replying on string error is horrible here.
+				// TODO: relying on string error is quite bad here.
 				// not(operational && "would kill")
 				if info.class == DispatchClass::Normal || msg != "payment would kill account" {
 					return InvalidTransaction::Payment.into()
