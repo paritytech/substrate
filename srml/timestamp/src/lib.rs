@@ -324,10 +324,7 @@ mod tests {
 	use support::{impl_outer_origin, assert_ok, parameter_types};
 	use runtime_io::TestExternalities;
 	use primitives::H256;
-	use sr_primitives::{
-		Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header,
-		set_and_run_with_externalities,
-	};
+	use sr_primitives::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 
 	impl_outer_origin! {
 		pub enum Origin for Test {}
@@ -372,7 +369,7 @@ mod tests {
 	#[test]
 	fn timestamp_works() {
 		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		set_and_run_with_externalities(&mut TestExternalities::new(t), || {
+		TestExternalities::new(t).execute_with(|| {
 			Timestamp::set_timestamp(42);
 			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::NONE));
 			assert_eq!(Timestamp::now(), 69);
@@ -383,7 +380,7 @@ mod tests {
 	#[should_panic(expected = "Timestamp must be updated only once in the block")]
 	fn double_timestamp_should_fail() {
 		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		set_and_run_with_externalities(&mut TestExternalities::new(t), || {
+		TestExternalities::new(t).execute_with(|| {
 			Timestamp::set_timestamp(42);
 			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::NONE));
 			let _ = Timestamp::dispatch(Call::set(70), Origin::NONE);
@@ -394,7 +391,7 @@ mod tests {
 	#[should_panic(expected = "Timestamp must increment by at least <MinimumPeriod> between sequential blocks")]
 	fn block_period_minimum_enforced() {
 		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		set_and_run_with_externalities(&mut TestExternalities::new(t), || {
+		TestExternalities::new(t).execute_with(|| {
 			Timestamp::set_timestamp(42);
 			let _ = Timestamp::dispatch(Call::set(46), Origin::NONE);
 		});

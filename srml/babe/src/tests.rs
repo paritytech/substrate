@@ -18,9 +18,7 @@
 
 use super::*;
 use mock::{new_test_ext, Babe, Test};
-use sr_primitives::{
-	set_and_run_with_externalities, traits::OnFinalize, testing::{Digest, DigestItem},
-};
+use sr_primitives::{traits::OnFinalize, testing::{Digest, DigestItem}};
 use session::ShouldEndSession;
 
 const EMPTY_RANDOMNESS: [u8; 32] = [
@@ -54,14 +52,14 @@ fn empty_randomness_is_correct() {
 
 #[test]
 fn initial_values() {
-	set_and_run_with_externalities(&mut new_test_ext(vec![0, 1, 2, 3]), || {
+	new_test_ext(vec![0, 1, 2, 3]).execute_with(|| {
 		assert_eq!(Babe::authorities().len(), 4)
 	})
 }
 
 #[test]
 fn check_module() {
-	set_and_run_with_externalities(&mut new_test_ext(vec![0, 1, 2, 3]), || {
+	new_test_ext(vec![0, 1, 2, 3]).execute_with(|| {
 		assert!(!Babe::should_end_session(0), "Genesis does not change sessions");
 		assert!(!Babe::should_end_session(200000),
 			"BABE does not include the block number in epoch calculations");
@@ -72,7 +70,7 @@ type System = system::Module<Test>;
 
 #[test]
 fn first_block_epoch_zero_start() {
-	set_and_run_with_externalities(&mut new_test_ext(vec![0, 1, 2, 3]), || {
+	new_test_ext(vec![0, 1, 2, 3]).execute_with(|| {
 		let genesis_slot = 100;
 		let first_vrf = [1; 32];
 		let pre_digest = make_pre_digest(
@@ -120,7 +118,7 @@ fn first_block_epoch_zero_start() {
 
 #[test]
 fn authority_index() {
-	set_and_run_with_externalities(&mut new_test_ext(vec![0, 1, 2, 3]), || {
+	new_test_ext(vec![0, 1, 2, 3]).execute_with(|| {
 		assert_eq!(
 			Babe::find_author((&[(BABE_ENGINE_ID, &[][..])]).into_iter().cloned()), None,
 			"Trivially invalid authorities are ignored")
