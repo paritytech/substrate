@@ -30,7 +30,7 @@ use crate::trie_backend::TrieBackend;
 use crate::trie_backend_essence::{Ephemeral, TrieBackendEssence, TrieBackendStorage};
 use crate::{Error, ExecutionError, Backend};
 use crate::kv_backend::{KvBackend, InMemory as InMemoryKvBackend};
-use primitives::child_trie::KeySpace;
+use primitives::child_trie::{KeySpace, NO_CHILD_KEYSPACE};
 
 /// Patricia trie-based backend essence which also tracks all touched storage trie values.
 /// These can be sent to remote node and used as a proof of execution.
@@ -64,10 +64,11 @@ impl<'a, S, H> ProvingBackendEssence<'a, S, H>
 	pub fn child_storage(
 		&mut self,
 		storage_key: &[u8],
+		keyspace: &KeySpace,
 		key: &[u8]
 	) -> Result<Option<Vec<u8>>, String> {
 		let root = self.storage(storage_key)?
-			.unwrap_or(default_child_trie_root::<Layout<H>>(storage_key));
+			.unwrap_or_else(|| default_child_trie_root::<Layout<H>>(storage_key));
 
 		let mut read_overlay = S::Overlay::default();
 		let eph = Ephemeral::new(
@@ -80,6 +81,7 @@ impl<'a, S, H> ProvingBackendEssence<'a, S, H>
 		read_child_trie_value_with::<Layout<H>, _, _>(
 			storage_key,
 			&eph,
+			keyspace,
 			&root,
 			key,
 			&mut *self.proof_recorder
@@ -181,11 +183,17 @@ impl<'a, S, H, O> Backend<H> for ProvingBackend<'a, S, H, O>
 	}
 
 	fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		// default to using the main keyspace is not an issue
+		// here as we are in the case of non existing trie
+		// and will query default trie root to empty trie.
+		let keyspace = self.get_child_keyspace(storage_key)?
+			.unwrap_or_else(|| NO_CHILD_KEYSPACE.to_vec());
+
 		ProvingBackendEssence {
 			backend: self.backend.essence(),
 			proof_recorder: &mut *self.proof_recorder.try_borrow_mut()
 				.expect("only fails when already borrowed; child_storage() is non-reentrant; qed"),
-		}.child_storage(storage_key, key)
+		}.child_storage(storage_key, &keyspace, key)
 	}
 
 	fn get_child_keyspace(&self, storage_key: &[u8]) -> Result<Option<KeySpace>, Self::Error> {
@@ -238,12 +246,17 @@ impl<'a, S, H, O> Backend<H> for ProvingBackend<'a, S, H, O>
 		self.backend.storage_root(delta)
 	}
 
-	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (Vec<u8>, bool, Self::Transaction)
+	fn child_storage_root<I>(
+		&self,
+		storage_key: &[u8],
+		keyspace: &KeySpace,
+		delta: I,
+	) -> (Vec<u8>, bool, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		H::Out: Ord
 	{
-		self.backend.child_storage_root(storage_key, delta)
+		self.backend.child_storage_root(storage_key, keyspace, delta)
 	}
 
 	fn kv_transaction<I>(&self, delta: I) -> Self::Transaction

@@ -20,6 +20,7 @@ use log::{warn, debug};
 use hash_db::Hasher;
 use trie::{Trie, delta_trie_root, default_child_trie_root, child_delta_trie_root};
 use trie::trie_types::{TrieDB, TrieError, Layout};
+use trie::KeySpacedDB;
 use crate::trie_backend_essence::{TrieBackendEssence, TrieBackendStorage, Ephemeral};
 use crate::Backend;
 use crate::kv_backend::KvBackend;
@@ -102,11 +103,13 @@ impl<
 	}
 
 	fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-// TODO EMCHEMCH
-//		let keyspace = self.child_keyspace(storage_key);
-		// Then change essence functions to use keyspace as input.
+		let keyspace = if let Some(keyspace) = self.get_child_keyspace(storage_key)? {
+			keyspace
+		} else {
+			return Ok(None);
+		};
 
-		self.essence.child_storage(storage_key, key)
+		self.essence.child_storage(storage_key, &keyspace, key)
 	}
 
 	fn get_child_keyspace(&self, storage_key: &[u8]) -> Result<Option<KeySpace>, Self::Error> {
@@ -122,7 +125,16 @@ impl<
 	}
 
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], f: F) {
-		self.essence.for_keys_in_child_storage(storage_key, f)
+		let keyspace = match self.get_child_keyspace(storage_key) {
+			Ok(Some(keyspace)) => keyspace,
+			Err(e) => {
+				warn!(target: "trie", "Failed to query keyspace: {}", e);
+				return;
+			},
+			Ok(None) => return,
+		};
+
+		self.essence.for_keys_in_child_storage(storage_key, &keyspace, f)
 	}
 
 	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(&self, storage_key: &[u8], prefix: &[u8], f: F) {
@@ -134,6 +146,7 @@ impl<
 		let eph = Ephemeral::new(self.essence.backend_storage(), &mut read_overlay);
 
 		let collect_all = || -> Result<_, Box<TrieError<H::Out>>> {
+			let eph = KeySpacedDB::new(&eph, None);
 			let trie = TrieDB::<H>::new(&eph, self.essence.root())?;
 			let mut v = Vec::new();
 			for x in trie.iter()? {
@@ -170,12 +183,24 @@ impl<
 		let mut read_overlay = S::Overlay::default();
 		let eph = Ephemeral::new(self.essence.backend_storage(), &mut read_overlay);
 
+		let keyspace = match self.get_child_keyspace(storage_key) {
+			Ok(ks) => ks,
+			Err(e) => {
+				debug!(target: "trie", "Error extracting child trie values: {}", e);
+				return Vec::new();
+			}
+		};
+
 		let collect_all = || -> Result<_, Box<TrieError<H::Out>>> {
-			let trie = TrieDB::<H>::new(&eph, &root)?;
 			let mut v = Vec::new();
-			for x in trie.iter()? {
-				let (key, value) = x?;
-				v.push((key.to_vec(), value.to_vec()));
+			// if no keyspace, the child trie just got created.
+			if let Some(keyspace) = keyspace {
+				let eph = KeySpacedDB::new(&eph, Some(&keyspace));
+				let trie = TrieDB::<H>::new(&eph, &root)?;
+				for x in trie.iter()? {
+					let (key, value) = x?;
+					v.push((key.to_vec(), value.to_vec()));
+				}
 			}
 
 			Ok(v)
@@ -199,6 +224,7 @@ impl<
 		let eph = Ephemeral::new(self.essence.backend_storage(), &mut read_overlay);
 
 		let collect_all = || -> Result<_, Box<TrieError<H::Out>>> {
+			let eph = KeySpacedDB::new(&eph, None);
 			let trie = TrieDB::<H>::new(&eph, self.essence.root())?;
 			let mut v = Vec::new();
 			for x in trie.iter()? {
@@ -235,7 +261,12 @@ impl<
 		(root, (write_overlay, Default::default()))
 	}
 
-	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (Vec<u8>, bool, Self::Transaction)
+	fn child_storage_root<I>(
+		&self,
+		storage_key: &[u8],
+		keyspace: &KeySpace,
+		delta: I,
+	) -> (Vec<u8>, bool, Self::Transaction)
 		where
 			I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 			H::Out: Ord
@@ -260,6 +291,7 @@ impl<
 			match child_delta_trie_root::<Layout<H>, _, _, _, _>(
 				storage_key,
 				&mut eph,
+				keyspace,
 				root.clone(),
 				delta
 			) {
@@ -293,26 +325,31 @@ impl<
 pub mod tests {
 	use std::collections::HashSet;
 	use primitives::{Blake2Hasher, H256};
-	use codec::Encode;
-	use trie::{TrieMut, PrefixedMemoryDB, trie_types::TrieDBMut};
+	use primitives::child_trie::{produce_keyspace, KEYSPACE_COUNTER, reverse_keyspace};
+	use trie::{TrieMut, PrefixedMemoryDB, KeySpacedDBMut, trie_types::TrieDBMut};
 	use super::*;
 
 	type KvBackend = crate::kv_backend::InMemory;
 
+	const CHILD_KEY_1: &[u8; 27] = b":child_storage:default:sub1";
+
 	fn test_db() -> (PrefixedMemoryDB<Blake2Hasher>, H256, KvBackend) {
 		let mut root = H256::default();
 		let mut mdb = PrefixedMemoryDB::<Blake2Hasher>::default();
+
+		let keyspace1 = produce_keyspace(1);
+		let mut sub_root = H256::default();
 		{
-			let mut trie = TrieDBMut::new(&mut mdb, &mut root);
+			let mut mdb = KeySpacedDBMut::new(&mut mdb, Some(&keyspace1));
+			let mut trie = TrieDBMut::new(&mut mdb, &mut sub_root);
 			trie.insert(b"value3", &[142]).expect("insert failed");
 			trie.insert(b"value4", &[124]).expect("insert failed");
-		};
-
+		}
+	
 		{
-			let mut sub_root = Vec::new();
-			root.encode_to(&mut sub_root);
+			let mut mdb = KeySpacedDBMut::new(&mut mdb, None);
 			let mut trie = TrieDBMut::new(&mut mdb, &mut root);
-			trie.insert(b":child_storage:default:sub1", &sub_root).expect("insert failed");
+			trie.insert(CHILD_KEY_1, &sub_root[..]).expect("insert failed");
 			trie.insert(b"key", b"value").expect("insert failed");
 			trie.insert(b"value1", &[42]).expect("insert failed");
 			trie.insert(b"value2", &[24]).expect("insert failed");
@@ -323,8 +360,8 @@ pub mod tests {
 		}
 		// empty history.
 		let mut kv = crate::kv_backend::InMemory::default();
-		kv.insert(b"kv1".to_vec(), Some(b"kv_value1".to_vec()));
-		kv.insert(b"kv2".to_vec(), Some(b"kv_value2".to_vec()));
+		kv.insert(KEYSPACE_COUNTER.to_vec(), Some(keyspace1.clone()));
+		kv.insert(prefixed_keyspace_kv(&CHILD_KEY_1[..]), Some(keyspace1));
 		(mdb, root, kv)
 	}
 
@@ -337,6 +374,15 @@ pub mod tests {
 	#[test]
 	fn read_from_storage_returns_some() {
 		assert_eq!(test_trie().storage(b"key").unwrap(), Some(b"value".to_vec()));
+	}
+
+	#[test]
+	fn read_from_child_storage_returns_some() {
+		let test_trie = test_trie();
+		assert_eq!(
+			test_trie.child_storage(CHILD_KEY_1, b"value3").unwrap(),
+			Some(vec![142u8]),
+		);
 	}
 
 	#[test]
@@ -374,6 +420,7 @@ pub mod tests {
 	fn storage_root_transaction_is_non_empty() {
 		let (new_root, mut tx) = test_trie().storage_root(vec![(b"new-key".to_vec(), Some(b"new-value".to_vec()))]);
 		assert!(!tx.0.drain().is_empty());
+		assert!(tx.1.is_empty());
 		assert!(new_root != test_trie().storage_root(::std::iter::empty()).0);
 	}
 

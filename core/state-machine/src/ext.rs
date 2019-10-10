@@ -29,6 +29,7 @@ use primitives::{
 	offchain, storage::well_known_keys::is_child_storage_key,
 	traits::{BareCryptoStorePtr, Externalities}, child_storage_key::ChildStorageKey,
 	hexdisplay::HexDisplay,
+	child_trie::{KeySpace, NO_CHILD_KEYSPACE},
 };
 use trie::{MemoryDB, default_child_trie_root};
 use trie::trie_types::Layout;
@@ -154,7 +155,6 @@ where
 
 }
 
-#[cfg(test)]
 impl<'a, H, N, B, T, O> Ext<'a, H, N, B, T, O>
 where
 	H: Hasher,
@@ -163,6 +163,7 @@ where
 	O: 'a + offchain::Externalities,
 	N: crate::changes_trie::BlockNumber,
 {
+	#[cfg(test)]
 	pub fn storage_pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
 		use std::collections::HashMap;
 
@@ -175,10 +176,15 @@ where
 			.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))
 			.collect()
 	}
+
+	fn get_child_keyspace(&self, storage_key: &[u8]) -> Option<KeySpace> {
+		unimplemented!("query overlay then backend (overlay can have delete it)");
+	}
 }
 
 impl<'a, B, T, H, N, O> Externalities<H> for Ext<'a, H, N, B, T, O>
-where	H: Hasher,
+where
+	H: Hasher,
 	B: 'a + Backend<H>,
 	T: 'a + ChangesTrieStorage<H, N>,
 	H::Out: Ord + 'static,
@@ -453,7 +459,10 @@ where	H: Hasher,
 						.into_iter()
 						.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), v.value.clone()))));
 
-			let root = self.backend.child_storage_root(storage_key, delta).0;
+			let keyspace = self.get_child_keyspace(storage_key)
+				// no need to generate keyspace here (tx are dropped)
+				.unwrap_or_else(|| NO_CHILD_KEYSPACE.to_vec());
+			let root = self.backend.child_storage_root(storage_key, &keyspace, delta).0;
 
 			self.overlay.set_storage(storage_key.to_vec(), Some(root.to_vec()));
 

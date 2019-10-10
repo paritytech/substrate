@@ -23,9 +23,10 @@ use log::{debug, warn};
 use hash_db::{self, Hasher, EMPTY_PREFIX, Prefix};
 use trie::{Trie, MemoryDB, PrefixedMemoryDB, DBValue,
 	default_child_trie_root, read_trie_value, read_child_trie_value,
-	for_keys_in_child_trie};
+	for_keys_in_child_trie, KeySpacedDB};
 use trie::trie_types::{TrieDB, TrieError, Layout};
 use crate::backend::Consolidate;
+use primitives::child_trie::KeySpace;
 
 /// Patricia trie-based storage trait.
 pub trait Storage<H: Hasher>: Send + Sync {
@@ -77,9 +78,17 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> {
 	}
 
 	/// Get the value of child storage at given key.
-	pub fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, String> {
-		let root = self.storage(storage_key)?
-			.unwrap_or(default_child_trie_root::<Layout<H>>(storage_key));
+	pub fn child_storage(
+		&self,
+		storage_key: &[u8],
+		keyspace: &KeySpace,
+		key: &[u8],
+	) -> Result<Option<Vec<u8>>, String> {
+		let root = if let Some(root) = self.storage(storage_key)? {
+			root
+		} else {
+			return Ok(None)
+		};
 
 		let mut read_overlay = S::Overlay::default();
 		let eph = Ephemeral {
@@ -89,11 +98,16 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> {
 
 		let map_e = |e| format!("Trie lookup error: {}", e);
 
-		read_child_trie_value::<Layout<H>, _>(storage_key, &eph, &root, key).map_err(map_e)
+		read_child_trie_value::<Layout<H>, _>(storage_key, &eph, &keyspace, &root, key).map_err(map_e)
 	}
 
 	/// Retrieve all entries keys of child storage and call `f` for each of those keys.
-	pub fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], f: F) {
+	pub fn for_keys_in_child_storage<F: FnMut(&[u8])>(
+		&self,
+		storage_key: &[u8],
+		keyspace: &KeySpace,
+		f: F,
+	) {
 		let root = match self.storage(storage_key) {
 			Ok(v) => v.unwrap_or(default_child_trie_root::<Layout<H>>(storage_key)),
 			Err(e) => {
@@ -111,6 +125,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> {
 		if let Err(e) = for_keys_in_child_trie::<Layout<H>, _, Ephemeral<S, H>>(
 			storage_key,
 			&eph,
+			keyspace,
 			&root,
 			f,
 		) {
@@ -152,7 +167,8 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> {
 		};
 
 		let mut iter = move || -> Result<(), Box<TrieError<H::Out>>> {
-			let trie = TrieDB::<H>::new(&eph, root)?;
+			let eph = KeySpacedDB::new(&eph, None);
+			let trie = TrieDB::<H>::new(&eph, &self.root)?;
 			let mut iter = trie.iter()?;
 
 			iter.seek(prefix)?;

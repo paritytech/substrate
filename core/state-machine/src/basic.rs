@@ -25,6 +25,7 @@ use trie::trie_types::Layout;
 use primitives::{
 	storage::well_known_keys::is_child_storage_key, child_storage_key::ChildStorageKey, offchain,
 	traits::Externalities,
+	child_trie::{KeySpace, NO_CHILD_KEYSPACE},
 };
 use log::warn;
 
@@ -181,8 +182,9 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord {
 	fn child_storage_root(&mut self, storage_key: ChildStorageKey) -> Vec<u8> {
 		if let Some(child) = self.children.get(storage_key.as_ref()) {
 			let delta = child.clone().into_iter().map(|(k, v)| (k, Some(v)));
-
-			InMemory::<H>::default().child_storage_root(storage_key.as_ref(), delta).0
+			// no transaction produce, just send a dummy
+			let keyspace = NO_CHILD_KEYSPACE.to_vec();
+			InMemory::<H>::default().child_storage_root(storage_key.as_ref(), &keyspace, delta).0
 		} else {
 			default_child_trie_root::<Layout<H>>(storage_key.as_ref())
 		}

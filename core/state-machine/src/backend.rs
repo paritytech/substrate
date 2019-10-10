@@ -103,7 +103,12 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	/// Calculate the child storage root, with given delta over what is already stored in
 	/// the backend, and produce a "transaction" that can be used to commit. The second argument
 	/// is true if child storage root equals default storage root.
-	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (Vec<u8>, bool, Self::Transaction)
+	fn child_storage_root<I>(
+		&self,
+		storage_key: &[u8],
+		keyspace: &KeySpace,
+		delta: I,
+	) -> (Vec<u8>, bool, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		H::Out: Ord;
@@ -165,10 +170,15 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 		let mut txs: Self::Transaction = self.kv_transaction(kv_deltas);
 
 		let mut child_roots: Vec<_> = Default::default();
+
 		// child first
 		for (storage_key, child_delta) in child_deltas {
+			let keyspace = unimplemented!("get or new keyspace and put the \
+			new keyspace to kv, ak tx consolidate kv transaction (first line with \
+				those as kv_deltas)");
+
 			let (child_root, empty, child_txs) =
-				self.child_storage_root(&storage_key[..], child_delta);
+				self.child_storage_root(&storage_key[..], &keyspace, child_delta);
 			txs.consolidate(child_txs);
 			if empty {
 				child_roots.push((storage_key, None));
@@ -222,12 +232,17 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 		(*self).storage_root(delta)
 	}
 
-	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (Vec<u8>, bool, Self::Transaction)
+	fn child_storage_root<I>(
+		&self,
+		storage_key: &[u8],
+		keyspace: &KeySpace,
+		delta: I,
+	) -> (Vec<u8>, bool, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		H::Out: Ord,
 	{
-		(*self).child_storage_root(storage_key, delta)
+		(*self).child_storage_root(storage_key, keyspace, delta)
 	}
 
 	fn kv_transaction<I>(&self, delta: I) -> Self::Transaction
@@ -568,7 +583,12 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 		(root, InMemoryTransaction { storage: full_transaction, kv: Default::default() })
 	}
 
-	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (Vec<u8>, bool, Self::Transaction)
+	fn child_storage_root<I>(
+		&self,
+		storage_key: &[u8],
+		_keyspace: &KeySpace,
+		delta: I,
+	) -> (Vec<u8>, bool, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		H::Out: Ord

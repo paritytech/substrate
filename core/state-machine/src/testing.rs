@@ -307,7 +307,12 @@ impl<H, N> Externalities<H> for TestExternalities<H, N> where
 						.into_iter()
 						.flat_map(|map| map.clone().into_iter().map(|(k, v)| (k, v.value))));
 
-			self.backend.child_storage_root(storage_key, delta)
+			let keyspace = match self.get_child_keyspace(storage_key) {
+				Ok(Some(keyspace)) => keyspace,
+				// no transaction produced, can default when new trie
+				_ => NO_CHILD_KEYSPACE.to_vec(),
+			};
+			self.backend.child_storage_root(storage_key, &keyspace, delta)
 		};
 		if is_empty {
 			self.overlay.set_storage(storage_key.into(), None);

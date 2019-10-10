@@ -36,7 +36,7 @@ use primitives::{
 use app_crypto::{ed25519, sr25519, RuntimeAppPublic};
 pub use app_crypto;
 use trie_db::{TrieMut, Trie};
-use substrate_trie::PrefixedMemoryDB;
+use substrate_trie::{KeySpacedDBMut, KeySpacedDB, PrefixedMemoryDB};
 use substrate_trie::trie_types::{TrieDB, TrieDBMut};
 
 use substrate_client::{
@@ -431,6 +431,7 @@ fn code_using_trie() -> u64 {
 	let mut root = rstd::default::Default::default();
 	let _ = {
 		let v = &pairs;
+		let mut mdb = KeySpacedDBMut::new(&mut mdb, None);
 		let mut t = TrieDBMut::<Blake2Hasher>::new(&mut mdb, &mut root);
 		for i in 0..v.len() {
 			let key: &[u8]= &v[i].0;
@@ -442,6 +443,7 @@ fn code_using_trie() -> u64 {
 		t
 	};
 
+	let mdb = KeySpacedDB::new(&mdb, None);
 	if let Ok(trie) = TrieDB::<Blake2Hasher>::new(&mdb, &root) {
 		if let Ok(iter) = trie.iter() {
 			let mut iter_pairs = Vec::new();
