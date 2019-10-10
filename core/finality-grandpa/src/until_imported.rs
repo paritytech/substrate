@@ -117,6 +117,7 @@ impl<Block: BlockT, BlockStatus, BlockSyncRequester, I: Stream, M> UntilImported
 
 impl<Block: BlockT, BlockStatus, BlockSyncRequester, I, M> Stream for UntilImported<Block, BlockStatus, BlockSyncRequester, I, M> where
 	BlockStatus: BlockStatusT<Block>,
+	BlockSyncRequester: BlockSyncRequesterT<Block>,
 	I: Stream<Item=(Option<network::PeerId>, M::Blocked),Error=Error>,
 	M: BlockUntilImported<Block>,
 {
@@ -128,7 +129,6 @@ impl<Block: BlockT, BlockStatus, BlockSyncRequester, I, M> Stream for UntilImpor
 			match self.inner.poll()? {
 				Async::Ready(None) => return Ok(Async::Ready(None)),
 				Async::Ready(Some((sender, input))) => {
-
 					// new input: schedule wait of any parts which require
 					// blocks to be known.
 					let ready = &mut self.ready;
@@ -143,7 +143,6 @@ impl<Block: BlockT, BlockStatus, BlockSyncRequester, I, M> Stream for UntilImpor
 							// Given that we received the message from the sender, we expect to be able to download the
 							// referenced block from them later in case we don't already download it automatically from
 							// elsewhere.
-							// TODO: Can we get around the clone?
 							if let Some(sender) = sender.clone() {
 								entry.2.push(sender);
 							}
@@ -194,13 +193,14 @@ impl<Block: BlockT, BlockStatus, BlockSyncRequester, I, M> Stream for UntilImpor
 						debug!(
 							target: "afg",
 							"Waiting to import block {} before {} {} messages can be imported. \
+							Requesting network sync service to retrieve block from. \
 							Possible fork?",
 							self.identifier,
 							block_hash,
 							v.len(),
 						);
 
-						// TODO: This seems like THE place to be! Pass the senders down to the network sync service.
+						self.block_sync_requester.set_sync_fork_request(senders.clone(), block_hash, block_number);
 
 						*last_log = next_log;
 					}
