@@ -179,7 +179,7 @@ use sr_primitives::{
 		Zero, SimpleArithmetic, StaticLookup, Member, CheckedAdd, CheckedSub, MaybeSerializeDebug,
 		Saturating, Bounded, SignedExtension, SaturatedConversion, Convert,
 	},
-	weights::{DispatchInfo, SimpleDispatchInfo, Weight},
+	weights::{DispatchInfo, SimpleDispatchInfo, DispatchClass, Weight},
 };
 use system::{IsDeadAccount, OnNewAccount, ensure_signed, ensure_root};
 
@@ -1260,7 +1260,14 @@ impl<T: Trait<I>, I: Instance + Clone + Eq> SignedExtension for TakeFees<T, I> {
 			ExistenceRequirement::KeepAlive,
 		) {
 			Ok(imbalance) => imbalance,
-			Err(_) => return InvalidTransaction::Payment.into(),
+			Err(msg) => {
+				// TODO: replying on string error is horrible here.
+				// not(operational && "would kill")
+				if info.class == DispatchClass::Normal || msg != "payment would kill account" {
+					return InvalidTransaction::Payment.into()
+				}
+				NegativeImbalance::zero()
+			},
 		};
 		T::TransactionPayment::on_unbalanced(imbalance);
 
