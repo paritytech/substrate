@@ -32,6 +32,9 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
+mod error;
+mod storage_proof;
+
 use codec::{Encode, Decode};
 use sr_primitives::traits::{Header, Member};
 use support::{
@@ -148,7 +151,7 @@ mod tests {
 
 	use primitives::{H256, Blake2Hasher};
 	use sr_primitives::{
-		Perbill, traits::IdentityLookup, testing::Header, generic::Digest
+		Perbill, traits::{Header as HeaderT, IdentityLookup}, testing::Header, generic::Digest,
 	};
 	use support::{assert_ok, impl_outer_origin, parameter_types};
 	use runtime_io::with_externalities;
@@ -223,6 +226,7 @@ mod tests {
 			extrinsics_root: H256::default(),
 			digest: Digest::default(),
 		};
+		let test_hash = test_header.hash();
 
 		with_externalities(&mut new_test_ext(), || {
 			assert_eq!(MockBridge::num_bridges(), 0);
@@ -242,7 +246,7 @@ mod tests {
 				MockBridge::tracked_bridges(1),
 				Some(BridgeInfo {
 					last_finalized_block_number: 42,
-					last_finalized_block_hash: test_header.hash(), // FIXME: This is broken
+					last_finalized_block_hash: test_hash,
 					last_finalized_state_root: dummy_state_root,
 					current_validator_set: vec![1, 2, 3],
 				}));
