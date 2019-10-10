@@ -22,11 +22,11 @@
 //!
 //! # Usage
 //!
-//! First, create a block-import wrapper with the `block_import` function.
-//! The GRANDPA worker needs to be linked together with this block import object,
-//! so a `LinkHalf` is returned as well. All blocks imported (from network or consensus or otherwise)
-//! must pass through this wrapper, otherwise consensus is likely to break in
-//! unexpected ways.
+//! First, create a block-import wrapper with the `block_import` function. The
+//! GRANDPA worker needs to be linked together with this block import object, so
+//! a `LinkHalf` is returned as well. All blocks imported (from network or
+//! consensus or otherwise) must pass through this wrapper, otherwise consensus
+//! is likely to break in unexpected ways.
 //!
 //! Next, use the `LinkHalf` and a local configuration to `run_grandpa_voter`.
 //! This requires a `Network` implementation. The returned future should be
@@ -238,7 +238,7 @@ impl From<ClientError> for Error {
 }
 
 /// Something which can determine if a block is known.
-pub trait BlockStatus<Block: BlockT> {
+pub(crate) trait BlockStatus<Block: BlockT> {
 	/// Return `Ok(Some(number))` or `Ok(None)` depending on whether the block
 	/// is definitely known and has been imported.
 	/// If an unexpected error occurs, return that.
