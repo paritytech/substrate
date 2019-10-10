@@ -21,10 +21,9 @@
 use super::*;
 use crate::mock::*;
 use offchain::testing::TestOffchainExt;
-use primitives::offchain::OpaquePeerId;
-use runtime_io::with_externalities;
+use primitives::offchain::{OpaquePeerId, OffchainExt};
 use support::{dispatch, assert_noop};
-use sr_primitives::testing::UintAuthorityId;
+use sr_primitives::{set_and_run_with_externalities, testing::UintAuthorityId};
 
 
 #[test]
@@ -49,7 +48,7 @@ fn test_unresponsiveness_slash_fraction() {
 
 #[test]
 fn should_report_offline_validators() {
-	with_externalities(&mut new_test_ext(), || {
+	set_and_run_with_externalities(&mut new_test_ext(), || {
 		// given
 		let block = 1;
 		System::set_block_number(block);
@@ -125,7 +124,7 @@ fn heartbeat(
 
 #[test]
 fn should_mark_online_validator_when_heartbeat_is_received() {
-	with_externalities(&mut new_test_ext(), || {
+	set_and_run_with_externalities(&mut new_test_ext(), || {
 		advance_session();
 		// given
 		VALIDATORS.with(|l| *l.borrow_mut() = Some(vec![1, 2, 3, 4, 5, 6]));
@@ -160,7 +159,7 @@ fn should_mark_online_validator_when_heartbeat_is_received() {
 
 #[test]
 fn late_heartbeat_should_fail() {
-	with_externalities(&mut new_test_ext(), || {
+	set_and_run_with_externalities(&mut new_test_ext(), || {
 		advance_session();
 		// given
 		VALIDATORS.with(|l| *l.borrow_mut() = Some(vec![1, 2, 4, 4, 5, 6]));
@@ -181,9 +180,9 @@ fn late_heartbeat_should_fail() {
 fn should_generate_heartbeats() {
 	let mut ext = new_test_ext();
 	let (offchain, state) = TestOffchainExt::new();
-	ext.set_offchain_externalities(offchain);
+	ext.register_extension(OffchainExt::new(offchain));
 
-	with_externalities(&mut ext, || {
+	set_and_run_with_externalities(&mut ext, || {
 		// given
 		let block = 1;
 		System::set_block_number(block);
@@ -219,7 +218,7 @@ fn should_generate_heartbeats() {
 
 #[test]
 fn should_cleanup_received_heartbeats_on_session_end() {
-	with_externalities(&mut new_test_ext(), || {
+	set_and_run_with_externalities(&mut new_test_ext(), || {
 		advance_session();
 
 		VALIDATORS.with(|l| *l.borrow_mut() = Some(vec![1, 2, 3]));

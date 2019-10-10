@@ -29,7 +29,10 @@ support::decl_event!(
 
 support::decl_error! {
 	pub enum Error {
+		/// Test error documentation
 		TestError,
+		/// Error documentation
+		/// with multiple lines
 		AnotherError
 	}
 }

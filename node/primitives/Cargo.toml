@@ -9,7 +9,7 @@ client = { package = "substrate-client", path = "../../core/client", default-fea
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 primitives = { package = "substrate-primitives", path = "../../core/primitives", default-features = false }
 rstd = { package = "sr-std", path = "../../core/sr-std", default-features = false }
-serde = { version = "1.0", optional = true, features = ["derive"] }
+serde = { version = "1.0.101", optional = true, features = ["derive"] }
 sr-primitives = { path = "../../core/sr-primitives", default-features = false }
 
 [dev-dependencies]

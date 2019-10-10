@@ -22,7 +22,7 @@ use sr_primitives::curve::PiecewiseLinear;
 use sr_primitives::traits::{IdentityLookup, Convert, OpaqueKeys, OnInitialize, SaturatedConversion};
 use sr_primitives::testing::{Header, UintAuthorityId};
 use sr_staking_primitives::SessionIndex;
-use primitives::{H256, Blake2Hasher};
+use primitives::H256;
 use runtime_io;
 use support::{assert_ok, impl_outer_origin, parameter_types, StorageLinkedMap};
 use support::traits::{Currency, Get, FindAuthor};
@@ -274,7 +274,7 @@ impl ExtBuilder {
 	pub fn set_associated_consts(&self) {
 		EXISTENTIAL_DEPOSIT.with(|v| *v.borrow_mut() = self.existential_deposit);
 	}
-	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
+	pub fn build(self) -> runtime_io::TestExternalities {
 		self.set_associated_consts();
 		let mut storage = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		let balance_factor = if self.existential_deposit > 0 {
@@ -341,7 +341,7 @@ impl ExtBuilder {
 		}.assimilate_storage(&mut storage);
 
 		let mut ext = storage.into();
-		runtime_io::with_externalities(&mut ext, || {
+		sr_primitives::set_and_run_with_externalities(&mut ext, || {
 			let validators = Session::validators();
 			SESSION.with(|x|
 				*x.borrow_mut() = (validators.clone(), HashSet::new())

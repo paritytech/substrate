@@ -56,7 +56,7 @@ pub mod weights;
 pub use generic::{DigestItem, Digest};
 
 /// Re-export this since it's part of the API of this crate.
-pub use primitives::crypto::{key_types, KeyTypeId, CryptoType};
+pub use primitives::{TypeId, crypto::{key_types, KeyTypeId, CryptoType}};
 pub use app_crypto::RuntimeAppPublic;
 
 /// Re-export arithmetic stuff.
@@ -66,6 +66,9 @@ pub use sr_arithmetic::{
 };
 /// Re-export 128 bit helpers from sr_arithmetic
 pub use sr_arithmetic::helpers_128bit;
+
+#[cfg(feature = "std")]
+pub use externalities::set_and_run_with_externalities;
 
 /// An abstraction over justification for a block's validity under a consensus algorithm.
 ///
@@ -82,7 +85,7 @@ use traits::{Verify, Lazy};
 #[derive(Clone, Copy, Eq, PartialEq, Encode, Decode)]
 pub struct ModuleId(pub [u8; 8]);
 
-impl traits::TypeId for ModuleId {
+impl TypeId for ModuleId {
 	const TYPE_ID: [u8; 4] = *b"modl";
 }
 

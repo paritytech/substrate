@@ -188,4 +188,3 @@ fn generate_fork_to_base(
 		})
 	}
 }
-

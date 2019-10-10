@@ -348,28 +348,46 @@ fn info_expect_equal_hash(given: &Hash, expected: &Hash) {
 mod tests {
 	use super::*;
 
-	use runtime_io::{with_externalities, TestExternalities};
+	use runtime_io::TestExternalities;
 	use substrate_test_runtime_client::{AccountKeyring, Sr25519Keyring};
+	use sr_primitives::set_and_run_with_externalities;
 	use crate::{Header, Transfer, WASM_BINARY};
-	use primitives::{Blake2Hasher, map};
-	use substrate_executor::WasmExecutor;
+	use primitives::{NeverNativeValue, map, traits::CodeExecutor};
+	use substrate_executor::{NativeExecutor, WasmExecutionMethod, native_executor_instance};
 
-	fn new_test_ext() -> TestExternalities<Blake2Hasher> {
+	// Declare an instance of the native executor dispatch for the test runtime.
+	native_executor_instance!(
+		NativeDispatch,
+		crate::api::dispatch,
+		crate::native_version
+	);
+
+	fn executor() -> NativeExecutor<NativeDispatch> {
+		NativeExecutor::new(WasmExecutionMethod::Interpreted, None)
+	}
+
+	fn new_test_ext() -> TestExternalities {
 		let authorities = vec![
 			Sr25519Keyring::Alice.to_raw_public(),
 			Sr25519Keyring::Bob.to_raw_public(),
 			Sr25519Keyring::Charlie.to_raw_public()
 		];
-		TestExternalities::new((map![
-			twox_128(b"latest").to_vec() => vec![69u8; 32],
-			twox_128(b"sys:auth").to_vec() => authorities.encode(),
-			blake2_256(&AccountKeyring::Alice.to_raw_public().to_keyed_vec(b"balance:")).to_vec() => {
-				vec![111u8, 0, 0, 0, 0, 0, 0, 0]
-			}
-		], map![]))
+		TestExternalities::new_with_code(
+			WASM_BINARY,
+			(
+				map![
+					twox_128(b"latest").to_vec() => vec![69u8; 32],
+					twox_128(b"sys:auth").to_vec() => authorities.encode(),
+					blake2_256(&AccountKeyring::Alice.to_raw_public().to_keyed_vec(b"balance:")).to_vec() => {
+						vec![111u8, 0, 0, 0, 0, 0, 0, 0]
+					}
+				],
+				map![],
+			)
+		)
 	}
 
-	fn block_import_works<F>(block_executor: F) where F: Fn(Block, &mut TestExternalities<Blake2Hasher>) {
+	fn block_import_works<F>(block_executor: F) where F: Fn(Block, &mut TestExternalities) {
 		let h = Header {
 			parent_hash: [69u8; 32].into(),
 			number: 1,
@@ -382,7 +400,7 @@ mod tests {
 			extrinsics: vec![],
 		};
 
-		with_externalities(&mut new_test_ext(), || polish_block(&mut b));
+		set_and_run_with_externalities(&mut new_test_ext(), || polish_block(&mut b));
 
 		block_executor(b, &mut new_test_ext());
 	}
@@ -390,7 +408,7 @@ mod tests {
 	#[test]
 	fn block_import_works_native() {
 		block_import_works(|b, ext| {
-			with_externalities(ext, || {
+			set_and_run_with_externalities(ext, || {
 				execute_block(b);
 			});
 		});
@@ -399,11 +417,19 @@ mod tests {
 	#[test]
 	fn block_import_works_wasm() {
 		block_import_works(|b, ext| {
-			WasmExecutor::new().call(ext, 8, &WASM_BINARY, "Core_execute_block", &b.encode()).unwrap();
+			executor().call::<_, NeverNativeValue, fn() -> _>(
+				ext,
+				"Core_execute_block",
+				&b.encode(),
+				false,
+				None,
+			).0.unwrap();
 		})
 	}
 
-	fn block_import_with_transaction_works<F>(block_executor: F) where F: Fn(Block, &mut TestExternalities<Blake2Hasher>) {
+	fn block_import_with_transaction_works<F>(block_executor: F)
+		where F: Fn(Block, &mut TestExternalities)
+	{
 		let mut b1 = Block {
 			header: Header {
 				parent_hash: [69u8; 32].into(),
@@ -423,7 +449,7 @@ mod tests {
 		};
 
 		let mut dummy_ext = new_test_ext();
-		with_externalities(&mut dummy_ext, || polish_block(&mut b1));
+		set_and_run_with_externalities(&mut dummy_ext, || polish_block(&mut b1));
 
 		let mut b2 = Block {
 			header: Header {
@@ -449,26 +475,26 @@ mod tests {
 			],
 		};
 
-		with_externalities(&mut dummy_ext, || polish_block(&mut b2));
+		set_and_run_with_externalities(&mut dummy_ext, || polish_block(&mut b2));
 		drop(dummy_ext);
 
 		let mut t = new_test_ext();
 
-		with_externalities(&mut t, || {
+		set_and_run_with_externalities(&mut t, || {
 			assert_eq!(balance_of(AccountKeyring::Alice.into()), 111);
 			assert_eq!(balance_of(AccountKeyring::Bob.into()), 0);
 		});
 
 		block_executor(b1, &mut t);
 
-		with_externalities(&mut t, || {
+		set_and_run_with_externalities(&mut t, || {
 			assert_eq!(balance_of(AccountKeyring::Alice.into()), 42);
 			assert_eq!(balance_of(AccountKeyring::Bob.into()), 69);
 		});
 
 		block_executor(b2, &mut t);
 
-		with_externalities(&mut t, || {
+		set_and_run_with_externalities(&mut t, || {
 			assert_eq!(balance_of(AccountKeyring::Alice.into()), 0);
 			assert_eq!(balance_of(AccountKeyring::Bob.into()), 42);
 			assert_eq!(balance_of(AccountKeyring::Charlie.into()), 69);
@@ -478,7 +504,7 @@ mod tests {
 	#[test]
 	fn block_import_with_transaction_works_native() {
 		block_import_with_transaction_works(|b, ext| {
-			with_externalities(ext, || {
+			set_and_run_with_externalities(ext, || {
 				execute_block(b);
 			});
 		});
@@ -487,7 +513,13 @@ mod tests {
 	#[test]
 	fn block_import_with_transaction_works_wasm() {
 		block_import_with_transaction_works(|b, ext| {
-			WasmExecutor::new().call(ext, 8, &WASM_BINARY, "Core_execute_block", &b.encode()).unwrap();
+			executor().call::<_, NeverNativeValue, fn() -> _>(
+				ext,
+				"Core_execute_block",
+				&b.encode(),
+				false,
+				None,
+			).0.unwrap();
 		})
 	}
 }

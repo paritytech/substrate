@@ -312,9 +312,10 @@ impl<T: Trait, D: AsRef<[u8]>> support::traits::KeyOwnerProofSystem<(KeyTypeId, 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use runtime_io::with_externalities;
-	use primitives::{Blake2Hasher, crypto::key_types::DUMMY};
-	use sr_primitives::{traits::OnInitialize, testing::UintAuthorityId};
+	use primitives::crypto::key_types::DUMMY;
+	use sr_primitives::{
+		traits::OnInitialize, testing::UintAuthorityId, set_and_run_with_externalities,
+	};
 	use crate::mock::{
 		NEXT_VALIDATORS, force_new_session,
 		set_next_validators, Test, System, Session,
@@ -323,7 +324,7 @@ mod tests {
 
 	type Historical = Module<Test>;
 
-	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+	fn new_test_ext() -> runtime_io::TestExternalities {
 		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		crate::GenesisConfig::<Test> {
 			keys: NEXT_VALIDATORS.with(|l|
@@ -335,7 +336,7 @@ mod tests {
 
 	#[test]
 	fn generated_proof_is_good() {
-		with_externalities(&mut new_test_ext(), || {
+		set_and_run_with_externalities(&mut new_test_ext(), || {
 			set_next_validators(vec![1, 2]);
 			force_new_session();
 
@@ -376,7 +377,7 @@ mod tests {
 
 	#[test]
 	fn prune_up_to_works() {
-		with_externalities(&mut new_test_ext(), || {
+		set_and_run_with_externalities(&mut new_test_ext(), || {
 			for i in 1..101u64 {
 				set_next_validators(vec![i]);
 				force_new_session();
