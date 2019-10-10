@@ -26,7 +26,7 @@ use crate::Backend;
 use crate::kv_backend::KvBackend;
 use primitives::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX;
 use std::collections::HashMap;
-use primitives::child_trie::{KeySpace, prefixed_keyspace_kv};
+use primitives::child_trie::{KeySpace, prefixed_keyspace_kv, NO_CHILD_KEYSPACE};
 
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
 /// A simple key value backend is also accessible for direct key value storage.
@@ -106,7 +106,9 @@ impl<
 		let keyspace = if let Some(keyspace) = self.get_child_keyspace(storage_key)? {
 			keyspace
 		} else {
-			return Ok(None);
+			// cannot early exit for case where we do not prefix db
+			// (proof): can be any dummy value here.
+			NO_CHILD_KEYSPACE.to_vec()
 		};
 
 		self.essence.child_storage(storage_key, &keyspace, key)
