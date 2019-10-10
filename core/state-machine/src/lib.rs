@@ -26,7 +26,6 @@ use primitives::{
 	storage::well_known_keys, NativeOrEncoded, NeverNativeValue, offchain::OffchainExt,
 	traits::{KeystoreExt, CodeExecutor}, hexdisplay::HexDisplay, hash::H256,
 };
-use overlayed_changes::OverlayedChangeSet;
 use externalities::Extensions;
 
 pub mod backend;
@@ -299,7 +298,6 @@ impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec> where
 		&mut self,
 		compute_tx: bool,
 		mut native_call: Option<NC>,
-		orig_changes: OverlayedChangeSet,
 		on_consensus_failure: Handler,
 	) -> (
 		CallResult<R, Exec::Error>,
@@ -313,6 +311,7 @@ impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec> where
 			CallResult<R, Exec::Error>,
 		) -> CallResult<R, Exec::Error>
 	{
+		let orig_changes = self.overlay.changes.clone();
 		let (result, was_native, storage_delta, changes_delta) = self.execute_aux(
 			compute_tx,
 			true,
@@ -320,7 +319,7 @@ impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec> where
 		);
 
 		if was_native {
-			self.overlay.changes = orig_changes.clone();
+			self.overlay.changes = orig_changes;
 			let (wasm_result, _, wasm_storage_delta, wasm_changes_delta) = self.execute_aux(
 				compute_tx,
 				false,
@@ -344,7 +343,6 @@ impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec> where
 		&mut self,
 		compute_tx: bool,
 		mut native_call: Option<NC>,
-		orig_changes: OverlayedChangeSet,
 	) -> (
 		CallResult<R, Exec::Error>,
 		Option<(B::Transaction, H::Out)>,
@@ -353,6 +351,7 @@ impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec> where
 		R: Decode + Encode + PartialEq,
 		NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
 	{
+		let orig_changes = self.overlay.changes.clone();
 		let (result, was_native, storage_delta, changes_delta) = self.execute_aux(
 			compute_tx,
 			true,
@@ -362,7 +361,7 @@ impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec> where
 		if !was_native || result.is_ok() {
 			(result, storage_delta, changes_delta)
 		} else {
-			self.overlay.changes = orig_changes.clone();
+			self.overlay.changes = orig_changes;
 			let (wasm_result, _, wasm_storage_delta, wasm_changes_delta) = self.execute_aux(
 				compute_tx,
 				false,
@@ -419,7 +418,6 @@ impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec> where
 					self.execute_call_with_both_strategy(
 						compute_tx,
 						native_call.take(),
-						self.overlay.changes.clone(),
 						on_consensus_failure,
 					)
 				},
@@ -427,7 +425,6 @@ impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec> where
 					self.execute_call_with_native_else_wasm_strategy(
 						compute_tx,
 						native_call.take(),
-						self.overlay.changes.clone(),
 					)
 				},
 				ExecutionManager::AlwaysWasm(trust_level) => {
