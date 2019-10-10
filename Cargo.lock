@@ -4077,6 +4077,7 @@ dependencies = [
 name = "srml-bridge"
 version = "0.1.0"
 dependencies = [
+ "hash-db 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-scale-codec 1.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.101 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 2.0.0",
@@ -4085,6 +4086,8 @@ dependencies = [
  "srml-support 2.0.0",
  "srml-system 2.0.0",
  "substrate-primitives 2.0.0",
+ "substrate-state-machine 2.0.0",
+ "substrate-trie 2.0.0",
 ]
 
 [[package]]
