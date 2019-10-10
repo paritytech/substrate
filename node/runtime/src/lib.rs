@@ -591,7 +591,7 @@ impl_runtime_apis! {
 		}
 
 		fn random_seed() -> <Block as BlockT>::Hash {
-			<RandomnessCollectiveFlip as Randomness<Hash>>::random_seed()
+			RandomnessCollectiveFlip::random_seed()
 		}
 	}
 
