@@ -298,7 +298,6 @@ mod tests {
 		generic::Era, Perbill, DispatchError, weights::Weight, testing::{Digest, Header, Block},
 		traits::{Bounded, Header as HeaderT, BlakeTwo256, IdentityLookup, ConvertInto},
 		transaction_validity::{InvalidTransaction, UnknownTransaction}, ApplyError,
-		set_and_run_with_externalities,
 	};
 	use support::{
 		impl_outer_event, impl_outer_origin, parameter_types, impl_outer_dispatch,
@@ -420,7 +419,7 @@ mod tests {
 		let xt = sr_primitives::testing::TestXt(sign_extra(1, 0, 0), Call::Balances(BalancesCall::transfer(2, 69)));
 		let weight = xt.get_dispatch_info().weight as u64;
 		let mut t = runtime_io::TestExternalities::new(t);
-		set_and_run_with_externalities(&mut t, || {
+		t.execute_with(|| {
 			Executive::initialize_block(&Header::new(
 				1,
 				H256::default(),
@@ -446,7 +445,7 @@ mod tests {
 
 	#[test]
 	fn block_import_works() {
-		set_and_run_with_externalities(&mut new_test_ext(1), || {
+		new_test_ext(1).execute_with(|| {
 			Executive::execute_block(Block {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
@@ -463,7 +462,7 @@ mod tests {
 	#[test]
 	#[should_panic]
 	fn block_import_of_bad_state_root_fails() {
-		set_and_run_with_externalities(&mut new_test_ext(1), || {
+		new_test_ext(1).execute_with(|| {
 			Executive::execute_block(Block {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
@@ -480,7 +479,7 @@ mod tests {
 	#[test]
 	#[should_panic]
 	fn block_import_of_bad_extrinsic_root_fails() {
-		set_and_run_with_externalities(&mut new_test_ext(1), || {
+		new_test_ext(1).execute_with(|| {
 			Executive::execute_block(Block {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
@@ -499,7 +498,7 @@ mod tests {
 		let mut t = new_test_ext(1);
 		// bad nonce check!
 		let xt = sr_primitives::testing::TestXt(sign_extra(1, 30, 0), Call::Balances(BalancesCall::transfer(33, 69)));
-		set_and_run_with_externalities(&mut t, || {
+		t.execute_with(|| {
 			Executive::initialize_block(&Header::new(
 				1,
 				H256::default(),
@@ -521,7 +520,7 @@ mod tests {
 		let encoded_len = encoded.len() as Weight;
 		let limit = AvailableBlockRatio::get() * MaximumBlockWeight::get();
 		let num_to_exhaust_block = limit / encoded_len;
-		set_and_run_with_externalities(&mut t, || {
+		t.execute_with(|| {
 			Executive::initialize_block(&Header::new(
 				1,
 				H256::default(),
@@ -557,7 +556,7 @@ mod tests {
 		let x2 = sr_primitives::testing::TestXt(sign_extra(1, 2, 0), Call::Balances(BalancesCall::transfer(33, 0)));
 		let len = xt.clone().encode().len() as u32;
 		let mut t = new_test_ext(1);
-		set_and_run_with_externalities(&mut t, || {
+		t.execute_with(|| {
 			assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 0);
 			assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 0);
 
@@ -581,7 +580,7 @@ mod tests {
 		let xt = sr_primitives::testing::TestXt(None, Call::Balances(BalancesCall::set_balance(33, 69, 69)));
 		let mut t = new_test_ext(1);
 
-		set_and_run_with_externalities(&mut t, || {
+		t.execute_with(|| {
 			assert_eq!(Executive::validate_transaction(xt.clone()), Ok(Default::default()));
 			assert_eq!(
 				Executive::apply_extrinsic(xt),
@@ -599,7 +598,7 @@ mod tests {
 		let id: LockIdentifier = *b"0       ";
 		let execute_with_lock = |lock: WithdrawReasons| {
 			let mut t = new_test_ext(1);
-			set_and_run_with_externalities(&mut t, || {
+			t.execute_with(|| {
 				<balances::Module<Runtime> as LockableCurrency<u64>>::set_lock(
 					id,
 					&1,

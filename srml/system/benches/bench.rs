@@ -18,9 +18,7 @@ use criterion::{Criterion, criterion_group, criterion_main, black_box};
 use srml_system as system;
 use support::{decl_module, decl_event, impl_outer_origin, impl_outer_event};
 use primitives::H256;
-use sr_primitives::{
-	set_and_run_with_externalities, Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header,
-};
+use sr_primitives::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 
 mod module {
 	use super::*;
@@ -89,7 +87,7 @@ fn new_test_ext() -> runtime_io::TestExternalities {
 
 fn deposit_events(n: usize) {
 	let mut t = new_test_ext();
-	set_and_run_with_externalities(&mut t, || {
+	t.execute_with(|| {
 		for _ in 0..n {
 			module::Module::<Runtime>::deposit_event(
 				module::Event::Complex(vec![1, 2, 3], 2, 3, 899)

@@ -113,6 +113,13 @@ impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 
 		self.backend.update(top.chain(children).collect())
 	}
+
+	/// Execute the given closure while `self` is set as externalities.
+	///
+	/// Returns the result of the given closure.
+	pub fn execute_with<R>(&mut self, execute: impl FnOnce() -> R) -> R {
+		externalities::set_and_run_with_externalities(self, execute)
+	}
 }
 
 impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> std::fmt::Debug for TestExternalities<H, N> {

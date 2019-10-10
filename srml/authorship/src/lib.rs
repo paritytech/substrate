@@ -414,8 +414,7 @@ mod tests {
 	use super::*;
 	use primitives::H256;
 	use sr_primitives::{
-		set_and_run_with_externalities, traits::{BlakeTwo256, IdentityLookup}, testing::Header,
-		generic::DigestItem, Perbill,
+		traits::{BlakeTwo256, IdentityLookup}, testing::Header, generic::DigestItem, Perbill,
 	};
 	use support::{parameter_types, impl_outer_origin, ConsensusEngineId};
 
@@ -542,7 +541,7 @@ mod tests {
 	#[test]
 	fn prune_old_uncles_works() {
 		use UncleEntryItem::*;
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			let hash = Default::default();
 			let author = Default::default();
 			let uncles = vec![
@@ -561,7 +560,7 @@ mod tests {
 
 	#[test]
 	fn rejects_bad_uncles() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			let author_a = 69;
 
 			struct CanonChain {
@@ -674,7 +673,7 @@ mod tests {
 
 	#[test]
 	fn sets_author_lazily() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			let author = 42;
 			let mut header = seal_header(
 				create_header(1, Default::default(), [1; 32].into()),

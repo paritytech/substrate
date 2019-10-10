@@ -681,9 +681,7 @@ mod tests {
 	use super::*;
 	use support::assert_ok;
 	use primitives::crypto::key_types::DUMMY;
-	use sr_primitives::{
-		traits::OnInitialize, set_and_run_with_externalities, testing::UintAuthorityId,
-	};
+	use sr_primitives::{traits::OnInitialize, testing::UintAuthorityId};
 	use mock::{
 		NEXT_VALIDATORS, SESSION_CHANGED, TEST_SESSION_CHANGED, authorities, force_new_session,
 		set_next_validators, set_session_length, session_changed, Test, Origin, System, Session,
@@ -708,7 +706,7 @@ mod tests {
 
 	#[test]
 	fn simple_setup_should_work() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
 			assert_eq!(Session::validators(), vec![1, 2, 3]);
 		});
@@ -716,7 +714,7 @@ mod tests {
 
 	#[test]
 	fn put_get_keys() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			Session::put_keys(&10, &UintAuthorityId(10).into());
 			assert_eq!(Session::load_keys(&10), Some(UintAuthorityId(10).into()));
 		})
@@ -725,7 +723,7 @@ mod tests {
 	#[test]
 	fn keys_cleared_on_kill() {
 		let mut ext = new_test_ext();
-		set_and_run_with_externalities(&mut ext, || {
+		ext.execute_with(|| {
 			assert_eq!(Session::validators(), vec![1, 2, 3]);
 			assert_eq!(Session::load_keys(&1), Some(UintAuthorityId(1).into()));
 
@@ -742,7 +740,7 @@ mod tests {
 	fn authorities_should_track_validators() {
 		reset_before_session_end_called();
 
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			set_next_validators(vec![1, 2]);
 			force_new_session();
 			initialize_block(1);
@@ -793,7 +791,7 @@ mod tests {
 
 	#[test]
 	fn should_work_with_early_exit() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			set_session_length(10);
 
 			initialize_block(1);
@@ -816,7 +814,7 @@ mod tests {
 
 	#[test]
 	fn session_change_should_work() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			// Block 1: No change
 			initialize_block(1);
 			assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
@@ -846,7 +844,7 @@ mod tests {
 
 	#[test]
 	fn duplicates_are_not_allowed() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			System::set_block_number(1);
 			Session::on_initialize(1);
 			assert!(Session::set_keys(Origin::signed(4), UintAuthorityId(1).into(), vec![]).is_err());
@@ -861,7 +859,7 @@ mod tests {
 	fn session_changed_flag_works() {
 		reset_before_session_end_called();
 
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			TEST_SESSION_CHANGED.with(|l| *l.borrow_mut() = true);
 
 			force_new_session();
@@ -950,7 +948,7 @@ mod tests {
 
 	#[test]
 	fn session_keys_generate_output_works_as_set_keys_input() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			let new_keys = mock::MockSessionKeys::generate(None);
 			assert_ok!(
 				Session::set_keys(
@@ -964,7 +962,7 @@ mod tests {
 
 	#[test]
 	fn return_true_if_more_than_third_is_disabled() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			set_next_validators(vec![1, 2, 3, 4, 5, 6, 7]);
 			force_new_session();
 			initialize_block(1);
@@ -977,6 +975,5 @@ mod tests {
 			assert_eq!(Session::disable_index(2), true);
 			assert_eq!(Session::disable_index(3), true);
 		});
-
 	}
 }

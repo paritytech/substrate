@@ -638,7 +638,7 @@ mod tests {
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
 	use sr_primitives::{
-		set_and_run_with_externalities, Perbill, weights::GetDispatchInfo, testing::Header,
+		Perbill, weights::GetDispatchInfo, testing::Header,
 		traits::{BlakeTwo256, OnInitialize, OnFinalize, IdentityLookup},
 	};
 
@@ -719,7 +719,7 @@ mod tests {
 
 	#[test]
 	fn it_works_for_optional_value() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			// Check that GenesisBuilder works properly.
 			assert_eq!(Example::dummy(), Some(42));
 
@@ -740,7 +740,7 @@ mod tests {
 
 	#[test]
 	fn it_works_for_default_value() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			assert_eq!(Example::foo(), 24);
 			assert_ok!(Example::accumulate_foo(Origin::signed(1), 1));
 			assert_eq!(Example::foo(), 25);
@@ -749,7 +749,7 @@ mod tests {
 
 	#[test]
 	fn signed_ext_watch_dummy_works() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			let call = <Call<Test>>::set_dummy(10);
 			let info = DispatchInfo::default();
 
