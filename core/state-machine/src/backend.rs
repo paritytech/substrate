@@ -322,6 +322,7 @@ impl error::Error for Void {
 /// In-memory backend. Fully recomputes tries on each commit but useful for
 /// tests.
 pub struct InMemory<H: Hasher> {
+	// TODO EMCH remove keyspace: it is into kv.
 	inner: HashMap<Option<Vec<u8>>, (KeySpace, HashMap<Vec<u8>, Vec<u8>>)>,
 	kv: Option<InMemoryKvBackend>,
 	trie: Option<TrieBackend<MemoryDB<H>, H, InMemoryKvBackend>>,
