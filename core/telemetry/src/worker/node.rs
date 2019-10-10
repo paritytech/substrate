@@ -129,7 +129,8 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 			match socket {
 				NodeSocket::Connected(mut conn) => {
 					match NodeSocketConnected::poll(Pin::new(&mut conn), cx, &self.addr) {
-						Poll::Ready(Ok(_)) | Poll::Pending => {
+						Poll::Ready(Ok(v)) => match v {},
+						Poll::Pending => {
 							break NodeSocket::Connected(conn)
 						},
 						Poll::Ready(Err(ConnectionError::Sink(err))) => {
