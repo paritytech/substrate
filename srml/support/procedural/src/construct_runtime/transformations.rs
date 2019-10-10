@@ -92,7 +92,6 @@ fn decl_outer_event<'a>(
 					.as_ref()
 					.map(|instance| &instance.name);
 				let generics = &module_entry.generics;
-				// println!("Module `{}`, instance present: `{}`, generics present: `{}`", module, instance.is_some(), generics.inner.is_some());
 				if instance.is_some() && generics.params.len() == 0 {
 					let msg = format!(
 						"Instantiable module with no generic `Event` cannot \
@@ -107,15 +106,13 @@ fn decl_outer_event<'a>(
 			None => {}
 		}
 	}
-	Ok(
-		quote!(
-			#scrate::impl_outer_event! {
-				pub enum Event for #runtime_name where system = #system_name {
-					#modules_tokens
-				}
+	Ok(quote!(
+		#scrate::impl_outer_event! {
+			pub enum Event for #runtime_name where system = #system_name {
+				#modules_tokens
 			}
-		)
-	)
+		}
+	))
 }
 
 fn find_system_module<'a>(mut module_declarations: impl Iterator<Item = &'a ModuleDeclaration>) -> Option<&'a Ident> {
