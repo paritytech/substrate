@@ -765,10 +765,6 @@ pub mod biguint {
 		}
 
 		/// A naive getter for limb at `index`. Note that the order is lsb -> msb.
-		///
-		/// #### Panics
-		///
-		/// This panics if index is out of range.
 		pub fn checked_get(&self, index: usize) -> Option<Single> {
 			if let Some(i) = self.len().checked_sub(1) {
 				if let Some(j) = i.checked_sub(index) {
