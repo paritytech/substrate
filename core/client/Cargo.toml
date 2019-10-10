@@ -30,7 +30,7 @@ sr-api-macros = { path = "../sr-api-macros" }
 header-metadata = { package = "substrate-header-metadata", path = "header-metadata", optional = true }
 
 [dev-dependencies]
-env_logger = "0.6.2"
+env_logger = "0.7.0"
 tempfile = "3.1.0"
 test-client = { package = "substrate-test-runtime-client", path = "../test-runtime/client" }
 kvdb-memorydb = { git = "https://github.com/paritytech/parity-common", rev="b0317f649ab2c665b7987b8475878fc4d2e1f81d" }
