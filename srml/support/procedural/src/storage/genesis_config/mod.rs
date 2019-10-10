@@ -14,14 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+//! Declaration of genesis config structure and implementation of build storage trait and
+//! functions.
+
 use proc_macro2::{TokenStream, Span};
 use quote::quote;
 use super::{DeclStorageDefExt, instance_trait::DEFAULT_INSTANTIABLE_TRAIT_NAME};
 use genesis_config_def::GenesisConfigDef;
 use builder_def::BuilderDef;
-
-//! Declaration of genesis config structure and implementation of build storage trait and
-//! functions.
 
 mod genesis_config_def;
 mod builder_def;
