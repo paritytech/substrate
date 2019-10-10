@@ -19,6 +19,10 @@
 #![warn(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
+// to allow benchmarking
+#![cfg_attr(feature = "bench", feature(test))]
+#[cfg(feature = "bench")] extern crate test;
+
 #[doc(hidden)]
 pub use codec;
 #[cfg(feature = "std")]
@@ -59,13 +63,15 @@ pub use generic::{DigestItem, Digest};
 pub use primitives::{TypeId, crypto::{key_types, KeyTypeId, CryptoType}};
 pub use app_crypto::RuntimeAppPublic;
 
-/// Re-export arithmetic stuff.
+/// Re-export top-level arithmetic stuff.
 pub use sr_arithmetic::{
 	Perquintill, Perbill, Permill, Percent,
 	Rational128, Fixed64
 };
-/// Re-export 128 bit helpers from sr_arithmetic
+/// Re-export 128 bit helpers.
 pub use sr_arithmetic::helpers_128bit;
+/// Re-export big_uint stiff.
+pub use sr_arithmetic::biguint;
 
 #[cfg(feature = "std")]
 pub use externalities::set_and_run_with_externalities;
