@@ -722,7 +722,7 @@ impl<T> InitializeMembers<T> for () {
 pub trait Randomness<Output> {
 	/// Get a "random" value
 	///
-	/// Being a deterministic block chain, real randomness is difficult to come by. This gives you
+	/// Being a deterministic blockchain, real randomness is difficult to come by. This gives you
 	/// something that approximates it. `subject` is a context identifier and allows you to get a
 	/// different result to other callers of this function; use it like
 	/// `random(&b"my context"[..])`.

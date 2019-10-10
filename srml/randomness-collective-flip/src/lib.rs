@@ -193,7 +193,7 @@ mod tests {
 	}
 
 	type System = system::Module<Test>;
-	type RandomnessModule = Module<Test>;
+	type CollectiveFlip = Module<Test>;
 
 	fn new_test_ext() -> runtime_io::TestExternalities {
 		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
