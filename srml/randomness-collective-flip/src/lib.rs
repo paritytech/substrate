@@ -212,7 +212,7 @@ mod tests {
 
 		for i in 1 .. (blocks + 1) {
 			System::initialize(&i, &parent_hash, &Default::default(), &Default::default());
-			RandomnessModule::on_initialize(i);
+			CollectiveFlip::on_initialize(i);
 
 			let header = System::finalize();
 			parent_hash = header.hash();
@@ -227,7 +227,7 @@ mod tests {
 
 			setup_blocks(38);
 
-			let random_material = RandomnessModule::random_material();
+			let random_material = CollectiveFlip::random_material();
 
 			assert_eq!(random_material.len(), 38);
 			assert_eq!(random_material[0], genesis_hash);
@@ -241,7 +241,7 @@ mod tests {
 
 			setup_blocks(81);
 
-			let random_material = RandomnessModule::random_material();
+			let random_material = CollectiveFlip::random_material();
 
 			assert_eq!(random_material.len(), 81);
 			assert_ne!(random_material[0], random_material[1]);
@@ -256,7 +256,7 @@ mod tests {
 
 			setup_blocks(162);
 
-			let random_material = RandomnessModule::random_material();
+			let random_material = CollectiveFlip::random_material();
 
 			assert_eq!(random_material.len(), 81);
 			assert_ne!(random_material[0], random_material[1]);
@@ -270,13 +270,13 @@ mod tests {
 			setup_blocks(162);
 
 			assert_eq!(System::block_number(), 162);
-			assert_eq!(RandomnessModule::random_seed(), RandomnessModule::random_seed());
-			assert_ne!(RandomnessModule::random(b"random_1"), RandomnessModule::random(b"random_2"));
+			assert_eq!(CollectiveFlip::random_seed(), CollectiveFlip::random_seed());
+			assert_ne!(CollectiveFlip::random(b"random_1"), CollectiveFlip::random(b"random_2"));
 
-			let random = RandomnessModule::random_seed();
+			let random = CollectiveFlip::random_seed();
 
 			assert_ne!(random, H256::zero());
-			assert!(!RandomnessModule::random_material().contains(&random));
+			assert!(!CollectiveFlip::random_material().contains(&random));
 		});
 	}
 }
