@@ -19,21 +19,18 @@
 
 #![allow(unused)]
 
-use crate::account_db::{AccountDb, DirectAccountDb, OverlayAccountDb};
 use crate::{
 	BalanceOf, ComputeDispatchFee, ContractAddressFor, ContractInfo, ContractInfoOf, GenesisConfig,
 	Module, RawAliveContractInfo, RawEvent, Trait, TrieId, TrieIdFromParentCounter, Schedule,
-	TrieIdGenerator, CheckBlockGasLimit,
+	TrieIdGenerator, CheckBlockGasLimit, account_db::{AccountDb, DirectAccountDb, OverlayAccountDb},
 };
 use assert_matches::assert_matches;
 use hex_literal::*;
 use codec::{Decode, Encode, KeyedVec};
-use runtime_io;
-use runtime_io::with_externalities;
 use sr_primitives::{
 	Perbill, BuildStorage, transaction_validity::{InvalidTransaction, ValidTransaction},
 	traits::{BlakeTwo256, Hash, IdentityLookup, SignedExtension},
-	weights::{DispatchInfo, DispatchClass},
+	weights::{DispatchInfo, DispatchClass}, set_and_run_with_externalities,
 	testing::{Digest, DigestItem, Header, UintAuthorityId, H256},
 };
 use support::{
@@ -41,7 +38,7 @@ use support::{
 	storage::child, StorageMap, StorageValue, traits::{Currency, Get},
 };
 use std::{cell::RefCell, sync::atomic::{AtomicUsize, Ordering}};
-use primitives::{storage::well_known_keys, Blake2Hasher};
+use primitives::storage::well_known_keys;
 use system::{self, EventRecord, Phase};
 
 mod contract {
@@ -275,7 +272,7 @@ impl ExtBuilder {
 		INSTANTIATION_FEE.with(|v| *v.borrow_mut() = self.instantiation_fee);
 		BLOCK_GAS_LIMIT.with(|v| *v.borrow_mut() = self.block_gas_limit);
 	}
-	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
+	pub fn build(self) -> runtime_io::TestExternalities {
 		self.set_associated_consts();
 		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		balances::GenesisConfig::<Test> {
@@ -307,7 +304,7 @@ fn compile_module<T>(wabt_module: &str)
 // Then we check that the all unused gas is refunded.
 #[test]
 fn refunds_unused_gas() {
-	with_externalities(&mut ExtBuilder::default().gas_price(2).build(), || {
+	set_and_run_with_externalities(&mut ExtBuilder::default().gas_price(2).build(), || {
 		Balances::deposit_creating(&ALICE, 100_000_000);
 
 		assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, Vec::new()));
@@ -319,7 +316,7 @@ fn refunds_unused_gas() {
 
 #[test]
 fn account_removal_removes_storage() {
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default().existential_deposit(100).build(),
 		|| {
 			let trie_id1 = <Test as Trait>::TrieIdGenerator::trie_id(&1);
@@ -419,7 +416,7 @@ const CODE_RETURN_FROM_START_FN: &str = r#"
 fn instantiate_and_call_and_deposit_event() {
 	let (wasm, code_hash) = compile_module::<Test>(CODE_RETURN_FROM_START_FN).unwrap();
 
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default().existential_deposit(100).build(),
 		|| {
 			Balances::deposit_creating(&ALICE, 1_000_000);
@@ -502,7 +499,7 @@ fn dispatch_call() {
 
 	let (wasm, code_hash) = compile_module::<Test>(CODE_DISPATCH_CALL).unwrap();
 
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default().existential_deposit(50).build(),
 		|| {
 			Balances::deposit_creating(&ALICE, 1_000_000);
@@ -623,7 +620,7 @@ fn dispatch_call_not_dispatched_after_top_level_transaction_failure() {
 
 	let (wasm, code_hash) = compile_module::<Test>(CODE_DISPATCH_CALL_THEN_TRAP).unwrap();
 
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default().existential_deposit(50).build(),
 		|| {
 			Balances::deposit_creating(&ALICE, 1_000_000);
@@ -826,7 +823,7 @@ fn test_set_rent_code_and_hash() {
 
 	let (wasm, code_hash) = compile_module::<Test>(CODE_SET_RENT).unwrap();
 
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default().existential_deposit(50).build(),
 		|| {
 			Balances::deposit_creating(&ALICE, 1_000_000);
@@ -855,7 +852,7 @@ fn storage_size() {
 	let (wasm, code_hash) = compile_module::<Test>(CODE_SET_RENT).unwrap();
 
 	// Storage size
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default().existential_deposit(50).build(),
 		|| {
 			// Create
@@ -885,7 +882,7 @@ fn storage_size() {
 fn deduct_blocks() {
 	let (wasm, code_hash) = compile_module::<Test>(CODE_SET_RENT).unwrap();
 
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default().existential_deposit(50).build(),
 		|| {
 			// Create
@@ -982,7 +979,7 @@ fn claim_surcharge_malus() {
 fn claim_surcharge(blocks: u64, trigger_call: impl Fn() -> bool, removes: bool) {
 	let (wasm, code_hash) = compile_module::<Test>(CODE_SET_RENT).unwrap();
 
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default().existential_deposit(50).build(),
 		|| {
 			// Create
@@ -1018,7 +1015,7 @@ fn removals(trigger_call: impl Fn() -> bool) {
 	let (wasm, code_hash) = compile_module::<Test>(CODE_SET_RENT).unwrap();
 
 	// Balance reached and superior to subsistence threshold
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default().existential_deposit(50).build(),
 		|| {
 			// Create
@@ -1057,7 +1054,7 @@ fn removals(trigger_call: impl Fn() -> bool) {
 	);
 
 	// Allowance exceeded
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default().existential_deposit(50).build(),
 		|| {
 			// Create
@@ -1095,7 +1092,7 @@ fn removals(trigger_call: impl Fn() -> bool) {
 	);
 
 	// Balance reached and inferior to subsistence threshold
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default().existential_deposit(50).build(),
 		|| {
 			// Create
@@ -1142,7 +1139,7 @@ fn call_removed_contract() {
 	let (wasm, code_hash) = compile_module::<Test>(CODE_SET_RENT).unwrap();
 
 	// Balance reached and superior to subsistence threshold
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default().existential_deposit(50).build(),
 		|| {
 			// Create
@@ -1230,7 +1227,7 @@ const CODE_CHECK_DEFAULT_RENT_ALLOWANCE: &str = r#"
 fn default_rent_allowance_on_instantiate() {
 	let (wasm, code_hash) = compile_module::<Test>(CODE_CHECK_DEFAULT_RENT_ALLOWANCE).unwrap();
 
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default().existential_deposit(50).build(),
 		|| {
 			// Create
@@ -1347,7 +1344,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 	let (restoration_wasm, restoration_code_hash) =
 		compile_module::<Test>(CODE_RESTORATION).unwrap();
 
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default().existential_deposit(50).build(),
 		|| {
 			Balances::deposit_creating(&ALICE, 1_000_000);
@@ -1533,7 +1530,7 @@ const CODE_STORAGE_SIZE: &str = r#"
 fn storage_max_value_limit() {
 	let (wasm, code_hash) = compile_module::<Test>(CODE_STORAGE_SIZE).unwrap();
 
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default().existential_deposit(50).build(),
 		|| {
 			// Create
@@ -1900,7 +1897,7 @@ fn deploy_and_call_other_contract() {
 	let (callee_wasm, callee_code_hash) = compile_module::<Test>(CODE_RETURN_WITH_DATA).unwrap();
 	let (caller_wasm, caller_code_hash) = compile_module::<Test>(CODE_CALLER_CONTRACT).unwrap();
 
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default().existential_deposit(50).build(),
 		|| {
 			// Create
@@ -2031,7 +2028,7 @@ const CODE_SELF_DESTRUCT: &str = r#"
 #[test]
 fn self_destruct_by_draining_balance() {
 	let (wasm, code_hash) = compile_module::<Test>(CODE_SELF_DESTRUCT).unwrap();
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default().existential_deposit(50).build(),
 		|| {
 			Balances::deposit_creating(&ALICE, 1_000_000);
@@ -2070,7 +2067,7 @@ fn self_destruct_by_draining_balance() {
 #[test]
 fn cannot_self_destruct_while_live() {
 	let (wasm, code_hash) = compile_module::<Test>(CODE_SELF_DESTRUCT).unwrap();
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default().existential_deposit(50).build(),
 		|| {
 			Balances::deposit_creating(&ALICE, 1_000_000);
@@ -2272,7 +2269,7 @@ fn destroy_contract_and_transfer_funds() {
 	let (callee_wasm, callee_code_hash) = compile_module::<Test>(CODE_SELF_DESTRUCT).unwrap();
 	let (caller_wasm, caller_code_hash) = compile_module::<Test>(CODE_DESTROY_AND_TRANSFER).unwrap();
 
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default().existential_deposit(50).build(),
 		|| {
 			// Create
@@ -2371,7 +2368,7 @@ const CODE_SELF_DESTRUCTING_CONSTRUCTOR: &str = r#"
 #[test]
 fn cannot_self_destruct_in_constructor() {
 	let (wasm, code_hash) = compile_module::<Test>(CODE_SELF_DESTRUCTING_CONSTRUCTOR).unwrap();
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default().existential_deposit(50).build(),
 		|| {
 			Balances::deposit_creating(&ALICE, 1_000_000);
@@ -2395,7 +2392,7 @@ fn cannot_self_destruct_in_constructor() {
 
 #[test]
 fn check_block_gas_limit_works() {
-	with_externalities(
+	set_and_run_with_externalities(
 		&mut ExtBuilder::default().block_gas_limit(50).build(),
 		|| {
 			let info = DispatchInfo { weight: 100, class: DispatchClass::Normal };

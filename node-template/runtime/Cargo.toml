@@ -19,6 +19,7 @@ aura = { package = "srml-aura", path = "../../srml/aura", default_features = fal
 consensus-aura = { package = "substrate-consensus-aura-primitives", path = "../../core/consensus/aura/primitives", default_features = false }
 executive = { package = "srml-executive", path = "../../srml/executive", default_features = false }
 indices = { package = "srml-indices", path = "../../srml/indices", default_features = false }
+randomness-collective-flip = { package = "srml-randomness-collective-flip", path = "../../srml/randomness-collective-flip", default_features = false }
 system = { package = "srml-system", path = "../../srml/system", default_features = false }
 timestamp = { package = "srml-timestamp", path = "../../srml/timestamp", default_features = false }
 sudo = { package = "srml-sudo", path = "../../srml/sudo", default_features = false }
@@ -44,6 +45,7 @@ std = [
 	"indices/std",
 	"primitives/std",
 	"sr-primitives/std",
+	"randomness-collective-flip/std",
 	"system/std",
 	"timestamp/std",
 	"sudo/std",

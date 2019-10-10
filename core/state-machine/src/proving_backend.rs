@@ -250,7 +250,7 @@ mod tests {
 	use crate::backend::{InMemory};
 	use crate::trie_backend::tests::test_trie;
 	use super::*;
-	use primitives::{Blake2Hasher, child_storage_key::ChildStorageKey};
+	use primitives::{Blake2Hasher, storage::ChildStorageKey};
 
 	fn test_proving<'a>(
 		trie_backend: &'a TrieBackend<PrefixedMemoryDB<Blake2Hasher>,Blake2Hasher>,

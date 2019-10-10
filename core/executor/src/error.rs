@@ -98,3 +98,18 @@ impl From<String> for Error {
 		Error::Other(err)
 	}
 }
+
+/// Type for errors occurring during Wasm runtime construction.
+#[derive(Debug, derive_more::Display)]
+pub enum WasmError {
+	/// Code could not be read from the state.
+	CodeNotFound,
+	/// Failure to reinitialize runtime instance from snapshot.
+	ApplySnapshotFailed,
+	/// Wasm code failed validation.
+	InvalidModule,
+	/// Wasm code could not be deserialized.
+	CantDeserializeWasm,
+	/// Instantiation error.
+	Instantiation(Error),
+}

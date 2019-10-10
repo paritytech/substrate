@@ -382,10 +382,10 @@ mod tests {
 	use support::{Hashable, assert_ok, assert_noop, parameter_types};
 	use system::{EventRecord, Phase};
 	use hex_literal::hex;
-	use runtime_io::with_externalities;
-	use primitives::{H256, Blake2Hasher};
+	use primitives::H256;
 	use sr_primitives::{
-		Perbill, traits::{BlakeTwo256, IdentityLookup, Block as BlockT}, testing::Header, BuildStorage
+		set_and_run_with_externalities, Perbill,
+		traits::{BlakeTwo256, IdentityLookup, Block as BlockT}, testing::Header, BuildStorage,
 	};
 	use crate as collective;
 
@@ -439,7 +439,7 @@ mod tests {
 		}
 	);
 
-	fn make_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+	fn make_ext() -> runtime_io::TestExternalities {
 		GenesisConfig {
 			collective_Instance1: Some(collective::GenesisConfig {
 				members: vec![1, 2, 3],
@@ -451,7 +451,7 @@ mod tests {
 
 	#[test]
 	fn motions_basic_environment_works() {
-		with_externalities(&mut make_ext(), || {
+		set_and_run_with_externalities(&mut make_ext(), || {
 			System::set_block_number(1);
 			assert_eq!(Collective::members(), vec![1, 2, 3]);
 			assert_eq!(Collective::proposals(), Vec::<H256>::new());
@@ -464,7 +464,7 @@ mod tests {
 
 	#[test]
 	fn removal_of_old_voters_votes_works() {
-		with_externalities(&mut make_ext(), || {
+		set_and_run_with_externalities(&mut make_ext(), || {
 			System::set_block_number(1);
 			let proposal = make_proposal(42);
 			let hash = BlakeTwo256::hash_of(&proposal);
@@ -498,7 +498,7 @@ mod tests {
 
 	#[test]
 	fn removal_of_old_voters_votes_works_with_set_members() {
-		with_externalities(&mut make_ext(), || {
+		set_and_run_with_externalities(&mut make_ext(), || {
 			System::set_block_number(1);
 			let proposal = make_proposal(42);
 			let hash = BlakeTwo256::hash_of(&proposal);
@@ -532,7 +532,7 @@ mod tests {
 
 	#[test]
 	fn propose_works() {
-		with_externalities(&mut make_ext(), || {
+		set_and_run_with_externalities(&mut make_ext(), || {
 			System::set_block_number(1);
 			let proposal = make_proposal(42);
 			let hash = proposal.blake2_256().into();
@@ -561,7 +561,7 @@ mod tests {
 
 	#[test]
 	fn motions_ignoring_non_collective_proposals_works() {
-		with_externalities(&mut make_ext(), || {
+		set_and_run_with_externalities(&mut make_ext(), || {
 			System::set_block_number(1);
 			let proposal = make_proposal(42);
 			assert_noop!(
@@ -573,7 +573,7 @@ mod tests {
 
 	#[test]
 	fn motions_ignoring_non_collective_votes_works() {
-		with_externalities(&mut make_ext(), || {
+		set_and_run_with_externalities(&mut make_ext(), || {
 			System::set_block_number(1);
 			let proposal = make_proposal(42);
 			let hash: H256 = proposal.blake2_256().into();
@@ -584,7 +584,7 @@ mod tests {
 
 	#[test]
 	fn motions_ignoring_bad_index_collective_vote_works() {
-		with_externalities(&mut make_ext(), || {
+		set_and_run_with_externalities(&mut make_ext(), || {
 			System::set_block_number(3);
 			let proposal = make_proposal(42);
 			let hash: H256 = proposal.blake2_256().into();
@@ -595,7 +595,7 @@ mod tests {
 
 	#[test]
 	fn motions_revoting_works() {
-		with_externalities(&mut make_ext(), || {
+		set_and_run_with_externalities(&mut make_ext(), || {
 			System::set_block_number(1);
 			let proposal = make_proposal(42);
 			let hash: H256 = proposal.blake2_256().into();
@@ -640,7 +640,7 @@ mod tests {
 
 	#[test]
 	fn motions_disapproval_works() {
-		with_externalities(&mut make_ext(), || {
+		set_and_run_with_externalities(&mut make_ext(), || {
 			System::set_block_number(1);
 			let proposal = make_proposal(42);
 			let hash: H256 = proposal.blake2_256().into();
@@ -683,7 +683,7 @@ mod tests {
 
 	#[test]
 	fn motions_approval_works() {
-		with_externalities(&mut make_ext(), || {
+		set_and_run_with_externalities(&mut make_ext(), || {
 			System::set_block_number(1);
 			let proposal = make_proposal(42);
 			let hash: H256 = proposal.blake2_256().into();
