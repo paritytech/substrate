@@ -34,7 +34,6 @@ use primitives::{
 		Timestamp, HttpRequestId, HttpRequestStatus, HttpError, StorageKind, OpaqueNetworkState,
 	},
 };
-use impl_trait_for_tuples::impl_for_tuples;
 
 /// Error verifying ECDSA signature
 pub enum EcdsaVerifyError {
@@ -161,6 +160,7 @@ export_api! {
 		fn print_utf8(utf8: &[u8]);
 		/// Print any `u8` slice as hex.
 		fn print_hex(data: &[u8]);
+
 		/// Print a debuggable struct.
 		///
 		/// Might do nothing if debugging is not enabled.

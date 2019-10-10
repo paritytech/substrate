@@ -15,8 +15,8 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use quote::quote;
-use proc_macro2::{Span, TokenStream};
-use syn::{Ident, Data, Field, DeriveInput, parse_quote};
+use proc_macro2::TokenStream;
+use syn::{Ident, Data, DeriveInput, parse_quote};
 
 fn ident2str(name: &Ident) -> String {
 	format!("{}", name)
@@ -43,8 +43,6 @@ pub fn debug_derive(ast: &DeriveInput) -> proc_macro::TokenStream {
 		}
 	};
 
-	println!("{}", gen);
-
 	gen.into()
 }
 
@@ -56,7 +54,7 @@ mod implementation {
 	///
 	/// Non-std environment. We do nothing to prevent bloating the size of runtime.
 	/// Implement `Printable` if you need to print the details.
-	pub fn derive(name_str: &str, data: &Data) -> TokenStream {
+	pub fn derive(_name_str: &str, _data: &Data) -> TokenStream {
 		quote! {
 			let _ = fmt;
 			Ok(())
@@ -67,6 +65,8 @@ mod implementation {
 #[cfg(any(test, feature = "std"))]
 mod implementation {
 	use super::*;
+	use proc_macro2::Span;
+	use syn::Index;
 
 	/// Derive the inner implementation of `Debug::fmt` function.
 	pub fn derive(name_str: &str, data: &Data) -> TokenStream {
@@ -79,7 +79,7 @@ mod implementation {
 
 	enum Fields {
 		Indexed {
-			indices: Vec<syn::Index>,
+			indices: Vec<Index>,
 		},
 		Unnamed {
 			vars: Vec<Ident>,
@@ -91,7 +91,7 @@ mod implementation {
 	}
 
 	impl Fields {
-		fn new<'a>(fields: impl Iterator<Item=&'a Field>, this: Option<Ident>) -> Self {
+		fn new<'a>(fields: impl Iterator<Item=&'a syn::Field>, this: Option<Ident>) -> Self {
 			let mut indices = vec![];
 			let mut names = vec![];
 
@@ -99,7 +99,7 @@ mod implementation {
 				if let Some(ident) = f.ident.clone() {
 					names.push(ident);
 				} else {
-					indices.push(syn::Index::from(i));
+					indices.push(Index::from(i));
 				}
 			}
 

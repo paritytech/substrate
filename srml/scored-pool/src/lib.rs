@@ -96,7 +96,7 @@ use support::{
 };
 use system::{self, ensure_root, ensure_signed};
 use sr_primitives::{
-	traits::{EnsureOrigin, SimpleArithmetic, MaybeSerializeDebug, Zero, StaticLookup},
+	traits::{EnsureOrigin, SimpleArithmetic, MaybeSerializeDeserialize + Debug, Zero, StaticLookup},
 };
 
 type BalanceOf<T, I> = <<T as Trait<I>>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
@@ -117,7 +117,7 @@ pub trait Trait<I=DefaultInstance>: system::Trait {
 	type Currency: Currency<Self::AccountId> + ReservableCurrency<Self::AccountId>;
 
 	/// The score attributed to a member or candidate.
-	type Score: SimpleArithmetic + Clone + Copy + Default + Encode + Decode + MaybeSerializeDebug;
+	type Score: SimpleArithmetic + Clone + Copy + Default + Encode + Decode + MaybeSerializeDeserialize + Debug;
 
 	/// The overarching event type.
 	type Event: From<Event<Self, I>> + Into<<Self as system::Trait>::Event>;

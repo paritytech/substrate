@@ -109,11 +109,11 @@ pub use crate::exec::{ExecResult, ExecReturnValue, ExecError, StatusCode};
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 use primitives::crypto::UncheckedFrom;
-use rstd::{prelude::*, marker::PhantomData};
+use rstd::{prelude::*, marker::PhantomData, fmt::Debug};
 use codec::{Codec, Encode, Decode};
 use runtime_io::blake2_256;
 use sr_primitives::{
-	traits::{Hash, StaticLookup, Zero, MaybeSerializeDebug, Member, SignedExtension},
+	traits::{Hash, StaticLookup, Zero, MaybeSerializeDeserialize, Member, SignedExtension},
 	weights::DispatchInfo,
 	transaction_validity::{
 		ValidTransaction, InvalidTransaction, TransactionValidity, TransactionValidityError,
@@ -235,7 +235,7 @@ pub struct RawTombstoneContractInfo<H, Hasher>(H, PhantomData<Hasher>);
 
 impl<H, Hasher> RawTombstoneContractInfo<H, Hasher>
 where
-	H: Member + MaybeSerializeDebug + AsRef<[u8]> + AsMut<[u8]> + Copy + Default + rstd::hash::Hash
+	H: Member + MaybeSerializeDeserialize + Debug + AsRef<[u8]> + AsMut<[u8]> + Copy + Default + rstd::hash::Hash
 		+ Codec,
 	Hasher: Hash<Output=H>,
 {

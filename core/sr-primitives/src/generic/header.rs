@@ -18,16 +18,17 @@
 
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
-#[cfg(feature = "std")]
-use log::debug;
 use crate::codec::{Decode, Encode, Codec, Input, Output, HasCompact, EncodeAsRef, Error};
 use crate::traits::{
-	self, Member, SimpleArithmetic, SimpleBitOps, MaybeDisplay, Hash as HashT, MaybeSerializeDebug,
-	MaybeSerializeDebugButNotDeserialize
+	self, Member, SimpleArithmetic, SimpleBitOps, Hash as HashT,
+	MaybeSerializeDeserialize, MaybeSerialize, MaybeDisplay,
 };
 use crate::generic::Digest;
 use primitives::U256;
-use core::convert::TryFrom;
+use rstd::{
+	convert::TryFrom,
+	fmt::Debug,
+};
 
 /// Abstraction over a block header for a substrate chain.
 #[derive(PartialEq, Eq, Clone)]
@@ -104,11 +105,11 @@ impl<Number, Hash> codec::EncodeLike for Header<Number, Hash> where
 {}
 
 impl<Number, Hash> traits::Header for Header<Number, Hash> where
-	Number: Member + MaybeSerializeDebug + rstd::hash::Hash + MaybeDisplay +
+	Number: Member + MaybeSerializeDeserialize + Debug + rstd::hash::Hash + MaybeDisplay +
 		SimpleArithmetic + Codec + Copy + Into<U256> + TryFrom<U256>,
 	Hash: HashT,
 	Hash::Output: Default + rstd::hash::Hash + Copy + Member +
-		MaybeSerializeDebugButNotDeserialize + MaybeDisplay + SimpleBitOps + Codec,
+		MaybeSerialize + Debug + MaybeDisplay + SimpleBitOps + Codec,
 {
 	type Number = Number;
 	type Hash = <Hash as HashT>::Output;
@@ -128,14 +129,11 @@ impl<Number, Hash> traits::Header for Header<Number, Hash> where
 
 	fn digest(&self) -> &Digest<Self::Hash> { &self.digest }
 
-	#[cfg(feature = "std")]
 	fn digest_mut(&mut self) -> &mut Digest<Self::Hash> {
-		debug!(target: "header", "Retrieving mutable reference to digest");
+		#[cfg(feature = "std")]
+		log::debug!(target: "header", "Retrieving mutable reference to digest");
 		&mut self.digest
 	}
-
-	#[cfg(not(feature = "std"))]
-	fn digest_mut(&mut self) -> &mut Digest<Self::Hash> { &mut self.digest }
 
 	fn new(
 		number: Self::Number,

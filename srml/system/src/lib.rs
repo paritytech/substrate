@@ -94,6 +94,7 @@ use rstd::prelude::*;
 #[cfg(any(feature = "std", test))]
 use rstd::map;
 use rstd::marker::PhantomData;
+use rstd::fmt::Debug;
 use sr_version::RuntimeVersion;
 use sr_primitives::{
 	generic::{self, Era}, Perbill, ApplyError, ApplyOutcome, DispatchError,
@@ -105,7 +106,7 @@ use sr_primitives::{
 	traits::{
 		self, CheckEqual, SimpleArithmetic, Zero, SignedExtension, Convert, Lookup, LookupError,
 		SimpleBitOps, Hash, Member, MaybeDisplay, EnsureOrigin, SaturatedConversion,
-		MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup, One, Bounded,
+		MaybeSerialize, MaybeSerializeDeserialize, StaticLookup, One, Bounded,
 	},
 };
 
@@ -159,28 +160,28 @@ pub trait Trait: 'static + Eq + Clone {
 	type Origin: Into<Result<RawOrigin<Self::AccountId>, Self::Origin>> + From<RawOrigin<Self::AccountId>>;
 
 	/// The aggregated `Call` type.
-	type Call: rstd::fmt::Debug;
+	type Call: Debug;
 
 	/// Account index (aka nonce) type. This stores the number of previous transactions associated with a sender
 	/// account.
 	type Index:
-		Parameter + Member + MaybeSerializeDebugButNotDeserialize + Default + MaybeDisplay + SimpleArithmetic + Copy;
+		Parameter + Member + MaybeSerialize + Debug + Default + MaybeDisplay + SimpleArithmetic + Copy;
 
 	/// The block number type used by the runtime.
 	type BlockNumber:
-		Parameter + Member + MaybeSerializeDebug + MaybeDisplay + SimpleArithmetic + Default + Bounded + Copy
+		Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay + SimpleArithmetic + Default + Bounded + Copy
 		+ rstd::hash::Hash;
 
 	/// The output of the `Hashing` function.
 	type Hash:
-		Parameter + Member + MaybeSerializeDebug + MaybeDisplay + SimpleBitOps + Default + Copy + CheckEqual
-		+ rstd::hash::Hash + AsRef<[u8]> + AsMut<[u8]> + rstd::fmt::Debug;
+		Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay + SimpleBitOps + Default + Copy + CheckEqual
+		+ rstd::hash::Hash + AsRef<[u8]> + AsMut<[u8]>;
 
 	/// The hashing system (algorithm) being used in the runtime (e.g. Blake2).
 	type Hashing: Hash<Output = Self::Hash>;
 
 	/// The user account identifier type for the runtime.
-	type AccountId: Parameter + Member + MaybeSerializeDebug + MaybeDisplay + Ord + Default;
+	type AccountId: Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay + Ord + Default;
 
 	/// Converting trait to take a source type and convert to `AccountId`.
 	///
@@ -204,7 +205,7 @@ pub trait Trait: 'static + Eq + Clone {
 	>;
 
 	/// The aggregated event type of the runtime.
-	type Event: Parameter + Member + From<Event> + rstd::fmt::Debug;
+	type Event: Parameter + Member + From<Event> + Debug;
 
 	/// Maximum number of block number to block hash mappings to keep (oldest pruned first).
 	type BlockHashCount: Get<Self::BlockNumber>;
@@ -289,7 +290,7 @@ decl_module! {
 }
 
 /// A phase of a block's execution.
-#[derive(Encode, Decode, Debug)]
+#[derive(Encode, Decode, sr_primitives::RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize, PartialEq, Eq, Clone))]
 pub enum Phase {
 	/// Applying an extrinsic.
@@ -299,7 +300,7 @@ pub enum Phase {
 }
 
 /// Record of an event happening.
-#[derive(Encode, Decode, Debug)]
+#[derive(Encode, Decode, sr_primitives::RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize, PartialEq, Eq, Clone))]
 pub struct EventRecord<E: Parameter + Member, T> {
 	/// The phase of the block it happened in.
@@ -953,7 +954,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 	}
 }
 
-impl<T: Trait + Send + Sync> rstd::fmt::Debug for CheckWeight<T> {
+impl<T: Trait + Send + Sync> Debug for CheckWeight<T> {
 	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
 		write!(f, "CheckWeight<T>")
 	}
@@ -970,7 +971,7 @@ impl<T: Trait> CheckNonce<T> {
 	}
 }
 
-impl<T: Trait> rstd::fmt::Debug for CheckNonce<T> {
+impl<T: Trait> Debug for CheckNonce<T> {
 	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
 		self.0.fmt(f)
 	}
@@ -1047,7 +1048,7 @@ impl<T: Trait + Send + Sync> CheckEra<T> {
 	}
 }
 
-impl<T: Trait + Send + Sync> rstd::fmt::Debug for CheckEra<T> {
+impl<T: Trait + Send + Sync> Debug for CheckEra<T> {
 	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
 		self.0.fmt(f)
 	}
@@ -1089,7 +1090,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckEra<T> {
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
 pub struct CheckGenesis<T: Trait + Send + Sync>(rstd::marker::PhantomData<T>);
 
-impl<T: Trait + Send + Sync> rstd::fmt::Debug for CheckGenesis<T> {
+impl<T: Trait + Send + Sync> Debug for CheckGenesis<T> {
 	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
 		write!(f, "CheckGenesis<T>")
 	}
@@ -1117,7 +1118,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckGenesis<T> {
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
 pub struct CheckVersion<T: Trait + Send + Sync>(rstd::marker::PhantomData<T>);
 
-impl<T: Trait + Send + Sync> rstd::fmt::Debug for CheckVersion<T> {
+impl<T: Trait + Send + Sync> Debug for CheckVersion<T> {
 	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
 		write!(f, "CheckVersion<T>")
 	}

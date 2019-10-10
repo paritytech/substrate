@@ -159,7 +159,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use rstd::prelude::*;
-use rstd::{cmp, result, mem};
+use rstd::{cmp, result, mem, fmt::Debug};
 use codec::{Codec, Encode, Decode};
 use support::{
 	StorageValue, Parameter, decl_event, decl_storage, decl_module,
@@ -176,7 +176,7 @@ use sr_primitives::{
 		TransactionValidity,
 	},
 	traits::{
-		Zero, SimpleArithmetic, StaticLookup, Member, CheckedAdd, CheckedSub, MaybeSerializeDebug,
+		Zero, SimpleArithmetic, StaticLookup, Member, CheckedAdd, CheckedSub, MaybeSerializeDeserialize,
 		Saturating, Bounded, SignedExtension, SaturatedConversion, Convert,
 	},
 	weights::{DispatchInfo, SimpleDispatchInfo, Weight},
@@ -191,7 +191,7 @@ pub use self::imbalances::{PositiveImbalance, NegativeImbalance};
 pub trait Subtrait<I: Instance = DefaultInstance>: system::Trait {
 	/// The balance of an account.
 	type Balance: Parameter + Member + SimpleArithmetic + Codec + Default + Copy +
-		MaybeSerializeDebug + From<Self::BlockNumber>;
+		MaybeSerializeDeserialize + Debug + From<Self::BlockNumber>;
 
 	/// A function that is invoked when the free-balance has fallen below the existential deposit and
 	/// has been reduced to zero.
@@ -224,7 +224,7 @@ pub trait Subtrait<I: Instance = DefaultInstance>: system::Trait {
 pub trait Trait<I: Instance = DefaultInstance>: system::Trait {
 	/// The balance of an account.
 	type Balance: Parameter + Member + SimpleArithmetic + Codec + Default + Copy +
-		MaybeSerializeDebug + From<Self::BlockNumber>;
+		MaybeSerializeDeserialize + Debug + From<Self::BlockNumber>;
 
 	/// A function that is invoked when the free-balance has fallen below the existential deposit and
 	/// has been reduced to zero.
@@ -822,7 +822,7 @@ impl<T: Subtrait<I>, I: Instance> Trait<I> for ElevatedTrait<T, I> {
 
 impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I>
 where
-	T::Balance: MaybeSerializeDebug
+	T::Balance: MaybeSerializeDeserialize + Debug
 {
 	type Balance = T::Balance;
 	type PositiveImbalance = PositiveImbalance<T, I>;
@@ -1052,7 +1052,7 @@ where
 
 impl<T: Trait<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I>
 where
-	T::Balance: MaybeSerializeDebug
+	T::Balance: MaybeSerializeDeserialize + Debug
 {
 	fn can_reserve(who: &T::AccountId, value: Self::Balance) -> bool {
 		Self::free_balance(who)
@@ -1115,7 +1115,7 @@ where
 
 impl<T: Trait<I>, I: Instance> LockableCurrency<T::AccountId> for Module<T, I>
 where
-	T::Balance: MaybeSerializeDebug
+	T::Balance: MaybeSerializeDeserialize + Debug
 {
 	type Moment = T::BlockNumber;
 
@@ -1273,7 +1273,7 @@ impl<T: Trait<I>, I: Instance + Clone + Eq> SignedExtension for TakeFees<T, I> {
 
 impl<T: Trait<I>, I: Instance> IsDeadAccount<T::AccountId> for Module<T, I>
 where
-	T::Balance: MaybeSerializeDebug
+	T::Balance: MaybeSerializeDeserialize + Debug
 {
 	fn is_dead_account(who: &T::AccountId) -> bool {
 		Self::total_balance(who).is_zero()

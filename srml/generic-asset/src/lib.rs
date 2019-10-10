@@ -154,7 +154,7 @@
 use codec::{Decode, Encode, HasCompact, Input, Output, Error};
 
 use sr_primitives::traits::{
-	CheckedAdd, CheckedSub, MaybeSerializeDebug, Member, One, Saturating, SimpleArithmetic, Zero, Bounded
+	CheckedAdd, CheckedSub, MaybeSerializeDeserialize + Debug, Member, One, Saturating, SimpleArithmetic, Zero, Bounded
 };
 
 use rstd::prelude::*;
@@ -181,7 +181,7 @@ pub trait Trait: system::Trait {
 		+ SimpleArithmetic
 		+ Default
 		+ Copy
-		+ MaybeSerializeDebug;
+		+ MaybeSerializeDeserialize + Debug;
 	type AssetId: Parameter + Member + SimpleArithmetic + Default + Copy;
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
@@ -192,7 +192,7 @@ pub trait Subtrait: system::Trait {
 		+ SimpleArithmetic
 		+ Default
 		+ Copy
-		+ MaybeSerializeDebug;
+		+ MaybeSerializeDeserialize + Debug;
 	type AssetId: Parameter + Member + SimpleArithmetic + Default + Copy;
 }
 
@@ -1255,7 +1255,7 @@ impl<T: Trait> AssetIdProvider for SpendingAssetIdProvider<T> {
 impl<T> LockableCurrency<T::AccountId> for AssetCurrency<T, StakingAssetIdProvider<T>>
 where
 	T: Trait,
-	T::Balance: MaybeSerializeDebug,
+	T::Balance: MaybeSerializeDeserialize + Debug,
 {
 	type Moment = T::BlockNumber;
 
