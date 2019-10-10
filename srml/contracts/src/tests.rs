@@ -159,6 +159,7 @@ parameter_types! {
 impl Trait for Test {
 	type Currency = Balances;
 	type Time = Timestamp;
+	type Randomness = Randomness;
 	type Call = Call;
 	type DetermineContractAddress = DummyContractAddressFor;
 	type Event = MetaEvent;
@@ -187,6 +188,7 @@ type Balances = balances::Module<Test>;
 type Timestamp = timestamp::Module<Test>;
 type Contract = Module<Test>;
 type System = system::Module<Test>;
+type Randomness = randomness_collective_flip::Module<Test>;
 
 pub struct DummyContractAddressFor;
 impl ContractAddressFor<H256, u64> for DummyContractAddressFor {

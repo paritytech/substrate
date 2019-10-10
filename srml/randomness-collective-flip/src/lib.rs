@@ -35,7 +35,7 @@
 //! ### Example - Get random seed for the current block
 //!
 //! ```
-//! use support::{decl_module, dispatch::Result};
+//! use support::{decl_module, dispatch::Result, traits::Randomness};
 //!
 //! pub trait Trait: system::Trait {}
 //!
@@ -54,7 +54,7 @@
 
 use rstd::{prelude::*, convert::TryInto};
 use sr_primitives::traits::Hash;
-use support::{decl_module, decl_storage};
+use support::{decl_module, decl_storage, traits::Randomness};
 use safe_mix::TripletMix;
 use codec::Encode;
 use system::Trait;
@@ -91,16 +91,7 @@ decl_storage! {
 	}
 }
 
-impl<T: Trait> Module<T> {
-	/// Get the basic random seed.
-	///
-	/// In general you won't want to use this, but rather `Self::random` which allows you to give a
-	/// subject for the random result and whose value will be independently low-influence random
-	/// from any other such seeds.
-	pub fn random_seed() -> T::Hash {
-		Self::random(&[][..])
-	}
-
+impl<T: Trait> Randomness<T::Hash> for Module<T> {
 	/// Get a low-influence "random" value.
 	///
 	/// Being a deterministic block chain, real randomness is difficult to come by. This gives you
@@ -138,7 +129,7 @@ impl<T: Trait> Module<T> {
 	/// WARNING: Hashing the result of this function will remove any low-influence properties it has
 	/// and mean that all bits of the resulting value are entirely manipulatable by the author of
 	/// the parent block, who can determine the value of `parent_hash`.
-	pub fn random(subject: &[u8]) -> T::Hash {
+	fn random(subject: &[u8]) -> T::Hash {
 		let block_number = <system::Module<T>>::block_number();
 		let index = block_number_to_index::<T>(block_number);
 
@@ -166,7 +157,7 @@ mod tests {
 		Perbill, traits::{BlakeTwo256, OnInitialize, Header as _, IdentityLookup}, testing::Header,
 		set_and_run_with_externalities,
 	};
-	use support::{impl_outer_origin, parameter_types};
+	use support::{impl_outer_origin, parameter_types, traits::Randomness};
 
 	#[derive(Clone, PartialEq, Eq)]
 	pub struct Test;
@@ -202,7 +193,7 @@ mod tests {
 	}
 
 	type System = system::Module<Test>;
-	type Randomness = Module<Test>;
+	type CollectiveFlip = Module<Test>;
 
 	fn new_test_ext() -> runtime_io::TestExternalities {
 		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
@@ -221,7 +212,7 @@ mod tests {
 
 		for i in 1 .. (blocks + 1) {
 			System::initialize(&i, &parent_hash, &Default::default(), &Default::default());
-			Randomness::on_initialize(i);
+			CollectiveFlip::on_initialize(i);
 
 			let header = System::finalize();
 			parent_hash = header.hash();
@@ -236,7 +227,7 @@ mod tests {
 
 			setup_blocks(38);
 
-			let random_material = Randomness::random_material();
+			let random_material = CollectiveFlip::random_material();
 
 			assert_eq!(random_material.len(), 38);
 			assert_eq!(random_material[0], genesis_hash);
@@ -250,7 +241,7 @@ mod tests {
 
 			setup_blocks(81);
 
-			let random_material = Randomness::random_material();
+			let random_material = CollectiveFlip::random_material();
 
 			assert_eq!(random_material.len(), 81);
 			assert_ne!(random_material[0], random_material[1]);
@@ -265,7 +256,7 @@ mod tests {
 
 			setup_blocks(162);
 
-			let random_material = Randomness::random_material();
+			let random_material = CollectiveFlip::random_material();
 
 			assert_eq!(random_material.len(), 81);
 			assert_ne!(random_material[0], random_material[1]);
@@ -279,13 +270,13 @@ mod tests {
 			setup_blocks(162);
 
 			assert_eq!(System::block_number(), 162);
-			assert_eq!(Randomness::random_seed(), Randomness::random_seed());
-			assert_ne!(Randomness::random(b"random_1"), Randomness::random(b"random_2"));
+			assert_eq!(CollectiveFlip::random_seed(), CollectiveFlip::random_seed());
+			assert_ne!(CollectiveFlip::random(b"random_1"), CollectiveFlip::random(b"random_2"));
 
-			let random = Randomness::random_seed();
+			let random = CollectiveFlip::random_seed();
 
 			assert_ne!(random, H256::zero());
-			assert!(!Randomness::random_material().contains(&random));
+			assert!(!CollectiveFlip::random_material().contains(&random));
 		});
 	}
 }

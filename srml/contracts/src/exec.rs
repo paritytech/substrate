@@ -22,7 +22,7 @@ use crate::rent;
 
 use rstd::prelude::*;
 use sr_primitives::traits::{Bounded, CheckedAdd, CheckedSub, Zero};
-use support::traits::{WithdrawReason, Currency, Time};
+use support::traits::{WithdrawReason, Currency, Time, Randomness};
 
 pub type AccountIdOf<T> = <T as system::Trait>::AccountId;
 pub type CallOf<T> = <T as Trait>::Call;
@@ -753,7 +753,7 @@ where
 	}
 
 	fn random(&self, subject: &[u8]) -> SeedOf<T> {
-		randomness_collective_flip::Module::<T>::random(subject)
+		T::Randomness::random(subject)
 	}
 
 	fn now(&self) -> &MomentOf<T> {
