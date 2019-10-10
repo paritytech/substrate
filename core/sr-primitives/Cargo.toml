@@ -25,6 +25,7 @@ rand = "0.7.2"
 substrate-offchain = { path = "../offchain" }
 
 [features]
+bench = []
 default = ["std"]
 std = [
 	"num-traits/std",
