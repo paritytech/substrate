@@ -14,6 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+//! Implementation of the trait instance and the instance structures implementing it.
+//! (For not instantiable traits there is still the inherent instance implemented).
+
 use proc_macro2::{TokenStream, Span};
 use quote::quote;
 use super::{DeclStorageDefExt, StorageLineTypeDef};

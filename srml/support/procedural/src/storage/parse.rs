@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+//! Parsing of decl_storage input.
+
 use srml_support_procedural_tools::{ToTokens, Parse, syn_ext as ext};
 use syn::{Ident, Token};
 

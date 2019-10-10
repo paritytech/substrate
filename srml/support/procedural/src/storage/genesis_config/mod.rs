@@ -20,6 +20,9 @@ use super::{DeclStorageDefExt, instance_trait::DEFAULT_INSTANTIABLE_TRAIT_NAME};
 use genesis_config_def::GenesisConfigDef;
 use builder_def::BuilderDef;
 
+//! Declaration of genesis config structure and implementation of build storage trait and
+//! functions.
+
 mod genesis_config_def;
 mod builder_def;
 

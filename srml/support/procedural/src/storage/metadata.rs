@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! `decl_storage` macro transformation
+//! Implementation of `storage_metadata` on module structure, used by construct_runtime.
 
 use srml_support_procedural_tools::clean_type_string;
 use proc_macro2::TokenStream;

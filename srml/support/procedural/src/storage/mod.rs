@@ -14,7 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-// mod impls;
+//! `decl_storage` input definition and expansion.
+
 mod storage_struct;
 mod parse;
 mod store_trait;
@@ -22,25 +23,37 @@ mod getters;
 mod metadata;
 mod instance_trait;
 mod genesis_config;
-// pub mod transformation;
 
 use quote::quote;
 use srml_support_procedural_tools::{
 	generate_crate_access, generate_hidden_includes, syn_ext as ext
 };
 
+/// All informations contained in input of decl_storage
 pub struct DeclStorageDef {
+	/// Name of the module used to import hidden imports.
 	hidden_crate: Option<syn::Ident>,
+	/// Visibility of store trait.
 	visibility: syn::Visibility,
+	/// Name of store trait: usually `Store`.
 	store_trait: syn::Ident,
+	/// Module name used by construct_runtime: usually `Module`.
 	module_name: syn::Ident,
+	/// Usually `T`.
 	module_runtime_generic: syn::Ident,
+	/// Usually `Trait`
 	module_runtime_trait: syn::Path,
+	/// For instantiable module: usually `I: Instance=DefaultInstance`.
 	module_instance: Option<ModuleInstanceDef>,
+	/// Where claused used to constrain T and I even more.
 	where_clause: Option<syn::WhereClause>,
+	/// The extra build function used to build storage at genesis.
 	extra_genesis_build: Option<syn::Expr>,
+	/// The extra genesis config fields.
 	extra_genesis_config_lines: Vec<ExtraGenesisLineDef>,
+	/// Definition of storages.
 	storage_lines: Vec<StorageLineDef>,
+	/// Name of the crate, used for storage prefixes.
 	crate_name: syn::Ident,
 }
 
@@ -50,25 +63,42 @@ impl syn::parse::Parse for DeclStorageDef {
 	}
 }
 
-// Extended version of `DeclStorageDef` with useful precomputed value.
+/// Extended version of `DeclStorageDef` with useful precomputed value.
 pub struct DeclStorageDefExt {
+	/// Name of the module used to import hidden imports.
 	hidden_crate: Option<syn::Ident>,
+	/// Visibility of store trait.
 	visibility: syn::Visibility,
+	/// Name of store trait: usually `Store`.
 	store_trait: syn::Ident,
+	/// Module name used by construct_runtime: usually `Module`.
 	#[allow(unused)]
 	module_name: syn::Ident,
+	/// Usually `T`.
 	module_runtime_generic: syn::Ident,
+	/// Usually `Trait`.
 	module_runtime_trait: syn::Path,
+	/// For instantiable module: usually `I: Instance=DefaultInstance`.
 	module_instance: Option<ModuleInstanceDef>,
+	/// Where claused used to constrain T and I even more.
 	where_clause: Option<syn::WhereClause>,
+	/// The extra build function used to build storage at genesis.
 	extra_genesis_build: Option<syn::Expr>,
+	/// The extra genesis config fields.
 	extra_genesis_config_lines: Vec<ExtraGenesisLineDef>,
+	/// Definition of storages.
 	storage_lines: Vec<StorageLineDefExt>,
+	/// Name of the crate, used for storage prefixes.
 	crate_name: syn::Ident,
+	/// Full struct expansion: `Module<T, I>`.
 	module_struct: proc_macro2::TokenStream,
+	/// Impl block for module: `<T: Trait, I: Instance>`.
 	module_impl: proc_macro2::TokenStream,
+	/// For instantiable: `I`.
 	optional_instance: Option<proc_macro2::TokenStream>,
+	/// For instantiable: `I: Instance`.
 	optional_instance_bound: Option<proc_macro2::TokenStream>,
+	/// For instantiable: `I: Instance = DefaultInstance`.
 	optional_instance_bound_optional_default: Option<proc_macro2::TokenStream>,
 }
 
@@ -131,19 +161,28 @@ impl From<DeclStorageDef> for DeclStorageDefExt {
 	}
 }
 
+/// Usually `I: Instance=DefaultInstance`.
 pub struct ModuleInstanceDef {
+	/// Usually: `I`.
 	instance_generic: syn::Ident,
+	/// Usually: `Instance`.
 	instance_trait: syn::Ident,
+	/// Usually: `DefaultInstance`.
 	instance_default: Option<syn::Ident>,
 }
 
 pub struct StorageLineDef {
 	attrs: Vec<syn::Attribute>,
+	/// Visibility of the storage struct.
 	visibility: syn::Visibility,
 	name: syn::Ident,
+	/// The name of getter function to be implemented on Module struct.
 	getter: Option<syn::Ident>,
+	/// The name of the field to be used in genesis config if any.
 	config: Option<syn::Ident>,
+	/// The build function of the storage if any.
 	build: Option<syn::Expr>,
+	/// Default value of genesis config field and also for storage when no value available.
 	default_value: Option<syn::Expr>,
 	storage_type: StorageLineTypeDef,
 }
@@ -151,11 +190,16 @@ pub struct StorageLineDef {
 pub struct StorageLineDefExt {
 	#[allow(unused)]
 	attrs: Vec<syn::Attribute>,
+	/// Visibility of the storage struct.
 	visibility: syn::Visibility,
 	name: syn::Ident,
+	/// The name of getter function to be implemented on Module struct.
 	getter: Option<syn::Ident>,
+	/// The name of the field to be used in genesis config if any.
 	config: Option<syn::Ident>,
+	/// The build function of the storage if any.
 	build: Option<syn::Expr>,
+	/// Default value of genesis config field and also for storage when no value available.
 	default_value: Option<syn::Expr>,
 	storage_type: StorageLineTypeDef,
 	doc_attrs: Vec<syn::Meta>,
@@ -163,13 +207,21 @@ pub struct StorageLineDefExt {
 	query_type: syn::Type,
 	/// The type stored in storage.
 	value_type: syn::Type,
+	/// Full struct, for example: `StorageName<T, I>`.
 	storage_struct: proc_macro2::TokenStream,
+	/// If storage is generic over runtime then `T`.
 	optional_storage_runtime_comma: Option<proc_macro2::TokenStream>,
+	/// If storage is generic over runtime then `T: Trait`.
 	optional_storage_runtime_bound_comma: Option<proc_macro2::TokenStream>,
+	/// The where clause to use to constrain generics if storage is generic over runtime.
 	optional_storage_where_clause: Option<proc_macro2::TokenStream>,
+	/// Full trait, for example: `storage::StorageMap<u32, u32>`.
 	storage_trait: proc_macro2::TokenStream,
+	/// Full trait, for example: `storage::generator::StorageMap<u32, u32>`.
 	storage_generator_trait: proc_macro2::TokenStream,
+	/// Weither the storage is generic.
 	is_generic: bool,
+	/// Weither the storage value is an option.
 	is_option: bool,
 }
 
@@ -292,6 +344,7 @@ pub enum StorageLineTypeDef {
 pub struct MapDef {
 	pub hasher: HasherKind,
 	pub key: syn::Type,
+	/// This is the query value not the inner value used in storage trait implementation.
 	pub value: syn::Type,
 }
 
@@ -300,6 +353,7 @@ pub struct DoubleMapDef {
 	pub hasher2: HasherKind,
 	pub key1: syn::Type,
 	pub key2: syn::Type,
+	/// This is the query value not the inner value used in storage trait implementation.
 	pub value: syn::Type,
 }
 
@@ -341,6 +395,7 @@ impl HasherKind {
 	}
 }
 
+/// Full implementation of decl_storage.
 pub fn decl_storage_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 	let def = syn::parse_macro_input!(input as DeclStorageDef);
 	let def_ext = DeclStorageDefExt::from(def);

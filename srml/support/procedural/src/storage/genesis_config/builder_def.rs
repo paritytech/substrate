@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+//! Builder logic definition used to build genesis storage.
+
 use srml_support_procedural_tools::syn_ext as ext;
 use proc_macro2::TokenStream;
 use syn::spanned::Spanned;
@@ -21,7 +23,12 @@ use quote::{quote, quote_spanned};
 use super::super::{DeclStorageDefExt, StorageLineTypeDef};
 
 pub struct BuilderDef {
+	/// Contains:
+	/// * build block for storage with build attribute.
+	/// * build block for storage with config attribute and no build attribute.
+	/// * build block for extra genesis build expression.
 	pub blocks: Vec<TokenStream>,
+	/// The build blocks requires generic traits.
 	pub is_generic: bool,
 }
 

@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+//! Declaration of store trait and implementation on module structure.
+
 use proc_macro2::TokenStream;
 use quote::quote;
 use super::DeclStorageDefExt;
