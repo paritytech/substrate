@@ -33,8 +33,7 @@ use client::{
 	backend::Backend, error::Result as ClientResult,
 };
 use primitives::{
-	H256, Blake2Hasher, Bytes, offchain::NeverOffchainExt,
-	storage::{well_known_keys, StorageKey, StorageData, StorageChangeSet},
+	H256, Blake2Hasher, Bytes, storage::{well_known_keys, StorageKey, StorageData, StorageChangeSet},
 };
 use runtime_version::RuntimeVersion;
 use state_machine::ExecutionStrategy;
@@ -240,13 +239,16 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 	) -> FutureResult<Bytes> {
 		Box::new(result(
 			self.block_or_best(block)
-				.and_then(|block| self.client.executor()
+				.and_then(|block|
+					self
+					.client
+					.executor()
 					.call(
 						&BlockId::Hash(block),
 						&method,
 						&*call_data,
 						ExecutionStrategy::NativeElseWasm,
-						NeverOffchainExt::new(),
+						None,
 					)
 					.map(Into::into))
 				.map_err(client_err)))

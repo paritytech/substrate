@@ -14,23 +14,30 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Contract execution data.
+//! Primitive types for storage related stuff.
+
+#![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
-#[cfg(feature = "std")]
-use crate::bytes;
-use rstd::vec::Vec;
 
-/// Contract storage key.
+use rstd::{vec::Vec, borrow::Cow};
+
+/// Storage key.
 #[derive(PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug, Hash, PartialOrd, Ord, Clone))]
-pub struct StorageKey(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
+pub struct StorageKey(
+	#[cfg_attr(feature = "std", serde(with="impl_serde::serialize"))]
+	pub Vec<u8>,
+);
 
-/// Contract storage entry data.
+/// Storage data associated to a [`StorageKey`].
 #[derive(PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug, Hash, PartialOrd, Ord, Clone))]
-pub struct StorageData(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
+pub struct StorageData(
+	#[cfg_attr(feature = "std", serde(with="impl_serde::serialize"))]
+	pub Vec<u8>,
+);
 
 /// Storage change set
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug, PartialEq, Eq))]
@@ -39,15 +46,11 @@ pub struct StorageChangeSet<Hash> {
 	/// Block hash
 	pub block: Hash,
 	/// A list of changes
-	pub changes: Vec<(
-		StorageKey,
-		Option<StorageData>,
-	)>,
+	pub changes: Vec<(StorageKey, Option<StorageData>)>,
 }
 
 /// List of all well known keys and prefixes in storage.
 pub mod well_known_keys {
-
 	/// Wasm code of the runtime.
 	///
 	/// Stored as a raw byte vector. Required by substrate.
@@ -92,5 +95,54 @@ pub mod well_known_keys {
 			);
 		}
 		has_right_prefix
+	}
+}
+
+/// A wrapper around a child storage key.
+///
+/// This wrapper ensures that the child storage key is correct and properly used. It is
+/// impossible to create an instance of this struct without providing a correct `storage_key`.
+pub struct ChildStorageKey<'a> {
+	storage_key: Cow<'a, [u8]>,
+}
+
+impl<'a> ChildStorageKey<'a> {
+	/// Create new instance of `Self`.
+	fn new(storage_key: Cow<'a, [u8]>) -> Option<Self> {
+		if well_known_keys::is_child_trie_key_valid(&storage_key) {
+			Some(ChildStorageKey { storage_key })
+		} else {
+			None
+		}
+	}
+
+	/// Create a new `ChildStorageKey` from a vector.
+	///
+	/// `storage_key` need to start with `:child_storage:default:`
+	/// See `is_child_trie_key_valid` for more details.
+	pub fn from_vec(key: Vec<u8>) -> Option<Self> {
+		Self::new(Cow::Owned(key))
+	}
+
+	/// Create a new `ChildStorageKey` from a slice.
+	///
+	/// `storage_key` need to start with `:child_storage:default:`
+	/// See `is_child_trie_key_valid` for more details.
+	pub fn from_slice(key: &'a [u8]) -> Option<Self> {
+		Self::new(Cow::Borrowed(key))
+	}
+
+	/// Get access to the byte representation of the storage key.
+	///
+	/// This key is guaranteed to be correct.
+	pub fn as_ref(&self) -> &[u8] {
+		&*self.storage_key
+	}
+
+	/// Destruct this instance into an owned vector that represents the storage key.
+	///
+	/// This key is guaranteed to be correct.
+	pub fn into_owned(self) -> Vec<u8> {
+		self.storage_key.into_owned()
 	}
 }

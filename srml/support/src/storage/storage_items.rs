@@ -758,8 +758,7 @@ mod test3 {
 #[cfg(test)]
 #[allow(dead_code)]
 mod test_append_and_len {
-	use crate::storage::{StorageValue};
-	use runtime_io::{with_externalities, TestExternalities};
+	use runtime_io::TestExternalities;
 	use codec::{Encode, Decode};
 
 	pub trait Trait {
@@ -801,7 +800,7 @@ mod test_append_and_len {
 
 	#[test]
 	fn default_for_option() {
-		with_externalities(&mut TestExternalities::default(), || {
+		TestExternalities::default().execute_with(|| {
 			assert_eq!(OptionVec::get(), None);
 			assert_eq!(JustVec::get(), vec![]);
 		});
@@ -809,7 +808,7 @@ mod test_append_and_len {
 
 	#[test]
 	fn append_works() {
-		with_externalities(&mut TestExternalities::default(), || {
+		TestExternalities::default().execute_with(|| {
 			let _ = MapVec::append(1, [1, 2, 3].iter());
 			let _ = MapVec::append(1, [4, 5].iter());
 			assert_eq!(MapVec::get(1), vec![1, 2, 3, 4, 5]);
@@ -822,7 +821,7 @@ mod test_append_and_len {
 
 	#[test]
 	fn append_works_for_default() {
-		with_externalities(&mut TestExternalities::default(), || {
+		TestExternalities::default().execute_with(|| {
 			assert_eq!(JustVecWithDefault::get(), vec![6, 9]);
 			let _ = JustVecWithDefault::append([1].iter());
 			assert_eq!(JustVecWithDefault::get(), vec![6, 9, 1]);
@@ -839,7 +838,7 @@ mod test_append_and_len {
 
 	#[test]
 	fn append_or_put_works() {
-		with_externalities(&mut TestExternalities::default(), || {
+		TestExternalities::default().execute_with(|| {
 			let _ = MapVec::append_or_insert(1, &[1, 2, 3][..]);
 			let _ = MapVec::append_or_insert(1, &[4, 5][..]);
 			assert_eq!(MapVec::get(1), vec![1, 2, 3, 4, 5]);
@@ -856,7 +855,7 @@ mod test_append_and_len {
 
 	#[test]
 	fn len_works() {
-		with_externalities(&mut TestExternalities::default(), || {
+		TestExternalities::default().execute_with(|| {
 			JustVec::put(&vec![1, 2, 3, 4]);
 			OptionVec::put(&vec![1, 2, 3, 4, 5]);
 			MapVec::insert(1, &vec![1, 2, 3, 4, 5, 6]);
@@ -871,7 +870,7 @@ mod test_append_and_len {
 
 	#[test]
 	fn len_works_for_default() {
-		with_externalities(&mut TestExternalities::default(), || {
+		TestExternalities::default().execute_with(|| {
 			// vec
 			assert_eq!(JustVec::get(), vec![]);
 			assert_eq!(JustVec::decode_len(), Ok(0));

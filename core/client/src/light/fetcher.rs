@@ -23,7 +23,7 @@ use std::future::Future;
 
 use hash_db::{HashDB, Hasher, EMPTY_PREFIX};
 use codec::{Decode, Encode};
-use primitives::{ChangesTrieConfiguration, convert_hash, traits::CodeExecutor};
+use primitives::{ChangesTrieConfiguration, convert_hash, traits::CodeExecutor, H256};
 use sr_primitives::traits::{
 	Block as BlockT, Header as HeaderT, Hash, HashFor, NumberFor,
 	SimpleArithmetic, CheckedConversion, Zero,
@@ -370,9 +370,8 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>> LightDataChecker<E, H, B, S> {
 impl<E, Block, H, S> FetchChecker<Block> for LightDataChecker<E, H, Block, S>
 	where
 		Block: BlockT,
-		E: CodeExecutor<H>,
-		H: Hasher,
-		H::Out: Ord + 'static,
+		E: CodeExecutor,
+		H: Hasher<Out=H256>,
 		S: BlockchainStorage<Block>,
 {
 	fn check_header_proof(

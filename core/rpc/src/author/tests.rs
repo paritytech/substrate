@@ -24,8 +24,8 @@ use transaction_pool::{
 	FullChainApi,
 };
 use primitives::{
-	H256, blake2_256, hexdisplay::HexDisplay, traits::BareCryptoStore,
-	testing::{ED25519, SR25519, KeyStore}, ed25519, crypto::Pair
+	H256, blake2_256, hexdisplay::HexDisplay, testing::{ED25519, SR25519, KeyStore}, ed25519,
+	crypto::Pair,
 };
 use test_client::{
 	self, AccountKeyring, runtime::{Extrinsic, Transfer, SessionKeys}, DefaultTestClientBuilderExt,
@@ -212,7 +212,9 @@ fn should_insert_key() {
 fn should_rotate_keys() {
 	let runtime = runtime::Runtime::new().unwrap();
 	let keystore = KeyStore::new();
-	let client = Arc::new(test_client::TestClientBuilder::new().set_keystore(keystore.clone()).build());
+	let client = Arc::new(
+		test_client::TestClientBuilder::new().set_keystore(keystore.clone()).build(),
+	);
 	let p = Author {
 		client: client.clone(),
 		pool: Arc::new(Pool::new(Default::default(), FullChainApi::new(client))),
