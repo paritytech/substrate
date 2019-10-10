@@ -20,7 +20,7 @@
 //!
 //! This is used for votes and commit messages currently.
 
-use super::{BlockStatus, CommunicationIn, Error, SignedMessage};
+use super::{BlockStatus as BlockStatusT, BlockSyncRequester as BlockSyncRequesterT, CommunicationIn, Error, SignedMessage};
 
 use log::{debug, warn};
 use client::{BlockImportNotification, ImportNotifications};
@@ -54,7 +54,7 @@ pub(crate) trait BlockUntilImported<Block: BlockT>: Sized {
 		wait: Wait,
 		ready: Ready,
 	) -> Result<(), Error> where
-		S: BlockStatus<Block>,
+		S: BlockStatusT<Block>,
 		Wait: FnMut(Block::Hash, Self),
 		Ready: FnMut(Self::Blocked);
 
@@ -64,9 +64,10 @@ pub(crate) trait BlockUntilImported<Block: BlockT>: Sized {
 }
 
 /// Buffering imported messages until blocks with given hashes are imported.
-pub(crate) struct UntilImported<Block: BlockT, Status, I, M: BlockUntilImported<Block>> {
+pub(crate) struct UntilImported<Block: BlockT, BlockStatus, BlockSyncRequester, I, M: BlockUntilImported<Block>> {
 	import_notifications: Fuse<Box<dyn Stream<Item = BlockImportNotification<Block>, Error = ()> + Send>>,
-	status_check: Status,
+	block_sync_requester: BlockSyncRequester,
+	status_check: BlockStatus,
 	// TODO: Why is this called inner? Why not being more descriptive and say finality_msg_stream?
 	inner: Fuse<I>,
 	ready: VecDeque<M::Blocked>,
@@ -78,13 +79,14 @@ pub(crate) struct UntilImported<Block: BlockT, Status, I, M: BlockUntilImported<
 	identifier: &'static str,
 }
 
-impl<Block: BlockT, Status, I: Stream, M> UntilImported<Block, Status, I, M>
-	where Status: BlockStatus<Block>, M: BlockUntilImported<Block>
+impl<Block: BlockT, BlockStatus, BlockSyncRequester, I: Stream, M> UntilImported<Block, BlockStatus, BlockSyncRequester, I, M>
+	where BlockStatus: BlockStatusT<Block>, M: BlockUntilImported<Block>
 {
 	/// Create a new `UntilImported` wrapper.
 	pub(crate) fn new(
 		import_notifications: ImportNotifications<Block>,
-		status_check: Status,
+		block_sync_requester: BlockSyncRequester,
+		status_check: BlockStatus,
 		stream: I,
 		identifier: &'static str,
 	) -> Self {
@@ -102,6 +104,7 @@ impl<Block: BlockT, Status, I: Stream, M> UntilImported<Block, Status, I, M>
 				let stream = import_notifications.map::<_, fn(_) -> _>(|v| Ok::<_, ()>(v)).compat();
 				Box::new(stream) as Box<dyn Stream<Item = _, Error = _> + Send>
 			}.fuse(),
+			block_sync_requester,
 			status_check,
 			inner: stream.fuse(),
 			ready: VecDeque::new(),
@@ -112,8 +115,8 @@ impl<Block: BlockT, Status, I: Stream, M> UntilImported<Block, Status, I, M>
 	}
 }
 
-impl<Block: BlockT, Status, I, M> Stream for UntilImported<Block, Status, I, M> where
-	Status: BlockStatus<Block>,
+impl<Block: BlockT, BlockStatus, BlockSyncRequester, I, M> Stream for UntilImported<Block, BlockStatus, BlockSyncRequester, I, M> where
+	BlockStatus: BlockStatusT<Block>,
 	I: Stream<Item=(Option<network::PeerId>, M::Blocked),Error=Error>,
 	M: BlockUntilImported<Block>,
 {
@@ -235,13 +238,13 @@ fn warn_authority_wrong_target<H: ::std::fmt::Display>(hash: H, id: AuthorityId)
 impl<Block: BlockT> BlockUntilImported<Block> for SignedMessage<Block> {
 	type Blocked = Self;
 
-	fn schedule_wait<S, Wait, Ready>(
+	fn schedule_wait<BlockStatus, Wait, Ready>(
 		msg: Self::Blocked,
-		status_check: &S,
+		status_check: &BlockStatus,
 		mut wait: Wait,
 		mut ready: Ready,
 	) -> Result<(), Error> where
-		S: BlockStatus<Block>,
+		BlockStatus: BlockStatusT<Block>,
 		Wait: FnMut(Block::Hash, Self),
 		Ready: FnMut(Self::Blocked),
 	{
@@ -274,7 +277,13 @@ impl<Block: BlockT> BlockUntilImported<Block> for SignedMessage<Block> {
 
 /// Helper type definition for the stream which waits until vote targets for
 /// signed messages are imported.
-pub(crate) type UntilVoteTargetImported<Block, Status, I> = UntilImported<Block, Status, I, SignedMessage<Block>>;
+pub(crate) type UntilVoteTargetImported<Block, BlockStatus, BlockSyncRequester, I> = UntilImported<
+	Block,
+	BlockStatus,
+	BlockSyncRequester,
+	I,
+	SignedMessage<Block>,
+>;
 
 /// This blocks a global message import, i.e. a commit or catch up messages,
 /// until all blocks referenced in its votes are known.
@@ -289,13 +298,13 @@ pub(crate) struct BlockGlobalMessage<Block: BlockT> {
 impl<Block: BlockT> BlockUntilImported<Block> for BlockGlobalMessage<Block> {
 	type Blocked = CommunicationIn<Block>;
 
-	fn schedule_wait<S, Wait, Ready>(
+	fn schedule_wait<BlockStatus, Wait, Ready>(
 		input: Self::Blocked,
-		status_check: &S,
+		status_check: &BlockStatus,
 		mut wait: Wait,
 		mut ready: Ready,
 	) -> Result<(), Error> where
-		S: BlockStatus<Block>,
+		BlockStatus: BlockStatusT<Block>,
 		Wait: FnMut(Block::Hash, Self),
 		Ready: FnMut(Self::Blocked),
 	{
@@ -440,9 +449,10 @@ impl<Block: BlockT> BlockUntilImported<Block> for BlockGlobalMessage<Block> {
 
 /// A stream which gates off incoming global messages, i.e. commit and catch up
 /// messages, until all referenced block hashes have been imported.
-pub(crate) type UntilGlobalMessageBlocksImported<Block, Status, I> = UntilImported<
+pub(crate) type UntilGlobalMessageBlocksImported<Block, BlockStatus, BlockSyncRequester, I> = UntilImported<
 	Block,
-	Status,
+	BlockStatus,
+	BlockSyncRequester,
 	I,
 	BlockGlobalMessage<Block>,
 >;

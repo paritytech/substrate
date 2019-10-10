@@ -437,10 +437,9 @@ fn global_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 	);
 
 	// block commit and catch up messages until relevant blocks are imported.
-	// TODO: How about passing a BlockSyncRequestHandler in here to have the UntilImported component request blocks it
-	// is waiting on from the network?
 	let global_in = UntilGlobalMessageBlocksImported::new(
 		client.import_notification_stream(),
+		network.clone(),
 		client.clone(),
 		global_in,
 		"global",

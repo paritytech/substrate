@@ -369,6 +369,8 @@ impl<Block: BlockT> SharedVoterSetState<Block> {
 
 /// The environment we run GRANDPA in.
 pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA, SC> {
+	// TODO: As far as I can tell this does not follow the pattern of having an outer struct protecting an inner struct
+	// via a lock in order to be Sync. How about renaming this to `client` like we do in many other places?
 	pub(crate) inner: Arc<Client<B, E, Block, RA>>,
 	pub(crate) select_chain: SC,
 	pub(crate) voters: Arc<VoterSet<AuthorityId>>,
@@ -581,6 +583,7 @@ where
 		// corresponding blocks are imported.
 		let incoming = Box::new(UntilVoteTargetImported::new(
 			self.inner.import_notification_stream(),
+			self.network.clone(),
 			self.inner.clone(),
 			incoming,
 			"round",
