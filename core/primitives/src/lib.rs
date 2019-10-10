@@ -54,16 +54,15 @@ pub mod crypto;
 
 pub mod u32_trait;
 
-pub mod child_storage_key;
 pub mod ed25519;
 pub mod sr25519;
 pub mod hash;
 mod hasher;
 pub mod offchain;
 pub mod sandbox;
-pub mod storage;
 pub mod uint;
 mod changes_trie;
+#[cfg(feature = "std")]
 pub mod traits;
 pub mod testing;
 
@@ -80,6 +79,8 @@ pub use hash_db::Hasher;
 // Switch back to Blake after PoC-3 is out
 // pub use self::hasher::blake::BlakeHasher;
 pub use self::hasher::blake2::Blake2Hasher;
+
+pub use primitives_storage as storage;
 
 /// Context for executing a call into the runtime.
 pub enum ExecutionContext {

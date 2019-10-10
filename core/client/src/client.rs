@@ -28,7 +28,7 @@ use hash_db::{Hasher, Prefix};
 use primitives::{
 	Blake2Hasher, H256, ChangesTrieConfiguration, convert_hash, NeverNativeValue, ExecutionContext,
 	NativeOrEncoded, storage::{StorageKey, StorageData, well_known_keys},
-	offchain::{NeverOffchainExt, self}, traits::CodeExecutor,
+	offchain::{OffchainExt, self}, traits::CodeExecutor,
 };
 use substrate_telemetry::{telemetry, SUBSTRATE_INFO};
 use sr_primitives::{
@@ -248,7 +248,7 @@ pub fn new_in_mem<E, Block, S, RA>(
 	Block,
 	RA
 >> where
-	E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
+	E: CodeExecutor + RuntimeInfo,
 	S: BuildStorage,
 	Block: BlockT<Hash=H256>,
 {
@@ -264,7 +264,7 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 	keystore: Option<primitives::traits::BareCryptoStorePtr>,
 ) -> error::Result<Client<B, LocalCallExecutor<B, E>, Block, RA>>
 	where
-		E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
+		E: CodeExecutor + RuntimeInfo,
 		S: BuildStorage,
 		Block: BlockT<Hash=H256>,
 		B: backend::LocalBackend<Block, Blake2Hasher>
@@ -1058,18 +1058,27 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 						}),
 					}
 				};
-				let (_, storage_update, changes_update) = self.executor.call_at_state::<_, _, _, NeverNativeValue, fn() -> _>(
-					transaction_state,
-					&mut overlay,
-					"Core_execute_block",
-					&<Block as BlockT>::new(import_headers.pre().clone(), body.unwrap_or_default()).encode(),
-					match origin {
-						BlockOrigin::NetworkInitialSync => get_execution_manager(self.execution_strategies().syncing),
-						_ => get_execution_manager(self.execution_strategies().importing),
-					},
-					None,
-					NeverOffchainExt::new(),
-				)?;
+
+				let encoded_block = <Block as BlockT>::new(
+					import_headers.pre().clone(),
+					body.unwrap_or_default(),
+				).encode();
+
+				let (_, storage_update, changes_update) = self.executor
+					.call_at_state::<_, _, NeverNativeValue, fn() -> _>(
+						transaction_state,
+						&mut overlay,
+						"Core_execute_block",
+						&encoded_block,
+						match origin {
+							BlockOrigin::NetworkInitialSync => get_execution_manager(
+								self.execution_strategies().syncing,
+							),
+							_ => get_execution_manager(self.execution_strategies().importing),
+						},
+						None,
+						None,
+					)?;
 
 				overlay.commit_prospective();
 
@@ -1460,12 +1469,13 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 		};
 
 		let capabilities = context.capabilities();
-		let mut offchain_extensions = match context {
-			ExecutionContext::OffchainCall(ext) => ext.map(|x| x.0),
-			_ => None,
-		}.map(|ext| offchain::LimitedExternalities::new(capabilities, ext));
+		let offchain_extensions = if let ExecutionContext::OffchainCall(Some(ext)) = context {
+			Some(OffchainExt::new(offchain::LimitedExternalities::new(capabilities, ext.0)))
+		} else {
+			None
+		};
 
-		self.executor.contextual_call::<_, _, fn(_,_) -> _,_,_>(
+		self.executor.contextual_call::<_, fn(_,_) -> _,_,_>(
 			|| core_api.initialize_block(at, &self.prepare_environment_block(at)?),
 			at,
 			function,
@@ -1474,7 +1484,7 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 			initialize_block,
 			manager,
 			native_call,
-			offchain_extensions.as_mut(),
+			offchain_extensions,
 			recorder,
 			capabilities.has(offchain::Capability::Keystore),
 		)

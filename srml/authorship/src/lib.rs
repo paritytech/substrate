@@ -412,12 +412,11 @@ impl<T: Trait> ProvideInherent for Module<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use runtime_io::with_externalities;
-	use primitives::{H256, Blake2Hasher};
-	use sr_primitives::traits::{BlakeTwo256, IdentityLookup};
-	use sr_primitives::testing::Header;
-	use sr_primitives::generic::DigestItem;
-	use sr_primitives::Perbill;
+	use primitives::H256;
+	use sr_primitives::{
+		set_and_run_with_externalities, traits::{BlakeTwo256, IdentityLookup}, testing::Header,
+		generic::DigestItem, Perbill,
+	};
 	use support::{parameter_types, impl_outer_origin, ConsensusEngineId};
 
 	impl_outer_origin!{
@@ -535,7 +534,7 @@ mod tests {
 		)
 	}
 
-	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+	fn new_test_ext() -> runtime_io::TestExternalities {
 		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		t.into()
 	}
@@ -543,7 +542,7 @@ mod tests {
 	#[test]
 	fn prune_old_uncles_works() {
 		use UncleEntryItem::*;
-		with_externalities(&mut new_test_ext(), || {
+		set_and_run_with_externalities(&mut new_test_ext(), || {
 			let hash = Default::default();
 			let author = Default::default();
 			let uncles = vec![
@@ -562,7 +561,7 @@ mod tests {
 
 	#[test]
 	fn rejects_bad_uncles() {
-		with_externalities(&mut new_test_ext(), || {
+		set_and_run_with_externalities(&mut new_test_ext(), || {
 			let author_a = 69;
 
 			struct CanonChain {
@@ -675,7 +674,7 @@ mod tests {
 
 	#[test]
 	fn sets_author_lazily() {
-		with_externalities(&mut new_test_ext(), || {
+		set_and_run_with_externalities(&mut new_test_ext(), || {
 			let author = 42;
 			let mut header = seal_header(
 				create_header(1, Default::default(), [1; 32].into()),

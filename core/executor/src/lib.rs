@@ -31,24 +31,24 @@
 
 #[macro_use]
 mod wasm_utils;
-mod wasm_executor;
+mod wasmi_execution;
 #[macro_use]
 mod native_executor;
 mod sandbox;
 mod allocator;
-mod wasm_runtimes_cache;
+mod host_interface;
+mod wasm_runtime;
 
 pub mod error;
 pub use wasmi;
-pub use wasm_executor::WasmExecutor;
 pub use native_executor::{with_native_environment, NativeExecutor, NativeExecutionDispatch};
-pub use wasm_runtimes_cache::RuntimesCache;
 pub use runtime_version::{RuntimeVersion, NativeVersion};
 pub use codec::Codec;
 #[doc(hidden)]
-pub use primitives::{Blake2Hasher, traits::Externalities};
+pub use primitives::traits::Externalities;
 #[doc(hidden)]
 pub use wasm_interface;
+pub use wasm_runtime::WasmExecutionMethod;
 
 /// Provides runtime information.
 pub trait RuntimeInfo {
@@ -56,7 +56,7 @@ pub trait RuntimeInfo {
 	fn native_version(&self) -> &NativeVersion;
 
 	/// Extract RuntimeVersion of given :code block
-	fn runtime_version<E: Externalities<Blake2Hasher>> (
+	fn runtime_version<E: Externalities> (
 		&self,
 		ext: &mut E,
 	) -> Option<RuntimeVersion>;
