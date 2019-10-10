@@ -1262,7 +1262,7 @@ impl<T: Trait<I>, I: Instance + Clone + Eq> SignedExtension for TakeFees<T, I> {
 			Ok(imbalance) => imbalance,
 			Err(msg) => {
 				// TODO: relying on string error is quite bad here.
-				// if we the transaction is operational, and the error is due to existential
+				// if the transaction is operational, and the error is due to existential
 				// deposit, ignore it.
 				if info.class == DispatchClass::Operational && msg == "payment would kill account" {
 					NegativeImbalance::zero()
