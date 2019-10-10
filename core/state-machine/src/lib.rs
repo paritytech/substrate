@@ -413,14 +413,13 @@ impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec> where
 		init_overlay(self.overlay, false, &self.backend)?;
 
 		let result = {
-			let orig_changes = self.overlay.changes.clone();
 
 			let (result, storage_delta, changes_delta) = match manager {
 				ExecutionManager::Both(on_consensus_failure) => {
 					self.execute_call_with_both_strategy(
 						compute_tx,
 						native_call.take(),
-						orig_changes,
+						self.overlay.changes.clone(),
 						on_consensus_failure,
 					)
 				},
@@ -428,7 +427,7 @@ impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec> where
 					self.execute_call_with_native_else_wasm_strategy(
 						compute_tx,
 						native_call.take(),
-						orig_changes,
+						self.overlay.changes.clone(),
 					)
 				},
 				ExecutionManager::AlwaysWasm(trust_level) => {
