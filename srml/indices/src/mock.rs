@@ -22,7 +22,7 @@ use std::collections::HashSet;
 use ref_thread_local::{ref_thread_local, RefThreadLocal};
 use sr_primitives::testing::Header;
 use sr_primitives::Perbill;
-use primitives::{H256, Blake2Hasher};
+use primitives::H256;
 use support::{impl_outer_origin, parameter_types};
 use {runtime_io, system};
 use crate::{GenesisConfig, Module, Trait, IsDeadAccount, OnNewAccount, ResolveHint};
@@ -96,7 +96,7 @@ impl Trait for Runtime {
 	type Event = ();
 }
 
-pub fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+pub fn new_test_ext() -> runtime_io::TestExternalities {
 	{
 		let mut h = ALIVE.borrow_mut();
 		h.clear();

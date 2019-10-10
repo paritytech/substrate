@@ -21,7 +21,8 @@
 //! avoid collision from a resistant hash function (which unique implies)).
 // NOTE: could replace unhashed by having only one kind of storage (root being null storage key (storage_key can become Option<&[u8]>).
 
-use super::{Codec, Encode, Decode, Vec};
+use crate::rstd::prelude::*;
+use codec::{Codec, Encode, Decode};
 
 /// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
 pub fn get<T: Decode + Sized>(storage_key: &[u8], key: &[u8]) -> Option<T> {

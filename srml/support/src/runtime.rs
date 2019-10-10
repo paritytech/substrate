@@ -220,6 +220,7 @@ macro_rules! construct_runtime {
 			$runtime;
 			;
 			{};
+			{};
 			$(
 				$name: $module:: $( < $module_instance >:: )? { $( $modules ),* },
 			)*
@@ -434,6 +435,7 @@ macro_rules! __decl_all_modules {
 		$runtime:ident;
 		;
 		{ $( $parsed:tt )* };
+		{ $( $parsed_nested:tt )* };
 		System: $module:ident::{ Module $(, $modules:ident )* },
 		$( $rest:tt )*
 	) => {
@@ -441,6 +443,7 @@ macro_rules! __decl_all_modules {
 			$runtime;
 			$module;
 			{ $( $parsed )* };
+			{ $( $parsed_nested )* };
 			$( $rest )*
 		);
 	};
@@ -448,6 +451,7 @@ macro_rules! __decl_all_modules {
 		$runtime:ident;
 		$( $system:ident )?;
 		{ $( $parsed:tt )* };
+		{};
 		$name:ident: $module:ident:: $( < $module_instance:ident >:: )? { Module $(, $modules:ident )* },
 		$( $rest:tt )*
 	) => {
@@ -458,6 +462,7 @@ macro_rules! __decl_all_modules {
 				$( $parsed )*
 				$module::$name $(<$module_instance>)?,
 			};
+			{ $name };
 			$( $rest )*
 		);
 	};
@@ -465,6 +470,26 @@ macro_rules! __decl_all_modules {
 		$runtime:ident;
 		$( $system:ident )?;
 		{ $( $parsed:tt )* };
+		{ $( $parsed_nested:tt )* };
+		$name:ident: $module:ident:: $( < $module_instance:ident >:: )? { Module $(, $modules:ident )* },
+		$( $rest:tt )*
+	) => {
+		$crate::__decl_all_modules!(
+			$runtime;
+			$( $system )?;
+			{
+				$( $parsed )*
+				$module::$name $(<$module_instance>)?,
+			};
+			{ ( $( $parsed_nested )*, $name, ) };
+			$( $rest )*
+		);
+	};
+	(
+		$runtime:ident;
+		$( $system:ident )?;
+		{ $( $parsed:tt )* };
+		{ $( $parsed_nested:tt )* };
 		$name:ident: $module:ident:: $( < $module_instance:ident >:: )? { $ignore:ident $(, $modules:ident )* },
 		$( $rest:tt )*
 	) => {
@@ -472,6 +497,7 @@ macro_rules! __decl_all_modules {
 			$runtime;
 			$( $system )?;
 			{ $( $parsed )* };
+			{ $( $parsed_nested )* };
 			$name: $module::{ $( $modules ),* },
 			$( $rest )*
 		);
@@ -487,6 +513,7 @@ macro_rules! __decl_all_modules {
 			$runtime;
 			$( $system )?;
 			{ $( $parsed )* };
+			{ $( $parsed_nested )* };
 			$( $rest )*
 		);
 	};
@@ -494,12 +521,13 @@ macro_rules! __decl_all_modules {
 		$runtime:ident;
 		$system:ident;
 		{ $( $parsed_module:ident :: $parsed_name:ident $(<$instance:ident>)? ,)*};
+		{ $( $parsed_nested:tt )* };
 	) => {
 		pub type System = system::Module<$runtime>;
 		$(
 			pub type $parsed_name = $parsed_module::Module<$runtime $(, $parsed_module::$instance )?>;
 		)*
-		type AllModules = ( $( $parsed_name, )* );
+		type AllModules = ( $( $parsed_nested )* );
 	}
 }
 

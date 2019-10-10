@@ -166,7 +166,7 @@ use support::{
 		Currency, ExistenceRequirement, Imbalance, LockIdentifier, LockableCurrency, ReservableCurrency,
 		SignedImbalance, UpdateBalanceOutcome, WithdrawReason, WithdrawReasons,
 	},
-	Parameter, StorageDoubleMap, StorageMap, StorageValue,
+	Parameter, StorageMap,
 };
 use system::{ensure_signed, ensure_root};
 

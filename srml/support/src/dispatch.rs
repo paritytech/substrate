@@ -18,10 +18,10 @@
 //! generating values representing lazy module function calls.
 
 pub use crate::rstd::{result, fmt, prelude::{Vec, Clone, Eq, PartialEq}, marker};
-pub use crate::codec::{Codec, Decode, Encode, Input, Output, HasCompact, EncodeAsRef};
+pub use crate::codec::{Codec, EncodeLike, Decode, Encode, Input, Output, HasCompact, EncodeAsRef};
 pub use srml_metadata::{
 	FunctionMetadata, DecodeDifferent, DecodeDifferentArray, FunctionArgumentMetadata,
-	ModuleConstantMetadata, DefaultByte, DefaultByteGetter,
+	ModuleConstantMetadata, DefaultByte, DefaultByteGetter, ModuleErrorMetadata, ErrorMetadata
 };
 pub use sr_primitives::{
 	weights::{
@@ -48,8 +48,8 @@ pub trait Callable<T> {
 // https://github.com/rust-lang/rust/issues/51331
 pub type CallableCallFor<A, T> = <A as Callable<T>>::Call;
 
-pub trait Parameter: Codec + Clone + Eq + fmt::Debug {}
-impl<T> Parameter for T where T: Codec + Clone + Eq + fmt::Debug {}
+pub trait Parameter: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
+impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 
 /// Declares a `Module` struct and a `Call` enum, which implements the dispatch logic.
 ///
@@ -1287,6 +1287,14 @@ macro_rules! decl_module {
 			$mod_type<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?>
 			{ $( $other_where_bounds )* }
 			$( $constants )*
+		}
+
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::ModuleErrorMetadata
+			for $mod_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
+		{
+			fn metadata() -> &'static [$crate::dispatch::ErrorMetadata] {
+				<$error_type as $crate::dispatch::ModuleErrorMetadata>::metadata()
+			}
 		}
 	}
 }

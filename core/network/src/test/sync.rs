@@ -581,4 +581,3 @@ fn can_sync_explicit_forks() {
 		Ok(Async::Ready(()))
 	})).unwrap();
 }
-

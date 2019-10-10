@@ -405,6 +405,10 @@ parameter_types! {
 impl srml_babe::Trait for Runtime {
 	type EpochDuration = EpochDuration;
 	type ExpectedBlockTime = ExpectedBlockTime;
+	// there is no actual runtime in this test-runtime, so testing crates
+	// are manually adding the digests. normally in this situation you'd use
+	// srml_babe::SameAuthoritiesForever.
+	type EpochChangeTrigger = srml_babe::ExternalTrigger;
 }
 
 /// Adds one to the given input and returns the final result.

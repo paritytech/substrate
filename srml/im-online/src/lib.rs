@@ -418,7 +418,7 @@ impl<T: Trait> Module<T> {
 	fn initialize_keys(keys: &[T::AuthorityId]) {
 		if !keys.is_empty() {
 			assert!(Keys::<T>::get().is_empty(), "Keys are already initialized!");
-			Keys::<T>::put_ref(keys);
+			Keys::<T>::put(keys);
 		}
 	}
 }

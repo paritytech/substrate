@@ -19,6 +19,7 @@
 pub use client::ExecutionStrategies;
 pub use client_db::PruningMode;
 pub use network::config::{ExtTransport, NetworkConfiguration, Roles};
+pub use substrate_executor::WasmExecutionMethod;
 
 use std::{path::PathBuf, net::SocketAddr};
 use transaction_pool;
@@ -60,6 +61,8 @@ pub struct Configuration<C, G, E = NoExtension> {
 	pub custom: C,
 	/// Node name.
 	pub name: String,
+	/// Wasm execution method.
+	pub wasm_method: WasmExecutionMethod,
 	/// Execution strategies.
 	pub execution_strategies: ExecutionStrategies,
 	/// RPC over HTTP binding address. `None` if disabled.
@@ -116,6 +119,7 @@ impl<C, G, E> Configuration<C, G, E> where
 			state_cache_child_ratio: Default::default(),
 			custom: Default::default(),
 			pruning: PruningMode::default(),
+			wasm_method: WasmExecutionMethod::Interpreted,
 			execution_strategies: Default::default(),
 			rpc_http: None,
 			rpc_ws: None,

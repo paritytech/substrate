@@ -19,6 +19,10 @@
 #![warn(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
+// to allow benchmarking
+#![cfg_attr(feature = "bench", feature(test))]
+#[cfg(feature = "bench")] extern crate test;
+
 #[doc(hidden)]
 pub use codec;
 #[cfg(feature = "std")]
@@ -44,31 +48,36 @@ use codec::{Encode, Decode};
 #[cfg(feature = "std")]
 pub mod testing;
 
-pub mod weights;
-pub mod traits;
 pub mod curve;
-
 pub mod generic;
-pub mod transaction_validity;
+pub mod offchain;
 pub mod sr_arithmetic;
+pub mod traits;
+pub mod transaction_validity;
+pub mod weights;
 
 /// Re-export these since they're only "kind of" generic.
 pub use generic::{DigestItem, Digest};
 
 /// Re-export this since it's part of the API of this crate.
-pub use primitives::crypto::{key_types, KeyTypeId, CryptoType};
+pub use primitives::{TypeId, crypto::{key_types, KeyTypeId, CryptoType}};
 pub use app_crypto::RuntimeAppPublic;
 
 /// Re-export `RuntimeDebug`, to avoid dependency clutter.
 pub use primitives::RuntimeDebug;
 
-/// Re-export arithmetic stuff.
+/// Re-export top-level arithmetic stuff.
 pub use sr_arithmetic::{
 	Perquintill, Perbill, Permill, Percent,
 	Rational128, Fixed64
 };
-/// Re-export 128 bit helpers from sr_arithmetic
+/// Re-export 128 bit helpers.
 pub use sr_arithmetic::helpers_128bit;
+/// Re-export big_uint stiff.
+pub use sr_arithmetic::biguint;
+
+#[cfg(feature = "std")]
+pub use externalities::set_and_run_with_externalities;
 
 /// An abstraction over justification for a block's validity under a consensus algorithm.
 ///
@@ -85,7 +94,7 @@ use traits::{Verify, Lazy};
 #[derive(Clone, Copy, Eq, PartialEq, Encode, Decode)]
 pub struct ModuleId(pub [u8; 8]);
 
-impl traits::TypeId for ModuleId {
+impl TypeId for ModuleId {
 	const TYPE_ID: [u8; 4] = *b"modl";
 }
 

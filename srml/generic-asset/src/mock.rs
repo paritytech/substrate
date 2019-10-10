@@ -25,7 +25,7 @@ use sr_primitives::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
-use primitives::{Blake2Hasher, H256};
+use primitives::H256;
 use support::{parameter_types, impl_outer_event, impl_outer_origin};
 
 use super::*;
@@ -118,7 +118,7 @@ impl ExtBuilder {
 	}
 
 	// builds genesis config
-	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
+	pub fn build(self) -> runtime_io::TestExternalities {
 		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 
 		GenesisConfig::<Test> {
@@ -137,7 +137,7 @@ impl ExtBuilder {
 
 // This function basically just builds a genesis storage key/value store according to
 // our desired mockup.
-pub fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+pub fn new_test_ext() -> runtime_io::TestExternalities {
 	system::GenesisConfig::default()
 		.build_storage::<Test>()
 		.unwrap()

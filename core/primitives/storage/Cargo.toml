@@ -1,0 +1,16 @@
+[package]
+name = "substrate-primitives-storage"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+description = "Storage related primitives"
+
+[dependencies]
+rstd = { package = "sr-std", path = "../../sr-std", default-features = false }
+serde = { version = "1.0.101", optional = true, features = ["derive"] }
+impl-serde = { version = "0.2.1", optional = true }
+substrate-debug-derive = { version = "2.0.0", path = "../debug-derive" }
+
+[features]
+default = [ "std" ]
+std = [ "rstd/std", "serde", "impl-serde" ]

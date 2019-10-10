@@ -18,6 +18,25 @@ use rstd::prelude::Vec;
 use rstd::collections::btree_map::BTreeMap;
 use rstd::fmt::{self, Write, Debug};
 
+pub use log::{info, debug, error, trace, warn};
+
+#[cfg(feature = "std")]
+pub mod native {
+	pub use super::{info, debug, error, trace, warn, print};
+}
+#[cfg(not(feature = "std"))]
+pub mod native {
+	macro_rules! noop {
+		($($arg:tt)+) => {}
+	}
+	pub use noop as info;
+	pub use noop as debug;
+	pub use noop as error;
+	pub use noop as trace;
+	pub use noop as warn;
+	pub use noop as print;
+}
+
 macro_rules! print {
 	($($arg:tt)+) => {
 		let mut w = $crate::debug::Writer::default();

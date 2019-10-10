@@ -28,7 +28,7 @@ use hash_db::{Hasher, Prefix};
 use primitives::{
 	Blake2Hasher, H256, ChangesTrieConfiguration, convert_hash, NeverNativeValue, ExecutionContext,
 	NativeOrEncoded, storage::{StorageKey, StorageData, well_known_keys},
-	offchain::{NeverOffchainExt, self}, traits::CodeExecutor,
+	offchain::{OffchainExt, self}, traits::CodeExecutor,
 };
 use substrate_telemetry::{telemetry, SUBSTRATE_INFO};
 use sr_primitives::{
@@ -51,6 +51,7 @@ use consensus::{
 	ImportResult, BlockOrigin, ForkChoiceStrategy,
 	SelectChain, self,
 };
+use header_metadata::{HeaderMetadata, CachedHeaderMetadata};
 
 use crate::{
 	runtime_api::{
@@ -247,7 +248,7 @@ pub fn new_in_mem<E, Block, S, RA>(
 	Block,
 	RA
 >> where
-	E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
+	E: CodeExecutor + RuntimeInfo,
 	S: BuildStorage,
 	Block: BlockT<Hash=H256>,
 {
@@ -263,7 +264,7 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 	keystore: Option<primitives::traits::BareCryptoStorePtr>,
 ) -> error::Result<Client<B, LocalCallExecutor<B, E>, Block, RA>>
 	where
-		E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
+		E: CodeExecutor + RuntimeInfo,
 		S: BuildStorage,
 		Block: BlockT<Hash=H256>,
 		B: backend::LocalBackend<Block, Blake2Hasher>
@@ -966,10 +967,10 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		};
 
 		let retracted = if is_new_best {
-			let route_from_best = crate::blockchain::tree_route(
-				|id| self.header(&id)?.ok_or_else(|| Error::UnknownBlock(format!("{:?}", id))),
-				BlockId::Hash(info.best_hash),
-				BlockId::Hash(parent_hash),
+			let route_from_best = header_metadata::tree_route(
+				self.backend.blockchain(),
+				info.best_hash,
+				parent_hash,
 			)?;
 			route_from_best.retracted().iter().rev().map(|e| e.hash.clone()).collect()
 		} else {
@@ -1057,18 +1058,27 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 						}),
 					}
 				};
-				let (_, storage_update, changes_update) = self.executor.call_at_state::<_, _, _, NeverNativeValue, fn() -> _>(
-					transaction_state,
-					&mut overlay,
-					"Core_execute_block",
-					&<Block as BlockT>::new(import_headers.pre().clone(), body.unwrap_or_default()).encode(),
-					match origin {
-						BlockOrigin::NetworkInitialSync => get_execution_manager(self.execution_strategies().syncing),
-						_ => get_execution_manager(self.execution_strategies().importing),
-					},
-					None,
-					NeverOffchainExt::new(),
-				)?;
+
+				let encoded_block = <Block as BlockT>::new(
+					import_headers.pre().clone(),
+					body.unwrap_or_default(),
+				).encode();
+
+				let (_, storage_update, changes_update) = self.executor
+					.call_at_state::<_, _, NeverNativeValue, fn() -> _>(
+						transaction_state,
+						&mut overlay,
+						"Core_execute_block",
+						&encoded_block,
+						match origin {
+							BlockOrigin::NetworkInitialSync => get_execution_manager(
+								self.execution_strategies().syncing,
+							),
+							_ => get_execution_manager(self.execution_strategies().importing),
+						},
+						None,
+						None,
+					)?;
 
 				overlay.commit_prospective();
 
@@ -1100,11 +1110,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			return Ok(());
 		}
 
-		let route_from_finalized = crate::blockchain::tree_route(
-			|id| self.header(&id)?.ok_or_else(|| Error::UnknownBlock(format!("{:?}", id))),
-			BlockId::Hash(last_finalized),
-			BlockId::Hash(block),
-		)?;
+		let route_from_finalized = header_metadata::tree_route(self.backend.blockchain(), last_finalized, block)?;
 
 		if let Some(retracted) = route_from_finalized.retracted().get(0) {
 			warn!("Safety violation: attempted to revert finalized block {:?} which is not in the \
@@ -1113,11 +1119,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			return Err(error::Error::NotInFinalizedChain);
 		}
 
-		let route_from_best = crate::blockchain::tree_route(
-			|id| self.header(&id)?.ok_or_else(|| Error::UnknownBlock(format!("{:?}", id))),
-			BlockId::Hash(best_block),
-			BlockId::Hash(block),
-		)?;
+		let route_from_best = header_metadata::tree_route(self.backend.blockchain(), best_block, block)?;
 
 		// if the block is not a direct ancestor of the current best chain,
 		// then some other block is the common ancestor.
@@ -1321,6 +1323,26 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	}
 }
 
+impl<B, E, Block, RA> HeaderMetadata<Block> for Client<B, E, Block, RA> where
+	B: backend::Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher>,
+	Block: BlockT<Hash=H256>,
+{
+	type Error = error::Error;
+
+	fn header_metadata(&self, hash: Block::Hash) -> Result<CachedHeaderMetadata<Block>, Self::Error> {
+		self.backend.blockchain().header_metadata(hash)
+	}
+
+	fn insert_header_metadata(&self, hash: Block::Hash, metadata: CachedHeaderMetadata<Block>) {
+		self.backend.blockchain().insert_header_metadata(hash, metadata)
+	}
+
+	fn remove_header_metadata(&self, hash: Block::Hash) {
+		self.backend.blockchain().remove_header_metadata(hash)
+	}
+}
+
 impl<B, E, Block, RA> ProvideUncles<Block> for Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher>,
@@ -1447,12 +1469,13 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 		};
 
 		let capabilities = context.capabilities();
-		let mut offchain_extensions = match context {
-			ExecutionContext::OffchainCall(ext) => ext.map(|x| x.0),
-			_ => None,
-		}.map(|ext| offchain::LimitedExternalities::new(capabilities, ext));
+		let offchain_extensions = if let ExecutionContext::OffchainCall(Some(ext)) = context {
+			Some(OffchainExt::new(offchain::LimitedExternalities::new(capabilities, ext.0)))
+		} else {
+			None
+		};
 
-		self.executor.contextual_call::<_, _, fn(_,_) -> _,_,_>(
+		self.executor.contextual_call::<_, fn(_,_) -> _,_,_>(
 			|| core_api.initialize_block(at, &self.prepare_environment_block(at)?),
 			at,
 			function,
@@ -1461,7 +1484,7 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 			initialize_block,
 			manager,
 			native_call,
-			offchain_extensions.as_mut(),
+			offchain_extensions,
 			recorder,
 			capabilities.has(offchain::Capability::Keystore),
 		)
@@ -1798,7 +1821,7 @@ where
 /// Utility methods for the client.
 pub mod utils {
 	use super::*;
-	use crate::{blockchain, error};
+	use crate::error;
 	use primitives::H256;
 	use std::borrow::Borrow;
 
@@ -1812,7 +1835,7 @@ pub mod utils {
 		client: &'a T,
 		current: Option<(H, H)>,
 	) -> impl Fn(&H256, &H256) -> Result<bool, error::Error> + 'a
-		where T: ChainHeaderBackend<Block>,
+		where T: ChainHeaderBackend<Block> + HeaderMetadata<Block, Error=error::Error>,
 	{
 		move |base, hash| {
 			if base == hash { return Ok(false); }
@@ -1831,13 +1854,9 @@ pub mod utils {
 				}
 			}
 
-			let tree_route = blockchain::tree_route(
-				|id| client.header(id)?.ok_or_else(|| Error::UnknownBlock(format!("{:?}", id))),
-				BlockId::Hash(*hash),
-				BlockId::Hash(*base),
-			)?;
+			let ancestor = header_metadata::lowest_common_ancestor(client, *hash, *base)?;
 
-			Ok(tree_route.common_block().hash == *base)
+			Ok(ancestor.hash == *base)
 		}
 	}
 }
