@@ -341,20 +341,13 @@ impl OverlayedChanges {
 	pub fn into_committed(self) -> (
 		impl Iterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		impl Iterator<Item=(Vec<u8>, impl Iterator<Item=(Vec<u8>, Option<Vec<u8>>)>)>,
-		impl Iterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
+		HashMap<Vec<u8>, Option<Vec<u8>>>,
 	){
 		assert!(self.prospective.is_empty());
 		(self.committed.top.into_iter().map(|(k, v)| (k, v.value)),
 			self.committed.children.into_iter()
-				.map(|(sk, v)| {
-					// TODO EMCH bad design do not include keyspace ???
-					// could we do a later resolution: commenting for now
-/*					let keyspace = self.committed.kv.get(&prefixed_keyspace_kv(&sk))
-						.map(Clone::clone)
-						.unwrap_or(None);*/
-					(sk, v.into_iter().map(|(k, v)| (k, v.value)))
-				}),
-			self.committed.kv.into_iter())
+				.map(|(sk, v)| (sk, v.into_iter().map(|(k, v)| (k, v.value)))),
+			self.committed.kv)
 	}
 
 	/// Inserts storage entry responsible for current extrinsic index.

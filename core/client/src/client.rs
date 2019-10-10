@@ -1085,7 +1085,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				Ok((
 					Some(storage_update.0),
 					Some(changes_update),
-					Some((top.collect(), children, kv.collect())),
+					// switching kv from map to vec for compactness
+					Some((top.collect(), children, kv.into_iter().collect())),
 				))
 			},
 			None => Ok((None, None, None))
