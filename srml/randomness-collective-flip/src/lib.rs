@@ -35,7 +35,7 @@
 //! ### Example - Get random seed for the current block
 //!
 //! ```
-//! use support::{decl_module, dispatch::Result};
+//! use support::{decl_module, dispatch::Result, traits::Randomness};
 //!
 //! pub trait Trait: system::Trait {}
 //!
