@@ -164,7 +164,6 @@ mod tests {
 	use primitives::H256;
 	use sr_primitives::{
 		Perbill, traits::{BlakeTwo256, OnInitialize, Header as _, IdentityLookup}, testing::Header,
-		set_and_run_with_externalities,
 	};
 	use support::{impl_outer_origin, parameter_types};
 
@@ -231,7 +230,7 @@ mod tests {
 
 	#[test]
 	fn test_random_material_parital() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			let genesis_hash = System::parent_hash();
 
 			setup_blocks(38);
@@ -245,7 +244,7 @@ mod tests {
 
 	#[test]
 	fn test_random_material_filled() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			let genesis_hash = System::parent_hash();
 
 			setup_blocks(81);
@@ -260,7 +259,7 @@ mod tests {
 
 	#[test]
 	fn test_random_material_filled_twice() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			let genesis_hash = System::parent_hash();
 
 			setup_blocks(162);
@@ -275,7 +274,7 @@ mod tests {
 
 	#[test]
 	fn test_random() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			setup_blocks(162);
 
 			assert_eq!(System::block_number(), 162);

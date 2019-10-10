@@ -20,7 +20,7 @@ use super::*;
 use mock::*;
 
 use support::{assert_ok, assert_noop};
-use sr_primitives::{set_and_run_with_externalities, traits::OnInitialize};
+use sr_primitives::traits::OnInitialize;
 
 type ScoredPool = Module<Test>;
 type System = system::Module<Test>;
@@ -31,7 +31,7 @@ const INDEX_ERR: &str = "index does not match requested account";
 
 #[test]
 fn query_membership_works() {
-	set_and_run_with_externalities(&mut new_test_ext(), || {
+	new_test_ext().execute_with(|| {
 		assert_eq!(ScoredPool::members(), vec![20, 40]);
 		assert_eq!(Balances::reserved_balance(&31), CandidateDeposit::get());
 		assert_eq!(Balances::reserved_balance(&40), CandidateDeposit::get());
@@ -41,7 +41,7 @@ fn query_membership_works() {
 
 #[test]
 fn submit_candidacy_must_not_work() {
-	set_and_run_with_externalities(&mut new_test_ext(), || {
+	new_test_ext().execute_with(|| {
 		assert_noop!(
 			ScoredPool::submit_candidacy(Origin::signed(99)),
 			"balance too low to submit candidacy"
@@ -55,7 +55,7 @@ fn submit_candidacy_must_not_work() {
 
 #[test]
 fn submit_candidacy_works() {
-	set_and_run_with_externalities(&mut new_test_ext(), || {
+	new_test_ext().execute_with(|| {
 		// given
 		let who = 15;
 
@@ -70,7 +70,7 @@ fn submit_candidacy_works() {
 
 #[test]
 fn scoring_works() {
-	set_and_run_with_externalities(&mut new_test_ext(), || {
+	new_test_ext().execute_with(|| {
 		// given
 		let who = 15;
 		let score = 99;
@@ -88,7 +88,7 @@ fn scoring_works() {
 
 #[test]
 fn scoring_same_element_with_same_score_works() {
-	set_and_run_with_externalities(&mut new_test_ext(), || {
+	new_test_ext().execute_with(|| {
 		// given
 		let who = 31;
 		let index = find_in_pool(who).expect("entity must be in pool") as u32;
@@ -108,7 +108,7 @@ fn scoring_same_element_with_same_score_works() {
 
 #[test]
 fn kicking_works_only_for_authorized() {
-	set_and_run_with_externalities(&mut new_test_ext(), || {
+	new_test_ext().execute_with(|| {
 		let who = 40;
 		let index = find_in_pool(who).expect("entity must be in pool") as u32;
 		assert_noop!(ScoredPool::kick(Origin::signed(99), who, index), "bad origin");
@@ -117,7 +117,7 @@ fn kicking_works_only_for_authorized() {
 
 #[test]
 fn kicking_works() {
-	set_and_run_with_externalities(&mut new_test_ext(), || {
+	new_test_ext().execute_with(|| {
 		// given
 		let who = 40;
 		assert_eq!(Balances::reserved_balance(&who), CandidateDeposit::get());
@@ -137,7 +137,7 @@ fn kicking_works() {
 
 #[test]
 fn unscored_entities_must_not_be_used_for_filling_members() {
-	set_and_run_with_externalities(&mut new_test_ext(), || {
+	new_test_ext().execute_with(|| {
 		// given
 		// we submit a candidacy, score will be `None`
 		assert_ok!(ScoredPool::submit_candidacy(Origin::signed(15)));
@@ -162,7 +162,7 @@ fn unscored_entities_must_not_be_used_for_filling_members() {
 
 #[test]
 fn refreshing_works() {
-	set_and_run_with_externalities(&mut new_test_ext(), || {
+	new_test_ext().execute_with(|| {
 		// given
 		let who = 15;
 		assert_ok!(ScoredPool::submit_candidacy(Origin::signed(who)));
@@ -180,7 +180,7 @@ fn refreshing_works() {
 
 #[test]
 fn refreshing_happens_every_period() {
-	set_and_run_with_externalities(&mut new_test_ext(), || {
+	new_test_ext().execute_with(|| {
 		// given
 		System::set_block_number(1);
 		assert_ok!(ScoredPool::submit_candidacy(Origin::signed(15)));
@@ -200,7 +200,7 @@ fn refreshing_happens_every_period() {
 
 #[test]
 fn withdraw_candidacy_must_only_work_for_members() {
-	set_and_run_with_externalities(&mut new_test_ext(), || {
+	new_test_ext().execute_with(|| {
 		let who = 77;
 		let index = 0;
 		assert_noop!( ScoredPool::withdraw_candidacy(Origin::signed(who), index), INDEX_ERR);
@@ -209,7 +209,7 @@ fn withdraw_candidacy_must_only_work_for_members() {
 
 #[test]
 fn oob_index_should_abort() {
-	set_and_run_with_externalities(&mut new_test_ext(), || {
+	new_test_ext().execute_with(|| {
 		let who = 40;
 		let oob_index = ScoredPool::pool().len() as u32;
 		assert_noop!(ScoredPool::withdraw_candidacy(Origin::signed(who), oob_index), OOB_ERR);
@@ -220,7 +220,7 @@ fn oob_index_should_abort() {
 
 #[test]
 fn index_mismatches_should_abort() {
-	set_and_run_with_externalities(&mut new_test_ext(), || {
+	new_test_ext().execute_with(|| {
 		let who = 40;
 		let index = 3;
 		assert_noop!(ScoredPool::withdraw_candidacy(Origin::signed(who), index), INDEX_ERR);
@@ -231,7 +231,7 @@ fn index_mismatches_should_abort() {
 
 #[test]
 fn withdraw_unscored_candidacy_must_work() {
-	set_and_run_with_externalities(&mut new_test_ext(), || {
+	new_test_ext().execute_with(|| {
 		// given
 		let who = 5;
 
@@ -246,7 +246,7 @@ fn withdraw_unscored_candidacy_must_work() {
 
 #[test]
 fn withdraw_scored_candidacy_must_work() {
-	set_and_run_with_externalities(&mut new_test_ext(), || {
+	new_test_ext().execute_with(|| {
 		// given
 		let who = 40;
 		assert_eq!(Balances::reserved_balance(&who), CandidateDeposit::get());
@@ -264,7 +264,7 @@ fn withdraw_scored_candidacy_must_work() {
 
 #[test]
 fn candidacy_resubmitting_works() {
-	set_and_run_with_externalities(&mut new_test_ext(), || {
+	new_test_ext().execute_with(|| {
 		// given
 		let who = 15;
 
