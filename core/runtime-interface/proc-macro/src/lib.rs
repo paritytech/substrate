@@ -20,7 +20,7 @@ extern crate proc_macro;
 
 use proc_macro2::{Span, TokenStream};
 
-use syn::{parse_macro_input, Ident, ItemTrait, Result};
+use syn::{parse_macro_input, Ident, ItemTrait, Result, DeriveInput};
 
 use quote::quote;
 
@@ -30,6 +30,7 @@ use utils::generate_runtime_interface_include;
 
 mod bare_function_interface;
 mod host_function_interface;
+mod pass_by_codec;
 mod trait_decl_impl;
 mod utils;
 
@@ -67,4 +68,10 @@ fn runtime_interface_impl(trait_def: ItemTrait) -> Result<TokenStream> {
 	println!("{}", res);
 
 	Ok(res)
+}
+
+#[proc_macro_derive(PassByCodec)]
+pub fn pass_by_codec(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+	let input = parse_macro_input!(input as DeriveInput);
+	pass_by_codec::derive_impl(input).unwrap_or_else(|e| e.to_compile_error()).into()
 }

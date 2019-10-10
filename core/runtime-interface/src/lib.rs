@@ -34,6 +34,9 @@ pub use substrate_runtime_interface_proc_macro::runtime_interface;
 #[cfg(feature = "std")]
 pub use externalities::{set_and_run_with_externalities, with_externalities, Externalities};
 
+#[doc(hidden)]
+pub use codec;
+
 pub(crate) mod impls;
 #[cfg(feature = "std")]
 pub mod host;
