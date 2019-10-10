@@ -159,7 +159,7 @@ decl_module! {
 			let id = Self::next_asset_id();
 			<NextAssetId<T>>::mutate(|id| *id += One::one());
 
-			<Balances<T>>::insert((id, origin.clone()), total);
+			<Balances<T>>::insert((id, &origin), total);
 			<TotalSupply<T>>::insert(id, total);
 
 			Self::deposit_event(RawEvent::Issued(id, origin, total));
@@ -186,7 +186,7 @@ decl_module! {
 		/// Destroy any assets of `id` owned by `origin`.
 		fn destroy(origin, #[compact] id: T::AssetId) {
 			let origin = ensure_signed(origin)?;
-			let balance = <Balances<T>>::take((id, origin.clone()));
+			let balance = <Balances<T>>::take((id, &origin));
 			ensure!(!balance.is_zero(), "origin balance should be non-zero");
 
 			<TotalSupply<T>>::mutate(id, |total_supply| *total_supply -= balance);
@@ -196,10 +196,11 @@ decl_module! {
 }
 
 decl_event!(
-	pub enum Event<T>
-		where <T as system::Trait>::AccountId,
-		      <T as Trait>::Balance,
-		      <T as Trait>::AssetId {
+	pub enum Event<T> where
+		<T as system::Trait>::AccountId,
+		<T as Trait>::Balance,
+		<T as Trait>::AssetId,
+	{
 		/// Some assets were issued.
 		Issued(AssetId, AccountId, Balance),
 		/// Some assets were transferred.
@@ -239,9 +240,8 @@ impl<T: Trait> Module<T> {
 mod tests {
 	use super::*;
 
-	use runtime_io::with_externalities;
 	use support::{impl_outer_origin, assert_ok, assert_noop, parameter_types};
-	use primitives::{H256, Blake2Hasher};
+	use primitives::H256;
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
 	use sr_primitives::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
@@ -288,13 +288,13 @@ mod tests {
 
 	// This function basically just builds a genesis storage key/value store according to
 	// our desired mockup.
-	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+	fn new_test_ext() -> runtime_io::TestExternalities {
 		system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
 	}
 
 	#[test]
 	fn issuing_asset_units_to_issuer_should_work() {
-		with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			assert_ok!(Assets::issue(Origin::signed(1), 100));
 			assert_eq!(Assets::balance(0, 1), 100);
 		});
@@ -302,7 +302,7 @@ mod tests {
 
 	#[test]
 	fn querying_total_supply_should_work() {
-		with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			assert_ok!(Assets::issue(Origin::signed(1), 100));
 			assert_eq!(Assets::balance(0, 1), 100);
 			assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 50));
@@ -319,7 +319,7 @@ mod tests {
 
 	#[test]
 	fn transferring_amount_above_available_balance_should_work() {
-		with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			assert_ok!(Assets::issue(Origin::signed(1), 100));
 			assert_eq!(Assets::balance(0, 1), 100);
 			assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 50));
@@ -330,7 +330,7 @@ mod tests {
 
 	#[test]
 	fn transferring_amount_less_than_available_balance_should_not_work() {
-		with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			assert_ok!(Assets::issue(Origin::signed(1), 100));
 			assert_eq!(Assets::balance(0, 1), 100);
 			assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 50));
@@ -344,7 +344,7 @@ mod tests {
 
 	#[test]
 	fn transferring_less_than_one_unit_should_not_work() {
-		with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			assert_ok!(Assets::issue(Origin::signed(1), 100));
 			assert_eq!(Assets::balance(0, 1), 100);
 			assert_noop!(Assets::transfer(Origin::signed(1), 0, 2, 0), "transfer amount should be non-zero");
@@ -353,7 +353,7 @@ mod tests {
 
 	#[test]
 	fn transferring_more_units_than_total_supply_should_not_work() {
-		with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			assert_ok!(Assets::issue(Origin::signed(1), 100));
 			assert_eq!(Assets::balance(0, 1), 100);
 			assert_noop!(Assets::transfer(Origin::signed(1), 0, 2, 101), "origin account balance must be greater than or equal to the transfer amount");
@@ -362,7 +362,7 @@ mod tests {
 
 	#[test]
 	fn destroying_asset_balance_with_positive_balance_should_work() {
-		with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			assert_ok!(Assets::issue(Origin::signed(1), 100));
 			assert_eq!(Assets::balance(0, 1), 100);
 			assert_ok!(Assets::destroy(Origin::signed(1), 0));
@@ -371,7 +371,7 @@ mod tests {
 
 	#[test]
 	fn destroying_asset_balance_with_zero_balance_should_not_work() {
-		with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			assert_ok!(Assets::issue(Origin::signed(1), 100));
 			assert_eq!(Assets::balance(0, 2), 0);
 			assert_noop!(Assets::destroy(Origin::signed(2), 0), "origin balance should be non-zero");

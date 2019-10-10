@@ -98,7 +98,7 @@ pub fn load<T: Trait>(
 		let original_code =
 			<PristineCode<T>>::get(code_hash).ok_or_else(|| "pristine code is not found")?;
 		prefab_module = prepare::prepare_contract::<Env>(&original_code, schedule)?;
-		<CodeStorage<T>>::insert(code_hash, prefab_module.clone());
+		<CodeStorage<T>>::insert(&code_hash, &prefab_module);
 	}
 	Ok(prefab_module)
 }

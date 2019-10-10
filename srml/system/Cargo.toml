@@ -5,8 +5,8 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-serde = { version = "1.0", optional = true, features = ["derive"] }
-safe-mix = { version = "1.0", default-features = false}
+serde = { version = "1.0.101", optional = true, features = ["derive"] }
+safe-mix = { version = "1.0.0", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 primitives = { package = "substrate-primitives",  path = "../../core/primitives", default-features = false }
 rstd = { package = "sr-std", path = "../../core/sr-std", default-features = false }
@@ -14,10 +14,10 @@ runtime-io ={ package = "sr-io", path = "../../core/sr-io", default-features = f
 sr-primitives = { path = "../../core/sr-primitives", default-features = false }
 sr-version = { path = "../../core/sr-version", default-features = false }
 support = { package = "srml-support", path = "../support", default-features = false }
-impl-trait-for-tuples = "0.1.1"
+impl-trait-for-tuples = "0.1.2"
 
 [dev-dependencies]
-criterion = "0.2"
+criterion = "0.2.11"
 
 [features]
 default = ["std"]

@@ -28,6 +28,7 @@ use codec::{Encode, Decode};
 use client::error::Error as ClientError;
 use client::utils as client_utils;
 use client::blockchain::HeaderBackend;
+use header_metadata::HeaderMetadata;
 use primitives::H256;
 use std::ops::Add;
 
@@ -62,7 +63,7 @@ pub(crate) struct HeaderBackendDescendentBuilder<H, Block>(H, std::marker::Phant
 // https://github.com/paritytech/substrate/issues/3624
 impl<'a, H, Block> IsDescendentOfBuilder<H256>
 	for HeaderBackendDescendentBuilder<&'a H, Block> where
-	H: HeaderBackend<Block>,
+	H: HeaderBackend<Block> + HeaderMetadata<Block, Error=ClientError>,
 	Block: BlockT<Hash = H256>,
 {
 	type Error = ClientError;
@@ -189,23 +190,35 @@ impl<Hash, Number> EpochChanges<Hash, Number> where
 		EpochChanges { inner: ForkTree::new() }
 	}
 
-	/// Prune out finalized epochs, except for the ancestor of the finalized block.
+	/// Prune out finalized epochs, except for the ancestor of the finalized
+	/// block. The given slot should be the slot number at which the finalized
+	/// block was authored.
 	pub fn prune_finalized<D: IsDescendentOfBuilder<Hash>>(
 		&mut self,
 		descendent_of_builder: D,
-		_hash: &Hash,
-		_number: Number,
+		hash: &Hash,
+		number: Number,
+		slot: SlotNumber,
 	) -> Result<(), fork_tree::Error<D::Error>> {
-		let _is_descendent_of = descendent_of_builder
+		let is_descendent_of = descendent_of_builder
 			.build_is_descendent_of(None);
 
-		// TODO:
-		// https://github.com/paritytech/substrate/issues/3651
-		//
+		let predicate = |epoch: &PersistedEpoch| match *epoch {
+			PersistedEpoch::Genesis(_, ref epoch_1) =>
+				slot >= epoch_1.end_slot(),
+			PersistedEpoch::Regular(ref epoch_n) =>
+				slot >= epoch_n.end_slot(),
+		};
+
 		// prune any epochs which could not be _live_ as of the children of the
-		// finalized block.
-		// i.e. re-root the fork tree to the oldest ancestor of (hash, number)
-		// where epoch.end_slot() >= slot(hash)
+		// finalized block, i.e. re-root the fork tree to the oldest ancestor of
+		// (hash, number) where epoch.end_slot() >= finalized_slot
+		self.inner.prune(
+			hash,
+			&number,
+			&is_descendent_of,
+			&predicate,
+		)?;
 
 		Ok(())
 	}
@@ -298,6 +311,12 @@ impl<Hash, Number> EpochChanges<Hash, Number> where
 			Ok(_) | Err(fork_tree::Error::Duplicate) => Ok(()),
 			Err(e) => Err(e),
 		}
+	}
+
+	/// Return the inner fork tree, useful for testing purposes.
+	#[cfg(test)]
+	pub fn tree(&self) -> &ForkTree<Hash, Number, PersistedEpoch> {
+		&self.inner
 	}
 }
 

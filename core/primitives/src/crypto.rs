@@ -596,9 +596,8 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 	/// for storage. If you want a persistent key pair, use `generate_with_phrase` instead.
 	#[cfg(feature = "std")]
 	fn generate() -> (Self, Self::Seed) {
-		let mut csprng: OsRng = OsRng::new().expect("OS random generator works; qed");
 		let mut seed = Self::Seed::default();
-		csprng.fill_bytes(seed.as_mut());
+		OsRng.fill_bytes(seed.as_mut());
 		(Self::from_seed(&seed), seed)
 	}
 

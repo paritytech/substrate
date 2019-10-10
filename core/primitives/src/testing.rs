@@ -18,8 +18,7 @@
 
 #[cfg(feature = "std")]
 use crate::{ed25519, sr25519, crypto::{Public, Pair}};
-use crate::crypto::KeyTypeId; // No idea why this import had to move from
-                              // the previous line, but now the compiler is happy
+use crate::crypto::KeyTypeId;
 
 /// Key type for generic Ed25519 key.
 pub const ED25519: KeyTypeId = KeyTypeId(*b"ed25");
@@ -37,7 +36,7 @@ pub struct KeyStore {
 #[cfg(feature = "std")]
 impl KeyStore {
 	/// Creates a new instance of `Self`.
-	pub fn new() -> std::sync::Arc<parking_lot::RwLock<Self>> {
+	pub fn new() -> crate::traits::BareCryptoStorePtr {
 		std::sync::Arc::new(parking_lot::RwLock::new(Self::default()))
 	}
 }
@@ -133,7 +132,7 @@ impl crate::traits::BareCryptoStore for KeyStore {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{sr25519, traits::BareCryptoStore};
+	use crate::sr25519;
 	use crate::testing::{ED25519, SR25519};
 
 

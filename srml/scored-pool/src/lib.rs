@@ -88,10 +88,10 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-use codec::{Encode, Decode};
+use codec::FullCodec;
 use rstd::prelude::*;
 use support::{
-	StorageValue, StorageMap, decl_module, decl_storage, decl_event, ensure,
+	decl_module, decl_storage, decl_event, ensure,
 	traits::{ChangeMembers, InitializeMembers, Currency, Get, ReservableCurrency},
 };
 use system::{self, ensure_root, ensure_signed};
@@ -117,7 +117,7 @@ pub trait Trait<I=DefaultInstance>: system::Trait {
 	type Currency: Currency<Self::AccountId> + ReservableCurrency<Self::AccountId>;
 
 	/// The score attributed to a member or candidate.
-	type Score: SimpleArithmetic + Clone + Copy + Default + Encode + Decode + MaybeSerializeDebug;
+	type Score: SimpleArithmetic + Clone + Copy + Default + FullCodec + MaybeSerializeDebug;
 
 	/// The overarching event type.
 	type Event: From<Event<Self, I>> + Into<<Self as system::Trait>::Event>;
