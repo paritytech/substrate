@@ -823,3 +823,22 @@ fn burn_must_work() {
 		}
 	);
 }
+
+#[test]
+fn can_have_free_fee() {
+	set_and_run_with_externalities(
+		&mut ExtBuilder::default()
+			.monied(true)
+			.build(),
+		|| {
+			let check = Balances::withdraw(
+				&1101,
+				0u64,
+				WithdrawReason::TransactionPayment,
+				ExistenceRequirement::KeepAlive,
+			);
+			assert_eq!(Balances::free_balance(1101), 0);
+			assert!(check.is_ok());
+		}
+	);
+}
