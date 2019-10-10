@@ -22,7 +22,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::prelude::Vec;
+use rstd::vec::Vec;
 use codec::{Encode, Decode, Codec};
 
 /// A result of execution of a contract.
