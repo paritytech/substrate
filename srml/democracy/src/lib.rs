@@ -1091,7 +1091,7 @@ mod tests {
 			vesting: vec![],
 		}.assimilate_storage(&mut t).unwrap();
 		GenesisConfig::default().assimilate_storage(&mut t).unwrap();
-		runtime_io::TestExternalities::new(t)
+		runtime_io::TestExternalities::new_todo(t)
 	}
 
 	type System = system::Module<Test>;

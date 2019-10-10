@@ -710,7 +710,7 @@ impl<T: Trait> Module<T> {
 			<BlockHash<T>>::hashed_key_for(T::BlockNumber::zero()) => [69u8; 32].encode(),
 			<Number<T>>::hashed_key().to_vec() => T::BlockNumber::one().encode(),
 			<ParentHash<T>>::hashed_key().to_vec() => [69u8; 32].encode()
-		], map![]))
+		], map![], map![]))
 	}
 
 	/// Set the block number to something in particular. Can be used as an alternative to

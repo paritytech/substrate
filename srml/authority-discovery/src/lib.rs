@@ -260,7 +260,7 @@ mod tests {
 		.unwrap();
 
 		// Create externalities.
-		let mut externalities = TestExternalities::new(t);
+		let mut externalities = TestExternalities::new_todo(t);
 		externalities.set_keystore(key_store);
 
 		with_externalities(&mut externalities, || {
@@ -297,7 +297,7 @@ mod tests {
 			.unwrap();
 
 		// Create externalities.
-		let mut externalities = TestExternalities::new(t);
+		let mut externalities = TestExternalities::new_todo(t);
 		externalities.set_keystore(key_store);
 
 		with_externalities(&mut externalities, || {
@@ -334,7 +334,7 @@ mod tests {
 		.unwrap();
 
 		// Create externalities.
-		let mut externalities = TestExternalities::new(t);
+		let mut externalities = TestExternalities::new_todo(t);
 		externalities.set_keystore(key_store);
 
 		with_externalities(&mut externalities, || {

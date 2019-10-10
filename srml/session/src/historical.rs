@@ -330,7 +330,7 @@ mod tests {
 				l.borrow().iter().cloned().map(|i| (i, UintAuthorityId(i).into())).collect()
 			),
 		}.assimilate_storage(&mut t).unwrap();
-		runtime_io::TestExternalities::new(t)
+		runtime_io::TestExternalities::new_todo(t)
 	}
 
 	#[test]

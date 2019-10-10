@@ -28,13 +28,17 @@ use crate::{
 use primitives::{
 	storage::well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES, is_child_storage_key},
 	traits::{BareCryptoStorePtr, Externalities}, offchain, child_storage_key::ChildStorageKey,
-	child_trie::{KeySpace, NO_CHILD_KEYSPACE},
+	child_trie::{KeySpace, NO_CHILD_KEYSPACE, prefixed_keyspace_kv},
 };
 use codec::Encode;
 
 const EXT_NOT_ALLOWED_TO_FAIL: &str = "Externalities not allowed to fail within runtime";
 
-type StorageTuple = (HashMap<Vec<u8>, Vec<u8>>, HashMap<Vec<u8>, (KeySpace, HashMap<Vec<u8>, Vec<u8>>)>);
+type StorageTuple = (
+	HashMap<Vec<u8>, Vec<u8>>,
+	HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>,
+	HashMap<Vec<u8>, Option<KeySpace>>,
+);
 
 /// Simple HashMap-based Externalities impl.
 pub struct TestExternalities<H: Hasher, N: ChangesTrieBlockNumber> {
@@ -46,6 +50,12 @@ pub struct TestExternalities<H: Hasher, N: ChangesTrieBlockNumber> {
 }
 
 impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
+	// TOOD EMCH delete that when genesis support
+	/// Create a new instance of `TestExternalities` with storage.
+	pub fn new_todo(storage: StorageTuple2) -> Self {
+		Self::new_with_code(&[], (storage.0, storage.1, Default::default()))
+	}
+
 	/// Create a new instance of `TestExternalities` with storage.
 	pub fn new(storage: StorageTuple) -> Self {
 		Self::new_with_code(&[], storage)
@@ -68,14 +78,14 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 		storage.0.insert(CODE.to_vec(), code.to_vec());
 
 		let backend: HashMap<_, _> = storage.1.into_iter()
-			.map(|(keyspace, map)| (Some(keyspace), map))
-			.chain(Some((None, (NO_CHILD_KEYSPACE.to_vec(), storage.0))).into_iter())
+			.map(|(storage_key, map)| (Some(storage_key), map))
+			.chain(Some((None, storage.0)).into_iter())
 			.collect();
 
 		TestExternalities {
 			overlay,
 			changes_trie_storage: ChangesTrieInMemoryStorage::new(),
-			backend: backend.into(),
+			backend: (backend, storage.2).into(),
 			offchain: None,
 			keystore: None,
 		}
@@ -84,7 +94,7 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 	/// Insert key/value into backend
 	pub fn insert(&mut self, k: Vec<u8>, v: Vec<u8>) {
 		self.backend = self.backend.update(InMemoryTransaction {
-			storage: vec![(None, None, k, Some(v))],
+			storage: vec![(None, k, Some(v))],
 			kv: Default::default(),
 		});
 	}
@@ -124,15 +134,13 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 	pub fn commit_all(&self) -> InMemory<H> {
 		let top = self.overlay.committed.top.clone().into_iter()
 			.chain(self.overlay.prospective.top.clone().into_iter())
-			.map(|(k, v)| (None, None, k, v.value));
+			.map(|(k, v)| (None, k, v.value));
 
 		let children = self.overlay.committed.children.clone().into_iter()
 			.chain(self.overlay.prospective.children.clone().into_iter())
-			.flat_map(|(storage_key, map)| {
-				let keyspace = self.get_child_keyspace(storage_key.as_slice())
-					.expect("Test backend do not produce db error");
+			.flat_map(|(keyspace, map)| {
 				map.into_iter()
-					.map(|(k, v)| (Some(storage_key.clone()), keyspace.clone(), k, v.value))
+					.map(|(k, v)| (Some(keyspace.clone()), k, v.value))
 					.collect::<Vec<_>>()
 			});
 
@@ -167,6 +175,15 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> Default for TestExternalities<H, N> {
 impl<H: Hasher, N: ChangesTrieBlockNumber> From<StorageTuple> for TestExternalities<H, N> {
 	fn from(storage: StorageTuple) -> Self {
 		Self::new(storage)
+	}
+}
+
+// TODO EMCH this is only needed until genesis builds from kv to.
+type StorageTuple2 = (HashMap<Vec<u8>, Vec<u8>>, HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>);
+
+impl<H: Hasher, N: ChangesTrieBlockNumber> From<StorageTuple2> for TestExternalities<H, N> {
+	fn from(storage: StorageTuple2) -> Self {
+		Self::new_todo(storage)
 	}
 }
 

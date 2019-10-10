@@ -419,7 +419,7 @@ mod tests {
 		}.assimilate_storage(&mut t).unwrap();
 		let xt = sr_primitives::testing::TestXt(sign_extra(1, 0, 0), Call::Balances(BalancesCall::transfer(2, 69)));
 		let weight = xt.get_dispatch_info().weight as u64;
-		let mut t = runtime_io::TestExternalities::<Blake2Hasher>::new(t);
+		let mut t = runtime_io::TestExternalities::<Blake2Hasher>::new_todo(t);
 		with_externalities(&mut t, || {
 			Executive::initialize_block(&Header::new(
 				1,

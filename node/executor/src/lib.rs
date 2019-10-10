@@ -140,7 +140,7 @@ mod tests {
 			<system::BlockHash<Runtime>>::hashed_key_for(0) => {
 				vec![0u8; 32]
 			}
-		], map![]));
+		], map![], map![]));
 
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
@@ -176,7 +176,7 @@ mod tests {
 			<system::BlockHash<Runtime>>::hashed_key_for(0) => {
 				vec![0u8; 32]
 			}
-		], map![]));
+		], map![], map![]));
 
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
@@ -208,7 +208,7 @@ mod tests {
 			},
 			<indices::NextEnumSet<Runtime>>::hashed_key().to_vec() => vec![0u8; 16],
 			<system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
-		], map![]));
+		], map![], map![]));
 
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
@@ -244,7 +244,7 @@ mod tests {
 			},
 			<indices::NextEnumSet<Runtime>>::hashed_key().to_vec() => vec![0u8; 16],
 			<system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
-		], map![]));
+		], map![], map![]));
 
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
@@ -270,9 +270,11 @@ mod tests {
 	}
 
 	fn new_test_ext(code: &[u8], support_changes_trie: bool) -> TestExternalities<Blake2Hasher> {
+		let storage = node_testing::genesis::config(support_changes_trie, Some(code)).build_storage().unwrap();
 		let mut ext = TestExternalities::new_with_code(
 			code,
-			node_testing::genesis::config(support_changes_trie, Some(code)).build_storage().unwrap(),
+			// TODO EMCH get genesis config return kv store
+			(storage.0, storage.1, Default::default()),
 		);
 		ext.changes_trie_storage().insert(0, GENESIS_HASH.into(), Default::default());
 		ext
@@ -783,7 +785,7 @@ mod tests {
 			},
 			<indices::NextEnumSet<Runtime>>::hashed_key().to_vec() => vec![0u8; 16],
 			<system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
-		], map![]));
+		], map![], map![]));
 
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
@@ -815,7 +817,7 @@ mod tests {
 			},
 			<indices::NextEnumSet<Runtime>>::hashed_key().to_vec() => vec![0u8; 16],
 			<system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
-		], map![]));
+		], map![], map![]));
 
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
@@ -993,7 +995,7 @@ mod tests {
 			},
 			<indices::NextEnumSet<Runtime>>::hashed_key().to_vec() => vec![0u8; 16],
 			<system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
-		], map![]));
+		], map![], map![]));
 
 		let tip = 1_000_000;
 		let xt = sign(CheckedExtrinsic {

@@ -162,7 +162,8 @@ mod tests {
 		).genesis_map();
 		let genesis_hash = insert_genesis_block(&mut storage);
 
-		let backend = InMemory::from(storage);
+		// TODO EMCH need to put kv in genesis
+		let backend = InMemory::from((storage.0, storage.1, Default::default()));
 		let (b1data, _b1hash) = block1(genesis_hash, &backend);
 
 		let mut overlay = OverlayedChanges::default();
@@ -192,7 +193,8 @@ mod tests {
 		).genesis_map();
 		let genesis_hash = insert_genesis_block(&mut storage);
 
-		let backend = InMemory::from(storage);
+		// TODO EMCH need to put kv in genesis
+		let backend = InMemory::from((storage.0, storage.1, Default::default()));
 		let (b1data, _b1hash) = block1(genesis_hash, &backend);
 
 		let mut overlay = OverlayedChanges::default();
@@ -222,7 +224,8 @@ mod tests {
 		).genesis_map();
 		let genesis_hash = insert_genesis_block(&mut storage);
 
-		let backend = InMemory::from(storage);
+		// TODO EMCH need to put kv in genesis
+		let backend = InMemory::from((storage.0, storage.1, Default::default()));
 		let (b1data, _b1hash) = block1(genesis_hash, &backend);
 
 		let mut overlay = OverlayedChanges::default();

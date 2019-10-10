@@ -21,6 +21,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use parking_lot::{RwLock, Mutex};
 
+use primitives::child_trie::KeySpace;
 use sr_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
 use state_machine::{Backend as StateBackend, TrieBackend, backend::InMemory as InMemoryState, ChangesTrieTransaction};
 use sr_primitives::traits::{Block as BlockT, NumberFor, Zero, Header};
@@ -290,7 +291,8 @@ where
 			storage.insert(Some(child_key), child_storage);
 		}
 
-		let storage_update: InMemoryState<H> = storage.into();
+		// TODO EMCH need kv init here
+		let storage_update: InMemoryState<H> = (storage, Default::default()).into();
 		let (storage_root, _) = storage_update.full_storage_root(
 			::std::iter::empty(),
 			child_delta,
@@ -358,6 +360,14 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 		match *self {
 			GenesisOrUnavailableState::Genesis(ref state) =>
 				Ok(state.child_storage(storage_key, key).expect(IN_MEMORY_EXPECT_PROOF)),
+			GenesisOrUnavailableState::Unavailable => Err(ClientError::NotAvailableOnLightClient),
+		}
+	}
+
+	fn get_child_keyspace(&self, storage_key: &[u8]) -> ClientResult<Option<KeySpace>> {
+		match *self {
+			GenesisOrUnavailableState::Genesis(ref state) =>
+				Ok(state.get_child_keyspace(storage_key).expect(IN_MEMORY_EXPECT_PROOF)),
 			GenesisOrUnavailableState::Unavailable => Err(ClientError::NotAvailableOnLightClient),
 		}
 	}
