@@ -55,7 +55,7 @@ pub(crate) trait BlockUntilImported<Block: BlockT>: Sized {
 		ready: Ready,
 	) -> Result<(), Error> where
 		S: BlockStatusT<Block>,
-		Wait: FnMut(Block::Hash, Self),
+		Wait: FnMut(Block::Hash, NumberFor<Block>, Self),
 		Ready: FnMut(Self::Blocked);
 
 	/// called when the wait has completed. The canonical number is passed through
@@ -72,10 +72,10 @@ pub(crate) struct UntilImported<Block: BlockT, BlockStatus, BlockSyncRequester, 
 	inner: Fuse<I>,
 	ready: VecDeque<M::Blocked>,
 	check_pending: Interval,
-	/// Mapping block hashes to the point in time it was first encountered (Instant), nodes that have the corresponding
-	/// block (inferred by the fact that they send a message referencing it) and a list of Grandpa messages referencing
-	/// the block hash.
-	pending: HashMap<Block::Hash, (Instant, Vec<network::PeerId>, Vec<(M)>)>,
+	/// Mapping block hashes to their block number, the point in time it was first encountered (Instant), nodes that
+	/// have the corresponding block (inferred by the fact that they send a message referencing it) and a list of
+	/// Grandpa messages referencing the block hash.
+	pending: HashMap<Block::Hash, (NumberFor<Block>, Instant, Vec<network::PeerId>, Vec<(M)>)>,
 	identifier: &'static str,
 }
 
@@ -136,18 +136,18 @@ impl<Block: BlockT, BlockStatus, BlockSyncRequester, I, M> Stream for UntilImpor
 					M::schedule_wait(
 						input,
 						&self.status_check,
-						|target_hash, wait| {
+						|target_hash, target_number, wait| {
 							let entry = pending
 								.entry(target_hash)
-								.or_insert_with(|| (Instant::now(), Vec::new(), Vec::new()));
+								.or_insert_with(|| (target_number, Instant::now(), Vec::new(), Vec::new()));
 							// Given that we received the message from the sender, we expect to be able to download the
 							// referenced block from them later in case we don't already download it automatically from
 							// elsewhere.
 							// TODO: Can we get around the clone?
 							if let Some(sender) = sender.clone() {
-								entry.1.push(sender);
+								entry.2.push(sender);
 							}
-							entry.2.push(wait);
+							entry.3.push(wait);
 						} ,
 						|ready_item| ready.push_back(ready_item),
 					)?;
@@ -162,7 +162,7 @@ impl<Block: BlockT, BlockStatus, BlockSyncRequester, I, M> Stream for UntilImpor
 				Ok(Async::Ready(None)) => return Ok(Async::Ready(None)),
 				Ok(Async::Ready(Some(notification))) => {
 					// new block imported. queue up all messages tied to that hash.
-					if let Some((_, _, messages)) = self.pending.remove(&notification.hash) {
+					if let Some((_, _, _, messages)) = self.pending.remove(&notification.hash) {
 						let canon_number = notification.header.number().clone();
 						let ready_messages = messages.into_iter()
 							.filter_map(|m| m.wait_completed(canon_number));
@@ -181,11 +181,15 @@ impl<Block: BlockT, BlockStatus, BlockSyncRequester, I, M> Stream for UntilImpor
 
 		if update_interval {
 			let mut known_keys = Vec::new();
-			for (&block_hash, &mut (ref mut last_log, ref _senders, ref v)) in &mut self.pending {
+			for (&block_hash, &mut (block_number, ref mut last_log, ref senders, ref v)) in &mut self.pending {
 				if let Some(number) = self.status_check.block_number(block_hash)? {
+					// TODO: Now that we pass the number all the way down here, should we check if it is the same as we
+					// are expecting it to be?
 					known_keys.push((block_hash, number));
 				} else {
 					let next_log = *last_log + LOG_PENDING_INTERVAL;
+					// TODO: Should this not be >=? We want to log whenever we want to log every LOG_PENDING_INTERVAL,
+					// right?
 					if Instant::now() <= next_log {
 						debug!(
 							target: "afg",
@@ -204,7 +208,7 @@ impl<Block: BlockT, BlockStatus, BlockSyncRequester, I, M> Stream for UntilImpor
 			}
 
 			for (known_hash, canon_number) in known_keys {
-				if let Some((_, _, pending_messages)) = self.pending.remove(&known_hash) {
+				if let Some((_, _, _, pending_messages)) = self.pending.remove(&known_hash) {
 					let ready_messages = pending_messages.into_iter()
 						.filter_map(|m| m.wait_completed(canon_number));
 
@@ -245,7 +249,7 @@ impl<Block: BlockT> BlockUntilImported<Block> for SignedMessage<Block> {
 		mut ready: Ready,
 	) -> Result<(), Error> where
 		BlockStatus: BlockStatusT<Block>,
-		Wait: FnMut(Block::Hash, Self),
+		Wait: FnMut(Block::Hash, NumberFor<Block>, Self),
 		Ready: FnMut(Self::Blocked),
 	{
 		let (&target_hash, target_number) = msg.target();
@@ -257,7 +261,7 @@ impl<Block: BlockT> BlockUntilImported<Block> for SignedMessage<Block> {
 				ready(msg);
 			}
 		} else {
-			wait(target_hash, msg)
+			wait(target_hash, target_number, msg)
 		}
 
 		Ok(())
@@ -305,7 +309,7 @@ impl<Block: BlockT> BlockUntilImported<Block> for BlockGlobalMessage<Block> {
 		mut ready: Ready,
 	) -> Result<(), Error> where
 		BlockStatus: BlockStatusT<Block>,
-		Wait: FnMut(Block::Hash, Self),
+		Wait: FnMut(Block::Hash, NumberFor<Block>, Self),
 		Ready: FnMut(Self::Blocked),
 	{
 		use std::collections::hash_map::Entry;
@@ -407,7 +411,7 @@ impl<Block: BlockT> BlockUntilImported<Block> for BlockGlobalMessage<Block> {
 		// if this is taking a long time.
 		for (hash, is_known) in checked_hashes {
 			if let KnownOrUnknown::Unknown(target_number) = is_known {
-				wait(hash, BlockGlobalMessage {
+				wait(hash, target_number, BlockGlobalMessage {
 					inner: locked_global.clone(),
 					target_number,
 				})
