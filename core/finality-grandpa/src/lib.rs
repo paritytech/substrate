@@ -257,6 +257,20 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> BlockStatus<Block> for Arc<Client<B, E,
 	}
 }
 
+/// Something that one can ask to do a block sync request.
+pub(crate) trait BlockSyncRequester<Block: BlockT> {
+	  fn set_sync_fork_request(&self, peers: Vec<network::PeerId>, hash: Block::Hash, number: NumberFor<Block>);
+}
+
+impl<Block, N> BlockSyncRequester<Block> for NetworkBridge<Block, N> where
+	Block: BlockT,
+	N: communication::Network<Block>,
+{
+	fn set_sync_fork_request(&self, peers: Vec<network::PeerId>, hash: Block::Hash, number: NumberFor<Block>){
+		NetworkBridge::set_sync_fork_request(self, peers, hash, number)
+	}
+}
+
 /// A new authority set along with the canonical block it changed at.
 #[derive(Debug)]
 pub(crate) struct NewAuthoritySet<H, N> {

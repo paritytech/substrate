@@ -38,7 +38,7 @@ use network::{consensus_gossip as network_gossip, NetworkService};
 use network_gossip::ConsensusMessage;
 use codec::{Encode, Decode};
 use primitives::Pair;
-use sr_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
+use sr_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, NumberFor};
 use substrate_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_INFO};
 use tokio_executor::Executor;
 
@@ -128,6 +128,9 @@ pub trait Network<Block: BlockT>: Clone + Send + 'static {
 
 	/// Inform peers that a block with given hash should be downloaded.
 	fn announce(&self, block: Block::Hash, associated_data: Vec<u8>);
+
+	/// Configure an explicit fork sync request.
+	fn set_sync_fork_request(&self, peers: Vec<network::PeerId>, hash: Block::Hash, number: NumberFor<Block>);
 }
 
 /// Create a unique topic for a round and set-id combo.
@@ -199,6 +202,10 @@ impl<B, S, H> Network<B> for Arc<NetworkService<B, S, H>> where
 
 	fn announce(&self, block: B::Hash, associated_data: Vec<u8>) {
 		self.announce_block(block, associated_data)
+	}
+
+	fn set_sync_fork_request(&self, peers: Vec<network::PeerId>, hash: B::Hash, number: NumberFor<B>) {
+		NetworkService::set_sync_fork_request(self, peers, hash, number)
 	}
 }
 
@@ -483,6 +490,10 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		});
 
 		(incoming, outgoing)
+	}
+
+	pub(crate) fn set_sync_fork_request(&self, peers: Vec<network::PeerId>, hash: B::Hash, number: NumberFor<B>){
+		self.service.set_sync_fork_request(peers, hash, number)
 	}
 }
 
