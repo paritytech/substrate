@@ -20,14 +20,9 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::prelude::*;
 use sr_primitives::{
 	generic, traits::{Verify, BlakeTwo256}, OpaqueExtrinsic, AnySignature
 };
-
-#[cfg(feature = "std")]
-use serde::{Serialize, Deserialize};
-use codec::{Encode, Decode};
 
 /// An index to a block.
 pub type BlockNumber = u32;
