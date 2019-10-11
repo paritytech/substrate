@@ -315,7 +315,7 @@ impl<T: Trait> Module<T> {
 			&Self::account_id(),
 			imbalance,
 			WithdrawReason::Transfer,
-			ExistenceRequirement::KeepAlive
+			ExistenceRequirement::AllowDeath,
 		) {
 			print("Inconsistent state - couldn't settle imbalance for funds spent by treasury");
 			// Nothing else to do here.
@@ -392,7 +392,7 @@ mod tests {
 		type Version = ();
 	}
 	parameter_types! {
-		pub const ExistentialDeposit: u64 = 0;
+		pub const ExistentialDeposit: u64 = 1;
 		pub const TransferFee: u64 = 0;
 		pub const CreationFee: u64 = 0;
 		pub const TransactionBaseFee: u64 = 0;
