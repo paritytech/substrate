@@ -16,20 +16,14 @@
 
 //! # Transaction Payment Module
 //!
-//! This module provides the logic needed to approve that a transaction is paying the _absolute
-//! minimum_ amount required to be included on-chain. Note that this is similar, but by no means the
-//! same as what a typical blockchain system names _transaction fee_. Substrate makes no assumption
-//! about the type of the transactions, ergo no assumption is also made about the existence of a
-//! fee.
+//! This module provides the basic logic needed to pay the absolute minimum amount needed for a
+//! transaction to be included. This includes:
+//!   - _weight fee_: A fee proportional to amount of Weight a transaction consumes. (TODO: explain
+//!     what weight is or link somewhere)
+//!   - _length fee_: A fee proportional to the encoded length of the transaction.
 //!
-//!
-//!
-//!
-
-// The way that it should work is that the system module assumes that the concept of weight is fixed
-// it will try and use an external module to estimate how mcuh fee does a weigth number correspond to.
-// so in the long term I suspect the TakeFee to actully go into the system module (maybe also here but)
-// the rational is that the weight system os **mandatory**.
+//! Additionally, this module allows all transactions to include an optional tip. Tip increases the
+//! priority of the transaction, giving it a higher chance to be included.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -136,6 +130,7 @@ impl<T: Trait> ChargeTransactionPayment<T> {
 			// maximum of its data type, which is not desired.
 			let capped_weight = info.weight.min(<T as system::Trait>::MaximumBlockWeight::get());
 			let fee = T::WeightToFee::convert(capped_weight);
+			// TODO #3291 apply this to both weights, not just one.
 			let fee_update = NextFeeMultiplier::get();
 			let adjusted_fee = fee_update.saturated_multiply_accumulate(fee);
 			adjusted_fee
