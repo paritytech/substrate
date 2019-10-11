@@ -226,7 +226,7 @@ fn find_module_entry<'a>(
 		None if include_default => {
 			let event_tokens = quote!(#name<T>);
 			return Some(syn::parse2(event_tokens).unwrap());
-		},
+		}
 		_ => return None,
 	};
 	for entry in details.entries.content.inner.iter() {

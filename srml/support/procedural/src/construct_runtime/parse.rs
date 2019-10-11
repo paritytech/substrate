@@ -89,3 +89,78 @@ pub struct ModulePart {
 	pub generics: syn::Generics,
 	pub args: ext::Opt<ext::Parens<ext::Punctuated<Ident, Token![,]>>>,
 }
+
+impl ModuleDeclaration {
+	pub fn module_parts(&self) -> syn::Result<Vec<ModulePart>> {
+		if let Some(ref details) = self.details.inner {
+			let parts: Vec<_> = details.entries.content.inner.iter().flat_map(|entry| match &entry.inner {
+				ModuleEntry::Default(ref token) => Self::default_modules(token.span()),
+				ModuleEntry::Part(ref part) => vec![part.clone()],
+			}).collect();
+			let mut uniq = HashSet::new();
+			for part in parts.iter() {
+				let name = part.name.to_string();
+				if !uniq.insert(name.clone()) {
+					return Err(syn::Error::new(
+						part.name.span(),
+						format!(
+							"`{}` module is not unique - either it is \
+							a double entry or it is included in `default` keyword",
+							name
+						),
+					));
+				}
+			}
+			Ok(parts)
+		} else {
+			Ok(Self::default_modules(self.module.span()))
+		}
+	}
+
+	fn default_modules(span: Span) -> Vec<ModulePart> {
+		let mut res: Vec<_> = ["Module", "Call", "Storage"]
+			.into_iter()
+			.map(|name| ModulePart::with_name(name, span))
+			.collect();
+		res.extend(
+			["Event", "Config"]
+				.into_iter()
+				.map(|name| ModulePart::with_generics(name, span)),
+		);
+		res
+	}
+}
+
+impl ModulePart {
+	pub fn with_name(name: &str, span: Span) -> Self {
+		let name = Ident::new(name, span);
+		Self {
+			name,
+			generics: syn::Generics {
+				lt_token: None,
+				gt_token: None,
+				where_clause: None,
+				..Default::default()
+			},
+			args: ext::Opt { inner: None },
+		}
+	}
+
+	pub fn with_generics(name: &str, span: Span) -> Self {
+		let name = Ident::new(name, span);
+		let typ = Ident::new("T", span);
+		let generic_param = syn::GenericParam::Type(typ.into());
+		let generic_params = vec![generic_param].into_iter().collect();
+		let generics = syn::Generics {
+			lt_token: Some(syn::token::Lt { spans: [span] }),
+			params: generic_params,
+			gt_token: Some(syn::token::Gt { spans: [span] }),
+			where_clause: None,
+		};
+		Self {
+			name,
+			generics,
+			args: ext::Opt { inner: None },
+		}
+	}
+}
