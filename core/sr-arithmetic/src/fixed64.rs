@@ -22,7 +22,7 @@ use codec::{Encode, Decode};
 use crate::{
 	Perbill,
 	traits::{
-		SaturatedConversion, CheckedSub, CheckedAdd, Bounded, UniqueSaturatedInto, Saturating,
+		SaturatedConversion, CheckedSub, CheckedAdd, Bounded, UniqueSaturatedInto, Saturating
 	}
 };
 

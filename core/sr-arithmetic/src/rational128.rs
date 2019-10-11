@@ -15,7 +15,8 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use rstd::{cmp::Ordering, prelude::*};
-use crate::{helpers_128bit, traits::Zero};
+use crate::helpers_128bit;
+use num_traits::Zero;
 
 /// A wrapper for any rational number with a 128 bit numerator and denominator.
 #[derive(Clone, Copy, Default, Eq)]

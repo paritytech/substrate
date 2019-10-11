@@ -3809,6 +3809,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "sr-arithmetic"
+version = "2.0.0"
+dependencies = [
+ "integer-sqrt 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "num-traits 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "paste 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "primitive-types 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rand 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.101 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_json 1.0.41 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-std 2.0.0",
+ "substrate-offchain 2.0.0",
+]
+
+[[package]]
 name = "sr-io"
 version = "2.0.0"
 dependencies = [
@@ -3829,15 +3845,14 @@ name = "sr-primitives"
 version = "2.0.0"
 dependencies = [
  "impl-trait-for-tuples 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "integer-sqrt 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "num-traits 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "paste 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "primitive-types 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.101 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.41 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-arithmetic 2.0.0",
  "sr-io 2.0.0",
  "sr-std 2.0.0",
  "substrate-application-crypto 2.0.0",

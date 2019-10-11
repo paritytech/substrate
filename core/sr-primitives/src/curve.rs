@@ -16,7 +16,7 @@
 
 //! Provides some utilities to define a piecewise linear function.
 
-use crate::{Perbill, traits::{SimpleArithmetic, SaturatedConversion}};
+use arithmetic::{Perbill, traits::{SimpleArithmetic, SaturatedConversion}};
 use core::ops::Sub;
 
 /// Piecewise Linear function in [0, 1] -> [0, 1].

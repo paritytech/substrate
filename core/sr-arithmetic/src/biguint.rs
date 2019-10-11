@@ -16,7 +16,7 @@
 
 //! Infinite precision unsigned integer for substrate runtime.
 
-use crate::traits::Zero;
+use num_traits::Zero;
 use rstd::{cmp::Ordering, ops, prelude::*, cell::RefCell, convert::TryFrom};
 
 // A sensible value for this would be half of the dword size of the host machine. Since the

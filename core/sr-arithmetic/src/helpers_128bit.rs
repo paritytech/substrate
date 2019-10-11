@@ -20,7 +20,7 @@
 //! multiplication implementation provided there.
 
 use crate::biguint;
-use crate::traits::Zero;
+use num_traits::Zero;
 use rstd::{cmp::{min, max}, convert::TryInto};
 
 /// Helper gcd function used in Rational128 implementation.

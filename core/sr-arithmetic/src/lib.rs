@@ -18,6 +18,7 @@
 
 pub mod biguint;
 pub mod helpers_128bit;
+pub mod traits;
 mod parts_per_x;
 mod fixed64;
 mod rational128;

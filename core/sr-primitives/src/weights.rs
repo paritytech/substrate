@@ -23,11 +23,10 @@
 //! Note that the decl_module macro _cannot_ enforce this and will simply fail if an invalid struct
 //! (something that does not  implement `Weighable`) is passed in.
 
-use crate::{Fixed64, traits::Saturating};
+use arithmetic::{Fixed64, traits::{Saturating, Bounded}};
 use crate::codec::{Encode, Decode};
 
 pub use crate::transaction_validity::TransactionPriority;
-use crate::traits::Bounded;
 
 /// Numeric range of a transaction weight.
 pub type Weight = u32;

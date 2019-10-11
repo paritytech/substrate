@@ -51,7 +51,6 @@ pub mod testing;
 pub mod curve;
 pub mod generic;
 pub mod offchain;
-pub mod sr_arithmetic;
 pub mod traits;
 pub mod transaction_validity;
 pub mod weights;
@@ -64,14 +63,14 @@ pub use primitives::{TypeId, crypto::{key_types, KeyTypeId, CryptoType}};
 pub use app_crypto::RuntimeAppPublic;
 
 /// Re-export top-level arithmetic stuff.
-pub use sr_arithmetic::{
+pub use arithmetic::{
 	Perquintill, Perbill, Permill, Percent,
 	Rational128, Fixed64
 };
 /// Re-export 128 bit helpers.
-pub use sr_arithmetic::helpers_128bit;
+pub use arithmetic::helpers_128bit;
 /// Re-export big_uint stiff.
-pub use sr_arithmetic::biguint;
+pub use arithmetic::biguint;
 
 /// An abstraction over justification for a block's validity under a consensus algorithm.
 ///
@@ -527,37 +526,6 @@ macro_rules! impl_outer_config {
 			$storage,
 		)?;
 	}
-}
-
-/// Checks that `$x` is equal to `$y` with an error rate of `$error`.
-///
-/// # Example
-///
-/// ```rust
-/// # fn main() {
-/// sr_primitives::assert_eq_error_rate!(10, 10, 0);
-/// sr_primitives::assert_eq_error_rate!(10, 11, 1);
-/// sr_primitives::assert_eq_error_rate!(12, 10, 2);
-/// # }
-/// ```
-///
-/// ```rust,should_panic
-/// # fn main() {
-/// sr_primitives::assert_eq_error_rate!(12, 10, 1);
-/// # }
-/// ```
-#[macro_export]
-#[cfg(feature = "std")]
-macro_rules! assert_eq_error_rate {
-	($x:expr, $y:expr, $error:expr $(,)?) => {
-		assert!(
-			($x) >= (($y) - ($error)) && ($x) <= (($y) + ($error)),
-			"{:?} != {:?} (with error rate {:?})",
-			$x,
-			$y,
-			$error,
-		);
-	};
 }
 
 /// Simple blob to hold an extrinsic without committing to its format and ensure it is serialized

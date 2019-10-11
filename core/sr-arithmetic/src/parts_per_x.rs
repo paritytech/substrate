@@ -1,10 +1,41 @@
 
 #[cfg(feature = "std")]
-use crate::serde::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize};
 
 use rstd::{ops, prelude::*, convert::TryInto};
 use codec::{Encode, Decode};
 use crate::traits::{SaturatedConversion, UniqueSaturatedInto, Saturating};
+
+/// Checks that `$x` is equal to `$y` with an error rate of `$error`.
+///
+/// # Example
+///
+/// ```rust
+/// # fn main() {
+/// sr_primitives::assert_eq_error_rate!(10, 10, 0);
+/// sr_primitives::assert_eq_error_rate!(10, 11, 1);
+/// sr_primitives::assert_eq_error_rate!(12, 10, 2);
+/// # }
+/// ```
+///
+/// ```rust,should_panic
+/// # fn main() {
+/// sr_primitives::assert_eq_error_rate!(12, 10, 1);
+/// # }
+/// ```
+#[macro_export]
+#[cfg(feature = "std")]
+macro_rules! assert_eq_error_rate {
+	($x:expr, $y:expr, $error:expr $(,)?) => {
+		assert!(
+			($x) >= (($y) - ($error)) && ($x) <= (($y) + ($error)),
+			"{:?} != {:?} (with error rate {:?})",
+			$x,
+			$y,
+			$error,
+		);
+	};
+}
 
 macro_rules! implement_per_thing {
 	($name:ident, $test_mod:ident, [$($test_units:tt),+], $max:tt, $type:ty, $upper_type:ty, $title:expr $(,)?) => {
@@ -210,7 +241,7 @@ macro_rules! implement_per_thing {
 			}
 
 			#[derive(Encode, Decode, PartialEq, Eq, Debug)]
-			struct WithCompact<T: crate::codec::HasCompact> {
+			struct WithCompact<T: codec::HasCompact> {
 				data: T,
 			}
 
@@ -233,10 +264,10 @@ macro_rules! implement_per_thing {
 					(<$type>::max_value(), <$type>::max_value().encode().len() + 1)
 				];
 				for &(n, l) in &tests {
-					let compact: crate::codec::Compact<$name> = $name(n).into();
+					let compact: codec::Compact<$name> = $name(n).into();
 					let encoded = compact.encode();
 					assert_eq!(encoded.len(), l);
-					let decoded = <crate::codec::Compact<$name>>::decode(&mut & encoded[..])
+					let decoded = <codec::Compact<$name>>::decode(&mut & encoded[..])
 						.unwrap();
 					let per_thingy: $name = decoded.into();
 					assert_eq!(per_thingy, $name(n));

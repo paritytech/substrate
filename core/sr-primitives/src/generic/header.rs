@@ -21,8 +21,9 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "std")]
 use log::debug;
 use crate::codec::{Decode, Encode, Codec, Input, Output, HasCompact, EncodeAsRef, Error};
+use arithmetic::traits::SimpleArithmetic;
 use crate::traits::{
-	self, Member, SimpleArithmetic, SimpleBitOps, MaybeDisplay, Hash as HashT, MaybeSerializeDebug,
+	self, Member, SimpleBitOps, MaybeDisplay, Hash as HashT, MaybeSerializeDebug,
 	MaybeSerializeDebugButNotDeserialize
 };
 use crate::generic::Digest;
