@@ -279,8 +279,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "fuzzer"
 version = "0.1.0"
 dependencies = [
- "arbitrary 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "honggfuzz 0.5.45 (registry+https://github.com/rust-lang/crates.io-index)",
+ "primitive-types 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 2.0.0",
 ]
 

@@ -2,6 +2,10 @@ use honggfuzz::fuzz;
 use sr_primitives::sr_arithmetic::biguint::{Single, BigUint};
 use std::convert::TryFrom;
 
+mod util;
+
+use util::value_between;
+
 fn main() {
     loop {
         fuzz!(|data: (usize, usize, Vec<Single>, Vec<Single>)| {
@@ -129,14 +133,6 @@ fn run_with_data_set<F>(
     println!("u: {:?}, v: {:?}", u, v);
     assertion(u, v);
     Some(())
-}
-
-fn value_between(value: usize, min: usize, max: usize) -> Option<usize> {
-    if value >= min && value < max {
-        Some(value)
-    } else {
-        None
-    }
 }
 
 fn random_big_uint(size: usize, digits: &[Single]) -> Option<BigUint> {

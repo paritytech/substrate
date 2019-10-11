@@ -7,9 +7,14 @@ edition = "2018"
 [dependencies]
 honggfuzz = "0.5"
 sr-primitives = { path = ".." }
+primitive-types = "0.5.1"
 
 [workspace]
 
 [[bin]]
 name = "biguint"
 path = "src/biguint.rs"
+
+[[bin]]
+name = "rational128"
+path = "src/rational128.rs"
