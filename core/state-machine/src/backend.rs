@@ -194,8 +194,8 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 						counter_keyspace = Some(keyspace);
 					}
 					// increment counter
-					counter_keyspace.map(|c| {
-						c + 1
+					counter_keyspace.as_mut().map(|c| {
+						*c += 1;
 					});
 					let enc_counter_keyspace = produce_keyspace(
 						*counter_keyspace.as_ref().expect("lazy init at start of this block")
