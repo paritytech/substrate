@@ -1,6 +1,6 @@
 use super::parse::{ModuleDeclaration, ModuleEntry, ModulePart, RuntimeDefinition, WhereSection};
 use proc_macro::TokenStream;
-use proc_macro2::{TokenStream as TokenStream2, Span};
+use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::quote;
 use srml_support_procedural_tools::syn_ext as ext;
 use srml_support_procedural_tools::{generate_crate_access, generate_hidden_includes};
@@ -91,8 +91,6 @@ enum DeclOuterKind {
 	Origin,
 }
 
-
-
 fn decl_outer_event_or_origin<'a>(
 	runtime_name: &'a Ident,
 	module_declarations: impl Iterator<Item = &'a ModuleDeclaration>,
@@ -151,12 +149,18 @@ fn find_system_module<'a>(mut module_declarations: impl Iterator<Item = &'a Modu
 		.map(|decl| &decl.module)
 }
 
-fn find_module_entry<'a>(module_declaration: &'a ModuleDeclaration, name: &'a Ident, include_default: bool) -> Option<ModulePart> {
+fn find_module_entry<'a>(
+	module_declaration: &'a ModuleDeclaration,
+	name: &'a Ident,
+	include_default: bool,
+) -> Option<ModulePart> {
 	let details = module_declaration.details.inner.as_ref()?;
 	for entry in details.entries.content.inner.iter() {
 		match &entry.inner {
 			ModuleEntry::Default(default_token) => {
-				if (!include_default) { continue };
+				if (!include_default) {
+					continue;
+				};
 				let event_tokens = quote!(#name<T>);
 				return Some(syn::parse2(event_tokens).unwrap());
 			}
