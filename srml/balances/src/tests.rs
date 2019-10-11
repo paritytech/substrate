@@ -25,6 +25,7 @@ use support::{
 	traits::{LockableCurrency, LockIdentifier, WithdrawReason, WithdrawReasons,
 	Currency, ReservableCurrency}
 };
+use sr_primitives::weights::DispatchClass;
 use system::RawOrigin;
 
 const ID_1: LockIdentifier = *b"1       ";
@@ -779,6 +780,41 @@ fn signed_extension_take_fees_is_bounded() {
 			assert_eq!(
 				Balances::free_balance(&1),
 				(10000 - <Runtime as system::Trait>::MaximumBlockWeight::get()) as u64
+			);
+		});
+}
+
+#[test]
+fn signed_extension_allows_free_transactions() {
+	ExtBuilder::default()
+		.transaction_fees(100, 1, 1)
+		.monied(false)
+		.build()
+		.execute_with(|| {
+			// 1 ain't have a penny.
+			assert_eq!(Balances::free_balance(&1), 0);
+
+			// like a FreeOperational
+			let operational_transaction = DispatchInfo {
+				weight: 0,
+				class: DispatchClass::Operational
+			};
+			let len = 100;
+			assert!(
+				TakeFees::<Runtime>::from(0)
+					.validate(&1, CALL, operational_transaction , len)
+					.is_ok()
+			);
+
+			// like a FreeNormal
+			let free_transaction = DispatchInfo {
+				weight: 0,
+				class: DispatchClass::Normal
+			};
+			assert!(
+				TakeFees::<Runtime>::from(0)
+					.validate(&1, CALL, free_transaction , len)
+					.is_err()
 			);
 		});
 }
