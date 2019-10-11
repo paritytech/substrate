@@ -22,7 +22,6 @@
 #[cfg(feature = "benchmarks")] extern crate test;
 
 pub use substrate_executor::NativeExecutor;
-pub use substrate_executor::RuntimesCache;
 use substrate_executor::native_executor_instance;
 
 // Declare an instance of the native executor named `Executor`. Include the wasm binary as the
@@ -37,7 +36,6 @@ native_executor_instance!(
 mod tests {
 	use super::Executor;
 	use {balances, contracts, indices, system, timestamp};
-	use runtime_io;
 	use codec::{Encode, Decode, Joiner};
 	use runtime_support::{
 		Hashable, StorageValue, StorageMap, traits::Currency,
@@ -53,6 +51,7 @@ mod tests {
 		transaction_validity::InvalidTransaction, weights::{WeightMultiplier, GetDispatchInfo},
 	};
 	use contracts::ContractAddressFor;
+	use substrate_executor::{NativeExecutor, WasmExecutionMethod};
 	use system::{EventRecord, Phase};
 	use node_runtime::{
 		Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances, BuildStorage,
@@ -117,11 +116,11 @@ mod tests {
 		Header::new(n, Default::default(), Default::default(), [69; 32].into(), Default::default())
 	}
 
-	fn executor() -> ::substrate_executor::NativeExecutor<Executor> {
-		substrate_executor::NativeExecutor::new(None)
+	fn executor() -> NativeExecutor<Executor> {
+		NativeExecutor::new(WasmExecutionMethod::Interpreted, None)
 	}
 
-	fn set_heap_pages<E: Externalities<Blake2Hasher>>(ext: &mut E, heap_pages: u64) {
+	fn set_heap_pages<E: Externalities>(ext: &mut E, heap_pages: u64) {
 		ext.place_storage(well_known_keys::HEAP_PAGES.to_vec(), Some(heap_pages.encode()));
 	}
 
@@ -227,7 +226,7 @@ mod tests {
 		).0;
 		assert!(r.is_ok());
 
-		runtime_io::with_externalities(&mut t, || {
+		t.execute_with(|| {
 			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - transfer_fee(&xt()));
 			assert_eq!(Balances::total_balance(&bob()), 69 * DOLLARS);
 		});
@@ -263,7 +262,7 @@ mod tests {
 		).0;
 		assert!(r.is_ok());
 
-		runtime_io::with_externalities(&mut t, || {
+		t.execute_with(|| {
 			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - transfer_fee(&xt()));
 			assert_eq!(Balances::total_balance(&bob()), 69 * DOLLARS);
 		});
@@ -436,7 +435,7 @@ mod tests {
 			None,
 		).0.unwrap();
 
-		runtime_io::with_externalities(&mut t, || {
+		t.execute_with(|| {
 			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - transfer_fee(&xt()));
 			assert_eq!(Balances::total_balance(&bob()), 169 * DOLLARS);
 			let events = vec![
@@ -471,7 +470,7 @@ mod tests {
 			None,
 		).0.unwrap();
 
-		runtime_io::with_externalities(&mut t, || {
+		t.execute_with(|| {
 			// NOTE: fees differ slightly in tests that execute more than one block due to the
 			// weight update. Hence, using `assert_eq_error_rate`.
 			assert_eq_error_rate!(
@@ -543,7 +542,7 @@ mod tests {
 			None,
 		).0.unwrap();
 
-		runtime_io::with_externalities(&mut t, || {
+		t.execute_with(|| {
 			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - transfer_fee(&xt()));
 			assert_eq!(Balances::total_balance(&bob()), 169 * DOLLARS);
 		});
@@ -556,7 +555,7 @@ mod tests {
 			None,
 		).0.unwrap();
 
-		runtime_io::with_externalities(&mut t, || {
+		t.execute_with(|| {
 			assert_eq_error_rate!(
 				Balances::total_balance(&alice()),
 				32 * DOLLARS - 2 * transfer_fee(&xt()),
@@ -718,7 +717,7 @@ mod tests {
 			None,
 		).0.unwrap();
 
-		runtime_io::with_externalities(&mut t, || {
+		t.execute_with(|| {
 			// Verify that the contract constructor worked well and code of TRANSFER contract is actually deployed.
 			assert_eq!(
 				&contracts::ContractInfoOf::<Runtime>::get(addr)
@@ -839,7 +838,7 @@ mod tests {
 			.expect("Extrinsic could be applied")
 			.expect("Extrinsic did not fail");
 
-		runtime_io::with_externalities(&mut t, || {
+		t.execute_with(|| {
 			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - 1 * transfer_fee(&xt()));
 			assert_eq!(Balances::total_balance(&bob()), 69 * DOLLARS);
 		});
@@ -898,7 +897,7 @@ mod tests {
 
 		let mut prev_multiplier = WeightMultiplier::default();
 
-		runtime_io::with_externalities(&mut t, || {
+		t.execute_with(|| {
 			assert_eq!(System::next_weight_multiplier(), prev_multiplier);
 		});
 
@@ -950,7 +949,7 @@ mod tests {
 		).0.unwrap();
 
 		// weight multiplier is increased for next block.
-		runtime_io::with_externalities(&mut t, || {
+		t.execute_with(|| {
 			let fm = System::next_weight_multiplier();
 			println!("After a big block: {:?} -> {:?}", prev_multiplier, fm);
 			assert!(fm > prev_multiplier);
@@ -967,7 +966,7 @@ mod tests {
 		).0.unwrap();
 
 		// weight multiplier is increased for next block.
-		runtime_io::with_externalities(&mut t, || {
+		t.execute_with(|| {
 			let fm = System::next_weight_multiplier();
 			println!("After a small block: {:?} -> {:?}", prev_multiplier, fm);
 			assert!(fm < prev_multiplier);
@@ -1021,7 +1020,7 @@ mod tests {
 		).0;
 		assert!(r.is_ok());
 
-		runtime_io::with_externalities(&mut t, || {
+		t.execute_with(|| {
 			assert_eq!(Balances::total_balance(&bob()), (10 + 69) * DOLLARS);
 			// Components deducted from alice's balances:
 			// - Weight fee

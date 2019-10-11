@@ -112,7 +112,7 @@ mod tests;
 pub use babe_primitives::{
 	AuthorityId, AuthorityPair, AuthoritySignature, Epoch, NextEpochDescriptor,
 };
-pub use epoch_changes::{EpochChanges, SharedEpochChanges};
+pub use epoch_changes::{EpochChanges, EpochChangesFor, SharedEpochChanges};
 
 macro_rules! babe_err {
 	($($i: expr),+) => {
@@ -593,9 +593,8 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA
 		let hash = header.hash();
 		let parent_hash = *header.parent_hash();
 
-		let parent_header = self.client.header(&BlockId::Hash(parent_hash))
-			.map_err(|e| format!("Could not fetch parent header {:?}: {:?}", parent_hash, e))?
-			.ok_or_else(|| format!("Parent header {:?} not found.", parent_hash))?;
+		let parent_header_metadata = self.client.header_metadata(parent_hash)
+			.map_err(|e| format!("Could not fetch parent header: {:?}", e))?;
 
 		let pre_digest = find_pre_digest::<Block::Header>(&header)?;
 		let epoch = {
@@ -603,7 +602,7 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA
 			epoch_changes.epoch_for_child_of(
 				descendent_query(&*self.client),
 				&parent_hash,
-				parent_header.number().clone(),
+				parent_header_metadata.number,
 				pre_digest.slot_number(),
 				|slot| self.config.genesis_epoch(slot),
 			)
@@ -796,6 +795,31 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 					 header has been already verified; qed");
 		let slot_number = pre_digest.slot_number();
 
+		let parent_hash = *block.header.parent_hash();
+		let parent_header = self.client.header(&BlockId::Hash(parent_hash))
+			.map_err(|e| ConsensusError::ChainLookup(e.to_string()))?
+			.ok_or_else(|| ConsensusError::ChainLookup(babe_err!(
+				"Parent ({}) of {} unavailable. Cannot import",
+				parent_hash,
+				hash
+			)))?;
+
+		let parent_slot = find_pre_digest::<Block::Header>(&parent_header)
+			.map(|d| d.slot_number())
+			.expect("parent is non-genesis; valid BABE headers contain a pre-digest; \
+					header has already been verified; qed");
+
+		// make sure that slot number is strictly increasing
+		if slot_number <= parent_slot {
+			return Err(
+				ConsensusError::ClientImport(babe_err!(
+					"Slot number must increase: parent slot: {}, this slot: {}",
+					parent_slot,
+					slot_number
+				))
+			);
+		}
+
 		let mut epoch_changes = self.epoch_changes.lock();
 
 		// check if there's any epoch change expected to happen at this slot.
@@ -804,20 +828,6 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 		//
 		// also provides the total weight of the chain, including the imported block.
 		let (epoch, first_in_epoch, parent_weight) = {
-			let parent_hash = *block.header.parent_hash();
-			let parent_header = self.client.header(&BlockId::Hash(parent_hash))
-				.map_err(|e| ConsensusError::ChainLookup(e.to_string()))?
-				.ok_or_else(|| ConsensusError::ChainLookup(babe_err!(
-					"Parent ({}) of {} unavailable. Cannot import",
-					parent_hash,
-					hash
-				)))?;
-
-			let parent_slot = find_pre_digest::<Block::Header>(&parent_header)
-				.map(|d| d.slot_number())
-				.expect("parent is non-genesis; valid BABE headers contain a pre-digest; \
-						 header has already been verified; qed");
-
 			let parent_weight = if *parent_header.number() == Zero::zero() {
 				0
 			} else {
@@ -890,24 +900,10 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 			// used by pruning may not know about the block that is being
 			// imported.
 			let prune_and_import = || {
-				let finalized_slot = {
-					let finalized_header = self.client.header(&BlockId::Hash(info.finalized_hash))
-						.map_err(|e| ConsensusError::ClientImport(format!("{:?}", e)))?
-						.expect("best finalized hash was given by client; \
-								finalized headers must exist in db; qed");
-
-					find_pre_digest::<Block::Header>(&finalized_header)
-						.expect("finalized header must be valid; \
-								valid blocks have a pre-digest; qed")
-						.slot_number()
-				};
-
-				epoch_changes.prune_finalized(
-					descendent_query(&*self.client),
-					&info.finalized_hash,
-					info.finalized_number,
-					finalized_slot,
-				).map_err(|e| ConsensusError::ClientImport(format!("{:?}", e)))?;
+				prune_finalized(
+					&self.client,
+					&mut epoch_changes,
+				)?;
 
 				epoch_changes.import(
 					descendent_query(&*self.client),
@@ -990,6 +986,40 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 	}
 }
 
+/// Gets the best finalized block and its slot, and prunes the given epoch tree.
+fn prune_finalized<B, E, Block, RA>(
+	client: &Client<B, E, Block, RA>,
+	epoch_changes: &mut EpochChangesFor<Block>,
+) -> Result<(), ConsensusError> where
+	Block: BlockT<Hash=H256>,
+	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
+	B: Backend<Block, Blake2Hasher>,
+	RA: Send + Sync,
+{
+	let info = client.info().chain;
+
+	let finalized_slot = {
+		let finalized_header = client.header(&BlockId::Hash(info.finalized_hash))
+			.map_err(|e| ConsensusError::ClientImport(format!("{:?}", e)))?
+			.expect("best finalized hash was given by client; \
+				 finalized headers must exist in db; qed");
+
+		find_pre_digest::<Block::Header>(&finalized_header)
+			.expect("finalized header must be valid; \
+					 valid blocks have a pre-digest; qed")
+			.slot_number()
+	};
+
+	epoch_changes.prune_finalized(
+		descendent_query(&*client),
+		&info.finalized_hash,
+		info.finalized_number,
+		finalized_slot,
+	).map_err(|e| ConsensusError::ClientImport(format!("{:?}", e)))?;
+
+	Ok(())
+}
+
 /// Produce a BABE block-import object to be used later on in the construction of
 /// an import-queue.
 ///
@@ -1002,7 +1032,8 @@ pub fn block_import<B, E, Block: BlockT<Hash=H256>, I, RA, PRA>(
 	api: Arc<PRA>,
 ) -> ClientResult<(BabeBlockImport<B, E, Block, I, RA, PRA>, BabeLink<Block>)> where
 	B: Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
+	RA: Send + Sync,
 {
 	let epoch_changes = aux_schema::load_epoch_changes(&*client)?;
 	let link = BabeLink {
@@ -1010,6 +1041,14 @@ pub fn block_import<B, E, Block: BlockT<Hash=H256>, I, RA, PRA>(
 		time_source: Default::default(),
 		config: config.clone(),
 	};
+
+	// NOTE: this isn't entirely necessary, but since we didn't use to prune the
+	// epoch tree it is useful as a migration, so that nodes prune long trees on
+	// startup rather than waiting until importing the next epoch change block.
+	prune_finalized(
+		&client,
+		&mut epoch_changes.lock(),
+	)?;
 
 	let import = BabeBlockImport::new(
 		client,

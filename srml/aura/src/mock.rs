@@ -26,7 +26,7 @@ use sr_primitives::{
 };
 use support::{impl_outer_origin, parameter_types};
 use runtime_io;
-use primitives::{H256, Blake2Hasher};
+use primitives::H256;
 
 impl_outer_origin!{
 	pub enum Origin for Test {}
@@ -73,7 +73,7 @@ impl Trait for Test {
 	type AuthorityId = AuthorityId;
 }
 
-pub fn new_test_ext(authorities: Vec<u64>) -> runtime_io::TestExternalities<Blake2Hasher> {
+pub fn new_test_ext(authorities: Vec<u64>) -> runtime_io::TestExternalities {
 	let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	GenesisConfig::<Test>{
 		authorities: authorities.into_iter().map(|a| UintAuthorityId(a).to_public_key()).collect(),

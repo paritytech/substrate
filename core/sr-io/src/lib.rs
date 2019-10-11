@@ -368,13 +368,10 @@ mod imp {
 }
 
 #[cfg(feature = "std")]
-pub use self::imp::{
-	StorageOverlay, ChildrenStorageOverlay, with_storage,
-	with_externalities
-};
+pub use self::imp::{StorageOverlay, ChildrenStorageOverlay, with_storage};
 #[cfg(not(feature = "std"))]
 pub use self::imp::ext::*;
 
 /// Type alias for Externalities implementation used in tests.
 #[cfg(feature = "std")]
-pub type TestExternalities<H> = self::imp::TestExternalities<H, u64>;
+pub type TestExternalities = self::imp::TestExternalities<primitives::Blake2Hasher, u64>;

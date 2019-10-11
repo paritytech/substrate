@@ -12,5 +12,5 @@ codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive
 historied-data = { path = "../../core/utils/historied-data" }
 
 [dev-dependencies]
-env_logger = "0.6.2"
+env_logger = "0.7.0"
 historied-data = { path = "../../core/utils/historied-data", features = ["test"] }

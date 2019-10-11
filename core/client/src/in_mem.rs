@@ -324,7 +324,7 @@ impl<Block: BlockT> HeaderMetadata<Block> for Blockchain<Block> {
 
 	fn header_metadata(&self, hash: Block::Hash) -> Result<CachedHeaderMetadata<Block>, Self::Error> {
 		self.header(BlockId::hash(hash))?.map(|header| CachedHeaderMetadata::from(&header))
-			.ok_or(error::Error::UnknownBlock("header not found".to_owned()))
+			.ok_or(error::Error::UnknownBlock(format!("header not found: {}", hash)))
 	}
 
 	fn insert_header_metadata(&self, _hash: Block::Hash, _metadata: CachedHeaderMetadata<Block>) {
