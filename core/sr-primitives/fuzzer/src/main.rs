@@ -77,6 +77,9 @@ fn main() {
             run_with_data_set(4, 4, false, &data, |u, v| {
                 let ue = S::try_from(u.clone()).unwrap();
                 let ve = S::try_from(v.clone()).unwrap();
+                if ve == 0 {
+                    return;
+                }
                 let (q, r) = (ue / ve, ue % ve);
                 if let Some((qq, rr)) = u.clone().div(&v, true) {
                     assert_eq!(
@@ -133,6 +136,8 @@ fn run_with_data_set<F>(
 
     let u = random_big_uint(digits_len_1, &data.digits_1)?;
     let v = random_big_uint(digits_len_2, &data.digits_2)?;
+    // this is easier than using lldb
+    println!("u: {:?}, v: {:?}", u, v);
     assertion(u, v);
     Some(())
 }
