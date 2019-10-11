@@ -122,12 +122,16 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 		&mut self.changes_trie_storage
 	}
 
-	fn get_child_keyspace(&self, storage_key: &[u8]) -> Result<Option<KeySpace>, ()> {
-		if let Some(change) = self.overlay.get_child_keyspace(storage_key) {
-			return Ok(change);
+	fn kv_storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, ()> {
+		if let Some(change) = self.overlay.kv_storage(key) {
+			return Ok(change.map(Into::into));
 		}
 
-		self.backend.get_child_keyspace(storage_key).map_err(|_|())
+		self.backend.kv_storage(key).map_err(|_|())
+	}
+
+	fn get_child_keyspace(&self, storage_key: &[u8]) -> Result<Option<KeySpace>, ()> {
+		self.kv_storage(&prefixed_keyspace_kv(storage_key))
 	}
 
 	/// Return a new backend with all pending value.
@@ -292,7 +296,8 @@ impl<H, N> Externalities<H> for TestExternalities<H, N> where
 			.chain(self.overlay.prospective.top.iter().map(|(k, v)| (k.clone(), v.value.clone())));
 
 		// transaction not used afterward, so not using kv.
-		self.backend.full_storage_root(delta, child_delta_iter, None).0
+		self.backend.full_storage_root(delta, child_delta_iter, None)
+			.expect(EXT_NOT_ALLOWED_TO_FAIL).0
 
 	}
 

@@ -364,10 +364,10 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 		}
 	}
 
-	fn get_child_keyspace(&self, storage_key: &[u8]) -> ClientResult<Option<KeySpace>> {
+	fn kv_storage(&self, key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
 		match *self {
 			GenesisOrUnavailableState::Genesis(ref state) =>
-				Ok(state.get_child_keyspace(storage_key).expect(IN_MEMORY_EXPECT_PROOF)),
+				Ok(state.kv_storage(key).expect(IN_MEMORY_EXPECT_PROOF)),
 			GenesisOrUnavailableState::Unavailable => Err(ClientError::NotAvailableOnLightClient),
 		}
 	}

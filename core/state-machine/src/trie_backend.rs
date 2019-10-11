@@ -114,8 +114,8 @@ impl<
 		self.essence.child_storage(storage_key, &keyspace, key)
 	}
 
-	fn get_child_keyspace(&self, storage_key: &[u8]) -> Result<Option<KeySpace>, Self::Error> {
-		self.kv_storage.get(&prefixed_keyspace_kv(storage_key)[..])
+	fn kv_storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		self.kv_storage.get(key)
 	}
 
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {

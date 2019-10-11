@@ -426,7 +426,8 @@ where
 
 		let kv_delta = self.overlay.committed.kv.clone().into_iter()
 			.chain(self.overlay.prospective.kv.clone().into_iter());
-		let (root, transaction) = self.backend.full_storage_root(delta, child_delta_iter, kv_delta);
+		let (root, transaction) = self.backend.full_storage_root(delta, child_delta_iter, kv_delta)
+			.expect(EXT_NOT_ALLOWED_TO_FAIL);
 		self.storage_transaction = Some((transaction, root));
 		trace!(target: "state-trace", "{:04x}: Root {}",
 			self.id,

@@ -65,7 +65,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	}
 
 	/// Get technical keyspace use for child storage key.
-	fn get_child_keyspace2(&self, storage_key: &[u8]) -> Result<Option<KeySpace>, Self::Error> {
+	fn get_child_keyspace(&self, storage_key: &[u8]) -> Result<Option<KeySpace>, Self::Error> {
 		self.kv_storage(&prefixed_keyspace_kv(&storage_key))
 	}
 
@@ -222,8 +222,8 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 		(*self).child_storage(storage_key, key)
 	}
 
-	fn get_child_keyspace(&self, storage_key: &[u8]) -> Result<Option<KeySpace>, Self::Error> {
-		(*self).get_child_keyspace(storage_key)
+	fn kv_storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		(*self).kv_storage(key)
 	}
 
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], f: F) {
@@ -546,9 +546,9 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 		Ok(self.inner.get(&Some(storage_key.to_vec())).and_then(|map| map.get(key).map(Clone::clone)))
 	}
 
-	fn get_child_keyspace(&self, storage_key: &[u8]) -> Result<Option<KeySpace>, Self::Error> {
+	fn kv_storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		Ok(
-			self.kv().get(&prefixed_keyspace_kv(storage_key)[..])
+			self.kv().get(key)
 				.map(Clone::clone)
 				.unwrap_or(None)
 		)

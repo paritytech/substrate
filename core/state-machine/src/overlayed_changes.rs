@@ -324,13 +324,6 @@ impl OverlayedChanges {
 		}
 	}
 
-	/// Get current changed keyspace value return `Some(None)` if deleted.
-	pub fn get_child_keyspace(&self, storage_key: &[u8]) -> Option<Option<KeySpace>> {
-			self.prospective.kv.get(&prefixed_keyspace_kv(&storage_key))
-				.or_else(|| self.committed.kv.get(&prefixed_keyspace_kv(&storage_key)))
-				.map(Clone::clone)
-	}
-
 	/// Consume `OverlayedChanges` and take committed set.
 	///
 	/// The child keyspace is only added if it was change in the

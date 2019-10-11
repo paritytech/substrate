@@ -196,8 +196,8 @@ impl<'a, S, H, O> Backend<H> for ProvingBackend<'a, S, H, O>
 		}.child_storage(storage_key, &keyspace, key)
 	}
 
-	fn get_child_keyspace(&self, storage_key: &[u8]) -> Result<Option<KeySpace>, Self::Error> {
-		self.backend.get_child_keyspace(storage_key)
+	fn kv_storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		self.backend.kv_storage(key)
 	}
 
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], f: F) {
@@ -396,7 +396,7 @@ mod tests {
 			::std::iter::empty(),
 			in_memory.child_storage_keys().map(|k|(k.to_vec(), Vec::new())),
 			::std::iter::empty(),
-		).0;
+		).unwrap().0;
 		(0..64).for_each(|i| assert_eq!(
 			in_memory.storage(&[i]).unwrap().unwrap(),
 			vec![i]
