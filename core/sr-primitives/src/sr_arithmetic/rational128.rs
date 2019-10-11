@@ -371,4 +371,12 @@ mod tests {
 			Ok(20),
 		);
 	}
+
+	#[test]
+	fn multiply_by_rational_fuzzed_equation() {
+		assert_eq!(
+			multiply_by_rational(154742576605164960401588224, 9223376310179529214, 549756068598),
+			Ok(2596149632101417846585204209223679)
+		);
+	}
 }

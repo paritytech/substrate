@@ -568,7 +568,6 @@ impl From<Double> for BigUint {
 #[cfg(test)]
 pub mod tests {
 	use super::*;
-	use rand::Rng;
 	#[cfg(feature = "bench")]
 	use test::Bencher;
 
