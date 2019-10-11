@@ -69,8 +69,11 @@ pub use arithmetic::{
 };
 /// Re-export 128 bit helpers.
 pub use arithmetic::helpers_128bit;
-/// Re-export big_uint stiff.
+/// Re-export big_uint stuff.
 pub use arithmetic::biguint;
+/// Re-export error rate macro.
+#[cfg(feature = "std")]
+pub use arithmetic::assert_eq_error_rate;
 
 /// An abstraction over justification for a block's validity under a consensus algorithm.
 ///
