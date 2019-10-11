@@ -59,7 +59,7 @@ pub type Hash = primitives::H256;
 pub type DigestItem = generic::DigestItem<Hash>;
 
 /// The SR25519 pub key of an session that belongs to an Aura authority of the chain.
-pub type AuraId = consensus_aura::sr25519::AuthorityId;
+pub type AuraId = aura_primitives::sr25519::AuthorityId;
 
 /// Used for the module template in `./template.rs`
 mod template;
@@ -327,7 +327,7 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl consensus_aura::AuraApi<Block, AuraId> for Runtime {
+	impl aura_primitives::AuraApi<Block, AuraId> for Runtime {
 		fn slot_duration() -> u64 {
 			Aura::slot_duration()
 		}

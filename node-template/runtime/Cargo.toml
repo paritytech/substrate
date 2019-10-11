@@ -40,7 +40,7 @@ std = [
 	"support/std",
 	"balances/std",
 	"aura/std",
-	"consensus-aura/std",
+	"aura-primitives/std",
 	"executive/std",
 	"indices/std",
 	"primitives/std",
