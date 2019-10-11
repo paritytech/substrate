@@ -1,5 +1,5 @@
 [package]
-name = "fuzzer"
+name = "sr-arithmetic-fuzzer"
 version = "0.1.0"
 authors = ["Ashley <ashley.ruglys@gmail.com>"]
 edition = "2018"
@@ -8,8 +8,6 @@ edition = "2018"
 honggfuzz = "0.5"
 sr-arithmetic = { path = ".." }
 primitive-types = "0.5.1"
-
-[workspace]
 
 [[bin]]
 name = "biguint"
