@@ -104,8 +104,8 @@ impl ModuleDeclaration {
 					return Err(syn::Error::new(
 						part.name.span(),
 						format!(
-							"`{}` module is not unique - either it is \
-							a double entry or it is included in `default` keyword",
+							"`{}` is not unique - it is either a double entry \
+							or included in the `default` keyword",
 							name
 						),
 					));
