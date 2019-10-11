@@ -18,6 +18,9 @@ fn main() {
 			};
 
 			fuzz_multiply_by_rational_32(&data);
+			fuzz_multiply_by_rational_64(&data);
+			fuzz_multiply_by_rational_96(&data);
+			fuzz_multiply_by_rational_128(&data);
 		})
 	}
 }
@@ -35,7 +38,6 @@ fn do_fuzz_multiply_by_rational(
 	bounded: bool,
 	data: &Data,
 ) -> Option<()> {
-	let mut average_diff = 0.0;
 	let upper_bound = 2u128.pow(bits);
 
 	let a = value_between(data.a, 0u128, upper_bound)?;
@@ -53,8 +55,6 @@ fn do_fuzz_multiply_by_rational(
 	let truth = mul_div(a, b, c);
 	let result = mul_fn(a, b, c);
 	let diff = truth.max(result) - truth.min(result);
-	let loss_ratio = diff as f64 / truth as f64;
-	average_diff += loss_ratio;
 
 	if do_print && diff > maximum_error {
 		println!("++ Computed with more loss than expected: {} * {} / {}", a, b, c);

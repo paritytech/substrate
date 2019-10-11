@@ -161,7 +161,6 @@ impl PartialEq for Rational128 {
 mod tests {
 	use super::*;
 	use super::helpers_128bit::*;
-	use rand::Rng;
 
 	const MAX128: u128 = u128::max_value();
 	const MAX64: u128 = u64::max_value() as u128;
@@ -371,92 +370,5 @@ mod tests {
 			multiply_by_rational(MAX128, 10, MAX128 / 2),
 			Ok(20),
 		);
-	}
-
-	fn do_fuzz_multiply_by_rational<F>(
-		iters: usize,
-		bits: u32,
-		maximum_error: u128,
-		do_print: bool,
-		bounded: bool,
-		mul_fn: F,
-	) where F: Fn(u128, u128, u128) -> u128 {
-		let mut rng = rand::thread_rng();
-		let mut average_diff = 0.0;
-		let upper_bound = 2u128.pow(bits);
-
-		for _ in 0..iters {
-			let a = rng.gen_range(0u128, upper_bound);
-			let c = rng.gen_range(0u128, upper_bound);
-			let b = rng.gen_range(
-				0u128,
-				if bounded { c } else { upper_bound }
-			);
-
-			let a: u128 = a.into();
-			let b: u128 = b.into();
-			let c: u128 = c.into();
-
-			let truth = mul_div(a, b, c);
-			let result = mul_fn(a, b, c);
-			let diff = truth.max(result) - truth.min(result);
-			let loss_ratio = diff as f64 / truth as f64;
-			average_diff += loss_ratio;
-
-			if do_print && diff > maximum_error {
-				println!("++ Computed with more loss than expected: {} * {} / {}", a, b, c);
-				println!("++ Expected {}", truth);
-				println!("+++++++ Got {}", result);
-			}
-		}
-
-		// print report
-		println!(
-			"## Fuzzed with {} numbers. Average error was {}",
-			iters,
-			average_diff / (iters as f64),
-		);
-	}
-
-	// TODO $# move into a proper fuzzer #3745
-	const FUZZ_COUNT: usize = 100_000;
-
-	#[test]
-	fn fuzz_multiply_by_rational_32() {
-		// if Err just return the truth value. We don't care about such cases. The point of this
-		// fuzzing is to make sure: if `multiply_by_rational` returns `Ok`, it must be 100% accurate
-		// returning `Err` is fine.
-		let f = |a, b, c| multiply_by_rational(a, b, c).unwrap_or(mul_div(a, b, c));
-		println!("\nInvariant: b < c");
-		do_fuzz_multiply_by_rational(FUZZ_COUNT, 32, 0, false, true, f);
-		println!("every possibility");
-		do_fuzz_multiply_by_rational(FUZZ_COUNT, 32, 0, false, false, f);
-	}
-
-	#[test]
-	fn fuzz_multiply_by_rational_64() {
-		let f = |a, b, c| multiply_by_rational(a, b, c).unwrap_or(mul_div(a, b, c));
-		println!("\nInvariant: b < c");
-		do_fuzz_multiply_by_rational(FUZZ_COUNT, 64, 0, false, true, f);
-		println!("every possibility");
-		do_fuzz_multiply_by_rational(FUZZ_COUNT, 64, 0, false, false, f);
-	}
-
-	#[test]
-	fn fuzz_multiply_by_rational_96() {
-		let f = |a, b, c| multiply_by_rational(a, b, c).unwrap_or(mul_div(a, b, c));
-		println!("\nInvariant: b < c");
-		do_fuzz_multiply_by_rational(FUZZ_COUNT, 96, 0, false, true, f);
-		println!("every possibility");
-		do_fuzz_multiply_by_rational(FUZZ_COUNT, 96, 0, false, false, f);
-	}
-
-	#[test]
-	fn fuzz_multiply_by_rational_128() {
-		let f = |a, b, c| multiply_by_rational(a, b, c).unwrap_or(mul_div(a, b, c));
-		println!("\nInvariant: b < c");
-		do_fuzz_multiply_by_rational(FUZZ_COUNT, 127, 0, false, true, f);
-		println!("every possibility");
-		do_fuzz_multiply_by_rational(FUZZ_COUNT, 127, 0, false, false, f);
 	}
 }
