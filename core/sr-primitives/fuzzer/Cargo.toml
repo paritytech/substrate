@@ -7,7 +7,6 @@ edition = "2018"
 [dependencies]
 honggfuzz = "0.5"
 sr-primitives = { path = ".." }
-arbitrary = "*"
 
 [workspace]
 
