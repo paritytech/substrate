@@ -1,5 +1,5 @@
 use honggfuzz::fuzz;
-use sr_primitives::{
+use sr_arithmetic::{
 	helpers_128bit::multiply_by_rational,
 	traits::Zero
 };

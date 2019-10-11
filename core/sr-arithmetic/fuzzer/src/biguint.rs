@@ -1,5 +1,5 @@
 use honggfuzz::fuzz;
-use sr_primitives::sr_arithmetic::biguint::{Single, BigUint};
+use sr_arithmetic::biguint::{Single, BigUint};
 use std::convert::TryFrom;
 
 mod util;

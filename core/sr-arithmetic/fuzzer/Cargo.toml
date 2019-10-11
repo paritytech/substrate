@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 honggfuzz = "0.5"
-sr-primitives = { path = ".." }
+sr-arithmetic = { path = ".." }
 primitive-types = "0.5.1"
 
 [workspace]
