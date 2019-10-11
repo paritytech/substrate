@@ -1,9 +1,9 @@
 use primitives::{Pair, Public};
 use node_template_runtime::{
-	AuraId, AccountId, AuraConfig, BalancesConfig, GenesisConfig,
+	AccountId, AuraConfig, BalancesConfig, GenesisConfig,
 	SudoConfig, IndicesConfig, SystemConfig, WASM_BINARY, 
 };
-use aura_primitives::sr25519::AuthorityPair as AuraPair;
+use aura_primitives::sr25519::{AuthorityId as AuraId, AuthorityPair as AuraPair};
 use substrate_service;
 
 // Note this is the URL for the telemetry server

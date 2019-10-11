@@ -20,6 +20,7 @@ use client::{
 	block_builder::api::{CheckInherentsResult, InherentData, self as block_builder_api},
 	runtime_api as client_api, impl_runtime_apis
 };
+use aura_primitives::sr25519::AuthorityId as AuraId;
 use version::RuntimeVersion;
 #[cfg(feature = "std")]
 use version::NativeVersion;
@@ -57,9 +58,6 @@ pub type Hash = primitives::H256;
 
 /// Digest item type.
 pub type DigestItem = generic::DigestItem<Hash>;
-
-/// The SR25519 pub key of an session that belongs to an Aura authority of the chain.
-pub type AuraId = aura_primitives::sr25519::AuthorityId;
 
 /// Used for the module template in `./template.rs`
 mod template;
