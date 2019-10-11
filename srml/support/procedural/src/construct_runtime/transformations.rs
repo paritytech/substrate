@@ -1,6 +1,6 @@
 use super::parse::{ModuleDeclaration, ModuleEntry, ModulePart, RuntimeDefinition, WhereSection};
 use proc_macro::TokenStream;
-use proc_macro2::TokenStream as TokenStream2;
+use proc_macro2::{TokenStream as TokenStream2, Span};
 use quote::quote;
 use srml_support_procedural_tools::syn_ext as ext;
 use srml_support_procedural_tools::{generate_crate_access, generate_hidden_includes};
@@ -47,12 +47,21 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 	let hidden_crate_name = "construct_runtime";
 	let scrate = generate_crate_access(&hidden_crate_name, "srml-support");
 	let scrate_decl = generate_hidden_includes(&hidden_crate_name, "srml-support");
-	let outer_event = try_tok!(decl_outer_event(
+	let outer_event = try_tok!(decl_outer_event_or_origin(
 		&name,
 		modules.iter().filter(|module| module.name.to_string() != "System"),
 		&system_module,
 		&scrate,
+		DeclOuterKind::Event,
 	));
+	let outer_origin = try_tok!(decl_outer_event_or_origin(
+		&name,
+		modules.iter().filter(|module| module.name.to_string() != "System"),
+		&system_module,
+		&scrate,
+		DeclOuterKind::Origin,
+	));
+
 	let res: TokenStream = quote!(
 		#scrate_decl
 
@@ -67,6 +76,8 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 		}
 
 		#outer_event
+
+		#outer_origin
 	)
 	.into();
 
@@ -74,16 +85,30 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 	res
 }
 
-fn decl_outer_event<'a>(
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+enum DeclOuterKind {
+	Event,
+	Origin,
+}
+
+
+
+fn decl_outer_event_or_origin<'a>(
 	runtime_name: &'a Ident,
 	module_declarations: impl Iterator<Item = &'a ModuleDeclaration>,
 	system_name: &'a Ident,
 	scrate: &'a TokenStream2,
+	kind: DeclOuterKind,
 ) -> syn::Result<TokenStream2> {
 	let mut modules_tokens = TokenStream2::new();
+	let kind_str = format!("{:?}", kind);
 	for module_declaration in module_declarations {
-		let event_ident = Ident::new("Event", module_declaration.name.span());
-		match find_module_entry(module_declaration, &event_ident) {
+		let kind_ident = Ident::new(kind_str.as_str(), module_declaration.name.span());
+		let included_in_default = match kind {
+			DeclOuterKind::Event => true,
+			DeclOuterKind::Origin => false,
+		};
+		match find_module_entry(module_declaration, &kind_ident, included_in_default) {
 			Some(module_entry) => {
 				let module = &module_declaration.module;
 				let instance = module_declaration
@@ -94,9 +119,9 @@ fn decl_outer_event<'a>(
 				let generics = &module_entry.generics;
 				if instance.is_some() && generics.params.len() == 0 {
 					let msg = format!(
-						"Instantiable module with no generic `Event` cannot \
-						 be constructed: module `{}` must have generic `Event`",
-						module_declaration.name
+						"Instantiable module with no generic `{}` cannot \
+						 be constructed: module `{}` must have generic `{}`",
+						kind_str, module_declaration.name, kind_str
 					);
 					return Err(syn::Error::new(module_declaration.name.span(), msg));
 				}
@@ -106,9 +131,14 @@ fn decl_outer_event<'a>(
 			None => {}
 		}
 	}
+	let macro_call = match kind {
+		DeclOuterKind::Event => quote!(#scrate::impl_outer_event!),
+		DeclOuterKind::Origin => quote!(#scrate::impl_outer_origin!),
+	};
+	let enum_name = Ident::new(kind_str.as_str(), Span::call_site());
 	Ok(quote!(
-		#scrate::impl_outer_event! {
-			pub enum Event for #runtime_name where system = #system_name {
+		#macro_call {
+			pub enum #enum_name for #runtime_name where system = #system_name {
 				#modules_tokens
 			}
 		}
@@ -121,12 +151,12 @@ fn find_system_module<'a>(mut module_declarations: impl Iterator<Item = &'a Modu
 		.map(|decl| &decl.module)
 }
 
-/// `Name` could be only one of module names included in `default` keyword
-fn find_module_entry<'a>(module_declaration: &'a ModuleDeclaration, name: &'a Ident) -> Option<ModulePart> {
+fn find_module_entry<'a>(module_declaration: &'a ModuleDeclaration, name: &'a Ident, include_default: bool) -> Option<ModulePart> {
 	let details = module_declaration.details.inner.as_ref()?;
 	for entry in details.entries.content.inner.iter() {
 		match &entry.inner {
 			ModuleEntry::Default(default_token) => {
+				if (!include_default) { continue };
 				let event_tokens = quote!(#name<T>);
 				return Some(syn::parse2(event_tokens).unwrap());
 			}
