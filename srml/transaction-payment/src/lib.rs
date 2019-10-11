@@ -21,9 +21,14 @@
 //!   - _weight fee_: A fee proportional to amount of Weight a transaction consumes. (TODO: explain
 //!     what weight is or link somewhere)
 //!   - _length fee_: A fee proportional to the encoded length of the transaction.
+//!   - _tip_: An optional tip. Tip increases the priority of the transaction, giving it a higher
+//!     chance to be included by the transaction queue.
 //!
-//! Additionally, this module allows all transactions to include an optional tip. Tip increases the
-//! priority of the transaction, giving it a higher chance to be included.
+//! Additionally, this module allows one to configure:
+//!   - The mapping between one unit of weight to one unit of fee via [`WeightToFee`].
+//!   - A means of updating the fee for the next block, via defining a multiplier, based on the
+//!     final state of the chain at the end of the previous block. This can be configured via
+//!     [`FeeMultiplierUpdate`]
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
