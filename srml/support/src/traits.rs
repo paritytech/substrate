@@ -717,3 +717,23 @@ pub trait InitializeMembers<AccountId> {
 impl<T> InitializeMembers<T> for () {
 	fn initialize_members(_: &[T]) {}
 }
+
+// A trait that is able to provide randomness.
+pub trait Randomness<Output> {
+	/// Get a "random" value
+	///
+	/// Being a deterministic blockchain, real randomness is difficult to come by. This gives you
+	/// something that approximates it. `subject` is a context identifier and allows you to get a
+	/// different result to other callers of this function; use it like
+	/// `random(&b"my context"[..])`.
+	fn random(subject: &[u8]) -> Output;
+
+	/// Get the basic random seed.
+	///
+	/// In general you won't want to use this, but rather `Self::random` which allows you to give a
+	/// subject for the random result and whose value will be independently low-influence random
+	/// from any other such seeds.
+	fn random_seed() -> Output {
+		Self::random(&[][..])
+	}
+}

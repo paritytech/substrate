@@ -23,8 +23,7 @@ use crate::mock::*;
 use offchain::testing::TestOffchainExt;
 use primitives::offchain::{OpaquePeerId, OffchainExt};
 use support::{dispatch, assert_noop};
-use sr_primitives::{set_and_run_with_externalities, testing::UintAuthorityId};
-
+use sr_primitives::testing::UintAuthorityId;
 
 #[test]
 fn test_unresponsiveness_slash_fraction() {
@@ -48,7 +47,7 @@ fn test_unresponsiveness_slash_fraction() {
 
 #[test]
 fn should_report_offline_validators() {
-	set_and_run_with_externalities(&mut new_test_ext(), || {
+	new_test_ext().execute_with(|| {
 		// given
 		let block = 1;
 		System::set_block_number(block);
@@ -124,7 +123,7 @@ fn heartbeat(
 
 #[test]
 fn should_mark_online_validator_when_heartbeat_is_received() {
-	set_and_run_with_externalities(&mut new_test_ext(), || {
+	new_test_ext().execute_with(|| {
 		advance_session();
 		// given
 		VALIDATORS.with(|l| *l.borrow_mut() = Some(vec![1, 2, 3, 4, 5, 6]));
@@ -159,7 +158,7 @@ fn should_mark_online_validator_when_heartbeat_is_received() {
 
 #[test]
 fn late_heartbeat_should_fail() {
-	set_and_run_with_externalities(&mut new_test_ext(), || {
+	new_test_ext().execute_with(|| {
 		advance_session();
 		// given
 		VALIDATORS.with(|l| *l.borrow_mut() = Some(vec![1, 2, 4, 4, 5, 6]));
@@ -182,7 +181,7 @@ fn should_generate_heartbeats() {
 	let (offchain, state) = TestOffchainExt::new();
 	ext.register_extension(OffchainExt::new(offchain));
 
-	set_and_run_with_externalities(&mut ext, || {
+	ext.execute_with(|| {
 		// given
 		let block = 1;
 		System::set_block_number(block);
@@ -218,7 +217,7 @@ fn should_generate_heartbeats() {
 
 #[test]
 fn should_cleanup_received_heartbeats_on_session_end() {
-	set_and_run_with_externalities(&mut new_test_ext(), || {
+	new_test_ext().execute_with(|| {
 		advance_session();
 
 		VALIDATORS.with(|l| *l.borrow_mut() = Some(vec![1, 2, 3]));

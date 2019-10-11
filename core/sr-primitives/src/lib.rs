@@ -73,9 +73,6 @@ pub use sr_arithmetic::helpers_128bit;
 /// Re-export big_uint stiff.
 pub use sr_arithmetic::biguint;
 
-#[cfg(feature = "std")]
-pub use externalities::set_and_run_with_externalities;
-
 /// An abstraction over justification for a block's validity under a consensus algorithm.
 ///
 /// Essentially a finality proof. The exact formulation will vary between consensus

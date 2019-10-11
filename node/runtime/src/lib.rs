@@ -22,7 +22,7 @@
 
 use rstd::prelude::*;
 use support::{
-	construct_runtime, parameter_types, traits::{SplitTwoWays, Currency}
+	construct_runtime, parameter_types, traits::{SplitTwoWays, Currency, Randomness}
 };
 use primitives::u32_trait::{_1, _2, _3, _4};
 use node_primitives::{
@@ -398,6 +398,7 @@ parameter_types! {
 impl contracts::Trait for Runtime {
 	type Currency = Balances;
 	type Time = Timestamp;
+	type Randomness = RandomnessCollectiveFlip;
 	type Call = Call;
 	type Event = Event;
 	type DetermineContractAddress = contracts::SimpleAddressDeterminator<Runtime>;

@@ -16,7 +16,6 @@ runtime_io = { package = "sr-io", path = "../sr-io", default-features = false }
 log = { version = "0.4.8", optional = true }
 paste = "0.1.6"
 rand = { version = "0.7.2", optional = true }
-externalities = { package = "substrate-externalities", path = "../externalities", optional = true }
 impl-trait-for-tuples = "0.1.2"
 
 [dev-dependencies]
@@ -38,5 +37,4 @@ std = [
 	"primitives/std",
 	"app-crypto/std",
 	"rand",
-	"externalities",
 ]

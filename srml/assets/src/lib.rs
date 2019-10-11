@@ -244,10 +244,7 @@ mod tests {
 	use primitives::H256;
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
-	use sr_primitives::{
-		Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header,
-		set_and_run_with_externalities,
-	};
+	use sr_primitives::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 
 	impl_outer_origin! {
 		pub enum Origin for Test {}
@@ -297,7 +294,7 @@ mod tests {
 
 	#[test]
 	fn issuing_asset_units_to_issuer_should_work() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			assert_ok!(Assets::issue(Origin::signed(1), 100));
 			assert_eq!(Assets::balance(0, 1), 100);
 		});
@@ -305,7 +302,7 @@ mod tests {
 
 	#[test]
 	fn querying_total_supply_should_work() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			assert_ok!(Assets::issue(Origin::signed(1), 100));
 			assert_eq!(Assets::balance(0, 1), 100);
 			assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 50));
@@ -322,7 +319,7 @@ mod tests {
 
 	#[test]
 	fn transferring_amount_above_available_balance_should_work() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			assert_ok!(Assets::issue(Origin::signed(1), 100));
 			assert_eq!(Assets::balance(0, 1), 100);
 			assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 50));
@@ -333,7 +330,7 @@ mod tests {
 
 	#[test]
 	fn transferring_amount_less_than_available_balance_should_not_work() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			assert_ok!(Assets::issue(Origin::signed(1), 100));
 			assert_eq!(Assets::balance(0, 1), 100);
 			assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 50));
@@ -347,7 +344,7 @@ mod tests {
 
 	#[test]
 	fn transferring_less_than_one_unit_should_not_work() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			assert_ok!(Assets::issue(Origin::signed(1), 100));
 			assert_eq!(Assets::balance(0, 1), 100);
 			assert_noop!(Assets::transfer(Origin::signed(1), 0, 2, 0), "transfer amount should be non-zero");
@@ -356,7 +353,7 @@ mod tests {
 
 	#[test]
 	fn transferring_more_units_than_total_supply_should_not_work() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			assert_ok!(Assets::issue(Origin::signed(1), 100));
 			assert_eq!(Assets::balance(0, 1), 100);
 			assert_noop!(Assets::transfer(Origin::signed(1), 0, 2, 101), "origin account balance must be greater than or equal to the transfer amount");
@@ -365,7 +362,7 @@ mod tests {
 
 	#[test]
 	fn destroying_asset_balance_with_positive_balance_should_work() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			assert_ok!(Assets::issue(Origin::signed(1), 100));
 			assert_eq!(Assets::balance(0, 1), 100);
 			assert_ok!(Assets::destroy(Origin::signed(1), 0));
@@ -374,7 +371,7 @@ mod tests {
 
 	#[test]
 	fn destroying_asset_balance_with_zero_balance_should_not_work() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			assert_ok!(Assets::issue(Origin::signed(1), 100));
 			assert_eq!(Assets::balance(0, 2), 0);
 			assert_noop!(Assets::destroy(Origin::signed(2), 0), "origin balance should be non-zero");
