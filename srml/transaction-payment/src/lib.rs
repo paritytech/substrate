@@ -22,10 +22,6 @@
 //! about the type of the transactions, ergo no assumption is also made about the existence of a
 //! fee.
 //!
-//! Hence, the primitives that this module uses to _charge an inclusion payment_ from the dispatch
-//! origin are rather simple and static (as opposed to dynamic and complicated systems like gas
-//! metering).
-//!
 //!
 //!
 //!
@@ -38,75 +34,156 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use rstd::prelude::*;
-use codec::{Codec, Encode, Decode};
+use codec::{Encode, Decode};
 use support::{
-	StorageValue, Parameter, decl_event, decl_storage, decl_module,
-	traits::{Currency, Get},
-	dispatch::Result,
+	decl_storage, decl_module,
+	traits::{Currency, Get, OnUnbalanced, ExistenceRequirement, WithdrawReason},
 };
 use sr_primitives::{
+	Fixed64,
 	transaction_validity::{
 		TransactionPriority, ValidTransaction, InvalidTransaction, TransactionValidityError,
 		TransactionValidity,
 	},
-	traits::{
-		Zero, SimpleArithmetic, StaticLookup, Member, CheckedAdd, CheckedSub, MaybeSerializeDebug,
-		Saturating, Bounded, SignedExtension, SaturatedConversion, Convert,
-	},
-	weights::Weight,
+	traits::{Zero, Saturating, SignedExtension, SaturatedConversion, Convert},
+	weights::{Weight, DispatchInfo},
 };
-use system::{IsDeadAccount, OnNewAccount, ensure_signed, ensure_root};
 
-
-// Imagine this going into support.
-/// Something that can convert a weight type into a _deductible currency_.
-pub trait WeightToFee<B> {
-	fn weight_to_fee(w: Weight) -> B;
-}
-
-impl<B: Zero> WeightToFee<B> for () {
-	fn weight_to_fee(_: Weight) -> B {
-		Zero::zero()
-	}
-}
-
+type Multiplier = Fixed64;
 pub type BalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
+pub type NegativeImbalanceOf<T> =
+	<<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
 
 pub trait Trait: system::Trait {
 	/// The currency type of the chain.
-	type Currency: Currency<Self::AccountId> + Codec;
+	type Currency: Currency<Self::AccountId>;
+
+	/// Handler for the unbalanced reduction when taking transaction fees.
+	type OnTransactionPayment: OnUnbalanced<NegativeImbalanceOf<Self>>;
 
 	/// The fee to be paid for making a transaction; the base.
-	type TransactionBaseFee: Get<Self::Currency>;
+	type TransactionBaseFee: Get<BalanceOf<Self>>;
 
 	/// The fee to be paid for making a transaction; the per-byte portion.
-	type TransactionByteFee: Get<Self::Currency>;
+	type TransactionByteFee: Get<BalanceOf<Self>>;
+
+	/// Convert a weight value into a deductible fee based on the currency type.
+	type WeightToFee: Convert<Weight, BalanceOf<Self>>;
+
+	/// Update the multiplier of the next block, based on the previous block's weight.
+	// TODO: maybe this does not need previous weight and can just read it
+	type FeeMultiplierUpdate: Convert<(Weight, Multiplier), Multiplier>;
 }
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Balances {
-
+		NextFeeMultiplier get(next_fee_multiplier): Multiplier = Multiplier::one();
 	}
 }
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		/// The fee to be paid for making a transaction; the base.
-		const TransactionBaseFee: T::Currency = T::TransactionBaseFee::get();
+		const TransactionBaseFee: BalanceOf<T> = T::TransactionBaseFee::get();
 
 		/// The fee to be paid for making a transaction; the per-byte portion.
-		const TransactionByteFee: T::Currency = T::TransactionByteFee::get();
+		const TransactionByteFee: BalanceOf<T> = T::TransactionByteFee::get();
 
-		// user dispatchables? nada.
+		fn on_finalize() {
+			let current_weight = <system::Module<T>>::all_extrinsics_weight();
+			NextFeeMultiplier::mutate(|fm| {
+				*fm = T::FeeMultiplierUpdate::convert((current_weight, *fm))
+			});
+		}
 	}
 }
 
 impl<T: Trait> Module<T> {}
 
-impl<T: Trait> WeightToFee<BalanceOf<T>> for Module<T> {
-	fn weight_to_fee(w: Weight) -> BalanceOf<T> {
-		// assume this module implements a simple multiplier
-		Zero::zero()
+/// Require the transactor pay for themselves and maybe include a tip to gain additional priority
+/// in the queue.
+#[derive(Encode, Decode, Clone, Eq, PartialEq)]
+pub struct ChargeTransactionPayment<T: Trait>(#[codec(compact)] BalanceOf<T>);
+
+impl<T: Trait> ChargeTransactionPayment<T> {
+	/// utility constructor. Used only in client/factory code.
+	pub fn from(fee: BalanceOf<T>) -> Self {
+		Self(fee)
+	}
+
+	/// Compute the final fee value for a particular transaction.
+	///
+	/// The final fee is composed of:
+	///   - _length-fee_: This is the amount paid merely to pay for size of the transaction.
+	///   - _weight-fee_: This amount is computed based on the weight of the transaction. Unlike
+	///      size-fee, this is not input dependent and reflects the _complexity_ of the execution
+	///      and the time it consumes.
+	///   - (optional) _tip_: if included in the transaction, it will be added on top. Only signed
+	///      transactions can have a tip.
+	fn compute_fee(len: usize, info: DispatchInfo, tip: BalanceOf<T>) -> BalanceOf<T> {
+		let len_fee = if info.pay_length_fee() {
+			let len = <BalanceOf<T>>::from(len as u32);
+			let base = T::TransactionBaseFee::get();
+			let per_byte = T::TransactionByteFee::get();
+			base.saturating_add(per_byte.saturating_mul(len))
+		} else {
+			Zero::zero()
+		};
+
+		let weight_fee = {
+			// cap the weight to the maximum defined in runtime, otherwise it will be the `Bounded`
+			// maximum of its data type, which is not desired.
+			let capped_weight = info.weight.min(<T as system::Trait>::MaximumBlockWeight::get());
+			let fee = T::WeightToFee::convert(capped_weight);
+			let fee_update = NextFeeMultiplier::get();
+			let adjusted_fee = fee_update.saturated_multiply_accumulate(fee);
+			adjusted_fee
+		};
+
+		len_fee.saturating_add(weight_fee).saturating_add(tip)
 	}
 }
+
+#[cfg(feature = "std")]
+impl<T: Trait> rstd::fmt::Debug for ChargeTransactionPayment<T> {
+	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+		self.0.fmt(f)
+	}
+}
+
+impl<T: Trait> SignedExtension for ChargeTransactionPayment<T> where BalanceOf<T>: Send + Sync {
+	type AccountId = T::AccountId;
+	type Call = T::Call;
+	type AdditionalSigned = ();
+	type Pre = ();
+	fn additional_signed(&self) -> rstd::result::Result<(), TransactionValidityError> { Ok(()) }
+
+	fn validate(
+		&self,
+		who: &Self::AccountId,
+		_call: &Self::Call,
+		info: DispatchInfo,
+		len: usize,
+	) -> TransactionValidity {
+		// pay any fees.
+		let fee = Self::compute_fee(len, info, self.0);
+		let imbalance = match T::Currency::withdraw(
+			who,
+			fee,
+			WithdrawReason::TransactionPayment,
+			ExistenceRequirement::KeepAlive,
+		) {
+			Ok(imbalance) => imbalance,
+			Err(_) => return InvalidTransaction::Payment.into(),
+		};
+		T::OnTransactionPayment::on_unbalanced(imbalance);
+
+		let mut r = ValidTransaction::default();
+		// NOTE: we probably want to maximize the _fee (of any type) per weight unit_ here, which
+		// will be a bit more than setting the priority to tip. For now, this is enough.
+		r.priority = fee.saturated_into::<TransactionPriority>();
+		Ok(r)
+	}
+}
+
