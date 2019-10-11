@@ -32,6 +32,8 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 		},
 		..
 	} = definition;
+
+	// Assert we have system module
 	let system_module = match find_system_module(modules.iter()) {
 		Some(sm) => sm,
 		None => {
@@ -44,6 +46,11 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 			.into()
 		}
 	};
+	// Assert each module declaration doesn't have duplicated modules
+	for module in modules.iter() {
+		let _ = try_tok!(module.module_parts());
+	}
+
 	let hidden_crate_name = "construct_runtime";
 	let scrate = generate_crate_access(&hidden_crate_name, "srml-support");
 	let scrate_decl = generate_hidden_includes(&hidden_crate_name, "srml-support");
@@ -67,7 +74,7 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 		modules.iter().filter(|module| module.name.to_string() != "System"),
 	);
 
-	let dispatch = decl_outer_dipatch(&name, modules.iter(), &scrate);
+	let dispatch = decl_outer_dispatch(&name, modules.iter(), &scrate);
 
 	let res: TokenStream = quote!(
 		#scrate_decl
@@ -96,7 +103,7 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 	res
 }
 
-fn decl_outer_dipatch<'a>(
+fn decl_outer_dispatch<'a>(
 	runtime: &'a Ident,
 	module_declarations: impl Iterator<Item = &'a ModuleDeclaration>,
 	scrate: &'a TokenStream2,
@@ -106,8 +113,9 @@ fn decl_outer_dipatch<'a>(
 			find_module_entry(
 				module_declaration,
 				&Ident::new("Call", module_declaration.name.span()),
-				true,
 			)
+			// asserted above that result is ok
+			.unwrap()
 			.is_some()
 		})
 		.map(|module_declaration| {
@@ -141,11 +149,7 @@ fn decl_outer_event_or_origin<'a>(
 	let kind_str = format!("{:?}", kind);
 	for module_declaration in module_declarations {
 		let kind_ident = Ident::new(kind_str.as_str(), module_declaration.name.span());
-		let included_in_default = match kind {
-			DeclOuterKind::Event => true,
-			DeclOuterKind::Origin => false,
-		};
-		match find_module_entry(module_declaration, &kind_ident, included_in_default) {
+		match find_module_entry(module_declaration, &kind_ident)? {
 			Some(module_entry) => {
 				let module = &module_declaration.module;
 				let instance = module_declaration
@@ -219,33 +223,8 @@ fn find_system_module<'a>(mut module_declarations: impl Iterator<Item = &'a Modu
 fn find_module_entry<'a>(
 	module_declaration: &'a ModuleDeclaration,
 	name: &'a Ident,
-	include_default: bool,
-) -> Option<ModulePart> {
-	let details = match module_declaration.details.inner.as_ref() {
-		Some(d) => d,
-		None if include_default => {
-			let event_tokens = quote!(#name<T>);
-			return Some(syn::parse2(event_tokens).unwrap());
-		}
-		_ => return None,
-	};
-	for entry in details.entries.content.inner.iter() {
-		match &entry.inner {
-			ModuleEntry::Default(default_token) => {
-				if (!include_default) {
-					continue;
-				};
-				let event_tokens = quote!(#name<T>);
-				return Some(syn::parse2(event_tokens).unwrap());
-			}
-			ModuleEntry::Part(part) => {
-				if part.name == *name {
-					return Some(part.clone());
-				}
-			}
-			_ => {}
-		}
-	}
-
-	None
+) -> syn::Result<Option<ModulePart>> {
+	let name_str = name.to_string();
+	let parts = module_declaration.module_parts()?;
+	Ok(parts.into_iter().find(|part| part.name.to_string() == name_str))
 }
