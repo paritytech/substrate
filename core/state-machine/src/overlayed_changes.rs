@@ -343,7 +343,7 @@ impl OverlayedChanges {
 		(self.committed.top.into_iter().map(|(k, v)| (k, v.value)),
 			self.committed.children.into_iter()
 				.map(|(sk, v)| (sk, v.into_iter().map(|(k, v)| (k, v.value)))),
-			self.committed.offstate.into_iter())
+			self.committed.kv.into_iter())
 	}
 
 	/// Inserts storage entry responsible for current extrinsic index.
