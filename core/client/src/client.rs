@@ -1074,9 +1074,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 				overlay.commit_prospective();
 
-				let (top, children, kv) = overlay.into_committed();
-				// TODO EMCH can we resolve keyspace here: will need to get kv intact
-				// from into_committed and make it an iter in a next step
+				let (top, children, offstate) = overlay.into_committed();
 				let children = children.map(|(sk, it)| (sk, it.collect())).collect();
 				if import_headers.post().state_root() != &storage_update.1 {
 					return Err(error::Error::InvalidStateRoot);
@@ -1085,8 +1083,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				Ok((
 					Some(storage_update.0),
 					Some(changes_update),
-					// switching kv from map to vec for compactness
-					Some((top.collect(), children, kv.into_iter().collect())),
+					Some((top.collect(), children, offstate.collect())),
 				))
 			},
 			None => Ok((None, None, None))
