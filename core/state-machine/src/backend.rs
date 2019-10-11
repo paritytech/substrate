@@ -48,6 +48,9 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	/// Get keyed storage or None if there is nothing associated.
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
 
+	/// Access a value in the key value storage.
+	fn kv_storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
+
 	/// Get keyed storage value hash or None if there is nothing associated.
 	fn storage_hash(&self, key: &[u8]) -> Result<Option<H::Out>, Self::Error> {
 		self.storage(key).map(|v| v.map(|v| H::hash(&v)))
@@ -62,7 +65,9 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	}
 
 	/// Get technical keyspace use for child storage key.
-	fn get_child_keyspace(&self, storage_key: &[u8]) -> Result<Option<KeySpace>, Self::Error>;
+	fn get_child_keyspace2(&self, storage_key: &[u8]) -> Result<Option<KeySpace>, Self::Error> {
+		self.kv_storage(&prefixed_keyspace_kv(&storage_key))
+	}
 
 	/// true if a key exists in storage.
 	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {
@@ -159,7 +164,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 		delta: I1,
 		child_deltas: I2,
 		kv_deltas: I3,
-	) -> (H::Out, Self::Transaction)
+	) -> Result<(H::Out, Self::Transaction), Self::Error>
 	where
 		I1: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		I2i: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
@@ -167,15 +172,21 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 		I3: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		<H as Hasher>::Out: Ord,
 	{
-		let mut txs: Self::Transaction = self.kv_transaction(kv_deltas);
+		let mut txs: Self::Transaction = Default::default();
 
 		let mut child_roots: Vec<_> = Default::default();
 
+		let mut counter_keyspace = None;
+		let mut new_keyspaces = Vec::new();
 		// child first
 		for (storage_key, child_delta) in child_deltas {
-			let keyspace = unimplemented!("get or new keyspace and put the \
-			new keyspace to kv, ak tx consolidate kv transaction (first line with \
-				those as kv_deltas)");
+			let keyspace = match self.get_child_keyspace(storage_key.as_slice())? {
+				Some(keyspace) => keyspace,
+				None => {
+					// new child trie keyspace needed (creation of ct).
+					self.new_child_keyspace(storage_key, &mut counter_keyspace, &mut new_keyspaces)?
+				},
+			};
 
 			let (child_root, empty, child_txs) =
 				self.child_storage_root(&storage_key[..], &keyspace, child_delta);
@@ -190,7 +201,10 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 			delta.into_iter().chain(child_roots.into_iter())
 		);
 		txs.consolidate(parent_txs);
-		(root, txs)
+		txs.consolidate(self.kv_transaction(
+			kv_deltas.into_iter().chain(new_keyspaces.into_iter())
+		));
+		Ok((root, txs))
 	}
 }
 
