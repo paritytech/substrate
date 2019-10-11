@@ -16,7 +16,7 @@ primitives = { package = "substrate-primitives", path = "../../core/primitives",
 substrate-session = { path = "../../core/session", default-features = false }
 balances = { package = "srml-balances", path = "../../srml/balances", default_features = false }
 aura = { package = "srml-aura", path = "../../srml/aura", default_features = false }
-consensus-aura = { package = "substrate-consensus-aura-primitives", path = "../../core/consensus/aura/primitives", default_features = false }
+aura-primitives = { package = "substrate-consensus-aura-primitives", path = "../../core/consensus/aura/primitives", default_features = false }
 executive = { package = "srml-executive", path = "../../srml/executive", default_features = false }
 indices = { package = "srml-indices", path = "../../srml/indices", default_features = false }
 randomness-collective-flip = { package = "srml-randomness-collective-flip", path = "../../srml/randomness-collective-flip", default_features = false }
