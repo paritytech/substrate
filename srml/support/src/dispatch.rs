@@ -23,7 +23,7 @@ pub use std::fmt;
 pub use crate::codec::{Codec, EncodeLike, Decode, Encode, Input, Output, HasCompact, EncodeAsRef};
 pub use srml_metadata::{
 	FunctionMetadata, DecodeDifferent, DecodeDifferentArray, FunctionArgumentMetadata,
-	ModuleConstantMetadata, DefaultByte, DefaultByteGetter,
+	ModuleConstantMetadata, DefaultByte, DefaultByteGetter, ModuleErrorMetadata, ErrorMetadata
 };
 pub use sr_primitives::{
 	weights::{
@@ -1297,6 +1297,14 @@ macro_rules! decl_module {
 			$mod_type<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?>
 			{ $( $other_where_bounds )* }
 			$( $constants )*
+		}
+
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::ModuleErrorMetadata
+			for $mod_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
+		{
+			fn metadata() -> &'static [$crate::dispatch::ErrorMetadata] {
+				<$error_type as $crate::dispatch::ModuleErrorMetadata>::metadata()
+			}
 		}
 	}
 }

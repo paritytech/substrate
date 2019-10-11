@@ -48,7 +48,7 @@ use sr_primitives::{
 	Justification, generic::BlockId,
 	traits::{NumberFor, Block as BlockT, Header as HeaderT, One},
 };
-use primitives::{H256, Blake2Hasher, offchain::NeverOffchainExt};
+use primitives::{H256, Blake2Hasher};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 use fg_primitives::AuthorityId;
 
@@ -78,7 +78,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> AuthoritySetForFinalityProver<Block> fo
 			"GrandpaApi_grandpa_authorities",
 			&[],
 			ExecutionStrategy::NativeElseWasm,
-			NeverOffchainExt::new(),
+			None,
 		).and_then(|call_result| Decode::decode(&mut &call_result[..])
 			.map_err(|err| ClientError::CallResultDecode(
 				"failed to decode GRANDPA authorities set proof".into(), err

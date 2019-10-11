@@ -23,27 +23,21 @@
 use rstd::prelude::*;
 use support::{decl_module, decl_event, Parameter};
 use system::ensure_root;
-use sr_primitives::{
-	traits::{Dispatchable, DispatchResult}, weights::SimpleDispatchInfo
-};
+use sr_primitives::{traits::Dispatchable, weights::SimpleDispatchInfo, DispatchError};
 
 /// Configuration trait.
 pub trait Trait: system::Trait {
 	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+	type Event: From<Event> + Into<<Self as system::Trait>::Event>;
 
 	/// The overarching call type.
 	type Call: Parameter + Dispatchable<Origin=Self::Origin>;
 }
 
-pub type DispatchResultOf<T> = DispatchResult<<<T as Trait>::Call as Dispatchable>::Error>;
-
 decl_event!(
 	/// Events type.
-	pub enum Event<T> where
-		DispatchResult = DispatchResultOf<T>,
-	{
-		BatchExecuted(Vec<DispatchResult>),
+	pub enum Event {
+		BatchExecuted(Vec<Result<(), DispatchError>>),
 	}
 );
 
@@ -58,8 +52,9 @@ decl_module! {
 			ensure_root(origin)?;
 			let results = calls.into_iter()
 				.map(|call| call.dispatch(system::RawOrigin::Root.into()))
+				.map(|res| res.map_err(Into::into))
 				.collect::<Vec<_>>();
-			Self::deposit_event(RawEvent::BatchExecuted(results));
+			Self::deposit_event(Event::BatchExecuted(results));
 		}
 	}
 }
@@ -69,11 +64,8 @@ mod tests {
 	use super::*;
 
 	use support::{assert_ok, assert_noop, impl_outer_origin, parameter_types, impl_outer_dispatch};
-	use runtime_io::with_externalities;
-	use primitives::{H256, Blake2Hasher};
-	use sr_primitives::{
-		Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header
-	};
+	use primitives::H256;
+	use sr_primitives::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 
 	impl_outer_origin! {
 		pub enum Origin for Test {}
@@ -144,7 +136,7 @@ mod tests {
 	type Balances = balances::Module<Test>;
 	type Utility = Module<Test>;
 
-	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+	fn new_test_ext() -> runtime_io::TestExternalities {
 		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		balances::GenesisConfig::<Test> {
 			balances: vec![(1, 10), (2, 0)],
@@ -155,7 +147,7 @@ mod tests {
 
 	#[test]
 	fn batch_works() {
-		with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			assert_eq!(Balances::free_balance(1), 10);
 			assert_eq!(Balances::free_balance(2), 0);
 			assert_noop!(Utility::batch(Origin::signed(1), vec![

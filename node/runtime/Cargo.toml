@@ -40,6 +40,7 @@ im-online = { package = "srml-im-online", path = "../../srml/im-online", default
 indices = { package = "srml-indices", path = "../../srml/indices", default-features = false }
 membership = { package = "srml-membership", path = "../../srml/membership", default-features = false }
 offences = { package = "srml-offences", path = "../../srml/offences", default-features = false }
+randomness-collective-flip = { package = "srml-randomness-collective-flip", path = "../../srml/randomness-collective-flip", default-features = false }
 session = { package = "srml-session", path = "../../srml/session", default-features = false, features = ["historical"] }
 staking = { package = "srml-staking", path = "../../srml/staking", default-features = false }
 srml-staking-reward-curve = { path = "../../srml/staking/reward-curve"}
@@ -78,6 +79,7 @@ std = [
 	"offchain-primitives/std",
 	"offences/std",
 	"primitives/std",
+	"randomness-collective-flip/std",
 	"rstd/std",
 	"rustc-hex",
 	"safe-mix/std",

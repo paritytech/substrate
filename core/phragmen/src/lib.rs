@@ -34,8 +34,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use rstd::{prelude::*, collections::btree_map::BTreeMap};
-use sr_primitives::{helpers_128bit::multiply_by_rational_best_effort, Perbill, Rational128};
-use sr_primitives::traits::{Zero, Convert, Member, SimpleArithmetic, Saturating};
+use sr_primitives::{helpers_128bit::multiply_by_rational, Perbill, Rational128};
+use sr_primitives::traits::{Zero, Convert, Member, SimpleArithmetic, Saturating, Bounded};
 
 mod mock;
 mod tests;
@@ -253,11 +253,11 @@ pub fn elect<AccountId, Balance, FS, C>(
 			for e in &n.edges {
 				let c = &mut candidates[e.candidate_index];
 				if !c.elected && !c.approval_stake.is_zero() {
-					let temp_n = multiply_by_rational_best_effort(
+					let temp_n = multiply_by_rational(
 						n.load.n(),
 						n.budget,
 						c.approval_stake,
-					);
+					).unwrap_or(Bounded::max_value());
 					let temp_d = n.load.d();
 					let temp = Rational128::from(temp_n, temp_d);
 					c.score = c.score.lazy_saturating_add(temp);
@@ -303,11 +303,11 @@ pub fn elect<AccountId, Balance, FS, C>(
 							if e.load.d() == n.load.d() {
 								// return e.load / n.load.
 								let desired_scale: u128 = Perbill::accuracy().into();
-								multiply_by_rational_best_effort(
+								multiply_by_rational(
 									desired_scale,
 									e.load.n(),
 									n.load.n(),
-								)
+								).unwrap_or(Bounded::max_value())
 							} else {
 								// defensive only. Both edge and nominator loads are built from
 								// scores, hence MUST have the same denominator.

@@ -122,9 +122,9 @@ use sr_primitives::{
 use support::dispatch::{Result, Dispatchable};
 use support::{
 	Parameter, decl_module, decl_event, decl_storage, storage::child,
-	parameter_types,
+	parameter_types, IsSubType
 };
-use support::{traits::{OnFreeBalanceZero, OnUnbalanced, Currency, Get, Time}, IsSubType};
+use support::traits::{OnFreeBalanceZero, OnUnbalanced, Currency, Get, Time, Randomness};
 use system::{ensure_signed, RawOrigin, ensure_root};
 use primitives::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX;
 
@@ -335,6 +335,7 @@ parameter_types! {
 pub trait Trait: system::Trait {
 	type Currency: Currency<Self::AccountId>;
 	type Time: Time;
+	type Randomness: Randomness<Self::Hash>;
 
 	/// The outer call dispatch type.
 	type Call: Parameter + Dispatchable<Origin=<Self as system::Trait>::Origin> + IsSubType<Module<Self>, Self>;

@@ -25,6 +25,7 @@ hex-literal = "0.2.1"
 balances = { package = "srml-balances", path = "../balances" }
 hex = "0.3.2"
 timestamp = { package = "srml-timestamp", path = "../timestamp" }
+randomness-collective-flip = { package = "srml-randomness-collective-flip", path = "../randomness-collective-flip" }
 
 [features]
 default = ["std"]

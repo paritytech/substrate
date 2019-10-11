@@ -293,7 +293,7 @@ mod tests {
 	use crate::backend::{InMemory, InMemoryTransaction};
 	use crate::trie_backend::tests::test_trie;
 	use super::*;
-	use primitives::{Blake2Hasher, child_storage_key::ChildStorageKey};
+	use primitives::{Blake2Hasher, storage::ChildStorageKey};
 
 	type KvBackend = InMemoryKvBackend;
 
