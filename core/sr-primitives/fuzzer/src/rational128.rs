@@ -25,9 +25,9 @@ fn main() {
 
 			do_fuzz_multiply_by_rational(96, true, &data);
 			do_fuzz_multiply_by_rational(96, false, &data);
-			
-			do_fuzz_multiply_by_rational(128, true, &data);
-			do_fuzz_multiply_by_rational(128, false, &data);
+
+			do_fuzz_multiply_by_rational(127, true, &data);
+			do_fuzz_multiply_by_rational(127, false, &data);
 		})
 	}
 }
@@ -54,7 +54,10 @@ fn do_fuzz_multiply_by_rational(
 	)?;
 
 	let truth = mul_div(a, b, c);
-	let result = mul_fn(a, b, c);
+	// if Err just use the truth value. We don't care about such cases. The point of this
+	// fuzzing is to make sure: if `multiply_by_rational` returns `Ok`, it must be 100% accurate
+	// returning `Err` is fine.
+	let result = multiply_by_rational(a, b, c).unwrap_or(truth);
 
 	if truth != result {
 		println!("++ Computed with more loss than expected: {} * {} / {}", a, b, c);
@@ -82,11 +85,4 @@ fn mul_div(a: u128, b: u128, c: u128) -> u128 {
 	} else {
 		r.as_u128()
 	}
-}
-
-// if Err just return the truth value. We don't care about such cases. The point of this
-// fuzzing is to make sure: if `multiply_by_rational` returns `Ok`, it must be 100% accurate
-// returning `Err` is fine.
-fn mul_fn(a: u128, b: u128, c: u128) -> u128 {
-	multiply_by_rational(a, b, c).unwrap_or(mul_div(a, b, c))
 }
