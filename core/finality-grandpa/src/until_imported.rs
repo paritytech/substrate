@@ -514,10 +514,16 @@ mod tests {
 		inner: Arc<Mutex<HashMap<Hash, u64>>>,
 	}
 
-	impl BlockStatus<Block> for TestBlockStatus {
+	impl BlockStatusT<Block> for TestBlockStatus {
 		fn block_number(&self, hash: Hash) -> Result<Option<u64>, Error> {
 			Ok(self.inner.lock().get(&hash).map(|x| x.clone()))
 		}
+	}
+
+	struct TestBlockSyncRequester {}
+
+	impl BlockSyncRequesterT<Block> for TestBlockSyncRequester {
+		fn set_sync_fork_request(&self, peers: Vec<network::PeerId>, hash: Hash, number: NumberFor<Block>){}
 	}
 
 	fn make_header(number: u64) -> Header {
@@ -564,12 +570,13 @@ mod tests {
 
 		let until_imported = UntilGlobalMessageBlocksImported::new(
 			import_notifications,
+			TestBlockSyncRequester{},
 			block_status,
 			global_rx.map_err(|_| panic!("should never error")),
 			"global",
 		);
 
-		global_tx.unbounded_send(msg).unwrap();
+		global_tx.unbounded_send((None, msg)).unwrap();
 
 		let work = until_imported.into_future();
 
@@ -590,12 +597,13 @@ mod tests {
 
 		let until_imported = UntilGlobalMessageBlocksImported::new(
 			import_notifications,
+			TestBlockSyncRequester{},
 			block_status,
 			global_rx.map_err(|_| panic!("should never error")),
 			"global",
 		);
 
-		global_tx.unbounded_send(msg).unwrap();
+		global_tx.unbounded_send((None, msg)).unwrap();
 
 		// NOTE: needs to be cloned otherwise it is moved to the stream and
 		// dropped too early.

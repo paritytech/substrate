@@ -25,6 +25,7 @@ use tokio::runtime::current_thread;
 use std::sync::Arc;
 use keyring::Ed25519Keyring;
 use codec::Encode;
+use sr_primitives::traits::NumberFor;
 
 use crate::environment::SharedVoterSetState;
 use super::gossip::{self, GossipValidator};
@@ -91,6 +92,8 @@ impl super::Network<Block> for TestNetwork {
 	fn announce(&self, block: Hash, _associated_data: Vec<u8>) {
 		let _ = self.sender.unbounded_send(Event::Announce(block));
 	}
+
+	fn set_sync_fork_request(&self, peers: Vec<network::PeerId>, hash: Hash, number: NumberFor<Block>) {}
 }
 
 impl network_gossip::ValidatorContext<Block> for TestNetwork {
@@ -296,7 +299,7 @@ fn good_commit_leads_to_relay() {
 			// when the commit comes in, we'll tell the callback it was good.
 			let handle_commit = commits_in.into_future()
 				.map(|(item, _)| {
-					match item.unwrap() {
+					match item.unwrap().1 {
 						grandpa::voter::CommunicationIn::Commit(_, _, mut callback) => {
 							callback.run(grandpa::voter::CommitProcessingOutcome::good());
 						},
@@ -411,7 +414,7 @@ fn bad_commit_leads_to_report() {
 			// when the commit comes in, we'll tell the callback it was good.
 			let handle_commit = commits_in.into_future()
 				.map(|(item, _)| {
-					match item.unwrap() {
+					match item.unwrap().1 {
 						grandpa::voter::CommunicationIn::Commit(_, _, mut callback) => {
 							callback.run(grandpa::voter::CommitProcessingOutcome::bad());
 						},
