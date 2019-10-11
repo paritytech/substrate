@@ -108,11 +108,11 @@ impl<
 	}
 
 	fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-
-//		let keyspace = self.child_keyspace(storage_key);
-		// Then change essence functions to use keyspace as input.
-
 		self.essence.child_storage(storage_key, key)
+	}
+
+	fn kv_storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		self.kv_storage.get(key)
 	}
 
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {

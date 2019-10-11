@@ -362,6 +362,14 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 		}
 	}
 
+	fn kv_storage(&self, key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
+		match *self {
+			GenesisOrUnavailableState::Genesis(ref state) =>
+				Ok(state.kv_storage(key).expect(IN_MEMORY_EXPECT_PROOF)),
+			GenesisOrUnavailableState::Unavailable => Err(ClientError::NotAvailableOnLightClient),
+		}
+	}
+
 	fn for_keys_with_prefix<A: FnMut(&[u8])>(&self, prefix: &[u8], action: A) {
 		match *self {
 			GenesisOrUnavailableState::Genesis(ref state) => state.for_keys_with_prefix(prefix, action),

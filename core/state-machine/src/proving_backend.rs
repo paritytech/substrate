@@ -187,6 +187,10 @@ impl<'a, S, H, O> Backend<H> for ProvingBackend<'a, S, H, O>
 		}.child_storage(storage_key, key)
 	}
 
+	fn kv_storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		self.backend.kv_storage(key)
+	}
+
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], f: F) {
 		self.backend.for_keys_in_child_storage(storage_key, f)
 	}

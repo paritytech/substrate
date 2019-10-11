@@ -47,6 +47,9 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	/// Get keyed storage or None if there is nothing associated.
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
 
+	/// Access a value in the key value storage.
+	fn kv_storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
+
 	/// Get keyed storage value hash or None if there is nothing associated.
 	fn storage_hash(&self, key: &[u8]) -> Result<Option<H::Out>, Self::Error> {
 		self.storage(key).map(|v| v.map(|v| H::hash(&v)))
@@ -192,6 +195,10 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 
 	fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		(*self).child_storage(storage_key, key)
+	}
+
+	fn kv_storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		(*self).kv_storage(key)
 	}
 
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], f: F) {
@@ -499,6 +506,14 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 
 	fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		Ok(self.inner.get(&Some(storage_key.to_vec())).and_then(|map| map.get(key).map(Clone::clone)))
+	}
+
+	fn kv_storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		Ok(
+			self.kv().get(key)
+				.map(Clone::clone)
+				.unwrap_or(None)
+		)
 	}
 
 	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {

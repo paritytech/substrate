@@ -149,6 +149,10 @@ impl<B: BlockT> StateBackend<Blake2Hasher> for RefTrackingState<B> {
 		self.state.child_storage(storage_key, key)
 	}
 
+	fn kv_storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		self.state.kv_storage(key)
+	}
+
 	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {
 		self.state.exists_storage(key)
 	}

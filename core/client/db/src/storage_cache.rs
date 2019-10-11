@@ -531,6 +531,10 @@ impl<H: Hasher, S: StateBackend<H>, B: BlockT> StateBackend<H> for CachingState<
 		Ok(value)
 	}
 
+	fn kv_storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		self.state.kv_storage(key)
+	}
+
 	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {
 		Ok(self.storage(key)?.is_some())
 	}
