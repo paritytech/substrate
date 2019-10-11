@@ -20,7 +20,13 @@
 //!
 //! This is used for votes and commit messages currently.
 
-use super::{BlockStatus as BlockStatusT, BlockSyncRequester as BlockSyncRequesterT, CommunicationIn, Error, SignedMessage};
+use super::{
+	BlockStatus as BlockStatusT,
+	BlockSyncRequester as BlockSyncRequesterT,
+	CommunicationIn,
+	Error,
+	SignedMessage,
+};
 
 use log::{debug, warn};
 use client::{BlockImportNotification, ImportNotifications};
@@ -79,8 +85,11 @@ pub(crate) struct UntilImported<Block: BlockT, BlockStatus, BlockSyncRequester, 
 	identifier: &'static str,
 }
 
-impl<Block: BlockT, BlockStatus, BlockSyncRequester, I: Stream, M> UntilImported<Block, BlockStatus, BlockSyncRequester, I, M>
-	where BlockStatus: BlockStatusT<Block>, M: BlockUntilImported<Block>
+impl<Block, BlockStatus, BlockSyncRequester, I, M> UntilImported<Block, BlockStatus, BlockSyncRequester, I, M> where
+	Block: BlockT,
+	BlockStatus: BlockStatusT<Block>,
+	M: BlockUntilImported<Block>,
+	I: Stream,
 {
 	/// Create a new `UntilImported` wrapper.
 	pub(crate) fn new(
@@ -115,9 +124,10 @@ impl<Block: BlockT, BlockStatus, BlockSyncRequester, I: Stream, M> UntilImported
 	}
 }
 
-impl<Block: BlockT, BlockStatus, BlockSyncRequester, I, M> Stream for UntilImported<Block, BlockStatus, BlockSyncRequester, I, M> where
-	BlockStatus: BlockStatusT<Block>,
-	BlockSyncRequester: BlockSyncRequesterT<Block>,
+impl<Block, BStatus, BSyncRequester, I, M> Stream for UntilImported<Block, BStatus, BSyncRequester, I, M> where
+	Block: BlockT,
+	BStatus: BlockStatusT<Block>,
+	BSyncRequester: BlockSyncRequesterT<Block>,
 	I: Stream<Item=(Option<network::PeerId>, M::Blocked),Error=Error>,
 	M: BlockUntilImported<Block>,
 {

@@ -616,9 +616,21 @@ fn incoming_global<B: BlockT, N: Network<B>>(
 		.filter_map(move |(notification, msg)| {
 			match msg {
 				GossipMessage::Commit(msg) =>
-					process_commit(msg, notification.clone(), &mut service, &gossip_validator, &*voters).map(|c| (notification.sender, c)),
+					process_commit(
+						msg,
+						notification.clone(),
+						&mut service,
+						&gossip_validator,
+						&*voters
+					).map(|c| (notification.sender, c)),
 				GossipMessage::CatchUp(msg) =>
-					process_catch_up(msg, notification.clone(), &mut service, &gossip_validator, &*voters).map(|cu| (notification.sender, cu)),
+					process_catch_up(
+						msg,
+						notification.clone(),
+						&mut service,
+						&gossip_validator,
+						&*voters
+					).map(|cu| (notification.sender, cu)),
 				_ => {
 					debug!(target: "afg", "Skipping unknown message type");
 					return None;
