@@ -1253,25 +1253,20 @@ impl<T: Trait<I>, I: Instance + Clone + Eq> SignedExtension for TakeFees<T, I> {
 	) -> TransactionValidity {
 		// pay any fees.
 		let fee = Self::compute_fee(len, info, self.0);
-		let imbalance = match <Module<T, I>>::withdraw(
-			who,
-			fee,
-			WithdrawReason::TransactionPayment,
-			ExistenceRequirement::KeepAlive,
-		) {
-			Ok(imbalance) => imbalance,
-			Err(msg) => {
-				// TODO: relying on string error is quite bad here.
-				// if we the transaction is operational, and the error is due to existential
-				// deposit, ignore it.
-				if info.class == DispatchClass::Operational && msg == "payment would kill account" {
-					NegativeImbalance::zero()
-				} else {
-					return InvalidTransaction::Payment.into()
-				}
-			},
-		};
-		T::TransactionPayment::on_unbalanced(imbalance);
+		// Only check for withdraw possibility if there is something to pay. Note that this allows
+		// accounts below ED to also dispatch a transaction, given that it incurs zero fee.
+		if !fee.is_zero() {
+			let imbalance = match <Module<T, I>>::withdraw(
+				who,
+				fee,
+				WithdrawReason::TransactionPayment,
+				ExistenceRequirement::KeepAlive,
+			) {
+				Ok(imbalance) => imbalance,
+				Err(_) => return InvalidTransaction::Payment.into()
+			};
+			T::TransactionPayment::on_unbalanced(imbalance);
+		}
 
 		let mut r = ValidTransaction::default();
 		// NOTE: we probably want to maximize the _fee (of any type) per weight unit_ here, which
