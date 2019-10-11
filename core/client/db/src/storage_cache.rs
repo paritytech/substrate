@@ -568,12 +568,17 @@ impl<H: Hasher, S: StateBackend<H>, B: BlockT> StateBackend<H> for CachingState<
 		self.state.storage_root(delta)
 	}
 
-	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (Vec<u8>, bool, Self::Transaction)
+	fn child_storage_root<I>(
+		&self,
+		storage_key: &[u8],
+		keyspace: &KeySpace,
+		delta: I,
+	) -> (Vec<u8>, bool, Self::Transaction)
 		where
 			I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 			H::Out: Ord
 	{
-		self.state.child_storage_root(storage_key, delta)
+		self.state.child_storage_root(storage_key, keyspace, delta)
 	}
 
 	fn kv_transaction<I>(&self, delta: I) -> Self::Transaction

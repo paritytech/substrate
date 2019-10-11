@@ -297,7 +297,7 @@ where
 			::std::iter::empty(),
 			child_delta,
 			::std::iter::empty(),
-		);
+		).map_err(|e| ClientError::from(format!("full storage root: {}", e)))?;
 		self.storage_update = Some(storage_update);
 
 		Ok(storage_root)
@@ -418,13 +418,13 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 		}
 	}
 
-	fn child_storage_root<I>(&self, key: &[u8], delta: I) -> (Vec<u8>, bool, Self::Transaction)
+	fn child_storage_root<I>(&self, key: &[u8], keyspace: &KeySpace, delta: I) -> (Vec<u8>, bool, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
 		match *self {
 			GenesisOrUnavailableState::Genesis(ref state) => {
-				let (root, is_equal, _) = state.child_storage_root(key, delta);
+				let (root, is_equal, _) = state.child_storage_root(key, keyspace, delta);
 				(root, is_equal, ())
 			},
 			GenesisOrUnavailableState::Unavailable => (H::Out::default().as_ref().to_vec(), true, ()),

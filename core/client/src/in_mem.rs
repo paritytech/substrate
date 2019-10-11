@@ -513,7 +513,7 @@ where
 			top.into_iter().map(|(k, v)| (k, Some(v))),
 			child_delta,
 			None,
-		);
+		).map_err(|e| error::Error::from(format!("full storage root: {}", e)))?;
 
 		self.new_state = Some(InMemory::from(transaction));
 		Ok(root)

@@ -429,7 +429,7 @@ fn code_using_trie() -> u64 {
 
 	let mut mdb = PrefixedMemoryDB::default();
 	let mut root = rstd::default::Default::default();
-	let _ = {
+	{
 		let v = &pairs;
 		let mut mdb = KeySpacedDBMut::new(&mut mdb, None);
 		let mut t = TrieDBMut::<Blake2Hasher>::new(&mut mdb, &mut root);
@@ -440,8 +440,7 @@ fn code_using_trie() -> u64 {
 				return 101;
 			}
 		}
-		t
-	};
+	}
 
 	let mdb = KeySpacedDB::new(&mdb, None);
 	if let Ok(trie) = TrieDB::<Blake2Hasher>::new(&mdb, &root) {

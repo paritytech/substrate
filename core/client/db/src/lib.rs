@@ -185,11 +185,11 @@ impl<B: BlockT> StateBackend<Blake2Hasher> for RefTrackingState<B> {
 		self.state.storage_root(delta)
 	}
 
-	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (Vec<u8>, bool, Self::Transaction)
+	fn child_storage_root<I>(&self, storage_key: &[u8], keyspace: &KeySpace, delta: I) -> (Vec<u8>, bool, Self::Transaction)
 		where
 			I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 	{
-		self.state.child_storage_root(storage_key, delta)
+		self.state.child_storage_root(storage_key, keyspace, delta)
 	}
 
 	fn kv_transaction<I>(&self, delta: I) -> Self::Transaction
@@ -561,7 +561,7 @@ where Block: BlockT<Hash=H256>,
 			top.into_iter().map(|(k, v)| (k, Some(v))),
 			child_delta,
 			None,
-		);
+		)?;
 
 		self.db_updates = transaction;
 		Ok(root)
@@ -1930,7 +1930,7 @@ mod tests {
 				storage.iter().cloned(),
 				child,
 				storage.iter().cloned(),
-			);
+			).unwrap();
 			op.update_db_storage(overlay).unwrap();
 			header.state_root = root.into();
 
