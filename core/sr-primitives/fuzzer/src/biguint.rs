@@ -1,5 +1,4 @@
 use honggfuzz::fuzz;
-
 use sr_primitives::sr_arithmetic::biguint::{Single, BigUint};
 use std::convert::TryFrom;
 
@@ -34,7 +33,7 @@ fn main() {
             });
 
             // basic_random_sub_works
-            //type S = u128;
+            // type S = u128;
             run_with_data_set(4, 4, false, &data, |u, v| {
                 let expected = S::try_from(u.clone()).unwrap()
                     .checked_sub(S::try_from(v.clone()).unwrap());
@@ -52,7 +51,7 @@ fn main() {
             });
 
             // basic_random_mul_works
-            //type S = u128;
+            // type S = u128;
             run_with_data_set(2, 2, false, &data, |u, v| {
                 let expected = S::try_from(u.clone()).unwrap() * S::try_from(v.clone()).unwrap();
                 let t = u.clone().mul(&v);
@@ -63,7 +62,7 @@ fn main() {
             });
 
             // basic_random_div_works
-            //type S = u128;
+            // type S = u128;
             run_with_data_set(4, 4, false, &data, |u, v| {
                 let ue = S::try_from(u.clone()).unwrap();
                 let ve = S::try_from(v.clone()).unwrap();
@@ -87,7 +86,7 @@ fn main() {
                         "[single] {:?} / {:?} ===> {:?} != {:?}", u, v, qq, q,
                     );
                 } else {
-                    if v.msb() == 0 || v.msb() == 0 || u.len() <= v.len() {} // nada
+                    if v.msb() == 0 || u.msb() == 0 || u.len() <= v.len() {} // nada
                     else { panic!("div returned none for an unexpected reason"); }
                 }
             });
@@ -115,13 +114,13 @@ fn run_with_data_set<F>(
     let digits_len_1 = if exact {
         limbs_ub_1
     } else {
-        check_between(data.random_limb_len_1, 1, limbs_ub_1)?
+        value_between(data.random_limb_len_1, 1, limbs_ub_1)?
     };
 
     let digits_len_2 = if exact {
         limbs_ub_2
     } else {
-        check_between(data.random_limb_len_2, 1, limbs_ub_2)?
+        value_between(data.random_limb_len_2, 1, limbs_ub_2)?
     };
 
     let u = random_big_uint(digits_len_1, &data.digits_1)?;
@@ -132,7 +131,7 @@ fn run_with_data_set<F>(
     Some(())
 }
 
-fn check_between(value: usize, min: usize, max: usize) -> Option<usize> {
+fn value_between(value: usize, min: usize, max: usize) -> Option<usize> {
     if value >= min && value < max {
         Some(value)
     } else {
@@ -140,9 +139,9 @@ fn check_between(value: usize, min: usize, max: usize) -> Option<usize> {
     }
 }
 
-pub fn random_big_uint(size: usize, digits: &[Single]) -> Option<BigUint> {
+fn random_big_uint(size: usize, digits: &[Single]) -> Option<BigUint> {
     if digits.len() != size {
-        return None;
+        None
     } else {
         Some(BigUint::from_limbs(digits))
     }
