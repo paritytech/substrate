@@ -67,6 +67,8 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 		modules.iter().filter(|module| module.name.to_string() != "System"),
 	);
 
+	let dispatch = decl_outer_dipatch(&name, modules.iter(), &scrate);
+
 	let res: TokenStream = quote!(
 		#scrate_decl
 
@@ -85,11 +87,41 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 		#outer_origin
 
 		#all_modules
+
+		#dispatch
 	)
 	.into();
 
 	println!("-----\n{}\n------", res.to_string());
 	res
+}
+
+fn decl_outer_dipatch<'a>(
+	runtime: &'a Ident,
+	module_declarations: impl Iterator<Item = &'a ModuleDeclaration>,
+	scrate: &'a TokenStream2,
+) -> TokenStream2 {
+	let modules_tokens = module_declarations
+		.filter(|module_declaration| {
+			find_module_entry(
+				module_declaration,
+				&Ident::new("Call", module_declaration.name.span()),
+				true,
+			)
+			.is_some()
+		})
+		.map(|module_declaration| {
+			let module = &module_declaration.module;
+			let name = &module_declaration.name;
+			quote!(#module::#name)
+		});
+	quote!(
+		#scrate::impl_outer_dispatch! {
+			pub enum Call for #runtime where origin: Origin {
+				#(#modules_tokens,)*
+			}
+		}
+	)
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -189,7 +221,14 @@ fn find_module_entry<'a>(
 	name: &'a Ident,
 	include_default: bool,
 ) -> Option<ModulePart> {
-	let details = module_declaration.details.inner.as_ref()?;
+	let details = match module_declaration.details.inner.as_ref() {
+		Some(d) => d,
+		None if include_default => {
+			let event_tokens = quote!(#name<T>);
+			return Some(syn::parse2(event_tokens).unwrap());
+		},
+		_ => return None,
+	};
 	for entry in details.entries.content.inner.iter() {
 		match &entry.inner {
 			ModuleEntry::Default(default_token) => {
