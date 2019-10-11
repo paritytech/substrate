@@ -572,35 +572,6 @@ pub mod tests {
 	#[cfg(feature = "bench")]
 	use test::Bencher;
 
-	// TODO move into a proper fuzzer #3745
-	const FUZZ_COUNT: usize = 100_000;
-
-	pub fn random_big_uint(size: usize) -> BigUint {
-		let mut rng = rand::thread_rng();
-		let digits = (0..size).map(|_| rng.gen_range(0, Single::max_value())).collect();
-		BigUint { digits }
-	}
-
-	fn run_with_data_set<F>(
-		count: usize,
-		limbs_ub_1: usize,
-		limbs_ub_2: usize,
-		exact: bool,
-		assertion: F,
-	) where
-		F: Fn(BigUint, BigUint) -> ()
-	{
-		let mut rng = rand::thread_rng();
-		for _ in 0..count {
-			let digits_len_1 = if exact { limbs_ub_1 } else { rng.gen_range(1, limbs_ub_1) };
-			let digits_len_2 = if exact { limbs_ub_2 } else { rng.gen_range(1, limbs_ub_2) };
-
-			let u = random_big_uint(digits_len_1);
-			let v = random_big_uint(digits_len_2);
-			assertion(u, v);
-		}
-	}
-
 	fn with_limbs(n: usize) -> BigUint {
 		BigUint { digits: vec![1; n] }
 	}
@@ -684,17 +655,6 @@ pub mod tests {
 	}
 
 	#[test]
-	fn basic_random_ord_eq_works() {
-		type S = u128;
-		run_with_data_set(FUZZ_COUNT, 4, 4, false, |u, v| {
-			let ue = S::try_from(u.clone()).unwrap();
-			let ve = S::try_from(v.clone()).unwrap();
-			assert_eq!(u.cmp(&v), ue.cmp(&ve));
-			assert_eq!(u.eq(&v), ue.eq(&ve));
-		})
-	}
-
-	#[test]
 	fn can_try_build_numbers_from_types() {
 		use rstd::convert::TryFrom;
 		assert_eq!(u64::try_from(with_limbs(1)).unwrap(), 1);
@@ -722,19 +682,6 @@ pub mod tests {
 	}
 
 	#[test]
-	fn basic_random_add_works() {
-		type S = u128;
-		run_with_data_set(FUZZ_COUNT, 3, 3, false, |u, v| {
-			let expected = S::try_from(u.clone()).unwrap() + S::try_from(v.clone()).unwrap();
-			let t = u.clone().add(&v);
-			assert_eq!(
-				S::try_from(t.clone()).unwrap(), expected,
-				"{:?} + {:?} ===> {:?} != {:?}", u, v, t, expected,
-			);
-		})
-	}
-
-	#[test]
 	fn sub_negative_works() {
 		assert_eq!(
 			BigUint::from(10 as Single).sub(&BigUint::from(5 as Single)).unwrap(),
@@ -748,39 +695,6 @@ pub mod tests {
 			BigUint::from(10 as Single).sub(&BigUint::from(13 as Single)).unwrap_err(),
 			BigUint::from((B - 3) as Single),
 		);
-	}
-
-	#[test]
-	fn basic_random_sub_works() {
-		type S = u128;
-		run_with_data_set(FUZZ_COUNT, 4, 4, false, |u, v| {
-			let expected = S::try_from(u.clone()).unwrap()
-				.checked_sub(S::try_from(v.clone()).unwrap());
-			let t = u.clone().sub(&v);
-			if expected.is_none() {
-				assert!(t.is_err())
-			} else {
-				let t = t.unwrap();
-				let expected = expected.unwrap();
-				assert_eq!(
-					S::try_from(t.clone()).unwrap(), expected,
-					"{:?} - {:?} ===> {:?} != {:?}", u, v, t, expected,
-				);
-			}
-		})
-	}
-
-	#[test]
-	fn basic_random_mul_works() {
-		type S = u128;
-		run_with_data_set(FUZZ_COUNT, 2, 2, false, |u, v| {
-			let expected = S::try_from(u.clone()).unwrap() * S::try_from(v.clone()).unwrap();
-			let t = u.clone().mul(&v);
-			assert_eq!(
-				S::try_from(t.clone()).unwrap(), expected,
-				"{:?} * {:?} ===> {:?} != {:?}", u, v, t, expected,
-			);
-		})
 	}
 
 	#[test]
@@ -827,35 +741,6 @@ pub mod tests {
 		assert_eq!(b.clone().div_unit(2), BigUint::from(((B + 100) / 2) as Single));
 		assert_eq!(b.clone().div_unit(7), BigUint::from(((B + 100) / 7) as Single));
 
-	}
-
-	#[test]
-	fn basic_random_div_works() {
-		type S = u128;
-		run_with_data_set(FUZZ_COUNT, 4, 4, false, |u, v| {
-			let ue = S::try_from(u.clone()).unwrap();
-			let ve = S::try_from(v.clone()).unwrap();
-			let (q, r) = (ue / ve, ue % ve);
-			if let Some((qq, rr)) = u.clone().div(&v, true) {
-				assert_eq!(
-					S::try_from(qq.clone()).unwrap(), q,
-					"{:?} / {:?} ===> {:?} != {:?}", u, v, qq, q,
-				);
-				assert_eq!(
-					S::try_from(rr.clone()).unwrap(), r,
-					"{:?} % {:?} ===> {:?} != {:?}", u, v, rr, r,
-				);
-			} else if v.len() == 1 {
-				let qq = u.clone().div_unit(ve as Single);
-				assert_eq!(
-					S::try_from(qq.clone()).unwrap(), q,
-					"[single] {:?} / {:?} ===> {:?} != {:?}", u, v, qq, q,
-				);
-			} else {
-				if v.msb() == 0 || v.msb() == 0 || u.len() <= v.len() {} // nada
-				else { panic!("div returned none for an unexpected reason"); }
-			}
-		})
 	}
 
 	#[cfg(feature = "bench")]
