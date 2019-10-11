@@ -16,6 +16,8 @@
 
 //! Minimal fixed point arithmetic primitives and types for runtime.
 
+#![cfg_attr(not(feature = "std"), no_std)]
+
 pub mod biguint;
 pub mod helpers_128bit;
 pub mod traits;
