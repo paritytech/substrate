@@ -4,17 +4,7 @@ use sr_primitives::sr_arithmetic::biguint::{Single, BigUint};
 use std::convert::TryFrom;
 
 fn main() {
-    // Here you can parse `std::env::args and
-    // setup / initialize your project
-
-    // You have full control over the loop but
-    // you're supposed to call `fuzz` ad vitam aeternam
     loop {
-        // The fuzz macro gives an arbitrary object (see `arbitrary crate`)
-        // to a closure-like block of code.
-        // For performance reasons, it is recommended that you use the native type
-        // `&[u8]` when possible.
-        // Here, this slice will contain a "random" quantity of "random" data.
         fuzz!(|data: (usize, usize, Vec<Single>, Vec<Single>)| {
             let data = Data {
                 random_limb_len_1: data.0,
