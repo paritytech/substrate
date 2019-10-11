@@ -60,6 +60,7 @@ fn do_fuzz_multiply_by_rational(
 		println!("++ Computed with more loss than expected: {} * {} / {}", a, b, c);
 		println!("++ Expected {}", truth);
 		println!("+++++++ Got {}", result);
+		panic!();
 	}
 
 	Some(())
