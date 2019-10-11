@@ -61,6 +61,11 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 		&scrate,
 		DeclOuterKind::Origin,
 	));
+	let all_modules = decl_all_modules(
+		&name,
+		&system_module,
+		modules.iter().filter(|module| module.name.to_string() != "System"),
+	);
 
 	let res: TokenStream = quote!(
 		#scrate_decl
@@ -78,6 +83,8 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 		#outer_event
 
 		#outer_origin
+
+		#all_modules
 	)
 	.into();
 
@@ -141,6 +148,34 @@ fn decl_outer_event_or_origin<'a>(
 			}
 		}
 	))
+}
+
+fn decl_all_modules<'a>(
+	runtime: &'a Ident,
+	system_module: &'a Ident,
+	module_declarations: impl Iterator<Item = &'a ModuleDeclaration>,
+) -> TokenStream2 {
+	let mut types = TokenStream2::new();
+	let mut names = Vec::new();
+	for module_declaration in module_declarations {
+		let type_name = &module_declaration.name;
+		let module = &module_declaration.module;
+		let mut generics = vec![quote!(runtime)];
+		generics.extend(module_declaration.instance.inner.iter().map(|mi| {
+			let name = &mi.name;
+			quote!(#module::#name)
+		}));
+		let type_decl = quote!(
+			pub type #type_name = #module::Module <#(#generics),*>;
+		);
+		types.extend(type_decl);
+		names.push(&module_declaration.name);
+	}
+	quote!(
+		pub type System = system::Module<#runtime>;
+		#types
+		type AllModules = ( #(#names),* );
+	)
 }
 
 fn find_system_module<'a>(mut module_declarations: impl Iterator<Item = &'a ModuleDeclaration>) -> Option<&'a Ident> {
