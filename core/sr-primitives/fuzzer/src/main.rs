@@ -23,12 +23,80 @@ fn main() {
                 digits_2: data.3
             };
 
+            // basic_random_ord_eq_works
             type S = u128;
             run_with_data_set(4, 4, false, &data, |u, v| {
                 let ue = S::try_from(u.clone()).unwrap();
                 let ve = S::try_from(v.clone()).unwrap();
                 assert_eq!(u.cmp(&v), ue.cmp(&ve));
                 assert_eq!(u.eq(&v), ue.eq(&ve));
+            });
+
+            // basic_random_add_works
+            //type S = u128;
+            run_with_data_set(3, 3, false, &data, |u, v| {
+                let expected = S::try_from(u.clone()).unwrap() + S::try_from(v.clone()).unwrap();
+                let t = u.clone().add(&v);
+                assert_eq!(
+                    S::try_from(t.clone()).unwrap(), expected,
+                    "{:?} + {:?} ===> {:?} != {:?}", u, v, t, expected,
+                );
+            });
+
+            // basic_random_sub_works
+            //type S = u128;
+            run_with_data_set(4, 4, false, &data, |u, v| {
+                let expected = S::try_from(u.clone()).unwrap()
+                    .checked_sub(S::try_from(v.clone()).unwrap());
+                let t = u.clone().sub(&v);
+                if expected.is_none() {
+                    assert!(t.is_err())
+                } else {
+                    let t = t.unwrap();
+                    let expected = expected.unwrap();
+                    assert_eq!(
+                        S::try_from(t.clone()).unwrap(), expected,
+                        "{:?} - {:?} ===> {:?} != {:?}", u, v, t, expected,
+                    );
+                }
+            });
+
+            // basic_random_mul_works
+            //type S = u128;
+            run_with_data_set(2, 2, false, &data, |u, v| {
+                let expected = S::try_from(u.clone()).unwrap() * S::try_from(v.clone()).unwrap();
+                let t = u.clone().mul(&v);
+                assert_eq!(
+                    S::try_from(t.clone()).unwrap(), expected,
+                    "{:?} * {:?} ===> {:?} != {:?}", u, v, t, expected,
+                );
+            });
+
+            // basic_random_div_works
+            //type S = u128;
+            run_with_data_set(4, 4, false, &data, |u, v| {
+                let ue = S::try_from(u.clone()).unwrap();
+                let ve = S::try_from(v.clone()).unwrap();
+                let (q, r) = (ue / ve, ue % ve);
+                if let Some((qq, rr)) = u.clone().div(&v, true) {
+                    assert_eq!(
+                        S::try_from(qq.clone()).unwrap(), q,
+                        "{:?} / {:?} ===> {:?} != {:?}", u, v, qq, q,
+                    );
+                    assert_eq!(
+                        S::try_from(rr.clone()).unwrap(), r,
+                        "{:?} % {:?} ===> {:?} != {:?}", u, v, rr, r,
+                    );
+                } else if v.len() == 1 {
+                    let qq = u.clone().div_unit(ve as Single);
+                    assert_eq!(
+                        S::try_from(qq.clone()).unwrap(), q,
+                        "[single] {:?} / {:?} ===> {:?} != {:?}", u, v, qq, q,
+                    );
+                } else {
+                    if v.msb() == 0 || v.msb() == 0 || u.len() <= v.len() {} // nada
+                    else { panic!("div returned none for an unexpected reason"); }
+                }
             });
         });
     }
