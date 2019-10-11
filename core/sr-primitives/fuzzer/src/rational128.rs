@@ -33,8 +33,6 @@ struct Data {
 
 fn do_fuzz_multiply_by_rational(
 	bits: u32,
-	maximum_error: u128,
-	do_print: bool,
 	bounded: bool,
 	data: &Data,
 ) -> Option<()> {
@@ -56,7 +54,7 @@ fn do_fuzz_multiply_by_rational(
 	let result = mul_fn(a, b, c);
 	let diff = truth.max(result) - truth.min(result);
 
-	if do_print && diff > maximum_error {
+	if diff > 0 {
 		println!("++ Computed with more loss than expected: {} * {} / {}", a, b, c);
 		println!("++ Expected {}", truth);
 		println!("+++++++ Got {}", result);
@@ -93,28 +91,28 @@ fn mul_fn(a: u128, b: u128, c: u128) -> u128 {
 
 fn fuzz_multiply_by_rational_32(data: &Data) {
 	println!("\nInvariant: b < c");
-	do_fuzz_multiply_by_rational(32, 0, false, true, data);
+	do_fuzz_multiply_by_rational(32, true, data);
 	println!("every possibility");
-	do_fuzz_multiply_by_rational(32, 0, false, false, data);
+	do_fuzz_multiply_by_rational(32, false, data);
 }
 
 fn fuzz_multiply_by_rational_64(data: &Data) {
 	println!("\nInvariant: b < c");
-	do_fuzz_multiply_by_rational( 64, 0, false, true, data);
+	do_fuzz_multiply_by_rational( 64, true, data);
 	println!("every possibility");
-	do_fuzz_multiply_by_rational( 64, 0, false, false, data);
+	do_fuzz_multiply_by_rational( 64, false, data);
 }
 
 fn fuzz_multiply_by_rational_96(data: &Data) {
 	println!("\nInvariant: b < c");
-	do_fuzz_multiply_by_rational( 96, 0, false, true, data);
+	do_fuzz_multiply_by_rational( 96, true, data);
 	println!("every possibility");
-	do_fuzz_multiply_by_rational( 96, 0, false, false, data);
+	do_fuzz_multiply_by_rational( 96, false, data);
 }
 
 fn fuzz_multiply_by_rational_128(data: &Data) {
 	println!("\nInvariant: b < c");
-	do_fuzz_multiply_by_rational( 127, 0, false, true, data);
+	do_fuzz_multiply_by_rational( 127, true, data);
 	println!("every possibility");
-	do_fuzz_multiply_by_rational( 127, 0, false, false, data);
+	do_fuzz_multiply_by_rational( 127, false, data);
 }
