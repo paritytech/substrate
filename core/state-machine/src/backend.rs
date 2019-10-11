@@ -26,7 +26,10 @@ use trie::{
 	TrieMut, MemoryDB, child_trie_root, default_child_trie_root, TrieConfiguration,
 	trie_types::{TrieDBMut, Layout},
 };
-use primitives::child_trie::{KeySpace, NO_CHILD_KEYSPACE, prefixed_keyspace_kv};
+use primitives::child_trie::{
+	KeySpace, NO_CHILD_KEYSPACE, prefixed_keyspace_kv, KEYSPACE_COUNTER,
+	reverse_keyspace, produce_keyspace,
+};
 
 /// A state backend is used to read state data and can have changes committed
 /// to it.
@@ -183,10 +186,34 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 			let keyspace = match self.get_child_keyspace(storage_key.as_slice())? {
 				Some(keyspace) => keyspace,
 				None => {
-					// new child trie keyspace needed (creation of ct).
-					self.new_child_keyspace(storage_key, &mut counter_keyspace, &mut new_keyspaces)?
+					if counter_keyspace.is_none() {
+						let counter_keyspace_enc = self.kv_storage(KEYSPACE_COUNTER)?
+							.unwrap_or(produce_keyspace(0));
+						let keyspace = reverse_keyspace(counter_keyspace_enc.as_slice())
+							.expect("Keyspaces are never added manually so encoding is valid");
+						counter_keyspace = Some(keyspace);
+					}
+					// increment counter
+					counter_keyspace.map(|c| {
+						c + 1
+					});
+					let enc_counter_keyspace = produce_keyspace(
+						*counter_keyspace.as_ref().expect("lazy init at start of this block")
+					);
+					new_keyspaces.push((
+						prefixed_keyspace_kv(storage_key.as_slice()),
+						Some(enc_counter_keyspace.clone()),
+					));
+					enc_counter_keyspace
 				},
 			};
+
+			counter_keyspace.map(|c| {
+				new_keyspaces.push((
+					KEYSPACE_COUNTER.to_vec(),
+					Some(produce_keyspace(c)),
+				));
+			});
 
 			let (child_root, empty, child_txs) =
 				self.child_storage_root(&storage_key[..], &keyspace, child_delta);
@@ -206,6 +233,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 		));
 		Ok((root, txs))
 	}
+
 }
 
 impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {

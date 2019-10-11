@@ -29,7 +29,7 @@ use primitives::{
 	offchain, storage::well_known_keys::is_child_storage_key,
 	traits::{BareCryptoStorePtr, Externalities}, child_storage_key::ChildStorageKey,
 	hexdisplay::HexDisplay,
-	child_trie::{KeySpace, NO_CHILD_KEYSPACE},
+	child_trie::{KeySpace, NO_CHILD_KEYSPACE, prefixed_keyspace_kv},
 };
 use trie::{MemoryDB, default_child_trie_root};
 use trie::trie_types::Layout;
@@ -178,7 +178,13 @@ where
 	}
 
 	fn get_child_keyspace(&self, storage_key: &[u8]) -> Option<KeySpace> {
-		unimplemented!("query overlay then backend (overlay can have delete it)");
+		match self.overlay.kv_storage(prefixed_keyspace_kv(storage_key).as_slice()) {
+			Some(Some(keyspace)) => return Some(keyspace.to_vec()),
+			Some(None) => return None,
+			None => (),
+		}
+		self.backend.get_child_keyspace(storage_key)
+			.expect(EXT_NOT_ALLOWED_TO_FAIL)
 	}
 }
 
