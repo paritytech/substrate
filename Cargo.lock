@@ -400,10 +400,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "chain-spec-builder"
 version = "2.0.0"
 dependencies = [
- "clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "node-cli 2.0.0",
+ "structopt 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-primitives 2.0.0",
- "substrate-service 2.0.0",
 ]
 
 [[package]]

@@ -5,7 +5,6 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-clap = { version = "2.33.0", features = ["yaml"] }
 node-cli = { path = "../../node/cli" }
 primitives = { package = "substrate-primitives",  path = "../../core/primitives" }
-substrate-service = { path = "../../core/service" }
+structopt = "0.3.3"
