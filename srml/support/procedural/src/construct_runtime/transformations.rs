@@ -82,6 +82,7 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 	let metadata = decl_runtime_metadata(&name, modules.iter(), &scrate);
 	let outer_config = decl_outer_config(&name, modules.iter(), &scrate);
 	let inherent = decl_outer_inherent(&name, &block, &unchecked_extrinsic, modules.iter(), &scrate);
+	let validate_unsigned = decl_validate_unsigned(&name, modules.iter(), &scrate);
 
 	let res: TokenStream = quote!(
 		#scrate_decl
@@ -109,11 +110,35 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 		#outer_config
 
 		#inherent
+
+		#validate_unsigned
 	)
 	.into();
 
 	println!("-----\n{}\n------", res.to_string());
 	res
+}
+
+fn decl_validate_unsigned<'a>(
+	runtime: &'a Ident,
+	module_declarations: impl Iterator<Item = &'a ModuleDeclaration>,
+	scrate: &'a TokenStream2,
+) -> TokenStream2 {
+	let modules_tokens = module_declarations
+		.filter(|module_declaration| {
+			module_declaration
+				.resolved_module_parts()
+				.into_iter()
+				.any(|part| part.name.to_string() == "ValidateUnsigned")
+		})
+		.map(|module_declaration| &module_declaration.name);
+	quote!(
+		#scrate::impl_outer_validate_unsigned!(
+			impl ValidateUnsigned for #runtime {
+				#( #modules_tokens )*
+			}
+		);
+	)
 }
 
 fn decl_outer_inherent<'a>(
