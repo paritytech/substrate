@@ -93,7 +93,7 @@ impl ModuleDeclaration {
 	/// or empty declaration
 	pub fn module_parts(&self) -> Vec<ModulePart> {
 		if let Some(ref details) = self.details.inner {
-			let uniq: BTreeMap<_, _>  = details
+			let uniq: BTreeMap<_, _> = details
 				.entries
 				.content
 				.inner
