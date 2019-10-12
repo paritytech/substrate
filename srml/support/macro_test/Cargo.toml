@@ -49,3 +49,46 @@ support = { package = "srml-support", path = "../../../srml/support", default-fe
 system = { package = "srml-system", path = "../../../srml/system", default-features = false }
 timestamp = { package = "srml-timestamp", path = "../../../srml/timestamp", default-features = false }
 treasury = { package = "srml-treasury", path = "../../../srml/treasury", default-features = false }
+
+[features]
+default = ["std"]
+std = [
+	"authority-discovery-primitives/std",
+	"authority-discovery/std",
+	"authorship/std",
+	"babe-primitives/std",
+	"babe/std",
+	"balances/std",
+	"client/std",
+	"codec/std",
+	"collective/std",
+	"contracts/std",
+	"democracy/std",
+	"elections/std",
+	"executive/std",
+	"finality-tracker/std",
+	"grandpa/std",
+	"im-online/std",
+	"indices/std",
+	"membership/std",
+	"node-primitives/std",
+	"offchain-primitives/std",
+	"offences/std",
+	"primitives/std",
+	"rstd/std",
+	"rustc-hex",
+	"safe-mix/std",
+	"serde",
+	"session/std",
+	"sr-primitives/std",
+	"sr-staking-primitives/std",
+	"staking/std",
+	"substrate-keyring",
+	"substrate-session/std",
+	"sudo/std",
+	"support/std",
+	"system/std",
+	"timestamp/std",
+	"treasury/std",
+	"version/std",
+]

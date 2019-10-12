@@ -79,8 +79,8 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 	);
 
 	let dispatch = decl_outer_dispatch(&name, modules.iter(), &scrate);
-
 	let metadata = decl_runtime_metadata(&name, modules.iter(), &scrate);
+	let outer_config = decl_outer_config(&name, modules.iter(), &scrate);
 
 	let res: TokenStream = quote!(
 		#scrate_decl
@@ -104,11 +104,56 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 		#dispatch
 
 		#metadata
+
+		#outer_config
 	)
 	.into();
 
 	println!("-----\n{}\n------", res.to_string());
 	res
+}
+
+fn decl_outer_config<'a>(
+	runtime: &'a Ident,
+	module_declarations: impl Iterator<Item = &'a ModuleDeclaration>,
+	scrate: &'a TokenStream2,
+) -> TokenStream2 {
+	let modules_tokens = module_declarations
+		.filter_map(|module_declaration| {
+			let generics: Vec<_> = module_declaration
+				.resolved_module_parts()
+				.into_iter()
+				.filter(|part| part.name.to_string() == "Config")
+				.map(|part| &part.generics)
+				.collect();
+			if generics.len() == 0 {
+				None
+			} else {
+				let transformed_generics = generics[0].params.iter().map(|param| quote!(<#param>));
+				Some((module_declaration, transformed_generics))
+			}
+		})
+		.map(|(module_declaration, generics)| {
+			let module = &module_declaration.module;
+			let name = Ident::new(&format!("{}Config", module_declaration.name), module_declaration.name.span());
+			let instance = module_declaration
+				.instance
+				.inner
+				.as_ref()
+				.map(|inst| &inst.name)
+				.into_iter();
+			quote!(
+				#name =>
+					#module #(#instance)* #(#generics)*,
+			)
+		});
+	quote!(
+		#scrate::sr_primitives::impl_outer_config! {
+			pub struct GenesisConfig for #runtime {
+				#(#modules_tokens)*
+			}
+		}
+	)
 }
 
 fn decl_runtime_metadata<'a>(
@@ -135,17 +180,22 @@ fn decl_runtime_metadata<'a>(
 		.map(|(module_declaration, filtered_names)| {
 			let module = &module_declaration.module;
 			let name = &module_declaration.name;
-			let instance = module_declaration.instance.inner.as_ref().map(|inst| {
-				let name = &inst.name;
-				quote!(<#name>)
-			}).into_iter();
+			let instance = module_declaration
+				.instance
+				.inner
+				.as_ref()
+				.map(|inst| {
+					let name = &inst.name;
+					quote!(<#name>)
+				})
+				.into_iter();
 			quote!(#module::Module #(#instance)* as #name with #(#filtered_names)* ,)
 		});
 	quote!(
-		#scrate::impl_runtime_metadata!(
+		#scrate::impl_runtime_metadata!{
 			for #runtime with modules
 				#(#modules_tokens)*
-		);
+		}
 	)
 }
 
