@@ -81,6 +81,7 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 	let dispatch = decl_outer_dispatch(&name, modules.iter(), &scrate);
 	let metadata = decl_runtime_metadata(&name, modules.iter(), &scrate);
 	let outer_config = decl_outer_config(&name, modules.iter(), &scrate);
+	let inherent = decl_outer_inherent(&name, &block, &unchecked_extrinsic, modules.iter(), &scrate);
 
 	let res: TokenStream = quote!(
 		#scrate_decl
@@ -106,11 +107,46 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 		#metadata
 
 		#outer_config
+
+		#inherent
 	)
 	.into();
 
 	println!("-----\n{}\n------", res.to_string());
 	res
+}
+
+fn decl_outer_inherent<'a>(
+	runtime: &'a Ident,
+	block: &'a syn::TypePath,
+	unchecked_extrinsic: &'a syn::TypePath,
+	module_declarations: impl Iterator<Item = &'a ModuleDeclaration>,
+	scrate: &'a TokenStream2,
+) -> TokenStream2 {
+	let modules_tokens = module_declarations.filter_map(|module_declaration| {
+		let maybe_config_part = module_declaration
+			.resolved_module_parts()
+			.into_iter()
+			.filter(|part| part.name.to_string() == "Inherent")
+			.next();
+		maybe_config_part.map(|config_part| {
+			let arg = config_part
+				.args
+				.inner
+				.as_ref()
+				.and_then(|parens| parens.content.inner.iter().next())
+				.unwrap_or(&module_declaration.name);
+			let name = &module_declaration.name;
+			quote!(#name : #arg,)
+		})
+	});
+	quote!(
+		#scrate::impl_outer_inherent!(
+			impl Inherents where Block = #block, UncheckedExtrinsic = #unchecked_extrinsic {
+				#(#modules_tokens)*
+			}
+		);
+	)
 }
 
 fn decl_outer_config<'a>(
@@ -135,7 +171,10 @@ fn decl_outer_config<'a>(
 		})
 		.map(|(module_declaration, generics)| {
 			let module = &module_declaration.module;
-			let name = Ident::new(&format!("{}Config", module_declaration.name), module_declaration.name.span());
+			let name = Ident::new(
+				&format!("{}Config", module_declaration.name),
+				module_declaration.name.span(),
+			);
 			let instance = module_declaration
 				.instance
 				.inner
