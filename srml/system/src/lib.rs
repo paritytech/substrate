@@ -48,7 +48,7 @@
 //!
 //!   - [`CheckWeight`]: Checks the weight and length of the block and ensure that it does not
 //!     exceed the limits.
-//!   - ['CheckNonce']: Checks the nonce of the transaction. Contains a single payload of type
+//!   - [`CheckNonce`]: Checks the nonce of the transaction. Contains a single payload of type
 //!     `T::Index`.
 //!   - [`CheckEra`]: Checks the era of the transaction. Contains a single payload of type `Era`.
 //!   - [`CheckGenesis`]: Checks the provided genesis hash of the transaction. Must be a part of the
@@ -65,7 +65,7 @@
 //!
 //! Import the System module and derive your module's configuration trait from the system trait.
 //!
-//! ### Example - Get random seed and extrinsic count for the current block
+//! ### Example - Get extrinsic count and parent hash for the current block
 //!
 //! ```
 //! use support::{decl_module, dispatch::Result};
@@ -77,8 +77,8 @@
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 //! 		pub fn system_module_example(origin) -> Result {
 //! 			let _sender = ensure_signed(origin)?;
-//! 			let _random_seed = <system::Module<T>>::random_seed();
 //! 			let _extrinsic_count = <system::Module<T>>::extrinsic_count();
+//! 			let _parent_hash = <system::Module<T>>::parent_hash();
 //! 			Ok(())
 //! 		}
 //! 	}
@@ -114,14 +114,13 @@ use support::{
 	decl_module, decl_event, decl_storage, decl_error, storage, Parameter,
 	traits::{Contains, Get},
 };
-use safe_mix::TripletMix;
 use codec::{Encode, Decode};
 
 #[cfg(any(feature = "std", test))]
 use runtime_io::TestExternalities;
 
 #[cfg(any(feature = "std", test))]
-use primitives::{ChangesTrieConfiguration, Blake2Hasher};
+use primitives::ChangesTrieConfiguration;
 
 pub mod offchain;
 
@@ -389,9 +388,6 @@ decl_storage! {
 		pub BlockHash get(block_hash) build(|_| vec![(T::BlockNumber::zero(), hash69())]): map T::BlockNumber => T::Hash;
 		/// Extrinsics data for the current block (maps an extrinsic's index to its data).
 		ExtrinsicData get(extrinsic_data): map u32 => Vec<u8>;
-		/// Series of block headers from the last 81 blocks that acts as random seed material. This is arranged as a
-		/// ring buffer with the `i8` prefix being the index into the `Vec` of the oldest hash.
-		RandomMaterial get(random_material): (i8, Vec<T::Hash>);
 		/// The current block number being processed. Set by `execute_block`.
 		Number get(block_number) build(|_| 1.into()): T::BlockNumber;
 		/// Hash of the previous block.
@@ -641,12 +637,6 @@ impl<T: Trait> Module<T> {
 		<ParentHash<T>>::put(parent_hash);
 		<BlockHash<T>>::insert(*number - One::one(), parent_hash);
 		<ExtrinsicsRoot<T>>::put(txs_root);
-		<RandomMaterial<T>>::mutate(|&mut(ref mut index, ref mut values)| if values.len() < 81 {
-			values.push(parent_hash.clone())
-		} else {
-			values[*index as usize] = parent_hash.clone();
-			*index = (*index + 1) % 81;
-		});
 		<Events<T>>::kill();
 		EventCount::kill();
 		<EventTopics<T>>::remove_prefix(&());
@@ -705,7 +695,7 @@ impl<T: Trait> Module<T> {
 
 	/// Get the basic externalities for this module, useful for tests.
 	#[cfg(any(feature = "std", test))]
-	pub fn externalities() -> TestExternalities<Blake2Hasher> {
+	pub fn externalities() -> TestExternalities {
 		TestExternalities::new((map![
 			<BlockHash<T>>::hashed_key_for(T::BlockNumber::zero()) => [69u8; 32].encode(),
 			<Number<T>>::hashed_key().to_vec() => T::BlockNumber::one().encode(),
@@ -735,69 +725,6 @@ impl<T: Trait> Module<T> {
 
 	/// Return the chain's current runtime version.
 	pub fn runtime_version() -> RuntimeVersion { T::Version::get() }
-
-	/// Get the basic random seed.
-	///
-	/// In general you won't want to use this, but rather `Self::random` which
-	/// allows you to give a subject for the random result and whose value will
-	/// be independently low-influence random from any other such seeds.
-	pub fn random_seed() -> T::Hash {
-		Self::random(&[][..])
-	}
-
-	/// Get a low-influence "random" value.
-	///
-	/// Being a deterministic block chain, real randomness is difficult to come
-	/// by. This gives you something that approximates it. `subject` is a
-	/// context identifier and allows you to get a different result to other
-	/// callers of this function; use it like `random(&b"my context"[..])`.
-	///
-	/// This is initially implemented through a low-influence "triplet mix"
-	/// convolution of previous block hash values. In the future it will be
-	/// generated from a secure verifiable random function (VRF).
-	///
-	/// ### Security Notes
-	///
-	/// This randomness uses a low-influence function, drawing upon the block
-	/// hashes from the previous 81 blocks. Its result for any given subject
-	/// will be known in advance by the block producer of this block (and,
-	/// indeed, anyone who knows the block's `parent_hash`). However, it is
-	/// mostly impossible for the producer of this block *alone* to influence
-	/// the value of this hash. A sizable minority of dishonest and coordinating
-	/// block producers would be required in order to affect this value. If that
-	/// is an insufficient security guarantee then two things can be used to
-	/// improve this randomness:
-	///
-	/// - Name, in advance, the block number whose random value will be used;
-	///   ensure your module retains a buffer of previous random values for its
-	///   subject and then index into these in order to obviate the ability of
-	///   your user to look up the parent hash and choose when to transact based
-	///   upon it.
-	/// - Require your user to first commit to an additional value by first
-	///   posting its hash. Require them to reveal the value to determine the
-	///   final result, hashing it with the output of this random function. This
-	///   reduces the ability of a cabal of block producers from conspiring
-	///   against individuals.
-	///
-	/// WARNING: Hashing the result of this function will remove any
-	/// low-influnce properties it has and mean that all bits of the resulting
-	/// value are entirely manipulatable by the author of the parent block, who
-	/// can determine the value of `parent_hash`.
-	pub fn random(subject: &[u8]) -> T::Hash {
-		let (index, hash_series) = <RandomMaterial<T>>::get();
-		if hash_series.len() > 0 {
-			// Always the case after block 1 is initialised.
-			hash_series.iter()
-				.cycle()
-				.skip(index as usize)
-				.take(81)
-				.enumerate()
-				.map(|(i, h)| (i as i8, subject, h).using_encoded(T::Hashing::hash))
-				.triplet_mix()
-		} else {
-			T::Hash::default()
-		}
-	}
 
 	/// Increment a particular account's nonce by 1.
 	pub fn inc_account_nonce(who: &T::AccountId) {
@@ -1163,7 +1090,6 @@ impl<T: Trait> Lookup for ChainContext<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use runtime_io::with_externalities;
 	use primitives::H256;
 	use sr_primitives::{traits::{BlakeTwo256, IdentityLookup}, testing::Header, DispatchError};
 	use support::{impl_outer_origin, parameter_types};
@@ -1214,7 +1140,7 @@ mod tests {
 
 	const CALL: &<Test as Trait>::Call = &();
 
-	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+	fn new_test_ext() -> runtime_io::TestExternalities {
 		GenesisConfig::default().build_storage::<Test>().unwrap().into()
 	}
 
@@ -1235,7 +1161,7 @@ mod tests {
 
 	#[test]
 	fn deposit_event_should_work() {
-		with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			System::initialize(&1, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
 			System::note_finished_extrinsics();
 			System::deposit_event(1u16);
@@ -1272,10 +1198,15 @@ mod tests {
 
 	#[test]
 	fn deposit_event_topics() {
-		with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			const BLOCK_NUMBER: u64 = 1;
 
-			System::initialize(&BLOCK_NUMBER, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
+			System::initialize(
+				&BLOCK_NUMBER,
+				&[0u8; 32].into(),
+				&[0u8; 32].into(),
+				&Default::default(),
+			);
 			System::note_finished_extrinsics();
 
 			let topics = vec![
@@ -1332,7 +1263,7 @@ mod tests {
 
 	#[test]
 	fn prunes_block_hash_mappings() {
-		with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			// simulate import of 15 blocks
 			for n in 1..=15 {
 				System::initialize(
@@ -1365,7 +1296,7 @@ mod tests {
 
 	#[test]
 	fn signed_ext_check_nonce_works() {
-		with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			<AccountNonce<Test>>::insert(1, 1);
 			let info = DispatchInfo::default();
 			let len = 0_usize;
@@ -1383,7 +1314,7 @@ mod tests {
 
 	#[test]
 	fn signed_ext_check_weight_works_normal_tx() {
-		with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			let normal_limit = normal_weight_limit();
 			let small = DispatchInfo { weight: 100, ..Default::default() };
 			let medium = DispatchInfo {
@@ -1410,7 +1341,7 @@ mod tests {
 
 	#[test]
 	fn signed_ext_check_weight_fee_works() {
-		with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			let free = DispatchInfo { weight: 0, ..Default::default() };
 			let len = 0_usize;
 
@@ -1423,7 +1354,7 @@ mod tests {
 
 	#[test]
 	fn signed_ext_check_weight_max_works() {
-		with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			let max = DispatchInfo { weight: Weight::max_value(), ..Default::default() };
 			let len = 0_usize;
 			let normal_limit = normal_weight_limit();
@@ -1437,7 +1368,7 @@ mod tests {
 
 	#[test]
 	fn signed_ext_check_weight_works_operational_tx() {
-		with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			let normal = DispatchInfo { weight: 100, ..Default::default() };
 			let op = DispatchInfo { weight: 100, class: DispatchClass::Operational };
 			let len = 0_usize;
@@ -1460,7 +1391,7 @@ mod tests {
 
 	#[test]
 	fn signed_ext_check_weight_priority_works() {
-		with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			let normal = DispatchInfo { weight: 100, class: DispatchClass::Normal };
 			let op = DispatchInfo { weight: 100, class: DispatchClass::Operational };
 			let len = 0_usize;
@@ -1481,7 +1412,7 @@ mod tests {
 
 	#[test]
 	fn signed_ext_check_weight_block_size_works() {
-		with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			let normal = DispatchInfo::default();
 			let normal_limit = normal_weight_limit() as usize;
 			let reset_check_weight = |tx, s, f| {
@@ -1505,7 +1436,7 @@ mod tests {
 
 	#[test]
 	fn signed_ext_check_era_should_work() {
-		with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			// future
 			assert_eq!(
 				CheckEra::<Test>::from(Era::mortal(4, 2)).additional_signed().err().unwrap(),
@@ -1521,7 +1452,7 @@ mod tests {
 
 	#[test]
 	fn signed_ext_check_era_should_change_longevity() {
-		with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			let normal = DispatchInfo { weight: 100, class: DispatchClass::Normal };
 			let len = 0_usize;
 			let ext = (

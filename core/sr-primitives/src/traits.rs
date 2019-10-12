@@ -23,7 +23,7 @@ use runtime_io;
 use std::fmt::{Debug, Display};
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize, de::DeserializeOwned};
-use primitives::{self, Hasher, Blake2Hasher};
+use primitives::{self, Hasher, Blake2Hasher, TypeId};
 use crate::codec::{Codec, Encode, Decode, HasCompact};
 use crate::transaction_validity::{
 	ValidTransaction, TransactionValidity, TransactionValidityError, UnknownTransaction,
@@ -611,7 +611,7 @@ pub trait IsMember<MemberId> {
 }
 
 /// Something which fulfills the abstract idea of a Substrate header. It has types for a `Number`,
-/// a `Hash` and a `Digest`. It provides access to an `extrinsics_root`, `state_root` and
+/// a `Hash` and a `Hashing`. It provides access to an `extrinsics_root`, `state_root` and
 /// `parent_hash`, as well as a `digest` and a block `number`.
 ///
 /// You can also create a `new` one from those fields.
@@ -1121,12 +1121,6 @@ pub trait AccountIdConversion<AccountId>: Sized {
 
 	/// Try to convert an account ID into this type. Might not succeed.
 	fn try_from_sub_account<S: Decode>(x: &AccountId) -> Option<(Self, S)>;
-}
-
-/// Provide a simple 4 byte identifier for a type.
-pub trait TypeId {
-	/// Simple 4 byte identifier.
-	const TYPE_ID: [u8; 4];
 }
 
 /// Format is TYPE_ID ++ encode(parachain ID) ++ 00.... where 00... is indefinite trailing zeroes to

@@ -14,12 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use codec::{Codec, Encode, Decode};
+use codec::{FullCodec, Encode, Decode, EncodeLike, Ref};
 use crate::{storage::{self, unhashed}, hash::StorageHasher, traits::Len};
-use rstd::{
-	borrow::Borrow,
-	marker::PhantomData,
-};
+use rstd::marker::PhantomData;
 
 /// Generator for `StorageLinkedMap` used by `decl_storage`.
 ///
@@ -43,7 +40,7 @@ use rstd::{
 ///
 /// If the keys are not trusted (e.g. can be set by a user), a cryptographic `hasher` such as
 /// `blake2_256` must be used. Otherwise, other values in storage can be compromised.
-pub trait StorageLinkedMap<K: Codec, V: Codec> {
+pub trait StorageLinkedMap<K: FullCodec, V: FullCodec> {
 	/// The type that get/take returns.
 	type Query;
 
@@ -65,10 +62,10 @@ pub trait StorageLinkedMap<K: Codec, V: Codec> {
 	/// Generate the full key used in top storage.
 	fn storage_linked_map_final_key<KeyArg>(key: KeyArg) -> <Self::Hasher as StorageHasher>::Output
 	where
-		KeyArg: Borrow<K>,
+		KeyArg: EncodeLike<K>,
 	{
 		let mut final_key = Self::prefix().to_vec();
-		key.borrow().encode_to(&mut final_key);
+		key.encode_to(&mut final_key);
 		Self::Hasher::hash(&final_key)
 	}
 
@@ -96,13 +93,29 @@ impl<Key> Default for Linkage<Key> {
 	}
 }
 
+// Encode like a linkage.
+#[derive(Encode)]
+struct EncodeLikeLinkage<PKey: EncodeLike<Key>, NKey: EncodeLike<Key>, Key: Encode> {
+	// Previous element key in storage (None for the first element)
+	previous: Option<PKey>,
+	// Next element key in storage (None for the last element)
+	next: Option<NKey>,
+	// The key of the linkage this type encode to
+	phantom: core::marker::PhantomData<Key>,
+}
+
 /// A key-value pair iterator for enumerable map.
-pub struct Enumerator<K: Codec, V: Codec, G: StorageLinkedMap<K, V>> {
+pub struct Enumerator<K: FullCodec, V: FullCodec, G: StorageLinkedMap<K, V>> {
 	next: Option<K>,
 	_phantom: PhantomData<(G, V)>,
 }
 
-impl<K: Codec, V: Codec, G: StorageLinkedMap<K, V>> Iterator for Enumerator<K, V, G> {
+impl<K, V, G> Iterator for Enumerator<K, V, G>
+where
+	K: FullCodec,
+	V: FullCodec,
+	G: StorageLinkedMap<K, V>,
+{
 	type Item = (K, V);
 
 	fn next(&mut self) -> Option<Self::Item> {
@@ -123,7 +136,12 @@ impl<K: Codec, V: Codec, G: StorageLinkedMap<K, V>> Iterator for Enumerator<K, V
 ///
 /// Takes care of updating previous and next elements points
 /// as well as updates head if the element is first or last.
-fn remove_linkage<K: Codec, V: Codec, G: StorageLinkedMap<K, V>>(linkage: Linkage<K>) {
+fn remove_linkage<K, V, G>(linkage: Linkage<K>)
+where
+	K: FullCodec,
+	V: FullCodec,
+	G: StorageLinkedMap<K, V>,
+{
 	let next_key = linkage.next.as_ref()
 		.map(G::storage_linked_map_final_key)
 		.map(|x| x.as_ref().to_vec());
@@ -140,7 +158,7 @@ fn remove_linkage<K: Codec, V: Codec, G: StorageLinkedMap<K, V>>(linkage: Linkag
 		unhashed::put(prev_key.as_ref(), &res);
 	} else {
 		// we were first so let's update the head
-		write_head::<_, _, G>(linkage.next.as_ref());
+		write_head::<_, _, _, G>(linkage.next.as_ref());
 	}
 	if let Some(next_key) = next_key {
 		// Update previous of next element
@@ -155,9 +173,9 @@ fn remove_linkage<K: Codec, V: Codec, G: StorageLinkedMap<K, V>>(linkage: Linkag
 /// Read the contained data and it's linkage.
 fn read_with_linkage<K, V, G>(key: &[u8]) -> Option<(V, Linkage<K>)>
 where
-	K: Codec,
-	V: Codec,
-	G: StorageLinkedMap<K, V>
+	K: FullCodec,
+	V: FullCodec,
+	G: StorageLinkedMap<K, V>,
 {
 	unhashed::get(key)
 }
@@ -165,11 +183,12 @@ where
 /// Generate linkage for newly inserted element.
 ///
 /// Takes care of updating head and previous head's pointer.
-fn new_head_linkage<K, V, G>(key: &K) -> Linkage<K>
+fn new_head_linkage<KeyArg, K, V, G>(key: KeyArg) -> Linkage<K>
 where
-	K: Codec,
-	V: Codec,
-	G: StorageLinkedMap<K, V>
+	KeyArg: EncodeLike<K>,
+	K: FullCodec,
+	V: FullCodec,
+	G: StorageLinkedMap<K, V>,
 {
 	if let Some(head) = read_head::<_, _, G>() {
 		// update previous head predecessor
@@ -179,20 +198,22 @@ where
 				.expect("head is set when first element is inserted
 						and unset when last element is removed;
 						if head is Some then it points to existing key; qed");
-			unhashed::put(head_key.as_ref(), &(data, Linkage {
+			let new_linkage = EncodeLikeLinkage::<_, _, K> {
+				previous: Some(Ref::from(&key)),
 				next: linkage.next.as_ref(),
-				previous: Some(key),
-			}));
+				phantom: Default::default(),
+			};
+			unhashed::put(head_key.as_ref(), &(data, new_linkage));
 		}
 		// update to current head
-		write_head::<_, _, G>(Some(key));
+		write_head::<_, _, _, G>(Some(key));
 		// return linkage with pointer to previous head
 		let mut linkage = Linkage::default();
 		linkage.next = Some(head);
 		linkage
 	} else {
 		// we are first - update the head and produce empty linkage
-		write_head::<_, _, G>(Some(key));
+		write_head::<_, _, _, G>(Some(key));
 		Linkage::default()
 	}
 }
@@ -200,9 +221,9 @@ where
 /// Read current head pointer.
 fn read_head<K, V, G>() -> Option<K>
 where
-	K: Codec,
-	V: Codec,
-	G: StorageLinkedMap<K, V>
+	K: FullCodec,
+	V: FullCodec,
+	G: StorageLinkedMap<K, V>,
 {
 	unhashed::get(G::storage_linked_map_final_head_key().as_ref())
 }
@@ -210,35 +231,41 @@ where
 /// Overwrite current head pointer.
 ///
 /// If `None` is given head is removed from storage.
-fn write_head<K, V, G>(head: Option<&K>)
+fn write_head<KeyArg, K, V, G>(head: Option<KeyArg>)
 where
-	K: Codec,
-	V: Codec,
-	G: StorageLinkedMap<K, V>
+	KeyArg: EncodeLike<K>,
+	K: FullCodec,
+	V: FullCodec,
+	G: StorageLinkedMap<K, V>,
 {
-	match head {
+	match head.as_ref() {
 		Some(head) => unhashed::put(G::storage_linked_map_final_head_key().as_ref(), head),
 		None => unhashed::kill(G::storage_linked_map_final_head_key().as_ref()),
 	}
 }
 
-impl<K: Codec, V: Codec, G: StorageLinkedMap<K, V>> storage::StorageLinkedMap<K, V> for G {
+impl<K, V, G> storage::StorageLinkedMap<K, V> for G
+where
+	K: FullCodec,
+	V: FullCodec,
+	G: StorageLinkedMap<K, V>,
+{
 	type Query = G::Query;
 
 	type Enumerator = Enumerator<K, V, Self>;
 
-	fn exists<KeyArg: Borrow<K>>(key: KeyArg) -> bool {
+	fn exists<KeyArg: EncodeLike<K>>(key: KeyArg) -> bool {
 		unhashed::exists(Self::storage_linked_map_final_key(key).as_ref())
 	}
 
-	fn get<KeyArg: Borrow<K>>(key: KeyArg) -> Self::Query {
+	fn get<KeyArg: EncodeLike<K>>(key: KeyArg) -> Self::Query {
 		let val = unhashed::get(Self::storage_linked_map_final_key(key).as_ref());
 		G::from_optional_value_to_query(val)
 	}
 
-	fn swap<KeyArg1: Borrow<K>, KeyArg2: Borrow<K>>(key1: KeyArg1, key2: KeyArg2) {
-		let final_key1 = Self::storage_linked_map_final_key(key1.borrow());
-		let final_key2 = Self::storage_linked_map_final_key(key2.borrow());
+	fn swap<KeyArg1: EncodeLike<K>, KeyArg2: EncodeLike<K>>(key1: KeyArg1, key2: KeyArg2) {
+		let final_key1 = Self::storage_linked_map_final_key(Ref::from(&key1));
+		let final_key2 = Self::storage_linked_map_final_key(Ref::from(&key2));
 		let full_value_1 = read_with_linkage::<_, _, G>(final_key1.as_ref());
 		let full_value_2 = read_with_linkage::<_, _, G>(final_key2.as_ref());
 
@@ -251,13 +278,13 @@ impl<K: Codec, V: Codec, G: StorageLinkedMap<K, V>> storage::StorageLinkedMap<K,
 			// Remove key and insert the new one.
 			(Some((value, _linkage)), None) => {
 				Self::remove(key1);
-				let linkage = new_head_linkage::<_, _, G>(key2.borrow());
+				let linkage = new_head_linkage::<_, _, _, G>(key2);
 				unhashed::put(final_key2.as_ref(), &(value, linkage));
 			}
 			// Remove key and insert the new one.
 			(None, Some((value, _linkage))) => {
 				Self::remove(key2);
-				let linkage = new_head_linkage::<_, _, G>(key1.borrow());
+				let linkage = new_head_linkage::<_, _, _, G>(key1);
 				unhashed::put(final_key1.as_ref(), &(value, linkage));
 			}
 			// No-op.
@@ -265,37 +292,23 @@ impl<K: Codec, V: Codec, G: StorageLinkedMap<K, V>> storage::StorageLinkedMap<K,
 		}
 	}
 
-	fn insert<KeyArg: Borrow<K>, ValArg: Borrow<V>>(key: KeyArg, val: ValArg) {
-		let final_key = Self::storage_linked_map_final_key(key.borrow());
+	fn insert<KeyArg: EncodeLike<K>, ValArg: EncodeLike<V>>(key: KeyArg, val: ValArg) {
+		let final_key = Self::storage_linked_map_final_key(Ref::from(&key));
 		let linkage = match read_with_linkage::<_, _, G>(final_key.as_ref()) {
 			// overwrite but reuse existing linkage
 			Some((_data, linkage)) => linkage,
 			// create new linkage
-			None => new_head_linkage::<_, _, G>(key.borrow()),
+			None => new_head_linkage::<_, _, _, G>(key),
 		};
-		unhashed::put(final_key.as_ref(), &(val.borrow(), linkage))
+		unhashed::put(final_key.as_ref(), &(val, linkage))
 	}
 
-	fn insert_ref<KeyArg: Borrow<K>, ValArg: ?Sized + Encode>(key: KeyArg, val: &ValArg)
-	where
-		V: AsRef<ValArg>
-	{
-		let final_key = Self::storage_linked_map_final_key(key.borrow());
-		let linkage = match read_with_linkage::<_, _, G>(final_key.as_ref()) {
-			// overwrite but reuse existing linkage
-			Some((_data, linkage)) => linkage,
-			// create new linkage
-			None => new_head_linkage::<_, _, G>(key.borrow()),
-		};
-		unhashed::put(final_key.as_ref(), &(&val, &linkage))
-	}
-
-	fn remove<KeyArg: Borrow<K>>(key: KeyArg) {
+	fn remove<KeyArg: EncodeLike<K>>(key: KeyArg) {
 		G::take(key);
 	}
 
-	fn mutate<KeyArg: Borrow<K>, R, F: FnOnce(&mut Self::Query) -> R>(key: KeyArg, f: F) -> R {
-		let final_key = Self::storage_linked_map_final_key(key.borrow());
+	fn mutate<KeyArg: EncodeLike<K>, R, F: FnOnce(&mut Self::Query) -> R>(key: KeyArg, f: F) -> R {
+		let final_key = Self::storage_linked_map_final_key(Ref::from(&key));
 
 		let (mut val, _linkage) = read_with_linkage::<_, _, G>(final_key.as_ref())
 			.map(|(data, linkage)| (G::from_optional_value_to_query(Some(data)), Some(linkage)))
@@ -303,13 +316,13 @@ impl<K: Codec, V: Codec, G: StorageLinkedMap<K, V>> storage::StorageLinkedMap<K,
 
 		let ret = f(&mut val);
 		match G::from_query_to_optional_value(val) {
-			Some(ref val) => G::insert(key.borrow(), val),
-			None => G::remove(key.borrow()),
+			Some(ref val) => G::insert(key, val),
+			None => G::remove(key),
 		}
 		ret
 	}
 
-	fn take<KeyArg: Borrow<K>>(key: KeyArg) -> Self::Query {
+	fn take<KeyArg: EncodeLike<K>>(key: KeyArg) -> Self::Query {
 		let final_key = Self::storage_linked_map_final_key(key);
 
 		let full_value: Option<(V, Linkage<K>)> = unhashed::take(final_key.as_ref());
@@ -333,7 +346,7 @@ impl<K: Codec, V: Codec, G: StorageLinkedMap<K, V>> storage::StorageLinkedMap<K,
 		read_head::<_, _, G>()
 	}
 
-	fn decode_len<KeyArg: Borrow<K>>(key: KeyArg) -> Result<usize, &'static str>
+	fn decode_len<KeyArg: EncodeLike<K>>(key: KeyArg) -> Result<usize, &'static str>
 		where V: codec::DecodeLength + Len
 	{
 		let key = Self::storage_linked_map_final_key(key);

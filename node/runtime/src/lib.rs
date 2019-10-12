@@ -22,14 +22,14 @@
 
 use rstd::prelude::*;
 use support::{
-	construct_runtime, parameter_types, traits::{SplitTwoWays, Currency}
+	construct_runtime, parameter_types, traits::{SplitTwoWays, Currency, Randomness}
 };
 use primitives::u32_trait::{_1, _2, _3, _4};
 use node_primitives::{
 	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index,
 	Moment, Signature, ContractExecResult,
 };
-use babe_primitives::{AuthorityId as BabeId};
+use babe_primitives::{AuthorityId as BabeId, AuthoritySignature as BabeSignature};
 use grandpa::fg_primitives;
 use client::{
 	block_builder::api::{self as block_builder_api, InherentData, CheckInherentsResult},
@@ -50,7 +50,7 @@ use elections::VoteIndex;
 use version::NativeVersion;
 use primitives::OpaqueMetadata;
 use grandpa::{AuthorityId as GrandpaId, AuthorityWeight as GrandpaWeight};
-use im_online::sr25519::{AuthorityId as ImOnlineId, AuthoritySignature as ImOnlineSignature};
+use im_online::sr25519::{AuthorityId as ImOnlineId};
 use authority_discovery_primitives::{AuthorityId as EncodedAuthorityId, Signature as EncodedSignature};
 use codec::{Encode, Decode};
 use system::offchain::TransactionSubmitter;
@@ -84,8 +84,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to equal spec_version. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 167,
-	impl_version: 167,
+	spec_version: 175,
+	impl_version: 175,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -134,6 +134,11 @@ impl system::Trait for Runtime {
 	type Version = Version;
 }
 
+impl utility::Trait for Runtime {
+	type Event = Event;
+	type Call = Call;
+}
+
 parameter_types! {
 	pub const EpochDuration: u64 = EPOCH_DURATION_IN_SLOTS;
 	pub const ExpectedBlockTime: Moment = MILLISECS_PER_BLOCK;
@@ -142,6 +147,7 @@ parameter_types! {
 impl babe::Trait for Runtime {
 	type EpochDuration = EpochDuration;
 	type ExpectedBlockTime = ExpectedBlockTime;
+	type EpochChangeTrigger = babe::ExternalTrigger;
 }
 
 impl indices::Trait for Runtime {
@@ -392,6 +398,7 @@ parameter_types! {
 impl contracts::Trait for Runtime {
 	type Currency = Balances;
 	type Time = Timestamp;
+	type Randomness = RandomnessCollectiveFlip;
 	type Call = Call;
 	type Event = Event;
 	type DetermineContractAddress = contracts::SimpleAddressDeterminator<Runtime>;
@@ -437,7 +444,9 @@ impl offences::Trait for Runtime {
 	type OnOffenceHandler = Staking;
 }
 
-impl authority_discovery::Trait for Runtime {}
+impl authority_discovery::Trait for Runtime {
+    type AuthorityId = BabeId;
+}
 
 impl grandpa::Trait for Runtime {
 	type Event = Event;
@@ -489,6 +498,7 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
 		System: system::{Module, Call, Storage, Config, Event},
+		Utility: utility::{Module, Call, Event},
 		Babe: babe::{Module, Call, Storage, Config, Inherent(Timestamp)},
 		Timestamp: timestamp::{Module, Call, Storage, Inherent},
 		Authorship: authorship::{Module, Call, Storage, Inherent},
@@ -509,6 +519,7 @@ construct_runtime!(
 		ImOnline: im_online::{Module, Call, Storage, Event<T>, ValidateUnsigned, Config<T>},
 		AuthorityDiscovery: authority_discovery::{Module, Call, Config<T>},
 		Offences: offences::{Module, Call, Storage, Event},
+		RandomnessCollectiveFlip: randomness_collective_flip::{Module, Call, Storage},
 	}
 );
 
@@ -580,7 +591,7 @@ impl_runtime_apis! {
 		}
 
 		fn random_seed() -> <Block as BlockT>::Hash {
-			System::random_seed()
+			RandomnessCollectiveFlip::random_seed()
 		}
 	}
 
@@ -635,12 +646,12 @@ impl_runtime_apis! {
 		}
 
 		fn verify(payload: &Vec<u8>, signature: &EncodedSignature, authority_id: &EncodedAuthorityId) -> bool {
-			let signature = match ImOnlineSignature::decode(&mut &signature.0[..]) {
+			let signature = match BabeSignature::decode(&mut &signature.0[..]) {
 				Ok(s) => s,
 				_ => return false,
 			};
 
-			let authority_id = match ImOnlineId::decode(&mut &authority_id.0[..]) {
+			let authority_id = match BabeId::decode(&mut &authority_id.0[..]) {
 				Ok(id) => id,
 				_ => return false,
 			};

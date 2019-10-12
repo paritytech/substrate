@@ -178,6 +178,7 @@ fn node_config<G, E: Clone> (
 		chain_spec: (*spec).clone(),
 		custom: Default::default(),
 		name: format!("Node {}", index),
+		wasm_method: service::config::WasmExecutionMethod::Interpreted,
 		execution_strategies: Default::default(),
 		rpc_http: None,
 		rpc_ws: None,
@@ -445,7 +446,7 @@ pub fn sync<G, E, Fb, F, Lb, L, B, ExF, U>(
 	let first_user_data = &network.full_nodes[0].2;
 	let best_block = BlockId::number(first_service.get().client().info().chain.best_number);
 	let extrinsic = extrinsic_factory(&first_service.get(), first_user_data);
-	first_service.get().transaction_pool().submit_one(&best_block, extrinsic).unwrap();
+	futures03::executor::block_on(first_service.get().transaction_pool().submit_one(&best_block, extrinsic)).unwrap();
 	network.run_until_all_full(
 		|_index, service| service.get().transaction_pool().ready().count() == 1,
 		|_index, _service| true,

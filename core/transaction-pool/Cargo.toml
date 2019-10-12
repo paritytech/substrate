@@ -5,8 +5,9 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-derive_more = "0.14.0"
-log = "0.4"
+derive_more = "0.15.0"
+log = "0.4.8"
+futures-preview = "0.3.0-alpha.19"
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 parking_lot = "0.9.0"
 sr-primitives = { path = "../sr-primitives" }
