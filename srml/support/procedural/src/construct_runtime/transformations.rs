@@ -27,13 +27,21 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 			..
 		},
 		modules: ext::Braces {
-			content: ext::Punctuated { inner: modules, .. },
+			content: ext::Punctuated { inner: mut modules, .. },
 			token: modules_token,
 		},
 		..
 	} = definition;
 
-	// Assert we have system module
+	// Assert each module declaration doesn't have duplicated modules
+	// and write expanded module parts instead of `default` or empty declaration
+	{
+		for module in modules.iter_mut() {
+			let _ = try_tok!(module.resolve_module_parts());
+		}
+	}
+
+	// Assert we have system module declared
 	let system_module = match find_system_module(modules.iter()) {
 		Some(sm) => sm,
 		None => {
@@ -46,10 +54,6 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 			.into()
 		}
 	};
-	// Assert each module declaration doesn't have duplicated modules
-	for module in modules.iter() {
-		let _ = try_tok!(module.module_parts());
-	}
 
 	let hidden_crate_name = "construct_runtime";
 	let scrate = generate_crate_access(&hidden_crate_name, "srml-support");
@@ -223,8 +227,8 @@ fn find_system_module<'a>(mut module_declarations: impl Iterator<Item = &'a Modu
 fn find_module_entry<'a>(
 	module_declaration: &'a ModuleDeclaration,
 	name: &'a Ident,
-) -> syn::Result<Option<ModulePart>> {
+) -> syn::Result<Option<&'a ModulePart>> {
 	let name_str = name.to_string();
-	let parts = module_declaration.module_parts()?;
+	let parts = module_declaration.resolved_module_parts();
 	Ok(parts.into_iter().find(|part| part.name.to_string() == name_str))
 }

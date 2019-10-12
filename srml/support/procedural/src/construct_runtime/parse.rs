@@ -91,12 +91,48 @@ pub struct ModulePart {
 }
 
 impl ModuleDeclaration {
-	pub fn module_parts(&self) -> syn::Result<Vec<ModulePart>> {
+	pub fn resolved_module_parts(&self) -> Vec<&ModulePart> {
+		self.details
+			.inner
+			.as_ref()
+			.unwrap()
+			.entries
+			.content
+			.inner
+			.iter()
+			.filter_map(|entry| match entry.inner {
+				ModuleEntry::Part(ref part) => Some(part),
+				_ => None,
+			})
+			.collect()
+	}
+
+	pub fn resolve_module_parts(&mut self) -> syn::Result<()> {
+		let module_parts = self.module_parts()?;
+		if self.details.inner.is_none() {
+			self.details.inner = Some(syn::parse2(quote!(::{})).expect("Infallible parse"));
+		}
+		self.details.inner.as_mut().unwrap().entries.content.inner = module_parts
+			.into_iter()
+			.map(|part| ModuleEntryWrapper {
+				inner: ModuleEntry::Part(part),
+			})
+			.collect();
+		Ok(())
+	}
+
+	fn module_parts(&self) -> syn::Result<Vec<ModulePart>> {
 		if let Some(ref details) = self.details.inner {
-			let parts: Vec<_> = details.entries.content.inner.iter().flat_map(|entry| match &entry.inner {
-				ModuleEntry::Default(ref token) => Self::default_modules(token.span()),
-				ModuleEntry::Part(ref part) => vec![part.clone()],
-			}).collect();
+			let parts: Vec<_> = details
+				.entries
+				.content
+				.inner
+				.iter()
+				.flat_map(|entry| match &entry.inner {
+					ModuleEntry::Default(ref token) => Self::default_modules(token.span()),
+					ModuleEntry::Part(ref part) => vec![part.clone()],
+				})
+				.collect();
 			let mut uniq = HashSet::new();
 			for part in parts.iter() {
 				let name = part.name.to_string();
@@ -105,7 +141,7 @@ impl ModuleDeclaration {
 						part.name.span(),
 						format!(
 							"`{}` is not unique - it is either a double entry \
-							or included in the `default` keyword",
+							 or included in the `default` keyword",
 							name
 						),
 					));
