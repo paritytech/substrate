@@ -143,7 +143,7 @@ fn generate_authority_keys_and_store(
 		let insert_key = |key_type, public| {
 			keystore.write().insert_unknown(
 				key_type,
-				&seed,
+				&format!("//{}", seed),
 				public,
 			).map_err(|_| format!("Failed to insert key: {}", grandpa))
 		};
@@ -178,7 +178,7 @@ fn print_seeds(
 	println!("{}", header.paint("Authority seeds"));
 
 	for (n, seed) in authority_seeds.iter().enumerate() {
-		println!("{} {}",
+		println!("{} //{}",
 			entry.paint(format!("auth-{}:", n)),
 			seed,
 		);
@@ -189,7 +189,7 @@ fn print_seeds(
 	if !endowed_seeds.is_empty() {
 		println!("{}", header.paint("Endowed seeds"));
 		for (n, seed) in endowed_seeds.iter().enumerate() {
-			println!("{} {}",
+			println!("{} //{}",
 				entry.paint(format!("endowed-{}:", n)),
 				seed,
 			);
@@ -199,7 +199,7 @@ fn print_seeds(
 	}
 
 	println!("{}", header.paint("Sudo seed"));
-	println!("{}", sudo_seed);
+	println!("//{}", sudo_seed);
 }
 
 fn main() -> Result<(), String> {
