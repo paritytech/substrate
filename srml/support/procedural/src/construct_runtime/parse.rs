@@ -1,7 +1,6 @@
 use proc_macro2::Span;
-use quote::quote;
 use srml_support_procedural_tools::{syn_ext as ext, Parse, ToTokens};
-use std::collections::HashSet;
+use std::collections::BTreeMap;
 use syn::{
 	parse::{Parse, ParseStream},
 	spanned::Spanned,
@@ -90,43 +89,11 @@ pub struct ModulePart {
 }
 
 impl ModuleDeclaration {
-	/// Get module parts that have been resolved
-	/// (i.e. function [resolve_module_parts](ModuleDeclaration::resolve_module_parts) was called)
-	pub fn resolved_module_parts(&self) -> Vec<&ModulePart> {
-		self.details
-			.inner
-			.as_ref()
-			.unwrap()
-			.entries
-			.content
-			.inner
-			.iter()
-			.filter_map(|entry| match entry.inner {
-				ModuleEntry::Part(ref part) => Some(part),
-				_ => None,
-			})
-			.collect()
-	}
-
-	/// Resolive module parts, i.e. expand `default` keyword or empty declaration
-	/// If there are double entries [Error](syn::Error) is returned
-	pub fn resolve_module_parts(&mut self) -> syn::Result<()> {
-		let module_parts = self.module_parts()?;
-		if self.details.inner.is_none() {
-			self.details.inner = Some(syn::parse2(quote!(::{})).expect("Infallible parse"));
-		}
-		self.details.inner.as_mut().unwrap().entries.content.inner = module_parts
-			.into_iter()
-			.map(|part| ModuleEntryWrapper {
-				inner: ModuleEntry::Part(part),
-			})
-			.collect();
-		Ok(())
-	}
-
-	fn module_parts(&self) -> syn::Result<Vec<ModulePart>> {
+	/// Get resolved module parts, i.e. after expanding `default` keyword
+	/// or empty declaration
+	pub fn module_parts(&self) -> Vec<ModulePart> {
 		if let Some(ref details) = self.details.inner {
-			let parts: Vec<_> = details
+			let uniq: BTreeMap<_, _>  = details
 				.entries
 				.content
 				.inner
@@ -135,24 +102,11 @@ impl ModuleDeclaration {
 					ModuleEntry::Default(ref token) => Self::default_modules(token.span()),
 					ModuleEntry::Part(ref part) => vec![part.clone()],
 				})
+				.map(|part| (part.name.to_string(), part))
 				.collect();
-			let mut uniq = HashSet::new();
-			for part in parts.iter() {
-				let name = part.name.to_string();
-				if !uniq.insert(name.clone()) {
-					return Err(syn::Error::new(
-						part.name.span(),
-						format!(
-							"`{}` is not unique - it is either a double entry \
-							 or included in the `default` keyword",
-							name
-						),
-					));
-				}
-			}
-			Ok(parts)
+			uniq.into_iter().map(|(_, v)| v).collect()
 		} else {
-			Ok(Self::default_modules(self.module.span()))
+			Self::default_modules(self.module.span())
 		}
 	}
 

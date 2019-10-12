@@ -27,19 +27,11 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 			..
 		},
 		modules: ext::Braces {
-			content: ext::Punctuated { inner: mut modules, .. },
+			content: ext::Punctuated { inner: modules, .. },
 			token: modules_token,
 		},
 		..
 	} = definition;
-
-	// Assert each module declaration doesn't have duplicated modules
-	// and write expanded module parts instead of `default` or empty declarations
-	{
-		for module in modules.iter_mut() {
-			let _ = try_tok!(module.resolve_module_parts());
-		}
-	}
 
 	// Assert we have system module declared
 	let system_module = match find_system_module(modules.iter()) {
@@ -125,7 +117,7 @@ fn decl_validate_unsigned<'a>(
 	let modules_tokens = module_declarations
 		.filter(|module_declaration| {
 			module_declaration
-				.resolved_module_parts()
+				.module_parts()
 				.into_iter()
 				.any(|part| part.name.to_string() == "ValidateUnsigned")
 		})
@@ -147,7 +139,7 @@ fn decl_outer_inherent<'a>(
 ) -> TokenStream2 {
 	let modules_tokens = module_declarations.filter_map(|module_declaration| {
 		let maybe_config_part = module_declaration
-			.resolved_module_parts()
+			.module_parts()
 			.into_iter()
 			.filter(|part| part.name.to_string() == "Inherent")
 			.next();
@@ -179,15 +171,15 @@ fn decl_outer_config<'a>(
 	let modules_tokens = module_declarations
 		.filter_map(|module_declaration| {
 			let generics: Vec<_> = module_declaration
-				.resolved_module_parts()
+				.module_parts()
 				.into_iter()
 				.filter(|part| part.name.to_string() == "Config")
-				.map(|part| &part.generics)
+				.map(|part| part.generics)
 				.collect();
 			if generics.len() == 0 {
 				None
 			} else {
-				let transformed_generics = generics[0].params.iter().map(|param| quote!(<#param>));
+				let transformed_generics: Vec<_> = generics[0].params.iter().map(|param| quote!(<#param>)).collect();
 				Some((module_declaration, transformed_generics))
 			}
 		})
@@ -224,7 +216,7 @@ fn decl_runtime_metadata<'a>(
 ) -> TokenStream2 {
 	let modules_tokens = module_declarations
 		.filter_map(|module_declaration| {
-			let parts = module_declaration.resolved_module_parts();
+			let parts = module_declaration.module_parts();
 			let parts_len = parts.len();
 			let filtered_names: Vec<_> = parts
 				.into_iter()
@@ -370,8 +362,8 @@ fn find_system_module<'a>(mut module_declarations: impl Iterator<Item = &'a Modu
 		.map(|decl| &decl.module)
 }
 
-fn find_module_entry<'a>(module_declaration: &'a ModuleDeclaration, name: &'a Ident) -> Option<&'a ModulePart> {
+fn find_module_entry<'a>(module_declaration: &'a ModuleDeclaration, name: &'a Ident) -> Option<ModulePart> {
 	let name_str = name.to_string();
-	let parts = module_declaration.resolved_module_parts();
+	let parts = module_declaration.module_parts();
 	parts.into_iter().find(|part| part.name.to_string() == name_str)
 }
