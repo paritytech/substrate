@@ -1,14 +1,15 @@
 use honggfuzz::fuzz;
-use sr_arithmetic::{
-	helpers_128bit::multiply_by_rational,
-	traits::Zero
-};
+use sr_arithmetic::{helpers_128bit::multiply_by_rational, traits::Zero};
 
 fn main() {
 	loop {
 		fuzz!(|data: ([u8; 16], [u8; 16], [u8; 16])| {
 			let (a_bytes, b_bytes, c_bytes) = data;
-			let (a, b, c) = (u128::from_be_bytes(a_bytes), u128::from_be_bytes(b_bytes), u128::from_be_bytes(c_bytes));
+			let (a, b, c) = (
+				u128::from_be_bytes(a_bytes),
+				u128::from_be_bytes(b_bytes),
+				u128::from_be_bytes(c_bytes),
+			);
 
 			println!("++ Equation: {} * {} / {}", a, b, c);
 
@@ -29,7 +30,9 @@ fn main() {
 
 fn mul_div(a: u128, b: u128, c: u128) -> u128 {
 	use primitive_types::U256;
-	if a.is_zero() { return Zero::zero(); }
+	if a.is_zero() {
+		return Zero::zero();
+	}
 	let c = c.max(1);
 
 	// e for extended
