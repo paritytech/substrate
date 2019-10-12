@@ -358,23 +358,30 @@ mod tests {
 		pub const ExistentialDeposit: u64 = 0;
 		pub const TransferFee: u64 = 0;
 		pub const CreationFee: u64 = 0;
-		pub const TransactionBaseFee: u64 = 10;
-		pub const TransactionByteFee: u64 = 0;
 	}
 	impl balances::Trait for Runtime {
 		type Balance = u64;
 		type OnFreeBalanceZero = ();
 		type OnNewAccount = ();
 		type Event = MetaEvent;
-		type TransactionPayment = ();
 		type DustRemoval = ();
 		type TransferPayment = ();
 		type ExistentialDeposit = ExistentialDeposit;
 		type TransferFee = TransferFee;
 		type CreationFee = CreationFee;
+	}
+
+	parameter_types! {
+		pub const TransactionBaseFee: u64 = 10;
+		pub const TransactionByteFee: u64 = 0;
+	}
+	impl transaction_payment::Trait for Runtime {
+		type Currency = Balances;
+		type OnTransactionPayment = ();
 		type TransactionBaseFee = TransactionBaseFee;
 		type TransactionByteFee = TransactionByteFee;
 		type WeightToFee = ConvertInto;
+		type FeeMultiplierUpdate = ();
 	}
 
 	impl ValidateUnsigned for Runtime {
@@ -392,7 +399,7 @@ mod tests {
 		system::CheckEra<Runtime>,
 		system::CheckNonce<Runtime>,
 		system::CheckWeight<Runtime>,
-		balances::TakeFees<Runtime>
+		transaction_payment::ChargeTransactionPayment<Runtime>
 	);
 	type TestXt = sr_primitives::testing::TestXt<Call, SignedExtra>;
 	type Executive = super::Executive<Runtime, Block<TestXt>, system::ChainContext<Runtime>, Runtime, ()>;
@@ -402,7 +409,7 @@ mod tests {
 			system::CheckEra::from(Era::Immortal),
 			system::CheckNonce::from(nonce),
 			system::CheckWeight::new(),
-			balances::TakeFees::from(fee)
+			transaction_payment::ChargeTransactionPayment::from(fee)
 		)
 	}
 

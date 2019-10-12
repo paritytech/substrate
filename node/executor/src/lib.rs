@@ -97,7 +97,7 @@ mod tests {
 		// NOTE: this is really hard to apply, since the multiplier of each block needs to be fetched
 		// before the block, while we compute this after the block.
 		// weight = <system::Module<Runtime>>::next_weight_multiplier().apply_to(weight);
-		let weight_fee = <Runtime as balances::Trait>::WeightToFee::convert(weight);
+		let weight_fee = <Runtime as transaction_payment::Trait>::WeightToFee::convert(weight);
 		length_fee + weight_fee + TransferFee::get()
 	}
 

@@ -96,8 +96,6 @@ parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub const MaximumBlockWeight: u32 = 1024;
 	pub const MaximumBlockLength: u32 = 2 * 1024;
-	pub const BalancesTransactionBaseFee: u64 = 0;
-	pub const BalancesTransactionByteFee: u64 = 0;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 impl system::Trait for Test {
@@ -123,15 +121,11 @@ impl balances::Trait for Test {
 	type OnFreeBalanceZero = Contract;
 	type OnNewAccount = ();
 	type Event = MetaEvent;
-	type TransactionPayment = ();
 	type DustRemoval = ();
 	type TransferPayment = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type TransferFee = TransferFee;
 	type CreationFee = CreationFee;
-	type TransactionBaseFee = BalancesTransactionBaseFee;
-	type TransactionByteFee = BalancesTransactionByteFee;
-	type WeightToFee = ();
 }
 parameter_types! {
 	pub const MinimumPeriod: u64 = 1;

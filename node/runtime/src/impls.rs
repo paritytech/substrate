@@ -196,7 +196,7 @@ mod tests {
 			if wm == next { break; }
 			wm = next;
 			iterations += 1;
-			let fee = <Runtime as balances::Trait>::WeightToFee::convert(wm.apply_to(tx_weight));
+			let fee = <Runtime as transaction_payment::Trait>::WeightToFee::convert(wm.apply_to(tx_weight));
 			println!(
 				"iteration {}, new wm = {:?}. Fee at this point is: {} millicents, {} cents, {} dollars",
 				iterations,

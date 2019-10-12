@@ -49,9 +49,9 @@ use sr_primitives::{
 };
 
 type Multiplier = Fixed64;
-pub type BalanceOf<T> =
+type BalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
-pub type NegativeImbalanceOf<T> =
+type NegativeImbalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
 
 pub trait Trait: system::Trait {
@@ -77,7 +77,7 @@ pub trait Trait: system::Trait {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Balances {
-		NextFeeMultiplier get(next_fee_multiplier): Multiplier = Multiplier::one();
+		NextFeeMultiplier get(next_fee_multiplier): Multiplier = Default::default(); // todo explicit zero
 	}
 }
 
@@ -103,9 +103,9 @@ impl<T: Trait> Module<T> {}
 /// Require the transactor pay for themselves and maybe include a tip to gain additional priority
 /// in the queue.
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
-pub struct ChargeTransactionPayment<T: Trait>(#[codec(compact)] BalanceOf<T>);
+pub struct ChargeTransactionPayment<T: Trait + Send + Sync>(#[codec(compact)] BalanceOf<T>);
 
-impl<T: Trait> ChargeTransactionPayment<T> {
+impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> {
 	/// utility constructor. Used only in client/factory code.
 	pub fn from(fee: BalanceOf<T>) -> Self {
 		Self(fee)
@@ -140,19 +140,18 @@ impl<T: Trait> ChargeTransactionPayment<T> {
 			let adjusted_fee = fee_update.saturated_multiply_accumulate(fee);
 			adjusted_fee
 		};
-
 		len_fee.saturating_add(weight_fee).saturating_add(tip)
 	}
 }
 
 #[cfg(feature = "std")]
-impl<T: Trait> rstd::fmt::Debug for ChargeTransactionPayment<T> {
+impl<T: Trait + Send + Sync> rstd::fmt::Debug for ChargeTransactionPayment<T> {
 	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
-		self.0.fmt(f)
+		write!(f, "ChargeTransactionPayment<{:?}>", self.0)
 	}
 }
 
-impl<T: Trait> SignedExtension for ChargeTransactionPayment<T> where BalanceOf<T>: Send + Sync {
+impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T> where BalanceOf<T>: Send + Sync {
 	type AccountId = T::AccountId;
 	type Call = T::Call;
 	type AdditionalSigned = ();
@@ -184,6 +183,214 @@ impl<T: Trait> SignedExtension for ChargeTransactionPayment<T> where BalanceOf<T
 		// will be a bit more than setting the priority to tip. For now, this is enough.
 		r.priority = fee.saturated_into::<TransactionPriority>();
 		Ok(r)
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use support::{parameter_types, impl_outer_origin};
+	use primitives::H256;
+	use sr_primitives::{
+		Perbill, set_and_run_with_externalities,
+		testing::Header,
+		traits::{BlakeTwo256, IdentityLookup},
+	};
+	use rstd::cell::RefCell;
+	use crate as transaction_payment;
+
+	const CALL: &<Runtime as system::Trait>::Call = &();
+
+	#[derive(Clone, PartialEq, Eq, Debug)]
+	pub struct Runtime;
+
+	impl_outer_origin!{
+		pub enum Origin for Runtime {}
+	}
+
+	parameter_types! {
+		pub const BlockHashCount: u64 = 250;
+		pub const MaximumBlockWeight: u32 = 1024;
+		pub const MaximumBlockLength: u32 = 2 * 1024;
+		pub const AvailableBlockRatio: Perbill = Perbill::one();
+	}
+
+	impl system::Trait for Runtime {
+		type Origin = Origin;
+		type Index = u64;
+		type BlockNumber = u64;
+		type Call = ();
+		type Hash = H256;
+		type Hashing = BlakeTwo256;
+		type AccountId = u64;
+		type Lookup = IdentityLookup<Self::AccountId>;
+		type Header = Header;
+		type Event = ();
+		type WeightMultiplierUpdate = ();
+		type BlockHashCount = BlockHashCount;
+		type MaximumBlockWeight = MaximumBlockWeight;
+		type MaximumBlockLength = MaximumBlockLength;
+		type AvailableBlockRatio = AvailableBlockRatio;
+		type Version = ();
+	}
+
+	parameter_types! {
+		pub const TransferFee: u64 = 0;
+		pub const CreationFee: u64 = 0;
+		pub const ExistentialDeposit: u64 = 0;
+	}
+
+	impl balances::Trait for Runtime {
+		type Balance = u64;
+		type OnFreeBalanceZero = ();
+		type OnNewAccount = ();
+		type Event = ();
+		type TransferPayment = ();
+		type DustRemoval = ();
+		type ExistentialDeposit = ExistentialDeposit;
+		type TransferFee = TransferFee;
+		type CreationFee = CreationFee;
+	}
+
+	thread_local! {
+		static TRANSACTION_BASE_FEE: RefCell<u64> = RefCell::new(0);
+		static TRANSACTION_BYTE_FEE: RefCell<u64> = RefCell::new(1);
+		static WEIGHT_TO_FEE: RefCell<u64> = RefCell::new(1);
+	}
+
+	pub struct TransactionBaseFee;
+	impl Get<u64> for TransactionBaseFee {
+		fn get() -> u64 { TRANSACTION_BASE_FEE.with(|v| *v.borrow()) }
+	}
+
+	pub struct TransactionByteFee;
+	impl Get<u64> for TransactionByteFee {
+		fn get() -> u64 { TRANSACTION_BYTE_FEE.with(|v| *v.borrow()) }
+	}
+
+	pub struct WeightToFee(u64);
+	impl Convert<Weight, u64> for WeightToFee {
+		fn convert(t: Weight) -> u64 {
+			WEIGHT_TO_FEE.with(|v| *v.borrow() * (t as u64))
+		}
+	}
+
+	impl Trait for Runtime {
+		type Currency = balances::Module<Runtime>;
+		type OnTransactionPayment = ();
+		type TransactionBaseFee = TransactionBaseFee;
+		type TransactionByteFee = TransactionByteFee;
+		type WeightToFee = WeightToFee;
+		type FeeMultiplierUpdate = ();
+	}
+
+	type System = system::Module<Runtime>;
+	type Balances = balances::Module<Runtime>;
+
+	pub struct ExtBuilder {
+		balance_factor: u64,
+		base_fee: u64,
+		byte_fee: u64,
+		weight_to_fee: u64
+	}
+
+	impl Default for ExtBuilder {
+		fn default() -> Self {
+			Self {
+				balance_factor: 1,
+				base_fee: 0,
+				byte_fee: 1,
+				weight_to_fee: 1,
+			}
+		}
+	}
+
+	impl ExtBuilder {
+		pub fn fees(mut self, base: u64, byte: u64, weight: u64) -> Self {
+			self.base_fee = base;
+			self.byte_fee = byte;
+			self.weight_to_fee = weight;
+			self
+		}
+		pub fn balance_factor(mut self, factor: u64) -> Self {
+			self.balance_factor = factor;
+			self
+		}
+		fn set_constants(&self) {
+			TRANSACTION_BASE_FEE.with(|v| *v.borrow_mut() = self.base_fee);
+			TRANSACTION_BYTE_FEE.with(|v| *v.borrow_mut() = self.byte_fee);
+			WEIGHT_TO_FEE.with(|v| *v.borrow_mut() = self.weight_to_fee);
+		}
+		pub fn build(self) -> runtime_io::TestExternalities {
+			self.set_constants();
+			let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+			balances::GenesisConfig::<Runtime> {
+				balances: vec![
+					(1, 10 * self.balance_factor),
+					(2, 20 * self.balance_factor),
+					(3, 30 * self.balance_factor),
+					(4, 40 * self.balance_factor),
+					(5, 50 * self.balance_factor),
+					(6, 60 * self.balance_factor)
+				],
+				vesting: vec![],
+			}.assimilate_storage(&mut t).unwrap();
+			t.into()
+		}
+	}
+
+	/// create a transaction info struct from weight. Handy to avoid building the whole struct.
+	pub fn info_from_weight(w: Weight) -> DispatchInfo {
+		DispatchInfo { weight: w, ..Default::default() }
+	}
+
+	#[test]
+	fn signed_extension_transaction_payment_work() {
+		set_and_run_with_externalities(&mut
+			ExtBuilder::default()
+			.balance_factor(10) // 100
+			.fees(5, 1, 1) // 5 fixed, 1 per byte, 1 per weight
+			.build(), ||
+		{
+			let len = 10;
+			assert!(
+				ChargeTransactionPayment::<Runtime>::from(0)
+					.pre_dispatch(&1, CALL, info_from_weight(5), len)
+					.is_ok()
+			);
+			assert_eq!(Balances::free_balance(&1), 100 - 5 - 5 - 10);
+
+			assert!(
+				ChargeTransactionPayment::<Runtime>::from(5 /* tipped */)
+					.pre_dispatch(&2, CALL, info_from_weight(3), len)
+					.is_ok()
+			);
+			assert_eq!(Balances::free_balance(&2), 200 - 5 - 10 - 3 - 5);
+		});
+	}
+
+	#[test]
+	fn signed_extension_transaction_payment_is_bounded() {
+		set_and_run_with_externalities(&mut
+			ExtBuilder::default()
+			.balance_factor(1000)
+			.fees(0, 0, 1)
+			.build(), ||
+		{
+			use sr_primitives::weights::Weight;
+
+			// maximum weight possible
+			assert!(
+				ChargeTransactionPayment::<Runtime>::from(0)
+					.pre_dispatch(&1, CALL, info_from_weight(Weight::max_value()), 10)
+					.is_ok()
+			);
+			// fee will be proportional to what is the actual maximum weight in the runtime.
+			assert_eq!(
+				Balances::free_balance(&1),
+				(10000 - <Runtime as system::Trait>::MaximumBlockWeight::get()) as u64
+			);
+		});
 	}
 }
 
