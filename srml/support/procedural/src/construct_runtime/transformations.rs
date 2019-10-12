@@ -80,6 +80,8 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 
 	let dispatch = decl_outer_dispatch(&name, modules.iter(), &scrate);
 
+	let metadata = decl_runtime_metadata(&name, modules.iter(), &scrate);
+
 	let res: TokenStream = quote!(
 		#scrate_decl
 
@@ -100,11 +102,51 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 		#all_modules
 
 		#dispatch
+
+		#metadata
 	)
 	.into();
 
 	println!("-----\n{}\n------", res.to_string());
 	res
+}
+
+fn decl_runtime_metadata<'a>(
+	runtime: &'a Ident,
+	module_declarations: impl Iterator<Item = &'a ModuleDeclaration>,
+	scrate: &'a TokenStream2,
+) -> TokenStream2 {
+	let modules_tokens = module_declarations
+		.filter_map(|module_declaration| {
+			let parts = module_declaration.resolved_module_parts();
+			let parts_len = parts.len();
+			let filtered_names: Vec<_> = parts
+				.into_iter()
+				.filter(|part| part.name.to_string() != "Module")
+				.map(|part| part.name.clone())
+				.collect();
+			// Theres no `Module` entry
+			if filtered_names.len() == parts_len {
+				None
+			} else {
+				Some((module_declaration, filtered_names))
+			}
+		})
+		.map(|(module_declaration, filtered_names)| {
+			let module = &module_declaration.module;
+			let name = &module_declaration.name;
+			let instance = module_declaration.instance.inner.as_ref().map(|inst| {
+				let name = &inst.name;
+				quote!(<#name>)
+			}).into_iter();
+			quote!(#module::Module #(#instance)* as #name with #(#filtered_names)* ,)
+		});
+	quote!(
+		#scrate::impl_runtime_metadata!(
+			for #runtime with modules
+				#(#modules_tokens)*
+		);
+	)
 }
 
 fn decl_outer_dispatch<'a>(
@@ -114,13 +156,7 @@ fn decl_outer_dispatch<'a>(
 ) -> TokenStream2 {
 	let modules_tokens = module_declarations
 		.filter(|module_declaration| {
-			find_module_entry(
-				module_declaration,
-				&Ident::new("Call", module_declaration.name.span()),
-			)
-			// asserted above that result is ok
-			.unwrap()
-			.is_some()
+			find_module_entry(module_declaration, &Ident::new("Call", module_declaration.name.span())).is_some()
 		})
 		.map(|module_declaration| {
 			let module = &module_declaration.module;
@@ -153,7 +189,7 @@ fn decl_outer_event_or_origin<'a>(
 	let kind_str = format!("{:?}", kind);
 	for module_declaration in module_declarations {
 		let kind_ident = Ident::new(kind_str.as_str(), module_declaration.name.span());
-		match find_module_entry(module_declaration, &kind_ident)? {
+		match find_module_entry(module_declaration, &kind_ident) {
 			Some(module_entry) => {
 				let module = &module_declaration.module;
 				let instance = module_declaration
@@ -200,7 +236,7 @@ fn decl_all_modules<'a>(
 	for module_declaration in module_declarations {
 		let type_name = &module_declaration.name;
 		let module = &module_declaration.module;
-		let mut generics = vec![quote!(runtime)];
+		let mut generics = vec![quote!(#runtime)];
 		generics.extend(module_declaration.instance.inner.iter().map(|mi| {
 			let name = &mi.name;
 			quote!(#module::#name)
@@ -224,11 +260,8 @@ fn find_system_module<'a>(mut module_declarations: impl Iterator<Item = &'a Modu
 		.map(|decl| &decl.module)
 }
 
-fn find_module_entry<'a>(
-	module_declaration: &'a ModuleDeclaration,
-	name: &'a Ident,
-) -> syn::Result<Option<&'a ModulePart>> {
+fn find_module_entry<'a>(module_declaration: &'a ModuleDeclaration, name: &'a Ident) -> Option<&'a ModulePart> {
 	let name_str = name.to_string();
 	let parts = module_declaration.resolved_module_parts();
-	Ok(parts.into_iter().find(|part| part.name.to_string() == name_str))
+	parts.into_iter().find(|part| part.name.to_string() == name_str)
 }
