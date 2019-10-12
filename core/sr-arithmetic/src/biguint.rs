@@ -743,6 +743,14 @@ pub mod tests {
 	}
 
 	#[cfg(feature = "bench")]
+	fn random_big_uint(size: usize) -> BigUint {
+		use rand::Rng;
+		let mut rng = rand::thread_rng();
+		let digits = (0..size).map(|_| rng.gen_range(0, Single::max_value())).collect();
+		BigUint { digits }
+	}
+
+	#[cfg(feature = "bench")]
 	#[bench]
 	fn bench_addition_2_digit(bencher: &mut Bencher) {
 		let a = random_big_uint(2);

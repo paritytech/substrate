@@ -18,6 +18,10 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+// to allow benchmarking
+#![cfg_attr(feature = "bench", feature(test))]
+#[cfg(feature = "bench")] extern crate test;
+
 pub mod biguint;
 pub mod helpers_128bit;
 pub mod traits;

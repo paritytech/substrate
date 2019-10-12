@@ -12,15 +12,15 @@ use crate::traits::{SaturatedConversion, UniqueSaturatedInto, Saturating};
 ///
 /// ```rust
 /// # fn main() {
-/// sr_primitives::assert_eq_error_rate!(10, 10, 0);
-/// sr_primitives::assert_eq_error_rate!(10, 11, 1);
-/// sr_primitives::assert_eq_error_rate!(12, 10, 2);
+/// sr_arithmetic::assert_eq_error_rate!(10, 10, 0);
+/// sr_arithmetic::assert_eq_error_rate!(10, 11, 1);
+/// sr_arithmetic::assert_eq_error_rate!(12, 10, 2);
 /// # }
 /// ```
 ///
 /// ```rust,should_panic
 /// # fn main() {
-/// sr_primitives::assert_eq_error_rate!(12, 10, 1);
+/// sr_arithmetic::assert_eq_error_rate!(12, 10, 1);
 /// # }
 /// ```
 #[macro_export]
