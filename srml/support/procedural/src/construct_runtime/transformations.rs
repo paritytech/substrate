@@ -34,7 +34,7 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 	} = definition;
 
 	// Assert each module declaration doesn't have duplicated modules
-	// and write expanded module parts instead of `default` or empty declaration
+	// and write expanded module parts instead of `default` or empty declarations
 	{
 		for module in modules.iter_mut() {
 			let _ = try_tok!(module.resolve_module_parts());
@@ -115,7 +115,6 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 	)
 	.into();
 
-	println!("-----\n{}\n------", res.to_string());
 	res
 }
 

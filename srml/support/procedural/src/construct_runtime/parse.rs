@@ -91,6 +91,8 @@ pub struct ModulePart {
 }
 
 impl ModuleDeclaration {
+	/// Get module parts that have been resolved
+	/// (i.e. function [resolve_module_parts](ModuleDeclaration::resolve_module_parts) was called)
 	pub fn resolved_module_parts(&self) -> Vec<&ModulePart> {
 		self.details
 			.inner
@@ -107,6 +109,8 @@ impl ModuleDeclaration {
 			.collect()
 	}
 
+	/// Resolive module parts, i.e. expand `default` keyword or empty declaration
+	/// If there are double entries [Error](syn::Error) is returned
 	pub fn resolve_module_parts(&mut self) -> syn::Result<()> {
 		let module_parts = self.module_parts()?;
 		if self.details.inner.is_none() {
@@ -168,6 +172,7 @@ impl ModuleDeclaration {
 }
 
 impl ModulePart {
+	/// Plain module name like `Event` or `Call`, etc.
 	pub fn with_name(name: &str, span: Span) -> Self {
 		let name = Ident::new(name, span);
 		Self {
@@ -182,6 +187,7 @@ impl ModulePart {
 		}
 	}
 
+	/// Module name with generic like `Event<T>` or `Call<T>`, etc.
 	pub fn with_generics(name: &str, span: Span) -> Self {
 		let name = Ident::new(name, span);
 		let typ = Ident::new("T", span);
