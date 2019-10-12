@@ -202,7 +202,7 @@ fn print_seeds(
 	println!("{}", sudo_seed);
 }
 
-fn run() -> Result<(), String> {
+fn main() -> Result<(), String> {
 	let builder = ChainSpecBuilder::from_args();
 	let chain_spec_path = builder.chain_spec_path().to_path_buf();
 
@@ -260,16 +260,4 @@ fn run() -> Result<(), String> {
 		.map_err(|err| err.to_string())?;
 
 	Ok(())
-}
-
-fn main() {
-	let code = match run() {
-	   Ok(_) => 0,
-	   Err(err) => {
-		   eprintln!("Error: {}", err);
-		   1
-	   },
-	};
-
-	std::process::exit(code);
 }
