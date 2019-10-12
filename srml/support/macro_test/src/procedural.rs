@@ -27,5 +27,6 @@ construct_runtime2!(
 		ImOnline: im_online::{Module, Call, Storage, Event<T>, ValidateUnsigned, Config<T>},
 		AuthorityDiscovery: authority_discovery::{Module, Call, Config<T>},
 		Offences: offences::{Module, Call, Storage, Event},
+		Bridge: bridge::{Module, Call},
 	}
 );
