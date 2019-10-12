@@ -53,8 +53,6 @@ mod origin;
 #[macro_use]
 pub mod metadata;
 #[macro_use]
-mod runtime;
-#[macro_use]
 pub mod inherent;
 #[macro_use]
 pub mod unsigned;
@@ -110,7 +108,7 @@ macro_rules! parameter_types {
 }
 
 #[doc(inline)]
-pub use srml_support_procedural::{decl_storage, construct_runtime2};
+pub use srml_support_procedural::{decl_storage, construct_runtime};
 
 /// Return Err of the expression: `return Err($expression);`.
 ///

@@ -1,12 +1,11 @@
-use proc_macro::TokenStream;
-use proc_macro2::{Span, TokenStream as TokenStream2};
-use quote::{quote, ToTokens};
+use proc_macro2::Span;
+use quote::quote;
 use srml_support_procedural_tools::{syn_ext as ext, Parse, ToTokens};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use syn::{
 	parse::{Parse, ParseStream},
 	spanned::Spanned,
-	token, Ident, Result, Token,
+	Ident, Result, Token,
 };
 
 mod keyword {

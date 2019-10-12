@@ -1,4 +1,4 @@
-use super::parse::{ModuleDeclaration, ModuleEntry, ModulePart, RuntimeDefinition, WhereSection};
+use super::parse::{ModuleDeclaration, ModulePart, RuntimeDefinition, WhereSection};
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::quote;
@@ -74,14 +74,13 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 	));
 	let all_modules = decl_all_modules(
 		&name,
-		&system_module,
 		modules.iter().filter(|module| module.name.to_string() != "System"),
 	);
 
 	let dispatch = decl_outer_dispatch(&name, modules.iter(), &scrate);
 	let metadata = decl_runtime_metadata(&name, modules.iter(), &scrate);
 	let outer_config = decl_outer_config(&name, modules.iter(), &scrate);
-	let inherent = decl_outer_inherent(&name, &block, &unchecked_extrinsic, modules.iter(), &scrate);
+	let inherent = decl_outer_inherent(&block, &unchecked_extrinsic, modules.iter(), &scrate);
 	let validate_unsigned = decl_validate_unsigned(&name, modules.iter(), &scrate);
 
 	let res: TokenStream = quote!(
@@ -141,7 +140,6 @@ fn decl_validate_unsigned<'a>(
 }
 
 fn decl_outer_inherent<'a>(
-	runtime: &'a Ident,
 	block: &'a syn::TypePath,
 	unchecked_extrinsic: &'a syn::TypePath,
 	module_declarations: impl Iterator<Item = &'a ModuleDeclaration>,
@@ -341,7 +339,6 @@ fn decl_outer_event_or_origin<'a>(
 
 fn decl_all_modules<'a>(
 	runtime: &'a Ident,
-	system_module: &'a Ident,
 	module_declarations: impl Iterator<Item = &'a ModuleDeclaration>,
 ) -> TokenStream2 {
 	let mut types = TokenStream2::new();
