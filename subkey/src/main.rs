@@ -241,10 +241,10 @@ where
 			C::print_from_uri(phrase, password, maybe_network, None);
 		}
 		("import", Some(matches)) => {
-			let uri = matches
-				.value_of("uri")
-				.map_or_else(from_stdin, Into::into);
 			if let Some(ref w) = wallet {
+				let uri = matches
+					.value_of("suri")
+					.map_or_else(from_stdin, Into::into);
 				let (phrase, uri_password, path) = <C::Pair as Pair>::parse_suri(&uri)
 					.unwrap_or_bail("Invalid secret URI parameter given.");
 				let phrase = phrase.unwrap_or_bail("Phrase part of secret URI must be provided.");
