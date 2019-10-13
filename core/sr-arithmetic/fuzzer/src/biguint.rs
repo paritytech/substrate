@@ -97,31 +97,31 @@ fn main() {
 
 			// Addition
 
-			let mut w = u.clone().add(&v);
-			let mut num_w = num_u.clone() + &num_v;
+			let w = u.clone().add(&v);
+			let num_w = num_u.clone() + &num_v;
 
 			assert_biguints_eq(&w, &num_w);
 
 			// Subtraction
 
 			if let Ok(w) = u.clone().sub(&v) {
-				num_w = num_u.clone() - &num_v;
+				let num_w = num_u.clone() - &num_v;
 
 				assert_biguints_eq(&w, &num_w);
 			}
 
 			// Multiplication
 
-			w = u.clone().mul(&v);
-			num_w = num_u.clone() * &num_v;
+			let w = u.clone().mul(&v);
+			let num_w = num_u.clone() * &num_v;
 
 			assert_biguints_eq(&w, &num_w);
 
 			// Division
 
 			if v.len() == 1 && v.get(0) != 0 {
-				w = u.clone().div_unit(v.get(0));
-				num_w = num_u.clone() / &num_v;
+				let w = u.clone().div_unit(v.get(0));
+				let num_w = num_u.clone() / &num_v;
 				assert_biguints_eq(&w, &num_w);
 			} else {
 				let w = u.clone().div(&v, rem).map(|(w, _)| w);
@@ -131,9 +131,7 @@ fn main() {
 				// assert_eq!(w.is_some(), num_w.is_some());
 
 				if let Some(w) = w {
-					if let Some(num_w) = num_w {
-						assert_biguints_eq(&w, &num_w);
-					}
+					assert_biguints_eq(&w, &num_w.unwrap());
 				}
 			}
 		});
@@ -168,18 +166,10 @@ fn value_between(value: usize, min: usize, max: usize) -> bool {
 }
 
 fn assert_biguints_eq(a: &BigUint, b: &num_bigint::BigUint) {
-	println!("arithmetic: {:?}", a);
-	println!("num-bigint: {:?}", b);
+	// `BigUint` doesn't check the input in `from_limbs` so we skip any leading 0s.
+	let a_iter = a.as_slice().iter().skip_while(|&&i| i == 0);
+	// the `num-bigint` `BigUint` is little endian whereas our `BigUint` is big endian.
+	let b_iter = b.as_slice().iter().rev();
 
-	let mut a = a.as_slice();
-
-	while !a.is_empty() && a[0] == 0 {
-		a = &a[1..];
-	}
-
-	let mut a = a.to_vec();
-
-	a.reverse();
-
-	assert_eq!(&(*a), b.as_slice());
+	assert!(a_iter.eq(b_iter), "arithmetic: {:?}\nnum-bigint: {:?}", a, b);
 }
