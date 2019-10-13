@@ -40,7 +40,7 @@ macro_rules! new_full_start {
 				Ok(transaction_pool::txpool::Pool::new(config, transaction_pool::FullChainApi::new(client)))
 			)?
 			.with_import_queue(|_config, client, _select_chain, transaction_pool| {
-				aura::import_queue::<_, _, aura_primitives::sr25519::AuthorityPair, _>(
+				aura::import_queue::<_, _, AuraPair, _>(
 					aura::SlotDuration::get_or_compute(&*client)?,
 					Box::new(client.clone()),
 					None,
