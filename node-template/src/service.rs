@@ -9,6 +9,7 @@ use inherents::InherentDataProviders;
 use network::{construct_simple_protocol, config::DummyFinalityProofRequestBuilder};
 use substrate_executor::native_executor_instance;
 pub use substrate_executor::NativeExecutor;
+use aura_primitives::sr25519::{AuthorityPair as AuraPair};
 
 // Our native executor instance.
 native_executor_instance!(
