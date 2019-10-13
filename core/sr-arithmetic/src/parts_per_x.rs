@@ -80,7 +80,7 @@ macro_rules! implement_per_thing {
 			pub fn square(self) -> Self {
 				// both can be safely casted and multiplied.
 				let p: $upper_type = self.0 as $upper_type * self.0 as $upper_type;
-				let q: $upper_type = $max as $upper_type * $max as $upper_type;
+				let q: $upper_type = <$upper_type>::from($max) * <$upper_type>::from($max);
 				Self::from_rational_approximation(p, q)
 			}
 
@@ -124,7 +124,7 @@ macro_rules! implement_per_thing {
 				// fit in $upper_type. This is guaranteed by the macro tests.
 				let part =
 					p_reduce as $upper_type
-					* ($max as $upper_type)
+					* <$upper_type>::from($max)
 					/ q_reduce as $upper_type;
 
 				$name(part as $type)
@@ -142,7 +142,7 @@ macro_rules! implement_per_thing {
 			fn saturating_mul(self, rhs: Self) -> Self {
 				let a = self.0 as $upper_type;
 				let b = rhs.0 as $upper_type;
-				let m = $max as $upper_type;
+				let m = <$upper_type>::from($max);
 				let parts = a * b / m;
 				// This will always fit into $type.
 				Self::from_parts(parts as $type)
@@ -233,11 +233,11 @@ macro_rules! implement_per_thing {
 
 				// needed for `from_rational_approximation`
 				assert!(2 * $max < <$type>::max_value());
-				assert!(($max as $upper_type) < <$upper_type>::max_value());
+				assert!(<$upper_type>::from($max) < <$upper_type>::max_value());
 
 				// for something like percent they can be the same.
 				assert!((<$type>::max_value() as $upper_type) <= <$upper_type>::max_value());
-				assert!(($max as $upper_type).checked_mul($max.into()).is_some());
+				assert!(<$upper_type>::from($max).checked_mul($max.into()).is_some());
 			}
 
 			#[derive(Encode, Decode, PartialEq, Eq, Debug)]
@@ -399,7 +399,7 @@ macro_rules! implement_per_thing {
 			fn per_thing_from_rationale_approx_works() {
 				// This is just to make sure something like Percent which _might_ get built from a
 				// u8 does not overflow in the context of this test.
-				let max_value = $max as $upper_type;
+				let max_value = <$upper_type>::from($max);
 				// almost at the edge
 				assert_eq!(
 					$name::from_rational_approximation($max - 1, $max + 1),
@@ -484,7 +484,7 @@ macro_rules! implement_per_thing {
 				assert_eq!($name::from_percent(10).square(), $name::from_percent(1));
 				assert_eq!(
 					$name::from_percent(2).square(),
-					$name::from_parts((4 * ($max as $upper_type) / 100 / 100) as $type)
+					$name::from_parts((4 * <$upper_type>::from($max) / 100 / 100) as $type)
 				);
 			}
 

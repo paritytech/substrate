@@ -59,16 +59,16 @@ impl Fixed64 {
 	/// Note that this might be lossy.
 	pub fn from_rational(n: i64, d: u64) -> Self {
 		Self(
-			((n as i128).saturating_mul(DIV as i128) / (d as i128).max(1))
+			(i128::from(n).saturating_mul(i128::from(DIV)) / i128::from(d).max(1))
 				.try_into()
-				.unwrap_or(Bounded::max_value())
+				.unwrap_or_else(|_| Bounded::max_value())
 		)
 	}
 
 	/// Performs a saturated multiply and accumulate by unsigned number.
 	///
 	/// Returns a saturated `int + (self * int)`.
-	pub fn saturated_multiply_accumulate<N>(&self, int: N) -> N
+	pub fn saturated_multiply_accumulate<N>(self, int: N) -> N
 		where
 			N: TryFrom<u64> + From<u32> + UniqueSaturatedInto<u32> + Bounded + Clone + Saturating +
 			ops::Rem<N, Output=N> + ops::Div<N, Output=N> + ops::Mul<N, Output=N> +

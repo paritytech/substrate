@@ -44,8 +44,7 @@ pub fn split(a: Double) -> (Single, Single) {
 pub fn mul_single(a: Single, b: Single) -> Double {
 	let a: Double = a.into();
 	let b: Double = b.into();
-	let r = a * b;
-	r
+	a * b
 }
 
 /// Assumed as a given primitive.
@@ -91,7 +90,7 @@ impl BigUint {
 	/// Raw constructor from custom limbs. If `limbs` is empty, `Zero::zero()` implementation is
 	/// used.
 	pub fn from_limbs(limbs: &[Single]) -> Self {
-		if limbs.len() > 0 {
+		if !limbs.is_empty() {
 			Self { digits: limbs.to_vec() }
 		} else {
 			Zero::zero()
@@ -117,7 +116,7 @@ impl BigUint {
 				return self.digits.get(j).cloned();
 			}
 		}
-		return None;
+		None
 	}
 
 	/// A naive setter for limb at `index`. Note that the order is lsb -> msb.
@@ -291,8 +290,8 @@ impl BigUint {
 		let mut out = Self::with_capacity(n);
 		let mut r: Single = 0;
 		// PROOF: (B-1) * B + (B-1) still fits in double
-		let with_r = |x: Double, r: Single| { r as Double * B + x };
-		for d in (0..=n-1).rev() {
+		let with_r = |x: Double, r: Single| { Double::from(r) * B + x };
+		for d in (0..n).rev() {
 			let (q, rr) = div_single(with_r(self.get(d).into(), r), other) ;
 			out.set(d, q as Single);
 			r = rr;
@@ -353,13 +352,13 @@ impl BigUint {
 						* B
 						+ Double::from(self_norm.get(j + n - 1));
 				let divisor = other_norm.get(n - 1);
-				div_single(dividend, divisor.into())
+				div_single(dividend, divisor)
 			};
 
 			// D3.1 test qhat
 			// replace qhat and rhat with RefCells. This helps share state with the closure
 			let qhat = RefCell::new(qhat);
-			let rhat = RefCell::new(rhat as Double);
+			let rhat = RefCell::new(Double::from(rhat));
 
 			let test = || {
 				// decrease qhat if it is bigger than the base (B)
@@ -367,13 +366,13 @@ impl BigUint {
 				let rhat_local = *rhat.borrow();
 				let predicate_1 = qhat_local >= B;
 				let predicate_2 = {
-					let lhs = qhat_local * other_norm.get(n - 2) as Double;
-					let rhs = B * rhat_local + self_norm.get(j + n - 2) as Double;
+					let lhs = qhat_local * Double::from(other_norm.get(n - 2));
+					let rhs = B * rhat_local + Double::from(self_norm.get(j + n - 2));
 					lhs > rhs
 				};
 				if predicate_1 || predicate_2 {
 					*qhat.borrow_mut() -= 1;
-					*rhat.borrow_mut() += other_norm.get(n - 1) as Double;
+					*rhat.borrow_mut() += Double::from(other_norm.get(n - 1));
 					true
 				} else {
 					false
