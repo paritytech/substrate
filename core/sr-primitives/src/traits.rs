@@ -178,18 +178,17 @@ impl<A, B: Default> Convert<A, B> for () {
 	fn convert(_: A) -> B { Default::default() }
 }
 
-/// A structure that performs standard conversion using the standard Rust conversion traits.
-pub struct ConvertInto;
-impl<A, B: From<A>> Convert<A, B> for ConvertInto {
-	fn convert(a: A) -> B { a.into() }
-}
-
 /// A structure that performs identity conversion.
 pub struct Identity;
 impl<T> Convert<T, T> for Identity {
 	fn convert(a: T) -> T { a }
 }
 
+/// A structure that performs standard conversion using the standard Rust conversion traits.
+pub struct ConvertInto;
+impl<A, B: From<A>> Convert<A, B> for ConvertInto {
+	fn convert(a: A) -> B { a.into() }
+}
 
 /// Trait for things that can be clear (have no bits set). For numeric types, essentially the same
 /// as `Zero`.
