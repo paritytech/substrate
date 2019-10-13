@@ -2,10 +2,6 @@ use honggfuzz::fuzz;
 use sr_arithmetic::biguint::{BigUint, Single};
 use std::convert::TryFrom;
 
-mod util;
-
-use util::value_between;
-
 type S = u128;
 
 fn main() {
@@ -89,18 +85,25 @@ fn run_with_data_set<F>(
 	max_limbs: usize,
 	digits_u: &[Single], digits_v: &[Single],
 	assertion: F,
-) -> Option<()>
+)
 	where
 		F: Fn(BigUint, BigUint) -> (),
 {
 	// Ensure that `1 <= num_digits < max_limbs`.
-	value_between(digits_u.len(), 1, max_limbs)?;
-	value_between(digits_v.len(), 1, max_limbs)?;
+	let valid = value_between(digits_u.len(), 1, max_limbs) &&
+		value_between(digits_v.len(), 1, max_limbs);
+	if !valid {
+		return;
+	}
 
 	let u = BigUint::from_limbs(digits_u);
 	let v = BigUint::from_limbs(digits_v);
 	// this is easier than using lldb
-	println!("u: {:?}, v: {:?}", u, v);
-	assertion(u, v);
-	Some(())
+	// println!("u: {:?}, v: {:?}", u, v);
+
+	assertion(u, v)
+}
+
+fn value_between(value: usize, min: usize, max: usize) -> bool {
+	min <= value && value <= max
 }
