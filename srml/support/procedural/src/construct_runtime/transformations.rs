@@ -349,10 +349,18 @@ fn decl_all_modules<'a>(
 		types.extend(type_decl);
 		names.push(&module_declaration.name);
 	}
+	// Make nested tuple structure like (((Babe, Consensus), Grandpa), ...)
+	let all_modules = if names.len() < 2 {
+		quote!(#(#names),*)
+	} else {
+		let name0 = names[0];
+		let name1 = names[1];
+		names.iter().skip(2).fold(quote!((#name0, #name1)), |acc, name| quote!((#acc, #name)))
+	};
 	quote!(
 		pub type System = system::Module<#runtime>;
 		#types
-		type AllModules = ( #(#names),* );
+		type AllModules = ( #all_modules );
 	)
 }
 
