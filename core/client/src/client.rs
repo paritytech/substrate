@@ -1059,10 +1059,10 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 					}
 				};
 
-				let encoded_block = <Block as BlockT>::new(
-					import_headers.pre().clone(),
-					body.unwrap_or_default(),
-				).encode();
+				let encoded_block = <Block as BlockT>::encode_from(
+					import_headers.pre(),
+					&body.unwrap_or_default()
+				);
 
 				let (_, storage_update, changes_update) = self.executor
 					.call_at_state::<_, _, NeverNativeValue, fn() -> _>(
