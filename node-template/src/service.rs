@@ -115,7 +115,7 @@ pub fn new_light<C: Send + Default + 'static>(config: Configuration<C, GenesisCo
 		)?
 		.with_import_queue_and_fprb(|_config, client, _backend, _fetcher, _select_chain, _tx_pool| {
 			let finality_proof_request_builder = Box::new(DummyFinalityProofRequestBuilder::default()) as Box<_>;
-			let import_queue = aura::import_queue::<_, _, aura_primitives::sr25519::AuthorityPair, ()>(
+			let import_queue = aura::import_queue::<_, _, AuraPair, ()>(
 				aura::SlotDuration::get_or_compute(&*client)?,
 				Box::new(client.clone()),
 				None,
