@@ -1,13 +1,14 @@
 use honggfuzz::fuzz;
 use sr_arithmetic::biguint::{BigUint, Single};
 use std::convert::TryFrom;
+use num_traits::ops::checked::CheckedDiv;
 
 type S = u128;
 
 fn main() {
 	loop {
-		fuzz!(|data: (Vec<Single>, Vec<Single>)| {
-			let (digits_u, digits_v) = data;
+		fuzz!(|data: (Vec<Single>, Vec<Single>, bool)| {
+			let (mut digits_u, mut digits_v, rem) = data;
 
 			run_with_data_set(4, &digits_u, &digits_v, |u, v| {
 				let ue = S::try_from(u.clone()).unwrap();
@@ -77,6 +78,64 @@ fn main() {
 					panic!("div returned none for an unexpected reason");
 				}
 			});
+
+			// Test against num_bigint
+
+			let u = BigUint::from_limbs(&digits_u);
+			let v = BigUint::from_limbs(&digits_v);
+
+			digits_u.reverse();
+			digits_v.reverse();
+
+			let num_u = num_bigint::BigUint::new(digits_u);
+			let num_v = num_bigint::BigUint::new(digits_v);
+
+			// Equality
+
+			assert_biguints_eq(&u, &num_u);
+			assert_biguints_eq(&v, &num_v);
+
+			// Addition
+
+			let mut w = u.clone().add(&v);
+			let mut num_w = num_u.clone() + &num_v;
+
+			assert_biguints_eq(&w, &num_w);
+
+			// Subtraction
+
+			if let Ok(w) = u.clone().sub(&v) {
+				num_w = num_u.clone() - &num_v;
+
+				assert_biguints_eq(&w, &num_w);
+			}
+
+			// Multiplication
+
+			w = u.clone().mul(&v);
+			num_w = num_u.clone() * &num_v;
+
+			assert_biguints_eq(&w, &num_w);
+
+			// Division
+
+			if v.len() == 1 && v.get(0) != 0 {
+				w = u.clone().div_unit(v.get(0));
+				num_w = num_u.clone() / &num_v;
+				assert_biguints_eq(&w, &num_w);
+			} else {
+				let w = u.clone().div(&v, rem).map(|(w, _)| w);
+				let num_w = num_u.clone().checked_div(&num_v);
+
+				// assert that the division was checked equally:
+				// assert_eq!(w.is_some(), num_w.is_some());
+
+				if let Some(w) = w {
+					if let Some(num_w) = num_w {
+						assert_biguints_eq(&w, &num_w);
+					}
+				}
+			}
 		});
 	}
 }
@@ -106,4 +165,21 @@ fn run_with_data_set<F>(
 
 fn value_between(value: usize, min: usize, max: usize) -> bool {
 	min <= value && value <= max
+}
+
+fn assert_biguints_eq(a: &BigUint, b: &num_bigint::BigUint) {
+	println!("arithmetic: {:?}", a);
+	println!("num-bigint: {:?}", b);
+
+	let mut a = a.as_slice();
+
+	while !a.is_empty() && a[0] == 0 {
+		a = &a[1..];
+	}
+
+	let mut a = a.to_vec();
+
+	a.reverse();
+
+	assert_eq!(&(*a), b.as_slice());
 }
