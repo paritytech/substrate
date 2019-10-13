@@ -7,7 +7,7 @@ edition = "2018"
 [dependencies]
 honggfuzz = "0.5"
 sr-arithmetic = { path = ".." }
-primitive-types = "0.5.1"
+primitive-types = "0.6"
 
 [[bin]]
 name = "biguint"
