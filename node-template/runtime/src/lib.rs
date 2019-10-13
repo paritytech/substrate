@@ -329,6 +329,7 @@ impl_runtime_apis! {
 		fn slot_duration() -> u64 {
 			Aura::slot_duration()
 		}
+		
 		fn authorities() -> Vec<AuraId> {
 			Aura::authorities()
 		}
