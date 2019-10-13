@@ -83,7 +83,6 @@ pub enum ModuleEntry {
 #[derive(Parse, ToTokens, Debug, Clone)]
 pub struct ModulePart {
 	pub name: Ident,
-	// This deviates from macro $( <$modules_generic:ident> )*
 	pub generics: syn::Generics,
 	pub args: ext::Opt<ext::Parens<ext::Punctuated<Ident, Token![,]>>>,
 }
