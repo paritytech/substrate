@@ -2355,12 +2355,8 @@ dependencies = [
  "srml-support 2.0.0",
  "srml-system 2.0.0",
  "srml-timestamp 2.0.0",
-<<<<<<< HEAD
  "srml-transaction-payment 2.0.0",
- "structopt 0.2.18 (registry+https://github.com/rust-lang/crates.io-index)",
-=======
  "structopt 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)",
->>>>>>> 64192122e3ce9d059bb15ab3e674aa6ddf670cc8
  "substrate-authority-discovery 2.0.0",
  "substrate-basic-authorship 2.0.0",
  "substrate-chain-spec 2.0.0",

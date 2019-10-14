@@ -77,7 +77,7 @@ pub trait Trait: system::Trait {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Balances {
-		NextFeeMultiplier get(next_fee_multiplier): Multiplier = Default::default(); // todo explicit zero
+		NextFeeMultiplier get(next_fee_multiplier): Multiplier = Multiplier::from_parts(0);
 	}
 }
 
@@ -192,12 +192,12 @@ mod tests {
 	use support::{parameter_types, impl_outer_origin};
 	use primitives::H256;
 	use sr_primitives::{
-		Perbill, set_and_run_with_externalities,
+		Perbill,
 		testing::Header,
 		traits::{BlakeTwo256, IdentityLookup},
+		weights::DispatchClass,
 	};
 	use rstd::cell::RefCell;
-	use crate as transaction_payment;
 
 	const CALL: &<Runtime as system::Trait>::Call = &();
 
@@ -283,7 +283,6 @@ mod tests {
 		type FeeMultiplierUpdate = ();
 	}
 
-	type System = system::Module<Runtime>;
 	type Balances = balances::Module<Runtime>;
 
 	pub struct ExtBuilder {
@@ -395,8 +394,8 @@ mod tests {
 	#[test]
 	fn signed_extension_allows_free_transactions() {
 		ExtBuilder::default()
-			.transaction_fees(100, 1, 1)
-			.monied(false)
+			.fees(100, 1, 1)
+			.balance_factor(0)
 			.build()
 			.execute_with(||
 		{
@@ -410,7 +409,7 @@ mod tests {
 			};
 			let len = 100;
 			assert!(
-				TakeFees::<Runtime>::from(0)
+				ChargeTransactionPayment::<Runtime>::from(0)
 					.validate(&1, CALL, operational_transaction , len)
 					.is_ok()
 			);
@@ -421,7 +420,7 @@ mod tests {
 				class: DispatchClass::Normal
 			};
 			assert!(
-				TakeFees::<Runtime>::from(0)
+				ChargeTransactionPayment::<Runtime>::from(0)
 					.validate(&1, CALL, free_transaction , len)
 					.is_err()
 			);

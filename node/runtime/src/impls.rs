@@ -144,7 +144,6 @@ mod tests {
 	}
 
 	// poc reference implementation.
-	#[allow(dead_code)]
 	fn fee_multiplier_update(block_weight: Weight, previous: Fixed64) -> Fixed64  {
 		let block_weight = block_weight as f32;
 		let v: f32 = 0.00004;

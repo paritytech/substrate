@@ -20,20 +20,13 @@
 
 use super::*;
 use mock::{Balances, ExtBuilder, Runtime, System, info_from_weight, CALL};
-<<<<<<< HEAD
-use sr_primitives::{set_and_run_with_externalities, traits::SignedExtension};
-=======
->>>>>>> 64192122e3ce9d059bb15ab3e674aa6ddf670cc8
+use sr_primitives::traits::SignedExtension;
 use support::{
 	assert_noop, assert_ok, assert_err,
 	traits::{LockableCurrency, LockIdentifier, WithdrawReason, WithdrawReasons,
 	Currency, ReservableCurrency}
 };
-<<<<<<< HEAD
 use transaction_payment::ChargeTransactionPayment;
-=======
-use sr_primitives::weights::DispatchClass;
->>>>>>> 64192122e3ce9d059bb15ab3e674aa6ddf670cc8
 use system::RawOrigin;
 
 const ID_1: LockIdentifier = *b"1       ";
@@ -123,7 +116,6 @@ fn lock_reasons_should_work() {
 	ExtBuilder::default()
 		.existential_deposit(1)
 		.monied(true)
-		.transaction_fees(0, 1, 0)
 		.build()
 		.execute_with(|| {
 			Balances::set_lock(ID_1, &1, 10, u64::max_value(), WithdrawReason::Transfer.into());
@@ -133,7 +125,6 @@ fn lock_reasons_should_work() {
 			);
 			assert_ok!(<Balances as ReservableCurrency<_>>::reserve(&1, 1));
 			// NOTE: this causes a fee payment.
-			// TODO: maybe don't depend on this.
 			assert!(<ChargeTransactionPayment<Runtime> as SignedExtension>::pre_dispatch(
 				ChargeTransactionPayment::from(1),
 				&1,

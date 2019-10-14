@@ -83,13 +83,13 @@ parameter_types! {
 	pub const TransactionByteFee: u64 = 1;
 }
 impl transaction_payment::Trait for Runtime {
-		type Currency = Module<Runtime>;
-		type OnTransactionPayment = ();
-		type TransactionBaseFee = TransactionBaseFee;
-		type TransactionByteFee = TransactionByteFee;
-		type WeightToFee = ConvertInto;
-		type FeeMultiplierUpdate = ();
-	}
+	type Currency = Module<Runtime>;
+	type OnTransactionPayment = ();
+	type TransactionBaseFee = TransactionBaseFee;
+	type TransactionByteFee = TransactionByteFee;
+	type WeightToFee = ConvertInto;
+	type FeeMultiplierUpdate = ();
+}
 impl Trait for Runtime {
 	type Balance = u64;
 	type OnFreeBalanceZero = ();

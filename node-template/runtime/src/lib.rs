@@ -276,6 +276,7 @@ construct_runtime!(
 		Grandpa: grandpa::{Module, Call, Storage, Config, Event},
 		Indices: indices::{default, Config<T>},
 		Balances: balances::{default, Error},
+		TransactionPayment: transaction_payment::{Module, Storage},
 		Sudo: sudo,
 		// Used for the module template in `./template.rs`
 		TemplateModule: template::{Module, Call, Storage, Event<T>},
