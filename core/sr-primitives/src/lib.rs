@@ -71,9 +71,6 @@ pub use arithmetic::{
 pub use arithmetic::helpers_128bit;
 /// Re-export big_uint stuff.
 pub use arithmetic::biguint;
-/// Re-export error rate macro.
-#[cfg(feature = "std")]
-pub use arithmetic::assert_eq_error_rate;
 
 /// An abstraction over justification for a block's validity under a consensus algorithm.
 ///
@@ -531,6 +528,35 @@ macro_rules! impl_outer_config {
 	}
 }
 
+/// Checks that `$x` is equal to `$y` with an error rate of `$error`.
+///
+/// # Example
+///
+/// ```rust
+/// # fn main() {
+/// sr_primitives::assert_eq_error_rate!(10, 10, 0);
+/// sr_primitives::assert_eq_error_rate!(10, 11, 1);
+/// sr_primitives::assert_eq_error_rate!(12, 10, 2);
+/// # }
+/// ```
+///
+/// ```rust,should_panic
+/// # fn main() {
+/// sr_primitives::assert_eq_error_rate!(12, 10, 1);
+/// # }
+/// ```
+#[cfg(feature = "std")]
+macro_rules! assert_eq_error_rate {
+	($x:expr, $y:expr, $error:expr $(,)?) => {
+		assert!(
+			($x) >= (($y) - ($error)) && ($x) <= (($y) + ($error)),
+			"{:?} != {:?} (with error rate {:?})",
+			$x,
+			$y,
+			$error,
+		);
+	};
+}
 /// Simple blob to hold an extrinsic without committing to its format and ensure it is serialized
 /// correctly.
 #[derive(PartialEq, Eq, Clone, Default, Encode, Decode)]

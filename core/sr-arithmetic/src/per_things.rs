@@ -6,24 +6,7 @@ use rstd::{ops, prelude::*, convert::TryInto};
 use codec::{Encode, Decode};
 use crate::traits::{SaturatedConversion, UniqueSaturatedInto, Saturating};
 
-/// Checks that `$x` is equal to `$y` with an error rate of `$error`.
-///
-/// # Example
-///
-/// ```rust
-/// # fn main() {
-/// sr_arithmetic::assert_eq_error_rate!(10, 10, 0);
-/// sr_arithmetic::assert_eq_error_rate!(10, 11, 1);
-/// sr_arithmetic::assert_eq_error_rate!(12, 10, 2);
-/// # }
-/// ```
-///
-/// ```rust,should_panic
-/// # fn main() {
-/// sr_arithmetic::assert_eq_error_rate!(12, 10, 1);
-/// # }
-/// ```
-#[macro_export]
+/// Copied from `sr-primitives` and documented there.
 #[cfg(feature = "std")]
 macro_rules! assert_eq_error_rate {
 	($x:expr, $y:expr, $error:expr $(,)?) => {
@@ -222,7 +205,7 @@ macro_rules! implement_per_thing {
 		mod $test_mod {
 			use codec::{Encode, Decode};
 			use super::{$name, Saturating};
-			use crate::{assert_eq_error_rate, traits::Zero};
+			use crate::traits::Zero;
 
 
 			#[test]
