@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{fs::File, io::Write, path::{Path, PathBuf}};
+use std::{fs, path::{Path, PathBuf}};
 
 use ansi_term::Style;
 use rand::{Rng, distributions::Alphanumeric, rngs::OsRng};
@@ -257,11 +257,5 @@ fn main() -> Result<(), String> {
 		sudo_account,
 	)?;
 
-	let mut file = File::create(chain_spec_path)
-		.map_err(|err| err.to_string())?;
-
-	file.write_all(json.as_bytes())
-		.map_err(|err| err.to_string())?;
-
-	Ok(())
+	fs::write(chain_spec_path, json).map_err(|err| err.to_string())
 }
