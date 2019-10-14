@@ -81,7 +81,6 @@ impl system::Trait for Runtime {
 	type AccountId = u64;
 	type Lookup = Indices;
 	type Header = Header;
-	type WeightMultiplierUpdate = ();
 	type Event = ();
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;

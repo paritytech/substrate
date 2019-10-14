@@ -751,7 +751,6 @@ impl<T: Subtrait<I>, I: Instance> system::Trait for ElevatedTrait<T, I> {
 	type AccountId = T::AccountId;
 	type Lookup = T::Lookup;
 	type Header = T::Header;
-	type WeightMultiplierUpdate = T::WeightMultiplierUpdate;
 	type Event = ();
 	type BlockHashCount = T::BlockHashCount;
 	type MaximumBlockWeight = T::MaximumBlockWeight;

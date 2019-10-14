@@ -348,7 +348,6 @@ mod tests {
 		type Header = Header;
 		type Event = MetaEvent;
 		type BlockHashCount = BlockHashCount;
-		type WeightMultiplierUpdate = ();
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
@@ -458,7 +457,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("a6378d7fdd31029d13718d54bdff10a370e75cc624aaf94a90e7e7d4a24e0bcc").into(),
+					state_root: hex!("f0d1d66255c2e5b40580eb8b93ddbe732491478487f85e358e1d167d369e398e").into(),
 					extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
 					digest: Digest { logs: vec![], },
 				},
