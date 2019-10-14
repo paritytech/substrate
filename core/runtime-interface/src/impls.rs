@@ -386,3 +386,31 @@ for_primitive_types! {
 	H256 32,
 	H512 64,
 }
+
+impl RIType for str {
+	type FFIType = u64;
+}
+
+#[cfg(feature = "std")]
+impl FromFFIValue for str {
+	type SelfInstance = String;
+
+	fn from_ffi_value(context: &mut dyn FunctionContext, arg: u64) -> Result<String> {
+		let (ptr, len) = pointer_and_len_from_u64(arg);
+
+		let vec = context.read_memory(Pointer::new(ptr), len)?;
+
+		// The data is valid utf8, as it is stored as `&str` in wasm.
+		Ok(unsafe { String::from_utf8_unchecked(vec) })
+	}
+}
+
+#[cfg(not(feature = "std"))]
+impl IntoFFIValue for str {
+	type Owned = ();
+
+	fn into_ffi_value(&self) -> WrappedFFIValue<u64, ()> {
+		let bytes = self.as_bytes();
+		pointer_and_len_to_u64(bytes.as_ptr() as u32, bytes.len() as u32).into()
+	}
+}
