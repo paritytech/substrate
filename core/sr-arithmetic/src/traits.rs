@@ -32,28 +32,6 @@ use rstd::ops::{
 	RemAssign, Shl, Shr
 };
 
-/// A lazy value.
-pub trait Lazy<T: ?Sized> {
-	/// Get a reference to the underlying value.
-	///
-	/// This will compute the value if the function is invoked for the first time.
-	fn get(&mut self) -> &T;
-}
-
-impl<'a> Lazy<[u8]> for &'a [u8] {
-	fn get(&mut self) -> &[u8] { &**self }
-}
-
-/// Extensible conversion trait. Generic over both source and destination types.
-pub trait Convert<A, B> {
-	/// Make conversion.
-	fn convert(a: A) -> B;
-}
-
-impl<A, B: Default> Convert<A, B> for () {
-	fn convert(_: A) -> B { Default::default() }
-}
-
 /// A meta trait for arithmetic.
 ///
 /// Arithmetic types do all the usual stuff you'd expect numbers to do. They are guaranteed to
