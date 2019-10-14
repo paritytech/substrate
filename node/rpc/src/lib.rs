@@ -45,8 +45,8 @@ mod constants {
 	pub const RUNTIME_ERROR: i64 = 1;
 }
 
-/// Instantiate all RPC extensions.
-pub fn create<C, P, M>(client: Arc<C>, pool: Arc<Pool<P>>) -> jsonrpc_core::IoHandler<M> where
+/// Instantiate all RPC extensions for full node.
+pub fn create_full<C, P, M>(client: Arc<C>, pool: Arc<Pool<P>>) -> jsonrpc_core::IoHandler<M> where
 	C: ProvideRuntimeApi,
 	C: client::blockchain::HeaderBackend<Block>,
 	C: Send + Sync + 'static,
@@ -55,16 +55,43 @@ pub fn create<C, P, M>(client: Arc<C>, pool: Arc<Pool<P>>) -> jsonrpc_core::IoHa
 	M: jsonrpc_core::Metadata + Default,
 {
 	use self::{
-		accounts::{Accounts, AccountsApi},
+		accounts::{FullAccounts, AccountsApi},
 		contracts::{Contracts, ContractsApi},
 	};
 
 	let mut io = jsonrpc_core::IoHandler::default();
 	io.extend_with(
-		AccountsApi::to_delegate(Accounts::new(client.clone(), pool))
+		AccountsApi::to_delegate(FullAccounts::new(client.clone(), pool))
 	);
 	io.extend_with(
 		ContractsApi::to_delegate(Contracts::new(client))
+	);
+	io
+}
+
+/// Instantiate all RPC extensions for light node.
+pub fn create_light<C, P, M, F>(
+	client: Arc<C>,
+	remote_blockchain: Arc<dyn client::light::blockchain::RemoteBlockchain<Block>>,
+	fetcher: Arc<F>,
+	pool: Arc<Pool<P>>,
+) -> jsonrpc_core::IoHandler<M>
+	where
+		C: ProvideRuntimeApi,
+		C: client::blockchain::HeaderBackend<Block>,
+		C: Send + Sync + 'static,
+		C::Api: AccountNonceApi<Block> + ContractsApi<Block>,
+		P: ChainApi + Sync + Send + 'static,
+		M: jsonrpc_core::Metadata + Default,
+		F: client::light::fetcher::Fetcher<Block> + 'static,
+{
+	use self::{
+		accounts::{LightAccounts, AccountsApi},
+	};
+
+	let mut io = jsonrpc_core::IoHandler::default();
+	io.extend_with(
+		AccountsApi::to_delegate(LightAccounts::new(client, remote_blockchain, fetcher, pool))
 	);
 	io
 }

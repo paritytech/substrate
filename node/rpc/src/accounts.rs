@@ -18,18 +18,30 @@
 
 use std::sync::Arc;
 
-use client::blockchain::HeaderBackend;
-use jsonrpc_core::{Result, Error, ErrorCode};
+use client::{
+	blockchain::HeaderBackend,
+	error::Error as ClientError,
+	light::blockchain::{future_header, RemoteBlockchain},
+	light::fetcher::{Fetcher, RemoteCallRequest},
+};
+use jsonrpc_core::{
+	Error, ErrorCode,
+	futures::future::{result, Future},
+};
 use jsonrpc_derive::rpc;
+use futures03::future::{ready, TryFutureExt};
 use node_primitives::{
 	AccountId, Index, AccountNonceApi, Block, BlockId,
 };
-use codec::Encode;
+use codec::{Decode, Encode};
 use sr_primitives::traits;
 use substrate_primitives::hexdisplay::HexDisplay;
 use transaction_pool::txpool::{self, Pool};
 
 pub use self::gen_client::Client as AccountsClient;
+
+/// Future that resolves to account nonce.
+pub type FutureResult<T> = Box<dyn Future<Item = T, Error = Error> + Send>;
 
 /// Accounts RPC methods.
 #[rpc]
@@ -40,26 +52,26 @@ pub trait AccountsApi {
 	/// currently in the pool and if no transactions are found in the pool
 	/// it fallbacks to query the index from the runtime (aka. state nonce).
 	#[rpc(name = "account_nextIndex")]
-	fn nonce(&self, account: AccountId) -> Result<Index>;
+	fn nonce(&self, account: AccountId) -> FutureResult<Index>;
 }
 
-/// An implementation of Accounts specific RPC methods.
-pub struct Accounts<P: txpool::ChainApi, C> {
+/// An implementation of Accounts specific RPC methods on full client.
+pub struct FullAccounts<P: txpool::ChainApi, C> {
 	client: Arc<C>,
 	pool: Arc<Pool<P>>,
 }
 
-impl<P: txpool::ChainApi, C> Accounts<P, C> {
-	/// Create new `Accounts` given client and transaction pool.
+impl<P: txpool::ChainApi, C> FullAccounts<P, C> {
+	/// Create new `FullAccounts` given client and transaction pool.
 	pub fn new(client: Arc<C>, pool: Arc<Pool<P>>) -> Self {
-		Accounts {
+		FullAccounts {
 			client,
 			pool
 		}
 	}
 }
 
-impl<P, C> AccountsApi for Accounts<P, C>
+impl<P, C> AccountsApi for FullAccounts<P, C>
 where
 	C: traits::ProvideRuntimeApi,
 	C: HeaderBackend<Block>,
@@ -67,44 +79,125 @@ where
 	C::Api: AccountNonceApi<Block>,
 	P: txpool::ChainApi + Sync + Send + 'static,
 {
-	fn nonce(&self, account: AccountId) -> Result<Index> {
-		let api = self.client.runtime_api();
-		let best = self.client.info().best_hash;
-		let at = BlockId::hash(best);
+	fn nonce(&self, account: AccountId) -> FutureResult<Index> {
+		let get_nonce = || {
+			let api = self.client.runtime_api();
+			let best = self.client.info().best_hash;
+			let at = BlockId::hash(best);
 
-		let nonce = api.account_nonce(&at, account.clone()).map_err(|e| Error {
+			let nonce = api.account_nonce(&at, account.clone()).map_err(|e| Error {
+				code: ErrorCode::ServerError(crate::constants::RUNTIME_ERROR),
+				message: "Unable to query nonce.".into(),
+				data: Some(format!("{:?}", e).into()),
+			})?;
+
+			Ok(adjust_nonce(&*self.pool, account, nonce))
+		};
+
+		Box::new(result(get_nonce()))
+	}
+}
+
+/// An implementation of Accounts specific RPC methods on light client.
+pub struct LightAccounts<P: txpool::ChainApi, C, F> {
+	client: Arc<C>,
+	remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
+	fetcher: Arc<F>,
+	pool: Arc<Pool<P>>,
+}
+
+impl<P: txpool::ChainApi, C, F> LightAccounts<P, C, F> {
+	/// Create new `LightAccounts` given client and transaction pool.
+	pub fn new(
+		client: Arc<C>,
+		remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
+		fetcher: Arc<F>,
+		pool: Arc<Pool<P>>,
+	) -> Self {
+		LightAccounts {
+			client,
+			remote_blockchain,
+			fetcher,
+			pool,
+		}
+	}
+}
+
+impl<P, C, F> AccountsApi for LightAccounts<P, C, F>
+where
+	P: txpool::ChainApi + Sync + Send + 'static,
+	C: HeaderBackend<Block> + 'static,
+	F: Fetcher<Block> + 'static,
+{
+	fn nonce(&self, account: AccountId) -> FutureResult<Index> {
+		let best_hash = self.client.info().best_hash;
+		let best_id = BlockId::hash(best_hash);
+		let future_best_header = future_header(&*self.remote_blockchain, &*self.fetcher, best_id);
+		let fetcher = self.fetcher.clone();
+		let call_data = account.encode();
+		let future_best_header = future_best_header.and_then(move |maybe_best_header| ready(
+			match maybe_best_header {
+				Some(best_header) => Ok(best_header),
+				None => Err(ClientError::UnknownBlock(format!("{}", best_hash))),
+			}
+		));
+		let future_nonce = future_best_header.and_then(move |best_header|
+			fetcher.remote_call(RemoteCallRequest {
+				block: best_hash,
+				header: best_header,
+				method: "AccountNonceApi_account_nonce".into(),
+				call_data,
+				retry_count: None,
+			})
+		).compat();
+		let future_nonce = future_nonce.and_then(|nonce| Decode::decode(&mut &nonce[..])
+			.map_err(|e| ClientError::CallResultDecode("Cannot decode account nonce", e)));
+		let future_nonce = future_nonce.map_err(|e| Error {
 			code: ErrorCode::ServerError(crate::constants::RUNTIME_ERROR),
 			message: "Unable to query nonce.".into(),
 			data: Some(format!("{:?}", e).into()),
-		})?;
+		});
 
-		log::debug!(target: "rpc", "State nonce for {}: {}", account, nonce);
-		// Now we need to query the transaction pool
-		// and find transactions originating from the same sender.
-		//
-		// Since extrinsics are opaque to us, we look for them using
-		// `provides` tag. And increment the nonce if we find a transaction
-		// that matches the current one.
-		let mut current_nonce = nonce;
-		let mut current_tag = (account.clone(), nonce).encode();
-		for tx in self.pool.ready() {
-			log::debug!(
-				target: "rpc",
-				"Current nonce to {:?}, checking {} vs {:?}",
-				current_nonce,
-				HexDisplay::from(&current_tag),
-				tx.provides.iter().map(|x| format!("{}", HexDisplay::from(x))).collect::<Vec<_>>(),
-			);
-			// since transactions in `ready()` need to be ordered by nonce
-			// it's fine to continue with current iterator.
-			if tx.provides.get(0) == Some(&current_tag) {
-				current_nonce += 1;
-				current_tag = (account.clone(), current_nonce).encode();
-			}
-		}
+		let pool = self.pool.clone();
+		let future_nonce = future_nonce.map(move |nonce| adjust_nonce(&*pool, account, nonce));
 
-		Ok(current_nonce)
+		Box::new(future_nonce)
 	}
+}
+
+/// Adjust account nonce from state, so that tx with the nonce will be
+/// placed after all ready txpool transactions.
+fn adjust_nonce<P: txpool::ChainApi>(
+	pool: &Pool<P>,
+	account: AccountId,
+	nonce: Index,
+) -> Index {
+	log::debug!(target: "rpc", "State nonce for {}: {}", account, nonce);
+	// Now we need to query the transaction pool
+	// and find transactions originating from the same sender.
+	//
+	// Since extrinsics are opaque to us, we look for them using
+	// `provides` tag. And increment the nonce if we find a transaction
+	// that matches the current one.
+	let mut current_nonce = nonce;
+	let mut current_tag = (account.clone(), nonce).encode();
+	for tx in pool.ready() {
+		log::debug!(
+			target: "rpc",
+			"Current nonce to {:?}, checking {} vs {:?}",
+			current_nonce,
+			HexDisplay::from(&current_tag),
+			tx.provides.iter().map(|x| format!("{}", HexDisplay::from(x))).collect::<Vec<_>>(),
+		);
+		// since transactions in `ready()` need to be ordered by nonce
+		// it's fine to continue with current iterator.
+		if tx.provides.get(0) == Some(&current_tag) {
+			current_nonce += 1;
+			current_tag = (account.clone(), current_nonce).encode();
+		}
+	}
+
+	current_nonce
 }
 
 #[cfg(test)]
@@ -144,12 +237,12 @@ mod tests {
 		let ext1 = new_transaction(signed_extra(1, 0));
 		block_on(pool.submit_one(&BlockId::number(0), ext1)).unwrap();
 
-		let accounts = Accounts::new(client, pool);
+		let accounts = FullAccounts::new(client, pool);
 
 		// when
 		let nonce = accounts.nonce(alice().into());
 
 		// then
-		assert_eq!(nonce.unwrap(), 2);
+		assert_eq!(nonce.wait().unwrap(), 2);
 	}
 }

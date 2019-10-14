@@ -60,6 +60,9 @@ pub enum Error {
 	ImmediatelyDropped,
 	/// Invalid block id.
 	InvalidBlockId(String),
+	/// The pool is not accepting future transactions.
+	#[display(fmt="The pool is not accepting future tranasctions")]
+	RejectedFutureTransaction,
 }
 
 impl std::error::Error for Error {}

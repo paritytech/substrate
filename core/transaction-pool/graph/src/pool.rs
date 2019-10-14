@@ -122,6 +122,11 @@ impl<B: ChainApi> Pool<B> {
 		}
 	}
 
+	/// Start rejecting future transactions.
+	pub fn reject_future_transactions(&self) {
+		self.validated_pool.reject_future_transactions();
+	}
+
 	/// Imports a bunch of unverified extrinsics to the pool
 	pub fn submit_at<T>(&self, at: &BlockId<B::Block>, xts: T, force: bool)
 		-> impl Future<Output=Result<Vec<Result<ExHash<B>, B::Error>>, B::Error>>
@@ -131,7 +136,9 @@ impl<B: ChainApi> Pool<B> {
 		let validated_pool = self.validated_pool.clone();
 		self.verify(at, xts, force)
 			.map(move |validated_transactions| validated_transactions
-				.map(|validated_transactions| validated_pool.submit(validated_transactions)))
+				.map(|validated_transactions| validated_pool.submit(validated_transactions
+					.into_iter()
+					.map(|(_, tx)| tx))))
 	}
 
 	/// Imports one unverified extrinsic to the pool
@@ -165,6 +172,36 @@ impl<B: ChainApi> Pool<B> {
 		)
 	}
 
+	/// Revalidate all ready transactions.
+	///
+	/// Returns future that performs validation of all ready transactions and
+	/// then resubmits all transactions back to the pool.
+	pub fn revalidate_ready(&self, at: &BlockId<B::Block>) -> impl Future<Output=Result<(), B::Error>> {
+		let validated_pool = self.validated_pool.clone();
+		let ready = self.validated_pool.ready().map(|tx| tx.data.clone());
+		self.verify(at, ready, false)
+			.map(move |revalidated_transactions| revalidated_transactions.map(
+				move |revalidated_transactions| validated_pool.resubmit(revalidated_transactions)
+			))
+	}
+
+	/// Prunes known ready transactions.
+	///
+	/// Used to clear the pool from transactions that were part of recently imported block.
+	/// The main difference from the `prune` is that we do not revalidate any transactions
+	/// and ignore unknown passed hashes.
+	pub fn prune_known(&self, at: &BlockId<B::Block>, hashes: &[ExHash<B>]) -> Result<(), B::Error> {
+		// Get details of all extrinsics that are already in the pool
+		let in_pool_tags = self.validated_pool.extrinsics_tags(hashes)
+			.into_iter().filter_map(|x| x).flat_map(|x| x);
+
+		// Prune all transactions that provide given tags
+		let prune_status = self.validated_pool.prune_tags(in_pool_tags)?;
+		let pruned_transactions = hashes.into_iter().cloned()
+			.chain(prune_status.pruned.iter().map(|tx| tx.hash.clone()));
+		self.validated_pool.fire_pruned(at, pruned_transactions)
+	}
+
 	/// Prunes ready transactions.
 	///
 	/// Used to clear the pool from transactions that were part of recently imported block.
@@ -178,7 +215,8 @@ impl<B: ChainApi> Pool<B> {
 		extrinsics: &[ExtrinsicFor<B>],
 	) -> impl Future<Output=Result<(), B::Error>> {
 		// Get details of all extrinsics that are already in the pool
-		let (in_pool_hashes, in_pool_tags) = self.validated_pool.extrinsics_tags(extrinsics);
+		let in_pool_hashes = extrinsics.iter().map(|extrinsic| self.hash_of(extrinsic)).collect::<Vec<_>>();
+		let in_pool_tags = self.validated_pool.extrinsics_tags(&in_pool_hashes);
 
 		// Zip the ones from the pool with the full list (we get pairs `(Extrinsic, Option<Vec<Tag>>)`)
 		let all = extrinsics.iter().zip(in_pool_tags.into_iter());
@@ -266,7 +304,7 @@ impl<B: ChainApi> Pool<B> {
 					&at,
 					known_imported_hashes,
 					pruned_hashes,
-					reverified_transactions,
+					reverified_transactions.into_iter().map(|(_, xt)| xt).collect(),
 				))
 			)))
 	}
@@ -314,7 +352,7 @@ impl<B: ChainApi> Pool<B> {
 		at: &BlockId<B::Block>,
 		xts: impl IntoIterator<Item=ExtrinsicFor<B>>,
 		force: bool,
-	) -> impl Future<Output=Result<Vec<ValidatedTransactionFor<B>>, B::Error>> {
+	) -> impl Future<Output=Result<HashMap<ExHash<B>, ValidatedTransactionFor<B>>, B::Error>> {
 		// we need a block number to compute tx validity
 		let block_number = match self.resolve_block_number(at) {
 			Ok(block_number) => block_number,
@@ -322,12 +360,14 @@ impl<B: ChainApi> Pool<B> {
 		};
 
 		// for each xt, prepare a validation future
-		let validation_futures = xts.into_iter().map(move |xt|
+		let validation_futures = xts.into_iter().map(move |xt| {
+			let hash = self.validated_pool.api().hash_and_length(&xt).0;
 			self.verify_one(at, block_number, xt, force)
-		);
+				.map(|v| (hash, v))
+		});
 
 		// make single validation future that waits all until all extrinsics are validated
-		Either::Right(join_all(validation_futures).then(|x| ready(Ok(x))))
+		Either::Right(join_all(validation_futures).then(|x| ready(Ok(x.into_iter().collect()))))
 	}
 
 	/// Returns future that validates single transaction at given block.
@@ -383,7 +423,7 @@ impl<B: ChainApi> Clone for Pool<B> {
 #[cfg(test)]
 mod tests {
 	use std::{
-		collections::HashMap,
+		collections::{HashMap, HashSet},
 		time::Instant,
 	};
 	use parking_lot::Mutex;
@@ -401,6 +441,9 @@ mod tests {
 	#[derive(Clone, Debug, Default)]
 	struct TestApi {
 		delay: Arc<Mutex<Option<std::sync::mpsc::Receiver<()>>>>,
+		invalidate: Arc<Mutex<HashSet<u64>>>,
+		clear_requirements: Arc<Mutex<HashSet<u64>>>,
+		add_requirements: Arc<Mutex<HashSet<u64>>>,
 	}
 
 	impl ChainApi for TestApi {
@@ -415,6 +458,7 @@ mod tests {
 			at: &BlockId<Self::Block>,
 			uxt: ExtrinsicFor<Self>,
 		) -> Self::ValidationFuture {
+			let hash = self.hash_and_length(&uxt).0;
 			let block_number = self.block_id_to_number(at).unwrap().unwrap();
 			let nonce = uxt.transfer().nonce;
 
@@ -428,16 +472,30 @@ mod tests {
 				}
 			}
 
+			if self.invalidate.lock().contains(&hash) {
+				return futures::future::ready(Ok(InvalidTransaction::Custom(0).into()));
+			}
+
 			futures::future::ready(if nonce < block_number {
 				Ok(InvalidTransaction::Stale.into())
 			} else {
-				Ok(Ok(ValidTransaction {
+				let mut transaction = ValidTransaction {
 					priority: 4,
 					requires: if nonce > block_number { vec![vec![nonce as u8 - 1]] } else { vec![] },
 					provides: if nonce == INVALID_NONCE { vec![] } else { vec![vec![nonce as u8]] },
 					longevity: 3,
 					propagate: true,
-				}))
+				};
+
+				if self.clear_requirements.lock().contains(&hash) {
+					transaction.requires.clear();
+				}
+
+				if self.add_requirements.lock().contains(&hash) {
+					transaction.requires.push(vec![128]);
+				}
+
+				Ok(Ok(transaction))
 			})
 		}
 
@@ -907,5 +965,81 @@ mod tests {
 			assert_eq!(pool.status().ready, 1);
 			assert_eq!(pool.status().future, 0);
 		}
+	}
+
+	#[test]
+	fn should_revalidate_ready_transactions() {
+		fn transfer(nonce: u64) -> Extrinsic {
+			uxt(Transfer {
+				from: AccountId::from_h256(H256::from_low_u64_be(1)),
+				to: AccountId::from_h256(H256::from_low_u64_be(2)),
+				amount: 5,
+				nonce,
+			})
+		}
+
+		// given
+		let pool = pool();
+		let tx0 = transfer(0);
+		let hash0 = pool.validated_pool.api().hash_and_length(&tx0).0;
+		let watcher0 = block_on(pool.submit_and_watch(&BlockId::Number(0), tx0)).unwrap();
+		let tx1 = transfer(1);
+		let hash1 = pool.validated_pool.api().hash_and_length(&tx1).0;
+		let watcher1 = block_on(pool.submit_and_watch(&BlockId::Number(0), tx1)).unwrap();
+		let tx2 = transfer(2);
+		let hash2 = pool.validated_pool.api().hash_and_length(&tx2).0;
+		let watcher2 = block_on(pool.submit_and_watch(&BlockId::Number(0), tx2)).unwrap();
+		let tx3 = transfer(3);
+		let hash3 = pool.validated_pool.api().hash_and_length(&tx3).0;
+		let watcher3 = block_on(pool.submit_and_watch(&BlockId::Number(0), tx3)).unwrap();
+		let tx4 = transfer(4);
+		let hash4 = pool.validated_pool.api().hash_and_length(&tx4).0;
+		let watcher4 = block_on(pool.submit_and_watch(&BlockId::Number(0), tx4)).unwrap();
+		assert_eq!(pool.status().ready, 5);
+
+		// when
+		pool.validated_pool.api().invalidate.lock().insert(hash3);
+		pool.validated_pool.api().clear_requirements.lock().insert(hash1);
+		pool.validated_pool.api().add_requirements.lock().insert(hash0);
+		block_on(pool.revalidate_ready(&BlockId::Number(0))).unwrap();
+
+		// then
+		// hash0 now has unsatisfied requirements => it is moved to the future queue
+		// hash1 is now independent of hash0 => it is in ready queue
+		// hash2 still depends on hash1 => it is in ready queue
+		// hash3 is now invalid => it is removed from the pool
+		// hash4 now depends on invalidated hash3 => it is moved to the future queue
+		//
+		// events for hash3 are: Ready, Invalid
+		// events for hash4 are: Ready, Invalid
+		assert_eq!(pool.status().ready, 2);
+		assert_eq!(
+			futures::executor::block_on_stream(watcher3.into_stream()).collect::<Vec<_>>(),
+			vec![watcher::Status::Ready, watcher::Status::Invalid],
+		);
+
+		// when
+		pool.validated_pool.remove_invalid(&[hash0, hash1, hash2, hash4]);
+
+		// then
+		// events for hash0 are: Ready, Future, Invalid
+		// events for hash1 are: Ready, Invalid
+		// events for hash2 are: Ready, Invalid
+		assert_eq!(
+			futures::executor::block_on_stream(watcher0.into_stream()).collect::<Vec<_>>(),
+			vec![watcher::Status::Ready, watcher::Status::Future, watcher::Status::Invalid],
+		);
+		assert_eq!(
+			futures::executor::block_on_stream(watcher1.into_stream()).collect::<Vec<_>>(),
+			vec![watcher::Status::Ready, watcher::Status::Invalid],
+		);
+		assert_eq!(
+			futures::executor::block_on_stream(watcher2.into_stream()).collect::<Vec<_>>(),
+			vec![watcher::Status::Ready, watcher::Status::Invalid],
+		);
+		assert_eq!(
+			futures::executor::block_on_stream(watcher4.into_stream()).collect::<Vec<_>>(),
+			vec![watcher::Status::Ready, watcher::Status::Future, watcher::Status::Invalid],
+		);
 	}
 }

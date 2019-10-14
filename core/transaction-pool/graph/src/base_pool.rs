@@ -83,8 +83,7 @@ pub struct PruneStatus<Hash, Ex> {
 }
 
 /// Immutable transaction
-#[cfg_attr(test, derive(Clone))]
-#[derive(PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Transaction<Hash, Extrinsic> {
 	/// Raw extrinsic representing that transaction.
 	pub data: Extrinsic,
@@ -159,6 +158,7 @@ const RECENTLY_PRUNED_TAGS: usize = 2;
 /// required tags.
 #[derive(Debug)]
 pub struct BasePool<Hash: hash::Hash + Eq, Ex> {
+	reject_future_transactions: bool,
 	future: FutureTransactions<Hash, Ex>,
 	ready: ReadyTransactions<Hash, Ex>,
 	/// Store recently pruned tags (for last two invocations).
@@ -172,6 +172,7 @@ pub struct BasePool<Hash: hash::Hash + Eq, Ex> {
 impl<Hash: hash::Hash + Eq, Ex> Default for BasePool<Hash, Ex> {
 	fn default() -> Self {
 		BasePool {
+			reject_future_transactions: false,
 			future: Default::default(),
 			ready: Default::default(),
 			recently_pruned: Default::default(),
@@ -181,6 +182,11 @@ impl<Hash: hash::Hash + Eq, Ex> Default for BasePool<Hash, Ex> {
 }
 
 impl<Hash: hash::Hash + Member + Serialize, Ex: ::std::fmt::Debug> BasePool<Hash, Ex> {
+	/// Start rejecting future transactions.
+	pub fn reject_future_transactions(&mut self) {
+		self.reject_future_transactions = true;
+	}
+
 	/// Imports transaction to the pool.
 	///
 	/// The pool consists of two parts: Future and Ready.
@@ -206,6 +212,10 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: ::std::fmt::Debug> BasePool<Hash
 
 		// If all tags are not satisfied import to future.
 		if !tx.is_ready() {
+			if self.reject_future_transactions {
+				return Err(error::Error::RejectedFutureTransaction);
+			}
+
 			let hash = tx.transaction.hash.clone();
 			self.future.import(tx);
 			return Ok(Imported::Future { hash });
@@ -354,6 +364,14 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: ::std::fmt::Debug> BasePool<Hash
 		}
 
 		removed
+	}
+
+	/// Removes ready transaction represented by the hash and all other ready transactions
+	/// that depend on it.
+	///
+	/// Returns a list of actually removed transactions.
+	pub fn remove_from_ready(&mut self, hash: &Hash) -> Vec<Arc<Transaction<Hash, Ex>>> {
+		self.ready.remove_invalid(&[hash.clone()])
 	}
 
 	/// Removes all transactions represented by the hashes and all other transactions
@@ -971,5 +989,31 @@ requires: [03,02], provides: [04], data: [4]}".to_owned()
 				provides: vec![vec![4]],
 				propagate: false,
 		}.is_propagateable(), false);
+	}
+
+	#[test]
+	fn should_reject_future_transactions() {
+		// given
+		let mut pool = pool();
+
+		// when
+		pool.reject_future_transactions();
+
+		// then
+		let err = pool.import(Transaction {
+			data: vec![5u8],
+			bytes: 1,
+			hash: 5,
+			priority: 5u64,
+			valid_till: 64u64,
+			requires: vec![vec![0]],
+			provides: vec![],
+			propagate: true,
+		});
+
+		if let Err(error::Error::RejectedFutureTransaction) = err {
+		} else {
+			assert!(false, "Invalid error kind: {:?}", err);
+		}
 	}
 }

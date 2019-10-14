@@ -19,9 +19,10 @@ sr-primitives = { path = "../../core/sr-primitives" }
 substrate-primitives = { path = "../../core/primitives" }
 rpc-primitives = { package = "substrate-rpc-primitives", path = "../../core/rpc/primitives" }
 transaction_pool = { package = "substrate-transaction-pool", path = "../../core/transaction-pool" }
+futures03 = { package = "futures-preview", version = "=0.3.0-alpha.19" }
 
 [dev-dependencies]
 node-testing = { path = "../testing" }
 node-runtime = { path = "../runtime" }
 env_logger = "0.7.0"
-futures03 = { package = "futures-preview", version = "=0.3.0-alpha.19" }
+
