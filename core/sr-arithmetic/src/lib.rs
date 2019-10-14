@@ -25,10 +25,10 @@
 pub mod biguint;
 pub mod helpers_128bit;
 pub mod traits;
-mod parts_per_x;
+mod per_things;
 mod fixed64;
 mod rational128;
 
 pub use fixed64::Fixed64;
-pub use parts_per_x::{Percent, Permill, Perbill, Perquintill};
+pub use per_things::{Percent, Permill, Perbill, Perquintill};
 pub use rational128::Rational128;
