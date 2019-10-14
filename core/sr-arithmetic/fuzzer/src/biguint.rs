@@ -1,3 +1,31 @@
+// Copyright 2019 Parity Technologies (UK) Ltd.
+// This file is part of Substrate.
+
+// Substrate is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// Substrate is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+
+//! # Running
+//! Running this fuzzer can be done with `cargo hfuzz run biguint`. `honggfuzz` CLI options can
+//! be used by setting `HFUZZ_RUN_ARGS`, such as `-n 4` to use 4 threads.
+//!
+//! # Debugging a panic
+//! Once a panic is found, it can be debugged with
+//! `cargo hfuzz run-debug biguint hfuzz_workspace/biguint/*.fuzz`.
+//!
+//! # More infomation
+//! More information about `honggfuzz` can be found
+//! [here](https://docs.rs/honggfuzz/0.5.45/honggfuzz/).
+
 use honggfuzz::fuzz;
 use sr_arithmetic::biguint::{BigUint, Single};
 use std::convert::TryFrom;
