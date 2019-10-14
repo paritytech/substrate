@@ -23,7 +23,7 @@ use jsonrpc_core as rpc;
 /// Chain RPC Result type.
 pub type Result<T> = std::result::Result<T, Error>;
 
-/// State RPC future Result type.
+/// Chain RPC future Result type.
 pub type FutureResult<T> = Box<dyn rpc::futures::Future<Item = T, Error = Error> + Send>;
 
 /// Chain RPC errors.
