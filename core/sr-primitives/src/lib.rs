@@ -545,6 +545,7 @@ macro_rules! impl_outer_config {
 /// sr_primitives::assert_eq_error_rate!(12, 10, 1);
 /// # }
 /// ```
+#[macro_export]
 #[cfg(feature = "std")]
 macro_rules! assert_eq_error_rate {
 	($x:expr, $y:expr, $error:expr $(,)?) => {
@@ -557,6 +558,7 @@ macro_rules! assert_eq_error_rate {
 		);
 	};
 }
+
 /// Simple blob to hold an extrinsic without committing to its format and ensure it is serialized
 /// correctly.
 #[derive(PartialEq, Eq, Clone, Default, Encode, Decode)]
