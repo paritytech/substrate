@@ -33,6 +33,7 @@ use crate::crypto::{Pair as TraitPair, DeriveJunction, SecretStringError, Ss58Co
 #[cfg(feature = "std")]
 use serde::{de, Serializer, Serialize, Deserializer, Deserialize};
 use crate::{crypto::{Public as TraitPublic, UncheckedFrom, CryptoType, Derive}};
+use runtime_interface::pass_by::PassByInner;
 
 /// A secret seed. It's not called a "secret key" because ring doesn't expose the secret keys
 /// of the key pair (yeah, dumb); as such we're forced to remember the seed manually if we
@@ -41,7 +42,7 @@ use crate::{crypto::{Public as TraitPublic, UncheckedFrom, CryptoType, Derive}};
 type Seed = [u8; 32];
 
 /// A public key.
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, PassByInner)]
 pub struct Public(pub [u8; 32]);
 
 /// A key pair.
@@ -160,7 +161,7 @@ impl std::hash::Hash for Public {
 }
 
 /// A signature (a 512-bit value).
-#[derive(Encode, Decode)]
+#[derive(Encode, Decode, PassByInner)]
 pub struct Signature(pub [u8; 64]);
 
 impl rstd::convert::TryFrom<&[u8]> for Signature {

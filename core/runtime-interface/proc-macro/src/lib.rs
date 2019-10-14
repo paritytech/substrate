@@ -66,7 +66,7 @@ fn runtime_interface_impl(trait_def: ItemTrait) -> Result<TokenStream> {
 		}
 	};
 
-	println!("{}", res);
+	// println!("{}", res);
 
 	Ok(res)
 }

@@ -14,7 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Checks the trait declaration, folds and implements it.
+//! Checks the trait declaration, makes the trait declaration module local, removes all method
+//! default implementations and implements the trait for `&mut dyn Externalities`.
 
 use crate::utils::{generate_crate_access, get_function_argument_types_without_ref};
 
@@ -28,7 +29,7 @@ use proc_macro2::TokenStream;
 use quote::quote;
 
 /// Process the given trait definition, by checking that the definition is valid, fold it to the
-/// essential definition and implement this essential definition for `dyn Externalities<Blake2Hasher>`.
+/// essential definition and implement this essential definition for `dyn Externalities`.
 pub fn process(trait_def: &ItemTrait) -> Result<TokenStream> {
 	let impl_trait = impl_trait_for_externalities(trait_def)?;
 	let essential_trait_def = ToEssentialTraitDef::convert(trait_def.clone())?;
@@ -110,7 +111,7 @@ impl Fold for ToEssentialTraitDef {
 	}
 }
 
-/// Implements the given trait definition for `dyn Externalities<Blake2Hasher>`.
+/// Implements the given trait definition for `dyn Externalities`.
 fn impl_trait_for_externalities(trait_def: &ItemTrait) -> Result<TokenStream> {
 	let trait_ = &trait_def.ident;
 	let crate_ = generate_crate_access();
@@ -125,7 +126,7 @@ fn impl_trait_for_externalities(trait_def: &ItemTrait) -> Result<TokenStream> {
 	Ok(
 		quote! {
 			#[cfg(feature = "std")]
-			impl #trait_ for &mut dyn #crate_::Externalities<#crate_::Blake2Hasher> {
+			impl #trait_ for &mut dyn #crate_::Externalities {
 				#( #methods )*
 			}
 		}

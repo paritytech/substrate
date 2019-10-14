@@ -32,7 +32,9 @@ pub use substrate_runtime_interface_proc_macro::runtime_interface;
 
 #[doc(hidden)]
 #[cfg(feature = "std")]
-pub use externalities::{set_and_run_with_externalities, with_externalities, Externalities};
+pub use externalities::{
+	set_and_run_with_externalities, with_externalities, Externalities, ExternalitiesExt, ExtensionStore,
+};
 
 #[doc(hidden)]
 pub use codec;
@@ -66,7 +68,7 @@ mod tests {
 
 	type TestExternalities<H> = state_machine::TestExternalities<H, u64>;
 
-	fn call_wasm_method<HF: HostFunctionsT>(method: &str) -> TestExternalities<Blake2Hasher> {
+	fn call_wasm_method<HF: HostFunctionsT>(method: &str) -> TestExternalities {
 		let mut ext = TestExternalities::default();
 		let executor = WasmExecutor::<HF>::new();
 

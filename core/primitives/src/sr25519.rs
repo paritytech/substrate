@@ -41,13 +41,14 @@ use codec::{Encode, Decode};
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 #[cfg(feature = "std")]
 use schnorrkel::keys::{MINI_SECRET_KEY_LENGTH, SECRET_KEY_LENGTH};
+use runtime_interface::pass_by::PassByInner;
 
 // signing context
 #[cfg(feature = "std")]
 const SIGNING_CTX: &[u8] = b"substrate";
 
 /// An Schnorrkel/Ristretto x25519 ("sr25519") public key.
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, PassByInner)]
 pub struct Public(pub [u8; 32]);
 
 /// An Schnorrkel/Ristretto x25519 ("sr25519") key pair.
@@ -161,7 +162,7 @@ impl std::hash::Hash for Public {
 /// An Schnorrkel/Ristretto x25519 ("sr25519") signature.
 ///
 /// Instead of importing it for the local module, alias it to be available as a public type
-#[derive(Encode, Decode)]
+#[derive(Encode, Decode, PassByInner)]
 pub struct Signature(pub [u8; 64]);
 
 impl rstd::convert::TryFrom<&[u8]> for Signature {

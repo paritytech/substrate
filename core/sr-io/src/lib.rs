@@ -29,11 +29,12 @@
 use rstd::vec::Vec;
 
 use primitives::{
-	crypto::KeyTypeId, ed25519, sr25519, H256,
+	crypto::{KeyTypeId, Pair}, ed25519, sr25519, H256, hexdisplay::HexDisplay,
 	offchain::{
 		Timestamp, HttpRequestId, HttpRequestStatus, HttpError, StorageKind, OpaqueNetworkState,
+		OffchainExt,
 	},
-	child_storage_key::ChildStorageKey,
+	storage::ChildStorageKey, traits::KeystoreExt,
 };
 
 use trie::{TrieConfiguration, trie_types::Layout};
@@ -41,6 +42,8 @@ use trie::{TrieConfiguration, trie_types::Layout};
 use runtime_interface::runtime_interface;
 
 use codec::{Encode, Decode};
+
+use externalities::ExternalitiesExt;
 
 /// Error verifying ECDSA signature
 #[derive(Encode, Decode)]
@@ -51,6 +54,18 @@ pub enum EcdsaVerifyError {
 	BadV,
 	/// Invalid signature
 	BadSignature,
+}
+
+/// Returns a `ChildStorageKey` if the given `storage_key` slice is a valid storage
+/// key or panics otherwise.
+///
+/// Panicking here is aligned with what the `without_std` environment would do
+/// in the case of an invalid child storage key.
+fn child_storage_key_or_panic(storage_key: &[u8]) -> ChildStorageKey {
+	match ChildStorageKey::from_slice(storage_key) {
+		Some(storage_key) => storage_key,
+		None => panic!("child storage key is invalid"),
+	}
 }
 
 /// Interface for accessing the storage from within the runtime.
@@ -64,7 +79,7 @@ pub trait Storage {
 	/// Returns the data for `key` in the child storage or `None` if the key can not be found.
 	fn child_get(&self, child_storage_key: &[u8], key: &[u8]) -> Option<Vec<u8>> {
 		let storage_key = child_storage_key_or_panic(child_storage_key);
-		ext.child_storage(storage_key, key).map(|s| s.to_vec())
+		self.child_storage(storage_key, key).map(|s| s.to_vec())
 	}
 
 	/// Get `key` from storage, placing the value into `value_out` and return the number of
@@ -121,14 +136,14 @@ pub trait Storage {
 		self.clear_storage(key)
 	}
 
-	/// Clear the storage of a key.
-	fn clear_child(&mut self, child_storage_key: &[u8], key: &[u8]) {
+	/// Clear the given child storage of the given `key` and its value.
+	fn child_clear(&mut self, child_storage_key: &[u8], key: &[u8]) {
 		let storage_key = child_storage_key_or_panic(child_storage_key);
 		self.clear_child_storage(storage_key, key);
 	}
 
 	/// Clear an entire child storage.
-	fn kill_child_storage(&mut self, child_storage_key: &[u8]) {
+	fn child_storage_kill(&mut self, child_storage_key: &[u8]) {
 		let storage_key = child_storage_key_or_panic(child_storage_key);
 		self.kill_child_storage(storage_key);
 	}
@@ -156,7 +171,7 @@ pub trait Storage {
 	}
 
 	/// "Commit" all existing operations and compute the resulting storage root.
-	fn root(&mut self) -> [u8; 32] {
+	fn root(&mut self) -> H256 {
 		self.storage_root()
 	}
 
@@ -167,18 +182,18 @@ pub trait Storage {
 	}
 
 	/// "Commit" all existing operations and get the resulting storage change root.
-	fn changes_root(&mut self, parent_hash: [u8; 32]) -> Option<[u8; 32]> {
-		self.storage_changes_root(parent_hash.into()).map(|h| h.map(|h| h.into())).ok()
+	fn changes_root(&mut self, parent_hash: [u8; 32]) -> Option<H256> {
+		self.storage_changes_root(parent_hash.into()).ok().and_then(|h| h)
 	}
 
 	/// A trie root formed from the iterated items.
 	fn blake2_256_trie_root(input: Vec<(Vec<u8>, Vec<u8>)>) -> H256 {
-		Layout::<Blake2Hasher>::trie_root(input)
+		Layout::<primitives::Blake2Hasher>::trie_root(input)
 	}
 
 	/// A trie root formed from the enumerated items.
 	fn blake2_256_ordered_trie_root(input: Vec<Vec<u8>>) -> H256 {
-		Layout::<Blake2Hasher>::ordered_trie_root(input)
+		Layout::<primitives::Blake2Hasher>::ordered_trie_root(input)
 	}
 }
 
@@ -187,6 +202,7 @@ pub trait Storage {
 pub trait Misc {
 	/// The current relay chain identifier.
 	fn chain_id(&self) -> u64 {
+		self.extension::<KeystoreExt>();
 		self.chain_id()
 	}
 
@@ -209,10 +225,11 @@ pub trait Misc {
 }
 
 /// Interfaces for working with crypto related types from within the runtime.
+#[runtime_interface]
 pub trait Crypto {
 	/// Returns all `ed25519` public keys for the given key id from the keystore.
-	fn ed25519_public_keys(&self, id: KeyTypeId) -> Vec<ed25519::Public> {
-		self.keystore()
+	fn ed25519_public_keys(&mut self, id: KeyTypeId) -> Vec<ed25519::Public> {
+		self.extension::<KeystoreExt>()
 			.expect("No `keystore` associated for the current context!")
 			.read()
 			.ed25519_public_keys(id)
@@ -221,8 +238,8 @@ pub trait Crypto {
 	/// Generate an `ed22519` key for the given key type and store it in the keystore.
 	///
 	/// Returns the public key.
-	fn ed25519_generate(&self, id: KeyTypeId, seed: Option<&str>) -> ed25519::Public {
-		self.keystore()
+	fn ed25519_generate(&mut self, id: KeyTypeId, seed: Option<&str>) -> ed25519::Public {
+		self.extension::<KeystoreExt>()
 			.expect("No `keystore` associated for the current context!")
 			.write()
 			.ed25519_generate_new(id, seed)
@@ -239,7 +256,7 @@ pub trait Crypto {
 		pub_key: &ed25519::Public,
 		msg: &[u8],
 	) -> Option<ed25519::Signature> {
-		self.keystore()
+		self.extension::<KeystoreExt>()
 			.expect("No `keystore` associated for the current context!")
 			.read()
 			.ed25519_key_pair(id, &pub_key)
@@ -260,7 +277,7 @@ pub trait Crypto {
 
 	/// Returns all `sr25519` public keys for the given key id from the keystore.
 	fn sr25519_public_keys(&self, id: KeyTypeId) -> Vec<sr25519::Public> {
-		self.keystore()
+		self.extension::<KeystoreExt>()
 			.expect("No `keystore` associated for the current context!")
 			.read()
 			.sr25519_public_keys(id)
@@ -270,7 +287,7 @@ pub trait Crypto {
 	///
 	/// Returns the public key.
 	fn sr25519_generate(&self, id: KeyTypeId, seed: Option<&str>) -> sr25519::Public {
-		self.keystore()
+		self.extension::<KeystoreExt>()
 			.expect("No `keystore` associated for the current context!")
 			.write()
 			.sr25519_generate_new(id, seed)
@@ -282,12 +299,12 @@ pub trait Crypto {
 	///
 	/// Returns the signature.
 	fn sr25519_sign(
-		self,
+		&mut self,
 		id: KeyTypeId,
 		pub_key: &sr25519::Public,
 		msg: &[u8],
 	) -> Option<sr25519::Signature> {
-		self.keystore()
+		self.extension::<KeystoreExt>()
 			.expect("No `keystore` associated for the current context!")
 			.read()
 			.sr25519_key_pair(id, &pub_key)
@@ -363,7 +380,7 @@ pub trait Offchain {
 	/// Even if this function returns `true`, it does not mean that any keys are configured
 	/// and that the validator is registered in the chain.
 	fn is_validator(&self) -> bool {
-		self.offchain()
+		self.extension::<OffchainExt>()
 			.expect("is_validator can be called only in the offchain worker context")
 			.is_validator()
 	}
@@ -372,28 +389,28 @@ pub trait Offchain {
 	///
 	/// The transaction will end up in the pool.
 	fn submit_transaction(&self, data: Vec<u8>) -> Result<(), ()> {
-		self.offchain()
+		self.extension::<OffchainExt>()
 			.expect("submit_transaction can be called only in the offchain worker context")
 			.submit_transaction(data)
 	}
 
 	/// Returns information about the local node's network state.
 	fn network_state(&self) -> Result<OpaqueNetworkState, ()> {
-		self.offchain()
+		self.extension::<OffchainExt>()
 			.expect("network_state can be called only in the offchain worker context")
 			.network_state()
 	}
 
 	/// Returns current UNIX timestamp (in millis)
 	fn timestamp(&self) -> Timestamp {
-		self.offchain()
+		self.extension::<OffchainExt>()
 			.expect("timestamp can be called only in the offchain worker context")
 			.timestamp()
 	}
 
 	/// Pause the execution until `deadline` is reached.
 	fn sleep_until(&self, deadline: Timestamp) {
-		self.offchain()
+		self.extension::<OffchainExt>()
 			.expect("sleep_until can be called only in the offchain worker context")
 			.sleep_until(deadline)
 	}
@@ -403,7 +420,7 @@ pub trait Offchain {
 	/// This is a trully random non deterministic seed generated by host environment.
 	/// Obviously fine in the off-chain worker context.
 	fn random_seed(&self) -> [u8; 32] {
-		self.offchain()
+		self.extension::<OffchainExt>()
 			.expect("random_seed can be called only in the offchain worker context")
 			.random_seed()
 	}
@@ -413,7 +430,7 @@ pub trait Offchain {
 	/// Note this storage is not part of the consensus, it's only accessible by
 	/// offchain worker tasks running on the same machine. It IS persisted between runs.
 	fn local_storage_set(&self, kind: StorageKind, key: &[u8], value: &[u8]) {
-		self.offchain()
+		self.extension::<OffchainExt>()
 			.expect("random_seed can be called only in the offchain worker context")
 			.local_storage_set(kind, key, value)
 	}
@@ -434,7 +451,7 @@ pub trait Offchain {
 		old_value: Option<&[u8]>,
 		new_value: &[u8],
 	) -> bool {
-		self.offchain()
+		self.extension::<OffchainExt>()
 			.expect("random_seed can be called only in the offchain worker context")
 			.local_storage_compare_and_set(kind, key, old_value, new_value)
 	}
@@ -445,7 +462,7 @@ pub trait Offchain {
 	/// Note this storage is not part of the consensus, it's only accessible by
 	/// offchain worker tasks running on the same machine. It IS persisted between runs.
 	fn local_storage_get(&self, kind: StorageKind, key: &[u8]) -> Option<Vec<u8>> {
-		self.offchain()
+		self.extension::<OffchainExt>()
 			.expect("random_seed can be called only in the offchain worker context")
 			.local_storage_get(kind, key)
 	}
@@ -460,7 +477,7 @@ pub trait Offchain {
 		uri: &str,
 		meta: &[u8],
 	) -> Result<HttpRequestId, ()> {
-		self.offchain()
+		self.extension::<OffchainExt>()
 			.expect("random_seed can be called only in the offchain worker context")
 			.http_request_start(method, uri, meta)
 	}
@@ -472,7 +489,7 @@ pub trait Offchain {
 		name: &str,
 		value: &str,
 	) -> Result<(), ()> {
-		self.offchain()
+		self.extension::<OffchainExt>()
 			.expect("random_seed can be called only in the offchain worker context")
 			.http_request_add_header(request_id, name, value)
 	}
@@ -489,7 +506,7 @@ pub trait Offchain {
 		chunk: &[u8],
 		deadline: Option<Timestamp>,
 	) -> Result<(), HttpError> {
-		self.offchain()
+		self.extension::<OffchainExt>()
 			.expect("random_seed can be called only in the offchain worker context")
 			.http_request_write_body(request_id, chunk, deadline)
 	}
@@ -506,7 +523,7 @@ pub trait Offchain {
 		ids: &[HttpRequestId],
 		deadline: Option<Timestamp>,
 	) -> Vec<HttpRequestStatus> {
-		self.offchain()
+		self.extension::<OffchainExt>()
 			.expect("random_seed can be called only in the offchain worker context")
 			.http_response_wait(ids, deadline)
 	}
@@ -516,7 +533,7 @@ pub trait Offchain {
 	/// Returns a vector of pairs `(HeaderKey, HeaderValue)`.
 	/// NOTE response headers have to be read before response body.
 	fn http_response_headers(&self, request_id: HttpRequestId) -> Vec<(Vec<u8>, Vec<u8>)> {
-		self.offchain()
+		self.extension::<OffchainExt>()
 			.expect("random_seed can be called only in the offchain worker context")
 			.http_response_headers(request_id)
 	}
@@ -535,7 +552,7 @@ pub trait Offchain {
 		buffer: &mut [u8],
 		deadline: Option<Timestamp>,
 	) -> Result<u32, HttpError> {
-		self.offchain()
+		self.extension::<OffchainExt>()
 			.expect("random_seed can be called only in the offchain worker context")
 			.http_response_read_body(request_id, buffer, deadline)
 			.map(|r| r as u32)

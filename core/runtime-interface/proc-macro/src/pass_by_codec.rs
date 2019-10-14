@@ -36,7 +36,7 @@ pub fn derive_impl(mut input: DeriveInput) -> Result<TokenStream> {
 	let ident = input.ident;
 
 	let res = quote! {
-		const _ = {
+		const _: () = {
 			#crate_include
 
 			impl #impl_generics #crate_::pass_by::PassBy for #ident #ty_generics #where_clause {

@@ -38,6 +38,12 @@ use rstd::borrow::Cow;
 #[cfg(not(feature = "std"))]
 use rstd::slice;
 
+// Make sure that our assumptions for storing a pointer + its size in `u64` is valid.
+#[cfg(not(feature = "std"))]
+assert_eq_size!(usize, u32);
+#[cfg(not(feature = "std"))]
+assert_eq_size!(*const u8, u32);
+
 /// Converts a pointer and length into an `u64`.
 pub fn pointer_and_len_to_u64(ptr: u32, len: u32) -> u64 {
 	((len as u64) | u64::from(ptr) << 32).to_le()
@@ -175,6 +181,30 @@ impl<T: 'static + Decode> FromFFIValue for Vec<T> {
 	}
 }
 
+#[cfg(not(feature = "std"))]
+impl<T: 'static + Encode> IntoFFIValue for Vec<T> {
+	type Owned = Vec<u8>;
+
+	fn into_ffi_value(&self) -> WrappedFFIValue<u64, Vec<u8>> {
+		self[..].into_ffi_value()
+	}
+}
+
+#[cfg(not(feature = "std"))]
+impl<T: 'static + Decode> FromFFIValue for Vec<T> {
+	fn from_ffi_value(arg: u64) -> Vec<T> {
+		let (ptr, len) = pointer_and_len_from_u64(arg);
+		let len = len as usize;
+
+		if TypeId::of::<T>() == TypeId::of::<u8>() {
+			unsafe { mem::transmute(Vec::from_raw_parts(ptr as *mut u8, len, len)) }
+		} else {
+			let slice = unsafe { slice::from_raw_parts(ptr as *const u8, len) };
+			Self::decode(&mut &slice[..]).expect("Host to wasm values are encoded correctly; qed")
+		}
+	}
+}
+
 impl<T> RIType for [T] {
 	type FFIType = u64;
 }
@@ -221,12 +251,6 @@ impl IntoPreallocatedFFIValue for [u8] {
 	}
 }
 
-// Make sure that our assumptions for storing a pointer + its size in `u64` is valid.
-#[cfg(not(feature = "std"))]
-assert_eq_size!(usize_check; usize, u32);
-#[cfg(not(feature = "std"))]
-assert_eq_size!(ptr_check; *const u8, u32);
-
 #[cfg(not(feature = "std"))]
 impl<T: 'static + Encode> IntoFFIValue for [T] {
 	type Owned = Vec<u8>;
@@ -239,30 +263,6 @@ impl<T: 'static + Encode> IntoFFIValue for [T] {
 			let data = self.encode();
 			let ffi_value = pointer_and_len_to_u64(data.as_ptr() as u32, data.len() as u32);
 			(ffi_value, data).into()
-		}
-	}
-}
-
-#[cfg(not(feature = "std"))]
-impl<T: 'static + Encode> IntoFFIValue for Vec<T> {
-	type Owned = Vec<u8>;
-
-	fn into_ffi_value(&self) -> WrappedFFIValue<u64, Vec<u8>> {
-		self[..].into_ffi_value()
-	}
-}
-
-#[cfg(not(feature = "std"))]
-impl<T: 'static + Decode> FromFFIValue for Vec<T> {
-	fn from_ffi_value(arg: u64) -> Vec<T> {
-		let (ptr, len) = pointer_and_len_from_u64(arg);
-		let len = len as usize;
-
-		if TypeId::of::<T>() == TypeId::of::<u8>() {
-			unsafe { mem::transmute(Vec::from_raw_parts(ptr as *mut u8, len, len)) }
-		} else {
-			let slice = unsafe { slice::from_raw_parts(ptr as *const u8, len) };
-			Self::decode(&mut &slice[..]).expect("Host to wasm values are encoded correctly; qed")
 		}
 	}
 }
@@ -345,10 +345,10 @@ impl_traits_for_arrays! {
 	51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64
 }
 
-impl<T: codec::Codec> PassBy for Option<T> {
+impl<T: codec::Codec, E: codec::Codec> PassBy for rstd::result::Result<T, E> {
 	type PassBy = Codec<Self>;
 }
 
-impl<T: codec::Codec, E: codec::Codec> PassBy for rstd::result::Result<T, E> {
+impl<T: codec::Codec> PassBy for Option<T> {
 	type PassBy = Codec<Self>;
 }

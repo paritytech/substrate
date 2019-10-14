@@ -27,6 +27,8 @@ use trie::{TrieConfiguration, trie_types::Layout};
 
 use std::{collections::HashMap, convert::TryFrom};
 
+use externalities::Externalities;
+
 /// Additional bounds for `Hasher` trait for with_std.
 pub trait HasherBounds {}
 impl<T: Hasher> HasherBounds for T {}
@@ -34,7 +36,7 @@ impl<T: Hasher> HasherBounds for T {}
 /// Execute the given closure with global function available whose functionality routes into the
 /// externalities `ext`. Forwards the value that the closure returns.
 // NOTE: need a concrete hasher here due to limitations of the `environmental!` macro, otherwise a type param would have been fine I think.
-pub fn with_externalities<R, F: FnOnce() -> R>(ext: &mut dyn Externalities<Blake2Hasher>, f: F) -> R {
+pub fn with_externalities<R, F: FnOnce() -> R>(ext: &mut dyn Externalities, f: F) -> R {
 	unimplemented!()
 }
 
