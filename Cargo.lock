@@ -5363,6 +5363,7 @@ version = "2.0.0"
 dependencies = [
  "environmental 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "primitive-types 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-std 2.0.0",
  "static_assertions 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-executor 2.0.0",

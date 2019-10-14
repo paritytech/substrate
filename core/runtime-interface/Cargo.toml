@@ -12,6 +12,7 @@ externalities = { package = "substrate-externalities", path = "../externalities"
 codec = { package = "parity-scale-codec", version = "1.0.6", default-features = false }
 environmental = { version = "1.0.2", optional = true }
 static_assertions = "1.0.0"
+primitive-types = { version = "0.5.1", default-features = false }
 
 [dev-dependencies]
 executor = { package = "substrate-executor", path = "../executor" }
@@ -20,4 +21,4 @@ state_machine = { package = "substrate-state-machine", path = "../state-machine"
 
 [features]
 default = [ "std" ]
-std = [ "wasm-interface", "rstd/std", "codec/std", "externalities", "environmental" ]
+std = [ "wasm-interface", "rstd/std", "codec/std", "externalities", "environmental", "primitive-types/std" ]

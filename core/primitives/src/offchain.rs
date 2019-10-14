@@ -122,7 +122,7 @@ impl OpaqueMultiaddr {
 }
 
 /// Opaque timestamp type
-#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Default, PassByInner)]
+#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Default, Encode, Decode, PassByInner)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct Timestamp(u64);
 
