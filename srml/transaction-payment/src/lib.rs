@@ -134,13 +134,15 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> {
 			// cap the weight to the maximum defined in runtime, otherwise it will be the `Bounded`
 			// maximum of its data type, which is not desired.
 			let capped_weight = info.weight.min(<T as system::Trait>::MaximumBlockWeight::get());
-			let fee = T::WeightToFee::convert(capped_weight);
-			// TODO #3291 apply this to both weights, not just one.
-			let fee_update = NextFeeMultiplier::get();
-			let adjusted_fee = fee_update.saturated_multiply_accumulate(fee);
-			adjusted_fee
+			T::WeightToFee::convert(capped_weight)
 		};
-		len_fee.saturating_add(weight_fee).saturating_add(tip)
+
+		// everything except for tip
+		let basic_fee = len_fee.saturating_add(weight_fee);
+		let fee_update = NextFeeMultiplier::get();
+		let adjusted_fee = fee_update.saturated_multiply_accumulate(basic_fee);
+
+		adjusted_fee.saturating_add(tip)
 	}
 }
 
@@ -151,7 +153,9 @@ impl<T: Trait + Send + Sync> rstd::fmt::Debug for ChargeTransactionPayment<T> {
 	}
 }
 
-impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T> where BalanceOf<T>: Send + Sync {
+impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T>
+	where BalanceOf<T>: Send + Sync
+{
 	type AccountId = T::AccountId;
 	type Call = T::Call;
 	type AdditionalSigned = ();
@@ -425,6 +429,27 @@ mod tests {
 					.is_err()
 			);
 		});
+	}
+
+	#[test]
+	fn signed_ext_length_fee_is_also_updated_per_congestion() {
+		ExtBuilder::default()
+			.fees(5, 1, 1)
+			.balance_factor(10)
+			.build()
+			.execute_with(||
+		{
+			// all fees should be x1.5
+			NextFeeMultiplier::put(Fixed64::from_rational(1, 2));
+			let len = 10;
+
+			assert!(
+				ChargeTransactionPayment::<Runtime>::from(10) // tipped
+					.pre_dispatch(&1, CALL, info_from_weight(3), len)
+					.is_ok()
+			);
+			assert_eq!(Balances::free_balance(&1), 100 - 10 - (5 + 10 + 3) * 3 / 2);
+		})
 	}
 }
 

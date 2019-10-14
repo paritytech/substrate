@@ -46,7 +46,7 @@ mod tests {
 		traits::{CodeExecutor, Externalities}, storage::well_known_keys,
 	};
 	use sr_primitives::{
-		assert_eq_error_rate, Fixed64,
+		Fixed64,
 		traits::{Header as HeaderT, Hash as HashT, Convert}, ApplyResult,
 		transaction_validity::InvalidTransaction, weights::GetDispatchInfo,
 	};
@@ -88,17 +88,15 @@ mod tests {
 	}
 
 	/// Default transfer fee
-	fn transfer_fee<E: Encode>(extrinsic: &E) -> Balance {
+	fn transfer_fee<E: Encode>(extrinsic: &E, fm: Fixed64) -> Balance {
 		let length_fee = TransactionBaseFee::get() +
 			TransactionByteFee::get() *
 			(extrinsic.encode().len() as Balance);
 
 		let weight = default_transfer_call().get_dispatch_info().weight;
-		// NOTE: this is really hard to apply, since the multiplier of each block needs to be fetched
-		// before the block, while we compute this after the block.
-		// weight = TransactionPayment::next_fee_multiplier().apply_to(weight);
 		let weight_fee = <Runtime as transaction_payment::Trait>::WeightToFee::convert(weight);
-		length_fee + weight_fee + TransferFee::get()
+
+		fm.saturated_multiply_accumulate(length_fee + weight_fee) + TransferFee::get()
 	}
 
 	fn default_transfer_call() -> balances::Call<Runtime> {
@@ -217,6 +215,10 @@ mod tests {
 			None,
 		).0;
 		assert!(r.is_ok());
+
+		let mut fm: Fixed64 = Default::default();
+		t.execute_with(|| { fm = TransactionPayment::next_fee_multiplier(); });
+
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"BlockBuilder_apply_extrinsic",
@@ -227,7 +229,7 @@ mod tests {
 		assert!(r.is_ok());
 
 		t.execute_with(|| {
-			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - transfer_fee(&xt()));
+			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - transfer_fee(&xt(), fm));
 			assert_eq!(Balances::total_balance(&bob()), 69 * DOLLARS);
 		});
 	}
@@ -253,6 +255,10 @@ mod tests {
 			None,
 		).0;
 		assert!(r.is_ok());
+
+		let mut fm: Fixed64 = Default::default();
+		t.execute_with(|| { fm = TransactionPayment::next_fee_multiplier(); });
+
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"BlockBuilder_apply_extrinsic",
@@ -263,7 +269,7 @@ mod tests {
 		assert!(r.is_ok());
 
 		t.execute_with(|| {
-			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - transfer_fee(&xt()));
+			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - transfer_fee(&xt(), fm));
 			assert_eq!(Balances::total_balance(&bob()), 69 * DOLLARS);
 		});
 	}
@@ -425,6 +431,10 @@ mod tests {
 
 		let (block1, block2) = blocks();
 
+		let mut fm: Fixed64 = Default::default();
+		let mut alice_last_known_balance: Balance = Default::default();
+		t.execute_with(|| { fm = TransactionPayment::next_fee_multiplier(); });
+
 		executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_execute_block",
@@ -434,8 +444,9 @@ mod tests {
 		).0.unwrap();
 
 		t.execute_with(|| {
-			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - transfer_fee(&xt()));
+			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - transfer_fee(&xt(), fm));
 			assert_eq!(Balances::total_balance(&bob()), 169 * DOLLARS);
+			alice_last_known_balance = Balances::total_balance(&alice());
 			let events = vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
@@ -460,6 +471,9 @@ mod tests {
 			];
 			assert_eq!(System::events(), events);
 		});
+
+		t.execute_with(|| { fm = TransactionPayment::next_fee_multiplier(); });
+
 		executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_execute_block",
@@ -471,15 +485,13 @@ mod tests {
 		t.execute_with(|| {
 			// NOTE: fees differ slightly in tests that execute more than one block due to the
 			// weight update. Hence, using `assert_eq_error_rate`.
-			assert_eq_error_rate!(
+			assert_eq!(
 				Balances::total_balance(&alice()),
-				32 * DOLLARS - 2 * transfer_fee(&xt()),
-				10_000
+				alice_last_known_balance - 10 * DOLLARS - transfer_fee(&xt(), fm),
 			);
-			assert_eq_error_rate!(
+			assert_eq!(
 				Balances::total_balance(&bob()),
-				179 * DOLLARS - transfer_fee(&xt()),
-				10_000
+				179 * DOLLARS - transfer_fee(&xt(), fm),
 			);
 			let events = vec![
 				EventRecord {
@@ -532,6 +544,10 @@ mod tests {
 
 		let (block1, block2) = blocks();
 
+		let mut fm: Fixed64 = Default::default();
+		let mut alice_last_known_balance: Balance = Default::default();
+		t.execute_with(|| { fm = TransactionPayment::next_fee_multiplier(); });
+
 		executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_execute_block",
@@ -541,9 +557,12 @@ mod tests {
 		).0.unwrap();
 
 		t.execute_with(|| {
-			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - transfer_fee(&xt()));
+			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - transfer_fee(&xt(), fm));
 			assert_eq!(Balances::total_balance(&bob()), 169 * DOLLARS);
+			alice_last_known_balance = Balances::total_balance(&alice());
 		});
+
+		t.execute_with(|| { fm = TransactionPayment::next_fee_multiplier(); });
 
 		executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
@@ -554,15 +573,13 @@ mod tests {
 		).0.unwrap();
 
 		t.execute_with(|| {
-			assert_eq_error_rate!(
+			assert_eq!(
 				Balances::total_balance(&alice()),
-				32 * DOLLARS - 2 * transfer_fee(&xt()),
-				10_000
+				alice_last_known_balance - 10 * DOLLARS - transfer_fee(&xt(), fm),
 			);
-			assert_eq_error_rate!(
+			assert_eq!(
 				Balances::total_balance(&bob()),
-				179 * DOLLARS - 1 * transfer_fee(&xt()),
-				10_000
+				179 * DOLLARS - 1 * transfer_fee(&xt(), fm),
 			);
 		});
 	}
@@ -824,6 +841,8 @@ mod tests {
 			None,
 		).0;
 		assert!(r.is_ok());
+		let mut fm: Fixed64 = Default::default();
+		t.execute_with(|| { fm = TransactionPayment::next_fee_multiplier(); });
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"BlockBuilder_apply_extrinsic",
@@ -837,7 +856,7 @@ mod tests {
 			.expect("Extrinsic did not fail");
 
 		t.execute_with(|| {
-			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - 1 * transfer_fee(&xt()));
+			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - 1 * transfer_fee(&xt(), fm));
 			assert_eq!(Balances::total_balance(&bob()), 69 * DOLLARS);
 		});
 	}
