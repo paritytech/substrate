@@ -520,40 +520,40 @@ impl Zero for BigUint {
 }
 
 macro_rules! impl_try_from_number_for {
-		($([$type:ty, $len:expr]),+) => {
-			$(
-				impl TryFrom<BigUint> for $type {
-					type Error = &'static str;
-					fn try_from(mut value: BigUint) -> Result<$type, Self::Error> {
-						value.lstrip();
-						let error_message = concat!("cannot fit a number into ", stringify!($type));
-						if value.len() * SHIFT > $len {
-							Err(error_message)
-						} else {
-							let mut acc: $type = Zero::zero();
-							for (i, d) in value.digits.iter().rev().cloned().enumerate() {
-								let d: $type = d.into();
-								acc += d << (SHIFT * i);
-							}
-							Ok(acc)
+	($([$type:ty, $len:expr]),+) => {
+		$(
+			impl TryFrom<BigUint> for $type {
+				type Error = &'static str;
+				fn try_from(mut value: BigUint) -> Result<$type, Self::Error> {
+					value.lstrip();
+					let error_message = concat!("cannot fit a number into ", stringify!($type));
+					if value.len() * SHIFT > $len {
+						Err(error_message)
+					} else {
+						let mut acc: $type = Zero::zero();
+						for (i, d) in value.digits.iter().rev().cloned().enumerate() {
+							let d: $type = d.into();
+							acc += d << (SHIFT * i);
 						}
+						Ok(acc)
 					}
 				}
-			)*
-		};
-	}
+			}
+		)*
+	};
+}
 // can only be implemented for sizes bigger than two limb.
 impl_try_from_number_for!([u128, 128], [u64, 64]);
 
 macro_rules! impl_from_for_smaller_than_word {
-		($($type:ty),+) => {
-			$(impl From<$type> for BigUint {
-				fn from(a: $type) -> Self {
-					Self { digits: vec! [a.into()] }
-				}
-			})*
-		}
+	($($type:ty),+) => {
+		$(impl From<$type> for BigUint {
+			fn from(a: $type) -> Self {
+				Self { digits: vec! [a.into()] }
+			}
+		})*
 	}
+}
 impl_from_for_smaller_than_word!(u8, u16, Single);
 
 impl From<Double> for BigUint {
