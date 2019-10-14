@@ -3888,7 +3888,7 @@ dependencies = [
 
 [[package]]
 name = "sr-arithmetic-fuzzer"
-version = "0.1.0"
+version = "2.0.0"
 dependencies = [
  "honggfuzz 0.5.45 (registry+https://github.com/rust-lang/crates.io-index)",
  "num-bigint 0.2.3 (git+https://github.com/expenses/num-bigint?branch=as-slice)",
