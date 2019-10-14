@@ -58,6 +58,10 @@ enum ChainSpecBuilder {
 		#[structopt(long, short, default_value = "./chain_spec.json")]
 		chain_spec_path: PathBuf,
 		/// Path to use when saving generated keystores for each authority.
+		///
+		/// At this path, a new folder will be created for each authority's
+		/// keystore named `auth-$i` where `i` is the authority index, i.e.
+		/// `auth-0`, `auth-1`, etc.
 		#[structopt(long, short)]
 		keystore_path: Option<PathBuf>,
 	},
