@@ -19,20 +19,18 @@ use super::*;
 use std::sync::Arc;
 use assert_matches::assert_matches;
 use codec::Encode;
-use transaction_pool::{
-	txpool::Pool,
-	FullChainApi,
-};
 use primitives::{
 	H256, blake2_256, hexdisplay::HexDisplay, testing::{ED25519, SR25519, KeyStore}, ed25519,
 	crypto::Pair,
 };
+use rpc::futures::Stream as _;
 use test_client::{
 	self, AccountKeyring, runtime::{Extrinsic, Transfer, SessionKeys}, DefaultTestClientBuilderExt,
 	TestClientBuilderExt,
 };
-use rpc::futures::{
-	Stream as _
+use transaction_pool::{
+	txpool::Pool,
+	FullChainApi,
 };
 use tokio::runtime;
 
@@ -105,7 +103,7 @@ fn should_watch_extrinsic() {
 		subscriptions: Subscriptions::new(Arc::new(runtime.executor())),
 		keystore: keystore.clone(),
 	};
-	let (subscriber, id_rx, data) = ::jsonrpc_pubsub::typed::Subscriber::new_test("test");
+	let (subscriber, id_rx, data) = jsonrpc_pubsub::typed::Subscriber::new_test("test");
 
 	// when
 	p.watch_extrinsic(Default::default(), subscriber, uxt(AccountKeyring::Alice, 0).encode().into());
@@ -148,7 +146,7 @@ fn should_return_watch_validation_error() {
 		subscriptions: Subscriptions::new(Arc::new(runtime.executor())),
 		keystore: keystore.clone(),
 	};
-	let (subscriber, id_rx, _data) = ::jsonrpc_pubsub::typed::Subscriber::new_test("test");
+	let (subscriber, id_rx, _data) = jsonrpc_pubsub::typed::Subscriber::new_test("test");
 
 	// when
 	p.watch_extrinsic(Default::default(), subscriber, uxt(AccountKeyring::Alice, 179).encode().into());

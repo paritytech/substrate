@@ -164,11 +164,10 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 			Ok(
 				self.pool
 					.submit_and_watch(&generic::BlockId::hash(best_block_hash), dxt)
-					.map(|res| res.map_err(|e|
-						e.into_pool_error()
-							.map(error::Error::from)
-							.unwrap_or_else(|e| error::Error::Verification(Box::new(e)).into())
-					))
+					.map_err(|e| e.into_pool_error()
+						.map(error::Error::from)
+						.unwrap_or_else(|e| error::Error::Verification(Box::new(e)).into())
+					)
 			)
 		};
 
