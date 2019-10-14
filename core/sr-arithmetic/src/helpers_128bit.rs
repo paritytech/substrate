@@ -61,15 +61,24 @@ pub fn to_big_uint(x: u128) -> biguint::BigUint {
 ///     cannot be safely casted back to u128.
 ///
 /// Invariant: c must be greater than or equal to 1.
-pub fn multiply_by_rational(mut a: u128, mut b: u128, c: u128) -> Result<u128, &'static str> {
+pub fn multiply_by_rational(mut a: u128, mut b: u128, mut c: u128) -> Result<u128, &'static str> {
 	if a.is_zero() || b.is_zero() { return Ok(Zero::zero()); }
-	let c = c.max(1);
+	c = c.max(1);
 
 	// a and b are interchangeable by definition in this function. It always helps to assume the
 	// bigger of which is being multiplied by a `0 < b/c < 1`. Hence, a should be the bigger and
 	// b the smaller one.
 	if b > a {
 		mem::swap(&mut a, &mut b);
+	}
+
+	// Attempt to perform the division first
+	if a % c == 0 {
+		a /= c;
+		c = 1;
+	} else if b % c == 0 {
+		b /= c;
+		c = 1;
 	}
 
 	if let Some(x) = a.checked_mul(b) {
