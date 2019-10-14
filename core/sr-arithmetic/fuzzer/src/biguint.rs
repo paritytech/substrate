@@ -87,13 +87,18 @@ fn main() {
 			digits_u.reverse();
 			digits_v.reverse();
 
-			let num_u = num_bigint::BigUint::new(digits_u);
-			let num_v = num_bigint::BigUint::new(digits_v);
+			let num_u = num_bigint::BigUint::new(digits_u.clone());
+			let num_v = num_bigint::BigUint::new(digits_v.clone());
 
 			// Equality
 
 			assert_biguints_eq(&u, &num_u);
 			assert_biguints_eq(&v, &num_v);
+
+			if digits_u == digits_v {
+				assert_eq!(u, v);
+				assert_eq!(num_u, num_v);
+			}
 
 			// Addition
 

@@ -452,12 +452,7 @@ impl rstd::fmt::Debug for BigUint {
 
 impl PartialEq for BigUint {
 	fn eq(&self, other: &Self) -> bool {
-		// sadly, we have to reallocate here as strip mutably uses self.
-		let mut lhs = self.clone();
-		let mut rhs = other.clone();
-		lhs.lstrip();
-		rhs.lstrip();
-		lhs.digits.eq(&rhs.digits)
+		self.cmp(other) == Ordering::Equal
 	}
 }
 
