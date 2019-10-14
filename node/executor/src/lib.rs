@@ -226,7 +226,7 @@ mod tests {
 		).0;
 		assert!(r.is_ok());
 
-		sr_primitives::set_and_run_with_externalities(&mut t, || {
+		t.execute_with(|| {
 			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - transfer_fee(&xt()));
 			assert_eq!(Balances::total_balance(&bob()), 69 * DOLLARS);
 		});
@@ -262,7 +262,7 @@ mod tests {
 		).0;
 		assert!(r.is_ok());
 
-		sr_primitives::set_and_run_with_externalities(&mut t, || {
+		t.execute_with(|| {
 			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - transfer_fee(&xt()));
 			assert_eq!(Balances::total_balance(&bob()), 69 * DOLLARS);
 		});
@@ -433,7 +433,7 @@ mod tests {
 			None,
 		).0.unwrap();
 
-		sr_primitives::set_and_run_with_externalities(&mut t, || {
+		t.execute_with(|| {
 			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - transfer_fee(&xt()));
 			assert_eq!(Balances::total_balance(&bob()), 169 * DOLLARS);
 			let events = vec![
@@ -468,7 +468,7 @@ mod tests {
 			None,
 		).0.unwrap();
 
-		sr_primitives::set_and_run_with_externalities(&mut t, || {
+		t.execute_with(|| {
 			// NOTE: fees differ slightly in tests that execute more than one block due to the
 			// weight update. Hence, using `assert_eq_error_rate`.
 			assert_eq_error_rate!(
@@ -540,7 +540,7 @@ mod tests {
 			None,
 		).0.unwrap();
 
-		sr_primitives::set_and_run_with_externalities(&mut t, || {
+		t.execute_with(|| {
 			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - transfer_fee(&xt()));
 			assert_eq!(Balances::total_balance(&bob()), 169 * DOLLARS);
 		});
@@ -553,7 +553,7 @@ mod tests {
 			None,
 		).0.unwrap();
 
-		sr_primitives::set_and_run_with_externalities(&mut t, || {
+		t.execute_with(|| {
 			assert_eq_error_rate!(
 				Balances::total_balance(&alice()),
 				32 * DOLLARS - 2 * transfer_fee(&xt()),
@@ -715,7 +715,7 @@ mod tests {
 			None,
 		).0.unwrap();
 
-		sr_primitives::set_and_run_with_externalities(&mut t, || {
+		t.execute_with(|| {
 			// Verify that the contract constructor worked well and code of TRANSFER contract is actually deployed.
 			assert_eq!(
 				&contracts::ContractInfoOf::<Runtime>::get(addr)
@@ -836,7 +836,7 @@ mod tests {
 			.expect("Extrinsic could be applied")
 			.expect("Extrinsic did not fail");
 
-		sr_primitives::set_and_run_with_externalities(&mut t, || {
+		t.execute_with(|| {
 			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - 1 * transfer_fee(&xt()));
 			assert_eq!(Balances::total_balance(&bob()), 69 * DOLLARS);
 		});
@@ -896,7 +896,7 @@ mod tests {
 		// initial fee multiplier must be zero
 		let mut prev_multiplier = Fixed64::from_parts(0);
 
-		sr_primitives::set_and_run_with_externalities(&mut t, || {
+		t.execute_with(|| {
 			assert_eq!(TransactionPayment::next_fee_multiplier(), prev_multiplier);
 		});
 
@@ -947,8 +947,8 @@ mod tests {
 			None,
 		).0.unwrap();
 
-		// fee multiplier is increased for next block.
-		sr_primitives::set_and_run_with_externalities(&mut t, || {
+		// weight multiplier is increased for next block.
+		t.execute_with(|| {
 			let fm = TransactionPayment::next_fee_multiplier();
 			println!("After a big block: {:?} -> {:?}", prev_multiplier, fm);
 			assert!(fm > prev_multiplier);
@@ -965,7 +965,7 @@ mod tests {
 		).0.unwrap();
 
 		// weight multiplier is increased for next block.
-		sr_primitives::set_and_run_with_externalities(&mut t, || {
+		t.execute_with(|| {
 			let fm = TransactionPayment::next_fee_multiplier();
 			println!("After a small block: {:?} -> {:?}", prev_multiplier, fm);
 			assert!(fm < prev_multiplier);
@@ -1019,7 +1019,7 @@ mod tests {
 		).0;
 		assert!(r.is_ok());
 
-		sr_primitives::set_and_run_with_externalities(&mut t, || {
+		t.execute_with(|| {
 			assert_eq!(Balances::total_balance(&bob()), (10 + 69) * DOLLARS);
 			// Components deducted from alice's balances:
 			// - Weight fee

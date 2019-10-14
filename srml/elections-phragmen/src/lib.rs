@@ -594,7 +594,7 @@ mod tests {
 	use primitives::H256;
 	use sr_primitives::{
 		Perbill, testing::Header, BuildStorage,
-		traits::{BlakeTwo256, IdentityLookup, Block as BlockT}, set_and_run_with_externalities
+		traits::{BlakeTwo256, IdentityLookup, Block as BlockT},
 	};
 	use crate as elections;
 
@@ -763,7 +763,7 @@ mod tests {
 
 	#[test]
 	fn params_should_work() {
-		set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
+		ExtBuilder::default().build().execute_with(|| {
 			System::set_block_number(1);
 			assert_eq!(Elections::desired_members(), 2);
 			assert_eq!(Elections::term_duration(), 5);
@@ -783,7 +783,7 @@ mod tests {
 
 	#[test]
 	fn simple_candidate_submission_should_work() {
-		set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
+		ExtBuilder::default().build().execute_with(|| {
 			assert_eq!(Elections::candidates(), Vec::<u64>::new());
 			assert!(Elections::is_candidate(&1).is_err());
 			assert!(Elections::is_candidate(&2).is_err());
@@ -810,7 +810,7 @@ mod tests {
 
 	#[test]
 	fn simple_candidate_submission_with_no_votes_should_work() {
-		set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
+		ExtBuilder::default().build().execute_with(|| {
 			assert_eq!(Elections::candidates(), Vec::<u64>::new());
 
 			assert_ok!(Elections::submit_candidacy(Origin::signed(1)));
@@ -837,7 +837,7 @@ mod tests {
 
 	#[test]
 	fn dupe_candidate_submission_should_not_work() {
-		set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
+		ExtBuilder::default().build().execute_with(|| {
 			assert_eq!(Elections::candidates(), Vec::<u64>::new());
 			assert_ok!(Elections::submit_candidacy(Origin::signed(1)));
 			assert_eq!(Elections::candidates(), vec![1]);
@@ -851,7 +851,7 @@ mod tests {
 	#[test]
 	fn member_candidacy_submission_should_not_work() {
 		// critically important to make sure that outgoing candidates and losers are not mixed up.
-		set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
+		ExtBuilder::default().build().execute_with(|| {
 			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
 			assert_ok!(Elections::vote(Origin::signed(2), vec![5], 20));
 
@@ -871,7 +871,7 @@ mod tests {
 
 	#[test]
 	fn poor_candidate_submission_should_not_work() {
-		set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
+		ExtBuilder::default().build().execute_with(|| {
 			assert_eq!(Elections::candidates(), Vec::<u64>::new());
 			assert_noop!(
 				Elections::submit_candidacy(Origin::signed(7)),
@@ -882,7 +882,7 @@ mod tests {
 
 	#[test]
 	fn simple_voting_should_work() {
-		set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
+		ExtBuilder::default().build().execute_with(|| {
 			assert_eq!(Elections::candidates(), Vec::<u64>::new());
 			assert_eq!(balances(&2), (20, 0));
 
@@ -896,7 +896,7 @@ mod tests {
 
 	#[test]
 	fn can_vote_with_custom_stake() {
-		set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
+		ExtBuilder::default().build().execute_with(|| {
 			assert_eq!(Elections::candidates(), Vec::<u64>::new());
 			assert_eq!(balances(&2), (20, 0));
 
@@ -910,7 +910,7 @@ mod tests {
 
 	#[test]
 	fn can_update_votes_and_stake() {
-		set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
+		ExtBuilder::default().build().execute_with(|| {
 			assert_eq!(balances(&2), (20, 0));
 
 			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
@@ -931,7 +931,7 @@ mod tests {
 
 	#[test]
 	fn cannot_vote_for_no_candidate() {
-		set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
+		ExtBuilder::default().build().execute_with(|| {
 			assert_noop!(
 				Elections::vote(Origin::signed(2), vec![], 20),
 				"cannot vote when no candidates or members exist"
@@ -942,7 +942,7 @@ mod tests {
 	#[test]
 	fn can_vote_for_old_members_even_when_no_new_candidates() {
 		// let allowed_votes = candidates_count as usize + Self::members().len()
-		set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
+		ExtBuilder::default().build().execute_with(|| {
 			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
 			assert_ok!(Elections::submit_candidacy(Origin::signed(4)));
 
@@ -960,7 +960,7 @@ mod tests {
 
 	#[test]
 	fn cannot_vote_for_more_than_candidates() {
-		set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
+		ExtBuilder::default().build().execute_with(|| {
 			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
 			assert_ok!(Elections::submit_candidacy(Origin::signed(4)));
 
@@ -973,7 +973,7 @@ mod tests {
 
 	#[test]
 	fn cannot_vote_for_less_than_ed() {
-		set_and_run_with_externalities(&mut ExtBuilder::default().voter_bond(8).build(), || {
+		ExtBuilder::default().voter_bond(8).build().execute_with(|| {
 			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
 			assert_ok!(Elections::submit_candidacy(Origin::signed(4)));
 
@@ -986,7 +986,7 @@ mod tests {
 
 	#[test]
 	fn can_vote_for_more_than_total_balance_but_moot() {
-		set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
+		ExtBuilder::default().build().execute_with(|| {
 			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
 			assert_ok!(Elections::submit_candidacy(Origin::signed(4)));
 
@@ -999,7 +999,7 @@ mod tests {
 
 	#[test]
 	fn remove_voter_should_work() {
-		set_and_run_with_externalities(&mut ExtBuilder::default().voter_bond(8).build(), || {
+		ExtBuilder::default().voter_bond(8).build().execute_with(|| {
 			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
 
 			assert_ok!(Elections::vote(Origin::signed(2), vec![5], 20));
@@ -1024,14 +1024,14 @@ mod tests {
 
 	#[test]
 	fn non_voter_remove_should_not_work() {
-		set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
+		ExtBuilder::default().build().execute_with(|| {
 			assert_noop!(Elections::remove_voter(Origin::signed(3)), "must be a voter");
 		});
 	}
 
 	#[test]
 	fn dupe_remove_should_fail() {
-		set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
+		ExtBuilder::default().build().execute_with(|| {
 			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
 			assert_ok!(Elections::vote(Origin::signed(2), vec![5], 20));
 
@@ -1044,7 +1044,7 @@ mod tests {
 
 	#[test]
 	fn removed_voter_should_not_be_counted() {
-		set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
+		ExtBuilder::default().build().execute_with(|| {
 			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
 			assert_ok!(Elections::submit_candidacy(Origin::signed(4)));
 			assert_ok!(Elections::submit_candidacy(Origin::signed(3)));
@@ -1064,7 +1064,7 @@ mod tests {
 
 	#[test]
 	fn reporter_must_be_voter() {
-		set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
+		ExtBuilder::default().build().execute_with(|| {
 			assert_noop!(
 				Elections::report_defunct_voter(Origin::signed(1), 2),
 				"reporter must be a voter",
@@ -1074,7 +1074,7 @@ mod tests {
 
 	#[test]
 	fn can_detect_defunct_voter() {
-		set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
+		ExtBuilder::default().build().execute_with(|| {
 			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
 			assert_ok!(Elections::submit_candidacy(Origin::signed(4)));
 
@@ -1109,7 +1109,7 @@ mod tests {
 
 	#[test]
 	fn report_voter_should_work_and_earn_reward() {
-		set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
+		ExtBuilder::default().build().execute_with(|| {
 			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
 			assert_ok!(Elections::submit_candidacy(Origin::signed(4)));
 
@@ -1141,8 +1141,7 @@ mod tests {
 
 	#[test]
 	fn report_voter_should_slash_when_bad_report() {
-		set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
-			set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
+		ExtBuilder::default().build().execute_with(|| {
 			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
 			assert_ok!(Elections::submit_candidacy(Origin::signed(4)));
 
@@ -1167,13 +1166,12 @@ mod tests {
 			assert_eq!(balances(&4), (35, 5));
 			assert_eq!(balances(&5), (45, 3));
 		});
-		});
 	}
 
 
 	#[test]
 	fn simple_voting_rounds_should_work() {
-		set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
+		ExtBuilder::default().build().execute_with(|| {
 			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
 			assert_ok!(Elections::submit_candidacy(Origin::signed(4)));
 			assert_ok!(Elections::submit_candidacy(Origin::signed(3)));
@@ -1208,7 +1206,7 @@ mod tests {
 
 	#[test]
 	fn defunct_voter_will_be_counted() {
-		set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
+		ExtBuilder::default().build().execute_with(|| {
 			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
 
 			// This guy's vote is pointless for this round.
@@ -1236,7 +1234,7 @@ mod tests {
 
 	#[test]
 	fn only_desired_seats_are_chosen() {
-		set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
+		ExtBuilder::default().build().execute_with(|| {
 			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
 			assert_ok!(Elections::submit_candidacy(Origin::signed(4)));
 			assert_ok!(Elections::submit_candidacy(Origin::signed(3)));
@@ -1257,7 +1255,7 @@ mod tests {
 
 	#[test]
 	fn phragmen_should_not_self_vote() {
-		set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
+		ExtBuilder::default().build().execute_with(|| {
 			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
 			assert_ok!(Elections::submit_candidacy(Origin::signed(4)));
 
@@ -1272,7 +1270,7 @@ mod tests {
 
 	#[test]
 	fn runners_up_should_be_kept() {
-		set_and_run_with_externalities(&mut ExtBuilder::default().desired_runners_up(2).build(), || {
+		ExtBuilder::default().desired_runners_up(2).build().execute_with(|| {
 			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
 			assert_ok!(Elections::submit_candidacy(Origin::signed(4)));
 			assert_ok!(Elections::submit_candidacy(Origin::signed(3)));
@@ -1299,7 +1297,7 @@ mod tests {
 
 	#[test]
 	fn runners_up_should_be_next_candidates() {
-		set_and_run_with_externalities(&mut ExtBuilder::default().desired_runners_up(2).build(), || {
+		ExtBuilder::default().desired_runners_up(2).build().execute_with(|| {
 			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
 			assert_ok!(Elections::submit_candidacy(Origin::signed(4)));
 			assert_ok!(Elections::submit_candidacy(Origin::signed(3)));
@@ -1326,7 +1324,7 @@ mod tests {
 
 	#[test]
 	fn runners_up_lose_bond_once_outgoing() {
-		set_and_run_with_externalities(&mut ExtBuilder::default().desired_runners_up(1).build(), || {
+		ExtBuilder::default().desired_runners_up(1).build().execute_with(|| {
 			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
 			assert_ok!(Elections::submit_candidacy(Origin::signed(4)));
 			assert_ok!(Elections::submit_candidacy(Origin::signed(2)));
@@ -1357,7 +1355,7 @@ mod tests {
 
 	#[test]
 	fn current_members_are_always_implicitly_next_candidate() {
-		set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
+		ExtBuilder::default().build().execute_with(|| {
 			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
 			assert_ok!(Elections::submit_candidacy(Origin::signed(4)));
 
@@ -1393,7 +1391,7 @@ mod tests {
 	fn election_state_is_uninterrupted() {
 		// what I mean by uninterrupted:
 		// given no input or stimulants the same members are re-elected.
-		set_and_run_with_externalities(&mut ExtBuilder::default().desired_runners_up(2).build(), || {
+		ExtBuilder::default().desired_runners_up(2).build().execute_with(|| {
 			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
 			assert_ok!(Elections::submit_candidacy(Origin::signed(4)));
 			assert_ok!(Elections::submit_candidacy(Origin::signed(3)));
@@ -1426,7 +1424,7 @@ mod tests {
 
 	#[test]
 	fn remove_members_triggers_election() {
-		set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
+		ExtBuilder::default().build().execute_with(|| {
 			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
 			assert_ok!(Elections::submit_candidacy(Origin::signed(4)));
 
@@ -1452,7 +1450,7 @@ mod tests {
 
 	#[test]
 	fn seats_should_be_released_when_no_vote() {
-		set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
+		ExtBuilder::default().build().execute_with(|| {
 			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
 			assert_ok!(Elections::submit_candidacy(Origin::signed(4)));
 			assert_ok!(Elections::submit_candidacy(Origin::signed(3)));
@@ -1486,7 +1484,7 @@ mod tests {
 
 	#[test]
 	fn outgoing_will_get_the_bond_back() {
-		set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
+		ExtBuilder::default().build().execute_with(|| {
 			assert_eq!(balances(&5), (50, 0));
 
 			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
@@ -1512,7 +1510,7 @@ mod tests {
 
 	#[test]
 	fn losers_will_lose_the_bond() {
-		set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
+		ExtBuilder::default().build().execute_with(|| {
 			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
 			assert_ok!(Elections::submit_candidacy(Origin::signed(3)));
 
@@ -1535,7 +1533,7 @@ mod tests {
 
 	#[test]
 	fn incoming_outgoing_are_reported() {
-		set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
+		ExtBuilder::default().build().execute_with(|| {
 			assert_ok!(Elections::submit_candidacy(Origin::signed(4)));
 			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
 
@@ -1580,7 +1578,7 @@ mod tests {
 
 	#[test]
 	fn invalid_votes_are_moot() {
-		set_and_run_with_externalities(&mut ExtBuilder::default().build(), || {
+		ExtBuilder::default().build().execute_with(|| {
 			assert_ok!(Elections::submit_candidacy(Origin::signed(4)));
 			assert_ok!(Elections::submit_candidacy(Origin::signed(3)));
 

@@ -345,11 +345,11 @@ mod tests {
 
 	#[test]
 	fn signed_extension_transaction_payment_work() {
-		set_and_run_with_externalities(&mut
 			ExtBuilder::default()
 			.balance_factor(10) // 100
 			.fees(5, 1, 1) // 5 fixed, 1 per byte, 1 per weight
-			.build(), ||
+			.build()
+			.execute_with(||
 		{
 			let len = 10;
 			assert!(
@@ -370,11 +370,11 @@ mod tests {
 
 	#[test]
 	fn signed_extension_transaction_payment_is_bounded() {
-		set_and_run_with_externalities(&mut
 			ExtBuilder::default()
 			.balance_factor(1000)
 			.fees(0, 0, 1)
-			.build(), ||
+			.build()
+			.execute_with(||
 		{
 			use sr_primitives::weights::Weight;
 
@@ -391,5 +391,42 @@ mod tests {
 			);
 		});
 	}
+
+	#[test]
+	fn signed_extension_allows_free_transactions() {
+		ExtBuilder::default()
+			.transaction_fees(100, 1, 1)
+			.monied(false)
+			.build()
+			.execute_with(||
+		{
+			// 1 ain't have a penny.
+			assert_eq!(Balances::free_balance(&1), 0);
+
+			// like a FreeOperational
+			let operational_transaction = DispatchInfo {
+				weight: 0,
+				class: DispatchClass::Operational
+			};
+			let len = 100;
+			assert!(
+				TakeFees::<Runtime>::from(0)
+					.validate(&1, CALL, operational_transaction , len)
+					.is_ok()
+			);
+
+			// like a FreeNormal
+			let free_transaction = DispatchInfo {
+				weight: 0,
+				class: DispatchClass::Normal
+			};
+			assert!(
+				TakeFees::<Runtime>::from(0)
+					.validate(&1, CALL, free_transaction , len)
+					.is_err()
+			);
+		});
+	}
 }
+
 

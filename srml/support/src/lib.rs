@@ -173,10 +173,10 @@ macro_rules! assert_err {
 #[macro_export]
 #[cfg(feature = "std")]
 macro_rules! assert_ok {
-	( $x:expr ) => {
+	( $x:expr $(,)? ) => {
 		assert_eq!($x, Ok(()));
 	};
-	( $x:expr, $y:expr ) => {
+	( $x:expr, $y:expr $(,)? ) => {
 		assert_eq!($x, Ok($y));
 	}
 }
@@ -236,7 +236,6 @@ pub use serde::{Serialize, Deserialize};
 mod tests {
 	use super::*;
 	use codec::{Codec, EncodeLike};
-	use sr_primitives::set_and_run_with_externalities;
 	use srml_metadata::{
 		DecodeDifferent, StorageEntryMetadata, StorageMetadata, StorageEntryType,
 		StorageEntryModifier, DefaultByteGetter, StorageHasher,
@@ -288,7 +287,7 @@ mod tests {
 
 	#[test]
 	fn linked_map_issue_3318() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			OptionLinkedMap::insert(1, 1);
 			assert_eq!(OptionLinkedMap::get(1), Some(1));
 			OptionLinkedMap::insert(1, 2);
@@ -298,7 +297,7 @@ mod tests {
 
 	#[test]
 	fn linked_map_swap_works() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			OptionLinkedMap::insert(0, 0);
 			OptionLinkedMap::insert(1, 1);
 			OptionLinkedMap::insert(2, 2);
@@ -327,7 +326,7 @@ mod tests {
 
 	#[test]
 	fn linked_map_basic_insert_remove_should_work() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			// initialized during genesis
 			assert_eq!(Map::get(&15u32), 42u64);
 
@@ -353,7 +352,7 @@ mod tests {
 
 	#[test]
 	fn linked_map_enumeration_and_head_should_work() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			assert_eq!(Map::head(), Some(15));
 			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![(15, 42)]);
 			// insert / remove
@@ -405,7 +404,7 @@ mod tests {
 
 	#[test]
 	fn double_map_basic_insert_remove_remove_prefix_should_work() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			type DoubleMap = DataDM;
 			// initialized during genesis
 			assert_eq!(DoubleMap::get(&15u32, &16u32), 42u64);
@@ -445,7 +444,7 @@ mod tests {
 
 	#[test]
 	fn double_map_append_should_work() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			type DoubleMap = AppendableDM<Test>;
 
 			let key1 = 17u32;
