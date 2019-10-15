@@ -5,11 +5,11 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-honggfuzz = "0.5"
 sr-arithmetic = { path = ".." }
+honggfuzz = "0.5"
 primitive-types = "0.6"
-num-bigint = "0.2.3"
-num-traits = "0.2.8"
+num-bigint = "0.2"
+num-traits = "0.2"
 
 [[bin]]
 name = "biguint"

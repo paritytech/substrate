@@ -16,7 +16,6 @@
 
 //! Primitives for the runtime modules.
 
-use rstd::prelude::*;
 use rstd::{self, convert::{TryFrom, TryInto}};
 use codec::HasCompact;
 pub use integer_sqrt::IntegerSquareRoot;
@@ -142,96 +141,3 @@ pub trait SaturatedConversion {
 	}
 }
 impl<T: Sized> SaturatedConversion for T {}
-
-/// Convenience type to work around the highly unergonomic syntax needed
-/// to invoke the functions of overloaded generic traits, in this case
-/// `TryFrom` and `TryInto`.
-pub trait CheckedConversion {
-	/// Convert from a value of `T` into an equivalent instance of `Option<Self>`.
-	///
-	/// This just uses `TryFrom` internally but with this
-	/// variant you can provide the destination type using turbofish syntax
-	/// in case Rust happens not to assume the correct type.
-	fn checked_from<T>(t: T) -> Option<Self> where Self: TryFrom<T> {
-		<Self as TryFrom<T>>::try_from(t).ok()
-	}
-	/// Consume self to return `Some` equivalent value of `Option<T>`.
-	///
-	/// This just uses `TryInto` internally but with this
-	/// variant you can provide the destination type using turbofish syntax
-	/// in case Rust happens not to assume the correct type.
-	fn checked_into<T>(self) -> Option<T> where Self: TryInto<T> {
-		<Self as TryInto<T>>::try_into(self).ok()
-	}
-}
-impl<T: Sized> CheckedConversion for T {}
-
-/// Multiply and divide by a number that isn't necessarily the same type. Basically just the same
-/// as `Mul` and `Div` except it can be used for all basic numeric types.
-pub trait Scale<Other> {
-	/// The output type of the product of `self` and `Other`.
-	type Output;
-
-	/// @return the product of `self` and `other`.
-	fn mul(self, other: Other) -> Self::Output;
-
-	/// @return the integer division of `self` and `other`.
-	fn div(self, other: Other) -> Self::Output;
-
-	/// @return the modulo remainder of `self` and `other`.
-	fn rem(self, other: Other) -> Self::Output;
-}
-macro_rules! impl_scale {
-	($self:ty, $other:ty) => {
-		impl Scale<$other> for $self {
-			type Output = Self;
-			fn mul(self, other: $other) -> Self::Output { self * (other as Self) }
-			fn div(self, other: $other) -> Self::Output { self / (other as Self) }
-			fn rem(self, other: $other) -> Self::Output { self % (other as Self) }
-		}
-	}
-}
-impl_scale!(u128, u128);
-impl_scale!(u128, u64);
-impl_scale!(u128, u32);
-impl_scale!(u128, u16);
-impl_scale!(u128, u8);
-impl_scale!(u64, u64);
-impl_scale!(u64, u32);
-impl_scale!(u64, u16);
-impl_scale!(u64, u8);
-impl_scale!(u32, u32);
-impl_scale!(u32, u16);
-impl_scale!(u32, u8);
-impl_scale!(u16, u16);
-impl_scale!(u16, u8);
-impl_scale!(u8, u8);
-
-/// Trait for things that can be clear (have no bits set). For numeric types, essentially the same
-/// as `Zero`.
-pub trait Clear {
-	/// True iff no bits are set.
-	fn is_clear(&self) -> bool;
-
-	/// Return the value of Self that is clear.
-	fn clear() -> Self;
-}
-
-impl<T: Default + Eq + PartialEq> Clear for T {
-	fn is_clear(&self) -> bool { *self == Self::clear() }
-	fn clear() -> Self { Default::default() }
-}
-
-/// A meta trait for all bit ops.
-pub trait SimpleBitOps:
-	Sized + Clear +
-	rstd::ops::BitOr<Self, Output = Self> +
-	rstd::ops::BitXor<Self, Output = Self> +
-	rstd::ops::BitAnd<Self, Output = Self>
-{}
-impl<T:
-	Sized + Clear +
-	rstd::ops::BitOr<Self, Output = Self> +
-	rstd::ops::BitXor<Self, Output = Self> +
-	rstd::ops::BitAnd<Self, Output = Self>
-> SimpleBitOps for T {}

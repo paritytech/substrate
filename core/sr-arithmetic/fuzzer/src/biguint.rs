@@ -171,10 +171,12 @@ fn check_digit_lengths(u: &BigUint, v: &BigUint, max_limbs: usize) -> bool {
 }
 
 fn assert_biguints_eq(a: &BigUint, b: &num_bigint::BigUint) {
+	let mut a = a.clone();
+	a.lstrip();
+
 	// `num_bigint::BigUint` doesn't expose it's internals, so we need to convert into that to
-	// compare. It is little endian while our `BigUint` is big endian so we need to reverse the
-	// limbs.
-	let limbs = a.as_slice().iter().rev().cloned().collect();
+	// compare.
+	let limbs = (0 .. a.len()).map(|i| a.get(i)).collect();
 	let num_a = num_bigint::BigUint::new(limbs);
 
 	assert!(&num_a == b, "\narithmetic: {:?}\nnum-bigint: {:?}", a, b);

@@ -47,7 +47,7 @@ fn main() {
 			// value fits in a u128.
 			let result = multiply_by_rational(a, b, c).unwrap_or(truth);
 
-			// `multiply_by_rational` rounds up, so we need to allow both cases.
+			// `multiply_by_rational` rounds the value, so we need to allow both cases.
 			if !(truth == result || truth == result - 1) {
 				println!("++ Expected {}", truth);
 				println!("+++++++ Got {}", result);

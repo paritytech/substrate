@@ -17,7 +17,7 @@
 //! Primitives for the runtime modules.
 
 use rstd::prelude::*;
-use rstd::{self, result, marker::PhantomData};
+use rstd::{self, result, marker::PhantomData, convert::{TryFrom, TryInto}};
 use runtime_io;
 #[cfg(feature = "std")]
 use std::fmt::{Debug, Display};
@@ -28,7 +28,11 @@ use crate::codec::{Codec, Encode, Decode};
 use crate::transaction_validity::{
 	ValidTransaction, TransactionValidity, TransactionValidityError, UnknownTransaction,
 };
-pub use arithmetic::traits::*;
+pub use arithmetic::traits::{
+	SimpleArithmetic, UniqueSaturatedInto, UniqueSaturatedFrom, Saturating, SaturatedConversion,
+	Zero, One, Bounded, CheckedAdd, CheckedSub, CheckedMul, CheckedDiv,
+	CheckedShl, CheckedShr, IntegerSquareRoot
+};
 use crate::generic::{Digest, DigestItem};
 use crate::weights::DispatchInfo;
 use app_crypto::AppKey;
@@ -189,6 +193,70 @@ pub struct ConvertInto;
 impl<A, B: From<A>> Convert<A, B> for ConvertInto {
 	fn convert(a: A) -> B { a.into() }
 }
+
+/// Convenience type to work around the highly unergonomic syntax needed
+/// to invoke the functions of overloaded generic traits, in this case
+/// `TryFrom` and `TryInto`.
+pub trait CheckedConversion {
+	/// Convert from a value of `T` into an equivalent instance of `Option<Self>`.
+	///
+	/// This just uses `TryFrom` internally but with this
+	/// variant you can provide the destination type using turbofish syntax
+	/// in case Rust happens not to assume the correct type.
+	fn checked_from<T>(t: T) -> Option<Self> where Self: TryFrom<T> {
+		<Self as TryFrom<T>>::try_from(t).ok()
+	}
+	/// Consume self to return `Some` equivalent value of `Option<T>`.
+	///
+	/// This just uses `TryInto` internally but with this
+	/// variant you can provide the destination type using turbofish syntax
+	/// in case Rust happens not to assume the correct type.
+	fn checked_into<T>(self) -> Option<T> where Self: TryInto<T> {
+		<Self as TryInto<T>>::try_into(self).ok()
+	}
+}
+impl<T: Sized> CheckedConversion for T {}
+
+/// Multiply and divide by a number that isn't necessarily the same type. Basically just the same
+/// as `Mul` and `Div` except it can be used for all basic numeric types.
+pub trait Scale<Other> {
+	/// The output type of the product of `self` and `Other`.
+	type Output;
+
+	/// @return the product of `self` and `other`.
+	fn mul(self, other: Other) -> Self::Output;
+
+	/// @return the integer division of `self` and `other`.
+	fn div(self, other: Other) -> Self::Output;
+
+	/// @return the modulo remainder of `self` and `other`.
+	fn rem(self, other: Other) -> Self::Output;
+}
+macro_rules! impl_scale {
+	($self:ty, $other:ty) => {
+		impl Scale<$other> for $self {
+			type Output = Self;
+			fn mul(self, other: $other) -> Self::Output { self * (other as Self) }
+			fn div(self, other: $other) -> Self::Output { self / (other as Self) }
+			fn rem(self, other: $other) -> Self::Output { self % (other as Self) }
+		}
+	}
+}
+impl_scale!(u128, u128);
+impl_scale!(u128, u64);
+impl_scale!(u128, u32);
+impl_scale!(u128, u16);
+impl_scale!(u128, u8);
+impl_scale!(u64, u64);
+impl_scale!(u64, u32);
+impl_scale!(u64, u16);
+impl_scale!(u64, u8);
+impl_scale!(u32, u32);
+impl_scale!(u32, u16);
+impl_scale!(u32, u8);
+impl_scale!(u16, u16);
+impl_scale!(u16, u8);
+impl_scale!(u8, u8);
 
 /// Trait for things that can be clear (have no bits set). For numeric types, essentially the same
 /// as `Zero`.

@@ -97,10 +97,6 @@ impl BigUint {
 		}
 	}
 
-	pub fn as_slice(&self) -> &[Single] {
-		&self.digits
-	}
-
 	/// Number of limbs.
 	pub fn len(&self) -> usize { self.digits.len() }
 
