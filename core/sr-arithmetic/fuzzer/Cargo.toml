@@ -8,7 +8,7 @@ edition = "2018"
 honggfuzz = "0.5"
 sr-arithmetic = { path = ".." }
 primitive-types = "0.6"
-num-bigint = { git = "https://github.com/expenses/num-bigint", branch = "as-slice" }
+num-bigint = "0.2.3"
 num-traits = "0.2.8"
 
 [[bin]]

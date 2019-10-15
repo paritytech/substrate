@@ -171,10 +171,11 @@ fn check_digit_lengths(u: &BigUint, v: &BigUint, max_limbs: usize) -> bool {
 }
 
 fn assert_biguints_eq(a: &BigUint, b: &num_bigint::BigUint) {
-	// `BigUint` doesn't check the input in `from_limbs` so we skip any leading 0s.
-	let a_iter = a.as_slice().iter().skip_while(|&&i| i == 0);
-	// the `num-bigint` `BigUint` is little endian whereas our `BigUint` is big endian.
-	let b_iter = b.as_slice().iter().rev();
+	// `num_bigint::BigUint` doesn't expose it's internals, so we need to convert into that to
+	// compare. It is little endian while our `BigUint` is big endian so we need to reverse the
+	// limbs.
+	let mut limbs = a.as_slice().iter().rev().cloned().collect();
+	let num_a = num_bigint::BigUint::new(limbs);
 
-	assert!(a_iter.eq(b_iter), "\narithmetic: {:?}\nnum-bigint: {:?}", a, b);
+	assert!(&num_a == b, "\narithmetic: {:?}\nnum-bigint: {:?}", a, b);
 }
