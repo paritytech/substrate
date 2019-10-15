@@ -121,7 +121,7 @@ mod tests {
 	}
 
 	fn target() -> Weight {
-		TARGET_BLOCK_FULLNESS * max()
+		<Runtime as system::Trait>::WeightMultiplierUpdate::get() * max()
 	}
 
 	// poc reference implementation.

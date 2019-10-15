@@ -55,8 +55,8 @@ mod tests {
 	use system::{EventRecord, Phase};
 	use node_runtime::{
 		Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances, BuildStorage,
-		System, Event, TransferFee, TransactionBaseFee, TransactionByteFee,
-		constants::currency::*, impls::WeightToFee,
+		System, Event, TransferFee, TransactionBaseFee, TransactionByteFee, WeightToFee,
+		constants::currency::*,
 	};
 	use node_primitives::{Balance, Hash, BlockNumber};
 	use node_testing::keyring::*;
