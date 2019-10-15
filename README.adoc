@@ -459,6 +459,8 @@ node-cli, node-consensus, node-executor, node-network, node-primitives, node-run
 [source, shell]
 subkey
 
+=== Viewing internal documentation
+
 To document Substrate's private items for internal development, add the `--document-private-items` flag:
 
 ```
