@@ -443,8 +443,8 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 			format!("Failed to receive on unbounded receiver for round {}", round.0)
 		));
 
-		// TODO: Do I understand correctly that we combine the incoming Grandpa messages with the messages we are
-		// sending out to other nodes and in addition thereby also send to ourself?
+		// Combine incoming votes from external Grandpa nodes with outgoing votes from our own Grandpa voter to have a
+		// single vote-import-pipeline.
 		let incoming = incoming.select(out_rx.map(|msg| (None, msg)));
 
 		(incoming, outgoing)
