@@ -8,6 +8,7 @@ use crate::traits::{SaturatedConversion, UniqueSaturatedInto, Saturating};
 
 /// Copied from `sr-primitives` and documented there.
 #[cfg(feature = "std")]
+#[cfg(test)]
 macro_rules! assert_eq_error_rate {
 	($x:expr, $y:expr, $error:expr $(,)?) => {
 		assert!(
