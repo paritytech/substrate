@@ -259,7 +259,7 @@ impl<Xt: 'static + Codec + Sized + Send + Sync + Serialize + Clone + Eq + Debug 
 	fn new(header: Self::Header, extrinsics: Vec<Self::Extrinsic>) -> Self {
 		Block { header, extrinsics }
 	}
-	fn encode_from(header: &Self::Header, extrinsics: &Vec<Self::Extrinsic>) -> Vec<u8> {
+	fn encode_from(header: &Self::Header, extrinsics: &[Self::Extrinsic]) -> Vec<u8> {
 		(header, extrinsics).encode()
 	}
 }
