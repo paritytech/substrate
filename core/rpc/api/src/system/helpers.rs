@@ -82,7 +82,9 @@ pub enum NodeRole {
 	/// The node is a light client
 	LightClient,
 	/// The node is an authority
-	Authority
+	Authority,
+	/// An unknown role with a bit number
+	UnknownRole(u8)
 }
 
 #[cfg(test)]

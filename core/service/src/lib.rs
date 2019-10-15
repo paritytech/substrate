@@ -719,22 +719,20 @@ fn build_network_future<
 						let _ = sender.send(network_state);
 					}
 				}
-				rpc::system::Request::NodeRole(sender) => {
+				rpc::system::Request::NodeRoles(sender) => {
 					use rpc::system::NodeRole;
 
-					let role = if roles.intersects(Roles::AUTHORITY) {
-						Some(NodeRole::Authority)
-					} else if roles.intersects(Roles::FULL) {
-						Some(NodeRole::Full)
-					} else if roles.intersects(Roles::LIGHT) {
-						Some(NodeRole::LightClient)
-					} else {
-						None
-					};
+					let node_roles = (0 .. 8)
+						.filter(|&bit_number| (roles.bits() >> bit_number) & 1 == 1)
+						.map(|bit_number| match Roles::from_bits(1 << bit_number) {
+							Some(Roles::AUTHORITY) => NodeRole::Authority,
+							Some(Roles::LIGHT) => NodeRole::LightClient,
+							Some(Roles::FULL) => NodeRole::Full,
+							_ => NodeRole::UnknownRole(bit_number),
+						})
+						.collect();
 
-					if let Some(role) = role {
-						let _ = sender.send(role);
-					}
+					let _ = sender.send(node_roles);
 				}
 			};
 		}

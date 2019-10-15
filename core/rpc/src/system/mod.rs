@@ -43,7 +43,7 @@ pub enum Request<B: traits::Block> {
 	/// Must return the state of the network.
 	NetworkState(oneshot::Sender<rpc::Value>),
 	/// Must return the node role.
-	NodeRole(oneshot::Sender<NodeRole>)
+	NodeRoles(oneshot::Sender<Vec<NodeRole>>)
 }
 
 impl<B: traits::Block> System<B> {
@@ -97,9 +97,9 @@ impl<B: traits::Block> SystemApi<B::Hash, <B::Header as HeaderT>::Number> for Sy
 		Receiver(Compat::new(rx))
 	}
 
-	fn system_node_role(&self) -> Receiver<NodeRole> {
+	fn system_node_roles(&self) -> Receiver<Vec<NodeRole>> {
 		let (tx, rx) = oneshot::channel();
-		let _ = self.send_back.unbounded_send(Request::NodeRole(tx));
+		let _ = self.send_back.unbounded_send(Request::NodeRoles(tx));
 		Receiver(Compat::new(rx))
 	}
 }

@@ -81,7 +81,7 @@ fn api<T: Into<Option<Status>>>(sync: T) -> System<Block> {
 					}).unwrap());
 				},
 				Request::NodeRole(sender) => {
-					let _ = sender.send(NodeRole::Authority);
+					let _ = sender.send(vec![NodeRole::Authority]);
 				}
 			};
 
