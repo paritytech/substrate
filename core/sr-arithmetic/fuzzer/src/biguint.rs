@@ -156,7 +156,7 @@ fn main() {
 				let w = u.clone().div_unit(v.get(0));
 				let num_w = num_u.clone() / &num_v;
 				assert_biguints_eq(&w, &num_w);
-			} else {
+			} else if u.len() > v.len() {
 				let w = u.clone().div(&v, rem).map(|(w, _)| w);
 				let num_w = num_u.clone().checked_div(&num_v);
 
