@@ -16,14 +16,10 @@
 
 use quote::quote;
 use proc_macro2::TokenStream;
-use syn::{Ident, Data, DeriveInput, parse_quote};
-
-fn ident2str(name: &Ident) -> String {
-	format!("{}", name)
-}
+use syn::{Data, DeriveInput, parse_quote};
 
 pub fn debug_derive(ast: &DeriveInput) -> proc_macro::TokenStream {
-	let name_str = ident2str(&ast.ident);
+	let name_str = ast.ident.to_string();
 	let implementation = implementation::derive(&name_str, &ast.data);
 	let name = &ast.ident;
 	let mut generics = ast.generics.clone();
@@ -46,7 +42,7 @@ pub fn debug_derive(ast: &DeriveInput) -> proc_macro::TokenStream {
 	gen.into()
 }
 
-#[cfg(not(any(test, feature = "std")))]
+#[cfg(not(feature = "std"))]
 mod implementation {
 	use super::*;
 
@@ -62,11 +58,11 @@ mod implementation {
 	}
 }
 
-#[cfg(any(test, feature = "std"))]
+#[cfg(feature = "std")]
 mod implementation {
 	use super::*;
 	use proc_macro2::Span;
-	use syn::Index;
+	use syn::{Ident, Index};
 
 	/// Derive the inner implementation of `Debug::fmt` function.
 	pub fn derive(name_str: &str, data: &Data) -> TokenStream {
@@ -123,7 +119,7 @@ mod implementation {
 		match fields {
 			Fields::Named { names, this } => {
 				let names_str: Vec<_> = names.iter()
-					.map(ident2str)
+					.map(|x| x.to_string())
 					.collect();
 
 				let fields = match this {
@@ -162,7 +158,7 @@ mod implementation {
 		let v = e.variants
 			.iter()
 			.map(|v| {
-				let name = format!("{}::{}", name, ident2str(&v.ident));
+				let name = format!("{}::{}", name, v.ident);
 				let ident = &v.ident;
 				match v.fields {
 					syn::Fields::Named(ref f) => {
