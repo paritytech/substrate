@@ -97,7 +97,7 @@ use rstd::marker::PhantomData;
 use sr_version::RuntimeVersion;
 use sr_primitives::{
 	generic::{self, Era}, Perbill, ApplyError, ApplyOutcome, DispatchError,
-	weights::{Weight, DispatchInfo, DispatchClass, WeightMultiplier, SimpleDispatchInfo},
+	weights::{Weight, DispatchInfo, DispatchClass, WeightMultiplier},
 	transaction_validity::{
 		ValidTransaction, TransactionPriority, TransactionLongevity, TransactionValidityError,
 		InvalidTransaction, TransactionValidity,

@@ -259,7 +259,7 @@ use system::{ensure_signed, ensure_root};
 use codec::{Encode, Decode};
 use sr_primitives::{
 	traits::{SignedExtension, Bounded, SaturatedConversion},
-	weights::{SimpleDispatchInfo, DispatchInfo, DispatchClass, ClassifyDispatch, WeighData, Weight},
+	weights::{DispatchInfo, DispatchClass, ClassifyDispatch, WeighData, Weight},
 	transaction_validity::{
 		ValidTransaction, TransactionValidityError, InvalidTransaction, TransactionValidity,
 	},

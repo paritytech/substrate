@@ -629,7 +629,7 @@ macro_rules! decl_module {
 			{ $( $error_type )* }
 			[ $( $dispatchables )* ]
 			$(#[doc = $doc_attr])*
-			#[weight = $crate::dispatch::SimpleDispatchInfo::default()]
+			#[weight = SimpleDispatchInfo::default()]
 			$fn_vis fn $fn_name(
 				$from $(, $(#[$codec_attr])* $param_name : $param )*
 			) $( -> $result )* { $( $impl )* }
@@ -1068,6 +1068,8 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		{ $error_type:ty }
 	) => {
+		// default weight import.
+		use $crate::dispatch::SimpleDispatchInfo;
 		$crate::__check_reserved_fn_name! { $( $fn_name )* }
 
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
@@ -1170,7 +1172,7 @@ macro_rules! decl_module {
 				// implementation of `SimpleDispatchInfo`. Nonetheless, we create one if it does
 				// not exist.
 				let weight = <dyn $crate::dispatch::WeighData<_>>::weigh_data(
-					&$crate::dispatch::SimpleDispatchInfo::default(),
+					&SimpleDispatchInfo::default(),
 					()
 				);
 				let class = <dyn $crate::dispatch::ClassifyDispatch<_>>::classify_dispatch(

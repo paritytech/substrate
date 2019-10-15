@@ -179,7 +179,7 @@ use sr_primitives::{
 		Zero, SimpleArithmetic, StaticLookup, Member, CheckedAdd, CheckedSub, MaybeSerializeDebug,
 		Saturating, Bounded, SignedExtension, SaturatedConversion, Convert,
 	},
-	weights::{DispatchInfo, SimpleDispatchInfo, Weight},
+	weights::{DispatchInfo, Weight},
 };
 use system::{IsDeadAccount, OnNewAccount, ensure_signed, ensure_root};
 
