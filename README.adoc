@@ -459,6 +459,12 @@ node-cli, node-consensus, node-executor, node-network, node-primitives, node-run
 [source, shell]
 subkey
 
+To document Substrate's private items for internal development, add the `--document-private-items` flag:
+
+```
+cargo doc --package <spec> --open --document-private-items
+```
+
 === Contributing to documentation for Substrate packages
 
 https://doc.rust-lang.org/1.9.0/book/documentation.html[Document source code] for Substrate packages by annotating the source code with documentation comments.
