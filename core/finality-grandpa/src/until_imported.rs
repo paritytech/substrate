@@ -175,9 +175,9 @@ impl<Block: BlockT, Status, I, M> Stream for UntilImported<Block, Status, I, M> 
 							target: "afg",
 							"Waiting to import block {} before {} {} messages can be imported. \
 							Possible fork?",
-							self.identifier,
 							block_hash,
 							v.len(),
+							self.identifier,
 						);
 
 						*last_log = next_log;
