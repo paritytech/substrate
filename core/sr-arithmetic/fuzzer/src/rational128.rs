@@ -43,11 +43,12 @@ fn main() {
 
 			let truth = mul_div(a, b, c);
 			// if Err just use the truth value. We don't care about such cases. The point of this
-			// fuzzing is to make sure: if `multiply_by_rational` returns `Ok`, it must be 100% accurate
-			// returning `Err` is fine.
+			// fuzzing is to make sure that `multiply_by_rational` is 100% accurate as long as the
+			// value fits in a u128.
 			let result = multiply_by_rational(a, b, c).unwrap_or(truth);
 
-			if truth != result {
+			// `multiply_by_rational` rounds up, so we need to allow both cases.
+			if !(truth == result || truth == result - 1) {
 				println!("++ Expected {}", truth);
 				println!("+++++++ Got {}", result);
 				panic!();
