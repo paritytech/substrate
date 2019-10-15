@@ -20,7 +20,7 @@
 use std::fmt;
 
 use rstd::prelude::*;
-use runtime_io::blake2_256;
+use runtime_io::hashing::blake2_256;
 use codec::{Decode, Encode, EncodeLike, Input, Error};
 use crate::{
 	traits::{self, Member, MaybeDisplay, SignedExtension, Checkable, Extrinsic},

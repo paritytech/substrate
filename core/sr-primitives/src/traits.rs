@@ -65,14 +65,14 @@ pub trait Verify {
 impl Verify for primitives::ed25519::Signature {
 	type Signer = primitives::ed25519::Public;
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &Self::Signer) -> bool {
-		runtime_io::ed25519_verify(self, msg.get(), signer)
+		runtime_io::crypto::ed25519_verify(self, msg.get(), signer)
 	}
 }
 
 impl Verify for primitives::sr25519::Signature {
 	type Signer = primitives::sr25519::Public;
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &Self::Signer) -> bool {
-		runtime_io::sr25519_verify(self, msg.get(), signer)
+		runtime_io::crypto::sr25519_verify(self, msg.get(), signer)
 	}
 }
 
@@ -479,23 +479,23 @@ impl Hash for BlakeTwo256 {
 	type Output = primitives::H256;
 	type Hasher = Blake2Hasher;
 	fn hash(s: &[u8]) -> Self::Output {
-		runtime_io::blake2_256(s).into()
+		runtime_io::hashing::blake2_256(s).into()
 	}
 
 	fn trie_root(input: Vec<(Vec<u8>, Vec<u8>)>) -> Self::Output {
-		runtime_io::blake2_256_trie_root(input)
+		runtime_io::storage::blake2_256_trie_root(input)
 	}
 
 	fn ordered_trie_root(input: Vec<Vec<u8>>) -> Self::Output {
-		runtime_io::blake2_256_ordered_trie_root(input)
+		runtime_io::storage::blake2_256_ordered_trie_root(input)
 	}
 
 	fn storage_root() -> Self::Output {
-		runtime_io::storage_root().into()
+		runtime_io::storage::root().into()
 	}
 
 	fn storage_changes_root(parent_hash: Self::Output) -> Option<Self::Output> {
-		runtime_io::storage_changes_root(parent_hash.into()).map(Into::into)
+		runtime_io::storage::changes_root(parent_hash.into()).map(Into::into)
 	}
 }
 
@@ -617,9 +617,9 @@ pub trait IsMember<MemberId> {
 /// You can also create a `new` one from those fields.
 pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebugButNotDeserialize + 'static {
 	/// Header number.
-	type Number: Member + MaybeSerializeDebug + ::rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Codec;
+	type Number: Member + MaybeSerializeDebug + rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Codec;
 	/// Header hash type
-	type Hash: Member + MaybeSerializeDebug + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
+	type Hash: Member + MaybeSerializeDebug + rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
 	/// Hashing algorithm
 	type Hashing: Hash<Output = Self::Hash>;
 
@@ -673,7 +673,7 @@ pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebugButNotDes
 	/// Header type.
 	type Header: Header<Hash=Self::Hash>;
 	/// Block hash type.
-	type Hash: Member + MaybeSerializeDebug + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
+	type Hash: Member + MaybeSerializeDebug + rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
 
 	/// Returns a reference to the header.
 	fn header(&self) -> &Self::Header;
@@ -1253,19 +1253,19 @@ impl Printable for u8 {
 
 impl Printable for &[u8] {
 	fn print(&self) {
-		runtime_io::print_hex(self);
+		runtime_io::misc::print_hex(self);
 	}
 }
 
 impl Printable for &str {
 	fn print(&self) {
-		runtime_io::print_utf8(self.as_bytes());
+		runtime_io::misc::print_utf8(self.as_bytes());
 	}
 }
 
 impl Printable for u64 {
 	fn print(&self) {
-		runtime_io::print_num(*self);
+		runtime_io::misc::print_num(*self);
 	}
 }
 

@@ -269,11 +269,11 @@ impl Verify for AnySignature {
 	type Signer = sr25519::Public;
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &sr25519::Public) -> bool {
 		sr25519::Signature::try_from(self.0.as_fixed_bytes().as_ref())
-			.map(|s| runtime_io::sr25519_verify(&s, msg.get(), &signer))
+			.map(|s| runtime_io::crypto::sr25519_verify(&s, msg.get(), &signer))
 			.unwrap_or(false)
 		|| ed25519::Signature::try_from(self.0.as_fixed_bytes().as_ref())
 			.and_then(|s| ed25519::Public::try_from(signer.0.as_ref()).map(|p| (s, p)))
-			.map(|(s, p)| runtime_io::ed25519_verify(&s, msg.get(), &p))
+			.map(|(s, p)| runtime_io::crypto::ed25519_verify(&s, msg.get(), &p))
 			.unwrap_or(false)
 	}
 }
