@@ -18,7 +18,6 @@
 
 use rstd::prelude::*;
 use rstd::{self, convert::{TryFrom, TryInto}};
-//use crate::generic::{Digest, DigestItem};
 //use crate::weights::DispatchInfo;
 use codec::HasCompact;
 pub use integer_sqrt::IntegerSquareRoot;
