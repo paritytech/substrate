@@ -1197,7 +1197,9 @@ where
 		Self::free_balance(who)
 			.checked_sub(&value)
 			.map_or(false, |new_balance|
-				<Module<T>>::ensure_can_withdraw(&U::asset_id(), who, value, WithdrawReason::Reserve, new_balance).is_ok()
+				<Module<T>>::ensure_can_withdraw(
+					&U::asset_id(), who, value, WithdrawReason::Reserve, new_balance
+				).is_ok()
 			)
 	}
 

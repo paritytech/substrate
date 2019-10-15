@@ -53,7 +53,9 @@ pub trait MaybeHash {}
 impl<T> MaybeHash for T {}
 
 /// A application's public key.
-pub trait AppPublic: AppKey + Public + Ord + PartialOrd + Eq + PartialEq + Debug + MaybeHash + codec::Codec {
+pub trait AppPublic:
+	AppKey + Public + Ord + PartialOrd + Eq + PartialEq + Debug + MaybeHash + codec::Codec
+{
 	/// The wrapped type which is just a plain instance of `Public`.
 	type Generic:
 		IsWrappedBy<Self> + Public + Ord + PartialOrd + Eq + PartialEq + Debug + MaybeHash + codec::Codec;
