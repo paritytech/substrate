@@ -183,7 +183,8 @@ impl<N: Ord> View<N> {
 
 const KEEP_RECENT_ROUNDS: usize = 3;
 
-/// Tracks topics we keep messages for.
+/// Tracks gossip topics we keep messages for. E.g. there is one topic per GRANDPA round and a global topic for commit
+/// and catch-up messages.
 struct KeepTopics<B: BlockT> {
 	current_set: SetId,
 	rounds: VecDeque<(Round, SetId)>,
