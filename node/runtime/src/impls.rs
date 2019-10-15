@@ -21,8 +21,10 @@ use sr_primitives::weights::{Weight, WeightMultiplier};
 use sr_primitives::traits::{Convert, Saturating};
 use sr_primitives::Fixed64;
 use support::traits::{OnUnbalanced, Currency};
-use crate::{Balances, Authorship, MaximumBlockWeight, NegativeImbalance};
-use crate::constants::fee::TARGET_BLOCK_FULLNESS;
+use crate::{
+	Balances, Authorship, MaximumBlockWeight, NegativeImbalance, WeightToFee,
+	TargetedFeeAdjustment
+};
 
 pub struct Author;
 impl OnUnbalanced<NegativeImbalance> for Author {
@@ -47,48 +49,26 @@ impl Convert<u128, Balance> for CurrencyToVoteHandler {
 	fn convert(x: u128) -> Balance { x * Self::factor() }
 }
 
-/// Handles converting a weight scalar to a fee value, based on the scale and granularity of the
-/// node's balance type.
-///
-/// This should typically create a mapping between the following ranges:
-///   - [0, system::MaximumBlockWeight]
-///   - [Balance::min, Balance::max]
-///
-/// Yet, it can be used for any other sort of change to weight-fee. Some examples being:
-///   - Setting it to `0` will essentially disable the weight fee.
-///   - Setting it to `1` will cause the literal `#[weight = x]` values to be charged.
-///
-/// By default, substrate node will have a weight range of [0, 1_000_000_000].
-pub struct WeightToFee;
+/// Simply multiply by a coefficient denoted by the `Get` implementation.
 impl Convert<Weight, Balance> for WeightToFee {
 	fn convert(x: Weight) -> Balance {
-		// substrate-node a weight of 10_000 (smallest non-zero weight) to be mapped to 10^7 units of
-		// fees, hence:
-		Balance::from(x).saturating_mul(1_000)
+		Balance::from(x).saturating_mul(Self::get())
 	}
 }
 
-/// A struct that updates the weight multiplier based on the saturation level of the previous block.
-/// This should typically be called once per-block.
+/// Update the given multiplier based on the following formula
 ///
-/// This assumes that weight is a numeric value in the u32 range.
-///
-/// Given `TARGET_BLOCK_FULLNESS = 1/2`, a block saturation greater than 1/2 will cause the system
-/// fees to slightly grow and the opposite for block saturations less than 1/2.
-///
-/// Formula:
 ///   diff = (target_weight - current_block_weight)
 ///   v = 0.00004
 ///   next_weight = weight * (1 + (v . diff) + (v . diff)^2 / 2)
 ///
+/// Where `target_weight` must be implemented as the `Get` trait.
 /// https://research.web3.foundation/en/latest/polkadot/Token%20Economics/#relay-chain-transaction-fees
-pub struct WeightMultiplierUpdateHandler;
-
-impl Convert<(Weight, WeightMultiplier), WeightMultiplier> for WeightMultiplierUpdateHandler {
+impl Convert<(Weight, WeightMultiplier), WeightMultiplier> for TargetedFeeAdjustment {
 	fn convert(previous_state: (Weight, WeightMultiplier)) -> WeightMultiplier {
 		let (block_weight, multiplier) = previous_state;
 		let max_weight = MaximumBlockWeight::get();
-		let target_weight = (TARGET_BLOCK_FULLNESS * max_weight) as u128;
+		let target_weight = (Self::get() * max_weight) as u128;
 		let block_weight = block_weight as u128;
 
 		// determines if the first_term is positive
@@ -100,8 +80,8 @@ impl Convert<(Weight, WeightMultiplier), WeightMultiplier> for WeightMultiplierU
 
 		// 0.00004 = 4/100_000 = 40_000/10^9
 		let v = Fixed64::from_rational(4, 100_000);
-		// 0.00004^2 = 16/10^10 ~= 2/10^9. Taking the future /2 into account, then it is just 1 parts
-		// from a billionth.
+		// 0.00004^2 = 16/10^10 ~= 2/10^9. Taking the future /2 into account, then it is just 1
+		// parts from a billionth.
 		let v_squared_2 = Fixed64::from_rational(1, 1_000_000_000);
 
 		let first_term = v.saturating_mul(diff);
@@ -174,7 +154,7 @@ mod tests {
 		let mut wm = WeightMultiplier::default();
 		let mut iterations: u64 = 0;
 		loop {
-			let next = WeightMultiplierUpdateHandler::convert((block_weight, wm));
+			let next = TargetedFeeAdjustment::convert((block_weight, wm));
 			wm = next;
 			if wm == WeightMultiplier::from_rational(-1, 1) { break; }
 			iterations += 1;
@@ -192,13 +172,14 @@ mod tests {
 		let mut wm = WeightMultiplier::default();
 		let mut iterations: u64 = 0;
 		loop {
-			let next = WeightMultiplierUpdateHandler::convert((block_weight, wm));
+			let next = TargetedFeeAdjustment::convert((block_weight, wm));
 			if wm == next { break; }
 			wm = next;
 			iterations += 1;
 			let fee = <Runtime as balances::Trait>::WeightToFee::convert(wm.apply_to(tx_weight));
 			println!(
-				"iteration {}, new wm = {:?}. Fee at this point is: {} millicents, {} cents, {} dollars",
+				"iteration {}, new wm = {:?}. Fee at this point is: {} millicents, {} cents\
+				, {} dollars",
 				iterations,
 				wm,
 				fee / MILLICENTS,
@@ -212,22 +193,22 @@ mod tests {
 	fn stateless_weight_mul() {
 		// Light block. Fee is reduced a little.
 		assert_eq!(
-			WeightMultiplierUpdateHandler::convert((target() / 4, WeightMultiplier::default())),
+			TargetedFeeAdjustment::convert((target() / 4, WeightMultiplier::default())),
 			wm(-7500)
 		);
 		// a bit more. Fee is decreased less, meaning that the fee increases as the block grows.
 		assert_eq!(
-			WeightMultiplierUpdateHandler::convert((target() / 2, WeightMultiplier::default())),
+			TargetedFeeAdjustment::convert((target() / 2, WeightMultiplier::default())),
 			wm(-5000)
 		);
 		// ideal. Original fee. No changes.
 		assert_eq!(
-			WeightMultiplierUpdateHandler::convert((target(), WeightMultiplier::default())),
+			TargetedFeeAdjustment::convert((target(), WeightMultiplier::default())),
 			wm(0)
 		);
 		// // More than ideal. Fee is increased.
 		assert_eq!(
-			WeightMultiplierUpdateHandler::convert(((target() * 2), WeightMultiplier::default())),
+			TargetedFeeAdjustment::convert(((target() * 2), WeightMultiplier::default())),
 			wm(10000)
 		);
 	}
@@ -235,20 +216,20 @@ mod tests {
 	#[test]
 	fn stateful_weight_mul_grow_to_infinity() {
 		assert_eq!(
-			WeightMultiplierUpdateHandler::convert((target() * 2, WeightMultiplier::default())),
+			TargetedFeeAdjustment::convert((target() * 2, WeightMultiplier::default())),
 			wm(10000)
 		);
 		assert_eq!(
-			WeightMultiplierUpdateHandler::convert((target() * 2, wm(10000))),
+			TargetedFeeAdjustment::convert((target() * 2, wm(10000))),
 			wm(20000)
 		);
 		assert_eq!(
-			WeightMultiplierUpdateHandler::convert((target() * 2, wm(20000))),
+			TargetedFeeAdjustment::convert((target() * 2, wm(20000))),
 			wm(30000)
 		);
 		// ...
 		assert_eq!(
-			WeightMultiplierUpdateHandler::convert((target() * 2, wm(1_000_000_000))),
+			TargetedFeeAdjustment::convert((target() * 2, wm(1_000_000_000))),
 			wm(1_000_000_000 + 10000)
 		);
 	}
@@ -256,20 +237,20 @@ mod tests {
 	#[test]
 	fn stateful_weight_mil_collapse_to_minus_one() {
 		assert_eq!(
-			WeightMultiplierUpdateHandler::convert((0, WeightMultiplier::default())),
+			TargetedFeeAdjustment::convert((0, WeightMultiplier::default())),
 			wm(-10000)
 		);
 		assert_eq!(
-			WeightMultiplierUpdateHandler::convert((0, wm(-10000))),
+			TargetedFeeAdjustment::convert((0, wm(-10000))),
 			wm(-20000)
 		);
 		assert_eq!(
-			WeightMultiplierUpdateHandler::convert((0, wm(-20000))),
+			TargetedFeeAdjustment::convert((0, wm(-20000))),
 			wm(-30000)
 		);
 		// ...
 		assert_eq!(
-			WeightMultiplierUpdateHandler::convert((0, wm(1_000_000_000 * -1))),
+			TargetedFeeAdjustment::convert((0, wm(1_000_000_000 * -1))),
 			wm(-1_000_000_000)
 		);
 	}
@@ -283,7 +264,7 @@ mod tests {
 		vec![0, 1, 10, 1000, kb, 10 * kb, 100 * kb, mb, 10 * mb, Weight::max_value() / 2, Weight::max_value()]
 			.into_iter()
 			.for_each(|i| {
-				WeightMultiplierUpdateHandler::convert((i, WeightMultiplier::default()));
+				TargetedFeeAdjustment::convert((i, WeightMultiplier::default()));
 			});
 
 		// Some values that are all above the target and will cause an increase.
@@ -291,7 +272,7 @@ mod tests {
 		vec![t + 100, t * 2, t * 4]
 			.into_iter()
 			.for_each(|i| {
-				let fm = WeightMultiplierUpdateHandler::convert((
+				let fm = TargetedFeeAdjustment::convert((
 					i,
 					max_fm
 				));
