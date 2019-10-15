@@ -25,8 +25,7 @@ use support::{
 };
 use primitives::H256;
 use sr_primitives::{
-	Perbill, BuildStorage, set_and_run_with_externalities, testing::Header,
-	traits::{BlakeTwo256, IdentityLookup, Block as BlockT},
+	Perbill, BuildStorage, testing::Header, traits::{BlakeTwo256, IdentityLookup, Block as BlockT},
 };
 use crate as elections;
 
@@ -283,7 +282,7 @@ pub(crate) fn locks(who: &u64) -> Vec<u64> {
 
 pub(crate) fn new_test_ext_with_candidate_holes() -> runtime_io::TestExternalities {
 	let mut t = ExtBuilder::default().build();
-	set_and_run_with_externalities(&mut t, || {
+	t.execute_with(|| {
 		<elections::Candidates<Test>>::put(vec![0, 0, 1]);
 		elections::CandidateCount::put(1);
 		<elections::RegisterInfoOf<Test>>::insert(1, (0, 2));

@@ -18,12 +18,11 @@
 
 #![cfg(test)]
 
-use sr_primitives::set_and_run_with_externalities;
 use crate::mock::{Aura, new_test_ext};
 
 #[test]
 fn initial_values() {
-	set_and_run_with_externalities(&mut new_test_ext(vec![0, 1, 2, 3]), || {
+	new_test_ext(vec![0, 1, 2, 3]).execute_with(|| {
 		assert_eq!(Aura::last(), 0u64);
 		assert_eq!(Aura::authorities().len(), 4);
 	});

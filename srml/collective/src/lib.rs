@@ -384,8 +384,8 @@ mod tests {
 	use hex_literal::hex;
 	use primitives::H256;
 	use sr_primitives::{
-		set_and_run_with_externalities, Perbill,
-		traits::{BlakeTwo256, IdentityLookup, Block as BlockT}, testing::Header, BuildStorage,
+		Perbill, traits::{BlakeTwo256, IdentityLookup, Block as BlockT}, testing::Header,
+		BuildStorage,
 	};
 	use crate as collective;
 
@@ -451,7 +451,7 @@ mod tests {
 
 	#[test]
 	fn motions_basic_environment_works() {
-		set_and_run_with_externalities(&mut make_ext(), || {
+		make_ext().execute_with(|| {
 			System::set_block_number(1);
 			assert_eq!(Collective::members(), vec![1, 2, 3]);
 			assert_eq!(Collective::proposals(), Vec::<H256>::new());
@@ -464,7 +464,7 @@ mod tests {
 
 	#[test]
 	fn removal_of_old_voters_votes_works() {
-		set_and_run_with_externalities(&mut make_ext(), || {
+		make_ext().execute_with(|| {
 			System::set_block_number(1);
 			let proposal = make_proposal(42);
 			let hash = BlakeTwo256::hash_of(&proposal);
@@ -498,7 +498,7 @@ mod tests {
 
 	#[test]
 	fn removal_of_old_voters_votes_works_with_set_members() {
-		set_and_run_with_externalities(&mut make_ext(), || {
+		make_ext().execute_with(|| {
 			System::set_block_number(1);
 			let proposal = make_proposal(42);
 			let hash = BlakeTwo256::hash_of(&proposal);
@@ -532,7 +532,7 @@ mod tests {
 
 	#[test]
 	fn propose_works() {
-		set_and_run_with_externalities(&mut make_ext(), || {
+		make_ext().execute_with(|| {
 			System::set_block_number(1);
 			let proposal = make_proposal(42);
 			let hash = proposal.blake2_256().into();
@@ -561,7 +561,7 @@ mod tests {
 
 	#[test]
 	fn motions_ignoring_non_collective_proposals_works() {
-		set_and_run_with_externalities(&mut make_ext(), || {
+		make_ext().execute_with(|| {
 			System::set_block_number(1);
 			let proposal = make_proposal(42);
 			assert_noop!(
@@ -573,29 +573,35 @@ mod tests {
 
 	#[test]
 	fn motions_ignoring_non_collective_votes_works() {
-		set_and_run_with_externalities(&mut make_ext(), || {
+		make_ext().execute_with(|| {
 			System::set_block_number(1);
 			let proposal = make_proposal(42);
 			let hash: H256 = proposal.blake2_256().into();
 			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone())));
-			assert_noop!(Collective::vote(Origin::signed(42), hash.clone(), 0, true), "voter not a member");
+			assert_noop!(
+				Collective::vote(Origin::signed(42), hash.clone(), 0, true),
+				"voter not a member",
+			);
 		});
 	}
 
 	#[test]
 	fn motions_ignoring_bad_index_collective_vote_works() {
-		set_and_run_with_externalities(&mut make_ext(), || {
+		make_ext().execute_with(|| {
 			System::set_block_number(3);
 			let proposal = make_proposal(42);
 			let hash: H256 = proposal.blake2_256().into();
 			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone())));
-			assert_noop!(Collective::vote(Origin::signed(2), hash.clone(), 1, true), "mismatched index");
+			assert_noop!(
+				Collective::vote(Origin::signed(2), hash.clone(), 1, true),
+				"mismatched index",
+			);
 		});
 	}
 
 	#[test]
 	fn motions_revoting_works() {
-		set_and_run_with_externalities(&mut make_ext(), || {
+		make_ext().execute_with(|| {
 			System::set_block_number(1);
 			let proposal = make_proposal(42);
 			let hash: H256 = proposal.blake2_256().into();
@@ -604,13 +610,19 @@ mod tests {
 				Collective::voting(&hash),
 				Some(Votes { index: 0, threshold: 2, ayes: vec![1], nays: vec![] })
 			);
-			assert_noop!(Collective::vote(Origin::signed(1), hash.clone(), 0, true), "duplicate vote ignored");
+			assert_noop!(
+				Collective::vote(Origin::signed(1), hash.clone(), 0, true),
+				"duplicate vote ignored",
+			);
 			assert_ok!(Collective::vote(Origin::signed(1), hash.clone(), 0, false));
 			assert_eq!(
 				Collective::voting(&hash),
 				Some(Votes { index: 0, threshold: 2, ayes: vec![], nays: vec![1] })
 			);
-			assert_noop!(Collective::vote(Origin::signed(1), hash.clone(), 0, false), "duplicate vote ignored");
+			assert_noop!(
+				Collective::vote(Origin::signed(1), hash.clone(), 0, false),
+				"duplicate vote ignored",
+			);
 
 			assert_eq!(System::events(), vec![
 				EventRecord {
@@ -640,7 +652,7 @@ mod tests {
 
 	#[test]
 	fn motions_disapproval_works() {
-		set_and_run_with_externalities(&mut make_ext(), || {
+		make_ext().execute_with(|| {
 			System::set_block_number(1);
 			let proposal = make_proposal(42);
 			let hash: H256 = proposal.blake2_256().into();
@@ -683,7 +695,7 @@ mod tests {
 
 	#[test]
 	fn motions_approval_works() {
-		set_and_run_with_externalities(&mut make_ext(), || {
+		make_ext().execute_with(|| {
 			System::set_block_number(1);
 			let proposal = make_proposal(42);
 			let hash: H256 = proposal.blake2_256().into();

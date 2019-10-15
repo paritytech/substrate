@@ -151,6 +151,22 @@ impl_wasm_host_interface! {
 			Ok(())
 		}
 
+		ext_log(
+			level: u32,
+			target_data: Pointer<u8>,
+			target_len: WordSize,
+			message_data: Pointer<u8>,
+			message_len: WordSize,
+		) {
+			let target = context.read_memory(target_data, target_len)
+				.map_err(|_| "Invalid attempt to determine target in ext_log")?;
+			let message = context.read_memory(message_data, message_len)
+				.map_err(|_| "Invalid attempt to determine message in ext_log")?;
+
+			runtime_io::log(level.into(), &target, &message);
+			Ok(())
+		}
+
 		ext_set_storage(
 			key_data: Pointer<u8>,
 			key_len: WordSize,

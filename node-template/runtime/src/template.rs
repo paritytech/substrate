@@ -72,8 +72,7 @@ mod tests {
 	use primitives::H256;
 	use support::{impl_outer_origin, assert_ok, parameter_types};
 	use sr_primitives::{
-		set_and_run_with_externalities, traits::{BlakeTwo256, IdentityLookup}, testing::Header,
-		weights::Weight, Perbill,
+		traits::{BlakeTwo256, IdentityLookup}, testing::Header, weights::Weight, Perbill,
 	};
 
 	impl_outer_origin! {
@@ -122,7 +121,7 @@ mod tests {
 
 	#[test]
 	fn it_works_for_default_value() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			// Just a dummy test for the dummy funtion `do_something`
 			// calling the `do_something` function with a value 42
 			assert_ok!(TemplateModule::do_something(Origin::signed(1), 42));

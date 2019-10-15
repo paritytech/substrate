@@ -359,8 +359,7 @@ mod tests {
 	use support::{assert_noop, assert_ok, impl_outer_origin, parameter_types};
 	use primitives::H256;
 	use sr_primitives::{
-		traits::{BlakeTwo256, OnFinalize, IdentityLookup}, set_and_run_with_externalities,
-		testing::Header, assert_eq_error_rate,
+		traits::{BlakeTwo256, OnFinalize, IdentityLookup}, testing::Header, assert_eq_error_rate,
 	};
 
 	impl_outer_origin! {
@@ -447,7 +446,7 @@ mod tests {
 
 	#[test]
 	fn genesis_config_works() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			assert_eq!(Treasury::pot(), 0);
 			assert_eq!(Treasury::proposal_count(), 0);
 		});
@@ -455,7 +454,7 @@ mod tests {
 
 	#[test]
 	fn minting_works() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			// Check that accumulate works when we have Some value in Dummy already.
 			Treasury::on_dilution(100, 100);
 			assert_eq!(Treasury::pot(), 100);
@@ -466,7 +465,7 @@ mod tests {
 	fn minting_works_2() {
 		let tests = [(1, 10), (1, 20), (40, 130), (2, 66), (2, 67), (2, 100), (2, 101), (2, 134)];
 		for &(minted, portion) in &tests {
-			set_and_run_with_externalities(&mut new_test_ext(), || {
+			new_test_ext().execute_with(|| {
 				let init_total_issuance = Balances::total_issuance();
 				Treasury::on_dilution(minted, portion);
 
@@ -490,7 +489,7 @@ mod tests {
 
 	#[test]
 	fn spend_proposal_takes_min_deposit() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 1, 3));
 			assert_eq!(Balances::free_balance(&0), 99);
 			assert_eq!(Balances::reserved_balance(&0), 1);
@@ -499,7 +498,7 @@ mod tests {
 
 	#[test]
 	fn spend_proposal_takes_proportional_deposit() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
 			assert_eq!(Balances::free_balance(&0), 95);
 			assert_eq!(Balances::reserved_balance(&0), 5);
@@ -508,14 +507,14 @@ mod tests {
 
 	#[test]
 	fn spend_proposal_fails_when_proposer_poor() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			assert_noop!(Treasury::propose_spend(Origin::signed(2), 100, 3), "Proposer's balance too low");
 		});
 	}
 
 	#[test]
 	fn accepted_spend_proposal_ignored_outside_spend_period() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			Treasury::on_dilution(100, 100);
 
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
@@ -529,7 +528,7 @@ mod tests {
 
 	#[test]
 	fn unused_pot_should_diminish() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			let init_total_issuance = Balances::total_issuance();
 			Treasury::on_dilution(100, 100);
 			assert_eq!(Balances::total_issuance(), init_total_issuance + 100);
@@ -542,7 +541,7 @@ mod tests {
 
 	#[test]
 	fn rejected_spend_proposal_ignored_on_spend_period() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			Treasury::on_dilution(100, 100);
 
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
@@ -556,7 +555,7 @@ mod tests {
 
 	#[test]
 	fn reject_already_rejected_spend_proposal_fails() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			Treasury::on_dilution(100, 100);
 
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
@@ -567,21 +566,21 @@ mod tests {
 
 	#[test]
 	fn reject_non_existant_spend_proposal_fails() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			assert_noop!(Treasury::reject_proposal(Origin::ROOT, 0), "No proposal at that index");
 		});
 	}
 
 	#[test]
 	fn accept_non_existant_spend_proposal_fails() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			assert_noop!(Treasury::approve_proposal(Origin::ROOT, 0), "No proposal at that index");
 		});
 	}
 
 	#[test]
 	fn accept_already_rejected_spend_proposal_fails() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			Treasury::on_dilution(100, 100);
 
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
@@ -592,7 +591,7 @@ mod tests {
 
 	#[test]
 	fn accepted_spend_proposal_enacted_on_spend_period() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			Treasury::on_dilution(100, 100);
 			assert_eq!(Treasury::pot(), 100);
 
@@ -607,7 +606,7 @@ mod tests {
 
 	#[test]
 	fn pot_underflow_should_not_diminish() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			Treasury::on_dilution(100, 100);
 
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 150, 3));

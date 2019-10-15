@@ -165,9 +165,12 @@ export_api! {
 		/// Note that this will be only displayed if the host
 		/// is enabed to display log messages with given
 		/// level and target.
+		///
+		/// Instead of using directly, prefer setting up `RuntimeLogger`
+		/// and using `log` macros.
 		fn log(
 			level: LogLevel,
-			target: &str,
+			target: &[u8],
 			message: &[u8]
 		);
 	}

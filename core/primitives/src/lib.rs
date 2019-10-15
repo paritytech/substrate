@@ -39,6 +39,7 @@ use std::borrow::Cow;
 use serde::{Serialize, Deserialize};
 #[cfg(feature = "std")]
 pub use serde;// << for macro
+#[doc(hidden)]
 pub use codec::{Encode, Decode};// << for macro
 
 pub use substrate_debug_derive::RuntimeDebug;
@@ -83,6 +84,9 @@ pub use hash_db::Hasher;
 pub use self::hasher::blake2::Blake2Hasher;
 
 pub use primitives_storage as storage;
+
+#[doc(hidden)]
+pub use rstd;
 
 /// Context for executing a call into the runtime.
 pub enum ExecutionContext {
@@ -231,18 +235,30 @@ pub trait TypeId {
 /// A log level matching the one from `log` crate.
 ///
 /// Used internally by `runtime_io::log` method.
-#[derive(Debug, Encode, Decode)]
+#[repr(u32)]
 pub enum LogLevel {
 	/// `Error` log level.
-	Error,
+	Error = 1,
 	/// `Warn` log level.
-	Warn,
+	Warn = 2,
 	/// `Info` log level.
-	Info,
+	Info = 3,
 	/// `Debug` log level.
-	Debug,
+	Debug = 4,
 	/// `Trace` log level.
-	Trace,
+	Trace = 5,
+}
+
+impl From<u32> for LogLevel {
+	fn from(val: u32) -> Self {
+		match val {
+			x if x == LogLevel::Warn as u32 => LogLevel::Warn,
+			x if x == LogLevel::Info as u32 => LogLevel::Info,
+			x if x == LogLevel::Debug as u32 => LogLevel::Debug,
+			x if x == LogLevel::Trace as u32 => LogLevel::Trace,
+			_ => LogLevel::Error,
+		}
+	}
 }
 
 impl From<log::Level> for LogLevel {

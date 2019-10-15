@@ -101,7 +101,7 @@ impl log::Log for RuntimeLogger {
 
 		runtime_io::log(
 			record.level().into(),
-			record.target(),
+			record.target().as_bytes(),
 			&w.0,
 		);
 	}

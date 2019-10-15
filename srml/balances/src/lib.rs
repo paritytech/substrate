@@ -947,8 +947,15 @@ where
 		reason: WithdrawReason,
 		liveness: ExistenceRequirement,
 	) -> result::Result<Self::NegativeImbalance, &'static str> {
-		if let Some(new_balance) = Self::free_balance(who).checked_sub(&value) {
-			if liveness == ExistenceRequirement::KeepAlive && new_balance < T::ExistentialDeposit::get() {
+		let old_balance = Self::free_balance(who);
+		if let Some(new_balance) = old_balance.checked_sub(&value) {
+			// if we need to keep the account alive...
+			if liveness == ExistenceRequirement::KeepAlive
+				// ...and it would be dead afterwards...
+				&& new_balance < T::ExistentialDeposit::get()
+				// ...yet is was alive before
+				&& old_balance >= T::ExistentialDeposit::get()
+			{
 				return Err("payment would kill account")
 			}
 			Self::ensure_can_withdraw(who, value, reason, new_balance)?;

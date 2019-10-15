@@ -195,9 +195,10 @@ impl OtherApi for () {
 
 	fn log(
 		level: LogLevel,
-		target: &str,
+		target: &[u8],
 		message: &[u8],
 	) {
+		let target = std::str::from_utf8(target).unwrap_or("invalid utf8");
 		let msg = std::str::from_utf8(message).unwrap_or("invalid utf8");
 
 		log::log!(
