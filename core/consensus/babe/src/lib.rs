@@ -125,11 +125,11 @@ enum Error<B: BlockT> {
 	#[display(fmt = "Multiple BABE epoch change digests, rejecting!")]
 	MultipleEpochChangeDigests,
 	#[display(fmt = "Could not extract timestamp and slot: {:?}", _0)]
-	ExtractTimeStamp(consensus_common::Error),
+	Extraction(consensus_common::Error),
 	#[display(fmt = "Could not fetch epoch at {:?}", _0)]
 	FetchEpoch(B::Hash),
 	#[display(fmt = "Header {:?} rejected: too far in the future", _0)]
-	HeaderTooFarInFuture(B::Hash),
+	TooFarInFuture(B::Hash),
 	#[display(fmt = "Parent ({}) of {} unavailable. Cannot import", _0, _1)]
 	ParentUnavailable(B::Hash, B::Hash),
 	#[display(fmt = "Slot number must increase: parent slot: {}, this slot: {}", _0, _1)]
@@ -646,7 +646,7 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA
 			.map_err( Error::<Block>::Runtime)?;
 
 		let (_, slot_now, _) = self.time_source.extract_timestamp_and_slot(&inherent_data)
-			.map_err(Error::<Block>::ExtractTimeStamp)?;
+			.map_err(Error::<Block>::Extraction)?;
 
 		let hash = header.hash();
 		let parent_hash = *header.parent_hash();
@@ -749,7 +749,7 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA
 				telemetry!(CONSENSUS_DEBUG; "babe.header_too_far_in_future";
 					"hash" => ?hash, "a" => ?a, "b" => ?b
 				);
-				Err(Error::<Block>::HeaderTooFarInFuture(hash).into())
+				Err(Error::<Block>::TooFarInFuture(hash).into())
 			}
 		}
 	}
@@ -858,7 +858,7 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 			.map_err(|e| ConsensusError::ChainLookup(e.to_string()))?
 			.ok_or_else(|| ConsensusError::ChainLookup(babe_err(
 				Error::<Block>::ParentUnavailable(parent_hash, hash)
-			).to_string()))?;
+			).into()))?;
 
 		let parent_slot = find_pre_digest::<Block>(&parent_header)
 			.map(|d| d.slot_number())
@@ -870,7 +870,7 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 			return Err(
 				ConsensusError::ClientImport(babe_err(
 					Error::<Block>::SlotNumberMustIncrease(parent_slot, slot_number)
-				).to_string())
+				).into())
 			);
 		}
 
@@ -900,10 +900,10 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 				|slot| self.config.genesis_epoch(slot),
 			)
 				.map_err(|e: fork_tree::Error<client::error::Error>| ConsensusError::ChainLookup(
-					babe_err(Error::<Block>::CouldNotLookUpEpoch(Box::new(e))).to_string()
+					babe_err(Error::<Block>::CouldNotLookUpEpoch(Box::new(e))).into()
 				))?
 				.ok_or_else(|| ConsensusError::ClientImport(
-					babe_err(Error::<Block>::BlockNotValid(hash)).to_string()
+					babe_err(Error::<Block>::BlockNotValid(hash)).into()
 				))?;
 
 			let first_in_epoch = parent_slot < epoch.as_ref().start_slot;
@@ -922,12 +922,12 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 			(true, false) => {
 				return Err(
 					ConsensusError::ClientImport(
-						babe_err(Error::<Block>::ExpectedEpochChange(hash, slot_number)).to_string(),
+						babe_err(Error::<Block>::ExpectedEpochChange(hash, slot_number)).into(),
 					)
 				);
 			},
 			(false, true) => {
-				return Err(ConsensusError::ClientImport(Error::<Block>::UnexpectedEpochChange.to_string()));
+				return Err(ConsensusError::ClientImport(Error::<Block>::UnexpectedEpochChange.into()));
 			},
 		}
 

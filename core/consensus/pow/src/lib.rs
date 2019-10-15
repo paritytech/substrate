@@ -63,15 +63,15 @@ pub enum Error<B: BlockT> {
 	#[display(fmt = "Rejecting block too far in future")]
 	TooFarInFuture,
 	#[display(fmt = "Fetching best header failed using select chain: {:?}", _0)]
-	FetchingBestHeaderFailedSelectChain(ConsensusError),
+	BestHeaderSelectChain(ConsensusError),
 	#[display(fmt = "Fetching best header failed: {:?}", _0)]
-	FetchingBestHeaderFailed(client::error::Error),
+	BestHeader(client::error::Error),
 	#[display(fmt = "Best header does not exist")]
 	NoBestHeader,
 	#[display(fmt = "Block proposing error: {:?}", _0)]
 	BlockProposingError(String),
 	#[display(fmt = "Fetch best hash failed via select chain: {:?}", _0)]
-	FetchingBestHashFailedSelectChain(ConsensusError),
+	BestHashSelectChain(ConsensusError),
 	#[display(fmt = "Error with block built on {:?}: {:?}", _0, _1)]
 	BlockBuiltError(B::Hash, ConsensusError),
 	Client(client::error::Error),
@@ -445,14 +445,14 @@ fn mine_loop<B: BlockT<Hash=H256>, C, Algorithm, E, SO, S>(
 		let (best_hash, best_header) = match select_chain {
 			Some(select_chain) => {
 				let header = select_chain.best_chain()
-					.map_err(Error::FetchingBestHeaderFailedSelectChain)?;
+					.map_err(Error::BestHeaderSelectChain)?;
 				let hash = header.hash();
 				(hash, header)
 			},
 			None => {
 				let hash = client.info().best_hash;
 				let header = client.header(BlockId::Hash(hash))
-					.map_err(Error::FetchingBestHeaderFailed)?
+					.map_err(Error::BestHeader)?
 					.ok_or(Error::NoBestHeader)?;
 				(hash, header)
 			},
@@ -508,7 +508,7 @@ fn mine_loop<B: BlockT<Hash=H256>, C, Algorithm, E, SO, S>(
 		let key = aux_key(&hash);
 		let best_hash = match select_chain {
 			Some(select_chain) => select_chain.best_chain()
-				.map_err(Error::FetchingBestHashFailedSelectChain)?
+				.map_err(Error::BestHashSelectChain)?
 				.hash(),
 			None => client.info().best_hash,
 		};
