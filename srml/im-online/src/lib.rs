@@ -86,7 +86,7 @@ use sr_staking_primitives::{
 	offence::{ReportOffence, Offence, Kind},
 };
 use support::{
-	decl_module, decl_event, decl_storage, print, ensure, Parameter
+	decl_module, decl_event, decl_storage, print, ensure, Parameter, debug
 };
 use system::ensure_none;
 use system::offchain::SubmitUnsignedTransaction;
@@ -280,13 +280,10 @@ decl_module! {
 
 		// Runs after every block.
 		fn offchain_worker(now: T::BlockNumber) {
-			use support::debug::info;
-			support::debug::RuntimeLogger::init();
+			debug::RuntimeLogger::init();
 
-			info!("Calling offchain workers for block: {:?}", now);
 			// Only send messages if we are a potential validator.
 			if runtime_io::is_validator() {
-				info!("Running: {:?}", now);
 				Self::offchain(now);
 			}
 		}
@@ -324,6 +321,14 @@ impl<T: Trait> Module<T> {
 				Ok(_) => {},
 				Err(err) => print(err),
 			}
+		} else {
+			debug::native::trace!(
+				target: "imonline",
+				"Skipping gossip at: {:?} >= {:?} || {:?}",
+				next_gossip,
+				now,
+				if not_yet_gossipped { "not gossipped" } else { "gossipped" }
+			);
 		}
 	}
 
@@ -351,6 +356,13 @@ impl<T: Trait> Module<T> {
 
 			let signature = key.sign(&heartbeat_data.encode()).ok_or(OffchainErr::FailedSigning)?;
 			let call = Call::heartbeat(heartbeat_data, signature);
+
+			debug::info!(
+				target: "imonline",
+				"[index: {:?}] Reporting im-online at block: {:?}",
+				authority_index,
+				block_number
+			);
 			T::SubmitTransaction::submit_unsigned(call)
 				.map_err(|_| OffchainErr::SubmitTransaction)?;
 

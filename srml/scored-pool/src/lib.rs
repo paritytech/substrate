@@ -89,14 +89,17 @@ mod mock;
 mod tests;
 
 use codec::FullCodec;
-use rstd::prelude::*;
+use rstd::{
+	fmt::Debug,
+	prelude::*,
+};
 use support::{
 	decl_module, decl_storage, decl_event, ensure,
 	traits::{ChangeMembers, InitializeMembers, Currency, Get, ReservableCurrency},
 };
 use system::{self, ensure_root, ensure_signed};
 use sr_primitives::{
-	traits::{EnsureOrigin, SimpleArithmetic, MaybeSerializeDeserialize + Debug, Zero, StaticLookup},
+	traits::{EnsureOrigin, SimpleArithmetic, MaybeSerializeDeserialize, Zero, StaticLookup},
 };
 
 type BalanceOf<T, I> = <<T as Trait<I>>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;

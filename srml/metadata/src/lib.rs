@@ -28,6 +28,7 @@ use serde::Serialize;
 use codec::{Decode, Input, Error};
 use codec::{Encode, Output};
 use rstd::vec::Vec;
+use primitives::RuntimeDebug;
 
 #[cfg(feature = "std")]
 type StringBuf = String;
@@ -116,9 +117,8 @@ pub type DecodeDifferentArray<B, O=B> = DecodeDifferent<&'static [B], Vec<O>>;
 type DecodeDifferentStr = DecodeDifferent<&'static str, StringBuf>;
 
 /// All the metadata about a function.
-#[derive(Clone, PartialEq, Eq, Encode)]
+#[derive(Clone, PartialEq, Eq, Encode, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Decode, Serialize))]
-#[derive(primitives::RuntimeDebug)]
 pub struct FunctionMetadata {
 	pub name: DecodeDifferentStr,
 	pub arguments: DecodeDifferentArray<FunctionArgumentMetadata>,
@@ -126,9 +126,8 @@ pub struct FunctionMetadata {
 }
 
 /// All the metadata about a function argument.
-#[derive(Clone, PartialEq, Eq, Encode)]
+#[derive(Clone, PartialEq, Eq, Encode, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Decode, Serialize))]
-#[derive(primitives::RuntimeDebug)]
 pub struct FunctionArgumentMetadata {
 	pub name: DecodeDifferentStr,
 	pub ty: DecodeDifferentStr,
@@ -166,9 +165,8 @@ impl<E: Encode + serde::Serialize> serde::Serialize for FnEncode<E> {
 }
 
 /// All the metadata about an outer event.
-#[derive(Clone, PartialEq, Eq, Encode)]
+#[derive(Clone, PartialEq, Eq, Encode, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Decode, Serialize))]
-#[derive(primitives::RuntimeDebug)]
 pub struct OuterEventMetadata {
 	pub name: DecodeDifferentStr,
 	pub events: DecodeDifferentArray<
@@ -178,9 +176,8 @@ pub struct OuterEventMetadata {
 }
 
 /// All the metadata about an event.
-#[derive(Clone, PartialEq, Eq, Encode)]
+#[derive(Clone, PartialEq, Eq, Encode, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Decode, Serialize))]
-#[derive(primitives::RuntimeDebug)]
 pub struct EventMetadata {
 	pub name: DecodeDifferentStr,
 	pub arguments: DecodeDifferentArray<&'static str, StringBuf>,
@@ -188,9 +185,8 @@ pub struct EventMetadata {
 }
 
 /// All the metadata about one storage entry.
-#[derive(Clone, PartialEq, Eq, Encode)]
+#[derive(Clone, PartialEq, Eq, Encode, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Decode, Serialize))]
-#[derive(primitives::RuntimeDebug)]
 pub struct StorageEntryMetadata {
 	pub name: DecodeDifferentStr,
 	pub modifier: StorageEntryModifier,
@@ -200,9 +196,8 @@ pub struct StorageEntryMetadata {
 }
 
 /// All the metadata about one module constant.
-#[derive(Clone, PartialEq, Eq, Encode)]
+#[derive(Clone, PartialEq, Eq, Encode, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Decode, Serialize))]
-#[derive(primitives::RuntimeDebug)]
 pub struct ModuleConstantMetadata {
 	pub name: DecodeDifferentStr,
 	pub ty: DecodeDifferentStr,
@@ -211,8 +206,8 @@ pub struct ModuleConstantMetadata {
 }
 
 /// All the metadata about a module error.
-#[derive(Clone, PartialEq, Eq, Encode)]
-#[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
+#[derive(Clone, PartialEq, Eq, Encode, RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Decode, Serialize))]
 pub struct ErrorMetadata {
 	pub name: DecodeDifferentStr,
 	pub documentation: DecodeDifferentArray<&'static str, StringBuf>,
@@ -273,9 +268,8 @@ impl rstd::fmt::Debug for DefaultByteGetter {
 }
 
 /// Hasher used by storage maps
-#[derive(Clone, PartialEq, Eq, Encode)]
+#[derive(Clone, PartialEq, Eq, Encode, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Decode, Serialize))]
-#[derive(primitives::RuntimeDebug)]
 pub enum StorageHasher {
 	Blake2_128,
 	Blake2_256,
@@ -285,9 +279,8 @@ pub enum StorageHasher {
 }
 
 /// A storage entry type.
-#[derive(Clone, PartialEq, Eq, Encode)]
+#[derive(Clone, PartialEq, Eq, Encode, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Decode, Serialize))]
-#[derive(primitives::RuntimeDebug)]
 pub enum StorageEntryType {
 	Plain(DecodeDifferentStr),
 	Map {
@@ -306,36 +299,32 @@ pub enum StorageEntryType {
 }
 
 /// A storage entry modifier.
-#[derive(Clone, PartialEq, Eq, Encode)]
+#[derive(Clone, PartialEq, Eq, Encode, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Decode, Serialize))]
-#[derive(primitives::RuntimeDebug)]
 pub enum StorageEntryModifier {
 	Optional,
 	Default,
 }
 
 /// All metadata of the storage.
-#[derive(Clone, PartialEq, Eq, Encode)]
+#[derive(Clone, PartialEq, Eq, Encode, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Decode, Serialize))]
-#[derive(primitives::RuntimeDebug)]
 pub struct StorageMetadata {
 	/// The common prefix used by all storage entries.
 	pub prefix: DecodeDifferent<&'static str, StringBuf>,
 	pub entries: DecodeDifferent<&'static [StorageEntryMetadata], Vec<StorageEntryMetadata>>,
 }
 
-#[derive(Eq, Encode, PartialEq)]
+#[derive(Eq, Encode, PartialEq, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Decode, Serialize))]
-#[derive(primitives::RuntimeDebug)]
 /// Metadata prefixed by a u32 for reserved usage
 pub struct RuntimeMetadataPrefixed(pub u32, pub RuntimeMetadata);
 
 /// The metadata of a runtime.
 /// The version ID encoded/decoded through
 /// the enum nature of `RuntimeMetadata`.
-#[derive(Eq, Encode, PartialEq)]
+#[derive(Eq, Encode, PartialEq, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Decode, Serialize))]
-#[derive(primitives::RuntimeDebug)]
 pub enum RuntimeMetadata {
 	/// Unused; enum filler.
 	V0(RuntimeMetadataDeprecated),
@@ -358,9 +347,8 @@ pub enum RuntimeMetadata {
 }
 
 /// Enum that should fail.
-#[derive(Eq, PartialEq)]
+#[derive(Eq, PartialEq, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize))]
-#[derive(primitives::RuntimeDebug)]
 pub enum RuntimeMetadataDeprecated { }
 
 impl Encode for RuntimeMetadataDeprecated {
@@ -377,9 +365,8 @@ impl Decode for RuntimeMetadataDeprecated {
 }
 
 /// The metadata of a runtime.
-#[derive(Eq, Encode, PartialEq)]
+#[derive(Eq, Encode, PartialEq, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Decode, Serialize))]
-#[derive(primitives::RuntimeDebug)]
 pub struct RuntimeMetadataV8 {
 	pub modules: DecodeDifferentArray<ModuleMetadata>,
 }
@@ -388,9 +375,8 @@ pub struct RuntimeMetadataV8 {
 pub type RuntimeMetadataLastVersion = RuntimeMetadataV8;
 
 /// All metadata about an runtime module.
-#[derive(Clone, PartialEq, Eq, Encode)]
+#[derive(Clone, PartialEq, Eq, Encode, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Decode, Serialize))]
-#[derive(primitives::RuntimeDebug)]
 pub struct ModuleMetadata {
 	pub name: DecodeDifferentStr,
 	pub storage: Option<DecodeDifferent<FnEncode<StorageMetadata>, StorageMetadata>>,

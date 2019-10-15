@@ -323,7 +323,7 @@ impl<Balance: SimpleArithmetic + Copy, BlockNumber: SimpleArithmetic + Copy> Ves
 }
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
-//#[derive(sr_primitives::RuntimeDebug)]
+#[derive(sr_primitives::RuntimeDebug)]
 pub struct BalanceLock<Balance, BlockNumber> {
 	pub id: LockIdentifier,
 	pub amount: Balance,

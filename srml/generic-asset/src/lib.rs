@@ -154,11 +154,11 @@
 use codec::{Decode, Encode, HasCompact, Input, Output, Error};
 
 use sr_primitives::traits::{
-	CheckedAdd, CheckedSub, MaybeSerializeDeserialize + Debug, Member, One, Saturating, SimpleArithmetic, Zero, Bounded
+	CheckedAdd, CheckedSub, MaybeSerializeDeserialize, Member, One, Saturating, SimpleArithmetic, Zero, Bounded
 };
 
 use rstd::prelude::*;
-use rstd::{cmp, result};
+use rstd::{cmp, result, fmt::Debug};
 use support::dispatch::Result;
 use support::{
 	decl_event, decl_module, decl_storage, ensure,
@@ -181,7 +181,8 @@ pub trait Trait: system::Trait {
 		+ SimpleArithmetic
 		+ Default
 		+ Copy
-		+ MaybeSerializeDeserialize + Debug;
+		+ MaybeSerializeDeserialize
+		+ Debug;
 	type AssetId: Parameter + Member + SimpleArithmetic + Default + Copy;
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
@@ -192,7 +193,8 @@ pub trait Subtrait: system::Trait {
 		+ SimpleArithmetic
 		+ Default
 		+ Copy
-		+ MaybeSerializeDeserialize + Debug;
+		+ MaybeSerializeDeserialize
+		+ Debug;
 	type AssetId: Parameter + Member + SimpleArithmetic + Default + Copy;
 }
 

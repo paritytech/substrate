@@ -209,7 +209,6 @@ where
 	pub fn apply_extrinsic(uxt: Block::Extrinsic) -> ApplyResult {
 		let encoded = uxt.encode();
 		let encoded_len = encoded.len();
-		support::debug::debug(&uxt);
 		Self::apply_extrinsic_with_len(uxt, encoded_len, Some(encoded))
 	}
 

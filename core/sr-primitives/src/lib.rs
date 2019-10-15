@@ -170,9 +170,7 @@ impl BuildStorage for (StorageOverlay, ChildrenStorageOverlay) {
 pub type ConsensusEngineId = [u8; 4];
 
 /// Signature verify that can work with any known signature types..
-#[derive(Eq, PartialEq, Clone, Encode, Decode)]
-// TODO [ToDr] Do proper
-//#[derive(primitives::RuntimeDebug)]
+#[derive(Eq, PartialEq, Clone, Encode, Decode, RuntimeDebug)]
 pub enum MultiSignature {
 	/// An Ed25519 signature.
 	Ed25519(ed25519::Signature),
@@ -199,9 +197,8 @@ impl Default for MultiSignature {
 }
 
 /// Public key for any known crypto algorithm.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Encode, Decode)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Encode, Decode, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[derive(primitives::RuntimeDebug)]
 pub enum MultiSigner {
 	/// An Ed25519 identity.
 	Ed25519(ed25519::Public),
@@ -266,9 +263,8 @@ impl Verify for MultiSignature {
 }
 
 /// Signature verify that can work with any known signature types..
-#[derive(Eq, PartialEq, Clone, Default, Encode, Decode)]
+#[derive(Eq, PartialEq, Clone, Default, Encode, Decode, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[derive(primitives::RuntimeDebug)]
 pub struct AnySignature(H512);
 
 impl Verify for AnySignature {
@@ -296,9 +292,8 @@ impl From<ed25519::Signature> for AnySignature {
 	}
 }
 
-#[derive(Eq, PartialEq, Clone, Copy, Decode, Encode)]
+#[derive(Eq, PartialEq, Clone, Copy, Decode, Encode, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize))]
-#[derive(primitives::RuntimeDebug)]
 /// Reason why an extrinsic couldn't be applied (i.e. invalid extrinsic).
 pub enum ApplyError {
 	/// General error to do with the permissions of the sender.
@@ -349,9 +344,8 @@ impl From<DispatchError> for ApplyOutcome {
 /// Result from attempt to apply an extrinsic.
 pub type ApplyResult = Result<ApplyOutcome, ApplyError>;
 
-#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode)]
+#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize))]
-#[derive(primitives::RuntimeDebug)]
 /// Reason why a dispatch call failed
 pub struct DispatchError {
 	/// Module index, matching the metadata module index

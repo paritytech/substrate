@@ -49,15 +49,15 @@ fn should_display_proper_debug() {
 		"Named { a: 1, b: \"abc\" }"
 	);
 	assert_eq!(
-		format!("{:?}", Enum::A),
-		"Enum~me::A"
+		format!("{:?}", Enum::<u64>::A),
+		"EnumLongName::A"
 	);
 	assert_eq!(
 		format!("{:?}", Enum::B(1, "abc".into())),
-		"Enum~me::B(1, \"abc\")"
+		"EnumLongName::B(1, \"abc\")"
 	);
 	assert_eq!(
 		format!("{:?}", Enum::VariantLongName { a: 1, b: "abc".into() }),
-		"Enum~me::Va~me { a: 1, b: \"abc\" }"
+		"EnumLongName::VariantLongName { a: 1, b: \"abc\" }"
 	);
 }
