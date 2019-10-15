@@ -33,6 +33,7 @@ use primitives::{
 	offchain::{
 		Timestamp, HttpRequestId, HttpRequestStatus, HttpError, StorageKind, OpaqueNetworkState,
 	},
+	LogLevel,
 };
 
 /// Error verifying ECDSA signature
@@ -159,13 +160,16 @@ export_api! {
 		/// Print any `u8` slice as hex.
 		fn print_hex(data: &[u8]);
 
-		/// Print a debuggable struct.
+		/// Request to print a log message (stderr) on the host.
 		///
-		/// Might do nothing if debugging is not enabled.
-		#[cfg(feature = "std")]
-		fn debug(data: &impl std::fmt::Debug);
-		#[cfg(not(feature = "std"))]
-		fn debug(data: &impl core::fmt::Debug);
+		/// Note that this will be only displayed if the host
+		/// is enabed to display log messages with given
+		/// level and target.
+		fn log(
+			level: LogLevel,
+			target: &str,
+			message: &[u8]
+		);
 	}
 }
 

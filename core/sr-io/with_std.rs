@@ -193,8 +193,19 @@ impl OtherApi for () {
 		println!("{}", HexDisplay::from(&data));
 	}
 
-	fn debug(data: &impl rstd::fmt::Debug) {
-		dbg!("{:?}", data);
+	fn log(
+		level: LogLevel,
+		target: &str,
+		message: &[u8],
+	) {
+		let msg = std::str::from_utf8(message).unwrap_or("invalid utf8");
+
+		log::log!(
+			target: target,
+			log::Level::from(level),
+			"{}",
+			msg
+		)
 	}
 }
 

@@ -227,3 +227,46 @@ pub trait TypeId {
 	/// Simple 4 byte identifier.
 	const TYPE_ID: [u8; 4];
 }
+
+/// A log level matching the one from `log` crate.
+///
+/// Used internally by `runtime_io::log` method.
+#[derive(Debug, Encode, Decode)]
+pub enum LogLevel {
+	/// `Error` log level.
+	Error,
+	/// `Warn` log level.
+	Warn,
+	/// `Info` log level.
+	Info,
+	/// `Debug` log level.
+	Debug,
+	/// `Trace` log level.
+	Trace,
+}
+
+impl From<log::Level> for LogLevel {
+	fn from(l: log::Level) -> Self {
+		use log::Level::*;
+		match l {
+			Error => Self::Error,
+			Warn => Self::Warn,
+			Info => Self::Info,
+			Debug => Self::Debug,
+			Trace => Self::Trace,
+		}
+	}
+}
+
+impl From<LogLevel> for log::Level {
+	fn from(l: LogLevel) -> Self {
+		use self::LogLevel::*;
+		match l {
+			Error => Self::Error,
+			Warn => Self::Warn,
+			Info => Self::Info,
+			Debug => Self::Debug,
+			Trace => Self::Trace,
+		}
+	}
+}

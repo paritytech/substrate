@@ -280,8 +280,13 @@ decl_module! {
 
 		// Runs after every block.
 		fn offchain_worker(now: T::BlockNumber) {
+			use support::debug::info;
+			support::debug::RuntimeLogger::init();
+
+			info!("Calling offchain workers for block: {:?}", now);
 			// Only send messages if we are a potential validator.
 			if runtime_io::is_validator() {
+				info!("Running: {:?}", now);
 				Self::offchain(now);
 			}
 		}

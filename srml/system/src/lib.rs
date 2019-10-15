@@ -552,7 +552,7 @@ impl<T: Trait> Module<T> {
 	/// This will update storage entries that correspond to the specified topics.
 	/// It is expected that light-clients could subscribe to this topics.
 	pub fn deposit_event_indexed(topics: &[T::Hash], event: T::Event) {
-		runtime_io::debug(&event);
+		support::runtime_print!("{:?}", event);
 		let extrinsic_index = Self::extrinsic_index();
 		let phase = extrinsic_index.map_or(Phase::Finalization, |c| Phase::ApplyExtrinsic(c));
 		let event = EventRecord {
@@ -851,7 +851,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 		info: DispatchInfo,
 		len: usize,
 	) -> Result<(), ApplyError> {
-		runtime_io::debug(_call);
+		support::runtime_print!("{:?}", _call);
 		let next_len = Self::check_block_length(info, len)?;
 		AllExtrinsicsLen::put(next_len);
 		let next_weight = Self::check_weight(info)?;

@@ -14,18 +14,21 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use rstd::prelude::Vec;
-use rstd::collections::btree_map::BTreeMap;
-use rstd::fmt::{self, Write, Debug};
+use rstd::vec::Vec;
+use rstd::fmt::{self, Debug};
 
 pub use log::{info, debug, error, trace, warn};
 
+// TODO [ToDr] Docs!!!
+
 #[cfg(feature = "std")]
 pub mod native {
-	pub use super::{info, debug, error, trace, warn, print};
+	pub use super::{info, debug, error, trace, warn};
+	pub use crate::runtime_print;
 }
 #[cfg(not(feature = "std"))]
 pub mod native {
+	#[macro_export]
 	macro_rules! noop {
 		($($arg:tt)+) => {}
 	}
@@ -34,11 +37,13 @@ pub mod native {
 	pub use noop as error;
 	pub use noop as trace;
 	pub use noop as warn;
-	pub use noop as print;
+	pub use noop as runtime_print;
 }
 
-macro_rules! print {
+#[macro_export]
+macro_rules! runtime_print {
 	($($arg:tt)+) => {
+		use core::fmt::Write;
 		let mut w = $crate::debug::Writer::default();
 		let _ = core::write!(&mut w, $($arg)+);
 		w.print();
@@ -47,13 +52,13 @@ macro_rules! print {
 
 /// Print out the debuggable type.
 pub fn debug(data: &impl Debug) {
-	print!("{:?}", data);
+	runtime_print!("{:?}", data);
 }
 
 #[derive(Default)]
 pub struct Writer(Vec<u8>);
 
-impl Write for Writer {
+impl fmt::Write for Writer {
 	fn write_str(&mut self, s: &str) -> fmt::Result {
 		self.0.extend(s.as_bytes());
 		Ok(())
@@ -67,34 +72,37 @@ impl Writer {
 	}
 }
 
-pub struct RuntimeLogger {
-	level: log::LevelFilter,
-	filters: BTreeMap<Vec<u8>, log::LevelFilter>,
+pub struct RuntimeLogger;
+
+impl RuntimeLogger {
+	#[cfg(feature = "std")]
+	pub fn init() {}
+
+	#[cfg(not(feature = "std"))]
+	pub fn init() {
+		static LOGGER: RuntimeLogger = RuntimeLogger;;
+		let _ = log::set_logger(&LOGGER);
+	}
 }
 
 impl log::Log for RuntimeLogger {
-	fn enabled(&self, metadata: &log::Metadata) -> bool {
-		let level = metadata.level();
-
-		// target-specific filter
-		if let Some(f) = self.filters.get(metadata.target().as_bytes()) {
-			return f <= &level
-		}
-
-		// general filter
-		self.level <= level
+	fn enabled(&self, _metadata: &log::Metadata) -> bool {
+		// to avoid calling to host twice, we pass everything
+		// and let the host decide what to print.
+		// If someone is initializing the logger they should
+		// know what they are doing.
+		true
 	}
 
 	fn log(&self, record: &log::Record) {
-		if !self.enabled(record.metadata()) {
-			return;
-		}
+		use fmt::Write;
+		let mut w = Writer::default();
+		let _ = core::write!(&mut w, "{}", record.args());
 
-		print!(
-			"{}:{} -- {}",
-			record.level(),
+		runtime_io::log(
+			record.level().into(),
 			record.target(),
-			record.args(),
+			&w.0,
 		);
 	}
 
