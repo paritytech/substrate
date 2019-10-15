@@ -358,7 +358,8 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		);
 	}
 
-	/// Get the round messages for a round in the current set ID. These are signature-checked.
+	/// Get a stream of signature-checked round messages from the network as well as a sink for round messages to the
+	/// network all within the current set.
 	pub(crate) fn round_communication(
 		&self,
 		round: Round,
