@@ -80,7 +80,7 @@ fn api<T: Into<Option<Status>>>(sync: T) -> System<Block> {
 						peerset: serde_json::Value::Null,
 					}).unwrap());
 				},
-				Request::NodeRole(sender) => {
+				Request::NodeRoles(sender) => {
 					let _ = sender.send(vec![NodeRole::Authority]);
 				}
 			};
@@ -226,9 +226,9 @@ fn system_network_state() {
 }
 
 #[test]
-fn system_node_role() {
+fn system_node_roles() {
 	assert_eq!(
-		wait_receiver(api(None).system_node_role()),
-		NodeRole::Authority
+		wait_receiver(api(None).system_node_roles()),
+		vec![NodeRole::Authority]
 	);
 }
