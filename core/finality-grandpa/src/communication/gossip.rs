@@ -248,7 +248,7 @@ fn neighbor_topics<B: BlockT>(view: &View<NumberFor<B>>) -> Vec<B::Hash> {
 #[derive(Debug, Encode, Decode)]
 pub(super) enum GossipMessage<Block: BlockT> {
 	/// Grandpa message with round and set info.
-	VoteOrPrecommit(VoteOrPrecommitMessage<Block>),
+	PrevoteOrPrecommit(PrevoteOrPrecommitMessage<Block>),
 	/// Grandpa commit message with round and set info.
 	Commit(FullCommitMessage<Block>),
 	/// A neighbor packet. Not repropagated.
@@ -265,9 +265,9 @@ impl<Block: BlockT> From<NeighborPacket<NumberFor<Block>>> for GossipMessage<Blo
 	}
 }
 
-/// Network level message with topic information.
+/// Network level vote message with topic information.
 #[derive(Debug, Encode, Decode)]
-pub(super) struct VoteOrPrecommitMessage<Block: BlockT> {
+pub(super) struct PrevoteOrPrecommitMessage<Block: BlockT> {
 	/// The round this message is from.
 	pub(super) round: Round,
 	/// The voter set ID this message is from.
@@ -604,7 +604,7 @@ impl<Block: BlockT> Inner<Block> {
 		cost::PAST_REJECTION
 	}
 
-	fn validate_round_message(&self, who: &PeerId, full: &VoteOrPrecommitMessage<Block>)
+	fn validate_round_message(&self, who: &PeerId, full: &PrevoteOrPrecommitMessage<Block>)
 		-> Action<Block::Hash>
 	{
 		match self.consider_vote(full.round, full.set_id) {
@@ -995,7 +995,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 
 		let action = {
 			match GossipMessage::<Block>::decode(&mut data) {
-				Ok(GossipMessage::VoteOrPrecommit(ref message))
+				Ok(GossipMessage::PrevoteOrPrecommit(ref message))
 					=> self.inner.write().validate_round_message(who, message),
 				Ok(GossipMessage::Commit(ref message)) => self.inner.write().validate_commit_message(who, message),
 				Ok(GossipMessage::Neighbor(update)) => {
@@ -1155,7 +1155,7 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 				Ok(GossipMessage::Neighbor(_)) => false,
 				Ok(GossipMessage::CatchUpRequest(_)) => false,
 				Ok(GossipMessage::CatchUp(_)) => false,
-				Ok(GossipMessage::VoteOrPrecommit(_)) => false, // should not be the case.
+				Ok(GossipMessage::PrevoteOrPrecommit(_)) => false, // should not be the case.
 			}
 		})
 	}
@@ -1470,7 +1470,7 @@ mod tests {
 		val.note_round(Round(0), |_, _| {});
 
 		let inner = val.inner.read();
-		let unknown_voter = inner.validate_round_message(&peer, &VoteOrPrecommitMessage {
+		let unknown_voter = inner.validate_round_message(&peer, &PrevoteOrPrecommitMessage {
 			round: Round(0),
 			set_id: SetId(set_id),
 			message: SignedMessage::<Block> {
@@ -1483,7 +1483,7 @@ mod tests {
 			}
 		});
 
-		let bad_sig = inner.validate_round_message(&peer, &VoteOrPrecommitMessage {
+		let bad_sig = inner.validate_round_message(&peer, &PrevoteOrPrecommitMessage {
 			round: Round(0),
 			set_id: SetId(set_id),
 			message: SignedMessage::<Block> {

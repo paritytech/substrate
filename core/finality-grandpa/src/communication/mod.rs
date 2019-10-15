@@ -48,7 +48,7 @@ use crate::{
 };
 use crate::environment::HasVoted;
 use gossip::{
-	GossipMessage, FullCatchUpMessage, FullCommitMessage, VoteOrPrecommitMessage, GossipValidator
+	GossipMessage, FullCatchUpMessage, FullCommitMessage, PrevoteOrPrecommitMessage, GossipValidator
 };
 use fg_primitives::{
 	AuthorityPair, AuthorityId, AuthoritySignature, SetId as SetIdNumber, RoundNumber,
@@ -275,8 +275,8 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 				validator.note_round(Round(round.number), |_, _| {});
 
 				for signed in round.votes.iter() {
-					let message = gossip::GossipMessage::VoteOrPrecommit(
-						gossip::VoteOrPrecommitMessage::<B> {
+					let message = gossip::GossipMessage::PrevoteOrPrecommit(
+						gossip::PrevoteOrPrecommitMessage::<B> {
 							message: signed.clone(),
 							round: Round(round.number),
 							set_id: SetId(set_id),
@@ -379,7 +379,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 			})
 			.and_then(move |msg| {
 				match msg {
-					GossipMessage::VoteOrPrecommit(msg) => {
+					GossipMessage::PrevoteOrPrecommit(msg) => {
 						// check signature.
 						if !voters.contains_key(&msg.message.id) {
 							debug!(target: "afg", "Skipping message from unknown voter {}", msg.message.id);
@@ -707,7 +707,7 @@ impl<Block: BlockT, N: Network<Block>> Sink for OutgoingMessages<Block, N>
 				id: local_id.clone(),
 			};
 
-			let message = GossipMessage::VoteOrPrecommit(VoteOrPrecommitMessage::<Block> {
+			let message = GossipMessage::PrevoteOrPrecommit(PrevoteOrPrecommitMessage::<Block> {
 				message: signed.clone(),
 				round: Round(self.round),
 				set_id: SetId(self.set_id),
