@@ -122,8 +122,8 @@ pub struct ChainSync<B: BlockT> {
 	best_importing_number: NumberFor<B>,
 	/// Finality proof handler.
 	request_builder: Option<BoxFinalityProofRequestBuilder<B>>,
-	/// Explicit sync requests.
-	sync_requests: HashMap<B::Hash, SyncRequest<B>>,
+	/// Fork sync targets.
+	fork_targets: HashMap<B::Hash, ForkTarget<B>>,
 	/// A flag that caches idle state with no pending requests.
 	is_idle: bool,
 	/// A type to check incoming block announcements.
@@ -157,7 +157,7 @@ pub struct PeerInfo<B: BlockT> {
 	pub best_number: NumberFor<B>
 }
 
-struct SyncRequest<B: BlockT> {
+struct ForkTarget<B: BlockT> {
 	number: NumberFor<B>,
 	parent_hash: Option<B::Hash>,
 	peers: HashSet<PeerId>,
@@ -303,7 +303,7 @@ impl<B: BlockT> ChainSync<B> {
 			queue_blocks: Default::default(),
 			best_importing_number: Zero::zero(),
 			request_builder,
-			sync_requests: Default::default(),
+			fork_targets: Default::default(),
 			is_idle: false,
 			block_announce_validator,
 		}
@@ -458,7 +458,7 @@ impl<B: BlockT> ChainSync<B> {
 	// The implementation is similar to on_block_announce with unknown parent hash.
 	pub fn set_sync_fork_request(&mut self, peers: Vec<PeerId>, hash: &B::Hash, number: NumberFor<B>) {
 		if peers.is_empty() {
-			if let Some(_) = self.sync_requests.remove(hash) {
+			if let Some(_) = self.fork_targets.remove(hash) {
 				debug!(target: "sync", "Cleared sync request for block {:?} with {:?}", hash, peers);
 			}
 			return;
@@ -490,9 +490,9 @@ impl<B: BlockT> ChainSync<B> {
 			}
 		}
 
-		self.sync_requests
+		self.fork_targets
 			.entry(hash.clone())
-			.or_insert_with(|| SyncRequest {
+			.or_insert_with(|| ForkTarget {
 				number,
 				peers: Default::default(),
 				parent_hash: None,
@@ -559,7 +559,7 @@ impl<B: BlockT> ChainSync<B> {
 		}
 		let blocks = &mut self.blocks;
 		let attrs = &self.required_block_attributes;
-		let sync_requests = &self.sync_requests;
+		let fork_targets = &self.fork_targets;
 		let mut have_requests = false;
 		let last_finalized = self.client.info().chain.finalized_number;
 		let best_queued = self.best_queued_number;
@@ -570,9 +570,9 @@ impl<B: BlockT> ChainSync<B> {
 				trace!(target: "sync", "Peer {} is busy", id);
 				return None
 			}
-			if let Some((hash, req)) = explicit_sync_request(
+			if let Some((hash, req)) = fork_sync_request(
 				id,
-				sync_requests,
+				fork_targets,
 				best_queued,
 				last_finalized,
 				attrs,
@@ -582,7 +582,7 @@ impl<B: BlockT> ChainSync<B> {
 					client.block_status(&BlockId::Hash(*hash)).unwrap_or(BlockStatus::Unknown)
 				},
 			) {
-				trace!(target: "sync", "Downloading explicitly requested block {:?} from {}", hash, id);
+				trace!(target: "sync", "Downloading fork {:?} from {}", hash, id);
 				peer.state = PeerSyncState::DownloadingStale(hash);
 				have_requests = true;
 				Some((id.clone(), req))
@@ -686,9 +686,9 @@ impl<B: BlockT> ChainSync<B> {
 							);
 							if peer.common_number < peer.best_number && peer.best_number < self.best_queued_number {
 								trace!(target: "sync", "Added fork target {} for {}" , peer.best_hash, who);
-								self.sync_requests
+								self.fork_targets
 									.entry(peer.best_hash.clone())
-									.or_insert_with(|| SyncRequest {
+									.or_insert_with(|| ForkTarget {
 										number: peer.best_number,
 										parent_hash: None,
 										peers: Default::default(),
@@ -952,8 +952,8 @@ impl<B: BlockT> ChainSync<B> {
 			self.best_queued_number = number;
 			self.best_queued_hash = *hash;
 		}
-		if let Some(_) = self.sync_requests.remove(&hash) {
-			trace!(target: "sync", "Completed explicit sync request {:?}", hash);
+		if let Some(_) = self.fork_targets.remove(&hash) {
+			trace!(target: "sync", "Completed fork sync {:?}", hash);
 		}
 		// Update common blocks
 		for (n, peer) in self.peers.iter_mut() {
@@ -1031,7 +1031,7 @@ impl<B: BlockT> ChainSync<B> {
 		// known block case
 		if known || self.is_already_downloading(&hash) {
 			trace!(target: "sync", "Known block announce from {}: {}", who, hash);
-			if let Some(target) = self.sync_requests.get_mut(&hash) {
+			if let Some(target) = self.fork_targets.get_mut(&hash) {
 				target.peers.insert(who);
 			}
 			return OnBlockAnnounce::Nothing
@@ -1067,9 +1067,9 @@ impl<B: BlockT> ChainSync<B> {
 				target: "sync",
 				"Added sync target for block announced from {}: {} {:?}", who, hash, header
 			);
-			self.sync_requests
+			self.fork_targets
 				.entry(hash.clone())
-				.or_insert_with(|| SyncRequest {
+				.or_insert_with(|| ForkTarget {
 					number,
 					parent_hash: Some(header.parent_hash().clone()),
 					peers: Default::default(),
@@ -1260,17 +1260,17 @@ fn peer_block_request<B: BlockT>(
 	}
 }
 
-/// Get pending explicit sync request for a peer.
-fn explicit_sync_request<B: BlockT>(
+/// Get pending fork sync targets for a peer.
+fn fork_sync_request<B: BlockT>(
 	id: &PeerId,
-	requests: &HashMap<B::Hash, SyncRequest<B>>,
+	targets: &HashMap<B::Hash, ForkTarget<B>>,
 	best_num: NumberFor<B>,
 	finalized: NumberFor<B>,
 	attributes: &message::BlockAttributes,
 	check_block: impl Fn(&B::Hash) -> BlockStatus,
 ) -> Option<(B::Hash, BlockRequest<B>)>
 {
-	for (hash, r) in requests {
+	for (hash, r) in targets {
 		if !r.peers.contains(id) {
 			continue
 		}
