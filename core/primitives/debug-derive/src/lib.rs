@@ -15,6 +15,19 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Macros to derive runtime debug implementation.
+//!
+//! This custom derive implements a `core::fmt::Debug` trait,
+//! but in case the `std` feature is enabled the implementation
+//! will actually print out the structure as regular `derive(Debug)`
+//! would do. If `std` is disabled the implementation will be empty.
+//!
+//! This behaviour is useful to prevent bloating the runtime WASM
+//! blob from unneeded code.
+//!
+//! ```rust,no_run
+//! #[derive(RuntimeDebug)]
+//!	struct MyStruct;
+//! ```
 
 extern crate proc_macro;
 

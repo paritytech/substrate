@@ -31,9 +31,8 @@ use rstd::{
 };
 
 /// Abstraction over a block header for a substrate chain.
-#[derive(PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone, primitives::RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[derive(primitives::RuntimeDebug)]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
 pub struct Header<Number: Copy + Into<U256> + TryFrom<U256>, Hash: HashT> {

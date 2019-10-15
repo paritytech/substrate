@@ -24,9 +24,8 @@ use codec::{Encode, Decode, Input, Output, Error};
 
 /// An indices-aware address, which can be either a direct `AccountId` or
 /// an index.
-#[derive(PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone, sr_primitives::RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Hash))]
-#[derive(sr_primitives::RuntimeDebug)]
 pub enum Address<AccountId, AccountIndex> where
 	AccountId: Member,
 	AccountIndex: Member,

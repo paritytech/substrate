@@ -34,8 +34,7 @@ macro_rules! implement_per_thing {
 		///
 		#[doc = $title]
 		#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Ord, PartialOrd))]
-		#[derive(primitives::RuntimeDebug)]
-		#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq)]
+		#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq, primitives::RuntimeDebug)]
 		pub struct $name($type);
 
 		impl $name {
@@ -544,8 +543,7 @@ implement_per_thing!(
 
 /// An unsigned fixed point number. Can hold any value in the range [-9_223_372_036, 9_223_372_036]
 /// with fixed point accuracy of one billion.
-#[derive(primitives::RuntimeDebug)]
-#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, primitives::RuntimeDebug)]
 pub struct Fixed64(i64);
 
 /// The accuracy of the `Fixed64` type.
@@ -1675,8 +1673,7 @@ pub mod helpers_128bit {
 }
 
 /// A wrapper for any rational number with a 128 bit numerator and denominator.
-#[derive(Clone, Copy, Default, Eq)]
-#[derive(primitives::RuntimeDebug)]
+#[derive(Clone, Copy, Default, Eq, primitives::RuntimeDebug)]
 pub struct Rational128(u128, u128);
 
 impl Rational128 {

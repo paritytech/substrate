@@ -24,7 +24,7 @@ extern crate alloc;
 #[cfg(feature = "std")]
 use serde::Serialize;
 use codec::{Encode, Decode, Codec};
-use sr_primitives::ConsensusEngineId;
+use sr_primitives::{ConsensusEngineId, RuntimeDebug};
 use client::decl_runtime_apis;
 use rstd::vec::Vec;
 
@@ -60,8 +60,7 @@ pub type RoundNumber = u64;
 
 /// A scheduled change of authority set.
 #[cfg_attr(feature = "std", derive(Serialize))]
-#[derive(sr_primitives::RuntimeDebug)]
-#[derive(Clone, Eq, PartialEq, Encode, Decode)]
+#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug)]
 pub struct ScheduledChange<N> {
 	/// The new authorities after the change, along with their respective weights.
 	pub next_authorities: Vec<(AuthorityId, AuthorityWeight)>,
@@ -71,8 +70,7 @@ pub struct ScheduledChange<N> {
 
 /// An consensus log item for GRANDPA.
 #[cfg_attr(feature = "std", derive(Serialize))]
-#[derive(sr_primitives::RuntimeDebug)]
-#[derive(Decode, Encode, PartialEq, Eq, Clone)]
+#[derive(Decode, Encode, PartialEq, Eq, Clone, RuntimeDebug)]
 pub enum ConsensusLog<N: Codec> {
 	/// Schedule an authority set change.
 	///

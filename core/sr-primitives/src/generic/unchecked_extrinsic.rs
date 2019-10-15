@@ -16,9 +16,8 @@
 
 //! Generic implementation of an unchecked (pre-verification) extrinsic.
 
-use core::fmt;
-
 use rstd::prelude::*;
+use rstd::fmt;
 use runtime_io::blake2_256;
 use codec::{Decode, Encode, EncodeLike, Input, Error};
 use crate::{

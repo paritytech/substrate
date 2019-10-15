@@ -153,6 +153,7 @@
 
 use codec::{Decode, Encode, HasCompact, Input, Output, Error};
 
+use sr_primitives::RuntimeDebug;
 use sr_primitives::traits::{
 	CheckedAdd, CheckedSub, MaybeSerializeDeserialize, Member, One, Saturating, SimpleArithmetic, Zero, Bounded
 };
@@ -204,8 +205,7 @@ impl<T: Trait> Subtrait for T {
 }
 
 /// Asset creation options.
-#[derive(sr_primitives::RuntimeDebug)]
-#[derive(Clone, Encode, Decode, PartialEq, Eq)]
+#[derive(Clone, Encode, Decode, PartialEq, Eq, RuntimeDebug)]
 pub struct AssetOptions<Balance: HasCompact, AccountId> {
 	/// Initial issuance of this asset. All deposit to the creater of the asset.
 	#[codec(compact)]
@@ -215,8 +215,7 @@ pub struct AssetOptions<Balance: HasCompact, AccountId> {
 }
 
 /// Owner of an asset.
-#[derive(sr_primitives::RuntimeDebug)]
-#[derive(Clone, Encode, Decode, PartialEq, Eq)]
+#[derive(Clone, Encode, Decode, PartialEq, Eq, RuntimeDebug)]
 pub enum Owner<AccountId> {
 	/// No owner.
 	None,
@@ -231,8 +230,7 @@ impl<AccountId> Default for Owner<AccountId> {
 }
 
 /// Asset permissions
-#[derive(sr_primitives::RuntimeDebug)]
-#[derive(Clone, Encode, Decode, PartialEq, Eq)]
+#[derive(Clone, Encode, Decode, PartialEq, Eq, RuntimeDebug)]
 pub struct PermissionsV1<AccountId> {
 	/// Who have permission to update asset permission
 	pub update: Owner<AccountId>,
@@ -242,16 +240,14 @@ pub struct PermissionsV1<AccountId> {
 	pub burn: Owner<AccountId>,
 }
 
-#[derive(sr_primitives::RuntimeDebug)]
-#[derive(Clone, Encode, Decode, PartialEq, Eq)]
+#[derive(Clone, Encode, Decode, PartialEq, Eq, RuntimeDebug)]
 #[repr(u8)]
 enum PermissionVersionNumber {
 	V1 = 0,
 }
 
 /// Versioned asset permission
-#[derive(sr_primitives::RuntimeDebug)]
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, RuntimeDebug)]
 pub enum PermissionVersions<AccountId> {
 	V1(PermissionsV1<AccountId>),
 }
@@ -437,8 +433,7 @@ decl_module! {
 	}
 }
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq)]
-#[derive(sr_primitives::RuntimeDebug)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct BalanceLock<Balance, BlockNumber> {
 	pub id: LockIdentifier,
 	pub amount: Balance,
@@ -1068,8 +1063,7 @@ impl<T: Subtrait> Trait for ElevatedTrait<T> {
 	type Event = ();
 }
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq)]
-#[derive(sr_primitives::RuntimeDebug)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct AssetCurrency<T, U>(rstd::marker::PhantomData<T>, rstd::marker::PhantomData<U>);
 
 impl<T, U> Currency<T::AccountId> for AssetCurrency<T, U>

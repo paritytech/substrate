@@ -18,6 +18,7 @@
 
 use rstd::prelude::*;
 use crate::codec::{Encode, Decode};
+use crate::RuntimeDebug;
 
 /// Priority for a transaction. Additive. Higher is better.
 pub type TransactionPriority = u64;
@@ -30,9 +31,8 @@ pub type TransactionLongevity = u64;
 pub type TransactionTag = Vec<u8>;
 
 /// An invalid transaction validity.
-#[derive(Clone, PartialEq, Eq, Encode, Decode, Copy)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, Copy, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(serde::Serialize))]
-#[derive(primitives::RuntimeDebug)]
 pub enum InvalidTransaction {
 	/// The call of the transaction is not expected.
 	Call,
@@ -82,9 +82,8 @@ impl From<InvalidTransaction> for &'static str {
 }
 
 /// An unknown transaction validity.
-#[derive(Clone, PartialEq, Eq, Encode, Decode, Copy)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, Copy, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(serde::Serialize))]
-#[derive(primitives::RuntimeDebug)]
 pub enum UnknownTransaction {
 	/// Could not lookup some information that is required to validate the transaction.
 	CannotLookup,
@@ -107,9 +106,8 @@ impl From<UnknownTransaction> for &'static str {
 }
 
 /// Errors that can occur while checking the validity of a transaction.
-#[derive(Clone, PartialEq, Eq, Encode, Decode, Copy)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, Copy, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(serde::Serialize))]
-#[derive(primitives::RuntimeDebug)]
 pub enum TransactionValidityError {
 	/// The transaction is invalid.
 	Invalid(InvalidTransaction),
@@ -176,8 +174,7 @@ impl Into<TransactionValidity> for UnknownTransaction {
 }
 
 /// Information concerning a valid transaction.
-#[derive(Clone, PartialEq, Eq, Encode, Decode)]
-#[derive(primitives::RuntimeDebug)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
 pub struct ValidTransaction {
 	/// Priority of the transaction.
 	///

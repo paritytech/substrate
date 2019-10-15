@@ -1062,8 +1062,7 @@ macro_rules! decl_module {
 		$crate::__check_reserved_fn_name! { $( $fn_name )* }
 
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-		#[derive(Clone, Copy, PartialEq, Eq)]
-#[derive($crate::RuntimeDebug)]
+		#[derive(Clone, Copy, PartialEq, Eq, $crate::RuntimeDebug)]
 		pub struct $mod_type<
 			$trait_instance: $trait_name
 			$(<I>, $instance: $instantiable $( = $module_default_instance)?)?
@@ -1315,8 +1314,12 @@ macro_rules! impl_outer_dispatch {
 		}
 	) => {
 		$(#[$attr])*
-		#[derive(Clone, PartialEq, Eq, $crate::codec::Encode, $crate::codec::Decode)]
-#[derive($crate::RuntimeDebug)]
+		#[derive(
+			Clone, PartialEq, Eq,
+			$crate::codec::Encode,
+			$crate::codec::Decode,
+			$crate::RuntimeDebug,
+		)]
 		pub enum $call_type {
 			$(
 				$camelcase ( $crate::dispatch::CallableCallFor<$camelcase, $runtime> )

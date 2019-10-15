@@ -97,6 +97,7 @@ use rstd::marker::PhantomData;
 use rstd::fmt::Debug;
 use sr_version::RuntimeVersion;
 use sr_primitives::{
+	RuntimeDebug,
 	generic::{self, Era}, Perbill, ApplyError, ApplyOutcome, DispatchError,
 	weights::{Weight, DispatchInfo, DispatchClass, WeightMultiplier, SimpleDispatchInfo},
 	transaction_validity::{
@@ -289,7 +290,7 @@ decl_module! {
 }
 
 /// A phase of a block's execution.
-#[derive(Encode, Decode, sr_primitives::RuntimeDebug)]
+#[derive(Encode, Decode, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize, PartialEq, Eq, Clone))]
 pub enum Phase {
 	/// Applying an extrinsic.
@@ -299,7 +300,7 @@ pub enum Phase {
 }
 
 /// Record of an event happening.
-#[derive(Encode, Decode, sr_primitives::RuntimeDebug)]
+#[derive(Encode, Decode, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize, PartialEq, Eq, Clone))]
 pub struct EventRecord<E: Parameter + Member, T> {
 	/// The phase of the block it happened in.
@@ -332,8 +333,7 @@ decl_error! {
 }
 
 /// Origin for the System module.
-#[derive(PartialEq, Eq, Clone)]
-#[derive(sr_primitives::RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, RuntimeDebug)]
 pub enum RawOrigin<AccountId> {
 	/// The system itself ordained this dispatch to happen: this is the highest privilege level.
 	Root,
@@ -882,8 +882,14 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 }
 
 impl<T: Trait + Send + Sync> Debug for CheckWeight<T> {
+	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
 		write!(f, "CheckWeight<T>")
+	}
+
+	#[cfg(not(feature = "std"))]
+	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+		Ok(())
 	}
 }
 
@@ -899,8 +905,14 @@ impl<T: Trait> CheckNonce<T> {
 }
 
 impl<T: Trait> Debug for CheckNonce<T> {
+	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
 		self.0.fmt(f)
+	}
+
+	#[cfg(not(feature = "std"))]
+	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+		Ok(())
 	}
 }
 
@@ -976,8 +988,14 @@ impl<T: Trait + Send + Sync> CheckEra<T> {
 }
 
 impl<T: Trait + Send + Sync> Debug for CheckEra<T> {
+	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
 		self.0.fmt(f)
+	}
+
+	#[cfg(not(feature = "std"))]
+	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+		Ok(())
 	}
 }
 
@@ -1018,8 +1036,14 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckEra<T> {
 pub struct CheckGenesis<T: Trait + Send + Sync>(rstd::marker::PhantomData<T>);
 
 impl<T: Trait + Send + Sync> Debug for CheckGenesis<T> {
+	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
 		write!(f, "CheckGenesis<T>")
+	}
+
+	#[cfg(not(feature = "std"))]
+	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+		Ok(())
 	}
 }
 
@@ -1046,8 +1070,14 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckGenesis<T> {
 pub struct CheckVersion<T: Trait + Send + Sync>(rstd::marker::PhantomData<T>);
 
 impl<T: Trait + Send + Sync> Debug for CheckVersion<T> {
+	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
 		write!(f, "CheckVersion<T>")
+	}
+
+	#[cfg(not(feature = "std"))]
+	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+		Ok(())
 	}
 }
 

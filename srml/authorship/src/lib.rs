@@ -195,9 +195,8 @@ where
 	}
 }
 
-#[derive(Encode, Decode)]
+#[derive(Encode, Decode, sr_primitives::RuntimeDebug)]
 #[cfg_attr(any(feature = "std", test), derive(PartialEq))]
-#[derive(sr_primitives::RuntimeDebug)]
 enum UncleEntryItem<BlockNumber, Hash, Author> {
 	InclusionHeight(BlockNumber),
 	Uncle(Hash, Option<Author>),

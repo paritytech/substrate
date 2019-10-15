@@ -76,6 +76,7 @@ use primitives::offchain::{OpaqueNetworkState, StorageKind};
 use rstd::prelude::*;
 use session::historical::IdentificationTuple;
 use sr_primitives::{
+	RuntimeDebug,
 	traits::{Convert, Member, Printable, Saturating}, Perbill,
 	transaction_validity::{
 		TransactionValidity, TransactionLongevity, ValidTransaction, InvalidTransaction,
@@ -146,15 +147,14 @@ const DB_KEY: &[u8] = b"srml/im-online-worker-status";
 /// finishing it. With every execution of the off-chain worker we check
 /// if we need to recover and resume gossipping or if there is already
 /// another off-chain worker in the process of gossipping.
-#[derive(Encode, Decode, Clone, PartialEq, Eq)]
-#[derive(sr_primitives::RuntimeDebug)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 struct WorkerStatus<BlockNumber> {
 	done: bool,
 	gossipping_at: BlockNumber,
 }
 
 /// Error which may occur while executing the off-chain code.
-#[derive(sr_primitives::RuntimeDebug)]
+#[derive(RuntimeDebug)]
 enum OffchainErr {
 	DecodeWorkerStatus,
 	FailedSigning,
@@ -176,8 +176,7 @@ impl Printable for OffchainErr {
 pub type AuthIndex = u32;
 
 /// Heartbeat which is sent/received.
-#[derive(Encode, Decode, Clone, PartialEq, Eq)]
-#[derive(sr_primitives::RuntimeDebug)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct Heartbeat<BlockNumber>
 	where BlockNumber: PartialEq + Eq + Decode + Encode,
 {
@@ -555,8 +554,8 @@ impl<T: Trait> support::unsigned::ValidateUnsigned for Module<T> {
 }
 
 /// An offence that is filed if a validator didn't send a heartbeat message.
+#[derive(RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Clone, PartialEq, Eq))]
-#[derive(sr_primitives::RuntimeDebug)]
 pub struct UnresponsivenessOffence<Offender> {
 	/// The current session index in which we report the unresponsive validators.
 	///

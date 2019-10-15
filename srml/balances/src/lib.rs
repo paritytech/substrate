@@ -171,6 +171,7 @@ use support::{
 	dispatch::Result,
 };
 use sr_primitives::{
+	RuntimeDebug,
 	transaction_validity::{
 		TransactionPriority, ValidTransaction, InvalidTransaction, TransactionValidityError,
 		TransactionValidity,
@@ -294,8 +295,7 @@ decl_event!(
 );
 
 /// Struct to encode the vesting schedule of an individual account.
-#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq)]
-#[derive(sr_primitives::RuntimeDebug)]
+#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct VestingSchedule<Balance, BlockNumber> {
 	/// Locked amount at genesis.
 	pub locked: Balance,
@@ -322,8 +322,7 @@ impl<Balance: SimpleArithmetic + Copy, BlockNumber: SimpleArithmetic + Copy> Ves
 	}
 }
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq)]
-#[derive(sr_primitives::RuntimeDebug)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct BalanceLock<Balance, BlockNumber> {
 	pub id: LockIdentifier,
 	pub amount: Balance,
