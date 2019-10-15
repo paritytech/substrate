@@ -29,35 +29,45 @@
 use honggfuzz::fuzz;
 use sr_arithmetic::biguint::{BigUint, Single};
 use std::convert::TryFrom;
-use num_traits::ops::checked::CheckedDiv;
 
 type S = u128;
 
 fn main() {
 	loop {
 		fuzz!(|data: (Vec<Single>, Vec<Single>, bool)| {
-			let (mut digits_u, mut digits_v, rem) = data;
+			let (mut digits_u, mut digits_v, return_remainder) = data;
 
-			run_with_data_set(4, &digits_u, &digits_v, |u, v| {
-				let ue = S::try_from(u.clone()).unwrap();
-				let ve = S::try_from(v.clone()).unwrap();
+			let mut u = BigUint::from_limbs(&digits_u);
+			let mut v = BigUint::from_limbs(&digits_v);
+
+			u.lstrip();
+			v.lstrip();
+
+			let ue = S::try_from(u.clone());
+			let ve = S::try_from(v.clone());
+
+			digits_u.reverse();
+			digits_v.reverse();
+
+			let num_u = num_bigint::BigUint::new(digits_u.clone());
+			let num_v = num_bigint::BigUint::new(digits_v.clone());
+
+			if check_digit_lengths(&u, &v, 4) {
 				assert_eq!(u.cmp(&v), ue.cmp(&ve));
 				assert_eq!(u.eq(&v), ue.eq(&ve));
-			});
+			}
 
-			run_with_data_set(3, &digits_u, &digits_v, |u, v| {
-				let expected = S::try_from(u.clone()).unwrap() + S::try_from(v.clone()).unwrap();
+			if check_digit_lengths(&u, &v, 3) {
+				let expected = ue.unwrap() + ve.unwrap();
 				let t = u.clone().add(&v);
 				assert_eq!(
 					S::try_from(t.clone()).unwrap(), expected,
 					"{:?} + {:?} ===> {:?} != {:?}", u, v, t, expected,
 				);
-			});
+			}
 
-			run_with_data_set(4, &digits_u, &digits_v, |u, v| {
-				let expected = S::try_from(u.clone())
-					.unwrap()
-					.checked_sub(S::try_from(v.clone()).unwrap());
+			if check_digit_lengths(&u, &v, 4) {
+				let expected = ue.unwrap().checked_sub(ve.unwrap());
 				let t = u.clone().sub(&v);
 				if expected.is_none() {
 					assert!(t.is_err())
@@ -69,20 +79,19 @@ fn main() {
 						"{:?} - {:?} ===> {:?} != {:?}", u, v, t, expected,
 					);
 				}
-			});
+			}
 
-			run_with_data_set(2, &digits_u, &digits_v, |u, v| {
-				let expected = S::try_from(u.clone()).unwrap() * S::try_from(v.clone()).unwrap();
+			if check_digit_lengths(&u, &v, 2) {
+				let expected = ue.unwrap() * ve.unwrap();
 				let t = u.clone().mul(&v);
 				assert_eq!(
 					S::try_from(t.clone()).unwrap(), expected,
 					"{:?} * {:?} ===> {:?} != {:?}", u, v, t, expected,
 				);
-			});
+			}
 
-			run_with_data_set(4, &digits_u, &digits_v, |u, v| {
-				let ue = S::try_from(u.clone()).unwrap();
-				let ve = S::try_from(v.clone()).unwrap();
+			if check_digit_lengths(&u, &v, 4) {
+				let (ue, ve) = (ue.unwrap(), ve.unwrap());
 				if ve == 0 {
 					return;
 				}
@@ -105,28 +114,13 @@ fn main() {
 				} else if v.msb() != 0 && u.msb() != 0 && u.len() > v.len() {
 					panic!("div returned none for an unexpected reason");
 				}
-			});
+			}
 
 			// Test against num_bigint
 
-			let u = BigUint::from_limbs(&digits_u);
-			let v = BigUint::from_limbs(&digits_v);
-
-			digits_u.reverse();
-			digits_v.reverse();
-
-			let num_u = num_bigint::BigUint::new(digits_u.clone());
-			let num_v = num_bigint::BigUint::new(digits_v.clone());
-
 			// Equality
 
-			assert_biguints_eq(&u, &num_u);
-			assert_biguints_eq(&v, &num_v);
-
-			if digits_u == digits_v {
-				assert_eq!(u, v);
-				assert_eq!(num_u, num_v);
-			}
+			assert_eq!(u.cmp(&v), num_u.cmp(&num_v));
 
 			// Addition
 
@@ -156,46 +150,24 @@ fn main() {
 				let w = u.clone().div_unit(v.get(0));
 				let num_w = num_u.clone() / &num_v;
 				assert_biguints_eq(&w, &num_w);
-			} else if u.len() > v.len() {
-				let w = u.clone().div(&v, rem).map(|(w, _)| w);
-				let num_w = num_u.clone().checked_div(&num_v);
+			} else if u.len() > v.len() && v.len() > 0 {
+				let num_remainder = num_u.clone() % num_v.clone();
 
-				// assert that the division was checked equally:
-				// assert_eq!(w.is_some(), num_w.is_some());
+				let (w, remainder) = u.clone().div(&v, return_remainder).unwrap();
+				let num_w = num_u.clone() / &num_v;
 
-				if let Some(w) = w {
-					assert_biguints_eq(&w, &num_w.unwrap());
+				assert_biguints_eq(&w, &num_w);
+
+				if return_remainder {
+					assert_biguints_eq(&remainder, &num_remainder);
 				}
 			}
 		});
 	}
 }
 
-fn run_with_data_set<F>(
-	max_limbs: usize,
-	digits_u: &[Single], digits_v: &[Single],
-	assertion: F,
-)
-	where
-		F: Fn(BigUint, BigUint) -> (),
-{
-	// Ensure that `1 <= num_digits < max_limbs`.
-	let valid = value_between(digits_u.len(), 1, max_limbs) &&
-		value_between(digits_v.len(), 1, max_limbs);
-	if !valid {
-		return;
-	}
-
-	let u = BigUint::from_limbs(digits_u);
-	let v = BigUint::from_limbs(digits_v);
-	// this is easier than using lldb
-	// println!("u: {:?}, v: {:?}", u, v);
-
-	assertion(u, v)
-}
-
-fn value_between(value: usize, min: usize, max: usize) -> bool {
-	min <= value && value <= max
+fn check_digit_lengths(u: &BigUint, v: &BigUint, max_limbs: usize) -> bool {
+	1 <= u.len() && u.len() <= max_limbs && 1 <= v.len() && v.len() <= max_limbs
 }
 
 fn assert_biguints_eq(a: &BigUint, b: &num_bigint::BigUint) {
@@ -204,5 +176,5 @@ fn assert_biguints_eq(a: &BigUint, b: &num_bigint::BigUint) {
 	// the `num-bigint` `BigUint` is little endian whereas our `BigUint` is big endian.
 	let b_iter = b.as_slice().iter().rev();
 
-	assert!(a_iter.eq(b_iter), "arithmetic: {:?}\nnum-bigint: {:?}", a, b);
+	assert!(a_iter.eq(b_iter), "\narithmetic: {:?}\nnum-bigint: {:?}", a, b);
 }
