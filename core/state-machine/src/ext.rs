@@ -252,7 +252,8 @@ where
 			.child_storage(storage_key.as_ref(), key)
 			.map(|x| x.map(|x| H::hash(x)))
 			.unwrap_or_else(||
-				self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL)
+				self.backend.child_storage_hash(storage_key.as_ref(), key)
+					.expect(EXT_NOT_ALLOWED_TO_FAIL)
 			);
 
 		trace!(target: "state-trace", "{:04x}: ChildHash({}) {}={:?}",
