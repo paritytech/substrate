@@ -31,7 +31,7 @@
 
 #[macro_use]
 mod wasm_utils;
-pub mod wasmi_execution;
+mod wasmi_execution;
 #[macro_use]
 mod native_executor;
 mod sandbox;
@@ -48,7 +48,30 @@ pub use codec::Codec;
 pub use primitives::traits::Externalities;
 #[doc(hidden)]
 pub use wasm_interface;
-pub use wasm_runtime::{WasmExecutionMethod, WasmRuntime};
+pub use wasm_runtime::WasmExecutionMethod;
+
+/// Call the given `function` in the given wasm `code`.
+///
+/// The signature of `function` needs to follow the default Substrate function signature.
+///
+/// - `call_data`: Will be given as input parameters to `function`
+/// - `execution_method`: The execution method to use.
+/// - `ext`: The externalities that should be set while executing the wasm function.
+/// - `heap_pages`: The number of heap pages to allocate.
+///
+/// Returns the `Vec<u8>` that contains the return value of the function.
+pub fn call_in_wasm<E: Externalities>(
+	function: &str,
+	call_data: &[u8],
+	execution_method: WasmExecutionMethod,
+	ext: &mut E,
+	code: &[u8],
+	heap_pages: u64,
+) -> error::Result<Vec<u8>> {
+	// make sure this is updated, when there are more execution methods
+	let WasmExecutionMethod::Interpreted = execution_method;
+	wasmi_execution::call_in_wasm(function, call_data, ext, code, heap_pages)
+}
 
 /// Provides runtime information.
 pub trait RuntimeInfo {

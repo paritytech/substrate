@@ -635,6 +635,21 @@ pub fn create_instance<E: Externalities>(ext: &mut E, code: &[u8], heap_pages: u
 	})
 }
 
+/// Call a `function` in the given wasm `code`.
+pub fn call_in_wasm<E: Externalities>(
+	function: &str,
+	call_data: &[u8],
+	ext: &mut E,
+	code: &[u8],
+	heap_pages: u64,
+) -> crate::error::Result<Vec<u8>> {
+	let module = Module::from_buffer(&code)?;
+
+	let instance = instantiate_module(heap_pages as usize, &module)?;
+
+	call_in_wasm_module(ext, &instance, function, call_data)
+}
+
 /// Extract the data segments from the given wasm code.
 ///
 /// Returns `Err` if the given wasm code cannot be deserialized.
@@ -683,8 +698,22 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let test_code = WASM_BINARY;
 
-		let output = call(&mut ext, 8, &test_code[..], "test_empty_return", &[]).unwrap();
+		let output = call(&mut ext, 8, &test_code[..], "test_empty_return", &[0]).unwrap();
 		assert_eq!(output, vec![0u8; 0]);
+	}
+
+	#[test]
+	fn call_in_interpreted_wasm_works() {
+		let mut ext = TestExternalities::default();
+		let res = crate::call_in_wasm(
+			"test_empty_return",
+			&[0],
+			crate::WasmExecutionMethod::Interpreted,
+			&mut ext,
+			&WASM_BINARY,
+			8,
+		).unwrap();
+		assert_eq!(res, vec![0u8; 0]);
 	}
 
 	#[test]
