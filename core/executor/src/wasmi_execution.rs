@@ -680,6 +680,7 @@ mod tests {
 	#[test]
 	fn returning_should_work() {
 		let mut ext = TestExternalities::default();
+		let mut ext = ext.ext();
 		let test_code = WASM_BINARY;
 
 		let output = call(&mut ext, 8, &test_code[..], "test_empty_return", &[]).unwrap();
@@ -689,6 +690,7 @@ mod tests {
 	#[test]
 	fn panicking_should_work() {
 		let mut ext = TestExternalities::default();
+		let mut ext = ext.ext();
 		let test_code = WASM_BINARY;
 
 		let output = call(&mut ext, 8, &test_code[..], "test_panic", &[]);
@@ -704,12 +706,16 @@ mod tests {
 	#[test]
 	fn storage_should_work() {
 		let mut ext = TestExternalities::default();
-		ext.set_storage(b"foo".to_vec(), b"bar".to_vec());
-		let test_code = WASM_BINARY;
 
-		let output = call(&mut ext, 8, &test_code[..], "test_data_in", b"Hello world").unwrap();
+		{
+			let mut ext = ext.ext();
+			ext.set_storage(b"foo".to_vec(), b"bar".to_vec());
+			let test_code = WASM_BINARY;
 
-		assert_eq!(output, b"all ok!".to_vec());
+			let output = call(&mut ext, 8, &test_code[..], "test_data_in", b"Hello world").unwrap();
+
+			assert_eq!(output, b"all ok!".to_vec());
+		}
 
 		let expected = TestExternalities::new((map![
 			b"input".to_vec() => b"Hello world".to_vec(),
@@ -722,17 +728,20 @@ mod tests {
 	#[test]
 	fn clear_prefix_should_work() {
 		let mut ext = TestExternalities::default();
-		ext.set_storage(b"aaa".to_vec(), b"1".to_vec());
-		ext.set_storage(b"aab".to_vec(), b"2".to_vec());
-		ext.set_storage(b"aba".to_vec(), b"3".to_vec());
-		ext.set_storage(b"abb".to_vec(), b"4".to_vec());
-		ext.set_storage(b"bbb".to_vec(), b"5".to_vec());
-		let test_code = WASM_BINARY;
+		{
+			let mut ext = ext.ext();
+			ext.set_storage(b"aaa".to_vec(), b"1".to_vec());
+			ext.set_storage(b"aab".to_vec(), b"2".to_vec());
+			ext.set_storage(b"aba".to_vec(), b"3".to_vec());
+			ext.set_storage(b"abb".to_vec(), b"4".to_vec());
+			ext.set_storage(b"bbb".to_vec(), b"5".to_vec());
+			let test_code = WASM_BINARY;
 
-		// This will clear all entries which prefix is "ab".
-		let output = call(&mut ext, 8, &test_code[..], "test_clear_prefix", b"ab").unwrap();
+			// This will clear all entries which prefix is "ab".
+			let output = call(&mut ext, 8, &test_code[..], "test_clear_prefix", b"ab").unwrap();
 
-		assert_eq!(output, b"all ok!".to_vec());
+			assert_eq!(output, b"all ok!".to_vec());
+		}
 
 		let expected = TestExternalities::new((map![
 			b"aaa".to_vec() => b"1".to_vec(),
@@ -745,6 +754,7 @@ mod tests {
 	#[test]
 	fn blake2_256_should_work() {
 		let mut ext = TestExternalities::default();
+		let mut ext = ext.ext();
 		let test_code = WASM_BINARY;
 		assert_eq!(
 			call(&mut ext, 8, &test_code[..], "test_blake2_256", &[]).unwrap(),
@@ -759,6 +769,7 @@ mod tests {
 	#[test]
 	fn blake2_128_should_work() {
 		let mut ext = TestExternalities::default();
+		let mut ext = ext.ext();
 		let test_code = WASM_BINARY;
 		assert_eq!(
 			call(&mut ext, 8, &test_code[..], "test_blake2_128", &[]).unwrap(),
@@ -773,6 +784,7 @@ mod tests {
 	#[test]
 	fn twox_256_should_work() {
 		let mut ext = TestExternalities::default();
+		let mut ext = ext.ext();
 		let test_code = WASM_BINARY;
 		assert_eq!(
 			call(&mut ext, 8, &test_code[..], "test_twox_256", &[]).unwrap(),
@@ -787,6 +799,7 @@ mod tests {
 	#[test]
 	fn twox_128_should_work() {
 		let mut ext = TestExternalities::default();
+		let mut ext = ext.ext();
 		let test_code = WASM_BINARY;
 		assert_eq!(
 			call(&mut ext, 8, &test_code[..], "test_twox_128", &[]).unwrap(),
@@ -801,6 +814,7 @@ mod tests {
 	#[test]
 	fn ed25519_verify_should_work() {
 		let mut ext = TestExternalities::default();
+		let mut ext = ext.ext();
 		let test_code = WASM_BINARY;
 		let key = ed25519::Pair::from_seed(&blake2_256(b"test"));
 		let sig = key.sign(b"all ok!");
@@ -827,6 +841,7 @@ mod tests {
 	#[test]
 	fn sr25519_verify_should_work() {
 		let mut ext = TestExternalities::default();
+		let mut ext = ext.ext();
 		let test_code = WASM_BINARY;
 		let key = sr25519::Pair::from_seed(&blake2_256(b"test"));
 		let sig = key.sign(b"all ok!");
@@ -853,6 +868,7 @@ mod tests {
 	#[test]
 	fn ordered_trie_root_should_work() {
 		let mut ext = TestExternalities::default();
+		let mut ext = ext.ext();
 		let trie_input = vec![b"zero".to_vec(), b"one".to_vec(), b"two".to_vec()];
 		let test_code = WASM_BINARY;
 		assert_eq!(
@@ -869,6 +885,7 @@ mod tests {
 		let (offchain, state) = testing::TestOffchainExt::new();
 		ext.register_extension(OffchainExt::new(offchain));
 		let test_code = WASM_BINARY;
+		let mut ext = ext.ext();
 		assert_eq!(
 			call(&mut ext, 8, &test_code[..], "test_offchain_local_storage", &[]).unwrap(),
 			vec![0]
@@ -896,6 +913,7 @@ mod tests {
 		);
 
 		let test_code = WASM_BINARY;
+		let mut ext = ext.ext();
 		assert_eq!(
 			call(&mut ext, 8, &test_code[..], "test_offchain_http", &[]).unwrap(),
 			vec![0]

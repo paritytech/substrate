@@ -141,6 +141,8 @@ mod tests {
 			}
 		], map![]));
 
+		let mut t = t.ext();
+
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_initialize_block",
@@ -177,6 +179,8 @@ mod tests {
 			}
 		], map![]));
 
+		let mut t = t.ext();
+
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_initialize_block",
@@ -209,22 +213,26 @@ mod tests {
 			<system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
 		], map![]));
 
-		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
-			&mut t,
-			"Core_initialize_block",
-			&vec![].and(&from_block_number(1u32)),
-			true,
-			None,
-		).0;
-		assert!(r.is_ok());
-		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
-			&mut t,
-			"BlockBuilder_apply_extrinsic",
-			&vec![].and(&xt()),
-			true,
-			None,
-		).0;
-		assert!(r.is_ok());
+		{
+			let mut t = t.ext();
+
+			let r = executor().call::<_, NeverNativeValue, fn() -> _>(
+				&mut t,
+				"Core_initialize_block",
+				&vec![].and(&from_block_number(1u32)),
+				true,
+				None,
+			).0;
+			assert!(r.is_ok());
+			let r = executor().call::<_, NeverNativeValue, fn() -> _>(
+				&mut t,
+				"BlockBuilder_apply_extrinsic",
+				&vec![].and(&xt()),
+				true,
+				None,
+			).0;
+			assert!(r.is_ok());
+		}
 
 		t.execute_with(|| {
 			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - transfer_fee(&xt()));
@@ -245,22 +253,26 @@ mod tests {
 			<system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
 		], map![]));
 
-		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
-			&mut t,
-			"Core_initialize_block",
-			&vec![].and(&from_block_number(1u32)),
-			true,
-			None,
-		).0;
-		assert!(r.is_ok());
-		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
-			&mut t,
-			"BlockBuilder_apply_extrinsic",
-			&vec![].and(&xt()),
-			true,
-			None,
-		).0;
-		assert!(r.is_ok());
+		{
+			let mut t = t.ext();
+
+			let r = executor().call::<_, NeverNativeValue, fn() -> _>(
+				&mut t,
+				"Core_initialize_block",
+				&vec![].and(&from_block_number(1u32)),
+				true,
+				None,
+			).0;
+			assert!(r.is_ok());
+			let r = executor().call::<_, NeverNativeValue, fn() -> _>(
+				&mut t,
+				"BlockBuilder_apply_extrinsic",
+				&vec![].and(&xt()),
+				true,
+				None,
+			).0;
+			assert!(r.is_ok());
+		}
 
 		t.execute_with(|| {
 			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - transfer_fee(&xt()));
@@ -301,6 +313,9 @@ mod tests {
 			state_root: Default::default(),
 			digest: Default::default(),
 		};
+
+		let mut env = env.ext();
+		let env = &mut env;
 
 		// execute the block to get the real header.
 		executor().call::<_, NeverNativeValue, fn() -> _>(
@@ -425,13 +440,17 @@ mod tests {
 
 		let (block1, block2) = blocks();
 
-		executor().call::<_, NeverNativeValue, fn() -> _>(
-			&mut t,
-			"Core_execute_block",
-			&block1.0,
-			true,
-			None,
-		).0.unwrap();
+		{
+			let mut t = t.ext();
+
+			executor().call::<_, NeverNativeValue, fn() -> _>(
+				&mut t,
+				"Core_execute_block",
+				&block1.0,
+				true,
+				None,
+			).0.unwrap();
+		}
 
 		t.execute_with(|| {
 			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - transfer_fee(&xt()));
@@ -460,13 +479,16 @@ mod tests {
 			];
 			assert_eq!(System::events(), events);
 		});
-		executor().call::<_, NeverNativeValue, fn() -> _>(
-			&mut t,
-			"Core_execute_block",
-			&block2.0,
-			true,
-			None,
-		).0.unwrap();
+		{
+			let mut t = t.ext();
+			executor().call::<_, NeverNativeValue, fn() -> _>(
+				&mut t,
+				"Core_execute_block",
+				&block2.0,
+				true,
+				None,
+			).0.unwrap();
+		}
 
 		t.execute_with(|| {
 			// NOTE: fees differ slightly in tests that execute more than one block due to the
@@ -532,26 +554,32 @@ mod tests {
 
 		let (block1, block2) = blocks();
 
-		executor().call::<_, NeverNativeValue, fn() -> _>(
-			&mut t,
-			"Core_execute_block",
-			&block1.0,
-			false,
-			None,
-		).0.unwrap();
+		{
+			let mut t = t.ext();
+			executor().call::<_, NeverNativeValue, fn() -> _>(
+				&mut t,
+				"Core_execute_block",
+				&block1.0,
+				false,
+				None,
+			).0.unwrap();
+		}
 
 		t.execute_with(|| {
 			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - transfer_fee(&xt()));
 			assert_eq!(Balances::total_balance(&bob()), 169 * DOLLARS);
 		});
 
-		executor().call::<_, NeverNativeValue, fn() -> _>(
-			&mut t,
-			"Core_execute_block",
-			&block2.0,
-			false,
-			None,
-		).0.unwrap();
+		{
+			let mut t = t.ext();
+			executor().call::<_, NeverNativeValue, fn() -> _>(
+				&mut t,
+				"Core_execute_block",
+				&block2.0,
+				false,
+				None,
+			).0.unwrap();
+		}
 
 		t.execute_with(|| {
 			assert_eq_error_rate!(
@@ -707,13 +735,16 @@ mod tests {
 
 		let mut t = new_test_ext(COMPACT_CODE, false);
 
-		executor().call::<_, NeverNativeValue, fn() -> _>(
-			&mut t,
-			"Core_execute_block",
-			&b.0,
-			false,
-			None,
-		).0.unwrap();
+		{
+			let mut t = t.ext();
+			executor().call::<_, NeverNativeValue, fn() -> _>(
+				&mut t,
+				"Core_execute_block",
+				&b.0,
+				false,
+				None,
+			).0.unwrap();
+		}
 
 		t.execute_with(|| {
 			// Verify that the contract constructor worked well and code of TRANSFER contract is actually deployed.
@@ -730,6 +761,7 @@ mod tests {
 	#[test]
 	fn wasm_big_block_import_fails() {
 		let mut t = new_test_ext(COMPACT_CODE, false);
+		let mut t = t.ext();
 
 		set_heap_pages(&mut t, 4);
 
@@ -746,6 +778,7 @@ mod tests {
 	#[test]
 	fn native_big_block_import_succeeds() {
 		let mut t = new_test_ext(COMPACT_CODE, false);
+		let mut t = t.ext();
 
 		executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
@@ -759,6 +792,7 @@ mod tests {
 	#[test]
 	fn native_big_block_import_fails_on_fallback() {
 		let mut t = new_test_ext(COMPACT_CODE, false);
+		let mut t = t.ext();
 
 		assert!(
 			executor().call::<_, NeverNativeValue, fn() -> _>(
@@ -783,6 +817,8 @@ mod tests {
 			<indices::NextEnumSet<Runtime>>::hashed_key().to_vec() => vec![0u8; 16],
 			<system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
 		], map![]));
+
+		let mut t = t.ext();
 
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
@@ -816,25 +852,30 @@ mod tests {
 			<system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
 		], map![]));
 
-		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
-			&mut t,
-			"Core_initialize_block",
-			&vec![].and(&from_block_number(1u32)),
-			false,
-			None,
-		).0;
-		assert!(r.is_ok());
-		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
-			&mut t,
-			"BlockBuilder_apply_extrinsic",
-			&vec![].and(&xt()),
-			false,
-			None,
-		).0.unwrap().into_encoded();
-		ApplyResult::decode(&mut &r[..])
-			.unwrap()
-			.expect("Extrinsic could be applied")
-			.expect("Extrinsic did not fail");
+		{
+			let mut t = t.ext();
+
+			let r = executor().call::<_, NeverNativeValue, fn() -> _>(
+				&mut t,
+				"Core_initialize_block",
+				&vec![].and(&from_block_number(1u32)),
+				false,
+				None,
+			).0;
+			assert!(r.is_ok());
+			let r = executor().call::<_, NeverNativeValue, fn() -> _>(
+				&mut t,
+				"BlockBuilder_apply_extrinsic",
+				&vec![].and(&xt()),
+				false,
+				None,
+			).0.unwrap().into_encoded();
+			ApplyResult::decode(&mut &r[..])
+				.unwrap()
+				.expect("Extrinsic could be applied")
+				.expect("Extrinsic did not fail");
+		}
+
 
 		t.execute_with(|| {
 			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - 1 * transfer_fee(&xt()));
@@ -849,6 +890,7 @@ mod tests {
 		let block = Block::decode(&mut &block_data[..]).unwrap();
 
 		let mut t = new_test_ext(COMPACT_CODE, true);
+		let mut t = t.ext();
 		executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_execute_block",
@@ -865,6 +907,7 @@ mod tests {
 		let block1 = changes_trie_block();
 
 		let mut t = new_test_ext(COMPACT_CODE, true);
+		let mut t = t.ext();
 		executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_execute_block",
@@ -937,14 +980,17 @@ mod tests {
 
 		println!("++ Block 1 size: {} / Block 2 size {}", block1.0.encode().len(), block2.0.encode().len());
 
-		// execute a big block.
-		executor().call::<_, NeverNativeValue, fn() -> _>(
-			&mut t,
-			"Core_execute_block",
-			&block1.0,
-			true,
-			None,
-		).0.unwrap();
+		{
+			let mut t = t.ext();
+			// execute a big block.
+			executor().call::<_, NeverNativeValue, fn() -> _>(
+				&mut t,
+				"Core_execute_block",
+				&block1.0,
+				true,
+				None,
+			).0.unwrap();
+		}
 
 		// weight multiplier is increased for next block.
 		t.execute_with(|| {
@@ -954,14 +1000,17 @@ mod tests {
 			prev_multiplier = fm;
 		});
 
-		// execute a big block.
-		executor().call::<_, NeverNativeValue, fn() -> _>(
-			&mut t,
-			"Core_execute_block",
-			&block2.0,
-			true,
-			None,
-		).0.unwrap();
+		{
+			let mut t = t.ext();
+			// execute a big block.
+			executor().call::<_, NeverNativeValue, fn() -> _>(
+				&mut t,
+				"Core_execute_block",
+				&block2.0,
+				true,
+				None,
+			).0.unwrap();
+		}
 
 		// weight multiplier is increased for next block.
 		t.execute_with(|| {
@@ -994,29 +1043,33 @@ mod tests {
 			<system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
 		], map![]));
 
+
 		let tip = 1_000_000;
 		let xt = sign(CheckedExtrinsic {
 			signed: Some((alice(), signed_extra(0, tip))),
 			function: Call::Balances(default_transfer_call()),
 		});
 
-		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
-			&mut t,
-			"Core_initialize_block",
-			&vec![].and(&from_block_number(1u32)),
-			true,
-			None,
-		).0;
+		{
+			let mut t = t.ext();
+			let r = executor().call::<_, NeverNativeValue, fn() -> _>(
+				&mut t,
+				"Core_initialize_block",
+				&vec![].and(&from_block_number(1u32)),
+				true,
+				None,
+			).0;
 
-		assert!(r.is_ok());
-		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
-			&mut t,
-			"BlockBuilder_apply_extrinsic",
-			&vec![].and(&xt.clone()),
-			true,
-			None,
-		).0;
-		assert!(r.is_ok());
+			assert!(r.is_ok());
+			let r = executor().call::<_, NeverNativeValue, fn() -> _>(
+				&mut t,
+				"BlockBuilder_apply_extrinsic",
+				&vec![].and(&xt.clone()),
+				true,
+				None,
+			).0;
+			assert!(r.is_ok());
+		}
 
 		t.execute_with(|| {
 			assert_eq!(Balances::total_balance(&bob()), (10 + 69) * DOLLARS);
