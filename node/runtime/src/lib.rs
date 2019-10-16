@@ -27,7 +27,7 @@ use support::{
 use primitives::u32_trait::{_1, _2, _3, _4};
 use node_primitives::{
 	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index,
-	Moment, Signature, ContractExecResult,
+	Moment, Signature,
 };
 use babe_primitives::{AuthorityId as BabeId, AuthoritySignature as BabeSignature};
 use grandpa::fg_primitives;
@@ -84,7 +84,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to equal spec_version. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 175,
+	spec_version: 176,
 	impl_version: 176,
 	apis: RUNTIME_API_VERSIONS,
 };
@@ -660,20 +660,22 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl node_primitives::AccountNonceApi<Block> for Runtime {
+	impl system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {
 		fn account_nonce(account: AccountId) -> Index {
 			System::account_nonce(account)
 		}
 	}
 
-	impl node_primitives::ContractsApi<Block> for Runtime {
+	impl contracts_rpc_runtime_api::ContractsApi<Block, AccountId, Balance> for Runtime {
 		fn call(
 			origin: AccountId,
 			dest: AccountId,
 			value: Balance,
 			gas_limit: u64,
 			input_data: Vec<u8>,
-		) -> ContractExecResult {
+		) -> contracts_rpc_runtime_api::ContractExecResult {
+			use contracts_rpc_runtime_api::ContractExecResult;
+
 			let exec_result = Contracts::bare_call(
 				origin,
 				dest.into(),
