@@ -635,21 +635,6 @@ pub fn create_instance<E: Externalities>(ext: &mut E, code: &[u8], heap_pages: u
 	})
 }
 
-/// Call a `function` in the given wasm `code`.
-pub fn call_in_wasm<E: Externalities>(
-	function: &str,
-	call_data: &[u8],
-	ext: &mut E,
-	code: &[u8],
-	heap_pages: u64,
-) -> crate::error::Result<Vec<u8>> {
-	let module = Module::from_buffer(&code)?;
-
-	let instance = instantiate_module(heap_pages as usize, &module)?;
-
-	call_in_wasm_module(ext, &instance, function, call_data)
-}
-
 /// Extract the data segments from the given wasm code.
 ///
 /// Returns `Err` if the given wasm code cannot be deserialized.
