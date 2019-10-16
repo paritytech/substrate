@@ -1,9 +1,10 @@
 use primitives::{Pair, Public};
 use node_template_runtime::{
-	AccountId, AuraConfig, BalancesConfig, GenesisConfig,
+	AccountId, AuraConfig, BalancesConfig, GenesisConfig, GrandpaConfig,
 	SudoConfig, IndicesConfig, SystemConfig, WASM_BINARY, 
 };
 use aura_primitives::sr25519::{AuthorityId as AuraId, AuthorityPair as AuraPair};
+use grandpa_primitives::{AuthorityId as GrandpaId};
 use substrate_service;
 
 // Note this is the URL for the telemetry server
@@ -31,10 +32,13 @@ pub fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Pu
 }
 
 /// Helper function to generate an authority key for Aura
-pub fn get_authority_key_from_seed(s: &str) -> AuraId { 
-	AuraPair::from_string(&format!("//{}", s), None)
-	.expect("static values are valid; qed")
-	.public()
+pub fn get_authority_keys_from_seed(s: &str) -> (AuraId, GrandpaId) { 
+	(
+		AuraPair::from_string(&format!("//{}", s), None)
+			.expect("static values are valid; qed")
+			.public(),
+		get_from_seed::<GrandpaId>(s),
+	)
 }
 
 impl Alternative {
@@ -45,7 +49,7 @@ impl Alternative {
 				"Development",
 				"dev",
 				|| testnet_genesis(vec![
-					get_authority_key_from_seed("Alice"),
+					get_authority_keys_from_seed("Alice"),
 				],
 				get_from_seed::<AccountId>("Alice"),
 				vec![
@@ -65,8 +69,8 @@ impl Alternative {
 				"Local Testnet",
 				"local_testnet",
 				|| testnet_genesis(vec![
-					get_authority_key_from_seed("Alice"),
-					get_authority_key_from_seed("Bob"),
+					get_authority_keys_from_seed("Alice"),
+					get_authority_keys_from_seed("Bob"),
 				], 
 				get_from_seed::<AccountId>("Alice"),
 				vec![
@@ -102,7 +106,7 @@ impl Alternative {
 	}
 }
 
-fn testnet_genesis(initial_authorities: Vec<AuraId>,
+fn testnet_genesis(initial_authorities: Vec<(AuraId, GrandpaId)>,
 	root_key: AccountId, 
 	endowed_accounts: Vec<AccountId>,
 	_enable_println: bool) -> GenesisConfig {
@@ -122,7 +126,10 @@ fn testnet_genesis(initial_authorities: Vec<AuraId>,
 			key: root_key,
 		}),
 		aura: Some(AuraConfig {
-			authorities: initial_authorities.clone(),
-		})
+			authorities: initial_authorities.iter().map(|x| (x.0.clone())).collect(),
+		}),
+		grandpa: Some(GrandpaConfig {
+			authorities: initial_authorities.iter().map(|x| (x.1.clone(), 1)).collect(),
+		}),
 	}
 }

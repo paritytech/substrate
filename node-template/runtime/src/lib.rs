@@ -21,6 +21,8 @@ use client::{
 	runtime_api as client_api, impl_runtime_apis
 };
 use aura_primitives::sr25519::AuthorityId as AuraId;
+use grandpa::{AuthorityId as GrandpaId, AuthorityWeight as GrandpaWeight};
+use grandpa::fg_primitives;
 use version::RuntimeVersion;
 #[cfg(feature = "std")]
 use version::NativeVersion;
@@ -82,6 +84,8 @@ pub mod opaque {
 		pub struct SessionKeys {
 			#[id(key_types::AURA)]
 			pub aura: AuraId,
+			#[id(key_types::GRANDPA)]
+			pub grandpa: GrandpaId,
 		}
 	}
 }
@@ -165,6 +169,10 @@ impl aura::Trait for Runtime {
 	type AuthorityId = AuraId;
 }
 
+impl grandpa::Trait for Runtime {
+	type Event = Event;
+}
+
 impl indices::Trait for Runtime {
 	/// The type for recording indexing into the account enumeration. If this ever overflows, there
 	/// will be problems!
@@ -235,6 +243,7 @@ construct_runtime!(
 		System: system::{Module, Call, Storage, Config, Event},
 		Timestamp: timestamp::{Module, Call, Storage, Inherent},
 		Aura: aura::{Module, Config<T>, Inherent(Timestamp)},
+		Grandpa: grandpa::{Module, Call, Storage, Config, Event},
 		Indices: indices::{default, Config<T>},
 		Balances: balances::{default, Error},
 		Sudo: sudo,
@@ -339,6 +348,12 @@ impl_runtime_apis! {
 		fn generate_session_keys(seed: Option<Vec<u8>>) -> Vec<u8> {
 			let seed = seed.as_ref().map(|s| rstd::str::from_utf8(&s).expect("Seed is an utf8 string"));
 			opaque::SessionKeys::generate(seed)
+		}
+	}
+
+	impl fg_primitives::GrandpaApi<Block> for Runtime {
+		fn grandpa_authorities() -> Vec<(GrandpaId, GrandpaWeight)> {
+			Grandpa::grandpa_authorities()
 		}
 	}
 }
