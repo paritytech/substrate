@@ -69,6 +69,13 @@ impl Subscriptions {
 		}
 	}
 
+	/// Borrows the internal task executor.
+	///
+	/// This can be used to spawn additional tasks on the underyling event loop.
+	pub fn executor(&self) -> &TaskExecutor {
+		&self.executor
+	}
+
 	/// Creates new subscription for given subscriber.
 	///
 	/// Second parameter is a function that converts Subscriber sink into a future.

@@ -79,6 +79,9 @@ fn api<T: Into<Option<Status>>>(sync: T) -> System<Block> {
 						average_upload_per_sec: 0,
 						peerset: serde_json::Value::Null,
 					}).unwrap());
+				},
+				Request::NodeRoles(sender) => {
+					let _ = sender.send(vec![NodeRole::Authority]);
 				}
 			};
 
@@ -219,5 +222,13 @@ fn system_network_state() {
 			average_upload_per_sec: 0,
 			peerset: serde_json::Value::Null,
 		}
+	);
+}
+
+#[test]
+fn system_node_roles() {
+	assert_eq!(
+		wait_receiver(api(None).system_node_roles()),
+		vec![NodeRole::Authority]
 	);
 }

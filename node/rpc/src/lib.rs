@@ -25,43 +25,32 @@
 //! The RPCs available in this crate however can make some assumptions
 //! about how the runtime is constructed and what `SRML` modules
 //! are part of it. Therefore all node-runtime-specific RPCs can
-//! be placed here.
+//! be placed here or imported from corresponding `SRML` RPC definitions.
 
 #![warn(missing_docs)]
 
 use std::sync::Arc;
 
-use node_primitives::{Block, AccountNonceApi, ContractsApi};
+use node_primitives::{Block, AccountId, Index, Balance};
 use sr_primitives::traits::ProvideRuntimeApi;
 use transaction_pool::txpool::{ChainApi, Pool};
-
-pub mod accounts;
-pub mod contracts;
-
-mod constants {
-	/// A status code indicating an error happened while trying to call into the runtime.
-	///
-	/// This typically means that the runtime trapped.
-	pub const RUNTIME_ERROR: i64 = 1;
-}
 
 /// Instantiate all RPC extensions for full node.
 pub fn create_full<C, P, M>(client: Arc<C>, pool: Arc<Pool<P>>) -> jsonrpc_core::IoHandler<M> where
 	C: ProvideRuntimeApi,
 	C: client::blockchain::HeaderBackend<Block>,
 	C: Send + Sync + 'static,
-	C::Api: AccountNonceApi<Block> + ContractsApi<Block>,
+	C::Api: srml_system_rpc::AccountNonceApi<Block, AccountId, Index>,
+	C::Api: srml_contracts_rpc::ContractsRuntimeApi<Block, AccountId, Balance>,
 	P: ChainApi + Sync + Send + 'static,
 	M: jsonrpc_core::Metadata + Default,
 {
-	use self::{
-		accounts::{FullAccounts, AccountsApi},
-		contracts::{Contracts, ContractsApi},
-	};
+	use srml_system_rpc::{FullSystem, SystemApi};
+	use srml_contracts_rpc::{Contracts, ContractsApi};
 
 	let mut io = jsonrpc_core::IoHandler::default();
 	io.extend_with(
-		AccountsApi::to_delegate(FullAccounts::new(client.clone(), pool))
+		SystemApi::to_delegate(FullSystem::new(client.clone(), pool))
 	);
 	io.extend_with(
 		ContractsApi::to_delegate(Contracts::new(client))
@@ -80,18 +69,16 @@ pub fn create_light<C, P, M, F>(
 		C: ProvideRuntimeApi,
 		C: client::blockchain::HeaderBackend<Block>,
 		C: Send + Sync + 'static,
-		C::Api: AccountNonceApi<Block> + ContractsApi<Block>,
+		C::Api: srml_system_rpc::AccountNonceApi<Block, AccountId, Index>,
 		P: ChainApi + Sync + Send + 'static,
 		M: jsonrpc_core::Metadata + Default,
 		F: client::light::fetcher::Fetcher<Block> + 'static,
 {
-	use self::{
-		accounts::{LightAccounts, AccountsApi},
-	};
+	use srml_system_rpc::{LightSystem, SystemApi};
 
 	let mut io = jsonrpc_core::IoHandler::default();
 	io.extend_with(
-		AccountsApi::to_delegate(LightAccounts::new(client, remote_blockchain, fetcher, pool))
+		SystemApi::<AccountId, Index>::to_delegate(LightSystem::new(client, remote_blockchain, fetcher, pool))
 	);
 	io
 }

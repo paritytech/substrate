@@ -19,17 +19,18 @@ use super::*;
 use std::sync::Arc;
 use assert_matches::assert_matches;
 use codec::Encode;
-use transaction_pool::{
-	txpool::Pool,
-	FullChainApi,
-};
 use primitives::{
 	H256, blake2_256, hexdisplay::HexDisplay, testing::{ED25519, SR25519, KeyStore}, ed25519,
 	crypto::Pair,
 };
+use rpc::futures::Stream as _;
 use test_client::{
 	self, AccountKeyring, runtime::{Extrinsic, Transfer, SessionKeys}, DefaultTestClientBuilderExt,
 	TestClientBuilderExt,
+};
+use transaction_pool::{
+	txpool::Pool,
+	FullChainApi,
 };
 use tokio::runtime;
 
@@ -102,7 +103,7 @@ fn should_watch_extrinsic() {
 		subscriptions: Subscriptions::new(Arc::new(runtime.executor())),
 		keystore: keystore.clone(),
 	};
-	let (subscriber, id_rx, data) = ::jsonrpc_pubsub::typed::Subscriber::new_test("test");
+	let (subscriber, id_rx, data) = jsonrpc_pubsub::typed::Subscriber::new_test("test");
 
 	// when
 	p.watch_extrinsic(Default::default(), subscriber, uxt(AccountKeyring::Alice, 0).encode().into());
@@ -130,6 +131,29 @@ fn should_watch_extrinsic() {
 		runtime.block_on(data.into_future()).unwrap().0,
 		Some(format!(r#"{{"jsonrpc":"2.0","method":"test","params":{{"result":{{"usurped":"0x{}"}},"subscription":1}}}}"#, HexDisplay::from(&h)))
 	);
+}
+
+#[test]
+fn should_return_watch_validation_error() {
+	//given
+	let mut runtime = runtime::Runtime::new().unwrap();
+	let client = Arc::new(test_client::new());
+	let pool = Arc::new(Pool::new(Default::default(), FullChainApi::new(client.clone())));
+	let keystore = KeyStore::new();
+	let p = Author {
+		client,
+		pool: pool.clone(),
+		subscriptions: Subscriptions::new(Arc::new(runtime.executor())),
+		keystore: keystore.clone(),
+	};
+	let (subscriber, id_rx, _data) = jsonrpc_pubsub::typed::Subscriber::new_test("test");
+
+	// when
+	p.watch_extrinsic(Default::default(), subscriber, uxt(AccountKeyring::Alice, 179).encode().into());
+
+	// then
+	let res = runtime.block_on(id_rx).unwrap();
+	assert!(res.is_err(), "Expected the transaction to be rejected as invalid.");
 }
 
 #[test]

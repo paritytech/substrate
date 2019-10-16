@@ -31,6 +31,7 @@ babe = { package = "srml-babe", path = "../../srml/babe", default-features = fal
 balances = { package = "srml-balances", path = "../../srml/balances", default-features = false }
 collective = { package = "srml-collective", path = "../../srml/collective", default-features = false }
 contracts = { package = "srml-contracts", path = "../../srml/contracts", default-features = false }
+contracts-rpc-runtime-api = { package = "srml-contracts-rpc-runtime-api", path = "../../srml/contracts/rpc/runtime-api/", default-features = false }
 democracy = { package = "srml-democracy", path = "../../srml/democracy", default-features = false }
 elections = { package = "srml-elections", path = "../../srml/elections", default-features = false }
 executive = { package = "srml-executive", path = "../../srml/executive", default-features = false }
@@ -47,6 +48,7 @@ srml-staking-reward-curve = { path = "../../srml/staking/reward-curve"}
 sudo = { package = "srml-sudo", path = "../../srml/sudo", default-features = false }
 support = { package = "srml-support", path = "../../srml/support", default-features = false }
 system = { package = "srml-system", path = "../../srml/system", default-features = false }
+system-rpc-runtime-api = { package = "srml-system-rpc-runtime-api", path = "../../srml/system/rpc/runtime-api/", default-features = false }
 timestamp = { package = "srml-timestamp", path = "../../srml/timestamp", default-features = false }
 treasury = { package = "srml-treasury", path = "../../srml/treasury", default-features = false }
 utility = { package = "srml-utility", path = "../../srml/utility", default-features = false }
@@ -67,6 +69,7 @@ std = [
 	"codec/std",
 	"collective/std",
 	"contracts/std",
+	"contracts-rpc-runtime-api/std",
 	"democracy/std",
 	"elections/std",
 	"executive/std",
@@ -93,6 +96,7 @@ std = [
 	"sudo/std",
 	"support/std",
 	"system/std",
+	"system-rpc-runtime-api/std",
 	"timestamp/std",
 	"treasury/std",
 	"utility/std",
