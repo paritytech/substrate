@@ -1122,11 +1122,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 		match self.sync.on_block_announce(who.clone(), hash, &announce, is_their_best) {
 			sync::OnBlockAnnounce::Nothing => {
-				// try_import is only true when we have all data required to import block
+				// `on_block_announce` returns `OnBlockAnnounce::ImportHeader`
+				// when we have all data required to import the block
 				// in the BlockAnnounce message. This is only when:
 				// 1) we're on light client;
 				// AND
-				// 2) parent block is already imported
+				// 2) parent block is already imported and not pruned.
 				return CustomMessageOutcome::None
 			}
 			sync::OnBlockAnnounce::ImportHeader => () // We proceed with the import.

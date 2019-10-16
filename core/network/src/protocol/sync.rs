@@ -1051,15 +1051,15 @@ impl<B: BlockT> ChainSync<B> {
 			}
 		}
 
+		if ancient_parent {
+			trace!(target: "sync", "Ignored ancient block announced from {}: {} {:?}", who, hash, header);
+			return OnBlockAnnounce::Nothing
+		}
+
 		let requires_additional_data = !self.role.is_light() || !known_parent;
 		if !requires_additional_data {
 			trace!(target: "sync", "Importing new header announced from {}: {} {:?}", who, hash, header);
 			return OnBlockAnnounce::ImportHeader
-		}
-
-		if ancient_parent && !requires_additional_data {
-			trace!(target: "sync", "Ignored ancient block announced from {}: {} {:?}", who, hash, header);
-			return OnBlockAnnounce::Nothing
 		}
 
 		if number <= self.best_queued_number {
