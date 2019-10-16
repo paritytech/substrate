@@ -99,6 +99,12 @@ impl From<String> for Error {
 	}
 }
 
+impl From<WasmError> for Error {
+	fn from(err: WasmError) -> Error {
+		Error::Other(err.to_string())
+	}
+}
+
 /// Type for errors occurring during Wasm runtime construction.
 #[derive(Debug, derive_more::Display)]
 pub enum WasmError {
