@@ -88,7 +88,7 @@ mod tests {
 	}
 
 	/// Default transfer fee
-	fn transfer_fee<E: Encode>(extrinsic: &E, fm: Fixed64) -> Balance {
+	fn transfer_fee<E: Encode>(extrinsic: &E, fee_multiplier: Fixed64) -> Balance {
 		let length_fee = TransactionBaseFee::get() +
 			TransactionByteFee::get() *
 			(extrinsic.encode().len() as Balance);
@@ -96,7 +96,7 @@ mod tests {
 		let weight = default_transfer_call().get_dispatch_info().weight;
 		let weight_fee = <Runtime as transaction_payment::Trait>::WeightToFee::convert(weight);
 
-		fm.saturated_multiply_accumulate(length_fee + weight_fee) + TransferFee::get()
+		fee_multiplier.saturated_multiply_accumulate(length_fee + weight_fee) + TransferFee::get()
 	}
 
 	fn default_transfer_call() -> balances::Call<Runtime> {
@@ -216,8 +216,7 @@ mod tests {
 		).0;
 		assert!(r.is_ok());
 
-		let mut fm: Fixed64 = Default::default();
-		t.execute_with(|| { fm = TransactionPayment::next_fee_multiplier(); });
+		let fm = t.execute_with(TransactionPayment::next_fee_multiplier);
 
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
@@ -256,8 +255,7 @@ mod tests {
 		).0;
 		assert!(r.is_ok());
 
-		let mut fm: Fixed64 = Default::default();
-		t.execute_with(|| { fm = TransactionPayment::next_fee_multiplier(); });
+		let fm = t.execute_with(TransactionPayment::next_fee_multiplier);
 
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
@@ -431,9 +429,8 @@ mod tests {
 
 		let (block1, block2) = blocks();
 
-		let mut fm: Fixed64 = Default::default();
 		let mut alice_last_known_balance: Balance = Default::default();
-		t.execute_with(|| { fm = TransactionPayment::next_fee_multiplier(); });
+		let mut fm = t.execute_with(TransactionPayment::next_fee_multiplier);
 
 		executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
@@ -472,7 +469,7 @@ mod tests {
 			assert_eq!(System::events(), events);
 		});
 
-		t.execute_with(|| { fm = TransactionPayment::next_fee_multiplier(); });
+		fm = t.execute_with(TransactionPayment::next_fee_multiplier);
 
 		executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
@@ -544,9 +541,8 @@ mod tests {
 
 		let (block1, block2) = blocks();
 
-		let mut fm: Fixed64 = Default::default();
 		let mut alice_last_known_balance: Balance = Default::default();
-		t.execute_with(|| { fm = TransactionPayment::next_fee_multiplier(); });
+		let mut fm = t.execute_with(TransactionPayment::next_fee_multiplier);
 
 		executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
@@ -562,7 +558,7 @@ mod tests {
 			alice_last_known_balance = Balances::total_balance(&alice());
 		});
 
-		t.execute_with(|| { fm = TransactionPayment::next_fee_multiplier(); });
+		fm = t.execute_with(TransactionPayment::next_fee_multiplier);
 
 		executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
@@ -841,8 +837,7 @@ mod tests {
 			None,
 		).0;
 		assert!(r.is_ok());
-		let mut fm: Fixed64 = Default::default();
-		t.execute_with(|| { fm = TransactionPayment::next_fee_multiplier(); });
+		let fm = t.execute_with(TransactionPayment::next_fee_multiplier);
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"BlockBuilder_apply_extrinsic",

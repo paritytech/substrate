@@ -18,8 +18,7 @@
 //!
 //! This module provides the basic logic needed to pay the absolute minimum amount needed for a
 //! transaction to be included. This includes:
-//!   - _weight fee_: A fee proportional to amount of Weight a transaction consumes. (TODO: explain
-//!     what weight is or link somewhere)
+//!   - _weight fee_: A fee proportional to amount of weight a transaction consumes.
 //!   - _length fee_: A fee proportional to the encoded length of the transaction.
 //!   - _tip_: An optional tip. Tip increases the priority of the transaction, giving it a higher
 //!     chance to be included by the transaction queue.
@@ -55,7 +54,7 @@ type NegativeImbalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
 
 pub trait Trait: system::Trait {
-	/// The currency type of the chain.
+	/// The currency type in which fees will be paid.
 	type Currency: Currency<Self::AccountId>;
 
 	/// Handler for the unbalanced reduction when taking transaction fees.
