@@ -48,7 +48,7 @@ use std::sync::Arc;
 use std::iter;
 use std::time;
 use log::{trace, debug};
-use futures::sync::mpsc;
+use futures03::channel::mpsc;
 use lru_cache::LruCache;
 use libp2p::PeerId;
 use sr_primitives::traits::{Block as BlockT, Hash, HashFor};
