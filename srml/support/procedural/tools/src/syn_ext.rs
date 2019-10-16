@@ -184,13 +184,15 @@ impl<P: ToTokens> ToTokens for Opt<P> {
 	}
 }
 
-pub fn extract_type_option(typ: &syn::Type) -> Option<TokenStream> {
+pub fn extract_type_option(typ: &syn::Type) -> Option<syn::Type> {
 	if let syn::Type::Path(ref path) = typ {
 		let v = path.path.segments.last()?;
 		if v.value().ident == "Option" {
-			if let syn::PathArguments::AngleBracketed(ref a) = v.value().arguments {
-				let args = &a.args;
-				return Some(quote!{ #args })
+			// Option has only one type argument in angle bracket.
+			if let syn::PathArguments::AngleBracketed(a) = &v.value().arguments {
+				if let syn::GenericArgument::Type(typ) = a.args.last()?.value() {
+					return Some(typ.clone())
+				}
 			}
 		}
 	}
