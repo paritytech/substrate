@@ -42,57 +42,32 @@ impl BuilderDef {
 			let storage_trait = &line.storage_trait;
 			let value_type = &line.value_type;
 
+			// Contains the data to inset at genesis either from build or config.
+			let mut data = None;
+
 			if let Some(builder) = &line.build {
 				is_generic |= ext::expr_contains_ident(&builder, &def.module_runtime_generic);
 				is_generic |= line.is_generic;
 
+				data = Some(quote_spanned!(builder.span() => &(#builder)(&self)));
+			} else if let Some(config) = &line.config {
+				is_generic |= line.is_generic;
+
+				data = Some(quote!(&self.#config;));
+			};
+
+			if let Some(data) = data {
 				blocks.push(match &line.storage_type {
 					StorageLineTypeDef::Simple(_) => {
 						quote!{{
-							let v: #value_type = (#builder)(&self);
-							<#storage_struct as #scrate::#storage_trait>::put::<#value_type>(v);
+							let v: &#value_type = #data;
+							<#storage_struct as #scrate::#storage_trait>::put::<&#value_type>(v);
 						}}
 					},
 					StorageLineTypeDef::Map(map) | StorageLineTypeDef::LinkedMap(map) => {
 						let key = &map.key;
 						quote!{{
-							let data = (#builder)(&self);
-							data.into_iter().for_each(|(k, v)| {
-								<#storage_struct as #scrate::#storage_trait>::insert::<
-									#key, #value_type
-								>(k, v);
-							});
-						}}
-					},
-					StorageLineTypeDef::DoubleMap(map) => {
-						let key1 = &map.key1;
-						let key2 = &map.key2;
-						quote!{{
-							let data = (#builder)(&self);
-							data.into_iter().for_each(|(k1, k2, v)| {
-								<#storage_struct as #scrate::#storage_trait>::insert::<
-									#key1, #key2, #value_type
-								>(k1, k2, v);
-							});
-						}}
-					},
-				});
-			} else if let Some(config) = &line.config {
-				is_generic |= line.is_generic;
-
-				blocks.push(match &line.storage_type {
-					StorageLineTypeDef::Simple(_) => {
-						quote!{{
-							let v = &self.#config;
-							<#storage_struct as #scrate::#storage_trait>::put::<&#value_type>(v);
-						}}
-					},
-					StorageLineTypeDef::Map(map)
-						| StorageLineTypeDef::LinkedMap(map)
-					=> {
-						let key = &map.key;
-						quote!{{
-							let data = &self.#config;
+							let data: &#scrate::rstd::vec::Vec<(#key, #value_type)> = #data;
 							data.iter().for_each(|(k, v)| {
 								<#storage_struct as #scrate::#storage_trait>::insert::<
 									&#key, &#value_type
@@ -104,8 +79,8 @@ impl BuilderDef {
 						let key1 = &map.key1;
 						let key2 = &map.key2;
 						quote!{{
-							let data = &self.#config;
-							data.into_iter().for_each(|(k1, k2, v)| {
+							let data: &#scrate::rstd::vec::Vec<(#key1, #key2, #value_type)> = #data;
+							data.iter().for_each(|(k1, k2, v)| {
 								<#storage_struct as #scrate::#storage_trait>::insert::<
 									&#key1, &#key2, &#value_type
 								>(k1, k2, v);
