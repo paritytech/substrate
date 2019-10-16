@@ -68,11 +68,12 @@ pub fn call_in_wasm<E: Externalities>(
 	code: &[u8],
 	heap_pages: u64,
 ) -> error::Result<Vec<u8>> {
-	use wasm_runtime::WasmRuntime;
-
-	// make sure this is updated, when there are more execution methods
-	let WasmExecutionMethod::Interpreted = execution_method;
-	let mut instance = wasmi_execution::create_instance(ext, code, heap_pages)?;
+	let mut instance = wasm_runtime::create_wasm_runtime_with_code(
+		ext,
+		execution_method,
+		heap_pages,
+		code,
+	)?;
 	instance.call(ext, function, call_data)
 }
 
