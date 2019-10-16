@@ -91,101 +91,6 @@ pub struct Ext<'a, H, N, B, T> where H: Hasher<Out=H256>, B: 'a + Backend<H> {
 	pub(crate) extensions: Option<&'a mut Extensions>,
 }
 
-/// Subset of Ext for sharing functions with testing.
-pub(crate) struct ExtBasis<'a, B, H> {
-	pub overlay: &'a OverlayedChanges,
-	pub backend: &'a B,
-	pub _phantom: PhantomData<H>,
-}
-
-impl<'a, H, B> ExtBasis<'a, B, H>
-where
-	H: Hasher<Out=H256>,
-	B: 'a + Backend<H>,
-{
-	pub(crate) fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
-		self.overlay.storage(key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
-			self.backend.storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL))
-	}
-
-	pub(crate) fn storage_hash(&self, key: &[u8]) -> Option<H256> {
-		self.overlay
-			.storage(key)
-			.map(|x| x.map(|x| H::hash(x)))
-			.unwrap_or_else(||
-				self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL)
-			)
-	}
-
-	pub(crate) fn original_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
-		self.backend.storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL)
-	}
-
-	pub(crate) fn original_storage_hash(&self, key: &[u8]) -> Option<H256> {
-		self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL)
-	}
-
-	pub(crate) fn child_storage(&self, storage_key: &ChildStorageKey, key: &[u8]) -> Option<Vec<u8>> {
-		self.overlay
-			.child_storage(storage_key.as_ref(), key)
-			.map(|x| x.map(|x| x.to_vec()))
-			.unwrap_or_else(|| self.backend
-				.child_storage(storage_key.as_ref(), key)
-				.expect(EXT_NOT_ALLOWED_TO_FAIL)
-			)
-	}
-
-	pub(crate) fn child_storage_hash(
-		&self,
-		storage_key: &ChildStorageKey,
-		key: &[u8],
-	) -> Option<H256> {
-		self.overlay
-			.child_storage(storage_key.as_ref(), key)
-			.map(|x| x.map(|x| H::hash(x)))
-			.unwrap_or_else(||
-				self.backend.child_storage_hash(storage_key.as_ref(), key)
-					.expect(EXT_NOT_ALLOWED_TO_FAIL)
-			)
-	}
-
-	pub(crate) fn original_child_storage(
-		&self,
-		storage_key: &ChildStorageKey,
-		key: &[u8],
-	) -> Option<Vec<u8>> {
-		self.backend
-			.child_storage(storage_key.as_ref(), key)
-			.expect(EXT_NOT_ALLOWED_TO_FAIL)
-	}
-
-	pub(crate) fn original_child_storage_hash(
-		&self,
-		storage_key: &ChildStorageKey,
-		key: &[u8],
-	) -> Option<H256> {
-		self.backend
-			.child_storage_hash(storage_key.as_ref(), key)
-			.expect(EXT_NOT_ALLOWED_TO_FAIL)
-	}
-
-	pub(crate) fn exists_storage(&self, key: &[u8]) -> bool {
-		match self.overlay.storage(key) {
-			Some(x) => x.is_some(),
-			_ => self.backend.exists_storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL),
-		}
-	}
-
-	pub(crate) fn exists_child_storage(&self, storage_key: &ChildStorageKey, key: &[u8]) -> bool {
-		match self.overlay.child_storage(storage_key.as_ref(), key) {
-			Some(x) => x.is_some(),
-			_ => self.backend
-				.exists_child_storage(storage_key.as_ref(), key)
-				.expect(EXT_NOT_ALLOWED_TO_FAIL),
-		}
-	}
-}
-
 impl<'a, H, N, B, T> Ext<'a, H, N, B, T>
 where
 	H: Hasher<Out=H256>,
@@ -193,14 +98,6 @@ where
 	T: 'a + ChangesTrieStorage<H, N>,
 	N: crate::changes_trie::BlockNumber,
 {
-
-	fn basis(&self) -> ExtBasis<B, H> {
-		ExtBasis {
-			overlay: &*self.overlay,
-			backend: self.backend,
-			_phantom: PhantomData,
-		}
-	}
 
 	/// Create a new `Ext` from overlayed changes and read-only backend
 	pub fn new(
@@ -282,7 +179,8 @@ where
 {
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
 		let _guard = panic_handler::AbortGuard::force_abort();
-		let result = self.basis().storage(key);
+		let result = self.overlay.storage(key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
+			self.backend.storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL));
 		trace!(target: "state-trace", "{:04x}: Get {}={:?}",
 			self.id,
 			HexDisplay::from(&key),
@@ -293,7 +191,12 @@ where
 
 	fn storage_hash(&self, key: &[u8]) -> Option<H256> {
 		let _guard = panic_handler::AbortGuard::force_abort();
-		let result = self.basis().storage_hash(key);
+		let result = self.overlay
+			.storage(key)
+			.map(|x| x.map(|x| H::hash(x)))
+			.unwrap_or_else(||
+				self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL)
+			);
 		trace!(target: "state-trace", "{:04x}: Hash {}={:?}",
 			self.id,
 			HexDisplay::from(&key),
@@ -304,7 +207,7 @@ where
 
 	fn original_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
 		let _guard = panic_handler::AbortGuard::force_abort();
-		let result = self.basis().original_storage(key);
+		let result = self.backend.storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL);
 		trace!(target: "state-trace", "{:04x}: GetOriginal {}={:?}",
 			self.id,
 			HexDisplay::from(&key),
@@ -315,7 +218,7 @@ where
 
 	fn original_storage_hash(&self, key: &[u8]) -> Option<H256> {
 		let _guard = panic_handler::AbortGuard::force_abort();
-		let result = self.basis().original_storage_hash(key);
+		let result = self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL);
 		trace!(target: "state-trace", "{:04x}: GetOriginalHash {}={:?}",
 			self.id,
 			HexDisplay::from(&key),
@@ -326,7 +229,12 @@ where
 
 	fn child_storage(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<Vec<u8>> {
 		let _guard = panic_handler::AbortGuard::force_abort();
-		let result = self.basis().child_storage(&storage_key, key);
+		let result = self.overlay
+			.child_storage(storage_key.as_ref(), key)
+			.map(|x| x.map(|x| x.to_vec()))
+			.unwrap_or_else(||
+				self.backend.child_storage(storage_key.as_ref(), key).expect(EXT_NOT_ALLOWED_TO_FAIL)
+			);
 
 		trace!(target: "state-trace", "{:04x}: GetChild({}) {}={:?}",
 			self.id,
@@ -340,7 +248,12 @@ where
 
 	fn child_storage_hash(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<H256> {
 		let _guard = panic_handler::AbortGuard::force_abort();
-		let result = self.basis().child_storage_hash(&storage_key, key);
+		let result = self.overlay
+			.child_storage(storage_key.as_ref(), key)
+			.map(|x| x.map(|x| H::hash(x)))
+			.unwrap_or_else(||
+				self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL)
+			);
 
 		trace!(target: "state-trace", "{:04x}: ChildHash({}) {}={:?}",
 			self.id,
@@ -354,7 +267,9 @@ where
 
 	fn original_child_storage(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<Vec<u8>> {
 		let _guard = panic_handler::AbortGuard::force_abort();
-		let result = self.basis().original_child_storage(&storage_key, key);
+		let result = self.backend
+			.child_storage(storage_key.as_ref(), key)
+			.expect(EXT_NOT_ALLOWED_TO_FAIL);
 
 		trace!(target: "state-trace", "{:04x}: ChildOriginal({}) {}={:?}",
 			self.id,
@@ -367,7 +282,9 @@ where
 
 	fn original_child_storage_hash(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<H256> {
 		let _guard = panic_handler::AbortGuard::force_abort();
-		let result = self.basis().original_child_storage_hash(&storage_key, key);
+		let result = self.backend
+			.child_storage_hash(storage_key.as_ref(), key)
+			.expect(EXT_NOT_ALLOWED_TO_FAIL);
 
 		trace!(target: "state-trace", "{}: ChildHashOriginal({}) {}={:?}",
 			self.id,
@@ -380,7 +297,10 @@ where
 
 	fn exists_storage(&self, key: &[u8]) -> bool {
 		let _guard = panic_handler::AbortGuard::force_abort();
-		let result = self.basis().exists_storage(key);
+		let result = match self.overlay.storage(key) {
+			Some(x) => x.is_some(),
+			_ => self.backend.exists_storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL),
+		};
 
 		trace!(target: "state-trace", "{:04x}: Exists {}={:?}",
 			self.id,
@@ -394,7 +314,12 @@ where
 	fn exists_child_storage(&self, storage_key: ChildStorageKey, key: &[u8]) -> bool {
 		let _guard = panic_handler::AbortGuard::force_abort();
 
-		let result = self.basis().exists_child_storage(&storage_key, key);
+		let result = match self.overlay.child_storage(storage_key.as_ref(), key) {
+			Some(x) => x.is_some(),
+			_ => self.backend
+				.exists_child_storage(storage_key.as_ref(), key)
+				.expect(EXT_NOT_ALLOWED_TO_FAIL),
+		};
 
 		trace!(target: "state-trace", "{:04x}: ChildExists({}) {}={:?}",
 			self.id,

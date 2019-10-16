@@ -24,14 +24,13 @@ use crate::{
 		InMemoryStorage as ChangesTrieInMemoryStorage,
 		BlockNumber as ChangesTrieBlockNumber,
 	},
-	ext::{ExtBasis, Ext},
+	ext::Ext,
 };
 use primitives::{
 	storage::{
-		ChildStorageKey,
 		well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES, is_child_storage_key}
 	},
-	traits::Externalities, hash::H256, Blake2Hasher,
+	hash::H256, Blake2Hasher,
 };
 use codec::Encode;
 use externalities::{Extensions, Extension};
@@ -47,14 +46,6 @@ pub struct TestExternalities<H: Hasher<Out=H256>=Blake2Hasher, N: ChangesTrieBlo
 }
 
 impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
-
-	fn basis(&self) -> ExtBasis<InMemory<H>, H> {
-		ExtBasis {
-			overlay: &self.overlay,
-			backend: &self.backend,
-			_phantom: std::marker::PhantomData,
-		}
-	}
 
 	fn ext(&mut self) -> Ext<H, N, InMemory<H>, ChangesTrieInMemoryStorage<H, N>> {
 		Ext {
@@ -139,7 +130,8 @@ impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 	///
 	/// Returns the result of the given closure.
 	pub fn execute_with<R>(&mut self, execute: impl FnOnce() -> R) -> R {
-		externalities::set_and_run_with_externalities(self, execute)
+		let mut ext = self.ext();
+		externalities::set_and_run_with_externalities(&mut ext, execute)
 	}
 }
 
@@ -167,98 +159,6 @@ impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> From<StorageTuple> for Test
 	}
 }
 
-impl<H, N> Externalities for TestExternalities<H, N> where
-	H: Hasher<Out=H256>,
-	N: ChangesTrieBlockNumber,
-{
-	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
-		self.basis().storage(key)
-	}
-
-	fn storage_hash(&self, key: &[u8]) -> Option<H256> {
-		self.basis().storage_hash(key)
-	}
-
-	fn original_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
-		self.basis().original_storage(key)
-	}
-
-	fn original_storage_hash(&self, key: &[u8]) -> Option<H256> {
-		self.basis().original_storage_hash(key)
-	}
-
-	fn child_storage(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<Vec<u8>> {
-		self.basis().child_storage(&storage_key, key)
-	}
-
-	fn child_storage_hash(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<H256> {
-		self.basis().child_storage_hash(&storage_key, key)
-	}
-
-	fn original_child_storage(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<Vec<u8>> {
-		self.basis().original_child_storage(&storage_key, key)
-	}
-
-	fn original_child_storage_hash(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<H256> {
-		self.basis().original_child_storage_hash(&storage_key, key)
-	}
-
-	fn exists_storage(&self, key: &[u8]) -> bool {
-		self.basis().exists_storage(key)
-	}
-
-	fn exists_child_storage(&self, storage_key: ChildStorageKey, key: &[u8]) -> bool {
-		self.basis().exists_child_storage(&storage_key, key)
-	}
-
-	fn place_storage(&mut self, key: Vec<u8>, maybe_value: Option<Vec<u8>>) {
-		if is_child_storage_key(&key) {
-			panic!("Refuse to directly set child storage key");
-		}
-
-		self.overlay.set_storage(key, maybe_value);
-	}
-
-	fn place_child_storage(
-		&mut self,
-		storage_key: ChildStorageKey,
-		key: Vec<u8>,
-		value: Option<Vec<u8>>,
-	) {
-		self.overlay.set_child_storage(storage_key.into_owned(), key, value);
-	}
-
-	fn kill_child_storage(&mut self, storage_key: ChildStorageKey) {
-		self.ext().kill_child_storage(storage_key)
-	}
-
-	fn clear_prefix(&mut self, prefix: &[u8]) {
-		if is_child_storage_key(prefix) {
-			panic!("Refuse to directly clear prefix that is part of child storage key");
-		}
-
-		self.ext().clear_prefix(prefix)
-	}
-
-	fn clear_child_prefix(&mut self, storage_key: ChildStorageKey, prefix: &[u8]) {
-		self.ext().clear_child_prefix(storage_key, prefix)
-	}
-
-	fn chain_id(&self) -> u64 { 42 }
-
-	fn storage_root(&mut self) -> H256 {
-		self.ext().storage_root()
-	}
-
-	fn child_storage_root(&mut self, storage_key: ChildStorageKey) -> Vec<u8> {
-		self.ext().child_storage_root(storage_key)
-	}
-
-	fn storage_changes_root(&mut self, parent: H256) -> Result<Option<H256>, ()> {
-		self.ext().storage_changes_root(parent)
-	}
-}
-
 impl<H, N> externalities::ExtensionStore for TestExternalities<H, N> where
 	H: Hasher<Out=H256>,
 	N: ChangesTrieBlockNumber,
@@ -271,12 +171,13 @@ impl<H, N> externalities::ExtensionStore for TestExternalities<H, N> where
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use primitives::{Blake2Hasher, H256};
+	use primitives::traits::Externalities;
 	use hex_literal::hex;
 
 	#[test]
 	fn commit_should_work() {
 		let mut ext = TestExternalities::<Blake2Hasher, u64>::default();
+		let mut ext = ext.ext();
 		ext.set_storage(b"doe".to_vec(), b"reindeer".to_vec());
 		ext.set_storage(b"dog".to_vec(), b"puppy".to_vec());
 		ext.set_storage(b"dogglesworth".to_vec(), b"cat".to_vec());
@@ -287,6 +188,7 @@ mod tests {
 	#[test]
 	fn set_and_retrieve_code() {
 		let mut ext = TestExternalities::<Blake2Hasher, u64>::default();
+		let mut ext = ext.ext();
 
 		let code = vec![1, 2, 3];
 		ext.set_storage(CODE.to_vec(), code.clone());
