@@ -21,10 +21,10 @@ use hash_db::Hasher;
 use crate::{
 	backend::{InMemory, Backend}, OverlayedChanges,
 	changes_trie::{
-		build_changes_trie, InMemoryStorage as ChangesTrieInMemoryStorage,
+		InMemoryStorage as ChangesTrieInMemoryStorage,
 		BlockNumber as ChangesTrieBlockNumber,
 	},
-	ext::{ExtBasis, ExtBasisMut},
+	ext::{ExtBasis, Ext},
 };
 use primitives::{
 	storage::{
@@ -56,11 +56,16 @@ impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 		}
 	}
 
-	fn basis_mut(&mut self) -> ExtBasisMut<InMemory<H>, H> {
-		ExtBasisMut {
+	fn ext(&mut self) -> Ext<H, N, InMemory<H>, ChangesTrieInMemoryStorage<H, N>> {
+		Ext {
 			overlay: &mut self.overlay,
 			backend: &self.backend,
 			_phantom: std::marker::PhantomData,
+			storage_transaction: None,
+			changes_trie_storage: Some(&self.changes_trie_storage),
+			changes_trie_transaction: None,
+			id: 0,
+			extensions: None,
 		}
 	}
 
@@ -224,7 +229,7 @@ impl<H, N> Externalities for TestExternalities<H, N> where
 	}
 
 	fn kill_child_storage(&mut self, storage_key: ChildStorageKey) {
-		self.basis_mut().kill_child_storage(storage_key)
+		self.ext().kill_child_storage(storage_key)
 	}
 
 	fn clear_prefix(&mut self, prefix: &[u8]) {
@@ -232,30 +237,25 @@ impl<H, N> Externalities for TestExternalities<H, N> where
 			panic!("Refuse to directly clear prefix that is part of child storage key");
 		}
 
-		self.basis_mut().clear_prefix(prefix)
+		self.ext().clear_prefix(prefix)
 	}
 
 	fn clear_child_prefix(&mut self, storage_key: ChildStorageKey, prefix: &[u8]) {
-		self.basis_mut().clear_child_prefix(storage_key, prefix)
+		self.ext().clear_child_prefix(storage_key, prefix)
 	}
 
 	fn chain_id(&self) -> u64 { 42 }
 
 	fn storage_root(&mut self) -> H256 {
-		self.basis_mut().storage_root().0
+		self.ext().storage_root()
 	}
 
 	fn child_storage_root(&mut self, storage_key: ChildStorageKey) -> Vec<u8> {
-		self.basis_mut().child_storage_root(&storage_key)
+		self.ext().child_storage_root(storage_key)
 	}
 
 	fn storage_changes_root(&mut self, parent: H256) -> Result<Option<H256>, ()> {
-		Ok(build_changes_trie::<_, _, H, N>(
-			&self.backend,
-			Some(&self.changes_trie_storage),
-			&self.overlay,
-			parent,
-		)?.map(|(_, root, _)| root))
+		self.ext().storage_changes_root(parent)
 	}
 }
 

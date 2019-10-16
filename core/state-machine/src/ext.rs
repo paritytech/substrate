@@ -68,39 +68,32 @@ impl<B: error::Error, E: error::Error> error::Error for Error<B, E> {
 /// Wraps a read-only backend, call executor, and current overlayed changes.
 pub struct Ext<'a, H, N, B, T> where H: Hasher<Out=H256>, B: 'a + Backend<H> {
 	/// The overlayed changes to write to.
-	overlay: &'a mut OverlayedChanges,
+	pub(crate) overlay: &'a mut OverlayedChanges,
 	/// The storage backend to read from.
-	backend: &'a B,
+	pub(crate) backend: &'a B,
 	/// The storage transaction necessary to commit to the backend. Is cached when
 	/// `storage_root` is called and the cache is cleared on every subsequent change.
-	storage_transaction: Option<(B::Transaction, H::Out)>,
+	pub(crate) storage_transaction: Option<(B::Transaction, H::Out)>,
 	/// Changes trie storage to read from.
-	changes_trie_storage: Option<&'a T>,
+	pub(crate) changes_trie_storage: Option<&'a T>,
 	/// The changes trie transaction necessary to commit to the changes trie backend.
 	/// Set to Some when `storage_changes_root` is called. Could be replaced later
 	/// by calling `storage_changes_root` again => never used as cache.
 	/// This differs from `storage_transaction` behavior, because the moment when
 	/// `storage_changes_root` is called matters + we need to remember additional
 	/// data at this moment (block number).
-	changes_trie_transaction: Option<(MemoryDB<H>, H::Out, ChangesTrieCacheAction<H::Out, N>)>,
+	pub(crate) changes_trie_transaction: Option<(MemoryDB<H>, H::Out, ChangesTrieCacheAction<H::Out, N>)>,
 	/// Pseudo-unique id used for tracing.
 	pub id: u16,
 	/// Dummy usage of N arg.
-	_phantom: PhantomData<N>,
+	pub(crate) _phantom: PhantomData<N>,
 	/// Extensions registered with this instance.
-	extensions: Option<&'a mut Extensions>,
+	pub(crate) extensions: Option<&'a mut Extensions>,
 }
 
 /// Subset of Ext for sharing functions with testing.
 pub(crate) struct ExtBasis<'a, B, H> {
 	pub overlay: &'a OverlayedChanges,
-	pub backend: &'a B,
-	pub _phantom: PhantomData<H>,
-}
-
-/// Subset of Ext for sharing functions with testing.
-pub(crate) struct ExtBasisMut<'a, B, H> {
-	pub overlay: &'a mut OverlayedChanges,
 	pub backend: &'a B,
 	pub _phantom: PhantomData<H>,
 }
@@ -193,78 +186,6 @@ where
 	}
 }
 
-impl<'a, H, B> ExtBasisMut<'a, B, H>
-where
-	H: Hasher<Out=H256>,
-	B: 'a + Backend<H>,
-{
-
-	pub(crate) fn kill_child_storage(&mut self, storage_key: ChildStorageKey) {
-		self.overlay.clear_child_storage(storage_key.as_ref());
-		self.backend.for_keys_in_child_storage(storage_key.as_ref(), |key| {
-			self.overlay.set_child_storage(storage_key.as_ref().to_vec(), key.to_vec(), None);
-		});
-	}
-
-	pub(crate) fn clear_prefix(&mut self, prefix: &[u8]) {
-		self.overlay.clear_prefix(prefix);
-		self.backend.for_keys_with_prefix(prefix, |key| {
-			self.overlay.set_storage(key.to_vec(), None);
-		});
-	}
-
-	pub(crate) fn clear_child_prefix(&mut self, storage_key: ChildStorageKey, prefix: &[u8]) {
-		self.overlay.clear_child_prefix(storage_key.as_ref(), prefix);
-		self.backend.for_child_keys_with_prefix(storage_key.as_ref(), prefix, |key| {
-			self.overlay.set_child_storage(storage_key.as_ref().to_vec(), key.to_vec(), None);
-		});
-	}
-
-	pub(crate) fn storage_root(&mut self) -> (H256, B::Transaction) {
-		let child_storage_keys =
-			self.overlay.prospective.children.keys()
-				.chain(self.overlay.committed.children.keys());
-
-		let child_delta_iter = child_storage_keys.map(|storage_key|
-			(storage_key.clone(), self.overlay.committed.children.get(storage_key)
-				.into_iter()
-				.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), v.value.clone())))
-				.chain(self.overlay.prospective.children.get(storage_key)
-					.into_iter()
-					.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), v.value.clone()))))));
-
-
-		// compute and memoize
-		let delta = self.overlay.committed.top.iter().map(|(k, v)| (k.clone(), v.value.clone()))
-			.chain(self.overlay.prospective.top.iter().map(|(k, v)| (k.clone(), v.value.clone())));
-
-		self.backend.full_storage_root(delta, child_delta_iter)
-	}
-
-	pub(crate) fn child_storage_root(&mut self, storage_key: &ChildStorageKey) -> Vec<u8> {
-		let storage_key = storage_key.as_ref();
-
-		let (root, is_empty, _) = {
-			let delta = self.overlay.committed.children.get(storage_key)
-				.into_iter()
-				.flat_map(|map| map.clone().into_iter().map(|(k, v)| (k, v.value)))
-				.chain(self.overlay.prospective.children.get(storage_key)
-						.into_iter()
-						.flat_map(|map| map.clone().into_iter().map(|(k, v)| (k, v.value))));
-
-			self.backend.child_storage_root(storage_key, delta)
-		};
-
-		if is_empty {
-			self.overlay.set_storage(storage_key.into(), None);
-		} else {
-			self.overlay.set_storage(storage_key.into(), Some(root.clone()));
-		}
-
-		root
-	}
-}
-
 impl<'a, H, N, B, T> Ext<'a, H, N, B, T>
 where
 	H: Hasher<Out=H256>,
@@ -276,14 +197,6 @@ where
 	fn basis(&self) -> ExtBasis<B, H> {
 		ExtBasis {
 			overlay: &*self.overlay,
-			backend: self.backend,
-			_phantom: PhantomData,
-		}
-	}
-
-	fn basis_mut(&mut self) -> ExtBasisMut<B, H> {
-		ExtBasisMut {
-			overlay: self.overlay,
 			backend: self.backend,
 			_phantom: PhantomData,
 		}
@@ -534,8 +447,10 @@ where
 		let _guard = panic_handler::AbortGuard::force_abort();
 
 		self.mark_dirty();
-
-		self.basis_mut().kill_child_storage(storage_key)
+		self.overlay.clear_child_storage(storage_key.as_ref());
+		self.backend.for_keys_in_child_storage(storage_key.as_ref(), |key| {
+			self.overlay.set_child_storage(storage_key.as_ref().to_vec(), key.to_vec(), None);
+		});
 	}
 
 	fn clear_prefix(&mut self, prefix: &[u8]) {
@@ -550,8 +465,10 @@ where
 		}
 
 		self.mark_dirty();
-
-		self.basis_mut().clear_prefix(prefix)
+		self.overlay.clear_prefix(prefix);
+		self.backend.for_keys_with_prefix(prefix, |key| {
+			self.overlay.set_storage(key.to_vec(), None);
+		});
 	}
 
 	fn clear_child_prefix(&mut self, storage_key: ChildStorageKey, prefix: &[u8]) {
@@ -563,8 +480,10 @@ where
 		let _guard = panic_handler::AbortGuard::force_abort();
 
 		self.mark_dirty();
-
-		self.basis_mut().clear_child_prefix(storage_key, prefix)
+		self.overlay.clear_child_prefix(storage_key.as_ref(), prefix);
+		self.backend.for_child_keys_with_prefix(storage_key.as_ref(), prefix, |key| {
+			self.overlay.set_child_storage(storage_key.as_ref().to_vec(), key.to_vec(), None);
+		});
 	}
 
 	fn chain_id(&self) -> u64 {
@@ -581,8 +500,23 @@ where
 			return root.clone();
 		}
 
-		let (root, transaction) = self.basis_mut().storage_root();
+		let child_storage_keys =
+			self.overlay.prospective.children.keys()
+				.chain(self.overlay.committed.children.keys());
+		let child_delta_iter = child_storage_keys.map(|storage_key|
+			(storage_key.clone(), self.overlay.committed.children.get(storage_key)
+				.into_iter()
+				.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), v.value.clone())))
+				.chain(self.overlay.prospective.children.get(storage_key)
+					.into_iter()
+					.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), v.value.clone()))))));
 
+
+		// compute and memoize
+		let delta = self.overlay.committed.top.iter().map(|(k, v)| (k.clone(), v.value.clone()))
+			.chain(self.overlay.prospective.top.iter().map(|(k, v)| (k.clone(), v.value.clone())));
+
+		let (root, transaction) = self.backend.full_storage_root(delta, child_delta_iter);
 		self.storage_transaction = Some((transaction, root));
 		trace!(target: "state-trace", "{:04x}: Root {}",
 			self.id,
@@ -606,8 +540,24 @@ where
 			);
 			root
 		} else {
+			let storage_key = storage_key.as_ref();
 
-			let root = self.basis_mut().child_storage_root(&storage_key);
+			let (root, is_empty, _) = {
+				let delta = self.overlay.committed.children.get(storage_key)
+					.into_iter()
+					.flat_map(|map| map.clone().into_iter().map(|(k, v)| (k, v.value)))
+					.chain(self.overlay.prospective.children.get(storage_key)
+							.into_iter()
+							.flat_map(|map| map.clone().into_iter().map(|(k, v)| (k, v.value))));
+
+				self.backend.child_storage_root(storage_key, delta)
+			};
+
+			if is_empty {
+				self.overlay.set_storage(storage_key.into(), None);
+			} else {
+				self.overlay.set_storage(storage_key.into(), Some(root.clone()));
+			}
 
 			trace!(target: "state-trace", "{:04x}: ChildRoot({}) {}",
 				self.id,
