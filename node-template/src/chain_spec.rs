@@ -3,7 +3,7 @@ use node_template_runtime::{
 	AccountId, AuraConfig, BalancesConfig, GenesisConfig, GrandpaConfig,
 	SudoConfig, IndicesConfig, SystemConfig, WASM_BINARY, 
 };
-use aura_primitives::sr25519::{AuthorityId as AuraId, AuthorityPair as AuraPair};
+use aura_primitives::sr25519::{AuthorityId as AuraId};
 use grandpa_primitives::{AuthorityId as GrandpaId};
 use substrate_service;
 
