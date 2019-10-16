@@ -31,7 +31,7 @@
 
 #[macro_use]
 mod wasm_utils;
-mod wasmi_execution;
+pub mod wasmi_execution;
 #[macro_use]
 mod native_executor;
 mod sandbox;
