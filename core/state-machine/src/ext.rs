@@ -265,13 +265,6 @@ where
 	}
 }
 
-impl<'a, H, B> ExtBasisMut<'a, B, H>
-where
-	H: Hasher<Out=H256>,
-	B: 'a + Backend<H>,
-{
-}
-
 impl<'a, H, N, B, T> Ext<'a, H, N, B, T>
 where
 	H: Hasher<Out=H256>,
