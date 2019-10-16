@@ -34,7 +34,7 @@ pub fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Pu
 /// Helper function to generate an authority key for Aura
 pub fn get_authority_keys_from_seed(s: &str) -> (AuraId, GrandpaId) { 
 	(
-		AuraPair::from_string(&format!("//{}", s), None)
+		get_from_seed::<AuraId>(s),
 			.expect("static values are valid; qed")
 			.public(),
 		get_from_seed::<GrandpaId>(s),
