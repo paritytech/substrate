@@ -24,9 +24,11 @@
 //! This behaviour is useful to prevent bloating the runtime WASM
 //! blob from unneeded code.
 //!
-//! ```rust,no_run
-//! #[derive(RuntimeDebug)]
+//! ```rust
+//! #[derive(substrate_debug_derive::RuntimeDebug)]
 //!	struct MyStruct;
+//!
+//!	assert_eq!(format!("{:?}", MyStruct), "MyStruct");
 //! ```
 
 extern crate proc_macro;
