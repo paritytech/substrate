@@ -683,22 +683,8 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let test_code = WASM_BINARY;
 
-		let output = call(&mut ext, 8, &test_code[..], "test_empty_return", &[0]).unwrap();
+		let output = call(&mut ext, 8, &test_code[..], "test_empty_return", &[]).unwrap();
 		assert_eq!(output, vec![0u8; 0]);
-	}
-
-	#[test]
-	fn call_in_interpreted_wasm_works() {
-		let mut ext = TestExternalities::default();
-		let res = crate::call_in_wasm(
-			"test_empty_return",
-			&[0],
-			crate::WasmExecutionMethod::Interpreted,
-			&mut ext,
-			&WASM_BINARY,
-			8,
-		).unwrap();
-		assert_eq!(res, vec![0u8; 0]);
 	}
 
 	#[test]

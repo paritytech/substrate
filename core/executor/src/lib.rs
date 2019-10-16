@@ -87,3 +87,24 @@ pub trait RuntimeInfo {
 		ext: &mut E,
 	) -> Option<RuntimeVersion>;
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use runtime_test::WASM_BINARY;
+	use runtime_io::TestExternalities;
+
+	#[test]
+	fn call_in_interpreted_wasm_works() {
+		let mut ext = TestExternalities::default();
+		let res = call_in_wasm(
+			"test_empty_return",
+			&[],
+			WasmExecutionMethod::Interpreted,
+			&mut ext,
+			&WASM_BINARY,
+			8,
+		).unwrap();
+		assert_eq!(res, vec![0u8; 0]);
+	}
+}
