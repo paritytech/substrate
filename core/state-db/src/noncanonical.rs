@@ -30,6 +30,7 @@ use codec::{Encode, Decode};
 use log::trace;
 use crate::branch::{RangeSet, BranchRanges};
 use historied_data::tree::History;
+use primitives::child_trie::KeySpace;
 
 const NON_CANONICAL_JOURNAL: &[u8] = b"noncanonical_journal";
 const NON_CANONICAL_OFFSTATE_JOURNAL: &[u8] = b"kv_noncanonical_journal";
@@ -137,6 +138,8 @@ struct JournalRecord<BlockHash: Hash, Key: Hash> {
 struct KvJournalRecord {
 	inserted: Vec<(KvKey, DBValue)>,
 	deleted: Vec<KvKey>,
+	// placeholder for deleted keyspace
+	keyspace_deleted: Vec<KeySpace>,
 }
 
 fn to_journal_key(block: BlockNumber, index: u64) -> Vec<u8> {
@@ -454,6 +457,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 		let kv_journal_record = KvJournalRecord {
 			inserted: kv_inserted_value,
 			deleted: kv_deleted,
+			keyspace_deleted: Default::default(),
 		};
 		commit.meta.inserted.push((kv_journal_key, kv_journal_record.encode()));
 	

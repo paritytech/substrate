@@ -27,6 +27,7 @@ use codec::{Encode, Decode};
 use crate::{CommitSet, CommitSetCanonical, Error, MetaDb, to_meta_key, Hash,
 	KvKey};
 use log::{trace, warn};
+use primitives::child_trie::KeySpace;
 
 const LAST_PRUNED: &[u8] = b"last_pruned";
 const PRUNING_JOURNAL: &[u8] = b"pruning_journal";
@@ -70,6 +71,9 @@ struct JournalRecord<BlockHash: Hash, Key: Hash> {
 #[derive(Encode, Decode)]
 struct KvJournalRecord {
 	modified: Vec<KvKey>,
+	// placeholder for trie deletion
+	// over a full keyspace.
+	keyspace_deleted: Vec<KeySpace>,
 }
 
 fn to_journal_key(block: u64) -> Vec<u8> {
@@ -231,6 +235,7 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 		};
 		let kv_journal_record = KvJournalRecord {
 			modified: kv_modified,
+			keyspace_deleted: Default::default(),
 		};
 		let block = self.pending_number + self.death_rows.len() as u64;
 		let journal_key = to_journal_key(block);
