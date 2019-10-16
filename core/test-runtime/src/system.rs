@@ -18,7 +18,7 @@
 //! and depositing logs.
 
 use rstd::prelude::*;
-use runtime_io::{storage_root, storage_changes_root, twox_128, blake2_256};
+use runtime_io::{storage_root, storage_changes_root, blake2_256};
 use runtime_support::storage::{self, StorageValue, StorageMap};
 use runtime_support::storage_items;
 use sr_primitives::{
@@ -170,22 +170,14 @@ pub fn validate_transaction(utx: Extrinsic) -> TransactionValidity {
 		return InvalidTransaction::Future.into();
 	}
 
-	let hash = |from: &AccountId, nonce: u64| {
-		twox_128(&nonce.to_keyed_vec(&from.encode())).to_vec()
-	};
+	let encode = |from: &AccountId, nonce: u64| (from, nonce).encode();
 	let requires = if tx.nonce != expected_nonce && tx.nonce > 0 {
-		let mut deps = Vec::new();
-		deps.push(hash(&tx.from, tx.nonce - 1));
-		deps
+		vec![encode(&tx.from, tx.nonce - 1)]
 	} else {
-		Vec::new()
+		vec![]
 	};
 
-	let provides = {
-		let mut p = Vec::new();
-		p.push(hash(&tx.from, tx.nonce));
-		p
-	};
+	let provides = vec![encode(&tx.from, tx.nonce)];
 
 	Ok(ValidTransaction {
 		priority: tx.amount,
@@ -324,6 +316,7 @@ mod tests {
 	use crate::{Header, Transfer, WASM_BINARY};
 	use primitives::{NeverNativeValue, map, traits::CodeExecutor};
 	use substrate_executor::{NativeExecutor, WasmExecutionMethod, native_executor_instance};
+	use runtime_io::twox_128;
 
 	// Declare an instance of the native executor dispatch for the test runtime.
 	native_executor_instance!(

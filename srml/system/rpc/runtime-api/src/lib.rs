@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -14,22 +14,21 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-#![allow(missing_docs)]
+//! Runtime API definition required by System RPC extensions.
+//!
+//! This API should be imported and implemented by the runtime,
+//! of a node that wants to use the custom RPC extension
+//! adding System access methods.
 
-use structopt::clap::arg_enum;
+#![cfg_attr(not(feature = "std"), no_std)]
 
-arg_enum! {
-	/// How to execute blocks
-	#[derive(Debug, Clone, Copy)]
-	pub enum ExecutionStrategy {
-		// Execute with native build (if available, WebAssembly otherwise).
-		Native,
-		// Only execute with the WebAssembly build.
-		Wasm,
-		// Execute with both native (where available) and WebAssembly builds.
-		Both,
-		// Execute with the native build if possible; if it fails, then execute with WebAssembly.
-		NativeElseWasm,
+client::decl_runtime_apis! {
+	/// The API to query account nonce (aka transaction index).
+	pub trait AccountNonceApi<AccountId, Index> where
+		AccountId: codec::Codec,
+		Index: codec::Codec,
+	{
+		/// Get current account nonce of given `AccountId`.
+		fn account_nonce(account: AccountId) -> Index;
 	}
 }
-

@@ -632,11 +632,11 @@ mod tests {
 				call $assert
 			)
 		)
-		"#).unwrap();
+		"#).unwrap().encode();
 
 		assert_eq!(
 			call_wasm(&mut ext, 8, &test_code[..], "test_sandbox", &code).unwrap(),
-			vec![1],
+			true.encode(),
 		);
 	}
 
@@ -676,7 +676,7 @@ mod tests {
 				call $assert
 			)
 		)
-		"#).unwrap();
+		"#).unwrap().encode();
 
 		let res = call_wasm(&mut ext, 8, &test_code[..], "test_exhaust_heap", &code);
 		assert_eq!(res.is_err(), true);
@@ -722,11 +722,11 @@ mod tests {
 				call $assert
 			)
 		)
-		"#).unwrap();
+		"#).unwrap().encode();
 
 		assert_eq!(
 			call_wasm(&mut ext, 8, &test_code[..], "test_sandbox", &code).unwrap(),
-			vec![1],
+			true.encode(),
 		);
 	}
 
@@ -757,11 +757,11 @@ mod tests {
 				)
 			)
 		)
-		"#).unwrap();
+		"#).unwrap().encode();
 
 		assert_eq!(
 			call_wasm(&mut ext, 8, &test_code[..], "test_sandbox_args", &code).unwrap(),
-			vec![1],
+			true.encode(),
 		);
 	}
 
@@ -780,11 +780,11 @@ mod tests {
 				)
 			)
 		)
-		"#).unwrap();
+		"#).unwrap().encode();
 
 		assert_eq!(
 			call_wasm(&mut ext, 8, &test_code[..], "test_sandbox_return_val", &code).unwrap(),
-			vec![1],
+			true.encode(),
 		);
 	}
 
@@ -801,11 +801,11 @@ mod tests {
 			(func (export "call")
 			)
 		)
-		"#).unwrap();
+		"#).unwrap().encode();
 
 		assert_eq!(
 			call_wasm(&mut ext, 8, &test_code[..], "test_sandbox_instantiate", &code).unwrap(),
-			vec![1],
+			1u8.encode(),
 		);
 	}
 
@@ -816,11 +816,11 @@ mod tests {
 		let test_code = WASM_BINARY;
 
 		// Corrupted wasm file
-		let code = &[0, 0, 0, 0, 1, 0, 0, 0];
+		let code = vec![0u8, 0, 0, 0, 1, 0, 0, 0].encode();
 
 		assert_eq!(
-			call_wasm(&mut ext, 8, &test_code[..], "test_sandbox_instantiate", code).unwrap(),
-			vec![1],
+			call_wasm(&mut ext, 8, &test_code[..], "test_sandbox_instantiate", &code).unwrap(),
+			1u8.encode(),
 		);
 	}
 
@@ -840,11 +840,11 @@ mod tests {
 
 			(start $start)
 		)
-		"#).unwrap();
+		"#).unwrap().encode();
 
 		assert_eq!(
 			call_wasm(&mut ext, 8, &test_code[..], "test_sandbox_instantiate", &code).unwrap(),
-			vec![0],
+			0u8.encode(),
 		);
 	}
 
@@ -865,11 +865,11 @@ mod tests {
 
 			(start $start)
 		)
-		"#).unwrap();
+		"#).unwrap().encode();
 
 		assert_eq!(
 			call_wasm(&mut ext, 8, &test_code[..], "test_sandbox_instantiate", &code).unwrap(),
-			vec![2],
+			2u8.encode(),
 		);
 	}
 }
