@@ -31,8 +31,7 @@ use primitives::{
 use trie::{trie_types::Layout, MemoryDB, default_child_trie_root};
 use externalities::Extensions;
 
-use std::{error, fmt, any::{Any, TypeId}};
-
+use std::{error, fmt, any::{Any, TypeId}, marker::PhantomData};
 use log::{warn, trace};
 
 const EXT_NOT_ALLOWED_TO_FAIL: &str = "Externalities not allowed to fail within runtime";
@@ -87,9 +86,190 @@ pub struct Ext<'a, H, N, B, T> where H: Hasher<Out=H256>, B: 'a + Backend<H> {
 	/// Pseudo-unique id used for tracing.
 	pub id: u16,
 	/// Dummy usage of N arg.
-	_phantom: std::marker::PhantomData<N>,
+	_phantom: PhantomData<N>,
 	/// Extensions registered with this instance.
 	extensions: Option<&'a mut Extensions>,
+}
+
+/// Subset of Ext for sharing functions with testing.
+pub(crate) struct ExtBasis<'a, B, H> {
+	pub overlay: &'a OverlayedChanges,
+	pub backend: &'a B,
+	pub _phantom: PhantomData<H>,
+}
+
+/// Subset of Ext for sharing functions with testing.
+pub(crate) struct ExtBasisMut<'a, B, H> {
+	pub overlay: &'a mut OverlayedChanges,
+	pub backend: &'a B,
+	pub _phantom: PhantomData<H>,
+}
+
+impl<'a, H, B> ExtBasis<'a, B, H>
+where
+	H: Hasher<Out=H256>,
+	B: 'a + Backend<H>,
+{
+	pub(crate) fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
+		self.overlay.storage(key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
+			self.backend.storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL))
+	}
+
+	pub(crate) fn storage_hash(&self, key: &[u8]) -> Option<H256> {
+		self.overlay
+			.storage(key)
+			.map(|x| x.map(|x| H::hash(x)))
+			.unwrap_or_else(||
+				self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL)
+			)
+	}
+
+	pub(crate) fn original_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
+		self.backend.storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL)
+	}
+
+	pub(crate) fn original_storage_hash(&self, key: &[u8]) -> Option<H256> {
+		self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL)
+	}
+
+	pub(crate) fn child_storage(&self, storage_key: &ChildStorageKey, key: &[u8]) -> Option<Vec<u8>> {
+		self.overlay
+			.child_storage(storage_key.as_ref(), key)
+			.map(|x| x.map(|x| x.to_vec()))
+			.unwrap_or_else(|| self.backend
+				.child_storage(storage_key.as_ref(), key)
+				.expect(EXT_NOT_ALLOWED_TO_FAIL)
+			)
+	}
+
+	pub(crate) fn child_storage_hash(
+		&self,
+		storage_key: &ChildStorageKey,
+		key: &[u8],
+	) -> Option<H256> {
+		self.overlay
+			.child_storage(storage_key.as_ref(), key)
+			.map(|x| x.map(|x| H::hash(x)))
+			.unwrap_or_else(||
+				self.backend.child_storage_hash(storage_key.as_ref(), key)
+					.expect(EXT_NOT_ALLOWED_TO_FAIL)
+			)
+	}
+
+	pub(crate) fn original_child_storage(
+		&self,
+		storage_key: &ChildStorageKey,
+		key: &[u8],
+	) -> Option<Vec<u8>> {
+		self.backend
+			.child_storage(storage_key.as_ref(), key)
+			.expect(EXT_NOT_ALLOWED_TO_FAIL)
+	}
+
+	pub(crate) fn original_child_storage_hash(
+		&self,
+		storage_key: &ChildStorageKey,
+		key: &[u8],
+	) -> Option<H256> {
+		self.backend
+			.child_storage_hash(storage_key.as_ref(), key)
+			.expect(EXT_NOT_ALLOWED_TO_FAIL)
+	}
+
+	pub(crate) fn exists_storage(&self, key: &[u8]) -> bool {
+		match self.overlay.storage(key) {
+			Some(x) => x.is_some(),
+			_ => self.backend.exists_storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL),
+		}
+	}
+
+	pub(crate) fn exists_child_storage(&self, storage_key: &ChildStorageKey, key: &[u8]) -> bool {
+		match self.overlay.child_storage(storage_key.as_ref(), key) {
+			Some(x) => x.is_some(),
+			_ => self.backend
+				.exists_child_storage(storage_key.as_ref(), key)
+				.expect(EXT_NOT_ALLOWED_TO_FAIL),
+		}
+	}
+}
+
+impl<'a, H, B> ExtBasisMut<'a, B, H>
+where
+	H: Hasher<Out=H256>,
+	B: 'a + Backend<H>,
+{
+
+	pub(crate) fn kill_child_storage(&mut self, storage_key: ChildStorageKey) {
+		self.overlay.clear_child_storage(storage_key.as_ref());
+		self.backend.for_keys_in_child_storage(storage_key.as_ref(), |key| {
+			self.overlay.set_child_storage(storage_key.as_ref().to_vec(), key.to_vec(), None);
+		});
+	}
+
+	pub(crate) fn clear_prefix(&mut self, prefix: &[u8]) {
+		self.overlay.clear_prefix(prefix);
+		self.backend.for_keys_with_prefix(prefix, |key| {
+			self.overlay.set_storage(key.to_vec(), None);
+		});
+	}
+
+	pub(crate) fn clear_child_prefix(&mut self, storage_key: ChildStorageKey, prefix: &[u8]) {
+		self.overlay.clear_child_prefix(storage_key.as_ref(), prefix);
+		self.backend.for_child_keys_with_prefix(storage_key.as_ref(), prefix, |key| {
+			self.overlay.set_child_storage(storage_key.as_ref().to_vec(), key.to_vec(), None);
+		});
+	}
+
+	pub(crate) fn storage_root(&mut self) -> (H256, B::Transaction) {
+		let child_storage_keys =
+			self.overlay.prospective.children.keys()
+				.chain(self.overlay.committed.children.keys());
+
+		let child_delta_iter = child_storage_keys.map(|storage_key|
+			(storage_key.clone(), self.overlay.committed.children.get(storage_key)
+				.into_iter()
+				.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), v.value.clone())))
+				.chain(self.overlay.prospective.children.get(storage_key)
+					.into_iter()
+					.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), v.value.clone()))))));
+
+
+		// compute and memoize
+		let delta = self.overlay.committed.top.iter().map(|(k, v)| (k.clone(), v.value.clone()))
+			.chain(self.overlay.prospective.top.iter().map(|(k, v)| (k.clone(), v.value.clone())));
+
+		self.backend.full_storage_root(delta, child_delta_iter)
+	}
+
+	pub(crate) fn child_storage_root(&mut self, storage_key: &ChildStorageKey) -> Vec<u8> {
+		let storage_key = storage_key.as_ref();
+
+		let (root, is_empty, _) = {
+			let delta = self.overlay.committed.children.get(storage_key)
+				.into_iter()
+				.flat_map(|map| map.clone().into_iter().map(|(k, v)| (k, v.value)))
+				.chain(self.overlay.prospective.children.get(storage_key)
+						.into_iter()
+						.flat_map(|map| map.clone().into_iter().map(|(k, v)| (k, v.value))));
+
+			self.backend.child_storage_root(storage_key, delta)
+		};
+
+		if is_empty {
+			self.overlay.set_storage(storage_key.into(), None);
+		} else {
+			self.overlay.set_storage(storage_key.into(), Some(root.clone()));
+		}
+
+		root
+	}
+}
+
+impl<'a, H, B> ExtBasisMut<'a, B, H>
+where
+	H: Hasher<Out=H256>,
+	B: 'a + Backend<H>,
+{
 }
 
 impl<'a, H, N, B, T> Ext<'a, H, N, B, T>
@@ -99,6 +279,23 @@ where
 	T: 'a + ChangesTrieStorage<H, N>,
 	N: crate::changes_trie::BlockNumber,
 {
+
+	fn basis(&self) -> ExtBasis<B, H> {
+		ExtBasis {
+			overlay: &*self.overlay,
+			backend: self.backend,
+			_phantom: PhantomData,
+		}
+	}
+
+	fn basis_mut(&mut self) -> ExtBasisMut<B, H> {
+		ExtBasisMut {
+			overlay: self.overlay,
+			backend: self.backend,
+			_phantom: PhantomData,
+		}
+	}
+
 	/// Create a new `Ext` from overlayed changes and read-only backend
 	pub fn new(
 		overlay: &'a mut OverlayedChanges,
@@ -179,8 +376,7 @@ where
 {
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
 		let _guard = panic_handler::AbortGuard::force_abort();
-		let result = self.overlay.storage(key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
-			self.backend.storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL));
+		let result = self.basis().storage(key);
 		trace!(target: "state-trace", "{:04x}: Get {}={:?}",
 			self.id,
 			HexDisplay::from(&key),
@@ -191,12 +387,7 @@ where
 
 	fn storage_hash(&self, key: &[u8]) -> Option<H256> {
 		let _guard = panic_handler::AbortGuard::force_abort();
-		let result = self.overlay
-			.storage(key)
-			.map(|x| x.map(|x| H::hash(x)))
-			.unwrap_or_else(||
-				self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL)
-			);
+		let result = self.basis().storage_hash(key);
 		trace!(target: "state-trace", "{:04x}: Hash {}={:?}",
 			self.id,
 			HexDisplay::from(&key),
@@ -207,7 +398,7 @@ where
 
 	fn original_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
 		let _guard = panic_handler::AbortGuard::force_abort();
-		let result = self.backend.storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL);
+		let result = self.basis().original_storage(key);
 		trace!(target: "state-trace", "{:04x}: GetOriginal {}={:?}",
 			self.id,
 			HexDisplay::from(&key),
@@ -218,7 +409,7 @@ where
 
 	fn original_storage_hash(&self, key: &[u8]) -> Option<H256> {
 		let _guard = panic_handler::AbortGuard::force_abort();
-		let result = self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL);
+		let result = self.basis().original_storage_hash(key);
 		trace!(target: "state-trace", "{:04x}: GetOriginalHash {}={:?}",
 			self.id,
 			HexDisplay::from(&key),
@@ -229,12 +420,7 @@ where
 
 	fn child_storage(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<Vec<u8>> {
 		let _guard = panic_handler::AbortGuard::force_abort();
-		let result = self.overlay
-			.child_storage(storage_key.as_ref(), key)
-			.map(|x| x.map(|x| x.to_vec()))
-			.unwrap_or_else(||
-				self.backend.child_storage(storage_key.as_ref(), key).expect(EXT_NOT_ALLOWED_TO_FAIL)
-			);
+		let result = self.basis().child_storage(&storage_key, key);
 
 		trace!(target: "state-trace", "{:04x}: GetChild({}) {}={:?}",
 			self.id,
@@ -248,13 +434,7 @@ where
 
 	fn child_storage_hash(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<H256> {
 		let _guard = panic_handler::AbortGuard::force_abort();
-		let result = self.overlay
-			.child_storage(storage_key.as_ref(), key)
-			.map(|x| x.map(|x| H::hash(x)))
-			.unwrap_or_else(||
-				self.backend.child_storage_hash(storage_key.as_ref(), key)
-					.expect(EXT_NOT_ALLOWED_TO_FAIL)
-			);
+		let result = self.basis().child_storage_hash(&storage_key, key);
 
 		trace!(target: "state-trace", "{:04x}: ChildHash({}) {}={:?}",
 			self.id,
@@ -268,9 +448,7 @@ where
 
 	fn original_child_storage(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<Vec<u8>> {
 		let _guard = panic_handler::AbortGuard::force_abort();
-		let result = self.backend
-			.child_storage(storage_key.as_ref(), key)
-			.expect(EXT_NOT_ALLOWED_TO_FAIL);
+		let result = self.basis().original_child_storage(&storage_key, key);
 
 		trace!(target: "state-trace", "{:04x}: ChildOriginal({}) {}={:?}",
 			self.id,
@@ -283,9 +461,7 @@ where
 
 	fn original_child_storage_hash(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<H256> {
 		let _guard = panic_handler::AbortGuard::force_abort();
-		let result = self.backend
-			.child_storage_hash(storage_key.as_ref(), key)
-			.expect(EXT_NOT_ALLOWED_TO_FAIL);
+		let result = self.basis().original_child_storage_hash(&storage_key, key);
 
 		trace!(target: "state-trace", "{}: ChildHashOriginal({}) {}={:?}",
 			self.id,
@@ -298,10 +474,7 @@ where
 
 	fn exists_storage(&self, key: &[u8]) -> bool {
 		let _guard = panic_handler::AbortGuard::force_abort();
-		let result = match self.overlay.storage(key) {
-			Some(x) => x.is_some(),
-			_ => self.backend.exists_storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL),
-		};
+		let result = self.basis().exists_storage(key);
 
 		trace!(target: "state-trace", "{:04x}: Exists {}={:?}",
 			self.id,
@@ -315,12 +488,7 @@ where
 	fn exists_child_storage(&self, storage_key: ChildStorageKey, key: &[u8]) -> bool {
 		let _guard = panic_handler::AbortGuard::force_abort();
 
-		let result = match self.overlay.child_storage(storage_key.as_ref(), key) {
-			Some(x) => x.is_some(),
-			_ => self.backend
-				.exists_child_storage(storage_key.as_ref(), key)
-				.expect(EXT_NOT_ALLOWED_TO_FAIL),
-		};
+		let result = self.basis().exists_child_storage(&storage_key, key);
 
 		trace!(target: "state-trace", "{:04x}: ChildExists({}) {}={:?}",
 			self.id,
@@ -373,10 +541,8 @@ where
 		let _guard = panic_handler::AbortGuard::force_abort();
 
 		self.mark_dirty();
-		self.overlay.clear_child_storage(storage_key.as_ref());
-		self.backend.for_keys_in_child_storage(storage_key.as_ref(), |key| {
-			self.overlay.set_child_storage(storage_key.as_ref().to_vec(), key.to_vec(), None);
-		});
+
+		self.basis_mut().kill_child_storage(storage_key)
 	}
 
 	fn clear_prefix(&mut self, prefix: &[u8]) {
@@ -391,10 +557,8 @@ where
 		}
 
 		self.mark_dirty();
-		self.overlay.clear_prefix(prefix);
-		self.backend.for_keys_with_prefix(prefix, |key| {
-			self.overlay.set_storage(key.to_vec(), None);
-		});
+
+		self.basis_mut().clear_prefix(prefix)
 	}
 
 	fn clear_child_prefix(&mut self, storage_key: ChildStorageKey, prefix: &[u8]) {
@@ -406,10 +570,8 @@ where
 		let _guard = panic_handler::AbortGuard::force_abort();
 
 		self.mark_dirty();
-		self.overlay.clear_child_prefix(storage_key.as_ref(), prefix);
-		self.backend.for_child_keys_with_prefix(storage_key.as_ref(), prefix, |key| {
-			self.overlay.set_child_storage(storage_key.as_ref().to_vec(), key.to_vec(), None);
-		});
+
+		self.basis_mut().clear_child_prefix(storage_key, prefix)
 	}
 
 	fn chain_id(&self) -> u64 {
@@ -426,23 +588,8 @@ where
 			return root.clone();
 		}
 
-		let child_storage_keys =
-			self.overlay.prospective.children.keys()
-				.chain(self.overlay.committed.children.keys());
-		let child_delta_iter = child_storage_keys.map(|storage_key|
-			(storage_key.clone(), self.overlay.committed.children.get(storage_key)
-				.into_iter()
-				.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), v.value.clone())))
-				.chain(self.overlay.prospective.children.get(storage_key)
-					.into_iter()
-					.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), v.value.clone()))))));
+		let (root, transaction) = self.basis_mut().storage_root();
 
-
-		// compute and memoize
-		let delta = self.overlay.committed.top.iter().map(|(k, v)| (k.clone(), v.value.clone()))
-			.chain(self.overlay.prospective.top.iter().map(|(k, v)| (k.clone(), v.value.clone())));
-
-		let (root, transaction) = self.backend.full_storage_root(delta, child_delta_iter);
 		self.storage_transaction = Some((transaction, root));
 		trace!(target: "state-trace", "{:04x}: Root {}",
 			self.id,
@@ -466,18 +613,8 @@ where
 			);
 			root
 		} else {
-			let storage_key = storage_key.as_ref();
 
-			let delta = self.overlay.committed.children.get(storage_key)
-				.into_iter()
-				.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), v.value.clone())))
-				.chain(self.overlay.prospective.children.get(storage_key)
-						.into_iter()
-						.flat_map(|map| map.clone().into_iter().map(|(k, v)| (k.clone(), v.value.clone()))));
-
-			let root = self.backend.child_storage_root(storage_key, delta).0;
-
-			self.overlay.set_storage(storage_key.to_vec(), Some(root.to_vec()));
+			let root = self.basis_mut().child_storage_root(&storage_key);
 
 			trace!(target: "state-trace", "{:04x}: ChildRoot({}) {}",
 				self.id,

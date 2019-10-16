@@ -24,6 +24,7 @@ use crate::{
 		build_changes_trie, InMemoryStorage as ChangesTrieInMemoryStorage,
 		BlockNumber as ChangesTrieBlockNumber,
 	},
+	ext::{ExtBasis, ExtBasisMut},
 };
 use primitives::{
 	storage::{
@@ -34,8 +35,6 @@ use primitives::{
 };
 use codec::Encode;
 use externalities::{Extensions, Extension};
-
-const EXT_NOT_ALLOWED_TO_FAIL: &str = "Externalities not allowed to fail within runtime";
 
 type StorageTuple = (HashMap<Vec<u8>, Vec<u8>>, HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>);
 
@@ -48,6 +47,23 @@ pub struct TestExternalities<H: Hasher<Out=H256>=Blake2Hasher, N: ChangesTrieBlo
 }
 
 impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
+
+	fn basis(&self) -> ExtBasis<InMemory<H>, H> {
+		ExtBasis {
+			overlay: &self.overlay,
+			backend: &self.backend,
+			_phantom: std::marker::PhantomData,
+		}
+	}
+
+	fn basis_mut(&mut self) -> ExtBasisMut<InMemory<H>, H> {
+		ExtBasisMut {
+			overlay: &mut self.overlay,
+			backend: &self.backend,
+			_phantom: std::marker::PhantomData,
+		}
+	}
+
 	/// Create a new instance of `TestExternalities` with storage.
 	pub fn new(storage: StorageTuple) -> Self {
 		Self::new_with_code(&[], storage)
@@ -151,45 +167,43 @@ impl<H, N> Externalities for TestExternalities<H, N> where
 	N: ChangesTrieBlockNumber,
 {
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
-		self.overlay.storage(key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
-			self.backend.storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL))
+		self.basis().storage(key)
 	}
 
 	fn storage_hash(&self, key: &[u8]) -> Option<H256> {
-		self.storage(key).map(|v| H::hash(&v))
+		self.basis().storage_hash(key)
 	}
 
 	fn original_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
-		self.backend.storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL)
+		self.basis().original_storage(key)
 	}
 
 	fn original_storage_hash(&self, key: &[u8]) -> Option<H256> {
-		self.storage_hash(key)
+		self.basis().original_storage_hash(key)
 	}
 
 	fn child_storage(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<Vec<u8>> {
-		self.overlay
-			.child_storage(storage_key.as_ref(), key)
-			.map(|x| x.map(|x| x.to_vec()))
-			.unwrap_or_else(|| self.backend
-				.child_storage(storage_key.as_ref(), key)
-				.expect(EXT_NOT_ALLOWED_TO_FAIL)
-			)
+		self.basis().child_storage(&storage_key, key)
 	}
 
 	fn child_storage_hash(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<H256> {
-		self.child_storage(storage_key, key).map(|v| H::hash(&v))
+		self.basis().child_storage_hash(&storage_key, key)
 	}
 
 	fn original_child_storage(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<Vec<u8>> {
-		self.backend
-			.child_storage(storage_key.as_ref(), key)
-			.map(|x| x.map(|x| x.to_vec()))
-			.expect(EXT_NOT_ALLOWED_TO_FAIL)
+		self.basis().original_child_storage(&storage_key, key)
 	}
 
 	fn original_child_storage_hash(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<H256> {
-		self.child_storage_hash(storage_key, key)
+		self.basis().original_child_storage_hash(&storage_key, key)
+	}
+
+	fn exists_storage(&self, key: &[u8]) -> bool {
+		self.basis().exists_storage(key)
+	}
+
+	fn exists_child_storage(&self, storage_key: ChildStorageKey, key: &[u8]) -> bool {
+		self.basis().exists_child_storage(&storage_key, key)
 	}
 
 	fn place_storage(&mut self, key: Vec<u8>, maybe_value: Option<Vec<u8>>) {
@@ -210,13 +224,7 @@ impl<H, N> Externalities for TestExternalities<H, N> where
 	}
 
 	fn kill_child_storage(&mut self, storage_key: ChildStorageKey) {
-		let backend = &self.backend;
-		let overlay = &mut self.overlay;
-
-		overlay.clear_child_storage(storage_key.as_ref());
-		backend.for_keys_in_child_storage(storage_key.as_ref(), |key| {
-			overlay.set_child_storage(storage_key.as_ref().to_vec(), key.to_vec(), None);
-		});
+		self.basis_mut().kill_child_storage(storage_key)
 	}
 
 	fn clear_prefix(&mut self, prefix: &[u8]) {
@@ -224,66 +232,21 @@ impl<H, N> Externalities for TestExternalities<H, N> where
 			panic!("Refuse to directly clear prefix that is part of child storage key");
 		}
 
-		self.overlay.clear_prefix(prefix);
-
-		let backend = &self.backend;
-		let overlay = &mut self.overlay;
-		backend.for_keys_with_prefix(prefix, |key| {
-			overlay.set_storage(key.to_vec(), None);
-		});
+		self.basis_mut().clear_prefix(prefix)
 	}
 
 	fn clear_child_prefix(&mut self, storage_key: ChildStorageKey, prefix: &[u8]) {
-		self.overlay.clear_child_prefix(storage_key.as_ref(), prefix);
-
-		let backend = &self.backend;
-		let overlay = &mut self.overlay;
-		backend.for_child_keys_with_prefix(storage_key.as_ref(), prefix, |key| {
-			overlay.set_child_storage(storage_key.as_ref().to_vec(), key.to_vec(), None);
-		});
+		self.basis_mut().clear_child_prefix(storage_key, prefix)
 	}
 
 	fn chain_id(&self) -> u64 { 42 }
 
 	fn storage_root(&mut self) -> H256 {
-		let child_storage_keys =
-			self.overlay.prospective.children.keys()
-				.chain(self.overlay.committed.children.keys());
-
-		let child_delta_iter = child_storage_keys.map(|storage_key|
-			(storage_key.clone(), self.overlay.committed.children.get(storage_key)
-				.into_iter()
-				.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), v.value.clone())))
-				.chain(self.overlay.prospective.children.get(storage_key)
-					.into_iter()
-					.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), v.value.clone()))))));
-
-
-		// compute and memoize
-		let delta = self.overlay.committed.top.iter().map(|(k, v)| (k.clone(), v.value.clone()))
-			.chain(self.overlay.prospective.top.iter().map(|(k, v)| (k.clone(), v.value.clone())));
-		self.backend.full_storage_root(delta, child_delta_iter).0
+		self.basis_mut().storage_root().0
 	}
 
 	fn child_storage_root(&mut self, storage_key: ChildStorageKey) -> Vec<u8> {
-		let storage_key = storage_key.as_ref();
-
-		let (root, is_empty, _) = {
-			let delta = self.overlay.committed.children.get(storage_key)
-				.into_iter()
-				.flat_map(|map| map.clone().into_iter().map(|(k, v)| (k, v.value)))
-				.chain(self.overlay.prospective.children.get(storage_key)
-						.into_iter()
-						.flat_map(|map| map.clone().into_iter().map(|(k, v)| (k, v.value))));
-
-			self.backend.child_storage_root(storage_key, delta)
-		};
-		if is_empty {
-			self.overlay.set_storage(storage_key.into(), None);
-		} else {
-			self.overlay.set_storage(storage_key.into(), Some(root.clone()));
-		}
-		root
+		self.basis_mut().child_storage_root(&storage_key)
 	}
 
 	fn storage_changes_root(&mut self, parent: H256) -> Result<Option<H256>, ()> {
