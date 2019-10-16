@@ -56,14 +56,14 @@ macro_rules! new_full_start {
 				let import_queue = aura::import_queue::<_, _, AuraPair, _>(
 					aura::SlotDuration::get_or_compute(&*client)?,
 					Box::new(grandpa_block_import.clone()),
-					Some(Box::new(grandpa_block_import)),
+					Some(Box::new(grandpa_block_import.clone())),
 					None,
 					client,
 					inherent_data_providers.clone(),
 					Some(transaction_pool),
 				)?;
 
-				import_setup = Some(grandpa_link);
+				import_setup = Some((grandpa_block_import, grandpa_link));
 
 				Ok(import_queue)
 			})?;
@@ -83,9 +83,9 @@ pub fn new_full<C: Send + Default + 'static>(config: Configuration<C, GenesisCon
 
 	let (builder, mut import_setup, inherent_data_providers) = new_full_start!(config);
 
-	let grandpa_link =
+	let (block_import, grandpa_link) =
 		import_setup.take()
-			.expect("Link is present for Full Services or setup failed before. qed");
+			.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
 
 	let service = builder.with_network_protocol(|_| Ok(NodeProtocol::new()))?
 		.with_finality_proof_provider(|client, backend|
@@ -105,9 +105,9 @@ pub fn new_full<C: Send + Default + 'static>(config: Configuration<C, GenesisCon
 
 		let aura = aura::start_aura::<_, _, _, _, _, AuraPair, _, _, _>(
 			aura::SlotDuration::get_or_compute(&*client)?,
-			client.clone(),
-			select_chain,
 			client,
+			select_chain,
+			block_import,
 			proposer,
 			service.network(),
 			inherent_data_providers.clone(),
