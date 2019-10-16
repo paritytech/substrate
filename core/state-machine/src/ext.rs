@@ -31,7 +31,7 @@ use primitives::{
 use trie::{trie_types::Layout, MemoryDB, default_child_trie_root};
 use externalities::Extensions;
 
-use std::{error, fmt, any::{Any, TypeId}, marker::PhantomData};
+use std::{error, fmt, any::{Any, TypeId}};
 use log::{warn, trace};
 
 const EXT_NOT_ALLOWED_TO_FAIL: &str = "Externalities not allowed to fail within runtime";
@@ -68,27 +68,27 @@ impl<B: error::Error, E: error::Error> error::Error for Error<B, E> {
 /// Wraps a read-only backend, call executor, and current overlayed changes.
 pub struct Ext<'a, H, N, B, T> where H: Hasher<Out=H256>, B: 'a + Backend<H> {
 	/// The overlayed changes to write to.
-	pub(crate) overlay: &'a mut OverlayedChanges,
+	overlay: &'a mut OverlayedChanges,
 	/// The storage backend to read from.
-	pub(crate) backend: &'a B,
+	backend: &'a B,
 	/// The storage transaction necessary to commit to the backend. Is cached when
 	/// `storage_root` is called and the cache is cleared on every subsequent change.
-	pub(crate) storage_transaction: Option<(B::Transaction, H::Out)>,
+	storage_transaction: Option<(B::Transaction, H::Out)>,
 	/// Changes trie storage to read from.
-	pub(crate) changes_trie_storage: Option<&'a T>,
+	changes_trie_storage: Option<&'a T>,
 	/// The changes trie transaction necessary to commit to the changes trie backend.
 	/// Set to Some when `storage_changes_root` is called. Could be replaced later
 	/// by calling `storage_changes_root` again => never used as cache.
 	/// This differs from `storage_transaction` behavior, because the moment when
 	/// `storage_changes_root` is called matters + we need to remember additional
 	/// data at this moment (block number).
-	pub(crate) changes_trie_transaction: Option<(MemoryDB<H>, H::Out, ChangesTrieCacheAction<H::Out, N>)>,
+	changes_trie_transaction: Option<(MemoryDB<H>, H::Out, ChangesTrieCacheAction<H::Out, N>)>,
 	/// Pseudo-unique id used for tracing.
 	pub id: u16,
 	/// Dummy usage of N arg.
-	pub(crate) _phantom: PhantomData<N>,
+	_phantom: std::marker::PhantomData<N>,
 	/// Extensions registered with this instance.
-	pub(crate) extensions: Option<&'a mut Extensions>,
+	extensions: Option<&'a mut Extensions>,
 }
 
 impl<'a, H, N, B, T> Ext<'a, H, N, B, T>

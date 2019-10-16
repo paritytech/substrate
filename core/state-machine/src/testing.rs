@@ -49,16 +49,12 @@ impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 
 	/// Get externalities implementation.
 	pub fn ext(&mut self) -> Ext<H, N, InMemory<H>, ChangesTrieInMemoryStorage<H, N>> {
-		Ext {
-			overlay: &mut self.overlay,
-			backend: &self.backend,
-			_phantom: std::marker::PhantomData,
-			storage_transaction: None,
-			changes_trie_storage: Some(&self.changes_trie_storage),
-			changes_trie_transaction: None,
-			id: 0,
-			extensions: None,
-		}
+		Ext::new(
+			&mut self.overlay,
+			&self.backend,
+			Some(&self.changes_trie_storage),
+			None,
+		)
 	}
 
 	/// Create a new instance of `TestExternalities` with storage.
