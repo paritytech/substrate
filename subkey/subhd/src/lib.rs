@@ -24,7 +24,7 @@
 use primitives::{
 	sr25519::{self, Signature, Public, Pair}, crypto::{DeriveJunction, Pair as TraitPair}
 };
-use wookong_solo::{wk_getpub, wk_sign, wk_generate, wk_format, wk_import};
+use wookong_solo::{wk_select, wk_getpub, wk_sign, wk_generate, wk_format, wk_import};
 
 /// Error define
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
@@ -35,6 +35,8 @@ pub enum Error {
 	DeviceNotInit,
 	/// General error of command.
 	DeviceError,
+	/// No seed matching the give account
+	NoAccount,
 }
 
 /// Result type.
@@ -44,6 +46,8 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub trait Wallet {
 	/// The keypair type.
 	type Pair: TraitPair;
+	/// Select specific account in device
+	fn select_account(account: sr25519::Public,path: &[DeriveJunction]) -> Result<()>;
 	/// Retrieve public key, if device is initialized.
 	fn derive_public(&self, path: &[DeriveJunction]) -> Result<<Self::Pair as TraitPair>::Public>;
 	/// Sign the message.
@@ -58,6 +62,7 @@ pub trait Wallet {
 
 impl<T: TraitPair> Wallet for T {
 	type Pair = T;
+	fn select_account(_account: sr25519::Public, _path: &[DeriveJunction]) -> Result<()>{Err(Error::NoAccount)}
 	fn derive_public(&self, _: &[DeriveJunction]) -> Result<<Self::Pair as TraitPair>::Public> { Err(Error::DeviceNotFound) }
 	fn sign(&self, _: &[DeriveJunction], _: &[u8]) -> Result<<Self::Pair as TraitPair>::Signature> { Err(Error::DeviceNotFound) }
 	fn generate(&self) -> Result<Self::Pair> { Err(Error::DeviceNotFound) }
@@ -70,10 +75,34 @@ pub struct Wookong;
 
 impl Wallet for Wookong {
 	type Pair = sr25519::Pair;
-	fn derive_public(&self, _path: &[DeriveJunction]) -> Result<Public> {
+	fn select_account(account: sr25519::Public, path: &[DeriveJunction]) -> Result<()>{
+		// convert vec![DeriveJunction] to &[u8]
+		let mut path_u8:[u8;32] = [0u8;32];
+		let mut len = 0;
+		for j in path {
+			match j {
+				DeriveJunction::Soft(cc) => {path_u8[..len].copy_from_slice(&cc[..]);len=len+cc.len();},
+				DeriveJunction::Hard(_cc) => return Err(Error::NoAccount),
+			}
+		}
+		let rv = wk_select(account.as_ref(), &path_u8);
+		if rv != 0 {
+			return Err(Error::NoAccount);
+		}
+		Ok(())
+	}
+	fn derive_public(&self, path: &[DeriveJunction]) -> Result<Public> {
 		// TODO: pass through _path and _password to mutate the key on the device accordingly.
 		let mut pk: [u8; 32] = [0u8; 32];
-		let rv = wk_getpub(&mut pk);
+		let mut path_u8:[u8;32] = [0u8;32];
+		let mut len = 0;
+		for j in path {
+			match j {
+				DeriveJunction::Soft(cc) => {path_u8[..len].copy_from_slice(&cc[..]);len=len+cc.len();},
+				DeriveJunction::Hard(_cc) => return Err(Error::NoAccount),
+			}
+		}
+		let rv = wk_getpub(&mut pk, &path_u8);
 		if rv == 242 {
 			return Err(Error::DeviceNotInit);
 		} else if rv != 0 {
@@ -84,10 +113,18 @@ impl Wallet for Wookong {
 			return Err(Error::DeviceError);
 		}
 	}
-	fn sign(&self, _path: &[DeriveJunction], message: &[u8]) -> Result<Signature> {
+	fn sign(&self, path: &[DeriveJunction], message: &[u8]) -> Result<Signature> {
 		// TODO: pass through _path and _password to mutate the key on the device accordingly.
 		let mut sig: [u8; 64] = [0u8; 64];
-		let rv = wk_sign(message, &mut sig);
+		let mut path_u8:[u8;32] = [0u8;32];
+		let mut len = 0;
+		for j in path {
+			match j {
+				DeriveJunction::Soft(cc) => {path_u8[..len].copy_from_slice(&cc[..]);len=len+cc.len();},
+				DeriveJunction::Hard(_cc) => return Err(Error::NoAccount),
+			}
+		}
+		let rv = wk_sign(message, &mut sig, &path_u8);
 		if rv != 0 {
 			return Err(Error::DeviceError);
 		}
