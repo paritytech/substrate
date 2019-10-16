@@ -34,6 +34,7 @@ network = { package = "substrate-network", path = "../network", features = ["tes
 keyring = { package = "substrate-keyring", path = "../keyring" }
 test-client = { package = "substrate-test-runtime-client", path = "../test-runtime/client"}
 babe_primitives = { package = "substrate-consensus-babe-primitives", path = "../consensus/babe/primitives" }
+state_machine = { package = "substrate-state-machine", path = "../state-machine" }
 env_logger = "0.7.0"
 tokio = "0.1.22"
 tempfile = "3.1.0"

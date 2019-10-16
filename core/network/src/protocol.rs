@@ -48,7 +48,7 @@ use std::sync::Arc;
 use std::{cmp, num::NonZeroUsize, time};
 use log::{trace, debug, warn, error};
 use crate::chain::{Client, FinalityProofProvider};
-use client::light::fetcher::{FetchChecker, ChangesProof};
+use client::light::fetcher::{FetchChecker, ChangesProof, StorageProof};
 use crate::error;
 use util::LruHashSet;
 
@@ -1226,7 +1226,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					error
 				);
 				self.peerset_handle.report_peer(who.clone(), RPC_FAILED_REPUTATION_CHANGE);
-				Default::default()
+				StorageProof::empty()
 			}
 		};
 
@@ -1343,7 +1343,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					request.block,
 					error
 				);
-				Default::default()
+				StorageProof::empty()
 			}
 		};
 		self.send_message(
@@ -1386,7 +1386,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					request.block,
 					error
 				);
-				Default::default()
+				StorageProof::empty()
 			}
 		};
 		self.send_message(
@@ -1426,7 +1426,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					request.block,
 					error
 				);
-				(Default::default(), Default::default())
+				(Default::default(), StorageProof::empty())
 			}
 		};
 		self.send_message(
@@ -1495,7 +1495,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					max_block: Zero::zero(),
 					proof: vec![],
 					roots: BTreeMap::new(),
-					roots_proof: vec![],
+					roots_proof: StorageProof::empty(),
 				}
 			}
 		};
