@@ -193,7 +193,7 @@ pub fn new_light<C: Send + Default + 'static>(config: Configuration<C, GenesisCo
 
 			let import_queue = aura::import_queue::<_, _, AuraPair, ()>(
 				aura::SlotDuration::get_or_compute(&*client)?,
-				Box::new(client.clone()),
+				Box::new(grandpa_block_import),
 				None,
 				Some(Box::new(finality_proof_import)),
 				client,
