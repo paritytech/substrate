@@ -22,6 +22,8 @@ use syn::spanned::Spanned;
 use quote::{quote, quote_spanned};
 use super::super::{DeclStorageDefExt, StorageLineTypeDef};
 
+/// Definition of builder blocks, each block insert some value in the storage.
+/// They must be called inside externalities, and with `self` being the genesis config.
 pub struct BuilderDef {
 	/// Contains:
 	/// * build block for storage with build attribute.
