@@ -18,7 +18,7 @@ use quote::quote;
 use proc_macro2::TokenStream;
 use syn::{Data, DeriveInput, parse_quote};
 
-pub fn debug_derive(ast: &DeriveInput) -> proc_macro::TokenStream {
+pub fn debug_derive(ast: DeriveInput) -> proc_macro::TokenStream {
 	let name_str = ast.ident.to_string();
 	let implementation = implementation::derive(&name_str, &ast.data);
 	let name = &ast.ident;
