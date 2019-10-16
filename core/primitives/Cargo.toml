@@ -82,6 +82,7 @@ std = [
 	"schnorrkel",
 	"regex",
 	"num-traits/std",
+	"substrate-debug-derive/std",
 	"externalities",
 	"primitives-storage/std",
 ]
