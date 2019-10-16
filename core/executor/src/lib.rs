@@ -48,7 +48,7 @@ pub use codec::Codec;
 pub use primitives::traits::Externalities;
 #[doc(hidden)]
 pub use wasm_interface;
-pub use wasm_runtime::WasmExecutionMethod;
+pub use wasm_runtime::{WasmExecutionMethod, WasmRuntime};
 
 /// Provides runtime information.
 pub trait RuntimeInfo {
