@@ -117,83 +117,19 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 	)];
 
 	// generated with secret: subkey inspect "$secret"/fir
-	let endowed_accounts: Vec<AccountId> = vec![
+	let root_key: AccountId = hex![
 		// 5Ff3iXP75ruzroPWRP2FYBHWnmGGBSb63857BgnzCoXNxfPo
-		hex!["9ee5e5bdc0ec239eb164f865ecc345ce4c88e76ee002e0f7e318097347471809"].unchecked_into(),
-	];
+		"9ee5e5bdc0ec239eb164f865ecc345ce4c88e76ee002e0f7e318097347471809"
+	].unchecked_into();
 
-	const ENDOWMENT: Balance = 10_000_000 * DOLLARS;
-	const STASH: Balance = 100 * DOLLARS;
+	let endowed_accounts: Vec<AccountId> = vec![root_key.clone()];
 
-	GenesisConfig {
-		system: Some(SystemConfig {
-			code: WASM_BINARY.to_vec(),
-			changes_trie_config: Default::default(),
-		}),
-		balances: Some(BalancesConfig {
-			balances: endowed_accounts.iter().cloned()
-				.map(|k| (k, ENDOWMENT))
-				.chain(initial_authorities.iter().map(|x| (x.0.clone(), STASH)))
-				.collect(),
-			vesting: vec![],
-		}),
-		indices: Some(IndicesConfig {
-			ids: endowed_accounts.iter().cloned()
-				.chain(initial_authorities.iter().map(|x| x.0.clone()))
-				.collect::<Vec<_>>(),
-		}),
-		session: Some(SessionConfig {
-			keys: initial_authorities.iter().map(|x| {
-				(x.0.clone(), session_keys(x.2.clone(), x.3.clone(), x.4.clone()))
-			}).collect::<Vec<_>>(),
-		}),
-		staking: Some(StakingConfig {
-			current_era: 0,
-			validator_count: 7,
-			minimum_validator_count: 4,
-			stakers: initial_authorities.iter().map(|x| {
-				(x.0.clone(), x.1.clone(), STASH, StakerStatus::Validator)
-			}).collect(),
-			invulnerables: initial_authorities.iter().map(|x| x.0.clone()).collect(),
-			slash_reward_fraction: Perbill::from_percent(10),
-			.. Default::default()
-		}),
-		democracy: Some(DemocracyConfig::default()),
-		collective_Instance1: Some(CouncilConfig {
-			members: vec![],
-			phantom: Default::default(),
-		}),
-		collective_Instance2: Some(TechnicalCommitteeConfig {
-			members: vec![],
-			phantom: Default::default(),
-		}),
-		elections: Some(ElectionsConfig {
-			members: vec![],
-			presentation_duration: 1 * DAYS,
-			term_duration: 28 * DAYS,
-			desired_seats: 0,
-		}),
-		contracts: Some(ContractsConfig {
-			current_schedule: Default::default(),
-			gas_price: 1 * MILLICENTS,
-		}),
-		sudo: Some(SudoConfig {
-			key: endowed_accounts[0].clone(),
-		}),
-		babe: Some(BabeConfig {
-			authorities: vec![],
-		}),
-		im_online: Some(ImOnlineConfig {
-			keys: vec![],
-		}),
-		authority_discovery: Some(AuthorityDiscoveryConfig{
-			keys: vec![],
-		}),
-		grandpa: Some(GrandpaConfig {
-			authorities: vec![],
-		}),
-		membership_Instance1: Some(Default::default()),
-	}
+	testnet_genesis(
+		initial_authorities,
+		root_key,
+		Some(endowed_accounts),
+		false,
+	)
 }
 
 /// Staging testnet config.
@@ -257,19 +193,22 @@ pub fn testnet_genesis(
 	const ENDOWMENT: Balance = 10_000_000 * DOLLARS;
 	const STASH: Balance = 100 * DOLLARS;
 
-	let desired_seats = (endowed_accounts.len() / 2 - initial_authorities.len()) as u32;
-
 	GenesisConfig {
 		system: Some(SystemConfig {
 			code: WASM_BINARY.to_vec(),
 			changes_trie_config: Default::default(),
 		}),
-		indices: Some(IndicesConfig {
-			ids: endowed_accounts.clone(),
-		}),
 		balances: Some(BalancesConfig {
-			balances: endowed_accounts.iter().map(|k| (k.clone(), ENDOWMENT)).collect(),
+			balances: endowed_accounts.iter().cloned()
+				.map(|k| (k, ENDOWMENT))
+				.chain(initial_authorities.iter().map(|x| (x.0.clone(), STASH)))
+				.collect(),
 			vesting: vec![],
+		}),
+		indices: Some(IndicesConfig {
+			ids: endowed_accounts.iter().cloned()
+				.chain(initial_authorities.iter().map(|x| x.0.clone()))
+				.collect::<Vec<_>>(),
 		}),
 		session: Some(SessionConfig {
 			keys: initial_authorities.iter().map(|x| {
@@ -278,8 +217,8 @@ pub fn testnet_genesis(
 		}),
 		staking: Some(StakingConfig {
 			current_era: 0,
-			minimum_validator_count: 1,
-			validator_count: 2,
+			validator_count: initial_authorities.len() as u32 * 2,
+			minimum_validator_count: initial_authorities.len() as u32,
 			stakers: initial_authorities.iter().map(|x| {
 				(x.0.clone(), x.1.clone(), STASH, StakerStatus::Validator)
 			}).collect(),
@@ -297,12 +236,10 @@ pub fn testnet_genesis(
 			phantom: Default::default(),
 		}),
 		elections: Some(ElectionsConfig {
-			members: endowed_accounts.iter()
-				.filter(|&endowed| initial_authorities.iter().find(|&(_, controller, ..)| controller == endowed).is_none())
-				.map(|a| (a.clone(), 1000000)).collect(),
-			presentation_duration: 10,
-			term_duration: 1000000,
-			desired_seats: desired_seats,
+			members: vec![],
+			presentation_duration: 1 * DAYS,
+			term_duration: 28 * DAYS,
+			desired_seats: 0,
 		}),
 		contracts: Some(ContractsConfig {
 			current_schedule: contracts::Schedule {
