@@ -194,21 +194,30 @@ impl<B: BlockT> KeepTopics<B> {
 	fn new() -> Self {
 		KeepTopics {
 			current_set: SetId(0),
-			rounds: VecDeque::with_capacity(KEEP_RECENT_ROUNDS + 1),
+			rounds: VecDeque::with_capacity(KEEP_RECENT_ROUNDS + 2),
 			reverse_map: HashMap::new(),
 		}
 	}
 
 	fn push(&mut self, round: Round, set_id: SetId) {
 		self.current_set = std::cmp::max(self.current_set, set_id);
-		self.rounds.push_back((round, set_id));
 
-		// the 1 is for the current round.
-		while self.rounds.len() > KEEP_RECENT_ROUNDS + 1 {
+		// under normal operation the given round is already tracked (since we
+		// track one round ahead). if we skip rounds (with a catch up), or when
+		// starting a new set the given round topic might not be tracked yet.
+		if !self.rounds.contains(&(round, set_id)) {
+			self.rounds.push_back((round, set_id));
+		}
+
+		// we also accept messages for the next round
+		self.rounds.push_back((Round(round.0.saturating_add(1)), set_id));
+
+		// the 2 is for the current and next round.
+		while self.rounds.len() > KEEP_RECENT_ROUNDS + 2 {
 			let _ = self.rounds.pop_front();
 		}
 
-		let mut map = HashMap::with_capacity(KEEP_RECENT_ROUNDS + 2);
+		let mut map = HashMap::with_capacity(KEEP_RECENT_ROUNDS + 3);
 		map.insert(super::global_topic::<B>(self.current_set.0), (None, self.current_set));
 
 		for &(round, set) in &self.rounds {
@@ -1847,6 +1856,35 @@ mod tests {
 				assert_eq!(request.round, Round(41));
 			},
 			_ => panic!("expected catch up message"),
+		}
+	}
+
+	#[test]
+	fn doesnt_expire_next_round_messages() {
+		// NOTE: this is a regression test
+		let (val, _) = GossipValidator::<Block>::new(
+			config(),
+			voter_set_state(),
+			true,
+		);
+
+		// the validator starts at set id 1.
+		val.note_set(SetId(1), Vec::new(), |_, _| {});
+
+		// we are at round 10
+		val.note_round(Round(10), |_, _| {});
+
+		let mut is_expired = val.message_expired();
+
+		// we accept messages from rounds 9, 10 and 11
+		// therefore neither of those should be considered expired
+		for round in &[9, 10, 11] {
+			assert!(
+				!is_expired(
+					crate::communication::round_topic::<Block>(*round, 1),
+					&[],
+				)
+			)
 		}
 	}
 }
