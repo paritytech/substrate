@@ -105,6 +105,7 @@ members = [
 	"srml/staking/reward-curve",
 	"srml/sudo",
 	"srml/system",
+	"srml/system/rpc",
 	"srml/timestamp",
 	"srml/treasury",
 	"srml/utility",

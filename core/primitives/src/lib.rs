@@ -39,6 +39,7 @@ use std::borrow::Cow;
 use serde::{Serialize, Deserialize};
 #[cfg(feature = "std")]
 pub use serde;// << for macro
+#[doc(hidden)]
 pub use codec::{Encode, Decode};// << for macro
 
 #[cfg(feature = "std")]
@@ -81,6 +82,9 @@ pub use hash_db::Hasher;
 pub use self::hasher::blake2::Blake2Hasher;
 
 pub use primitives_storage as storage;
+
+#[doc(hidden)]
+pub use rstd;
 
 /// Context for executing a call into the runtime.
 pub enum ExecutionContext {
