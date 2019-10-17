@@ -2422,7 +2422,7 @@ mod tests {
 
 	#[test]
 	fn kv_storage_works_with_forks() {
-		let backend = Backend::<Block>::new_test(1000, 4);
+		let backend = Backend::<Block>::new_test(4, 4);
 
 		let check_kv = |backend: &Backend<Block>, block: H256, val: &Vec<(Vec<u8>, Option<Vec<u8>>)>| {
 			let block = BlockId::Hash(block);
@@ -2434,7 +2434,10 @@ mod tests {
 		};
 
 		let changes0 = vec![(b"k0".to_vec(), Some(b"v0".to_vec()))];
-		let changes1 = vec![(b"k1".to_vec(), Some(b"v1".to_vec()))];
+		let changes1 = vec![
+			(b"k1".to_vec(), Some(b"v1".to_vec())),
+			(b"k0".to_vec(), None),
+		];
 		let changes2 = vec![(b"k2".to_vec(), Some(b"v2".to_vec()))];
 		let block0 = insert_kvs(&backend, 0, Default::default(), changes0.clone(), Default::default());
 		let block1 = insert_kvs(&backend, 1, block0, changes1.clone(), Default::default());
@@ -2453,7 +2456,7 @@ mod tests {
 
 		// branch1: when asking for finalized block hash
 		check_kv(&backend, block0, &changes0);
-		check_kv(&backend, block1, &changes0);
+		check_kv(&backend, block1, &vec![]);
 		check_kv(&backend, block1, &changes1);
 		check_kv(&backend, block2, &changes2);
 		check_kv(&backend, block2_1_0, &changes2_1_0);
@@ -2484,6 +2487,13 @@ mod tests {
 		assert!(backend.state_at(BlockId::Hash(block2_2_0)).is_err());
 		// pinned state is not garbage collected
 		assert!(state.kv_storage(&b"k5"[..]).unwrap().is_some());
+
+		// check pruning is called on storage
+		check_kv(&backend, block0, &changes0);
+		assert!(backend.storage.db.get(crate::columns::OFFSTATE, &b"k0"[..]).unwrap().is_some());
+		next();
+		assert!(backend.state_at(BlockId::Hash(block0)).is_err());
+		assert!(backend.storage.db.get(crate::columns::OFFSTATE, &b"k0"[..]).unwrap().is_none());
 	}
 
 	#[test]
