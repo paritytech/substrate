@@ -203,8 +203,8 @@ impl<B: BlockT> KeepTopics<B> {
 		self.current_set = std::cmp::max(self.current_set, set_id);
 
 		// under normal operation the given round is already tracked (since we
-		// track one round ahead). if we skip rounds (with a catch up), or when
-		// starting a new set the given round topic might not be tracked yet.
+		// track one round ahead). if we skip rounds (with a catch up) the given
+		// round topic might not be tracked yet.
 		if !self.rounds.contains(&(round, set_id)) {
 			self.rounds.push_back((round, set_id));
 		}
