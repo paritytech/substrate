@@ -43,7 +43,7 @@
 //! Based on research at https://research.web3.foundation/en/latest/polkadot/slashing/npos/
 
 use super::{EraIndex, Trait, Module, Store, BalanceOf, Exposure, Perbill};
-use sr_primitives::traits::Zero;
+use sr_primitives::traits::{Zero, Saturating};
 use support::{StorageValue, StorageMap, StorageDoubleMap};
 use codec::{HasCompact, Encode, Decode};
 
@@ -140,11 +140,12 @@ impl SlashingSpans {
 }
 
 /// Parameters for performing a slash.
+#[derive(Clone)]
 pub(crate) struct SlashParams<'a, T: 'a + Trait> {
 	/// The stash account being slashed.
 	pub(crate) stash: &'a T::AccountId,
-	/// The proportion and total amount of the slash (proportion applied to `exposure.total`).
-	pub(crate) slash: (Perbill, BalanceOf<T>),
+	/// The proportion of the slash.
+	pub(crate) slash: Perbill,
 	/// The exposure of the stash and all nominators.
 	pub(crate) exposure: &'a Exposure<T::AccountId, BalanceOf<T>>,
 	/// The era where the offence occurred.
@@ -161,19 +162,20 @@ pub(crate) fn slash<T: Trait>(params: SlashParams<T>){
 		exposure,
 		slash_era,
 		window_start,
-	} = params;
-	let (slash_proportion, slash_amount) = slash;
+	} = params.clone();
 
 	// is the slash amount here a maximum for the era?
-	let era_slash = <Module<T> as Store>::SlashInEra::get(&slash_era, stash)
-		.map(|(_, amount)| amount)
-		.unwrap_or(Zero::zero());
+	let own_slash = slash * exposure.own;
+	let (prior_slash_p, era_slash) = <Module<T> as Store>::ValidatorSlashInEra::get(
+		&slash_era,
+		stash,
+	).unwrap_or((Perbill::zero(), Zero::zero()));
 
-	if slash_amount > era_slash {
-		<Module<T> as Store>::SlashInEra::insert(
+	if own_slash > era_slash {
+		<Module<T> as Store>::ValidatorSlashInEra::insert(
 			&slash_era,
 			stash,
-			&(slash_proportion, slash_amount),
+			&(slash, own_slash),
 		);
 	} else {
 		// we slash based on the max in era - this new event is not the max,
@@ -181,89 +183,136 @@ pub(crate) fn slash<T: Trait>(params: SlashParams<T>){
 		return
 	}
 
-	// what about the maximum slash in the span?
-	let mut spans = <Module<T> as Store>::SlashingSpans::get(stash).unwrap_or_else(|| {
-		SlashingSpans::new(window_start)
-	});
-	span_gc::<T>(stash, spans.prune(window_start));
+	// apply slash to validator.
+	let mut spans = fetch_spans::<T>(stash, window_start);
 
-	<Module<T> as Store>::SlashingSpans::insert(stash, &spans);
+	let target_span = spans.compare_and_update_span_slash(
+		slash_era,
+		own_slash,
+	);
 
-	let target_span = spans.iter().find(|span| span.contains_era(slash_era));
-	let span_slash = <Module<T>>::span_slash(&(stash.clone(), target_span.index));
-
-	let spans = spans;
-
-	// `chill` validator if this is the most recent span.
-	if spans.span_index == target_span.index {
-		// TODO
+	if target_span == Some(spans.span_index()) {
+		// TODO: chill the validator - it misbehaved in the current span.
 	}
 
-	// false if have chewed through all of our own exposure for this era,
-	// true if nothing has been passed onto nominators.
-	let has_own_remaining = slash_amount < exposure.own;
+	slash_nominators::<T>(params, prior_slash_p)
+}
 
-	let effective_nominator_slash = if slash_amount > span_slash {
-		let remaining_slash = slash_amount - span_slash;
-		let remaining_own = exposure.own.saturating_sub(span_slash);
+fn slash_nominators<T: Trait>(params: SlashParams<T>, prior_slash_p: Perbill) {
+	let SlashParams {
+		stash: validator,
+		slash,
+		exposure,
+		slash_era,
+		window_start,
+	} = params;
 
-		// divide up the slash into own and nominator portions.
-		let (own_slash, nominator_slash) = if remaining_slash >= remaining_own {
-			(remaining_own, remaining_slash - remaining_own)
-		} else {
-			(remaining_slash, 0)
+	for nominator in &exposure.others {
+		let stash = &nominator.who;
+
+		// the era slash of a nominator always grows, if the validator
+		// had a new max slash for the era.
+		let era_slash = {
+			let own_slash_prior = prior_slash_p * nominator.value;
+			let own_slash_by_validator = slash * nominator.value;
+			let own_slash_difference = own_slash_by_validator.saturating_sub(own_slash_prior);
+
+			let mut era_slash = <Module<T> as Store>::NominatorSlashInEra::get(
+				&slash_era,
+				stash,
+			).unwrap_or(Zero::zero());
+
+			era_slash += own_slash_difference;
+
+			<Module<T> as Store>::NominatorSlashInEra::insert(
+				&slash_era,
+				stash,
+				&era_slash,
+			);
+
+			era_slash
 		};
 
-		// Apply `own_slash` to self balance. Since this is the highest slash of
-		// the span, we actually apply the slash to our own bond.
-		// TODO
+		// compare the era slash against other eras in the same span.
+		let mut spans = fetch_spans::<T>(stash, window_start);
 
-		// note new highest slash in span
-		<Module<T> as Store>::SpanSlash::insert(
-			&(stash.clone(), target_span.index),
-			&slash_amount,
+		let target_span = spans.compare_and_update_span_slash(
+			slash_era,
+			era_slash,
 		);
 
-		nominator_slash
-	} else {
-		// this validator has already been slashed for more than `slash_amount` within
-		// this slashing span. That means that we do not actually apply the slash on our own
-		// bond, but if the nominator slash for this era is now non-zero we have
-		// to pass that onwards to the nominator calculation.
-		if has_own_remaining {
-			0
-		} else {
-			slash_amount - exposure.own
+		if target_span == Some(spans.span_index()) {
+			// TODO: chill the nominator. (only from the validator?)
 		}
-	};
+	}
+}
 
-	if effective_nominator_slash == 0 {
-		// nominators are unaffected.
-		return
+// helper struct for managing a set of spans we are currently inspecting.
+// writes alterations to disk on drop, but only if a slash has been carried out.
+struct InspectingSpans<'a, T: Trait + 'a> {
+	dirty: bool,
+	window_start: EraIndex,
+	stash: &'a T::AccountId,
+	spans: SlashingSpans,
+	_marker: rstd::marker::PhantomData<T>,
+}
+
+// fetches the slashing spans record for a stash account, initializing it if necessary.
+fn fetch_spans<T: Trait>(stash: &T::AccountId, window_start: EraIndex) -> InspectingSpans<T> {
+	let spans = <Module<T> as Store>::SlashingSpans::get(stash).unwrap_or_else(|| {
+		let spans = SlashingSpans::new(window_start);
+		<Module<T> as Store>::SlashingSpans::insert(stash, &spans);
+		spans
+	});
+
+	InspectingSpans {
+		dirty: false,
+		window_start,
+		stash,
+		spans,
+		_marker: rstd::marker::PhantomData,
+	}
+}
+
+impl<'a, T: 'a + Trait> InspectingSpans<'a, T> {
+	fn span_index(&self) -> SpanIndex {
+		self.spans.span_index
 	}
 
-	// p_{v,e} is non-zero here - it is the ratio of the remaining slash in the era
-	// to the amount of exposure held by nominators.
-	let nominator_slash_proportion = {
-		let d = Perbill::from_rational_approximation(
-			effective_nominator_slash,
-			exposure.total - exposure.own,
-		);
-		let d = Perbill::one() / (exposure.total - exposure.own);
-		d * effective_nominator_slash;
-	};
+	// compares the slash in an era to the overall current span slash.
+	// if it's higher, applies the difference of the slashes and then updates the span on disk.
+	//
+	// returns the span index of the era, if any.
+	fn compare_and_update_span_slash(
+		&mut self,
+		slash_era: EraIndex,
+		slash: BalanceOf<T>,
+	) -> Option<SpanIndex> {
+		let target_span = self.spans.iter().find(|span| span.contains_era(slash_era))?;
+		let span_slash_key = (self.stash.clone(), target_span.index);
+		let span_slash = <Module<T>>::span_slash(&span_slash_key);
 
-	// TODO: apply to nominators.
+		if span_slash < slash {
+			// new maximum span slash.
+			// TODO: apply difference.
+			self.dirty = true;
+			<Module<T> as Store>::SpanSlash::insert(&span_slash_key, &slash);
+		}
+
+		Some(target_span.index)
+	}
 }
 
-fn slash_nominators<T: Trait>() {
+impl<'a, T: 'a + Trait> Drop for InspectingSpans<'a, T> {
+	fn drop(&mut self) {
+		// only update on disk if we slashed this account.
+		if !self.dirty { return }
 
-}
-
-fn span_gc<T: Trait>(stash: &T::AccountId, pruned_range: Option<(SpanIndex, SpanIndex)>) {
-	if let Some((start, end)) = pruned_range {
-		for span_index in start..end {
-			<Module<T> as Store>::SpanSlash::remove(&(stash.clone(), span_index));
+		if let Some((start, end)) = self.spans.prune(self.window_start) {
+			<Module<T> as Store>::SlashingSpans::insert(self.stash, &self.spans);
+			for span_index in start..end {
+				<Module<T> as Store>::SpanSlash::remove(&(self.stash.clone(), span_index));
+			}
 		}
 	}
 }

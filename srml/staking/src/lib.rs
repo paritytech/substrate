@@ -611,9 +611,14 @@ decl_storage! {
 		/// A mapping from still-bonded eras to the first session index of that era.
 		BondedEras: Vec<(EraIndex, SessionIndex)>;
 
-		/// All slashing events on validators and nominators, mapped by era.
-		SlashInEra:
+		/// All slashing events on validators, mapped by era to the highest slash proportion
+		/// and slash value of the era.
+		ValidatorSlashInEra:
 			double_map EraIndex, twox_128(T::AccountId) => Option<(Perbill, BalanceOf<T>)>;
+
+		/// All slashing events on nominators, mapped by era to the highest slash value of the era.
+		NominatorSlashInEra:
+			double_map EraIndex, twox_128(T::AccountId) => Option<BalanceOf<T>>;
 
 		/// Slashing spans for stash accounts.
 		SlashingSpans: map T::AccountId => Option<slashing::SlashingSpans>;
@@ -1054,6 +1059,8 @@ impl<T: Trait> Module<T> {
 		exposure: &Exposure<T::AccountId, BalanceOf<T>>,
 		journal: &mut Vec<SlashJournalEntry<T::AccountId, BalanceOf<T>>>,
 	) -> NegativeImbalanceOf<T> {
+		// TODO: move over to `slashing.rs` logic.
+
 		// The amount we are actually going to slash (can't be bigger than the validator's total
 		// exposure)
 		let slash = slash.min(exposure.total);
