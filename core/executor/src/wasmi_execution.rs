@@ -721,7 +721,7 @@ mod tests {
 				&b"Hello world".to_vec().encode(),
 			).unwrap();
 
-			assert_eq!(output, b"all ok!".to_vec());
+			assert_eq!(output, b"all ok!".to_vec().encode());
 		}
 
 		let expected = TestExternalities::new((map![
@@ -753,7 +753,7 @@ mod tests {
 				&b"ab".to_vec().encode(),
 			).unwrap();
 
-			assert_eq!(output, b"all ok!".to_vec());
+			assert_eq!(output, b"all ok!".to_vec().encode());
 		}
 
 		let expected = TestExternalities::new((map![
