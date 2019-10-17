@@ -42,6 +42,7 @@ pub struct RefWindow<BlockHash: Hash, Key: Hash> {
 	pending_number: u64,
 	/// Number of call of `note_canonical` after
 	/// last call `apply_pending` or `revert_pending`
+	/// TODO EMCH seems useless??
 	pending_canonicalizations: usize,
 	/// Number of calls of `prune_one` after
 	/// last call `apply_pending` or `revert_pending`

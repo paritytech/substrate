@@ -275,24 +275,25 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 	pub fn canonicalize_block<E: fmt::Debug>(
 		&mut self,
 		hash: &BlockHash,
-	) -> Result<CommitSetCanonical<Key>, Error<E>> {
+	) -> Result<(CommitSetCanonical<Key>, u64), Error<E>> {
 		let mut commit = (CommitSet::default(), None);
 		if self.mode == PruningMode::ArchiveAll {
-			return Ok(commit)
+			return Ok((commit, 0))
 		}
-		match self.non_canonical.canonicalize(&hash, &mut commit.0) {
-			Ok(()) => {
+		let block_number = match self.non_canonical.canonicalize(&hash, &mut commit.0) {
+			Ok(block_number) => {
 				if self.mode == PruningMode::ArchiveCanonical {
 					commit.0.data.deleted.clear();
 				}
-			}
+				block_number
+			},
 			Err(e) => return Err(e),
 		};
 		if let Some(ref mut pruning) = self.pruning {
 			pruning.note_canonical(&hash, &mut commit.0);
 		}
 		self.prune(&mut commit);
-		Ok(commit)
+		Ok((commit, block_number))
 	}
 
 	pub fn best_canonical(&self) -> Option<u64> {
@@ -482,7 +483,7 @@ impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
 	pub fn canonicalize_block<E: fmt::Debug>(
 		&self,
 		hash: &BlockHash,
-	) -> Result<CommitSetCanonical<Key>, Error<E>> {
+	) -> Result<(CommitSetCanonical<Key>, u64), Error<E>> {
 		self.db.write().canonicalize_block(hash)
 	}
 
@@ -615,7 +616,7 @@ mod tests {
 		state_db.apply_pending();
 		db.commit_canonical(
 			&state_db.canonicalize_block::<io::Error>(&H256::from_low_u64_be(1))
-				.unwrap()
+				.unwrap().0
 		);
 		state_db.apply_pending();
 		db.commit(
@@ -632,12 +633,12 @@ mod tests {
 		state_db.apply_pending();
 		db.commit_canonical(
 			&state_db.canonicalize_block::<io::Error>(&H256::from_low_u64_be(21))
-				.unwrap()
+				.unwrap().0
 		);
 		state_db.apply_pending();
 		db.commit_canonical(
 			&state_db.canonicalize_block::<io::Error>(&H256::from_low_u64_be(3))
-				.unwrap()
+				.unwrap().0
 		);
 		state_db.apply_pending();
 

@@ -1160,7 +1160,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 			trace!(target: "db", "Canonicalize block #{} ({:?})", new_canonical, hash);
 			let commit = self.storage.state_db.canonicalize_block(&hash)
 				.map_err(|e: state_db::Error<io::Error>| client::error::Error::from(format!("State database error: {:?}", e)))?;
-			apply_state_commit_canonical(transaction, commit, &self.storage.db, number_u64).map_err(|err|
+			apply_state_commit_canonical(transaction, commit.0, &self.storage.db, commit.1).map_err(|err|
 				client::error::Error::Backend(
 					format!("Error building commit transaction : {}", err)
 				)
@@ -1399,8 +1399,6 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 			.map(|c| f_num.saturated_into::<u64>() > c)
 			.unwrap_or(true) {
 			let parent_hash = f_header.parent_hash().clone();
-			let number = f_header.number().clone();
-			let number_u64 = number.saturated_into::<u64>();
 
 			let lookup_key = utils::number_and_hash_to_lookup_key(f_num, f_hash.clone())?;
 			transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, &lookup_key);
@@ -1409,7 +1407,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 				.map_err(|e: state_db::Error<io::Error>|
 					client::error::Error::from(format!("State database error: {:?}", e))
 				)?;
-			apply_state_commit_canonical(transaction, commit, &self.storage.db, number_u64)
+			apply_state_commit_canonical(transaction, commit.0, &self.storage.db, commit.1)
 				.map_err(|err| client::error::Error::Backend(
 					format!("Error building commit transaction : {}", err)
 				))?;
@@ -1813,12 +1811,13 @@ mod tests {
 		header_hash
 	}
 
-	fn insert_kvs(
+	fn insert_kvs_and_finalize(
 		backend: &Backend<Block>,
 		number: u64,
 		parent_hash: H256,
 		kvs: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 		extrinsics_root: H256,
+		finalize: Option<Vec<H256>>,
 	) -> H256 {
 		let header = Header {
 			number,
@@ -1836,11 +1835,34 @@ mod tests {
 		};
 		let mut op = backend.begin_operation().unwrap();
 		backend.begin_state_operation(&mut op, block_id).unwrap();
+		if let Some(finalize) = finalize {
+			for finalize in finalize {
+				op.mark_finalized(BlockId::hash(finalize), None).unwrap();
+			}
+		}
 		let kv_transaction = kvs.into_iter().collect(); 
 		op.update_db_storage((Default::default(), kv_transaction)).unwrap();
 		op.set_block_data(header, None, None, NewBlockState::Best).unwrap();
 		backend.commit_operation(op).unwrap();
 		header_hash
+	}
+
+
+	fn insert_kvs(
+		backend: &Backend<Block>,
+		number: u64,
+		parent_hash: H256,
+		kvs: Vec<(Vec<u8>, Option<Vec<u8>>)>,
+		extrinsics_root: H256,
+	) -> H256 {
+		insert_kvs_and_finalize(
+			backend,
+			number,
+			parent_hash,
+			kvs,
+			extrinsics_root,
+			None,
+		)
 	}
 
 	#[test]
@@ -2455,13 +2477,72 @@ mod tests {
 		check_kv(&backend, block2, &changes2);
 		check_kv(&backend, block2_1_0, &changes2_1_0);
 		check_kv(&backend, block2_2_0, &changes2_2_0);
+		let state = backend.state_at(BlockId::Hash(block2_2_0)).unwrap();
+		assert!(state.kv_storage(&b"k5"[..]).unwrap().is_some());
 		next();
 		check_kv(&backend, block2_1_0, &changes2_1_0);
-		check_kv(&backend, block2_2_0, &changes2_2_0);
-//unimplemented!("finalized block2_1_0 and check again");
-
-//unimplemented!("direct query into storage db");
+		assert!(backend.state_at(BlockId::Hash(block2_2_0)).is_err());
+		// pinned state is not garbage collected
+		assert!(state.kv_storage(&b"k5"[..]).unwrap().is_some());
 	}
+
+	#[test]
+	fn kv_storage_works_with_finalize() {
+		let backend = Backend::<Block>::new_test(1000, 100);
+
+		let check_kv = |backend: &Backend<Block>, block: H256, val: &Vec<(Vec<u8>, Option<Vec<u8>>)>| {
+			let block = BlockId::Hash(block);
+			let state = backend.state_at(block).unwrap();
+			for (k, v) in val {
+				let content = state.kv_storage(k).unwrap();
+				assert_eq!(v, &content);
+			}
+		};
+
+		let changes0 = vec![(b"k0".to_vec(), Some(b"v0".to_vec()))];
+		let changes1 = vec![(b"k1".to_vec(), Some(b"v1".to_vec()))];
+		let changes2 = vec![(b"k2".to_vec(), Some(b"v2".to_vec()))];
+		let block0 = insert_kvs(&backend, 0, Default::default(), changes0.clone(), Default::default());
+		let block1 = insert_kvs(&backend, 1, block0, changes1.clone(), Default::default());
+		let block2 = insert_kvs(&backend, 2, block1, changes2.clone(), Default::default());
+
+		let changes2_1_0 = vec![(b"k3".to_vec(), Some(b"v3".to_vec()))];
+		let changes2_1_1 = vec![(b"k4".to_vec(), Some(b"v4".to_vec()))];
+		let block2_1_0 = insert_kvs(&backend, 3, block2, changes2_1_0.clone(), Default::default());
+		let _block2_1_1 = insert_kvs(&backend, 4, block2_1_0, changes2_1_1.clone(), Default::default());
+
+		let changes2_2_0 = vec![(b"k5".to_vec(), Some(b"v5".to_vec()))];
+		let changes2_2_1 = vec![(b"k6".to_vec(), Some(b"v6".to_vec()))];
+		// use different extrinsic root to have different hash than 2_1_0
+		let block2_2_0 = insert_kvs(&backend, 3, block2, changes2_2_0.clone(), [1u8; 32].into());
+		let state = backend.state_at(BlockId::Hash(block2_1_0)).unwrap();
+
+		let block2_2_1 = insert_kvs_and_finalize(
+			&backend,
+			4,
+			block2_2_0,
+			changes2_2_1.clone(),
+			Default::default(),
+			Some(vec![
+				block1,
+				block2,
+				block2_2_0,
+			]),
+		);
+
+		check_kv(&backend, block0, &changes0);
+		check_kv(&backend, block1, &changes0);
+		check_kv(&backend, block1, &changes1);
+		check_kv(&backend, block2, &changes2);
+		check_kv(&backend, block2_2_0, &changes2_2_0);
+		check_kv(&backend, block2_2_1, &changes2_2_1);
+
+		// still accessible due to pinned state
+		assert!(state.kv_storage(&b"k3"[..]).unwrap().is_some());
+		assert!(backend.state_at(BlockId::Hash(block2_1_0)).is_err());
+	}
+
+
 
 	#[test]
 	fn tree_route_works() {

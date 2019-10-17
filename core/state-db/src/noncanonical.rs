@@ -63,10 +63,8 @@ pub struct NonCanonicalOverlay<BlockHash: Hash, Key: Hash> {
 struct KvPendingGC {
 	/// Each gc call uses a new index.
 	gc_last_index: GcIndex,
-	/// Keep trace of last cannonicalization branch index height.
-	/// All data in state are added after this value (branch is
-	/// set as non modifiable on canonicalisation).
-	pending_canonicalisation_query: Option<u64>,
+	/// Keep trace of last gc query.
+	pending_gc_query: Option<u64>,
 	/// keys to gc that got their journal removed.
 	keys_pending_gc: HashSet<KvKey>,
 	/// store keys while waiting for a gc.
@@ -74,12 +72,12 @@ struct KvPendingGC {
 }
 
 impl KvPendingGC {
-	fn set_pending_gc(&mut self, branch_index: u64) {
+	fn set_pending_gc(&mut self) {
 		self.gc_last_index += 1;
-		if self.pending_canonicalisation_query.is_some() {
+		if self.pending_gc_query.is_none() {
 			self.keys_pending_gc.extend(self.next_keys_pending_gc.drain());
+			self.pending_gc_query = Some(self.gc_last_index - 1);
 		}
-		self.pending_canonicalisation_query = Some(branch_index);
 	}
 
 	fn try_gc<K, V>(
@@ -88,9 +86,8 @@ impl KvPendingGC {
 		branches: &RangeSet,
 		pinned: &HashMap<K, (V, u64)>,
 	) {
-		if let Some(pending) = self.pending_canonicalisation_query {
+		if let Some(pending) = self.pending_gc_query {
 			if pending < self.min_pinned_index(pinned) {
-
 				// TODO EMCH double get is rather inefficient, see if it is possible
 				// to reuse the hash of the hashset into the hashmap
 				for key in self.keys_pending_gc.drain() {
@@ -104,7 +101,7 @@ impl KvPendingGC {
 					}
 				}
 
-				self.pending_canonicalisation_query = None;
+				self.pending_gc_query = None;
 			}
 		}
 	}
@@ -211,7 +208,7 @@ fn discard_kv_values(
 	deleted: Vec<KvKey>,
 	into: &mut KvPendingGC,
 ) {
-	let into = if into.pending_canonicalisation_query.is_some() {
+	let into = if into.pending_gc_query.is_some() {
 		&mut into.next_keys_pending_gc
 	} else {
 		&mut into.keys_pending_gc
@@ -528,7 +525,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 		&mut self,
 		hash: &BlockHash,
 		commit: &mut CommitSet<Key>,
-	) -> Result<(), Error<E>> {
+	) -> Result<u64, Error<E>> {
 		trace!(target: "state-db", "Canonicalizing {:?}", hash);
 		let level = self.levels.get(self.pending_canonicalizations.len()).ok_or_else(|| Error::InvalidBlock)?;
 		let index = level
@@ -589,7 +586,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 		commit.meta.inserted.push((to_meta_key(LAST_CANONICAL, &()), canonicalized.encode()));
 		trace!(target: "state-db", "Discarding {} records", commit.meta.deleted.len());
 		self.pending_canonicalizations.push(hash.clone());
-		Ok(())
+		Ok(block_number)
 	}
 
 	fn apply_canonicalizations(&mut self) {
@@ -637,7 +634,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 			if let Some(branch_index_cannonicalize) = last_index {
 				// this needs to be call after parents update
 				self.branches.update_finalize_treshold(branch_index_cannonicalize, block_number, true);
-				self.kv_gc.set_pending_gc(branch_index_cannonicalize);
+				self.kv_gc.set_pending_gc();
 				// try to run the garbage collection (can run later if there is
 				// pinned process).
 				self.kv_gc.try_gc(&mut self.kv_values, &self.branches, &self.pinned);
