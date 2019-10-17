@@ -631,7 +631,7 @@ mod tests {
 
 	macro_rules! stream_assert_eq {
 		($stream: expr, $expected_value: expr) => {
-			let mut rt = Runtime::new().unwrap();
+			let mut rt = Runtime::new().unwrap(); // use tokio 0.1's runtime on stable rust
 			assert_eq!(rt.block_on($stream.map(|x| -> Result<_, ()> { Ok(x) }).compat()).unwrap(), $expected_value);
 		};
 	}
