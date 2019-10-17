@@ -197,9 +197,7 @@ impl<Block, BStatus, BSyncRequester, I, M> Stream for UntilImported<Block, BStat
 					known_keys.push((block_hash, number));
 				} else {
 					let next_log = *last_log + LOG_PENDING_INTERVAL;
-					// TODO: Should this not be >=? We want to log whenever we want to log every LOG_PENDING_INTERVAL,
-					// right?
-					if Instant::now() <= next_log {
+					if Instant::now() >= next_log {
 						debug!(
 							target: "afg",
 							"Waiting to import block {} before {} {} messages can be imported. \
