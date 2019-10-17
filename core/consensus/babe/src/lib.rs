@@ -164,9 +164,9 @@ enum Error<B: BlockT> {
 	UnexpectedEpochChange,
 	#[display(fmt = "Parent block of {} has no associated weight", _0)]
 	ParentBlockNoAssociatedWeight(B::Hash),
-	Client(client::error::Error),
 	#[display(fmt = "Checking inherents failed: {}", _0)]
 	CheckInherents(String),
+	Client(client::error::Error),
 	Runtime(RuntimeString),
 	ForkTree(Box<fork_tree::Error<client::error::Error>>),
 }
@@ -565,7 +565,7 @@ impl<B, E, Block: BlockT, RA, PRA> BabeVerifier<B, E, Block, RA, PRA> {
 			inherent_res
 				.into_errors()
 				.try_for_each(|(i, e)| {
-					Err(Error::DataProvider(self.inherent_data_providers.error_to_string(&i, &e)))
+					Err(Error::CheckInherents(self.inherent_data_providers.error_to_string(&i, &e)))
 				})
 		} else {
 			Ok(())

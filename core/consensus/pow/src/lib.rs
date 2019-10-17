@@ -74,10 +74,13 @@ pub enum Error<B: BlockT> {
 	BestHashSelectChain(ConsensusError),
 	#[display(fmt = "Error with block built on {:?}: {:?}", _0, _1)]
 	BlockBuiltError(B::Hash, ConsensusError),
+	#[display(fmt = "Creating inherents failed: {}", _0)]
+	CreateInherents(RuntimeString),
+	#[display(fmt = "Checking inherents failed: {}", _0)]
+	CheckInherents(String),
 	Client(client::error::Error),
 	Codec(codec::Error),
 	Environment(String),
-	DataProvider(String),
 	Runtime(RuntimeString)
 }
 
@@ -233,7 +236,7 @@ impl<B: BlockT<Hash=H256>, C, S, Algorithm> PowVerifier<B, C, S, Algorithm> {
 						Ok(())
 					},
 					Some(TIError::Other(e)) => Err(Error::Runtime(e)),
-					None => Err(Error::DataProvider(
+					None => Err(Error::CheckInherents(
 						self.inherent_data_providers.error_to_string(&i, &e)
 					)),
 				})
@@ -462,7 +465,7 @@ fn mine_loop<B: BlockT<Hash=H256>, C, Algorithm, E, SO, S>(
 			.map_err(|e| Error::Environment(format!("{:?}", e)))?;
 
 		let inherent_data = inherent_data_providers
-			.create_inherent_data().map_err(|e| Error::DataProvider(String::from(e)))?;
+			.create_inherent_data().map_err(Error::CreateInherents)?;
 		let mut inherent_digest = Digest::default();
 		if let Some(preruntime) = &preruntime {
 			inherent_digest.push(DigestItem::PreRuntime(POW_ENGINE_ID, preruntime.to_vec()));
