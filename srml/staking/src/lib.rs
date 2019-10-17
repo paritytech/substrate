@@ -611,9 +611,15 @@ decl_storage! {
 		/// A mapping from still-bonded eras to the first session index of that era.
 		BondedEras: Vec<(EraIndex, SessionIndex)>;
 
-		/// All slashes that have occurred in a given era.
-		EraSlashJournal get(fn era_slash_journal):
-			map EraIndex => Vec<SlashJournalEntry<T::AccountId, BalanceOf<T>>>;
+		/// All slashing events on validators and nominators, mapped by era.
+		SlashInEra:
+			double_map EraIndex, twox_128(T::AccountId) => Option<(Perbill, BalanceOf<T>)>;
+
+		/// Slashing spans for stash accounts.
+		SlashingSpans: map T::AccountId => Option<slashing::SlashingSpans>;
+
+		/// Records information about the maximum slash of a stash within a slashing span.
+		SpanSlash get(fn span_slash): map (T::AccountId, slashing::SpanIndex) => BalanceOf<T>;
 	}
 	add_extra_genesis {
 		config(stakers):
@@ -1214,7 +1220,8 @@ impl<T: Trait> Module<T> {
 		let current_era = CurrentEra::mutate(|s| { *s += 1; *s });
 
 		// prune journal for last era.
-		<EraSlashJournal<T>>::remove(current_era - 1);
+		// TODO: prune journal for the era just exiting the bonding window.
+		// <EraSlashJournal<T>>::remove(current_era - 1);
 
 		CurrentEraStartSessionIndex::mutate(|v| {
 			*v = start_session_index;
@@ -1364,6 +1371,8 @@ impl<T: Trait> Module<T> {
 		<Payee<T>>::remove(stash);
 		<Validators<T>>::remove(stash);
 		<Nominators<T>>::remove(stash);
+
+		// TODO: clear all slashing bookkeeping (slashing spans, etc).
 	}
 
 	/// Add reward points to validators using their stash account ID.
@@ -1493,7 +1502,6 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, session::historical::Identificati
 		let slash_reward_fraction = SlashRewardFraction::get();
 
 		let era_now = Self::current_era();
-		let mut journal = Self::era_slash_journal(era_now);
 		for (details, slash_fraction) in offenders.iter().zip(slash_fraction) {
 			let stash = &details.offender.0;
 			let exposure = &details.offender.1;
@@ -1518,7 +1526,7 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, session::historical::Identificati
 				ForceEra::put(Forcing::ForceNew);
 			}
 			// actually slash the validator
-			let slashed_amount = Self::slash_validator(stash, amount, exposure, &mut journal);
+			let slashed_amount = Self::slash_validator(stash, amount, exposure, &mut Vec::new());
 
 			// distribute the rewards according to the slash
 			let slash_reward = slash_reward_fraction * slashed_amount.peek();
@@ -1539,7 +1547,6 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, session::historical::Identificati
 				remaining_imbalance.subsume(slashed_amount);
 			}
 		}
-		<EraSlashJournal<T>>::insert(era_now, journal);
 
 		// Handle the rest of imbalances
 		T::Slash::on_unbalanced(remaining_imbalance);
