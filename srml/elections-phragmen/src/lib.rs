@@ -616,7 +616,6 @@ mod tests {
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = Event;
-		type WeightMultiplierUpdate = ();
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type MaximumBlockLength = MaximumBlockLength;
@@ -628,8 +627,6 @@ mod tests {
 		pub const ExistentialDeposit: u64 = 1;
 		pub const TransferFee: u64 = 0;
 		pub const CreationFee: u64 = 0;
-		pub const TransactionBaseFee: u64 = 0;
-		pub const TransactionByteFee: u64 = 0;
 	}
 
 	impl balances::Trait for Test {
@@ -637,15 +634,11 @@ mod tests {
 		type OnNewAccount = ();
 		type OnFreeBalanceZero = ();
 		type Event = Event;
-		type TransactionPayment = ();
 		type TransferPayment = ();
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
 		type TransferFee = TransferFee;
 		type CreationFee = CreationFee;
-		type TransactionBaseFee = TransactionBaseFee;
-		type TransactionByteFee = TransactionByteFee;
-		type WeightToFee = ();
 	}
 
 	parameter_types! {
