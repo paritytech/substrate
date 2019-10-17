@@ -22,6 +22,20 @@
 #![cfg_attr(feature = "bench", feature(test))]
 #[cfg(feature = "bench")] extern crate test;
 
+/// Copied from `sr-primitives` and documented there.
+#[cfg(test)]
+macro_rules! assert_eq_error_rate {
+	($x:expr, $y:expr, $error:expr $(,)?) => {
+		assert!(
+			($x) >= (($y) - ($error)) && ($x) <= (($y) + ($error)),
+			"{:?} != {:?} (with error rate {:?})",
+			$x,
+			$y,
+			$error,
+		);
+	};
+}
+
 pub mod biguint;
 pub mod helpers_128bit;
 pub mod traits;

@@ -21,21 +21,6 @@ use rstd::{ops, prelude::*, convert::TryInto};
 use codec::{Encode, Decode};
 use crate::traits::{SaturatedConversion, UniqueSaturatedInto, Saturating};
 
-/// Copied from `sr-primitives` and documented there.
-#[cfg(feature = "std")]
-#[cfg(test)]
-macro_rules! assert_eq_error_rate {
-	($x:expr, $y:expr, $error:expr $(,)?) => {
-		assert!(
-			($x) >= (($y) - ($error)) && ($x) <= (($y) + ($error)),
-			"{:?} != {:?} (with error rate {:?})",
-			$x,
-			$y,
-			$error,
-		);
-	};
-}
-
 macro_rules! implement_per_thing {
 	($name:ident, $test_mod:ident, [$($test_units:tt),+], $max:tt, $type:ty, $upper_type:ty, $title:expr $(,)?) => {
 		/// A fixed point representation of a number between in the range [0, 1].
