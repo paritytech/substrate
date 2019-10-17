@@ -53,7 +53,7 @@ impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 			&mut self.overlay,
 			&self.backend,
 			Some(&self.changes_trie_storage),
-			None,
+			Some(&mut self.extensions),
 		)
 	}
 
