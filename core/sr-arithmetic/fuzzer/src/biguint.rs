@@ -30,8 +30,6 @@ use honggfuzz::fuzz;
 use sr_arithmetic::biguint::{BigUint, Single};
 use std::convert::TryFrom;
 
-type S = u128;
-
 fn main() {
 	loop {
 		fuzz!(|data: (Vec<Single>, Vec<Single>, bool)| {
@@ -43,8 +41,8 @@ fn main() {
 			u.lstrip();
 			v.lstrip();
 
-			let ue = S::try_from(u.clone());
-			let ve = S::try_from(v.clone());
+			let ue = u128::try_from(u.clone());
+			let ve = u128::try_from(v.clone());
 
 			digits_u.reverse();
 			digits_v.reverse();
@@ -61,7 +59,7 @@ fn main() {
 				let expected = ue.unwrap() + ve.unwrap();
 				let t = u.clone().add(&v);
 				assert_eq!(
-					S::try_from(t.clone()).unwrap(), expected,
+					u128::try_from(t.clone()).unwrap(), expected,
 					"{:?} + {:?} ===> {:?} != {:?}", u, v, t, expected,
 				);
 			}
@@ -75,7 +73,7 @@ fn main() {
 					let t = t.unwrap();
 					let expected = expected.unwrap();
 					assert_eq!(
-						S::try_from(t.clone()).unwrap(), expected,
+						u128::try_from(t.clone()).unwrap(), expected,
 						"{:?} - {:?} ===> {:?} != {:?}", u, v, t, expected,
 					);
 				}
@@ -85,7 +83,7 @@ fn main() {
 				let expected = ue.unwrap() * ve.unwrap();
 				let t = u.clone().mul(&v);
 				assert_eq!(
-					S::try_from(t.clone()).unwrap(), expected,
+					u128::try_from(t.clone()).unwrap(), expected,
 					"{:?} * {:?} ===> {:?} != {:?}", u, v, t, expected,
 				);
 			}
@@ -98,17 +96,17 @@ fn main() {
 				let (q, r) = (ue / ve, ue % ve);
 				if let Some((qq, rr)) = u.clone().div(&v, true) {
 					assert_eq!(
-						S::try_from(qq.clone()).unwrap(), q,
+						u128::try_from(qq.clone()).unwrap(), q,
 						"{:?} / {:?} ===> {:?} != {:?}", u, v, qq, q,
 					);
 					assert_eq!(
-						S::try_from(rr.clone()).unwrap(), r,
+						u128::try_from(rr.clone()).unwrap(), r,
 						"{:?} % {:?} ===> {:?} != {:?}", u, v, rr, r,
 					);
 				} else if v.len() == 1 {
 					let qq = u.clone().div_unit(ve as Single);
 					assert_eq!(
-						S::try_from(qq.clone()).unwrap(), q,
+						u128::try_from(qq.clone()).unwrap(), q,
 						"[single] {:?} / {:?} ===> {:?} != {:?}", u, v, qq, q,
 					);
 				} else if v.msb() != 0 && u.msb() != 0 && u.len() > v.len() {
