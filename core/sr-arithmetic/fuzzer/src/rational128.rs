@@ -24,7 +24,7 @@
 //!
 //! # More infomation
 //! More information about `honggfuzz` can be found
-//! [here](https://docs.rs/honggfuzz/0.5.45/honggfuzz/).
+//! [here](https://docs.rs/honggfuzz/).
 
 use honggfuzz::fuzz;
 use sr_arithmetic::{helpers_128bit::multiply_by_rational, traits::Zero};
