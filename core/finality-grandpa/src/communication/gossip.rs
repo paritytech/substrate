@@ -132,7 +132,7 @@ struct View<N> {
 impl<N> Default for View<N> {
 	fn default() -> Self {
 		View {
-			round: Round(0),
+			round: Round(1),
 			set_id: SetId(0),
 			last_commit: None,
 		}
@@ -144,7 +144,7 @@ impl<N: Ord> View<N> {
 	fn update_set(&mut self, set_id: SetId) {
 		if set_id != self.set_id {
 			self.set_id = set_id;
-			self.round = Round(0);
+			self.round = Round(1);
 		}
 	}
 
@@ -563,7 +563,7 @@ impl<Block: BlockT> Inner<Block> {
 		{
 			let local_view = match self.local_view {
 				ref mut x @ None => x.get_or_insert(View {
-					round: Round(0),
+					round: Round(1),
 					set_id,
 					last_commit: None,
 				}),
@@ -575,7 +575,7 @@ impl<Block: BlockT> Inner<Block> {
 			};
 
 			local_view.update_set(set_id);
-			self.live_topics.push(Round(0), set_id);
+			self.live_topics.push(Round(1), set_id);
 			self.authorities = authorities;
 		}
 		self.multicast_neighbor_packet()
@@ -1475,11 +1475,11 @@ mod tests {
 		let peer = PeerId::random();
 
 		val.note_set(SetId(set_id), vec![auth.clone()], |_, _| {});
-		val.note_round(Round(0), |_, _| {});
+		val.note_round(Round(1), |_, _| {});
 
 		let inner = val.inner.read();
 		let unknown_voter = inner.validate_round_message(&peer, &VoteOrPrecommitMessage {
-			round: Round(0),
+			round: Round(1),
 			set_id: SetId(set_id),
 			message: SignedMessage::<Block> {
 				message: grandpa::Message::Prevote(grandpa::Prevote {
@@ -1492,7 +1492,7 @@ mod tests {
 		});
 
 		let bad_sig = inner.validate_round_message(&peer, &VoteOrPrecommitMessage {
-			round: Round(0),
+			round: Round(1),
 			set_id: SetId(set_id),
 			message: SignedMessage::<Block> {
 				message: grandpa::Message::Prevote(grandpa::Prevote {
@@ -1521,7 +1521,7 @@ mod tests {
 		let peer = PeerId::random();
 
 		val.note_set(SetId(set_id), vec![auth.clone()], |_, _| {});
-		val.note_round(Round(0), |_, _| {});
+		val.note_round(Round(1), |_, _| {});
 
 		let validate_catch_up = || {
 			let mut inner = val.inner.write();
