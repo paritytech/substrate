@@ -79,6 +79,7 @@ const NODE_KEY_SECP256K1_FILE: &str = "secret";
 const NODE_KEY_ED25519_FILE: &str = "secret_ed25519";
 
 /// Executable version. Used to pass version information from the root crate.
+#[derive(Clone)]
 pub struct VersionInfo {
 	/// Implementaiton name.
 	pub name: &'static str,
