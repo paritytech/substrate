@@ -50,6 +50,33 @@ pub use primitives::traits::Externalities;
 pub use wasm_interface;
 pub use wasm_runtime::WasmExecutionMethod;
 
+/// Call the given `function` in the given wasm `code`.
+///
+/// The signature of `function` needs to follow the default Substrate function signature.
+///
+/// - `call_data`: Will be given as input parameters to `function`
+/// - `execution_method`: The execution method to use.
+/// - `ext`: The externalities that should be set while executing the wasm function.
+/// - `heap_pages`: The number of heap pages to allocate.
+///
+/// Returns the `Vec<u8>` that contains the return value of the function.
+pub fn call_in_wasm<E: Externalities>(
+	function: &str,
+	call_data: &[u8],
+	execution_method: WasmExecutionMethod,
+	ext: &mut E,
+	code: &[u8],
+	heap_pages: u64,
+) -> error::Result<Vec<u8>> {
+	let mut instance = wasm_runtime::create_wasm_runtime_with_code(
+		ext,
+		execution_method,
+		heap_pages,
+		code,
+	)?;
+	instance.call(ext, function, call_data)
+}
+
 /// Provides runtime information.
 pub trait RuntimeInfo {
 	/// Native runtime information.
@@ -60,4 +87,25 @@ pub trait RuntimeInfo {
 		&self,
 		ext: &mut E,
 	) -> Option<RuntimeVersion>;
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use runtime_test::WASM_BINARY;
+	use runtime_io::TestExternalities;
+
+	#[test]
+	fn call_in_interpreted_wasm_works() {
+		let mut ext = TestExternalities::default();
+		let res = call_in_wasm(
+			"test_empty_return",
+			&[],
+			WasmExecutionMethod::Interpreted,
+			&mut ext,
+			&WASM_BINARY,
+			8,
+		).unwrap();
+		assert_eq!(res, vec![0u8; 0]);
+	}
 }
