@@ -609,7 +609,8 @@ impl<B: BlockT> Validator<B> for DiscardAll {
 mod tests {
 	use sr_primitives::testing::{H256, Block as RawBlock, ExtrinsicWrapper};
 	use futures03::stream::StreamExt;
-	use tokio02::runtime::current_thread::Runtime;
+	use futures03::future::{FutureExt, TryFutureExt};
+	use tokio::runtime::current_thread::Runtime;
 
 	use super::*;
 
@@ -631,8 +632,7 @@ mod tests {
 	macro_rules! stream_assert_eq {
 		($stream: expr, $expected_value: expr) => {
 			let mut rt = Runtime::new().unwrap();
-			let value = rt.block_on($stream);
-			assert_eq!(value, $expected_value);
+			assert_eq!(rt.block_on($stream.map(|x| -> Result<_, ()> { Ok(x) }).compat()).unwrap(), $expected_value);
 		};
 	}
 
