@@ -165,7 +165,8 @@ enum Error<B: BlockT> {
 	#[display(fmt = "Parent block of {} has no associated weight", _0)]
 	ParentBlockNoAssociatedWeight(B::Hash),
 	Client(client::error::Error),
-	DataProvider(String),
+	#[display(fmt = "Checking inherents failed: {}", _0)]
+	CheckInherents(String),
 	Runtime(RuntimeString),
 	ForkTree(Box<fork_tree::Error<client::error::Error>>),
 }
