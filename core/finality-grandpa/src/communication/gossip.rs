@@ -1557,19 +1557,19 @@ mod tests {
 
 	#[test]
 	fn unanswerable_catch_up_requests_discarded() {
-		// create voter set state with round 1 completed
+		// create voter set state with round 2 completed
 		let set_state: SharedVoterSetState<Block> = {
 			let mut completed_rounds = voter_set_state().read().completed_rounds();
 
 			completed_rounds.push(environment::CompletedRound {
-				number: 1,
+				number: 2,
 				state: grandpa::round::State::genesis(Default::default()),
 				base: Default::default(),
 				votes: Default::default(),
 			});
 
 			let mut current_rounds = environment::CurrentRounds::new();
-			current_rounds.insert(2, environment::HasVoted::No);
+			current_rounds.insert(3, environment::HasVoted::No);
 
 			let set_state = environment::VoterSetState::<Block>::Live {
 				completed_rounds,
@@ -1590,7 +1590,7 @@ mod tests {
 		let peer = PeerId::random();
 
 		val.note_set(SetId(set_id), vec![auth.clone()], |_, _| {});
-		val.note_round(Round(2), |_, _| {});
+		val.note_round(Round(3), |_, _| {});
 
 		// add the peer making the request to the validator,
 		// otherwise it is discarded
@@ -1606,7 +1606,7 @@ mod tests {
 			&set_state,
 		);
 
-		// we're at round 2, a catch up request for round 10 is out of scope
+		// we're at round 3, a catch up request for round 10 is out of scope
 		assert!(res.0.is_none());
 		assert_eq!(res.1, Action::Discard(cost::OUT_OF_SCOPE_MESSAGE));
 
@@ -1614,16 +1614,16 @@ mod tests {
 			&peer,
 			CatchUpRequestMessage {
 				set_id: SetId(set_id),
-				round: Round(1),
+				round: Round(2),
 			},
 			&set_state,
 		);
 
-		// a catch up request for round 1 should be answered successfully
+		// a catch up request for round 2 should be answered successfully
 		match res.0.unwrap() {
 			GossipMessage::CatchUp(catch_up) => {
 				assert_eq!(catch_up.set_id, SetId(set_id));
-				assert_eq!(catch_up.message.round_number, 1);
+				assert_eq!(catch_up.message.round_number, 2);
 
 				assert_eq!(res.1, Action::Discard(cost::CATCH_UP_REPLY));
 			},
