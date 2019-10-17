@@ -1872,6 +1872,7 @@ mod tests {
 		val.note_set(SetId(1), Vec::new(), |_, _| {});
 
 		// we are at round 10
+		val.note_round(Round(9), |_, _| {});
 		val.note_round(Round(10), |_, _| {});
 
 		let mut is_expired = val.message_expired();
