@@ -56,6 +56,7 @@ test-client = { package = "substrate-test-runtime-client", path = "../../core/te
 test_runtime = { package = "substrate-test-runtime", path = "../../core/test-runtime" }
 tempdir = "0.3.7"
 tokio = "0.1.22"
+tokio02 = { package = "tokio", version = "0.2.0-alpha.6"}
 
 [features]
 default = []

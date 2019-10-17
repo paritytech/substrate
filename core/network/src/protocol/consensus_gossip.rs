@@ -608,7 +608,8 @@ impl<B: BlockT> Validator<B> for DiscardAll {
 #[cfg(test)]
 mod tests {
 	use sr_primitives::testing::{H256, Block as RawBlock, ExtrinsicWrapper};
-	use futures::Stream;
+	use futures03::stream::StreamExt;
+	use tokio02::runtime::current_thread::Runtime;
 
 	use super::*;
 
@@ -625,6 +626,14 @@ mod tests {
 				});
 			}
 		}
+	}
+
+	macro_rules! stream_assert_eq {
+		($stream: expr, $expected_value: expr) => {
+			let mut rt = Runtime::new().unwrap();
+			let value = rt.block_on($stream);
+			assert_eq!(value, $expected_value);
+		};
 	}
 
 	struct AllowAll;
@@ -692,8 +701,6 @@ mod tests {
 
 	#[test]
 	fn message_stream_include_those_sent_before_asking_for_stream() {
-		use futures::Stream;
-
 		let mut consensus = ConsensusGossip::<Block>::new();
 		consensus.register_validator_internal([0, 0, 0, 0], Arc::new(AllowAll));
 
@@ -701,9 +708,9 @@ mod tests {
 		let topic = HashFor::<Block>::hash(&[1,2,3]);
 
 		consensus.register_message(topic, message.clone());
-		let stream = consensus.messages_for([0, 0, 0, 0], topic);
+		let mut stream = consensus.messages_for([0, 0, 0, 0], topic);
 
-		assert_eq!(stream.wait().next(), Some(Ok(TopicNotification { message: message.data, sender: None })));
+		stream_assert_eq!(stream.next(), Some(TopicNotification { message: message.data, sender: None }));
 	}
 
 	#[test]
@@ -730,11 +737,11 @@ mod tests {
 
 		consensus.register_message(topic, message.clone());
 
-		let stream1 = consensus.messages_for([0, 0, 0, 0], topic);
-		let stream2 = consensus.messages_for([0, 0, 0, 0], topic);
+		let mut stream1 = consensus.messages_for([0, 0, 0, 0], topic);
+		let mut stream2 = consensus.messages_for([0, 0, 0, 0], topic);
 
-		assert_eq!(stream1.wait().next(), Some(Ok(TopicNotification { message: message.data.clone(), sender: None })));
-		assert_eq!(stream2.wait().next(), Some(Ok(TopicNotification { message: message.data, sender: None })));
+		stream_assert_eq!(stream1.next(), Some(TopicNotification { message: message.data.clone(), sender: None }));
+		stream_assert_eq!(stream2.next(), Some(TopicNotification { message: message.data, sender: None }));
 	}
 
 	#[test]
@@ -749,10 +756,10 @@ mod tests {
 		consensus.register_message(topic, msg_a);
 		consensus.register_message(topic, msg_b);
 
-		let mut stream = consensus.messages_for([0, 0, 0, 0], topic).wait();
+		let mut stream = consensus.messages_for([0, 0, 0, 0], topic);
 
-		assert_eq!(stream.next(), Some(Ok(TopicNotification { message: vec![1, 2, 3], sender: None })));
+		stream_assert_eq!(stream.next(), Some(TopicNotification { message: vec![1, 2, 3], sender: None }));
 		let _ = consensus.live_message_sinks.remove(&([0, 0, 0, 0], topic));
-		assert_eq!(stream.next(), None);
+		stream_assert_eq!(stream.next(), None);
 	}
 }
