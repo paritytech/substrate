@@ -1813,6 +1813,36 @@ mod tests {
 		header_hash
 	}
 
+	fn insert_kvs(
+		backend: &Backend<Block>,
+		number: u64,
+		parent_hash: H256,
+		kvs: Vec<(Vec<u8>, Option<Vec<u8>>)>,
+		extrinsics_root: H256,
+	) -> H256 {
+		let header = Header {
+			number,
+			parent_hash,
+			state_root: BlakeTwo256::trie_root(Vec::new()),
+			digest: Default::default(),
+			extrinsics_root,
+		};
+		let header_hash = header.hash();
+
+		let block_id = if number == 0 {
+			BlockId::Hash(Default::default())
+		} else {
+			BlockId::Number(number - 1)
+		};
+		let mut op = backend.begin_operation().unwrap();
+		backend.begin_state_operation(&mut op, block_id).unwrap();
+		let kv_transaction = kvs.into_iter().collect(); 
+		op.update_db_storage((Default::default(), kv_transaction)).unwrap();
+		op.set_block_data(header, None, None, NewBlockState::Best).unwrap();
+		backend.commit_operation(op).unwrap();
+		header_hash
+	}
+
 	#[test]
 	fn block_hash_inserted_correctly() {
 		let backing = {
@@ -2332,6 +2362,105 @@ mod tests {
 		backend.storage.db.write(tx).unwrap();
 		assert!(backend.changes_tries_storage.get(&root2, EMPTY_PREFIX).unwrap().is_none());
 		assert!(backend.changes_tries_storage.get(&root3, EMPTY_PREFIX).unwrap().is_some());
+	}
+
+	#[test]
+	fn kv_storage_works() {
+		let backend = Backend::<Block>::new_test(1000, 100);
+
+		let check_kv = |backend: &Backend<Block>, block: H256, val: Vec<(Vec<u8>, Option<Vec<u8>>)>| {
+			let block = BlockId::Hash(block);
+			let state = backend.state_at(block).unwrap();
+			for (k, v) in val {
+				let content = state.kv_storage(k.as_slice()).unwrap();
+				assert_eq!(v, content);
+			}
+		};
+
+		let changes0 = vec![(b"key_at_0".to_vec(), Some(b"val_at_0".to_vec()))];
+		let changes1 = vec![
+			(b"key_at_1".to_vec(), Some(b"val_at_1".to_vec())),
+			(b"another_key_at_1".to_vec(), Some(b"another_val_at_1".to_vec())),
+		];
+		let changes2 = vec![(b"key_at_2".to_vec(), Some(b"val_at_2".to_vec()))];
+		let changes3 = vec![(b"another_key_at_1".to_vec(), None)];
+
+		let block0 = insert_kvs(&backend, 0, Default::default(), changes0.clone(), Default::default());
+		let block1 = insert_kvs(&backend, 1, block0, changes1.clone(), Default::default());
+		let block2 = insert_kvs(&backend, 2, block1, changes2.clone(), Default::default());
+		let block3 = insert_kvs(&backend, 3, block2, changes3.clone(), Default::default());
+
+		check_kv(&backend, block0, changes0.clone());
+		check_kv(&backend, block1, changes0);
+		check_kv(&backend, block1, changes1.clone());
+		check_kv(&backend, block2, changes1);
+		check_kv(&backend, block2, changes2);
+		check_kv(&backend, block3, changes3);
+	}
+
+	#[test]
+	fn kv_storage_works_with_forks() {
+		let backend = Backend::<Block>::new_test(1000, 4);
+
+		let check_kv = |backend: &Backend<Block>, block: H256, val: &Vec<(Vec<u8>, Option<Vec<u8>>)>| {
+			let block = BlockId::Hash(block);
+			let state = backend.state_at(block).unwrap();
+			for (k, v) in val {
+				let content = state.kv_storage(k).unwrap();
+				assert_eq!(v, &content);
+			}
+		};
+
+		let changes0 = vec![(b"k0".to_vec(), Some(b"v0".to_vec()))];
+		let changes1 = vec![(b"k1".to_vec(), Some(b"v1".to_vec()))];
+		let changes2 = vec![(b"k2".to_vec(), Some(b"v2".to_vec()))];
+		let block0 = insert_kvs(&backend, 0, Default::default(), changes0.clone(), Default::default());
+		let block1 = insert_kvs(&backend, 1, block0, changes1.clone(), Default::default());
+		let block2 = insert_kvs(&backend, 2, block1, changes2.clone(), Default::default());
+
+		let changes2_1_0 = vec![(b"k3".to_vec(), Some(b"v3".to_vec()))];
+		let changes2_1_1 = vec![(b"k4".to_vec(), Some(b"v4".to_vec()))];
+		let block2_1_0 = insert_kvs(&backend, 3, block2, changes2_1_0.clone(), Default::default());
+		let block2_1_1 = insert_kvs(&backend, 4, block2_1_0, changes2_1_1.clone(), Default::default());
+
+		let changes2_2_0 = vec![(b"k5".to_vec(), Some(b"v5".to_vec()))];
+		let changes2_2_1 = vec![(b"k6".to_vec(), Some(b"v6".to_vec()))];
+		// use different extrinsic root to have different hash than 2_1_0
+		let block2_2_0 = insert_kvs(&backend, 3, block2, changes2_2_0.clone(), [1u8; 32].into());
+		let block2_2_1 = insert_kvs(&backend, 4, block2_2_0, changes2_2_1.clone(), Default::default());
+
+		// branch1: when asking for finalized block hash
+		check_kv(&backend, block0, &changes0);
+		check_kv(&backend, block1, &changes0);
+		check_kv(&backend, block1, &changes1);
+		check_kv(&backend, block2, &changes2);
+		check_kv(&backend, block2_1_0, &changes2_1_0);
+		check_kv(&backend, block2_1_1, &changes2_1_1);
+		check_kv(&backend, block2_2_0, &changes2_2_0);
+		check_kv(&backend, block2_2_1, &changes2_2_1);
+
+		// after canonicalize range on 2_2_0 side
+		let mut block_prev = block2_1_1;
+		let mut nb_prev = 4;
+		let mut next = || {
+			block_prev = insert_kvs(&backend, nb_prev, block_prev, vec![], Default::default());
+			nb_prev += 1;
+		};
+
+		next();
+		next();
+		next();
+		check_kv(&backend, block0, &changes0);
+		check_kv(&backend, block1, &changes1);
+		check_kv(&backend, block2, &changes2);
+		check_kv(&backend, block2_1_0, &changes2_1_0);
+		check_kv(&backend, block2_2_0, &changes2_2_0);
+		next();
+		check_kv(&backend, block2_1_0, &changes2_1_0);
+		check_kv(&backend, block2_2_0, &changes2_2_0);
+//unimplemented!("finalized block2_1_0 and check again");
+
+//unimplemented!("direct query into storage db");
 	}
 
 	#[test]
