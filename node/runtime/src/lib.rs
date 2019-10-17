@@ -65,7 +65,7 @@ pub use staking::StakerStatus;
 
 /// Implementations of some helper traits passed into runtime modules as associated types.
 pub mod impls;
-use impls::{CurrencyToVoteHandler, WeightMultiplierUpdateHandler, Author, WeightToFee};
+use impls::{CurrencyToVoteHandler, FeeMultiplierUpdateHandler, Author, WeightToFee};
 
 /// Constant values used within the runtime.
 pub mod constants;
@@ -84,8 +84,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to equal spec_version. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 177,
-	impl_version: 177,
+	spec_version: 178,
+	impl_version: 178,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -125,7 +125,6 @@ impl system::Trait for Runtime {
 	type AccountId = AccountId;
 	type Lookup = Indices;
 	type Header = generic::Header<BlockNumber, BlakeTwo256>;
-	type WeightMultiplierUpdate = WeightMultiplierUpdateHandler;
 	type Event = Event;
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
@@ -161,8 +160,6 @@ parameter_types! {
 	pub const ExistentialDeposit: Balance = 1 * DOLLARS;
 	pub const TransferFee: Balance = 1 * CENTS;
 	pub const CreationFee: Balance = 1 * CENTS;
-	pub const TransactionBaseFee: Balance = 1 * CENTS;
-	pub const TransactionByteFee: Balance = 10 * MILLICENTS;
 }
 
 impl balances::Trait for Runtime {
@@ -170,15 +167,25 @@ impl balances::Trait for Runtime {
 	type OnFreeBalanceZero = ((Staking, Contracts), Session);
 	type OnNewAccount = Indices;
 	type Event = Event;
-	type TransactionPayment = DealWithFees;
 	type DustRemoval = ();
 	type TransferPayment = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type TransferFee = TransferFee;
 	type CreationFee = CreationFee;
+}
+
+parameter_types! {
+	pub const TransactionBaseFee: Balance = 1 * CENTS;
+	pub const TransactionByteFee: Balance = 10 * MILLICENTS;
+}
+
+impl transaction_payment::Trait for Runtime {
+	type Currency = Balances;
+	type OnTransactionPayment = DealWithFees;
 	type TransactionBaseFee = TransactionBaseFee;
 	type TransactionByteFee = TransactionByteFee;
 	type WeightToFee = WeightToFee;
+	type FeeMultiplierUpdate = FeeMultiplierUpdateHandler;
 }
 
 parameter_types! {
@@ -480,7 +487,7 @@ impl system::offchain::CreateTransaction<Runtime, UncheckedExtrinsic> for Runtim
 			system::CheckEra::<Runtime>::from(generic::Era::mortal(period, current_block)),
 			system::CheckNonce::<Runtime>::from(index),
 			system::CheckWeight::<Runtime>::new(),
-			balances::TakeFees::<Runtime>::from(tip),
+			transaction_payment::ChargeTransactionPayment::<Runtime>::from(tip),
 			Default::default(),
 		);
 		let raw_payload = SignedPayload::new(call, extra).ok()?;
@@ -504,6 +511,7 @@ construct_runtime!(
 		Authorship: authorship::{Module, Call, Storage, Inherent},
 		Indices: indices,
 		Balances: balances::{default, Error},
+		TransactionPayment: transaction_payment::{Module, Storage},
 		Staking: staking::{default, OfflineWorker},
 		Session: session::{Module, Call, Storage, Event, Config<T>},
 		Democracy: democracy::{Module, Call, Storage, Config, Event<T>},
@@ -540,7 +548,7 @@ pub type SignedExtra = (
 	system::CheckEra<Runtime>,
 	system::CheckNonce<Runtime>,
 	system::CheckWeight<Runtime>,
-	balances::TakeFees<Runtime>,
+	transaction_payment::ChargeTransactionPayment<Runtime>,
 	contracts::CheckBlockGasLimit<Runtime>,
 );
 /// Unchecked extrinsic type as expected by this runtime.

@@ -46,16 +46,16 @@ mod tests {
 		traits::{CodeExecutor, Externalities}, storage::well_known_keys,
 	};
 	use sr_primitives::{
-		assert_eq_error_rate,
+		Fixed64,
 		traits::{Header as HeaderT, Hash as HashT, Convert}, ApplyResult,
-		transaction_validity::InvalidTransaction, weights::{WeightMultiplier, GetDispatchInfo},
+		transaction_validity::InvalidTransaction, weights::GetDispatchInfo,
 	};
 	use contracts::ContractAddressFor;
 	use substrate_executor::{NativeExecutor, WasmExecutionMethod};
 	use system::{EventRecord, Phase};
 	use node_runtime::{
 		Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances, BuildStorage,
-		System, Event, TransferFee, TransactionBaseFee, TransactionByteFee,
+		System, TransactionPayment, Event, TransferFee, TransactionBaseFee, TransactionByteFee,
 		constants::currency::*, impls::WeightToFee,
 	};
 	use node_primitives::{Balance, Hash, BlockNumber};
@@ -88,17 +88,15 @@ mod tests {
 	}
 
 	/// Default transfer fee
-	fn transfer_fee<E: Encode>(extrinsic: &E) -> Balance {
+	fn transfer_fee<E: Encode>(extrinsic: &E, fee_multiplier: Fixed64) -> Balance {
 		let length_fee = TransactionBaseFee::get() +
 			TransactionByteFee::get() *
 			(extrinsic.encode().len() as Balance);
 
 		let weight = default_transfer_call().get_dispatch_info().weight;
-		// NOTE: this is really hard to apply, since the multiplier of each block needs to be fetched
-		// before the block, while we compute this after the block.
-		// weight = <system::Module<Runtime>>::next_weight_multiplier().apply_to(weight);
-		let weight_fee = <Runtime as balances::Trait>::WeightToFee::convert(weight);
-		length_fee + weight_fee + TransferFee::get()
+		let weight_fee = <Runtime as transaction_payment::Trait>::WeightToFee::convert(weight);
+
+		fee_multiplier.saturated_multiply_accumulate(length_fee + weight_fee) + TransferFee::get()
 	}
 
 	fn default_transfer_call() -> balances::Call<Runtime> {
@@ -217,6 +215,9 @@ mod tests {
 			None,
 		).0;
 		assert!(r.is_ok());
+
+		let fm = t.execute_with(TransactionPayment::next_fee_multiplier);
+
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"BlockBuilder_apply_extrinsic",
@@ -227,7 +228,7 @@ mod tests {
 		assert!(r.is_ok());
 
 		t.execute_with(|| {
-			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - transfer_fee(&xt()));
+			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - transfer_fee(&xt(), fm));
 			assert_eq!(Balances::total_balance(&bob()), 69 * DOLLARS);
 		});
 	}
@@ -253,6 +254,9 @@ mod tests {
 			None,
 		).0;
 		assert!(r.is_ok());
+
+		let fm = t.execute_with(TransactionPayment::next_fee_multiplier);
+
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"BlockBuilder_apply_extrinsic",
@@ -263,7 +267,7 @@ mod tests {
 		assert!(r.is_ok());
 
 		t.execute_with(|| {
-			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - transfer_fee(&xt()));
+			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - transfer_fee(&xt(), fm));
 			assert_eq!(Balances::total_balance(&bob()), 69 * DOLLARS);
 		});
 	}
@@ -425,6 +429,9 @@ mod tests {
 
 		let (block1, block2) = blocks();
 
+		let mut alice_last_known_balance: Balance = Default::default();
+		let mut fm = t.execute_with(TransactionPayment::next_fee_multiplier);
+
 		executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_execute_block",
@@ -434,8 +441,9 @@ mod tests {
 		).0.unwrap();
 
 		t.execute_with(|| {
-			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - transfer_fee(&xt()));
+			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - transfer_fee(&xt(), fm));
 			assert_eq!(Balances::total_balance(&bob()), 169 * DOLLARS);
+			alice_last_known_balance = Balances::total_balance(&alice());
 			let events = vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
@@ -460,6 +468,9 @@ mod tests {
 			];
 			assert_eq!(System::events(), events);
 		});
+
+		fm = t.execute_with(TransactionPayment::next_fee_multiplier);
+
 		executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_execute_block",
@@ -471,15 +482,13 @@ mod tests {
 		t.execute_with(|| {
 			// NOTE: fees differ slightly in tests that execute more than one block due to the
 			// weight update. Hence, using `assert_eq_error_rate`.
-			assert_eq_error_rate!(
+			assert_eq!(
 				Balances::total_balance(&alice()),
-				32 * DOLLARS - 2 * transfer_fee(&xt()),
-				10_000
+				alice_last_known_balance - 10 * DOLLARS - transfer_fee(&xt(), fm),
 			);
-			assert_eq_error_rate!(
+			assert_eq!(
 				Balances::total_balance(&bob()),
-				179 * DOLLARS - transfer_fee(&xt()),
-				10_000
+				179 * DOLLARS - transfer_fee(&xt(), fm),
 			);
 			let events = vec![
 				EventRecord {
@@ -532,6 +541,9 @@ mod tests {
 
 		let (block1, block2) = blocks();
 
+		let mut alice_last_known_balance: Balance = Default::default();
+		let mut fm = t.execute_with(TransactionPayment::next_fee_multiplier);
+
 		executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_execute_block",
@@ -541,9 +553,12 @@ mod tests {
 		).0.unwrap();
 
 		t.execute_with(|| {
-			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - transfer_fee(&xt()));
+			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - transfer_fee(&xt(), fm));
 			assert_eq!(Balances::total_balance(&bob()), 169 * DOLLARS);
+			alice_last_known_balance = Balances::total_balance(&alice());
 		});
+
+		fm = t.execute_with(TransactionPayment::next_fee_multiplier);
 
 		executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
@@ -554,15 +569,13 @@ mod tests {
 		).0.unwrap();
 
 		t.execute_with(|| {
-			assert_eq_error_rate!(
+			assert_eq!(
 				Balances::total_balance(&alice()),
-				32 * DOLLARS - 2 * transfer_fee(&xt()),
-				10_000
+				alice_last_known_balance - 10 * DOLLARS - transfer_fee(&xt(), fm),
 			);
-			assert_eq_error_rate!(
+			assert_eq!(
 				Balances::total_balance(&bob()),
-				179 * DOLLARS - 1 * transfer_fee(&xt()),
-				10_000
+				179 * DOLLARS - 1 * transfer_fee(&xt(), fm),
 			);
 		});
 	}
@@ -824,6 +837,7 @@ mod tests {
 			None,
 		).0;
 		assert!(r.is_ok());
+		let fm = t.execute_with(TransactionPayment::next_fee_multiplier);
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"BlockBuilder_apply_extrinsic",
@@ -837,7 +851,7 @@ mod tests {
 			.expect("Extrinsic did not fail");
 
 		t.execute_with(|| {
-			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - 1 * transfer_fee(&xt()));
+			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - 1 * transfer_fee(&xt(), fm));
 			assert_eq!(Balances::total_balance(&bob()), 69 * DOLLARS);
 		});
 	}
@@ -890,13 +904,14 @@ mod tests {
 
 
 	#[test]
-	fn weight_multiplier_increases_and_decreases_on_big_weight() {
+	fn fee_multiplier_increases_and_decreases_on_big_weight() {
 		let mut t = new_test_ext(COMPACT_CODE, false);
 
-		let mut prev_multiplier = WeightMultiplier::default();
+		// initial fee multiplier must be zero
+		let mut prev_multiplier = Fixed64::from_parts(0);
 
 		t.execute_with(|| {
-			assert_eq!(System::next_weight_multiplier(), prev_multiplier);
+			assert_eq!(TransactionPayment::next_fee_multiplier(), prev_multiplier);
 		});
 
 		let mut tt = new_test_ext(COMPACT_CODE, false);
@@ -948,7 +963,7 @@ mod tests {
 
 		// weight multiplier is increased for next block.
 		t.execute_with(|| {
-			let fm = System::next_weight_multiplier();
+			let fm = TransactionPayment::next_fee_multiplier();
 			println!("After a big block: {:?} -> {:?}", prev_multiplier, fm);
 			assert!(fm > prev_multiplier);
 			prev_multiplier = fm;
@@ -965,7 +980,7 @@ mod tests {
 
 		// weight multiplier is increased for next block.
 		t.execute_with(|| {
-			let fm = System::next_weight_multiplier();
+			let fm = TransactionPayment::next_fee_multiplier();
 			println!("After a small block: {:?} -> {:?}", prev_multiplier, fm);
 			assert!(fm < prev_multiplier);
 		});
@@ -978,7 +993,7 @@ mod tests {
 		// weight of transfer call as of now: 1_000_000
 		// if weight of the cheapest weight would be 10^7, this would be 10^9, which is:
 		//   - 1 MILLICENTS in substrate node.
-		//   - 1 milldot based on current polkadot runtime.
+		//   - 1 milli-dot based on current polkadot runtime.
 		// (this baed on assigning 0.1 CENT to the cheapest tx with `weight = 100`)
 		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, (map![
 			<balances::FreeBalance<Runtime>>::hashed_key_for(alice()) => {
@@ -1052,6 +1067,7 @@ mod tests {
 	fn block_weight_capacity_report() {
 		// Just report how many transfer calls you could fit into a block. The number should at least
 		// be a few hundred (250 at the time of writing but can change over time). Runs until panic.
+		use node_primitives::Index;
 
 		// execution ext.
 		let mut t = new_test_ext(COMPACT_CODE, false);
@@ -1118,6 +1134,7 @@ mod tests {
 		// Just report how big a block can get. Executes until panic. Should be ignored unless if
 		// manually inspected. The number should at least be a few megabytes (5 at the time of
 		// writing but can change over time).
+		use node_primitives::Index;
 
 		// execution ext.
 		let mut t = new_test_ext(COMPACT_CODE, false);

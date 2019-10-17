@@ -52,8 +52,6 @@ parameter_types! {
 	pub const ExistentialDeposit: u64 = 0;
 	pub const TransferFee: u64 = 0;
 	pub const CreationFee: u64 = 0;
-	pub const TransactionBaseFee: u64 = 0;
-	pub const TransactionByteFee: u64 = 0;
 }
 
 impl system::Trait for Test {
@@ -66,7 +64,6 @@ impl system::Trait for Test {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type WeightMultiplierUpdate = ();
 	type Event = ();
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
@@ -80,15 +77,11 @@ impl balances::Trait for Test {
 	type OnFreeBalanceZero = ();
 	type OnNewAccount = ();
 	type Event = ();
-	type TransactionPayment = ();
 	type TransferPayment = ();
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type TransferFee = TransferFee;
 	type CreationFee = CreationFee;
-	type TransactionBaseFee = TransactionBaseFee;
-	type TransactionByteFee = TransactionByteFee;
-	type WeightToFee = ();
 }
 
 thread_local! {
