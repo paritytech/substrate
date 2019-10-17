@@ -166,18 +166,17 @@ impl system::Trait for Runtime {
 	type Header = generic::Header<BlockNumber, BlakeTwo256>;
 	/// The ubiquitous event type.
 	type Event = Event;
-	/// Update weight (to fee) multiplier per-block.
-	type WeightMultiplierUpdate = ();
 	/// The ubiquitous origin type.
 	type Origin = Origin;
 	/// Maximum number of block number to block hash mappings to keep (oldest pruned first).
 	type BlockHashCount = BlockHashCount;
-	/// Maximum weight of each block. With a default weight system of 1byte == 1weight, 4mb is ok.
+	/// Maximum weight of each block.
 	type MaximumBlockWeight = MaximumBlockWeight;
 	/// Maximum size of all encoded transactions (in bytes) that are allowed in one block.
 	type MaximumBlockLength = MaximumBlockLength;
 	/// Portion of the block weight that is available to all normal transactions.
 	type AvailableBlockRatio = AvailableBlockRatio;
+	/// Version of the runtime.
 	type Version = Version;
 }
 
@@ -223,8 +222,6 @@ parameter_types! {
 	pub const ExistentialDeposit: u128 = 500;
 	pub const TransferFee: u128 = 0;
 	pub const CreationFee: u128 = 0;
-	pub const TransactionBaseFee: u128 = 0;
-	pub const TransactionByteFee: u128 = 1;
 }
 
 impl balances::Trait for Runtime {
@@ -236,15 +233,25 @@ impl balances::Trait for Runtime {
 	type OnNewAccount = Indices;
 	/// The ubiquitous event type.
 	type Event = Event;
-	type TransactionPayment = ();
 	type DustRemoval = ();
 	type TransferPayment = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type TransferFee = TransferFee;
 	type CreationFee = CreationFee;
+}
+
+parameter_types! {
+	pub const TransactionBaseFee: Balance = 0;
+	pub const TransactionByteFee: Balance = 1;
+}
+
+impl transaction_payment::Trait for Runtime {
+	type Currency = balances::Module<Runtime>;
+	type OnTransactionPayment = ();
 	type TransactionBaseFee = TransactionBaseFee;
 	type TransactionByteFee = TransactionByteFee;
 	type WeightToFee = ConvertInto;
+	type FeeMultiplierUpdate = ();
 }
 
 impl sudo::Trait for Runtime {
@@ -269,6 +276,7 @@ construct_runtime!(
 		Grandpa: grandpa::{Module, Call, Storage, Config, Event},
 		Indices: indices::{default, Config<T>},
 		Balances: balances::{default, Error},
+		TransactionPayment: transaction_payment::{Module, Storage},
 		Sudo: sudo,
 		// Used for the module template in `./template.rs`
 		TemplateModule: template::{Module, Call, Storage, Event<T>},
@@ -293,7 +301,7 @@ pub type SignedExtra = (
 	system::CheckEra<Runtime>,
 	system::CheckNonce<Runtime>,
 	system::CheckWeight<Runtime>,
-	balances::TakeFees<Runtime>
+	transaction_payment::ChargeTransactionPayment<Runtime>
 );
 /// Unchecked extrinsic type as expected by this runtime.
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Call, Signature, SignedExtra>;
