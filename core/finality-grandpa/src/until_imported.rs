@@ -38,7 +38,7 @@ use parking_lot::Mutex;
 use sr_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use tokio_timer::Interval;
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::{atomic::{AtomicUsize, Ordering}, Arc};
 use std::time::{Duration, Instant};
 use fg_primitives::AuthorityId;
@@ -81,7 +81,7 @@ pub(crate) struct UntilImported<Block: BlockT, BlockStatus, BlockSyncRequester, 
 	/// Mapping block hashes to their block number, the point in time it was first encountered (Instant), nodes that
 	/// have the corresponding block (inferred by the fact that they send a message referencing it) and a list of
 	/// Grandpa messages referencing the block hash.
-	pending: HashMap<Block::Hash, (NumberFor<Block>, Instant, Vec<network::PeerId>, Vec<(M)>)>,
+	pending: HashMap<Block::Hash, (NumberFor<Block>, Instant, HashSet<network::PeerId>, Vec<(M)>)>,
 	identifier: &'static str,
 }
 
@@ -149,12 +149,12 @@ impl<Block, BStatus, BSyncRequester, I, M> Stream for UntilImported<Block, BStat
 						|target_hash, target_number, wait| {
 							let entry = pending
 								.entry(target_hash)
-								.or_insert_with(|| (target_number, Instant::now(), Vec::new(), Vec::new()));
+								.or_insert_with(|| (target_number, Instant::now(), HashSet::new(), Vec::new()));
 							// Given that we received the message from the sender, we expect to be able to download the
 							// referenced block from them later in case we don't already download it automatically from
 							// elsewhere.
 							if let Some(sender) = sender.clone() {
-								entry.2.push(sender);
+								entry.2.insert(sender);
 							}
 							entry.3.push(wait);
 						} ,
@@ -208,7 +208,10 @@ impl<Block, BStatus, BSyncRequester, I, M> Stream for UntilImported<Block, BStat
 							v.len(),
 						);
 
-						self.block_sync_requester.set_sync_fork_request(senders.clone(), block_hash, block_number);
+						self.block_sync_requester.set_sync_fork_request(
+							senders.clone().into_iter().collect(),
+							block_hash, block_number,
+						);
 
 						*last_log = next_log;
 					}
