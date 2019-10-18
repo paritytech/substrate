@@ -94,9 +94,10 @@ impl<'a> Iterator for BranchRangesIter<'a> {
 
 	fn next(&mut self) -> Option<Self::Item> {
 		if self.1 > 0 {
+			self.1 -= 1;
 			Some((
-				&(self.0).0[self.1 - 1].range,
-				(self.0).0[self.1 - 1].branch_index,
+				&(self.0).0[self.1].range,
+				(self.0).0[self.1].branch_index,
 			))
 		} else {
 			None

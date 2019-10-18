@@ -220,16 +220,19 @@ impl<V> History<V> {
 			return None;
 		}
 
-		// TODO EMCH switch loops ? probably.
 		for (state_branch, state_index) in state.iter() {
+			let state_index = as_u(state_index);
 			while index > 0 {
-				index -= 1;
-				let branch_index = as_u(self.0[index].branch_index);
-				let state_index = as_u(state_index);
+				let branch_index = as_u(self.0[index - 1].branch_index);
 				if state_index == branch_index {
-					if let Some(result) = self.branch_get(index, &state_branch) {
+					if let Some(result) = self.branch_get(index - 1, &state_branch) {
 						return Some(result)
 					}
+					break;
+				} else if state_index > branch_index {
+					break;
+				} else {
+					index -= 1;
 				}
 			}
 			if index == 0 {
@@ -792,10 +795,11 @@ mod test {
 
 		fn next(&mut self) -> Option<Self::Item> {
 			if self.1 > 0 {
+				self.1 -= 1;
 				let upper_node_index = self.2.take();
 				Some((
-					(&self.0.history[self.1 - 1].range, upper_node_index),
-					self.0.history[self.1 - 1].branch_index,
+					(&self.0.history[self.1].range, upper_node_index),
+					self.0.history[self.1].branch_index,
 				))
 			} else {
 				None
@@ -889,6 +893,13 @@ mod test {
 	#[test]
 	fn test_set_get() {
 		let states = test_states();
+		let mut item: History<u64> = Default::default();
+		let mut ref_1 = states.state(3);
+		ref_1.limit_branch(1, Some(1));
+		item.set(&states.state(1), 4);
+		assert_eq!(item.get(&states.state(1)), Some(&4));
+		assert_eq!(item.get(&states.state(4)), Some(&4));
+
 		let mut item: History<u64> = Default::default();
 
 		for i in 0..6 {
