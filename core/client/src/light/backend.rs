@@ -22,7 +22,10 @@ use std::sync::Arc;
 use parking_lot::{RwLock, Mutex};
 
 use sr_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
-use state_machine::{Backend as StateBackend, TrieBackend, backend::InMemory as InMemoryState, ChangesTrieTransaction};
+use state_machine::{
+	Backend as StateBackend, TrieBackend, backend::InMemory as InMemoryState,
+	ChangesTrieTransaction, InMemoryKvBackend,
+};
 use sr_primitives::traits::{Block as BlockT, NumberFor, Zero, Header};
 use crate::in_mem::{self, check_genesis_storage};
 use crate::backend::{
@@ -457,9 +460,9 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 		}
 	}
 
-	fn kv_pairs(&self) -> HashMap<Vec<u8>, Option<Vec<u8>>> {
+	fn kv_in_memory(&self) -> InMemoryKvBackend {
 		match *self {
-			GenesisOrUnavailableState::Genesis(ref state) => state.kv_pairs(),
+			GenesisOrUnavailableState::Genesis(ref state) => state.kv_in_memory(),
 			GenesisOrUnavailableState::Unavailable => Default::default(),
 		}
 	}

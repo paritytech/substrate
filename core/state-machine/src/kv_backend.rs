@@ -30,12 +30,15 @@ pub trait KvBackend: Send + Sync {
 	/// Return all values (in memory) for this backend, mainly for
 	/// tests. This method should only be use for testing or
 	/// for small kv.
-	/// It returns a map to be aligned with internal in memory storage
-	/// types.
-	fn pairs(&self) -> HashMap<Vec<u8>, Option<Vec<u8>>>;
+	/// When use for a storage that implements this trait
+	/// It should return pending deletion as a `None` value.
+	/// This contracdicts a bit the backend aspect of this
+	/// trait but is practical in some cases.
+	fn in_memory(&self) -> InMemory;
 }
 
-/// need to keep multiple block state.
+/// In memory storage of content. It is a storage so it
+/// can contains deletion of value as a `None` variant.
 pub type InMemory = HashMap<Vec<u8>, Option<Vec<u8>>>;
 
 impl KvBackend for InMemory {
@@ -43,7 +46,7 @@ impl KvBackend for InMemory {
 		Ok(self.get(key).map(Clone::clone).unwrap_or(None))
 	}
 
-	fn pairs(&self) -> HashMap<Vec<u8>, Option<Vec<u8>>> {
+	fn in_memory(&self) -> InMemory {
 		self.clone()
 	}
 }
@@ -53,7 +56,7 @@ impl KvBackend for Arc<dyn KvBackend> {
 		KvBackend::get(self.deref(), key)
 	}
 
-	fn pairs(&self) -> HashMap<Vec<u8>, Option<Vec<u8>>> {
-		KvBackend::pairs(self.deref())
+	fn in_memory(&self) -> InMemory {
+		KvBackend::in_memory(self.deref())
 	}
 }

@@ -210,8 +210,8 @@ impl<B: BlockT> StateBackend<Blake2Hasher> for RefTrackingState<B> {
 		self.state.child_pairs(child_storage_key)
 	}
 
-	fn kv_pairs(&self) -> HashMap<Vec<u8>, Option<Vec<u8>>> {
-		self.state.kv_pairs()
+	fn kv_in_memory(&self) -> InMemoryKvBackend {
+		self.state.kv_in_memory()
 	}
 
 	fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> {
@@ -288,8 +288,10 @@ pub(crate) mod columns {
 	pub const AUX: Option<u32> = Some(8);
 	/// Offchain workers local storage
 	pub const OFFCHAIN: Option<u32> = Some(9);
-	/// Kv data
-	pub const OFFSTATE: Option<u32> = Some(10);
+	/// Kv storage main collection.
+	/// Content here should be organized by prefixing
+	/// keys to avoid conflicts.
+	pub const KV: Option<u32> = Some(10);
 }
 
 struct PendingBlock<Block: BlockT> {
@@ -475,7 +477,7 @@ impl<Block: BlockT> HeaderMetadata<Block> for BlockchainDb<Block> {
 /// Database transaction
 pub struct BlockImportOperation<Block: BlockT, H: Hasher> {
 	old_state: CachingState<Blake2Hasher, RefTrackingState<Block>, Block>,
-	db_updates: (PrefixedMemoryDB<H>, HashMap<Vec<u8>, Option<Vec<u8>>>),
+	db_updates: (PrefixedMemoryDB<H>, InMemoryKvBackend),
 	storage_updates: StorageCollection,
 	child_storage_updates: ChildStorageCollection,
 	changes_trie_updates: MemoryDB<H>,
@@ -529,7 +531,7 @@ impl<Block> client::backend::BlockImportOperation<Block, Blake2Hasher>
 
 	fn update_db_storage(
 		&mut self,
-		update: (PrefixedMemoryDB<Blake2Hasher>, HashMap<Vec<u8>, Option<Vec<u8>>>),
+		update: (PrefixedMemoryDB<Blake2Hasher>, InMemoryKvBackend),
 	) -> ClientResult<()> {
 		self.db_updates = update;
 		Ok(())
@@ -635,7 +637,7 @@ impl<Block: BlockT> state_db::KvDb<u64> for StorageDb<Block> {
 	type Error = io::Error;
 
 	fn get_kv(&self, key: &[u8], state: &u64) -> Result<Option<Vec<u8>>, Self::Error> {
-		Ok(self.db.get(columns::OFFSTATE, key)?
+		Ok(self.db.get(columns::KV, key)?
 			.as_ref()
 			.map(|s| Ser::from_slice(&s[..]))
 			.and_then(|s| s.get(*state)
@@ -645,7 +647,7 @@ impl<Block: BlockT> state_db::KvDb<u64> for StorageDb<Block> {
 	}
 
 	fn get_kv_pairs(&self, state: &u64) -> Vec<(Vec<u8>, Vec<u8>)> {
-		self.db.iter(columns::OFFSTATE).filter_map(|(k, v)|
+		self.db.iter(columns::KV).filter_map(|(k, v)|
 			Ser::from_slice(&v[..]).get(*state)
 				.unwrap_or(None) // flatten
 				.map(Into::into)
@@ -661,10 +663,9 @@ impl<Block: BlockT> state_machine::KvBackend for StorageDbAt<Block, (BranchRange
 			.map_err(|e| format!("Database backend error: {:?}", e))
 	}
 
-	fn pairs(&self) -> HashMap<Vec<u8>, Option<Vec<u8>>> {
+	fn in_memory(&self) -> InMemoryKvBackend {
 		self.storage_db.state_db.get_kv_pairs(&self.state, self.storage_db.deref())
-			// Not that we do not store deletion.
-			// Function pairs should not really be call for this backend.
+			// No deletion on storage db.
 			.into_iter().map(|(k, v)| (k, Some(v))).collect()
 	}
 }
@@ -988,7 +989,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 			op.set_block_data(header, body, justification, new_block_state).unwrap();
 			op.update_db_storage(InMemoryTransaction {
 				storage,
-				kv: state.kv_pairs().clone(),
+				kv: state.kv_in_memory().clone(),
 			}).unwrap();
 			inmem.commit_operation(op).unwrap();
 		}
@@ -1446,7 +1447,7 @@ fn apply_state_commit_inner(
 ) -> Result<(), io::Error> {
 
 	for (key, o) in commit.kv.iter() {
-		let (mut ser, new) = if let Some(stored) = db.get(columns::OFFSTATE, key)? {
+		let (mut ser, new) = if let Some(stored) = db.get(columns::KV, key)? {
 			(Ser::from_vec(stored.to_vec()), false)
 		} else {
 			if o.is_some() {
@@ -1459,15 +1460,15 @@ fn apply_state_commit_inner(
 		if let Some((block_prune, kv_prune_keys)) = kv_prune_key.as_mut() {
 			if !new && kv_prune_keys.remove(key) {
 				match ser.prune(*block_prune) {
-					PruneResult::Cleared => transaction.delete(columns::OFFSTATE, &key),
+					PruneResult::Cleared => transaction.delete(columns::KV, &key),
 					PruneResult::Changed
-					| PruneResult::Unchanged => transaction.put(columns::OFFSTATE, &key[..], &ser.into_vec()),
+					| PruneResult::Unchanged => transaction.put(columns::KV, &key[..], &ser.into_vec()),
 				}
 			} else {
-				transaction.put(columns::OFFSTATE, &key[..], &ser.into_vec())
+				transaction.put(columns::KV, &key[..], &ser.into_vec())
 			}
 		} else {
-			transaction.put(columns::OFFSTATE, &key[..], &ser.into_vec())
+			transaction.put(columns::KV, &key[..], &ser.into_vec())
 		}
 	}
 
@@ -1476,15 +1477,15 @@ fn apply_state_commit_inner(
 		for key in kv_prune_key.iter() {
 			// TODO EMCH should we prune less often (wait on pruning journals for instance)
 			// or make it out of this context just stored the block prune and do asynch
-			let mut ser = if let Some(stored) = db.get(columns::OFFSTATE, key)? {
+			let mut ser = if let Some(stored) = db.get(columns::KV, key)? {
 				Ser::from_vec(stored.to_vec())
 			} else {
 				break;
 			};
 
 			match ser.prune(block_prune) {
-				PruneResult::Cleared => transaction.delete(columns::OFFSTATE, &key),
-				PruneResult::Changed => transaction.put(columns::OFFSTATE, &key[..], &ser.into_vec()),
+				PruneResult::Cleared => transaction.delete(columns::KV, &key),
+				PruneResult::Changed => transaction.put(columns::KV, &key[..], &ser.into_vec()),
 				PruneResult::Unchanged => (),
 			}
 		}
@@ -1998,11 +1999,11 @@ mod tests {
 			assert_eq!(state.storage(&[1, 3, 5]).unwrap(), None);
 			assert_eq!(state.storage(&[1, 2, 3]).unwrap(), Some(vec![9, 9, 9]));
 			assert_eq!(state.storage(&[5, 5, 5]).unwrap(), Some(vec![4, 5, 6]));
-			assert_eq!(state.kv_pairs(), vec![
+			assert_eq!(state.kv_in_memory(), vec![
 				(vec![5, 5, 5], Some(vec![4, 5, 6]))
 			].into_iter().collect());
 			let state = db.state_at(BlockId::Number(0)).unwrap();
-			assert_eq!(state.kv_pairs(), vec![].into_iter().collect());
+			assert_eq!(state.kv_in_memory(), vec![].into_iter().collect());
 
 		}
 	}
@@ -2490,10 +2491,10 @@ mod tests {
 
 		// check pruning is called on storage
 		check_kv(&backend, block0, &changes0);
-		assert!(backend.storage.db.get(crate::columns::OFFSTATE, &b"k0"[..]).unwrap().is_some());
+		assert!(backend.storage.db.get(crate::columns::KV, &b"k0"[..]).unwrap().is_some());
 		next();
 		assert!(backend.state_at(BlockId::Hash(block0)).is_err());
-		assert!(backend.storage.db.get(crate::columns::OFFSTATE, &b"k0"[..]).unwrap().is_none());
+		assert!(backend.storage.db.get(crate::columns::KV, &b"k0"[..]).unwrap().is_none());
 	}
 
 	#[test]

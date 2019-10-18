@@ -192,8 +192,8 @@ impl<
 		}
 	}
 
-	fn kv_pairs(&self) -> HashMap<Vec<u8>, Option<Vec<u8>>> {
-		self.kv_storage.pairs()
+	fn kv_in_memory(&self) -> HashMap<Vec<u8>, Option<Vec<u8>>> {
+		self.kv_storage.in_memory()
 	}
 
 	fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> {
@@ -279,7 +279,7 @@ impl<
 		where
 			I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
-		let mut result = self.kv_storage.pairs();
+		let mut result = self.kv_storage.in_memory();
 		result.extend(delta.into_iter());
 		(Default::default(), result)
 	}

@@ -219,8 +219,8 @@ impl<'a, S, H, O> Backend<H> for ProvingBackend<'a, S, H, O>
 		self.backend.child_pairs(storage_key)
 	}
 
-	fn kv_pairs(&self) -> HashMap<Vec<u8>, Option<Vec<u8>>> {
-		self.backend.kv_pairs()
+	fn kv_in_memory(&self) -> HashMap<Vec<u8>, Option<Vec<u8>>> {
+		self.backend.kv_in_memory()
 	}
 
 	fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> {

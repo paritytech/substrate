@@ -22,7 +22,7 @@ use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 use linked_hash_map::{LinkedHashMap, Entry};
 use hash_db::Hasher;
 use sr_primitives::traits::{Block as BlockT, Header};
-use state_machine::{backend::Backend as StateBackend, TrieBackend};
+use state_machine::{backend::Backend as StateBackend, TrieBackend, InMemoryKvBackend};
 use log::trace;
 use super::{StorageCollection, ChildStorageCollection};
 use std::hash::Hash as StdHash;
@@ -594,8 +594,8 @@ impl<H: Hasher, S: StateBackend<H>, B: BlockT> StateBackend<H> for CachingState<
 		self.state.child_pairs(storage_key)
 	}
 
-	fn kv_pairs(&self) -> HashMap<Vec<u8>, Option<Vec<u8>>> {
-		self.state.kv_pairs()
+	fn kv_in_memory(&self) -> InMemoryKvBackend {
+		self.state.kv_in_memory()
 	}
 
 	fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> {

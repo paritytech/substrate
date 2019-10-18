@@ -121,8 +121,9 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	/// Get all key/value pairs into a Vec for a child storage.
 	fn child_pairs(&self, child_storage_key: &[u8]) -> Vec<(Vec<u8>, Vec<u8>)>;
 
-	/// Get all key/value pairs of kv storage. 
-	fn kv_pairs(&self) -> HashMap<Vec<u8>, Option<Vec<u8>>>;
+	/// Get all key/value pairs of kv storage, and pending deletion
+	/// if allowed. 
+	fn kv_in_memory(&self) -> crate::InMemoryKvBackend;
 
 	/// Get all keys with given prefix
 	fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> {
@@ -248,8 +249,8 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 		(*self).child_pairs(child_storage_key)
 	}
 
-	fn kv_pairs(&self) -> HashMap<Vec<u8>, Option<Vec<u8>>> {
-		(*self).kv_pairs()
+	fn kv_in_memory(&self) -> crate::InMemoryKvBackend {
+		(*self).kv_in_memory()
 	}
 
 
@@ -617,7 +618,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 			.collect()
 	}
 
-	fn kv_pairs(&self) -> HashMap<Vec<u8>, Option<Vec<u8>>> {
+	fn kv_in_memory(&self) -> crate::InMemoryKvBackend {
 		self.kv().clone()
 	}
 
