@@ -111,12 +111,9 @@ impl BigUint {
 
 	/// A naive getter for limb at `index`. Note that the order is lsb -> msb.
 	pub fn checked_get(&self, index: usize) -> Option<Single> {
-		if let Some(i) = self.len().checked_sub(1) {
-			if let Some(j) = i.checked_sub(index) {
-				return self.digits.get(j).cloned();
-			}
-		}
-		None
+		let i = self.len().checked_sub(1)?;
+		let j = i.checked_sub(index)?;
+		self.digits.get(j).cloned()
 	}
 
 	/// A naive setter for limb at `index`. Note that the order is lsb -> msb.
@@ -147,16 +144,14 @@ impl BigUint {
 		self.digits[0]
 	}
 
-	/// Strips zeros from the left side of `self`, if any.
+	/// Strips zeros from the left side (the most significant limbs) of `self`, if any.
 	pub fn lstrip(&mut self) {
 		// by definition, a big-int number should never have leading zero limbs. This function
 		// has the ability to cause this. There is nothing to do if the number already has 1
 		// limb only. call it a day and return.
 		if self.len().is_zero() { return; }
-		let mut index = 0;
-		for elem in self.digits.iter() {
-			if *elem != 0 { break } else { index += 1 }
-		}
+		let index = self.digits.iter().position(|&elem| elem != 0).unwrap_or(0);
+
 		if index > 0 {
 			self.digits = self.digits[index..].to_vec()
 		}
@@ -441,7 +436,7 @@ impl rstd::fmt::Debug for BigUint {
 			f,
 			"BigUint {{ {:?} ({:?})}}",
 			self.digits,
-			u128::try_from(self.clone()).unwrap_or_else(|_| 0),
+			u128::try_from(self.clone()).unwrap_or(0),
 		)
 	}
 }

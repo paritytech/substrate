@@ -135,21 +135,13 @@ impl ops::Sub for Fixed64 {
 
 impl CheckedSub for Fixed64 {
 	fn checked_sub(&self, rhs: &Self) -> Option<Self> {
-		if let Some(v) = self.0.checked_sub(rhs.0) {
-			Some(Self(v))
-		} else {
-			None
-		}
+		self.0.checked_sub(rhs.0).map(Self)
 	}
 }
 
 impl CheckedAdd for Fixed64 {
 	fn checked_add(&self, rhs: &Self) -> Option<Self> {
-		if let Some(v) = self.0.checked_add(rhs.0) {
-			Some(Self(v))
-		} else {
-			None
-		}
+		self.0.checked_add(rhs.0).map(Self)
 	}
 }
 

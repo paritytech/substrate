@@ -18,7 +18,7 @@
 use serde::{Serialize, Deserialize};
 
 use rstd::{ops, prelude::*, convert::TryInto};
-use codec::{Encode, Decode};
+use codec::{Encode, Decode, CompactAs};
 use crate::traits::{SaturatedConversion, UniqueSaturatedInto, Saturating};
 
 macro_rules! implement_per_thing {
@@ -27,7 +27,7 @@ macro_rules! implement_per_thing {
 		///
 		#[doc = $title]
 		#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug, Ord, PartialOrd))]
-		#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq)]
+		#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq, CompactAs)]
 		pub struct $name($type);
 
 		impl $name {
@@ -183,22 +183,6 @@ macro_rules! implement_per_thing {
 				};
 
 				(b / maximum) * part + rem_multiplied_divided
-			}
-		}
-
-		impl codec::CompactAs for $name {
-			type As = $type;
-			fn encode_as(&self) -> &$type {
-				&self.0
-			}
-			fn decode_from(x: $type) -> Self {
-				Self(x)
-			}
-		}
-
-		impl From<codec::Compact<$name>> for $name {
-			fn from(x: codec::Compact<$name>) -> Self {
-				x.0
 			}
 		}
 
