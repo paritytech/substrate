@@ -140,7 +140,7 @@ fn main() {
 		.get_matches();
 
 	if matches.is_present("wookong") {
-		execute::<Sr25519, Wookong>(matches, Some(Wookong))
+		execute::<Sr25519, Wookong>(matches, Some(Wookong::with_account(Public)))
 	} else {
 		if matches.is_present("ed25519") {
 			execute::<Ed25519, ed25519::Pair>(matches, None)
