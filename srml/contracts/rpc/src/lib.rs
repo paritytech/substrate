@@ -23,6 +23,7 @@ use client::blockchain::HeaderBackend;
 use codec::Codec;
 use jsonrpc_core::{Error, ErrorCode, Result};
 use jsonrpc_derive::rpc;
+use primitives::Bytes;
 use sr_primitives::{
 	generic::BlockId,
 	traits::{Block as BlockT, ProvideRuntimeApi},
@@ -41,7 +42,7 @@ pub struct CallRequest<AccountId, Balance> {
 	dest: AccountId,
 	value: Balance,
 	gas_limit: number::NumberOrHex<u64>,
-	input_data: Vec<u8>,
+	input_data: Bytes,
 }
 
 /// Contracts RPC methods.
@@ -111,7 +112,7 @@ where
 		})?;
 
 		let exec_result = api
-			.call(&at, origin, dest, value, gas_limit, input_data)
+			.call(&at, origin, dest, value, gas_limit, input_data.to_vec())
 			.map_err(|e| Error {
 				code: ErrorCode::ServerError(RUNTIME_ERROR),
 				message: "Runtime trapped while executing a contract.".into(),
