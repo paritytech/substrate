@@ -32,22 +32,26 @@ pub use substrate_finality_grandpa_primitives as fg_primitives;
 
 use rstd::prelude::*;
 
-use app_crypto::RuntimeAppPublic;
+use app_crypto::{key_types::GRANDPA, RuntimeAppPublic};
 use codec::{self as codec, Encode, Decode, Error};
 use support::{
-	decl_event, decl_storage, decl_module, dispatch::Result,
-	storage::StorageValue, storage::StorageMap, traits::KeyOwnerProofSystem,
+	decl_event, decl_storage, decl_module,
+	dispatch::Result,
+	traits::KeyOwnerProofSystem,
 };
 use sr_primitives::{
 	generic::{DigestItem, OpaqueDigestItemId},
-	traits::{Extrinsic as ExtrinsicT, Zero},
+	traits::Zero,
 	KeyTypeId, Perbill,
 };
 use sr_staking_primitives::{
 	SessionIndex,
 	offence::{Kind, Offence, ReportOffence},
 };
-use fg_primitives::{GRANDPA_ENGINE_ID, ScheduledChange, ConsensusLog, SetId, RoundNumber};
+use fg_primitives::{
+	GRANDPA_ENGINE_ID,
+	ConsensusLog, EquivocationReport, RoundNumber, SetId, ScheduledChange,
+};
 pub use fg_primitives::{AuthorityId, AuthorityWeight};
 use system::{
 	ensure_signed, DigestOf,
@@ -65,9 +69,12 @@ pub trait Trait: system::Trait {
 	type Call: From<Call<Self>>;
 
 	/// A system for proving ownership of keys, i.e. that a given key was part
-	/// of a validator set. Needed for validating equivocation reports.
+	/// of a validator set, needed for validating equivocation reports. The
+	/// session index and validator count of the session are part of the proof
+	/// as extra data.
 	type KeyOwnerProofSystem: KeyOwnerProofSystem<
 		(KeyTypeId, Vec<u8>),
+		ExtraData = (SessionIndex, u32),
 	>;
 
 	/// A transaction submitter. Used for submitting equivocation reports.
@@ -78,7 +85,7 @@ pub trait Trait: system::Trait {
 			Self::AccountId,
 			KeyOwnerIdentification<Self>,
 			GrandpaEquivocationOffence<KeyOwnerIdentification<Self>>,
-			>;
+		>;
 
 	/// Key type to use when signing equivocation report transactions, must be
 	/// convertible to and from an account id since that's what we need to use
@@ -208,28 +215,54 @@ decl_module! {
 		fn deposit_event() = default;
 
 		// Report some misbehavior.
-		fn report_equivocation(origin, equivocation: (), proof: KeyOwnerProof<T>) {
-			let account_id = ensure_signed(origin)?;
+		fn report_equivocation(
+			origin,
+			equivocation_report: EquivocationReport<T::Hash, T::BlockNumber>,
+			key_owner_proof: KeyOwnerProof<T>,
+		) {
+			let reporter_id = ensure_signed(origin)?;
 
-			let id = T::KeyOwnerProofSystem::check_proof(
-				unimplemented!(),
-				proof,
-			).ok_or("Invalid key ownership proof.")?;
+			// validate the membership proof and extract session index and
+			// validator set count of the session that we're proving membership
+			// of
+			let (offender, (session_index, validator_set_count)) =
+				T::KeyOwnerProofSystem::check_proof(
+					(GRANDPA, equivocation_report.offender().encode()),
+					key_owner_proof,
+				).ok_or("Invalid key ownership proof.")?;
 
 			// TODO:
-			// - use proper equivocation type
-			// - validate equivocation
+			// - validate equivocation proof
 
+			// we check the equivocation within the context of its set id (and
+			// associated session).
+			let set_id = equivocation_report.set_id();
+
+			let previous_set_id_session_index = SetIdSession::get(set_id.saturating_sub(1));
+			let set_id_session_index = SetIdSession::get(set_id)
+				.ok_or("Invalid set id provided.")?;
+
+			// check that the session id for the membership proof is within the
+			// bounds of the set id reported in the equivocation.
+			if session_index > set_id_session_index ||
+				previous_set_id_session_index
+					.map(|previous_index| session_index <= previous_index)
+					.unwrap_or(false)
+			{
+				return Err("Invalid set id provided.");
+			}
+
+			// report to the offences module rewarding the sender.
 			T::ReportEquivocation::report_offence(
-				vec![account_id],
+				vec![reporter_id],
 				GrandpaEquivocationOffence {
+					session_index,
+					validator_set_count,
+					offender,
 					time_slot: GrandpaTimeSlot {
-						set_id: 0,
-						round: 0,
+						set_id,
+						round: equivocation_report.round(),
 					},
-					session_index: SessionIndex::default(),
-					validator_set_count: 1,
-					offender: id,
 				},
 			);
 		}
@@ -397,13 +430,17 @@ impl<T: Trait> Module<T> {
 	}
 
 	pub fn submit_report_equivocation_extrinsic(
-		equivocation: (),
+		equivocation_report: EquivocationReport<T::Hash, T::BlockNumber>,
 		key_owner_proof: KeyOwnerProof<T>,
 	) -> Option<()> {
 		let local_keys = T::ReportKeyType::all();
 
 		for key in local_keys {
-			let call = Call::report_equivocation(equivocation, key_owner_proof.clone());
+			let call = Call::report_equivocation(
+				equivocation_report.clone(),
+				key_owner_proof.clone(),
+			);
+
 			let ext = T::SubmitTransaction::sign_and_submit(
 				call,
 				key.into(),

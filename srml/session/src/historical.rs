@@ -275,6 +275,10 @@ impl<T: Trait, D: AsRef<[u8]>> support::traits::KeyOwnerProofSystem<(KeyTypeId, 
 	type Proof = MembershipProof;
 	type IdentificationTuple = IdentificationTuple<T>;
 
+	// The session index of a given membership proof and the validator count for
+	// that session.
+	type ExtraData = (SessionIndex, ValidatorCount);
+
 	fn prove(key: (KeyTypeId, D)) -> Option<Self::Proof> {
 		let session = <SessionModule<T>>::current_index();
 		let trie = ProvingTrie::<T>::generate_for(session).ok()?;
@@ -287,18 +291,25 @@ impl<T: Trait, D: AsRef<[u8]>> support::traits::KeyOwnerProofSystem<(KeyTypeId, 
 		})
 	}
 
-	fn check_proof(key: (KeyTypeId, D), proof: Self::Proof) -> Option<IdentificationTuple<T>> {
+	fn check_proof(
+		key: (KeyTypeId, D),
+		proof: Self::Proof,
+	) -> Option<(IdentificationTuple<T>, Self::ExtraData)> {
 		let (id, data) = key;
 
 		if proof.session == <SessionModule<T>>::current_index() {
-			<SessionModule<T>>::key_owner(id, data.as_ref()).and_then(|owner|
-				T::FullIdentificationOf::convert(owner.clone()).map(move |id| (owner, id))
-			)
+			<SessionModule<T>>::key_owner(id, data.as_ref()).and_then(|owner| {
+				T::FullIdentificationOf::convert(owner.clone()).map(move |id| {
+					let count = <SessionModule<T>>::validators().len() as u32;
+					((owner, id), (proof.session, count))
+				})
+			})
 		} else {
-			let (root, _) = <HistoricalSessions<T>>::get(&proof.session)?;
+			let (root, count) = <HistoricalSessions<T>>::get(&proof.session)?;
 			let trie = ProvingTrie::<T>::from_nodes(root, &proof.trie_nodes);
 
 			trie.query(id, data.as_ref())
+				.map(|id| (id, (proof.session, count)))
 		}
 	}
 }

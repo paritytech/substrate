@@ -649,15 +649,13 @@ impl_runtime_apis! {
 		}
 
 		fn submit_report_equivocation_extrinsic(
-			equivocation: (),
+			equivocation_report: fg_primitives::EquivocationReport<Hash, BlockNumber>,
 			key_owner_proof: Vec<u8>,
 		) -> Option<()> {
-			use codec::Decode;
-
-			let key_owner_proof = Decode::decode(&mut &key_owner_proof[..]).ok()?;
+			let key_owner_proof = codec::Decode::decode(&mut &key_owner_proof[..]).ok()?;
 
 			Grandpa::submit_report_equivocation_extrinsic(
-				equivocation,
+				equivocation_report,
 				key_owner_proof,
 			)
 		}

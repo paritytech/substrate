@@ -23,10 +23,12 @@ extern crate alloc;
 
 #[cfg(feature = "std")]
 use serde::Serialize;
-use codec::{Encode, Decode, Codec};
-use sr_primitives::ConsensusEngineId;
-use client::decl_runtime_apis;
+
 use rstd::vec::Vec;
+
+use client::decl_runtime_apis;
+use codec::{Encode, Decode, Codec};
+use sr_primitives::{ConsensusEngineId, traits::NumberFor};
 
 pub mod app {
 	use app_crypto::{app_crypto, key_types::GRANDPA, ed25519};
@@ -149,6 +151,52 @@ impl<N: Codec> ConsensusLog<N> {
 	}
 }
 
+#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Clone, Decode, Encode, PartialEq)]
+pub struct EquivocationReport<H, N> {
+	set_id: SetId,
+	equivocation: Equivocation<H, N>,
+}
+
+impl<H, N> EquivocationReport<H, N> {
+	pub fn set_id(&self) -> SetId {
+		self.set_id
+	}
+
+	pub fn round(&self) -> RoundNumber {
+		match self.equivocation {
+			Equivocation::Prevote(ref equivocation) => equivocation.round_number,
+			Equivocation::Precommit(ref equivocation) => equivocation.round_number,
+		}
+	}
+
+	pub fn offender(&self) -> &AuthorityId {
+		match self.equivocation {
+			Equivocation::Prevote(ref equivocation) => &equivocation.identity,
+			Equivocation::Precommit(ref equivocation) => &equivocation.identity,
+		}
+	}
+}
+
+#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Clone, Decode, Encode, PartialEq)]
+pub enum Equivocation<H, N> {
+	Prevote(
+		grandpa::Equivocation<
+			AuthorityId,
+			grandpa::Prevote<H, N>,
+			AuthoritySignature,
+		>,
+	),
+	Precommit(
+		grandpa::Equivocation<
+			AuthorityId,
+			grandpa::Precommit<H, N>,
+			AuthoritySignature,
+		>,
+	),
+}
+
 /// WASM function call to check for pending changes.
 pub const PENDING_CHANGE_CALL: &str = "grandpa_pending_change";
 /// WASM function call to get current GRANDPA authorities.
@@ -175,7 +223,7 @@ decl_runtime_apis! {
 		fn grandpa_authorities() -> Vec<(AuthorityId, AuthorityWeight)>;
 
 		fn submit_report_equivocation_extrinsic(
-			equivocation: (),
+			equivocation_report: EquivocationReport<Block::Hash, NumberFor<Block>>,
 			key_owner_proof: Vec<u8>,
 		) -> Option<()>;
 	}

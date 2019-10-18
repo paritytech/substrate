@@ -116,9 +116,15 @@ pub trait VerifySeal<Header, Author> {
 pub trait KeyOwnerProofSystem<Key> {
 	/// The proof of membership itself.
 	type Proof: Clone + Codec + MaybeDebug + PartialEq;
-	// type Proof: Codec + Clone + PartialEq;
 	/// The full identification of a key owner and the stash account.
 	type IdentificationTuple: Clone + Codec;
+
+	/// Arbitrary data associated with a given key ownership proof, useful for
+	/// providing context to the proof. For example, if the proof is proving
+	/// ownership of a key in a **numbered** validator set, then the context of
+	/// the proof could be the number associated with that validator set (e.g. a
+	/// session index).
+	type ExtraData;
 
 	/// Prove membership of a key owner in the current block-state.
 	///
@@ -131,7 +137,10 @@ pub trait KeyOwnerProofSystem<Key> {
 
 	/// Check a proof of membership on-chain. Return `Some` iff the proof is
 	/// valid and recent enough to check.
-	fn check_proof(key: Key, proof: Self::Proof) -> Option<Self::IdentificationTuple>;
+	fn check_proof(
+		key: Key,
+		proof: Self::Proof,
+	) -> Option<(Self::IdentificationTuple, Self::ExtraData)>;
 }
 
 /// Handler for when some currency "account" decreased in balance for

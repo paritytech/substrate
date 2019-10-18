@@ -129,3 +129,6 @@ is-it-maintained-open-issues = { repository = "paritytech/substrate" }
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"
+
+[patch.crates-io]
+finality-grandpa = { path = "../finality-grandpa" }
