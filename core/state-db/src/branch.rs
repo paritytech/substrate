@@ -16,27 +16,49 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Helper for managing the set of indexed available branches.
+//!
+//! This allows managing an index over the multiple block forks
+//! in the state db.
+//!
+//! State db use block hash to address blocks in different branches.
+//!
+//! These utilities aims at managing for trees of fork and indexed
+//! way to address blocks in fork. That is the block number and a
+//! branch number.
+//! Branch number are not allows to change, once set they are kept.
+//! This property is important to avoid any data update for on branch
+//! modification.
+//! Therefore the tree formed by these branch inexing is not balanced,
+//! branch are created sequentially to block addition with a very
+//! simple rules: if the block can be added to parent branch (number following
+//! the last block and there was no block with this numbering before) it
+//! uses the same index, otherwhise a new sequential index is used.
+//! It should be noticed that parent branch therefore always have a smaller
+//! index than children.
 
 use std::collections::{BTreeMap};
-use historied_data::tree::{BranchesStateTrait, BranchStatesRef, BranchStateRef};
+use historied_data::tree::{
+	BranchesStateTrait, BranchStatesRef as BranchState, BranchStateRef as BranchRange,
+};
 
 #[derive(Clone, Default, Debug)]
-/// State needed for query updates.
+/// State needed for queries and updates operations.
 /// That is a subset of the full branch ranges set.
 ///
-/// Values are ordered by branch_ix,
-/// and only a logic branch path should be present.
+/// Values are ordered by branch indexes so from the root
+/// to the leaf of the fork tree.
+/// Only a single tree branch path is present.
 ///
-/// Note that an alternative could be a pointer to the full state
-/// a branch index corresponding to the leaf for the fork.
-/// Here we use an in memory copy of the path because it seems
-/// to fit query at a given state with multiple operations
-/// (block processing), that way we iterate on a vec rather than 
-/// hoping over linked branches.
-pub struct BranchRanges(Vec<BranchStatesRef>);
+/// This achieve the same purpose  as a pointer to the full state
+/// and a branch index corresponding to the leaf to query, but
+/// with memory aligned state.
+/// We prefer using an in memory copy of the full fork path because it
+/// fits better the model where we do a big number of queries on a single
+/// state (a block processing).
+pub struct BranchRanges(Vec<BranchState>);
 
 impl<'a> BranchesStateTrait<bool, u64, u64> for &'a BranchRanges {
-	type Branch = &'a BranchStateRef;
+	type Branch = &'a BranchRange;
 	type Iter = BranchRangesIter<'a>;
 
 	fn get_branch(self, i: u64) -> Option<Self::Branch> {
@@ -65,11 +87,12 @@ impl<'a> BranchesStateTrait<bool, u64, u64> for &'a BranchRanges {
 
 }
 
-/// Iterator, contains index of last inner struct.
+/// Iterator over a `BranchRanges`, it iterates over
+/// every branches from the leaf to the root.
 pub struct BranchRangesIter<'a>(&'a BranchRanges, usize);
 
 impl<'a> Iterator for BranchRangesIter<'a> {
-	type Item = (&'a BranchStateRef, u64);
+	type Item = (&'a BranchRange, u64);
 
 	fn next(&mut self) -> Option<Self::Item> {
 		if self.1 > 0 {
@@ -83,16 +106,16 @@ impl<'a> Iterator for BranchRangesIter<'a> {
 	}
 }
 
-/// current branches range definition, indexed by branch
-/// numbers.
+/// Current full state for the tree(s).
+/// It can contain multiple tries as it only store
+/// branch elements indexed by their respective branch
+/// index.
 ///
-/// New branches index are using `last_index`.
-///
-/// Also acts as a cache, storage can store
-/// unknown db value as `None`.
+/// New branches index are sequentially returned by a `last_index`
+/// counter.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RangeSet {
-	storage: BTreeMap<u64, BranchStates>,
+	storage: BTreeMap<u64, BranchStateFull>,
 	last_index: u64,
 	/// treshold for possible node value, correspond
 	/// roughly to last cannonical block branch index.
@@ -114,22 +137,23 @@ impl Default for RangeSet {
 impl RangeSet {
 
 	#[cfg(test)]
-	/// test access to treshold.
+	/// Access to treshold for tests only.
 	pub fn range_treshold(&self) -> u64 {
 		self.treshold
 	}
 
-	/// Iterator over all its range sets.
-	pub fn reverse_iter_ranges(&self) -> impl Iterator<Item = (&BranchStateRef, u64)> {
+	/// Iterator over all its branch range sets.
+	/// The iterator order is reversed so it will return branches from leaf to root.
+	pub fn reverse_iter_ranges(&self) -> impl Iterator<Item = (&BranchRange, u64)> {
 		self.storage.iter().rev().map(|(k, v)| (&v.state, *k))
 	}
 
-	/// For a a given branch, return its path if the tree of ranges.
+	/// For a a given branch, returns its tree path.
 	/// If block number is undefined, return the path up to the latest block
-	/// of the branch index.
+	/// of the last branch.
 	///
-	/// Note that this method is a bit costy and a caching could be use.
-	/// Similarily in some case using an iterator instead could make sense.
+	/// Note that this method is a bit costy and a caching could be use,
+	/// but it only really need to be call once per block processing.
 	pub fn branch_ranges(
 		&self,
 		mut branch_index: u64,
@@ -141,18 +165,17 @@ impl RangeSet {
 		}
 		let mut previous_start = block.map(|b| b + 1).unwrap_or(u64::max_value());
 		loop {
-			if let Some(BranchStates{
+			if let Some(BranchStateFull {
 				state,
 				parent_branch_index,
 				..
 			}) = self.storage.get(&branch_index) {
-				// TODO EMCH consider vecdeque ??
 				let state = if state.end > previous_start {
 					if state.start >= previous_start {
 						// empty branch stop here
 						break;
 					}
-					BranchStateRef {
+					BranchRange {
 						start: state.start,
 						end: previous_start,
 					}
@@ -160,7 +183,7 @@ impl RangeSet {
 
 				previous_start = state.start;
 
-				result.insert(0, BranchStatesRef {
+				result.push(BranchState {
 					state,
 					branch_index,
 				});
@@ -174,13 +197,16 @@ impl RangeSet {
 				break;
 			}
 		}
+		result.reverse();
 		BranchRanges(result)
 	}
 
-	/// Return anchor index for this branch history:
+	/// Drop last block from a branch.
+	///
+	/// Returns anchor index for this branch history:
 	/// - same index as input if branch is not empty
 	/// - parent index if branch is empty
-	pub fn drop_state(
+	fn drop_state(
 		&mut self,
 		branch_index: u64,
 	) -> u64 {
@@ -208,10 +234,12 @@ impl RangeSet {
 		}
 	}
 
+	/// Add a new numbered block into a branch.
+	///
 	/// Return anchor index for this branch history:
 	/// - same index as input if the branch was modifiable
 	/// - new index in case of branch range creation
-	pub fn add_state(
+	fn add_state(
 		&mut self,
 		branch_index: u64,
 		number: u64,
@@ -232,7 +260,7 @@ impl RangeSet {
 		if create_new {
 			self.last_index += 1;
 
-			let state = BranchStates::new(number, branch_index);
+			let state = BranchStateFull::new(number, branch_index);
 			self.storage.insert(self.last_index, state);
 			self.last_index
 		} else {
@@ -241,9 +269,9 @@ impl RangeSet {
 	}
 
 	/// Get the branch reference for a given branch index if it exists.
-	pub fn state_ref(&self, branch_index: u64) -> Option<BranchStatesRef> {
-		self.storage.get(&branch_index).map(|v| v.state_ref())
-			.map(|state| BranchStatesRef {
+	pub fn range(&self, branch_index: u64) -> Option<BranchState> {
+		self.storage.get(&branch_index).map(|v| v.range())
+			.map(|state| BranchState {
 				branch_index,
 				state,
 			})
@@ -251,6 +279,10 @@ impl RangeSet {
 
 	/// Updates the range set on import (defined by its number in branch (block number).
 	/// Returns the corresponding branch ranges and the branch index for this block.
+	///
+	/// This is the same as `add_state` but returning the branch range for the imported
+	/// block and with a possible branch ranges as parameter.
+	/// This avoids branch ranges query when possible.
 	pub fn import(
 		&mut self,
 		number: u64,
@@ -263,12 +295,12 @@ impl RangeSet {
 			if anchor_index == parent_branch_index {
 				branch_ranges.0.pop();
 			}
-			branch_ranges.0.push(self.state_ref(anchor_index).expect("added just above"));
+			branch_ranges.0.push(self.range(anchor_index).expect("added just above"));
 			(branch_ranges, anchor_index)
 		} else {
 			let anchor_index = self.add_state(parent_branch_index, number);
 			(
-				BranchRanges(vec![self.state_ref(anchor_index).expect("added just above")]),
+				BranchRanges(vec![self.range(anchor_index).expect("added just above")]),
 				anchor_index,
 			)
 		}
@@ -277,6 +309,11 @@ impl RangeSet {
 	/// Apply a post finalize update of treshold: requires
 	/// that values before new treshold are all clear (since
 	/// we stop maintaining branches for them).
+	/// Clear here means that values for those block gets canonicalized
+	/// and either written in the backend db or deleted for non canonical
+	/// blocks.
+	/// If `full` parameter is not set to true, the operation is
+	/// runing only a fast branch index based removal.
 	pub fn update_finalize_treshold(
 		&mut self,
 		branch_index: u64,
@@ -308,16 +345,18 @@ impl RangeSet {
 	}
 
 	/// Apply a post finalize without considering treshold.
+	/// Will drop from state all branches that are not attached
+	/// to the canonical block in parameter.
 	pub fn finalize_full(
 		&mut self,
 		branch_index: u64,
 		linear_index: u64,
 	) {
 		if let Some(state) = self.storage.remove(&branch_index) {
-			let mut child_anchor: BranchStates = state.clone();
+			let mut child_anchor: BranchStateFull = state.clone();
 			child_anchor.state.start = linear_index;
 			let old_storage = std::mem::replace(&mut self.storage, BTreeMap::new());
-			// insert anchor
+			// insert anchor block
 			self.storage.insert(branch_index, child_anchor.clone());
 			for (index, state) in old_storage.into_iter() {
 				// ordered property of branch index allows to skip in depth branch search
@@ -344,8 +383,8 @@ impl RangeSet {
 	
 	}
 
-	/// Revert some ranges, without any way to revert.
-	/// Returning ranges for the parent index.
+	/// Revert a block for a branch index.
+	/// Returning new branch index after this removal.
 	pub fn revert(&mut self, branch_ix: u64) -> u64 {
 		if branch_ix != 0 {
 			self.drop_state(branch_ix)
@@ -357,7 +396,7 @@ impl RangeSet {
 	#[cfg(test)]
 	pub fn contains_range(&self, branch_index: u64, size: u64) -> bool {
 		if let Some(s) = self.storage.get(&branch_index) {
-			(s.state_ref().end - s.state_ref().start) == size
+			(s.range().end - s.range().start) == size
 		} else {
 			false
 		}
@@ -365,28 +404,28 @@ impl RangeSet {
 
 }
 
-/// Stored states for a branch, it contains branch reference information,
+/// Stored state for a branch, it contains branch reference information,
 /// structural information (index of parent branch) and fork tree building
 /// information (is branch appendable).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BranchStates {
-	state: BranchStateRef,
+struct BranchStateFull {
+	state: BranchRange,
 	can_append: bool,
 	parent_branch_index: u64,
 }
 
-impl Default for BranchStates {
+impl Default for BranchStateFull {
 	// initialize with one element
 	fn default() -> Self {
 		Self::new(0, 0)
 	}
 }
 
-impl BranchStates {
-	pub fn new(offset: u64, parent_branch_index: u64) -> Self {
+impl BranchStateFull {
+	fn new(offset: u64, parent_branch_index: u64) -> Self {
 		let offset = offset as u64;
-		BranchStates {
-			state: BranchStateRef {
+		BranchStateFull {
+			state: BranchRange {
 				start: offset,
 				end: offset + 1,
 			},
@@ -395,15 +434,15 @@ impl BranchStates {
 		}
 	}
 
-	pub fn state_ref(&self) -> BranchStateRef {
+	fn range(&self) -> BranchRange {
 		self.state.clone()
 	}
 
-	pub fn has_deleted_index(&self) -> bool {
+	fn has_deleted_index(&self) -> bool {
 		!self.can_append
 	}
 
-	pub fn add_state(&mut self) -> bool {
+	fn add_state(&mut self) -> bool {
 		if !self.has_deleted_index() {
 			self.state.end += 1;
 			true
@@ -412,8 +451,7 @@ impl BranchStates {
 		}
 	}
 
-	/// return possible dropped state
-	pub fn drop_state(&mut self) -> Option<u64> {
+	fn drop_state(&mut self) -> Option<u64> {
 		if self.state.end - self.state.start > 0 {
 			self.state.end -= 1;
 			Some(self.state.end)
@@ -422,8 +460,7 @@ impl BranchStates {
 		}
 	}
 
-	/// Return true if you can add this index.
-	pub fn can_add(&self, index: u64) -> bool {
+	fn can_add(&self, index: u64) -> bool {
 		index == self.state.end
 	}
 
@@ -438,7 +475,7 @@ mod test {
 	// |> 1: [10,1]
 	// |> 2: [10,2] [11,1]
 	//       |> 3:  [11,2] [12, 2]
-	//		          | > 5: [12,1]
+	//              | > 5: [12,1]
 	//       |> 4:  [11,123] [12,1]
 	// full finalize: 3
 	// 0

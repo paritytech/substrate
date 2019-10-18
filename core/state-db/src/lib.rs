@@ -72,18 +72,17 @@ pub trait NodeDb {
 
 /// Backend database trait. Read-only.
 ///
-/// State parameter indicate where to query kv storage,
-/// this is a Block hash, as branch index are
-/// build on load, with a persistence for this
-/// data it would be more direct to use a
-/// tuple of block number and branchindex.
+/// All query uses a state parameter which indicates
+/// where to query kv storage.
+/// It any additional information that is needed to resolve
+/// a chain state (depending on the implementation).
 pub trait KvDb<State> {
 	type Error: fmt::Debug;
 
 	/// Get state trie node.
 	fn get_kv(&self, key: &[u8], state: &State) -> Result<Option<DBValue>, Self::Error>;
 
-	/// Get all pairs of key at current state.
+	/// Get all pairs of key values at current state.
 	fn get_kv_pairs(&self, state: &State) -> Vec<(KvKey, DBValue)>;
 }
 
@@ -134,21 +133,19 @@ pub struct ChangeSet<H: Hash> {
 	pub deleted: Vec<H>,
 }
 
-/// A set of kv state values changes.
+/// A set of key values state changes.
 ///
 /// This assumes that we only commit block per block (otherwhise
-/// we need to include block number value here and
-/// implement a more efficient batching update).
+/// we will need to include a block number value).
 pub type KvChangeSet<H> = Vec<(H, Option<DBValue>)>;
 
-/// Info for pruning kv: a last prune index and keys to prune.
+/// Info for pruning key values.
+/// This is a last prune index (pruning will be done up to this index),
+/// and a set keys to prune.
 /// Is set to none when not initialized.
 pub type KvChangeSetPrune = Option<(u64, HashSet<KvKey>)>;
 
-/// Info for reverting kv of a canonical backend.
-pub type KvChangeSetRevert = u64;
-
-/// Commit set on canonical operation.
+/// Commit set on block canonicalization operation.
 pub type CommitSetCanonical<H> = (CommitSet<H>, KvChangeSetPrune);
 
 /// A set of changes to the backing database.
@@ -159,7 +156,7 @@ pub struct CommitSet<H: Hash> {
 	pub data: ChangeSet<H>,
 	/// Metadata changes.
 	pub meta: ChangeSet<Vec<u8>>,
-	/// Kv data changes.
+	/// Key values data changes.
 	pub kv: KvChangeSet<KvKey>,
 }
 
@@ -178,6 +175,7 @@ pub enum PruningMode {
 	/// Maintain a pruning window.
 	Constrained(Constraints),
 	/// No pruning. Canonicalization is a no-op.
+	/// Except for kv (key value without state) storage.
 	ArchiveAll,
 	/// Canonicalization discards non-canonical nodes. All the canonical nodes are kept in the DB.
 	ArchiveCanonical,
@@ -257,12 +255,9 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 				Ok(CommitSet {
 					data: changeset,
 					meta: Default::default(),
-					// TODO EMCH no current support for archive all,
-					// it would require managing branch index at
-					// client level (was implemented in another branch:
-					// client-db-branch-ix)
-					// and use and ordered tuple (branchix, blocknumber)
-					// index to run.
+					// This is only the canonical changeset: archive
+					// all mode does not keep trace of kv storage for
+					// fork. This is a big limitation.
 					kv: kv_changeset,
 				})
 			},
@@ -348,7 +343,7 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 	}
 
 	/// For a a given block return its path in the block tree.
-	/// Note that using `number` is use to skip a query to block number for hash.
+	/// Using a block hash and its number.
 	pub fn get_branch_range(&self, hash: &BlockHash, number: u64) -> Option<BranchRanges> {
 		self.non_canonical.get_branch_range(hash, number)
 	}
@@ -399,6 +394,10 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		db.get(key.as_ref()).map_err(|e| Error::Db(e))
 	}
 
+	/// Get a value from non-canonical/pruning overlay or the backing DB.
+	///
+	/// State is both a branch ranges for non canonical storage
+	/// and a block number for cannonical storage.
 	pub fn get_kv<D: KvDb<u64>>(
 		&self,
 		key: &[u8],
@@ -411,6 +410,8 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		db.get_kv(key, &state.1).map_err(|e| Error::Db(e))
 	}
 
+	/// Access current full state for both backend and non cannoical.
+	/// Very inefficient and costly.
 	pub fn get_kv_pairs<D: KvDb<u64>>(
 		&self,
 		state: &(BranchRanges, u64),
@@ -511,6 +512,9 @@ impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
 	}
 
 	/// Get a value from non-canonical/pruning overlay or the backing DB.
+	///
+	/// State is both a branch ranges for non canonical storage
+	/// and a block number for cannonical storage.
 	pub fn get_kv<D: KvDb<u64>>(
 		&self,
 		key: &[u8],
@@ -520,7 +524,8 @@ impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
 		self.db.read().get_kv(key, state, db)
 	}
 
-	/// Get pairs values kv.
+	/// Access current full state for both backend and non cannoical.
+	/// Very inefficient and costly.
 	pub fn get_kv_pairs<D: KvDb<u64>>(
 		&self,
 		state: &(BranchRanges, u64),

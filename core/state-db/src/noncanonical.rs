@@ -51,23 +51,24 @@ pub struct NonCanonicalOverlay<BlockHash: Hash, Key: Hash> {
 	values: HashMap<Key, (u32, DBValue)>, //ref counted
 	branches: RangeSet,
 	kv_values: HashMap<KvKey, History<Option<DBValue>>>,
-	/// second value is kv pinned index: used in order to determine if the pinned 
-	/// thread should block garbage collection.
+	/// Second value is kv pinned index: used in order to determine if the pinned 
+	/// thread should block key value storage garbage collection.
 	pinned: HashMap<BlockHash, (HashMap<Key, DBValue>, GcIndex)>,
 	kv_gc: KvPendingGC,
 }
 
 #[derive(Default)]
-/// kv gc only happen when all pinned threads that where
-/// running at the time of cannonicalisation are finished.
+/// Key value storage garbage collection happen only when all pinned threads
+/// that were running at the time of cannonicalisation are finished.
 struct KvPendingGC {
 	/// Each gc call uses a new index.
 	gc_last_index: GcIndex,
-	/// Keep trace of last gc query.
-	pending_gc_query: Option<u64>,
-	/// keys to gc that got their journal removed.
+	/// Keep trace of last garbage collection query.
+	pending_gc_query: Option<GcIndex>,
+	/// Keys to garbage collect.
 	keys_pending_gc: HashSet<KvKey>,
-	/// store keys while waiting for a gc.
+	/// Store keys which are waiting for a gc but for a next call.
+	/// We use a secondary storage to avoid having threads blocking gc forever.
 	next_keys_pending_gc: HashSet<KvKey>,
 }
 
@@ -88,8 +89,6 @@ impl KvPendingGC {
 	) {
 		if let Some(pending) = self.pending_gc_query {
 			if pending < self.min_pinned_index(pinned) {
-				// TODO EMCH double get is rather inefficient, see if it is possible
-				// to reuse the hash of the hashset into the hashmap
 				for key in self.keys_pending_gc.drain() {
 					match kv_values.get_mut(&key).map(|historied_value| {
 						historied_value.gc(branches.reverse_iter_ranges())
@@ -520,7 +519,8 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 	}
 
 	/// Select a top-level root and canonicalized it. Discards all sibling subtrees and the root.
-	/// Returns a set of changes that need to be added to the DB.
+	/// Complete a set of changes that need to be added to the DB, and return corresponding block
+	/// number.
 	pub fn canonicalize<E: fmt::Debug>(
 		&mut self,
 		hash: &BlockHash,

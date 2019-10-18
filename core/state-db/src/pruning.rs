@@ -42,7 +42,6 @@ pub struct RefWindow<BlockHash: Hash, Key: Hash> {
 	pending_number: u64,
 	/// Number of call of `note_canonical` after
 	/// last call `apply_pending` or `revert_pending`
-	/// TODO EMCH seems useless??
 	pending_canonicalizations: usize,
 	/// Number of calls of `prune_one` after
 	/// last call `apply_pending` or `revert_pending`
@@ -55,8 +54,6 @@ struct DeathRow<BlockHash: Hash, Key: Hash> {
 	journal_key: Vec<u8>,
 	kv_journal_key: Vec<u8>,
 	deleted: HashSet<Key>,
-	// TODO EMCH for kv there is no need to put
-	// in memory so we can make it lazy (load from
 	// pruning journal on actual prune).
 	kv_modified: HashSet<KvKey>,
 }
