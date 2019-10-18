@@ -98,6 +98,7 @@ mod tests {
 	#[test]
 	fn call_in_interpreted_wasm_works() {
 		let mut ext = TestExternalities::default();
+		let mut ext = ext.ext();
 		let res = call_in_wasm(
 			"test_empty_return",
 			&[],
