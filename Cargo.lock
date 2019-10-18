@@ -2392,6 +2392,7 @@ dependencies = [
  "srml-support 2.0.0",
  "srml-system 2.0.0",
  "srml-timestamp 2.0.0",
+ "srml-transaction-payment 2.0.0",
  "structopt 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-authority-discovery 2.0.0",
  "substrate-basic-authorship 2.0.0",
@@ -2438,6 +2439,7 @@ dependencies = [
  "srml-support 2.0.0",
  "srml-system 2.0.0",
  "srml-timestamp 2.0.0",
+ "srml-transaction-payment 2.0.0",
  "srml-treasury 2.0.0",
  "substrate-executor 2.0.0",
  "substrate-primitives 2.0.0",
@@ -2523,6 +2525,7 @@ dependencies = [
  "srml-system 2.0.0",
  "srml-system-rpc-runtime-api 2.0.0",
  "srml-timestamp 2.0.0",
+ "srml-transaction-payment 2.0.0",
  "srml-treasury 2.0.0",
  "srml-utility 2.0.0",
  "substrate-authority-discovery-primitives 2.0.0",
@@ -2551,8 +2554,8 @@ dependencies = [
  "substrate-basic-authorship 2.0.0",
  "substrate-cli 2.0.0",
  "substrate-client 2.0.0",
- "substrate-consensus-babe 2.0.0",
- "substrate-consensus-babe-primitives 2.0.0",
+ "substrate-consensus-aura 2.0.0",
+ "substrate-consensus-aura-primitives 2.0.0",
  "substrate-executor 2.0.0",
  "substrate-finality-grandpa 2.0.0",
  "substrate-finality-grandpa-primitives 2.0.0",
@@ -2577,7 +2580,7 @@ dependencies = [
  "sr-primitives 2.0.0",
  "sr-std 2.0.0",
  "sr-version 2.0.0",
- "srml-babe 2.0.0",
+ "srml-aura 2.0.0",
  "srml-balances 2.0.0",
  "srml-executive 2.0.0",
  "srml-grandpa 2.0.0",
@@ -2587,8 +2590,9 @@ dependencies = [
  "srml-support 2.0.0",
  "srml-system 2.0.0",
  "srml-timestamp 2.0.0",
+ "srml-transaction-payment 2.0.0",
  "substrate-client 2.0.0",
- "substrate-consensus-babe-primitives 2.0.0",
+ "substrate-consensus-aura-primitives 2.0.0",
  "substrate-offchain-primitives 2.0.0",
  "substrate-primitives 2.0.0",
  "substrate-session 2.0.0",
@@ -2614,6 +2618,7 @@ dependencies = [
  "srml-support 2.0.0",
  "srml-system 2.0.0",
  "srml-timestamp 2.0.0",
+ "srml-transaction-payment 2.0.0",
  "srml-treasury 2.0.0",
  "substrate-client 2.0.0",
  "substrate-executor 2.0.0",
@@ -4055,6 +4060,7 @@ dependencies = [
  "sr-std 2.0.0",
  "srml-support 2.0.0",
  "srml-system 2.0.0",
+ "srml-transaction-payment 2.0.0",
  "substrate-keyring 2.0.0",
  "substrate-primitives 2.0.0",
 ]
@@ -4113,6 +4119,7 @@ dependencies = [
  "sr-primitives 2.0.0",
  "srml-contracts-rpc-runtime-api 2.0.0",
  "substrate-client 2.0.0",
+ "substrate-primitives 2.0.0",
  "substrate-rpc-primitives 2.0.0",
 ]
 
@@ -4205,6 +4212,7 @@ dependencies = [
  "srml-indices 2.0.0",
  "srml-support 2.0.0",
  "srml-system 2.0.0",
+ "srml-transaction-payment 2.0.0",
  "substrate-primitives 2.0.0",
 ]
 
@@ -4558,6 +4566,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "srml-transaction-payment"
+version = "2.0.0"
+dependencies = [
+ "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-io 2.0.0",
+ "sr-primitives 2.0.0",
+ "sr-std 2.0.0",
+ "srml-balances 2.0.0",
+ "srml-support 2.0.0",
+ "srml-system 2.0.0",
+ "substrate-primitives 2.0.0",
+]
+
+[[package]]
 name = "srml-treasury"
 version = "2.0.0"
 dependencies = [
@@ -4675,6 +4697,7 @@ dependencies = [
  "sr-primitives 2.0.0",
  "srml-balances 2.0.0",
  "srml-system 2.0.0",
+ "srml-transaction-payment 2.0.0",
  "substrate-bip39 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-primitives 2.0.0",
  "tiny-bip39 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -4936,6 +4959,7 @@ dependencies = [
 name = "substrate-consensus-babe"
 version = "2.0.0"
 dependencies = [
+ "derive_more 0.15.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "env_logger 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "fork-tree 2.0.0",
  "futures 0.1.29 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -5012,6 +5036,7 @@ dependencies = [
 name = "substrate-consensus-pow"
 version = "2.0.0"
 dependencies = [
+ "derive_more 0.15.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures-preview 0.3.0-alpha.19 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",

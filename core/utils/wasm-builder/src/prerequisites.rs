@@ -16,6 +16,7 @@
 
 use std::{process::{Command, Stdio}, fs};
 
+use std::env;
 use tempfile::tempdir;
 
 /// Checks that all prerequisites are installed.
@@ -23,7 +24,7 @@ use tempfile::tempdir;
 /// # Returns
 /// Returns `None` if everything was found and `Some(ERR_MSG)` if something could not be found.
 pub fn check() -> Option<&'static str> {
-	if !check_nightly_installed() {
+	if !rustc_stable_forced_to_nightly() && !check_nightly_installed(){
 		return Some("Rust nightly not installed, please install it!")
 	}
 
@@ -37,6 +38,10 @@ pub fn check() -> Option<&'static str> {
 	}
 
 	check_wasm_toolchain_installed()
+}
+
+fn rustc_stable_forced_to_nightly() -> bool {
+  env::var("RUSTC_BOOTSTRAP") == Ok("1".to_string())
 }
 
 fn check_nightly_installed() -> bool {
