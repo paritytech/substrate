@@ -108,19 +108,19 @@ impl<'a, S, H> ProvingBackendEssence<'a, S, H>
 pub struct ProvingBackend<'a,
 	S: 'a + TrieBackendStorage<H>,
 	H: 'a + Hasher,
-	O: 'a + KvBackend,
+	K: 'a + KvBackend,
 > {
-	backend: &'a TrieBackend<S, H, O>,
+	backend: &'a TrieBackend<S, H, K>,
 	proof_recorder: Rc<RefCell<Recorder<H::Out>>>,
 }
 
 impl<'a,
 	S: 'a + TrieBackendStorage<H>,
 	H: 'a + Hasher,
-	O: 'a + KvBackend,
-> ProvingBackend<'a, S, H, O> {
+	K: 'a + KvBackend,
+> ProvingBackend<'a, S, H, K> {
 	/// Create new proving backend.
-	pub fn new(backend: &'a TrieBackend<S, H, O>) -> Self {
+	pub fn new(backend: &'a TrieBackend<S, H, K>) -> Self {
 		ProvingBackend {
 			backend,
 			proof_recorder: Rc::new(RefCell::new(Recorder::new())),
@@ -129,7 +129,7 @@ impl<'a,
 
 	/// Create new proving backend with the given recorder.
 	pub fn new_with_recorder(
-		backend: &'a TrieBackend<S, H, O>,
+		backend: &'a TrieBackend<S, H, K>,
 		proof_recorder: Rc<RefCell<Recorder<H::Out>>>,
 	) -> Self {
 		ProvingBackend {
@@ -152,24 +152,24 @@ impl<'a,
 impl<'a,
 	S: 'a + TrieBackendStorage<H>,
 	H: 'a + Hasher,
-	O: 'a + KvBackend,
-> std::fmt::Debug for ProvingBackend<'a, S, H, O> {
+	K: 'a + KvBackend,
+> std::fmt::Debug for ProvingBackend<'a, S, H, K> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "ProvingBackend")
 	}
 }
 
-impl<'a, S, H, O> Backend<H> for ProvingBackend<'a, S, H, O>
+impl<'a, S, H, K> Backend<H> for ProvingBackend<'a, S, H, K>
 	where
 		S: 'a + TrieBackendStorage<H>,
 		H: 'a + Hasher,
 		H::Out: Ord,
-		O: 'a + KvBackend,
+		K: 'a + KvBackend,
 {
 	type Error = String;
 	type Transaction = (S::Overlay, HashMap<Vec<u8>, Option<Vec<u8>>>);
 	type TrieBackendStorage = PrefixedMemoryDB<H>;
-	type KvBackend = O;
+	type KvBackend = K;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		ProvingBackendEssence {

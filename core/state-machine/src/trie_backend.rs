@@ -28,14 +28,14 @@ use std::collections::HashMap;
 
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
 /// A simple key value backend is also accessible for direct key value storage.
-pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher, O: KvBackend> {
+pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher, K: KvBackend> {
 	essence: TrieBackendEssence<S, H>,
-	kv_storage: O,
+	kv_storage: K,
 }
 
-impl<S: TrieBackendStorage<H>, O: KvBackend, H: Hasher> TrieBackend<S, H, O> {
+impl<S: TrieBackendStorage<H>, K: KvBackend, H: Hasher> TrieBackend<S, H, K> {
 	/// Create new trie-based backend.
-	pub fn new(storage: S, root: H::Out, kv_storage: O) -> Self {
+	pub fn new(storage: S, root: H::Out, kv_storage: K) -> Self {
 		TrieBackend {
 			essence: TrieBackendEssence::new(storage, root),
 			kv_storage,
@@ -53,12 +53,12 @@ impl<S: TrieBackendStorage<H>, O: KvBackend, H: Hasher> TrieBackend<S, H, O> {
 	}
 
 	/// Get key value storage backend reference.
-	pub fn kv_backend(&self) -> &O {
+	pub fn kv_backend(&self) -> &K {
 		&self.kv_storage
 	}
 
 	/// Get key value storage backend mutable reference.
-	pub fn kv_backend_mut(&mut self) -> &mut O {
+	pub fn kv_backend_mut(&mut self) -> &mut K {
 		&mut self.kv_storage
 	}
 
@@ -72,20 +72,13 @@ impl<S: TrieBackendStorage<H>, O: KvBackend, H: Hasher> TrieBackend<S, H, O> {
 		self.essence.into_storage()
 	}
 
-	// TODO EMCH PROTO: remove before pr.
-	pub fn child_keyspace(&self, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
-		const PREFIX_KEYSPACE: &'static[u8] = b"kv_keyspace";
-		// TODO EMCH do prefixing manually.
-		self.kv_storage.get(key)
-	}
-
 }
 
 impl<
 	S: TrieBackendStorage<H>,
 	H: Hasher,
-	O: KvBackend,
-> std::fmt::Debug for TrieBackend<S, H, O> {
+	K: KvBackend,
+> std::fmt::Debug for TrieBackend<S, H, K> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "TrieBackend")
 	}
@@ -94,14 +87,14 @@ impl<
 impl<
 	S: TrieBackendStorage<H>,
 	H: Hasher,
-	O: KvBackend,
-> Backend<H> for TrieBackend<S, H, O> where
+	K: KvBackend,
+> Backend<H> for TrieBackend<S, H, K> where
 	H::Out: Ord,
 {
 	type Error = String;
 	type Transaction = (S::Overlay, HashMap<Vec<u8>, Option<Vec<u8>>>);
 	type TrieBackendStorage = S;
-	type KvBackend = O;
+	type KvBackend = K;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.essence.storage(key)

@@ -174,6 +174,7 @@ impl OverlayedChanges {
 		}
 	}
 
+	#[cfg(test)]
 	/// Inserts the given key-value pair as an auxilliary data.
 	///
 	/// `None` can be used to delete a value specified by the given key.

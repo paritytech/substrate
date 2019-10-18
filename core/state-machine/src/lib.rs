@@ -41,8 +41,7 @@ mod overlayed_changes;
 mod proving_backend;
 mod trie_backend;
 mod trie_backend_essence;
-// TODO EMCH make it private
-pub mod kv_backend;
+mod kv_backend;
 
 pub use trie::{trie_types::{Layout, TrieDBMut}, TrieMut, DBValue, MemoryDB};
 pub use testing::TestExternalities;
@@ -487,8 +486,8 @@ where
 ///
 /// Note: changes to code will be in place if this call is made again. For running partial
 /// blocks (e.g. a transaction at a time), ensure a different method is used.
-pub fn prove_execution_on_trie_backend<S, H, O, Exec>(
-	trie_backend: &TrieBackend<S, H, O>,
+pub fn prove_execution_on_trie_backend<S, H, K, Exec>(
+	trie_backend: &TrieBackend<S, H, K>,
 	overlay: &mut OverlayedChanges,
 	exec: &Exec,
 	method: &str,
@@ -500,7 +499,7 @@ where
 	H: Hasher<Out=H256>,
 	Exec: CodeExecutor,
 	H::Out: Ord + 'static,
-	O: KvBackend,
+	K: KvBackend,
 {
 	let proving_backend = proving_backend::ProvingBackend::new(trie_backend);
 	let mut sm = StateMachine::<_, H, _, InMemoryChangesTrieStorage<H, u64>, Exec>::new(
@@ -597,15 +596,15 @@ where
 }
 
 /// Generate storage read proof on pre-created trie backend.
-pub fn prove_read_on_trie_backend<S, H, O, I>(
-	trie_backend: &TrieBackend<S, H, O>,
+pub fn prove_read_on_trie_backend<S, H, K, I>(
+	trie_backend: &TrieBackend<S, H, K>,
 	keys: I,
 ) -> Result<Vec<Vec<u8>>, Box<dyn Error>>
 where
 	S: trie_backend_essence::TrieBackendStorage<H>,
 	H: Hasher,
 	H::Out: Ord,
-	O: KvBackend,
+	K: KvBackend,
 	I: IntoIterator,
 	I::Item: AsRef<[u8]>,
 {
@@ -619,8 +618,8 @@ where
 }
 
 /// Generate storage read proof on pre-created trie backend.
-pub fn prove_child_read_on_trie_backend<S, H, O, I>(
-	trie_backend: &TrieBackend<S, H, O>,
+pub fn prove_child_read_on_trie_backend<S, H, K, I>(
+	trie_backend: &TrieBackend<S, H, K>,
 	storage_key: &[u8],
 	keys: I,
 ) -> Result<Vec<Vec<u8>>, Box<dyn Error>>
@@ -628,7 +627,7 @@ where
 	S: trie_backend_essence::TrieBackendStorage<H>,
 	H: Hasher,
 	H::Out: Ord,
-	O: KvBackend,
+	K: KvBackend,
 	I: IntoIterator,
 	I::Item: AsRef<[u8]>,
 {

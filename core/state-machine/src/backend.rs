@@ -290,7 +290,6 @@ impl<U: Consolidate, V: Consolidate> Consolidate for (U, V) {
 	}
 }
 
-
 impl Consolidate for InMemoryTransaction {
 	fn consolidate(&mut self, other: Self) {
 		self.storage.consolidate(other.storage);
@@ -359,11 +358,13 @@ impl<H: Hasher> Clone for InMemory<H> {
 impl<H: Hasher> PartialEq for InMemory<H> {
 	fn eq(&self, other: &Self) -> bool {
 		self.inner.eq(&other.inner)
-		&& self.kv().eq(other.kv()) 
+			&& self.kv().eq(other.kv()) 
 	}
 }
 
 impl<H: Hasher> InMemory<H> {
+	// the inmemory storage for kv is either in trie if initialized
+	// or in field.
 	fn kv(&self) -> &InMemoryKvBackend {
 		if let Some(kv) = self.kv.as_ref() {
 			kv
