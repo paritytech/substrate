@@ -34,6 +34,7 @@ native_executor_instance!(
 
 #[cfg(test)]
 mod tests {
+	use substrate_executor::error::Result;
 	use super::Executor;
 	use {balances, contracts, indices, system, timestamp};
 	use codec::{Encode, Decode, Joiner};
@@ -122,6 +123,26 @@ mod tests {
 		ext.place_storage(well_known_keys::HEAP_PAGES.to_vec(), Some(heap_pages.encode()));
 	}
 
+	fn executor_call<
+		R:Decode + Encode + PartialEq,
+		NC: FnOnce() -> std::result::Result<R, String> + std::panic::UnwindSafe
+	>(
+		t: &mut TestExternalities<Blake2Hasher>,
+		method: &str,
+		data: &[u8],
+		use_native: bool,
+		native_call: Option<NC>,
+	) -> (Result<NativeOrEncoded<R>>, bool) {
+		let mut t = t.ext();
+		executor().call::<_, R, NC>(
+			&mut t,
+			method,
+			data,
+			use_native,
+			native_call,
+		)
+	}
+
 	#[test]
 	fn panic_execution_with_foreign_code_gives_error() {
 		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(BLOATY_CODE, (map![
@@ -139,7 +160,7 @@ mod tests {
 			}
 		], map![]));
 
-		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
+		let r = executor_call::<NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_initialize_block",
 			&vec![].and(&from_block_number(1u32)),
@@ -147,7 +168,7 @@ mod tests {
 			None,
 		).0;
 		assert!(r.is_ok());
-		let v = executor().call::<_, NeverNativeValue, fn() -> _>(
+		let v = executor_call::<NeverNativeValue, fn() -> _>(
 			&mut t,
 			"BlockBuilder_apply_extrinsic",
 			&vec![].and(&xt()),
@@ -175,7 +196,7 @@ mod tests {
 			}
 		], map![]));
 
-		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
+		let r = executor_call::<NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_initialize_block",
 			&vec![].and(&from_block_number(1u32)),
@@ -183,7 +204,7 @@ mod tests {
 			None,
 		).0;
 		assert!(r.is_ok());
-		let v = executor().call::<_, NeverNativeValue, fn() -> _>(
+		let v = executor_call::<NeverNativeValue, fn() -> _>(
 			&mut t,
 			"BlockBuilder_apply_extrinsic",
 			&vec![].and(&xt()),
@@ -207,7 +228,7 @@ mod tests {
 			<system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
 		], map![]));
 
-		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
+		let r = executor_call::<NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_initialize_block",
 			&vec![].and(&from_block_number(1u32)),
@@ -218,7 +239,7 @@ mod tests {
 
 		let fm = t.execute_with(TransactionPayment::next_fee_multiplier);
 
-		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
+		let r = executor_call::<NeverNativeValue, fn() -> _>(
 			&mut t,
 			"BlockBuilder_apply_extrinsic",
 			&vec![].and(&xt()),
@@ -246,7 +267,7 @@ mod tests {
 			<system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
 		], map![]));
 
-		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
+		let r = executor_call::<NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_initialize_block",
 			&vec![].and(&from_block_number(1u32)),
@@ -257,7 +278,7 @@ mod tests {
 
 		let fm = t.execute_with(TransactionPayment::next_fee_multiplier);
 
-		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
+		let r = executor_call::<NeverNativeValue, fn() -> _>(
 			&mut t,
 			"BlockBuilder_apply_extrinsic",
 			&vec![].and(&xt()),
@@ -307,7 +328,7 @@ mod tests {
 		};
 
 		// execute the block to get the real header.
-		executor().call::<_, NeverNativeValue, fn() -> _>(
+		executor_call::<NeverNativeValue, fn() -> _>(
 			env,
 			"Core_initialize_block",
 			&header.encode(),
@@ -316,7 +337,7 @@ mod tests {
 		).0.unwrap();
 
 		for i in extrinsics.iter() {
-			executor().call::<_, NeverNativeValue, fn() -> _>(
+			executor_call::<NeverNativeValue, fn() -> _>(
 				env,
 				"BlockBuilder_apply_extrinsic",
 				&i.encode(),
@@ -325,7 +346,7 @@ mod tests {
 			).0.unwrap();
 		}
 
-		let header = match executor().call::<_, NeverNativeValue, fn() -> _>(
+		let header = match executor_call::<NeverNativeValue, fn() -> _>(
 			env,
 			"BlockBuilder_finalize_block",
 			&[0u8;0],
@@ -432,7 +453,7 @@ mod tests {
 		let mut alice_last_known_balance: Balance = Default::default();
 		let mut fm = t.execute_with(TransactionPayment::next_fee_multiplier);
 
-		executor().call::<_, NeverNativeValue, fn() -> _>(
+		executor_call::<NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_execute_block",
 			&block1.0,
@@ -471,7 +492,7 @@ mod tests {
 
 		fm = t.execute_with(TransactionPayment::next_fee_multiplier);
 
-		executor().call::<_, NeverNativeValue, fn() -> _>(
+		executor_call::<NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_execute_block",
 			&block2.0,
@@ -544,7 +565,7 @@ mod tests {
 		let mut alice_last_known_balance: Balance = Default::default();
 		let mut fm = t.execute_with(TransactionPayment::next_fee_multiplier);
 
-		executor().call::<_, NeverNativeValue, fn() -> _>(
+		executor_call::<NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_execute_block",
 			&block1.0,
@@ -560,7 +581,7 @@ mod tests {
 
 		fm = t.execute_with(TransactionPayment::next_fee_multiplier);
 
-		executor().call::<_, NeverNativeValue, fn() -> _>(
+		executor_call::<NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_execute_block",
 			&block2.0,
@@ -720,7 +741,7 @@ mod tests {
 
 		let mut t = new_test_ext(COMPACT_CODE, false);
 
-		executor().call::<_, NeverNativeValue, fn() -> _>(
+		executor_call::<NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_execute_block",
 			&b.0,
@@ -744,9 +765,9 @@ mod tests {
 	fn wasm_big_block_import_fails() {
 		let mut t = new_test_ext(COMPACT_CODE, false);
 
-		set_heap_pages(&mut t, 4);
+		set_heap_pages(&mut t.ext(), 4);
 
-		let result = executor().call::<_, NeverNativeValue, fn() -> _>(
+		let result = executor_call::<NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_execute_block",
 			&block_with_size(42, 0, 120_000).0,
@@ -760,7 +781,7 @@ mod tests {
 	fn native_big_block_import_succeeds() {
 		let mut t = new_test_ext(COMPACT_CODE, false);
 
-		executor().call::<_, NeverNativeValue, fn() -> _>(
+		executor_call::<NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_execute_block",
 			&block_with_size(42, 0, 120_000).0,
@@ -774,7 +795,7 @@ mod tests {
 		let mut t = new_test_ext(COMPACT_CODE, false);
 
 		assert!(
-			executor().call::<_, NeverNativeValue, fn() -> _>(
+			executor_call::<NeverNativeValue, fn() -> _>(
 				&mut t,
 				"Core_execute_block",
 				&block_with_size(42, 0, 120_000).0,
@@ -797,7 +818,7 @@ mod tests {
 			<system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
 		], map![]));
 
-		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
+		let r = executor_call::<NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_initialize_block",
 			&vec![].and(&from_block_number(1u32)),
@@ -805,7 +826,7 @@ mod tests {
 			None,
 		).0;
 		assert!(r.is_ok());
-		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
+		let r = executor_call::<NeverNativeValue, fn() -> _>(
 			&mut t,
 			"BlockBuilder_apply_extrinsic",
 			&vec![].and(&xt()),
@@ -829,7 +850,7 @@ mod tests {
 			<system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
 		], map![]));
 
-		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
+		let r = executor_call::<NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_initialize_block",
 			&vec![].and(&from_block_number(1u32)),
@@ -838,7 +859,7 @@ mod tests {
 		).0;
 		assert!(r.is_ok());
 		let fm = t.execute_with(TransactionPayment::next_fee_multiplier);
-		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
+		let r = executor_call::<NeverNativeValue, fn() -> _>(
 			&mut t,
 			"BlockBuilder_apply_extrinsic",
 			&vec![].and(&xt()),
@@ -863,7 +884,7 @@ mod tests {
 		let block = Block::decode(&mut &block_data[..]).unwrap();
 
 		let mut t = new_test_ext(COMPACT_CODE, true);
-		executor().call::<_, NeverNativeValue, fn() -> _>(
+		executor_call::<NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_execute_block",
 			&block.encode(),
@@ -871,7 +892,7 @@ mod tests {
 			None,
 		).0.unwrap();
 
-		assert!(t.storage_changes_root(GENESIS_HASH.into()).unwrap().is_some());
+		assert!(t.ext().storage_changes_root(GENESIS_HASH.into()).unwrap().is_some());
 	}
 
 	#[test]
@@ -879,7 +900,7 @@ mod tests {
 		let block1 = changes_trie_block();
 
 		let mut t = new_test_ext(COMPACT_CODE, true);
-		executor().call::<_, NeverNativeValue, fn() -> _>(
+		executor_call::<NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_execute_block",
 			&block1.0,
@@ -887,7 +908,7 @@ mod tests {
 			None,
 		).0.unwrap();
 
-		assert!(t.storage_changes_root(GENESIS_HASH.into()).unwrap().is_some());
+		assert!(t.ext().storage_changes_root(GENESIS_HASH.into()).unwrap().is_some());
 	}
 
 	#[test]
@@ -953,7 +974,7 @@ mod tests {
 		println!("++ Block 1 size: {} / Block 2 size {}", block1.0.encode().len(), block2.0.encode().len());
 
 		// execute a big block.
-		executor().call::<_, NeverNativeValue, fn() -> _>(
+		executor_call::<NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_execute_block",
 			&block1.0,
@@ -970,7 +991,7 @@ mod tests {
 		});
 
 		// execute a big block.
-		executor().call::<_, NeverNativeValue, fn() -> _>(
+		executor_call::<NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_execute_block",
 			&block2.0,
@@ -1015,7 +1036,7 @@ mod tests {
 			function: Call::Balances(default_transfer_call()),
 		});
 
-		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
+		let r = executor_call::<NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_initialize_block",
 			&vec![].and(&from_block_number(1u32)),
@@ -1024,7 +1045,7 @@ mod tests {
 		).0;
 
 		assert!(r.is_ok());
-		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
+		let r = executor_call::<NeverNativeValue, fn() -> _>(
 			&mut t,
 			"BlockBuilder_apply_extrinsic",
 			&vec![].and(&xt.clone()),
@@ -1109,7 +1130,7 @@ mod tests {
 				len / 1024 / 1024,
 			);
 
-			let r = executor().call::<_, NeverNativeValue, fn() -> _>(
+			let r = executor_call::<NeverNativeValue, fn() -> _>(
 				&mut t,
 				"Core_execute_block",
 				&block.0,
@@ -1173,7 +1194,7 @@ mod tests {
 				len / 1024 / 1024,
 			);
 
-			let r = executor().call::<_, NeverNativeValue, fn() -> _>(
+			let r = executor_call::<NeverNativeValue, fn() -> _>(
 				&mut t,
 				"Core_execute_block",
 				&block.0,
