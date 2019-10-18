@@ -162,7 +162,7 @@ impl<B, S, H> Network<B> for Arc<NetworkService<B, S, H>> where
 			let inner_rx = gossip.messages_for(GRANDPA_ENGINE_ID, topic);
 			let _ = tx.send(inner_rx);
 		});
-		NetworkStream { outer: rx, inner: None }
+		NetworkStream::PollingOneshot(rx)
 	}
 
 	fn register_validator(&self, validator: Arc<dyn network_gossip::Validator<B>>) {
@@ -220,9 +220,9 @@ impl<B, S, H> Network<B> for Arc<NetworkService<B, S, H>> where
 ///
 /// `NetworkStream` combines the two steps into one, requiring a consumer to only poll `NetworkStream` to retrieve
 /// messages directly.
-pub struct NetworkStream {
-	inner: Option<mpsc::UnboundedReceiver<network_gossip::TopicNotification>>,
-	outer: oneshot::Receiver<mpsc::UnboundedReceiver<network_gossip::TopicNotification>>
+pub enum NetworkStream {
+	PollingOneshot(oneshot::Receiver<mpsc::UnboundedReceiver<network_gossip::TopicNotification>>),
+	PollingTopicNotifications(mpsc::UnboundedReceiver<network_gossip::TopicNotification>),
 }
 
 impl Stream for NetworkStream {
@@ -230,17 +230,21 @@ impl Stream for NetworkStream {
 	type Error = ();
 
 	fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
-		if let Some(ref mut inner) = self.inner {
-			return inner.poll();
-		}
-		match self.outer.poll() {
-			Ok(futures::Async::Ready(mut inner)) => {
-				let poll_result = inner.poll();
-				self.inner = Some(inner);
-				poll_result
+		match self {
+			NetworkStream::PollingOneshot(oneshot) => {
+				match oneshot.poll() {
+					Ok(futures::Async::Ready(mut stream)) => {
+						let poll_result = stream.poll();
+						*self = NetworkStream::PollingTopicNotifications(stream);
+						poll_result
+					},
+					Ok(futures::Async::NotReady) => Ok(futures::Async::NotReady),
+					Err(_) => Err(())
+				}
 			},
-			Ok(futures::Async::NotReady) => Ok(futures::Async::NotReady),
-			Err(_) => Err(())
+			NetworkStream::PollingTopicNotifications(stream) => {
+				stream.poll()
+			},
 		}
 	}
 }
