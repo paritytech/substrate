@@ -132,7 +132,7 @@ struct View<N> {
 impl<N> Default for View<N> {
 	fn default() -> Self {
 		View {
-			round: Round(0),
+			round: Round(1),
 			set_id: SetId(0),
 			last_commit: None,
 		}
@@ -144,7 +144,7 @@ impl<N: Ord> View<N> {
 	fn update_set(&mut self, set_id: SetId) {
 		if set_id != self.set_id {
 			self.set_id = set_id;
-			self.round = Round(0);
+			self.round = Round(1);
 		}
 	}
 
@@ -194,21 +194,30 @@ impl<B: BlockT> KeepTopics<B> {
 	fn new() -> Self {
 		KeepTopics {
 			current_set: SetId(0),
-			rounds: VecDeque::with_capacity(KEEP_RECENT_ROUNDS + 1),
+			rounds: VecDeque::with_capacity(KEEP_RECENT_ROUNDS + 2),
 			reverse_map: HashMap::new(),
 		}
 	}
 
 	fn push(&mut self, round: Round, set_id: SetId) {
 		self.current_set = std::cmp::max(self.current_set, set_id);
-		self.rounds.push_back((round, set_id));
 
-		// the 1 is for the current round.
-		while self.rounds.len() > KEEP_RECENT_ROUNDS + 1 {
+		// under normal operation the given round is already tracked (since we
+		// track one round ahead). if we skip rounds (with a catch up) the given
+		// round topic might not be tracked yet.
+		if !self.rounds.contains(&(round, set_id)) {
+			self.rounds.push_back((round, set_id));
+		}
+
+		// we also accept messages for the next round
+		self.rounds.push_back((Round(round.0.saturating_add(1)), set_id));
+
+		// the 2 is for the current and next round.
+		while self.rounds.len() > KEEP_RECENT_ROUNDS + 2 {
 			let _ = self.rounds.pop_front();
 		}
 
-		let mut map = HashMap::with_capacity(KEEP_RECENT_ROUNDS + 2);
+		let mut map = HashMap::with_capacity(KEEP_RECENT_ROUNDS + 3);
 		map.insert(super::global_topic::<B>(self.current_set.0), (None, self.current_set));
 
 		for &(round, set) in &self.rounds {
@@ -554,7 +563,7 @@ impl<Block: BlockT> Inner<Block> {
 		{
 			let local_view = match self.local_view {
 				ref mut x @ None => x.get_or_insert(View {
-					round: Round(0),
+					round: Round(1),
 					set_id,
 					last_commit: None,
 				}),
@@ -566,7 +575,7 @@ impl<Block: BlockT> Inner<Block> {
 			};
 
 			local_view.update_set(set_id);
-			self.live_topics.push(Round(0), set_id);
+			self.live_topics.push(Round(1), set_id);
 			self.authorities = authorities;
 		}
 		self.multicast_neighbor_packet()
@@ -1466,11 +1475,11 @@ mod tests {
 		let peer = PeerId::random();
 
 		val.note_set(SetId(set_id), vec![auth.clone()], |_, _| {});
-		val.note_round(Round(0), |_, _| {});
+		val.note_round(Round(1), |_, _| {});
 
 		let inner = val.inner.read();
 		let unknown_voter = inner.validate_round_message(&peer, &VoteOrPrecommitMessage {
-			round: Round(0),
+			round: Round(1),
 			set_id: SetId(set_id),
 			message: SignedMessage::<Block> {
 				message: grandpa::Message::Prevote(grandpa::Prevote {
@@ -1483,7 +1492,7 @@ mod tests {
 		});
 
 		let bad_sig = inner.validate_round_message(&peer, &VoteOrPrecommitMessage {
-			round: Round(0),
+			round: Round(1),
 			set_id: SetId(set_id),
 			message: SignedMessage::<Block> {
 				message: grandpa::Message::Prevote(grandpa::Prevote {
@@ -1512,7 +1521,7 @@ mod tests {
 		let peer = PeerId::random();
 
 		val.note_set(SetId(set_id), vec![auth.clone()], |_, _| {});
-		val.note_round(Round(0), |_, _| {});
+		val.note_round(Round(1), |_, _| {});
 
 		let validate_catch_up = || {
 			let mut inner = val.inner.write();
@@ -1548,19 +1557,19 @@ mod tests {
 
 	#[test]
 	fn unanswerable_catch_up_requests_discarded() {
-		// create voter set state with round 1 completed
+		// create voter set state with round 2 completed
 		let set_state: SharedVoterSetState<Block> = {
 			let mut completed_rounds = voter_set_state().read().completed_rounds();
 
 			completed_rounds.push(environment::CompletedRound {
-				number: 1,
+				number: 2,
 				state: grandpa::round::State::genesis(Default::default()),
 				base: Default::default(),
 				votes: Default::default(),
 			});
 
 			let mut current_rounds = environment::CurrentRounds::new();
-			current_rounds.insert(2, environment::HasVoted::No);
+			current_rounds.insert(3, environment::HasVoted::No);
 
 			let set_state = environment::VoterSetState::<Block>::Live {
 				completed_rounds,
@@ -1581,7 +1590,7 @@ mod tests {
 		let peer = PeerId::random();
 
 		val.note_set(SetId(set_id), vec![auth.clone()], |_, _| {});
-		val.note_round(Round(2), |_, _| {});
+		val.note_round(Round(3), |_, _| {});
 
 		// add the peer making the request to the validator,
 		// otherwise it is discarded
@@ -1597,7 +1606,7 @@ mod tests {
 			&set_state,
 		);
 
-		// we're at round 2, a catch up request for round 10 is out of scope
+		// we're at round 3, a catch up request for round 10 is out of scope
 		assert!(res.0.is_none());
 		assert_eq!(res.1, Action::Discard(cost::OUT_OF_SCOPE_MESSAGE));
 
@@ -1605,16 +1614,16 @@ mod tests {
 			&peer,
 			CatchUpRequestMessage {
 				set_id: SetId(set_id),
-				round: Round(1),
+				round: Round(2),
 			},
 			&set_state,
 		);
 
-		// a catch up request for round 1 should be answered successfully
+		// a catch up request for round 2 should be answered successfully
 		match res.0.unwrap() {
 			GossipMessage::CatchUp(catch_up) => {
 				assert_eq!(catch_up.set_id, SetId(set_id));
-				assert_eq!(catch_up.message.round_number, 1);
+				assert_eq!(catch_up.message.round_number, 2);
 
 				assert_eq!(res.1, Action::Discard(cost::CATCH_UP_REPLY));
 			},
@@ -1847,6 +1856,36 @@ mod tests {
 				assert_eq!(request.round, Round(41));
 			},
 			_ => panic!("expected catch up message"),
+		}
+	}
+
+	#[test]
+	fn doesnt_expire_next_round_messages() {
+		// NOTE: this is a regression test
+		let (val, _) = GossipValidator::<Block>::new(
+			config(),
+			voter_set_state(),
+			true,
+		);
+
+		// the validator starts at set id 1.
+		val.note_set(SetId(1), Vec::new(), |_, _| {});
+
+		// we are at round 10
+		val.note_round(Round(9), |_, _| {});
+		val.note_round(Round(10), |_, _| {});
+
+		let mut is_expired = val.message_expired();
+
+		// we accept messages from rounds 9, 10 and 11
+		// therefore neither of those should be considered expired
+		for round in &[9, 10, 11] {
+			assert!(
+				!is_expired(
+					crate::communication::round_topic::<Block>(*round, 1),
+					&[],
+				)
+			)
 		}
 	}
 }
