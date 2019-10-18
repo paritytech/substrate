@@ -433,8 +433,7 @@ impl Iterator for ResponseBody {
 			let result = runtime_io::offchain::http_response_read_body(
 				self.id,
 				&mut self.buffer,
-				self.deadline,
-			);
+				self.deadline);
 			match result {
 				Err(e) => {
 					self.error = Some(e);
