@@ -46,7 +46,7 @@ const ALLOCATED_HISTORY: usize = 2;
 /// Arraylike buffer with in place byte data.
 /// Can be written as is in underlying
 /// storage.
-/// Could be use for direct access memory to.
+/// Could be extended to direct access memory too.
 pub struct Serialized<'a, F>(SerializedBuff<'a>, PhantomData<F>);
 
 #[derive(Debug)]
@@ -323,7 +323,6 @@ impl<'a, F> Into<Serialized<'a, F>> for &'a mut Vec<u8> {
 		Serialized(SerializedBuff::Mut(self), PhantomData)
 	}
 }
-
 
 // Utility function for basis implementation.
 impl<'a, F: SerializedConfig> Serialized<'a, F> {

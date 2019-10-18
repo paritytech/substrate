@@ -37,9 +37,7 @@
 //! index than children.
 
 use std::collections::{BTreeMap};
-use historied_data::tree::{
-	BranchesStateTrait, BranchStatesRef as BranchState, BranchStateRef as BranchRange,
-};
+use historied_data::tree::{BranchesStateTrait, BranchState, BranchRange};
 
 #[derive(Clone, Default, Debug)]
 /// State needed for queries and updates operations.
@@ -97,7 +95,7 @@ impl<'a> Iterator for BranchRangesIter<'a> {
 	fn next(&mut self) -> Option<Self::Item> {
 		if self.1 > 0 {
 			Some((
-				&(self.0).0[self.1 - 1].state,
+				&(self.0).0[self.1 - 1].range,
 				(self.0).0[self.1 - 1].branch_index,
 			))
 		} else {
@@ -170,7 +168,7 @@ impl RangeSet {
 				parent_branch_index,
 				..
 			}) = self.storage.get(&branch_index) {
-				let state = if state.end > previous_start {
+				let range = if state.end > previous_start {
 					if state.start >= previous_start {
 						// empty branch stop here
 						break;
@@ -184,7 +182,7 @@ impl RangeSet {
 				previous_start = state.start;
 
 				result.push(BranchState {
-					state,
+					range,
 					branch_index,
 				});
 
@@ -271,9 +269,9 @@ impl RangeSet {
 	/// Get the branch reference for a given branch index if it exists.
 	pub fn range(&self, branch_index: u64) -> Option<BranchState> {
 		self.storage.get(&branch_index).map(|v| v.range())
-			.map(|state| BranchState {
+			.map(|range| BranchState {
 				branch_index,
-				state,
+				range,
 			})
 	}
 

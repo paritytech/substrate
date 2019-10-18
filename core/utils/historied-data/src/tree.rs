@@ -63,9 +63,9 @@ pub trait BranchStateTrait<S, I> {
 	fn last_index(&self) -> I;
 }
 
-impl<'a> BranchesStateTrait<bool, u64, u64> for &'a StatesRef {
-	type Branch = (&'a BranchStateRef, Option<u64>);
-	type Iter = StatesRefIter<'a>;
+impl<'a> BranchesStateTrait<bool, u64, u64> for &'a BranchRanges {
+	type Branch = (&'a BranchRange, Option<u64>);
+	type Iter = BranchRangesIter<'a>;
 
 	fn get_branch(self, i: u64) -> Option<Self::Branch> {
 		for (b, bi) in self.iter() {
@@ -101,33 +101,25 @@ impl<'a> BranchesStateTrait<bool, u64, u64> for &'a StatesRef {
 			end -= 1;
 		}
 
-		StatesRefIter(self, end, upper_node_index)
+		BranchRangesIter(self, end, upper_node_index)
 	}
 }
 
 #[derive(Debug, Clone)]
 #[cfg_attr(any(test, feature = "test"), derive(PartialEq, Eq))]
-pub struct BranchState {
-	/// Index of first element (only use for indexed access).
-	/// Element before offset are not in state.
-	offset: u64,
-	/// number of elements: all elements equal or bellow
-	/// this index are valid, over this index they are not.
-	len: u64,
-	/// Maximum index before first deletion, it indicates
-	/// if the state is modifiable (when an element is dropped
-	/// we cannot append and need to create a new branch).
-	max_len_ix: u64,
+pub struct ModifiableBranchRange {
+	range: BranchRange,
+	can_append: bool,
 }
 
 /// This is a simple range, end non inclusive.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BranchStateRef {
+pub struct BranchRange {
 	pub start: u64,
 	pub end: u64,
 }
 
-impl<'a> BranchStateTrait<bool, u64> for (&'a BranchStateRef, Option<u64>) {
+impl<'a> BranchStateTrait<bool, u64> for (&'a BranchRange, Option<u64>) {
 
 	fn get_node(&self, i: u64) -> bool {
 		let l = self.0.end;
@@ -143,7 +135,7 @@ impl<'a> BranchStateTrait<bool, u64> for (&'a BranchStateRef, Option<u64>) {
 
 }
 
-impl<'a> BranchStateTrait<bool, u64> for &'a BranchStateRef {
+impl<'a> BranchStateTrait<bool, u64> for &'a BranchRange {
 
 	fn get_node(&self, i: u64) -> bool {
 		i >= self.start && i < self.end
@@ -170,37 +162,31 @@ impl<'a> BranchStateTrait<bool, u64> for u64 {
 
 }
 
-impl Default for BranchState {
+impl Default for ModifiableBranchRange {
 	// initialize with one element
 	fn default() -> Self {
 		Self::new_from(0)
 	}
 }
 
-impl BranchState {
+impl ModifiableBranchRange {
 	pub fn new_from(offset: u64) -> Self {
-		BranchState {
-			offset,
-			len: 1,
-			max_len_ix: offset,
+		ModifiableBranchRange {
+			range: BranchRange {
+				start: offset,
+				end: offset + 1,
+			},
+			can_append: true,
 		}
 	}
 
-	pub fn state_ref(&self) -> BranchStateRef {
-		BranchStateRef {
-			start: self.offset,
-			end: self.offset + self.len,
-		}
-	}
-
-	pub fn has_deleted_index(&self) -> bool {
-		self.max_len_ix >= self.offset + self.len
+	pub fn range(&self) -> BranchRange {
+		self.range.clone()
 	}
 
 	pub fn add_state(&mut self) -> bool {
-		if !self.has_deleted_index() {
-			self.len += 1;
-			self.max_len_ix += 1;
+		if self.can_append {
+			self.range.end += 1;
 			true
 		} else {
 			false
@@ -209,9 +195,10 @@ impl BranchState {
 
 	/// return possible dropped state
 	pub fn drop_state(&mut self) -> Option<u64> {
-		if self.len > 0 {
-			self.len -= 1;
-			Some(self.offset + self.len)
+		if self.range.end > self.range.start {
+			self.range.end -= 1;
+			self.can_append = false;
+			Some(self.range.end)
 		} else {
 			None
 		}
@@ -219,15 +206,12 @@ impl BranchState {
 
 	/// Return true if state exists.
 	pub fn get_state(&self, index: u64) -> bool {
-		if index < self.offset {
-			return false;
-		}
-		self.len > index + self.offset
+		self.range.get_state(index)
 	}
 
 	pub fn latest_ix(&self) -> Option<u64> {
-		if self.len > 0 {
-			Some(self.offset + self.len - 1)
+		if self.range.end > self.range.start {
+			Some(self.range.end - 1)
 		} else {
 			None
 		}
@@ -235,7 +219,7 @@ impl BranchState {
 
 }
 
-impl BranchStateRef {
+impl BranchRange {
 	/// Return true if the state exists, false otherwhise.
 	pub fn get_state(&self, index: u64) -> bool {
 		index < self.end && index >= self.start
@@ -249,7 +233,7 @@ impl BranchStateRef {
 #[derive(Debug, Clone)]
 #[cfg_attr(any(test, feature = "test"), derive(PartialEq))]
 pub struct TestStates {
-	branches: BTreeMap<u64, StatesBranch>,
+	branches: BTreeMap<u64, BranchStateFull>,
 	last_branch_index: u64,
 	/// a lower treshold under which every branch are seen
 	/// as containing only valid values.
@@ -257,11 +241,11 @@ pub struct TestStates {
 	valid_treshold: u64,
 }
 
-impl StatesBranch {
-	pub fn branch_ref(&self) -> BranchStatesRef {
-		BranchStatesRef {
+impl BranchStateFull {
+	pub fn state(&self) -> BranchState {
+		BranchState {
 			branch_index: self.branch_index,
-			state: self.state.state_ref(),
+			range: self.state.range(),
 		}
 	}
 }
@@ -278,7 +262,7 @@ impl Default for TestStates {
 
 #[derive(Debug, Clone)]
 #[cfg_attr(any(test, feature = "test"), derive(PartialEq, Eq))]
-struct StatesBranch {
+struct BranchStateFull {
 	// this is the key (need to growth unless full gc (can still have
 	// content pointing to it even if it seems safe to reuse a previously
 	// use ix).
@@ -287,13 +271,13 @@ struct StatesBranch {
 	origin_branch_index: u64,
 	origin_node_index: u64,
 
-	state: BranchState,
+	state: ModifiableBranchRange,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BranchStatesRef {
+pub struct BranchState {
 	pub branch_index: u64,
-	pub state: BranchStateRef,
+	pub range: BranchRange,
 }
 
 #[derive(Clone)]
@@ -302,9 +286,9 @@ pub struct BranchStatesRef {
 ///
 /// Note that an alternative representation could be a pointer to full
 /// tree state with a defined branch index implementing an iterator.
-pub struct StatesRef {
+pub struct BranchRanges {
 	/// Oredered by branch index linear branch states.
-	history: Rc<Vec<BranchStatesRef>>,
+	history: Rc<Vec<BranchState>>,
 	/// Index is included, acts as length of history.
 	upper_branch_index: Option<u64>,
 	/// Index is included, acts as a branch ref end value.
@@ -312,16 +296,16 @@ pub struct StatesRef {
 }
 
 /// Iterator, contains index of last inner struct.
-pub struct StatesRefIter<'a>(&'a StatesRef, usize, Option<u64>);
+pub struct BranchRangesIter<'a>(&'a BranchRanges, usize, Option<u64>);
 
-impl<'a> Iterator for StatesRefIter<'a> {
-	type Item = ((&'a BranchStateRef, Option<u64>), u64);
+impl<'a> Iterator for BranchRangesIter<'a> {
+	type Item = ((&'a BranchRange, Option<u64>), u64);
 
 	fn next(&mut self) -> Option<Self::Item> {
 		if self.1 > 0 {
 			let upper_node_index = self.2.take();
 			Some((
-				(&self.0.history[self.1 - 1].state, upper_node_index),
+				(&self.0.history[self.1 - 1].range, upper_node_index),
 				self.0.history[self.1 - 1].branch_index,
 			))
 		} else {
@@ -330,7 +314,7 @@ impl<'a> Iterator for StatesRefIter<'a> {
 	}
 }
 
-impl StatesRef {
+impl BranchRanges {
 	/// limit to a given branch (included).
 	/// Optionally limiting branch to a linear index (included).
 	pub fn limit_branch(&mut self, branch_index: u64, node_index: Option<u64>) {
@@ -358,24 +342,24 @@ impl TestStates {
 
 	/// warning it should be the index of the leaf, otherwhise the ref will be incomplete.
 	/// (which is fine as long as we use this state to query something that refer to this state.
-	pub fn state_ref(&self, mut branch_index: u64) -> StatesRef {
+	pub fn state(&self, mut branch_index: u64) -> BranchRanges {
 		let mut result = Vec::new();
 		let mut previous_origin_node_index = u64::max_value() - 1;
 		while branch_index > self.valid_treshold {
 			if let Some(branch) = self.branches.get(&branch_index) {
-				let mut branch_ref = branch.branch_ref();
-				if branch_ref.state.end > previous_origin_node_index + 1 {
-					branch_ref.state.end = previous_origin_node_index + 1;
+				let mut branch_range = branch.state();
+				if branch_range.range.end > previous_origin_node_index + 1 {
+					branch_range.range.end = previous_origin_node_index + 1;
 				}
 				previous_origin_node_index = branch.origin_node_index;
 				// vecdeque would be better suited
-				result.insert(0, branch_ref);
+				result.insert(0, branch_range);
 				branch_index = branch.origin_branch_index;
 			} else {
 				break;
 			}
 		}
-		StatesRef { history: Rc::new(result), upper_branch_index: None, upper_node_index: None }
+		BranchRanges { history: Rc::new(result), upper_branch_index: None, upper_node_index: None }
 	}
 
 	// create a branches. End current branch.
@@ -405,7 +389,7 @@ impl TestStates {
 
 		let result_ix = self.last_branch_index + 1;
 		for i in result_ix .. result_ix + (nb_branch as u64) {
-			self.branches.insert(i, StatesBranch {
+			self.branches.insert(i, BranchStateFull {
 				branch_index: i,
 				origin_branch_index: branch_index,
 				origin_node_index: node_index,
@@ -444,12 +428,12 @@ impl TestStates {
 		self.get_node(branch_index, Some(node_index)).is_some()
 	}
 
-	pub fn branch_state(&self, branch_index: u64) -> Option<&BranchState> {
+	pub fn branch_range(&self, branch_index: u64) -> Option<&ModifiableBranchRange> {
 		self.branches.get(&branch_index)
 			.map(|b| &b.state)
 	}
 
-	pub fn branch_state_mut(&mut self, branch_index: u64) -> Option<&mut BranchState> {
+	pub fn branch_range_mut(&mut self, branch_index: u64) -> Option<&mut ModifiableBranchRange> {
 		self.branches.get_mut(&branch_index)
 			.map(|b| &mut b.state)
 	}
@@ -466,7 +450,7 @@ impl TestStates {
 		}
 		for i in to_delete.into_iter() {
 			loop {
-				match self.branch_state_mut(i).map(|ls| ls.drop_state()) {
+				match self.branch_range_mut(i).map(|ls| ls.drop_state()) {
 					Some(Some(li)) => self.apply_drop_state(i, li),
 					Some(None) => break, // we keep empty branch
 					None => break,
@@ -853,20 +837,20 @@ mod test {
 		assert_eq!(states.create_branch(1, 0, None), Some(1));
 		// root branching.
 		assert_eq!(states.create_branch(1, 0, None), Some(2));
-		assert_eq!(Some(true), states.branch_state_mut(1).map(|ls| ls.add_state()));
+		assert_eq!(Some(true), states.branch_range_mut(1).map(|ls| ls.add_state()));
 		assert_eq!(states.create_branch(2, 1, None), Some(3));
 		assert_eq!(states.create_branch(1, 1, Some(0)), Some(5));
 		assert_eq!(states.create_branch(1, 1, Some(2)), None);
-		assert_eq!(Some(true), states.branch_state_mut(1).map(|ls| ls.add_state()));
-		assert_eq!(Some(Some(2)), states.branch_state_mut(1).map(|ls| ls.drop_state()));
+		assert_eq!(Some(true), states.branch_range_mut(1).map(|ls| ls.add_state()));
+		assert_eq!(Some(Some(2)), states.branch_range_mut(1).map(|ls| ls.drop_state()));
 		// cannot create when dropped happen on branch
-		assert_eq!(Some(false), states.branch_state_mut(1).map(|ls| ls.add_state()));
+		assert_eq!(Some(false), states.branch_range_mut(1).map(|ls| ls.add_state()));
 
 		assert!(states.get(1, 1));
 		// 0> 1: _ _ X
-		// |			 |> 3: 1
-		// |			 |> 4: 1
-		// |		 |> 5: 1
+		// |       |> 3: 1
+		// |       |> 4: 1
+		// |     |> 5: 1
 		// |> 2: _
 
 		states
@@ -875,7 +859,7 @@ mod test {
 	#[test]
 	fn test_remove_attached() {
 		let mut states = test_states();
-		assert_eq!(Some(Some(1)), states.branch_state_mut(1).map(|ls| ls.drop_state()));
+		assert_eq!(Some(Some(1)), states.branch_range_mut(1).map(|ls| ls.drop_state()));
 		assert!(states.get(3, 0));
 		assert!(states.get(4, 0));
 		states.apply_drop_state(1, 1);
@@ -884,69 +868,64 @@ mod test {
 	}
 
 	#[test]
-	fn test_state_refs() {
+	fn test_state() {
 		let states = test_states();
 		let ref_3 = vec![
-			BranchStatesRef {
+			BranchState {
 				branch_index: 1,
-				state: BranchStateRef { start: 0, end: 2 },
+				range: BranchRange { start: 0, end: 2 },
 			},
-			BranchStatesRef {
+			BranchState {
 				branch_index: 3,
-				state: BranchStateRef { start: 0, end: 1 },
+				range: BranchRange { start: 0, end: 1 },
 			},
 		];
-		assert_eq!(*states.state_ref(3).history, ref_3);
+		assert_eq!(*states.state(3).history, ref_3);
 
 		let mut states = states;
 
 		assert_eq!(states.create_branch(1, 1, Some(0)), Some(6));
 		let ref_6 = vec![
-			BranchStatesRef {
+			BranchState {
 				branch_index: 1,
-				state: BranchStateRef { start: 0, end: 1 },
+				range: BranchRange { start: 0, end: 1 },
 			},
-			BranchStatesRef {
+			BranchState {
 				branch_index: 6,
-				state: BranchStateRef { start: 0, end: 1 },
+				range: BranchRange { start: 0, end: 1 },
 			},
 		];
-		assert_eq!(*states.state_ref(6).history, ref_6);
+		assert_eq!(*states.state(6).history, ref_6);
 
 		states.valid_treshold = 3;
 		let mut ref_6 = ref_6;
 		ref_6.remove(0);
-		assert_eq!(*states.state_ref(6).history, ref_6);
+		assert_eq!(*states.state(6).history, ref_6);
 	}
 
 	#[test]
 	fn test_set_get() {
-		// 0> 1: _ _ X
-		// |			 |> 3: 1
-		// |			 |> 4: 1
-		// |		 |> 5: 1
-		// |> 2: _
 		let states = test_states();
 		let mut item: History<u64> = Default::default();
 
 		for i in 0..6 {
-			assert_eq!(item.get(&states.state_ref(i)), None);
+			assert_eq!(item.get(&states.state(i)), None);
 		}
 
 		// setting value respecting branch build order
 		for i in 1..6 {
-			item.set(&states.state_ref(i), i);
+			item.set(&states.state(i), i);
 		}
 
 		for i in 1..6 {
-			assert_eq!(item.get(&states.state_ref(i)), Some(&i));
+			assert_eq!(item.get(&states.state(i)), Some(&i));
 		}
 
-		let mut ref_3 = states.state_ref(3);
+		let mut ref_3 = states.state(3);
 		ref_3.limit_branch(1, None);
 		assert_eq!(item.get(&ref_3), Some(&1));
 
-		let mut ref_1 = states.state_ref(1);
+		let mut ref_1 = states.state(1);
 		ref_1.limit_branch(1, Some(0));
 		assert_eq!(item.get(&ref_1), None);
 		item.set(&ref_1, 11);
@@ -962,10 +941,10 @@ mod test {
 		];
 		for r in disordered.iter() {
 			for i in r {
-				item.set(&states.state_ref(*i), *i);
+				item.set(&states.state(*i), *i);
 			}
 			for i in r {
-				assert_eq!(item.get(&states.state_ref(*i)), Some(i));
+				assert_eq!(item.get(&states.state(*i)), Some(i));
 			}
 		}
 
@@ -974,16 +953,11 @@ mod test {
 
 	#[test]
 	fn test_gc() {
-		// 0> 1: _ _ X
-		// |			 |> 3: 1
-		// |			 |> 4: 1
-		// |		 |> 5: 1
-		// |> 2: _
 		let states = test_states();
 		let mut item: History<u64> = Default::default();
 		// setting value respecting branch build order
 		for i in 1..6 {
-			item.set(&states.state_ref(i), i);
+			item.set(&states.state(i), i);
 		}
 
 		let mut states1 = states.branches.clone();
@@ -994,16 +968,16 @@ mod test {
 			}
 		}
 		// makes invalid tree (detaches 4)
-		states1.get_mut(&1).map(|br| br.state.len = 1);
-		let states1: BTreeMap<_, _> = states1.iter().map(|(k,v)| (k, v.branch_ref())).collect();
+		states1.get_mut(&1).map(|br| br.state.range.end -= 1);
+		let states1: BTreeMap<_, _> = states1.iter().map(|(k,v)| (k, v.state())).collect();
 		let mut item1 = item.clone();
-		item1.gc(states1.iter().map(|(k, v)| ((&v.state, None), **k)).rev());
-		assert_eq!(item1.get(&states.state_ref(1)), None);
+		item1.gc(states1.iter().map(|(k, v)| ((&v.range, None), **k)).rev());
+		assert_eq!(item1.get(&states.state(1)), None);
 		for a in action.iter().skip(1) {
 			if a.1 {
-				assert_eq!(item1.get(&states.state_ref(a.0)), Some(&a.0));
+				assert_eq!(item1.get(&states.state(a.0)), Some(&a.0));
 			} else {
-				assert_eq!(item1.get(&states.state_ref(a.0)), None);
+				assert_eq!(item1.get(&states.state(a.0)), None);
 			}
 		}
 	}

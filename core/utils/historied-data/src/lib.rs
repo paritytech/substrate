@@ -41,31 +41,7 @@ impl<V, I> From<(V, I)> for HistoriedValue<V, I> {
 	}
 }
 
-impl<V, I: Copy> HistoriedValue<V, I> {
-	pub fn as_ref(&self) -> HistoriedValue<&V, I> {
-		HistoriedValue {
-			value: &self.value,
-			index: self.index,
-		}
-	}
-
-	pub fn as_mut(&mut self) -> HistoriedValue<&mut V, I> {
-		HistoriedValue {
-			value: &mut self.value,
-			index: self.index,
-		}
-	}
-
-	pub fn map<R, F: FnOnce(V) -> R>(self, f: F) -> HistoriedValue<R, I> {
-		HistoriedValue {
-			value: f(self.value),
-			index: self.index,
-		}
-	}
-
-}
-
-// utility function for panicking cast (similar to a `as` cast for number).
+// Utility function for panicking cast (enabling casts similar to `as` cast for number).
 fn as_u<U: num_traits::Bounded, I: TryInto<U>>(i: I) -> U {
 	match i.try_into() {
 		Ok(index) => index,
