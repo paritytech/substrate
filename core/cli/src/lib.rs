@@ -919,7 +919,9 @@ fn init_logger(pattern: &str) {
 		writeln!(buf, "{}", output)
 	});
 
-	builder.init();
+	if builder.try_init().is_err() {
+		info!("Not registering Substrate logger, as there is already a global logger registered!");
+	}
 }
 
 fn kill_color(s: &str) -> String {
