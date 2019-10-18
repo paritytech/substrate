@@ -106,6 +106,7 @@ members = [
 	"srml/system/rpc",
 	"srml/timestamp",
 	"srml/treasury",
+	"srml/transaction-payment",
 	"srml/utility",
 	"node/cli",
 	"node/executor",

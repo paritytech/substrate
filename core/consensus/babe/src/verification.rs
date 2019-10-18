@@ -22,7 +22,7 @@ use babe_primitives::{Epoch, BabePreDigest, CompatibleDigestItem, AuthorityId};
 use babe_primitives::{AuthoritySignature, SlotNumber, AuthorityIndex, AuthorityPair};
 use slots::CheckedHeader;
 use log::{debug, trace};
-use super::{find_pre_digest, BlockT};
+use super::{find_pre_digest, babe_err, BlockT, Error};
 use super::authorship::{make_transcript, calculate_primary_threshold, check_primary_threshold, secondary_slot_author};
 
 /// BABE verification parameters
@@ -41,15 +41,6 @@ pub(super) struct VerificationParams<'a, B: 'a + BlockT> {
 	pub(super) config: &'a super::Config,
 }
 
-macro_rules! babe_err {
-	($($i: expr),+) => {
-		{
-			debug!(target: "babe", $($i),+);
-			format!($($i),+)
-		}
-	};
-}
-
 /// Check a header has been signed by the right key. If the slot is too far in
 /// the future, an error will be returned. If successful, returns the pre-header
 /// and the digest item containing the seal.
@@ -63,7 +54,7 @@ macro_rules! babe_err {
 /// with each having different validation logic.
 pub(super) fn check_header<B: BlockT + Sized>(
 	params: VerificationParams<B>,
-) -> Result<CheckedHeader<B::Header, VerifiedHeaderInfo<B>>, String> where
+) -> Result<CheckedHeader<B::Header, VerifiedHeaderInfo<B>>, Error<B>> where
 	DigestItemFor<B>: CompatibleDigestItem,
 {
 	let VerificationParams {
@@ -75,16 +66,16 @@ pub(super) fn check_header<B: BlockT + Sized>(
 	} = params;
 
 	let authorities = &epoch.authorities;
-	let pre_digest = pre_digest.map(Ok).unwrap_or_else(|| find_pre_digest::<B::Header>(&header))?;
+	let pre_digest = pre_digest.map(Ok).unwrap_or_else(|| find_pre_digest::<B>(&header))?;
 
 	trace!(target: "babe", "Checking header");
 	let seal = match header.digest_mut().pop() {
 		Some(x) => x,
-		None => return Err(babe_err!("Header {:?} is unsealed", header.hash())),
+		None => return Err(babe_err(Error::HeaderUnsealed(header.hash()))),
 	};
 
 	let sig = seal.as_babe_seal().ok_or_else(|| {
-		babe_err!("Header {:?} has a bad seal", header.hash())
+		babe_err(Error::HeaderBadSeal(header.hash()))
 	})?;
 
 	// the pre-hash of the header doesn't include the seal
@@ -98,7 +89,7 @@ pub(super) fn check_header<B: BlockT + Sized>(
 
 	let author = match authorities.get(pre_digest.authority_index() as usize) {
 		Some(author) => author.0.clone(),
-		None => return Err(babe_err!("Slot author not found")),
+		None => return Err(babe_err(Error::SlotAuthorNotFound)),
 	};
 
 	match &pre_digest {
@@ -128,7 +119,7 @@ pub(super) fn check_header<B: BlockT + Sized>(
 			)?;
 		},
 		_ => {
-			return Err(babe_err!("Secondary slot assignments are disabled for the current epoch."));
+			return Err(babe_err(Error::SecondarySlotAssignmentsDisabled));
 		}
 	}
 
@@ -156,7 +147,7 @@ fn check_primary_header<B: BlockT + Sized>(
 	signature: AuthoritySignature,
 	epoch: &Epoch,
 	c: (u64, u64),
-) -> Result<(), String> {
+) -> Result<(), Error<B>> {
 	let (vrf_output, vrf_proof, authority_index, slot_number) = pre_digest;
 
 	let author = &epoch.authorities[authority_index as usize].0;
@@ -172,7 +163,7 @@ fn check_primary_header<B: BlockT + Sized>(
 			schnorrkel::PublicKey::from_bytes(author.as_slice()).and_then(|p| {
 				p.vrf_verify(transcript, vrf_output, vrf_proof)
 			}).map_err(|s| {
-				babe_err!("VRF verification failed: {:?}", s)
+				babe_err(Error::VRFVerificationFailed(s))
 			})?
 		};
 
@@ -183,13 +174,12 @@ fn check_primary_header<B: BlockT + Sized>(
 		);
 
 		if !check_primary_threshold(&inout, threshold) {
-			return Err(babe_err!("VRF verification of block by author {:?} failed: \
-								  threshold {} exceeded", author, threshold));
+			return Err(babe_err(Error::VRFVerificationOfBlockFailed(author.clone(), threshold)));
 		}
 
 		Ok(())
 	} else {
-		Err(babe_err!("Bad signature on {:?}", pre_hash))
+		Err(babe_err(Error::BadSignature(pre_hash)))
 	}
 }
 
@@ -202,7 +192,7 @@ fn check_secondary_header<B: BlockT>(
 	pre_digest: (AuthorityIndex, SlotNumber),
 	signature: AuthoritySignature,
 	epoch: &Epoch,
-) -> Result<(), String> {
+) -> Result<(), Error<B>> {
 	let (authority_index, slot_number) = pre_digest;
 
 	// check the signature is valid under the expected authority and
@@ -211,22 +201,17 @@ fn check_secondary_header<B: BlockT>(
 		slot_number,
 		&epoch.authorities,
 		epoch.randomness,
-	).ok_or_else(|| "No secondary author expected.".to_string())?;
+	).ok_or_else(|| Error::NoSecondaryAuthorExpected)?;
 
 	let author = &epoch.authorities[authority_index as usize].0;
 
 	if expected_author != author {
-		let msg = format!("Invalid author: Expected secondary author: {:?}, got: {:?}.",
-			expected_author,
-			author,
-		);
-
-		return Err(msg);
+		return Err(Error::InvalidAuthor(expected_author.clone(), author.clone()));
 	}
 
 	if AuthorityPair::verify(&signature, pre_hash.as_ref(), author) {
 		Ok(())
 	} else {
-		Err(format!("Bad signature on {:?}", pre_hash))
+		Err(Error::BadSignature(pre_hash))
 	}
 }

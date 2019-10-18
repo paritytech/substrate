@@ -1053,7 +1053,6 @@ impl<T: Subtrait> system::Trait for ElevatedTrait<T> {
 	type MaximumBlockWeight = T::MaximumBlockWeight;
 	type MaximumBlockLength = T::MaximumBlockLength;
 	type AvailableBlockRatio = T::AvailableBlockRatio;
-	type WeightMultiplierUpdate = ();
 	type BlockHashCount = T::BlockHashCount;
 	type Version = T::Version;
 }
