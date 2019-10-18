@@ -237,9 +237,17 @@ where
 
 					self.handle_dht_value_found_event(v)?;
 				}
-				DhtEvent::ValueNotFound(hash) => warn!(target: "sub-authority-discovery", "Value for hash '{:?}' not found on Dht.", hash),
-				DhtEvent::ValuePut(hash) => debug!(target: "sub-authority-discovery", "Successfully put hash '{:?}' on Dht.", hash),
-				DhtEvent::ValuePutFailed(hash) => warn!(target: "sub-authority-discovery", "Failed to put hash '{:?}' on Dht.", hash),
+				DhtEvent::ValueNotFound(hash) => warn!(
+					target: "sub-authority-discovery",
+					"Value for hash '{:?}' not found on Dht.", hash
+				),
+				DhtEvent::ValuePut(hash) => debug!(
+					target: "sub-authority-discovery",
+					"Successfully put hash '{:?}' on Dht.", hash),
+				DhtEvent::ValuePutFailed(hash) => warn!(
+					target: "sub-authority-discovery",
+					"Failed to put hash '{:?}' on Dht.", hash
+				),
 			}
 		}
 
