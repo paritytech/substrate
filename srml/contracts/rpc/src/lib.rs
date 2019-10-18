@@ -42,7 +42,7 @@ pub struct CallRequest<AccountId, Balance> {
 	dest: AccountId,
 	value: Balance,
 	gas_limit: number::NumberOrHex<u64>,
-	input_data: Bytes
+	input_data: Bytes,
 }
 
 /// Contracts RPC methods.
