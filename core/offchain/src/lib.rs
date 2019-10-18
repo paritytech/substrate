@@ -39,7 +39,6 @@ use std::{
 	sync::Arc,
 };
 
-extern crate num_cpus;
 use threadpool::ThreadPool;
 use client::runtime_api::ApiExt;
 use futures::future::Future;
