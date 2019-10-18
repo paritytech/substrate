@@ -23,7 +23,7 @@ use sr_primitives::{Fixed64, Perbill};
 use support::traits::{OnUnbalanced, Currency, Get};
 use crate::{
 	Balances, System, Authorship, MaximumBlockWeight, NegativeImbalance, WeightToFee,
-	TargetedFeeAdjustment, TransactionPayment,
+	TargetedFeeAdjustment,
 };
 
 pub struct Author;
@@ -58,7 +58,7 @@ impl Convert<Weight, Balance> for WeightToFee {
 
 /// Update the given multiplier based on the following formula
 ///
-///   diff = (target_weight - current_block_weight)
+///   diff = (target_weight - previous_block_weight)
 ///   v = 0.00004
 ///   next_weight = weight * (1 + (v . diff) + (v . diff)^2 / 2)
 ///
@@ -112,8 +112,9 @@ impl Convert<Fixed64, Fixed64> for TargetedFeeAdjustment {
 mod tests {
 	use super::*;
 	use sr_primitives::weights::Weight;
+	use sr_primitives::assert_eq_error_rate;
 	use crate::{MaximumBlockWeight, AvailableBlockRatio, Runtime};
-	use crate::constants::currency::*;
+	use crate::{constants::currency::*, TransactionPayment};
 
 	fn max() -> Weight {
 		MaximumBlockWeight::get()
@@ -135,8 +136,7 @@ mod tests {
 		// Current saturation in terms of weight
 		let s = block_weight;
 
-		let fm = (v * (s/m - ss/m)) + (v.powi(2) * (s/m - ss/m).powi(2)) / 2.0;
-		dbg!(fm * 1_000_000_000_f32);
+		let fm = v * (s/m - ss/m) + v.powi(2) * (s/m - ss/m).powi(2) / 2.0;
 		let addition_fm = Fixed64::from_parts((fm * 1_000_000_000_f32).round() as i64);
 		previous.saturating_add(addition_fm)
 	}
@@ -158,8 +158,7 @@ mod tests {
 	fn fee_multiplier_update_poc_works() {
 		let fm = Fixed64::from_rational(0, 1);
 		let test_set = vec![
-			// TODO: this has a rounding error and fails.
-			// (0, fm.clone()),
+			(0, fm.clone()),
 			(100, fm.clone()),
 			(target(), fm.clone()),
 			(max() / 2, fm.clone()),
@@ -167,12 +166,10 @@ mod tests {
 		];
 		test_set.into_iter().for_each(|(w, fm)| {
 			run_with_system_weight(w, || {
-				assert_eq!(
-					fee_multiplier_update(w, fm),
-					TargetedFeeAdjustment::convert(fm),
-					"failed for weight {} and prev fm {:?}",
-					w,
-					fm,
+				assert_eq_error_rate!(
+					fee_multiplier_update(w, fm).into_inner(),
+					TargetedFeeAdjustment::convert(fm).into_inner(),
+					5,
 				);
 			})
 		})
@@ -181,7 +178,7 @@ mod tests {
 	#[test]
 	fn empty_chain_simulation() {
 		// just a few txs per_block.
-		let block_weight = 1000;
+		let block_weight = 0;
 		run_with_system_weight(block_weight, || {
 			let mut fm = Fixed64::default();
 			let mut iterations: u64 = 0;
@@ -192,6 +189,13 @@ mod tests {
 				iterations += 1;
 			}
 			println!("iteration {}, new fm = {:?}. Weight fee is now zero", iterations, fm);
+			assert!(iterations > 50_000, "This assertion is just a warning; Don't panic. \
+				Current substrate/polkadot node are configured with a _slow adjusting fee_ \
+				mechanism. Hence, it is really unlikely that fees collapse to zero even on an empty chain \
+				in less than at least of couple of thousands of empty blocks. But this simulation
+				indicates that fees collapsed to zero after {} almost-empty blocks. Check it",
+				iterations,
+			);
 		})
 	}
 
@@ -201,12 +205,10 @@ mod tests {
 		// `cargo test congested_chain_simulation -- --nocapture` to get some insight.
 
 		// almost full. The entire quota of normal transactions is taken.
-		let block_weight = AvailableBlockRatio::get() * max();
+		let block_weight = AvailableBlockRatio::get() * max() - 100;
 
-		// default minimum substrate weight
-		let tx_weight = 10_000u32;
-		let tx_per_block = 100;
-		let block_weight = tx_weight * tx_per_block;
+		// Default substrate minimum.
+		let tx_weight = 10_000;
 
 		run_with_system_weight(block_weight, || {
 			// initial value configured on module
@@ -216,7 +218,8 @@ mod tests {
 			let mut iterations: u64 = 0;
 			loop {
 				let next = TargetedFeeAdjustment::convert(fm);
-				if fm == next { break; }
+				// if no change, panic. This should never happen in this case.
+				if fm == next { panic!("The fee should ever increase"); }
 				fm = next;
 				iterations += 1;
 				let fee = <Runtime as transaction_payment::Trait>::WeightToFee::convert(tx_weight);
@@ -337,7 +340,7 @@ mod tests {
 			run_with_system_weight(i, || {
 				let next = TargetedFeeAdjustment::convert(Fixed64::default());
 				let truth = fee_multiplier_update(i, Fixed64::default());
-				assert_eq!(next, truth);
+				assert_eq_error_rate!(truth.into_inner(), next.into_inner(), 5);
 			});
 		});
 

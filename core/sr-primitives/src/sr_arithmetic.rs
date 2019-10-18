@@ -557,6 +557,12 @@ impl Fixed64 {
 		Self(int.saturating_mul(DIV))
 	}
 
+	/// Return the inner value. Only for testing.
+	#[cfg(any(feature = "std", test))]
+	pub fn into_inner(self) -> i64 {
+		self.0
+	}
+
 	/// Return the accuracy of the type. Given that this function returns the value `X`, it means
 	/// that an instance composed of `X` parts (`Fixed64::from_parts(X)`) is equal to `1`.
 	pub fn accuracy() -> i64 {

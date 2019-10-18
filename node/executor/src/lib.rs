@@ -480,8 +480,6 @@ mod tests {
 		).0.unwrap();
 
 		t.execute_with(|| {
-			// NOTE: fees differ slightly in tests that execute more than one block due to the
-			// weight update. Hence, using `assert_eq_error_rate`.
 			assert_eq!(
 				Balances::total_balance(&alice()),
 				alice_last_known_balance - 10 * DOLLARS - transfer_fee(&xt(), fm),
