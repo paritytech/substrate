@@ -4052,6 +4052,7 @@ dependencies = [
  "sr-primitives 2.0.0",
  "srml-contracts-rpc-runtime-api 2.0.0",
  "substrate-client 2.0.0",
+ "substrate-primitives 2.0.0",
  "substrate-rpc-primitives 2.0.0",
 ]
 
