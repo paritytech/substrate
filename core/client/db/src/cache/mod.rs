@@ -268,6 +268,27 @@ impl<'a, Block: BlockT> DbCacheTransaction<'a, Block> {
 
 		Ok(self)
 	}
+
+	/// When block is reverted.
+	pub fn on_block_revert(
+		mut self,
+		reverted_block: &ComplexBlockId<Block>,
+	) -> ClientResult<Self> {
+		for (name, cache) in self.cache.cache_at.iter() {
+			let op = cache.on_block_revert(
+				&mut self::list_storage::DbStorageTransaction::new(
+					cache.storage(),
+					&mut self.tx
+				),
+				reverted_block,
+			)?;
+
+			assert!(!self.cache_at_op.contains_key(name));
+			self.cache_at_op.insert(name.to_owned(), op);
+		}
+
+		Ok(self)
+	}
 }
 
 /// Synchronous implementation of database-backed blockchain data cache.
