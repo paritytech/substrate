@@ -102,7 +102,7 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 			match db.get_meta(&journal_key).map_err(|e| Error::Db(e))? {
 				Some(record) => {
 					let record: JournalRecord<BlockHash, Key> = Decode::decode(&mut record.as_slice())?;
-					let kv_record_inserted = if let Some(record) = db
+					let kv_record_modified = if let Some(record) = db
 						.get_meta(&kv_journal_key).map_err(|e| Error::Db(e))? {
 						let record = KvJournalRecord::decode(&mut record.as_slice())?;
 						record.modified
@@ -113,7 +113,7 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 						"Pruning journal entry {} ({} {} inserted, {} deleted)",
 						block,
 						record.inserted.len(),
-						kv_record_inserted.len(),
+						kv_record_modified.len(),
 						record.deleted.len(),
 					);
 					pruning.import(
@@ -122,7 +122,7 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 						kv_journal_key,
 						record.inserted.into_iter(),
 						record.deleted,
-						kv_record_inserted.into_iter(),
+						kv_record_modified.into_iter(),
 					);
 				},
 				None => break,
@@ -153,13 +153,12 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 		for k in deleted.iter() {
 			self.death_index.insert(k.clone(), imported_block);
 		}
-			// TODO EMCH is it possible to change type to directly set ??
-		let kv_modified = kv_modified.into_iter().collect();
+
 		self.death_rows.push_back(
 			DeathRow {
 				hash: hash.clone(),
 				deleted: deleted.into_iter().collect(),
-				kv_modified,
+				kv_modified: kv_modified.into_iter().collect(),
 				journal_key,
 				kv_journal_key,
 			}
