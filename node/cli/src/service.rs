@@ -170,7 +170,7 @@ macro_rules! new_full {
 			let babe = babe::start_babe(babe_config)?;
 			service.spawn_essential_task(babe);
 
-			let authority_discovery = authority_discovery::AuthorityDiscovery::new(
+			let authority_discovery = authority_discovery::AuthorityDiscovery::new_compat(
 				service.client(),
 				service.network(),
 				dht_event_rx,

@@ -42,29 +42,45 @@
 //!    3. Validates the signatures of the retrieved key value pairs.
 //!
 //!    4. Adds the retrieved external addresses as priority nodes to the peerset.
+use std::collections::{HashMap, HashSet};
+use std::convert::TryInto;
+use std::iter::FromIterator;
+use std::marker::PhantomData;
+use std::pin::Pin;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+
+use futures::future::Future as Future01;
+use futures::sync::mpsc::Receiver as Receiver01;
+use futures03::compat::Stream01CompatExt;
+use futures03::future::{FutureExt, TryFutureExt};
+use futures03::prelude::{Future, Stream};
+use futures03::stream::StreamExt;
+use futures03::task::{Context, Poll};
+
+use tokio_timer::Interval as Interval01;
 
 use authority_discovery_primitives::{AuthorityDiscoveryApi, AuthorityId, Signature};
 use client::blockchain::HeaderBackend;
 use error::{Error, Result};
-use futures::{prelude::*, sync::mpsc::Receiver};
 use log::{debug, error, log_enabled, warn};
 use network::specialization::NetworkSpecialization;
 use network::{DhtEvent, ExHashT};
 use prost::Message;
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{Block as BlockT, ProvideRuntimeApi};
-use std::collections::{HashMap, HashSet};
-use std::convert::TryInto;
-use std::iter::FromIterator;
-use std::marker::PhantomData;
-use std::sync::Arc;
-use std::time::{Duration, Instant};
 
 mod error;
 /// Dht payload schemas generated from Protobuf definitions via Prost crate in build.rs.
 mod schema {
 	include!(concat!(env!("OUT_DIR"), "/authority_discovery.rs"));
 }
+
+// TODO change tokio 02's Interval when tokio 02's runtime is adopted
+type Interval01As03 = Pin<Box<dyn Stream<Item = Instant> + Send>>;
+
+const DURATION_12H: Duration = Duration::from_secs(12 * 60 * 60);
+const DURATION_10M: Duration = Duration::from_secs(10 * 60);
 
 /// An `AuthorityDiscovery` makes a given authority discoverable and discovers other authorities.
 pub struct AuthorityDiscovery<Client, Network, Block>
@@ -78,12 +94,12 @@ where
 
 	network: Arc<Network>,
 	/// Channel we receive Dht events on.
-	dht_event_rx: Receiver<DhtEvent>,
+	dht_event_rx: Pin<Box<dyn Stream<Item = DhtEvent> + Send>>,
 
 	/// Interval to be proactive, publishing own addresses.
-	publish_interval: tokio_timer::Interval,
+	publish_interval: Interval01As03,
 	/// Interval on which to query for addresses of other authorities.
-	query_interval: tokio_timer::Interval,
+	query_interval: Interval01As03,
 
 	/// The network peerset interface for priority groups lets us only set an entire group, but we retrieve the
 	/// addresses of other authorities one by one from the network. To use the peerset interface we need to cache the
@@ -96,27 +112,32 @@ where
 
 impl<Client, Network, Block> AuthorityDiscovery<Client, Network, Block>
 where
-	Block: BlockT + 'static,
+	Block: BlockT + Unpin + 'static,
 	Network: NetworkProvider,
 	Client: ProvideRuntimeApi + Send + Sync + 'static + HeaderBackend<Block>,
 	<Client as ProvideRuntimeApi>::Api: AuthorityDiscoveryApi<Block>,
+	Self: Future<Output = ()>,
 {
 	/// Return a new authority discovery.
 	pub fn new(
 		client: Arc<Client>,
 		network: Arc<Network>,
-		dht_event_rx: futures::sync::mpsc::Receiver<DhtEvent>,
-	) -> AuthorityDiscovery<Client, Network, Block> {
+		dht_event_rx: Pin<Box<dyn Stream<Item = DhtEvent> + Send>>,
+	) -> Self {
 		// Kademlia's default time-to-live for Dht records is 36h, republishing records every 24h. Given that a node
 		// could restart at any point in time, one can not depend on the republishing process, thus publishing own
 		// external addresses should happen on an interval < 36h.
-		let publish_interval =
-			tokio_timer::Interval::new(Instant::now(), Duration::from_secs(12 * 60 * 60));
+		let publish_interval = Interval01::new_interval(DURATION_12H)
+			.compat()
+			.map(|x| x.unwrap())
+			.boxed();
 
 		// External addresses of other authorities can change at any given point in time. The interval on which to query
 		// for external addresses of other authorities is a trade off between efficiency and performance.
-		let query_interval =
-			tokio_timer::Interval::new(Instant::now(), Duration::from_secs(10 * 60));
+		let query_interval = Interval01::new_interval(DURATION_10M)
+			.compat()
+			.map(|x| x.unwrap())
+			.boxed();
 
 		let address_cache = HashMap::new();
 
@@ -129,6 +150,20 @@ where
 			address_cache,
 			phantom: PhantomData,
 		}
+	}
+
+	/// New a futures 01 authority discovery
+	pub fn new_compat(
+		client: Arc<Client>,
+		network: Arc<Network>,
+		dht_event_rx: Receiver01<DhtEvent>,
+	) -> impl Future01<Item = (), Error = ()> {
+		// TODO remove this function when we switch to futures 03
+		let dht_event_rx = dht_event_rx.compat().map(|x| x.unwrap()).boxed();
+
+		Self::new(client, network, dht_event_rx)
+			.map(|x| Ok(x))
+			.compat()
 	}
 
 	fn publish_own_ext_addresses(&mut self) -> Result<()> {
@@ -191,8 +226,8 @@ where
 		Ok(())
 	}
 
-	fn handle_dht_events(&mut self) -> Result<()> {
-		while let Ok(Async::Ready(Some(event))) = self.dht_event_rx.poll() {
+	fn handle_dht_events(&mut self, cx: &mut Context) -> Result<()> {
+		while let Poll::Ready(Some(event)) = self.dht_event_rx.poll_next_unpin(cx) {
 			match event {
 				DhtEvent::ValueFound(v) => {
 					if log_enabled!(log::Level::Debug) {
@@ -202,15 +237,9 @@ where
 
 					self.handle_dht_value_found_event(v)?;
 				}
-				DhtEvent::ValueNotFound(hash) => {
-					warn!(target: "sub-authority-discovery", "Value for hash '{:?}' not found on Dht.", hash)
-				}
-				DhtEvent::ValuePut(hash) => {
-					debug!(target: "sub-authority-discovery", "Successfully put hash '{:?}' on Dht.", hash)
-				}
-				DhtEvent::ValuePutFailed(hash) => {
-					warn!(target: "sub-authority-discovery", "Failed to put hash '{:?}' on Dht.", hash)
-				}
+				DhtEvent::ValueNotFound(hash) => warn!(target: "sub-authority-discovery", "Value for hash '{:?}' not found on Dht.", hash),
+				DhtEvent::ValuePut(hash) => debug!(target: "sub-authority-discovery", "Successfully put hash '{:?}' on Dht.", hash),
+				DhtEvent::ValuePutFailed(hash) => warn!(target: "sub-authority-discovery", "Failed to put hash '{:?}' on Dht.", hash),
 			}
 		}
 
@@ -291,53 +320,36 @@ where
 	}
 }
 
-impl<Client, Network, Block> futures::Future for AuthorityDiscovery<Client, Network, Block>
+impl<Client, Network, Block> Future for AuthorityDiscovery<Client, Network, Block>
 where
-	Block: BlockT + 'static,
+	Block: BlockT + Unpin + 'static,
 	Network: NetworkProvider,
 	Client: ProvideRuntimeApi + Send + Sync + 'static + HeaderBackend<Block>,
 	<Client as ProvideRuntimeApi>::Api: AuthorityDiscoveryApi<Block>,
 {
-	type Item = ();
-	type Error = ();
+	type Output = ();
 
-	fn poll(&mut self) -> futures::Poll<Self::Item, Self::Error> {
+	fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
 		let mut inner = || -> Result<()> {
 			// Process incoming events before triggering new ones.
-			self.handle_dht_events()?;
+			self.handle_dht_events(cx)?;
 
-			if let Async::Ready(_) = self
-				.publish_interval
-				.poll()
-				.map_err(Error::PollingTokioTimer)?
-			{
+			if let Poll::Ready(_) = self.publish_interval.poll_next_unpin(cx) {
 				// Make sure to call interval.poll until it returns Async::NotReady once. Otherwise, in case one of the
 				// function calls within this block do a `return`, we don't call `interval.poll` again and thereby the
 				// underlying Tokio task is never registered with Tokio's Reactor to be woken up on the next interval
 				// tick.
-				while let Async::Ready(_) = self
-					.publish_interval
-					.poll()
-					.map_err(Error::PollingTokioTimer)?
-				{}
+				while let Poll::Ready(_) = self.publish_interval.poll_next_unpin(cx) {}
 
 				self.publish_own_ext_addresses()?;
 			}
 
-			if let Async::Ready(_) = self
-				.query_interval
-				.poll()
-				.map_err(Error::PollingTokioTimer)?
-			{
+			if let Poll::Ready(_) = self.query_interval.poll_next_unpin(cx) {
 				// Make sure to call interval.poll until it returns Async::NotReady once. Otherwise, in case one of the
 				// function calls within this block do a `return`, we don't call `interval.poll` again and thereby the
 				// underlying Tokio task is never registered with Tokio's Reactor to be woken up on the next interval
 				// tick.
-				while let Async::Ready(_) = self
-					.query_interval
-					.poll()
-					.map_err(Error::PollingTokioTimer)?
-				{}
+				while let Poll::Ready(_) = self.query_interval.poll_next_unpin(cx) {}
 
 				self.request_addresses_of_others()?;
 			}
@@ -351,7 +363,7 @@ where
 		};
 
 		// Make sure to always return NotReady as this is a long running task with the same lifetime as the node itself.
-		Ok(futures::Async::NotReady)
+		Poll::Pending
 	}
 }
 
@@ -415,13 +427,14 @@ fn hash_authority_id(id: &[u8]) -> Result<libp2p::kad::record::Key> {
 mod tests {
 	use super::*;
 	use client::runtime_api::{ApiExt, Core, RuntimeVersion};
-	use futures::future::poll_fn;
+	use futures03::channel::mpsc::channel;
+	use futures03::future::poll_fn;
 	use primitives::{ExecutionContext, NativeOrEncoded};
 	use sr_primitives::traits::Zero;
 	use sr_primitives::traits::{ApiRef, Block as BlockT, NumberFor, ProvideRuntimeApi};
 	use std::sync::{Arc, Mutex};
 	use test_client::runtime::Block;
-	use tokio::runtime::current_thread;
+	use tokio::runtime::current_thread::Runtime as Runtime01;
 
 	#[derive(Clone)]
 	struct TestApi {}
@@ -611,12 +624,12 @@ mod tests {
 
 	#[test]
 	fn publish_own_ext_addresses_puts_record_on_dht() {
-		let (_dht_event_tx, dht_event_rx) = futures::sync::mpsc::channel(1000);
+		let (_dht_event_tx, dht_event_rx) = channel(1000);
 		let test_api = Arc::new(TestApi {});
 		let network: Arc<TestNetwork> = Arc::new(Default::default());
 
 		let mut authority_discovery =
-			AuthorityDiscovery::new(test_api, network.clone(), dht_event_rx);
+			AuthorityDiscovery::new(test_api, network.clone(), dht_event_rx.boxed());
 
 		authority_discovery.publish_own_ext_addresses().unwrap();
 
@@ -626,12 +639,12 @@ mod tests {
 
 	#[test]
 	fn request_addresses_of_others_triggers_dht_get_query() {
-		let (_dht_event_tx, dht_event_rx) = futures::sync::mpsc::channel(1000);
+		let (_dht_event_tx, dht_event_rx) = channel(1000);
 		let test_api = Arc::new(TestApi {});
 		let network: Arc<TestNetwork> = Arc::new(Default::default());
 
 		let mut authority_discovery =
-			AuthorityDiscovery::new(test_api, network.clone(), dht_event_rx);
+			AuthorityDiscovery::new(test_api, network.clone(), dht_event_rx.boxed());
 
 		authority_discovery.request_addresses_of_others().unwrap();
 
@@ -643,12 +656,12 @@ mod tests {
 	fn handle_dht_events_with_value_found_should_call_set_priority_group() {
 		// Create authority discovery.
 
-		let (mut dht_event_tx, dht_event_rx) = futures::sync::mpsc::channel(1000);
+		let (mut dht_event_tx, dht_event_rx) = channel(1000);
 		let test_api = Arc::new(TestApi {});
 		let network: Arc<TestNetwork> = Arc::new(Default::default());
 
 		let mut authority_discovery =
-			AuthorityDiscovery::new(test_api, network.clone(), dht_event_rx);
+			AuthorityDiscovery::new(test_api, network.clone(), dht_event_rx.boxed());
 
 		// Create sample dht event.
 
@@ -675,8 +688,8 @@ mod tests {
 
 		// Make authority discovery handle the event.
 
-		let f = || {
-			authority_discovery.handle_dht_events().unwrap();
+		let f = |cx: &mut Context<'_>| -> Poll<()> {
+			authority_discovery.handle_dht_events(cx).unwrap();
 
 			// Expect authority discovery to set the priority set.
 			assert_eq!(network.set_priority_group_call.lock().unwrap().len(), 1);
@@ -689,10 +702,12 @@ mod tests {
 				)
 			);
 
-			Ok(Async::Ready(()))
+			Poll::Ready(())
 		};
 
-		let mut runtime = current_thread::Runtime::new().unwrap();
-		runtime.block_on(poll_fn::<(), (), _>(f)).unwrap();
+		let mut runtime = Runtime01::new().unwrap();
+		runtime
+			.block_on(poll_fn(f).map(|x| Ok::<(), ()>(x)).compat())
+			.unwrap();
 	}
 }
