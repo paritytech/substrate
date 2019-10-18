@@ -188,8 +188,9 @@ pub trait Function {
 pub trait FunctionContext {
 	/// Read memory from `address` into a vector.
 	fn read_memory(&self, address: Pointer<u8>, size: WordSize) -> Result<Vec<u8>> {
-		let mut vec = Vec::with_capacity(size as usize);
-		vec.resize(size as usize, 0);
+		// Using `with_capacity` and then reisizing leads to
+		// https://rust-lang.github.io/rust-clippy/master/index.html#slow_vector_initialization.
+		vec![0; size as usize];
 		self.read_memory_into(address, &mut vec)?;
 		Ok(vec)
 	}

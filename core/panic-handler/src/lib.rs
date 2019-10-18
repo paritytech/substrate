@@ -149,13 +149,15 @@ fn panic_hook(info: &PanicInfo, report_url: &'static str, version: &str) {
 
 	let mut stderr = io::stderr();
 
-	let _ = writeln!(stderr, "");
+	// The line below is the same as `let _ = writeln!(stderr, "");`, and
+	// avoids https://rust-lang.github.io/rust-clippy/master/index.html#writeln_empty_string.
+	let _ = writeln!(stderr);
 	let _ = writeln!(stderr, "====================");
-	let _ = writeln!(stderr, "");
+	let _ = writeln!(stderr);
 	let _ = writeln!(stderr, "Version: {}", version);
-	let _ = writeln!(stderr, "");
+	let _ = writeln!(stderr);
 	let _ = writeln!(stderr, "{:?}", backtrace);
-	let _ = writeln!(stderr, "");
+	let _ = writeln!(stderr);
 	let _ = writeln!(
 		stderr,
 		"Thread '{}' panicked at '{}', {}:{}",
