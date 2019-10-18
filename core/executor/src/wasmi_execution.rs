@@ -663,28 +663,25 @@ mod tests {
 	use substrate_offchain::testing;
 	use trie::{TrieConfiguration, trie_types::Layout};
 	use codec::{Encode, Decode};
+	use crate::{WasmExecutionMethod, call_in_wasm};
 
 	type TestExternalities = CoreTestExternalities<Blake2Hasher, u64>;
-
-	fn call<E: Externalities>(
-		ext: &mut E,
-		heap_pages: u64,
-		code: &[u8],
-		method: &str,
-		data: &[u8],
-	) -> Result<Vec<u8>, Error> {
-		let mut instance = create_instance(ext, code, heap_pages)
-			.map_err(|err| err.to_string())?;
-		instance.call(ext, method, data)
-	}
 
 	#[test]
 	fn returning_should_work() {
 		let mut ext = TestExternalities::default();
 		let mut ext = ext.ext();
 		let test_code = WASM_BINARY;
+		let wasm_method = WasmExecutionMethod::Interpreted;
 
-		let output = call(&mut ext, 8, &test_code[..], "test_empty_return", &[]).unwrap();
+		let output = call_in_wasm(
+			"test_empty_return",
+			&[],
+			wasm_method,
+			&mut ext,
+			&test_code[..],
+			8,
+		).unwrap();
 		assert_eq!(output, vec![0u8; 0]);
 	}
 
@@ -693,32 +690,56 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let mut ext = ext.ext();
 		let test_code = WASM_BINARY;
+		let wasm_method = WasmExecutionMethod::Interpreted;
 
-		let output = call(&mut ext, 8, &test_code[..], "test_panic", &[]);
+		let output = call_in_wasm(
+			"test_panic",
+			&[],
+			wasm_method,
+			&mut ext,
+			&test_code[..],
+			8,
+		);
 		assert!(output.is_err());
 
-		let output = call(&mut ext, 8, &test_code[..], "test_conditional_panic", &[0]);
+		let output = call_in_wasm(
+			"test_conditional_panic",
+			&[0],
+			wasm_method,
+			&mut ext,
+			&test_code[..],
+			8,
+		);
 		assert_eq!(Decode::decode(&mut &output.unwrap()[..]), Ok(Vec::<u8>::new()));
 
-		let output = call(&mut ext, 8, &test_code[..], "test_conditional_panic", &vec![2].encode());
+		let output = call_in_wasm(
+			"test_conditional_panic",
+			&vec![2].encode(),
+			wasm_method,
+			&mut ext,
+			&test_code[..],
+			8,
+		);
 		assert!(output.is_err());
 	}
 
 	#[test]
 	fn storage_should_work() {
 		let mut ext = TestExternalities::default();
+		let wasm_method = WasmExecutionMethod::Interpreted;
 
 		{
 			let mut ext = ext.ext();
 			ext.set_storage(b"foo".to_vec(), b"bar".to_vec());
 			let test_code = WASM_BINARY;
 
-			let output = call(
-				&mut ext,
-				8,
-				&test_code[..],
+			let output = call_in_wasm(
 				"test_data_in",
 				&b"Hello world".to_vec().encode(),
+				wasm_method,
+				&mut ext,
+				&test_code[..],
+				8,
 			).unwrap();
 
 			assert_eq!(output, b"all ok!".to_vec().encode());
@@ -735,6 +756,7 @@ mod tests {
 	#[test]
 	fn clear_prefix_should_work() {
 		let mut ext = TestExternalities::default();
+		let wasm_method = WasmExecutionMethod::Interpreted;
 		{
 			let mut ext = ext.ext();
 			ext.set_storage(b"aaa".to_vec(), b"1".to_vec());
@@ -745,12 +767,13 @@ mod tests {
 			let test_code = WASM_BINARY;
 
 			// This will clear all entries which prefix is "ab".
-			let output = call(
-				&mut ext,
-				8,
-				&test_code[..],
+			let output = call_in_wasm(
 				"test_clear_prefix",
 				&b"ab".to_vec().encode(),
+				wasm_method,
+				&mut ext,
+				&test_code[..],
+				8,
 			).unwrap();
 
 			assert_eq!(output, b"all ok!".to_vec().encode());
@@ -769,17 +792,26 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let mut ext = ext.ext();
 		let test_code = WASM_BINARY;
+		let wasm_method = WasmExecutionMethod::Interpreted;
 		assert_eq!(
-			call(&mut ext, 8, &test_code[..], "test_blake2_256", &[0]).unwrap(),
+			call_in_wasm(
+				"test_blake2_256",
+				&[0],
+				wasm_method,
+				&mut ext,
+				&test_code[..],
+				8,
+			).unwrap(),
 			blake2_256(&b""[..]).to_vec().encode(),
 		);
 		assert_eq!(
-			call(
-				&mut ext,
-				8,
-				&test_code[..],
+			call_in_wasm(
 				"test_blake2_256",
 				&b"Hello world!".to_vec().encode(),
+				wasm_method,
+				&mut ext,
+				&test_code[..],
+				8,
 			).unwrap(),
 			blake2_256(&b"Hello world!"[..]).to_vec().encode(),
 		);
@@ -790,17 +822,26 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let mut ext = ext.ext();
 		let test_code = WASM_BINARY;
+		let wasm_method = WasmExecutionMethod::Interpreted;
 		assert_eq!(
-			call(&mut ext, 8, &test_code[..], "test_blake2_128", &[0]).unwrap(),
+			call_in_wasm(
+				"test_blake2_128",
+				&[0],
+				wasm_method,
+				&mut ext,
+				&test_code[..],
+				8,
+			).unwrap(),
 			blake2_128(&b""[..]).to_vec().encode(),
 		);
 		assert_eq!(
-			call(
-				&mut ext,
-				8,
-				&test_code[..],
+			call_in_wasm(
 				"test_blake2_128",
 				&b"Hello world!".to_vec().encode(),
+				wasm_method,
+				&mut ext,
+				&test_code[..],
+				8,
 			).unwrap(),
 			blake2_128(&b"Hello world!"[..]).to_vec().encode(),
 		);
@@ -811,19 +852,28 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let mut ext = ext.ext();
 		let test_code = WASM_BINARY;
+		let wasm_method = WasmExecutionMethod::Interpreted;
 		assert_eq!(
-			call(&mut ext, 8, &test_code[..], "test_twox_256", &[0]).unwrap(),
+			call_in_wasm(
+				"test_twox_256",
+				&[0],
+				wasm_method,
+				&mut ext,
+				&test_code[..],
+				8,
+			).unwrap(),
 			hex!(
 				"99e9d85137db46ef4bbea33613baafd56f963c64b1f3685a4eb4abd67ff6203a"
 			).to_vec().encode(),
 		);
 		assert_eq!(
-			call(
-				&mut ext,
-				8,
-				&test_code[..],
+			call_in_wasm(
 				"test_twox_256",
 				&b"Hello world!".to_vec().encode(),
+				wasm_method,
+				&mut ext,
+				&test_code[..],
+				8,
 			).unwrap(),
 			hex!(
 				"b27dfd7f223f177f2a13647b533599af0c07f68bda23d96d059da2b451a35a74"
@@ -836,17 +886,26 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let mut ext = ext.ext();
 		let test_code = WASM_BINARY;
+		let wasm_method = WasmExecutionMethod::Interpreted;
 		assert_eq!(
-			call(&mut ext, 8, &test_code[..], "test_twox_128", &[0]).unwrap(),
+			call_in_wasm(
+				"test_twox_128",
+				&[0],
+				wasm_method,
+				&mut ext,
+				&test_code[..],
+				8,
+			).unwrap(),
 			hex!("99e9d85137db46ef4bbea33613baafd5").to_vec().encode(),
 		);
 		assert_eq!(
-			call(
-				&mut ext,
-				8,
-				&test_code[..],
+			call_in_wasm(
 				"test_twox_128",
 				&b"Hello world!".to_vec().encode(),
+				wasm_method,
+				&mut ext,
+				&test_code[..],
+				8,
 			).unwrap(),
 			hex!("b27dfd7f223f177f2a13647b533599af").to_vec().encode(),
 		);
@@ -857,6 +916,7 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let mut ext = ext.ext();
 		let test_code = WASM_BINARY;
+		let wasm_method = WasmExecutionMethod::Interpreted;
 		let key = ed25519::Pair::from_seed(&blake2_256(b"test"));
 		let sig = key.sign(b"all ok!");
 		let mut calldata = vec![];
@@ -864,7 +924,14 @@ mod tests {
 		calldata.extend_from_slice(sig.as_ref());
 
 		assert_eq!(
-			call(&mut ext, 8, &test_code[..], "test_ed25519_verify", &calldata.encode()).unwrap(),
+			call_in_wasm(
+				"test_ed25519_verify",
+				&calldata.encode(),
+				wasm_method,
+				&mut ext,
+				&test_code[..],
+				8,
+			).unwrap(),
 			true.encode(),
 		);
 
@@ -874,7 +941,14 @@ mod tests {
 		calldata.extend_from_slice(other_sig.as_ref());
 
 		assert_eq!(
-			call(&mut ext, 8, &test_code[..], "test_ed25519_verify", &calldata.encode()).unwrap(),
+			call_in_wasm(
+				"test_ed25519_verify",
+				&calldata.encode(),
+				wasm_method,
+				&mut ext,
+				&test_code[..],
+				8,
+			).unwrap(),
 			false.encode(),
 		);
 	}
@@ -884,6 +958,7 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let mut ext = ext.ext();
 		let test_code = WASM_BINARY;
+		let wasm_method = WasmExecutionMethod::Interpreted;
 		let key = sr25519::Pair::from_seed(&blake2_256(b"test"));
 		let sig = key.sign(b"all ok!");
 		let mut calldata = vec![];
@@ -891,7 +966,14 @@ mod tests {
 		calldata.extend_from_slice(sig.as_ref());
 
 		assert_eq!(
-			call(&mut ext, 8, &test_code[..], "test_sr25519_verify", &calldata.encode()).unwrap(),
+			call_in_wasm(
+				"test_sr25519_verify",
+				&calldata.encode(),
+				wasm_method,
+				&mut ext,
+				&test_code[..],
+				8,
+			).unwrap(),
 			true.encode(),
 		);
 
@@ -901,7 +983,14 @@ mod tests {
 		calldata.extend_from_slice(other_sig.as_ref());
 
 		assert_eq!(
-			call(&mut ext, 8, &test_code[..], "test_sr25519_verify", &calldata.encode()).unwrap(),
+			call_in_wasm(
+				"test_sr25519_verify",
+				&calldata.encode(),
+				wasm_method,
+				&mut ext,
+				&test_code[..],
+				8,
+			).unwrap(),
 			false.encode(),
 		);
 	}
@@ -912,8 +1001,16 @@ mod tests {
 		let mut ext = ext.ext();
 		let trie_input = vec![b"zero".to_vec(), b"one".to_vec(), b"two".to_vec()];
 		let test_code = WASM_BINARY;
+		let wasm_method = WasmExecutionMethod::Interpreted;
 		assert_eq!(
-			call(&mut ext, 8, &test_code[..], "test_ordered_trie_root", &[0]).unwrap(),
+			call_in_wasm(
+				"test_ordered_trie_root",
+				&[0],
+				wasm_method,
+				&mut ext,
+				&test_code[..],
+				8,
+			).unwrap(),
 			Layout::<Blake2Hasher>::ordered_trie_root(trie_input.iter()).as_bytes().encode(),
 		);
 	}
@@ -926,9 +1023,17 @@ mod tests {
 		let (offchain, state) = testing::TestOffchainExt::new();
 		ext.register_extension(OffchainExt::new(offchain));
 		let test_code = WASM_BINARY;
+		let wasm_method = WasmExecutionMethod::Interpreted;
 		let mut ext = ext.ext();
 		assert_eq!(
-			call(&mut ext, 8, &test_code[..], "test_offchain_local_storage", &[0]).unwrap(),
+			call_in_wasm(
+				"test_offchain_local_storage",
+				&[0],
+				wasm_method,
+				&mut ext,
+				&test_code[..],
+				8,
+			).unwrap(),
 			true.encode(),
 		);
 		assert_eq!(state.read().persistent_storage.get(b"", b"test"), Some(vec![]));
@@ -954,9 +1059,17 @@ mod tests {
 		);
 
 		let test_code = WASM_BINARY;
+		let wasm_method = WasmExecutionMethod::Interpreted;
 		let mut ext = ext.ext();
 		assert_eq!(
-			call(&mut ext, 8, &test_code[..], "test_offchain_http", &[0]).unwrap(),
+			call_in_wasm(
+				"test_offchain_http",
+				&[0],
+				wasm_method,
+				&mut ext,
+				&test_code[..],
+				8,
+			).unwrap(),
 			true.encode(),
 		);
 	}

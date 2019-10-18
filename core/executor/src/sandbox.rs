@@ -586,32 +586,20 @@ impl<FR> Store<FR> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use primitives::{Blake2Hasher, traits::Externalities};
-	use crate::wasm_runtime::WasmRuntime;
-	use crate::wasmi_execution;
+	use primitives::Blake2Hasher;
+	use crate::{WasmExecutionMethod, call_in_wasm};
 	use state_machine::TestExternalities as CoreTestExternalities;
 	use wabt;
 	use runtime_test::WASM_BINARY;
 
 	type TestExternalities = CoreTestExternalities<Blake2Hasher, u64>;
 
-	fn call_wasm<E: Externalities>(
-		ext: &mut E,
-		heap_pages: u64,
-		code: &[u8],
-		method: &str,
-		data: &[u8],
-	) -> Result<Vec<u8>> {
-		let mut instance = wasmi_execution::create_instance(ext, code, heap_pages)
-			.map_err(|err| err.to_string())?;
-		instance.call(ext, method, data)
-	}
-
 	#[test]
 	fn sandbox_should_work() {
 		let mut ext = TestExternalities::default();
 		let mut ext = ext.ext();
 		let test_code = WASM_BINARY;
+		let wasm_method = WasmExecutionMethod::Interpreted;
 
 		let code = wabt::wat2wasm(r#"
 		(module
@@ -635,7 +623,14 @@ mod tests {
 		"#).unwrap().encode();
 
 		assert_eq!(
-			call_wasm(&mut ext, 8, &test_code[..], "test_sandbox", &code).unwrap(),
+			call_in_wasm(
+				"test_sandbox",
+				&code,
+				wasm_method,
+				&mut ext,
+				&test_code[..],
+				8,
+			).unwrap(),
 			true.encode(),
 		);
 	}
@@ -645,6 +640,7 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let mut ext = ext.ext();
 		let test_code = WASM_BINARY;
+		let wasm_method = WasmExecutionMethod::Interpreted;
 
 		let code = wabt::wat2wasm(r#"
 		(module
@@ -657,7 +653,14 @@ mod tests {
 		"#).unwrap();
 
 		assert_eq!(
-			call_wasm(&mut ext, 8, &test_code[..], "test_sandbox", &code).unwrap(),
+			call_in_wasm(
+				"test_sandbox",
+				&code,
+				wasm_method,
+				&mut ext,
+				&test_code[..],
+				8,
+			).unwrap(),
 			vec![0],
 		);
 	}
@@ -667,6 +670,7 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let mut ext = ext.ext();
 		let test_code = WASM_BINARY;
+		let wasm_method = WasmExecutionMethod::Interpreted;
 
 		let code = wabt::wat2wasm(r#"
 		(module
@@ -678,7 +682,14 @@ mod tests {
 		)
 		"#).unwrap().encode();
 
-		let res = call_wasm(&mut ext, 8, &test_code[..], "test_exhaust_heap", &code);
+		let res = call_in_wasm(
+			"test_exhaust_heap",
+			&code,
+			wasm_method,
+			&mut ext,
+			&test_code[..],
+			8,
+		);
 		assert_eq!(res.is_err(), true);
 		if let Err(err) = res {
 			assert_eq!(
@@ -696,6 +707,7 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let mut ext = ext.ext();
 		let test_code = WASM_BINARY;
+		let wasm_method = WasmExecutionMethod::Interpreted;
 
 		let code = wabt::wat2wasm(r#"
 		(module
@@ -725,7 +737,14 @@ mod tests {
 		"#).unwrap().encode();
 
 		assert_eq!(
-			call_wasm(&mut ext, 8, &test_code[..], "test_sandbox", &code).unwrap(),
+			call_in_wasm(
+				"test_sandbox",
+				&code,
+				wasm_method,
+				&mut ext,
+				&test_code[..],
+				8,
+			).unwrap(),
 			true.encode(),
 		);
 	}
@@ -735,6 +754,7 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let mut ext = ext.ext();
 		let test_code = WASM_BINARY;
+		let wasm_method = WasmExecutionMethod::Interpreted;
 
 		let code = wabt::wat2wasm(r#"
 		(module
@@ -760,7 +780,14 @@ mod tests {
 		"#).unwrap().encode();
 
 		assert_eq!(
-			call_wasm(&mut ext, 8, &test_code[..], "test_sandbox_args", &code).unwrap(),
+			call_in_wasm(
+				"test_sandbox_args",
+				&code,
+				wasm_method,
+				&mut ext,
+				&test_code[..],
+				8,
+			).unwrap(),
 			true.encode(),
 		);
 	}
@@ -770,6 +797,7 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let mut ext = ext.ext();
 		let test_code = WASM_BINARY;
+		let wasm_method = WasmExecutionMethod::Interpreted;
 
 		let code = wabt::wat2wasm(r#"
 		(module
@@ -783,7 +811,14 @@ mod tests {
 		"#).unwrap().encode();
 
 		assert_eq!(
-			call_wasm(&mut ext, 8, &test_code[..], "test_sandbox_return_val", &code).unwrap(),
+			call_in_wasm(
+				"test_sandbox_return_val",
+				&code,
+				wasm_method,
+				&mut ext,
+				&test_code[..],
+				8,
+			).unwrap(),
 			true.encode(),
 		);
 	}
@@ -793,6 +828,7 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let mut ext = ext.ext();
 		let test_code = WASM_BINARY;
+		let wasm_method = WasmExecutionMethod::Interpreted;
 
 		let code = wabt::wat2wasm(r#"
 		(module
@@ -804,7 +840,14 @@ mod tests {
 		"#).unwrap().encode();
 
 		assert_eq!(
-			call_wasm(&mut ext, 8, &test_code[..], "test_sandbox_instantiate", &code).unwrap(),
+			call_in_wasm(
+				"test_sandbox_instantiate",
+				&code,
+				wasm_method,
+				&mut ext,
+				&test_code[..],
+				8,
+			).unwrap(),
 			1u8.encode(),
 		);
 	}
@@ -814,12 +857,20 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let mut ext = ext.ext();
 		let test_code = WASM_BINARY;
+		let wasm_method = WasmExecutionMethod::Interpreted;
 
 		// Corrupted wasm file
 		let code = vec![0u8, 0, 0, 0, 1, 0, 0, 0].encode();
 
 		assert_eq!(
-			call_wasm(&mut ext, 8, &test_code[..], "test_sandbox_instantiate", &code).unwrap(),
+			call_in_wasm(
+				"test_sandbox_instantiate",
+				&code,
+				wasm_method,
+				&mut ext,
+				&test_code[..],
+				8,
+			).unwrap(),
 			1u8.encode(),
 		);
 	}
@@ -829,6 +880,7 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let mut ext = ext.ext();
 		let test_code = WASM_BINARY;
+		let wasm_method = WasmExecutionMethod::Interpreted;
 
 		let code = wabt::wat2wasm(r#"
 		(module
@@ -843,7 +895,14 @@ mod tests {
 		"#).unwrap().encode();
 
 		assert_eq!(
-			call_wasm(&mut ext, 8, &test_code[..], "test_sandbox_instantiate", &code).unwrap(),
+			call_in_wasm(
+				"test_sandbox_instantiate",
+				&code,
+				wasm_method,
+				&mut ext,
+				&test_code[..],
+				8,
+			).unwrap(),
 			0u8.encode(),
 		);
 	}
@@ -853,6 +912,7 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let mut ext = ext.ext();
 		let test_code = WASM_BINARY;
+		let wasm_method = WasmExecutionMethod::Interpreted;
 
 		let code = wabt::wat2wasm(r#"
 		(module
@@ -868,7 +928,14 @@ mod tests {
 		"#).unwrap().encode();
 
 		assert_eq!(
-			call_wasm(&mut ext, 8, &test_code[..], "test_sandbox_instantiate", &code).unwrap(),
+			call_in_wasm(
+				"test_sandbox_instantiate",
+				&code,
+				wasm_method,
+				&mut ext,
+				&test_code[..],
+				8,
+			).unwrap(),
 			2u8.encode(),
 		);
 	}
