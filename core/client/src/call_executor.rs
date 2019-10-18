@@ -141,10 +141,10 @@ where
 	/// No changes are made.
 	fn prove_at_trie_state<
 		S: state_machine::TrieBackendStorage<H>,
-		O: state_machine::KvBackend,
+		K: state_machine::KvBackend,
 	>(
 		&self,
-		trie_state: &state_machine::TrieBackend<S, H, O>,
+		trie_state: &state_machine::TrieBackend<S, H, K>,
 		overlay: &mut OverlayedChanges,
 		method: &str,
 		call_data: &[u8]
@@ -376,10 +376,10 @@ where
 
 	fn prove_at_trie_state<
 		S: state_machine::TrieBackendStorage<Blake2Hasher>,
-		O: state_machine::KvBackend,
+		K: state_machine::KvBackend,
 	>(
 		&self,
-		trie_state: &state_machine::TrieBackend<S, Blake2Hasher, O>,
+		trie_state: &state_machine::TrieBackend<S, Blake2Hasher, K>,
 		overlay: &mut OverlayedChanges,
 		method: &str,
 		call_data: &[u8]

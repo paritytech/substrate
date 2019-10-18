@@ -60,7 +60,7 @@ use crate::{
 	},
 	backend::{
 		self, BlockImportOperation, PrunableStateChangesTrieStorage,
-		ClientImportOperation, Finalizer, ImportSummary,
+		ClientImportOperation, Finalizer, ImportSummary, FullStorageCollection,
 	},
 	blockchain::{
 		self, Info as ChainInfo, Backend as ChainBackend,
@@ -991,7 +991,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			operation.op.update_db_storage(storage_update)?;
 		}
 		if let Some(storage_changes) = storage_changes.clone() {
-			operation.op.update_storage(storage_changes.0, storage_changes.1)?;
+			operation.op.update_storage(storage_changes)?;
 		}
 		if let Some(Some(changes_update)) = changes_update {
 			operation.op.update_changes_trie(changes_update)?;
@@ -1027,11 +1027,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	) -> error::Result<(
 		Option<StorageUpdate<B, Block>>,
 		Option<Option<ChangesUpdate<Block>>>,
-		Option<(
-			Vec<(Vec<u8>, Option<Vec<u8>>)>,
-			Vec<(Vec<u8>, Vec<(Vec<u8>, Option<Vec<u8>>)>)>,
-			Vec<(Vec<u8>, Option<Vec<u8>>)>,
-		)>
+		Option<FullStorageCollection>,
 	)>
 		where
 			E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
@@ -1092,7 +1088,11 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				Ok((
 					Some(storage_update.0),
 					Some(changes_update),
-					Some((top.collect(), children, kv.collect())),
+					Some(FullStorageCollection {
+						top: top.collect(),
+						children,
+						kv: kv.collect(),
+					}),
 				))
 			},
 			None => Ok((None, None, None))
@@ -1193,8 +1193,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			self.storage_notifications.lock()
 				.trigger(
 					&notify_import.hash,
-					storage_changes.0.into_iter(),
-					storage_changes.1.into_iter().map(|(sk, v)| (sk, v.into_iter())),
+					storage_changes.top.into_iter(),
+					storage_changes.children.into_iter().map(|(sk, v)| (sk, v.into_iter())),
 				);
 		}
 

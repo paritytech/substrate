@@ -42,7 +42,7 @@ use std::collections::{HashMap, HashSet};
 use client::backend::NewBlockState;
 use client::blockchain::{well_known_cache_keys, HeaderBackend};
 use client::{ForkBlocks, ExecutionStrategies};
-use client::backend::{StorageCollection, ChildStorageCollection};
+use client::backend::{StorageCollection, ChildStorageCollection, FullStorageCollection};
 use client::error::{Result as ClientResult, Error as ClientError};
 use codec::{Decode, Encode};
 use hash_db::{Hasher, Prefix};
@@ -585,11 +585,10 @@ impl<Block> client::backend::BlockImportOperation<Block, Blake2Hasher>
 
 	fn update_storage(
 		&mut self,
-		update: StorageCollection,
-		child_update: ChildStorageCollection,
+		update: FullStorageCollection,
 	) -> ClientResult<()> {
-		self.storage_updates = update;
-		self.child_storage_updates = child_update;
+		self.storage_updates = update.top;
+		self.child_storage_updates = update.children;
 		Ok(())
 	}
 
@@ -1246,7 +1245,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 				}
 			}
 			let kv_changeset: state_db::KvChangeSet<Vec<u8>> = operation.db_updates.1
-				// use as vec from hash map
+				// switch to vec for size
 				.into_iter().collect();
 			let number_u64 = number.saturated_into::<u64>();
 			let commit = self.storage.state_db.insert_block(
@@ -1256,7 +1255,8 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 				changeset,
 				kv_changeset,
 			).map_err(|e: state_db::Error<io::Error>|
-				client::error::Error::from(format!("State database error: {:?}", e)))?;
+				client::error::Error::from(format!("State database error: {:?}", e))
+			)?;
 			apply_state_commit(&mut transaction, commit, &self.storage.db, number_u64).map_err(|err|
 				client::error::Error::Backend(
 					format!("Error building commit transaction : {}", err)
@@ -1446,17 +1446,17 @@ fn apply_state_commit_inner(
 	mut kv_prune_key: state_db::KvChangeSetPrune,
 ) -> Result<(), io::Error> {
 
-	for (key, o) in commit.kv.iter() {
+	for (key, change) in commit.kv.iter() {
 		let (mut ser, new) = if let Some(stored) = db.get(columns::KV, key)? {
 			(Ser::from_vec(stored.to_vec()), false)
 		} else {
-			if o.is_some() {
+			if change.is_some() {
 				(Ser::default(), true)
 			} else {
 				break;
 			}
 		};
-		ser.push(last_block, o.as_ref().map(|v| v.as_slice()));
+		ser.push(last_block, change.as_ref().map(|v| v.as_slice()));
 		if let Some((block_prune, kv_prune_keys)) = kv_prune_key.as_mut() {
 			if !new && kv_prune_keys.remove(key) {
 				match ser.prune(*block_prune) {
@@ -1475,8 +1475,6 @@ fn apply_state_commit_inner(
 	if let Some((block_prune, kv_prune_key)) = kv_prune_key {
 		// no need to into_iter
 		for key in kv_prune_key.iter() {
-			// TODO EMCH should we prune less often (wait on pruning journals for instance)
-			// or make it out of this context just stored the block prune and do asynch
 			let mut ser = if let Some(stored) = db.get(columns::KV, key)? {
 				Ser::from_vec(stored.to_vec())
 			} else {
@@ -1561,7 +1559,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 		Ok(BlockImportOperation {
 			pending_block: None,
 			old_state,
-			db_updates: (PrefixedMemoryDB::default(), Default::default()),
+			db_updates: Default::default(),
 			storage_updates: Default::default(),
 			child_storage_updates: Default::default(),
 			changes_trie_updates: MemoryDB::default(),
@@ -1864,6 +1862,15 @@ mod tests {
 			extrinsics_root,
 			None,
 		)
+	}
+	
+	fn check_kv (backend: &Backend<Block>, block: H256, val: &Vec<(Vec<u8>, Option<Vec<u8>>)>) {
+		let block = BlockId::Hash(block);
+		let state = backend.state_at(block).unwrap();
+		for (k, v) in val {
+			let content = state.kv_storage(k).unwrap();
+			assert_eq!(v, &content);
+		}
 	}
 
 	#[test]
@@ -2391,15 +2398,6 @@ mod tests {
 	fn kv_storage_works() {
 		let backend = Backend::<Block>::new_test(1000, 100);
 
-		let check_kv = |backend: &Backend<Block>, block: H256, val: Vec<(Vec<u8>, Option<Vec<u8>>)>| {
-			let block = BlockId::Hash(block);
-			let state = backend.state_at(block).unwrap();
-			for (k, v) in val {
-				let content = state.kv_storage(k.as_slice()).unwrap();
-				assert_eq!(v, content);
-			}
-		};
-
 		let changes0 = vec![(b"key_at_0".to_vec(), Some(b"val_at_0".to_vec()))];
 		let changes1 = vec![
 			(b"key_at_1".to_vec(), Some(b"val_at_1".to_vec())),
@@ -2413,26 +2411,17 @@ mod tests {
 		let block2 = insert_kvs(&backend, 2, block1, changes2.clone(), Default::default());
 		let block3 = insert_kvs(&backend, 3, block2, changes3.clone(), Default::default());
 
-		check_kv(&backend, block0, changes0.clone());
-		check_kv(&backend, block1, changes0);
-		check_kv(&backend, block1, changes1.clone());
-		check_kv(&backend, block2, changes1);
-		check_kv(&backend, block2, changes2);
-		check_kv(&backend, block3, changes3);
+		check_kv(&backend, block0, &changes0);
+		check_kv(&backend, block1, &changes0);
+		check_kv(&backend, block1, &changes1);
+		check_kv(&backend, block2, &changes1);
+		check_kv(&backend, block2, &changes2);
+		check_kv(&backend, block3, &changes3);
 	}
 
 	#[test]
 	fn kv_storage_works_with_forks() {
 		let backend = Backend::<Block>::new_test(4, 4);
-
-		let check_kv = |backend: &Backend<Block>, block: H256, val: &Vec<(Vec<u8>, Option<Vec<u8>>)>| {
-			let block = BlockId::Hash(block);
-			let state = backend.state_at(block).unwrap();
-			for (k, v) in val {
-				let content = state.kv_storage(k).unwrap();
-				assert_eq!(v, &content);
-			}
-		};
 
 		let changes0 = vec![(b"k0".to_vec(), Some(b"v0".to_vec()))];
 		let changes1 = vec![
@@ -2500,15 +2489,6 @@ mod tests {
 	#[test]
 	fn kv_storage_works_with_finalize() {
 		let backend = Backend::<Block>::new_test(1000, 100);
-
-		let check_kv = |backend: &Backend<Block>, block: H256, val: &Vec<(Vec<u8>, Option<Vec<u8>>)>| {
-			let block = BlockId::Hash(block);
-			let state = backend.state_at(block).unwrap();
-			for (k, v) in val {
-				let content = state.kv_storage(k).unwrap();
-				assert_eq!(v, &content);
-			}
-		};
 
 		let changes0 = vec![(b"k0".to_vec(), Some(b"v0".to_vec()))];
 		let changes1 = vec![(b"k1".to_vec(), Some(b"v1".to_vec()))];

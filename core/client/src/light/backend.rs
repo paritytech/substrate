@@ -30,7 +30,7 @@ use sr_primitives::traits::{Block as BlockT, NumberFor, Zero, Header};
 use crate::in_mem::{self, check_genesis_storage};
 use crate::backend::{
 	AuxStore, Backend as ClientBackend, BlockImportOperation, RemoteBackend, NewBlockState,
-	StorageCollection, ChildStorageCollection,
+	FullStorageCollection,
 };
 use crate::blockchain::{HeaderBackend as BlockchainHeaderBackend, well_known_cache_keys};
 use crate::error::{Error as ClientError, Result as ClientResult};
@@ -313,8 +313,7 @@ where
 
 	fn update_storage(
 		&mut self,
-		_update: StorageCollection,
-		_child_update: ChildStorageCollection,
+		_update: FullStorageCollection,
 	) -> ClientResult<()> {
 		// we're not storing anything locally => ignore changes
 		Ok(())

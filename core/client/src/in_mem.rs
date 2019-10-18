@@ -30,7 +30,7 @@ use trie::MemoryDB;
 use header_metadata::{CachedHeaderMetadata, HeaderMetadata};
 
 use crate::error;
-use crate::backend::{self, NewBlockState, StorageCollection, ChildStorageCollection};
+use crate::backend::{self, NewBlockState, FullStorageCollection};
 use crate::light;
 use crate::leaves::LeafSet;
 use crate::blockchain::{
@@ -528,8 +528,7 @@ where
 
 	fn update_storage(
 		&mut self,
-		_update: StorageCollection,
-		_child_update: ChildStorageCollection,
+		_update: FullStorageCollection,
 	) -> error::Result<()> {
 		Ok(())
 	}

@@ -36,16 +36,24 @@ pub type StorageCollection = Vec<(Vec<u8>, Option<Vec<u8>>)>;
 /// In memory arrays of storage values for multiple child tries.
 pub type ChildStorageCollection = Vec<(Vec<u8>, StorageCollection)>;
 
+#[derive(Clone)]
+/// Collection of all storage element, can manage a single state delta
+/// (deletion are included).
+pub struct FullStorageCollection {
+	/// Parent trie changes.
+	pub top: StorageCollection,
+	/// Children trie changes.
+	pub children: ChildStorageCollection,
+	/// Key value not in trie changes.
+	pub kv: StorageCollection,
+}
+
 pub(crate) struct ImportSummary<Block: BlockT> {
 	pub(crate) hash: Block::Hash,
 	pub(crate) origin: BlockOrigin,
 	pub(crate) header: Block::Header,
 	pub(crate) is_new_best: bool,
-	pub(crate) storage_changes: Option<(
-		StorageCollection,
-		ChildStorageCollection,
-		StorageCollection,
-	)>,
+	pub(crate) storage_changes: Option<FullStorageCollection>,
 	pub(crate) retracted: Vec<Block::Hash>,
 }
 
@@ -117,8 +125,7 @@ pub trait BlockImportOperation<Block, H> where
 	/// Set storage changes.
 	fn update_storage(
 		&mut self,
-		update: StorageCollection,
-		child_update: ChildStorageCollection,
+		update: FullStorageCollection,
 	) -> error::Result<()>;
 
 	/// Inject changes trie data into the database.
