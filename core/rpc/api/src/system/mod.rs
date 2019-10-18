@@ -24,7 +24,7 @@ use jsonrpc_derive::rpc;
 
 use self::error::Result;
 
-pub use self::helpers::{Properties, SystemInfo, Health, PeerInfo};
+pub use self::helpers::{Properties, SystemInfo, Health, PeerInfo, NodeRole};
 pub use self::gen_client::Client as SystemClient;
 
 /// Substrate system RPC API
@@ -64,4 +64,8 @@ pub trait SystemApi<Hash, Number> {
 	// TODO: make this stable and move structs https://github.com/paritytech/substrate/issues/1890
 	#[rpc(name = "system_networkState", returns = "jsonrpc_core::Value")]
 	fn system_network_state(&self) -> Receiver<jsonrpc_core::Value>;
+
+	/// Returns the roles the node is running as.
+	#[rpc(name = "system_nodeRoles", returns = "Vec<NodeRole>")]
+	fn system_node_roles(&self) -> Receiver<Vec<NodeRole>>;
 }

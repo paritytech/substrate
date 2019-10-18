@@ -37,7 +37,7 @@ use client::{
 	block_builder::api::BlockBuilder as BlockBuilderApi, backend::AuxStore,
 	well_known_cache_keys::Id as CacheKeyId,
 };
-use sr_primitives::Justification;
+use sr_primitives::{Justification, RuntimeString};
 use sr_primitives::generic::{BlockId, Digest, DigestItem};
 use sr_primitives::traits::{Block as BlockT, Header as HeaderT, ProvideRuntimeApi};
 use srml_timestamp::{TimestampInherentData, InherentError as TIError};
@@ -46,11 +46,49 @@ use primitives::H256;
 use inherents::{InherentDataProviders, InherentData};
 use consensus_common::{
 	BlockImportParams, BlockOrigin, ForkChoiceStrategy, SyncOracle, Environment, Proposer,
-	SelectChain,
+	SelectChain, Error as ConsensusError
 };
 use consensus_common::import_queue::{BoxBlockImport, BasicQueue, Verifier};
 use codec::{Encode, Decode};
 use log::*;
+
+#[derive(derive_more::Display, Debug)]
+pub enum Error<B: BlockT> {
+	#[display(fmt = "Header uses the wrong engine {:?}", _0)]
+	WrongEngine([u8; 4]),
+	#[display(fmt = "Header {:?} is unsealed", _0)]
+	HeaderUnsealed(B::Hash),
+	#[display(fmt = "PoW validation error: invalid seal")]
+	InvalidSeal,
+	#[display(fmt = "Rejecting block too far in future")]
+	TooFarInFuture,
+	#[display(fmt = "Fetching best header failed using select chain: {:?}", _0)]
+	BestHeaderSelectChain(ConsensusError),
+	#[display(fmt = "Fetching best header failed: {:?}", _0)]
+	BestHeader(client::error::Error),
+	#[display(fmt = "Best header does not exist")]
+	NoBestHeader,
+	#[display(fmt = "Block proposing error: {:?}", _0)]
+	BlockProposingError(String),
+	#[display(fmt = "Fetch best hash failed via select chain: {:?}", _0)]
+	BestHashSelectChain(ConsensusError),
+	#[display(fmt = "Error with block built on {:?}: {:?}", _0, _1)]
+	BlockBuiltError(B::Hash, ConsensusError),
+	#[display(fmt = "Creating inherents failed: {}", _0)]
+	CreateInherents(RuntimeString),
+	#[display(fmt = "Checking inherents failed: {}", _0)]
+	CheckInherents(String),
+	Client(client::error::Error),
+	Codec(codec::Error),
+	Environment(String),
+	Runtime(RuntimeString)
+}
+
+impl<B: BlockT> std::convert::From<Error<B>> for String {
+	fn from(error: Error<B>) -> String {
+		error.to_string()
+	}
+}
 
 /// Auxiliary storage prefix for PoW engine.
 pub const POW_AUX_PREFIX: [u8; 4] = *b"PoW:";
@@ -74,12 +112,12 @@ impl<Difficulty> PowAux<Difficulty> where
 	Difficulty: Decode + Default,
 {
 	/// Read the auxiliary from client.
-	pub fn read<C: AuxStore>(client: &C, hash: &H256) -> Result<Self, String> {
+	pub fn read<C: AuxStore, B: BlockT>(client: &C, hash: &H256) -> Result<Self, Error<B>> {
 		let key = aux_key(hash);
 
-		match client.get_aux(&key).map_err(|e| format!("{:?}", e))? {
+		match client.get_aux(&key).map_err(Error::Client)? {
 			Some(bytes) => Self::decode(&mut &bytes[..])
-				.map_err(|e| format!("{:?}", e)),
+				.map_err(Error::Codec),
 			None => Ok(Self::default()),
 		}
 	}
@@ -91,7 +129,7 @@ pub trait PowAlgorithm<B: BlockT> {
 	type Difficulty: TotalDifficulty + Default + Encode + Decode + Ord + Clone + Copy;
 
 	/// Get the next block's difficulty.
-	fn difficulty(&self, parent: &BlockId<B>) -> Result<Self::Difficulty, String>;
+	fn difficulty(&self, parent: &BlockId<B>) -> Result<Self::Difficulty, Error<B>>;
 	/// Verify proof of work against the given difficulty.
 	fn verify(
 		&self,
@@ -99,7 +137,7 @@ pub trait PowAlgorithm<B: BlockT> {
 		pre_hash: &H256,
 		seal: &Seal,
 		difficulty: Self::Difficulty,
-	) -> Result<bool, String>;
+	) -> Result<bool, Error<B>>;
 	/// Mine a seal that satisfies the given difficulty.
 	fn mine(
 		&self,
@@ -107,7 +145,7 @@ pub trait PowAlgorithm<B: BlockT> {
 		pre_hash: &H256,
 		difficulty: Self::Difficulty,
 		round: u32,
-	) -> Result<Option<Seal>, String>;
+	) -> Result<Option<Seal>, Error<B>>;
 }
 
 /// A verifier for PoW blocks.
@@ -134,7 +172,7 @@ impl<B: BlockT<Hash=H256>, C, S, Algorithm> PowVerifier<B, C, S, Algorithm> {
 		&self,
 		mut header: B::Header,
 		parent_block_id: BlockId<B>,
-	) -> Result<(B::Header, Algorithm::Difficulty, DigestItem<H256>), String> where
+	) -> Result<(B::Header, Algorithm::Difficulty, DigestItem<H256>), Error<B>> where
 		Algorithm: PowAlgorithm<B>,
 	{
 		let hash = header.hash();
@@ -144,10 +182,10 @@ impl<B: BlockT<Hash=H256>, C, S, Algorithm> PowVerifier<B, C, S, Algorithm> {
 				if id == POW_ENGINE_ID {
 					(DigestItem::Seal(id, seal.clone()), seal)
 				} else {
-					return Err(format!("Header uses the wrong engine {:?}", id))
+					return Err(Error::WrongEngine(id))
 				}
 			},
-			_ => return Err(format!("Header {:?} is unsealed", hash)),
+			_ => return Err(Error::HeaderUnsealed(hash)),
 		};
 
 		let pre_hash = header.hash();
@@ -159,7 +197,7 @@ impl<B: BlockT<Hash=H256>, C, S, Algorithm> PowVerifier<B, C, S, Algorithm> {
 			&inner_seal,
 			difficulty,
 		)? {
-			return Err("PoW validation error: invalid seal".into());
+			return Err(Error::InvalidSeal);
 		}
 
 		Ok((header, difficulty, seal))
@@ -171,7 +209,7 @@ impl<B: BlockT<Hash=H256>, C, S, Algorithm> PowVerifier<B, C, S, Algorithm> {
 		block_id: BlockId<B>,
 		inherent_data: InherentData,
 		timestamp_now: u64,
-	) -> Result<(), String> where
+	) -> Result<(), Error<B>> where
 		C: ProvideRuntimeApi, C::Api: BlockBuilderApi<B>
 	{
 		const MAX_TIMESTAMP_DRIFT_SECS: u64 = 60;
@@ -184,7 +222,7 @@ impl<B: BlockT<Hash=H256>, C, S, Algorithm> PowVerifier<B, C, S, Algorithm> {
 			&block_id,
 			block,
 			inherent_data,
-		).map_err(|e| format!("{:?}", e))?;
+		).map_err(Error::Client)?;
 
 		if !inherent_res.ok() {
 			inherent_res
@@ -192,13 +230,15 @@ impl<B: BlockT<Hash=H256>, C, S, Algorithm> PowVerifier<B, C, S, Algorithm> {
 				.try_for_each(|(i, e)| match TIError::try_from(&i, &e) {
 					Some(TIError::ValidAtTimestamp(timestamp)) => {
 						if timestamp > timestamp_now + MAX_TIMESTAMP_DRIFT_SECS {
-							return Err("Rejecting block too far in future".into());
+							return Err(Error::TooFarInFuture);
 						}
 
 						Ok(())
 					},
-					Some(TIError::Other(e)) => Err(e.into()),
-					None => Err(self.inherent_data_providers.error_to_string(&i, &e)),
+					Some(TIError::Other(e)) => Err(Error::Runtime(e)),
+					None => Err(Error::CheckInherents(
+						self.inherent_data_providers.error_to_string(&i, &e)
+					)),
 				})
 		} else {
 			Ok(())
@@ -231,8 +271,8 @@ impl<B: BlockT<Hash=H256>, C, S, Algorithm> Verifier<B> for PowVerifier<B, C, S,
 		};
 		let hash = header.hash();
 		let parent_hash = *header.parent_hash();
-		let best_aux = PowAux::read(self.client.as_ref(), &best_hash)?;
-		let mut aux = PowAux::read(self.client.as_ref(), &parent_hash)?;
+		let best_aux = PowAux::read::<_, B>(self.client.as_ref(), &best_hash)?;
+		let mut aux = PowAux::read::<_, B>(self.client.as_ref(), &parent_hash)?;
 
 		let (checked_header, difficulty, seal) = self.check_header(
 			header,
@@ -390,7 +430,7 @@ fn mine_loop<B: BlockT<Hash=H256>, C, Algorithm, E, SO, S>(
 	build_time: std::time::Duration,
 	select_chain: Option<&S>,
 	inherent_data_providers: &inherents::InherentDataProviders,
-) -> Result<(), String> where
+) -> Result<(), Error<B>> where
 	C: HeaderBackend<B> + AuxStore,
 	Algorithm: PowAlgorithm<B>,
 	E: Environment<B>,
@@ -408,23 +448,24 @@ fn mine_loop<B: BlockT<Hash=H256>, C, Algorithm, E, SO, S>(
 		let (best_hash, best_header) = match select_chain {
 			Some(select_chain) => {
 				let header = select_chain.best_chain()
-					.map_err(|e| format!("Fetching best header failed using select chain: {:?}", e))?;
+					.map_err(Error::BestHeaderSelectChain)?;
 				let hash = header.hash();
 				(hash, header)
 			},
 			None => {
 				let hash = client.info().best_hash;
 				let header = client.header(BlockId::Hash(hash))
-					.map_err(|e| format!("Fetching best header failed: {:?}", e))?
-					.ok_or("Best header does not exist")?;
+					.map_err(Error::BestHeader)?
+					.ok_or(Error::NoBestHeader)?;
 				(hash, header)
 			},
 		};
 		let mut aux = PowAux::read(client, &best_hash)?;
-		let mut proposer = env.init(&best_header).map_err(|e| format!("{:?}", e))?;
+		let mut proposer = env.init(&best_header)
+			.map_err(|e| Error::Environment(format!("{:?}", e)))?;
 
 		let inherent_data = inherent_data_providers
-			.create_inherent_data().map_err(String::from)?;
+			.create_inherent_data().map_err(Error::CreateInherents)?;
 		let mut inherent_digest = Digest::default();
 		if let Some(preruntime) = &preruntime {
 			inherent_digest.push(DigestItem::PreRuntime(POW_ENGINE_ID, preruntime.to_vec()));
@@ -433,7 +474,7 @@ fn mine_loop<B: BlockT<Hash=H256>, C, Algorithm, E, SO, S>(
 			inherent_data,
 			inherent_digest,
 			build_time.clone(),
-		)).map_err(|e| format!("Block proposing error: {:?}", e))?;
+		)).map_err(|e| Error::BlockProposingError(format!("{:?}", e)))?;
 
 		let (header, body) = block.deconstruct();
 		let (difficulty, seal) = {
@@ -470,7 +511,7 @@ fn mine_loop<B: BlockT<Hash=H256>, C, Algorithm, E, SO, S>(
 		let key = aux_key(&hash);
 		let best_hash = match select_chain {
 			Some(select_chain) => select_chain.best_chain()
-				.map_err(|e| format!("Fetch best hash failed via select chain: {:?}", e))?
+				.map_err(Error::BestHashSelectChain)?
 				.hash(),
 			None => client.info().best_hash,
 		};
@@ -493,6 +534,6 @@ fn mine_loop<B: BlockT<Hash=H256>, C, Algorithm, E, SO, S>(
 		};
 
 		block_import.import_block(import_block, HashMap::default())
-			.map_err(|e| format!("Error with block built on {:?}: {:?}", best_hash, e))?;
+			.map_err(|e| Error::BlockBuiltError(best_hash, e))?;
 	}
 }
