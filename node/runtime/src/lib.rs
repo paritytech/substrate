@@ -436,13 +436,13 @@ impl sudo::Trait for Runtime {
 	type Proposal = Call;
 }
 
-type SubmitTransaction = TransactionSubmitter<ImOnlineId, Runtime, UncheckedExtrinsic>;
+type SubmitImOnlineTransaction = TransactionSubmitter<ImOnlineId, Runtime, UncheckedExtrinsic>;
 
 impl im_online::Trait for Runtime {
 	type AuthorityId = ImOnlineId;
 	type Call = Call;
 	type Event = Event;
-	type SubmitTransaction = SubmitTransaction;
+	type SubmitTransaction = SubmitImOnlineTransaction;
 	type ReportUnresponsiveness = Offences;
 }
 
@@ -453,14 +453,37 @@ impl offences::Trait for Runtime {
 }
 
 impl authority_discovery::Trait for Runtime {
-    type AuthorityId = BabeId;
+	type AuthorityId = BabeId;
 }
+
+pub mod report {
+	pub mod app {
+		use app_crypto::{app_crypto, sr25519, KeyTypeId};
+
+		pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"rprt");
+		app_crypto!(sr25519, KEY_TYPE);
+
+		impl From<Signature> for node_primitives::Signature {
+			fn from(sig: Signature) -> Self {
+				sr25519::Signature::from(sig).into()
+			}
+		}
+	}
+
+	pub type ReporterId = app::Public;
+}
+
+use report::ReporterId;
+
+type SubmitGrandpaTransaction = TransactionSubmitter<ReporterId, Runtime, UncheckedExtrinsic>;
 
 impl grandpa::Trait for Runtime {
 	type Event = Event;
 	type Call = Call;
-	type UncheckedExtrinsic = UncheckedExtrinsic;
 	type KeyOwnerProofSystem = Historical;
+	type SubmitTransaction = SubmitGrandpaTransaction;
+	type ReportEquivocation = Offences;
+	type ReportKeyType = ReporterId;
 }
 
 parameter_types! {
@@ -625,19 +648,18 @@ impl_runtime_apis! {
 			Grandpa::grandpa_authorities()
 		}
 
-		fn construct_equivocation_report_extrinsic(
+		fn submit_report_equivocation_extrinsic(
 			equivocation: (),
 			key_owner_proof: Vec<u8>,
-		) -> Option<Vec<u8>> {
-			use codec::{Decode, Encode};
+		) -> Option<()> {
+			use codec::Decode;
 
 			let key_owner_proof = Decode::decode(&mut &key_owner_proof[..]).ok()?;
 
-			Grandpa::construct_equivocation_report_extrinsic(
+			Grandpa::submit_report_equivocation_extrinsic(
 				equivocation,
 				key_owner_proof,
-				|_call, _key| None, // FIXME: actually create xt here
-			).map(|xt| xt.encode())
+			)
 		}
 	}
 
@@ -668,9 +690,9 @@ impl_runtime_apis! {
 		}
 
 		fn sign(payload: &Vec<u8>) -> Option<(EncodedSignature, EncodedAuthorityId)> {
-			  AuthorityDiscovery::sign(payload).map(|(sig, id)| {
-            (EncodedSignature(sig.encode()), EncodedAuthorityId(id.encode()))
-        })
+			AuthorityDiscovery::sign(payload).map(|(sig, id)| {
+				(EncodedSignature(sig.encode()), EncodedAuthorityId(id.encode()))
+			})
 		}
 
 		fn verify(payload: &Vec<u8>, signature: &EncodedSignature, authority_id: &EncodedAuthorityId) -> bool {

@@ -174,9 +174,9 @@ decl_runtime_apis! {
 		/// is finalized by the authorities from block B-1.
 		fn grandpa_authorities() -> Vec<(AuthorityId, AuthorityWeight)>;
 
-		fn construct_equivocation_report_extrinsic(
+		fn submit_report_equivocation_extrinsic(
 			equivocation: (),
 			key_owner_proof: Vec<u8>,
-		) -> Option<Vec<u8>>;
+		) -> Option<()>;
 	}
 }

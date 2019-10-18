@@ -31,6 +31,8 @@
 pub use substrate_finality_grandpa_primitives as fg_primitives;
 
 use rstd::prelude::*;
+
+use app_crypto::RuntimeAppPublic;
 use codec::{self as codec, Encode, Decode, Error};
 use support::{
 	decl_event, decl_storage, decl_module, dispatch::Result,
@@ -43,11 +45,14 @@ use sr_primitives::{
 };
 use sr_staking_primitives::{
 	SessionIndex,
-	offence::{Offence, Kind},
+	offence::{Kind, Offence, ReportOffence},
 };
 use fg_primitives::{GRANDPA_ENGINE_ID, ScheduledChange, ConsensusLog, SetId, RoundNumber};
 pub use fg_primitives::{AuthorityId, AuthorityWeight};
-use system::{ensure_signed, DigestOf};
+use system::{
+	ensure_signed, DigestOf,
+	offchain::SubmitSignedTransaction,
+};
 
 mod mock;
 mod tests;
@@ -65,13 +70,28 @@ pub trait Trait: system::Trait {
 		(KeyTypeId, Vec<u8>),
 	>;
 
-	/// A extrinsic right from the external world. This is unchecked and so
-	/// can contain a signature.
-	type UncheckedExtrinsic: ExtrinsicT<Call=<Self as Trait>::Call> + Encode + Decode;
+	/// A transaction submitter. Used for submitting equivocation reports.
+	type SubmitTransaction: SubmitSignedTransaction<Self, <Self as Trait>::Call>;
+
+	type ReportEquivocation:
+		ReportOffence<
+			Self::AccountId,
+			KeyOwnerIdentification<Self>,
+			GrandpaEquivocationOffence<KeyOwnerIdentification<Self>>,
+			>;
+
+	/// Key type to use when signing equivocation report transactions, must be
+	/// convertible to and from an account id since that's what we need to use
+	/// to sign transactions.
+	type ReportKeyType: RuntimeAppPublic + From<Self::AccountId> + Into<Self::AccountId> + Clone;
 }
 
 type KeyOwnerProof<T> =
 	<<T as Trait>::KeyOwnerProofSystem as KeyOwnerProofSystem<(KeyTypeId, Vec<u8>)>>::Proof;
+
+type KeyOwnerIdentification<T> =
+	<<T as Trait>::KeyOwnerProofSystem as KeyOwnerProofSystem<(KeyTypeId, Vec<u8>)>>
+		::IdentificationTuple;
 
 /// A stored pending change, old format.
 // TODO: remove shim
@@ -189,7 +209,7 @@ decl_module! {
 
 		// Report some misbehavior.
 		fn report_equivocation(origin, equivocation: (), proof: KeyOwnerProof<T>) {
-			ensure_signed(origin)?;
+			let account_id = ensure_signed(origin)?;
 
 			let id = T::KeyOwnerProofSystem::check_proof(
 				unimplemented!(),
@@ -199,7 +219,19 @@ decl_module! {
 			// TODO:
 			// - use proper equivocation type
 			// - validate equivocation
-			// - report to offences module
+
+			T::ReportEquivocation::report_offence(
+				vec![account_id],
+				GrandpaEquivocationOffence {
+					time_slot: GrandpaTimeSlot {
+						set_id: 0,
+						round: 0,
+					},
+					session_index: SessionIndex::default(),
+					validator_set_count: 1,
+					offender: id,
+				},
+			);
 		}
 
 		fn on_finalize(block_number: T::BlockNumber) {
@@ -364,27 +396,22 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	pub fn construct_equivocation_report_extrinsic<F>(
+	pub fn submit_report_equivocation_extrinsic(
 		equivocation: (),
 		key_owner_proof: KeyOwnerProof<T>,
-		create_extrinsic: F,
-	) -> Option<T::UncheckedExtrinsic> where
-		F: Fn(Call<T>, fg_primitives::app::Public) -> Option<T::UncheckedExtrinsic>,
-	{
-		use app_crypto::RuntimeAppPublic;
-		let local_keys = fg_primitives::app::Public::all();
+	) -> Option<()> {
+		let local_keys = T::ReportKeyType::all();
 
 		for key in local_keys {
-			let call = Call::report_equivocation::<T>(
-				equivocation,
-				key_owner_proof.clone(),
-			);
-
-			let xt = create_extrinsic(call, key);
+			let call = Call::report_equivocation(equivocation, key_owner_proof.clone());
+			let ext = T::SubmitTransaction::sign_and_submit(
+				call,
+				key.into(),
+			).ok();
 
 			// early exit after successful extrinsic creation
-			if xt.is_some() {
-				return xt;
+			if ext.is_some() {
+				return Some(());
 			}
 		}
 
@@ -482,16 +509,15 @@ impl<T: Trait> finality_tracker::OnFinalizationStalled<T::BlockNumber> for Modul
 
 /// A round number and set id which point on the time of an offence.
 #[derive(Copy, Clone, PartialOrd, Ord, Eq, PartialEq, Encode, Decode)]
-struct GrandpaTimeSlot {
+pub struct GrandpaTimeSlot {
 	// The order of these matters for `derive(Ord)`.
 	set_id: SetId,
 	round: RoundNumber,
 }
 
-// TODO [slashing]: Integrate this.
 /// A grandpa equivocation offence report.
 #[allow(dead_code)]
-struct GrandpaEquivocationOffence<FullIdentification> {
+pub struct GrandpaEquivocationOffence<FullIdentification> {
 	/// Time slot at which this incident happened.
 	time_slot: GrandpaTimeSlot,
 	/// The session index in which the incident happened.

@@ -116,8 +116,9 @@ pub trait VerifySeal<Header, Author> {
 pub trait KeyOwnerProofSystem<Key> {
 	/// The proof of membership itself.
 	type Proof: Clone + Codec + MaybeDebug + PartialEq;
+	// type Proof: Codec + Clone + PartialEq;
 	/// The full identification of a key owner and the stash account.
-	type IdentificationTuple: Codec;
+	type IdentificationTuple: Clone + Codec;
 
 	/// Prove membership of a key owner in the current block-state.
 	///

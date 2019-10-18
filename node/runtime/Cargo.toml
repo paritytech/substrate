@@ -12,6 +12,7 @@ rustc-hex = { version = "2.0", optional = true }
 safe-mix = { version = "1.0", default-features = false }
 serde = { version = "1.0.101", optional = true }
 
+app-crypto = { package = "substrate-application-crypto", path = "../../core/application-crypto", default-features = false }
 authority-discovery-primitives = { package = "substrate-authority-discovery-primitives", path = "../../core/authority-discovery/primitives", default-features = false }
 babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../../core/consensus/babe/primitives", default-features = false }
 client = { package = "substrate-client", path = "../../core/client", default-features = false }
@@ -60,6 +61,7 @@ wasm-builder-runner = { package = "substrate-wasm-builder-runner", version = "1.
 [features]
 default = ["std"]
 std = [
+	"app-crypto/std",
 	"authority-discovery-primitives/std",
 	"authority-discovery/std",
 	"authorship/std",
