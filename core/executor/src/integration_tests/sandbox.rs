@@ -16,18 +16,18 @@
 
 use codec::Encode;
 use runtime_test::WASM_BINARY;
+use test_case::test_case;
 use wabt;
 
 use crate::{WasmExecutionMethod, call_in_wasm};
 use crate::error::Error;
 use crate::integration_tests::TestExternalities;
 
-#[test]
-fn sandbox_should_work() {
+#[test_case(WasmExecutionMethod::Interpreted)]
+fn sandbox_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
 	let test_code = WASM_BINARY;
-	let wasm_method = WasmExecutionMethod::Interpreted;
 
 	let code = wabt::wat2wasm(r#"
 		(module
@@ -63,12 +63,11 @@ fn sandbox_should_work() {
 	);
 }
 
-#[test]
-fn sandbox_trap() {
+#[test_case(WasmExecutionMethod::Interpreted)]
+fn sandbox_trap(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
 	let test_code = WASM_BINARY;
-	let wasm_method = WasmExecutionMethod::Interpreted;
 
 	let code = wabt::wat2wasm(r#"
 		(module
@@ -93,12 +92,11 @@ fn sandbox_trap() {
 	);
 }
 
-#[test]
-fn sandbox_should_trap_when_heap_exhausted() {
+#[test_case(WasmExecutionMethod::Interpreted)]
+fn sandbox_should_trap_when_heap_exhausted(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
 	let test_code = WASM_BINARY;
-	let wasm_method = WasmExecutionMethod::Interpreted;
 
 	let code = wabt::wat2wasm(r#"
 		(module
@@ -130,12 +128,11 @@ fn sandbox_should_trap_when_heap_exhausted() {
 	}
 }
 
-#[test]
-fn start_called() {
+#[test_case(WasmExecutionMethod::Interpreted)]
+fn start_called(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
 	let test_code = WASM_BINARY;
-	let wasm_method = WasmExecutionMethod::Interpreted;
 
 	let code = wabt::wat2wasm(r#"
 		(module
@@ -177,12 +174,11 @@ fn start_called() {
 	);
 }
 
-#[test]
-fn invoke_args() {
+#[test_case(WasmExecutionMethod::Interpreted)]
+fn invoke_args(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
 	let test_code = WASM_BINARY;
-	let wasm_method = WasmExecutionMethod::Interpreted;
 
 	let code = wabt::wat2wasm(r#"
 		(module
@@ -220,12 +216,11 @@ fn invoke_args() {
 	);
 }
 
-#[test]
-fn return_val() {
+#[test_case(WasmExecutionMethod::Interpreted)]
+fn return_val(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
 	let test_code = WASM_BINARY;
-	let wasm_method = WasmExecutionMethod::Interpreted;
 
 	let code = wabt::wat2wasm(r#"
 		(module
@@ -251,12 +246,11 @@ fn return_val() {
 	);
 }
 
-#[test]
-fn unlinkable_module() {
+#[test_case(WasmExecutionMethod::Interpreted)]
+fn unlinkable_module(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
 	let test_code = WASM_BINARY;
-	let wasm_method = WasmExecutionMethod::Interpreted;
 
 	let code = wabt::wat2wasm(r#"
 		(module
@@ -280,12 +274,11 @@ fn unlinkable_module() {
 	);
 }
 
-#[test]
-fn corrupted_module() {
+#[test_case(WasmExecutionMethod::Interpreted)]
+fn corrupted_module(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
 	let test_code = WASM_BINARY;
-	let wasm_method = WasmExecutionMethod::Interpreted;
 
 	// Corrupted wasm file
 	let code = vec![0u8, 0, 0, 0, 1, 0, 0, 0].encode();
@@ -303,12 +296,11 @@ fn corrupted_module() {
 	);
 }
 
-#[test]
-fn start_fn_ok() {
+#[test_case(WasmExecutionMethod::Interpreted)]
+fn start_fn_ok(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
 	let test_code = WASM_BINARY;
-	let wasm_method = WasmExecutionMethod::Interpreted;
 
 	let code = wabt::wat2wasm(r#"
 		(module
@@ -335,12 +327,11 @@ fn start_fn_ok() {
 	);
 }
 
-#[test]
-fn start_fn_traps() {
+#[test_case(WasmExecutionMethod::Interpreted)]
+fn start_fn_traps(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
 	let test_code = WASM_BINARY;
-	let wasm_method = WasmExecutionMethod::Interpreted;
 
 	let code = wabt::wat2wasm(r#"
 		(module

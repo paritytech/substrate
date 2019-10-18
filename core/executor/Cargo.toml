@@ -31,6 +31,7 @@ runtime-test = { package = "substrate-runtime-test", path = "runtime-test" }
 substrate-client = { path = "../client" }
 substrate-offchain = { path = "../offchain/" }
 state_machine = { package = "substrate-state-machine", path = "../state-machine"  }
+test-case = "0.3.3"
 
 [features]
 default = []
