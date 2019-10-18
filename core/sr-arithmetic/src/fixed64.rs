@@ -28,7 +28,6 @@ use crate::{
 
 /// An unsigned fixed point number. Can hold any value in the range [-9_223_372_036, 9_223_372_036]
 /// with fixed point accuracy of one billion.
-#[cfg_attr(feature = "std", derive(Debug))]
 #[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Fixed64(i64);
 
@@ -145,6 +144,13 @@ impl CheckedAdd for Fixed64 {
 	}
 }
 
+#[cfg(feature = "std")]
+impl rstd::fmt::Debug for Fixed64 {
+	fn fmt(&self, f: &mut rstd::fmt::Formatter<'_>) -> rstd::fmt::Result {
+		write!(f, "Fixed64({},{})", self.0 / DIV, (self.0 % DIV) / 1000)
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -162,6 +168,35 @@ mod tests {
 		// biggest value that can be created.
 		assert_ne!(max(), Fixed64::from_natural(9_223_372_036));
 		assert_eq!(max(), Fixed64::from_natural(9_223_372_037));
+	}
+
+	#[test]
+	fn fixed_64_growth_decrease_curve() {
+		let test_set = vec![0u32, 1, 10, 1000, 1_000_000_000];
+
+		// negative (1/2)
+		let mut fm = Fixed64::from_rational(-1, 2);
+		test_set.clone().into_iter().for_each(|i| {
+			assert_eq!(fm.saturated_multiply_accumulate(i) as i32, i as i32 - i as i32 / 2);
+		});
+
+		// unit (1) multiplier
+		fm = Fixed64::from_parts(0);
+		test_set.clone().into_iter().for_each(|i| {
+			assert_eq!(fm.saturated_multiply_accumulate(i), i);
+		});
+
+		// i.5 multiplier
+		fm = Fixed64::from_rational(1, 2);
+		test_set.clone().into_iter().for_each(|i| {
+			assert_eq!(fm.saturated_multiply_accumulate(i), i * 3 / 2);
+		});
+
+		// dual multiplier
+		fm = Fixed64::from_rational(1, 1);
+		test_set.clone().into_iter().for_each(|i| {
+			assert_eq!(fm.saturated_multiply_accumulate(i), i * 2);
+		});
 	}
 
 	macro_rules! saturating_mul_acc_test {

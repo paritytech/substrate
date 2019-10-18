@@ -321,8 +321,6 @@ impl BigUint {
 		let mut q = Self::with_capacity(m + 1);
 		let mut r = Self::with_capacity(n);
 
-		debug_assert!(other.msb() != 0);
-
 		// PROOF: 0 <= normalizer_bits < SHIFT 0 <= normalizer < B. all conversions are
 		// safe.
 		let normalizer_bits = other.msb().leading_zeros() as Single;
