@@ -81,7 +81,7 @@ impl Environment<TestBlock> for DummyFactory {
 		-> Result<DummyProposer, Error>
 	{
 
-		let parent_slot = crate::find_pre_digest(parent_header)
+		let parent_slot = crate::find_pre_digest::<TestBlock>(parent_header)
 			.expect("parent header has a pre-digest")
 			.slot_number();
 
@@ -109,7 +109,7 @@ impl DummyProposer {
 			Err(e) => return future::ready(Err(e)),
 		};
 
-		let this_slot = crate::find_pre_digest(block.header())
+		let this_slot = crate::find_pre_digest::<TestBlock>(block.header())
 			.expect("baked block has valid pre-digest")
 			.slot_number();
 
@@ -535,7 +535,7 @@ fn propose_and_import_block(
 	let mut proposer = proposer_factory.init(parent).unwrap();
 
 	let slot_number = slot_number.unwrap_or_else(|| {
-		let parent_pre_digest = find_pre_digest(parent).unwrap();
+		let parent_pre_digest = find_pre_digest::<TestBlock>(parent).unwrap();
 		parent_pre_digest.slot_number() + 1
 	});
 

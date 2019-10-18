@@ -35,7 +35,7 @@ grandpa_primitives = { package = "substrate-finality-grandpa-primitives", path =
 sr-primitives = { path = "../../core/sr-primitives" }
 node-executor = { path = "../executor" }
 substrate-telemetry = { package = "substrate-telemetry", path = "../../core/telemetry" }
-structopt = "0.2.0"
+structopt = "0.3.3"
 transaction-factory = { path = "../../test-utils/transaction-factory" }
 keyring = { package = "substrate-keyring", path = "../../core/keyring" }
 indices = { package = "srml-indices", path = "../../srml/indices" }
@@ -45,6 +45,7 @@ finality_tracker = { package = "srml-finality-tracker", path = "../../srml/final
 contracts = { package = "srml-contracts", path = "../../srml/contracts" }
 system = { package = "srml-system", path = "../../srml/system" }
 balances = { package = "srml-balances", path = "../../srml/balances" }
+transaction-payment = { package = "srml-transaction-payment", path = "../../srml/transaction-payment" }
 support = { package = "srml-support", path = "../../srml/support", default-features = false }
 im_online = { package = "srml-im-online", path = "../../srml/im-online", default-features = false }
 sr-authority-discovery = { package = "srml-authority-discovery", path = "../../srml/authority-discovery", default-features = false }
@@ -63,4 +64,4 @@ tempfile = "3.1.0"
 
 [build-dependencies]
 cli = { package = "substrate-cli", path = "../../core/cli" }
-structopt = "0.2.0"
+structopt = "0.3.3"

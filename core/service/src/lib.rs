@@ -368,6 +368,7 @@ macro_rules! new_impl {
 
 
 		let _ = to_spawn_tx.unbounded_send(Box::new(build_network_future(
+			$config.roles,
 			network_mut,
 			client.clone(),
 			network_status_sinks.clone(),
@@ -662,6 +663,7 @@ fn build_network_future<
 	S: network::specialization::NetworkSpecialization<B>,
 	H: network::ExHashT
 > (
+	roles: Roles,
 	mut network: network::NetworkWorker<B, S, H>,
 	client: Arc<C>,
 	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<(NetworkStatus<B>, NetworkState)>>>>,
@@ -669,7 +671,7 @@ fn build_network_future<
 	should_have_peers: bool,
 	dht_event_tx: Option<mpsc::Sender<DhtEvent>>,
 ) -> impl Future<Item = (), Error = ()> {
-	// Compatibility shim while we're transitionning to stable Futures.
+	// Compatibility shim while we're transitioning to stable Futures.
 	// See https://github.com/paritytech/substrate/issues/3099
 	let mut rpc_rx = futures03::compat::Compat::new(rpc_rx.map(|v| Ok::<_, ()>(v)));
 
@@ -724,6 +726,21 @@ fn build_network_future<
 					if let Some(network_state) = serde_json::to_value(&network.network_state()).ok() {
 						let _ = sender.send(network_state);
 					}
+				}
+				rpc::system::Request::NodeRoles(sender) => {
+					use rpc::system::NodeRole;
+
+					let node_roles = (0 .. 8)
+						.filter(|&bit_number| (roles.bits() >> bit_number) & 1 == 1)
+						.map(|bit_number| match Roles::from_bits(1 << bit_number) {
+							Some(Roles::AUTHORITY) => NodeRole::Authority,
+							Some(Roles::LIGHT) => NodeRole::LightClient,
+							Some(Roles::FULL) => NodeRole::Full,
+							_ => NodeRole::UnknownRole(bit_number),
+						})
+						.collect();
+
+					let _ = sender.send(node_roles);
 				}
 			};
 		}

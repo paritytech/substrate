@@ -6,7 +6,7 @@ description = "Substrate CLI interface."
 edition = "2018"
 
 [dependencies]
-clap = "~2.32.0"
+clap = "2.33.0"
 derive_more = "0.15.0"
 env_logger = "0.7.0"
 log = "0.4.8"
@@ -33,7 +33,7 @@ state-machine = { package = "substrate-state-machine", path = "../../core/state-
 substrate-telemetry = { path = "../../core/telemetry" }
 keyring = { package = "substrate-keyring", path = "../keyring" }
 names = "0.11.0"
-structopt = "0.2.0"
+structopt = "0.3.3"
 rpassword = "4.0.1"
 
 [dev-dependencies]

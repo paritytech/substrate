@@ -48,7 +48,7 @@
 //!
 //!   - [`CheckWeight`]: Checks the weight and length of the block and ensure that it does not
 //!     exceed the limits.
-//!   - ['CheckNonce']: Checks the nonce of the transaction. Contains a single payload of type
+//!   - [`CheckNonce`]: Checks the nonce of the transaction. Contains a single payload of type
 //!     `T::Index`.
 //!   - [`CheckEra`]: Checks the era of the transaction. Contains a single payload of type `Era`.
 //!   - [`CheckGenesis`]: Checks the provided genesis hash of the transaction. Must be a part of the
@@ -97,13 +97,13 @@ use rstd::marker::PhantomData;
 use sr_version::RuntimeVersion;
 use sr_primitives::{
 	generic::{self, Era}, Perbill, ApplyError, ApplyOutcome, DispatchError,
-	weights::{Weight, DispatchInfo, DispatchClass, WeightMultiplier, SimpleDispatchInfo},
+	weights::{Weight, DispatchInfo, DispatchClass, SimpleDispatchInfo},
 	transaction_validity::{
 		ValidTransaction, TransactionPriority, TransactionLongevity, TransactionValidityError,
 		InvalidTransaction, TransactionValidity,
 	},
 	traits::{
-		self, CheckEqual, SimpleArithmetic, Zero, SignedExtension, Convert, Lookup, LookupError,
+		self, CheckEqual, SimpleArithmetic, Zero, SignedExtension, Lookup, LookupError,
 		SimpleBitOps, Hash, Member, MaybeDisplay, EnsureOrigin, SaturatedConversion,
 		MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup, One, Bounded,
 	},
@@ -187,14 +187,6 @@ pub trait Trait: 'static + Eq + Clone {
 	/// reasonable for this to be an identity conversion (with the source type being `AccountId`), but other modules
 	/// (e.g. Indices module) may provide more functional/efficient alternatives.
 	type Lookup: StaticLookup<Target = Self::AccountId>;
-
-	/// Handler for updating the weight multiplier at the end of each block.
-	///
-	/// It receives the current block's weight as input and returns the next weight multiplier for next
-	/// block.
-	///
-	/// Note that passing `()` will keep the value constant.
-	type WeightMultiplierUpdate: Convert<(Weight, WeightMultiplier), WeightMultiplier>;
 
 	/// The block header.
 	type Header: Parameter + traits::Header<
@@ -381,9 +373,6 @@ decl_storage! {
 		AllExtrinsicsWeight: Option<Weight>;
 		/// Total length (in bytes) for all extrinsics put together, for the current block.
 		AllExtrinsicsLen: Option<u32>;
-		/// The next weight multiplier. This should be updated at the end of each block based on the
-		/// saturation level (weight).
-		pub NextWeightMultiplier get(next_weight_multiplier): WeightMultiplier = Default::default();
 		/// Map of block numbers to block hashes.
 		pub BlockHash get(block_hash) build(|_| vec![(T::BlockNumber::zero(), hash69())]): map T::BlockNumber => T::Hash;
 		/// Extrinsics data for the current block (maps an extrinsic's index to its data).
@@ -612,17 +601,6 @@ impl<T: Trait> Module<T> {
 		AllExtrinsicsLen::get().unwrap_or_default()
 	}
 
-	/// Update the next weight multiplier.
-	///
-	/// This should be called at then end of each block, before `all_extrinsics_weight` is cleared.
-	pub fn update_weight_multiplier() {
-		// update the multiplier based on block weight.
-		let current_weight = Self::all_extrinsics_weight();
-		NextWeightMultiplier::mutate(|fm| {
-			*fm = T::WeightMultiplierUpdate::convert((current_weight, *fm))
-		});
-	}
-
 	/// Start the execution of a particular block.
 	pub fn initialize(
 		number: &T::BlockNumber,
@@ -645,7 +623,6 @@ impl<T: Trait> Module<T> {
 	/// Remove temporary "environment" entries in storage.
 	pub fn finalize() -> T::Header {
 		ExtrinsicCount::kill();
-		Self::update_weight_multiplier();
 		AllExtrinsicsWeight::kill();
 		AllExtrinsicsLen::kill();
 
@@ -1091,10 +1068,7 @@ impl<T: Trait> Lookup for ChainContext<T> {
 mod tests {
 	use super::*;
 	use primitives::H256;
-	use sr_primitives::{
-		traits::{BlakeTwo256, IdentityLookup}, testing::Header, DispatchError,
-		set_and_run_with_externalities,
-	};
+	use sr_primitives::{traits::{BlakeTwo256, IdentityLookup}, testing::Header, DispatchError};
 	use support::{impl_outer_origin, parameter_types};
 
 	impl_outer_origin! {
@@ -1121,7 +1095,6 @@ mod tests {
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
-		type WeightMultiplierUpdate = ();
 		type Event = u16;
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
@@ -1164,7 +1137,7 @@ mod tests {
 
 	#[test]
 	fn deposit_event_should_work() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			System::initialize(&1, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
 			System::note_finished_extrinsics();
 			System::deposit_event(1u16);
@@ -1201,10 +1174,15 @@ mod tests {
 
 	#[test]
 	fn deposit_event_topics() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			const BLOCK_NUMBER: u64 = 1;
 
-			System::initialize(&BLOCK_NUMBER, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
+			System::initialize(
+				&BLOCK_NUMBER,
+				&[0u8; 32].into(),
+				&[0u8; 32].into(),
+				&Default::default(),
+			);
 			System::note_finished_extrinsics();
 
 			let topics = vec![
@@ -1261,7 +1239,7 @@ mod tests {
 
 	#[test]
 	fn prunes_block_hash_mappings() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			// simulate import of 15 blocks
 			for n in 1..=15 {
 				System::initialize(
@@ -1294,7 +1272,7 @@ mod tests {
 
 	#[test]
 	fn signed_ext_check_nonce_works() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			<AccountNonce<Test>>::insert(1, 1);
 			let info = DispatchInfo::default();
 			let len = 0_usize;
@@ -1312,7 +1290,7 @@ mod tests {
 
 	#[test]
 	fn signed_ext_check_weight_works_normal_tx() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			let normal_limit = normal_weight_limit();
 			let small = DispatchInfo { weight: 100, ..Default::default() };
 			let medium = DispatchInfo {
@@ -1339,7 +1317,7 @@ mod tests {
 
 	#[test]
 	fn signed_ext_check_weight_fee_works() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			let free = DispatchInfo { weight: 0, ..Default::default() };
 			let len = 0_usize;
 
@@ -1352,7 +1330,7 @@ mod tests {
 
 	#[test]
 	fn signed_ext_check_weight_max_works() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			let max = DispatchInfo { weight: Weight::max_value(), ..Default::default() };
 			let len = 0_usize;
 			let normal_limit = normal_weight_limit();
@@ -1366,7 +1344,7 @@ mod tests {
 
 	#[test]
 	fn signed_ext_check_weight_works_operational_tx() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			let normal = DispatchInfo { weight: 100, ..Default::default() };
 			let op = DispatchInfo { weight: 100, class: DispatchClass::Operational };
 			let len = 0_usize;
@@ -1389,7 +1367,7 @@ mod tests {
 
 	#[test]
 	fn signed_ext_check_weight_priority_works() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			let normal = DispatchInfo { weight: 100, class: DispatchClass::Normal };
 			let op = DispatchInfo { weight: 100, class: DispatchClass::Operational };
 			let len = 0_usize;
@@ -1410,7 +1388,7 @@ mod tests {
 
 	#[test]
 	fn signed_ext_check_weight_block_size_works() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			let normal = DispatchInfo::default();
 			let normal_limit = normal_weight_limit() as usize;
 			let reset_check_weight = |tx, s, f| {
@@ -1434,7 +1412,7 @@ mod tests {
 
 	#[test]
 	fn signed_ext_check_era_should_work() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			// future
 			assert_eq!(
 				CheckEra::<Test>::from(Era::mortal(4, 2)).additional_signed().err().unwrap(),
@@ -1450,7 +1428,7 @@ mod tests {
 
 	#[test]
 	fn signed_ext_check_era_should_change_longevity() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			let normal = DispatchInfo { weight: 100, class: DispatchClass::Normal };
 			let len = 0_usize;
 			let ext = (
