@@ -17,7 +17,7 @@
 use crate::{BalanceOf, ContractInfo, ContractInfoOf, TombstoneContractInfo, Trait, AliveContractInfo};
 use sr_primitives::traits::{Bounded, CheckedDiv, CheckedMul, Saturating, Zero,
 	SaturatedConversion};
-use support::traits::{Currency, ExistenceRequirement, Get, WithdrawReason};
+use support::traits::{Currency, ExistenceRequirement, Get, WithdrawReason, OnUnbalanced};
 use support::StorageMap;
 
 #[derive(PartialEq, Eq, Copy, Clone)]
@@ -124,9 +124,9 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 	)
 	.is_ok();
 
-	if can_withdraw_rent && (insufficient_rent || pay_rent) {
+	let imbalance = if can_withdraw_rent && (insufficient_rent || pay_rent) {
 		// Collect dues.
-		let _ = T::Currency::withdraw(
+		let imbalance = T::Currency::withdraw(
 			account,
 			dues_limited,
 			WithdrawReason::Fee,
@@ -137,7 +137,11 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 			dues_limited < rent_budget < balance - subsistence < balance - existential_deposit;
 			qed",
 		);
-	}
+
+		Some(imbalance)
+	} else {
+		None
+	};
 
 	if insufficient_rent || !can_withdraw_rent {
 		// The contract cannot afford the rent payment and has a balance above the subsistence
@@ -164,6 +168,9 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 			deduct_block: current_block_number,
 			..contract
 		});
+
+		let imbalance = imbalance.expect("Imbalance has been checked above");
+		T::RentPayment::on_unbalanced(imbalance);
 
 		<ContractInfoOf<T>>::insert(account, &contract_info);
 

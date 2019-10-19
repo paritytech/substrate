@@ -23,19 +23,20 @@ use crate::{
 	BalanceOf, ComputeDispatchFee, ContractAddressFor, ContractInfo, ContractInfoOf, GenesisConfig,
 	Module, RawAliveContractInfo, RawEvent, Trait, TrieId, TrieIdFromParentCounter, Schedule,
 	TrieIdGenerator, CheckBlockGasLimit, account_db::{AccountDb, DirectAccountDb, OverlayAccountDb},
+	NegativeImbalanceOf
 };
 use assert_matches::assert_matches;
 use hex_literal::*;
 use codec::{Decode, Encode, KeyedVec};
 use sr_primitives::{
 	Perbill, BuildStorage, transaction_validity::{InvalidTransaction, ValidTransaction},
-	traits::{BlakeTwo256, Hash, IdentityLookup, SignedExtension},
+	traits::{BlakeTwo256, Hash, IdentityLookup, SignedExtension, Zero},
 	weights::{DispatchInfo, DispatchClass},
 	testing::{Digest, DigestItem, Header, UintAuthorityId, H256},
 };
 use support::{
 	assert_ok, assert_err, impl_outer_dispatch, impl_outer_event, impl_outer_origin, parameter_types,
-	storage::child, StorageMap, StorageValue, traits::{Currency, Get},
+	storage::child, StorageMap, StorageValue, traits::{Currency, Get, Imbalance, OnUnbalanced},
 };
 use std::{cell::RefCell, sync::atomic::{AtomicUsize, Ordering}};
 use primitives::storage::well_known_keys;
@@ -159,6 +160,7 @@ impl Trait for Test {
 	type ComputeDispatchFee = DummyComputeDispatchFee;
 	type TrieIdGenerator = DummyTrieIdGenerator;
 	type GasPayment = ();
+	type RentPayment = NonZeroRentHook;
 	type SignedClaimHandicap = SignedClaimHandicap;
 	type TombstoneDeposit = TombstoneDeposit;
 	type StorageSizeOffset = StorageSizeOffset;
@@ -293,6 +295,15 @@ fn compile_module<T>(wabt_module: &str)
 	let wasm = wabt::wat2wasm(wabt_module)?;
 	let code_hash = T::Hashing::hash(&wasm);
 	Ok((wasm, code_hash))
+}
+
+// A hook for rent payments to check that the rent is not zero.
+pub struct NonZeroRentHook;
+
+impl OnUnbalanced<NegativeImbalanceOf<Test>> for NonZeroRentHook {
+	fn on_unbalanced(amount: NegativeImbalanceOf<Test>) {
+		assert_ne!(amount.peek(), BalanceOf::<Test>::zero());
+	}
 }
 
 // Perform a simple transfer to a non-existent account supplying way more gas than needed.
