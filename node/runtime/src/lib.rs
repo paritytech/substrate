@@ -475,13 +475,13 @@ pub mod report {
 
 use report::ReporterId;
 
-type SubmitGrandpaTransaction = TransactionSubmitter<ReporterId, Runtime, UncheckedExtrinsic>;
+type SubmitReportTransaction = TransactionSubmitter<ReporterId, Runtime, UncheckedExtrinsic>;
 
 impl grandpa::Trait for Runtime {
 	type Event = Event;
 	type Call = Call;
 	type KeyOwnerProofSystem = Historical;
-	type SubmitTransaction = SubmitGrandpaTransaction;
+	type SubmitTransaction = SubmitReportTransaction;
 	type ReportEquivocation = Offences;
 	type ReportKeyType = ReporterId;
 }

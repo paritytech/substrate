@@ -35,6 +35,9 @@ pub mod app {
 	app_crypto!(ed25519, GRANDPA);
 }
 
+pub const KEY_TYPE: app_crypto::KeyTypeId =
+	app_crypto::key_types::GRANDPA;
+
 /// The grandpa crypto scheme defined via the keypair type.
 #[cfg(feature = "std")]
 pub type AuthorityPair = app::Pair;
@@ -151,6 +154,7 @@ impl<N: Codec> ConsensusLog<N> {
 	}
 }
 
+// FIXME: rename to equivocation proof ?
 #[cfg_attr(feature = "std", derive(Debug))]
 #[derive(Clone, Decode, Encode, PartialEq)]
 pub struct EquivocationReport<H, N> {
@@ -159,6 +163,13 @@ pub struct EquivocationReport<H, N> {
 }
 
 impl<H, N> EquivocationReport<H, N> {
+	pub fn new(set_id: SetId, equivocation: Equivocation<H, N>) -> Self {
+		EquivocationReport {
+			set_id,
+			equivocation,
+		}
+	}
+
 	pub fn set_id(&self) -> SetId {
 		self.set_id
 	}
@@ -171,10 +182,7 @@ impl<H, N> EquivocationReport<H, N> {
 	}
 
 	pub fn offender(&self) -> &AuthorityId {
-		match self.equivocation {
-			Equivocation::Prevote(ref equivocation) => &equivocation.identity,
-			Equivocation::Precommit(ref equivocation) => &equivocation.identity,
-		}
+		self.equivocation.offender()
 	}
 }
 
@@ -195,6 +203,43 @@ pub enum Equivocation<H, N> {
 			AuthoritySignature,
 		>,
 	),
+}
+
+impl<H, N> From<grandpa::Equivocation<AuthorityId, grandpa::Prevote<H, N>, AuthoritySignature>>
+	for Equivocation<H, N>
+{
+	fn from(
+		equivocation: grandpa::Equivocation<
+			AuthorityId,
+			grandpa::Prevote<H, N>,
+			AuthoritySignature,
+		>,
+	) -> Self {
+		Equivocation::Prevote(equivocation)
+	}
+}
+
+impl<H, N> From<grandpa::Equivocation<AuthorityId, grandpa::Precommit<H, N>, AuthoritySignature>>
+	for Equivocation<H, N>
+{
+	fn from(
+		equivocation: grandpa::Equivocation<
+			AuthorityId,
+			grandpa::Precommit<H, N>,
+			AuthoritySignature,
+		>,
+	) -> Self {
+		Equivocation::Precommit(equivocation)
+	}
+}
+
+impl<H, N> Equivocation<H, N> {
+	pub fn offender(&self) -> &AuthorityId {
+		match self {
+			Equivocation::Prevote(ref equivocation) => &equivocation.identity,
+			Equivocation::Precommit(ref equivocation) => &equivocation.identity,
+		}
+	}
 }
 
 /// WASM function call to check for pending changes.

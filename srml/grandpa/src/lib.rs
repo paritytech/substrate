@@ -42,6 +42,7 @@ use support::{
 use sr_primitives::{
 	generic::{DigestItem, OpaqueDigestItemId},
 	traits::Zero,
+	weights::SimpleDispatchInfo,
 	KeyTypeId, Perbill,
 };
 use sr_staking_primitives::{
@@ -214,7 +215,11 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event() = default;
 
-		// Report some misbehavior.
+		/// Report some misbehavior.
+		///
+		/// FIXME: I have no clue about the weight (but we're checking two
+		/// ed25519 signatures).
+		#[weight = SimpleDispatchInfo::FixedOperational(10_000_000)]
 		fn report_equivocation(
 			origin,
 			equivocation_report: EquivocationReport<T::Hash, T::BlockNumber>,
@@ -223,13 +228,12 @@ decl_module! {
 			let reporter_id = ensure_signed(origin)?;
 
 			// validate the membership proof and extract session index and
-			// validator set count of the session that we're proving membership
-			// of
+			// validator set count of the session that we're proving membership of
 			let (offender, (session_index, validator_set_count)) =
 				T::KeyOwnerProofSystem::check_proof(
 					(GRANDPA, equivocation_report.offender().encode()),
 					key_owner_proof,
-				).ok_or("Invalid key ownership proof.")?;
+				).ok_or("Invalid/outdated key ownership proof.")?;
 
 			// TODO:
 			// - validate equivocation proof
@@ -240,7 +244,7 @@ decl_module! {
 
 			let previous_set_id_session_index = SetIdSession::get(set_id.saturating_sub(1));
 			let set_id_session_index = SetIdSession::get(set_id)
-				.ok_or("Invalid set id provided.")?;
+				.ok_or("Invalid equivocation set id.")?;
 
 			// check that the session id for the membership proof is within the
 			// bounds of the set id reported in the equivocation.
@@ -249,7 +253,7 @@ decl_module! {
 					.map(|previous_index| session_index <= previous_index)
 					.unwrap_or(false)
 			{
-				return Err("Invalid set id provided.");
+				return Err("Invalid equivocation set id provided.");
 			}
 
 			// report to the offences module rewarding the sender.

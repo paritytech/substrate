@@ -31,15 +31,17 @@ use client::{
 	blockchain::HeaderBackend, backend::Finalizer,
 };
 use grandpa::{
-	BlockNumberOps, Equivocation, Error as GrandpaError, round::State as RoundState,
-	voter, voter_set::VoterSet,
+	BlockNumberOps, Error as GrandpaError, round::State as RoundState,
+	self, voter, voter_set::VoterSet,
 };
+use header_metadata::HeaderMetadata;
 use primitives::{Blake2Hasher, H256, Pair};
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{
-	Block as BlockT, Header as HeaderT, NumberFor, One, Zero,
+	Block as BlockT, Header as HeaderT, NumberFor, One, ProvideRuntimeApi, Zero,
 };
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
+use substrate_session::SessionMembership;
 
 use crate::{
 	CommandOrError, Commit, Config, Error, Network, Precommit, Prevote,
@@ -52,7 +54,10 @@ use crate::authorities::{AuthoritySet, SharedAuthoritySet};
 use crate::consensus_changes::SharedConsensusChanges;
 use crate::justification::GrandpaJustification;
 use crate::until_imported::UntilVoteTargetImported;
-use fg_primitives::{AuthorityId, AuthoritySignature, SetId, RoundNumber};
+use fg_primitives::{
+	AuthorityId, AuthoritySignature, Equivocation, EquivocationReport,
+	GrandpaApi, RoundNumber, SetId,
+};
 
 type HistoricalVotes<Block> = grandpa::HistoricalVotes<
 	<Block as BlockT>::Hash,
@@ -368,8 +373,9 @@ impl<Block: BlockT> SharedVoterSetState<Block> {
 }
 
 /// The environment we run GRANDPA in.
-pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA, SC> {
+pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA, PRA, SC> {
 	pub(crate) inner: Arc<Client<B, E, Block, RA>>,
+	pub(crate) api: Arc<PRA>,
 	pub(crate) select_chain: SC,
 	pub(crate) voters: Arc<VoterSet<AuthorityId>>,
 	pub(crate) config: Config,
@@ -380,7 +386,7 @@ pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA, SC> {
 	pub(crate) voter_set_state: SharedVoterSetState<Block>,
 }
 
-impl<B, E, Block: BlockT, N: Network<Block>, RA, SC> Environment<B, E, Block, N, RA, SC> {
+impl<B, E, Block: BlockT, N: Network<Block>, PRA, RA, SC> Environment<B, E, Block, N, RA, PRA, SC> {
 	/// Updates the voter set state using the given closure. The write lock is
 	/// held during evaluation of the closure and the environment's voter set
 	/// state is set to its result if successful.
@@ -396,9 +402,9 @@ impl<B, E, Block: BlockT, N: Network<Block>, RA, SC> Environment<B, E, Block, N,
 	}
 }
 
-impl<Block: BlockT<Hash=H256>, B, E, N, RA, SC>
+impl<Block: BlockT<Hash=H256>, B, E, N, RA, PRA, SC>
 	grandpa::Chain<Block::Hash, NumberFor<Block>>
-for Environment<B, E, Block, N, RA, SC>
+for Environment<B, E, Block, N, RA, PRA, SC>
 where
 	Block: 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
@@ -519,9 +525,9 @@ pub(crate) fn ancestry<B, Block: BlockT<Hash=H256>, E, RA>(
 	Ok(tree_route.retracted().iter().skip(1).map(|e| e.hash).collect())
 }
 
-impl<B, E, Block: BlockT<Hash=H256>, N, RA, SC>
+impl<B, E, Block: BlockT<Hash=H256>, N, RA, PRA, SC>
 	voter::Environment<Block::Hash, NumberFor<Block>>
-for Environment<B, E, Block, N, RA, SC>
+for Environment<B, E, Block, N, RA, PRA, SC>
 where
 	Block: 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
@@ -529,6 +535,8 @@ where
 	N: Network<Block> + 'static + Send,
 	N::In: 'static + Send,
 	RA: 'static + Send + Sync,
+	PRA: ProvideRuntimeApi,
+	PRA::Api: GrandpaApi<Block> + SessionMembership<Block>,
 	SC: SelectChain<Block> + 'static,
 	NumberFor<Block>: BlockNumberOps,
 {
@@ -538,11 +546,11 @@ where
 
 	// regular round message streams
 	type In = Box<dyn Stream<
-		Item = ::grandpa::SignedMessage<Block::Hash, NumberFor<Block>, Self::Signature, Self::Id>,
+		Item = grandpa::SignedMessage<Block::Hash, NumberFor<Block>, Self::Signature, Self::Id>,
 		Error = Self::Error,
 	> + Send>;
 	type Out = Box<dyn Sink<
-		SinkItem = ::grandpa::Message<Block::Hash, NumberFor<Block>>,
+		SinkItem = grandpa::Message<Block::Hash, NumberFor<Block>>,
 		SinkError = Self::Error,
 	> + Send>;
 
@@ -818,20 +826,117 @@ where
 	fn prevote_equivocation(
 		&self,
 		_round: RoundNumber,
-		equivocation: ::grandpa::Equivocation<Self::Id, Prevote<Block>, Self::Signature>
+		equivocation: grandpa::Equivocation<Self::Id, Prevote<Block>, Self::Signature>
 	) {
 		warn!(target: "afg", "Detected prevote equivocation in the finality worker: {:?}", equivocation);
-		// nothing yet; this could craft misbehavior reports of some kind.
+		report_equivocation(
+			&*self.inner,
+			&*self.api,
+			&self.authority_set.inner().read(),
+			&self.select_chain,
+			equivocation.into(),
+		);
 	}
 
 	fn precommit_equivocation(
 		&self,
 		_round: RoundNumber,
-		equivocation: Equivocation<Self::Id, Precommit<Block>, Self::Signature>
+		equivocation: grandpa::Equivocation<Self::Id, Precommit<Block>, Self::Signature>
 	) {
 		warn!(target: "afg", "Detected precommit equivocation in the finality worker: {:?}", equivocation);
-		// nothing yet
+		report_equivocation(
+			&*self.inner,
+			&*self.api,
+			&self.authority_set.inner().read(),
+			&self.select_chain,
+			equivocation.into(),
+		);
 	}
+}
+
+// TODO: how to make this optional?
+
+fn report_equivocation<Block, B, PRA, SC>(
+	backend: &B,
+	api: &PRA,
+	authority_set: &AuthoritySet<Block::Hash, NumberFor<Block>>,
+	select_chain: &SC,
+	equivocation: Equivocation<Block::Hash, NumberFor<Block>>,
+) -> Result<(), String> where
+	Block: BlockT<Hash=H256>,
+	B: HeaderBackend<Block> + HeaderMetadata<Block, Error = client::error::Error>,
+	PRA: ProvideRuntimeApi,
+	PRA::Api: GrandpaApi<Block> + SessionMembership<Block>,
+	SC: SelectChain<Block> + 'static,
+{
+	let is_descendent_of = is_descendent_of::<_, _, Block::Hash>(backend, None);
+
+	let best_header = select_chain.best_chain().unwrap();
+	let next_change_height = authority_set.next_change_height(
+		&best_header.hash(),
+		&is_descendent_of,
+	).unwrap();
+
+	let current_set_latest_height = match next_change_height {
+		Some(n) if n.is_zero() =>
+			return Err("Authority set change signalled at genesis.".to_string()),
+		// the next set starts at `n` so the current one lasts until `n - 1`. if
+		// `n` is later than the best block, then the current set is still live
+		// at best block.
+		Some(n) if n > *best_header.number() => *best_header.number(),
+		Some(n) => n - One::one(),
+		// there is no pending change, the latest block for the current set is
+		// the best block.
+		None => *best_header.number(),
+	};
+
+	// FIXME: clean up
+	// find the header of the latest block in the current set
+	let current_set_latest_header = {
+		if current_set_latest_height == *best_header.number() {
+			best_header.clone()
+		} else {
+			let h = backend.header(BlockId::Number(current_set_latest_height)).unwrap().unwrap();
+
+			// make sure that the given block is in the same chain as "best"
+			if is_descendent_of(&h.hash(), &best_header.hash()).unwrap() {
+				h
+			} else {
+				let mut current = best_header.clone();
+				loop {
+					if *current.number() == current_set_latest_height {
+						break;
+					}
+					current = backend.header(BlockId::Hash(*current.parent_hash())).unwrap().unwrap();
+				}
+				current
+			}
+		}
+	};
+
+	// generate membership proof at that block
+	let membership_proof = api.runtime_api()
+		.generate_session_membership_proof(
+			&BlockId::Hash(current_set_latest_header.hash()),
+			(fg_primitives::KEY_TYPE, equivocation.offender().encode()),
+		)
+		.unwrap();
+
+	// submit equivocation report at best block
+	let equivocation_report = EquivocationReport::new(
+		authority_set.set_id,
+		equivocation,
+	);
+
+	api.runtime_api()
+		.submit_report_equivocation_extrinsic(
+			&BlockId::Hash(best_header.hash()),
+			equivocation_report,
+			membership_proof.encode(),
+		)
+		.unwrap();
+
+	Ok(())
 }
 
 pub(crate) enum JustificationOrCommit<Block: BlockT> {

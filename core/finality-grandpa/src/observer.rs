@@ -150,9 +150,9 @@ fn grandpa_observer<B, E, Block: BlockT<Hash=H256>, RA, S, F>(
 /// listening for and validating GRANDPA commits instead of following the full
 /// protocol. Provide configuration and a link to a block import worker that has
 /// already been instantiated with `block_import`.
-pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, SC>(
+pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, PRA, SC>(
 	config: Config,
-	link: LinkHalf<B, E, Block, RA, SC>,
+	link: LinkHalf<B, E, Block, RA, PRA, SC>,
 	network: N,
 	on_exit: impl Future<Item=(),Error=()> + Clone + Send + 'static,
 ) -> ::client::error::Result<impl Future<Item=(),Error=()> + Send + 'static> where
@@ -169,6 +169,7 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, SC>(
 		select_chain: _,
 		persistent_data,
 		voter_commands_rx,
+		..
 	} = link;
 
 	let (network, network_startup) = NetworkBridge::new(

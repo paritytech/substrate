@@ -123,6 +123,47 @@ where
 	N: Add<Output=N> + Ord + Clone + Debug,
 	H: Clone + Debug
 {
+	/// Returns the block height at which the next pending change in the given
+	/// chain (i.e. it includes `best_hash`) was signalled, `None` if there are
+	/// no pending changes for the given chain.
+	///
+	/// This is useful since we know that when a change is signalled the
+	/// underlying runtime authority set management module (e.g. session module)
+	/// has updated its internal state (e.g. a new session started).
+	pub(crate) fn next_change_height<F, E>(
+		&self,
+		best_hash: &H,
+		is_descendent_of: &F,
+	) -> Result<Option<N>, fork_tree::Error<E>> where
+		F: Fn(&H, &H) -> Result<bool, E>,
+		E:  std::error::Error,
+	{
+		let mut forced = None;
+		for change in &self.pending_forced_changes {
+			if is_descendent_of(&change.canon_hash, best_hash)? {
+				forced = Some(change.canon_height.clone());
+				break;
+			}
+		}
+
+		let mut standard = None;
+		for (_, _, change) in self.pending_standard_changes.roots() {
+			if is_descendent_of(&change.canon_hash, best_hash)? {
+				standard = Some(change.canon_height.clone());
+				break;
+			}
+		}
+
+		let n = match (standard, forced) {
+			(Some(standard), Some(forced)) => Some(standard.min(forced)),
+			(Some(standard), None) => Some(standard),
+			(None, Some(forced)) => Some(forced),
+			(None, None) => None,
+		};
+
+		Ok(n)
+	}
+
 	fn add_standard_change<F, E>(
 		&mut self,
 		pending: PendingChange<H, N>,
