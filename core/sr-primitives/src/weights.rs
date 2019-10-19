@@ -24,7 +24,7 @@
 //! (something that does not  implement `Weighable`) is passed in.
 
 pub use crate::transaction_validity::TransactionPriority;
-use crate::traits::Bounded;
+use arithmetic::traits::Bounded;
 
 /// Numeric range of a transaction weight.
 pub type Weight = u32;
