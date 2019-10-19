@@ -567,7 +567,7 @@ impl<T: Trait> Module<T> {
 		// We perform early return if we've reached the maximum capacity of the event list,
 		// so `Events<T>` seems to be corrupted. Also, this has happened after the start of execution
 		// (since the event list is cleared at the block initialization).
-		if <Events<T>>::append([event].into_iter()).is_err() {
+		if <Events<T>>::append([event].iter()).is_err() {
 			// The most sensible thing to do here is to just ignore this event and wait until the
 			// new block.
 			return;

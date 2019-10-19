@@ -59,7 +59,7 @@ impl StorageHasher for Twox64Concat {
 	type Output = Vec<u8>;
 	fn hash(x: &[u8]) -> Vec<u8> {
 		twox_64(x)
-			.into_iter()
+			.iter()
 			.chain(x.into_iter())
 			.cloned()
 			.collect::<Vec<_>>()
