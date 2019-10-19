@@ -14,9 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{process::{Command, Stdio}, fs};
-
-use std::env;
+use std::{env, fs};
 use tempfile::tempdir;
 
 /// Checks that all prerequisites are installed.
@@ -26,15 +24,6 @@ use tempfile::tempdir;
 pub fn check() -> Option<&'static str> {
 	if !rustc_stable_forced_to_nightly() && !check_nightly_installed(){
 		return Some("Rust nightly not installed, please install it!")
-	}
-
-	if Command::new("wasm-gc")
-		.stdout(Stdio::null())
-		.stderr(Stdio::null())
-		.status()
-		.map(|s| !s.success()).unwrap_or(true)
-	{
-		return Some("`wasm-gc` not installed, please install it!")
 	}
 
 	check_wasm_toolchain_installed()
