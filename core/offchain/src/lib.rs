@@ -40,6 +40,7 @@ use std::{
 };
 
 use threadpool::ThreadPool;
+use std::sync::Mutex;
 use client::runtime_api::ApiExt;
 use futures::future::Future;
 use log::{debug, warn};
@@ -59,7 +60,7 @@ pub struct OffchainWorkers<Client, Storage, Block: traits::Block> {
 	client: Arc<Client>,
 	db: Storage,
 	_block: PhantomData<Block>,
-	thread_pool: ThreadPool,
+	thread_pool: Mutex<ThreadPool>,
 }
 
 impl<Client, Storage, Block: traits::Block> OffchainWorkers<Client, Storage, Block> {
@@ -69,7 +70,7 @@ impl<Client, Storage, Block: traits::Block> OffchainWorkers<Client, Storage, Blo
 			client,
 			db,
 			_block: PhantomData,
-			thread_pool: ThreadPool::new(num_cpus::get()),
+			thread_pool: Mutex::new(ThreadPool::new(num_cpus::get())),
 		}
 	}
 }
@@ -147,7 +148,7 @@ impl<Client, Storage, Block> OffchainWorkers<
 	/// Note that we should avoid that if we switch to future-based runtime in the future,
 	/// alternatively:
 	fn spawn_worker(&self, f: impl FnOnce() -> () + Send + 'static) {
-		self.thread_pool.execute(f);
+		self.thread_pool.lock().unwrap().execute(f);
 	}
 }
 
