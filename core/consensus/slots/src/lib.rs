@@ -116,7 +116,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	fn on_slot(&mut self, chain_head: B::Header, slot_info: SlotInfo)
 		-> Pin<Box<dyn Future<Output = Result<(), consensus_common::Error>> + Send>> where
 		Self: Send + Sync,
-		<Self::Proposer as Proposer<B>>::Create: Unpin + Send + 'static,
+		<Self::Proposer as Proposer<B>>::Proposal: Unpin + Send + 'static,
 	{
 		let (timestamp, slot_number, slot_duration) =
 			(slot_info.timestamp, slot_info.number, slot_info.duration);
@@ -189,6 +189,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 					logs,
 				},
 				remaining_duration,
+				false,
 			).map_err(|e| consensus_common::Error::ClientImport(format!("{:?}", e)).into()),
 			Delay::new(remaining_duration)
 				.map_err(|err| consensus_common::Error::FaultyTimer(err).into())
@@ -203,7 +204,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		let block_import = self.block_import();
 		let logging_target = self.logging_target();
 
-		Box::pin(proposal_work.map_ok(move |(block, claim)| {
+		Box::pin(proposal_work.map_ok(move |((block, _), claim)| {
 			// minor hack since we don't have access to the timestamp
 			// that is actually set by the proposer.
 			let slot_after_building = SignedDuration::default().slot_now(slot_duration);

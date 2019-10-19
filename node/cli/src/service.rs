@@ -485,7 +485,8 @@ mod tests {
 					inherent_data,
 					digest,
 					std::time::Duration::from_secs(1),
-				)).expect("Error making test block");
+					false,
+				)).expect("Error making test block").0;
 
 				let (new_header, new_body) = new_block.deconstruct();
 				let pre_hash = new_header.hash();

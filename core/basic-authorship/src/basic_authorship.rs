@@ -47,15 +47,15 @@ pub struct ProposerFactory<C, A> where A: txpool::ChainApi {
 }
 
 impl<B, E, Block, RA, A> consensus_common::Environment<Block> for
-ProposerFactory<SubstrateClient<B, E, Block, RA>, A>
-where
-	A: txpool::ChainApi<Block=Block>,
-	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
-	Block: BlockT<Hash=H256>,
-	RA: Send + Sync + 'static,
-	SubstrateClient<B, E, Block, RA>: ProvideRuntimeApi,
-	<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api: BlockBuilderApi<Block>,
+	ProposerFactory<SubstrateClient<B, E, Block, RA>, A>
+	where
+		A: txpool::ChainApi<Block=Block> + 'static,
+		B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
+		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
+		Block: BlockT<Hash=H256>,
+		RA: Send + Sync + 'static,
+		SubstrateClient<B, E, Block, RA>: ProvideRuntimeApi,
+		<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api: BlockBuilderApi<Block>,
 {
 	type Proposer = Proposer<Block, SubstrateClient<B, E, Block, RA>, A>;
 	type Error = error::Error;
@@ -94,17 +94,17 @@ pub struct Proposer<Block: BlockT, C, A: txpool::ChainApi> {
 }
 
 impl<B, E, Block, RA, A> consensus_common::Proposer<Block> for
-Proposer<Block, SubstrateClient<B, E, Block, RA>, A>
-where
-	A: txpool::ChainApi<Block=Block>,
-	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
-	Block: BlockT<Hash=H256>,
-	RA: Send + Sync + 'static,
-	SubstrateClient<B, E, Block, RA>: ProvideRuntimeApi,
-	<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api: BlockBuilderApi<Block>,
+	Proposer<Block, SubstrateClient<B, E, Block, RA>, A>
+	where
+		A: txpool::ChainApi<Block=Block>,
+		B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
+		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
+		Block: BlockT<Hash=H256>,
+		RA: Send + Sync + 'static,
+		SubstrateClient<B, E, Block, RA>: ProvideRuntimeApi,
+		<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api: BlockBuilderApi<Block>,
 {
-	type Create = futures::future::Ready<Result<Block, error::Error>>;
+	type Proposal = futures::future::Ready<Result<(Block, Option<Vec<Vec<u8>>>), error::Error>>;
 	type Error = error::Error;
 
 	fn propose(
@@ -112,10 +112,12 @@ where
 		inherent_data: InherentData,
 		inherent_digests: DigestFor<Block>,
 		max_duration: time::Duration,
-	) -> Self::Create {
+		record_proof: bool,
+	) -> Self::Proposal {
 		// leave some time for evaluation and block finalization (33%)
 		let deadline = (self.now)() + max_duration - max_duration / 3;
-		futures::future::ready(self.propose_with(inherent_data, inherent_digests, deadline))
+		let proposal = self.propose_with(inherent_data, inherent_digests, deadline, record_proof);
+		futures::future::ready(proposal)
 	}
 }
 
@@ -133,13 +135,18 @@ impl<Block, B, E, RA, A> Proposer<Block, SubstrateClient<B, E, Block, RA>, A>	wh
 		inherent_data: InherentData,
 		inherent_digests: DigestFor<Block>,
 		deadline: time::Instant,
-	) -> Result<Block, error::Error> {
+		record_proof: bool,
+	) -> Result<(Block, Option<Vec<Vec<u8>>>), error::Error> {
 		/// If the block is full we will attempt to push at most
 		/// this number of transactions before quitting for real.
 		/// It allows us to increase block utilization.
 		const MAX_SKIPPED_TRANSACTIONS: usize = 8;
 
-		let mut block_builder = self.client.new_block_at(&self.parent_id, inherent_digests)?;
+		let mut block_builder = self.client.new_block_at(
+			&self.parent_id,
+			inherent_digests,
+			record_proof,
+		)?;
 
 		// We don't check the API versions any further here since the dispatch compatibility
 		// check should be enough.
@@ -197,7 +204,7 @@ impl<Block, B, E, RA, A> Proposer<Block, SubstrateClient<B, E, Block, RA>, A>	wh
 
 		self.transaction_pool.remove_invalid(&unqueue_invalid);
 
-		let block = block_builder.bake()?;
+		let (block, proof) = block_builder.bake_and_extract_proof()?;
 
 		info!("Prepared block for proposing at {} [hash: {:?}; parent_hash: {}; extrinsics: [{}]]",
 			block.header().number(),
@@ -222,7 +229,7 @@ impl<Block, B, E, RA, A> Proposer<Block, SubstrateClient<B, E, Block, RA>, A>	wh
 			error!("Failed to evaluate authored block: {:?}", err);
 		}
 
-		Ok(block)
+		Ok((block, proof))
 	}
 }
 
@@ -270,8 +277,9 @@ mod tests {
 			cell.replace(new)
 		});
 		let deadline = time::Duration::from_secs(3);
-		let block = futures::executor::block_on(proposer.propose(Default::default(), Default::default(), deadline))
-			.unwrap();
+		let block = futures::executor::block_on(
+			proposer.propose(Default::default(), Default::default(), deadline, false)
+		).map(|r| r.0).unwrap();
 
 		// then
 		// block should have some extrinsics although we have some more in the pool.

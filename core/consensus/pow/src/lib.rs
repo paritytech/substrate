@@ -474,7 +474,8 @@ fn mine_loop<B: BlockT<Hash=H256>, C, Algorithm, E, SO, S>(
 			inherent_data,
 			inherent_digest,
 			build_time.clone(),
-		)).map_err(|e| Error::BlockProposingError(format!("{:?}", e)))?;
+			false,
+		)).map(|r| r.0).map_err(|e| Error::BlockProposingError(format!("{:?}", e)))?;
 
 		let (header, body) = block.deconstruct();
 		let (difficulty, seal) = {

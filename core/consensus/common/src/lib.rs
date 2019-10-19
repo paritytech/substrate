@@ -71,14 +71,13 @@ pub enum BlockStatus {
 /// Environment producer for a Consensus instance. Creates proposer instance and communication streams.
 pub trait Environment<B: BlockT> {
 	/// The proposer type this creates.
-	type Proposer: Proposer<B>;
+	type Proposer: Proposer<B> + 'static;
 	/// Error which can occur upon creation.
-	type Error: From<Error>;
+	type Error: From<Error> + std::fmt::Debug + 'static;
 
 	/// Initialize the proposal logic on top of a specific header. Provide
 	/// the authorities at that header.
-	fn init(&mut self, parent_header: &B::Header)
-		-> Result<Self::Proposer, Self::Error>;
+	fn init(&mut self, parent_header: &B::Header) -> Result<Self::Proposer, Self::Error>;
 }
 
 /// Logic for a proposer.
@@ -89,16 +88,26 @@ pub trait Environment<B: BlockT> {
 /// Proposers are generic over bits of "consensus data" which are engine-specific.
 pub trait Proposer<B: BlockT> {
 	/// Error type which can occur when proposing or evaluating.
-	type Error: From<Error> + ::std::fmt::Debug + 'static;
-	/// Future that resolves to a committed proposal.
-	type Create: Future<Output = Result<B, Self::Error>>;
+	type Error: From<Error> + std::fmt::Debug + 'static;
+	/// Future that resolves to a committed proposal with an optional proof.
+	type Proposal: Future<Output = Result<(B, Option<Vec<Vec<u8>>>), Self::Error>> + Send + Unpin + 'static;
+
 	/// Create a proposal.
+	///
+	/// Gets the `inherent_data` and `inherent_digests` as input for the proposal. Additionally
+	/// a maximum duration for building this proposal is given. If building the proposal takes
+	/// longer than this maximum, the proposal will be very likely discarded.
+	///
+	/// When proof recording is enabled, all accessed trie nodes should be saved. These recorded
+	/// trie nodes can be used by a third party to proof this proposal without having access to the
+	/// full storage.
 	fn propose(
 		&mut self,
 		inherent_data: InherentData,
 		inherent_digests: DigestFor<B>,
 		max_duration: Duration,
-	) -> Self::Create;
+		record_proof: bool,
+	) -> Self::Proposal;
 }
 
 /// An oracle for when major synchronization work is being undertaken.

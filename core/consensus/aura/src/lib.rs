@@ -147,7 +147,6 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, H>(
 	SC: SelectChain<B>,
 	E: Environment<B, Error=Error> + Send + Sync + 'static,
 	E::Proposer: Proposer<B, Error=Error>,
-	<E::Proposer as Proposer<B>>::Create: Unpin + Send,
 	P: Pair + Send + Sync,
 	P::Public: Hash + Member + Encode + Decode,
 	P::Signature: Hash + Member + Encode + Decode,
@@ -195,7 +194,6 @@ impl<H, B, C, E, I, P, Error, SO> slots::SimpleSlotWorker<B> for AuraWorker<C, E
 	C::Api: AuraApi<B, AuthorityId<P>>,
 	E: Environment<B, Error=Error>,
 	E::Proposer: Proposer<B, Error=Error>,
-	<E::Proposer as Proposer<B>>::Create: Unpin + Send,
 	H: Header<Hash=B::Hash>,
 	I: BlockImport<B> + Send + Sync + 'static,
 	P: Pair + Send + Sync,
@@ -292,7 +290,6 @@ impl<H, B: BlockT, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, 
 	C::Api: AuraApi<B, AuthorityId<P>>,
 	E: Environment<B, Error=Error> + Send + Sync,
 	E::Proposer: Proposer<B, Error=Error>,
-	<E::Proposer as Proposer<B>>::Create: Unpin + Send + 'static,
 	H: Header<Hash=B::Hash>,
 	I: BlockImport<B> + Send + Sync + 'static,
 	P: Pair + Send + Sync,
@@ -729,16 +726,17 @@ mod tests {
 
 	impl Proposer<TestBlock> for DummyProposer {
 		type Error = Error;
-		type Create = future::Ready<Result<TestBlock, Error>>;
+		type Proposal = future::Ready<Result<(TestBlock, Option<Vec<Vec<u8>>>), Error>>;
 
 		fn propose(
 			&mut self,
 			_: InherentData,
 			digests: DigestFor<TestBlock>,
 			_: Duration,
-		) -> Self::Create {
+			_: bool,
+		) -> Self::Proposal {
 			let r = self.1.new_block(digests).unwrap().bake().map_err(|e| e.into());
-			future::ready(r)
+			future::ready(r.map(|b| (b, None)))
 		}
 	}
 

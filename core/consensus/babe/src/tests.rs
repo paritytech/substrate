@@ -96,12 +96,13 @@ impl Environment<TestBlock> for DummyFactory {
 
 impl DummyProposer {
 	fn propose_with(&mut self, pre_digests: DigestFor<TestBlock>)
-		-> future::Ready<Result<TestBlock, Error>>
+		-> future::Ready<Result<(TestBlock, Option<Vec<Vec<u8>>>), Error>>
 	{
 		use codec::Encode;
 		let block_builder = self.factory.client.new_block_at(
 			&BlockId::Hash(self.parent_hash),
 			pre_digests,
+			false,
 		).unwrap();
 
 		let mut block = match block_builder.bake().map_err(|e| e.into()) {
@@ -144,20 +145,21 @@ impl DummyProposer {
 		// mutate the block header according to the mutator.
 		(self.factory.mutator)(&mut block.header, Stage::PreSeal);
 
-		future::ready(Ok(block))
+		future::ready(Ok((block, None)))
 	}
 }
 
 impl Proposer<TestBlock> for DummyProposer {
 	type Error = Error;
-	type Create = future::Ready<Result<TestBlock, Error>>;
+	type Proposal = future::Ready<Result<(TestBlock, Option<Vec<Vec<u8>>>), Error>>;
 
 	fn propose(
 		&mut self,
 		_: InherentData,
 		pre_digests: DigestFor<TestBlock>,
 		_: Duration,
-	) -> Self::Create {
+		_: bool,
+	) -> Self::Proposal {
 		self.propose_with(pre_digests)
 	}
 }
@@ -550,7 +552,7 @@ fn propose_and_import_block(
 		],
 	};
 
-	let mut block = futures::executor::block_on(proposer.propose_with(pre_digest)).unwrap();
+	let mut block = futures::executor::block_on(proposer.propose_with(pre_digest)).unwrap().0;
 
 	let seal = {
 		// sign the pre-sealed hash of the block and then

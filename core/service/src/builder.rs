@@ -1104,7 +1104,11 @@ mod tests {
 		assert_eq!(pool.status().future, 0);
 
 		// import second block
-		let builder = client.new_block_at(&BlockId::hash(best.hash()), Default::default()).unwrap();
+		let builder = client.new_block_at(
+			&BlockId::hash(best.hash()),
+			Default::default(),
+			false,
+		).unwrap();
 		let block = builder.bake().unwrap();
 		let id = BlockId::hash(block.header().hash());
 		client.import(BlockOrigin::Own, block).unwrap();
