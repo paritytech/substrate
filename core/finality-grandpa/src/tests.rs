@@ -385,6 +385,7 @@ fn run_to_completion_with<F>(
 			inherent_data_providers: InherentDataProviders::new(),
 			on_exit: Exit,
 			telemetry_on_connect: None,
+			voting_rule: (),
 		};
 		let voter = run_grandpa_voter(grandpa_params).expect("all in order with client and network");
 
@@ -516,6 +517,7 @@ fn finalize_3_voters_1_full_observer() {
 			inherent_data_providers: InherentDataProviders::new(),
 			on_exit: Exit,
 			telemetry_on_connect: None,
+			voting_rule: (),
 		};
 		let voter = run_grandpa_voter(grandpa_params).expect("all in order with client and network");
 
@@ -676,6 +678,7 @@ fn transition_3_voters_twice_1_full_observer() {
 			inherent_data_providers: InherentDataProviders::new(),
 			on_exit: Exit,
 			telemetry_on_connect: None,
+			voting_rule: (),
 		};
 		let voter = run_grandpa_voter(grandpa_params).expect("all in order with client and network");
 
@@ -859,30 +862,6 @@ fn finalizes_multiple_pending_changes_in_order() {
 
 	let net = Arc::new(Mutex::new(net));
 	run_to_completion(&mut runtime, 30, net.clone(), all_peers);
-}
-
-#[test]
-fn doesnt_vote_on_the_tip_of_the_chain() {
-	let mut runtime = current_thread::Runtime::new().unwrap();
-	let peers_a = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
-	let voters = make_ids(peers_a);
-	let api = TestApi::new(voters);
-	let mut net = GrandpaTestNet::new(api, 3);
-
-	// add 100 blocks
-	net.peer(0).push_blocks(100, false);
-	net.block_until_sync(&mut runtime);
-
-	for i in 0..3 {
-		assert_eq!(net.peer(i).client().info().chain.best_number, 100,
-			"Peer #{} failed to sync", i);
-	}
-
-	let net = Arc::new(Mutex::new(net));
-	let highest = run_to_completion(&mut runtime, 75, net.clone(), peers_a);
-
-	// the highest block to be finalized will be 3/4 deep in the unfinalized chain
-	assert_eq!(highest, 75);
 }
 
 #[test]
@@ -1122,6 +1101,7 @@ fn voter_persists_its_votes() {
 							inherent_data_providers: InherentDataProviders::new(),
 							on_exit: Exit,
 							telemetry_on_connect: None,
+							voting_rule: VotingRulesBuilder::default().build(),
 						};
 
 						let voter = run_grandpa_voter(grandpa_params)
@@ -1452,6 +1432,7 @@ fn voter_catches_up_to_latest_round_when_behind() {
 			inherent_data_providers: InherentDataProviders::new(),
 			on_exit: Exit,
 			telemetry_on_connect: None,
+			voting_rule: (),
 		};
 
 		Box::new(run_grandpa_voter(grandpa_params).expect("all in order with client and network"))
@@ -1532,4 +1513,117 @@ fn voter_catches_up_to_latest_round_when_behind() {
 
 	let drive_to_completion = futures::future::poll_fn(|| { net.lock().poll(); Ok(Async::NotReady) });
 	let _ = runtime.block_on(test.select(drive_to_completion).map_err(|_| ())).unwrap();
+}
+
+#[test]
+fn grandpa_environment_respects_voting_rules() {
+	use grandpa::Chain;
+	use network::test::TestClient;
+
+	let peers = &[Ed25519Keyring::Alice];
+	let voters = make_ids(peers);
+
+	let mut net = GrandpaTestNet::new(TestApi::new(voters), 1);
+	let peer = net.peer(0);
+	let network_service = peer.network_service().clone();
+	let link = peer.data.lock().take().unwrap();
+
+	// create a voter environment with a given voting rule
+	let environment = |voting_rule: Box<dyn VotingRule<Block, TestClient>>| {
+		let PersistentData {
+			ref authority_set,
+			ref consensus_changes,
+			ref set_state,
+			..
+		} = link.persistent_data;
+
+		let config = Config {
+			gossip_duration: TEST_GOSSIP_DURATION,
+			justification_period: 32,
+			keystore: None,
+			name: None,
+		};
+
+		let (network, _) = NetworkBridge::new(
+			network_service.clone(),
+			config.clone(),
+			set_state.clone(),
+			Exit,
+			true,
+		);
+
+		Environment {
+			authority_set: authority_set.clone(),
+			config: config.clone(),
+			consensus_changes: consensus_changes.clone(),
+			inner: link.client.clone(),
+			select_chain: link.select_chain.clone(),
+			set_id: authority_set.set_id(),
+			voter_set_state: set_state.clone(),
+			voters: Arc::new(authority_set.current_authorities()),
+			network,
+			voting_rule,
+		}
+	};
+
+	// add 20 blocks
+	peer.push_blocks(20, false);
+
+	// create an environment with no voting rule restrictions
+	let unrestricted_env = environment(Box::new(()));
+
+	// another with 3/4 unfinalized chain voting rule restriction
+	let three_quarters_env = environment(Box::new(
+		voting_rule::ThreeQuartersOfTheUnfinalizedChain
+	));
+
+	// and another restricted with the default voting rules: i.e. 3/4 rule and
+	// always below best block
+	let default_env = environment(Box::new(
+		VotingRulesBuilder::default().build()
+	));
+
+	// the unrestricted environment should just return the best block
+	assert_eq!(
+		unrestricted_env.best_chain_containing(
+			peer.client().info().chain.finalized_hash
+		).unwrap().1,
+		20,
+	);
+
+	// both the other environments should return block 15, which is 3/4 of the
+	// way in the unfinalized chain
+	assert_eq!(
+		three_quarters_env.best_chain_containing(
+			peer.client().info().chain.finalized_hash
+		).unwrap().1,
+		15,
+	);
+
+	assert_eq!(
+		default_env.best_chain_containing(
+			peer.client().info().chain.finalized_hash
+		).unwrap().1,
+		15,
+	);
+
+	// we finalize block 19 with block 20 being the best block
+	peer.client().finalize_block(BlockId::Number(19), None, false).unwrap();
+
+	// the 3/4 environment should propose block 20 for voting
+	assert_eq!(
+		three_quarters_env.best_chain_containing(
+			peer.client().info().chain.finalized_hash
+		).unwrap().1,
+		20,
+	);
+
+	// while the default environment will always still make sure we don't vote
+	// on the best block
+	assert_eq!(
+		default_env.best_chain_containing(
+			peer.client().info().chain.finalized_hash
+		).unwrap().1,
+		19,
+	);
 }

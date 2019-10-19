@@ -75,7 +75,6 @@
 //! WASM builder requires the following prerequisities for building the WASM binary:
 //!
 //! - rust nightly + `wasm32-unknown-unknown` toolchain
-//! - wasm-gc
 //!
 
 use std::{env, fs, path::PathBuf, process::{Command, Stdio, self}};
