@@ -49,16 +49,17 @@ impl Convert<u128, Balance> for CurrencyToVoteHandler {
 	fn convert(x: u128) -> Balance { x * Self::factor() }
 }
 
-// M is the coefficient in units of currency / weight
-pub struct LinearWeight<Multiplier>(Multiplier);
+/// Convert from weight to balance via a simple coefficient multiplication
+/// The associated type M encapsulates a constant in units of balance per weight
+pub struct LinearWeight<M>(M);
 
-impl<Multiplier> Convert<Weight, Balance> for LinearWeight<Multiplier>
- 	where Multiplier: Get<u128> {
+impl<M> Convert<Weight, Balance> for LinearWeight<M>
+ 	where M: Get<Balance> {
 
 	fn convert(w: Weight) -> Balance {
 		// substrate-node a weight of 10_000 (smallest non-zero weight) to be mapped to 10^7 units of
 		// fees, hence:
-		let multiplier = Multiplier::get();
+		let multiplier = M::get();
 		Balance::from(w).saturating_mul(multiplier)
 	}
 }
