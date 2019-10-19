@@ -22,7 +22,7 @@ use sr_primitives::traits::{Convert, Saturating};
 use sr_primitives::{Fixed64, Perbill};
 use support::traits::{OnUnbalanced, Currency, Get};
 use crate::{
-	Balances, System, Authorship, MaximumBlockWeight, NegativeImbalance, WeightToFee,
+	Balances, System, Authorship, MaximumBlockWeight, NegativeImbalance,
 	TargetedFeeAdjustment,
 };
 
@@ -49,10 +49,17 @@ impl Convert<u128, Balance> for CurrencyToVoteHandler {
 	fn convert(x: u128) -> Balance { x * Self::factor() }
 }
 
-/// Simply multiply by a coefficient denoted by the `Get` implementation.
-impl Convert<Weight, Balance> for WeightToFee {
-	fn convert(x: Weight) -> Balance {
-		Balance::from(x).saturating_mul(Self::get())
+// M is the coefficient in units of currency / weight
+pub struct LinearWeight<Multiplier>(Multiplier);
+
+impl<Multiplier> Convert<Weight, Balance> for LinearWeight<Multiplier>
+ 	where Multiplier: Get<u128> {
+
+	fn convert(w: Weight) -> Balance {
+		// substrate-node a weight of 10_000 (smallest non-zero weight) to be mapped to 10^7 units of
+		// fees, hence:
+		let multiplier = Multiplier::get();
+		Balance::from(w).saturating_mul(multiplier)
 	}
 }
 
