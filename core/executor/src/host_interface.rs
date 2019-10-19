@@ -761,6 +761,7 @@ impl_wasm_host_interface! {
 		}
 
 		ext_secp256k1_ecdsa_recover(
+			compressed: u32,
 			msg_data: Pointer<u8>,
 			sig_data: Pointer<u8>,
 			pubkey_data: Pointer<u8>,
@@ -788,9 +789,11 @@ impl_wasm_host_interface! {
 				_ => return Ok(3),
 			};
 
-			context.write_memory(pubkey_data, &pubkey.serialize()[1..65])
-				.map_err(|_| "Invalid attempt to set pubkey in ext_secp256k1_ecdsa_recover")?;
-
+			match compressed {
+				0 => context.write_memory(pubkey_data, &pubkey.serialize()[1..65]),
+				1 => context.write_memory(pubkey_data, &pubkey.serialize_compressed()[..]),
+				_ => return Ok(4),
+			}.map_err(|_| "Invalid attempt to set pubkey in ext_secp256k1_ecdsa_recover")?;
 			Ok(0)
 		}
 

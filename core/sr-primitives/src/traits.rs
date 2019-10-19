@@ -37,6 +37,7 @@ pub use arithmetic::traits::{
 };
 use app_crypto::AppKey;
 use impl_trait_for_tuples::impl_for_tuples;
+use primitives::crypto::UncheckedInto;
 
 /// A lazy value.
 pub trait Lazy<T: ?Sized> {
@@ -69,6 +70,16 @@ impl Verify for primitives::sr25519::Signature {
 	type Signer = primitives::sr25519::Public;
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &Self::Signer) -> bool {
 		runtime_io::sr25519_verify(self, msg.get(), signer)
+	}
+}
+
+impl Verify for primitives::ecdsa::Signature {
+	type Signer = primitives::ecdsa::Public;
+	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &Self::Signer) -> bool {
+		match runtime_io::secp256k1_ecdsa_recover_compressed(self.as_ref(), &runtime_io::blake2_256(msg.get())) {
+			Ok(pubkey) => signer == &runtime_io::blake2_256(pubkey.as_ref()).unchecked_into(),
+			_ => false,
+		}
 	}
 }
 

@@ -42,7 +42,7 @@ pub use runtime_io::{StorageOverlay, ChildrenStorageOverlay};
 
 use rstd::prelude::*;
 use rstd::convert::TryFrom;
-use primitives::{crypto, ed25519, sr25519, hash::{H256, H512}};
+use primitives::{crypto, ed25519, sr25519, ecdsa, hash::{H256, H512}};
 use codec::{Encode, Decode};
 
 #[cfg(feature = "std")]
@@ -173,6 +173,8 @@ pub enum MultiSignature {
 	Ed25519(ed25519::Signature),
 	/// An Sr25519 signature.
 	Sr25519(sr25519::Signature),
+	/// An ECDSA/SECP256k1 signature.
+	Ecdsa(ecdsa::Signature),
 }
 
 impl From<ed25519::Signature> for MultiSignature {
@@ -184,6 +186,12 @@ impl From<ed25519::Signature> for MultiSignature {
 impl From<sr25519::Signature> for MultiSignature {
 	fn from(x: sr25519::Signature) -> Self {
 		MultiSignature::Sr25519(x)
+	}
+}
+
+impl From<ecdsa::Signature> for MultiSignature {
+	fn from(x: ecdsa::Signature) -> Self {
+		MultiSignature::Ecdsa(x)
 	}
 }
 
@@ -201,6 +209,8 @@ pub enum MultiSigner {
 	Ed25519(ed25519::Public),
 	/// An Sr25519 identity.
 	Sr25519(sr25519::Public),
+	/// An SECP256k1/ECDSA identity (actually, the Blake2 hash of the pub key).
+	Ecdsa(ecdsa::Public),
 }
 
 impl Default for MultiSigner {
@@ -222,6 +232,7 @@ impl AsRef<[u8]> for MultiSigner {
 		match *self {
 			MultiSigner::Ed25519(ref who) => who.as_ref(),
 			MultiSigner::Sr25519(ref who) => who.as_ref(),
+			MultiSigner::Ecdsa(ref who) => who.as_ref(),
 		}
 	}
 }
@@ -238,12 +249,19 @@ impl From<sr25519::Public> for MultiSigner {
 	}
 }
 
- #[cfg(feature = "std")]
+impl From<ecdsa::Public> for MultiSigner {
+	fn from(x: ecdsa::Public) -> Self {
+		MultiSigner::Ecdsa(x)
+	}
+}
+
+#[cfg(feature = "std")]
 impl std::fmt::Display for MultiSigner {
 	fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
 		match *self {
 			MultiSigner::Ed25519(ref who) => write!(fmt, "ed25519: {}", who),
 			MultiSigner::Sr25519(ref who) => write!(fmt, "sr25519: {}", who),
+			MultiSigner::Ecdsa(ref who) => write!(fmt, "ecdsa: {}", who),
 		}
 	}
 }
@@ -254,6 +272,7 @@ impl Verify for MultiSignature {
 		match (self, signer) {
 			(MultiSignature::Ed25519(ref sig), &MultiSigner::Ed25519(ref who)) => sig.verify(msg, who),
 			(MultiSignature::Sr25519(ref sig), &MultiSigner::Sr25519(ref who)) => sig.verify(msg, who),
+			(MultiSignature::Ecdsa(ref sig), &MultiSigner::Ecdsa(ref who)) => sig.verify(msg, who),
 			_ => false,
 		}
 	}
