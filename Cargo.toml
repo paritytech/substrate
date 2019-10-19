@@ -53,6 +53,8 @@ members = [
 	"core/service/test",
 	"core/session",
 	"core/sr-api-macros",
+	"core/sr-arithmetic",
+	"core/sr-arithmetic/fuzzer",
 	"core/sr-io",
 	"core/sr-primitives",
 	"core/sr-staking-primitives",
