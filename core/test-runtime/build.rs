@@ -21,7 +21,7 @@ fn main() {
 		"wasm_binary.rs",
 		WasmBuilderSource::CratesOrPath {
 			path: "../utils/wasm-builder",
-			version: "1.0.7",
+			version: "1.0.8",
 		},
 		// Note that we set the stack-size to 1MB explicitly even though it is set
 		// to this value by default. This is because some of our tests (`restoration_of_globals`)
