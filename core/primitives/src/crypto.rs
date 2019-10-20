@@ -255,7 +255,7 @@ pub enum PublicError {
 
 /// Key that can be encoded to/from SS58.
 #[cfg(feature = "std")]
-pub trait Ss58Codec: Sized {
+pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 	/// Some if the string is a properly encoded SS58Check address.
 	fn from_ss58check(s: &str) -> Result<Self, PublicError> {
 		Self::from_ss58check_with_version(s)
@@ -269,7 +269,23 @@ pub trait Ss58Codec: Sized {
 			})
 	}
 	/// Some if the string is a properly encoded SS58Check address.
-	fn from_ss58check_with_version(s: &str) -> Result<(Self, Ss58AddressFormat), PublicError>;
+	fn from_ss58check_with_version(s: &str) -> Result<(Self, Ss58AddressFormat), PublicError> {
+		let mut res = Self::default();
+		let len = res.as_mut().len();
+		let d = s.from_base58().map_err(|_| PublicError::BadBase58)?; // failure here would be invalid encoding.
+		if d.len() != len + 3 {
+			// Invalid length.
+			return Err(PublicError::BadLength);
+		}
+		let ver = d[0].try_into().map_err(|_: ()| PublicError::UnknownVersion)?;
+
+		if d[len + 1..len + 3] != ss58hash(&d[0..len + 1]).as_bytes()[0..2] {
+			// Invalid checksum.
+			return Err(PublicError::InvalidChecksum);
+		}
+		res.as_mut().copy_from_slice(&d[1..len + 1]);
+		Ok((res, ver))
+	}
 	/// Some if the string is a properly encoded SS58Check address, optionally with
 	/// a derivation path following.
 	fn from_string(s: &str) -> Result<Self, PublicError> {
@@ -285,7 +301,13 @@ pub trait Ss58Codec: Sized {
 	}
 
 	/// Return the ss58-check string for this key.
-	fn to_ss58check_with_version(&self, version: Ss58AddressFormat) -> String;
+	fn to_ss58check_with_version(&self, version: Ss58AddressFormat) -> String {
+		let mut v = vec![version.into()];
+		v.extend(self.as_ref());
+		let r = ss58hash(&v);
+		v.extend(&r.as_bytes()[0..2]);
+		v.to_base58()
+	}
 	/// Return the ss58-check string for this key.
 	fn to_ss58check(&self) -> String { self.to_ss58check_with_version(*DEFAULT_VERSION.lock()) }
 	/// Some if the string is a properly encoded SS58Check address, optionally with
@@ -408,33 +430,7 @@ pub fn set_default_ss58_version(version: Ss58AddressFormat) {
 }
 
 #[cfg(feature = "std")]
-impl<T: AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
-	fn from_ss58check_with_version(s: &str) -> Result<(Self, Ss58AddressFormat), PublicError> {
-		let mut res = T::default();
-		let len = res.as_mut().len();
-		let d = s.from_base58().map_err(|_| PublicError::BadBase58)?; // failure here would be invalid encoding.
-		if d.len() != len + 3 {
-			// Invalid length.
-			return Err(PublicError::BadLength);
-		}
-		let ver = d[0].try_into().map_err(|_: ()| PublicError::UnknownVersion)?;
-
-		if d[len+1..len+3] != ss58hash(&d[0..len+1]).as_bytes()[0..2] {
-			// Invalid checksum.
-			return Err(PublicError::InvalidChecksum);
-		}
-		res.as_mut().copy_from_slice(&d[1..len+1]);
-		Ok((res, ver))
-	}
-
-	fn to_ss58check_with_version(&self, version: Ss58AddressFormat) -> String {
-		let mut v = vec![version.into()];
-		v.extend(self.as_ref());
-		let r = ss58hash(&v);
-		v.extend(&r.as_bytes()[0..2]);
-		v.to_base58()
-	}
-
+impl<T: Sized + AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
 	fn from_string(s: &str) -> Result<Self, PublicError> {
 		let re = Regex::new(r"^(?P<ss58>[\w\d]+)?(?P<path>(//?[^/]+)*)$")
 			.expect("constructed from known-good static value; qed");
@@ -493,6 +489,79 @@ pub trait Public: AsRef<[u8]> + AsMut<[u8]> + Default + Derive + CryptoType + Pa
 
 	/// Return a slice filled with raw data.
 	fn as_slice(&self) -> &[u8] { self.as_ref() }
+}
+
+/// An opaque 32-byte cryptographic identifier.
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Default, Encode, Decode)]
+pub struct AccountId32([u8; 32]);
+
+#[cfg(feature = "std")]
+impl Ss58Codec for AccountId32 {}
+
+impl AsRef<[u8]> for AccountId32 {
+	fn as_ref(&self) -> &[u8] {
+		&self.0[..]
+	}
+}
+
+impl AsMut<[u8]> for AccountId32 {
+	fn as_mut(&mut self) -> &mut [u8] {
+		&mut self.0[..]
+	}
+}
+
+impl AsRef<[u8; 32]> for AccountId32 {
+	fn as_ref(&self) -> &[u8; 32] {
+		&self.0
+	}
+}
+
+impl AsMut<[u8; 32]> for AccountId32 {
+	fn as_mut(&mut self) -> &mut [u8; 32] {
+		&mut self.0
+	}
+}
+
+impl From<[u8; 32]> for AccountId32 {
+	fn from(x: [u8; 32]) -> AccountId32 {
+		AccountId32(x)
+	}
+}
+
+impl From<AccountId32> for [u8; 32] {
+	fn from(x: AccountId32) -> [u8; 32] {
+		x.0
+	}
+}
+
+#[cfg(feature = "std")]
+impl std::fmt::Display for AccountId32 {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+		write!(f, "{}", self.to_ss58check())
+	}
+}
+
+#[cfg(feature = "std")]
+impl std::fmt::Debug for AccountId32 {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+		let s = self.to_ss58check();
+		write!(f, "{} ({}...)", crate::hexdisplay::HexDisplay::from(&self.0), &s[0..8])
+	}
+}
+
+#[cfg(feature = "std")]
+impl serde::Serialize for AccountId32 {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: serde::Serializer {
+		serializer.serialize_str(&self.to_ss58check())
+	}
+}
+
+#[cfg(feature = "std")]
+impl<'de> serde::Deserialize<'de> for AccountId32 {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: serde::Deserializer<'de> {
+		Ss58Codec::from_ss58check(&String::deserialize(deserializer)?)
+			.map_err(|e| serde::de::Error::custom(format!("{:?}", e)))
+	}
 }
 
 #[cfg(feature = "std")]

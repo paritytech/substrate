@@ -37,7 +37,6 @@ pub use arithmetic::traits::{
 };
 use app_crypto::AppKey;
 use impl_trait_for_tuples::impl_for_tuples;
-use primitives::crypto::UncheckedInto;
 
 /// A lazy value.
 pub trait Lazy<T: ?Sized> {
@@ -51,33 +50,57 @@ impl<'a> Lazy<[u8]> for &'a [u8] {
 	fn get(&mut self) -> &[u8] { &**self }
 }
 
+/// Some type that is able to be collapsed into an account ID. It is not possible to recreate the original value from
+/// the account ID.
+pub trait IdentifyAccount {
+	/// The account ID that this can be transformed into.
+	type AccountId;
+	/// Transform into an account.
+	fn into_account(self) -> Self::AccountId;
+}
+
+impl IdentifyAccount for primitives::ed25519::Public {
+	type AccountId = Self;
+	fn into_account(self) -> Self { self }
+}
+
+impl IdentifyAccount for primitives::sr25519::Public {
+	type AccountId = Self;
+	fn into_account(self) -> Self { self }
+}
+
+impl IdentifyAccount for primitives::ecdsa::Public {
+	type AccountId = Self;
+	fn into_account(self) -> Self { self }
+}
+
 /// Means of signature verification.
 pub trait Verify {
 	/// Type of the signer.
-	type Signer;
+	type Signer: IdentifyAccount;
 	/// Verify a signature. Return `true` if signature is valid for the value.
-	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &Self::Signer) -> bool;
+	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &<Self::Signer as IdentifyAccount>::AccountId) -> bool;
 }
 
 impl Verify for primitives::ed25519::Signature {
 	type Signer = primitives::ed25519::Public;
-	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &Self::Signer) -> bool {
+	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &primitives::ed25519::Public) -> bool {
 		runtime_io::ed25519_verify(self, msg.get(), signer)
 	}
 }
 
 impl Verify for primitives::sr25519::Signature {
 	type Signer = primitives::sr25519::Public;
-	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &Self::Signer) -> bool {
+	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &primitives::sr25519::Public) -> bool {
 		runtime_io::sr25519_verify(self, msg.get(), signer)
 	}
 }
 
 impl Verify for primitives::ecdsa::Signature {
 	type Signer = primitives::ecdsa::Public;
-	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &Self::Signer) -> bool {
+	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &primitives::ecdsa::Public) -> bool {
 		match runtime_io::secp256k1_ecdsa_recover_compressed(self.as_ref(), &runtime_io::blake2_256(msg.get())) {
-			Ok(pubkey) => signer == &runtime_io::blake2_256(pubkey.as_ref()).unchecked_into(),
+			Ok(pubkey) => <dyn AsRef<[u8]>>::as_ref(signer) == &pubkey[..],
 			_ => false,
 		}
 	}
@@ -86,22 +109,24 @@ impl Verify for primitives::ecdsa::Signature {
 /// Means of signature verification of an application key.
 pub trait AppVerify {
 	/// Type of the signer.
-	type Signer;
+	type Signer: IdentifyAccount;
 	/// Verify a signature. Return `true` if signature is valid for the value.
-	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &Self::Signer) -> bool;
+	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &<Self::Signer as IdentifyAccount>::AccountId) -> bool;
 }
 
 impl<
 	S: Verify<Signer=<<T as AppKey>::Public as app_crypto::AppPublic>::Generic> + From<T>,
 	T: app_crypto::Wraps<Inner=S> + app_crypto::AppKey + app_crypto::AppSignature +
 		AsRef<S> + AsMut<S> + From<S>,
-> AppVerify for T {
+> AppVerify for T where
+	<<T as AppKey>::Public as app_crypto::AppPublic>::Generic:
+		IdentifyAccount<AccountId = <<T as AppKey>::Public as IdentifyAccount>::AccountId>,
+	<T as AppKey>::Public: IdentifyAccount,
+{
 	type Signer = <T as AppKey>::Public;
-	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &Self::Signer) -> bool {
-		use app_crypto::IsWrappedBy;
+	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &<Self::Signer as IdentifyAccount>::AccountId) -> bool {
 		let inner: &S = self.as_ref();
-		let inner_pubkey = <Self::Signer as app_crypto::AppPublic>::Generic::from_ref(&signer);
-		Verify::verify(inner, msg, inner_pubkey)
+		Verify::verify(inner, msg, signer)
 	}
 }
 

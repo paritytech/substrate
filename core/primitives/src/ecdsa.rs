@@ -18,6 +18,7 @@
 //! Simple ECDSA API.
 // end::description[]
 
+use rstd::cmp::Ordering;
 use codec::{Encode, Decode};
 
 #[cfg(feature = "std")]
@@ -30,7 +31,7 @@ use bip39::{Mnemonic, Language, MnemonicType};
 use crate::{hashing::blake2_256, crypto::{Pair as TraitPair, DeriveJunction, SecretStringError, Ss58Codec}};
 #[cfg(feature = "std")]
 use serde::{de, Serializer, Serialize, Deserializer, Deserialize};
-use crate::{crypto::{Public as TraitPublic, UncheckedFrom, CryptoType, Derive}, hash::H256};
+use crate::crypto::{Public as TraitPublic, UncheckedFrom, CryptoType, Derive};
 #[cfg(feature = "std")]
 use secp256k1::{PublicKey, SecretKey};
 
@@ -46,8 +47,34 @@ type Seed = [u8; 32];
 /// In principle, we could do an alternative form of this module with a full 33 byte pub key and then have some extra
 /// logic higher up that reduced it to 32 bytes for an `AccountId`. That would open up the possibility of using soft-
 /// derived paths for HDKD.
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default)]
-pub struct Public(pub [u8; 32]);
+#[derive(Clone, Encode, Decode)]
+pub struct Public(pub [u8; 33]);
+
+impl PartialOrd for Public {
+	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+		Some(self.cmp(other))
+	}
+}
+
+impl Ord for Public {
+	fn cmp(&self, other: &Self) -> Ordering {
+		self.0[..].cmp(&other.0[..])
+	}
+}
+
+impl PartialEq for Public {
+	fn eq(&self, other: &Self) -> bool {
+		&self.0[..] == &other.0[..]
+	}
+}
+
+impl Eq for Public {}
+
+impl Default for Public {
+	fn default() -> Self {
+		Public([0u8; 33])
+	}
+}
 
 /// A key pair.
 #[cfg(feature = "std")]
@@ -57,8 +84,8 @@ pub struct Pair {
 	secret: SecretKey,
 }
 
-impl AsRef<[u8; 32]> for Public {
-	fn as_ref(&self) -> &[u8; 32] {
+impl AsRef<[u8; 33]> for Public {
+	fn as_ref(&self) -> &[u8; 33] {
 		&self.0
 	}
 }
@@ -79,8 +106,8 @@ impl rstd::convert::TryFrom<&[u8]> for Public {
 	type Error = ();
 
 	fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
-		if data.len() == 32 {
-			let mut inner = [0u8; 32];
+		if data.len() == 33 {
+			let mut inner = [0u8; 33];
 			inner.copy_from_slice(data);
 			Ok(Public(inner))
 		} else {
@@ -89,7 +116,7 @@ impl rstd::convert::TryFrom<&[u8]> for Public {
 	}
 }
 
-impl From<Public> for [u8; 32] {
+impl From<Public> for [u8; 33] {
 	fn from(x: Public) -> Self {
 		x.0
 	}
@@ -102,28 +129,9 @@ impl From<Pair> for Public {
 	}
 }
 
-impl From<Public> for H256 {
-	fn from(x: Public) -> Self {
-		x.0.into()
-	}
-}
-
-impl UncheckedFrom<[u8; 32]> for Public {
-	fn unchecked_from(x: [u8; 32]) -> Self {
+impl UncheckedFrom<[u8; 33]> for Public {
+	fn unchecked_from(x: [u8; 33]) -> Self {
 		Public(x)
-	}
-}
-
-impl UncheckedFrom<H256> for Public {
-	fn unchecked_from(x: H256) -> Self {
-		Public::from_h256(x)
-	}
-}
-
-#[cfg(feature = "std")]
-impl From<PublicKey> for Public {
-	fn from(p: PublicKey) -> Public {
-		Public(blake2_256(&p.serialize_compressed()[..]))
 	}
 }
 
@@ -138,7 +146,7 @@ impl std::fmt::Display for Public {
 impl std::fmt::Debug for Public {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		let s = self.to_ss58check();
-		write!(f, "{} ({}...)", crate::hexdisplay::HexDisplay::from(&self.0), &s[0..8])
+		write!(f, "{} ({}...)", crate::hexdisplay::HexDisplay::from(&&self.0[..]), &s[0..8])
 	}
 }
 
@@ -250,6 +258,15 @@ impl Signature {
 	pub fn from_raw(data: [u8; 65]) -> Signature {
 		Signature(data)
 	}
+
+	/// Recover the public key from this signature and a message.
+	#[cfg(feature = "std")]
+	pub fn recover<M: AsRef<[u8]>>(&self, message: M) -> Option<Public> {
+		let message = secp256k1::Message::parse(&blake2_256(message.as_ref()));
+		let sig: (_, _) = self.try_into().ok()?;
+		secp256k1::recover(&message, &sig.0, &sig.1).ok()
+			.map(|recovered| Public(recovered.serialize_compressed()))
+	}
 }
 
 #[cfg(feature = "std")]
@@ -288,35 +305,27 @@ pub enum PublicError {
 }
 
 impl Public {
-	/// A new instance from the given 32-byte `data`.
+	/// A new instance from the given 33-byte `data`.
 	///
 	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
 	/// you are certain that the array actually is a pubkey. GIGO!
-	pub fn from_raw(data: [u8; 32]) -> Self {
+	pub fn from_raw(data: [u8; 33]) -> Self {
 		Public(data)
 	}
 
-	/// A new instance from an H256.
-	///
-	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
-	/// you are certain that the array actually is a pubkey. GIGO!
-	pub fn from_h256(x: H256) -> Self {
-		Public(x.into())
-	}
-
 	/// Return a slice filled with raw data.
-	pub fn as_array_ref(&self) -> &[u8; 32] {
+	pub fn as_array_ref(&self) -> &[u8; 33] {
 		self.as_ref()
 	}
 }
 
 impl TraitPublic for Public {
-	/// A new instance from the given slice that should be 32 bytes long.
+	/// A new instance from the given slice that should be 33 bytes long.
 	///
 	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
 	/// you are certain that the array actually is a pubkey. GIGO!
 	fn from_slice(data: &[u8]) -> Self {
-		let mut r = [0u8; 32];
+		let mut r = [0u8; 33];
 		r.copy_from_slice(data);
 		Public(r)
 	}
@@ -405,9 +414,20 @@ impl TraitPair for Pair {
 		Ok(Self::from_seed(&acc))
 	}
 
+	/// Generate a key from the phrase, password and derivation path.
+	fn from_standard_components<I: Iterator<Item=DeriveJunction>>(
+		phrase: &str,
+		password: Option<&str>,
+		path: I
+	) -> Result<Pair, SecretStringError> {
+		Self::from_phrase(phrase, password)?.0
+			.derive(path)
+			.map_err(|_| SecretStringError::InvalidPath)
+	}
+
 	/// Get the public key.
 	fn public(&self) -> Public {
-		Public(blake2_256(&self.public.serialize_compressed()[..]))
+		Public(self.public.serialize_compressed())
 	}
 
 	/// Sign a message.
@@ -421,7 +441,7 @@ impl TraitPair for Pair {
 		let message = secp256k1::Message::parse(&blake2_256(message.as_ref()));
 		let sig: (_, _) = match sig.try_into() { Ok(x) => x, _ => return false };
 		match secp256k1::recover(&message, &sig.0, &sig.1) {
-			Ok(actual) => pubkey == &Public::from(actual),
+			Ok(actual) => &pubkey.0[..] == &actual.serialize_compressed()[..],
 			_ => false,
 		}
 	}
@@ -436,7 +456,7 @@ impl TraitPair for Pair {
 		let ri = match secp256k1::RecoveryId::parse(sig[64]) { Ok(x) => x, _ => return false };
 		let sig = match secp256k1::Signature::parse_slice(&sig[0..64]) { Ok(x) => x, _ => return false };
 		match secp256k1::recover(&message, &sig, &ri) {
-			Ok(actual) => pubkey.as_ref() == &Public::from(actual).0[..],
+			Ok(actual) => pubkey.as_ref() == &actual.serialize_compressed()[..],
 			_ => false,
 		}
 	}
@@ -515,7 +535,7 @@ mod test {
 		);
 		let public = pair.public();
 		assert_eq!(public, Public::from_raw(
-			hex!("d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a")
+			hex!("d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a00")
 		));
 		let message = b"";
 		let signature = hex!("e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b00");
@@ -532,7 +552,7 @@ mod test {
 		).unwrap();
 		let public = pair.public();
 		assert_eq!(public, Public::from_raw(
-			hex!("d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a")
+			hex!("d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a00")
 		));
 		let message = b"";
 		let signature = hex!("e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b00");
@@ -556,7 +576,7 @@ mod test {
 		let pair = Pair::from_seed(b"12345678901234567890123456789012");
 		let public = pair.public();
 		assert_eq!(public, Public::from_raw(
-			hex!("2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee")
+			hex!("2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee00")
 		));
 		let message = hex!("2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee00000000000000000200d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a4500000000000000");
 		let signature = pair.sign(&message[..]);

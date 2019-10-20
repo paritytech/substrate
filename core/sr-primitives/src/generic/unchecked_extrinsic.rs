@@ -23,7 +23,7 @@ use rstd::prelude::*;
 use runtime_io::blake2_256;
 use codec::{Decode, Encode, EncodeLike, Input, Error};
 use crate::{
-	traits::{self, Member, MaybeDisplay, SignedExtension, Checkable, Extrinsic},
+	traits::{self, Member, MaybeDisplay, SignedExtension, Checkable, Extrinsic, IdentifyAccount},
 	generic::CheckedExtrinsic, transaction_validity::{TransactionValidityError, InvalidTransaction},
 };
 
@@ -100,7 +100,8 @@ for
 where
 	Address: Member + MaybeDisplay,
 	Call: Encode + Member,
-	Signature: Member + traits::Verify<Signer=AccountId>,
+	Signature: Member + traits::Verify,
+	<Signature as traits::Verify>::Signer: IdentifyAccount<AccountId=AccountId>,
 	Extra: SignedExtension<AccountId=AccountId>,
 	AccountId: Member + MaybeDisplay,
 	Lookup: traits::Lookup<Source=Address, Target=AccountId>,
@@ -296,8 +297,12 @@ mod tests {
 	struct TestSig(u64, Vec<u8>);
 	impl traits::Verify for TestSig {
 		type Signer = u64;
-		fn verify<L: traits::Lazy<[u8]>>(&self, mut msg: L, signer: &Self::Signer) -> bool {
-			*signer == self.0 && msg.get() == &self.1[..]
+		fn verify<L: traits::Lazy<[u8]>>(&self, mut msg: L, signer: Option<&Self::Signer>) -> Result<Self::Signer, ()> {
+			if *signer == self.0 && msg.get() == &self.1[..] {
+				Ok(signer.clone())
+			} else {
+				Err(())
+			}
 		}
 	}
 

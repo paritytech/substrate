@@ -59,7 +59,7 @@ pub mod weights;
 pub use generic::{DigestItem, Digest};
 
 /// Re-export this since it's part of the API of this crate.
-pub use primitives::{TypeId, crypto::{key_types, KeyTypeId, CryptoType}};
+pub use primitives::{TypeId, crypto::{key_types, KeyTypeId, CryptoType, AccountId32}};
 pub use app_crypto::RuntimeAppPublic;
 
 /// Re-export top-level arithmetic stuff.
@@ -114,6 +114,7 @@ macro_rules! create_runtime_str {
 
 #[cfg(feature = "std")]
 pub use serde::{Serialize, Deserialize, de::DeserializeOwned};
+use crate::traits::IdentifyAccount;
 
 /// Complex storage builder stuff.
 #[cfg(feature = "std")]
@@ -237,6 +238,17 @@ impl AsRef<[u8]> for MultiSigner {
 	}
 }
 
+impl traits::IdentifyAccount for MultiSigner {
+	type AccountId = AccountId32;
+	fn into_account(self) -> AccountId32 {
+		match self {
+			MultiSigner::Ed25519(who) => <[u8; 32]>::from(who).into(),
+			MultiSigner::Sr25519(who) => <[u8; 32]>::from(who).into(),
+			MultiSigner::Ecdsa(who) => runtime_io::blake2_256(who.as_ref()).into(),
+		}
+	}
+}
+
 impl From<ed25519::Public> for MultiSigner {
 	fn from(x: ed25519::Public) -> Self {
 		MultiSigner::Ed25519(x)
@@ -268,12 +280,18 @@ impl std::fmt::Display for MultiSigner {
 
 impl Verify for MultiSignature {
 	type Signer = MultiSigner;
-	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &Self::Signer) -> bool {
+	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &AccountId32) -> bool {
+		use primitives::crypto::Public;
 		match (self, signer) {
-			(MultiSignature::Ed25519(ref sig), &MultiSigner::Ed25519(ref who)) => sig.verify(msg, who),
-			(MultiSignature::Sr25519(ref sig), &MultiSigner::Sr25519(ref who)) => sig.verify(msg, who),
-			(MultiSignature::Ecdsa(ref sig), &MultiSigner::Ecdsa(ref who)) => sig.verify(msg, who),
-			_ => false,
+			(MultiSignature::Ed25519(ref sig), who) => sig.verify(msg, &ed25519::Public::from_slice(who.as_ref())),
+			(MultiSignature::Sr25519(ref sig), who) => sig.verify(msg, &sr25519::Public::from_slice(who.as_ref())),
+			(MultiSignature::Ecdsa(ref sig), who) => {
+				let m = runtime_io::blake2_256(msg.get());
+				match runtime_io::secp256k1_ecdsa_recover_compressed(sig.as_ref(), &m) {
+					Ok(pubkey) => &runtime_io::blake2_256(pubkey.as_ref()) == <dyn AsRef<[u8; 32]>>::as_ref(who),
+					_ => false,
+				}
+			}
 		}
 	}
 }
@@ -286,12 +304,13 @@ pub struct AnySignature(H512);
 impl Verify for AnySignature {
 	type Signer = sr25519::Public;
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &sr25519::Public) -> bool {
+		use primitives::crypto::Public;
+		let msg = msg.get();
 		sr25519::Signature::try_from(self.0.as_fixed_bytes().as_ref())
-			.map(|s| runtime_io::sr25519_verify(&s, msg.get(), &signer))
+			.map(|s| s.verify(msg, signer))
 			.unwrap_or(false)
 		|| ed25519::Signature::try_from(self.0.as_fixed_bytes().as_ref())
-			.and_then(|s| ed25519::Public::try_from(signer.0.as_ref()).map(|p| (s, p)))
-			.map(|(s, p)| runtime_io::ed25519_verify(&s, msg.get(), &p))
+			.map(|s| s.verify(msg, &ed25519::Public::from_slice(signer.as_ref())))
 			.unwrap_or(false)
 	}
 }
@@ -415,7 +434,7 @@ impl From<&'static str> for DispatchError {
 
 /// Verify a signature on an encoded value in a lazy manner. This can be
 /// an optimization if the signature scheme has an "unsigned" escape hash.
-pub fn verify_encoded_lazy<V: Verify, T: codec::Encode>(sig: &V, item: &T, signer: &V::Signer) -> bool {
+pub fn verify_encoded_lazy<V: Verify, T: codec::Encode>(sig: &V, item: &T, signer: &<V::Signer as IdentifyAccount>::AccountId) -> bool {
 	// The `Lazy<T>` trait expresses something like `X: FnMut<Output = for<'a> &'a T>`.
 	// unfortunately this is a lifetime relationship that can't
 	// be expressed without generic associated types, better unification of HRTBs in type position,
