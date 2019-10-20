@@ -495,6 +495,12 @@ pub trait Public: AsRef<[u8]> + AsMut<[u8]> + Default + Derive + CryptoType + Pa
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Default, Encode, Decode)]
 pub struct AccountId32([u8; 32]);
 
+impl UncheckedFrom<crate::hash::H256> for AccountId32 {
+	fn unchecked_from(h: crate::hash::H256) -> Self {
+		AccountId32(h.into())
+	}
+}
+
 #[cfg(feature = "std")]
 impl Ss58Codec for AccountId32 {}
 
