@@ -14,7 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{env, fs};
+use std::fs;
+
 use tempfile::tempdir;
 
 /// Checks that all prerequisites are installed.
@@ -22,20 +23,15 @@ use tempfile::tempdir;
 /// # Returns
 /// Returns `None` if everything was found and `Some(ERR_MSG)` if something could not be found.
 pub fn check() -> Option<&'static str> {
-	if !rustc_stable_forced_to_nightly() && !check_nightly_installed(){
+	if !check_nightly_installed(){
 		return Some("Rust nightly not installed, please install it!")
 	}
 
 	check_wasm_toolchain_installed()
 }
 
-fn rustc_stable_forced_to_nightly() -> bool {
-  env::var("RUSTC_BOOTSTRAP") == Ok("1".to_string())
-}
-
 fn check_nightly_installed() -> bool {
-	let command = crate::get_nightly_cargo();
-	command.is_nightly()
+	crate::get_nightly_cargo().is_nightly()
 }
 
 fn check_wasm_toolchain_installed() -> Option<&'static str> {
