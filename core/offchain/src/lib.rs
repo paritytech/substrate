@@ -36,11 +36,10 @@
 use std::{
 	fmt,
 	marker::PhantomData,
-	sync::Arc,
+	sync::{Arc,Mutex},
 };
 
 use threadpool::ThreadPool;
-use std::sync::Mutex;
 use client::runtime_api::ApiExt;
 use futures::future::Future;
 use log::{debug, warn};
