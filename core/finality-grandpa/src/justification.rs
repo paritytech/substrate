@@ -25,10 +25,9 @@ use grandpa::{Error as GrandpaError};
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{NumberFor, Block as BlockT, Header as HeaderT};
 use primitives::{H256, Blake2Hasher};
-use fg_primitives::AuthorityId;
+use fg_primitives::{check_message_signature, AuthorityId};
 
 use crate::{Commit, Error};
-use crate::communication;
 
 /// A GRANDPA justification for block finality, it includes a commit message and
 /// an ancestry proof including all headers routing all precommit target blocks
@@ -135,7 +134,7 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 
 		let mut visited_hashes = HashSet::new();
 		for signed in self.commit.precommits.iter() {
-			if let Err(_) = communication::check_message_sig::<Block>(
+			if let Err(_) = check_message_signature(
 				&grandpa::Message::Precommit(signed.precommit.clone()),
 				&signed.id,
 				&signed.signature,

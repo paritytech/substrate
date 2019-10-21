@@ -51,6 +51,7 @@ use gossip::{
 	GossipMessage, FullCatchUpMessage, FullCommitMessage, VoteMessage, GossipValidator
 };
 use fg_primitives::{
+	check_message_signature, sign_message,
 	AuthorityPair, AuthorityId, AuthoritySignature, SetId as SetIdNumber, RoundNumber,
 };
 
@@ -648,10 +649,6 @@ impl<B: BlockT, N: Network<B>> Clone for NetworkBridge<B, N> {
 	}
 }
 
-fn localized_payload<E: Encode>(round: RoundNumber, set_id: SetIdNumber, message: &E) -> Vec<u8> {
-	(message, round, set_id).encode()
-}
-
 /// Type-safe wrapper around a round number.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Encode, Decode)]
 pub struct Round(pub RoundNumber);
@@ -659,24 +656,6 @@ pub struct Round(pub RoundNumber);
 /// Type-safe wrapper around a set ID.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Encode, Decode)]
 pub struct SetId(pub SetIdNumber);
-
-// check a message.
-pub(crate) fn check_message_sig<Block: BlockT>(
-	message: &Message<Block>,
-	id: &AuthorityId,
-	signature: &AuthoritySignature,
-	round: RoundNumber,
-	set_id: SetIdNumber,
-) -> Result<(), ()> {
-	let as_public = id.clone();
-	let encoded_raw = localized_payload(round, set_id, message);
-	if AuthorityPair::verify(signature, &encoded_raw, &as_public) {
-		Ok(())
-	} else {
-		debug!(target: "afg", "Bad signature on message from {:?}", id);
-		Err(())
-	}
-}
 
 /// A sink for outgoing messages to the network. Any messages that are sent will
 /// be replaced, as appropriate, according to the given `HasVoted`.
@@ -718,16 +697,14 @@ impl<Block: BlockT, N: Network<Block>> Sink for OutgoingMessages<Block, N>
 		}
 
 		// when locals exist, sign messages on import
-		if let Some((ref pair, ref local_id)) = self.locals {
-			let encoded = localized_payload(self.round, self.set_id, &msg);
-			let signature = pair.sign(&encoded[..]);
-
+		if let Some((ref pair, _)) = self.locals {
 			let target_hash = msg.target().0.clone();
-			let signed = SignedMessage::<Block> {
-				message: msg,
-				signature,
-				id: local_id.clone(),
-			};
+			let signed = sign_message(
+				msg,
+				pair,
+				self.round,
+				self.set_id,
+			);
 
 			let message = GossipMessage::Vote(VoteMessage::<Block> {
 				message: signed.clone(),
@@ -808,7 +785,7 @@ fn check_compact_commit<Block: BlockT>(
 		use crate::communication::gossip::Misbehavior;
 		use grandpa::Message as GrandpaMessage;
 
-		if let Err(()) = check_message_sig::<Block>(
+		if let Err(()) = check_message_signature(
 			&GrandpaMessage::Precommit(precommit.clone()),
 			id,
 			sig,
@@ -894,7 +871,7 @@ fn check_catch_up<Block: BlockT>(
 		for (msg, id, sig) in messages {
 			signatures_checked += 1;
 
-			if let Err(()) = check_message_sig::<B>(
+			if let Err(()) = check_message_signature(
 				&msg,
 				id,
 				sig,

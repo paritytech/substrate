@@ -114,6 +114,7 @@ mod tests;
 
 /// A GRANDPA message for a substrate chain.
 pub type Message<Block> = grandpa::Message<<Block as BlockT>::Hash, NumberFor<Block>>;
+
 /// A signed message.
 pub type SignedMessage<Block> = grandpa::SignedMessage<
 	<Block as BlockT>::Hash,

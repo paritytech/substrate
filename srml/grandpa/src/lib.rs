@@ -235,8 +235,10 @@ decl_module! {
 					key_owner_proof,
 				).ok_or("Invalid/outdated key ownership proof.")?;
 
-			// TODO:
-			// - validate equivocation proof
+			// validate equivocation proof (check votes are different and
+			// signatures are valid).
+			fg_primitives::check_equivocation_report(&equivocation_report)
+				.map_err(|_| "Invalid equivocation proof.")?;
 
 			// we check the equivocation within the context of its set id (and
 			// associated session).

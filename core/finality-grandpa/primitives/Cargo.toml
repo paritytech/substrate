@@ -9,6 +9,8 @@ app-crypto = { package = "substrate-application-crypto", path = "../../applicati
 client = { package = "substrate-client", path = "../../client", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 grandpa = { package = "finality-grandpa", version = "0.9.0", default-features = false, features = ["derive-codec"] }
+log = { version = "0.4.8", optional = true }
+primitives = { package = "substrate-primitives", path = "../../primitives", optional = true }
 rstd = { package = "sr-std", path = "../../sr-std", default-features = false }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
 sr-primitives = { path = "../../sr-primitives", default-features = false }
@@ -20,6 +22,8 @@ std = [
 	"client/std",
 	"codec/std",
 	"grandpa/std",
+	"log",
+	"primitives",
 	"rstd/std",
 	"serde",
 	"sr-primitives/std",

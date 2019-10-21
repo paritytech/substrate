@@ -86,7 +86,7 @@ use sr_primitives::traits::{NumberFor, Block as BlockT, Zero};
 use network::consensus_gossip::{self as network_gossip, MessageIntent, ValidatorContext};
 use network::{config::Roles, PeerId};
 use codec::{Encode, Decode};
-use fg_primitives::AuthorityId;
+use fg_primitives::{check_message_signature, AuthorityId};
 
 use substrate_telemetry::{telemetry, CONSENSUS_DEBUG};
 use log::{trace, debug, warn};
@@ -635,7 +635,7 @@ impl<Block: BlockT> Inner<Block> {
 			return Action::Discard(cost::UNKNOWN_VOTER);
 		}
 
-		if let Err(()) = super::check_message_sig::<Block>(
+		if let Err(()) = check_message_signature(
 			&full.message.message,
 			&full.message.id,
 			&full.message.signature,

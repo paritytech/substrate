@@ -26,6 +26,9 @@ use serde::Serialize;
 
 use rstd::vec::Vec;
 
+#[cfg(feature = "std")]
+use log::debug;
+
 use client::decl_runtime_apis;
 use codec::{Encode, Decode, Codec};
 use sr_primitives::{ConsensusEngineId, traits::NumberFor};
@@ -239,6 +242,107 @@ impl<H, N> Equivocation<H, N> {
 			Equivocation::Prevote(ref equivocation) => &equivocation.identity,
 			Equivocation::Precommit(ref equivocation) => &equivocation.identity,
 		}
+	}
+}
+
+pub fn check_equivocation_report<H, N>(
+	report: &EquivocationReport<H, N>,
+) -> Result<(), ()> where
+	H: Clone + Encode + PartialEq,
+	N: Clone + Encode + PartialEq,
+{
+	// NOTE: the bare `Prevote` and `Precommit` types don't share any trait,
+	// this is implemented as a macro to avoid duplication.
+	macro_rules! check {
+		( $equivocation:expr, $message:expr ) => {
+			// if both votes have the same target the equivocation is invalid.
+			if $equivocation.first.0.target_hash == $equivocation.second.0.target_hash &&
+				$equivocation.first.0.target_number == $equivocation.second.0.target_number {
+				return Err(());
+			}
+
+			// check signatures on both votes are valid
+			check_message_signature(
+				&$message($equivocation.first.0.clone()),
+				&$equivocation.identity,
+				&$equivocation.first.1,
+				$equivocation.round_number,
+				report.set_id,
+			)?;
+
+			check_message_signature(
+				&$message($equivocation.second.0.clone()),
+				&$equivocation.identity,
+				&$equivocation.second.1,
+				$equivocation.round_number,
+				report.set_id,
+			)?;
+
+			return Ok(());
+		}
+	}
+
+	match report.equivocation {
+		Equivocation::Prevote(ref equivocation) => {
+			check!(equivocation, grandpa::Message::Prevote);
+		},
+		Equivocation::Precommit(ref equivocation) => {
+			check!(equivocation, grandpa::Message::Precommit);
+		},
+	}
+}
+
+fn localized_payload<E: Encode>(
+	round: RoundNumber,
+	set_id: SetId,
+	message: &E,
+) -> Vec<u8> {
+	(message, round, set_id).encode()
+}
+
+// check a message.
+pub fn check_message_signature<H, N>(
+	message: &grandpa::Message<H, N>,
+	id: &AuthorityId,
+	signature: &AuthoritySignature,
+	round: RoundNumber,
+	set_id: SetId,
+) -> Result<(), ()> where
+	H: Encode,
+	N: Encode,
+{
+	use app_crypto::RuntimeAppPublic;
+
+	let encoded_raw = localized_payload(round, set_id, message);
+	if id.verify(&encoded_raw, signature) {
+		Ok(())
+	} else {
+		#[cfg(feature = "std")]
+		debug!(target: "afg", "Bad signature on message from {:?}", id);
+
+		Err(())
+	}
+}
+
+#[cfg(feature = "std")]
+pub fn sign_message<H, N>(
+	message: grandpa::Message<H, N>,
+	pair: &AuthorityPair,
+	round: RoundNumber,
+	set_id: SetId,
+) -> grandpa::SignedMessage<H, N, AuthoritySignature, AuthorityId> where
+	H: Encode,
+	N: Encode,
+{
+	use primitives::Pair;
+
+	let encoded = localized_payload(round, set_id, &message);
+	let signature = pair.sign(&encoded[..]);
+
+	grandpa::SignedMessage {
+		message,
+		signature,
+		id: pair.public(),
 	}
 }
 
