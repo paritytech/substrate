@@ -125,10 +125,10 @@ impl<B: ChainApi> ValidatedPool<B> {
 				fire_events(&mut *listener, &imported);
 				Ok(imported.hash().clone())
 			}
-			ValidatedTransaction::Invalid(err) => Err(err.into()),
+			ValidatedTransaction::Invalid(err) => Err(err),
 			ValidatedTransaction::Unknown(hash, err) => {
 				self.listener.write().invalid(&hash);
-				Err(err.into())
+				Err(err)
 			}
 		}
 	}
@@ -148,7 +148,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 				let removed = pool.enforce_limits(ready_limit, future_limit)
 					.into_iter().map(|x| x.hash.clone()).collect::<HashSet<_>>();
 				// ban all removed transactions
-				self.rotator.ban(&std::time::Instant::now(), removed.iter().map(|x| x.clone()));
+				self.rotator.ban(&std::time::Instant::now(), removed.iter().cloned());
 				removed
 			};
 			// run notifications
@@ -177,8 +177,8 @@ impl<B: ChainApi> ValidatedPool<B> {
 					.expect("One extrinsic passed; one result returned; qed")
 					.map(|_| watcher)
 			},
-			ValidatedTransaction::Invalid(err) => Err(err.into()),
-			ValidatedTransaction::Unknown(_, err) => Err(err.into()),
+			ValidatedTransaction::Invalid(err) => Err(err),
+			ValidatedTransaction::Unknown(_, err) => Err(err),
 		}
 	}
 
@@ -190,8 +190,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 			hashes,
 			in_pool.into_iter()
 				.map(|existing_in_pool| existing_in_pool
-					.map(|transaction| transaction.provides.iter().cloned()
-					.collect()))
+					.map(|transaction| transaction.provides.to_vec()))
 				.collect(),
 		)
 	}
@@ -244,7 +243,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 		let hashes = hashes.chain(known_imported_hashes.into_iter());
 		{
 			let header_hash = self.api.block_id_to_hash(at)?
-				.ok_or_else(|| error::Error::InvalidBlockId(format!("{:?}", at)).into())?;
+				.ok_or_else(|| error::Error::InvalidBlockId(format!("{:?}", at)))?;
 			let mut listener = self.listener.write();
 			for h in hashes {
 				listener.pruned(header_hash, &h);
@@ -263,7 +262,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 	/// See `prune_tags` if you want this.
 	pub fn clear_stale(&self, at: &BlockId<B::Block>) -> Result<(), B::Error> {
 		let block_number = self.api.block_id_to_number(at)?
-				.ok_or_else(|| error::Error::InvalidBlockId(format!("{:?}", at)).into())?
+				.ok_or_else(|| error::Error::InvalidBlockId(format!("{:?}", at)))?
 				.saturated_into::<u64>();
 		let now = time::Instant::now();
 		let to_remove = {

@@ -61,7 +61,7 @@ impl<Hash, Ex> Clone for WaitingTransaction<Hash, Ex> {
 		WaitingTransaction {
 			transaction: self.transaction.clone(),
 			missing_tags: self.missing_tags.clone(),
-			imported_at: self.imported_at.clone(),
+			imported_at: self.imported_at,
 		}
 	}
 }
@@ -95,7 +95,7 @@ impl<Hash, Ex> WaitingTransaction<Hash, Ex> {
 	}
 
 	/// Marks the tag as satisfied.
-	pub fn satisfy_tag(&mut self, tag: &Tag) {
+	pub fn satisfy_tag(&mut self, tag: &[u8]) {
 		self.missing_tags.remove(tag);
 	}
 

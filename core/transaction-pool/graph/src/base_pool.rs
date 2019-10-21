@@ -226,12 +226,8 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: ::std::fmt::Debug> BasePool<Hash
 		let mut first = true;
 		let mut to_import = vec![tx];
 
-		loop {
-			// take first transaction from the list
-			let tx = match to_import.pop() {
-				Some(tx) => tx,
-				None => break,
-			};
+		// take first transaction from the list
+		while let Some(tx) = to_import.pop() {
 
 			// find transactions in Future that it unlocks
 			to_import.append(&mut self.future.satisfy_tags(&tx.transaction.provides));

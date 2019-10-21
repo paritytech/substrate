@@ -105,9 +105,9 @@ impl InherentData {
 	/// - `Err(_)` if the data could be found, but deserialization did not work.
 	pub fn get_data<I: codec::Decode>(
 		&self,
-		identifier: &InherentIdentifier,
+		identifier: InherentIdentifier,
 	) -> Result<Option<I>, RuntimeString> {
-		match self.data.get(identifier) {
+		match self.data.get(&identifier) {
 			Some(inherent) =>
 				I::decode(&mut &inherent[..])
 					.map_err(|_| {
@@ -190,7 +190,7 @@ impl CheckInherentsResult {
 	/// - `Err(_)` if the error could be found, but deserialization did not work.
 	pub fn get_error<E: codec::Decode>(
 		&self,
-		identifier: &InherentIdentifier,
+		identifier: InherentIdentifier,
 	) -> Result<Option<E>, RuntimeString> {
 		self.errors.get_data(identifier)
 	}
@@ -246,7 +246,7 @@ impl InherentDataProviders {
 		&self,
 		provider: P,
 	) -> Result<(), RuntimeString> {
-		if self.has_provider(&provider.inherent_identifier()) {
+		if self.has_provider(*provider.inherent_identifier()) {
 			Err(
 				format!(
 					"Inherent data provider with identifier {:?} already exists!",
@@ -261,8 +261,8 @@ impl InherentDataProviders {
 	}
 
 	/// Returns if a provider for the given identifier exists.
-	pub fn has_provider(&self, identifier: &InherentIdentifier) -> bool {
-		self.providers.read().iter().any(|p| p.inherent_identifier() == identifier)
+	pub fn has_provider(&self, identifier: InherentIdentifier) -> bool {
+		self.providers.read().iter().any(|p| *p.inherent_identifier() == identifier)
 	}
 
 	/// Create inherent data.
@@ -278,9 +278,9 @@ impl InherentDataProviders {
 	/// Converts a given encoded error into a `String`.
 	///
 	/// Useful if the implementation encouters an error for an identifier it does not know.
-	pub fn error_to_string(&self, identifier: &InherentIdentifier, error: &[u8]) -> String {
+	pub fn error_to_string(&self, identifier: InherentIdentifier, error: &[u8]) -> String {
 		let res = self.providers.read().iter().filter_map(|p|
-			if p.inherent_identifier() == identifier {
+			if *p.inherent_identifier() == identifier {
 				Some(
 					p.error_to_string(error)
 						.unwrap_or_else(|| error_to_string_fallback(identifier))
@@ -294,7 +294,7 @@ impl InherentDataProviders {
 			Some(res) => res,
 			None => format!(
 				"Error while checking inherent of type \"{}\", but this inherent type is unknown.",
-				String::from_utf8_lossy(identifier)
+				String::from_utf8_lossy(&identifier)
 			)
 		}
 	}
@@ -325,10 +325,10 @@ pub trait ProvideInherentData {
 
 /// A fallback function, if the decoding of an error fails.
 #[cfg(feature = "std")]
-fn error_to_string_fallback(identifier: &InherentIdentifier) -> String {
+fn error_to_string_fallback(identifier: InherentIdentifier) -> String {
 	format!(
 		"Error while checking inherent of type \"{}\", but error could not be decoded.",
-		String::from_utf8_lossy(identifier)
+		String::from_utf8_lossy(&identifier)
 	)
 }
 

@@ -188,7 +188,8 @@ mod apis_serialize {
 		seq.end()
 	}
 
-	pub fn serialize_bytesref<S>(&apis: &&super::ApiId, ser: S) -> Result<S::Ok, S::Error> where
+	#[allow(clippy::trivially_copy_pass_by_ref)]
+	pub fn serialize_bytesref<S>(apis: &super::ApiId, ser: S) -> Result<S::Ok, S::Error> where
 		S: Serializer,
 	{
 		bytes::serialize(apis, ser)

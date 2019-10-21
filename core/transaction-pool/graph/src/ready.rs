@@ -237,7 +237,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 	/// All removed transactions are returned.
 	pub fn remove_invalid(&mut self, hashes: &[Hash]) -> Vec<Arc<Transaction<Hash, Ex>>> {
 		let mut removed = vec![];
-		let mut to_remove = hashes.iter().cloned().collect::<Vec<_>>();
+		let mut to_remove = hashes.to_vec();
 
 		let mut ready = self.ready.write();
 		loop {

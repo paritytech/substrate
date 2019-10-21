@@ -60,7 +60,11 @@ pub fn rpc_handler<M: PubSubMetadata>(
 mod inner {
 	use super::*;
 
+	/// Type synonym for the JSONRPC HTTP `Server` data structure from the
+	/// `jsonrpc-http-server` crate.
 	pub type HttpServer = http::Server;
+	/// Type synonym for the `WebSocket` data structure from the
+	/// `jsonrpc-ws-server` crate.
 	pub type WsServer = ws::Server;
 
 	/// Start HTTP server listening on given address.

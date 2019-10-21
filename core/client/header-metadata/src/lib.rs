@@ -244,7 +244,7 @@ impl<Block: BlockT> HeaderMetadata<Block> for HeaderMetadataCache<Block> {
 
 	fn header_metadata(&self, hash: Block::Hash) -> Result<CachedHeaderMetadata<Block>, Self::Error> {
 		self.cache.write().get_mut(&hash).cloned()
-			.ok_or("header metadata not found in cache".to_owned())
+			.ok_or_else(|| "header metadata not found in cache".to_owned())
 	}
 
 	fn insert_header_metadata(&self, hash: Block::Hash, metadata: CachedHeaderMetadata<Block>) {
@@ -272,10 +272,10 @@ pub struct CachedHeaderMetadata<Block: BlockT> {
 impl<Block: BlockT> From<&Block::Header> for CachedHeaderMetadata<Block> {
 	fn from(header: &Block::Header) -> Self {
 		CachedHeaderMetadata {
-			hash: header.hash().clone(),
-			number: header.number().clone(),
-			parent: header.parent_hash().clone(),
-			ancestor: header.parent_hash().clone(),
+			hash: header.hash(),
+			number: *header.number(),
+			parent: *header.parent_hash(),
+			ancestor: *header.parent_hash(),
 		}
 	}
 }
