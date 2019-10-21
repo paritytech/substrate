@@ -316,7 +316,8 @@ fn should_notify_on_runtime_version_initially() {
 
 #[test]
 fn should_deserialize_storage_key() {
-	let k: StorageKey = serde_json::from_str("\"0x7f864e18e3dd8b58386310d2fe0919eef27c6e558564b7f67f22d99d20f587b\"").unwrap();
+	let k = "\"0x7f864e18e3dd8b58386310d2fe0919eef27c6e558564b7f67f22d99d20f587b\"";
+	let k: StorageKey = serde_json::from_str(k).unwrap();
 
 	assert_eq!(k.0.len(), 32);
 }
