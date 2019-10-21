@@ -10,7 +10,7 @@ Install Rust:
 curl https://sh.rustup.rs -sSf | sh
 ```
 
-Install required tools:
+Initialize your Wasm Build environment:
 
 ```bash
 ./scripts/init.sh
@@ -19,17 +19,23 @@ Install required tools:
 Build Wasm and native code:
 
 ```bash
-cargo build
+cargo build --release
 ```
 
 ## Run
 
 ### Single node development chain
 
-You can start a development chain with:
+Purge any existing developer chain state:
 
 ```bash
-cargo run -- --dev
+./target/release/node-template purge-chain --dev
+```
+
+Start a development chain with:
+
+```bash
+./target/release/node-template --dev
 ```
 
 Detailed logs may be shown by running the node with the following environment variables set: `RUST_LOG=debug RUST_BACKTRACE=1 cargo run -- --dev`.

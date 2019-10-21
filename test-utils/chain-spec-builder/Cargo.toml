@@ -5,7 +5,9 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-clap = { version = "~2.32.0", features = ["yaml"] }
+ansi_term = "0.12.1"
+keystore = { package = "substrate-keystore", path = "../../core/keystore" }
 node-cli = { path = "../../node/cli" }
 primitives = { package = "substrate-primitives",  path = "../../core/primitives" }
-substrate-service = { path = "../../core/service" }
+rand = "0.7.2"
+structopt = "0.3.3"

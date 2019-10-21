@@ -20,32 +20,34 @@ use std::sync::Arc;
 
 use serde::{Serialize, Deserialize};
 use client::blockchain::HeaderBackend;
+use codec::Codec;
 use jsonrpc_core::{Error, ErrorCode, Result};
 use jsonrpc_derive::rpc;
-use node_primitives::{
-	AccountId, Balance, Block, BlockId, ContractExecResult, ContractsApi as ContractsRuntimeApi,
-};
-use sr_primitives::traits::{
-	self,
-	Block as BlockT,
+use primitives::Bytes;
+use sr_primitives::{
+	generic::BlockId,
+	traits::{Block as BlockT, ProvideRuntimeApi},
 };
 use rpc_primitives::number;
+
+pub use srml_contracts_rpc_runtime_api::{ContractExecResult, ContractsApi as ContractsRuntimeApi};
+pub use self::gen_client::Client as ContractsClient;
 
 /// A struct that encodes RPC parameters required for a call to a smart-contract.
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all="camelCase")]
 #[serde(deny_unknown_fields)]
-pub struct CallRequest {
+pub struct CallRequest<AccountId, Balance> {
 	origin: AccountId,
 	dest: AccountId,
 	value: Balance,
 	gas_limit: number::NumberOrHex<u64>,
-	input_data: Vec<u8>,
+	input_data: Bytes,
 }
 
 /// Contracts RPC methods.
 #[rpc]
-pub trait ContractsApi<BlockHash> {
+pub trait ContractsApi<BlockHash, AccountId, Balance> {
 	/// Executes a call to a contract.
 	///
 	/// This call is performed locally without submitting any transactions. Thus executing this
@@ -55,33 +57,39 @@ pub trait ContractsApi<BlockHash> {
 	#[rpc(name = "contracts_call")]
 	fn call(
 		&self,
-		call_request: CallRequest,
+		call_request: CallRequest<AccountId, Balance>,
 		at: Option<BlockHash>,
 	) -> Result<ContractExecResult>;
 }
 
 /// An implementation of contract specific RPC methods.
-pub struct Contracts<C> {
+pub struct Contracts<C, B> {
 	client: Arc<C>,
+	_marker: std::marker::PhantomData<B>,
 }
 
-impl<C> Contracts<C> {
+impl<C, B> Contracts<C, B> {
 	/// Create new `Contracts` with the given reference to the client.
 	pub fn new(client: Arc<C>) -> Self {
-		Contracts { client }
+		Contracts { client, _marker: Default::default() }
 	}
 }
 
-impl<C> ContractsApi<<Block as BlockT>::Hash> for Contracts<C>
+const RUNTIME_ERROR: i64 = 1;
+
+impl<C, Block, AccountId, Balance> ContractsApi<<Block as BlockT>::Hash, AccountId, Balance> for Contracts<C, Block>
 where
+	Block: BlockT,
 	C: Send + Sync + 'static,
-	C: traits::ProvideRuntimeApi,
+	C: ProvideRuntimeApi,
 	C: HeaderBackend<Block>,
-	C::Api: ContractsRuntimeApi<Block>,
+	C::Api: ContractsRuntimeApi<Block, AccountId, Balance>,
+	AccountId: Codec,
+	Balance: Codec,
 {
 	fn call(
 		&self,
-		call_request: CallRequest,
+		call_request: CallRequest<AccountId, Balance>,
 		at: Option<<Block as BlockT>::Hash>,
 	) -> Result<ContractExecResult> {
 		let api = self.client.runtime_api();
@@ -104,9 +112,9 @@ where
 		})?;
 
 		let exec_result = api
-			.call(&at, origin, dest, value, gas_limit, input_data)
+			.call(&at, origin, dest, value, gas_limit, input_data.to_vec())
 			.map_err(|e| Error {
-				code: ErrorCode::ServerError(crate::constants::RUNTIME_ERROR),
+				code: ErrorCode::ServerError(RUNTIME_ERROR),
 				message: "Runtime trapped while executing a contract.".into(),
 				data: Some(format!("{:?}", e).into()),
 			})?;

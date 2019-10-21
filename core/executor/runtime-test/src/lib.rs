@@ -5,48 +5,23 @@
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
-use rstd::{vec::Vec, slice, vec};
+#[cfg(not(feature = "std"))]
+use rstd::{vec::Vec, vec};
 
+#[cfg(not(feature = "std"))]
 use runtime_io::{
 	set_storage, storage, clear_prefix, blake2_128, blake2_256,
 	twox_128, twox_256, ed25519_verify, sr25519_verify,
 };
+#[cfg(not(feature = "std"))]
 use sr_primitives::{print, traits::{BlakeTwo256, Hash}};
+#[cfg(not(feature = "std"))]
 use primitives::{ed25519, sr25519};
 
-macro_rules! impl_stubs {
-	( $( $new_name:ident => $invoke:expr, )* ) => {
-		$(
-			impl_stubs!(@METHOD $new_name => $invoke);
-		)*
-	};
-	( @METHOD $new_name:ident => $invoke:expr ) => {
-		#[no_mangle]
-		pub fn $new_name(input_data: *mut u8, input_len: usize) -> u64 {
-			let input: &[u8] = if input_len == 0 {
-				&[0u8; 0]
-			} else {
-				unsafe {
-					slice::from_raw_parts(input_data, input_len)
-				}
-			};
-
-			let output: Vec<u8> = $invoke(input);
-			let res = output.as_ptr() as u64 + ((output.len() as u64) << 32);
-
-			// Leak the output vector to avoid it being freed.
-			// This is fine in a WASM context since the heap
-			// will be discarded after the call.
-			rstd::mem::forget(output);
-			res
-		}
-	};
-}
-
-impl_stubs!(
-	test_data_in => |input| {
+primitives::wasm_export_functions! {
+	fn test_data_in(input: Vec<u8>) -> Vec<u8> {
 		print("set_storage");
-		set_storage(b"input", input);
+		set_storage(b"input", &input);
 
 		print("storage");
 		let foo = storage(b"foo").unwrap();
@@ -56,25 +31,44 @@ impl_stubs!(
 
 		print("finished!");
 		b"all ok!".to_vec()
-	},
-	test_clear_prefix => |input| {
-		clear_prefix(input);
+	}
+
+	fn test_clear_prefix(input: Vec<u8>) -> Vec<u8> {
+		clear_prefix(&input);
 		b"all ok!".to_vec()
-	},
-	test_empty_return => |_| Vec::new(),
-	test_exhaust_heap => |_| Vec::with_capacity(16777216),
-	test_panic => |_| panic!("test panic"),
-	test_conditional_panic => |input: &[u8]| {
+	}
+
+	fn test_empty_return() {}
+
+	fn test_exhaust_heap() -> Vec<u8> { Vec::with_capacity(16777216) }
+
+	fn test_panic() { panic!("test panic") }
+
+	fn test_conditional_panic(input: Vec<u8>) -> Vec<u8> {
 		if input.len() > 0 {
 			panic!("test panic")
 		}
-		input.to_vec()
-	},
-	test_blake2_256 => |input| blake2_256(input).to_vec(),
-	test_blake2_128 => |input| blake2_128(input).to_vec(),
-	test_twox_256 => |input| twox_256(input).to_vec(),
-	test_twox_128 => |input| twox_128(input).to_vec(),
-	test_ed25519_verify => |input: &[u8]| {
+
+		input
+	}
+
+	fn test_blake2_256(input: Vec<u8>) -> Vec<u8> {
+		blake2_256(&input).to_vec()
+	}
+
+	fn test_blake2_128(input: Vec<u8>) -> Vec<u8> {
+		blake2_128(&input).to_vec()
+	}
+
+	fn test_twox_256(input: Vec<u8>) -> Vec<u8> {
+		twox_256(&input).to_vec()
+	}
+
+	fn test_twox_128(input: Vec<u8>) -> Vec<u8> {
+		twox_128(&input).to_vec()
+	}
+
+	fn test_ed25519_verify(input: Vec<u8>) -> bool {
 		let mut pubkey = [0; 32];
 		let mut sig = [0; 64];
 
@@ -82,9 +76,10 @@ impl_stubs!(
 		sig.copy_from_slice(&input[32..96]);
 
 		let msg = b"all ok!";
-		[ed25519_verify(&ed25519::Signature(sig), &msg[..], &ed25519::Public(pubkey)) as u8].to_vec()
-	},
-	test_sr25519_verify => |input: &[u8]| {
+		ed25519_verify(&ed25519::Signature(sig), &msg[..], &ed25519::Public(pubkey))
+	}
+
+	fn test_sr25519_verify(input: Vec<u8>) -> bool {
 		let mut pubkey = [0; 32];
 		let mut sig = [0; 64];
 
@@ -92,9 +87,10 @@ impl_stubs!(
 		sig.copy_from_slice(&input[32..96]);
 
 		let msg = b"all ok!";
-		[sr25519_verify(&sr25519::Signature(sig), &msg[..], &sr25519::Public(pubkey)) as u8].to_vec()
-	},
-	test_ordered_trie_root => |_| {
+		sr25519_verify(&sr25519::Signature(sig), &msg[..], &sr25519::Public(pubkey))
+	}
+
+	fn test_ordered_trie_root() -> Vec<u8> {
 		BlakeTwo256::ordered_trie_root(
 			vec![
 				b"zero"[..].into(),
@@ -102,24 +98,25 @@ impl_stubs!(
 				b"two"[..].into(),
 			],
 		).as_ref().to_vec()
-	},
-	test_sandbox => |code: &[u8]| {
-		let ok = execute_sandboxed(code, &[]).is_ok();
-		[ok as u8].to_vec()
-	},
-	test_sandbox_args => |code: &[u8]| {
-		let ok = execute_sandboxed(
-			code,
+	}
+
+	fn test_sandbox(code: Vec<u8>) -> bool {
+		execute_sandboxed(&code, &[]).is_ok()
+	}
+
+	fn test_sandbox_args(code: Vec<u8>) -> bool {
+		execute_sandboxed(
+			&code,
 			&[
 				sandbox::TypedValue::I32(0x12345678),
 				sandbox::TypedValue::I64(0x1234567887654321),
-			]
-		).is_ok();
-		[ok as u8].to_vec()
-	},
-	test_sandbox_return_val => |code: &[u8]| {
+			],
+		).is_ok()
+	}
+
+	fn test_sandbox_return_val(code: Vec<u8>) -> bool {
 		let ok = match execute_sandboxed(
-			code,
+			&code,
 			&[
 				sandbox::TypedValue::I32(0x1336),
 			]
@@ -127,41 +124,43 @@ impl_stubs!(
 			Ok(sandbox::ReturnValue::Value(sandbox::TypedValue::I32(0x1337))) => true,
 			_ => false,
 		};
-		[ok as u8].to_vec()
-	},
-	test_sandbox_instantiate => |code: &[u8]| {
+
+		ok
+	}
+
+	fn test_sandbox_instantiate(code: Vec<u8>) -> u8 {
 		let env_builder = sandbox::EnvironmentDefinitionBuilder::new();
-		let code = match sandbox::Instance::new(code, &env_builder, &mut ()) {
+		let code = match sandbox::Instance::new(&code, &env_builder, &mut ()) {
 			Ok(_) => 0,
 			Err(sandbox::Error::Module) => 1,
 			Err(sandbox::Error::Execution) => 2,
 			Err(sandbox::Error::OutOfBounds) => 3,
 		};
-		[code].to_vec()
-	},
-	test_offchain_local_storage => |_| {
+
+		code
+	}
+
+	fn test_offchain_local_storage() -> bool {
 		let kind = primitives::offchain::StorageKind::PERSISTENT;
 		assert_eq!(runtime_io::local_storage_get(kind, b"test"), None);
 		runtime_io::local_storage_set(kind, b"test", b"asd");
 		assert_eq!(runtime_io::local_storage_get(kind, b"test"), Some(b"asd".to_vec()));
 
 		let res = runtime_io::local_storage_compare_and_set(kind, b"test", Some(b"asd"), b"");
-		assert_eq!(res, true);
 		assert_eq!(runtime_io::local_storage_get(kind, b"test"), Some(b"".to_vec()));
+		res
+	}
 
-		[0].to_vec()
-	},
-	test_offchain_local_storage_with_none => |_| {
+	fn test_offchain_local_storage_with_none() {
 		let kind = primitives::offchain::StorageKind::PERSISTENT;
 		assert_eq!(runtime_io::local_storage_get(kind, b"test"), None);
 
 		let res = runtime_io::local_storage_compare_and_set(kind, b"test", None, b"value");
 		assert_eq!(res, true);
 		assert_eq!(runtime_io::local_storage_get(kind, b"test"), Some(b"value".to_vec()));
+	}
 
-		[0].to_vec()
-	},
-	test_offchain_http => |_| {
+	fn test_offchain_http() -> bool {
 		use primitives::offchain::HttpRequestStatus;
 		let run = || -> Option<()> {
 			let id = runtime_io::http_request_start("POST", "http://localhost:12345", &[]).ok()?;
@@ -182,16 +181,23 @@ impl_stubs!(
 			Some(())
 		};
 
-		[if run().is_some() { 0 } else { 1 }].to_vec()
-	},
-);
+		run().is_some()
+	}
+ }
 
-fn execute_sandboxed(code: &[u8], args: &[sandbox::TypedValue]) -> Result<sandbox::ReturnValue, sandbox::HostError> {
+#[cfg(not(feature = "std"))]
+fn execute_sandboxed(
+	code: &[u8],
+	args: &[sandbox::TypedValue],
+) -> Result<sandbox::ReturnValue, sandbox::HostError> {
 	struct State {
 		counter: u32,
 	}
 
-	fn env_assert(_e: &mut State, args: &[sandbox::TypedValue]) -> Result<sandbox::ReturnValue, sandbox::HostError> {
+	fn env_assert(
+		_e: &mut State,
+		args: &[sandbox::TypedValue],
+	) -> Result<sandbox::ReturnValue, sandbox::HostError> {
 		if args.len() != 1 {
 			return Err(sandbox::HostError);
 		}
@@ -202,7 +208,10 @@ fn execute_sandboxed(code: &[u8], args: &[sandbox::TypedValue]) -> Result<sandbo
 			Err(sandbox::HostError)
 		}
 	}
-	fn env_inc_counter(e: &mut State, args: &[sandbox::TypedValue]) -> Result<sandbox::ReturnValue, sandbox::HostError> {
+	fn env_inc_counter(
+		e: &mut State,
+		args: &[sandbox::TypedValue],
+	) -> Result<sandbox::ReturnValue, sandbox::HostError> {
 		if args.len() != 1 {
 			return Err(sandbox::HostError);
 		}

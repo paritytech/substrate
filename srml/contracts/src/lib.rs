@@ -122,9 +122,9 @@ use sr_primitives::{
 use support::dispatch::{Result, Dispatchable};
 use support::{
 	Parameter, decl_module, decl_event, decl_storage, storage::child,
-	parameter_types,
+	parameter_types, IsSubType
 };
-use support::{traits::{OnFreeBalanceZero, OnUnbalanced, Currency, Get, Time}, IsSubType};
+use support::traits::{OnFreeBalanceZero, OnUnbalanced, Currency, Get, Time, Randomness};
 use system::{ensure_signed, RawOrigin, ensure_root};
 use primitives::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX;
 
@@ -325,7 +325,7 @@ parameter_types! {
 	/// A reasonable default value for [`Trait::InstantiateBaseFee`].
 	pub const DefaultInstantiateBaseFee: u32 = 1000;
 	/// A reasonable default value for [`Trait::MaxDepth`].
-	pub const DefaultMaxDepth: u32 = 1024;
+	pub const DefaultMaxDepth: u32 = 32;
 	/// A reasonable default value for [`Trait::MaxValueSize`].
 	pub const DefaultMaxValueSize: u32 = 16_384;
 	/// A reasonable default value for [`Trait::BlockGasLimit`].
@@ -335,6 +335,7 @@ parameter_types! {
 pub trait Trait: system::Trait {
 	type Currency: Currency<Self::AccountId>;
 	type Time: Time;
+	type Randomness: Randomness<Self::Hash>;
 
 	/// The outer call dispatch type.
 	type Call: Parameter + Dispatchable<Origin=<Self as system::Trait>::Origin> + IsSubType<Module<Self>, Self>;
@@ -441,7 +442,7 @@ where
 }
 
 /// The default dispatch fee computor computes the fee in the same way that
-/// the implementation of `TakeFees` for the Balances module does. Note that this only takes a fixed
+/// the implementation of `ChargeTransactionPayment` for the Balances module does. Note that this only takes a fixed
 /// fee based on size. Unlike the balances module, weight-fee is applied.
 pub struct DefaultDispatchFeeComputor<T: Trait>(PhantomData<T>);
 impl<T: Trait> ComputeDispatchFee<<T as Trait>::Call, BalanceOf<T>> for DefaultDispatchFeeComputor<T> {

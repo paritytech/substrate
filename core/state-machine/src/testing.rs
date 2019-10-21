@@ -21,21 +21,19 @@ use hash_db::Hasher;
 use crate::{
 	backend::{InMemory, Backend}, OverlayedChanges,
 	changes_trie::{
-		build_changes_trie, InMemoryStorage as ChangesTrieInMemoryStorage,
+		InMemoryStorage as ChangesTrieInMemoryStorage,
 		BlockNumber as ChangesTrieBlockNumber,
 	},
+	ext::Ext,
 };
 use primitives::{
 	storage::{
-		ChildStorageKey,
 		well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES, is_child_storage_key}
 	},
-	traits::Externalities, hash::H256, Blake2Hasher,
+	hash::H256, Blake2Hasher,
 };
 use codec::Encode;
 use externalities::{Extensions, Extension};
-
-const EXT_NOT_ALLOWED_TO_FAIL: &str = "Externalities not allowed to fail within runtime";
 
 type StorageTuple = (HashMap<Vec<u8>, Vec<u8>>, HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>);
 
@@ -48,6 +46,17 @@ pub struct TestExternalities<H: Hasher<Out=H256>=Blake2Hasher, N: ChangesTrieBlo
 }
 
 impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
+
+	/// Get externalities implementation.
+	pub fn ext(&mut self) -> Ext<H, N, InMemory<H>, ChangesTrieInMemoryStorage<H, N>> {
+		Ext::new(
+			&mut self.overlay,
+			&self.backend,
+			Some(&self.changes_trie_storage),
+			Some(&mut self.extensions),
+		)
+	}
+
 	/// Create a new instance of `TestExternalities` with storage.
 	pub fn new(storage: StorageTuple) -> Self {
 		Self::new_with_code(&[], storage)
@@ -110,6 +119,14 @@ impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 
 		self.backend.update(top.chain(children).collect())
 	}
+
+	/// Execute the given closure while `self` is set as externalities.
+	///
+	/// Returns the result of the given closure.
+	pub fn execute_with<R>(&mut self, execute: impl FnOnce() -> R) -> R {
+		let mut ext = self.ext();
+		externalities::set_and_run_with_externalities(&mut ext, execute)
+	}
 }
 
 impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> std::fmt::Debug for TestExternalities<H, N> {
@@ -136,6 +153,7 @@ impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> From<StorageTuple> for Test
 	}
 }
 
+<<<<<<< HEAD
 impl<H, N> Externalities for TestExternalities<H, N> where
 	H: Hasher<Out=H256>,
 	N: ChangesTrieBlockNumber,
@@ -284,6 +302,8 @@ impl<H, N> Externalities for TestExternalities<H, N> where
 	
 }
 
+=======
+>>>>>>> master
 impl<H, N> externalities::ExtensionStore for TestExternalities<H, N> where
 	H: Hasher<Out=H256>,
 	N: ChangesTrieBlockNumber,
@@ -296,12 +316,13 @@ impl<H, N> externalities::ExtensionStore for TestExternalities<H, N> where
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use primitives::{Blake2Hasher, H256};
+	use primitives::traits::Externalities;
 	use hex_literal::hex;
 
 	#[test]
 	fn commit_should_work() {
 		let mut ext = TestExternalities::<Blake2Hasher, u64>::default();
+		let mut ext = ext.ext();
 		ext.set_storage(b"doe".to_vec(), b"reindeer".to_vec());
 		ext.set_storage(b"dog".to_vec(), b"puppy".to_vec());
 		ext.set_storage(b"dogglesworth".to_vec(), b"cat".to_vec());
@@ -312,6 +333,7 @@ mod tests {
 	#[test]
 	fn set_and_retrieve_code() {
 		let mut ext = TestExternalities::<Blake2Hasher, u64>::default();
+		let mut ext = ext.ext();
 
 		let code = vec![1, 2, 3];
 		ext.set_storage(CODE.to_vec(), code.clone());

@@ -22,6 +22,7 @@ test-client = { package = "substrate-test-client", path = "../../core/test-clien
 sr-primitives = { path = "../../core/sr-primitives" }
 runtime_support = { package = "srml-support", path = "../../srml/support" }
 balances = { package = "srml-balances", path = "../../srml/balances" }
+transaction-payment = { package = "srml-transaction-payment", path = "../../srml/transaction-payment" }
 session = { package = "srml-session", path = "../../srml/session" }
 system = { package = "srml-system", path = "../../srml/system" }
 timestamp = { package = "srml-timestamp", path = "../../srml/timestamp" }

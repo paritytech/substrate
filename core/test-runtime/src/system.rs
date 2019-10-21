@@ -18,7 +18,7 @@
 //! and depositing logs.
 
 use rstd::prelude::*;
-use runtime_io::{storage_root, storage_changes_root, twox_128, blake2_256};
+use runtime_io::{storage_root, storage_changes_root, blake2_256};
 use runtime_support::storage::{self, StorageValue, StorageMap};
 use runtime_support::storage_items;
 use sr_primitives::{
@@ -199,22 +199,14 @@ pub fn validate_transaction(utx: Extrinsic) -> TransactionValidity {
 		return InvalidTransaction::Future.into();
 	}
 
-	let hash = |from: &AccountId, nonce: u64| {
-		twox_128(&nonce.to_keyed_vec(&from.encode())).to_vec()
-	};
+	let encode = |from: &AccountId, nonce: u64| (from, nonce).encode();
 	let requires = if tx.nonce != expected_nonce && tx.nonce > 0 {
-		let mut deps = Vec::new();
-		deps.push(hash(&tx.from, tx.nonce - 1));
-		deps
+		vec![encode(&tx.from, tx.nonce - 1)]
 	} else {
-		Vec::new()
+		vec![]
 	};
 
-	let provides = {
-		let mut p = Vec::new();
-		p.push(hash(&tx.from, tx.nonce));
-		p
-	};
+	let provides = vec![encode(&tx.from, tx.nonce)];
 
 	Ok(ValidTransaction {
 		priority: tx.amount,
@@ -350,10 +342,10 @@ mod tests {
 
 	use runtime_io::TestExternalities;
 	use substrate_test_runtime_client::{AccountKeyring, Sr25519Keyring};
-	use sr_primitives::set_and_run_with_externalities;
 	use crate::{Header, Transfer, WASM_BINARY};
 	use primitives::{NeverNativeValue, map, traits::CodeExecutor};
 	use substrate_executor::{NativeExecutor, WasmExecutionMethod, native_executor_instance};
+	use runtime_io::twox_128;
 
 	// Declare an instance of the native executor dispatch for the test runtime.
 	native_executor_instance!(
@@ -400,25 +392,22 @@ mod tests {
 			extrinsics: vec![],
 		};
 
-		set_and_run_with_externalities(&mut new_test_ext(), || polish_block(&mut b));
+		new_test_ext().execute_with(|| polish_block(&mut b));
 
 		block_executor(b, &mut new_test_ext());
 	}
 
 	#[test]
 	fn block_import_works_native() {
-		block_import_works(|b, ext| {
-			set_and_run_with_externalities(ext, || {
-				execute_block(b);
-			});
-		});
+		block_import_works(|b, ext| ext.execute_with(|| execute_block(b)));
 	}
 
 	#[test]
 	fn block_import_works_wasm() {
 		block_import_works(|b, ext| {
+			let mut ext = ext.ext();
 			executor().call::<_, NeverNativeValue, fn() -> _>(
-				ext,
+				&mut ext,
 				"Core_execute_block",
 				&b.encode(),
 				false,
@@ -449,7 +438,7 @@ mod tests {
 		};
 
 		let mut dummy_ext = new_test_ext();
-		set_and_run_with_externalities(&mut dummy_ext, || polish_block(&mut b1));
+		dummy_ext.execute_with(|| polish_block(&mut b1));
 
 		let mut b2 = Block {
 			header: Header {
@@ -475,26 +464,26 @@ mod tests {
 			],
 		};
 
-		set_and_run_with_externalities(&mut dummy_ext, || polish_block(&mut b2));
+		dummy_ext.execute_with(|| polish_block(&mut b2));
 		drop(dummy_ext);
 
 		let mut t = new_test_ext();
 
-		set_and_run_with_externalities(&mut t, || {
+		t.execute_with(|| {
 			assert_eq!(balance_of(AccountKeyring::Alice.into()), 111);
 			assert_eq!(balance_of(AccountKeyring::Bob.into()), 0);
 		});
 
 		block_executor(b1, &mut t);
 
-		set_and_run_with_externalities(&mut t, || {
+		t.execute_with(|| {
 			assert_eq!(balance_of(AccountKeyring::Alice.into()), 42);
 			assert_eq!(balance_of(AccountKeyring::Bob.into()), 69);
 		});
 
 		block_executor(b2, &mut t);
 
-		set_and_run_with_externalities(&mut t, || {
+		t.execute_with(|| {
 			assert_eq!(balance_of(AccountKeyring::Alice.into()), 0);
 			assert_eq!(balance_of(AccountKeyring::Bob.into()), 42);
 			assert_eq!(balance_of(AccountKeyring::Charlie.into()), 69);
@@ -503,18 +492,15 @@ mod tests {
 
 	#[test]
 	fn block_import_with_transaction_works_native() {
-		block_import_with_transaction_works(|b, ext| {
-			set_and_run_with_externalities(ext, || {
-				execute_block(b);
-			});
-		});
+		block_import_with_transaction_works(|b, ext| ext.execute_with(|| execute_block(b)));
 	}
 
 	#[test]
 	fn block_import_with_transaction_works_wasm() {
 		block_import_with_transaction_works(|b, ext| {
+			let mut ext = ext.ext();
 			executor().call::<_, NeverNativeValue, fn() -> _>(
-				ext,
+				&mut ext,
 				"Core_execute_block",
 				&b.encode(),
 				false,

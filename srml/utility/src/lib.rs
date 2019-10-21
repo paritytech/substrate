@@ -65,10 +65,7 @@ mod tests {
 
 	use support::{assert_ok, assert_noop, impl_outer_origin, parameter_types, impl_outer_dispatch};
 	use primitives::H256;
-	use sr_primitives::{
-		Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header,
-		set_and_run_with_externalities,
-	};
+	use sr_primitives::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 
 	impl_outer_origin! {
 		pub enum Origin for Test {}
@@ -102,7 +99,6 @@ mod tests {
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
-		type WeightMultiplierUpdate = ();
 		type Event = ();
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
@@ -114,23 +110,17 @@ mod tests {
 		pub const ExistentialDeposit: u64 = 0;
 		pub const TransferFee: u64 = 0;
 		pub const CreationFee: u64 = 0;
-		pub const TransactionBaseFee: u64 = 0;
-		pub const TransactionByteFee: u64 = 0;
 	}
 	impl balances::Trait for Test {
 		type Balance = u64;
 		type OnFreeBalanceZero = ();
 		type OnNewAccount = ();
 		type Event = ();
-		type TransactionPayment = ();
 		type TransferPayment = ();
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
 		type TransferFee = TransferFee;
 		type CreationFee = CreationFee;
-		type TransactionBaseFee = TransactionBaseFee;
-		type TransactionByteFee = TransactionByteFee;
-		type WeightToFee = ();
 	}
 	impl Trait for Test {
 		type Event = ();
@@ -150,7 +140,7 @@ mod tests {
 
 	#[test]
 	fn batch_works() {
-		set_and_run_with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			assert_eq!(Balances::free_balance(1), 10);
 			assert_eq!(Balances::free_balance(2), 0);
 			assert_noop!(Utility::batch(Origin::signed(1), vec![

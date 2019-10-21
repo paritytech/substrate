@@ -21,7 +21,7 @@ fn main() {
 		"wasm_binary.rs",
 		WasmBuilderSource::CratesOrPath {
 			path: "../../core/utils/wasm-builder",
-			version: "1.0.7",
+			version: "1.0.8",
 		},
 		// This instructs LLD to export __heap_base as a global variable, which is used by the
 		// external memory allocator.

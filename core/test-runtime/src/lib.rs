@@ -390,7 +390,6 @@ impl srml_system::Trait for Runtime {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type WeightMultiplierUpdate = ();
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
 	type MaximumBlockLength = MaximumBlockLength;
@@ -664,6 +663,12 @@ cfg_if! {
 					SessionKeys::generate(None)
 				}
 			}
+
+			impl srml_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {
+				fn account_nonce(_account: AccountId) -> Index {
+					0
+				}
+			}
 		}
 	} else {
 		impl_runtime_apis! {
@@ -880,6 +885,12 @@ cfg_if! {
 			impl session::SessionKeys<Block> for Runtime {
 				fn generate_session_keys(_: Option<Vec<u8>>) -> Vec<u8> {
 					SessionKeys::generate(None)
+				}
+			}
+
+			impl srml_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {
+				fn account_nonce(_account: AccountId) -> Index {
+					0
 				}
 			}
 		}

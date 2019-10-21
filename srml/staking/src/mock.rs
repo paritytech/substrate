@@ -118,7 +118,6 @@ impl system::Trait for Test {
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type WeightMultiplierUpdate = ();
 	type Event = ();
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
@@ -129,23 +128,17 @@ impl system::Trait for Test {
 parameter_types! {
 	pub const TransferFee: Balance = 0;
 	pub const CreationFee: Balance = 0;
-	pub const TransactionBaseFee: u64 = 0;
-	pub const TransactionByteFee: u64 = 0;
 }
 impl balances::Trait for Test {
 	type Balance = Balance;
 	type OnFreeBalanceZero = Staking;
 	type OnNewAccount = ();
 	type Event = ();
-	type TransactionPayment = ();
 	type TransferPayment = ();
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type TransferFee = TransferFee;
 	type CreationFee = CreationFee;
-	type TransactionBaseFee = TransactionBaseFee;
-	type TransactionByteFee = TransactionByteFee;
-	type WeightToFee = ();
 }
 parameter_types! {
 	pub const Period: BlockNumber = 1;
@@ -340,8 +333,8 @@ impl ExtBuilder {
 			keys: validators.iter().map(|x| (*x, UintAuthorityId(*x))).collect(),
 		}.assimilate_storage(&mut storage);
 
-		let mut ext = storage.into();
-		sr_primitives::set_and_run_with_externalities(&mut ext, || {
+		let mut ext = runtime_io::TestExternalities::from(storage);
+		ext.execute_with(|| {
 			let validators = Session::validators();
 			SESSION.with(|x|
 				*x.borrow_mut() = (validators.clone(), HashSet::new())

@@ -18,7 +18,7 @@
 
 #![cfg(test)]
 
-use sr_primitives::{Perbill, traits::{Convert, IdentityLookup}, testing::Header,
+use sr_primitives::{Perbill, traits::{ConvertInto, IdentityLookup}, testing::Header,
 	weights::{DispatchInfo, Weight}};
 use primitives::H256;
 use runtime_io;
@@ -35,10 +35,6 @@ thread_local! {
 	static EXISTENTIAL_DEPOSIT: RefCell<u64> = RefCell::new(0);
 	static TRANSFER_FEE: RefCell<u64> = RefCell::new(0);
 	static CREATION_FEE: RefCell<u64> = RefCell::new(0);
-	static TRANSACTION_BASE_FEE: RefCell<u64> = RefCell::new(0);
-	static TRANSACTION_BYTE_FEE: RefCell<u64> = RefCell::new(1);
-	static TRANSACTION_WEIGHT_FEE: RefCell<u64> = RefCell::new(1);
-	static WEIGHT_TO_FEE: RefCell<u64> = RefCell::new(1);
 }
 
 pub struct ExistentialDeposit;
@@ -54,23 +50,6 @@ impl Get<u64> for TransferFee {
 pub struct CreationFee;
 impl Get<u64> for CreationFee {
 	fn get() -> u64 { CREATION_FEE.with(|v| *v.borrow()) }
-}
-
-pub struct TransactionBaseFee;
-impl Get<u64> for TransactionBaseFee {
-	fn get() -> u64 { TRANSACTION_BASE_FEE.with(|v| *v.borrow()) }
-}
-
-pub struct TransactionByteFee;
-impl Get<u64> for TransactionByteFee {
-	fn get() -> u64 { TRANSACTION_BYTE_FEE.with(|v| *v.borrow()) }
-}
-
-pub struct WeightToFee(u64);
-impl Convert<Weight, u64> for WeightToFee {
-	fn convert(t: Weight) -> u64 {
-		WEIGHT_TO_FEE.with(|v| *v.borrow() * (t as u64))
-	}
 }
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
@@ -92,7 +71,6 @@ impl system::Trait for Runtime {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type WeightMultiplierUpdate = ();
 	type Event = ();
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
@@ -100,26 +78,31 @@ impl system::Trait for Runtime {
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
 }
+parameter_types! {
+	pub const TransactionBaseFee: u64 = 0;
+	pub const TransactionByteFee: u64 = 1;
+}
+impl transaction_payment::Trait for Runtime {
+	type Currency = Module<Runtime>;
+	type OnTransactionPayment = ();
+	type TransactionBaseFee = TransactionBaseFee;
+	type TransactionByteFee = TransactionByteFee;
+	type WeightToFee = ConvertInto;
+	type FeeMultiplierUpdate = ();
+}
 impl Trait for Runtime {
 	type Balance = u64;
 	type OnFreeBalanceZero = ();
 	type OnNewAccount = ();
 	type Event = ();
-	type TransactionPayment = ();
 	type DustRemoval = ();
 	type TransferPayment = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type TransferFee = TransferFee;
 	type CreationFee = CreationFee;
-	type TransactionBaseFee = TransactionBaseFee;
-	type TransactionByteFee = TransactionByteFee;
-	type WeightToFee = WeightToFee;
 }
 
 pub struct ExtBuilder {
-	transaction_base_fee: u64,
-	transaction_byte_fee: u64,
-	weight_to_fee: u64,
 	existential_deposit: u64,
 	transfer_fee: u64,
 	creation_fee: u64,
@@ -129,9 +112,6 @@ pub struct ExtBuilder {
 impl Default for ExtBuilder {
 	fn default() -> Self {
 		Self {
-			transaction_base_fee: 0,
-			transaction_byte_fee: 0,
-			weight_to_fee: 0,
 			existential_deposit: 0,
 			transfer_fee: 0,
 			creation_fee: 0,
@@ -141,12 +121,6 @@ impl Default for ExtBuilder {
 	}
 }
 impl ExtBuilder {
-	pub fn transaction_fees(mut self, base_fee: u64, byte_fee: u64, weight_fee: u64) -> Self {
-		self.transaction_base_fee = base_fee;
-		self.transaction_byte_fee = byte_fee;
-		self.weight_to_fee = weight_fee;
-		self
-	}
 	pub fn existential_deposit(mut self, existential_deposit: u64) -> Self {
 		self.existential_deposit = existential_deposit;
 		self
@@ -175,9 +149,6 @@ impl ExtBuilder {
 		EXISTENTIAL_DEPOSIT.with(|v| *v.borrow_mut() = self.existential_deposit);
 		TRANSFER_FEE.with(|v| *v.borrow_mut() = self.transfer_fee);
 		CREATION_FEE.with(|v| *v.borrow_mut() = self.creation_fee);
-		TRANSACTION_BASE_FEE.with(|v| *v.borrow_mut() = self.transaction_base_fee);
-		TRANSACTION_BYTE_FEE.with(|v| *v.borrow_mut() = self.transaction_byte_fee);
-		WEIGHT_TO_FEE.with(|v| *v.borrow_mut() = self.weight_to_fee);
 	}
 	pub fn build(self) -> runtime_io::TestExternalities {
 		self.set_associated_consts();
@@ -210,7 +181,6 @@ impl ExtBuilder {
 
 pub type System = system::Module<Runtime>;
 pub type Balances = Module<Runtime>;
-
 
 pub const CALL: &<Runtime as system::Trait>::Call = &();
 
