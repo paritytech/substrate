@@ -536,7 +536,7 @@ impl OverlayedChanges {
 		}
 	}
 
-	#[cfg(any(test, feature = "test"))]
+	#[cfg(any(test, feature = "test-helpers"))]
 	/// Iterator over current state of the overlay.
 	pub fn iter_values(
 		&self,
@@ -545,7 +545,7 @@ impl OverlayedChanges {
 		self.changes.iter_values(storage_key)
 	}
 
-	#[cfg(any(test, feature = "test"))]
+	#[cfg(any(test, feature = "test-helpers"))]
 	/// Count (slow) the number of key value, history included.
 	/// Only for debugging or testing usage.
 	pub fn top_count_keyvalue_pair(&self) -> usize {

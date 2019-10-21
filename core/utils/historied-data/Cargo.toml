@@ -15,4 +15,4 @@ std = [
   "rstd/std",
   "smallvec/std",
 ]
-test = []
+test-helpers = []

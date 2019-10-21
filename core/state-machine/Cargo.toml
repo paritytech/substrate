@@ -24,7 +24,7 @@ externalities = { package = "substrate-externalities", path = "../externalities"
 hex-literal = "0.2.1"
 criterion = "0.2"
 rand = { version = "0.7.1", features = ["small_rng"] }
-historied-data = { path = "../utils/historied-data", features = [ "test" ] }
+historied-data = { path = "../utils/historied-data", features = [ "test-helpers" ] }
 
 [[bench]]
 name = "bench"
@@ -32,3 +32,4 @@ harness = false
 
 [features]
 default = []
+test-helpers = []

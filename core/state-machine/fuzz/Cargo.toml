@@ -11,7 +11,7 @@ cargo-fuzz = true
 
 [dependencies.substrate-state-machine]
 path = ".."
-features = ["test"]
+features = ["test-helpers"]
 
 [dependencies.libfuzzer-sys]
 git = "https://github.com/rust-fuzz/libfuzzer-sys.git"

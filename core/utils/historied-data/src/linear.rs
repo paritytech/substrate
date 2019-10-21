@@ -28,7 +28,7 @@ use rstd::vec;
 
 /// An entry at a given history height.
 #[derive(Debug, Clone)]
-#[cfg_attr(any(test, feature = "test"), derive(PartialEq))]
+#[cfg_attr(any(test, feature = "test-helpers"), derive(PartialEq))]
 pub struct HistoriedValue<V> {
 	/// The stored value.
 	pub value: V,
@@ -66,7 +66,7 @@ const ALLOCATED_HISTORY: usize = 2;
 ///
 /// Values are always paired with a state history index.
 #[derive(Debug, Clone)]
-#[cfg_attr(any(test, feature = "test"), derive(PartialEq))]
+#[cfg_attr(any(test, feature = "test-helpers"), derive(PartialEq))]
 pub struct History<V>(MemoryOnly<V>);
 
 impl<V> Default for History<V> {
@@ -83,7 +83,7 @@ impl<V> History<V> {
 		self.0[index].as_ref()
 	}
 
-	#[cfg(any(test, feature = "test"))]
+	#[cfg(any(test, feature = "test-helpers"))]
 	/// Create an history from an existing history.
 	pub fn from_iter(input: impl IntoIterator<Item = HistoriedValue<V>>) -> Self {
 		let mut history = History::default();
@@ -126,7 +126,7 @@ impl<V> History<V> {
 }
 
 #[derive(Debug, Clone)]
-#[cfg_attr(any(test, feature = "test"), derive(PartialEq))]
+#[cfg_attr(any(test, feature = "test-helpers"), derive(PartialEq))]
 pub struct States(Vec<TransactionState>);
 
 impl Default for States {
@@ -148,7 +148,7 @@ impl States {
 impl States {
 
 	/// Build any state for testing only.
-	#[cfg(any(test, feature = "test"))]
+	#[cfg(any(test, feature = "test-helpers"))]
 	pub fn test_vector(test_states: Vec<TransactionState>) -> Self {
 		States(test_states)
 	}
@@ -312,7 +312,7 @@ impl<V> History<V> {
 	}
 
 
-	#[cfg(any(test, feature = "test"))]
+	#[cfg(any(test, feature = "test-helpers"))]
 	pub fn get_prospective(&self, history: &[TransactionState]) -> Option<&V> {
 		// index is never 0,
 		let mut index = self.len();
@@ -335,7 +335,7 @@ impl<V> History<V> {
 		None
 	}
 
-	#[cfg(any(test, feature = "test"))]
+	#[cfg(any(test, feature = "test-helpers"))]
 	pub fn get_committed(&self, history: &[TransactionState]) -> Option<&V> {
 		// index is never 0,
 		let mut index = self.len();
