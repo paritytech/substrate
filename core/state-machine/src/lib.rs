@@ -17,6 +17,12 @@
 //! Substrate state machine implementation.
 
 #![warn(missing_docs)]
+// This `allow` flag is here because otherwise running `clippy` with the
+// `-D clippy::all` flag results in many errors about type complexity.
+//
+// This may mean it is worth it to revisit this module in the future to
+// simplify data structures and types.
+#![allow(clippy::type_complexity)]
 
 use std::{fmt, result, collections::HashMap, panic::UnwindSafe, marker::PhantomData};
 use log::{warn, trace};
@@ -174,6 +180,7 @@ pub struct StateMachine<'a, B, H, N, T, Exec> where H: Hasher<Out=H256>, B: Back
 	_marker: PhantomData<(H, N)>,
 }
 
+#[allow(clippy::too_many_arguments)]
 impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec> where
 	H: Hasher<Out=H256>,
 	Exec: CodeExecutor,
@@ -257,7 +264,12 @@ impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec> where
 		let mut ext = Ext::new(
 			self.overlay,
 			self.backend,
-			self.changes_trie_storage.clone(),
+			// `.clone()` is not needed here as
+			// `changes_trie_storage: Option<&'a T>`, where
+			// `T: ChangesTrieStorage<H, N>`,
+			// `H: Hasher<Out=H256>,`, `N: crate::changes_trie::BlockNumber`
+			// implements `Copy`.
+			self.changes_trie_storage,
 			Some(&mut self.extensions),
 		);
 
@@ -525,7 +537,7 @@ where
 	Exec: CodeExecutor,
 	H::Out: Ord + 'static,
 {
-	let trie_backend = create_proof_check_backend::<H>(root.into(), proof)?;
+	let trie_backend = create_proof_check_backend::<H>(root, proof)?;
 	execution_proof_check_on_trie_backend(&trie_backend, overlay, exec, method, call_data, keystore)
 }
 

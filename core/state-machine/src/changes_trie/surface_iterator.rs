@@ -27,12 +27,12 @@ use crate::changes_trie::{ConfigurationRange, BlockNumber};
 ///
 /// `max` is the number of best block, known to caller. We can't access any changes tries
 /// that are built after this block, even though we may have them built already.
-pub fn surface_iterator<'a, Number: BlockNumber>(
-	config: ConfigurationRange<'a, Number>,
+pub fn surface_iterator<Number: BlockNumber>(
+	config: ConfigurationRange<Number>,
 	max: Number,
 	begin: Number,
 	end: Number,
-) -> Result<SurfaceIterator<'a, Number>, String> {
+) -> Result<SurfaceIterator<Number>, String> {
 	let (current, current_begin, digest_step, digest_level) = lower_bound_max_digest(
 		config.clone(),
 		max.clone(),
@@ -106,8 +106,8 @@ impl<'a, Number: BlockNumber> Iterator for SurfaceIterator<'a, Number> {
 
 /// Returns parameters of highest level digest block that includes the end of given range
 /// and tends to include the whole range.
-fn lower_bound_max_digest<'a, Number: BlockNumber>(
-	config: ConfigurationRange<'a, Number>,
+fn lower_bound_max_digest<Number: BlockNumber>(
+	config: ConfigurationRange<Number>,
 	max: Number,
 	begin: Number,
 	end: Number,

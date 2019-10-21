@@ -25,8 +25,8 @@ use crate::changes_trie::{ConfigurationRange, BlockNumber};
 /// ascending order.
 ///
 /// Skewed digest is built IF block >= config.end.
-pub fn digest_build_iterator<'a, Number: BlockNumber>(
-	config: ConfigurationRange<'a, Number>,
+pub fn digest_build_iterator<Number: BlockNumber>(
+	config: ConfigurationRange<Number>,
 	block: Number,
 ) -> DigestBuildIterator<Number> {
 	// prepare digest build parameters
@@ -124,7 +124,7 @@ impl<Number: BlockNumber> Iterator for DigestBuildIterator<Number> {
 				self.current_step.into(),
 			));
 
-			self.current_step = self.current_step / self.digest_interval;
+			self.current_step /= self.digest_interval;
 			if self.current_step == 0 {
 				self.current_step = 1;
 			}

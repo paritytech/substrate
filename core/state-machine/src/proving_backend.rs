@@ -64,7 +64,7 @@ impl<'a, S, H> ProvingBackendEssence<'a, S, H>
 		key: &[u8]
 	) -> Result<Option<Vec<u8>>, String> {
 		let root = self.storage(storage_key)?
-			.unwrap_or(default_child_trie_root::<Layout<H>>(storage_key));
+			.unwrap_or_else(|| default_child_trie_root::<Layout<H>>(storage_key));
 
 		let mut read_overlay = S::Overlay::default();
 		let eph = Ephemeral::new(

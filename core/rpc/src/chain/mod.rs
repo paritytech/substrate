@@ -84,7 +84,7 @@ trait ChainBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 		Ok(match number {
 			None => Some(self.client().info().chain.best_hash),
 			Some(num_or_hex) => self.client()
-				.header(&BlockId::number(num_or_hex.to_number()?))
+				.header(&BlockId::number(num_or_hex.into_number()?))
 				.map_err(client_err)?
 				.map(|h| h.hash()),
 		})

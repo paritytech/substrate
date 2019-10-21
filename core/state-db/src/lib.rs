@@ -237,7 +237,7 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 	}
 
 	pub fn best_canonical(&self) -> Option<u64> {
-		return self.non_canonical.last_canonicalized_block_number()
+		self.non_canonical.last_canonicalized_block_number()
 	}
 
 	pub fn is_pruned(&self, hash: &BlockHash, number: u64) -> bool {
@@ -256,7 +256,7 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 	fn prune(&mut self, commit: &mut CommitSet<Key>) {
 		if let (&mut Some(ref mut pruning), &PruningMode::Constrained(ref constraints)) = (&mut self.pruning, &self.mode) {
 			loop {
-				if pruning.window_size() <= constraints.max_blocks.unwrap_or(0) as u64 {
+				if pruning.window_size() <= u64::from(constraints.max_blocks.unwrap_or(0)) {
 					break;
 				}
 
@@ -330,7 +330,7 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		if let Some(value) = self.non_canonical.get(key) {
 			return Ok(Some(value));
 		}
-		db.get(key.as_ref()).map_err(|e| Error::Db(e))
+		db.get(key.as_ref()).map_err(Error::Db)
 	}
 
 	pub fn apply_pending(&mut self) {
@@ -405,12 +405,12 @@ impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
 
 	/// Returns last finalized block number.
 	pub fn best_canonical(&self) -> Option<u64> {
-		return self.db.read().best_canonical()
+		self.db.read().best_canonical()
 	}
 
 	/// Check if block is pruned away.
 	pub fn is_pruned(&self, hash: &BlockHash, number: u64) -> bool {
-		return self.db.read().is_pruned(hash, number)
+		self.db.read().is_pruned(hash, number)
 	}
 
 	/// Apply all pending changes

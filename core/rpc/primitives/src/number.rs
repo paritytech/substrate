@@ -40,7 +40,7 @@ impl<Number: TryFrom<u64> + From<u32> + Debug + PartialOrd> NumberOrHex<Number> 
 	/// Attempts to convert into concrete block number.
 	///
 	/// Fails in case hex number is too big.
-	pub fn to_number(self) -> Result<Number, String> {
+	pub fn into_number(self) -> Result<Number, String> {
 		let num = match self {
 			NumberOrHex::Number(n) => n,
 			NumberOrHex::Hex(h) => {

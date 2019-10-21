@@ -67,24 +67,24 @@ fn to_journal_key(block: u64) -> Vec<u8> {
 impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 	pub fn new<D: MetaDb>(db: &D) -> Result<RefWindow<BlockHash, Key>, Error<D::Error>> {
 		let last_pruned = db.get_meta(&to_meta_key(LAST_PRUNED, &()))
-			.map_err(|e| Error::Db(e))?;
-		let pending_number: u64 = match last_pruned {
+			.map_err(Error::Db)?;
+		let pending_number_: u64 = match last_pruned {
 			Some(buffer) => u64::decode(&mut buffer.as_slice())? + 1,
 			None => 0,
 		};
-		let mut block = pending_number;
+		let mut block = pending_number_;
 		let mut pruning = RefWindow {
 			death_rows: Default::default(),
 			death_index: Default::default(),
-			pending_number: pending_number,
+			pending_number: pending_number_,
 			pending_canonicalizations: 0,
 			pending_prunings: 0,
 		};
 		// read the journal
-		trace!(target: "state-db", "Reading pruning journal. Pending #{}", pending_number);
+		trace!(target: "state-db", "Reading pruning journal. Pending #{}", pending_number_);
 		loop {
 			let journal_key = to_journal_key(block);
-			match db.get_meta(&journal_key).map_err(|e| Error::Db(e))? {
+			match db.get_meta(&journal_key).map_err(Error::Db)? {
 				Some(record) => {
 					let record: JournalRecord<BlockHash, Key> = Decode::decode(&mut record.as_slice())?;
 					trace!(target: "state-db", "Pruning journal entry {} ({} inserted, {} deleted)", block, record.inserted.len(), record.deleted.len());
@@ -97,7 +97,7 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 		Ok(pruning)
 	}
 
-	fn import<I: IntoIterator<Item=Key>>(&mut self, hash: &BlockHash, journal_key: Vec<u8>, inserted: I, deleted: Vec<Key>) {
+	fn import<I: IntoIterator<Item=Key>>(&mut self, hash: &BlockHash, journal_key_: Vec<u8>, inserted: I, deleted: Vec<Key>) {
 		// remove all re-inserted keys from death rows
 		for k in inserted {
 			if let Some(block) = self.death_index.remove(&k) {
@@ -114,7 +114,7 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 			DeathRow {
 				hash: hash.clone(),
 				deleted: deleted.into_iter().collect(),
-				journal_key: journal_key,
+				journal_key: journal_key_,
 			}
 		);
 	}

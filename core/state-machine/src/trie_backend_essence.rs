@@ -79,7 +79,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> {
 	/// Get the value of child storage at given key.
 	pub fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, String> {
 		let root = self.storage(storage_key)?
-			.unwrap_or(default_child_trie_root::<Layout<H>>(storage_key));
+			.unwrap_or_else(|| default_child_trie_root::<Layout<H>>(storage_key));
 
 		let mut read_overlay = S::Overlay::default();
 		let eph = Ephemeral {
@@ -95,7 +95,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> {
 	/// Retrieve all entries keys of child storage and call `f` for each of those keys.
 	pub fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], f: F) {
 		let root = match self.storage(storage_key) {
-			Ok(v) => v.unwrap_or(default_child_trie_root::<Layout<H>>(storage_key)),
+			Ok(v) => v.unwrap_or_else(|| default_child_trie_root::<Layout<H>>(storage_key)),
 			Err(e) => {
 				debug!(target: "trie", "Error while iterating child storage: {}", e);
 				return;
@@ -121,7 +121,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> {
 	/// Execute given closure for all keys starting with prefix.
 	pub fn for_child_keys_with_prefix<F: FnMut(&[u8])>(&self, storage_key: &[u8], prefix: &[u8], mut f: F) {
 		let root_vec = match self.storage(storage_key) {
-			Ok(v) => v.unwrap_or(default_child_trie_root::<Layout<H>>(storage_key)),
+			Ok(v) => v.unwrap_or_else(|| default_child_trie_root::<Layout<H>>(storage_key)),
 			Err(e) => {
 				debug!(target: "trie", "Error while iterating child storage: {}", e);
 				return;

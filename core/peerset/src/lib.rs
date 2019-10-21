@@ -31,7 +31,7 @@ const BANNED_THRESHOLD: i32 = 82 * (i32::min_value() / 100);
 /// Reputation change for a node when we get disconnected from it.
 const DISCONNECT_REPUTATION_CHANGE: i32 = -10;
 /// Reserved peers group ID
-const RESERVED_NODES: &'static str = "reserved";
+const RESERVED_NODES: &str = "reserved";
 
 #[derive(Debug)]
 enum Action {

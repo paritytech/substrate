@@ -105,7 +105,7 @@ impl Externalities for BasicExternalities {
 	}
 
 	fn child_storage(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<Vec<u8>> {
-		self.children.get(storage_key.as_ref()).and_then(|child| child.get(key)).cloned()
+		self.children.get(storage_key.as_bytes()).and_then(|child| child.get(key)).cloned()
 	}
 
 	fn child_storage_hash(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<H256> {
@@ -147,7 +147,7 @@ impl Externalities for BasicExternalities {
 	}
 
 	fn kill_child_storage(&mut self, storage_key: ChildStorageKey) {
-		self.children.remove(storage_key.as_ref());
+		self.children.remove(storage_key.as_bytes());
 	}
 
 	fn clear_prefix(&mut self, prefix: &[u8]) {
@@ -163,7 +163,7 @@ impl Externalities for BasicExternalities {
 	}
 
 	fn clear_child_prefix(&mut self, storage_key: ChildStorageKey, prefix: &[u8]) {
-		if let Some(child) = self.children.get_mut(storage_key.as_ref()) {
+		if let Some(child) = self.children.get_mut(storage_key.as_bytes()) {
 			child.retain(|key, _| !key.starts_with(prefix));
 		}
 	}
@@ -182,7 +182,7 @@ impl Externalities for BasicExternalities {
 				ChildStorageKey::from_slice(storage_key.as_slice())
 					.expect("Map only feed by valid keys; qed"),
 			);
-			if &empty_hash[..] == &child_root[..] {
+			if empty_hash[..] == child_root[..] {
 				top.remove(&storage_key);
 			} else {
 				top.insert(storage_key, child_root);
@@ -193,12 +193,12 @@ impl Externalities for BasicExternalities {
 	}
 
 	fn child_storage_root(&mut self, storage_key: ChildStorageKey) -> Vec<u8> {
-		if let Some(child) = self.children.get(storage_key.as_ref()) {
+		if let Some(child) = self.children.get(storage_key.as_bytes()) {
 			let delta = child.clone().into_iter().map(|(k, v)| (k, Some(v)));
 
-			InMemory::<Blake2Hasher>::default().child_storage_root(storage_key.as_ref(), delta).0
+			InMemory::<Blake2Hasher>::default().child_storage_root(storage_key.as_bytes(), delta).0
 		} else {
-			default_child_trie_root::<Layout<Blake2Hasher>>(storage_key.as_ref())
+			default_child_trie_root::<Layout<Blake2Hasher>>(storage_key.as_bytes())
 		}
 	}
 

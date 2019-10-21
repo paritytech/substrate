@@ -230,15 +230,15 @@ where
 	fn child_storage(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<Vec<u8>> {
 		let _guard = panic_handler::AbortGuard::force_abort();
 		let result = self.overlay
-			.child_storage(storage_key.as_ref(), key)
+			.child_storage(storage_key.as_bytes(), key)
 			.map(|x| x.map(|x| x.to_vec()))
 			.unwrap_or_else(||
-				self.backend.child_storage(storage_key.as_ref(), key).expect(EXT_NOT_ALLOWED_TO_FAIL)
+				self.backend.child_storage(storage_key.as_bytes(), key).expect(EXT_NOT_ALLOWED_TO_FAIL)
 			);
 
 		trace!(target: "state-trace", "{:04x}: GetChild({}) {}={:?}",
 			self.id,
-			HexDisplay::from(&storage_key.as_ref()),
+			HexDisplay::from(&storage_key.as_bytes()),
 			HexDisplay::from(&key),
 			result.as_ref().map(HexDisplay::from)
 		);
@@ -249,7 +249,7 @@ where
 	fn child_storage_hash(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<H256> {
 		let _guard = panic_handler::AbortGuard::force_abort();
 		let result = self.overlay
-			.child_storage(storage_key.as_ref(), key)
+			.child_storage(storage_key.as_bytes(), key)
 			.map(|x| x.map(|x| H::hash(x)))
 			.unwrap_or_else(||
 				self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL)
@@ -257,7 +257,7 @@ where
 
 		trace!(target: "state-trace", "{:04x}: ChildHash({}) {}={:?}",
 			self.id,
-			HexDisplay::from(&storage_key.as_ref()),
+			HexDisplay::from(&storage_key.as_bytes()),
 			HexDisplay::from(&key),
 			result,
 		);
@@ -268,12 +268,12 @@ where
 	fn original_child_storage(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<Vec<u8>> {
 		let _guard = panic_handler::AbortGuard::force_abort();
 		let result = self.backend
-			.child_storage(storage_key.as_ref(), key)
+			.child_storage(storage_key.as_bytes(), key)
 			.expect(EXT_NOT_ALLOWED_TO_FAIL);
 
 		trace!(target: "state-trace", "{:04x}: ChildOriginal({}) {}={:?}",
 			self.id,
-			HexDisplay::from(&storage_key.as_ref()),
+			HexDisplay::from(&storage_key.as_bytes()),
 			HexDisplay::from(&key),
 			result.as_ref().map(HexDisplay::from),
 		);
@@ -283,12 +283,12 @@ where
 	fn original_child_storage_hash(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<H256> {
 		let _guard = panic_handler::AbortGuard::force_abort();
 		let result = self.backend
-			.child_storage_hash(storage_key.as_ref(), key)
+			.child_storage_hash(storage_key.as_bytes(), key)
 			.expect(EXT_NOT_ALLOWED_TO_FAIL);
 
 		trace!(target: "state-trace", "{}: ChildHashOriginal({}) {}={:?}",
 			self.id,
-			HexDisplay::from(&storage_key.as_ref()),
+			HexDisplay::from(&storage_key.as_bytes()),
 			HexDisplay::from(&key),
 			result,
 		);
@@ -314,16 +314,16 @@ where
 	fn exists_child_storage(&self, storage_key: ChildStorageKey, key: &[u8]) -> bool {
 		let _guard = panic_handler::AbortGuard::force_abort();
 
-		let result = match self.overlay.child_storage(storage_key.as_ref(), key) {
+		let result = match self.overlay.child_storage(storage_key.as_bytes(), key) {
 			Some(x) => x.is_some(),
 			_ => self.backend
-				.exists_child_storage(storage_key.as_ref(), key)
+				.exists_child_storage(storage_key.as_bytes(), key)
 				.expect(EXT_NOT_ALLOWED_TO_FAIL),
 		};
 
 		trace!(target: "state-trace", "{:04x}: ChildExists({}) {}={:?}",
 			self.id,
-			HexDisplay::from(&storage_key.as_ref()),
+			HexDisplay::from(&storage_key.as_bytes()),
 			HexDisplay::from(&key),
 			result,
 		);
@@ -354,7 +354,7 @@ where
 	) {
 		trace!(target: "state-trace", "{:04x}: PutChild({}) {}={:?}",
 			self.id,
-			HexDisplay::from(&storage_key.as_ref()),
+			HexDisplay::from(&storage_key.as_bytes()),
 			HexDisplay::from(&key),
 			value.as_ref().map(HexDisplay::from)
 		);
@@ -367,14 +367,14 @@ where
 	fn kill_child_storage(&mut self, storage_key: ChildStorageKey) {
 		trace!(target: "state-trace", "{:04x}: KillChild({})",
 			self.id,
-			HexDisplay::from(&storage_key.as_ref()),
+			HexDisplay::from(&storage_key.as_bytes()),
 		);
 		let _guard = panic_handler::AbortGuard::force_abort();
 
 		self.mark_dirty();
-		self.overlay.clear_child_storage(storage_key.as_ref());
-		self.backend.for_keys_in_child_storage(storage_key.as_ref(), |key| {
-			self.overlay.set_child_storage(storage_key.as_ref().to_vec(), key.to_vec(), None);
+		self.overlay.clear_child_storage(storage_key.as_bytes());
+		self.backend.for_keys_in_child_storage(storage_key.as_bytes(), |key| {
+			self.overlay.set_child_storage(storage_key.as_bytes().to_vec(), key.to_vec(), None);
 		});
 	}
 
@@ -399,15 +399,15 @@ where
 	fn clear_child_prefix(&mut self, storage_key: ChildStorageKey, prefix: &[u8]) {
 		trace!(target: "state-trace", "{:04x}: ClearChildPrefix({}) {}",
 			self.id,
-			HexDisplay::from(&storage_key.as_ref()),
+			HexDisplay::from(&storage_key.as_bytes()),
 			HexDisplay::from(&prefix),
 		);
 		let _guard = panic_handler::AbortGuard::force_abort();
 
 		self.mark_dirty();
-		self.overlay.clear_child_prefix(storage_key.as_ref(), prefix);
-		self.backend.for_child_keys_with_prefix(storage_key.as_ref(), prefix, |key| {
-			self.overlay.set_child_storage(storage_key.as_ref().to_vec(), key.to_vec(), None);
+		self.overlay.clear_child_prefix(storage_key.as_bytes(), prefix);
+		self.backend.for_child_keys_with_prefix(storage_key.as_bytes(), prefix, |key| {
+			self.overlay.set_child_storage(storage_key.as_bytes().to_vec(), key.to_vec(), None);
 		});
 	}
 
@@ -422,7 +422,8 @@ where
 				self.id,
 				HexDisplay::from(&root.as_ref()),
 			);
-			return root.clone();
+			// Changed from `root.clone()` since `H256` implements `Copy`.
+			return *root;
 		}
 
 		let child_storage_keys =
@@ -454,18 +455,16 @@ where
 		let _guard = panic_handler::AbortGuard::force_abort();
 		if self.storage_transaction.is_some() {
 			let root = self
-				.storage(storage_key.as_ref())
-				.unwrap_or(
-					default_child_trie_root::<Layout<H>>(storage_key.as_ref())
-				);
+				.storage(storage_key.as_bytes())
+				.unwrap_or_else(|| default_child_trie_root::<Layout<H>>(storage_key.as_bytes()));
 			trace!(target: "state-trace", "{:04x}: ChildRoot({}) (cached) {}",
 				self.id,
-				HexDisplay::from(&storage_key.as_ref()),
-				HexDisplay::from(&root.as_ref()),
+				HexDisplay::from(&storage_key.as_bytes()),
+				HexDisplay::from(&root),
 			);
 			root
 		} else {
-			let storage_key = storage_key.as_ref();
+			let storage_key = storage_key.as_bytes();
 
 			let (root, is_empty, _) = {
 				let delta = self.overlay.committed.children.get(storage_key)
@@ -486,7 +485,7 @@ where
 
 			trace!(target: "state-trace", "{:04x}: ChildRoot({}) {}",
 				self.id,
-				HexDisplay::from(&storage_key.as_ref()),
+				HexDisplay::from(&storage_key),
 				HexDisplay::from(&root.as_ref()),
 			);
 			root
@@ -498,11 +497,11 @@ where
 		let _guard = panic_handler::AbortGuard::force_abort();
 		self.changes_trie_transaction = build_changes_trie::<_, T, H, N>(
 			self.backend,
-			self.changes_trie_storage.clone(),
+			self.changes_trie_storage,
 			self.overlay,
 			parent_hash,
 		)?;
-		let result = Ok(self.changes_trie_transaction.as_ref().map(|(_, root, _)| root.clone()));
+		let result = Ok(self.changes_trie_transaction.as_ref().map(|(_, root, _)| *root));
 		trace!(target: "state-trace", "{:04x}: ChangesRoot({}) {:?}",
 			self.id,
 			HexDisplay::from(&parent_hash.as_ref()),

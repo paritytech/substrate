@@ -168,7 +168,7 @@ pub fn read_trie_value_with<
 
 /// Determine the default child trie root.
 pub fn default_child_trie_root<L: TrieConfiguration>(_storage_key: &[u8]) -> Vec<u8> {
-	L::trie_root::<_, Vec<u8>, Vec<u8>>(core::iter::empty()).as_ref().iter().cloned().collect()
+	L::trie_root::<_, Vec<u8>, Vec<u8>>(core::iter::empty()).as_ref().to_vec()
 }
 
 /// Determine a child trie root given its ordered contents, closed form. H is the default hasher,
@@ -179,7 +179,7 @@ pub fn child_trie_root<L: TrieConfiguration, I, A, B>(_storage_key: &[u8], input
 		A: AsRef<[u8]> + Ord,
 		B: AsRef<[u8]>,
 {
-	L::trie_root(input).as_ref().iter().cloned().collect()
+	L::trie_root(input).as_ref().to_vec()
 }
 
 /// Determine a child trie root given a hash DB and delta values. H is the default hasher,
@@ -520,7 +520,7 @@ mod tests {
 			memtrie.commit();
 			if *memtrie.root() != real {
 				println!("TRIE MISMATCH");
-				println!("");
+				println!();
 				println!("{:?} vs {:?}", memtrie.root(), real);
 				for i in &x {
 					println!("{:#x?} -> {:#x?}", i.0, i.1);
@@ -532,7 +532,7 @@ mod tests {
 			let hashed_null_node = hashed_null_node::<Layout>();
 			if *memtrie.root() != hashed_null_node {
 				println!("- TRIE MISMATCH");
-				println!("");
+				println!();
 				println!("{:?} vs {:?}", memtrie.root(), hashed_null_node);
 				for i in &x {
 					println!("{:#x?} -> {:#x?}", i.0, i.1);

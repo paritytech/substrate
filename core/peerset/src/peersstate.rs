@@ -114,7 +114,7 @@ impl PeersState {
 	/// Returns an object that grants access to the state of a peer.
 	pub fn peer<'a>(&'a mut self, peer_id: &'a PeerId) -> Peer<'a> {
 		match self.nodes.get_mut(peer_id) {
-			None => return Peer::Unknown(UnknownPeer {
+			None => Peer::Unknown(UnknownPeer {
 				parent: self,
 				peer_id: Cow::Borrowed(peer_id),
 			}),

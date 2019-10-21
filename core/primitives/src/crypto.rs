@@ -31,6 +31,7 @@ use regex::Regex;
 #[cfg(feature = "std")]
 use base58::{FromBase58, ToBase58};
 #[cfg(feature = "std")]
+//use std::cell::UnsafeCell;
 use std::hash::Hash;
 use zeroize::Zeroize;
 #[doc(hidden)]
@@ -213,7 +214,7 @@ impl DeriveJunction {
 impl<T: AsRef<str>> From<T> for DeriveJunction {
 	fn from(j: T) -> DeriveJunction {
 		let j = j.as_ref();
-		let (code, hard) = if j.starts_with("/") {
+		let (code, hard) = if j.starts_with('/') {
 			(&j[1..], true)
 		} else {
 			(j, false)
@@ -419,11 +420,11 @@ impl<T: AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
 		}
 		let ver = d[0].try_into().map_err(|_: ()| PublicError::UnknownVersion)?;
 
-		if d[len+1..len+3] != ss58hash(&d[0..len+1]).as_bytes()[0..2] {
+		if d[len+1..len+3] != ss58hash(&d[0..=len]).as_bytes()[0..2] {
 			// Invalid checksum.
 			return Err(PublicError::InvalidChecksum);
 		}
-		res.as_mut().copy_from_slice(&d[1..len+1]);
+		res.as_mut().copy_from_slice(&d[1..=len]);
 		Ok((res, ver))
 	}
 
@@ -510,11 +511,22 @@ mod dummy {
 		fn as_ref(&self) -> &[u8] { &b""[..] }
 	}
 
+	#[allow(clippy::transmute_ptr_to_ptr)]
 	impl AsMut<[u8]> for Dummy {
 		fn as_mut(&mut self) -> &mut[u8] {
 			unsafe {
 				#[allow(mutable_transmutes)]
+				// Suggested #2
+				//let uc = &UnsafeCell::new(&b""[..]);
+
+				// Original
 				rstd::mem::transmute::<_, &'static mut [u8]>(&b""[..])
+
+				// Suggested #1
+				// &mut *(&b""[..] as *const [u8] as *mut [u8])
+
+                // Suggested #2
+				//&mut *uc.get()
 			}
 		}
 	}

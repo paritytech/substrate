@@ -56,21 +56,21 @@ pub mod well_known_keys {
 	/// Wasm code of the runtime.
 	///
 	/// Stored as a raw byte vector. Required by substrate.
-	pub const CODE: &'static [u8] = b":code";
+	pub const CODE: &[u8] = b":code";
 
 	/// Number of wasm linear memory pages required for execution of the runtime.
 	///
 	/// The type of this value is encoded `u64`.
-	pub const HEAP_PAGES: &'static [u8] = b":heappages";
+	pub const HEAP_PAGES: &[u8] = b":heappages";
 
 	/// Current extrinsic index (u32) is stored under this key.
-	pub const EXTRINSIC_INDEX: &'static [u8] = b":extrinsic_index";
+	pub const EXTRINSIC_INDEX: &[u8] = b":extrinsic_index";
 
 	/// Changes trie configuration is stored under this key.
-	pub const CHANGES_TRIE_CONFIG: &'static [u8] = b":changes_trie";
+	pub const CHANGES_TRIE_CONFIG: &[u8] = b":changes_trie";
 
 	/// Prefix of child storage keys.
-	pub const CHILD_STORAGE_KEY_PREFIX: &'static [u8] = b":child_storage:";
+	pub const CHILD_STORAGE_KEY_PREFIX: &[u8] = b":child_storage:";
 
 	/// Whether a key is a child storage key.
 	///
@@ -137,7 +137,9 @@ impl<'a> ChildStorageKey<'a> {
 	/// Get access to the byte representation of the storage key.
 	///
 	/// This key is guaranteed to be correct.
-	pub fn as_ref(&self) -> &[u8] {
+	/// Renamed from `as_ref` to avoid the lint error described in
+	/// https://rust-lang.github.io/rust-clippy/master/index.html#should_implement_trait.
+	pub fn as_bytes(&self) -> &[u8] {
 		&*self.storage_key
 	}
 

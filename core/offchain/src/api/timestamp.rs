@@ -42,7 +42,7 @@ pub fn now() -> Timestamp {
 ///
 /// In other words, returns `timestamp - now()`.
 pub fn timestamp_from_now(timestamp: Timestamp) -> Duration {
-	Duration::from_millis(timestamp.diff(&now()).millis())
+	Duration::from_millis(timestamp.diff(now()).millis())
 }
 
 /// Converts the deadline into a `Future` that resolves when the deadline is reached.

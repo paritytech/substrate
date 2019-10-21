@@ -53,7 +53,9 @@ pub struct Pair(ed25519_dalek::Keypair);
 impl Clone for Pair {
 	fn clone(&self) -> Self {
 		Pair(ed25519_dalek::Keypair {
-			public: self.0.public.clone(),
+			// No `clone()` required here because `self.0.public: PublicKey`
+			// implements `Copy.`
+			public: self.0.public,
 			secret: ed25519_dalek::SecretKey::from_bytes(self.0.secret.as_bytes())
 				.expect("key is always the correct size; qed")
 		})
@@ -485,7 +487,7 @@ impl Pair {
 	/// characters are taken (padded with spaces as necessary) and used as the MiniSecretKey.
 	pub fn from_legacy_string(s: &str, password_override: Option<&str>) -> Pair {
 		Self::from_string(s, password_override).unwrap_or_else(|_| {
-			let mut padded_seed: Seed = [' ' as u8; 32];
+			let mut padded_seed: Seed = [b' '; 32];
 			let len = s.len().min(32);
 			padded_seed[..len].copy_from_slice(&s.as_bytes()[..len]);
 			Self::from_seed(&padded_seed)

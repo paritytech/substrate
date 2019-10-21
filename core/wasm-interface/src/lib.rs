@@ -190,7 +190,7 @@ pub trait FunctionContext {
 	fn read_memory(&self, address: Pointer<u8>, size: WordSize) -> Result<Vec<u8>> {
 		// Using `with_capacity` and then reisizing leads to
 		// https://rust-lang.github.io/rust-clippy/master/index.html#slow_vector_initialization.
-		vec![0; size as usize];
+		let mut vec = vec![0; size as usize];
 		self.read_memory_into(address, &mut vec)?;
 		Ok(vec)
 	}

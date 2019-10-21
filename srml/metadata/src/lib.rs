@@ -34,7 +34,7 @@ use primitives::RuntimeDebug;
 type StringBuf = String;
 
 /// Curent prefix of metadata
-pub const META_RESERVED: u32 = 0x6174656d; // 'meta' warn endianness
+pub const META_RESERVED: u32 = 0x6174_656d; // 'meta' warn endianness
 
 /// On `no_std` we do not support `Decode` and thus `StringBuf` is just `&'static str`.
 /// So, if someone tries to decode this stuff on `no_std`, they will get a compilation error.
@@ -167,6 +167,7 @@ impl<E: Encode + serde::Serialize> serde::Serialize for FnEncode<E> {
 /// All the metadata about an outer event.
 #[derive(Clone, PartialEq, Eq, Encode, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Decode, Serialize))]
+#[allow(clippy::type_complexity)]
 pub struct OuterEventMetadata {
 	pub name: DecodeDifferentStr,
 	pub events: DecodeDifferentArray<

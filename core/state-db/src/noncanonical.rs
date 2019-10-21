@@ -92,6 +92,18 @@ fn discard_values<Key: Hash>(
 	}
 }
 
+// `clippy` with `-D clippy::all` will fail because of the `filter_map` below.
+//
+// In this particular situation, it is the correct choice to use it because
+// the type of `filter`'s closure is `FnMut(&Self::Item) -> bool`, whereas
+// the closure in `filter_map` has type `FnMut(Self::Item) -> Option<B>`,
+// where `B` is type of the item being filter *after* the closure has worked
+// on it - notice that the argument is passed by reference in `filter`, and by
+// reference in `filter-map`.
+//
+// In summary, the above means using `filter` results in moving data that is
+// behind a shared reference.
+#[allow(clippy::unnecessary_filter_map)]
 fn discard_descendants<BlockHash: Hash, Key: Hash>(
 	levels: &mut VecDeque<Vec<BlockOverlay<BlockHash, Key>>>,
 	mut values: &mut HashMap<Key, (u32, DBValue)>,
@@ -123,14 +135,14 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 	/// Creates a new instance. Does not expect any metadata to be present in the DB.
 	pub fn new<D: MetaDb>(db: &D) -> Result<NonCanonicalOverlay<BlockHash, Key>, Error<D::Error>> {
 		let last_canonicalized = db.get_meta(&to_meta_key(LAST_CANONICAL, &()))
-			.map_err(|e| Error::Db(e))?;
+			.map_err(Error::Db)?;
 		let last_canonicalized = match last_canonicalized {
 			Some(buffer) => Some(<(BlockHash, u64)>::decode(&mut buffer.as_slice())?),
 			None => None,
 		};
 		let mut levels = VecDeque::new();
 		let mut parents = HashMap::new();
-		let mut values = HashMap::new();
+		let mut values_ = HashMap::new();
 		if let Some((ref hash, mut block)) = last_canonicalized {
 			// read the journal
 			trace!(target: "state-db", "Reading uncanonicalized journal. Last canonicalized #{} ({:?})", block, hash);
@@ -141,17 +153,17 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 				let mut level = Vec::new();
 				loop {
 					let journal_key = to_journal_key(block, index);
-					match db.get_meta(&journal_key).map_err(|e| Error::Db(e))? {
+					match db.get_meta(&journal_key).map_err(Error::Db)? {
 						Some(record) => {
 							let record: JournalRecord<BlockHash, Key> = Decode::decode(&mut record.as_slice())?;
-							let inserted = record.inserted.iter().map(|(k, _)| k.clone()).collect();
+							let inserted_ = record.inserted.iter().map(|(k, _)| k.clone()).collect();
 							let overlay = BlockOverlay {
 								hash: record.hash.clone(),
 								journal_key,
-								inserted: inserted,
+								inserted: inserted_,
 								deleted: record.deleted,
 							};
-							insert_values(&mut values, record.inserted);
+							insert_values(&mut values_, record.inserted);
 							trace!(target: "state-db", "Uncanonicalized journal entry {}.{} ({} inserted, {} deleted)", block, index, overlay.inserted.len(), overlay.deleted.len());
 							level.push(overlay);
 							parents.insert(record.hash, record.parent_hash);
@@ -176,7 +188,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 			pending_canonicalizations: Default::default(),
 			pending_insertions: Default::default(),
 			pinned: Default::default(),
-			values: values,
+			values: values_,
 		})
 	}
 
@@ -190,7 +202,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 			commit.meta.inserted.push((to_meta_key(LAST_CANONICAL, &()), last_canonicalized.encode()));
 			self.last_canonicalized = Some(last_canonicalized);
 		} else if self.last_canonicalized.is_some() {
-			if number < front_block_number || number >= front_block_number + self.levels.len() as u64 + 1 {
+			if number < front_block_number || number > front_block_number + self.levels.len() as u64 {
 				trace!(target: "state-db", "Failed to insert block {}, current is {} .. {})",
 					number,
 					front_block_number,
@@ -218,11 +230,11 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 		let index = level.len() as u64;
 		let journal_key = to_journal_key(number, index);
 
-		let inserted = changeset.inserted.iter().map(|(k, _)| k.clone()).collect();
+		let inserted_ = changeset.inserted.iter().map(|(k, _)| k.clone()).collect();
 		let overlay = BlockOverlay {
 			hash: hash.clone(),
 			journal_key: journal_key.clone(),
-			inserted: inserted,
+			inserted: inserted_,
 			deleted: changeset.deleted.clone(),
 		};
 		level.push(overlay);

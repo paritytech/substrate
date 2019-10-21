@@ -36,7 +36,7 @@ pub struct KeyStore {
 #[cfg(feature = "std")]
 impl KeyStore {
 	/// Creates a new instance of `Self`.
-	pub fn new() -> crate::traits::BareCryptoStorePtr {
+	pub fn new_key_store_ptr() -> crate::traits::BareCryptoStorePtr {
 		std::sync::Arc::new(parking_lot::RwLock::new(Self::default()))
 	}
 }

@@ -54,7 +54,7 @@ impl TryFrom<u32> for StorageKind {
 
 impl From<StorageKind> for u32 {
 	fn from(c: StorageKind) -> Self {
-		c as u8 as u32
+		u32::from(c as u8)
 	}
 }
 
@@ -65,7 +65,7 @@ pub struct HttpRequestId(pub u16);
 
 impl From<HttpRequestId> for u32 {
 	fn from(c: HttpRequestId) -> Self {
-		c.0 as u32
+		u32::from(c.0)
 	}
 }
 
@@ -86,9 +86,9 @@ impl TryFrom<u32> for HttpError {
 
 	fn try_from(error: u32) -> Result<Self, Self::Error> {
 		match error {
-			e if e == HttpError::DeadlineReached as u8 as u32 => Ok(HttpError::DeadlineReached),
-			e if e == HttpError::IoError as u8 as u32 => Ok(HttpError::IoError),
-			e if e == HttpError::Invalid as u8 as u32 => Ok(HttpError::Invalid),
+			e if e == u32::from(HttpError::DeadlineReached as u8) => Ok(HttpError::DeadlineReached),
+			e if e == u32::from(HttpError::IoError as u8) => Ok(HttpError::IoError),
+			e if e == u32::from(HttpError::Invalid as u8) => Ok(HttpError::Invalid),
 			_ => Err(())
 		}
 	}
@@ -96,7 +96,7 @@ impl TryFrom<u32> for HttpError {
 
 impl From<HttpError> for u32 {
 	fn from(c: HttpError) -> Self {
-		c as u8 as u32
+		u32::from(c as u8)
 	}
 }
 
@@ -192,7 +192,7 @@ impl Duration {
 	}
 
 	/// Returns number of milliseconds this Duration represents.
-	pub fn millis(&self) -> u64 {
+	pub fn millis(self) -> u64 {
 		self.0
 	}
 }
@@ -204,22 +204,22 @@ impl Timestamp {
 	}
 
 	/// Increase the timestamp by given `Duration`.
-	pub fn add(&self, duration: Duration) -> Timestamp {
+	pub fn plus(self, duration: Duration) -> Timestamp {
 		Timestamp(self.0.saturating_add(duration.0))
 	}
 
 	/// Decrease the timestamp by given `Duration`
-	pub fn sub(&self, duration: Duration) -> Timestamp {
+	pub fn subtract(self, duration: Duration) -> Timestamp {
 		Timestamp(self.0.saturating_sub(duration.0))
 	}
 
 	/// Returns a saturated difference (Duration) between two Timestamps.
-	pub fn diff(&self, other: &Self) -> Duration {
+	pub fn diff(self, other: Self) -> Duration {
 		Duration(self.0.saturating_sub(other.0))
 	}
 
 	/// Return number of milliseconds since UNIX epoch.
-	pub fn unix_millis(&self) -> u64 {
+	pub fn unix_millis(self) -> u64 {
 		self.0
 	}
 }
@@ -272,13 +272,13 @@ impl Capabilities {
 	}
 
 	/// Check if particular capability is enabled.
-	pub fn has(&self, capability: Capability) -> bool {
+	pub fn has(self, capability: Capability) -> bool {
 		self.0 & capability as u8 != 0
 	}
 
 	/// Check if this capability object represents all capabilities.
-	pub fn has_all(&self) -> bool {
-		self == &Capabilities::all()
+	pub fn has_all(self) -> bool {
+		self == Capabilities::all()
 	}
 }
 

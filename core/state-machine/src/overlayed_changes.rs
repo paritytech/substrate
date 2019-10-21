@@ -107,6 +107,7 @@ impl OverlayedChanges {
 	/// Returns a double-Option: None if the key is unknown (i.e. and the query should be refered
 	/// to the backend); Some(None) if the key has been deleted. Some(Some(...)) for a key whose
 	/// value has been set.
+	#[allow(clippy::option_option)]
 	pub fn storage(&self, key: &[u8]) -> Option<Option<&[u8]>> {
 		self.prospective.top.get(key)
 			.or_else(|| self.committed.top.get(key))
@@ -116,6 +117,7 @@ impl OverlayedChanges {
 	/// Returns a double-Option: None if the key is unknown (i.e. and the query should be refered
 	/// to the backend); Some(None) if the key has been deleted. Some(Some(...)) for a key whose
 	/// value has been set.
+	#[allow(clippy::option_option)]
 	pub fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Option<Option<&[u8]>> {
 		if let Some(map) = self.prospective.children.get(storage_key) {
 			if let Some(val) = map.get(key) {
@@ -187,7 +189,7 @@ impl OverlayedChanges {
 						value: None,
 						extrinsics: extrinsic_index.map(|i| {
 							let mut e = value.extrinsics.clone()
-								.unwrap_or_else(|| BTreeSet::default());
+								.unwrap_or_else(BTreeSet::default);
 							e.insert(i);
 							e
 						}),
@@ -331,12 +333,12 @@ impl OverlayedChanges {
 	/// Changes that are made outside of extrinsics, are marked with
 	/// `NO_EXTRINSIC_INDEX` index.
 	fn extrinsic_index(&self) -> Option<u32> {
-		match self.changes_trie_config.is_some() {
-			true => Some(
-				self.storage(EXTRINSIC_INDEX)
+		if self.changes_trie_config.is_some() {
+			Some(self.storage(EXTRINSIC_INDEX)
 					.and_then(|idx| idx.and_then(|idx| Decode::decode(&mut &*idx).ok()))
-					.unwrap_or(NO_EXTRINSIC_INDEX)),
-			false => None,
+					.unwrap_or(NO_EXTRINSIC_INDEX))
+		} else {
+			None
 		}
 	}
 }

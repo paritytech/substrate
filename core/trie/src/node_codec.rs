@@ -76,6 +76,7 @@ impl<H: Hasher> NodeCodecT<H> for NodeCodec<H> {
 				};
 				let mut children = [None; 16];
 
+                #[allow(clippy::needless_range_loop)]
 				for i in 0..nibble_ops::NIBBLE_LENGTH {
 					if bitmap.value_at(i) {
 						let count = <Compact<u32>>::decode(input)?.0 as usize;
