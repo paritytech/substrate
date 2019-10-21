@@ -2432,6 +2432,7 @@ dependencies = [
 name = "node-executor"
 version = "2.0.0"
 dependencies = [
+ "criterion 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "node-primitives 2.0.0",
  "node-runtime 2.0.0",
  "node-testing 2.0.0",
