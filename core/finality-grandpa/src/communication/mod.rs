@@ -158,7 +158,7 @@ impl<B, S, H> Network<B> for Arc<NetworkService<B, S, H>> where
 				.messages_for(GRANDPA_ENGINE_ID, topic)
 				.map(|x| Ok(x))
 				.compat()
-				.boxed(); // Box::new() will break
+				.boxed();
 			let _ = tx.send(inner_rx);
 		});
 		NetworkStream { outer: rx, inner: None }
