@@ -541,7 +541,6 @@ impl<T: Trait> Module<T> {
 	/// This will update storage entries that correspond to the specified topics.
 	/// It is expected that light-clients could subscribe to this topics.
 	pub fn deposit_event_indexed(topics: &[T::Hash], event: T::Event) {
-		support::runtime_print!("{:?}", event);
 		let extrinsic_index = Self::extrinsic_index();
 		let phase = extrinsic_index.map_or(Phase::Finalization, |c| Phase::ApplyExtrinsic(c));
 		let event = EventRecord {
@@ -828,7 +827,6 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 		info: DispatchInfo,
 		len: usize,
 	) -> Result<(), ApplyError> {
-		support::runtime_print!("{:?}", _call);
 		let next_len = Self::check_block_length(info, len)?;
 		AllExtrinsicsLen::put(next_len);
 		let next_weight = Self::check_weight(info)?;
@@ -861,7 +859,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 impl<T: Trait + Send + Sync> Debug for CheckWeight<T> {
 	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
-		write!(f, "CheckWeight<T>")
+		write!(f, "CheckWeight")
 	}
 
 	#[cfg(not(feature = "std"))]
@@ -1015,7 +1013,7 @@ pub struct CheckGenesis<T: Trait + Send + Sync>(rstd::marker::PhantomData<T>);
 impl<T: Trait + Send + Sync> Debug for CheckGenesis<T> {
 	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
-		write!(f, "CheckGenesis<T>")
+		write!(f, "CheckGenesis")
 	}
 
 	#[cfg(not(feature = "std"))]
@@ -1049,7 +1047,7 @@ pub struct CheckVersion<T: Trait + Send + Sync>(rstd::marker::PhantomData<T>);
 impl<T: Trait + Send + Sync> Debug for CheckVersion<T> {
 	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
-		write!(f, "CheckVersion<T>")
+		write!(f, "CheckVersion")
 	}
 
 	#[cfg(not(feature = "std"))]

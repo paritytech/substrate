@@ -988,7 +988,7 @@ impl<T: Trait + Send + Sync> Default for CheckBlockGasLimit<T> {
 impl<T: Trait + Send + Sync> rstd::fmt::Debug for CheckBlockGasLimit<T> {
 	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
-		write!(f, "CheckBlockGasLimit<T>")
+		write!(f, "CheckBlockGasLimit")
 	}
 
 	#[cfg(not(feature = "std"))]

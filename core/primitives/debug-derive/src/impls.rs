@@ -62,7 +62,7 @@ mod implementation {
 mod implementation {
 	use super::*;
 	use proc_macro2::Span;
-	use syn::{Ident, Index};
+	use syn::{Ident, Index, token::SelfValue};
 
 	/// Derive the inner implementation of `Debug::fmt` function.
 	pub fn derive(name_str: &str, data: &Data) -> TokenStream {
@@ -82,12 +82,12 @@ mod implementation {
 		},
 		Named {
 			names: Vec<Ident>,
-			this: Option<Ident>,
+			this: Option<SelfValue>,
 		},
 	}
 
 	impl Fields {
-		fn new<'a>(fields: impl Iterator<Item=&'a syn::Field>, this: Option<Ident>) -> Self {
+		fn new<'a>(fields: impl Iterator<Item=&'a syn::Field>, this: Option<SelfValue>) -> Self {
 			let mut indices = vec![];
 			let mut names = vec![];
 
@@ -203,7 +203,7 @@ mod implementation {
 		match *fields {
 			syn::Fields::Named(ref f) => derive_fields(
 				name_str,
-				Fields::new(f.named.iter(), Some(Ident::new("self", Span::call_site()))),
+				Fields::new(f.named.iter(), Some(syn::Token!(self)(Span::call_site()))),
 			),
 			syn::Fields::Unnamed(ref f) => derive_fields(
 				name_str,

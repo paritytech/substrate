@@ -1169,8 +1169,6 @@ impl Printable for &str {
 
 #[impl_for_tuples(1, 12)]
 impl Printable for Tuple {
-	for_tuples!( where #( Tuple: Printable )* );
-
 	fn print(&self) {
 		for_tuples!( #( Tuple.print(); )* )
 	}

@@ -584,10 +584,9 @@ impl<T: Trait> Module<T> {
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
 pub struct WatchDummy<T: Trait + Send + Sync>(PhantomData<T>);
 
-#[cfg(feature = "std")]
 impl<T: Trait + Send + Sync> rstd::fmt::Debug for WatchDummy<T> {
 	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
-		write!(f, "WatchDummy<T>")
+		write!(f, "WatchDummy")
 	}
 }
 

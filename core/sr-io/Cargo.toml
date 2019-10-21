@@ -10,7 +10,6 @@ rustc_version = "0.2.3"
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false }
-environmental = { version = "1.0.1", optional = true }
 hash-db = { version = "0.15.2", default-features = false }
 primitives = { package = "substrate-primitives", path = "../primitives", default-features = false }
 rstd = { package = "sr-std", path = "../sr-std", default-features = false }

@@ -205,7 +205,7 @@ impl OtherApi for () {
 			target: target,
 			log::Level::from(level),
 			"{}",
-			msg
+			msg,
 		)
 	}
 }
