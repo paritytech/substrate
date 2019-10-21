@@ -39,7 +39,7 @@ pub fn register_uncles_inherent_data_provider<B, C, SC>(
 	C: ProvideUncles<B> + Send + Sync + 'static,
 	SC: SelectChain<B> + 'static,
 {
-	if !inherent_data_providers.has_provider(&srml_authorship::INHERENT_IDENTIFIER) {
+	if !inherent_data_providers.has_provider(srml_authorship::INHERENT_IDENTIFIER) {
 		inherent_data_providers
 			.register_provider(srml_authorship::InherentDataProvider::new(move || {
 				{

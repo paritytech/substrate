@@ -237,7 +237,7 @@ impl<B: BlockT<Hash=H256>, C, S, Algorithm> PowVerifier<B, C, S, Algorithm> {
 					},
 					Some(TIError::Other(e)) => Err(Error::Runtime(e)),
 					None => Err(Error::CheckInherents(
-						self.inherent_data_providers.error_to_string(&i, &e)
+						self.inherent_data_providers.error_to_string(i, &e)
 					)),
 				})
 		} else {
@@ -314,7 +314,7 @@ impl<B: BlockT<Hash=H256>, C, S, Algorithm> Verifier<B> for PowVerifier<B, C, S,
 pub fn register_pow_inherent_data_provider(
 	inherent_data_providers: &InherentDataProviders,
 ) -> Result<(), consensus_common::Error> {
-	if !inherent_data_providers.has_provider(&srml_timestamp::INHERENT_IDENTIFIER) {
+	if !inherent_data_providers.has_provider(srml_timestamp::INHERENT_IDENTIFIER) {
 		inherent_data_providers
 			.register_provider(srml_timestamp::InherentDataProvider)
 			.map_err(Into::into)

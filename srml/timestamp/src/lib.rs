@@ -150,7 +150,7 @@ pub trait TimestampInherentData {
 
 impl TimestampInherentData for InherentData {
 	fn timestamp_inherent_data(&self) -> Result<InherentType, RuntimeString> {
-		self.get_data(&INHERENT_IDENTIFIER)
+		self.get_data(INHERENT_IDENTIFIER)
 			.and_then(|r| r.ok_or_else(|| "Timestamp inherent data not found".into()))
 	}
 }
@@ -268,7 +268,7 @@ impl<T: Trait> Module<T> {
 }
 
 fn extract_inherent_data(data: &InherentData) -> Result<InherentType, RuntimeString> {
-	data.get_data::<InherentType>(&INHERENT_IDENTIFIER)
+	data.get_data::<InherentType>(INHERENT_IDENTIFIER)
 		.map_err(|_| RuntimeString::from("Invalid timestamp inherent data encoding."))?
 		.ok_or_else(|| "Timestamp inherent data is not provided.".into())
 }

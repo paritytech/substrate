@@ -43,7 +43,7 @@ pub trait FinalizedInherentData<N: Decode> {
 
 impl<N: Decode> FinalizedInherentData<N> for InherentData {
 	fn finalized_number(&self) -> Result<N, RuntimeString> {
-		self.get_data(&INHERENT_IDENTIFIER)
+		self.get_data(INHERENT_IDENTIFIER)
 			.and_then(|r| r.ok_or_else(|| "Finalized number inherent data not found".into()))
 	}
 }

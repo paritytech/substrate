@@ -472,7 +472,7 @@ impl<C, P, T> AuraVerifier<C, P, T>
 					},
 					Some(TIError::Other(e)) => Err(Error::Runtime(e)),
 					None => Err(Error::DataProvider(
-						self.inherent_data_providers.error_to_string(&i, &e)
+						self.inherent_data_providers.error_to_string(i, &e)
 					)),
 				})
 		} else {
@@ -643,7 +643,7 @@ fn register_aura_inherent_data_provider(
 	inherent_data_providers: &InherentDataProviders,
 	slot_duration: u64,
 ) -> Result<(), consensus_common::Error> {
-	if !inherent_data_providers.has_provider(&srml_aura::INHERENT_IDENTIFIER) {
+	if !inherent_data_providers.has_provider(srml_aura::INHERENT_IDENTIFIER) {
 		inherent_data_providers
 			.register_provider(srml_aura::InherentDataProvider::new(slot_duration))
 			.map_err(Into::into)

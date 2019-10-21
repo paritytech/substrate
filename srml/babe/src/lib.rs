@@ -64,7 +64,7 @@ pub trait BabeInherentData {
 
 impl BabeInherentData for InherentData {
 	fn babe_inherent_data(&self) -> result::Result<InherentType, RuntimeString> {
-		self.get_data(&INHERENT_IDENTIFIER)
+		self.get_data(INHERENT_IDENTIFIER)
 			.and_then(|r| r.ok_or_else(|| "BABE inherent data not found".into()))
 	}
 
@@ -95,7 +95,7 @@ impl ProvideInherentData for InherentDataProvider {
 		&self,
 		providers: &InherentDataProviders,
 	) -> result::Result<(), RuntimeString> {
-		if !providers.has_provider(&timestamp::INHERENT_IDENTIFIER) {
+		if !providers.has_provider(timestamp::INHERENT_IDENTIFIER) {
 			// Add the timestamp inherent data provider, as we require it.
 			providers.register_provider(timestamp::InherentDataProvider)
 		} else {

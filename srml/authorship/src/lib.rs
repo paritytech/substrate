@@ -45,7 +45,7 @@ pub trait UnclesInherentData<H: Decode> {
 
 impl<H: Decode> UnclesInherentData<H> for InherentData {
 	fn uncles(&self) -> Result<Vec<H>, RuntimeString> {
-		Ok(self.get_data(&INHERENT_IDENTIFIER)?.unwrap_or_default())
+		Ok(self.get_data(INHERENT_IDENTIFIER)?.unwrap_or_default())
 	}
 }
 

@@ -105,7 +105,7 @@ where
 			gas_limit,
 			input_data
 		} = call_request;
-		let gas_limit = gas_limit.to_number().map_err(|e| Error {
+		let gas_limit = gas_limit.into_number().map_err(|e| Error {
 			code: ErrorCode::InvalidParams,
 			message: e,
 			data: None,

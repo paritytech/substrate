@@ -565,7 +565,7 @@ impl<B, E, Block: BlockT, RA, PRA> BabeVerifier<B, E, Block, RA, PRA> {
 			inherent_res
 				.into_errors()
 				.try_for_each(|(i, e)| {
-					Err(Error::CheckInherents(self.inherent_data_providers.error_to_string(&i, &e)))
+					Err(Error::CheckInherents(self.inherent_data_providers.error_to_string(i, &e)))
 				})
 		} else {
 			Ok(())
@@ -765,7 +765,7 @@ fn register_babe_inherent_data_provider(
 	slot_duration: u64,
 ) -> Result<(), consensus_common::Error> {
 	debug!(target: "babe", "Registering");
-	if !inherent_data_providers.has_provider(&srml_babe::INHERENT_IDENTIFIER) {
+	if !inherent_data_providers.has_provider(srml_babe::INHERENT_IDENTIFIER) {
 		inherent_data_providers
 			.register_provider(srml_babe::InherentDataProvider::new(slot_duration))
 			.map_err(Into::into)
