@@ -184,7 +184,6 @@ curl https://sh.rustup.rs -sSf | sh
 rustup update nightly
 rustup target add wasm32-unknown-unknown --toolchain nightly
 rustup update stable
-cargo install --git https://github.com/alexcrichton/wasm-gc
 ----
 
 You will also need to install the following packages:
@@ -231,13 +230,9 @@ If you are trying to set up Substrate on Windows, you should do the following:
 	rustup update stable
 	rustup target add wasm32-unknown-unknown --toolchain nightly
 
-4. Next, you install wasm-gc, which is used to slim down Wasm files:
+4. Then, you need to install LLVM: https://releases.llvm.org/download.html
 
-	cargo install --git https://github.com/alexcrichton/wasm-gc --force
-
-5. Then, you need to install LLVM: https://releases.llvm.org/download.html
-
-6. Next, you need to install OpenSSL, which we will do with `vcpkg`:
+5. Next, you need to install OpenSSL, which we will do with `vcpkg`:
 
 	mkdir \Tools
 	cd \Tools
@@ -246,14 +241,14 @@ If you are trying to set up Substrate on Windows, you should do the following:
 	.\bootstrap-vcpkg.bat
 	.\vcpkg.exe install openssl:x64-windows-static
 
-7. After, you need to add OpenSSL to your System Variables. Note that in order for the following commands to work, you need to use Windows Powershell:
+6. After, you need to add OpenSSL to your System Variables. Note that in order for the following commands to work, you need to use Windows Powershell:
 
 	$env:OPENSSL_DIR = 'C:\Tools\vcpkg\installed\x64-windows-static'
 	$env:OPENSSL_STATIC = 'Yes'
 	[System.Environment]::SetEnvironmentVariable('OPENSSL_DIR', $env:OPENSSL_DIR, [System.EnvironmentVariableTarget]::User)
 	[System.Environment]::SetEnvironmentVariable('OPENSSL_STATIC', $env:OPENSSL_STATIC, [System.EnvironmentVariableTarget]::User)
 
-8. Finally, you need to install `cmake`: https://cmake.org/download/
+7. Finally, you need to install `cmake`: https://cmake.org/download/
 
 ==== Shared Steps
 
