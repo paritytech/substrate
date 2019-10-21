@@ -51,7 +51,7 @@ impl Convert<u128, Balance> for CurrencyToVoteHandler {
 
 /// Convert from weight to balance via a simple coefficient multiplication
 /// The associated type C encapsulates a constant in units of balance per weight
-pub struct LinearWeightToFee<C>(C);
+pub struct LinearWeightToFee<C>(rstd::marker::PhantomData<C>);
 
 impl<C> Convert<Weight, Balance> for LinearWeightToFee<C>
  	where C: Get<Balance> {
