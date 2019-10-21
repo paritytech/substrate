@@ -52,21 +52,21 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 	let scrate_decl = generate_hidden_includes(&hidden_crate_name, "srml-support");
 	let outer_event = try_tok!(decl_outer_event_or_origin(
 		&name,
-		modules.iter().filter(|module| module.name.to_string() != "System"),
+		modules.iter().filter(|module| module.name != "System"),
 		&system_module,
 		&scrate,
 		DeclOuterKind::Event,
 	));
 	let outer_origin = try_tok!(decl_outer_event_or_origin(
 		&name,
-		modules.iter().filter(|module| module.name.to_string() != "System"),
+		modules.iter().filter(|module| module.name != "System"),
 		&system_module,
 		&scrate,
 		DeclOuterKind::Origin,
 	));
 	let all_modules = decl_all_modules(
 		&name,
-		modules.iter().filter(|module| module.name.to_string() != "System"),
+		modules.iter().filter(|module| module.name != "System"),
 	);
 
 	let dispatch = decl_outer_dispatch(&name, modules.iter(), &scrate);
@@ -119,7 +119,7 @@ fn decl_validate_unsigned<'a>(
 			module_declaration
 				.module_parts()
 				.into_iter()
-				.any(|part| part.name.to_string() == "ValidateUnsigned")
+				.any(|part| part.name == "ValidateUnsigned")
 		})
 		.map(|module_declaration| &module_declaration.name);
 	quote!(
@@ -141,7 +141,7 @@ fn decl_outer_inherent<'a>(
 		let maybe_config_part = module_declaration
 			.module_parts()
 			.into_iter()
-			.filter(|part| part.name.to_string() == "Inherent")
+			.filter(|part| part.name == "Inherent")
 			.next();
 		maybe_config_part.map(|config_part| {
 			let arg = config_part
@@ -173,7 +173,7 @@ fn decl_outer_config<'a>(
 			let generics: Vec<_> = module_declaration
 				.module_parts()
 				.into_iter()
-				.filter(|part| part.name.to_string() == "Config")
+				.filter(|part| part.name == "Config")
 				.map(|part| part.generics)
 				.collect();
 			if generics.len() == 0 {
@@ -220,7 +220,7 @@ fn decl_runtime_metadata<'a>(
 			let parts_len = parts.len();
 			let filtered_names: Vec<_> = parts
 				.into_iter()
-				.filter(|part| part.name.to_string() != "Module")
+				.filter(|part| part.name != "Module")
 				.map(|part| part.name.clone())
 				.collect();
 			// Theres no `Module` entry
@@ -366,12 +366,12 @@ fn decl_all_modules<'a>(
 
 fn find_system_module<'a>(mut module_declarations: impl Iterator<Item = &'a ModuleDeclaration>) -> Option<&'a Ident> {
 	module_declarations
-		.find(|decl| decl.name.to_string().as_str() == "System")
+		.find(|decl| decl.name == "System")
 		.map(|decl| &decl.module)
 }
 
 fn find_module_entry<'a>(module_declaration: &'a ModuleDeclaration, name: &'a Ident) -> Option<ModulePart> {
 	let name_str = name.to_string();
 	let parts = module_declaration.module_parts();
-	parts.into_iter().find(|part| part.name.to_string() == name_str)
+	parts.into_iter().find(|part| part.name == name_str)
 }
