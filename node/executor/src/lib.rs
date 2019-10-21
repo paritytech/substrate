@@ -94,7 +94,7 @@ mod tests {
 			(extrinsic.encode().len() as Balance);
 
 		let weight = default_transfer_call().get_dispatch_info().weight;
-		let weight_fee = <Runtime as transaction_payment::Trait>::LinearWeightToFee::convert(weight);
+		let weight_fee = <Runtime as transaction_payment::Trait>::WeightToFee::convert(weight);
 
 		fee_multiplier.saturated_multiply_accumulate(length_fee + weight_fee) + TransferFee::get()
 	}
