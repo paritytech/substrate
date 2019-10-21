@@ -226,7 +226,7 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 ///
 /// # Example:
 ///
-/// ```
+/// ```nocompile
 /// construct_runtime!(
 ///     pub enum Runtime where
 ///         Block = Block,
