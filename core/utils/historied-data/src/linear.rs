@@ -22,9 +22,21 @@
 //! It only allows linear history (no branch so
 //! inner storage is only an array of element).
 
-use crate::State as TransactionState;
 use rstd::vec::Vec;
 use rstd::vec;
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+/// State of a transactional layer.
+pub enum TransactionState {
+	/// Data is under change and can still be dropped.
+	Pending,
+	/// Same as pending but does count as a transaction.
+	TxPending,
+	/// Data pointing to this indexed historic state should
+	/// not be returned and can be removed.
+	Dropped,
+}
+
 
 /// An entry at a given history height.
 #[derive(Debug, Clone)]
@@ -102,12 +114,21 @@ impl<V> History<V> {
 		self.0.truncate(index)
 	}
 
-	fn pop(&mut self) -> Option<HistoriedValue<V>> {
-		self.0.pop()
+	fn truncate_until(&mut self, index: usize) {
+		if index > 0 {
+			if self.0.spilled() {
+				let owned = rstd::mem::replace(&mut self.0, Default::default());
+				self.0 = smallvec::SmallVec::from_vec(owned.into_vec().split_off(index));
+			} else {
+				for i in (0..index).rev() {
+					self.0.remove(i);
+				}
+			}
+		}
 	}
 
-	fn remove(&mut self, index: usize) {
-		let _ = self.0.remove(index);
+	fn pop(&mut self) -> Option<HistoriedValue<V>> {
+		self.0.pop()
 	}
 
 	/// Append without checking if a value already exist.
@@ -125,64 +146,65 @@ impl<V> History<V> {
 
 }
 
+
+/// States is both an indexed state to query values with history
+/// and a committed index that indicates a point in time where
+/// we cannot drop transaction layer.
+/// Committed index is starting at 1, if it is 0 then there is no
+/// committed index and all layer can be dropped.
+/// There is a implicit pending state which is equal to the length
+/// of this history.
 #[derive(Debug, Clone)]
 #[cfg_attr(any(test, feature = "test-helpers"), derive(PartialEq))]
-pub struct States(Vec<TransactionState>);
+pub struct States(Vec<TransactionState>, usize);
 
 impl Default for States {
 	fn default() -> Self {
-		States(vec![TransactionState::Pending])
+		States(vec![TransactionState::Pending], 0)
 	}
 }
 
 impl States {
+	/// Get reference of state, that is enough
+	/// information to query or update historied
+	/// data.
 	pub fn as_ref(&self) -> &[TransactionState] {
 		self.0.as_ref()
 	}
-
-	pub fn iter<'a>(&'a self) -> impl Iterator<Item = (usize, TransactionState)> + 'a {
-		self.0.iter().map(Clone::clone).enumerate()
+	/// Get index of committed layer, this is
+	/// additional information needed to manage
+	/// commit and garbage collect.
+	pub fn committed(&self) -> usize {
+		self.1
 	}
-}
 
-impl States {
+	/// Allow to rollback to a previous committed
+	/// index.
+	/// This can only work if there was no eager
+	/// garbage collection.
+	pub fn unchecked_rollback_committed(&mut self, old_committed: usize) {
+		self.1 = old_committed;
+		self.discard_prospective();
+	}
 
 	/// Build any state for testing only.
 	#[cfg(any(test, feature = "test-helpers"))]
-	pub fn test_vector(test_states: Vec<TransactionState>) -> Self {
-		States(test_states)
+	pub fn test_vector(test_states: Vec<TransactionState>, committed: usize) -> Self {
+		States(test_states, committed)
 	}
 
 	/// Discard prospective changes to state.
+	/// That is revert all transaction up to the committed index.
 	pub fn discard_prospective(&mut self) {
-		let mut i = self.0.len();
-		while i > 0 {
-			i -= 1;
-			match self.0[i] {
-				TransactionState::Dropped => (),
-				TransactionState::Pending
-				| TransactionState::TxPending
-				| TransactionState::Prospective => self.0[i] = TransactionState::Dropped,
-				TransactionState::Committed => break,
-			}
+		for i in self.1 .. self.0.len() {
+			self.0[i] = TransactionState::Dropped;
 		}
 		self.0.push(TransactionState::Pending);
 	}
 
 	/// Commit prospective changes to state.
 	pub fn commit_prospective(&mut self) {
-		debug_assert!(self.0.len() > 0);
-		let mut i = self.0.len();
-		while i > 0 {
-			i -= 1;
-			match self.0[i] {
-				TransactionState::Dropped => (),
-				TransactionState::Prospective
-				| TransactionState::TxPending
-				| TransactionState::Pending => self.0[i] = TransactionState::Committed,
-				| TransactionState::Committed => break,
-			}
-		}
+		self.1 = self.0.len();
 		self.0.push(TransactionState::Pending);
 	}
 
@@ -195,17 +217,17 @@ impl States {
 	/// A transaction is always running (history always end with pending).
 	pub fn discard_transaction(&mut self) {
 		let mut i = self.0.len();
-		while i > 0 {
+		while i > self.1 {
 			i -= 1;
 			match self.0[i] {
 				TransactionState::Dropped => (),
-				TransactionState::Prospective
-				| TransactionState::Pending => self.0[i] = TransactionState::Dropped,
+				TransactionState::Pending => {
+					self.0[i] = TransactionState::Dropped;
+				},
 				TransactionState::TxPending => {
 					self.0[i] = TransactionState::Dropped;
 					break;
 				},
-				TransactionState::Committed => break,
 			}
 		}
 		self.0.push(TransactionState::Pending);
@@ -214,34 +236,18 @@ impl States {
 	/// Commit a transactional layer.
 	pub fn commit_transaction(&mut self) {
 		let mut i = self.0.len();
-		while i > 0 {
+		while i > self.1 {
 			i -= 1;
 			match self.0[i] {
-				TransactionState::Prospective
-				| TransactionState::Dropped => (),
-				TransactionState::Pending => self.0[i] = TransactionState::Prospective,
+				TransactionState::Dropped => (),
+				TransactionState::Pending => (),
 				TransactionState::TxPending => {
-					self.0[i] = TransactionState::Prospective;
+					self.0[i] = TransactionState::Pending;
 					break;
 				},
-				TransactionState::Committed => break,
 			}
 		}
-		self.0.push(TransactionState::Pending);
 	}
-
-	/// Return array of `TxPending` indexes in state.
-	/// This is use as an input for garbage collection.
-	pub fn transaction_indexes(&self) -> Vec<usize> {
-		let mut transaction_index = Vec::new();
-		for (i, state) in self.0.iter().enumerate() {
-			if &TransactionState::TxPending == state {
-				transaction_index.push(i);
-			}
-		}
-		transaction_index
-	}
-
 
 }
 
@@ -278,9 +284,7 @@ impl<V> History<V> {
 			match history[history_index] {
 				TransactionState::Dropped => (),
 				TransactionState::Pending
-				| TransactionState::TxPending
-				| TransactionState::Prospective
-				| TransactionState::Committed =>
+				| TransactionState::TxPending =>
 					return Some(value),
 			}
 		}
@@ -300,9 +304,7 @@ impl<V> History<V> {
 			match history[history_index] {
 				TransactionState::Dropped => (),
 				TransactionState::Pending
-				| TransactionState::TxPending
-				| TransactionState::Prospective
-				| TransactionState::Committed => {
+				| TransactionState::TxPending => {
 					self.truncate(index + 1);
 					return self.pop().map(|v| v.value);
 				},
@@ -313,31 +315,27 @@ impl<V> History<V> {
 
 
 	#[cfg(any(test, feature = "test-helpers"))]
-	pub fn get_prospective(&self, history: &[TransactionState]) -> Option<&V> {
-		// index is never 0,
+	pub fn get_prospective(&self, history: &[TransactionState], committed: usize) -> Option<&V> {
 		let mut index = self.len();
 		if index == 0 {
 			return None;
 		}
 		debug_assert!(history.len() >= index);
-		while index > 0 {
+		while index > committed {
 			index -= 1;
 			let HistoriedValue { value, index: history_index } = self.get_state(index);
 			match history[history_index] {
+				TransactionState::Dropped => (),
 				TransactionState::Pending
-				| TransactionState::TxPending
-				| TransactionState::Prospective =>
+				| TransactionState::TxPending =>
 					return Some(value),
-				TransactionState::Committed
-				| TransactionState::Dropped => (),
 			}
 		}
 		None
 	}
 
 	#[cfg(any(test, feature = "test-helpers"))]
-	pub fn get_committed(&self, history: &[TransactionState]) -> Option<&V> {
-		// index is never 0,
+	pub fn get_committed(&self, history: &[TransactionState], committed: usize) -> Option<&V> {
 		let mut index = self.len();
 		if index == 0 {
 			return None;
@@ -346,18 +344,19 @@ impl<V> History<V> {
 		while index > 0 {
 			index -= 1;
 			let HistoriedValue { value, index: history_index } = self.get_state(index);
-			match history[history_index] {
-				TransactionState::Committed => return Some(value),
-				TransactionState::Pending
-				| TransactionState::TxPending
-				| TransactionState::Prospective
-				| TransactionState::Dropped => (),
+			if history_index < committed {
+				match history[history_index] {
+					TransactionState::Dropped => (),
+					TransactionState::Pending
+					| TransactionState::TxPending =>
+						return Some(value),
+				}
 			}
 		}
 		None
 	}
 
-	pub fn into_committed(mut self, history: &[TransactionState]) -> Option<V> {
+	pub fn into_committed(mut self, history: &[TransactionState], committed: usize) -> Option<V> {
 		// index is never 0,
 		let mut index = self.len();
 		if index == 0 {
@@ -370,15 +369,15 @@ impl<V> History<V> {
 		while index > 0 {
 			index -= 1;
 			let history_index = self.get_state(index).index;
-			match history[history_index] {
-				TransactionState::Committed => {
-					self.truncate(index + 1);
-					return self.pop().map(|v| v.value);
-				},
-				TransactionState::Pending
-				| TransactionState::TxPending
-				| TransactionState::Prospective
-				| TransactionState::Dropped => (),
+			if history_index < committed {
+				match history[history_index] {
+					TransactionState::Dropped => (),
+					TransactionState::Pending
+					| TransactionState::TxPending => {
+						self.truncate(index + 1);
+						return self.pop().map(|v| v.value);
+					},
+				}
 			}
 		}
 		None
@@ -400,14 +399,8 @@ impl<V> History<V> {
 			index -= 1;
 			let history_index = self.get_state(index).index;
 			match history[history_index] {
-				TransactionState::Committed => {
-					// here we could gc all preceding values but that is additional cost
-					// and get_mut should stop at pending following committed.
-					return Some((self.mut_ref(index), history_index).into())
-				},
 				TransactionState::Pending
-				| TransactionState::TxPending
-				| TransactionState::Prospective => {
+				| TransactionState::TxPending => {
 					return Some((self.mut_ref(index), history_index).into())
 				},
 				TransactionState::Dropped => { let _ = self.pop(); },
@@ -417,83 +410,51 @@ impl<V> History<V> {
 	}
 
 
-	/// Garbage collect the history, act as a `get_mut` with additional cost.
-	/// To run `eager`, a `transaction_index` parameter of all `TxPending` states
-	/// must be provided, then all dropped value are removed even if it means shifting
-	/// array byte. Otherwhise we mainly garbage collect up to last Commit state
-	/// (truncate left size).
 	pub fn get_mut_pruning(
 		&mut self,
 		history: &[TransactionState],
-		transaction_index: Option<&[usize]>,
-	) -> Option<HistoriedValue<&mut V>> {
-		if let Some(mut transaction_index) = transaction_index {
-			let mut index = self.len();
-			if index == 0 {
-				return None;
-			}
-			// indicates that we got a value to return up to previous
-			// `TxPending` so values in between can be dropped.
-			let mut below_value = usize::max_value();
-			let mut result: Option<(usize, usize)> = None;
-			// internal method: should be use properly
-			// (history of the right overlay change set
-			// is size aligned).
-			debug_assert!(history.len() >= index);
-			while index > 0 {
-				index -= 1;
-				let history_index = self.get_state(index).index;
-				match history[history_index] {
-					TransactionState::Committed => {
-						for _ in 0..index {
-							self.remove(0);
+		committed: Option<usize>,
+	) -> Option<HistoriedValue<&mut V>>  {
+		let mut index = self.len();
+		if index == 0 {
+			return None;
+		}
+		let mut result = None;
+		let mut prune_index = self.len();
+		// internal method: should be use properly
+		// (history of the right overlay change set
+		// is size aligned).
+		debug_assert!(history.len() >= index);
+		while index > 0 {
+			index -= 1;
+			let history_index = self.get_state(index).index;
+			match history[history_index] {
+				TransactionState::Pending
+				| TransactionState::TxPending => {
+					if result.is_none() {
+						result =  Some((index, history_index));
+					}
+					if let Some(committed) = committed {
+						prune_index = index;
+						if history_index < committed {
+							break;
 						}
-						result = Some(result.map(|(i, history_index)| (i - index, history_index))
-							.unwrap_or((0, history_index)));
+					} else {
 						break;
-					},
-					TransactionState::Pending
-					| TransactionState::Prospective => {
-						if history_index >= below_value {
-							self.remove(index);
-							result.as_mut().map(|(i, _)| *i = *i - 1);
-						} else {
-							if result.is_none() {
-								result = Some((index, history_index));
-							}
-							// move to next previous `TxPending`
-							while below_value > history_index {
-								// mut slice pop
-								let split = transaction_index.split_last()
-									.map(|(v, sl)| (*v, sl))
-									.unwrap_or((0, &[]));
-								below_value = split.0;
-								transaction_index = split.1;
-							}
-						}
-					},
-					TransactionState::TxPending => {
-						if history_index >= below_value {
-							self.remove(index);
-							result.as_mut().map(|(i, _)| *i = *i - 1);
-						} else {
-							if result.is_none() {
-								result = Some((index, history_index));
-							}
-						}
-						below_value = usize::max_value();
-					},
-					TransactionState::Dropped => {
-						self.remove(index);
-					},
-				}
+					}
+				},
+				TransactionState::Dropped => { let _ = self.pop(); },
 			}
-			if let Some((index, history_index)) = result {
-				Some((self.mut_ref(index), history_index).into())
-			} else { None }
-
+		}
+		if prune_index < self.len() {
+			self.truncate_until(prune_index);
+		}
+		// no need to clear if equal to length since we return None, meaning the value should be
+		// dropped.
+		if let Some((index, history_index)) = result {
+			Some((self.mut_ref(index - prune_index), history_index).into())
 		} else {
-			self.get_mut(history)
+			None
 		}
 	}
 

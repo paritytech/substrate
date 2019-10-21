@@ -325,8 +325,7 @@ mod test {
 	use crate::changes_trie::{RootsStorage, Configuration, storage::InMemoryStorage};
 	use crate::changes_trie::build_cache::{IncompleteCacheAction, IncompleteCachedBuildData};
 	use crate::overlayed_changes::{OverlayedValue, OverlayedChangeSet};
-	use historied_data::linear::{History, States, HistoriedValue};
-	use historied_data::State as TransactionState;
+	use historied_data::linear::{History, States, HistoriedValue, TransactionState};
 	use super::*;
 
 	fn prepare_for_build(zero: u64) -> (
@@ -397,7 +396,7 @@ mod test {
 		]);
 		let changes = OverlayedChanges {
 			changes: OverlayedChangeSet {
-				history: States::test_vector(vec![TransactionState::Committed, TransactionState::Pending]),
+				history: States::test_vector(vec![TransactionState::Pending, TransactionState::Pending], 1),
 				top: vec![
 					(EXTRINSIC_INDEX.to_vec(), History::from_iter(vec![
 						(OverlayedValue {
@@ -452,6 +451,7 @@ mod test {
 				].into_iter().collect(),
 			},
 			operation_from_last_gc: 0,
+			not_eager_gc: false,
 			changes_trie_config: Some(config.clone()),
 		};
 

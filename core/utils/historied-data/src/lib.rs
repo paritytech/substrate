@@ -22,25 +22,6 @@
 
 pub mod linear;
 
-#[derive(Debug, Clone, PartialEq, Copy)]
-/// State of a data.
-pub enum State {
-	/// Data is under change and can still be dropped.
-	Pending,
-	/// Data is under change and can still be dropped.
-	/// This also mark the start of a transaction.
-	TxPending,
-	/// Data is committed, but can still be dropped
-	/// using `discard_prospective` or `discard_transaction`
-	/// from a parent transaction state.
-	Prospective,
-	/// Committed is data that cannot be dropped.
-	Committed,
-	/// Data pointing to this indexed historic state should
-	/// not be returned and can be removed.
-	Dropped,
-}
-
 pub const DEFAULT_GC_CONF: GCConfiguration = GCConfiguration {
 	trigger_transaction_gc: 100_000,
 	trigger_commit_gc: 10_000,

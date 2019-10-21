@@ -565,6 +565,7 @@ mod tests {
 				].into_iter().collect(),
 			},
 			operation_from_last_gc: 0,
+			not_eager_gc: false,
 		}
 	}
 

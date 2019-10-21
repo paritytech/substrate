@@ -311,15 +311,20 @@ impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec> where
 			CallResult<R, Exec::Error>,
 		) -> CallResult<R, Exec::Error>
 	{
-		let orig_changes = self.overlay.changes.clone();
+		let orig_committed = self.overlay.changes.history.committed();
+		// disable eager gc to be able to rollback
+		self.overlay.not_eager_gc = true;
 		let (result, was_native, storage_delta, changes_delta) = self.execute_aux(
 			compute_tx,
 			true,
 			native_call.take(),
 		);
 
+		self.overlay.not_eager_gc = false;
 		if was_native {
-			self.overlay.changes = orig_changes;
+			if result.is_ok() {
+				self.overlay.changes.history.unchecked_rollback_committed(orig_committed);
+			}
 			let (wasm_result, _, wasm_storage_delta, wasm_changes_delta) = self.execute_aux(
 				compute_tx,
 				false,
@@ -351,7 +356,6 @@ impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec> where
 		R: Decode + Encode + PartialEq,
 		NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
 	{
-		let orig_changes = self.overlay.changes.clone();
 		let (result, was_native, storage_delta, changes_delta) = self.execute_aux(
 			compute_tx,
 			true,
@@ -361,7 +365,6 @@ impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec> where
 		if !was_native || result.is_ok() {
 			(result, storage_delta, changes_delta)
 		} else {
-			self.overlay.changes = orig_changes;
 			let (wasm_result, _, wasm_storage_delta, wasm_changes_delta) = self.execute_aux(
 				compute_tx,
 				false,
