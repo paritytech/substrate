@@ -212,7 +212,7 @@ pub type MemoryId = u32;
 pub trait Sandbox {
 	/// Get sandbox memory from the `memory_id` instance at `offset` into the given buffer.
 	fn memory_get(
-		&self,
+		&mut self,
 		memory_id: MemoryId,
 		offset: WordSize,
 		buf_ptr: Pointer<u8>,

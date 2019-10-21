@@ -16,6 +16,7 @@
 
 ///! Defines a `WasmRuntime` that uses the Wasmtime JIT to execute.
 
+mod function_executor;
 mod runtime;
 mod util;
 

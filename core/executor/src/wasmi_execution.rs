@@ -138,7 +138,7 @@ impl FunctionContext for FunctionExecutor {
 
 impl Sandbox for FunctionExecutor {
 	fn memory_get(
-		&self,
+		&mut self,
 		memory_id: MemoryId,
 		offset: WordSize,
 		buf_ptr: Pointer<u8>,
