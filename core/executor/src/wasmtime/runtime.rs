@@ -17,20 +17,30 @@
 //! Defines the compiled Wasm runtime that uses Wasmtime internally.
 
 use crate::error::{Error, Result, WasmError};
+use crate::host_interface::SubstrateExternals;
 use crate::wasm_runtime::WasmRuntime;
-use crate::wasmtime::util::read_memory_into;
+use crate::wasmtime::function_executor::FunctionExecutorState;
+use crate::wasmtime::trampoline::{TrampolineState, make_trampoline};
+use crate::wasmtime::util::{cranelift_ir_signature, read_memory_into};
 use crate::{Externalities, RuntimeVersion};
 
 use codec::Decode;
 use cranelift_codegen::isa::TargetIsa;
+use cranelift_entity::{EntityRef, PrimaryMap};
+use cranelift_frontend::FunctionBuilderContext;
+use cranelift_wasm::DefinedFuncIndex;
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::convert::TryFrom;
-use wasm_interface::Pointer;
+use std::mem;
+use std::rc::Rc;
+use wasm_interface::{HostFunctions, Pointer};
+use wasmtime_environ::{Module, translate_signature};
 use wasmtime_jit::{
-	ActionOutcome, ActionError, CompilationStrategy, CompiledModule, Context,
+	ActionOutcome, ActionError, CodeMemory, CompilationStrategy, CompiledModule, Compiler, Context,
 	SetupError, RuntimeValue,
 };
-use wasmtime_runtime::{Export, InstanceHandle};
+use wasmtime_runtime::{Export, Imports, InstanceHandle, VMFunctionBody};
 
 /// A `WasmRuntime` implementation using the Wasmtime JIT to compile the runtime module to native
 /// and execute the compiled code.
@@ -123,7 +133,10 @@ fn create_compiled_unit(code: &[u8])
 	// Enable/disable producing of debug info.
 	context.set_debug_info(false);
 
-	// TODO: Instantiate and link the env module.
+	// Instantiate and link the env module.
+	let global_exports = context.get_global_exports();
+	let env_module = instantiate_env_module(global_exports)?;
+	context.name_instance("env".to_owned(), env_module);
 
 	// Compile the wasm module.
 	let module = context.compile_module(&code)
@@ -158,6 +171,18 @@ fn call_method(
 		// However, the wasmtime API doesn't support modifying the size of memory on instantiation
 		// at this time.
 		grow_memory(&mut instance, heap_pages)?;
+
+		// Initialize the function executor state.
+		let executor_state = FunctionExecutorState::new(
+			// Unsafely extend the reference lifetime to static. This is necessary because the
+			// host state must be `Any`. This is OK as we will drop this object either before
+			// exiting the function in the happy case or in the worst case on the next runtime
+			// call, which also resets the host state. Thus this reference can never actually
+			// outlive the Context.
+			mem::transmute::<_, &'static mut Compiler>(context.compiler_mut()),
+			get_heap_base(&instance)?,
+		);
+		reset_host_state(context, Some(executor_state))?;
 	}
 
 	// TODO: Construct arguments properly by allocating heap space with data.
@@ -169,6 +194,7 @@ fn call_method(
 			.invoke(&mut instance, method, &args[..])
 			.map_err(Error::Wasmtime)
 	})?;
+	let trap_error = reset_host_state(context, None)?;
 	let (output_ptr, output_len) = match outcome {
 		ActionOutcome::Returned { values } => {
 			if values.len()	!= 1 {
@@ -183,7 +209,9 @@ fn call_method(
 			}
 		}
 		ActionOutcome::Trapped { message } =>
-			return Err(format!("Wasm execution trapped: {}", message).into()),
+			return Err(trap_error.unwrap_or_else(||
+				format!("Wasm execution trapped: {}", message).into()
+			)),
 	};
 
 	// Read the output data from guest memory.
@@ -191,6 +219,60 @@ fn call_method(
 	let memory = unsafe { get_memory_mut(&mut instance)? };
 	read_memory_into(memory, output_ptr, &mut output)?;
 	Ok(output)
+}
+
+/// The implementation is based on wasmtime_wasi::instantiate_wasi.
+fn instantiate_env_module(global_exports: Rc<RefCell<HashMap<String, Option<Export>>>>)
+	-> std::result::Result<InstanceHandle, WasmError>
+{
+	let isa = target_isa()?;
+	let pointer_type = isa.pointer_type();
+	let call_conv = isa.default_call_conv();
+
+	let mut fn_builder_ctx = FunctionBuilderContext::new();
+	let mut module = Module::new();
+	let mut finished_functions = <PrimaryMap<DefinedFuncIndex, *const VMFunctionBody>>::new();
+	let mut code_memory = CodeMemory::new();
+
+	for function in SubstrateExternals::functions().iter() {
+		let sig = translate_signature(
+			cranelift_ir_signature(function.signature(), &call_conv),
+			pointer_type
+		);
+		let sig_id = module.signatures.push(sig.clone());
+		let func_id = module.functions.push(sig_id);
+		module
+			.exports
+			.insert(function.name().to_string(), wasmtime_environ::Export::Function(func_id));
+
+		let trampoline = make_trampoline(
+			isa.as_ref(),
+			&mut code_memory,
+			&mut fn_builder_ctx,
+			func_id.index() as u32,
+			&sig,
+		);
+		finished_functions.push(trampoline);
+	}
+
+	code_memory.publish();
+
+	let imports = Imports::none();
+	let data_initializers = Vec::new();
+	let signatures = PrimaryMap::new();
+	let host_state = TrampolineState::new::<SubstrateExternals>(code_memory);
+
+	let result = InstanceHandle::new(
+		Rc::new(module),
+		global_exports,
+		finished_functions.into_boxed_slice(),
+		imports,
+		&data_initializers,
+		signatures.into_boxed_slice(),
+		None,
+		Box::new(host_state),
+	);
+	result.map_err(|e| WasmError::WasmtimeSetup(SetupError::Instantiate(e)))
 }
 
 /// Build a new TargetIsa for the host machine.
@@ -218,6 +300,23 @@ unsafe fn grow_memory(instance: &mut InstanceHandle, pages: u32) -> Result<()> {
 		.ok_or_else(|| "requested heap_pages would exceed maximum memory size".into())
 }
 
+fn get_host_state(context: &mut Context) -> Result<&mut TrampolineState> {
+	let env_instance = context.get_instance("env")
+		.map_err(|err| format!("cannot find \"env\" module: {}", err))?;
+	env_instance
+		.host_state()
+		.downcast_mut::<TrampolineState>()
+		.ok_or_else(|| "cannot get \"env\" module host state".into())
+}
+
+fn reset_host_state(context: &mut Context, executor_state: Option<FunctionExecutorState>)
+	-> Result<Option<Error>>
+{
+	let trampoline_state = get_host_state(context)?;
+	trampoline_state.executor_state = executor_state;
+	Ok(trampoline_state.reset_trap())
+}
+
 unsafe fn get_memory_mut(instance: &mut InstanceHandle) -> Result<&mut [u8]> {
 	match instance.lookup("memory") {
 		Some(Export::Memory { definition, vmctx: _, memory: _ }) =>
@@ -226,6 +325,14 @@ unsafe fn get_memory_mut(instance: &mut InstanceHandle) -> Result<&mut [u8]> {
 				(*definition).current_length,
 			)),
 		_ => Err(Error::InvalidMemoryReference),
+	}
+}
+
+unsafe fn get_heap_base(instance: &InstanceHandle) -> Result<u32> {
+	match instance.lookup_immutable("__heap_base") {
+		Some(Export::Global { definition, vmctx: _, global: _ }) =>
+			Ok(*(*definition).as_u32()),
+		_ => return Err(Error::HeapBaseNotFoundOrInvalid),
 	}
 }
 
