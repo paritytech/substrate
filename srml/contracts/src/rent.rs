@@ -172,7 +172,7 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 		let imbalance = imbalance.expect(
 			"imbalance is Some if can_withdraw_rent && (insufficient_rent || pay_rent) is true;
 			if can_withdraw_rent is false, the function has returned;
-			pay_rent is true;
+			can_withdraw_rent && pay_rent is true;
 			qed"
 		);
 		T::RentPayment::on_unbalanced(imbalance);
