@@ -34,6 +34,9 @@ wabt = "0.9.2"
 criterion = "0.3.0"
 
 [features]
+wasmtime = [
+    "substrate-executor/wasmtime",
+]
 stress-test = []
 
 [[bench]]

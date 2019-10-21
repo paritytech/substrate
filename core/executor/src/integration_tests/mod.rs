@@ -33,6 +33,7 @@ use crate::{WasmExecutionMethod, call_in_wasm};
 pub type TestExternalities = CoreTestExternalities<Blake2Hasher, u64>;
 
 #[test_case(WasmExecutionMethod::Interpreted)]
+#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
 fn returning_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
@@ -50,6 +51,7 @@ fn returning_should_work(wasm_method: WasmExecutionMethod) {
 }
 
 #[test_case(WasmExecutionMethod::Interpreted)]
+#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
 fn panicking_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
@@ -87,6 +89,7 @@ fn panicking_should_work(wasm_method: WasmExecutionMethod) {
 }
 
 #[test_case(WasmExecutionMethod::Interpreted)]
+#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
 fn storage_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 
@@ -116,6 +119,7 @@ fn storage_should_work(wasm_method: WasmExecutionMethod) {
 }
 
 #[test_case(WasmExecutionMethod::Interpreted)]
+#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
 fn clear_prefix_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	{
@@ -149,6 +153,7 @@ fn clear_prefix_should_work(wasm_method: WasmExecutionMethod) {
 }
 
 #[test_case(WasmExecutionMethod::Interpreted)]
+#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
 fn blake2_256_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
@@ -178,6 +183,7 @@ fn blake2_256_should_work(wasm_method: WasmExecutionMethod) {
 }
 
 #[test_case(WasmExecutionMethod::Interpreted)]
+#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
 fn blake2_128_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
@@ -207,6 +213,7 @@ fn blake2_128_should_work(wasm_method: WasmExecutionMethod) {
 }
 
 #[test_case(WasmExecutionMethod::Interpreted)]
+#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
 fn twox_256_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
@@ -240,6 +247,7 @@ fn twox_256_should_work(wasm_method: WasmExecutionMethod) {
 }
 
 #[test_case(WasmExecutionMethod::Interpreted)]
+#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
 fn twox_128_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
@@ -269,6 +277,7 @@ fn twox_128_should_work(wasm_method: WasmExecutionMethod) {
 }
 
 #[test_case(WasmExecutionMethod::Interpreted)]
+#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
 fn ed25519_verify_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
@@ -310,6 +319,7 @@ fn ed25519_verify_should_work(wasm_method: WasmExecutionMethod) {
 }
 
 #[test_case(WasmExecutionMethod::Interpreted)]
+#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
 fn sr25519_verify_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
@@ -351,6 +361,7 @@ fn sr25519_verify_should_work(wasm_method: WasmExecutionMethod) {
 }
 
 #[test_case(WasmExecutionMethod::Interpreted)]
+#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
 fn ordered_trie_root_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
@@ -370,6 +381,7 @@ fn ordered_trie_root_should_work(wasm_method: WasmExecutionMethod) {
 }
 
 #[test_case(WasmExecutionMethod::Interpreted)]
+#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
 fn offchain_local_storage_should_work(wasm_method: WasmExecutionMethod) {
 	use substrate_client::backend::OffchainStorage;
 
@@ -393,6 +405,7 @@ fn offchain_local_storage_should_work(wasm_method: WasmExecutionMethod) {
 }
 
 #[test_case(WasmExecutionMethod::Interpreted)]
+#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
 fn offchain_http_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let (offchain, state) = testing::TestOffchainExt::new();

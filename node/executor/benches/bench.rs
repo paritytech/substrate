@@ -189,6 +189,8 @@ fn bench_execute_block(c: &mut Criterion) {
 		vec![
 			ExecutionMethod::Native,
 			ExecutionMethod::Wasm(WasmExecutionMethod::Interpreted),
+			#[cfg(feature = "wasmtime")]
+			ExecutionMethod::Wasm(WasmExecutionMethod::Compiled),
 		],
 	);
 }
