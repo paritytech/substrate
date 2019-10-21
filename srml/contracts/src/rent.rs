@@ -169,7 +169,11 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 			..contract
 		});
 
-		let imbalance = imbalance.expect("Imbalance has been checked above");
+		let imbalance = imbalance.expect(
+			"insufficient_rent || pay_rent is true;
+			if insufficient_rent the function has returned;
+			qed"
+		);
 		T::RentPayment::on_unbalanced(imbalance);
 
 		<ContractInfoOf<T>>::insert(account, &contract_info);
