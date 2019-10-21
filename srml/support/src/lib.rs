@@ -518,6 +518,15 @@ mod tests {
 					documentation: DecodeDifferent::Encode(&[]),
 				},
 				StorageEntryMetadata {
+					name: DecodeDifferent::Encode("GetterNoFnKeyword"),
+					modifier: StorageEntryModifier::Optional,
+					ty: StorageEntryType::Plain(DecodeDifferent::Encode("u32")),
+					default: DecodeDifferent::Encode(
+						DefaultByteGetter(&__GetByteStructGetterNoFnKeyword(PhantomData::<Test>))
+					),
+					documentation: DecodeDifferent::Encode(&[]),
+				},
+				StorageEntryMetadata {
 					name: DecodeDifferent::Encode("DataDM"),
 					modifier: StorageEntryModifier::Default,
 					ty: StorageEntryType::DoubleMap{

@@ -447,7 +447,7 @@ pub struct BalanceLock<Balance, BlockNumber> {
 decl_storage! {
 	trait Store for Module<T: Trait> as GenericAsset {
 		/// Total issuance of a given asset.
-		pub TotalIssuance get(total_issuance) build(|config: &GenesisConfig<T>| {
+		pub TotalIssuance get(fn total_issuance) build(|config: &GenesisConfig<T>| {
 			let issuance = config.initial_balance * (config.endowed_accounts.len() as u32).into();
 			config.assets.iter().map(|id| (id.clone(), issuance)).collect::<Vec<_>>()
 		}): map T::AssetId => T::Balance;
@@ -459,19 +459,19 @@ decl_storage! {
 		pub ReservedBalance: double_map T::AssetId, twox_128(T::AccountId) => T::Balance;
 
 		/// Next available ID for user-created asset.
-		pub NextAssetId get(next_asset_id) config(): T::AssetId;
+		pub NextAssetId get(fn next_asset_id) config(): T::AssetId;
 
 		/// Permission options for a given asset.
-		pub Permissions get(get_permission): map T::AssetId => PermissionVersions<T::AccountId>;
+		pub Permissions get(fn get_permission): map T::AssetId => PermissionVersions<T::AccountId>;
 
 		/// Any liquidity locks on some account balances.
-		pub Locks get(locks): map T::AccountId => Vec<BalanceLock<T::Balance, T::BlockNumber>>;
+		pub Locks get(fn locks): map T::AccountId => Vec<BalanceLock<T::Balance, T::BlockNumber>>;
 
 		/// The identity of the asset which is the one that is designated for the chain's staking system.
-		pub StakingAssetId get(staking_asset_id) config(): T::AssetId;
+		pub StakingAssetId get(fn staking_asset_id) config(): T::AssetId;
 
 		/// The identity of the asset which is the one that is designated for paying the chain's transaction fee.
-		pub SpendingAssetId get(spending_asset_id) config(): T::AssetId;
+		pub SpendingAssetId get(fn spending_asset_id) config(): T::AssetId;
 	}
 	add_extra_genesis {
 		config(assets): Vec<T::AssetId>;

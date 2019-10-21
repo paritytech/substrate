@@ -86,15 +86,15 @@ pub struct Votes<AccountId> {
 decl_storage! {
 	trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Collective {
 		/// The hashes of the active proposals.
-		pub Proposals get(proposals): Vec<T::Hash>;
+		pub Proposals get(fn proposals): Vec<T::Hash>;
 		/// Actual proposal for a given hash, if it's current.
-		pub ProposalOf get(proposal_of): map T::Hash => Option<<T as Trait<I>>::Proposal>;
+		pub ProposalOf get(fn proposal_of): map T::Hash => Option<<T as Trait<I>>::Proposal>;
 		/// Votes on a given proposal, if it is ongoing.
-		pub Voting get(voting): map T::Hash => Option<Votes<T::AccountId>>;
+		pub Voting get(fn voting): map T::Hash => Option<Votes<T::AccountId>>;
 		/// Proposals so far.
-		pub ProposalCount get(proposal_count): u32;
+		pub ProposalCount get(fn proposal_count): u32;
 		/// The current members of the collective. This is stored sorted (just by value).
-		pub Members get(members): Vec<T::AccountId>;
+		pub Members get(fn members): Vec<T::AccountId>;
 	}
 	add_extra_genesis {
 		config(phantom): rstd::marker::PhantomData<I>;
