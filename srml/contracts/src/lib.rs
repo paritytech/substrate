@@ -325,7 +325,7 @@ parameter_types! {
 	/// A reasonable default value for [`Trait::InstantiateBaseFee`].
 	pub const DefaultInstantiateBaseFee: u32 = 1000;
 	/// A reasonable default value for [`Trait::MaxDepth`].
-	pub const DefaultMaxDepth: u32 = 1024;
+	pub const DefaultMaxDepth: u32 = 32;
 	/// A reasonable default value for [`Trait::MaxValueSize`].
 	pub const DefaultMaxValueSize: u32 = 16_384;
 	/// A reasonable default value for [`Trait::BlockGasLimit`].
