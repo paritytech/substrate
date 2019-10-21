@@ -325,7 +325,7 @@ parameter_types! {
 	/// A reasonable default value for [`Trait::InstantiateBaseFee`].
 	pub const DefaultInstantiateBaseFee: u32 = 1000;
 	/// A reasonable default value for [`Trait::MaxDepth`].
-	pub const DefaultMaxDepth: u32 = 1024;
+	pub const DefaultMaxDepth: u32 = 32;
 	/// A reasonable default value for [`Trait::MaxValueSize`].
 	pub const DefaultMaxValueSize: u32 = 16_384;
 	/// A reasonable default value for [`Trait::BlockGasLimit`].
@@ -442,7 +442,7 @@ where
 }
 
 /// The default dispatch fee computor computes the fee in the same way that
-/// the implementation of `TakeFees` for the Balances module does. Note that this only takes a fixed
+/// the implementation of `ChargeTransactionPayment` for the Balances module does. Note that this only takes a fixed
 /// fee based on size. Unlike the balances module, weight-fee is applied.
 pub struct DefaultDispatchFeeComputor<T: Trait>(PhantomData<T>);
 impl<T: Trait> ComputeDispatchFee<<T as Trait>::Call, BalanceOf<T>> for DefaultDispatchFeeComputor<T> {

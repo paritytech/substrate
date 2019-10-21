@@ -218,7 +218,6 @@ fn multi_era_reward_should_work() {
 		// Compute now as other parameter won't change
 		let total_payout_0 = current_total_payout_for_duration(3000);
 		assert!(total_payout_0 > 10); // Test is meaningfull if reward something
-		dbg!(<Module<Test>>::slot_stake());
 		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
 
 		start_session(0);

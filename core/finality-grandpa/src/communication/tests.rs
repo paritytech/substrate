@@ -220,7 +220,7 @@ fn good_commit_leads_to_relay() {
 	let public = make_ids(&private[..]);
 	let voter_set = Arc::new(public.iter().cloned().collect::<VoterSet<AuthorityId>>());
 
-	let round = 0;
+	let round = 1;
 	let set_id = 1;
 
 	let commit = {
@@ -335,7 +335,7 @@ fn bad_commit_leads_to_report() {
 	let public = make_ids(&private[..]);
 	let voter_set = Arc::new(public.iter().cloned().collect::<VoterSet<AuthorityId>>());
 
-	let round = 0;
+	let round = 1;
 	let set_id = 1;
 
 	let commit = {

@@ -610,6 +610,7 @@ mod tests {
 	#[test]
 	fn sandbox_should_work() {
 		let mut ext = TestExternalities::default();
+		let mut ext = ext.ext();
 		let test_code = WASM_BINARY;
 
 		let code = wabt::wat2wasm(r#"
@@ -631,17 +632,18 @@ mod tests {
 				call $assert
 			)
 		)
-		"#).unwrap();
+		"#).unwrap().encode();
 
 		assert_eq!(
 			call_wasm(&mut ext, 8, &test_code[..], "test_sandbox", &code).unwrap(),
-			vec![1],
+			true.encode(),
 		);
 	}
 
 	#[test]
 	fn sandbox_trap() {
 		let mut ext = TestExternalities::default();
+		let mut ext = ext.ext();
 		let test_code = WASM_BINARY;
 
 		let code = wabt::wat2wasm(r#"
@@ -663,6 +665,7 @@ mod tests {
 	#[test]
 	fn sandbox_should_trap_when_heap_exhausted() {
 		let mut ext = TestExternalities::default();
+		let mut ext = ext.ext();
 		let test_code = WASM_BINARY;
 
 		let code = wabt::wat2wasm(r#"
@@ -673,7 +676,7 @@ mod tests {
 				call $assert
 			)
 		)
-		"#).unwrap();
+		"#).unwrap().encode();
 
 		let res = call_wasm(&mut ext, 8, &test_code[..], "test_exhaust_heap", &code);
 		assert_eq!(res.is_err(), true);
@@ -691,6 +694,7 @@ mod tests {
 	#[test]
 	fn start_called() {
 		let mut ext = TestExternalities::default();
+		let mut ext = ext.ext();
 		let test_code = WASM_BINARY;
 
 		let code = wabt::wat2wasm(r#"
@@ -718,17 +722,18 @@ mod tests {
 				call $assert
 			)
 		)
-		"#).unwrap();
+		"#).unwrap().encode();
 
 		assert_eq!(
 			call_wasm(&mut ext, 8, &test_code[..], "test_sandbox", &code).unwrap(),
-			vec![1],
+			true.encode(),
 		);
 	}
 
 	#[test]
 	fn invoke_args() {
 		let mut ext = TestExternalities::default();
+		let mut ext = ext.ext();
 		let test_code = WASM_BINARY;
 
 		let code = wabt::wat2wasm(r#"
@@ -752,17 +757,18 @@ mod tests {
 				)
 			)
 		)
-		"#).unwrap();
+		"#).unwrap().encode();
 
 		assert_eq!(
 			call_wasm(&mut ext, 8, &test_code[..], "test_sandbox_args", &code).unwrap(),
-			vec![1],
+			true.encode(),
 		);
 	}
 
 	#[test]
 	fn return_val() {
 		let mut ext = TestExternalities::default();
+		let mut ext = ext.ext();
 		let test_code = WASM_BINARY;
 
 		let code = wabt::wat2wasm(r#"
@@ -774,17 +780,18 @@ mod tests {
 				)
 			)
 		)
-		"#).unwrap();
+		"#).unwrap().encode();
 
 		assert_eq!(
 			call_wasm(&mut ext, 8, &test_code[..], "test_sandbox_return_val", &code).unwrap(),
-			vec![1],
+			true.encode(),
 		);
 	}
 
 	#[test]
 	fn unlinkable_module() {
 		let mut ext = TestExternalities::default();
+		let mut ext = ext.ext();
 		let test_code = WASM_BINARY;
 
 		let code = wabt::wat2wasm(r#"
@@ -794,31 +801,33 @@ mod tests {
 			(func (export "call")
 			)
 		)
-		"#).unwrap();
+		"#).unwrap().encode();
 
 		assert_eq!(
 			call_wasm(&mut ext, 8, &test_code[..], "test_sandbox_instantiate", &code).unwrap(),
-			vec![1],
+			1u8.encode(),
 		);
 	}
 
 	#[test]
 	fn corrupted_module() {
 		let mut ext = TestExternalities::default();
+		let mut ext = ext.ext();
 		let test_code = WASM_BINARY;
 
 		// Corrupted wasm file
-		let code = &[0, 0, 0, 0, 1, 0, 0, 0];
+		let code = vec![0u8, 0, 0, 0, 1, 0, 0, 0].encode();
 
 		assert_eq!(
-			call_wasm(&mut ext, 8, &test_code[..], "test_sandbox_instantiate", code).unwrap(),
-			vec![1],
+			call_wasm(&mut ext, 8, &test_code[..], "test_sandbox_instantiate", &code).unwrap(),
+			1u8.encode(),
 		);
 	}
 
 	#[test]
 	fn start_fn_ok() {
 		let mut ext = TestExternalities::default();
+		let mut ext = ext.ext();
 		let test_code = WASM_BINARY;
 
 		let code = wabt::wat2wasm(r#"
@@ -831,17 +840,18 @@ mod tests {
 
 			(start $start)
 		)
-		"#).unwrap();
+		"#).unwrap().encode();
 
 		assert_eq!(
 			call_wasm(&mut ext, 8, &test_code[..], "test_sandbox_instantiate", &code).unwrap(),
-			vec![0],
+			0u8.encode(),
 		);
 	}
 
 	#[test]
 	fn start_fn_traps() {
 		let mut ext = TestExternalities::default();
+		let mut ext = ext.ext();
 		let test_code = WASM_BINARY;
 
 		let code = wabt::wat2wasm(r#"
@@ -855,11 +865,11 @@ mod tests {
 
 			(start $start)
 		)
-		"#).unwrap();
+		"#).unwrap().encode();
 
 		assert_eq!(
 			call_wasm(&mut ext, 8, &test_code[..], "test_sandbox_instantiate", &code).unwrap(),
-			vec![2],
+			2u8.encode(),
 		);
 	}
 }

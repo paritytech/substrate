@@ -213,5 +213,5 @@ use proc_macro::TokenStream;
 ///
 #[proc_macro]
 pub fn decl_storage(input: TokenStream) -> TokenStream {
-	storage::transformation::decl_storage_impl(input)
+	storage::decl_storage_impl(input)
 }

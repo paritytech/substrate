@@ -203,9 +203,9 @@ impl<Block, BStatus, BSyncRequester, I, M> Stream for UntilImported<Block, BStat
 							"Waiting to import block {} before {} {} messages can be imported. \
 							Requesting network sync service to retrieve block from. \
 							Possible fork?",
-							self.identifier,
 							block_hash,
 							v.len(),
+							self.identifier,
 						);
 
 						self.block_sync_requester.set_sync_fork_request(

@@ -205,6 +205,7 @@ macro_rules! new_full {
 					inherent_data_providers: inherent_data_providers.clone(),
 					on_exit: service.on_exit(),
 					telemetry_on_connect: Some(service.telemetry_on_connect_stream()),
+					voting_rule: grandpa::VotingRulesBuilder::default().build(),
 				};
 				service.spawn_task(Box::new(grandpa::run_grandpa_voter(grandpa_config)?));
 			},
@@ -528,14 +529,14 @@ mod tests {
 				let check_era = system::CheckEra::from(Era::Immortal);
 				let check_nonce = system::CheckNonce::from(index);
 				let check_weight = system::CheckWeight::new();
-				let take_fees = balances::TakeFees::from(0);
+				let payment = transaction_payment::ChargeTransactionPayment::from(0);
 				let extra = (
 					check_version,
 					check_genesis,
 					check_era,
 					check_nonce,
 					check_weight,
-					take_fees,
+					payment,
 					Default::default(),
 				);
 				let raw_payload = SignedPayload::from_raw(
