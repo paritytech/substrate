@@ -761,7 +761,6 @@ impl_wasm_host_interface! {
 		}
 
 		ext_secp256k1_ecdsa_recover(
-			compressed: u32,
 			msg_data: Pointer<u8>,
 			sig_data: Pointer<u8>,
 			pubkey_data: Pointer<u8>,
@@ -789,11 +788,41 @@ impl_wasm_host_interface! {
 				_ => return Ok(3),
 			};
 
-			match compressed {
-				0 => context.write_memory(pubkey_data, &pubkey.serialize()[1..65]),
-				1 => context.write_memory(pubkey_data, &pubkey.serialize_compressed()[..]),
-				_ => return Ok(4),
-			}.map_err(|_| "Invalid attempt to set pubkey in ext_secp256k1_ecdsa_recover")?;
+			context.write_memory(pubkey_data, &pubkey.serialize()[1..65])
+				.map_err(|_| "Invalid attempt to set pubkey in ext_secp256k1_ecdsa_recover")?;
+			Ok(0)
+		}
+
+		ext_secp256k1_ecdsa_recover_compressed(
+			msg_data: Pointer<u8>,
+			sig_data: Pointer<u8>,
+			pubkey_data: Pointer<u8>,
+		) -> u32 {
+			let mut sig = [0u8; 65];
+			context.read_memory_into(sig_data, &mut sig[..])
+				.map_err(|_| "Invalid attempt to get signature in ext_secp256k1_ecdsa_recover")?;
+			let rs = match secp256k1::Signature::parse_slice(&sig[0..64]) {
+				Ok(rs) => rs,
+				_ => return Ok(1),
+			};
+
+			let recovery_id = if sig[64] > 26 { sig[64] - 27 } else { sig[64] } as u8;
+			let v = match secp256k1::RecoveryId::parse(recovery_id) {
+				Ok(v) => v,
+				_ => return Ok(2),
+			};
+
+			let mut msg = [0u8; 32];
+			context.read_memory_into(msg_data, &mut msg[..])
+				.map_err(|_| "Invalid attempt to get message in ext_secp256k1_ecdsa_recover")?;
+
+			let pubkey = match secp256k1::recover(&secp256k1::Message::parse(&msg), &rs, &v) {
+				Ok(pk) => pk,
+				_ => return Ok(3),
+			};
+
+			context.write_memory(pubkey_data, &pubkey.serialize_compressed()[..])
+				.map_err(|_| "Invalid attempt to set pubkey in ext_secp256k1_ecdsa_recover")?;
 			Ok(0)
 		}
 

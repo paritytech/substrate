@@ -21,20 +21,20 @@ use sr_primitives::app_crypto::RuntimeAppPublic;
 use sr_primitives::traits::Extrinsic as ExtrinsicT;
 
 /// A trait responsible for signing a payload using given account.
-pub trait Signer<Account, Signature> {
+pub trait Signer<Public, Signature> {
 	/// Sign any encodable payload with given account and produce a signature.
 	///
 	/// Returns `Some` if signing succeeded and `None` in case the `account` couldn't be used.
-	fn sign<Payload: Encode>(account: Account, payload: &Payload) -> Option<Signature>;
+	fn sign<Payload: Encode>(public: Public, payload: &Payload) -> Option<Signature>;
 }
 
-impl<Account, Signature, AppPublic> Signer<Account, Signature> for AppPublic where
-	AppPublic: RuntimeAppPublic + From<Account>,
+impl<Public, Signature, AppPublic> Signer<Public, Signature> for AppPublic where
+	AppPublic: RuntimeAppPublic + From<Public>,
 	AppPublic::Signature: Into<Signature>,
 {
-	fn sign<Payload: Encode>(account: Account, raw_payload: &Payload) -> Option<Signature> {
+	fn sign<Payload: Encode>(public: Public, raw_payload: &Payload) -> Option<Signature> {
 		raw_payload.using_encoded(|payload| {
-			AppPublic::from(account).sign(&payload).map(Into::into)
+			AppPublic::from(public).sign(&payload).map(Into::into)
 		})
 	}
 }
