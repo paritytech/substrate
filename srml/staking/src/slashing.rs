@@ -40,6 +40,9 @@
 //! requiring them to re-enlist voluntarily (acknowledging the slash) and begin a new
 //! slashing span.
 //!
+//! Typically, you will have a single slashing event per slashing span. Only in the case
+//! where a validator releases many misbehaviors at once
+//!
 //! Based on research at https://research.web3.foundation/en/latest/polkadot/slashing/npos/
 
 use super::{EraIndex, Trait, Module, Store, BalanceOf, Exposure, Perbill};
@@ -89,13 +92,18 @@ impl SlashingSpans {
 		}
 	}
 
-	fn bump_span(&mut self, now: EraIndex) {
-		if now <= self.last_start { return }
+	// update the slashing spans to reflect the start of a new span at the era after `now`
+	// returns `true` if a new span was started, `false` otherwise. `false` indicates
+	// that internal state is unchanged.
+	fn end_span(&mut self, now: EraIndex) -> bool {
+		let next_start = now + 1;
+		if next_start <= self.last_start { return false }
 
-		let last_length = now - self.last_start;
+		let last_length = next_start - self.last_start;
 		self.prior.insert(0, last_length);
-		self.last_start = now;
+		self.last_start = next_start;
 		self.span_index += 1;
+		true
 	}
 
 	// an iterator over all slashing spans in _reverse_ order - most recent first.
@@ -152,6 +160,8 @@ pub(crate) struct SlashParams<'a, T: 'a + Trait> {
 	pub(crate) slash_era: EraIndex,
 	/// The first era in the current bonding period.
 	pub(crate) window_start: EraIndex,
+	/// The current era.
+	pub(crate) now: EraIndex,
 }
 
 /// Slash a validator and their nominators, if necessary.
@@ -162,6 +172,7 @@ pub(crate) fn slash<T: Trait>(params: SlashParams<T>){
 		exposure,
 		slash_era,
 		window_start,
+		now,
 	} = params.clone();
 
 	// is the slash amount here a maximum for the era?
@@ -192,7 +203,10 @@ pub(crate) fn slash<T: Trait>(params: SlashParams<T>){
 	);
 
 	if target_span == Some(spans.span_index()) {
-		// TODO: chill the validator - it misbehaved in the current span.
+		// chill the validator - it misbehaved in the current span and should
+		// not continue in the next election. also end the slashing span.
+		spans.end_span(now);
+		<Module<T>>::chill_stash(stash);
 	}
 
 	slash_nominators::<T>(params, prior_slash_p)
@@ -205,6 +219,7 @@ fn slash_nominators<T: Trait>(params: SlashParams<T>, prior_slash_p: Perbill) {
 		exposure,
 		slash_era,
 		window_start,
+		now,
 	} = params;
 
 	for nominator in &exposure.others {
@@ -242,7 +257,9 @@ fn slash_nominators<T: Trait>(params: SlashParams<T>, prior_slash_p: Perbill) {
 		);
 
 		if target_span == Some(spans.span_index()) {
-			// TODO: chill the nominator. (only from the validator?)
+			// Chill the nominator outright, ending the slashing span.
+			spans.end_span(now);
+			<Module<T>>::chill_stash(&stash);
 		}
 	}
 }
@@ -277,6 +294,10 @@ fn fetch_spans<T: Trait>(stash: &T::AccountId, window_start: EraIndex) -> Inspec
 impl<'a, T: 'a + Trait> InspectingSpans<'a, T> {
 	fn span_index(&self) -> SpanIndex {
 		self.spans.span_index
+	}
+
+	fn end_span(&mut self, now: EraIndex) {
+		self.dirty = self.spans.end_span(now) || self.dirty;
 	}
 
 	// compares the slash in an era to the overall current span slash.
@@ -443,6 +464,46 @@ mod tests {
 			spans.iter().collect::<Vec<_>>(),
 			vec![
 				SlashingSpan { index: 10, start: 2000, length: None },
+			],
+		);
+	}
+
+	#[test]
+	fn ending_span() {
+		let mut spans = SlashingSpans {
+			span_index: 1,
+			last_start: 10,
+			prior: Vec::new(),
+		};
+
+		assert!(spans.end_span(10));
+
+		assert_eq!(
+			spans.iter().collect::<Vec<_>>(),
+			vec![
+				SlashingSpan { index: 2, start: 11, length: None },
+				SlashingSpan { index: 1, start: 10, length: Some(1) },
+			],
+		);
+
+		assert!(spans.end_span(15));
+		assert_eq!(
+			spans.iter().collect::<Vec<_>>(),
+			vec![
+				SlashingSpan { index: 3, start: 16, length: None },
+				SlashingSpan { index: 2, start: 11, length: Some(5) },
+				SlashingSpan { index: 1, start: 10, length: Some(1) },
+			],
+		);
+
+		// does nothing if not a valid end.
+		assert!(!spans.end_span(15));
+		assert_eq!(
+			spans.iter().collect::<Vec<_>>(),
+			vec![
+				SlashingSpan { index: 3, start: 16, length: None },
+				SlashingSpan { index: 2, start: 11, length: Some(5) },
+				SlashingSpan { index: 1, start: 10, length: Some(1) },
 			],
 		);
 	}

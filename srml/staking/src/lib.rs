@@ -916,9 +916,7 @@ decl_module! {
 		fn chill(origin) {
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or("not a controller")?;
-			let stash = &ledger.stash;
-			<Validators<T>>::remove(stash);
-			<Nominators<T>>::remove(stash);
+			Self::chill_stash(&ledger.stash);
 		}
 
 		/// (Re-)set the payment target for a controller.
@@ -1029,6 +1027,11 @@ impl<T: Trait> Module<T> {
 	}
 
 	// MUTABLES (DANGEROUS)
+
+	fn chill_stash(stash: &T::AccountId) {
+		<Validators<T>>::remove(stash);
+		<Nominators<T>>::remove(stash);
+	}
 
 	/// Update the ledger for a controller. This will also update the stash lock. The lock will
 	/// will lock the entire funds except paying for further transactions.
