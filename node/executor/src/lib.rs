@@ -56,7 +56,7 @@ mod tests {
 	use node_runtime::{
 		Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances, BuildStorage,
 		System, TransactionPayment, Event, TransferFee, TransactionBaseFee, TransactionByteFee,
-		WeightToFee, constants::currency::*,
+		LinearWeightToFee, constants::currency::*,
 	};
 	use node_primitives::{Balance, Hash, BlockNumber};
 	use node_testing::keyring::*;
@@ -94,7 +94,7 @@ mod tests {
 			(extrinsic.encode().len() as Balance);
 
 		let weight = default_transfer_call().get_dispatch_info().weight;
-		let weight_fee = <Runtime as transaction_payment::Trait>::WeightToFee::convert(weight);
+		let weight_fee = <Runtime as transaction_payment::Trait>::LinearWeightToFee::convert(weight);
 
 		fee_multiplier.saturated_multiply_accumulate(length_fee + weight_fee) + TransferFee::get()
 	}
@@ -1046,7 +1046,7 @@ mod tests {
 			balance_alice -= length_fee;
 
 			let weight = default_transfer_call().get_dispatch_info().weight;
-			let weight_fee = WeightToFee::convert(weight);
+			let weight_fee = LinearWeightToFee::convert(weight);
 
 			// we know that weight to fee multiplier is effect-less in block 1.
 			assert_eq!(weight_fee as Balance, MILLICENTS);
