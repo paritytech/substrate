@@ -1,0 +1,5 @@
+error: Expected `default` or module export name (e.g. Call, Event, etc.)
+ --> $DIR/invalid_module_details_keyword.rs:9:20
+  |
+9 |         system: System::{enum},
+  |                          ^^^^

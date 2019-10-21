@@ -43,9 +43,44 @@ pub struct ModuleDeclaration {
 	pub name: Ident,
 	pub name_colon: Token![:],
 	pub module: Ident,
-	pub instance: ext::Opt<ModuleInstance>,
-	pub details: ext::Opt<ModuleDetails>,
+	pub instance: ModuleInstanceWrapper,
+	pub details: ModuleDetailsWrapper,
 }
+
+#[derive(ToTokens, Debug)]
+pub struct ModuleInstanceWrapper {
+	pub inner: Option<ModuleInstance>,
+}
+
+impl Parse for ModuleInstanceWrapper {
+	fn parse(input: ParseStream) -> Result<Self> {
+		// In this case we're sure it needs to be a ModuleInstance
+		if input.peek(Token![::]) && input.peek3(Token![<]) {
+			let inner = Some(input.parse()?);
+			Ok(ModuleInstanceWrapper { inner } )
+		} else {
+			Ok(ModuleInstanceWrapper { inner: None })
+		}
+	}
+}
+
+#[derive(ToTokens, Debug)]
+pub struct ModuleDetailsWrapper {
+	pub inner: Option<ModuleDetails>,
+}
+
+impl Parse for ModuleDetailsWrapper {
+	fn parse(input: ParseStream) -> Result<Self> {
+		// In this case we're sure it needs to be a ModuleDetails
+		if input.peek(Token![::]) {
+			let inner = Some(input.parse()?);
+			Ok(ModuleDetailsWrapper { inner } )
+		} else {
+			Ok(ModuleDetailsWrapper { inner: None })
+		}
+	}
+}
+
 
 #[derive(Parse, ToTokens, Debug)]
 pub struct ModuleInstance {

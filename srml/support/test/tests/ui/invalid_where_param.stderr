@@ -1,0 +1,5 @@
+error: expected `UncheckedExtrinsic`
+ --> $DIR/invalid_where_param.rs:7:3
+  |
+7 |         TypeX = Block,
+  |         ^^^^^
