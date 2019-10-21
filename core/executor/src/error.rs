@@ -81,8 +81,8 @@ pub enum Error {
 	#[display(fmt="Requested allocation size is too large")]
 	RequestedAllocationTooLarge,
 	/// Execution of a host function failed.
-	#[display(fmt="Function execution failed with: {}", _0)]
-	FunctionExecution(String),
+	#[display(fmt="Host function {} execution failed with: {}", _0, _1)]
+	FunctionExecution(String, String),
 }
 
 impl std::error::Error for Error {

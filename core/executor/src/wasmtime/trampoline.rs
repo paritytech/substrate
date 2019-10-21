@@ -110,9 +110,7 @@ unsafe fn stub_fn_inner(
 
 	// Execute and write output back to the stack.
 	let return_val = func.execute(&mut context, &mut args)
-		.map_err(|e| Error::FunctionExecution(
-			format!("error in external function {}: {}", func.name(), e)
-		))?;
+		.map_err(|e| Error::FunctionExecution(func.name().to_string(), e))?;
 	if let Some(val) = return_val {
 		write_value_to(values_vec, val);
 	}

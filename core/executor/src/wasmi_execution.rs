@@ -309,7 +309,7 @@ impl wasmi::Externals for FunctionExecutor {
 		)?;
 
 		function.execute(self, &mut args)
-			.map_err(Error::FunctionExecution)
+			.map_err(|msg| Error::FunctionExecution(function.name().to_string(), msg))
 			.map_err(wasmi::Trap::from)
 			.map(|v| v.map(Into::into))
 	}

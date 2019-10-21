@@ -184,7 +184,7 @@ impl<'a> SandboxCapabilities for FunctionExecutor<'a> {
 				values_vec.as_mut_ptr() as *mut u8,
 			)
 		} {
-			return Err(Error::FunctionExecution(message));
+			return Err(Error::Other(message));
 		}
 
 		// Load the return value out of `values_vec`.
