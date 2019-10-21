@@ -20,12 +20,13 @@
 
 use super::*;
 use mock::{Balances, ExtBuilder, Runtime, System, info_from_weight, CALL};
+use sr_primitives::traits::SignedExtension;
 use support::{
 	assert_noop, assert_ok, assert_err,
 	traits::{LockableCurrency, LockIdentifier, WithdrawReason, WithdrawReasons,
 	Currency, ReservableCurrency}
 };
-use sr_primitives::weights::DispatchClass;
+use transaction_payment::ChargeTransactionPayment;
 use system::RawOrigin;
 
 const ID_1: LockIdentifier = *b"1       ";
@@ -115,7 +116,6 @@ fn lock_reasons_should_work() {
 	ExtBuilder::default()
 		.existential_deposit(1)
 		.monied(true)
-		.transaction_fees(0, 1, 0)
 		.build()
 		.execute_with(|| {
 			Balances::set_lock(ID_1, &1, 10, u64::max_value(), WithdrawReason::Transfer.into());
@@ -125,8 +125,8 @@ fn lock_reasons_should_work() {
 			);
 			assert_ok!(<Balances as ReservableCurrency<_>>::reserve(&1, 1));
 			// NOTE: this causes a fee payment.
-			assert!(<TakeFees<Runtime> as SignedExtension>::pre_dispatch(
-				TakeFees::from(1),
+			assert!(<ChargeTransactionPayment<Runtime> as SignedExtension>::pre_dispatch(
+				ChargeTransactionPayment::from(1),
 				&1,
 				CALL,
 				info_from_weight(1),
@@ -139,8 +139,8 @@ fn lock_reasons_should_work() {
 				<Balances as ReservableCurrency<_>>::reserve(&1, 1),
 				"account liquidity restrictions prevent withdrawal"
 			);
-			assert!(<TakeFees<Runtime> as SignedExtension>::pre_dispatch(
-				TakeFees::from(1),
+			assert!(<ChargeTransactionPayment<Runtime> as SignedExtension>::pre_dispatch(
+				ChargeTransactionPayment::from(1),
 				&1,
 				CALL,
 				info_from_weight(1),
@@ -150,8 +150,8 @@ fn lock_reasons_should_work() {
 			Balances::set_lock(ID_1, &1, 10, u64::max_value(), WithdrawReason::TransactionPayment.into());
 			assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1));
 			assert_ok!(<Balances as ReservableCurrency<_>>::reserve(&1, 1));
-			assert!(<TakeFees<Runtime> as SignedExtension>::pre_dispatch(
-				TakeFees::from(1),
+			assert!(<ChargeTransactionPayment<Runtime> as SignedExtension>::pre_dispatch(
+				ChargeTransactionPayment::from(1),
 				&1,
 				CALL,
 				info_from_weight(1),
@@ -733,89 +733,6 @@ fn liquid_funds_should_transfer_with_delayed_vesting() {
 
 			// Account 12 can still send liquid funds
 			assert_ok!(Balances::transfer(Some(12).into(), 3, 256 * 5));
-		});
-}
-
-#[test]
-fn signed_extension_take_fees_work() {
-	ExtBuilder::default()
-		.existential_deposit(10)
-		.transaction_fees(10, 1, 5)
-		.monied(true)
-		.build()
-		.execute_with(|| {
-			let len = 10;
-			assert!(
-				TakeFees::<Runtime>::from(0)
-					.pre_dispatch(&1, CALL, info_from_weight(5), len)
-					.is_ok()
-			);
-			assert_eq!(Balances::free_balance(&1), 100 - 20 - 25);
-			assert!(
-				TakeFees::<Runtime>::from(5 /* tipped */)
-					.pre_dispatch(&1, CALL, info_from_weight(3), len)
-					.is_ok()
-			);
-			assert_eq!(Balances::free_balance(&1), 100 - 20 - 25 - 20 - 5 - 15);
-		});
-}
-
-#[test]
-fn signed_extension_take_fees_is_bounded() {
-	ExtBuilder::default()
-		.existential_deposit(1000)
-		.transaction_fees(0, 0, 1)
-		.monied(true)
-		.build()
-		.execute_with(|| {
-			use sr_primitives::weights::Weight;
-
-			// maximum weight possible
-			assert!(
-				TakeFees::<Runtime>::from(0)
-					.pre_dispatch(&1, CALL, info_from_weight(Weight::max_value()), 10)
-					.is_ok()
-			);
-			// fee will be proportional to what is the actual maximum weight in the runtime.
-			assert_eq!(
-				Balances::free_balance(&1),
-				(10000 - <Runtime as system::Trait>::MaximumBlockWeight::get()) as u64
-			);
-		});
-}
-
-#[test]
-fn signed_extension_allows_free_transactions() {
-	ExtBuilder::default()
-		.transaction_fees(100, 1, 1)
-		.monied(false)
-		.build()
-		.execute_with(|| {
-			// 1 ain't have a penny.
-			assert_eq!(Balances::free_balance(&1), 0);
-
-			// like a FreeOperational
-			let operational_transaction = DispatchInfo {
-				weight: 0,
-				class: DispatchClass::Operational
-			};
-			let len = 100;
-			assert!(
-				TakeFees::<Runtime>::from(0)
-					.validate(&1, CALL, operational_transaction , len)
-					.is_ok()
-			);
-
-			// like a FreeNormal
-			let free_transaction = DispatchInfo {
-				weight: 0,
-				class: DispatchClass::Normal
-			};
-			assert!(
-				TakeFees::<Runtime>::from(0)
-					.validate(&1, CALL, free_transaction , len)
-					.is_err()
-			);
 		});
 }
 

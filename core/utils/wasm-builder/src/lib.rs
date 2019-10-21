@@ -75,7 +75,6 @@
 //! WASM builder requires the following prerequisities for building the WASM binary:
 //!
 //! - rust nightly + `wasm32-unknown-unknown` toolchain
-//! - wasm-gc
 //!
 
 use std::{env, fs, path::PathBuf, process::{Command, Stdio, self}};
@@ -206,9 +205,7 @@ impl CargoCommand {
 	}
 
 	fn args(&mut self, args: &[&str]) -> &mut Self {
-		for arg in args {
-			self.arg(arg);
-		}
+		args.into_iter().for_each(|a| { self.arg(a); });
 		self
 	}
 
@@ -228,12 +225,17 @@ impl CargoCommand {
 
 	/// Check if the supplied cargo command is a nightly version
 	fn is_nightly(&self) -> bool {
-		self.command()
-			.arg("--version")
-			.output()
-			.map_err(|_| ())
-			.and_then(|o| String::from_utf8(o.stdout).map_err(|_| ()))
-			.unwrap_or_default()
-			.contains("-nightly")
+		// `RUSTC_BOOTSTRAP` tells a stable compiler to behave like a nightly. So, when this env
+		// variable is set, we can assume that whatever rust compiler we have, it is a nightly compiler.
+		// For "more" information, see:
+		// https://github.com/rust-lang/rust/blob/fa0f7d0080d8e7e9eb20aa9cbf8013f96c81287f/src/libsyntax/feature_gate/check.rs#L891
+		env::var("RUSTC_BOOTSTRAP").is_ok() ||
+			self.command()
+				.arg("--version")
+				.output()
+				.map_err(|_| ())
+				.and_then(|o| String::from_utf8(o.stdout).map_err(|_| ()))
+				.unwrap_or_default()
+				.contains("-nightly")
 	}
 }

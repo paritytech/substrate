@@ -66,7 +66,7 @@ pub trait ChainApi: Send + Sync {
 	/// Error type.
 	type Error: From<error::Error> + error::IntoPoolError;
 	/// Validate transaction future.
-	type ValidationFuture: Future<Output=Result<TransactionValidity, Self::Error>> + Send;
+	type ValidationFuture: Future<Output=Result<TransactionValidity, Self::Error>> + Send + Unpin;
 
 	/// Verify extrinsic at given block.
 	fn validate_transaction(

@@ -108,11 +108,9 @@ pub struct FactoryCmd {
 	#[structopt(
 		long = "execution",
 		value_name = "STRATEGY",
-		raw(
-			possible_values = "&ExecutionStrategyParam::variants()",
-			case_insensitive = "true",
-			default_value = r#""NativeElseWasm""#
-		)
+		possible_values = &ExecutionStrategyParam::variants(),
+		case_insensitive = true,
+		default_value = "NativeElseWasm"
 	)]
 	pub execution: ExecutionStrategyParam,
 }

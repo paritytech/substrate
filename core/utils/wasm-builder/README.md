@@ -57,7 +57,6 @@ be `NODE_RUNTIME`.
 WASM builder requires the following prerequisities for building the WASM binary:
 
 - rust nightly + `wasm32-unknown-unknown` toolchain
-- wasm-gc
 
 
 License: GPL-3.0

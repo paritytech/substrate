@@ -52,7 +52,7 @@ pub type AuthorityWeight = u64;
 /// The index of an authority.
 pub type AuthorityIndex = u64;
 
-/// The identifier of a GRANDPA set.
+/// The monotonic identifier of a GRANDPA set of authorities.
 pub type SetId = u64;
 
 /// The round indicator.
