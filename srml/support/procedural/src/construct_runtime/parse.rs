@@ -74,7 +74,7 @@ impl Parse for ModuleInstanceWrapper {
 		// In this case we're sure it needs to be a ModuleInstance
 		if input.peek(Token![::]) && input.peek3(Token![<]) {
 			let inner = Some(input.parse()?);
-			Ok(ModuleInstanceWrapper { inner } )
+			Ok(ModuleInstanceWrapper { inner })
 		} else {
 			Ok(ModuleInstanceWrapper { inner: None })
 		}
@@ -91,13 +91,12 @@ impl Parse for ModuleDetailsWrapper {
 		// In this case we're sure it needs to be a ModuleDetails
 		if input.peek(Token![::]) {
 			let inner = Some(input.parse()?);
-			Ok(ModuleDetailsWrapper { inner } )
+			Ok(ModuleDetailsWrapper { inner })
 		} else {
 			Ok(ModuleDetailsWrapper { inner: None })
 		}
 	}
 }
-
 
 #[derive(Parse, ToTokens, Debug)]
 pub struct ModuleInstance {

@@ -82,10 +82,7 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 		&scrate,
 		DeclOuterKind::Origin,
 	));
-	let all_modules = decl_all_modules(
-		&name,
-		modules.iter().filter(|module| module.name != "System"),
-	);
+	let all_modules = decl_all_modules(&name, modules.iter().filter(|module| module.name != "System"));
 
 	let dispatch = decl_outer_dispatch(&name, modules.iter(), &scrate);
 	let metadata = decl_runtime_metadata(&name, modules.iter(), &scrate);
@@ -373,7 +370,10 @@ fn decl_all_modules<'a>(
 	} else {
 		let name0 = names[0];
 		let name1 = names[1];
-		names.iter().skip(2).fold(quote!((#name0, #name1)), |acc, name| quote!((#acc, #name)))
+		names
+			.iter()
+			.skip(2)
+			.fold(quote!((#name0, #name1)), |acc, name| quote!((#acc, #name)))
 	};
 	quote!(
 		pub type System = system::Module<#runtime>;
