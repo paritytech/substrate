@@ -20,7 +20,6 @@ use test_case::test_case;
 use wabt;
 
 use crate::{WasmExecutionMethod, call_in_wasm};
-use crate::error::Error;
 use crate::integration_tests::TestExternalities;
 
 #[test_case(WasmExecutionMethod::Interpreted)]
@@ -116,15 +115,9 @@ fn sandbox_should_trap_when_heap_exhausted(wasm_method: WasmExecutionMethod) {
 		&test_code[..],
 		8,
 	);
-	assert_eq!(res.is_err(), true);
+	assert!(res.is_err());
 	if let Err(err) = res {
-		assert_eq!(
-			format!("{}", err),
-			format!(
-				"{}",
-				wasmi::Error::Trap(Error::FunctionExecution("AllocatorOutOfSpace".into()).into()),
-			),
-		);
+		assert!(err.to_string().contains("Allocator ran out of space"));
 	}
 }
 

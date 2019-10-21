@@ -110,24 +110,24 @@ impl sandbox::SandboxCapabilities for FunctionExecutor {
 
 impl FunctionContext for FunctionExecutor {
 	fn read_memory_into(&self, address: Pointer<u8>, dest: &mut [u8]) -> WResult<()> {
-		self.memory.get_into(address.into(), dest).map_err(|e| format!("{:?}", e))
+		self.memory.get_into(address.into(), dest).map_err(|e| e.to_string())
 	}
 
 	fn write_memory(&mut self, address: Pointer<u8>, data: &[u8]) -> WResult<()> {
-		self.memory.set(address.into(), data).map_err(|e| format!("{:?}", e))
+		self.memory.set(address.into(), data).map_err(|e| e.to_string())
 	}
 
 	fn allocate_memory(&mut self, size: WordSize) -> WResult<Pointer<u8>> {
 		let heap = &mut self.heap;
 		self.memory.with_direct_access_mut(|mem| {
-			heap.allocate(mem, size).map_err(|e| format!("{:?}", e))
+			heap.allocate(mem, size).map_err(|e| e.to_string())
 		})
 	}
 
 	fn deallocate_memory(&mut self, ptr: Pointer<u8>) -> WResult<()> {
 		let heap = &mut self.heap;
 		self.memory.with_direct_access_mut(|mem| {
-			heap.deallocate(mem, ptr).map_err(|e| format!("{:?}", e))
+			heap.deallocate(mem, ptr).map_err(|e| e.to_string())
 		})
 	}
 
@@ -144,7 +144,7 @@ impl Sandbox for FunctionExecutor {
 		buf_ptr: Pointer<u8>,
 		buf_len: WordSize,
 	) -> WResult<u32> {
-		let sandboxed_memory = self.sandbox_store.memory(memory_id).map_err(|e| format!("{:?}", e))?;
+		let sandboxed_memory = self.sandbox_store.memory(memory_id).map_err(|e| e.to_string())?;
 
 		match MemoryInstance::transfer(
 			&sandboxed_memory,
@@ -165,7 +165,7 @@ impl Sandbox for FunctionExecutor {
 		val_ptr: Pointer<u8>,
 		val_len: WordSize,
 	) -> WResult<u32> {
-		let sandboxed_memory = self.sandbox_store.memory(memory_id).map_err(|e| format!("{:?}", e))?;
+		let sandboxed_memory = self.sandbox_store.memory(memory_id).map_err(|e| e.to_string())?;
 
 		match MemoryInstance::transfer(
 			&self.memory,
@@ -180,7 +180,7 @@ impl Sandbox for FunctionExecutor {
 	}
 
 	fn memory_teardown(&mut self, memory_id: MemoryId) -> WResult<()> {
-		self.sandbox_store.memory_teardown(memory_id).map_err(|e| format!("{:?}", e))
+		self.sandbox_store.memory_teardown(memory_id).map_err(|e| e.to_string())
 	}
 
 	fn memory_new(
@@ -188,7 +188,7 @@ impl Sandbox for FunctionExecutor {
 		initial: u32,
 		maximum: u32,
 	) -> WResult<MemoryId> {
-		self.sandbox_store.new_memory(initial, maximum).map_err(|e| format!("{:?}", e))
+		self.sandbox_store.new_memory(initial, maximum).map_err(|e| e.to_string())
 	}
 
 	fn invoke(
@@ -209,7 +209,7 @@ impl Sandbox for FunctionExecutor {
 			.map(Into::into)
 			.collect::<Vec<_>>();
 
-		let instance = self.sandbox_store.instance(instance_id).map_err(|e| format!("{:?}", e))?;
+		let instance = self.sandbox_store.instance(instance_id).map_err(|e| e.to_string())?;
 		let result = instance.invoke(export_name, &args, self, state);
 
 		match result {
@@ -229,7 +229,7 @@ impl Sandbox for FunctionExecutor {
 	}
 
 	fn instance_teardown(&mut self, instance_id: u32) -> WResult<()> {
-		self.sandbox_store.instance_teardown(instance_id).map_err(|e| format!("{:?}", e))
+		self.sandbox_store.instance_teardown(instance_id).map_err(|e| e.to_string())
 	}
 
 	fn instance_new(

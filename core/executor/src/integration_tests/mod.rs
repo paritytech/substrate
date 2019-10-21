@@ -29,7 +29,6 @@ use test_case::test_case;
 use trie::{TrieConfiguration, trie_types::Layout};
 
 use crate::{WasmExecutionMethod, call_in_wasm};
-use crate::error::Error;
 
 pub type TestExternalities = CoreTestExternalities<Blake2Hasher, u64>;
 
