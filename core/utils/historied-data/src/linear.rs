@@ -54,19 +54,11 @@ impl<V> HistoriedValue<V> {
 /// Array like buffer for in memory storage.
 /// By in memory we expect that this will
 /// not required persistence and is not serialized.
-#[cfg(not(feature = "std"))]
-type MemoryOnly<V> = Vec<HistoriedValue<V>>;
-
-/// Array like buffer for in memory storage.
-/// By in memory we expect that this will
-/// not required persistence and is not serialized.
-#[cfg(feature = "std")]
 type MemoryOnly<V> = smallvec::SmallVec<[HistoriedValue<V>; ALLOCATED_HISTORY]>;
 
 /// Size of preallocated history per element.
 /// Currently at two for committed and prospective only.
 /// It means that using transaction in a module got a direct allocation cost.
-#[cfg(feature = "std")]
 const ALLOCATED_HISTORY: usize = 2;
 
 /// History of value that are related to a state history (eg field `history` of
@@ -101,13 +93,8 @@ impl<V> History<V> {
 		history
 	}
 
-	#[cfg(any(test, feature = "test"))]
+	/// Current number of inner states.
 	pub fn len(&self) -> usize {
-		self.0.len()
-	}
-
-	#[cfg(not(any(test, feature = "test")))]
-	fn len(&self) -> usize {
 		self.0.len()
 	}
 

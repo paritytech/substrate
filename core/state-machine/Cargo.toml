@@ -32,6 +32,3 @@ harness = false
 
 [features]
 default = []
-test = [
-  "historied-data/test",
-]
