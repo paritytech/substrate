@@ -130,8 +130,6 @@ macro_rules! runtime_print {
 	}
 }
 
-pub use crate::runtime_print;
-
 /// Print out the debuggable type.
 pub fn debug(data: &impl Debug) {
 	runtime_print!("{:?}", data);
