@@ -225,7 +225,6 @@ impl externalities::ExtensionStore for BasicExternalities {
 		warn!("Extensions are not supported by `BasicExternalities`.");
 		None
 	}
-
 }
 
 #[cfg(test)]

@@ -104,7 +104,6 @@ fn fuzz_transactions_inner(input: &[u8], check_gc: bool) {
 		println!("input: \n {:?}", &input);
 	}
 
-
 	assert!(success);
 }
 
@@ -112,7 +111,6 @@ fn check_values(overlayed: &OverlayedChanges, ref_overlayed: &RefOverlayedChange
 	let mut len = 0;
 	let mut success = true;
 	for (key, value) in overlayed.iter_values(None) {
-
 		let ref_value = ref_overlayed.storage(key);
 		if Some(value) != ref_value {
 			println!("at {:x?} different values {:x?} {:x?}", key, Some(value), ref_value);

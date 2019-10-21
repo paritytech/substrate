@@ -15,7 +15,7 @@ trie = { package = "substrate-trie", path = "../trie" }
 primitives = { package = "substrate-primitives", path = "../primitives" }
 panic-handler = { package = "substrate-panic-handler", path = "../panic-handler" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
-historied-data = { path = "../utils/historied-data", features = ["std"] }
+historied-data = { path = "../utils/historied-data" }
 num-traits = "0.2.8"
 rand = "0.7.2"
 externalities = { package = "substrate-externalities", path = "../externalities" }
@@ -24,7 +24,7 @@ externalities = { package = "substrate-externalities", path = "../externalities"
 hex-literal = "0.2.1"
 criterion = "0.2"
 rand = { version = "0.7.1", features = ["small_rng"] }
-historied-data = { path = "../utils/historied-data", features = ["std", "test"] }
+historied-data = { path = "../utils/historied-data", features = [ "test" ] }
 
 [[bench]]
 name = "bench"
