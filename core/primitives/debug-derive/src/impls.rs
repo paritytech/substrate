@@ -52,8 +52,7 @@ mod implementation {
 	/// Implement `Printable` if you need to print the details.
 	pub fn derive(_name_str: &str, _data: &Data) -> TokenStream {
 		quote! {
-			let _ = fmt;
-			Ok(())
+			fmt.write_str("<wasm:stripped>")
 		}
 	}
 }
