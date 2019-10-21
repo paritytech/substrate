@@ -52,7 +52,7 @@ pub struct WhereSection {
 	pub unchecked_extrinsic_token: keyword::UncheckedExtrinsic,
 	pub unchecked_extrinsic_eq: Token![=],
 	pub unchecked_extrinsic: syn::TypePath,
-	pub trailing_comme: ext::Opt<Token![,]>,
+	pub trailing_comma: ext::Opt<Token![,]>,
 }
 
 #[derive(Parse, ToTokens, Debug)]
