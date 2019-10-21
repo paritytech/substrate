@@ -36,9 +36,10 @@
 use std::{
 	fmt,
 	marker::PhantomData,
-	sync::{Arc,Mutex},
+	sync::Arc,
 };
 
+use parking_lot::Mutex;
 use threadpool::ThreadPool;
 use client::runtime_api::ApiExt;
 use futures::future::Future;
@@ -147,7 +148,7 @@ impl<Client, Storage, Block> OffchainWorkers<
 	/// Note that we should avoid that if we switch to future-based runtime in the future,
 	/// alternatively:
 	fn spawn_worker(&self, f: impl FnOnce() -> () + Send + 'static) {
-		self.thread_pool.lock().unwrap().execute(f);
+		self.thread_pool.lock().execute(f);
 	}
 }
 
