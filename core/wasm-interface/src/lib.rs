@@ -49,6 +49,18 @@ pub enum Value {
 	F64(u64),
 }
 
+impl Value {
+	/// Returns the type of this value.
+	pub fn value_type(&self) -> ValueType {
+		match self {
+			Value::I32(_) => ValueType::I32,
+			Value::I64(_) => ValueType::I64,
+			Value::F32(_) => ValueType::F32,
+			Value::F64(_) => ValueType::F64,
+		}
+	}
+}
+
 /// Provides `Sealed` trait to prevent implementing trait `PointerType` outside of this crate.
 mod private {
 	pub trait Sealed {}

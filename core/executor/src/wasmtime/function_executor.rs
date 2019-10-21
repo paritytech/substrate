@@ -17,15 +17,22 @@
 use crate::allocator::FreeingBumpHeapAllocator;
 use crate::error::{Error, Result};
 use crate::sandbox::{self, SandboxCapabilities, SupervisorFuncIndex};
-use crate::wasmtime::util::{checked_range, read_memory_into, write_memory_from};
+use crate::wasmtime::util::{
+	checked_range, cranelift_ir_signature, read_memory_into, write_memory_from,
+};
 
 use codec::{Decode, Encode};
+use cranelift_codegen::ir;
+use cranelift_codegen::isa::TargetFrontendConfig;
 use log::trace;
 use primitives::sandbox as sandbox_primitives;
-use wasmtime_jit::Compiler;
-use wasmtime_runtime::{Export, VMCallerCheckedAnyfunc, VMContext};
+use std::{cmp, mem, ptr};
+use wasmtime_environ::translate_signature;
+use wasmtime_jit::{ActionError, Compiler};
+use wasmtime_runtime::{Export, VMCallerCheckedAnyfunc, VMContext, wasmtime_call_trampoline};
 use wasm_interface::{
-	FunctionContext, MemoryId, Pointer, Result as WResult, Sandbox, WordSize,
+	FunctionContext, MemoryId, Pointer, Result as WResult, Sandbox, Signature, Value, ValueType,
+	WordSize,
 };
 
 /// Wrapper type for pointer to a Wasm table entry.
@@ -140,14 +147,48 @@ impl<'a> SandboxCapabilities for FunctionExecutor<'a> {
 
 	fn invoke(
 		&mut self,
-		_dispatch_thunk: &Self::SupervisorFuncRef,
-		_invoke_args_ptr: Pointer<u8>,
-		_invoke_args_len: WordSize,
-		_state: u32,
-		_func_idx: SupervisorFuncIndex,
+		dispatch_thunk: &Self::SupervisorFuncRef,
+		invoke_args_ptr: Pointer<u8>,
+		invoke_args_len: WordSize,
+		state: u32,
+		func_idx: SupervisorFuncIndex,
 	) -> Result<i64>
 	{
-		unimplemented!()
+		let func_ptr = unsafe { (*dispatch_thunk.0).func_ptr };
+		let vmctx = unsafe { (*dispatch_thunk.0).vmctx };
+
+		// The following code is based on the wasmtime_jit::Context::invoke.
+		let value_size = mem::size_of::<VMInvokeArgument>();
+		let (signature, mut values_vec) = generate_signature_and_args(
+			&[
+				Value::I32(u32::from(invoke_args_ptr) as i32),
+				Value::I32(invoke_args_len as i32),
+				Value::I32(state as i32),
+				Value::I32(usize::from(func_idx) as i32),
+			],
+			Some(ValueType::I64),
+			self.compiler.frontend_config(),
+		);
+
+		// Get the trampoline to call for this function.
+		let exec_code_buf = self.compiler
+			.get_published_trampoline(func_ptr, &signature, value_size)
+			.map_err(ActionError::Setup)
+			.map_err(Error::Wasmtime)?;
+
+		// Call the trampoline.
+		if let Err(message) = unsafe {
+			wasmtime_call_trampoline(
+				vmctx,
+				exec_code_buf,
+				values_vec.as_mut_ptr() as *mut u8,
+			)
+		} {
+			return Err(Error::FunctionExecution(message));
+		}
+
+		// Load the return value out of `values_vec`.
+		Ok(unsafe { ptr::read(values_vec.as_ptr() as *const i64) })
 	}
 }
 
@@ -298,3 +339,50 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 		Ok(instance_idx_or_err_code as u32)
 	}
 }
+
+// The storage for a Wasmtime invocation argument.
+#[derive(Debug, Default, Copy, Clone)]
+#[repr(C, align(8))]
+struct VMInvokeArgument([u8; 8]);
+
+fn generate_signature_and_args(
+	args: &[Value],
+	result_type: Option<ValueType>,
+	frontend_config: TargetFrontendConfig,
+) -> (ir::Signature, Vec<VMInvokeArgument>)
+{
+	// This code is based on the wasmtime_jit::Context::invoke.
+
+	let param_types = args.iter()
+		.map(|arg| arg.value_type())
+		.collect::<Vec<_>>();
+	let signature = translate_signature(
+		cranelift_ir_signature(
+			Signature::new(param_types, result_type),
+			&frontend_config.default_call_conv
+		),
+		frontend_config.pointer_type()
+	);
+
+	let mut values_vec = vec![
+		VMInvokeArgument::default();
+		cmp::max(args.len(), result_type.iter().len())
+	];
+
+	// Store the argument values into `values_vec`.
+	for (index, arg) in args.iter().enumerate() {
+		unsafe {
+			let ptr = values_vec.as_mut_ptr().add(index);
+
+			match arg {
+				Value::I32(x) => ptr::write(ptr as *mut i32, *x),
+				Value::I64(x) => ptr::write(ptr as *mut i64, *x),
+				Value::F32(x) => ptr::write(ptr as *mut u32, *x),
+				Value::F64(x) => ptr::write(ptr as *mut u64, *x),
+			}
+		}
+	}
+
+	(signature, values_vec)
+}
+
