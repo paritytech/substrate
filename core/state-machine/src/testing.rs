@@ -154,6 +154,7 @@ impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> From<StorageTuple> for Test
 }
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 impl<H, N> Externalities for TestExternalities<H, N> where
 	H: Hasher<Out=H256>,
 	N: ChangesTrieBlockNumber,
@@ -304,6 +305,8 @@ impl<H, N> Externalities for TestExternalities<H, N> where
 
 =======
 >>>>>>> master
+=======
+>>>>>>> fc66ecdafa32965b809c1a80edee6e9416d8159d
 impl<H, N> externalities::ExtensionStore for TestExternalities<H, N> where
 	H: Hasher<Out=H256>,
 	N: ChangesTrieBlockNumber,

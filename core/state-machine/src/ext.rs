@@ -455,12 +455,10 @@ where
 		} else {
 			let storage_key = storage_key.as_ref();
 
-			let (root, is_empty, _) = {
-				let delta = self.overlay.changes.iter_values(Some(storage_key))
-					.map(|(k, v)| (k.to_vec(), v.map(|s| s.to_vec())));
+			let delta = self.overlay.changes.iter_values(Some(storage_key))
+				.map(|(k, v)| (k.to_vec(), v.map(|s| s.to_vec())));
 
-				self.backend.child_storage_root(storage_key, delta)
-			};
+			let (root, is_empty, _) = self.backend.child_storage_root(storage_key, delta);
 
 			if is_empty {
 				self.overlay.set_storage(storage_key.into(), None);
