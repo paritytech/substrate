@@ -18,6 +18,7 @@
 
 mod function_executor;
 mod runtime;
+mod trampoline;
 mod util;
 
 pub use runtime::create_instance;
