@@ -189,9 +189,9 @@ pub trait SimpleSlotWorker<B: BlockT> {
 					logs,
 				},
 				remaining_duration,
-			).map_err(|e| consensus_common::Error::ClientImport(format!("{:?}", e)).into()),
+			).map_err(|e| consensus_common::Error::ClientImport(format!("{:?}", e))),
 			Delay::new(remaining_duration)
-				.map_err(|err| consensus_common::Error::FaultyTimer(err).into())
+				.map_err(consensus_common::Error::FaultyTimer)
 		).map(|v| match v {
 			futures::future::Either::Left((b, _)) => b.map(|b| (b, claim)),
 			futures::future::Either::Right((Ok(_), _)) =>
@@ -220,9 +220,9 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			}
 
 			let (header, body) = block.deconstruct();
-			let header_num = header.number().clone();
+			let header_num = *header.number();
 			let header_hash = header.hash();
-			let parent_hash = header.parent_hash().clone();
+			let parent_hash = *header.parent_hash();
 
 			let block_import_params = block_import_params_maker(
 				header,
@@ -401,9 +401,8 @@ impl<T: Clone> SlotDuration<T> {
 				.map_err(|_| {
 					client::error::Error::Backend({
 						error!(target: "slots", "slot duration kept in invalid format");
-						format!("slot duration kept in invalid format")
+						"slot duration kept in invalid format".to_string()
 					})
-					.into()
 				}),
 			None => {
 				use sr_primitives::traits::Zero;
