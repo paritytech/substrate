@@ -259,7 +259,6 @@ impl States {
 }
 
 impl<V> History<V> {
-
 	/// Set a value, it uses a state history as parameter.
 	/// This method uses `get_mut` and do remove pending
 	/// dropped value.
@@ -402,7 +401,6 @@ impl<V> History<V> {
 	///
 	/// This method removes latest dropped values up to the latest valid value.
 	pub fn get_mut(&mut self, history: &[TransactionState]) -> Option<HistoriedValue<&mut V>> {
-
 		let mut index = self.len();
 		if index == 0 {
 			return None;
