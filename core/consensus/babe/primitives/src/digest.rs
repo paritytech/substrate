@@ -91,7 +91,7 @@ impl BabePreDigest {
 }
 
 /// The prefix used by BABE for its VRF keys.
-pub const BABE_VRF_PREFIX: &'static [u8] = b"substrate-babe-vrf";
+pub const BABE_VRF_PREFIX: &[u8] = b"substrate-babe-vrf";
 
 /// A raw version of `BabePreDigest`, usable on `no_std`.
 #[derive(Copy, Clone, Encode, Decode)]

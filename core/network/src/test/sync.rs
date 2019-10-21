@@ -457,6 +457,17 @@ fn can_sync_small_non_best_forks() {
 		}
 		Ok(Async::Ready(()))
 	})).unwrap();
+	net.block_until_sync(&mut runtime);
+
+	let another_fork = net.peer(0).push_blocks_at(BlockId::Number(35), 2, true);
+	net.peer(0).announce_block(another_fork, Vec::new());
+	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| -> Result<_, ()> {
+		net.poll();
+		if net.peer(1).client().header(&BlockId::Hash(another_fork)).unwrap().is_none() {
+			return Ok(Async::NotReady)
+		}
+		Ok(Async::Ready(()))
+	})).unwrap();
 }
 
 #[test]

@@ -148,7 +148,7 @@ pub trait OnUnbalanced<Imbalance> {
 	fn on_unbalanced(amount: Imbalance);
 }
 
-impl<Imbalance: Drop> OnUnbalanced<Imbalance> for () {
+impl<Imbalance> OnUnbalanced<Imbalance> for () {
 	fn on_unbalanced(amount: Imbalance) { drop(amount); }
 }
 
