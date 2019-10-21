@@ -21,7 +21,7 @@ use crate::host_interface::SubstrateExternals;
 use crate::wasm_runtime::WasmRuntime;
 use crate::wasmtime::function_executor::FunctionExecutorState;
 use crate::wasmtime::trampoline::{TrampolineState, make_trampoline};
-use crate::wasmtime::util::{cranelift_ir_signature, read_memory_into};
+use crate::wasmtime::util::{cranelift_ir_signature, read_memory_into, write_memory_from};
 use crate::{Externalities, RuntimeVersion};
 
 use codec::Decode;
@@ -34,7 +34,7 @@ use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::mem;
 use std::rc::Rc;
-use wasm_interface::{HostFunctions, Pointer};
+use wasm_interface::{HostFunctions, Pointer, WordSize};
 use wasmtime_environ::{Module, translate_signature};
 use wasmtime_jit::{
 	ActionOutcome, ActionError, CodeMemory, CompilationStrategy, CompiledModule, Compiler, Context,
@@ -165,7 +165,7 @@ fn call_method(
 		.map_err(ActionError::Setup)
 		.map_err(Error::Wasmtime)?;
 
-	unsafe {
+	let args = unsafe {
 		// Ideally there would be a way to set the heap pages during instantiation rather than
 		// growing the memory after the fact. Current this may require an additional mmap and copy.
 		// However, the wasmtime API doesn't support modifying the size of memory on instantiation
@@ -183,10 +183,11 @@ fn call_method(
 			get_heap_base(&instance)?,
 		);
 		reset_host_state(context, Some(executor_state))?;
-	}
 
-	// TODO: Construct arguments properly by allocating heap space with data.
-	let args = [];
+		// Write the input data into guest memory.
+		let (data_ptr, data_len) = inject_input_data(context, &mut instance, data)?;
+		[RuntimeValue::I32(u32::from(data_ptr) as i32), RuntimeValue::I32(data_len as i32)]
+	};
 
 	// Invoke the function in the runtime.
 	let outcome = externalities::set_and_run_with_externalities(ext, || {
@@ -315,6 +316,24 @@ fn reset_host_state(context: &mut Context, executor_state: Option<FunctionExecut
 	let trampoline_state = get_host_state(context)?;
 	trampoline_state.executor_state = executor_state;
 	Ok(trampoline_state.reset_trap())
+}
+
+unsafe fn inject_input_data(
+	context: &mut Context,
+	instance: &mut InstanceHandle,
+	data: &[u8],
+) -> Result<(Pointer<u8>, WordSize)> {
+	let trampoline_state = get_host_state(context)?;
+	let executor_state = trampoline_state.executor_state
+		.as_mut()
+		.ok_or_else(|| "cannot get \"env\" module executor state")?;
+
+	let memory = get_memory_mut(instance)?;
+
+	let data_len = data.len() as WordSize;
+	let data_ptr = executor_state.heap().allocate(memory, data_len)?;
+	write_memory_from(memory, data_ptr, data)?;
+	Ok((data_ptr, data_len))
 }
 
 unsafe fn get_memory_mut(instance: &mut InstanceHandle) -> Result<&mut [u8]> {
