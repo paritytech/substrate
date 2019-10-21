@@ -101,7 +101,7 @@ mod benefit {
 /// Intended to be a lightweight handle such as an `Arc`.
 pub trait Network<Block: BlockT>: Clone + Send + 'static {
 	/// A stream of input messages for a topic.
-	type In: Stream<Item=network_gossip::TopicNotification,Error=()>;
+	type In: Stream<Item = network_gossip::TopicNotification, Error = ()>;
 
 	/// Get a stream of messages for a specific gossip topic.
 	fn messages_for(&self, topic: Block::Hash) -> Self::In;
@@ -237,7 +237,7 @@ impl<R> Stream for NetworkStream<R>
 where
 	R: Stream<Item = network_gossip::TopicNotification, Error = ()>,
 {
-	type Item = network_gossip::TopicNotification;
+	type Item = R::Item;
 	type Error = ();
 
 	fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
@@ -277,11 +277,11 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		service: N,
 		config: crate::Config,
 		set_state: crate::environment::SharedVoterSetState<B>,
-		on_exit: impl Future<Item=(),Error=()> + Clone + Send + 'static,
+		on_exit: impl Future<Item = (), Error = ()> + Clone + Send + 'static,
 		catch_up_enabled: bool,
 	) -> (
 		Self,
-		impl futures::Future<Item = (), Error = ()> + Send + 'static,
+		impl Future<Item = (), Error = ()> + Send + 'static,
 	) {
 
 		let (validator, report_stream) = GossipValidator::new(
