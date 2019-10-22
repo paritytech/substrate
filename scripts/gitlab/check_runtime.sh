@@ -32,7 +32,7 @@ github_label () {
 
 # check if the wasm sources changed
 if ! git diff --name-only origin/master...${CI_COMMIT_SHA} \
-	| grep -q -e '^node/src/runtime' -e '^srml/' -e '^core/sr-'
+	| grep -q -e '^node/src/runtime' -e '^srml/' -e '^core/sr-' | grep -v -e '^core/sr-arithmetic/fuzzer'
 then
 	cat <<-EOT
 	
