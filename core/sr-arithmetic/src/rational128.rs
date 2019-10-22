@@ -17,10 +17,10 @@
 use rstd::{cmp::Ordering, prelude::*};
 use crate::helpers_128bit;
 use num_traits::Zero;
+use substrate_debug_derive::RuntimeDebug;
 
 /// A wrapper for any rational number with a 128 bit numerator and denominator.
-#[derive(Clone, Copy, Default, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Clone, Copy, Default, Eq, RuntimeDebug)]
 pub struct Rational128(u128, u128);
 
 impl Rational128 {

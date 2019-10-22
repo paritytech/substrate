@@ -25,7 +25,10 @@
 
 use rstd::prelude::*;
 use sr_primitives::{
-	print, traits::{Zero, One, StaticLookup, Bounded, Saturating}, weights::SimpleDispatchInfo,
+	RuntimeDebug,
+	print,
+	traits::{Zero, One, StaticLookup, Bounded, Saturating},
+	weights::SimpleDispatchInfo,
 };
 use support::{
 	dispatch::Result, decl_storage, decl_event, ensure, decl_module,
@@ -98,8 +101,7 @@ mod tests;
 // entries before they increase the capacity.
 
 /// The activity status of a voter.
-#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, Default)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, Default, RuntimeDebug)]
 pub struct VoterInfo<Balance> {
 	/// Last VoteIndex in which this voter assigned (or initialized) approvals.
 	last_active: VoteIndex,
@@ -114,8 +116,7 @@ pub struct VoterInfo<Balance> {
 }
 
 /// Used to demonstrate the status of a particular index in the global voter list.
-#[derive(PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(PartialEq, Eq, RuntimeDebug)]
 pub enum CellStatus {
 	/// Any out of bound index. Means a push a must happen to the chunk pointed by `NextVoterSet<T>`.
 	/// Voting fee is applied in case a new chunk is created.

@@ -144,10 +144,15 @@ impl CheckedAdd for Fixed64 {
 	}
 }
 
-#[cfg(feature = "std")]
 impl rstd::fmt::Debug for Fixed64 {
-	fn fmt(&self, f: &mut rstd::fmt::Formatter<'_>) -> rstd::fmt::Result {
+	#[cfg(feature = "std")]
+	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
 		write!(f, "Fixed64({},{})", self.0 / DIV, (self.0 % DIV) / 1000)
+	}
+
+	#[cfg(not(feature = "std"))]
+	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+		Ok(())
 	}
 }
 

@@ -25,6 +25,7 @@
 
 use rstd::{prelude::*, result};
 use primitives::u32_trait::Value as U32;
+use sr_primitives::RuntimeDebug;
 use sr_primitives::traits::{Hash, EnsureOrigin};
 use sr_primitives::weights::SimpleDispatchInfo;
 use support::{
@@ -55,8 +56,7 @@ pub trait Trait<I=DefaultInstance>: system::Trait {
 }
 
 /// Origin for the collective module.
-#[derive(PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(PartialEq, Eq, Clone, RuntimeDebug)]
 pub enum RawOrigin<AccountId, I> {
 	/// It has been condoned by a given number of members of the collective from a given total.
 	Members(MemberCount, MemberCount),
@@ -69,8 +69,7 @@ pub enum RawOrigin<AccountId, I> {
 /// Origin for the collective module.
 pub type Origin<T, I=DefaultInstance> = RawOrigin<<T as system::Trait>::AccountId, I>;
 
-#[derive(PartialEq, Eq, Clone, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 /// Info for keeping track of a motion being voted on.
 pub struct Votes<AccountId> {
 	/// The proposal's unique index.
