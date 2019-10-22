@@ -55,7 +55,7 @@ use header_metadata::{HeaderMetadata, CachedHeaderMetadata};
 
 use crate::{
 	runtime_api::{
-		CallRuntimeAt, ConstructRuntimeApi, Core as CoreApi, ProofRecorder,
+		CallRuntimeAt, ConstructRuntimeApi, Core as CoreApi, FullProofRecorder,
 		InitializeBlock,
 	},
 	backend::{
@@ -1453,7 +1453,7 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 		initialize_block: InitializeBlock<'a, Block>,
 		native_call: Option<NC>,
 		context: ExecutionContext,
-		recorder: &Option<Rc<RefCell<ProofRecorder<Block>>>>,
+		recorder: &Option<FullProofRecorder<Block>>,
 	) -> error::Result<NativeOrEncoded<R>> {
 		let manager = match context {
 			ExecutionContext::BlockConstruction =>

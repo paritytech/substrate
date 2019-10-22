@@ -30,7 +30,7 @@ use primitives::{
 	traits::{CodeExecutor, KeystoreExt},
 };
 
-use crate::runtime_api::{ProofRecorder, InitializeBlock};
+use crate::runtime_api::{FullProofRecorder, InitializeBlock};
 use crate::backend;
 use crate::error;
 
@@ -81,7 +81,7 @@ where
 		execution_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
 		side_effects_handler: Option<OffchainExt>,
-		proof_recorder: &Option<Rc<RefCell<ProofRecorder<B>>>>,
+		proof_recorder: &Option<FullProofRecorder<B>>,
 		enable_keystore: bool,
 	) -> error::Result<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone;
 
@@ -241,7 +241,7 @@ where
 		execution_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
 		side_effects_handler: Option<OffchainExt>,
-		recorder: &Option<Rc<RefCell<ProofRecorder<Block>>>>,
+		recorder: &Option<FullProofRecorder<Block>>,
 		enable_keystore: bool,
 	) -> Result<NativeOrEncoded<R>, error::Error> where ExecutionManager<EM>: Clone {
 		match initialize_block {
@@ -269,7 +269,7 @@ where
 							as Box<dyn state_machine::Error>
 					)?;
 
-				let backend = state_machine::ProvingBackend::new_with_recorder(
+				let backend = state_machine::full_proving_backend::ProvingBackend::new_with_recorder(
 					trie_state,
 					recorder.clone()
 				);

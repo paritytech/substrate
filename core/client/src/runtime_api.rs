@@ -55,6 +55,12 @@ pub type ProofRecorder<B> = state_machine::ProofRecorder<
 	<<<<B as BlockT>::Header as HeaderT>::Hashing as HashT>::Hasher as HasherT>::Out
 >;
 
+#[cfg(feature = "std")]
+/// A type that records all accessed trie nodes and generates a proof out of it.
+pub type FullProofRecorder<B> = state_machine::full_proving_backend::ProofRecorder<
+	<<<B as BlockT>::Header as HeaderT>::Hashing as HashT>::Hasher
+>;
+
 /// Something that can be constructed to a runtime api.
 #[cfg(feature = "std")]
 pub trait ConstructRuntimeApi<Block: BlockT, C: CallRuntimeAt<Block>> {
@@ -148,7 +154,7 @@ pub trait CallRuntimeAt<Block: BlockT> {
 		initialize_block: InitializeBlock<'a, Block>,
 		native_call: Option<NC>,
 		context: ExecutionContext,
-		recorder: &Option<Rc<RefCell<ProofRecorder<Block>>>>,
+		recorder: &Option<FullProofRecorder<Block>>,
 	) -> error::Result<NativeOrEncoded<R>>;
 
 	/// Returns the runtime version at the given block.

@@ -267,7 +267,7 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 			commit_on_success: std::cell::RefCell<bool>,
 			initialized_block: std::cell::RefCell<Option<#block_id>>,
 			changes: std::cell::RefCell<#crate_::runtime_api::OverlayedChanges>,
-			recorder: Option<std::rc::Rc<std::cell::RefCell<#crate_::runtime_api::ProofRecorder<#block>>>>,
+			recorder: Option<#crate_::runtime_api::FullProofRecorder<#block>>,
 		}
 
 		// `RuntimeApi` itself is not threadsafe. However, an instance is only available in a
@@ -310,10 +310,10 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 				self.recorder
 					.take()
 					.map(|r| {
-						r.borrow_mut()
-							.drain()
-							.into_iter()
-							.map(|n| n.data.to_vec())
+						r.read()
+							// TODO same as in proof impl: do consume and avoid clone
+							.iter()
+							.map(|(k, v)| v.to_vec())
 							.collect()
 					})
 			}
@@ -347,7 +347,7 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 					&Self,
 					&std::cell::RefCell<#crate_::runtime_api::OverlayedChanges>,
 					&std::cell::RefCell<Option<#crate_::runtime_api::BlockId<#block>>>,
-					&Option<std::rc::Rc<std::cell::RefCell<#crate_::runtime_api::ProofRecorder<#block>>>>,
+					&Option<#crate_::runtime_api::FullProofRecorder<#block>>,
 				) -> #crate_::error::Result<#crate_::runtime_api::NativeOrEncoded<R>>,
 			>(
 				&self,

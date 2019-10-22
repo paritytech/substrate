@@ -37,6 +37,7 @@ mod testing;
 mod basic;
 mod overlayed_changes;
 mod proving_backend;
+mod proving_backend_full;
 mod trie_backend;
 mod trie_backend_essence;
 
@@ -62,6 +63,14 @@ pub use proving_backend::{
 	create_proof_check_backend, create_proof_check_backend_storage,
 	Recorder as ProofRecorder, ProvingBackend,
 };
+pub mod full_proving_backend {
+	pub use crate::proving_backend_full::{
+		ProofRecorder, ProvingBackend,
+	};
+	pub use crate::proving_backend::{
+		create_proof_check_backend, create_proof_check_backend_storage,
+	};
+}
 pub use trie_backend_essence::{TrieBackendStorage, Storage};
 pub use trie_backend::TrieBackend;
 pub use error::{Error, ExecutionError};

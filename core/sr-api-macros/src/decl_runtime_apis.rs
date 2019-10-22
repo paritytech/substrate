@@ -411,7 +411,7 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 				initialized_block: &std::cell::RefCell<Option<#crate_::runtime_api::BlockId<Block>>>,
 				native_call: Option<NC>,
 				context: #crate_::runtime_api::ExecutionContext,
-				recorder: &Option<std::rc::Rc<std::cell::RefCell<#crate_::runtime_api::ProofRecorder<Block>>>>,
+				recorder: &Option<#crate_::runtime_api::FullProofRecorder<Block>>,
 			) -> #crate_::error::Result<#crate_::runtime_api::NativeOrEncoded<R>> {
 				let version = call_runtime_at.runtime_version_at(at)?;
 				use #crate_::runtime_api::InitializeBlock;
