@@ -260,10 +260,11 @@ mod tests {
 
 	decl_storage! {
 		trait Store for Module<T: Trait> as Example {
-			pub Data get(data) build(|_| vec![(15u32, 42u64)]): linked_map hasher(twox_64_concat) u32 => u64;
+			pub Data get(fn data) build(|_| vec![(15u32, 42u64)]): linked_map hasher(twox_64_concat) u32 => u64;
 			pub OptionLinkedMap: linked_map u32 => Option<u32>;
-			pub GenericData get(generic_data): linked_map hasher(twox_128) T::BlockNumber => T::BlockNumber;
-			pub GenericData2 get(generic_data2): linked_map T::BlockNumber => Option<T::BlockNumber>;
+			pub GenericData get(fn generic_data): linked_map hasher(twox_128) T::BlockNumber => T::BlockNumber;
+			pub GenericData2 get(fn generic_data2): linked_map T::BlockNumber => Option<T::BlockNumber>;
+			pub GetterNoFnKeyword get(no_fn): Option<u32>;
 
 			pub DataDM config(test_config) build(|_| vec![(15u32, 16u32, 42u64)]):
 				double_map hasher(twox_64_concat) u32, blake2_256(u32) => u64;
@@ -513,6 +514,15 @@ mod tests {
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructGenericData2(PhantomData::<Test>))
+					),
+					documentation: DecodeDifferent::Encode(&[]),
+				},
+				StorageEntryMetadata {
+					name: DecodeDifferent::Encode("GetterNoFnKeyword"),
+					modifier: StorageEntryModifier::Optional,
+					ty: StorageEntryType::Plain(DecodeDifferent::Encode("u32")),
+					default: DecodeDifferent::Encode(
+						DefaultByteGetter(&__GetByteStructGetterNoFnKeyword(PhantomData::<Test>))
 					),
 					documentation: DecodeDifferent::Encode(&[]),
 				},

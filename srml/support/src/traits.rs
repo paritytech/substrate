@@ -148,7 +148,7 @@ pub trait OnUnbalanced<Imbalance> {
 	fn on_unbalanced(amount: Imbalance);
 }
 
-impl<Imbalance: Drop> OnUnbalanced<Imbalance> for () {
+impl<Imbalance> OnUnbalanced<Imbalance> for () {
 	fn on_unbalanced(amount: Imbalance) { drop(amount); }
 }
 
@@ -156,6 +156,9 @@ impl<Imbalance: Drop> OnUnbalanced<Imbalance> for () {
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub enum ExistenceRequirement {
 	/// Operation must not result in the account going out of existence.
+	///
+	/// Note this implies that if the account never existed in the first place, then the operation
+	/// may legitimately leave the account unchanged and still non-existent.
 	KeepAlive,
 	/// Operation may result in account going out of existence.
 	AllowDeath,

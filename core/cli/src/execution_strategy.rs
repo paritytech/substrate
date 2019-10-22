@@ -16,7 +16,7 @@
 
 #![allow(missing_docs)]
 
-use structopt::clap::{arg_enum, _clap_count_exprs};
+use structopt::clap::arg_enum;
 
 arg_enum! {
 	/// How to execute blocks

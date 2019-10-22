@@ -48,7 +48,7 @@
 //!
 //!   - [`CheckWeight`]: Checks the weight and length of the block and ensure that it does not
 //!     exceed the limits.
-//!   - ['CheckNonce']: Checks the nonce of the transaction. Contains a single payload of type
+//!   - [`CheckNonce`]: Checks the nonce of the transaction. Contains a single payload of type
 //!     `T::Index`.
 //!   - [`CheckEra`]: Checks the era of the transaction. Contains a single payload of type `Era`.
 //!   - [`CheckGenesis`]: Checks the provided genesis hash of the transaction. Must be a part of the
@@ -97,13 +97,13 @@ use rstd::marker::PhantomData;
 use sr_version::RuntimeVersion;
 use sr_primitives::{
 	generic::{self, Era}, Perbill, ApplyError, ApplyOutcome, DispatchError,
-	weights::{Weight, DispatchInfo, DispatchClass, WeightMultiplier, SimpleDispatchInfo},
+	weights::{Weight, DispatchInfo, DispatchClass, SimpleDispatchInfo},
 	transaction_validity::{
 		ValidTransaction, TransactionPriority, TransactionLongevity, TransactionValidityError,
 		InvalidTransaction, TransactionValidity,
 	},
 	traits::{
-		self, CheckEqual, SimpleArithmetic, Zero, SignedExtension, Convert, Lookup, LookupError,
+		self, CheckEqual, SimpleArithmetic, Zero, SignedExtension, Lookup, LookupError,
 		SimpleBitOps, Hash, Member, MaybeDisplay, EnsureOrigin, SaturatedConversion,
 		MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup, One, Bounded,
 	},
@@ -187,14 +187,6 @@ pub trait Trait: 'static + Eq + Clone {
 	/// reasonable for this to be an identity conversion (with the source type being `AccountId`), but other modules
 	/// (e.g. Indices module) may provide more functional/efficient alternatives.
 	type Lookup: StaticLookup<Target = Self::AccountId>;
-
-	/// Handler for updating the weight multiplier at the end of each block.
-	///
-	/// It receives the current block's weight as input and returns the next weight multiplier for next
-	/// block.
-	///
-	/// Note that passing `()` will keep the value constant.
-	type WeightMultiplierUpdate: Convert<(Weight, WeightMultiplier), WeightMultiplier>;
 
 	/// The block header.
 	type Header: Parameter + traits::Header<
@@ -374,32 +366,29 @@ type EventIndex = u32;
 decl_storage! {
 	trait Store for Module<T: Trait> as System {
 		/// Extrinsics nonce for accounts.
-		pub AccountNonce get(account_nonce): map T::AccountId => T::Index;
+		pub AccountNonce get(fn account_nonce): map T::AccountId => T::Index;
 		/// Total extrinsics count for the current block.
 		ExtrinsicCount: Option<u32>;
 		/// Total weight for all extrinsics put together, for the current block.
 		AllExtrinsicsWeight: Option<Weight>;
 		/// Total length (in bytes) for all extrinsics put together, for the current block.
 		AllExtrinsicsLen: Option<u32>;
-		/// The next weight multiplier. This should be updated at the end of each block based on the
-		/// saturation level (weight).
-		pub NextWeightMultiplier get(next_weight_multiplier): WeightMultiplier = Default::default();
 		/// Map of block numbers to block hashes.
-		pub BlockHash get(block_hash) build(|_| vec![(T::BlockNumber::zero(), hash69())]): map T::BlockNumber => T::Hash;
+		pub BlockHash get(fn block_hash) build(|_| vec![(T::BlockNumber::zero(), hash69())]): map T::BlockNumber => T::Hash;
 		/// Extrinsics data for the current block (maps an extrinsic's index to its data).
-		ExtrinsicData get(extrinsic_data): map u32 => Vec<u8>;
+		ExtrinsicData get(fn extrinsic_data): map u32 => Vec<u8>;
 		/// The current block number being processed. Set by `execute_block`.
-		Number get(block_number) build(|_| 1.into()): T::BlockNumber;
+		Number get(fn block_number) build(|_| 1.into()): T::BlockNumber;
 		/// Hash of the previous block.
-		ParentHash get(parent_hash) build(|_| hash69()): T::Hash;
+		ParentHash get(fn parent_hash) build(|_| hash69()): T::Hash;
 		/// Extrinsics root of the current block, also part of the block header.
-		ExtrinsicsRoot get(extrinsics_root): T::Hash;
+		ExtrinsicsRoot get(fn extrinsics_root): T::Hash;
 		/// Digest of the current block, also part of the block header.
-		Digest get(digest): DigestOf<T>;
+		Digest get(fn digest): DigestOf<T>;
 		/// Events deposited for the current block.
-		Events get(events): Vec<EventRecord<T::Event, T::Hash>>;
+		Events get(fn events): Vec<EventRecord<T::Event, T::Hash>>;
 		/// The number of events in the `Events<T>` list.
-		EventCount get(event_count): EventIndex;
+		EventCount get(fn event_count): EventIndex;
 
 		// TODO: https://github.com/paritytech/substrate/issues/2553
 		// Possibly, we can improve it by using something like:
@@ -419,7 +408,7 @@ decl_storage! {
 		/// The value has the type `(T::BlockNumber, EventIndex)` because if we used only just
 		/// the `EventIndex` then in case if the topic has the same contents on the next block
 		/// no notification will be triggered thus the event might be lost.
-		EventTopics get(event_topics): double_map hasher(blake2_256) (), blake2_256(T::Hash)
+		EventTopics get(fn event_topics): double_map hasher(blake2_256) (), blake2_256(T::Hash)
 			=> Vec<(T::BlockNumber, EventIndex)>;
 	}
 	add_extra_genesis {
@@ -578,7 +567,7 @@ impl<T: Trait> Module<T> {
 		// We perform early return if we've reached the maximum capacity of the event list,
 		// so `Events<T>` seems to be corrupted. Also, this has happened after the start of execution
 		// (since the event list is cleared at the block initialization).
-		if <Events<T>>::append([event].into_iter()).is_err() {
+		if <Events<T>>::append([event].iter()).is_err() {
 			// The most sensible thing to do here is to just ignore this event and wait until the
 			// new block.
 			return;
@@ -612,17 +601,6 @@ impl<T: Trait> Module<T> {
 		AllExtrinsicsLen::get().unwrap_or_default()
 	}
 
-	/// Update the next weight multiplier.
-	///
-	/// This should be called at then end of each block, before `all_extrinsics_weight` is cleared.
-	pub fn update_weight_multiplier() {
-		// update the multiplier based on block weight.
-		let current_weight = Self::all_extrinsics_weight();
-		NextWeightMultiplier::mutate(|fm| {
-			*fm = T::WeightMultiplierUpdate::convert((current_weight, *fm))
-		});
-	}
-
 	/// Start the execution of a particular block.
 	pub fn initialize(
 		number: &T::BlockNumber,
@@ -645,7 +623,6 @@ impl<T: Trait> Module<T> {
 	/// Remove temporary "environment" entries in storage.
 	pub fn finalize() -> T::Header {
 		ExtrinsicCount::kill();
-		Self::update_weight_multiplier();
 		AllExtrinsicsWeight::kill();
 		AllExtrinsicsLen::kill();
 
@@ -1118,7 +1095,6 @@ mod tests {
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
-		type WeightMultiplierUpdate = ();
 		type Event = u16;
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;

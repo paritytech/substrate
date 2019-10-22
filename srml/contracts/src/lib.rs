@@ -325,7 +325,7 @@ parameter_types! {
 	/// A reasonable default value for [`Trait::InstantiateBaseFee`].
 	pub const DefaultInstantiateBaseFee: u32 = 1000;
 	/// A reasonable default value for [`Trait::MaxDepth`].
-	pub const DefaultMaxDepth: u32 = 1024;
+	pub const DefaultMaxDepth: u32 = 32;
 	/// A reasonable default value for [`Trait::MaxValueSize`].
 	pub const DefaultMaxValueSize: u32 = 16_384;
 	/// A reasonable default value for [`Trait::BlockGasLimit`].
@@ -442,7 +442,7 @@ where
 }
 
 /// The default dispatch fee computor computes the fee in the same way that
-/// the implementation of `TakeFees` for the Balances module does. Note that this only takes a fixed
+/// the implementation of `ChargeTransactionPayment` for the Balances module does. Note that this only takes a fixed
 /// fee based on size. Unlike the balances module, weight-fee is applied.
 pub struct DefaultDispatchFeeComputor<T: Trait>(PhantomData<T>);
 impl<T: Trait> ComputeDispatchFee<<T as Trait>::Call, BalanceOf<T>> for DefaultDispatchFeeComputor<T> {
@@ -838,9 +838,9 @@ decl_event! {
 decl_storage! {
 	trait Store for Module<T: Trait> as Contract {
 		/// Gas spent so far in this block.
-		GasSpent get(gas_spent): Gas;
+		GasSpent get(fn gas_spent): Gas;
 		/// Current cost schedule for contracts.
-		CurrentSchedule get(current_schedule) config(): Schedule = Schedule::default();
+		CurrentSchedule get(fn current_schedule) config(): Schedule = Schedule::default();
 		/// A mapping from an original code hash to the original code, untouched by instrumentation.
 		pub PristineCode: map CodeHash<T> => Option<Vec<u8>>;
 		/// A mapping between an original code hash and instrumented wasm code, ready for execution.
@@ -850,7 +850,7 @@ decl_storage! {
 		/// The code associated with a given account.
 		pub ContractInfoOf: map T::AccountId => Option<ContractInfo<T>>;
 		/// The price of one unit of gas.
-		GasPrice get(gas_price) config(): BalanceOf<T> = 1.into();
+		GasPrice get(fn gas_price) config(): BalanceOf<T> = 1.into();
 	}
 }
 

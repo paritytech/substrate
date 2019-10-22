@@ -282,7 +282,7 @@ fn should_return_runtime_version() {
 		\"specVersion\":1,\"implVersion\":1,\"apis\":[[\"0xdf6acb689907609b\",2],\
 		[\"0x37e397fc7c91f5e4\",1],[\"0xd2bc9897eed08f15\",1],[\"0x40fe3ad401f8959a\",3],\
 		[\"0xc6e9a76309f39b09\",1],[\"0xdd718d5cc53262d4\",1],[\"0xcbca25e39f142387\",1],\
-		[\"0xf78b278be53f454c\",1],[\"0xab3c0572291feb8b\",1]]}";
+		[\"0xf78b278be53f454c\",1],[\"0xab3c0572291feb8b\",1],[\"0xbc9d89904f5b923f\",1]]}";
 
 	let runtime_version = api.runtime_version(None.into()).wait().unwrap();
 	let serialized = serde_json::to_string(&runtime_version).unwrap();
@@ -312,4 +312,12 @@ fn should_notify_on_runtime_version_initially() {
 	assert!(notification.is_some());
 		// no more notifications on this channel
 	assert_eq!(core.block_on(next.into_future()).unwrap().0, None);
+}
+
+#[test]
+fn should_deserialize_storage_key() {
+	let k = "\"0x7f864e18e3dd8b58386310d2fe0919eef27c6e558564b7f67f22d99d20f587b\"";
+	let k: StorageKey = serde_json::from_str(k).unwrap();
+
+	assert_eq!(k.0.len(), 32);
 }

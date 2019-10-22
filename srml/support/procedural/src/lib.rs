@@ -33,7 +33,7 @@ use proc_macro::TokenStream;
 /// ```nocompile
 /// decl_storage! {
 /// 	trait Store for Module<T: Trait> as Example {
-/// 		Foo get(foo) config(): u32=12;
+/// 		Foo get(fn foo) config(): u32=12;
 /// 		Bar: map u32 => u32;
 /// 		pub Zed build(|config| vec![(0, 0)]): linked_map u32 => u32;
 /// 	}
@@ -120,11 +120,11 @@ use proc_macro::TokenStream;
 ///
 /// Basic storage can be extended as such:
 ///
-/// `#vis #name get(#getter) config(#field_name) build(#closure): #type = #default;`
+/// `#vis #name get(fn #getter) config(#field_name) build(#closure): #type = #default;`
 ///
 /// * `#vis`: Set the visibility of the structure. `pub` or nothing.
 /// * `#name`: Name of the storage item, used as a prefix in storage.
-/// * [optional] `get(#getter)`: Implements the function #getter to `Module`.
+/// * [optional] `get(fn #getter)`: Implements the function #getter to `Module`.
 /// * [optional] `config(#field_name)`: `field_name` is optional if get is set.
 /// Will include the item in `GenesisConfig`.
 /// * [optional] `build(#closure)`: Closure called with storage overlays.
@@ -213,5 +213,5 @@ use proc_macro::TokenStream;
 ///
 #[proc_macro]
 pub fn decl_storage(input: TokenStream) -> TokenStream {
-	storage::transformation::decl_storage_impl(input)
+	storage::decl_storage_impl(input)
 }

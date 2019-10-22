@@ -244,7 +244,7 @@ decl_module! {
 decl_storage! {
 	trait Store for Module<T: Trait> as Timestamp {
 		/// Current time for the current block.
-		pub Now get(now) build(|_| 0.into()): T::Moment;
+		pub Now get(fn now) build(|_| 0.into()): T::Moment;
 
 		/// Did the timestamp get updated in this block?
 		DidUpdate: bool;
@@ -348,7 +348,6 @@ mod tests {
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
-		type WeightMultiplierUpdate = ();
 		type Event = ();
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;

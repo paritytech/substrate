@@ -51,7 +51,6 @@ pub mod testing;
 pub mod curve;
 pub mod generic;
 pub mod offchain;
-pub mod sr_arithmetic;
 pub mod traits;
 pub mod transaction_validity;
 pub mod weights;
@@ -64,14 +63,14 @@ pub use primitives::{TypeId, crypto::{key_types, KeyTypeId, CryptoType}};
 pub use app_crypto::RuntimeAppPublic;
 
 /// Re-export top-level arithmetic stuff.
-pub use sr_arithmetic::{
+pub use arithmetic::{
 	Perquintill, Perbill, Permill, Percent,
 	Rational128, Fixed64
 };
 /// Re-export 128 bit helpers.
-pub use sr_arithmetic::helpers_128bit;
-/// Re-export big_uint stiff.
-pub use sr_arithmetic::biguint;
+pub use arithmetic::helpers_128bit;
+/// Re-export big_uint stuff.
+pub use arithmetic::biguint;
 
 /// An abstraction over justification for a block's validity under a consensus algorithm.
 ///
