@@ -26,7 +26,7 @@ use crate::listener::Listener;
 use crate::rotator::PoolRotator;
 use crate::watcher::Watcher;
 use serde::Serialize;
-use log::debug;
+use log::{debug, warn};
 
 use futures::channel::mpsc;
 use parking_lot::{Mutex, RwLock};
@@ -248,7 +248,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 							// we do not want to fail if single transaction import has failed
 							// nor we do want to propagate this error, because it could tx unknown to caller
 							// => let's just notify listeners (and issue debug message)
-							debug!(target: "txpool", "[{:?}] Removing invalid transaction from update: {}", hash, err);
+							warn!(target: "txpool", "[{:?}] Removing invalid transaction from update: {}", hash, err);
 							final_statuses.insert(hash, Status::Failed);
 						},
 					},
