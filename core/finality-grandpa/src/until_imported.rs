@@ -127,7 +127,7 @@ impl<Block, BStatus, BSyncRequester, I, M> Stream for UntilImported<Block, BStat
 	Block: BlockT,
 	BStatus: BlockStatusT<Block>,
 	BSyncRequester: BlockSyncRequesterT<Block>,
-	I: Stream<Item=(Option<network::PeerId>, M::Blocked),Error=Error>,
+	I: Stream<Item=M::Blocked,Error=Error>,
 	M: BlockUntilImported<Block>,
 {
 	type Item = M::Blocked;
@@ -137,7 +137,7 @@ impl<Block, BStatus, BSyncRequester, I, M> Stream for UntilImported<Block, BStat
 		loop {
 			match self.inner.poll()? {
 				Async::Ready(None) => return Ok(Async::Ready(None)),
-				Async::Ready(Some((sender, input))) => {
+				Async::Ready(Some(input)) => {
 					// new input: schedule wait of any parts which require
 					// blocks to be known.
 					let ready = &mut self.ready;
