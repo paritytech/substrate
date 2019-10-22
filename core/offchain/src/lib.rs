@@ -54,6 +54,7 @@ mod api;
 pub mod testing;
 
 pub use offchain_primitives::OffchainWorkerApi;
+pub use api::STORAGE_PREFIX;
 
 /// An offchain workers manager.
 pub struct OffchainWorkers<Client, Storage, Block: traits::Block> {

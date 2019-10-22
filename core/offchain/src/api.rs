@@ -71,7 +71,7 @@ fn unavailable_yet<R: Default>(name: &str) -> R {
 }
 
 const LOCAL_DB: &str = "LOCAL (fork-aware) DB";
-const STORAGE_PREFIX: &[u8] = b"storage";
+pub const STORAGE_PREFIX: &[u8] = b"storage";
 
 impl<Storage, Block> OffchainExt for Api<Storage, Block>
 where
