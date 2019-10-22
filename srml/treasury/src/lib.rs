@@ -77,7 +77,7 @@ use support::traits::{
 };
 use sr_primitives::{Permill, Perbill, ModuleId};
 use sr_primitives::traits::{
-	Zero, EnsureOrigin, StaticLookup, AccountIdConversion, CheckedSub
+	Zero, EnsureOrigin, StaticLookup, AccountIdConversion, CheckedSub, Saturating
 };
 use sr_primitives::weights::SimpleDispatchInfo;
 use codec::{Encode, Decode};
@@ -233,6 +233,16 @@ decl_storage! {
 		/// Proposal indices that have been approved but not yet awarded.
 		Approvals get(fn approvals): Vec<ProposalIndex>;
 	}
+	add_extra_genesis {
+		build(|_config| {
+			// Create Treasury account
+			let _ = T::Currency::make_free_balance_be(
+				&MODULE_ID.into_account(),
+				T::Currency::minimum_balance(),
+			);
+			println!("toto");
+		});
+	}
 }
 
 decl_event!(
@@ -311,6 +321,7 @@ impl<T: Trait> Module<T> {
 			Self::deposit_event(RawEvent::Burnt(burn))
 		}
 
+		// Budget doesn't include existential deposit thus the account must stay alive.
 		if let Err(problem) = T::Currency::settle(
 			&Self::account_id(),
 			imbalance,
@@ -325,21 +336,31 @@ impl<T: Trait> Module<T> {
 		Self::deposit_event(RawEvent::Rollover(budget_remaining));
 	}
 
+	/// Return the amount of money in the pot.
 	fn pot() -> BalanceOf<T> {
 		T::Currency::free_balance(&Self::account_id())
+			// Must never be less than 0 but better be safe.
+			.saturating_sub(T::Currency::minimum_balance())
 	}
 }
 
 impl<T: Trait> OnUnbalanced<NegativeImbalanceOf<T>> for Module<T> {
 	fn on_unbalanced(amount: NegativeImbalanceOf<T>) {
-		T::Currency::resolve_creating(&Self::account_id(), amount);
+		// Must resolve into existing but better be safe.
+		let _ = T::Currency::resolve_creating(&Self::account_id(), amount);
 	}
 }
 
+/// Mint extra funds for the treasury to keep the ratio of portion to total_issuance equal
+/// pre dilution and post-dilution.
+///
+/// i.e.
+/// ```nocompile
+/// portion / total_issuance_before_dilution ==
+///   (portion + minted) / (total_issuance_before_dilution + minted_to_treasury + minted)
+/// ```
 impl<T: Trait> OnDilution<BalanceOf<T>> for Module<T> {
 	fn on_dilution(minted: BalanceOf<T>, portion: BalanceOf<T>) {
-		// Mint extra funds for the treasury to keep the ratio of portion to total_issuance equal
-		// pre dilution and post-dilution.
 		if !minted.is_zero() && !portion.is_zero() {
 			let total_issuance = T::Currency::total_issuance();
 			if let Some(funding) = total_issuance.checked_sub(&portion) {
@@ -391,7 +412,7 @@ mod tests {
 		type Version = ();
 	}
 	parameter_types! {
-		pub const ExistentialDeposit: u64 = 0;
+		pub const ExistentialDeposit: u64 = 1;
 		pub const TransferFee: u64 = 0;
 		pub const CreationFee: u64 = 0;
 	}
@@ -430,9 +451,11 @@ mod tests {
 	fn new_test_ext() -> runtime_io::TestExternalities {
 		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		balances::GenesisConfig::<Test>{
-			balances: vec![(0, 100), (1, 99), (2, 1)],
+			// Total issuance will be 200 with treasury account initialized at ED.
+			balances: vec![(0, 100), (1, 98), (2, 1)],
 			vesting: vec![],
 		}.assimilate_storage(&mut t).unwrap();
+		GenesisConfig::default().assimilate_storage::<Test>(&mut t).unwrap();
 		t.into()
 	}
 
