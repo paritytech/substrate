@@ -237,7 +237,7 @@ decl_storage! {
 		build(|_config| {
 			// Create Treasury account
 			let _ = T::Currency::make_free_balance_be(
-				&MODULE_ID.into_account(),
+				&<Module<T>>::account_id(),
 				T::Currency::minimum_balance(),
 			);
 		});
