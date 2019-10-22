@@ -320,7 +320,10 @@ impl<T: Trait> Module<T> {
 			Self::deposit_event(RawEvent::Burnt(burn))
 		}
 
-		// Budget doesn't include existential deposit thus the account must stay alive.
+		// Must never be an error, but better to be safe.
+		// proof: budget_remaining is account free balance minus ED;
+		// Thus we can't spend more than account free balance minus ED;
+		// Thus account is kept alive; qed;
 		if let Err(problem) = T::Currency::settle(
 			&Self::account_id(),
 			imbalance,
@@ -336,6 +339,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Return the amount of money in the pot.
+	// The existential deposit is not part of the pot so treasury account never gets deleted.
 	fn pot() -> BalanceOf<T> {
 		T::Currency::free_balance(&Self::account_id())
 			// Must never be less than 0 but better be safe.
