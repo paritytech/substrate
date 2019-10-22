@@ -148,10 +148,10 @@ pub trait Trait: timestamp::Trait {
 decl_storage! {
 	trait Store for Module<T: Trait> as Aura {
 		/// The last timestamp.
-		LastTimestamp get(last) build(|_| 0.into()): T::Moment;
+		LastTimestamp get(fn last) build(|_| 0.into()): T::Moment;
 
 		/// The current authorities
-		pub Authorities get(authorities): Vec<T::AuthorityId>;
+		pub Authorities get(fn authorities): Vec<T::AuthorityId>;
 	}
 	add_extra_genesis {
 		config(authorities): Vec<T::AuthorityId>;

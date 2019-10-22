@@ -295,12 +295,12 @@ pub struct BalanceLock<Balance, BlockNumber> {
 decl_storage! {
 	trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Balances {
 		/// The total units issued in the system.
-		pub TotalIssuance get(total_issuance) build(|config: &GenesisConfig<T, I>| {
+		pub TotalIssuance get(fn total_issuance) build(|config: &GenesisConfig<T, I>| {
 			config.balances.iter().fold(Zero::zero(), |acc: T::Balance, &(_, n)| acc + n)
 		}): T::Balance;
 
 		/// Information regarding the vesting of a given account.
-		pub Vesting get(vesting) build(|config: &GenesisConfig<T, I>| {
+		pub Vesting get(fn vesting) build(|config: &GenesisConfig<T, I>| {
 			// Generate initial vesting configuration
 			// * who - Account which we are generating vesting configuration for
 			// * begin - Block when the account will start to vest
@@ -337,7 +337,7 @@ decl_storage! {
 		///
 		/// `system::AccountNonce` is also deleted if `ReservedBalance` is also zero (it also gets
 		/// collapsed to zero if it ever becomes less than `ExistentialDeposit`.
-		pub FreeBalance get(free_balance)
+		pub FreeBalance get(fn free_balance)
 			build(|config: &GenesisConfig<T, I>| config.balances.clone()):
 			map T::AccountId => T::Balance;
 
@@ -352,10 +352,10 @@ decl_storage! {
 		///
 		/// `system::AccountNonce` is also deleted if `FreeBalance` is also zero (it also gets
 		/// collapsed to zero if it ever becomes less than `ExistentialDeposit`.)
-		pub ReservedBalance get(reserved_balance): map T::AccountId => T::Balance;
+		pub ReservedBalance get(fn reserved_balance): map T::AccountId => T::Balance;
 
 		/// Any liquidity locks on some account balances.
-		pub Locks get(locks): map T::AccountId => Vec<BalanceLock<T::Balance, T::BlockNumber>>;
+		pub Locks get(fn locks): map T::AccountId => Vec<BalanceLock<T::Balance, T::BlockNumber>>;
 	}
 	add_extra_genesis {
 		config(balances): Vec<(T::AccountId, T::Balance)>;

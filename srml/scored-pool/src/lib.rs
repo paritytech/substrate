@@ -154,20 +154,20 @@ decl_storage! {
 	trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as ScoredPool {
 		/// The current pool of candidates, stored as an ordered Vec
 		/// (ordered descending by score, `None` last, highest first).
-		Pool get(pool) config(): PoolT<T, I>;
+		Pool get(fn pool) config(): PoolT<T, I>;
 
 		/// A Map of the candidates. The information in this Map is redundant
 		/// to the information in the `Pool`. But the Map enables us to easily
 		/// check if a candidate is already in the pool, without having to
 		/// iterate over the entire pool (the `Pool` is not sorted by
 		/// `T::AccountId`, but by `T::Score` instead).
-		CandidateExists get(candidate_exists): map T::AccountId => bool;
+		CandidateExists get(fn candidate_exists): map T::AccountId => bool;
 
 		/// The current membership, stored as an ordered Vec.
-		Members get(members): Vec<T::AccountId>;
+		Members get(fn members): Vec<T::AccountId>;
 
 		/// Size of the `Members` set.
-		MemberCount get(member_count) config(): u32;
+		MemberCount get(fn member_count) config(): u32;
 	}
 	add_extra_genesis {
 		config(members): Vec<T::AccountId>;

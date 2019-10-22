@@ -138,26 +138,26 @@ decl_event!(
 decl_storage! {
 	trait Store for Module<T: Trait> as GrandpaFinality {
 		/// The current authority set.
-		Authorities get(authorities): Vec<(AuthorityId, AuthorityWeight)>;
+		Authorities get(fn authorities): Vec<(AuthorityId, AuthorityWeight)>;
 
 		/// State of the current authority set.
-		State get(state): StoredState<T::BlockNumber> = StoredState::Live;
+		State get(fn state): StoredState<T::BlockNumber> = StoredState::Live;
 
 		/// Pending change: (signaled at, scheduled change).
 		PendingChange: Option<StoredPendingChange<T::BlockNumber>>;
 
 		/// next block number where we can force a change.
-		NextForced get(next_forced): Option<T::BlockNumber>;
+		NextForced get(fn next_forced): Option<T::BlockNumber>;
 
 		/// `true` if we are currently stalled.
-		Stalled get(stalled): Option<(T::BlockNumber, T::BlockNumber)>;
+		Stalled get(fn stalled): Option<(T::BlockNumber, T::BlockNumber)>;
 
 		/// The number of changes (both in terms of keys and underlying economic responsibilities)
 		/// in the "set" of Grandpa validators from genesis.
-		CurrentSetId get(current_set_id) build(|_| fg_primitives::SetId::default()): SetId;
+		CurrentSetId get(fn current_set_id) build(|_| fg_primitives::SetId::default()): SetId;
 
 		/// A mapping from grandpa set ID to the index of the *most recent* session for which its members were responsible.
-		SetIdSession get(session_for_set): map SetId => Option<SessionIndex>;
+		SetIdSession get(fn session_for_set): map SetId => Option<SessionIndex>;
 	}
 	add_extra_genesis {
 		config(authorities): Vec<(AuthorityId, AuthorityWeight)>;

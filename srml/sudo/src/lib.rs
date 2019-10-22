@@ -200,6 +200,6 @@ decl_event!(
 decl_storage! {
 	trait Store for Module<T: Trait> as Sudo {
 		/// The `AccountId` of the sudo key.
-		Key get(key) config(): T::AccountId;
+		Key get(fn key) config(): T::AccountId;
 	}
 }
