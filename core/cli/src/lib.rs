@@ -803,7 +803,7 @@ where
 	G: RuntimeGenesis,
 	E: ChainSpecExtension,
 {
-	if spec.boot_nodes().is_empty() {
+	if spec.boot_nodes().is_empty() && !cli.disable_default_bootnode {
 		let base_path = base_path(&cli.shared_params, version);
 		let storage_path = network_path(&base_path, spec.id());
 		let node_key = node_key_config(cli.node_key_params, &Some(storage_path))?;

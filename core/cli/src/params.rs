@@ -614,6 +614,13 @@ pub struct BuildSpecCmd {
 	#[structopt(long = "raw")]
 	pub raw: bool,
 
+	/// Disable adding the default bootnode to the specification.
+	///
+	/// By default the `/ip4/127.0.0.1/tcp/30333/p2p/NODE_PEER_ID` bootnode is added to the
+	/// specification when no bootnode exists.
+	#[structopt(long = "disable-default-bootnode")]
+	pub disable_default_bootnode: bool,
+
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
@@ -763,7 +770,7 @@ impl<CC, RP> StructOpt for CoreParams<CC, RP> where
 			)
 		).subcommand(
 			BuildSpecCmd::augment_clap(SubCommand::with_name("build-spec"))
-				.about("Build a spec.json file, outputing to stdout.")
+				.about("Build a spec.json file, outputting to stdout.")
 		)
 		.subcommand(
 			ExportBlocksCmd::augment_clap(SubCommand::with_name("export-blocks"))
