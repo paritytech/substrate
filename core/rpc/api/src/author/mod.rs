@@ -86,9 +86,9 @@ pub trait AuthorApi<Hash, BlockHash> {
 
 	/// Watch multiple extrinsics (own or from network)
 	#[pubsub(
-		subscription = "author_multiExtrinsicUpdate",
+		subscription = "author_extrinsicTrack",
 		subscribe,
-		name = "author_watchExtrinsics"
+		name = "author_trackExtrinsic"
 	)]
 	fn track_extrinsic(&self,
     	metadata: Self::Metadata,
@@ -98,10 +98,9 @@ pub trait AuthorApi<Hash, BlockHash> {
 
 	/// Unsubscribe from multiple extrinsics watching.
 	#[pubsub(
-		subscription = "author_multiExtrinsicUpdate",
+		subscription = "author_extrinsicTrack",
 		unsubscribe,
-		name = "author_unwatchExtrinsics"
+		name = "author_untrackExtrinsic"
 	)]
 	fn untrack_extrinsic(&self, metadata: Option<Self::Metadata>, id: SubscriptionId) -> Result<bool>;
-
 }
