@@ -165,6 +165,13 @@ impl<B: ChainApi> Pool<B> {
 		)
 	}
 
+	pub fn watch(
+		&self,
+		xt_hash: ExHash<B>,
+	) -> Watcher<ExHash<B>, BlockHash<B>> {
+		self.validated_pool.watch(xt_hash)
+	}
+
 	/// Prunes ready transactions.
 	///
 	/// Used to clear the pool from transactions that were part of recently imported block.
@@ -782,7 +789,6 @@ mod tests {
 
 			// when
 			pool.validated_pool.remove_invalid(&[*watcher.hash()]);
-
 
 			// then
 			let mut stream = futures::executor::block_on_stream(watcher.into_stream());
