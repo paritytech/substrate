@@ -30,7 +30,7 @@ use wasm_interface::{FunctionContext, Pointer, Result};
 
 use codec::{Encode, Decode};
 
-use rstd::{any::TypeId, mem};
+use rstd::{any::TypeId, mem, vec::Vec, boxed::Box};
 
 #[cfg(feature = "std")]
 use rstd::borrow::Cow;

@@ -18,6 +18,8 @@
 
 use crate::{RuntimePublic, KeyTypeId};
 
+use rstd::vec::Vec;
+
 pub use primitives::sr25519::*;
 
 mod app {
@@ -25,8 +27,7 @@ mod app {
 	crate::app_crypto!(super, SR25519);
 }
 
-pub use app::Public as AppPublic;
-pub use app::Signature as AppSignature;
+pub use app::{Public as AppPublic, Signature as AppSignature};
 #[cfg(feature="std")]
 pub use app::Pair as AppPair;
 

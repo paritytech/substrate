@@ -34,8 +34,6 @@ std = [
 	"runtime-interface/std",
 	"externalities",
 ]
-nightly = []
-strict = []
 
 # These two features are used for `no_std` builds for the environments which already provides
 # `#[panic_handler]` and `#[alloc_error_handler]`.

@@ -72,6 +72,13 @@ pub trait TestApi {
 	}
 }
 
+/// This function is not used, but we require it for the compiler to include `runtime-io`.
+/// `runtime-io` is required for its panic and oom handler.
+#[no_mangle]
+pub fn import_runtime_io() {
+	runtime_io::misc::print_utf8(&[]);
+}
+
 #[no_mangle]
 pub fn test_return_data() {
 	let input = vec![1, 2, 3, 4, 5, 6];

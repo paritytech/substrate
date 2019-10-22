@@ -220,7 +220,7 @@ macro_rules! app_crypto {
 				<$public as $crate::RuntimePublic>::all($key_type).into_iter().map(Self).collect()
 			}
 
-			fn generate_pair(seed: Option<Vec<u8>>) -> Self {
+			fn generate_pair(seed: Option<$crate::Vec<u8>>) -> Self {
 				Self(<$public as $crate::RuntimePublic>::generate_pair($key_type, seed))
 			}
 

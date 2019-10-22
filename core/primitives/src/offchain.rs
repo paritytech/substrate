@@ -17,7 +17,7 @@
 //! Offchain workers types
 
 use codec::{Encode, Decode};
-use rstd::prelude::{Vec, Box};
+use rstd::{convert::TryFrom, prelude::{Vec, Box}};
 use runtime_interface::pass_by::{PassByCodec, PassByInner};
 
 pub use crate::crypto::KeyTypeId;
@@ -39,6 +39,24 @@ pub enum StorageKind {
 	/// if that block is reverted as non-canonical and is NOT available for the worker
 	/// that is re-run at block `N(hash2)`.
 	LOCAL = 2,
+}
+
+impl TryFrom<u32> for StorageKind {
+	type Error = ();
+
+	fn try_from(kind: u32) -> Result<Self, Self::Error> {
+		match kind {
+			e if e == u32::from(StorageKind::PERSISTENT as u8) => Ok(StorageKind::PERSISTENT),
+			e if e == u32::from(StorageKind::LOCAL as u8) => Ok(StorageKind::LOCAL),
+			_ => Err(()),
+		}
+	}
+}
+
+impl From<StorageKind> for u32 {
+	fn from(c: StorageKind) -> Self {
+		c as u8 as u32
+	}
 }
 
 /// Opaque type for offchain http requests.
@@ -65,6 +83,25 @@ pub enum HttpError {
 	Invalid = 3,
 }
 
+impl TryFrom<u32> for HttpError {
+	type Error = ();
+
+	fn try_from(error: u32) -> Result<Self, Self::Error> {
+		match error {
+			e if e == HttpError::DeadlineReached as u8 as u32 => Ok(HttpError::DeadlineReached),
+			e if e == HttpError::IoError as u8 as u32 => Ok(HttpError::IoError),
+			e if e == HttpError::Invalid as u8 as u32 => Ok(HttpError::Invalid),
+			_ => Err(())
+		}
+	}
+}
+
+impl From<HttpError> for u32 {
+	fn from(c: HttpError) -> Self {
+		c as u8 as u32
+	}
+}
+
 /// Status of the HTTP request
 #[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, PassByCodec)]
 #[cfg_attr(feature = "std", derive(Debug))]
@@ -84,6 +121,31 @@ pub enum HttpRequestStatus {
 	Invalid,
 	/// The request has finished with given status code.
 	Finished(u16),
+}
+
+impl From<HttpRequestStatus> for u32 {
+	fn from(status: HttpRequestStatus) -> Self {
+		match status {
+			HttpRequestStatus::Invalid => 0,
+			HttpRequestStatus::DeadlineReached => 10,
+			HttpRequestStatus::IoError => 20,
+			HttpRequestStatus::Finished(code) => u32::from(code),
+		}
+	}
+}
+
+impl TryFrom<u32> for HttpRequestStatus {
+	type Error = ();
+
+	fn try_from(status: u32) -> Result<Self, Self::Error> {
+		match status {
+			0 => Ok(HttpRequestStatus::Invalid),
+			10 => Ok(HttpRequestStatus::DeadlineReached),
+			20 => Ok(HttpRequestStatus::IoError),
+			100..=999 => u16::try_from(status).map(HttpRequestStatus::Finished).map_err(|_| ()),
+			_ => Err(()),
+		}
+	}
 }
 
 /// A blob to hold information about the local node's network state

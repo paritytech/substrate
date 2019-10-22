@@ -5389,6 +5389,7 @@ dependencies = [
 name = "substrate-runtime-interface-test-wasm"
 version = "2.0.0"
 dependencies = [
+ "sr-io 2.0.0",
  "sr-std 2.0.0",
  "substrate-primitives 2.0.0",
  "substrate-runtime-interface 2.0.0",

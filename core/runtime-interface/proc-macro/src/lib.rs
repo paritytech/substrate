@@ -52,8 +52,10 @@ fn runtime_interface_impl(trait_def: ItemTrait) -> Result<TokenStream> {
 	let trait_decl_impl = trait_decl_impl::process(&trait_def)?;
 	let host_functions = host_function_interface::generate(&trait_def)?;
 	let vis = trait_def.vis;
+	let attrs = &trait_def.attrs;
 
 	let res = quote! {
+		#( #attrs )*
 		#vis mod #mod_name {
 			use super::*;
 			#crate_include

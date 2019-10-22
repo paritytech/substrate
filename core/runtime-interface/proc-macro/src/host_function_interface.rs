@@ -58,7 +58,7 @@ pub fn generate(trait_def: &ItemTrait) -> Result<TokenStream> {
 			/// is required to change the extern host functions signature to
 			/// `unsafe fn name(args) -> ret` to make the function implementations exchangeable.
 			#[cfg(not(feature = "std"))]
-			pub mod extern_host_function_impls {
+			mod extern_host_function_impls {
 				use super::*;
 
 				#extern_host_function_impls
@@ -86,7 +86,7 @@ fn generate_extern_host_function(method: &TraitItemMethod, trait_name: &Ident) -
 		ReturnType::Default => quote!(),
 		ReturnType::Type(_, ref ty) => quote! {
 			-> <#ty as #crate_::RIType>::FFIType
-		}
+		},
 	};
 
 	Ok(
@@ -95,6 +95,7 @@ fn generate_extern_host_function(method: &TraitItemMethod, trait_name: &Ident) -
 			pub unsafe fn #function (
 				#( #arg_names: <#arg_types as #crate_::RIType>::FFIType ),*
 			) #output {
+				/// Contains the actual extern function.
 				mod implementation {
 					use super::*;
 

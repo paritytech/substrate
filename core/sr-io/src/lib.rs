@@ -28,21 +28,29 @@
 
 use rstd::vec::Vec;
 
+#[cfg(feature = "std")]
+use rstd::ops::Deref;
+
+#[cfg(feature = "std")]
 use primitives::{
-	crypto::{KeyTypeId, Pair}, ed25519, sr25519, H256, hexdisplay::HexDisplay,
-	offchain::{
-		Timestamp, HttpRequestId, HttpRequestStatus, HttpError, StorageKind, OpaqueNetworkState,
-		OffchainExt,
-	},
-	storage::ChildStorageKey, traits::KeystoreExt,
+	crypto::Pair, traits::KeystoreExt, offchain::OffchainExt, hexdisplay::HexDisplay,
 };
 
+use primitives::{
+	crypto::KeyTypeId, ed25519, sr25519, H256, storage::ChildStorageKey,
+	offchain::{
+		Timestamp, HttpRequestId, HttpRequestStatus, HttpError, StorageKind, OpaqueNetworkState,
+	},
+};
+
+#[cfg(feature = "std")]
 use trie::{TrieConfiguration, trie_types::Layout};
 
 use runtime_interface::runtime_interface;
 
 use codec::{Encode, Decode};
 
+#[cfg(feature = "std")]
 use externalities::ExternalitiesExt;
 
 /// Error verifying ECDSA signature
@@ -460,7 +468,7 @@ pub trait Offchain {
 	) -> bool {
 		self.extension::<OffchainExt>()
 			.expect("random_seed can be called only in the offchain worker context")
-			.local_storage_compare_and_set(kind, key, old_value.as_deref(), new_value)
+			.local_storage_compare_and_set(kind, key, old_value.as_ref().map(|v| v.deref()), new_value)
 	}
 
 	/// Gets a value from the local storage.
@@ -579,8 +587,6 @@ mod imp {
 
 #[cfg(feature = "std")]
 pub use self::imp::{StorageOverlay, ChildrenStorageOverlay, with_storage};
-#[cfg(not(feature = "std"))]
-pub use self::imp::ext::*;
 
 /// Type alias for Externalities implementation used in tests.
 #[cfg(feature = "std")]

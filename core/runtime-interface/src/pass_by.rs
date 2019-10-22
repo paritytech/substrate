@@ -27,7 +27,7 @@ use crate::wasm::*;
 #[cfg(feature = "std")]
 use wasm_interface::{FunctionContext, Pointer, Result};
 
-use rstd::marker::PhantomData;
+use rstd::{marker::PhantomData, vec::Vec};
 
 #[cfg(not(feature = "std"))]
 use rstd::slice;

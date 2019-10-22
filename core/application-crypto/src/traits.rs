@@ -18,6 +18,7 @@ use primitives::crypto::{KeyTypeId, CryptoType, IsWrappedBy, Public};
 #[cfg(feature = "std")]
 use primitives::crypto::Pair;
 use codec::Codec;
+use rstd::vec::Vec;
 
 /// An application-specific key.
 pub trait AppKey: 'static + Send + Sync + Sized + CryptoType + Clone {

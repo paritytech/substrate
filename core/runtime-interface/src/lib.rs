@@ -24,6 +24,8 @@
 //! [`WrappedFFIValue`] to call into the host. The created [`WrappedFFIValue`] will remain on
 //! the stack while we call into the host.
 
+#![cfg_attr(not(feature = "std"), no_std)]
+
 #[doc(hidden)]
 #[cfg(feature = "std")]
 pub use wasm_interface;
