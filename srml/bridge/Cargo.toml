@@ -17,7 +17,6 @@ system = { package = "srml-system", path = "../system", default-features = false
 trie = { package = "substrate-trie", path = "../../core/trie", default-features = false }
 
 [dev-dependencies]
-externalities = { package = "substrate-externalities", path = "../../core/externalities" }
 primitives = { package = "substrate-primitives",  path = "../../core/primitives" }
 runtime-io = { package = "sr-io", path = "../../core/sr-io", default-features = false }
 state-machine = { package = "substrate-state-machine",  path = "../../core/state-machine" }
