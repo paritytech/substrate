@@ -227,7 +227,7 @@ impl Store {
 			if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
 				match hex::decode(name) {
 					Ok(ref hex) => {
-						if &hex[0..4] != &key_type.0 { continue	}
+						if hex[0..4] != key_type.0 { continue	}
 						let public = TPublic::from_slice(&hex[4..]);
 						public_keys.push(public);
 					}

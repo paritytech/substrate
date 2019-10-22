@@ -37,7 +37,7 @@ impl<'a> PiecewiseLinear<'a> {
 	{
 		let n = n.min(d.clone());
 
-		if self.points.len() == 0 {
+		if self.points.is_empty() {
 			return N::zero()
 		}
 
@@ -91,7 +91,7 @@ fn multiply_by_rational_saturating<N>(value: N, p: u32, q: u32) -> N
 		let rem_u32 = rem.saturated_into::<u32>();
 
 		// Multiplication fits into u64 as both term are u32
-		let rem_part = rem_u32 as u64 * p as u64 / q as u64;
+		let rem_part = u64::from(rem_u32) * u64::from(p) / u64::from(q);
 
 		// Can saturate if p > q
 		rem_part.saturated_into::<N>()

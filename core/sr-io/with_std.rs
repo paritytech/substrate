@@ -147,7 +147,7 @@ impl StorageApi for () {
 	fn storage_root() -> [u8; 32] {
 		with_externalities(|ext|
 			ext.storage_root()
-		).unwrap_or(H256::zero()).into()
+		).unwrap_or_else(H256::zero).into()
 	}
 
 	fn child_storage_root(storage_key: &[u8]) -> Vec<u8> {

@@ -119,7 +119,7 @@ impl Decode for Era {
 		if first == 0 {
 			Ok(Era::Immortal)
 		} else {
-			let encoded = first as u64 + ((input.read_byte()? as u64) << 8);
+			let encoded = u64::from(first) + (u64::from(input.read_byte()?) << 8);
 			let period = 2 << (encoded % (1 << 4));
 			let quantize_factor = (period >> 12).max(1);
 			let phase = (encoded >> 4) * quantize_factor;

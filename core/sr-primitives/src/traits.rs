@@ -357,6 +357,9 @@ pub trait Hash: 'static + MaybeSerializeDeserialize + Debug + Clone + Eq + Parti
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct BlakeTwo256;
 
+// Search for Note [clippy::derive_hash_xor_eq] for an explanation of the line
+// below.
+#[allow(clippy::derive_hash_xor_eq)]
 impl Hash for BlakeTwo256 {
 	type Output = primitives::H256;
 	type Hasher = Blake2Hasher;
@@ -768,6 +771,7 @@ pub trait ModuleDispatchError {
 }
 
 #[impl_for_tuples(1, 12)]
+#[allow(clippy::type_complexity)]
 impl<AccountId, Call> SignedExtension for Tuple {
 	for_tuples!( where #( Tuple: SignedExtension<AccountId=AccountId, Call=Call> )* );
 	type AccountId = AccountId;
@@ -899,7 +903,7 @@ pub trait ProvideRuntimeApi {
 	/// call to an api function, will `commit` its changes to an internal buffer. Otherwise,
 	/// the modifications will be `discarded`. The modifications will not be applied to the
 	/// storage, even on a `commit`.
-	fn runtime_api<'a>(&'a self) -> ApiRef<'a, Self::Api>;
+	fn runtime_api(&self) -> ApiRef<Self::Api>;
 }
 
 /// A marker trait for something that knows the type of the runtime block.
@@ -1015,7 +1019,7 @@ impl<T: Encode + Decode + Default, Id: Encode + Decode + TypeId> AccountIdConver
 
 	fn try_from_sub_account<S: Decode>(x: &T) -> Option<(Self, S)> {
 		x.using_encoded(|d| {
-			if &d[0..4] != Id::TYPE_ID { return None }
+			if d[0..4] != Id::TYPE_ID { return None }
 			let mut cursor = &d[4..];
 			let result = Decode::decode(&mut cursor).ok()?;
 			if cursor.iter().all(|x| *x == 0) {

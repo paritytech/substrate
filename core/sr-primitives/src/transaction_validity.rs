@@ -56,7 +56,7 @@ pub enum InvalidTransaction {
 
 impl InvalidTransaction {
 	/// Returns if the reason for the invalidity was block resource exhaustion.
-	pub fn exhausted_resources(&self) -> bool {
+	pub fn exhausted_resources(self) -> bool {
 		match self {
 			Self::ExhaustsResources => true,
 			_ => false,
@@ -117,7 +117,7 @@ pub enum TransactionValidityError {
 
 impl TransactionValidityError {
 	/// Returns `true` if the reason for the error was block resource exhaustion.
-	pub fn exhausted_resources(&self) -> bool {
+	pub fn exhausted_resources(self) -> bool {
 		match self {
 			Self::Invalid(e) => e.exhausted_resources(),
 			Self::Unknown(_) => false,

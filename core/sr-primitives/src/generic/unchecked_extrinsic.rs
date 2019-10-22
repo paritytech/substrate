@@ -110,9 +110,10 @@ where
 			Some((signed, signature, extra)) => {
 				let signed = lookup.lookup(signed)?;
 				let raw_payload = SignedPayload::new(self.function, extra)?;
-				if !raw_payload.using_encoded(|payload| {
+				let cond = !raw_payload.using_encoded(|payload| {
 					signature.verify(payload, &signed)
-				}) {
+				});
+				if cond {
 					return Err(InvalidTransaction::BadProof.into())
 				}
 

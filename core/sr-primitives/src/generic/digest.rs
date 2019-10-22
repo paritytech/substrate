@@ -175,7 +175,7 @@ pub enum OpaqueDigestItemId<'a> {
 
 impl<Hash> DigestItem<Hash> {
 	/// Returns a 'referencing view' for this digest item.
-	pub fn dref<'a>(&'a self) -> DigestItemRef<'a, Hash> {
+	pub fn dref(&self) -> DigestItemRef<Hash> {
 		match *self {
 			DigestItem::ChangesTrieRoot(ref v) => DigestItemRef::ChangesTrieRoot(v),
 			DigestItem::PreRuntime(ref v, ref s) => DigestItemRef::PreRuntime(v, s),

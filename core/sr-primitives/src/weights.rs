@@ -73,7 +73,7 @@ pub struct DispatchInfo {
 
 impl DispatchInfo {
 	/// Determine if this dispatch should pay the base length-related fee or not.
-	pub fn pay_length_fee(&self) -> bool {
+	pub fn pay_length_fee(self) -> bool {
 		match self.class {
 			DispatchClass::Normal => true,
 			// For now we assume all operational transactions don't pay the length fee.
