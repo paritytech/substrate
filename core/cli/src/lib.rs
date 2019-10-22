@@ -675,13 +675,6 @@ where
 	config.database_path = db_path(&base_path, config.chain_spec.id());
 	config.database_cache_size = cli.database_cache_size;
 	config.state_cache_size = cli.state_cache_size;
-	config.pruning = match cli.pruning {
-		Some(ref s) if s == "archive" => PruningMode::ArchiveAll,
-		None => PruningMode::default(),
-		Some(s) => PruningMode::keep_blocks(s.parse()
-			.map_err(|_| error::Error::Input("Invalid pruning mode specified".to_string()))?
-		),
-	};
 
 	let is_dev = cli.shared_params.dev;
 
@@ -693,6 +686,28 @@ where
 		} else {
 			service::Roles::FULL
 		};
+
+	// by default we disable pruning if the node is an authority (i.e.
+	// `ArchiveAll`), otherwise we keep state for the last 256 blocks. if the
+	// node is an authority and pruning is enabled explicitly, then we error
+	// unless `unsafe_pruning` is set.
+	config.pruning = match cli.pruning {
+		Some(ref s) if s == "archive" => PruningMode::ArchiveAll,
+		None if role == service::Roles::AUTHORITY => PruningMode::ArchiveAll,
+		None => PruningMode::default(),
+		Some(s) => {
+			if role == service::Roles::AUTHORITY && !cli.unsafe_pruning {
+				return Err(error::Error::Input(
+					"Validators should run with state pruning disabled (i.e. archive). \
+					You can ignore this check with `--unsafe-pruning`.".to_string()
+				));
+			}
+
+			PruningMode::keep_blocks(s.parse()
+				.map_err(|_| error::Error::Input("Invalid pruning mode specified".to_string()))?
+			)
+		},
+	};
 
 	config.wasm_method = cli.wasm_method.into();
 
