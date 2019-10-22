@@ -432,16 +432,26 @@ pub fn set_default_ss58_version(version: Ss58AddressFormat) {
 #[cfg(feature = "std")]
 impl<T: Sized + AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
 	fn from_string(s: &str) -> Result<Self, PublicError> {
-		let re = Regex::new(r"^(?P<ss58>[\w\d]+)?(?P<path>(//?[^/]+)*)$")
+		let re = Regex::new(r"^(?P<ss58>[\w\d ]+)?(?P<path>(//?[^/]+)*)$")
 			.expect("constructed from known-good static value; qed");
 		let cap = re.captures(s).ok_or(PublicError::InvalidFormat)?;
 		let re_junction = Regex::new(r"/(/?[^/]+)")
 			.expect("constructed from known-good static value; qed");
-		let addr = Self::from_ss58check(
-			cap.name("ss58")
-				.map(|r| r.as_str())
-				.unwrap_or(DEV_ADDRESS)
-		)?;
+		let s = cap.name("ss58")
+			.map(|r| r.as_str())
+			.unwrap_or(DEV_ADDRESS);
+		let addr = if s.starts_with("0x") {
+			let d = hex::decode(&s[2..]).map_err(|_| PublicError::InvalidFormat)?;
+			let mut r = Self::default();
+			if d.len() == r.as_ref().len() {
+				r.as_mut().copy_from_slice(&d);
+				r
+			} else {
+				Err(PublicError::BadLength)?
+			}
+		} else {
+			Self::from_ss58check(s)?
+		};
 		if cap["path"].is_empty() {
 			Ok(addr)
 		} else {
@@ -453,7 +463,7 @@ impl<T: Sized + AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
 	}
 
 	fn from_string_with_version(s: &str) -> Result<(Self, Ss58AddressFormat), PublicError> {
-		let re = Regex::new(r"^(?P<ss58>[\w\d]+)?(?P<path>(//?[^/]+)*)$")
+		let re = Regex::new(r"^(?P<ss58>[\w\d ]+)?(?P<path>(//?[^/]+)*)$")
 			.expect("constructed from known-good static value; qed");
 		let cap = re.captures(s).ok_or(PublicError::InvalidFormat)?;
 		let re_junction = Regex::new(r"/(/?[^/]+)")
@@ -708,9 +718,21 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 	fn from_seed_slice(seed: &[u8]) -> Result<Self, SecretStringError>;
 
 	/// Construct a key from a phrase, password and path.
-	fn from_standard_components<
-		I: Iterator<Item=DeriveJunction>
-	>(phrase: &str, password: Option<&str>, path: I) -> Result<Self, SecretStringError>;
+	fn from_standard_components<I: Iterator<Item=DeriveJunction>>(
+		phrase: &str,
+		password: Option<&str>,
+		path: I
+	) -> Result<Self, SecretStringError> {
+		let seed = if phrase.starts_with("0x") && phrase.len() == 66 {
+			let seed = hex::decode(&phrase[2..66]).map_err(|_| SecretStringError::InvalidPhrase)?;
+			Self::from_seed_slice(&seed[..])
+				.map_err(|_| SecretStringError::InvalidPhrase)?
+		} else {
+			Self::from_phrase(phrase, password)?.0
+		};
+		seed.derive(path)
+			.map_err(|_| SecretStringError::InvalidPath)
+	}
 
 	/// Sign a message.
 	fn sign(&self, message: &[u8]) -> Self::Signature;
@@ -751,21 +773,10 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 	///
 	/// `None` is returned if no matches are found.
 	fn from_string(s: &str, password_override: Option<&str>) -> Result<Self, SecretStringError> {
-		let hex_seed = if s.starts_with("0x") {
-			&s[2..]
-		} else {
-			s
-		};
-
-		if let Ok(d) = hex::decode(hex_seed) {
-			if let Ok(r) = Self::from_seed_slice(&d) {
-				return Ok(r)
-			}
-		}
-
-		let re = Regex::new(r"^(?P<phrase>\w+( \w+)*)?(?P<path>(//?[^/]+)*)(///(?P<password>.*))?$")
+		let re = Regex::new(r"^(?P<phrase>[\d\w ]+)?(?P<path>(//?[^/]+)*)(///(?P<password>.*))?$")
 			.expect("constructed from known-good static value; qed");
 		let cap = re.captures(s).ok_or(SecretStringError::InvalidFormat)?;
+
 		let re_junction = Regex::new(r"/(/?[^/]+)")
 			.expect("constructed from known-good static value; qed");
 		let path = re_junction.captures_iter(&cap["path"])

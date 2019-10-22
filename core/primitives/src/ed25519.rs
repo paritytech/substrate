@@ -407,17 +407,6 @@ impl TraitPair for Pair {
 		Ok(Self::from_seed(&acc))
 	}
 
-	/// Generate a key from the phrase, password and derivation path.
-	fn from_standard_components<I: Iterator<Item=DeriveJunction>>(
-		phrase: &str,
-		password: Option<&str>,
-		path: I
-	) -> Result<Pair, SecretStringError> {
-		Self::from_phrase(phrase, password)?.0
-			.derive(path)
-			.map_err(|_| SecretStringError::InvalidPath)
-	}
-
 	/// Get the public key.
 	fn public(&self) -> Public {
 		let mut r = [0u8; 32];

@@ -414,17 +414,6 @@ impl TraitPair for Pair {
 		Ok(Self::from_seed(&acc))
 	}
 
-	/// Generate a key from the phrase, password and derivation path.
-	fn from_standard_components<I: Iterator<Item=DeriveJunction>>(
-		phrase: &str,
-		password: Option<&str>,
-		path: I
-	) -> Result<Pair, SecretStringError> {
-		Self::from_phrase(phrase, password)?.0
-			.derive(path)
-			.map_err(|_| SecretStringError::InvalidPath)
-	}
-
 	/// Get the public key.
 	fn public(&self) -> Public {
 		Public(self.public.serialize_compressed())
@@ -524,7 +513,7 @@ mod test {
 		let derived = pair.derive(path.into_iter()).ok().unwrap();
 		assert_eq!(
 			derived.seed(),
-			hex!("ede3354e133f9c8e337ddd6ee5415ed4b4ffe5fc7d21e933f4930a3730e5b21c")
+			hex!("b8eefc4937200a8382d00050e050ced2d4ab72cc2ef1b061477afb51564fdd61")
 		);
 	}
 
@@ -535,10 +524,10 @@ mod test {
 		);
 		let public = pair.public();
 		assert_eq!(public, Public::from_raw(
-			hex!("d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a00")
+			hex!("028db55b05db86c0b1786ca49f095d76344c9e6056b2f02701a7e7f3c20aabfd91")
 		));
 		let message = b"";
-		let signature = hex!("e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b00");
+		let signature = hex!("3dde91174bd9359027be59a428b8146513df80a2a3c7eda2194f64de04a69ab97b753169e94db6ffd50921a2668a48b94ca11e3d32c1ff19cfe88890aa7e8f3c00");
 		let signature = Signature::from_raw(signature);
 		assert!(&pair.sign(&message[..]) == &signature);
 		assert!(Pair::verify(&signature, &message[..], &public));
@@ -552,10 +541,10 @@ mod test {
 		).unwrap();
 		let public = pair.public();
 		assert_eq!(public, Public::from_raw(
-			hex!("d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a00")
+			hex!("028db55b05db86c0b1786ca49f095d76344c9e6056b2f02701a7e7f3c20aabfd91")
 		));
 		let message = b"";
-		let signature = hex!("e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b00");
+		let signature = hex!("3dde91174bd9359027be59a428b8146513df80a2a3c7eda2194f64de04a69ab97b753169e94db6ffd50921a2668a48b94ca11e3d32c1ff19cfe88890aa7e8f3c00");
 		let signature = Signature::from_raw(signature);
 		assert!(&pair.sign(&message[..]) == &signature);
 		assert!(Pair::verify(&signature, &message[..], &public));
@@ -576,7 +565,7 @@ mod test {
 		let pair = Pair::from_seed(b"12345678901234567890123456789012");
 		let public = pair.public();
 		assert_eq!(public, Public::from_raw(
-			hex!("2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee00")
+			hex!("035676109c54b9a16d271abeb4954316a40a32bcce023ac14c8e26e958aa68fba9")
 		));
 		let message = hex!("2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee00000000000000000200d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a4500000000000000");
 		let signature = pair.sign(&message[..]);
