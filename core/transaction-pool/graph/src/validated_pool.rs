@@ -182,6 +182,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 		}
 	}
 
+	/// Watch some existing transaction with known hash.
 	pub fn watch(&self, hash: ExHash<B>) -> Watcher<ExHash<B>, BlockHash<B>> {
 		self.listener.write().create_watcher(hash)
 	}

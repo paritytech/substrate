@@ -165,6 +165,10 @@ impl<B: ChainApi> Pool<B> {
 		)
 	}
 
+	/// Watch existing transaction
+	///
+	/// Get notified when some existing transaction is finished verifying or gets finalized
+	/// in a new block.
 	pub fn watch(
 		&self,
 		hash: ExHash<B>,

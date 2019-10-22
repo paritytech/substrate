@@ -88,7 +88,7 @@ pub trait AuthorApi<Hash, BlockHash> {
 	#[pubsub(
 		subscription = "author_extrinsicTrack",
 		subscribe,
-		name = "author_trackExtrinsic"
+		name = "author_watchExtrinsic"
 	)]
 	fn track_extrinsic(&self,
     	metadata: Self::Metadata,
@@ -100,7 +100,7 @@ pub trait AuthorApi<Hash, BlockHash> {
 	#[pubsub(
 		subscription = "author_extrinsicTrack",
 		unsubscribe,
-		name = "author_untrackExtrinsic"
+		name = "author_unwatchExtrinsic"
 	)]
 	fn untrack_extrinsic(&self, metadata: Option<Self::Metadata>, id: SubscriptionId) -> Result<bool>;
 }
