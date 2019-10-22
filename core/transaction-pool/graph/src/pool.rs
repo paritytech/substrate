@@ -168,7 +168,7 @@ impl<B: ChainApi> Pool<B> {
 		let validated_pool = self.validated_pool.clone();
 		Either::Right(
 			self.verify_one(at, block_number, xt, false)
-				.map(move |validated_transactions| validated_pool.submit_and_watch(validated_transactions))
+				.map(move |validated_transactions| validated_pool.submit_and_watch(validated_transactions.1))
 		)
 	}
 
@@ -360,11 +360,9 @@ impl<B: ChainApi> Pool<B> {
 		};
 
 		// for each xt, prepare a validation future
-		let validation_futures = xts.into_iter().map(move |xt| {
-			let hash = self.validated_pool.api().hash_and_length(&xt).0;
+		let validation_futures = xts.into_iter().map(move |xt|
 			self.verify_one(at, block_number, xt, force)
-				.map(|v| (hash, v))
-		});
+		);
 
 		// make single validation future that waits all until all extrinsics are validated
 		Either::Right(join_all(validation_futures).then(|x| ready(Ok(x.into_iter().collect()))))
@@ -377,14 +375,14 @@ impl<B: ChainApi> Pool<B> {
 		block_number: NumberFor<B>,
 		xt: ExtrinsicFor<B>,
 		force: bool,
-	) -> impl Future<Output=ValidatedTransactionFor<B>> {
+	) -> impl Future<Output=(ExHash<B>, ValidatedTransactionFor<B>)> {
 		let (hash, bytes) = self.validated_pool.api().hash_and_length(&xt);
 		if !force && self.validated_pool.is_banned(&hash) {
-			return Either::Left(ready(ValidatedTransaction::Invalid(error::Error::TemporarilyBanned.into())))
+			return Either::Left(ready((hash, ValidatedTransaction::Invalid(error::Error::TemporarilyBanned.into()))))
 		}
 
 		Either::Right(self.validated_pool.api().validate_transaction(block_id, xt.clone())
-			.then(move |validation_result| ready(match validation_result {
+			.then(move |validation_result| ready((hash.clone(), match validation_result {
 				Ok(validity) => match validity {
 					Ok(validity) => if validity.provides.is_empty() {
 						ValidatedTransaction::Invalid(error::Error::NoTagsProvided.into())
@@ -408,7 +406,7 @@ impl<B: ChainApi> Pool<B> {
 						ValidatedTransaction::Unknown(hash, error::Error::UnknownTransaction(e).into()),
 				},
 				Err(e) => ValidatedTransaction::Invalid(e),
-			})))
+			}))))
 	}
 }
 
