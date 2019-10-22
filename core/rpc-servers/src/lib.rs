@@ -16,7 +16,7 @@
 
 //! Substrate RPC servers.
 
-#[warn(missing_docs)]
+#![warn(missing_docs)]
 
 use std::io;
 use jsonrpc_core::IoHandlerExtension;

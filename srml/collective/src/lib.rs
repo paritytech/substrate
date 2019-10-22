@@ -25,6 +25,7 @@
 
 use rstd::{prelude::*, result};
 use primitives::u32_trait::Value as U32;
+use sr_primitives::RuntimeDebug;
 use sr_primitives::traits::{Hash, EnsureOrigin};
 use sr_primitives::weights::SimpleDispatchInfo;
 use support::{
@@ -55,8 +56,7 @@ pub trait Trait<I=DefaultInstance>: system::Trait {
 }
 
 /// Origin for the collective module.
-#[derive(PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(PartialEq, Eq, Clone, RuntimeDebug)]
 pub enum RawOrigin<AccountId, I> {
 	/// It has been condoned by a given number of members of the collective from a given total.
 	Members(MemberCount, MemberCount),
@@ -69,8 +69,7 @@ pub enum RawOrigin<AccountId, I> {
 /// Origin for the collective module.
 pub type Origin<T, I=DefaultInstance> = RawOrigin<<T as system::Trait>::AccountId, I>;
 
-#[derive(PartialEq, Eq, Clone, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 /// Info for keeping track of a motion being voted on.
 pub struct Votes<AccountId> {
 	/// The proposal's unique index.
@@ -86,15 +85,15 @@ pub struct Votes<AccountId> {
 decl_storage! {
 	trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Collective {
 		/// The hashes of the active proposals.
-		pub Proposals get(proposals): Vec<T::Hash>;
+		pub Proposals get(fn proposals): Vec<T::Hash>;
 		/// Actual proposal for a given hash, if it's current.
-		pub ProposalOf get(proposal_of): map T::Hash => Option<<T as Trait<I>>::Proposal>;
+		pub ProposalOf get(fn proposal_of): map T::Hash => Option<<T as Trait<I>>::Proposal>;
 		/// Votes on a given proposal, if it is ongoing.
-		pub Voting get(voting): map T::Hash => Option<Votes<T::AccountId>>;
+		pub Voting get(fn voting): map T::Hash => Option<Votes<T::AccountId>>;
 		/// Proposals so far.
-		pub ProposalCount get(proposal_count): u32;
+		pub ProposalCount get(fn proposal_count): u32;
 		/// The current members of the collective. This is stored sorted (just by value).
-		pub Members get(members): Vec<T::AccountId>;
+		pub Members get(fn members): Vec<T::AccountId>;
 	}
 	add_extra_genesis {
 		config(phantom): rstd::marker::PhantomData<I>;

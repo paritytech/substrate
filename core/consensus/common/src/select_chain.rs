@@ -42,8 +42,9 @@ pub trait SelectChain<Block: BlockT>: Sync + Send + Clone {
 	/// best chain to author new blocks upon and probably finalize.
 	fn best_chain(&self) -> Result<<Block as BlockT>::Header, Error>;
 
-	/// Get the best ancestor of `target_hash` that we should attempt
-	/// to finalize next.
+	/// Get the best descendent of `target_hash` that we should attempt to
+	/// finalize next, if any. It is valid to return the given `target_hash`
+	/// itself if no better descendent exists.
 	fn finality_target(
 		&self,
 		target_hash: <Block as BlockT>::Hash,

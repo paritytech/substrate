@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-#[cfg(feature = "nightly")]
 #[doc(hidden)]
 pub extern crate alloc;
 
@@ -54,6 +53,7 @@ pub use core::clone;
 pub use core::cmp;
 pub use core::convert;
 pub use core::default;
+pub use core::fmt;
 pub use core::hash;
 pub use core::intrinsics;
 pub use core::iter;

@@ -26,9 +26,9 @@
 /// Can be used to create a `HashMap`.
 #[macro_export]
 macro_rules! map {
-	($( $name:expr => $value:expr ),*) => (
+	($( $name:expr => $value:expr ),* $(,)? ) => (
 		vec![ $( ( $name, $value ) ),* ].into_iter().collect()
-	)
+	);
 }
 
 use rstd::prelude::*;
@@ -41,6 +41,8 @@ use serde::{Serialize, Deserialize};
 pub use serde;// << for macro
 #[doc(hidden)]
 pub use codec::{Encode, Decode};// << for macro
+
+pub use substrate_debug_derive::RuntimeDebug;
 
 #[cfg(feature = "std")]
 pub use impl_serde::serialize as bytes;
@@ -116,8 +118,8 @@ impl ExecutionContext {
 }
 
 /// Hex-serialized shim for `Vec<u8>`.
-#[derive(PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug, Hash, PartialOrd, Ord))]
+#[derive(PartialEq, Eq, Clone, RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Hash, PartialOrd, Ord))]
 pub struct Bytes(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
 impl From<Vec<u8>> for Bytes {
@@ -162,8 +164,8 @@ pub enum NativeOrEncoded<R> {
 }
 
 #[cfg(feature = "std")]
-impl<R: codec::Encode> ::std::fmt::Debug for NativeOrEncoded<R> {
-	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+impl<R: codec::Encode> rstd::fmt::Debug for NativeOrEncoded<R> {
+	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
 		hexdisplay::HexDisplay::from(&self.as_encoded().as_ref()).fmt(f)
 	}
 }
@@ -228,4 +230,59 @@ impl codec::Decode for NeverNativeValue {
 pub trait TypeId {
 	/// Simple 4 byte identifier.
 	const TYPE_ID: [u8; 4];
+}
+
+/// A log level matching the one from `log` crate.
+///
+/// Used internally by `runtime_io::log` method.
+#[repr(u32)]
+pub enum LogLevel {
+	/// `Error` log level.
+	Error = 1,
+	/// `Warn` log level.
+	Warn = 2,
+	/// `Info` log level.
+	Info = 3,
+	/// `Debug` log level.
+	Debug = 4,
+	/// `Trace` log level.
+	Trace = 5,
+}
+
+impl From<u32> for LogLevel {
+	fn from(val: u32) -> Self {
+		match val {
+			x if x == LogLevel::Warn as u32 => LogLevel::Warn,
+			x if x == LogLevel::Info as u32 => LogLevel::Info,
+			x if x == LogLevel::Debug as u32 => LogLevel::Debug,
+			x if x == LogLevel::Trace as u32 => LogLevel::Trace,
+			_ => LogLevel::Error,
+		}
+	}
+}
+
+impl From<log::Level> for LogLevel {
+	fn from(l: log::Level) -> Self {
+		use log::Level::*;
+		match l {
+			Error => Self::Error,
+			Warn => Self::Warn,
+			Info => Self::Info,
+			Debug => Self::Debug,
+			Trace => Self::Trace,
+		}
+	}
+}
+
+impl From<LogLevel> for log::Level {
+	fn from(l: LogLevel) -> Self {
+		use self::LogLevel::*;
+		match l {
+			Error => Self::Error,
+			Warn => Self::Warn,
+			Info => Self::Info,
+			Debug => Self::Debug,
+			Trace => Self::Trace,
+		}
+	}
 }
