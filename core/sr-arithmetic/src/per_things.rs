@@ -20,14 +20,15 @@ use serde::{Serialize, Deserialize};
 use rstd::{ops, prelude::*, convert::TryInto};
 use codec::{Encode, Decode, CompactAs};
 use crate::traits::{SaturatedConversion, UniqueSaturatedInto, Saturating};
+use substrate_debug_derive::RuntimeDebug;
 
 macro_rules! implement_per_thing {
 	($name:ident, $test_mod:ident, [$($test_units:tt),+], $max:tt, $type:ty, $upper_type:ty, $title:expr $(,)?) => {
 		/// A fixed point representation of a number between in the range [0, 1].
 		///
 		#[doc = $title]
-		#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug, Ord, PartialOrd))]
-		#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq, CompactAs)]
+		#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Ord, PartialOrd))]
+		#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq, RuntimeDebug, CompactAs)]
 		pub struct $name($type);
 
 		impl $name {
@@ -189,7 +190,7 @@ macro_rules! implement_per_thing {
 		#[cfg(test)]
 		mod $test_mod {
 			use codec::{Encode, Decode};
-			use super::{$name, Saturating};
+			use super::{$name, Saturating, RuntimeDebug};
 			use crate::traits::Zero;
 
 
@@ -208,7 +209,7 @@ macro_rules! implement_per_thing {
 				assert!(<$upper_type>::from($max).checked_mul($max.into()).is_some());
 			}
 
-			#[derive(Encode, Decode, PartialEq, Eq, Debug)]
+			#[derive(Encode, Decode, PartialEq, Eq, RuntimeDebug)]
 			struct WithCompact<T: codec::HasCompact> {
 				data: T,
 			}
