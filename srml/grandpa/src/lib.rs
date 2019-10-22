@@ -207,7 +207,14 @@ decl_storage! {
 	}
 	add_extra_genesis {
 		config(authorities): Vec<(AuthorityId, AuthorityWeight)>;
-		build(|config| Module::<T>::initialize_authorities(&config.authorities))
+		build(|config| {
+			// NOTE: initialize first session of first set. this is necessary
+			// because we only update this `on_new_session` which isn't called
+			// for the genesis session.
+			SetIdSession::insert(0, 0);
+
+			Module::<T>::initialize_authorities(&config.authorities)
+		})
 	}
 }
 
