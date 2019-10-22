@@ -1049,71 +1049,6 @@ impl<T: Trait> Module<T> {
 		<Nominators<T>>::remove(stash);
 	}
 
-	/// Slash a given validator by a specific amount with given (historical) exposure.
-	///
-	/// Removes the slash from the validator's balance by preference,
-	/// and reduces the nominators' balance if needed.
-	///
-	/// Returns the resulting `NegativeImbalance` to allow distributing the slashed amount and
-	/// pushes an entry onto the slash journal.
-	fn slash_validator(
-		stash: &T::AccountId,
-		slash: BalanceOf<T>,
-		exposure: &Exposure<T::AccountId, BalanceOf<T>>,
-		journal: &mut Vec<SlashJournalEntry<T::AccountId, BalanceOf<T>>>,
-	) -> NegativeImbalanceOf<T> {
-		// TODO: move over to `slashing.rs` logic.
-
-		// The amount we are actually going to slash (can't be bigger than the validator's total
-		// exposure)
-		let slash = slash.min(exposure.total);
-
-		// limit what we'll slash of the stash's own to only what's in
-		// the exposure.
-		//
-		// note: this is fine only because we limit reports of the current era.
-		// otherwise, these funds may have already been slashed due to something
-		// reported from a prior era.
-		let already_slashed_own = journal.iter()
-			.filter(|entry| &entry.who == stash)
-			.map(|entry| entry.own_slash)
-			.fold(<BalanceOf<T>>::zero(), |a, c| a.saturating_add(c));
-
-		let own_remaining = exposure.own.saturating_sub(already_slashed_own);
-
-		// The amount we'll slash from the validator's stash directly.
-		let own_slash = own_remaining.min(slash);
-		let (mut imbalance, missing) = T::Currency::slash(stash, own_slash);
-		let own_slash = own_slash - missing;
-		// The amount remaining that we can't slash from the validator,
-		// that must be taken from the nominators.
-		let rest_slash = slash - own_slash;
-		if !rest_slash.is_zero() {
-			// The total to be slashed from the nominators.
-			let total = exposure.total - exposure.own;
-			if !total.is_zero() {
-				for i in exposure.others.iter() {
-					let per_u64 = Perbill::from_rational_approximation(i.value, total);
-					// best effort - not much that can be done on fail.
-					imbalance.subsume(T::Currency::slash(&i.who, per_u64 * rest_slash).0)
-				}
-			}
-		}
-
-		journal.push(SlashJournalEntry {
-			who: stash.clone(),
-			own_slash: own_slash.clone(),
-			amount: slash,
-		});
-
-		// trigger the event
-		Self::deposit_event(
-			RawEvent::Slash(stash.clone(), slash)
-		);
-
-		imbalance
-	}
-
 	/// Actually make a payment to a staker. This uses the currency's reward function
 	/// to pay the right payee for the given staker account.
 	fn make_payout(stash: &T::AccountId, amount: BalanceOf<T>) -> Option<PositiveImbalanceOf<T>> {
@@ -1508,13 +1443,20 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, session::historical::Identificati
 		offenders: &[OffenceDetails<T::AccountId, session::historical::IdentificationTuple<T>>],
 		slash_fraction: &[Perbill],
 	) {
-		let mut remaining_imbalance = <NegativeImbalanceOf<T>>::zero();
 		let slash_reward_fraction = SlashRewardFraction::get();
 
 		let era_now = Self::current_era();
+		let window_start = era_now.saturating_sub(T::BondingDuration::get());
+		let current_era_start_session = CurrentEraStartSessionIndex::get();
+		let mut bonded_eras = None;
+
 		for (details, slash_fraction) in offenders.iter().zip(slash_fraction) {
 			let stash = &details.offender.0;
 			let exposure = &details.offender.1;
+
+			// TODO
+			// let slash_session = unimplemented!();
+			let slash_session = current_era_start_session;
 
 			// Skip if the validator is invulnerable.
 			if Self::invulnerables().contains(stash) {
@@ -1524,42 +1466,51 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, session::historical::Identificati
 			// calculate the amount to slash
 			let slash_exposure = exposure.total;
 			let amount = *slash_fraction * slash_exposure;
+
 			// in some cases `slash_fraction` can be just `0`,
 			// which means we are not slashing this time.
 			if amount.is_zero() {
 				continue;
 			}
 
-			// make sure to disable validator till the end of this session
-			if T::SessionInterface::disable_validator(stash).unwrap_or(false) {
-				// force a new era, to select a new validator set
-				ForceEra::put(Forcing::ForceNew);
-			}
-			// actually slash the validator
-			let slashed_amount = Self::slash_validator(stash, amount, exposure, &mut Vec::new());
-
-			// distribute the rewards according to the slash
-			let slash_reward = slash_reward_fraction * slashed_amount.peek();
-			if !slash_reward.is_zero() && !details.reporters.is_empty() {
-				let (mut reward, rest) = slashed_amount.split(slash_reward);
-				// split the reward between reporters equally. Division cannot fail because
-				// we guarded against it in the enclosing if.
-				let per_reporter = reward.peek() / (details.reporters.len() as u32).into();
-				for reporter in &details.reporters {
-					let (reporter_reward, rest) = reward.split(per_reporter);
-					reward = rest;
-					T::Currency::resolve_creating(reporter, reporter_reward);
-				}
-				// The rest goes to the treasury.
-				remaining_imbalance.subsume(reward);
-				remaining_imbalance.subsume(rest);
+			let slash_era = if slash_session >= current_era_start_session {
+				era_now
 			} else {
-				remaining_imbalance.subsume(slashed_amount);
-			}
-		}
+				let eras = bonded_eras.get_or_insert_with(|| BondedEras::get()).iter().rev();
+				match eras.filter(|&&(_, ref sesh)| sesh <= &slash_session).next() {
+					None => continue, // before bonding period. defensive - should be filtered out.
+					Some(&(ref slash_era, _)) => *slash_era,
+				}
+			};
 
-		// Handle the rest of imbalances
-		T::Slash::on_unbalanced(remaining_imbalance);
+			slashing::slash::<T>(slashing::SlashParams {
+				stash,
+				slash: *slash_fraction,
+				exposure,
+				slash_era,
+				window_start,
+				now: era_now,
+			})
+
+			// TODO: remove when rewards are done again.
+			// let slash_reward = slash_reward_fraction * slashed_amount.peek();
+			// if !slash_reward.is_zero() && !details.reporters.is_empty() {
+			// 	let (mut reward, rest) = slashed_amount.split(slash_reward);
+			// 	// split the reward between reporters equally. Division cannot fail because
+			// 	// we guarded against it in the enclosing if.
+			// 	let per_reporter = reward.peek() / (details.reporters.len() as u32).into();
+			// 	for reporter in &details.reporters {
+			// 		let (reporter_reward, rest) = reward.split(per_reporter);
+			// 		reward = rest;
+			// 		T::Currency::resolve_creating(reporter, reporter_reward);
+			// 	}
+			// 	// The rest goes to the treasury.
+			// 	remaining_imbalance.subsume(reward);
+			// 	remaining_imbalance.subsume(rest);
+			// } else {
+			// 	remaining_imbalance.subsume(slashed_amount);
+			// }
+		}
 	}
 }
 

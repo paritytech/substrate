@@ -45,13 +45,13 @@
 //!
 //! Based on research at https://research.web3.foundation/en/latest/polkadot/slashing/npos/
 
-use super::{EraIndex, Trait, Module, Store, BalanceOf, Exposure, Perbill};
+use super::{EraIndex, Trait, Module, Store, BalanceOf, Exposure, Perbill, SessionInterface};
 use sr_primitives::traits::{Zero, Saturating};
-use support::{StorageValue, StorageMap, StorageDoubleMap, traits::Currency};
+use support::{StorageValue, StorageMap, StorageDoubleMap, traits::{Currency, OnUnbalanced}};
 use codec::{Encode, Decode};
 
 /// The index of a slashing span - unique to each stash.
-pub (crate) type SpanIndex = u32;
+pub(crate) type SpanIndex = u32;
 
 // A range of start..end eras for a slashing span.
 #[derive(Encode, Decode)]
@@ -203,10 +203,19 @@ pub(crate) fn slash<T: Trait>(params: SlashParams<T>){
 	);
 
 	if target_span == Some(spans.span_index()) {
+		// misbehavior occurred within the current slashing span - take appropriate
+		// actions.
+
 		// chill the validator - it misbehaved in the current span and should
 		// not continue in the next election. also end the slashing span.
 		spans.end_span(now);
 		<Module<T>>::chill_stash(stash);
+
+		// make sure to disable validator till the end of this session
+		if T::SessionInterface::disable_validator(stash).unwrap_or(false) {
+			// force a new era, to select a new validator set
+			crate::ForceEra::put(crate::Forcing::ForceNew);
+		}
 	}
 
 	slash_nominators::<T>(params, prior_slash_p)
@@ -214,7 +223,7 @@ pub(crate) fn slash<T: Trait>(params: SlashParams<T>){
 
 fn slash_nominators<T: Trait>(params: SlashParams<T>, prior_slash_p: Perbill) {
 	let SlashParams {
-		stash: validator,
+		stash: _,
 		slash,
 		exposure,
 		slash_era,
@@ -379,8 +388,17 @@ impl<T: Trait> Drop for LazySlash<T> {
 			}
 
 			ledger.total -= value;
-			T::Currency::slash(&self.stash, value);
+
+			// TODO: rewards
+			let (imbalance, _) = T::Currency::slash(&self.stash, value);
+			T::Slash::on_unbalanced(imbalance);
+
 			<Module<T>>::update_ledger(&controller, &ledger);
+
+			// trigger the event
+			<Module<T>>::deposit_event(
+				super::RawEvent::Slash(self.stash.clone(), value)
+			);
 		}
 	}
 }
