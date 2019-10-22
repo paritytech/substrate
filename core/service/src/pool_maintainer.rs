@@ -160,7 +160,7 @@ impl<Block: BlockT, F: Fetcher<Block>> DefaultLightTransactionPoolMaintainer<Blo
 		id: &BlockId<Block>,
 		header: &Block::Header,
 		transaction_pool: &Arc<TransactionPool<PoolApi>>,
-	) -> impl futures03::Future<Output = ()> where
+	) -> impl std::future::Future<Output = ()> where
 		PoolApi: 'static + txpool::ChainApi<Hash = Block::Hash, Block = Block>,
 	{
 		// fetch transactions (possible future optimization: proofs of inclusion) that
@@ -197,7 +197,7 @@ impl<Block: BlockT, F: Fetcher<Block>> DefaultLightTransactionPoolMaintainer<Blo
 		id: &BlockId<Block>,
 		header: &Block::Header,
 		transaction_pool: &Arc<TransactionPool<PoolApi>>,
-	) -> impl futures03::Future<Output = ()> where
+	) -> impl std::future::Future<Output = ()> where
 		PoolApi: 'static + txpool::ChainApi<Hash = Block::Hash, Block = Block>,
 	{
 		// to determine whether ready transaction is still valid, we perform periodic revalidaton
