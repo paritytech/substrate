@@ -205,7 +205,10 @@ impl<B: ChainApi> ValidatedPool<B> {
 			while !transactions.is_empty() {
 				let hash = transactions.keys().next().cloned().expect("transactions is not empty; qed");
 
-				let removed = pool.remove_from_ready(&hash);
+				// note we are not considering tx with hash invalid here - we just want
+				// to remove it along with dependent transactions and `remove_invalid()`
+				// does exactly what we need
+				let removed = pool.remove_invalid(&[hash.clone()]);
 				for removed_tx in removed {
 					let removed_hash = removed_tx.hash.clone();
 					let tx_to_resubmit = if let Some(updated_tx) = transactions.remove(&removed_hash) {

@@ -366,14 +366,6 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: ::std::fmt::Debug> BasePool<Hash
 		removed
 	}
 
-	/// Removes ready transaction represented by the hash and all other ready transactions
-	/// that depend on it.
-	///
-	/// Returns a list of actually removed transactions.
-	pub fn remove_from_ready(&mut self, hash: &Hash) -> Vec<Arc<Transaction<Hash, Ex>>> {
-		self.ready.remove_invalid(&[hash.clone()])
-	}
-
 	/// Removes all transactions represented by the hashes and all other transactions
 	/// that depend on them.
 	///
