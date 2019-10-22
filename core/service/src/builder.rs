@@ -32,8 +32,8 @@ use consensus_common::import_queue::ImportQueue;
 use futures::{prelude::*, sync::mpsc};
 use futures03::{
 	compat::Compat,
-	FutureExt as _,
-	StreamExt as _, TryStreamExt as _,
+	FutureExt,
+	StreamExt, TryStreamExt,
 };
 use keystore::{Store as Keystore, KeyStorePtr};
 use log::{info, warn};

@@ -22,7 +22,7 @@ use client::{
 use futures::prelude::*;
 use futures03::{
 	future::{ready, Either},
-	FutureExt as _, TryFutureExt as _,
+	FutureExt, TryFutureExt,
 };
 use log::warn;
 use parking_lot::Mutex;
