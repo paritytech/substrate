@@ -1020,18 +1020,12 @@ decl_module! {
 impl<T: Trait> Module<T> {
 	// PUBLIC IMMUTABLES
 
-	/// The total balance that can be slashed from a validator controller account as of
-	/// right now.
+	/// The total balance that can be slashed from a stash account as of right now.
 	pub fn slashable_balance_of(stash: &T::AccountId) -> BalanceOf<T> {
 		Self::bonded(stash).and_then(Self::ledger).map(|l| l.active).unwrap_or_default()
 	}
 
 	// MUTABLES (DANGEROUS)
-
-	fn chill_stash(stash: &T::AccountId) {
-		<Validators<T>>::remove(stash);
-		<Nominators<T>>::remove(stash);
-	}
 
 	/// Update the ledger for a controller. This will also update the stash lock. The lock will
 	/// will lock the entire funds except paying for further transactions.
@@ -1047,6 +1041,12 @@ impl<T: Trait> Module<T> {
 			WithdrawReasons::all(),
 		);
 		<Ledger<T>>::insert(controller, ledger);
+	}
+
+	/// Chill a stash account.
+	fn chill_stash(stash: &T::AccountId) {
+		<Validators<T>>::remove(stash);
+		<Nominators<T>>::remove(stash);
 	}
 
 	/// Slash a given validator by a specific amount with given (historical) exposure.

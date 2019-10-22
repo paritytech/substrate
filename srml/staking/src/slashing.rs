@@ -47,8 +47,8 @@
 
 use super::{EraIndex, Trait, Module, Store, BalanceOf, Exposure, Perbill};
 use sr_primitives::traits::{Zero, Saturating};
-use support::{StorageValue, StorageMap, StorageDoubleMap};
-use codec::{HasCompact, Encode, Decode};
+use support::{StorageValue, StorageMap, StorageDoubleMap, traits::Currency};
+use codec::{Encode, Decode};
 
 /// The index of a slashing span - unique to each stash.
 pub (crate) type SpanIndex = u32;
@@ -271,6 +271,7 @@ struct InspectingSpans<'a, T: Trait + 'a> {
 	window_start: EraIndex,
 	stash: &'a T::AccountId,
 	spans: SlashingSpans,
+	deferred_slashes: Vec<LazySlash<T>>,
 	_marker: rstd::marker::PhantomData<T>,
 }
 
@@ -287,6 +288,7 @@ fn fetch_spans<T: Trait>(stash: &T::AccountId, window_start: EraIndex) -> Inspec
 		window_start,
 		stash,
 		spans,
+		deferred_slashes: Vec::with_capacity(1), // we usually would only slash once.
 		_marker: rstd::marker::PhantomData,
 	}
 }
@@ -303,7 +305,8 @@ impl<'a, T: 'a + Trait> InspectingSpans<'a, T> {
 	// compares the slash in an era to the overall current span slash.
 	// if it's higher, applies the difference of the slashes and then updates the span on disk.
 	//
-	// returns the span index of the era, if any.
+	// returns the span index of the era, if any, along with a slash to be lazily applied
+	// when all book-keeping is done.
 	fn compare_and_update_span_slash(
 		&mut self,
 		slash_era: EraIndex,
@@ -314,10 +317,13 @@ impl<'a, T: 'a + Trait> InspectingSpans<'a, T> {
 		let span_slash = <Module<T>>::span_slash(&span_slash_key);
 
 		if span_slash < slash {
-			// new maximum span slash.
-			// TODO: apply difference.
+			// new maximum span slash. apply the difference.
+			let difference = slash - span_slash;
+
 			self.dirty = true;
 			<Module<T> as Store>::SpanSlash::insert(&span_slash_key, &slash);
+
+			self.deferred_slashes.push(slash_lazy(self.stash.clone(), difference));
 		}
 
 		Some(target_span.index)
@@ -334,6 +340,47 @@ impl<'a, T: 'a + Trait> Drop for InspectingSpans<'a, T> {
 			for span_index in start..end {
 				<Module<T> as Store>::SpanSlash::remove(&(self.stash.clone(), span_index));
 			}
+		}
+	}
+}
+
+// perform a slash which is lazily applied on `Drop`. This allows us to register
+// that the slash should happen without being in the middle of any bookkeeping.
+fn slash_lazy<T: Trait>(stash: T::AccountId, value: BalanceOf<T>) -> LazySlash<T> {
+	LazySlash { stash, value }
+}
+
+struct LazySlash<T: Trait> {
+	stash: T::AccountId,
+	value: BalanceOf<T>,
+}
+
+impl<T: Trait> Drop for LazySlash<T> {
+	fn drop(&mut self) {
+		let mut ledger = match <Module<T>>::ledger(&self.stash) {
+			Some(ledger) => ledger,
+			None => return, // nothing to do.
+		};
+
+		let controller = match <Module<T>>::bonded(&self.stash) {
+			None => return, // defensive: should always exist.
+			Some(c) => c,
+		};
+
+		let mut value = self.value.min(ledger.active);
+
+		if !value.is_zero() {
+			ledger.active -= value;
+
+			// Avoid there being a dust balance left in the staking system.
+			if ledger.active < T::Currency::minimum_balance() {
+				value += ledger.active;
+				ledger.active = Zero::zero();
+			}
+
+			ledger.total -= value;
+			T::Currency::slash(&self.stash, value);
+			<Module<T>>::update_ledger(&controller, &ledger);
 		}
 	}
 }
