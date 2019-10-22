@@ -37,9 +37,7 @@ mod tests {
 	use super::Executor;
 	use {balances, contracts, indices, system, timestamp};
 	use codec::{Encode, Decode, Joiner};
-	use runtime_support::{
-		Hashable, StorageValue, StorageMap, traits::Currency,
-	};
+	use runtime_support::{Hashable, StorageValue, StorageMap, traits::Currency};
 	use state_machine::TestExternalities as CoreTestExternalities;
 	use primitives::{
 		Blake2Hasher, NeverNativeValue, NativeOrEncoded, map,

@@ -65,7 +65,7 @@ pub use staking::StakerStatus;
 
 /// Implementations of some helper traits passed into runtime modules as associated types.
 pub mod impls;
-use impls::{CurrencyToVoteHandler, Author, LinearWeightToFee};
+use impls::{CurrencyToVoteHandler, Author, LinearWeightToFee, TargetedFeeAdjustment};
 
 /// Constant values used within the runtime.
 pub mod constants;
@@ -180,7 +180,7 @@ parameter_types! {
 	// setting this to zero will disable the weight fee.
 	pub const WeightFeeCoefficient: Balance = 1_000;
 	// for a sane configuration, this should always be less than `AvailableBlockRatio`.
-	pub const TargetedFeeAdjustment: Perbill = Perbill::from_percent(25);
+	pub const TargetBlockFullness: Perbill = Perbill::from_percent(25);
 }
 
 impl transaction_payment::Trait for Runtime {
@@ -189,7 +189,7 @@ impl transaction_payment::Trait for Runtime {
 	type TransactionBaseFee = TransactionBaseFee;
 	type TransactionByteFee = TransactionByteFee;
 	type WeightToFee = LinearWeightToFee<WeightFeeCoefficient>;
-	type FeeMultiplierUpdate = TargetedFeeAdjustment;
+	type FeeMultiplierUpdate = TargetedFeeAdjustment<TargetBlockFullness>;
 }
 
 parameter_types! {
