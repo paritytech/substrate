@@ -96,17 +96,17 @@ pub trait Trait: SystemTrait {
 decl_storage! {
 	trait Store for Module<T: Trait> as Timestamp {
 		/// Recent hints.
-		RecentHints get(recent_hints) build(|_| vec![T::BlockNumber::zero()]): Vec<T::BlockNumber>;
+		RecentHints get(fn recent_hints) build(|_| vec![T::BlockNumber::zero()]): Vec<T::BlockNumber>;
 		/// Ordered recent hints.
-		OrderedHints get(ordered_hints) build(|_| vec![T::BlockNumber::zero()]): Vec<T::BlockNumber>;
+		OrderedHints get(fn ordered_hints) build(|_| vec![T::BlockNumber::zero()]): Vec<T::BlockNumber>;
 		/// The median.
-		Median get(median) build(|_| T::BlockNumber::zero()): T::BlockNumber;
+		Median get(fn median) build(|_| T::BlockNumber::zero()): T::BlockNumber;
 
 		/// Final hint to apply in the block. `None` means "same as parent".
 		Update: Option<T::BlockNumber>;
 
 		// when initialized through config this is set in the beginning.
-		Initialized get(initialized) build(|_| false): bool;
+		Initialized get(fn initialized) build(|_| false): bool;
 	}
 }
 

@@ -41,7 +41,7 @@ pub trait Trait: system::Trait + session::Trait {
 decl_storage! {
 	trait Store for Module<T: Trait> as AuthorityDiscovery {
 		/// The current set of keys that may issue a heartbeat.
-		Keys get(keys): Vec<T::AuthorityId>;
+		Keys get(fn keys): Vec<T::AuthorityId>;
 	}
 	add_extra_genesis {
 		config(keys): Vec<T::AuthorityId>;
