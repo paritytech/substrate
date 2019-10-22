@@ -920,6 +920,7 @@ fn report_equivocation<Block, B, PRA, SC>(
 			&BlockId::Hash(current_set_latest_header.hash()),
 			(fg_primitives::KEY_TYPE, equivocation.offender().encode()),
 		)
+		.unwrap()
 		.unwrap();
 
 	// submit equivocation report at best block
