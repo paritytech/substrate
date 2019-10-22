@@ -251,7 +251,17 @@ decl_module! {
 			// associated session).
 			let set_id = equivocation_report.set_id();
 
-			let previous_set_id_session_index = SetIdSession::get(set_id.saturating_sub(1));
+			// fetch the current and previous sets last session index. on the
+			// genesis set there's no previous set.
+			let previous_set_id_session_index = if set_id == 0 {
+				None
+			} else {
+				let session_index = SetIdSession::get(set_id - 1)
+					.ok_or("Invalid equivocation set id.")?;
+
+				Some(session_index)
+			};
+
 			let set_id_session_index = SetIdSession::get(set_id)
 				.ok_or("Invalid equivocation set id.")?;
 
