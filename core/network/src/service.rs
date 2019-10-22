@@ -152,6 +152,27 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 			}
 		}
 
+		// Check for duplicate bootnodes.
+		known_addresses.iter()
+			.try_for_each(|(peer_id, addr)|
+				if let Some(other) = known_addresses
+					.iter()
+					.find(|o| o.1 == *addr && o.0 != *peer_id)
+				{
+					Err(
+						format!(
+							"Bootnode with address `{}` is registered with two different peer \
+							ids: `{}` vs `{}`",
+							addr,
+							peer_id,
+							other.0,
+						)
+					)
+				} else {
+					Ok(())
+				}
+			)?;
+
 		// Initialize the reserved peers.
 		for reserved in params.network_config.reserved_nodes.iter() {
 			if let Ok((peer_id, addr)) = parse_str_addr(reserved) {
@@ -553,8 +574,9 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	}
 }
 
-impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>
-	::consensus::SyncOracle for NetworkService<B, S, H> {
+impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> consensus::SyncOracle
+	for NetworkService<B, S, H>
+{
 	fn is_major_syncing(&mut self) -> bool {
 		NetworkService::is_major_syncing(self)
 	}
@@ -564,8 +586,9 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>
 	}
 }
 
-impl<'a, B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>
-	::consensus::SyncOracle for &'a NetworkService<B, S, H> {
+impl<'a, B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> consensus::SyncOracle
+	for &'a NetworkService<B, S, H>
+{
 	fn is_major_syncing(&mut self) -> bool {
 		NetworkService::is_major_syncing(self)
 	}

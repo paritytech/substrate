@@ -28,6 +28,8 @@ pub enum Error {
 	Io(std::io::Error),
 	/// Client error
 	Client(client::error::Error),
+	/// Some other error occurred.
+	Other(String),
 }
 
 impl std::error::Error for Error {
@@ -35,6 +37,7 @@ impl std::error::Error for Error {
 		match self {
 			Error::Io(ref err) => Some(err),
 			Error::Client(ref err) => Some(err),
+			Error::Other(_) => None,
 		}
 	}
 }
