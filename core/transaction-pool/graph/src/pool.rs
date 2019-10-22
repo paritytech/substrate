@@ -167,9 +167,9 @@ impl<B: ChainApi> Pool<B> {
 
 	pub fn watch(
 		&self,
-		xt_hash: ExHash<B>,
+		hash: ExHash<B>,
 	) -> Watcher<ExHash<B>, BlockHash<B>> {
-		self.validated_pool.watch(xt_hash)
+		self.validated_pool.watch(hash)
 	}
 
 	/// Prunes ready transactions.
@@ -912,6 +912,38 @@ mod tests {
 			is_ready.recv().unwrap(); // wait for finish
 			assert_eq!(pool.status().ready, 1);
 			assert_eq!(pool.status().future, 0);
+		}
+
+		#[test]
+		fn should_watch_existing() {
+			let limit = Limit {
+				count: 1,
+				total_bytes: 1000,
+			};
+			let pool = Pool::new(Options {
+				ready: limit.clone(),
+				future: limit.clone(),
+			}, TestApi::default());
+
+			let xt = uxt(Transfer {
+				from: AccountId::from_h256(H256::from_low_u64_be(1)),
+				to: AccountId::from_h256(H256::from_low_u64_be(2)),
+				amount: 5,
+				nonce: 0,
+			});
+			let hash = block_on(pool.submit_one(&BlockId::Number(0), xt)).expect("Failed to submit");
+			assert_eq!(pool.status().ready, 1);
+
+			let watcher = pool.watch(hash);
+			block_on(pool.prune_tags(&BlockId::Number(2), vec![], vec![hash]))
+				.expect("Failed to prune tags");
+
+			let mut stream = futures::executor::block_on_stream(
+				watcher.into_stream()
+			);
+
+			assert_eq!(stream.next(), Some(watcher::Status::Finalized(H256::from_low_u64_be(2).into())));
+			assert_eq!(stream.next(), None);
 		}
 	}
 }
