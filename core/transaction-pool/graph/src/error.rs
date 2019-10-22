@@ -61,7 +61,7 @@ pub enum Error {
 	/// Invalid block id.
 	InvalidBlockId(String),
 	/// The pool is not accepting future transactions.
-	#[display(fmt="The pool is not accepting future tranasctions")]
+	#[display(fmt="The pool is not accepting future transactions")]
 	RejectedFutureTransaction,
 }
 
