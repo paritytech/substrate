@@ -26,7 +26,7 @@
 /// Can be used to create a `HashMap`.
 #[macro_export]
 macro_rules! map {
-    ($( $name:expr => $value:expr ),* $(,)? ) => (
+	($( $name:expr => $value:expr ),* $(,)? ) => (
 		vec![ $( ( $name, $value ) ),* ].into_iter().collect()
 	);
 }
