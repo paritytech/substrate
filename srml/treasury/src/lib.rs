@@ -345,7 +345,7 @@ impl<T: Trait> Module<T> {
 
 impl<T: Trait> OnUnbalanced<NegativeImbalanceOf<T>> for Module<T> {
 	fn on_unbalanced(amount: NegativeImbalanceOf<T>) {
-		// Must resolve into existing but better be safe.
+		// Must resolve into existing but better to be safe.
 		let _ = T::Currency::resolve_creating(&Self::account_id(), amount);
 	}
 }
