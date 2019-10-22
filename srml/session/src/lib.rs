@@ -349,10 +349,10 @@ const DEDUP_KEY_PREFIX: &[u8] = b":session:keys";
 decl_storage! {
 	trait Store for Module<T: Trait> as Session {
 		/// The current set of validators.
-		Validators get(validators): Vec<T::ValidatorId>;
+		Validators get(fn validators): Vec<T::ValidatorId>;
 
 		/// Current index of the session.
-		CurrentIndex get(current_index): SessionIndex;
+		CurrentIndex get(fn current_index): SessionIndex;
 
 		/// True if the underlying economic identities or weighting behind the validators
 		/// has changed in the queued validator set.
@@ -360,12 +360,12 @@ decl_storage! {
 
 		/// The queued keys for the next session. When the next session begins, these keys
 		/// will be used to determine the validator's session keys.
-		QueuedKeys get(queued_keys): Vec<(T::ValidatorId, T::Keys)>;
+		QueuedKeys get(fn queued_keys): Vec<(T::ValidatorId, T::Keys)>;
 
 		/// Indices of disabled validators.
 		///
 		/// The set is cleared when `on_session_ending` returns a new set of identities.
-		DisabledValidators get(disabled_validators): Vec<u32>;
+		DisabledValidators get(fn disabled_validators): Vec<u32>;
 
 		/// The next session keys for a validator.
 		///

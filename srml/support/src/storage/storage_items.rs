@@ -307,15 +307,15 @@ mod tests {
 
 			// getters: pub / $default
 			// we need at least one type which uses T, otherwise GenesisConfig will complain.
-			GETU32 get(u32_getter): T::Origin;
-			pub PUBGETU32 get(pub_u32_getter) build(|config: &GenesisConfig| config.u32_getter_with_config): u32;
-			GETU32WITHCONFIG get(u32_getter_with_config) config(): u32;
-			pub PUBGETU32WITHCONFIG get(pub_u32_getter_with_config) config(): u32;
-			GETU32MYDEF get(u32_getter_mydef): Option<u32>;
-			pub PUBGETU32MYDEF get(pub_u32_getter_mydef) config(): u32 = 3;
-			GETU32WITHCONFIGMYDEF get(u32_getter_with_config_mydef) config(): u32 = 2;
-			pub PUBGETU32WITHCONFIGMYDEF get(pub_u32_getter_with_config_mydef) config(): u32 = 1;
-			PUBGETU32WITHCONFIGMYDEFOPT get(pub_u32_getter_with_config_mydef_opt) config(): Option<u32>;
+			GETU32 get(fn u32_getter): T::Origin;
+			pub PUBGETU32 get(fn pub_u32_getter) build(|config: &GenesisConfig| config.u32_getter_with_config): u32;
+			GETU32WITHCONFIG get(fn u32_getter_with_config) config(): u32;
+			pub PUBGETU32WITHCONFIG get(fn pub_u32_getter_with_config) config(): u32;
+			GETU32MYDEF get(fn u32_getter_mydef): Option<u32>;
+			pub PUBGETU32MYDEF get(fn pub_u32_getter_mydef) config(): u32 = 3;
+			GETU32WITHCONFIGMYDEF get(fn u32_getter_with_config_mydef) config(): u32 = 2;
+			pub PUBGETU32WITHCONFIGMYDEF get(fn pub_u32_getter_with_config_mydef) config(): u32 = 1;
+			PUBGETU32WITHCONFIGMYDEFOPT get(fn pub_u32_getter_with_config_mydef_opt) config(): Option<u32>;
 
 			// map non-getters: pub / $default
 			MAPU32 : map u32 => Option<String>;
@@ -324,17 +324,17 @@ mod tests {
 			pub PUBMAPU32MYDEF : map u32 => Option<String>;
 
 			// map getters: pub / $default
-			GETMAPU32 get(map_u32_getter): map u32 => String;
-			pub PUBGETMAPU32 get(pub_map_u32_getter): map u32 => String;
+			GETMAPU32 get(fn map_u32_getter): map u32 => String;
+			pub PUBGETMAPU32 get(fn pub_map_u32_getter): map u32 => String;
 
-			GETMAPU32MYDEF get(map_u32_getter_mydef): map u32 => String = "map".into();
-			pub PUBGETMAPU32MYDEF get(pub_map_u32_getter_mydef): map u32 => String = "pubmap".into();
+			GETMAPU32MYDEF get(fn map_u32_getter_mydef): map u32 => String = "map".into();
+			pub PUBGETMAPU32MYDEF get(fn pub_map_u32_getter_mydef): map u32 => String = "pubmap".into();
 
 			// linked map
 			LINKEDMAPU32 : linked_map u32 => Option<String>;
 			pub PUBLINKEDMAPU32MYDEF : linked_map u32 => Option<String>;
-			GETLINKEDMAPU32 get(linked_map_u32_getter): linked_map u32 => String;
-			pub PUBGETLINKEDMAPU32MYDEF get(pub_linked_map_u32_getter_mydef): linked_map u32 => String = "pubmap".into();
+			GETLINKEDMAPU32 get(fn linked_map_u32_getter): linked_map u32 => String;
+			pub PUBGETLINKEDMAPU32MYDEF get(fn pub_linked_map_u32_getter_mydef): linked_map u32 => String = "pubmap".into();
 
 			COMPLEXTYPE1: ::std::vec::Vec<<T as Trait>::Origin>;
 			COMPLEXTYPE2: (Vec<Vec<(u16,Box<(  )>)>>, u32);
@@ -741,7 +741,7 @@ mod test3 {
 	}
 	crate::decl_storage! {
 		trait Store for Module<T: Trait> as Test {
-			Foo get(foo) config(initial_foo): u32;
+			Foo get(fn foo) config(initial_foo): u32;
 		}
 	}
 
