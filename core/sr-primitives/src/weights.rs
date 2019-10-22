@@ -25,14 +25,17 @@
 
 pub use crate::transaction_validity::TransactionPriority;
 use arithmetic::traits::Bounded;
+use codec::{Encode, Decode};
+#[cfg(feature = "std")]
+use serde::{Serialize, Deserialize};
 
 /// Numeric range of a transaction weight.
 pub type Weight = u32;
 
 /// A generalized group of dispatch types. This is only distinguishing normal, user-triggered transactions
 /// (`Normal`) and anything beyond which serves a higher purpose to the system (`Operational`).
-#[cfg_attr(feature = "std", derive(Debug))]
-#[derive(PartialEq, Eq, Clone, Copy)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode)]
 pub enum DispatchClass {
 	/// A normal dispatch.
 	Normal,

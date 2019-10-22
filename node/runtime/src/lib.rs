@@ -21,6 +21,7 @@
 #![recursion_limit="256"]
 
 use rstd::prelude::*;
+use codec::{Encode, Decode};
 use support::{
 	construct_runtime, parameter_types, traits::{SplitTwoWays, Currency, Randomness}
 };
@@ -51,8 +52,9 @@ use version::NativeVersion;
 use primitives::OpaqueMetadata;
 use grandpa::{AuthorityId as GrandpaId, AuthorityWeight as GrandpaWeight};
 use im_online::sr25519::{AuthorityId as ImOnlineId};
+use transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
 use authority_discovery_primitives::{AuthorityId as EncodedAuthorityId, Signature as EncodedSignature};
-use codec::{Encode, Decode};
+use contracts_rpc_runtime_api::ContractExecResult;
 use system::offchain::TransactionSubmitter;
 
 #[cfg(any(feature = "std", test))]
@@ -653,7 +655,12 @@ impl_runtime_apis! {
         })
 		}
 
-		fn verify(payload: &Vec<u8>, signature: &EncodedSignature, authority_id: &EncodedAuthorityId) -> bool {
+		fn verify(
+			payload: &Vec<u8>,
+			signature:
+			&EncodedSignature,
+			authority_id: &EncodedAuthorityId,
+		) -> bool {
 			let signature = match BabeSignature::decode(&mut &signature.0[..]) {
 				Ok(s) => s,
 				_ => return false,
@@ -681,9 +688,7 @@ impl_runtime_apis! {
 			value: Balance,
 			gas_limit: u64,
 			input_data: Vec<u8>,
-		) -> contracts_rpc_runtime_api::ContractExecResult {
-			use contracts_rpc_runtime_api::ContractExecResult;
-
+		) -> ContractExecResult {
 			let exec_result = Contracts::bare_call(
 				origin,
 				dest.into(),
@@ -698,6 +703,22 @@ impl_runtime_apis! {
 				},
 				Err(_) => ContractExecResult::Error,
 			}
+		}
+	}
+
+	impl transaction_payment_rpc_runtime_api::TransactionPaymentApi<
+		Block,
+		AccountId,
+		Balance,
+		Call,
+		SignedExtra,
+	> for Runtime {
+		fn query_info_unsigned(
+			origin: AccountId,
+			call: Call,
+			extra: SignedExtra,
+		) -> RuntimeDispatchInfo<Balance> {
+			TransactionPayment::query_info_unsigned(origin, call, extra)
 		}
 	}
 

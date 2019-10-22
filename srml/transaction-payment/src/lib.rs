@@ -32,7 +32,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use rstd::prelude::*;
-use codec::{Encode, Decode};
+use codec::{Encode, Decode, Codec};
 use support::{
 	decl_storage, decl_module,
 	traits::{Currency, Get, OnUnbalanced, ExistenceRequirement, WithdrawReason},
@@ -44,8 +44,9 @@ use sr_primitives::{
 		TransactionValidity,
 	},
 	traits::{Zero, Saturating, SignedExtension, SaturatedConversion, Convert},
-	weights::{Weight, DispatchInfo},
+	weights::{Weight, DispatchInfo, GetDispatchInfo},
 };
+use transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
 
 type Multiplier = Fixed64;
 type BalanceOf<T> =
@@ -97,7 +98,39 @@ decl_module! {
 	}
 }
 
-impl<T: Trait> Module<T> {}
+impl<T: Trait> Module<T> {
+	/// Query the data that we know about the fee of a given `call`.
+	///
+	/// As this module is not and cannot be aware of the internals of a signed extension. It only
+	/// interprets them as some encoded value and takes their length into account.
+	///
+	/// All dispatchables must be annotated with weight and will have some fee info. This function
+	/// always returns.
+	// TODO: we can actually make it understand `ChargeTransactionPayment`, but would be some hassle
+	// for sure. We have to make it aware of the index of `ChargeTransactionPayment` in `Extra`.
+	pub fn query_info_unsigned<Extra: Codec>(
+		sender: T::AccountId,
+		call: T::Call,
+		extra: Extra
+	) -> RuntimeDispatchInfo<BalanceOf<T>>
+		where T::Call: Codec + GetDispatchInfo, T: Send + Sync
+	{
+		// TODO: We can not decode this stuff and receive some raw bytes from the RPC, save the
+		// lengths, then decode and check that they are decodable (aka. correct) and just use the
+		// values.
+		let encoded_extra = extra.encode();
+		let encoded_call = call.encode();
+		let encoded_sender = sender.encode();
+
+		let dispatch_info = <T::Call as GetDispatchInfo>::get_dispatch_info(&call);
+		let len = encoded_call.len() + encoded_extra.len() + encoded_sender.len() + 64;
+
+		let partial_fee = <ChargeTransactionPayment<T>>::compute_fee(len, dispatch_info, 0u32.into());
+		let DispatchInfo { weight, class } = dispatch_info;
+
+		RuntimeDispatchInfo { weight, class, partial_fee }
+	}
+}
 
 /// Require the transactor pay for themselves and maybe include a tip to gain additional priority
 /// in the queue.
@@ -192,17 +225,27 @@ impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T>
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use support::{parameter_types, impl_outer_origin};
+	use codec::Encode;
+	use support::{parameter_types, impl_outer_origin, impl_outer_dispatch};
 	use primitives::H256;
 	use sr_primitives::{
 		Perbill,
 		testing::Header,
 		traits::{BlakeTwo256, IdentityLookup},
-		weights::DispatchClass,
+		weights::{DispatchClass, DispatchInfo, GetDispatchInfo},
 	};
+	use balances::Call as BalancesCall;
 	use rstd::cell::RefCell;
+	use transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
 
-	const CALL: &<Runtime as system::Trait>::Call = &();
+	const CALL: &<Runtime as system::Trait>::Call = &Call::Balances(BalancesCall::transfer(2, 69));
+
+	impl_outer_dispatch! {
+		pub enum Call for Runtime where origin: Origin {
+			balances::Balances,
+			system::System,
+		}
+	}
 
 	#[derive(Clone, PartialEq, Eq, Debug)]
 	pub struct Runtime;
@@ -222,7 +265,7 @@ mod tests {
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
-		type Call = ();
+		type Call = Call;
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
@@ -287,6 +330,8 @@ mod tests {
 	}
 
 	type Balances = balances::Module<Runtime>;
+	type System = system::Module<Runtime>;
+	type TransactionPayment = Module<Runtime>;
 
 	pub struct ExtBuilder {
 		balance_factor: u64,
@@ -449,6 +494,37 @@ mod tests {
 			);
 			assert_eq!(Balances::free_balance(&1), 100 - 10 - (5 + 10 + 3) * 3 / 2);
 		})
+	}
+
+	#[test]
+	fn query_info_works_given_valid_call() {
+		let call = Call::Balances(BalancesCall::transfer(2, 69));
+		let info  = call.get_dispatch_info();
+		let origin = 111111;
+		let extra = ();
+		let len = call.encode().len() + origin.encode().len() + extra.encode().len() + 64;
+		ExtBuilder::default()
+			.fees(5, 1, 2)
+			.build()
+			.execute_with(||
+		{
+			// all fees should be x1.5
+			NextFeeMultiplier::put(Fixed64::from_rational(1, 2));
+
+			assert_eq!(
+				TransactionPayment::query_info_unsigned(origin , call, ()),
+				RuntimeDispatchInfo {
+					weight: info.weight,
+					class: info.class,
+					partial_fee: (
+						5 /* base */
+						+ len as u64 /* len * 1 */
+						+ info.weight.min(MaximumBlockWeight::get()) as u64 * 2 /* weight * weight_to_fee */
+					) * 3 / 2
+				},
+			);
+
+		});
 	}
 }
 
