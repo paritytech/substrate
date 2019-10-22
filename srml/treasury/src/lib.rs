@@ -240,7 +240,6 @@ decl_storage! {
 				&MODULE_ID.into_account(),
 				T::Currency::minimum_balance(),
 			);
-			println!("toto");
 		});
 	}
 }
