@@ -74,9 +74,10 @@ pub struct NewService<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
 	select_chain: Option<TSc>,
 	network: Arc<TNet>,
 	/// Sinks to propagate network status updates.
-	network_status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<(
+	/// For each element, every time the `Interval` fires we push an element on the sender.
+	network_status_sinks: Arc<Mutex<Vec<(tokio_timer::Interval, mpsc::UnboundedSender<(
 		TNetStatus, NetworkState
-	)>>>>,
+	)>)>>>,
 	transaction_pool: Arc<TTxPool>,
 	/// A future that resolves when the service has exited, this is useful to
 	/// make sure any internally spawned futures stop when the service does.
@@ -296,9 +297,12 @@ macro_rules! new_impl {
 		let client_ = client.clone();
 		let mut sys = System::new();
 		let self_pid = get_current_pid().ok();
-		let (netstat_tx, netstat_rx) = mpsc::unbounded::<(NetworkStatus<_>, NetworkState)>();
-		network_status_sinks.lock().push(netstat_tx);
-		let tel_task = netstat_rx.for_each(move |(net_status, network_state)| {
+		let (state_tx, state_rx) = mpsc::unbounded::<(NetworkStatus<_>, NetworkState)>();
+		network_status_sinks.lock().push((
+			tokio_timer::Interval::new_interval(std::time::Duration::from_millis(5000)),
+			state_tx
+		));
+		let tel_task = state_rx.for_each(move |(net_status, _)| {
 			let info = client_.info();
 			let best_number = info.chain.best_number.saturated_into::<u64>();
 			let best_hash = info.chain.best_hash;
@@ -325,7 +329,6 @@ macro_rules! new_impl {
 			telemetry!(
 				SUBSTRATE_INFO;
 				"system.interval";
-				"network_state" => network_state,
 				"peers" => num_peers,
 				"height" => best_number,
 				"best" => ?best_hash,
@@ -342,6 +345,22 @@ macro_rules! new_impl {
 			Ok(())
 		}).select(exit.clone()).then(|_| Ok(()));
 		let _ = to_spawn_tx.unbounded_send(Box::new(tel_task));
+
+		// Periodically send the network state to the telemetry.
+		let (netstat_tx, netstat_rx) = mpsc::unbounded::<(NetworkStatus<_>, NetworkState)>();
+		network_status_sinks.lock().push((
+			tokio_timer::Interval::new_interval(std::time::Duration::from_secs(30)),
+			netstat_tx
+		));
+		let tel_task_2 = netstat_rx.for_each(move |(_, network_state)| {
+			telemetry!(
+				SUBSTRATE_INFO;
+				"system.network_state";
+				"state" => network_state,
+			);
+			Ok(())
+		}).select(exit.clone()).then(|_| Ok(()));
+		let _ = to_spawn_tx.unbounded_send(Box::new(tel_task_2));
 
 		// RPC
 		let (system_rpc_tx, system_rpc_rx) = futures03::channel::mpsc::unbounded();
@@ -507,7 +526,7 @@ pub trait AbstractService: 'static + Future<Item = (), Error = Error> +
 	fn network(&self) -> Arc<NetworkService<Self::Block, Self::NetworkSpecialization, H256>>;
 
 	/// Returns a receiver that periodically receives a status of the network.
-	fn network_status(&self) -> mpsc::UnboundedReceiver<(NetworkStatus<Self::Block>, NetworkState)>;
+	fn network_status(&self, interval: Duration) -> mpsc::UnboundedReceiver<(NetworkStatus<Self::Block>, NetworkState)>;
 
 	/// Get shared transaction pool instance.
 	fn transaction_pool(&self) -> Arc<TransactionPool<Self::TransactionPoolApi>>;
@@ -590,9 +609,9 @@ where
 		self.network.clone()
 	}
 
-	fn network_status(&self) -> mpsc::UnboundedReceiver<(NetworkStatus<Self::Block>, NetworkState)> {
+	fn network_status(&self, interval: Duration) -> mpsc::UnboundedReceiver<(NetworkStatus<Self::Block>, NetworkState)> {
 		let (sink, stream) = mpsc::unbounded();
-		self.network_status_sinks.lock().push(sink);
+		self.network_status_sinks.lock().push((tokio_timer::Interval::new_interval(interval), sink));
 		stream
 	}
 
@@ -666,7 +685,7 @@ fn build_network_future<
 	roles: Roles,
 	mut network: network::NetworkWorker<B, S, H>,
 	client: Arc<C>,
-	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<(NetworkStatus<B>, NetworkState)>>>>,
+	status_sinks: Arc<Mutex<Vec<(tokio_timer::Interval, mpsc::UnboundedSender<(NetworkStatus<B>, NetworkState)>)>>>,
 	rpc_rx: futures03::channel::mpsc::UnboundedReceiver<rpc::system::Request<B>>,
 	should_have_peers: bool,
 	dht_event_tx: Option<mpsc::Sender<DhtEvent>>,
@@ -674,10 +693,6 @@ fn build_network_future<
 	// Compatibility shim while we're transitioning to stable Futures.
 	// See https://github.com/paritytech/substrate/issues/3099
 	let mut rpc_rx = futures03::compat::Compat::new(rpc_rx.map(|v| Ok::<_, ()>(v)));
-
-	// Interval at which we send status updates on the status stream.
-	const STATUS_INTERVAL: Duration = Duration::from_millis(5000);
-	let mut status_interval = tokio_timer::Interval::new_interval(STATUS_INTERVAL);
 
 	let mut imported_blocks_stream = client.import_notification_stream().fuse()
 		.map(|v| Ok::<_, ()>(v)).compat();
@@ -746,19 +761,27 @@ fn build_network_future<
 		}
 
 		// Interval report for the external API.
-		while let Ok(Async::Ready(_)) = status_interval.poll() {
-			let status = NetworkStatus {
-				sync_state: network.sync_state(),
-				best_seen_block: network.best_seen_block(),
-				num_sync_peers: network.num_sync_peers(),
-				num_connected_peers: network.num_connected_peers(),
-				num_active_peers: network.num_active_peers(),
-				average_download_per_sec: network.average_download_per_sec(),
-				average_upload_per_sec: network.average_upload_per_sec(),
-			};
-			let state = network.network_state();
+		{
+			let mut status_sinks = status_sinks.lock();
+			for n in (0..status_sinks.len()).rev() {
+				while let Ok(Async::Ready(_)) = status_sinks[n].0.poll() {
+					let status = NetworkStatus {
+						sync_state: network.sync_state(),
+						best_seen_block: network.best_seen_block(),
+						num_sync_peers: network.num_sync_peers(),
+						num_connected_peers: network.num_connected_peers(),
+						num_active_peers: network.num_active_peers(),
+						average_download_per_sec: network.average_download_per_sec(),
+						average_upload_per_sec: network.average_upload_per_sec(),
+					};
+					let state = network.network_state();
 
-			status_sinks.lock().retain(|sink| sink.unbounded_send((status.clone(), state.clone())).is_ok());
+					if !status_sinks[n].1.unbounded_send((status.clone(), state.clone())).is_ok() {
+						status_sinks.remove(n);
+						continue;
+					}
+				}
+			}
 		}
 
 		// Main network polling.
