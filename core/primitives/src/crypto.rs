@@ -534,6 +534,19 @@ impl From<[u8; 32]> for AccountId32 {
 	}
 }
 
+impl<'a> rstd::convert::TryFrom<&'a [u8]> for AccountId32 {
+	type Error = ();
+	fn try_from(x: &'a [u8]) -> Result<AccountId32, ()> {
+		if x.len() == 32 {
+			let mut r = AccountId32::default();
+			r.0.copy_from_slice(x);
+			Ok(r)
+		} else {
+			Err(())
+		}
+	}
+}
+
 impl From<AccountId32> for [u8; 32] {
 	fn from(x: AccountId32) -> [u8; 32] {
 		x.0
