@@ -465,7 +465,11 @@ impl<B: BlockT> ChainSync<B> {
 				hash, peers,
 			);
 
-			peers = self.peers.iter().map(|(id, _)| id.clone()).collect();
+			peers = self.peers.iter()
+				// Only request blocks from peers who are ahead or on a par.
+				.filter(|(id, peer)| peer.best_number >= number)
+				.map(|(id, _)| id.clone())
+				.collect();
 		} else {
 			debug!(target: "sync", "Explicit sync request for block {:?} with {:?}", hash, peers);
 		}
