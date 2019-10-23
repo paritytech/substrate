@@ -124,7 +124,7 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 	)
 	.is_ok();
 
-	let imbalance = if can_withdraw_rent && (insufficient_rent || pay_rent) {
+	if can_withdraw_rent && (insufficient_rent || pay_rent) {
 		// Collect dues.
 		let imbalance = T::Currency::withdraw(
 			account,
@@ -138,10 +138,8 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 			qed",
 		);
 
-		Some(imbalance)
-	} else {
-		None
-	};
+		T::RentPayment::on_unbalanced(imbalance);
+	}
 
 	if insufficient_rent || !can_withdraw_rent {
 		// The contract cannot afford the rent payment and has a balance above the subsistence
@@ -168,14 +166,6 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 			deduct_block: current_block_number,
 			..contract
 		});
-
-		let imbalance = imbalance.expect(
-			"imbalance is Some if can_withdraw_rent && (insufficient_rent || pay_rent) is true;
-			if can_withdraw_rent is false, the function has returned;
-			can_withdraw_rent && pay_rent is true;
-			qed"
-		);
-		T::RentPayment::on_unbalanced(imbalance);
 
 		<ContractInfoOf<T>>::insert(account, &contract_info);
 
