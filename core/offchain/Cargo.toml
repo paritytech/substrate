@@ -16,6 +16,8 @@ futures-timer = "0.4.0"
 hyper = "0.12.35"
 hyper-tls = "0.3.2"
 log = "0.4.8"
+threadpool = "1.7"
+num_cpus = "1.10"
 offchain-primitives = { package = "substrate-offchain-primitives", path = "./primitives" }
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
 parking_lot = "0.9.0"

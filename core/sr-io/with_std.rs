@@ -192,6 +192,22 @@ impl OtherApi for () {
 	fn print_hex(data: &[u8]) {
 		println!("{}", HexDisplay::from(&data));
 	}
+
+	fn log(
+		level: LogLevel,
+		target: &[u8],
+		message: &[u8],
+	) {
+		let target = std::str::from_utf8(target).unwrap_or("invalid utf8");
+		let msg = std::str::from_utf8(message).unwrap_or("invalid utf8");
+
+		log::log!(
+			target: target,
+			log::Level::from(level),
+			"{}",
+			msg,
+		)
+	}
 }
 
 impl CryptoApi for () {

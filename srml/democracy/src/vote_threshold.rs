@@ -23,8 +23,8 @@ use sr_primitives::traits::{Zero, IntegerSquareRoot};
 use rstd::ops::{Add, Mul, Div, Rem};
 
 /// A means of determining if a vote is past pass threshold.
-#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, sr_primitives::RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum VoteThreshold {
 	/// A supermajority of approvals is needed to pass this vote.
 	SuperMajorityApprove,

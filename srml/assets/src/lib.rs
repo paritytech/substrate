@@ -215,7 +215,7 @@ decl_storage! {
 		/// The number of units of assets held by any given account.
 		Balances: map (T::AssetId, T::AccountId) => T::Balance;
 		/// The next asset identifier up for grabs.
-		NextAssetId get(next_asset_id): T::AssetId;
+		NextAssetId get(fn next_asset_id): T::AssetId;
 		/// The total unit supply of an asset.
 		TotalSupply: map T::AssetId => T::Balance;
 	}

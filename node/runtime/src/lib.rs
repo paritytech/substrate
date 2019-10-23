@@ -84,8 +84,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to equal spec_version. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 179,
-	impl_version: 180,
+	spec_version: 181,
+	impl_version: 182,
 	apis: RUNTIME_API_VERSIONS,
 };
 

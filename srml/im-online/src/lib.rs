@@ -76,6 +76,7 @@ use primitives::offchain::{OpaqueNetworkState, StorageKind};
 use rstd::prelude::*;
 use session::historical::IdentificationTuple;
 use sr_primitives::{
+	RuntimeDebug,
 	traits::{Convert, Member, Printable, Saturating}, Perbill,
 	transaction_validity::{
 		TransactionValidity, TransactionLongevity, ValidTransaction, InvalidTransaction,
@@ -86,7 +87,7 @@ use sr_staking_primitives::{
 	offence::{ReportOffence, Offence, Kind},
 };
 use support::{
-	decl_module, decl_event, decl_storage, print, ensure, Parameter
+	decl_module, decl_event, decl_storage, print, ensure, Parameter, debug
 };
 use system::ensure_none;
 use system::offchain::SubmitUnsignedTransaction;
@@ -146,15 +147,14 @@ const DB_KEY: &[u8] = b"srml/im-online-worker-status";
 /// finishing it. With every execution of the off-chain worker we check
 /// if we need to recover and resume gossipping or if there is already
 /// another off-chain worker in the process of gossipping.
-#[derive(Encode, Decode, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 struct WorkerStatus<BlockNumber> {
 	done: bool,
 	gossipping_at: BlockNumber,
 }
 
 /// Error which may occur while executing the off-chain code.
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(RuntimeDebug)]
 enum OffchainErr {
 	DecodeWorkerStatus,
 	FailedSigning,
@@ -176,8 +176,7 @@ impl Printable for OffchainErr {
 pub type AuthIndex = u32;
 
 /// Heartbeat which is sent/received.
-#[derive(Encode, Decode, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct Heartbeat<BlockNumber>
 	where BlockNumber: PartialEq + Eq + Decode + Encode,
 {
@@ -221,14 +220,14 @@ decl_event!(
 decl_storage! {
 	trait Store for Module<T: Trait> as ImOnline {
 		/// The block number when we should gossip.
-		GossipAt get(gossip_at): T::BlockNumber;
+		GossipAt get(fn gossip_at): T::BlockNumber;
 
 		/// The current set of keys that may issue a heartbeat.
-		Keys get(keys): Vec<T::AuthorityId>;
+		Keys get(fn keys): Vec<T::AuthorityId>;
 
 		/// For each session index we keep a mapping of `AuthorityId`
 		/// to `offchain::OpaqueNetworkState`.
-		ReceivedHeartbeats get(received_heartbeats): double_map SessionIndex,
+		ReceivedHeartbeats get(fn received_heartbeats): double_map SessionIndex,
 			blake2_256(AuthIndex) => Vec<u8>;
 	}
 	add_extra_genesis {
@@ -280,6 +279,8 @@ decl_module! {
 
 		// Runs after every block.
 		fn offchain_worker(now: T::BlockNumber) {
+			debug::RuntimeLogger::init();
+
 			// Only send messages if we are a potential validator.
 			if runtime_io::is_validator() {
 				Self::offchain(now);
@@ -319,6 +320,14 @@ impl<T: Trait> Module<T> {
 				Ok(_) => {},
 				Err(err) => print(err),
 			}
+		} else {
+			debug::native::trace!(
+				target: "imonline",
+				"Skipping gossip at: {:?} >= {:?} || {:?}",
+				next_gossip,
+				now,
+				if not_yet_gossipped { "not gossipped" } else { "gossipped" }
+			);
 		}
 	}
 
@@ -346,6 +355,13 @@ impl<T: Trait> Module<T> {
 
 			let signature = key.sign(&heartbeat_data.encode()).ok_or(OffchainErr::FailedSigning)?;
 			let call = Call::heartbeat(heartbeat_data, signature);
+
+			debug::info!(
+				target: "imonline",
+				"[index: {:?}] Reporting im-online at block: {:?}",
+				authority_index,
+				block_number
+			);
 			T::SubmitTransaction::submit_unsigned(call)
 				.map_err(|_| OffchainErr::SubmitTransaction)?;
 
@@ -538,7 +554,8 @@ impl<T: Trait> support::unsigned::ValidateUnsigned for Module<T> {
 }
 
 /// An offence that is filed if a validator didn't send a heartbeat message.
-#[cfg_attr(feature = "std", derive(Clone, Debug, PartialEq, Eq))]
+#[derive(RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Clone, PartialEq, Eq))]
 pub struct UnresponsivenessOffence<Offender> {
 	/// The current session index in which we report the unresponsive validators.
 	///

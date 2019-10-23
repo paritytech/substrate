@@ -822,7 +822,7 @@ where
 	}
 }
 
-#[deprecated(since = "1.1", note = "Please switch to run_grandpa_voter.")]
+#[deprecated(since = "1.1.0", note = "Please switch to run_grandpa_voter.")]
 pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X>(
 	grandpa_params: GrandpaParams<B, E, Block, N, RA, SC, VR, X>,
 ) -> ::client::error::Result<impl Future<Item=(),Error=()> + Send + 'static> where
