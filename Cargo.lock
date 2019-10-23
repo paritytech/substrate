@@ -2484,7 +2484,7 @@ dependencies = [
  "srml-contracts 2.0.0",
  "srml-contracts-rpc-runtime-api 2.0.0",
  "srml-democracy 2.0.0",
- "srml-elections 2.0.0",
+ "srml-elections-phragmen 2.0.0",
  "srml-executive 2.0.0",
  "srml-finality-tracker 2.0.0",
  "srml-grandpa 2.0.0",
