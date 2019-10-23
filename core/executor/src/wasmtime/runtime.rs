@@ -25,6 +25,7 @@ use crate::wasmtime::util::{cranelift_ir_signature, read_memory_into, write_memo
 use crate::{Externalities, RuntimeVersion};
 
 use codec::Decode;
+use cranelift_codegen::ir;
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_frontend::FunctionBuilderContext;
@@ -165,29 +166,27 @@ fn call_method(
 		.map_err(ActionError::Setup)
 		.map_err(Error::Wasmtime)?;
 
-	let args = unsafe {
-		// Ideally there would be a way to set the heap pages during instantiation rather than
-		// growing the memory after the fact. Current this may require an additional mmap and copy.
-		// However, the wasmtime API doesn't support modifying the size of memory on instantiation
-		// at this time.
-		grow_memory(&mut instance, heap_pages)?;
+	// Ideally there would be a way to set the heap pages during instantiation rather than
+	// growing the memory after the fact. Current this may require an additional mmap and copy.
+	// However, the wasmtime API doesn't support modifying the size of memory on instantiation
+	// at this time.
+	grow_memory(&mut instance, heap_pages)?;
 
-		// Initialize the function executor state.
-		let executor_state = FunctionExecutorState::new(
-			// Unsafely extend the reference lifetime to static. This is necessary because the
-			// host state must be `Any`. This is OK as we will drop this object either before
-			// exiting the function in the happy case or in the worst case on the next runtime
-			// call, which also resets the host state. Thus this reference can never actually
-			// outlive the Context.
-			mem::transmute::<_, &'static mut Compiler>(context.compiler_mut()),
-			get_heap_base(&instance)?,
-		);
-		reset_host_state(context, Some(executor_state))?;
+	// Initialize the function executor state.
+	let executor_state = FunctionExecutorState::new(
+		// Unsafely extend the reference lifetime to static. This is necessary because the
+		// host state must be `Any`. This is OK as we will drop this object either before
+		// exiting the function in the happy case or in the worst case on the next runtime
+		// call, which also resets the host state. Thus this reference can never actually
+		// outlive the Context.
+		unsafe { mem::transmute::<_, &'static mut Compiler>(context.compiler_mut()) },
+		get_heap_base(&instance)?,
+	);
+	reset_host_state(context, Some(executor_state))?;
 
-		// Write the input data into guest memory.
-		let (data_ptr, data_len) = inject_input_data(context, &mut instance, data)?;
-		[RuntimeValue::I32(u32::from(data_ptr) as i32), RuntimeValue::I32(data_len as i32)]
-	};
+	// Write the input data into guest memory.
+	let (data_ptr, data_len) = inject_input_data(context, &mut instance, data)?;
+	let args = [RuntimeValue::I32(u32::from(data_ptr) as i32), RuntimeValue::I32(data_len as i32)];
 
 	// Invoke the function in the runtime.
 	let outcome = externalities::set_and_run_with_externalities(ext, || {
@@ -217,7 +216,7 @@ fn call_method(
 
 	// Read the output data from guest memory.
 	let mut output = vec![0; output_len];
-	let memory = unsafe { get_memory_mut(&mut instance)? };
+	let memory = get_memory_mut(&mut instance)?;
 	read_memory_into(memory, output_ptr, &mut output)?;
 	Ok(output)
 }
@@ -290,11 +289,16 @@ fn clear_globals(global_exports: &mut HashMap<String, Option<Export>>) {
 	global_exports.remove("__indirect_function_table");
 }
 
-unsafe fn grow_memory(instance: &mut InstanceHandle, pages: u32) -> Result<()> {
-	let memory_index = match instance.lookup_immutable("memory") {
-		Some(Export::Memory { definition, vmctx: _, memory: _ }) =>
-			instance.memory_index(&*definition),
-		_ => return Err(Error::InvalidMemoryReference),
+fn grow_memory(instance: &mut InstanceHandle, pages: u32) -> Result<()> {
+	// This is safe to wrap in an unsafe block as:
+	// - The result of the `lookup_immutable` call is not mutated
+	// - The definition pointer is returned by a lookup on a valid instance
+	let memory_index = unsafe {
+		match instance.lookup_immutable("memory") {
+			Some(Export::Memory { definition, vmctx: _, memory: _ }) =>
+				instance.memory_index(&*definition),
+			_ => return Err(Error::InvalidMemoryReference),
+		}
 	};
 	instance.memory_grow(memory_index, pages)
 		.map(|_| ())
@@ -318,7 +322,7 @@ fn reset_host_state(context: &mut Context, executor_state: Option<FunctionExecut
 	Ok(trampoline_state.reset_trap())
 }
 
-unsafe fn inject_input_data(
+fn inject_input_data(
 	context: &mut Context,
 	instance: &mut InstanceHandle,
 	data: &[u8],
@@ -336,22 +340,33 @@ unsafe fn inject_input_data(
 	Ok((data_ptr, data_len))
 }
 
-unsafe fn get_memory_mut(instance: &mut InstanceHandle) -> Result<&mut [u8]> {
+fn get_memory_mut(instance: &mut InstanceHandle) -> Result<&mut [u8]> {
 	match instance.lookup("memory") {
-		Some(Export::Memory { definition, vmctx: _, memory: _ }) =>
+		// This is safe to wrap in an unsafe block as:
+		// - The definition pointer is returned by a lookup on a valid instance and thus points to
+		//   a valid memory definition
+		Some(Export::Memory { definition, vmctx: _, memory: _ }) => unsafe {
 			Ok(std::slice::from_raw_parts_mut(
 				(*definition).base,
 				(*definition).current_length,
-			)),
+			))
+		},
 		_ => Err(Error::InvalidMemoryReference),
 	}
 }
 
-unsafe fn get_heap_base(instance: &InstanceHandle) -> Result<u32> {
-	match instance.lookup_immutable("__heap_base") {
-		Some(Export::Global { definition, vmctx: _, global: _ }) =>
-			Ok(*(*definition).as_u32()),
-		_ => return Err(Error::HeapBaseNotFoundOrInvalid),
+fn get_heap_base(instance: &InstanceHandle) -> Result<u32> {
+	// This is safe to wrap in an unsafe block as:
+	// - The result of the `lookup_immutable` call is not mutated
+	// - The definition pointer is returned by a lookup on a valid instance
+	// - The defined value is checked to be an I32, which can be read safely as a u32
+	unsafe {
+		match instance.lookup_immutable("__heap_base") {
+			Some(Export::Global { definition, vmctx: _, global })
+				if global.ty == ir::types::I32 =>
+				Ok(*(*definition).as_u32()),
+			_ => return Err(Error::HeapBaseNotFoundOrInvalid),
+		}
 	}
 }
 
