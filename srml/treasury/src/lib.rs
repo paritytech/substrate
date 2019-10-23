@@ -626,17 +626,18 @@ mod tests {
 	fn pot_underflow_should_not_diminish() {
 		new_test_ext().execute_with(|| {
 			Treasury::on_dilution(100, 100);
+			assert_eq!(Treasury::pot(), 100);
 
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 150, 3));
 			assert_ok!(Treasury::approve_proposal(Origin::ROOT, 0));
 
 			<Treasury as OnFinalize<u64>>::on_finalize(2);
-			assert_eq!(Treasury::pot(), 100);
+			assert_eq!(Treasury::pot(), 100); // Pot hasn't changed
 
 			Treasury::on_dilution(100, 100);
 			<Treasury as OnFinalize<u64>>::on_finalize(4);
-			assert_eq!(Balances::free_balance(&3), 150);
-			assert_eq!(Treasury::pot(), 75);
+			assert_eq!(Balances::free_balance(&3), 150); // Fund has been spent
+			assert_eq!(Treasury::pot(), 75); // Pot has finally changed
 		});
 	}
 }
