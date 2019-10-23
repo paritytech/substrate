@@ -36,7 +36,7 @@ use sr_primitives::{
 	traits,
 };
 use substrate_primitives::hexdisplay::HexDisplay;
-use transaction_pool::txpool::{self, Pool};
+use transaction_pool::TransactionPool;
 
 pub use srml_system_rpc_runtime_api::AccountNonceApi;
 pub use self::gen_client::Client as SystemClient;
@@ -59,15 +59,15 @@ pub trait SystemApi<AccountId, Index> {
 const RUNTIME_ERROR: i64 = 1;
 
 /// An implementation of System-specific RPC methods on full client.
-pub struct FullSystem<P: txpool::ChainApi, C, B> {
+pub struct FullSystem<P: TransactionPool, C, B> {
 	client: Arc<C>,
-	pool: Arc<Pool<P>>,
+	pool: Arc<P>,
 	_marker: std::marker::PhantomData<B>,
 }
 
-impl<P: txpool::ChainApi, C, B> FullSystem<P, C, B> {
+impl<P: TransactionPool, C, B> FullSystem<P, C, B> {
 	/// Create new `FullSystem` given client and transaction pool.
-	pub fn new(client: Arc<C>, pool: Arc<Pool<P>>) -> Self {
+	pub fn new(client: Arc<C>, pool: Arc<P>) -> Self {
 		FullSystem {
 			client,
 			pool,
@@ -82,7 +82,7 @@ where
 	C: HeaderBackend<Block>,
 	C: Send + Sync + 'static,
 	C::Api: AccountNonceApi<Block, AccountId, Index>,
-	P: txpool::ChainApi + Sync + Send + 'static,
+	P: TransactionPool + Sync + Send + 'static,
 	Block: traits::Block,
 	AccountId: Clone + std::fmt::Display + Codec,
 	Index: Clone + std::fmt::Display + Codec + Send + traits::SimpleArithmetic + 'static,
@@ -107,20 +107,20 @@ where
 }
 
 /// An implementation of System-specific RPC methods on light client.
-pub struct LightSystem<P: txpool::ChainApi, C, F, Block> {
+pub struct LightSystem<P: TransactionPool, C, F, Block> {
 	client: Arc<C>,
 	remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
 	fetcher: Arc<F>,
-	pool: Arc<Pool<P>>,
+	pool: Arc<P>,
 }
 
-impl<P: txpool::ChainApi, C, F, Block> LightSystem<P, C, F, Block> {
+impl<P: TransactionPool, C, F, Block> LightSystem<P, C, F, Block> {
 	/// Create new `LightSystem`.
 	pub fn new(
 		client: Arc<C>,
 		remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
 		fetcher: Arc<F>,
-		pool: Arc<Pool<P>>,
+		pool: Arc<P>,
 	) -> Self {
 		LightSystem {
 			client,
@@ -133,7 +133,7 @@ impl<P: txpool::ChainApi, C, F, Block> LightSystem<P, C, F, Block> {
 
 impl<P, C, F, Block, AccountId, Index> SystemApi<AccountId, Index> for LightSystem<P, C, F, Block>
 where
-	P: txpool::ChainApi + Sync + Send + 'static,
+	P: TransactionPool + Sync + Send + 'static,
 	C: HeaderBackend<Block>,
 	C: Send + Sync + 'static,
 	F: Fetcher<Block> + 'static,
@@ -180,8 +180,8 @@ where
 
 /// Adjust account nonce from state, so that tx with the nonce will be
 /// placed after all ready txpool transactions.
-fn adjust_nonce<P: txpool::ChainApi, AccountId, Index>(
-	pool: &Pool<P>,
+fn adjust_nonce<P: TransactionPool, AccountId, Index>(
+	pool: &P,
 	account: AccountId,
 	nonce: Index,
 ) -> Index where
@@ -225,13 +225,14 @@ mod tests {
 		runtime::Transfer,
 		AccountKeyring,
 	};
+	use transaction_pool::BasicTransactionPool;
 
 	#[test]
 	fn should_return_next_nonce_for_some_account() {
 		// given
 		let _ = env_logger::try_init();
 		let client = Arc::new(test_client::new());
-		let pool = Arc::new(Pool::new(Default::default(), transaction_pool::FullChainApi::new(client.clone())));
+		let pool = Arc::new(BasicTransactionPool::default_full(Default::default(), client.clone()));
 
 		let new_transaction = |nonce: u64| {
 			let t = Transfer {

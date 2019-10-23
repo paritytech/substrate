@@ -33,16 +33,16 @@ use std::sync::Arc;
 
 use node_primitives::{Block, AccountId, Index, Balance};
 use sr_primitives::traits::ProvideRuntimeApi;
-use transaction_pool::txpool::{ChainApi, Pool};
+use transaction_pool::TransactionPool;
 
 /// Instantiate all RPC extensions for full node.
-pub fn create_full<C, P, M>(client: Arc<C>, pool: Arc<Pool<P>>) -> jsonrpc_core::IoHandler<M> where
+pub fn create_full<C, P, M>(client: Arc<C>, pool: Arc<P>) -> jsonrpc_core::IoHandler<M> where
 	C: ProvideRuntimeApi,
 	C: client::blockchain::HeaderBackend<Block>,
 	C: Send + Sync + 'static,
 	C::Api: srml_system_rpc::AccountNonceApi<Block, AccountId, Index>,
 	C::Api: srml_contracts_rpc::ContractsRuntimeApi<Block, AccountId, Balance>,
-	P: ChainApi + Sync + Send + 'static,
+	P: TransactionPool + Sync + Send + 'static,
 	M: jsonrpc_core::Metadata + Default,
 {
 	use srml_system_rpc::{FullSystem, SystemApi};
@@ -63,14 +63,14 @@ pub fn create_light<C, P, M, F>(
 	client: Arc<C>,
 	remote_blockchain: Arc<dyn client::light::blockchain::RemoteBlockchain<Block>>,
 	fetcher: Arc<F>,
-	pool: Arc<Pool<P>>,
+	pool: Arc<P>,
 ) -> jsonrpc_core::IoHandler<M>
 	where
 		C: ProvideRuntimeApi,
 		C: client::blockchain::HeaderBackend<Block>,
 		C: Send + Sync + 'static,
 		C::Api: srml_system_rpc::AccountNonceApi<Block, AccountId, Index>,
-		P: ChainApi + Sync + Send + 'static,
+		P: TransactionPool + Sync + Send + 'static,
 		M: jsonrpc_core::Metadata + Default,
 		F: client::light::fetcher::Fetcher<Block> + 'static,
 {

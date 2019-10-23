@@ -28,10 +28,7 @@ use test_client::{
 	self, AccountKeyring, runtime::{Extrinsic, Transfer, SessionKeys}, DefaultTestClientBuilderExt,
 	TestClientBuilderExt,
 };
-use transaction_pool::{
-	txpool::Pool,
-	FullChainApi,
-};
+use transaction_pool::BasicTransactionPool;
 use tokio::runtime;
 
 fn uxt(sender: AccountKeyring, nonce: u64) -> Extrinsic {
@@ -51,7 +48,7 @@ fn submit_transaction_should_not_cause_error() {
 	let keystore = KeyStore::new();
 	let p = Author {
 		client: client.clone(),
-		pool: Arc::new(Pool::new(Default::default(), FullChainApi::new(client))),
+		pool: Arc::new(BasicTransactionPool::default_full(Default::default(), client)),
 		subscriptions: Subscriptions::new(Arc::new(runtime.executor())),
 		keystore: keystore.clone(),
 	};
@@ -74,7 +71,7 @@ fn submit_rich_transaction_should_not_cause_error() {
 	let keystore = KeyStore::new();
 	let p = Author {
 		client: client.clone(),
-		pool: Arc::new(Pool::new(Default::default(), FullChainApi::new(client.clone()))),
+		pool: Arc::new(BasicTransactionPool::default_full(Default::default(), client)),
 		subscriptions: Subscriptions::new(Arc::new(runtime.executor())),
 		keystore: keystore.clone(),
 	};
@@ -95,7 +92,7 @@ fn should_watch_extrinsic() {
 	//given
 	let mut runtime = runtime::Runtime::new().unwrap();
 	let client = Arc::new(test_client::new());
-	let pool = Arc::new(Pool::new(Default::default(), FullChainApi::new(client.clone())));
+	let pool = Arc::new(BasicTransactionPool::default_full(Default::default(), client.clone()));
 	let keystore = KeyStore::new();
 	let p = Author {
 		client,
@@ -138,7 +135,7 @@ fn should_return_watch_validation_error() {
 	//given
 	let mut runtime = runtime::Runtime::new().unwrap();
 	let client = Arc::new(test_client::new());
-	let pool = Arc::new(Pool::new(Default::default(), FullChainApi::new(client.clone())));
+	let pool = Arc::new(BasicTransactionPool::default_full(Default::default(), client.clone()));
 	let keystore = KeyStore::new();
 	let p = Author {
 		client,
@@ -160,7 +157,7 @@ fn should_return_watch_validation_error() {
 fn should_return_pending_extrinsics() {
 	let runtime = runtime::Runtime::new().unwrap();
 	let client = Arc::new(test_client::new());
-	let pool = Arc::new(Pool::new(Default::default(), FullChainApi::new(client.clone())));
+	let pool = Arc::new(BasicTransactionPool::default_full(Default::default(), client.clone()));
 	let keystore = KeyStore::new();
 	let p = Author {
 		client,
@@ -180,7 +177,7 @@ fn should_return_pending_extrinsics() {
 fn should_remove_extrinsics() {
 	let runtime = runtime::Runtime::new().unwrap();
 	let client = Arc::new(test_client::new());
-	let pool = Arc::new(Pool::new(Default::default(), FullChainApi::new(client.clone())));
+	let pool = Arc::new(BasicTransactionPool::default_full(Default::default(), client.clone()));
 	let keystore = KeyStore::new();
 	let p = Author {
 		client,
@@ -213,7 +210,7 @@ fn should_insert_key() {
 	let keystore = KeyStore::new();
 	let p = Author {
 		client: client.clone(),
-		pool: Arc::new(Pool::new(Default::default(), FullChainApi::new(client))),
+		pool: Arc::new(BasicTransactionPool::default_full(Default::default(), client)),
 		subscriptions: Subscriptions::new(Arc::new(runtime.executor())),
 		keystore: keystore.clone(),
 	};
@@ -241,7 +238,7 @@ fn should_rotate_keys() {
 	);
 	let p = Author {
 		client: client.clone(),
-		pool: Arc::new(Pool::new(Default::default(), FullChainApi::new(client))),
+		pool: Arc::new(BasicTransactionPool::default_full(Default::default(), client)),
 		subscriptions: Subscriptions::new(Arc::new(runtime.executor())),
 		keystore: keystore.clone(),
 	};

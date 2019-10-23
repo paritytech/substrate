@@ -54,14 +54,11 @@ pub use self::error::Error;
 pub use self::builder::{
 	ServiceBuilder, ServiceBuilderExport, ServiceBuilderImport, ServiceBuilderRevert,
 };
-pub use self::pool_maintainer:: {
-	TransactionPoolMaintainer,
-	DefaultLightTransactionPoolMaintainer, DefaultFullTransactionPoolMaintainer,
-};
 pub use config::{Configuration, Roles, PruningMode};
 pub use chain_spec::{ChainSpec, Properties, RuntimeGenesis, Extension as ChainSpecExtension};
+pub use transaction_pool::TransactionPool;
 pub use transaction_pool::txpool::{
-	self, Pool as TransactionPool, Options as TransactionPoolOptions, ChainApi, IntoPoolError
+	self, Options as TransactionPoolOptions, IntoPoolError
 };
 pub use client::FinalityNotifications;
 pub use rpc::Metadata as RpcMetadata;
@@ -161,7 +158,6 @@ macro_rules! new_impl {
 			finality_proof_provider,
 			network_protocol,
 			transaction_pool,
-			transaction_pool_maintainer,
 			rpc_extensions,
 			dht_event_tx,
 		) = $build_components(&$config)?;
@@ -234,7 +230,6 @@ macro_rules! new_impl {
 		{
 			// block notifications
 			let txpool = Arc::downgrade(&transaction_pool);
-			let wclient = Arc::downgrade(&client);
 			let offchain = offchain_workers.as_ref().map(Arc::downgrade);
 			let to_spawn_tx_ = to_spawn_tx.clone();
 			let network_state_info: Arc<dyn NetworkStateInfo + Send + Sync> = network.clone();
@@ -246,14 +241,13 @@ macro_rules! new_impl {
 					let number = *notification.header.number();
 					let txpool = txpool.upgrade();
 
-					if let (Some(txpool), Some(client)) = (txpool.as_ref(), wclient.upgrade()) {
-						let future = transaction_pool_maintainer.maintain(
+					if let Some(txpool) = txpool.as_ref() {
+						use futures03::TryFutureExt;
+						let future = txpool.maintain(
 							&BlockId::hash(notification.hash),
-							&client,
-							&txpool,
-							&notification.retracted,
-						).map_err(|e| warn!("Pool error processing new block: {:?}", e))?;
-						let _ = to_spawn_tx_.unbounded_send(future);
+							&notification.retracted[..],
+						).map(|_| Ok(())).compat();
+						let _ = to_spawn_tx_.unbounded_send(Box::new(future));
 					}
 
 					let offchain = offchain.as_ref().and_then(|o| o.upgrade());
@@ -454,7 +448,6 @@ macro_rules! new_impl {
 }
 
 mod builder;
-mod pool_maintainer;
 
 /// Abstraction over a Substrate service.
 pub trait AbstractService: 'static + Future<Item = (), Error = Error> +
@@ -469,8 +462,8 @@ pub trait AbstractService: 'static + Future<Item = (), Error = Error> +
 	type RuntimeApi: Send + Sync;
 	/// Chain selection algorithm.
 	type SelectChain: consensus_common::SelectChain<Self::Block>;
-	/// API of the transaction pool.
-	type TransactionPoolApi: ChainApi<Block = Self::Block>;
+	/// Transaction pool.
+	type TransactionPool: TransactionPool<Block = Self::Block>;
 	/// Network specialization.
 	type NetworkSpecialization: NetworkSpecialization<Self::Block>;
 
@@ -518,22 +511,22 @@ pub trait AbstractService: 'static + Future<Item = (), Error = Error> +
 	fn network_status(&self) -> mpsc::UnboundedReceiver<(NetworkStatus<Self::Block>, NetworkState)>;
 
 	/// Get shared transaction pool instance.
-	fn transaction_pool(&self) -> Arc<TransactionPool<Self::TransactionPoolApi>>;
+	fn transaction_pool(&self) -> Arc<Self::TransactionPool>;
 
 	/// Get a handle to a future that will resolve on exit.
 	fn on_exit(&self) -> ::exit_future::Exit;
 }
 
-impl<TBl, TBackend, TExec, TRtApi, TSc, TNetSpec, TExPoolApi, TOc> AbstractService for
+impl<TBl, TBackend, TExec, TRtApi, TSc, TNetSpec, TExPool, TOc> AbstractService for
 	NewService<TBl, Client<TBackend, TExec, TBl, TRtApi>, TSc, NetworkStatus<TBl>,
-		NetworkService<TBl, TNetSpec, H256>, TransactionPool<TExPoolApi>, TOc>
+		NetworkService<TBl, TNetSpec, H256>, TExPool, TOc>
 where
 	TBl: BlockT<Hash = H256>,
 	TBackend: 'static + client::backend::Backend<TBl, Blake2Hasher>,
 	TExec: 'static + client::CallExecutor<TBl, Blake2Hasher> + Send + Sync + Clone,
 	TRtApi: 'static + Send + Sync,
 	TSc: consensus_common::SelectChain<TBl> + 'static + Clone + Send,
-	TExPoolApi: 'static + ChainApi<Block = TBl>,
+	TExPool: 'static + TransactionPool<Block = TBl>,
 	TOc: 'static + Send + Sync,
 	TNetSpec: NetworkSpecialization<TBl>,
 {
@@ -542,7 +535,7 @@ where
 	type CallExecutor = TExec;
 	type RuntimeApi = TRtApi;
 	type SelectChain = TSc;
-	type TransactionPoolApi = TExPoolApi;
+	type TransactionPool = TExPool;
 	type NetworkSpecialization = TNetSpec;
 
 	fn telemetry_on_connect_stream(&self) -> mpsc::UnboundedReceiver<()> {
@@ -604,7 +597,7 @@ where
 		stream
 	}
 
-	fn transaction_pool(&self) -> Arc<TransactionPool<Self::TransactionPoolApi>> {
+	fn transaction_pool(&self) -> Arc<Self::TransactionPool> {
 		self.transaction_pool.clone()
 	}
 
@@ -910,10 +903,10 @@ pub struct TransactionPoolAdapter<C, P> {
 /// Get transactions for propagation.
 ///
 /// Function extracted to simplify the test and prevent creating `ServiceFactory`.
-fn transactions_to_propagate<PoolApi, B, H, E>(pool: &TransactionPool<PoolApi>)
+fn transactions_to_propagate<Pool, B, H, E>(pool: &Pool)
 	-> Vec<(H, B::Extrinsic)>
 where
-	PoolApi: ChainApi<Block=B, Hash=H, Error=E>,
+	Pool: TransactionPool<Block=B, Hash=H, Error=E>,
 	B: BlockT,
 	H: std::hash::Hash + Eq + sr_primitives::traits::Member + sr_primitives::traits::MaybeSerialize,
 	E: txpool::error::IntoPoolError + From<txpool::error::Error>,
@@ -928,17 +921,17 @@ where
 		.collect()
 }
 
-impl<B, H, C, PoolApi, E> network::TransactionPool<H, B> for
-	TransactionPoolAdapter<C, TransactionPool<PoolApi>>
+impl<B, H, C, Pool, E> network::TransactionPool<H, B> for
+	TransactionPoolAdapter<C, Pool>
 where
 	C: network::ClientHandle<B> + Send + Sync,
-	PoolApi: 'static + ChainApi<Block=B, Hash=H, Error=E>,
+	Pool: 'static + TransactionPool<Block=B, Hash=H, Error=E>,
 	B: BlockT,
 	H: std::hash::Hash + Eq + sr_primitives::traits::Member + sr_primitives::traits::MaybeSerialize,
-	E: txpool::error::IntoPoolError + From<txpool::error::Error>,
+	E: 'static + txpool::error::IntoPoolError + From<txpool::error::Error>,
 {
 	fn transactions(&self) -> Vec<(H, <B as BlockT>::Extrinsic)> {
-		transactions_to_propagate(&self.pool)
+		transactions_to_propagate(&*self.pool)
 	}
 
 	fn hash_of(&self, transaction: &B::Extrinsic) -> H {
@@ -990,16 +983,14 @@ mod tests {
 	use consensus_common::SelectChain;
 	use sr_primitives::traits::BlindCheckable;
 	use substrate_test_runtime_client::{prelude::*, runtime::{Extrinsic, Transfer}};
+	use transaction_pool::BasicTransactionPool;
 
 	#[test]
 	fn should_not_propagate_transactions_that_are_marked_as_such() {
 		// given
 		let (client, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
 		let client = Arc::new(client);
-		let pool = Arc::new(TransactionPool::new(
-			Default::default(),
-			transaction_pool::FullChainApi::new(client.clone())
-		));
+		let pool = Arc::new(BasicTransactionPool::default_full(Default::default(), client.clone()));
 		let best = longest_chain.best_chain().unwrap();
 		let transaction = Transfer {
 			amount: 5,
@@ -1012,7 +1003,7 @@ mod tests {
 		assert_eq!(pool.status().ready, 2);
 
 		// when
-		let transactions = transactions_to_propagate(&pool);
+		let transactions = transactions_to_propagate(&*pool);
 
 		// then
 		assert_eq!(transactions.len(), 1);

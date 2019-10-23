@@ -31,7 +31,7 @@ use primitives::offchain::{
 	OpaqueNetworkState, OpaquePeerId, OpaqueMultiaddr, StorageKind,
 };
 use sr_primitives::{generic::BlockId, traits::{self, Extrinsic}};
-use transaction_pool::txpool::{Pool, ChainApi};
+use transaction_pool::TransactionPool;
 
 mod http;
 mod timestamp;
@@ -253,23 +253,23 @@ impl TryFrom<OpaqueNetworkState> for NetworkState {
 /// Offchain extensions implementation API
 ///
 /// This is the asynchronous processing part of the API.
-pub(crate) struct AsyncApi<A: ChainApi> {
+pub(crate) struct AsyncApi<P: TransactionPool> {
 	receiver: Option<mpsc::UnboundedReceiver<ExtMessage>>,
-	transaction_pool: Arc<Pool<A>>,
-	at: BlockId<A::Block>,
+	transaction_pool: Arc<P>,
+	at: BlockId<P::Block>,
 	/// Everything HTTP-related is handled by a different struct.
 	http: Option<http::HttpWorker>,
 }
 
-impl<A: ChainApi> AsyncApi<A> {
+impl<P: TransactionPool> AsyncApi<P> {
 	/// Creates new Offchain extensions API implementation  an the asynchronous processing part.
 	pub fn new<S: OffchainStorage>(
-		transaction_pool: Arc<Pool<A>>,
+		transaction_pool: Arc<P>,
 		db: S,
-		at: BlockId<A::Block>,
+		at: BlockId<P::Block>,
 		network_state: Arc<dyn NetworkStateInfo + Send + Sync>,
 		is_validator: bool,
-	) -> (Api<S, A::Block>, AsyncApi<A>) {
+	) -> (Api<S, P::Block>, AsyncApi<P>) {
 		let (sender, rx) = mpsc::unbounded();
 
 		let (http_api, http_worker) = http::http();
@@ -309,7 +309,7 @@ impl<A: ChainApi> AsyncApi<A> {
 	}
 
 	fn submit_extrinsic(&mut self, ext: Vec<u8>) -> impl Future<Output = ()> {
-		let xt = match <A::Block as traits::Block>::Extrinsic::decode(&mut &*ext) {
+		let xt = match <P::Block as traits::Block>::Extrinsic::decode(&mut &*ext) {
 			Ok(xt) => xt,
 			Err(e) => {
 				warn!("Unable to decode extrinsic: {:?}: {}", ext, e.what());
@@ -335,6 +335,7 @@ mod tests {
 	use client_db::offchain::LocalStorage;
 	use network::PeerId;
 	use test_client::runtime::Block;
+	use transaction_pool::BasicTransactionPool;
 
 	struct MockNetworkStateInfo();
 
@@ -348,13 +349,11 @@ mod tests {
 		}
 	}
 
-	fn offchain_api() -> (Api<LocalStorage, Block>, AsyncApi<impl ChainApi>) {
+	fn offchain_api() -> (Api<LocalStorage, Block>, AsyncApi<impl TransactionPool>) {
 		let _ = env_logger::try_init();
 		let db = LocalStorage::new_test();
 		let client = Arc::new(test_client::new());
-		let pool = Arc::new(
-			Pool::new(Default::default(), transaction_pool::FullChainApi::new(client.clone()))
-		);
+		let pool = Arc::new(BasicTransactionPool::default_full(Default::default(), client.clone()));
 
 		let mock = Arc::new(MockNetworkStateInfo());
 		AsyncApi::new(

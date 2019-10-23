@@ -23,6 +23,7 @@ use std::{
 use crate::base_pool as base;
 use crate::error;
 use crate::listener::Listener;
+use crate::ready::BestIterator;
 use crate::rotator::PoolRotator;
 use crate::watcher::Watcher;
 use serde::Serialize;
@@ -75,19 +76,15 @@ pub(crate) struct ValidatedPool<B: ChainApi> {
 impl<B: ChainApi> ValidatedPool<B> {
 	/// Create a new transaction pool.
 	pub fn new(options: Options, api: B) -> Self {
+		let base_pool = base::BasePool::new(options.reject_future_transactions);
 		ValidatedPool {
 			api,
 			options,
 			listener: Default::default(),
-			pool: Default::default(),
+			pool: RwLock::new(base_pool),
 			import_notification_sinks: Default::default(),
 			rotator: Default::default(),
 		}
-	}
-
-	/// Start rejecting future transactions.
-	pub fn reject_future_transactions(&self) {
-		self.pool.write().reject_future_transactions();
 	}
 
 	/// Bans given set of hashes.
@@ -433,7 +430,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 	}
 
 	/// Get an iterator for ready transactions ordered by priority
-	pub fn ready(&self) -> impl Iterator<Item=TransactionFor<B>> {
+	pub fn ready(&self) -> BestIterator<ExHash<B>, ExtrinsicFor<B>> {
 		self.pool.read().ready()
 	}
 

@@ -29,7 +29,7 @@ use node_runtime::{GenesisConfig, RuntimeApi};
 use substrate_service::{
 	AbstractService, ServiceBuilder, config::Configuration, error::{Error as ServiceError},
 };
-use transaction_pool::{self, txpool::{Pool as TransactionPool}};
+use transaction_pool::{BasicTransactionPool, DefaultFullTransactionPoolMaintainer, FullChainApi};
 use inherents::InherentDataProviders;
 use network::construct_simple_protocol;
 
@@ -64,7 +64,7 @@ macro_rules! new_full_start {
 				Ok(client::LongestChain::new(backend.clone()))
 			})?
 			.with_transaction_pool(|config, client, _fetcher|
-				Ok(transaction_pool::txpool::Pool::new(config, transaction_pool::FullChainApi::new(client)))
+				Ok(transaction_pool::BasicTransactionPool::default_full(config, client))
 			)?
 			.with_import_queue(|_config, client, mut select_chain, _transaction_pool| {
 				let select_chain = select_chain.take()
@@ -237,6 +237,17 @@ type ConcreteClient =
 	>;
 #[allow(dead_code)]
 type ConcreteBackend = Backend<ConcreteBlock>;
+#[allow(dead_code)]
+type ConcreteTransactionPool = BasicTransactionPool<
+		FullChainApi<ConcreteClient, Block>,
+		DefaultFullTransactionPoolMaintainer<
+			ConcreteBackend,
+			LocalCallExecutor<Backend<ConcreteBlock>, NativeExecutor<node_executor::Executor>>,
+			Block,
+			node_runtime::RuntimeApi,
+		>,
+		Block,
+	>;
 
 /// A specialized configuration object for setting up the node..
 pub type NodeConfiguration<C> = Configuration<C, GenesisConfig, crate::chain_spec::Extensions>;
@@ -250,7 +261,7 @@ pub fn new_full<C: Send + Default + 'static>(config: NodeConfiguration<C>)
 		LongestChain<ConcreteBackend, ConcreteBlock>,
 		NetworkStatus<ConcreteBlock>,
 		NetworkService<ConcreteBlock, crate::service::NodeProtocol, <ConcreteBlock as BlockT>::Hash>,
-		TransactionPool<transaction_pool::FullChainApi<ConcreteClient, ConcreteBlock>>,
+		ConcreteTransactionPool,
 		OffchainWorkers<
 			ConcreteClient,
 			<ConcreteBackend as client::backend::Backend<Block, Blake2Hasher>>::OffchainStorage,
@@ -276,9 +287,7 @@ pub fn new_light<C: Send + Default + 'static>(config: NodeConfiguration<C>)
 		.with_transaction_pool(|config, client, fetcher| {
 			let fetcher = fetcher
 				.ok_or_else(|| "Trying to start light transaction pool without active fetcher")?;
-			let pool = TransactionPool::new(config, transaction_pool::LightChainApi::new(client, fetcher));
-			pool.reject_future_transactions();
-			Ok(pool)
+			Ok(transaction_pool::BasicTransactionPool::default_light(config, client, fetcher))
 		})?
 		.with_import_queue_and_fprb(|_config, client, backend, fetcher, _select_chain, _tx_pool| {
 			let fetch_checker = fetcher

@@ -22,6 +22,7 @@ use std::{
 
 use crate::base_pool as base;
 use crate::error;
+use crate::ready::BestIterator;
 use crate::watcher::Watcher;
 use serde::Serialize;
 
@@ -92,6 +93,8 @@ pub struct Options {
 	pub ready: base::Limit,
 	/// Future queue limits.
 	pub future: base::Limit,
+	/// Reject future transactions.
+	pub reject_future_transactions: bool,
 }
 
 impl Default for Options {
@@ -105,6 +108,7 @@ impl Default for Options {
 				count: 128,
 				total_bytes: 1 * 1024 * 1024,
 			},
+			reject_future_transactions: false,
 		}
 	}
 }
@@ -120,11 +124,6 @@ impl<B: ChainApi> Pool<B> {
 		Pool {
 			validated_pool: Arc::new(ValidatedPool::new(options, api)),
 		}
-	}
-
-	/// Start rejecting future transactions.
-	pub fn reject_future_transactions(&self) {
-		self.validated_pool.reject_future_transactions();
 	}
 
 	/// Imports a bunch of unverified extrinsics to the pool
@@ -325,7 +324,7 @@ impl<B: ChainApi> Pool<B> {
 	}
 
 	/// Get an iterator for ready transactions ordered by priority
-	pub fn ready(&self) -> impl Iterator<Item=TransactionFor<B>> {
+	pub fn ready(&self) -> BestIterator<ExHash<B>, ExtrinsicFor<B>> {
 		self.validated_pool.ready()
 	}
 
@@ -674,6 +673,7 @@ mod tests {
 		let pool = Pool::new(Options {
 			ready: limit.clone(),
 			future: limit.clone(),
+			..Default::default()
 		}, TestApi::default());
 
 		let hash1 = block_on(pool.submit_one(&BlockId::Number(0), uxt(Transfer {
@@ -708,6 +708,7 @@ mod tests {
 		let pool = Pool::new(Options {
 			ready: limit.clone(),
 			future: limit.clone(),
+			..Default::default()
 		}, TestApi::default());
 
 		// when
@@ -883,6 +884,7 @@ mod tests {
 			let pool = Pool::new(Options {
 				ready: limit.clone(),
 				future: limit.clone(),
+				..Default::default()
 			}, TestApi::default());
 
 			let xt = uxt(Transfer {

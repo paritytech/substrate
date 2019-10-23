@@ -35,6 +35,7 @@ use service::{
 use network::{multiaddr, Multiaddr};
 use network::config::{NetworkConfiguration, TransportConfig, NodeKeyConfig, Secret, NonReservedPeerMode};
 use sr_primitives::{generic::BlockId, traits::Block as BlockT};
+use transaction_pool::TransactionPool;
 
 /// Maximum duration of single wait call.
 const MAX_WAIT_TIME: Duration = Duration::from_secs(60 * 3);

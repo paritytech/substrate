@@ -35,21 +35,21 @@ use sr_primitives::{
 	},
 	generic::BlockId,
 };
-use transaction_pool::txpool::{self, Pool as TransactionPool};
+use transaction_pool::TransactionPool;
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 
 /// Proposer factory.
-pub struct ProposerFactory<C, A> where A: txpool::ChainApi {
+pub struct ProposerFactory<C, A> where A: TransactionPool {
 	/// The client instance.
 	pub client: Arc<C>,
 	/// The transaction pool.
-	pub transaction_pool: Arc<TransactionPool<A>>,
+	pub transaction_pool: Arc<A>,
 }
 
 impl<B, E, Block, RA, A> consensus_common::Environment<Block> for
 ProposerFactory<SubstrateClient<B, E, Block, RA>, A>
 where
-	A: txpool::ChainApi<Block=Block>,
+	A: TransactionPool<Block=Block>,
 	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
 	Block: BlockT<Hash=H256>,
@@ -84,19 +84,19 @@ where
 }
 
 /// The proposer logic.
-pub struct Proposer<Block: BlockT, C, A: txpool::ChainApi> {
+pub struct Proposer<Block: BlockT, C, A: TransactionPool> {
 	client: Arc<C>,
 	parent_hash: <Block as BlockT>::Hash,
 	parent_id: BlockId<Block>,
 	parent_number: <<Block as BlockT>::Header as HeaderT>::Number,
-	transaction_pool: Arc<TransactionPool<A>>,
+	transaction_pool: Arc<A>,
 	now: Box<dyn Fn() -> time::Instant>,
 }
 
 impl<B, E, Block, RA, A> consensus_common::Proposer<Block> for
 Proposer<Block, SubstrateClient<B, E, Block, RA>, A>
 where
-	A: txpool::ChainApi<Block=Block>,
+	A: TransactionPool<Block=Block>,
 	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
 	Block: BlockT<Hash=H256>,
@@ -120,7 +120,7 @@ where
 }
 
 impl<Block, B, E, RA, A> Proposer<Block, SubstrateClient<B, E, Block, RA>, A>	where
-	A: txpool::ChainApi<Block=Block>,
+	A: TransactionPool<Block=Block>,
 	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
 	Block: BlockT<Hash=H256>,
@@ -233,6 +233,7 @@ mod tests {
 	use std::cell::RefCell;
 	use consensus_common::{Environment, Proposer};
 	use test_client::{self, runtime::{Extrinsic, Transfer}, AccountKeyring};
+	use transaction_pool::BasicTransactionPool;
 
 	fn extrinsic(nonce: u64) -> Extrinsic {
 		Transfer {
@@ -247,8 +248,7 @@ mod tests {
 	fn should_cease_building_block_when_deadline_is_reached() {
 		// given
 		let client = Arc::new(test_client::new());
-		let chain_api = transaction_pool::FullChainApi::new(client.clone());
-		let txpool = Arc::new(TransactionPool::new(Default::default(), chain_api));
+		let txpool = Arc::new(BasicTransactionPool::default_full(Default::default(), client.clone()));
 
 		futures::executor::block_on(
 			txpool.submit_at(&BlockId::number(0), vec![extrinsic(0), extrinsic(1)], false)

@@ -37,6 +37,7 @@ pub mod watcher;
 
 pub use self::error::IntoPoolError;
 pub use self::base_pool::{Transaction, Status};
+pub use self::ready::BestIterator;
 pub use self::pool::{
 	Pool,
 	Options, ChainApi, EventStream, ExtrinsicFor,

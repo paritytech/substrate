@@ -45,7 +45,7 @@ use log::{debug, warn};
 use network::NetworkStateInfo;
 use primitives::{offchain, ExecutionContext};
 use sr_primitives::{generic::BlockId, traits::{self, ProvideRuntimeApi}};
-use transaction_pool::txpool::{Pool, ChainApi};
+use transaction_pool::TransactionPool;
 
 mod api;
 
@@ -93,13 +93,13 @@ impl<Client, Storage, Block> OffchainWorkers<
 {
 	/// Start the offchain workers after given block.
 	#[must_use]
-	pub fn on_block_imported<A>(
+	pub fn on_block_imported<P>(
 		&self,
 		number: &<Block::Header as traits::Header>::Number,
-		pool: &Arc<Pool<A>>,
+		pool: &Arc<P>,
 		network_state: Arc<dyn NetworkStateInfo + Send + Sync>,
 		is_validator: bool,
-	) -> impl Future<Output = ()> where A: ChainApi<Block=Block> + 'static {
+	) -> impl Future<Output = ()> where P: TransactionPool<Block=Block> + 'static {
 		let runtime = self.client.runtime_api();
 		let at = BlockId::number(*number);
 		let has_api = runtime.has_api::<dyn OffchainWorkerApi<Block>>(&at);
@@ -153,6 +153,7 @@ fn spawn_worker(f: impl FnOnce() -> () + Send + 'static) {
 mod tests {
 	use super::*;
 	use network::{Multiaddr, PeerId};
+	use transaction_pool::BasicTransactionPool;
 
 	struct MockNetworkStateInfo();
 
@@ -171,7 +172,7 @@ mod tests {
 		// given
 		let _ = env_logger::try_init();
 		let client = Arc::new(test_client::new());
-		let pool = Arc::new(Pool::new(Default::default(), transaction_pool::FullChainApi::new(client.clone())));
+		let pool = Arc::new(BasicTransactionPool::default_full(Default::default(), client.clone()));
 		let db = client_db::offchain::LocalStorage::new_test();
 		let network_state = Arc::new(MockNetworkStateInfo());
 

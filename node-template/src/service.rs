@@ -8,7 +8,6 @@ use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider};
 use futures::prelude::*;
 use node_template_runtime::{self, GenesisConfig, opaque::Block, RuntimeApi};
 use substrate_service::{error::{Error as ServiceError}, AbstractService, Configuration, ServiceBuilder};
-use transaction_pool::{self, txpool::{Pool as TransactionPool}};
 use inherents::InherentDataProviders;
 use network::construct_simple_protocol;
 use substrate_executor::native_executor_instance;
@@ -42,7 +41,7 @@ macro_rules! new_full_start {
 				Ok(substrate_client::LongestChain::new(backend.clone()))
 			})?
 			.with_transaction_pool(|config, client, _fetcher|
-				Ok(transaction_pool::txpool::Pool::new(config, transaction_pool::FullChainApi::new(client)))
+				Ok(transaction_pool::BasicTransactionPool::default_full(config, client))
 			)?
 			.with_import_queue(|_config, client, mut select_chain, _transaction_pool| {
 				let select_chain = select_chain.take()
@@ -189,8 +188,7 @@ pub fn new_light<C: Send + Default + 'static>(config: Configuration<C, GenesisCo
 		.with_transaction_pool(|config, client, fetcher| {
 			let fetcher = fetcher
 				.ok_or_else(|| "Trying to start light transaction pool without active fetcher")?;
-			let pool = TransactionPool::new(config, transaction_pool::LightChainApi::new(client, fetcher));
-			pool.reject_future_transactions();
+			let pool = transaction_pool::BasicTransactionPool::default_light(config, client, fetcher);
 			Ok(pool)
 		})?
 		.with_import_queue_and_fprb(|_config, client, backend, fetcher, _select_chain, _tx_pool| {

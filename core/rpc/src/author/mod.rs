@@ -35,12 +35,11 @@ use codec::{Encode, Decode};
 use primitives::{Bytes, Blake2Hasher, H256, traits::BareCryptoStorePtr};
 use sr_primitives::{generic, traits::{self, ProvideRuntimeApi}};
 use transaction_pool::{
+	TransactionPool,
+	BlockHash,
+	ExHash,
 	txpool::{
-		ChainApi as PoolChainApi,
-		BlockHash,
-		ExHash,
 		IntoPoolError,
-		Pool,
 		watcher::Status,
 	},
 };
@@ -51,22 +50,22 @@ pub use api::author::*;
 use self::error::{Error, FutureResult, Result};
 
 /// Authoring API
-pub struct Author<B, E, P, RA> where P: PoolChainApi + Sync + Send + 'static {
+pub struct Author<B, E, P, RA> where P: TransactionPool + Sync + Send + 'static {
 	/// Substrate client
-	client: Arc<Client<B, E, <P as PoolChainApi>::Block, RA>>,
+	client: Arc<Client<B, E, <P as TransactionPool>::Block, RA>>,
 	/// Transactions pool
-	pool: Arc<Pool<P>>,
+	pool: Arc<P>,
 	/// Subscriptions manager
 	subscriptions: Subscriptions,
 	/// The key store.
 	keystore: BareCryptoStorePtr,
 }
 
-impl<B, E, P, RA> Author<B, E, P, RA> where P: PoolChainApi + Sync + Send + 'static {
+impl<B, E, P, RA> Author<B, E, P, RA> where P: TransactionPool + Sync + Send + 'static {
 	/// Create new instance of Authoring API.
 	pub fn new(
-		client: Arc<Client<B, E, <P as PoolChainApi>::Block, RA>>,
-		pool: Arc<Pool<P>>,
+		client: Arc<Client<B, E, <P as TransactionPool>::Block, RA>>,
+		pool: Arc<P>,
 		subscriptions: Subscriptions,
 		keystore: BareCryptoStorePtr,
 	) -> Self {
@@ -80,9 +79,9 @@ impl<B, E, P, RA> Author<B, E, P, RA> where P: PoolChainApi + Sync + Send + 'sta
 }
 
 impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> where
-	B: client::backend::Backend<<P as PoolChainApi>::Block, Blake2Hasher> + Send + Sync + 'static,
-	E: client::CallExecutor<<P as PoolChainApi>::Block, Blake2Hasher> + Send + Sync + 'static,
-	P: PoolChainApi + Sync + Send + 'static,
+	B: client::backend::Backend<<P as TransactionPool>::Block, Blake2Hasher> + Send + Sync + 'static,
+	E: client::CallExecutor<<P as TransactionPool>::Block, Blake2Hasher> + Send + Sync + 'static,
+	P: TransactionPool + Sync + Send + 'static,
 	P::Block: traits::Block<Hash=H256>,
 	P::Error: 'static,
 	RA: Send + Sync + 'static,
@@ -159,7 +158,7 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 	) {
 		let submit = || -> Result<_> {
 			let best_block_hash = self.client.info().chain.best_hash;
-			let dxt = <<P as PoolChainApi>::Block as traits::Block>::Extrinsic::decode(&mut &xt[..])
+			let dxt = <<P as TransactionPool>::Block as traits::Block>::Extrinsic::decode(&mut &xt[..])
 				.map_err(error::Error::from)?;
 			Ok(
 				self.pool

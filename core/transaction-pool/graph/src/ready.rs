@@ -144,7 +144,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 	/// - transactions that are valid for a shorter time go first
 	/// 4. Lastly we sort by the time in the queue
 	/// - transactions that are longer in the queue go first
-	pub fn get(&self) -> impl Iterator<Item=Arc<Transaction<Hash, Ex>>> {
+	pub fn get(&self) -> BestIterator<Hash, Ex> {
 		BestIterator {
 			all: self.ready.clone(),
 			best: self.best.clone(),
@@ -420,6 +420,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 	}
 }
 
+/// Iterator of ready transactions ordered by priority.
 pub struct BestIterator<Hash, Ex> {
 	all: Arc<RwLock<HashMap<Hash, ReadyTx<Hash, Ex>>>>,
 	awaiting: HashMap<Hash, (usize, TransactionRef<Hash, Ex>)>,

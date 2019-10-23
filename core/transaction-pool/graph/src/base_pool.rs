@@ -37,7 +37,7 @@ use sr_primitives::transaction_validity::{
 
 use crate::error;
 use crate::future::{FutureTransactions, WaitingTransaction};
-use crate::ready::ReadyTransactions;
+use crate::ready::{ReadyTransactions, BestIterator};
 
 /// Successful import result.
 #[derive(Debug, PartialEq, Eq)]
@@ -169,22 +169,22 @@ pub struct BasePool<Hash: hash::Hash + Eq, Ex> {
 	recently_pruned_index: usize,
 }
 
-impl<Hash: hash::Hash + Eq, Ex> Default for BasePool<Hash, Ex> {
+impl<Hash: hash::Hash + Member + Serialize, Ex: ::std::fmt::Debug> Default for BasePool<Hash, Ex> {
 	fn default() -> Self {
+		Self::new(false)
+	}
+}
+
+impl<Hash: hash::Hash + Member + Serialize, Ex: ::std::fmt::Debug> BasePool<Hash, Ex> {
+	/// Create new pool given reject_future_transactions flag.
+	pub fn new(reject_future_transactions: bool) -> Self {
 		BasePool {
-			reject_future_transactions: false,
+			reject_future_transactions,
 			future: Default::default(),
 			ready: Default::default(),
 			recently_pruned: Default::default(),
 			recently_pruned_index: 0,
 		}
-	}
-}
-
-impl<Hash: hash::Hash + Member + Serialize, Ex: ::std::fmt::Debug> BasePool<Hash, Ex> {
-	/// Start rejecting future transactions.
-	pub fn reject_future_transactions(&mut self) {
-		self.reject_future_transactions = true;
 	}
 
 	/// Imports transaction to the pool.
@@ -290,7 +290,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: ::std::fmt::Debug> BasePool<Hash
 	}
 
 	/// Returns an iterator over ready transactions in the pool.
-	pub fn ready(&self) -> impl Iterator<Item=Arc<Transaction<Hash, Ex>>> {
+	pub fn ready(&self) -> BestIterator<Hash, Ex> {
 		self.ready.get()
 	}
 
@@ -989,7 +989,7 @@ requires: [03,02], provides: [04], data: [4]}".to_owned()
 		let mut pool = pool();
 
 		// when
-		pool.reject_future_transactions();
+		pool.reject_future_transactions = true;
 
 		// then
 		let err = pool.import(Transaction {
