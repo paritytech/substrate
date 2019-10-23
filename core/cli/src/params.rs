@@ -150,7 +150,6 @@ arg_enum! {
 	#[allow(missing_docs)]
 	#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 	pub enum NodeKeyType {
-		Secp256k1,
 		Ed25519
 	}
 }
@@ -163,10 +162,6 @@ pub struct NodeKeyParams {
 	///
 	/// The value is a string that is parsed according to the choice of
 	/// `--node-key-type` as follows:
-	///
-	///   `secp256k1`:
-	///   The value is parsed as a hex-encoded Secp256k1 32 bytes secret key,
-	///   i.e. 64 hex characters.
 	///
 	///   `ed25519`:
 	///   The value is parsed as a hex-encoded Ed25519 32 bytes secret key,
@@ -198,10 +193,6 @@ pub struct NodeKeyParams {
 	///
 	/// The node's secret key determines the corresponding public key and hence the
 	/// node's peer ID in the context of libp2p.
-	///
-	/// NOTE: The current default key type is `secp256k1` for a transition period only
-	/// but will eventually change to `ed25519` in a future release. To continue using
-	/// `secp256k1` keys, use `--node-key-type=secp256k1`.
 	#[structopt(
 		long = "node-key-type",
 		value_name = "TYPE",
@@ -215,9 +206,6 @@ pub struct NodeKeyParams {
 	///
 	/// The contents of the file are parsed according to the choice of `--node-key-type`
 	/// as follows:
-	///
-	///   `secp256k1`:
-	///   The file must contain an unencoded 32 bytes Secp256k1 secret key.
 	///
 	///   `ed25519`:
 	///   The file must contain an unencoded 32 bytes Ed25519 secret key.

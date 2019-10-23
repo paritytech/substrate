@@ -17,6 +17,7 @@
 use crate::{NewService, NetworkStatus, NetworkState, error::{self, Error}, DEFAULT_PROTOCOL_ID};
 use crate::{SpawnTaskHandle, start_rpc_servers, build_network_future, TransactionPoolAdapter};
 use crate::TaskExecutor;
+use crate::status_sinks;
 use crate::config::Configuration;
 use client::{
 	BlockchainEvents, Client, runtime_api,
