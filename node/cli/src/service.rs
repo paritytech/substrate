@@ -207,7 +207,9 @@ macro_rules! new_full {
 					telemetry_on_connect: Some(service.telemetry_on_connect_stream()),
 					voting_rule: grandpa::VotingRulesBuilder::default().build(),
 				};
-				service.spawn_task(Box::new(grandpa::run_grandpa_voter(grandpa_config)?));
+				// the GRANDPA voter task is considered infallible, i.e.
+				// if it fails we take down the service with it.
+				service.spawn_essential_task(grandpa::run_grandpa_voter(grandpa_config)?);
 			},
 			(_, true) => {
 				grandpa::setup_disabled_grandpa(
