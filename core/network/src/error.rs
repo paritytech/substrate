@@ -28,8 +28,8 @@ pub enum Error {
 	Io(std::io::Error),
 	/// Client error
 	Client(client::error::Error),
-	/// Some other error occurred.
-	Other(String),
+	/// The same bootnode (based on address) is given with two different peer ids.
+	DuplicateBootnode(String),
 }
 
 impl std::error::Error for Error {
