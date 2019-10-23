@@ -723,16 +723,17 @@ mod tests {
 		let mut consensus = ConsensusGossip::<Block>::new();
 		consensus.register_validator_internal([0, 0, 0, 0], Arc::new(AllowAll));
 
-		let message = ConsensusMessage { data: vec![4, 5, 6], engine_id: [0, 0, 0, 0] };
-		let topic = HashFor::<Block>::hash(&[1,2,3]);
+		let data = vec![4, 5, 6];
+		let message = ConsensusMessage { data: data.clone(), engine_id: [0, 0, 0, 0] };
+		let topic = HashFor::<Block>::hash(&[1, 2, 3]);
 
 		consensus.register_message(topic, message.clone());
 
 		let mut stream1 = block_on_stream(consensus.messages_for([0, 0, 0, 0], topic));
 		let mut stream2 = block_on_stream(consensus.messages_for([0, 0, 0, 0], topic));
 
-		assert_eq!(stream1.next(), Some(TopicNotification { message: message.data, sender: None }));
-		assert_eq!(stream2.next(), Some(TopicNotification { message: message.data, sender: None }));
+		assert_eq!(stream1.next(), Some(TopicNotification { message: data.clone(), sender: None }));
+		assert_eq!(stream2.next(), Some(TopicNotification { message: data, sender: None }));
 	}
 
 	#[test]
