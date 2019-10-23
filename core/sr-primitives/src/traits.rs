@@ -109,9 +109,9 @@ impl Verify for primitives::ecdsa::Signature {
 /// Means of signature verification of an application key.
 pub trait AppVerify {
 	/// Type of the signer.
-	type Signer: IdentifyAccount;
+	type AccountId;
 	/// Verify a signature. Return `true` if signature is valid for the value.
-	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &<Self::Signer as IdentifyAccount>::AccountId) -> bool;
+	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &Self::AccountId) -> bool;
 }
 
 impl<
@@ -119,14 +119,16 @@ impl<
 	T: app_crypto::Wraps<Inner=S> + app_crypto::AppKey + app_crypto::AppSignature +
 		AsRef<S> + AsMut<S> + From<S>,
 > AppVerify for T where
+	<S as Verify>::Signer: IdentifyAccount<AccountId = <S as Verify>::Signer>,
 	<<T as AppKey>::Public as app_crypto::AppPublic>::Generic:
-		IdentifyAccount<AccountId = <<T as AppKey>::Public as IdentifyAccount>::AccountId>,
-	<T as AppKey>::Public: IdentifyAccount,
+		IdentifyAccount<AccountId = <<T as AppKey>::Public as app_crypto::AppPublic>::Generic>,
 {
-	type Signer = <T as AppKey>::Public;
-	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &<Self::Signer as IdentifyAccount>::AccountId) -> bool {
+	type AccountId = <T as AppKey>::Public;
+	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &<T as AppKey>::Public) -> bool {
+		use app_crypto::IsWrappedBy;
 		let inner: &S = self.as_ref();
-		Verify::verify(inner, msg, signer)
+		let inner_pubkey = <<T as AppKey>::Public as app_crypto::AppPublic>::Generic::from_ref(&signer);
+		Verify::verify(inner, msg, inner_pubkey)
 	}
 }
 
@@ -1214,6 +1216,21 @@ impl Printable for Tuple {
 mod tests {
 	use super::AccountIdConversion;
 	use crate::codec::{Encode, Decode, Input};
+
+	mod t {
+		use primitives::crypto::KeyTypeId;
+		use app_crypto::{app_crypto, sr25519};
+		app_crypto!(sr25519, KeyTypeId(*b"test"));
+	}
+
+	#[test]
+	fn app_verify_works() {
+		use t::*;
+		use super::AppVerify;
+
+		let s = Signature::default();
+		let _ = s.verify(&[0u8; 100][..], &Public::default());
+	}
 
 	#[derive(Encode, Decode, Default, PartialEq, Debug)]
 	struct U32Value(u32);
