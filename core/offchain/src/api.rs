@@ -71,6 +71,7 @@ fn unavailable_yet<R: Default>(name: &str) -> R {
 }
 
 const LOCAL_DB: &str = "LOCAL (fork-aware) DB";
+/// Local Storage Prefix used by the Offchain Worker API to
 pub const STORAGE_PREFIX: &[u8] = b"storage";
 
 impl<Storage, Block> OffchainExt for Api<Storage, Block>
