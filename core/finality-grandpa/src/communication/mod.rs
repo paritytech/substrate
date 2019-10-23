@@ -130,7 +130,12 @@ pub trait Network<Block: BlockT>: Clone + Send + 'static {
 	/// Inform peers that a block with given hash should be downloaded.
 	fn announce(&self, block: Block::Hash, associated_data: Vec<u8>);
 
-	/// Configure an explicit fork sync request.
+	/// Notifies the sync service to try and sync the given block from the given
+	/// peers.
+	///
+	/// If the given vector of peers is empty then the underlying implementation
+	/// should make a best effort to fetch the block from any peers it is
+	/// connected to (NOTE: this assumption will change in the future #3629).
 	fn set_sync_fork_request(&self, peers: Vec<network::PeerId>, hash: Block::Hash, number: NumberFor<Block>);
 }
 
@@ -525,6 +530,12 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		(incoming, outgoing)
 	}
 
+	/// Notifies the sync service to try and sync the given block from the given
+	/// peers.
+	///
+	/// If the given vector of peers is empty then the underlying implementation
+	/// should make a best effort to fetch the block from any peers it is
+	/// connected to (NOTE: this assumption will change in the future #3629).
 	pub(crate) fn set_sync_fork_request(&self, peers: Vec<network::PeerId>, hash: B::Hash, number: NumberFor<B>) {
 		self.service.set_sync_fork_request(peers, hash, number)
 	}
