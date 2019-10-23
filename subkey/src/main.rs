@@ -61,7 +61,7 @@ trait Crypto: Sized {
 		if let Ok((pair, seed)) = Self::Pair::from_phrase(uri, password) {
 			let public_key = Self::public_from_pair(&pair);
 			println!("Secret phrase `{}` is account:\n  \
-				Secret seed:     {}\n  \
+				Secret seed:      {}\n  \
 				Public key (hex): {}\n  \
 				Account ID:       {}\n  \
 				SS58 Address:     {}",
@@ -71,13 +71,15 @@ trait Crypto: Sized {
 				format_account_id::<Self>(public_key),
 				Self::ss58_from_pair(&pair)
 			);
-		} else if let Ok(pair) = Self::Pair::from_string(uri, password) {
+		} else if let Ok((pair, seed)) = Self::Pair::from_string_with_seed(uri, password) {
 			let public_key = Self::public_from_pair(&pair);
 			println!("Secret Key URI `{}` is account:\n  \
+				Secret seed:      {}\n  \
 				Public key (hex): {}\n  \
 				Account ID:       {}\n  \
 				SS58 Address:     {}",
 				uri,
+				if let Some(seed) = seed { format_seed::<Self>(seed) } else { "n/a".into() },
 				format_public_key::<Self>(public_key.clone()),
 				format_account_id::<Self>(public_key),
 				Self::ss58_from_pair(&pair)

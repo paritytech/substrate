@@ -647,8 +647,8 @@ mod dummy {
 			Ok(Default::default())
 		}
 		fn derive<
-			Iter: Iterator<Item=DeriveJunction>
-		>(&self, _: Iter) -> Result<Self, Self::DeriveError> { Ok(Self) }
+			Iter: Iterator<Item=DeriveJunction>,
+		>(&self, _: Iter, _: Option<Dummy>) -> Result<(Self, Option<Dummy>), Self::DeriveError> { Ok((Self, None)) }
 		fn from_seed(_: &Self::Seed) -> Self { Self }
 		fn from_seed_slice(_: &[u8]) -> Result<Self, SecretStringError> { Ok(Self) }
 		fn sign(&self, _: &[u8]) -> Self::Signature { Self }
@@ -700,7 +700,10 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 	fn from_phrase(phrase: &str, password: Option<&str>) -> Result<(Self, Self::Seed), SecretStringError>;
 
 	/// Derive a child key from a series of given junctions.
-	fn derive<Iter: Iterator<Item=DeriveJunction>>(&self, path: Iter) -> Result<Self, Self::DeriveError>;
+	fn derive<Iter: Iterator<Item=DeriveJunction>>(&self,
+		path: Iter,
+		seed: Option<Self::Seed>
+	) -> Result<(Self, Option<Self::Seed>), Self::DeriveError>;
 
 	/// Generate new key pair from the provided `seed`.
 	///
@@ -727,7 +730,9 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 	/// Get the public key.
 	fn public(&self) -> Self::Public;
 
-	/// Interprets the string `s` in order to generate a key Pair.
+	/// Interprets the string `s` in order to generate a key Pair. Returns both the pair and an optional seed, in the
+	/// case that the pair can be expressed as a direct derivation from a seed (some cases, such as Sr25519 derivations
+	/// with path components, cannot).
 	///
 	/// This takes a helper function to do the key generation from a phrase, password and
 	/// junction iterator.
@@ -753,8 +758,7 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 	/// be equivalent to no password at all.
 	///
 	/// `None` is returned if no matches are found.
-	fn from_string(s: &str, password_override: Option<&str>) -> Result<Self, SecretStringError> {
-		println!("HERE {}", s);
+	fn from_string_with_seed(s: &str, password_override: Option<&str>) -> Result<(Self, Option<Self::Seed>), SecretStringError> {
 		let re = Regex::new(r"^(?P<phrase>[\d\w ]+)?(?P<path>(//?[^/]+)*)(///(?P<password>.*))?$")
 			.expect("constructed from known-good static value; qed");
 		let cap = re.captures(s).ok_or(SecretStringError::InvalidFormat)?;
@@ -765,21 +769,29 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 			.map(|f| DeriveJunction::from(&f[1]));
 
 		let phrase = cap.name("phrase").map(|r| r.as_str()).unwrap_or(DEV_PHRASE);
-		println!("HERE {:?}", phrase);
 		let password = password_override.or_else(|| cap.name("password").map(|m| m.as_str()));
-		println!("HERE {:?}", password);
 
-		let seed = if phrase.starts_with("0x") {
-			println!("HERE {}", phrase);
+		let (root, seed) = if phrase.starts_with("0x") {
 			hex::decode(&phrase[2..]).ok()
-				.and_then(|seed| Self::from_seed_slice(&seed[..]).ok())
+				.and_then(|seed_vec| {
+					let mut seed = Self::Seed::default();
+					if seed.as_ref().len() == seed_vec.len() {
+						seed.as_mut().copy_from_slice(&seed_vec);
+						Some((Self::from_seed(&seed), seed))
+					} else {
+						None
+					}
+				})
 				.ok_or(SecretStringError::InvalidSeed)?
 		} else {
 			Self::from_phrase(phrase, password)
-				.map_err(|_| SecretStringError::InvalidPhrase)?.0
+				.map_err(|_| SecretStringError::InvalidPhrase)?
 		};
+		root.derive(path, Some(seed)).map_err(|_| SecretStringError::InvalidPath)
+	}
 
-		seed.derive(path).map_err(|_| SecretStringError::InvalidPath)
+	fn from_string(s: &str, password_override: Option<&str>) -> Result<Self, SecretStringError> {
+		Self::from_string_with_seed(s, password_override).map(|x| x.0)
 	}
 
 	/// Return a vec filled with raw data.
@@ -955,18 +967,18 @@ mod tests {
 				password: password.map(Into::into)
 			}, [0u8; 8]))
 		}
-		fn derive<Iter: Iterator<Item=DeriveJunction>>(&self, path_iter: Iter)
-			-> Result<Self, Self::DeriveError>
+		fn derive<Iter: Iterator<Item=DeriveJunction>>(&self, path_iter: Iter, _: Option<[u8; 8]>)
+			-> Result<(Self, Option<[u8; 8]>), Self::DeriveError>
 		{
-			match self.clone() {
+			Ok((match self.clone() {
 				TestPair::Standard {phrase, password, path} =>
-					Ok(TestPair::Standard { phrase, password, path: path.into_iter().chain(path_iter).collect() }),
+					TestPair::Standard { phrase, password, path: path.into_iter().chain(path_iter).collect() },
 				TestPair::GeneratedFromPhrase {phrase, password} =>
-					Ok(TestPair::Standard { phrase, password, path: path_iter.collect() }),
-				x => if path_iter.count() == 0 { Ok(x) } else { Err(()) },
-			}
+					TestPair::Standard { phrase, password, path: path_iter.collect() },
+				x => if path_iter.count() == 0 { x } else { return Err(()) },
+			}, None))
 		}
-		fn from_seed(_seed: &<TestPair as Pair>::Seed) -> Self { TestPair::Seed(vec![]) }
+		fn from_seed(_seed: &<TestPair as Pair>::Seed) -> Self { TestPair::Seed(_seed.as_ref().to_owned()) }
 		fn sign(&self, _message: &[u8]) -> Self::Signature { [] }
 		fn verify<M: AsRef<[u8]>>(_: &Self::Signature, _: M, _: &Self::Public) -> bool { true }
 		fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(
