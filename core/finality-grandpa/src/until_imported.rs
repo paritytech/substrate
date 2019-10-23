@@ -78,8 +78,9 @@ pub(crate) struct UntilImported<Block: BlockT, BlockStatus, BlockSyncRequester, 
 	inner: Fuse<I>,
 	ready: VecDeque<M::Blocked>,
 	check_pending: Interval,
-	/// Mapping block hashes to their block number, the point in time it was first encountered (Instant) and a list of
-	/// Grandpa messages referencing the block hash.
+	/// Mapping block hashes to their block number, the point in time it was
+	/// first encountered (Instant) and a list of GRANDPA messages referencing
+	/// the block hash.
 	pending: HashMap<Block::Hash, (NumberFor<Block>, Instant, Vec<M>)>,
 	identifier: &'static str,
 }
@@ -184,8 +185,6 @@ impl<Block, BStatus, BSyncRequester, I, M> Stream for UntilImported<Block, BStat
 			let mut known_keys = Vec::new();
 			for (&block_hash, &mut (block_number, ref mut last_log, ref v)) in &mut self.pending {
 				if let Some(number) = self.status_check.block_number(block_hash)? {
-					// TODO: Now that we pass the number all the way down here, should we check if it is the same as we
-					// are expecting it to be?
 					known_keys.push((block_hash, number));
 				} else {
 					let next_log = *last_log + LOG_PENDING_INTERVAL;
@@ -200,8 +199,13 @@ impl<Block, BStatus, BSyncRequester, I, M> Stream for UntilImported<Block, BStat
 							self.identifier,
 						);
 
+						// NOTE: when sending an empty vec of peers the
+						// underlying should make a best effort to sync the
+						// block from any peers it knows about.
 						self.block_sync_requester.set_sync_fork_request(
-							vec![],	block_hash, block_number,
+							vec![],
+							block_hash,
+							block_number,
 						);
 
 						*last_log = next_log;
