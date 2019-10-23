@@ -475,7 +475,6 @@ mod tests {
 		Pool::new(Default::default(), TestApi::default())
 	}
 
-
 	#[test]
 	fn should_validate_and_import_transaction() {
 		// given
