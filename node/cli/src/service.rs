@@ -192,12 +192,12 @@ macro_rules! new_full {
 		match (is_authority, disable_grandpa) {
 			(false, false) => {
 				// start the lightweight GRANDPA observer
-				service.spawn_task(Box::new(grandpa::run_grandpa_observer(
+				service.spawn_task(grandpa::run_grandpa_observer(
 					config,
 					grandpa_link,
 					service.network(),
 					service.on_exit(),
-				)?));
+				)?);
 			},
 			(true, false) => {
 				// start the full GRANDPA voter
