@@ -150,7 +150,6 @@ impl<B, S, H> Network<B> for Arc<NetworkService<B, S, H>> where
 		Box<dyn Stream<Item = network_gossip::TopicNotification, Error = ()> + Send + 'static>,
 	>;
 
-	#[allow(deprecated)]
 	fn messages_for(&self, topic: B::Hash) -> Self::In {
 		// Given that one can only communicate with the Substrate network via the `NetworkService` via message-passing,
 		// and given that methods on the network consensus gossip are not exposed but only reachable by passing a
@@ -163,11 +162,11 @@ impl<B, S, H> Network<B> for Arc<NetworkService<B, S, H>> where
 		// waiting for the oneshot to resolve and from there on acting like a normal message channel.
 		let (tx, rx) = oneshot::channel();
 		self.with_gossip(move |gossip, _| {
-			let inner_rx = gossip
+			let inner_rx: Box<dyn Stream<Item = _, Error = ()> + Send> = Box::new(gossip
 				.messages_for(GRANDPA_ENGINE_ID, topic)
 				.map(|x| Ok(x))
 				.compat()
-				.boxed();
+			);
 			let _ = tx.send(inner_rx);
 		});
 		NetworkStream::PollingOneshot(rx)
