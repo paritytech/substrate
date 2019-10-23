@@ -282,33 +282,33 @@ impl<V> History<V> {
 	/// Set a value, it uses a state history as parameter.
 	/// This method uses `get_mut` and do remove pending
 	/// dropped value.
-	pub fn set(&mut self, history: &[TransactionState], value: V) {
-		if let Some(v) = self.get_mut(history) {
-			if v.index == history.len() - 1 {
+	pub fn set(&mut self, states: (&[TransactionState], usize), value: V) {
+		if let Some(v) = self.get_mut(states) {
+			if v.index == states.0.len() - 1 {
 				*v.value = value;
 				return;
 			}
 		}
 		self.push_unchecked(HistoriedValue {
 			value,
-			index: history.len() - 1,
+			index: states.0.len() - 1,
 		});
 	}
 
-	/// Access to latest pending value (non dropped state in history).
+	/// Access to latest pending value (non dropped state).
 	/// When possible please prefer `get_mut` as it can free
 	/// some memory.
-	pub fn get(&self, history: &[TransactionState]) -> Option<&V> {
+	pub fn get(&self, states: &[TransactionState]) -> Option<&V> {
 		// index is never 0,
 		let mut index = self.len();
 		if index == 0 {
 			return None;
 		}
-		debug_assert!(history.len() >= index);
+		debug_assert!(states.len() >= index);
 		while index > 0 {
 			index -= 1;
-			let HistoriedValue { value, index: history_index } = self.get_state(index);
-			match history[history_index] {
+			let HistoriedValue { value, index: state_index } = self.get_state(index);
+			match states[state_index] {
 				TransactionState::Dropped => (),
 				TransactionState::Pending
 				| TransactionState::TxPending =>
@@ -319,16 +319,16 @@ impl<V> History<V> {
 	}
 
 	/// Get latest value, consuming the historied data.
-	pub fn into_pending(mut self, history: &[TransactionState]) -> Option<V> {
+	pub fn into_pending(mut self, states: &[TransactionState]) -> Option<V> {
 		let mut index = self.len();
 		if index == 0 {
 			return None;
 		}
-		debug_assert!(history.len() >= index);
+		debug_assert!(states.len() >= index);
 		while index > 0 {
 			index -= 1;
-			let history_index = self.get_state(index).index;
-			match history[history_index] {
+			let state_index = self.get_state(index).index;
+			match states[state_index] {
 				TransactionState::Dropped => (),
 				TransactionState::Pending
 				| TransactionState::TxPending => {
@@ -342,16 +342,16 @@ impl<V> History<V> {
 
 
 	#[cfg(any(test, feature = "test-helpers"))]
-	pub fn get_prospective(&self, history: &[TransactionState], committed: usize) -> Option<&V> {
+	pub fn get_prospective(&self, states: &[TransactionState], committed: usize) -> Option<&V> {
 		let mut index = self.len();
 		if index == 0 {
 			return None;
 		}
-		debug_assert!(history.len() >= index);
+		debug_assert!(states.len() >= index);
 		while index > committed {
 			index -= 1;
-			let HistoriedValue { value, index: history_index } = self.get_state(index);
-			match history[history_index] {
+			let HistoriedValue { value, index: state_index } = self.get_state(index);
+			match states[state_index] {
 				TransactionState::Dropped => (),
 				TransactionState::Pending
 				| TransactionState::TxPending =>
@@ -362,17 +362,17 @@ impl<V> History<V> {
 	}
 
 	#[cfg(any(test, feature = "test-helpers"))]
-	pub fn get_committed(&self, history: &[TransactionState], committed: usize) -> Option<&V> {
+	pub fn get_committed(&self, states: &[TransactionState], committed: usize) -> Option<&V> {
 		let mut index = self.len();
 		if index == 0 {
 			return None;
 		}
-		debug_assert!(history.len() >= index);
+		debug_assert!(states.len() >= index);
 		while index > 0 {
 			index -= 1;
-			let HistoriedValue { value, index: history_index } = self.get_state(index);
-			if history_index < committed {
-				match history[history_index] {
+			let HistoriedValue { value, index: state_index } = self.get_state(index);
+			if state_index < committed {
+				match states[state_index] {
 					TransactionState::Dropped => (),
 					TransactionState::Pending
 					| TransactionState::TxPending =>
@@ -383,7 +383,7 @@ impl<V> History<V> {
 		None
 	}
 
-	pub fn into_committed(mut self, history: &[TransactionState], committed: usize) -> Option<V> {
+	pub fn into_committed(mut self, states: &[TransactionState], committed: usize) -> Option<V> {
 		// index is never 0,
 		let mut index = self.len();
 		if index == 0 {
@@ -392,12 +392,12 @@ impl<V> History<V> {
 		// internal method: should be use properly
 		// (history of the right overlay change set
 		// is size aligned).
-		debug_assert!(history.len() >= index);
+		debug_assert!(states.len() >= index);
 		while index > 0 {
 			index -= 1;
-			let history_index = self.get_state(index).index;
-			if history_index < committed {
-				match history[history_index] {
+			let state_index = self.get_state(index).index;
+			if state_index < committed {
+				match states[state_index] {
 					TransactionState::Dropped => (),
 					TransactionState::Pending
 					| TransactionState::TxPending => {
@@ -410,10 +410,13 @@ impl<V> History<V> {
 		None
 	}
 
-	/// Access to latest pending value (non dropped state in history).
+	/// Access to latest pending value (non dropped state).
 	///
 	/// This method removes latest dropped values up to the latest valid value.
-	pub fn get_mut(&mut self, history: &[TransactionState]) -> Option<HistoriedValue<&mut V>> {
+	pub fn get_mut(
+		&mut self,
+		states: (&[TransactionState], usize),
+	) -> Option<HistoriedValue<&mut V>> {
 		let mut index = self.len();
 		if index == 0 {
 			return None;
@@ -421,25 +424,25 @@ impl<V> History<V> {
 		// internal method: should be use properly
 		// (history of the right overlay change set
 		// is size aligned).
-		debug_assert!(history.len() >= index);
+		debug_assert!(states.0.len() >= index);
 		let mut result = None;
 		while index > 0 {
 			index -= 1;
-			let history_index = self.get_state(index).index;
-			match history[history_index] {
+			let state_index = self.get_state(index).index;
+			match states.0[state_index] {
 				TransactionState::TxPending
 				| TransactionState::Pending => {
-						result = Some((index, history_index));
+						result = Some((index, state_index));
 						break;
 				},
 				TransactionState::Dropped => (),
 			}
 		}
-		if let Some((index, history_index)) = result {
+		if let Some((index, state_index)) = result {
 			if index + 1 < self.len() {
 				self.truncate(index + 1);
 			}
-			Some((self.mut_ref(index), history_index).into())
+			Some((self.mut_ref(index), state_index).into())
 		} else {
 			None
 		}
@@ -448,7 +451,7 @@ impl<V> History<V> {
 
 	pub fn get_mut_pruning(
 		&mut self,
-		history: &[TransactionState],
+		states: (&[TransactionState], usize),
 		committed: Option<usize>,
 	) -> Option<HistoriedValue<&mut V>>  {
 		let mut index = self.len();
@@ -459,18 +462,18 @@ impl<V> History<V> {
 		// internal method: should be use properly
 		// (history of the right overlay change set
 		// is size aligned).
-		debug_assert!(history.len() >= index);
+		debug_assert!(states.0.len() >= index);
 		let mut result = None;
 		while index > 0 {
 			index -= 1;
-			let history_index = self.get_state(index).index;
-			match history[history_index] {
+			let state_index = self.get_state(index).index;
+			match states.0[state_index] {
 				TransactionState::TxPending
 				| TransactionState::Pending => {
-						result = Some((index, history_index));
+						result = Some((index, state_index));
 						if let Some(committed) = committed {
 							prune_index = index;
-							if history_index < committed {
+							if state_index < committed {
 								break;
 							}
 						} else {
@@ -488,11 +491,11 @@ impl<V> History<V> {
 		} else {
 			0
 		};
-		if let Some((index, history_index)) = result {
+		if let Some((index, state_index)) = result {
 			if index + 1 - deleted < self.len() {
 				self.truncate(index + 1 - deleted);
 			}
-			Some((self.mut_ref(index), history_index).into())
+			Some((self.mut_ref(index), state_index).into())
 		} else {
 			None
 		}

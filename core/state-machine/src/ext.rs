@@ -547,7 +547,7 @@ mod tests {
 				digest_levels: 0,
 			}),
 			changes: OverlayedChangeSet {
-				history: Default::default(),
+				states: Default::default(),
 				children: Default::default(),
 				top: vec![
 					(EXTRINSIC_INDEX.to_vec(), History::from_iter(vec![

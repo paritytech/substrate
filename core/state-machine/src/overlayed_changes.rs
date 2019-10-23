@@ -71,7 +71,7 @@ pub struct OverlayedValue {
 #[cfg_attr(test, derive(PartialEq))]
 pub struct OverlayedChangeSet {
 	/// Indexed state history.
-	pub(crate) history: States,
+	pub(crate) states: States,
 	/// Top level storage changes.
 	pub(crate) top: HashMap<Vec<u8>, History<OverlayedValue>>,
 	/// Child storage changes.
@@ -96,14 +96,14 @@ impl FromIterator<(Vec<u8>, OverlayedValue)> for OverlayedChangeSet {
 /// It does remove latest dropped values.
 fn set_with_extrinsic_overlayed_value(
 	h_value: &mut History<OverlayedValue>,
-	history: &[TransactionState],
+	states: (&[TransactionState], usize),
 	value: Option<Vec<u8>>,
 	extrinsic_index: Option<u32>,
 ) {
 	if let Some(extrinsic) = extrinsic_index {
-		set_with_extrinsic_inner_overlayed_value(h_value, history, value, extrinsic)
+		set_with_extrinsic_inner_overlayed_value(h_value, states, value, extrinsic)
 	} else {
-		h_value.set(history, OverlayedValue {
+		h_value.set(states, OverlayedValue {
 			value,
 			extrinsics: None,
 		})
@@ -112,12 +112,12 @@ fn set_with_extrinsic_overlayed_value(
 
 fn set_with_extrinsic_inner_overlayed_value(
 	h_value: &mut History<OverlayedValue>,
-	history: &[TransactionState],
+	states: (&[TransactionState], usize),
 	value: Option<Vec<u8>>,
 	extrinsic_index: u32,
 ) {
-	let state = history.len() - 1;
-	if let Some(current) = h_value.get_mut(history) {
+	let state = states.0.len() - 1;
+	if let Some(current) = h_value.get_mut(states) {
 		if current.index == state {
 			current.value.value = value;
 			current.value.extrinsics.get_or_insert_with(Default::default)
@@ -154,15 +154,15 @@ impl OverlayedChangeSet {
 	/// Garbage collect.
 	fn gc(&mut self, eager: bool) {
 		let committed = if eager {
-			Some(self.history.committed())
+			Some(self.states.committed())
 		} else {
 			None
 		};
-		let history = self.history.as_ref();
+		let states = self.states.as_ref_mut();
 		// retain does change values
-		self.top.retain(|_, h_value| h_value.get_mut_pruning(history, committed).is_some());
+		self.top.retain(|_, h_value| h_value.get_mut_pruning(states, committed).is_some());
 		self.children.retain(|_, m| {
-			m.retain(|_, h_value| h_value.get_mut_pruning(history, committed).is_some());
+			m.retain(|_, h_value| h_value.get_mut_pruning(states, committed).is_some());
 			!m.is_empty()
 		});
 	}
@@ -174,28 +174,28 @@ impl OverlayedChangeSet {
 
 	/// Discard prospective changes to state.
 	pub fn discard_prospective(&mut self) {
-		self.history.discard_prospective();
+		self.states.discard_prospective();
 	}
 
 	/// Commit prospective changes to state.
 	pub fn commit_prospective(&mut self) {
-		self.history.commit_prospective();
+		self.states.commit_prospective();
 	}
 
 	/// Create a new transactional layer.
 	pub fn start_transaction(&mut self) {
-		self.history.start_transaction();
+		self.states.start_transaction();
 	}
 
 	/// Discard a transactional layer.
-	/// A transaction is always running (history always end with pending).
+	/// A transaction is always running (states always end with pending).
 	pub fn discard_transaction(&mut self) {
-		self.history.discard_transaction();
+		self.states.discard_transaction();
 	}
 
 	/// Commit a transactional layer.
 	pub fn commit_transaction(&mut self) {
-		self.history.commit_transaction();
+		self.states.commit_transaction();
 	}
 
 	/// Iterator over current state of a given overlay, including change trie information.
@@ -212,7 +212,7 @@ impl OverlayedChangeSet {
 			.into_iter()
 			.flat_map(move |map| map.iter()
 				.filter_map(move |(k, v)|
-					v.get(self.history.as_ref()).map(|v| (k.as_slice(), v)))
+					v.get(self.states.as_ref()).map(|v| (k.as_slice(), v)))
 			)
 	}
 
@@ -232,7 +232,7 @@ impl OverlayedChangeSet {
 		self.children.iter()
 			.map(move |(keyspace, child)| (keyspace.as_slice(), child.iter()
 				.filter_map(move |(k, v)|
-					v.get(self.history.as_ref())
+					v.get(self.states.as_ref())
 						.map(|v| (k.as_slice(), v.value.as_ref().map(|v| v.as_slice()))))
 			))
 	}
@@ -245,7 +245,7 @@ impl OverlayedChangeSet {
 		self.children.iter()
 			.map(move |(keyspace, child)| (keyspace.to_vec(), child.iter()
 				.filter_map(move |(k, v)|
-					v.get(self.history.as_ref())
+					v.get(self.states.as_ref())
 						.map(|v| (k.to_vec(), v.value.as_ref().map(|v| v.to_vec()))))
 			))
 	}
@@ -257,7 +257,7 @@ impl OverlayedChangeSet {
 		self.children.iter()
 			.map(move |(keyspace, child)| (keyspace.as_slice(), child.iter()
 				.filter_map(move |(k, v)|
-					v.get(self.history.as_ref()).map(|v| (k.as_slice(), v)))
+					v.get(self.states.as_ref()).map(|v| (k.as_slice(), v)))
 			))
 	}
 
@@ -267,9 +267,9 @@ impl OverlayedChangeSet {
 	#[cfg(test)]
 	pub(crate) fn top_prospective(&self) -> HashMap<Vec<u8>, OverlayedValue> {
 		let mut result = HashMap::new();
-		let committed = self.history.committed();
+		let committed = self.states.committed();
 		for (k, v) in self.top.iter() {
-			if let Some(v) = v.get_prospective(self.history.as_ref(), committed) {
+			if let Some(v) = v.get_prospective(self.states.as_ref(), committed) {
 				result.insert(k.clone(), v.clone());
 			}
 		}
@@ -282,9 +282,9 @@ impl OverlayedChangeSet {
 	#[cfg(test)]
 	pub(crate) fn top_committed(&self) -> HashMap<Vec<u8>, OverlayedValue> {
 		let mut result = HashMap::new();
-		let committed = self.history.committed();
+		let committed = self.states.committed();
 		for (k, v) in self.top.iter() {
-			if let Some(v) = v.get_committed(self.history.as_ref(), committed) {
+			if let Some(v) = v.get_committed(self.states.as_ref(), committed) {
 				result.insert(k.clone(), v.clone());
 			}
 		}
@@ -327,7 +327,7 @@ impl OverlayedChanges {
 	/// value has been set.
 	pub fn storage(&self, key: &[u8]) -> Option<Option<&[u8]>> {
 		if let Some(overlay_value) = self.changes.top.get(key) {
-			if let Some(o_value) = overlay_value.get(self.changes.history.as_ref()) {
+			if let Some(o_value) = overlay_value.get(self.changes.states.as_ref()) {
 				return Some(o_value.value.as_ref().map(|v| v.as_slice()))
 			}
 		}
@@ -340,7 +340,7 @@ impl OverlayedChanges {
 	pub fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Option<Option<&[u8]>> {
 		if let Some(map) = self.changes.children.get(storage_key) {
 			if let Some(overlay_value) = map.get(key) {
-				if let Some(o_value) = overlay_value.get(self.changes.history.as_ref()) {
+				if let Some(o_value) = overlay_value.get(self.changes.states.as_ref()) {
 					return Some(o_value.value.as_ref().map(|v| v.as_slice()))
 				}
 			}
@@ -355,7 +355,8 @@ impl OverlayedChanges {
 		self.operation_from_last_gc += DEFAULT_GC_CONF.operation_cost(value.as_ref());
 		let extrinsic_index = self.extrinsic_index();
 		let entry = self.changes.top.entry(key).or_default();
-		set_with_extrinsic_overlayed_value(entry, self.changes.history.as_ref(), value, extrinsic_index);
+		let states = self.changes.states.as_ref_mut();
+		set_with_extrinsic_overlayed_value(entry, states, value, extrinsic_index);
 	}
 
 	/// Inserts the given key-value pair into the prospective child change set.
@@ -371,9 +372,10 @@ impl OverlayedChanges {
 		let extrinsic_index = self.extrinsic_index();
 		let map_entry = self.changes.children.entry(storage_key).or_default();
 		let entry = map_entry.entry(key).or_default();
+		let states = self.changes.states.as_ref_mut();
 		set_with_extrinsic_overlayed_value(
 			entry,
-			self.changes.history.as_ref(),
+			states,
 			value,
 			extrinsic_index,
 		);
@@ -387,11 +389,12 @@ impl OverlayedChanges {
 	/// [`discard_prospective`]: #method.discard_prospective
 	pub(crate) fn clear_child_storage(&mut self, storage_key: &[u8]) {
 		let extrinsic_index = self.extrinsic_index();
-		let history = self.changes.history.as_ref();
+		let states = self.changes.states.as_ref_mut();
 		let map_entry = self.changes.children.entry(storage_key.to_vec()).or_default();
 
 		self.operation_from_last_gc += map_entry.len();
-		map_entry.values_mut().for_each(|e| set_with_extrinsic_overlayed_value(e, history, None, extrinsic_index));
+		map_entry.values_mut()
+			.for_each(|e| set_with_extrinsic_overlayed_value(e, states, None, extrinsic_index));
 	}
 
 	/// Removes all key-value pairs which keys share the given prefix.
@@ -404,10 +407,11 @@ impl OverlayedChanges {
 		let extrinsic_index = self.extrinsic_index();
 
 		let mut number_removed = 0;
+		let states = self.changes.states.as_ref_mut();
 		for (key, entry) in self.changes.top.iter_mut() {
 			if key.starts_with(prefix) {
 				number_removed += 1;
-				set_with_extrinsic_overlayed_value(entry, self.changes.history.as_ref(), None, extrinsic_index);
+				set_with_extrinsic_overlayed_value(entry, states, None, extrinsic_index);
 			}
 		}
 
@@ -418,10 +422,11 @@ impl OverlayedChanges {
 		let extrinsic_index = self.extrinsic_index();
 		if let Some(child_change) = self.changes.children.get_mut(storage_key) {
 			let mut number_removed = 0;
+			let states = self.changes.states.as_ref_mut();
 			for (key, entry) in child_change.iter_mut() {
 				if key.starts_with(prefix) {
 					number_removed += 1;
-					set_with_extrinsic_overlayed_value(entry, self.changes.history.as_ref(), None, extrinsic_index);
+					set_with_extrinsic_overlayed_value(entry, states, None, extrinsic_index);
 				}
 			}
 
@@ -482,17 +487,17 @@ impl OverlayedChanges {
 	){
 		let top = self.changes.top;
 		let children = self.changes.children;
-		let committed = self.changes.history.committed();
-		let history = self.changes.history.clone();
-		let history2 = self.changes.history;
+		let committed = self.changes.states.committed();
+		let states = self.changes.states.clone();
+		let states2 = self.changes.states;
 		(
 			top.into_iter()
-				.filter_map(move |(k, v)| v.into_committed(history.as_ref(), committed)
+				.filter_map(move |(k, v)| v.into_committed(states.as_ref(), committed)
 					.map(|v| (k, v.value))),
 			children.into_iter().map(move |(sk, v)| {
-				let history2 = history2.clone();
+				let states2 = states2.clone();
 				(sk, v.into_iter()
-					.filter_map(move |(k, v)| v.into_committed(history2.as_ref(), committed)
+					.filter_map(move |(k, v)| v.into_committed(states2.as_ref(), committed)
 						.map(|v| (k, v.value))))
 			})
 		)

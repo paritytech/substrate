@@ -311,7 +311,7 @@ impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec> where
 			CallResult<R, Exec::Error>,
 		) -> CallResult<R, Exec::Error>
 	{
-		let orig_committed = self.overlay.changes.history.committed();
+		let orig_committed = self.overlay.changes.states.committed();
 		// disable eager gc to be able to rollback
 		self.overlay.not_eager_gc = true;
 		let (result, was_native, storage_delta, changes_delta) = self.execute_aux(
@@ -323,7 +323,7 @@ impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec> where
 		self.overlay.not_eager_gc = false;
 		if was_native {
 			if result.is_ok() {
-				self.overlay.changes.history.unchecked_rollback_committed(orig_committed);
+				self.overlay.changes.states.unchecked_rollback_committed(orig_committed);
 			}
 			let (wasm_result, _, wasm_storage_delta, wasm_changes_delta) = self.execute_aux(
 				compute_tx,
