@@ -79,6 +79,7 @@ const NODE_KEY_SECP256K1_FILE: &str = "secret";
 const NODE_KEY_ED25519_FILE: &str = "secret_ed25519";
 
 /// Executable version. Used to pass version information from the root crate.
+#[derive(Clone)]
 pub struct VersionInfo {
 	/// Implementaiton name.
 	pub name: &'static str,
@@ -674,13 +675,6 @@ where
 	config.database_path = db_path(&base_path, config.chain_spec.id());
 	config.database_cache_size = cli.database_cache_size;
 	config.state_cache_size = cli.state_cache_size;
-	config.pruning = match cli.pruning {
-		Some(ref s) if s == "archive" => PruningMode::ArchiveAll,
-		None => PruningMode::default(),
-		Some(s) => PruningMode::keep_blocks(s.parse()
-			.map_err(|_| error::Error::Input("Invalid pruning mode specified".to_string()))?
-		),
-	};
 
 	let is_dev = cli.shared_params.dev;
 
@@ -692,6 +686,28 @@ where
 		} else {
 			service::Roles::FULL
 		};
+
+	// by default we disable pruning if the node is an authority (i.e.
+	// `ArchiveAll`), otherwise we keep state for the last 256 blocks. if the
+	// node is an authority and pruning is enabled explicitly, then we error
+	// unless `unsafe_pruning` is set.
+	config.pruning = match cli.pruning {
+		Some(ref s) if s == "archive" => PruningMode::ArchiveAll,
+		None if role == service::Roles::AUTHORITY => PruningMode::ArchiveAll,
+		None => PruningMode::default(),
+		Some(s) => {
+			if role == service::Roles::AUTHORITY && !cli.unsafe_pruning {
+				return Err(error::Error::Input(
+					"Validators should run with state pruning disabled (i.e. archive). \
+					You can ignore this check with `--unsafe-pruning`.".to_string()
+				));
+			}
+
+			PruningMode::keep_blocks(s.parse()
+				.map_err(|_| error::Error::Input("Invalid pruning mode specified".to_string()))?
+			)
+		},
+	};
 
 	config.wasm_method = cli.wasm_method.into();
 
@@ -787,7 +803,7 @@ where
 	G: RuntimeGenesis,
 	E: ChainSpecExtension,
 {
-	if spec.boot_nodes().is_empty() {
+	if spec.boot_nodes().is_empty() && !cli.disable_default_bootnode {
 		let base_path = base_path(&cli.shared_params, version);
 		let storage_path = network_path(&base_path, spec.id());
 		let node_key = node_key_config(cli.node_key_params, &Some(storage_path))?;
@@ -918,7 +934,9 @@ fn init_logger(pattern: &str) {
 		writeln!(buf, "{}", output)
 	});
 
-	builder.init();
+	if builder.try_init().is_err() {
+		info!("Not registering Substrate logger, as there is already a global logger registered!");
+	}
 }
 
 fn kill_color(s: &str) -> String {

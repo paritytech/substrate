@@ -94,18 +94,20 @@ use rstd::prelude::*;
 #[cfg(any(feature = "std", test))]
 use rstd::map;
 use rstd::marker::PhantomData;
+use rstd::fmt::Debug;
 use sr_version::RuntimeVersion;
 use sr_primitives::{
+	RuntimeDebug,
 	generic::{self, Era}, Perbill, ApplyError, ApplyOutcome, DispatchError,
-	weights::{Weight, DispatchInfo, DispatchClass, WeightMultiplier, SimpleDispatchInfo},
+	weights::{Weight, DispatchInfo, DispatchClass, SimpleDispatchInfo},
 	transaction_validity::{
 		ValidTransaction, TransactionPriority, TransactionLongevity, TransactionValidityError,
 		InvalidTransaction, TransactionValidity,
 	},
 	traits::{
-		self, CheckEqual, SimpleArithmetic, Zero, SignedExtension, Convert, Lookup, LookupError,
+		self, CheckEqual, SimpleArithmetic, Zero, SignedExtension, Lookup, LookupError,
 		SimpleBitOps, Hash, Member, MaybeDisplay, EnsureOrigin, SaturatedConversion,
-		MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup, One, Bounded,
+		MaybeSerialize, MaybeSerializeDeserialize, StaticLookup, One, Bounded,
 	},
 };
 
@@ -158,28 +160,28 @@ pub trait Trait: 'static + Eq + Clone {
 	type Origin: Into<Result<RawOrigin<Self::AccountId>, Self::Origin>> + From<RawOrigin<Self::AccountId>>;
 
 	/// The aggregated `Call` type.
-	type Call;
+	type Call: Debug;
 
 	/// Account index (aka nonce) type. This stores the number of previous transactions associated with a sender
 	/// account.
 	type Index:
-		Parameter + Member + MaybeSerializeDebugButNotDeserialize + Default + MaybeDisplay + SimpleArithmetic + Copy;
+		Parameter + Member + MaybeSerialize + Debug + Default + MaybeDisplay + SimpleArithmetic + Copy;
 
 	/// The block number type used by the runtime.
 	type BlockNumber:
-		Parameter + Member + MaybeSerializeDebug + MaybeDisplay + SimpleArithmetic + Default + Bounded + Copy
-		+ rstd::hash::Hash;
+		Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay + SimpleArithmetic
+		+ Default + Bounded + Copy + rstd::hash::Hash;
 
 	/// The output of the `Hashing` function.
 	type Hash:
-		Parameter + Member + MaybeSerializeDebug + MaybeDisplay + SimpleBitOps + Default + Copy + CheckEqual
-		+ rstd::hash::Hash + AsRef<[u8]> + AsMut<[u8]>;
+		Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay + SimpleBitOps
+		+ Default + Copy + CheckEqual + rstd::hash::Hash + AsRef<[u8]> + AsMut<[u8]>;
 
 	/// The hashing system (algorithm) being used in the runtime (e.g. Blake2).
 	type Hashing: Hash<Output = Self::Hash>;
 
 	/// The user account identifier type for the runtime.
-	type AccountId: Parameter + Member + MaybeSerializeDebug + MaybeDisplay + Ord + Default;
+	type AccountId: Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay + Ord + Default;
 
 	/// Converting trait to take a source type and convert to `AccountId`.
 	///
@@ -188,14 +190,6 @@ pub trait Trait: 'static + Eq + Clone {
 	/// (e.g. Indices module) may provide more functional/efficient alternatives.
 	type Lookup: StaticLookup<Target = Self::AccountId>;
 
-	/// Handler for updating the weight multiplier at the end of each block.
-	///
-	/// It receives the current block's weight as input and returns the next weight multiplier for next
-	/// block.
-	///
-	/// Note that passing `()` will keep the value constant.
-	type WeightMultiplierUpdate: Convert<(Weight, WeightMultiplier), WeightMultiplier>;
-
 	/// The block header.
 	type Header: Parameter + traits::Header<
 		Number = Self::BlockNumber,
@@ -203,7 +197,7 @@ pub trait Trait: 'static + Eq + Clone {
 	>;
 
 	/// The aggregated event type of the runtime.
-	type Event: Parameter + Member + From<Event>;
+	type Event: Parameter + Member + From<Event> + Debug;
 
 	/// Maximum number of block number to block hash mappings to keep (oldest pruned first).
 	type BlockHashCount: Get<Self::BlockNumber>;
@@ -288,8 +282,8 @@ decl_module! {
 }
 
 /// A phase of a block's execution.
-#[derive(Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Serialize, PartialEq, Eq, Clone, Debug))]
+#[derive(Encode, Decode, RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Serialize, PartialEq, Eq, Clone))]
 pub enum Phase {
 	/// Applying an extrinsic.
 	ApplyExtrinsic(u32),
@@ -298,8 +292,8 @@ pub enum Phase {
 }
 
 /// Record of an event happening.
-#[derive(Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Serialize, PartialEq, Eq, Clone, Debug))]
+#[derive(Encode, Decode, RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Serialize, PartialEq, Eq, Clone))]
 pub struct EventRecord<E: Parameter + Member, T> {
 	/// The phase of the block it happened in.
 	pub phase: Phase,
@@ -331,8 +325,7 @@ decl_error! {
 }
 
 /// Origin for the System module.
-#[derive(PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(PartialEq, Eq, Clone, RuntimeDebug)]
 pub enum RawOrigin<AccountId> {
 	/// The system itself ordained this dispatch to happen: this is the highest privilege level.
 	Root,
@@ -374,32 +367,29 @@ type EventIndex = u32;
 decl_storage! {
 	trait Store for Module<T: Trait> as System {
 		/// Extrinsics nonce for accounts.
-		pub AccountNonce get(account_nonce): map T::AccountId => T::Index;
+		pub AccountNonce get(fn account_nonce): map T::AccountId => T::Index;
 		/// Total extrinsics count for the current block.
 		ExtrinsicCount: Option<u32>;
 		/// Total weight for all extrinsics put together, for the current block.
 		AllExtrinsicsWeight: Option<Weight>;
 		/// Total length (in bytes) for all extrinsics put together, for the current block.
 		AllExtrinsicsLen: Option<u32>;
-		/// The next weight multiplier. This should be updated at the end of each block based on the
-		/// saturation level (weight).
-		pub NextWeightMultiplier get(next_weight_multiplier): WeightMultiplier = Default::default();
 		/// Map of block numbers to block hashes.
-		pub BlockHash get(block_hash) build(|_| vec![(T::BlockNumber::zero(), hash69())]): map T::BlockNumber => T::Hash;
+		pub BlockHash get(fn block_hash) build(|_| vec![(T::BlockNumber::zero(), hash69())]): map T::BlockNumber => T::Hash;
 		/// Extrinsics data for the current block (maps an extrinsic's index to its data).
-		ExtrinsicData get(extrinsic_data): map u32 => Vec<u8>;
+		ExtrinsicData get(fn extrinsic_data): map u32 => Vec<u8>;
 		/// The current block number being processed. Set by `execute_block`.
-		Number get(block_number) build(|_| 1.into()): T::BlockNumber;
+		Number get(fn block_number) build(|_| 1.into()): T::BlockNumber;
 		/// Hash of the previous block.
-		ParentHash get(parent_hash) build(|_| hash69()): T::Hash;
+		ParentHash get(fn parent_hash) build(|_| hash69()): T::Hash;
 		/// Extrinsics root of the current block, also part of the block header.
-		ExtrinsicsRoot get(extrinsics_root): T::Hash;
+		ExtrinsicsRoot get(fn extrinsics_root): T::Hash;
 		/// Digest of the current block, also part of the block header.
-		Digest get(digest): DigestOf<T>;
+		Digest get(fn digest): DigestOf<T>;
 		/// Events deposited for the current block.
-		Events get(events): Vec<EventRecord<T::Event, T::Hash>>;
+		Events get(fn events): Vec<EventRecord<T::Event, T::Hash>>;
 		/// The number of events in the `Events<T>` list.
-		EventCount get(event_count): EventIndex;
+		EventCount get(fn event_count): EventIndex;
 
 		// TODO: https://github.com/paritytech/substrate/issues/2553
 		// Possibly, we can improve it by using something like:
@@ -419,7 +409,7 @@ decl_storage! {
 		/// The value has the type `(T::BlockNumber, EventIndex)` because if we used only just
 		/// the `EventIndex` then in case if the topic has the same contents on the next block
 		/// no notification will be triggered thus the event might be lost.
-		EventTopics get(event_topics): double_map hasher(blake2_256) (), blake2_256(T::Hash)
+		EventTopics get(fn event_topics): double_map hasher(blake2_256) (), blake2_256(T::Hash)
 			=> Vec<(T::BlockNumber, EventIndex)>;
 	}
 	add_extra_genesis {
@@ -578,7 +568,7 @@ impl<T: Trait> Module<T> {
 		// We perform early return if we've reached the maximum capacity of the event list,
 		// so `Events<T>` seems to be corrupted. Also, this has happened after the start of execution
 		// (since the event list is cleared at the block initialization).
-		if <Events<T>>::append([event].into_iter()).is_err() {
+		if <Events<T>>::append([event].iter()).is_err() {
 			// The most sensible thing to do here is to just ignore this event and wait until the
 			// new block.
 			return;
@@ -612,17 +602,6 @@ impl<T: Trait> Module<T> {
 		AllExtrinsicsLen::get().unwrap_or_default()
 	}
 
-	/// Update the next weight multiplier.
-	///
-	/// This should be called at then end of each block, before `all_extrinsics_weight` is cleared.
-	pub fn update_weight_multiplier() {
-		// update the multiplier based on block weight.
-		let current_weight = Self::all_extrinsics_weight();
-		NextWeightMultiplier::mutate(|fm| {
-			*fm = T::WeightMultiplierUpdate::convert((current_weight, *fm))
-		});
-	}
-
 	/// Start the execution of a particular block.
 	pub fn initialize(
 		number: &T::BlockNumber,
@@ -645,7 +624,6 @@ impl<T: Trait> Module<T> {
 	/// Remove temporary "environment" entries in storage.
 	pub fn finalize() -> T::Header {
 		ExtrinsicCount::kill();
-		Self::update_weight_multiplier();
 		AllExtrinsicsWeight::kill();
 		AllExtrinsicsLen::kill();
 
@@ -878,10 +856,15 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 	}
 }
 
-#[cfg(feature = "std")]
-impl<T: Trait + Send + Sync> rstd::fmt::Debug for CheckWeight<T> {
+impl<T: Trait + Send + Sync> Debug for CheckWeight<T> {
+	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
-		write!(f, "CheckWeight<T>")
+		write!(f, "CheckWeight")
+	}
+
+	#[cfg(not(feature = "std"))]
+	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+		Ok(())
 	}
 }
 
@@ -896,10 +879,15 @@ impl<T: Trait> CheckNonce<T> {
 	}
 }
 
-#[cfg(feature = "std")]
-impl<T: Trait> rstd::fmt::Debug for CheckNonce<T> {
+impl<T: Trait> Debug for CheckNonce<T> {
+	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
 		self.0.fmt(f)
+	}
+
+	#[cfg(not(feature = "std"))]
+	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+		Ok(())
 	}
 }
 
@@ -974,10 +962,15 @@ impl<T: Trait + Send + Sync> CheckEra<T> {
 	}
 }
 
-#[cfg(feature = "std")]
-impl<T: Trait + Send + Sync> rstd::fmt::Debug for CheckEra<T> {
+impl<T: Trait + Send + Sync> Debug for CheckEra<T> {
+	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
 		self.0.fmt(f)
+	}
+
+	#[cfg(not(feature = "std"))]
+	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+		Ok(())
 	}
 }
 
@@ -1017,9 +1010,14 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckEra<T> {
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
 pub struct CheckGenesis<T: Trait + Send + Sync>(rstd::marker::PhantomData<T>);
 
-#[cfg(feature = "std")]
-impl<T: Trait + Send + Sync> rstd::fmt::Debug for CheckGenesis<T> {
-	fn fmt(&self, _f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+impl<T: Trait + Send + Sync> Debug for CheckGenesis<T> {
+	#[cfg(feature = "std")]
+	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+		write!(f, "CheckGenesis")
+	}
+
+	#[cfg(not(feature = "std"))]
+	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
 		Ok(())
 	}
 }
@@ -1046,9 +1044,14 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckGenesis<T> {
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
 pub struct CheckVersion<T: Trait + Send + Sync>(rstd::marker::PhantomData<T>);
 
-#[cfg(feature = "std")]
-impl<T: Trait + Send + Sync> rstd::fmt::Debug for CheckVersion<T> {
-	fn fmt(&self, _f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+impl<T: Trait + Send + Sync> Debug for CheckVersion<T> {
+	#[cfg(feature = "std")]
+	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+		write!(f, "CheckVersion")
+	}
+
+	#[cfg(not(feature = "std"))]
+	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
 		Ok(())
 	}
 }
@@ -1118,7 +1121,6 @@ mod tests {
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
-		type WeightMultiplierUpdate = ();
 		type Event = u16;
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;

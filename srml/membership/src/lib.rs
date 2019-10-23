@@ -57,7 +57,7 @@ pub trait Trait<I=DefaultInstance>: system::Trait {
 decl_storage! {
 	trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Membership {
 		/// The current membership, stored as an ordered Vec.
-		Members get(members): Vec<T::AccountId>;
+		Members get(fn members): Vec<T::AccountId>;
 	}
 	add_extra_genesis {
 		config(members): Vec<T::AccountId>;
@@ -224,7 +224,6 @@ mod tests {
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
-		type WeightMultiplierUpdate = ();
 		type Event = ();
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;

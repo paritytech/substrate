@@ -45,6 +45,7 @@ finality_tracker = { package = "srml-finality-tracker", path = "../../srml/final
 contracts = { package = "srml-contracts", path = "../../srml/contracts" }
 system = { package = "srml-system", path = "../../srml/system" }
 balances = { package = "srml-balances", path = "../../srml/balances" }
+transaction-payment = { package = "srml-transaction-payment", path = "../../srml/transaction-payment" }
 support = { package = "srml-support", path = "../../srml/support", default-features = false }
 im_online = { package = "srml-im-online", path = "../../srml/im-online", default-features = false }
 sr-authority-discovery = { package = "srml-authority-discovery", path = "../../srml/authority-discovery", default-features = false }

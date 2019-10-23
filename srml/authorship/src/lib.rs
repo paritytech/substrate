@@ -195,8 +195,8 @@ where
 	}
 }
 
-#[derive(Encode, Decode)]
-#[cfg_attr(any(feature = "std", test), derive(PartialEq, Debug))]
+#[derive(Encode, Decode, sr_primitives::RuntimeDebug)]
+#[cfg_attr(any(feature = "std", test), derive(PartialEq))]
 enum UncleEntryItem<BlockNumber, Hash, Author> {
 	InclusionHeight(BlockNumber),
 	Uncle(Hash, Option<Author>),
@@ -442,7 +442,6 @@ mod tests {
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
-		type WeightMultiplierUpdate = ();
 		type Event = ();
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;

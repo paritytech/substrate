@@ -23,19 +23,17 @@
 //! Note that the decl_module macro _cannot_ enforce this and will simply fail if an invalid struct
 //! (something that does not  implement `Weighable`) is passed in.
 
-use crate::{Fixed64, traits::Saturating};
-use crate::codec::{Encode, Decode};
+use arithmetic::traits::Bounded;
+use crate::RuntimeDebug;
 
 pub use crate::transaction_validity::TransactionPriority;
-use crate::traits::Bounded;
 
 /// Numeric range of a transaction weight.
 pub type Weight = u32;
 
 /// A generalized group of dispatch types. This is only distinguishing normal, user-triggered transactions
 /// (`Normal`) and anything beyond which serves a higher purpose to the system (`Operational`).
-#[cfg_attr(feature = "std", derive(Debug))]
-#[derive(PartialEq, Eq, Clone, Copy)]
+#[derive(PartialEq, Eq, Clone, Copy, RuntimeDebug)]
 pub enum DispatchClass {
 	/// A normal dispatch.
 	Normal,
@@ -64,8 +62,8 @@ impl From<SimpleDispatchInfo> for DispatchClass {
 }
 
 /// A bundle of static information collected from the `#[weight = $x]` attributes.
-#[cfg_attr(feature = "std", derive(PartialEq, Eq, Debug))]
-#[derive(Clone, Copy, Default)]
+#[cfg_attr(feature = "std", derive(PartialEq, Eq))]
+#[derive(Clone, Copy, Default, RuntimeDebug)]
 pub struct DispatchInfo {
 	/// Weight of this transaction.
 	pub weight: Weight,
@@ -165,78 +163,5 @@ impl Default for SimpleDispatchInfo {
 	fn default() -> Self {
 		// Default weight of all transactions.
 		SimpleDispatchInfo::FixedNormal(10_000)
-	}
-}
-
-/// Representation of a weight multiplier. This represents how a fee value can be computed from a
-/// weighted transaction.
-///
-/// This is basically a wrapper for the `Fixed64` type a slightly tailored multiplication to u32
-/// in the form of the `apply_to` method.
-#[cfg_attr(feature = "std", derive(Debug))]
-#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct WeightMultiplier(Fixed64);
-
-impl WeightMultiplier {
-	/// Apply the inner Fixed64 as a weight multiplier to a weight value.
-	///
-	/// This will perform a saturated  `weight + weight * self.0`.
-	pub fn apply_to(&self, weight: Weight) -> Weight {
-		self.0.saturated_multiply_accumulate(weight)
-	}
-
-	/// build self from raw parts per billion.
-	#[cfg(feature = "std")]
-	pub fn from_parts(parts: i64) -> Self {
-		Self(Fixed64::from_parts(parts))
-	}
-
-	/// build self from a fixed64 value.
-	pub fn from_fixed(f: Fixed64) -> Self {
-		Self(f)
-	}
-
-	/// Approximate the fraction `n/d`.
-	pub fn from_rational(n: i64, d: u64) -> Self {
-		Self(Fixed64::from_rational(n, d))
-	}
-}
-
-impl Saturating for WeightMultiplier {
-	fn saturating_add(self, rhs: Self) -> Self {
-		Self(self.0.saturating_add(rhs.0))
-	}
-	fn saturating_mul(self, rhs: Self) -> Self {
-		Self(self.0.saturating_mul(rhs.0))
-
-	}
-	fn saturating_sub(self, rhs: Self) -> Self {
-		Self(self.0.saturating_sub(rhs.0))
-	}
-}
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-
-	#[test]
-	fn multiplier_apply_to_works() {
-		let test_set = vec![0, 1, 10, 1000, 1_000_000_000];
-
-		// negative (1/2)
-		let mut fm = WeightMultiplier::from_rational(-1, 2);
-		test_set.clone().into_iter().for_each(|i| { assert_eq!(fm.apply_to(i) as i32, i as i32  - i as i32 / 2); });
-
-		// unit (1) multiplier
-		fm = WeightMultiplier::from_parts(0);
-		test_set.clone().into_iter().for_each(|i| { assert_eq!(fm.apply_to(i), i); });
-
-		// i.5 multiplier
-		fm = WeightMultiplier::from_rational(1, 2);
-		test_set.clone().into_iter().for_each(|i| { assert_eq!(fm.apply_to(i), i * 3 / 2); });
-
-		// dual multiplier
-		fm = WeightMultiplier::from_rational(1, 1);
-		test_set.clone().into_iter().for_each(|i| { assert_eq!(fm.apply_to(i), i * 2); });
 	}
 }

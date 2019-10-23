@@ -160,6 +160,14 @@ pub mod ext {
 		fn ext_print_hex(data: *const u8, len: u32);
 		/// Print a number
 		fn ext_print_num(value: u64);
+		/// Print a log line if logging for given level and target is enabled.
+		fn ext_log(
+			level: u32,
+			target_data: *const u8,
+			target_len: u32,
+			message_data: *const u8,
+			message_len: u32,
+		);
 
 		/// Set value for key in storage.
 		fn ext_set_storage(key_data: *const u8, key_len: u32, value_data: *const u8, value_len: u32);
@@ -778,6 +786,22 @@ impl OtherApi for () {
 	fn print_hex(data: &[u8]) {
 		unsafe {
 			ext_print_hex.get()(data.as_ptr(), data.len() as u32);
+		}
+	}
+
+	fn log(
+		level: LogLevel,
+		target: &[u8],
+		message: &[u8]
+	) {
+		unsafe {
+			ext_log.get()(
+				level as u32,
+				target.as_ptr(),
+				target.len() as u32,
+				message.as_ptr(),
+				message.len() as u32,
+			)
 		}
 	}
 }

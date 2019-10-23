@@ -87,8 +87,7 @@ mod module1 {
 		}
 	}
 
-	#[derive(PartialEq, Eq, Clone)]
-	#[cfg_attr(feature = "std", derive(Debug))]
+	#[derive(PartialEq, Eq, Clone, sr_primitives::RuntimeDebug)]
 	pub enum Origin<T: Trait<I>, I> where T::BlockNumber: From<u32> {
 		Members(u32),
 		_Phantom(std::marker::PhantomData<(T, I)>),
@@ -150,8 +149,7 @@ mod module2 {
 		}
 	}
 
-	#[derive(PartialEq, Eq, Clone)]
-	#[cfg_attr(feature = "std", derive(Debug))]
+	#[derive(PartialEq, Eq, Clone, sr_primitives::RuntimeDebug)]
 	pub enum Origin<T: Trait<I>, I=DefaultInstance> {
 		Members(u32),
 		_Phantom(std::marker::PhantomData<(T, I)>),

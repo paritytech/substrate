@@ -47,6 +47,7 @@ use schnorrkel::keys::{MINI_SECRET_KEY_LENGTH, SECRET_KEY_LENGTH};
 const SIGNING_CTX: &[u8] = b"substrate";
 
 /// An Schnorrkel/Ristretto x25519 ("sr25519") public key.
+#[cfg_attr(feature = "std", derive(Hash))]
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default)]
 pub struct Public(pub [u8; 32]);
 
@@ -128,11 +129,19 @@ impl std::fmt::Display for Public {
 	}
 }
 
-#[cfg(feature = "std")]
-impl std::fmt::Debug for Public {
-	fn fmt(&self, f: &mut std::fmt::Formatter) -> ::std::fmt::Result {
+#[cfg(not(feature = "std"))]
+use core as std;
+
+impl rstd::fmt::Debug for Public {
+	#[cfg(feature = "std")]
+	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
 		let s = self.to_ss58check();
 		write!(f, "{} ({}...)", crate::hexdisplay::HexDisplay::from(&self.0), &s[0..8])
+	}
+
+	#[cfg(not(feature = "std"))]
+	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+		Ok(())
 	}
 }
 
@@ -148,13 +157,6 @@ impl<'de> Deserialize<'de> for Public {
 	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
 		Public::from_ss58check(&String::deserialize(deserializer)?)
 			.map_err(|e| de::Error::custom(format!("{:?}", e)))
-	}
-}
-
-#[cfg(feature = "std")]
-impl std::hash::Hash for Public {
-	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-		self.0.hash(state);
 	}
 }
 
@@ -237,10 +239,15 @@ impl From<schnorrkel::Signature> for Signature {
 	}
 }
 
-#[cfg(feature = "std")]
-impl std::fmt::Debug for Signature {
-	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+impl rstd::fmt::Debug for Signature {
+	#[cfg(feature = "std")]
+	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
 		write!(f, "{}", crate::hexdisplay::HexDisplay::from(&self.0))
+	}
+
+	#[cfg(not(feature = "std"))]
+	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+		Ok(())
 	}
 }
 
