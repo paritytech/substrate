@@ -802,7 +802,7 @@ impl_wasm_host_interface! {
 			match secp256k1_recover(context, msg_data, sig_data)? {
 				RecoverResult::Invalid(c) => Ok(c),
 				RecoverResult::Valid(pubkey) => {
-⎄					context.write_memory(pubkey_data, &pubkey.serialize()[1..65])
+					context.write_memory(pubkey_data, &pubkey.serialize()[1..65])
 						.map_err(|_| "Invalid attempt to set pubkey in ext_secp256k1_ecdsa_recover")?;
 					Ok(0)
 				}
