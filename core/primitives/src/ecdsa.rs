@@ -246,7 +246,7 @@ impl std::hash::Hash for Signature {
 }
 
 impl Signature {
-	/// A new instance from the given 64-byte `data`.
+	/// A new instance from the given 65-byte `data`.
 	///
 	/// NOTE: No checking goes on to ensure this is a real signature. Only use it if
 	/// you are certain that the array actually is a signature. GIGO!
