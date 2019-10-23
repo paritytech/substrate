@@ -41,12 +41,7 @@ use secp256k1::{PublicKey, SecretKey};
 #[cfg(feature = "std")]
 type Seed = [u8; 32];
 
-/// The Blake2-256 hash of the ECDSA 33-byte compressed public key.
-///
-/// We take the hash in order to securely squash it down to 32 bytes since that's convenient for the rest of Substrate.
-/// In principle, we could do an alternative form of this module with a full 33 byte pub key and then have some extra
-/// logic higher up that reduced it to 32 bytes for an `AccountId`. That would open up the possibility of using soft-
-/// derived paths for HDKD.
+/// The ECDSA 33-byte compressed public key.
 #[derive(Clone, Encode, Decode)]
 pub struct Public(pub [u8; 33]);
 

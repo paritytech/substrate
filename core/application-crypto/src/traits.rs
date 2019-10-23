@@ -123,30 +123,3 @@ pub trait RuntimeAppPublic: Sized  {
 	fn verify<M: AsRef<[u8]>>(&self, msg: &M, signature: &Self::Signature) -> bool;
 }
 
-/// A runtime interface for an application's public key, as referenced by the account ID that it collapses to.
-pub trait RuntimeAccountId: Sized  {
-	/// An identifier for this application-specific key type.
-	const ID: KeyTypeId;
-
-	/// The signature that will be generated when signing with the corresponding private key.
-	type Signature: Codec + MaybeDebugHash + Eq + PartialEq + Clone;
-
-	/// Returns all account IDs for this application in the keystore.
-	fn all() -> crate::Vec<Self>;
-
-	/// Generate a public/private pair and store it in the keystore.
-	///
-	/// Returns the generated public key.
-	fn generate_pair(seed: Option<&str>) -> Self;
-
-	/// Sign the given message with the corresponding private key of this public key.
-	///
-	/// The private key will be requested from the keystore.
-	///
-	/// Returns the signature or `None` if the private key could not be found or some other error
-	/// occurred.
-	fn sign<M: AsRef<[u8]>>(&self, msg: &M) -> Option<Self::Signature>;
-
-	/// Verify that the given signature matches the given message using this public key.
-	fn verify<M: AsRef<[u8]>>(&self, msg: &M, signature: &Self::Signature) -> bool;
-}
