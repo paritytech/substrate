@@ -30,7 +30,7 @@ client = { package = "substrate-client", path = "../../core/client", default_fea
 offchain-primitives = { package = "substrate-offchain-primitives", path = "../../core/offchain/primitives", default-features = false }
 
 [build-dependencies]
-wasm-builder-runner = { package = "substrate-wasm-builder-runner", version = "1.0.2" }
+wasm-builder-runner = { package = "substrate-wasm-builder-runner", version = "1.0.4" }
 
 [features]
 default = ["std"]
@@ -43,7 +43,7 @@ std = [
 	"balances/std",
 	"aura/std",
 	"aura-primitives/std",
-	'grandpa/std',
+	"grandpa/std",
 	"executive/std",
 	"indices/std",
 	"primitives/std",

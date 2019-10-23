@@ -93,12 +93,12 @@ decl_event!(
 decl_storage! {
 	trait Store for Module<T: Trait> as Indices {
 		/// The next free enumeration set.
-		pub NextEnumSet get(next_enum_set) build(|config: &GenesisConfig<T>| {
+		pub NextEnumSet get(fn next_enum_set) build(|config: &GenesisConfig<T>| {
 			(config.ids.len() as u32 / ENUM_SET_SIZE).into()
 		}): T::AccountIndex;
 
 		/// The enumeration sets.
-		pub EnumSet get(enum_set) build(|config: &GenesisConfig<T>| {
+		pub EnumSet get(fn enum_set) build(|config: &GenesisConfig<T>| {
 			(0..((config.ids.len() as u32) + ENUM_SET_SIZE - 1) / ENUM_SET_SIZE)
 				.map(|i| (
 					i.into(),

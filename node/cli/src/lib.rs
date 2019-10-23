@@ -172,15 +172,15 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 			match config.roles {
 				ServiceRoles::LIGHT => run_until_exit(
 					runtime,
-					service::new_light(config).map_err(|e| format!("{:?}", e))?,
+					service::new_light(config)?,
 					exit
 				),
 				_ => run_until_exit(
 					runtime,
-					service::new_full(config).map_err(|e| format!("{:?}", e))?,
+					service::new_full(config)?,
 					exit
 				),
-			}.map_err(|e| format!("{:?}", e))
+			}
 		}),
 		ParseAndPrepare::BuildSpec(cmd) => cmd.run(load_spec),
 		ParseAndPrepare::ExportBlocks(cmd) => cmd.run_with_builder(|config: Config<_, _>|

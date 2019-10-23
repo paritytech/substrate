@@ -180,17 +180,17 @@ type MaybeVrf = Option<[u8; 32 /* VRF_OUTPUT_LENGTH */]>;
 decl_storage! {
 	trait Store for Module<T: Trait> as Babe {
 		/// Current epoch index.
-		pub EpochIndex get(epoch_index): u64;
+		pub EpochIndex get(fn epoch_index): u64;
 
 		/// Current epoch authorities.
-		pub Authorities get(authorities): Vec<(AuthorityId, BabeAuthorityWeight)>;
+		pub Authorities get(fn authorities): Vec<(AuthorityId, BabeAuthorityWeight)>;
 
 		/// The slot at which the first epoch actually started. This is 0
 		/// until the first block of the chain.
-		pub GenesisSlot get(genesis_slot): u64;
+		pub GenesisSlot get(fn genesis_slot): u64;
 
 		/// Current slot number.
-		pub CurrentSlot get(current_slot): u64;
+		pub CurrentSlot get(fn current_slot): u64;
 
 		/// The epoch randomness for the *current* epoch.
 		///
@@ -205,7 +205,7 @@ decl_storage! {
 		// NOTE: the following fields don't use the constants to define the
 		// array size because the metadata API currently doesn't resolve the
 		// variable to its underlying value.
-		pub Randomness get(randomness): [u8; 32 /* RANDOMNESS_LENGTH */];
+		pub Randomness get(fn randomness): [u8; 32 /* RANDOMNESS_LENGTH */];
 
 		/// Next epoch randomness.
 		NextRandomness: [u8; 32 /* RANDOMNESS_LENGTH */];
@@ -224,7 +224,7 @@ decl_storage! {
 
 		/// Temporary value (cleared at block finalization) which is `Some`
 		/// if per-block initialization has already been called for current block.
-		Initialized get(initialized): Option<MaybeVrf>;
+		Initialized get(fn initialized): Option<MaybeVrf>;
 	}
 	add_extra_genesis {
 		config(authorities): Vec<(AuthorityId, BabeAuthorityWeight)>;

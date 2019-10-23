@@ -113,11 +113,16 @@ struct DeclStorageLine {
 	pub default_value: ext::Opt<DeclStorageDefault>,
 }
 
+#[derive(Parse, ToTokens, Debug)]
+struct DeclStorageGetterBody {
+	fn_keyword: Option<Token![fn]>,
+	ident: Ident,
+}
 
 #[derive(Parse, ToTokens, Debug)]
 struct DeclStorageGetter {
 	pub getter_keyword: keyword::get,
-	pub getfn: ext::Parens<Ident>,
+	pub getfn: ext::Parens<DeclStorageGetterBody>,
 }
 
 #[derive(Parse, ToTokens, Debug)]
@@ -301,17 +306,17 @@ pub fn parse(input: syn::parse::ParseStream) -> syn::Result<super::DeclStorageDe
 	let mut storage_lines = vec![];
 
 	for line in def.content.content.inner.into_iter() {
-		let getter = line.getter.inner.map(|o| o.getfn.content);
+		let getter = line.getter.inner.map(|o| o.getfn.content.ident);
 		let config = if let Some(config) = line.config.inner {
 			if let Some(ident) = config.expr.content {
 				Some(ident)
-			} else if let Some(ident) = getter.clone() {
-				Some(ident)
+			} else if let Some(ref ident) = getter {
+				Some(ident.clone())
 			} else {
 				return Err(syn::Error::new(
 					config.span(),
 					"Invalid storage definiton, couldn't find config identifier: storage must either have a get \
-					identifier `get(ident)` or a defined config identifier `config(ident)`"
+					identifier `get(fn ident)` or a defined config identifier `config(ident)`"
 				))
 			}
 		} else {

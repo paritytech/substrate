@@ -25,7 +25,10 @@
 
 use rstd::prelude::*;
 use sr_primitives::{
-	print, traits::{Zero, One, StaticLookup, Bounded, Saturating}, weights::SimpleDispatchInfo,
+	RuntimeDebug,
+	print,
+	traits::{Zero, One, StaticLookup, Bounded, Saturating},
+	weights::SimpleDispatchInfo,
 };
 use support::{
 	dispatch::Result, decl_storage, decl_event, ensure, decl_module,
@@ -98,8 +101,7 @@ mod tests;
 // entries before they increase the capacity.
 
 /// The activity status of a voter.
-#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, Default)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, Default, RuntimeDebug)]
 pub struct VoterInfo<Balance> {
 	/// Last VoteIndex in which this voter assigned (or initialized) approvals.
 	last_active: VoteIndex,
@@ -114,8 +116,7 @@ pub struct VoterInfo<Balance> {
 }
 
 /// Used to demonstrate the status of a particular index in the global voter list.
-#[derive(PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(PartialEq, Eq, RuntimeDebug)]
 pub enum CellStatus {
 	/// Any out of bound index. Means a push a must happen to the chunk pointed by `NextVoterSet<T>`.
 	/// Voting fee is applied in case a new chunk is created.
@@ -213,11 +214,11 @@ decl_storage! {
 		// ---- parameters
 
 		/// How long to give each top candidate to present themselves after the vote ends.
-		pub PresentationDuration get(presentation_duration) config(): T::BlockNumber;
+		pub PresentationDuration get(fn presentation_duration) config(): T::BlockNumber;
 		/// How long each position is active for.
-		pub TermDuration get(term_duration) config(): T::BlockNumber;
+		pub TermDuration get(fn term_duration) config(): T::BlockNumber;
 		/// Number of accounts that should constitute the collective.
-		pub DesiredSeats get(desired_seats) config(): u32;
+		pub DesiredSeats get(fn desired_seats) config(): u32;
 
 		// ---- permanent state (always relevant, changes only at the finalization of voting)
 
@@ -225,9 +226,9 @@ decl_storage! {
 		///  executive matters. The block number (second element in the tuple) is the block that
 		///  their position is active until (calculated by the sum of the block number when the
 		///  member was elected and their term duration).
-		pub Members get(members) config(): Vec<(T::AccountId, T::BlockNumber)>;
+		pub Members get(fn members) config(): Vec<(T::AccountId, T::BlockNumber)>;
 		/// The total number of vote rounds that have happened or are in progress.
-		pub VoteCount get(vote_index): VoteIndex;
+		pub VoteCount get(fn vote_index): VoteIndex;
 
 		// ---- persistent state (always relevant, changes constantly)
 
@@ -235,35 +236,35 @@ decl_storage! {
 		// bit-wise manner. In order to get a human-readable representation (`Vec<bool>`), use
 		// [`all_approvals_of`]. Furthermore, each vector of scalars is chunked with the cap of
 		// `APPROVAL_SET_SIZE`.
-		pub ApprovalsOf get(approvals_of): map (T::AccountId, SetIndex) => Vec<ApprovalFlag>;
+		pub ApprovalsOf get(fn approvals_of): map (T::AccountId, SetIndex) => Vec<ApprovalFlag>;
 		/// The vote index and list slot that the candidate `who` was registered or `None` if they
 		/// are not currently registered.
-		pub RegisterInfoOf get(candidate_reg_info): map T::AccountId => Option<(VoteIndex, u32)>;
+		pub RegisterInfoOf get(fn candidate_reg_info): map T::AccountId => Option<(VoteIndex, u32)>;
 		/// Basic information about a voter.
-		pub VoterInfoOf get(voter_info): map T::AccountId => Option<VoterInfo<BalanceOf<T>>>;
+		pub VoterInfoOf get(fn voter_info): map T::AccountId => Option<VoterInfo<BalanceOf<T>>>;
 		/// The present voter list (chunked and capped at [`VOTER_SET_SIZE`]).
-		pub Voters get(voters): map SetIndex => Vec<Option<T::AccountId>>;
+		pub Voters get(fn voters): map SetIndex => Vec<Option<T::AccountId>>;
 		/// the next free set to store a voter in. This will keep growing.
-		pub NextVoterSet get(next_nonfull_voter_set): SetIndex = 0;
+		pub NextVoterSet get(fn next_nonfull_voter_set): SetIndex = 0;
 		/// Current number of Voters.
-		pub VoterCount get(voter_count): SetIndex = 0;
+		pub VoterCount get(fn voter_count): SetIndex = 0;
 		/// The present candidate list.
-		pub Candidates get(candidates): Vec<T::AccountId>; // has holes
+		pub Candidates get(fn candidates): Vec<T::AccountId>; // has holes
 		/// Current number of active candidates
-		pub CandidateCount get(candidate_count): u32;
+		pub CandidateCount get(fn candidate_count): u32;
 
 		// ---- temporary state (only relevant during finalization/presentation)
 
 		/// The accounts holding the seats that will become free on the next tally.
-		pub NextFinalize get(next_finalize): Option<(T::BlockNumber, u32, Vec<T::AccountId>)>;
+		pub NextFinalize get(fn next_finalize): Option<(T::BlockNumber, u32, Vec<T::AccountId>)>;
 		/// Get the leaderboard if we're in the presentation phase. The first element is the weight
 		/// of each entry; It may be the direct summed approval stakes, or a weighted version of it.
 		/// Sorted from low to high.
-		pub Leaderboard get(leaderboard): Option<Vec<(BalanceOf<T>, T::AccountId)> >;
+		pub Leaderboard get(fn leaderboard): Option<Vec<(BalanceOf<T>, T::AccountId)> >;
 
 		/// Who is able to vote for whom. Value is the fund-holding account, key is the
 		/// vote-transaction-sending account.
-		pub Proxy get(proxy): map T::AccountId => Option<T::AccountId>;
+		pub Proxy get(fn proxy): map T::AccountId => Option<T::AccountId>;
 	}
 }
 

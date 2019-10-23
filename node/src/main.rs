@@ -43,7 +43,7 @@ impl cli::IntoExit for Exit {
 	}
 }
 
-fn main() {
+fn main() -> Result<(), cli::error::Error> {
 	let version = VersionInfo {
 		name: "Substrate Node",
 		commit: env!("VERGEN_SHA_SHORT"),
@@ -54,8 +54,5 @@ fn main() {
 		support_url: "https://github.com/paritytech/substrate/issues/new",
 	};
 
-	if let Err(e) = cli::run(::std::env::args(), Exit, version) {
-		eprintln!("Fatal error: {}\n\n{:?}", e, e);
-		std::process::exit(1)
-	}
+	cli::run(std::env::args(), Exit, version)
 }

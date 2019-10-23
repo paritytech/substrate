@@ -427,8 +427,8 @@ impl BigUint {
 	}
 }
 
-#[cfg(feature = "std")]
 impl rstd::fmt::Debug for BigUint {
+	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut rstd::fmt::Formatter<'_>) -> rstd::fmt::Result {
 		write!(
 			f,
@@ -437,6 +437,12 @@ impl rstd::fmt::Debug for BigUint {
 			u128::try_from(self.clone()).unwrap_or(0),
 		)
 	}
+
+	#[cfg(not(feature = "std"))]
+	fn fmt(&self, _: &mut rstd::fmt::Formatter<'_>) -> rstd::fmt::Result {
+		Ok(())
+	}
+
 }
 
 impl PartialEq for BigUint {

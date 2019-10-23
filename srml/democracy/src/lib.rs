@@ -21,6 +21,7 @@
 use rstd::prelude::*;
 use rstd::{result, convert::TryFrom};
 use sr_primitives::{
+	RuntimeDebug,
 	traits::{Zero, Bounded, CheckedMul, CheckedDiv, EnsureOrigin, Hash, Dispatchable},
 	weights::SimpleDispatchInfo,
 };
@@ -48,8 +49,7 @@ pub type PropIndex = u32;
 pub type ReferendumIndex = u32;
 
 /// A value denoting the strength of conviction of a vote.
-#[derive(Encode, Decode, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Encode, Decode, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, RuntimeDebug)]
 pub enum Conviction {
 	/// 0.1x votes, unlocked.
 	None,
@@ -148,8 +148,7 @@ impl Bounded for Conviction {
 const MAX_RECURSION_LIMIT: u32 = 16;
 
 /// A number of lock periods, plus a vote, one way or the other.
-#[derive(Copy, Clone, Eq, PartialEq, Default)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Copy, Clone, Eq, PartialEq, Default, RuntimeDebug)]
 pub struct Vote {
 	pub aye: bool,
 	pub conviction: Conviction,
@@ -231,8 +230,7 @@ pub trait Trait: system::Trait + Sized {
 }
 
 /// Info regarding an ongoing referendum.
-#[derive(Encode, Decode, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct ReferendumInfo<BlockNumber: Parameter, Proposal: Parameter> {
 	/// When voting on this referendum will end.
 	end: BlockNumber,
@@ -259,38 +257,38 @@ impl<BlockNumber: Parameter, Proposal: Parameter> ReferendumInfo<BlockNumber, Pr
 decl_storage! {
 	trait Store for Module<T: Trait> as Democracy {
 		/// The number of (public) proposals that have been made so far.
-		pub PublicPropCount get(public_prop_count) build(|_| 0 as PropIndex) : PropIndex;
+		pub PublicPropCount get(fn public_prop_count) build(|_| 0 as PropIndex) : PropIndex;
 		/// The public proposals. Unsorted.
-		pub PublicProps get(public_props): Vec<(PropIndex, T::Proposal, T::AccountId)>;
+		pub PublicProps get(fn public_props): Vec<(PropIndex, T::Proposal, T::AccountId)>;
 		/// Those who have locked a deposit.
-		pub DepositOf get(deposit_of): map PropIndex => Option<(BalanceOf<T>, Vec<T::AccountId>)>;
+		pub DepositOf get(fn deposit_of): map PropIndex => Option<(BalanceOf<T>, Vec<T::AccountId>)>;
 
 		/// The next free referendum index, aka the number of referenda started so far.
-		pub ReferendumCount get(referendum_count) build(|_| 0 as ReferendumIndex): ReferendumIndex;
+		pub ReferendumCount get(fn referendum_count) build(|_| 0 as ReferendumIndex): ReferendumIndex;
 		/// The next referendum index that should be tallied.
-		pub NextTally get(next_tally) build(|_| 0 as ReferendumIndex): ReferendumIndex;
+		pub NextTally get(fn next_tally) build(|_| 0 as ReferendumIndex): ReferendumIndex;
 		/// Information concerning any given referendum.
-		pub ReferendumInfoOf get(referendum_info):
+		pub ReferendumInfoOf get(fn referendum_info):
 			map ReferendumIndex => Option<(ReferendumInfo<T::BlockNumber, T::Proposal>)>;
 		/// Queue of successful referenda to be dispatched.
-		pub DispatchQueue get(dispatch_queue):
+		pub DispatchQueue get(fn dispatch_queue):
 			map T::BlockNumber => Vec<Option<(T::Proposal, ReferendumIndex)>>;
 
 		/// Get the voters for the current proposal.
-		pub VotersFor get(voters_for): map ReferendumIndex => Vec<T::AccountId>;
+		pub VotersFor get(fn voters_for): map ReferendumIndex => Vec<T::AccountId>;
 
 		/// Get the vote in a given referendum of a particular voter. The result is meaningful only
 		/// if `voters_for` includes the voter when called with the referendum (you'll get the
 		/// default `Vote` value otherwise). If you don't want to check `voters_for`, then you can
 		/// also check for simple existence with `VoteOf::exists` first.
-		pub VoteOf get(vote_of): map (ReferendumIndex, T::AccountId) => Vote;
+		pub VoteOf get(fn vote_of): map (ReferendumIndex, T::AccountId) => Vote;
 
 		/// Who is able to vote for whom. Value is the fund-holding account, key is the
 		/// vote-transaction-sending account.
-		pub Proxy get(proxy): map T::AccountId => Option<T::AccountId>;
+		pub Proxy get(fn proxy): map T::AccountId => Option<T::AccountId>;
 
 		/// Get the account (and lock periods) to which another account is delegating vote.
-		pub Delegations get(delegations): linked_map T::AccountId => (T::AccountId, Conviction);
+		pub Delegations get(fn delegations): linked_map T::AccountId => (T::AccountId, Conviction);
 
 		/// True if the last referendum tabled was submitted externally. False if it was a public
 		/// proposal.
@@ -304,7 +302,7 @@ decl_storage! {
 
 		/// A record of who vetoed what. Maps proposal hash to a possible existent block number
 		/// (until when it may not be resubmitted) and who vetoed it.
-		pub Blacklist get(blacklist): map T::Hash => Option<(T::BlockNumber, Vec<T::AccountId>)>;
+		pub Blacklist get(fn blacklist): map T::Hash => Option<(T::BlockNumber, Vec<T::AccountId>)>;
 
 		/// Record of all proposals that have been subject to emergency cancellation.
 		pub Cancellations: map T::Hash => bool;

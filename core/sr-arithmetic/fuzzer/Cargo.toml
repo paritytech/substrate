@@ -11,6 +11,8 @@ primitive-types = "0.6"
 num-bigint = "0.2"
 num-traits = "0.2"
 
+[workspace]
+
 [[bin]]
 name = "biguint"
 path = "src/biguint.rs"

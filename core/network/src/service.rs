@@ -52,14 +52,11 @@ use crate::protocol::specialization::NetworkSpecialization;
 use crate::protocol::sync::SyncState;
 
 /// Minimum Requirements for a Hash within Networking
-pub trait ExHashT:
-	::std::hash::Hash + Eq + ::std::fmt::Debug + Clone + Send + Sync + 'static
-{
-}
+pub trait ExHashT: std::hash::Hash + Eq + std::fmt::Debug + Clone + Send + Sync + 'static {}
+
 impl<T> ExHashT for T where
-	T: ::std::hash::Hash + Eq + ::std::fmt::Debug + Clone + Send + Sync + 'static
-{
-}
+	T: std::hash::Hash + Eq + std::fmt::Debug + Clone + Send + Sync + 'static
+{}
 
 /// Transaction pool interface
 pub trait TransactionPool<H: ExHashT, B: BlockT>: Send + Sync {
@@ -151,6 +148,23 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 				Err(_) => warn!(target: "sub-libp2p", "Not a valid bootnode address: {}", bootnode),
 			}
 		}
+
+		// Check for duplicate bootnodes.
+		known_addresses.iter()
+			.try_for_each(|(peer_id, addr)|
+				if let Some(other) = known_addresses
+					.iter()
+					.find(|o| o.1 == *addr && o.0 != *peer_id)
+				{
+					Err(Error::DuplicateBootnode {
+						address: addr.clone(),
+						first_id: peer_id.clone(),
+						second_id: other.0.clone(),
+					})
+				} else {
+					Ok(())
+				}
+			)?;
 
 		// Initialize the reserved peers.
 		for reserved in params.network_config.reserved_nodes.iter() {
@@ -553,8 +567,9 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	}
 }
 
-impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>
-	::consensus::SyncOracle for NetworkService<B, S, H> {
+impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> consensus::SyncOracle
+	for NetworkService<B, S, H>
+{
 	fn is_major_syncing(&mut self) -> bool {
 		NetworkService::is_major_syncing(self)
 	}
@@ -564,8 +579,9 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>
 	}
 }
 
-impl<'a, B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>
-	::consensus::SyncOracle for &'a NetworkService<B, S, H> {
+impl<'a, B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> consensus::SyncOracle
+	for &'a NetworkService<B, S, H>
+{
 	fn is_major_syncing(&mut self) -> bool {
 		NetworkService::is_major_syncing(self)
 	}
