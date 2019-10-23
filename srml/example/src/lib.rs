@@ -318,7 +318,7 @@ decl_storage! {
 	// keep things around between blocks.
 	trait Store for Module<T: Trait> as Example {
 		// Any storage declarations of the form:
-		//   `pub? Name get(getter_name)? [config()|config(myname)] [build(|_| {...})] : <type> (= <new_default_value>)?;`
+		//   `pub? Name get(fn getter_name)? [config()|config(myname)] [build(|_| {...})] : <type> (= <new_default_value>)?;`
 		// where `<type>` is either:
 		//   - `Type` (a basic value item); or
 		//   - `map KeyType => ValueType` (a map item).
@@ -331,7 +331,7 @@ decl_storage! {
 		//   - `Foo::put(1); Foo::get()` returns `1`;
 		//   - `Foo::kill(); Foo::get()` returns `0` (u32::default()).
 		// e.g. Foo: u32;
-		// e.g. pub Bar get(bar): map T::AccountId => Vec<(T::Balance, u64)>;
+		// e.g. pub Bar get(fn bar): map T::AccountId => Vec<(T::Balance, u64)>;
 		//
 		// For basic value items, you'll get a type which implements
 		// `support::StorageValue`. For map items, you'll get a type which
@@ -340,13 +340,13 @@ decl_storage! {
 		// If they have a getter (`get(getter_name)`), then your module will come
 		// equipped with `fn getter_name() -> Type` for basic value items or
 		// `fn getter_name(key: KeyType) -> ValueType` for map items.
-		Dummy get(dummy) config(): Option<T::Balance>;
+		Dummy get(fn dummy) config(): Option<T::Balance>;
 
 		// A map that has enumerable entries.
-		Bar get(bar) config(): linked_map T::AccountId => T::Balance;
+		Bar get(fn bar) config(): linked_map T::AccountId => T::Balance;
 
 		// this one uses the default, we'll demonstrate the usage of 'mutate' API.
-		Foo get(foo) config(): T::Balance;
+		Foo get(fn foo) config(): T::Balance;
 	}
 }
 
@@ -584,10 +584,9 @@ impl<T: Trait> Module<T> {
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
 pub struct WatchDummy<T: Trait + Send + Sync>(PhantomData<T>);
 
-#[cfg(feature = "std")]
 impl<T: Trait + Send + Sync> rstd::fmt::Debug for WatchDummy<T> {
 	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
-		write!(f, "WatchDummy<T>")
+		write!(f, "WatchDummy")
 	}
 }
 

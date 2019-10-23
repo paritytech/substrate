@@ -28,6 +28,7 @@ use codec::{Encode, Decode, Input, Error};
 use primitives::{
 	Blake2Hasher,
 	OpaqueMetadata,
+	RuntimeDebug,
 	testing::{
 		ED25519,
 		SR25519,
@@ -93,8 +94,7 @@ pub fn native_version() -> NativeVersion {
 }
 
 /// Calls in transactions.
-#[derive(Clone, PartialEq, Eq, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
 pub struct Transfer {
 	pub from: AccountId,
 	pub to: AccountId,
@@ -113,8 +113,7 @@ impl Transfer {
 }
 
 /// Extrinsic for test-runtime.
-#[derive(Clone, PartialEq, Eq, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
 pub enum Extrinsic {
 	AuthoritiesChange(Vec<AuthorityId>),
 	Transfer(Transfer, AccountSignature),
@@ -353,8 +352,7 @@ impl_outer_origin!{
 	pub enum Origin for Runtime where system = srml_system {}
 }
 
-#[derive(Clone, Encode, Decode, Eq, PartialEq)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
 pub struct Event;
 
 impl From<srml_system::Event> for Event {

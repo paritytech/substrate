@@ -43,7 +43,7 @@ pub const DEV_PHRASE: &str = "bottom drive obey lake curtain smoke basket hold r
 pub const DEV_ADDRESS: &str = "5DfhGyQdFobKM8NsWvEeAKk5EQQgYe9AydgJ7rMB6E1EqRzV";
 
 /// The infallible type.
-#[derive(Debug)]
+#[derive(crate::RuntimeDebug)]
 pub enum Infallible {}
 
 /// The length of the junction identifier. Note that this is also referred to as the
@@ -743,7 +743,7 @@ pub trait CryptoType {
 /// Values whose first character is `_` are reserved for private use and won't conflict with any
 /// public modules.
 #[derive(Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(crate::RuntimeDebug)]
 pub struct KeyTypeId(pub [u8; 4]);
 
 impl From<u32> for KeyTypeId {
