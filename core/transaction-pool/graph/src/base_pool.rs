@@ -187,6 +187,13 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: ::std::fmt::Debug> BasePool<Hash
 		}
 	}
 
+	/// Changes reject future transactions flag. Returns previous flag value.
+	pub fn reject_future_transactions(&mut self, reject: bool) -> bool {
+		let previous = self.reject_future_transactions;
+		self.reject_future_transactions = reject;
+		previous
+	}
+
 	/// Imports transaction to the pool.
 	///
 	/// The pool consists of two parts: Future and Ready.
@@ -378,6 +385,11 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: ::std::fmt::Debug> BasePool<Hash
 		let mut removed = self.ready.remove_invalid(hashes);
 		removed.extend(self.future.remove(hashes));
 		removed
+	}
+
+	/// Removes and returns all transactions from the future queue.
+	pub fn clear_future(&mut self) -> Vec<Arc<Transaction<Hash, Ex>>> {
+		self.future.clear()
 	}
 
 	/// Prunes transactions that provide given list of tags.
@@ -1007,5 +1019,32 @@ requires: [03,02], provides: [04], data: [4]}".to_owned()
 		} else {
 			assert!(false, "Invalid error kind: {:?}", err);
 		}
+	}
+
+	#[test]
+	fn should_clear_future_queue() {
+		// given
+		let mut pool = pool();
+
+		// when
+		pool.import(Transaction {
+			data: vec![5u8],
+			bytes: 1,
+			hash: 5,
+			priority: 5u64,
+			valid_till: 64u64,
+			requires: vec![vec![0]],
+			provides: vec![],
+			propagate: true,
+		}).unwrap();
+
+		// then
+		assert_eq!(pool.future.len(), 1);
+
+		// and then when
+		assert_eq!(pool.clear_future().len(), 1);
+
+		// then
+		assert_eq!(pool.future.len(), 0);
 	}
 }

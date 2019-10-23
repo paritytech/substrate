@@ -219,6 +219,12 @@ impl<B: ChainApi> ValidatedPool<B> {
 				}
 			}
 
+			// if we're rejecting future transactions, then insertion order matters here:
+			// if tx1 depends on tx2, then if tx1 is inserted before tx2, then it goes
+			// to the future queue and gets rejected immediately
+			// => let's temporary stop rejection and clear future queue before return
+			let reject_future_transactions = pool.reject_future_transactions(false);
+
 			// now resubmit all removed transactions back to the pool
 			let mut final_statuses = HashMap::new();
 			for (hash, tx_to_resubmit) in txs_to_resubmit {
@@ -254,6 +260,15 @@ impl<B: ChainApi> ValidatedPool<B> {
 					},
 				}
 			}
+
+			// if the pool is configured to reject future transactions, let's clear the future
+			// queue, updating final statuses as required
+			if reject_future_transactions {
+				for future_tx in pool.clear_future() {
+					final_statuses.insert(future_tx.hash.clone(), Status::Dropped);
+				}
+			}
+			pool.reject_future_transactions(reject_future_transactions);
 
 			(initial_statuses, final_statuses)
 		};
