@@ -317,12 +317,12 @@ impl<A: ChainApi> AsyncApi<A> {
 			},
 		};
 
-		info!("Submitting to the pool: {:?} (isSigned: {:?})", xt, xt.is_signed());
+		info!("Submitting transaction to the pool: {:?} (isSigned: {:?})", xt, xt.is_signed());
 		future::Either::Right(self.transaction_pool
 			.submit_one(&self.at, xt.clone())
 			.map(|result| match result {
 				Ok(hash) => { debug!("[{:?}] Offchain transaction added to the pool.", hash); },
-				Err(e) => { debug!("Couldn't submit transaction: {:?}", e); },
+				Err(e) => { warn!("Couldn't submit offchain transaction: {:?}", e); },
 			}))
 	}
 }

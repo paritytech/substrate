@@ -21,7 +21,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[doc(hidden)]
-pub use primitives::{self, crypto::{CryptoType, Public, Derive, IsWrappedBy, Wraps}};
+pub use primitives::{self, crypto::{CryptoType, Public, Derive, IsWrappedBy, Wraps}, RuntimeDebug};
 #[doc(hidden)]
 #[cfg(feature = "std")]
 pub use primitives::crypto::{SecretStringError, DeriveJunction, Ss58Codec, Pair};
@@ -139,10 +139,12 @@ macro_rules! app_crypto {
 		$crate::wrap!{
 			/// A generic `AppPublic` wrapper type over $public crypto; this has no specific App.
 			#[derive(
-				Clone, Default, Eq, PartialEq, Ord, PartialOrd, $crate::codec::Encode,
+				Clone, Default, Eq, PartialEq, Ord, PartialOrd,
+				$crate::codec::Encode,
 				$crate::codec::Decode,
+				$crate::RuntimeDebug,
 			)]
-			#[cfg_attr(feature = "std", derive(Debug, Hash))]
+			#[cfg_attr(feature = "std", derive(Hash))]
 			pub struct Public($public);
 		}
 
@@ -239,8 +241,12 @@ macro_rules! app_crypto {
 
 		$crate::wrap! {
 			/// A generic `AppPublic` wrapper type over $public crypto; this has no specific App.
-			#[derive(Clone, Default, Eq, PartialEq, $crate::codec::Encode, $crate::codec::Decode)]
-			#[cfg_attr(feature = "std", derive(Debug, Hash))]
+			#[derive(Clone, Default, Eq, PartialEq,
+				$crate::codec::Encode,
+				$crate::codec::Decode,
+				$crate::RuntimeDebug,
+			)]
+			#[cfg_attr(feature = "std", derive(Hash))]
 			pub struct Signature($sig);
 		}
 

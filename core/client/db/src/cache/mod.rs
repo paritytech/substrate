@@ -207,7 +207,7 @@ impl<'a, Block: BlockT> DbCacheTransaction<'a, Block> {
 		// prepare list of caches that are not update
 		// (we might still need to do some cache maintenance in this case)
 		let missed_caches = self.cache.cache_at.keys()
-			.filter(|cache| !data_at.contains_key(cache.clone()))
+			.filter(|cache| !data_at.contains_key(*cache))
 			.cloned()
 			.collect::<Vec<_>>();
 
