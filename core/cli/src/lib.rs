@@ -269,22 +269,24 @@ pub struct ParseAndPrepareRun<'a, RP> {
 
 impl<'a, RP> ParseAndPrepareRun<'a, RP> {
 	/// Runs the command and runs the main client.
-	pub fn run<C, G, E, S, Exit, RS>(
+	pub fn run<C, G, CE, S, Exit, RS, E>(
 		self,
 		spec_factory: S,
 		exit: Exit,
 		run_service: RS,
 	) -> error::Result<()>
-	where S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
+	where
+		S: FnOnce(&str) -> Result<Option<ChainSpec<G, CE>>, String>,
+		E: Into<error::Error>,
 		RP: StructOpt + Clone,
 		C: Default,
 		G: RuntimeGenesis,
-		E: ChainSpecExtension,
+		CE: ChainSpecExtension,
 		Exit: IntoExit,
-		RS: FnOnce(Exit, RunCmd, RP, Configuration<C, G, E>) -> Result<(), String>
+		RS: FnOnce(Exit, RunCmd, RP, Configuration<C, G, CE>) -> Result<(), E>
 	{
 		let config = create_run_node_config(
-			self.params.left.clone(), spec_factory, self.impl_name, self.version
+			self.params.left.clone(), spec_factory, self.impl_name, self.version,
 		)?;
 
 		run_service(exit, self.params.left, self.params.right, config).map_err(Into::into)
@@ -633,7 +635,7 @@ fn fill_config_keystore_password<C, G, E>(
 }
 
 fn create_run_node_config<C, G, E, S>(
-	cli: RunCmd, spec_factory: S, impl_name: &'static str, version: &VersionInfo
+	cli: RunCmd, spec_factory: S, impl_name: &'static str, version: &VersionInfo,
 ) -> error::Result<Configuration<C, G, E>>
 where
 	C: Default,
