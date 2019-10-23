@@ -1185,7 +1185,7 @@ fn voter_persists_its_votes() {
 		runtime.spawn(round_rx.for_each(move |signed| {
 			if state.compare_and_swap(0, 1, Ordering::SeqCst) == 0 {
 				// the first message we receive should be a prevote from alice.
-				let prevote = match signed.1.message {
+				let prevote = match signed.message {
 					grandpa::Message::Prevote(prevote) => prevote,
 					_ => panic!("voter should prevote."),
 				};
@@ -1225,7 +1225,7 @@ fn voter_persists_its_votes() {
 
 			} else if state.compare_and_swap(1, 2, Ordering::SeqCst) == 1 {
 				// the next message we receive should be our own prevote
-				let prevote = match signed.1.message {
+				let prevote = match signed.message {
 					grandpa::Message::Prevote(prevote) => prevote,
 					_ => panic!("We should receive our own prevote."),
 				};
@@ -1242,7 +1242,7 @@ fn voter_persists_its_votes() {
 			} else if state.compare_and_swap(2, 3, Ordering::SeqCst) == 2 {
 				// we then receive a precommit from alice for block 15
 				// even though we casted a prevote for block 30
-				let precommit = match signed.1.message {
+				let precommit = match signed.message {
 					grandpa::Message::Precommit(precommit) => precommit,
 					_ => panic!("voter should precommit."),
 				};

@@ -299,7 +299,7 @@ fn good_commit_leads_to_relay() {
 			// when the commit comes in, we'll tell the callback it was good.
 			let handle_commit = commits_in.into_future()
 				.map(|(item, _)| {
-					match item.unwrap().1 {
+					match item.unwrap() {
 						grandpa::voter::CommunicationIn::Commit(_, _, mut callback) => {
 							callback.run(grandpa::voter::CommitProcessingOutcome::good());
 						},
@@ -414,7 +414,7 @@ fn bad_commit_leads_to_report() {
 			// when the commit comes in, we'll tell the callback it was good.
 			let handle_commit = commits_in.into_future()
 				.map(|(item, _)| {
-					match item.unwrap().1 {
+					match item.unwrap() {
 						grandpa::voter::CommunicationIn::Commit(_, _, mut callback) => {
 							callback.run(grandpa::voter::CommitProcessingOutcome::bad());
 						},

@@ -578,7 +578,7 @@ mod tests {
 			"global",
 		);
 
-		global_tx.unbounded_send((None, msg)).unwrap();
+		global_tx.unbounded_send(msg).unwrap();
 
 		let work = until_imported.into_future();
 
@@ -605,7 +605,7 @@ mod tests {
 			"global",
 		);
 
-		global_tx.unbounded_send((None, msg)).unwrap();
+		global_tx.unbounded_send(msg).unwrap();
 
 		// NOTE: needs to be cloned otherwise it is moved to the stream and
 		// dropped too early.
