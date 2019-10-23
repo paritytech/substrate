@@ -152,17 +152,12 @@ fn set_with_extrinsic_inner_overlayed_value(
 
 impl OverlayedChangeSet {
 	/// Garbage collect.
-	fn gc(&mut self, eager: bool) {
-		let committed = if eager {
-			Some(self.states.committed())
-		} else {
-			None
-		};
+	fn gc(&mut self, prune_commit: bool) {
 		let states = self.states.as_ref_mut();
 		// retain does change values
-		self.top.retain(|_, h_value| h_value.get_mut_pruning(states, committed).is_some());
+		self.top.retain(|_, h_value| h_value.get_mut_pruning(states, prune_commit).is_some());
 		self.children.retain(|_, m| {
-			m.retain(|_, h_value| h_value.get_mut_pruning(states, committed).is_some());
+			m.retain(|_, h_value| h_value.get_mut_pruning(states, prune_commit).is_some());
 			!m.is_empty()
 		});
 	}

@@ -266,14 +266,20 @@ impl States {
 pub fn find_previous_tx_start(states: (&[TransactionState], usize), from: usize) -> usize {
 	for i in (states.1 .. from).rev() {
 		match states.0[i] {
-			TransactionState::Pending
-			| TransactionState::TxPending => {
+			TransactionState::TxPending => {
 				return i;
 			},
 			_ => (),
 		}
 	}
 	states.1
+/*	// skip dropped layer if any
+	for i in (0..=states.1).rev() {
+		if states.0[i] != TransactionState::Dropped {
+			return i;
+		}
+	}
+	states.1*/
 }
 
 
@@ -432,7 +438,6 @@ impl<V> History<V> {
 			index -= 1;
 			let state_index = self.get_state(index).index;
 			match states.0[state_index] {
-
 				TransactionState::TxPending => {
 					if state_index >= previous_transaction {
 						previous_switch = Some((index, state_index));
@@ -450,6 +455,8 @@ impl<V> History<V> {
 						if result.is_none() {
 							result = Some((index, state_index));
 							previous_transaction = find_previous_tx_start(states, state_index);
+						} else {
+							break;
 						}
 					}
 				},
@@ -471,6 +478,7 @@ impl<V> History<V> {
 				Some((self.mut_ref(index), state_index).into())
 			}
 		} else {
+			self.0.clear();
 			None
 		}
 	}
@@ -479,40 +487,70 @@ impl<V> History<V> {
 	pub fn get_mut_pruning(
 		&mut self,
 		states: (&[TransactionState], usize),
-		committed: Option<usize>,
+		prune_to_commit: bool,
 	) -> Option<HistoriedValue<&mut V>>  {
 		let mut index = self.len();
 		if index == 0 {
 			return None;
 		}
-		let mut prune_index = self.len();
+		let mut prune_index = 0;
 		// internal method: should be use properly
 		// (history of the right overlay change set
 		// is size aligned).
 		debug_assert!(states.0.len() >= index);
 		let mut result = None;
+		let mut previous_transaction = usize::max_value();
+		let mut previous_switch = None;
 		while index > 0 {
 			index -= 1;
 			let state_index = self.get_state(index).index;
 			match states.0[state_index] {
-				TransactionState::TxPending
-				| TransactionState::Pending => {
-						result = Some((index, state_index));
-						if let Some(committed) = committed {
-							prune_index = index;
-							if state_index < committed {
-								break;
-							}
-						} else {
+				TransactionState::TxPending => {
+					if state_index < states.1 && index > prune_index {
+						prune_index = index;
+					}
+					if state_index >= previous_transaction {
+						previous_switch = Some((index, state_index));
+					} else {
+						if result.is_none() {
+							result = Some((index, state_index));
+						}
+					}
+					if prune_to_commit {
+						if state_index < states.1 {
 							break;
 						}
+					} else {
+						break;
+					}
+				},
+				TransactionState::Pending => {
+					// index > prune index for only first.
+					if state_index < states.1 && index > prune_index {
+						prune_index = index;
+					}
+
+					if state_index >= previous_transaction {
+						previous_switch = Some((index, state_index));
+					} else {
+						if result.is_none() {
+							result = Some((index, state_index));
+							previous_transaction = find_previous_tx_start(states, state_index);
+						} else {
+							if prune_to_commit {
+								if state_index < states.1 {
+									break;
+								}
+							} else {
+								break;
+							}
+						}
+					}
 				},
 				TransactionState::Dropped => (),
 			}
 		}
-		// no need to clear if equal to length since we return None, meaning the value should be
-		// dropped.
-		let deleted = if prune_index < self.len() && result.is_some() {
+		let deleted = if prune_to_commit && prune_index > 0 && result.is_some() {
 			self.truncate_until(prune_index);
 			prune_index
 		} else {
@@ -522,8 +560,18 @@ impl<V> History<V> {
 			if index + 1 - deleted < self.len() {
 				self.truncate(index + 1 - deleted);
 			}
-			Some((self.mut_ref(index - deleted), state_index).into())
+			if let Some((switch_index, state_index)) = previous_switch {
+				if let Some(mut value) = self.pop() {
+					self.truncate(switch_index - deleted);
+					value.index = state_index;
+					self.push_unchecked(value);
+				}
+				Some((self.mut_ref(switch_index - deleted), state_index).into())
+			} else {
+				Some((self.mut_ref(index - deleted), state_index).into())
+			}
 		} else {
+			self.0.clear();
 			None
 		}
 	}
