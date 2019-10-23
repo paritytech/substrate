@@ -37,7 +37,7 @@ impl std::error::Error for Error {
 		match self {
 			Error::Io(ref err) => Some(err),
 			Error::Client(ref err) => Some(err),
-			Error::Other(_) => None,
+			Error::DuplicateBootnode(_) => None,
 		}
 	}
 }
