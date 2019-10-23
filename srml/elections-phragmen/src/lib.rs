@@ -76,6 +76,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use rstd::prelude::*;
 use sr_primitives::{print, traits::{Zero, StaticLookup, Bounded, Convert}};
 use sr_primitives::weights::SimpleDispatchInfo;
 use srml_support::{
