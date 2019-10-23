@@ -522,10 +522,23 @@ mod tests {
 		}
 	}
 
-	struct TestBlockSyncRequester {}
+	#[derive(Clone)]
+	struct TestBlockSyncRequester {
+		requests: Arc<Mutex<Vec<(Hash, NumberFor<Block>)>>>,
+	}
+
+	impl Default for TestBlockSyncRequester {
+		fn default() -> Self {
+			TestBlockSyncRequester {
+				requests: Arc::new(Mutex::new(Vec::new())),
+			}
+		}
+	}
 
 	impl BlockSyncRequesterT<Block> for TestBlockSyncRequester {
-		fn set_sync_fork_request(&self, _peers: Vec<network::PeerId>, hash: Hash, number: NumberFor<Block>) { }
+		fn set_sync_fork_request(&self, _peers: Vec<network::PeerId>, hash: Hash, number: NumberFor<Block>) {
+			self.requests.lock().push((hash, number));
+		}
 	}
 
 	fn make_header(number: u64) -> Header {
@@ -572,7 +585,7 @@ mod tests {
 
 		let until_imported = UntilGlobalMessageBlocksImported::new(
 			import_notifications,
-			TestBlockSyncRequester{},
+			TestBlockSyncRequester::default(),
 			block_status,
 			global_rx.map_err(|_| panic!("should never error")),
 			"global",
@@ -599,7 +612,7 @@ mod tests {
 
 		let until_imported = UntilGlobalMessageBlocksImported::new(
 			import_notifications,
-			TestBlockSyncRequester{},
+			TestBlockSyncRequester::default(),
 			block_status,
 			global_rx.map_err(|_| panic!("should never error")),
 			"global",
@@ -844,5 +857,81 @@ mod tests {
 			unapply_catch_up(res),
 			unapply_catch_up(unknown_catch_up()),
 		);
+	}
+
+	#[test]
+	fn request_block_sync_for_needed_blocks() {
+		let (chain_state, import_notifications) = TestChainState::new();
+		let block_status = chain_state.block_status();
+
+		let (global_tx, global_rx) = futures::sync::mpsc::unbounded();
+
+		let block_sync_requester = TestBlockSyncRequester::default();
+
+		let until_imported = UntilGlobalMessageBlocksImported::new(
+			import_notifications,
+			block_sync_requester.clone(),
+			block_status,
+			global_rx.map_err(|_| panic!("should never error")),
+			"global",
+		);
+
+		let h1 = make_header(5);
+		let h2 = make_header(6);
+		let h3 = make_header(7);
+
+		// we create a commit message, with precommits for blocks 6 and 7 which
+		// we haven't imported.
+		let unknown_commit = CompactCommit::<Block> {
+			target_hash: h1.hash(),
+			target_number: 5,
+			precommits: vec![
+				Precommit {
+					target_hash: h2.hash(),
+					target_number: 6,
+				},
+				Precommit {
+					target_hash: h3.hash(),
+					target_number: 7,
+				},
+			],
+			auth_data: Vec::new(), // not used
+		};
+
+		let unknown_commit = || voter::CommunicationIn::Commit(
+			0,
+			unknown_commit.clone(),
+			voter::Callback::Blank,
+		);
+
+		// we send the commit message and spawn the until_imported stream
+		global_tx.unbounded_send(unknown_commit()).unwrap();
+
+		let mut runtime = Runtime::new().unwrap();
+		runtime.spawn(until_imported.into_future().map(|_| ()).map_err(|_| ()));
+
+		// assert that we will make sync requests
+		let assert = futures::future::poll_fn::<(), (), _>(|| {
+			let block_sync_requests = block_sync_requester.requests.lock();
+
+			// we request blocks targeted by the precommits that aren't imported
+			if block_sync_requests.contains(&(h2.hash(), *h2.number())) &&
+				block_sync_requests.contains(&(h3.hash(), *h3.number()))
+			{
+				return Ok(Async::Ready(()));
+			}
+
+			Ok(Async::NotReady)
+		});
+
+		// the `until_imported` stream doesn't request the blocks immediately,
+		// but it should request them after a small timeout
+		let timeout = Delay::new(Instant::now() + Duration::from_secs(60));
+		let test = assert.select2(timeout).map(|res| match res {
+			Either::A(_) => {},
+			Either::B(_) => panic!("timed out waiting for block sync request"),
+		}).map_err(|_| ());
+
+		runtime.block_on(test).unwrap();
 	}
 }
