@@ -74,7 +74,6 @@ pub(crate) struct UntilImported<Block: BlockT, BlockStatus, BlockSyncRequester, 
 	import_notifications: Fuse<Box<dyn Stream<Item = BlockImportNotification<Block>, Error = ()> + Send>>,
 	block_sync_requester: BlockSyncRequester,
 	status_check: BlockStatus,
-	// TODO: Why is this called inner? Why not being more descriptive and say finality_msg_stream?
 	inner: Fuse<I>,
 	ready: VecDeque<M::Blocked>,
 	check_pending: Interval,
