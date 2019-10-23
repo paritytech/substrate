@@ -475,8 +475,9 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 			format!("Failed to receive on unbounded receiver for round {}", round.0)
 		));
 
-		// Combine incoming votes from external Grandpa nodes with outgoing votes from our own Grandpa voter to have a
-		// single vote-import-pipeline.
+		// Combine incoming votes from external GRANDPA nodes with outgoing
+		// votes from our own GRANDPA voter to have a single
+		// vote-import-pipeline.
 		let incoming = incoming.select(out_rx);
 
 		(incoming, outgoing)
@@ -524,7 +525,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		(incoming, outgoing)
 	}
 
-	pub(crate) fn set_sync_fork_request(&self, peers: Vec<network::PeerId>, hash: B::Hash, number: NumberFor<B>){
+	pub(crate) fn set_sync_fork_request(&self, peers: Vec<network::PeerId>, hash: B::Hash, number: NumberFor<B>) {
 		self.service.set_sync_fork_request(peers, hash, number)
 	}
 }
