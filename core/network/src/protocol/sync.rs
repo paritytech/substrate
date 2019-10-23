@@ -467,7 +467,7 @@ impl<B: BlockT> ChainSync<B> {
 
 			peers = self.peers.iter()
 				// Only request blocks from peers who are ahead or on a par.
-				.filter(|(id, peer)| peer.best_number >= number)
+				.filter(|(_, peer)| peer.best_number >= number)
 				.map(|(id, _)| id.clone())
 				.collect();
 		} else {
@@ -1084,7 +1084,7 @@ impl<B: BlockT> ChainSync<B> {
 					parent_hash: Some(header.parent_hash().clone()),
 					peers: Default::default(),
 				})
-			.peers.insert(who);
+				.peers.insert(who);
 		}
 
 		OnBlockAnnounce::Nothing

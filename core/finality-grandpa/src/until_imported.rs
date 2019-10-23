@@ -38,7 +38,7 @@ use parking_lot::Mutex;
 use sr_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use tokio_timer::Interval;
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, VecDeque};
 use std::sync::{atomic::{AtomicUsize, Ordering}, Arc};
 use std::time::{Duration, Instant};
 use fg_primitives::AuthorityId;
@@ -525,7 +525,7 @@ mod tests {
 	struct TestBlockSyncRequester {}
 
 	impl BlockSyncRequesterT<Block> for TestBlockSyncRequester {
-		fn set_sync_fork_request(&self, peers: Vec<network::PeerId>, hash: Hash, number: NumberFor<Block>){}
+		fn set_sync_fork_request(&self, _peers: Vec<network::PeerId>, hash: Hash, number: NumberFor<Block>) { }
 	}
 
 	fn make_header(number: u64) -> Header {

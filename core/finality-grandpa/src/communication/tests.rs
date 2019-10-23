@@ -93,7 +93,8 @@ impl super::Network<Block> for TestNetwork {
 		let _ = self.sender.unbounded_send(Event::Announce(block));
 	}
 
-	fn set_sync_fork_request(&self, peers: Vec<network::PeerId>, hash: Hash, number: NumberFor<Block>) {}
+	/// Notify the sync service to try syncing the given chain.
+	fn set_sync_fork_request(&self, _peers: Vec<network::PeerId>, _hash: Hash, _number: NumberFor<Block>) {}
 }
 
 impl network_gossip::ValidatorContext<Block> for TestNetwork {
