@@ -235,11 +235,11 @@ pub fn testnet_genesis(
 			members: vec![],
 			phantom: Default::default(),
 		}),
-		elections: Some(ElectionsConfig {
-			members: vec![],
-			presentation_duration: 1 * DAYS,
+		elections_phragmen: Some(ElectionsConfig {
+			members: endowed_accounts.iter().take(2).cloned().collect(),
 			term_duration: 28 * DAYS,
-			desired_seats: 0,
+			desired_members: 4,
+			desired_runners_up: 1,
 		}),
 		contracts: Some(ContractsConfig {
 			current_schedule: contracts::Schedule {
