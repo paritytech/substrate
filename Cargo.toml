@@ -62,7 +62,6 @@ members = [
 	"core/sr-std",
 	"core/sr-version",
 	"core/state-machine",
-#	"core/state-machine/fuzz",
 	"core/telemetry",
 	"core/test-client",
 	"core/test-runtime",

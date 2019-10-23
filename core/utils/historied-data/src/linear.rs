@@ -273,7 +273,7 @@ pub fn find_previous_tx_start(states: (&[TransactionState], usize), from: usize)
 			_ => (),
 		}
 	}
-	0
+	states.1
 }
 
 
@@ -426,14 +426,32 @@ impl<V> History<V> {
 		// is size aligned).
 		debug_assert!(states.0.len() >= index);
 		let mut result = None;
+		let mut previous_transaction = usize::max_value();
+		let mut previous_switch = None;
 		while index > 0 {
 			index -= 1;
 			let state_index = self.get_state(index).index;
 			match states.0[state_index] {
-				TransactionState::TxPending
-				| TransactionState::Pending => {
-						result = Some((index, state_index));
-						break;
+
+				TransactionState::TxPending => {
+					if state_index >= previous_transaction {
+						previous_switch = Some((index, state_index));
+					} else {
+						if result.is_none() {
+							result = Some((index, state_index));
+						}
+					}
+					break;
+				},
+				TransactionState::Pending => {
+					if state_index >= previous_transaction {
+						previous_switch = Some((index, state_index));
+					} else {
+						if result.is_none() {
+							result = Some((index, state_index));
+							previous_transaction = find_previous_tx_start(states, state_index);
+						}
+					}
 				},
 				TransactionState::Dropped => (),
 			}
@@ -442,7 +460,16 @@ impl<V> History<V> {
 			if index + 1 < self.len() {
 				self.truncate(index + 1);
 			}
-			Some((self.mut_ref(index), state_index).into())
+			if let Some((switch_index, state_index)) = previous_switch {
+				if let Some(mut value) = self.pop() {
+					self.truncate(switch_index);
+					value.index = state_index;
+					self.push_unchecked(value);
+				}
+				Some((self.mut_ref(switch_index), state_index).into())
+			} else {
+				Some((self.mut_ref(index), state_index).into())
+			}
 		} else {
 			None
 		}
@@ -495,7 +522,7 @@ impl<V> History<V> {
 			if index + 1 - deleted < self.len() {
 				self.truncate(index + 1 - deleted);
 			}
-			Some((self.mut_ref(index), state_index).into())
+			Some((self.mut_ref(index - deleted), state_index).into())
 		} else {
 			None
 		}
