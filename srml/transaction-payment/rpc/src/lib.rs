@@ -74,11 +74,17 @@ where
 	Balance: Codec,
 	Extrinsic: Codec + Send + Sync + 'static,
 {
-	fn query_info(&self, encoded_xt: Bytes) -> Result<RuntimeDispatchInfo<Balance>> {
+	fn query_info(
+		&self,
+		encoded_xt: Bytes,
+		at: Option<<Block as BlockT>::Hash>
+	) -> Result<RuntimeDispatchInfo<Balance>> {
 		let api = self.client.runtime_api();
-		let best = self.client.info().best_hash;
-		// TODO: settle this. Do we need to accept it from the user or just use the best?
-		let at = BlockId::hash(best);
+		let at = BlockId::hash(at.unwrap_or_else(||
+			// If the block hash is not supplied assume the best block.
+			self.client.info().best_hash
+		));
+
 		let encoded_len = encoded_xt.len() as u32;
 
 		let uxt: Extrinsic = Decode::decode(&mut &*encoded_xt).map_err(|e| RpcError {
