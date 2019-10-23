@@ -24,6 +24,8 @@ pub mod config;
 pub mod chain_ops;
 pub mod error;
 
+mod status_sinks;
+
 use std::io;
 use std::marker::PhantomData;
 use std::net::SocketAddr;
@@ -75,9 +77,7 @@ pub struct NewService<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
 	network: Arc<TNet>,
 	/// Sinks to propagate network status updates.
 	/// For each element, every time the `Interval` fires we push an element on the sender.
-	network_status_sinks: Arc<Mutex<Vec<(tokio_timer::Interval, mpsc::UnboundedSender<(
-		TNetStatus, NetworkState
-	)>)>>>,
+	network_status_sinks: Arc<Mutex<status_sinks::StatusSinks<(TNetStatus, NetworkState)>>>,
 	transaction_pool: Arc<TTxPool>,
 	/// A future that resolves when the service has exited, this is useful to
 	/// make sure any internally spawned futures stop when the service does.
@@ -211,7 +211,7 @@ macro_rules! new_impl {
 		let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
 		let network_mut = network::NetworkWorker::new(network_params)?;
 		let network = network_mut.service().clone();
-		let network_status_sinks = Arc::new(Mutex::new(Vec::new()));
+		let network_status_sinks = Arc::new(Mutex::new(status_sinks::StatusSinks::new()));
 
 		let offchain_storage = backend.offchain_storage();
 		let offchain_workers = match ($config.offchain_worker, offchain_storage) {
@@ -298,10 +298,7 @@ macro_rules! new_impl {
 		let mut sys = System::new();
 		let self_pid = get_current_pid().ok();
 		let (state_tx, state_rx) = mpsc::unbounded::<(NetworkStatus<_>, NetworkState)>();
-		network_status_sinks.lock().push((
-			tokio_timer::Interval::new_interval(std::time::Duration::from_millis(5000)),
-			state_tx
-		));
+		network_status_sinks.lock().push(std::time::Duration::from_millis(5000), state_tx);
 		let tel_task = state_rx.for_each(move |(net_status, _)| {
 			let info = client_.info();
 			let best_number = info.chain.best_number.saturated_into::<u64>();
@@ -348,10 +345,7 @@ macro_rules! new_impl {
 
 		// Periodically send the network state to the telemetry.
 		let (netstat_tx, netstat_rx) = mpsc::unbounded::<(NetworkStatus<_>, NetworkState)>();
-		network_status_sinks.lock().push((
-			tokio_timer::Interval::new_interval(std::time::Duration::from_secs(30)),
-			netstat_tx
-		));
+		network_status_sinks.lock().push(std::time::Duration::from_secs(30), netstat_tx);
 		let tel_task_2 = netstat_rx.for_each(move |(_, network_state)| {
 			telemetry!(
 				SUBSTRATE_INFO;
@@ -611,7 +605,7 @@ where
 
 	fn network_status(&self, interval: Duration) -> mpsc::UnboundedReceiver<(NetworkStatus<Self::Block>, NetworkState)> {
 		let (sink, stream) = mpsc::unbounded();
-		self.network_status_sinks.lock().push((tokio_timer::Interval::new_interval(interval), sink));
+		self.network_status_sinks.lock().push(interval, sink);
 		stream
 	}
 
@@ -685,7 +679,7 @@ fn build_network_future<
 	roles: Roles,
 	mut network: network::NetworkWorker<B, S, H>,
 	client: Arc<C>,
-	status_sinks: Arc<Mutex<Vec<(tokio_timer::Interval, mpsc::UnboundedSender<(NetworkStatus<B>, NetworkState)>)>>>,
+	status_sinks: Arc<Mutex<status_sinks::StatusSinks<(NetworkStatus<B>, NetworkState)>>>,
 	rpc_rx: futures03::channel::mpsc::UnboundedReceiver<rpc::system::Request<B>>,
 	should_have_peers: bool,
 	dht_event_tx: Option<mpsc::Sender<DhtEvent>>,
@@ -761,28 +755,19 @@ fn build_network_future<
 		}
 
 		// Interval report for the external API.
-		{
-			let mut status_sinks = status_sinks.lock();
-			for n in (0..status_sinks.len()).rev() {
-				while let Ok(Async::Ready(_)) = status_sinks[n].0.poll() {
-					let status = NetworkStatus {
-						sync_state: network.sync_state(),
-						best_seen_block: network.best_seen_block(),
-						num_sync_peers: network.num_sync_peers(),
-						num_connected_peers: network.num_connected_peers(),
-						num_active_peers: network.num_active_peers(),
-						average_download_per_sec: network.average_download_per_sec(),
-						average_upload_per_sec: network.average_upload_per_sec(),
-					};
-					let state = network.network_state();
-
-					if status_sinks[n].1.unbounded_send((status, state)).is_err() {
-						status_sinks.remove(n);
-						continue;
-					}
-				}
-			}
-		}
+		status_sinks.lock().poll(|| {
+			let status = NetworkStatus {
+				sync_state: network.sync_state(),
+				best_seen_block: network.best_seen_block(),
+				num_sync_peers: network.num_sync_peers(),
+				num_connected_peers: network.num_connected_peers(),
+				num_active_peers: network.num_active_peers(),
+				average_download_per_sec: network.average_download_per_sec(),
+				average_upload_per_sec: network.average_upload_per_sec(),
+			};
+			let state = network.network_state();
+			(status, state)
+		});
 
 		// Main network polling.
 		while let Ok(Async::Ready(Some(Event::Dht(event)))) = network.poll().map_err(|err| {
