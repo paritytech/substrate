@@ -17,7 +17,6 @@
 //! RPC interface for the transaction payment module.
 
 use std::sync::Arc;
-use serde::{Serialize, Deserialize};
 use codec::{Codec, Decode};
 use client::blockchain::HeaderBackend;
 use jsonrpc_core::{Error as RpcError, ErrorCode, Result};
@@ -34,7 +33,11 @@ pub use self::gen_client::Client as TransactionPaymentClient;
 #[rpc]
 pub trait TransactionPaymentApi<BlockHash, Balance> {
 	#[rpc(name = "payment_queryInfo")]
-	fn query_info(&self, encoded_xt: Bytes) -> Result<RuntimeDispatchInfo<Balance>>;
+	fn query_info(
+		&self,
+		encoded_xt: Bytes,
+		at: Option<BlockHash>
+	) -> Result<RuntimeDispatchInfo<Balance>>;
 }
 
 /// A struct that implements the [`TransactionPaymentApi`].
@@ -44,13 +47,17 @@ pub struct TransactionPayment<C, P> {
 }
 
 impl<C, P> TransactionPayment<C, P> {
+	/// Create new `TransactionPayment` with the given reference to the client.
 	pub fn new(client: Arc<C>) -> Self {
 		TransactionPayment { client, _marker: Default::default() }
 	}
 }
 
+/// Error type of this RPC api.
 pub enum Error {
+	/// The transaction was not decodable.
 	DecodeError,
+	/// The call to runtime failed.
 	RuntimeError,
 }
 

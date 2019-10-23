@@ -650,15 +650,14 @@ impl_runtime_apis! {
 		}
 
 		fn sign(payload: &Vec<u8>) -> Option<(EncodedSignature, EncodedAuthorityId)> {
-			  AuthorityDiscovery::sign(payload).map(|(sig, id)| {
-            (EncodedSignature(sig.encode()), EncodedAuthorityId(id.encode()))
-        })
+			AuthorityDiscovery::sign(payload).map(|(sig, id)| {
+				(EncodedSignature(sig.encode()), EncodedAuthorityId(id.encode()))
+			})
 		}
 
 		fn verify(
 			payload: &Vec<u8>,
-			signature:
-			&EncodedSignature,
+			signature: &EncodedSignature,
 			authority_id: &EncodedAuthorityId,
 		) -> bool {
 			let signature = match BabeSignature::decode(&mut &signature.0[..]) {

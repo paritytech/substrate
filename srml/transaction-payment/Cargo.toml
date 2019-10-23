@@ -25,4 +25,5 @@ std = [
 	"sr-primitives/std",
 	"support/std",
 	"system/std",
+	"transaction-payment-rpc-runtime-api/std"
 ]
