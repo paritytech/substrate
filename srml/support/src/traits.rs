@@ -27,7 +27,6 @@ use sr_primitives::{
 };
 
 /// Anything that can have a `::len()` method.
-
 pub trait Len {
 	/// Return the length of data type.
 	fn len(&self) -> usize;

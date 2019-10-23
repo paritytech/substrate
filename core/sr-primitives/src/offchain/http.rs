@@ -38,7 +38,7 @@
 //! let mut response = pending.wait().unwrap();
 //!
 //! // then check the headers
-//! let mut headers = response.headers().into_iter();
+//! let mut headers = response.headers().to_iter();
 //! assert_eq!(headers.current(), None);
 //!
 //! // and collect the body

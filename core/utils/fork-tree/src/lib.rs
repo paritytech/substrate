@@ -522,8 +522,6 @@ mod node_implementation {
 	impl<H: PartialEq, N: Ord, V> Node<H, N, V> {
 		pub fn import<F, E: std::error::Error>(
 			&mut self,
-			// Variable names here appended with `_` to avoid shadowing issues.
-			// See https://rust-lang.github.io/rust-clippy/master/index.html#redundant_field_names.
 			mut hash: H,
 			mut number: N,
 			mut data: V,

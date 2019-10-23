@@ -180,7 +180,7 @@ impl ChangesTrieConfiguration {
 
 			digest_step = digest_interval;
 			digest_interval = new_digest_interval;
-			current_level += current_level;
+			current_level += 1;
 		}
 
 		Some((
