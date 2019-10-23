@@ -640,4 +640,27 @@ mod tests {
 			assert_eq!(Treasury::pot(), 75); // Pot has finally changed
 		});
 	}
+
+	// Treasury account doesn't get deleted if amount approved to spend is all its free balance.
+	// i.e. pot should not include existential deposit needed for account survival.
+	#[test]
+	fn treasury_account_doesnt_get_deleted() {
+		new_test_ext().execute_with(|| {
+			Treasury::on_dilution(100, 100);
+			assert_eq!(Treasury::pot(), 100);
+			let treasury_balance = Balances::free_balance(&Treasury::account_id());
+
+			assert_ok!(Treasury::propose_spend(Origin::signed(0), treasury_balance, 3));
+			assert_ok!(Treasury::approve_proposal(Origin::ROOT, 0));
+
+			<Treasury as OnFinalize<u64>>::on_finalize(2);
+			assert_eq!(Treasury::pot(), 100); // Pot hasn't changed
+
+			assert_ok!(Treasury::propose_spend(Origin::signed(0), Treasury::pot(), 3));
+			assert_ok!(Treasury::approve_proposal(Origin::ROOT, 1));
+
+			<Treasury as OnFinalize<u64>>::on_finalize(4);
+			assert_eq!(Treasury::pot(), 0); // Pot is emptied
+		});
+	}
 }
