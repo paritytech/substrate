@@ -30,7 +30,7 @@ use rstd::vec;
 pub enum TransactionState {
 	/// Data is under change and can still be dropped.
 	Pending,
-	/// Same as pending but does count as a transaction.
+	/// Same as pending but does count as a transaction start.
 	TxPending,
 	/// Data pointing to this indexed historic state should
 	/// not be returned and can be removed.
@@ -166,11 +166,19 @@ impl Default for States {
 
 impl States {
 	/// Get reference of state, that is enough
-	/// information to query or update historied
+	/// information to query historied
 	/// data.
 	pub fn as_ref(&self) -> &[TransactionState] {
 		self.0.as_ref()
 	}
+
+	/// Get reference of state, that is enough
+	/// information to update historied
+	/// data.
+	pub fn as_ref_mut(&self) -> (&[TransactionState], usize) {
+		(self.0.as_ref(), self.1)
+	}
+
 	/// Get index of committed layer, this is
 	/// additional information needed to manage
 	/// commit and garbage collect.
@@ -239,17 +247,36 @@ impl States {
 		while i > self.1 {
 			i -= 1;
 			match self.0[i] {
-				TransactionState::Dropped => (),
-				TransactionState::Pending => (),
+				TransactionState::Pending
+				| TransactionState::Dropped => (),
 				TransactionState::TxPending => {
 					self.0[i] = TransactionState::Pending;
 					break;
 				},
 			}
 		}
+		self.0.push(TransactionState::Pending);
 	}
 
 }
+
+/// Get previous index of pending state.
+/// Used to say if it is possible to drop a committed transaction
+/// state value.
+pub fn find_previous_tx_start(states: (&[TransactionState], usize), from: usize) -> usize {
+	for i in (states.1 .. from).rev() {
+		match states.0[i] {
+			TransactionState::Pending
+			| TransactionState::TxPending => {
+				return i;
+			},
+			_ => (),
+		}
+	}
+	0
+}
+
+
 
 impl<V> History<V> {
 	/// Set a value, it uses a state history as parameter.
@@ -395,18 +422,27 @@ impl<V> History<V> {
 		// (history of the right overlay change set
 		// is size aligned).
 		debug_assert!(history.len() >= index);
+		let mut result = None;
 		while index > 0 {
 			index -= 1;
 			let history_index = self.get_state(index).index;
 			match history[history_index] {
-				TransactionState::Pending
-				| TransactionState::TxPending => {
-					return Some((self.mut_ref(index), history_index).into())
+				TransactionState::TxPending
+				| TransactionState::Pending => {
+						result = Some((index, history_index));
+						break;
 				},
-				TransactionState::Dropped => { let _ = self.pop(); },
+				TransactionState::Dropped => (),
 			}
 		}
-		None
+		if let Some((index, history_index)) = result {
+			if index + 1 < self.len() {
+				self.truncate(index + 1);
+			}
+			Some((self.mut_ref(index), history_index).into())
+		} else {
+			None
+		}
 	}
 
 
@@ -419,43 +455,46 @@ impl<V> History<V> {
 		if index == 0 {
 			return None;
 		}
-		let mut result = None;
 		let mut prune_index = self.len();
 		// internal method: should be use properly
 		// (history of the right overlay change set
 		// is size aligned).
 		debug_assert!(history.len() >= index);
+		let mut result = None;
 		while index > 0 {
 			index -= 1;
 			let history_index = self.get_state(index).index;
 			match history[history_index] {
-				TransactionState::Pending
-				| TransactionState::TxPending => {
-					if result.is_none() {
-						result =  Some((index, history_index));
-					}
-					if let Some(committed) = committed {
-						prune_index = index;
-						if history_index < committed {
+				TransactionState::TxPending
+				| TransactionState::Pending => {
+						result = Some((index, history_index));
+						if let Some(committed) = committed {
+							prune_index = index;
+							if history_index < committed {
+								break;
+							}
+						} else {
 							break;
 						}
-					} else {
-						break;
-					}
 				},
-				TransactionState::Dropped => { let _ = self.pop(); },
+				TransactionState::Dropped => (),
 			}
-		}
-		if prune_index < self.len() {
-			self.truncate_until(prune_index);
 		}
 		// no need to clear if equal to length since we return None, meaning the value should be
 		// dropped.
+		let deleted = if prune_index < self.len() && result.is_some() {
+			self.truncate_until(prune_index);
+			prune_index
+		} else {
+			0
+		};
 		if let Some((index, history_index)) = result {
-			Some((self.mut_ref(index - prune_index), history_index).into())
+			if index + 1 - deleted < self.len() {
+				self.truncate(index + 1 - deleted);
+			}
+			Some((self.mut_ref(index), history_index).into())
 		} else {
 			None
 		}
 	}
-
 }
