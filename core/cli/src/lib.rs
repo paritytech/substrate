@@ -68,11 +68,6 @@ use substrate_telemetry::TelemetryEndpoints;
 /// The maximum number of characters for a node name.
 const NODE_NAME_MAX_LENGTH: usize = 32;
 
-/// The file name of the node's Secp256k1 secret key inside the chain-specific
-/// network config directory, if neither `--node-key` nor `--node-key-file`
-/// is specified in combination with `--node-key-type=secp256k1`.
-const NODE_KEY_SECP256K1_FILE: &str = "secret";
-
 /// The file name of the node's Ed25519 secret key inside the chain-specific
 /// network config directory, if neither `--node-key` nor `--node-key-file`
 /// is specified in combination with `--node-key-type=ed25519`.
@@ -494,14 +489,6 @@ where
 	P: AsRef<Path>
 {
 	match params.node_key_type {
-		NodeKeyType::Secp256k1 =>
-			params.node_key.as_ref().map(parse_secp256k1_secret).unwrap_or_else(||
-				Ok(params.node_key_file
-					.or_else(|| net_config_file(net_config_dir, NODE_KEY_SECP256K1_FILE))
-					.map(network::config::Secret::File)
-					.unwrap_or(network::config::Secret::New)))
-				.map(NodeKeyConfig::Secp256k1),
-
 		NodeKeyType::Ed25519 =>
 			params.node_key.as_ref().map(parse_ed25519_secret).unwrap_or_else(||
 				Ok(params.node_key_file
@@ -522,14 +509,6 @@ where
 /// Create an error caused by an invalid node key argument.
 fn invalid_node_key(e: impl std::fmt::Display) -> error::Error {
 	error::Error::Input(format!("Invalid node key: {}", e))
-}
-
-/// Parse a Secp256k1 secret key from a hex string into a `network::Secret`.
-fn parse_secp256k1_secret(hex: &String) -> error::Result<network::config::Secp256k1Secret> {
-	H256::from_str(hex).map_err(invalid_node_key).and_then(|bytes|
-		network::config::identity::secp256k1::SecretKey::from_bytes(bytes)
-			.map(network::config::Secret::Input)
-			.map_err(invalid_node_key))
 }
 
 /// Parse a Ed25519 secret key from a hex string into a `network::Secret`.
@@ -952,7 +931,7 @@ fn kill_color(s: &str) -> String {
 mod tests {
 	use super::*;
 	use tempdir::TempDir;
-	use network::config::identity::{secp256k1, ed25519};
+	use network::config::identity::ed25519;
 
 	#[test]
 	fn tests_node_name_good() {
@@ -975,7 +954,6 @@ mod tests {
 			NodeKeyType::variants().into_iter().try_for_each(|t| {
 				let node_key_type = NodeKeyType::from_str(t).unwrap();
 				let sk = match node_key_type {
-					NodeKeyType::Secp256k1 => secp256k1::SecretKey::generate().to_bytes().to_vec(),
 					NodeKeyType::Ed25519 => ed25519::SecretKey::generate().as_ref().to_vec()
 				};
 				let params = NodeKeyParams {
@@ -984,9 +962,6 @@ mod tests {
 					node_key_file: None
 				};
 				node_key_config(params, &net_config_dir).and_then(|c| match c {
-					NodeKeyConfig::Secp256k1(network::config::Secret::Input(ref ski))
-						if node_key_type == NodeKeyType::Secp256k1 &&
-							&sk[..] == ski.to_bytes() => Ok(()),
 					NodeKeyConfig::Ed25519(network::config::Secret::Input(ref ski))
 						if node_key_type == NodeKeyType::Ed25519 &&
 							&sk[..] == ski.as_ref() => Ok(()),
@@ -1012,8 +987,6 @@ mod tests {
 					node_key_file: Some(file.clone())
 				};
 				node_key_config(params, &net_config_dir).and_then(|c| match c {
-					NodeKeyConfig::Secp256k1(network::config::Secret::File(ref f))
-						if node_key_type == NodeKeyType::Secp256k1 && f == &file => Ok(()),
 					NodeKeyConfig::Ed25519(network::config::Secret::File(ref f))
 						if node_key_type == NodeKeyType::Ed25519 && f == &file => Ok(()),
 					_ => Err(error::Error::Input("Unexpected node key config".into()))
@@ -1046,8 +1019,6 @@ mod tests {
 				let typ = params.node_key_type;
 				node_key_config::<String>(params, &None)
 					.and_then(|c| match c {
-						NodeKeyConfig::Secp256k1(network::config::Secret::New)
-							if typ == NodeKeyType::Secp256k1 => Ok(()),
 						NodeKeyConfig::Ed25519(network::config::Secret::New)
 							if typ == NodeKeyType::Ed25519 => Ok(()),
 						_ => Err(error::Error::Input("Unexpected node key config".into()))
@@ -1061,9 +1032,6 @@ mod tests {
 				let typ = params.node_key_type;
 				node_key_config(params, &Some(net_config_dir.clone()))
 					.and_then(move |c| match c {
-						NodeKeyConfig::Secp256k1(network::config::Secret::File(ref f))
-							if typ == NodeKeyType::Secp256k1 &&
-								f == &dir.join(NODE_KEY_SECP256K1_FILE) => Ok(()),
 						NodeKeyConfig::Ed25519(network::config::Secret::File(ref f))
 							if typ == NodeKeyType::Ed25519 &&
 								f == &dir.join(NODE_KEY_ED25519_FILE) => Ok(()),
