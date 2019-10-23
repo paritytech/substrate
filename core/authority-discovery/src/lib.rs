@@ -48,7 +48,7 @@ use std::iter::FromIterator;
 use std::marker::PhantomData;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use futures::future::Future as Future01;
 use futures::sync::mpsc::Receiver as Receiver01;
@@ -57,8 +57,7 @@ use futures03::future::{FutureExt, TryFutureExt};
 use futures03::prelude::{Future, Stream};
 use futures03::stream::StreamExt;
 use futures03::task::{Context, Poll};
-
-use tokio_timer::Interval as Interval01;
+use futures_timer::Interval;
 
 use authority_discovery_primitives::{AuthorityDiscoveryApi, AuthorityId, Signature};
 use client::blockchain::HeaderBackend;
@@ -76,12 +75,6 @@ mod schema {
 	include!(concat!(env!("OUT_DIR"), "/authority_discovery.rs"));
 }
 
-// TODO change tokio 02's Interval when tokio 02's runtime is adopted
-type Interval01As03 = Pin<Box<dyn Stream<Item = Instant> + Send>>;
-
-const DURATION_12H: Duration = Duration::from_secs(12 * 60 * 60);
-const DURATION_10M: Duration = Duration::from_secs(10 * 60);
-
 /// An `AuthorityDiscovery` makes a given authority discoverable and discovers other authorities.
 pub struct AuthorityDiscovery<Client, Network, Block>
 where
@@ -97,9 +90,9 @@ where
 	dht_event_rx: Pin<Box<dyn Stream<Item = DhtEvent> + Send>>,
 
 	/// Interval to be proactive, publishing own addresses.
-	publish_interval: Interval01As03,
+	publish_interval: Interval,
 	/// Interval on which to query for addresses of other authorities.
-	query_interval: Interval01As03,
+	query_interval: Interval,
 
 	/// The network peerset interface for priority groups lets us only set an entire group, but we retrieve the
 	/// addresses of other authorities one by one from the network. To use the peerset interface we need to cache the
@@ -127,17 +120,11 @@ where
 		// Kademlia's default time-to-live for Dht records is 36h, republishing records every 24h. Given that a node
 		// could restart at any point in time, one can not depend on the republishing process, thus publishing own
 		// external addresses should happen on an interval < 36h.
-		let publish_interval = Interval01::new_interval(DURATION_12H)
-			.compat()
-			.map(|x| x.unwrap())
-			.boxed();
+		let publish_interval = Interval::new(Duration::from_secs(12 * 60 * 60));
 
 		// External addresses of other authorities can change at any given point in time. The interval on which to query
 		// for external addresses of other authorities is a trade off between efficiency and performance.
-		let query_interval = Interval01::new_interval(DURATION_10M)
-			.compat()
-			.map(|x| x.unwrap())
-			.boxed();
+		let query_interval = Interval::new(Duration::from_secs(10 * 60));
 
 		let address_cache = HashMap::new();
 
@@ -152,7 +139,7 @@ where
 		}
 	}
 
-	/// New a futures 01 authority discovery
+	/// Return futures 01 authority discovery
 	pub fn new_compat(
 		client: Arc<Client>,
 		network: Arc<Network>,
