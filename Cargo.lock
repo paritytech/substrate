@@ -4726,7 +4726,6 @@ dependencies = [
  "substrate-peerset 2.0.0",
  "substrate-primitives 2.0.0",
  "substrate-test-runtime-client 2.0.0",
- "tokio 0.1.22 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

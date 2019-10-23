@@ -54,9 +54,9 @@ use futures::future::Future as Future01;
 use futures::sync::mpsc::Receiver as Receiver01;
 use futures03::compat::Stream01CompatExt;
 use futures03::future::{FutureExt, TryFutureExt};
-use futures03::{Future, Stream};
 use futures03::stream::StreamExt;
 use futures03::task::{Context, Poll};
+use futures03::{Future, Stream};
 use futures_timer::Interval;
 
 use authority_discovery_primitives::{AuthorityDiscoveryApi, AuthorityId, Signature};
@@ -423,13 +423,13 @@ mod tests {
 	use super::*;
 	use client::runtime_api::{ApiExt, Core, RuntimeVersion};
 	use futures03::channel::mpsc::channel;
+	use futures03::executor::block_on;
 	use futures03::future::poll_fn;
 	use primitives::{ExecutionContext, NativeOrEncoded};
 	use sr_primitives::traits::Zero;
 	use sr_primitives::traits::{ApiRef, Block as BlockT, NumberFor, ProvideRuntimeApi};
 	use std::sync::{Arc, Mutex};
 	use test_client::runtime::Block;
-	use tokio::runtime::current_thread::Runtime as Runtime01;
 
 	#[derive(Clone)]
 	struct TestApi {}
@@ -700,9 +700,6 @@ mod tests {
 			Poll::Ready(())
 		};
 
-		let mut runtime = Runtime01::new().unwrap();
-		runtime
-			.block_on(poll_fn(f).map(|x| Ok::<(), ()>(x)).compat())
-			.unwrap();
+		let _ = block_on(poll_fn(f));
 	}
 }
