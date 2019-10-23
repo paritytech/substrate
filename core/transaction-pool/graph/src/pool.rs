@@ -204,8 +204,6 @@ impl<B: ChainApi> Pool<B> {
 			));
 
 		// Prune transactions by tags.
-		// `at: &BlockId<B::Block>` implements `Copy`, so deferencing as done
-		// below instead of using `clone()` works.
 		let at = *at;
 		let self_clone = self.clone();
 		future_tags.then(move |tags| self_clone.prune_tags(
@@ -260,8 +258,6 @@ impl<B: ChainApi> Pool<B> {
 		let reverify_future = self.verify(at, pruned_transactions, false);
 
 		// And finally - submit reverified transactions back to the pool.
-		// `at: &BlockId<B::Block>` implements `Copy`, so deferencing as done
-		// below instead of using `clone()` works.
 		let at = *at;
 		let validated_pool = self.validated_pool.clone();
 		Either::Right(reverify_future.then(move |reverified_transactions|

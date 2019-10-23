@@ -54,7 +54,7 @@ impl<B: BlockT> BasicQueue<B> {
 		finality_proof_import: Option<BoxFinalityProofImport<B>>,
 	) -> Self {
 		let (result_sender, result_port) = buffered_link::buffered_link();
-		let (future, worker_sender) = BlockImportWorker::new(
+		let (future, worker_sender) = BlockImportWorker::new_fut_block_worker(
 			result_sender,
 			verifier,
 			block_import,
@@ -126,6 +126,7 @@ impl<B: BlockT> ImportQueue<B> for BasicQueue<B> {
 
 /// Message destinated to the background worker.
 #[derive(Debug)]
+#[allow(clippy::enum_variant_names)]
 enum ToWorkerMsg<B: BlockT> {
 	ImportBlocks(BlockOrigin, Vec<IncomingBlock<B>>),
 	ImportJustification(Origin, B::Hash, NumberFor<B>, Justification),
@@ -140,7 +141,7 @@ struct BlockImportWorker<B: BlockT> {
 }
 
 impl<B: BlockT> BlockImportWorker<B> {
-	fn new<V: 'static + Verifier<B>>(
+	fn new_fut_block_worker<V: 'static + Verifier<B>>(
 		result_sender: BufferedLinkSender<B>,
 		verifier: V,
 		block_import: BoxBlockImport<B>,
@@ -374,7 +375,7 @@ fn import_many_blocks<B: BlockT, V: Verifier<B>>(
 		let verifier = verifier.as_mut()
 			.expect("Future polled again after it has finished");
 
-		let block_number = block.header.as_ref().map(|h| h.number().clone());
+		let block_number = block.header.as_ref().map(|h| *h.number());
 		let block_hash = block.hash;
 		let import_result = if has_error {
 			Err(BlockImportError::Cancelled)
@@ -382,7 +383,7 @@ fn import_many_blocks<B: BlockT, V: Verifier<B>>(
 			// The actual import.
 			import_single_block(
 				&mut **import_handle,
-				blocks_origin.clone(),
+				blocks_origin,
 				block,
 				verifier,
 			)

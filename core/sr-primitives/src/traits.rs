@@ -1137,13 +1137,13 @@ pub trait Printable {
 
 impl Printable for u8 {
 	fn print(&self) {
-		(*self as u64).print()
+		u64::from(*self).print()
 	}
 }
 
 impl Printable for u32 {
 	fn print(&self) {
-		(*self as u64).print()
+		u64::from(*self).print()
 	}
 }
 

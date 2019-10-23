@@ -142,7 +142,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 		};
 		let mut levels = VecDeque::new();
 		let mut parents = HashMap::new();
-		let mut values_ = HashMap::new();
+		let mut values = HashMap::new();
 		if let Some((ref hash, mut block)) = last_canonicalized {
 			// read the journal
 			trace!(target: "state-db", "Reading uncanonicalized journal. Last canonicalized #{} ({:?})", block, hash);
@@ -156,14 +156,14 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 					match db.get_meta(&journal_key).map_err(Error::Db)? {
 						Some(record) => {
 							let record: JournalRecord<BlockHash, Key> = Decode::decode(&mut record.as_slice())?;
-							let inserted_ = record.inserted.iter().map(|(k, _)| k.clone()).collect();
+							let inserted = record.inserted.iter().map(|(k, _)| k.clone()).collect();
 							let overlay = BlockOverlay {
 								hash: record.hash.clone(),
 								journal_key,
-								inserted: inserted_,
+								inserted,
 								deleted: record.deleted,
 							};
-							insert_values(&mut values_, record.inserted);
+							insert_values(&mut values, record.inserted);
 							trace!(target: "state-db", "Uncanonicalized journal entry {}.{} ({} inserted, {} deleted)", block, index, overlay.inserted.len(), overlay.deleted.len());
 							level.push(overlay);
 							parents.insert(record.hash, record.parent_hash);
@@ -188,7 +188,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 			pending_canonicalizations: Default::default(),
 			pending_insertions: Default::default(),
 			pinned: Default::default(),
-			values: values_,
+			values,
 		})
 	}
 
@@ -230,11 +230,11 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 		let index = level.len() as u64;
 		let journal_key = to_journal_key(number, index);
 
-		let inserted_ = changeset.inserted.iter().map(|(k, _)| k.clone()).collect();
+		let inserted = changeset.inserted.iter().map(|(k, _)| k.clone()).collect();
 		let overlay = BlockOverlay {
 			hash: hash.clone(),
 			journal_key: journal_key.clone(),
-			inserted: inserted_,
+			inserted,
 			deleted: changeset.deleted.clone(),
 		};
 		level.push(overlay);

@@ -137,6 +137,7 @@ pub struct BlockImportParams<Block: BlockT> {
 
 impl<Block: BlockT> BlockImportParams<Block> {
 	/// Deconstruct the justified header into parts.
+	#[allow(clippy::type_complexity)]
 	pub fn into_inner(self)
 		-> (
 			BlockOrigin,

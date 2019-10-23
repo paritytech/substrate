@@ -75,6 +75,7 @@ impl<B: BlockT> Clone for BufferedLinkSender<B> {
 }
 
 /// Internal buffered message.
+#[allow(clippy::type_complexity)]
 enum BlockImportWorkerMsg<B: BlockT> {
 	BlocksProcessed(usize, usize, Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>),
 	JustificationImported(Origin, B::Hash, NumberFor<B>, bool),
@@ -84,6 +85,7 @@ enum BlockImportWorkerMsg<B: BlockT> {
 }
 
 impl<B: BlockT> Link<B> for BufferedLinkSender<B> {
+	#[allow(clippy::type_complexity)]
 	fn blocks_processed(
 		&mut self,
 		imported: usize,
@@ -100,12 +102,12 @@ impl<B: BlockT> Link<B> for BufferedLinkSender<B> {
 		number: NumberFor<B>,
 		success: bool
 	) {
-		let msg = BlockImportWorkerMsg::JustificationImported(who, hash.clone(), number, success);
+		let msg = BlockImportWorkerMsg::JustificationImported(who, *hash, number, success);
 		let _ = self.tx.unbounded_send(msg);
 	}
 
 	fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>) {
-		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::RequestJustification(hash.clone(), number));
+		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::RequestJustification(*hash, number));
 	}
 
 	fn finality_proof_imported(
@@ -119,7 +121,7 @@ impl<B: BlockT> Link<B> for BufferedLinkSender<B> {
 	}
 
 	fn request_finality_proof(&mut self, hash: &B::Hash, number: NumberFor<B>) {
-		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::RequestFinalityProof(hash.clone(), number));
+		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::RequestFinalityProof(*hash, number));
 	}
 }
 
@@ -136,12 +138,7 @@ impl<B: BlockT> BufferedLinkReceiver<B> {
 	/// task and notify later when more actions are ready to be polled. To continue the comparison,
 	/// it is as if this method always returned `Poll::Pending`.
 	pub fn poll_actions(&mut self, cx: &mut Context, link: &mut dyn Link<B>) {
-		loop {
-			let msg = if let Poll::Ready(Some(msg)) = Stream::poll_next(Pin::new(&mut self.rx), cx) {
-				msg
-			} else {
-				break
-			};
+		while let Poll::Ready(Some(msg)) = Stream::poll_next(Pin::new(&mut self.rx), cx) {
 
 			match msg {
 				BlockImportWorkerMsg::BlocksProcessed(imported, count, results) =>

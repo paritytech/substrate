@@ -27,6 +27,7 @@ use sr_primitives::{
 };
 
 /// Anything that can have a `::len()` method.
+
 pub trait Len {
 	/// Return the length of data type.
 	fn len(&self) -> usize;
@@ -419,6 +420,7 @@ pub trait Currency<AccountId> {
 
 	/// Similar to deposit_creating, only accepts a `NegativeImbalance` and returns nothing on
 	/// success.
+	#[allow(clippy::unit_arg)]
 	fn resolve_into_existing(
 		who: &AccountId,
 		value: Self::NegativeImbalance,
@@ -464,6 +466,7 @@ pub trait Currency<AccountId> {
 	) -> result::Result<Self::NegativeImbalance, &'static str>;
 
 	/// Similar to withdraw, only accepts a `PositiveImbalance` and returns nothing on success.
+	#[allow(clippy::unit_arg)]
 	fn settle(
 		who: &AccountId,
 		value: Self::PositiveImbalance,
@@ -607,13 +610,13 @@ bitmask! {
 	#[derive(Encode, Decode)]
 	flags WithdrawReason {
 		/// In order to pay for (system) transaction costs.
-		TransactionPayment = 0b00000001,
+		TransactionPayment = 0b0000_0001,
 		/// In order to transfer ownership.
-		Transfer = 0b00000010,
+		Transfer = 0b0000_0010,
 		/// In order to reserve some funds for a later return or repatriation
-		Reserve = 0b00000100,
+		Reserve = 0b0000_0100,
 		/// In order to pay some other (higher-level) fees.
-		Fee = 0b00001000,
+		Fee = 0b0000_1000,
 	}
 }
 

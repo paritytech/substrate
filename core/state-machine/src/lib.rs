@@ -17,11 +17,6 @@
 //! Substrate state machine implementation.
 
 #![warn(missing_docs)]
-// This `allow` flag is here because otherwise running `clippy` with the
-// `-D clippy::all` flag results in many errors about type complexity.
-//
-// This may mean it is worth it to revisit this module in the future to
-// simplify data structures and types.
 #![allow(clippy::type_complexity)]
 
 use std::{fmt, result, collections::HashMap, panic::UnwindSafe, marker::PhantomData};
@@ -264,11 +259,6 @@ impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec> where
 		let mut ext = Ext::new(
 			self.overlay,
 			self.backend,
-			// `.clone()` is not needed here as
-			// `changes_trie_storage: Option<&'a T>`, where
-			// `T: ChangesTrieStorage<H, N>`,
-			// `H: Hasher<Out=H256>,`, `N: crate::changes_trie::BlockNumber`
-			// implements `Copy`.
 			self.changes_trie_storage,
 			Some(&mut self.extensions),
 		);

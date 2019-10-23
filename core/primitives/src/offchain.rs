@@ -204,12 +204,14 @@ impl Timestamp {
 	}
 
 	/// Increase the timestamp by given `Duration`.
-	pub fn plus(self, duration: Duration) -> Timestamp {
+	#[allow(clippy::should_implement_trait)]
+	pub fn add(self, duration: Duration) -> Timestamp {
 		Timestamp(self.0.saturating_add(duration.0))
 	}
 
+	#[allow(clippy::should_implement_trait)]
 	/// Decrease the timestamp by given `Duration`
-	pub fn subtract(self, duration: Duration) -> Timestamp {
+	pub fn sub(self, duration: Duration) -> Timestamp {
 		Timestamp(self.0.saturating_sub(duration.0))
 	}
 
@@ -678,7 +680,7 @@ mod tests {
 		let t = Timestamp(5);
 		assert_eq!(t.add(Duration::from_millis(10)), Timestamp(15));
 		assert_eq!(t.sub(Duration::from_millis(10)), Timestamp(0));
-		assert_eq!(t.diff(&Timestamp(3)), Duration(2));
+		assert_eq!(t.diff(Timestamp(3)), Duration(2));
 	}
 
 	#[test]

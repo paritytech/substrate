@@ -409,8 +409,8 @@ mod tests {
 
 		let decoded = InherentData::decode(&mut &encoded[..]).unwrap();
 
-		assert_eq!(decoded.get_data::<Vec<u32>>(&TEST_INHERENT_0).unwrap().unwrap(), inherent_0);
-		assert_eq!(decoded.get_data::<u32>(&TEST_INHERENT_1).unwrap().unwrap(), inherent_1);
+		assert_eq!(decoded.get_data::<Vec<u32>>(TEST_INHERENT_0).unwrap().unwrap(), inherent_0);
+		assert_eq!(decoded.get_data::<u32>(TEST_INHERENT_1).unwrap().unwrap(), inherent_1);
 	}
 
 	#[test]
@@ -470,7 +470,7 @@ mod tests {
 
 		providers.register_provider(provider.clone()).unwrap();
 		assert!(provider.is_registered());
-		assert!(providers.has_provider(provider.inherent_identifier()));
+		assert!(providers.has_provider(*provider.inherent_identifier()));
 
 		// Second time should fail
 		assert!(providers.register_provider(provider.clone()).is_err());
@@ -487,7 +487,7 @@ mod tests {
 		let inherent_data = providers.create_inherent_data().unwrap();
 
 		assert_eq!(
-			inherent_data.get_data::<u32>(provider.inherent_identifier()).unwrap().unwrap(),
+			inherent_data.get_data::<u32>(*provider.inherent_identifier()).unwrap().unwrap(),
 			42u32
 		);
 	}
@@ -501,12 +501,12 @@ mod tests {
 		assert!(provider.is_registered());
 
 		assert_eq!(
-			&providers.error_to_string(&TEST_INHERENT_0, &[1, 2]), ERROR_TO_STRING
+			&providers.error_to_string(TEST_INHERENT_0, &[1, 2]), ERROR_TO_STRING
 		);
 
 		assert!(
 			providers
-				.error_to_string(&TEST_INHERENT_1, &[1, 2])
+				.error_to_string(TEST_INHERENT_1, &[1, 2])
 				.contains("inherent type is unknown")
 		);
 	}
@@ -524,7 +524,7 @@ mod tests {
 
 		let decoded = CheckInherentsResult::decode(&mut &encoded[..]).unwrap();
 
-		assert_eq!(decoded.get_error::<u32>(&TEST_INHERENT_0).unwrap().unwrap(), 2);
+		assert_eq!(decoded.get_error::<u32>(TEST_INHERENT_0).unwrap().unwrap(), 2);
 		assert!(!decoded.ok());
 		assert!(!decoded.fatal_error());
 	}

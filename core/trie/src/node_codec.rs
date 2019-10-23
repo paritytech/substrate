@@ -47,6 +47,7 @@ impl<H: Hasher> NodeCodecT<H> for NodeCodec<H> {
 		H::hash(<Self as NodeCodecT<_>>::empty_node())
 	}
 
+	#[allow(clippy::needless_range_loop)]
 	fn decode(data: &[u8]) -> rstd::result::Result<Node, Self::Error> {
 		let input = &mut &*data;
 		let head = NodeHeader::decode(input)?;
@@ -76,7 +77,6 @@ impl<H: Hasher> NodeCodecT<H> for NodeCodec<H> {
 				};
 				let mut children = [None; 16];
 
-                #[allow(clippy::needless_range_loop)]
 				for i in 0..nibble_ops::NIBBLE_LENGTH {
 					if bitmap.value_at(i) {
 						let count = <Compact<u32>>::decode(input)?.0 as usize;

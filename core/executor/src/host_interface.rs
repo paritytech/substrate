@@ -41,6 +41,7 @@ macro_rules! debug_trace {
 
 pub struct SubstrateExternals;
 
+#[allow(clippy::unit_arg)]
 impl_wasm_host_interface! {
 	impl SubstrateExternals where context {
 		ext_malloc(size: WordSize) -> Pointer<u8> {
@@ -477,13 +478,11 @@ impl_wasm_host_interface! {
 
 		ext_twox_64(data: Pointer<u8>, len: WordSize, out: Pointer<u8>) {
 			let result: [u8; 8] = if len == 0 {
-				let hashed = twox_64(&[0u8; 0]);
-				hashed
+				twox_64(&[0u8; 0])
 			} else {
 				let key = context.read_memory(data, len)
 					.map_err(|_| "Invalid attempt to get key in ext_twox_64")?;
-				let hashed_key = twox_64(&key);
-				hashed_key
+				twox_64(&key)
 			};
 
 			context.write_memory(out, &result)
@@ -493,13 +492,11 @@ impl_wasm_host_interface! {
 
 		ext_twox_128(data: Pointer<u8>, len: WordSize, out: Pointer<u8>) {
 			let result: [u8; 16] = if len == 0 {
-				let hashed = twox_128(&[0u8; 0]);
-				hashed
+				twox_128(&[0u8; 0])
 			} else {
 				let key = context.read_memory(data, len)
 					.map_err(|_| "Invalid attempt to get key in ext_twox_128")?;
-				let hashed_key = twox_128(&key);
-				hashed_key
+				twox_128(&key)
 			};
 
 			context.write_memory(out, &result)
@@ -522,13 +519,11 @@ impl_wasm_host_interface! {
 
 		ext_blake2_128(data: Pointer<u8>, len: WordSize, out: Pointer<u8>) {
 			let result: [u8; 16] = if len == 0 {
-				let hashed = blake2_128(&[0u8; 0]);
-				hashed
+				blake2_128(&[0u8; 0])
 			} else {
 				let key = context.read_memory(data, len)
 					.map_err(|_| "Invalid attempt to get key in ext_blake2_128")?;
-				let hashed_key = blake2_128(&key);
-				hashed_key
+				blake2_128(&key)
 			};
 
 			context.write_memory(out, &result)
@@ -1030,7 +1025,7 @@ impl_wasm_host_interface! {
 
 			let res = runtime_io::http_response_wait(&ids, deadline_to_timestamp(deadline))
 				.into_iter()
-				.map(|status| u32::from(status))
+				.map(u32::from)
 				.enumerate()
 				// make sure to take up to `ids_len` to avoid exceeding the mem.
 				.take(ids_len as usize);
@@ -1069,8 +1064,7 @@ impl_wasm_host_interface! {
 			buffer_len: WordSize,
 			deadline: u64,
 		) -> WordSize {
-			let mut internal_buffer = Vec::with_capacity(buffer_len as usize);
-			internal_buffer.resize(buffer_len as usize, 0);
+			let mut internal_buffer = vec![0; buffer_len as usize];
 
 			let res = runtime_io::http_response_read_body(
 				offchain::HttpRequestId(request_id as u16),

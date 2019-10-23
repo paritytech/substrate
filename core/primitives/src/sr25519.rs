@@ -389,8 +389,6 @@ impl AsRef<schnorrkel::Keypair> for Pair {
 /// Derive a single hard junction.
 #[cfg(feature = "std")]
 fn derive_hard_junction(secret: &SecretKey, cc: &[u8; CHAIN_CODE_LENGTH]) -> SecretKey {
-	// No `clone()` required here because `cc: &[u8; CHAIN_CODE_LENGTH]`
-	// implements `Copy.`
 	secret.hard_derive_mini_secret_key(Some(ChainCode(*cc)), b"").0.expand(ExpansionMode::Ed25519)
 }
 

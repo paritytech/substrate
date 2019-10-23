@@ -61,7 +61,7 @@ mod tests {
 
 	#[test]
 	fn sr25519_works_in_runtime() {
-		let keystore = KeyStore::new();
+		let keystore = KeyStore::new_key_store_ptr();
 		let test_client = TestClientBuilder::new().set_keystore(keystore.clone()).build();
 		let (signature, public) = test_client.runtime_api()
 			.test_sr25519_crypto(&BlockId::Number(0))

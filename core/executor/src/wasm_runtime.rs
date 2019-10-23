@@ -65,6 +65,7 @@ pub enum WasmExecutionMethod {
 ///
 /// For now the cache grows indefinitely, but that should be fine for now since runtimes can only be
 /// upgraded rarely and there are no other ways to make the node to execute some other runtime.
+#[allow(clippy::type_complexity)]
 pub struct RuntimesCache {
 	/// A cache of runtime instances along with metadata, ready to be reused.
 	///
@@ -117,7 +118,7 @@ impl RuntimesCache {
 	) -> Result<&mut (dyn WasmRuntime + 'static), Error> {
 		let code_hash = ext
 			.original_storage_hash(well_known_keys::CODE)
-			.ok_or(Error::InvalidCode("`CODE` not found in storage.".into()))?;
+			.ok_or_else(|| Error::InvalidCode("`CODE` not found in storage.".into()))?;
 
 		let heap_pages = ext
 			.storage(well_known_keys::HEAP_PAGES)

@@ -75,7 +75,7 @@ pub enum FinalizationResult<V> {
 /// in order. Each node is uniquely identified by its hash but can be ordered by
 /// its number. In order to build the tree an external function must be provided
 /// when interacting with the tree to establish a node's ancestry.
-#[derive(Clone, Debug, Decode, Encode, PartialEq, Default)]
+#[derive(Clone, Debug, Decode, Encode, PartialEq)]
 pub struct ForkTree<H, N, V> {
 	roots: Vec<Node<H, N, V>>,
 	best_finalized_number: Option<N>,
@@ -128,6 +128,7 @@ impl<H, N, V> ForkTree<H, N, V> where
 	}
 }
 
+#[allow(clippy::new_without_default)]
 impl<H, N, V> ForkTree<H, N, V> where
 	H: PartialEq,
 	N: Ord,
@@ -148,10 +149,8 @@ impl<H, N, V> ForkTree<H, N, V> where
 	/// Returns `true` if the imported node is a root.
 	pub fn import<F, E>(
 		&mut self,
-		// Variable names appended with `_` to avoid shadowing issues.
-		// See https://rust-lang.github.io/rust-clippy/master/index.html#redundant_field_names.
-		mut hash_: H,
-		mut number_: N,
+		mut hash: H,
+		mut number: N,
 		mut data: V,
 		is_descendent_of: &F,
 	) -> Result<bool, Error<E>>
@@ -159,20 +158,20 @@ impl<H, N, V> ForkTree<H, N, V> where
 			  F: Fn(&H, &H) -> Result<bool, E>,
 	{
 		if let Some(ref best_finalized_number) = self.best_finalized_number {
-			if number_ <= *best_finalized_number {
+			if number <= *best_finalized_number {
 				return Err(Error::Revert);
 			}
 		}
 
 		for root in self.roots.iter_mut() {
-			if root.hash == hash_ {
+			if root.hash == hash {
 				return Err(Error::Duplicate);
 			}
 
-			match root.import(hash_, number_, data, is_descendent_of)? {
+			match root.import(hash, number, data, is_descendent_of)? {
 				Some((h, n, d)) => {
-					hash_ = h;
-					number_ = n;
+					hash = h;
+					number = n;
 					data = d;
 				},
 				None => return Ok(false),
@@ -181,8 +180,8 @@ impl<H, N, V> ForkTree<H, N, V> where
 
 		self.roots.push(Node {
 			data,
-			hash: hash_,
-			number: number_,
+			hash,
+			number,
 			children:  Vec::new(),
 		});
 
@@ -525,42 +524,42 @@ mod node_implementation {
 			&mut self,
 			// Variable names here appended with `_` to avoid shadowing issues.
 			// See https://rust-lang.github.io/rust-clippy/master/index.html#redundant_field_names.
-			mut hash_: H,
-			mut number_: N,
+			mut hash: H,
+			mut number: N,
 			mut data: V,
 			is_descendent_of: &F,
 		) -> Result<Option<(H, N, V)>, Error<E>>
 			where E: fmt::Debug,
 				  F: Fn(&H, &H) -> Result<bool, E>,
 		{
-			if self.hash == hash_ {
+			if self.hash == hash {
 				return Err(Error::Duplicate);
 			};
 
-			if number_ <= self.number { return Ok(Some((hash_, number_, data))); }
+			if number <= self.number { return Ok(Some((hash, number, data))); }
 
 			for node in self.children.iter_mut() {
-				match node.import(hash_, number_, data, is_descendent_of)? {
+				match node.import(hash, number, data, is_descendent_of)? {
 					Some((h, n, d)) => {
-						hash_ = h;
-						number_ = n;
+						hash = h;
+						number = n;
 						data = d;
 					},
 					None => return Ok(None),
 				}
 			}
 
-			if is_descendent_of(&self.hash, &hash_)? {
+			if is_descendent_of(&self.hash, &hash)? {
 				self.children.push(Node {
 					data,
-					hash: hash_,
-					number: number_,
+					hash,
+					number,
 					children: Vec::new(),
 				});
 
 				Ok(None)
 			} else {
-				Ok(Some((hash_, number_, data)))
+				Ok(Some((hash, number, data)))
 			}
 		}
 

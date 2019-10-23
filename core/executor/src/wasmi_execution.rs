@@ -102,7 +102,7 @@ impl sandbox::SandboxCapabilities for FunctionExecutor {
 		);
 		match result {
 			Ok(Some(RuntimeValue::I64(val))) => Ok(val),
-			Ok(_) => return Err("Supervisor function returned unexpected result!".into()),
+			Ok(_) => Err("Supervisor function returned unexpected result!".into()),
 			Err(err) => Err(Error::Trap(err)),
 		}
 	}

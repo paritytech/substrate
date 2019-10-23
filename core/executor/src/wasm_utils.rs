@@ -101,7 +101,7 @@ macro_rules! unmarshall_args {
 		$(
 			let $names : $params =
 				$args_iter.next()
-					.and_then(|val| <$params as $crate::wasm_interface::TryFromValue>::try_from_value(val))
+					.and_then(<$params as $crate::wasm_interface::TryFromValue>::try_from_value)
 					.expect(
 						"`$args_iter` comes from an argument of Externals::execute_function;
 						args to an external call always matches the signature of the external;

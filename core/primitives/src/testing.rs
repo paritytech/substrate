@@ -252,7 +252,7 @@ mod tests {
 
 	#[test]
 	fn store_key_and_extract() {
-		let store = KeyStore::new();
+		let store = KeyStore::new_key_store_ptr();
 
 		let public = store.write()
 			.ed25519_generate_new(ED25519, None)
@@ -267,7 +267,7 @@ mod tests {
 
 	#[test]
 	fn store_unknown_and_extract_it() {
-		let store = KeyStore::new();
+		let store = KeyStore::new_key_store_ptr();
 
 		let secret_uri = "//Alice";
 		let key_pair = sr25519::Pair::from_string(secret_uri, None).expect("Generates key pair");

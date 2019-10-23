@@ -95,7 +95,7 @@ impl<Hash, Ex> WaitingTransaction<Hash, Ex> {
 	}
 
 	/// Marks the tag as satisfied.
-	pub fn satisfy_tag(&mut self, tag: &[u8]) {
+	pub fn satisfy_tag(&mut self, tag: &Tag) {
 		self.missing_tags.remove(tag);
 	}
 

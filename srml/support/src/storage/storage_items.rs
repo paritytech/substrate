@@ -60,7 +60,7 @@ pub use Some;
 
 #[doc(hidden)]
 pub fn unwrap_or_default<T: Default>(t: Option<T>) -> T {
-	t.unwrap_or_else(|| Default::default())
+	t.unwrap_or_else(Default::default)
 }
 
 #[doc(hidden)]

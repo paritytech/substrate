@@ -422,7 +422,6 @@ where
 				self.id,
 				HexDisplay::from(&root.as_ref()),
 			);
-			// Changed from `root.clone()` since `H256` implements `Copy`.
 			return *root;
 		}
 

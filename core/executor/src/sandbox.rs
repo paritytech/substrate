@@ -285,7 +285,7 @@ impl<'a, FE: SandboxCapabilities + 'a> Externals for GuestExternals<'a, FE> {
 			// Cast to u64 to use zero-extension.
 			let v = result as u64;
 			let ptr = (v as u64 >> 32) as u32;
-			let len = (v & 0xFFFFFFFF) as u32;
+			let len = (v & 0xFFFF_FFFF) as u32;
 			(Pointer::new(ptr), len)
 		};
 

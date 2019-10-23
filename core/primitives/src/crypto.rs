@@ -31,7 +31,6 @@ use regex::Regex;
 #[cfg(feature = "std")]
 use base58::{FromBase58, ToBase58};
 #[cfg(feature = "std")]
-//use std::cell::UnsafeCell;
 use std::hash::Hash;
 use zeroize::Zeroize;
 #[doc(hidden)]
@@ -516,17 +515,7 @@ mod dummy {
 		fn as_mut(&mut self) -> &mut[u8] {
 			unsafe {
 				#[allow(mutable_transmutes)]
-				// Suggested #2
-				//let uc = &UnsafeCell::new(&b""[..]);
-
-				// Original
 				rstd::mem::transmute::<_, &'static mut [u8]>(&b""[..])
-
-				// Suggested #1
-				// &mut *(&b""[..] as *const [u8] as *mut [u8])
-
-                // Suggested #2
-				//&mut *uc.get()
 			}
 		}
 	}

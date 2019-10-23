@@ -48,7 +48,7 @@ fn uxt(sender: AccountKeyring, nonce: u64) -> Extrinsic {
 fn submit_transaction_should_not_cause_error() {
 	let runtime = runtime::Runtime::new().unwrap();
 	let client = Arc::new(test_client::new());
-	let keystore = KeyStore::new();
+	let keystore = KeyStore::new_key_store_ptr();
 	let p = Author {
 		client: client.clone(),
 		pool: Arc::new(Pool::new(Default::default(), FullChainApi::new(client))),
@@ -71,7 +71,7 @@ fn submit_transaction_should_not_cause_error() {
 fn submit_rich_transaction_should_not_cause_error() {
 	let runtime = runtime::Runtime::new().unwrap();
 	let client = Arc::new(test_client::new());
-	let keystore = KeyStore::new();
+	let keystore = KeyStore::new_key_store_ptr();
 	let p = Author {
 		client: client.clone(),
 		pool: Arc::new(Pool::new(Default::default(), FullChainApi::new(client.clone()))),
@@ -96,7 +96,7 @@ fn should_watch_extrinsic() {
 	let mut runtime = runtime::Runtime::new().unwrap();
 	let client = Arc::new(test_client::new());
 	let pool = Arc::new(Pool::new(Default::default(), FullChainApi::new(client.clone())));
-	let keystore = KeyStore::new();
+	let keystore = KeyStore::new_key_store_ptr();
 	let p = Author {
 		client,
 		pool: pool.clone(),
@@ -139,7 +139,7 @@ fn should_return_watch_validation_error() {
 	let mut runtime = runtime::Runtime::new().unwrap();
 	let client = Arc::new(test_client::new());
 	let pool = Arc::new(Pool::new(Default::default(), FullChainApi::new(client.clone())));
-	let keystore = KeyStore::new();
+	let keystore = KeyStore::new_key_store_ptr();
 	let p = Author {
 		client,
 		pool: pool.clone(),
@@ -161,7 +161,7 @@ fn should_return_pending_extrinsics() {
 	let runtime = runtime::Runtime::new().unwrap();
 	let client = Arc::new(test_client::new());
 	let pool = Arc::new(Pool::new(Default::default(), FullChainApi::new(client.clone())));
-	let keystore = KeyStore::new();
+	let keystore = KeyStore::new_key_store_ptr();
 	let p = Author {
 		client,
 		pool: pool.clone(),
@@ -181,7 +181,7 @@ fn should_remove_extrinsics() {
 	let runtime = runtime::Runtime::new().unwrap();
 	let client = Arc::new(test_client::new());
 	let pool = Arc::new(Pool::new(Default::default(), FullChainApi::new(client.clone())));
-	let keystore = KeyStore::new();
+	let keystore = KeyStore::new_key_store_ptr();
 	let p = Author {
 		client,
 		pool: pool.clone(),
@@ -210,7 +210,7 @@ fn should_remove_extrinsics() {
 fn should_insert_key() {
 	let runtime = runtime::Runtime::new().unwrap();
 	let client = Arc::new(test_client::new());
-	let keystore = KeyStore::new();
+	let keystore = KeyStore::new_key_store_ptr();
 	let p = Author {
 		client: client.clone(),
 		pool: Arc::new(Pool::new(Default::default(), FullChainApi::new(client))),
@@ -235,7 +235,7 @@ fn should_insert_key() {
 #[test]
 fn should_rotate_keys() {
 	let runtime = runtime::Runtime::new().unwrap();
-	let keystore = KeyStore::new();
+	let keystore = KeyStore::new_key_store_ptr();
 	let client = Arc::new(
 		test_client::TestClientBuilder::new().set_keystore(keystore.clone()).build(),
 	);

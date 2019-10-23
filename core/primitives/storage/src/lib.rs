@@ -137,8 +137,6 @@ impl<'a> ChildStorageKey<'a> {
 	/// Get access to the byte representation of the storage key.
 	///
 	/// This key is guaranteed to be correct.
-	/// Renamed from `as_ref` to avoid the lint error described in
-	/// https://rust-lang.github.io/rust-clippy/master/index.html#should_implement_trait.
 	pub fn as_bytes(&self) -> &[u8] {
 		&*self.storage_key
 	}

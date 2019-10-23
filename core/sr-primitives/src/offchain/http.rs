@@ -541,7 +541,7 @@ mod tests {
 			let mut response = pending.wait().unwrap();
 
 			// then check the response
-			let mut headers = response.headers().into_iter();
+			let mut headers = response.headers().to_iter();
 			assert_eq!(headers.current(), None);
 			assert_eq!(headers.next(), false);
 			assert_eq!(headers.current(), None);
@@ -583,7 +583,7 @@ mod tests {
 			let mut response = pending.wait().unwrap();
 
 			// then check the response
-			let mut headers = response.headers().into_iter();
+			let mut headers = response.headers().to_iter();
 			assert_eq!(headers.current(), None);
 			assert_eq!(headers.next(), true);
 			assert_eq!(headers.current(), Some(("Test", "Header")));

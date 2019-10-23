@@ -62,7 +62,7 @@ const ALIGNMENT: u32 = 8;
 // This is because all pointers will contain a 8 byte prefix (the list
 // index) and then a subsequent item of 2^x bytes, where x = [3..24].
 const N: usize = 22;
-const MAX_POSSIBLE_ALLOCATION: u32 = 16777216; // 2^24 bytes
+const MAX_POSSIBLE_ALLOCATION: u32 = 1677_7216; // 2^24 bytes
 const MIN_POSSIBLE_ALLOCATION: u32 = 8;
 
 // Each pointer is prefixed with 8 bytes, which identify the list index

@@ -233,7 +233,7 @@ mod tests {
 	#[test]
 	fn authority_id_fn_returns_intersection_of_current_authorities_and_keys_in_key_store() {
 		// Create keystore and generate key.
-		let key_store = KeyStore::new();
+		let key_store = KeyStore::new_key_store_ptr();
 		key_store
 			.write()
 			.sr25519_generate_new(key_types::BABE, None)
@@ -273,7 +273,7 @@ mod tests {
 	#[test]
 	fn authority_id_fn_does_not_return_key_outside_current_authority_set() {
 		// Create keystore and generate key.
-		let key_store = KeyStore::new();
+		let key_store = KeyStore::new_key_store_ptr();
 		key_store
 			.write()
 			.sr25519_generate_new(key_types::BABE, None)
@@ -307,7 +307,7 @@ mod tests {
 	#[test]
 	fn sign_and_verify_workflow() {
 		// Create keystore and generate key.
-		let key_store = KeyStore::new();
+		let key_store = KeyStore::new_key_store_ptr();
 		key_store
 			.write()
 			.sr25519_generate_new(key_types::BABE, None)

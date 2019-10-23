@@ -53,8 +53,6 @@ pub struct Pair(ed25519_dalek::Keypair);
 impl Clone for Pair {
 	fn clone(&self) -> Self {
 		Pair(ed25519_dalek::Keypair {
-			// No `clone()` required here because `self.0.public: PublicKey`
-			// implements `Copy.`
 			public: self.0.public,
 			secret: ed25519_dalek::SecretKey::from_bytes(self.0.secret.as_bytes())
 				.expect("key is always the correct size; qed")

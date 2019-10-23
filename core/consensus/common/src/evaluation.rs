@@ -60,7 +60,7 @@ pub fn evaluate_initial<Block: BlockT>(
 
 	let encoded = Encode::encode(proposal);
 	let proposal = Block::decode(&mut &encoded[..])
-		.map_err(|e| Error::BadProposalFormat(e))?;
+		.map_err(Error::BadProposalFormat)?;
 
 	if encoded.len() > MAX_BLOCK_SIZE {
 		return Err(Error::ProposalTooLarge(encoded.len()))

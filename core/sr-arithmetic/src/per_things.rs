@@ -147,6 +147,7 @@ macro_rules! implement_per_thing {
 		/// Overflow-prune multiplication.
 		///
 		/// tailored to be used with a balance type.
+		#[allow(clippy::suspicious_arithmetic_impl)]
 		impl<N> ops::Mul<N> for $name
 		where
 			N: Clone + From<$type> + UniqueSaturatedInto<$type> + ops::Rem<N, Output=N>
