@@ -104,3 +104,46 @@ impl<T> Future for YieldAfter<T> {
 		}
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::StatusSinks;
+	use futures::prelude::*;
+	use futures::sync::mpsc;
+	use std::time::Duration;
+
+	#[test]
+	fn basic_usage() {
+		let mut status_sinks = StatusSinks::new();
+
+		let (tx1, rx1) = mpsc::unbounded();
+		status_sinks.push(Duration::from_millis(200), tx1);
+
+		let (tx2, rx2) = mpsc::unbounded();
+		status_sinks.push(Duration::from_millis(500), tx2);
+
+		let mut runtime = tokio::runtime::Runtime::new().unwrap();
+
+		let mut val_order = 5;
+		runtime.spawn(futures::future::poll_fn(move || {
+			status_sinks.poll(|| { val_order += 1; val_order });
+			Ok(Async::NotReady)
+		}));
+
+		let done = rx1
+			.into_future()
+			.and_then(|(item, rest)| {
+				assert_eq!(item, Some(6));
+				rest.into_future()
+			})
+			.and_then(|(item, _)| {
+				assert_eq!(item, Some(7));
+				rx2.into_future()
+			})
+			.map(|(item, _)| {
+				assert_eq!(item, Some(8));
+			});
+
+		runtime.block_on(done).unwrap();
+	}
+}
