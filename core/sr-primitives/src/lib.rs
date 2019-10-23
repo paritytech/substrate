@@ -51,7 +51,6 @@ pub mod testing;
 pub mod curve;
 pub mod generic;
 pub mod offchain;
-pub mod sr_arithmetic;
 pub mod traits;
 pub mod transaction_validity;
 pub mod weights;
@@ -63,15 +62,18 @@ pub use generic::{DigestItem, Digest};
 pub use primitives::{TypeId, crypto::{key_types, KeyTypeId, CryptoType}};
 pub use app_crypto::RuntimeAppPublic;
 
+/// Re-export `RuntimeDebug`, to avoid dependency clutter.
+pub use primitives::RuntimeDebug;
+
 /// Re-export top-level arithmetic stuff.
-pub use sr_arithmetic::{
+pub use arithmetic::{
 	Perquintill, Perbill, Permill, Percent,
 	Rational128, Fixed64
 };
 /// Re-export 128 bit helpers.
-pub use sr_arithmetic::helpers_128bit;
-/// Re-export big_uint stiff.
-pub use sr_arithmetic::biguint;
+pub use arithmetic::helpers_128bit;
+/// Re-export big_uint stuff.
+pub use arithmetic::biguint;
 
 /// An abstraction over justification for a block's validity under a consensus algorithm.
 ///
@@ -167,8 +169,7 @@ impl BuildStorage for (StorageOverlay, ChildrenStorageOverlay) {
 pub type ConsensusEngineId = [u8; 4];
 
 /// Signature verify that can work with any known signature types..
-#[derive(Eq, PartialEq, Clone, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Eq, PartialEq, Clone, Encode, Decode, RuntimeDebug)]
 pub enum MultiSignature {
 	/// An Ed25519 signature.
 	Ed25519(ed25519::Signature),
@@ -195,8 +196,8 @@ impl Default for MultiSignature {
 }
 
 /// Public key for any known crypto algorithm.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Encode, Decode, RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum MultiSigner {
 	/// An Ed25519 identity.
 	Ed25519(ed25519::Public),
@@ -261,8 +262,8 @@ impl Verify for MultiSignature {
 }
 
 /// Signature verify that can work with any known signature types..
-#[derive(Eq, PartialEq, Clone, Default, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+#[derive(Eq, PartialEq, Clone, Default, Encode, Decode, RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct AnySignature(H512);
 
 impl Verify for AnySignature {
@@ -290,8 +291,8 @@ impl From<ed25519::Signature> for AnySignature {
 	}
 }
 
-#[derive(Eq, PartialEq, Clone, Copy, Decode, Encode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+#[derive(Eq, PartialEq, Clone, Copy, Decode, Encode, RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Serialize))]
 /// Reason why an extrinsic couldn't be applied (i.e. invalid extrinsic).
 pub enum ApplyError {
 	/// General error to do with the permissions of the sender.
@@ -342,8 +343,8 @@ impl From<DispatchError> for ApplyOutcome {
 /// Result from attempt to apply an extrinsic.
 pub type ApplyResult = Result<ApplyOutcome, ApplyError>;
 
-#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Serialize))]
 /// Reason why a dispatch call failed
 pub struct DispatchError {
 	/// Module index, matching the metadata module index
@@ -565,12 +566,18 @@ macro_rules! assert_eq_error_rate {
 #[derive(PartialEq, Eq, Clone, Default, Encode, Decode)]
 pub struct OpaqueExtrinsic(pub Vec<u8>);
 
-#[cfg(feature = "std")]
-impl std::fmt::Debug for OpaqueExtrinsic {
-	fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl rstd::fmt::Debug for OpaqueExtrinsic {
+	#[cfg(feature = "std")]
+	fn fmt(&self, fmt: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
 		write!(fmt, "{}", primitives::hexdisplay::HexDisplay::from(&self.0))
 	}
+
+	#[cfg(not(feature = "std"))]
+	fn fmt(&self, _fmt: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+		Ok(())
+	}
 }
+
 
 #[cfg(feature = "std")]
 impl ::serde::Serialize for OpaqueExtrinsic {

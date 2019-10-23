@@ -205,6 +205,7 @@ macro_rules! new_full {
 					inherent_data_providers: inherent_data_providers.clone(),
 					on_exit: service.on_exit(),
 					telemetry_on_connect: Some(service.telemetry_on_connect_stream()),
+					voting_rule: grandpa::VotingRulesBuilder::default().build(),
 				};
 				service.spawn_task(Box::new(grandpa::run_grandpa_voter(grandpa_config)?));
 			},

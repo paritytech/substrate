@@ -376,8 +376,9 @@ mod tests {
 	#[test]
 	fn block_import_works_wasm() {
 		block_import_works(|b, ext| {
+			let mut ext = ext.ext();
 			executor().call::<_, NeverNativeValue, fn() -> _>(
-				ext,
+				&mut ext,
 				"Core_execute_block",
 				&b.encode(),
 				false,
@@ -468,8 +469,9 @@ mod tests {
 	#[test]
 	fn block_import_with_transaction_works_wasm() {
 		block_import_with_transaction_works(|b, ext| {
+			let mut ext = ext.ext();
 			executor().call::<_, NeverNativeValue, fn() -> _>(
-				ext,
+				&mut ext,
 				"Core_execute_block",
 				&b.encode(),
 				false,

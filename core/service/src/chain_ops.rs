@@ -46,7 +46,7 @@ macro_rules! export_blocks {
 		let last_: u64 = last.saturated_into::<u64>();
 		let block_: u64 = block.saturated_into::<u64>();
 		let len: u64 = last_ - block_ + 1;
-		$output.write(&len.encode())?;
+		$output.write_all(&len.encode())?;
 	}
 
 	loop {
@@ -59,7 +59,7 @@ macro_rules! export_blocks {
 					serde_json::to_writer(&mut $output, &block)
 						.map_err(|e| format!("Error writing JSON: {}", e))?;
 				} else {
-					$output.write(&block.encode())?;
+					$output.write_all(&block.encode())?;
 				}
 			},
 			None => break,

@@ -132,29 +132,29 @@ decl_storage! {
 	trait Store for Module<T: Trait> as PhragmenElection {
 		// ---- parameters
 		/// Number of members to elect.
-		pub DesiredMembers get(desired_members) config(): u32;
+		pub DesiredMembers get(fn desired_members) config(): u32;
 		/// Number of runners_up to keep.
-		pub DesiredRunnersUp get(desired_runners_up) config(): u32;
+		pub DesiredRunnersUp get(fn desired_runners_up) config(): u32;
 		/// How long each seat is kept. This defines the next block number at which an election
 		/// round will happen.
-		pub TermDuration get(term_duration) config(): T::BlockNumber;
+		pub TermDuration get(fn term_duration) config(): T::BlockNumber;
 
 		// ---- State
 		/// The current elected membership. Sorted based on account id.
-		pub Members get(members) config(): Vec<T::AccountId>;
+		pub Members get(fn members) config(): Vec<T::AccountId>;
 		/// The current runners_up. Sorted based on low to high merit (worse to best runner).
-		pub RunnersUp get(runners_up): Vec<T::AccountId>;
+		pub RunnersUp get(fn runners_up): Vec<T::AccountId>;
 		/// The total number of vote rounds that have happened, excluding the upcoming one.
-		pub ElectionRounds get(election_rounds): u32 = Zero::zero();
+		pub ElectionRounds get(fn election_rounds): u32 = Zero::zero();
 
 		/// Votes of a particular voter, with the round index of the votes.
-		pub VotesOf get(votes_of): linked_map T::AccountId => Vec<T::AccountId>;
+		pub VotesOf get(fn votes_of): linked_map T::AccountId => Vec<T::AccountId>;
 		/// Locked stake of a voter.
-		pub StakeOf get(stake_of): map T::AccountId => BalanceOf<T>;
+		pub StakeOf get(fn stake_of): map T::AccountId => BalanceOf<T>;
 
 		/// The present candidate list. Sorted based on account id. A current member can never enter
 		/// this vector and is always implicitly assumed to be a candidate.
-		pub Candidates get(candidates): Vec<T::AccountId>;
+		pub Candidates get(fn candidates): Vec<T::AccountId>;
 	}
 }
 

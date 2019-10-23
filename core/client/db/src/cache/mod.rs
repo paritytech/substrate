@@ -207,7 +207,7 @@ impl<'a, Block: BlockT> DbCacheTransaction<'a, Block> {
 		// prepare list of caches that are not update
 		// (we might still need to do some cache maintenance in this case)
 		let missed_caches = self.cache.cache_at.keys()
-			.filter(|cache| !data_at.contains_key(cache.clone()))
+			.filter(|cache| !data_at.contains_key(*cache))
 			.cloned()
 			.collect::<Vec<_>>();
 
@@ -265,6 +265,27 @@ impl<'a, Block: BlockT> DbCacheTransaction<'a, Block> {
 		}
 
 		self.best_finalized_block = Some(block);
+
+		Ok(self)
+	}
+
+	/// When block is reverted.
+	pub fn on_block_revert(
+		mut self,
+		reverted_block: &ComplexBlockId<Block>,
+	) -> ClientResult<Self> {
+		for (name, cache) in self.cache.cache_at.iter() {
+			let op = cache.on_block_revert(
+				&mut self::list_storage::DbStorageTransaction::new(
+					cache.storage(),
+					&mut self.tx
+				),
+				reverted_block,
+			)?;
+
+			assert!(!self.cache_at_op.contains_key(name));
+			self.cache_at_op.insert(name.to_owned(), op);
+		}
 
 		Ok(self)
 	}

@@ -111,8 +111,8 @@ pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"timstap0";
 pub type InherentType = u64;
 
 /// Errors that can occur while checking the timestamp inherent.
-#[derive(Encode)]
-#[cfg_attr(feature = "std", derive(Debug, Decode))]
+#[derive(Encode, sr_primitives::RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Decode))]
 pub enum InherentError {
 	/// The timestamp is valid in the future.
 	/// This is a non-fatal-error and will not stop checking the inherents.
@@ -244,7 +244,7 @@ decl_module! {
 decl_storage! {
 	trait Store for Module<T: Trait> as Timestamp {
 		/// Current time for the current block.
-		pub Now get(now) build(|_| 0.into()): T::Moment;
+		pub Now get(fn now) build(|_| 0.into()): T::Moment;
 
 		/// Did the timestamp get updated in this block?
 		DidUpdate: bool;

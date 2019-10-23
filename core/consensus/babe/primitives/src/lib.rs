@@ -23,7 +23,7 @@ mod digest;
 
 use codec::{Encode, Decode};
 use rstd::vec::Vec;
-use sr_primitives::ConsensusEngineId;
+use sr_primitives::{ConsensusEngineId, RuntimeDebug};
 use substrate_client::decl_runtime_apis;
 
 #[cfg(feature = "std")]
@@ -79,8 +79,7 @@ pub type BabeAuthorityWeight = u64;
 pub type BabeBlockWeight = u32;
 
 /// BABE epoch information
-#[derive(Decode, Encode, Default, PartialEq, Eq, Clone)]
-#[cfg_attr(any(feature = "std", test), derive(Debug))]
+#[derive(Decode, Encode, Default, PartialEq, Eq, Clone, RuntimeDebug)]
 pub struct Epoch {
 	/// The epoch index
 	pub epoch_index: u64,
@@ -127,8 +126,7 @@ pub enum ConsensusLog {
 }
 
 /// Configuration data used by the BABE consensus engine.
-#[derive(Clone, PartialEq, Eq, Encode, Decode)]
-#[cfg_attr(any(feature = "std", test), derive(Debug))]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
 pub struct BabeConfiguration {
 	/// The slot duration in milliseconds for BABE. Currently, only
 	/// the value provided by this type at genesis will be used.

@@ -32,7 +32,6 @@ use trie::{trie_types::Layout, MemoryDB, default_child_trie_root};
 use externalities::Extensions;
 
 use std::{error, fmt, any::{Any, TypeId}};
-
 use log::{warn, trace};
 
 const EXT_NOT_ALLOWED_TO_FAIL: &str = "Externalities not allowed to fail within runtime";
@@ -99,6 +98,7 @@ where
 	T: 'a + ChangesTrieStorage<H, N>,
 	N: crate::changes_trie::BlockNumber,
 {
+
 	/// Create a new `Ext` from overlayed changes and read-only backend
 	pub fn new(
 		overlay: &'a mut OverlayedChanges,
@@ -467,16 +467,22 @@ where
 		} else {
 			let storage_key = storage_key.as_ref();
 
-			let delta = self.overlay.committed.children.get(storage_key)
-				.into_iter()
-				.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), v.value.clone())))
-				.chain(self.overlay.prospective.children.get(storage_key)
-						.into_iter()
-						.flat_map(|map| map.clone().into_iter().map(|(k, v)| (k.clone(), v.value.clone()))));
+			let (root, is_empty, _) = {
+				let delta = self.overlay.committed.children.get(storage_key)
+					.into_iter()
+					.flat_map(|map| map.clone().into_iter().map(|(k, v)| (k, v.value)))
+					.chain(self.overlay.prospective.children.get(storage_key)
+							.into_iter()
+							.flat_map(|map| map.clone().into_iter().map(|(k, v)| (k, v.value))));
 
-			let root = self.backend.child_storage_root(storage_key, delta).0;
+				self.backend.child_storage_root(storage_key, delta)
+			};
 
-			self.overlay.set_storage(storage_key.to_vec(), Some(root.to_vec()));
+			if is_empty {
+				self.overlay.set_storage(storage_key.into(), None);
+			} else {
+				self.overlay.set_storage(storage_key.into(), Some(root.clone()));
+			}
 
 			trace!(target: "state-trace", "{:04x}: ChildRoot({}) {}",
 				self.id,

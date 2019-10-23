@@ -91,7 +91,7 @@ impl BabePreDigest {
 }
 
 /// The prefix used by BABE for its VRF keys.
-pub const BABE_VRF_PREFIX: &'static [u8] = b"substrate-babe-vrf";
+pub const BABE_VRF_PREFIX: &[u8] = b"substrate-babe-vrf";
 
 /// A raw version of `BabePreDigest`, usable on `no_std`.
 #[derive(Copy, Clone, Encode, Decode)]
@@ -195,8 +195,7 @@ impl Decode for BabePreDigest {
 
 /// Information about the next epoch. This is broadcast in the first block
 /// of the epoch.
-#[derive(Decode, Encode, Default, PartialEq, Eq, Clone)]
-#[cfg_attr(any(feature = "std", test), derive(Debug))]
+#[derive(Decode, Encode, Default, PartialEq, Eq, Clone, sr_primitives::RuntimeDebug)]
 pub struct NextEpochDescriptor {
 	/// The authorities.
 	pub authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
