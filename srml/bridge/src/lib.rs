@@ -19,6 +19,7 @@
 //! This will eventually have some useful documentation.
 //! For now though, enjoy this cow's wisdom.
 //!
+//!```ignore
 //!________________________________________
 //! / You are only young once, but you can  \
 //! \ stay immature indefinitely.           /
@@ -28,6 +29,7 @@
 //!            (__)\       )\/\
 //!                ||----w |
 //!                ||     ||
+//!```
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -37,7 +39,6 @@ mod storage_proof;
 
 use crate::storage_proof::StorageProofChecker;
 use codec::{Encode, Decode};
-use primitives::{Blake2Hasher};
 use sr_primitives::traits::{Header, Member};
 use support::{
 	decl_error, decl_module, decl_storage,
@@ -131,16 +132,12 @@ decl_error! {
 }
 
 impl<T: Trait> Module<T> {
-	fn check_storage_proof(_proof: Vec<u8>) -> std::result::Result<(), Error> {
-		// ... Do some math ...
-		Ok(()) // Otherwise, Error::InvalidStorageProof
-	}
-
 	fn check_validator_set_proof(
 		state_root: &T::Hash,
 		proof: Vec<Vec<u8>>,
 		_validator_set: &Vec<T::ValidatorId>,
 	) -> std::result::Result<(), Error> {
+
 		let _checker = <StorageProofChecker<<T::Hashing as sr_primitives::traits::Hash>::Hasher>>::new(
 			*state_root,
 			proof.clone()
@@ -155,7 +152,7 @@ impl<T: Trait> Module<T> {
 mod tests {
 	use super::*;
 
-	use primitives::H256;
+	use primitives::{Blake2Hasher, H256};
 	use sr_primitives::{
 		Perbill, traits::{Header as HeaderT, IdentityLookup}, testing::Header, generic::Digest,
 	};
@@ -169,7 +166,7 @@ mod tests {
 	#[derive(Clone, PartialEq, Eq, Debug)]
 	pub struct Test;
 
-	type System = system::Module<Test>;
+	type _System = system::Module<Test>;
 	type MockBridge = Module<Test>;
 
 	// TODO: Figure out what I actually need from here
@@ -220,11 +217,8 @@ mod tests {
 		});
 	}
 
-	#[test]
-	fn it_can_validate_validator_sets() {
+	fn create_dummy_validator_proof() -> (H256, Vec<Vec<u8>>) {
 		use state_machine::{prove_read, backend::{Backend, InMemory}};
-
-		let validators = vec![0, 5, 10];
 
 		// construct storage proof
 		let backend = <InMemory<Blake2Hasher>>::from(vec![
@@ -236,22 +230,26 @@ mod tests {
 		// Generates a storage read proof
 		let proof = prove_read(backend, &[&b"validator1"[..], &b"validator2"[..]]).unwrap();
 
-		// check proof in runtime
-		let checker = <StorageProofChecker<Blake2Hasher>>::new(root, proof.clone()).unwrap();
-		assert_eq!(checker.read_value(b"validator1"), Ok(Some(b"alice".to_vec())));
-		assert_eq!(checker.read_value(b"validator2"), Ok(Some(b"bob".to_vec())));
+		(root, proof)
+	}
 
-		// with_externalities(&mut new_test_ext(), || {
-		// });
+	#[test]
+	fn it_can_validate_validator_sets() {
+
+		let validators = vec![0, 5, 10];
+		let (root, proof) = create_dummy_validator_proof();
+
+		assert_ok!(MockBridge::check_validator_set_proof(&root, proof, &validators));
 	}
 
 	#[test]
 	fn it_creates_a_new_bridge() {
-		let dummy_state_root = H256::default();
+		let (root, proof) = create_dummy_validator_proof();
+
 		let test_header = Header {
 			parent_hash: H256::default(),
 			number: 42,
-			state_root: dummy_state_root,
+			state_root: root,
 			extrinsics_root: H256::default(),
 			digest: Digest::default(),
 		};
@@ -265,8 +263,7 @@ mod tests {
 					Origin::signed(1),
 					test_header,
 					vec![1, 2, 3],
-					vec![],
-					vec![],
+					proof,
 			));
 
 			assert_eq!(
@@ -274,7 +271,7 @@ mod tests {
 				Some(BridgeInfo {
 					last_finalized_block_number: 42,
 					last_finalized_block_hash: test_hash,
-					last_finalized_state_root: dummy_state_root,
+					last_finalized_state_root: root,
 					current_validator_set: vec![1, 2, 3],
 				}));
 
