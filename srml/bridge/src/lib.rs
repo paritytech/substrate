@@ -149,12 +149,11 @@ impl<T: Trait> Module<T> {
 mod tests {
 	use super::*;
 
-	use primitives::{H256, Blake2Hasher};
+	use primitives::H256;
 	use sr_primitives::{
 		Perbill, traits::{Header as HeaderT, IdentityLookup}, testing::Header, generic::Digest,
 	};
 	use support::{assert_ok, impl_outer_origin, parameter_types};
-	use runtime_io::with_externalities;
 
 	// NOTE: What's this for?
 	impl_outer_origin! {
@@ -188,7 +187,6 @@ mod tests {
 		type AccountId = DummyValidatorId;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
-		type WeightMultiplierUpdate = ();
 		type Event = ();
 		type BlockHashCount = ();
 		type MaximumBlockWeight = ();
@@ -201,7 +199,7 @@ mod tests {
 		type ValidatorId = DummyValidatorId;
 	}
 
-	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+	fn new_test_ext() -> runtime_io::TestExternalities {
 		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		GenesisConfig {
 			num_bridges: 0,
@@ -211,7 +209,7 @@ mod tests {
 
 	#[test]
 	fn it_works_for_default_value() {
-		with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			assert_eq!(MockBridge::num_bridges(), 0);
 		});
 	}
@@ -228,7 +226,7 @@ mod tests {
 		};
 		let test_hash = test_header.hash();
 
-		with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			assert_eq!(MockBridge::num_bridges(), 0);
 			assert_eq!(MockBridge::tracked_bridges(0), None);
 
