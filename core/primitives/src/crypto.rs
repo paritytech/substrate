@@ -702,7 +702,7 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 	/// Derive a child key from a series of given junctions.
 	fn derive<Iter: Iterator<Item=DeriveJunction>>(&self,
 		path: Iter,
-		seed: Option<Self::Seed>
+		seed: Option<Self::Seed>,
 	) -> Result<(Self, Option<Self::Seed>), Self::DeriveError>;
 
 	/// Generate new key pair from the provided `seed`.
