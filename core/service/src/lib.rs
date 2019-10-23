@@ -776,7 +776,7 @@ fn build_network_future<
 					};
 					let state = network.network_state();
 
-					if status_sinks[n].1.unbounded_send((status.clone(), state.clone())).is_err() {
+					if status_sinks[n].1.unbounded_send((status, state)).is_err() {
 						status_sinks.remove(n);
 						continue;
 					}
