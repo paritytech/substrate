@@ -632,7 +632,7 @@ where
 
 		let voters = persistent_data.authority_set.current_authorities();
 		let env = Arc::new(Environment {
-			inner: client,
+			client,
 			select_chain,
 			voting_rule,
 			voters: Arc::new(voters),
@@ -671,7 +671,7 @@ where
 			"authority_id" => authority_id.to_string(),
 		);
 
-		let chain_info = self.env.inner.info();
+		let chain_info = self.env.client.info();
 		telemetry!(CONSENSUS_INFO; "afg.authority_set";
 			"number" => ?chain_info.chain.finalized_number,
 			"hash" => ?chain_info.chain.finalized_hash,
@@ -695,7 +695,7 @@ where
 				let global_comms = global_communication(
 					self.env.set_id,
 					&self.env.voters,
-					&self.env.inner,
+					&self.env.client,
 					&self.env.network,
 					&self.env.config.keystore,
 				);
@@ -743,7 +743,7 @@ where
 						(new.canon_hash, new.canon_number),
 					);
 
-					aux_schema::write_voter_set_state(&*self.env.inner, &set_state)?;
+					aux_schema::write_voter_set_state(&*self.env.client, &set_state)?;
 					Ok(Some(set_state))
 				})?;
 
@@ -752,7 +752,7 @@ where
 					set_id: new.set_id,
 					voter_set_state: self.env.voter_set_state.clone(),
 					// Fields below are simply transferred and not updated.
-					inner: self.env.inner.clone(),
+					client: self.env.client.clone(),
 					select_chain: self.env.select_chain.clone(),
 					config: self.env.config.clone(),
 					authority_set: self.env.authority_set.clone(),
@@ -772,7 +772,7 @@ where
 					let completed_rounds = voter_set_state.completed_rounds();
 					let set_state = VoterSetState::Paused { completed_rounds };
 
-					aux_schema::write_voter_set_state(&*self.env.inner, &set_state)?;
+					aux_schema::write_voter_set_state(&*self.env.client, &set_state)?;
 					Ok(Some(set_state))
 				})?;
 
