@@ -154,11 +154,13 @@ impl<Backend, Executor, Block, Api, F> DefaultLightTransactionPoolMaintainer<Bac
 		F: Fetcher<Block> + 'static,
 {
 	/// Create light pool maintainer with default constants.
+	///
+	/// Default constants are: revalidate every 60 seconds or every 20 blocks
+	/// (whatever happens first).
 	pub fn with_defaults(
 		client: Arc<Client<Backend, Executor, Block, Api>>,
 		fetcher: Arc<F>,
 	) -> Self {
-		// default constants are: revalidate every 60 seconds or every 20 blocks
 		Self::new(
 			client,
 			fetcher,
