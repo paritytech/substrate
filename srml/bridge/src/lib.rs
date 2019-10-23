@@ -35,7 +35,9 @@
 mod error;
 mod storage_proof;
 
+use crate::storage_proof::StorageProofChecker;
 use codec::{Encode, Decode};
+use primitives::{Blake2Hasher};
 use sr_primitives::traits::{Header, Member};
 use support::{
 	decl_error, decl_module, decl_storage,
@@ -90,32 +92,27 @@ decl_storage! {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		// TODO: Figure out the proper type for these proofs
+		// TODO: Change proof type to StorageProof once #3834 is merged
 		fn initialize_bridge(
 			origin,
 			block_header: T::Header,
 			validator_set: Vec<T::ValidatorId>,
-			validator_set_proof: Vec<u8>,
-			storage_proof: Vec<u8>,
+			validator_set_proof: Vec<Vec<u8>>,
 		) {
 			// NOTE: Will want to make this a governance issued call
 			let _sender = ensure_signed(origin)?;
 
-			Self::check_storage_proof(storage_proof)?;
-			Self::check_validator_set_proof(validator_set_proof)?;
-
 			let block_number = block_header.number();
 			let block_hash = block_header.hash();
 			let state_root = block_header.state_root();
+
+			Self::check_validator_set_proof(state_root, validator_set_proof, &validator_set)?;
+
 			let bridge_info = BridgeInfo::new(block_number, &block_hash, state_root, validator_set);
 
 			let new_bridge_id = NumBridges::get() + 1;
-
-			// Hmm, can a call to `insert` fail?
-			// If this is an Option, why do we not need to wrap it in Some(T)?
 			<TrackedBridges<T>>::insert(new_bridge_id, bridge_info);
 
-			// Only increase the number of bridges if the insert call succeeds
 			NumBridges::put(new_bridge_id);
 		}
 
@@ -139,8 +136,17 @@ impl<T: Trait> Module<T> {
 		Ok(()) // Otherwise, Error::InvalidStorageProof
 	}
 
-	fn check_validator_set_proof(_proof: Vec<u8>) -> std::result::Result<(), Error> {
-		// ... Do some math ...
+	fn check_validator_set_proof(
+		state_root: &T::Hash,
+		proof: Vec<Vec<u8>>,
+		_validator_set: &Vec<T::ValidatorId>,
+	) -> std::result::Result<(), Error> {
+		let _checker = <StorageProofChecker<<T::Hashing as sr_primitives::traits::Hash>::Hasher>>::new(
+			*state_root,
+			proof.clone()
+		)
+		.unwrap();
+
 		Ok(()) // Otherwise, Error::InvalidValidatorSetProof
 	}
 }
@@ -215,6 +221,31 @@ mod tests {
 	}
 
 	#[test]
+	fn it_can_validate_validator_sets() {
+		use state_machine::{prove_read, backend::{Backend, InMemory}};
+
+		let validators = vec![0, 5, 10];
+
+		// construct storage proof
+		let backend = <InMemory<Blake2Hasher>>::from(vec![
+			(None, b"validator1".to_vec(), Some(b"alice".to_vec())),
+			(None, b"validator2".to_vec(), Some(b"bob".to_vec()))
+		]);
+		let root = backend.storage_root(std::iter::empty()).0;
+
+		// Generates a storage read proof
+		let proof = prove_read(backend, &[&b"validator1"[..], &b"validator2"[..]]).unwrap();
+
+		// check proof in runtime
+		let checker = <StorageProofChecker<Blake2Hasher>>::new(root, proof.clone()).unwrap();
+		assert_eq!(checker.read_value(b"validator1"), Ok(Some(b"alice".to_vec())));
+		assert_eq!(checker.read_value(b"validator2"), Ok(Some(b"bob".to_vec())));
+
+		// with_externalities(&mut new_test_ext(), || {
+		// });
+	}
+
+	#[test]
 	fn it_creates_a_new_bridge() {
 		let dummy_state_root = H256::default();
 		let test_header = Header {
@@ -228,8 +259,6 @@ mod tests {
 
 		new_test_ext().execute_with(|| {
 			assert_eq!(MockBridge::num_bridges(), 0);
-			assert_eq!(MockBridge::tracked_bridges(0), None);
-
 			dbg!(&test_header);
 			assert_ok!(
 				MockBridge::initialize_bridge(
