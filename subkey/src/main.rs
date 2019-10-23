@@ -90,9 +90,9 @@ trait Crypto: Sized {
 			let v = network_override.unwrap_or(v);
 			println!("Public Key URI `{}` is account:\n  \
 				Network ID/version: {}\n  \
-				Public key (hex): {}\n  \
-				Account ID:       {}\n  \
-				SS58 Address:     {}",
+				Public key (hex):   {}\n  \
+				Account ID:         {}\n  \
+				SS58 Address:       {}",
 				uri,
 				String::from(v),
 				format_public_key::<Self>(public_key.clone()),
