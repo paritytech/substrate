@@ -355,6 +355,9 @@ pub trait Trait: system::Trait {
 	/// Handler for the unbalanced reduction when making a gas payment.
 	type GasPayment: OnUnbalanced<NegativeImbalanceOf<Self>>;
 
+	/// Handler for rent payments.
+	type RentPayment: OnUnbalanced<NegativeImbalanceOf<Self>>;
+
 	/// Number of block delay an extrinsic claim surcharge has.
 	///
 	/// When claim surcharge is called by an extrinsic the rent is checked
