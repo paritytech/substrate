@@ -52,14 +52,11 @@ use crate::protocol::specialization::NetworkSpecialization;
 use crate::protocol::sync::SyncState;
 
 /// Minimum Requirements for a Hash within Networking
-pub trait ExHashT:
-	::std::hash::Hash + Eq + ::std::fmt::Debug + Clone + Send + Sync + 'static
-{
-}
+pub trait ExHashT: std::hash::Hash + Eq + std::fmt::Debug + Clone + Send + Sync + 'static {}
+
 impl<T> ExHashT for T where
-	T: ::std::hash::Hash + Eq + ::std::fmt::Debug + Clone + Send + Sync + 'static
-{
-}
+	T: std::hash::Hash + Eq + std::fmt::Debug + Clone + Send + Sync + 'static
+{}
 
 /// Transaction pool interface
 pub trait TransactionPool<H: ExHashT, B: BlockT>: Send + Sync {
@@ -159,15 +156,11 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 					.iter()
 					.find(|o| o.1 == *addr && o.0 != *peer_id)
 				{
-					Err(
-						format!(
-							"Bootnode with address `{}` is registered with two different peer \
-							ids: `{}` vs `{}`",
-							addr,
-							peer_id,
-							other.0,
-						)
-					)
+					Err(Error::DuplicateBootnode {
+						address: addr.clone(),
+						first_id: peer_id.clone(),
+						second_id: other.0.clone(),
+					})
 				} else {
 					Ok(())
 				}
