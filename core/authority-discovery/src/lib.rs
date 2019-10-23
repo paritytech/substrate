@@ -54,7 +54,7 @@ use futures::future::Future as Future01;
 use futures::sync::mpsc::Receiver as Receiver01;
 use futures03::compat::Stream01CompatExt;
 use futures03::future::{FutureExt, TryFutureExt};
-use futures03::prelude::{Future, Stream};
+use futures03::{Future, Stream};
 use futures03::stream::StreamExt;
 use futures03::task::{Context, Poll};
 use futures_timer::Interval;
