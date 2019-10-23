@@ -32,7 +32,7 @@ use crate::wasmtime::function_executor::{FunctionExecutorState, FunctionExecutor
 
 /// The top-level host state of the "env" module. This state is used by the trampoline function to
 /// construct a `FunctionExecutor` which can execute the host call.
-pub struct TrampolineState {
+pub struct EnvState {
 	externals: &'static [&'static dyn Function],
 	trap: Option<Error>,
 	/// The executor state stored across host calls during a single Wasm runtime call.
@@ -43,10 +43,10 @@ pub struct TrampolineState {
 	code_memory: CodeMemory,
 }
 
-impl TrampolineState {
-	/// Construct a new `TrampolineState` which owns the given code memory.
+impl EnvState {
+	/// Construct a new `EnvState` which owns the given code memory.
 	pub fn new<HF: HostFunctions>(code_memory: CodeMemory) -> Self {
-		TrampolineState {
+		EnvState {
 			externals: HF::functions(),
 			trap: None,
 			executor_state: None,
@@ -55,15 +55,15 @@ impl TrampolineState {
 	}
 
 	/// Resets the trap error to None and returns the current value.
-	pub fn reset_trap(&mut self) -> Option<Error> {
-		mem::replace(&mut self.trap, None)
+	pub fn take_trap(&mut self) -> Option<Error> {
+		self.trap.take()
 	}
 }
 
 /// This is called by the dynamically generated trampoline taking the function index and reference
 /// to the call arguments on the stack as arguments. Returns 0 on success and 1 on an error.
 unsafe extern "C" fn stub_fn(vmctx: *mut VMContext, func_index: u32, values_vec: *mut i64) -> u32 {
-	if let Some(state) = (*vmctx).host_state().downcast_mut::<TrampolineState>() {
+	if let Some(state) = (*vmctx).host_state().downcast_mut::<EnvState>() {
 		match stub_fn_inner(
 			vmctx,
 			state.externals,

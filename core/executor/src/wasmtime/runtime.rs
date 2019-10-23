@@ -20,7 +20,7 @@ use crate::error::{Error, Result, WasmError};
 use crate::host_interface::SubstrateExternals;
 use crate::wasm_runtime::WasmRuntime;
 use crate::wasmtime::function_executor::FunctionExecutorState;
-use crate::wasmtime::trampoline::{TrampolineState, make_trampoline};
+use crate::wasmtime::trampoline::{EnvState, make_trampoline};
 use crate::wasmtime::util::{cranelift_ir_signature, read_memory_into, write_memory_from};
 use crate::{Externalities, RuntimeVersion};
 
@@ -182,7 +182,7 @@ fn call_method(
 		unsafe { mem::transmute::<_, &'static mut Compiler>(context.compiler_mut()) },
 		get_heap_base(&instance)?,
 	);
-	reset_host_state(context, Some(executor_state))?;
+	reset_env_state(context, Some(executor_state))?;
 
 	// Write the input data into guest memory.
 	let (data_ptr, data_len) = inject_input_data(context, &mut instance, data)?;
@@ -194,7 +194,7 @@ fn call_method(
 			.invoke(&mut instance, method, &args[..])
 			.map_err(Error::Wasmtime)
 	})?;
-	let trap_error = reset_host_state(context, None)?;
+	let trap_error = reset_env_state(context, None)?;
 	let (output_ptr, output_len) = match outcome {
 		ActionOutcome::Returned { values } => {
 			if values.len()	!= 1 {
@@ -260,7 +260,7 @@ fn instantiate_env_module(global_exports: Rc<RefCell<HashMap<String, Option<Expo
 	let imports = Imports::none();
 	let data_initializers = Vec::new();
 	let signatures = PrimaryMap::new();
-	let host_state = TrampolineState::new::<SubstrateExternals>(code_memory);
+	let env_state = EnvState::new::<SubstrateExternals>(code_memory);
 
 	let result = InstanceHandle::new(
 		Rc::new(module),
@@ -270,7 +270,7 @@ fn instantiate_env_module(global_exports: Rc<RefCell<HashMap<String, Option<Expo
 		&data_initializers,
 		signatures.into_boxed_slice(),
 		None,
-		Box::new(host_state),
+		Box::new(env_state),
 	);
 	result.map_err(|e| WasmError::WasmtimeSetup(SetupError::Instantiate(e)))
 }
@@ -305,21 +305,21 @@ fn grow_memory(instance: &mut InstanceHandle, pages: u32) -> Result<()> {
 		.ok_or_else(|| "requested heap_pages would exceed maximum memory size".into())
 }
 
-fn get_host_state(context: &mut Context) -> Result<&mut TrampolineState> {
+fn get_env_state(context: &mut Context) -> Result<&mut EnvState> {
 	let env_instance = context.get_instance("env")
 		.map_err(|err| format!("cannot find \"env\" module: {}", err))?;
 	env_instance
 		.host_state()
-		.downcast_mut::<TrampolineState>()
+		.downcast_mut::<EnvState>()
 		.ok_or_else(|| "cannot get \"env\" module host state".into())
 }
 
-fn reset_host_state(context: &mut Context, executor_state: Option<FunctionExecutorState>)
+fn reset_env_state(context: &mut Context, executor_state: Option<FunctionExecutorState>)
 	-> Result<Option<Error>>
 {
-	let trampoline_state = get_host_state(context)?;
-	trampoline_state.executor_state = executor_state;
-	Ok(trampoline_state.reset_trap())
+	let env_state = get_env_state(context)?;
+	env_state.executor_state = executor_state;
+	Ok(env_state.take_trap())
 }
 
 fn inject_input_data(
@@ -327,8 +327,8 @@ fn inject_input_data(
 	instance: &mut InstanceHandle,
 	data: &[u8],
 ) -> Result<(Pointer<u8>, WordSize)> {
-	let trampoline_state = get_host_state(context)?;
-	let executor_state = trampoline_state.executor_state
+	let env_state = get_env_state(context)?;
+	let executor_state = env_state.executor_state
 		.as_mut()
 		.ok_or_else(|| "cannot get \"env\" module executor state")?;
 
