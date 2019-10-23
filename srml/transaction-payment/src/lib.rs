@@ -32,7 +32,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use rstd::prelude::*;
-use codec::{Encode, Decode, Codec};
+use codec::{Encode, Decode};
 use support::{
 	decl_storage, decl_module,
 	traits::{Currency, Get, OnUnbalanced, ExistenceRequirement, WithdrawReason},
@@ -101,29 +101,23 @@ decl_module! {
 impl<T: Trait> Module<T> {
 	/// Query the data that we know about the fee of a given `call`.
 	///
-	/// As this module is not and cannot be aware of the internals of a signed extension. It only
+	/// As this module is not and cannot be aware of the internals of a signed extension, it only
 	/// interprets them as some encoded value and takes their length into account.
 	///
 	/// All dispatchables must be annotated with weight and will have some fee info. This function
 	/// always returns.
 	// TODO: we can actually make it understand `ChargeTransactionPayment`, but would be some hassle
 	// for sure. We have to make it aware of the index of `ChargeTransactionPayment` in `Extra`.
-	pub fn query_info_unsigned<Extra: Codec>(
-		sender: T::AccountId,
-		call: T::Call,
-		extra: Extra
+	// Alternatively, we could actually execute the tx's per-dispatch and record the balance of the
+	// sender before and after the pipeline.. but this is way too much hassle for a very very little
+	// potential gain in the future.
+	pub fn query_info<Extrinsic: GetDispatchInfo>(
+		unchecked_extrinsic: Extrinsic,
+		len: u32,
 	) -> RuntimeDispatchInfo<BalanceOf<T>>
-		where T::Call: Codec + GetDispatchInfo, T: Send + Sync
+		where T: Send + Sync,
 	{
-		// TODO: We can not decode this stuff and receive some raw bytes from the RPC, save the
-		// lengths, then decode and check that they are decodable (aka. correct) and just use the
-		// values.
-		let encoded_extra = extra.encode();
-		let encoded_call = call.encode();
-		let encoded_sender = sender.encode();
-
-		let dispatch_info = <T::Call as GetDispatchInfo>::get_dispatch_info(&call);
-		let len = encoded_call.len() + encoded_extra.len() + encoded_sender.len() + 64;
+		let dispatch_info = <Extrinsic as GetDispatchInfo>::get_dispatch_info(&unchecked_extrinsic);
 
 		let partial_fee = <ChargeTransactionPayment<T>>::compute_fee(len, dispatch_info, 0u32.into());
 		let DispatchInfo { weight, class } = dispatch_info;
@@ -152,9 +146,9 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> {
 	///      and the time it consumes.
 	///   - (optional) _tip_: if included in the transaction, it will be added on top. Only signed
 	///      transactions can have a tip.
-	fn compute_fee(len: usize, info: DispatchInfo, tip: BalanceOf<T>) -> BalanceOf<T> {
+	fn compute_fee(len: u32, info: DispatchInfo, tip: BalanceOf<T>) -> BalanceOf<T> {
 		let len_fee = if info.pay_length_fee() {
-			let len = <BalanceOf<T>>::from(len as u32);
+			let len = <BalanceOf<T>>::from(len);
 			let base = T::TransactionBaseFee::get();
 			let per_byte = T::TransactionByteFee::get();
 			base.saturating_add(per_byte.saturating_mul(len))
@@ -202,7 +196,7 @@ impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T>
 		len: usize,
 	) -> TransactionValidity {
 		// pay any fees.
-		let fee = Self::compute_fee(len, info, self.0);
+		let fee = Self::compute_fee(len as u32, info, self.0);
 		let imbalance = match T::Currency::withdraw(
 			who,
 			fee,
@@ -230,8 +224,8 @@ mod tests {
 	use primitives::H256;
 	use sr_primitives::{
 		Perbill,
-		testing::Header,
-		traits::{BlakeTwo256, IdentityLookup},
+		testing::{Header, TestXt},
+		traits::{BlakeTwo256, IdentityLookup, Extrinsic},
 		weights::{DispatchClass, DispatchInfo, GetDispatchInfo},
 	};
 	use balances::Call as BalancesCall;
@@ -497,12 +491,14 @@ mod tests {
 	}
 
 	#[test]
-	fn query_info_works_given_valid_call() {
+	fn query_info_works() {
 		let call = Call::Balances(BalancesCall::transfer(2, 69));
-		let info  = call.get_dispatch_info();
 		let origin = 111111;
 		let extra = ();
-		let len = call.encode().len() + origin.encode().len() + extra.encode().len() + 64;
+		let xt = TestXt::new(call, Some((origin, extra))).unwrap();
+		let info  = xt.get_dispatch_info();
+		let ext = xt.encode();
+		let len = ext.len() as u32;
 		ExtBuilder::default()
 			.fees(5, 1, 2)
 			.build()
@@ -512,7 +508,7 @@ mod tests {
 			NextFeeMultiplier::put(Fixed64::from_rational(1, 2));
 
 			assert_eq!(
-				TransactionPayment::query_info_unsigned(origin , call, ()),
+				TransactionPayment::query_info(xt, len),
 				RuntimeDispatchInfo {
 					weight: info.weight,
 					class: info.class,

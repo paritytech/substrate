@@ -25,7 +25,7 @@ use codec::{Encode, Codec, Decode};
 use serde::{Serialize, Deserialize};
 
 /// Some information related to a dispatchable that can be queried from the runtime.
-#[derive(Eq, PartialEq, Encode, Decode)]
+#[derive(Eq, PartialEq, Encode, Decode, Default)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 pub struct RuntimeDispatchInfo<Balance> {
 	/// Weight of this dispatch.
@@ -38,16 +38,10 @@ pub struct RuntimeDispatchInfo<Balance> {
 }
 
 client::decl_runtime_apis! {
-	pub trait TransactionPaymentApi<AccountId, Balance, Call, Extra> where
-		AccountId: Codec,
+	pub trait TransactionPaymentApi<Balance, Extrinsic> where
 		Balance: Codec,
-		Call: Codec,
-		Extra: Codec,
+		Extrinsic: Codec,
 	{
-		fn query_info_unsigned(
-			origin: AccountId,
-			call: Call,
-			extra: Extra,
-		) -> RuntimeDispatchInfo<Balance>;
+		fn query_info(uxt: Extrinsic, len: u32) -> RuntimeDispatchInfo<Balance>;
 	}
 }

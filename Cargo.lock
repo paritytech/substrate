@@ -2466,9 +2466,11 @@ version = "2.0.0"
 dependencies = [
  "jsonrpc-core 13.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "node-primitives 2.0.0",
+ "node-runtime 2.0.0",
  "sr-primitives 2.0.0",
  "srml-contracts-rpc 2.0.0",
  "srml-system-rpc 2.0.0",
+ "srml-transaction-payment-rpc 2.0.0",
  "substrate-client 2.0.0",
  "substrate-transaction-pool 2.0.0",
 ]

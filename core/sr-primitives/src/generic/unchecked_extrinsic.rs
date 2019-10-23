@@ -25,6 +25,7 @@ use codec::{Decode, Encode, EncodeLike, Input, Error};
 use crate::{
 	traits::{self, Member, MaybeDisplay, SignedExtension, Checkable, Extrinsic},
 	generic::CheckedExtrinsic, transaction_validity::{TransactionValidityError, InvalidTransaction},
+	weights::{GetDispatchInfo, DispatchInfo},
 };
 
 const TRANSACTION_VERSION: u8 = 3;
@@ -279,6 +280,17 @@ where
 			self.signature.as_ref().map(|x| (&x.0, &x.2)),
 			self.function,
 		)
+	}
+}
+
+impl<Address, Call, Signature, Extra> GetDispatchInfo
+	for UncheckedExtrinsic<Address, Call, Signature, Extra>
+where
+	Call: GetDispatchInfo,
+	Extra: SignedExtension,
+{
+	fn get_dispatch_info(&self) -> DispatchInfo {
+		self.function.get_dispatch_info()
 	}
 }
 
