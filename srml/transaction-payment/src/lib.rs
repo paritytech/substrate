@@ -76,7 +76,7 @@ pub trait Trait: system::Trait {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Balances {
-		NextFeeMultiplier get(next_fee_multiplier): Multiplier = Multiplier::from_parts(0);
+		NextFeeMultiplier get(fn next_fee_multiplier): Multiplier = Multiplier::from_parts(0);
 	}
 }
 
@@ -145,10 +145,14 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> {
 	}
 }
 
-#[cfg(feature = "std")]
 impl<T: Trait + Send + Sync> rstd::fmt::Debug for ChargeTransactionPayment<T> {
+	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
 		write!(f, "ChargeTransactionPayment<{:?}>", self.0)
+	}
+	#[cfg(not(feature = "std"))]
+	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+		Ok(())
 	}
 }
 

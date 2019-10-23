@@ -24,10 +24,11 @@
 
 use rstd::vec::Vec;
 use codec::{Encode, Decode, Codec};
+use sr_primitives::RuntimeDebug;
 
 /// A result of execution of a contract.
-#[derive(Eq, PartialEq, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug, serde::Serialize, serde::Deserialize))]
+#[derive(Eq, PartialEq, Encode, Decode, RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub enum ContractExecResult {
 	/// The contract returned successfully.
 	///

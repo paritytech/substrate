@@ -17,10 +17,10 @@
 //! Primitives for the runtime modules.
 
 use rstd::prelude::*;
-use rstd::{self, result, marker::PhantomData, convert::{TryFrom, TryInto}};
+use rstd::{self, result, marker::PhantomData, convert::{TryFrom, TryInto}, fmt::Debug};
 use runtime_io;
 #[cfg(feature = "std")]
-use std::fmt::{Debug, Display};
+use std::fmt::Display;
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize, de::DeserializeOwned};
 use primitives::{self, Hasher, Blake2Hasher, TypeId};
@@ -147,7 +147,7 @@ pub trait Lookup {
 /// context.
 pub trait StaticLookup {
 	/// Type to lookup from.
-	type Source: Codec + Clone + PartialEq + MaybeDebug;
+	type Source: Codec + Clone + PartialEq + Debug;
 	/// Type to lookup into.
 	type Target;
 	/// Attempt a lookup.
@@ -159,7 +159,7 @@ pub trait StaticLookup {
 /// A lookup implementation returning the input value.
 #[derive(Default)]
 pub struct IdentityLookup<T>(PhantomData<T>);
-impl<T: Codec + Clone + PartialEq + MaybeDebug> StaticLookup for IdentityLookup<T> {
+impl<T: Codec + Clone + PartialEq + Debug> StaticLookup for IdentityLookup<T> {
 	type Source = T;
 	type Target = T;
 	fn lookup(x: T) -> Result<T, LookupError> { Ok(x) }
@@ -323,10 +323,10 @@ pub trait OffchainWorker<BlockNumber> {
 /// Abstraction around hashing
 // Stupid bug in the Rust compiler believes derived
 // traits must be fulfilled by all type parameters.
-pub trait Hash: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {
+pub trait Hash: 'static + MaybeSerializeDeserialize + Debug + Clone + Eq + PartialEq {
 	/// The hash type produced.
-	type Output: Member + MaybeSerializeDebug + rstd::hash::Hash + AsRef<[u8]> + AsMut<[u8]> + Copy
-		+ Default + Encode + Decode;
+	type Output: Member + MaybeSerializeDeserialize + Debug + rstd::hash::Hash
+		+ AsRef<[u8]> + AsMut<[u8]> + Copy + Default + Encode + Decode;
 
 	/// The associated hash_db Hasher type.
 	type Hasher: Hasher<Out=Self::Output>;
@@ -353,8 +353,8 @@ pub trait Hash: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {
 }
 
 /// Blake2-256 Hash implementation.
-#[derive(PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+#[derive(PartialEq, Eq, Clone, primitives::RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct BlakeTwo256;
 
 impl Hash for BlakeTwo256 {
@@ -410,7 +410,7 @@ impl CheckEqual for primitives::H256 {
 	}
 }
 
-impl<H: PartialEq + Eq + MaybeDebug> CheckEqual for super::generic::DigestItem<H> where H: Encode {
+impl<H: PartialEq + Eq + Debug> CheckEqual for super::generic::DigestItem<H> where H: Encode {
 	#[cfg(feature = "std")]
 	fn check_equal(&self, other: &Self) {
 		if self != other {
@@ -447,23 +447,17 @@ macro_rules! impl_maybe_marker {
 }
 
 impl_maybe_marker!(
-	/// A type that implements Debug when in std environment.
-	MaybeDebug: Debug;
-
 	/// A type that implements Display when in std environment.
 	MaybeDisplay: Display;
 
 	/// A type that implements Hash when in std environment.
-	MaybeHash: ::rstd::hash::Hash;
+	MaybeHash: rstd::hash::Hash;
 
 	/// A type that implements Serialize when in std environment.
 	MaybeSerialize: Serialize;
 
 	/// A type that implements Serialize, DeserializeOwned and Debug when in std environment.
-	MaybeSerializeDebug: Debug, DeserializeOwned, Serialize;
-
-	/// A type that implements Serialize and Debug when in std environment.
-	MaybeSerializeDebugButNotDeserialize: Debug, Serialize
+	MaybeSerializeDeserialize: DeserializeOwned, Serialize
 );
 
 /// A type that provides a randomness beacon.
@@ -483,8 +477,8 @@ pub trait RandomnessBeacon {
 }
 
 /// A type that can be used in runtime structures.
-pub trait Member: Send + Sync + Sized + MaybeDebug + Eq + PartialEq + Clone + 'static {}
-impl<T: Send + Sync + Sized + MaybeDebug + Eq + PartialEq + Clone + 'static> Member for T {}
+pub trait Member: Send + Sync + Sized + Debug + Eq + PartialEq + Clone + 'static {}
+impl<T: Send + Sync + Sized + Debug + Eq + PartialEq + Clone + 'static> Member for T {}
 
 /// Determine if a `MemberId` is a valid member.
 pub trait IsMember<MemberId> {
@@ -497,11 +491,13 @@ pub trait IsMember<MemberId> {
 /// `parent_hash`, as well as a `digest` and a block `number`.
 ///
 /// You can also create a `new` one from those fields.
-pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebugButNotDeserialize + 'static {
+pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'static {
 	/// Header number.
-	type Number: Member + MaybeSerializeDebug + ::rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Codec;
+	type Number: Member + MaybeSerializeDeserialize + Debug + rstd::hash::Hash
+		+ Copy + MaybeDisplay + SimpleArithmetic + Codec;
 	/// Header hash type
-	type Hash: Member + MaybeSerializeDebug + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
+	type Hash: Member + MaybeSerializeDeserialize + Debug + rstd::hash::Hash
+		+ Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
 	/// Hashing algorithm
 	type Hashing: Hash<Output = Self::Hash>;
 
@@ -549,13 +545,14 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebugButNotDe
 /// `Extrinsic` piece of information as well as a `Header`.
 ///
 /// You can get an iterator over each of the `extrinsics` and retrieve the `header`.
-pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebugButNotDeserialize + 'static {
+pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'static {
 	/// Type of extrinsics.
 	type Extrinsic: Member + Codec + Extrinsic + MaybeSerialize;
 	/// Header type.
 	type Header: Header<Hash=Self::Hash>;
 	/// Block hash type.
-	type Hash: Member + MaybeSerializeDebug + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
+	type Hash: Member + MaybeSerializeDeserialize + Debug + rstd::hash::Hash
+		+ Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
 
 	/// Returns a reference to the header.
 	fn header(&self) -> &Self::Header;
@@ -661,7 +658,7 @@ pub trait Dispatchable {
 
 /// Means by which a transaction may be extended. This type embodies both the data and the logic
 /// that should be additionally associated with the transaction. It should be plain old data.
-pub trait SignedExtension: Codec + MaybeDebug + Sync + Send + Clone + Eq + PartialEq {
+pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq {
 	/// The type which encodes the sender identity.
 	type AccountId;
 
@@ -1080,8 +1077,13 @@ macro_rules! impl_opaque_keys {
 			)*
 		}
 	) => {
-		#[derive(Default, Clone, PartialEq, Eq, $crate::codec::Encode, $crate::codec::Decode)]
-		#[cfg_attr(feature = "std", derive(Debug, $crate::serde::Serialize, $crate::serde::Deserialize))]
+		#[derive(
+			Default, Clone, PartialEq, Eq,
+			$crate::codec::Encode,
+			$crate::codec::Decode,
+			$crate::RuntimeDebug
+		)]
+		#[cfg_attr(feature = "std", derive($crate::serde::Serialize, $crate::serde::Deserialize))]
 		pub struct $name {
 			$(
 				pub $field: $type,
@@ -1131,7 +1133,25 @@ pub trait Printable {
 
 impl Printable for u8 {
 	fn print(&self) {
-		u64::from(*self).print()
+		(*self as u64).print()
+	}
+}
+
+impl Printable for u32 {
+	fn print(&self) {
+		(*self as u64).print()
+	}
+}
+
+impl Printable for usize {
+	fn print(&self) {
+		(*self as u64).print()
+	}
+}
+
+impl Printable for u64 {
+	fn print(&self) {
+		runtime_io::print_num(*self);
 	}
 }
 
@@ -1147,9 +1167,10 @@ impl Printable for &str {
 	}
 }
 
-impl Printable for u64 {
+#[impl_for_tuples(1, 12)]
+impl Printable for Tuple {
 	fn print(&self) {
-		runtime_io::print_num(*self);
+		for_tuples!( #( Tuple.print(); )* )
 	}
 }
 
