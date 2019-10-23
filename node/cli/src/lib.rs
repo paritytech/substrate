@@ -150,13 +150,15 @@ fn load_spec(id: &str) -> Result<Option<chain_spec::ChainSpec>, String> {
 	})
 }
 
+type CustomConf = ();
+
 /// Parse command line arguments into service configuration.
 pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Result<()> where
 	I: IntoIterator<Item = T>,
 	T: Into<std::ffi::OsString> + Clone,
 	E: IntoExit,
 {
-	type Config<A, B> = Configuration<(), A, B>;
+	type Config<A, B> = Configuration<CustomConf, A, B>;
 
 	match parse_and_prepare::<CustomSubcommands, NoCustom, _>(&version, "substrate-node", args) {
 		ParseAndPrepare::Run(cmd) => cmd.run(load_spec, exit,
@@ -182,7 +184,7 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 				),
 			}
 		}),
-		ParseAndPrepare::BuildSpec(cmd) => cmd.run(load_spec),
+		ParseAndPrepare::BuildSpec(cmd) => cmd.run::<CustomConf, _, _, _>(load_spec),
 		ParseAndPrepare::ExportBlocks(cmd) => cmd.run_with_builder(|config: Config<_, _>|
 			Ok(new_full_start!(config).0), load_spec, exit),
 		ParseAndPrepare::ImportBlocks(cmd) => cmd.run_with_builder(|config: Config<_, _>|

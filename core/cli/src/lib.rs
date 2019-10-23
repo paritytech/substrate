@@ -307,18 +307,33 @@ pub struct ParseAndPrepareBuildSpec<'a> {
 
 impl<'a> ParseAndPrepareBuildSpec<'a> {
 	/// Runs the command and build the chain specs.
-	pub fn run<G, S, E>(
+	pub fn run<C,G, S, E>(
 		self,
 		spec_factory: S
 	) -> error::Result<()> where
 		S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
+		C: Default,
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
 	{
 		info!("Building chain spec");
 		let raw_output = self.params.raw;
 		let mut spec = load_spec(&self.params.shared_params, spec_factory)?;
-		with_default_boot_node(&mut spec, self.params, self.version)?;
+
+		if spec.boot_nodes().is_empty() {
+			let base_path = base_path(&self.params.shared_params, self.version);
+			let config = service::Configuration::<C,_,_>::default_with_spec_and_base_path(spec.clone(), base_path);
+			let node_key = node_key_config(self.params.node_key_params, &Some(config.network_path()))?;
+			let keys = node_key.into_keypair()?;
+			let peer_id = keys.public().into_peer_id();
+			let addr = build_multiaddr![
+				Ip4([127, 0, 0, 1]),
+				Tcp(30333u16),
+				P2p(peer_id)
+			];
+			spec.add_boot_node(addr)
+		}
+		
 		let json = service::chain_ops::build_spec(spec, raw_output)?;
 
 		print!("{}", json);
@@ -556,18 +571,16 @@ fn fill_transaction_pool_configuration<C, G, E>(
 }
 
 /// Fill the given `NetworkConfiguration` by looking at the cli parameters.
-fn fill_network_configuration(
+fn fill_network_configuration
+(
 	cli: NetworkConfigurationParams,
-	base_path: &Path,
-	chain_spec_id: &str,
+	config_path: PathBuf,
 	config: &mut NetworkConfiguration,
 	client_id: String,
 	is_dev: bool,
 ) -> error::Result<()> {
 	config.boot_nodes.extend(cli.bootnodes.into_iter());
-	config.config_path = Some(
-		network_path(&base_path, chain_spec_id).to_string_lossy().into()
-	);
+	config.config_path = Some(config_path.to_string_lossy().into());
 	config.net_config_path = config.config_path.clone();
 	config.reserved_nodes.extend(cli.reserved_nodes.into_iter());
 
@@ -642,7 +655,8 @@ where
 	S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
 {
 	let spec = load_spec(&cli.shared_params, spec_factory)?;
-	let mut config = service::Configuration::default_with_spec(spec.clone());
+	let base_path = base_path(&cli.shared_params, &version);
+	let mut config = service::Configuration::default_with_spec_and_base_path(spec.clone(), base_path);
 
 	fill_config_keystore_password(&mut config, &cli)?;
 
@@ -666,14 +680,10 @@ where
 		)?
 	}
 
-	let base_path = base_path(&cli.shared_params, version);
-
-	config.keystore_path = cli.keystore_path.unwrap_or_else(
-		|| keystore_path(&base_path, config.chain_spec.id())
-	);
+	config.keystore_path = cli.keystore_path.unwrap_or_else( || config.in_chain_config_dir("keystore"));
 
 	config.database = DatabaseConfig::Path {
-		path: db_path(&base_path, config.chain_spec.id()),
+		path: config.database_path(),
 		cache_size: cli.database_cache_size,
 	};
 	config.state_cache_size = cli.state_cache_size;
@@ -740,8 +750,7 @@ where
 	let client_id = config.client_id();
 	fill_network_configuration(
 		cli.network_config,
-		&base_path,
-		spec.id(),
+		config.network_path(),
 		&mut config.network,
 		client_id,
 		is_dev,
@@ -792,39 +801,6 @@ where
 	Ok(config)
 }
 
-//
-// IANA unassigned port ranges that we could use:
-// 6717-6766		Unassigned
-// 8504-8553		Unassigned
-// 9556-9591		Unassigned
-// 9803-9874		Unassigned
-// 9926-9949		Unassigned
-
-fn with_default_boot_node<G, E>(
-	spec: &mut ChainSpec<G, E>,
-	cli: BuildSpecCmd,
-	version: &VersionInfo,
-) -> error::Result<()>
-where
-	G: RuntimeGenesis,
-	E: ChainSpecExtension,
-{
-	if spec.boot_nodes().is_empty() && !cli.disable_default_bootnode {
-		let base_path = base_path(&cli.shared_params, version);
-		let storage_path = network_path(&base_path, spec.id());
-		let node_key = node_key_config(cli.node_key_params, &Some(storage_path))?;
-		let keys = node_key.into_keypair()?;
-		let peer_id = keys.public().into_peer_id();
-		let addr = build_multiaddr![
-			Ip4([127, 0, 0, 1]),
-			Tcp(30333u16),
-			P2p(peer_id)
-		];
-		spec.add_boot_node(addr)
-	}
-	Ok(())
-}
-
 /// Creates a configuration including the database path.
 pub fn create_config_with_db_path<C, G, E, S>(
 	spec_factory: S, cli: &SharedParams, version: &VersionInfo,
@@ -838,9 +814,9 @@ where
 	let spec = load_spec(cli, spec_factory)?;
 	let base_path = base_path(cli, version);
 
-	let mut config = service::Configuration::default_with_spec(spec.clone());
+	let mut config = service::Configuration::default_with_spec_and_base_path(spec.clone(), base_path);
 	config.database = DatabaseConfig::Path {
-		path: db_path(&base_path, spec.id()),
+		path: config.database_path(),
 		cache_size: None,
 	};
 
@@ -864,30 +840,6 @@ fn parse_address(
 	}
 
 	Ok(address)
-}
-
-fn keystore_path(base_path: &Path, chain_id: &str) -> PathBuf {
-	let mut path = base_path.to_owned();
-	path.push("chains");
-	path.push(chain_id);
-	path.push("keystore");
-	path
-}
-
-fn db_path(base_path: &Path, chain_id: &str) -> PathBuf {
-	let mut path = base_path.to_owned();
-	path.push("chains");
-	path.push(chain_id);
-	path.push("db");
-	path
-}
-
-fn network_path(base_path: &Path, chain_id: &str) -> PathBuf {
-	let mut path = base_path.to_owned();
-	path.push("chains");
-	path.push(chain_id);
-	path.push("network");
-	path
 }
 
 fn init_logger(pattern: &str) {
