@@ -670,7 +670,7 @@ mod tests {
 		let m2 = vec![4, 5, 6];
 
 		push_msg!(consensus, prev_hash, m1_hash, m1);
-		push_msg!(consensus, best_hash, m2_hash, m2.clone());
+		push_msg!(consensus, best_hash, m2_hash, m2);
 		consensus.known_messages.insert(m1_hash, ());
 		consensus.known_messages.insert(m2_hash, ());
 
@@ -731,7 +731,7 @@ mod tests {
 		let mut stream1 = block_on_stream(consensus.messages_for([0, 0, 0, 0], topic));
 		let mut stream2 = block_on_stream(consensus.messages_for([0, 0, 0, 0], topic));
 
-		assert_eq!(stream1.next(), Some(TopicNotification { message: message.data.clone(), sender: None }));
+		assert_eq!(stream1.next(), Some(TopicNotification { message: message.data, sender: None }));
 		assert_eq!(stream2.next(), Some(TopicNotification { message: message.data, sender: None }));
 	}
 
@@ -750,6 +750,7 @@ mod tests {
 		let mut stream = block_on_stream(consensus.messages_for([0, 0, 0, 0], topic));
 
 		assert_eq!(stream.next(), Some(TopicNotification { message: vec![1, 2, 3], sender: None }));
+
 		let _ = consensus.live_message_sinks.remove(&([0, 0, 0, 0], topic));
 		assert_eq!(stream.next(), None);
 	}
