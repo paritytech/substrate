@@ -21,12 +21,12 @@ use rstd::vec::Vec;
 
 /// Error error that can be returned from host function.
 #[derive(Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(crate::RuntimeDebug)]
 pub struct HostError;
 
 /// Representation of a typed wasm value.
 #[derive(Clone, Copy, PartialEq, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(crate::RuntimeDebug)]
 pub enum TypedValue {
 	/// Value of 32-bit signed or unsigned integer.
 	#[codec(index = "1")]
@@ -86,7 +86,7 @@ impl From<TypedValue> for ::wasmi::RuntimeValue {
 ///
 /// Basically a `TypedValue` plus `Unit`, for functions which return nothing.
 #[derive(Clone, Copy, PartialEq, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(crate::RuntimeDebug)]
 pub enum ReturnValue {
 	/// For returning nothing.
 	Unit,
@@ -119,7 +119,7 @@ fn return_value_encoded_max_size() {
 
 /// Describes an entity to define or import into the environment.
 #[derive(Clone, PartialEq, Eq, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(crate::RuntimeDebug)]
 pub enum ExternEntity {
 	/// Function that is specified by an index in a default table of
 	/// a module that creates the sandbox.
@@ -137,7 +137,7 @@ pub enum ExternEntity {
 /// Each entry has a two-level name and description of an entity
 /// being defined.
 #[derive(Clone, PartialEq, Eq, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(crate::RuntimeDebug)]
 pub struct Entry {
 	/// Module name of which corresponding entity being defined.
 	pub module_name: Vec<u8>,
@@ -149,7 +149,7 @@ pub struct Entry {
 
 /// Definition of runtime that could be used by sandboxed code.
 #[derive(Clone, PartialEq, Eq, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(crate::RuntimeDebug)]
 pub struct EnvironmentDefinition {
 	/// Vector of all entries in the environment definition.
 	pub entries: Vec<Entry>,

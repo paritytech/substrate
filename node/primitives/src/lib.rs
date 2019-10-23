@@ -65,4 +65,3 @@ pub type BlockId = generic::BlockId<Block>;
 
 /// Opaque, encoded, unchecked extrinsic.
 pub type UncheckedExtrinsic = OpaqueExtrinsic;
-

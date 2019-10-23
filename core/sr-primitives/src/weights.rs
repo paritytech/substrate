@@ -23,16 +23,17 @@
 //! Note that the decl_module macro _cannot_ enforce this and will simply fail if an invalid struct
 //! (something that does not  implement `Weighable`) is passed in.
 
-pub use crate::transaction_validity::TransactionPriority;
 use arithmetic::traits::Bounded;
+use crate::RuntimeDebug;
+
+pub use crate::transaction_validity::TransactionPriority;
 
 /// Numeric range of a transaction weight.
 pub type Weight = u32;
 
 /// A generalized group of dispatch types. This is only distinguishing normal, user-triggered transactions
 /// (`Normal`) and anything beyond which serves a higher purpose to the system (`Operational`).
-#[cfg_attr(feature = "std", derive(Debug))]
-#[derive(PartialEq, Eq, Clone, Copy)]
+#[derive(PartialEq, Eq, Clone, Copy, RuntimeDebug)]
 pub enum DispatchClass {
 	/// A normal dispatch.
 	Normal,
@@ -61,8 +62,8 @@ impl From<SimpleDispatchInfo> for DispatchClass {
 }
 
 /// A bundle of static information collected from the `#[weight = $x]` attributes.
-#[cfg_attr(feature = "std", derive(PartialEq, Eq, Debug))]
-#[derive(Clone, Copy, Default)]
+#[cfg_attr(feature = "std", derive(PartialEq, Eq))]
+#[derive(Clone, Copy, Default, RuntimeDebug)]
 pub struct DispatchInfo {
 	/// Weight of this transaction.
 	pub weight: Weight,
