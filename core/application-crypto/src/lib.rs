@@ -95,15 +95,6 @@ macro_rules! app_crypto {
 			fn from_seed_slice(seed: &[u8]) -> Result<Self, $crate::SecretStringError> {
 				<$pair>::from_seed_slice(seed).map(Self)
 			}
-			fn from_standard_components<
-				I: Iterator<Item=$crate::DeriveJunction>
-			>(
-				seed: &str,
-				password: Option<&str>,
-				path: I,
-			) -> Result<Self, $crate::SecretStringError> {
-				<$pair>::from_standard_components::<I>(seed, password, path).map(Self)
-			}
 			fn sign(&self, msg: &[u8]) -> Self::Signature {
 				Signature(self.0.sign(msg))
 			}

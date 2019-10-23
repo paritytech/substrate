@@ -570,11 +570,16 @@ impl std::fmt::Display for AccountId32 {
 	}
 }
 
-#[cfg(feature = "std")]
-impl std::fmt::Debug for AccountId32 {
-	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl rstd::fmt::Debug for AccountId32 {
+	#[cfg(feature = "std")]
+	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
 		let s = self.to_ss58check();
 		write!(f, "{} ({}...)", crate::hexdisplay::HexDisplay::from(&self.0), &s[0..8])
+	}
+
+	#[cfg(not(feature = "std"))]
+	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+		Ok(())
 	}
 }
 
@@ -646,13 +651,6 @@ mod dummy {
 		>(&self, _: Iter) -> Result<Self, Self::DeriveError> { Ok(Self) }
 		fn from_seed(_: &Self::Seed) -> Self { Self }
 		fn from_seed_slice(_: &[u8]) -> Result<Self, SecretStringError> { Ok(Self) }
-		fn from_standard_components<
-			I: Iterator<Item=DeriveJunction>
-		>(
-			_: &str,
-			_: Option<&str>,
-			_: I
-		) -> Result<Self, SecretStringError> { Ok(Self) }
 		fn sign(&self, _: &[u8]) -> Self::Signature { Self }
 		fn verify<M: AsRef<[u8]>>(_: &Self::Signature, _: M, _: &Self::Public) -> bool { true }
 		fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(_: &[u8], _: M, _: P) -> bool { true }
@@ -717,23 +715,6 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 	/// by an attacker then they can also derive your key.
 	fn from_seed_slice(seed: &[u8]) -> Result<Self, SecretStringError>;
 
-	/// Construct a key from a phrase, password and path.
-	fn from_standard_components<I: Iterator<Item=DeriveJunction>>(
-		phrase: &str,
-		password: Option<&str>,
-		path: I
-	) -> Result<Self, SecretStringError> {
-		let seed = if phrase.starts_with("0x") && phrase.len() == 66 {
-			let seed = hex::decode(&phrase[2..66]).map_err(|_| SecretStringError::InvalidPhrase)?;
-			Self::from_seed_slice(&seed[..])
-				.map_err(|_| SecretStringError::InvalidPhrase)?
-		} else {
-			Self::from_phrase(phrase, password)?.0
-		};
-		seed.derive(path)
-			.map_err(|_| SecretStringError::InvalidPath)
-	}
-
 	/// Sign a message.
 	fn sign(&self, message: &[u8]) -> Self::Signature;
 
@@ -773,6 +754,7 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 	///
 	/// `None` is returned if no matches are found.
 	fn from_string(s: &str, password_override: Option<&str>) -> Result<Self, SecretStringError> {
+		println!("HERE {}", s);
 		let re = Regex::new(r"^(?P<phrase>[\d\w ]+)?(?P<path>(//?[^/]+)*)(///(?P<password>.*))?$")
 			.expect("constructed from known-good static value; qed");
 		let cap = re.captures(s).ok_or(SecretStringError::InvalidFormat)?;
@@ -781,11 +763,23 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 			.expect("constructed from known-good static value; qed");
 		let path = re_junction.captures_iter(&cap["path"])
 			.map(|f| DeriveJunction::from(&f[1]));
-		Self::from_standard_components(
-			cap.name("phrase").map(|r| r.as_str()).unwrap_or(DEV_PHRASE),
-			password_override.or_else(|| cap.name("password").map(|m| m.as_str())),
-			path,
-		)
+
+		let phrase = cap.name("phrase").map(|r| r.as_str()).unwrap_or(DEV_PHRASE);
+		println!("HERE {:?}", phrase);
+		let password = password_override.or_else(|| cap.name("password").map(|m| m.as_str()));
+		println!("HERE {:?}", password);
+
+		let seed = if phrase.starts_with("0x") {
+			println!("HERE {}", phrase);
+			hex::decode(&phrase[2..]).ok()
+				.and_then(|seed| Self::from_seed_slice(&seed[..]).ok())
+				.ok_or(SecretStringError::InvalidSeed)?
+		} else {
+			Self::from_phrase(phrase, password)
+				.map_err(|_| SecretStringError::InvalidPhrase)?.0
+		};
+
+		seed.derive(path).map_err(|_| SecretStringError::InvalidPath)
 	}
 
 	/// Return a vec filled with raw data.
@@ -945,13 +939,13 @@ mod tests {
 	}
 	impl Pair for TestPair {
 		type Public = TestPublic;
-		type Seed = [u8; 0];
+		type Seed = [u8; 8];
 		type Signature = [u8; 0];
 		type DeriveError = ();
 
-		fn generate() -> (Self, <Self as Pair>::Seed) { (TestPair::Generated, []) }
+		fn generate() -> (Self, <Self as Pair>::Seed) { (TestPair::Generated, [0u8; 8]) }
 		fn generate_with_phrase(_password: Option<&str>) -> (Self, String, <Self as Pair>::Seed) {
-			(TestPair::GeneratedWithPhrase, "".into(), [])
+			(TestPair::GeneratedWithPhrase, "".into(), [0u8; 8])
 		}
 		fn from_phrase(phrase: &str, password: Option<&str>)
 			-> Result<(Self, <Self as Pair>::Seed), SecretStringError>
@@ -959,12 +953,18 @@ mod tests {
 			Ok((TestPair::GeneratedFromPhrase {
 				phrase: phrase.to_owned(),
 				password: password.map(Into::into)
-			}, []))
+			}, [0u8; 8]))
 		}
-		fn derive<Iter: Iterator<Item=DeriveJunction>>(&self, _path: Iter)
+		fn derive<Iter: Iterator<Item=DeriveJunction>>(&self, path_iter: Iter)
 			-> Result<Self, Self::DeriveError>
 		{
-			Err(())
+			match self.clone() {
+				TestPair::Standard {phrase, password, path} =>
+					Ok(TestPair::Standard { phrase, password, path: path.into_iter().chain(path_iter).collect() }),
+				TestPair::GeneratedFromPhrase {phrase, password} =>
+					Ok(TestPair::Standard { phrase, password, path: path_iter.collect() }),
+				x => if path_iter.count() == 0 { Ok(x) } else { Err(()) },
+			}
 		}
 		fn from_seed(_seed: &<TestPair as Pair>::Seed) -> Self { TestPair::Seed(vec![]) }
 		fn sign(&self, _message: &[u8]) -> Self::Signature { [] }
@@ -975,17 +975,6 @@ mod tests {
 			_pubkey: P
 		) -> bool { true }
 		fn public(&self) -> Self::Public { TestPublic }
-		fn from_standard_components<I: Iterator<Item=DeriveJunction>>(
-			phrase: &str,
-			password: Option<&str>,
-			path: I
-		) -> Result<Self, SecretStringError> {
-			Ok(TestPair::Standard {
-				phrase: phrase.to_owned(),
-				password: password.map(ToOwned::to_owned),
-				path: path.collect()
-			})
-		}
 		fn from_seed_slice(seed: &[u8])
 			-> Result<Self, SecretStringError>
 		{
@@ -1000,10 +989,6 @@ mod tests {
 	fn interpret_std_seed_should_work() {
 		assert_eq!(
 			TestPair::from_string("0x0123456789abcdef", None),
-			Ok(TestPair::Seed(hex!["0123456789abcdef"][..].to_owned()))
-		);
-		assert_eq!(
-			TestPair::from_string("0123456789abcdef", None),
 			Ok(TestPair::Seed(hex!["0123456789abcdef"][..].to_owned()))
 		);
 	}
