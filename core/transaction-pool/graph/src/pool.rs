@@ -146,7 +146,7 @@ impl<B: ChainApi> Pool<B> {
 		at: &BlockId<B::Block>,
 		xt: ExtrinsicFor<B>,
 	) -> impl Future<Output=Result<ExHash<B>, B::Error>> {
-		self.submit_at(at, std::iter::once(xt), false)
+		self.submit_at(at, std::iter::once(xt))
 			.map(|import_result| import_result.and_then(|mut import_result| import_result
 				.pop()
 				.expect("One extrinsic passed; one result returned; qed")

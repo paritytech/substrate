@@ -251,7 +251,7 @@ mod tests {
 		let txpool = Arc::new(BasicTransactionPool::default_full(Default::default(), client.clone()));
 
 		futures::executor::block_on(
-			txpool.submit_at(&BlockId::number(0), vec![extrinsic(0), extrinsic(1)], false)
+			txpool.submit_at(&BlockId::number(0), vec![extrinsic(0), extrinsic(1)])
 		).unwrap();
 
 		let mut proposer_factory = ProposerFactory {

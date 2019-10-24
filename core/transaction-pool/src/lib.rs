@@ -71,7 +71,6 @@ pub trait TransactionPool: Send + Sync {
 		&self,
 		at: &BlockId<Self::Block>,
 		xts: impl IntoIterator<Item=ExtrinsicFor<Self>> + 'static,
-		force: bool,
 	) -> Box<dyn Future<Output=Result<Vec<Result<Self::Hash, Self::Error>>, Self::Error>> + Send + Unpin>;
 
 	/// Returns a future that imports one unverified extrinsic to the pool.
@@ -207,9 +206,8 @@ impl<PoolApi, Maintainer, Block> TransactionPool for BasicTransactionPool<PoolAp
 		&self,
 		at: &BlockId<Self::Block>,
 		xts: impl IntoIterator<Item=ExtrinsicFor<Self>> + 'static,
-		force: bool,
 	) -> Box<dyn Future<Output=Result<Vec<Result<Block::Hash, Self::Error>>, Self::Error>> + Send + Unpin> {
-		Box::new(self.pool.submit_at(at, xts, force))
+		Box::new(self.pool.submit_at(at, xts, false))
 	}
 
 	fn submit_one(
