@@ -22,10 +22,10 @@
 use cranelift_codegen::{Context, binemit, ir, isa};
 use cranelift_codegen::ir::{InstBuilder, StackSlotData, StackSlotKind, TrapCode};
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
-use wasmtime_jit::CodeMemory;
+use wasmtime_jit::{CodeMemory, Compiler};
 use wasmtime_runtime::{VMContext, VMFunctionBody};
 use wasm_interface::{HostFunctions, Function, Value, ValueType};
-use std::{cmp, mem, ptr};
+use std::{cmp, ptr};
 
 use crate::error::{Error, Result};
 use crate::wasmtime::function_executor::{FunctionExecutorState, FunctionExecutor};
@@ -34,23 +34,25 @@ use crate::wasmtime::function_executor::{FunctionExecutorState, FunctionExecutor
 /// construct a `FunctionExecutor` which can execute the host call.
 pub struct EnvState {
 	externals: &'static [&'static dyn Function],
+	compiler: Compiler,
+	// The code memory must be kept around on the state to prevent it from being dropped.
+	#[allow(dead_code)]
+	code_memory: CodeMemory,
 	trap: Option<Error>,
 	/// The executor state stored across host calls during a single Wasm runtime call.
 	/// During a runtime call, this MUST be `Some`.
 	pub executor_state: Option<FunctionExecutorState>,
-	// The code memory must be kept around on the state to prevent it from being dropped.
-	#[allow(dead_code)]
-	code_memory: CodeMemory,
 }
 
 impl EnvState {
 	/// Construct a new `EnvState` which owns the given code memory.
-	pub fn new<HF: HostFunctions>(code_memory: CodeMemory) -> Self {
+	pub fn new<HF: HostFunctions>(code_memory: CodeMemory, compiler: Compiler) -> Self {
 		EnvState {
 			externals: HF::functions(),
 			trap: None,
-			executor_state: None,
+			compiler,
 			code_memory,
+			executor_state: None,
 		}
 	}
 
@@ -67,8 +69,9 @@ unsafe extern "C" fn stub_fn(vmctx: *mut VMContext, func_index: u32, values_vec:
 		match stub_fn_inner(
 			vmctx,
 			state.externals,
-			func_index,
+			&mut state.compiler,
 			state.executor_state.as_mut(),
+			func_index,
 			values_vec
 		) {
 			Ok(()) => 0,
@@ -88,8 +91,9 @@ unsafe extern "C" fn stub_fn(vmctx: *mut VMContext, func_index: u32, values_vec:
 unsafe fn stub_fn_inner(
 	vmctx: *mut VMContext,
 	externals: &[&dyn Function],
-	func_index: u32,
+	compiler: &mut Compiler,
 	executor_state: Option<&mut FunctionExecutorState>,
+	func_index: u32,
 	values_vec: *mut i64,
 ) -> Result<()>
 {
@@ -99,7 +103,7 @@ unsafe fn stub_fn_inner(
 		.ok_or_else(|| "executor state is None during call to external function")?;
 
 	// Build the external function context.
-	let mut context = FunctionExecutor::new(vmctx, executor_state)?;
+	let mut context = FunctionExecutor::new(vmctx, compiler, executor_state)?;
 
 	let signature = func.signature();
 

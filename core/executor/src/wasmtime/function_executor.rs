@@ -48,18 +48,14 @@ pub struct SupervisorFuncRef(*const VMCallerCheckedAnyfunc);
 ///
 /// This is stored as part of the host state of the "env" Wasmtime instance.
 pub struct FunctionExecutorState {
-	// The lifetime of the reference is not actually static, but is unsafely cast to static since
-	// the compiler is owned by the wasmtime-jit `Context` and must be accessed during host calls.
-	compiler: &'static mut Compiler,
 	sandbox_store: sandbox::Store<SupervisorFuncRef>,
 	heap: FreeingBumpHeapAllocator,
 }
 
 impl FunctionExecutorState {
 	/// Constructs a new `FunctionExecutorState`.
-	pub fn new(compiler: &'static mut Compiler, heap_base: u32) -> Self {
+	pub fn new(heap_base: u32) -> Self {
 		FunctionExecutorState {
-			compiler,
 			sandbox_store: sandbox::Store::new(),
 			heap: FreeingBumpHeapAllocator::new(heap_base),
 		}
@@ -87,8 +83,11 @@ impl<'a> FunctionExecutor<'a> {
 	///
 	/// The vmctx MUST come from a call to a function in the "env" module.
 	/// The state MUST be looked up from the host state of the "env" module.
-	pub unsafe fn new(vmctx: *mut VMContext, state: &'a mut FunctionExecutorState)
-		-> Result<Self>
+	pub unsafe fn new(
+		vmctx: *mut VMContext,
+		compiler: &'a mut Compiler,
+		state: &'a mut FunctionExecutorState,
+	) -> Result<Self>
 	{
 		let memory = match (*vmctx).lookup_global_export("memory") {
 			Some(Export::Memory { definition, vmctx: _, memory: _ }) =>
@@ -107,7 +106,7 @@ impl<'a> FunctionExecutor<'a> {
 			_ => None,
 		};
 		Ok(FunctionExecutor {
-			compiler: &mut state.compiler,
+			compiler,
 			sandbox_store: &mut state.sandbox_store,
 			heap: &mut state.heap,
 			memory,

@@ -33,7 +33,6 @@ use cranelift_wasm::DefinedFuncIndex;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::convert::TryFrom;
-use std::mem;
 use std::rc::Rc;
 use wasm_interface::{HostFunctions, Pointer, WordSize};
 use wasmtime_environ::{Module, translate_signature};
@@ -128,15 +127,18 @@ pub fn create_instance<E: Externalities>(ext: &mut E, code: &[u8], heap_pages: u
 fn create_compiled_unit(code: &[u8])
 	-> std::result::Result<(CompiledModule, Context), WasmError>
 {
-	let isa = target_isa()?;
-	let mut context = Context::with_isa(isa, CompilationStrategy::Cranelift);
+	let compilation_strategy = CompilationStrategy::Cranelift;
+
+	let compiler = new_compiler(compilation_strategy)?;
+	let mut context = Context::new(Box::new(compiler));
 
 	// Enable/disable producing of debug info.
 	context.set_debug_info(false);
 
 	// Instantiate and link the env module.
 	let global_exports = context.get_global_exports();
-	let env_module = instantiate_env_module(global_exports)?;
+	let compiler = new_compiler(compilation_strategy)?;
+	let env_module = instantiate_env_module(global_exports, compiler)?;
 	context.name_instance("env".to_owned(), env_module);
 
 	// Compile the wasm module.
@@ -173,15 +175,8 @@ fn call_method(
 	grow_memory(&mut instance, heap_pages)?;
 
 	// Initialize the function executor state.
-	let executor_state = FunctionExecutorState::new(
-		// Unsafely extend the reference lifetime to static. This is necessary because the
-		// host state must be `Any`. This is OK as we will drop this object either before
-		// exiting the function in the happy case or in the worst case on the next runtime
-		// call, which also resets the host state. Thus this reference can never actually
-		// outlive the Context.
-		unsafe { mem::transmute::<_, &'static mut Compiler>(context.compiler_mut()) },
-		get_heap_base(&instance)?,
-	);
+	let heap_base = get_heap_base(&instance)?;
+	let executor_state = FunctionExecutorState::new(heap_base);
 	reset_env_state(context, Some(executor_state))?;
 
 	// Write the input data into guest memory.
@@ -222,8 +217,10 @@ fn call_method(
 }
 
 /// The implementation is based on wasmtime_wasi::instantiate_wasi.
-fn instantiate_env_module(global_exports: Rc<RefCell<HashMap<String, Option<Export>>>>)
-	-> std::result::Result<InstanceHandle, WasmError>
+fn instantiate_env_module(
+	global_exports: Rc<RefCell<HashMap<String, Option<Export>>>>,
+	compiler: Compiler,
+) -> std::result::Result<InstanceHandle, WasmError>
 {
 	let isa = target_isa()?;
 	let pointer_type = isa.pointer_type();
@@ -260,7 +257,7 @@ fn instantiate_env_module(global_exports: Rc<RefCell<HashMap<String, Option<Expo
 	let imports = Imports::none();
 	let data_initializers = Vec::new();
 	let signatures = PrimaryMap::new();
-	let env_state = EnvState::new::<SubstrateExternals>(code_memory);
+	let env_state = EnvState::new::<SubstrateExternals>(code_memory, compiler);
 
 	let result = InstanceHandle::new(
 		Rc::new(module),
@@ -281,6 +278,11 @@ fn target_isa() -> std::result::Result<Box<dyn TargetIsa>, WasmError> {
 		.map_err(WasmError::MissingCompilerSupport)?;
 	let flag_builder = cranelift_codegen::settings::builder();
 	Ok(isa_builder.finish(cranelift_codegen::settings::Flags::new(flag_builder)))
+}
+
+fn new_compiler(strategy: CompilationStrategy) -> std::result::Result<Compiler, WasmError> {
+	let isa = target_isa()?;
+	Ok(Compiler::new(isa, strategy))
 }
 
 fn clear_globals(global_exports: &mut HashMap<String, Option<Export>>) {
