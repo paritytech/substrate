@@ -396,7 +396,11 @@ mod test {
 		]);
 		let changes = OverlayedChanges {
 			changes: OverlayedChangeSet {
-				states: States::test_vector(vec![TransactionState::Pending, TransactionState::Pending], 1),
+				states: States::test_vector(
+					vec![TransactionState::Pending, TransactionState::Pending],
+					vec![0, 0],
+					1,
+				),
 				top: vec![
 					(EXTRINSIC_INDEX.to_vec(), History::from_iter(vec![
 						(OverlayedValue {

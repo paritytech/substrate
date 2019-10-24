@@ -158,6 +158,23 @@ impl<V> History<V> {
 #[cfg_attr(any(test, feature = "test-helpers"), derive(PartialEq))]
 pub struct States {
 	history: Vec<TransactionState>,
+	// keep trace of previous transaction.
+	// associatied logic is that of:
+	// ```
+	// use historical_data::linear::States;
+	// fn find_previous_tx_start(states: &States, from: usize) -> usize {
+	//	for i in (states.commit .. from).rev() {
+	//		match states.history[i] {
+	//			TransactionState::TxPending => {
+	//				return i;
+	//			},
+	//			_ => (),
+	//		}
+	//	}
+	//	states.commit
+	// }
+	// ```
+	previous_transaction: Vec<usize>,
 	commit: usize,
 }
 
@@ -165,6 +182,7 @@ impl Default for States {
 	fn default() -> Self {
 		States {
 			history: vec![TransactionState::Pending],
+			previous_transaction: vec![0],
 			commit: 0,
 		}
 	}
@@ -201,8 +219,12 @@ impl States {
 
 	/// Build any state for testing only.
 	#[cfg(any(test, feature = "test-helpers"))]
-	pub fn test_vector(history: Vec<TransactionState>, commit: usize) -> Self {
-		States { history, commit }
+	pub fn test_vector(
+		history: Vec<TransactionState>,
+		previous_transaction: Vec<usize>,
+		commit: usize,
+	) -> Self {
+		States { history, previous_transaction, commit }
 	}
 
 	/// Discard prospective changes to state.
@@ -210,18 +232,25 @@ impl States {
 	pub fn discard_prospective(&mut self) {
 		for i in self.commit .. self.history.len() {
 			self.history[i] = TransactionState::Dropped;
+			self.previous_transaction[i] = self.commit;
 		}
 		self.history.push(TransactionState::Pending);
+		self.previous_transaction.push(self.commit);
 	}
 
 	/// Commit prospective changes to state.
 	pub fn commit_prospective(&mut self) {
 		self.commit = self.history.len();
 		self.history.push(TransactionState::Pending);
+		for i in 0..self.history.len() - 1 {
+			self.previous_transaction[i] = self.commit;
+		}
+		self.previous_transaction.push(self.commit);
 	}
 
 	/// Create a new transactional layer.
 	pub fn start_transaction(&mut self) {
+		self.previous_transaction.push(self.history.len());
 		self.history.push(TransactionState::TxPending);
 	}
 
@@ -243,6 +272,10 @@ impl States {
 			}
 		}
 		self.history.push(TransactionState::Pending);
+		self.previous_transaction.truncate(i);
+		let previous = self.previous_transaction.last()
+			.cloned().unwrap_or(self.commit);
+		self.previous_transaction.resize(self.history.len(), previous);
 	}
 
 	/// Commit a transactional layer.
@@ -260,24 +293,21 @@ impl States {
 			}
 		}
 		self.history.push(TransactionState::Pending);
+		self.previous_transaction.truncate(i);
+		let previous = self.previous_transaction.last()
+			.cloned().unwrap_or(self.commit);
+		self.previous_transaction.resize(self.history.len(), previous);
 	}
 
 }
 
+#[inline]
 /// Get previous index of pending state.
 /// Used to say if it is possible to drop a committed transaction
 /// state value.
 /// Committed index is seen as a transaction state.
 pub fn find_previous_tx_start(states: &States, from: usize) -> usize {
-	for i in (states.commit .. from).rev() {
-		match states.history[i] {
-			TransactionState::TxPending => {
-				return i;
-			},
-			_ => (),
-		}
-	}
-	states.commit
+	states.previous_transaction[from]
 }
 
 
