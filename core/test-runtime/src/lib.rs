@@ -934,12 +934,12 @@ fn test_historical_data() {
 		panic!("Got a value for empty data");
 	}
  
-	value.set(states.as_ref_mut(), 42u64);
+	value.set(&states, 42u64);
 	states.start_transaction();
 	if value.get(states.as_ref()) != Some(&42) {
 		panic!("Got a wrong result accessing a one element data");
 	}
-	value.set(states.as_ref_mut(), 43u64);
+	value.set(&states, 43u64);
 	if value.get(states.as_ref()) != Some(&43) {
 		panic!("Got a wrong result accessing a two element data");
 	}

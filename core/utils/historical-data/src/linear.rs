@@ -172,11 +172,9 @@ impl States {
 		self.0.as_ref()
 	}
 
-	/// Get reference of state, that is enough
-	/// information to update historical
-	/// data.
-	pub fn as_ref_mut(&self) -> (&[TransactionState], usize) {
-		(self.0.as_ref(), self.1)
+	/// Current number of inner states.
+	pub fn len(&self) -> usize {
+		self.0.len()
 	}
 
 	/// Get index of committed layer, this is
@@ -264,7 +262,7 @@ impl States {
 /// Used to say if it is possible to drop a committed transaction
 /// state value.
 /// Committed index is seen as a transaction state.
-pub fn find_previous_tx_start(states: (&[TransactionState], usize), from: usize) -> usize {
+pub fn find_previous_tx_start(states: &States, from: usize) -> usize {
 	for i in (states.1 .. from).rev() {
 		match states.0[i] {
 			TransactionState::TxPending => {
@@ -282,7 +280,7 @@ impl<V> History<V> {
 	/// Set a value, it uses a state history as parameter.
 	/// This method uses `get_mut` and do remove pending
 	/// dropped value.
-	pub fn set(&mut self, states: (&[TransactionState], usize), value: V) {
+	pub fn set(&mut self, states: &States, value: V) {
 		if let Some(v) = self.get_mut(states) {
 			if v.index == states.0.len() - 1 {
 				*v.value = value;
@@ -342,7 +340,7 @@ impl<V> History<V> {
 
 
 	#[cfg(any(test, feature = "test-helpers"))]
-	pub fn get_prospective(&self, states: (&[TransactionState], usize)) -> Option<&V> {
+	pub fn get_prospective(&self, states: &States) -> Option<&V> {
 		let mut index = self.len();
 		if index == 0 {
 			return None;
@@ -362,7 +360,7 @@ impl<V> History<V> {
 	}
 
 	#[cfg(any(test, feature = "test-helpers"))]
-	pub fn get_committed(&self, states: (&[TransactionState], usize)) -> Option<&V> {
+	pub fn get_committed(&self, states: &States) -> Option<&V> {
 		let mut index = self.len();
 		if index == 0 {
 			return None;
@@ -412,7 +410,7 @@ impl<V> History<V> {
 	/// This method removes latest dropped values up to the latest valid value.
 	pub fn get_mut(
 		&mut self,
-		states: (&[TransactionState], usize),
+		states: &States,
 	) -> Option<HistoricalValue<&mut V>> {
 		let mut index = self.len();
 		if index == 0 {
@@ -462,7 +460,7 @@ impl<V> History<V> {
 	/// state if `prune_to_commit` is set to true.
 	pub fn get_mut_pruning(
 		&mut self,
-		states: (&[TransactionState], usize),
+		states: &States,
 		prune_to_commit: bool,
 	) -> Option<HistoricalValue<&mut V>>  {
 		let mut index = self.len();

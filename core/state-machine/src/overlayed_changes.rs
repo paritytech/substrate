@@ -22,7 +22,7 @@ use std::collections::{HashMap, BTreeSet};
 use codec::Decode;
 use crate::changes_trie::{NO_EXTRINSIC_INDEX, Configuration as ChangesTrieConfig};
 use primitives::storage::well_known_keys::EXTRINSIC_INDEX;
-use historical_data::linear::{States, History, HistoricalValue, TransactionState};
+use historical_data::linear::{States, History, HistoricalValue};
 use historical_data::DEFAULT_GC_CONF;
 
 /// The overlayed changes to state to be queried on top of the backend.
@@ -96,7 +96,7 @@ impl FromIterator<(Vec<u8>, OverlayedValue)> for OverlayedChangeSet {
 /// It does remove latest dropped values.
 fn set_with_extrinsic_overlayed_value(
 	h_value: &mut History<OverlayedValue>,
-	states: (&[TransactionState], usize),
+	states: &States,
 	value: Option<Vec<u8>>,
 	extrinsic_index: Option<u32>,
 ) {
@@ -112,11 +112,11 @@ fn set_with_extrinsic_overlayed_value(
 
 fn set_with_extrinsic_inner_overlayed_value(
 	h_value: &mut History<OverlayedValue>,
-	states: (&[TransactionState], usize),
+	states: &States,
 	value: Option<Vec<u8>>,
 	extrinsic_index: u32,
 ) {
-	let state = states.0.len() - 1;
+	let state = states.len() - 1;
 	if let Some(current) = h_value.get_mut(states) {
 		if current.index == state {
 			current.value.value = value;
@@ -153,7 +153,7 @@ fn set_with_extrinsic_inner_overlayed_value(
 impl OverlayedChangeSet {
 	/// Garbage collect.
 	fn gc(&mut self, prune_commit: bool) {
-		let states = self.states.as_ref_mut();
+		let states = &self.states;
 		// retain does change values
 		self.top.retain(|_, h_value| h_value.get_mut_pruning(states, prune_commit).is_some());
 		self.children.retain(|_, m| {
@@ -263,7 +263,7 @@ impl OverlayedChangeSet {
 	pub(crate) fn top_prospective(&self) -> HashMap<Vec<u8>, OverlayedValue> {
 		let mut result = HashMap::new();
 		for (k, v) in self.top.iter() {
-			if let Some(v) = v.get_prospective(self.states.as_ref_mut()) {
+			if let Some(v) = v.get_prospective(&self.states) {
 				result.insert(k.clone(), v.clone());
 			}
 		}
@@ -277,7 +277,7 @@ impl OverlayedChangeSet {
 	pub(crate) fn top_committed(&self) -> HashMap<Vec<u8>, OverlayedValue> {
 		let mut result = HashMap::new();
 		for (k, v) in self.top.iter() {
-			if let Some(v) = v.get_committed(self.states.as_ref_mut()) {
+			if let Some(v) = v.get_committed(&self.states) {
 				result.insert(k.clone(), v.clone());
 			}
 		}
@@ -348,8 +348,7 @@ impl OverlayedChanges {
 		self.operation_from_last_gc += DEFAULT_GC_CONF.operation_cost(value.as_ref());
 		let extrinsic_index = self.extrinsic_index();
 		let entry = self.changes.top.entry(key).or_default();
-		let states = self.changes.states.as_ref_mut();
-		set_with_extrinsic_overlayed_value(entry, states, value, extrinsic_index);
+		set_with_extrinsic_overlayed_value(entry, &self.changes.states, value, extrinsic_index);
 	}
 
 	/// Inserts the given key-value pair into the prospective child change set.
@@ -365,10 +364,9 @@ impl OverlayedChanges {
 		let extrinsic_index = self.extrinsic_index();
 		let map_entry = self.changes.children.entry(storage_key).or_default();
 		let entry = map_entry.entry(key).or_default();
-		let states = self.changes.states.as_ref_mut();
 		set_with_extrinsic_overlayed_value(
 			entry,
-			states,
+			&self.changes.states,
 			value,
 			extrinsic_index,
 		);
@@ -382,7 +380,7 @@ impl OverlayedChanges {
 	/// [`discard_prospective`]: #method.discard_prospective
 	pub(crate) fn clear_child_storage(&mut self, storage_key: &[u8]) {
 		let extrinsic_index = self.extrinsic_index();
-		let states = self.changes.states.as_ref_mut();
+		let states = &self.changes.states;
 		let map_entry = self.changes.children.entry(storage_key.to_vec()).or_default();
 
 		self.operation_from_last_gc += map_entry.len();
@@ -400,11 +398,10 @@ impl OverlayedChanges {
 		let extrinsic_index = self.extrinsic_index();
 
 		let mut number_removed = 0;
-		let states = self.changes.states.as_ref_mut();
 		for (key, entry) in self.changes.top.iter_mut() {
 			if key.starts_with(prefix) {
 				number_removed += 1;
-				set_with_extrinsic_overlayed_value(entry, states, None, extrinsic_index);
+				set_with_extrinsic_overlayed_value(entry, &self.changes.states, None, extrinsic_index);
 			}
 		}
 
@@ -415,11 +412,10 @@ impl OverlayedChanges {
 		let extrinsic_index = self.extrinsic_index();
 		if let Some(child_change) = self.changes.children.get_mut(storage_key) {
 			let mut number_removed = 0;
-			let states = self.changes.states.as_ref_mut();
 			for (key, entry) in child_change.iter_mut() {
 				if key.starts_with(prefix) {
 					number_removed += 1;
-					set_with_extrinsic_overlayed_value(entry, states, None, extrinsic_index);
+					set_with_extrinsic_overlayed_value(entry, &self.changes.states, None, extrinsic_index);
 				}
 			}
 
