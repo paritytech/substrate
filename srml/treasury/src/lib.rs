@@ -661,6 +661,7 @@ mod tests {
 
 			<Treasury as OnFinalize<u64>>::on_finalize(4);
 			assert_eq!(Treasury::pot(), 0); // Pot is emptied
+			assert_eq!(Balances::free_balance(&Treasury::account_id()), 1); // but the account is still there 
 		});
 	}
 
