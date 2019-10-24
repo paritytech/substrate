@@ -587,31 +587,31 @@ impl<TBl, TRtApi, TCfg, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNet
 		})
 	}
 
-		/// Adds a dht event sender to builder to be used by the network to send dht events to the authority discovery
-		/// module.
-		pub fn with_dht_event_tx(
-			self,
-			dht_event_tx: mpsc::Sender<DhtEvent>,
-		) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp,
-								   TNetP, TExPool, TRpc, TRpcB, Backend>, Error> {
-			Ok(ServiceBuilder {
-				config: self.config,
-				client: self.client,
-				backend: self.backend,
-				keystore: self.keystore,
-				fetcher: self.fetcher,
-				select_chain: self.select_chain,
-				import_queue: self.import_queue,
-				finality_proof_request_builder: self.finality_proof_request_builder,
-				finality_proof_provider: self.finality_proof_provider,
-				network_protocol: self.network_protocol,
-				transaction_pool: self.transaction_pool,
-				rpc_extensions: self.rpc_extensions,
-				rpc_builder: self.rpc_builder,
-				dht_event_tx: Some(dht_event_tx),
-				marker: self.marker,
-			})
-		}
+	/// Adds a dht event sender to builder to be used by the network to send dht events to the authority discovery
+	/// module.
+	pub fn with_dht_event_tx(
+		self,
+		dht_event_tx: mpsc::Sender<DhtEvent>,
+	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp,
+								TNetP, TExPool, TRpc, TRpcB, Backend>, Error> {
+		Ok(ServiceBuilder {
+			config: self.config,
+			client: self.client,
+			backend: self.backend,
+			keystore: self.keystore,
+			fetcher: self.fetcher,
+			select_chain: self.select_chain,
+			import_queue: self.import_queue,
+			finality_proof_request_builder: self.finality_proof_request_builder,
+			finality_proof_provider: self.finality_proof_provider,
+			network_protocol: self.network_protocol,
+			transaction_pool: self.transaction_pool,
+			rpc_extensions: self.rpc_extensions,
+			rpc_builder: self.rpc_builder,
+			dht_event_tx: Some(dht_event_tx),
+			marker: self.marker,
+		})
+	}
 }
 
 /// RPC handlers builder.
