@@ -537,8 +537,6 @@ mod tests {
 
 		// when revalidation is scheduled by time - it is performed
 		let fetcher = build_fetcher();
-		//let maintainer = DefaultLightTransactionPoolMaintainer::new(fetcher.clone(), None, None);
-		//*maintainer.revalidation_status.lock() = TxPoolRevalidationStatus::Scheduled(Some(Instant::now()), None);
 		let status = with_fetcher_maintain(fetcher, None, None, |revalidation_status|
 			*revalidation_status.lock() = TxPoolRevalidationStatus::Scheduled(Some(Instant::now()), None)
 		);
@@ -546,8 +544,6 @@ mod tests {
 
 		// when revalidation is scheduled by block number - it is performed
 		let fetcher = build_fetcher();
-		//let maintainer = DefaultLightTransactionPoolMaintainer::new(fetcher.clone(), None, None);
-		//*maintainer.revalidation_status.lock() = TxPoolRevalidationStatus::Scheduled(None, Some(0));
 		let status = with_fetcher_maintain(fetcher, None, None, |revalidation_status|
 			*revalidation_status.lock() = TxPoolRevalidationStatus::Scheduled(None, Some(0))
 		);
