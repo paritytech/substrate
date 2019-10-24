@@ -76,6 +76,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use rstd::prelude::*;
 use sr_primitives::{print, traits::{Zero, StaticLookup, Bounded, Convert}};
 use sr_primitives::weights::SimpleDispatchInfo;
 use srml_support::{
@@ -136,7 +137,8 @@ decl_storage! {
 		/// Number of runners_up to keep.
 		pub DesiredRunnersUp get(fn desired_runners_up) config(): u32;
 		/// How long each seat is kept. This defines the next block number at which an election
-		/// round will happen.
+		/// round will happen. If set to zero, no elections are ever triggered and the module will
+		/// be in passive mode. In that case only a member set defined in at genesis can exist.
 		pub TermDuration get(fn term_duration) config(): T::BlockNumber;
 
 		// ---- State
@@ -470,8 +472,10 @@ impl<T: Trait> Module<T> {
 	/// Runs phragmen election and cleans all the previous candidate state. The voter state is NOT
 	/// cleaned and voters must themselves submit a transaction to retract.
 	fn end_block(block_number: T::BlockNumber) -> dispatch::Result {
-		if (block_number % Self::term_duration()).is_zero() {
-			Self::do_phragmen();
+		if !Self::term_duration().is_zero() {
+			if (block_number % Self::term_duration()).is_zero() {
+				Self::do_phragmen();
+			}
 		}
 		Ok(())
 	}
@@ -701,7 +705,9 @@ mod tests {
 	pub struct ExtBuilder {
 		balance_factor: u64,
 		voter_bond: u64,
+		term_duration: u64,
 		desired_runners_up: u32,
+		members: Vec<u64>,
 	}
 
 	impl Default for ExtBuilder {
@@ -710,6 +716,8 @@ mod tests {
 				balance_factor: 1,
 				voter_bond: 2,
 				desired_runners_up: 0,
+				term_duration: 5,
+				members: vec![],
 			}
 		}
 	}
@@ -721,6 +729,14 @@ mod tests {
 		}
 		pub fn desired_runners_up(mut self, count: u32) -> Self {
 			self.desired_runners_up = count;
+			self
+		}
+		pub fn term_duration(mut self, duration: u64) -> Self {
+			self.term_duration = duration;
+			self
+		}
+		pub fn members(mut self, members: Vec<u64>) -> Self {
+			self.members = members;
 			self
 		}
 		pub fn build(self) -> runtime_io::TestExternalities {
@@ -738,10 +754,10 @@ mod tests {
 					vesting: vec![],
 				}),
 				elections: Some(elections::GenesisConfig::<Test>{
-					members: vec![],
+					members: self.members,
 					desired_members: 2,
 					desired_runners_up: self.desired_runners_up,
-					term_duration: 5,
+					term_duration: self.term_duration,
 				}),
 			}.build_storage().unwrap().into()
 		}
@@ -778,6 +794,33 @@ mod tests {
 
 			assert_eq!(all_voters(), vec![]);
 			assert_eq!(Elections::votes_of(&1), vec![]);
+		});
+	}
+
+	#[test]
+	fn passive_module_should_work() {
+		ExtBuilder::default()
+			.term_duration(0)
+			.members(vec![1, 2, 3])
+			.build()
+			.execute_with(||
+		{
+			System::set_block_number(1);
+			assert_eq!(Elections::term_duration(), 0);
+			assert_eq!(Elections::desired_members(), 2);
+			assert_eq!(Elections::election_rounds(), 0);
+
+			assert_eq!(Elections::members(), vec![1, 2, 3]);
+			assert_eq!(Elections::runners_up(), vec![]);
+
+			assert_eq!(Elections::candidates(), vec![]);
+			assert_eq!(all_voters(), vec![]);
+
+			System::set_block_number(5);
+			assert_ok!(Elections::end_block(System::block_number()));
+
+			assert_eq!(Elections::members(), vec![1, 2, 3]);
+			assert_eq!(Elections::runners_up(), vec![]);
 		});
 	}
 

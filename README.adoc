@@ -418,7 +418,7 @@ curl -H 'Content-Type: application/json' --data '{ "jsonrpc":"2.0", "method":"au
 === Viewing documentation for Substrate packages
 
 You can generate documentation for a Substrate Rust package and have it automatically open in your web browser using https://doc.rust-lang.org/rustdoc/what-is-rustdoc.html#using-rustdoc-with-cargo[rustdoc with Cargo],
-(of the The Rustdoc Book), by running the the following command:
+(of the The Rustdoc Book), by running the following command:
 
 ```
 cargo doc --package <spec> --open
