@@ -115,8 +115,6 @@ pub fn new_full<C: Send + Default + 'static>(config: Configuration<C, GenesisCon
 			service.keystore(),
 		)?;
 
-		let aura = aura.select(service.on_exit()).then(|_| Ok(()));
-
 		// the AURA authoring task is considered essential, i.e. if it
 		// fails we take down the service with it.
 		service.spawn_essential_task(aura);
