@@ -16,7 +16,6 @@
 
 use crate::{Service, NetworkStatus, NetworkState, error::{self, Error}, DEFAULT_PROTOCOL_ID};
 use crate::{SpawnTaskHandle, start_rpc_servers, build_network_future, TransactionPoolAdapter};
-use crate::TaskExecutor;
 use crate::status_sinks;
 use crate::config::Configuration;
 use client::{
@@ -33,13 +32,13 @@ use futures03::{
 	FutureExt as _, TryFutureExt as _,
 	StreamExt as _, TryStreamExt as _,
 };
-use keystore::{Store as Keystore, KeyStorePtr};
+use keystore::{Store as Keystore};
 use log::{info, warn};
 use network::{FinalityProofProvider, OnDemand, NetworkService, NetworkStateInfo, DhtEvent};
 use network::{config::BoxFinalityProofRequestBuilder, specialization::NetworkSpecialization};
 use parking_lot::{Mutex, RwLock};
 use primitives::{Blake2Hasher, H256, Hasher};
-use rpc::{self, system::SystemInfo};
+use rpc;
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{
 	Block as BlockT, Extrinsic, ProvideRuntimeApi, NumberFor, One, Zero, Header, SaturatedConversion
@@ -1078,23 +1077,36 @@ ServiceBuilder<
 		// RPC
 		let (system_rpc_tx, system_rpc_rx) = futures03::channel::mpsc::unbounded();
 		let gen_handler = || {
+			use rpc::{chain, state, author, system};
+
 			let system_info = rpc::system::SystemInfo {
 				chain_name: config.chain_spec.name().into(),
 				impl_name: config.impl_name.into(),
 				impl_version: config.impl_version.into(),
 				properties: config.chain_spec.properties().clone(),
 			};
-			start_rpc(
-				&rpc_builder,
+
+			let subscriptions = rpc::Subscriptions::new(Arc::new(SpawnTaskHandle {
+				sender: to_spawn_tx.clone(),
+				on_exit: exit.clone()
+			}));
+			let chain = rpc_builder.build_chain(subscriptions.clone());
+			let state = rpc_builder.build_state(subscriptions.clone());
+			let author = rpc::author::Author::new(
 				client.clone(),
-				//light_components.clone(),
-				system_rpc_tx.clone(),
-				system_info.clone(),
-				Arc::new(SpawnTaskHandle { sender: to_spawn_tx.clone(), on_exit: exit.clone() }),
 				transaction_pool.clone(),
-				rpc_extensions.clone(),
+				subscriptions,
 				keystore.clone(),
-			)
+			);
+			let system = system::System::new(system_info, system_rpc_tx.clone());
+
+			rpc_servers::rpc_handler((
+				state::StateApi::to_delegate(state),
+				chain::ChainApi::to_delegate(chain),
+				author::AuthorApi::to_delegate(author),
+				system::SystemApi::to_delegate(system),
+				rpc_extensions.clone(),
+			))
 		};
 		let rpc_handlers = gen_handler();
 		let rpc = start_rpc_servers(&config, gen_handler)?;
@@ -1177,48 +1189,6 @@ ServiceBuilder<
 			marker: PhantomData::<TBl>,
 		})
 	}
-}
-
-pub(crate) fn start_rpc<Api, Backend, Block, Executor, PoolApi, RpcB>(
-	rpc_builder: &RpcB,
-	client: Arc<Client<Backend, Executor, Block, Api>>,
-	system_send_back: futures03::channel::mpsc::UnboundedSender<rpc::system::Request<Block>>,
-	rpc_system_info: SystemInfo,
-	task_executor: TaskExecutor,
-	transaction_pool: Arc<TransactionPool<PoolApi>>,
-	rpc_extensions: impl rpc::RpcExtension<rpc::Metadata>,
-	keystore: KeyStorePtr,
-) -> rpc_servers::RpcHandler<rpc::Metadata>
-where
-	Block: BlockT<Hash = <Blake2Hasher as primitives::Hasher>::Out>,
-	Backend: client::backend::Backend<Block, Blake2Hasher> + 'static,
-	Client<Backend, Executor, Block, Api>: ProvideRuntimeApi,
-	<Client<Backend, Executor, Block, Api> as ProvideRuntimeApi>::Api:
-		runtime_api::Metadata<Block> + session::SessionKeys<Block>,
-	Api: Send + Sync + 'static,
-	Executor: client::CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
-	PoolApi: txpool::ChainApi<Hash = Block::Hash, Block = Block> + 'static,
-	RpcB: RpcBuilder<Block, Backend, Executor, Api>,
-{
-	use rpc::{chain, state, author, system};
-	let subscriptions = rpc::Subscriptions::new(task_executor);
-	let chain = rpc_builder.build_chain(subscriptions.clone());
-	let state = rpc_builder.build_state(subscriptions.clone());
-	let author = rpc::author::Author::new(
-		client,
-		transaction_pool,
-		subscriptions,
-		keystore,
-	);
-	let system = system::System::new(rpc_system_info, system_send_back);
-
-	rpc_servers::rpc_handler((
-		state::StateApi::to_delegate(state),
-		chain::ChainApi::to_delegate(chain),
-		author::AuthorApi::to_delegate(author),
-		system::SystemApi::to_delegate(system),
-		rpc_extensions,
-	))
 }
 
 pub(crate) fn maintain_transaction_pool<Api, Backend, Block, Executor, PoolApi>(
