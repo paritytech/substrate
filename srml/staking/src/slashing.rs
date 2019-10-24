@@ -275,6 +275,11 @@ fn slash_nominators<T: Trait>(params: SlashParams<T>, prior_slash_p: Perbill) {
 
 // helper struct for managing a set of spans we are currently inspecting.
 // writes alterations to disk on drop, but only if a slash has been carried out.
+//
+// NOTE: alterations to slashing metadata should not be done after this is dropped.
+// dropping this struct applies any necessary slashes, which can lead to free balance
+// being 0, and the account being garbage-collected -- a dead account should get no new
+// metadata.
 struct InspectingSpans<'a, T: Trait + 'a> {
 	dirty: bool,
 	window_start: EraIndex,
@@ -359,6 +364,26 @@ fn slash_lazy<T: Trait>(stash: T::AccountId, value: BalanceOf<T>) -> LazySlash<T
 	LazySlash { stash, value }
 }
 
+/// Clear slashing metadata for an obsolete era.
+pub(crate) fn clear_era_metadata<T: Trait>(obsolete_era: EraIndex) {
+	<Module<T> as Store>::ValidatorSlashInEra::remove_prefix(&obsolete_era);
+	<Module<T> as Store>::NominatorSlashInEra::remove_prefix(&obsolete_era);
+}
+
+/// Clear slashing metadata for a dead account.
+pub(crate) fn clear_stash_metadata<T: Trait>(stash: &T::AccountId) {
+	let spans = <Module<T> as Store>::SlashingSpans::take(stash);
+
+	// kill slashing-span metadata for account.
+	//
+	// this can only happen while the account is staked _if_ they are completely slashed.
+	// in that case, they may re-bond, but it would count again as span 0. Further ancient
+	// slashes would slash into this new bond, since metadata has now been cleared.
+	for span in spans.into_iter().flat_map(|spans| spans) {
+		<Module<T> as Store>::SpanSlash::remove(&(stash.clone()), span.index);
+	}
+}
+
 struct LazySlash<T: Trait> {
 	stash: T::AccountId,
 	value: BalanceOf<T>,
@@ -366,14 +391,14 @@ struct LazySlash<T: Trait> {
 
 impl<T: Trait> Drop for LazySlash<T> {
 	fn drop(&mut self) {
-		let mut ledger = match <Module<T>>::ledger(&self.stash) {
-			Some(ledger) => ledger,
-			None => return, // nothing to do.
-		};
-
 		let controller = match <Module<T>>::bonded(&self.stash) {
 			None => return, // defensive: should always exist.
 			Some(c) => c,
+		};
+
+		let mut ledger = match <Module<T>>::ledger(&controller) {
+			Some(ledger) => ledger,
+			None => return, // nothing to do.
 		};
 
 		let mut value = self.value.min(ledger.active);
@@ -390,6 +415,7 @@ impl<T: Trait> Drop for LazySlash<T> {
 			ledger.total -= value;
 
 			// TODO: rewards
+
 			let (imbalance, _) = T::Currency::slash(&self.stash, value);
 			T::Slash::on_unbalanced(imbalance);
 

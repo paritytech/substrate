@@ -1825,14 +1825,14 @@ fn reporters_receive_their_slice() {
 fn invulnerables_are_not_slashed() {
 	// For invulnerable validators no slashing is performed.
 	ExtBuilder::default().invulnerables(vec![11]).build().execute_with(|| {
-		#[cfg(feature = "equalize")]
-		let initial_balance = 1250;
-		#[cfg(not(feature = "equalize"))]
-		let initial_balance = 1375;
-
 		assert_eq!(Balances::free_balance(&11), 1000);
 		assert_eq!(Balances::free_balance(&21), 2000);
-		assert_eq!(Staking::stakers(&21).total, initial_balance);
+
+		let exposure = Staking::stakers(&21);
+		let initial_balance = Staking::slashable_balance_of(&21);
+
+		let nominator_balances: Vec<_> = exposure.others
+			.iter().map(|o| Balances::free_balance(&o.who)).collect();
 
 		Staking::on_offence(
 			&[
@@ -1852,6 +1852,14 @@ fn invulnerables_are_not_slashed() {
 		assert_eq!(Balances::free_balance(&11), 1000);
 		// 2000 - (0.2 * initial_balance)
 		assert_eq!(Balances::free_balance(&21), 2000 - (2 * initial_balance / 10));
+
+		// ensure that nominators were slashed as well.
+		for (initial_balance, other) in nominator_balances.into_iter().zip(exposure.others) {
+			assert_eq!(
+				Balances::free_balance(&other.who),
+				initial_balance - (2 * other.value / 10),
+			);
+		}
 	});
 }
 
