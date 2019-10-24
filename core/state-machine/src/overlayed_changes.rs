@@ -262,9 +262,8 @@ impl OverlayedChangeSet {
 	#[cfg(test)]
 	pub(crate) fn top_prospective(&self) -> HashMap<Vec<u8>, OverlayedValue> {
 		let mut result = HashMap::new();
-		let committed = self.states.committed();
 		for (k, v) in self.top.iter() {
-			if let Some(v) = v.get_prospective(self.states.as_ref(), committed) {
+			if let Some(v) = v.get_prospective(self.states.as_ref_mut()) {
 				result.insert(k.clone(), v.clone());
 			}
 		}
@@ -277,9 +276,8 @@ impl OverlayedChangeSet {
 	#[cfg(test)]
 	pub(crate) fn top_committed(&self) -> HashMap<Vec<u8>, OverlayedValue> {
 		let mut result = HashMap::new();
-		let committed = self.states.committed();
 		for (k, v) in self.top.iter() {
-			if let Some(v) = v.get_committed(self.states.as_ref(), committed) {
+			if let Some(v) = v.get_committed(self.states.as_ref_mut()) {
 				result.insert(k.clone(), v.clone());
 			}
 		}

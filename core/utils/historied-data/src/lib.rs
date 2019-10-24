@@ -14,8 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! History driven data storage.
-//! Useful to store information with history
+//! Data storage containing multiple state for a
+//! key.
+//! Can be use to store historical information
 //! on a per item basis.
 
 #![cfg_attr(not(feature = "std"), no_std)]

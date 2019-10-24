@@ -25,7 +25,7 @@
 use rstd::vec::Vec;
 use rstd::vec;
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Copy)]
 /// State of a transactional layer.
 pub enum TransactionState {
 	/// Data is under change and can still be dropped.
@@ -263,6 +263,7 @@ impl States {
 /// Get previous index of pending state.
 /// Used to say if it is possible to drop a committed transaction
 /// state value.
+/// Committed index is seen as a transaction state.
 pub fn find_previous_tx_start(states: (&[TransactionState], usize), from: usize) -> usize {
 	for i in (states.1 .. from).rev() {
 		match states.0[i] {
@@ -273,13 +274,6 @@ pub fn find_previous_tx_start(states: (&[TransactionState], usize), from: usize)
 		}
 	}
 	states.1
-/*	// skip dropped layer if any
-	for i in (0..=states.1).rev() {
-		if states.0[i] != TransactionState::Dropped {
-			return i;
-		}
-	}
-	states.1*/
 }
 
 
@@ -348,16 +342,16 @@ impl<V> History<V> {
 
 
 	#[cfg(any(test, feature = "test-helpers"))]
-	pub fn get_prospective(&self, states: &[TransactionState], committed: usize) -> Option<&V> {
+	pub fn get_prospective(&self, states: (&[TransactionState], usize)) -> Option<&V> {
 		let mut index = self.len();
 		if index == 0 {
 			return None;
 		}
-		debug_assert!(states.len() >= index);
-		while index > committed {
+		debug_assert!(states.0.len() >= index);
+		while index > states.1 {
 			index -= 1;
 			let HistoriedValue { value, index: state_index } = self.get_state(index);
-			match states[state_index] {
+			match states.0[state_index] {
 				TransactionState::Dropped => (),
 				TransactionState::Pending
 				| TransactionState::TxPending =>
@@ -368,17 +362,17 @@ impl<V> History<V> {
 	}
 
 	#[cfg(any(test, feature = "test-helpers"))]
-	pub fn get_committed(&self, states: &[TransactionState], committed: usize) -> Option<&V> {
+	pub fn get_committed(&self, states: (&[TransactionState], usize)) -> Option<&V> {
 		let mut index = self.len();
 		if index == 0 {
 			return None;
 		}
-		debug_assert!(states.len() >= index);
+		debug_assert!(states.0.len() >= index);
 		while index > 0 {
 			index -= 1;
 			let HistoriedValue { value, index: state_index } = self.get_state(index);
-			if state_index < committed {
-				match states[state_index] {
+			if state_index < states.1 {
+				match states.0[state_index] {
 					TransactionState::Dropped => (),
 					TransactionState::Pending
 					| TransactionState::TxPending =>
@@ -395,9 +389,6 @@ impl<V> History<V> {
 		if index == 0 {
 			return None;
 		}
-		// internal method: should be use properly
-		// (history of the right overlay change set
-		// is size aligned).
 		debug_assert!(states.len() >= index);
 		while index > 0 {
 			index -= 1;
@@ -427,9 +418,6 @@ impl<V> History<V> {
 		if index == 0 {
 			return None;
 		}
-		// internal method: should be use properly
-		// (history of the right overlay change set
-		// is size aligned).
 		debug_assert!(states.0.len() >= index);
 		let mut result = None;
 		let mut previous_transaction = usize::max_value();
@@ -463,27 +451,15 @@ impl<V> History<V> {
 				TransactionState::Dropped => (),
 			}
 		}
-		if let Some((index, state_index)) = result {
-			if index + 1 < self.len() {
-				self.truncate(index + 1);
-			}
-			if let Some((switch_index, state_index)) = previous_switch {
-				if let Some(mut value) = self.pop() {
-					self.truncate(switch_index);
-					value.index = state_index;
-					self.push_unchecked(value);
-				}
-				Some((self.mut_ref(switch_index), state_index).into())
-			} else {
-				Some((self.mut_ref(index), state_index).into())
-			}
-		} else {
-			self.0.clear();
-			None
-		}
+		self.clear_terminal_values(result, previous_switch, 0)
 	}
 
 
+	/// Method to prune regarding a full state.
+	/// It also returns the last value as mutable.
+	/// Internally it acts like `get_mut` with an
+	/// additional cleaning capacity to clean committed
+	/// state if `prune_to_commit` is set to true.
 	pub fn get_mut_pruning(
 		&mut self,
 		states: (&[TransactionState], usize),
@@ -494,9 +470,6 @@ impl<V> History<V> {
 			return None;
 		}
 		let mut prune_index = 0;
-		// internal method: should be use properly
-		// (history of the right overlay change set
-		// is size aligned).
 		debug_assert!(states.0.len() >= index);
 		let mut result = None;
 		let mut previous_transaction = usize::max_value();
@@ -505,27 +478,8 @@ impl<V> History<V> {
 			index -= 1;
 			let state_index = self.get_state(index).index;
 			match states.0[state_index] {
-				TransactionState::TxPending => {
-					if state_index < states.1 && index > prune_index {
-						prune_index = index;
-					}
-					if state_index >= previous_transaction {
-						previous_switch = Some((index, state_index));
-					} else {
-						if result.is_none() {
-							result = Some((index, state_index));
-						}
-					}
-					if prune_to_commit {
-						if state_index < states.1 {
-							break;
-						}
-					} else {
-						break;
-					}
-				},
-				TransactionState::Pending => {
-					// index > prune index for only first.
+				state @ TransactionState::TxPending
+				| state @ TransactionState::Pending => {
 					if state_index < states.1 && index > prune_index {
 						prune_index = index;
 					}
@@ -535,7 +489,9 @@ impl<V> History<V> {
 					} else {
 						if result.is_none() {
 							result = Some((index, state_index));
-							previous_transaction = find_previous_tx_start(states, state_index);
+							if state == TransactionState::Pending {
+								previous_transaction = find_previous_tx_start(states, state_index);
+							}
 						} else {
 							if prune_to_commit {
 								if state_index < states.1 {
@@ -556,6 +512,16 @@ impl<V> History<V> {
 		} else {
 			0
 		};
+		self.clear_terminal_values(result, previous_switch, deleted)
+	}
+
+	#[inline]
+	fn clear_terminal_values(
+		&mut self,
+		result: Option<(usize, usize)>,
+		previous_switch: Option<(usize, usize)>,
+		deleted: usize,
+	) -> Option<HistoriedValue<&mut V>>  {
 		if let Some((index, state_index)) = result {
 			if index + 1 - deleted < self.len() {
 				self.truncate(index + 1 - deleted);
