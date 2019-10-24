@@ -24,6 +24,7 @@ pub mod config;
 pub mod chain_ops;
 pub mod error;
 
+mod builder;
 mod status_sinks;
 
 use std::io;
@@ -71,7 +72,7 @@ pub use futures::future::Executor;
 const DEFAULT_PROTOCOL_ID: &str = "sup";
 
 /// Substrate service.
-pub struct NewService<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
+pub struct Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
 	client: Arc<TCl>,
 	select_chain: Option<TSc>,
 	network: Arc<TNet>,
@@ -128,338 +129,6 @@ impl Executor<Box<dyn Future<Item = (), Error = ()> + Send>> for SpawnTaskHandle
 		}
 	}
 }
-
-macro_rules! new_impl {
-	(
-		$block:ty,
-		$config:ident,
-		$build_components:expr,
-		$maintain_transaction_pool:expr,
-		$offchain_workers:expr,
-		$start_rpc:expr,
-	) => {{
-		let (signal, exit) = exit_future::signal();
-
-		// List of asynchronous tasks to spawn. We collect them, then spawn them all at once.
-		let (to_spawn_tx, to_spawn_rx) =
-			mpsc::unbounded::<Box<dyn Future<Item = (), Error = ()> + Send>>();
-
-		// Create all the components.
-		let (
-			client,
-			on_demand,
-			backend,
-			keystore,
-			select_chain,
-			import_queue,
-			finality_proof_request_builder,
-			finality_proof_provider,
-			network_protocol,
-			transaction_pool,
-			rpc_extensions,
-			dht_event_tx,
-		) = $build_components(&$config)?;
-		let import_queue = Box::new(import_queue);
-		let chain_info = client.info().chain;
-
-		let version = $config.full_version();
-		info!("Highest known block at #{}", chain_info.best_number);
-		telemetry!(
-			SUBSTRATE_INFO;
-			"node.start";
-			"height" => chain_info.best_number.saturated_into::<u64>(),
-			"best" => ?chain_info.best_hash
-		);
-
-		let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {
-			imports_external_transactions: !$config.roles.is_light(),
-			pool: transaction_pool.clone(),
-			client: client.clone(),
-			executor: Arc::new(SpawnTaskHandle { sender: to_spawn_tx.clone(), on_exit: exit.clone() }),
-		});
-
-		let protocol_id = {
-			let protocol_id_full = match $config.chain_spec.protocol_id() {
-				Some(pid) => pid,
-				None => {
-					warn!("Using default protocol ID {:?} because none is configured in the \
-						chain specs", DEFAULT_PROTOCOL_ID
-					);
-					DEFAULT_PROTOCOL_ID
-				}
-			}.as_bytes();
-			network::config::ProtocolId::from(protocol_id_full)
-		};
-
-		let block_announce_validator =
-			Box::new(consensus_common::block_validation::DefaultBlockAnnounceValidator::new(client.clone()));
-
-		let network_params = network::config::Params {
-			roles: $config.roles,
-			network_config: $config.network.clone(),
-			chain: client.clone(),
-			finality_proof_provider,
-			finality_proof_request_builder,
-			on_demand,
-			transaction_pool: transaction_pool_adapter.clone() as _,
-			import_queue,
-			protocol_id,
-			specialization: network_protocol,
-			block_announce_validator,
-		};
-
-		let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
-		let network_mut = network::NetworkWorker::new(network_params)?;
-		let network = network_mut.service().clone();
-		let network_status_sinks = Arc::new(Mutex::new(status_sinks::StatusSinks::new()));
-
-		let offchain_storage = backend.offchain_storage();
-		let offchain_workers = match ($config.offchain_worker, offchain_storage) {
-			(true, Some(db)) => {
-				Some(Arc::new(offchain::OffchainWorkers::new(client.clone(), db)))
-			},
-			(true, None) => {
-				log::warn!("Offchain workers disabled, due to lack of offchain storage support in backend.");
-				None
-			},
-			_ => None,
-		};
-
-		{
-			// block notifications
-			let txpool = Arc::downgrade(&transaction_pool);
-			let wclient = Arc::downgrade(&client);
-			let offchain = offchain_workers.as_ref().map(Arc::downgrade);
-			let to_spawn_tx_ = to_spawn_tx.clone();
-			let network_state_info: Arc<dyn NetworkStateInfo + Send + Sync> = network.clone();
-			let is_validator = $config.roles.is_authority();
-
-			let events = client.import_notification_stream()
-				.map(|v| Ok::<_, ()>(v)).compat()
-				.for_each(move |notification| {
-					let number = *notification.header.number();
-					let txpool = txpool.upgrade();
-
-					if let (Some(txpool), Some(client)) = (txpool.as_ref(), wclient.upgrade()) {
-						let future = $maintain_transaction_pool(
-							&BlockId::hash(notification.hash),
-							&client,
-							&*txpool,
-							&notification.retracted,
-						).map_err(|e| warn!("Pool error processing new block: {:?}", e))?;
-						let _ = to_spawn_tx_.unbounded_send(future);
-					}
-
-					let offchain = offchain.as_ref().and_then(|o| o.upgrade());
-					if let (Some(txpool), Some(offchain)) = (txpool, offchain) {
-						let future = $offchain_workers(
-							&number,
-							&offchain,
-							&txpool,
-							&network_state_info,
-							is_validator,
-						).map_err(|e| warn!("Offchain workers error processing new block: {:?}", e))?;
-						let _ = to_spawn_tx_.unbounded_send(future);
-					}
-
-					Ok(())
-				})
-				.select(exit.clone())
-				.then(|_| Ok(()));
-			let _ = to_spawn_tx.unbounded_send(Box::new(events));
-		}
-
-		{
-			// extrinsic notifications
-			let network = Arc::downgrade(&network);
-			let transaction_pool_ = transaction_pool.clone();
-			let events = transaction_pool.import_notification_stream()
-				.map(|v| Ok::<_, ()>(v)).compat()
-				.for_each(move |_| {
-					if let Some(network) = network.upgrade() {
-						network.trigger_repropagate();
-					}
-					let status = transaction_pool_.status();
-					telemetry!(SUBSTRATE_INFO; "txpool.import";
-						"ready" => status.ready,
-						"future" => status.future
-					);
-					Ok(())
-				})
-				.select(exit.clone())
-				.then(|_| Ok(()));
-
-			let _ = to_spawn_tx.unbounded_send(Box::new(events));
-		}
-
-		// Periodically notify the telemetry.
-		let transaction_pool_ = transaction_pool.clone();
-		let client_ = client.clone();
-		let mut sys = System::new();
-		let self_pid = get_current_pid().ok();
-		let (state_tx, state_rx) = mpsc::unbounded::<(NetworkStatus<_>, NetworkState)>();
-		network_status_sinks.lock().push(std::time::Duration::from_millis(5000), state_tx);
-		let tel_task = state_rx.for_each(move |(net_status, _)| {
-			let info = client_.info();
-			let best_number = info.chain.best_number.saturated_into::<u64>();
-			let best_hash = info.chain.best_hash;
-			let num_peers = net_status.num_connected_peers;
-			let txpool_status = transaction_pool_.status();
-			let finalized_number: u64 = info.chain.finalized_number.saturated_into::<u64>();
-			let bandwidth_download = net_status.average_download_per_sec;
-			let bandwidth_upload = net_status.average_upload_per_sec;
-
-			let used_state_cache_size = match info.used_state_cache_size {
-				Some(size) => size,
-				None => 0,
-			};
-
-			// get cpu usage and memory usage of this process
-			let (cpu_usage, memory) = if let Some(self_pid) = self_pid {
-				if sys.refresh_process(self_pid) {
-					let proc = sys.get_process(self_pid)
-						.expect("Above refresh_process succeeds, this should be Some(), qed");
-					(proc.cpu_usage(), proc.memory())
-				} else { (0.0, 0) }
-			} else { (0.0, 0) };
-
-			telemetry!(
-				SUBSTRATE_INFO;
-				"system.interval";
-				"peers" => num_peers,
-				"height" => best_number,
-				"best" => ?best_hash,
-				"txcount" => txpool_status.ready,
-				"cpu" => cpu_usage,
-				"memory" => memory,
-				"finalized_height" => finalized_number,
-				"finalized_hash" => ?info.chain.finalized_hash,
-				"bandwidth_download" => bandwidth_download,
-				"bandwidth_upload" => bandwidth_upload,
-				"used_state_cache_size" => used_state_cache_size,
-			);
-
-			Ok(())
-		}).select(exit.clone()).then(|_| Ok(()));
-		let _ = to_spawn_tx.unbounded_send(Box::new(tel_task));
-
-		// Periodically send the network state to the telemetry.
-		let (netstat_tx, netstat_rx) = mpsc::unbounded::<(NetworkStatus<_>, NetworkState)>();
-		network_status_sinks.lock().push(std::time::Duration::from_secs(30), netstat_tx);
-		let tel_task_2 = netstat_rx.for_each(move |(_, network_state)| {
-			telemetry!(
-				SUBSTRATE_INFO;
-				"system.network_state";
-				"state" => network_state,
-			);
-			Ok(())
-		}).select(exit.clone()).then(|_| Ok(()));
-		let _ = to_spawn_tx.unbounded_send(Box::new(tel_task_2));
-
-		// RPC
-		let (system_rpc_tx, system_rpc_rx) = futures03::channel::mpsc::unbounded();
-		let gen_handler = || {
-			let system_info = rpc::system::SystemInfo {
-				chain_name: $config.chain_spec.name().into(),
-				impl_name: $config.impl_name.into(),
-				impl_version: $config.impl_version.into(),
-				properties: $config.chain_spec.properties().clone(),
-			};
-			$start_rpc(
-				client.clone(),
-				//light_components.clone(),
-				system_rpc_tx.clone(),
-				system_info.clone(),
-				Arc::new(SpawnTaskHandle { sender: to_spawn_tx.clone(), on_exit: exit.clone() }),
-				transaction_pool.clone(),
-				rpc_extensions.clone(),
-				keystore.clone(),
-			)
-		};
-		let rpc_handlers = gen_handler();
-		let rpc = start_rpc_servers(&$config, gen_handler)?;
-
-
-		let _ = to_spawn_tx.unbounded_send(Box::new(build_network_future(
-			$config.roles,
-			network_mut,
-			client.clone(),
-			network_status_sinks.clone(),
-			system_rpc_rx,
-			has_bootnodes,
-			dht_event_tx,
-		)
-			.map_err(|_| ())
-			.select(exit.clone())
-			.then(|_| Ok(()))));
-
-		let telemetry_connection_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>> = Default::default();
-
-		// Telemetry
-		let telemetry = $config.telemetry_endpoints.clone().map(|endpoints| {
-			let is_authority = $config.roles.is_authority();
-			let network_id = network.local_peer_id().to_base58();
-			let name = $config.name.clone();
-			let impl_name = $config.impl_name.to_owned();
-			let version = version.clone();
-			let chain_name = $config.chain_spec.name().to_owned();
-			let telemetry_connection_sinks_ = telemetry_connection_sinks.clone();
-			let telemetry = tel::init_telemetry(tel::TelemetryConfig {
-				endpoints,
-				wasm_external_transport: $config.telemetry_external_transport.take(),
-			});
-			let future = telemetry.clone()
-				.map(|ev| Ok::<_, ()>(ev))
-				.compat()
-				.for_each(move |event| {
-					// Safe-guard in case we add more events in the future.
-					let tel::TelemetryEvent::Connected = event;
-
-					telemetry!(SUBSTRATE_INFO; "system.connected";
-						"name" => name.clone(),
-						"implementation" => impl_name.clone(),
-						"version" => version.clone(),
-						"config" => "",
-						"chain" => chain_name.clone(),
-						"authority" => is_authority,
-						"network_id" => network_id.clone()
-					);
-
-					telemetry_connection_sinks_.lock().retain(|sink| {
-						sink.unbounded_send(()).is_ok()
-					});
-					Ok(())
-				});
-			let _ = to_spawn_tx.unbounded_send(Box::new(future
-				.select(exit.clone())
-				.then(|_| Ok(()))));
-			telemetry
-		});
-
-		Ok(NewService {
-			client,
-			network,
-			network_status_sinks,
-			select_chain,
-			transaction_pool,
-			exit,
-			signal: Some(signal),
-			essential_failed: Arc::new(AtomicBool::new(false)),
-			to_spawn_tx,
-			to_spawn_rx,
-			to_poll: Vec::new(),
-			rpc_handlers,
-			_rpc: rpc,
-			_telemetry: telemetry,
-			_offchain_workers: offchain_workers,
-			_telemetry_on_connect_sinks: telemetry_connection_sinks.clone(),
-			keystore,
-			marker: PhantomData::<$block>,
-		})
-	}}
-}
-
-mod builder;
 
 /// Abstraction over a Substrate service.
 pub trait AbstractService: 'static + Future<Item = (), Error = Error> +
@@ -530,7 +199,7 @@ pub trait AbstractService: 'static + Future<Item = (), Error = Error> +
 }
 
 impl<TBl, TBackend, TExec, TRtApi, TSc, TNetSpec, TExPoolApi, TOc> AbstractService for
-	NewService<TBl, Client<TBackend, TExec, TBl, TRtApi>, TSc, NetworkStatus<TBl>,
+	Service<TBl, Client<TBackend, TExec, TBl, TRtApi>, TSc, NetworkStatus<TBl>,
 		NetworkService<TBl, TNetSpec, H256>, TransactionPool<TExPoolApi>, TOc>
 where
 	TBl: BlockT<Hash = H256>,
@@ -619,7 +288,7 @@ where
 }
 
 impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Future for
-	NewService<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc>
+	Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc>
 {
 	type Item = ();
 	type Error = Error;
@@ -652,7 +321,7 @@ impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Future for
 }
 
 impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Executor<Box<dyn Future<Item = (), Error = ()> + Send>> for
-	NewService<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc>
+	Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc>
 {
 	fn execute(
 		&self,
@@ -819,7 +488,7 @@ pub struct NetworkStatus<B: BlockT> {
 }
 
 impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Drop for
-	NewService<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc>
+	Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc>
 {
 	fn drop(&mut self) {
 		debug!(target: "service", "Substrate service shutdown");
