@@ -663,4 +663,39 @@ mod tests {
 			assert_eq!(Treasury::pot(), 0); // Pot is emptied
 		});
 	}
+
+	// In case treasury account is not existing then it works fine.
+	// This is usefull for chain that will just update runtime.
+	#[test]
+	fn inexisting_account_works() {
+		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		balances::GenesisConfig::<Test>{
+			balances: vec![(0, 100), (1, 99), (2, 1)],
+			vesting: vec![],
+		}.assimilate_storage(&mut t).unwrap();
+		// Treasury genesis config is not build thus treasury account does not exist
+		let mut t: runtime_io::TestExternalities = t.into();
+
+		t.execute_with(|| {
+			assert_eq!(Balances::free_balance(&Treasury::account_id()), 0); // Account does not exist
+			assert_eq!(Treasury::pot(), 0); // Pot is empty
+
+			assert_ok!(Treasury::propose_spend(Origin::signed(0), 99, 3));
+			assert_ok!(Treasury::approve_proposal(Origin::ROOT, 0));
+			assert_ok!(Treasury::propose_spend(Origin::signed(0), 1, 3));
+			assert_ok!(Treasury::approve_proposal(Origin::ROOT, 1));
+			<Treasury as OnFinalize<u64>>::on_finalize(2);
+			assert_eq!(Treasury::pot(), 0); // Pot hasn't changed
+			assert_eq!(Balances::free_balance(&3), 0); // Balance of `3` hasn't changed
+
+			Treasury::on_dilution(100, 100);
+			assert_eq!(Treasury::pot(), 99); // Pot now contains funds
+			assert_eq!(Balances::free_balance(&Treasury::account_id()), 100); // Account does exist
+
+			<Treasury as OnFinalize<u64>>::on_finalize(4);
+
+			assert_eq!(Treasury::pot(), 0); // Pot has changed
+			assert_eq!(Balances::free_balance(&3), 99); // Balance of `3` has changed
+		});
+	}
 }
