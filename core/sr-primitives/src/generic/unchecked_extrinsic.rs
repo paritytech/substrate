@@ -25,7 +25,7 @@ use crate::{
 	generic::CheckedExtrinsic, transaction_validity::{TransactionValidityError, InvalidTransaction},
 };
 
-const TRANSACTION_VERSION: u8 = 3;
+const TRANSACTION_VERSION: u8 = 4;
 
 /// A extrinsic right from the external world. This is unchecked and so
 /// can contain a signature.
