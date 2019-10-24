@@ -1174,7 +1174,7 @@ impl<T: Trait> Module<T> {
 
 				// kill slashing metadata.
 				for (pruned_era, _) in bonded.drain(..n_to_prune) {
-					slashing::clear_era_metadata(pruned_era);
+					slashing::clear_era_metadata::<T>(pruned_era);
 				}
 
 				if let Some(&(_, first_session)) = bonded.first() {

@@ -372,15 +372,18 @@ pub(crate) fn clear_era_metadata<T: Trait>(obsolete_era: EraIndex) {
 
 /// Clear slashing metadata for a dead account.
 pub(crate) fn clear_stash_metadata<T: Trait>(stash: &T::AccountId) {
-	let spans = <Module<T> as Store>::SlashingSpans::take(stash);
+	let spans = match <Module<T> as Store>::SlashingSpans::take(stash) {
+		None => return,
+		Some(s) => s,
+	};
 
 	// kill slashing-span metadata for account.
 	//
 	// this can only happen while the account is staked _if_ they are completely slashed.
 	// in that case, they may re-bond, but it would count again as span 0. Further ancient
 	// slashes would slash into this new bond, since metadata has now been cleared.
-	for span in spans.into_iter().flat_map(|spans| spans) {
-		<Module<T> as Store>::SpanSlash::remove(&(stash.clone()), span.index);
+	for span in spans.iter() {
+		<Module<T> as Store>::SpanSlash::remove(&(stash.clone(), span.index));
 	}
 }
 
