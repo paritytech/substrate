@@ -357,8 +357,9 @@ fn call_in_wasm_module(
 		},
 		|res, memory| {
 			if let Some(I64(r)) = res {
+				let r = u64::from_le(r as u64);
 				let offset = r as u32;
-				let length = (r as u64 >> 32) as usize;
+				let length = (r >> 32) as usize;
 				memory.get(offset, length).map_err(|_| Error::Runtime).map(Some)
 			} else {
 				Ok(None)

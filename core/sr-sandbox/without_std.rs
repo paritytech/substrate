@@ -239,14 +239,9 @@ extern "C" fn dispatch_thunk<T>(
 		let state = &mut *(state as *mut T);
 
 		// Pass control flow to the designated function.
-		let result = f(state, &args).encode();
+		let result = f(state, &args);
 
-		// Leak the result vector and return the pointer to return data.
-		let result_ptr = result.as_ptr() as u64;
-		let result_len = result.len() as u64;
-		mem::forget(result);
-
-		(result_ptr << 32) | result_len
+		primitives::to_substrate_wasm_fn_return_value(&result)
 	}
 }
 

@@ -286,3 +286,25 @@ impl From<LogLevel> for log::Level {
 		}
 	}
 }
+
+/// Converts the given value into an `u64` by following the Substrate calling convention.
+///
+/// When Substrate calls into Wasm it expects a fixed signature for functions exported
+/// from the Wasm blob. The return value of this signature is always a `u64` in little endian.
+/// This `u64` stores the pointer to the encoded return value and the length of this encoded value.
+/// The first `32bit` are reserved for the pointer and the last `32bit` for the length.
+#[cfg(not(feature = "std"))]
+pub fn to_substrate_wasm_fn_return_value(value: &impl Encode) -> u64 {
+	let encoded = value.encode();
+
+	let ptr = encoded.as_ptr() as u64;
+	let length = encoded.len() as u64;
+	let res = ptr | (length << 32);
+
+	// Leak the output vector to avoid it being freed.
+	// This is fine in a WASM context since the heap
+	// will be discarded after the call.
+	rstd::mem::forget(encoded);
+
+	res.to_le()
+}
