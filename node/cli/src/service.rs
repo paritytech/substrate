@@ -175,6 +175,7 @@ macro_rules! new_full {
 				service.network(),
 				dht_event_rx,
 			);
+
 			service.spawn_task(authority_discovery);
 		}
 
@@ -189,12 +190,12 @@ macro_rules! new_full {
 		match (is_authority, disable_grandpa) {
 			(false, false) => {
 				// start the lightweight GRANDPA observer
-				service.spawn_task(Box::new(grandpa::run_grandpa_observer(
+				service.spawn_task(grandpa::run_grandpa_observer(
 					config,
 					grandpa_link,
 					service.network(),
 					service.on_exit(),
-				)?));
+				)?);
 			},
 			(true, false) => {
 				// start the full GRANDPA voter
@@ -207,7 +208,9 @@ macro_rules! new_full {
 					telemetry_on_connect: Some(service.telemetry_on_connect_stream()),
 					voting_rule: grandpa::VotingRulesBuilder::default().build(),
 				};
-				service.spawn_task(Box::new(grandpa::run_grandpa_voter(grandpa_config)?));
+				// the GRANDPA voter task is considered infallible, i.e.
+				// if it fails we take down the service with it.
+				service.spawn_essential_task(grandpa::run_grandpa_voter(grandpa_config)?);
 			},
 			(_, true) => {
 				grandpa::setup_disabled_grandpa(

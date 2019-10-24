@@ -115,11 +115,11 @@ pub fn new_full<C: Send + Default + 'static>(config: Configuration<C, GenesisCon
 			service.keystore(),
 		)?;
 
-		let select = aura.select(service.on_exit()).then(|_| Ok(()));
+		let aura = aura.select(service.on_exit()).then(|_| Ok(()));
 
 		// the AURA authoring task is considered essential, i.e. if it
 		// fails we take down the service with it.
-		service.spawn_essential_task(select);
+		service.spawn_essential_task(aura);
 	}
 
 	let grandpa_config = grandpa::Config {
@@ -133,12 +133,12 @@ pub fn new_full<C: Send + Default + 'static>(config: Configuration<C, GenesisCon
 	match (is_authority, disable_grandpa) {
 		(false, false) => {
 			// start the lightweight GRANDPA observer
-			service.spawn_task(Box::new(grandpa::run_grandpa_observer(
+			service.spawn_task(grandpa::run_grandpa_observer(
 				grandpa_config,
 				grandpa_link,
 				service.network(),
 				service.on_exit(),
-			)?));
+			)?);
 		},
 		(true, false) => {
 			// start the full GRANDPA voter
