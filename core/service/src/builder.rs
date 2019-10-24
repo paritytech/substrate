@@ -858,7 +858,7 @@ ServiceBuilder<
 			marker: _,
 			mut config,
 			client,
-			fetcher,
+			fetcher: on_demand,
 			backend,
 			keystore,
 			select_chain,
@@ -883,34 +883,6 @@ ServiceBuilder<
 		let (to_spawn_tx, to_spawn_rx) =
 			mpsc::unbounded::<Box<dyn Future<Item = (), Error = ()> + Send>>();
 
-		// Create all the components.
-		let (
-			client,
-			on_demand,
-			backend,
-			keystore,
-			select_chain,
-			import_queue,
-			finality_proof_request_builder,
-			finality_proof_provider,
-			network_protocol,
-			transaction_pool,
-			rpc_extensions,
-			dht_event_tx,
-		) = (
-			client,
-			fetcher,
-			backend,
-			keystore,
-			select_chain,
-			import_queue,
-			finality_proof_request_builder,
-			finality_proof_provider,
-			network_protocol,
-			transaction_pool,
-			rpc_extensions,
-			dht_event_tx,
-		);
 		let import_queue = Box::new(import_queue);
 		let chain_info = client.info().chain;
 
