@@ -37,7 +37,7 @@
 //! index than children.
 
 use std::collections::{BTreeMap};
-use historied_data::tree::{BranchesStateTrait, BranchState, BranchRange};
+use historical_data::tree::{BranchesStateTrait, BranchState, BranchRange};
 
 #[derive(Clone, Default, Debug)]
 /// State needed for queries and updates operations.

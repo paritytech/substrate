@@ -72,9 +72,9 @@ use header_metadata::{CachedHeaderMetadata, HeaderMetadata, HeaderMetadataCache}
 use crate::storage_cache::{CachingState, SharedCache, new_shared_cache};
 use log::{trace, debug, warn};
 pub use state_db::PruningMode;
-use historied_data::tree::Serialized;
-use historied_data::PruneResult;
-use historied_data::linear::DefaultVersion;
+use historical_data::tree::Serialized;
+use historical_data::PruneResult;
+use historical_data::linear::DefaultVersion;
 
 type Ser<'a> = Serialized<'a, DefaultVersion>;
 

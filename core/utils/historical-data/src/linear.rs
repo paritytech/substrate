@@ -14,26 +14,26 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Linear historied data.
+//! Linear historical data.
 
 #[cfg(not(feature = "std"))]
 use rstd::{vec::Vec, vec};
 use rstd::marker::PhantomData;
 use rstd::borrow::Cow;
-use crate::HistoriedValue;
+use crate::HistoricalValue;
 
 
 /// Array like buffer for in memory storage.
 /// By in memory we expect that this will
 /// not required persistence and is not serialized.
 #[cfg(not(feature = "std"))]
-pub(crate) type MemoryOnly<V, I> = Vec<HistoriedValue<V, I>>;
+pub(crate) type MemoryOnly<V, I> = Vec<HistoricalValue<V, I>>;
 
 /// Array like buffer for in memory storage.
 /// By in memory we expect that this will
 /// not required persistence and is not serialized.
 #[cfg(feature = "std")]
-pub(crate) type MemoryOnly<V, I> = smallvec::SmallVec<[HistoriedValue<V, I>; ALLOCATED_HISTORY]>;
+pub(crate) type MemoryOnly<V, I> = smallvec::SmallVec<[HistoricalValue<V, I>; ALLOCATED_HISTORY]>;
 
 /// Size of preallocated history per element.
 /// Currently at two for committed and prospective only.
@@ -185,7 +185,7 @@ impl<'a, F: SerializedConfig> Serialized<'a, F> {
 		self.remove_range(0, index);
 	}
 
-	pub(crate) fn pop(&mut self) -> Option<HistoriedValue<Vec<u8>, u64>> {
+	pub(crate) fn pop(&mut self) -> Option<HistoricalValue<Vec<u8>, u64>> {
 		let len = self.len();
 		if len == 0 {
 			return None;
@@ -196,22 +196,22 @@ impl<'a, F: SerializedConfig> Serialized<'a, F> {
 		let value = self.0[start_ix + SIZE_BYTE_LEN..end_ix].to_vec();
 		if len - 1 == 0 {
 			self.clear();
-			return Some(HistoriedValue { value, index: state })	
+			return Some(HistoricalValue { value, index: state })	
 		} else {
 			self.write_le_usize(self.0.len() - (SIZE_BYTE_LEN * 2), len - 1);
 		};
 		let ix_size = (len * SIZE_BYTE_LEN) - SIZE_BYTE_LEN;
 		self.slice_copy(end_ix, start_ix, ix_size);
 		self.0.to_mut().truncate(start_ix + ix_size);
-		Some(HistoriedValue { value, index: state })
+		Some(HistoricalValue { value, index: state })
 	}
 
-	pub(crate) fn push(&mut self, val: HistoriedValue<&[u8], u64>) {
+	pub(crate) fn push(&mut self, val: HistoricalValue<&[u8], u64>) {
 		self.push_extra(val, &[])
 	}
 
 	/// variant of push where part of the value is in a second slice.
-	pub(crate) fn push_extra(&mut self, val: HistoriedValue<&[u8], u64>, extra: &[u8]) {
+	pub(crate) fn push_extra(&mut self, val: HistoricalValue<&[u8], u64>, extra: &[u8]) {
 		let len = self.len();
 		let start_ix = self.index_start();
 		let end_ix = self.0.len();
@@ -275,7 +275,7 @@ impl<'a, F: SerializedConfig> Serialized<'a, F> {
 
 	}
 
-	pub(crate) fn get_state(&self, index: usize) -> HistoriedValue<&[u8], u64> {
+	pub(crate) fn get_state(&self, index: usize) -> HistoricalValue<&[u8], u64> {
 		let start_ix = self.index_element(index);
 		let len = self.len();
 		let end_ix = if index == len - 1 {
@@ -284,7 +284,7 @@ impl<'a, F: SerializedConfig> Serialized<'a, F> {
 			self.index_element(index + 1)
 		};
 		let state = self.read_le_u64(start_ix);
-		HistoriedValue {
+		HistoricalValue {
 			value: &self.0[start_ix + SIZE_BYTE_LEN..end_ix],
 			index: state,
 		}
@@ -350,7 +350,7 @@ impl<'a, F: SerializedConfig> Serialized<'a, F> {
 		self.0.to_mut()[start_to..start_to + size].copy_from_slice(&buffer[..]);
 	}
 
-	// Usize encoded as le u64 (for historied value).
+	// Usize encoded as le u64 (for historical value).
 	fn read_le_u64(&self, pos: usize) -> u64 {
 		let mut buffer = [0u8; SIZE_BYTE_LEN];
 		buffer.copy_from_slice(&self.0[pos..pos + SIZE_BYTE_LEN]);

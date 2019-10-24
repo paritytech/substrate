@@ -23,7 +23,7 @@ state_db = { package = "substrate-state-db", path = "../../state-db" }
 trie = { package = "substrate-trie", path = "../../trie" }
 consensus_common = { package = "substrate-consensus-common", path = "../../consensus/common" }
 header_metadata = { package = "substrate-header-metadata", path = "../header-metadata" }
-historied-data = { path = "../../utils/historied-data" }
+historical-data = { path = "../../utils/historical-data" }
 
 [dev-dependencies]
 substrate-keyring = { path = "../../keyring" }

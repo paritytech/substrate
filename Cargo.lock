@@ -1225,7 +1225,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "historied-data"
+name = "historical-data"
 version = "2.0.0"
 dependencies = [
  "num-traits 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -4831,7 +4831,7 @@ version = "2.0.0"
 dependencies = [
  "env_logger 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "hash-db 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "historied-data 2.0.0",
+ "historical-data 2.0.0",
  "kvdb 0.1.0 (git+https://github.com/paritytech/parity-common?rev=b0317f649ab2c665b7987b8475878fc4d2e1f81d)",
  "kvdb-memorydb 0.1.0 (git+https://github.com/paritytech/parity-common?rev=b0317f649ab2c665b7987b8475878fc4d2e1f81d)",
  "kvdb-rocksdb 0.1.4 (git+https://github.com/paritytech/parity-common?rev=b0317f649ab2c665b7987b8475878fc4d2e1f81d)",
@@ -5530,7 +5530,7 @@ name = "substrate-state-db"
 version = "2.0.0"
 dependencies = [
  "env_logger 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "historied-data 2.0.0",
+ "historical-data 2.0.0",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",

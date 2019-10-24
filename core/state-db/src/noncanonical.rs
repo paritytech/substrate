@@ -29,7 +29,7 @@ use super::{
 use codec::{Encode, Decode};
 use log::trace;
 use crate::branch::{RangeSet, BranchRanges};
-use historied_data::tree::History;
+use historical_data::tree::History;
 
 const NON_CANONICAL_JOURNAL: &[u8] = b"noncanonical_journal";
 const NON_CANONICAL_OFFSTATE_JOURNAL: &[u8] = b"kv_noncanonical_journal";
@@ -90,10 +90,10 @@ impl KvPendingGC {
 		if let Some(pending) = self.pending_gc_query {
 			if pending < self.min_pinned_index(pinned) {
 				for key in self.keys_pending_gc.drain() {
-					match kv_values.get_mut(&key).map(|historied_value| {
-						historied_value.gc(branches.reverse_iter_ranges())
+					match kv_values.get_mut(&key).map(|historical_value| {
+						historical_value.gc(branches.reverse_iter_ranges())
 					}) {
-						Some(historied_data::PruneResult::Cleared) => {
+						Some(historical_data::PruneResult::Cleared) => {
 							let _ = kv_values.remove(&key);
 						},
 						_ => (),
@@ -564,7 +564,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 					.map(|k| (k.clone(), self.kv_values.get(k)
 						.expect("For each key in overlays there's a value in values")
 						.get(&range)
-						.expect("For each key in overlays there's a historied entry in values")
+						.expect("For each key in overlays there's a historical entry in values")
 						.clone())));
 				// some deletion can be pruned if in first block so handle is
 				// a bit less restrictive
@@ -572,7 +572,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 					overlay.kv_deleted.iter()
 					.filter_map(|k| self.kv_values.get(k)
 						.map(|v| (k.clone(), v.get(&range)
-							.expect("For each key in overlays there's a historied entry \
+							.expect("For each key in overlays there's a historical entry \
 								in values, and pruned empty value are cleared")
 							.clone())
 						)

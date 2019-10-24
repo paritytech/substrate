@@ -22,9 +22,9 @@ use crate::{
 	DBValue, ChangeSet, KvChangeSet, KvKey, MetaDb, NodeDb, KvDb,
 	CommitSet, CommitSetCanonical,
 };
-use historied_data::tree::Serialized;
-use historied_data::PruneResult;
-use historied_data::linear::DefaultVersion;
+use historical_data::tree::Serialized;
+use historical_data::PruneResult;
+use historical_data::linear::DefaultVersion;
 
 type Ser<'a> = Serialized<'a, DefaultVersion>;
 

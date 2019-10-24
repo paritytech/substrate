@@ -28,16 +28,16 @@ pub mod linear;
 /// An entry at a given history index.
 #[derive(Debug, Clone)]
 #[cfg_attr(any(test, feature = "test"), derive(PartialEq))]
-pub struct HistoriedValue<V, I> {
+pub struct HistoricalValue<V, I> {
 	/// The stored value.
 	pub value: V,
 	/// The moment in history when the value got set.
 	pub index: I,
 }
 
-impl<V, I> From<(V, I)> for HistoriedValue<V, I> {
-	fn from(input: (V, I)) -> HistoriedValue<V, I> {
-		HistoriedValue { value: input.0, index: input.1 }
+impl<V, I> From<(V, I)> for HistoricalValue<V, I> {
+	fn from(input: (V, I)) -> HistoricalValue<V, I> {
+		HistoricalValue { value: input.0, index: input.1 }
 	}
 }
 

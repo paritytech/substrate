@@ -26,7 +26,7 @@ use crate::linear::{
 	Serialized as SerializedInner,
 	SerializedConfig,
 };
-use crate::HistoriedValue;
+use crate::HistoricalValue;
 use crate::PruneResult;
 use crate::as_u;
 use rstd::vec::Vec;
@@ -156,7 +156,7 @@ impl<V> History<V> {
 			if new_branch {
 				let index = as_u(state_branch.last_index());
 				let mut history = BranchBackend::<V, u64>::default();
-				history.push(HistoriedValue {
+				history.push(HistoricalValue {
 					value,
 					index,
 				});
@@ -186,7 +186,7 @@ impl<V> History<V> {
 		debug_assert!(index > 0);
 		loop {
 			if index == 0 || history.history[index - 1].index < node_index_u64 {
-				let h_value = HistoriedValue {
+				let h_value = HistoricalValue {
 					value,
 					index: node_index_u64
 				};
@@ -261,7 +261,7 @@ impl<V> History<V> {
 		None
 	}
 
-	/// Gc an historied value other its possible values.
+	/// Gc an historical value other its possible values.
 	/// Iterator need to be reversed ordered by branch index.
 	pub fn gc<IT, S, I>(&mut self, mut states: IT) -> PruneResult
 		where
@@ -345,7 +345,7 @@ impl<'a, F: SerializedConfig> Serialized<'a, F> {
 		}
 		while index > 0 {
 			index -= 1;
-			let HistoriedValue { value, index: state_index } = self.0.get_state(index);
+			let HistoricalValue { value, index: state_index } = self.0.get_state(index);
 			let state_index = as_u(state_index);
 			if state.get_node(state_index) {
 				// Note this extra byte is note optimal, should be part of index encoding
@@ -377,9 +377,9 @@ impl<'a, F: SerializedConfig> Serialized<'a, F> {
 		}
 		match value {
 			Some(value) =>
-				self.0.push_extra(HistoriedValue {value, index: target_state_index}, &[0][..]),
+				self.0.push_extra(HistoricalValue {value, index: target_state_index}, &[0][..]),
 			None =>
-				self.0.push(HistoriedValue {value: &[], index: target_state_index}),
+				self.0.push(HistoricalValue {value: &[], index: target_state_index}),
 		}
 	}
 
