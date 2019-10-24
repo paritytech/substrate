@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::{NewService, NetworkStatus, NetworkState, error::{self, Error}, DEFAULT_PROTOCOL_ID};
+use crate::{Service, NetworkStatus, NetworkState, error::{self, Error}, DEFAULT_PROTOCOL_ID};
 use crate::{SpawnTaskHandle, start_rpc_servers, build_network_future, TransactionPoolAdapter};
 use crate::TaskExecutor;
 use crate::status_sinks;
@@ -841,7 +841,7 @@ ServiceBuilder<
 	TRpcB: RpcBuilder<TBl, TBackend, TExec, TRtApi>,
 {
 	/// Builds the service.
-	pub fn build(self) -> Result<NewService<
+	pub fn build(self) -> Result<Service<
 		TBl,
 		Client<TBackend, TExec, TBl, TRtApi>,
 		TSc,

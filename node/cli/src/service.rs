@@ -33,7 +33,7 @@ use transaction_pool::{self, txpool::{Pool as TransactionPool}};
 use inherents::InherentDataProviders;
 use network::construct_simple_protocol;
 
-use substrate_service::{NewService, NetworkStatus};
+use substrate_service::{Service, NetworkStatus};
 use client::{Client, LocalCallExecutor};
 use client_db::Backend;
 use sr_primitives::traits::Block as BlockT;
@@ -248,7 +248,7 @@ pub type NodeConfiguration<C> = Configuration<C, GenesisConfig, crate::chain_spe
 /// Builds a new service for a full client.
 pub fn new_full<C: Send + Default + 'static>(config: NodeConfiguration<C>)
 -> Result<
-	NewService<
+	Service<
 		ConcreteBlock,
 		ConcreteClient,
 		LongestChain<ConcreteBackend, ConcreteBlock>,

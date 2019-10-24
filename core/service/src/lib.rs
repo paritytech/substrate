@@ -71,7 +71,7 @@ pub use futures::future::Executor;
 const DEFAULT_PROTOCOL_ID: &str = "sup";
 
 /// Substrate service.
-pub struct NewService<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
+pub struct Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
 	client: Arc<TCl>,
 	select_chain: Option<TSc>,
 	network: Arc<TNet>,
@@ -436,7 +436,7 @@ macro_rules! new_impl {
 			telemetry
 		});
 
-		Ok(NewService {
+		Ok(Service {
 			client,
 			network,
 			network_status_sinks,
@@ -530,7 +530,7 @@ pub trait AbstractService: 'static + Future<Item = (), Error = Error> +
 }
 
 impl<TBl, TBackend, TExec, TRtApi, TSc, TNetSpec, TExPoolApi, TOc> AbstractService for
-	NewService<TBl, Client<TBackend, TExec, TBl, TRtApi>, TSc, NetworkStatus<TBl>,
+	Service<TBl, Client<TBackend, TExec, TBl, TRtApi>, TSc, NetworkStatus<TBl>,
 		NetworkService<TBl, TNetSpec, H256>, TransactionPool<TExPoolApi>, TOc>
 where
 	TBl: BlockT<Hash = H256>,
@@ -619,7 +619,7 @@ where
 }
 
 impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Future for
-	NewService<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc>
+	Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc>
 {
 	type Item = ();
 	type Error = Error;
@@ -652,7 +652,7 @@ impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Future for
 }
 
 impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Executor<Box<dyn Future<Item = (), Error = ()> + Send>> for
-	NewService<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc>
+	Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc>
 {
 	fn execute(
 		&self,
@@ -819,7 +819,7 @@ pub struct NetworkStatus<B: BlockT> {
 }
 
 impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Drop for
-	NewService<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc>
+	Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc>
 {
 	fn drop(&mut self) {
 		debug!(target: "service", "Substrate service shutdown");
