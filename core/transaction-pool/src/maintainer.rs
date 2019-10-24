@@ -345,8 +345,7 @@ mod tests {
 	use super::*;
 	use futures::executor::block_on;
 	use codec::Encode;
-	use consensus_common::{BlockOrigin, SelectChain};
-	use test_client::{prelude::*, runtime::{Block, Transfer}};
+	use test_client::{prelude::*, runtime::{Block, Transfer}, consensus::{BlockOrigin, SelectChain}};
 	use crate::api::{FullChainApi, LightChainApi};
 
 	#[test]

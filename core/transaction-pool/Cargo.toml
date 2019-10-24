@@ -18,4 +18,3 @@ txpool = { package = "substrate-transaction-graph", path = "./graph" }
 [dev-dependencies]
 keyring = { package = "substrate-keyring", path = "../../core/keyring" }
 test-client = { package = "substrate-test-runtime-client", path = "../../core/test-runtime/client" }
-consensus_common = { package = "substrate-consensus-common", path = "../../core/consensus/common" }
