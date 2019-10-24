@@ -20,8 +20,7 @@ use crate::{Perbill, traits::{SimpleArithmetic, SaturatedConversion}};
 use core::ops::Sub;
 
 /// Piecewise Linear function in [0, 1] -> [0, 1].
-#[cfg_attr(feature = "std", derive(Debug))]
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, primitives::RuntimeDebug)]
 pub struct PiecewiseLinear<'a> {
 	/// Array of points. Must be in order from the lowest abscissas to the highest.
 	pub points: &'a [(Perbill, Perbill)]

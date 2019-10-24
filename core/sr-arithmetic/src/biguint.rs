@@ -21,7 +21,7 @@ use rstd::{cmp::Ordering, ops, prelude::*, cell::RefCell, convert::TryFrom};
 
 // A sensible value for this would be half of the dword size of the host machine. Since the
 // runtime is compiled to 32bit webassembly, using 32 and 64 for single and double respectively
-// should yield the most performance. TODO #3745 we could benchmark this and verify.
+// should yield the most performance.
 /// Representation of a single limb.
 pub type Single = u32;
 /// Representation of two limbs.
@@ -427,8 +427,8 @@ impl BigUint {
 	}
 }
 
-#[cfg(feature = "std")]
 impl rstd::fmt::Debug for BigUint {
+	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut rstd::fmt::Formatter<'_>) -> rstd::fmt::Result {
 		write!(
 			f,
@@ -437,6 +437,12 @@ impl rstd::fmt::Debug for BigUint {
 			u128::try_from(self.clone()).unwrap_or(0),
 		)
 	}
+
+	#[cfg(not(feature = "std"))]
+	fn fmt(&self, _: &mut rstd::fmt::Formatter<'_>) -> rstd::fmt::Result {
+		Ok(())
+	}
+
 }
 
 impl PartialEq for BigUint {

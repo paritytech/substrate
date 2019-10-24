@@ -51,7 +51,7 @@ mod imp {
 }
 
 /// Error that can occur while using this crate.
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(primitives::RuntimeDebug)]
 pub enum Error {
 	/// Module is not valid, couldn't be instantiated.
 	Module,
@@ -171,7 +171,7 @@ pub struct Instance<T> {
 
 impl<T> Instance<T> {
 	/// Instantiate a module with the given [`EnvironmentDefinitionBuilder`]. It will
-	/// run the `start` function with the given `state`.
+	/// run the `start` function (if it is present in the module) with the given `state`.
 	///
 	/// Returns `Err(Error::Module)` if this module can't be instantiated with the given
 	/// environment. If execution of `start` function generated a trap, then `Err(Error::Execution)` will

@@ -33,7 +33,7 @@ use transaction_pool::{self, txpool::{Pool as TransactionPool}};
 use inherents::InherentDataProviders;
 use network::construct_simple_protocol;
 
-use substrate_service::{NewService, NetworkStatus};
+use substrate_service::{Service, NetworkStatus};
 use client::{Client, LocalCallExecutor};
 use client_db::Backend;
 use sr_primitives::traits::Block as BlockT;
@@ -175,6 +175,7 @@ macro_rules! new_full {
 				service.network(),
 				dht_event_rx,
 			);
+
 			service.spawn_task(authority_discovery);
 		}
 
@@ -189,12 +190,12 @@ macro_rules! new_full {
 		match (is_authority, disable_grandpa) {
 			(false, false) => {
 				// start the lightweight GRANDPA observer
-				service.spawn_task(Box::new(grandpa::run_grandpa_observer(
+				service.spawn_task(grandpa::run_grandpa_observer(
 					config,
 					grandpa_link,
 					service.network(),
 					service.on_exit(),
-				)?));
+				)?);
 			},
 			(true, false) => {
 				// start the full GRANDPA voter
@@ -207,7 +208,9 @@ macro_rules! new_full {
 					telemetry_on_connect: Some(service.telemetry_on_connect_stream()),
 					voting_rule: grandpa::VotingRulesBuilder::default().build(),
 				};
-				service.spawn_task(Box::new(grandpa::run_grandpa_voter(grandpa_config)?));
+				// the GRANDPA voter task is considered infallible, i.e.
+				// if it fails we take down the service with it.
+				service.spawn_essential_task(grandpa::run_grandpa_voter(grandpa_config)?);
 			},
 			(_, true) => {
 				grandpa::setup_disabled_grandpa(
@@ -245,7 +248,7 @@ pub type NodeConfiguration<C> = Configuration<C, GenesisConfig, crate::chain_spe
 /// Builds a new service for a full client.
 pub fn new_full<C: Send + Default + 'static>(config: NodeConfiguration<C>)
 -> Result<
-	NewService<
+	Service<
 		ConcreteBlock,
 		ConcreteClient,
 		LongestChain<ConcreteBackend, ConcreteBlock>,
@@ -327,17 +330,15 @@ mod tests {
 	use consensus_common::{
 		Environment, Proposer, BlockImportParams, BlockOrigin, ForkChoiceStrategy, BlockImport,
 	};
-	use node_primitives::{Block, DigestItem};
-	use node_runtime::{BalancesCall, Call, UncheckedExtrinsic};
+	use node_primitives::{Block, DigestItem, Signature};
+	use node_runtime::{BalancesCall, Call, UncheckedExtrinsic, Address};
 	use node_runtime::constants::{currency::CENTS, time::SLOT_DURATION};
 	use codec::{Encode, Decode};
-	use primitives::{
-		crypto::Pair as CryptoPair,
-		sr25519::Public as AddressPublic, H256,
-	};
+	use primitives::{crypto::Pair as CryptoPair, H256};
 	use sr_primitives::{
 		generic::{BlockId, Era, Digest, SignedPayload},
 		traits::Block as BlockT,
+		traits::Verify,
 		OpaqueExtrinsic,
 	};
 	use timestamp;
@@ -345,6 +346,9 @@ mod tests {
 	use keyring::AccountKeyring;
 	use substrate_service::{AbstractService, Roles};
 	use crate::service::new_full;
+	use sr_primitives::traits::IdentifyAccount;
+
+	type AccountPublic = <Signature as Verify>::Signer;
 
 	#[cfg(feature = "rhd")]
 	fn test_sync() {
@@ -515,8 +519,8 @@ mod tests {
 			},
 			|service, _| {
 				let amount = 5 * CENTS;
-				let to = AddressPublic::from_raw(bob.public().0);
-				let from = AddressPublic::from_raw(charlie.public().0);
+				let to: Address = AccountPublic::from(bob.public()).into_account().into();
+				let from: Address = AccountPublic::from(charlie.public()).into_account().into();
 				let genesis_hash = service.client().block_hash(0).unwrap().unwrap();
 				let best_block_id = BlockId::number(service.client().info().chain.best_number);
 				let version = service.client().runtime_version_at(&best_block_id).unwrap().spec_version;

@@ -20,12 +20,13 @@
 
 use client::decl_runtime_apis;
 use rstd::vec::Vec;
+use sr_primitives::RuntimeDebug;
 
-#[derive(codec::Encode, codec::Decode, Eq, PartialEq, Clone)]
-#[cfg_attr(feature = "std", derive(Debug, Hash))]
+#[derive(codec::Encode, codec::Decode, Eq, PartialEq, Clone, RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Hash))]
 pub struct Signature(pub Vec<u8>);
-#[derive(codec::Encode, codec::Decode, Eq, PartialEq, Clone)]
-#[cfg_attr(feature = "std", derive(Debug, Hash))]
+#[derive(codec::Encode, codec::Decode, Eq, PartialEq, Clone, RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Hash))]
 pub struct AuthorityId(pub Vec<u8>);
 
 decl_runtime_apis! {

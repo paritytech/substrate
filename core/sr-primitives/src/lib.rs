@@ -42,7 +42,7 @@ pub use runtime_io::{StorageOverlay, ChildrenStorageOverlay};
 
 use rstd::prelude::*;
 use rstd::convert::TryFrom;
-use primitives::{crypto, ed25519, sr25519, hash::{H256, H512}};
+use primitives::{crypto, ed25519, sr25519, ecdsa, hash::{H256, H512}};
 use codec::{Encode, Decode};
 
 #[cfg(feature = "std")]
@@ -59,8 +59,11 @@ pub mod weights;
 pub use generic::{DigestItem, Digest};
 
 /// Re-export this since it's part of the API of this crate.
-pub use primitives::{TypeId, crypto::{key_types, KeyTypeId, CryptoType}};
+pub use primitives::{TypeId, crypto::{key_types, KeyTypeId, CryptoType, AccountId32}};
 pub use app_crypto::RuntimeAppPublic;
+
+/// Re-export `RuntimeDebug`, to avoid dependency clutter.
+pub use primitives::RuntimeDebug;
 
 /// Re-export top-level arithmetic stuff.
 pub use arithmetic::{
@@ -114,6 +117,7 @@ macro_rules! create_runtime_str {
 
 #[cfg(feature = "std")]
 pub use serde::{Serialize, Deserialize, de::DeserializeOwned};
+use crate::traits::IdentifyAccount;
 
 /// Complex storage builder stuff.
 #[cfg(feature = "std")]
@@ -166,13 +170,14 @@ impl BuildStorage for (StorageOverlay, ChildrenStorageOverlay) {
 pub type ConsensusEngineId = [u8; 4];
 
 /// Signature verify that can work with any known signature types..
-#[derive(Eq, PartialEq, Clone, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Eq, PartialEq, Clone, Encode, Decode, RuntimeDebug)]
 pub enum MultiSignature {
 	/// An Ed25519 signature.
 	Ed25519(ed25519::Signature),
 	/// An Sr25519 signature.
 	Sr25519(sr25519::Signature),
+	/// An ECDSA/SECP256k1 signature.
+	Ecdsa(ecdsa::Signature),
 }
 
 impl From<ed25519::Signature> for MultiSignature {
@@ -187,6 +192,12 @@ impl From<sr25519::Signature> for MultiSignature {
 	}
 }
 
+impl From<ecdsa::Signature> for MultiSignature {
+	fn from(x: ecdsa::Signature) -> Self {
+		MultiSignature::Ecdsa(x)
+	}
+}
+
 impl Default for MultiSignature {
 	fn default() -> Self {
 		MultiSignature::Ed25519(Default::default())
@@ -194,13 +205,15 @@ impl Default for MultiSignature {
 }
 
 /// Public key for any known crypto algorithm.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Encode, Decode, RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum MultiSigner {
 	/// An Ed25519 identity.
 	Ed25519(ed25519::Public),
 	/// An Sr25519 identity.
 	Sr25519(sr25519::Public),
+	/// An SECP256k1/ECDSA identity (actually, the Blake2 hash of the pub key).
+	Ecdsa(ecdsa::Public),
 }
 
 impl Default for MultiSigner {
@@ -222,6 +235,18 @@ impl AsRef<[u8]> for MultiSigner {
 		match *self {
 			MultiSigner::Ed25519(ref who) => who.as_ref(),
 			MultiSigner::Sr25519(ref who) => who.as_ref(),
+			MultiSigner::Ecdsa(ref who) => who.as_ref(),
+		}
+	}
+}
+
+impl traits::IdentifyAccount for MultiSigner {
+	type AccountId = AccountId32;
+	fn into_account(self) -> AccountId32 {
+		match self {
+			MultiSigner::Ed25519(who) => <[u8; 32]>::from(who).into(),
+			MultiSigner::Sr25519(who) => <[u8; 32]>::from(who).into(),
+			MultiSigner::Ecdsa(who) => runtime_io::blake2_256(who.as_ref()).into(),
 		}
 	}
 }
@@ -238,41 +263,56 @@ impl From<sr25519::Public> for MultiSigner {
 	}
 }
 
- #[cfg(feature = "std")]
+impl From<ecdsa::Public> for MultiSigner {
+	fn from(x: ecdsa::Public) -> Self {
+		MultiSigner::Ecdsa(x)
+	}
+}
+
+#[cfg(feature = "std")]
 impl std::fmt::Display for MultiSigner {
 	fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
 		match *self {
 			MultiSigner::Ed25519(ref who) => write!(fmt, "ed25519: {}", who),
 			MultiSigner::Sr25519(ref who) => write!(fmt, "sr25519: {}", who),
+			MultiSigner::Ecdsa(ref who) => write!(fmt, "ecdsa: {}", who),
 		}
 	}
 }
 
 impl Verify for MultiSignature {
 	type Signer = MultiSigner;
-	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &Self::Signer) -> bool {
+	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &AccountId32) -> bool {
+		use primitives::crypto::Public;
 		match (self, signer) {
-			(MultiSignature::Ed25519(ref sig), &MultiSigner::Ed25519(ref who)) => sig.verify(msg, who),
-			(MultiSignature::Sr25519(ref sig), &MultiSigner::Sr25519(ref who)) => sig.verify(msg, who),
-			_ => false,
+			(MultiSignature::Ed25519(ref sig), who) => sig.verify(msg, &ed25519::Public::from_slice(who.as_ref())),
+			(MultiSignature::Sr25519(ref sig), who) => sig.verify(msg, &sr25519::Public::from_slice(who.as_ref())),
+			(MultiSignature::Ecdsa(ref sig), who) => {
+				let m = runtime_io::blake2_256(msg.get());
+				match runtime_io::secp256k1_ecdsa_recover_compressed(sig.as_ref(), &m) {
+					Ok(pubkey) => &runtime_io::blake2_256(pubkey.as_ref()) == <dyn AsRef<[u8; 32]>>::as_ref(who),
+					_ => false,
+				}
+			}
 		}
 	}
 }
 
 /// Signature verify that can work with any known signature types..
-#[derive(Eq, PartialEq, Clone, Default, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+#[derive(Eq, PartialEq, Clone, Default, Encode, Decode, RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct AnySignature(H512);
 
 impl Verify for AnySignature {
 	type Signer = sr25519::Public;
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &sr25519::Public) -> bool {
+		use primitives::crypto::Public;
+		let msg = msg.get();
 		sr25519::Signature::try_from(self.0.as_fixed_bytes().as_ref())
-			.map(|s| runtime_io::sr25519_verify(&s, msg.get(), &signer))
+			.map(|s| s.verify(msg, signer))
 			.unwrap_or(false)
 		|| ed25519::Signature::try_from(self.0.as_fixed_bytes().as_ref())
-			.and_then(|s| ed25519::Public::try_from(signer.0.as_ref()).map(|p| (s, p)))
-			.map(|(s, p)| runtime_io::ed25519_verify(&s, msg.get(), &p))
+			.map(|s| s.verify(msg, &ed25519::Public::from_slice(signer.as_ref())))
 			.unwrap_or(false)
 	}
 }
@@ -289,8 +329,8 @@ impl From<ed25519::Signature> for AnySignature {
 	}
 }
 
-#[derive(Eq, PartialEq, Clone, Copy, Decode, Encode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+#[derive(Eq, PartialEq, Clone, Copy, Decode, Encode, RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Serialize))]
 /// Reason why an extrinsic couldn't be applied (i.e. invalid extrinsic).
 pub enum ApplyError {
 	/// General error to do with the permissions of the sender.
@@ -341,8 +381,8 @@ impl From<DispatchError> for ApplyOutcome {
 /// Result from attempt to apply an extrinsic.
 pub type ApplyResult = Result<ApplyOutcome, ApplyError>;
 
-#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Serialize))]
 /// Reason why a dispatch call failed
 pub struct DispatchError {
 	/// Module index, matching the metadata module index
@@ -396,7 +436,7 @@ impl From<&'static str> for DispatchError {
 
 /// Verify a signature on an encoded value in a lazy manner. This can be
 /// an optimization if the signature scheme has an "unsigned" escape hash.
-pub fn verify_encoded_lazy<V: Verify, T: codec::Encode>(sig: &V, item: &T, signer: &V::Signer) -> bool {
+pub fn verify_encoded_lazy<V: Verify, T: codec::Encode>(sig: &V, item: &T, signer: &<V::Signer as IdentifyAccount>::AccountId) -> bool {
 	// The `Lazy<T>` trait expresses something like `X: FnMut<Output = for<'a> &'a T>`.
 	// unfortunately this is a lifetime relationship that can't
 	// be expressed without generic associated types, better unification of HRTBs in type position,
@@ -564,12 +604,18 @@ macro_rules! assert_eq_error_rate {
 #[derive(PartialEq, Eq, Clone, Default, Encode, Decode)]
 pub struct OpaqueExtrinsic(pub Vec<u8>);
 
-#[cfg(feature = "std")]
-impl std::fmt::Debug for OpaqueExtrinsic {
-	fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl rstd::fmt::Debug for OpaqueExtrinsic {
+	#[cfg(feature = "std")]
+	fn fmt(&self, fmt: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
 		write!(fmt, "{}", primitives::hexdisplay::HexDisplay::from(&self.0))
 	}
+
+	#[cfg(not(feature = "std"))]
+	fn fmt(&self, _fmt: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+		Ok(())
+	}
 }
+
 
 #[cfg(feature = "std")]
 impl ::serde::Serialize for OpaqueExtrinsic {
