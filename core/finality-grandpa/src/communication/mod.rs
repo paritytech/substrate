@@ -127,6 +127,14 @@ pub trait Network<Block: BlockT>: Clone + Send + 'static {
 
 	/// Inform peers that a block with given hash should be downloaded.
 	fn announce(&self, block: Block::Hash, associated_data: Vec<u8>);
+
+	/// Notifies the sync service to try and sync the given block from the given
+	/// peers.
+	///
+	/// If the given vector of peers is empty then the underlying implementation
+	/// should make a best effort to fetch the block from any peers it is
+	/// connected to (NOTE: this assumption will change in the future #3629).
+	fn set_sync_fork_request(&self, peers: Vec<network::PeerId>, hash: Block::Hash, number: NumberFor<Block>);
 }
 
 /// Create a unique topic for a round and set-id combo.
@@ -211,6 +219,10 @@ impl<B, S, H> Network<B> for Arc<NetworkService<B, S, H>> where
 	fn announce(&self, block: B::Hash, associated_data: Vec<u8>) {
 		self.announce_block(block, associated_data)
 	}
+
+	fn set_sync_fork_request(&self, peers: Vec<network::PeerId>, hash: B::Hash, number: NumberFor<B>) {
+		NetworkService::set_sync_fork_request(self, peers, hash, number)
+	}
 }
 
 /// A stream used by NetworkBridge in its implementation of Network. Given a oneshot that eventually returns a channel
@@ -264,7 +276,7 @@ pub(crate) struct NetworkBridge<B: BlockT, N: Network<B>> {
 	announce_sender: periodic::BlockAnnounceSender<B>,
 }
 
-impl<B: BlockT<Hash = H256>, N: Network<B>> NetworkBridge<B, N> {
+impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 	/// Create a new NetworkBridge to the given NetworkService. Returns the service
 	/// handle and a future that must be polled to completion to finish startup.
 	/// On creation it will register previous rounds' votes with the gossip
@@ -367,7 +379,9 @@ impl<B: BlockT<Hash = H256>, N: Network<B>> NetworkBridge<B, N> {
 			|to, neighbor| self.neighbor_sender.send(to, neighbor),
 		);
 	}
+}
 
+impl<B: BlockT<Hash = H256>, N: Network<B>> NetworkBridge<B, N> {
 	/// Get a stream of signature-checked round messages from the network as well as a sink for round messages to the
 	/// network all within the current set.
 	pub(crate) fn round_communication(
@@ -464,6 +478,9 @@ impl<B: BlockT<Hash = H256>, N: Network<B>> NetworkBridge<B, N> {
 			format!("Failed to receive on unbounded receiver for round {}", round.0)
 		));
 
+		// Combine incoming votes from external GRANDPA nodes with outgoing
+		// votes from our own GRANDPA voter to have a single
+		// vote-import-pipeline.
 		let incoming = stream::select(incoming, out_rx);
 
 		(incoming, outgoing)
@@ -509,6 +526,18 @@ impl<B: BlockT<Hash = H256>, N: Network<B>> NetworkBridge<B, N> {
 		});
 
 		(incoming, outgoing)
+	}
+}
+
+impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
+	/// Notifies the sync service to try and sync the given block from the given
+	/// peers.
+	///
+	/// If the given vector of peers is empty then the underlying implementation
+	/// should make a best effort to fetch the block from any peers it is
+	/// connected to (NOTE: this assumption will change in the future #3629).
+	pub(crate) fn set_sync_fork_request(&self, peers: Vec<network::PeerId>, hash: B::Hash, number: NumberFor<B>) {
+		self.service.set_sync_fork_request(peers, hash, number)
 	}
 }
 

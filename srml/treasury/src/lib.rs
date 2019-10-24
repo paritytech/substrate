@@ -77,7 +77,7 @@ use support::traits::{
 };
 use sr_primitives::{Permill, Perbill, ModuleId};
 use sr_primitives::traits::{
-	Zero, EnsureOrigin, StaticLookup, AccountIdConversion, CheckedSub
+	Zero, EnsureOrigin, StaticLookup, AccountIdConversion, CheckedSub, Saturating
 };
 use sr_primitives::weights::SimpleDispatchInfo;
 use codec::{Encode, Decode};
@@ -233,6 +233,15 @@ decl_storage! {
 		/// Proposal indices that have been approved but not yet awarded.
 		Approvals get(fn approvals): Vec<ProposalIndex>;
 	}
+	add_extra_genesis {
+		build(|_config| {
+			// Create Treasury account
+			let _ = T::Currency::make_free_balance_be(
+				&<Module<T>>::account_id(),
+				T::Currency::minimum_balance(),
+			);
+		});
+	}
 }
 
 decl_event!(
@@ -311,6 +320,10 @@ impl<T: Trait> Module<T> {
 			Self::deposit_event(RawEvent::Burnt(burn))
 		}
 
+		// Must never be an error, but better to be safe.
+		// proof: budget_remaining is account free balance minus ED;
+		// Thus we can't spend more than account free balance minus ED;
+		// Thus account is kept alive; qed;
 		if let Err(problem) = T::Currency::settle(
 			&Self::account_id(),
 			imbalance,
@@ -325,21 +338,32 @@ impl<T: Trait> Module<T> {
 		Self::deposit_event(RawEvent::Rollover(budget_remaining));
 	}
 
+	/// Return the amount of money in the pot.
+	// The existential deposit is not part of the pot so treasury account never gets deleted.
 	fn pot() -> BalanceOf<T> {
 		T::Currency::free_balance(&Self::account_id())
+			// Must never be less than 0 but better be safe.
+			.saturating_sub(T::Currency::minimum_balance())
 	}
 }
 
 impl<T: Trait> OnUnbalanced<NegativeImbalanceOf<T>> for Module<T> {
 	fn on_unbalanced(amount: NegativeImbalanceOf<T>) {
-		T::Currency::resolve_creating(&Self::account_id(), amount);
+		// Must resolve into existing but better to be safe.
+		let _ = T::Currency::resolve_creating(&Self::account_id(), amount);
 	}
 }
 
+/// Mint extra funds for the treasury to keep the ratio of portion to total_issuance equal
+/// pre dilution and post-dilution.
+///
+/// i.e.
+/// ```nocompile
+/// portion / total_issuance_before_dilution ==
+///   (portion + minted) / (total_issuance_before_dilution + minted_to_treasury + minted)
+/// ```
 impl<T: Trait> OnDilution<BalanceOf<T>> for Module<T> {
 	fn on_dilution(minted: BalanceOf<T>, portion: BalanceOf<T>) {
-		// Mint extra funds for the treasury to keep the ratio of portion to total_issuance equal
-		// pre dilution and post-dilution.
 		if !minted.is_zero() && !portion.is_zero() {
 			let total_issuance = T::Currency::total_issuance();
 			if let Some(funding) = total_issuance.checked_sub(&portion) {
@@ -391,7 +415,7 @@ mod tests {
 		type Version = ();
 	}
 	parameter_types! {
-		pub const ExistentialDeposit: u64 = 0;
+		pub const ExistentialDeposit: u64 = 1;
 		pub const TransferFee: u64 = 0;
 		pub const CreationFee: u64 = 0;
 	}
@@ -430,9 +454,11 @@ mod tests {
 	fn new_test_ext() -> runtime_io::TestExternalities {
 		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		balances::GenesisConfig::<Test>{
-			balances: vec![(0, 100), (1, 99), (2, 1)],
+			// Total issuance will be 200 with treasury account initialized at ED.
+			balances: vec![(0, 100), (1, 98), (2, 1)],
 			vesting: vec![],
 		}.assimilate_storage(&mut t).unwrap();
+		GenesisConfig::default().assimilate_storage::<Test>(&mut t).unwrap();
 		t.into()
 	}
 
@@ -600,17 +626,77 @@ mod tests {
 	fn pot_underflow_should_not_diminish() {
 		new_test_ext().execute_with(|| {
 			Treasury::on_dilution(100, 100);
+			assert_eq!(Treasury::pot(), 100);
 
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 150, 3));
 			assert_ok!(Treasury::approve_proposal(Origin::ROOT, 0));
 
 			<Treasury as OnFinalize<u64>>::on_finalize(2);
-			assert_eq!(Treasury::pot(), 100);
+			assert_eq!(Treasury::pot(), 100); // Pot hasn't changed
 
 			Treasury::on_dilution(100, 100);
 			<Treasury as OnFinalize<u64>>::on_finalize(4);
-			assert_eq!(Balances::free_balance(&3), 150);
-			assert_eq!(Treasury::pot(), 75);
+			assert_eq!(Balances::free_balance(&3), 150); // Fund has been spent
+			assert_eq!(Treasury::pot(), 75); // Pot has finally changed
+		});
+	}
+
+	// Treasury account doesn't get deleted if amount approved to spend is all its free balance.
+	// i.e. pot should not include existential deposit needed for account survival.
+	#[test]
+	fn treasury_account_doesnt_get_deleted() {
+		new_test_ext().execute_with(|| {
+			Treasury::on_dilution(100, 100);
+			assert_eq!(Treasury::pot(), 100);
+			let treasury_balance = Balances::free_balance(&Treasury::account_id());
+
+			assert_ok!(Treasury::propose_spend(Origin::signed(0), treasury_balance, 3));
+			assert_ok!(Treasury::approve_proposal(Origin::ROOT, 0));
+
+			<Treasury as OnFinalize<u64>>::on_finalize(2);
+			assert_eq!(Treasury::pot(), 100); // Pot hasn't changed
+
+			assert_ok!(Treasury::propose_spend(Origin::signed(0), Treasury::pot(), 3));
+			assert_ok!(Treasury::approve_proposal(Origin::ROOT, 1));
+
+			<Treasury as OnFinalize<u64>>::on_finalize(4);
+			assert_eq!(Treasury::pot(), 0); // Pot is emptied
+			assert_eq!(Balances::free_balance(&Treasury::account_id()), 1); // but the account is still there 
+		});
+	}
+
+	// In case treasury account is not existing then it works fine.
+	// This is usefull for chain that will just update runtime.
+	#[test]
+	fn inexisting_account_works() {
+		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		balances::GenesisConfig::<Test>{
+			balances: vec![(0, 100), (1, 99), (2, 1)],
+			vesting: vec![],
+		}.assimilate_storage(&mut t).unwrap();
+		// Treasury genesis config is not build thus treasury account does not exist
+		let mut t: runtime_io::TestExternalities = t.into();
+
+		t.execute_with(|| {
+			assert_eq!(Balances::free_balance(&Treasury::account_id()), 0); // Account does not exist
+			assert_eq!(Treasury::pot(), 0); // Pot is empty
+
+			assert_ok!(Treasury::propose_spend(Origin::signed(0), 99, 3));
+			assert_ok!(Treasury::approve_proposal(Origin::ROOT, 0));
+			assert_ok!(Treasury::propose_spend(Origin::signed(0), 1, 3));
+			assert_ok!(Treasury::approve_proposal(Origin::ROOT, 1));
+			<Treasury as OnFinalize<u64>>::on_finalize(2);
+			assert_eq!(Treasury::pot(), 0); // Pot hasn't changed
+			assert_eq!(Balances::free_balance(&3), 0); // Balance of `3` hasn't changed
+
+			Treasury::on_dilution(100, 100);
+			assert_eq!(Treasury::pot(), 99); // Pot now contains funds
+			assert_eq!(Balances::free_balance(&Treasury::account_id()), 100); // Account does exist
+
+			<Treasury as OnFinalize<u64>>::on_finalize(4);
+
+			assert_eq!(Treasury::pot(), 0); // Pot has changed
+			assert_eq!(Balances::free_balance(&3), 99); // Balance of `3` has changed
 		});
 	}
 }
