@@ -37,7 +37,7 @@ use sr_primitives::transaction_validity::{
 
 use crate::error;
 use crate::future::{FutureTransactions, WaitingTransaction};
-use crate::ready::{ReadyTransactions, BestIterator};
+use crate::ready::ReadyTransactions;
 
 /// Successful import result.
 #[derive(Debug, PartialEq, Eq)]
@@ -324,7 +324,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: std::fmt::Debug> BasePool<Hash, 
 	}
 
 	/// Returns an iterator over ready transactions in the pool.
-	pub fn ready(&self) -> BestIterator<Hash, Ex> {
+	pub fn ready(&self) -> impl Iterator<Item=Arc<Transaction<Hash, Ex>>> {
 		self.ready.get()
 	}
 

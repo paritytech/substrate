@@ -22,7 +22,6 @@ use std::{
 
 use crate::base_pool as base;
 use crate::error;
-use crate::ready::BestIterator;
 use crate::watcher::Watcher;
 use serde::Serialize;
 
@@ -146,7 +145,7 @@ impl<B: ChainApi> Pool<B> {
 		at: &BlockId<B::Block>,
 		xt: ExtrinsicFor<B>,
 	) -> impl Future<Output=Result<ExHash<B>, B::Error>> {
-		self.submit_at(at, std::iter::once(xt))
+		self.submit_at(at, std::iter::once(xt), false)
 			.map(|import_result| import_result.and_then(|mut import_result| import_result
 				.pop()
 				.expect("One extrinsic passed; one result returned; qed")
@@ -324,7 +323,7 @@ impl<B: ChainApi> Pool<B> {
 	}
 
 	/// Get an iterator for ready transactions ordered by priority
-	pub fn ready(&self) -> BestIterator<ExHash<B>, ExtrinsicFor<B>> {
+	pub fn ready(&self) -> impl Iterator<Item=TransactionFor<B>> {
 		self.validated_pool.ready()
 	}
 

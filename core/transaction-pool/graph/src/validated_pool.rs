@@ -24,7 +24,6 @@ use std::{
 use crate::base_pool as base;
 use crate::error;
 use crate::listener::Listener;
-use crate::ready::BestIterator;
 use crate::rotator::PoolRotator;
 use crate::watcher::Watcher;
 use serde::Serialize;
@@ -462,7 +461,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 	}
 
 	/// Get an iterator for ready transactions ordered by priority
-	pub fn ready(&self) -> BestIterator<ExHash<B>, ExtrinsicFor<B>> {
+	pub fn ready(&self) -> impl Iterator<Item=TransactionFor<B>> {
 		self.pool.read().ready()
 	}
 

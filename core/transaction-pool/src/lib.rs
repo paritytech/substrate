@@ -48,7 +48,7 @@ use sr_primitives::{
 	traits::{Block as BlockT, Member, ProvideRuntimeApi},
 };
 
-use txpool::{BestIterator, EventStream, Options, watcher::Watcher};
+use txpool::{EventStream, Options, watcher::Watcher};
 
 /// Extrinsic hash type for a pool.
 pub type ExHash<P> = <P as TransactionPool>::Hash;
@@ -97,7 +97,7 @@ pub trait TransactionPool: Send + Sync {
 	fn status(&self) -> txpool::base_pool::Status;
 
 	/// Get an iterator for ready transactions ordered by priority
-	fn ready(&self) -> BestIterator<Self::Hash, ExtrinsicFor<Self>>;
+	fn ready(&self) -> Box<dyn Iterator<Item=Arc<txpool::base_pool::Transaction<Self::Hash, ExtrinsicFor<Self>>>>>;
 
 	/// Return an event stream of transactions imported to the pool.
 	fn import_notification_stream(&self) -> EventStream;
@@ -237,8 +237,8 @@ impl<PoolApi, Maintainer, Block> TransactionPool for BasicTransactionPool<PoolAp
 		self.pool.status()
 	}
 
-	fn ready(&self) -> BestIterator<Self::Hash, ExtrinsicFor<Self>> {
-		self.pool.ready()
+	fn ready(&self) -> Box<dyn Iterator<Item=Arc<txpool::base_pool::Transaction<Self::Hash, ExtrinsicFor<Self>>>>> {
+		Box::new(self.pool.ready())
 	}
 
 	fn import_notification_stream(&self) -> EventStream {
