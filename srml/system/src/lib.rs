@@ -157,15 +157,17 @@ pub fn extrinsics_data_root<H: Hash>(xts: Vec<Vec<u8>>) -> H::Output {
 
 pub trait Trait: 'static + Eq + Clone {
 	/// The aggregated `Origin` type used by dispatchable calls.
-	type Origin: Into<Result<RawOrigin<Self::AccountId>, Self::Origin>> + From<RawOrigin<Self::AccountId>>;
+	type Origin:
+		Into<Result<RawOrigin<Self::AccountId>, Self::Origin>> + From<RawOrigin<Self::AccountId>>;
 
 	/// The aggregated `Call` type.
 	type Call: Debug;
 
-	/// Account index (aka nonce) type. This stores the number of previous transactions associated with a sender
-	/// account.
+	/// Account index (aka nonce) type. This stores the number of previous transactions associated
+	/// with a sender account.
 	type Index:
-		Parameter + Member + MaybeSerialize + Debug + Default + MaybeDisplay + SimpleArithmetic + Copy;
+		Parameter + Member + MaybeSerialize + Debug + Default + MaybeDisplay + SimpleArithmetic
+		+ Copy;
 
 	/// The block number type used by the runtime.
 	type BlockNumber:
@@ -181,13 +183,15 @@ pub trait Trait: 'static + Eq + Clone {
 	type Hashing: Hash<Output = Self::Hash>;
 
 	/// The user account identifier type for the runtime.
-	type AccountId: Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay + Ord + Default;
+	type AccountId: Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay + Ord
+		+ Default;
 
 	/// Converting trait to take a source type and convert to `AccountId`.
 	///
-	/// Used to define the type and conversion mechanism for referencing accounts in transactions. It's perfectly
-	/// reasonable for this to be an identity conversion (with the source type being `AccountId`), but other modules
-	/// (e.g. Indices module) may provide more functional/efficient alternatives.
+	/// Used to define the type and conversion mechanism for referencing accounts in transactions.
+	/// It's perfectly reasonable for this to be an identity conversion (with the source type being
+	/// `AccountId`), but other modules (e.g. Indices module) may provide more functional/efficient
+	/// alternatives.
 	type Lookup: StaticLookup<Target = Self::AccountId>;
 
 	/// The block header.
@@ -699,6 +703,13 @@ impl<T: Trait> Module<T> {
 	#[cfg(any(feature = "std", test))]
 	pub fn set_parent_hash(n: T::Hash) {
 		<ParentHash<T>>::put(n);
+	}
+
+	/// Set the current block weight. This should only be used in some integration tests.
+	#[cfg(any(feature = "std", test))]
+	pub fn set_block_limits(weight: Weight, len: usize) {
+		AllExtrinsicsWeight::put(weight);
+		AllExtrinsicsLen::put(len as u32);
 	}
 
 	/// Return the chain's current runtime version.
