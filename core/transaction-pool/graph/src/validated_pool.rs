@@ -185,11 +185,11 @@ impl<B: ChainApi> ValidatedPool<B> {
 		}
 	}
 
-	/// Resubmits transactions in the pool.
+	/// Resubmits revalidated transactions back to the pool.
 	///
 	/// Removes and then submits passed transactions and all dependent transactions.
 	/// Transactions that are missing from the pool are not submitted.
-	pub fn resubmit(&self, mut transactions: HashMap<ExHash<B>, ValidatedTransactionFor<B>>) {
+	pub fn resubmit(&self, mut updated_transactions: HashMap<ExHash<B>, ValidatedTransactionFor<B>>) {
 		#[derive(Debug, Clone, Copy, PartialEq)]
 		enum Status { Future, Ready, Failed, Dropped };
 
@@ -198,10 +198,15 @@ impl<B: ChainApi> ValidatedPool<B> {
 
 			// remove all passed transactions from the ready/future queues
 			// (this may remove additional transactions as well)
+			//
+			// for every transaction that has an entry in the `updated_transactions`,
+			// we store updated validation result in txs_to_resubmit
+			// for every transaction that has no entry in the `updated_transactions`,
+			// we store last validation result (i.e. the pool entry) in txs_to_resubmit
 			let mut initial_statuses = HashMap::new();
-			let mut txs_to_resubmit = Vec::with_capacity(transactions.len());
-			while !transactions.is_empty() {
-				let hash = transactions.keys().next().cloned().expect("transactions is not empty; qed");
+			let mut txs_to_resubmit = Vec::with_capacity(updated_transactions.len());
+			while !updated_transactions.is_empty() {
+				let hash = updated_transactions.keys().next().cloned().expect("transactions is not empty; qed");
 
 				// note we are not considering tx with hash invalid here - we just want
 				// to remove it along with dependent transactions and `remove_invalid()`
@@ -209,7 +214,8 @@ impl<B: ChainApi> ValidatedPool<B> {
 				let removed = pool.remove_invalid(&[hash.clone()]);
 				for removed_tx in removed {
 					let removed_hash = removed_tx.hash.clone();
-					let tx_to_resubmit = if let Some(updated_tx) = transactions.remove(&removed_hash) {
+					let updated_transaction = updated_transactions.remove(&removed_hash);
+					let tx_to_resubmit = if let Some(updated_tx) = updated_transaction {
 						updated_tx
 					} else {
 						// in most cases we'll end up in successful `try_unwrap`, but if not
