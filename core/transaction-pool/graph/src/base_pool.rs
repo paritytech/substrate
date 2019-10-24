@@ -190,13 +190,13 @@ pub struct BasePool<Hash: hash::Hash + Eq, Ex> {
 	recently_pruned_index: usize,
 }
 
-impl<Hash: hash::Hash + Member + Serialize, Ex: ::std::fmt::Debug> Default for BasePool<Hash, Ex> {
+impl<Hash: hash::Hash + Member + Serialize, Ex: std::fmt::Debug> Default for BasePool<Hash, Ex> {
 	fn default() -> Self {
 		Self::new(false)
 	}
 }
 
-impl<Hash: hash::Hash + Member + Serialize, Ex: ::std::fmt::Debug> BasePool<Hash, Ex> {
+impl<Hash: hash::Hash + Member + Serialize, Ex: std::fmt::Debug> BasePool<Hash, Ex> {
 	/// Create new pool given reject_future_transactions flag.
 	pub fn new(reject_future_transactions: bool) -> Self {
 		BasePool {
@@ -428,7 +428,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: ::std::fmt::Debug> BasePool<Hash
 
 		for tag in tags {
 			// make sure to promote any future transactions that could be unlocked
-			to_import.append(&mut self.future.satisfy_tags(::std::iter::once(&tag)));
+			to_import.append(&mut self.future.satisfy_tags(std::iter::once(&tag)));
 			// and actually prune transactions in ready queue
 			pruned.append(&mut self.ready.prune_tags(tag.clone()));
 			// store the tags for next submission
