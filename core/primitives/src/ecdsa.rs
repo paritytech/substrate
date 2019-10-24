@@ -15,53 +15,72 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 // tag::description[]
-//! Simple Ed25519 API.
+//! Simple ECDSA API.
 // end::description[]
 
-
-use crate::{hash::H256, hash::H512};
+use rstd::cmp::Ordering;
 use codec::{Encode, Decode};
 
 #[cfg(feature = "std")]
-use blake2_rfc;
+use std::convert::{TryFrom, TryInto};
 #[cfg(feature = "std")]
 use substrate_bip39::seed_from_entropy;
 #[cfg(feature = "std")]
 use bip39::{Mnemonic, Language, MnemonicType};
 #[cfg(feature = "std")]
-use crate::crypto::{Pair as TraitPair, DeriveJunction, SecretStringError, Ss58Codec};
+use crate::{hashing::blake2_256, crypto::{Pair as TraitPair, DeriveJunction, SecretStringError, Ss58Codec}};
 #[cfg(feature = "std")]
 use serde::{de, Serializer, Serialize, Deserializer, Deserialize};
-use crate::{crypto::{Public as TraitPublic, UncheckedFrom, CryptoType, Derive}};
+use crate::crypto::{Public as TraitPublic, UncheckedFrom, CryptoType, Derive};
+#[cfg(feature = "std")]
+use secp256k1::{PublicKey, SecretKey};
 
-/// A secret seed. It's not called a "secret key" because ring doesn't expose the secret keys
-/// of the key pair (yeah, dumb); as such we're forced to remember the seed manually if we
-/// will need it later (such as for HDKD).
+/// A secret seed (which is bytewise essentially equivalent to a SecretKey).
+///
+/// We need it as a different type because `Seed` is expected to be AsRef<[u8]>.
 #[cfg(feature = "std")]
 type Seed = [u8; 32];
 
-/// A public key.
-#[cfg_attr(feature = "std", derive(Hash))]
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default)]
-pub struct Public(pub [u8; 32]);
+/// The ECDSA 33-byte compressed public key.
+#[derive(Clone, Encode, Decode)]
+pub struct Public(pub [u8; 33]);
 
-/// A key pair.
-#[cfg(feature = "std")]
-pub struct Pair(ed25519_dalek::Keypair);
-
-#[cfg(feature = "std")]
-impl Clone for Pair {
-	fn clone(&self) -> Self {
-		Pair(ed25519_dalek::Keypair {
-			public: self.0.public.clone(),
-			secret: ed25519_dalek::SecretKey::from_bytes(self.0.secret.as_bytes())
-				.expect("key is always the correct size; qed")
-		})
+impl PartialOrd for Public {
+	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+		Some(self.cmp(other))
 	}
 }
 
-impl AsRef<[u8; 32]> for Public {
-	fn as_ref(&self) -> &[u8; 32] {
+impl Ord for Public {
+	fn cmp(&self, other: &Self) -> Ordering {
+		self.0[..].cmp(&other.0[..])
+	}
+}
+
+impl PartialEq for Public {
+	fn eq(&self, other: &Self) -> bool {
+		&self.0[..] == &other.0[..]
+	}
+}
+
+impl Eq for Public {}
+
+impl Default for Public {
+	fn default() -> Self {
+		Public([0u8; 33])
+	}
+}
+
+/// A key pair.
+#[cfg(feature = "std")]
+#[derive(Clone)]
+pub struct Pair {
+	public: PublicKey,
+	secret: SecretKey,
+}
+
+impl AsRef<[u8; 33]> for Public {
+	fn as_ref(&self) -> &[u8; 33] {
 		&self.0
 	}
 }
@@ -82,8 +101,8 @@ impl rstd::convert::TryFrom<&[u8]> for Public {
 	type Error = ();
 
 	fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
-		if data.len() == 32 {
-			let mut inner = [0u8; 32];
+		if data.len() == 33 {
+			let mut inner = [0u8; 33];
 			inner.copy_from_slice(data);
 			Ok(Public(inner))
 		} else {
@@ -92,7 +111,7 @@ impl rstd::convert::TryFrom<&[u8]> for Public {
 	}
 }
 
-impl From<Public> for [u8; 32] {
+impl From<Public> for [u8; 33] {
 	fn from(x: Public) -> Self {
 		x.0
 	}
@@ -105,21 +124,9 @@ impl From<Pair> for Public {
 	}
 }
 
-impl From<Public> for H256 {
-	fn from(x: Public) -> Self {
-		x.0.into()
-	}
-}
-
-impl UncheckedFrom<[u8; 32]> for Public {
-	fn unchecked_from(x: [u8; 32]) -> Self {
-		Public::from_raw(x)
-	}
-}
-
-impl UncheckedFrom<H256> for Public {
-	fn unchecked_from(x: H256) -> Self {
-		Public::from_h256(x)
+impl UncheckedFrom<[u8; 33]> for Public {
+	fn unchecked_from(x: [u8; 33]) -> Self {
+		Public(x)
 	}
 }
 
@@ -130,16 +137,11 @@ impl std::fmt::Display for Public {
 	}
 }
 
-impl rstd::fmt::Debug for Public {
-	#[cfg(feature = "std")]
-	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+#[cfg(feature = "std")]
+impl std::fmt::Debug for Public {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		let s = self.to_ss58check();
-		write!(f, "{} ({}...)", crate::hexdisplay::HexDisplay::from(&self.0), &s[0..8])
-	}
-
-	#[cfg(not(feature = "std"))]
-	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
-		Ok(())
+		write!(f, "{} ({}...)", crate::hexdisplay::HexDisplay::from(&&self.0[..]), &s[0..8])
 	}
 }
 
@@ -158,16 +160,23 @@ impl<'de> Deserialize<'de> for Public {
 	}
 }
 
+#[cfg(feature = "std")]
+impl std::hash::Hash for Public {
+	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+		self.0.hash(state);
+	}
+}
+
 /// A signature (a 512-bit value).
 #[derive(Encode, Decode)]
-pub struct Signature(pub [u8; 64]);
+pub struct Signature([u8; 65]);
 
 impl rstd::convert::TryFrom<&[u8]> for Signature {
 	type Error = ();
 
 	fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
-		if data.len() == 64 {
-			let mut inner = [0u8; 64];
+		if data.len() == 65 {
+			let mut inner = [0u8; 65];
 			inner.copy_from_slice(data);
 			Ok(Signature(inner))
 		} else {
@@ -178,7 +187,7 @@ impl rstd::convert::TryFrom<&[u8]> for Signature {
 
 impl Clone for Signature {
 	fn clone(&self) -> Self {
-		let mut r = [0u8; 64];
+		let mut r = [0u8; 65];
 		r.copy_from_slice(&self.0[..]);
 		Signature(r)
 	}
@@ -186,7 +195,7 @@ impl Clone for Signature {
 
 impl Default for Signature {
 	fn default() -> Self {
-		Signature([0u8; 64])
+		Signature([0u8; 65])
 	}
 }
 
@@ -198,20 +207,14 @@ impl PartialEq for Signature {
 
 impl Eq for Signature {}
 
-impl From<Signature> for H512 {
-	fn from(v: Signature) -> H512 {
-		H512::from(v.0)
-	}
-}
-
-impl From<Signature> for [u8; 64] {
-	fn from(v: Signature) -> [u8; 64] {
+impl From<Signature> for [u8; 65] {
+	fn from(v: Signature) -> [u8; 65] {
 		v.0
 	}
 }
 
-impl AsRef<[u8; 64]> for Signature {
-	fn as_ref(&self) -> &[u8; 64] {
+impl AsRef<[u8; 65]> for Signature {
+	fn as_ref(&self) -> &[u8; 65] {
 		&self.0
 	}
 }
@@ -228,15 +231,10 @@ impl AsMut<[u8]> for Signature {
 	}
 }
 
-impl rstd::fmt::Debug for Signature {
-	#[cfg(feature = "std")]
-	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+#[cfg(feature = "std")]
+impl std::fmt::Debug for Signature {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		write!(f, "{}", crate::hexdisplay::HexDisplay::from(&self.0))
-	}
-
-	#[cfg(not(feature = "std"))]
-	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
-		Ok(())
 	}
 }
 
@@ -248,41 +246,43 @@ impl std::hash::Hash for Signature {
 }
 
 impl Signature {
-	/// A new instance from the given 64-byte `data`.
+	/// A new instance from the given 65-byte `data`.
 	///
 	/// NOTE: No checking goes on to ensure this is a real signature. Only use it if
 	/// you are certain that the array actually is a signature. GIGO!
-	pub fn from_raw(data: [u8; 64]) -> Signature {
+	pub fn from_raw(data: [u8; 65]) -> Signature {
 		Signature(data)
 	}
 
-	/// A new instance from the given slice that should be 64 bytes long.
-	///
-	/// NOTE: No checking goes on to ensure this is a real signature. Only use it if
-	/// you are certain that the array actually is a signature. GIGO!
-	pub fn from_slice(data: &[u8]) -> Self {
-		let mut r = [0u8; 64];
-		r.copy_from_slice(data);
-		Signature(r)
-	}
-
-	/// A new instance from an H512.
-	///
-	/// NOTE: No checking goes on to ensure this is a real signature. Only use it if
-	/// you are certain that the array actually is a signature. GIGO!
-	pub fn from_h512(v: H512) -> Signature {
-		Signature(v.into())
+	/// Recover the public key from this signature and a message.
+	#[cfg(feature = "std")]
+	pub fn recover<M: AsRef<[u8]>>(&self, message: M) -> Option<Public> {
+		let message = secp256k1::Message::parse(&blake2_256(message.as_ref()));
+		let sig: (_, _) = self.try_into().ok()?;
+		secp256k1::recover(&message, &sig.0, &sig.1).ok()
+			.map(|recovered| Public(recovered.serialize_compressed()))
 	}
 }
 
-/// A localized signature also contains sender information.
 #[cfg(feature = "std")]
-#[derive(PartialEq, Eq, Clone, Debug, Encode, Decode)]
-pub struct LocalizedSignature {
-	/// The signer of the signature.
-	pub signer: Public,
-	/// The signature itself.
-	pub signature: Signature,
+impl From<(secp256k1::Signature, secp256k1::RecoveryId)> for Signature {
+	fn from(x: (secp256k1::Signature, secp256k1::RecoveryId)) -> Signature {
+		let mut r = Self::default();
+		r.0[0..64].copy_from_slice(&x.0.serialize()[..]);
+		r.0[64] = x.1.serialize();
+		r
+	}
+}
+
+#[cfg(feature = "std")]
+impl<'a> TryFrom<&'a Signature> for (secp256k1::Signature, secp256k1::RecoveryId) {
+	type Error = ();
+	fn try_from(x: &'a Signature) -> Result<(secp256k1::Signature, secp256k1::RecoveryId), Self::Error> {
+		Ok((
+			secp256k1::Signature::parse_slice(&x.0[0..64]).expect("hardcoded to 64 bytes; qed"),
+			secp256k1::RecoveryId::parse(x.0[64]).map_err(|_| ())?,
+		))
+	}
 }
 
 /// An error type for SS58 decoding.
@@ -300,35 +300,27 @@ pub enum PublicError {
 }
 
 impl Public {
-	/// A new instance from the given 32-byte `data`.
+	/// A new instance from the given 33-byte `data`.
 	///
 	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
 	/// you are certain that the array actually is a pubkey. GIGO!
-	pub fn from_raw(data: [u8; 32]) -> Self {
+	pub fn from_raw(data: [u8; 33]) -> Self {
 		Public(data)
 	}
 
-	/// A new instance from an H256.
-	///
-	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
-	/// you are certain that the array actually is a pubkey. GIGO!
-	pub fn from_h256(x: H256) -> Self {
-		Public(x.into())
-	}
-
 	/// Return a slice filled with raw data.
-	pub fn as_array_ref(&self) -> &[u8; 32] {
+	pub fn as_array_ref(&self) -> &[u8; 33] {
 		self.as_ref()
 	}
 }
 
 impl TraitPublic for Public {
-	/// A new instance from the given slice that should be 32 bytes long.
+	/// A new instance from the given slice that should be 33 bytes long.
 	///
 	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
 	/// you are certain that the array actually is a pubkey. GIGO!
 	fn from_slice(data: &[u8]) -> Self {
-		let mut r = [0u8; 32];
+		let mut r = [0u8; 33];
 		r.copy_from_slice(data);
 		Public(r)
 	}
@@ -339,7 +331,7 @@ impl Derive for Public {}
 /// Derive a single hard junction.
 #[cfg(feature = "std")]
 fn derive_hard_junction(secret_seed: &Seed, cc: &[u8; 32]) -> Seed {
-	("Ed25519HDKD", secret_seed, cc).using_encoded(|data| {
+	("Secp256k1HDKD", secret_seed, cc).using_encoded(|data| {
 		let mut res = [0u8; 32];
 		res.copy_from_slice(blake2_rfc::blake2b::blake2b(32, &[], data).as_bytes());
 		res
@@ -389,7 +381,7 @@ impl TraitPair for Pair {
 
 	/// Make a new key pair from secret seed material.
 	///
-	/// You should never need to use this; generate(), generate_with_phrasee
+	/// You should never need to use this; generate(), generate_with_phrase
 	fn from_seed(seed: &Seed) -> Pair {
 		Self::from_seed_slice(&seed[..]).expect("seed has valid length; qed")
 	}
@@ -399,18 +391,18 @@ impl TraitPair for Pair {
 	///
 	/// You should never need to use this; generate(), generate_with_phrase
 	fn from_seed_slice(seed_slice: &[u8]) -> Result<Pair, SecretStringError> {
-		let secret = ed25519_dalek::SecretKey::from_bytes(seed_slice)
+		let secret = SecretKey::parse_slice(seed_slice)
 			.map_err(|_| SecretStringError::InvalidSeedLength)?;
-		let public = ed25519_dalek::PublicKey::from(secret.expand::<sha2::Sha512>());
-		Ok(Pair(ed25519_dalek::Keypair { secret, public }))
+		let public = PublicKey::from_secret_key(&secret);
+		Ok(Pair{ secret, public })
 	}
 
 	/// Derive a child key from a series of given junctions.
 	fn derive<Iter: Iterator<Item=DeriveJunction>>(&self,
 		path: Iter,
-		_seed: Option<Seed>,
+		_seed: Option<Seed>
 	) -> Result<(Pair, Option<Seed>), DeriveError> {
-		let mut acc = self.0.secret.to_bytes();
+		let mut acc = self.secret.serialize();
 		for j in path {
 			match j {
 				DeriveJunction::Soft(_cc) => return Err(DeriveError::SoftKeyInPath),
@@ -422,21 +414,23 @@ impl TraitPair for Pair {
 
 	/// Get the public key.
 	fn public(&self) -> Public {
-		let mut r = [0u8; 32];
-		let pk = self.0.public.as_bytes();
-		r.copy_from_slice(pk);
-		Public(r)
+		Public(self.public.serialize_compressed())
 	}
 
 	/// Sign a message.
 	fn sign(&self, message: &[u8]) -> Signature {
-		let r = self.0.sign::<sha2::Sha512>(message).to_bytes();
-		Signature::from_raw(r)
+		let message = secp256k1::Message::parse(&blake2_256(message));
+		secp256k1::sign(&message, &self.secret).into()
 	}
 
 	/// Verify a signature on a message. Returns true if the signature is good.
 	fn verify<M: AsRef<[u8]>>(sig: &Self::Signature, message: M, pubkey: &Self::Public) -> bool {
-		Self::verify_weak(&sig.0[..], message.as_ref(), pubkey)
+		let message = secp256k1::Message::parse(&blake2_256(message.as_ref()));
+		let sig: (_, _) = match sig.try_into() { Ok(x) => x, _ => return false };
+		match secp256k1::recover(&message, &sig.0, &sig.1) {
+			Ok(actual) => &pubkey.0[..] == &actual.serialize_compressed()[..],
+			_ => false,
+		}
 	}
 
 	/// Verify a signature on a message. Returns true if the signature is good.
@@ -444,18 +438,12 @@ impl TraitPair for Pair {
 	/// This doesn't use the type system to ensure that `sig` and `pubkey` are the correct
 	/// size. Use it only if you're coming from byte buffers and need the speed.
 	fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(sig: &[u8], message: M, pubkey: P) -> bool {
-		let public_key = match ed25519_dalek::PublicKey::from_bytes(pubkey.as_ref()) {
-			Ok(pk) => pk,
-			Err(_) => return false,
-		};
-
-		let sig = match ed25519_dalek::Signature::from_bytes(sig) {
-			Ok(s) => s,
-			Err(_) => return false
-		};
-
-		match public_key.verify::<sha2::Sha512>(message.as_ref(), &sig) {
-			Ok(_) => true,
+		let message = secp256k1::Message::parse(&blake2_256(message.as_ref()));
+		if sig.len() != 65 { return false }
+		let ri = match secp256k1::RecoveryId::parse(sig[64]) { Ok(x) => x, _ => return false };
+		let sig = match secp256k1::Signature::parse_slice(&sig[0..64]) { Ok(x) => x, _ => return false };
+		match secp256k1::recover(&message, &sig, &ri) {
+			Ok(actual) => pubkey.as_ref() == &actual.serialize_compressed()[..],
 			_ => false,
 		}
 	}
@@ -469,8 +457,8 @@ impl TraitPair for Pair {
 #[cfg(feature = "std")]
 impl Pair {
 	/// Get the seed for this key.
-	pub fn seed(&self) -> &Seed {
-		self.0.secret.as_bytes()
+	pub fn seed(&self) -> Seed {
+		self.secret.serialize()
 	}
 
 	/// Exactly as `from_string` except that if no matches are found then, the the first 32
@@ -518,12 +506,12 @@ mod test {
 	fn seed_and_derive_should_work() {
 		let seed = hex!("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60");
 		let pair = Pair::from_seed(&seed);
-		assert_eq!(pair.seed(), &seed);
+		assert_eq!(pair.seed(), seed);
 		let path = vec![DeriveJunction::Hard([0u8; 32])];
-		let derived = pair.derive(path.into_iter(), None).ok().unwrap().0;
+		let derived = pair.derive(path.into_iter(), None).ok().unwrap();
 		assert_eq!(
-			derived.seed(),
-			&hex!("ede3354e133f9c8e337ddd6ee5415ed4b4ffe5fc7d21e933f4930a3730e5b21c")
+			derived.0.seed(),
+			hex!("b8eefc4937200a8382d00050e050ced2d4ab72cc2ef1b061477afb51564fdd61")
 		);
 	}
 
@@ -534,10 +522,10 @@ mod test {
 		);
 		let public = pair.public();
 		assert_eq!(public, Public::from_raw(
-			hex!("d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a")
+			hex!("028db55b05db86c0b1786ca49f095d76344c9e6056b2f02701a7e7f3c20aabfd91")
 		));
 		let message = b"";
-		let signature = hex!("e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b");
+		let signature = hex!("3dde91174bd9359027be59a428b8146513df80a2a3c7eda2194f64de04a69ab97b753169e94db6ffd50921a2668a48b94ca11e3d32c1ff19cfe88890aa7e8f3c00");
 		let signature = Signature::from_raw(signature);
 		assert!(&pair.sign(&message[..]) == &signature);
 		assert!(Pair::verify(&signature, &message[..], &public));
@@ -551,10 +539,10 @@ mod test {
 		).unwrap();
 		let public = pair.public();
 		assert_eq!(public, Public::from_raw(
-			hex!("d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a")
+			hex!("028db55b05db86c0b1786ca49f095d76344c9e6056b2f02701a7e7f3c20aabfd91")
 		));
 		let message = b"";
-		let signature = hex!("e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b");
+		let signature = hex!("3dde91174bd9359027be59a428b8146513df80a2a3c7eda2194f64de04a69ab97b753169e94db6ffd50921a2668a48b94ca11e3d32c1ff19cfe88890aa7e8f3c00");
 		let signature = Signature::from_raw(signature);
 		assert!(&pair.sign(&message[..]) == &signature);
 		assert!(Pair::verify(&signature, &message[..], &public));
@@ -575,7 +563,7 @@ mod test {
 		let pair = Pair::from_seed(b"12345678901234567890123456789012");
 		let public = pair.public();
 		assert_eq!(public, Public::from_raw(
-			hex!("2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee")
+			hex!("035676109c54b9a16d271abeb4954316a40a32bcce023ac14c8e26e958aa68fba9")
 		));
 		let message = hex!("2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee00000000000000000200d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a4500000000000000");
 		let signature = pair.sign(&message[..]);

@@ -394,7 +394,18 @@ pub mod ext {
 		) -> u32;
 
 		/// Note: ext_secp256k1_ecdsa_recover returns 0 if the signature is correct, nonzero otherwise.
+		///
+		/// pubkey_data must point to 64 bytes.
 		fn ext_secp256k1_ecdsa_recover(
+			msg_data: *const u8,
+			sig_data: *const u8,
+			pubkey_data: *mut u8,
+		) -> u32;
+
+		/// Note: ext_secp256k1_ecdsa_recover_compressed returns 0 if the signature is correct, nonzero otherwise.
+		///
+		/// pubkey_data must point to 33 bytes.
+		fn ext_secp256k1_ecdsa_recover_compressed(
 			msg_data: *const u8,
 			sig_data: *const u8,
 			pubkey_data: *mut u8,
@@ -969,6 +980,19 @@ impl CryptoApi for () {
 			2 => Err(EcdsaVerifyError::BadV),
 			3 => Err(EcdsaVerifyError::BadSignature),
 			_ => unreachable!("`ext_secp256k1_ecdsa_recover` only returns 0, 1, 2 or 3; qed"),
+		}
+	}
+
+	fn secp256k1_ecdsa_recover_compressed(sig: &[u8; 65], msg: &[u8; 32]) -> Result<[u8; 33], EcdsaVerifyError> {
+		let mut pubkey = [0u8; 33];
+		match unsafe {
+			ext_secp256k1_ecdsa_recover_compressed.get()(msg.as_ptr(), sig.as_ptr(), pubkey.as_mut_ptr())
+		} {
+			0 => Ok(pubkey),
+			1 => Err(EcdsaVerifyError::BadRS),
+			2 => Err(EcdsaVerifyError::BadV),
+			3 => Err(EcdsaVerifyError::BadSignature),
+			_ => unreachable!("`ext_secp256k1_ecdsa_recover_compressed` only returns 0, 1, 2 or 3; qed"),
 		}
 	}
 }

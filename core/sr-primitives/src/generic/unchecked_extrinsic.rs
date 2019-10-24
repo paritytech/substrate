@@ -21,7 +21,7 @@ use rstd::fmt;
 use runtime_io::blake2_256;
 use codec::{Decode, Encode, EncodeLike, Input, Error};
 use crate::{
-	traits::{self, Member, MaybeDisplay, SignedExtension, Checkable, Extrinsic},
+	traits::{self, Member, MaybeDisplay, SignedExtension, Checkable, Extrinsic, IdentifyAccount},
 	generic::CheckedExtrinsic, transaction_validity::{TransactionValidityError, InvalidTransaction},
 };
 
@@ -98,7 +98,8 @@ for
 where
 	Address: Member + MaybeDisplay,
 	Call: Encode + Member,
-	Signature: Member + traits::Verify<Signer=AccountId>,
+	Signature: Member + traits::Verify,
+	<Signature as traits::Verify>::Signer: IdentifyAccount<AccountId=AccountId>,
 	Extra: SignedExtension<AccountId=AccountId>,
 	AccountId: Member + MaybeDisplay,
 	Lookup: traits::Lookup<Source=Address, Target=AccountId>,
@@ -284,17 +285,26 @@ mod tests {
 	use super::*;
 	use runtime_io::blake2_256;
 	use crate::codec::{Encode, Decode};
-	use crate::traits::{SignedExtension, IdentityLookup};
+	use crate::traits::{SignedExtension, IdentifyAccount, IdentityLookup};
 	use serde::{Serialize, Deserialize};
 
 	type TestContext = IdentityLookup<u64>;
 
+	#[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Encode, Decode)]
+	pub struct TestSigner(pub u64);
+	impl From<u64> for TestSigner { fn from(x: u64) -> Self { Self(x) } }
+	impl From<TestSigner> for u64 { fn from(x: TestSigner) -> Self { x.0 } }
+	impl IdentifyAccount for TestSigner {
+		type AccountId = u64;
+		fn into_account(self) -> u64 { self.into() }
+	}
+
 	#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Encode, Decode)]
 	struct TestSig(u64, Vec<u8>);
 	impl traits::Verify for TestSig {
-		type Signer = u64;
-		fn verify<L: traits::Lazy<[u8]>>(&self, mut msg: L, signer: &Self::Signer) -> bool {
-			*signer == self.0 && msg.get() == &self.1[..]
+		type Signer = TestSigner;
+		fn verify<L: traits::Lazy<[u8]>>(&self, mut msg: L, signer: &u64) -> bool {
+			signer == &self.0 && msg.get() == &self.1[..]
 		}
 	}
 
