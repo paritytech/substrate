@@ -30,19 +30,27 @@ pub trait Signer<Public, Signature> {
 
 /// A `Signer` implementation for any `AppPublic` type.
 ///
-/// This implementation additionaly supports conversion to/from multi-signature/multi-signer wrappers.
+/// This implementation additionaly supports conversion to/from multi-signature/multi-signer
+/// wrappers.
 /// If the wrapped crypto doesn't match `AppPublic`s crypto `None` is returned.
 impl<Public, Signature, AppPublic> Signer<Public, Signature> for AppPublic where
-	AppPublic: RuntimeAppPublic + app_crypto::AppPublic + From<<AppPublic as app_crypto::AppPublic>::Generic>,
+	AppPublic: RuntimeAppPublic
+		+ app_crypto::AppPublic
+		+ From<<AppPublic as app_crypto::AppPublic>::Generic>,
 	<AppPublic as RuntimeAppPublic>::Signature: app_crypto::AppSignature,
-	Signature: From<<<AppPublic as RuntimeAppPublic>::Signature as app_crypto::AppSignature>::Generic>,
+	Signature: From<
+		<<AppPublic as RuntimeAppPublic>::Signature as app_crypto::AppSignature>::Generic
+	>,
 	Public: rstd::convert::TryInto<<AppPublic as app_crypto::AppPublic>::Generic>
 {
 	fn sign<Payload: Encode>(public: Public, raw_payload: &Payload) -> Option<Signature> {
 		raw_payload.using_encoded(|payload| {
 			let public = public.try_into().ok()?;
 			AppPublic::from(public).sign(&payload)
-				.map(<<AppPublic as RuntimeAppPublic>::Signature as app_crypto::AppSignature>::Generic::from)
+				.map(
+					<<AppPublic as RuntimeAppPublic>::Signature as app_crypto::AppSignature>
+					 ::Generic::from
+				)
 				.map(Signature::from)
 		})
 	}
