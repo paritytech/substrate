@@ -225,13 +225,13 @@ pub struct Proposal<AccountId, Balance> {
 decl_storage! {
 	trait Store for Module<T: Trait> as Treasury {
 		/// Number of proposals that have been made.
-		ProposalCount get(proposal_count): ProposalIndex;
+		ProposalCount get(fn proposal_count): ProposalIndex;
 
 		/// Proposals that have been made.
-		Proposals get(proposals): map ProposalIndex => Option<Proposal<T::AccountId, BalanceOf<T>>>;
+		Proposals get(fn proposals): map ProposalIndex => Option<Proposal<T::AccountId, BalanceOf<T>>>;
 
 		/// Proposal indices that have been approved but not yet awarded.
-		Approvals get(approvals): Vec<ProposalIndex>;
+		Approvals get(fn approvals): Vec<ProposalIndex>;
 	}
 }
 

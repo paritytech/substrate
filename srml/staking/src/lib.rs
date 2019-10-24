@@ -551,72 +551,72 @@ decl_storage! {
 	trait Store for Module<T: Trait> as Staking {
 
 		/// The ideal number of staking participants.
-		pub ValidatorCount get(validator_count) config(): u32;
+		pub ValidatorCount get(fn validator_count) config(): u32;
 		/// Minimum number of staking participants before emergency conditions are imposed.
-		pub MinimumValidatorCount get(minimum_validator_count) config():
+		pub MinimumValidatorCount get(fn minimum_validator_count) config():
 			u32 = DEFAULT_MINIMUM_VALIDATOR_COUNT;
 
 		/// Any validators that may never be slashed or forcibly kicked. It's a Vec since they're
 		/// easy to initialize and the performance hit is minimal (we expect no more than four
 		/// invulnerables) and restricted to testnets.
-		pub Invulnerables get(invulnerables) config(): Vec<T::AccountId>;
+		pub Invulnerables get(fn invulnerables) config(): Vec<T::AccountId>;
 
 		/// Map from all locked "stash" accounts to the controller account.
-		pub Bonded get(bonded): map T::AccountId => Option<T::AccountId>;
+		pub Bonded get(fn bonded): map T::AccountId => Option<T::AccountId>;
 		/// Map from all (unlocked) "controller" accounts to the info regarding the staking.
-		pub Ledger get(ledger):
+		pub Ledger get(fn ledger):
 			map T::AccountId => Option<StakingLedger<T::AccountId, BalanceOf<T>>>;
 
 		/// Where the reward payment should be made. Keyed by stash.
-		pub Payee get(payee): map T::AccountId => RewardDestination;
+		pub Payee get(fn payee): map T::AccountId => RewardDestination;
 
 		/// The map from (wannabe) validator stash key to the preferences of that validator.
-		pub Validators get(validators): linked_map T::AccountId => ValidatorPrefs<BalanceOf<T>>;
+		pub Validators get(fn validators): linked_map T::AccountId => ValidatorPrefs<BalanceOf<T>>;
 
 		/// The map from nominator stash key to the set of stash keys of all validators to nominate.
-		pub Nominators get(nominators): linked_map T::AccountId => Vec<T::AccountId>;
+		pub Nominators get(fn nominators): linked_map T::AccountId => Vec<T::AccountId>;
 
 		/// Nominators for a particular account that is in action right now. You can't iterate
 		/// through validators here, but you can find them in the Session module.
 		///
 		/// This is keyed by the stash account.
-		pub Stakers get(stakers): map T::AccountId => Exposure<T::AccountId, BalanceOf<T>>;
+		pub Stakers get(fn stakers): map T::AccountId => Exposure<T::AccountId, BalanceOf<T>>;
 
 		/// The currently elected validator set keyed by stash account ID.
-		pub CurrentElected get(current_elected): Vec<T::AccountId>;
+		pub CurrentElected get(fn current_elected): Vec<T::AccountId>;
 
 		/// The current era index.
-		pub CurrentEra get(current_era) config(): EraIndex;
+		pub CurrentEra get(fn current_era) config(): EraIndex;
 
 		/// The start of the current era.
-		pub CurrentEraStart get(current_era_start): MomentOf<T>;
+		pub CurrentEraStart get(fn current_era_start): MomentOf<T>;
 
 		/// The session index at which the current era started.
-		pub CurrentEraStartSessionIndex get(current_era_start_session_index): SessionIndex;
+		pub CurrentEraStartSessionIndex get(fn current_era_start_session_index): SessionIndex;
 
 		/// Rewards for the current era. Using indices of current elected set.
-		CurrentEraPointsEarned get(current_era_reward): EraPoints;
+		CurrentEraPointsEarned get(fn current_era_reward): EraPoints;
 
 		/// The amount of balance actively at stake for each validator slot, currently.
 		///
 		/// This is used to derive rewards and punishments.
-		pub SlotStake get(slot_stake) build(|config: &GenesisConfig<T>| {
+		pub SlotStake get(fn slot_stake) build(|config: &GenesisConfig<T>| {
 			config.stakers.iter().map(|&(_, _, value, _)| value).min().unwrap_or_default()
 		}): BalanceOf<T>;
 
 		/// True if the next session change will be a new era regardless of index.
-		pub ForceEra get(force_era) config(): Forcing;
+		pub ForceEra get(fn force_era) config(): Forcing;
 
 		/// The percentage of the slash that is distributed to reporters.
 		///
 		/// The rest of the slashed value is handled by the `Slash`.
-		pub SlashRewardFraction get(slash_reward_fraction) config(): Perbill;
+		pub SlashRewardFraction get(fn slash_reward_fraction) config(): Perbill;
 
 		/// A mapping from still-bonded eras to the first session index of that era.
 		BondedEras: Vec<(EraIndex, SessionIndex)>;
 
 		/// All slashes that have occurred in a given era.
-		EraSlashJournal get(era_slash_journal):
+		EraSlashJournal get(fn era_slash_journal):
 			map EraIndex => Vec<SlashJournalEntry<T::AccountId, BalanceOf<T>>>;
 	}
 	add_extra_genesis {

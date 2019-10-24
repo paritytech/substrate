@@ -366,7 +366,7 @@ type EventIndex = u32;
 decl_storage! {
 	trait Store for Module<T: Trait> as System {
 		/// Extrinsics nonce for accounts.
-		pub AccountNonce get(account_nonce): map T::AccountId => T::Index;
+		pub AccountNonce get(fn account_nonce): map T::AccountId => T::Index;
 		/// Total extrinsics count for the current block.
 		ExtrinsicCount: Option<u32>;
 		/// Total weight for all extrinsics put together, for the current block.
@@ -374,21 +374,21 @@ decl_storage! {
 		/// Total length (in bytes) for all extrinsics put together, for the current block.
 		AllExtrinsicsLen: Option<u32>;
 		/// Map of block numbers to block hashes.
-		pub BlockHash get(block_hash) build(|_| vec![(T::BlockNumber::zero(), hash69())]): map T::BlockNumber => T::Hash;
+		pub BlockHash get(fn block_hash) build(|_| vec![(T::BlockNumber::zero(), hash69())]): map T::BlockNumber => T::Hash;
 		/// Extrinsics data for the current block (maps an extrinsic's index to its data).
-		ExtrinsicData get(extrinsic_data): map u32 => Vec<u8>;
+		ExtrinsicData get(fn extrinsic_data): map u32 => Vec<u8>;
 		/// The current block number being processed. Set by `execute_block`.
-		Number get(block_number) build(|_| 1.into()): T::BlockNumber;
+		Number get(fn block_number) build(|_| 1.into()): T::BlockNumber;
 		/// Hash of the previous block.
-		ParentHash get(parent_hash) build(|_| hash69()): T::Hash;
+		ParentHash get(fn parent_hash) build(|_| hash69()): T::Hash;
 		/// Extrinsics root of the current block, also part of the block header.
-		ExtrinsicsRoot get(extrinsics_root): T::Hash;
+		ExtrinsicsRoot get(fn extrinsics_root): T::Hash;
 		/// Digest of the current block, also part of the block header.
-		Digest get(digest): DigestOf<T>;
+		Digest get(fn digest): DigestOf<T>;
 		/// Events deposited for the current block.
-		Events get(events): Vec<EventRecord<T::Event, T::Hash>>;
+		Events get(fn events): Vec<EventRecord<T::Event, T::Hash>>;
 		/// The number of events in the `Events<T>` list.
-		EventCount get(event_count): EventIndex;
+		EventCount get(fn event_count): EventIndex;
 
 		// TODO: https://github.com/paritytech/substrate/issues/2553
 		// Possibly, we can improve it by using something like:
@@ -408,7 +408,7 @@ decl_storage! {
 		/// The value has the type `(T::BlockNumber, EventIndex)` because if we used only just
 		/// the `EventIndex` then in case if the topic has the same contents on the next block
 		/// no notification will be triggered thus the event might be lost.
-		EventTopics get(event_topics): double_map hasher(blake2_256) (), blake2_256(T::Hash)
+		EventTopics get(fn event_topics): double_map hasher(blake2_256) (), blake2_256(T::Hash)
 			=> Vec<(T::BlockNumber, EventIndex)>;
 	}
 	add_extra_genesis {

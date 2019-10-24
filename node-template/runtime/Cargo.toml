@@ -43,7 +43,7 @@ std = [
 	"balances/std",
 	"aura/std",
 	"aura-primitives/std",
-	'grandpa/std',
+	"grandpa/std",
 	"executive/std",
 	"indices/std",
 	"primitives/std",
