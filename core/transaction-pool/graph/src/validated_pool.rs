@@ -236,54 +236,58 @@ impl<B: ChainApi> ValidatedPool<B> {
 			// if tx1 depends on tx2, then if tx1 is inserted before tx2, then it goes
 			// to the future queue and gets rejected immediately
 			// => let's temporary stop rejection and clear future queue before return
-			let reject_future_transactions = pool.reject_future_transactions(false);
-
-			// now resubmit all removed transactions back to the pool
-			let mut final_statuses = HashMap::new();
-			for (hash, tx_to_resubmit) in txs_to_resubmit {
-				match tx_to_resubmit {
-					ValidatedTransaction::Valid(tx) => match pool.import(tx) {
-						Ok(imported) => match imported {
-							base::Imported::Ready { promoted, failed, removed, .. } => {
-								final_statuses.insert(hash, Status::Ready);
-								for hash in promoted {
+			pool.with_futures_enabled(|pool, reject_future_transactions| {
+				// now resubmit all removed transactions back to the pool
+				let mut final_statuses = HashMap::new();
+				for (hash, tx_to_resubmit) in txs_to_resubmit {
+					match tx_to_resubmit {
+						ValidatedTransaction::Valid(tx) => match pool.import(tx) {
+							Ok(imported) => match imported {
+								base::Imported::Ready { promoted, failed, removed, .. } => {
 									final_statuses.insert(hash, Status::Ready);
-								}
-								for hash in failed {
-									final_statuses.insert(hash, Status::Failed);
-								}
-								for tx in removed {
-									final_statuses.insert(tx.hash.clone(), Status::Dropped);
-								}
+									for hash in promoted {
+										final_statuses.insert(hash, Status::Ready);
+									}
+									for hash in failed {
+										final_statuses.insert(hash, Status::Failed);
+									}
+									for tx in removed {
+										final_statuses.insert(tx.hash.clone(), Status::Dropped);
+									}
+								},
+								base::Imported::Future { .. } => {
+									final_statuses.insert(hash, Status::Future);
+								},
 							},
-							base::Imported::Future { .. } => {
-								final_statuses.insert(hash, Status::Future);
+							Err(err) => {
+								// we do not want to fail if single transaction import has failed
+								// nor we do want to propagate this error, because it could tx unknown to caller
+								// => let's just notify listeners (and issue debug message)
+								warn!(
+									target: "txpool",
+									"[{:?}] Removing invalid transaction from update: {}",
+									hash,
+									err,
+								);
+								final_statuses.insert(hash, Status::Failed);
 							},
 						},
-						Err(err) => {
-							// we do not want to fail if single transaction import has failed
-							// nor we do want to propagate this error, because it could tx unknown to caller
-							// => let's just notify listeners (and issue debug message)
-							warn!(target: "txpool", "[{:?}] Removing invalid transaction from update: {}", hash, err);
+						ValidatedTransaction::Invalid(_) | ValidatedTransaction::Unknown(_, _) => {
 							final_statuses.insert(hash, Status::Failed);
 						},
-					},
-					ValidatedTransaction::Invalid(_) | ValidatedTransaction::Unknown(_, _) => {
-						final_statuses.insert(hash, Status::Failed);
-					},
+					}
 				}
-			}
 
-			// if the pool is configured to reject future transactions, let's clear the future
-			// queue, updating final statuses as required
-			if reject_future_transactions {
-				for future_tx in pool.clear_future() {
-					final_statuses.insert(future_tx.hash.clone(), Status::Dropped);
+				// if the pool is configured to reject future transactions, let's clear the future
+				// queue, updating final statuses as required
+				if reject_future_transactions {
+					for future_tx in pool.clear_future() {
+						final_statuses.insert(future_tx.hash.clone(), Status::Dropped);
+					}
 				}
-			}
-			pool.reject_future_transactions(reject_future_transactions);
 
-			(initial_statuses, final_statuses)
+				(initial_statuses, final_statuses)
+			})
 		};
 
 		// and now let's notify listeners about status changes

@@ -208,11 +208,17 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: std::fmt::Debug> BasePool<Hash, 
 		}
 	}
 
-	/// Changes reject future transactions flag. Returns previous flag value.
-	pub fn reject_future_transactions(&mut self, reject: bool) -> bool {
+	/// Temporary enables future transactions, runs closure and then restores
+	/// `reject_future_transactions` flag back to previous value.
+	///
+	/// The closure accepts the mutable reference to the pool and original value
+	/// of the `reject_future_transactions` flag.
+	pub(crate) fn with_futures_enabled<T>(&mut self, closure: impl FnOnce(&mut Self, bool) -> T) -> T {
 		let previous = self.reject_future_transactions;
-		self.reject_future_transactions = reject;
-		previous
+		self.reject_future_transactions = false;
+		let return_value = closure(self, previous);
+		self.reject_future_transactions = previous;
+		return_value
 	}
 
 	/// Imports transaction to the pool.
@@ -1067,5 +1073,33 @@ requires: [03,02], provides: [04], data: [4]}".to_owned()
 
 		// then
 		assert_eq!(pool.future.len(), 0);
+	}
+
+	#[test]
+	fn should_accept_future_transactions_when_explcitly_asked_to() {
+		// given
+		let mut pool = pool();
+		pool.reject_future_transactions = true;
+
+		// when
+		let flag_value = pool.with_futures_enabled(|pool, flag| {
+			pool.import(Transaction {
+				data: vec![5u8],
+				bytes: 1,
+				hash: 5,
+				priority: 5u64,
+				valid_till: 64u64,
+				requires: vec![vec![0]],
+				provides: vec![],
+				propagate: true,
+			}).unwrap();
+
+			flag
+		});
+
+		// then
+		assert_eq!(flag_value, true);
+		assert_eq!(pool.reject_future_transactions, true);
+		assert_eq!(pool.future.len(), 1);
 	}
 }
