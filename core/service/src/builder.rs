@@ -976,14 +976,9 @@ ServiceBuilder<
 
 					let offchain = offchain.as_ref().and_then(|o| o.upgrade());
 					if let (Some(txpool), Some(offchain)) = (txpool, offchain) {
-						let future = crate::builder::offchain_workers(
-							&number,
-							&offchain,
-							&txpool,
-							&network_state_info,
-							is_validator,
-						).map_err(|e| warn!("Offchain workers error processing new block: {:?}", e))?;
-						let _ = to_spawn_tx_.unbounded_send(future);
+						let future = offchain.on_block_imported(&number, &txpool, network_state_info.clone(), is_validator)
+							.map(|()| Ok(()));
+						let _ = to_spawn_tx_.unbounded_send(Box::new(Compat::new(future)));
 					}
 
 					Ok(())
@@ -1276,32 +1271,6 @@ pub(crate) fn maintain_transaction_pool<Api, Backend, Block, Executor, PoolApi>(
 		},
 		None => Box::new(resubmit_future),
 	})
-}
-
-pub(crate) fn offchain_workers<Api, Backend, Block, Executor, PoolApi>(
-	number: &NumberFor<Block>,
-	offchain: &offchain::OffchainWorkers<
-		Client<Backend, Executor, Block, Api>,
-		<Backend as client::backend::Backend<Block, Blake2Hasher>>::OffchainStorage,
-		Block
-	>,
-	pool: &Arc<TransactionPool<PoolApi>>,
-	network_state: &Arc<dyn NetworkStateInfo + Send + Sync>,
-	is_validator: bool,
-) -> error::Result<Box<dyn Future<Item = (), Error = ()> + Send>>
-where
-	Block: BlockT<Hash = <Blake2Hasher as primitives::Hasher>::Out>,
-	Backend: client::backend::Backend<Block, Blake2Hasher> + 'static,
-	Api: 'static,
-	<Backend as client::backend::Backend<Block, Blake2Hasher>>::OffchainStorage: 'static,
-	Client<Backend, Executor, Block, Api>: ProvideRuntimeApi + Send + Sync,
-	<Client<Backend, Executor, Block, Api> as ProvideRuntimeApi>::Api: offchain::OffchainWorkerApi<Block>,
-	Executor: client::CallExecutor<Block, Blake2Hasher> + 'static,
-	PoolApi: txpool::ChainApi<Hash = Block::Hash, Block = Block> + 'static,
-{
-	let future = offchain.on_block_imported(number, pool, network_state.clone(), is_validator)
-		.map(|()| Ok(()));
-	Ok(Box::new(Compat::new(future)))
 }
 
 #[cfg(test)]
