@@ -57,6 +57,9 @@ transaction-payment = { package = "srml-transaction-payment", path = "../../srml
 [build-dependencies]
 wasm-builder-runner = { package = "substrate-wasm-builder-runner", version = "1.0.4", path = "../../core/utils/wasm-builder-runner" }
 
+[dev-dependencies]
+runtime_io = { package = "sr-io", path = "../../core/sr-io" }
+
 [features]
 default = ["std"]
 std = [
