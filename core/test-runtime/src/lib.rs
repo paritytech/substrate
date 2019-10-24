@@ -574,7 +574,7 @@ cfg_if! {
 				}
 
 				fn use_history_data() {
-					test_historied_data()
+					test_historical_data()
 				}
 
 				fn use_transactions() -> u64 {
@@ -771,7 +771,7 @@ cfg_if! {
 				}
 
 				fn use_history_data() {
-					test_historied_data()
+					test_historical_data()
 				}
 
 				fn use_transactions() -> u64 {
@@ -927,19 +927,19 @@ fn test_sr25519_crypto() -> (sr25519::AppSignature, sr25519::AppPublic) {
 	(signature, public0)
 }
 
-fn test_historied_data() {
-	let mut states = historied_data::linear::States::default();
-	let mut value = historied_data::linear::History::default();
+fn test_historical_data() {
+	let mut states = historical_data::linear::States::default();
+	let mut value = historical_data::linear::History::default();
 	if value.get(states.as_ref()) != None {
 		panic!("Got a value for empty data");
 	}
  
-	value.set(states.as_ref(), 42u64);
+	value.set(states.as_ref_mut(), 42u64);
 	states.start_transaction();
 	if value.get(states.as_ref()) != Some(&42) {
 		panic!("Got a wrong result accessing a one element data");
 	}
-	value.set(states.as_ref(), 43u64);
+	value.set(states.as_ref_mut(), 43u64);
 	if value.get(states.as_ref()) != Some(&43) {
 		panic!("Got a wrong result accessing a two element data");
 	}

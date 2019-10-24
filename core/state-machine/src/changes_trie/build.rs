@@ -325,7 +325,7 @@ mod test {
 	use crate::changes_trie::{RootsStorage, Configuration, storage::InMemoryStorage};
 	use crate::changes_trie::build_cache::{IncompleteCacheAction, IncompleteCachedBuildData};
 	use crate::overlayed_changes::{OverlayedValue, OverlayedChangeSet};
-	use historied_data::linear::{History, States, HistoriedValue, TransactionState};
+	use historical_data::linear::{History, States, HistoricalValue, TransactionState};
 	use super::*;
 
 	fn prepare_for_build(zero: u64) -> (
@@ -403,7 +403,7 @@ mod test {
 							value: Some(3u32.encode()),
 							extrinsics: None,
 						}, 0),
-					].into_iter().map(|(value, index)| HistoriedValue { value, index }))),
+					].into_iter().map(|(value, index)| HistoricalValue { value, index }))),
 					(vec![100], History::from_iter(vec![
 						(OverlayedValue {
 							value: Some(vec![202]),
@@ -413,19 +413,19 @@ mod test {
 							value: Some(vec![200]),
 							extrinsics: Some(vec![3, 0, 2].into_iter().collect())
 						}, 1),
-					].into_iter().map(|(value, index)| HistoriedValue { value, index }))),
+					].into_iter().map(|(value, index)| HistoricalValue { value, index }))),
 					(vec![101], History::from_iter(vec![
 						(OverlayedValue {
 						value: Some(vec![203]),
 						extrinsics: Some(vec![1].into_iter().collect())
 						}, 0),
-					].into_iter().map(|(value, index)| HistoriedValue { value, index }))),
+					].into_iter().map(|(value, index)| HistoricalValue { value, index }))),
 					(vec![103], History::from_iter(vec![
 						(OverlayedValue {
 						value: None,
 						extrinsics: Some(vec![0, 1].into_iter().collect())
 						}, 1),
-					].into_iter().map(|(value, index)| HistoriedValue { value, index }))),
+					].into_iter().map(|(value, index)| HistoricalValue { value, index }))),
 				].into_iter().collect(),
 				children: vec![
 					(child_trie_key1, vec![
@@ -438,7 +438,7 @@ mod test {
 								value: Some(vec![200]),
 								extrinsics: Some(vec![3, 0, 2].into_iter().collect())
 							}, 1),
-						].into_iter().map(|(value, index)| HistoriedValue { value, index }))),
+						].into_iter().map(|(value, index)| HistoricalValue { value, index }))),
 					].into_iter().collect()),
 					(child_trie_key2, vec![
 						(vec![100], History::from_iter(vec![
@@ -446,7 +446,7 @@ mod test {
 								value: Some(vec![200]),
 								extrinsics: Some(vec![0, 2].into_iter().collect())
 							}, 1),
-						].into_iter().map(|(value, index)| HistoriedValue { value, index }))),
+						].into_iter().map(|(value, index)| HistoricalValue { value, index }))),
 					].into_iter().collect()),
 				].into_iter().collect(),
 			},
@@ -649,7 +649,7 @@ mod test {
 					value: None,
 					extrinsics: Some(vec![1].into_iter().collect()),
 				}, 1),
-			].into_iter().map(|(value, index)| HistoriedValue { value, index })));
+			].into_iter().map(|(value, index)| HistoricalValue { value, index })));
 
 			let parent = AnchorBlockId { hash: Default::default(), number: zero + 3 };
 			let changes_trie_nodes = prepare_input(

@@ -1,4 +1,4 @@
-## Historied data
+## Historical data
 
 Crate with methods to manage data that stores its own history.
 
@@ -13,6 +13,6 @@ History is serialize as a per item basis.
 
 This crates is `no_std` compatible as long as the `std` feature is not enabled.
 
-For more information see <https://crates.io/historied-data>
+For more information see <https://crates.io/historical-data>
 
 License: GPL-3.0

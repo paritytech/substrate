@@ -41,22 +41,22 @@ pub enum TransactionState {
 /// An entry at a given history height.
 #[derive(Debug, Clone)]
 #[cfg_attr(any(test, feature = "test-helpers"), derive(PartialEq))]
-pub struct HistoriedValue<V> {
+pub struct HistoricalValue<V> {
 	/// The stored value.
 	pub value: V,
 	/// The moment in history when the value got set.
 	pub index: usize,
 }
 
-impl<V> From<(V, usize)> for HistoriedValue<V> {
-	fn from(input: (V, usize)) -> HistoriedValue<V> {
-		HistoriedValue { value: input.0, index: input.1 }
+impl<V> From<(V, usize)> for HistoricalValue<V> {
+	fn from(input: (V, usize)) -> HistoricalValue<V> {
+		HistoricalValue { value: input.0, index: input.1 }
 	}
 }
 
-impl<V> HistoriedValue<V> {
-	fn as_ref(&self) -> HistoriedValue<&V> {
-		HistoriedValue {
+impl<V> HistoricalValue<V> {
+	fn as_ref(&self) -> HistoricalValue<&V> {
+		HistoricalValue {
 			value: &self.value,
 			index: self.index,
 		}
@@ -66,7 +66,7 @@ impl<V> HistoriedValue<V> {
 /// Array like buffer for in memory storage.
 /// By in memory we expect that this will
 /// not required persistence and is not serialized.
-type MemoryOnly<V> = smallvec::SmallVec<[HistoriedValue<V>; ALLOCATED_HISTORY]>;
+type MemoryOnly<V> = smallvec::SmallVec<[HistoricalValue<V>; ALLOCATED_HISTORY]>;
 
 /// Size of preallocated history per element.
 /// Currently at two for committed and prospective only.
@@ -91,13 +91,13 @@ impl<V> Default for History<V> {
 // buffer specific functions.
 impl<V> History<V> {
 
-	fn get_state(&self, index: usize) -> HistoriedValue<&V> {
+	fn get_state(&self, index: usize) -> HistoricalValue<&V> {
 		self.0[index].as_ref()
 	}
 
 	#[cfg(any(test, feature = "test-helpers"))]
 	/// Create an history from an existing history.
-	pub fn from_iter(input: impl IntoIterator<Item = HistoriedValue<V>>) -> Self {
+	pub fn from_iter(input: impl IntoIterator<Item = HistoricalValue<V>>) -> Self {
 		let mut history = History::default();
 		for v in input {
 			history.push_unchecked(v);
@@ -127,7 +127,7 @@ impl<V> History<V> {
 		}
 	}
 
-	fn pop(&mut self) -> Option<HistoriedValue<V>> {
+	fn pop(&mut self) -> Option<HistoricalValue<V>> {
 		self.0.pop()
 	}
 
@@ -136,7 +136,7 @@ impl<V> History<V> {
 	/// This method shall only be call after a `get_mut` where
 	/// the returned index indicate that a `set` will result
 	/// in appending a value.
-	pub fn push_unchecked(&mut self, value: HistoriedValue<V>) {
+	pub fn push_unchecked(&mut self, value: HistoricalValue<V>) {
 		self.0.push(value)
 	}
 
@@ -166,14 +166,14 @@ impl Default for States {
 
 impl States {
 	/// Get reference of state, that is enough
-	/// information to query historied
+	/// information to query historical
 	/// data.
 	pub fn as_ref(&self) -> &[TransactionState] {
 		self.0.as_ref()
 	}
 
 	/// Get reference of state, that is enough
-	/// information to update historied
+	/// information to update historical
 	/// data.
 	pub fn as_ref_mut(&self) -> (&[TransactionState], usize) {
 		(self.0.as_ref(), self.1)
@@ -289,7 +289,7 @@ impl<V> History<V> {
 				return;
 			}
 		}
-		self.push_unchecked(HistoriedValue {
+		self.push_unchecked(HistoricalValue {
 			value,
 			index: states.0.len() - 1,
 		});
@@ -307,7 +307,7 @@ impl<V> History<V> {
 		debug_assert!(states.len() >= index);
 		while index > 0 {
 			index -= 1;
-			let HistoriedValue { value, index: state_index } = self.get_state(index);
+			let HistoricalValue { value, index: state_index } = self.get_state(index);
 			match states[state_index] {
 				TransactionState::Dropped => (),
 				TransactionState::Pending
@@ -318,7 +318,7 @@ impl<V> History<V> {
 		None
 	}
 
-	/// Get latest value, consuming the historied data.
+	/// Get latest value, consuming the historical data.
 	pub fn into_pending(mut self, states: &[TransactionState]) -> Option<V> {
 		let mut index = self.len();
 		if index == 0 {
@@ -350,7 +350,7 @@ impl<V> History<V> {
 		debug_assert!(states.0.len() >= index);
 		while index > states.1 {
 			index -= 1;
-			let HistoriedValue { value, index: state_index } = self.get_state(index);
+			let HistoricalValue { value, index: state_index } = self.get_state(index);
 			match states.0[state_index] {
 				TransactionState::Dropped => (),
 				TransactionState::Pending
@@ -370,7 +370,7 @@ impl<V> History<V> {
 		debug_assert!(states.0.len() >= index);
 		while index > 0 {
 			index -= 1;
-			let HistoriedValue { value, index: state_index } = self.get_state(index);
+			let HistoricalValue { value, index: state_index } = self.get_state(index);
 			if state_index < states.1 {
 				match states.0[state_index] {
 					TransactionState::Dropped => (),
@@ -413,7 +413,7 @@ impl<V> History<V> {
 	pub fn get_mut(
 		&mut self,
 		states: (&[TransactionState], usize),
-	) -> Option<HistoriedValue<&mut V>> {
+	) -> Option<HistoricalValue<&mut V>> {
 		let mut index = self.len();
 		if index == 0 {
 			return None;
@@ -464,7 +464,7 @@ impl<V> History<V> {
 		&mut self,
 		states: (&[TransactionState], usize),
 		prune_to_commit: bool,
-	) -> Option<HistoriedValue<&mut V>>  {
+	) -> Option<HistoricalValue<&mut V>>  {
 		let mut index = self.len();
 		if index == 0 {
 			return None;
@@ -521,7 +521,7 @@ impl<V> History<V> {
 		result: Option<(usize, usize)>,
 		previous_switch: Option<(usize, usize)>,
 		deleted: usize,
-	) -> Option<HistoriedValue<&mut V>>  {
+	) -> Option<HistoricalValue<&mut V>>  {
 		if let Some((index, state_index)) = result {
 			if index + 1 - deleted < self.len() {
 				self.truncate(index + 1 - deleted);
