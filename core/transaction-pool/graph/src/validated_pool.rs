@@ -17,6 +17,7 @@
 use std::{
 	collections::{HashSet, HashMap},
 	hash,
+	sync::Arc,
 	time,
 };
 
@@ -211,7 +212,13 @@ impl<B: ChainApi> ValidatedPool<B> {
 					let tx_to_resubmit = if let Some(updated_tx) = transactions.remove(&removed_hash) {
 						updated_tx
 					} else {
-						ValidatedTransaction::Valid((*removed_tx).clone())
+						// in most cases we'll end up in successful `try_unwrap`, but if not
+						// we still need to reinsert transaction back to the pool => duplicate call
+						let transaction = match Arc::try_unwrap(removed_tx) {
+							Ok(transaction) => transaction,
+							Err(transaction) => transaction.duplicate(),
+						};
+						ValidatedTransaction::Valid(transaction)
 					};
 
 					initial_statuses.insert(removed_hash.clone(), Status::Ready);

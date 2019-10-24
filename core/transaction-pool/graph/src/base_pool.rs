@@ -83,7 +83,8 @@ pub struct PruneStatus<Hash, Ex> {
 }
 
 /// Immutable transaction
-#[derive(Clone, PartialEq, Eq)]
+#[cfg_attr(test, derive(Clone))]
+#[derive(PartialEq, Eq)]
 pub struct Transaction<Hash, Extrinsic> {
 	/// Raw extrinsic representing that transaction.
 	pub data: Extrinsic,
@@ -107,6 +108,26 @@ impl<Hash, Extrinsic> Transaction<Hash, Extrinsic> {
 	/// Returns `true` if the transaction should be propagated to other peers.
 	pub fn is_propagateable(&self) -> bool {
 		self.propagate
+	}
+}
+
+impl<Hash: Clone, Extrinsic: Clone> Transaction<Hash, Extrinsic> {
+	/// Explicit transaction clone.
+	///
+	/// Transaction should be cloned only if absolutely necessary && we want
+	/// every reason to be commented. That's why we `Transaction` is not `Clone`,
+	/// but there's explicit `duplicate` method.
+	pub fn duplicate(&self) -> Self {
+		Transaction {
+			data: self.data.clone(),
+			bytes: self.bytes.clone(),
+			hash: self.hash.clone(),
+			priority: self.priority.clone(),
+			valid_till: self.valid_till.clone(),
+			requires: self.requires.clone(),
+			provides: self.provides.clone(),
+			propagate: self.propagate,
+		}
 	}
 }
 
