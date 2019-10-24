@@ -273,6 +273,7 @@ pub fn testnet_genesis(
 			authorities: vec![],
 		}),
 		membership_Instance1: Some(Default::default()),
+		treasury: Some(Default::default()),
 	}
 }
 
