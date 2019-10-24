@@ -22,7 +22,7 @@ use structopt::StructOpt;
 
 use keystore::{Store as Keystore};
 use node_cli::chain_spec::{self, AccountId};
-use primitives::{crypto::{Public, Ss58Codec}, traits::BareCryptoStore};
+use primitives::{sr25519, crypto::{Public, Ss58Codec}, traits::BareCryptoStore};
 
 /// A utility to easily create a testnet chain spec definition with a given set
 /// of authorities and endowed accounts and/or generate random accounts.
@@ -237,11 +237,11 @@ fn main() -> Result<(), String> {
 			}
 
 			let endowed_accounts = endowed_seeds.iter().map(|seed| {
-				chain_spec::get_from_seed::<AccountId>(seed)
+				chain_spec::get_account_id_from_seed::<sr25519::Public>(seed)
 					.to_ss58check()
 			}).collect();
 
-			let sudo_account = chain_spec::get_from_seed::<AccountId>(&sudo_seed)
+			let sudo_account = chain_spec::get_account_id_from_seed::<sr25519::Public>(&sudo_seed)
 				.to_ss58check();
 
 			(authority_seeds, endowed_accounts, sudo_account)
