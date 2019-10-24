@@ -109,7 +109,6 @@ macro_rules! new_full_start {
 /// concrete types instead.
 macro_rules! new_full {
 	($config:expr, $with_startup_data: expr) => {{
-		use futures::future::Future;
 		use futures::sync::mpsc;
 		use network::DhtEvent;
 
@@ -169,7 +168,6 @@ macro_rules! new_full {
 			};
 
 			let babe = babe::start_babe(babe_config)?;
-			let babe = babe.select(service.on_exit()).then(|_| Ok(()));
 			service.spawn_essential_task(babe);
 
 			let authority_discovery = authority_discovery::AuthorityDiscovery::new(
