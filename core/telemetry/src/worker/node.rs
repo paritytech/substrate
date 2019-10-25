@@ -216,30 +216,10 @@ where TTrans::Output: Sink<BytesMut, Error = TSinkErr>
 		cx: &mut Context,
 		my_addr: &Multiaddr,
 	) -> Poll<Result<futures::never::Never, ConnectionError<TSinkErr>>> {
-		if let Some(mut timeout) = self.timeout.as_mut() {
-			match Future::poll(Pin::new(&mut timeout), cx) {
-				Poll::Pending => {},
-				Poll::Ready(Err(err)) => {
-					warn!(target: "telemetry", "Connection timeout error for {} {:?}", my_addr, err);
-				}
-				Poll::Ready(Ok(_)) => {
-					return Poll::Ready(Err(ConnectionError::Timeout))
-				}
-			}
-		}
-		loop {
-			if let Some(item) = self.pending.pop_front() {
-				if let Poll::Pending = Sink::poll_ready(Pin::new(&mut self.sink), cx) {
-					self.pending.push_front(item);
-					self.timeout = Some(Delay::new(Duration::from_millis(5000)));
-					if let Some(mut timeout) = self.timeout.as_mut() {
-						let _ = Future::poll(Pin::new(&mut timeout), cx);
-					}
-					return Poll::Pending
-				}
 
+		while let Some(item) = self.pending.pop_front() {
+			if let Poll::Ready(_) = Sink::poll_ready(Pin::new(&mut self.sink), cx) {
 				let item_len = item.len();
-
 				if let Err(err) = Sink::start_send(Pin::new(&mut self.sink), item) {
 					self.timeout = None;
 					return Poll::Ready(Err(ConnectionError::Sink(err)))
@@ -250,31 +230,57 @@ where TTrans::Output: Sink<BytesMut, Error = TSinkErr>
 				);
 				self.need_flush = true;
 
-			} else if self.need_flush {
-				match Sink::poll_flush(Pin::new(&mut self.sink), cx) {
-					Poll::Pending => return Poll::Pending,
-					Poll::Ready(Err(err)) => {
-						self.timeout = None;
-						return Poll::Ready(Err(ConnectionError::Sink(err)))
-					},
-					Poll::Ready(Ok(())) => {
-						self.timeout = None;
-						self.need_flush = false;
-					},
-				}
 			} else {
-				match Stream::poll_next(Pin::new(&mut self.sink), cx) {
-					Poll::Ready(Some(Ok(_))) => {
-						// We poll the telemetry `Stream` because the underlying implementation relies on
-						// this in order to answer PINGs.
-						// We don't do anything with incoming messages, however.
-					},
-					Poll::Ready(Some(Err(err))) => {
-						return Poll::Ready(Err(ConnectionError::Sink(err)))
-					},
-					Poll::Pending | Poll::Ready(None) => break,
+				self.pending.push_front(item);
+				if self.timeout.is_none() {
+					self.timeout = Some(Delay::new(Duration::from_secs(10)));
+				}
+				break;
+			}
+		}
+
+		if self.need_flush {
+			match Sink::poll_flush(Pin::new(&mut self.sink), cx) {
+				Poll::Pending => {
+					if self.timeout.is_none() {
+						self.timeout = Some(Delay::new(Duration::from_secs(10)));
+					}
+				},
+				Poll::Ready(Err(err)) => {
+					self.timeout = None;
+					return Poll::Ready(Err(ConnectionError::Sink(err)))
+				},
+				Poll::Ready(Ok(())) => {
+					self.timeout = None;
+					self.need_flush = false;
+				},
+			}
+		}
+
+		if let Some(timeout) = self.timeout.as_mut() {
+			match Future::poll(Pin::new(timeout), cx) {
+				Poll::Pending => {},
+				Poll::Ready(Err(err)) => {
+					self.timeout = None;
+					warn!(target: "telemetry", "Connection timeout error for {} {:?}", my_addr, err);
+				}
+				Poll::Ready(Ok(_)) => {
+					self.timeout = None;
+					return Poll::Ready(Err(ConnectionError::Timeout))
 				}
 			}
+		}
+
+		match Stream::poll_next(Pin::new(&mut self.sink), cx) {
+			Poll::Ready(Some(Ok(_))) => {
+				// We poll the telemetry `Stream` because the underlying implementation relies on
+				// this in order to answer PINGs.
+				// We don't do anything with incoming messages, however.
+			},
+			Poll::Ready(Some(Err(err))) => {
+				return Poll::Ready(Err(ConnectionError::Sink(err)))
+			},
+			Poll::Pending | Poll::Ready(None) => {},
 		}
 
 		Poll::Pending
