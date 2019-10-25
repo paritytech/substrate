@@ -585,14 +585,57 @@ trait Allocator {
 	}
 }
 
+/// Allocator used by Substrate when executing the Wasm runtime.
+#[cfg(not(feature = "std"))]
+struct WasmAllocator;
+
+#[cfg(all(not(feature = "disable_global_allocator"), not(feature = "std")))]
+#[global_allocator]
+static ALLOCATOR: WasmAllocator = WasmAllocator;
+
+#[cfg(not(feature = "std"))]
+mod allocator_impl {
+	use super::*;
+	use core::alloc::{GlobalAlloc, Layout};
+
+	unsafe impl GlobalAlloc for WasmAllocator {
+		unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+			allocator::malloc(layout.size() as u32)
+		}
+
+		unsafe fn dealloc(&self, ptr: *mut u8, _: Layout) {
+			allocator::free(ptr)
+		}
+	}
+}
+
+#[cfg(all(not(feature = "disable_panic_handler"), not(feature = "std")))]
+#[panic_handler]
+#[no_mangle]
+pub fn panic(info: &core::panic::PanicInfo) -> ! {
+	unsafe {
+		let message = rstd::alloc::format!("{}", info);
+		misc::print_utf8(message.as_bytes());
+		core::intrinsics::abort()
+	}
+}
+
+#[cfg(all(not(feature = "disable_oom"), not(feature = "std")))]
+#[alloc_error_handler]
+pub extern fn oom(_: core::alloc::Layout) -> ! {
+	static OOM_MSG: &str = "Runtime memory exhausted. Aborting";
+
+	unsafe {
+		misc::print_utf8(OOM_MSG.as_bytes());
+		core::intrinsics::abort();
+	}
+}
+
 mod imp {
 	use super::*;
 
 	#[cfg(feature = "std")]
 	include!("../with_std.rs");
-
-	#[cfg(not(feature = "std"))]
-	include!("../without_std.rs");
 }
 
 #[cfg(feature = "std")]
@@ -612,4 +655,5 @@ pub type SubstrateHostFunctions = (
 	offchain::HostFunctions,
 	crypto::HostFunctions,
 	hashing::HostFunctions,
+	allocator::HostFunctions,
 );

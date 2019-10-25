@@ -36,8 +36,9 @@ std = [
 ]
 
 # These two features are used for `no_std` builds for the environments which already provides
-# `#[panic_handler]` and `#[alloc_error_handler]`.
+# `#[panic_handler]`, `#[alloc_error_handler]` and `#[global_allocator]`.
 #
 # For the regular wasm runtime builds those are not used.
-no_panic_handler = []
-no_oom = []
+disable_panic_handler = []
+disable_oom = []
+disable_allocator = []
