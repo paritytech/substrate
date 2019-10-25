@@ -19,6 +19,7 @@
 use crate::error::{Error, Result, WasmError};
 use crate::host_interface::SubstrateExternals;
 use crate::wasm_runtime::WasmRuntime;
+use crate::wasm_utils::interpret_runtime_api_result;
 use crate::wasmtime::function_executor::FunctionExecutorState;
 use crate::wasmtime::trampoline::{EnvState, make_trampoline};
 use crate::wasmtime::util::{cranelift_ir_signature, read_memory_into, write_memory_from};
@@ -191,17 +192,10 @@ fn call_method(
 	})?;
 	let trap_error = reset_env_state(context, None)?;
 	let (output_ptr, output_len) = match outcome {
-		ActionOutcome::Returned { values } => {
-			if values.len()	!= 1 {
-				return Err(Error::InvalidReturn);
-			}
-			if let RuntimeValue::I64(val) = values[0] {
-				let output_ptr = <Pointer<u8>>::new(val as u32);
-				let output_len = ((val as u64) >> 32) as usize;
-				(output_ptr, output_len)
-			} else {
-				return Err(Error::InvalidReturn);
-			}
+		ActionOutcome::Returned { values } => match values.as_slice() {
+			[RuntimeValue::I64(retval)] =>
+				interpret_runtime_api_result(*retval),
+			_ => return Err(Error::InvalidReturn),
 		}
 		ActionOutcome::Trapped { message } =>
 			return Err(trap_error.unwrap_or_else(||
@@ -210,7 +204,7 @@ fn call_method(
 	};
 
 	// Read the output data from guest memory.
-	let mut output = vec![0; output_len];
+	let mut output = vec![0; output_len as usize];
 	let memory = get_memory_mut(&mut instance)?;
 	read_memory_into(memory, output_ptr, &mut output)?;
 	Ok(output)

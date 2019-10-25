@@ -27,6 +27,7 @@ use primitives::{sandbox as sandbox_primitives, traits::Externalities};
 use crate::host_interface::SubstrateExternals;
 use crate::sandbox;
 use crate::allocator;
+use crate::wasm_utils::interpret_runtime_api_result;
 use crate::wasm_runtime::WasmRuntime;
 use log::trace;
 use parity_wasm::elements::{deserialize_buffer, DataSegment, Instruction, Module as RawModule};
@@ -356,10 +357,9 @@ fn call_in_wasm_module(
 			Ok(vec![I32(offset as i32), I32(data.len() as i32)])
 		},
 		|res, memory| {
-			if let Some(I64(r)) = res {
-				let offset = r as u32;
-				let length = (r as u64 >> 32) as usize;
-				memory.get(offset, length).map_err(|_| Error::Runtime).map(Some)
+			if let Some(I64(retval)) = res {
+				let (ptr, length) = interpret_runtime_api_result(retval);
+				memory.get(ptr.into(), length as usize).map_err(|_| Error::Runtime).map(Some)
 			} else {
 				Ok(None)
 			}
