@@ -14,8 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Generates the extern host function declarations as well as the implementation for these host
-//! functions. The implementation of these host functions will call the native bare functions.
+//! Generates the extern host functions and the implementation for these host functions.
+//!
+//! The extern host functions will be called by the bare function interface from the Wasm side.
+//! The implementation of these host functions will be called on the host side from the Wasm
+//! executor. These implementations call the bare function interface.
 
 use crate::utils::{
 	generate_crate_access, create_host_function_ident, get_function_argument_names,
@@ -34,11 +37,11 @@ use quote::{quote, ToTokens};
 
 use inflector::Inflector;
 
-use std::iter::Iterator;
+use std::iter::{Iterator, self};
 
 /// Generate the extern host functions for wasm and the `HostFunctions` struct that provides the
 /// implementations for the host functions on the host.
-pub fn generate(trait_def: &ItemTrait) -> Result<TokenStream> {
+pub fn generate(trait_def: &ItemTrait, is_wasm_only: bool) -> Result<TokenStream> {
 	let trait_name = &trait_def.ident;
 	let extern_host_function_impls = get_trait_methods(trait_def)
 		.try_fold(TokenStream::new(), |mut t, m| {
@@ -50,7 +53,7 @@ pub fn generate(trait_def: &ItemTrait) -> Result<TokenStream> {
 			t.extend(generate_extern_host_exchangeable_function(m, trait_name)?);
 			Ok::<_, Error>(t)
 		})?;
-	let host_functions_struct = generate_host_functions_struct(trait_def)?;
+	let host_functions_struct = generate_host_functions_struct(trait_def, is_wasm_only)?;
 
 	Ok(
 		quote! {
@@ -143,7 +146,7 @@ fn generate_extern_host_exchangeable_function(
 
 /// Generate the `HostFunctions` struct that implements `wasm-interface::HostFunctions` to provide
 /// implementations for the extern host functions.
-fn generate_host_functions_struct(trait_def: &ItemTrait) -> Result<TokenStream> {
+fn generate_host_functions_struct(trait_def: &ItemTrait, is_wasm_only: bool) -> Result<TokenStream> {
 	let crate_ = generate_crate_access();
 	let host_functions = trait_def
 		.items
@@ -152,7 +155,7 @@ fn generate_host_functions_struct(trait_def: &ItemTrait) -> Result<TokenStream> 
 			TraitItem::Method(ref method) => Some(method),
 			_ => None,
 		})
-		.map(|m| generate_host_function_implementation(&trait_def.ident, m))
+		.map(|m| generate_host_function_implementation(&trait_def.ident, m, is_wasm_only))
 		.collect::<Result<Vec<_>>>()?;
 	let host_functions_count = trait_def
 		.items
@@ -191,6 +194,7 @@ fn generate_host_functions_struct(trait_def: &ItemTrait) -> Result<TokenStream> 
 fn generate_host_function_implementation(
 	trait_name: &Ident,
 	method: &TraitItemMethod,
+	is_wasm_only: bool,
 ) -> Result<TokenStream> {
 	let name = create_host_function_ident(&method.sig.ident, trait_name).to_string();
 	let struct_name = Ident::new(&name.to_pascal_case(), Span::call_site());
@@ -198,7 +202,7 @@ fn generate_host_function_implementation(
 	let signature = generate_wasm_interface_signature_for_host_function(&method.sig)?;
 	let wasm_to_ffi_values = generate_wasm_to_ffi_values(&method.sig).collect::<Result<Vec<_>>>()?;
 	let ffi_to_host_values = generate_ffi_to_host_value(&method.sig).collect::<Result<Vec<_>>>()?;
-	let host_function_call = generate_host_function_call(&method.sig);
+	let host_function_call = generate_host_function_call(&method.sig, is_wasm_only);
 	let into_preallocated_ffi_value = generate_into_preallocated_ffi_value(&method.sig)?;
 	let convert_return_value = generate_return_value_into_wasm_value(&method.sig);
 
@@ -219,7 +223,7 @@ fn generate_host_function_implementation(
 
 					fn execute(
 						&self,
-						context: &mut dyn #crate_::wasm_interface::FunctionContext,
+						__function_context__: &mut dyn #crate_::wasm_interface::FunctionContext,
 						args: &mut dyn Iterator<Item = #crate_::wasm_interface::Value>,
 					) -> std::result::Result<Option<#crate_::wasm_interface::Value>, String> {
 						#( #wasm_to_ffi_values )*
@@ -307,7 +311,7 @@ fn generate_ffi_to_host_value<'a>(
 			Ok(
 				quote! {
 					let #mut_access #name = <#ty as #crate_::host::FromFFIValue>::from_ffi_value(
-						context,
+						__function_context__,
 						#ffi_value_var_name,
 					)?;
 				}
@@ -316,7 +320,7 @@ fn generate_ffi_to_host_value<'a>(
 }
 
 /// Generate the code to call the host function and the ident that stores the result.
-fn generate_host_function_call(sig: &Signature) -> TokenStream {
+fn generate_host_function_call(sig: &Signature, is_wasm_only: bool) -> TokenStream {
 	let host_function_name = &sig.ident;
 	let result_var_name = generate_host_function_result_var_name(&sig.ident);
 	let ref_and_mut = get_function_argument_types_ref_and_mut(sig).map(|ram|
@@ -324,9 +328,15 @@ fn generate_host_function_call(sig: &Signature) -> TokenStream {
 	);
 	let names = get_function_argument_names(sig);
 
-	let var_access = names.zip(ref_and_mut).map(|(n, ref_and_mut)| {
-		quote!( #ref_and_mut #n )
-	});
+	let var_access = names.zip(ref_and_mut)
+		.map(|(n, ref_and_mut)| {
+			quote!( #ref_and_mut #n )
+		})
+		// If this is a wasm only interface, we add the function context as last parameter.
+		.chain(
+			iter::from_fn(|| if is_wasm_only { Some(quote!(__function_context__)) } else { None })
+				.take(1)
+		);
 
 	quote! {
 		let #result_var_name = #host_function_name ( #( #var_access ),* );
@@ -374,7 +384,7 @@ fn generate_into_preallocated_ffi_value(sig: &Signature) -> Result<TokenStream> 
 				quote! {
 					<#ty as #crate_::host::IntoPreallocatedFFIValue>::into_preallocated_ffi_value(
 						#name,
-						context,
+						__function_context__,
 						#ffi_var_name,
 					)?;
 				}
@@ -393,9 +403,10 @@ fn generate_return_value_into_wasm_value(sig: &Signature) -> TokenStream {
 			let result_var_name = generate_host_function_result_var_name(&sig.ident);
 
 			quote! {
-				<#ty as #crate_::host::IntoFFIValue>::into_ffi_value(#result_var_name, context)
-					.map(#crate_::wasm_interface::IntoValue::into_value)
-					.map(Some)
+				<#ty as #crate_::host::IntoFFIValue>::into_ffi_value(
+					#result_var_name,
+					__function_context__,
+				).map(#crate_::wasm_interface::IntoValue::into_value).map(Some)
 			}
 		}
 	}

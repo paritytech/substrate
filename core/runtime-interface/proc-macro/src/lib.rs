@@ -35,22 +35,30 @@ mod pass_by_inner;
 mod trait_decl_impl;
 mod utils;
 
+mod kw {
+	// Custom keyword `wasm_only` that can be given as attribute to [`runtime_interface`].
+	syn::custom_keyword!(wasm_only);
+}
+
 #[proc_macro_attribute]
 pub fn runtime_interface(
-	_: proc_macro::TokenStream,
+	attrs: proc_macro::TokenStream,
 	input: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
 	let trait_def = parse_macro_input!(input as ItemTrait);
+	let wasm_only = parse_macro_input!(attrs as Option<kw::wasm_only>);
 
-	runtime_interface_impl(trait_def).unwrap_or_else(|e| e.to_compile_error()).into()
+	runtime_interface_impl(trait_def, wasm_only.is_some())
+		.unwrap_or_else(|e| e.to_compile_error())
+		.into()
 }
 
-fn runtime_interface_impl(trait_def: ItemTrait) -> Result<TokenStream> {
-	let bare_functions = bare_function_interface::generate(&trait_def)?;
+fn runtime_interface_impl(trait_def: ItemTrait, is_wasm_only: bool) -> Result<TokenStream> {
+	let bare_functions = bare_function_interface::generate(&trait_def, is_wasm_only)?;
 	let crate_include = generate_runtime_interface_include();
 	let mod_name = Ident::new(&trait_def.ident.to_string().to_snake_case(), Span::call_site());
-	let trait_decl_impl = trait_decl_impl::process(&trait_def)?;
-	let host_functions = host_function_interface::generate(&trait_def)?;
+	let trait_decl_impl = trait_decl_impl::process(&trait_def, is_wasm_only)?;
+	let host_functions = host_function_interface::generate(&trait_def, is_wasm_only)?;
 	let vis = trait_def.vis;
 	let attrs = &trait_def.attrs;
 

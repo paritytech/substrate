@@ -34,50 +34,46 @@ use crate::utils::{
 
 use syn::{
 	Ident, ItemTrait, TraitItemMethod, FnArg, Signature, Result, ReturnType, spanned::Spanned,
+	parse_quote,
 };
 
 use proc_macro2::{TokenStream, Span};
 
 use quote::{quote, quote_spanned};
 
+use std::iter;
+
 /// Generate one bare function per trait method. The name of the bare function is equal to the name
 /// of the trait method.
-pub fn generate(trait_def: &ItemTrait) -> Result<TokenStream> {
+pub fn generate(trait_def: &ItemTrait, is_wasm_only: bool) -> Result<TokenStream> {
 	let trait_name = &trait_def.ident;
 	get_trait_methods(trait_def).try_fold(TokenStream::new(), |mut t, m| {
-		t.extend(function_for_method(trait_name, m)?);
+		t.extend(function_for_method(trait_name, m, is_wasm_only)?);
 		Ok(t)
 	})
 }
 
-/// Generates the bare function implementation for the given method.
-fn function_for_method(trait_name: &Ident, method: &TraitItemMethod) -> Result<TokenStream> {
-	let std_impl = function_std_impl(trait_name, method)?;
+/// Generates the bare function implementation for the given method for the host and wasm side.
+fn function_for_method(
+	trait_name: &Ident,
+	method: &TraitItemMethod,
+	is_wasm_only: bool,
+) -> Result<TokenStream> {
+	let std_impl = function_std_impl(trait_name, method, is_wasm_only)?;
 	let no_std_impl = function_no_std_impl(trait_name, method)?;
-	let function_impl_name = create_function_impl_ident(&method.sig.ident);
-	let function_name = &method.sig.ident;
-	let args = get_function_arguments(&method.sig);
-	let arg_names = get_function_argument_names(&method.sig);
-	let return_value = &method.sig.output;
-	let attrs = &method.attrs;
 
 	Ok(
 		quote! {
-			#( #attrs )*
-			pub fn #function_name( #( #args, )* ) #return_value {
-				#std_impl
+			#std_impl
 
-				#no_std_impl
-
-				#function_impl_name( #( #arg_names, )* )
-			}
+			#no_std_impl
 		}
 	)
 }
 
 /// Generates the bare function implementation for `cfg(not(feature = "std"))`.
 fn function_no_std_impl(trait_name: &Ident, method: &TraitItemMethod) -> Result<TokenStream> {
-	let function_name = create_function_impl_ident(&method.sig.ident);
+	let function_name = &method.sig.ident;
 	let host_function_name = create_host_function_ident(&method.sig.ident, trait_name);
 	let args = get_function_arguments(&method.sig);
 	let arg_names = get_function_argument_names(&method.sig);
@@ -95,8 +91,8 @@ fn function_no_std_impl(trait_name: &Ident, method: &TraitItemMethod) -> Result<
 	Ok(
 		quote! {
 			#[cfg(not(feature = "std"))]
-			fn #function_name( #( #args, )* ) #return_value {
-				// Generate all wrapped ffi value.
+			pub fn #function_name( #( #args, )* ) #return_value {
+				// Generate all wrapped ffi values.
 				#(
 					let #arg_names = <#arg_types as #crate_::wasm::IntoFFIValue>::into_ffi_value(
 						&#arg_names,
@@ -113,45 +109,89 @@ fn function_no_std_impl(trait_name: &Ident, method: &TraitItemMethod) -> Result<
 }
 
 /// Generates the bare function implementation for `cfg(feature = "std")`.
-fn function_std_impl(trait_name: &Ident, method: &TraitItemMethod) -> Result<TokenStream> {
-	let method_name = &method.sig.ident;
-	let function_name = create_function_impl_ident(&method.sig.ident);
-	let args = get_function_arguments(&method.sig);
-	let arg_names = get_function_argument_names(&method.sig);
+fn function_std_impl(
+	trait_name: &Ident,
+	method: &TraitItemMethod,
+	is_wasm_only: bool,
+) -> Result<TokenStream> {
+	let function_name = &method.sig.ident;
 	let crate_ = generate_crate_access();
-	let return_value = &method.sig.output;
-	let expect_msg = format!(
-		"`{}` called outside of an Externalities-provided environment.",
-		method_name,
+	let args = get_function_arguments(&method.sig).cloned().map(FnArg::Typed).chain(
+		// Add the function context as last parameter when this is a wasm only interface.
+		iter::from_fn(|| if is_wasm_only {
+				Some(
+					parse_quote!(
+						__function_context__: &mut dyn #crate_::wasm_interface::FunctionContext
+					)
+				)
+			} else {
+				None
+			}
+		).take(1),
 	);
-
-	let call_to_trait = if takes_self_argument(&method.sig) {
-		quote_spanned! { method.span() =>
-			#crate_::with_externalities(
-				|mut ext| #trait_name::#method_name(&mut ext, #( #arg_names, )*)
-			).expect(#expect_msg)
-		}
-	} else {
-		quote_spanned! { method.span() =>
-			<&mut dyn #crate_::Externalities as #trait_name>::#method_name(
-				#( #arg_names, )*
-			)
-		}
-	};
+	let return_value = &method.sig.output;
+	let attrs = &method.attrs;
+	// Don't make the function public accessible when this is a wasm only interface.
+	let vis = if is_wasm_only { quote!() } else { quote!(pub) };
+	let call_to_trait = generate_call_to_trait(trait_name, method, is_wasm_only);
 
 	Ok(
 		quote_spanned! { method.span() =>
 			#[cfg(feature = "std")]
-			fn #function_name( #( #args, )* ) #return_value {
+			#( #attrs )*
+			#vis fn #function_name( #( #args, )* ) #return_value {
 				#call_to_trait
 			}
 		}
 	)
 }
 
-/// Create the function identifier for the internal implementation function.
-fn create_function_impl_ident(method_name: &Ident) -> Ident {
-	Ident::new(&format!("{}_impl", method_name), Span::call_site())
+/// Generate the call to the interface trait.
+fn generate_call_to_trait(
+	trait_name: &Ident,
+	method: &TraitItemMethod,
+	is_wasm_only: bool,
+) -> TokenStream {
+	let crate_ = generate_crate_access();
+	let method_name = &method.sig.ident;
+	let expect_msg = format!(
+		"`{}` called outside of an Externalities-provided environment.",
+		method_name,
+	);
+	let arg_names = get_function_argument_names(&method.sig);
+
+	if takes_self_argument(&method.sig) {
+		let instance = if is_wasm_only {
+			Ident::new("__function_context__", Span::call_site())
+		} else {
+			Ident::new("__externalities__", Span::call_site())
+		};
+
+		let impl_ = quote!( #trait_name::#method_name(&mut #instance, #( #arg_names, )*) );
+
+		if is_wasm_only {
+			quote_spanned! { method.span() => #impl_ }
+		} else {
+			quote_spanned! { method.span() =>
+				#crate_::with_externalities(
+					|mut #instance| #impl_
+				).expect(#expect_msg)
+			}
+		}
+	} else {
+		// The name of the trait the interface trait is implemented for
+		let impl_trait_name = if is_wasm_only {
+			quote!( #crate_::wasm_interface::FunctionContext )
+		} else {
+			quote!( #crate_::Externalities )
+		};
+
+		quote_spanned! { method.span() =>
+			<&mut dyn #impl_trait_name as #trait_name>::#method_name(
+				#( #arg_names, )*
+			)
+		}
+	}
 }
 
 /// Returns if the given `Signature` takes a `self` argument.
