@@ -1,0 +1,16 @@
+[package]
+description = "Grafana data source server"
+name = "grafana-data-source"
+version = "2.0.0"
+license = "GPL-3.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
+hyper = "0.12.35"
+futures = "0.1.29"
+serde_json = "1.0.41"
+http = "0.1.19"
+serde = { version = "1.0.101", features = ["derive"] }
+chrono = { version = "0.4.9", features = ["serde"] }
+rand = "*"

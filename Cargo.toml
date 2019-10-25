@@ -39,6 +39,8 @@ members = [
 	"core/externalities",
 	"core/finality-grandpa",
 	"core/finality-grandpa/primitives",
+	"core/grafana-data-source",
+	"core/grafana-data-source/test",
 	"core/inherents",
 	"core/keyring",
 	"core/keystore",
