@@ -20,14 +20,23 @@
 
 use client::decl_runtime_apis;
 use rstd::vec::Vec;
+// TODO: Is this needed?
 use sr_primitives::RuntimeDebug;
 
-#[derive(codec::Encode, codec::Decode, Eq, PartialEq, Clone, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Hash))]
-pub struct Signature(pub Vec<u8>);
-#[derive(codec::Encode, codec::Decode, Eq, PartialEq, Clone, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Hash))]
-pub struct AuthorityId(pub Vec<u8>);
+mod app {
+	use app_crypto::{app_crypto, key_types::AUTHORITY_DISCOVERY, sr25519};
+	app_crypto!(sr25519, AUTHORITY_DISCOVERY);
+}
+
+/// An authority discovery authority keypair.
+// TODO: Not so pretty to just export this for testing. Can we do better?
+pub type AuthorityPair = app::Pair;
+
+/// An authority discovery authority identifier.
+pub type AuthorityId = app::Public;
+
+/// An authority discovery authority signature.
+pub type AuthoritySignature = app::Signature;
 
 decl_runtime_apis! {
 	/// The authority discovery api.
@@ -40,11 +49,11 @@ decl_runtime_apis! {
 		/// Retrieve authority identifiers of the current authority set.
 		fn authorities() -> Vec<AuthorityId>;
 
-		/// Sign the given payload with the private key corresponding to the given authority id.
-		fn sign(payload: &Vec<u8>) -> Option<(Signature, AuthorityId)>;
+		/// Sign the given payload with the private key corresponding to the returned authority id.
+		fn sign(payload: &Vec<u8>) -> Option<(AuthoritySignature, AuthorityId)>;
 
 		/// Verify the given signature for the given payload with the given
 		/// authority identifier.
-		fn verify(payload: &Vec<u8>, signature: &Signature, authority_id: &AuthorityId) -> bool;
+		fn verify(payload: &Vec<u8>, signature: &AuthoritySignature, authority_id: &AuthorityId) -> bool;
 	}
 }

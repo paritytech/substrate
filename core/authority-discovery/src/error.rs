@@ -36,10 +36,12 @@ pub enum Error {
 	MatchingHashedAuthorityIdWithAuthorityId,
 	/// Failed to set the authority discovery peerset priority group in the peerset module.
 	SettingPeersetPriorityGroup(String),
-	/// Failed to encode a dht payload.
-	Encoding(prost::EncodeError),
-	/// Failed to decode a dht payload.
-	Decoding(prost::DecodeError),
+	/// Failed to encode a protobuf payload.
+	EncodingProto(prost::EncodeError),
+	/// Failed to decode a protobuf payload.
+	DecodingProto(prost::DecodeError),
+	/// Failed to encode or decode scale payload
+	EncodingDecodingScale(codec::Error),
 	/// Failed to parse a libp2p multi address.
 	ParsingMultiaddress(libp2p::core::multiaddr::Error),
 	/// Tokio timer error.

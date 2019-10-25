@@ -43,8 +43,9 @@
 //!
 //!    4. Adds the retrieved external addresses as priority nodes to the peerset.
 
-use authority_discovery_primitives::{AuthorityDiscoveryApi, AuthorityId, Signature};
+use authority_discovery_primitives::{AuthorityDiscoveryApi, AuthorityId, AuthoritySignature};
 use client::blockchain::HeaderBackend;
+use codec::{Decode, Encode};
 use error::{Error, Result};
 use futures::{prelude::*, sync::mpsc::Receiver};
 use log::{debug, error, log_enabled, warn};
@@ -149,7 +150,7 @@ where
 		let mut serialized_addresses = vec![];
 		schema::AuthorityAddresses { addresses }
 			.encode(&mut serialized_addresses)
-			.map_err(Error::Encoding)?;
+			.map_err(Error::EncodingProto)?;
 
 		let (signature, authority_id) = self
 			.client
@@ -161,13 +162,15 @@ where
 		let mut signed_addresses = vec![];
 		schema::SignedAuthorityAddresses {
 			addresses: serialized_addresses,
-			signature: signature.0,
+			// TODO: Instead of encoding via scale and then encoding via proto, we could also convert the signature to a
+			// [u8] and protobuf encode from there.
+			signature: signature.encode(),
 		}
 		.encode(&mut signed_addresses)
-		.map_err(Error::Encoding)?;
+		.map_err(Error::EncodingProto)?;
 
 		self.network.put_value(
-			hash_authority_id(authority_id.0.as_ref())?,
+			hash_authority_id(authority_id.as_ref())?,
 			signed_addresses,
 		);
 
@@ -185,7 +188,7 @@ where
 
 		for authority_id in authorities.iter() {
 			self.network
-				.get_value(&hash_authority_id(authority_id.0.as_ref())?);
+				.get_value(&hash_authority_id(authority_id.as_ref())?);
 		}
 
 		Ok(())
@@ -223,16 +226,16 @@ where
 	) -> Result<()> {
 		debug!(target: "sub-authority-discovery", "Got Dht value from network.");
 
-		let id = BlockId::hash(self.client.info().best_hash);
+		let block_id = BlockId::hash(self.client.info().best_hash);
 
 		// From the Dht we only get the hashed authority id. In order to retrieve the actual authority id and to ensure
 		// it is actually an authority, we match the hash against the hash of the authority id of all other authorities.
-		let authorities = self.client.runtime_api().authorities(&id)?;
+		let authorities = self.client.runtime_api().authorities(&block_id)?;
 		self.purge_old_authorities_from_cache(&authorities);
 
 		let authorities = authorities
 			.into_iter()
-			.map(|a| hash_authority_id(a.0.as_ref()).map(|h| (h, a)))
+			.map(|id| hash_authority_id(id.as_ref()).map(|h| (h, id)))
 			.collect::<Result<HashMap<_, _>>>()?;
 
 		for (key, value) in values.iter() {
@@ -244,13 +247,15 @@ where
 			let schema::SignedAuthorityAddresses {
 				signature,
 				addresses,
-			} = schema::SignedAuthorityAddresses::decode(value).map_err(Error::Decoding)?;
-			let signature = Signature(signature);
+			} = schema::SignedAuthorityAddresses::decode(value).map_err(Error::DecodingProto)?;
+			// TODO: Should we rather have a `TryFrom<&[u8]> for Signature` instead of encoding a scale encoded
+			// signature as Protobuf?
+			let signature = AuthoritySignature::decode(&mut &signature[..]).map_err(Error::EncodingDecodingScale)?;
 
 			let is_verified = self
 				.client
 				.runtime_api()
-				.verify(&id, &addresses, &signature, &authority_id.clone())
+				.verify(&block_id, &addresses, &signature, &authority_id.clone())
 				.map_err(Error::CallingRuntime)?;
 
 			if !is_verified {
@@ -259,7 +264,7 @@ where
 
 			let addresses: Vec<libp2p::Multiaddr> = schema::AuthorityAddresses::decode(addresses)
 				.map(|a| a.addresses)
-				.map_err(Error::Decoding)?
+				.map_err(Error::DecodingProto)?
 				.into_iter()
 				.map(|a| a.try_into())
 				.collect::<std::result::Result<_, _>>()
@@ -416,12 +421,13 @@ mod tests {
 	use super::*;
 	use client::runtime_api::{ApiExt, Core, RuntimeVersion};
 	use futures::future::poll_fn;
-	use primitives::{ExecutionContext, NativeOrEncoded};
+	use primitives::{ExecutionContext, NativeOrEncoded, Public, crypto::Pair};
 	use sr_primitives::traits::Zero;
 	use sr_primitives::traits::{ApiRef, Block as BlockT, NumberFor, ProvideRuntimeApi};
 	use std::sync::{Arc, Mutex};
 	use test_client::runtime::Block;
 	use tokio::runtime::current_thread;
+	use authority_discovery_primitives::AuthorityPair;
 
 	#[derive(Clone)]
 	struct TestApi {}
@@ -541,9 +547,12 @@ mod tests {
 			_: Option<()>,
 			_: Vec<u8>,
 		) -> std::result::Result<NativeOrEncoded<Vec<AuthorityId>>, client::error::Error> {
+			// TODO: cleanup
+			let authority_1_key_pair = AuthorityPair::from_seed_slice(&[1; 32]).unwrap();
+			let authority_2_key_pair = AuthorityPair::from_seed_slice(&[2; 32]).unwrap();
 			return Ok(NativeOrEncoded::Native(vec![
-				AuthorityId("test-authority-id-1".as_bytes().to_vec()),
-				AuthorityId("test-authority-id-2".as_bytes().to_vec()),
+				authority_1_key_pair.public(),
+				authority_2_key_pair.public(),
 			]));
 		}
 		fn AuthorityDiscoveryApi_sign_runtime_api_impl(
@@ -553,24 +562,26 @@ mod tests {
 			_: Option<&std::vec::Vec<u8>>,
 			_: Vec<u8>,
 		) -> std::result::Result<
-			NativeOrEncoded<Option<(Signature, AuthorityId)>>,
+			NativeOrEncoded<Option<(AuthoritySignature, AuthorityId)>>,
 			client::error::Error,
 		> {
 			return Ok(NativeOrEncoded::Native(Some((
-				Signature("test-signature-1".as_bytes().to_vec()),
-				AuthorityId("test-authority-id-1".as_bytes().to_vec()),
+				AuthorityPair::from_seed_slice(&[0; 32]).unwrap().sign(b"1"),
+				AuthorityId::from_slice(&[2; 32]),
 			))));
 		}
 		fn AuthorityDiscoveryApi_verify_runtime_api_impl(
 			&self,
 			_: &BlockId<Block>,
 			_: ExecutionContext,
-			args: Option<(&Vec<u8>, &Signature, &AuthorityId)>,
+			args: Option<(&Vec<u8>, &AuthoritySignature, &AuthorityId)>,
 			_: Vec<u8>,
 		) -> std::result::Result<NativeOrEncoded<bool>, client::error::Error> {
-			if *args.unwrap().1 == Signature("test-signature-1".as_bytes().to_vec()) {
+			let (msg, sig, pubkey) = args.unwrap();
+			if AuthorityPair::verify(sig, msg, pubkey) {
 				return Ok(NativeOrEncoded::Native(true));
 			}
+
 			return Ok(NativeOrEncoded::Native(false));
 		}
 	}
@@ -652,7 +663,9 @@ mod tests {
 
 		// Create sample dht event.
 
-		let authority_id_1 = hash_authority_id("test-authority-id-1".as_bytes()).unwrap();
+		let key_pair = AuthorityPair::from_seed_slice(&[1; 32]).unwrap();
+
+		let authority_id_1 = hash_authority_id(key_pair.public().as_ref()).unwrap();
 		let address_1: libp2p::Multiaddr = "/ip6/2001:db8::".parse().unwrap();
 
 		let mut serialized_addresses = vec![];
@@ -662,10 +675,11 @@ mod tests {
 		.encode(&mut serialized_addresses)
 		.unwrap();
 
+		let signature = key_pair.sign(serialized_addresses.as_ref()).encode();
 		let mut signed_addresses = vec![];
 		schema::SignedAuthorityAddresses {
 			addresses: serialized_addresses,
-			signature: "test-signature-1".as_bytes().to_vec(),
+			signature: signature,
 		}
 		.encode(&mut signed_addresses)
 		.unwrap();

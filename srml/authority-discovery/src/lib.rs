@@ -29,22 +29,20 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use app_crypto::RuntimeAppPublic;
-use codec::FullCodec;
 use rstd::prelude::*;
 use support::{decl_module, decl_storage};
+use authority_discovery_primitives::{AuthorityId, AuthoritySignature};
 
 /// The module's config trait.
-pub trait Trait: system::Trait + session::Trait {
-	type AuthorityId: RuntimeAppPublic + Default + FullCodec + PartialEq;
-}
+pub trait Trait: system::Trait + session::Trait {}
 
 decl_storage! {
 	trait Store for Module<T: Trait> as AuthorityDiscovery {
 		/// The current set of keys that may issue a heartbeat.
-		Keys get(fn keys): Vec<T::AuthorityId>;
+		Keys get(fn keys): Vec<AuthorityId>;
 	}
 	add_extra_genesis {
-		config(keys): Vec<T::AuthorityId>;
+		config(keys): Vec<AuthorityId>;
 		build(|config| Module::<T>::initialize_keys(&config.keys))
 	}
 }
@@ -59,10 +57,10 @@ impl<T: Trait> Module<T> {
 	/// set, otherwise this function returns None. The restriction might be
 	/// softened in the future in case a consumer needs to learn own authority
 	/// identifier.
-	fn authority_id() -> Option<T::AuthorityId> {
-		let authorities = Keys::<T>::get();
+	fn authority_id() -> Option<AuthorityId> {
+		let authorities = Keys::get();
 
-		let local_keys = T::AuthorityId::all();
+		let local_keys = AuthorityId::all();
 
 		authorities.into_iter().find_map(|authority| {
 			if local_keys.contains(&authority) {
@@ -74,16 +72,16 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Retrieve authority identifiers of the current authority set.
-	pub fn authorities() -> Vec<T::AuthorityId> {
-		Keys::<T>::get()
+	pub fn authorities() -> Vec<AuthorityId> {
+		Keys::get()
 	}
 
 	/// Sign the given payload with the private key corresponding to the given authority id.
 	pub fn sign(
 		payload: &Vec<u8>,
 	) -> Option<(
-		<<T as Trait>::AuthorityId as RuntimeAppPublic>::Signature,
-		T::AuthorityId,
+		AuthoritySignature,
+		AuthorityId,
 	)> {
 		let authority_id = Module::<T>::authority_id()?;
 		authority_id.sign(payload).map(|s| (s, authority_id))
@@ -93,16 +91,16 @@ impl<T: Trait> Module<T> {
 	/// authority identifier.
 	pub fn verify(
 		payload: &Vec<u8>,
-		signature: <<T as Trait>::AuthorityId as RuntimeAppPublic>::Signature,
-		authority_id: T::AuthorityId,
+		signature: AuthoritySignature,
+		authority_id: AuthorityId,
 	) -> bool {
 		authority_id.verify(payload, &signature)
 	}
 
-	fn initialize_keys(keys: &[T::AuthorityId]) {
+	fn initialize_keys(keys: &[AuthorityId]) {
 		if !keys.is_empty() {
-			assert!(Keys::<T>::get().is_empty(), "Keys are already initialized!");
-			Keys::<T>::put(keys);
+			assert!(Keys::get().is_empty(), "Keys are already initialized!");
+			Keys::put(keys);
 		}
 	}
 }
@@ -112,7 +110,7 @@ impl<T: Trait> sr_primitives::BoundToRuntimeAppPublic for Module<T> {
 }
 
 impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
-	type Key = T::AuthorityId;
+	type Key = AuthorityId;
 
 	fn on_genesis_session<'a, I: 'a>(validators: I)
 	where
@@ -127,7 +125,7 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 		I: Iterator<Item = (&'a T::AccountId, Self::Key)>,
 	{
 		// Remember who the authorities are for the new session.
-		Keys::<T>::put(next_validators.map(|x| x.1).collect::<Vec<_>>());
+		Keys::put(next_validators.map(|x| x.1).collect::<Vec<_>>());
 	}
 
 	fn on_disabled(_i: usize) {
