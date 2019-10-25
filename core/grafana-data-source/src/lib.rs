@@ -16,9 +16,9 @@
 
 //! [Grafana] data source server
 //!
-//! To display node statistics with [Grafana], this module exposes a `run_server` function that starts up a HTTP server
-//! that conforms to the [`grafana-json-data-source`] API. The `record_metrics` macro can be used to pass metrics to
-//! this server.
+//! To display node statistics with [Grafana], this module exposes a `run_server` function that
+//! starts up a HTTP server that conforms to the [`grafana-json-data-source`] API. The
+//! `record_metrics` macro can be used to pass metrics to this server.
 //!
 //! [Grafana]: https://grafana.com/
 //! [`grafana-json-data-source`]: https://github.com/simPod/grafana-json-datasource

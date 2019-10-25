@@ -27,7 +27,11 @@ fn api_response(req: Request<Body>) -> ResponseFuture {
 		"/" => Box::new(future::ok(Response::new(Body::empty()))),
 		"/search" => map_request_to_response(req, |req: SearchRequest| {
 			// Filter and return metrics relating to the search term
-			METRICS.read().keys().filter(|key| key.starts_with(&req.target)).cloned().collect::<Vec<_>>()
+			METRICS.read()
+				.keys()
+				.filter(|key| key.starts_with(&req.target))
+				.cloned()
+				.collect::<Vec<_>>()
 		}),
 		"/query" => {
 			map_request_to_response(req, |req: QueryRequest| {
@@ -38,7 +42,9 @@ fn api_response(req: Request<Body>) -> ResponseFuture {
 					.map(|target| {
 						let datapoints = metrics.get(target.target.as_str()).iter()
 							.flat_map(|&vec| vec)
-							.filter(|(_, timestamp)| req.range.from <= *timestamp && *timestamp <= req.range.to)
+							.filter(|(_, timestamp)| {
+								req.range.from <= *timestamp && *timestamp <= req.range.to
+							})
 							.map(|(value, timestamp)| (*value, timestamp.timestamp_millis() as u64))
 							.collect();
 
@@ -79,7 +85,9 @@ fn map_request_to_response<Req, Res, T>(req: Request<Body>, transformation: T) -
 /// Start the data source server.
 ///
 /// The server shuts down cleanly when `shutdown` resolves.
-pub fn run_server<F: Future<Item = (), Error = ()>>(address: &std::net::SocketAddr, shutdown: F) -> impl Future<Item=(), Error=()> {
+pub fn run_server<F>(address: &std::net::SocketAddr, shutdown: F) -> impl Future<Item=(), Error=()>
+	where F: Future<Item = (), Error = ()>
+{
 	Server::bind(address)
 		.serve(|| service_fn(api_response))
 		.with_graceful_shutdown(shutdown)
