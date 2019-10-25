@@ -40,11 +40,16 @@ fn api_response(req: Request<Body>) -> ResponseFuture {
 				// Return timeseries data related to the specified metrics
 				req.targets.iter()
 					.map(|target| {
-						let datapoints = metrics.get(target.target.as_str()).iter()
-							.flat_map(|&vec| vec)
-							.cloned()
-							.filter(|&(_, timestamp)| req.range.from <= timestamp && timestamp <= req.range.to)
-							.collect();
+						let datapoints = metrics.get(target.target.as_str())
+							.map(|metric| {
+								let from = metric.binary_search_by_key(&req.range.from, |&(_, t)| t)
+									.unwrap_or_else(|i| i);
+								let to = metric.binary_search_by_key(&req.range.to, |&(_, t)| t)
+									.unwrap_or_else(|i| i);
+								
+								metric[from .. to].to_vec()
+							})
+							.unwrap_or_else(Vec::new);
 
 						TimeseriesData {
 							target: target.target.clone(), datapoints
