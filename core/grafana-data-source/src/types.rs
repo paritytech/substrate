@@ -17,7 +17,7 @@
 use serde::{Serialize, Deserialize};
 use chrono::{DateTime, Utc};
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize)]
 pub enum TargetType {
 	#[serde(rename = "timeseries")]
 	Timeseries,
@@ -30,7 +30,7 @@ pub struct SearchRequest {
 	pub target: String
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QueryRequest {
 	interval_ms: u64,
@@ -39,7 +39,7 @@ pub struct QueryRequest {
 	pub range: Range,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Target {
 	pub target: String,
@@ -47,13 +47,13 @@ pub struct Target {
 	target_type: TargetType,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize)]
 pub struct Range {
 	pub from: DateTime<Utc>,
 	pub to: DateTime<Utc>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize)]
 pub struct TimeseriesData {
 	pub target: String,
 	pub datapoints: Vec<(f32, u64)>

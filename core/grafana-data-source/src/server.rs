@@ -25,12 +25,12 @@ type ResponseFuture = Box<dyn Future<Item=Response<Body>, Error=GenericError> + 
 fn api_response(req: Request<Body>) -> ResponseFuture {
 	match req.uri().path() {
 		"/" => Box::new(future::ok(Response::new(Body::empty()))),
-		"/search" => respond(req, |req: SearchRequest| {
+		"/search" => map_request_to_response(req, |req: SearchRequest| {
 			// Filter and return metrics relating to the search term
 			METRICS.read().keys().filter(|key| key.starts_with(&req.target)).cloned().collect::<Vec<_>>()
 		}),
 		"/query" => {
-			respond(req, |req: QueryRequest| {
+			map_request_to_response(req, |req: QueryRequest| {
 				let metrics = METRICS.read();
 
 				// Return timeseries data related to the specified metrics
@@ -53,7 +53,7 @@ fn api_response(req: Request<Body>) -> ResponseFuture {
 	}
 }
 
-fn respond<Req, Res, T>(req: Request<Body>, transformation: T) -> ResponseFuture
+fn map_request_to_response<Req, Res, T>(req: Request<Body>, transformation: T) -> ResponseFuture
 	where
 		Req: DeserializeOwned,
 		Res: Serialize,
