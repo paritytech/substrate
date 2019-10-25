@@ -16,7 +16,7 @@
 
 //! Provides implementations for the runtime interface traits.
 
-use crate::{RIType, pass_by::{PassBy, Codec, Inner, PassByInner}};
+use crate::{RIType, Pointer, pass_by::{PassBy, Codec, Inner, PassByInner}};
 #[cfg(feature = "std")]
 use crate::host::*;
 #[cfg(not(feature = "std"))]
@@ -26,7 +26,7 @@ use crate::wasm::*;
 use static_assertions::assert_eq_size;
 
 #[cfg(feature = "std")]
-use wasm_interface::{FunctionContext, Pointer, Result};
+use wasm_interface::{FunctionContext, Result};
 
 use codec::{Encode, Decode};
 
@@ -411,5 +411,47 @@ impl IntoFFIValue for str {
 	fn into_ffi_value(&self) -> WrappedFFIValue<u64, ()> {
 		let bytes = self.as_bytes();
 		pointer_and_len_to_u64(bytes.as_ptr() as u32, bytes.len() as u32).into()
+	}
+}
+
+#[cfg(feature = "std")]
+impl<T: wasm_interface::PointerType> RIType for Pointer<T> {
+	type FFIType = u32;
+}
+
+#[cfg(not(feature = "std"))]
+impl<T> RIType for Pointer<T> {
+	type FFIType = u32;
+}
+
+#[cfg(not(feature = "std"))]
+impl<T> IntoFFIValue for Pointer<T> {
+	type Owned = ();
+
+	fn into_ffi_value(&self) -> WrappedFFIValue<u32> {
+		(*self as u32).into()
+	}
+}
+
+#[cfg(not(feature = "std"))]
+impl<T> FromFFIValue for Pointer<T> {
+	fn from_ffi_value(arg: u32) -> Self {
+		arg as _
+	}
+}
+
+#[cfg(feature = "std")]
+impl<T: wasm_interface::PointerType> FromFFIValue for Pointer<T> {
+	type SelfInstance = Self;
+
+	fn from_ffi_value(_: &mut dyn FunctionContext, arg: u32) -> Result<Self> {
+		Ok(Pointer::new(arg))
+	}
+}
+
+#[cfg(feature = "std")]
+impl<T: wasm_interface::PointerType> IntoFFIValue for Pointer<T> {
+	fn into_ffi_value(self, _: &mut dyn FunctionContext) -> Result<u32> {
+		Ok(self.into())
 	}
 }

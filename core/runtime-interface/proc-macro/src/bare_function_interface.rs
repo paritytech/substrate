@@ -118,10 +118,11 @@ fn function_std_impl(
 	let crate_ = generate_crate_access();
 	let args = get_function_arguments(&method.sig).cloned().map(FnArg::Typed).chain(
 		// Add the function context as last parameter when this is a wasm only interface.
-		iter::from_fn(|| if is_wasm_only {
+		iter::from_fn(||
+			if is_wasm_only {
 				Some(
 					parse_quote!(
-						__function_context__: &mut dyn #crate_::wasm_interface::FunctionContext
+						mut __function_context__: &mut dyn #crate_::wasm_interface::FunctionContext
 					)
 				)
 			} else {
@@ -173,9 +174,7 @@ fn generate_call_to_trait(
 			quote_spanned! { method.span() => #impl_ }
 		} else {
 			quote_spanned! { method.span() =>
-				#crate_::with_externalities(
-					|mut #instance| #impl_
-				).expect(#expect_msg)
+				#crate_::with_externalities(|mut #instance| #impl_).expect(#expect_msg)
 			}
 		}
 	} else {

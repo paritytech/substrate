@@ -46,7 +46,7 @@ use primitives::{
 #[cfg(feature = "std")]
 use trie::{TrieConfiguration, trie_types::Layout};
 
-use runtime_interface::runtime_interface;
+use runtime_interface::{runtime_interface, Pointer};
 
 use codec::{Encode, Decode};
 
@@ -574,6 +574,16 @@ pub trait Offchain {
 	}
 }
 
+#[runtime_interface(wasm_only)]
+trait Allocator {
+	fn malloc(&mut self, size: u32) -> Pointer<u8> {
+		self.allocate_memory(size).unwrap()
+	}
+
+	fn free(&mut self, ptr: Pointer<u8>) {
+		self.deallocate_memory(ptr).unwrap()
+	}
+}
 
 mod imp {
 	use super::*;

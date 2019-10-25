@@ -90,7 +90,7 @@ impl Fold for ToEssentialTraitDef {
 			}
 		).for_each(|invalid| self.push_error(invalid, "`impl Trait` syntax not supported."));
 
-		method
+		fold::fold_trait_item_method(self, method)
 	}
 
 	fn fold_item_trait(&mut self, mut trait_def: ItemTrait) -> ItemTrait {
@@ -99,7 +99,7 @@ impl Fold for ToEssentialTraitDef {
 		}
 
 		trait_def.vis = Visibility::Inherited;
-		trait_def
+		fold::fold_item_trait(self, trait_def)
 	}
 
 	fn fold_receiver(&mut self, receiver: Receiver) -> Receiver {
@@ -107,7 +107,7 @@ impl Fold for ToEssentialTraitDef {
 			self.push_error(&receiver, "Taking `Self` by value is not allowed");
 		}
 
-		receiver
+		fold::fold_receiver(self, receiver)
 	}
 }
 

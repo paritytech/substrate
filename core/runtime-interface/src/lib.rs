@@ -61,6 +61,12 @@ pub trait RIType {
 	type FFIType;
 }
 
+#[cfg(not(feature = "std"))]
+pub type Pointer<T> = *mut T;
+
+#[cfg(feature = "std")]
+pub type Pointer<T> = wasm_interface::Pointer<T>;
+
 #[cfg(test)]
 mod tests {
 	use super::*;
