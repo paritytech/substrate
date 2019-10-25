@@ -79,7 +79,7 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let mut ext_ext = ext.ext();
 
-		executor::call_in_wasm::<_, HF>(
+		executor::call_in_wasm::<_, (HF, runtime_io::SubstrateHostFunctions)>(
 			method,
 			&[],
 			executor::WasmExecutionMethod::Interpreted,

@@ -313,7 +313,7 @@ impl<HF: HostFunctions> wasmi::Externals for FunctionExecutor<HF> {
 		-> Result<Option<wasmi::RuntimeValue>, wasmi::Trap>
 	{
 		let mut args = args.as_ref().iter().copied().map(Into::into);
-		let function = SubstrateExternals::get_function(index).ok_or_else(||
+		let function = HF::get_function(index).ok_or_else(||
 			Error::from(
 				format!("Could not find host function with index: {}", index),
 			)
@@ -596,9 +596,12 @@ impl WasmRuntime for WasmiRuntime {
 		self.state_snapshot.heap_pages == heap_pages
 	}
 
-	fn call(&mut self, ext: &mut dyn Externalities, method: &str, data: &[u8])
-			-> Result<Vec<u8>, Error>
-	{
+	fn call(
+		&mut self,
+		ext: &mut dyn Externalities,
+		method: &str,
+		data: &[u8],
+	) -> Result<Vec<u8>, Error> {
 		self.with(|module| {
 			call_in_wasm_module::<runtime_io::SubstrateHostFunctions>(ext, module, method, data)
 		})

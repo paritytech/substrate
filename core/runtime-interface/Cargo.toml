@@ -19,6 +19,7 @@ executor = { package = "substrate-executor", path = "../executor" }
 test-wasm = { package = "substrate-runtime-interface-test-wasm", path = "test-wasm" }
 state_machine = { package = "substrate-state-machine", path = "../state-machine"  }
 primitives = { package = "substrate-primitives", path = "../primitives"  }
+runtime-io = { package = "sr-io", path = "../sr-io" }
 
 [features]
 default = [ "std" ]

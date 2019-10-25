@@ -20,9 +20,10 @@
 
 use runtime_interface::runtime_interface;
 
+#[cfg(not(feature = "std"))]
 use rstd::{vec, vec::Vec, mem, convert::TryFrom};
 
-use primitives::sr25519::Public;
+use primitives::{sr25519::Public, wasm_export_functions};
 
 // Inlucde the WASM binary
 #[cfg(feature = "std")]
@@ -79,72 +80,67 @@ pub fn import_runtime_io() {
 	runtime_io::misc::print_utf8(&[]);
 }
 
-#[no_mangle]
-pub fn test_return_data() {
-	let input = vec![1, 2, 3, 4, 5, 6];
-	let res = test_api::return_input(input.clone());
+wasm_export_functions! {
+	fn test_return_data() {
+		let input = vec![1, 2, 3, 4, 5, 6];
+		let res = test_api::return_input(input.clone());
 
-	assert_eq!(input, res);
-}
+		assert_eq!(input, res);
+	}
 
-#[no_mangle]
-pub fn test_return_option_data() {
-	let input = vec![1, 2, 3, 4, 5, 6];
-	let res = test_api::return_option_input(input.clone());
+	fn test_return_option_data() {
+		let input = vec![1, 2, 3, 4, 5, 6];
+		let res = test_api::return_option_input(input.clone());
 
-	assert_eq!(Some(input), res);
-}
+		assert_eq!(Some(input), res);
+	}
 
-#[no_mangle]
-pub fn test_set_storage() {
-	let key = "hello";
-	let value = "world";
+	fn test_set_storage() {
+		let key = "hello";
+		let value = "world";
 
-	test_api::set_storage(key.as_bytes(), value.as_bytes());
-}
+		test_api::set_storage(key.as_bytes(), value.as_bytes());
+	}
 
-#[no_mangle]
-pub fn test_return_value_into_mutable_reference() {
-	let mut data = vec![1, 2, 3, 4, 5, 6];
+	fn test_return_value_into_mutable_reference() {
+		let mut data = vec![1, 2, 3, 4, 5, 6];
 
-	test_api::return_value_into_mutable_reference(&mut data);
+		test_api::return_value_into_mutable_reference(&mut data);
 
-	let expected = "hello";
-	assert_eq!(expected.as_bytes(), &data[..expected.len()]);
-}
+		let expected = "hello";
+		assert_eq!(expected.as_bytes(), &data[..expected.len()]);
+	}
 
-#[no_mangle]
-pub fn test_get_and_return_array() {
-	let mut input = unsafe { mem::MaybeUninit::<[u8; 34]>::zeroed().assume_init() };
-	input.copy_from_slice(&[
-		24, 3, 23, 20, 2, 16, 32, 1, 12, 26, 27, 8, 29, 31, 6, 5, 4, 19, 10, 28, 34, 21, 18, 33, 9,
-		13, 22, 25, 15, 11, 30, 7, 14, 17,
-	]);
+	fn test_get_and_return_array() {
+		let mut input = unsafe { mem::MaybeUninit::<[u8; 34]>::zeroed().assume_init() };
+		input.copy_from_slice(&[
+			24, 3, 23, 20, 2, 16, 32, 1, 12, 26, 27, 8, 29, 31, 6, 5, 4, 19, 10, 28, 34, 21, 18, 33, 9,
+			13, 22, 25, 15, 11, 30, 7, 14, 17,
+		]);
 
-	let res = test_api::get_and_return_array(input);
+		let res = test_api::get_and_return_array(input);
 
-	assert_eq!(&res, &input[..16]);
-}
+		assert_eq!(&res, &input[..16]);
+	}
 
-#[no_mangle]
-pub fn test_array_as_mutable_reference() {
-	let mut array = [0u8; 16];
-	test_api::array_as_mutable_reference(&mut array);
+	fn test_array_as_mutable_reference() {
+		let mut array = [0u8; 16];
+		test_api::array_as_mutable_reference(&mut array);
 
-	assert_eq!(array, TEST_ARRAY);
-}
+		assert_eq!(array, TEST_ARRAY);
+	}
 
-#[no_mangle]
-pub fn test_return_input_public_key() {
-	let key = Public::try_from(
-		&[
-			1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
-			25, 26, 27, 28, 29, 30, 31, 32,
-		][..],
-	).unwrap();
-	let ret_key = test_api::return_input_public_key(key.clone());
+	fn test_return_input_public_key() {
+		let key = Public::try_from(
+			&[
+				1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+				25, 26, 27, 28, 29, 30, 31, 32,
+			][..],
+		).unwrap();
+		let ret_key = test_api::return_input_public_key(key.clone());
 
-	let key_data: &[u8] = key.as_ref();
-	let ret_key_data: &[u8] = ret_key.as_ref();
-	assert_eq!(key_data, ret_key_data);
+		let key_data: &[u8] = key.as_ref();
+		let ret_key_data: &[u8] = ret_key.as_ref();
+		assert_eq!(key_data, ret_key_data);
+	}
 }
