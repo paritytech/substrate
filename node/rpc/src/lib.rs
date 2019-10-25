@@ -33,7 +33,7 @@ use std::sync::Arc;
 
 use node_primitives::{Block, AccountId, Index, Balance};
 use sr_primitives::traits::ProvideRuntimeApi;
-use transaction_pool::TransactionPool;
+use txpoolapi::TransactionPool;
 
 /// Instantiate all RPC extensions for full node.
 pub fn create_full<C, P, M>(client: Arc<C>, pool: Arc<P>) -> jsonrpc_core::IoHandler<M> where
@@ -42,7 +42,7 @@ pub fn create_full<C, P, M>(client: Arc<C>, pool: Arc<P>) -> jsonrpc_core::IoHan
 	C: Send + Sync + 'static,
 	C::Api: srml_system_rpc::AccountNonceApi<Block, AccountId, Index>,
 	C::Api: srml_contracts_rpc::ContractsRuntimeApi<Block, AccountId, Balance>,
-	P: TransactionPool + Sync + Send + 'static,
+	P: TransactionPool + 'static,
 	M: jsonrpc_core::Metadata + Default,
 {
 	use srml_system_rpc::{FullSystem, SystemApi};
@@ -70,7 +70,7 @@ pub fn create_light<C, P, M, F>(
 		C: client::blockchain::HeaderBackend<Block>,
 		C: Send + Sync + 'static,
 		C::Api: srml_system_rpc::AccountNonceApi<Block, AccountId, Index>,
-		P: TransactionPool + Sync + Send + 'static,
+		P: TransactionPool + 'static,
 		M: jsonrpc_core::Metadata + Default,
 		F: client::light::fetcher::Fetcher<Block> + 'static,
 {

@@ -17,7 +17,6 @@
 //! Transaction pool error.
 
 use client;
-use txpool;
 
 /// Transaction pool result.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -28,7 +27,7 @@ pub enum Error {
 	/// Client error.
 	Client(client::error::Error),
 	/// Pool error.
-	Pool(txpool::error::Error),
+	Pool(txpoolapi::error::Error),
 }
 
 impl std::error::Error for Error {
@@ -40,8 +39,8 @@ impl std::error::Error for Error {
 	}
 }
 
-impl txpool::IntoPoolError for Error {
-	fn into_pool_error(self) -> std::result::Result<txpool::error::Error, Self> {
+impl txpoolapi::IntoPoolError for Error {
+	fn into_pool_error(self) -> std::result::Result<txpoolapi::error::Error, Self> {
 		match self {
 			Error::Pool(e) => Ok(e),
 			e => Err(e),

@@ -28,8 +28,8 @@ use sr_primitives::traits::Member;
 use sr_primitives::transaction_validity::{
 	TransactionTag as Tag,
 };
+use txpoolapi::error;
 
-use crate::error;
 use crate::future::WaitingTransaction;
 use crate::base_pool::Transaction;
 

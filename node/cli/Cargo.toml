@@ -26,7 +26,8 @@ substrate-rpc = { package = "substrate-rpc", path = "../../core/rpc" }
 substrate-basic-authorship = { path = "../../core/basic-authorship" }
 substrate-service = { path = "../../core/service" }
 chain-spec = { package = "substrate-chain-spec", path = "../../core/chain-spec" }
-transaction_pool = { package = "substrate-transaction-pool", path = "../../core/transaction-pool" }
+txpool = { package = "substrate-transaction-pool", path = "../../core/transaction-pool" }
+txpoolapi = { package = "substrate-transaction-pool-api", path = "../../core/transaction-pool/api" }
 network = { package = "substrate-network", path = "../../core/network" }
 babe = { package = "substrate-consensus-babe", path = "../../core/consensus/babe" }
 babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../../core/consensus/babe/primitives" }

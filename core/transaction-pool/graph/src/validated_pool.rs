@@ -22,7 +22,6 @@ use std::{
 };
 
 use crate::base_pool as base;
-use crate::error;
 use crate::listener::Listener;
 use crate::rotator::PoolRotator;
 use crate::watcher::Watcher;
@@ -36,6 +35,7 @@ use sr_primitives::{
 	traits::{self, SaturatedConversion},
 	transaction_validity::TransactionTag as Tag,
 };
+use txpoolapi::{error, PoolStatus};
 
 use crate::base_pool::PruneStatus;
 use crate::pool::{EventStream, Options, ChainApi, BlockHash, ExHash, ExtrinsicFor, TransactionFor};
@@ -390,8 +390,8 @@ impl<B: ChainApi> ValidatedPool<B> {
 	/// See `prune_tags` if you want this.
 	pub fn clear_stale(&self, at: &BlockId<B::Block>) -> Result<(), B::Error> {
 		let block_number = self.api.block_id_to_number(at)?
-				.ok_or_else(|| error::Error::InvalidBlockId(format!("{:?}", at)).into())?
-				.saturated_into::<u64>();
+			.ok_or_else(|| error::Error::InvalidBlockId(format!("{:?}", at)).into())?
+			.saturated_into::<u64>();
 		let now = time::Instant::now();
 		let to_remove = {
 			self.ready()
@@ -466,7 +466,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 	}
 
 	/// Returns pool status.
-	pub fn status(&self) -> base::Status {
+	pub fn status(&self) -> PoolStatus {
 		self.pool.read().status()
 	}
 }

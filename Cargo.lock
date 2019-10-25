@@ -2392,6 +2392,7 @@ dependencies = [
  "substrate-service-test 2.0.0",
  "substrate-telemetry 2.0.0",
  "substrate-transaction-pool 2.0.0",
+ "substrate-transaction-pool-api 2.0.0",
  "tempfile 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio 0.1.22 (registry+https://github.com/rust-lang/crates.io-index)",
  "transaction-factory 0.0.1",
@@ -2446,7 +2447,7 @@ dependencies = [
  "srml-contracts-rpc 2.0.0",
  "srml-system-rpc 2.0.0",
  "substrate-client 2.0.0",
- "substrate-transaction-pool 2.0.0",
+ "substrate-transaction-pool-api 2.0.0",
 ]
 
 [[package]]
@@ -2540,6 +2541,7 @@ dependencies = [
  "substrate-primitives 2.0.0",
  "substrate-service 2.0.0",
  "substrate-transaction-pool 2.0.0",
+ "substrate-transaction-pool-api 2.0.0",
  "tokio 0.1.22 (registry+https://github.com/rust-lang/crates.io-index)",
  "trie-root 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "vergen 3.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -4516,6 +4518,7 @@ dependencies = [
  "substrate-primitives 2.0.0",
  "substrate-test-runtime-client 2.0.0",
  "substrate-transaction-pool 2.0.0",
+ "substrate-transaction-pool-api 2.0.0",
 ]
 
 [[package]]
@@ -4753,6 +4756,7 @@ dependencies = [
  "substrate-telemetry 2.0.0",
  "substrate-test-runtime-client 2.0.0",
  "substrate-transaction-pool 2.0.0",
+ "substrate-transaction-pool-api 2.0.0",
 ]
 
 [[package]]
@@ -5307,6 +5311,7 @@ dependencies = [
  "substrate-primitives 2.0.0",
  "substrate-test-runtime-client 2.0.0",
  "substrate-transaction-pool 2.0.0",
+ "substrate-transaction-pool-api 2.0.0",
  "threadpool 1.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio 0.1.22 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -5429,6 +5434,7 @@ dependencies = [
  "substrate-state-machine 2.0.0",
  "substrate-test-runtime-client 2.0.0",
  "substrate-transaction-pool 2.0.0",
+ "substrate-transaction-pool-api 2.0.0",
  "tokio 0.1.22 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -5450,7 +5456,7 @@ dependencies = [
  "sr-version 2.0.0",
  "substrate-primitives 2.0.0",
  "substrate-rpc-primitives 2.0.0",
- "substrate-transaction-graph 2.0.0",
+ "substrate-transaction-pool-api 2.0.0",
 ]
 
 [[package]]
@@ -5537,6 +5543,7 @@ dependencies = [
  "substrate-telemetry 2.0.0",
  "substrate-test-runtime-client 2.0.0",
  "substrate-transaction-pool 2.0.0",
+ "substrate-transaction-pool-api 2.0.0",
  "sysinfo 0.9.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "target_info 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-executor 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -5558,7 +5565,7 @@ dependencies = [
  "substrate-network 2.0.0",
  "substrate-primitives 2.0.0",
  "substrate-service 2.0.0",
- "substrate-transaction-pool 2.0.0",
+ "substrate-transaction-pool-api 2.0.0",
  "tempdir 0.3.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio 0.1.22 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -5704,6 +5711,7 @@ dependencies = [
  "sr-primitives 2.0.0",
  "substrate-primitives 2.0.0",
  "substrate-test-runtime 2.0.0",
+ "substrate-transaction-pool-api 2.0.0",
 ]
 
 [[package]]
@@ -5721,6 +5729,19 @@ dependencies = [
  "substrate-primitives 2.0.0",
  "substrate-test-runtime-client 2.0.0",
  "substrate-transaction-graph 2.0.0",
+ "substrate-transaction-pool-api 2.0.0",
+]
+
+[[package]]
+name = "substrate-transaction-pool-api"
+version = "2.0.0"
+dependencies = [
+ "derive_more 0.15.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures-preview 0.3.0-alpha.19 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.101 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-primitives 2.0.0",
+ "substrate-primitives 2.0.0",
 ]
 
 [[package]]

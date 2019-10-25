@@ -34,14 +34,9 @@ use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use codec::{Encode, Decode};
 use primitives::{Bytes, Blake2Hasher, H256, traits::BareCryptoStorePtr};
 use sr_primitives::{generic, traits::{self, ProvideRuntimeApi}};
-use transaction_pool::{
-	TransactionPool,
-	BlockHash,
-	ExHash,
-	txpool::{
-		IntoPoolError,
-		watcher::Status,
-	},
+use txpoolapi::{
+	TransactionPool, InPoolTransaction, TransactionStatus,
+	BlockHash, TxHash, TransactionFor, IntoPoolError,
 };
 use session::SessionKeys;
 
@@ -50,9 +45,9 @@ pub use api::author::*;
 use self::error::{Error, FutureResult, Result};
 
 /// Authoring API
-pub struct Author<B, E, P, RA> where P: TransactionPool + Sync + Send + 'static {
+pub struct Author<B, E, P, Block: traits::Block, RA> {
 	/// Substrate client
-	client: Arc<Client<B, E, <P as TransactionPool>::Block, RA>>,
+	client: Arc<Client<B, E, Block, RA>>,
 	/// Transactions pool
 	pool: Arc<P>,
 	/// Subscriptions manager
@@ -61,10 +56,10 @@ pub struct Author<B, E, P, RA> where P: TransactionPool + Sync + Send + 'static 
 	keystore: BareCryptoStorePtr,
 }
 
-impl<B, E, P, RA> Author<B, E, P, RA> where P: TransactionPool + Sync + Send + 'static {
+impl<B, E, P, Block: traits::Block, RA> Author<B, E, P, Block, RA> {
 	/// Create new instance of Authoring API.
 	pub fn new(
-		client: Arc<Client<B, E, <P as TransactionPool>::Block, RA>>,
+		client: Arc<Client<B, E, Block, RA>>,
 		pool: Arc<P>,
 		subscriptions: Subscriptions,
 		keystore: BareCryptoStorePtr,
@@ -78,15 +73,15 @@ impl<B, E, P, RA> Author<B, E, P, RA> where P: TransactionPool + Sync + Send + '
 	}
 }
 
-impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> where
-	B: client::backend::Backend<<P as TransactionPool>::Block, Blake2Hasher> + Send + Sync + 'static,
-	E: client::CallExecutor<<P as TransactionPool>::Block, Blake2Hasher> + Send + Sync + 'static,
-	P: TransactionPool + Sync + Send + 'static,
-	P::Block: traits::Block<Hash=H256>,
+impl<B, E, P, Block, RA> AuthorApi<Block::Hash, Block::Hash> for Author<B, E, P, Block, RA> where
+	Block: traits::Block<Hash=H256>,
+	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
+	E: client::CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
+	P: TransactionPool<Block=Block, Hash=Block::Hash> + Sync + Send + 'static,
 	P::Error: 'static,
 	RA: Send + Sync + 'static,
-	Client<B, E, P::Block, RA>: ProvideRuntimeApi,
-	<Client<B, E, P::Block, RA> as ProvideRuntimeApi>::Api: SessionKeys<P::Block>,
+	Client<B, E, Block, RA>: ProvideRuntimeApi,
+	<Client<B, E, Block, RA> as ProvideRuntimeApi>::Api: SessionKeys<Block>,
 {
 	type Metadata = crate::metadata::Metadata;
 
@@ -111,7 +106,7 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 		).map(Into::into).map_err(|e| Error::Client(Box::new(e)))
 	}
 
-	fn submit_extrinsic(&self, ext: Bytes) -> FutureResult<ExHash<P>> {
+	fn submit_extrinsic(&self, ext: Bytes) -> FutureResult<TxHash<P>> {
 		let xt = match Decode::decode(&mut &ext[..]) {
 			Ok(xt) => xt,
 			Err(err) => return Box::new(result(Err(err.into()))),
@@ -127,12 +122,12 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 	}
 
 	fn pending_extrinsics(&self) -> Result<Vec<Bytes>> {
-		Ok(self.pool.ready().map(|tx| tx.data.encode().into()).collect())
+		Ok(self.pool.ready().map(|tx| tx.data().encode().into()).collect())
 	}
 
 	fn remove_extrinsic(&self,
-		bytes_or_hash: Vec<hash::ExtrinsicOrHash<ExHash<P>>>
-	) -> Result<Vec<ExHash<P>>> {
+		bytes_or_hash: Vec<hash::ExtrinsicOrHash<TxHash<P>>>
+	) -> Result<Vec<TxHash<P>>> {
 		let hashes = bytes_or_hash.into_iter()
 			.map(|x| match x {
 				hash::ExtrinsicOrHash::Hash(h) => Ok(h),
@@ -144,21 +139,22 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 			.collect::<Result<Vec<_>>>()?;
 
 		Ok(
-			self.pool.remove_invalid(&hashes)
+			self.pool
+				.remove_invalid(&hashes)
 				.into_iter()
-				.map(|tx| tx.hash.clone())
+				.map(|tx| tx.hash().clone())
 				.collect()
 		)
 	}
 
 	fn watch_extrinsic(&self,
 		_metadata: Self::Metadata,
-		subscriber: Subscriber<Status<ExHash<P>, BlockHash<P>>>,
+		subscriber: Subscriber<TransactionStatus<TxHash<P>, BlockHash<P>>>,
 		xt: Bytes
 	) {
 		let submit = || -> Result<_> {
 			let best_block_hash = self.client.info().chain.best_hash;
-			let dxt = <<P as TransactionPool>::Block as traits::Block>::Extrinsic::decode(&mut &xt[..])
+			let dxt = TransactionFor::<P>::decode(&mut &xt[..])
 				.map_err(error::Error::from)?;
 			Ok(
 				self.pool
@@ -174,7 +170,7 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 		let future = ready(submit())
 			.and_then(|res| res)
 			// convert the watcher into a `Stream`
-			.map(|res| res.map(|watcher| watcher.into_stream().map(|v| Ok::<_, ()>(Ok(v)))))
+			.map(|res| res.map(|stream| stream.map(|v| Ok::<_, ()>(Ok(v)))))
 			// now handle the import result,
 			// start a new subscrition
 			.map(move |result| match result {

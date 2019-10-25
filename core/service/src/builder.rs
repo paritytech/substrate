@@ -48,7 +48,7 @@ use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
 use std::{io::{Read, Write, Seek}, marker::PhantomData, sync::Arc, sync::atomic::AtomicBool};
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use tel::{telemetry, SUBSTRATE_INFO};
-use transaction_pool::TransactionPool;
+use txpoolapi::{TransactionPool, TransactionPoolMaintainer};
 
 /// Aggregator for the components required to build a service.
 ///
@@ -546,7 +546,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCSExt, TCl, TFchr, TSc,
 	pub fn with_transaction_pool<UExPool>(
 		self,
 		transaction_pool_builder: impl FnOnce(
-			transaction_pool::txpool::Options,
+			txpool::txpool::Options,
 			Arc<TCl>,
 			Option<TFchr>,
 		) -> Result<UExPool, Error>
@@ -870,7 +870,9 @@ ServiceBuilder<
 	TSc: Clone,
 	TImpQu: 'static + ImportQueue<TBl>,
 	TNetP: NetworkSpecialization<TBl>,
-	TExPool: 'static + TransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash>,
+	TExPool: 'static
+		+ TransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash>
+		+ TransactionPoolMaintainer<Block=TBl, Hash = <TBl as BlockT>::Hash>,
 	TRpc: rpc::RpcExtension<rpc::Metadata> + Clone,
 	TRpcB: RpcBuilder<TBl, TBackend, TExec, TRtApi>,
 {

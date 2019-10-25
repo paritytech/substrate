@@ -56,10 +56,8 @@ pub use self::builder::{
 };
 pub use config::{Configuration, Roles, PruningMode};
 pub use chain_spec::{ChainSpec, Properties, RuntimeGenesis, Extension as ChainSpecExtension};
-pub use transaction_pool::TransactionPool;
-pub use transaction_pool::txpool::{
-	self, Options as TransactionPoolOptions, IntoPoolError
-};
+pub use txpoolapi::{TransactionPool, TransactionPoolMaintainer, InPoolTransaction, IntoPoolError};
+pub use txpool::txpool::Options as TransactionPoolOptions;
 pub use client::FinalityNotifications;
 pub use rpc::Metadata as RpcMetadata;
 #[doc(hidden)]
@@ -463,7 +461,7 @@ pub trait AbstractService: 'static + Future<Item = (), Error = Error> +
 	/// Chain selection algorithm.
 	type SelectChain: consensus_common::SelectChain<Self::Block>;
 	/// Transaction pool.
-	type TransactionPool: TransactionPool<Block = Self::Block>;
+	type TransactionPool: TransactionPool<Block = Self::Block> + TransactionPoolMaintainer<Block = Self::Block>;
 	/// Network specialization.
 	type NetworkSpecialization: NetworkSpecialization<Self::Block>;
 
@@ -526,7 +524,7 @@ where
 	TExec: 'static + client::CallExecutor<TBl, Blake2Hasher> + Send + Sync + Clone,
 	TRtApi: 'static + Send + Sync,
 	TSc: consensus_common::SelectChain<TBl> + 'static + Clone + Send,
-	TExPool: 'static + TransactionPool<Block = TBl>,
+	TExPool: 'static + TransactionPool<Block = TBl> + TransactionPoolMaintainer<Block = TBl>,
 	TOc: 'static + Send + Sync,
 	TNetSpec: NetworkSpecialization<TBl>,
 {
@@ -909,13 +907,13 @@ where
 	Pool: TransactionPool<Block=B, Hash=H, Error=E>,
 	B: BlockT,
 	H: std::hash::Hash + Eq + sr_primitives::traits::Member + sr_primitives::traits::MaybeSerialize,
-	E: txpool::error::IntoPoolError + From<txpool::error::Error>,
+	E: IntoPoolError + From<txpoolapi::error::Error>,
 {
 	pool.ready()
 		.filter(|t| t.is_propagateable())
 		.map(|t| {
-			let hash = t.hash.clone();
-			let ex: B::Extrinsic = t.data.clone();
+			let hash = t.hash().clone();
+			let ex: B::Extrinsic = t.data().clone();
 			(hash, ex)
 		})
 		.collect()
@@ -928,7 +926,7 @@ where
 	Pool: 'static + TransactionPool<Block=B, Hash=H, Error=E>,
 	B: BlockT,
 	H: std::hash::Hash + Eq + sr_primitives::traits::Member + sr_primitives::traits::MaybeSerialize,
-	E: 'static + txpool::error::IntoPoolError + From<txpool::error::Error>,
+	E: 'static + IntoPoolError + From<txpoolapi::error::Error>,
 {
 	fn transactions(&self) -> Vec<(H, <B as BlockT>::Extrinsic)> {
 		transactions_to_propagate(&*self.pool)
@@ -954,7 +952,7 @@ where
 						match import_result {
 							Ok(_) => report_handle.report_peer(who, reputation_change),
 							Err(e) => match e.into_pool_error() {
-								Ok(txpool::error::Error::AlreadyImported(_)) => (),
+								Ok(txpoolapi::error::Error::AlreadyImported(_)) => (),
 								Ok(e) => debug!("Error adding transaction to the pool: {:?}", e),
 								Err(e) => debug!("Error converting pool error: {:?}", e),
 							}
@@ -983,14 +981,14 @@ mod tests {
 	use consensus_common::SelectChain;
 	use sr_primitives::traits::BlindCheckable;
 	use substrate_test_runtime_client::{prelude::*, runtime::{Extrinsic, Transfer}};
-	use transaction_pool::BasicTransactionPool;
+	use txpool::{BasicPool, FullChainApi};
 
 	#[test]
 	fn should_not_propagate_transactions_that_are_marked_as_such() {
 		// given
 		let (client, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
 		let client = Arc::new(client);
-		let pool = Arc::new(BasicTransactionPool::default_full(Default::default(), client.clone()));
+		let pool = Arc::new(BasicPool::new(Default::default(), FullChainApi::new(client.clone())));
 		let best = longest_chain.best_chain().unwrap();
 		let transaction = Transfer {
 			amount: 5,

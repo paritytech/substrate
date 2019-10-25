@@ -36,7 +36,7 @@ use sr_primitives::{
 	traits,
 };
 use substrate_primitives::hexdisplay::HexDisplay;
-use transaction_pool::TransactionPool;
+use txpoolapi::{TransactionPool, InPoolTransaction};
 
 pub use srml_system_rpc_runtime_api::AccountNonceApi;
 pub use self::gen_client::Client as SystemClient;
@@ -82,7 +82,7 @@ where
 	C: HeaderBackend<Block>,
 	C: Send + Sync + 'static,
 	C::Api: AccountNonceApi<Block, AccountId, Index>,
-	P: TransactionPool + Sync + Send + 'static,
+	P: TransactionPool + 'static,
 	Block: traits::Block,
 	AccountId: Clone + std::fmt::Display + Codec,
 	Index: Clone + std::fmt::Display + Codec + Send + traits::SimpleArithmetic + 'static,
@@ -133,7 +133,7 @@ impl<P: TransactionPool, C, F, Block> LightSystem<P, C, F, Block> {
 
 impl<P, C, F, Block, AccountId, Index> SystemApi<AccountId, Index> for LightSystem<P, C, F, Block>
 where
-	P: TransactionPool + Sync + Send + 'static,
+	P: TransactionPool + 'static,
 	C: HeaderBackend<Block>,
 	C: Send + Sync + 'static,
 	F: Fetcher<Block> + 'static,
@@ -180,11 +180,12 @@ where
 
 /// Adjust account nonce from state, so that tx with the nonce will be
 /// placed after all ready txpool transactions.
-fn adjust_nonce<P: TransactionPool, AccountId, Index>(
+fn adjust_nonce<P, AccountId, Index>(
 	pool: &P,
 	account: AccountId,
 	nonce: Index,
 ) -> Index where
+	P: TransactionPool,
 	AccountId: Clone + std::fmt::Display + Encode,
 	Index: Clone + std::fmt::Display + Encode + traits::SimpleArithmetic + 'static,
 {
@@ -203,11 +204,11 @@ fn adjust_nonce<P: TransactionPool, AccountId, Index>(
 			"Current nonce to {}, checking {} vs {:?}",
 			current_nonce,
 			HexDisplay::from(&current_tag),
-			tx.provides.iter().map(|x| format!("{}", HexDisplay::from(x))).collect::<Vec<_>>(),
+			tx.provides().iter().map(|x| format!("{}", HexDisplay::from(x))).collect::<Vec<_>>(),
 		);
 		// since transactions in `ready()` need to be ordered by nonce
 		// it's fine to continue with current iterator.
-		if tx.provides.get(0) == Some(&current_tag) {
+		if tx.provides().get(0) == Some(&current_tag) {
 			current_nonce += traits::One::one();
 			current_tag = (account.clone(), current_nonce.clone()).encode();
 		}
@@ -225,14 +226,14 @@ mod tests {
 		runtime::Transfer,
 		AccountKeyring,
 	};
-	use transaction_pool::BasicTransactionPool;
+	use txpool::{BasicPool, FullChainApi};
 
 	#[test]
 	fn should_return_next_nonce_for_some_account() {
 		// given
 		let _ = env_logger::try_init();
 		let client = Arc::new(test_client::new());
-		let pool = Arc::new(BasicTransactionPool::default_full(Default::default(), client.clone()));
+		let pool = Arc::new(BasicPool::new(Default::default(), FullChainApi::new(client.clone())));
 
 		let new_transaction = |nonce: u64| {
 			let t = Transfer {

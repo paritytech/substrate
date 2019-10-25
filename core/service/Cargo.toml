@@ -33,7 +33,8 @@ client_db = { package = "substrate-client-db", path = "../../core/client/db", fe
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 substrate-executor = { path = "../../core/executor" }
 substrate-authority-discovery = { path = "../../core/authority-discovery"}
-transaction_pool = { package = "substrate-transaction-pool", path = "../../core/transaction-pool" }
+txpool = { package = "substrate-transaction-pool", path = "../../core/transaction-pool" }
+txpoolapi = { package = "substrate-transaction-pool-api", path = "../../core/transaction-pool/api" }
 rpc-servers = { package = "substrate-rpc-servers", path = "../../core/rpc-servers" }
 rpc = { package = "substrate-rpc", path = "../../core/rpc" }
 tel = { package = "substrate-telemetry", path = "../../core/telemetry" }

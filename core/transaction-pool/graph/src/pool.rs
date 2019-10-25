@@ -21,7 +21,6 @@ use std::{
 };
 
 use crate::base_pool as base;
-use crate::error;
 use crate::watcher::Watcher;
 use serde::Serialize;
 
@@ -35,6 +34,8 @@ use sr_primitives::{
 	traits::{self, SaturatedConversion},
 	transaction_validity::{TransactionValidity, TransactionTag as Tag, TransactionValidityError},
 };
+use txpoolapi::{error, PoolStatus};
+
 use crate::validated_pool::{ValidatedPool, ValidatedTransaction};
 
 /// Modification notification event stream type;
@@ -328,7 +329,7 @@ impl<B: ChainApi> Pool<B> {
 	}
 
 	/// Returns pool status.
-	pub fn status(&self) -> base::Status {
+	pub fn status(&self) -> PoolStatus {
 		self.validated_pool.status()
 	}
 
@@ -425,12 +426,12 @@ mod tests {
 	use parking_lot::Mutex;
 	use futures::executor::block_on;
 	use super::*;
+	use txpoolapi::TransactionStatus;
 	use sr_primitives::transaction_validity::{ValidTransaction, InvalidTransaction};
 	use codec::Encode;
 	use test_runtime::{Block, Extrinsic, Transfer, H256, AccountId};
 	use assert_matches::assert_matches;
 	use crate::base_pool::Limit;
-	use crate::watcher;
 
 	const INVALID_NONCE: u64 = 254;
 
@@ -765,8 +766,8 @@ mod tests {
 
 			// then
 			let mut stream = futures::executor::block_on_stream(watcher.into_stream());
-			assert_eq!(stream.next(), Some(watcher::Status::Ready));
-			assert_eq!(stream.next(), Some(watcher::Status::Finalized(H256::from_low_u64_be(2).into())));
+			assert_eq!(stream.next(), Some(TransactionStatus::Ready));
+			assert_eq!(stream.next(), Some(TransactionStatus::Finalized(H256::from_low_u64_be(2).into())));
 			assert_eq!(stream.next(), None);
 		}
 
@@ -790,8 +791,8 @@ mod tests {
 
 			// then
 			let mut stream = futures::executor::block_on_stream(watcher.into_stream());
-			assert_eq!(stream.next(), Some(watcher::Status::Ready));
-			assert_eq!(stream.next(), Some(watcher::Status::Finalized(H256::from_low_u64_be(2).into())));
+			assert_eq!(stream.next(), Some(TransactionStatus::Ready));
+			assert_eq!(stream.next(), Some(TransactionStatus::Finalized(H256::from_low_u64_be(2).into())));
 			assert_eq!(stream.next(), None);
 		}
 
@@ -819,8 +820,8 @@ mod tests {
 
 			// then
 			let mut stream = futures::executor::block_on_stream(watcher.into_stream());
-			assert_eq!(stream.next(), Some(watcher::Status::Future));
-			assert_eq!(stream.next(), Some(watcher::Status::Ready));
+			assert_eq!(stream.next(), Some(TransactionStatus::Future));
+			assert_eq!(stream.next(), Some(TransactionStatus::Ready));
 		}
 
 		#[test]
@@ -842,8 +843,8 @@ mod tests {
 
 			// then
 			let mut stream = futures::executor::block_on_stream(watcher.into_stream());
-			assert_eq!(stream.next(), Some(watcher::Status::Ready));
-			assert_eq!(stream.next(), Some(watcher::Status::Invalid));
+			assert_eq!(stream.next(), Some(TransactionStatus::Ready));
+			assert_eq!(stream.next(), Some(TransactionStatus::Invalid));
 			assert_eq!(stream.next(), None);
 		}
 
@@ -869,8 +870,8 @@ mod tests {
 
 			// then
 			let mut stream = futures::executor::block_on_stream(watcher.into_stream());
-			assert_eq!(stream.next(), Some(watcher::Status::Ready));
-			assert_eq!(stream.next(), Some(watcher::Status::Broadcast(peers)));
+			assert_eq!(stream.next(), Some(TransactionStatus::Ready));
+			assert_eq!(stream.next(), Some(TransactionStatus::Broadcast(peers)));
 		}
 
 		#[test]
@@ -907,8 +908,8 @@ mod tests {
 
 			// then
 			let mut stream = futures::executor::block_on_stream(watcher.into_stream());
-			assert_eq!(stream.next(), Some(watcher::Status::Ready));
-			assert_eq!(stream.next(), Some(watcher::Status::Dropped));
+			assert_eq!(stream.next(), Some(TransactionStatus::Ready));
+			assert_eq!(stream.next(), Some(TransactionStatus::Dropped));
 		}
 
 		#[test]
@@ -1014,7 +1015,7 @@ mod tests {
 		assert_eq!(pool.status().ready, 2);
 		assert_eq!(
 			futures::executor::block_on_stream(watcher3.into_stream()).collect::<Vec<_>>(),
-			vec![watcher::Status::Ready, watcher::Status::Invalid],
+			vec![TransactionStatus::Ready, TransactionStatus::Invalid],
 		);
 
 		// when
@@ -1026,19 +1027,19 @@ mod tests {
 		// events for hash2 are: Ready, Invalid
 		assert_eq!(
 			futures::executor::block_on_stream(watcher0.into_stream()).collect::<Vec<_>>(),
-			vec![watcher::Status::Ready, watcher::Status::Future, watcher::Status::Invalid],
+			vec![TransactionStatus::Ready, TransactionStatus::Future, TransactionStatus::Invalid],
 		);
 		assert_eq!(
 			futures::executor::block_on_stream(watcher1.into_stream()).collect::<Vec<_>>(),
-			vec![watcher::Status::Ready, watcher::Status::Invalid],
+			vec![TransactionStatus::Ready, TransactionStatus::Invalid],
 		);
 		assert_eq!(
 			futures::executor::block_on_stream(watcher2.into_stream()).collect::<Vec<_>>(),
-			vec![watcher::Status::Ready, watcher::Status::Invalid],
+			vec![TransactionStatus::Ready, TransactionStatus::Invalid],
 		);
 		assert_eq!(
 			futures::executor::block_on_stream(watcher4.into_stream()).collect::<Vec<_>>(),
-			vec![watcher::Status::Ready, watcher::Status::Future, watcher::Status::Invalid],
+			vec![TransactionStatus::Ready, TransactionStatus::Future, TransactionStatus::Invalid],
 		);
 	}
 }

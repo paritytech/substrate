@@ -66,6 +66,7 @@ members = [
 	"core/test-runtime",
 	"core/test-runtime/client",
 	"core/transaction-pool",
+	"core/transaction-pool/api",
 	"core/transaction-pool/graph",
 	"core/trie",
 	"core/utils/fork-tree",

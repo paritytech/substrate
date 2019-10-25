@@ -34,8 +34,8 @@ use sr_primitives::transaction_validity::{
 	TransactionLongevity as Longevity,
 	TransactionPriority as Priority,
 };
+use txpoolapi::{error, PoolStatus, InPoolTransaction};
 
-use crate::error;
 use crate::future::{FutureTransactions, WaitingTransaction};
 use crate::ready::ReadyTransactions;
 
@@ -104,9 +104,41 @@ pub struct Transaction<Hash, Extrinsic> {
 	pub propagate: bool,
 }
 
-impl<Hash, Extrinsic> Transaction<Hash, Extrinsic> {
-	/// Returns `true` if the transaction should be propagated to other peers.
-	pub fn is_propagateable(&self) -> bool {
+impl<Hash, Extrinsic> AsRef<Extrinsic> for Transaction<Hash, Extrinsic> {
+	fn as_ref(&self) -> &Extrinsic {
+		&self.data
+	}
+}
+
+impl<Hash, Extrinsic> InPoolTransaction for Transaction<Hash, Extrinsic> {
+	type Transaction = Extrinsic;
+	type Hash = Hash;
+
+	fn data(&self) -> &Extrinsic {
+		&self.data
+	}
+
+	fn hash(&self) -> &Hash {
+		&self.hash
+	}
+
+	fn priority(&self) -> &Priority {
+		&self.priority
+	}
+
+	fn longevity(&self) ->&Longevity {
+		&self.valid_till
+	}
+
+	fn requires(&self) -> &[Tag] {
+		&self.requires
+	}
+
+	fn provides(&self) -> &[Tag] {
+		&self.provides
+	}
+
+	fn is_propagateable(&self) -> bool {
 		self.propagate
 	}
 }
@@ -462,33 +494,13 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: std::fmt::Debug> BasePool<Hash, 
 	}
 
 	/// Get pool status.
-	pub fn status(&self) -> Status {
-		Status {
+	pub fn status(&self) -> PoolStatus {
+		PoolStatus {
 			ready: self.ready.len(),
 			ready_bytes: self.ready.bytes(),
 			future: self.future.len(),
 			future_bytes: self.future.bytes(),
 		}
-	}
-}
-
-/// Pool status
-#[derive(Debug)]
-pub struct Status {
-	/// Number of transactions in the ready queue.
-	pub ready: usize,
-	/// Sum of bytes of ready transaction encodings.
-	pub ready_bytes: usize,
-	/// Number of transactions in the future queue.
-	pub future: usize,
-	/// Sum of bytes of ready transaction encodings.
-	pub future_bytes: usize,
-}
-
-impl Status {
-	/// Returns true if the are no transactions in the pool.
-	pub fn is_empty(&self) -> bool {
-		self.ready == 0 && self.future == 0
 	}
 }
 

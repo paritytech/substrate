@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Substrate transaction pool.
+//! Substrate transaction pool implementation.
 
 #![warn(missing_docs)]
 #![warn(unused_extern_crates)]
@@ -28,236 +28,105 @@ pub mod error;
 
 pub use txpool;
 pub use crate::api::{FullChainApi, LightChainApi};
-pub use crate::maintainer::{
-	TransactionPoolMaintainer,
-	DefaultFullTransactionPoolMaintainer, DefaultLightTransactionPoolMaintainer,
-};
+pub use crate::maintainer::{FullBasicPoolMaintainer, LightBasicPoolMaintainer};
 
-use std::{collections::HashMap, hash::Hash, sync::Arc};
-use futures::Future;
+use std::{collections::HashMap, sync::Arc};
+use futures::{Future, FutureExt};
 
-use client::{
-	Client,
-	light::fetcher::Fetcher,
-	runtime_api::TaggedTransactionQueue,
-};
-use primitives::{Blake2Hasher, H256};
 use sr_primitives::{
-	serde::Serialize,
 	generic::BlockId,
-	traits::{Block as BlockT, Member, ProvideRuntimeApi},
+	traits::Block as BlockT,
+};
+use txpoolapi::{
+	TransactionPool, PoolStatus, ImportNotificationStream,
+	TxHash, TransactionFor, TransactionStatusStreamFor,
 };
 
-use txpool::{EventStream, Options, watcher::Watcher};
-
-/// Extrinsic hash type for a pool.
-pub type ExHash<P> = <P as TransactionPool>::Hash;
-/// Block hash type for a pool.
-pub type BlockHash<P> = <<P as TransactionPool>::Block as BlockT>::Hash;
-/// Extrinsic type for a pool.
-pub type ExtrinsicFor<P> = <<P as TransactionPool>::Block as BlockT>::Extrinsic;
-
-/// Transaction pool interface.
-pub trait TransactionPool: Send + Sync {
-	/// Block type.
-	type Block: BlockT;
-	/// Transaction Hash type.
-	type Hash: Hash + Eq + Member + Serialize;
-	/// Error type.
-	type Error: From<txpool::error::Error> + txpool::error::IntoPoolError;
-
-	/// Returns a future that imports a bunch of unverified extrinsics to the pool.
-	fn submit_at(
-		&self,
-		at: &BlockId<Self::Block>,
-		xts: impl IntoIterator<Item=ExtrinsicFor<Self>> + 'static,
-	) -> Box<dyn Future<Output=Result<Vec<Result<Self::Hash, Self::Error>>, Self::Error>> + Send + Unpin>;
-
-	/// Returns a future that imports one unverified extrinsic to the pool.
-	fn submit_one(
-		&self,
-		at: &BlockId<Self::Block>,
-		xt: ExtrinsicFor<Self>,
-	) -> Box<dyn Future<Output=Result<Self::Hash, Self::Error>> + Send + Unpin>;
-
-	/// Returns a future that import a single extrinsic and starts to watch their progress in the pool.
-	fn submit_and_watch(
-		&self,
-		at: &BlockId<Self::Block>,
-		xt: ExtrinsicFor<Self>,
-	) -> Box<dyn Future<Output=Result<Watcher<Self::Hash, BlockHash<Self>>, Self::Error>> + Send + Unpin>;
-
-	/// Remove extrinsics identified by given hashes (and dependent extrinsics) from the pool.
-	fn remove_invalid(
-		&self,
-		hashes: &[Self::Hash],
-	) -> Vec<Arc<txpool::base_pool::Transaction<Self::Hash, ExtrinsicFor<Self>>>>;
-
-	/// Returns pool status.
-	fn status(&self) -> txpool::base_pool::Status;
-
-	/// Get an iterator for ready transactions ordered by priority
-	fn ready(&self) -> Box<dyn Iterator<Item=Arc<txpool::base_pool::Transaction<Self::Hash, ExtrinsicFor<Self>>>>>;
-
-	/// Return an event stream of transactions imported to the pool.
-	fn import_notification_stream(&self) -> EventStream;
-
-	/// Returns transaction hash
-	fn hash_of(&self, xt: &ExtrinsicFor<Self>) -> Self::Hash;
-
-	/// Notify the pool about transactions broadcast.
-	fn on_broadcasted(&self, propagations: HashMap<Self::Hash, Vec<String>>);
-
-	/// Returns a future that performs maintenance procedures on the pool.
-	fn maintain(
-		&self,
-		id: &BlockId<Self::Block>,
-		retracted: &[BlockHash<Self>],
-	) -> Box<dyn Future<Output=()> + Send + Unpin>;
-}
-
-/// Basic implementation of transaction pool that can be customized by providing
-/// different PoolApi and Maintainer.
-pub struct BasicTransactionPool<PoolApi, Maintainer, Block>
+/// Basic implementation of transaction pool that can be customized by providing PoolApi.
+pub struct BasicPool<PoolApi, Block>
 	where
-		Block: BlockT<Hash=H256>,
-		PoolApi: txpool::ChainApi<Block=Block, Hash=H256>,
-		Maintainer: TransactionPoolMaintainer<PoolApi>,
+		Block: BlockT,
+		PoolApi: txpool::ChainApi<Block=Block, Hash=Block::Hash>,
 {
 	pool: Arc<txpool::Pool<PoolApi>>,
-	maintainer: Maintainer,
 }
 
-impl<PoolApi, Maintainer, Block> BasicTransactionPool<PoolApi, Maintainer, Block>
+impl<PoolApi, Block> BasicPool<PoolApi, Block>
 	where
-		Block: BlockT<Hash=H256>,
-		PoolApi: txpool::ChainApi<Block=Block, Hash=H256>,
-		Maintainer: TransactionPoolMaintainer<PoolApi>,
+		Block: BlockT,
+		PoolApi: txpool::ChainApi<Block=Block, Hash=Block::Hash>,
 {
-	/// Create new basic transaction pool with given api and maintainer.
-	pub fn new(options: Options, pool_api: PoolApi, maintainer: Maintainer) -> Self {
-		BasicTransactionPool {
+	/// Create new basic transaction pool with provided api.
+	pub fn new(options: txpool::Options, pool_api: PoolApi) -> Self {
+		BasicPool {
 			pool: Arc::new(txpool::Pool::new(options, pool_api)),
-			maintainer,
 		}
 	}
-}
 
-impl<Backend, Executor, Block, Api> BasicTransactionPool<
-	api::FullChainApi<Client<Backend, Executor, Block, Api>, Block>,
-	DefaultFullTransactionPoolMaintainer<Backend, Executor, Block, Api>,
-	Block,
-> where
-	Block: BlockT<Hash=H256>,
-	Backend: 'static + client::backend::Backend<Block, Blake2Hasher>,
-	Client<Backend, Executor, Block, Api>: ProvideRuntimeApi,
-	<Client<Backend, Executor, Block, Api> as ProvideRuntimeApi>::Api: TaggedTransactionQueue<Block>,
-	Executor: 'static + Send + Sync + client::CallExecutor<Block, Blake2Hasher>,
-	Api: 'static + Send + Sync,
-{
-	/// Create new basic full transaction pool with default API and maintainer.
-	pub fn default_full(options: Options, client: Arc<Client<Backend, Executor, Block, Api>>) -> Self {
-		Self::new(
-			options,
-			FullChainApi::new(client.clone()),
-			DefaultFullTransactionPoolMaintainer::new(client),
-		)
+	/// Gets shared reference to the underlying pool.
+	pub fn pool(&self) -> &Arc<txpool::Pool<PoolApi>> {
+		&self.pool
 	}
 }
 
-impl<Backend, Executor, Block, Api, F> BasicTransactionPool<
-	api::LightChainApi<Client<Backend, Executor, Block, Api>, F, Block>,
-	DefaultLightTransactionPoolMaintainer<Backend, Executor, Block, Api, F>,
-	Block,
-> where
-	Block: BlockT<Hash=H256>,
-	Backend: 'static + client::backend::Backend<Block, Blake2Hasher>,
-	Client<Backend, Executor, Block, Api>: ProvideRuntimeApi,
-	<Client<Backend, Executor, Block, Api> as ProvideRuntimeApi>::Api: TaggedTransactionQueue<Block>,
-	Executor: 'static + Send + Sync + client::CallExecutor<Block, Blake2Hasher>,
-	Api: 'static + Send + Sync,
-	F: 'static + Fetcher<Block>,
-{
-	/// Create new basic light transaction pool with default API and maintainer.
-	pub fn default_light(
-		options: Options,
-		client: Arc<Client<Backend, Executor, Block, Api>>,
-		fetcher: Arc<F>,
-	) -> Self {
-		Self::new(
-			options,
-			LightChainApi::new(client.clone(), fetcher.clone()),
-			DefaultLightTransactionPoolMaintainer::with_defaults(client, fetcher),
-		)
-	}
-}
-
-impl<PoolApi, Maintainer, Block> TransactionPool for BasicTransactionPool<PoolApi, Maintainer, Block>
+impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 	where
-		Block: BlockT<Hash=H256>,
-		PoolApi: 'static + txpool::ChainApi<Block=Block, Hash=H256, Error=error::Error>,
-		Maintainer: TransactionPoolMaintainer<PoolApi> + Sync,
+		Block: BlockT,
+		PoolApi: 'static + txpool::ChainApi<Block=Block, Hash=Block::Hash, Error=error::Error>,
 {
-	type Block = Block;
-	type Hash = Block::Hash;
+	type Block = PoolApi::Block;
+	type Hash = txpool::ExHash<PoolApi>;
+	type InPoolTransaction = txpool::base_pool::Transaction<TxHash<Self>, TransactionFor<Self>>;
 	type Error = error::Error;
 
 	fn submit_at(
 		&self,
 		at: &BlockId<Self::Block>,
-		xts: impl IntoIterator<Item=ExtrinsicFor<Self>> + 'static,
-	) -> Box<dyn Future<Output=Result<Vec<Result<Block::Hash, Self::Error>>, Self::Error>> + Send + Unpin> {
+		xts: impl IntoIterator<Item=TransactionFor<Self>> + 'static,
+	) -> Box<dyn Future<Output=Result<Vec<Result<TxHash<Self>, Self::Error>>, Self::Error>> + Send + Unpin> {
 		Box::new(self.pool.submit_at(at, xts, false))
 	}
 
 	fn submit_one(
 		&self,
 		at: &BlockId<Self::Block>,
-		xt: ExtrinsicFor<Self>,
-	) -> Box<dyn Future<Output=Result<Self::Hash, Self::Error>> + Send + Unpin> {
+		xt: TransactionFor<Self>,
+	) -> Box<dyn Future<Output=Result<TxHash<Self>, Self::Error>> + Send + Unpin> {
 		Box::new(self.pool.submit_one(at, xt))
 	}
 
 	fn submit_and_watch(
 		&self,
 		at: &BlockId<Self::Block>,
-		xt: ExtrinsicFor<Self>,
-	) -> Box<dyn Future<Output=Result<Watcher<Self::Hash, BlockHash<Self>>, Self::Error>> + Send + Unpin> {
-		Box::new(self.pool.submit_and_watch(at, xt))
+		xt: TransactionFor<Self>,
+	) -> Box<dyn Future<Output=Result<Box<TransactionStatusStreamFor<Self>>, Self::Error>> + Send + Unpin> {
+		Box::new(
+			self.pool.submit_and_watch(at, xt)
+				.map(|result| result.map(|watcher| Box::new(watcher.into_stream()) as _))
+		)
 	}
 
-	fn remove_invalid(
-		&self,
-		hashes: &[Self::Hash],
-	) -> Vec<Arc<txpool::base_pool::Transaction<Self::Hash, ExtrinsicFor<Self>>>> {
+	fn remove_invalid(&self, hashes: &[TxHash<Self>]) -> Vec<Arc<Self::InPoolTransaction>> {
 		self.pool.remove_invalid(hashes)
 	}
 
-	fn status(&self) -> txpool::base_pool::Status {
+	fn status(&self) -> PoolStatus {
 		self.pool.status()
 	}
 
-	fn ready(&self) -> Box<dyn Iterator<Item=Arc<txpool::base_pool::Transaction<Self::Hash, ExtrinsicFor<Self>>>>> {
+	fn ready(&self) -> Box<dyn Iterator<Item=Arc<Self::InPoolTransaction>>> {
 		Box::new(self.pool.ready())
 	}
 
-	fn import_notification_stream(&self) -> EventStream {
+	fn import_notification_stream(&self) -> ImportNotificationStream {
 		self.pool.import_notification_stream()
 	}
 
-	fn hash_of(&self, xt: &ExtrinsicFor<Self>) -> Self::Hash {
+	fn hash_of(&self, xt: &TransactionFor<Self>) -> TxHash<Self> {
 		self.pool.hash_of(xt)
 	}
 
-	fn on_broadcasted(&self, propagations: HashMap<Self::Hash, Vec<String>>) {
+	fn on_broadcasted(&self, propagations: HashMap<TxHash<Self>, Vec<String>>) {
 		self.pool.on_broadcasted(propagations)
-	}
-
-	fn maintain(
-		&self,
-		id: &BlockId<Block>,
-		retracted: &[Block::Hash],
-	) -> Box<dyn Future<Output=()> + Send + Unpin> {
-		self.maintainer.maintain(id, retracted, &self.pool)
 	}
 }

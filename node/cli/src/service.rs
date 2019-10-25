@@ -29,7 +29,6 @@ use node_runtime::{GenesisConfig, RuntimeApi};
 use substrate_service::{
 	AbstractService, ServiceBuilder, config::Configuration, error::{Error as ServiceError},
 };
-use transaction_pool::{BasicTransactionPool, DefaultFullTransactionPoolMaintainer, FullChainApi};
 use inherents::InherentDataProviders;
 use network::construct_simple_protocol;
 
@@ -63,9 +62,13 @@ macro_rules! new_full_start {
 			.with_select_chain(|_config, backend| {
 				Ok(client::LongestChain::new(backend.clone()))
 			})?
-			.with_transaction_pool(|config, client, _fetcher|
-				Ok(transaction_pool::BasicTransactionPool::default_full(config, client))
-			)?
+			.with_transaction_pool(|config, client, _fetcher| {
+				let pool_api = txpool::FullChainApi::new(client.clone());
+				let pool = txpool::BasicPool::new(config, pool_api);
+				let maintainer = txpool::FullBasicPoolMaintainer::new(pool.pool().clone(), client);
+				let maintainable_pool = txpoolapi::MaintainableTransactionPool::new(pool, maintainer);
+				Ok(maintainable_pool)
+			})?
 			.with_import_queue(|_config, client, mut select_chain, _transaction_pool| {
 				let select_chain = select_chain.take()
 					.ok_or_else(|| substrate_service::Error::SelectChainRequired)?;
@@ -239,16 +242,19 @@ type ConcreteClient =
 #[allow(dead_code)]
 type ConcreteBackend = Backend<ConcreteBlock>;
 #[allow(dead_code)]
-type ConcreteTransactionPool = BasicTransactionPool<
-		FullChainApi<ConcreteClient, Block>,
-		DefaultFullTransactionPoolMaintainer<
-			ConcreteBackend,
-			LocalCallExecutor<Backend<ConcreteBlock>, NativeExecutor<node_executor::Executor>>,
-			Block,
-			node_runtime::RuntimeApi,
-		>,
-		Block,
-	>;
+type ConcreteTransactionPool = txpoolapi::MaintainableTransactionPool<
+	txpool::BasicPool<
+		txpool::FullChainApi<ConcreteClient, ConcreteBlock>,
+		ConcreteBlock
+	>,
+	txpool::FullBasicPoolMaintainer<
+		ConcreteBackend,
+		LocalCallExecutor<Backend<ConcreteBlock>, NativeExecutor<node_executor::Executor>>,
+		ConcreteBlock,
+		node_runtime::RuntimeApi,
+		txpool::FullChainApi<ConcreteClient, Block>
+	>
+>;
 
 /// A specialized configuration object for setting up the node..
 pub type NodeConfiguration<C> = Configuration<C, GenesisConfig, crate::chain_spec::Extensions>;
@@ -288,7 +294,11 @@ pub fn new_light<C: Send + Default + 'static>(config: NodeConfiguration<C>)
 		.with_transaction_pool(|config, client, fetcher| {
 			let fetcher = fetcher
 				.ok_or_else(|| "Trying to start light transaction pool without active fetcher")?;
-			Ok(transaction_pool::BasicTransactionPool::default_light(config, client, fetcher))
+			let pool_api = txpool::LightChainApi::new(client.clone(), fetcher.clone());
+			let pool = txpool::BasicPool::new(config, pool_api);
+			let maintainer = txpool::LightBasicPoolMaintainer::with_defaults(pool.pool().clone(), client, fetcher);
+			let maintainable_pool = txpoolapi::MaintainableTransactionPool::new(pool, maintainer);
+			Ok(maintainable_pool)
 		})?
 		.with_import_queue_and_fprb(|_config, client, backend, fetcher, _select_chain, _tx_pool| {
 			let fetch_checker = fetcher

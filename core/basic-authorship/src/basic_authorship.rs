@@ -35,7 +35,7 @@ use sr_primitives::{
 	},
 	generic::BlockId,
 };
-use transaction_pool::TransactionPool;
+use txpoolapi::{TransactionPool, InPoolTransaction};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 
 /// Proposer factory.
@@ -160,21 +160,23 @@ impl<Block, B, E, RA, A> Proposer<Block, SubstrateClient<B, E, Block, RA>, A>	wh
 		let pending_iterator = self.transaction_pool.ready();
 
 		debug!("Attempting to push transactions from the pool.");
-		for pending in pending_iterator {
+		for pending_tx in pending_iterator {
 			if (self.now)() > deadline {
 				debug!("Consensus deadline reached when pushing block transactions, proceeding with proposing.");
 				break;
 			}
 
-			trace!("[{:?}] Pushing to the block.", pending.hash);
-			match client::block_builder::BlockBuilder::push(&mut block_builder, pending.data.clone()) {
+			let pending_tx_data = pending_tx.data().clone();
+			let pending_tx_hash = pending_tx.hash().clone();
+			trace!("[{:?}] Pushing to the block.", pending_tx_hash);
+			match client::block_builder::BlockBuilder::push(&mut block_builder, pending_tx_data) {
 				Ok(()) => {
-					debug!("[{:?}] Pushed to the block.", pending.hash);
+					debug!("[{:?}] Pushed to the block.", pending_tx_hash);
 				}
 				Err(error::Error::ApplyExtrinsicFailed(e)) if e.exhausted_resources() => {
 					if is_first {
-						debug!("[{:?}] Invalid transaction: FullBlock on empty block", pending.hash);
-						unqueue_invalid.push(pending.hash.clone());
+						debug!("[{:?}] Invalid transaction: FullBlock on empty block", pending_tx_hash);
+						unqueue_invalid.push(pending_tx_hash);
 					} else if skipped < MAX_SKIPPED_TRANSACTIONS {
 						skipped += 1;
 						debug!(
@@ -187,8 +189,8 @@ impl<Block, B, E, RA, A> Proposer<Block, SubstrateClient<B, E, Block, RA>, A>	wh
 					}
 				}
 				Err(e) => {
-					debug!("[{:?}] Invalid transaction: {}", pending.hash, e);
-					unqueue_invalid.push(pending.hash.clone());
+					debug!("[{:?}] Invalid transaction: {}", pending_tx_hash, e);
+					unqueue_invalid.push(pending_tx_hash);
 				}
 			}
 
@@ -233,7 +235,7 @@ mod tests {
 	use std::cell::RefCell;
 	use consensus_common::{Environment, Proposer};
 	use test_client::{self, runtime::{Extrinsic, Transfer}, AccountKeyring};
-	use transaction_pool::BasicTransactionPool;
+	use txpool::{BasicPool, FullChainApi};
 
 	fn extrinsic(nonce: u64) -> Extrinsic {
 		Transfer {
@@ -248,7 +250,7 @@ mod tests {
 	fn should_cease_building_block_when_deadline_is_reached() {
 		// given
 		let client = Arc::new(test_client::new());
-		let txpool = Arc::new(BasicTransactionPool::default_full(Default::default(), client.clone()));
+		let txpool = Arc::new(BasicPool::new(Default::default(), FullChainApi::new(client.clone())));
 
 		futures::executor::block_on(
 			txpool.submit_at(&BlockId::number(0), vec![extrinsic(0), extrinsic(1)])

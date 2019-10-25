@@ -25,10 +25,10 @@ use primitives::{
 };
 use rpc::futures::Stream as _;
 use test_client::{
-	self, AccountKeyring, runtime::{Extrinsic, Transfer, SessionKeys, RuntimeApi, Block}, DefaultTestClientBuilderExt,
-	TestClientBuilderExt, Backend, Client, Executor, NativeExecutor,
+	self, AccountKeyring, runtime::{Extrinsic, Transfer, SessionKeys, RuntimeApi, Block},
+	DefaultTestClientBuilderExt, TestClientBuilderExt, Backend, Client, Executor,
 };
-use transaction_pool::{BasicTransactionPool, FullChainApi, DefaultFullTransactionPoolMaintainer};
+use txpool::{BasicPool, FullChainApi};
 use tokio::runtime;
 
 fn uxt(sender: AccountKeyring, nonce: u64) -> Extrinsic {
@@ -41,14 +41,8 @@ fn uxt(sender: AccountKeyring, nonce: u64) -> Extrinsic {
 	tx.into_signed_tx()
 }
 
-type FullTransactionPool = BasicTransactionPool<
+type FullTransactionPool = BasicPool<
 	FullChainApi<Client<Backend>, Block>,
-	DefaultFullTransactionPoolMaintainer<
-		Backend,
-		test_client::client::LocalCallExecutor<Backend, NativeExecutor<test_client::LocalExecutor>>,
-		Block,
-		RuntimeApi,
-	>,
 	Block,
 >;
 
@@ -63,7 +57,7 @@ impl Default for TestSetup {
 	fn default() -> Self {
 		let keystore = KeyStore::new();
 		let client = Arc::new(test_client::TestClientBuilder::new().set_keystore(keystore.clone()).build());
-		let pool = Arc::new(BasicTransactionPool::default_full(Default::default(), client.clone()));
+		let pool = Arc::new(BasicPool::new(Default::default(), FullChainApi::new(client.clone())));
 		TestSetup {
 			runtime: runtime::Runtime::new().expect("Failed to create runtime in test setup"),
 			client,
@@ -74,7 +68,7 @@ impl Default for TestSetup {
 }
 
 impl TestSetup {
-	fn author(&self) -> Author<Backend, Executor, FullTransactionPool, RuntimeApi> {
+	fn author(&self) -> Author<Backend, Executor, FullTransactionPool, Block, RuntimeApi> {
 		Author {
 			client: self.client.clone(),
 			pool: self.pool.clone(),

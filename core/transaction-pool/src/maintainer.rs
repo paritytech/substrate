@@ -31,61 +31,50 @@ use client::{
 	light::fetcher::{Fetcher, RemoteBodyRequest},
 	runtime_api::TaggedTransactionQueue,
 };
-use primitives::Blake2Hasher;
+use primitives::{Blake2Hasher, H256};
 use sr_primitives::{
 	generic::BlockId,
 	traits::{Block as BlockT, Extrinsic, Header, NumberFor, ProvideRuntimeApi, SimpleArithmetic},
 };
+use txpoolapi::TransactionPoolMaintainer;
 
-use txpool::{self, BlockHash};
-use crate::api::{FullChainApi, LightChainApi};
+use txpool::{self, ChainApi};
 
-/// Transaction pool maintainer.
-///
-/// In brief, the task of transaction pool maintainer is to:
-/// 1) make sure that ready in-pool transactions are valid;
-/// 2) move 'future' transactions to the 'ready' queue;
-/// 3) prune transactions that have been included in some block.
-///
-/// This trait is extracted from `TransactionPool` so that the maintainance
-/// algorithm could be customized easily, without touching the core' pool code.
-pub trait TransactionPoolMaintainer<PoolApi: txpool::ChainApi>: Send + 'static {
-	/// Maintain transaction pool.
-	fn maintain(
-		&self,
-		id: &BlockId<PoolApi::Block>,
-		retracted: &[BlockHash<PoolApi>],
-		pool: &Arc<txpool::Pool<PoolApi>>,
-	) -> Box<dyn Future<Output=()> + Send + Unpin>;
-}
-
-/// Default transaction pool maintainer for full clients.
-pub struct DefaultFullTransactionPoolMaintainer<Backend, Executor, Block: BlockT, Api> {
+/// Basic transaction pool maintainer for full clients.
+pub struct FullBasicPoolMaintainer<Backend, Executor, Block: BlockT, Api, PoolApi: ChainApi> {
+	pool: Arc<txpool::Pool<PoolApi>>,
 	client: Arc<Client<Backend, Executor, Block, Api>>,
 }
 
-impl<Backend, Executor, Block: BlockT, Api> DefaultFullTransactionPoolMaintainer<Backend, Executor, Block, Api> {
-	/// Create new default full pool maintainer.
-	pub fn new(client: Arc<Client<Backend, Executor, Block, Api>>) -> Self {
-		DefaultFullTransactionPoolMaintainer { client }
+impl<Backend, Executor, Block: BlockT, Api, PoolApi: ChainApi> FullBasicPoolMaintainer<Backend, Executor, Block, Api, PoolApi> {
+	/// Create new basic full pool maintainer.
+	pub fn new(
+		pool: Arc<txpool::Pool<PoolApi>>,
+		client: Arc<Client<Backend, Executor, Block, Api>>,
+	) -> Self {
+		FullBasicPoolMaintainer { pool, client }
 	}
 }
 
-impl<Backend, Executor, Block: BlockT, Api> TransactionPoolMaintainer<
-	FullChainApi<Client<Backend, Executor, Block, Api>, Block>
-> for DefaultFullTransactionPoolMaintainer<Backend, Executor, Block, Api> where
-	Block: BlockT<Hash = <Blake2Hasher as primitives::Hasher>::Out>,
+impl<Backend, Executor, Block: BlockT, Api, PoolApi> TransactionPoolMaintainer
+for
+	FullBasicPoolMaintainer<Backend, Executor, Block, Api, PoolApi>
+where
+	Block: BlockT<Hash = H256>,
 	Backend: 'static + client::backend::Backend<Block, Blake2Hasher>,
 	Client<Backend, Executor, Block, Api>: ProvideRuntimeApi,
 	<Client<Backend, Executor, Block, Api> as ProvideRuntimeApi>::Api: TaggedTransactionQueue<Block>,
 	Executor: 'static + Send + Sync + client::CallExecutor<Block, Blake2Hasher>,
 	Api: 'static + Send + Sync,
+	PoolApi: 'static + ChainApi<Block = Block, Hash = H256>,
 {
+	type Block = Block;
+	type Hash = Block::Hash;
+
 	fn maintain(
 		&self,
 		id: &BlockId<Block>,
 		retracted: &[Block::Hash],
-		pool: &Arc<txpool::Pool<FullChainApi<Client<Backend, Executor, Block, Api>, Block>>>,
 	) -> Box<dyn Future<Output=()> + Send + Unpin> {
 		// Put transactions from retracted blocks back into the pool.
 		let client_copy = self.client.clone();
@@ -93,7 +82,7 @@ impl<Backend, Executor, Block: BlockT, Api> TransactionPoolMaintainer<
 			.filter_map(move |hash| client_copy.block(&BlockId::hash(hash)).ok().unwrap_or(None))
 			.flat_map(|block| block.block.deconstruct().1.into_iter())
 			.filter(|tx| tx.is_signed().unwrap_or(false));
-		let resubmit_future = pool
+		let resubmit_future = self.pool
 			.submit_at(id, retracted_transactions, true)
 			.then(|resubmit_result| ready(match resubmit_result {
 				Ok(_) => (),
@@ -104,7 +93,7 @@ impl<Backend, Executor, Block: BlockT, Api> TransactionPoolMaintainer<
 			}));
 
 		// Avoid calling into runtime if there is nothing to prune from the pool anyway.
-		if pool.status().is_empty() {
+		if self.pool.status().is_empty() {
 			return Box::new(resubmit_future)
 		}
 
@@ -112,7 +101,7 @@ impl<Backend, Executor, Block: BlockT, Api> TransactionPoolMaintainer<
 		match block {
 			Ok(Some(block)) => {
 				let parent_id = BlockId::hash(*block.block.header().parent_hash());
-				let prune_future = pool
+				let prune_future = self.pool
 					.prune(id, &parent_id, block.block.extrinsics())
 					.then(|prune_result| ready(match prune_result {
 						Ok(_) => (),
@@ -133,8 +122,9 @@ impl<Backend, Executor, Block: BlockT, Api> TransactionPoolMaintainer<
 	}
 }
 
-/// Default transaction pool maintainer for light clients.
-pub struct DefaultLightTransactionPoolMaintainer<Backend, Executor, Block: BlockT, Api, F> {
+/// Basic transaction pool maintainer for light clients.
+pub struct LightBasicPoolMaintainer<Backend, Executor, Block: BlockT, Api, PoolApi: ChainApi, F> {
+	pool: Arc<txpool::Pool<PoolApi>>,
 	client: Arc<Client<Backend, Executor, Block, Api>>,
 	fetcher: Arc<F>,
 	revalidate_time_period: Option<std::time::Duration>,
@@ -143,14 +133,15 @@ pub struct DefaultLightTransactionPoolMaintainer<Backend, Executor, Block: Block
 	_phantom: PhantomData<Block>,
 }
 
-impl<Backend, Executor, Block, Api, F> DefaultLightTransactionPoolMaintainer<Backend, Executor, Block, Api, F>
+impl<Backend, Executor, Block, Api, PoolApi, F> LightBasicPoolMaintainer<Backend, Executor, Block, Api, PoolApi, F>
 	where
-		Block: BlockT<Hash = <Blake2Hasher as primitives::Hasher>::Out>,
+		Block: BlockT<Hash = H256>,
 		Backend: 'static + client::backend::Backend<Block, Blake2Hasher>,
 		Client<Backend, Executor, Block, Api>: ProvideRuntimeApi,
 		<Client<Backend, Executor, Block, Api> as ProvideRuntimeApi>::Api: TaggedTransactionQueue<Block>,
 		Executor: 'static + Send + Sync + client::CallExecutor<Block, Blake2Hasher>,
 		Api: 'static + Send + Sync,
+		PoolApi: 'static + ChainApi<Block = Block, Hash = H256>,
 		F: Fetcher<Block> + 'static,
 {
 	/// Create light pool maintainer with default constants.
@@ -158,10 +149,12 @@ impl<Backend, Executor, Block, Api, F> DefaultLightTransactionPoolMaintainer<Bac
 	/// Default constants are: revalidate every 60 seconds or every 20 blocks
 	/// (whatever happens first).
 	pub fn with_defaults(
+		pool: Arc<txpool::Pool<PoolApi>>,
 		client: Arc<Client<Backend, Executor, Block, Api>>,
 		fetcher: Arc<F>,
 	) -> Self {
 		Self::new(
+			pool,
 			client,
 			fetcher,
 			Some(std::time::Duration::from_secs(60)),
@@ -171,12 +164,14 @@ impl<Backend, Executor, Block, Api, F> DefaultLightTransactionPoolMaintainer<Bac
 
 	/// Create light pool maintainer with passed constants.
 	pub fn new(
+		pool: Arc<txpool::Pool<PoolApi>>,
 		client: Arc<Client<Backend, Executor, Block, Api>>,
 		fetcher: Arc<F>,
 		revalidate_time_period: Option<std::time::Duration>,
 		revalidate_block_period: Option<NumberFor<Block>>,
 	) -> Self {
 		Self {
+			pool,
 			client,
 			fetcher,
 			revalidate_time_period,
@@ -191,12 +186,11 @@ impl<Backend, Executor, Block, Api, F> DefaultLightTransactionPoolMaintainer<Bac
 		&self,
 		id: &BlockId<Block>,
 		header: &Block::Header,
-		pool: &Arc<txpool::Pool<LightChainApi<Client<Backend, Executor, Block, Api>, F, Block>>>,
 	) -> impl std::future::Future<Output = ()> {
 		// fetch transactions (possible future optimization: proofs of inclusion) that
 		// have been included into new block and prune these from the pool
 		let id = id.clone();
-		let pool = pool.clone();
+		let pool = self.pool.clone();
 		self.fetcher.remote_body(RemoteBodyRequest {
 			header: header.clone(),
 			retry_count: None,
@@ -226,7 +220,6 @@ impl<Backend, Executor, Block, Api, F> DefaultLightTransactionPoolMaintainer<Bac
 		&self,
 		id: &BlockId<Block>,
 		header: &Block::Header,
-		pool: &Arc<txpool::Pool<LightChainApi<Client<Backend, Executor, Block, Api>, F, Block>>>,
 	) -> impl std::future::Future<Output = ()> {
 		// to determine whether ready transaction is still valid, we perform periodic revalidaton
 		// of ready transactions
@@ -238,7 +231,7 @@ impl<Backend, Executor, Block, Api, F> DefaultLightTransactionPoolMaintainer<Bac
 		match is_revalidation_required {
 			true => {
 				let revalidation_status = self.revalidation_status.clone();
-				Either::Left(pool
+				Either::Left(self.pool
 					.revalidate_ready(id)
 					.map(|r| r.map_err(|e| warn!("Error revalidating known transactions: {}", e)))
 					.map(move |_| revalidation_status.lock().clear()))
@@ -248,25 +241,29 @@ impl<Backend, Executor, Block, Api, F> DefaultLightTransactionPoolMaintainer<Bac
 	}
 }
 
-impl<Backend, Executor, Block, Api, F> TransactionPoolMaintainer<
-	LightChainApi<Client<Backend, Executor, Block, Api>, F, Block>
-> for DefaultLightTransactionPoolMaintainer<Backend, Executor, Block, Api, F> where
+impl<Backend, Executor, Block, Api, PoolApi, F> TransactionPoolMaintainer
+for
+	LightBasicPoolMaintainer<Backend, Executor, Block, Api, PoolApi, F>
+where
 	Block: BlockT<Hash = <Blake2Hasher as primitives::Hasher>::Out>,
 	Backend: 'static + client::backend::Backend<Block, Blake2Hasher>,
 	Client<Backend, Executor, Block, Api>: ProvideRuntimeApi,
 	<Client<Backend, Executor, Block, Api> as ProvideRuntimeApi>::Api: TaggedTransactionQueue<Block>,
 	Executor: 'static + Send + Sync + client::CallExecutor<Block, Blake2Hasher>,
 	Api: 'static + Send + Sync,
+	PoolApi: 'static + ChainApi<Block = Block, Hash = H256>,
 	F: Fetcher<Block> + 'static,
 {
+	type Block = Block;
+	type Hash = Block::Hash;
+
 	fn maintain(
 		&self,
 		id: &BlockId<Block>,
 		_retracted: &[Block::Hash],
-		pool: &Arc<txpool::Pool<LightChainApi<Client<Backend, Executor, Block, Api>, F, Block>>>,
 	) -> Box<dyn Future<Output=()> + Send + Unpin> {
 		// Do nothing if transaction pool is empty.
-		if pool.status().is_empty() {
+		if self.pool.status().is_empty() {
 			self.revalidation_status.lock().clear();
 			return Box::new(ready(()));
 		}
@@ -281,10 +278,10 @@ impl<Backend, Executor, Block, Api, F> TransactionPoolMaintainer<
 		};
 
 		// else prune block transactions from the pool
-		let prune_future = self.prune(id, &header, pool);
+		let prune_future = self.prune(id, &header);
 
 		// and then (optionally) revalidate in-pool transactions
-		let revalidate_future = self.revalidate(id, &header, pool);
+		let revalidate_future = self.revalidate(id, &header);
 
 		let maintain_future = join(
 			prune_future,
@@ -346,6 +343,7 @@ mod tests {
 	use futures::executor::block_on;
 	use codec::Encode;
 	use test_client::{prelude::*, runtime::{Block, Transfer}, consensus::{BlockOrigin, SelectChain}};
+	use txpoolapi::PoolStatus;
 	use crate::api::{FullChainApi, LightChainApi};
 
 	#[test]
@@ -374,11 +372,7 @@ mod tests {
 
 		// fire notification - this should clean up the queue
 		assert_eq!(pool.status().ready, 1);
-		block_on(DefaultFullTransactionPoolMaintainer::new(client).maintain(
-			&id,
-			&[],
-			&pool,
-		));
+		block_on(FullBasicPoolMaintainer::new(pool.clone(), client).maintain(&id, &[]));
 
 		// then
 		assert_eq!(pool.status().ready, 0);
@@ -422,10 +416,9 @@ mod tests {
 
 		// fire notification - this should clean up the queue
 		assert_eq!(pool.status().ready, 1);
-		block_on(DefaultLightTransactionPoolMaintainer::with_defaults(client.clone(), fetcher).maintain(
+		block_on(LightBasicPoolMaintainer::with_defaults(pool.clone(), client.clone(), fetcher).maintain(
 			&BlockId::Number(0),
 			&[],
-			&pool,
 		));
 
 		// then
@@ -490,27 +483,27 @@ mod tests {
 			revalidate_time_period: Option<std::time::Duration>,
 			revalidate_block_period: Option<u64>,
 			prepare_maintainer: impl Fn(&Mutex<TxPoolRevalidationStatus<u64>>),
-		) -> txpool::Status {
+		) -> PoolStatus {
 			let (client, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
 			let client = Arc::new(client);
 
-			// let's prepare maintainer
-			let maintainer = DefaultLightTransactionPoolMaintainer::new(
+			// now let's prepare pool
+			let pool = txpool::Pool::new(Default::default(), LightChainApi::new(
 				client.clone(),
 				fetcher.clone(),
+			));
+			let pool = Arc::new(pool);
+			let best = longest_chain.best_chain().unwrap();
+
+			// let's prepare maintainer
+			let maintainer = LightBasicPoolMaintainer::new(
+				pool.clone(),
+				client,
+				fetcher,
 				revalidate_time_period,
 				revalidate_block_period,
 			);
 			prepare_maintainer(&*maintainer.revalidation_status);
-
-			// now let's prepare pool
-
-			let pool = txpool::Pool::new(Default::default(), LightChainApi::new(
-				client.clone(),
-				fetcher,
-			));
-			let pool = Arc::new(pool);
-			let best = longest_chain.best_chain().unwrap();
 
 			// store the transaction in the pool
 			block_on(pool.submit_one(
@@ -524,7 +517,7 @@ mod tests {
 			)).unwrap();
 
 			// and run maintain procedures
-			block_on(maintainer.maintain(&BlockId::Number(0), &[], &pool));
+			block_on(maintainer.maintain(&BlockId::Number(0), &[]));
 
 			pool.status()
 		}
@@ -577,11 +570,7 @@ mod tests {
 
 		// fire notification - this should clean up the queue
 		assert_eq!(pool.status().ready, 1);
-		block_on(DefaultFullTransactionPoolMaintainer::new(client.clone()).maintain(
-			&id,
-			&[],
-			&pool,
-		));
+		block_on(FullBasicPoolMaintainer::new(pool.clone(), client.clone()).maintain(&id, &[]));
 
 		// then
 		assert_eq!(pool.status().ready, 0);
@@ -594,11 +583,7 @@ mod tests {
 		client.import(BlockOrigin::Own, block).unwrap();
 
 		// fire notification - this should add the transaction back to the pool.
-		block_on(DefaultFullTransactionPoolMaintainer::new(client).maintain(
-			&id,
-			&[block1_hash],
-			&pool,
-		));
+		block_on(FullBasicPoolMaintainer::new(pool.clone(), client).maintain(&id, &[block1_hash]));
 
 		// then
 		assert_eq!(pool.status().ready, 1);

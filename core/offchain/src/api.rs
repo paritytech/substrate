@@ -31,7 +31,7 @@ use primitives::offchain::{
 	OpaqueNetworkState, OpaquePeerId, OpaqueMultiaddr, StorageKind,
 };
 use sr_primitives::{generic::BlockId, traits::{self, Extrinsic}};
-use transaction_pool::TransactionPool;
+use txpoolapi::TransactionPool;
 
 mod http;
 mod timestamp;
@@ -335,7 +335,7 @@ mod tests {
 	use client_db::offchain::LocalStorage;
 	use network::PeerId;
 	use test_client::runtime::Block;
-	use transaction_pool::BasicTransactionPool;
+	use txpool::{BasicPool, FullChainApi};
 
 	struct MockNetworkStateInfo();
 
@@ -353,7 +353,7 @@ mod tests {
 		let _ = env_logger::try_init();
 		let db = LocalStorage::new_test();
 		let client = Arc::new(test_client::new());
-		let pool = Arc::new(BasicTransactionPool::default_full(Default::default(), client.clone()));
+		let pool = Arc::new(BasicPool::new(Default::default(), FullChainApi::new(client.clone())));
 
 		let mock = Arc::new(MockNetworkStateInfo());
 		AsyncApi::new(

@@ -47,7 +47,7 @@ use log::{debug, warn};
 use network::NetworkStateInfo;
 use primitives::{offchain, ExecutionContext};
 use sr_primitives::{generic::BlockId, traits::{self, ProvideRuntimeApi}};
-use transaction_pool::TransactionPool;
+use txpoolapi::TransactionPool;
 
 mod api;
 
@@ -156,7 +156,8 @@ impl<Client, Storage, Block> OffchainWorkers<
 mod tests {
 	use super::*;
 	use network::{Multiaddr, PeerId};
-	use transaction_pool::BasicTransactionPool;
+	use txpool::{BasicPool, FullChainApi};
+	use txpoolapi::InPoolTransaction;
 
 	struct MockNetworkStateInfo();
 
@@ -175,7 +176,7 @@ mod tests {
 		// given
 		let _ = env_logger::try_init();
 		let client = Arc::new(test_client::new());
-		let pool = Arc::new(BasicTransactionPool::default_full(Default::default(), client.clone()));
+		let pool = Arc::new(BasicPool::new(Default::default(), FullChainApi::new(client.clone())));
 		let db = client_db::offchain::LocalStorage::new_test();
 		let network_state = Arc::new(MockNetworkStateInfo());
 
