@@ -1161,11 +1161,11 @@ impl<T: Trait> Module<T> {
 		});
 		let bonding_duration = T::BondingDuration::get();
 
-		if current_era > bonding_duration {
-			let first_kept = current_era - bonding_duration;
+		BondedEras::mutate(|bonded| {
+			bonded.push((current_era, start_session_index));
 
-			BondedEras::mutate(|bonded| {
-				bonded.push((current_era, start_session_index));
+			if current_era > bonding_duration {
+				let first_kept = current_era - bonding_duration;
 
 				// prune out everything that's from before the first-kept index.
 				let n_to_prune = bonded.iter()
@@ -1180,8 +1180,8 @@ impl<T: Trait> Module<T> {
 				if let Some(&(_, first_session)) = bonded.first() {
 					T::SessionInterface::prune_historical_up_to(first_session);
 				}
-			})
-		}
+			}
+		});
 
 		// Reassign all Stakers.
 		let (_slot_stake, maybe_new_validators) = Self::select_validators();

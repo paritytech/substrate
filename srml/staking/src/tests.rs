@@ -1885,3 +1885,130 @@ fn dont_slash_if_fraction_is_zero() {
 		assert_eq!(Staking::force_era(), Forcing::NotForcing);
 	});
 }
+
+#[test]
+fn only_slash_for_max_in_era() {
+	ExtBuilder::default().build().execute_with(|| {
+		assert_eq!(Balances::free_balance(&11), 1000);
+
+		Staking::on_offence(
+			&[
+				OffenceDetails {
+					offender: (11, Staking::stakers(&11)),
+					reporters: vec![],
+				},
+			],
+			&[Perbill::from_percent(50)],
+		);
+
+		// The validator has been slashed and has been force-chilled.
+		assert_eq!(Balances::free_balance(&11), 500);
+		assert_eq!(Staking::force_era(), Forcing::ForceNew);
+
+		Staking::on_offence(
+			&[
+				OffenceDetails {
+					offender: (11, Staking::stakers(&11)),
+					reporters: vec![],
+				},
+			],
+			&[Perbill::from_percent(25)],
+		);
+
+		// The validator has not been slashed additionally.
+		assert_eq!(Balances::free_balance(&11), 500);
+
+		Staking::on_offence(
+			&[
+				OffenceDetails {
+					offender: (11, Staking::stakers(&11)),
+					reporters: vec![],
+				},
+			],
+			&[Perbill::from_percent(60)],
+		);
+
+		// The validator got slashed 10% more.
+		assert_eq!(Balances::free_balance(&11), 400);
+	})
+}
+
+#[test]
+fn garbage_collection_after_slashing() {
+	ExtBuilder::default().existential_deposit(1).build().execute_with(|| {
+		assert_eq!(Balances::free_balance(&11), 256_000);
+
+		Staking::on_offence(
+			&[
+				OffenceDetails {
+					offender: (11, Staking::stakers(&11)),
+					reporters: vec![],
+				},
+			],
+			&[Perbill::from_percent(10)],
+		);
+
+		assert_eq!(Balances::free_balance(&11), 256_000 - 25_600);
+		assert!(<Staking as crate::Store>::SlashingSpans::get(&11).is_some());
+		assert_eq!(<Staking as crate::Store>::SpanSlash::get(&(11, 0)), 25_600);
+
+		Staking::on_offence(
+			&[
+				OffenceDetails {
+					offender: (11, Staking::stakers(&11)),
+					reporters: vec![],
+				},
+			],
+			&[Perbill::from_percent(100)],
+		);
+
+		// validator and nominator slash in era are garbage-collected by era change.
+		assert_eq!(Balances::free_balance(&11), 0);
+		assert!(<Staking as crate::Store>::SlashingSpans::get(&11).is_none());
+		assert_eq!(<Staking as crate::Store>::SpanSlash::get(&(11, 0)), 0);
+	})
+}
+
+#[test]
+fn garbage_collection_on_window_pruning() {
+	ExtBuilder::default().build().execute_with(|| {
+		start_era(1);
+
+		assert_eq!(Balances::free_balance(&11), 1000);
+
+		let exposure = Staking::stakers(&11);
+		assert_eq!(Balances::free_balance(&101), 2000);
+		let nominated_value = exposure.others.iter().find(|o| o.who == 101).unwrap().value;
+
+		Staking::on_offence(
+			&[
+				OffenceDetails {
+					offender: (11, Staking::stakers(&11)),
+					reporters: vec![],
+				},
+			],
+			&[Perbill::from_percent(10)],
+		);
+
+		let now = Staking::current_era();
+
+		assert_eq!(Balances::free_balance(&11), 900);
+		assert_eq!(Balances::free_balance(&101), 2000 - (nominated_value / 10));
+
+		assert!(<Staking as crate::Store>::ValidatorSlashInEra::get(&now, &11).is_some());
+		assert!(<Staking as crate::Store>::NominatorSlashInEra::get(&now, &101).is_some());
+
+		let slash_era = now;
+
+		// + 1 because we have to exit the bonding window.
+		for era in (0..(BondingDuration::get() + 1)).map(|offset| offset + now + 1) {
+			assert!(<Staking as crate::Store>::ValidatorSlashInEra::get(&now, &11).is_some());
+			assert!(<Staking as crate::Store>::NominatorSlashInEra::get(&now, &101).is_some());
+
+			start_era(era);
+		}
+
+		assert!(<Staking as crate::Store>::ValidatorSlashInEra::get(&now, &11).is_none());
+		assert!(<Staking as crate::Store>::NominatorSlashInEra::get(&now, &101).is_none());
+	})
+}
