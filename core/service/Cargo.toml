@@ -32,14 +32,12 @@ client = { package = "substrate-client", path = "../../core/client" }
 client_db = { package = "substrate-client-db", path = "../../core/client/db", features = ["kvdb-rocksdb"] }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 substrate-executor = { path = "../../core/executor" }
-substrate-authority-discovery = { path = "../../core/authority-discovery"}
 transaction_pool = { package = "substrate-transaction-pool", path = "../../core/transaction-pool" }
 rpc-servers = { package = "substrate-rpc-servers", path = "../../core/rpc-servers" }
 rpc = { package = "substrate-rpc", path = "../../core/rpc" }
 tel = { package = "substrate-telemetry", path = "../../core/telemetry" }
 offchain = { package = "substrate-offchain", path = "../../core/offchain" }
 parity-multiaddr = { package = "parity-multiaddr", version = "0.5.0" }
-authority-discovery-primitives = { package = "substrate-authority-discovery-primitives", path = "../authority-discovery/primitives", default-features = false }
 
 [dev-dependencies]
 substrate-test-runtime-client = { path = "../test-runtime/client" }
