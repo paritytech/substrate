@@ -37,15 +37,16 @@ fn api_response(req: Request<Body>) -> ResponseFuture {
 			map_request_to_response(req, |req: QueryRequest| {
 				let metrics = METRICS.read();
 
+				let to = req.range.to.timestamp_millis();
+				let from = req.range.from.timestamp_millis();
+
 				// Return timeseries data related to the specified metrics
 				req.targets.iter()
 					.map(|target| {
 						let datapoints = metrics.get(target.target.as_str()).iter()
 							.flat_map(|&vec| vec)
-							.filter(|(_, timestamp)| {
-								req.range.from <= *timestamp && *timestamp <= req.range.to
-							})
-							.map(|(value, timestamp)| (*value, timestamp.timestamp_millis() as u64))
+							.cloned()
+							.filter(|&(_, timestamp)| from <= timestamp && timestamp <= to)
 							.collect();
 
 						TimeseriesData {

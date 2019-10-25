@@ -24,7 +24,6 @@
 //! [`grafana-json-data-source`]: https://github.com/simPod/grafana-json-datasource
 
 use lazy_static::lazy_static;
-use chrono::DateTime;
 use std::collections::HashMap;
 use parking_lot::RwLock;
 
@@ -36,7 +35,7 @@ pub use server::run_server;
 ///
 pub use chrono::Utc;
 
-type Metrics = HashMap<&'static str, Vec<(f32, DateTime<Utc>)>>;
+type Metrics = HashMap<&'static str, Vec<(f32, i64)>>;
 
 lazy_static! {
 	/// The `RwLock` wrapping the metrics. Not intended to be used directly.
@@ -49,7 +48,7 @@ macro_rules! record_metrics(
 	($($key:expr => $value:expr),*) => {
 		use $crate::{Utc, METRICS};
 		let mut metrics = METRICS.write();
-		let now = Utc::now();
+		let now = Utc::now().timestamp_millis();
 		$(
 			metrics.entry($key).or_insert_with(Vec::new).push(($value as f32, now));
 		)*

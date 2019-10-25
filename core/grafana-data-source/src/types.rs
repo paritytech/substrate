@@ -40,7 +40,6 @@ pub struct QueryRequest {
 }
 
 #[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct Target {
 	pub target: String,
 	#[serde(rename = "type")]
@@ -56,5 +55,5 @@ pub struct Range {
 #[derive(Serialize, Deserialize)]
 pub struct TimeseriesData {
 	pub target: String,
-	pub datapoints: Vec<(f32, u64)>
+	pub datapoints: Vec<(f32, i64)>
 }
