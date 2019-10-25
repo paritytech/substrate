@@ -170,7 +170,7 @@ fn call_method(
 		.map_err(Error::Wasmtime)?;
 
 	// Ideally there would be a way to set the heap pages during instantiation rather than
-	// growing the memory after the fact. Current this may require an additional mmap and copy.
+	// growing the memory after the fact. Currently this may require an additional mmap and copy.
 	// However, the wasmtime API doesn't support modifying the size of memory on instantiation
 	// at this time.
 	grow_memory(&mut instance, heap_pages)?;
@@ -178,7 +178,7 @@ fn call_method(
 	// Initialize the function executor state.
 	let heap_base = get_heap_base(&instance)?;
 	let executor_state = FunctionExecutorState::new(heap_base);
-	reset_env_state(context, Some(executor_state))?;
+	reset_env_state_and_take_trap(context, Some(executor_state))?;
 
 	// Write the input data into guest memory.
 	let (data_ptr, data_len) = inject_input_data(context, &mut instance, data)?;
@@ -190,7 +190,7 @@ fn call_method(
 			.invoke(&mut instance, method, &args[..])
 			.map_err(Error::Wasmtime)
 	})?;
-	let trap_error = reset_env_state(context, None)?;
+	let trap_error = reset_env_state_and_take_trap(context, None)?;
 	let (output_ptr, output_len) = match outcome {
 		ActionOutcome::Returned { values } => match values.as_slice() {
 			[RuntimeValue::I64(retval)] =>
@@ -310,8 +310,10 @@ fn get_env_state(context: &mut Context) -> Result<&mut EnvState> {
 		.ok_or_else(|| "cannot get \"env\" module host state".into())
 }
 
-fn reset_env_state(context: &mut Context, executor_state: Option<FunctionExecutorState>)
-	-> Result<Option<Error>>
+fn reset_env_state_and_take_trap(
+	context: &mut Context,
+	executor_state: Option<FunctionExecutorState>,
+) -> Result<Option<Error>>
 {
 	let env_state = get_env_state(context)?;
 	env_state.executor_state = executor_state;

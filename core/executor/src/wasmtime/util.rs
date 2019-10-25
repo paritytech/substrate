@@ -20,7 +20,6 @@ use cranelift_codegen::{ir, isa};
 use std::ops::Range;
 use wasm_interface::{Pointer, Signature, ValueType};
 
-
 /// Read data from a slice of memory into a destination buffer.
 ///
 /// Returns an error if the read would go out of the memory bounds.
