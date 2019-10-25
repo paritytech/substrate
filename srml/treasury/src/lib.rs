@@ -102,9 +102,6 @@ pub trait Trait: system::Trait {
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 
-	/// Handler for the unbalanced increase when minting cash from the "Pot".
-	type MintedForSpending: OnUnbalanced<PositiveImbalanceOf<Self>>;
-
 	/// Handler for the unbalanced decrease when slashing for a rejected proposal.
 	type ProposalRejection: OnUnbalanced<NegativeImbalanceOf<Self>>;
 
@@ -441,7 +438,6 @@ mod tests {
 		type ApproveOrigin = system::EnsureRoot<u64>;
 		type RejectOrigin = system::EnsureRoot<u64>;
 		type Event = ();
-		type MintedForSpending = ();
 		type ProposalRejection = ();
 		type ProposalBond = ProposalBond;
 		type ProposalBondMinimum = ProposalBondMinimum;
