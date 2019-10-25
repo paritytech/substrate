@@ -45,19 +45,11 @@ use crate::error;
 use sr_api_macros::decl_runtime_apis;
 use primitives::OpaqueMetadata;
 #[cfg(feature = "std")]
-use std::{panic::UnwindSafe, cell::RefCell, rc::Rc};
-#[cfg(feature = "std")]
-use primitives::Hasher as HasherT;
+use std::{panic::UnwindSafe, cell::RefCell};
 
 #[cfg(feature = "std")]
 /// A type that records all accessed trie nodes and generates a proof out of it.
 pub type ProofRecorder<B> = state_machine::ProofRecorder<
-	<<<<B as BlockT>::Header as HeaderT>::Hashing as HashT>::Hasher as HasherT>::Out
->;
-
-#[cfg(feature = "std")]
-/// A type that records all accessed trie nodes and generates a proof out of it.
-pub type FullProofRecorder<B> = state_machine::full_proving_backend::ProofRecorder<
 	<<<B as BlockT>::Header as HeaderT>::Hashing as HashT>::Hasher
 >;
 
@@ -154,7 +146,7 @@ pub trait CallRuntimeAt<Block: BlockT> {
 		initialize_block: InitializeBlock<'a, Block>,
 		native_call: Option<NC>,
 		context: ExecutionContext,
-		recorder: &Option<FullProofRecorder<Block>>,
+		recorder: &Option<ProofRecorder<Block>>,
 	) -> error::Result<NativeOrEncoded<R>>;
 
 	/// Returns the runtime version at the given block.

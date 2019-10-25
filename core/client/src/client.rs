@@ -18,7 +18,7 @@
 
 use std::{
 	marker::PhantomData, collections::{HashSet, BTreeMap, HashMap}, sync::Arc,
-	panic::UnwindSafe, result, cell::RefCell, rc::Rc,
+	panic::UnwindSafe, result, cell::RefCell,
 };
 use log::{info, trace, warn};
 use futures03::channel::mpsc;
@@ -55,7 +55,7 @@ use header_metadata::{HeaderMetadata, CachedHeaderMetadata};
 
 use crate::{
 	runtime_api::{
-		CallRuntimeAt, ConstructRuntimeApi, Core as CoreApi, FullProofRecorder,
+		CallRuntimeAt, ConstructRuntimeApi, Core as CoreApi, ProofRecorder,
 		InitializeBlock,
 	},
 	backend::{
@@ -1453,7 +1453,7 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 		initialize_block: InitializeBlock<'a, Block>,
 		native_call: Option<NC>,
 		context: ExecutionContext,
-		recorder: &Option<FullProofRecorder<Block>>,
+		recorder: &Option<ProofRecorder<Block>>,
 	) -> error::Result<NativeOrEncoded<R>> {
 		let manager = match context {
 			ExecutionContext::BlockConstruction =>
