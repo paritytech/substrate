@@ -7,10 +7,10 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-hyper = "0.12.35"
-futures = "0.1.29"
-serde_json = "1.0.41"
-http = "0.1.19"
-serde = { version = "1.0.101", features = ["derive"] }
-chrono = { version = "0.4.9", features = ["serde"] }
-rand = "*"
+hyper = "0.12"
+futures = "0.1"
+serde_json = "1"
+serde = { version = "1", features = ["derive"] }
+chrono = { version = "0.4", features = ["serde"] }
+lazy_static = "1.4"
+parking_lot = "0.9"

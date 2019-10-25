@@ -7,5 +7,6 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-hyper = "0.12.35"
+hyper = "0.12"
 grafana-data-source = { path = ".." }
+rand = "0.7"
