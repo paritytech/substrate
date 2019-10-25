@@ -287,7 +287,7 @@ impl From<LogLevel> for log::Level {
 	}
 }
 
-/// Converts the given value into an `u64` by following the Substrate calling convention.
+/// Encodes the given value into a buffer and returns the pointer and the length as a single `u64`.
 ///
 /// When Substrate calls into Wasm it expects a fixed signature for functions exported
 /// from the Wasm blob. The return value of this signature is always a `u64`.
