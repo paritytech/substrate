@@ -20,7 +20,7 @@ use hash_db::Hasher;
 use trie::Recorder;
 use log::warn;
 use num_traits::{One, Zero};
-use crate::proving_backend::ProvingBackendEssence;
+use crate::proving_backend::ProvingBackendRecorder;
 use crate::trie_backend_essence::TrieBackendEssence;
 use crate::changes_trie::{AnchorBlockId, Configuration, Storage, BlockNumber};
 use crate::changes_trie::storage::TrieBackendAdapter;
@@ -122,7 +122,7 @@ fn prune_trie<S: Storage<H, Number>, H: Hasher, Number: BlockNumber, F: FnMut(H:
 	// (effectively - all changes trie nodes)
 	let mut proof_recorder: Recorder<H::Out> = Default::default();
 	{
-		let mut trie = ProvingBackendEssence::<_, H> {
+		let mut trie = ProvingBackendRecorder::<_, H> {
 			backend: &TrieBackendEssence::new(TrieBackendAdapter::new(storage), root),
 			proof_recorder: &mut proof_recorder,
 		};

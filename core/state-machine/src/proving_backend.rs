@@ -18,7 +18,6 @@
 
 use std::sync::Arc;
 use parking_lot::RwLock;
-use std::{cell::RefCell, rc::Rc};
 use log::debug;
 use hash_db::{Hasher, HashDB, EMPTY_PREFIX, Prefix};
 use trie::{
@@ -33,18 +32,18 @@ use crate::{Error, ExecutionError, Backend};
 use std::collections::HashMap;
 use crate::DBValue;
 
-/// Patricia trie-based backend essence which also tracks all touched storage trie values.
-/// These can be sent to remote node and used as a proof of execution.
-pub struct ProvingBackendEssence<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
+/// Patricia trie-based backend specialized in get value proofs.
+pub struct ProvingBackendRecorder<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
 	pub(crate) backend: &'a TrieBackendEssence<S, H>,
 	pub(crate) proof_recorder: &'a mut Recorder<H::Out>,
 }
 
-impl<'a, S, H> ProvingBackendEssence<'a, S, H>
+impl<'a, S, H> ProvingBackendRecorder<'a, S, H>
 	where
 		S: TrieBackendStorage<H>,
 		H: Hasher,
 {
+	/// Produce proof for a key query.
 	pub fn storage(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
 		let mut read_overlay = S::Overlay::default();
 		let eph = Ephemeral::new(
@@ -62,6 +61,7 @@ impl<'a, S, H> ProvingBackendEssence<'a, S, H>
 		).map_err(map_e)
 	}
 
+	/// Produce proof for a child key query.
 	pub fn child_storage(
 		&mut self,
 		storage_key: &[u8],
@@ -87,6 +87,7 @@ impl<'a, S, H> ProvingBackendEssence<'a, S, H>
 		).map_err(map_e)
 	}
 
+	/// Produce proof for tho whole backend.
 	pub fn record_all_keys(&mut self) {
 		let mut read_overlay = S::Overlay::default();
 		let eph = Ephemeral::new(
@@ -105,7 +106,9 @@ impl<'a, S, H> ProvingBackendEssence<'a, S, H>
 	}
 }
 
-pub type ProofRecorder<H: Hasher> = Arc<RwLock<HashMap<H::Out, DBValue>>>;
+/// Global proof recorder, act as a layer over a hash db for recording queried
+/// data.
+pub type ProofRecorder<H> = Arc<RwLock<HashMap<<H as Hasher>::Out, DBValue>>>;
 
 /// Patricia trie-based backend which also tracks all touched storage trie values.
 /// These can be sent to remote node and used as a proof of execution.
@@ -147,7 +150,7 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
 			.read()
 			//.borrow()
 			.iter()
-			.map(|(k, v)| v.to_vec())
+			.map(|(_k, v)| v.to_vec())
 			.collect()
 	}
 }
