@@ -993,6 +993,17 @@ decl_module! {
 			ensure_root(origin)?;
 			<Invulnerables<T>>::put(validators);
 		}
+
+		/// Force a current staker to become completely unstaked, immediately.
+		#[weight = sr_primitives::SimpleDispatchInfo::FreeOperational]
+		fn force_unstake(origin, stash: T::AccountId) {
+			ensure_root(origin)?;
+
+			// remove the lock.
+			T::Currency::remove_lock(STAKING_ID, &stash);
+			// remove all staking-related information.
+			Self::kill_stash(&stash);
+		}
 	}
 }
 
