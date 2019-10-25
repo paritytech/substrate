@@ -29,11 +29,11 @@ use rstd::{
 	collections::btree_set::BTreeSet,
 };
 use support::{
-	StorageMap, StorageDoubleMap, decl_module, decl_event, decl_storage, Parameter,
+	decl_module, decl_event, decl_storage, Parameter,
 };
 use sr_primitives::{
 	Perbill,
-	traits::Hash,
+	traits::{Hash, Saturating},
 };
 use sr_staking_primitives::{
 	offence::{Offence, ReportOffence, Kind, OnOffenceHandler, OffenceDetails},
@@ -59,7 +59,7 @@ pub trait Trait: system::Trait {
 decl_storage! {
 	trait Store for Module<T: Trait> as Offences {
 		/// The primary structure that holds all offence records keyed by report identifiers.
-		Reports get(reports): map ReportIdOf<T> => Option<OffenceDetails<T::AccountId, T::IdentificationTuple>>;
+		Reports get(fn reports): map ReportIdOf<T> => Option<OffenceDetails<T::AccountId, T::IdentificationTuple>>;
 
 		/// A vector of reports of the same kind that happened at the same time slot.
 		ConcurrentReportsIndex: double_map Kind, blake2_256(OpaqueTimeSlot) => Vec<ReportIdOf<T>>;
@@ -131,12 +131,9 @@ where
 				offenders_count.saturating_sub(previous_offenders_count),
 				validator_set_count,
 			);
-			let numerator = new_fraction
-				.into_parts()
-				.saturating_sub(previous_fraction.into_parts());
-			let denominator =
-				Perbill::from_parts(Perbill::one().into_parts() - previous_fraction.into_parts());
-			Perbill::from_parts(denominator * numerator)
+			let numerator = new_fraction.saturating_sub(previous_fraction);
+			let denominator = Perbill::one().saturating_sub(previous_fraction);
+			denominator.saturating_mul(numerator)
 		} else {
 			new_fraction.clone()
 		};

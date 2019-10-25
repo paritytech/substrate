@@ -19,7 +19,7 @@
 //! This crate exports a macro `storage_items!` and traits describing behavior of generated
 //! structs.
 //!
-//! Three kinds of data types are currently supported:
+//! Two kinds of data types are currently supported:
 //!   - values
 //!   - maps
 //!
@@ -50,109 +50,127 @@ pub use crate::rstd::marker::PhantomData;
 #[doc(hidden)]
 pub use crate::rstd::boxed::Box;
 
+#[doc(hidden)]
+pub fn id<T>(t: T) -> T {
+	t
+}
+
+#[doc(hidden)]
+pub use Some;
+
+#[doc(hidden)]
+pub fn unwrap_or_default<T: Default>(t: Option<T>) -> T {
+	t.unwrap_or_else(|| Default::default())
+}
+
+#[doc(hidden)]
+pub fn require<T: Default>(t: Option<T>) -> T {
+	t.expect("Required values must be in storage")
+}
+
 // FIXME #1466 Remove this in favor of `decl_storage` macro.
 /// Declares strongly-typed wrappers around codec-compatible types in storage.
 #[macro_export]
 macro_rules! storage_items {
 	// simple values
 	($name:ident : $key:expr => $ty:ty; $($t:tt)*) => {
-		$crate::__storage_items_internal!(() () (OPTION_TYPE Option<$ty>) (get) (take) $name: $key => $ty);
+		$crate::__storage_items_internal!(() () (OPTION_TYPE Option<$ty>) (id) (id) $name: $key => $ty);
 		storage_items!($($t)*);
 	};
 	(pub $name:ident : $key:expr => $ty:ty; $($t:tt)*) => {
-		$crate::__storage_items_internal!((pub) () (OPTION_TYPE Option<$ty>) (get) (take) $name: $key => $ty);
+		$crate::__storage_items_internal!((pub) () (OPTION_TYPE Option<$ty>) (id) (id) $name: $key => $ty);
 		storage_items!($($t)*);
 	};
 	($name:ident : $key:expr => default $ty:ty; $($t:tt)*) => {
-		$crate::__storage_items_internal!(() () (RAW_TYPE $ty) (get_or_default) (take_or_default) $name: $key => $ty);
+		$crate::__storage_items_internal!(() () (RAW_TYPE $ty) (unwrap_or_default) (Some) $name: $key => $ty);
 		storage_items!($($t)*);
 	};
 	(pub $name:ident : $key:expr => default $ty:ty; $($t:tt)*) => {
-		$crate::__storage_items_internal!((pub) () (RAW_TYPE $ty) (get_or_default) (take_or_default) $name: $key => $ty);
+		$crate::__storage_items_internal!((pub) () (RAW_TYPE $ty) (unwrap_or_default) (Some) $name: $key => $ty);
 		storage_items!($($t)*);
 	};
 	($name:ident : $key:expr => required $ty:ty; $($t:tt)*) => {
-		$crate::__storage_items_internal!(() () (RAW_TYPE $ty) (require) (take_or_panic) $name: $key => $ty);
+		$crate::__storage_items_internal!(() () (RAW_TYPE $ty) (require) (Some) $name: $key => $ty);
 		storage_items!($($t)*);
 	};
 	(pub $name:ident : $key:expr => required $ty:ty; $($t:tt)*) => {
-		$crate::__storage_items_internal!((pub) () (RAW_TYPE $ty) (require) (take_or_panic) $name: $key => $ty);
+		$crate::__storage_items_internal!((pub) () (RAW_TYPE $ty) (require) (Some) $name: $key => $ty);
 		storage_items!($($t)*);
 	};
 
 	($name:ident get($getfn:ident) : $key:expr => $ty:ty; $($t:tt)*) => {
-		$crate::__storage_items_internal!(() ($getfn) (OPTION_TYPE Option<$ty>) (get) (take) $name: $key => $ty);
+		$crate::__storage_items_internal!(() ($getfn) (OPTION_TYPE Option<$ty>) (id) (id) $name: $key => $ty);
 		storage_items!($($t)*);
 	};
 	(pub $name:ident get($getfn:ident) : $key:expr => $ty:ty; $($t:tt)*) => {
-		$crate::__storage_items_internal!((pub) ($getfn) (OPTION_TYPE Option<$ty>) (get) (take) $name: $key => $ty);
+		$crate::__storage_items_internal!((pub) ($getfn) (OPTION_TYPE Option<$ty>) (id) (id) $name: $key => $ty);
 		storage_items!($($t)*);
 	};
 	($name:ident get($getfn:ident) : $key:expr => default $ty:ty; $($t:tt)*) => {
-		$crate::__storage_items_internal!(() ($getfn) (RAW_TYPE $ty) (get_or_default) (take_or_default) $name: $key => $ty);
+		$crate::__storage_items_internal!(() ($getfn) (RAW_TYPE $ty) (unwrap_or_default) (Some) $name: $key => $ty);
 		storage_items!($($t)*);
 	};
 	(pub $name:ident get($getfn:ident) : $key:expr => default $ty:ty; $($t:tt)*) => {
-		$crate::__storage_items_internal!((pub) ($getfn) (RAW_TYPE $ty) (get_or_default) (take_or_default) $name: $key => $ty);
+		$crate::__storage_items_internal!((pub) ($getfn) (RAW_TYPE $ty) (unwrap_or_default) (Some) $name: $key => $ty);
 		storage_items!($($t)*);
 	};
 	($name:ident get($getfn:ident) : $key:expr => required $ty:ty; $($t:tt)*) => {
-		$crate::__storage_items_internal!(() ($getfn) (RAW_TYPE $ty) (require) (take_or_panic) $name: $key => $ty);
+		$crate::__storage_items_internal!(() ($getfn) (RAW_TYPE $ty) (require) (Some) $name: $key => $ty);
 		storage_items!($($t)*);
 	};
 	(pub $name:ident get($getfn:ident) : $key:expr => required $ty:ty; $($t:tt)*) => {
-		$crate::__storage_items_internal!((pub) ($getfn) (RAW_TYPE $ty) (require) (take_or_panic) $name: $key => $ty);
+		$crate::__storage_items_internal!((pub) ($getfn) (RAW_TYPE $ty) (require) (Some) $name: $key => $ty);
 		storage_items!($($t)*);
 	};
 
 	// maps
 	($name:ident : $prefix:expr => map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		$crate::__storage_items_internal!(() () (OPTION_TYPE Option<$ty>) (get) (take) $name: $prefix => map [$kty => $ty]);
+		$crate::__storage_items_internal!(() () (OPTION_TYPE Option<$ty>) (id) (id) $name: $prefix => map [$kty => $ty]);
 		storage_items!($($t)*);
 	};
 	(pub $name:ident : $prefix:expr => map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		$crate::__storage_items_internal!((pub) () (OPTION_TYPE Option<$ty>) (get) (take) $name: $prefix => map [$kty => $ty]);
+		$crate::__storage_items_internal!((pub) () (OPTION_TYPE Option<$ty>) (id) (id) $name: $prefix => map [$kty => $ty]);
 		storage_items!($($t)*);
 	};
 	($name:ident : $prefix:expr => default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		$crate::__storage_items_internal!(() () (RAW_TYPE $ty) (get_or_default) (take_or_default) $name: $prefix => map [$kty => $ty]);
+		$crate::__storage_items_internal!(() () (RAW_TYPE $ty) (unwrap_or_default) (Some) $name: $prefix => map [$kty => $ty]);
 		storage_items!($($t)*);
 	};
 	(pub $name:ident : $prefix:expr => default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		$crate::__storage_items_internal!((pub) () (RAW_TYPE $ty) (get_or_default) (take_or_default) $name: $prefix => map [$kty => $ty]);
+		$crate::__storage_items_internal!((pub) () (RAW_TYPE $ty) (unwrap_or_default) (Some) $name: $prefix => map [$kty => $ty]);
 		storage_items!($($t)*);
 	};
 	($name:ident : $prefix:expr => required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		$crate::__storage_items_internal!(() () (RAW_TYPE $ty) (require) (take_or_panic) $name: $prefix => map [$kty => $ty]);
+		$crate::__storage_items_internal!(() () (RAW_TYPE $ty) (require) (Some) $name: $prefix => map [$kty => $ty]);
 		storage_items!($($t)*);
 	};
 	(pub $name:ident : $prefix:expr => required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		$crate::__storage_items_internal!((pub) () (RAW_TYPE $ty) (require) (take_or_panic) $name: $prefix => map [$kty => $ty]);
+		$crate::__storage_items_internal!((pub) () (RAW_TYPE $ty) (require) (Some) $name: $prefix => map [$kty => $ty]);
 		storage_items!($($t)*);
 	};
 
 	($name:ident get($getfn:ident) : $prefix:expr => map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		$crate::__storage_items_internal!(() ($getfn) (OPTION_TYPE Option<$ty>) (get) (take) $name: $prefix => map [$kty => $ty]);
+		$crate::__storage_items_internal!(() ($getfn) (OPTION_TYPE Option<$ty>) (id) (id) $name: $prefix => map [$kty => $ty]);
 		storage_items!($($t)*);
 	};
 	(pub $name:ident get($getfn:ident) : $prefix:expr => map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		$crate::__storage_items_internal!((pub) ($getfn) (OPTION_TYPE Option<$ty>) (get) (take) $name: $prefix => map [$kty => $ty]);
+		$crate::__storage_items_internal!((pub) ($getfn) (OPTION_TYPE Option<$ty>) (id) (id) $name: $prefix => map [$kty => $ty]);
 		storage_items!($($t)*);
 	};
 	($name:ident get($getfn:ident) : $prefix:expr => default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		$crate::__storage_items_internal!(() ($getfn) (RAW_TYPE $ty) (get_or_default) (take_or_default) $name: $prefix => map [$kty => $ty]);
+		$crate::__storage_items_internal!(() ($getfn) (RAW_TYPE $ty) (unwrap_or_default) (Some) $name: $prefix => map [$kty => $ty]);
 		storage_items!($($t)*);
 	};
 	(pub $name:ident get($getfn:ident) : $prefix:expr => default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		$crate::__storage_items_internal!((pub) ($getfn) (RAW_TYPE $ty) (get_or_default) (take_or_default) $name: $prefix => map [$kty => $ty]);
+		$crate::__storage_items_internal!((pub) ($getfn) (RAW_TYPE $ty) (unwrap_or_default) (Some) $name: $prefix => map [$kty => $ty]);
 		storage_items!($($t)*);
 	};
 	($name:ident get($getfn:ident) : $prefix:expr => required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		$crate::__storage_items_internal!(() ($getfn) (RAW_TYPE $ty) (require) (take_or_panic) $name: $prefix => map [$kty => $ty]);
+		$crate::__storage_items_internal!(() ($getfn) (RAW_TYPE $ty) (require) (Some) $name: $prefix => map [$kty => $ty]);
 		storage_items!($($t)*);
 	};
 	(pub $name:ident get($getfn:ident) : $prefix:expr => required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		$crate::__storage_items_internal!((pub) ($getfn) (RAW_TYPE $ty) (require) (take_or_panic) $name: $prefix => map [$kty => $ty]);
+		$crate::__storage_items_internal!((pub) ($getfn) (RAW_TYPE $ty) (require) (Some) $name: $prefix => map [$kty => $ty]);
 		storage_items!($($t)*);
 	};
 
@@ -163,109 +181,53 @@ macro_rules! storage_items {
 #[doc(hidden)]
 macro_rules! __storage_items_internal {
 	// generator for values.
-	(($($vis:tt)*) ($get_fn:ident) ($wraptype:ident $gettype:ty) ($getter:ident) ($taker:ident) $name:ident : $key:expr => $ty:ty) => {
-		$crate::__storage_items_internal!{ ($($vis)*) () ($wraptype $gettype) ($getter) ($taker) $name : $key => $ty }
-		pub fn $get_fn() -> $gettype { <$name as $crate::storage::hashed::generator::StorageValue<$ty>> :: get(&$crate::storage::RuntimeStorage) }
+	(($($vis:tt)*) ($get_fn:ident) ($wraptype:ident $gettype:ty) ($into_query:ident) ($into_opt_val:ident) $name:ident : $key:expr => $ty:ty) => {
+		$crate::__storage_items_internal!{ ($($vis)*) () ($wraptype $gettype) ($into_query) ($into_opt_val) $name : $key => $ty }
+		pub fn $get_fn() -> $gettype { <$name as $crate::storage::StorageValue<$ty>> :: get() }
 	};
-	(($($vis:tt)*) () ($wraptype:ident $gettype:ty) ($getter:ident) ($taker:ident) $name:ident : $key:expr => $ty:ty) => {
+	(($($vis:tt)*) () ($wraptype:ident $gettype:ty) ($into_query:ident) ($into_opt_val:ident) $name:ident : $key:expr => $ty:ty) => {
 		$($vis)* struct $name;
 
-		impl $crate::storage::hashed::generator::StorageValue<$ty> for $name {
+		impl $crate::storage::generator::StorageValue<$ty> for $name {
 			type Query = $gettype;
 
-			/// Get the storage key.
-			fn key() -> &'static [u8] {
+			fn unhashed_key() -> &'static [u8] {
 				$key
 			}
 
-			/// Load the value from the provided storage instance.
-			fn get<S: $crate::HashedStorage<$crate::Twox128>>(storage: &S) -> Self::Query {
-				storage.$getter($key)
+			fn from_optional_value_to_query(v: Option<$ty>) -> Self::Query {
+				$crate::storage::storage_items::$into_query(v)
 			}
 
-			/// Take a value from storage, removing it afterwards.
-			fn take<S: $crate::HashedStorage<$crate::Twox128>>(storage: &mut S) -> Self::Query {
-				storage.$taker($key)
-			}
-
-			/// Mutate this value.
-			fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: $crate::HashedStorage<$crate::Twox128>>(f: F, storage: &mut S) -> R {
-				let mut val = <Self as $crate::storage::hashed::generator::StorageValue<$ty>>::get(storage);
-
-				let ret = f(&mut val);
-
-				$crate::__handle_wrap_internal!($wraptype {
-					// raw type case
-					<Self as $crate::storage::hashed::generator::StorageValue<$ty>>::put(&val, storage)
-				} {
-					// Option<> type case
-					match val {
-						Some(ref val) => <Self as $crate::storage::hashed::generator::StorageValue<$ty>>::put(&val, storage),
-						None => <Self as $crate::storage::hashed::generator::StorageValue<$ty>>::kill(storage),
-					}
-				});
-
-				ret
+			fn from_query_to_optional_value(v: Self::Query) -> Option<$ty> {
+				$crate::storage::storage_items::$into_opt_val(v)
 			}
 		}
 	};
 	// generator for maps.
-	(($($vis:tt)*) ($get_fn:ident) ($wraptype:ident $gettype:ty) ($getter:ident) ($taker:ident) $name:ident : $prefix:expr => map [$kty:ty => $ty:ty]) => {
-		$crate::__storage_items_internal!{ ($($vis)*) () ($wraptype $gettype) ($getter) ($taker) $name : $prefix => map [$kty => $ty] }
-		pub fn $get_fn<K: $crate::storage::generator::Borrow<$kty>>(key: K) -> $gettype {
-			<$name as $crate::storage::hashed::generator::StorageMap<$kty, $ty>> :: get(key.borrow(), &$crate::storage::RuntimeStorage)
+	(($($vis:tt)*) ($get_fn:ident) ($wraptype:ident $gettype:ty) ($into_query:ident) ($into_opt_val:ident) $name:ident : $prefix:expr => map [$kty:ty => $ty:ty]) => {
+		$crate::__storage_items_internal!{ ($($vis)*) () ($wraptype $gettype) ($into_query) ($into_opt_val) $name : $prefix => map [$kty => $ty] }
+		pub fn $get_fn<K: $crate::storage::storage_items::Borrow<$kty>>(key: K) -> $gettype {
+			<$name as $crate::storage::StorageMap<$kty, $ty>> :: get(key.borrow())
 		}
 	};
-	(($($vis:tt)*) () ($wraptype:ident $gettype:ty) ($getter:ident) ($taker:ident) $name:ident : $prefix:expr => map [$kty:ty => $ty:ty]) => {
+	(($($vis:tt)*) () ($wraptype:ident $gettype:ty) ($into_query:ident) ($into_opt_val:ident) $name:ident : $prefix:expr => map [$kty:ty => $ty:ty]) => {
 		$($vis)* struct $name;
 
-		impl $crate::storage::hashed::generator::StorageMap<$kty, $ty> for $name {
+		impl $crate::storage::generator::StorageMap<$kty, $ty> for $name {
 			type Query = $gettype;
-
 			type Hasher = $crate::Blake2_256;
 
-			/// Get the prefix key in storage.
 			fn prefix() -> &'static [u8] {
 				$prefix
 			}
 
-			/// Get the storage key used to fetch a value corresponding to a specific key.
-			fn key_for(x: &$kty) -> $crate::rstd::vec::Vec<u8> {
-				let mut key = $prefix.to_vec();
-				$crate::codec::Encode::encode_to(x, &mut key);
-				key
+			fn from_optional_value_to_query(v: Option<$ty>) -> Self::Query {
+				$crate::storage::storage_items::$into_query(v)
 			}
 
-			/// Load the value associated with the given key from the map.
-			fn get<S: $crate::HashedStorage<Self::Hasher>>(key: &$kty, storage: &S) -> Self::Query {
-				let key = <$name as $crate::storage::hashed::generator::StorageMap<$kty, $ty>>::key_for(key);
-				storage.$getter(&key[..])
-			}
-
-			/// Take the value, reading and removing it.
-			fn take<S: $crate::HashedStorage<Self::Hasher>>(key: &$kty, storage: &mut S) -> Self::Query {
-				let key = <$name as $crate::storage::hashed::generator::StorageMap<$kty, $ty>>::key_for(key);
-				storage.$taker(&key[..])
-			}
-
-			/// Mutate the value under a key.
-			fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: $crate::HashedStorage<Self::Hasher>>(key: &$kty, f: F, storage: &mut S) -> R {
-				let mut val = <Self as $crate::storage::hashed::generator::StorageMap<$kty, $ty>>::take(key, storage);
-
-				let ret = f(&mut val);
-
-				$crate::__handle_wrap_internal!($wraptype {
-					// raw type case
-					<Self as $crate::storage::hashed::generator::StorageMap<$kty, $ty>>::insert(key, &val, storage)
-				} {
-					// Option<> type case
-					match val {
-						Some(ref val) => <Self as $crate::storage::hashed::generator::StorageMap<$kty, $ty>>::insert(key, &val, storage),
-						None => <Self as $crate::storage::hashed::generator::StorageMap<$kty, $ty>>::remove(key, storage),
-					}
-				});
-
-				ret
+			fn from_query_to_optional_value(v: Self::Query) -> Option<$ty> {
+				$crate::storage::storage_items::$into_opt_val(v)
 			}
 		}
 	};
@@ -291,12 +253,10 @@ macro_rules! __handle_wrap_internal {
 // Do not complain about unused `dispatch` and `dispatch_aux`.
 #[allow(dead_code)]
 mod tests {
-	use std::collections::HashMap;
-	use super::*;
 	use crate::metadata::*;
 	use crate::metadata::StorageHasher;
 	use crate::rstd::marker::PhantomData;
-	use crate::storage::hashed::generator::*;
+	use crate::codec::{Encode, Decode, EncodeLike};
 
 	storage_items! {
 		Value: b"a" => u32;
@@ -305,27 +265,29 @@ mod tests {
 
 	#[test]
 	fn value() {
-		let mut storage = HashMap::new();
-		assert!(Value::get(&storage).is_none());
-		Value::put(&100_000, &mut storage);
-		assert_eq!(Value::get(&storage), Some(100_000));
-		Value::kill(&mut storage);
-		assert!(Value::get(&storage).is_none());
+		runtime_io::with_storage(&mut Default::default(), || {
+			assert!(Value::get().is_none());
+			Value::put(&100_000);
+			assert_eq!(Value::get(), Some(100_000));
+			Value::kill();
+			assert!(Value::get().is_none());
+		})
 	}
 
 	#[test]
 	fn map() {
-		let mut storage = HashMap::new();
-		assert!(Map::get(&5, &storage).is_none());
-		Map::insert(&5, &[1; 32], &mut storage);
-		assert_eq!(Map::get(&5, &storage), Some([1; 32]));
-		assert_eq!(Map::take(&5, &mut storage), Some([1; 32]));
-		assert!(Map::get(&5, &storage).is_none());
-		assert!(Map::get(&999, &storage).is_none());
+		runtime_io::with_storage(&mut Default::default(), || {
+			assert!(Map::get(&5).is_none());
+			Map::insert(&5, &[1; 32]);
+			assert_eq!(Map::get(&5), Some([1; 32]));
+			assert_eq!(Map::take(&5), Some([1; 32]));
+			assert!(Map::get(&5).is_none());
+			assert!(Map::get(&999).is_none());
+		})
 	}
 
 	pub trait Trait {
-		type Origin: crate::codec::Encode + crate::codec::Decode + ::std::default::Default;
+		type Origin: Encode + Decode + EncodeLike + std::default::Default;
 		type BlockNumber;
 	}
 
@@ -338,48 +300,48 @@ mod tests {
 			// non-getters: pub / $default
 
 			/// Hello, this is doc!
-			U32 : Option<u32> = Some(3);
+			U32 : Option<u32>;
 			pub PUBU32 : Option<u32>;
-			U32MYDEF : Option<u32> = None;
-			pub PUBU32MYDEF : Option<u32> = Some(3);
+			U32MYDEF : Option<u32>;
+			pub PUBU32MYDEF : Option<u32>;
 
 			// getters: pub / $default
 			// we need at least one type which uses T, otherwise GenesisConfig will complain.
-			GETU32 get(u32_getter): T::Origin;
-			pub PUBGETU32 get(pub_u32_getter) build(|config: &GenesisConfig| config.u32_getter_with_config): u32;
-			GETU32WITHCONFIG get(u32_getter_with_config) config(): u32;
-			pub PUBGETU32WITHCONFIG get(pub_u32_getter_with_config) config(): u32;
-			GETU32MYDEF get(u32_getter_mydef): Option<u32> = Some(4);
-			pub PUBGETU32MYDEF get(pub_u32_getter_mydef) config(): u32 = 3;
-			GETU32WITHCONFIGMYDEF get(u32_getter_with_config_mydef) config(): u32 = 2;
-			pub PUBGETU32WITHCONFIGMYDEF get(pub_u32_getter_with_config_mydef) config(): u32 = 1;
-			PUBGETU32WITHCONFIGMYDEFOPT get(pub_u32_getter_with_config_mydef_opt) config(): Option<u32> = Some(100);
+			GETU32 get(fn u32_getter): T::Origin;
+			pub PUBGETU32 get(fn pub_u32_getter) build(|config: &GenesisConfig| config.u32_getter_with_config): u32;
+			GETU32WITHCONFIG get(fn u32_getter_with_config) config(): u32;
+			pub PUBGETU32WITHCONFIG get(fn pub_u32_getter_with_config) config(): u32;
+			GETU32MYDEF get(fn u32_getter_mydef): Option<u32>;
+			pub PUBGETU32MYDEF get(fn pub_u32_getter_mydef) config(): u32 = 3;
+			GETU32WITHCONFIGMYDEF get(fn u32_getter_with_config_mydef) config(): u32 = 2;
+			pub PUBGETU32WITHCONFIGMYDEF get(fn pub_u32_getter_with_config_mydef) config(): u32 = 1;
+			PUBGETU32WITHCONFIGMYDEFOPT get(fn pub_u32_getter_with_config_mydef_opt) config(): Option<u32>;
 
 			// map non-getters: pub / $default
 			MAPU32 : map u32 => Option<String>;
 			pub PUBMAPU32 : map u32 => Option<String>;
-			MAPU32MYDEF : map u32 => Option<String> = None;
-			pub PUBMAPU32MYDEF : map u32 => Option<String> = Some("hello".into());
+			MAPU32MYDEF : map u32 => Option<String>;
+			pub PUBMAPU32MYDEF : map u32 => Option<String>;
 
 			// map getters: pub / $default
-			GETMAPU32 get(map_u32_getter): map u32 => String;
-			pub PUBGETMAPU32 get(pub_map_u32_getter): map u32 => String;
+			GETMAPU32 get(fn map_u32_getter): map u32 => String;
+			pub PUBGETMAPU32 get(fn pub_map_u32_getter): map u32 => String;
 
-			GETMAPU32MYDEF get(map_u32_getter_mydef): map u32 => String = "map".into();
-			pub PUBGETMAPU32MYDEF get(pub_map_u32_getter_mydef): map u32 => String = "pubmap".into();
+			GETMAPU32MYDEF get(fn map_u32_getter_mydef): map u32 => String = "map".into();
+			pub PUBGETMAPU32MYDEF get(fn pub_map_u32_getter_mydef): map u32 => String = "pubmap".into();
 
 			// linked map
 			LINKEDMAPU32 : linked_map u32 => Option<String>;
-			pub PUBLINKEDMAPU32MYDEF : linked_map u32 => Option<String> = Some("hello".into());
-			GETLINKEDMAPU32 get(linked_map_u32_getter): linked_map u32 => String;
-			pub PUBGETLINKEDMAPU32MYDEF get(pub_linked_map_u32_getter_mydef): linked_map u32 => String = "pubmap".into();
+			pub PUBLINKEDMAPU32MYDEF : linked_map u32 => Option<String>;
+			GETLINKEDMAPU32 get(fn linked_map_u32_getter): linked_map u32 => String;
+			pub PUBGETLINKEDMAPU32MYDEF get(fn pub_linked_map_u32_getter_mydef): linked_map u32 => String = "pubmap".into();
 
 			COMPLEXTYPE1: ::std::vec::Vec<<T as Trait>::Origin>;
 			COMPLEXTYPE2: (Vec<Vec<(u16,Box<(  )>)>>, u32);
 			COMPLEXTYPE3: ([u32;25]);
 		}
 		add_extra_genesis {
-			build(|_, _| {});
+			build(|_| {});
 		}
 	}
 
@@ -726,7 +688,7 @@ mod tests {
 		assert_eq!(config.pub_u32_getter_mydef, 3u32);
 		assert_eq!(config.u32_getter_with_config_mydef, 2u32);
 		assert_eq!(config.pub_u32_getter_with_config_mydef, 1u32);
-		assert_eq!(config.pub_u32_getter_with_config_mydef_opt, 100u32);
+		assert_eq!(config.pub_u32_getter_with_config_mydef_opt, 0u32);
 	}
 
 }
@@ -755,7 +717,7 @@ mod test2 {
 		add_extra_genesis {
 			config(_marker) : ::std::marker::PhantomData<T>;
 			config(extra_field) : u32 = 32;
-			build(|_, _| {});
+			build(|_| {});
 		}
 	}
 
@@ -779,7 +741,7 @@ mod test3 {
 	}
 	crate::decl_storage! {
 		trait Store for Module<T: Trait> as Test {
-			Foo get(foo) config(initial_foo): u32;
+			Foo get(fn foo) config(initial_foo): u32;
 		}
 	}
 
@@ -795,18 +757,37 @@ mod test3 {
 
 #[cfg(test)]
 #[allow(dead_code)]
-mod test_map_vec_append {
+mod test_append_and_len {
+	use runtime_io::TestExternalities;
+	use codec::{Encode, Decode};
+
 	pub trait Trait {
 		type Origin;
 		type BlockNumber;
 	}
+
 	decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 	}
+
+	#[derive(PartialEq, Eq, Clone, Encode, Decode)]
+	struct NoDef(u32);
+
 	crate::decl_storage! {
 		trait Store for Module<T: Trait> as Test {
+			NoDefault: Option<NoDef>;
+
 			JustVec: Vec<u32>;
+			JustVecWithDefault: Vec<u32> = vec![6, 9];
+			OptionVec: Option<Vec<u32>>;
+
 			MapVec: map u32 => Vec<u32>;
+			MapVecWithDefault: map u32 => Vec<u32> = vec![6, 9];
+			OptionMapVec: map u32 => Option<Vec<u32>>;
+
+			LinkedMapVec: linked_map u32 => Vec<u32>;
+			LinkedMapVecWithDefault: linked_map u32 => Vec<u32> = vec![6, 9];
+			OptionLinkedMapVec: linked_map u32 => Option<Vec<u32>>;
 		}
 	}
 
@@ -818,20 +799,107 @@ mod test_map_vec_append {
 	}
 
 	#[test]
-	fn append_works() {
-		use crate::storage::{AppendableStorageMap, StorageMap, StorageValue};
-		use runtime_io::{with_externalities, TestExternalities};
+	fn default_for_option() {
+		TestExternalities::default().execute_with(|| {
+			assert_eq!(OptionVec::get(), None);
+			assert_eq!(JustVec::get(), vec![]);
+		});
+	}
 
-		with_externalities(&mut TestExternalities::default(), || {
-			let _ = MapVec::append(1, &[1, 2, 3]);
-			let _ = MapVec::append(1, &[4, 5]);
+	#[test]
+	fn append_works() {
+		TestExternalities::default().execute_with(|| {
+			let _ = MapVec::append(1, [1, 2, 3].iter());
+			let _ = MapVec::append(1, [4, 5].iter());
 			assert_eq!(MapVec::get(1), vec![1, 2, 3, 4, 5]);
 
-			let _ = JustVec::append(&[1, 2, 3]);
-			let _ = JustVec::append(&[4, 5]);
+			let _ = JustVec::append([1, 2, 3].iter());
+			let _ = JustVec::append([4, 5].iter());
 			assert_eq!(JustVec::get(), vec![1, 2, 3, 4, 5]);
 		});
 	}
+
+	#[test]
+	fn append_works_for_default() {
+		TestExternalities::default().execute_with(|| {
+			assert_eq!(JustVecWithDefault::get(), vec![6, 9]);
+			let _ = JustVecWithDefault::append([1].iter());
+			assert_eq!(JustVecWithDefault::get(), vec![6, 9, 1]);
+
+			assert_eq!(MapVecWithDefault::get(0), vec![6, 9]);
+			let _ = MapVecWithDefault::append(0, [1].iter());
+			assert_eq!(MapVecWithDefault::get(0), vec![6, 9, 1]);
+
+			assert_eq!(OptionVec::get(), None);
+			let _ = OptionVec::append([1].iter());
+			assert_eq!(OptionVec::get(), Some(vec![1]));
+		});
+	}
+
+	#[test]
+	fn append_or_put_works() {
+		TestExternalities::default().execute_with(|| {
+			let _ = MapVec::append_or_insert(1, &[1, 2, 3][..]);
+			let _ = MapVec::append_or_insert(1, &[4, 5][..]);
+			assert_eq!(MapVec::get(1), vec![1, 2, 3, 4, 5]);
+
+			let _ = JustVec::append_or_put(&[1, 2, 3][..]);
+			let _ = JustVec::append_or_put(&[4, 5][..]);
+			assert_eq!(JustVec::get(), vec![1, 2, 3, 4, 5]);
+
+			let _ = OptionVec::append_or_put(&[1, 2, 3][..]);
+			let _ = OptionVec::append_or_put(&[4, 5][..]);
+			assert_eq!(OptionVec::get(), Some(vec![1, 2, 3, 4, 5]));
+		});
+	}
+
+	#[test]
+	fn len_works() {
+		TestExternalities::default().execute_with(|| {
+			JustVec::put(&vec![1, 2, 3, 4]);
+			OptionVec::put(&vec![1, 2, 3, 4, 5]);
+			MapVec::insert(1, &vec![1, 2, 3, 4, 5, 6]);
+			LinkedMapVec::insert(2, &vec![1, 2, 3]);
+
+			assert_eq!(JustVec::decode_len().unwrap(), 4);
+			assert_eq!(OptionVec::decode_len().unwrap(), 5);
+			assert_eq!(MapVec::decode_len(1).unwrap(), 6);
+			assert_eq!(LinkedMapVec::decode_len(2).unwrap(), 3);
+		});
+	}
+
+	#[test]
+	fn len_works_for_default() {
+		TestExternalities::default().execute_with(|| {
+			// vec
+			assert_eq!(JustVec::get(), vec![]);
+			assert_eq!(JustVec::decode_len(), Ok(0));
+
+			assert_eq!(JustVecWithDefault::get(), vec![6, 9]);
+			assert_eq!(JustVecWithDefault::decode_len(), Ok(2));
+
+			assert_eq!(OptionVec::get(), None);
+			assert_eq!(OptionVec::decode_len(), Ok(0));
+
+			// map
+			assert_eq!(MapVec::get(0), vec![]);
+			assert_eq!(MapVec::decode_len(0), Ok(0));
+
+			assert_eq!(MapVecWithDefault::get(0), vec![6, 9]);
+			assert_eq!(MapVecWithDefault::decode_len(0), Ok(2));
+
+			assert_eq!(OptionMapVec::get(0), None);
+			assert_eq!(OptionMapVec::decode_len(0), Ok(0));
+
+			// linked map
+			assert_eq!(LinkedMapVec::get(0), vec![]);
+			assert_eq!(LinkedMapVec::decode_len(0), Ok(0));
+
+			assert_eq!(LinkedMapVecWithDefault::get(0), vec![6, 9]);
+			assert_eq!(LinkedMapVecWithDefault::decode_len(0), Ok(2));
+
+			assert_eq!(OptionLinkedMapVec::get(0), None);
+			assert_eq!(OptionLinkedMapVec::decode_len(0), Ok(0));
+		});
+	}
 }
-
-

@@ -14,39 +14,68 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Temporary crate for contracts implementations.
+//! A crate that provides means of executing/dispatching calls into the runtime.
 //!
-//! This will be replaced with WASM contracts stored on-chain.
-//! ** NOTE ***
-//! This is entirely deprecated with the idea of a single-module Wasm module for state transition.
-//! The dispatch table should be replaced with the specific functions needed:
-//! - execute_block(bytes)
-//! - init_block(PrevBlock?) -> InProgressBlock
-//! - add_transaction(InProgressBlock) -> InProgressBlock
-//! It is left as is for now as it might be removed before this is ever done.
+//! There are a few responsibilities of this crate at the moment:
+//!
+//! - It provides an implementation of a common entrypoint for calling into the runtime, both
+//! wasm and compiled.
+//! - It defines the environment for the wasm execution, namely the host functions that are to be
+//! provided into the wasm runtime module.
+//! - It also provides the required infrastructure for executing the current wasm runtime (specified
+//! by the current value of `:code` in the provided externalities), i.e. interfacing with
+//! wasm engine used, instance cache.
 
 #![warn(missing_docs)]
 #![recursion_limit="128"]
 
 #[macro_use]
 mod wasm_utils;
-mod wasm_executor;
+mod wasmi_execution;
 #[macro_use]
 mod native_executor;
 mod sandbox;
 mod allocator;
-mod wasm_runtimes_cache;
+mod host_interface;
+mod wasm_runtime;
 
 pub mod error;
 pub use wasmi;
-pub use wasm_executor::WasmExecutor;
 pub use native_executor::{with_native_environment, NativeExecutor, NativeExecutionDispatch};
-pub use wasm_runtimes_cache::RuntimesCache;
-pub use state_machine::Externalities;
 pub use runtime_version::{RuntimeVersion, NativeVersion};
 pub use codec::Codec;
 #[doc(hidden)]
-pub use primitives::Blake2Hasher;
+pub use primitives::traits::Externalities;
+#[doc(hidden)]
+pub use wasm_interface;
+pub use wasm_runtime::WasmExecutionMethod;
+
+/// Call the given `function` in the given wasm `code`.
+///
+/// The signature of `function` needs to follow the default Substrate function signature.
+///
+/// - `call_data`: Will be given as input parameters to `function`
+/// - `execution_method`: The execution method to use.
+/// - `ext`: The externalities that should be set while executing the wasm function.
+/// - `heap_pages`: The number of heap pages to allocate.
+///
+/// Returns the `Vec<u8>` that contains the return value of the function.
+pub fn call_in_wasm<E: Externalities>(
+	function: &str,
+	call_data: &[u8],
+	execution_method: WasmExecutionMethod,
+	ext: &mut E,
+	code: &[u8],
+	heap_pages: u64,
+) -> error::Result<Vec<u8>> {
+	let mut instance = wasm_runtime::create_wasm_runtime_with_code(
+		ext,
+		execution_method,
+		heap_pages,
+		code,
+	)?;
+	instance.call(ext, function, call_data)
+}
 
 /// Provides runtime information.
 pub trait RuntimeInfo {
@@ -54,8 +83,30 @@ pub trait RuntimeInfo {
 	fn native_version(&self) -> &NativeVersion;
 
 	/// Extract RuntimeVersion of given :code block
-	fn runtime_version<E: Externalities<Blake2Hasher>> (
+	fn runtime_version<E: Externalities> (
 		&self,
 		ext: &mut E,
 	) -> Option<RuntimeVersion>;
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use runtime_test::WASM_BINARY;
+	use runtime_io::TestExternalities;
+
+	#[test]
+	fn call_in_interpreted_wasm_works() {
+		let mut ext = TestExternalities::default();
+		let mut ext = ext.ext();
+		let res = call_in_wasm(
+			"test_empty_return",
+			&[],
+			WasmExecutionMethod::Interpreted,
+			&mut ext,
+			&WASM_BINARY,
+			8,
+		).unwrap();
+		assert_eq!(res, vec![0u8; 0]);
+	}
 }

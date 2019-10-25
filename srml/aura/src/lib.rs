@@ -49,12 +49,12 @@ pub use timestamp;
 
 use rstd::{result, prelude::*};
 use codec::{Encode, Decode};
-use srml_support::{
-	decl_storage, decl_module, Parameter, storage::StorageValue, traits::{Get, FindAuthor},
+use support::{
+	decl_storage, decl_module, Parameter, traits::{Get, FindAuthor},
 	ConsensusEngineId,
 };
-use app_crypto::AppPublic;
 use sr_primitives::{
+	RuntimeAppPublic,
 	traits::{SaturatedConversion, Saturating, Zero, Member, IsMember}, generic::DigestItem,
 };
 use timestamp::OnTimestampSet;
@@ -142,28 +142,20 @@ impl ProvideInherentData for InherentDataProvider {
 
 pub trait Trait: timestamp::Trait {
 	/// The identifier type for an authority.
-	type AuthorityId: Member + Parameter + AppPublic + Default;
+	type AuthorityId: Member + Parameter + RuntimeAppPublic + Default;
 }
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Aura {
 		/// The last timestamp.
-		LastTimestamp get(last) build(|_| 0.into()): T::Moment;
+		LastTimestamp get(fn last) build(|_| 0.into()): T::Moment;
 
 		/// The current authorities
-		pub Authorities get(authorities): Vec<T::AuthorityId>;
+		pub Authorities get(fn authorities): Vec<T::AuthorityId>;
 	}
 	add_extra_genesis {
 		config(authorities): Vec<T::AuthorityId>;
-		build(|
-			storage: &mut (sr_primitives::StorageOverlay, sr_primitives::ChildrenStorageOverlay),
-			config: &GenesisConfig<T>
-		| {
-			runtime_io::with_storage(
-				storage,
-				|| Module::<T>::initialize_authorities(&config.authorities),
-			);
-		})
+		build(|config| Module::<T>::initialize_authorities(&config.authorities))
 	}
 }
 
@@ -185,7 +177,7 @@ impl<T: Trait> Module<T> {
 	fn initialize_authorities(authorities: &[T::AuthorityId]) {
 		if !authorities.is_empty() {
 			assert!(<Authorities<T>>::get().is_empty(), "Authorities are already initialized!");
-			<Authorities<T>>::put_ref(authorities);
+			<Authorities<T>>::put(authorities);
 		}
 	}
 }
@@ -258,7 +250,7 @@ impl<T: Trait> Module<T> {
 
 	fn on_timestamp_set(now: T::Moment, slot_duration: T::Moment) {
 		let last = Self::last();
-		<Self as Store>::LastTimestamp::put(now.clone());
+		<Self as Store>::LastTimestamp::put(now);
 
 		if last.is_zero() {
 			return;
@@ -266,7 +258,7 @@ impl<T: Trait> Module<T> {
 
 		assert!(!slot_duration.is_zero(), "Aura slot duration cannot be zero.");
 
-		let last_slot = last / slot_duration.clone();
+		let last_slot = last / slot_duration;
 		let cur_slot = now / slot_duration;
 
 		assert!(last_slot < cur_slot, "Only one block may be authored per slot.");

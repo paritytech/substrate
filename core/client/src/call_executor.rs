@@ -17,16 +17,18 @@
 use std::{sync::Arc, cmp::Ord, panic::UnwindSafe, result, cell::RefCell, rc::Rc};
 use codec::{Encode, Decode};
 use sr_primitives::{
-	generic::BlockId, traits::Block as BlockT,
+	generic::BlockId, traits::Block as BlockT, traits::NumberFor,
 };
 use state_machine::{
-	self, OverlayedChanges, Ext, CodeExecutor, ExecutionManager,
-	ExecutionStrategy, NeverOffchainExt, backend::Backend as _,
+	self, OverlayedChanges, Ext, ExecutionManager, StateMachine, ExecutionStrategy,
+	backend::Backend as _, ChangesTrieTransaction,
 };
 use executor::{RuntimeVersion, RuntimeInfo, NativeVersion};
 use hash_db::Hasher;
-use trie::MemoryDB;
-use primitives::{offchain, H256, Blake2Hasher, NativeOrEncoded, NeverNativeValue};
+use primitives::{
+	offchain::OffchainExt, H256, Blake2Hasher, NativeOrEncoded, NeverNativeValue,
+	traits::{CodeExecutor, KeystoreExt},
+};
 
 use crate::runtime_api::{ProofRecorder, InitializeBlock};
 use crate::backend;
@@ -45,15 +47,13 @@ where
 	/// Execute a call to a contract on top of state in a block of given hash.
 	///
 	/// No changes are made.
-	fn call<
-		O: offchain::Externalities,
-	>(
+	fn call(
 		&self,
 		id: &BlockId<B>,
 		method: &str,
 		call_data: &[u8],
 		strategy: ExecutionStrategy,
-		side_effects_handler: Option<&mut O>,
+		side_effects_handler: Option<OffchainExt>,
 	) -> Result<Vec<u8>, error::Error>;
 
 	/// Execute a contextual call on top of state in a block of a given hash.
@@ -63,14 +63,13 @@ where
 	/// of the execution context.
 	fn contextual_call<
 		'a,
-		O: offchain::Externalities,
 		IB: Fn() -> error::Result<()>,
 		EM: Fn(
 			Result<NativeOrEncoded<R>, Self::Error>,
 			Result<NativeOrEncoded<R>, Self::Error>
 		) -> Result<NativeOrEncoded<R>, Self::Error>,
 		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
+		NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
 	>(
 		&self,
 		initialize_block_fn: IB,
@@ -81,7 +80,7 @@ where
 		initialize_block: InitializeBlock<'a, B>,
 		execution_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
-		side_effects_handler: Option<&mut O>,
+		side_effects_handler: Option<OffchainExt>,
 		proof_recorder: &Option<Rc<RefCell<ProofRecorder<B>>>>,
 		enable_keystore: bool,
 	) -> error::Result<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone;
@@ -95,14 +94,13 @@ where
 	///
 	/// No changes are made.
 	fn call_at_state<
-		O: offchain::Externalities,
 		S: state_machine::Backend<H>,
 		F: FnOnce(
 			Result<NativeOrEncoded<R>, Self::Error>,
-			Result<NativeOrEncoded<R>, Self::Error>
+			Result<NativeOrEncoded<R>, Self::Error>,
 		) -> Result<NativeOrEncoded<R>, Self::Error>,
 		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
+		NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
 	>(&self,
 		state: &S,
 		overlay: &mut OverlayedChanges,
@@ -110,8 +108,15 @@ where
 		call_data: &[u8],
 		manager: ExecutionManager<F>,
 		native_call: Option<NC>,
-		side_effects_handler: Option<&mut O>,
-	) -> Result<(NativeOrEncoded<R>, (S::Transaction, H::Out), Option<MemoryDB<H>>), error::Error>;
+		side_effects_handler: Option<OffchainExt>,
+	) -> Result<
+		(
+			NativeOrEncoded<R>,
+			(S::Transaction, H::Out),
+			Option<ChangesTrieTransaction<Blake2Hasher, NumberFor<B>>>
+		),
+		error::Error,
+	>;
 
 	/// Execute a call to a contract on top of given state, gathering execution proof.
 	///
@@ -182,22 +187,22 @@ impl<B, E> Clone for LocalCallExecutor<B, E> where E: Clone {
 impl<B, E, Block> CallExecutor<Block, Blake2Hasher> for LocalCallExecutor<B, E>
 where
 	B: backend::Backend<Block, Blake2Hasher>,
-	E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
+	E: CodeExecutor + RuntimeInfo,
 	Block: BlockT<Hash=H256>,
 {
 	type Error = E::Error;
 
-	fn call<O: offchain::Externalities>(
+	fn call(
 		&self,
 		id: &BlockId<Block>,
 		method: &str,
 		call_data: &[u8],
 		strategy: ExecutionStrategy,
-		side_effects_handler: Option<&mut O>,
+		side_effects_handler: Option<OffchainExt>,
 	) -> error::Result<Vec<u8>> {
 		let mut changes = OverlayedChanges::default();
 		let state = self.backend.state_at(*id)?;
-		let return_data = state_machine::new(
+		let return_data = StateMachine::new(
 			&state,
 			self.backend.changes_trie_storage(),
 			side_effects_handler,
@@ -205,7 +210,7 @@ where
 			&self.executor,
 			method,
 			call_data,
-			self.keystore.clone(),
+			self.keystore.clone().map(KeystoreExt),
 		).execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
 			strategy.get_manager(),
 			false,
@@ -218,14 +223,13 @@ where
 
 	fn contextual_call<
 		'a,
-		O: offchain::Externalities,
 		IB: Fn() -> error::Result<()>,
 		EM: Fn(
 			Result<NativeOrEncoded<R>, Self::Error>,
 			Result<NativeOrEncoded<R>, Self::Error>
 		) -> Result<NativeOrEncoded<R>, Self::Error>,
 		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
+		NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
 	>(
 		&self,
 		initialize_block_fn: IB,
@@ -236,7 +240,7 @@ where
 		initialize_block: InitializeBlock<'a, Block>,
 		execution_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
-		side_effects_handler: Option<&mut O>,
+		side_effects_handler: Option<OffchainExt>,
 		recorder: &Option<Rc<RefCell<ProofRecorder<Block>>>>,
 		enable_keystore: bool,
 	) -> Result<NativeOrEncoded<R>, error::Error> where ExecutionManager<EM>: Clone {
@@ -250,7 +254,7 @@ where
 		}
 
 		let keystore = if enable_keystore {
-			self.keystore.clone()
+			self.keystore.clone().map(KeystoreExt)
 		} else {
 			None
 		};
@@ -270,7 +274,7 @@ where
 					recorder.clone()
 				);
 
-				state_machine::new(
+				StateMachine::new(
 					&backend,
 					self.backend.changes_trie_storage(),
 					side_effects_handler,
@@ -288,7 +292,7 @@ where
 				.map(|(result, _, _)| result)
 				.map_err(Into::into)
 			}
-			None => state_machine::new(
+			None => StateMachine::new(
 				&state,
 				self.backend.changes_trie_storage(),
 				side_effects_handler,
@@ -317,7 +321,6 @@ where
 			&mut overlay,
 			&state,
 			self.backend.changes_trie_storage(),
-			NeverOffchainExt::new(),
 			None,
 		);
 		let version = self.executor.runtime_version(&mut ext);
@@ -326,14 +329,13 @@ where
 	}
 
 	fn call_at_state<
-		O: offchain::Externalities,
 		S: state_machine::Backend<Blake2Hasher>,
 		F: FnOnce(
 			Result<NativeOrEncoded<R>, Self::Error>,
-			Result<NativeOrEncoded<R>, Self::Error>
+			Result<NativeOrEncoded<R>, Self::Error>,
 		) -> Result<NativeOrEncoded<R>, Self::Error>,
 		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
+		NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
 	>(&self,
 		state: &S,
 		changes: &mut OverlayedChanges,
@@ -341,13 +343,13 @@ where
 		call_data: &[u8],
 		manager: ExecutionManager<F>,
 		native_call: Option<NC>,
-		side_effects_handler: Option<&mut O>,
+		side_effects_handler: Option<OffchainExt>,
 	) -> error::Result<(
 		NativeOrEncoded<R>,
 		(S::Transaction, <Blake2Hasher as Hasher>::Out),
-		Option<MemoryDB<Blake2Hasher>>,
+		Option<ChangesTrieTransaction<Blake2Hasher, NumberFor<Block>>>,
 	)> {
-		state_machine::new(
+		StateMachine::new(
 			state,
 			self.backend.changes_trie_storage(),
 			side_effects_handler,
@@ -355,7 +357,7 @@ where
 			&self.executor,
 			method,
 			call_data,
-			self.keystore.clone(),
+			self.keystore.clone().map(KeystoreExt),
 		).execute_using_consensus_failure_handler(
 			manager,
 			true,
@@ -382,7 +384,7 @@ where
 			&self.executor,
 			method,
 			call_data,
-			self.keystore.clone(),
+			self.keystore.clone().map(KeystoreExt),
 		)
 		.map_err(Into::into)
 	}

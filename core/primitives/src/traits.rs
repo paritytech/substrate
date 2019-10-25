@@ -16,11 +16,13 @@
 
 //! Shareable Substrate traits.
 
-#[cfg(feature = "std")]
 use crate::{crypto::KeyTypeId, ed25519, sr25519};
 
+use std::{fmt::{Debug, Display}, panic::UnwindSafe};
+
+pub use externalities::{Externalities, ExternalitiesExt};
+
 /// Something that generates, stores and provides access to keys.
-#[cfg(feature = "std")]
 pub trait BareCryptoStore: Send + Sync {
 	/// Returns all sr25519 public keys for the given key type.
 	fn sr25519_public_keys(&self, id: KeyTypeId) -> Vec<sr25519::Public>;
@@ -66,5 +68,30 @@ pub trait BareCryptoStore: Send + Sync {
 }
 
 /// A pointer to the key store.
-#[cfg(feature = "std")]
 pub type BareCryptoStorePtr = std::sync::Arc<parking_lot::RwLock<dyn BareCryptoStore>>;
+
+externalities::decl_extension! {
+	/// The keystore extension to register/retrieve from the externalities.
+	pub struct KeystoreExt(BareCryptoStorePtr);
+}
+
+/// Code execution engine.
+pub trait CodeExecutor: Sized + Send + Sync {
+	/// Externalities error type.
+	type Error: Display + Debug + Send + 'static;
+
+	/// Call a given method in the runtime. Returns a tuple of the result (either the output data
+	/// or an execution error) together with a `bool`, which is true if native execution was used.
+	fn call<
+		E: Externalities,
+		R: codec::Codec + PartialEq,
+		NC: FnOnce() -> Result<R, String> + UnwindSafe,
+	>(
+		&self,
+		ext: &mut E,
+		method: &str,
+		data: &[u8],
+		use_native: bool,
+		native_call: Option<NC>,
+	) -> (Result<crate::NativeOrEncoded<R>, Self::Error>, bool);
+}

@@ -12,6 +12,11 @@ args:
       long: sr25519
       help: Use Schnorr/Ristretto x25519/BIP39 cryptography
       takes_value: false
+  - secp256k1:
+      short: k
+      long: secp256k1
+      help: Use SECP256k1/ECDSA/BIP39 cryptography
+      takes_value: false
   - password:
       short: p
       long: password
@@ -23,7 +28,7 @@ args:
       long: network
       takes_value: true
       required: false
-      help: Specify a network. One of substrate (default), polkadot and kusama.
+      help: Specify a network. One of substrate (default), polkadot, kusama, or dothereum.
 subcommands:
   - generate:
       about: Generate a random account

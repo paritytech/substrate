@@ -16,8 +16,7 @@
 
 use criterion::{Criterion, criterion_group, criterion_main, black_box};
 use srml_system as system;
-use srml_support::{decl_module, decl_event, impl_outer_origin, impl_outer_event};
-use runtime_io::{with_externalities, Blake2Hasher};
+use support::{decl_module, decl_event, impl_outer_origin, impl_outer_event};
 use primitives::H256;
 use sr_primitives::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 
@@ -51,7 +50,7 @@ impl_outer_event! {
 	}
 }
 
-srml_support::parameter_types! {
+support::parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub const MaximumBlockWeight: u32 = 4 * 1024 * 1024;
 	pub const MaximumBlockLength: u32 = 4 * 1024 * 1024;
@@ -69,7 +68,6 @@ impl system::Trait for Runtime {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type WeightMultiplierUpdate = ();
 	type Event = Event;
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
@@ -82,13 +80,13 @@ impl module::Trait for Runtime {
 	type Event = Event;
 }
 
-fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+fn new_test_ext() -> runtime_io::TestExternalities {
 	system::GenesisConfig::default().build_storage::<Runtime>().unwrap().into()
 }
 
 fn deposit_events(n: usize) {
 	let mut t = new_test_ext();
-	with_externalities(&mut t, || {
+	t.execute_with(|| {
 		for _ in 0..n {
 			module::Module::<Runtime>::deposit_event(
 				module::Event::Complex(vec![1, 2, 3], 2, 3, 899)

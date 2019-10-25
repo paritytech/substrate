@@ -5,20 +5,21 @@ FROM phusion/baseimage:0.10.2 as builder
 LABEL maintainer="chevdor@gmail.com"
 LABEL description="This is the build stage for Substrate. Here we create the binary."
 
+ENV DEBIAN_FRONTEND=noninteractive
+
 ARG PROFILE=release
 WORKDIR /substrate
 
 COPY . /substrate
 
 RUN apt-get update && \
-	apt-get dist-upgrade -y && \
+	apt-get dist-upgrade -y -o Dpkg::Options::="--force-confold" && \
 	apt-get install -y cmake pkg-config libssl-dev git clang
 
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y && \
 	export PATH="$PATH:$HOME/.cargo/bin" && \
 	rustup toolchain install nightly && \
 	rustup target add wasm32-unknown-unknown --toolchain nightly && \
-	cargo install --git https://github.com/alexcrichton/wasm-gc && \
 	rustup default nightly && \
 	rustup default stable && \
 	cargo build "--$PROFILE"

@@ -14,9 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use srml_support::sr_primitives::generic;
-use srml_support::sr_primitives::traits::{BlakeTwo256, Block as _, Verify};
-use srml_support::codec::{Encode, Decode};
+use support::sr_primitives::generic;
+use support::sr_primitives::traits::{BlakeTwo256, Block as _, Verify};
+use support::codec::{Encode, Decode};
 use primitives::{H256, sr25519};
 use serde::{Serialize, Deserialize};
 
@@ -82,7 +82,7 @@ mod module {
 
 	pub trait Trait: system::Trait {}
 
-	srml_support::decl_module! {
+	support::decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 	}
 
@@ -99,10 +99,10 @@ mod module {
 		}
 	}
 
-	srml_support::decl_storage! {
+	support::decl_storage! {
 		trait Store for Module<T: Trait> as Actors {
 			/// requirements to enter and maintain status in roles
-			pub Parameters get(parameters) build(|config: &GenesisConfig| {
+			pub Parameters get(fn parameters) build(|config: &GenesisConfig| {
 				if config.enable_storage_role {
 					let storage_params: RoleParameters<T> = Default::default();
 					vec![(Role::Storage, storage_params)]
@@ -112,7 +112,7 @@ mod module {
 			}): map Role => Option<RoleParameters<T>>;
 
 			/// the roles members can enter into
-			pub AvailableRoles get(available_roles) build(|config: &GenesisConfig| {
+			pub AvailableRoles get(fn available_roles) build(|config: &GenesisConfig| {
 				if config.enable_storage_role {
 					vec![(Role::Storage)]
 				} else {
@@ -121,13 +121,13 @@ mod module {
 			}): Vec<Role>;
 
 			/// Actors list
-			pub ActorAccountIds get(actor_account_ids) : Vec<T::AccountId>;
+			pub ActorAccountIds get(fn actor_account_ids) : Vec<T::AccountId>;
 
 			/// actor accounts associated with a role
-			pub AccountIdsByRole get(account_ids_by_role) : map Role => Vec<T::AccountId>;
+			pub AccountIdsByRole get(fn account_ids_by_role) : map Role => Vec<T::AccountId>;
 
 			/// tokens locked until given block number
-			pub Bondage get(bondage) : map T::AccountId => T::BlockNumber;
+			pub Bondage get(fn bondage) : map T::AccountId => T::BlockNumber;
 
 			/// First step before enter a role is registering intent with a new account/key.
 			/// This is done by sending a role_entry_request() from the new account.
@@ -135,10 +135,10 @@ mod module {
 			/// The account making the request will be bonded and must have
 			/// sufficient balance to cover the minimum stake for the role.
 			/// Bonding only occurs after successful entry into a role.
-			pub RoleEntryRequests get(role_entry_requests) : Requests<T>;
+			pub RoleEntryRequests get(fn role_entry_requests) : Requests<T>;
 
 			/// Entry request expires after this number of blocks
-			pub RequestLifeTime get(request_life_time) config(request_life_time) : u64 = 0;
+			pub RequestLifeTime get(fn request_life_time) config(request_life_time) : u64 = 0;
 		}
 		add_extra_genesis {
 			config(enable_storage_role): bool;
@@ -164,7 +164,7 @@ impl system::Trait for Runtime {
 
 impl module::Trait for Runtime {}
 
-srml_support::construct_runtime!(
+support::construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
 		NodeBlock = Block,

@@ -22,8 +22,8 @@ use std::collections::HashSet;
 use ref_thread_local::{ref_thread_local, RefThreadLocal};
 use sr_primitives::testing::Header;
 use sr_primitives::Perbill;
-use primitives::{H256, Blake2Hasher};
-use srml_support::{impl_outer_origin, parameter_types};
+use primitives::H256;
+use support::{impl_outer_origin, parameter_types};
 use {runtime_io, system};
 use crate::{GenesisConfig, Module, Trait, IsDeadAccount, OnNewAccount, ResolveHint};
 
@@ -81,7 +81,6 @@ impl system::Trait for Runtime {
 	type AccountId = u64;
 	type Lookup = Indices;
 	type Header = Header;
-	type WeightMultiplierUpdate = ();
 	type Event = ();
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
@@ -96,7 +95,7 @@ impl Trait for Runtime {
 	type Event = ();
 }
 
-pub fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+pub fn new_test_ext() -> runtime_io::TestExternalities {
 	{
 		let mut h = ALIVE.borrow_mut();
 		h.clear();

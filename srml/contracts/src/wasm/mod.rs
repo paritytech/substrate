@@ -173,7 +173,7 @@ mod tests {
 	}
 
 	#[derive(Debug, PartialEq, Eq)]
-	struct CreateEntry {
+	struct InstantiateEntry {
 		code_hash: H256,
 		endowment: u64,
 		data: Vec<u8>,
@@ -192,7 +192,7 @@ mod tests {
 	pub struct MockExt {
 		storage: HashMap<StorageKey, Vec<u8>>,
 		rent_allowance: u64,
-		creates: Vec<CreateEntry>,
+		instantiates: Vec<InstantiateEntry>,
 		transfers: Vec<TransferEntry>,
 		dispatches: Vec<DispatchEntry>,
 		restores: Vec<RestoreEntry>,
@@ -220,7 +220,7 @@ mod tests {
 			gas_meter: &mut GasMeter<Test>,
 			data: Vec<u8>,
 		) -> Result<(u64, ExecReturnValue), ExecError> {
-			self.creates.push(CreateEntry {
+			self.instantiates.push(InstantiateEntry {
 				code_hash: code_hash.clone(),
 				endowment,
 				data: data.to_vec(),
@@ -280,6 +280,10 @@ mod tests {
 
 		fn now(&self) -> &u64 {
 			&1111
+		}
+
+		fn minimum_balance(&self) -> u64 {
+			666
 		}
 
 		fn random(&self, subject: &[u8]) -> H256 {
@@ -363,6 +367,9 @@ mod tests {
 		}
 		fn now(&self) -> &u64 {
 			(**self).now()
+		}
+		fn minimum_balance(&self) -> u64 {
+			(**self).minimum_balance()
 		}
 		fn random(&self, subject: &[u8]) -> H256 {
 			(**self).random(subject)
@@ -464,14 +471,14 @@ mod tests {
 				to: 9,
 				value: 6,
 				data: vec![1, 2, 3, 4],
-				gas_left: 49970,
+				gas_left: 49971,
 			}]
 		);
 	}
 
-	const CODE_CREATE: &str = r#"
+	const CODE_INSTANTIATE: &str = r#"
 (module
-	;; ext_create(
+	;; ext_instantiate(
 	;;     code_ptr: u32,
 	;;     code_len: u32,
 	;;     gas: u64,
@@ -480,11 +487,11 @@ mod tests {
 	;;     input_data_ptr: u32,
 	;;     input_data_len: u32,
 	;; ) -> u32
-	(import "env" "ext_create" (func $ext_create (param i32 i32 i64 i32 i32 i32 i32) (result i32)))
+	(import "env" "ext_instantiate" (func $ext_instantiate (param i32 i32 i64 i32 i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 	(func (export "call")
 		(drop
-			(call $ext_create
+			(call $ext_instantiate
 				(i32.const 16)   ;; Pointer to `code_hash`
 				(i32.const 32)   ;; Length of `code_hash`
 				(i64.const 0)    ;; How much gas to devote for the execution. 0 = all.
@@ -500,7 +507,7 @@ mod tests {
 	;; Amount of value to transfer.
 	;; Represented by u64 (8 bytes long) in little endian.
 	(data (i32.const 4) "\03\00\00\00\00\00\00\00")
-	;; Input data to pass to the contract being created.
+	;; Input data to pass to the contract being instantiated.
 	(data (i32.const 12) "\01\02\03\04")
 	;; Hash of code.
 	(data (i32.const 16)
@@ -511,22 +518,22 @@ mod tests {
 "#;
 
 	#[test]
-	fn contract_create() {
+	fn contract_instantiate() {
 		let mut mock_ext = MockExt::default();
 		let _ = execute(
-			CODE_CREATE,
+			CODE_INSTANTIATE,
 			vec![],
 			&mut mock_ext,
 			&mut GasMeter::with_limit(50_000, 1),
 		).unwrap();
 
 		assert_eq!(
-			&mock_ext.creates,
-			&[CreateEntry {
+			&mock_ext.instantiates,
+			&[InstantiateEntry {
 				code_hash: [0x11; 32].into(),
 				endowment: 3,
 				data: vec![1, 2, 3, 4],
-				gas_left: 49946,
+				gas_left: 49947,
 			}]
 		);
 	}
@@ -1176,6 +1183,65 @@ mod tests {
 		).unwrap();
 	}
 
+	const CODE_MINIMUM_BALANCE: &str = r#"
+(module
+	(import "env" "ext_minimum_balance" (func $ext_minimum_balance))
+	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
+	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	(func $assert (param i32)
+		(block $ok
+			(br_if $ok
+				(get_local 0)
+			)
+			(unreachable)
+		)
+	)
+
+	(func (export "call")
+		(call $ext_minimum_balance)
+
+		;; assert $ext_scratch_size == 8
+		(call $assert
+			(i32.eq
+				(call $ext_scratch_size)
+				(i32.const 8)
+			)
+		)
+
+		;; copy contents of the scratch buffer into the contract's memory.
+		(call $ext_scratch_read
+			(i32.const 8)		;; Pointer in memory to the place where to copy.
+			(i32.const 0)		;; Offset from the start of the scratch buffer.
+			(i32.const 8)		;; Count of bytes to copy.
+		)
+
+		;; assert that contents of the buffer is equal to the i64 value of 666.
+		(call $assert
+			(i64.eq
+				(i64.load
+					(i32.const 8)
+				)
+				(i64.const 666)
+			)
+		)
+	)
+	(func (export "deploy"))
+)
+"#;
+
+	#[test]
+	fn minimum_balance() {
+		let mut gas_meter = GasMeter::with_limit(50_000, 1);
+		let _ = execute(
+			CODE_MINIMUM_BALANCE,
+			vec![],
+			MockExt::default(),
+			&mut gas_meter,
+		).unwrap();
+	}
+
 	const CODE_RANDOM: &str = r#"
 (module
 	(import "env" "ext_random" (func $ext_random (param i32 i32)))
@@ -1293,11 +1359,7 @@ mod tests {
 			vec![0x00, 0x01, 0x2a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xe5, 0x14, 0x00])
 		]);
 
-		assert_eq!(gas_meter.gas_left(), 50_000
-			- 6            // Explicit
-			- 13 - 1 - 1   // Deposit event
-			- (13 + 33)    // read memory
-		);
+		assert_eq!(gas_meter.gas_left(), 49934);
 	}
 
 	const CODE_DEPOSIT_EVENT_MAX_TOPICS: &str = r#"

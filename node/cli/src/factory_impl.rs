@@ -23,17 +23,22 @@ use rand::rngs::StdRng;
 
 use codec::{Encode, Decode};
 use keyring::sr25519::Keyring;
-use node_runtime::{Call, CheckedExtrinsic, UncheckedExtrinsic, SignedExtra, BalancesCall, ExistentialDeposit};
+use node_runtime::{
+	Call, CheckedExtrinsic, UncheckedExtrinsic, SignedExtra, BalancesCall, ExistentialDeposit,
+	MinimumPeriod
+};
+use node_primitives::Signature;
 use primitives::{sr25519, crypto::Pair};
-use sr_primitives::{generic::Era, traits::{Block as BlockT, Header as HeaderT, SignedExtension}};
+use sr_primitives::{
+	generic::Era, traits::{Block as BlockT, Header as HeaderT, SignedExtension, Verify, IdentifyAccount}
+};
 use transaction_factory::RuntimeAdapter;
 use transaction_factory::modes::Mode;
 use inherents::InherentData;
 use timestamp;
 use finality_tracker;
 
-// TODO get via api: <T as timestamp::Trait>::MinimumPeriod::get(). See #2587.
-const MINIMUM_PERIOD: u64 = 99;
+type AccountPublic = <Signature as Verify>::Signer;
 
 pub struct FactoryState<N> {
 	block_no: N,
@@ -56,7 +61,8 @@ impl<Number> FactoryState<Number> {
 			system::CheckEra::from(Era::mortal(256, phase)),
 			system::CheckNonce::from(index),
 			system::CheckWeight::new(),
-			balances::TakeFees::from(0)
+			transaction_payment::ChargeTransactionPayment::from(0),
+			Default::default(),
 		)
 	}
 }
@@ -147,11 +153,11 @@ impl RuntimeAdapter for FactoryState<Number> {
 					(*amount).into()
 				)
 			)
-		}, key, (version, genesis_hash.clone(), prior_block_hash.clone(), (), (), ()))
+		}, key, (version, genesis_hash.clone(), prior_block_hash.clone(), (), (), (), ()))
 	}
 
 	fn inherent_extrinsics(&self) -> InherentData {
-		let timestamp = self.block_no as u64 * MINIMUM_PERIOD;
+		let timestamp = (self.block_no as u64 + 1) * MinimumPeriod::get();
 
 		let mut inherent = InherentData::new();
 		inherent.put_data(timestamp::INHERENT_IDENTIFIER, &timestamp)
@@ -162,12 +168,11 @@ impl RuntimeAdapter for FactoryState<Number> {
 	}
 
 	fn minimum_balance() -> Self::Balance {
-		// TODO get correct amount via api. See #2587.
 		ExistentialDeposit::get()
 	}
 
 	fn master_account_id() -> Self::AccountId {
-		Keyring::Alice.pair().public()
+		Keyring::Alice.to_account_id()
 	}
 
 	fn master_account_secret() -> Self::Secret {
@@ -177,7 +182,7 @@ impl RuntimeAdapter for FactoryState<Number> {
 	/// Generates a random `AccountId` from `seed`.
 	fn gen_random_account_id(seed: &Self::Number) -> Self::AccountId {
 		let pair: sr25519::Pair = sr25519::Pair::from_seed(&gen_seed_bytes(*seed));
-		pair.public().into()
+		AccountPublic::from(pair.public()).into_account()
 	}
 
 	/// Generates a random `Secret` from `seed`.

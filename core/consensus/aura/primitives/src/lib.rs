@@ -23,38 +23,38 @@ use substrate_client::decl_runtime_apis;
 use rstd::vec::Vec;
 use sr_primitives::ConsensusEngineId;
 
-mod app_sr25519 {
-	use app_crypto::{app_crypto, key_types::AURA, sr25519};
-	app_crypto!(sr25519, AURA);
-}
-
 pub mod sr25519 {
+	mod app_sr25519 {
+		use app_crypto::{app_crypto, key_types::AURA, sr25519};
+		app_crypto!(sr25519, AURA);
+	}
+
 	/// An Aura authority keypair using S/R 25519 as its crypto.
 	#[cfg(feature = "std")]
-	pub type AuthorityPair = super::app_sr25519::Pair;
+	pub type AuthorityPair = app_sr25519::Pair;
 
 	/// An Aura authority signature using S/R 25519 as its crypto.
-	pub type AuthoritySignature = super::app_sr25519::Signature;
+	pub type AuthoritySignature = app_sr25519::Signature;
 
 	/// An Aura authority identifier using S/R 25519 as its crypto.
-	pub type AuthorityId = super::app_sr25519::Public;
-}
-
-mod app_ed25519 {
-	use app_crypto::{app_crypto, key_types::AURA, ed25519};
-	app_crypto!(ed25519, AURA);
+	pub type AuthorityId = app_sr25519::Public;
 }
 
 pub mod ed25519 {
+	mod app_ed25519 {
+		use app_crypto::{app_crypto, key_types::AURA, ed25519};
+		app_crypto!(ed25519, AURA);
+	}
+
 	/// An Aura authority keypair using Ed25519 as its crypto.
 	#[cfg(feature = "std")]
-	pub type AuthorityPair = super::app_ed25519::Pair;
+	pub type AuthorityPair = app_ed25519::Pair;
 
 	/// An Aura authority signature using Ed25519 as its crypto.
-	pub type AuthoritySignature = super::app_ed25519::Signature;
+	pub type AuthoritySignature = app_ed25519::Signature;
 
 	/// An Aura authority identifier using Ed25519 as its crypto.
-	pub type AuthorityId = super::app_ed25519::Public;
+	pub type AuthorityId = app_ed25519::Public;
 }
 
 /// The `ConsensusEngineId` of AuRa.

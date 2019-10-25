@@ -41,6 +41,7 @@ use crate::{crypto::{Public as TraitPublic, UncheckedFrom, CryptoType, Derive}};
 type Seed = [u8; 32];
 
 /// A public key.
+#[cfg_attr(feature = "std", derive(Hash))]
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default)]
 pub struct Public(pub [u8; 32]);
 
@@ -129,11 +130,16 @@ impl std::fmt::Display for Public {
 	}
 }
 
-#[cfg(feature = "std")]
-impl std::fmt::Debug for Public {
-	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl rstd::fmt::Debug for Public {
+	#[cfg(feature = "std")]
+	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
 		let s = self.to_ss58check();
 		write!(f, "{} ({}...)", crate::hexdisplay::HexDisplay::from(&self.0), &s[0..8])
+	}
+
+	#[cfg(not(feature = "std"))]
+	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+		Ok(())
 	}
 }
 
@@ -149,13 +155,6 @@ impl<'de> Deserialize<'de> for Public {
 	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
 		Public::from_ss58check(&String::deserialize(deserializer)?)
 			.map_err(|e| de::Error::custom(format!("{:?}", e)))
-	}
-}
-
-#[cfg(feature = "std")]
-impl std::hash::Hash for Public {
-	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-		self.0.hash(state);
 	}
 }
 
@@ -229,10 +228,15 @@ impl AsMut<[u8]> for Signature {
 	}
 }
 
-#[cfg(feature = "std")]
-impl std::fmt::Debug for Signature {
-	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl rstd::fmt::Debug for Signature {
+	#[cfg(feature = "std")]
+	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
 		write!(f, "{}", crate::hexdisplay::HexDisplay::from(&self.0))
+	}
+
+	#[cfg(not(feature = "std"))]
+	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+		Ok(())
 	}
 }
 
@@ -397,12 +401,15 @@ impl TraitPair for Pair {
 	fn from_seed_slice(seed_slice: &[u8]) -> Result<Pair, SecretStringError> {
 		let secret = ed25519_dalek::SecretKey::from_bytes(seed_slice)
 			.map_err(|_| SecretStringError::InvalidSeedLength)?;
-		let public = ed25519_dalek::PublicKey::from(&secret);
+		let public = ed25519_dalek::PublicKey::from(secret.expand::<sha2::Sha512>());
 		Ok(Pair(ed25519_dalek::Keypair { secret, public }))
 	}
 
 	/// Derive a child key from a series of given junctions.
-	fn derive<Iter: Iterator<Item=DeriveJunction>>(&self, path: Iter) -> Result<Pair, DeriveError> {
+	fn derive<Iter: Iterator<Item=DeriveJunction>>(&self,
+		path: Iter,
+		_seed: Option<Seed>,
+	) -> Result<(Pair, Option<Seed>), DeriveError> {
 		let mut acc = self.0.secret.to_bytes();
 		for j in path {
 			match j {
@@ -410,18 +417,7 @@ impl TraitPair for Pair {
 				DeriveJunction::Hard(cc) => acc = derive_hard_junction(&acc, &cc),
 			}
 		}
-		Ok(Self::from_seed(&acc))
-	}
-
-	/// Generate a key from the phrase, password and derivation path.
-	fn from_standard_components<I: Iterator<Item=DeriveJunction>>(
-		phrase: &str,
-		password: Option<&str>,
-		path: I
-	) -> Result<Pair, SecretStringError> {
-		Self::from_phrase(phrase, password)?.0
-			.derive(path)
-			.map_err(|_| SecretStringError::InvalidPath)
+		Ok((Self::from_seed(&acc), Some(acc)))
 	}
 
 	/// Get the public key.
@@ -434,7 +430,7 @@ impl TraitPair for Pair {
 
 	/// Sign a message.
 	fn sign(&self, message: &[u8]) -> Signature {
-		let r = self.0.sign(message).to_bytes();
+		let r = self.0.sign::<sha2::Sha512>(message).to_bytes();
 		Signature::from_raw(r)
 	}
 
@@ -458,7 +454,7 @@ impl TraitPair for Pair {
 			Err(_) => return false
 		};
 
-		match public_key.verify(message.as_ref(), &sig) {
+		match public_key.verify::<sha2::Sha512>(message.as_ref(), &sig) {
 			Ok(_) => true,
 			_ => false,
 		}
@@ -524,7 +520,7 @@ mod test {
 		let pair = Pair::from_seed(&seed);
 		assert_eq!(pair.seed(), &seed);
 		let path = vec![DeriveJunction::Hard([0u8; 32])];
-		let derived = pair.derive(path.into_iter()).ok().unwrap();
+		let derived = pair.derive(path.into_iter(), None).ok().unwrap().0;
 		assert_eq!(
 			derived.seed(),
 			&hex!("ede3354e133f9c8e337ddd6ee5415ed4b4ffe5fc7d21e933f4930a3730e5b21c")

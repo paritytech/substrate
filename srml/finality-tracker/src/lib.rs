@@ -22,12 +22,11 @@ use inherents::{
 	RuntimeString, InherentIdentifier, ProvideInherent,
 	InherentData, MakeFatalError,
 };
-use srml_support::StorageValue;
 use sr_primitives::traits::{One, Zero, SaturatedConversion};
 use rstd::{prelude::*, result, cmp, vec};
 use codec::Decode;
-use srml_support::{decl_module, decl_storage, for_each_tuple};
-use srml_support::traits::Get;
+use support::{decl_module, decl_storage};
+use support::traits::Get;
 use srml_system::{ensure_none, Trait as SystemTrait};
 
 #[cfg(feature = "std")]
@@ -97,17 +96,17 @@ pub trait Trait: SystemTrait {
 decl_storage! {
 	trait Store for Module<T: Trait> as Timestamp {
 		/// Recent hints.
-		RecentHints get(recent_hints) build(|_| vec![T::BlockNumber::zero()]): Vec<T::BlockNumber>;
+		RecentHints get(fn recent_hints) build(|_| vec![T::BlockNumber::zero()]): Vec<T::BlockNumber>;
 		/// Ordered recent hints.
-		OrderedHints get(ordered_hints) build(|_| vec![T::BlockNumber::zero()]): Vec<T::BlockNumber>;
+		OrderedHints get(fn ordered_hints) build(|_| vec![T::BlockNumber::zero()]): Vec<T::BlockNumber>;
 		/// The median.
-		Median get(median) build(|_| T::BlockNumber::zero()): T::BlockNumber;
+		Median get(fn median) build(|_| T::BlockNumber::zero()): T::BlockNumber;
 
 		/// Final hint to apply in the block. `None` means "same as parent".
 		Update: Option<T::BlockNumber>;
 
 		// when initialized through config this is set in the beginning.
-		Initialized get(initialized) build(|_| false): bool;
+		Initialized get(fn initialized) build(|_| false): bool;
 	}
 }
 
@@ -214,29 +213,12 @@ impl<T: Trait> Module<T> {
 }
 
 /// Called when finalization stalled at a given number.
+#[impl_trait_for_tuples::impl_for_tuples(30)]
 pub trait OnFinalizationStalled<N> {
 	/// The parameter here is how many more blocks to wait before applying
 	/// changes triggered by finality stalling.
 	fn on_stalled(further_wait: N, median: N);
 }
-
-macro_rules! impl_on_stalled {
-	() => (
-		impl<N> OnFinalizationStalled<N> for () {
-			fn on_stalled(_: N, _: N) {}
-		}
-	);
-
-	( $($t:ident)* ) => {
-		impl<NUM: Clone, $($t: OnFinalizationStalled<NUM>),*> OnFinalizationStalled<NUM> for ($($t,)*) {
-			fn on_stalled(further_wait: NUM, median: NUM) {
-				$($t::on_stalled(further_wait.clone(), median.clone());)*
-			}
-		}
-	}
-}
-
-for_each_tuple!(impl_on_stalled);
 
 impl<T: Trait> ProvideInherent for Module<T> {
 	type Call = Call<T>;
@@ -265,12 +247,13 @@ impl<T: Trait> ProvideInherent for Module<T> {
 mod tests {
 	use super::*;
 
-	use sr_io::{with_externalities, TestExternalities};
+	use runtime_io::TestExternalities;
 	use primitives::H256;
-	use sr_primitives::traits::{BlakeTwo256, IdentityLookup, OnFinalize, Header as HeaderT};
-	use sr_primitives::testing::Header;
-	use sr_primitives::Perbill;
-	use srml_support::{assert_ok, impl_outer_origin, parameter_types};
+	use sr_primitives::{
+		testing::Header, Perbill,
+		traits::{BlakeTwo256, IdentityLookup, OnFinalize, Header as HeaderT},
+	};
+	use support::{assert_ok, impl_outer_origin, parameter_types};
 	use srml_system as system;
 	use std::cell::RefCell;
 
@@ -315,7 +298,6 @@ mod tests {
 		type AccountId = u64;
 		type Lookup = IdentityLookup<u64>;
 		type Header = Header;
-		type WeightMultiplierUpdate = ();
 		type Event = ();
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
@@ -339,7 +321,7 @@ mod tests {
 	#[test]
 	fn median_works() {
 		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		with_externalities(&mut TestExternalities::new(t), || {
+		TestExternalities::new(t).execute_with(|| {
 			FinalityTracker::update_hint(Some(500));
 			assert_eq!(FinalityTracker::median(), 250);
 			assert!(NOTIFICATIONS.with(|n| n.borrow().is_empty()));
@@ -349,7 +331,7 @@ mod tests {
 	#[test]
 	fn notifies_when_stalled() {
 		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		with_externalities(&mut TestExternalities::new(t), || {
+		TestExternalities::new(t).execute_with(|| {
 			let mut parent_hash = System::parent_hash();
 			for i in 2..106 {
 				System::initialize(&i, &parent_hash, &Default::default(), &Default::default());
@@ -368,7 +350,7 @@ mod tests {
 	#[test]
 	fn recent_notifications_prevent_stalling() {
 		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		with_externalities(&mut TestExternalities::new(t), || {
+		TestExternalities::new(t).execute_with(|| {
 			let mut parent_hash = System::parent_hash();
 			for i in 2..106 {
 				System::initialize(&i, &parent_hash, &Default::default(), &Default::default());

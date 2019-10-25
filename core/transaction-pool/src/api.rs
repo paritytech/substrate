@@ -37,24 +37,24 @@ use sr_primitives::{
 use crate::error;
 
 /// The transaction pool logic
-pub struct ChainApi<T, Block> {
+pub struct FullChainApi<T, Block> {
 	client: Arc<T>,
 	_marker: PhantomData<Block>,
 }
 
-impl<T, Block> ChainApi<T, Block> where
+impl<T, Block> FullChainApi<T, Block> where
 	Block: traits::Block,
 	T: traits::ProvideRuntimeApi + HeaderBackend<Block> {
 	/// Create new transaction pool logic.
 	pub fn new(client: Arc<T>) -> Self {
-		ChainApi {
+		FullChainApi {
 			client,
 			_marker: Default::default()
 		}
 	}
 }
 
-impl<T, Block> txpool::ChainApi for ChainApi<T, Block> where
+impl<T, Block> txpool::ChainApi for FullChainApi<T, Block> where
 	Block: traits::Block<Hash=H256>,
 	T: traits::ProvideRuntimeApi + HeaderBackend<Block>,
 	T::Api: TaggedTransactionQueue<Block>
@@ -62,9 +62,14 @@ impl<T, Block> txpool::ChainApi for ChainApi<T, Block> where
 	type Block = Block;
 	type Hash = H256;
 	type Error = error::Error;
+	type ValidationFuture = futures::future::Ready<error::Result<TransactionValidity>>;
 
-	fn validate_transaction(&self, at: &BlockId<Self::Block>, uxt: txpool::ExtrinsicFor<Self>) -> error::Result<TransactionValidity> {
-		Ok(self.client.runtime_api().validate_transaction(at, uxt)?)
+	fn validate_transaction(
+		&self,
+		at: &BlockId<Self::Block>,
+		uxt: txpool::ExtrinsicFor<Self>,
+	) -> Self::ValidationFuture {
+		futures::future::ready(self.client.runtime_api().validate_transaction(at, uxt).map_err(Into::into))
 	}
 
 	fn block_id_to_number(&self, at: &BlockId<Self::Block>) -> error::Result<Option<txpool::NumberFor<Self>>> {

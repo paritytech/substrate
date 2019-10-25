@@ -25,7 +25,6 @@
 //!
 //! 1. Add a `build.rs` file.
 //! 2. Add `substrate-wasm-builder-runner` as dependency into `build-dependencies`.
-//! 3. Add a feature called `no-std`.
 //!
 //! The `build.rs` file needs to contain the following code:
 //!
@@ -41,8 +40,6 @@
 //! 	);
 //! }
 //! ```
-//!
-//! The `no-std` feature will be enabled by WASM builder while compiling your project to WASM.
 //!
 //! As the final step, you need to add the following to your project:
 //!
@@ -66,6 +63,8 @@
 //!                          needs to change. As WASM builder instructs `cargo` to watch for file changes
 //!                          this environment variable should only be required in certain circumstances.
 //! - `WASM_BUILD_RUSTFLAGS` - Extend `RUSTFLAGS` given to `cargo build` while building the WASM binary.
+//! - `WASM_TARGET_DIRECTORY` - Will copy any build WASM binary to the given directory. The path needs
+//!                            to be absolute.
 //!
 //! Each project can be skipped individually by using the environment variable `SKIP_PROJECT_NAME_WASM_BUILD`.
 //! Where `PROJECT_NAME` needs to be replaced by the name of the cargo project, e.g. `node-runtime` will
@@ -76,7 +75,6 @@
 //! WASM builder requires the following prerequisities for building the WASM binary:
 //!
 //! - rust nightly + `wasm32-unknown-unknown` toolchain
-//! - wasm-gc
 //!
 
 use std::{env, fs, path::PathBuf, process::{Command, Stdio, self}};
@@ -96,6 +94,11 @@ const WASM_BUILD_TYPE_ENV: &str = "WASM_BUILD_TYPE";
 /// Environment variable to extend the `RUSTFLAGS` variable given to the WASM build.
 const WASM_BUILD_RUSTFLAGS_ENV: &str = "WASM_BUILD_RUSTFLAGS";
 
+/// Environment variable to set the target directory to copy the final WASM binary.
+///
+/// The directory needs to be an absolute path.
+const WASM_TARGET_DIRECTORY: &str = "WASM_TARGET_DIRECTORY";
+
 /// Build the currently built project as WASM binary.
 ///
 /// The current project is determined by using the `CARGO_MANIFEST_DIR` environment variable.
@@ -104,6 +107,22 @@ const WASM_BUILD_RUSTFLAGS_ENV: &str = "WASM_BUILD_RUSTFLAGS";
 ///               constant `WASM_BINARY`, which contains the built WASM binary.
 /// `cargo_manifest` - The path to the `Cargo.toml` of the project that should be built.
 pub fn build_project(file_name: &str, cargo_manifest: &str) {
+	build_project_with_default_rustflags(file_name, cargo_manifest, "");
+}
+
+/// Build the currently built project as WASM binary.
+///
+/// The current project is determined by using the `CARGO_MANIFEST_DIR` environment variable.
+///
+/// `file_name` - The name + path of the file being generated. The file contains the
+///               constant `WASM_BINARY`, which contains the built WASM binary.
+/// `cargo_manifest` - The path to the `Cargo.toml` of the project that should be built.
+/// `default_rustflags` - Default `RUSTFLAGS` that will always be set for the build.
+pub fn build_project_with_default_rustflags(
+	file_name: &str,
+	cargo_manifest: &str,
+	default_rustflags: &str,
+) {
 	if check_skip_build() {
 		return;
 	}
@@ -123,10 +142,13 @@ pub fn build_project(file_name: &str, cargo_manifest: &str) {
 		process::exit(1);
 	}
 
-	let (wasm_binary, bloaty) = wasm_project::create_and_compile(&cargo_manifest);
+	let (wasm_binary, bloaty) = wasm_project::create_and_compile(
+		&cargo_manifest,
+		default_rustflags,
+	);
 
-	create_out_file(
-		file_name,
+	write_file_if_changed(
+		file_name.into(),
 		format!(
 			r#"
 				pub const WASM_BINARY: &[u8] = include_bytes!("{wasm_binary}");
@@ -143,11 +165,11 @@ fn check_skip_build() -> bool {
 	env::var(SKIP_BUILD_ENV).is_ok()
 }
 
-fn create_out_file(file_name: &str, content: String) {
-	fs::write(
-		file_name,
-		content
-	).expect("Creating and writing can not fail; qed");
+/// Write to the given `file` if the `content` is different.
+fn write_file_if_changed(file: PathBuf, content: String) {
+	if fs::read_to_string(&file).ok().as_ref() != Some(&content) {
+		fs::write(&file, content).expect(&format!("Writing `{}` can not fail!", file.display()));
+	}
 }
 
 /// Get a cargo command that compiles with nightly
@@ -183,9 +205,7 @@ impl CargoCommand {
 	}
 
 	fn args(&mut self, args: &[&str]) -> &mut Self {
-		for arg in args {
-			self.arg(arg);
-		}
+		args.into_iter().for_each(|a| { self.arg(a); });
 		self
 	}
 
@@ -205,12 +225,17 @@ impl CargoCommand {
 
 	/// Check if the supplied cargo command is a nightly version
 	fn is_nightly(&self) -> bool {
-		self.command()
-			.arg("--version")
-			.output()
-			.map_err(|_| ())
-			.and_then(|o| String::from_utf8(o.stdout).map_err(|_| ()))
-			.unwrap_or_default()
-			.contains("-nightly")
+		// `RUSTC_BOOTSTRAP` tells a stable compiler to behave like a nightly. So, when this env
+		// variable is set, we can assume that whatever rust compiler we have, it is a nightly compiler.
+		// For "more" information, see:
+		// https://github.com/rust-lang/rust/blob/fa0f7d0080d8e7e9eb20aa9cbf8013f96c81287f/src/libsyntax/feature_gate/check.rs#L891
+		env::var("RUSTC_BOOTSTRAP").is_ok() ||
+			self.command()
+				.arg("--version")
+				.output()
+				.map_err(|_| ())
+				.and_then(|o| String::from_utf8(o.stdout).map_err(|_| ()))
+				.unwrap_or_default()
+				.contains("-nightly")
 	}
 }

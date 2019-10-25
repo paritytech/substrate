@@ -19,8 +19,15 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use client::decl_runtime_apis;
-use codec::Codec;
 use rstd::vec::Vec;
+use sr_primitives::RuntimeDebug;
+
+#[derive(codec::Encode, codec::Decode, Eq, PartialEq, Clone, RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Hash))]
+pub struct Signature(pub Vec<u8>);
+#[derive(codec::Encode, codec::Decode, Eq, PartialEq, Clone, RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Hash))]
+pub struct AuthorityId(pub Vec<u8>);
 
 decl_runtime_apis! {
 	/// The authority discovery api.
@@ -29,21 +36,15 @@ decl_runtime_apis! {
 	/// own authority identifier, to retrieve identifiers of the current authority
 	/// set, as well as sign and verify Kademlia Dht external address payloads
 	/// from and to other authorities.
-	pub trait AuthorityDiscoveryApi<AuthorityId: Codec> {
-		/// Returns own authority identifier iff it is part of the current authority
-		/// set, otherwise this function returns None. The restriction might be
-		/// softened in the future in case a consumer needs to learn own authority
-		/// identifier.
-		fn authority_id() -> Option<AuthorityId>;
-
+	pub trait AuthorityDiscoveryApi {
 		/// Retrieve authority identifiers of the current authority set.
 		fn authorities() -> Vec<AuthorityId>;
 
 		/// Sign the given payload with the private key corresponding to the given authority id.
-		fn sign(payload: Vec<u8>, authority_id: AuthorityId) -> Option<Vec<u8>>;
+		fn sign(payload: &Vec<u8>) -> Option<(Signature, AuthorityId)>;
 
 		/// Verify the given signature for the given payload with the given
 		/// authority identifier.
-		fn verify(payload: Vec<u8>, signature: Vec<u8>, authority_id: AuthorityId) -> bool;
+		fn verify(payload: &Vec<u8>, signature: &Signature, authority_id: &AuthorityId) -> bool;
 	}
 }

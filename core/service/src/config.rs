@@ -19,19 +19,18 @@
 pub use client::ExecutionStrategies;
 pub use client_db::PruningMode;
 pub use network::config::{ExtTransport, NetworkConfiguration, Roles};
+pub use substrate_executor::WasmExecutionMethod;
 
 use std::{path::PathBuf, net::SocketAddr};
 use transaction_pool;
-use crate::chain_spec::ChainSpec;
+use chain_spec::{ChainSpec, RuntimeGenesis, Extension, NoExtension};
 use primitives::crypto::Protected;
-use sr_primitives::BuildStorage;
-use serde::{Serialize, de::DeserializeOwned};
 use target_info::Target;
 use tel::TelemetryEndpoints;
 
 /// Service configuration.
 #[derive(Clone)]
-pub struct Configuration<C, G> {
+pub struct Configuration<C, G, E = NoExtension> {
 	/// Implementation name
 	pub impl_name: &'static str,
 	/// Implementation version
@@ -57,11 +56,13 @@ pub struct Configuration<C, G> {
 	/// Pruning settings.
 	pub pruning: PruningMode,
 	/// Chain configuration.
-	pub chain_spec: ChainSpec<G>,
+	pub chain_spec: ChainSpec<G, E>,
 	/// Custom configuration.
 	pub custom: C,
 	/// Node name.
 	pub name: String,
+	/// Wasm execution method.
+	pub wasm_method: WasmExecutionMethod,
 	/// Execution strategies.
 	pub execution_strategies: ExecutionStrategies,
 	/// RPC over HTTP binding address. `None` if disabled.
@@ -95,9 +96,13 @@ pub struct Configuration<C, G> {
 	pub dev_key_seed: Option<String>,
 }
 
-impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C, G> {
+impl<C, G, E> Configuration<C, G, E> where
+	C: Default,
+	G: RuntimeGenesis,
+	E: Extension,
+{
 	/// Create default config for given chain spec.
-	pub fn default_with_spec(chain_spec: ChainSpec<G>) -> Self {
+	pub fn default_with_spec(chain_spec: ChainSpec<G, E>) -> Self {
 		let mut configuration = Configuration {
 			impl_name: "parity-substrate",
 			impl_version: "0.0.0",
@@ -114,6 +119,7 @@ impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C
 			state_cache_child_ratio: Default::default(),
 			custom: Default::default(),
 			pruning: PruningMode::default(),
+			wasm_method: WasmExecutionMethod::Interpreted,
 			execution_strategies: Default::default(),
 			rpc_http: None,
 			rpc_ws: None,

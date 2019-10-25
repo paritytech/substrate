@@ -25,8 +25,7 @@ use fork_tree::ForkTree;
 use grandpa::round::State as RoundState;
 use sr_primitives::traits::{Block as BlockT, NumberFor};
 use log::{info, warn};
-use substrate_telemetry::{telemetry, CONSENSUS_INFO};
-use fg_primitives::AuthorityId;
+use fg_primitives::{AuthorityId, AuthorityWeight, SetId, RoundNumber};
 
 use crate::authorities::{AuthoritySet, SharedAuthoritySet, PendingChange, DelayKind};
 use crate::consensus_changes::{SharedConsensusChanges, ConsensusChanges};
@@ -47,16 +46,16 @@ const CURRENT_VERSION: u32 = 2;
 #[cfg_attr(test, derive(PartialEq))]
 pub enum V1VoterSetState<H, N> {
 	/// The voter set state, currently paused.
-	Paused(u64, RoundState<H, N>),
+	Paused(RoundNumber, RoundState<H, N>),
 	/// The voter set state, currently live.
-	Live(u64, RoundState<H, N>),
+	Live(RoundNumber, RoundState<H, N>),
 }
 
-type V0VoterSetState<H, N> = (u64, RoundState<H, N>);
+type V0VoterSetState<H, N> = (RoundNumber, RoundState<H, N>);
 
 #[derive(Debug, Clone, Encode, Decode, PartialEq)]
 struct V0PendingChange<H, N> {
-	next_authorities: Vec<(AuthorityId, u64)>,
+	next_authorities: Vec<(AuthorityId, AuthorityWeight)>,
 	delay: N,
 	canon_height: N,
 	canon_hash: H,
@@ -64,8 +63,8 @@ struct V0PendingChange<H, N> {
 
 #[derive(Debug, Clone, Encode, Decode, PartialEq)]
 struct V0AuthoritySet<H, N> {
-	current_authorities: Vec<(AuthorityId, u64)>,
-	set_id: u64,
+	current_authorities: Vec<(AuthorityId, AuthorityWeight)>,
+	set_id: SetId,
 	pending_changes: Vec<V0PendingChange<H, N>>,
 }
 
@@ -267,7 +266,7 @@ pub(crate) fn load_persistent<Block: BlockT, B, G>(
 	-> ClientResult<PersistentData<Block>>
 	where
 		B: AuxStore,
-		G: FnOnce() -> ClientResult<Vec<(AuthorityId, u64)>>,
+		G: FnOnce() -> ClientResult<Vec<(AuthorityId, AuthorityWeight)>>,
 {
 	let version: Option<u32> = load_decode(backend, VERSION_KEY)?;
 	let consensus_changes = load_decode(backend, CONSENSUS_CHANGES_KEY)?
@@ -376,17 +375,6 @@ pub(crate) fn update_authority_set<Block: BlockT, F, R>(
 	let encoded_set = set.encode();
 
 	if let Some(new_set) = new_set {
-		telemetry!(CONSENSUS_INFO; "afg.authority_set";
-			"hash" => ?new_set.canon_hash,
-			"number" => ?new_set.canon_number,
-			"authority_set_id" => ?new_set.set_id,
-			"authorities" => {
-				let authorities: Vec<String> =
-					new_set.authorities.iter().map(|(id, _)| format!("{}", id)).collect();
-				format!("{:?}", authorities)
-			}
-		);
-
 		// we also overwrite the "last completed round" entry with a blank slate
 		// because from the perspective of the finality gadget, the chain has
 		// reset.
@@ -448,7 +436,7 @@ mod test {
 
 		let authorities = vec![(AuthorityId::default(), 100)];
 		let set_id = 3;
-		let round_number: u64 = 42;
+		let round_number: RoundNumber = 42;
 		let round_state = RoundState::<H256, u64> {
 			prevote_ghost: Some((H256::random(), 32)),
 			finalized: None,
@@ -536,7 +524,7 @@ mod test {
 
 		let authorities = vec![(AuthorityId::default(), 100)];
 		let set_id = 3;
-		let round_number: u64 = 42;
+		let round_number: RoundNumber = 42;
 		let round_state = RoundState::<H256, u64> {
 			prevote_ghost: Some((H256::random(), 32)),
 			finalized: None,

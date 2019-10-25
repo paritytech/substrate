@@ -1,32 +1,44 @@
-use srml_support::codec::{Encode, Decode};
+use support::codec::{Encode, Decode, EncodeLike};
 
 pub trait Trait: 'static + Eq + Clone {
 	type Origin: Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>
 		+ From<RawOrigin<Self::AccountId>>;
 
-	type BlockNumber: Decode + Encode + Clone + Default;
+	type BlockNumber: Decode + Encode + EncodeLike + Clone + Default;
 	type Hash;
-	type AccountId: Encode + Decode;
+	type AccountId: Encode + EncodeLike + Decode;
 	type Event: From<Event>;
 }
 
-srml_support::decl_module! {
+support::decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		pub fn deposit_event(_event: T::Event) {
-		}
 	}
 }
 
-srml_support::decl_event!(
+impl<T: Trait> Module<T> {
+	pub fn deposit_event(_event: impl Into<T::Event>) {
+	}
+}
+
+support::decl_event!(
 	pub enum Event {
 		ExtrinsicSuccess,
 		ExtrinsicFailed,
 	}
 );
 
+support::decl_error! {
+	pub enum Error {
+		/// Test error documentation
+		TestError,
+		/// Error documentation
+		/// with multiple lines
+		AnotherError
+	}
+}
+
 /// Origin for the system module.
-#[derive(PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(PartialEq, Eq, Clone, sr_primitives::RuntimeDebug)]
 pub enum RawOrigin<AccountId> {
 	Root,
 	Signed(AccountId),

@@ -24,9 +24,7 @@
 //! # Node identities and addresses
 //!
 //! In a decentralized network, each node possesses a network private key and a network public key.
-//! In Substrate, the keys are based on the ed25519 curve. As of the writing of this documentation,
-//! the secp256k1 curve can also be used, but is deprecated. Our local node's keypair must be
-//! passed as part of the network configuration.
+//! In Substrate, the keys are based on the ed25519 curve.
 //!
 //! From a node's public key, we can derive its *identity*. In Substrate and libp2p, a node's
 //! identity is represented with the [`PeerId`] struct. All network communications between nodes on
@@ -192,6 +190,7 @@ pub use service::{
 	NetworkStateInfo,
 };
 pub use protocol::{PeerInfo, Context, consensus_gossip, message, specialization};
+pub use protocol::event::{Event, DhtEvent};
 pub use protocol::sync::SyncState;
 pub use libp2p::{Multiaddr, PeerId};
 #[doc(inline)]

@@ -18,9 +18,7 @@
 
 #![cfg(test)]
 
-use sr_primitives::testing::Digest;
-use sr_primitives::traits::{Header, OnFinalize};
-use runtime_io::with_externalities;
+use sr_primitives::{testing::Digest, traits::{Header, OnFinalize}};
 use crate::mock::*;
 use system::{EventRecord, Phase};
 use codec::{Decode, Encode};
@@ -29,7 +27,7 @@ use super::*;
 
 #[test]
 fn authorities_change_logged() {
-	with_externalities(&mut new_test_ext(vec![(1, 1), (2, 1), (3, 1)]), || {
+	new_test_ext(vec![(1, 1), (2, 1), (3, 1)]).execute_with(|| {
 		System::initialize(&1, &Default::default(), &Default::default(), &Default::default());
 		Grandpa::schedule_change(to_authorities(vec![(4, 1), (5, 1), (6, 1)]), 0, None).unwrap();
 
@@ -57,7 +55,7 @@ fn authorities_change_logged() {
 
 #[test]
 fn authorities_change_logged_after_delay() {
-	with_externalities(&mut new_test_ext(vec![(1, 1), (2, 1), (3, 1)]), || {
+	new_test_ext(vec![(1, 1), (2, 1), (3, 1)]).execute_with(|| {
 		System::initialize(&1, &Default::default(), &Default::default(), &Default::default());
 		Grandpa::schedule_change(to_authorities(vec![(4, 1), (5, 1), (6, 1)]), 1, None).unwrap();
 		Grandpa::on_finalize(1);
@@ -90,7 +88,7 @@ fn authorities_change_logged_after_delay() {
 
 #[test]
 fn cannot_schedule_change_when_one_pending() {
-	with_externalities(&mut new_test_ext(vec![(1, 1), (2, 1), (3, 1)]), || {
+	new_test_ext(vec![(1, 1), (2, 1), (3, 1)]).execute_with(|| {
 		System::initialize(&1, &Default::default(), &Default::default(), &Default::default());
 		Grandpa::schedule_change(to_authorities(vec![(4, 1), (5, 1), (6, 1)]), 1, None).unwrap();
 		assert!(<PendingChange<Test>>::exists());
@@ -133,7 +131,7 @@ fn new_decodes_from_old() {
 
 #[test]
 fn dispatch_forced_change() {
-	with_externalities(&mut new_test_ext(vec![(1, 1), (2, 1), (3, 1)]), || {
+	new_test_ext(vec![(1, 1), (2, 1), (3, 1)]).execute_with(|| {
 		System::initialize(&1, &Default::default(), &Default::default(), &Default::default());
 		Grandpa::schedule_change(
 			to_authorities(vec![(4, 1), (5, 1), (6, 1)]),
@@ -205,7 +203,7 @@ fn dispatch_forced_change() {
 
 #[test]
 fn schedule_pause_only_when_live() {
-	with_externalities(&mut new_test_ext(vec![(1, 1), (2, 1), (3, 1)]), || {
+	new_test_ext(vec![(1, 1), (2, 1), (3, 1)]).execute_with(|| {
 		// we schedule a pause at block 1 with delay of 1
 		System::initialize(&1, &Default::default(), &Default::default(), &Default::default());
 		Grandpa::schedule_pause(1).unwrap();
@@ -240,7 +238,7 @@ fn schedule_pause_only_when_live() {
 
 #[test]
 fn schedule_resume_only_when_paused() {
-	with_externalities(&mut new_test_ext(vec![(1, 1), (2, 1), (3, 1)]), || {
+	new_test_ext(vec![(1, 1), (2, 1), (3, 1)]).execute_with(|| {
 		System::initialize(&1, &Default::default(), &Default::default(), &Default::default());
 
 		// the set is currently live, resuming it is an error

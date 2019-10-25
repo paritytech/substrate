@@ -32,8 +32,8 @@ pub use substrate_finality_grandpa_primitives as fg_primitives;
 
 use rstd::prelude::*;
 use codec::{self as codec, Encode, Decode, Error};
-use srml_support::{
-	decl_event, decl_storage, decl_module, dispatch::Result, storage::StorageValue
+use support::{
+	decl_event, decl_storage, decl_module, dispatch::Result,
 };
 use sr_primitives::{
 	generic::{DigestItem, OpaqueDigestItemId}, traits::Zero,
@@ -43,7 +43,7 @@ use sr_staking_primitives::{
 	SessionIndex,
 	offence::{Offence, Kind},
 };
-use fg_primitives::{ScheduledChange, ConsensusLog, GRANDPA_ENGINE_ID};
+use fg_primitives::{GRANDPA_ENGINE_ID, ScheduledChange, ConsensusLog, SetId, RoundNumber};
 pub use fg_primitives::{AuthorityId, AuthorityWeight};
 use system::{ensure_signed, DigestOf};
 
@@ -65,7 +65,7 @@ pub struct OldStoredPendingChange<N> {
 	/// The delay in blocks until it will be applied.
 	pub delay: N,
 	/// The next authority set.
-	pub next_authorities: Vec<(AuthorityId, u64)>,
+	pub next_authorities: Vec<(AuthorityId, AuthorityWeight)>,
 }
 
 /// A stored pending change.
@@ -76,7 +76,7 @@ pub struct StoredPendingChange<N> {
 	/// The delay in blocks until it will be applied.
 	pub delay: N,
 	/// The next authority set.
-	pub next_authorities: Vec<(AuthorityId, u64)>,
+	pub next_authorities: Vec<(AuthorityId, AuthorityWeight)>,
 	/// If defined it means the change was forced and the given block number
 	/// indicates the median last finalized block when the change was signaled.
 	pub forced: Option<N>,
@@ -127,7 +127,7 @@ pub enum StoredState<N> {
 decl_event!(
 	pub enum Event {
 		/// New authority set has been applied.
-		NewAuthorities(Vec<(AuthorityId, u64)>),
+		NewAuthorities(Vec<(AuthorityId, AuthorityWeight)>),
 		/// Current authority set has been paused.
 		Paused,
 		/// Current authority set has been resumed.
@@ -138,31 +138,30 @@ decl_event!(
 decl_storage! {
 	trait Store for Module<T: Trait> as GrandpaFinality {
 		/// The current authority set.
-		Authorities get(authorities): Vec<(AuthorityId, AuthorityWeight)>;
+		Authorities get(fn authorities): Vec<(AuthorityId, AuthorityWeight)>;
 
 		/// State of the current authority set.
-		State get(state): StoredState<T::BlockNumber> = StoredState::Live;
+		State get(fn state): StoredState<T::BlockNumber> = StoredState::Live;
 
 		/// Pending change: (signaled at, scheduled change).
 		PendingChange: Option<StoredPendingChange<T::BlockNumber>>;
 
 		/// next block number where we can force a change.
-		NextForced get(next_forced): Option<T::BlockNumber>;
+		NextForced get(fn next_forced): Option<T::BlockNumber>;
 
 		/// `true` if we are currently stalled.
-		Stalled get(stalled): Option<(T::BlockNumber, T::BlockNumber)>;
+		Stalled get(fn stalled): Option<(T::BlockNumber, T::BlockNumber)>;
+
+		/// The number of changes (both in terms of keys and underlying economic responsibilities)
+		/// in the "set" of Grandpa validators from genesis.
+		CurrentSetId get(fn current_set_id) build(|_| fg_primitives::SetId::default()): SetId;
+
+		/// A mapping from grandpa set ID to the index of the *most recent* session for which its members were responsible.
+		SetIdSession get(fn session_for_set): map SetId => Option<SessionIndex>;
 	}
 	add_extra_genesis {
 		config(authorities): Vec<(AuthorityId, AuthorityWeight)>;
-		build(|
-			storage: &mut (sr_primitives::StorageOverlay, sr_primitives::ChildrenStorageOverlay),
-			config: &GenesisConfig
-		| {
-			runtime_io::with_storage(
-				storage,
-				|| Module::<T>::initialize_authorities(&config.authorities),
-			);
-		})
+		build(|config| Module::<T>::initialize_authorities(&config.authorities))
 	}
 }
 
@@ -243,10 +242,12 @@ decl_module! {
 
 impl<T: Trait> Module<T> {
 	/// Get the current set of authorities, along with their respective weights.
-	pub fn grandpa_authorities() -> Vec<(AuthorityId, u64)> {
+	pub fn grandpa_authorities() -> Vec<(AuthorityId, AuthorityWeight)> {
 		Authorities::get()
 	}
 
+	/// Schedule GRANDPA to pause starting in the given number of blocks.
+	/// Cannot be done when already paused.
 	pub fn schedule_pause(in_blocks: T::BlockNumber) -> Result {
 		if let StoredState::Live = <State<T>>::get() {
 			let scheduled_at = <system::Module<T>>::block_number();
@@ -262,6 +263,7 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
+	/// Schedule a resume of GRANDPA after pausing.
 	pub fn schedule_resume(in_blocks: T::BlockNumber) -> Result {
 		if let StoredState::Paused = <State<T>>::get() {
 			let scheduled_at = <system::Module<T>>::block_number();
@@ -292,7 +294,7 @@ impl<T: Trait> Module<T> {
 	/// No change should be signaled while any change is pending. Returns
 	/// an error if a change is already pending.
 	pub fn schedule_change(
-		next_authorities: Vec<(AuthorityId, u64)>,
+		next_authorities: Vec<(AuthorityId, AuthorityWeight)>,
 		in_blocks: T::BlockNumber,
 		forced: Option<T::BlockNumber>,
 	) -> Result {
@@ -331,35 +333,40 @@ impl<T: Trait> Module<T> {
 	fn initialize_authorities(authorities: &[(AuthorityId, AuthorityWeight)]) {
 		if !authorities.is_empty() {
 			assert!(Authorities::get().is_empty(), "Authorities are already initialized!");
-			Authorities::put_ref(authorities);
+			Authorities::put(authorities);
 		}
 	}
 }
 
 impl<T: Trait> Module<T> {
+	/// Attempt to extract a GRANDPA log from a generic digest.
 	pub fn grandpa_log(digest: &DigestOf<T>) -> Option<ConsensusLog<T::BlockNumber>> {
 		let id = OpaqueDigestItemId::Consensus(&GRANDPA_ENGINE_ID);
 		digest.convert_first(|l| l.try_to::<ConsensusLog<T::BlockNumber>>(id))
 	}
 
+	/// Attempt to extract a pending set-change signal from a digest.
 	pub fn pending_change(digest: &DigestOf<T>)
 		-> Option<ScheduledChange<T::BlockNumber>>
 	{
 		Self::grandpa_log(digest).and_then(|signal| signal.try_into_change())
 	}
 
+	/// Attempt to extract a forced set-change signal from a digest.
 	pub fn forced_change(digest: &DigestOf<T>)
 		-> Option<(T::BlockNumber, ScheduledChange<T::BlockNumber>)>
 	{
 		Self::grandpa_log(digest).and_then(|signal| signal.try_into_forced_change())
 	}
 
+	/// Attempt to extract a pause signal from a digest.
 	pub fn pending_pause(digest: &DigestOf<T>)
 		-> Option<T::BlockNumber>
 	{
 		Self::grandpa_log(digest).and_then(|signal| signal.try_into_pause())
 	}
 
+	/// Attempt to extract a resume signal from a digest.
 	pub fn pending_resume(digest: &DigestOf<T>)
 		-> Option<T::BlockNumber>
 	{
@@ -367,7 +374,9 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
+impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T>
+	where T: session::Trait
+{
 	type Key = AuthorityId;
 
 	fn on_genesis_session<'a, I: 'a>(validators: I)
@@ -380,18 +389,27 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	fn on_new_session<'a, I: 'a>(changed: bool, validators: I, _queued_validators: I)
 		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
 	{
-		// instant changes
-		if changed {
+		// Always issue a change if `session` says that the validators have changed.
+		// Even if their session keys are the same as before, the underyling economic
+		// identities have changed.
+		let current_set_id = if changed {
 			let next_authorities = validators.map(|(_, k)| (k, 1)).collect::<Vec<_>>();
-			let last_authorities = <Module<T>>::grandpa_authorities();
-			if next_authorities != last_authorities {
-				if let Some((further_wait, median)) = <Stalled<T>>::take() {
-					let _ = Self::schedule_change(next_authorities, further_wait, Some(median));
-				} else {
-					let _ = Self::schedule_change(next_authorities, Zero::zero(), None);
-				}
+			if let Some((further_wait, median)) = <Stalled<T>>::take() {
+				let _ = Self::schedule_change(next_authorities, further_wait, Some(median));
+			} else {
+				let _ = Self::schedule_change(next_authorities, Zero::zero(), None);
 			}
-		}
+			CurrentSetId::mutate(|s| { *s += 1; *s })
+		} else {
+			// nothing's changed, neither economic conditions nor session keys. update the pointer
+			// of the current set.
+			Self::current_set_id()
+		};
+
+		// if we didn't issue a change, we update the mapping to note that the current
+		// set corresponds to the latest equivalent session (i.e. now).
+		let session_index = <session::Module<T>>::current_index();
+		SetIdSession::insert(current_set_id, &session_index);
 	}
 
 	fn on_disabled(i: usize) {
@@ -412,8 +430,8 @@ impl<T: Trait> finality_tracker::OnFinalizationStalled<T::BlockNumber> for Modul
 #[derive(Copy, Clone, PartialOrd, Ord, Eq, PartialEq, Encode, Decode)]
 struct GrandpaTimeSlot {
 	// The order of these matters for `derive(Ord)`.
-	set_id: u64,
-	round: u64,
+	set_id: SetId,
+	round: RoundNumber,
 }
 
 // TODO [slashing]: Integrate this.

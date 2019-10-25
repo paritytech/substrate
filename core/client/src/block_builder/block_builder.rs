@@ -17,7 +17,6 @@
 use super::api::BlockBuilder as BlockBuilderApi;
 use std::vec::Vec;
 use codec::Encode;
-use sr_primitives::ApplyOutcome;
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{
 	Header as HeaderT, Hash, Block as BlockT, One, HashFor, ProvideRuntimeApi, ApiRef, DigestFor,
@@ -104,7 +103,7 @@ where
 				ExecutionContext::BlockConstruction,
 				xt.clone()
 			)? {
-				Ok(ApplyOutcome::Success) | Ok(ApplyOutcome::Fail) => {
+				Ok(_) => {
 					extrinsics.push(xt);
 					Ok(())
 				}
@@ -129,7 +128,7 @@ where
 		debug_assert_eq!(
 			self.header.extrinsics_root().clone(),
 			HashFor::<Block>::ordered_trie_root(
-				self.extrinsics.iter().map(Encode::encode)
+				self.extrinsics.iter().map(Encode::encode).collect(),
 			),
 		);
 

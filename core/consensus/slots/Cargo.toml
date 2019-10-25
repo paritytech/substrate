@@ -4,6 +4,7 @@ version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Generic slots-based utilities for consensus"
 edition = "2018"
+build = "build.rs"
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0" }
@@ -13,10 +14,10 @@ sr-primitives = {  path = "../../sr-primitives" }
 substrate-telemetry = { path = "../../telemetry" }
 consensus_common = { package = "substrate-consensus-common", path = "../common" }
 inherents = { package = "substrate-inherents", path = "../../inherents" }
-futures-preview = "=0.3.0-alpha.17"
-futures-timer = "0.2.1"
+futures-preview = "0.3.0-alpha.19"
+futures-timer = "0.4.0"
 parking_lot = "0.9.0"
-log = "0.4"
+log = "0.4.8"
 
 [dev-dependencies]
 test-client = { package = "substrate-test-runtime-client", path = "../../test-runtime/client" }

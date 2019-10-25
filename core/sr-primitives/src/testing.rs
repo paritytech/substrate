@@ -17,21 +17,33 @@
 //! Testing utilities.
 
 use serde::{Serialize, Serializer, Deserialize, de::Error as DeError, Deserializer};
-use std::{fmt::Debug, ops::Deref, fmt};
+use std::{fmt::Debug, ops::Deref, fmt, cell::RefCell};
 use crate::codec::{Codec, Encode, Decode};
 use crate::traits::{
-	self, Checkable, Applyable, BlakeTwo256, OpaqueKeys, DispatchError, DispatchResult,
-	ValidateUnsigned, SignedExtension, Dispatchable,
+	self, Checkable, Applyable, BlakeTwo256, OpaqueKeys, ValidateUnsigned,
+	SignedExtension, Dispatchable,
 };
-use crate::{generic, KeyTypeId};
+use crate::{generic, KeyTypeId, ApplyResult};
 use crate::weights::{GetDispatchInfo, DispatchInfo};
-pub use primitives::H256;
+pub use primitives::{H256, sr25519};
 use primitives::{crypto::{CryptoType, Dummy, key_types, Public}, U256};
-use crate::transaction_validity::TransactionValidity;
+use crate::transaction_validity::{TransactionValidity, TransactionValidityError};
 
 /// Authority Id
-#[derive(Default, PartialEq, Eq, Clone, Encode, Decode, Debug, Hash, Serialize, Deserialize)]
+#[derive(Default, PartialEq, Eq, Clone, Encode, Decode, Debug, Hash, Serialize, Deserialize, PartialOrd, Ord)]
 pub struct UintAuthorityId(pub u64);
+
+impl From<u64> for UintAuthorityId {
+	fn from(id: u64) -> Self {
+		UintAuthorityId(id)
+	}
+}
+
+impl From<UintAuthorityId> for u64 {
+	fn from(id: UintAuthorityId) -> u64 {
+		id.0
+	}
+}
 
 impl UintAuthorityId {
 	/// Convert this authority id into a public key.
@@ -47,34 +59,44 @@ impl CryptoType for UintAuthorityId {
 
 impl AsRef<[u8]> for UintAuthorityId {
 	fn as_ref(&self) -> &[u8] {
+		// Unsafe, i know, but it's test code and it's just there because it's really convenient to
+		// keep `UintAuthorityId` as a u64 under the hood.
 		unsafe {
 			std::slice::from_raw_parts(&self.0 as *const u64 as *const _, std::mem::size_of::<u64>())
 		}
 	}
 }
 
+thread_local! {
+	/// A list of all UintAuthorityId keys returned to the runtime.
+	static ALL_KEYS: RefCell<Vec<UintAuthorityId>> = RefCell::new(vec![]);
+}
+
+impl UintAuthorityId {
+	/// Set the list of keys returned by the runtime call for all keys of that type.
+	pub fn set_all_keys<T: Into<UintAuthorityId>>(keys: impl IntoIterator<Item=T>) {
+		ALL_KEYS.with(|l| *l.borrow_mut() = keys.into_iter().map(Into::into).collect())
+	}
+}
+
 impl app_crypto::RuntimeAppPublic for UintAuthorityId {
+	const ID: KeyTypeId = key_types::DUMMY;
+
 	type Signature = u64;
 
 	fn all() -> Vec<Self> {
-		unimplemented!("`all()` not available for `UintAuthorityId`.")
+		ALL_KEYS.with(|l| l.borrow().clone())
 	}
 
-	#[cfg(feature = "std")]
 	fn generate_pair(_: Option<&str>) -> Self {
 		use rand::RngCore;
 		UintAuthorityId(rand::thread_rng().next_u64())
 	}
 
-	#[cfg(not(feature = "std"))]
-	fn generate_pair(_: Option<&str>) -> Self {
-		unimplemented!("`generate_pair` not implemented for `UIntAuthorityId` on `no_std`.")
-	}
-
 	fn sign<M: AsRef<[u8]>>(&self, msg: &M) -> Option<Self::Signature> {
 		let mut signature = [0u8; 8];
 		msg.as_ref().iter()
-			.chain(rstd::iter::repeat(&42u8))
+			.chain(std::iter::repeat(&42u8))
 			.take(8)
 			.enumerate()
 			.for_each(|(i, v)| { signature[i] = *v; });
@@ -85,7 +107,7 @@ impl app_crypto::RuntimeAppPublic for UintAuthorityId {
 	fn verify<M: AsRef<[u8]>>(&self, msg: &M, signature: &Self::Signature) -> bool {
 		let mut msg_signature = [0u8; 8];
 		msg.as_ref().iter()
-			.chain(rstd::iter::repeat(&42))
+			.chain(std::iter::repeat(&42))
 			.take(8)
 			.enumerate()
 			.for_each(|(i, v)| { msg_signature[i] = *v; });
@@ -97,19 +119,16 @@ impl app_crypto::RuntimeAppPublic for UintAuthorityId {
 impl OpaqueKeys for UintAuthorityId {
 	type KeyTypeIds = std::iter::Cloned<std::slice::Iter<'static, KeyTypeId>>;
 
-	fn key_ids() -> Self::KeyTypeIds { [key_types::DUMMY].iter().cloned() }
-	// Unsafe, i know, but it's test code and it's just there because it's really convenient to
-	// keep `UintAuthorityId` as a u64 under the hood.
-	fn get_raw(&self, _: KeyTypeId) -> &[u8] {
-		unsafe {
-			std::slice::from_raw_parts(
-				&self.0 as *const _ as *const u8,
-				std::mem::size_of::<u64>(),
-			)
-		}
+	fn key_ids() -> Self::KeyTypeIds {
+		[key_types::DUMMY].iter().cloned()
 	}
+
+	fn get_raw(&self, _: KeyTypeId) -> &[u8] {
+		self.as_ref()
+	}
+
 	fn get<T: Decode>(&self, _: KeyTypeId) -> Option<T> {
-		self.0.using_encoded(|mut x| T::decode(&mut x)).ok()
+		self.using_encoded(|mut x| T::decode(&mut x)).ok()
 	}
 }
 
@@ -187,6 +206,7 @@ pub struct ExtrinsicWrapper<Xt>(Xt);
 
 impl<Xt> traits::Extrinsic for ExtrinsicWrapper<Xt> {
 	type Call = ();
+	type SignaturePayload = ();
 
 	fn is_signed(&self) -> Option<bool> {
 		None
@@ -239,6 +259,9 @@ impl<Xt: 'static + Codec + Sized + Send + Sync + Serialize + Clone + Eq + Debug 
 	fn new(header: Self::Header, extrinsics: Vec<Self::Extrinsic>) -> Self {
 		Block { header, extrinsics }
 	}
+	fn encode_from(header: &Self::Header, extrinsics: &[Self::Extrinsic]) -> Vec<u8> {
+		(header, extrinsics).encode()
+	}
 }
 
 impl<'a, Xt> Deserialize<'a> for Block<Xt> where Block<Xt>: Decode {
@@ -270,24 +293,25 @@ impl<Call, Extra> Debug for TestXt<Call, Extra> {
 
 impl<Call: Codec + Sync + Send, Context, Extra> Checkable<Context> for TestXt<Call, Extra> {
 	type Checked = Self;
-	fn check(self, _: &Context) -> Result<Self::Checked, &'static str> { Ok(self) }
+	fn check(self, _: &Context) -> Result<Self::Checked, TransactionValidityError> { Ok(self) }
 }
 impl<Call: Codec + Sync + Send, Extra> traits::Extrinsic for TestXt<Call, Extra> {
 	type Call = Call;
+	type SignaturePayload = (u64, Extra);
 
 	fn is_signed(&self) -> Option<bool> {
 		Some(self.0.is_some())
 	}
 
-	fn new_unsigned(_c: Call) -> Option<Self> {
-		None
+	fn new(c: Call, sig: Option<Self::SignaturePayload>) -> Option<Self> {
+		Some(TestXt(sig, c))
 	}
 }
 
 impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 	Call: 'static + Sized + Send + Sync + Clone + Eq + Codec + Debug + Dispatchable<Origin=Origin>,
 	Extra: SignedExtension<AccountId=u64, Call=Call>,
-	Origin: From<Option<u64>>
+	Origin: From<Option<u64>>,
 {
 	type AccountId = u64;
 	type Call = Call;
@@ -295,19 +319,21 @@ impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 	fn sender(&self) -> Option<&Self::AccountId> { self.0.as_ref().map(|x| &x.0) }
 
 	/// Checks to see if this is a valid *transaction*. It returns information on it if so.
-	fn validate<U: ValidateUnsigned<Call=Self::Call>>(&self,
+	fn validate<U: ValidateUnsigned<Call=Self::Call>>(
+		&self,
 		_info: DispatchInfo,
 		_len: usize,
 	) -> TransactionValidity {
-		TransactionValidity::Valid(Default::default())
+		Ok(Default::default())
 	}
 
 	/// Executes all necessary logic needed prior to dispatch and deconstructs into function call,
 	/// index and sender.
-	fn dispatch(self,
+	fn apply(
+		self,
 		info: DispatchInfo,
 		len: usize,
-	) -> Result<DispatchResult, DispatchError> {
+	) -> ApplyResult {
 		let maybe_who = if let Some((who, extra)) = self.0 {
 			Extra::pre_dispatch(extra, &who, &self.1, info, len)?;
 			Some(who)
@@ -315,7 +341,8 @@ impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 			Extra::pre_dispatch_unsigned(&self.1, info, len)?;
 			None
 		};
-		Ok(self.1.dispatch(maybe_who.into()))
+
+		Ok(self.1.dispatch(maybe_who.into()).map_err(Into::into))
 	}
 }
 
