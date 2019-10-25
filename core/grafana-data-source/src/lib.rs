@@ -31,9 +31,6 @@ mod types;
 mod server;
 
 pub use server::run_server;
-/// Re-export `Utc` from `chrono` so that it can be used in `record_metrics`.
-///
-pub use chrono::Utc;
 
 type Metrics = HashMap<&'static str, Vec<(f32, i64)>>;
 
@@ -42,13 +39,18 @@ lazy_static! {
     pub static ref METRICS: RwLock<Metrics> = RwLock::new(Metrics::new());
 }
 
+/// Get the current unix timestamp in milliseconds.
+pub fn now_millis() -> i64 {
+	chrono::Utc::now().timestamp_millis()
+}
+
 /// Write metrics to `METRICS`.
 #[macro_export]
 macro_rules! record_metrics(
 	($($key:expr => $value:expr),*) => {
-		use $crate::{Utc, METRICS};
+		use $crate::{METRICS, now_millis};
 		let mut metrics = METRICS.write();
-		let now = Utc::now().timestamp_millis();
+		let now = now_millis();
 		$(
 			metrics.entry($key).or_insert_with(Vec::new).push(($value as f32, now));
 		)*

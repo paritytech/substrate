@@ -15,7 +15,6 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use serde::{Serialize, Deserialize};
-use chrono::{DateTime, Utc};
 
 #[derive(Serialize, Deserialize)]
 pub enum TargetType {
@@ -48,8 +47,16 @@ pub struct Target {
 
 #[derive(Serialize, Deserialize)]
 pub struct Range {
-	pub from: DateTime<Utc>,
-	pub to: DateTime<Utc>,
+	#[serde(deserialize_with = "date_to_timestamp_ms")]
+	pub from: i64,
+	#[serde(deserialize_with = "date_to_timestamp_ms")]
+	pub to: i64,
+}
+
+// Deserialize a timestamp via a `DateTime<Utc>`
+fn date_to_timestamp_ms<'de, D: serde::Deserializer<'de>>(timestamp: D) -> Result<i64, D::Error> {
+	Deserialize::deserialize(timestamp)
+		.map(|date: chrono::DateTime<chrono::Utc>| date.timestamp_millis())
 }
 
 #[derive(Serialize, Deserialize)]
