@@ -52,7 +52,7 @@ pub struct BridgeInfo<T: Trait> {
 	last_finalized_block_number: T::BlockNumber,
 	last_finalized_block_hash: T::Hash,
 	last_finalized_state_root: T::Hash,
-	current_validator_set: Vec<T::ValidatorId>,
+	current_validator_set: Vec<(T::ValidatorId, ValidatorWeight)>,
 }
 
 impl<T: Trait> BridgeInfo<T> {
@@ -60,7 +60,7 @@ impl<T: Trait> BridgeInfo<T> {
 			block_number: &T::BlockNumber,
 			block_hash: &T::Hash,
 			state_root: &T::Hash,
-			validator_set: Vec<T::ValidatorId>,
+			validator_set: Vec<(T::ValidatorId, ValidatorWeight)>,
 		) -> Self
 	{
 		// I don't like how this is done, should come back to...
@@ -74,6 +74,7 @@ impl<T: Trait> BridgeInfo<T> {
 }
 
 type BridgeId = u64;
+type ValidatorWeight = u64;
 
 pub trait Trait: system::Trait {
 	/// A stable ID for a validator.
@@ -97,7 +98,7 @@ decl_module! {
 		fn initialize_bridge(
 			origin,
 			block_header: T::Header,
-			validator_set: Vec<T::ValidatorId>,
+			validator_set: Vec<(T::ValidatorId, ValidatorWeight)>,
 			validator_set_proof: Vec<Vec<u8>>,
 		) {
 			// NOTE: Will want to make this a governance issued call
@@ -128,6 +129,7 @@ decl_error! {
 	pub enum Error {
 		InvalidStorageProof,
 		InvalidValidatorSetProof,
+		ValidatorSetMismatch,
 	}
 }
 
@@ -135,16 +137,26 @@ impl<T: Trait> Module<T> {
 	fn check_validator_set_proof(
 		state_root: &T::Hash,
 		proof: Vec<Vec<u8>>,
-		_validator_set: &Vec<T::ValidatorId>,
+		validator_set: &Vec<(T::ValidatorId, ValidatorWeight)>,
 	) -> std::result::Result<(), Error> {
 
-		let _checker = <StorageProofChecker<<T::Hashing as sr_primitives::traits::Hash>::Hasher>>::new(
+		// pub const GRANDPA_AUTHORITIES_KEY: &'static [u8] = b":grandpa_authorities";
+		// pub type AuthorityList = Vec<(AuthorityId, AuthorityWeight)>;
+		let checker = <StorageProofChecker<<T::Hashing as sr_primitives::traits::Hash>::Hasher>>::new(
 			*state_root,
 			proof.clone()
-		)
-		.unwrap();
+		).unwrap();
 
-		Ok(()) // Otherwise, Error::InvalidValidatorSetProof
+		// By encoding the given set we should have an easy way to compare
+		// with the stuff we get out of storage via `read_value`
+		let encoded_validator_set = validator_set.encode();
+		let actual_validator_set = checker.read_value(b":grandpa_authorities").unwrap().unwrap();
+
+		if encoded_validator_set == actual_validator_set {
+			Ok(())
+		} else {
+			Err(Error::ValidatorSetMismatch)
+		}
 	}
 }
 
@@ -156,7 +168,7 @@ mod tests {
 	use sr_primitives::{
 		Perbill, traits::{Header as HeaderT, IdentityLookup}, testing::Header, generic::Digest,
 	};
-	use support::{assert_ok, impl_outer_origin, parameter_types};
+	use support::{assert_ok, assert_err, impl_outer_origin, parameter_types};
 
 	// NOTE: What's this for?
 	impl_outer_origin! {
@@ -217,34 +229,47 @@ mod tests {
 		});
 	}
 
-	fn create_dummy_validator_proof() -> (H256, Vec<Vec<u8>>) {
+	fn create_dummy_validator_proof(validator_set: Vec<(DummyValidatorId, ValidatorWeight)>) -> (H256, Vec<Vec<u8>>) {
 		use state_machine::{prove_read, backend::{Backend, InMemory}};
+
+		let encoded_set = validator_set.encode();
 
 		// construct storage proof
 		let backend = <InMemory<Blake2Hasher>>::from(vec![
-			(None, b"validator1".to_vec(), Some(b"alice".to_vec())),
-			(None, b"validator2".to_vec(), Some(b"bob".to_vec()))
+			(None, b":grandpa_authorities".to_vec(), Some(encoded_set)),
 		]);
 		let root = backend.storage_root(std::iter::empty()).0;
 
 		// Generates a storage read proof
-		let proof = prove_read(backend, &[&b"validator1"[..], &b"validator2"[..]]).unwrap();
+		let proof = prove_read(backend, &[&b":grandpa_authorities"[..]]).unwrap();
 
 		(root, proof)
 	}
 
 	#[test]
 	fn it_can_validate_validator_sets() {
-
-		let validators = vec![0, 5, 10];
-		let (root, proof) = create_dummy_validator_proof();
+		let validators = vec![(1, 1), (2, 1), (3, 1)];
+		let (root, proof) = create_dummy_validator_proof(validators.clone());
 
 		assert_ok!(MockBridge::check_validator_set_proof(&root, proof, &validators));
 	}
 
 	#[test]
+	fn it_rejects_invalid_validator_sets() {
+		let validators = vec![(1, 1), (2, 1), (3, 1)];
+		let (root, proof) = create_dummy_validator_proof(validators.clone());
+
+		let invalid_validators = vec![(3, 1), (2, 1), (1, 1)];
+		assert_err!(
+			MockBridge::check_validator_set_proof(&root, proof, &invalid_validators),
+			Error::ValidatorSetMismatch
+		);
+	}
+
+	#[test]
 	fn it_creates_a_new_bridge() {
-		let (root, proof) = create_dummy_validator_proof();
+		let validators = vec![(1, 1), (2, 1), (3, 1)];
+		let (root, proof) = create_dummy_validator_proof(validators.clone());
 
 		let test_header = Header {
 			parent_hash: H256::default(),
@@ -262,7 +287,7 @@ mod tests {
 				MockBridge::initialize_bridge(
 					Origin::signed(1),
 					test_header,
-					vec![1, 2, 3],
+					validators.clone(),
 					proof,
 			));
 
@@ -272,7 +297,7 @@ mod tests {
 					last_finalized_block_number: 42,
 					last_finalized_block_hash: test_hash,
 					last_finalized_state_root: root,
-					current_validator_set: vec![1, 2, 3],
+					current_validator_set: validators.clone(),
 				}));
 
 			assert_eq!(MockBridge::num_bridges(), 1);
