@@ -39,10 +39,10 @@ mod storage_proof;
 
 use crate::storage_proof::StorageProofChecker;
 use codec::{Encode, Decode};
-use sr_primitives::traits::{Header, Member};
+use fg_primitives::{AuthorityId, AuthorityWeight};
+use sr_primitives::traits::Header;
 use support::{
 	decl_error, decl_module, decl_storage,
-	Parameter,
 };
 use system::{ensure_signed};
 
@@ -52,7 +52,7 @@ pub struct BridgeInfo<T: Trait> {
 	last_finalized_block_number: T::BlockNumber,
 	last_finalized_block_hash: T::Hash,
 	last_finalized_state_root: T::Hash,
-	current_validator_set: Vec<(T::ValidatorId, ValidatorWeight)>,
+	current_validator_set: Vec<(AuthorityId, AuthorityWeight)>,
 }
 
 impl<T: Trait> BridgeInfo<T> {
@@ -60,7 +60,7 @@ impl<T: Trait> BridgeInfo<T> {
 			block_number: &T::BlockNumber,
 			block_hash: &T::Hash,
 			state_root: &T::Hash,
-			validator_set: Vec<(T::ValidatorId, ValidatorWeight)>,
+			validator_set: Vec<(AuthorityId, AuthorityWeight)>,
 		) -> Self
 	{
 		// I don't like how this is done, should come back to...
@@ -74,12 +74,8 @@ impl<T: Trait> BridgeInfo<T> {
 }
 
 type BridgeId = u64;
-type ValidatorWeight = u64;
 
-pub trait Trait: system::Trait {
-	/// A stable ID for a validator.
-	type ValidatorId: Member + Parameter;
-}
+pub trait Trait: system::Trait {}
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Bridge {
@@ -98,7 +94,7 @@ decl_module! {
 		fn initialize_bridge(
 			origin,
 			block_header: T::Header,
-			validator_set: Vec<(T::ValidatorId, ValidatorWeight)>,
+			validator_set: Vec<(AuthorityId, AuthorityWeight)>,
 			validator_set_proof: Vec<Vec<u8>>,
 		) {
 			// NOTE: Will want to make this a governance issued call
@@ -137,11 +133,9 @@ impl<T: Trait> Module<T> {
 	fn check_validator_set_proof(
 		state_root: &T::Hash,
 		proof: Vec<Vec<u8>>,
-		validator_set: &Vec<(T::ValidatorId, ValidatorWeight)>,
+		validator_set: &Vec<(AuthorityId, AuthorityWeight)>,
 	) -> std::result::Result<(), Error> {
 
-		// pub const GRANDPA_AUTHORITIES_KEY: &'static [u8] = b":grandpa_authorities";
-		// pub type AuthorityList = Vec<(AuthorityId, AuthorityWeight)>;
 		let checker = <StorageProofChecker<<T::Hashing as sr_primitives::traits::Hash>::Hasher>>::new(
 			*state_root,
 			proof.clone()
@@ -164,13 +158,12 @@ impl<T: Trait> Module<T> {
 mod tests {
 	use super::*;
 
-	use primitives::{Blake2Hasher, H256};
+	use primitives::{Blake2Hasher, H256, Public};
 	use sr_primitives::{
 		Perbill, traits::{Header as HeaderT, IdentityLookup}, testing::Header, generic::Digest,
 	};
 	use support::{assert_ok, assert_err, impl_outer_origin, parameter_types};
 
-	// NOTE: What's this for?
 	impl_outer_origin! {
 		pub enum Origin for Test {}
 	}
@@ -190,7 +183,7 @@ mod tests {
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 
-	type DummyValidatorId = u64;
+	type DummyAuthorityId = u64;
 
 	impl system::Trait for Test {
 		type Origin = Origin;
@@ -199,7 +192,7 @@ mod tests {
 		type Call = ();
 		type Hash = H256;
 		type Hashing = sr_primitives::traits::BlakeTwo256;
-		type AccountId = DummyValidatorId;
+		type AccountId = DummyAuthorityId;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = ();
@@ -210,9 +203,7 @@ mod tests {
 		type Version = ();
 	}
 
-	impl Trait for Test {
-		type ValidatorId = DummyValidatorId;
-	}
+	impl Trait for Test {}
 
 	fn new_test_ext() -> runtime_io::TestExternalities {
 		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
@@ -229,7 +220,15 @@ mod tests {
 		});
 	}
 
-	fn create_dummy_validator_proof(validator_set: Vec<(DummyValidatorId, ValidatorWeight)>) -> (H256, Vec<Vec<u8>>) {
+	fn get_dummy_authorities() -> Vec<(AuthorityId, AuthorityWeight)> {
+		let authority1 = (AuthorityId::from_slice(&[1; 32]), 1);
+		let authority2 = (AuthorityId::from_slice(&[2; 32]), 1);
+		let authority3 = (AuthorityId::from_slice(&[3; 32]), 1);
+
+		vec![authority1, authority2, authority3]
+	}
+
+	fn create_dummy_validator_proof(validator_set: Vec<(AuthorityId, AuthorityWeight)>) -> (H256, Vec<Vec<u8>>) {
 		use state_machine::{prove_read, backend::{Backend, InMemory}};
 
 		let encoded_set = validator_set.encode();
@@ -248,28 +247,31 @@ mod tests {
 
 	#[test]
 	fn it_can_validate_validator_sets() {
-		let validators = vec![(1, 1), (2, 1), (3, 1)];
-		let (root, proof) = create_dummy_validator_proof(validators.clone());
+		let authorities = get_dummy_authorities();
+		let (root, proof) = create_dummy_validator_proof(authorities.clone());
 
-		assert_ok!(MockBridge::check_validator_set_proof(&root, proof, &validators));
+		assert_ok!(MockBridge::check_validator_set_proof(&root, proof, &authorities));
 	}
 
 	#[test]
 	fn it_rejects_invalid_validator_sets() {
-		let validators = vec![(1, 1), (2, 1), (3, 1)];
-		let (root, proof) = create_dummy_validator_proof(validators.clone());
+		let mut authorities = get_dummy_authorities();
+		let (root, proof) = create_dummy_validator_proof(authorities.clone());
 
-		let invalid_validators = vec![(3, 1), (2, 1), (1, 1)];
+		// Do something to make the authority set invalid
+		authorities.reverse();
+		let invalid_authorities = authorities;
+
 		assert_err!(
-			MockBridge::check_validator_set_proof(&root, proof, &invalid_validators),
+			MockBridge::check_validator_set_proof(&root, proof, &invalid_authorities),
 			Error::ValidatorSetMismatch
 		);
 	}
 
 	#[test]
 	fn it_creates_a_new_bridge() {
-		let validators = vec![(1, 1), (2, 1), (3, 1)];
-		let (root, proof) = create_dummy_validator_proof(validators.clone());
+		let authorities = get_dummy_authorities();
+		let (root, proof) = create_dummy_validator_proof(authorities.clone());
 
 		let test_header = Header {
 			parent_hash: H256::default(),
@@ -287,7 +289,7 @@ mod tests {
 				MockBridge::initialize_bridge(
 					Origin::signed(1),
 					test_header,
-					validators.clone(),
+					authorities.clone(),
 					proof,
 			));
 
@@ -297,7 +299,7 @@ mod tests {
 					last_finalized_block_number: 42,
 					last_finalized_block_hash: test_hash,
 					last_finalized_state_root: root,
-					current_validator_set: validators.clone(),
+					current_validator_set: authorities.clone(),
 				}));
 
 			assert_eq!(MockBridge::num_bridges(), 1);
