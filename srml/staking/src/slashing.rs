@@ -56,10 +56,10 @@ pub(crate) type SpanIndex = u32;
 // A range of start..end eras for a slashing span.
 #[derive(Encode, Decode)]
 #[cfg_attr(test, derive(Debug, PartialEq))]
-struct SlashingSpan {
-	index: SpanIndex,
-	start: EraIndex,
-	length: Option<EraIndex>, // the ongoing slashing span has indeterminate length.
+pub(crate) struct SlashingSpan {
+	pub(crate) index: SpanIndex,
+	pub(crate) start: EraIndex,
+	pub(crate) length: Option<EraIndex>, // the ongoing slashing span has indeterminate length.
 }
 
 impl SlashingSpan {
@@ -107,7 +107,7 @@ impl SlashingSpans {
 	}
 
 	// an iterator over all slashing spans in _reverse_ order - most recent first.
-	fn iter(&'_ self) -> impl Iterator<Item = SlashingSpan> + '_ {
+	pub(crate) fn iter(&'_ self) -> impl Iterator<Item = SlashingSpan> + '_ {
 		let mut last_start = self.last_start;
 		let mut index = self.span_index;
 		let last = SlashingSpan { index, start: last_start, length: None };
@@ -350,11 +350,12 @@ impl<'a, T: 'a + Trait> Drop for InspectingSpans<'a, T> {
 		if !self.dirty { return }
 
 		if let Some((start, end)) = self.spans.prune(self.window_start) {
-			<Module<T> as Store>::SlashingSpans::insert(self.stash, &self.spans);
 			for span_index in start..end {
 				<Module<T> as Store>::SpanSlash::remove(&(self.stash.clone(), span_index));
 			}
 		}
+
+		<Module<T> as Store>::SlashingSpans::insert(self.stash, &self.spans);
 	}
 }
 

@@ -21,10 +21,10 @@ use sr_primitives::Perbill;
 use sr_primitives::curve::PiecewiseLinear;
 use sr_primitives::traits::{IdentityLookup, Convert, OpaqueKeys, OnInitialize, SaturatedConversion};
 use sr_primitives::testing::{Header, UintAuthorityId};
-use sr_staking_primitives::SessionIndex;
+use sr_staking_primitives::{SessionIndex, offence::{OffenceDetails, OnOffenceHandler}};
 use primitives::H256;
 use runtime_io;
-use support::{assert_ok, impl_outer_origin, parameter_types, StorageLinkedMap};
+use support::{assert_ok, impl_outer_origin, parameter_types, StorageLinkedMap, StorageValue};
 use support::traits::{Currency, Get, FindAuthor};
 use crate::{
 	EraIndex, GenesisConfig, Module, Trait, StakerStatus, ValidatorPrefs, RewardDestination,
@@ -450,4 +450,34 @@ pub fn reward_all_elected() {
 
 pub fn validator_controllers() -> Vec<AccountId> {
 	Session::validators().into_iter().map(|s| Staking::bonded(&s).expect("no controller for validator")).collect()
+}
+
+pub fn on_offence_in_era(
+	offenders: &[OffenceDetails<AccountId, session::historical::IdentificationTuple<Test>>],
+	slash_fraction: &[Perbill],
+	era: EraIndex,
+) {
+	let bonded_eras = crate::BondedEras::get();
+	for &(bonded_era, start_session) in bonded_eras.iter() {
+		if bonded_era == era {
+			Staking::on_offence(offenders, slash_fraction, start_session);
+			return
+		} else if bonded_era > era {
+			break
+		}
+	}
+
+	if Staking::current_era() == era {
+		Staking::on_offence(offenders, slash_fraction, Staking::current_era_start_session_index());
+	} else {
+		panic!("cannot slash in era {}", era);
+	}
+}
+
+pub fn on_offence_now(
+	offenders: &[OffenceDetails<AccountId, session::historical::IdentificationTuple<Test>>],
+	slash_fraction: &[Perbill],
+) {
+	let now = Staking::current_era();
+	on_offence_in_era(offenders, slash_fraction, now)
 }
