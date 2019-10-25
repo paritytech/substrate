@@ -14,11 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use primitives::{
-	blake2_128, blake2_256, twox_128, twox_256, twox_64, ed25519, Blake2Hasher, sr25519, Pair, H256,
-	traits::KeystoreExt, storage::ChildStorageKey, hexdisplay::HexDisplay, Hasher,
-	offchain::{self, OffchainExt},
-};
 // Switch to this after PoC-3
 // pub use primitives::BlakeHasher;
 pub use substrate_state_machine::{BasicExternalities, TestExternalities};
@@ -28,10 +23,6 @@ use trie::{TrieConfiguration, trie_types::Layout};
 use std::{collections::HashMap, convert::TryFrom};
 
 use externalities::Externalities;
-
-/// Additional bounds for `Hasher` trait for with_std.
-pub trait HasherBounds {}
-impl<T: Hasher> HasherBounds for T {}
 
 /// Execute the given closure with global function available whose functionality routes into the
 /// externalities `ext`. Forwards the value that the closure returns.

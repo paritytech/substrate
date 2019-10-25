@@ -30,13 +30,13 @@ use wasm_interface::{FunctionContext, Pointer, Result};
 
 use codec::{Encode, Decode};
 
-use rstd::{any::TypeId, mem, vec::Vec, boxed::Box};
+use rstd::{any::TypeId, mem, vec::Vec};
 
 #[cfg(feature = "std")]
 use rstd::borrow::Cow;
 
 #[cfg(not(feature = "std"))]
-use rstd::slice;
+use rstd::{slice, boxed::Box};
 
 // Make sure that our assumptions for storing a pointer + its size in `u64` is valid.
 #[cfg(not(feature = "std"))]

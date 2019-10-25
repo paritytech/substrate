@@ -27,10 +27,7 @@ use primitives::{
 	crypto::KeyTypeId, offchain,
 };
 use trie::{TrieConfiguration, trie_types::Layout};
-use wasm_interface::{
-	FunctionContext, Pointer, PointerType, Result as WResult, WordSize,
-	WritePrimitive, ReadPrimitive,
-};
+use wasm_interface::{Pointer, WordSize, WritePrimitive, ReadPrimitive};
 
 #[cfg(feature="wasm-extern-trace")]
 macro_rules! debug_trace {

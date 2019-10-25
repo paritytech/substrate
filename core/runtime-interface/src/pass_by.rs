@@ -27,10 +27,10 @@ use crate::wasm::*;
 #[cfg(feature = "std")]
 use wasm_interface::{FunctionContext, Pointer, Result};
 
-use rstd::{marker::PhantomData, vec::Vec};
+use rstd::{marker::PhantomData};
 
 #[cfg(not(feature = "std"))]
-use rstd::slice;
+use rstd::{slice, vec::Vec};
 
 pub use substrate_runtime_interface_proc_macro::{PassByCodec, PassByInner};
 
