@@ -9,14 +9,18 @@ type ResponseFuture = Box<dyn Future<Item=Response<Body>, Error=GenericError> + 
 fn api_response(req: Request<Body>) -> ResponseFuture {
 	match req.uri().path() {
 		"/" => Box::new(future::ok(Response::new(Body::empty()))),
-		"/search" => respond(req, |_: SearchRequest| METRICS.read().keys().cloned().collect::<Vec<_>>()),
+		"/search" => respond(req, |req: SearchRequest| {
+			// Filter and return metrics relating to the search term
+			METRICS.read().keys().filter(|key| key.starts_with(&req.target)).cloned().collect::<Vec<_>>()
+		}),
 		"/query" => {
 			respond(req, |req: QueryRequest| {
 				let metrics = METRICS.read();
 
+				// Return timeseries data related to the specified metrics
 				req.targets.iter()
 					.map(|target| {
-						let datapoints = metrics.get(&target.target).iter()
+						let datapoints = metrics.get(target.target.as_str()).iter()
 							.flat_map(|&vec| vec)
 							.filter(|(_, timestamp)| req.range.from <= *timestamp && *timestamp <= req.range.to)
 							.map(|(value, timestamp)| (*value, timestamp.timestamp_millis() as u64))
@@ -56,8 +60,9 @@ fn respond<Req, Res, T>(req: Request<Body>, transformation: T) -> ResponseFuture
 	)
 }
 
-pub fn run_server(address: &std::net::SocketAddr) -> impl Future<Item=(), Error=()> {
+pub fn run_server<F: Future<Item = (), Error = ()>>(address: &std::net::SocketAddr, shutdown: F) -> impl Future<Item=(), Error=()> {
 	Server::bind(address)
 		.serve(|| service_fn(api_response))
+		.with_graceful_shutdown(shutdown)
 		.map_err(|e| eprintln!("server error: {}", e))
 }

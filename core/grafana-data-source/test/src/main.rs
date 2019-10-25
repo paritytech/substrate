@@ -15,6 +15,6 @@ fn main() {
 			sleep(Duration::from_secs(1));
 		}
 	});
-	hyper::rt::run(run_server(&"127.0.0.1:9955".parse().unwrap()));
+	hyper::rt::run(run_server(&"127.0.0.1:9955".parse().unwrap(), futures::future::empty()));
 	handle.join().unwrap();
 }

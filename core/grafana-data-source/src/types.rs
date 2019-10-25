@@ -11,7 +11,7 @@ pub enum TargetType {
 
 #[derive(Serialize, Deserialize)]
 pub struct SearchRequest {
-	target: String
+	pub target: String
 }
 
 #[derive(Serialize, Deserialize, Debug)]

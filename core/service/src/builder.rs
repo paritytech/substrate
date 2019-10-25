@@ -48,6 +48,7 @@ use std::{io::{Read, Write, Seek}, marker::PhantomData, sync::Arc, sync::atomic:
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use tel::{telemetry, SUBSTRATE_INFO};
 use transaction_pool::txpool::{self, ChainApi, Pool as TransactionPool};
+use grafana_data_source::{self, record_metrics};
 
 /// Aggregator for the components required to build a service.
 ///
@@ -965,6 +966,17 @@ ServiceBuilder<
 				"bandwidth_upload" => bandwidth_upload,
 				"used_state_cache_size" => used_state_cache_size,
 			);
+			record_metrics!(
+				"peers" => num_peers,
+				"height" => best_number,
+				"txcount" => txpool_status.ready,
+				"cpu" => cpu_usage,
+				"memory" => memory,
+				"finalized_height" => finalized_number,
+				"bandwidth_download" => bandwidth_download,
+				"bandwidth_upload" => bandwidth_upload,
+				"used_state_cache_size" => used_state_cache_size
+			);
 
 			Ok(())
 		}).select(exit.clone()).then(|_| Ok(()));
@@ -1099,6 +1111,13 @@ ServiceBuilder<
 				.then(|_| Ok(()))));
 			telemetry
 		});
+
+		// Grafana data source
+		if let Some(port) = config.grafana_port {
+			let _ = to_spawn_tx.unbounded_send(Box::new(
+				grafana_data_source::run_server(&port, exit.clone())
+			));
+		}
 
 		Ok(Service {
 			client,
