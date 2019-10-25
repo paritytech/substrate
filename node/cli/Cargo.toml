@@ -63,3 +63,10 @@ tempfile = "3.1.0"
 [build-dependencies]
 cli = { package = "substrate-cli", path = "../../core/cli" }
 structopt = "0.3.3"
+
+[features]
+wasmtime = [
+    "cli/wasmtime",
+    "node-executor/wasmtime",
+    "substrate-service/wasmtime",
+]
