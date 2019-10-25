@@ -200,7 +200,10 @@ fn generate_host_function_implementation(
 	let struct_name = Ident::new(&name.to_pascal_case(), Span::call_site());
 	let crate_ = generate_crate_access();
 	let signature = generate_wasm_interface_signature_for_host_function(&method.sig)?;
-	let wasm_to_ffi_values = generate_wasm_to_ffi_values(&method.sig).collect::<Result<Vec<_>>>()?;
+	let wasm_to_ffi_values = generate_wasm_to_ffi_values(
+		&method.sig,
+		trait_name,
+	).collect::<Result<Vec<_>>>()?;
 	let ffi_to_host_values = generate_ffi_to_host_value(&method.sig).collect::<Result<Vec<_>>>()?;
 	let host_function_call = generate_host_function_call(&method.sig, is_wasm_only);
 	let into_preallocated_ffi_value = generate_into_preallocated_ffi_value(&method.sig)?;
@@ -269,6 +272,7 @@ fn generate_wasm_interface_signature_for_host_function(sig: &Signature) -> Resul
 /// values.
 fn generate_wasm_to_ffi_values<'a>(
 	sig: &'a Signature,
+	trait_name: &'a Ident,
 ) -> impl Iterator<Item = Result<TokenStream>> + 'a {
 	let crate_ = generate_crate_access();
 	let function_name = &sig.ident;
@@ -280,9 +284,10 @@ fn generate_wasm_to_ffi_values<'a>(
 	get_function_argument_names_and_types_without_ref(sig)
 		.map(move |(name, ty)| {
 			let try_from_error = format!(
-				"Could not instantiate `{}` from wasm value while executing `{}`!",
+				"Could not instantiate `{}` from wasm value while executing `{}` from interface `{}`!",
 				name.to_token_stream(),
 				function_name,
+				trait_name,
 			);
 
 			let var_name = generate_ffi_value_var_name(name)?;
