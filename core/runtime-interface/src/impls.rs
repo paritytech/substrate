@@ -46,14 +46,13 @@ assert_eq_size!(*const u8, u32);
 
 /// Converts a pointer and length into an `u64`.
 pub fn pointer_and_len_to_u64(ptr: u32, len: u32) -> u64 {
-	((len as u64) | u64::from(ptr) << 32).to_le()
+	(u64::from(len) << 32) | u64::from(ptr)
 }
 
 /// Splits an `u64` into the pointer and length.
 pub fn pointer_and_len_from_u64(val: u64) -> (u32, u32) {
-	let val = u64::from_le(val);
-	let len = (val & (!0u32 as u64)) as u32;
-	let ptr = (val >> 32) as u32;
+	let ptr = (val & (!0u32 as u64)) as u32;
+	let len = (val >> 32) as u32;
 
 	(ptr, len)
 }
@@ -75,14 +74,14 @@ macro_rules! impl_traits_for_primitives {
 				type Owned = ();
 
 				fn into_ffi_value(&self) -> WrappedFFIValue<$fty> {
-					(*self as $fty).to_le().into()
+					(*self as $fty).into()
 				}
 			}
 
 			#[cfg(not(feature = "std"))]
 			impl FromFFIValue for $rty {
 				fn from_ffi_value(arg: $fty) -> $rty {
-					<$fty>::from_le(arg) as $rty
+					arg as $rty
 				}
 			}
 
@@ -91,14 +90,14 @@ macro_rules! impl_traits_for_primitives {
 				type SelfInstance = $rty;
 
 				fn from_ffi_value(_: &mut dyn FunctionContext, arg: $fty) -> Result<$rty> {
-					Ok(<$fty>::from_le(arg) as $rty)
+					Ok(arg as $rty)
 				}
 			}
 
 			#[cfg(feature = "std")]
 			impl IntoFFIValue for $rty {
 				fn into_ffi_value(self, _: &mut dyn FunctionContext) -> Result<$fty> {
-					Ok((self as $fty).to_le())
+					Ok(self as $fty)
 				}
 			}
 		)*
