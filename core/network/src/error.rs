@@ -18,16 +18,42 @@
 
 use client;
 
+use libp2p::{PeerId, Multiaddr};
+
+use std::fmt;
+
 /// Result type alias for the network.
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// Error type for the network.
-#[derive(Debug, derive_more::Display, derive_more::From)]
+#[derive(derive_more::Display, derive_more::From)]
 pub enum Error {
 	/// Io error
 	Io(std::io::Error),
 	/// Client error
 	Client(client::error::Error),
+	/// The same bootnode (based on address) is registered with two different peer ids.
+	#[display(
+		fmt = "The same bootnode (`{}`) is registered with two different peer ids: `{}` and `{}`",
+		address,
+		first_id,
+		second_id,
+	)]
+	DuplicateBootnode {
+		/// The address of the bootnode.
+		address: Multiaddr,
+		/// The first peer id that was found for the bootnode.
+		first_id: PeerId,
+		/// The second peer id that was found for the bootnode.
+		second_id: PeerId,
+	},
+}
+
+// Make `Debug` use the `Display` implementation.
+impl fmt::Debug for Error {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		fmt::Display::fmt(self, f)
+	}
 }
 
 impl std::error::Error for Error {
@@ -35,6 +61,7 @@ impl std::error::Error for Error {
 		match self {
 			Error::Io(ref err) => Some(err),
 			Error::Client(ref err) => Some(err),
+			Error::DuplicateBootnode { .. } => None,
 		}
 	}
 }

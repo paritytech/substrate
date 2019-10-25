@@ -21,6 +21,7 @@ use std::ops::Deref;
 use lazy_static::lazy_static;
 use primitives::{sr25519::{Pair, Public, Signature}, Pair as PairT, Public as PublicT, H256};
 pub use primitives::sr25519;
+use sr_primitives::AccountId32;
 
 /// Set of test accounts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum_macros::Display, strum_macros::EnumIter)]
@@ -38,6 +39,10 @@ pub enum Keyring {
 impl Keyring {
 	pub fn from_public(who: &Public) -> Option<Keyring> {
 		Self::iter().find(|&k| &Public::from(k) == who)
+	}
+
+	pub fn from_account_id(who: &AccountId32) -> Option<Keyring> {
+		Self::iter().find(|&k| &k.to_account_id() == who)
 	}
 
 	pub fn from_raw_public(who: [u8; 32]) -> Option<Keyring> {
@@ -58,6 +63,10 @@ impl Keyring {
 
 	pub fn to_raw_public_vec(self) -> Vec<u8> {
 		Public::from(self).to_raw_vec()
+	}
+
+	pub fn to_account_id(self) -> AccountId32 {
+		self.to_raw_public().into()
 	}
 
 	pub fn sign(self, msg: &[u8]) -> Signature {
@@ -112,6 +121,12 @@ lazy_static! {
 	static ref PUBLIC_KEYS: HashMap<Keyring, Public> = {
 		PRIVATE_KEYS.iter().map(|(&name, pair)| (name, pair.public())).collect()
 	};
+}
+
+impl From<Keyring> for AccountId32 {
+	fn from(k: Keyring) -> Self {
+		k.to_account_id()
+	}
 }
 
 impl From<Keyring> for Public {

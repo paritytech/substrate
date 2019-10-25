@@ -24,9 +24,9 @@
 //! # use sr_primitives::generic::BlockId;
 //! # use std::{sync::Arc, time::Duration};
 //! # use test_client::{self, runtime::{Extrinsic, Transfer}, AccountKeyring};
-//! # use transaction_pool::BasicTransactionPool;
+//! # use txpool::{BasicPool, FullChainApi};
 //! # let client = Arc::new(test_client::new());
-//! # let txpool = Arc::new(BasicTransactionPool::default_full(Default::default(), client.clone()));
+//! # let txpool = Arc::new(BasicPool::new(Default::default(), FullChainApi::new(client.clone())));
 //! // The first step is to create a `ProposerFactory`.
 //! let mut proposer_factory = ProposerFactory {
 //! 	client: client.clone(),

@@ -39,7 +39,7 @@ use network::{consensus_gossip as network_gossip, NetworkService};
 use network_gossip::ConsensusMessage;
 use codec::{Encode, Decode};
 use primitives::Pair;
-use sr_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
+use sr_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, NumberFor};
 use substrate_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_INFO};
 use tokio_executor::Executor;
 
@@ -129,6 +129,14 @@ pub trait Network<Block: BlockT>: Clone + Send + 'static {
 
 	/// Inform peers that a block with given hash should be downloaded.
 	fn announce(&self, block: Block::Hash, associated_data: Vec<u8>);
+
+	/// Notifies the sync service to try and sync the given block from the given
+	/// peers.
+	///
+	/// If the given vector of peers is empty then the underlying implementation
+	/// should make a best effort to fetch the block from any peers it is
+	/// connected to (NOTE: this assumption will change in the future #3629).
+	fn set_sync_fork_request(&self, peers: Vec<network::PeerId>, hash: Block::Hash, number: NumberFor<Block>);
 }
 
 /// Create a unique topic for a round and set-id combo.
@@ -215,6 +223,10 @@ impl<B, S, H> Network<B> for Arc<NetworkService<B, S, H>> where
 
 	fn announce(&self, block: B::Hash, associated_data: Vec<u8>) {
 		self.announce_block(block, associated_data)
+	}
+
+	fn set_sync_fork_request(&self, peers: Vec<network::PeerId>, hash: B::Hash, number: NumberFor<B>) {
+		NetworkService::set_sync_fork_request(self, peers, hash, number)
 	}
 }
 
@@ -468,6 +480,9 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 			format!("Failed to receive on unbounded receiver for round {}", round.0)
 		));
 
+		// Combine incoming votes from external GRANDPA nodes with outgoing
+		// votes from our own GRANDPA voter to have a single
+		// vote-import-pipeline.
 		let incoming = incoming.select(out_rx);
 
 		(incoming, outgoing)
@@ -513,6 +528,16 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		});
 
 		(incoming, outgoing)
+	}
+
+	/// Notifies the sync service to try and sync the given block from the given
+	/// peers.
+	///
+	/// If the given vector of peers is empty then the underlying implementation
+	/// should make a best effort to fetch the block from any peers it is
+	/// connected to (NOTE: this assumption will change in the future #3629).
+	pub(crate) fn set_sync_fork_request(&self, peers: Vec<network::PeerId>, hash: B::Hash, number: NumberFor<B>) {
+		self.service.set_sync_fork_request(peers, hash, number)
 	}
 }
 
