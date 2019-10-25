@@ -150,7 +150,11 @@ where
 			})
 			.collect::<Vec<_>>();
 
-		T::OnOffenceHandler::on_offence(&concurrent_offenders, &slash_perbill);
+		T::OnOffenceHandler::on_offence(
+			&concurrent_offenders,
+			&slash_perbill,
+			offence.session_index(),
+		);
 	}
 }
 

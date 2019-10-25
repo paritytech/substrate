@@ -1434,21 +1434,30 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, session::historical::Identificati
 	fn on_offence(
 		offenders: &[OffenceDetails<T::AccountId, session::historical::IdentificationTuple<T>>],
 		slash_fraction: &[Perbill],
+		slash_session: SessionIndex,
 	) {
 		let slash_reward_fraction = SlashRewardFraction::get();
 
 		let era_now = Self::current_era();
 		let window_start = era_now.saturating_sub(T::BondingDuration::get());
 		let current_era_start_session = CurrentEraStartSessionIndex::get();
-		let mut bonded_eras = None;
+
+		// fast path for current-era report - most likely.
+		let slash_era = if slash_session >= current_era_start_session {
+			era_now
+		} else {
+			let eras = BondedEras::get();
+
+			// reverse because it's more likely to find reports from recent eras.
+			match eras.iter().rev().filter(|&&(_, ref sesh)| sesh <= &slash_session).next() {
+				None => return, // before bonding period. defensive - should be filtered out.
+				Some(&(ref slash_era, _)) => *slash_era,
+			}
+		};
 
 		for (details, slash_fraction) in offenders.iter().zip(slash_fraction) {
 			let stash = &details.offender.0;
 			let exposure = &details.offender.1;
-
-			// TODO
-			// let slash_session = unimplemented!();
-			let slash_session = current_era_start_session;
 
 			// Skip if the validator is invulnerable.
 			if Self::invulnerables().contains(stash) {
@@ -1464,16 +1473,6 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, session::historical::Identificati
 			if amount.is_zero() {
 				continue;
 			}
-
-			let slash_era = if slash_session >= current_era_start_session {
-				era_now
-			} else {
-				let eras = bonded_eras.get_or_insert_with(|| BondedEras::get()).iter().rev();
-				match eras.filter(|&&(_, ref sesh)| sesh <= &slash_session).next() {
-					None => continue, // before bonding period. defensive - should be filtered out.
-					Some(&(ref slash_era, _)) => *slash_era,
-				}
-			};
 
 			slashing::slash::<T>(slashing::SlashParams {
 				stash,
@@ -1506,7 +1505,7 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, session::historical::Identificati
 	}
 }
 
-/// Filter historical offences out and only allow those from the current era.
+/// Filter historical offences out and only allow those from the bonding period.
 pub struct FilterHistoricalOffences<T, R> {
 	_inner: rstd::marker::PhantomData<(T, R)>,
 }
@@ -1518,9 +1517,11 @@ impl<T, Reporter, Offender, R, O> ReportOffence<Reporter, Offender, O>
 	O: Offence<Offender>,
 {
 	fn report_offence(reporters: Vec<Reporter>, offence: O) {
-		// disallow any slashing from before the current era.
+		// disallow any slashing from before the current bonding period.
 		let offence_session = offence.session_index();
-		if offence_session >= <Module<T>>::current_era_start_session_index() {
+		let bonded_eras = BondedEras::get();
+
+		if bonded_eras.first().filter(|(_, start)| offence_session >= *start).is_some() {
 			R::report_offence(reporters, offence)
 		} else {
 			<Module<T>>::deposit_event(
