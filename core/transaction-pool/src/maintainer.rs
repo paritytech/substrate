@@ -46,7 +46,11 @@ pub struct FullBasicPoolMaintainer<Backend, Executor, Block: BlockT, Api, PoolAp
 	client: Arc<Client<Backend, Executor, Block, Api>>,
 }
 
-impl<Backend, Executor, Block: BlockT, Api, PoolApi: ChainApi> FullBasicPoolMaintainer<Backend, Executor, Block, Api, PoolApi> {
+impl<Backend, Executor, Block, Api, PoolApi> FullBasicPoolMaintainer<Backend, Executor, Block, Api, PoolApi>
+	where
+		Block: BlockT,
+		PoolApi: ChainApi,
+{
 	/// Create new basic full pool maintainer.
 	pub fn new(
 		pool: Arc<txpool::Pool<PoolApi>>,
