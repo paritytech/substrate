@@ -591,3 +591,15 @@ pub use self::imp::{StorageOverlay, ChildrenStorageOverlay, with_storage};
 /// Type alias for Externalities implementation used in tests.
 #[cfg(feature = "std")]
 pub type TestExternalities = self::imp::TestExternalities<primitives::Blake2Hasher, u64>;
+
+/// The host functions Substrate provides for the Wasm runtime environment.
+///
+/// All these host functions will be callable from inside the Wasm environment.
+#[cfg(feature = "std")]
+pub type SubstrateHostFunctions = (
+	storage::HostFunctions,
+	misc::HostFunctions,
+	offchain::HostFunctions,
+	crypto::HostFunctions,
+	hashing::HostFunctions,
+);

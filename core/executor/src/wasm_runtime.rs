@@ -19,13 +19,19 @@
 //! The primary means of accessing the runtimes is through a cache which saves the reusable
 //! components of the runtime that are expensive to initialize.
 
-use crate::error::{Error, WasmError};
-use crate::wasmi_execution;
+use crate::{wasmi_execution, error::{Error, WasmError}};
+
 use log::{trace, warn};
+
 use codec::Decode;
+
 use primitives::{storage::well_known_keys, traits::Externalities};
+
 use runtime_version::RuntimeVersion;
+
 use std::{collections::hash_map::{Entry, HashMap}};
+
+use wasm_interface::HostFunctions;
 
 /// The Substrate Wasm runtime.
 pub trait WasmRuntime {
@@ -109,7 +115,7 @@ impl RuntimesCache {
 	///
 	/// `Error::InvalidMemoryReference` is returned if no memory export with the
 	/// identifier `memory` can be found in the runtime.
-	pub fn fetch_runtime<E: Externalities>(
+	pub fn fetch_runtime<E: Externalities, HF: HostFunctions>(
 		&mut self,
 		ext: &mut E,
 		wasm_method: WasmExecutionMethod,
@@ -133,7 +139,7 @@ impl RuntimesCache {
 							target: "runtimes_cache",
 							"heap_pages were changed. Reinstantiating the instance"
 						);
-						*result = create_wasm_runtime(ext, wasm_method, heap_pages);
+						*result = create_wasm_runtime::<_, HF>(ext, wasm_method, heap_pages);
 						if let Err(ref err) = result {
 							warn!(target: "runtimes_cache", "cannot create a runtime: {:?}", err);
 						}
@@ -143,7 +149,7 @@ impl RuntimesCache {
 			},
 			Entry::Vacant(v) => {
 				trace!(target: "runtimes_cache", "no instance found in cache, creating now.");
-				let result = create_wasm_runtime(ext, wasm_method, heap_pages);
+				let result = create_wasm_runtime::<_, HF>(ext, wasm_method, heap_pages);
 				if let Err(ref err) = result {
 					warn!(target: "runtimes_cache", "cannot create a runtime: {:?}", err);
 				}
@@ -158,7 +164,7 @@ impl RuntimesCache {
 }
 
 /// Create a wasm runtime with the given `code`.
-pub fn create_wasm_runtime_with_code<E: Externalities>(
+pub fn create_wasm_runtime_with_code<E: Externalities, HF: HostFunctions>(
 	ext: &mut E,
 	wasm_method: WasmExecutionMethod,
 	heap_pages: u64,
@@ -166,12 +172,12 @@ pub fn create_wasm_runtime_with_code<E: Externalities>(
 ) -> Result<Box<dyn WasmRuntime>, WasmError> {
 	match wasm_method {
 		WasmExecutionMethod::Interpreted =>
-			wasmi_execution::create_instance(ext, code, heap_pages)
+			wasmi_execution::create_instance::<_, HF>(ext, code, heap_pages)
 				.map(|runtime| -> Box<dyn WasmRuntime> { Box::new(runtime) }),
 	}
 }
 
-fn create_wasm_runtime<E: Externalities>(
+fn create_wasm_runtime<E: Externalities, HF: HostFunctions>(
 	ext: &mut E,
 	wasm_method: WasmExecutionMethod,
 	heap_pages: u64,
@@ -179,5 +185,5 @@ fn create_wasm_runtime<E: Externalities>(
 	let code = ext
 		.original_storage(well_known_keys::CODE)
 		.ok_or(WasmError::CodeNotFound)?;
-	create_wasm_runtime_with_code(ext, wasm_method, heap_pages, &code)
+	create_wasm_runtime_with_code::<_, HF>(ext, wasm_method, heap_pages, &code)
 }

@@ -65,7 +65,7 @@ pub trait NativeExecutionDispatch: Send + Sync {
 #[derive(Debug)]
 pub struct NativeExecutor<D> {
 	/// Dummy field to avoid the compiler complaining about us not using `D`.
-	_dummy: ::std::marker::PhantomData<D>,
+	_dummy: std::marker::PhantomData<D>,
 	/// Method used to execute fallback Wasm code.
 	fallback_method: WasmExecutionMethod,
 	/// Native runtime version info.
@@ -99,7 +99,11 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 	) -> Result<R> where E: Externalities {
 		RUNTIMES_CACHE.with(|cache| {
 			let mut cache = cache.borrow_mut();
-			let runtime = cache.fetch_runtime(ext, self.fallback_method, self.default_heap_pages)?;
+			let runtime = cache.fetch_runtime::<_, runtime_io::SubstrateHostFunctions>(
+				ext,
+				self.fallback_method,
+				self.default_heap_pages,
+			)?;
 			f(runtime, ext)
 		})
 	}

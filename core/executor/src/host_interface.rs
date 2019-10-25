@@ -1056,7 +1056,7 @@ impl_wasm_host_interface! {
 
 			Ok(match res {
 				Ok(read) => {
-					context.write_memory(buffer, &internal_buffer[..read])
+					context.write_memory(buffer, &internal_buffer[..read as usize])
 						.map_err(|_| "Invalid attempt to set memory in ext_http_response_read_body")?;
 
 					read as u32

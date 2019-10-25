@@ -65,22 +65,21 @@ pub trait RIType {
 mod tests {
 	use super::*;
 	use test_wasm::{WASM_BINARY, test_api::HostFunctions};
-	use executor::WasmExecutor;
 	use wasm_interface::HostFunctions as HostFunctionsT;
 
-	type TestExternalities<H> = state_machine::TestExternalities<H, u64>;
+	type TestExternalities = state_machine::TestExternalities<primitives::Blake2Hasher, u64>;
 
 	fn call_wasm_method<HF: HostFunctionsT>(method: &str) -> TestExternalities {
 		let mut ext = TestExternalities::default();
-		let executor = WasmExecutor::<HF>::new();
+		let mut ext_ext = ext.ext();
 
-		executor.call_with_custom_signature::<_, _, _, ()>(
-			&mut ext,
-			8,
-			&WASM_BINARY[..],
+		executor::call_in_wasm::<_, HF>(
 			method,
-			|_| Ok(Vec::new()),
-			|res, _| if res.is_none() { Ok(Some(())) } else { Err("Invalid return value!".into()) },
+			&[],
+			executor::WasmExecutionMethod::Interpreted,
+			&mut ext_ext,
+			&WASM_BINARY[..],
+			8,
 		).expect(&format!("Executes `{}`", method));
 
 		ext
@@ -98,10 +97,10 @@ mod tests {
 
 	#[test]
 	fn test_set_storage() {
-		let ext = call_wasm_method::<HostFunctions>("test_set_storage");
+		let mut ext = call_wasm_method::<HostFunctions>("test_set_storage");
 
 		let expected = "world";
-		assert_eq!(expected.as_bytes(), &ext.storage("hello".as_bytes()).unwrap()[..]);
+		assert_eq!(expected.as_bytes(), &ext.ext().storage("hello".as_bytes()).unwrap()[..]);
 	}
 
 	#[test]

@@ -60,7 +60,7 @@ pub use wasm_runtime::WasmExecutionMethod;
 /// - `heap_pages`: The number of heap pages to allocate.
 ///
 /// Returns the `Vec<u8>` that contains the return value of the function.
-pub fn call_in_wasm<E: Externalities>(
+pub fn call_in_wasm<E: Externalities, HF: wasm_interface::HostFunctions>(
 	function: &str,
 	call_data: &[u8],
 	execution_method: WasmExecutionMethod,
@@ -68,7 +68,7 @@ pub fn call_in_wasm<E: Externalities>(
 	code: &[u8],
 	heap_pages: u64,
 ) -> error::Result<Vec<u8>> {
-	let mut instance = wasm_runtime::create_wasm_runtime_with_code(
+	let mut instance = wasm_runtime::create_wasm_runtime_with_code::<_, HF>(
 		ext,
 		execution_method,
 		heap_pages,

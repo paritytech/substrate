@@ -18,6 +18,7 @@ primitive-types = { version = "0.5.1", default-features = false }
 executor = { package = "substrate-executor", path = "../executor" }
 test-wasm = { package = "substrate-runtime-interface-test-wasm", path = "test-wasm" }
 state_machine = { package = "substrate-state-machine", path = "../state-machine"  }
+primitives = { package = "substrate-primitives", path = "../primitives"  }
 
 [features]
 default = [ "std" ]

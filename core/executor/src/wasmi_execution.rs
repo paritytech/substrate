@@ -313,7 +313,7 @@ impl<HF: HostFunctions> wasmi::Externals for FunctionExecutor<HF> {
 		-> Result<Option<wasmi::RuntimeValue>, wasmi::Trap>
 	{
 		let mut args = args.as_ref().iter().copied().map(Into::into);
-		let function = SubstrateExternals::functions().get(index).ok_or_else(||
+		let function = SubstrateExternals::get_function(index).ok_or_else(||
 			Error::from(
 				format!("Could not find host function with index: {}", index),
 			)
@@ -352,13 +352,13 @@ fn get_heap_base(module: &ModuleRef) -> Result<u32, Error> {
 }
 
 /// Call a given method in the given wasm-module runtime.
-fn call_in_wasm_module(
+fn call_in_wasm_module<HF: HostFunctions>(
 	ext: &mut dyn Externalities,
 	module_instance: &ModuleRef,
 	method: &str,
 	data: &[u8],
 ) -> Result<Vec<u8>, Error> {
-	call_in_wasm_module_with_custom_signature(
+	call_in_wasm_module_with_custom_signature::<HF, _, _, _>(
 		ext,
 		module_instance,
 		method,
@@ -380,6 +380,7 @@ fn call_in_wasm_module(
 
 /// Call a given method in the given wasm-module runtime.
 fn call_in_wasm_module_with_custom_signature<
+	HF: HostFunctions,
 	F: FnOnce(&mut dyn FnMut(&[u8]) -> Result<u32, Error>) -> Result<Vec<RuntimeValue>, Error>,
 	FR: FnOnce(Option<RuntimeValue>, &MemoryRef) -> Result<Option<R>, Error>,
 	R,
@@ -398,11 +399,7 @@ fn call_in_wasm_module_with_custom_signature<
 		.and_then(|e| e.as_table().cloned());
 	let heap_base = get_heap_base(module_instance)?;
 
-	let mut fec = FunctionExecutor::new(
-		memory.clone(),
-		heap_base,
-		table,
-	)?;
+	let mut fec = FunctionExecutor::<HF>::new(memory.clone(), heap_base, table)?;
 
 	let parameters = create_parameters(&mut |data: &[u8]| {
 		let offset = fec.allocate_memory(data.len() as u32)?;
@@ -431,7 +428,7 @@ fn call_in_wasm_module_with_custom_signature<
 }
 
 /// Prepare module instance
-fn instantiate_module(
+fn instantiate_module<HF: HostFunctions>(
 	heap_pages: usize,
 	module: &Module,
 ) -> Result<ModuleRef, Error> {
@@ -439,7 +436,7 @@ fn instantiate_module(
 	let intermediate_instance = ModuleInstance::new(
 		module,
 		&ImportsBuilder::new()
-			.with_resolver("env", FunctionExecutor::resolver())
+			.with_resolver("env", FunctionExecutor::<HF>::resolver())
 	)?;
 
 	// Verify that the module has the heap base global variable.
@@ -603,7 +600,7 @@ impl WasmRuntime for WasmiRuntime {
 			-> Result<Vec<u8>, Error>
 	{
 		self.with(|module| {
-			call_in_wasm_module(ext, module, method, data)
+			call_in_wasm_module::<runtime_io::SubstrateHostFunctions>(ext, module, method, data)
 		})
 	}
 
@@ -612,9 +609,11 @@ impl WasmRuntime for WasmiRuntime {
 	}
 }
 
-pub fn create_instance<E: Externalities>(ext: &mut E, code: &[u8], heap_pages: u64)
-	-> Result<WasmiRuntime, WasmError>
-{
+pub fn create_instance<E: Externalities, HF: HostFunctions>(
+	ext: &mut E,
+	code: &[u8],
+	heap_pages: u64,
+) -> Result<WasmiRuntime, WasmError> {
 	let module = Module::from_buffer(&code).map_err(|_| WasmError::InvalidModule)?;
 
 	// Extract the data segments from the wasm code.
@@ -624,7 +623,7 @@ pub fn create_instance<E: Externalities>(ext: &mut E, code: &[u8], heap_pages: u
 	let data_segments = extract_data_segments(&code)?;
 
 	// Instantiate this module.
-	let instance = instantiate_module(heap_pages as usize, &module)
+	let instance = instantiate_module::<HF>(heap_pages as usize, &module)
 		.map_err(WasmError::Instantiation)?;
 
 	// Take state snapshot before executing anything.
@@ -636,7 +635,7 @@ pub fn create_instance<E: Externalities>(ext: &mut E, code: &[u8], heap_pages: u
 				",
 		);
 
-	let version = call_in_wasm_module(ext, &instance, "Core_version", &[])
+	let version = call_in_wasm_module::<HF>(ext, &instance, "Core_version", &[])
 		.ok()
 		.and_then(|v| RuntimeVersion::decode(&mut v.as_slice()).ok());
 	Ok(WasmiRuntime {

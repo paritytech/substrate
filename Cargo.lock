@@ -5523,6 +5523,7 @@ dependencies = [
  "static_assertions 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-executor 2.0.0",
  "substrate-externalities 2.0.0",
+ "substrate-primitives 2.0.0",
  "substrate-runtime-interface-proc-macro 2.0.0",
  "substrate-runtime-interface-test-wasm 2.0.0",
  "substrate-state-machine 2.0.0",
