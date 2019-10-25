@@ -2022,6 +2022,7 @@ fn slashing_nominators_by_span_max() {
 
 		assert_eq!(Balances::free_balance(&11), 1000);
 		assert_eq!(Balances::free_balance(&21), 2000);
+		assert_eq!(Balances::free_balance(&101), 2000);
 		assert_eq!(Staking::slashable_balance_of(&21), 1000);
 
 
@@ -2109,5 +2110,63 @@ fn slashing_nominators_by_span_max() {
 
 		// only the maximum slash in a single span is taken.
 		assert_eq!(Balances::free_balance(&101), 2000 - slash_2_amount);
+	});
+}
+
+#[test]
+fn slashes_are_summed_across_spans() {
+	ExtBuilder::default().build().execute_with(|| {
+		start_era(1);
+		start_era(2);
+		start_era(3);
+
+		assert_eq!(Balances::free_balance(&21), 2000);
+		assert_eq!(Staking::slashable_balance_of(&21), 1000);
+
+		let get_span = |account| <Staking as crate::Store>::SlashingSpans::get(&account).unwrap();
+
+		on_offence_now(
+			&[
+				OffenceDetails {
+					offender: (21, Staking::stakers(&21)),
+					reporters: vec![],
+				},
+			],
+			&[Perbill::from_percent(10)],
+		);
+
+		let expected_spans = vec![
+			slashing::SlashingSpan { index: 1, start: 4, length: None },
+			slashing::SlashingSpan { index: 0, start: 0, length: Some(4) },
+		];
+
+		assert_eq!(get_span(21).iter().collect::<Vec<_>>(), expected_spans);
+		assert_eq!(Balances::free_balance(&21), 1900);
+
+		// 21 has been force-chilled. re-signal intent to validate.
+		Staking::validate(Origin::signed(20), Default::default()).unwrap();
+
+		start_era(4);
+
+		assert_eq!(Staking::slashable_balance_of(&21), 900);
+
+		on_offence_now(
+			&[
+				OffenceDetails {
+					offender: (21, Staking::stakers(&21)),
+					reporters: vec![],
+				},
+			],
+			&[Perbill::from_percent(10)],
+		);
+
+		let expected_spans = vec![
+			slashing::SlashingSpan { index: 2, start: 5, length: None },
+			slashing::SlashingSpan { index: 1, start: 4, length: Some(1) },
+			slashing::SlashingSpan { index: 0, start: 0, length: Some(4) },
+		];
+
+		assert_eq!(get_span(21).iter().collect::<Vec<_>>(), expected_spans);
+		assert_eq!(Balances::free_balance(&21), 1810);
 	});
 }
