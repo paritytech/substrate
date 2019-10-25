@@ -995,7 +995,7 @@ decl_module! {
 		}
 
 		/// Force a current staker to become completely unstaked, immediately.
-		#[weight = sr_primitives::SimpleDispatchInfo::FreeOperational]
+		#[weight = SimpleDispatchInfo::FreeOperational]
 		fn force_unstake(origin, stash: T::AccountId) {
 			ensure_root(origin)?;
 
