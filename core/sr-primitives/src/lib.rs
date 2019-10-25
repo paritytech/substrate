@@ -255,15 +255,36 @@ impl From<ed25519::Public> for MultiSigner {
 	}
 }
 
+impl TryFrom<MultiSigner> for ed25519::Public {
+	type Error = ();
+	fn try_from(m: MultiSigner) -> Result<Self, Self::Error> {
+		if let MultiSigner::Ed25519(x) = m { Ok(x) } else { Err(()) }
+	}
+}
+
 impl From<sr25519::Public> for MultiSigner {
 	fn from(x: sr25519::Public) -> Self {
 		MultiSigner::Sr25519(x)
 	}
 }
 
+impl TryFrom<MultiSigner> for sr25519::Public {
+	type Error = ();
+	fn try_from(m: MultiSigner) -> Result<Self, Self::Error> {
+		if let MultiSigner::Sr25519(x) = m { Ok(x) } else { Err(()) }
+	}
+}
+
 impl From<ecdsa::Public> for MultiSigner {
 	fn from(x: ecdsa::Public) -> Self {
 		MultiSigner::Ecdsa(x)
+	}
+}
+
+impl TryFrom<MultiSigner> for ecdsa::Public {
+	type Error = ();
+	fn try_from(m: MultiSigner) -> Result<Self, Self::Error> {
+		if let MultiSigner::Ecdsa(x) = m { Ok(x) } else { Err(()) }
 	}
 }
 
