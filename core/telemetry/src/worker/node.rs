@@ -68,11 +68,11 @@ pub enum NodeEvent<TSinkErr> {
 	/// We are now connected to this node.
 	Connected,
 	/// We are now disconnected from this node.
-	Disconnected(TSinkErr),
+	Disconnected(ConnectionError<TSinkErr>),
 }
 
+/// Reason for disconnecting from a node.
 #[derive(Debug)]
-/// Error used by NodeSocketConnected.
 pub enum ConnectionError<TSinkErr> {
 	/// The connection timed-out.
 	Timeout,
@@ -133,16 +133,11 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 						Poll::Pending => {
 							break NodeSocket::Connected(conn)
 						},
-						Poll::Ready(Err(ConnectionError::Sink(err))) => {
+						Poll::Ready(Err(err)) => {
 							warn!(target: "telemetry", "Disconnected from {}: {:?}", self.addr, err);
 							let timeout = gen_rand_reconnect_delay();
 							self.socket = NodeSocket::WaitingReconnect(timeout);
 							return Poll::Ready(NodeEvent::Disconnected(err))
-						}
-						Poll::Ready(Err(ConnectionError::Timeout)) => {
-							warn!(target: "telemetry", "Connection timeout from {}", self.addr);
-							let timeout = gen_rand_reconnect_delay();
-							break NodeSocket::WaitingReconnect(timeout)
 						}
 					}
 				}
@@ -161,7 +156,6 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 					Poll::Pending => break NodeSocket::Dialing(s),
 					Poll::Ready(Err(err)) => {
 						warn!(target: "telemetry", "Error while dialing {}: {:?}", self.addr, err);
-						println!("Reconnecting");
 						let timeout = gen_rand_reconnect_delay();
 						socket = NodeSocket::WaitingReconnect(timeout);
 					}
