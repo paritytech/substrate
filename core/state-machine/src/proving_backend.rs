@@ -108,7 +108,7 @@ impl<'a, S, H> ProvingBackendRecorder<'a, S, H>
 
 /// Global proof recorder, act as a layer over a hash db for recording queried
 /// data.
-pub type ProofRecorder<H> = Arc<RwLock<HashMap<<H as Hasher>::Out, DBValue>>>;
+pub type ProofRecorder<H> = Arc<RwLock<HashMap<<H as Hasher>::Out, Option<DBValue>>>>;
 
 /// Patricia trie-based backend which also tracks all touched storage trie values.
 /// These can be sent to remote node and used as a proof of execution.
@@ -150,7 +150,7 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
 			.read()
 			//.borrow()
 			.iter()
-			.map(|(_k, v)| v.to_vec())
+			.filter_map(|(_k, v)| v.as_ref().map(|v| v.to_vec()))
 			.collect()
 	}
 }
@@ -163,18 +163,14 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> TrieBackendStorage<H> fo
 		// if we use mutex we should use the mut handle of write TODO only for testing now
 
 		if let Some(v) = self.proof_recorder.read().get(key) {
-			// TODO Notice that proof recorder could also stored missing value and be use as a better cache.
-			return Ok(Some(v.clone()));
+			return Ok(v.clone());
 		}
-		Ok(match self.backend.get(key, prefix)? {
-			Some(v) => {
-				self.proof_recorder.write().insert(key.clone(), v.clone());
-				Some(v)
-			},
-			None => None,
-		})
+		let backend_value =  self.backend.get(key, prefix)?;
+		self.proof_recorder.write().insert(key.clone(), backend_value.clone());
+		Ok(backend_value)
 	}
 }
+
 impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> std::fmt::Debug for ProvingBackend<'a, S, H> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "ProvingBackend")
