@@ -30,10 +30,9 @@ pub struct SearchRequest {
 }
 
 #[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct QueryRequest {
-	interval_ms: u64,
-	max_data_points: u64,
+	#[serde(rename = "maxDataPoints")]
+	pub max_datapoints: usize,
 	pub targets: Vec<Target>,
 	pub range: Range,
 }

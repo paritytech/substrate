@@ -46,8 +46,16 @@ fn api_response(req: Request<Body>) -> ResponseFuture {
 									.unwrap_or_else(|i| i);
 								let to = metric.binary_search_by_key(&req.range.to, |&(_, t)| t)
 									.unwrap_or_else(|i| i);
-								
-								metric[from .. to].to_vec()
+
+								let metric = &metric[from .. to];
+
+								if metric.len() > req.max_datapoints {
+									// Avoid returning more than `max_datapoints` (mostly to stop
+									// the web browser from having to do a ton of work)
+									select_points(metric, req.max_datapoints)
+								} else {
+									metric.to_vec()
+								}
 							})
 							.unwrap_or_else(Vec::new);
 
@@ -95,4 +103,21 @@ pub fn run_server<F>(address: &std::net::SocketAddr, shutdown: F) -> impl Future
 		.serve(|| service_fn(api_response))
 		.with_graceful_shutdown(shutdown)
 		.map_err(|e| eprintln!("server error: {}", e))
+}
+
+// Evenly select `num_points` points from a slice
+fn select_points<T: Copy>(slice: &[T], num_points: usize) -> Vec<T> {
+	(0 .. num_points - 1)
+		.map(|i| slice[i * slice.len() / (num_points - 1)])
+		.chain(slice.last().cloned())
+		.collect()
+}
+
+#[test]
+fn test_select_points() {
+	let array = [1, 2, 3, 4, 5];
+	assert_eq!(select_points(&array, 2), vec![1, 5]);
+	assert_eq!(select_points(&array, 3), vec![1, 3, 5]);
+	assert_eq!(select_points(&array, 4), vec![1, 2, 4, 5]);
+	assert_eq!(select_points(&array, 5), vec![1, 2, 3, 4, 5]);
 }
