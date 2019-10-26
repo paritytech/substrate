@@ -22,11 +22,11 @@
 //!
 //! # Usage
 //!
-//! First, create a block-import wrapper with the `block_import` function.
-//! The GRANDPA worker needs to be linked together with this block import object,
-//! so a `LinkHalf` is returned as well. All blocks imported (from network or consensus or otherwise)
-//! must pass through this wrapper, otherwise consensus is likely to break in
-//! unexpected ways.
+//! First, create a block-import wrapper with the `block_import` function. The
+//! GRANDPA worker needs to be linked together with this block import object, so
+//! a `LinkHalf` is returned as well. All blocks imported (from network or
+//! consensus or otherwise) must pass through this wrapper, otherwise consensus
+//! is likely to break in unexpected ways.
 //!
 //! Next, use the `LinkHalf` and a local configuration to `run_grandpa_voter`.
 //! This requires a `Network` implementation. The returned future should be
@@ -242,7 +242,7 @@ impl From<ClientError> for Error {
 }
 
 /// Something which can determine if a block is known.
-pub trait BlockStatus<Block: BlockT> {
+pub(crate) trait BlockStatus<Block: BlockT> {
 	/// Return `Ok(Some(number))` or `Ok(None)` depending on whether the block
 	/// is definitely known and has been imported.
 	/// If an unexpected error occurs, return that.
@@ -258,6 +258,26 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> BlockStatus<Block> for Arc<Client<B, E,
 	fn block_number(&self, hash: Block::Hash) -> Result<Option<NumberFor<Block>>, Error> {
 		self.block_number_from_id(&BlockId::Hash(hash))
 			.map_err(|e| Error::Blockchain(format!("{:?}", e)))
+	}
+}
+
+/// Something that one can ask to do a block sync request.
+pub(crate) trait BlockSyncRequester<Block: BlockT> {
+	/// Notifies the sync service to try and sync the given block from the given
+	/// peers.
+	///
+	/// If the given vector of peers is empty then the underlying implementation
+	/// should make a best effort to fetch the block from any peers it is
+	/// connected to (NOTE: this assumption will change in the future #3629).
+	fn set_sync_fork_request(&self, peers: Vec<network::PeerId>, hash: Block::Hash, number: NumberFor<Block>);
+}
+
+impl<Block, N> BlockSyncRequester<Block> for NetworkBridge<Block, N> where
+	Block: BlockT,
+	N: communication::Network<Block>,
+{
+	fn set_sync_fork_request(&self, peers: Vec<network::PeerId>, hash: Block::Hash, number: NumberFor<Block>) {
+		NetworkBridge::set_sync_fork_request(self, peers, hash, number)
 	}
 }
 
@@ -429,6 +449,7 @@ fn global_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 	// block commit and catch up messages until relevant blocks are imported.
 	let global_in = UntilGlobalMessageBlocksImported::new(
 		client.import_notification_stream(),
+		network.clone(),
 		client.clone(),
 		global_in,
 		"global",
@@ -617,7 +638,7 @@ where
 
 		let voters = persistent_data.authority_set.current_authorities();
 		let env = Arc::new(Environment {
-			inner: client,
+			client,
 			select_chain,
 			voting_rule,
 			voters: Arc::new(voters),
@@ -656,7 +677,7 @@ where
 			"authority_id" => authority_id.to_string(),
 		);
 
-		let chain_info = self.env.inner.info();
+		let chain_info = self.env.client.info();
 		telemetry!(CONSENSUS_INFO; "afg.authority_set";
 			"number" => ?chain_info.chain.finalized_number,
 			"hash" => ?chain_info.chain.finalized_hash,
@@ -680,7 +701,7 @@ where
 				let global_comms = global_communication(
 					self.env.set_id,
 					&self.env.voters,
-					&self.env.inner,
+					&self.env.client,
 					&self.env.network,
 					&self.env.config.keystore,
 				);
@@ -728,7 +749,7 @@ where
 						(new.canon_hash, new.canon_number),
 					);
 
-					aux_schema::write_voter_set_state(&*self.env.inner, &set_state)?;
+					aux_schema::write_voter_set_state(&*self.env.client, &set_state)?;
 					Ok(Some(set_state))
 				})?;
 
@@ -737,7 +758,7 @@ where
 					set_id: new.set_id,
 					voter_set_state: self.env.voter_set_state.clone(),
 					// Fields below are simply transferred and not updated.
-					inner: self.env.inner.clone(),
+					client: self.env.client.clone(),
 					select_chain: self.env.select_chain.clone(),
 					config: self.env.config.clone(),
 					authority_set: self.env.authority_set.clone(),
@@ -757,7 +778,7 @@ where
 					let completed_rounds = voter_set_state.completed_rounds();
 					let set_state = VoterSetState::Paused { completed_rounds };
 
-					aux_schema::write_voter_set_state(&*self.env.inner, &set_state)?;
+					aux_schema::write_voter_set_state(&*self.env.client, &set_state)?;
 					Ok(Some(set_state))
 				})?;
 

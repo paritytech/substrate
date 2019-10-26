@@ -31,6 +31,7 @@ use std::sync::Arc;
 
 use futures::prelude::*;
 use futures::sync::{oneshot, mpsc};
+use futures03::stream::{StreamExt, TryStreamExt};
 use grandpa::Message::{Prevote, Precommit, PrimaryPropose};
 use grandpa::{voter, voter_set::VoterSet};
 use log::{debug, trace};
@@ -38,7 +39,7 @@ use network::{consensus_gossip as network_gossip, NetworkService};
 use network_gossip::ConsensusMessage;
 use codec::{Encode, Decode};
 use primitives::Pair;
-use sr_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
+use sr_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, NumberFor};
 use substrate_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_INFO};
 use tokio_executor::Executor;
 
@@ -100,7 +101,7 @@ mod benefit {
 /// Intended to be a lightweight handle such as an `Arc`.
 pub trait Network<Block: BlockT>: Clone + Send + 'static {
 	/// A stream of input messages for a topic.
-	type In: Stream<Item=network_gossip::TopicNotification,Error=()>;
+	type In: Stream<Item = network_gossip::TopicNotification, Error = ()>;
 
 	/// Get a stream of messages for a specific gossip topic.
 	fn messages_for(&self, topic: Block::Hash) -> Self::In;
@@ -128,6 +129,14 @@ pub trait Network<Block: BlockT>: Clone + Send + 'static {
 
 	/// Inform peers that a block with given hash should be downloaded.
 	fn announce(&self, block: Block::Hash, associated_data: Vec<u8>);
+
+	/// Notifies the sync service to try and sync the given block from the given
+	/// peers.
+	///
+	/// If the given vector of peers is empty then the underlying implementation
+	/// should make a best effort to fetch the block from any peers it is
+	/// connected to (NOTE: this assumption will change in the future #3629).
+	fn set_sync_fork_request(&self, peers: Vec<network::PeerId>, hash: Block::Hash, number: NumberFor<Block>);
 }
 
 /// Create a unique topic for a round and set-id combo.
@@ -145,7 +154,9 @@ impl<B, S, H> Network<B> for Arc<NetworkService<B, S, H>> where
 	S: network::specialization::NetworkSpecialization<B>,
 	H: network::ExHashT,
 {
-	type In = NetworkStream;
+	type In = NetworkStream<
+		Box<dyn Stream<Item = network_gossip::TopicNotification, Error = ()> + Send + 'static>,
+	>;
 
 	fn messages_for(&self, topic: B::Hash) -> Self::In {
 		// Given that one can only communicate with the Substrate network via the `NetworkService` via message-passing,
@@ -159,7 +170,11 @@ impl<B, S, H> Network<B> for Arc<NetworkService<B, S, H>> where
 		// waiting for the oneshot to resolve and from there on acting like a normal message channel.
 		let (tx, rx) = oneshot::channel();
 		self.with_gossip(move |gossip, _| {
-			let inner_rx = gossip.messages_for(GRANDPA_ENGINE_ID, topic);
+			let inner_rx: Box<dyn Stream<Item = _, Error = ()> + Send> = Box::new(gossip
+				.messages_for(GRANDPA_ENGINE_ID, topic)
+				.map(|x| Ok(x))
+				.compat()
+			);
 			let _ = tx.send(inner_rx);
 		});
 		NetworkStream::PollingOneshot(rx)
@@ -209,6 +224,10 @@ impl<B, S, H> Network<B> for Arc<NetworkService<B, S, H>> where
 	fn announce(&self, block: B::Hash, associated_data: Vec<u8>) {
 		self.announce_block(block, associated_data)
 	}
+
+	fn set_sync_fork_request(&self, peers: Vec<network::PeerId>, hash: B::Hash, number: NumberFor<B>) {
+		NetworkService::set_sync_fork_request(self, peers, hash, number)
+	}
 }
 
 /// A stream used by NetworkBridge in its implementation of Network. Given a oneshot that eventually returns a channel
@@ -220,13 +239,16 @@ impl<B, S, H> Network<B> for Arc<NetworkService<B, S, H>> where
 ///
 /// `NetworkStream` combines the two steps into one, requiring a consumer to only poll `NetworkStream` to retrieve
 /// messages directly.
-pub enum NetworkStream {
-	PollingOneshot(oneshot::Receiver<mpsc::UnboundedReceiver<network_gossip::TopicNotification>>),
-	PollingTopicNotifications(mpsc::UnboundedReceiver<network_gossip::TopicNotification>),
+pub enum NetworkStream<R> {
+	PollingOneshot(oneshot::Receiver<R>),
+	PollingTopicNotifications(R),
 }
 
-impl Stream for NetworkStream {
-	type Item = network_gossip::TopicNotification;
+impl<R> Stream for NetworkStream<R>
+where
+	R: Stream<Item = network_gossip::TopicNotification, Error = ()>,
+{
+	type Item = R::Item;
 	type Error = ();
 
 	fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
@@ -266,11 +288,11 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		service: N,
 		config: crate::Config,
 		set_state: crate::environment::SharedVoterSetState<B>,
-		on_exit: impl Future<Item=(),Error=()> + Clone + Send + 'static,
+		on_exit: impl Future<Item = (), Error = ()> + Clone + Send + 'static,
 		catch_up_enabled: bool,
 	) -> (
 		Self,
-		impl futures::Future<Item = (), Error = ()> + Send + 'static,
+		impl Future<Item = (), Error = ()> + Send + 'static,
 	) {
 
 		let (validator, report_stream) = GossipValidator::new(
@@ -458,6 +480,9 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 			format!("Failed to receive on unbounded receiver for round {}", round.0)
 		));
 
+		// Combine incoming votes from external GRANDPA nodes with outgoing
+		// votes from our own GRANDPA voter to have a single
+		// vote-import-pipeline.
 		let incoming = incoming.select(out_rx);
 
 		(incoming, outgoing)
@@ -503,6 +528,16 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		});
 
 		(incoming, outgoing)
+	}
+
+	/// Notifies the sync service to try and sync the given block from the given
+	/// peers.
+	///
+	/// If the given vector of peers is empty then the underlying implementation
+	/// should make a best effort to fetch the block from any peers it is
+	/// connected to (NOTE: this assumption will change in the future #3629).
+	pub(crate) fn set_sync_fork_request(&self, peers: Vec<network::PeerId>, hash: B::Hash, number: NumberFor<B>) {
+		self.service.set_sync_fork_request(peers, hash, number)
 	}
 }
 

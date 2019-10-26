@@ -26,13 +26,13 @@ substrate-offchain = { path = "../offchain" }
 bench = []
 default = ["std"]
 std = [
-	"serde",
-	"log",
-	"rstd/std",
-	"runtime_io/std",
-	"codec/std",
-	"primitives/std",
 	"app-crypto/std",
 	"arithmetic/std",
+	"codec/std",
+	"log",
+	"primitives/std",
 	"rand",
+	"rstd/std",
+	"runtime_io/std",
+	"serde",
 ]

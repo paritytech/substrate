@@ -18,7 +18,7 @@
 // pub use primitives::BlakeHasher;
 pub use substrate_state_machine::{BasicExternalities, TestExternalities};
 
-use std::{collections::HashMap, convert::TryFrom};
+use std::collections::HashMap;
 
 use externalities::Externalities;
 

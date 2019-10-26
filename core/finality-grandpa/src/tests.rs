@@ -1556,7 +1556,7 @@ fn grandpa_environment_respects_voting_rules() {
 			authority_set: authority_set.clone(),
 			config: config.clone(),
 			consensus_changes: consensus_changes.clone(),
-			inner: link.client.clone(),
+			client: link.client.clone(),
 			select_chain: link.select_chain.clone(),
 			set_id: authority_set.set_id(),
 			voter_set_state: set_state.clone(),

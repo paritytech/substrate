@@ -25,6 +25,7 @@ use tokio::runtime::current_thread;
 use std::sync::Arc;
 use keyring::Ed25519Keyring;
 use codec::Encode;
+use sr_primitives::traits::NumberFor;
 
 use crate::environment::SharedVoterSetState;
 use super::gossip::{self, GossipValidator};
@@ -91,6 +92,9 @@ impl super::Network<Block> for TestNetwork {
 	fn announce(&self, block: Hash, _associated_data: Vec<u8>) {
 		let _ = self.sender.unbounded_send(Event::Announce(block));
 	}
+
+	/// Notify the sync service to try syncing the given chain.
+	fn set_sync_fork_request(&self, _peers: Vec<network::PeerId>, _hash: Hash, _number: NumberFor<Block>) {}
 }
 
 impl network_gossip::ValidatorContext<Block> for TestNetwork {

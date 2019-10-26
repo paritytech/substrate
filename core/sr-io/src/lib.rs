@@ -41,6 +41,7 @@ use primitives::{
 	offchain::{
 		Timestamp, HttpRequestId, HttpRequestStatus, HttpError, StorageKind, OpaqueNetworkState,
 	},
+	LogLevel,
 };
 
 #[cfg(feature = "std")]
@@ -351,6 +352,22 @@ pub trait Crypto {
 		res.copy_from_slice(&pubkey.serialize()[1..65]);
 		Ok(res)
 	}
+
+	/// Verify and recover a SECP256k1 ECDSA signature.
+	/// - `sig` is passed in RSV format. V should be either 0/1 or 27/28.
+	/// - returns `Err` if the signature is bad, otherwise the 33-byte compressed pubkey.
+	fn secp256k1_ecdsa_recover_compressed(
+		sig: &[u8; 65],
+		msg: &[u8; 32],
+	) -> Result<[u8; 33], EcdsaVerifyError> {
+		let rs = secp256k1::Signature::parse_slice(&sig[0..64])
+			.map_err(|_| EcdsaVerifyError::BadRS)?;
+		let v = secp256k1::RecoveryId::parse(if sig[64] > 26 { sig[64] - 27 } else { sig[64] } as u8)
+			.map_err(|_| EcdsaVerifyError::BadV)?;
+		let pubkey = secp256k1::recover(&secp256k1::Message::parse(msg), &rs, &v)
+			.map_err(|_| EcdsaVerifyError::BadSignature)?;
+		Ok(pubkey.serialize_compressed())
+	}
 }
 
 /// Interface that provides functions for hashing with different algorithms.
@@ -585,6 +602,24 @@ trait Allocator {
 	}
 }
 
+#[runtime_interface]
+pub trait Log {
+	/// Request to print a log message on the host.
+	///
+	/// Note that this will be only displayed if the host is enabled to display log messages with
+	/// given level and target.
+	///
+	/// Instead of using directly, prefer setting up `RuntimeLogger` and using `log` macros.
+	fn log(level: LogLevel, target: &str, message: &str) {
+		log::log!(
+			target: target,
+			log::Level::from(level),
+			"{}",
+			message,
+		)
+	}
+}
+
 /// Allocator used by Substrate when executing the Wasm runtime.
 #[cfg(not(feature = "std"))]
 struct WasmAllocator;
@@ -656,4 +691,5 @@ pub type SubstrateHostFunctions = (
 	crypto::HostFunctions,
 	hashing::HostFunctions,
 	allocator::HostFunctions,
+	log::HostFunctions,
 );
