@@ -61,9 +61,11 @@ pub trait RIType {
 	type FFIType;
 }
 
+/// A pointer that can be used in a runtime interface function signature.
 #[cfg(not(feature = "std"))]
 pub type Pointer<T> = *mut T;
 
+/// A pointer that can be used in a runtime interface function signature.
 #[cfg(feature = "std")]
 pub type Pointer<T> = wasm_interface::Pointer<T>;
 

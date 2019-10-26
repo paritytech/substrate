@@ -18,8 +18,6 @@
 // pub use primitives::BlakeHasher;
 pub use substrate_state_machine::{BasicExternalities, TestExternalities};
 
-use trie::{TrieConfiguration, trie_types::Layout};
-
 use std::{collections::HashMap, convert::TryFrom};
 
 use externalities::Externalities;
