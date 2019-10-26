@@ -131,7 +131,3 @@ is-it-maintained-open-issues = { repository = "paritytech/substrate" }
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"
-
-[patch.crates-io]
-rlp = { git = "https://github.com/paritytech/parity-common" }
-impl-rlp = { git = "https://github.com/paritytech/parity-common" }
