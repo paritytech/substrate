@@ -3,7 +3,6 @@
 use std::sync::Arc;
 use std::time::Duration;
 use substrate_client::LongestChain;
-use futures::prelude::*;
 use runtime::{self, GenesisConfig, opaque::Block, RuntimeApi};
 use substrate_service::{error::{Error as ServiceError}, AbstractService, Configuration, ServiceBuilder};
 use transaction_pool::{self, txpool::{Pool as TransactionPool}};
