@@ -1,3 +1,4 @@
+use rstd::vec::Vec;
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 use codec::{Encode, Decode};

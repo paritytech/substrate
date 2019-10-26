@@ -865,7 +865,7 @@ dependencies = [
  "evm-gasometer 0.13.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "evm-runtime 0.13.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "primitive-types 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "rlp 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rlp 0.4.3 (git+https://github.com/paritytech/parity-common)",
  "sha3 0.8.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -1461,9 +1461,9 @@ dependencies = [
 [[package]]
 name = "impl-rlp"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
+source = "git+https://github.com/paritytech/parity-common#9f15647d4d058db0eba0a895b36695630689c50f"
 dependencies = [
- "rlp 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rlp 0.4.3 (git+https://github.com/paritytech/parity-common)",
 ]
 
 [[package]]
@@ -3082,7 +3082,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "fixed-hash 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "impl-codec 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "impl-rlp 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "impl-rlp 0.2.0 (git+https://github.com/paritytech/parity-common)",
  "impl-serde 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "uint 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -3522,7 +3522,7 @@ dependencies = [
 [[package]]
 name = "rlp"
 version = "0.4.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
+source = "git+https://github.com/paritytech/parity-common#9f15647d4d058db0eba0a895b36695630689c50f"
 dependencies = [
  "rustc-hex 2.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -4254,7 +4254,7 @@ dependencies = [
  "evm 0.13.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "primitive-types 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "rlp 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rlp 0.4.3 (git+https://github.com/paritytech/parity-common)",
  "serde 1.0.101 (registry+https://github.com/rust-lang/crates.io-index)",
  "sha3 0.8.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 2.0.0",
@@ -7034,7 +7034,7 @@ dependencies = [
 "checksum idna 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)" = "38f09e0f0b1fb55fdee1f17470ad800da77af5186a1a76c026b679358b7e844e"
 "checksum idna 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "02e2673c30ee86b5b96a9cb52ad15718aa1f966f5ab9ad54a8b95d5ca33120a9"
 "checksum impl-codec 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)" = "3fa0086251524c50fd53b32e7b05eb6d79e2f97221eaf0c53c0ca9c3096f21d3"
-"checksum impl-rlp 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "f39b9963cf5f12fcc4ae4b30a6927ed67d6b4ea4cbe7d17a41131163b401303b"
+"checksum impl-rlp 0.2.0 (git+https://github.com/paritytech/parity-common)" = "<none>"
 "checksum impl-serde 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "a263dc95daa6c3788c8f7133d86dc2ad89ec5a0c56167f9e3441c5f7f33358c4"
 "checksum impl-trait-for-tuples 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "6947b372790f8948f439bb6aaa6baabdf80be1a207a477ff072f83fb793e428f"
 "checksum indexmap 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "a61202fbe46c4a951e9404a720a0180bcf3212c750d735cb5c4ba4dc551299f3"
@@ -7211,7 +7211,7 @@ dependencies = [
 "checksum remove_dir_all 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)" = "4a83fa3702a688b9359eccba92d153ac33fd2e8462f9e0e3fdf155239ea7792e"
 "checksum rhododendron 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)" = "36542aafc2429a4c010fafa079a20dee953b663cb2427f51d86cf1d436846b4d"
 "checksum ring 0.14.6 (registry+https://github.com/rust-lang/crates.io-index)" = "426bc186e3e95cac1e4a4be125a4aca7e84c2d616ffc02244eef36e2a60a093c"
-"checksum rlp 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)" = "8376a3f725ebb53f69263bbebb42196361fdfd551212409c8a721239aab4f09f"
+"checksum rlp 0.4.3 (git+https://github.com/paritytech/parity-common)" = "<none>"
 "checksum rocksdb 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)" = "f1651697fefd273bfb4fd69466cc2a9d20de557a0213b97233b22b5e95924b5e"
 "checksum rpassword 4.0.1 (registry+https://github.com/rust-lang/crates.io-index)" = "f072d931f11a96546efd97642e1e75e807345aced86b947f9239102f262d0fcd"
 "checksum rustc-demangle 0.1.16 (registry+https://github.com/rust-lang/crates.io-index)" = "4c691c0e608126e00913e33f0ccf3727d5fc84573623b8d65b2df340b5201783"

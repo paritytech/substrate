@@ -25,6 +25,7 @@ mod executor;
 
 pub use crate::executor::{Account, Log, Vicinity, Executor};
 
+use rstd::vec::Vec;
 use support::{dispatch::Result, decl_module, decl_storage, decl_event};
 use support::traits::{Currency, WithdrawReason, ExistenceRequirement};
 use system::ensure_signed;
