@@ -99,7 +99,10 @@ impl Verify for primitives::sr25519::Signature {
 impl Verify for primitives::ecdsa::Signature {
 	type Signer = primitives::ecdsa::Public;
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &primitives::ecdsa::Public) -> bool {
-		match runtime_io::secp256k1_ecdsa_recover_compressed(self.as_ref(), &runtime_io::blake2_256(msg.get())) {
+		match runtime_io::crypto::secp256k1_ecdsa_recover_compressed(
+			self.as_ref(),
+			&runtime_io::hashing::blake2_256(msg.get()),
+		) {
 			Ok(pubkey) => <dyn AsRef<[u8]>>::as_ref(signer) == &pubkey[..],
 			_ => false,
 		}
@@ -1189,7 +1192,7 @@ impl Printable for usize {
 
 impl Printable for u64 {
 	fn print(&self) {
-		runtime_io::print_num(*self);
+		runtime_io::misc::print_num(*self);
 	}
 }
 

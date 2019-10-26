@@ -27,7 +27,9 @@ use primitives::{
 	crypto::KeyTypeId, offchain,
 };
 use trie::{TrieConfiguration, trie_types::Layout};
-use wasm_interface::{Pointer, WordSize, WritePrimitive, ReadPrimitive};
+use wasm_interface::{
+	Pointer, WordSize, WritePrimitive, ReadPrimitive, FunctionContext, Result as WResult,
+};
 
 #[cfg(feature="wasm-extern-trace")]
 macro_rules! debug_trace {
@@ -197,7 +199,12 @@ impl_wasm_host_interface! {
 			let message = context.read_memory(message_data, message_len)
 				.map_err(|_| "Invalid attempt to determine message in ext_log")?;
 
-			runtime_io::log(level.into(), &target, &message);
+			let target_str = std::str::from_utf8(&target)
+				.map_err(|_| "Target invalid utf8 in ext_log")?;
+			let message_str = std::str::from_utf8(&message)
+				.map_err(|_| "Message invalid utf8 in ext_log")?;
+
+			runtime_io::log::log(level.into(), &target_str, &message_str);
 			Ok(())
 		}
 

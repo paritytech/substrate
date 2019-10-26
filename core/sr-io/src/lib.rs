@@ -611,9 +611,9 @@ pub trait Log {
 	///
 	/// Instead of using directly, prefer setting up `RuntimeLogger` and using `log` macros.
 	fn log(level: LogLevel, target: &str, message: &str) {
-		log::log!(
+		::log::log!(
 			target: target,
-			log::Level::from(level),
+			::log::Level::from(level),
 			"{}",
 			message,
 		)
