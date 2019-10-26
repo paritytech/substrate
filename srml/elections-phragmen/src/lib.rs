@@ -194,8 +194,8 @@ decl_module! {
 			ensure!(!allowed_votes.is_zero(), "cannot vote when no candidates or members exist");
 			ensure!(votes.len() <= allowed_votes, "cannot vote more than candidates");
 			ensure!(votes.len() <= MAXIMUM_VOTE, "cannot vote more than maximum allowed");
-
 			ensure!(!votes.is_empty(), "must vote for at least one candidate.");
+
 			ensure!(
 				value > T::Currency::minimum_balance(),
 				"cannot vote with stake less than minimum balance"
