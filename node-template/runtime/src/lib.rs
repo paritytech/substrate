@@ -14,7 +14,9 @@ use sr_primitives::{
 	ApplyResult, transaction_validity::TransactionValidity, generic, create_runtime_str,
 	impl_opaque_keys, MultiSignature
 };
-use sr_primitives::traits::{NumberFor, BlakeTwo256, Block as BlockT, StaticLookup, Verify, ConvertInto, IdentifyAccount};
+use sr_primitives::traits::{
+	NumberFor, BlakeTwo256, Block as BlockT, StaticLookup, Verify, ConvertInto, IdentifyAccount
+};
 use sr_primitives::weights::Weight;
 use client::{
 	block_builder::api::{CheckInherentsResult, InherentData, self as block_builder_api},
