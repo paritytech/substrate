@@ -109,6 +109,7 @@ members = [
 	"srml/treasury",
 	"srml/transaction-payment",
 	"srml/utility",
+	"srml/evm",
 	"node/cli",
 	"node/executor",
 	"node/primitives",
