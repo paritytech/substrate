@@ -13,7 +13,7 @@ use alloc::rc::Rc;
 use evm::{CreateScheme, Handler, ExitError, ExternalOpcode, Opcode, Stack,
 		  Memory, Context, Capture, Runtime, ExitReason};
 use evm::gasometer::{self, Gasometer};
-use crate::Accounts;
+use crate::{Trait, Accounts, Module, Event};
 
 #[derive(Clone, Eq, PartialEq, Encode, Decode, Default)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
@@ -74,6 +74,20 @@ impl<'vicinity> Executor<'vicinity> {
 
 	pub fn gas(&self) -> usize {
 		self.gasometer.gas()
+	}
+
+	pub fn apply<T: Trait>(self) {
+		for (address, account) in self.state {
+			Accounts::insert(address, account);
+		}
+
+		for address in self.deleted {
+			Accounts::remove(address);
+		}
+
+		for log in self.logs {
+			Module::<T>::deposit_event(Event::Log(log));
+		}
 	}
 
 	fn account(&self, address: H160) -> Account {
@@ -144,15 +158,16 @@ impl<'vicinity> Handler for Executor<'vicinity> {
 		U256::zero() // TODO: allow customization of this value
 	}
 
-	fn create_address(&self, address: H160, scheme: CreateScheme) -> H160 {
+	fn create_address(&mut self, address: H160, scheme: CreateScheme) -> Result<H160, ExitError> {
 		match scheme {
-			CreateScheme::Fixed(address) => address,
+			CreateScheme::Fixed(address) => Ok(address),
 			CreateScheme::Dynamic => {
 				let nonce = self.account(address).nonce;
+				self.account_mut(address).nonce += U256::one();
 				let mut stream = rlp::RlpStream::new_list(2);
 				stream.append(&address);
 				stream.append(&nonce);
-				H256::from_slice(Keccak256::digest(&stream.out()).as_slice()).into()
+				Ok(H256::from_slice(Keccak256::digest(&stream.out()).as_slice()).into())
 			},
 		}
 	}
@@ -224,8 +239,6 @@ impl<'vicinity> Handler for Executor<'vicinity> {
 		target_gas: Option<usize>,
 		context: Context,
 	) -> Result<Capture<(), Self::CreateInterrupt>, ExitError> {
-		self.account_mut(address).nonce += U256::one();
-
 		let after_gas = self.gasometer.gas(); // TODO: support l64(after_gas)
 		let target_gas = target_gas.unwrap_or(after_gas);
 
