@@ -1,20 +1,13 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, Criterion};
 
-use std::{
-	sync::{Arc, RwLock},
-	collections::HashMap,
-	time::Instant,
-};
-use parking_lot::Mutex;
 use futures::executor::block_on;
 use substrate_transaction_graph::*;
-use sr_primitives::transaction_validity::{ValidTransaction, InvalidTransaction};
+use sr_primitives::transaction_validity::ValidTransaction;
 use codec::Encode;
 use test_runtime::{Block, Extrinsic, Transfer, H256, AccountId};
 use sr_primitives::{
 	generic::BlockId,
-	traits::{self, SaturatedConversion},
-	transaction_validity::{TransactionValidity, TransactionTag as Tag, TransactionValidityError},
+	transaction_validity::{TransactionValidity, TransactionTag as Tag},
 };
 use primitives::blake2_256;
 
@@ -44,13 +37,9 @@ impl ChainApi for TestApi {
 
 	fn validate_transaction(
 		&self,
-		at: &BlockId<Self::Block>,
+		_at: &BlockId<Self::Block>,
 		uxt: ExtrinsicFor<Self>,
 	) -> Self::ValidationFuture {
-		let block_number = self.block_id_to_number(at)
-			.expect("Failed to get block number in TestApi")
-			.expect("No block number in TestApi");
-
 		let nonce = uxt.transfer().nonce;
 		let from = uxt.transfer().from.clone();
 
@@ -65,17 +54,15 @@ impl ChainApi for TestApi {
 			provides.push(to_tag(nonce+1, from.clone()));
 		}
 
-		futures::future::ready( {
-			let mut result = ValidTransaction {
+		futures::future::ready(
+			Ok(Ok(ValidTransaction {
 				priority: 4,
 				requires,
 				provides,
 				longevity: 10,
 				propagate: true,
-			};
-
-			Ok(Ok(result))
-		})
+			}))
+		)
 	}
 
 	fn block_id_to_number(&self, at: &BlockId<Self::Block>) -> Result<Option<NumberFor<Self>>, Self::Error> {
@@ -106,7 +93,7 @@ fn bench_configured(pool: Pool<TestApi>, number: u64) {
 	let mut nonce = 1;
 	let mut futures = Vec::new();
 
-	for i in 0..50 {
+	for _ in 0..number {
 		let xt = uxt(Transfer {
 			from: AccountId::from_h256(H256::from_low_u64_be(1)),
 			to: AccountId::from_h256(H256::from_low_u64_be(2)),
@@ -119,7 +106,7 @@ fn bench_configured(pool: Pool<TestApi>, number: u64) {
 		futures.push(pool.submit_one(&BlockId::Number(1), xt));
 	}
 
-	let res = block_on(futures::future::join_all(futures.into_iter()));
+	let _res = block_on(futures::future::join_all(futures.into_iter()));
 
 	// instantly producing "blocks" and pruning all ready until no ready
 	let mut block_num = 2;
@@ -136,6 +123,7 @@ fn bench_configured(pool: Pool<TestApi>, number: u64) {
 		}
 
 		block_num += 1;
+
 	}
 
 	// pool is empty
