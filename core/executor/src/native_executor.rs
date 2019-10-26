@@ -14,14 +14,22 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{result, cell::RefCell, panic::UnwindSafe};
-use crate::error::{Error, Result};
-use crate::wasm_runtime::{RuntimesCache, WasmExecutionMethod, WasmRuntime};
-use crate::RuntimeInfo;
+use crate::{
+	RuntimeInfo, error::{Error, Result}, host_interface::SubstrateExternals,
+	wasm_runtime::{RuntimesCache, WasmExecutionMethod, WasmRuntime},
+};
+
 use runtime_version::{NativeVersion, RuntimeVersion};
+
 use codec::{Decode, Encode};
+
 use primitives::{NativeOrEncoded, traits::{CodeExecutor, Externalities}};
+
 use log::{trace, warn};
+
+use std::{result, cell::RefCell, panic::UnwindSafe};
+
+use wasm_interface::HostFunctions;
 
 thread_local! {
 	static RUNTIMES_CACHE: RefCell<RuntimesCache> = RefCell::new(RuntimesCache::new());
@@ -99,10 +107,12 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 	) -> Result<R> where E: Externalities {
 		RUNTIMES_CACHE.with(|cache| {
 			let mut cache = cache.borrow_mut();
-			let runtime = cache.fetch_runtime::<_, runtime_io::SubstrateHostFunctions>(
+			let runtime = cache.fetch_runtime(
 				ext,
 				self.fallback_method,
 				self.default_heap_pages,
+				// Use the `SubstrateExternals` as well, to be backwards compatible.
+				<(runtime_io::SubstrateHostFunctions, SubstrateExternals)>::host_functions(),
 			)?;
 			f(runtime, ext)
 		})

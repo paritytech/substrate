@@ -31,7 +31,7 @@ use runtime_version::RuntimeVersion;
 
 use std::{collections::hash_map::{Entry, HashMap}};
 
-use wasm_interface::HostFunctions;
+use wasm_interface::Function;
 
 /// The Substrate Wasm runtime.
 pub trait WasmRuntime {
@@ -40,6 +40,9 @@ pub trait WasmRuntime {
 	/// Returns false if the update cannot be applied. The function is guaranteed to return true if
 	/// the heap pages would not change from its current value.
 	fn update_heap_pages(&mut self, heap_pages: u64) -> bool;
+
+	/// Return the host functions that are registered for this Wasm runtime.
+	fn host_functions(&self) -> &[&'static dyn Function];
 
 	/// Call a method in the Substrate runtime by name. Returns the encoded result on success.
 	fn call(&mut self, ext: &mut dyn Externalities, method: &str, data: &[u8])
@@ -103,6 +106,8 @@ impl RuntimesCache {
 	///
 	/// `default_heap_pages` - Number of 64KB pages to allocate for Wasm execution.
 	///
+	/// `host_functions` - The host functions that should be registered for the Wasm runtime.
+	///
 	/// # Return value
 	///
 	/// If no error occurred a tuple `(wasmi::ModuleRef, Option<RuntimeVersion>)` is
@@ -115,11 +120,12 @@ impl RuntimesCache {
 	///
 	/// `Error::InvalidMemoryReference` is returned if no memory export with the
 	/// identifier `memory` can be found in the runtime.
-	pub fn fetch_runtime<E: Externalities, HF: HostFunctions>(
+	pub fn fetch_runtime<E: Externalities>(
 		&mut self,
 		ext: &mut E,
 		wasm_method: WasmExecutionMethod,
 		default_heap_pages: u64,
+		host_functions: Vec<&'static dyn Function>,
 	) -> Result<&mut (dyn WasmRuntime + 'static), Error> {
 		let code_hash = ext
 			.original_storage_hash(well_known_keys::CODE)
@@ -134,12 +140,21 @@ impl RuntimesCache {
 			Entry::Occupied(o) => {
 				let result = o.into_mut();
 				if let Ok(ref mut cached_runtime) = result {
-					if !cached_runtime.update_heap_pages(heap_pages) {
+					let heap_pages_changed = !cached_runtime.update_heap_pages(heap_pages);
+					let host_functions_changed = cached_runtime.host_functions() != &host_functions[..];
+					if heap_pages_changed || host_functions_changed {
+						let changed = if heap_pages_changed {
+							"heap_pages"
+						} else {
+							"host functions"
+						};
+
 						trace!(
 							target: "runtimes_cache",
-							"heap_pages were changed. Reinstantiating the instance"
+							"{} were changed. Reinstantiating the instance",
+							changed,
 						);
-						*result = create_wasm_runtime::<_, HF>(ext, wasm_method, heap_pages);
+						*result = create_wasm_runtime(ext, wasm_method, heap_pages, host_functions);
 						if let Err(ref err) = result {
 							warn!(target: "runtimes_cache", "cannot create a runtime: {:?}", err);
 						}
@@ -149,7 +164,7 @@ impl RuntimesCache {
 			},
 			Entry::Vacant(v) => {
 				trace!(target: "runtimes_cache", "no instance found in cache, creating now.");
-				let result = create_wasm_runtime::<_, HF>(ext, wasm_method, heap_pages);
+				let result = create_wasm_runtime(ext, wasm_method, heap_pages, host_functions);
 				if let Err(ref err) = result {
 					warn!(target: "runtimes_cache", "cannot create a runtime: {:?}", err);
 				}
@@ -164,26 +179,28 @@ impl RuntimesCache {
 }
 
 /// Create a wasm runtime with the given `code`.
-pub fn create_wasm_runtime_with_code<E: Externalities, HF: HostFunctions>(
+pub fn create_wasm_runtime_with_code<E: Externalities>(
 	ext: &mut E,
 	wasm_method: WasmExecutionMethod,
 	heap_pages: u64,
 	code: &[u8],
+	host_functions: Vec<&'static dyn Function>,
 ) -> Result<Box<dyn WasmRuntime>, WasmError> {
 	match wasm_method {
 		WasmExecutionMethod::Interpreted =>
-			wasmi_execution::create_instance::<_, HF>(ext, code, heap_pages)
+			wasmi_execution::create_instance(ext, code, heap_pages, host_functions)
 				.map(|runtime| -> Box<dyn WasmRuntime> { Box::new(runtime) }),
 	}
 }
 
-fn create_wasm_runtime<E: Externalities, HF: HostFunctions>(
+fn create_wasm_runtime<E: Externalities>(
 	ext: &mut E,
 	wasm_method: WasmExecutionMethod,
 	heap_pages: u64,
+	host_functions: Vec<&'static dyn Function>,
 ) -> Result<Box<dyn WasmRuntime>, WasmError> {
 	let code = ext
 		.original_storage(well_known_keys::CODE)
 		.ok_or(WasmError::CodeNotFound)?;
-	create_wasm_runtime_with_code::<_, HF>(ext, wasm_method, heap_pages, &code)
+	create_wasm_runtime_with_code(ext, wasm_method, heap_pages, &code, host_functions)
 }

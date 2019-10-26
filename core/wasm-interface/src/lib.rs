@@ -190,6 +190,12 @@ pub trait Function {
 	) -> Result<Option<Value>>;
 }
 
+impl PartialEq for dyn Function {
+	fn eq(&self, other: &Self) -> bool {
+		other.name() == self.name() && other.signature() == self.signature()
+	}
+}
+
 /// Context used by `Function` to interact with the allocator and the memory of the wasm instance.
 pub trait FunctionContext {
 	/// Read memory from `address` into a vector.
@@ -261,42 +267,18 @@ pub trait Sandbox {
 
 /// Something that provides implementations for host functions.
 pub trait HostFunctions: 'static {
-	/// Returns the function at the given index or `None` if the index is invalid.
-	fn get_function(index: usize) -> Option<&'static dyn Function>;
-	/// Returns the number of host functions.
-	fn num_functions() -> usize;
+	/// Returns the host functions `Self` provides.
+	fn host_functions() -> Vec<&'static dyn Function>;
 }
 
-#[impl_trait_for_tuples::impl_for_tuples(1, 30)]
+#[impl_trait_for_tuples::impl_for_tuples(30)]
 impl HostFunctions for Tuple {
-	fn get_function(mut index: usize) -> Option<&'static dyn Function> {
-		for_tuples!(
-			#(
-				let num_functions = Tuple::num_functions();
+	fn host_functions() -> Vec<&'static dyn Function> {
+		let mut host_functions = Vec::new();
 
-				if index < num_functions {
-					return Tuple::get_function(index)
-				}
+		for_tuples!( #( host_functions.extend(Tuple::host_functions()); )* );
 
-				index -= num_functions;
-			)*
-		);
-
-		None
-	}
-
-	fn num_functions() -> usize {
-		for_tuples!( #( Tuple::num_functions() )+* )
-	}
-}
-
-impl HostFunctions for () {
-	fn get_function(_: usize) -> Option<&'static dyn Function> {
-		None
-	}
-
-	fn num_functions() -> usize {
-		0
+		host_functions
 	}
 }
 

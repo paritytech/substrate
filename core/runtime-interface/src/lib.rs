@@ -130,7 +130,7 @@ mod tests {
 	}
 
 	#[test]
-	#[should_panic(expected = "Wasmi(Instantiation(\"Export ext_test_api_return_input not found\"))")]
+	#[should_panic(expected = "Other(\"Instantiation: Export ext_test_api_return_input not found\")")]
 	fn host_function_not_found() {
 		call_wasm_method::<()>("test_return_data");
 	}
