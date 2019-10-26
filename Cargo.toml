@@ -131,9 +131,3 @@ is-it-maintained-open-issues = { repository = "paritytech/substrate" }
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"
-
-[patch.crates-io]
-evm = { path = "../rust-evm" }
-evm-core = { path = "../rust-evm/core" }
-evm-gasometer = { path = "../rust-evm/gasometer" }
-evm-runtime = { path = "../rust-evm/runtime" }
