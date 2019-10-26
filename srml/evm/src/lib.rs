@@ -19,11 +19,14 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::collections::btree_map::BTreeMap as Map;
+extern crate alloc;
+
+mod executor;
+
+pub use crate::executor::{Account, Log};
+
 use support::{decl_module, decl_storage, decl_event};
-#[cfg(feature = "std")]
-use serde::{Serialize, Deserialize};
-use codec::{Encode, Decode};
+
 use primitives::{U256, H256, H160};
 
 /// EVM module trait
@@ -32,34 +35,9 @@ pub trait Trait: balances::Trait {
 	type Event: From<Event> + Into<<Self as system::Trait>::Event>;
 }
 
-#[derive(Clone, Eq, PartialEq, Encode, Decode, Default)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
-pub struct ExternalAccount {
-	pub nonce: U256,
-	pub balance: U256,
-}
-
-#[derive(Clone, Eq, PartialEq, Encode, Decode, Default)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
-pub struct Contract {
-	pub nonce: U256,
-	pub balance: U256,
-	pub code: Vec<u8>,
-	pub storage: Map<H256, H256>,
-}
-
-#[derive(Clone, Eq, PartialEq, Encode, Decode, Default)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
-pub struct Log {
-	pub address: H160,
-	pub topcis: Vec<H256>,
-	pub data: Vec<u8>,
-}
-
 decl_storage! {
 	trait Store for Module<T: Trait> as Example {
-		ExternalAccounts get(fn external_accounts) config(): map T::AccountId => ExternalAccount;
-		Contracts get(fn contracts) config(): map H160 => Contract;
+		Accounts get(fn accounts) config(): map H160 => Account;
 	}
 }
 
