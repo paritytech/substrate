@@ -67,7 +67,7 @@ pub trait AuthorApi<Hash, BlockHash> {
 		subscribe,
 		name = "author_submitAndWatchExtrinsic"
 	)]
-	fn watch_extrinsic(&self,
+	fn submit_and_watch_extrinsic(&self,
 		metadata: Self::Metadata,
 		subscriber: Subscriber<Status<Hash, BlockHash>>,
 		bytes: Bytes
@@ -90,7 +90,7 @@ pub trait AuthorApi<Hash, BlockHash> {
 		subscribe,
 		name = "author_watchExtrinsic"
 	)]
-	fn track_extrinsic(&self,
+	fn watch_extrinsic(&self,
     	metadata: Self::Metadata,
 		subscriber: Subscriber<Status<Hash, BlockHash>>,
 	    hash: Hash,

@@ -106,7 +106,7 @@ fn should_watch_extrinsic() {
 	let (subscriber, id_rx, data) = jsonrpc_pubsub::typed::Subscriber::new_test("test");
 
 	// when
-	p.watch_extrinsic(Default::default(), subscriber, uxt(AccountKeyring::Alice, 0).encode().into());
+	p.submit_and_watch_extrinsic(Default::default(), subscriber, uxt(AccountKeyring::Alice, 0).encode().into());
 
 	// then
 	assert_eq!(runtime.block_on(id_rx), Ok(Ok(1.into())));
@@ -135,7 +135,7 @@ fn should_watch_extrinsic() {
 
 
 #[test]
-fn should_track_extrinsic() {
+fn should_watch_existing_extrinsic() {
 	// Initial setup is 1 submitted extrinsic
 	let mut runtime = runtime::Runtime::new().unwrap();
 	let client = Arc::new(test_client::new());
@@ -154,7 +154,7 @@ fn should_track_extrinsic() {
 	p.submit_extrinsic(xt.into()).wait().expect("Failed to submit extrinsic");
 
 	// Then we track it
-	p.track_extrinsic(Default::default(), subscriber, xt_hash.into());
+	p.watch_extrinsic(Default::default(), subscriber, xt_hash.into());
 	assert_eq!(runtime.block_on(id_rx), Ok(Ok(1.into())));
 
 	// Add replacement
@@ -196,7 +196,7 @@ fn should_return_watch_validation_error() {
 	let (subscriber, id_rx, _data) = jsonrpc_pubsub::typed::Subscriber::new_test("test");
 
 	// when
-	p.watch_extrinsic(Default::default(), subscriber, uxt(AccountKeyring::Alice, 179).encode().into());
+	p.submit_and_watch_extrinsic(Default::default(), subscriber, uxt(AccountKeyring::Alice, 179).encode().into());
 
 	// then
 	let res = runtime.block_on(id_rx).unwrap();

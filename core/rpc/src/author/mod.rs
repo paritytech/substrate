@@ -152,7 +152,7 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 		)
 	}
 
-	fn track_extrinsic(&self,
+	fn watch_extrinsic(&self,
     	_metadata: Self::Metadata,
 	    subscriber:  Subscriber<Status<ExHash<P>, BlockHash<P>>>,
 	    hash: ExHash<P>,
@@ -169,7 +169,7 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 		);
 	}
 
-	fn watch_extrinsic(&self,
+	fn submit_and_watch_extrinsic(&self,
 		_metadata: Self::Metadata,
 		subscriber: Subscriber<Status<ExHash<P>, BlockHash<P>>>,
 		xt: Bytes
