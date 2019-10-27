@@ -14,28 +14,20 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Test crate for srml_support. Allow to make use of `support::decl_storage`.
-//! See tests directory.
+pub trait Trait {
+	type Origin;
+	type BlockNumber: codec::Codec + codec::EncodeLike + Default + Clone;
+}
 
-#[cfg(test)]
-mod tests {
-	use std::env;
+support::decl_module! {
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+}
 
-	#[test]
-	fn reserved_keyword() {
-		// As trybuild is using `cargo check`, we don't need the real WASM binaries.
-		env::set_var("BUILD_DUMMY_WASM_BINARY", "1");
-
-		let t = trybuild::TestCases::new();
-		t.compile_fail("tests/reserved_keyword/*.rs");
-	}
-
-	#[test]
-	fn decl_storage_ui() {
-		// As trybuild is using `cargo check`, we don't need the real WASM binaries.
-		env::set_var("BUILD_DUMMY_WASM_BINARY", "1");
-
-		let t = trybuild::TestCases::new();
-		t.compile_fail("tests/decl_storage_ui/*.rs");
+support::decl_storage!{
+	trait Store for Module<T: Trait> as FinalKeysNone {
+		pub Value config(value): u32;
+		pub Value2 config(value): u32;
 	}
 }
+
+fn main() {}
