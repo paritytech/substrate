@@ -130,7 +130,6 @@ impl<H: Clone, H2: Clone> Sender<H, H2> {
 		self.send(Status::Broadcast(peers))
 	}
 
-
 	/// Returns true if the are no more listeners for this extrinsic or it was finalized.
 	pub fn is_done(&self) -> bool {
 		self.finalized || self.receivers.is_empty()

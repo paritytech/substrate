@@ -171,7 +171,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 		match tx {
 			ValidatedTransaction::Valid(tx) => {
 				let hash = self.api.hash_and_length(&tx.data).0;
-				let watcher = self.listener.write().create_watcher(hash);
+				let watcher = self.watch(hash);
 				self.submit(std::iter::once(ValidatedTransaction::Valid(tx)))
 					.pop()
 					.expect("One extrinsic passed; one result returned; qed")
@@ -180,6 +180,11 @@ impl<B: ChainApi> ValidatedPool<B> {
 			ValidatedTransaction::Invalid(err) => Err(err.into()),
 			ValidatedTransaction::Unknown(_, err) => Err(err.into()),
 		}
+	}
+
+	/// Watch some existing transaction with known hash.
+	pub fn watch(&self, hash: ExHash<B>) -> Watcher<ExHash<B>, BlockHash<B>> {
+		self.listener.write().create_watcher(hash)
 	}
 
 	/// For each extrinsic, returns tags that it provides (if known), or None (if it is unknown).
