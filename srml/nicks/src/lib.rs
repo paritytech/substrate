@@ -28,8 +28,6 @@
 //!
 //! ### Dispatchable Functions
 //!
-//! Only the sudo key can call the dispatchable functions from the Sudo module.
-//!
 //! * `set_name` - Set the associated name of an account; a small deposit is reserved if not already
 //!   taken.
 //! * `clear_name` - Remove an account's associated name; the deposit is returned.
