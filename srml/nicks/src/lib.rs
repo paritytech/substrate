@@ -100,6 +100,15 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event() = default;
 
+		/// Reservation fee.
+		const ReservationFee: BalanceOf<T> = T::ReservationFee::get();
+
+		/// The minimum length a name may be.
+		const MinLength: u32 = T::MinLength::get() as u32;
+
+		/// The maximum length a name may be.
+		const MaxLength: u32 = T::MaxLength::get() as u32;
+
 		/// Set an account's name. The name should be a UTF-8-encoded string by convention, though
 		/// we don't check it.
 		///
