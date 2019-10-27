@@ -1630,7 +1630,9 @@ fn grandpa_environment_respects_voting_rules() {
 
 #[test]
 fn imports_justification_for_regular_blocks_on_import() {
-	// NOTE: this is a regression test for a bug
+	// NOTE: this is a regression test since initially we would only import
+	// justifications for authority change blocks, and would discard any
+	// existing justification otherwise.
 	let peers = &[Ed25519Keyring::Alice];
 	let voters = make_ids(peers);
 	let api = TestApi::new(voters);
