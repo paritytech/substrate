@@ -169,7 +169,7 @@ decl_module! {
 		/// - One DB write (event).
 		/// - Unknown weight of derivative `proposal` execution.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedOperational(0)]
+		#[weight = SimpleDispatchInfo::FreeOperational]
 		fn kill_name(origin, target: <T::Lookup as StaticLookup>::Source) {
 			T::KillOrigin::try_origin(origin)
 				.map(|_| ())
