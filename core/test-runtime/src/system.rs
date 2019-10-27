@@ -18,7 +18,10 @@
 //! and depositing logs.
 
 use rstd::prelude::*;
-use runtime_io::{storage_root, storage_changes_root, blake2_256};
+use runtime_io::{
+	storage::root as storage_root, storage::changes_root as storage_changes_root,
+	hashing::blake2_256,
+};
 use runtime_support::storage::{self, StorageValue, StorageMap};
 use runtime_support::storage_items;
 use sr_primitives::{

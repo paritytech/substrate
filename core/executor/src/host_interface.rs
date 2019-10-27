@@ -201,10 +201,8 @@ impl_wasm_host_interface! {
 
 			let target_str = std::str::from_utf8(&target)
 				.map_err(|_| "Target invalid utf8 in ext_log")?;
-			let message_str = std::str::from_utf8(&message)
-				.map_err(|_| "Message invalid utf8 in ext_log")?;
 
-			runtime_io::log::log(level.into(), &target_str, &message_str);
+			runtime_io::logging::log(level.into(), &target_str, &message);
 			Ok(())
 		}
 

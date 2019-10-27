@@ -19,7 +19,7 @@ use primitives::crypto::Pair;
 
 use codec::Codec;
 use primitives::crypto::{KeyTypeId, CryptoType, IsWrappedBy, Public};
-use rstd::fmt::Debug;
+use rstd::{fmt::Debug, vec::Vec};
 
 /// An application-specific key.
 pub trait AppKey: 'static + Send + Sync + Sized + CryptoType + Clone {

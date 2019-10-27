@@ -270,7 +270,7 @@ decl_module! {
 			debug::RuntimeLogger::init();
 
 			// Only send messages if we are a potential validator.
-			if runtime_io::is_validator() {
+			if runtime_io::offchain::is_validator() {
 				Self::offchain(now);
 			}
 		}
@@ -333,7 +333,8 @@ impl<T: Trait> Module<T> {
 					.map(|location| (index as u32, &local_keys[location]))
 			})
 		{
-			let network_state = runtime_io::network_state().map_err(|_| OffchainErr::NetworkState)?;
+			let network_state = runtime_io::offchain::network_state()
+				.map_err(|_| OffchainErr::NetworkState)?;
 			let heartbeat_data = Heartbeat {
 				block_number,
 				network_state,
@@ -370,10 +371,10 @@ impl<T: Trait> Module<T> {
 			done,
 			gossipping_at,
 		};
-		runtime_io::local_storage_compare_and_set(
+		runtime_io::offchain::local_storage_compare_and_set(
 			StorageKind::PERSISTENT,
 			DB_KEY,
-			curr_worker_status.as_ref().map(Vec::as_slice),
+			curr_worker_status,
 			&enc.encode()
 		)
 	}
@@ -386,8 +387,7 @@ impl<T: Trait> Module<T> {
 			done,
 			gossipping_at,
 		};
-		runtime_io::local_storage_set(
-			StorageKind::PERSISTENT, DB_KEY, &enc.encode());
+		runtime_io::offchain::local_storage_set(StorageKind::PERSISTENT, DB_KEY, &enc.encode());
 	}
 
 	// Checks if a heartbeat gossip already occurred at this block number.
@@ -397,7 +397,7 @@ impl<T: Trait> Module<T> {
 		now: T::BlockNumber,
 		next_gossip: T::BlockNumber,
 	) -> Result<(Option<Vec<u8>>, bool), OffchainErr> {
-		let last_gossip = runtime_io::local_storage_get(StorageKind::PERSISTENT, DB_KEY);
+		let last_gossip = runtime_io::offchain::local_storage_get(StorageKind::PERSISTENT, DB_KEY);
 		match last_gossip {
 			Some(last) => {
 				let worker_status: WorkerStatus<T::BlockNumber> = Decode::decode(&mut &last[..])

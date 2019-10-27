@@ -1137,7 +1137,7 @@ macro_rules! impl_opaque_keys {
 			/// The generated key pairs are stored in the keystore.
 			///
 			/// Returns the concatenated SCALE encoded public keys.
-			pub fn generate(seed: Option<&str>) -> $crate::rstd::vec::Vec<u8> {
+			pub fn generate(seed: Option<$crate::rstd::vec::Vec<u8>>) -> $crate::rstd::vec::Vec<u8> {
 				let keys = Self{
 					$(
 						$field: <$type as $crate::app_crypto::RuntimeAppPublic>::generate_pair(seed),

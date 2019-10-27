@@ -130,9 +130,6 @@ impl std::fmt::Display for Public {
 	}
 }
 
-#[cfg(not(feature = "std"))]
-use core as std;
-
 impl rstd::fmt::Debug for Public {
 	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {

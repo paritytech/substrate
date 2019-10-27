@@ -99,7 +99,7 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 	if balance < subsistence_threshold {
 		// The contract cannot afford to leave a tombstone, so remove the contract info altogether.
 		<ContractInfoOf<T>>::remove(account);
-		runtime_io::kill_child_storage(&contract.trie_id);
+		runtime_io::storage::child_storage_kill(&contract.trie_id);
 		return (RentOutcome::Evicted, None);
 	}
 
@@ -146,7 +146,7 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 		// threshold, so it leaves a tombstone.
 
 		// Note: this operation is heavy.
-		let child_storage_root = runtime_io::child_storage_root(&contract.trie_id);
+		let child_storage_root = runtime_io::storage::child_root(&contract.trie_id);
 
 		let tombstone = <TombstoneContractInfo<T>>::new(
 			&child_storage_root[..],
@@ -155,7 +155,7 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 		let tombstone_info = ContractInfo::Tombstone(tombstone);
 		<ContractInfoOf<T>>::insert(account, &tombstone_info);
 
-		runtime_io::kill_child_storage(&contract.trie_id);
+		runtime_io::storage::child_storage_kill(&contract.trie_id);
 
 		return (RentOutcome::Evicted, Some(tombstone_info));
 	}
