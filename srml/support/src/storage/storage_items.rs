@@ -254,9 +254,12 @@ macro_rules! __handle_wrap_internal {
 #[allow(dead_code)]
 mod tests {
 	use crate::metadata::*;
-	use crate::metadata::StorageHasher;
-	use crate::rstd::marker::PhantomData;
-	use crate::codec::{Encode, Decode, EncodeLike};
+
+	use std::marker::PhantomData;
+
+	use codec::{Encode, Decode, EncodeLike};
+
+	use state_machine::testing::TestExternalities;
 
 	storage_items! {
 		Value: b"a" => u32;
@@ -265,7 +268,7 @@ mod tests {
 
 	#[test]
 	fn value() {
-		runtime_io::with_storage(&mut Default::default(), || {
+		TestExternalities::default().execute_with(|| {
 			assert!(Value::get().is_none());
 			Value::put(&100_000);
 			assert_eq!(Value::get(), Some(100_000));
@@ -276,7 +279,7 @@ mod tests {
 
 	#[test]
 	fn map() {
-		runtime_io::with_storage(&mut Default::default(), || {
+		TestExternalities::default().execute_with(|| {
 			assert!(Map::get(&5).is_none());
 			Map::insert(&5, &[1; 32]);
 			assert_eq!(Map::get(&5), Some([1; 32]));

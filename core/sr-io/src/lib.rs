@@ -52,7 +52,7 @@ use runtime_interface::{runtime_interface, Pointer};
 use codec::{Encode, Decode};
 
 #[cfg(feature = "std")]
-use externalities::ExternalitiesExt;
+use externalities::{ExternalitiesExt, Externalities};
 
 /// Error verifying ECDSA signature
 #[derive(Encode, Decode)]
@@ -170,7 +170,7 @@ pub trait Storage {
 
 	/// Clear the storage of each key-value pair where the key starts with the given `prefix`.
 	fn clear_prefix(&mut self, prefix: &[u8]) {
-		self.clear_prefix(prefix)
+		Externalities::clear_prefix(*self, prefix)
 	}
 
 	/// Clear the child storage of each key-value pair where the key starts with the given `prefix`.
@@ -591,17 +591,21 @@ pub trait Offchain {
 	}
 }
 
+/// Wasm only interface that provides functions for calling into the allocator.
 #[runtime_interface(wasm_only)]
 trait Allocator {
+	/// Malloc the given number of bytes and return the pointer to the allocated memory location.
 	fn malloc(&mut self, size: u32) -> Pointer<u8> {
-		self.allocate_memory(size).unwrap()
+		self.allocate_memory(size).expect("Failed to allocate memory")
 	}
 
+	/// Free the given pointer.
 	fn free(&mut self, ptr: Pointer<u8>) {
-		self.deallocate_memory(ptr).unwrap()
+		self.deallocate_memory(ptr).expect("Failed to free allocated memory")
 	}
 }
 
+/// Interface that provides functions for logging from within the runtime.
 #[runtime_interface]
 pub trait Log {
 	/// Request to print a log message on the host.
@@ -666,19 +670,9 @@ pub extern fn oom(_: core::alloc::Layout) -> ! {
 	}
 }
 
-mod imp {
-	use super::*;
-
-	#[cfg(feature = "std")]
-	include!("../with_std.rs");
-}
-
-#[cfg(feature = "std")]
-pub use self::imp::{StorageOverlay, ChildrenStorageOverlay, with_storage};
-
 /// Type alias for Externalities implementation used in tests.
 #[cfg(feature = "std")]
-pub type TestExternalities = self::imp::TestExternalities<primitives::Blake2Hasher, u64>;
+pub type TestExternalities = substrate_state_machine::TestExternalities<primitives::Blake2Hasher, u64>;
 
 /// The host functions Substrate provides for the Wasm runtime environment.
 ///
@@ -693,3 +687,68 @@ pub type SubstrateHostFunctions = (
 	allocator::HostFunctions,
 	log::HostFunctions,
 );
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use primitives::map;
+	use substrate_state_machine::BasicExternalities;
+
+	#[test]
+	fn storage_works() {
+		let mut t = BasicExternalities::default();
+		t.execute_with(|| {
+			assert_eq!(storage::get(b"hello"), None);
+			storage::set(b"hello", b"world");
+			assert_eq!(storage::get(b"hello"), Some(b"world".to_vec()));
+			assert_eq!(storage::get(b"foo"), None);
+			storage::set(b"foo", &[1, 2, 3][..]);
+		});
+
+		t = BasicExternalities::new(map![b"foo".to_vec() => b"bar".to_vec()], map![]);
+
+		t.execute_with(|| {
+			assert_eq!(storage::get(b"hello"), None);
+			assert_eq!(storage::get(b"foo"), Some(b"bar".to_vec()));
+		});
+	}
+
+	#[test]
+	fn read_storage_works() {
+		let mut t = BasicExternalities::new(
+			map![b":test".to_vec() => b"\x0b\0\0\0Hello world".to_vec()],
+			map![],
+		);
+
+		t.execute_with(|| {
+			let mut v = [0u8; 4];
+			assert!(storage::read(b":test", &mut v[..], 0).unwrap() >= 4);
+			assert_eq!(v, [11u8, 0, 0, 0]);
+			let mut w = [0u8; 11];
+			assert!(storage::read(b":test", &mut w[..], 4).unwrap() >= 11);
+			assert_eq!(&w, b"Hello world");
+		});
+	}
+
+	#[test]
+	fn clear_prefix_works() {
+		let mut t = BasicExternalities::new(
+			map![
+				b":a".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
+				b":abcd".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
+				b":abc".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
+				b":abdd".to_vec() => b"\x0b\0\0\0Hello world".to_vec()
+			],
+			map![],
+		);
+
+		t.execute_with(|| {
+			storage::clear_prefix(b":abc");
+
+			assert!(storage::get(b":a").is_some());
+			assert!(storage::get(b":abdd").is_some());
+			assert!(storage::get(b":abcd").is_none());
+			assert!(storage::get(b":abc").is_none());
+		});
+	}
+}

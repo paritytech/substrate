@@ -38,7 +38,7 @@ pub use paste;
 pub use app_crypto;
 
 #[cfg(feature = "std")]
-pub use runtime_io::{StorageOverlay, ChildrenStorageOverlay};
+pub use primitives::storage::{StorageOverlay, ChildrenStorageOverlay};
 
 use rstd::prelude::*;
 use rstd::convert::TryFrom;
@@ -66,10 +66,7 @@ pub use app_crypto::RuntimeAppPublic;
 pub use primitives::RuntimeDebug;
 
 /// Re-export top-level arithmetic stuff.
-pub use arithmetic::{
-	Perquintill, Perbill, Permill, Percent,
-	Rational128, Fixed64
-};
+pub use arithmetic::{Perquintill, Perbill, Permill, Percent, Rational128, Fixed64};
 /// Re-export 128 bit helpers.
 pub use arithmetic::helpers_128bit;
 /// Re-export big_uint stuff.

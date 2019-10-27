@@ -14,10 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use runtime_io::with_storage;
 use support::storage::unhashed;
 use codec::Encode;
 use support::{StorageDoubleMap, StorageLinkedMap, StorageMap, StorageValue};
+use state_machine::testing::TestExternalities;
 
 mod no_instance {
 	use codec::{Encode, Decode, EncodeLike};
@@ -87,7 +87,7 @@ mod instance {
 
 #[test]
 fn final_keys_no_instance() {
-	with_storage(&mut Default::default(), || {
+	TestExternalities::default().execute_with(|| {
 		no_instance::Value::put(1);
 		assert_eq!(unhashed::get::<u32>(&runtime_io::twox_128(b"FinalKeysNone Value")), Some(1u32));
 
@@ -133,7 +133,7 @@ fn final_keys_no_instance() {
 
 #[test]
 fn final_keys_default_instance() {
-	with_storage(&mut Default::default(), || {
+	TestExternalities::default().execute_with(|| {
 		<instance::Value<instance::DefaultInstance>>::put(1);
 		assert_eq!(unhashed::get::<u32>(&runtime_io::twox_128(b"FinalKeysSome Value")), Some(1u32));
 
@@ -179,7 +179,7 @@ fn final_keys_default_instance() {
 
 #[test]
 fn final_keys_instance_2() {
-	with_storage(&mut Default::default(), || {
+	TestExternalities::default().execute_with(|| {
 		<instance::Value<instance::Instance2>>::put(1);
 		assert_eq!(
 			unhashed::get::<u32>(&runtime_io::twox_128(b"Instance2FinalKeysSome Value")),

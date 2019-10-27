@@ -37,7 +37,7 @@ pub use once_cell;
 pub use paste;
 #[cfg(feature = "std")]
 #[doc(hidden)]
-pub use runtime_io::with_storage;
+pub use state_machine::BasicExternalities;
 #[doc(hidden)]
 pub use runtime_io::storage_root;
 #[doc(hidden)]
