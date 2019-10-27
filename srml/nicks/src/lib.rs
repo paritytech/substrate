@@ -320,7 +320,18 @@ mod tests {
 	}
 
 	#[test]
-	fn force_origin_should_work() {
+	fn kill_name_should_work() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(Nicks::set_name(Origin::signed(2), b"Dave".to_vec()));
+			assert_eq!(Balances::total_balance(&2), 10);
+			assert_ok!(Nicks::kill_name(Origin::signed(1), 2));
+			assert_eq!(Balances::total_balance(&2), 8);
+			assert_eq!(<NameOf<Test>>::get(2), None);
+		});
+	}
+
+	#[test]
+	fn force_name_should_work() {
 		new_test_ext().execute_with(|| {
 			assert_noop!(
 				Nicks::set_name(Origin::signed(2), b"Dr. David Brubeck, III".to_vec()),
