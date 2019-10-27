@@ -31,10 +31,7 @@ use rstd::{
 use support::{
 	decl_module, decl_event, decl_storage, Parameter,
 };
-use sr_primitives::{
-	Perbill,
-	traits::{Hash, Saturating},
-};
+use sr_primitives::traits::Hash;
 use sr_staking_primitives::{
 	offence::{Offence, ReportOffence, Kind, OnOffenceHandler, OffenceDetails},
 };
@@ -101,7 +98,7 @@ where
 		// Go through all offenders in the offence report and find all offenders that was spotted
 		// in unique reports.
 		let TriageOutcome {
-			new_offenders,
+			new_offenders: _,
 			concurrent_offenders,
 		} = match Self::triage_offence_report::<O>(reporters, &time_slot, offenders) {
 			Some(triage) => triage,
@@ -113,7 +110,6 @@ where
 		Self::deposit_event(Event::Offence(O::ID, time_slot.encode()));
 
 		let offenders_count = concurrent_offenders.len() as u32;
-		let previous_offenders_count = offenders_count - new_offenders.len() as u32;
 
 		// The amount new offenders are slashed
 		let new_fraction = O::slash_fraction(offenders_count, validator_set_count);
