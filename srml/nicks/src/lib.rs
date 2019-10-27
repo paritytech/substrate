@@ -40,7 +40,7 @@
 
 use rstd::prelude::*;
 use sr_primitives::{
-	traits::{StaticLookup, EnsureOrigin}, weights::SimpleDispatchInfo,
+	traits::{StaticLookup, EnsureOrigin, Zero}, weights::SimpleDispatchInfo
 };
 use support::{
 	decl_module, decl_event, decl_storage, ensure, traits::{
@@ -65,8 +65,8 @@ pub trait Trait: system::Trait {
 	/// What to do with slashed funds.
 	type Slashed: OnUnbalanced<NegativeImbalanceOf<Self>>;
 
-	/// The origin which may forcibly remove a name. Root can always do this.
-	type KillOrigin: EnsureOrigin<Self::Origin>;
+	/// The origin which may forcibly set or remove a name. Root can always do this.
+	type ForceOrigin: EnsureOrigin<Self::Origin>;
 
 	/// The minimum length a name may be.
 	type MinLength: Get<usize>;
@@ -86,6 +86,8 @@ decl_event!(
 	pub enum Event<T> where AccountId = <T as system::Trait>::AccountId, Balance = BalanceOf<T> {
 		/// A name was set.
 		NameSet(AccountId),
+		/// A name was forcibly set.
+		NameForced(AccountId),
 		/// A name was changed.
 		NameChanged(AccountId),
 		/// A name was cleared, and the given balance returned.
@@ -170,7 +172,7 @@ decl_module! {
 		/// Fails if `who` has not been named. The deposit is dealt with through `T::Slashed`
 		/// imbalance handler.
 		///
-		/// The dispatch origin for this call must be _Root_ or match `T::KillOrigin`.
+		/// The dispatch origin for this call must be _Root_ or match `T::ForceOrigin`.
 		///
 		/// # <weight>
 		/// - O(1).
@@ -180,7 +182,7 @@ decl_module! {
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FreeOperational]
 		fn kill_name(origin, target: <T::Lookup as StaticLookup>::Source) {
-			T::KillOrigin::try_origin(origin)
+			T::ForceOrigin::try_origin(origin)
 				.map(|_| ())
 				.or_else(ensure_root)
 				.map_err(|_| "bad origin")?;
@@ -193,6 +195,32 @@ decl_module! {
 			T::Slashed::on_unbalanced(T::Currency::slash_reserved(&target, deposit.clone()).0);
 
 			Self::deposit_event(RawEvent::NameKilled(target, deposit));
+		}
+
+		/// Set a third-party account's name with no deposit.
+		///
+		/// No length checking is done on the name.
+		///
+		/// The dispatch origin for this call must be _Root_ or match `T::ForceOrigin`.
+		///
+		/// # <weight>
+		/// - O(1).
+		/// - At most one balance operation.
+		/// - One storage read/write.
+		/// - One event.
+		/// # </weight>
+		#[weight = SimpleDispatchInfo::FreeOperational]
+		fn force_name(origin, target: <T::Lookup as StaticLookup>::Source, name: Vec<u8>) {
+			T::ForceOrigin::try_origin(origin)
+				.map(|_| ())
+				.or_else(ensure_root)
+				.map_err(|_| "bad origin")?;
+
+			let target = T::Lookup::lookup(target)?;
+			let deposit = <NameOf<T>>::get(&target).map(|x| x.1).unwrap_or_else(Zero::zero);
+			<NameOf<T>>::insert(&target, (name, deposit));
+
+			Self::deposit_event(RawEvent::NameForced(target));
 		}
 	}
 }
@@ -269,7 +297,7 @@ mod tests {
 		type Currency = Balances;
 		type ReservationFee = ReservationFee;
 		type Slashed = ();
-		type KillOrigin = EnsureSignedBy<One, u64>;
+		type ForceOrigin = EnsureSignedBy<One, u64>;
 		type MinLength = MinLength;
 		type MaxLength = MaxLength;
 	}
@@ -292,13 +320,29 @@ mod tests {
 	}
 
 	#[test]
-	fn kill_names_should_work() {
+	fn kill_name_should_work() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Nicks::set_name(Origin::signed(2), b"Dave".to_vec()));
 			assert_eq!(Balances::total_balance(&2), 10);
 			assert_ok!(Nicks::kill_name(Origin::signed(1), 2));
 			assert_eq!(Balances::total_balance(&2), 8);
 			assert_eq!(<NameOf<Test>>::get(2), None);
+		});
+	}
+
+	#[test]
+	fn force_name_should_work() {
+		new_test_ext().execute_with(|| {
+			assert_noop!(
+				Nicks::set_name(Origin::signed(2), b"Dr. David Brubeck, III".to_vec()),
+				"Name too long"
+			);
+
+			assert_ok!(Nicks::set_name(Origin::signed(2), b"Dave".to_vec()));
+			assert_eq!(Balances::reserved_balance(&2), 2);
+			assert_ok!(Nicks::force_name(Origin::signed(1), 2, b"Dr. David Brubeck, III".to_vec()));
+			assert_eq!(Balances::reserved_balance(&2), 2);
+			assert_eq!(<NameOf<Test>>::get(2).unwrap(), (b"Dr. David Brubeck, III".to_vec(), 2));
 		});
 	}
 
@@ -335,6 +379,7 @@ mod tests {
 			);
 			assert_ok!(Nicks::set_name(Origin::signed(1), b"Dave".to_vec()));
 			assert_noop!(Nicks::kill_name(Origin::signed(2), 1), "bad origin");
+			assert_noop!(Nicks::force_name(Origin::signed(2), 1, b"Whatever".to_vec()), "bad origin");
 		});
 	}
 }
