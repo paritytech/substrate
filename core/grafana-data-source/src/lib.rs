@@ -29,19 +29,16 @@ use parking_lot::RwLock;
 
 mod types;
 mod server;
+mod util;
 
 pub use server::run_server;
+pub use util::now_millis;
 
 type Metrics = HashMap<&'static str, Vec<(f32, i64)>>;
 
 lazy_static! {
 	/// The `RwLock` wrapping the metrics. Not intended to be used directly.
     pub static ref METRICS: RwLock<Metrics> = RwLock::new(Metrics::new());
-}
-
-/// Get the current unix timestamp in milliseconds.
-pub fn now_millis() -> i64 {
-	chrono::Utc::now().timestamp_millis()
 }
 
 /// Write metrics to `METRICS`.

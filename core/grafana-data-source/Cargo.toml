@@ -14,3 +14,5 @@ serde = { version = "1", features = ["derive"] }
 chrono = { version = "0.4", features = ["serde"] }
 lazy_static = "1.4"
 parking_lot = "0.9"
+tokio-timer = "0.2"
+stream-cancel = "0.4"

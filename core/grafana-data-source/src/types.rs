@@ -17,31 +17,16 @@
 use serde::{Serialize, Deserialize};
 
 #[derive(Serialize, Deserialize)]
-pub enum TargetType {
-	#[serde(rename = "timeseries")]
-	Timeseries,
-	#[serde(rename = "table")]
-	Table
+pub struct Target {
+	pub target: String,
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct SearchRequest {
-	pub target: String
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct QueryRequest {
+pub struct Query {
 	#[serde(rename = "maxDataPoints")]
 	pub max_datapoints: usize,
 	pub targets: Vec<Target>,
 	pub range: Range,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct Target {
-	pub target: String,
-	#[serde(rename = "type")]
-	target_type: TargetType,
 }
 
 #[derive(Serialize, Deserialize)]

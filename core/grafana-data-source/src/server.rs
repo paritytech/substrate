@@ -17,7 +17,9 @@
 use serde::{Serialize, de::DeserializeOwned};
 use hyper::{Body, Request, Response, header, service::service_fn, Server};
 use futures::{future, Future, stream::Stream};
-use crate::{METRICS, types::{SearchRequest, QueryRequest, TimeseriesData}};
+use chrono::{Duration, Utc};
+use stream_cancel::StreamExt;
+use crate::{METRICS, util, types::{Target, Query, TimeseriesData}};
 
 type GenericError = Box<dyn std::error::Error + Send + Sync>;
 type ResponseFuture = Box<dyn Future<Item=Response<Body>, Error=GenericError> + Send>;
@@ -25,34 +27,32 @@ type ResponseFuture = Box<dyn Future<Item=Response<Body>, Error=GenericError> + 
 fn api_response(req: Request<Body>) -> ResponseFuture {
 	match req.uri().path() {
 		"/" => Box::new(future::ok(Response::new(Body::empty()))),
-		"/search" => map_request_to_response(req, |req: SearchRequest| {
-			// Filter and return metrics relating to the search term
+		"/search" => map_request_to_response(req, |target: Target| {
+			// Filter and return metrics relating to the target
 			METRICS.read()
 				.keys()
-				.filter(|key| key.starts_with(&req.target))
+				.filter(|key| key.starts_with(&target.target))
 				.cloned()
 				.collect::<Vec<_>>()
 		}),
 		"/query" => {
-			map_request_to_response(req, |req: QueryRequest| {
+			map_request_to_response(req, |query: Query| {
 				let metrics = METRICS.read();
 
 				// Return timeseries data related to the specified metrics
-				req.targets.iter()
+				query.targets.iter()
 					.map(|target| {
 						let datapoints = metrics.get(target.target.as_str())
 							.map(|metric| {
-								let from = metric.binary_search_by_key(&req.range.from, |&(_, t)| t)
-									.unwrap_or_else(|i| i);
-								let to = metric.binary_search_by_key(&req.range.to, |&(_, t)| t)
-									.unwrap_or_else(|i| i);
+								let from = util::find_index(&metric, query.range.from);
+								let to = util::find_index(&metric, query.range.to);
 
 								let metric = &metric[from .. to];
 
-								if metric.len() > req.max_datapoints {
+								if metric.len() > query.max_datapoints {
 									// Avoid returning more than `max_datapoints` (mostly to stop
 									// the web browser from having to do a ton of work)
-									select_points(metric, req.max_datapoints)
+									util::select_points(metric, query.max_datapoints)
 								} else {
 									metric.to_vec()
 								}
@@ -97,27 +97,38 @@ fn map_request_to_response<Req, Res, T>(req: Request<Body>, transformation: T) -
 ///
 /// The server shuts down cleanly when `shutdown` resolves.
 pub fn run_server<F>(address: &std::net::SocketAddr, shutdown: F) -> impl Future<Item=(), Error=()>
-	where F: Future<Item = (), Error = ()>
+	where F: Future<Item=(), Error=()> + Clone
 {
 	Server::bind(address)
 		.serve(|| service_fn(api_response))
-		.with_graceful_shutdown(shutdown)
-		.map_err(|e| eprintln!("server error: {}", e))
+		.with_graceful_shutdown(shutdown.clone())
+		.map_err(|_| ())
+		// Clean up week-old metrics once a day
+		.join(clean_up(Duration::days(1), Duration::weeks(1), shutdown))
+		.map(|_| ())
 }
 
-// Evenly select `num_points` points from a slice
-fn select_points<T: Copy>(slice: &[T], num_points: usize) -> Vec<T> {
-	(0 .. num_points - 1)
-		.map(|i| slice[i * slice.len() / (num_points - 1)])
-		.chain(slice.last().cloned())
-		.collect()
-}
+// Remove all metrics before a certain duration every so often.
+fn clean_up<F>(every: Duration, before: Duration, exit: F) -> impl Future<Item=(), Error=()>
+	where F: Future<Item=(), Error=()>
+{
+	tokio_timer::Interval::new_interval(every.to_std().unwrap())
+		.take_until(exit)
+		.for_each(move |_| {
+			let oldest_allowed = (Utc::now() - before).timestamp_millis();
 
-#[test]
-fn test_select_points() {
-	let array = [1, 2, 3, 4, 5];
-	assert_eq!(select_points(&array, 2), vec![1, 5]);
-	assert_eq!(select_points(&array, 3), vec![1, 3, 5]);
-	assert_eq!(select_points(&array, 4), vec![1, 2, 4, 5]);
-	assert_eq!(select_points(&array, 5), vec![1, 2, 3, 4, 5]);
+			let mut metrics = METRICS.write();
+
+			for metric in metrics.values_mut() {
+				// Find the index of the oldest allowed timestamp and cut out all those before it.
+				let index = util::find_index(&metric, oldest_allowed);
+
+				if index > 0 {
+					*metric = metric[index..].to_vec();
+				}
+			}
+
+			futures::future::ok(())
+		})
+		.map_err(|_| ())
 }

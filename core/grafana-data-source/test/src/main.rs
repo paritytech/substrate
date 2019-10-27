@@ -18,6 +18,19 @@ use grafana_data_source::{run_server, record_metrics};
 use std::{thread::{spawn, sleep}, time::Duration};
 use rand::Rng;
 
+// futures::future::empty is not cloneable.
+#[derive(Clone)]
+struct EmptyFuture;
+
+impl futures::Future for EmptyFuture {
+	type Item = ();
+	type Error = ();
+
+	fn poll(&mut self) -> futures::Poll<(), ()> {
+		Ok(futures::Async::NotReady)
+	}
+}
+
 fn main() {
 	let handle = spawn(|| {
 		let mut rng = rand::thread_rng();
@@ -31,6 +44,6 @@ fn main() {
 			sleep(Duration::from_secs(1));
 		}
 	});
-	hyper::rt::run(run_server(&"127.0.0.1:9955".parse().unwrap(), futures::future::empty()));
+	hyper::rt::run(run_server(&"127.0.0.1:9955".parse().unwrap(), EmptyFuture));
 	handle.join().unwrap();
 }
