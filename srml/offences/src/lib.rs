@@ -118,37 +118,7 @@ where
 		// The amount new offenders are slashed
 		let new_fraction = O::slash_fraction(offenders_count, validator_set_count);
 
-		// The amount previous offenders are slashed additionally.
-		//
-		// Since they were slashed in the past, we slash by:
-		// x = (new - prev) / (1 - prev)
-		// because:
-		// Y = X * (1 - prev)
-		// Z = Y * (1 - x)
-		// Z = X * (1 - new)
-		let old_fraction = if previous_offenders_count > 0 {
-			let previous_fraction = O::slash_fraction(
-				offenders_count.saturating_sub(previous_offenders_count),
-				validator_set_count,
-			);
-			let numerator = new_fraction.saturating_sub(previous_fraction);
-			let denominator = Perbill::one().saturating_sub(previous_fraction);
-			denominator.saturating_mul(numerator)
-		} else {
-			new_fraction.clone()
-		};
-
-		// calculate how much to slash
-		let slash_perbill = concurrent_offenders
-			.iter()
-			.map(|details| {
-				if previous_offenders_count > 0 && new_offenders.contains(&details.offender) {
-					new_fraction.clone()
-				} else {
-					old_fraction.clone()
-				}
-			})
-			.collect::<Vec<_>>();
+		let slash_perbill = vec![new_fraction; concurrent_offenders.len()];
 
 		T::OnOffenceHandler::on_offence(
 			&concurrent_offenders,
