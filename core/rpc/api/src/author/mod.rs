@@ -67,7 +67,7 @@ pub trait AuthorApi<Hash, BlockHash> {
 		subscribe,
 		name = "author_submitAndWatchExtrinsic"
 	)]
-	fn submit_and_watch_extrinsic(&self,
+	fn watch_extrinsic(&self,
 		metadata: Self::Metadata,
 		subscriber: Subscriber<Status<Hash, BlockHash>>,
 		bytes: Bytes
@@ -83,16 +83,4 @@ pub trait AuthorApi<Hash, BlockHash> {
 		metadata: Option<Self::Metadata>,
 		id: SubscriptionId
 	) -> Result<bool>;
-
-	/// Watch multiple extrinsics (own or from network)
-	#[pubsub(
-		subscription = "author_extrinsicUpdate",
-		subscribe,
-		name = "author_watchExtrinsic"
-	)]
-	fn watch_extrinsic(&self,
-    	metadata: Self::Metadata,
-		subscriber: Subscriber<Status<Hash, BlockHash>>,
-	    hash: Hash,
-	);
 }
