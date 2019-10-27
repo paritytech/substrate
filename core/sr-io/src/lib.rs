@@ -380,27 +380,27 @@ pub trait Hashing {
 
 	/// Conduct a 128-bit Blake2 hash.
 	fn blake2_128(data: &[u8]) -> [u8; 16] {
-		blake2_128(data)
+		primitives::hashing::blake2_128(data)
 	}
 
 	/// Conduct a 256-bit Blake2 hash.
 	fn blake2_256(data: &[u8]) -> [u8; 32] {
-		blake2_256(data)
+		primitives::hashing::blake2_256(data)
 	}
 
 	/// Conduct four XX hashes to give a 256-bit result.
 	fn twox_256(data: &[u8]) -> [u8; 32] {
-		twox_256(data)
+		primitives::hashing::twox_256(data)
 	}
 
 	/// Conduct two XX hashes to give a 128-bit result.
 	fn twox_128(data: &[u8]) -> [u8; 16] {
-		twox_128(data)
+		primitives::hashing::twox_128(data)
 	}
 
 	/// Conduct two XX hashes to give a 64-bit result.
 	fn twox_64(data: &[u8]) -> [u8; 8] {
-		twox_64(data)
+		primitives::hashing::twox_64(data)
 	}
 }
 
@@ -607,20 +607,22 @@ trait Allocator {
 
 /// Interface that provides functions for logging from within the runtime.
 #[runtime_interface]
-pub trait Log {
+pub trait Logging {
 	/// Request to print a log message on the host.
 	///
 	/// Note that this will be only displayed if the host is enabled to display log messages with
 	/// given level and target.
 	///
 	/// Instead of using directly, prefer setting up `RuntimeLogger` and using `log` macros.
-	fn log(level: LogLevel, target: &str, message: &str) {
-		::log::log!(
-			target: target,
-			::log::Level::from(level),
-			"{}",
-			message,
-		)
+	fn log(level: LogLevel, target: &str, message: &[u8]) {
+		if let Ok(message) = std::str::from_utf8(message) {
+			log::log!(
+				target: target,
+				log::Level::from(level),
+				"{}",
+				message,
+			)
+		}
 	}
 }
 
@@ -685,7 +687,7 @@ pub type SubstrateHostFunctions = (
 	crypto::HostFunctions,
 	hashing::HostFunctions,
 	allocator::HostFunctions,
-	log::HostFunctions,
+	logging::HostFunctions,
 );
 
 #[cfg(test)]

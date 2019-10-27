@@ -39,7 +39,7 @@ pub use paste;
 #[doc(hidden)]
 pub use state_machine::BasicExternalities;
 #[doc(hidden)]
-pub use runtime_io::storage_root;
+pub use runtime_io::storage::root as storage_root;
 #[doc(hidden)]
 pub use sr_primitives::RuntimeDebug;
 

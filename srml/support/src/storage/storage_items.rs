@@ -259,7 +259,7 @@ mod tests {
 
 	use codec::{Encode, Decode, EncodeLike};
 
-	use state_machine::testing::TestExternalities;
+	use runtime_io::TestExternalities;
 
 	storage_items! {
 		Value: b"a" => u32;
