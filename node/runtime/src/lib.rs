@@ -440,7 +440,7 @@ impl offences::Trait for Runtime {
 }
 
 impl authority_discovery::Trait for Runtime {
-    type AuthorityId = BabeId;
+	type AuthorityId = BabeId;
 }
 
 impl grandpa::Trait for Runtime {
@@ -456,6 +456,22 @@ impl finality_tracker::Trait for Runtime {
 	type OnFinalizationStalled = Grandpa;
 	type WindowSize = WindowSize;
 	type ReportLatency = ReportLatency;
+}
+
+parameter_types! {
+	pub const ReservationFee: u64 = 1 * DOLLARS;
+	pub const MinLength: usize = 3;
+	pub const MaxLength: usize = 16;
+}
+
+impl nicks::Trait for Runtime {
+	type Event = Event;
+	type Currency = Balances;
+	type ReservationFee = ReservationFee;
+	type Slashed = Treasury;
+	type KillOrigin = collective::EnsureMember<AccountId, CouncilCollective>;
+	type MinLength = MinLength;
+	type MaxLength = MaxLength;
 }
 
 impl system::offchain::CreateTransaction<Runtime, UncheckedExtrinsic> for Runtime {
