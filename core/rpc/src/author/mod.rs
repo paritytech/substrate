@@ -153,6 +153,23 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 	}
 
 	fn watch_extrinsic(&self,
+    	_metadata: Self::Metadata,
+	    subscriber:  Subscriber<Status<ExHash<P>, BlockHash<P>>>,
+	    hash: ExHash<P>,
+	) {
+		let watcher = self.pool.watch(hash).into_stream().map(|v| Ok::<_, ()>(Ok(v)));
+		let subscriptions = self.subscriptions.clone();
+
+		subscriptions.add(subscriber,
+			move |sink| {
+				sink.sink_map_err(|_| unimplemented!())
+					.send_all(Compat::new(watcher))
+					.map(|_| ())
+			}
+		);
+	}
+
+	fn submit_and_watch_extrinsic(&self,
 		_metadata: Self::Metadata,
 		subscriber: Subscriber<Status<ExHash<P>, BlockHash<P>>>,
 		xt: Bytes

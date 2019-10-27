@@ -115,7 +115,7 @@ fn should_watch_extrinsic() {
 	let (subscriber, id_rx, data) = jsonrpc_pubsub::typed::Subscriber::new_test("test");
 
 	// when
-	p.watch_extrinsic(Default::default(), subscriber, uxt(AccountKeyring::Alice, 0).encode().into());
+	p.submit_and_watch_extrinsic(Default::default(), subscriber, uxt(AccountKeyring::Alice, 0).encode().into());
 
 	// then
 	assert_eq!(setup.runtime.block_on(id_rx), Ok(Ok(1.into())));
@@ -142,6 +142,53 @@ fn should_watch_extrinsic() {
 	);
 }
 
+
+#[test]
+fn should_watch_existing_extrinsic() {
+	// Initial setup is 1 submitted extrinsic
+	let mut runtime = runtime::Runtime::new().unwrap();
+	let client = Arc::new(test_client::new());
+	let pool = Arc::new(Pool::new(Default::default(), FullChainApi::new(client.clone())));
+	let keystore = KeyStore::new();
+	let p = Author {
+		client,
+		pool: pool.clone(),
+		subscriptions: Subscriptions::new(Arc::new(runtime.executor())),
+		keystore: keystore.clone(),
+	};
+	let (subscriber, id_rx, data) = jsonrpc_pubsub::typed::Subscriber::new_test("test");
+
+	let xt = uxt(AccountKeyring::Alice, 0).encode();
+	let xt_hash: H256 = blake2_256(&xt).into();
+	p.submit_extrinsic(xt.into()).wait().expect("Failed to submit extrinsic");
+
+	// Then we track it
+	p.watch_extrinsic(Default::default(), subscriber, xt_hash.into());
+	assert_eq!(runtime.block_on(id_rx), Ok(Ok(1.into())));
+
+	// Add replacement
+	let replacement = {
+		let tx = Transfer {
+			amount: 5,
+			nonce: 0,
+			from: AccountKeyring::Alice.into(),
+			to: Default::default(),
+		};
+		tx.into_signed_tx()
+	}.encode();
+	let replacement_hash = blake2_256(&replacement);
+	AuthorApi::submit_extrinsic(&p, replacement.into()).wait().unwrap();
+
+	// And check if the tracked one received usurped event
+	assert_eq!(
+		runtime.block_on(data.into_future()).unwrap().0,
+		Some(format!(
+			r#"{{"jsonrpc":"2.0","method":"test","params":{{"result":{{"usurped":"0x{}"}},"subscription":1}}}}"#,
+			HexDisplay::from(&replacement_hash))
+		)
+	);
+}
+
 #[test]
 fn should_return_watch_validation_error() {
 	//given
@@ -151,7 +198,7 @@ fn should_return_watch_validation_error() {
 	let (subscriber, id_rx, _data) = jsonrpc_pubsub::typed::Subscriber::new_test("test");
 
 	// when
-	p.watch_extrinsic(Default::default(), subscriber, uxt(AccountKeyring::Alice, 179).encode().into());
+	p.submit_and_watch_extrinsic(Default::default(), subscriber, uxt(AccountKeyring::Alice, 179).encode().into());
 
 	// then
 	let res = setup.runtime.block_on(id_rx).unwrap();
