@@ -43,22 +43,16 @@ impl ChainApi for TestApi {
 		let nonce = uxt.transfer().nonce;
 		let from = uxt.transfer().from.clone();
 
-		let mut requires = vec![];
-		if nonce > 1 && self.nonce_limit.is_some() {
-			requires.push(to_tag(nonce-1, from.clone()));
-		};
-
-		let mut provides = vec![];
-		provides.push(to_tag(nonce, from.clone()));
-		if self.nonce_limit.is_some() {
-			provides.push(to_tag(nonce+1, from.clone()));
-		}
-
 		futures::future::ready(
 			Ok(Ok(ValidTransaction {
 				priority: 4,
-				requires,
-				provides,
+				requires: if nonce > 1 && self.nonce_limit.is_some() { vec![to_tag(nonce-1, from.clone())] } else {vec![] },
+				provides:
+					if self.nonce_limit.is_some() {
+						vec![to_tag(nonce+1, from)]
+					} else {
+						vec![to_tag(nonce, from)]
+					},
 				longevity: 10,
 				propagate: true,
 			}))
@@ -90,10 +84,9 @@ fn uxt(transfer: Transfer) -> Extrinsic {
 }
 
 fn bench_configured(pool: Pool<TestApi>, number: u64) {
-	let mut nonce = 1;
 	let mut futures = Vec::new();
 
-	for _ in 0..number {
+	for nonce in 1..=number {
 		let xt = uxt(Transfer {
 			from: AccountId::from_h256(H256::from_low_u64_be(1)),
 			to: AccountId::from_h256(H256::from_low_u64_be(2)),
@@ -101,29 +94,29 @@ fn bench_configured(pool: Pool<TestApi>, number: u64) {
 			nonce,
 		});
 
-		nonce += 1;
-
 		futures.push(pool.submit_one(&BlockId::Number(1), xt));
 	}
 
-	let _res = block_on(futures::future::join_all(futures.into_iter()));
+	let res = block_on(futures::future::join_all(futures.into_iter()));
+	assert!(res.iter().all(Result::is_ok));
 
 	// instantly producing "blocks" and pruning all ready until no ready
 	let mut block_num = 2;
 	loop {
-		if let Some(ready) = pool.ready().next() {
-			//dbg!(ready.clone());
-			block_on(pool.prune_tags(
-				&BlockId::Number(block_num),
-				vec![to_tag(ready.data.transfer().nonce, ready.data.transfer().from.clone())],
-				vec![ready.hash],
-			)).expect("Prune failed");
-		} else {
-			break;
-		}
+		let ready_exts: Vec<_> = pool.ready().map(|ext|
+			to_tag(ext.data.transfer().nonce, ext.data.transfer().from.clone())
+		).collect();
+
+		if ready_exts.is_empty() { break; }
+
+		block_on(pool.prune_tags(
+			&BlockId::Number(block_num),
+			ready_exts,
+			vec![],
+		)).expect("Prune failed");
+
 
 		block_num += 1;
-
 	}
 
 	// pool is empty
