@@ -40,6 +40,7 @@ grandpa = { package = "srml-grandpa", path = "../../srml/grandpa", default-featu
 im-online = { package = "srml-im-online", path = "../../srml/im-online", default-features = false }
 indices = { package = "srml-indices", path = "../../srml/indices", default-features = false }
 membership = { package = "srml-membership", path = "../../srml/membership", default-features = false }
+nicks = { package = "srml-nicks", path = "../../srml/nicks", default-features = false }
 offences = { package = "srml-offences", path = "../../srml/offences", default-features = false }
 randomness-collective-flip = { package = "srml-randomness-collective-flip", path = "../../srml/randomness-collective-flip", default-features = false }
 session = { package = "srml-session", path = "../../srml/session", default-features = false, features = ["historical"] }
@@ -82,6 +83,7 @@ std = [
 	"im-online/std",
 	"indices/std",
 	"membership/std",
+	"nicks/std",
 	"node-primitives/std",
 	"offchain-primitives/std",
 	"offences/std",
