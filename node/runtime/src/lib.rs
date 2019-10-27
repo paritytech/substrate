@@ -459,7 +459,7 @@ impl finality_tracker::Trait for Runtime {
 }
 
 parameter_types! {
-	pub const ReservationFee: u64 = 1 * DOLLARS;
+	pub const ReservationFee: Balance = 1 * DOLLARS;
 	pub const MinLength: usize = 3;
 	pub const MaxLength: usize = 16;
 }
@@ -534,6 +534,7 @@ construct_runtime!(
 		AuthorityDiscovery: authority_discovery::{Module, Call, Config<T>},
 		Offences: offences::{Module, Call, Storage, Event},
 		RandomnessCollectiveFlip: randomness_collective_flip::{Module, Call, Storage},
+		Nicks: nicks::{Module, Call, Storage, Event<T>},
 	}
 );
 
