@@ -469,7 +469,7 @@ impl nicks::Trait for Runtime {
 	type Currency = Balances;
 	type ReservationFee = ReservationFee;
 	type Slashed = Treasury;
-	type KillOrigin = collective::EnsureMember<AccountId, CouncilCollective>;
+	type ForceOrigin = collective::EnsureMember<AccountId, CouncilCollective>;
 	type MinLength = MinLength;
 	type MaxLength = MaxLength;
 }
