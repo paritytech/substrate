@@ -50,6 +50,8 @@ use sr_primitives::traits::{Zero, Saturating};
 use support::{StorageValue, StorageMap, StorageDoubleMap, traits::{Currency, OnUnbalanced}};
 use codec::{Encode, Decode};
 
+const REWARD_F1: Perbill = Perbill::from_percent(50);
+
 /// The index of a slashing span - unique to each stash.
 pub(crate) type SpanIndex = u32;
 
@@ -147,6 +149,25 @@ impl SlashingSpans {
 	}
 }
 
+/// A slashing-span record for a particular stash.
+#[derive(Encode, Decode, Default)]
+pub(crate) struct SpanRecord<Balance> {
+	slashed: Balance,
+	paid_out: Balance,
+}
+
+impl<Balance> SpanRecord<Balance> {
+	/// The value of stash balance slashed in this span.
+	pub(crate) fn amount_slashed(&self) -> &Balance {
+		&self.slashed
+	}
+
+	/// The value of rewards paid out from slashes in this span.
+	pub(crate) fn amount_rewarded(&self) -> &Balance {
+		&self.paid_out
+	}
+}
+
 /// Parameters for performing a slash.
 #[derive(Clone)]
 pub(crate) struct SlashParams<'a, T: 'a + Trait> {
@@ -162,10 +183,17 @@ pub(crate) struct SlashParams<'a, T: 'a + Trait> {
 	pub(crate) window_start: EraIndex,
 	/// The current era.
 	pub(crate) now: EraIndex,
+	/// The maximum percentage of a slash that ever gets paid out.
+	/// This is f_inf in the paper.
+	pub(crate) reward_proportion: Perbill,
 }
 
+/// An unapplied reward payout.
+#[must_use = "Reward payout must be explicitly applied"]
+pub(crate) struct RewardPayout<T: Trait>(Option<BalanceOf<T>>);
+
 /// Slash a validator and their nominators, if necessary.
-pub(crate) fn slash<T: Trait>(params: SlashParams<T>){
+pub(crate) fn slash<T: Trait>(params: SlashParams<T>) -> RewardPayout<T> {
 	let SlashParams {
 		stash,
 		slash,
@@ -173,7 +201,10 @@ pub(crate) fn slash<T: Trait>(params: SlashParams<T>){
 		slash_era,
 		window_start,
 		now,
+		reward_proportion,
 	} = params.clone();
+
+	let mut reward_payout = Zero::zero();
 
 	// is the slash amount here a maximum for the era?
 	let own_slash = slash * exposure.own;
@@ -191,37 +222,48 @@ pub(crate) fn slash<T: Trait>(params: SlashParams<T>){
 	} else {
 		// we slash based on the max in era - this new event is not the max,
 		// so neither the validator or any nominators will need an update.
-		return
+		return RewardPayout(None)
 	}
 
 	// apply slash to validator.
-	let mut spans = fetch_spans::<T>(stash, window_start);
+	{
+		let mut spans = fetch_spans::<T>(
+			stash,
+			window_start,
+			&mut reward_payout,
+			reward_proportion,
+		);
 
-	let target_span = spans.compare_and_update_span_slash(
-		slash_era,
-		own_slash,
-	);
+		let target_span = spans.compare_and_update_span_slash(
+			slash_era,
+			own_slash,
+		);
 
-	if target_span == Some(spans.span_index()) {
-		// misbehavior occurred within the current slashing span - take appropriate
-		// actions.
+		if target_span == Some(spans.span_index()) {
+			// misbehavior occurred within the current slashing span - take appropriate
+			// actions.
 
-		// chill the validator - it misbehaved in the current span and should
-		// not continue in the next election. also end the slashing span.
-		spans.end_span(now);
-		<Module<T>>::chill_stash(stash);
+			// chill the validator - it misbehaved in the current span and should
+			// not continue in the next election. also end the slashing span.
+			spans.end_span(now);
+			<Module<T>>::chill_stash(stash);
 
-		// make sure to disable validator till the end of this session
-		if T::SessionInterface::disable_validator(stash).unwrap_or(false) {
-			// force a new era, to select a new validator set
-			crate::ForceEra::put(crate::Forcing::ForceNew);
+			// make sure to disable validator till the end of this session
+			if T::SessionInterface::disable_validator(stash).unwrap_or(false) {
+				// force a new era, to select a new validator set
+				crate::ForceEra::put(crate::Forcing::ForceNew);
+			}
 		}
 	}
 
-	slash_nominators::<T>(params, prior_slash_p)
+	reward_payout += slash_nominators::<T>(params, prior_slash_p);
+	RewardPayout(Some(reward_payout))
 }
 
-fn slash_nominators<T: Trait>(params: SlashParams<T>, prior_slash_p: Perbill) {
+/// Slash nominators. Accepts general parameters and the prior slash percentage of the nominator.
+///
+/// Returns the amount of reward to pay out.
+fn slash_nominators<T: Trait>(params: SlashParams<T>, prior_slash_p: Perbill) -> BalanceOf<T> {
 	let SlashParams {
 		stash: _,
 		slash,
@@ -229,7 +271,10 @@ fn slash_nominators<T: Trait>(params: SlashParams<T>, prior_slash_p: Perbill) {
 		slash_era,
 		window_start,
 		now,
+		reward_proportion,
 	} = params;
+
+	let mut reward_payout = Zero::zero();
 
 	for nominator in &exposure.others {
 		let stash = &nominator.who;
@@ -258,19 +303,28 @@ fn slash_nominators<T: Trait>(params: SlashParams<T>, prior_slash_p: Perbill) {
 		};
 
 		// compare the era slash against other eras in the same span.
-		let mut spans = fetch_spans::<T>(stash, window_start);
+		{
+			let mut spans = fetch_spans::<T>(
+				stash,
+				window_start,
+				&mut reward_payout,
+				reward_proportion,
+			);
 
-		let target_span = spans.compare_and_update_span_slash(
-			slash_era,
-			era_slash,
-		);
+			let target_span = spans.compare_and_update_span_slash(
+				slash_era,
+				era_slash,
+			);
 
-		if target_span == Some(spans.span_index()) {
-			// Chill the nominator outright, ending the slashing span.
-			spans.end_span(now);
-			<Module<T>>::chill_stash(&stash);
+			if target_span == Some(spans.span_index()) {
+				// Chill the nominator outright, ending the slashing span.
+				spans.end_span(now);
+				<Module<T>>::chill_stash(&stash);
+			}
 		}
 	}
+
+	reward_payout
 }
 
 // helper struct for managing a set of spans we are currently inspecting.
@@ -286,11 +340,18 @@ struct InspectingSpans<'a, T: Trait + 'a> {
 	stash: &'a T::AccountId,
 	spans: SlashingSpans,
 	deferred_slashes: Vec<LazySlash<T>>,
+	paid_out: &'a mut BalanceOf<T>,
+	reward_proportion: Perbill,
 	_marker: rstd::marker::PhantomData<T>,
 }
 
 // fetches the slashing spans record for a stash account, initializing it if necessary.
-fn fetch_spans<T: Trait>(stash: &T::AccountId, window_start: EraIndex) -> InspectingSpans<T> {
+fn fetch_spans<'a, T: Trait + 'a>(
+	stash: &'a T::AccountId,
+	window_start: EraIndex,
+	paid_out: &'a mut BalanceOf<T>,
+	reward_proportion: Perbill,
+) -> InspectingSpans<'a, T> {
 	let spans = <Module<T> as Store>::SlashingSpans::get(stash).unwrap_or_else(|| {
 		let spans = SlashingSpans::new(window_start);
 		<Module<T> as Store>::SlashingSpans::insert(stash, &spans);
@@ -303,6 +364,8 @@ fn fetch_spans<T: Trait>(stash: &T::AccountId, window_start: EraIndex) -> Inspec
 		stash,
 		spans,
 		deferred_slashes: Vec::with_capacity(1), // we usually would only slash once.
+		paid_out,
+		reward_proportion,
 		_marker: rstd::marker::PhantomData,
 	}
 }
@@ -328,16 +391,38 @@ impl<'a, T: 'a + Trait> InspectingSpans<'a, T> {
 	) -> Option<SpanIndex> {
 		let target_span = self.spans.iter().find(|span| span.contains_era(slash_era))?;
 		let span_slash_key = (self.stash.clone(), target_span.index);
-		let span_slash = <Module<T>>::span_slash(&span_slash_key);
+		let mut span_record = <Module<T> as Store>::SpanSlash::get(&span_slash_key);
+		let mut changed = false;
 
-		if span_slash < slash {
+		let reward = if span_record.slashed < slash {
 			// new maximum span slash. apply the difference.
-			let difference = slash - span_slash;
+			let difference = slash - span_record.slashed;
+			span_record.slashed = slash;
 
-			self.dirty = true;
-			<Module<T> as Store>::SpanSlash::insert(&span_slash_key, &slash);
+			// compute reward.
+			let reward = REWARD_F1
+				* (self.reward_proportion * slash).saturating_sub(span_record.paid_out);
 
 			self.deferred_slashes.push(slash_lazy(self.stash.clone(), difference));
+			changed = true;
+
+			reward
+		} else if span_record.slashed == slash {
+			// compute reward. no slash difference to apply.
+			REWARD_F1 * (self.reward_proportion * slash).saturating_sub(span_record.paid_out)
+		} else {
+			Zero::zero()
+		};
+
+		if !reward.is_zero() {
+			changed = true;
+			span_record.paid_out += reward;
+			*self.paid_out += reward;
+		}
+
+		if changed {
+			self.dirty = true;
+			<Module<T> as Store>::SpanSlash::insert(&span_slash_key, &span_record);
 		}
 
 		Some(target_span.index)
@@ -417,8 +502,6 @@ impl<T: Trait> Drop for LazySlash<T> {
 			}
 
 			ledger.total -= value;
-
-			// TODO: rewards
 
 			let (imbalance, _) = T::Currency::slash(&self.stash, value);
 			T::Slash::on_unbalanced(imbalance);

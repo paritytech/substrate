@@ -615,8 +615,10 @@ decl_storage! {
 		/// Slashing spans for stash accounts.
 		SlashingSpans: map T::AccountId => Option<slashing::SlashingSpans>;
 
-		/// Records information about the maximum slash of a stash within a slashing span.
-		SpanSlash get(fn span_slash): map (T::AccountId, slashing::SpanIndex) => BalanceOf<T>;
+		/// Records information about the maximum slash of a stash within a slashing span,
+		/// as well as how much reward has been paid out.
+		SpanSlash: map (T::AccountId, slashing::SpanIndex)
+			=> slashing::SpanRecord<BalanceOf<T>>;
 	}
 	add_extra_genesis {
 		config(stakers):
@@ -1436,7 +1438,7 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, session::historical::Identificati
 		slash_fraction: &[Perbill],
 		slash_session: SessionIndex,
 	) {
-		let slash_reward_fraction = SlashRewardFraction::get();
+		let reward_proportion = SlashRewardFraction::get();
 
 		let era_now = Self::current_era();
 		let window_start = era_now.saturating_sub(T::BondingDuration::get());
@@ -1474,14 +1476,15 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, session::historical::Identificati
 				continue;
 			}
 
-			slashing::slash::<T>(slashing::SlashParams {
+			let reward_payout = slashing::slash::<T>(slashing::SlashParams {
 				stash,
 				slash: *slash_fraction,
 				exposure,
 				slash_era,
 				window_start,
 				now: era_now,
-			})
+				reward_proportion,
+			});
 
 			// TODO: remove when rewards are done again.
 			// let slash_reward = slash_reward_fraction * slashed_amount.peek();
