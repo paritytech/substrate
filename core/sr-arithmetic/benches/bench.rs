@@ -16,9 +16,9 @@
 
 use criterion::{Criterion, Throughput, BenchmarkId, criterion_group, criterion_main};
 use sr_arithmetic::biguint::{BigUint, Single};
+use rand::Rng;
 
 fn random_big_uint(size: usize) -> BigUint {
-	use rand::Rng;
 	let mut rng = rand::thread_rng();
 	let digits: Vec<_> = (0..size).map(|_| rng.gen_range(0, Single::max_value())).collect();
 	BigUint::from_limbs(&digits)
@@ -40,7 +40,7 @@ fn bench_op<F: Fn(&BigUint, &BigUint)>(c: &mut Criterion, name: &str, op: F) {
 
 fn bench_addition(c: &mut Criterion) {
 	bench_op(c, "addition", |a, b| {
-		a.clone().add(&b);
+		let _ = a.clone().add(&b);
 	});
 }
 
@@ -52,14 +52,24 @@ fn bench_subtraction(c: &mut Criterion) {
 
 fn bench_multiplication(c: &mut Criterion) {
 	bench_op(c, "multiplication", |a, b| {
-		a.clone().mul(&b);
+		let _ = a.clone().mul(&b);
 	});
 }
 
 fn bench_division(c: &mut Criterion) {
-	bench_op(c, "division", |a, b| {
-		a.clone().div(&b, true);
-	});
+	let mut group = c.benchmark_group("division");
+
+	for size in [4, 6, 8, 10].iter() {
+		group.throughput(Throughput::Elements(*size));
+		group.bench_with_input(BenchmarkId::from_parameter(size), size, |bencher, &size| {
+			let a = random_big_uint(size as usize);
+			let b = random_big_uint(rand::thread_rng().gen_range(2, size as usize));
+
+			bencher.iter(|| {
+				let _ = a.clone().div(&b, true);
+			});
+		});
+	}
 }
 
 criterion_group!{
