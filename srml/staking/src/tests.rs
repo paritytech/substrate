@@ -1646,15 +1646,28 @@ fn reward_validator_slashing_validator_doesnt_overflow() {
 		// Set staker
 		let _ = Balances::make_free_balance_be(&11, stake);
 		let _ = Balances::make_free_balance_be(&2, stake);
+
+		// only slashes out of bonded stake are applied. without this line,
+		// it is 0.
+		Staking::bond(Origin::signed(2), 20000, stake - 1, RewardDestination::default()).unwrap();
 		<Stakers<Test>>::insert(&11, Exposure { total: stake, own: 1, others: vec![
 			IndividualExposure { who: 2, value: stake - 1 }
 		]});
 
+
 		// Check slashing
-		// TODO
-		// let _ = Staking::slash_validator(&11, reward_slash, &Staking::stakers(&11), &mut Vec::new());
-		// assert_eq!(Balances::total_balance(&11), stake - 1);
-		// assert_eq!(Balances::total_balance(&2), 1);
+		on_offence_now(
+			&[
+				OffenceDetails {
+					offender: (11, Staking::stakers(&11)),
+					reporters: vec![],
+				},
+			],
+			&[Perbill::from_percent(100)],
+		);
+
+		assert_eq!(Balances::total_balance(&11), stake - 1);
+		assert_eq!(Balances::total_balance(&2), 1);
 	})
 }
 
@@ -1814,10 +1827,61 @@ fn reporters_receive_their_slice() {
 			&[Perbill::from_percent(50)],
 		);
 
-		// initial_balance x 50% (slash fraction) x 10% (rewards slice)
-		let reward = initial_balance / 20 / 2;
+		// F1 * (reward_proportion * slash - 0)
+		// 50% * (10% * initial_balance / 2)
+		let reward = (initial_balance / 20) / 2;
+		let reward_each = reward / 2; // split into two pieces.
+		assert_eq!(Balances::free_balance(&1), 10 + reward_each);
+		assert_eq!(Balances::free_balance(&2), 20 + reward_each);
+	});
+}
+
+#[test]
+fn subsequent_reports_in_same_span_pay_out_less() {
+	// This test verifies that the reporters of the offence receive their slice from the slashed
+	// amount.
+	ExtBuilder::default().build().execute_with(|| {
+		// The reporters' reward is calculated from the total exposure.
+		#[cfg(feature = "equalize")]
+		let initial_balance = 1250;
+		#[cfg(not(feature = "equalize"))]
+		let initial_balance = 1125;
+
+		assert_eq!(Staking::stakers(&11).total, initial_balance);
+
+		on_offence_now(
+			&[OffenceDetails {
+				offender: (
+					11,
+					Staking::stakers(&11),
+				),
+				reporters: vec![1],
+			}],
+			&[Perbill::from_percent(20)],
+		);
+
+		// F1 * (reward_proportion * slash - 0)
+		// 50% * (10% * initial_balance * 20%)
+		let reward = (initial_balance / 5) / 20;
 		assert_eq!(Balances::free_balance(&1), 10 + reward);
-		assert_eq!(Balances::free_balance(&2), 20 + reward);
+
+		on_offence_now(
+			&[OffenceDetails {
+				offender: (
+					11,
+					Staking::stakers(&11),
+				),
+				reporters: vec![1],
+			}],
+			&[Perbill::from_percent(50)],
+		);
+
+		let prior_payout = reward;
+
+		// F1 * (reward_proportion * slash - prior_payout)
+		// 50% * (10% * (initial_balance / 2) - prior_payout)
+		let reward = ((initial_balance / 20) - prior_payout) / 2;
+		assert_eq!(Balances::free_balance(&1), 10 + prior_payout + reward);
 	});
 }
 
