@@ -2525,6 +2525,7 @@ dependencies = [
  "srml-im-online 0.1.0",
  "srml-indices 2.0.0",
  "srml-membership 2.0.0",
+ "srml-nicks 2.0.0",
  "srml-offences 1.0.0",
  "srml-randomness-collective-flip 2.0.0",
  "srml-session 2.0.0",
@@ -4347,6 +4348,21 @@ dependencies = [
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.101 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-std 2.0.0",
+ "substrate-primitives 2.0.0",
+]
+
+[[package]]
+name = "srml-nicks"
+version = "2.0.0"
+dependencies = [
+ "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.101 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-io 2.0.0",
+ "sr-primitives 2.0.0",
+ "sr-std 2.0.0",
+ "srml-balances 2.0.0",
+ "srml-support 2.0.0",
+ "srml-system 2.0.0",
  "substrate-primitives 2.0.0",
 ]
 
