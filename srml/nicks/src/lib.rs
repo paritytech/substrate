@@ -114,8 +114,9 @@ decl_module! {
 		///
 		/// # <weight>
 		/// - O(1).
-		/// - Limited storage reads.
-		/// - One DB write (event).
+		/// - At most one balance operation.
+		/// - One storage read/write.
+		/// - One event.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
 		fn set_name(origin, name: Vec<u8>) {
@@ -143,8 +144,9 @@ decl_module! {
 		///
 		/// # <weight>
 		/// - O(1).
-		/// - Limited storage reads.
-		/// - One DB change.
+		/// - One balance operation.
+		/// - One storage read/write.
+		/// - One event.
 		/// # </weight>
 		fn clear_name(origin) {
 			let sender = ensure_signed(origin)?;
@@ -165,9 +167,9 @@ decl_module! {
 		///
 		/// # <weight>
 		/// - O(1).
-		/// - Limited storage reads.
-		/// - One DB write (event).
-		/// - Unknown weight of derivative `proposal` execution.
+		/// - One unbalanced handler (probably a balance transfer)
+		/// - One storage read/write.
+		/// - One event.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FreeOperational]
 		fn kill_name(origin, target: <T::Lookup as StaticLookup>::Source) {
