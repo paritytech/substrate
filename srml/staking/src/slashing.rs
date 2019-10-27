@@ -226,6 +226,11 @@ pub(crate) fn slash<T: Trait>(params: SlashParams<T>) -> RewardPayout<T> {
 	} else {
 		// we slash based on the max in era - this new event is not the max,
 		// so neither the validator or any nominators will need an update.
+		//
+		// this does lead to a divergence of our system from the paper, which
+		// pays out some reward even if the latest report is not max-in-era.
+		// we opt to avoid the nominator lookups and edits and leave more rewards
+		// for more drastic misbehavior.
 		return RewardPayout(None)
 	}
 
