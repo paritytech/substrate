@@ -171,11 +171,16 @@ impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T>
 		len: usize,
 	) -> TransactionValidity {
 		// pay any fees.
-		let fee = Self::compute_fee(len, info, self.0);
+		let tip = self.0;
+		let fee = Self::compute_fee(len, info, tip);
 		let imbalance = match T::Currency::withdraw(
 			who,
 			fee,
-			WithdrawReason::TransactionPayment,
+			if tip.is_zero() {
+				WithdrawReason::TransactionPayment.into()
+			} else {
+				WithdrawReason::TransactionPayment | WithdrawReason::Tip
+			},
 			ExistenceRequirement::KeepAlive,
 		) {
 			Ok(imbalance) => imbalance,
