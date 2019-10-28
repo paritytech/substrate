@@ -14,5 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Test crate for srml_support. Allow to make use of `support::decl_storage`.
-//! See tests directory.
+#[test]
+fn decl_storage_ui() {
+	// As trybuild is using `cargo check`, we don't need the real WASM binaries.
+	std::env::set_var("BUILD_DUMMY_WASM_BINARY", "1");
+
+	let t = trybuild::TestCases::new();
+	t.compile_fail("tests/decl_storage_ui/*.rs");
+}
