@@ -128,7 +128,7 @@
 //! 	T::Currency::withdraw(
 //! 		transactor,
 //! 		amount,
-//! 		WithdrawReason::TransactionPayment,
+//! 		WithdrawReason::TransactionPayment.into(),
 //! 		ExistenceRequirement::KeepAlive,
 //! 	)?;
 //! 	// ...
