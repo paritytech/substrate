@@ -234,7 +234,7 @@ impl From<multiaddr::Error> for ParseErr {
 }
 
 /// Network service configuration.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct NetworkConfiguration {
 	/// Directory path to store general network configuration. None means nothing will be saved.
 	pub config_path: Option<String>,
@@ -317,7 +317,7 @@ impl NetworkConfiguration {
 }
 
 /// Configuration for the transport layer.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum TransportConfig {
 	/// Normal transport mode.
 	Normal {
@@ -362,7 +362,7 @@ impl NonReservedPeerMode {
 /// The configuration of a node's secret key, describing the type of key
 /// and how it is obtained. A node's identity keypair is the result of
 /// the evaluation of the node key configuration.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum NodeKeyConfig {
 	/// A Ed25519 secret key configuration.
 	Ed25519(Secret<ed25519::SecretKey>)
@@ -372,7 +372,7 @@ pub enum NodeKeyConfig {
 pub type Ed25519Secret = Secret<ed25519::SecretKey>;
 
 /// The configuration options for obtaining a secret key `K`.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Secret<K> {
 	/// Use the given secret key `K`.
 	Input(K),
