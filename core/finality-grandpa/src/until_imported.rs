@@ -469,7 +469,7 @@ pub(crate) type UntilGlobalMessageBlocksImported<Block, BlockStatus, BlockSyncRe
 	BlockGlobalMessage<Block>,
 >;
 
-#[cfg(testttt)]		// TODO: restore
+#[cfg(test)]
 mod tests {
 	use super::*;
 	use crate::{CatchUp, CompactCommit};
@@ -591,15 +591,15 @@ mod tests {
 			import_notifications,
 			TestBlockSyncRequester::default(),
 			block_status,
-			global_rx.map_err(|_| panic!("should never error")),
+			global_rx.map_err(|()| panic!("should never error")),
 			"global",
 		);
 
-		global_tx.unbounded_send(msg).unwrap();
+		global_tx.unbounded_send(Ok(msg)).unwrap();
 
 		let work = until_imported.into_future();
 
-		futures::executor::block_on(work).map_err(|(e, _)| e).unwrap().0.unwrap()
+		futures::executor::block_on(work).0.unwrap().unwrap()
 	}
 
 	fn blocking_message_on_dependencies<F>(
@@ -617,22 +617,19 @@ mod tests {
 			import_notifications,
 			TestBlockSyncRequester::default(),
 			block_status,
-			global_rx.map_err(|_| panic!("should never error")),
+			global_rx.map_err(|()| panic!("should never error")),
 			"global",
 		);
 
-		global_tx.unbounded_send(msg).unwrap();
+		global_tx.unbounded_send(Ok(msg)).unwrap();
 
 		// NOTE: needs to be cloned otherwise it is moved to the stream and
 		// dropped too early.
 		let inner_chain_state = chain_state.clone();
-		let work = until_imported
-			.into_future()
-			.select2(Delay::new(Instant::now() + Duration::from_millis(100)))
+		let work = future::select(until_imported.into_future(), Delay::new(Duration::from_millis(100)))
 			.then(move |res| match res {
-				Err(_) => panic!("neither should have had error"),
-				Ok(Either::A(_)) => panic!("timeout should have fired first"),
-				Ok(Either::B((_, until_imported))) => {
+				Either::Left(_) => panic!("timeout should have fired first"),
+				Either::Right((_, until_imported)) => {
 					// timeout fired. push in the headers.
 					enact_dependencies(&inner_chain_state);
 
@@ -640,7 +637,7 @@ mod tests {
 				}
 			});
 
-		futures::executor::block_on(work).map_err(|(e, _)| e).unwrap().0.unwrap()
+		futures::executor::block_on(work).0.unwrap().unwrap()
 	}
 
 	#[test]
@@ -874,7 +871,7 @@ mod tests {
 			import_notifications,
 			block_sync_requester.clone(),
 			block_status,
-			global_rx.map_err(|_| panic!("should never error")),
+			global_rx.map_err(|()| panic!("should never error")),
 			"global",
 		);
 
@@ -907,13 +904,13 @@ mod tests {
 		);
 
 		// we send the commit message and spawn the until_imported stream
-		global_tx.unbounded_send(unknown_commit()).unwrap();
+		global_tx.unbounded_send(Ok(unknown_commit())).unwrap();
 
-		let mut threads_pool = futures::executor::ThreadPool::new().unwrap();
-		threads_pool.spawn_ok(until_imported.into_future().map(|_| ()).map_err(|_| ()));
+		let threads_pool = futures::executor::ThreadPool::new().unwrap();
+		threads_pool.spawn_ok(until_imported.into_future().map(|_| ()));
 
 		// assert that we will make sync requests
-		let assert = futures::future::poll_fn::<(), (), _>(|| {
+		let assert = futures::future::poll_fn(|_| {
 			let block_sync_requests = block_sync_requester.requests.lock();
 
 			// we request blocks targeted by the precommits that aren't imported
@@ -928,12 +925,12 @@ mod tests {
 
 		// the `until_imported` stream doesn't request the blocks immediately,
 		// but it should request them after a small timeout
-		let timeout = Delay::new(Instant::now() + Duration::from_secs(60));
-		let test = assert.select2(timeout).map(|res| match res {
-			Either::A(_) => {},
-			Either::B(_) => panic!("timed out waiting for block sync request"),
-		}).map_err(|_| ());
+		let timeout = Delay::new(Duration::from_secs(60));
+		let test = future::select(assert, timeout).map(|res| match res {
+			Either::Left(_) => {},
+			Either::Right(_) => panic!("timed out waiting for block sync request"),
+		});
 
-		futures::executor::block_on(test).unwrap();
+		futures::executor::block_on(test);
 	}
 }
