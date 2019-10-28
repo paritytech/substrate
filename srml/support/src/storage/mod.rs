@@ -41,6 +41,17 @@ pub trait StorageValue<T: FullCodec> {
 	/// Load the value from the provided storage instance.
 	fn get() -> Self::Query;
 
+	/// Translate a value from some previous type (`O`) to the current type.
+	///
+	/// `f: F` is the translation function.
+	///
+	/// Returns `Err` if the storage item could not be interpreted as the old type, and Ok, along
+	/// with the new value if it could.
+	///
+	/// NOTE: This operates from and to `Option<>` types; no effort is made to respect the default
+	/// value of the original type.
+	fn translate<O: Decode, F: FnOnce(Option<O>) -> Option<T>>(f: F) -> Result<T, ()>;
+
 	/// Store a value under this key into the provided storage instance.
 	fn put<Arg: EncodeLike<T>>(val: Arg);
 

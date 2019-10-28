@@ -60,6 +60,23 @@ impl<T: FullCodec, G: StorageValue<T>> storage::StorageValue<T> for G {
 		G::from_optional_value_to_query(value)
 	}
 
+	fn translate<O: Decode, F: FnOnce(Option<O>) -> Option<T>>(f: F) -> Result<T, ()> {
+		let key = Self::storage_value_final_key();
+
+		// attempt to get the length directly.
+		let maybe_old = match unhashed::get_raw(&key) {
+			Some(old_data) => Some(O::decode(&mut &old_data).ok_or(())?),
+			None => None,
+		};
+		let maybe_new = f(maybe_old);
+		if let Some(new) = maybe_new {
+			new.with_encoded(|d| unhashed::put_raw(&key, d));
+		} else {
+			unhashed::kill(&key);
+		}
+		Ok(new)
+	}
+
 	fn put<Arg: EncodeLike<T>>(val: Arg) {
 		unhashed::put(&Self::storage_value_final_key(), &val)
 	}
