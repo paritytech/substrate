@@ -145,20 +145,9 @@ impl<'a, F: SerializedConfig> Serialized<'a, F> {
 
 	#[cfg(test)]
 	fn truncate(&mut self, index: usize) {
-		if index == 0 {
-			self.clear();
-			return;
-		}
-		let len = self.len();
-		if index >= len {
-			return;
-		}
-		let start_ix = self.index_start();
-		let new_start = self.index_element(index) as usize;
-		let len_ix = index * SIZE_BYTE_LEN;
-		self.slice_copy(start_ix, new_start, len_ix);
-		self.write_le_usize(new_start + len_ix - SIZE_BYTE_LEN, index);
-		self.0.to_mut().truncate(new_start + len_ix);
+		// This could be implemented more efficiently
+		// (useless for test)
+		self.remove_range(index, self.len());
 	}
 
 	// index stay in truncated content
