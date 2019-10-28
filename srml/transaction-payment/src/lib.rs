@@ -104,7 +104,7 @@ impl<T: Trait> Module<T> {
 	///
 	/// All dispatchables must be annotated with weight and will have some fee info. This function
 	/// always returns.
-	// TODO: we can actually make it understand `ChargeTransactionPayment`, but would be some hassle
+	// NOTE: we can actually make it understand `ChargeTransactionPayment`, but would be some hassle
 	// for sure. We have to make it aware of the index of `ChargeTransactionPayment` in `Extra`.
 	// Alternatively, we could actually execute the tx's per-dispatch and record the balance of the
 	// sender before and after the pipeline.. but this is way too much hassle for a very very little
