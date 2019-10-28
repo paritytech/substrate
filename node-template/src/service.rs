@@ -3,22 +3,21 @@
 use std::sync::Arc;
 use std::time::Duration;
 use substrate_client::LongestChain;
-use babe;
-use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider};
-use futures::prelude::*;
-use node_template_runtime::{self, GenesisConfig, opaque::Block, RuntimeApi};
+use runtime::{self, GenesisConfig, opaque::Block, RuntimeApi};
 use substrate_service::{error::{Error as ServiceError}, AbstractService, Configuration, ServiceBuilder};
 use transaction_pool::{self, txpool::{Pool as TransactionPool}};
 use inherents::InherentDataProviders;
-use network::construct_simple_protocol;
+use network::{construct_simple_protocol};
 use substrate_executor::native_executor_instance;
 pub use substrate_executor::NativeExecutor;
+use aura_primitives::sr25519::{AuthorityPair as AuraPair};
+use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider};
 
 // Our native executor instance.
 native_executor_instance!(
 	pub Executor,
-	node_template_runtime::api::dispatch,
-	node_template_runtime::native_version,
+	runtime::api::dispatch,
+	runtime::native_version,
 );
 
 construct_simple_protocol! {
@@ -36,7 +35,7 @@ macro_rules! new_full_start {
 		let inherent_data_providers = inherents::InherentDataProviders::new();
 
 		let builder = substrate_service::ServiceBuilder::new_full::<
-			node_template_runtime::opaque::Block, node_template_runtime::RuntimeApi, crate::service::Executor
+			runtime::opaque::Block, runtime::RuntimeApi, crate::service::Executor
 		>($config)?
 			.with_select_chain(|_config, backend| {
 				Ok(substrate_client::LongestChain::new(backend.clone()))
@@ -44,33 +43,26 @@ macro_rules! new_full_start {
 			.with_transaction_pool(|config, client|
 				Ok(transaction_pool::txpool::Pool::new(config, transaction_pool::FullChainApi::new(client)))
 			)?
-			.with_import_queue(|_config, client, mut select_chain, _transaction_pool| {
+			.with_import_queue(|_config, client, mut select_chain, transaction_pool| {
 				let select_chain = select_chain.take()
 					.ok_or_else(|| substrate_service::Error::SelectChainRequired)?;
+
 				let (grandpa_block_import, grandpa_link) =
-					grandpa::block_import::<_, _, _, node_template_runtime::RuntimeApi, _, _>(
+					grandpa::block_import::<_, _, _, runtime::RuntimeApi, _, _>(
 						client.clone(), &*client, select_chain
 					)?;
-				let justification_import = grandpa_block_import.clone();
 
-				let (babe_block_import, babe_link) = babe::block_import(
-					babe::Config::get_or_compute(&*client)?,
-					grandpa_block_import,
-					client.clone(),
-					client.clone(),
-				)?;
-
-				let import_queue = babe::import_queue(
-					babe_link.clone(),
-					babe_block_import.clone(),
-					Some(Box::new(justification_import)),
+				let import_queue = aura::import_queue::<_, _, AuraPair, _>(
+					aura::SlotDuration::get_or_compute(&*client)?,
+					Box::new(grandpa_block_import.clone()),
+					Some(Box::new(grandpa_block_import.clone())),
 					None,
-					client.clone(),
 					client,
 					inherent_data_providers.clone(),
+					Some(transaction_pool),
 				)?;
 
-				import_setup = Some((babe_block_import, grandpa_link, babe_link));
+				import_setup = Some((grandpa_block_import, grandpa_link));
 
 				Ok(import_queue)
 			})?;
@@ -83,23 +75,22 @@ macro_rules! new_full_start {
 pub fn new_full<C: Send + Default + 'static>(config: Configuration<C, GenesisConfig>)
 	-> Result<impl AbstractService, ServiceError>
 {
-
 	let is_authority = config.roles.is_authority();
+	let force_authoring = config.force_authoring;
 	let name = config.name.clone();
 	let disable_grandpa = config.disable_grandpa;
-	let force_authoring = config.force_authoring;
 
 	let (builder, mut import_setup, inherent_data_providers) = new_full_start!(config);
+
+	let (block_import, grandpa_link) =
+		import_setup.take()
+			.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
 
 	let service = builder.with_network_protocol(|_| Ok(NodeProtocol::new()))?
 		.with_finality_proof_provider(|client, backend|
 			Ok(Arc::new(GrandpaFinalityProofProvider::new(backend, client)) as _)
 		)?
 		.build()?;
-
-	let (block_import, grandpa_link, babe_link) =
-		import_setup.take()
-			.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
 
 	if is_authority {
 		let proposer = basic_authorship::ProposerFactory {
@@ -111,24 +102,21 @@ pub fn new_full<C: Send + Default + 'static>(config: Configuration<C, GenesisCon
 		let select_chain = service.select_chain()
 			.ok_or(ServiceError::SelectChainRequired)?;
 
-		let babe_config = babe::BabeParams {
-			keystore: service.keystore(),
+		let aura = aura::start_aura::<_, _, _, _, _, AuraPair, _, _, _>(
+			aura::SlotDuration::get_or_compute(&*client)?,
 			client,
 			select_chain,
-			env: proposer,
 			block_import,
-			sync_oracle: service.network(),
-			inherent_data_providers: inherent_data_providers.clone(),
+			proposer,
+			service.network(),
+			inherent_data_providers.clone(),
 			force_authoring,
-			babe_link,
-		};
+			service.keystore(),
+		)?;
 
-		let babe = babe::start_babe(babe_config)?;
-		let select = babe.select(service.on_exit()).then(|_| Ok(()));
-
-		// the BABE authoring task is considered infallible, i.e. if it
+		// the AURA authoring task is considered essential, i.e. if it
 		// fails we take down the service with it.
-		service.spawn_essential_task(select);
+		service.spawn_essential_task(aura);
 	}
 
 	let grandpa_config = grandpa::Config {
@@ -142,12 +130,12 @@ pub fn new_full<C: Send + Default + 'static>(config: Configuration<C, GenesisCon
 	match (is_authority, disable_grandpa) {
 		(false, false) => {
 			// start the lightweight GRANDPA observer
-			service.spawn_task(Box::new(grandpa::run_grandpa_observer(
+			service.spawn_task(grandpa::run_grandpa_observer(
 				grandpa_config,
 				grandpa_link,
 				service.network(),
 				service.on_exit(),
-			)?));
+			)?);
 		},
 		(true, false) => {
 			// start the full GRANDPA voter
@@ -158,6 +146,7 @@ pub fn new_full<C: Send + Default + 'static>(config: Configuration<C, GenesisCon
 				inherent_data_providers: inherent_data_providers.clone(),
 				on_exit: service.on_exit(),
 				telemetry_on_connect: Some(service.telemetry_on_connect_stream()),
+				voting_rule: grandpa::VotingRulesBuilder::default().build(),
 			};
 
 			// the GRANDPA voter task is considered infallible, i.e.
@@ -196,26 +185,18 @@ pub fn new_light<C: Send + Default + 'static>(config: Configuration<C, GenesisCo
 			let grandpa_block_import = grandpa::light_block_import::<_, _, _, RuntimeApi, _>(
 				client.clone(), backend, Arc::new(fetch_checker), client.clone()
 			)?;
-
 			let finality_proof_import = grandpa_block_import.clone();
 			let finality_proof_request_builder =
 				finality_proof_import.create_finality_proof_request_builder();
 
-			let (babe_block_import, babe_link) = babe::block_import(
-				babe::Config::get_or_compute(&*client)?,
-				grandpa_block_import,
-				client.clone(),
-				client.clone(),
-			)?;
-
-			let import_queue = babe::import_queue(
-				babe_link.clone(),
-				babe_block_import,
+			let import_queue = aura::import_queue::<_, _, AuraPair, ()>(
+				aura::SlotDuration::get_or_compute(&*client)?,
+				Box::new(grandpa_block_import),
 				None,
 				Some(Box::new(finality_proof_import)),
-				client.clone(),
 				client,
 				inherent_data_providers.clone(),
+				None,
 			)?;
 
 			Ok((import_queue, finality_proof_request_builder))

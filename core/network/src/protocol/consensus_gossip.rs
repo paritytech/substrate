@@ -48,7 +48,7 @@ use std::sync::Arc;
 use std::iter;
 use std::time;
 use log::{trace, debug};
-use futures::sync::mpsc;
+use futures03::channel::mpsc;
 use lru_cache::LruCache;
 use libp2p::PeerId;
 use sr_primitives::traits::{Block as BlockT, Hash, HashFor};
@@ -608,7 +608,7 @@ impl<B: BlockT> Validator<B> for DiscardAll {
 #[cfg(test)]
 mod tests {
 	use sr_primitives::testing::{H256, Block as RawBlock, ExtrinsicWrapper};
-	use futures::Stream;
+	use futures03::executor::block_on_stream;
 
 	use super::*;
 
@@ -670,7 +670,7 @@ mod tests {
 		let m2 = vec![4, 5, 6];
 
 		push_msg!(consensus, prev_hash, m1_hash, m1);
-		push_msg!(consensus, best_hash, m2_hash, m2.clone());
+		push_msg!(consensus, best_hash, m2_hash, m2);
 		consensus.known_messages.insert(m1_hash, ());
 		consensus.known_messages.insert(m2_hash, ());
 
@@ -692,8 +692,6 @@ mod tests {
 
 	#[test]
 	fn message_stream_include_those_sent_before_asking_for_stream() {
-		use futures::Stream;
-
 		let mut consensus = ConsensusGossip::<Block>::new();
 		consensus.register_validator_internal([0, 0, 0, 0], Arc::new(AllowAll));
 
@@ -701,9 +699,9 @@ mod tests {
 		let topic = HashFor::<Block>::hash(&[1,2,3]);
 
 		consensus.register_message(topic, message.clone());
-		let stream = consensus.messages_for([0, 0, 0, 0], topic);
+		let mut stream = block_on_stream(consensus.messages_for([0, 0, 0, 0], topic));
 
-		assert_eq!(stream.wait().next(), Some(Ok(TopicNotification { message: message.data, sender: None })));
+		assert_eq!(stream.next(), Some(TopicNotification { message: message.data, sender: None }));
 	}
 
 	#[test]
@@ -725,16 +723,17 @@ mod tests {
 		let mut consensus = ConsensusGossip::<Block>::new();
 		consensus.register_validator_internal([0, 0, 0, 0], Arc::new(AllowAll));
 
-		let message = ConsensusMessage { data: vec![4, 5, 6], engine_id: [0, 0, 0, 0] };
-		let topic = HashFor::<Block>::hash(&[1,2,3]);
+		let data = vec![4, 5, 6];
+		let message = ConsensusMessage { data: data.clone(), engine_id: [0, 0, 0, 0] };
+		let topic = HashFor::<Block>::hash(&[1, 2, 3]);
 
 		consensus.register_message(topic, message.clone());
 
-		let stream1 = consensus.messages_for([0, 0, 0, 0], topic);
-		let stream2 = consensus.messages_for([0, 0, 0, 0], topic);
+		let mut stream1 = block_on_stream(consensus.messages_for([0, 0, 0, 0], topic));
+		let mut stream2 = block_on_stream(consensus.messages_for([0, 0, 0, 0], topic));
 
-		assert_eq!(stream1.wait().next(), Some(Ok(TopicNotification { message: message.data.clone(), sender: None })));
-		assert_eq!(stream2.wait().next(), Some(Ok(TopicNotification { message: message.data, sender: None })));
+		assert_eq!(stream1.next(), Some(TopicNotification { message: data.clone(), sender: None }));
+		assert_eq!(stream2.next(), Some(TopicNotification { message: data, sender: None }));
 	}
 
 	#[test]
@@ -749,9 +748,10 @@ mod tests {
 		consensus.register_message(topic, msg_a);
 		consensus.register_message(topic, msg_b);
 
-		let mut stream = consensus.messages_for([0, 0, 0, 0], topic).wait();
+		let mut stream = block_on_stream(consensus.messages_for([0, 0, 0, 0], topic));
 
-		assert_eq!(stream.next(), Some(Ok(TopicNotification { message: vec![1, 2, 3], sender: None })));
+		assert_eq!(stream.next(), Some(TopicNotification { message: vec![1, 2, 3], sender: None }));
+
 		let _ = consensus.live_message_sinks.remove(&([0, 0, 0, 0], topic));
 		assert_eq!(stream.next(), None);
 	}

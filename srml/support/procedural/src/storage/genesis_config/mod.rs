@@ -138,7 +138,7 @@ fn impl_build_storage(
 	quote!{
 		#[cfg(feature = "std")]
 		impl#genesis_impl GenesisConfig#genesis_struct #genesis_where_clause {
-			pub fn build_storage #fn_generic (self) -> std::result::Result<
+			pub fn build_storage #fn_generic (&self) -> std::result::Result<
 				(
 					#scrate::sr_primitives::StorageOverlay,
 					#scrate::sr_primitives::ChildrenStorageOverlay,
@@ -152,7 +152,7 @@ fn impl_build_storage(
 
 			/// Assimilate the storage for this module into pre-existing overlays.
 			pub fn assimilate_storage #fn_generic (
-				self,
+				&self,
 				tuple_storage: &mut (
 					#scrate::sr_primitives::StorageOverlay,
 					#scrate::sr_primitives::ChildrenStorageOverlay,
@@ -170,7 +170,7 @@ fn impl_build_storage(
 			#where_clause
 		{
 			fn build_module_genesis_storage(
-				self,
+				&self,
 				storage: &mut (
 					#scrate::sr_primitives::StorageOverlay,
 					#scrate::sr_primitives::ChildrenStorageOverlay,

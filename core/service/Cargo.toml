@@ -49,3 +49,4 @@ node-runtime = { path = "../../node/runtime" }
 babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../../core/consensus/babe/primitives" }
 grandpa = { package = "substrate-finality-grandpa", path = "../../core/finality-grandpa" }
 grandpa-primitives = { package = "substrate-finality-grandpa-primitives", path = "../../core/finality-grandpa/primitives" }
+tokio = "0.1"

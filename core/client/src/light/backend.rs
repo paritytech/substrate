@@ -188,7 +188,7 @@ impl<S, Block, H> ClientBackend<Block, H> for Backend<S, H> where
 		None
 	}
 
-	fn offchain_storage(&self) -> Option<&Self::OffchainStorage> {
+	fn offchain_storage(&self) -> Option<Self::OffchainStorage> {
 		None
 	}
 

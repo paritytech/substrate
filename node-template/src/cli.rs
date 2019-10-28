@@ -5,6 +5,7 @@ use tokio::runtime::Runtime;
 pub use substrate_cli::{VersionInfo, IntoExit, error};
 use substrate_cli::{informant, parse_and_prepare, ParseAndPrepare, NoCustom};
 use substrate_service::{AbstractService, Roles as ServiceRoles, Configuration};
+use aura_primitives::sr25519::{AuthorityPair as AuraPair};
 use crate::chain_spec;
 use log::info;
 
@@ -28,15 +29,15 @@ pub fn run<I, T, E>(args: I, exit: E, version: VersionInfo) -> error::Result<()>
 			match config.roles {
 				ServiceRoles::LIGHT => run_until_exit(
 					runtime,
-				 	service::new_light(config).map_err(|e| format!("{:?}", e))?,
+					service::new_light(config)?,
 					exit
 				),
 				_ => run_until_exit(
 					runtime,
-					service::new_full(config).map_err(|e| format!("{:?}", e))?,
+					service::new_full(config)?,
 					exit
 				),
-			}.map_err(|e| format!("{:?}", e))
+			}
 		}),
 		ParseAndPrepare::BuildSpec(cmd) => cmd.run(load_spec),
 		ParseAndPrepare::ExportBlocks(cmd) => cmd.run_with_builder(|config: Config<_>|

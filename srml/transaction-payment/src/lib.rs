@@ -70,13 +70,12 @@ pub trait Trait: system::Trait {
 	type WeightToFee: Convert<Weight, BalanceOf<Self>>;
 
 	/// Update the multiplier of the next block, based on the previous block's weight.
-	// TODO: maybe this does not need previous weight and can just read it
-	type FeeMultiplierUpdate: Convert<(Weight, Multiplier), Multiplier>;
+	type FeeMultiplierUpdate: Convert<Multiplier, Multiplier>;
 }
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Balances {
-		NextFeeMultiplier get(next_fee_multiplier): Multiplier = Multiplier::from_parts(0);
+		NextFeeMultiplier get(fn next_fee_multiplier): Multiplier = Multiplier::from_parts(0);
 	}
 }
 
@@ -89,9 +88,8 @@ decl_module! {
 		const TransactionByteFee: BalanceOf<T> = T::TransactionByteFee::get();
 
 		fn on_finalize() {
-			let current_weight = <system::Module<T>>::all_extrinsics_weight();
 			NextFeeMultiplier::mutate(|fm| {
-				*fm = T::FeeMultiplierUpdate::convert((current_weight, *fm))
+				*fm = T::FeeMultiplierUpdate::convert(*fm)
 			});
 		}
 	}
@@ -145,10 +143,14 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> {
 	}
 }
 
-#[cfg(feature = "std")]
 impl<T: Trait + Send + Sync> rstd::fmt::Debug for ChargeTransactionPayment<T> {
+	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
 		write!(f, "ChargeTransactionPayment<{:?}>", self.0)
+	}
+	#[cfg(not(feature = "std"))]
+	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+		Ok(())
 	}
 }
 

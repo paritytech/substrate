@@ -1631,8 +1631,8 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 		Some(&self.changes_tries_storage)
 	}
 
-	fn offchain_storage(&self) -> Option<&Self::OffchainStorage> {
-		Some(&self.offchain_storage)
+	fn offchain_storage(&self) -> Option<Self::OffchainStorage> {
+		Some(self.offchain_storage.clone())
 	}
 
 	fn revert(&self, n: NumberFor<Block>) -> ClientResult<NumberFor<Block>> {
@@ -1739,6 +1739,12 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 
 impl<Block> client::backend::LocalBackend<Block, Blake2Hasher> for Backend<Block>
 where Block: BlockT<Hash=H256> {}
+
+/// TODO: remove me in #3201
+pub fn unused_sink<Block: BlockT>(cache_tx: crate::cache::DbCacheTransaction<Block>) {
+	cache_tx.on_block_revert(&crate::cache::ComplexBlockId::new(Default::default(), 0.into())).unwrap();
+	unimplemented!()
+}
 
 #[cfg(test)]
 mod tests {

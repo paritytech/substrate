@@ -215,7 +215,7 @@ decl_storage! {
 		/// The number of units of assets held by any given account.
 		Balances: map (T::AssetId, T::AccountId) => T::Balance;
 		/// The next asset identifier up for grabs.
-		NextAssetId get(next_asset_id): T::AssetId;
+		NextAssetId get(fn next_asset_id): T::AssetId;
 		/// The total unit supply of an asset.
 		TotalSupply: map T::AssetId => T::Balance;
 	}
@@ -328,7 +328,7 @@ mod tests {
 	}
 
 	#[test]
-	fn transferring_amount_less_than_available_balance_should_not_work() {
+	fn transferring_amount_more_than_available_balance_should_not_work() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Assets::issue(Origin::signed(1), 100));
 			assert_eq!(Assets::balance(0, 1), 100);

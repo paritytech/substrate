@@ -704,7 +704,9 @@ pub trait TestNetFactory: Sized {
 	fn poll(&mut self) {
 		self.mut_peers(|peers| {
 			for peer in peers {
+				trace!(target: "sync", "-- Polling {}", peer.id());
 				peer.network.poll().unwrap();
+				trace!(target: "sync", "-- Polling complete {}", peer.id());
 
 				// We poll `imported_blocks_stream`.
 				while let Ok(Async::Ready(Some(notification))) = peer.imported_blocks_stream.poll() {

@@ -43,6 +43,11 @@ use pruning::RefWindow;
 use log::trace;
 pub use branch::BranchRanges;
 
+const PRUNING_MODE: &[u8] = b"mode";
+const PRUNING_MODE_ARCHIVE: &[u8] = b"archive";
+const PRUNING_MODE_ARCHIVE_CANON: &[u8] = b"archive_canonical";
+const PRUNING_MODE_CONSTRAINED: &[u8] = b"constrained";
+
 /// Database value type.
 pub type DBValue = Vec<u8>;
 
@@ -98,6 +103,8 @@ pub enum Error<E: fmt::Debug> {
 	InvalidBlockNumber,
 	/// Trying to insert block with unknown parent.
 	InvalidParent,
+	/// Invalid pruning mode specified. Contains expected mode.
+	InvalidPruningMode(String),
 }
 
 /// Pinning error type.
@@ -120,6 +127,7 @@ impl<E: fmt::Debug> fmt::Debug for Error<E> {
 			Error::InvalidBlock => write!(f, "Trying to canonicalize invalid block"),
 			Error::InvalidBlockNumber => write!(f, "Trying to insert block with invalid number"),
 			Error::InvalidParent => write!(f, "Trying to insert block with unknown parent"),
+			Error::InvalidPruningMode(e) => write!(f, "Expected pruning mode: {}", e),
 		}
 	}
 }
@@ -198,6 +206,14 @@ impl PruningMode {
 		}
 	}
 
+	/// Is this an archive (either ArchiveAll or ArchiveCanonical) pruning mode?
+	pub fn id(&self) -> &[u8] {
+		match self {
+			PruningMode::ArchiveAll => PRUNING_MODE_ARCHIVE,
+			PruningMode::ArchiveCanonical => PRUNING_MODE_ARCHIVE_CANON,
+			PruningMode::Constrained(_) => PRUNING_MODE_CONSTRAINED,
+		}
+	}
 }
 
 impl Default for PruningMode {
@@ -222,6 +238,10 @@ struct StateDbSync<BlockHash: Hash, Key: Hash> {
 impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 	pub fn new<D: MetaDb>(mode: PruningMode, db: &D) -> Result<StateDbSync<BlockHash, Key>, Error<D::Error>> {
 		trace!(target: "state-db", "StateDb settings: {:?}", mode);
+
+		// Check that settings match
+		Self::check_meta(&mode, db)?;
+
 		let non_canonical: NonCanonicalOverlay<BlockHash, Key> = NonCanonicalOverlay::new(db)?;
 		let pruning: Option<RefWindow<BlockHash, Key>> = match mode {
 			PruningMode::Constrained(Constraints {
@@ -231,12 +251,26 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 			PruningMode::Constrained(_) => Some(RefWindow::new(db)?),
 			PruningMode::ArchiveAll | PruningMode::ArchiveCanonical => None,
 		};
+
 		Ok(StateDbSync {
 			mode,
 			non_canonical,
 			pruning,
 			pinned: Default::default(),
 		})
+	}
+
+	fn check_meta<D: MetaDb>(mode: &PruningMode, db: &D) -> Result<(), Error<D::Error>> {
+		let db_mode = db.get_meta(&to_meta_key(PRUNING_MODE, &())).map_err(Error::Db)?;
+		trace!(target: "state-db",
+			"DB pruning mode: {:?}",
+			db_mode.as_ref().map(|v| std::str::from_utf8(&v))
+		);
+		match &db_mode {
+			Some(v) if v.as_slice() == mode.id() => Ok(()),
+			Some(v) => Err(Error::InvalidPruningMode(String::from_utf8_lossy(v).into())),
+			None => Ok(()),
+		}
 	}
 
 	pub fn insert_block<E: fmt::Debug>(
@@ -247,6 +281,11 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		mut changeset: ChangeSet<Key>,
 		kv_changeset: KvChangeSet<KvKey>,
 	) -> Result<CommitSet<Key>, Error<E>> {
+		let mut meta = ChangeSet::default();
+		if number == 0 {
+			// Save pruning mode when writing first block.
+			meta.inserted.push((to_meta_key(PRUNING_MODE, &()), self.mode.id().into()));
+		}
 
 		match self.mode {
 			PruningMode::ArchiveAll => {
@@ -254,7 +293,7 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 				// write changes immediately
 				Ok(CommitSet {
 					data: changeset,
-					meta: Default::default(),
+					meta: meta,
 					// This is only the canonical changeset: archive
 					// all mode does not keep trace of kv storage for
 					// fork. This is a big limitation.
@@ -262,7 +301,11 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 				})
 			},
 			PruningMode::Constrained(_) | PruningMode::ArchiveCanonical => {
-				self.non_canonical.insert(hash, number, parent_hash, changeset, kv_changeset)
+				let commit = self.non_canonical.insert(hash, number, parent_hash, changeset, kv_changeset);
+				commit.map(|mut c| {
+					c.meta.inserted.extend(meta.inserted);
+					c
+				})
 			}
 		}
 	}
@@ -720,5 +763,25 @@ mod tests {
 		assert!(db.kv_eq_at(&[21, 822, 83, 84], Some(2)));
 		assert!(db.kv_eq_at(&[3, 21, 822, 84], Some(3)));
 		assert!(db.kv_eq(&[3, 21, 822, 84]));
+	}
+
+	#[test]
+	fn detects_incompatible_mode() {
+		let mut db = make_db(&[]);
+		let state_db = StateDb::new(PruningMode::ArchiveAll, &db).unwrap();
+		db.commit(
+			&state_db
+			.insert_block::<io::Error>(
+				&H256::from_low_u64_be(0),
+				0,
+				&H256::from_low_u64_be(0),
+				make_changeset(&[], &[]),
+				make_kv_changeset(&[], &[]),
+			)
+			.unwrap(),
+		);
+		let new_mode = PruningMode::Constrained(Constraints { max_blocks: Some(2), max_mem: None });
+		let state_db: Result<StateDb<H256, H256>, _> = StateDb::new(new_mode, &db);
+		assert!(state_db.is_err());
 	}
 }

@@ -233,7 +233,7 @@ pub trait Backend<Block, H>: AuxStore + Send + Sync where
 	/// Returns reference to changes trie storage.
 	fn changes_trie_storage(&self) -> Option<&Self::ChangesTrieStorage>;
 	/// Returns a handle to offchain storage.
-	fn offchain_storage(&self) -> Option<&Self::OffchainStorage>;
+	fn offchain_storage(&self) -> Option<Self::OffchainStorage>;
 	/// Returns true if state for given block is available.
 	fn have_state_at(&self, hash: &Block::Hash, _number: NumberFor<Block>) -> bool {
 		self.state_at(BlockId::Hash(hash.clone())).is_ok()

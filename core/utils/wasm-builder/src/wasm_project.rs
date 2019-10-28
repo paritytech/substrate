@@ -16,7 +16,7 @@
 
 use crate::write_file_if_changed;
 
-use std::{fs, path::{Path, PathBuf}, borrow::ToOwned, process::{Command, self}, env};
+use std::{fs, path::{Path, PathBuf}, borrow::ToOwned, process, env};
 
 use toml::value::Table;
 
@@ -352,15 +352,8 @@ fn compact_wasm_file(
 		.join(format!("{}.wasm", wasm_binary));
 	let wasm_compact_file = project.join(format!("{}.compact.wasm", wasm_binary));
 
-	let res = Command::new("wasm-gc")
-		.arg(&wasm_file)
-		.arg(&wasm_compact_file)
-		.status()
-		.map(|s| s.success());
-
-	if !res.unwrap_or(false) {
-		panic!("Failed to compact generated WASM binary.");
-	}
+	wasm_gc::garbage_collect_file(&wasm_file, &wasm_compact_file)
+		.expect("Failed to compact generated WASM binary.");
 
 	(WasmBinary(wasm_compact_file), WasmBinaryBloaty(wasm_file))
 }
