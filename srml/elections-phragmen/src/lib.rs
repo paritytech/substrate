@@ -159,6 +159,11 @@ decl_storage! {
 		/// The present candidate list. Sorted based on account id. A current member can never enter
 		/// this vector and is always implicitly assumed to be a candidate.
 		pub Candidates get(fn candidates): Vec<T::AccountId>;
+
+		/// Has the storage format been updated?
+		/// NOTE: Only use and set to false if you have used an early version of this module. Should
+		/// be set to true otherwise.
+		pub DidUpdate: bool = false;
 	}
 }
 
@@ -373,6 +378,10 @@ decl_module! {
 
 		/// What to do at the end of each block. Checks if an election needs to happen or not.
 		fn on_initialize(n: T::BlockNumber) {
+			if !DidUpdate::get() {
+				DidUpdate::put(true);
+				Self::do_update();
+			}
 			if let Err(e) = Self::end_block(n) {
 				print("Guru meditation");
 				print(e);
@@ -625,6 +634,40 @@ impl<T: Trait> Module<T> {
 		<Candidates<T>>::kill();
 
 		ElectionRounds::mutate(|v| *v += 1);
+	}
+
+	/// Perform the storage update needed to migrate the module from the initial version of the
+	/// storage.
+	///
+	/// If decoding the old storage fails in any way, the consequence is that we start with an empty
+	/// set.
+	fn do_update() {
+		use primitives::twox_128;
+		use srml_support::storage::hashed::get_raw;
+		use codec::Decode;
+
+		let members_key = "PhragmenElection Members";
+		let runners_key = "PhragmenElection RunnersUp";
+
+		// old storage format.
+		let old_members: Vec<T::AccountId> = get_raw(&twox_128, members_key.as_bytes())
+			.map_or_else(|| vec![], |bytes| Decode::decode(&mut &*bytes).unwrap_or_default());
+		let old_runners: Vec<T::AccountId> = get_raw(&twox_128, runners_key.as_bytes())
+			.map_or_else(|| vec![], |bytes| Decode::decode(&mut &*bytes).unwrap_or_default());
+
+		// new storage format.
+		let new_runners: Vec<(T::AccountId, BalanceOf<T>)> = old_runners
+			.into_iter()
+			.map(|r| (r, Zero::zero()))
+			.collect();
+		let new_members: Vec<(T::AccountId, BalanceOf<T>)> = old_members
+			.into_iter()
+			.map(|r| (r, Zero::zero()))
+			.collect();
+
+		<Members<T>>::put(new_members);
+		<RunnersUp<T>>::put(new_runners);
+
 	}
 }
 
