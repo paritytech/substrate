@@ -57,6 +57,7 @@ use support::{
 	StorageValue, StorageMap, StorageDoubleMap,
 	traits::{Currency, OnUnbalanced, Imbalance},
 };
+use rstd::vec::Vec;
 use codec::{Encode, Decode};
 
 /// The proportion of the slashing reward to be paid out on the first slashing detection.
@@ -169,6 +170,7 @@ pub(crate) struct SpanRecord<Balance> {
 
 impl<Balance> SpanRecord<Balance> {
 	/// The value of stash balance slashed in this span.
+	#[cfg(test)]
 	pub(crate) fn amount_slashed(&self) -> &Balance {
 		&self.slashed
 	}

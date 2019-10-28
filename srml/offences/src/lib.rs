@@ -94,7 +94,11 @@ where
 
 		// Go through all offenders in the offence report and find all offenders that was spotted
 		// in unique reports.
-		let TriageOutcome { concurrent_offenders } = match Self::triage_offence_report::<O>(reporters, &time_slot, offenders) {
+		let TriageOutcome { concurrent_offenders } = match Self::triage_offence_report::<O>(
+			reporters,
+			&time_slot,
+			offenders,
+		) {
 			Some(triage) => triage,
 			// The report contained only duplicates, so there is no need to slash again.
 			None => return,
