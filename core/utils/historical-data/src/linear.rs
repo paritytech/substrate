@@ -15,6 +15,23 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Linear historical data.
+//!
+//! Current encoding is a single encoded succession of values and
+//! their history index (version 1 is used for it).
+//! The frame for n elements is:
+//!
+//! `1 byte version ++ (u64 le encoded state index ++ byte value of element) * n
+//! ++ (u64 le encoded index of element) * n - 1 ++ n encoded as le u64`
+//!
+//! Start index of first element and end of last element are not needed since
+//! all other values are of constant size.
+//! Latest values and states are pushed a the end, this is ordered
+//! by state.
+//! Version is optional as can be ommitted for storages of a single kind.
+//! This history does not scale with number of version and would need to be split.
+//! Other version can be use (a reverse linked list storage with range indexing
+//! could be use).
+//! Access to latest value in history should be the less costy access.
 
 #[cfg(not(feature = "std"))]
 use rstd::{vec::Vec, vec};
@@ -27,13 +44,13 @@ use crate::HistoricalValue;
 /// By in memory we expect that this will
 /// not required persistence and is not serialized.
 #[cfg(not(feature = "std"))]
-pub(crate) type MemoryOnly<V, I> = Vec<HistoricalValue<V, I>>;
+pub(crate) type InMemory<V, I> = Vec<HistoricalValue<V, I>>;
 
 /// Array like buffer for in memory storage.
 /// By in memory we expect that this will
 /// not required persistence and is not serialized.
 #[cfg(feature = "std")]
-pub(crate) type MemoryOnly<V, I> = smallvec::SmallVec<[HistoricalValue<V, I>; ALLOCATED_HISTORY]>;
+pub(crate) type InMemory<V, I> = smallvec::SmallVec<[HistoricalValue<V, I>; ALLOCATED_HISTORY]>;
 
 /// Size of preallocated history per element.
 /// Currently at two for committed and prospective only.
@@ -41,14 +58,15 @@ pub(crate) type MemoryOnly<V, I> = smallvec::SmallVec<[HistoricalValue<V, I>; AL
 #[cfg(feature = "std")]
 const ALLOCATED_HISTORY: usize = 2;
 
+/// Arraylike buffer with in place byte data.
+/// Can be written as is in underlying storage.
+/// Could be extended to direct access memory too.
 #[derive(Debug, Clone)]
 #[cfg_attr(any(test, feature = "test"), derive(PartialEq))]
-/// Arraylike buffer with in place byte data.
-/// Can be written as is in underlying
-/// storage.
-/// Could be extended to direct access memory too.
 pub struct Serialized<'a, F>(SerializedBuff<'a>, PhantomData<F>);
 
+/// Internal buffer, it is either a readonly view other the
+/// serialized data or the pending changes.
 #[derive(Debug)]
 #[cfg_attr(any(test, feature = "test"), derive(PartialEq))]
 enum SerializedBuff<'a> {
@@ -101,9 +119,10 @@ impl<'a> Clone for SerializedBuff<'a> {
 
 /// Serialized specific behavior.
 pub trait SerializedConfig {
-	/// encoded empty slice
+	/// Encoded empty slice.
 	fn empty() -> &'static [u8];
-	/// size at start for encoding version.
+	/// Size needed to encode version.
+	/// Should be a static value.
 	fn version_len() -> usize;
 }
 
@@ -114,7 +133,7 @@ pub struct NoVersion;
 
 #[derive(Debug, Clone)]
 #[cfg_attr(any(test, feature = "test"), derive(PartialEq))]
-/// Serialize with default verison
+/// Serialize with default version.
 pub struct DefaultVersion;
 
 impl SerializedConfig for NoVersion {
@@ -135,22 +154,26 @@ impl SerializedConfig for DefaultVersion {
 	}
 }
 
-// encoding size as u64
+// Length in number of bytes for an encoded size.
+// Current value is one of a u64.
+// Used both for number of element in history and
+// length of elements.
 const SIZE_BYTE_LEN: usize = 8;
 
-// Basis implementation to be on par with implementation using
-// vec like container. Those method could be move to a trait
-// implementation.
-// Those function requires checked index.
+// Basis implementation must be on par with InMemory.
+// Those method could be move to a 'VecLike' trait.
+//
+// Those function requires prior index checking.
 impl<'a, F: SerializedConfig> Serialized<'a, F> {
 
 	pub fn into_owned(self) -> Serialized<'static, F> {
-    Serialized(SerializedBuff::Cow(Cow::from(self.0.into_owned())), PhantomData)
-  }
+		Serialized(SerializedBuff::Cow(Cow::from(self.0.into_owned())), PhantomData)
+	}
+
 
 	pub fn into_vec(self) -> Vec<u8> {
-    self.0.into_owned()
-  }
+		self.0.into_owned()
+	}
 
 	pub(crate) fn len(&self) -> usize {
 		let len = self.0.len();
@@ -387,6 +410,12 @@ impl<'a, F: SerializedConfig> Serialized<'a, F> {
 #[cfg(test)]
 mod test {
 	use super::*;
+
+	impl<V, I> From<(V, I)> for HistoricalValue<V, I> {
+		fn from(input: (V, I)) -> HistoricalValue<V, I> {
+			HistoricalValue { value: input.0, index: input.1 }
+		}
+	}
 
 	fn test_serialized_basis<F: SerializedConfig>(mut ser: Serialized<F>) {
 		// test basis unsafe function similar to a simple vec

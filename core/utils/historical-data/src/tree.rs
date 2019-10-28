@@ -14,21 +14,22 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.	If not, see <http://www.gnu.org/licenses/>.
 
-//! Data store acyclic directed graph as tree.
+//! Data state is an acyclic directed graph (tree).
 //!
-//! General structure is an array of branch, each branch originates
-//! from another branch at designated index.
+//! General structure for the global state is an array of branch,
+//! each branch originating from another branch at designated index.
 //!
-//! No particular state (just present or missing).
+//! Data structure for data is an indexed collection of linear storages
+//! for each of those branches.
 
 use crate::linear::{
-	MemoryOnly as BranchBackend,
+	InMemory as BranchBackend,
 	Serialized as SerializedInner,
 	SerializedConfig,
 };
 use crate::HistoricalValue;
 use crate::PruneResult;
-use crate::as_u;
+use crate::saturating_into;
 use rstd::vec::Vec;
 use rstd::convert::{TryFrom, TryInto};
 use num_traits::Bounded;
@@ -139,7 +140,7 @@ impl<V> History<V> {
 			BI: Copy + Eq + TryFrom<u64> + TryInto<u64>,
 	{
 		if let Some((state_branch, state_index)) = state.iter().next() {
-			let state_index_u64 = as_u(state_index);
+			let state_index_u64 = saturating_into(state_index);
 			let mut i = self.0.len();
 			let (branch_position, new_branch) = loop {
 				if i == 0 {
@@ -154,7 +155,7 @@ impl<V> History<V> {
 				i -= 1;
 			};
 			if new_branch {
-				let index = as_u(state_branch.last_index());
+				let index = saturating_into(state_branch.last_index());
 				let mut history = BranchBackend::<V, u64>::default();
 				history.push(HistoricalValue {
 					value,
@@ -180,7 +181,7 @@ impl<V> History<V> {
 			S: BranchStateTrait<bool, I>,
 			I: Copy + Eq + TryFrom<u64> + TryInto<u64>,
 	{
-		let node_index_u64 = as_u(state.last_index());
+		let node_index_u64 = saturating_into(state.last_index());
 		let history = &mut self.0[branch_index];
 		let mut index = history.history.len();
 		debug_assert!(index > 0);
@@ -221,9 +222,9 @@ impl<V> History<V> {
 		}
 
 		for (state_branch, state_index) in state.iter() {
-			let state_index = as_u(state_index);
+			let state_index = saturating_into(state_index);
 			while index > 0 {
-				let branch_index = as_u(self.0[index - 1].branch_index);
+				let branch_index = saturating_into(self.0[index - 1].branch_index);
 				if state_index == branch_index {
 					if let Some(result) = self.branch_get(index - 1, &state_branch) {
 						return Some(result)
@@ -252,7 +253,7 @@ impl<V> History<V> {
 		while index > 0 {
 			index -= 1;
 			if let Some(&v) = history.history.get(index).as_ref() {
-				let i = as_u(v.index);
+				let i = saturating_into(v.index);
 				if state.get_node(i) {
 					return Some(&v.value);
 				}
@@ -276,13 +277,13 @@ impl<V> History<V> {
 			let history_branch = self.0[branch_index].branch_index;
 			loop {
 				if let Some(state) = current_state.as_ref() {
-					let state_index_u64 = as_u(state.1);
+					let state_index_u64 = saturating_into(state.1);
 					if history_branch < state_index_u64 {
 						current_state = states.next();
 					} else if history_branch == state_index_u64 {
 						let len = self.0[branch_index].history.len();
 						for history_index in (0..len).rev() {
-							let node_index = as_u(self.0[branch_index].history[history_index].index);
+							let node_index = saturating_into(self.0[branch_index].history[history_index].index);
 							if !state.0.get_node(node_index) {
 								if history_index == len - 1 {
 									changed = self.0[branch_index]
@@ -346,7 +347,7 @@ impl<'a, F: SerializedConfig> Serialized<'a, F> {
 		while index > 0 {
 			index -= 1;
 			let HistoricalValue { value, index: state_index } = self.0.get_state(index);
-			let state_index = as_u(state_index);
+			let state_index = saturating_into(state_index);
 			if state.get_node(state_index) {
 				// Note this extra byte is note optimal, should be part of index encoding
 				if value.len() > 0 {
@@ -366,7 +367,7 @@ impl<'a, F: SerializedConfig> Serialized<'a, F> {
 			S: BranchStateTrait<bool, I>,
 			I: Copy + Eq + TryFrom<u64> + TryInto<u64>,
 	{
-		let target_state_index = as_u(state.last_index());
+		let target_state_index = saturating_into(state.last_index());
 		let index = self.0.len();
 		if index > 0 {
 			let last = self.0.get_state(index - 1);
@@ -389,7 +390,7 @@ impl<'a, F: SerializedConfig> Serialized<'a, F> {
 		where
 			I: Copy + Eq + TryFrom<u64> + TryInto<u64>,
 	{
-		let from = as_u(index);
+		let from = saturating_into(index);
 		let len = self.0.len();
 		let mut last_index_with_value = None;
 		let mut index = 0;

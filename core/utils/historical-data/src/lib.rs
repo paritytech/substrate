@@ -35,14 +35,8 @@ pub struct HistoricalValue<V, I> {
 	pub index: I,
 }
 
-impl<V, I> From<(V, I)> for HistoricalValue<V, I> {
-	fn from(input: (V, I)) -> HistoricalValue<V, I> {
-		HistoricalValue { value: input.0, index: input.1 }
-	}
-}
-
 // Utility function for panicking cast (enabling casts similar to `as` cast for number).
-fn as_u<U: num_traits::Bounded, I: TryInto<U>>(i: I) -> U {
+fn saturating_into<U: num_traits::Bounded, I: TryInto<U>>(i: I) -> U {
 	match i.try_into() {
 		Ok(index) => index,
 		Err(_) => <U as num_traits::Bounded>::max_value(),
