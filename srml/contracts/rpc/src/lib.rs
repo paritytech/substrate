@@ -18,24 +18,26 @@
 
 use std::sync::Arc;
 
-use serde::{Serialize, Deserialize};
 use client::blockchain::HeaderBackend;
 use codec::Codec;
 use jsonrpc_core::{Error, ErrorCode, Result};
 use jsonrpc_derive::rpc;
 use primitives::Bytes;
+use rpc_primitives::number;
+use serde::{Deserialize, Serialize};
 use sr_primitives::{
 	generic::BlockId,
 	traits::{Block as BlockT, ProvideRuntimeApi},
 };
-use rpc_primitives::number;
 
-pub use srml_contracts_rpc_runtime_api::{ContractExecResult, ContractsApi as ContractsRuntimeApi};
 pub use self::gen_client::Client as ContractsClient;
+pub use srml_contracts_rpc_runtime_api::{
+	ContractExecResult, ContractsApi as ContractsRuntimeApi, GetStorageResult, GetStorageError,
+};
 
 /// A struct that encodes RPC parameters required for a call to a smart-contract.
 #[derive(Serialize, Deserialize)]
-#[serde(rename_all="camelCase")]
+#[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 pub struct CallRequest<AccountId, Balance> {
 	origin: AccountId,
@@ -60,6 +62,15 @@ pub trait ContractsApi<BlockHash, AccountId, Balance> {
 		call_request: CallRequest<AccountId, Balance>,
 		at: Option<BlockHash>,
 	) -> Result<ContractExecResult>;
+
+	/// Returns the value under a specified storage `key` in a contract given by `address` param.
+	#[rpc(name = "contracts_getStorage")]
+	fn get_storage(
+		&self,
+		address: AccountId,
+		key: Bytes,
+		at: Option<BlockHash>,
+	) -> Result<Option<Bytes>>;
 }
 
 /// An implementation of contract specific RPC methods.
@@ -71,13 +82,19 @@ pub struct Contracts<C, B> {
 impl<C, B> Contracts<C, B> {
 	/// Create new `Contracts` with the given reference to the client.
 	pub fn new(client: Arc<C>) -> Self {
-		Contracts { client, _marker: Default::default() }
+		Contracts {
+			client,
+			_marker: Default::default(),
+		}
 	}
 }
 
 const RUNTIME_ERROR: i64 = 1;
+const CONTRACT_DOESNT_EXIST: i64 = 2;
+const CONTRACT_IS_A_TOMBSTONE: i64 = 3;
 
-impl<C, Block, AccountId, Balance> ContractsApi<<Block as BlockT>::Hash, AccountId, Balance> for Contracts<C, Block>
+impl<C, Block, AccountId, Balance> ContractsApi<<Block as BlockT>::Hash, AccountId, Balance>
+	for Contracts<C, Block>
 where
 	Block: BlockT,
 	C: Send + Sync + 'static,
@@ -95,15 +112,14 @@ where
 		let api = self.client.runtime_api();
 		let at = BlockId::hash(at.unwrap_or_else(||
 			// If the block hash is not supplied assume the best block.
-			self.client.info().best_hash
-		));
+			self.client.info().best_hash));
 
 		let CallRequest {
 			origin,
 			dest,
 			value,
 			gas_limit,
-			input_data
+			input_data,
 		} = call_request;
 		let gas_limit = gas_limit.to_number().map_err(|e| Error {
 			code: ErrorCode::InvalidParams,
@@ -120,5 +136,58 @@ where
 			})?;
 
 		Ok(exec_result)
+	}
+
+	fn get_storage(
+		&self,
+		address: AccountId,
+		key: Bytes,
+		at: Option<<Block as BlockT>::Hash>,
+	) -> Result<Option<Bytes>> {
+		let api = self.client.runtime_api();
+		let at = BlockId::hash(at.unwrap_or_else(||
+			// If the block hash is not supplied assume the best block.
+			self.client.info().best_hash));
+
+		if key.len() != 32 {
+			return Err(Error {
+				code: ErrorCode::InvalidParams,
+				message: format!(
+					"The key is expected to be 32 bytes long and only {} bytes are given",
+					key.len(),
+				),
+				data: None,
+			});
+		}
+
+		let mut key_fixed_len = [0u8; 32];
+		key_fixed_len.copy_from_slice(&*key);
+
+		let get_storage_result = api
+			.get_storage(&at, address, key_fixed_len)
+			.map_err(|e|
+				// Handle general API calling errors.
+				Error {
+					code: ErrorCode::ServerError(RUNTIME_ERROR),
+					message: "Runtime trapped while querying storage.".into(),
+					data: Some(format!("{:?}", e).into()),
+				})?
+			.map_err(|e|
+				// Convert contract errors to RPC errors.
+				match e {
+					GetStorageError::ContractDoesntExist => Error {
+						code: ErrorCode::ServerError(CONTRACT_DOESNT_EXIST),
+						message: "The specified contract doesn't exist.".into(),
+						data: None,
+					},
+					GetStorageError::IsTombstone => Error {
+						code: ErrorCode::ServerError(CONTRACT_IS_A_TOMBSTONE),
+						message: "The contract is a tombstone and doesn't have any storage.".into(),
+						data: None,
+					}
+				})?
+			.map(Bytes);
+
+		Ok(get_storage_result)
 	}
 }
