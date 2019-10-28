@@ -130,7 +130,7 @@ use support::{
 	decl_storage,
 };
 use support::{ensure, traits::{OnFreeBalanceZero, Get, FindAuthor}, Parameter};
-use system::{self, ensure_signed};
+use system::{self, ensure_signed, ensure_root};
 
 #[cfg(test)]
 mod mock;
@@ -469,8 +469,8 @@ decl_module! {
 		/// - One DB write.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FreeOperational]
-		fn set_keys(origin, keys: T::Keys, proof: Vec<u8>) {
-			ensure_root()?;
+		fn force_new_session(origin) {
+			ensure_root(origin)?;
 
 			ForceNewSession::put(true);
 		}
