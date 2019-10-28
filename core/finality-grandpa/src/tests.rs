@@ -22,7 +22,8 @@ use network::test::{Block, DummySpecialization, Hash, TestNetFactory, Peer, Peer
 use network::test::{PassThroughVerifier};
 use network::config::{ProtocolConfig, Roles, BoxFinalityProofRequestBuilder};
 use parking_lot::Mutex;
-use futures03::{StreamExt as _, TryStreamExt as _};
+use futures01::Async;
+use futures::{StreamExt as _, TryStreamExt as _};
 use tokio::runtime::current_thread;
 use keyring::Ed25519Keyring;
 use client::{
@@ -35,6 +36,7 @@ use consensus_common::{BlockOrigin, ForkChoiceStrategy, ImportedAux, BlockImport
 use consensus_common::import_queue::{BoxBlockImport, BoxJustificationImport, BoxFinalityProofImport};
 use std::collections::{HashMap, HashSet};
 use std::result;
+use std::task::{Context, Poll};
 use codec::Decode;
 use sr_primitives::traits::{ApiRef, ProvideRuntimeApi, Header as HeaderT};
 use sr_primitives::generic::{BlockId, DigestItem};
@@ -176,11 +178,11 @@ impl TestNetFactory for GrandpaTestNet {
 #[derive(Clone)]
 struct Exit;
 
-impl Future for Exit {
+impl futures01::Future for Exit {
 	type Item = ();
 	type Error = ();
 
-	fn poll(&mut self) -> Poll<(), ()> {
+	fn poll(&mut self) -> futures01::Poll<(), ()> {
 		Ok(Async::NotReady)
 	}
 }
@@ -326,7 +328,7 @@ fn run_to_completion_with<F>(
 	peers: &[Ed25519Keyring],
 	with: F,
 ) -> u64 where
-	F: FnOnce(current_thread::Handle) -> Option<Box<dyn Future<Item=(), Error=()>>>
+	F: FnOnce(current_thread::Handle) -> Option<Box<dyn Future<Output = result::Result<(), ()>>>>
 {
 	use parking_lot::RwLock;
 
@@ -1027,7 +1029,7 @@ fn voter_persists_its_votes() {
 	use std::iter::FromIterator;
 	use std::sync::atomic::{AtomicUsize, Ordering};
 	use futures::future;
-	use futures::sync::mpsc;
+	use futures::channel::mpsc;
 
 	let _ = env_logger::try_init();
 	let mut runtime = current_thread::Runtime::new().unwrap();
@@ -1064,7 +1066,7 @@ fn voter_persists_its_votes() {
 		keystore_paths.push(keystore_path);
 
 		struct ResettableVoter {
-			voter: Box<dyn Future<Item = (), Error = ()> + Send>,
+			voter: Box<dyn Future<Output = result::Result<(), ()>> + Send>,
 			voter_rx: mpsc::UnboundedReceiver<()>,
 			net: Arc<Mutex<GrandpaTestNet>>,
 			client: PeersClient,
@@ -1072,18 +1074,17 @@ fn voter_persists_its_votes() {
 		}
 
 		impl Future for ResettableVoter {
-			type Item = ();
-			type Error = ();
+			type Output = result::Result<(), ()>;
 
-			fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+			fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
 				match self.voter.poll() {
 					Ok(Async::Ready(())) | Err(_) => panic!("error in the voter"),
-					Ok(Async::NotReady) => {},
+					Poll::Pending => {},
 				}
 
 				match self.voter_rx.poll() {
 					Err(_) | Ok(Async::Ready(None)) => return Ok(Async::Ready(())),
-					Ok(Async::NotReady) => {}
+					Poll::Pending => {}
 					Ok(Async::Ready(Some(()))) => {
 						let (_block_import, _, _, _, link) =
 							self.net.lock().make_block_import(self.client.clone());
@@ -1116,19 +1117,19 @@ fn voter_persists_its_votes() {
 
 						self.voter = Box::new(voter);
 						// notify current task in order to poll the voter
-						futures::task::current().notify();
+						cx.waker().wake_by_ref();
 					}
 				};
 
-				Ok(Async::NotReady)
+				Poll::Pending
 			}
 		}
 
-		// we create a "dummy" voter by setting it to `empty` and triggering the `tx`.
+		// we create a "dummy" voter by setting it to `pending` and triggering the `tx`.
 		// this way, the `ResettableVoter` will reset its `voter` field to a value ASAP.
 		voter_tx.unbounded_send(()).unwrap();
 		runtime.spawn(ResettableVoter {
-			voter: Box::new(futures::future::empty()),
+			voter: Box::new(futures::future::pending()),
 			voter_rx,
 			net: net.clone(),
 			client: client.clone(),
@@ -1136,7 +1137,7 @@ fn voter_persists_its_votes() {
 		});
 	}
 
-	let (exit_tx, exit_rx) = futures::sync::oneshot::channel::<()>();
+	let (exit_tx, exit_rx) = futures::channel::oneshot::channel::<()>();
 
 	// create the communication layer for bob, but don't start any
 	// voter. instead we'll listen for the prevote that alice casts
@@ -1201,7 +1202,7 @@ fn voter_persists_its_votes() {
 				let net = net.clone();
 				let voter_tx = voter_tx.clone();
 				let round_tx = round_tx.clone();
-				future::Either::A(tokio_timer::Interval::new_interval(Duration::from_millis(200))
+				future::Either::A(futures_timer::Interval::new_interval(Duration::from_millis(200))
 					.take_while(move |_| {
 						Ok(net2.lock().peer(1).client().info().chain.best_number != 40)
 					})
@@ -1419,7 +1420,7 @@ fn voter_catches_up_to_latest_round_when_behind() {
 	let net = Arc::new(Mutex::new(net));
 	let mut finality_notifications = Vec::new();
 
-	let voter = |keystore, peer_id, link, net: Arc<Mutex<GrandpaTestNet>>| -> Box<dyn Future<Item=(), Error=()> + Send> {
+	let voter = |keystore, peer_id, link, net: Arc<Mutex<GrandpaTestNet>>| -> Box<dyn Future<Output = Result<(), ()>> + Send> {
 		let grandpa_params = GrandpaParams {
 			config: Config {
 				gossip_duration: TEST_GOSSIP_DURATION,

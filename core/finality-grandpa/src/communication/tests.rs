@@ -16,13 +16,12 @@
 
 //! Tests for the communication portion of the GRANDPA crate.
 
-use futures::sync::mpsc;
-use futures::prelude::*;
+use futures::{prelude::*, channel::mpsc, ready};
 use network::consensus_gossip as network_gossip;
 use network::test::{Block, Hash};
 use network_gossip::Validator;
-use tokio::runtime::current_thread;
-use std::sync::Arc;
+use std::{collections::HashSet, pin::Pin, sync::Arc, task::Context, task::Poll, time::Duration};
+use parking_lot::Mutex;
 use keyring::Ed25519Keyring;
 use codec::Encode;
 use sr_primitives::traits::NumberFor;
@@ -46,14 +45,13 @@ struct TestNetwork {
 }
 
 impl super::Network<Block> for TestNetwork {
-	type In = mpsc::UnboundedReceiver<network_gossip::TopicNotification>;
+	type In = Pin<Box<dyn Stream<Item = Result<network_gossip::TopicNotification, ()>> + Send>>;
 
 	/// Get a stream of messages for a specific gossip topic.
 	fn messages_for(&self, topic: Hash) -> Self::In {
 		let (tx, rx) = mpsc::unbounded();
 		let _ = self.sender.unbounded_send(Event::MessagesFor(topic, tx));
-
-		rx
+		rx.map(Result::Ok).boxed()
 	}
 
 	/// Register a gossip validator.
@@ -116,17 +114,17 @@ struct Tester {
 }
 
 impl Tester {
-	fn filter_network_events<F>(self, mut pred: F) -> impl Future<Item=Self,Error=()>
+	fn filter_network_events<F>(self, mut pred: F) -> impl Future<Output = Self>
 		where F: FnMut(Event) -> bool
 	{
 		let mut s = Some(self);
-		futures::future::poll_fn(move || loop {
-			match s.as_mut().unwrap().events.poll().expect("concluded early") {
-				Async::Ready(None) => panic!("concluded early"),
-				Async::Ready(Some(item)) => if pred(item) {
-					return Ok(Async::Ready(s.take().unwrap()))
+		futures::future::poll_fn(move |cx| loop {
+			match Stream::poll_next(Pin::new(&mut s.as_mut().unwrap().events), cx) {
+				Poll::Ready(None) => panic!("concluded early"),
+				Poll::Ready(Some(item)) => if pred(item) {
+					return Poll::Ready(s.take().unwrap())
 				},
-				Async::NotReady => return Ok(Async::NotReady),
+				Poll::Pending => return Poll::Pending,
 			}
 		})
 	}
@@ -163,7 +161,7 @@ fn voter_set_state() -> SharedVoterSetState<Block> {
 
 // needs to run in a tokio runtime.
 fn make_test_network() -> (
-	impl Future<Item=Tester,Error=()>,
+	impl Future<Output = Tester>,
 	TestNetwork,
 ) {
 	let (tx, rx) = mpsc::unbounded();
@@ -172,12 +170,12 @@ fn make_test_network() -> (
 	#[derive(Clone)]
 	struct Exit;
 
-	impl Future for Exit {
+	impl futures01::Future for Exit {
 		type Item = ();
 		type Error = ();
 
-		fn poll(&mut self) -> Poll<(), ()> {
-			Ok(Async::NotReady)
+		fn poll(&mut self) -> futures01::Poll<(), ()> {
+			Ok(futures01::Async::NotReady)
 		}
 	}
 
@@ -261,12 +259,12 @@ fn good_commit_leads_to_relay() {
 	let global_topic = super::global_topic::<Block>(set_id);
 
 	let test = make_test_network().0
-		.and_then(move |tester| {
+		.map(move |tester| {
 			// register a peer.
 			tester.gossip_validator.new_peer(&mut NoopContext, &id, network::config::Roles::FULL);
-			Ok((tester, id))
+			(tester, id)
 		})
-		.and_then(move |(tester, id)| {
+		.then(move |(tester, id)| {
 			// start round, dispatch commit, and wait for broadcast.
 			let (commits_in, _) = tester.net_handle.global_communication(SetId(1), voter_set, false);
 
@@ -300,18 +298,17 @@ fn good_commit_leads_to_relay() {
 			// when the commit comes in, we'll tell the callback it was good.
 			let handle_commit = commits_in.into_future()
 				.map(|(item, _)| {
-					match item.unwrap() {
+					match item.unwrap().unwrap() {
 						grandpa::voter::CommunicationIn::Commit(_, _, mut callback) => {
 							callback.run(grandpa::voter::CommitProcessingOutcome::good());
 						},
 						_ => panic!("commit expected"),
 					}
-				})
-				.map_err(|_| panic!("could not process commit"));
+				});
 
 			// once the message is sent and commit is "handled" we should have
 			// a repropagation event coming from the network.
-			send_message.join(handle_commit).and_then(move |(tester, ())| {
+			future::join(send_message, handle_commit).then(move |(tester, ())| {
 				tester.filter_network_events(move |event| match event {
 					Event::GossipMessage(topic, data, false) => {
 						if topic == global_topic && data == encoded_commit {
@@ -323,11 +320,10 @@ fn good_commit_leads_to_relay() {
 					_ => false,
 				})
 			})
-				.map_err(|_| panic!("could not watch for gossip message"))
 				.map(|_| ())
 		});
 
-	current_thread::block_on_all(test).unwrap();
+	futures::executor::block_on(test);
 }
 
 #[test]
@@ -376,12 +372,12 @@ fn bad_commit_leads_to_report() {
 	let global_topic = super::global_topic::<Block>(set_id);
 
 	let test = make_test_network().0
-		.and_then(move |tester| {
+		.map(move |tester| {
 			// register a peer.
 			tester.gossip_validator.new_peer(&mut NoopContext, &id, network::config::Roles::FULL);
-			Ok((tester, id))
+			(tester, id)
 		})
-		.and_then(move |(tester, id)| {
+		.then(move |(tester, id)| {
 			// start round, dispatch commit, and wait for broadcast.
 			let (commits_in, _) = tester.net_handle.global_communication(SetId(1), voter_set, false);
 
@@ -415,18 +411,17 @@ fn bad_commit_leads_to_report() {
 			// when the commit comes in, we'll tell the callback it was good.
 			let handle_commit = commits_in.into_future()
 				.map(|(item, _)| {
-					match item.unwrap() {
+					match item.unwrap().unwrap() {
 						grandpa::voter::CommunicationIn::Commit(_, _, mut callback) => {
 							callback.run(grandpa::voter::CommitProcessingOutcome::bad());
 						},
 						_ => panic!("commit expected"),
 					}
-				})
-				.map_err(|_| panic!("could not process commit"));
+				});
 
 			// once the message is sent and commit is "handled" we should have
 			// a report event coming from the network.
-			send_message.join(handle_commit).and_then(move |(tester, ())| {
+			future::join(send_message, handle_commit).then(move |(tester, ())| {
 				tester.filter_network_events(move |event| match event {
 					Event::Report(who, cost_benefit) => {
 						if who == id && cost_benefit == super::cost::INVALID_COMMIT {
@@ -438,11 +433,10 @@ fn bad_commit_leads_to_report() {
 					_ => false,
 				})
 			})
-				.map_err(|_| panic!("could not watch for peer report"))
 				.map(|_| ())
 		});
 
-	current_thread::block_on_all(test).unwrap();
+	futures::executor::block_on(test);
 }
 
 #[test]
@@ -451,12 +445,12 @@ fn peer_with_higher_view_leads_to_catch_up_request() {
 
 	let (tester, mut net) = make_test_network();
 	let test = tester
-		.and_then(move |tester| {
+		.map(move |tester| {
 			// register a peer with authority role.
 			tester.gossip_validator.new_peer(&mut NoopContext, &id, network::config::Roles::AUTHORITY);
-			Ok((tester, id))
+			(tester, id)
 		})
-		.and_then(move |(tester, id)| {
+		.then(move |(tester, id)| {
 			// send neighbor message at round 10 and height 50
 			let result = tester.gossip_validator.validate(
 				&mut net,
@@ -496,21 +490,14 @@ fn peer_with_higher_view_leads_to_catch_up_request() {
 				},
 				_ => false,
 			})
-				.map_err(|_| panic!("could not watch for peer send message"))
 				.map(|_| ())
 		});
 
-	current_thread::block_on_all(test).unwrap();
+	futures::executor::block_on(test);
 }
 
 #[test]
 fn periodically_reannounce_voted_blocks_on_stall() {
-	use futures::try_ready;
-	use std::collections::HashSet;
-	use std::sync::Arc;
-	use std::time::Duration;
-	use parking_lot::Mutex;
-
 	let (tester, net) = make_test_network();
 	let (announce_worker, announce_sender) = super::periodic::block_announce_worker_with_delay(
 		net,
@@ -519,46 +506,46 @@ fn periodically_reannounce_voted_blocks_on_stall() {
 
 	let hashes = Arc::new(Mutex::new(Vec::new()));
 
-	fn wait_all(tester: Tester, hashes: &[Hash]) -> impl Future<Item = Tester, Error = ()> {
+	fn wait_all(tester: Tester, hashes: &[Hash]) -> impl Future<Output = Tester> {
 		struct WaitAll {
 			remaining_hashes: Arc<Mutex<HashSet<Hash>>>,
-			events_fut: Box<dyn Future<Item = Tester, Error = ()>>,
+			events_fut: Pin<Box<dyn Future<Output = Tester>>>,
 		}
 
 		impl Future for WaitAll {
-			type Item = Tester;
-			type Error = ();
+			type Output = Tester;
 
-			fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-				let tester = try_ready!(self.events_fut.poll());
+			fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+				let tester = ready!(Future::poll(Pin::new(&mut self.events_fut), cx));
 
 				if self.remaining_hashes.lock().is_empty() {
-					return Ok(Async::Ready(tester));
+					return Poll::Ready(tester);
 				}
 
 				let remaining_hashes = self.remaining_hashes.clone();
-				self.events_fut = Box::new(tester.filter_network_events(move |event| match event {
+				self.events_fut = Box::pin(tester.filter_network_events(move |event| match event {
 					Event::Announce(h) =>
 						remaining_hashes.lock().remove(&h) || panic!("unexpected announce"),
 					_ => false,
 				}));
 
-				self.poll()
+				Future::poll(self, cx)
 			}
 		}
 
 		WaitAll {
 			remaining_hashes: Arc::new(Mutex::new(hashes.iter().cloned().collect())),
-			events_fut: Box::new(futures::future::ok(tester)),
+			events_fut: Box::pin(future::ready(tester)),
 		}
 	}
 
+	let threads_pool = futures::executor::ThreadPool::new().unwrap();
 	let test = tester
-		.and_then(move |tester| {
-			current_thread::spawn(announce_worker);
-			Ok(tester)
+		.map(move |tester| {
+			threads_pool.spawn_ok(announce_worker);
+			tester
 		})
-		.and_then(|tester| {
+		.then(|tester| {
 			// announce 12 blocks
 			for _ in 0..=12 {
 				let hash = Hash::random();
@@ -569,12 +556,11 @@ fn periodically_reannounce_voted_blocks_on_stall() {
 			// we should see an event for each of those announcements
 			wait_all(tester, &hashes.lock())
 		})
-		.and_then(|tester| {
+		.then(|tester| {
 			// after a period of inactivity we should see the last
 			// `LATEST_VOTED_BLOCKS_TO_ANNOUNCE` being rebroadcast
 			wait_all(tester, &hashes.lock()[7..=12])
 		});
 
-	let mut runtime = current_thread::Runtime::new().unwrap();
-	runtime.block_on(test).unwrap();
+	futures::executor::block_on(test);
 }
