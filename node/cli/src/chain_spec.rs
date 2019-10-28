@@ -20,12 +20,12 @@ use chain_spec::ChainSpecExtension;
 use primitives::{Pair, Public, crypto::UncheckedInto, sr25519};
 use serde::{Serialize, Deserialize};
 use node_runtime::{
-	BabeConfig, BalancesConfig, ContractsConfig, CouncilConfig, DemocracyConfig, ElectionsConfig, GrandpaConfig,
-	ImOnlineConfig, IndicesConfig, SessionConfig, SessionKeys, StakerStatus, StakingConfig, SudoConfig, SystemConfig,
-	TechnicalCommitteeConfig, WASM_BINARY,
+	BabeConfig, BalancesConfig, ContractsConfig, CouncilConfig, DemocracyConfig, GrandpaConfig,
+	ImOnlineConfig, IndicesConfig, SessionConfig, SessionKeys, StakerStatus, StakingConfig,
+	SudoConfig, SystemConfig, TechnicalCommitteeConfig, WASM_BINARY,
 };
 use node_runtime::Block;
-use node_runtime::constants::{time::*, currency::*};
+use node_runtime::constants::currency::*;
 use substrate_service;
 use hex_literal::hex;
 use substrate_telemetry::TelemetryEndpoints;
@@ -242,12 +242,6 @@ pub fn testnet_genesis(
 		collective_Instance2: Some(TechnicalCommitteeConfig {
 			members: vec![],
 			phantom: Default::default(),
-		}),
-		elections_phragmen: Some(ElectionsConfig {
-			members: endowed_accounts.iter().take(2).cloned().collect(),
-			term_duration: 28 * DAYS,
-			desired_members: 4,
-			desired_runners_up: 1,
 		}),
 		contracts: Some(ContractsConfig {
 			current_schedule: contracts::Schedule {
