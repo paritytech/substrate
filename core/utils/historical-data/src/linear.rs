@@ -196,15 +196,18 @@ impl<'a, F: SerializedConfig> Serialized<'a, F> {
 		let len = self.len();
 		let start_ix = self.index_start();
 		let end_ix = self.0.len();
-		// A sized buffer and multiple index to avoid to big copy
-		// should be use here.
-		let mut new_ix = self.0[start_ix..end_ix].to_vec();
-		// truncate here can be bad
-		self.0.to_mut().truncate(start_ix + SIZE_BYTE_LEN);
-		self.write_le_u64(start_ix, val.index);
-		self.0.to_mut().extend_from_slice(val.value);
-		self.0.to_mut().extend_from_slice(extra);
-		self.0.to_mut().append(&mut new_ix);
+		let new_len = self.0.len() + SIZE_BYTE_LEN + val.value.len() + extra.len();
+		self.0.to_mut().resize(new_len, 0);
+		self.0.to_mut().copy_within(
+			start_ix .. end_ix,
+			start_ix + SIZE_BYTE_LEN + val.value.len() + extra.len()
+		);
+		let mut position = start_ix;
+		self.write_le_u64(position, val.index);
+		position += SIZE_BYTE_LEN;
+		self.0.to_mut()[position .. position + val.value.len()].copy_from_slice(val.value);
+		position += val.value.len();
+		self.0.to_mut()[position .. position + extra.len()].copy_from_slice(extra);
 		if len > 0 {
 			self.write_le_usize(self.0.len() - SIZE_BYTE_LEN, start_ix);
 			self.append_le_usize(len + 1);
@@ -318,11 +321,8 @@ impl<'a, F: SerializedConfig> Serialized<'a, F> {
 		self.read_le_usize(i)
 	}
 
-	// move part of array that can overlap
-	// This is a memory inefficient implementation.
 	fn slice_copy(&mut self, start_from: usize, start_to: usize, size: usize) {
-		let buffer = self.0[start_from..start_from + size].to_vec();
-		self.0.to_mut()[start_to..start_to + size].copy_from_slice(&buffer[..]);
+		self.0.to_mut().copy_within(start_from..start_from + size, start_to);
 	}
 
 	// Usize encoded as le u64 (for historical value).
