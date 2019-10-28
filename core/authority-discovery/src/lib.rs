@@ -43,7 +43,7 @@
 //!
 //!    4. Adds the retrieved external addresses as priority nodes to the peerset.
 
-use authority_discovery_primitives::{AuthorityDiscoveryApi, AuthorityId, AuthoritySignature};
+use authority_discovery_primitives::{AuthorityDiscoveryApi, AuthorityId, AuthoritySignature, AuthorityPair};
 use client::blockchain::HeaderBackend;
 use codec::{Decode, Encode};
 use error::{Error, Result};
@@ -51,6 +51,7 @@ use futures::{prelude::*, sync::mpsc::Receiver};
 use log::{debug, error, log_enabled, warn};
 use network::specialization::NetworkSpecialization;
 use network::{DhtEvent, ExHashT};
+use primitives::crypto::Pair;
 use prost::Message;
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{Block as BlockT, ProvideRuntimeApi};
@@ -111,11 +112,13 @@ where
 		// Kademlia's default time-to-live for Dht records is 36h, republishing records every 24h. Given that a node
 		// could restart at any point in time, one can not depend on the republishing process, thus publishing own
 		// external addresses should happen on an interval < 36h.
+		// TODO: Give libp2p some time to insert itself into the DHT.
 		let publish_interval =
 			tokio_timer::Interval::new(Instant::now(), Duration::from_secs(12 * 60 * 60));
 
 		// External addresses of other authorities can change at any given point in time. The interval on which to query
 		// for external addresses of other authorities is a trade off between efficiency and performance.
+		// TODO: Give libp2p some time to insert itself into the DHT.
 		let query_interval =
 			tokio_timer::Interval::new(Instant::now(), Duration::from_secs(10 * 60));
 
@@ -252,13 +255,7 @@ where
 			// signature as Protobuf?
 			let signature = AuthoritySignature::decode(&mut &signature[..]).map_err(Error::EncodingDecodingScale)?;
 
-			let is_verified = self
-				.client
-				.runtime_api()
-				.verify(&block_id, &addresses, &signature, &authority_id.clone())
-				.map_err(Error::CallingRuntime)?;
-
-			if !is_verified {
+			if !AuthorityPair::verify(&signature, &addresses, authority_id) {
 				return Err(Error::VerifyingDhtPayload);
 			}
 
@@ -273,7 +270,7 @@ where
 			self.address_cache.insert(authority_id.clone(), addresses);
 		}
 
-		// Let's update the peerset priority group with the all the addresses we have in our cache.
+		// Let's update the peerset priority group with all the addresses we have in our cache.
 
 		let addresses = HashSet::from_iter(
 			self.address_cache
@@ -421,13 +418,12 @@ mod tests {
 	use super::*;
 	use client::runtime_api::{ApiExt, Core, RuntimeVersion};
 	use futures::future::poll_fn;
-	use primitives::{ExecutionContext, NativeOrEncoded, Public, crypto::Pair};
+	use primitives::{ExecutionContext, NativeOrEncoded, Public};
 	use sr_primitives::traits::Zero;
 	use sr_primitives::traits::{ApiRef, Block as BlockT, NumberFor, ProvideRuntimeApi};
 	use std::sync::{Arc, Mutex};
 	use test_client::runtime::Block;
 	use tokio::runtime::current_thread;
-	use authority_discovery_primitives::AuthorityPair;
 
 	#[derive(Clone)]
 	struct TestApi {}
@@ -569,20 +565,6 @@ mod tests {
 				AuthorityPair::from_seed_slice(&[0; 32]).unwrap().sign(b"1"),
 				AuthorityId::from_slice(&[2; 32]),
 			))));
-		}
-		fn AuthorityDiscoveryApi_verify_runtime_api_impl(
-			&self,
-			_: &BlockId<Block>,
-			_: ExecutionContext,
-			args: Option<(&Vec<u8>, &AuthoritySignature, &AuthorityId)>,
-			_: Vec<u8>,
-		) -> std::result::Result<NativeOrEncoded<bool>, client::error::Error> {
-			let (msg, sig, pubkey) = args.unwrap();
-			if AuthorityPair::verify(sig, msg, pubkey) {
-				return Ok(NativeOrEncoded::Native(true));
-			}
-
-			return Ok(NativeOrEncoded::Native(false));
 		}
 	}
 

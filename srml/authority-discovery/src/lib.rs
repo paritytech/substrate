@@ -150,11 +150,7 @@ mod tests {
 
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
-	impl Trait for Test {
-		type AuthorityId = babe_primitives::AuthorityId;
-	}
-
-	type AuthorityId = babe_primitives::AuthorityId;
+	impl Trait for Test {}
 
 	pub struct TestOnSessionEnding;
 	impl session::OnSessionEnding<AuthorityId> for TestOnSessionEnding {
@@ -240,13 +236,13 @@ mod tests {
 		let key_store = KeyStore::new();
 		key_store
 			.write()
-			.sr25519_generate_new(key_types::BABE, None)
+			.sr25519_generate_new(key_types::AUTHORITY_DISCOVERY, None)
 			.expect("Generates key.");
 
 		// Retrieve key to later check if we got the right one.
 		let public_key = key_store
 			.read()
-			.sr25519_public_keys(key_types::BABE)
+			.sr25519_public_keys(key_types::AUTHORITY_DISCOVERY)
 			.pop()
 			.unwrap();
 		let authority_id = AuthorityId::from(public_key);
@@ -256,7 +252,7 @@ mod tests {
 			.build_storage::<Test>()
 			.unwrap();
 
-		GenesisConfig::<Test> {
+		GenesisConfig {
 			keys: vec![authority_id.clone()],
 		}
 		.assimilate_storage(&mut t)
@@ -280,7 +276,7 @@ mod tests {
 		let key_store = KeyStore::new();
 		key_store
 			.write()
-			.sr25519_generate_new(key_types::BABE, None)
+			.sr25519_generate_new(key_types::AUTHORITY_DISCOVERY, None)
 			.expect("Generates key.");
 
 		// Build genesis.
@@ -295,7 +291,7 @@ mod tests {
 			.map(AuthorityId::from)
 			.collect();
 
-		GenesisConfig::<Test> { keys: keys }
+		GenesisConfig { keys: keys }
 			.assimilate_storage(&mut t)
 			.unwrap();
 
@@ -314,13 +310,13 @@ mod tests {
 		let key_store = KeyStore::new();
 		key_store
 			.write()
-			.sr25519_generate_new(key_types::BABE, None)
+			.sr25519_generate_new(key_types::AUTHORITY_DISCOVERY, None)
 			.expect("Generates key.");
 
 		// Retrieve key to later check if we got the right one.
 		let public_key = key_store
 			.read()
-			.sr25519_public_keys(key_types::BABE)
+			.sr25519_public_keys(key_types::AUTHORITY_DISCOVERY)
 			.pop()
 			.unwrap();
 		let authority_id = AuthorityId::from(public_key);
@@ -330,7 +326,7 @@ mod tests {
 			.build_storage::<Test>()
 			.unwrap();
 
-		GenesisConfig::<Test> {
+		GenesisConfig {
 			keys: vec![authority_id.clone()],
 		}
 		.assimilate_storage(&mut t)

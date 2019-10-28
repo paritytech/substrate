@@ -20,8 +20,6 @@
 
 use client::decl_runtime_apis;
 use rstd::vec::Vec;
-// TODO: Is this needed?
-use sr_primitives::RuntimeDebug;
 
 mod app {
 	use app_crypto::{app_crypto, key_types::AUTHORITY_DISCOVERY, sr25519};
@@ -29,7 +27,6 @@ mod app {
 }
 
 /// An authority discovery authority keypair.
-// TODO: Not so pretty to just export this for testing. Can we do better?
 pub type AuthorityPair = app::Pair;
 
 /// An authority discovery authority identifier.
@@ -51,9 +48,5 @@ decl_runtime_apis! {
 
 		/// Sign the given payload with the private key corresponding to the returned authority id.
 		fn sign(payload: &Vec<u8>) -> Option<(AuthoritySignature, AuthorityId)>;
-
-		/// Verify the given signature for the given payload with the given
-		/// authority identifier.
-		fn verify(payload: &Vec<u8>, signature: &AuthoritySignature, authority_id: &AuthorityId) -> bool;
 	}
 }
