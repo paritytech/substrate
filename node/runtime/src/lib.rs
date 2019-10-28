@@ -21,7 +21,6 @@
 #![recursion_limit="256"]
 
 use rstd::prelude::*;
-use codec::{Encode, Decode};
 use support::{
 	construct_runtime, parameter_types, traits::{SplitTwoWays, Currency, Randomness}
 };
@@ -85,7 +84,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
 	spec_version: 189,
-	impl_version: 189,
+	impl_version: 190,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -331,6 +330,9 @@ impl collective::Trait<CouncilCollective> for Runtime {
 parameter_types! {
 	pub const CandidacyBond: Balance = 10 * DOLLARS;
 	pub const VotingBond: Balance = 1 * DOLLARS;
+	pub const TermDuration: BlockNumber = 7 * DAYS;
+	pub const DesiredMembers: u32 = 13;
+	pub const DesiredRunnersUp: u32 = 7;
 }
 
 impl elections_phragmen::Trait for Runtime {
@@ -339,6 +341,9 @@ impl elections_phragmen::Trait for Runtime {
 	type CurrencyToVote = CurrencyToVoteHandler;
 	type CandidacyBond = CandidacyBond;
 	type VotingBond = VotingBond;
+	type TermDuration = TermDuration;
+	type DesiredMembers = DesiredMembers;
+	type DesiredRunnersUp = DesiredRunnersUp;
 	type LoserCandidate = ();
 	type BadReport = ();
 	type KickedMember = ();
@@ -523,7 +528,7 @@ construct_runtime!(
 		Democracy: democracy::{Module, Call, Storage, Config, Event<T>},
 		Council: collective::<Instance1>::{Module, Call, Storage, Origin<T>, Event<T>, Config<T>},
 		TechnicalCommittee: collective::<Instance2>::{Module, Call, Storage, Origin<T>, Event<T>, Config<T>},
-		Elections: elections_phragmen::{Module, Call, Storage, Event<T>, Config<T>},
+		Elections: elections_phragmen::{Module, Call, Storage, Event<T>},
 		TechnicalMembership: membership::<Instance1>::{Module, Call, Storage, Event<T>, Config<T>},
 		FinalityTracker: finality_tracker::{Module, Call, Inherent},
 		Grandpa: grandpa::{Module, Call, Storage, Config, Event},

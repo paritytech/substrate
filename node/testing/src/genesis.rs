@@ -93,7 +93,6 @@ pub fn config(support_changes_trie: bool, code: Option<&[u8]>) -> GenesisConfig 
 		collective_Instance1: Some(Default::default()),
 		collective_Instance2: Some(Default::default()),
 		membership_Instance1: Some(Default::default()),
-		elections_phragmen: Some(Default::default()),
 		sudo: Some(Default::default()),
 		treasury: Some(Default::default()),
 	}
