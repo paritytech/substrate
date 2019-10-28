@@ -18,7 +18,7 @@ use criterion::{criterion_group, criterion_main, Criterion};
 
 use futures::executor::block_on;
 use substrate_transaction_graph::*;
-use sr_primitives::transaction_validity::ValidTransaction;
+use sr_primitives::transaction_validity::{ValidTransaction, InvalidTransaction};
 use codec::Encode;
 use test_runtime::{Block, Extrinsic, Transfer, H256, AccountId};
 use sr_primitives::{
@@ -53,36 +53,48 @@ impl ChainApi for TestApi {
 
 	fn validate_transaction(
 		&self,
-		_at: &BlockId<Self::Block>,
+		at: &BlockId<Self::Block>,
 		uxt: ExtrinsicFor<Self>,
 	) -> Self::ValidationFuture {
 		let nonce = uxt.transfer().nonce;
 		let from = uxt.transfer().from.clone();
 
+		match self.block_id_to_number(at) {
+			Ok(Some(num)) if num > 5 => {
+				return futures::future::ready(
+					Ok(Err(InvalidTransaction::Stale.into()))
+				)
+			},
+			_ => {},
+		}
+
 		futures::future::ready(
 			Ok(Ok(ValidTransaction {
 				priority: 4,
-				requires: if nonce > 1 && self.nonce_limit.is_some() { vec![to_tag(nonce-1, from.clone())] } else {vec![] },
-				provides:
-					if self.nonce_limit.is_some() {
-						vec![to_tag(nonce+1, from)]
-					} else {
-						vec![to_tag(nonce, from)]
-					},
+				requires: if nonce > 1 && self.nonce_limit.is_some() {
+					vec![to_tag(nonce-1, from.clone())]
+				} else { vec![] },
+				provides: vec![to_tag(nonce, from)],
 				longevity: 10,
 				propagate: true,
 			}))
 		)
 	}
 
-	fn block_id_to_number(&self, at: &BlockId<Self::Block>) -> Result<Option<NumberFor<Self>>, Self::Error> {
+	fn block_id_to_number(
+		&self,
+		at: &BlockId<Self::Block>,
+	) -> Result<Option<NumberFor<Self>>, Self::Error> {
 		Ok(match at {
 			BlockId::Number(num) => Some(*num),
 			BlockId::Hash(_) => None,
 		})
 	}
 
-	fn block_id_to_hash(&self, at: &BlockId<Self::Block>) -> Result<Option<BlockHash<Self>>, Self::Error> {
+	fn block_id_to_hash(
+		&self,
+		at: &BlockId<Self::Block>.
+	) -> Result<Option<BlockHash<Self>>, Self::Error> {
 		Ok(match at {
 			BlockId::Number(num) => Some(H256::from_low_u64_be(*num)).into(),
 			BlockId::Hash(_) => None,
@@ -101,6 +113,7 @@ fn uxt(transfer: Transfer) -> Extrinsic {
 
 fn bench_configured(pool: Pool<TestApi>, number: u64) {
 	let mut futures = Vec::new();
+	let mut tags = Vec::new();
 
 	for nonce in 1..=number {
 		let xt = uxt(Transfer {
@@ -110,29 +123,23 @@ fn bench_configured(pool: Pool<TestApi>, number: u64) {
 			nonce,
 		});
 
+		tags.push(to_tag(nonce, AccountId::from_h256(H256::from_low_u64_be(1))));
 		futures.push(pool.submit_one(&BlockId::Number(1), xt));
 	}
 
 	let res = block_on(futures::future::join_all(futures.into_iter()));
 	assert!(res.iter().all(Result::is_ok));
 
-	// instantly producing "blocks" and pruning all ready until no ready
-	let mut block_num = 2;
-	loop {
-		let ready_exts: Vec<_> = pool.ready().map(|ext|
-			to_tag(ext.data.transfer().nonce, ext.data.transfer().from.clone())
-		).collect();
+	assert_eq!(pool.status().future, 0);
+	assert_eq!(pool.status().ready, number as usize);
 
-		if ready_exts.is_empty() { break; }
-
-		block_on(pool.prune_tags(
-			&BlockId::Number(block_num),
-			ready_exts,
-			vec![],
-		)).expect("Prune failed");
-
-		block_num += 1;
-	}
+	// Prune all transactions.
+	let block_num = 6;
+	block_on(pool.prune_tags(
+		&BlockId::Number(block_num),
+		tags,
+		vec![],
+	)).expect("Prune failed");
 
 	// pool is empty
 	assert_eq!(pool.status().ready, 0);
