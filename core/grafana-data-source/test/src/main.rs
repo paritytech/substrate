@@ -38,9 +38,9 @@ fn main() {
 		loop {
 			let random = rng.gen_range(0.0, 1000.0);
 			record_metrics!(
-                "random data" => random,
-                "random^2" => random * random
-            );
+				"random data" => random,
+				"random^2" => random * random
+			);
 			sleep(Duration::from_secs(1));
 		}
 	});

@@ -38,8 +38,8 @@ type Metrics = HashMap<&'static str, Vec<(f32, i64)>>;
 
 lazy_static! {
 	/// The `RwLock` wrapping the metrics. Not intended to be used directly.
-    #[doc(hidden)]
-    pub static ref METRICS: RwLock<Metrics> = RwLock::new(Metrics::new());
+	#[doc(hidden)]
+	pub static ref METRICS: RwLock<Metrics> = RwLock::new(Metrics::new());
 }
 
 /// Write metrics to `METRICS`.
