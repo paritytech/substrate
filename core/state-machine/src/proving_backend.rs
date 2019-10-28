@@ -87,7 +87,7 @@ impl<'a, S, H> ProvingBackendRecorder<'a, S, H>
 		).map_err(map_e)
 	}
 
-	/// Produce proof for tho whole backend.
+	/// Produce proof for the whole backend.
 	pub fn record_all_keys(&mut self) {
 		let mut read_overlay = S::Overlay::default();
 		let eph = Ephemeral::new(
@@ -112,11 +112,11 @@ pub type ProofRecorder<H> = Arc<RwLock<HashMap<<H as Hasher>::Out, Option<DBValu
 
 /// Patricia trie-based backend which also tracks all touched storage trie values.
 /// These can be sent to remote node and used as a proof of execution.
-pub struct ProvingBackend<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
-	backend: &'a TrieBackend<S, H>,
-	proof_recorder: ProofRecorder<H>,
-}
+pub struct ProvingBackend<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> (
+	TrieBackend<ProofRecorderBackend<'a, S, H>, H>,
+);
 
+/// Trie backend storage with its proof recorder.
 pub struct ProofRecorderBackend<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
 	backend: &'a S,
 	proof_recorder: ProofRecorder<H>,
@@ -125,10 +125,8 @@ pub struct ProofRecorderBackend<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hashe
 impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H> {
 	/// Create new proving backend.
 	pub fn new(backend: &'a TrieBackend<S, H>) -> Self {
-		ProvingBackend {
-			backend,
-			proof_recorder: Arc::new(RwLock::new(HashMap::new())),
-		}
+		let proof_recorder = Default::default();
+		Self::new_with_recorder(backend, proof_recorder)
 	}
 
 	/// Create new proving backend with the given recorder.
@@ -136,19 +134,19 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
 		backend: &'a TrieBackend<S, H>,
 		proof_recorder: ProofRecorder<H>,
 	) -> Self {
-		ProvingBackend {
-			backend,
-			proof_recorder,
-		}
+		let essence = backend.essence();
+		let root = essence.root().clone();
+		let recorder = ProofRecorderBackend {
+			backend: essence.backend_storage(),
+			proof_recorder: proof_recorder,
+		};
+		ProvingBackend(TrieBackend::new(recorder, root))
 	}
 
 	/// Consume the backend, extracting the gathered proof in lexicographical order by value.
 	pub fn extract_proof(&self) -> Vec<Vec<u8>> {
-		// TODO mem replace hashmap and into_iter instead of clone.
-		// and store as vec in the first place?.
-		self.proof_recorder
+		self.0.essence().backend_storage().proof_recorder
 			.read()
-			//.borrow()
 			.iter()
 			.filter_map(|(_k, v)| v.as_ref().map(|v| v.to_vec()))
 			.collect()
@@ -159,9 +157,6 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> TrieBackendStorage<H> fo
 	type Overlay = S::Overlay;
 
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
-		// crazy bad mutex handle : mutex should not be needed, and get is occuring a lot so even
-		// if we use mutex we should use the mut handle of write TODO only for testing now
-
 		if let Some(v) = self.proof_recorder.read().get(key) {
 			return Ok(v.clone());
 		}
@@ -177,26 +172,6 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> std::fmt::Debug for Prov
 	}
 }
 
-impl<'a, S, H> ProvingBackend<'a, S, H>
-	where
-		S: 'a + TrieBackendStorage<H>,// + Clone,
-		H: 'a + Hasher,
-		H::Out: Ord,
-{
-	
-	fn backend(&self) -> TrieBackend<ProofRecorderBackend<S, H>, H> {
-		let essence = self.backend.essence();
-		let root = essence.root().clone();
-//		// TODO bad code: TODO specialize for explicit type (one that
-//		// is an Arc some backend).
-		let recorder = ProofRecorderBackend {
-			backend: essence.backend_storage(),
-			proof_recorder: self.proof_recorder.clone(),
-		};
-		TrieBackend::new(recorder, root)
-	}
-}
-
 impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 	where
 		S: 'a + TrieBackendStorage<H>,
@@ -208,45 +183,45 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 	type TrieBackendStorage = PrefixedMemoryDB<H>;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.backend().storage(key)
+		self.0.storage(key)
 	}
 
 	fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.backend().child_storage(storage_key, key)
+		self.0.child_storage(storage_key, key)
 	}
 
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], f: F) {
-		self.backend().for_keys_in_child_storage(storage_key, f)
+		self.0.for_keys_in_child_storage(storage_key, f)
 	}
 
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
-		self.backend().for_keys_with_prefix(prefix, f)
+		self.0.for_keys_with_prefix(prefix, f)
 	}
 
 	fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], f: F) {
-		self.backend().for_key_values_with_prefix(prefix, f)
+		self.0.for_key_values_with_prefix(prefix, f)
 	}
 
 	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(&self, storage_key: &[u8], prefix: &[u8], f: F) {
-		self.backend().for_child_keys_with_prefix(storage_key, prefix, f)
+		self.0.for_child_keys_with_prefix(storage_key, prefix, f)
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
-		self.backend().pairs()
+		self.0.pairs()
 	}
 
 	fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> {
-		self.backend().keys(prefix)
+		self.0.keys(prefix)
 	}
 
 	fn child_keys(&self, child_storage_key: &[u8], prefix: &[u8]) -> Vec<Vec<u8>> {
-		self.backend().child_keys(child_storage_key, prefix)
+		self.0.child_keys(child_storage_key, prefix)
 	}
 
 	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
-		self.backend().storage_root(delta)
+		self.0.storage_root(delta)
 	}
 
 	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (Vec<u8>, bool, Self::Transaction)
@@ -254,7 +229,7 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		H::Out: Ord
 	{
-		self.backend().child_storage_root(storage_key, delta)
+		self.0.child_storage_root(storage_key, delta)
 	}
 }
 

@@ -305,7 +305,6 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 					.take()
 					.map(|r| {
 						r.read()
-							//.borrow()
 							.iter()
 							.filter_map(|(_k, v)| v.as_ref().map(|v| v.to_vec()))
 							.collect()

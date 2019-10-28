@@ -60,7 +60,7 @@ pub use changes_trie::{
 pub use overlayed_changes::OverlayedChanges;
 pub use proving_backend::{
 	create_proof_check_backend, create_proof_check_backend_storage,
-	ProofRecorder, ProvingBackend,ProvingBackendRecorder,
+	ProofRecorder, ProvingBackend, ProvingBackendRecorder,
 };
 pub use trie_backend_essence::{TrieBackendStorage, Storage};
 pub use trie_backend::TrieBackend;
