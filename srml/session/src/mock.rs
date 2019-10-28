@@ -28,7 +28,6 @@ use sr_staking_primitives::SessionIndex;
 
 impl_opaque_keys! {
 	pub struct MockSessionKeys {
-		#[id(DUMMY)]
 		pub dummy: UintAuthorityId,
 	}
 }
@@ -67,6 +66,7 @@ impl ShouldEndSession<u64> for TestShouldEndSession {
 
 pub struct TestSessionHandler;
 impl SessionHandler<u64> for TestSessionHandler {
+	const KEY_TYPE_IDS: &'static [sr_primitives::KeyTypeId] = &[UintAuthorityId::ID];
 	fn on_genesis_session<T: OpaqueKeys>(_validators: &[(u64, T)]) {}
 	fn on_new_session<T: OpaqueKeys>(
 		changed: bool,
