@@ -32,7 +32,7 @@ type Ser<'a> = Serialized<'a, DefaultVersion>;
 pub struct TestDb {
 	pub data: HashMap<H256, DBValue>,
 	pub meta: HashMap<Vec<u8>, DBValue>,
-	pub kv: HashMap<KvKey, DBValue>,
+	pub kv: HashMap<KvKey, Ser<'static>>,
 	// Heuristic : increase on commit_canonical.
 	pub kv_last_block: u64,
 }
@@ -50,7 +50,6 @@ impl KvDb<u64> for TestDb {
 
 	fn get_kv(&self, key: &[u8], state: &u64) -> Result<Option<DBValue>, ()> {
 		Ok(self.kv.get(key)
-			.map(|s| Ser::from_slice(s.as_slice()))
 			.and_then(|s| s.get(*state)
 				.unwrap_or(None) // flatten
 				.map(Into::into)
@@ -59,8 +58,7 @@ impl KvDb<u64> for TestDb {
 
 	fn get_kv_pairs(&self, state: &u64) -> Vec<(KvKey, DBValue)> {
 		self.kv.iter().filter_map(|(a, s)| (
-			Ser::from_slice(s.as_slice())
-				.get(*state)
+			s.get(*state)
 				.unwrap_or(None) // flatten
 				.map(|v| (a.clone(), v.to_vec()))
 		)).collect()
@@ -83,9 +81,8 @@ impl TestDb {
 			self.data.remove(k);
 		}
 		for (k, o) in commit.kv.iter() {
-			let encoded = self.kv.entry(k.clone())
-				.or_insert_with(|| Ser::default().into_vec());
-			let mut ser = Ser::from_mut(&mut (*encoded));
+			let ser = self.kv.entry(k.clone())
+				.or_insert_with(|| Ser::default());
 			ser.push(self.kv_last_block, o.as_ref().map(|v| v.as_slice()));
 		}
 		self.meta.extend(commit.meta.inserted.iter().cloned());
@@ -101,8 +98,7 @@ impl TestDb {
 
 		if let Some((block_prune, kv_prune_key)) = commit.1.as_ref() {
 			for k in kv_prune_key.iter() {
-				match self.kv.get_mut(k).map(|v| {
-					let mut ser = Ser::from_mut(v);
+				match self.kv.get_mut(k).map(|ser| {
 					ser.prune(*block_prune)
 				}) {
 					Some(PruneResult::Cleared) => { let _ = self.kv.remove(k); },
@@ -136,7 +132,7 @@ impl TestDb {
 			.map(|(k, v)| {
 				let mut ser = Ser::default();
 				ser.push(self.kv_last_block, Some(v.as_slice()));
-				(k, ser.into_vec())
+				(k, ser)
 			})
 			.collect();
 	}

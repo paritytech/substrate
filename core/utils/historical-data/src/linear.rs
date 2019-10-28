@@ -62,60 +62,19 @@ const ALLOCATED_HISTORY: usize = 2;
 /// Can be written as is in underlying storage.
 /// Could be extended to direct access memory too.
 #[derive(Debug, Clone)]
-#[cfg_attr(any(test, feature = "test"), derive(PartialEq))]
 pub struct Serialized<'a, F>(SerializedBuff<'a>, PhantomData<F>);
+
+impl<'a, 'b, F> PartialEq<Serialized<'b, F>> for Serialized<'a, F> {
+  fn eq(&self, other: &Serialized<'b, F>) -> bool {
+		self.0.eq(&other.0)
+	}
+}
+
+impl<'a, F> Eq for Serialized<'a, F> { }
 
 /// Internal buffer, it is either a readonly view other the
 /// serialized data or the pending changes.
-#[derive(Debug)]
-#[cfg_attr(any(test, feature = "test"), derive(PartialEq))]
-enum SerializedBuff<'a> {
-	Cow(Cow<'a, [u8]>),
-	Mut(&'a mut Vec<u8>),
-}
-
-impl<'a> SerializedBuff<'a> {
-	pub fn to_mut(&mut self) -> &mut Vec<u8> {
-		match self {
-			SerializedBuff::Cow(c) => c.to_mut(),
-			SerializedBuff::Mut(m) => m,
-		}
-	}
-	pub fn into_owned(self) -> Vec<u8> {
-		match self {
-			SerializedBuff::Cow(c) => c.into_owned(),
-			SerializedBuff::Mut(m) => m.clone(),
-		}
-	}
-}
-
-impl<'a> rstd::ops::Deref for SerializedBuff<'a> {
-	type Target = [u8];
-	fn deref(&self) -> &Self::Target {
-		match self {
-			SerializedBuff::Cow(c) => c.deref(),
-			SerializedBuff::Mut(m) => m.deref(),
-		}
-	}
-}
-
-impl<'a> rstd::ops::DerefMut for SerializedBuff<'a> {
-	fn deref_mut(&mut self) -> &mut Self::Target {
-		&mut self.to_mut()[..]
-	}
-}
-
-impl<'a> Clone for SerializedBuff<'a> {
-	fn clone(&self) -> Self {
-		match self {
-			SerializedBuff::Cow(c) => SerializedBuff::Cow(c.clone()),
-			SerializedBuff::Mut(m) => {
-				let m: Vec<u8> = (*m).clone();
-				SerializedBuff::Cow(Cow::Owned(m))
-			}
-		}
-	}
-}
+type SerializedBuff<'a> = Cow<'a, [u8]>;
 
 /// Serialized specific behavior.
 pub trait SerializedConfig {
@@ -167,9 +126,8 @@ const SIZE_BYTE_LEN: usize = 8;
 impl<'a, F: SerializedConfig> Serialized<'a, F> {
 
 	pub fn into_owned(self) -> Serialized<'static, F> {
-		Serialized(SerializedBuff::Cow(Cow::from(self.0.into_owned())), PhantomData)
+		Serialized(Cow::from(self.0.into_owned()), PhantomData)
 	}
-
 
 	pub fn into_vec(self) -> Vec<u8> {
 		self.0.into_owned()
@@ -325,25 +283,19 @@ const DEFAULT_VERSION_EMPTY_SERIALIZED: [u8; SIZE_BYTE_LEN + 1] = {
 
 impl<'a, F: SerializedConfig> Default for Serialized<'a, F> {
 	fn default() -> Self {
-		Serialized(SerializedBuff::Cow(Cow::Borrowed(F::empty())), PhantomData)
+		Serialized(Cow::Borrowed(F::empty()), PhantomData)
 	}
 }
 
 impl<'a, F> Into<Serialized<'a, F>> for &'a[u8] {
 	fn into(self) -> Serialized<'a, F> {
-		Serialized(SerializedBuff::Cow(Cow::Borrowed(self)), PhantomData)
+		Serialized(Cow::Borrowed(self), PhantomData)
 	}
 }
 
 impl<F> Into<Serialized<'static, F>> for Vec<u8> {
 	fn into(self) -> Serialized<'static, F> {
-		Serialized(SerializedBuff::Cow(Cow::Owned(self)), PhantomData)
-	}
-}
-
-impl<'a, F> Into<Serialized<'a, F>> for &'a mut Vec<u8> {
-	fn into(self) -> Serialized<'a, F> {
-		Serialized(SerializedBuff::Mut(self), PhantomData)
+		Serialized(Cow::Owned(self), PhantomData)
 	}
 }
 

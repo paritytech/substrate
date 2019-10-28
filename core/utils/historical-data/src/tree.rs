@@ -439,10 +439,17 @@ impl<'a, F: SerializedConfig> Serialized<'a, F> {
 }
 
 #[derive(Debug, Clone)]
-#[cfg_attr(any(test, feature = "test"), derive(PartialEq))]
 /// Serialized implementation when transaction support is not
 /// needed.
 pub struct Serialized<'a, F>(SerializedInner<'a, F>);
+
+impl<'a, 'b, F> PartialEq<Serialized<'b, F>> for Serialized<'a, F> {
+  fn eq(&self, other: &Serialized<'b, F>) -> bool {
+		self.0.eq(&other.0)
+	}
+}
+
+impl<'a, F> Eq for Serialized<'a, F> { }
 
 impl<'a, F> Serialized<'a, F> {
 	pub fn from_slice(s: &'a [u8]) -> Serialized<'a, F> {
@@ -452,19 +459,9 @@ impl<'a, F> Serialized<'a, F> {
 	pub fn from_vec(s: Vec<u8>) -> Serialized<'static, F> {
 		Serialized(s.into())
 	}
-
-	pub fn from_mut(s: &'a mut Vec<u8>) -> Serialized<'a, F> {
-		Serialized(s.into())
-	}
 }
 
 impl<'a, F> Into<Serialized<'a, F>> for &'a [u8] {
-	fn into(self) -> Serialized<'a, F> {
-		Serialized(self.into())
-	}
-}
-
-impl<'a, F> Into<Serialized<'a, F>> for &'a mut Vec<u8> {
 	fn into(self) -> Serialized<'a, F> {
 		Serialized(self.into())
 	}
