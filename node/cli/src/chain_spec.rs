@@ -20,9 +20,9 @@ use chain_spec::ChainSpecExtension;
 use primitives::{Pair, Public, crypto::UncheckedInto, sr25519};
 use serde::{Serialize, Deserialize};
 use node_runtime::{
-	AuthorityDiscoveryConfig, BabeConfig, BalancesConfig, ContractsConfig, CouncilConfig, DemocracyConfig,
-	ElectionsConfig, GrandpaConfig, ImOnlineConfig, IndicesConfig, SessionConfig, SessionKeys, StakerStatus,
-	StakingConfig, SudoConfig, SystemConfig, TechnicalCommitteeConfig, WASM_BINARY,
+	BabeConfig, BalancesConfig, ContractsConfig, CouncilConfig, DemocracyConfig, ElectionsConfig, GrandpaConfig,
+	ImOnlineConfig, IndicesConfig, SessionConfig, SessionKeys, StakerStatus, StakingConfig, SudoConfig, SystemConfig,
+	TechnicalCommitteeConfig, WASM_BINARY,
 };
 use node_runtime::Block;
 use node_runtime::constants::{time::*, currency::*};
@@ -263,9 +263,6 @@ pub fn testnet_genesis(
 			authorities: vec![],
 		}),
 		im_online: Some(ImOnlineConfig {
-			keys: vec![],
-		}),
-		authority_discovery: Some(AuthorityDiscoveryConfig{
 			keys: vec![],
 		}),
 		grandpa: Some(GrandpaConfig {

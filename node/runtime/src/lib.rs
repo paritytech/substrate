@@ -29,7 +29,7 @@ use node_primitives::{
 	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index,
 	Moment, Signature,
 };
-use babe_primitives::{AuthorityId as BabeId, AuthoritySignature as BabeSignature};
+use babe_primitives::AuthorityId as BabeId;
 use grandpa::fg_primitives;
 use client::{
 	block_builder::api::{self as block_builder_api, InherentData, CheckInherentsResult},
@@ -50,8 +50,6 @@ use version::NativeVersion;
 use primitives::OpaqueMetadata;
 use grandpa::{AuthorityId as GrandpaId, AuthorityWeight as GrandpaWeight};
 use im_online::sr25519::{AuthorityId as ImOnlineId};
-use authority_discovery_primitives::{AuthorityId as EncodedAuthorityId, Signature as EncodedSignature};
-use codec::{Encode, Decode};
 use system::offchain::TransactionSubmitter;
 
 #[cfg(any(feature = "std", test))]
@@ -83,8 +81,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to equal spec_version. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 188,
-	impl_version: 188,
+	spec_version: 189,
+	impl_version: 189,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -211,7 +209,10 @@ impl authorship::Trait for Runtime {
 	type EventHandler = Staking;
 }
 
-type SessionHandlers = (Grandpa, Babe, ImOnline, AuthorityDiscovery);
+// !!!!!!!!!!!!!
+// WARNING!!!!!!  SEE NOTE BELOW BEFORE TOUCHING THIS CODE
+// !!!!!!!!!!!!!
+type SessionHandlers = (Grandpa, Babe, ImOnline);
 
 impl_opaque_keys! {
 	pub struct SessionKeys {
@@ -439,10 +440,6 @@ impl offences::Trait for Runtime {
 	type OnOffenceHandler = Staking;
 }
 
-impl authority_discovery::Trait for Runtime {
-	type AuthorityId = BabeId;
-}
-
 impl grandpa::Trait for Runtime {
 	type Event = Event;
 }
@@ -531,7 +528,6 @@ construct_runtime!(
 		Contracts: contracts,
 		Sudo: sudo,
 		ImOnline: im_online::{Module, Call, Storage, Event<T>, ValidateUnsigned, Config<T>},
-		AuthorityDiscovery: authority_discovery::{Module, Call, Config<T>},
 		Offences: offences::{Module, Call, Storage, Event},
 		RandomnessCollectiveFlip: randomness_collective_flip::{Module, Call, Storage},
 		Nicks: nicks::{Module, Call, Storage, Event<T>},
@@ -643,35 +639,6 @@ impl_runtime_apis! {
 				randomness: Babe::randomness(),
 				secondary_slots: true,
 			}
-		}
-	}
-
-	impl authority_discovery_primitives::AuthorityDiscoveryApi<Block> for Runtime {
-		fn authorities() -> Vec<EncodedAuthorityId> {
-			AuthorityDiscovery::authorities().into_iter()
-				.map(|id| id.encode())
-				.map(EncodedAuthorityId)
-				.collect()
-		}
-
-		fn sign(payload: &Vec<u8>) -> Option<(EncodedSignature, EncodedAuthorityId)> {
-			  AuthorityDiscovery::sign(payload).map(|(sig, id)| {
-            (EncodedSignature(sig.encode()), EncodedAuthorityId(id.encode()))
-        })
-		}
-
-		fn verify(payload: &Vec<u8>, signature: &EncodedSignature, authority_id: &EncodedAuthorityId) -> bool {
-			let signature = match BabeSignature::decode(&mut &signature.0[..]) {
-				Ok(s) => s,
-				_ => return false,
-			};
-
-			let authority_id = match BabeId::decode(&mut &authority_id.0[..]) {
-				Ok(id) => id,
-				_ => return false,
-			};
-
-			AuthorityDiscovery::verify(payload, signature, authority_id)
 		}
 	}
 
