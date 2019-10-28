@@ -378,6 +378,9 @@ decl_storage! {
 		/// The first key is always `DEDUP_KEY_PREFIX` to have all the data in the same branch of
 		/// the trie. Having all data in the same branch should prevent slowing down other queries.
 		KeyOwner: double_map hasher(twox_64_concat) Vec<u8>, blake2_256((KeyTypeId, Vec<u8>)) => Option<T::ValidatorId>;
+
+		/// Force a new session at the next block. Not to be used lightly.
+		ForceNewSession: bool;
 	}
 	add_extra_genesis {
 		config(keys): Vec<(T::ValidatorId, T::Keys)>;
@@ -457,10 +460,25 @@ decl_module! {
 			Ok(())
 		}
 
+		/// Forces a new session at the beginning of the next block. This might result in less-than-
+		/// secure random seeding. Be very careful when using in a production system.
+		///
+		/// The dispatch origin of this function must be _Root_.
+		///
+		/// # <weight>
+		/// - One DB write.
+		/// # </weight>
+		#[weight = SimpleDispatchInfo::FreeOperational]
+		fn set_keys(origin, keys: T::Keys, proof: Vec<u8>) {
+			ensure_root()?;
+
+			ForceNewSession::put(true);
+		}
+
 		/// Called when a block is initialized. Will rotate session if it is the last
 		/// block of the current session.
 		fn on_initialize(n: T::BlockNumber) {
-			if T::ShouldEndSession::should_end_session(n) {
+			if T::ShouldEndSession::should_end_session(n) || ForceNewSession::take() {
 				Self::rotate_session();
 			}
 		}
@@ -809,6 +827,24 @@ mod tests {
 
 			initialize_block(10);
 			assert_eq!(Session::current_index(), 2);
+		});
+	}
+
+	#[test]
+	fn force_new_session_works() {
+		new_test_ext().execute_with(|| {
+			set_session_length(10);
+
+			initialize_block(1);
+			assert_eq!(Session::current_index(), 0);
+
+			initialize_block(2);
+			assert_eq!(Session::current_index(), 0);
+
+			assert_ok!(Session::force_new_session(Origin::ROOT));
+
+			initialize_block(3);
+			assert_eq!(Session::current_index(), 1);
 		});
 	}
 
