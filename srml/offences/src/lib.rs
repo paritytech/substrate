@@ -24,10 +24,7 @@
 mod mock;
 mod tests;
 
-use rstd::{
-	vec::Vec,
-	collections::btree_set::BTreeSet,
-};
+use rstd::{vec::Vec};
 use support::{
 	decl_module, decl_event, decl_storage, Parameter,
 };
@@ -97,10 +94,7 @@ where
 
 		// Go through all offenders in the offence report and find all offenders that was spotted
 		// in unique reports.
-		let TriageOutcome {
-			new_offenders: _,
-			concurrent_offenders,
-		} = match Self::triage_offence_report::<O>(reporters, &time_slot, offenders) {
+		let TriageOutcome { concurrent_offenders } = match Self::triage_offence_report::<O>(reporters, &time_slot, offenders) {
 			Some(triage) => triage,
 			// The report contained only duplicates, so there is no need to slash again.
 			None => return,
@@ -143,13 +137,13 @@ impl<T: Trait> Module<T> {
 		offenders: Vec<T::IdentificationTuple>,
 	) -> Option<TriageOutcome<T>> {
 		let mut storage = ReportIndexStorage::<T, O>::load(time_slot);
-		let mut new_offenders = BTreeSet::new();
 
+		let mut any_new = false;
 		for offender in offenders {
 			let report_id = Self::report_id::<O>(time_slot, &offender);
 
 			if !<Reports<T>>::exists(&report_id) {
-				new_offenders.insert(offender.clone());
+				any_new = true;
 				<Reports<T>>::insert(
 					&report_id,
 					OffenceDetails {
@@ -162,7 +156,7 @@ impl<T: Trait> Module<T> {
 			}
 		}
 
-		if !new_offenders.is_empty() {
+		if any_new {
 			// Load report details for the all reports happened at the same time.
 			let concurrent_offenders = storage.concurrent_reports
 				.iter()
@@ -172,7 +166,6 @@ impl<T: Trait> Module<T> {
 			storage.save();
 
 			Some(TriageOutcome {
-				new_offenders,
 				concurrent_offenders,
 			})
 		} else {
@@ -182,8 +175,6 @@ impl<T: Trait> Module<T> {
 }
 
 struct TriageOutcome<T: Trait> {
-	/// Offenders that was spotted in the unique reports.
-	new_offenders: BTreeSet<T::IdentificationTuple>,
 	/// Other reports for the same report kinds.
 	concurrent_offenders: Vec<OffenceDetails<T::AccountId, T::IdentificationTuple>>,
 }
