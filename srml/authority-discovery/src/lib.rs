@@ -17,28 +17,21 @@
 //! # Authority discovery module.
 //!
 //! This module is used by the `core/authority-discovery` to retrieve the
-//! current set of authorities, learn its own authority id as well as sign and
-//! verify messages to and from other authorities.
-//!
-//! ## Dependencies
-//!
-//! This module depends on an externally defined session key type, specified via
-//! `Trait::AuthorityId` in the respective node runtime implementation.
+//! current set of authorities.
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use app_crypto::RuntimeAppPublic;
 use rstd::prelude::*;
 use support::{decl_module, decl_storage};
-use authority_discovery_primitives::{AuthorityId, AuthoritySignature};
+use authority_discovery_primitives::AuthorityId;
 
 /// The module's config trait.
 pub trait Trait: system::Trait + session::Trait {}
 
 decl_storage! {
 	trait Store for Module<T: Trait> as AuthorityDiscovery {
-		/// The current set of keys that may issue a heartbeat.
+		// Keys of the current authority set.
 		Keys get(fn keys): Vec<AuthorityId>;
 	}
 	add_extra_genesis {
@@ -53,43 +46,9 @@ decl_module! {
 }
 
 impl<T: Trait> Module<T> {
-	/// Returns own authority identifier iff it is part of the current authority
-	/// set, otherwise this function returns None. The restriction might be
-	/// softened in the future in case a consumer needs to learn own authority
-	/// identifier anyways.
-	fn authority_id() -> Option<AuthorityId> {
-		let authorities = Keys::get();
-
-		let local_keys = AuthorityId::all();
-
-		authorities.into_iter().find_map(|authority| {
-			if local_keys.contains(&authority) {
-				Some(authority)
-			} else {
-				None
-			}
-		})
-	}
-
 	/// Retrieve authority identifiers of the current authority set.
 	pub fn authorities() -> Vec<AuthorityId> {
 		Keys::get()
-	}
-
-	/// Sign the given payload with the private key corresponding to the given authority id.
-	pub fn sign(payload: &Vec<u8>) -> Option<(AuthoritySignature,	AuthorityId)> {
-		let authority_id = Module::<T>::authority_id()?;
-		authority_id.sign(payload).map(|s| (s, authority_id))
-	}
-
-	/// Verify the given signature for the given payload with the given
-	/// authority identifier.
-	pub fn verify(
-		payload: &Vec<u8>,
-		signature: AuthoritySignature,
-		authority_id: AuthorityId,
-	) -> bool {
-		authority_id.verify(payload, &signature)
 	}
 
 	fn initialize_keys(keys: &[AuthorityId]) {
@@ -107,20 +66,20 @@ impl<T: Trait> sr_primitives::BoundToRuntimeAppPublic for Module<T> {
 impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	type Key = AuthorityId;
 
-	fn on_genesis_session<'a, I: 'a>(validators: I)
+	fn on_genesis_session<'a, I: 'a>(authorities: I)
 	where
 		I: Iterator<Item = (&'a T::AccountId, Self::Key)>,
 	{
-		let keys = validators.map(|x| x.1).collect::<Vec<_>>();
+		let keys = authorities.map(|x| x.1).collect::<Vec<_>>();
 		Self::initialize_keys(&keys);
 	}
 
-	fn on_new_session<'a, I: 'a>(_changed: bool, _validators: I, next_validators: I)
+	fn on_new_session<'a, I: 'a>(_changed: bool, _authorities: I, next_authorities: I)
 	where
 		I: Iterator<Item = (&'a T::AccountId, Self::Key)>,
 	{
 		// Remember who the authorities are for the new session.
-		Keys::put(next_validators.map(|x| x.1).collect::<Vec<_>>());
+		Keys::put(next_authorities.map(|x| x.1).collect::<Vec<_>>());
 	}
 
 	fn on_disabled(_i: usize) {
@@ -131,6 +90,7 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use authority_discovery_primitives::{AuthorityPair};
 	use app_crypto::Pair;
 	use primitives::{testing::KeyStore, crypto::key_types, sr25519, H256, traits::KeystoreExt};
 	use runtime_io::TestExternalities;
@@ -226,95 +186,32 @@ mod tests {
 	}
 
 	#[test]
-	fn authority_id_fn_returns_intersection_of_current_authorities_and_keys_in_key_store() {
-		// Create keystore and generate key.
-		let key_store = KeyStore::new();
-		key_store
-			.write()
-			.sr25519_generate_new(key_types::AUTHORITY_DISCOVERY, None)
-			.expect("Generates key.");
+	fn authorities_returns_current_authority_set() {
+		// The whole authority discovery module ignores account ids, but we still need it for
+		// `session::OneSessionHandler::on_new_session`, thus its safe to use the same value everywhere.
+		let account_id = AuthorityPair::from_seed_slice(vec![10; 32].as_ref()).unwrap().public();
 
-		// Retrieve key to later check if we got the right one.
-		let public_key = key_store
-			.read()
-			.sr25519_public_keys(key_types::AUTHORITY_DISCOVERY)
-			.pop()
-			.unwrap();
-		let authority_id = AuthorityId::from(public_key);
-
-		// Build genesis.
-		let mut t = system::GenesisConfig::default()
-			.build_storage::<Test>()
-			.unwrap();
-
-		GenesisConfig {
-			keys: vec![authority_id.clone()],
-		}
-		.assimilate_storage(&mut t)
-		.unwrap();
-
-		// Create externalities.
-		let mut externalities = TestExternalities::new(t);
-		externalities.register_extension(KeystoreExt(key_store));
-
-		externalities.execute_with(|| {
-			assert_eq!(
-				authority_id,
-				AuthorityDiscovery::authority_id().expect("Retrieving public key.")
-			);
-		});
-	}
-
-	#[test]
-	fn authority_id_fn_does_not_return_key_outside_current_authority_set() {
-		// Create keystore and generate key.
-		let key_store = KeyStore::new();
-		key_store
-			.write()
-			.sr25519_generate_new(key_types::AUTHORITY_DISCOVERY, None)
-			.expect("Generates key.");
-
-		// Build genesis.
-		let mut t = system::GenesisConfig::default()
-			.build_storage::<Test>()
-			.unwrap();
-
-		// Generate random authority set.
-		let keys = vec![(); 5]
-			.iter()
-			.map(|_x| sr25519::Pair::generate_with_phrase(None).0.public())
+		let first_authorities: Vec<AuthorityId> = vec![0, 1].into_iter()
+			.map(|i| AuthorityPair::from_seed_slice(vec![i; 32].as_ref()).unwrap().public())
 			.map(AuthorityId::from)
 			.collect();
 
-		GenesisConfig { keys: keys }
-			.assimilate_storage(&mut t)
-			.unwrap();
+		// Needed for `session::OneSessionHandler::on_new_session`.
+		let first_authorities_and_account_ids: Vec<(&AuthorityId, AuthorityId)>  = first_authorities.clone()
+			.into_iter()
+			.map(|id| (&account_id, id))
+			.collect();
 
-		// Create externalities.
-		let mut externalities = TestExternalities::new(t);
-		externalities.register_extension(KeystoreExt(key_store));
+		let second_authorities: Vec<AuthorityId> = vec![2, 3].into_iter()
+			.map(|i| AuthorityPair::from_seed_slice(vec![i; 32].as_ref()).unwrap().public())
+			.map(AuthorityId::from)
+			.collect();
 
-		externalities.execute_with(|| {
-			assert_eq!(None, AuthorityDiscovery::authority_id());
-		});
-	}
-
-	#[test]
-	fn sign_and_verify_workflow() {
-		// Create keystore and generate key.
-		let key_store = KeyStore::new();
-		key_store
-			.write()
-			.sr25519_generate_new(key_types::AUTHORITY_DISCOVERY, None)
-			.expect("Generates key.");
-
-		// Retrieve key to later check if we got the right one.
-		let public_key = key_store
-			.read()
-			.sr25519_public_keys(key_types::AUTHORITY_DISCOVERY)
-			.pop()
-			.unwrap();
-		let authority_id = AuthorityId::from(public_key);
+		// Needed for `session::OneSessionHandler::on_new_session`.
+		let second_authorities_and_account_ids: Vec<(&AuthorityId, AuthorityId)> = second_authorities.clone()
+			.into_iter()
+			.map(|id| (&account_id, id))
+			.collect();
 
 		// Build genesis.
 		let mut t = system::GenesisConfig::default()
@@ -322,30 +219,34 @@ mod tests {
 			.unwrap();
 
 		GenesisConfig {
-			keys: vec![authority_id.clone()],
+			keys: vec![],
 		}
-		.assimilate_storage(&mut t)
+		.assimilate_storage::<Test>(&mut t)
 		.unwrap();
 
 		// Create externalities.
 		let mut externalities = TestExternalities::new(t);
-		externalities.register_extension(KeystoreExt(key_store));
 
 		externalities.execute_with(|| {
-			let payload = String::from("test payload").into_bytes();
-			let (sig, authority_id) = AuthorityDiscovery::sign(&payload).expect("signature");
+			use session::OneSessionHandler;
 
-			assert!(AuthorityDiscovery::verify(
-				&payload,
-				sig.clone(),
-				authority_id.clone(),
-			));
+			AuthorityDiscovery::on_genesis_session(
+				first_authorities.iter().map(|id| (id, id.clone()))
+			);
+			assert_eq!(
+				first_authorities,
+				AuthorityDiscovery::authorities()
+			);
 
-			assert!(!AuthorityDiscovery::verify(
-				&String::from("other payload").into_bytes(),
-				sig,
-				authority_id,
-			))
+			AuthorityDiscovery::on_new_session(
+				false,
+				first_authorities_and_account_ids.into_iter(),
+				second_authorities_and_account_ids.into_iter(),
+			);
+			assert_eq!(
+				second_authorities,
+				AuthorityDiscovery::authorities()
+			);
 		});
 	}
 }

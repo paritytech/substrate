@@ -647,10 +647,6 @@ impl_runtime_apis! {
 		fn authorities() -> Vec<AuthorityDiscoveryId> {
 			AuthorityDiscovery::authorities()
 		}
-
-		fn sign(payload: &Vec<u8>) -> Option<(AuthorityDiscoverySignature, AuthorityDiscoveryId)> {
-			  AuthorityDiscovery::sign(payload)
-		}
 	}
 
 	impl system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {

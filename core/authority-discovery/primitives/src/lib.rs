@@ -39,15 +39,9 @@ pub type AuthoritySignature = app::Signature;
 decl_runtime_apis! {
 	/// The authority discovery api.
 	///
-	/// This api is used by the `core/authority-discovery` module to retrieve our
-	/// own authority identifier, to retrieve identifiers of the current authority
-	/// set, as well as sign and verify Kademlia Dht external address payloads
-	/// from and to other authorities.
+	/// This api is used by the `core/authority-discovery` module to retrieve identifiers of the current authority set.
 	pub trait AuthorityDiscoveryApi {
 		/// Retrieve authority identifiers of the current authority set.
 		fn authorities() -> Vec<AuthorityId>;
-
-		/// Sign the given payload with the private key corresponding to the returned authority id.
-		fn sign(payload: &Vec<u8>) -> Option<(AuthoritySignature, AuthorityId)>;
 	}
 }
