@@ -46,6 +46,7 @@ use state_machine::{
 	OverlayedChanges, BackendTrustLevel,
 };
 use executor::{RuntimeVersion, RuntimeInfo};
+use externalities::Extensions;
 use consensus::{
 	Error as ConsensusError, BlockStatus, BlockImportParams, BlockCheckParams,
 	ImportResult, BlockOrigin, ForkChoiceStrategy,
@@ -269,7 +270,7 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 		Block: BlockT<Hash=H256>,
 		B: backend::LocalBackend<Block, Blake2Hasher>
 {
-	let call_executor = LocalCallExecutor::new(backend.clone(), executor, keystore);
+	let call_executor = LocalCallExecutor::new(backend.clone(), executor);
 	Client::new(backend, call_executor, build_genesis_storage, Default::default(), Default::default())
 }
 
@@ -1468,11 +1469,22 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 				self.execution_strategies.other.get_manager(),
 		};
 
-		let capabilities = context.capabilities();
-		let offchain_extensions = if let ExecutionContext::OffchainCall(Some(ext)) = context {
-			Some(OffchainExt::new(offchain::LimitedExternalities::new(capabilities, ext.0)))
-		} else {
-			None
+		let extensions = {
+			let mut extensions = Extensions::new();
+			let capabilities = context.capabilities();
+
+			// TODO [ToDr] Keystore
+			// if capabilities.has(offchain::Capability::Keystore) {
+			// 	extensions.register(self.keystore.clone());
+			// }
+
+			if let ExecutionContext::OffchainCall(Some(ext)) = context {
+				extensions.register(
+					OffchainExt::new(offchain::LimitedExternalities::new(capabilities, ext.0))
+				)
+			}
+
+			extensions
 		};
 
 		self.executor.contextual_call::<_, fn(_,_) -> _,_,_>(
@@ -1484,9 +1496,8 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 			initialize_block,
 			manager,
 			native_call,
-			offchain_extensions,
 			recorder,
-			capabilities.has(offchain::Capability::Keystore),
+			Some(extensions),
 		)
 	}
 

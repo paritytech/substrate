@@ -223,7 +223,7 @@ impl<E, Backend, G: GenesisInit> TestClientBuilder<
 		let executor = executor.into().unwrap_or_else(||
 			NativeExecutor::new(WasmExecutionMethod::Interpreted, None)
 		);
-		let executor = LocalCallExecutor::new(self.backend.clone(), executor, self.keystore.take());
+		let executor = LocalCallExecutor::new(self.backend.clone(), executor);
 
 		self.build_with_executor(executor)
 	}

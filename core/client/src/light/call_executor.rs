@@ -23,12 +23,13 @@ use std::{
 
 use codec::{Encode, Decode};
 use primitives::{
-	offchain::OffchainExt, H256, Blake2Hasher, convert_hash, NativeOrEncoded,
+	H256, Blake2Hasher, convert_hash, NativeOrEncoded,
 	traits::CodeExecutor,
 };
 use sr_primitives::{
 	generic::BlockId, traits::{One, Block as BlockT, Header as HeaderT, NumberFor},
 };
+use externalities::Extensions;
 use state_machine::{
 	self, Backend as StateBackend, OverlayedChanges, ExecutionStrategy, create_proof_check_backend,
 	execution_proof_check_on_trie_backend, ExecutionManager, ChangesTrieTransaction,
@@ -81,10 +82,10 @@ impl<Block, B, Local> CallExecutor<Block, Blake2Hasher> for
 		method: &str,
 		call_data: &[u8],
 		strategy: ExecutionStrategy,
-		side_effects_handler: Option<OffchainExt>,
+		extensions: Option<Extensions>,
 	) -> ClientResult<Vec<u8>> {
 		match self.backend.is_local_state_available(id) {
-			true => self.local.call(id, method, call_data, strategy, side_effects_handler),
+			true => self.local.call(id, method, call_data, strategy, extensions),
 			false => Err(ClientError::NotAvailableOnLightClient),
 		}
 	}
@@ -108,9 +109,8 @@ impl<Block, B, Local> CallExecutor<Block, Blake2Hasher> for
 		initialize_block: InitializeBlock<'a, Block>,
 		_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
-		side_effects_handler: Option<OffchainExt>,
 		recorder: &Option<Rc<RefCell<ProofRecorder<Block>>>>,
-		enable_keystore: bool,
+        extensions: Option<Extensions>,
 	) -> ClientResult<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone {
 		// there's no actual way/need to specify native/wasm execution strategy on light node
 		// => we can safely ignore passed values
@@ -134,9 +134,8 @@ impl<Block, B, Local> CallExecutor<Block, Blake2Hasher> for
 				initialize_block,
 				ExecutionManager::NativeWhenPossible,
 				native_call,
-				side_effects_handler,
 				recorder,
-				enable_keystore,
+				extensions,
 			).map_err(|e| ClientError::Execution(Box::new(e.to_string()))),
 			false => Err(ClientError::NotAvailableOnLightClient),
 		}
@@ -164,7 +163,7 @@ impl<Block, B, Local> CallExecutor<Block, Blake2Hasher> for
 		_call_data: &[u8],
 		_manager: ExecutionManager<FF>,
 		_native_call: Option<NC>,
-		_side_effects_handler: Option<OffchainExt>,
+		_extensions: Option<Extensions>,
 	) -> ClientResult<(
 		NativeOrEncoded<R>,
 		(S::Transaction, <Blake2Hasher as Hasher>::Out),
@@ -314,7 +313,7 @@ mod tests {
 			_method: &str,
 			_call_data: &[u8],
 			_strategy: ExecutionStrategy,
-			_side_effects_handler: Option<OffchainExt>,
+			_extensions: Option<Extensions>,
 		) -> Result<Vec<u8>, ClientError> {
 			Ok(vec![42])
 		}
@@ -338,9 +337,8 @@ mod tests {
 			_initialize_block: InitializeBlock<'a, Block>,
 			_execution_manager: ExecutionManager<EM>,
 			_native_call: Option<NC>,
-			_side_effects_handler: Option<OffchainExt>,
 			_proof_recorder: &Option<Rc<RefCell<ProofRecorder<Block>>>>,
-			_enable_keystore: bool,
+			_extensions: Option<Extensions>,
 		) -> ClientResult<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone {
 			unreachable!()
 		}
@@ -364,7 +362,7 @@ mod tests {
 			_call_data: &[u8],
 			_manager: ExecutionManager<F>,
 			_native_call: Option<NC>,
-			_side_effects_handler: Option<OffchainExt>,
+			_extensions: Option<Extensions>,
 		) -> Result<
 			(
 				NativeOrEncoded<R>,

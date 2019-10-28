@@ -228,7 +228,7 @@ pub fn new_client<E, S, Block, RA>(
 		S: BuildStorage,
 {
 	let backend = Arc::new(Backend::new(settings, CANONICALIZATION_DELAY)?);
-	let executor = client::LocalCallExecutor::new(backend.clone(), executor, keystore);
+	let executor = client::LocalCallExecutor::new(backend.clone(), executor);
 	Ok((
 		client::Client::new(backend.clone(), executor, genesis_storage, fork_blocks, execution_strategies)?,
 		backend,
