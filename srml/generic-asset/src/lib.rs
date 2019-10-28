@@ -153,12 +153,13 @@
 
 use codec::{Decode, Encode, HasCompact, Input, Output, Error};
 
+use sr_primitives::RuntimeDebug;
 use sr_primitives::traits::{
-	CheckedAdd, CheckedSub, MaybeSerializeDebug, Member, One, Saturating, SimpleArithmetic, Zero, Bounded
+	CheckedAdd, CheckedSub, MaybeSerializeDeserialize, Member, One, Saturating, SimpleArithmetic, Zero, Bounded
 };
 
 use rstd::prelude::*;
-use rstd::{cmp, result};
+use rstd::{cmp, result, fmt::Debug};
 use support::dispatch::Result;
 use support::{
 	decl_event, decl_module, decl_storage, ensure,
@@ -181,7 +182,8 @@ pub trait Trait: system::Trait {
 		+ SimpleArithmetic
 		+ Default
 		+ Copy
-		+ MaybeSerializeDebug;
+		+ MaybeSerializeDeserialize
+		+ Debug;
 	type AssetId: Parameter + Member + SimpleArithmetic + Default + Copy;
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
@@ -192,7 +194,8 @@ pub trait Subtrait: system::Trait {
 		+ SimpleArithmetic
 		+ Default
 		+ Copy
-		+ MaybeSerializeDebug;
+		+ MaybeSerializeDeserialize
+		+ Debug;
 	type AssetId: Parameter + Member + SimpleArithmetic + Default + Copy;
 }
 
@@ -202,8 +205,7 @@ impl<T: Trait> Subtrait for T {
 }
 
 /// Asset creation options.
-#[cfg_attr(feature = "std", derive(Debug))]
-#[derive(Clone, Encode, Decode, PartialEq, Eq)]
+#[derive(Clone, Encode, Decode, PartialEq, Eq, RuntimeDebug)]
 pub struct AssetOptions<Balance: HasCompact, AccountId> {
 	/// Initial issuance of this asset. All deposit to the creater of the asset.
 	#[codec(compact)]
@@ -213,8 +215,7 @@ pub struct AssetOptions<Balance: HasCompact, AccountId> {
 }
 
 /// Owner of an asset.
-#[cfg_attr(feature = "std", derive(Debug))]
-#[derive(Clone, Encode, Decode, PartialEq, Eq)]
+#[derive(Clone, Encode, Decode, PartialEq, Eq, RuntimeDebug)]
 pub enum Owner<AccountId> {
 	/// No owner.
 	None,
@@ -229,8 +230,7 @@ impl<AccountId> Default for Owner<AccountId> {
 }
 
 /// Asset permissions
-#[cfg_attr(feature = "std", derive(Debug))]
-#[derive(Clone, Encode, Decode, PartialEq, Eq)]
+#[derive(Clone, Encode, Decode, PartialEq, Eq, RuntimeDebug)]
 pub struct PermissionsV1<AccountId> {
 	/// Who have permission to update asset permission
 	pub update: Owner<AccountId>,
@@ -240,16 +240,14 @@ pub struct PermissionsV1<AccountId> {
 	pub burn: Owner<AccountId>,
 }
 
-#[cfg_attr(feature = "std", derive(Debug))]
-#[derive(Clone, Encode, Decode, PartialEq, Eq)]
+#[derive(Clone, Encode, Decode, PartialEq, Eq, RuntimeDebug)]
 #[repr(u8)]
 enum PermissionVersionNumber {
 	V1 = 0,
 }
 
 /// Versioned asset permission
-#[cfg_attr(feature = "std", derive(Debug))]
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, RuntimeDebug)]
 pub enum PermissionVersions<AccountId> {
 	V1(PermissionsV1<AccountId>),
 }
@@ -435,8 +433,7 @@ decl_module! {
 	}
 }
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct BalanceLock<Balance, BlockNumber> {
 	pub id: LockIdentifier,
 	pub amount: Balance,
@@ -1065,8 +1062,7 @@ impl<T: Subtrait> Trait for ElevatedTrait<T> {
 	type Event = ();
 }
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct AssetCurrency<T, U>(rstd::marker::PhantomData<T>, rstd::marker::PhantomData<U>);
 
 impl<T, U> Currency<T::AccountId> for AssetCurrency<T, U>
@@ -1200,7 +1196,9 @@ where
 		Self::free_balance(who)
 			.checked_sub(&value)
 			.map_or(false, |new_balance|
-				<Module<T>>::ensure_can_withdraw(&U::asset_id(), who, value, WithdrawReason::Reserve, new_balance).is_ok()
+				<Module<T>>::ensure_can_withdraw(
+					&U::asset_id(), who, value, WithdrawReason::Reserve, new_balance
+				).is_ok()
 			)
 	}
 
@@ -1254,7 +1252,7 @@ impl<T: Trait> AssetIdProvider for SpendingAssetIdProvider<T> {
 impl<T> LockableCurrency<T::AccountId> for AssetCurrency<T, StakingAssetIdProvider<T>>
 where
 	T: Trait,
-	T::Balance: MaybeSerializeDebug,
+	T::Balance: MaybeSerializeDeserialize + Debug,
 {
 	type Moment = T::BlockNumber;
 

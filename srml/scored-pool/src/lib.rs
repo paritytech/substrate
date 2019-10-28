@@ -89,14 +89,17 @@ mod mock;
 mod tests;
 
 use codec::FullCodec;
-use rstd::prelude::*;
+use rstd::{
+	fmt::Debug,
+	prelude::*,
+};
 use support::{
 	decl_module, decl_storage, decl_event, ensure,
 	traits::{ChangeMembers, InitializeMembers, Currency, Get, ReservableCurrency},
 };
 use system::{self, ensure_root, ensure_signed};
 use sr_primitives::{
-	traits::{EnsureOrigin, SimpleArithmetic, MaybeSerializeDebug, Zero, StaticLookup},
+	traits::{EnsureOrigin, SimpleArithmetic, MaybeSerializeDeserialize, Zero, StaticLookup},
 };
 
 type BalanceOf<T, I> = <<T as Trait<I>>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
@@ -117,7 +120,8 @@ pub trait Trait<I=DefaultInstance>: system::Trait {
 	type Currency: Currency<Self::AccountId> + ReservableCurrency<Self::AccountId>;
 
 	/// The score attributed to a member or candidate.
-	type Score: SimpleArithmetic + Clone + Copy + Default + FullCodec + MaybeSerializeDebug;
+	type Score:
+		SimpleArithmetic + Clone + Copy + Default + FullCodec + MaybeSerializeDeserialize + Debug;
 
 	/// The overarching event type.
 	type Event: From<Event<Self, I>> + Into<<Self as system::Trait>::Event>;

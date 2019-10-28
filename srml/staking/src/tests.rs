@@ -23,6 +23,28 @@ use sr_staking_primitives::offence::{OffenceDetails, OnOffenceHandler};
 use support::{assert_ok, assert_noop, assert_eq_uvec, traits::{Currency, ReservableCurrency}};
 
 #[test]
+fn force_unstake_works() {
+	// Verifies initial conditions of mock
+	ExtBuilder::default().build().execute_with(|| {
+		// Account 11 is stashed and locked, and account 10 is the controller
+		assert_eq!(Staking::bonded(&11), Some(10));
+		// Cant transfer
+		assert_noop!(
+			Balances::transfer(Origin::signed(11), 1, 10),
+			"account liquidity restrictions prevent withdrawal"
+		);
+		// Force unstake requires root.
+		assert_noop!(Staking::force_unstake(Origin::signed(11), 11), "RequireRootOrigin");
+		// We now force them to unstake
+		assert_ok!(Staking::force_unstake(Origin::ROOT, 11));
+		// No longer bonded.
+		assert_eq!(Staking::bonded(&11), None);
+		// Transfer works.
+		assert_ok!(Balances::transfer(Origin::signed(11), 1, 10));
+	});
+}
+
+#[test]
 fn basic_setup_works() {
 	// Verifies initial conditions of mock
 	ExtBuilder::default().build().execute_with(|| {

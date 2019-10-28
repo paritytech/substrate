@@ -121,8 +121,12 @@ macro_rules! decl_event {
 		}
 	) => {
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-		#[derive(Clone, PartialEq, Eq, $crate::codec::Encode, $crate::codec::Decode)]
-		#[cfg_attr(feature = "std", derive(Debug))]
+		#[derive(
+			Clone, PartialEq, Eq,
+			$crate::codec::Encode,
+			$crate::codec::Decode,
+			$crate::RuntimeDebug,
+		)]
 		/// Events for this module.
 		///
 		$(#[$attr])*
@@ -260,9 +264,12 @@ macro_rules! __decl_generic_event {
 		/// [`Trait`]: trait.Trait.html
 		pub type Event<$event_generic_param $(, $instance $( = $event_default_instance)? )?> = RawEvent<$( $generic_type ),* $(, $instance)? >;
 
-		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-		#[derive(Clone, PartialEq, Eq, $crate::codec::Encode, $crate::codec::Decode)]
-		#[cfg_attr(feature = "std", derive(Debug))]
+		#[derive(
+			Clone, PartialEq, Eq,
+			$crate::codec::Encode,
+			$crate::codec::Decode,
+			$crate::RuntimeDebug,
+		)]
 		/// Events for this module.
 		///
 		$(#[$attr])*
@@ -452,8 +459,12 @@ macro_rules! impl_outer_event {
 		$( $module_name:ident::Event $( <$generic_param:ident> )? $( { $generic_instance:ident } )?, )*;
 	) => {
 		$crate::paste::item! {
-			#[derive(Clone, PartialEq, Eq, $crate::codec::Encode, $crate::codec::Decode)]
-			#[cfg_attr(feature = "std", derive(Debug))]
+			#[derive(
+				Clone, PartialEq, Eq,
+				$crate::codec::Encode,
+				$crate::codec::Decode,
+				$crate::RuntimeDebug,
+			)]
 			$(#[$attr])*
 			#[allow(non_camel_case_types)]
 			pub enum $name {

@@ -456,14 +456,24 @@ impl<B: BlockT> ChainSync<B> {
 
 	/// Request syncing for the given block from given set of peers.
 	// The implementation is similar to on_block_announce with unknown parent hash.
-	pub fn set_sync_fork_request(&mut self, peers: Vec<PeerId>, hash: &B::Hash, number: NumberFor<B>) {
+	pub fn set_sync_fork_request(&mut self, mut peers: Vec<PeerId>, hash: &B::Hash, number: NumberFor<B>) {
 		if peers.is_empty() {
-			if let Some(_) = self.fork_targets.remove(hash) {
-				debug!(target: "sync", "Cleared sync request for block {:?} with {:?}", hash, peers);
-			}
-			return;
+			debug!(
+				target: "sync",
+				"Explicit sync request for block {:?} with no peers specified. \
+				 Syncing from all connected peers {:?} instead.",
+				hash, peers,
+			);
+
+			peers = self.peers.iter()
+				// Only request blocks from peers who are ahead or on a par.
+				.filter(|(_, peer)| peer.best_number >= number)
+				.map(|(id, _)| id.clone())
+				.collect();
+		} else {
+			debug!(target: "sync", "Explicit sync request for block {:?} with {:?}", hash, peers);
 		}
-		debug!(target: "sync", "Explicit sync request for block {:?} with {:?}", hash, peers);
+
 		if self.is_known(&hash) {
 			debug!(target: "sync", "Refusing to sync known hash {:?}", hash);
 			return;
@@ -1074,7 +1084,7 @@ impl<B: BlockT> ChainSync<B> {
 					parent_hash: Some(header.parent_hash().clone()),
 					peers: Default::default(),
 				})
-			.peers.insert(who);
+				.peers.insert(who);
 		}
 
 		OnBlockAnnounce::Nothing

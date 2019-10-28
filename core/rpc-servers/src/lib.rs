@@ -60,7 +60,9 @@ pub fn rpc_handler<M: PubSubMetadata>(
 mod inner {
 	use super::*;
 
+	/// Type alias for http server
 	pub type HttpServer = http::Server;
+	/// Type alias for ws server
 	pub type WsServer = ws::Server;
 
 	/// Start HTTP server listening on given address.
