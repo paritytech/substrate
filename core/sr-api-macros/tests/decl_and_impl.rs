@@ -94,13 +94,6 @@ fn test_client_side_function_signature() {
 }
 
 #[test]
-fn test_runtime_side_function_signature() {
-	let _api_same_name: fn(input_data: *mut u8, input_len: usize) -> u64 = api::Api_same_name;
-	let _api_with_version_same_name: fn(input_data: *mut u8, input_len: usize) -> u64 =
-		api::ApiWithCustomVersion_same_name;
-}
-
-#[test]
 fn check_runtime_api_info() {
 	assert_eq!(&Api::<Block>::ID, &runtime_decl_for_Api::ID);
 	assert_eq!(Api::<Block>::VERSION, runtime_decl_for_Api::VERSION);

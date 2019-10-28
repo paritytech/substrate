@@ -96,6 +96,7 @@ members = [
 	"srml/indices",
 	"srml/membership",
 	"srml/metadata",
+	"srml/nicks",
 	"srml/offences",
 	"srml/randomness-collective-flip",
 	"srml/scored-pool",

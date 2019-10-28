@@ -32,11 +32,10 @@ use substrate_telemetry::TelemetryEndpoints;
 use grandpa_primitives::{AuthorityId as GrandpaId};
 use babe_primitives::{AuthorityId as BabeId};
 use im_online::sr25519::{AuthorityId as ImOnlineId};
-use sr_primitives::{traits::Verify, Perbill};
+use sr_primitives::{Perbill, traits::{Verify, IdentifyAccount}};
 
 pub use node_primitives::{AccountId, Balance, Signature};
 pub use node_runtime::GenesisConfig;
-use sr_primitives::traits::IdentifyAccount;
 
 type AccountPublic = <Signature as Verify>::Signer;
 
