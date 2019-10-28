@@ -63,7 +63,8 @@ pub trait ContractsApi<BlockHash, AccountId, Balance> {
 		at: Option<BlockHash>,
 	) -> Result<ContractExecResult>;
 
-	/// Returns the value under a specified storage `key` in a contract given by `address` param.
+	/// Returns the value under a specified storage `key` in a contract given by `address` param,
+	/// or `None` if it is not set.
 	#[rpc(name = "contracts_getStorage")]
 	fn get_storage(
 		&self,
