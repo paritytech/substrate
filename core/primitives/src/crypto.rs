@@ -790,6 +790,9 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 		root.derive(path, Some(seed)).map_err(|_| SecretStringError::InvalidPath)
 	}
 
+	/// Interprets the string `s` in order to generate a key pair.
+	///
+	/// See [`from_string_with_seed`](Self::from_string_with_seed) for more extensive documentation.
 	fn from_string(s: &str, password_override: Option<&str>) -> Result<Self, SecretStringError> {
 		Self::from_string_with_seed(s, password_override).map(|x| x.0)
 	}

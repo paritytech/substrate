@@ -1,6 +1,6 @@
 ## Historical data
 
-Crate with methods to manage data that stores its own history.
+Crate with functionality to manage data that stores its own history.
 
 This covers:
 - linear history driven data, eg. transactional layers for overlay.
