@@ -41,7 +41,10 @@
 //! slashing span.
 //!
 //! Typically, you will have a single slashing event per slashing span. Only in the case
-//! where a validator releases many misbehaviors at once
+//! where a validator releases many misbehaviors at once, or goes "back in time" to misbehave in
+//! eras that have already passed, would you encounter situations where a slashing span
+//! has multiple misbehaviors. However, accounting for such cases is necessary
+//! to deter a class of "rage-quit" attacks.
 //!
 //! Based on research at https://research.web3.foundation/en/latest/polkadot/slashing/npos/
 
