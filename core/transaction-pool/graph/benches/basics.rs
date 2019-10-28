@@ -29,12 +29,12 @@ use primitives::blake2_256;
 
 #[derive(Clone, Debug, Default)]
 struct TestApi {
-	nonce_limit: Option<u64>,
+	nonce_dependant: bool,
 }
 
 impl TestApi {
-	fn new_with_limit(limit: u64) -> Self {
-		TestApi { nonce_limit: Some(limit) }
+	fn new_dependant() -> Self {
+		TestApi { nonce_dependant: true }
 	}
 }
 
@@ -71,7 +71,7 @@ impl ChainApi for TestApi {
 		futures::future::ready(
 			Ok(Ok(ValidTransaction {
 				priority: 4,
-				requires: if nonce > 1 && self.nonce_limit.is_some() {
+				requires: if nonce > 1 && self.nonce_dependant {
 					vec![to_tag(nonce-1, from.clone())]
 				} else { vec![] },
 				provides: vec![to_tag(nonce, from)],
@@ -148,9 +148,9 @@ fn bench_configured(pool: Pool<TestApi>, number: u64) {
 
 fn benchmark_main(c: &mut Criterion) {
 
-    c.bench_function("sequental 50 tx", |b| {
+    c.bench_function("sequential 50 tx", |b| {
 		b.iter(|| {
-			bench_configured(Pool::new(Default::default(), TestApi::new_with_limit(50)), 50);
+			bench_configured(Pool::new(Default::default(), TestApi::new_dependant()), 50);
 		});
 	});
 
