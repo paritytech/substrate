@@ -93,7 +93,7 @@ impl ChainApi for TestApi {
 
 	fn block_id_to_hash(
 		&self,
-		at: &BlockId<Self::Block>.
+		at: &BlockId<Self::Block>,
 	) -> Result<Option<BlockHash<Self>>, Self::Error> {
 		Ok(match at {
 			BlockId::Number(num) => Some(H256::from_low_u64_be(*num)).into(),
