@@ -77,15 +77,18 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use rstd::prelude::*;
+use codec::Decode;
 use sr_primitives::{print, traits::{Zero, StaticLookup, Bounded, Convert}};
 use sr_primitives::weights::SimpleDispatchInfo;
 use srml_support::{
 	decl_storage, decl_event, ensure, decl_module, dispatch,
+	storage::hashed::get_raw,
 	traits::{
 		Currency, Get, LockableCurrency, LockIdentifier, ReservableCurrency, WithdrawReasons,
 		ChangeMembers, OnUnbalanced, WithdrawReason
 	}
 };
+use runtime_io::twox_128;
 use phragmen::ExtendedBalance;
 use system::{self, ensure_signed, ensure_root};
 
@@ -642,10 +645,6 @@ impl<T: Trait> Module<T> {
 	/// If decoding the old storage fails in any way, the consequence is that we start with an empty
 	/// set.
 	fn do_update() {
-		use primitives::twox_128;
-		use srml_support::storage::hashed::get_raw;
-		use codec::Decode;
-
 		let members_key = "PhragmenElection Members";
 		let runners_key = "PhragmenElection RunnersUp";
 
