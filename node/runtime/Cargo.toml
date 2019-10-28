@@ -52,6 +52,7 @@ timestamp = { package = "srml-timestamp", path = "../../srml/timestamp", default
 treasury = { package = "srml-treasury", path = "../../srml/treasury", default-features = false }
 utility = { package = "srml-utility", path = "../../srml/utility", default-features = false }
 transaction-payment = { package = "srml-transaction-payment", path = "../../srml/transaction-payment", default-features = false }
+transaction-payment-rpc-runtime-api = { package = "srml-transaction-payment-rpc-runtime-api", path = "../../srml/transaction-payment/rpc/runtime-api/", default-features = false }
 
 [build-dependencies]
 wasm-builder-runner = { package = "substrate-wasm-builder-runner", version = "1.0.4", path = "../../core/utils/wasm-builder-runner" }
@@ -103,5 +104,6 @@ std = [
 	"treasury/std",
 	"utility/std",
 	"transaction-payment/std",
+	"transaction-payment-rpc-runtime-api/std",
 	"version/std",
 ]
