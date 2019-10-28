@@ -56,7 +56,7 @@ impl<T: Trait> Module<T> {
 	/// Returns own authority identifier iff it is part of the current authority
 	/// set, otherwise this function returns None. The restriction might be
 	/// softened in the future in case a consumer needs to learn own authority
-	/// identifier.
+	/// identifier anyways.
 	fn authority_id() -> Option<AuthorityId> {
 		let authorities = Keys::get();
 
@@ -77,12 +77,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Sign the given payload with the private key corresponding to the given authority id.
-	pub fn sign(
-		payload: &Vec<u8>,
-	) -> Option<(
-		AuthoritySignature,
-		AuthorityId,
-	)> {
+	pub fn sign(payload: &Vec<u8>) -> Option<(AuthoritySignature,	AuthorityId)> {
 		let authority_id = Module::<T>::authority_id()?;
 		authority_id.sign(payload).map(|s| (s, authority_id))
 	}
@@ -106,7 +101,7 @@ impl<T: Trait> Module<T> {
 }
 
 impl<T: Trait> sr_primitives::BoundToRuntimeAppPublic for Module<T> {
-	type Public = T::AuthorityId;
+	type Public = AuthorityId;
 }
 
 impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {

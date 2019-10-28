@@ -27,6 +27,7 @@ mod app {
 }
 
 /// An authority discovery authority keypair.
+#[cfg(feature = "std")]
 pub type AuthorityPair = app::Pair;
 
 /// An authority discovery authority identifier.
