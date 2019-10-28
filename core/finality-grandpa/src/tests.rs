@@ -1627,3 +1627,84 @@ fn grandpa_environment_respects_voting_rules() {
 		19,
 	);
 }
+
+#[test]
+fn imports_justification_for_regular_blocks_on_import() {
+	// NOTE: this is a regression test since initially we would only import
+	// justifications for authority change blocks, and would discard any
+	// existing justification otherwise.
+	let peers = &[Ed25519Keyring::Alice];
+	let voters = make_ids(peers);
+	let api = TestApi::new(voters);
+	let mut net = GrandpaTestNet::new(api.clone(), 1);
+
+	let client = net.peer(0).client().clone();
+	let (mut block_import, ..) = net.make_block_import(client.clone());
+
+	let full_client = client.as_full().expect("only full clients are used in test");
+	let builder = full_client.new_block_at(&BlockId::Number(0), Default::default()).unwrap();
+	let block = builder.bake().unwrap();
+
+	let block_hash = block.hash();
+
+	// create a valid justification, with one precommit targeting the block
+	let justification = {
+		let round = 1;
+		let set_id = 0;
+
+		let precommit = grandpa::Precommit {
+			target_hash: block_hash,
+			target_number: *block.header.number(),
+		};
+
+		let msg = grandpa::Message::Precommit(precommit.clone());
+		let encoded = communication::localized_payload(round, set_id, &msg);
+		let signature = peers[0].sign(&encoded[..]).into();
+
+		let precommit = grandpa::SignedPrecommit {
+			precommit,
+			signature,
+			id: peers[0].public().into(),
+		};
+
+		let commit = grandpa::Commit {
+			target_hash: block_hash,
+			target_number: *block.header.number(),
+			precommits: vec![precommit],
+		};
+
+		GrandpaJustification::from_commit(
+			&full_client,
+			round,
+			commit,
+		).unwrap()
+	};
+
+	// we import the block with justification attached
+	let block = BlockImportParams {
+		origin: BlockOrigin::File,
+		header: block.header,
+		justification: Some(justification.encode()),
+		post_digests: Vec::new(),
+		body: Some(block.extrinsics),
+		finalized: false,
+		auxiliary: Vec::new(),
+		fork_choice: ForkChoiceStrategy::LongestChain,
+	};
+
+	assert_eq!(
+		block_import.import_block(block, HashMap::new()).unwrap(),
+		ImportResult::Imported(ImportedAux {
+			needs_justification: false,
+			clear_justification_requests: false,
+			bad_justification: false,
+			is_new_best: true,
+			..Default::default()
+		}),
+	);
+
+	// the justification should be imported and available from the client
+	assert!(
+		client.justification(&BlockId::Hash(block_hash)).unwrap().is_some(),
+	);
+}
