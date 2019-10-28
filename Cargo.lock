@@ -5505,9 +5505,9 @@ dependencies = [
  "tiny-keccak 1.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "wabt 0.9.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "wasmi 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "wasmtime-environ 0.2.0 (git+https://github.com/jimpo/wasmtime.git?branch=context-compile)",
- "wasmtime-jit 0.2.0 (git+https://github.com/jimpo/wasmtime.git?branch=context-compile)",
- "wasmtime-runtime 0.2.0 (git+https://github.com/jimpo/wasmtime.git?branch=context-compile)",
+ "wasmtime-environ 0.2.0 (git+https://github.com/CraneStation/wasmtime.git?rev=71dd73d6)",
+ "wasmtime-jit 0.2.0 (git+https://github.com/CraneStation/wasmtime.git?rev=71dd73d6)",
+ "wasmtime-runtime 0.2.0 (git+https://github.com/CraneStation/wasmtime.git?rev=71dd73d6)",
 ]
 
 [[package]]
@@ -6975,7 +6975,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "wasmtime-debug"
 version = "0.2.0"
-source = "git+https://github.com/jimpo/wasmtime.git?branch=context-compile#754dd01be66d58fff6b352f1c212e8986e143f1e"
+source = "git+https://github.com/CraneStation/wasmtime.git?rev=71dd73d6#71dd73d672deb325664e3c9cd4ee7acebed5fb95"
 dependencies = [
  "cranelift-codegen 0.46.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "cranelift-entity 0.46.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -6986,13 +6986,13 @@ dependencies = [
  "gimli 0.19.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "target-lexicon 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "wasmparser 0.39.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "wasmtime-environ 0.2.0 (git+https://github.com/jimpo/wasmtime.git?branch=context-compile)",
+ "wasmtime-environ 0.2.0 (git+https://github.com/CraneStation/wasmtime.git?rev=71dd73d6)",
 ]
 
 [[package]]
 name = "wasmtime-environ"
 version = "0.2.0"
-source = "git+https://github.com/jimpo/wasmtime.git?branch=context-compile#754dd01be66d58fff6b352f1c212e8986e143f1e"
+source = "git+https://github.com/CraneStation/wasmtime.git?rev=71dd73d6#71dd73d672deb325664e3c9cd4ee7acebed5fb95"
 dependencies = [
  "base64 0.10.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "bincode 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -7020,7 +7020,7 @@ dependencies = [
 [[package]]
 name = "wasmtime-jit"
 version = "0.2.0"
-source = "git+https://github.com/jimpo/wasmtime.git?branch=context-compile#754dd01be66d58fff6b352f1c212e8986e143f1e"
+source = "git+https://github.com/CraneStation/wasmtime.git?rev=71dd73d6#71dd73d672deb325664e3c9cd4ee7acebed5fb95"
 dependencies = [
  "cranelift-codegen 0.46.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "cranelift-entity 0.46.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -7031,15 +7031,15 @@ dependencies = [
  "region 2.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "target-lexicon 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "wasmparser 0.39.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "wasmtime-debug 0.2.0 (git+https://github.com/jimpo/wasmtime.git?branch=context-compile)",
- "wasmtime-environ 0.2.0 (git+https://github.com/jimpo/wasmtime.git?branch=context-compile)",
- "wasmtime-runtime 0.2.0 (git+https://github.com/jimpo/wasmtime.git?branch=context-compile)",
+ "wasmtime-debug 0.2.0 (git+https://github.com/CraneStation/wasmtime.git?rev=71dd73d6)",
+ "wasmtime-environ 0.2.0 (git+https://github.com/CraneStation/wasmtime.git?rev=71dd73d6)",
+ "wasmtime-runtime 0.2.0 (git+https://github.com/CraneStation/wasmtime.git?rev=71dd73d6)",
 ]
 
 [[package]]
 name = "wasmtime-runtime"
 version = "0.2.0"
-source = "git+https://github.com/jimpo/wasmtime.git?branch=context-compile#754dd01be66d58fff6b352f1c212e8986e143f1e"
+source = "git+https://github.com/CraneStation/wasmtime.git?rev=71dd73d6#71dd73d672deb325664e3c9cd4ee7acebed5fb95"
 dependencies = [
  "cc 1.0.45 (registry+https://github.com/rust-lang/crates.io-index)",
  "cranelift-codegen 0.46.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -7052,7 +7052,7 @@ dependencies = [
  "libc 0.2.62 (registry+https://github.com/rust-lang/crates.io-index)",
  "memoffset 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "region 2.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "wasmtime-environ 0.2.0 (git+https://github.com/jimpo/wasmtime.git?branch=context-compile)",
+ "wasmtime-environ 0.2.0 (git+https://github.com/CraneStation/wasmtime.git?rev=71dd73d6)",
  "winapi 0.3.8 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -7791,10 +7791,10 @@ dependencies = [
 "checksum wasmi 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)" = "f31d26deb2d9a37e6cfed420edce3ed604eab49735ba89035e13c98f9a528313"
 "checksum wasmi-validation 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "6bc0356e3df56e639fc7f7d8a99741915531e27ed735d911ed83d7e1339c8188"
 "checksum wasmparser 0.39.2 (registry+https://github.com/rust-lang/crates.io-index)" = "e5083b449454f7de0b15f131eee17de54b5a71dcb9adcf11df2b2f78fad0cd82"
-"checksum wasmtime-debug 0.2.0 (git+https://github.com/jimpo/wasmtime.git?branch=context-compile)" = "<none>"
-"checksum wasmtime-environ 0.2.0 (git+https://github.com/jimpo/wasmtime.git?branch=context-compile)" = "<none>"
-"checksum wasmtime-jit 0.2.0 (git+https://github.com/jimpo/wasmtime.git?branch=context-compile)" = "<none>"
-"checksum wasmtime-runtime 0.2.0 (git+https://github.com/jimpo/wasmtime.git?branch=context-compile)" = "<none>"
+"checksum wasmtime-debug 0.2.0 (git+https://github.com/CraneStation/wasmtime.git?rev=71dd73d6)" = "<none>"
+"checksum wasmtime-environ 0.2.0 (git+https://github.com/CraneStation/wasmtime.git?rev=71dd73d6)" = "<none>"
+"checksum wasmtime-jit 0.2.0 (git+https://github.com/CraneStation/wasmtime.git?rev=71dd73d6)" = "<none>"
+"checksum wasmtime-runtime 0.2.0 (git+https://github.com/CraneStation/wasmtime.git?rev=71dd73d6)" = "<none>"
 "checksum web-sys 0.3.28 (registry+https://github.com/rust-lang/crates.io-index)" = "c84440699cd02ca23bed6f045ffb1497bc18a3c2628bd13e2093186faaaacf6b"
 "checksum webpki 0.19.1 (registry+https://github.com/rust-lang/crates.io-index)" = "4f7e1cd7900a3a6b65a3e8780c51a3e6b59c0e2c55c6dc69578c288d69f7d082"
 "checksum webpki-roots 0.16.0 (registry+https://github.com/rust-lang/crates.io-index)" = "c10fa4212003ba19a564f25cd8ab572c6791f99a03cc219c13ed35ccab00de0e"

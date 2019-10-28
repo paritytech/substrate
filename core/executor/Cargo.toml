@@ -28,9 +28,9 @@ cranelift-entity = { version = "0.46.1", optional = true }
 cranelift-frontend = { version = "0.46.1", optional = true }
 cranelift-native = { version = "0.46.1", optional = true }
 cranelift-wasm = { version = "0.46.1", optional = true }
-wasmtime-environ = { version = "0.2", optional = true, git = "https://github.com/jimpo/wasmtime.git", branch = "context-compile" }
-wasmtime-jit = { version = "0.2", optional = true, git = "https://github.com/jimpo/wasmtime.git", branch = "context-compile" }
-wasmtime-runtime = { version = "0.2", optional = true, git = "https://github.com/jimpo/wasmtime.git", branch = "context-compile" }
+wasmtime-environ = { version = "0.2", optional = true, git = "https://github.com/CraneStation/wasmtime.git", rev = "71dd73d6" }
+wasmtime-jit = { version = "0.2", optional = true, git = "https://github.com/CraneStation/wasmtime.git", rev = "71dd73d6" }
+wasmtime-runtime = { version = "0.2", optional = true, git = "https://github.com/CraneStation/wasmtime.git", rev = "71dd73d6" }
 
 [dev-dependencies]
 assert_matches = "1.3.0"
