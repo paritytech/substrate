@@ -14,5 +14,20 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Test crate for srml_support. Allow to make use of `support::decl_storage`.
-//! See tests directory.
+pub trait Trait {
+	type Origin;
+	type BlockNumber: codec::Codec + codec::EncodeLike + Default + Clone;
+}
+
+support::decl_module! {
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+}
+
+support::decl_storage!{
+	trait Store for Module<T: Trait> as FinalKeysNone {
+		pub Value get(fn value) config(): u32;
+		pub Value2 get(fn value) config(): u32;
+	}
+}
+
+fn main() {}
