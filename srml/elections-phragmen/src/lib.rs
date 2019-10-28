@@ -82,13 +82,12 @@ use sr_primitives::{print, traits::{Zero, StaticLookup, Bounded, Convert}};
 use sr_primitives::weights::SimpleDispatchInfo;
 use srml_support::{
 	decl_storage, decl_event, ensure, decl_module, dispatch,
-	storage::hashed::get_raw,
+	storage::unhashed,
 	traits::{
 		Currency, Get, LockableCurrency, LockIdentifier, ReservableCurrency, WithdrawReasons,
 		ChangeMembers, OnUnbalanced, WithdrawReason
 	}
 };
-use runtime_io::twox_128;
 use phragmen::ExtendedBalance;
 use system::{self, ensure_signed, ensure_root};
 
@@ -166,7 +165,7 @@ decl_storage! {
 		/// Has the storage format been updated?
 		/// NOTE: Only use and set to false if you have used an early version of this module. Should
 		/// be set to true otherwise.
-		pub DidUpdate: bool = false;
+		DidMigrate: bool = false;
 	}
 }
 
@@ -381,9 +380,9 @@ decl_module! {
 
 		/// What to do at the end of each block. Checks if an election needs to happen or not.
 		fn on_initialize(n: T::BlockNumber) {
-			if !DidUpdate::get() {
-				DidUpdate::put(true);
-				Self::do_update();
+			if !DidMigrate::get() {
+				DidMigrate::put(true);
+				Self::do_migrate();
 			}
 			if let Err(e) = Self::end_block(n) {
 				print("Guru meditation");
@@ -644,15 +643,12 @@ impl<T: Trait> Module<T> {
 	///
 	/// If decoding the old storage fails in any way, the consequence is that we start with an empty
 	/// set.
-	fn do_update() {
-		let members_key = "PhragmenElection Members";
-		let runners_key = "PhragmenElection RunnersUp";
-
+	fn do_migrate() {
 		// old storage format.
-		let old_members: Vec<T::AccountId> = get_raw(&twox_128, members_key.as_bytes())
-			.map_or_else(|| vec![], |bytes| Decode::decode(&mut &*bytes).unwrap_or_default());
-		let old_runners: Vec<T::AccountId> = get_raw(&twox_128, runners_key.as_bytes())
-			.map_or_else(|| vec![], |bytes| Decode::decode(&mut &*bytes).unwrap_or_default());
+		let old_members: Vec<T::AccountId> = unhashed::get_raw(&<Members<T>>::hashed_key())
+			.map_or_else(Default::default, |bytes| Decode::decode(&mut &*bytes).unwrap_or_default());
+		let old_runners: Vec<T::AccountId> = unhashed::get_raw(&<RunnersUp<T>>::hashed_key())
+			.map_or_else(Default::default, |bytes| Decode::decode(&mut &*bytes).unwrap_or_default());
 
 		// new storage format.
 		let new_runners: Vec<(T::AccountId, BalanceOf<T>)> = old_runners
@@ -678,7 +674,7 @@ mod tests {
 	use primitives::H256;
 	use sr_primitives::{
 		Perbill, testing::Header, BuildStorage,
-		traits::{BlakeTwo256, IdentityLookup, Block as BlockT},
+		traits::{OnInitialize, BlakeTwo256, IdentityLookup, Block as BlockT},
 	};
 	use crate as elections;
 
@@ -865,6 +861,30 @@ mod tests {
 		let lock = Balances::locks(who)[0].clone();
 		assert_eq!(lock.id, MODULE_ID);
 		lock.amount
+	}
+
+	#[test]
+	fn temp_migration_works() {
+		ExtBuilder::default().build().execute_with(|| {
+			use srml_support::storage::unhashed;
+			use codec::Encode;
+
+			let old_members = vec![1u64, 2];
+			let old_runners = vec![3u64];
+
+			let members_key = <Members<Test>>::hashed_key();
+			let runners_key = <RunnersUp<Test>>::hashed_key();
+
+			unhashed::put_raw(&members_key, &old_members.encode()[..]);
+			unhashed::put_raw(&runners_key, &old_runners.encode()[..]);
+
+			assert_eq!(DidMigrate::get(), false);
+			<Elections as OnInitialize<u64>>::on_initialize(1);
+			assert_eq!(DidMigrate::get(), true);
+
+			assert_eq!(Elections::members(), vec![(1, 0), (2, 0)]);
+			assert_eq!(Elections::runners_up(), vec![(3, 0)]);
+		});
 	}
 
 	#[test]
