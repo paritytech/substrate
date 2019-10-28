@@ -1,0 +1,17 @@
+[package]
+name = "srml-transaction-payment-rpc"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
+client = { package = "substrate-client", path = "../../../core/client" }
+codec = { package = "parity-scale-codec", version = "1.0.0" }
+jsonrpc-core = "13.2.0"
+jsonrpc-core-client = "13.2.0"
+jsonrpc-derive = "13.2.0"
+primitives = { package = "substrate-primitives",  path = "../../../core/primitives" }
+rpc-primitives = { package = "substrate-rpc-primitives", path = "../../../core/rpc/primitives" }
+serde = { version = "1.0.101", features = ["derive"] }
+sr-primitives = { path = "../../../core/sr-primitives" }
+srml-transaction-payment-rpc-runtime-api = { path = "./runtime-api" }

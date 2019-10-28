@@ -2473,9 +2473,11 @@ version = "2.0.0"
 dependencies = [
  "jsonrpc-core 13.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "node-primitives 2.0.0",
+ "node-runtime 2.0.0",
  "sr-primitives 2.0.0",
  "srml-contracts-rpc 2.0.0",
  "srml-system-rpc 2.0.0",
+ "srml-transaction-payment-rpc 2.0.0",
  "substrate-client 2.0.0",
  "substrate-transaction-pool 2.0.0",
 ]
@@ -2534,6 +2536,7 @@ dependencies = [
  "srml-system-rpc-runtime-api 2.0.0",
  "srml-timestamp 2.0.0",
  "srml-transaction-payment 2.0.0",
+ "srml-transaction-payment-rpc-runtime-api 2.0.0",
  "srml-treasury 2.0.0",
  "srml-utility 2.0.0",
  "substrate-client 2.0.0",
@@ -4617,7 +4620,35 @@ dependencies = [
  "srml-balances 2.0.0",
  "srml-support 2.0.0",
  "srml-system 2.0.0",
+ "srml-transaction-payment-rpc-runtime-api 2.0.0",
  "substrate-primitives 2.0.0",
+]
+
+[[package]]
+name = "srml-transaction-payment-rpc"
+version = "2.0.0"
+dependencies = [
+ "jsonrpc-core 13.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "jsonrpc-core-client 13.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "jsonrpc-derive 13.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.101 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-primitives 2.0.0",
+ "srml-transaction-payment-rpc-runtime-api 2.0.0",
+ "substrate-client 2.0.0",
+ "substrate-primitives 2.0.0",
+ "substrate-rpc-primitives 2.0.0",
+]
+
+[[package]]
+name = "srml-transaction-payment-rpc-runtime-api"
+version = "2.0.0"
+dependencies = [
+ "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.101 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-primitives 2.0.0",
+ "sr-std 2.0.0",
+ "substrate-client 2.0.0",
 ]
 
 [[package]]

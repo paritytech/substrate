@@ -44,8 +44,9 @@ use sr_primitives::{
 		TransactionValidity,
 	},
 	traits::{Zero, Saturating, SignedExtension, SaturatedConversion, Convert},
-	weights::{Weight, DispatchInfo},
+	weights::{Weight, DispatchInfo, GetDispatchInfo},
 };
+use transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
 
 type Multiplier = Fixed64;
 type BalanceOf<T> =
@@ -95,7 +96,33 @@ decl_module! {
 	}
 }
 
-impl<T: Trait> Module<T> {}
+impl<T: Trait> Module<T> {
+	/// Query the data that we know about the fee of a given `call`.
+	///
+	/// As this module is not and cannot be aware of the internals of a signed extension, it only
+	/// interprets them as some encoded value and takes their length into account.
+	///
+	/// All dispatchables must be annotated with weight and will have some fee info. This function
+	/// always returns.
+	// NOTE: we can actually make it understand `ChargeTransactionPayment`, but would be some hassle
+	// for sure. We have to make it aware of the index of `ChargeTransactionPayment` in `Extra`.
+	// Alternatively, we could actually execute the tx's per-dispatch and record the balance of the
+	// sender before and after the pipeline.. but this is way too much hassle for a very very little
+	// potential gain in the future.
+	pub fn query_info<Extrinsic: GetDispatchInfo>(
+		unchecked_extrinsic: Extrinsic,
+		len: u32,
+	) -> RuntimeDispatchInfo<BalanceOf<T>>
+		where T: Send + Sync,
+	{
+		let dispatch_info = <Extrinsic as GetDispatchInfo>::get_dispatch_info(&unchecked_extrinsic);
+
+		let partial_fee = <ChargeTransactionPayment<T>>::compute_fee(len, dispatch_info, 0u32.into());
+		let DispatchInfo { weight, class } = dispatch_info;
+
+		RuntimeDispatchInfo { weight, class, partial_fee }
+	}
+}
 
 /// Require the transactor pay for themselves and maybe include a tip to gain additional priority
 /// in the queue.
@@ -117,9 +144,9 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> {
 	///      and the time it consumes.
 	///   - (optional) _tip_: if included in the transaction, it will be added on top. Only signed
 	///      transactions can have a tip.
-	fn compute_fee(len: usize, info: DispatchInfo, tip: BalanceOf<T>) -> BalanceOf<T> {
+	fn compute_fee(len: u32, info: DispatchInfo, tip: BalanceOf<T>) -> BalanceOf<T> {
 		let len_fee = if info.pay_length_fee() {
-			let len = <BalanceOf<T>>::from(len as u32);
+			let len = <BalanceOf<T>>::from(len);
 			let base = T::TransactionBaseFee::get();
 			let per_byte = T::TransactionByteFee::get();
 			base.saturating_add(per_byte.saturating_mul(len))
@@ -172,7 +199,7 @@ impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T>
 	) -> TransactionValidity {
 		// pay any fees.
 		let tip = self.0;
-		let fee = Self::compute_fee(len, info, tip);
+		let fee = Self::compute_fee(len as u32, info, tip);
 		let imbalance = match T::Currency::withdraw(
 			who,
 			fee,
@@ -199,17 +226,27 @@ impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T>
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use support::{parameter_types, impl_outer_origin};
+	use codec::Encode;
+	use support::{parameter_types, impl_outer_origin, impl_outer_dispatch};
 	use primitives::H256;
 	use sr_primitives::{
 		Perbill,
-		testing::Header,
-		traits::{BlakeTwo256, IdentityLookup},
-		weights::DispatchClass,
+		testing::{Header, TestXt},
+		traits::{BlakeTwo256, IdentityLookup, Extrinsic},
+		weights::{DispatchClass, DispatchInfo, GetDispatchInfo},
 	};
+	use balances::Call as BalancesCall;
 	use rstd::cell::RefCell;
+	use transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
 
-	const CALL: &<Runtime as system::Trait>::Call = &();
+	const CALL: &<Runtime as system::Trait>::Call = &Call::Balances(BalancesCall::transfer(2, 69));
+
+	impl_outer_dispatch! {
+		pub enum Call for Runtime where origin: Origin {
+			balances::Balances,
+			system::System,
+		}
+	}
 
 	#[derive(Clone, PartialEq, Eq, Debug)]
 	pub struct Runtime;
@@ -229,7 +266,7 @@ mod tests {
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
-		type Call = ();
+		type Call = Call;
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
@@ -294,6 +331,8 @@ mod tests {
 	}
 
 	type Balances = balances::Module<Runtime>;
+	type System = system::Module<Runtime>;
+	type TransactionPayment = Module<Runtime>;
 
 	pub struct ExtBuilder {
 		balance_factor: u64,
@@ -456,6 +495,39 @@ mod tests {
 			);
 			assert_eq!(Balances::free_balance(&1), 100 - 10 - (5 + 10 + 3) * 3 / 2);
 		})
+	}
+
+	#[test]
+	fn query_info_works() {
+		let call = Call::Balances(BalancesCall::transfer(2, 69));
+		let origin = 111111;
+		let extra = ();
+		let xt = TestXt::new(call, Some((origin, extra))).unwrap();
+		let info  = xt.get_dispatch_info();
+		let ext = xt.encode();
+		let len = ext.len() as u32;
+		ExtBuilder::default()
+			.fees(5, 1, 2)
+			.build()
+			.execute_with(||
+		{
+			// all fees should be x1.5
+			NextFeeMultiplier::put(Fixed64::from_rational(1, 2));
+
+			assert_eq!(
+				TransactionPayment::query_info(xt, len),
+				RuntimeDispatchInfo {
+					weight: info.weight,
+					class: info.class,
+					partial_fee: (
+						5 /* base */
+						+ len as u64 /* len * 1 */
+						+ info.weight.min(MaximumBlockWeight::get()) as u64 * 2 /* weight * weight_to_fee */
+					) * 3 / 2
+				},
+			);
+
+		});
 	}
 }
 
