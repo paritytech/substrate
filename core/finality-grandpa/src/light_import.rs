@@ -542,7 +542,7 @@ fn on_post_finalization_error(error: ClientError, value_type: &str) -> Consensus
 	ConsensusError::ClientImport(error.to_string())
 }
 
-#[cfg(testttt)]		// TODO: restore
+#[cfg(test)]
 pub mod tests {
 	use super::*;
 	use consensus_common::ForkChoiceStrategy;

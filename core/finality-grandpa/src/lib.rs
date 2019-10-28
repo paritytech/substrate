@@ -111,7 +111,7 @@ use fg_primitives::{AuthoritySignature, SetId, AuthorityWeight};
 // Re-export these two because it's just so damn convenient.
 pub use fg_primitives::{AuthorityId, ScheduledChange};
 
-#[cfg(testttt)]		// TODO: restore
+#[cfg(test)]
 mod tests;
 
 /// A GRANDPA message for a substrate chain.
