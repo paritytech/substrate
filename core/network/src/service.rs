@@ -42,7 +42,7 @@ use sr_primitives::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
 
 use crate::{behaviour::{Behaviour, BehaviourOut}, config::{parse_str_addr, parse_addr}};
 use crate::{NetworkState, NetworkStateNotConnectedPeer, NetworkStatePeer};
-use crate::{transport, config::NodeKeyConfig, config::NonReservedPeerMode};
+use crate::{transport, config::NonReservedPeerMode};
 use crate::config::{Params, TransportConfig};
 use crate::error::Error;
 use crate::protocol::{self, Protocol, Context, CustomMessageOutcome, PeerInfo};
@@ -185,9 +185,6 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 		};
 
 		// Private and public keys configuration.
-		if let NodeKeyConfig::Secp256k1(_) = params.network_config.node_key {
-			warn!(target: "sub-libp2p", "Secp256k1 keys are deprecated in favour of ed25519");
-		}
 		let local_identity = params.network_config.node_key.clone().into_keypair()?;
 		let local_public = local_identity.public();
 		let local_peer_id = local_public.clone().into_peer_id();

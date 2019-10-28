@@ -17,7 +17,7 @@
 //! Parsing of decl_storage input.
 
 use srml_support_procedural_tools::{ToTokens, Parse, syn_ext as ext};
-use syn::{Ident, Token};
+use syn::{Ident, Token, spanned::Spanned};
 
 mod keyword {
 	syn::custom_keyword!(hiddencrate);
@@ -265,7 +265,6 @@ fn get_module_instance(
 
 pub fn parse(input: syn::parse::ParseStream) -> syn::Result<super::DeclStorageDef> {
 	use syn::parse::Parse;
-	use syn::spanned::Spanned;
 
 	let def = StorageDefinition::parse(input)?;
 
@@ -303,9 +302,31 @@ pub fn parse(input: syn::parse::ParseStream) -> syn::Result<super::DeclStorageDe
 		}
 	}
 
-	let mut storage_lines = vec![];
+	let storage_lines = parse_storage_line_defs(def.content.content.inner.into_iter())?;
 
-	for line in def.content.content.inner.into_iter() {
+	Ok(super::DeclStorageDef {
+		hidden_crate: def.hidden_crate.inner.map(|i| i.ident.content),
+		visibility: def.visibility,
+		module_name: def.module_ident,
+		store_trait: def.ident,
+		module_runtime_generic: def.mod_param_generic,
+		module_runtime_trait: def.mod_param_bound,
+		where_clause: def.where_clause,
+		crate_name: def.crate_ident,
+		module_instance,
+		extra_genesis_build,
+		extra_genesis_config_lines,
+		storage_lines,
+	})
+}
+
+/// Parse the `DeclStorageLine` into `StorageLineDef`.
+fn parse_storage_line_defs(
+	defs: impl Iterator<Item = DeclStorageLine>,
+) -> syn::Result<Vec<super::StorageLineDef>> {
+	let mut storage_lines = Vec::<super::StorageLineDef>::new();
+
+	for line in defs {
 		let getter = line.getter.inner.map(|o| o.getfn.content.ident);
 		let config = if let Some(config) = line.config.inner {
 			if let Some(ident) = config.expr.content {
@@ -315,13 +336,27 @@ pub fn parse(input: syn::parse::ParseStream) -> syn::Result<super::DeclStorageDe
 			} else {
 				return Err(syn::Error::new(
 					config.span(),
-					"Invalid storage definiton, couldn't find config identifier: storage must either have a get \
-					identifier `get(fn ident)` or a defined config identifier `config(ident)`"
+					"Invalid storage definition, couldn't find config identifier: storage must \
+					either have a get identifier `get(fn ident)` or a defined config identifier \
+					`config(ident)`",
 				))
 			}
 		} else {
 			None
 		};
+
+		if let Some(ref config) = config {
+			storage_lines.iter().filter_map(|sl| sl.config.as_ref()).try_for_each(|other_config| {
+				if other_config == config {
+					Err(syn::Error::new(
+						config.span(),
+						"`config()`/`get()` with the same name already defined.",
+					))
+				} else {
+					Ok(())
+				}
+			})?;
+		}
 
 		let storage_type = match line.storage_type {
 			DeclStorageType::Map(map) => super::StorageLineTypeDef::Map(
@@ -365,18 +400,5 @@ pub fn parse(input: syn::parse::ParseStream) -> syn::Result<super::DeclStorageDe
 		})
 	}
 
-	Ok(super::DeclStorageDef {
-		hidden_crate: def.hidden_crate.inner.map(|i| i.ident.content),
-		visibility: def.visibility,
-		module_name: def.module_ident,
-		store_trait: def.ident,
-		module_runtime_generic: def.mod_param_generic,
-		module_runtime_trait: def.mod_param_bound,
-		where_clause: def.where_clause,
-		crate_name: def.crate_ident,
-		module_instance,
-		extra_genesis_build,
-		extra_genesis_config_lines,
-		storage_lines,
-	})
+	Ok(storage_lines)
 }

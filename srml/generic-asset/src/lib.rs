@@ -128,7 +128,7 @@
 //! 	T::Currency::withdraw(
 //! 		transactor,
 //! 		amount,
-//! 		WithdrawReason::TransactionPayment,
+//! 		WithdrawReason::TransactionPayment.into(),
 //! 		ExistenceRequirement::KeepAlive,
 //! 	)?;
 //! 	// ...
@@ -563,11 +563,16 @@ impl<T: Trait> Module<T> {
 
 	/// Transfer some liquid free balance from one account to another.
 	/// This will not emit the `Transferred` event.
-	pub fn make_transfer(asset_id: &T::AssetId, from: &T::AccountId, to: &T::AccountId, amount: T::Balance) -> Result {
+	pub fn make_transfer(
+		asset_id: &T::AssetId,
+		from: &T::AccountId,
+		to: &T::AccountId,
+		amount: T::Balance
+	) -> Result {
 		let new_balance = Self::free_balance(asset_id, from)
 			.checked_sub(&amount)
 			.ok_or_else(|| "balance too low to send amount")?;
-		Self::ensure_can_withdraw(asset_id, from, amount, WithdrawReason::Transfer, new_balance)?;
+		Self::ensure_can_withdraw(asset_id, from, amount, WithdrawReason::Transfer.into(), new_balance)?;
 
 		if from != to {
 			<FreeBalance<T>>::mutate(asset_id, from, |balance| *balance -= amount);
@@ -734,7 +739,7 @@ impl<T: Trait> Module<T> {
 		asset_id: &T::AssetId,
 		who: &T::AccountId,
 		_amount: T::Balance,
-		reason: WithdrawReason,
+		reasons: WithdrawReasons,
 		new_balance: T::Balance,
 	) -> Result {
 		if asset_id != &Self::staking_asset_id() {
@@ -748,7 +753,7 @@ impl<T: Trait> Module<T> {
 		let now = <system::Module<T>>::block_number();
 		if Self::locks(who)
 			.into_iter()
-			.all(|l| now >= l.until || new_balance >= l.amount || !l.reasons.contains(reason))
+			.all(|l| now >= l.until || new_balance >= l.amount || !l.reasons.intersects(reasons))
 		{
 			Ok(())
 		} else {
@@ -1098,22 +1103,22 @@ where
 	fn ensure_can_withdraw(
 		who: &T::AccountId,
 		amount: Self::Balance,
-		reason: WithdrawReason,
+		reasons: WithdrawReasons,
 		new_balance: Self::Balance,
 	) -> Result {
-		<Module<T>>::ensure_can_withdraw(&U::asset_id(), who, amount, reason, new_balance)
+		<Module<T>>::ensure_can_withdraw(&U::asset_id(), who, amount, reasons, new_balance)
 	}
 
 	fn withdraw(
 		who: &T::AccountId,
 		value: Self::Balance,
-		reason: WithdrawReason,
+		reasons: WithdrawReasons,
 		_: ExistenceRequirement, // no existential deposit policy for generic asset
 	) -> result::Result<Self::NegativeImbalance, &'static str> {
 		let new_balance = Self::free_balance(who)
 			.checked_sub(&value)
 			.ok_or_else(|| "account has too few funds")?;
-		Self::ensure_can_withdraw(who, value, reason, new_balance)?;
+		Self::ensure_can_withdraw(who, value, reasons, new_balance)?;
 		<Module<T>>::set_free_balance(&U::asset_id(), who, new_balance);
 		Ok(NegativeImbalance::new(value))
 	}
@@ -1197,7 +1202,7 @@ where
 			.checked_sub(&value)
 			.map_or(false, |new_balance|
 				<Module<T>>::ensure_can_withdraw(
-					&U::asset_id(), who, value, WithdrawReason::Reserve, new_balance
+					&U::asset_id(), who, value, WithdrawReason::Reserve.into(), new_balance
 				).is_ok()
 			)
 	}

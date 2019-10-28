@@ -41,6 +41,40 @@ macro_rules! debug_trace {
 
 pub struct SubstrateExternals;
 
+enum RecoverResult {
+	Invalid(u32),
+	Valid(secp256k1::PublicKey),
+}
+
+fn secp256k1_recover(
+	context: &mut dyn FunctionContext,
+	msg_data: Pointer<u8>,
+	sig_data: Pointer<u8>,
+) -> WResult<RecoverResult> {
+	let mut sig = [0u8; 65];
+	context.read_memory_into(sig_data, &mut sig[..])
+		.map_err(|_| "Invalid attempt to get signature in ext_secp256k1_ecdsa_recover")?;
+	let rs = match secp256k1::Signature::parse_slice(&sig[0..64]) {
+		Ok(rs) => rs,
+		_ => return Ok(RecoverResult::Invalid(1)),
+	};
+
+	let recovery_id = if sig[64] > 26 { sig[64] - 27 } else { sig[64] } as u8;
+	let v = match secp256k1::RecoveryId::parse(recovery_id) {
+		Ok(v) => v,
+		_ => return Ok(RecoverResult::Invalid(2)),
+	};
+
+	let mut msg = [0u8; 32];
+	context.read_memory_into(msg_data, &mut msg[..])
+		.map_err(|_| "Invalid attempt to get message in ext_secp256k1_ecdsa_recover")?;
+
+	Ok(match secp256k1::recover(&secp256k1::Message::parse(&msg), &rs, &v) {
+		Ok(pubkey) => RecoverResult::Valid(pubkey),
+		Err(_) => RecoverResult::Invalid(3),
+	})
+}
+
 impl_wasm_host_interface! {
 	impl SubstrateExternals where context {
 		ext_malloc(size: WordSize) -> Pointer<u8> {
@@ -781,33 +815,29 @@ impl_wasm_host_interface! {
 			sig_data: Pointer<u8>,
 			pubkey_data: Pointer<u8>,
 		) -> u32 {
-			let mut sig = [0u8; 65];
-			context.read_memory_into(sig_data, &mut sig[..])
-				.map_err(|_| "Invalid attempt to get signature in ext_secp256k1_ecdsa_recover")?;
-			let rs = match secp256k1::Signature::parse_slice(&sig[0..64]) {
-				Ok(rs) => rs,
-				_ => return Ok(1),
-			};
+			match secp256k1_recover(context, msg_data, sig_data)? {
+				RecoverResult::Invalid(c) => Ok(c),
+				RecoverResult::Valid(pubkey) => {
+					context.write_memory(pubkey_data, &pubkey.serialize()[1..65])
+						.map_err(|_| "Invalid attempt to set pubkey in ext_secp256k1_ecdsa_recover")?;
+					Ok(0)
+				}
+			}
+		}
 
-			let recovery_id = if sig[64] > 26 { sig[64] - 27 } else { sig[64] } as u8;
-			let v = match secp256k1::RecoveryId::parse(recovery_id) {
-				Ok(v) => v,
-				_ => return Ok(2),
-			};
-
-			let mut msg = [0u8; 32];
-			context.read_memory_into(msg_data, &mut msg[..])
-				.map_err(|_| "Invalid attempt to get message in ext_secp256k1_ecdsa_recover")?;
-
-			let pubkey = match secp256k1::recover(&secp256k1::Message::parse(&msg), &rs, &v) {
-				Ok(pk) => pk,
-				_ => return Ok(3),
-			};
-
-			context.write_memory(pubkey_data, &pubkey.serialize()[1..65])
-				.map_err(|_| "Invalid attempt to set pubkey in ext_secp256k1_ecdsa_recover")?;
-
-			Ok(0)
+		ext_secp256k1_ecdsa_recover_compressed(
+			msg_data: Pointer<u8>,
+			sig_data: Pointer<u8>,
+			pubkey_data: Pointer<u8>,
+		) -> u32 {
+			match secp256k1_recover(context, msg_data, sig_data)? {
+				RecoverResult::Invalid(c) => Ok(c),
+				RecoverResult::Valid(pubkey) => {
+					context.write_memory(pubkey_data, &pubkey.serialize_compressed()[..])
+						.map_err(|_| "Invalid attempt to set pubkey in ext_secp256k1_ecdsa_recover")?;
+					Ok(0)
+				}
+			}
 		}
 
 		ext_is_validator() -> u32 {

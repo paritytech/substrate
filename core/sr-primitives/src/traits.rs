@@ -50,46 +50,84 @@ impl<'a> Lazy<[u8]> for &'a [u8] {
 	fn get(&mut self) -> &[u8] { &**self }
 }
 
+/// Some type that is able to be collapsed into an account ID. It is not possible to recreate the original value from
+/// the account ID.
+pub trait IdentifyAccount {
+	/// The account ID that this can be transformed into.
+	type AccountId;
+	/// Transform into an account.
+	fn into_account(self) -> Self::AccountId;
+}
+
+impl IdentifyAccount for primitives::ed25519::Public {
+	type AccountId = Self;
+	fn into_account(self) -> Self { self }
+}
+
+impl IdentifyAccount for primitives::sr25519::Public {
+	type AccountId = Self;
+	fn into_account(self) -> Self { self }
+}
+
+impl IdentifyAccount for primitives::ecdsa::Public {
+	type AccountId = Self;
+	fn into_account(self) -> Self { self }
+}
+
 /// Means of signature verification.
 pub trait Verify {
 	/// Type of the signer.
-	type Signer;
+	type Signer: IdentifyAccount;
 	/// Verify a signature. Return `true` if signature is valid for the value.
-	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &Self::Signer) -> bool;
+	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &<Self::Signer as IdentifyAccount>::AccountId) -> bool;
 }
 
 impl Verify for primitives::ed25519::Signature {
 	type Signer = primitives::ed25519::Public;
-	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &Self::Signer) -> bool {
+	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &primitives::ed25519::Public) -> bool {
 		runtime_io::ed25519_verify(self, msg.get(), signer)
 	}
 }
 
 impl Verify for primitives::sr25519::Signature {
 	type Signer = primitives::sr25519::Public;
-	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &Self::Signer) -> bool {
+	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &primitives::sr25519::Public) -> bool {
 		runtime_io::sr25519_verify(self, msg.get(), signer)
+	}
+}
+
+impl Verify for primitives::ecdsa::Signature {
+	type Signer = primitives::ecdsa::Public;
+	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &primitives::ecdsa::Public) -> bool {
+		match runtime_io::secp256k1_ecdsa_recover_compressed(self.as_ref(), &runtime_io::blake2_256(msg.get())) {
+			Ok(pubkey) => <dyn AsRef<[u8]>>::as_ref(signer) == &pubkey[..],
+			_ => false,
+		}
 	}
 }
 
 /// Means of signature verification of an application key.
 pub trait AppVerify {
 	/// Type of the signer.
-	type Signer;
+	type AccountId;
 	/// Verify a signature. Return `true` if signature is valid for the value.
-	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &Self::Signer) -> bool;
+	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &Self::AccountId) -> bool;
 }
 
 impl<
 	S: Verify<Signer=<<T as AppKey>::Public as app_crypto::AppPublic>::Generic> + From<T>,
 	T: app_crypto::Wraps<Inner=S> + app_crypto::AppKey + app_crypto::AppSignature +
 		AsRef<S> + AsMut<S> + From<S>,
-> AppVerify for T {
-	type Signer = <T as AppKey>::Public;
-	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &Self::Signer) -> bool {
+> AppVerify for T where
+	<S as Verify>::Signer: IdentifyAccount<AccountId = <S as Verify>::Signer>,
+	<<T as AppKey>::Public as app_crypto::AppPublic>::Generic:
+		IdentifyAccount<AccountId = <<T as AppKey>::Public as app_crypto::AppPublic>::Generic>,
+{
+	type AccountId = <T as AppKey>::Public;
+	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &<T as AppKey>::Public) -> bool {
 		use app_crypto::IsWrappedBy;
 		let inner: &S = self.as_ref();
-		let inner_pubkey = <Self::Signer as app_crypto::AppPublic>::Generic::from_ref(&signer);
+		let inner_pubkey = <<T as AppKey>::Public as app_crypto::AppPublic>::Generic::from_ref(&signer);
 		Verify::verify(inner, msg, inner_pubkey)
 	}
 }
@@ -1178,6 +1216,21 @@ impl Printable for Tuple {
 mod tests {
 	use super::AccountIdConversion;
 	use crate::codec::{Encode, Decode, Input};
+
+	mod t {
+		use primitives::crypto::KeyTypeId;
+		use app_crypto::{app_crypto, sr25519};
+		app_crypto!(sr25519, KeyTypeId(*b"test"));
+	}
+
+	#[test]
+	fn app_verify_works() {
+		use t::*;
+		use super::AppVerify;
+
+		let s = Signature::default();
+		let _ = s.verify(&[0u8; 100][..], &Public::default());
+	}
 
 	#[derive(Encode, Decode, Default, PartialEq, Debug)]
 	struct U32Value(u32);
