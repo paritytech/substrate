@@ -94,7 +94,7 @@ fn generate_extern_host_function(method: &TraitItemMethod, trait_name: &Ident) -
 
 	Ok(
 		quote! {
-			#[doc(#doc_string)]
+			#[doc = #doc_string]
 			pub unsafe fn #function (
 				#( #arg_names: <#arg_types as #crate_::RIType>::FFIType ),*
 			) #output {
@@ -103,6 +103,7 @@ fn generate_extern_host_function(method: &TraitItemMethod, trait_name: &Ident) -
 					use super::*;
 
 					extern "C" {
+						/// The extern function.
 						pub fn #function (
 							#( #arg_names2: <#arg_types2 as #crate_::RIType>::FFIType ),*
 						) #output;
@@ -136,7 +137,7 @@ fn generate_extern_host_exchangeable_function(
 		quote! {
 			#[cfg(not(feature = "std"))]
 			#[allow(non_upper_case_globals)]
-			#[doc(#doc_string)]
+			#[doc = #doc_string]
 			pub static #function : #crate_::wasm::ExchangeableFunction<
 				unsafe fn ( #( <#arg_types as #crate_::RIType>::FFIType ),* ) #output
 			> = #crate_::wasm::ExchangeableFunction::new(extern_host_function_impls::#function);

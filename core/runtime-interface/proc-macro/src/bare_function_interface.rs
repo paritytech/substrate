@@ -87,10 +87,12 @@ fn function_no_std_impl(trait_name: &Ident, method: &TraitItemMethod) -> Result<
 			<#ty as #crate_::wasm::FromFFIValue>::from_ffi_value(result)
 		}
 	};
+	let attrs = &method.attrs;
 
 	Ok(
 		quote! {
 			#[cfg(not(feature = "std"))]
+			#( #attrs )*
 			pub fn #function_name( #( #args, )* ) #return_value {
 				// Generate all wrapped ffi values.
 				#(
