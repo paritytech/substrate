@@ -381,7 +381,7 @@ pub trait Currency<AccountId> {
 	fn ensure_can_withdraw(
 		who: &AccountId,
 		_amount: Self::Balance,
-		reason: WithdrawReason,
+		reasons: WithdrawReasons,
 		new_balance: Self::Balance,
 	) -> result::Result<(), &'static str>;
 
@@ -459,7 +459,7 @@ pub trait Currency<AccountId> {
 	fn withdraw(
 		who: &AccountId,
 		value: Self::Balance,
-		reason: WithdrawReason,
+		reasons: WithdrawReasons,
 		liveness: ExistenceRequirement,
 	) -> result::Result<Self::NegativeImbalance, &'static str>;
 
@@ -467,11 +467,11 @@ pub trait Currency<AccountId> {
 	fn settle(
 		who: &AccountId,
 		value: Self::PositiveImbalance,
-		reason: WithdrawReason,
+		reasons: WithdrawReasons,
 		liveness: ExistenceRequirement,
 	) -> result::Result<(), Self::PositiveImbalance> {
 		let v = value.peek();
-		match Self::withdraw(who, v, reason, liveness) {
+		match Self::withdraw(who, v, reasons, liveness) {
 			Ok(opposite) => Ok(drop(value.offset(opposite))),
 			_ => Err(value),
 		}
@@ -614,6 +614,8 @@ bitmask! {
 		Reserve = 0b00000100,
 		/// In order to pay some other (higher-level) fees.
 		Fee = 0b00001000,
+		/// In order to tip a validator for transaction inclusion.
+		Tip = 0b00010000,
 	}
 }
 
@@ -630,7 +632,7 @@ impl WithdrawReasons {
 	/// # use srml_support::traits::{WithdrawReason, WithdrawReasons};
 	/// # fn main() {
 	/// assert_eq!(
-	/// 	WithdrawReason::Fee | WithdrawReason::Transfer | WithdrawReason::Reserve,
+	/// 	WithdrawReason::Fee | WithdrawReason::Transfer | WithdrawReason::Reserve | WithdrawReason::Tip,
 	/// 	WithdrawReasons::except(WithdrawReason::TransactionPayment),
 	///	);
 	/// # }

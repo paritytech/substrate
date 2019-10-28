@@ -83,7 +83,7 @@ use srml_support::{
 	decl_storage, decl_event, ensure, decl_module, dispatch,
 	traits::{
 		Currency, Get, LockableCurrency, LockIdentifier, ReservableCurrency, WithdrawReasons,
-		ChangeMembers, OnUnbalanced,
+		ChangeMembers, OnUnbalanced, WithdrawReason
 	}
 };
 use system::{self, ensure_signed, ensure_root};
@@ -215,7 +215,7 @@ decl_module! {
 				&who,
 				locked_balance,
 				T::BlockNumber::max_value(),
-				WithdrawReasons::all(),
+				WithdrawReasons::except(WithdrawReason::TransactionPayment),
 			);
 			<StakeOf<T>>::insert(&who, locked_balance);
 			<VotesOf<T>>::insert(&who, votes);
