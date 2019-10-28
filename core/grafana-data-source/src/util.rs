@@ -25,8 +25,14 @@ pub fn find_index(slice: &[(f32, i64)], timestamp: i64) -> usize {
 		.unwrap_or_else(|index| index)
 }
 
-// Evenly select `num_points` points from a slice
+// Evenly select up to `num_points` points from a slice
 pub fn select_points<T: Copy>(slice: &[T], num_points: usize) -> Vec<T> {
+	if num_points == 0 {
+		return Vec::new();
+	} else if num_points >= slice.len() {
+		return slice.to_owned();
+	}
+
 	(0 .. num_points - 1)
 		.map(|i| slice[i * slice.len() / (num_points - 1)])
 		.chain(slice.last().cloned())
@@ -36,8 +42,11 @@ pub fn select_points<T: Copy>(slice: &[T], num_points: usize) -> Vec<T> {
 #[test]
 fn test_select_points() {
 	let array = [1, 2, 3, 4, 5];
+	assert_eq!(select_points(&array, 0), Vec::<u8>::new());
+	assert_eq!(select_points(&array, 1), vec![5]);
 	assert_eq!(select_points(&array, 2), vec![1, 5]);
 	assert_eq!(select_points(&array, 3), vec![1, 3, 5]);
 	assert_eq!(select_points(&array, 4), vec![1, 2, 4, 5]);
 	assert_eq!(select_points(&array, 5), vec![1, 2, 3, 4, 5]);
+	assert_eq!(select_points(&array, 6), vec![1, 2, 3, 4, 5]);
 }

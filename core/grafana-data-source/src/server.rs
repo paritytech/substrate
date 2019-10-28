@@ -47,15 +47,9 @@ fn api_response(req: Request<Body>) -> ResponseFuture {
 								let from = util::find_index(&metric, query.range.from);
 								let to = util::find_index(&metric, query.range.to);
 
-								let metric = &metric[from .. to];
-
-								if metric.len() > query.max_datapoints {
-									// Avoid returning more than `max_datapoints` (mostly to stop
-									// the web browser from having to do a ton of work)
-									util::select_points(metric, query.max_datapoints)
-								} else {
-									metric.to_vec()
-								}
+								// Avoid returning more than `max_datapoints` (mostly to stop
+								// the web browser from having to do a ton of work)
+								util::select_points(&metric[from .. to], query.max_datapoints)
 							})
 							.unwrap_or_else(Vec::new);
 
