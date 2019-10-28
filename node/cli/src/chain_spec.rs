@@ -243,12 +243,6 @@ pub fn testnet_genesis(
 			members: vec![],
 			phantom: Default::default(),
 		}),
-		elections_phragmen: Some(ElectionsConfig {
-			members: endowed_accounts.iter().take(2).cloned().collect(),
-			term_duration: 28 * DAYS,
-			desired_members: 4,
-			desired_runners_up: 1,
-		}),
 		contracts: Some(ContractsConfig {
 			current_schedule: contracts::Schedule {
 				enable_println, // this should only be enabled on development chains
