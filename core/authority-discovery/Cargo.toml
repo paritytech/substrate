@@ -14,7 +14,6 @@ bytes = "0.4.12"
 client = { package = "substrate-client", path = "../../core/client" }
 codec = { package = "parity-scale-codec", default-features = false, version = "1.0.3" }
 derive_more = "0.15.0"
-futures = "0.1.29"
 futures03 = { package = "futures-preview", version = "0.3.0-alpha.19", features = ["compat"] }
 libp2p = { version = "0.12.0", default-features = false, features = ["secp256k1", "libp2p-websocket"] }
 log = "0.4.8"

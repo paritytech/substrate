@@ -50,13 +50,10 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
-use futures::future::Future as Future01;
-use futures::sync::mpsc::Receiver as Receiver01;
-use futures03::compat::Stream01CompatExt;
-use futures03::future::{FutureExt, TryFutureExt};
+use futures03::channel::mpsc::Receiver;
 use futures03::stream::StreamExt;
 use futures03::task::{Context, Poll};
-use futures03::{Future, Stream};
+use futures03::Future;
 use futures_timer::Interval;
 
 use authority_discovery_primitives::{AuthorityDiscoveryApi, AuthorityId, Signature};
@@ -87,7 +84,7 @@ where
 
 	network: Arc<Network>,
 	/// Channel we receive Dht events on.
-	dht_event_rx: Pin<Box<dyn Stream<Item = DhtEvent> + Send>>,
+	dht_event_rx: Receiver<DhtEvent>,
 
 	/// Interval to be proactive, publishing own addresses.
 	publish_interval: Interval,
@@ -115,7 +112,7 @@ where
 	pub fn new(
 		client: Arc<Client>,
 		network: Arc<Network>,
-		dht_event_rx: Pin<Box<dyn Stream<Item = DhtEvent> + Send>>,
+		dht_event_rx: Receiver<DhtEvent>,
 	) -> Self {
 		// Kademlia's default time-to-live for Dht records is 36h, republishing records every 24h. Given that a node
 		// could restart at any point in time, one can not depend on the republishing process, thus publishing own
@@ -137,20 +134,6 @@ where
 			address_cache,
 			phantom: PhantomData,
 		}
-	}
-
-	/// Return futures 01 authority discovery
-	pub fn new_compat(
-		client: Arc<Client>,
-		network: Arc<Network>,
-		dht_event_rx: Receiver01<DhtEvent>,
-	) -> impl Future01<Item = (), Error = ()> {
-		// TODO remove this function when we switch to futures 03
-		let dht_event_rx = dht_event_rx.compat().map(|x| x.unwrap()).boxed();
-
-		Self::new(client, network, dht_event_rx)
-			.map(|x| Ok(x))
-			.compat()
 	}
 
 	fn publish_own_ext_addresses(&mut self) -> Result<()> {
@@ -624,7 +607,7 @@ mod tests {
 		let network: Arc<TestNetwork> = Arc::new(Default::default());
 
 		let mut authority_discovery =
-			AuthorityDiscovery::new(test_api, network.clone(), dht_event_rx.boxed());
+			AuthorityDiscovery::new(test_api, network.clone(), dht_event_rx);
 
 		authority_discovery.publish_own_ext_addresses().unwrap();
 
@@ -639,7 +622,7 @@ mod tests {
 		let network: Arc<TestNetwork> = Arc::new(Default::default());
 
 		let mut authority_discovery =
-			AuthorityDiscovery::new(test_api, network.clone(), dht_event_rx.boxed());
+			AuthorityDiscovery::new(test_api, network.clone(), dht_event_rx);
 
 		authority_discovery.request_addresses_of_others().unwrap();
 
@@ -656,7 +639,7 @@ mod tests {
 		let network: Arc<TestNetwork> = Arc::new(Default::default());
 
 		let mut authority_discovery =
-			AuthorityDiscovery::new(test_api, network.clone(), dht_event_rx.boxed());
+			AuthorityDiscovery::new(test_api, network.clone(), dht_event_rx);
 
 		// Create sample dht event.
 
