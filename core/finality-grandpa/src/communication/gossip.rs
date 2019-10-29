@@ -1320,6 +1320,8 @@ mod tests {
 			justification_period: 256,
 			keystore: None,
 			name: None,
+			is_authority: true,
+			observer_enabled: true,
 		}
 	}
 
@@ -1484,7 +1486,6 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(
 			config(),
 			voter_set_state(),
-			true,
 		);
 
 		let set_id = 1;
@@ -1520,7 +1521,6 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(
 			config(),
 			voter_set_state(),
-			true,
 		);
 		let set_id = 1;
 		let auth = AuthorityId::from_slice(&[1u8; 32]);
@@ -1565,7 +1565,6 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(
 			config(),
 			voter_set_state(),
-			true,
 		);
 
 		let set_id = 1;
@@ -1634,7 +1633,6 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(
 			config(),
 			set_state.clone(),
-			true,
 		);
 
 		let set_id = 1;
@@ -1689,7 +1687,6 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(
 			config(),
 			set_state.clone(),
-			true,
 		);
 
 		// the validator starts at set id 2
@@ -1769,7 +1766,6 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(
 			config(),
 			voter_set_state(),
-			true,
 		);
 
 		// the validator starts at set id 1.
@@ -1829,10 +1825,20 @@ mod tests {
 	#[test]
 	fn doesnt_send_catch_up_requests_when_disabled() {
 		// we create a gossip validator with catch up requests disabled.
+		let config = {
+			let mut c = config();
+
+			// if the observer protocol is enabled and we are not an authority,
+			// then we don't issue any catch-up requests.
+			c.is_authority = false;
+			c.observer_enabled = true;
+
+			c
+		};
+
 		let (val, _) = GossipValidator::<Block>::new(
-			config(),
+			config,
 			voter_set_state(),
-			false,
 		);
 
 		// the validator starts at set id 1.
@@ -1866,7 +1872,6 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(
 			config(),
 			voter_set_state(),
-			true,
 		);
 
 		// the validator starts at set id 1.
@@ -1917,7 +1922,6 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(
 			config(),
 			voter_set_state(),
-			true,
 		);
 
 		// the validator starts at set id 1.
