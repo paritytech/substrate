@@ -83,6 +83,9 @@ const DEFAULT_CHILD_RATIO: (usize, usize) = (1, 10);
 /// DB-backed patricia trie state, transaction type is an overlay of changes to commit.
 pub type DbState = state_machine::TrieBackend<Arc<dyn state_machine::Storage<Blake2Hasher>>, Blake2Hasher>;
 
+/// Re-export the KVDB trait so that one can pass an implementation of it.
+pub use kvdb;
+
 /// A reference tracking state.
 ///
 /// It makes sure that the hash we are using stays pinned in storage
@@ -191,16 +194,29 @@ impl<B: BlockT> StateBackend<Blake2Hasher> for RefTrackingState<B> {
 
 /// Database settings.
 pub struct DatabaseSettings {
-	/// Cache size in bytes. If `None` default is used.
-	pub cache_size: Option<usize>,
 	/// State cache size.
 	pub state_cache_size: usize,
 	/// Ratio of cache size dedicated to child tries.
 	pub state_cache_child_ratio: Option<(usize, usize)>,
-	/// Path to the database.
-	pub path: PathBuf,
 	/// Pruning mode.
 	pub pruning: PruningMode,
+	/// Where to find the database.
+	pub source: DatabaseSettingsSrc,
+}
+
+/// Where to find the database..
+pub enum DatabaseSettingsSrc {
+	/// Load a database from a given path. Recommended for most uses.
+	Path {
+		/// Path to the database.
+		path: PathBuf,
+		/// Cache size in bytes. If `None` default is used.
+		cache_size: Option<usize>,
+	},
+
+	/// Use a custom already-open database. Recommended only for testing purposes, or in
+	/// situations where a file system is not available.
+	Custom(Arc<dyn KeyValueDB>),
 }
 
 /// Create an instance of db-backed client.
@@ -779,13 +795,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 	}
 
 	fn new_inner(config: DatabaseSettings, canonicalization_delay: u64) -> ClientResult<Self> {
-		#[cfg(feature = "kvdb-rocksdb")]
 		let db = crate::utils::open_database(&config, columns::META, "full")?;
-		#[cfg(not(feature = "kvdb-rocksdb"))]
-		let db = {
-			log::warn!("Running without the RocksDB feature. The database will NOT be saved.");
-			Arc::new(kvdb_memorydb::create(crate::utils::NUM_COLUMNS))
-		};
 		Self::from_kvdb(db as Arc<_>, canonicalization_delay, &config)
 	}
 

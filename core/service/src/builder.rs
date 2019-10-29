@@ -169,19 +169,24 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 			.unwrap_or_default();
 
 		let (client, backend) = {
-			let ConfigurationDb::Path { ref path, .. } = config.database;
-
-			let db_settings = client_db::DatabaseSettings {
-				cache_size: None,
+			let db_config = client_db::DatabaseSettings {
 				state_cache_size: config.state_cache_size,
 				state_cache_child_ratio:
 					config.state_cache_child_ratio.map(|v| (v, 100)),
-				path: path.clone(),
 				pruning: config.pruning.clone(),
+				source: match &config.database {
+					ConfigurationDb::Path { path, cache_size } =>
+						client_db::DatabaseSettingsSrc::Path {
+							path: path.clone(),
+							cache_size: cache_size.clone().map(|u| u as usize),
+						},
+					ConfigurationDb::Custom(db) =>
+						client_db::DatabaseSettingsSrc::Custom(db.clone()),
+				},
 			};
-
+			
 			client_db::new_client(
-				db_settings,
+				db_config,
 				executor,
 				&config.chain_spec,
 				fork_blocks,
@@ -239,14 +244,20 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 		);
 
 		let db_storage = {
-			let ConfigurationDb::Path { ref path, ref cache_size } = config.database;
 			let db_settings = client_db::DatabaseSettings {
-				cache_size: cache_size.clone().map(|u| u as usize),
 				state_cache_size: config.state_cache_size,
 				state_cache_child_ratio:
 					config.state_cache_child_ratio.map(|v| (v, 100)),
-				path: path.clone(),
 				pruning: config.pruning.clone(),
+				source: match &config.database {
+					ConfigurationDb::Path { path, cache_size } =>
+						client_db::DatabaseSettingsSrc::Path {
+							path: path.clone(),
+							cache_size: cache_size.clone().map(|u| u as usize),
+						},
+					ConfigurationDb::Custom(db) =>
+						client_db::DatabaseSettingsSrc::Custom(db.clone()),
+				},
 			};
 			client_db::light::LightStorage::new(db_settings)?
 		};

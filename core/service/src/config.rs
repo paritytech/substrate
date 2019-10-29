@@ -17,11 +17,11 @@
 //! Service configuration.
 
 pub use client::ExecutionStrategies;
-pub use client_db::PruningMode;
+pub use client_db::{kvdb::KeyValueDB, PruningMode};
 pub use network::config::{ExtTransport, NetworkConfiguration, Roles};
 pub use substrate_executor::WasmExecutionMethod;
 
-use std::{path::PathBuf, net::SocketAddr};
+use std::{path::PathBuf, net::SocketAddr, sync::Arc};
 use transaction_pool;
 use chain_spec::{ChainSpec, RuntimeGenesis, Extension, NoExtension};
 use primitives::crypto::Protected;
@@ -104,10 +104,11 @@ pub enum ConfigurationDb {
 		/// Cache Size for internal database in MiB
 		cache_size: Option<u32>,
 	},
-	/*/// A custom implementation of an already-open database.
+
+	/// A custom implementation of an already-open database.
 	///
 	/// Recommended only for situations where a filesystem doesn't exist.
-	Custom(),*/
+	Custom(Arc<dyn KeyValueDB>),
 }
 
 impl<C, G, E> Configuration<C, G, E> where
