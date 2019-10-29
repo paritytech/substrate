@@ -155,7 +155,7 @@ impl SlashingSpans {
 			None => None,
 		};
 
-		// readjust the ongoing span, if it started before the beginning of the winow.
+		// readjust the ongoing span, if it started before the beginning of the window.
 		self.last_start = rstd::cmp::max(self.last_start, window_start);
 		pruned
 	}
