@@ -621,13 +621,13 @@ pub trait ServiceBuilderExport {
 
 	/// Performs the blocks export.
 	fn export_blocks(
-		&self,
+		self,
 		exit: impl Future<Item=(),Error=()> + Send + 'static,
-		output: impl Write,
+		output: impl Write + 'static,
 		from: NumberFor<Self::Block>,
 		to: Option<NumberFor<Self::Block>>,
 		json: bool
-	) -> Result<(), Error>;
+	) -> Box<dyn Future<Item = (), Error = Error>>;
 }
 
 /// Implemented on `ServiceBuilder`. Allows reverting the chain once you have given all the
@@ -675,20 +675,21 @@ impl<TBl, TRtApi, TCfg, TGen, TCSExt, TBackend, TExec, TFchr, TSc, TImpQu, TFprb
 where
 	TBl: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
 	TBackend: 'static + client::backend::Backend<TBl, Blake2Hasher> + Send,
-	TExec: 'static + client::CallExecutor<TBl, Blake2Hasher> + Send + Sync + Clone
+	TExec: 'static + client::CallExecutor<TBl, Blake2Hasher> + Send + Sync + Clone,
+	TRtApi: 'static + Send + Sync,
 {
 	type Block = TBl;
 
 	fn export_blocks(
-		&self,
+		self,
 		exit: impl Future<Item=(),Error=()> + Send + 'static,
-		mut output: impl Write,
+		mut output: impl Write + 'static,
 		from: NumberFor<TBl>,
 		to: Option<NumberFor<TBl>>,
 		json: bool
-	) -> Result<(), Error> {
-		let client = &self.client;
-		export_blocks!(client, exit, output, from, to, json)
+	) -> Box<dyn Future<Item = (), Error = Error>> {
+		let client = self.client;
+		Box::new(export_blocks!(client, exit, output, from, to, json).compat())
 	}
 }
 

@@ -32,27 +32,34 @@ macro_rules! export_blocks {
 		None => $client.info().chain.best_number,
 	};
 
-	if last < block {
-		return Err("Invalid block range specified".into());
-	}
-
 	let (exit_send, exit_recv) = std::sync::mpsc::channel();
 	std::thread::spawn(move || {
 		let _ = $exit.wait();
 		let _ = exit_send.send(());
 	});
-	info!("Exporting blocks from #{} to #{}", block, last);
-	if !$json {
-		let last_: u64 = last.saturated_into::<u64>();
-		let block_: u64 = block.saturated_into::<u64>();
-		let len: u64 = last_ - block_ + 1;
-		$output.write_all(&len.encode())?;
-	}
 
-	loop {
-		if exit_recv.try_recv().is_ok() {
-			break;
+	let mut wrote_header = false;
+
+	futures03::future::poll_fn(move |cx| {
+		if last < block {
+			return std::task::Poll::Ready(Err("Invalid block range specified".into()));
 		}
+
+		if !wrote_header {
+			info!("Exporting blocks from #{} to #{}", block, last);
+			if !$json {
+				let last_: u64 = last.saturated_into::<u64>();
+				let block_: u64 = block.saturated_into::<u64>();
+				let len: u64 = last_ - block_ + 1;
+				$output.write_all(&len.encode())?;
+			}
+			wrote_header = true;
+		}
+
+		if exit_recv.try_recv().is_ok() {
+			return std::task::Poll::Ready(Ok(()))
+		}
+
 		match $client.block(&BlockId::number(block))? {
 			Some(block) => {
 				if $json {
@@ -62,17 +69,21 @@ macro_rules! export_blocks {
 					$output.write_all(&block.encode())?;
 				}
 			},
-			None => break,
+			// Reached end of the chain.
+			None => return std::task::Poll::Ready(Ok(())),
 		}
 		if (block % 10000.into()).is_zero() {
 			info!("#{}", block);
 		}
 		if block == last {
-			break;
+			return std::task::Poll::Ready(Ok(()));
 		}
 		block += One::one();
-	}
-	Ok(())
+
+		// Re-schedule the task in order to continue the operation.
+		cx.waker().wake_by_ref();
+		std::task::Poll::Pending
+	})
 }}
 }
 

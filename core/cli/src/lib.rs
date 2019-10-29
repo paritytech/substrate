@@ -350,7 +350,9 @@ impl<'a> ParseAndPrepareExport<'a> {
 			None => Box::new(stdout()),
 		};
 
-		builder(config)?.export_blocks(exit.into_exit(), file, from.into(), to.map(Into::into), json)?;
+		let fut = builder(config)?.export_blocks(exit.into_exit(), file, from.into(), to.map(Into::into), json);
+		let mut runtime = tokio::runtime::current_thread::Runtime::new().unwrap();
+		runtime.block_on(fut)?;
 		Ok(())
 	}
 }
