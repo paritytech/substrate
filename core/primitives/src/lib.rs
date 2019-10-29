@@ -59,6 +59,7 @@ pub mod u32_trait;
 
 pub mod ed25519;
 pub mod sr25519;
+pub mod ecdsa;
 pub mod hash;
 mod hasher;
 pub mod offchain;
@@ -285,4 +286,26 @@ impl From<LogLevel> for log::Level {
 			Trace => Self::Trace,
 		}
 	}
+}
+
+/// Encodes the given value into a buffer and returns the pointer and the length as a single `u64`.
+///
+/// When Substrate calls into Wasm it expects a fixed signature for functions exported
+/// from the Wasm blob. The return value of this signature is always a `u64`.
+/// This `u64` stores the pointer to the encoded return value and the length of this encoded value.
+/// The low `32bits` are reserved for the pointer, followed by `32bit` for the length.
+#[cfg(not(feature = "std"))]
+pub fn to_substrate_wasm_fn_return_value(value: &impl Encode) -> u64 {
+	let encoded = value.encode();
+
+	let ptr = encoded.as_ptr() as u64;
+	let length = encoded.len() as u64;
+	let res = ptr | (length << 32);
+
+	// Leak the output vector to avoid it being freed.
+	// This is fine in a WASM context since the heap
+	// will be discarded after the call.
+	rstd::mem::forget(encoded);
+
+	res
 }

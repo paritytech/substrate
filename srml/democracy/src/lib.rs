@@ -486,9 +486,10 @@ decl_module! {
 		/// but it is not a majority-carries referendum then it fails.
 		///
 		/// - `proposal_hash`: The hash of the current external proposal.
-		/// - `voting_period`: The period that is allowed for voting on this proposal.
+		/// - `voting_period`: The period that is allowed for voting on this proposal. Increased to
+		///   `EmergencyVotingPeriod` if too low.
 		/// - `delay`: The number of block after voting has ended in approval and this should be
-		///   enacted. Increased to `EmergencyVotingPeriod` if too low.
+		///   enacted. This doesn't have a minimum amount.
 		#[weight = SimpleDispatchInfo::FixedNormal(200_000)]
 		fn fast_track(origin,
 			proposal_hash: T::Hash,

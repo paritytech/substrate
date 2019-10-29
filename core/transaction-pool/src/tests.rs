@@ -27,11 +27,15 @@ use sr_primitives::{
 	transaction_validity::{TransactionValidity, ValidTransaction},
 };
 
-struct TestApi;
+struct TestApi {
+	pub modifier: Box<dyn Fn(&mut ValidTransaction) + Send + Sync>,
+}
 
 impl TestApi {
 	fn default() -> Self {
-		TestApi
+		TestApi {
+			modifier: Box::new(|_| {}),
+		}
 	}
 }
 
@@ -54,14 +58,18 @@ impl txpool::ChainApi for TestApi {
 		};
 		let provides = vec![vec![uxt.transfer().nonce as u8]];
 
+		let mut validity = ValidTransaction {
+			priority: 1,
+			requires,
+			provides,
+			longevity: 64,
+			propagate: true,
+		};
+
+		(self.modifier)(&mut validity);
+
 		futures::future::ready(Ok(
-			Ok(ValidTransaction {
-				priority: 1,
-				requires,
-				provides,
-				longevity: 64,
-				propagate: true,
-			})
+			Ok(validity)
 		))
 	}
 
@@ -180,4 +188,35 @@ fn should_ban_invalid_transactions() {
 
 	// then
 	block_on(pool.submit_one(&BlockId::number(0), uxt.clone())).unwrap_err();
+}
+
+#[test]
+fn should_correctly_prune_transactions_providing_more_than_one_tag() {
+	let mut api = TestApi::default();
+	api.modifier = Box::new(|v: &mut ValidTransaction| {
+		v.provides.push(vec![155]);
+	});
+	let pool = Pool::new(Default::default(), api);
+	let xt = uxt(Alice, 209);
+	block_on(pool.submit_one(&BlockId::number(0), xt.clone())).expect("1. Imported");
+	assert_eq!(pool.status().ready, 1);
+
+	// remove the transaction that just got imported.
+	block_on(pool.prune_tags(&BlockId::number(1), vec![vec![209]], vec![])).expect("1. Pruned");
+	assert_eq!(pool.status().ready, 0);
+	// it's re-imported to future
+	assert_eq!(pool.status().future, 1);
+
+	// so now let's insert another transaction that also provides the 155
+	let xt = uxt(Alice, 211);
+	block_on(pool.submit_one(&BlockId::number(2), xt.clone())).expect("2. Imported");
+	assert_eq!(pool.status().ready, 1);
+	assert_eq!(pool.status().future, 1);
+	let pending: Vec<_> = pool.ready().map(|a| a.data.transfer().nonce).collect();
+	assert_eq!(pending, vec![211]);
+
+	// prune it and make sure the pool is empty
+	block_on(pool.prune_tags(&BlockId::number(3), vec![vec![155]], vec![])).expect("2. Pruned");
+	assert_eq!(pool.status().ready, 0);
+	assert_eq!(pool.status().future, 2);
 }

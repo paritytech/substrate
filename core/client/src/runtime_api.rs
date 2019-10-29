@@ -23,6 +23,9 @@ pub use state_machine::OverlayedChanges;
 #[cfg(feature = "std")]
 pub use primitives::NativeOrEncoded;
 #[doc(hidden)]
+#[cfg(not(feature = "std"))]
+pub use primitives::to_substrate_wasm_fn_return_value;
+#[doc(hidden)]
 pub use sr_primitives::{
 	traits::{
 		Block as BlockT, GetNodeBlockType, GetRuntimeBlockType,

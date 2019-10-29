@@ -129,9 +129,6 @@ impl std::fmt::Display for Public {
 	}
 }
 
-#[cfg(not(feature = "std"))]
-use core as std;
-
 impl rstd::fmt::Debug for Public {
 	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
@@ -388,8 +385,8 @@ impl AsRef<schnorrkel::Keypair> for Pair {
 
 /// Derive a single hard junction.
 #[cfg(feature = "std")]
-fn derive_hard_junction(secret: &SecretKey, cc: &[u8; CHAIN_CODE_LENGTH]) -> SecretKey {
-	secret.hard_derive_mini_secret_key(Some(ChainCode(cc.clone())), b"").0.expand(ExpansionMode::Ed25519)
+fn derive_hard_junction(secret: &SecretKey, cc: &[u8; CHAIN_CODE_LENGTH]) -> MiniSecretKey {
+	secret.hard_derive_mini_secret_key(Some(ChainCode(cc.clone())), b"").0
 }
 
 /// The raw secret seed, which can be used to recreate the `Pair`.
@@ -444,17 +441,6 @@ impl TraitPair for Pair {
 		}
 	}
 
-	/// Generate a key from the phrase, password and derivation path.
-	fn from_standard_components<I: Iterator<Item=DeriveJunction>>(
-		phrase: &str,
-		password: Option<&str>,
-		path: I
-	) -> Result<Pair, SecretStringError> {
-		Self::from_phrase(phrase, password)?.0
-			.derive(path)
-			.map_err(|_| SecretStringError::InvalidPath)
-	}
-
 	fn generate_with_phrase(password: Option<&str>) -> (Pair, String, Seed) {
 		let mnemonic = Mnemonic::new(MnemonicType::Words12, Language::English);
 		let phrase = mnemonic.phrase();
@@ -473,13 +459,27 @@ impl TraitPair for Pair {
 			.map(|m| Self::from_entropy(m.entropy(), password))
 	}
 
-	fn derive<Iter: Iterator<Item=DeriveJunction>>(&self, path: Iter) -> Result<Pair, Self::DeriveError> {
+	fn derive<Iter: Iterator<Item=DeriveJunction>>(&self,
+		path: Iter,
+		seed: Option<Seed>,
+	) -> Result<(Pair, Option<Seed>), Self::DeriveError> {
+		let seed = if let Some(s) = seed {
+			if let Ok(msk) = MiniSecretKey::from_bytes(&s) {
+				if msk.expand(ExpansionMode::Ed25519) == self.0.secret {
+					Some(msk)
+				} else { None }
+			} else { None }
+		} else { None };
 		let init = self.0.secret.clone();
-		let result = path.fold(init, |acc, j| match j {
-			DeriveJunction::Soft(cc) => acc.derived_key_simple(ChainCode(cc), &[]).0,
-			DeriveJunction::Hard(cc) => derive_hard_junction(&acc, &cc),
+		let (result, seed) = path.fold((init, seed), |(acc, acc_seed), j| match (j, acc_seed) {
+			(DeriveJunction::Soft(cc), _) =>
+				(acc.derived_key_simple(ChainCode(cc), &[]).0, None),
+			(DeriveJunction::Hard(cc), maybe_seed) => {
+				let seed = derive_hard_junction(&acc, &cc);
+				(seed.expand(ExpansionMode::Ed25519), maybe_seed.map(|_| seed))
+			}
 		});
-		Ok(Self(result.into()))
+		Ok((Self(result.into()), seed.map(|s| MiniSecretKey::to_bytes(&s))))
 	}
 
 	fn sign(&self, message: &[u8]) -> Signature {
@@ -621,9 +621,9 @@ mod test {
 		let pair = Pair::from_seed(&hex!(
 			"9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
 		));
-		let derive_1 = pair.derive(Some(DeriveJunction::soft(1)).into_iter()).unwrap();
-		let derive_1b = pair.derive(Some(DeriveJunction::soft(1)).into_iter()).unwrap();
-		let derive_2 = pair.derive(Some(DeriveJunction::soft(2)).into_iter()).unwrap();
+		let derive_1 = pair.derive(Some(DeriveJunction::soft(1)).into_iter(), None).unwrap().0;
+		let derive_1b = pair.derive(Some(DeriveJunction::soft(1)).into_iter(), None).unwrap().0;
+		let derive_2 = pair.derive(Some(DeriveJunction::soft(2)).into_iter(), None).unwrap().0;
 		assert_eq!(derive_1.public(), derive_1b.public());
 		assert_ne!(derive_1.public(), derive_2.public());
 	}
@@ -633,9 +633,9 @@ mod test {
 		let pair = Pair::from_seed(&hex!(
 			"9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
 		));
-		let derive_1 = pair.derive(Some(DeriveJunction::hard(1)).into_iter()).unwrap();
-		let derive_1b = pair.derive(Some(DeriveJunction::hard(1)).into_iter()).unwrap();
-		let derive_2 = pair.derive(Some(DeriveJunction::hard(2)).into_iter()).unwrap();
+		let derive_1 = pair.derive(Some(DeriveJunction::hard(1)).into_iter(), None).unwrap().0;
+		let derive_1b = pair.derive(Some(DeriveJunction::hard(1)).into_iter(), None).unwrap().0;
+		let derive_2 = pair.derive(Some(DeriveJunction::hard(2)).into_iter(), None).unwrap().0;
 		assert_eq!(derive_1.public(), derive_1b.public());
 		assert_ne!(derive_1.public(), derive_2.public());
 	}
@@ -646,7 +646,7 @@ mod test {
 			"9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
 		));
 		let path = Some(DeriveJunction::soft(1));
-		let pair_1 = pair.derive(path.clone().into_iter()).unwrap();
+		let pair_1 = pair.derive(path.clone().into_iter(), None).unwrap().0;
 		let public_1 = pair.public().derive(path.into_iter()).unwrap();
 		assert_eq!(pair_1.public(), public_1);
 	}

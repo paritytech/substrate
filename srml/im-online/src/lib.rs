@@ -96,12 +96,6 @@ pub mod sr25519 {
 	mod app_sr25519 {
 		use app_crypto::{app_crypto, key_types::IM_ONLINE, sr25519};
 		app_crypto!(sr25519, IM_ONLINE);
-
-		impl From<Signature> for sr_primitives::AnySignature {
-			fn from(sig: Signature) -> Self {
-				sr25519::Signature::from(sig).into()
-			}
-		}
 	}
 
 	/// An i'm online keypair using sr25519 as its crypto.
@@ -119,12 +113,6 @@ pub mod ed25519 {
 	mod app_ed25519 {
 		use app_crypto::{app_crypto, key_types::IM_ONLINE, ed25519};
 		app_crypto!(ed25519, IM_ONLINE);
-
-		impl From<Signature> for sr_primitives::AnySignature {
-			fn from(sig: Signature) -> Self {
-				ed25519::Signature::from(sig).into()
-			}
-		}
 	}
 
 	/// An i'm online keypair using ed25519 as its crypto.
@@ -439,8 +427,11 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
+impl<T: Trait> sr_primitives::BoundToRuntimeAppPublic for Module<T> {
+	type Public = T::AuthorityId;
+}
 
+impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	type Key = T::AuthorityId;
 
 	fn on_genesis_session<'a, I: 'a>(validators: I)
