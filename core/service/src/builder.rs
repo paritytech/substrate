@@ -609,8 +609,8 @@ pub trait ServiceBuilderImport {
 	fn import_blocks(
 		self,
 		exit: impl Future<Item=(),Error=()> + Send + 'static,
-		input: impl Read + Seek,
-	) -> Result<Box<dyn Future<Item = (), Error = ()> + Send>, Error>;
+		input: impl Read + Seek + Send + 'static,
+	) -> Box<dyn Future<Item = (), Error = Error> + Send>;
 }
 
 /// Implemented on `ServiceBuilder`. Allows exporting blocks once you have given all the required
@@ -659,12 +659,11 @@ impl<
 	fn import_blocks(
 		self,
 		exit: impl Future<Item=(),Error=()> + Send + 'static,
-		input: impl Read + Seek,
-	) -> Result<Box<dyn Future<Item = (), Error = ()> + Send>, Error> {
+		input: impl Read + Seek + Send + 'static,
+	) -> Box<dyn Future<Item = (), Error = Error> + Send> {
 		let client = self.client;
 		let mut queue = self.import_queue;
-		import_blocks!(TBl, client, queue, exit, input)
-			.map(|f| Box::new(f) as Box<_>)
+		Box::new(import_blocks!(TBl, client, queue, exit, input).compat())
 	}
 }
 

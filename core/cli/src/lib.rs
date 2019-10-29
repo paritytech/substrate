@@ -403,7 +403,7 @@ impl<'a> ParseAndPrepareImport<'a> {
 			..Default::default()
 		};
 
-		let file: Box<dyn ReadPlusSeek> = match self.params.input {
+		let file: Box<dyn ReadPlusSeek + Send> = match self.params.input {
 			Some(filename) => Box::new(File::open(filename)?),
 			None => {
 				let mut buffer = Vec::new();
@@ -412,8 +412,9 @@ impl<'a> ParseAndPrepareImport<'a> {
 			},
 		};
 
-		let fut = builder(config)?.import_blocks(exit.into_exit(), file)?;
-		tokio::run(fut);
+		let fut = builder(config)?.import_blocks(exit.into_exit(), file);
+		let mut runtime = tokio::runtime::current_thread::Runtime::new().unwrap();
+		runtime.block_on(fut)?;
 		Ok(())
 	}
 }

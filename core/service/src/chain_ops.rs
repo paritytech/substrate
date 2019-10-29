@@ -94,7 +94,6 @@ macro_rules! import_blocks {
 	use network::message;
 	use sr_primitives::generic::SignedBlock;
 	use sr_primitives::traits::Block;
-	use futures03::TryFutureExt as _;
 
 	struct WaitLink {
 		imported_blocks: u64,
@@ -136,67 +135,86 @@ macro_rules! import_blocks {
 	});
 
 	let mut io_reader_input = IoReader($input);
-	let count: u64 = Decode::decode(&mut io_reader_input)
-		.map_err(|e| format!("Error reading file: {}", e))?;
-	info!("Importing {} blocks", count);
-	let mut block_count = 0;
-	for b in 0 .. count {
-		if exit_recv.try_recv().is_ok() {
-			break;
-		}
-		match SignedBlock::<$block>::decode(&mut io_reader_input) {
-			Ok(signed) => {
-				let (header, extrinsics) = signed.block.deconstruct();
-				let hash = header.hash();
-				let block  = message::BlockData::<$block> {
-					hash,
-					justification: signed.justification,
-					header: Some(header),
-					body: Some(extrinsics),
-					receipt: None,
-					message_queue: None
-				};
-				// import queue handles verification and importing it into the client
-				$queue.import_blocks(BlockOrigin::File, vec![
-					IncomingBlock::<$block> {
-						hash: block.hash,
-						header: block.header,
-						body: block.body,
-						justification: block.justification,
-						origin: None,
-					}
-				]);
-			}
-			Err(e) => {
-				warn!("Error reading block data at {}: {}", b, e);
-				break;
-			}
-		}
-
-		block_count = b;
-		if b % 1000 == 0 && b != 0 {
-			info!("#{} blocks were added to the queue", b);
-		}
-	}
-
+	let mut count = None::<u64>;
+	let mut read_block_count = 0;
 	let mut link = WaitLink::new();
-	Ok(futures::future::poll_fn(move || {
+
+	futures03::future::poll_fn(move |cx| {
+		// Start by reading the number of blocks if not done so already.
+		let count = match count {
+			Some(c) => c,
+			None => {
+				let c: u64 = match Decode::decode(&mut io_reader_input) {
+					Ok(c) => c,
+					Err(err) => {
+						let err = format!("Error reading file: {}", err);
+						return std::task::Poll::Ready(Err(From::from(err)));
+					},
+				};
+				info!("Importing {} blocks", c);
+				count = Some(c);
+				c
+			}
+		};
+
+		// Read blocks from the input.
+		if read_block_count < count {
+			if exit_recv.try_recv().is_ok() {
+				return std::task::Poll::Ready(Ok(()));
+			}
+			match SignedBlock::<$block>::decode(&mut io_reader_input) {
+				Ok(signed) => {
+					let (header, extrinsics) = signed.block.deconstruct();
+					let hash = header.hash();
+					let block  = message::BlockData::<$block> {
+						hash,
+						justification: signed.justification,
+						header: Some(header),
+						body: Some(extrinsics),
+						receipt: None,
+						message_queue: None
+					};
+					// import queue handles verification and importing it into the client
+					$queue.import_blocks(BlockOrigin::File, vec![
+						IncomingBlock::<$block> {
+							hash: block.hash,
+							header: block.header,
+							body: block.body,
+							justification: block.justification,
+							origin: None,
+						}
+					]);
+				}
+				Err(e) => {
+					warn!("Error reading block data at {}: {}", read_block_count, e);
+					return std::task::Poll::Ready(Ok(()));
+				}
+			}
+
+			read_block_count += 1;
+			if read_block_count % 1000 == 0 {
+				info!("#{} blocks were added to the queue", read_block_count);
+			}
+
+			cx.waker().wake_by_ref();
+			return std::task::Poll::Pending;
+		}
+
 		if exit_recv.try_recv().is_ok() {
-			return Ok(Async::Ready(()));
+			return std::task::Poll::Ready(Ok(()));
 		}
 
 		let blocks_before = link.imported_blocks;
-		let _ = futures03::future::poll_fn(|cx| {
-			$queue.poll_actions(cx, &mut link);
-			std::task::Poll::Pending::<Result<(), ()>>
-		}).compat().poll();
+		$queue.poll_actions(cx, &mut link);
+
 		if link.has_error {
 			info!(
 				"Stopping after #{} blocks because of an error",
 				link.imported_blocks,
 			);
-			return Ok(Async::Ready(()));
+			return std::task::Poll::Ready(Ok(()));
 		}
+
 		if link.imported_blocks / 1000 != blocks_before / 1000 {
 			info!(
 				"#{} blocks were imported (#{} left)",
@@ -204,13 +222,15 @@ macro_rules! import_blocks {
 				count - link.imported_blocks
 			);
 		}
+
 		if link.imported_blocks >= count {
-			info!("Imported {} blocks. Best: #{}", block_count, $client.info().chain.best_number);
-			Ok(Async::Ready(()))
+			info!("Imported {} blocks. Best: #{}", read_block_count, $client.info().chain.best_number);
+			return std::task::Poll::Ready(Ok(()));
+
 		} else {
-			Ok(Async::NotReady)
+			return std::task::Poll::Pending;
 		}
-	}))
+	})
 }}
 }
 
