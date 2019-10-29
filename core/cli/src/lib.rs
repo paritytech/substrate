@@ -239,7 +239,7 @@ where
 /// Returns a string displaying the node role, special casing the sentry mode
 /// (returning `SENTRY`), since the node technically has an `AUTHORITY` role but
 /// doesn't participate.
-pub fn display_role<A, B>(config: &Configuration<(), A, B>) -> String {
+pub fn display_role<A, B, C>(config: &Configuration<A, B, C>) -> String {
 	if config.sentry_mode {
 		"SENTRY".to_string()
 	} else {
