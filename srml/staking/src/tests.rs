@@ -2109,7 +2109,7 @@ fn slashing_nominators_by_span_max() {
 
 		assert_eq!(Balances::free_balance(&11), 900);
 
-		let slash_1_amount = nominated_value_11 / 10;
+		let slash_1_amount = Perbill::from_percent(10) * nominated_value_11;
 		assert_eq!(Balances::free_balance(&101), 2000 - slash_1_amount);
 
 		let expected_spans = vec![
@@ -2145,7 +2145,7 @@ fn slashing_nominators_by_span_max() {
 		assert_eq!(Balances::free_balance(&11), 900);
 		assert_eq!(Balances::free_balance(&21), 1700);
 
-		let slash_2_amount = 3 * (nominated_value_21 / 10);
+		let slash_2_amount = Perbill::from_percent(30) * nominated_value_21;
 		assert!(slash_2_amount > slash_1_amount);
 
 		// only the maximum slash in a single span is taken.
@@ -2168,7 +2168,7 @@ fn slashing_nominators_by_span_max() {
 		assert_eq!(Balances::free_balance(&11), 800);
 		assert_eq!(Balances::free_balance(&21), 1700);
 
-		let slash_3_amount = 2 * (nominated_value_11 / 10);
+		let slash_3_amount = Perbill::from_percent(20) * nominated_value_21;
 		assert!(slash_3_amount < slash_2_amount);
 		assert!(slash_3_amount > slash_1_amount);
 

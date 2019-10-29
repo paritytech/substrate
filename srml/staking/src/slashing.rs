@@ -411,8 +411,7 @@ impl<'a, T: 'a + Trait> InspectingSpans<'a, T> {
 	// compares the slash in an era to the overall current span slash.
 	// if it's higher, applies the difference of the slashes and then updates the span on disk.
 	//
-	// returns the span index of the era, if any, along with a slash to be lazily applied
-	// when all book-keeping is done.
+	// returns the span index of the era where the slash occurred, if any.
 	fn compare_and_update_span_slash(
 		&mut self,
 		slash_era: EraIndex,
