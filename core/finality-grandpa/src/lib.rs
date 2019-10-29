@@ -201,7 +201,10 @@ pub struct Config {
 	/// at least every justification_period blocks. There are some other events which might cause
 	/// justification generation.
 	pub justification_period: u32,
-	/// Whether the GRANDPA observer is enabled on the given setup when not running as a validator.
+	/// Whether the GRANDPA observer protocol is live on the network and thereby
+	/// a full-node not running as a validator is running the GRANDPA observer
+	/// protocol (we will only issue catch-up requests to authorities when the
+	/// observer protocol is enabled).
 	pub observer_enabled: bool,
 	/// Whether the node is running as an authority (i.e. running the full GRANDPA protocol).
 	pub is_authority: bool,
