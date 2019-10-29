@@ -1868,7 +1868,7 @@ mod tests {
 	}
 
 	#[test]
-	fn doesnt_send_catch_up_requests_to_non_authorities() {
+	fn doesnt_send_catch_up_requests_to_non_authorities_when_observer_enabled() {
 		let (val, _) = GossipValidator::<Block>::new(
 			config(),
 			voter_set_state(),
