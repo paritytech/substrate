@@ -301,8 +301,18 @@ pub struct ExecutionStrategies {
 #[derive(Debug, StructOpt, Clone)]
 pub struct RunCmd {
 	/// Enable validator mode.
-	#[structopt(long = "validator")]
+	#[structopt(
+		long = "validator",
+		conflicts_with_all = &[ "sentry" ]
+	)]
 	pub validator: bool,
+
+	/// Enable sentry mode.
+	#[structopt(
+		long = "sentry",
+		conflicts_with_all = &[ "validator" ]
+	)]
+	pub sentry: bool,
 
 	/// Disable GRANDPA voter when running in validator mode, otherwise disables the GRANDPA observer.
 	#[structopt(long = "no-grandpa")]

@@ -236,6 +236,17 @@ where
 	}
 }
 
+/// Returns a string displaying the node role, special casing the sentry mode
+/// (returning `SENTRY`), since the node technically has an `AUTHORITY` role but
+/// doesn't participate.
+pub fn display_role<A, B>(config: &Configuration<(), A, B>) -> String {
+	if config.sentry_mode {
+		"SENTRY".to_string()
+	} else {
+		format!("{:?}", config.roles)
+	}
+}
+
 /// Output of calling `parse_and_prepare`.
 #[must_use]
 pub enum ParseAndPrepare<'a, CC, RP> {
@@ -658,15 +669,19 @@ where
 	config.state_cache_size = cli.state_cache_size;
 
 	let is_dev = cli.shared_params.dev;
+	let is_authority = cli.validator || cli.sentry || is_dev || cli.keyring.account.is_some();
 
 	let role =
 		if cli.light {
 			service::Roles::LIGHT
-		} else if cli.validator || is_dev || cli.keyring.account.is_some() {
+		} else if is_authority {
 			service::Roles::AUTHORITY
 		} else {
 			service::Roles::FULL
 		};
+
+	// set sentry mode (i.e. act as an authority but **never** actively participate)
+	config.sentry_mode = cli.sentry;
 
 	// by default we disable pruning if the node is an authority (i.e.
 	// `ArchiveAll`), otherwise we keep state for the last 256 blocks. if the
