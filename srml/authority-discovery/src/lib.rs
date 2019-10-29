@@ -92,7 +92,7 @@ mod tests {
 	use super::*;
 	use authority_discovery_primitives::{AuthorityPair};
 	use app_crypto::Pair;
-	use primitives::{testing::KeyStore, crypto::key_types, sr25519, H256, traits::KeystoreExt};
+	use primitives::{crypto::key_types, H256};
 	use runtime_io::TestExternalities;
 	use sr_primitives::{
 		testing::{Header, UintAuthorityId}, traits::{ConvertInto, IdentityLookup, OpaqueKeys},

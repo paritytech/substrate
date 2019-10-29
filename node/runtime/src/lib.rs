@@ -48,10 +48,7 @@ use version::NativeVersion;
 use primitives::OpaqueMetadata;
 use grandpa::{AuthorityId as GrandpaId, AuthorityWeight as GrandpaWeight};
 use im_online::sr25519::{AuthorityId as ImOnlineId};
-use authority_discovery_primitives::{
-	AuthorityId as AuthorityDiscoveryId,
-	AuthoritySignature as AuthorityDiscoverySignature,
-};
+use authority_discovery_primitives::AuthorityId as AuthorityDiscoveryId;
 use transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
 use contracts_rpc_runtime_api::ContractExecResult;
 use system::offchain::TransactionSubmitter;

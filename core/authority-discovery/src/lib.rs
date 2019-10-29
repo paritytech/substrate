@@ -658,7 +658,9 @@ mod tests {
 		let authority_1_key_pair = AuthorityPair::from_seed_slice(&[1; 32]).unwrap();
 		let authority_2_key_pair = AuthorityPair::from_seed_slice(&[2; 32]).unwrap();
 
-		let test_api = Arc::new(TestApi {authorities: vec![authority_1_key_pair.public(), authority_2_key_pair.public()]});
+		let test_api = Arc::new(TestApi {
+			authorities: vec![authority_1_key_pair.public(), authority_2_key_pair.public()],
+		});
 
 		let network: Arc<TestNetwork> = Arc::new(Default::default());
 		let key_store = KeyStore::new();
