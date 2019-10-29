@@ -3897,6 +3897,7 @@ dependencies = [
 name = "sr-arithmetic"
 version = "2.0.0"
 dependencies = [
+ "criterion 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "integer-sqrt 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "num-traits 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
