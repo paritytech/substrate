@@ -19,7 +19,8 @@
 #[derive(PartialEq)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub enum Error {
-	StorageRootMismatch,
-	StorageValueUnavailable,
+    StorageRootMismatch,
+    StorageValueUnavailable,
+    AncestorNotFound,
 }
 
