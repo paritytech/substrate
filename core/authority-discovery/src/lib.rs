@@ -72,6 +72,9 @@ mod schema {
 /// Upper bound estimation on how long one should wait before accessing the Kademlia DHT.
 const LIBP2P_KADEMLIA_BOOTSTRAP_TIME: Duration = Duration::from_secs(30);
 
+/// Name of the Substrate peerset priority group for authorities discovered through the authority discovery module.
+const AUTHORITIES_PRIORITY_GROUP_NAME: &'static str = "authorities";
+
 /// An `AuthorityDiscovery` makes a given authority discoverable and discovers other authorities.
 pub struct AuthorityDiscovery<Client, Network, Block>
 where
@@ -288,7 +291,7 @@ where
 
 		debug!(target: "sub-authority-discovery", "Applying priority group {:#?} to peerset.", addresses);
 		self.network
-			.set_priority_group("authorities".to_string(), addresses)
+			.set_priority_group(AUTHORITIES_PRIORITY_GROUP_NAME.to_string(), addresses)
 			.map_err(Error::SettingPeersetPriorityGroup)?;
 
 		Ok(())
