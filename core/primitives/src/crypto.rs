@@ -898,7 +898,6 @@ pub mod key_types {
 	/// Key type for ImOnline module, built-in.
 	pub const IM_ONLINE: KeyTypeId = KeyTypeId(*b"imon");
 	/// A key type ID useful for tests.
-	#[cfg(feature = "std")]
 	pub const DUMMY: KeyTypeId = KeyTypeId(*b"dumy");
 }
 
