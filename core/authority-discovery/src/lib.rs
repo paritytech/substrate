@@ -69,6 +69,9 @@ mod schema {
 	include!(concat!(env!("OUT_DIR"), "/authority_discovery.rs"));
 }
 
+/// Upper bound estimation on how long one should wait before accessing the Kademlia DHT.
+const LIBP2P_KADEMLIA_BOOTSTRAP_TIME: Duration = Duration::from_secs(30);
+
 /// An `AuthorityDiscovery` makes a given authority discoverable and discovers other authorities.
 pub struct AuthorityDiscovery<Client, Network, Block>
 where
@@ -117,15 +120,17 @@ where
 		// Kademlia's default time-to-live for Dht records is 36h, republishing records every 24h. Given that a node
 		// could restart at any point in time, one can not depend on the republishing process, thus publishing own
 		// external addresses should happen on an interval < 36h.
-		// TODO: Give libp2p some time to insert itself into the DHT.
-		let publish_interval =
-			tokio_timer::Interval::new(Instant::now(), Duration::from_secs(12 * 60 * 60));
+		let publish_interval = tokio_timer::Interval::new(
+			Instant::now() + LIBP2P_KADEMLIA_BOOTSTRAP_TIME,
+			Duration::from_secs(12 * 60 * 60),
+		);
 
 		// External addresses of other authorities can change at any given point in time. The interval on which to query
 		// for external addresses of other authorities is a trade off between efficiency and performance.
-		// TODO: Give libp2p some time to insert itself into the DHT.
-		let query_interval =
-			tokio_timer::Interval::new(Instant::now(), Duration::from_secs(10 * 60));
+		let query_interval = tokio_timer::Interval::new(
+			Instant::now() + LIBP2P_KADEMLIA_BOOTSTRAP_TIME,
+			Duration::from_secs(10 * 60),
+		);
 
 		let address_cache = HashMap::new();
 
