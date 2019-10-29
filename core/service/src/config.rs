@@ -45,10 +45,8 @@ pub struct Configuration<C, G, E = NoExtension> {
 	pub network: NetworkConfiguration,
 	/// Path to key files.
 	pub keystore_path: PathBuf,
-	/// Path to the database.
-	pub database_path: PathBuf,
-	/// Cache Size for internal database in MiB
-	pub database_cache_size: Option<u32>,
+	/// Configuration for the database.
+	pub database: ConfigurationDb,
 	/// Size of internal state cache in Bytes
 	pub state_cache_size: usize,
 	/// Size in percent of cache size dedicated to child tries
@@ -96,6 +94,22 @@ pub struct Configuration<C, G, E = NoExtension> {
 	pub dev_key_seed: Option<String>,
 }
 
+/// Configuration of the database of the client.
+#[derive(Clone)]
+pub enum ConfigurationDb {
+	/// Database file at a specific path. This is the default option.
+	Path {
+		/// Path to the database.
+		path: PathBuf,
+		/// Cache Size for internal database in MiB
+		cache_size: Option<u32>,
+	},
+	/*/// A custom implementation of an already-open database.
+	///
+	/// Recommended only for situations where a filesystem doesn't exist.
+	Custom(),*/
+}
+
 impl<C, G, E> Configuration<C, G, E> where
 	C: Default,
 	G: RuntimeGenesis,
@@ -113,8 +127,10 @@ impl<C, G, E> Configuration<C, G, E> where
 			transaction_pool: Default::default(),
 			network: Default::default(),
 			keystore_path: Default::default(),
-			database_path: Default::default(),
-			database_cache_size: Default::default(),
+			database: ConfigurationDb::Path {
+				path: Default::default(),
+				cache_size: Default::default(),
+			},
 			state_cache_size: Default::default(),
 			state_cache_child_ratio: Default::default(),
 			custom: Default::default(),
