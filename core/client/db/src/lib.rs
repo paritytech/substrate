@@ -791,10 +791,6 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 	///
 	/// The pruning window is how old a block must be before the state is pruned.
 	pub fn new(config: DatabaseSettings, canonicalization_delay: u64) -> ClientResult<Self> {
-		Self::new_inner(config, canonicalization_delay)
-	}
-
-	fn new_inner(config: DatabaseSettings, canonicalization_delay: u64) -> ClientResult<Self> {
 		let db = crate::utils::open_database(&config, columns::META, "full")?;
 		Self::from_kvdb(db as Arc<_>, canonicalization_delay, &config)
 	}
@@ -803,25 +799,14 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 	#[cfg(any(test, feature = "test-helpers"))]
 	pub fn new_test(keep_blocks: u32, canonicalization_delay: u64) -> Self {
 		let db = Arc::new(kvdb_memorydb::create(crate::utils::NUM_COLUMNS));
-		Self::new_test_db(keep_blocks, canonicalization_delay, db as Arc<_>)
-	}
-
-	/// Creates a client backend with test settings.
-	#[cfg(any(test, feature = "test-helpers"))]
-	pub fn new_test_db(keep_blocks: u32, canonicalization_delay: u64, db: Arc<dyn KeyValueDB>) -> Self {
-
 		let db_setting = DatabaseSettings {
-			cache_size: None,
 			state_cache_size: 16777216,
 			state_cache_child_ratio: Some((50, 100)),
-			path: Default::default(),
 			pruning: PruningMode::keep_blocks(keep_blocks),
+			source: DatabaseSettingsSrc::Custom(db),
 		};
-		Self::from_kvdb(
-			db,
-			canonicalization_delay,
-			&db_setting,
-		).expect("failed to create test-db")
+
+		Self::new(db_setting, canonicalization_delay).expect("failed to create test-db")
 	}
 
 	fn from_kvdb(
@@ -1646,7 +1631,12 @@ mod tests {
 			db.storage.db.clone()
 		};
 
-		let backend = Backend::<Block>::new_test_db(1, 0, backing);
+		let backend = Backend::<Block>::new(DatabaseSettings {
+			state_cache_size: 16777216,
+			state_cache_child_ratio: Some((50, 100)),
+			pruning: PruningMode::keep_blocks(1),
+			source: DatabaseSettingsSrc::Custom(backing),
+		}, 0).unwrap();
 		assert_eq!(backend.blockchain().info().best_number, 9);
 		for i in 0..10 {
 			assert!(backend.blockchain().hash(i).unwrap().is_some())

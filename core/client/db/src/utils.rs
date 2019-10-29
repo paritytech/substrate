@@ -17,7 +17,6 @@
 //! Db-based backend utility structures and functions, used by both
 //! full and light storages.
 
-#[cfg(feature = "kvdb-rocksdb")]
 use std::sync::Arc;
 use std::{io, convert::TryInto};
 
@@ -220,7 +219,8 @@ pub fn open_database(
 		},
 		#[cfg(not(feature = "kvdb-rocksdb"))]
 		DatabaseSettingsSrc::Path { .. } => {
-			client::error::Error::Backend("Try to open RocksDB database with RocksDB disabled".into())
+			let msg = "Try to open RocksDB database with RocksDB disabled".into();
+			return Err(client::error::Error::Backend(msg));
 		},
 		DatabaseSettingsSrc::Custom(db) => db.clone(),
 	};
