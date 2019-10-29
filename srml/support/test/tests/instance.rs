@@ -13,6 +13,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+
 #![recursion_limit="128"]
 
 use sr_primitives::{generic, BuildStorage, traits::{BlakeTwo256, Block as _, Verify}};

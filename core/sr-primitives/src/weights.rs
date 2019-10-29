@@ -14,26 +14,58 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Primitives for transaction weighting.
+//! # Primitives for transaction weighting.
 //!
-//! Each dispatch function within `decl_module!` can have an optional `#[weight = $x]` attribute.
-//! `$x` can be any type that implements the `ClassifyDispatch<T>` and `WeighData<T>` traits. By
-//! default, All transactions are annotated with `#[weight = SimpleDispatchInfo::default()]`.
+//! All dispatchable functions defined in `decl_module!` must provide two trait implementations:
+//!   - [`WeightData`]: To determine the weight of the dispatch.
+//!   - [`ClassifyDispatch`]: To determine the class of the dispatch. See the enum definition for
+//!     more information on dispatch classes.
+//!
+//! Every dispatchable function is responsible for providing this data via an optional `#[weight =
+//! $x]` attribute. In this snipped, `$x` can be any user provided struct that implements the
+//! two aforementioned traits.
+//!
+//! Substrate then bundles then output information of the two traits into [`DispatchInfo`] struct
+//! and provides it by implementing the [`GetDispatchInfo`] for all `Call` variants, and opaque
+//! extrinsic types.
+//!
+//! If no `#[weight]` is defined, the macro automatically injects the `Default` implementation of
+//! the [`SimpleDispatchInfo`].
 //!
 //! Note that the decl_module macro _cannot_ enforce this and will simply fail if an invalid struct
 //! (something that does not  implement `Weighable`) is passed in.
 
+#[cfg(feature = "std")]
+use serde::{Serialize, Deserialize};
+use codec::{Encode, Decode};
 use arithmetic::traits::Bounded;
 use crate::RuntimeDebug;
 
+/// Re-export priority as type
 pub use crate::transaction_validity::TransactionPriority;
 
 /// Numeric range of a transaction weight.
 pub type Weight = u32;
 
+/// Means of weighing some particular kind of data (`T`).
+pub trait WeighData<T> {
+	/// Weigh the data `T` given by `target`. When implementing this for a dispatchable, `T` will be
+	/// a tuple of all arguments given to the function (except origin).
+	fn weigh_data(&self, target: T) -> Weight;
+}
+
+/// Means of classifying a dispatchable function.
+pub trait ClassifyDispatch<T> {
+	/// Classify the dispatch function based on input data `target` of type `T`. When implementing
+	/// this for a dispatchable, `T` will be a tuple of all arguments given to the function (except
+	/// origin).
+	fn classify_dispatch(&self, target: T) -> DispatchClass;
+}
+
 /// A generalized group of dispatch types. This is only distinguishing normal, user-triggered transactions
 /// (`Normal`) and anything beyond which serves a higher purpose to the system (`Operational`).
-#[derive(PartialEq, Eq, Clone, Copy, RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
 pub enum DispatchClass {
 	/// A normal dispatch.
 	Normal,
@@ -82,25 +114,13 @@ impl DispatchInfo {
 	}
 }
 
-/// A `Dispatchable` function (aka transaction) that can carry some static information along with it, using the
-/// `#[weight]` attribute.
+/// A `Dispatchable` function (aka transaction) that can carry some static information along with
+/// it, using the `#[weight]` attribute.
 pub trait GetDispatchInfo {
 	/// Return a `DispatchInfo`, containing relevant information of this dispatch.
 	///
 	/// This is done independently of its encoded size.
 	fn get_dispatch_info(&self) -> DispatchInfo;
-}
-
-/// Means of weighing some particular kind of data (`T`).
-pub trait WeighData<T> {
-	/// Weigh the data `T` given by `target`.
-	fn weigh_data(&self, target: T) -> Weight;
-}
-
-/// Means of classifying a dispatchable function.
-pub trait ClassifyDispatch<T> {
-	/// Classify the dispatch function based on input data `target` of type `T`.
-	fn classify_dispatch(&self, target: T) -> DispatchClass;
 }
 
 /// Default type used with the `#[weight = x]` attribute in a substrate chain.
@@ -114,13 +134,9 @@ pub trait ClassifyDispatch<T> {
 ///   - A `Free` variant is equal to `::Fixed(0)`. Note that this does not guarantee inclusion.
 ///   - A `Max` variant is equal to `::Fixed(Weight::max_value())`.
 ///
-/// Based on the final weight value, based on the above variants:
-///   - A _weight-fee_  is deducted.
-///   - The block weight is consumed proportionally.
-///
 /// As for the generalized groups themselves:
 ///   - `Normal` variants will be assigned a priority proportional to their weight. They can only
-///     consume a portion (1/4) of the maximum block resource limits.
+///     consume a portion (defined in the system module) of the maximum block resource limits.
 ///   - `Operational` variants will be assigned the maximum priority. They can potentially consume
 ///     the entire block resource limit.
 #[derive(Clone, Copy)]

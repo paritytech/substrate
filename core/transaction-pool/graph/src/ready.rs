@@ -338,7 +338,20 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 					}
 				}
 
-				debug!(target: "txpool", "[{:?}] Pruned.", tx.hash);
+				// we also need to remove all other tags that this transaction provides,
+				// but since all the hard work is done, we only clear the provided_tag -> hash
+				// mapping.
+				let current_tag = &tag;
+				for tag in &tx.provides {
+					let removed = self.provided_tags.remove(tag);
+					assert_eq!(
+						removed.as_ref(),
+						if current_tag == tag { None } else { Some(&tx.hash) },
+						"The pool contains exactly one transaction providing given tag; the removed transaction
+						claims to provide that tag, so it has to be mapped to it's hash; qed"
+					);
+				}
+
 				removed.push(tx);
 			}
 		}

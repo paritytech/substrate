@@ -18,10 +18,6 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-// to allow benchmarking
-#![cfg_attr(feature = "bench", feature(test))]
-#[cfg(feature = "bench")] extern crate test;
-
 /// Copied from `sr-primitives` and documented there.
 #[cfg(test)]
 macro_rules! assert_eq_error_rate {

@@ -546,6 +546,10 @@ impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
 	fn on_timestamp_set(_moment: T::Moment) { }
 }
 
+impl<T: Trait> sr_primitives::BoundToRuntimeAppPublic for Module<T> {
+	type Public = AuthorityId;
+}
+
 impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	type Key = AuthorityId;
 

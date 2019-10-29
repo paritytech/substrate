@@ -96,6 +96,7 @@ mod voting_rule;
 
 pub use communication::Network;
 pub use finality_proof::FinalityProofProvider;
+pub use justification::GrandpaJustification;
 pub use light_import::light_block_import;
 pub use observer::run_grandpa_observer;
 pub use voting_rule::{

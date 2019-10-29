@@ -119,7 +119,7 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 	let can_withdraw_rent = T::Currency::ensure_can_withdraw(
 		account,
 		dues_limited,
-		WithdrawReason::Fee,
+		WithdrawReason::Fee.into(),
 		balance.saturating_sub(dues_limited),
 	)
 	.is_ok();
@@ -129,7 +129,7 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 		let imbalance = T::Currency::withdraw(
 			account,
 			dues_limited,
-			WithdrawReason::Fee,
+			WithdrawReason::Fee.into(),
 			ExistenceRequirement::KeepAlive,
 		)
 		.expect(

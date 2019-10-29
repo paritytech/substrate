@@ -60,7 +60,7 @@ pub use generic::{DigestItem, Digest};
 
 /// Re-export this since it's part of the API of this crate.
 pub use primitives::{TypeId, crypto::{key_types, KeyTypeId, CryptoType, AccountId32}};
-pub use app_crypto::RuntimeAppPublic;
+pub use app_crypto::{RuntimeAppPublic, BoundToRuntimeAppPublic};
 
 /// Re-export `RuntimeDebug`, to avoid dependency clutter.
 pub use primitives::RuntimeDebug;
