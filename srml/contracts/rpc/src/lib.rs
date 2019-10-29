@@ -32,8 +32,32 @@ use sr_primitives::{
 
 pub use self::gen_client::Client as ContractsClient;
 pub use srml_contracts_rpc_runtime_api::{
-	ContractExecResult, ContractsApi as ContractsRuntimeApi, GetStorageResult, GetStorageError,
+	self as runtime_api, ContractExecResult, ContractsApi as ContractsRuntimeApi, GetStorageResult,
 };
+
+const RUNTIME_ERROR: i64 = 1;
+const CONTRACT_DOESNT_EXIST: i64 = 2;
+const CONTRACT_IS_A_TOMBSTONE: i64 = 3;
+
+// A private newtype for converting `GetStorageError` into an RPC error.
+struct GetStorageError(runtime_api::GetStorageError);
+impl From<GetStorageError> for Error {
+	fn from(e: GetStorageError) -> Error {
+		use runtime_api::GetStorageError::*;
+		match e.0 {
+			ContractDoesntExist => Error {
+				code: ErrorCode::ServerError(CONTRACT_DOESNT_EXIST),
+				message: "The specified contract doesn't exist.".into(),
+				data: None,
+			},
+			IsTombstone => Error {
+				code: ErrorCode::ServerError(CONTRACT_IS_A_TOMBSTONE),
+				message: "The contract is a tombstone and doesn't have any storage.".into(),
+				data: None,
+			}
+		}
+	}
+}
 
 /// A struct that encodes RPC parameters required for a call to a smart-contract.
 #[derive(Serialize, Deserialize)]
@@ -89,10 +113,6 @@ impl<C, B> Contracts<C, B> {
 		}
 	}
 }
-
-const RUNTIME_ERROR: i64 = 1;
-const CONTRACT_DOESNT_EXIST: i64 = 2;
-const CONTRACT_IS_A_TOMBSTONE: i64 = 3;
 
 impl<C, Block, AccountId, Balance> ContractsApi<<Block as BlockT>::Hash, AccountId, Balance>
 	for Contracts<C, Block>
@@ -159,20 +179,7 @@ where
 					message: "Runtime trapped while querying storage.".into(),
 					data: Some(format!("{:?}", e).into()),
 				})?
-			.map_err(|e|
-				// Convert contract errors to RPC errors.
-				match e {
-					GetStorageError::ContractDoesntExist => Error {
-						code: ErrorCode::ServerError(CONTRACT_DOESNT_EXIST),
-						message: "The specified contract doesn't exist.".into(),
-						data: None,
-					},
-					GetStorageError::IsTombstone => Error {
-						code: ErrorCode::ServerError(CONTRACT_IS_A_TOMBSTONE),
-						message: "The contract is a tombstone and doesn't have any storage.".into(),
-						data: None,
-					}
-				})?
+			.map_err(GetStorageError)?
 			.map(Bytes);
 
 		Ok(get_storage_result)
