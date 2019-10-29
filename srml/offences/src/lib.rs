@@ -24,7 +24,7 @@
 mod mock;
 mod tests;
 
-use rstd::{vec::Vec};
+use rstd::vec::Vec;
 use support::{
 	decl_module, decl_event, decl_storage, Parameter,
 };
@@ -112,7 +112,8 @@ where
 		// The amount new offenders are slashed
 		let new_fraction = O::slash_fraction(offenders_count, validator_set_count);
 
-		let slash_perbill = vec![new_fraction; concurrent_offenders.len()];
+		let slash_perbill: Vec<_> = (0..concurrent_offenders.len())
+			.map(|_| new_fraction.clone()).collect();
 
 		T::OnOffenceHandler::on_offence(
 			&concurrent_offenders,
