@@ -17,7 +17,7 @@
 //! Stuff to do with the runtime's storage.
 
 use rstd::prelude::*;
-use codec::{FullCodec, FullEncode, Encode, EncodeAppend, EncodeLike};
+use codec::{FullCodec, FullEncode, Encode, EncodeAppend, EncodeLike, Decode};
 use crate::traits::Len;
 
 #[macro_use]
@@ -50,7 +50,7 @@ pub trait StorageValue<T: FullCodec> {
 	///
 	/// NOTE: This operates from and to `Option<>` types; no effort is made to respect the default
 	/// value of the original type.
-	fn translate<O: Decode, F: FnOnce(Option<O>) -> Option<T>>(f: F) -> Result<T, ()>;
+	fn translate<O: Decode, F: FnOnce(Option<O>) -> Option<T>>(f: F) -> Result<Option<T>, ()>;
 
 	/// Store a value under this key into the provided storage instance.
 	fn put<Arg: EncodeLike<T>>(val: Arg);
