@@ -21,7 +21,7 @@
 //! The frame for n elements is:
 //!
 //! `1 byte version ++ (u64 le encoded state index ++ byte value of element) * n
-//! ++ (u64 le encoded index of element) * n - 1 ++ n encoded as le u64`
+//! ++ (u64 le encoded index of element in the frame) * n - 1 ++ n encoded as le u64`
 //!
 //! Start index of first element and end of last element are not needed since
 //! all other values are of constant size.
@@ -294,7 +294,7 @@ impl<F> Into<Serialized<'static, F>> for Vec<u8> {
 // Utility function for basis implementation.
 impl<'a, F: SerializedConfig> Serialized<'a, F> {
 	
-	// Index at end, also contains the encoded size
+	// Index at the end of the element part, start of part with the index for each element in the buffer. (contains the encoded size, as it is the last part in the buffer)
 	fn index_start(&self) -> usize {
 		let nb_ix = self.len();
 		if nb_ix == 0 { return F::version_len(); }
@@ -321,26 +321,26 @@ impl<'a, F: SerializedConfig> Serialized<'a, F> {
 		u64::from_le_bytes(buffer)
 	}
 
-	// Usize encoded as le u64 (only for internal indexing).
+	// Read usize encoded as le u64 (only for internal indexing).
 	fn read_le_usize(&self, pos: usize) -> usize {
 		let mut buffer = [0u8; SIZE_BYTE_LEN];
 		buffer.copy_from_slice(&self.0[pos..pos + SIZE_BYTE_LEN]);
 		u64::from_le_bytes(buffer) as usize
 	}
 
-	// Usize encoded as le u64.
+	// Write usize encoded as le u64.
 	fn write_le_usize(&mut self, pos: usize, value: usize) {
 		let buffer = (value as u64).to_le_bytes();
 		self.0.to_mut()[pos..pos + SIZE_BYTE_LEN].copy_from_slice(&buffer[..]);
 	}
 
-	// Usize encoded as le u64.
+	// Append usize encoded as le u64.
 	fn append_le_usize(&mut self, value: usize) {
 		let buffer = (value as u64).to_le_bytes();
 		self.0.to_mut().extend_from_slice(&buffer[..]);
 	}
 
-	// Usize encoded as le u64.
+	// Write u64 encoded as le.
 	fn write_le_u64(&mut self, pos: usize, value: u64) {
 		let buffer = (value as u64).to_le_bytes();
 		self.0.to_mut()[pos..pos + SIZE_BYTE_LEN].copy_from_slice(&buffer[..]);
