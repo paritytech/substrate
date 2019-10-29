@@ -1420,6 +1420,14 @@ impl<T: Trait> Module<T> {
 			}
 		});
 	}
+
+	/// Ensures that at the end of the current session there will be a new era.
+	fn ensure_new_era() {
+		match ForceEra::get() {
+			Forcing::ForceAlways | Forcing::ForceNew => (),
+			_ => ForceEra::put(Forcing::ForceNew),
+		}
+	}
 }
 
 impl<T: Trait> session::OnSessionEnding<T::AccountId> for Module<T> {
@@ -1516,6 +1524,13 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, session::historical::Identificati
 				continue
 			}
 
+			// Auto deselect validator on any offence and force a new era if they haven't previously
+			// been deselected.
+			if <Validators<T>>::exists(stash) {
+				<Validators<T>>::remove(stash);
+				Self::ensure_new_era();
+			}
+
 			// calculate the amount to slash
 			let slash_exposure = exposure.total;
 			let amount = *slash_fraction * slash_exposure;
@@ -1528,7 +1543,7 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, session::historical::Identificati
 			// make sure to disable validator till the end of this session
 			if T::SessionInterface::disable_validator(stash).unwrap_or(false) {
 				// force a new era, to select a new validator set
-				ForceEra::put(Forcing::ForceNew);
+				Self::ensure_new_era();
 			}
 			// actually slash the validator
 			let slashed_amount = Self::slash_validator(stash, amount, exposure, &mut journal);

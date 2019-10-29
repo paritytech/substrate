@@ -1776,6 +1776,45 @@ fn offence_forces_new_era() {
 }
 
 #[test]
+fn offence_ensures_new_era_without_clobbering() {
+	ExtBuilder::default().build().execute_with(|| {
+		assert_ok!(Staking::force_new_era_always(Origin::ROOT));
+
+		Staking::on_offence(
+			&[OffenceDetails {
+				offender: (
+					11,
+					Staking::stakers(&11),
+				),
+				reporters: vec![],
+			}],
+			&[Perbill::from_percent(5)],
+		);
+
+		assert_eq!(Staking::force_era(), Forcing::ForceAlways);
+	});
+}
+
+#[test]
+fn offence_deselects_validator_when_slash_is_zero() {
+	ExtBuilder::default().build().execute_with(|| {
+		assert!(<Validators<Test>>::exists(11));
+		Staking::on_offence(
+			&[OffenceDetails {
+				offender: (
+					11,
+					Staking::stakers(&11),
+				),
+				reporters: vec![],
+			}],
+			&[Perbill::from_percent(0)],
+		);
+		assert_eq!(Staking::force_era(), Forcing::ForceNew);
+		assert!(!<Validators<Test>>::exists(11));
+	});
+}
+
+#[test]
 fn slashing_performed_according_exposure() {
 	// This test checks that slashing is performed according the exposure (or more precisely,
 	// historical exposure), not the current balance.
@@ -1887,6 +1926,5 @@ fn dont_slash_if_fraction_is_zero() {
 
 		// The validator hasn't been slashed. The new era is not forced.
 		assert_eq!(Balances::free_balance(&11), 1000);
-		assert_eq!(Staking::force_era(), Forcing::NotForcing);
 	});
 }
