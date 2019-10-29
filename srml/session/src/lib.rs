@@ -259,7 +259,7 @@ pub trait OneSessionHandler<ValidatorId>: BoundToRuntimeAppPublic {
 	fn on_disabled(_validator_index: usize);
 }
 
-#[impl_trait_for_tuples::impl_for_tuples(30)]
+#[impl_trait_for_tuples::impl_for_tuples(1, 30)]
 #[tuple_types_no_default_trait_bound]
 impl<AId> SessionHandler<AId> for Tuple {
 	for_tuples!( where #( Tuple: OneSessionHandler<AId> )* );
@@ -305,6 +305,20 @@ impl<AId> SessionHandler<AId> for Tuple {
 	fn on_disabled(i: usize) {
 		for_tuples!( #( Tuple::on_disabled(i); )* )
 	}
+}
+
+/// `SessionHandler` for tests that use `UintAuthorityId` as `Keys`.
+pub struct TestSessionHandler;
+impl<AId> SessionHandler<AId> for TestSessionHandler {
+	const KEY_TYPE_IDS: &'static [KeyTypeId] = &[sr_primitives::key_types::DUMMY];
+
+	fn on_genesis_session<Ks: OpaqueKeys>(_: &[(AId, Ks)]) {}
+
+	fn on_new_session<Ks: OpaqueKeys>(_: bool, _: &[(AId, Ks)], _: &[(AId, Ks)]) {}
+
+	fn on_before_session_ending() {}
+
+	fn on_disabled(_: usize) {}
 }
 
 /// Handler for selecting the genesis validator set.
