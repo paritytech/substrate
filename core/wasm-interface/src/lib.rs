@@ -180,7 +180,7 @@ pub trait Function {
 	fn execute(
 		&self,
 		context: &mut dyn FunctionContext,
-		args: &mut dyn Iterator<Item=Value>,
+		args: &mut dyn Iterator<Item = Value>,
 	) -> Result<Option<Value>>;
 }
 
