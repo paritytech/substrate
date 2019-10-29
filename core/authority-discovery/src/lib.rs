@@ -50,10 +50,10 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
-use futures03::channel::mpsc::Receiver;
-use futures03::stream::StreamExt;
-use futures03::task::{Context, Poll};
-use futures03::Future;
+use futures::channel::mpsc::Receiver;
+use futures::stream::StreamExt;
+use futures::task::{Context, Poll};
+use futures::Future;
 use futures_timer::Interval;
 
 use authority_discovery_primitives::{AuthorityDiscoveryApi, AuthorityId, Signature};
@@ -405,9 +405,9 @@ fn hash_authority_id(id: &[u8]) -> Result<libp2p::kad::record::Key> {
 mod tests {
 	use super::*;
 	use client::runtime_api::{ApiExt, Core, RuntimeVersion};
-	use futures03::channel::mpsc::channel;
-	use futures03::executor::block_on;
-	use futures03::future::poll_fn;
+	use futures::channel::mpsc::channel;
+	use futures::executor::block_on;
+	use futures::future::poll_fn;
 	use primitives::{ExecutionContext, NativeOrEncoded};
 	use sr_primitives::traits::Zero;
 	use sr_primitives::traits::{ApiRef, Block as BlockT, NumberFor, ProvideRuntimeApi};
