@@ -266,7 +266,7 @@ pub(crate) fn slash<T: Trait>(params: SlashParams<T>) -> RewardPayout<T> {
 			// make sure to disable validator till the end of this session
 			if T::SessionInterface::disable_validator(stash).unwrap_or(false) {
 				// force a new era, to select a new validator set
-				crate::ForceEra::put(crate::Forcing::ForceNew);
+				<Module<T>>::ensure_new_era()
 			}
 		}
 	}

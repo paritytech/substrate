@@ -14,31 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Minimal fixed point arithmetic primitives and types for runtime.
+use std::env;
 
-#![cfg_attr(not(feature = "std"), no_std)]
-
-/// Copied from `sr-primitives` and documented there.
-#[cfg(test)]
-macro_rules! assert_eq_error_rate {
-	($x:expr, $y:expr, $error:expr $(,)?) => {
-		assert!(
-			($x) >= (($y) - ($error)) && ($x) <= (($y) + ($error)),
-			"{:?} != {:?} (with error rate {:?})",
-			$x,
-			$y,
-			$error,
-		);
-	};
+fn main() {
+	if let Ok(profile) = env::var("PROFILE") {
+		println!("cargo:rustc-cfg=build_type=\"{}\"", profile);
+	}
 }
-
-pub mod biguint;
-pub mod helpers_128bit;
-pub mod traits;
-mod per_things;
-mod fixed64;
-mod rational128;
-
-pub use fixed64::Fixed64;
-pub use per_things::{Percent, Permill, Perbill, Perquintill};
-pub use rational128::Rational128;
