@@ -648,7 +648,7 @@ impl<T: Trait> Module<T> {
 		let old_members: Vec<T::AccountId> = unhashed::get_raw(&<Members<T>>::hashed_key())
 			.and_then(|bytes| Decode::decode(&mut &*bytes).ok()).unwrap_or_default();
 		let old_runners: Vec<T::AccountId> = unhashed::get_raw(&<RunnersUp<T>>::hashed_key())
-			.map_or_else(Default::default, |bytes| Decode::decode(&mut &*bytes).unwrap_or_default());
+			.and_then(|bytes| Decode::decode(&mut &*bytes).ok()).unwrap_or_default();
 
 		// new storage format.
 		let new_runners: Vec<(T::AccountId, BalanceOf<T>)> = old_runners
@@ -662,7 +662,6 @@ impl<T: Trait> Module<T> {
 
 		<Members<T>>::put(new_members);
 		<RunnersUp<T>>::put(new_runners);
-
 	}
 }
 
