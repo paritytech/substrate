@@ -379,6 +379,8 @@ fn run_to_completion_with<F>(
 				justification_period: 32,
 				keystore: Some(keystore),
 				name: Some(format!("peer#{}", peer_id)),
+				is_authority: true,
+				observer_enabled: true,
 			},
 			link: link,
 			network: net_service,
@@ -511,6 +513,8 @@ fn finalize_3_voters_1_full_observer() {
 				justification_period: 32,
 				keystore,
 				name: Some(format!("peer#{}", peer_id)),
+				is_authority: true,
+				observer_enabled: true,
 			},
 			link: link,
 			network: net_service,
@@ -672,6 +676,8 @@ fn transition_3_voters_twice_1_full_observer() {
 				justification_period: 32,
 				keystore: Some(keystore),
 				name: Some(format!("peer#{}", peer_id)),
+				is_authority: true,
+				observer_enabled: true,
 			},
 			link: link,
 			network: net_service,
@@ -1095,6 +1101,8 @@ fn voter_persists_its_votes() {
 								justification_period: 32,
 								keystore: Some(self.keystore.clone()),
 								name: Some(format!("peer#{}", 0)),
+								is_authority: true,
+								observer_enabled: true,
 							},
 							link,
 							network: self.net.lock().peers[0].network_service().clone(),
@@ -1150,6 +1158,8 @@ fn voter_persists_its_votes() {
 			justification_period: 32,
 			keystore: Some(keystore),
 			name: Some(format!("peer#{}", 1)),
+			is_authority: true,
+			observer_enabled: true,
 		};
 
 		let set_state = {
@@ -1164,7 +1174,6 @@ fn voter_persists_its_votes() {
 			config.clone(),
 			set_state,
 			Exit,
-			true,
 		);
 		runtime.block_on(routing_work).unwrap();
 
@@ -1299,6 +1308,8 @@ fn finalize_3_voters_1_light_observer() {
 					justification_period: 32,
 					keystore: None,
 					name: Some("observer".to_string()),
+					is_authority: false,
+					observer_enabled: true,
 				},
 				link,
 				net.lock().peers[3].network_service().clone(),
@@ -1426,6 +1437,8 @@ fn voter_catches_up_to_latest_round_when_behind() {
 				justification_period: 32,
 				keystore,
 				name: Some(format!("peer#{}", peer_id)),
+				is_authority: true,
+				observer_enabled: true,
 			},
 			link,
 			network: net.lock().peer(peer_id).network_service().clone(),
@@ -1542,6 +1555,8 @@ fn grandpa_environment_respects_voting_rules() {
 			justification_period: 32,
 			keystore: None,
 			name: None,
+			is_authority: true,
+			observer_enabled: true,
 		};
 
 		let (network, _) = NetworkBridge::new(
@@ -1549,7 +1564,6 @@ fn grandpa_environment_respects_voting_rules() {
 			config.clone(),
 			set_state.clone(),
 			Exit,
-			true,
 		);
 
 		Environment {

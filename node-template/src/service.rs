@@ -137,7 +137,9 @@ pub fn new_full<C: Send + Default + 'static>(config: Configuration<C, GenesisCon
 		gossip_duration: Duration::from_millis(333),
 		justification_period: 512,
 		name: Some(name),
+		observer_enabled: true,
 		keystore,
+		is_authority,
 	};
 
 	match (is_authority, disable_grandpa) {
