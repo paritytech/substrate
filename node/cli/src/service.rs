@@ -177,6 +177,8 @@ macro_rules! new_full {
 			justification_period: 512,
 			name: Some(name),
 			keystore: Some(service.keystore()),
+			observer_enabled: true,
+			is_authority,
 		};
 
 		match (is_authority, disable_grandpa) {

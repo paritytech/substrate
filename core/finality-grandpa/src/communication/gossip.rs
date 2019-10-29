@@ -512,6 +512,40 @@ enum PendingCatchUp {
 	},
 }
 
+/// Configuration for the round catch-up mechanism.
+enum CatchUpConfig {
+	/// Catch requests are enabled, our node will issue them whenever it sees a
+	/// neighbor packet for a round further than `CATCH_UP_THRESHOLD`. If
+	/// `only_from_authorities` is set, the node will only send catch-up
+	/// requests to other authorities it is connected to. This is useful if the
+	/// GRANDPA observer protocol is live on the network, in which case full
+	/// nodes (non-authorities) don't have the necessary round data to answer
+	/// catch-up requests.
+	Enabled { only_from_authorities: bool },
+	/// Catch-up requests are disabled, our node will never issue them. This is
+	/// useful for the GRANDPA observer mode, where we are only interested in
+	/// commit messages and don't need to follow the full round protocol.
+	Disabled,
+}
+
+impl CatchUpConfig {
+	fn enabled(only_from_authorities: bool) -> CatchUpConfig {
+		CatchUpConfig::Enabled { only_from_authorities }
+	}
+
+	fn disabled() -> CatchUpConfig {
+		CatchUpConfig::Disabled
+	}
+
+	fn request_allowed<N>(&self, peer: &PeerInfo<N>) -> bool {
+		match self {
+			CatchUpConfig::Disabled => false,
+			CatchUpConfig::Enabled { only_from_authorities, .. } =>
+				!only_from_authorities || peer.roles.is_authority(),
+		}
+	}
+}
+
 struct Inner<Block: BlockT> {
 	local_view: Option<View<NumberFor<Block>>>,
 	peers: Peers<NumberFor<Block>>,
@@ -520,13 +554,30 @@ struct Inner<Block: BlockT> {
 	config: crate::Config,
 	next_rebroadcast: Instant,
 	pending_catch_up: PendingCatchUp,
-	catch_up_enabled: bool,
+	catch_up_config: CatchUpConfig,
 }
 
 type MaybeMessage<Block> = Option<(Vec<PeerId>, NeighborPacket<NumberFor<Block>>)>;
 
 impl<Block: BlockT> Inner<Block> {
-	fn new(config: crate::Config, catch_up_enabled: bool) -> Self {
+	fn new(config: crate::Config) -> Self {
+		let catch_up_config = if config.observer_enabled {
+			if config.is_authority {
+				// since the observer protocol is enabled, we will only issue
+				// catch-up requests if we are an authority (and only to other
+				// authorities).
+				CatchUpConfig::enabled(true)
+			} else {
+				// otherwise, we are running the observer protocol and don't
+				// care about catch-up requests.
+				CatchUpConfig::disabled()
+			}
+		} else {
+			// if the observer protocol isn't enabled, then any full node should
+			// be able to answer catch-up requests.
+			CatchUpConfig::enabled(false)
+		};
+
 		Inner {
 			local_view: None,
 			peers: Peers::default(),
@@ -534,7 +585,7 @@ impl<Block: BlockT> Inner<Block> {
 			next_rebroadcast: Instant::now() + REBROADCAST_AFTER,
 			authorities: Vec::new(),
 			pending_catch_up: PendingCatchUp::None,
-			catch_up_enabled,
+			catch_up_config,
 			config,
 		}
 	}
@@ -823,10 +874,6 @@ impl<Block: BlockT> Inner<Block> {
 	}
 
 	fn try_catch_up(&mut self, who: &PeerId) -> (Option<GossipMessage<Block>>, Option<Report>) {
-		if !self.catch_up_enabled {
-			return (None, None);
-		}
-
 		let mut catch_up = None;
 		let mut report = None;
 
@@ -836,7 +883,7 @@ impl<Block: BlockT> Inner<Block> {
 		// won't be able to reply since they don't follow the full GRANDPA
 		// protocol and therefore might not have the vote data available.
 		if let (Some(peer), Some(local_view)) = (self.peers.peer(who), &self.local_view) {
-			if peer.roles.is_authority() &&
+			if self.catch_up_config.request_allowed(&peer) &&
 				peer.view.set_id == local_view.set_id &&
 				peer.view.round.0.saturating_sub(CATCH_UP_THRESHOLD) > local_view.round.0
 			{
@@ -949,11 +996,10 @@ impl<Block: BlockT> GossipValidator<Block> {
 	pub(super) fn new(
 		config: crate::Config,
 		set_state: environment::SharedVoterSetState<Block>,
-		catch_up_enabled: bool,
 	) -> (GossipValidator<Block>, ReportStream)	{
 		let (tx, rx) = mpsc::unbounded();
 		let val = GossipValidator {
-			inner: parking_lot::RwLock::new(Inner::new(config, catch_up_enabled)),
+			inner: parking_lot::RwLock::new(Inner::new(config)),
 			set_state,
 			report_sender: tx,
 		};
