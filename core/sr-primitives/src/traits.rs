@@ -982,11 +982,11 @@ pub trait ValidateUnsigned {
 /// Opaque datatype that may be destructured into a series of raw byte slices (which represent
 /// individual keys).
 pub trait OpaqueKeys: Clone {
-	/// An iterator over the type IDs of keys that this holds.
-	type KeyTypeIds: IntoIterator<Item=super::KeyTypeId>;
+	/// Types bound to this opaque keys that provide the key type ids returned.
+	type KeyTypeIdProviders;
 
-	/// Return an iterator over the key-type IDs supported by this set.
-	fn key_ids() -> Self::KeyTypeIds;
+	/// Return the key-type IDs supported by this set.
+	fn key_ids() -> &'static [crate::KeyTypeId];
 	/// Get the raw bytes of key with key-type ID `i`.
 	fn get_raw(&self, i: super::KeyTypeId) -> &[u8];
 	/// Get the decoded key with index `i`.
@@ -1086,22 +1086,25 @@ macro_rules! count {
 }
 
 /// Implement `OpaqueKeys` for a described struct.
-/// Would be much nicer for this to be converted to `derive` code.
 ///
-/// Every field type must be equivalent implement `as_ref()`, which is expected
-/// to hold the standard SCALE-encoded form of that key. This is typically
-/// just the bytes of the key.
+/// Every field type must implement [`BoundToRuntimeAppPublic`](crate::BoundToRuntimeAppPublic).
+/// `KeyTypeIdProviders` is set to the types given as fields.
 ///
 /// ```rust
-/// use sr_primitives::{impl_opaque_keys, KeyTypeId, app_crypto::{sr25519, ed25519}};
-/// use primitives::testing::{SR25519, ED25519};
+/// use sr_primitives::{
+/// 	impl_opaque_keys, KeyTypeId, BoundToRuntimeAppPublic, app_crypto::{sr25519, ed25519}
+/// };
+///
+/// pub struct KeyModule;
+/// impl BoundToRuntimeAppPublic for KeyModule { type Public = ed25519::AppPublic; }
+///
+/// pub struct KeyModule2;
+/// impl BoundToRuntimeAppPublic for KeyModule2 { type Public = sr25519::AppPublic; }
 ///
 /// impl_opaque_keys! {
 /// 	pub struct Keys {
-/// 		#[id(ED25519)]
-/// 		pub ed25519: ed25519::AppPublic,
-/// 		#[id(SR25519)]
-/// 		pub sr25519: sr25519::AppPublic,
+/// 		pub key_module: KeyModule,
+/// 		pub key_module2: KeyModule2,
 /// 	}
 /// }
 /// ```
@@ -1110,7 +1113,6 @@ macro_rules! impl_opaque_keys {
 	(
 		pub struct $name:ident {
 			$(
-				#[id($key_id:expr)]
 				pub $field:ident: $type:ty,
 			)*
 		}
@@ -1119,12 +1121,12 @@ macro_rules! impl_opaque_keys {
 			Default, Clone, PartialEq, Eq,
 			$crate::codec::Encode,
 			$crate::codec::Decode,
-			$crate::RuntimeDebug
+			$crate::RuntimeDebug,
 		)]
 		#[cfg_attr(feature = "std", derive($crate::serde::Serialize, $crate::serde::Deserialize))]
 		pub struct $name {
 			$(
-				pub $field: $type,
+				pub $field: <$type as $crate::BoundToRuntimeAppPublic>::Public,
 			)*
 		}
 
@@ -1137,7 +1139,11 @@ macro_rules! impl_opaque_keys {
 			pub fn generate(seed: Option<&str>) -> $crate::rstd::vec::Vec<u8> {
 				let keys = Self{
 					$(
-						$field: <$type as $crate::app_crypto::RuntimeAppPublic>::generate_pair(seed),
+						$field: <
+							<
+								$type as $crate::BoundToRuntimeAppPublic
+							>::Public as $crate::RuntimeAppPublic
+						>::generate_pair(seed),
 					)*
 				};
 				$crate::codec::Encode::encode(&keys)
@@ -1145,17 +1151,30 @@ macro_rules! impl_opaque_keys {
 		}
 
 		impl $crate::traits::OpaqueKeys for $name {
-			type KeyTypeIds = $crate::rstd::iter::Cloned<
-				$crate::rstd::slice::Iter<'static, $crate::KeyTypeId>
-			>;
+			type KeyTypeIdProviders = ( $( $type, )* );
 
-			fn key_ids() -> Self::KeyTypeIds {
-				[ $($key_id),* ].iter().cloned()
+			fn key_ids() -> &'static [$crate::KeyTypeId] {
+				&[
+					$(
+						<
+							<
+								$type as $crate::BoundToRuntimeAppPublic
+							>::Public as $crate::RuntimeAppPublic
+						>::ID
+					),*
+				]
 			}
 
 			fn get_raw(&self, i: $crate::KeyTypeId) -> &[u8] {
 				match i {
-					$( i if i == $key_id => self.$field.as_ref(), )*
+					$(
+						i if i == <
+							<
+								$type as $crate::BoundToRuntimeAppPublic
+							>::Public as $crate::RuntimeAppPublic
+						>::ID =>
+							self.$field.as_ref(),
+					)*
 					_ => &[],
 				}
 			}

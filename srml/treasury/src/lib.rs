@@ -324,7 +324,7 @@ impl<T: Trait> Module<T> {
 		if let Err(problem) = T::Currency::settle(
 			&Self::account_id(),
 			imbalance,
-			WithdrawReason::Transfer,
+			WithdrawReason::Transfer.into(),
 			ExistenceRequirement::KeepAlive
 		) {
 			print("Inconsistent state - couldn't settle imbalance for funds spent by treasury");
@@ -657,7 +657,7 @@ mod tests {
 
 			<Treasury as OnFinalize<u64>>::on_finalize(4);
 			assert_eq!(Treasury::pot(), 0); // Pot is emptied
-			assert_eq!(Balances::free_balance(&Treasury::account_id()), 1); // but the account is still there 
+			assert_eq!(Balances::free_balance(&Treasury::account_id()), 1); // but the account is still there
 		});
 	}
 

@@ -278,7 +278,7 @@ use sr_staking_primitives::{
 use sr_primitives::{Serialize, Deserialize};
 use system::{ensure_signed, ensure_root};
 
-use phragmen::{elect, equalize, ExtendedBalance, Support, SupportMap, PhragmenStakedAssignment};
+use phragmen::{elect, equalize, build_support_map, ExtendedBalance, PhragmenStakedAssignment};
 
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
 const MAX_NOMINATIONS: usize = 16;
@@ -1268,31 +1268,12 @@ impl<T: Trait> Module<T> {
 			let to_balance = |e: ExtendedBalance|
 				<T::CurrencyToVote as Convert<ExtendedBalance, BalanceOf<T>>>::convert(e);
 
-			// Initialize the support of each candidate.
-			let mut supports = <SupportMap<T::AccountId>>::new();
-			elected_stashes
-				.iter()
-				.map(|e| (e, to_votes(Self::slashable_balance_of(e))))
-				.for_each(|(e, s)| {
-					let item = Support { own: s, total: s, ..Default::default() };
-					supports.insert(e.clone(), item);
-				});
-
-			// build support struct.
-			for (n, assignment) in assignments.iter() {
-				for (c, per_thing) in assignment.iter() {
-					let nominator_stake = to_votes(Self::slashable_balance_of(n));
-					// AUDIT: it is crucially important for the `Mul` implementation of all
-					// per-things to be sound.
-					let other_stake = *per_thing * nominator_stake;
-					if let Some(support) = supports.get_mut(c) {
-						// For an astronomically rich validator with more astronomically rich
-						// set of nominators, this might saturate.
-						support.total = support.total.saturating_add(other_stake);
-						support.others.push((n.clone(), other_stake));
-					}
-				}
-			}
+			let mut supports = build_support_map::<_, _, _, T::CurrencyToVote>(
+				&elected_stashes,
+				&assignments,
+				Self::slashable_balance_of,
+				true,
+			);
 
 			if cfg!(feature = "equalize") {
 				let mut staked_assignments

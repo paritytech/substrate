@@ -9,7 +9,7 @@
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
 use rstd::prelude::*;
-use primitives::{OpaqueMetadata, crypto::key_types};
+use primitives::OpaqueMetadata;
 use sr_primitives::{
 	ApplyResult, transaction_validity::TransactionValidity, generic, create_runtime_str,
 	impl_opaque_keys, MultiSignature
@@ -84,10 +84,8 @@ pub mod opaque {
 
 	impl_opaque_keys! {
 		pub struct SessionKeys {
-			#[id(key_types::AURA)]
-			pub aura: AuraId,
-			#[id(key_types::GRANDPA)]
-			pub grandpa: GrandpaId,
+			pub aura: Aura,
+			pub grandpa: Grandpa,
 		}
 	}
 }
