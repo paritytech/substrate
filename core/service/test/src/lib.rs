@@ -29,7 +29,7 @@ use service::{
 	AbstractService,
 	ChainSpec,
 	Configuration,
-	ConfigurationDb,
+	config::ConfigurationDb,
 	Roles,
 	Error,
 };
