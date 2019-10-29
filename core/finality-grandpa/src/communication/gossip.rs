@@ -1917,6 +1917,53 @@ mod tests {
 	}
 
 	#[test]
+	fn sends_catch_up_requests_to_non_authorities_when_observer_disabled() {
+		let config = {
+			let mut c = config();
+
+			// if the observer protocol is disable any full-node should be able
+			// to answer catch-up requests.
+			c.observer_enabled = false;
+
+			c
+		};
+
+		let (val, _) = GossipValidator::<Block>::new(
+			config,
+			voter_set_state(),
+		);
+
+		// the validator starts at set id 1.
+		val.note_set(SetId(1), Vec::new(), |_, _| {});
+
+		// add the peer making the requests to the validator, otherwise it is
+		// discarded.
+		let peer_full = PeerId::random();
+		val.inner.write().peers.new_peer(peer_full.clone(), Roles::FULL);
+
+		let (_, _, catch_up_request, _) = val.inner.write().import_neighbor_message(
+			&peer_full,
+			NeighborPacket {
+				round: Round(42),
+				set_id: SetId(1),
+				commit_finalized_height: 50,
+			},
+		);
+
+		// importing a neighbor message from a peer in the same set in a later
+		// round should lead to a catch up request, the node is not an
+		// authority, but since the observer protocol is disabled we should
+		// issue a catch-up request to it anyway.
+		match catch_up_request {
+			Some(GossipMessage::CatchUpRequest(request)) => {
+				assert_eq!(request.set_id, SetId(1));
+				assert_eq!(request.round, Round(41));
+			},
+			_ => panic!("expected catch up message"),
+		}
+	}
+
+	#[test]
 	fn doesnt_expire_next_round_messages() {
 		// NOTE: this is a regression test
 		let (val, _) = GossipValidator::<Block>::new(
