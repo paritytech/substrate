@@ -412,7 +412,23 @@ impl<'a> ParseAndPrepareImport<'a> {
 			},
 		};
 
-		let fut = builder(config)?.import_blocks(exit.into_exit(), file);
+		// Note: while we would like the user to handle the exit themselves, we handle it here
+		// for backwards compatibility reasons.
+		let (exit_send, exit_recv) = std::sync::mpsc::channel();
+		let exit = exit.into_exit();
+		std::thread::spawn(move || {
+			let _ = exit.wait();
+			let _ = exit_send.send(());
+		});
+
+		let mut import_fut = builder(config)?.import_blocks(file);
+		let fut = futures::future::poll_fn(|| {
+			if exit_recv.try_recv().is_ok() {
+				return Ok(Async::Ready(()));
+			}
+			import_fut.poll()
+		});
+
 		let mut runtime = tokio::runtime::current_thread::Runtime::new().unwrap();
 		runtime.block_on(fut)?;
 		Ok(())

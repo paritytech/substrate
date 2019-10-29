@@ -88,7 +88,7 @@ macro_rules! export_blocks {
 #[macro_export]
 /// Import blocks
 macro_rules! import_blocks {
-($block:ty, $client:ident, $queue:ident, $exit:ident, $input:ident) => {{
+($block:ty, $client:ident, $queue:ident, $input:ident) => {{
 	use consensus_common::import_queue::{IncomingBlock, Link, BlockImportError, BlockImportResult};
 	use consensus_common::BlockOrigin;
 	use network::message;
@@ -128,17 +128,18 @@ macro_rules! import_blocks {
 		}
 	}
 
-	let (exit_send, exit_recv) = std::sync::mpsc::channel();
-	std::thread::spawn(move || {
-		let _ = $exit.wait();
-		let _ = exit_send.send(());
-	});
-
 	let mut io_reader_input = IoReader($input);
 	let mut count = None::<u64>;
 	let mut read_block_count = 0;
 	let mut link = WaitLink::new();
 
+	// Importing blocks is implemented as a future, because we want the operation to be
+	// interruptible.
+	//
+	// Every time we read a block from the input or import a bunch of blocks from the import
+	// queue, the `Future` re-schedules itself and returns `Poll::Pending`.
+	// This makes it possible either to interleave other operations in-between the block imports,
+	// or to stop the operation completely.
 	futures03::future::poll_fn(move |cx| {
 		// Start by reading the number of blocks if not done so already.
 		let count = match count {
@@ -159,9 +160,6 @@ macro_rules! import_blocks {
 
 		// Read blocks from the input.
 		if read_block_count < count {
-			if exit_recv.try_recv().is_ok() {
-				return std::task::Poll::Ready(Ok(()));
-			}
 			match SignedBlock::<$block>::decode(&mut io_reader_input) {
 				Ok(signed) => {
 					let (header, extrinsics) = signed.block.deconstruct();
@@ -200,10 +198,6 @@ macro_rules! import_blocks {
 			return std::task::Poll::Pending;
 		}
 
-		if exit_recv.try_recv().is_ok() {
-			return std::task::Poll::Ready(Ok(()));
-		}
-
 		let blocks_before = link.imported_blocks;
 		$queue.poll_actions(cx, &mut link);
 
@@ -228,6 +222,7 @@ macro_rules! import_blocks {
 			return std::task::Poll::Ready(Ok(()));
 
 		} else {
+			// Polling the import queue will re-schedule the task when ready.
 			return std::task::Poll::Pending;
 		}
 	})
