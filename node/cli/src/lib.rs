@@ -31,7 +31,7 @@ pub use cli::{VersionInfo, IntoExit, NoCustom, SharedParams, ExecutionStrategyPa
 use substrate_service::{AbstractService, Roles as ServiceRoles, Configuration};
 use log::info;
 use structopt::{StructOpt, clap::App};
-use cli::{AugmentClap, GetLogFilter, parse_and_prepare, ParseAndPrepare};
+use cli::{display_role, parse_and_prepare, AugmentClap, GetLogFilter, ParseAndPrepare};
 use crate::factory_impl::FactoryState;
 use transaction_factory::RuntimeAdapter;
 use client::ExecutionStrategies;
@@ -166,7 +166,7 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 			info!("  by Parity Technologies, 2017-2019");
 			info!("Chain specification: {}", config.chain_spec.name());
 			info!("Node name: {}", config.name);
-			info!("Roles: {:?}", config.roles);
+			info!("Roles: {}", display_role(&config));
 			let runtime = RuntimeBuilder::new().name_prefix("main-tokio-").build()
 				.map_err(|e| format!("{:?}", e))?;
 			match config.roles {
