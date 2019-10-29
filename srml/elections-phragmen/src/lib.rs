@@ -646,7 +646,7 @@ impl<T: Trait> Module<T> {
 	fn do_migrate() {
 		// old storage format.
 		let old_members: Vec<T::AccountId> = unhashed::get_raw(&<Members<T>>::hashed_key())
-			.map_or_else(Default::default, |bytes| Decode::decode(&mut &*bytes).unwrap_or_default());
+			.and_then(|bytes| Decode::decode(&mut &*bytes).ok()).unwrap_or_default();
 		let old_runners: Vec<T::AccountId> = unhashed::get_raw(&<RunnersUp<T>>::hashed_key())
 			.map_or_else(Default::default, |bytes| Decode::decode(&mut &*bytes).unwrap_or_default());
 
