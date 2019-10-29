@@ -22,7 +22,7 @@ use client::blockchain::HeaderBackend;
 use codec::Codec;
 use jsonrpc_core::{Error, ErrorCode, Result};
 use jsonrpc_derive::rpc;
-use primitives::Bytes;
+use primitives::{H256, Bytes};
 use rpc_primitives::number;
 use serde::{Deserialize, Serialize};
 use sr_primitives::{
@@ -69,7 +69,7 @@ pub trait ContractsApi<BlockHash, AccountId, Balance> {
 	fn get_storage(
 		&self,
 		address: AccountId,
-		key: Bytes,
+		key: H256,
 		at: Option<BlockHash>,
 	) -> Result<Option<Bytes>>;
 }
@@ -142,7 +142,7 @@ where
 	fn get_storage(
 		&self,
 		address: AccountId,
-		key: Bytes,
+		key: H256,
 		at: Option<<Block as BlockT>::Hash>,
 	) -> Result<Option<Bytes>> {
 		let api = self.client.runtime_api();
@@ -150,22 +150,8 @@ where
 			// If the block hash is not supplied assume the best block.
 			self.client.info().best_hash));
 
-		if key.len() != 32 {
-			return Err(Error {
-				code: ErrorCode::InvalidParams,
-				message: format!(
-					"The key is expected to be 32 bytes long and only {} bytes are given",
-					key.len(),
-				),
-				data: None,
-			});
-		}
-
-		let mut key_fixed_len = [0u8; 32];
-		key_fixed_len.copy_from_slice(&*key);
-
 		let get_storage_result = api
-			.get_storage(&at, address, key_fixed_len)
+			.get_storage(&at, address, key.into())
 			.map_err(|e|
 				// Handle general API calling errors.
 				Error {
