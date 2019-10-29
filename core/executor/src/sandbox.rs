@@ -592,6 +592,7 @@ mod tests {
 	use state_machine::TestExternalities as CoreTestExternalities;
 	use wabt;
 	use runtime_test::WASM_BINARY;
+	use wasm_interface::HostFunctions;
 
 	type TestExternalities = CoreTestExternalities<Blake2Hasher, u64>;
 
@@ -602,8 +603,12 @@ mod tests {
 		method: &str,
 		data: &[u8],
 	) -> Result<Vec<u8>> {
-		let mut instance = wasmi_execution::create_instance(ext, code, heap_pages)
-			.map_err(|err| err.to_string())?;
+		let mut instance = wasmi_execution::create_instance(
+			ext,
+			code,
+			heap_pages,
+			runtime_io::SubstrateHostFunctions::host_functions(),
+		).map_err(|err| err.to_string())?;
 		instance.call(ext, method, data)
 	}
 

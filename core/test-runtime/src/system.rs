@@ -319,7 +319,7 @@ mod tests {
 	use crate::{Header, Transfer, WASM_BINARY};
 	use primitives::{NeverNativeValue, map, traits::CodeExecutor};
 	use substrate_executor::{NativeExecutor, WasmExecutionMethod, native_executor_instance};
-	use runtime_io::twox_128;
+	use runtime_io::hashing::twox_128;
 
 	// Declare an instance of the native executor dispatch for the test runtime.
 	native_executor_instance!(

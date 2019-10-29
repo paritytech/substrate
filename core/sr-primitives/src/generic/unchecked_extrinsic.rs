@@ -282,7 +282,7 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use runtime_io::blake2_256;
+	use runtime_io::hashing::blake2_256;
 	use crate::codec::{Encode, Decode};
 	use crate::traits::{SignedExtension, IdentifyAccount, IdentityLookup};
 	use serde::{Serialize, Deserialize};

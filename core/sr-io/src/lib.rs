@@ -528,7 +528,7 @@ pub trait Offchain {
 
 	/// Write a chunk of request body.
 	///
-	/// Writing an empty chunks finalises the request.
+	/// Writing an empty chunks finalizes the request.
 	/// Passing `None` as deadline blocks forever.
 	///
 	/// Returns an error in case deadline is reached or the chunk couldn't be written.
@@ -596,12 +596,20 @@ pub trait Offchain {
 trait Allocator {
 	/// Malloc the given number of bytes and return the pointer to the allocated memory location.
 	fn malloc(&mut self, size: u32) -> Pointer<u8> {
-		self.allocate_memory(size).expect("Failed to allocate memory")
+		match self.allocate_memory(size) {
+			Ok(res) => res,
+			Err(e) => {
+				log::warn!(target: "runtime-interface", "Failed to allocate memory: {}", e);
+				Pointer::new(0)
+			}
+		}
 	}
 
 	/// Free the given pointer.
 	fn free(&mut self, ptr: Pointer<u8>) {
-		self.deallocate_memory(ptr).expect("Failed to free allocated memory")
+		if let Err(e) = self.deallocate_memory(ptr) {
+			log::warn!(target: "runtime-interface", "Failed to free a given pointer: {}", e);
+		}
 	}
 }
 

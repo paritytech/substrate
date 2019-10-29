@@ -649,6 +649,7 @@ mod tests {
 	use substrate_offchain::testing;
 	use trie::{TrieConfiguration, trie_types::Layout};
 	use codec::{Encode, Decode};
+	use wasm_interface::HostFunctions;
 
 	type TestExternalities = CoreTestExternalities<Blake2Hasher, u64>;
 
@@ -659,8 +660,12 @@ mod tests {
 		method: &str,
 		data: &[u8],
 	) -> Result<Vec<u8>, Error> {
-		let mut instance = create_instance(ext, code, heap_pages)
-			.map_err(|err| err.to_string())?;
+		let mut instance = create_instance(
+			ext,
+			code,
+			heap_pages,
+			runtime_io::SubstrateHostFunctions::host_functions(),
+		).map_err(|err| err.to_string())?;
 		instance.call(ext, method, data)
 	}
 

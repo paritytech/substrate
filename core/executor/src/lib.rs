@@ -100,7 +100,7 @@ mod tests {
 	fn call_in_interpreted_wasm_works() {
 		let mut ext = TestExternalities::default();
 		let mut ext = ext.ext();
-		let res = call_in_wasm(
+		let res = call_in_wasm::<_, runtime_io::SubstrateHostFunctions>(
 			"test_empty_return",
 			&[],
 			WasmExecutionMethod::Interpreted,

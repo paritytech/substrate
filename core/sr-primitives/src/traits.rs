@@ -1140,7 +1140,9 @@ macro_rules! impl_opaque_keys {
 			pub fn generate(seed: Option<$crate::rstd::vec::Vec<u8>>) -> $crate::rstd::vec::Vec<u8> {
 				let keys = Self{
 					$(
-						$field: <$type as $crate::app_crypto::RuntimeAppPublic>::generate_pair(seed),
+						$field: <$type as $crate::app_crypto::RuntimeAppPublic>::generate_pair(
+							seed.clone(),
+						),
 					)*
 				};
 				$crate::codec::Encode::encode(&keys)

@@ -208,7 +208,7 @@ fn should_generate_heartbeats() {
 
 		assert_eq!(heartbeat, Heartbeat {
 			block_number: 2,
-			network_state: runtime_io::network_state().unwrap(),
+			network_state: runtime_io::offchain::network_state().unwrap(),
 			session_index: 2,
 			authority_index: 2,
 		});
