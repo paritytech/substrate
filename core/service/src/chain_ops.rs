@@ -23,7 +23,7 @@ use chain_spec::{ChainSpec, RuntimeGenesis, Extension};
 #[macro_export]
 /// Export blocks
 macro_rules! export_blocks {
-($client:ident, $exit:ident, $output:ident, $from:ident, $to:ident, $json:ident) => {{
+($client:ident, $output:ident, $from:ident, $to:ident, $json:ident) => {{
 	let mut block = $from;
 
 	let last = match $to {
@@ -32,14 +32,15 @@ macro_rules! export_blocks {
 		None => $client.info().chain.best_number,
 	};
 
-	let (exit_send, exit_recv) = std::sync::mpsc::channel();
-	std::thread::spawn(move || {
-		let _ = $exit.wait();
-		let _ = exit_send.send(());
-	});
-
 	let mut wrote_header = false;
 
+	// Exporting blocks is implemented as a future, because we want the operation to be
+	// interruptible.
+	//
+	// Every time we write a block to the output, the `Future` re-schedules itself and returns
+	// `Poll::Pending`.
+	// This makes it possible either to interleave other operations in-between the block exports,
+	// or to stop the operation completely.
 	futures03::future::poll_fn(move |cx| {
 		if last < block {
 			return std::task::Poll::Ready(Err("Invalid block range specified".into()));
@@ -54,10 +55,6 @@ macro_rules! export_blocks {
 				$output.write_all(&len.encode())?;
 			}
 			wrote_header = true;
-		}
-
-		if exit_recv.try_recv().is_ok() {
-			return std::task::Poll::Ready(Ok(()))
 		}
 
 		match $client.block(&BlockId::number(block))? {

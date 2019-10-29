@@ -622,7 +622,6 @@ pub trait ServiceBuilderExport {
 	/// Performs the blocks export.
 	fn export_blocks(
 		self,
-		exit: impl Future<Item=(),Error=()> + Send + 'static,
 		output: impl Write + 'static,
 		from: NumberFor<Self::Block>,
 		to: Option<NumberFor<Self::Block>>,
@@ -682,14 +681,13 @@ where
 
 	fn export_blocks(
 		self,
-		exit: impl Future<Item=(),Error=()> + Send + 'static,
 		mut output: impl Write + 'static,
 		from: NumberFor<TBl>,
 		to: Option<NumberFor<TBl>>,
 		json: bool
 	) -> Box<dyn Future<Item = (), Error = Error>> {
 		let client = self.client;
-		Box::new(export_blocks!(client, exit, output, from, to, json).compat())
+		Box::new(export_blocks!(client, output, from, to, json).compat())
 	}
 }
 

@@ -62,7 +62,7 @@ use app_dirs::{AppInfo, AppDataType};
 use log::info;
 use lazy_static::lazy_static;
 
-use futures::Future;
+use futures::{Async, Future};
 use substrate_telemetry::TelemetryEndpoints;
 
 /// The maximum number of characters for a node name.
@@ -350,7 +350,23 @@ impl<'a> ParseAndPrepareExport<'a> {
 			None => Box::new(stdout()),
 		};
 
-		let fut = builder(config)?.export_blocks(exit.into_exit(), file, from.into(), to.map(Into::into), json);
+		// Note: while we would like the user to handle the exit themselves, we handle it here
+		// for backwards compatibility reasons.
+		let (exit_send, exit_recv) = std::sync::mpsc::channel();
+		let exit = exit.into_exit();
+		std::thread::spawn(move || {
+			let _ = exit.wait();
+			let _ = exit_send.send(());
+		});
+
+		let mut export_fut = builder(config)?.export_blocks(file, from.into(), to.map(Into::into), json);
+		let fut = futures::future::poll_fn(|| {
+			if exit_recv.try_recv().is_ok() {
+				return Ok(Async::Ready(()));
+			}
+			export_fut.poll()
+		});
+
 		let mut runtime = tokio::runtime::current_thread::Runtime::new().unwrap();
 		runtime.block_on(fut)?;
 		Ok(())
