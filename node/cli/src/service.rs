@@ -124,6 +124,11 @@ macro_rules! new_full {
 			$config.disable_grandpa
 		);
 
+		// sentry nodes announce themselves as authorities to the network
+		// and should run the same protocols authorities do, but it should
+		// never actively participate in any consensus process.
+		let participates_in_consensus = is_authority && !$config.sentry_mode;
+
 		let (builder, mut import_setup, inherent_data_providers) = new_full_start!($config);
 
 		// Dht event channel from the network to the authority discovery module. Use bounded channel to ensure
@@ -145,7 +150,7 @@ macro_rules! new_full {
 
 		($with_startup_data)(&block_import, &babe_link);
 
-		if is_authority {
+		if participates_in_consensus {
 			let proposer = substrate_basic_authorship::ProposerFactory {
 				client: service.client(),
 				transaction_pool: service.transaction_pool(),
@@ -171,13 +176,21 @@ macro_rules! new_full {
 			service.spawn_essential_task(babe);
 		}
 
+		// if the node isn't actively participating in consensus then it doesn't
+		// need a keystore, regardless of which protocol we use below.
+		let keystore = if participates_in_consensus {
+			Some(service.keystore())
+		} else {
+			None
+		};
+
 		let config = grandpa::Config {
 			// FIXME #1578 make this available through chainspec
 			gossip_duration: std::time::Duration::from_millis(333),
 			justification_period: 512,
 			name: Some(name),
-			keystore: Some(service.keystore()),
 			observer_enabled: true,
+			keystore,
 			is_authority,
 		};
 
