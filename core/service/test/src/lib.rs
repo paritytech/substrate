@@ -29,6 +29,7 @@ use service::{
 	AbstractService,
 	ChainSpec,
 	Configuration,
+	ConfigurationDb,
 	Roles,
 	Error,
 };
@@ -170,8 +171,10 @@ fn node_config<G, E: Clone> (
 		network: network_config,
 		keystore_path: root.join("key"),
 		keystore_password: None,
-		database_path: root.join("db"),
-		database_cache_size: None,
+		database: ConfigurationDb::Path {
+			path: root.join("db"),
+			cache_size: None
+		},
 		state_cache_size: 16777216,
 		state_cache_child_ratio: None,
 		pruning: Default::default(),
