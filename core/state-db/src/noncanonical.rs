@@ -154,7 +154,10 @@ struct BlockOverlay<BlockHash: Hash, Key: Hash> {
 	kv_deleted: Vec<KvKey>,
 }
 
-fn insert_values<Key: Hash>(values: &mut HashMap<Key, (u32, DBValue)>, inserted: Vec<(Key, DBValue)>) {
+fn insert_values<Key: Hash>(
+	values: &mut HashMap<Key, (u32, DBValue)>,
+	inserted: Vec<(Key, DBValue)>,
+) {
 	for (k, v) in inserted {
 		debug_assert!(values.get(&k).map_or(true, |(_, value)| *value == v));
 		let (ref mut counter, _) = values.entry(k).or_insert_with(|| (0, v));
@@ -228,7 +231,8 @@ fn discard_descendants<BlockHash: Hash, Key: Hash>(
 	let mut discarded = Vec::new();
 	if let Some(level) = levels.get_mut(index) {
 		*level = level.drain(..).filter_map(|overlay| {
-			let parent = parents.get(&overlay.hash).expect("there is a parent entry for each entry in levels; qed").0.clone();
+			let parent = parents.get(&overlay.hash)
+				.expect("there is a parent entry for each entry in levels; qed").0.clone();
 			if parent == *hash {
 				parents.remove(&overlay.hash);
 				discarded.push(overlay.hash);

@@ -17,7 +17,7 @@
 //! Linear historical data.
 //!
 //! Current encoding is a single encoded succession of values and
-//! their history index (version 1 is used for it).
+//! their state index (version 1 is used for it).
 //! The frame for n elements is:
 //!
 //! `1 byte version ++ (u64 le encoded state index ++ byte value of element) * n
@@ -62,7 +62,7 @@ const ALLOCATED_HISTORY: usize = 2;
 /// Can be written as is in underlying storage.
 /// Could be extended to direct access memory too.
 #[derive(Debug, Clone)]
-pub struct Serialized<'a, F>(SerializedBuff<'a>, PhantomData<F>);
+pub struct Serialized<'a, F>(Cow<'a, [u8]>, PhantomData<F>);
 
 impl<'a, 'b, F> PartialEq<Serialized<'b, F>> for Serialized<'a, F> {
   fn eq(&self, other: &Serialized<'b, F>) -> bool {
@@ -71,10 +71,6 @@ impl<'a, 'b, F> PartialEq<Serialized<'b, F>> for Serialized<'a, F> {
 }
 
 impl<'a, F> Eq for Serialized<'a, F> { }
-
-/// Internal buffer, it is either a readonly view other the
-/// serialized data or the pending changes.
-type SerializedBuff<'a> = Cow<'a, [u8]>;
 
 /// Serialized specific behavior.
 pub trait SerializedConfig {
@@ -97,7 +93,7 @@ pub struct DefaultVersion;
 
 impl SerializedConfig for NoVersion {
 	fn empty() -> &'static [u8] {
-		&EMPTY_SERIALIZED
+		&NO_VERSION_EMPTY_SERIALIZED
 	}
 	fn version_len() -> usize {
 		0
@@ -124,10 +120,6 @@ const SIZE_BYTE_LEN: usize = 8;
 //
 // Those function requires prior index checking.
 impl<'a, F: SerializedConfig> Serialized<'a, F> {
-
-	pub fn into_owned(self) -> Serialized<'static, F> {
-		Serialized(Cow::from(self.0.into_owned()), PhantomData)
-	}
 
 	pub fn into_vec(self) -> Vec<u8> {
 		self.0.into_owned()
@@ -265,7 +257,7 @@ impl<'a, F: SerializedConfig> Serialized<'a, F> {
 
 }
 
-const EMPTY_SERIALIZED: [u8; SIZE_BYTE_LEN] = [0u8; SIZE_BYTE_LEN];
+const NO_VERSION_EMPTY_SERIALIZED: [u8; SIZE_BYTE_LEN] = [0u8; SIZE_BYTE_LEN];
 const DEFAULT_VERSION: u8 = 1;
 const DEFAULT_VERSION_EMPTY_SERIALIZED: [u8; SIZE_BYTE_LEN + 1] = {
 	let mut buf = [0u8; SIZE_BYTE_LEN + 1];
@@ -294,7 +286,8 @@ impl<F> Into<Serialized<'static, F>> for Vec<u8> {
 // Utility function for basis implementation.
 impl<'a, F: SerializedConfig> Serialized<'a, F> {
 	
-	// Index at the end of the element part, start of part with the index for each element in the buffer. (contains the encoded size, as it is the last part in the buffer)
+	// Index at the end of the element part, start of internal index table in the buffer.
+	// (also followed by the encoded size, the last part in the buffer)
 	fn index_start(&self) -> usize {
 		let nb_ix = self.len();
 		if nb_ix == 0 { return F::version_len(); }

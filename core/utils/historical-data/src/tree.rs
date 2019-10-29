@@ -327,10 +327,6 @@ impl<V> History<V> {
 
 impl<'a, F: SerializedConfig> Serialized<'a, F> {
 
-	pub fn into_owned(self) -> Serialized<'static, F> {
-		Serialized(self.0.into_owned())
-	}
-
 	pub fn into_vec(self) -> Vec<u8> {
 		self.0.into_vec()
 	}
