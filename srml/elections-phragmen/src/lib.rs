@@ -165,7 +165,7 @@ decl_storage! {
 		/// Has the storage format been updated?
 		/// NOTE: Only use and set to false if you have used an early version of this module. Should
 		/// be set to true otherwise.
-		DidMigrate: bool = false;
+		DidMigrate: bool;
 	}
 }
 
@@ -380,7 +380,7 @@ decl_module! {
 
 		/// What to do at the end of each block. Checks if an election needs to happen or not.
 		fn on_initialize(n: T::BlockNumber) {
-			if !DidMigrate::get() {
+			if !DidMigrate::exists() {
 				DidMigrate::put(true);
 				Self::do_migrate();
 			}
