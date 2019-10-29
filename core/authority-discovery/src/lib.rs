@@ -682,7 +682,6 @@ mod tests {
 		dht_event_tx.try_send(dht_event).unwrap();
 
 		// Make authority discovery handle the event.
-
 		let f = |cx: &mut Context<'_>| -> Poll<()> {
 			authority_discovery.handle_dht_events(cx).unwrap();
 
