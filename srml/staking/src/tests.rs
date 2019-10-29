@@ -775,7 +775,7 @@ fn forcing_new_era_works() {
 		assert_eq!(Staking::current_era(), 1);
 
 		// back to normal.
-		// this immediatelly starts a new session.
+		// this immediately starts a new session.
 		ForceEra::put(Forcing::NotForcing);
 		start_session(7);
 		assert_eq!(Staking::current_era(), 2);
@@ -783,9 +783,23 @@ fn forcing_new_era_works() {
 		assert_eq!(Staking::current_era(), 2);
 
 		// forceful change
-		ForceEra::put(Forcing::ForceNew);
+		ForceEra::put(Forcing::ForceAlways);
 		start_session(9);
 		assert_eq!(Staking::current_era(), 3);
+		start_session(10);
+		assert_eq!(Staking::current_era(), 4);
+		start_session(11);
+		assert_eq!(Staking::current_era(), 5);
+
+		// just one forceful change
+		ForceEra::put(Forcing::ForceNew);
+		start_session(12);
+		assert_eq!(Staking::current_era(), 6);
+
+		assert_eq!(ForceEra::get(), Forcing::NotForcing);
+		start_session(13);
+		assert_eq!(Staking::current_era(), 6);
+
 	});
 }
 
