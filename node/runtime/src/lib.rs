@@ -29,20 +29,18 @@ use node_primitives::{
 	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index,
 	Moment, Signature,
 };
-use babe_primitives::AuthorityId as BabeId;
 use grandpa::fg_primitives;
 use client::{
 	block_builder::api::{self as block_builder_api, InherentData, CheckInherentsResult},
 	runtime_api as client_api, impl_runtime_apis
 };
-use sr_primitives::{
-	Permill, Perbill, ApplyResult, impl_opaque_keys, generic, create_runtime_str, key_types
-};
+use sr_primitives::{Permill, Perbill, ApplyResult, impl_opaque_keys, generic, create_runtime_str};
 use sr_primitives::curve::PiecewiseLinear;
 use sr_primitives::transaction_validity::TransactionValidity;
 use sr_primitives::weights::Weight;
 use sr_primitives::traits::{
 	self, BlakeTwo256, Block as BlockT, NumberFor, StaticLookup, SaturatedConversion,
+	OpaqueKeys,
 };
 use version::RuntimeVersion;
 #[cfg(any(feature = "std", test))]
@@ -211,34 +209,21 @@ impl authorship::Trait for Runtime {
 	type EventHandler = Staking;
 }
 
-// !!!!!!!!!!!!!
-// WARNING!!!!!!  SEE NOTE BELOW BEFORE TOUCHING THIS CODE
-// !!!!!!!!!!!!!
-type SessionHandlers = (Grandpa, Babe, ImOnline);
-
 impl_opaque_keys! {
 	pub struct SessionKeys {
-		#[id(key_types::GRANDPA)]
-		pub grandpa: GrandpaId,
-		#[id(key_types::BABE)]
-		pub babe: BabeId,
-		#[id(key_types::IM_ONLINE)]
-		pub im_online: ImOnlineId,
+		pub grandpa: Grandpa,
+		pub babe: Babe,
+		pub im_online: ImOnline,
 	}
 }
 
-// NOTE: `SessionHandler` and `SessionKeys` are co-dependent: One key will be used for each handler.
-// The number and order of items in `SessionHandler` *MUST* be the same number and order of keys in
-// `SessionKeys`.
-// TODO: Introduce some structure to tie these together to make it a bit less of a footgun. This
-// should be easy, since OneSessionHandler trait provides the `Key` as an associated type. #2858
 parameter_types! {
 	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(17);
 }
 
 impl session::Trait for Runtime {
 	type OnSessionEnding = Staking;
-	type SessionHandler = SessionHandlers;
+	type SessionHandler = <SessionKeys as OpaqueKeys>::KeyTypeIdProviders;
 	type ShouldEndSession = Babe;
 	type Event = Event;
 	type Keys = SessionKeys;
