@@ -21,7 +21,7 @@ use crate::{RuntimePublic, KeyTypeId};
 pub use primitives::ed25519::*;
 
 mod app {
-	use crate::Vec;
+	use rstd::vec::Vec;
 	use primitives::testing::ED25519;
 	crate::app_crypto!(super, ED25519);
 
