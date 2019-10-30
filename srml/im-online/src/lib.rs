@@ -80,6 +80,7 @@ use sr_primitives::{
 	traits::{Convert, Member, Printable, Saturating}, Perbill,
 	transaction_validity::{
 		TransactionValidity, TransactionLongevity, ValidTransaction, InvalidTransaction,
+		TransactionPriority,
 	},
 };
 use sr_staking_primitives::{
@@ -532,7 +533,7 @@ impl<T: Trait> support::unsigned::ValidateUnsigned for Module<T> {
 			}
 
 			Ok(ValidTransaction {
-				priority: 0,
+				priority: TransactionPriority::max_value(),
 				requires: vec![],
 				provides: vec![(current_session, authority_id).encode()],
 				longevity: TransactionLongevity::max_value(),
