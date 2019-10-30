@@ -28,7 +28,7 @@ pub mod informant;
 
 use client::ExecutionStrategies;
 use service::{
-	config::Configuration,
+	config::{Configuration, DatabaseConfig},
 	ServiceBuilderExport, ServiceBuilderImport, ServiceBuilderRevert,
 	RuntimeGenesis, ChainSpecExtension, PruningMode, ChainSpec,
 };
@@ -351,7 +351,9 @@ impl<'a> ParseAndPrepareExport<'a> {
 	{
 		let config = create_config_with_db_path(spec_factory, &self.params.shared_params, self.version)?;
 
-		info!("DB path: {}", config.database_path.display());
+		if let DatabaseConfig::Path { ref path, .. } = &config.database {
+			info!("DB path: {}", path.display());
+		}
 		let from = self.params.from.unwrap_or(1);
 		let to = self.params.to;
 		let json = self.params.json;
@@ -430,7 +432,13 @@ impl<'a> ParseAndPreparePurge<'a> {
 		let config = create_config_with_db_path::<(), _, _, _>(
 			spec_factory, &self.params.shared_params, self.version
 		)?;
-		let db_path = config.database_path;
+		let db_path = match config.database {
+			DatabaseConfig::Path { path, .. } => path,
+			_ => {
+				eprintln!("Cannot purge custom database implementation");
+				return Ok(());
+			}
+		};
 
 		if !self.params.yes {
 			print!("Are you sure to remove {:?}? [y/N]: ", &db_path);
@@ -455,7 +463,7 @@ impl<'a> ParseAndPreparePurge<'a> {
 				Ok(())
 			},
 			Result::Err(ref err) if err.kind() == ErrorKind::NotFound => {
-				println!("{:?} did not exist.", &db_path);
+				eprintln!("{:?} did not exist.", &db_path);
 				Ok(())
 			},
 			Result::Err(err) => Result::Err(err.into())
@@ -664,8 +672,10 @@ where
 		|| keystore_path(&base_path, config.chain_spec.id())
 	);
 
-	config.database_path = db_path(&base_path, config.chain_spec.id());
-	config.database_cache_size = cli.database_cache_size;
+	config.database = DatabaseConfig::Path {
+		path: db_path(&base_path, config.chain_spec.id()),
+		cache_size: cli.database_cache_size,
+	};
 	config.state_cache_size = cli.state_cache_size;
 
 	let is_dev = cli.shared_params.dev;
@@ -829,7 +839,10 @@ where
 	let base_path = base_path(cli, version);
 
 	let mut config = service::Configuration::default_with_spec(spec.clone());
-	config.database_path = db_path(&base_path, spec.id());
+	config.database = DatabaseConfig::Path {
+		path: db_path(&base_path, spec.id()),
+		cache_size: None,
+	};
 
 	Ok(config)
 }
