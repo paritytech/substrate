@@ -259,22 +259,17 @@ fn should_mark_online_validator_when_block_is_authored() {
 		assert_eq!(Session::current_index(), 2);
 		assert_eq!(Session::validators(), vec![1, 2, 3]);
 
-		for i in 0..5 {
+		for i in 0..3 {
 			assert!(!ImOnline::is_online_in_current_session(i));
 		}
 
 		// when
 		ImOnline::note_author(1);
-		ImOnline::note_author(2);
-		ImOnline::note_uncle(3, 0);
+		ImOnline::note_uncle(2, 0);
 
 		// then
 		assert!(ImOnline::is_online_in_current_session(0));
 		assert!(ImOnline::is_online_in_current_session(1));
-		assert!(ImOnline::is_online_in_current_session(2));
-
-		assert!(!ImOnline::is_online_in_current_session(4));
-		assert!(!ImOnline::is_online_in_current_session(5));
-		assert!(!ImOnline::is_online_in_current_session(6));
+		assert!(!ImOnline::is_online_in_current_session(2));
 	});
 }
