@@ -292,8 +292,9 @@ fn compile_module<T>(wabt_module: &str)
 	Ok((wasm, code_hash))
 }
 
+/// The payment for gas is handled outside of contract execution (e.g `call`) functions.
 #[test]
-fn call_doesnt_consume_gas() {
+fn call_doesnt_pay_for_gas() {
 	ExtBuilder::default().build().execute_with(|| {
 		Balances::deposit_creating(&ALICE, 100_000_000);
 		assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, Vec::new()));
