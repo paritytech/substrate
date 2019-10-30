@@ -1013,7 +1013,7 @@ impl Default for Schedule {
 }
 
 #[doc(hidden)]
-pub struct PreDispatchCheckData<AccountId, NegativeImbalance> {
+pub struct DynamicWeightData<AccountId, NegativeImbalance> {
 	/// The account id who should receive the refund from the gas leftovers.
 	transactor: AccountId,
 	/// The negative imbalance obtained by withdrawing the value up to the requested gas limit.
@@ -1025,10 +1025,11 @@ pub struct PreDispatchCheckData<AccountId, NegativeImbalance> {
 pub struct CheckBlockGasLimit<T: Trait + Send + Sync>(PhantomData<T>);
 
 impl<T: Trait + Send + Sync> CheckBlockGasLimit<T> {
+	/// Perform pre-dispatch checks for the given call and origin.
 	fn perform_pre_dispatch_checks(
 		who: &T::AccountId,
 		call: &<T as Trait>::Call,
-	) -> rstd::result::Result<Option<PreDispatchCheckData<T::AccountId, NegativeImbalanceOf<T>>>, TransactionValidityError> {
+	) -> rstd::result::Result<Option<DynamicWeightData<T::AccountId, NegativeImbalanceOf<T>>>, TransactionValidityError> {
 		let call = match call.is_sub_type() {
 			Some(call) => call,
 			None => return Ok(None),
@@ -1062,7 +1063,7 @@ impl<T: Trait + Send + Sync> CheckBlockGasLimit<T> {
 					Err(_) => return Err(InvalidTransaction::Payment.into()),
 				};
 
-				Ok(Some(PreDispatchCheckData {
+				Ok(Some(DynamicWeightData {
 					transactor: who.clone(),
 					imbalance,
 				}))
@@ -1097,7 +1098,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckBlockGasLimit<T> {
 	/// Optional pre-dispatch check data.
 	///
 	/// It is present only for the contract calls that operate with gas.
-	type Pre = Option<PreDispatchCheckData<T::AccountId, NegativeImbalanceOf<T>>>;
+	type Pre = Option<DynamicWeightData<T::AccountId, NegativeImbalanceOf<T>>>;
 
 	fn additional_signed(&self) -> rstd::result::Result<(), TransactionValidityError> { Ok(()) }
 
@@ -1112,7 +1113,6 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckBlockGasLimit<T> {
 			.map_err(Into::into)
 	}
 
-
 	fn validate(
 		&self,
 		who: &Self::AccountId,
@@ -1125,7 +1125,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckBlockGasLimit<T> {
 	}
 
 	fn post_dispatch(pre: Self::Pre, _info: DispatchInfo, _len: usize) {
-		if let Some(PreDispatchCheckData {
+		if let Some(DynamicWeightData {
 			transactor,
 			imbalance,
 		}) = pre {

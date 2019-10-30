@@ -14,14 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-use crate::{GasUsageReport, Module, Trait, BalanceOf, NegativeImbalanceOf};
-use rstd::convert::TryFrom;
+use crate::{GasUsageReport, Trait, BalanceOf};
 use sr_primitives::traits::{
-	CheckedMul, Zero, SaturatedConversion, SimpleArithmetic, UniqueSaturatedInto,
+	Zero, SaturatedConversion, SimpleArithmetic,
 };
-use support::{
-	traits::{Currency, ExistenceRequirement, Imbalance, OnUnbalanced, WithdrawReason}, StorageValue,
-};
+use support::StorageValue;
 
 #[cfg(test)]
 use std::{any::Any, fmt::Debug};
