@@ -46,11 +46,10 @@ fn start_inner(wasm_ext: wasm_ext::ffi::Transport) -> Result<Client, Box<dyn std
 	config.telemetry_external_transport = Some(wasm_ext);
 	config.roles = ServiceRoles::FULL;
 	config.name = "Browser node".to_string();
-    config.database = {
-        let db = Arc::new(kvdb_memorydb::create(10));
-        DatabaseConfig::Custom(db)
-    };
-    // TODO: config.database
+	config.database = {
+		let db = Arc::new(kvdb_memorydb::create(10));
+		DatabaseConfig::Custom(db)
+	};
 
 	//info!("{}", version.name);
 	info!("  version {}", config.full_version());

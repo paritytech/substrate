@@ -215,6 +215,8 @@ check-web-wasm:
     - time cargo web build -p substrate-state-machine
     - time cargo web build -p substrate-telemetry
     - time cargo web build -p substrate-trie
+    # Note: the command below is a bit weird because several Cargo issues prevent us from compiling the node in a more straight-forward way.
+    - time cargo build --manifest-path=node/cli/Cargo.toml --no-default-features --features "browser" --target=wasm32-unknown-unknown
     - sccache -s
 
 node-exits:

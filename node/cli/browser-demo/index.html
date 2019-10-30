@@ -29,9 +29,6 @@ async function start() {
 		client
 			.rpcSend('{"method":"system_networkState","params":[],"id":1,"jsonrpc":"2.0"}')
 			.then((r) => log("Network state: " + r));
-		client
-			.rpcSend('{"method":"system_networkState","params":[],"id":1,"jsonrpc":"2.0"}')
-			.then((r) => log("Network state: " + r));
 	}, 1000);
 }
 
