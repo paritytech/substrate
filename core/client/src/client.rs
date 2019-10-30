@@ -1871,7 +1871,7 @@ pub(crate) mod tests {
 	use consensus::{BlockOrigin, SelectChain};
 	use test_client::{
 		prelude::*,
-		client_db::{Backend, DatabaseSettings, PruningMode},
+		client_db::{Backend, DatabaseSettings, DatabaseSettingsSrc, PruningMode},
 		runtime::{self, Block, Transfer, RuntimeApi, TestAPI},
 	};
 
@@ -2755,11 +2755,13 @@ pub(crate) mod tests {
 		// states
 		let backend = Arc::new(Backend::new(
 			DatabaseSettings {
-				cache_size: None,
 				state_cache_size: 1 << 20,
 				state_cache_child_ratio: None,
-				path: tmp.path().into(),
 				pruning: PruningMode::ArchiveAll,
+				source: DatabaseSettingsSrc::Path {
+					path: tmp.path().into(),
+					cache_size: None,
+				}
 			},
 			u64::max_value(),
 		).unwrap());
