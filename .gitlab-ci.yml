@@ -234,9 +234,9 @@ test-full-crypto-feature:          &test-full-crypto-feature
       - $DEPLOY_TAG
   script:
     - cd core/primitives/
-    - time cargo build --verbose --no-default-features --features full_crypto
+    - time cargo +nightly build --verbose --no-default-features --features full_crypto
     - cd ../application-crypto
-    - time cargo build --verbose --no-default-features --features full_crypto
+    - time cargo +nightly build --verbose --no-default-features --features full_crypto
     - sccache -s
 
 
