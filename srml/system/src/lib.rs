@@ -597,9 +597,18 @@ impl<T: Trait> Module<T> {
 		ExtrinsicCount::get().unwrap_or_default()
 	}
 
-	/// Gets a total weight of all executed extrinsics.
+	/// Gets a total weight of all executed extrinsics so far.
 	pub fn all_extrinsics_weight() -> Weight {
 		AllExtrinsicsWeight::get().unwrap_or_default()
+	}
+
+	/// Sets the total weight of all executed extrinsics so far.
+	///
+	/// Note that generally the total extrinsics weight is tracked by the this module. You might
+	/// find this method useful only if you are implementing a custom weight handling logic for
+	/// transactions.
+	pub fn set_extrinsics_weight(current_weight: Weight) {
+		AllExtrinsicsWeight::put(current_weight)
 	}
 
 	pub fn all_extrinsics_len() -> u32 {

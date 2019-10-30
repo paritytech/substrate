@@ -381,6 +381,7 @@ parameter_types! {
 	pub const RentByteFee: Balance = 1 * DOLLARS;
 	pub const RentDepositOffset: Balance = 1000 * DOLLARS;
 	pub const SurchargeReward: Balance = 150 * DOLLARS;
+	pub const WeightPerGasUnit: Weight = 1;
 }
 
 impl contracts::Trait for Runtime {
@@ -410,6 +411,8 @@ impl contracts::Trait for Runtime {
 	type MaxDepth = contracts::DefaultMaxDepth;
 	type MaxValueSize = contracts::DefaultMaxValueSize;
 	type BlockGasLimit = contracts::DefaultBlockGasLimit;
+	type WeightToFee = LinearWeightToFee<WeightFeeCoefficient>;
+	type WeightPerGasUnit = WeightPerGasUnit;
 }
 
 impl sudo::Trait for Runtime {

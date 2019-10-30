@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-use crate::{GasSpent, Module, Trait, BalanceOf, NegativeImbalanceOf};
+use crate::{GasUsageReport, Module, Trait, BalanceOf, NegativeImbalanceOf};
 use rstd::convert::TryFrom;
 use sr_primitives::traits::{
 	CheckedMul, Zero, SaturatedConversion, SimpleArithmetic, UniqueSaturatedInto,
@@ -198,50 +198,20 @@ impl<T: Trait> GasMeter<T> {
 ///
 /// Cost is calculated by multiplying the gas cost (taken from the storage) by the `gas_limit`.
 /// The funds are deducted from `transactor`.
-pub fn buy_gas<T: Trait>(
-	transactor: &T::AccountId,
-	gas_limit: Gas,
-) -> Result<(GasMeter<T>, NegativeImbalanceOf<T>), &'static str> {
-	// Buy the specified amount of gas.
-	let gas_price = <Module<T>>::gas_price();
-	let cost = if gas_price.is_zero() {
-		<BalanceOf<T>>::zero()
-	} else {
-		<BalanceOf<T> as TryFrom<Gas>>::try_from(gas_limit).ok()
-			.and_then(|gas_limit| gas_price.checked_mul(&gas_limit))
-			.ok_or("overflow multiplying gas limit by price")?
-	};
-
-	let imbalance = T::Currency::withdraw(
-		transactor,
-		cost,
-		WithdrawReason::Fee.into(),
-		ExistenceRequirement::KeepAlive
-	)?;
-
-	Ok((GasMeter::with_limit(gas_limit, gas_price), imbalance))
+pub fn buy_gas<T: Trait>(gas_limit: Gas) -> Result<GasMeter<T>, &'static str> {
+	Ok(GasMeter::with_limit(gas_limit, 1.into()))
 }
 
 /// Refund the unused gas.
-pub fn refund_unused_gas<T: Trait>(
-	transactor: &T::AccountId,
-	gas_meter: GasMeter<T>,
-	imbalance: NegativeImbalanceOf<T>,
-) {
+pub fn refund_unused_gas<T: Trait>(gas_meter: GasMeter<T>) {
 	let gas_spent = gas_meter.spent();
 	let gas_left = gas_meter.gas_left();
 
-	// Increase total spent gas.
-	// This cannot overflow, since `gas_spent` is never greater than `block_gas_limit`, which
-	// also has Gas type.
-	GasSpent::mutate(|block_gas_spent| *block_gas_spent += gas_spent);
+	GasUsageReport::put((gas_left, gas_spent));
+}
 
-	// Refund gas left by the price it was bought at.
-	let refund = gas_meter.gas_price * gas_left.unique_saturated_into();
-	let refund_imbalance = T::Currency::deposit_creating(transactor, refund);
-	if let Ok(imbalance) = imbalance.offset(refund_imbalance) {
-		T::GasPayment::on_unbalanced(imbalance);
-	}
+pub fn take_gas_usage_report() -> (Gas, Gas) { // (gas_left, gas_spent)
+	GasUsageReport::take()
 }
 
 /// A little handy utility for converting a value in balance units into approximate value in gas units
