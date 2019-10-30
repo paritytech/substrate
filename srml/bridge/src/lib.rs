@@ -124,6 +124,7 @@ decl_error! {
 	// Error for the Bridge module
 	pub enum Error {
 		InvalidStorageProof,
+		StorageValueUnavailable,
 		InvalidValidatorSetProof,
 		ValidatorSetMismatch,
 	}
@@ -139,12 +140,14 @@ impl<T: Trait> Module<T> {
 		let checker = <StorageProofChecker<<T::Hashing as sr_primitives::traits::Hash>::Hasher>>::new(
 			*state_root,
 			proof.clone()
-		).unwrap();
+		)?;
 
 		// By encoding the given set we should have an easy way to compare
 		// with the stuff we get out of storage via `read_value`
 		let encoded_validator_set = validator_set.encode();
-		let actual_validator_set = checker.read_value(b":grandpa_authorities").unwrap().unwrap();
+		let actual_validator_set = checker
+			.read_value(b":grandpa_authorities")?
+			.ok_or(Error::StorageValueUnavailable)?;
 
 		if encoded_validator_set == actual_validator_set {
 			Ok(())
