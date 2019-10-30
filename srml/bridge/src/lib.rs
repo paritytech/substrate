@@ -34,7 +34,6 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-mod error;
 mod storage_proof;
 
 use crate::storage_proof::StorageProofChecker;
@@ -124,6 +123,7 @@ decl_error! {
 	// Error for the Bridge module
 	pub enum Error {
 		InvalidStorageProof,
+		StorageRootMismatch,
 		StorageValueUnavailable,
 		InvalidValidatorSetProof,
 		ValidatorSetMismatch,
