@@ -74,11 +74,11 @@ mod tests {
 
 			// put the old value in the new key.
 			let key = Value::storage_value_final_key();
-			unhashed::put_raw(&key, &old_raw_value);
+			unhashed::put_raw(&key, &1111u32.encode());
 
 			// translate
 			let translate_fn = |old: Option<u32>| -> Option<(u64, u64)> {
-				Some(old.map_or_else(|| unimplemented!(), |o| (o.into(), (o*2).into())))
+				old.map(|o| (o.into(), (o*2).into()))
 			};
 			let _ = Value::translate(translate_fn);
 			assert_eq!(Value::get(), (1111, 2222));
