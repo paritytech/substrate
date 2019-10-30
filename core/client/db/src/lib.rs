@@ -903,11 +903,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 	/// Returns total numbet of blocks (headers) in the block DB.
 	#[cfg(feature = "test-helpers")]
 	pub fn blocks_count(&self) -> u64 {
-		let mut count = 0;
-		for (_, _) in self.blockchain.db.iter(columns::HEADER) {
-			count += 1;
-		}
-		count
+		self.blockchain.db.iter(columns::HEADER).count() as u64
 	}
 
 	/// Read (from storage or cache) changes trie config.
