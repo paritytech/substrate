@@ -31,6 +31,7 @@ cfg-if = "0.1.10"
 srml-babe = { path = "../../srml/babe", default-features = false }
 srml-timestamp = { path = "../../srml/timestamp", default-features = false }
 srml-system = { path = "../../srml/system", default-features = false }
+srml-system-rpc-runtime-api = { path = "../../srml/system/rpc/runtime-api", default-features = false }
 
 [dev-dependencies]
 substrate-executor = { path = "../executor" }
@@ -38,7 +39,7 @@ substrate-test-runtime-client = { path = "./client" }
 state_machine = { package = "substrate-state-machine", path = "../state-machine" }
 
 [build-dependencies]
-wasm-builder-runner = { package = "substrate-wasm-builder-runner", version = "1.0.2", path = "../utils/wasm-builder-runner" }
+wasm-builder-runner = { package = "substrate-wasm-builder-runner", version = "1.0.4", path = "../utils/wasm-builder-runner" }
 
 [features]
 default = [
@@ -68,6 +69,7 @@ std = [
 	"srml-babe/std",
 	"srml-timestamp/std",
 	"srml-system/std",
+	"srml-system-rpc-runtime-api/std",
 	"app-crypto/std",
 	"session/std",
 ]

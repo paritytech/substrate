@@ -1,11 +1,12 @@
-use primitives::{Pair, Public};
-use node_template_runtime::{
-	AccountId, BabeConfig, BalancesConfig, GenesisConfig, GrandpaConfig,
-	SudoConfig, IndicesConfig, SystemConfig, WASM_BINARY, 
+use primitives::{Pair, Public, sr25519};
+use runtime::{
+	AccountId, AuraConfig, BalancesConfig, GenesisConfig, GrandpaConfig,
+	SudoConfig, IndicesConfig, SystemConfig, WASM_BINARY, Signature
 };
-use babe_primitives::{AuthorityId as BabeId};
+use aura_primitives::sr25519::{AuthorityId as AuraId};
 use grandpa_primitives::{AuthorityId as GrandpaId};
 use substrate_service;
+use sr_primitives::traits::{Verify, IdentifyAccount};
 
 // Note this is the URL for the telemetry server
 //const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
@@ -31,13 +32,20 @@ pub fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Pu
 		.public()
 }
 
-/// Helper function to generate stash, controller and session key from seed
-pub fn get_authority_keys_from_seed(seed: &str) -> (AccountId, AccountId, GrandpaId, BabeId) {
+type AccountPublic = <Signature as Verify>::Signer;
+
+/// Helper function to generate an account ID from seed
+pub fn get_account_id_from_seed<TPublic: Public>(seed: &str) -> AccountId where
+	AccountPublic: From<<TPublic::Pair as Pair>::Public>
+{
+	AccountPublic::from(get_from_seed::<TPublic>(seed)).into_account()
+}
+
+/// Helper function to generate an authority key for Aura
+pub fn get_authority_keys_from_seed(s: &str) -> (AuraId, GrandpaId) {
 	(
-		get_from_seed::<AccountId>(&format!("{}//stash", seed)),
-		get_from_seed::<AccountId>(seed),
-		get_from_seed::<GrandpaId>(seed),
-		get_from_seed::<BabeId>(seed),
+		get_from_seed::<AuraId>(s),
+		get_from_seed::<GrandpaId>(s),
 	)
 }
 
@@ -51,12 +59,12 @@ impl Alternative {
 				|| testnet_genesis(vec![
 					get_authority_keys_from_seed("Alice"),
 				],
-				get_from_seed::<AccountId>("Alice"),
+				get_account_id_from_seed::<sr25519::Public>("Alice"),
 				vec![
-					get_from_seed::<AccountId>("Alice"),
-					get_from_seed::<AccountId>("Bob"),
-					get_from_seed::<AccountId>("Alice//stash"),
-					get_from_seed::<AccountId>("Bob//stash"),
+					get_account_id_from_seed::<sr25519::Public>("Alice"),
+					get_account_id_from_seed::<sr25519::Public>("Bob"),
+					get_account_id_from_seed::<sr25519::Public>("Alice//stash"),
+					get_account_id_from_seed::<sr25519::Public>("Bob//stash"),
 				],
 				true),
 				vec![],
@@ -71,21 +79,21 @@ impl Alternative {
 				|| testnet_genesis(vec![
 					get_authority_keys_from_seed("Alice"),
 					get_authority_keys_from_seed("Bob"),
-				], 
-				get_from_seed::<AccountId>("Alice"),
+				],
+				get_account_id_from_seed::<sr25519::Public>("Alice"),
 				vec![
-					get_from_seed::<AccountId>("Alice"),
-					get_from_seed::<AccountId>("Bob"),
-					get_from_seed::<AccountId>("Charlie"),
-					get_from_seed::<AccountId>("Dave"),
-					get_from_seed::<AccountId>("Eve"),
-					get_from_seed::<AccountId>("Ferdie"),
-					get_from_seed::<AccountId>("Alice//stash"),
-					get_from_seed::<AccountId>("Bob//stash"),
-					get_from_seed::<AccountId>("Charlie//stash"),
-					get_from_seed::<AccountId>("Dave//stash"),
-					get_from_seed::<AccountId>("Eve//stash"),
-					get_from_seed::<AccountId>("Ferdie//stash"),
+					get_account_id_from_seed::<sr25519::Public>("Alice"),
+					get_account_id_from_seed::<sr25519::Public>("Bob"),
+					get_account_id_from_seed::<sr25519::Public>("Charlie"),
+					get_account_id_from_seed::<sr25519::Public>("Dave"),
+					get_account_id_from_seed::<sr25519::Public>("Eve"),
+					get_account_id_from_seed::<sr25519::Public>("Ferdie"),
+					get_account_id_from_seed::<sr25519::Public>("Alice//stash"),
+					get_account_id_from_seed::<sr25519::Public>("Bob//stash"),
+					get_account_id_from_seed::<sr25519::Public>("Charlie//stash"),
+					get_account_id_from_seed::<sr25519::Public>("Dave//stash"),
+					get_account_id_from_seed::<sr25519::Public>("Eve//stash"),
+					get_account_id_from_seed::<sr25519::Public>("Ferdie//stash"),
 				],
 				true),
 				vec![],
@@ -106,8 +114,8 @@ impl Alternative {
 	}
 }
 
-fn testnet_genesis(initial_authorities: Vec<(AccountId, AccountId, GrandpaId, BabeId)>,
-	root_key: AccountId, 
+fn testnet_genesis(initial_authorities: Vec<(AuraId, GrandpaId)>,
+	root_key: AccountId,
 	endowed_accounts: Vec<AccountId>,
 	_enable_println: bool) -> GenesisConfig {
 	GenesisConfig {
@@ -125,11 +133,11 @@ fn testnet_genesis(initial_authorities: Vec<(AccountId, AccountId, GrandpaId, Ba
 		sudo: Some(SudoConfig {
 			key: root_key,
 		}),
-		babe: Some(BabeConfig {
-			authorities: initial_authorities.iter().map(|x| (x.3.clone(), 1)).collect(),
+		aura: Some(AuraConfig {
+			authorities: initial_authorities.iter().map(|x| (x.0.clone())).collect(),
 		}),
 		grandpa: Some(GrandpaConfig {
-			authorities: initial_authorities.iter().map(|x| (x.2.clone(), 1)).collect(),
+			authorities: initial_authorities.iter().map(|x| (x.1.clone(), 1)).collect(),
 		}),
 	}
 }

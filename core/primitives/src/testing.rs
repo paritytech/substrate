@@ -129,12 +129,111 @@ impl crate::traits::BareCryptoStore for KeyStore {
 	}
 }
 
+/// Macro for exporting functions from wasm in with the expected signature for using it with the
+/// wasm executor. This is useful for tests where you need to call a function in wasm.
+///
+/// The input parameters are expected to be SCALE encoded and will be automatically decoded for you.
+/// The output value is also SCALE encoded when returned back to the host.
+///
+/// The functions are feature-gated with `#[cfg(not(feature = "std"))]`, so they are only available
+/// from within wasm.
+///
+/// # Example
+///
+/// ```
+/// # use substrate_primitives::wasm_export_functions;
+///
+/// wasm_export_functions! {
+///     fn test_in_wasm(value: bool, another_value: Vec<u8>) -> bool {
+///         value && another_value.is_empty()
+///     }
+///
+///     fn without_return_value() {
+///         // do something
+///     }
+/// }
+/// ```
+#[macro_export]
+macro_rules! wasm_export_functions {
+	(
+		$(
+			fn $name:ident (
+				$( $arg_name:ident: $arg_ty:ty ),* $(,)?
+			) $( -> $ret_ty:ty )? { $( $fn_impl:tt )* }
+		)*
+	) => {
+		$(
+			$crate::wasm_export_functions! {
+				@IMPL
+				fn $name (
+					$( $arg_name: $arg_ty ),*
+				) $( -> $ret_ty )? { $( $fn_impl )* }
+			}
+		)*
+	};
+	(@IMPL
+		fn $name:ident (
+				$( $arg_name:ident: $arg_ty:ty ),*
+		) { $( $fn_impl:tt )* }
+	) => {
+		#[no_mangle]
+		#[allow(unreachable_code)]
+		#[cfg(not(feature = "std"))]
+		pub fn $name(input_data: *mut u8, input_len: usize) -> u64 {
+			let input: &[u8] = if input_len == 0 {
+				&[0u8; 0]
+			} else {
+				unsafe {
+					$crate::rstd::slice::from_raw_parts(input_data, input_len)
+				}
+			};
+
+			{
+				let ($( $arg_name ),*) : ($( $arg_ty ),*) = $crate::Decode::decode(
+					&mut &input[..],
+				).expect("Input data is correctly encoded");
+
+				$( $fn_impl )*
+			}
+
+			$crate::to_substrate_wasm_fn_return_value(&())
+		}
+	};
+	(@IMPL
+		fn $name:ident (
+				$( $arg_name:ident: $arg_ty:ty ),*
+		) $( -> $ret_ty:ty )? { $( $fn_impl:tt )* }
+	) => {
+		#[no_mangle]
+		#[allow(unreachable_code)]
+		#[cfg(not(feature = "std"))]
+		pub fn $name(input_data: *mut u8, input_len: usize) -> u64 {
+			let input: &[u8] = if input_len == 0 {
+				&[0u8; 0]
+			} else {
+				unsafe {
+					$crate::rstd::slice::from_raw_parts(input_data, input_len)
+				}
+			};
+
+			let output $( : $ret_ty )? = {
+				let ($( $arg_name ),*) : ($( $arg_ty ),*) = $crate::Decode::decode(
+					&mut &input[..],
+				).expect("Input data is correctly encoded");
+
+				$( $fn_impl )*
+			};
+
+			$crate::to_substrate_wasm_fn_return_value(&output)
+		}
+	};
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
 	use crate::sr25519;
 	use crate::testing::{ED25519, SR25519};
-
 
 	#[test]
 	fn store_key_and_extract() {

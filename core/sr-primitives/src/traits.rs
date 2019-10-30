@@ -17,27 +17,23 @@
 //! Primitives for the runtime modules.
 
 use rstd::prelude::*;
-use rstd::{self, result, marker::PhantomData, convert::{TryFrom, TryInto}};
+use rstd::{self, result, marker::PhantomData, convert::{TryFrom, TryInto}, fmt::Debug};
 use runtime_io;
 #[cfg(feature = "std")]
-use std::fmt::{Debug, Display};
+use std::fmt::Display;
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize, de::DeserializeOwned};
 use primitives::{self, Hasher, Blake2Hasher, TypeId};
-use crate::codec::{Codec, Encode, Decode, HasCompact};
+use crate::codec::{Codec, Encode, Decode};
 use crate::transaction_validity::{
 	ValidTransaction, TransactionValidity, TransactionValidityError, UnknownTransaction,
 };
 use crate::generic::{Digest, DigestItem};
 use crate::weights::DispatchInfo;
-pub use integer_sqrt::IntegerSquareRoot;
-pub use num_traits::{
+pub use arithmetic::traits::{
+	SimpleArithmetic, UniqueSaturatedInto, UniqueSaturatedFrom, Saturating, SaturatedConversion,
 	Zero, One, Bounded, CheckedAdd, CheckedSub, CheckedMul, CheckedDiv,
-	CheckedShl, CheckedShr
-};
-use rstd::ops::{
-	Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, DivAssign,
-	RemAssign, Shl, Shr
+	CheckedShl, CheckedShr, IntegerSquareRoot
 };
 use app_crypto::AppKey;
 use impl_trait_for_tuples::impl_for_tuples;
@@ -54,46 +50,84 @@ impl<'a> Lazy<[u8]> for &'a [u8] {
 	fn get(&mut self) -> &[u8] { &**self }
 }
 
+/// Some type that is able to be collapsed into an account ID. It is not possible to recreate the original value from
+/// the account ID.
+pub trait IdentifyAccount {
+	/// The account ID that this can be transformed into.
+	type AccountId;
+	/// Transform into an account.
+	fn into_account(self) -> Self::AccountId;
+}
+
+impl IdentifyAccount for primitives::ed25519::Public {
+	type AccountId = Self;
+	fn into_account(self) -> Self { self }
+}
+
+impl IdentifyAccount for primitives::sr25519::Public {
+	type AccountId = Self;
+	fn into_account(self) -> Self { self }
+}
+
+impl IdentifyAccount for primitives::ecdsa::Public {
+	type AccountId = Self;
+	fn into_account(self) -> Self { self }
+}
+
 /// Means of signature verification.
 pub trait Verify {
 	/// Type of the signer.
-	type Signer;
+	type Signer: IdentifyAccount;
 	/// Verify a signature. Return `true` if signature is valid for the value.
-	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &Self::Signer) -> bool;
+	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &<Self::Signer as IdentifyAccount>::AccountId) -> bool;
 }
 
 impl Verify for primitives::ed25519::Signature {
 	type Signer = primitives::ed25519::Public;
-	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &Self::Signer) -> bool {
+	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &primitives::ed25519::Public) -> bool {
 		runtime_io::ed25519_verify(self, msg.get(), signer)
 	}
 }
 
 impl Verify for primitives::sr25519::Signature {
 	type Signer = primitives::sr25519::Public;
-	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &Self::Signer) -> bool {
+	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &primitives::sr25519::Public) -> bool {
 		runtime_io::sr25519_verify(self, msg.get(), signer)
+	}
+}
+
+impl Verify for primitives::ecdsa::Signature {
+	type Signer = primitives::ecdsa::Public;
+	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &primitives::ecdsa::Public) -> bool {
+		match runtime_io::secp256k1_ecdsa_recover_compressed(self.as_ref(), &runtime_io::blake2_256(msg.get())) {
+			Ok(pubkey) => <dyn AsRef<[u8]>>::as_ref(signer) == &pubkey[..],
+			_ => false,
+		}
 	}
 }
 
 /// Means of signature verification of an application key.
 pub trait AppVerify {
 	/// Type of the signer.
-	type Signer;
+	type AccountId;
 	/// Verify a signature. Return `true` if signature is valid for the value.
-	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &Self::Signer) -> bool;
+	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &Self::AccountId) -> bool;
 }
 
 impl<
 	S: Verify<Signer=<<T as AppKey>::Public as app_crypto::AppPublic>::Generic> + From<T>,
 	T: app_crypto::Wraps<Inner=S> + app_crypto::AppKey + app_crypto::AppSignature +
 		AsRef<S> + AsMut<S> + From<S>,
-> AppVerify for T {
-	type Signer = <T as AppKey>::Public;
-	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &Self::Signer) -> bool {
+> AppVerify for T where
+	<S as Verify>::Signer: IdentifyAccount<AccountId = <S as Verify>::Signer>,
+	<<T as AppKey>::Public as app_crypto::AppPublic>::Generic:
+		IdentifyAccount<AccountId = <<T as AppKey>::Public as app_crypto::AppPublic>::Generic>,
+{
+	type AccountId = <T as AppKey>::Public;
+	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &<T as AppKey>::Public) -> bool {
 		use app_crypto::IsWrappedBy;
 		let inner: &S = self.as_ref();
-		let inner_pubkey = <Self::Signer as app_crypto::AppPublic>::Generic::from_ref(&signer);
+		let inner_pubkey = <<T as AppKey>::Public as app_crypto::AppPublic>::Generic::from_ref(&signer);
 		Verify::verify(inner, msg, inner_pubkey)
 	}
 }
@@ -151,7 +185,7 @@ pub trait Lookup {
 /// context.
 pub trait StaticLookup {
 	/// Type to lookup from.
-	type Source: Codec + Clone + PartialEq + MaybeDebug;
+	type Source: Codec + Clone + PartialEq + Debug;
 	/// Type to lookup into.
 	type Target;
 	/// Attempt a lookup.
@@ -163,7 +197,7 @@ pub trait StaticLookup {
 /// A lookup implementation returning the input value.
 #[derive(Default)]
 pub struct IdentityLookup<T>(PhantomData<T>);
-impl<T: Codec + Clone + PartialEq + MaybeDebug> StaticLookup for IdentityLookup<T> {
+impl<T: Codec + Clone + PartialEq + Debug> StaticLookup for IdentityLookup<T> {
 	type Source = T;
 	type Target = T;
 	fn lookup(x: T) -> Result<T, LookupError> { Ok(x) }
@@ -197,120 +231,6 @@ pub struct ConvertInto;
 impl<A, B: From<A>> Convert<A, B> for ConvertInto {
 	fn convert(a: A) -> B { a.into() }
 }
-
-/// A meta trait for arithmetic.
-///
-/// Arithmetic types do all the usual stuff you'd expect numbers to do. They are guaranteed to
-/// be able to represent at least `u32` values without loss, hence the trait implies `From<u32>`
-/// and smaller ints. All other conversions are fallible.
-pub trait SimpleArithmetic:
-	Zero + One + IntegerSquareRoot +
-	From<u8> + From<u16> + From<u32> + TryInto<u8> + TryInto<u16> + TryInto<u32> +
-	TryFrom<u64> + TryInto<u64> + TryFrom<u128> + TryInto<u128> + TryFrom<usize> + TryInto<usize> +
-	UniqueSaturatedInto<u8> + UniqueSaturatedInto<u16> + UniqueSaturatedInto<u32> +
-	UniqueSaturatedFrom<u64> + UniqueSaturatedInto<u64> + UniqueSaturatedFrom<u128> + UniqueSaturatedInto<u128> +
-	Add<Self, Output = Self> + AddAssign<Self> +
-	Sub<Self, Output = Self> + SubAssign<Self> +
-	Mul<Self, Output = Self> + MulAssign<Self> +
-	Div<Self, Output = Self> + DivAssign<Self> +
-	Rem<Self, Output = Self> + RemAssign<Self> +
-	Shl<u32, Output = Self> + Shr<u32, Output = Self> +
-	CheckedShl + CheckedShr + CheckedAdd + CheckedSub + CheckedMul + CheckedDiv +
-	Saturating + PartialOrd<Self> + Ord + Bounded +
-	HasCompact + Sized
-{}
-impl<T:
-	Zero + One + IntegerSquareRoot +
-	From<u8> + From<u16> + From<u32> + TryInto<u8> + TryInto<u16> + TryInto<u32> +
-	TryFrom<u64> + TryInto<u64> + TryFrom<u128> + TryInto<u128> + TryFrom<usize> + TryInto<usize> +
-	UniqueSaturatedInto<u8> + UniqueSaturatedInto<u16> + UniqueSaturatedInto<u32> +
-	UniqueSaturatedFrom<u64> + UniqueSaturatedInto<u64> + UniqueSaturatedFrom<u128> +
-	UniqueSaturatedInto<u128> + UniqueSaturatedFrom<usize> + UniqueSaturatedInto<usize> +
-	Add<Self, Output = Self> + AddAssign<Self> +
-	Sub<Self, Output = Self> + SubAssign<Self> +
-	Mul<Self, Output = Self> + MulAssign<Self> +
-	Div<Self, Output = Self> + DivAssign<Self> +
-	Rem<Self, Output = Self> + RemAssign<Self> +
-	Shl<u32, Output = Self> + Shr<u32, Output = Self> +
-	CheckedShl + CheckedShr + CheckedAdd + CheckedSub + CheckedMul + CheckedDiv +
-	Saturating + PartialOrd<Self> + Ord + Bounded +
-	HasCompact + Sized
-> SimpleArithmetic for T {}
-
-/// Just like `From` except that if the source value is too big to fit into the destination type
-/// then it'll saturate the destination.
-pub trait UniqueSaturatedFrom<T: Sized>: Sized {
-	/// Convert from a value of `T` into an equivalent instance of `Self`.
-	fn unique_saturated_from(t: T) -> Self;
-}
-
-/// Just like `Into` except that if the source value is too big to fit into the destination type
-/// then it'll saturate the destination.
-pub trait UniqueSaturatedInto<T: Sized>: Sized {
-	/// Consume self to return an equivalent value of `T`.
-	fn unique_saturated_into(self) -> T;
-}
-
-impl<T: Sized, S: TryFrom<T> + Bounded + Sized> UniqueSaturatedFrom<T> for S {
-	fn unique_saturated_from(t: T) -> Self {
-		S::try_from(t).unwrap_or_else(|_| Bounded::max_value())
-	}
-}
-
-impl<T: Bounded + Sized, S: TryInto<T> + Sized> UniqueSaturatedInto<T> for S {
-	fn unique_saturated_into(self) -> T {
-		self.try_into().unwrap_or_else(|_| Bounded::max_value())
-	}
-}
-
-/// Simple trait to use checked mul and max value to give a saturated mul operation over
-/// supported types.
-pub trait Saturating {
-	/// Saturated addition - if the product can't fit in the type then just use max-value.
-	fn saturating_add(self, o: Self) -> Self;
-
-	/// Saturated subtraction - if the product can't fit in the type then just use max-value.
-	fn saturating_sub(self, o: Self) -> Self;
-
-	/// Saturated multiply - if the product can't fit in the type then just use max-value.
-	fn saturating_mul(self, o: Self) -> Self;
-}
-
-impl<T: CheckedMul + Bounded + num_traits::Saturating> Saturating for T {
-	fn saturating_add(self, o: Self) -> Self {
-		<Self as num_traits::Saturating>::saturating_add(self, o)
-	}
-	fn saturating_sub(self, o: Self) -> Self {
-		<Self as num_traits::Saturating>::saturating_sub(self, o)
-	}
-	fn saturating_mul(self, o: Self) -> Self {
-		self.checked_mul(&o).unwrap_or_else(Bounded::max_value)
-	}
-}
-
-/// Convenience type to work around the highly unergonomic syntax needed
-/// to invoke the functions of overloaded generic traits, in this case
-/// `SaturatedFrom` and `SaturatedInto`.
-pub trait SaturatedConversion {
-	/// Convert from a value of `T` into an equivalent instance of `Self`.
-	///
-	/// This just uses `UniqueSaturatedFrom` internally but with this
-	/// variant you can provide the destination type using turbofish syntax
-	/// in case Rust happens not to assume the correct type.
-	fn saturated_from<T>(t: T) -> Self where Self: UniqueSaturatedFrom<T> {
-		<Self as UniqueSaturatedFrom<T>>::unique_saturated_from(t)
-	}
-
-	/// Consume self to return an equivalent value of `T`.
-	///
-	/// This just uses `UniqueSaturatedInto` internally but with this
-	/// variant you can provide the destination type using turbofish syntax
-	/// in case Rust happens not to assume the correct type.
-	fn saturated_into<T>(self) -> T where Self: UniqueSaturatedInto<T> {
-		<Self as UniqueSaturatedInto<T>>::unique_saturated_into(self)
-	}
-}
-impl<T: Sized> SaturatedConversion for T {}
 
 /// Convenience type to work around the highly unergonomic syntax needed
 /// to invoke the functions of overloaded generic traits, in this case
@@ -441,10 +361,10 @@ pub trait OffchainWorker<BlockNumber> {
 /// Abstraction around hashing
 // Stupid bug in the Rust compiler believes derived
 // traits must be fulfilled by all type parameters.
-pub trait Hash: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {
+pub trait Hash: 'static + MaybeSerializeDeserialize + Debug + Clone + Eq + PartialEq {
 	/// The hash type produced.
-	type Output: Member + MaybeSerializeDebug + rstd::hash::Hash + AsRef<[u8]> + AsMut<[u8]> + Copy
-		+ Default + Encode + Decode;
+	type Output: Member + MaybeSerializeDeserialize + Debug + rstd::hash::Hash
+		+ AsRef<[u8]> + AsMut<[u8]> + Copy + Default + Encode + Decode;
 
 	/// The associated hash_db Hasher type.
 	type Hasher: Hasher<Out=Self::Output>;
@@ -471,8 +391,8 @@ pub trait Hash: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {
 }
 
 /// Blake2-256 Hash implementation.
-#[derive(PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+#[derive(PartialEq, Eq, Clone, primitives::RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct BlakeTwo256;
 
 impl Hash for BlakeTwo256 {
@@ -528,7 +448,7 @@ impl CheckEqual for primitives::H256 {
 	}
 }
 
-impl<H: PartialEq + Eq + MaybeDebug> CheckEqual for super::generic::DigestItem<H> where H: Encode {
+impl<H: PartialEq + Eq + Debug> CheckEqual for super::generic::DigestItem<H> where H: Encode {
 	#[cfg(feature = "std")]
 	fn check_equal(&self, other: &Self) {
 		if self != other {
@@ -565,23 +485,17 @@ macro_rules! impl_maybe_marker {
 }
 
 impl_maybe_marker!(
-	/// A type that implements Debug when in std environment.
-	MaybeDebug: Debug;
-
 	/// A type that implements Display when in std environment.
 	MaybeDisplay: Display;
 
 	/// A type that implements Hash when in std environment.
-	MaybeHash: ::rstd::hash::Hash;
+	MaybeHash: rstd::hash::Hash;
 
 	/// A type that implements Serialize when in std environment.
 	MaybeSerialize: Serialize;
 
 	/// A type that implements Serialize, DeserializeOwned and Debug when in std environment.
-	MaybeSerializeDebug: Debug, DeserializeOwned, Serialize;
-
-	/// A type that implements Serialize and Debug when in std environment.
-	MaybeSerializeDebugButNotDeserialize: Debug, Serialize
+	MaybeSerializeDeserialize: DeserializeOwned, Serialize
 );
 
 /// A type that provides a randomness beacon.
@@ -601,8 +515,8 @@ pub trait RandomnessBeacon {
 }
 
 /// A type that can be used in runtime structures.
-pub trait Member: Send + Sync + Sized + MaybeDebug + Eq + PartialEq + Clone + 'static {}
-impl<T: Send + Sync + Sized + MaybeDebug + Eq + PartialEq + Clone + 'static> Member for T {}
+pub trait Member: Send + Sync + Sized + Debug + Eq + PartialEq + Clone + 'static {}
+impl<T: Send + Sync + Sized + Debug + Eq + PartialEq + Clone + 'static> Member for T {}
 
 /// Determine if a `MemberId` is a valid member.
 pub trait IsMember<MemberId> {
@@ -611,15 +525,17 @@ pub trait IsMember<MemberId> {
 }
 
 /// Something which fulfills the abstract idea of a Substrate header. It has types for a `Number`,
-/// a `Hash` and a `Digest`. It provides access to an `extrinsics_root`, `state_root` and
+/// a `Hash` and a `Hashing`. It provides access to an `extrinsics_root`, `state_root` and
 /// `parent_hash`, as well as a `digest` and a block `number`.
 ///
 /// You can also create a `new` one from those fields.
-pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebugButNotDeserialize + 'static {
+pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'static {
 	/// Header number.
-	type Number: Member + MaybeSerializeDebug + ::rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Codec;
+	type Number: Member + MaybeSerializeDeserialize + Debug + rstd::hash::Hash
+		+ Copy + MaybeDisplay + SimpleArithmetic + Codec;
 	/// Header hash type
-	type Hash: Member + MaybeSerializeDebug + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
+	type Hash: Member + MaybeSerializeDeserialize + Debug + rstd::hash::Hash
+		+ Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
 	/// Hashing algorithm
 	type Hashing: Hash<Output = Self::Hash>;
 
@@ -667,13 +583,14 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebugButNotDe
 /// `Extrinsic` piece of information as well as a `Header`.
 ///
 /// You can get an iterator over each of the `extrinsics` and retrieve the `header`.
-pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebugButNotDeserialize + 'static {
+pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'static {
 	/// Type of extrinsics.
 	type Extrinsic: Member + Codec + Extrinsic + MaybeSerialize;
 	/// Header type.
 	type Header: Header<Hash=Self::Hash>;
 	/// Block hash type.
-	type Hash: Member + MaybeSerializeDebug + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
+	type Hash: Member + MaybeSerializeDeserialize + Debug + rstd::hash::Hash
+		+ Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
 
 	/// Returns a reference to the header.
 	fn header(&self) -> &Self::Header;
@@ -687,6 +604,8 @@ pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebugButNotDes
 	fn hash(&self) -> Self::Hash {
 		<<Self::Header as Header>::Hashing as Hash>::hash_of(self.header())
 	}
+	/// Create an encoded block from the given `header` and `extrinsics` without requiring to create an instance.
+	fn encode_from(header: &Self::Header, extrinsics: &[Self::Extrinsic]) -> Vec<u8>;
 }
 
 /// Something that acts like an `Extrinsic`.
@@ -777,7 +696,7 @@ pub trait Dispatchable {
 
 /// Means by which a transaction may be extended. This type embodies both the data and the logic
 /// that should be additionally associated with the transaction. It should be plain old data.
-pub trait SignedExtension: Codec + MaybeDebug + Sync + Send + Clone + Eq + PartialEq {
+pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq {
 	/// The type which encodes the sender identity.
 	type AccountId;
 
@@ -1063,11 +982,11 @@ pub trait ValidateUnsigned {
 /// Opaque datatype that may be destructured into a series of raw byte slices (which represent
 /// individual keys).
 pub trait OpaqueKeys: Clone {
-	/// An iterator over the type IDs of keys that this holds.
-	type KeyTypeIds: IntoIterator<Item=super::KeyTypeId>;
+	/// Types bound to this opaque keys that provide the key type ids returned.
+	type KeyTypeIdProviders;
 
-	/// Return an iterator over the key-type IDs supported by this set.
-	fn key_ids() -> Self::KeyTypeIds;
+	/// Return the key-type IDs supported by this set.
+	fn key_ids() -> &'static [crate::KeyTypeId];
 	/// Get the raw bytes of key with key-type ID `i`.
 	fn get_raw(&self, i: super::KeyTypeId) -> &[u8];
 	/// Get the decoded key with index `i`.
@@ -1167,22 +1086,25 @@ macro_rules! count {
 }
 
 /// Implement `OpaqueKeys` for a described struct.
-/// Would be much nicer for this to be converted to `derive` code.
 ///
-/// Every field type must be equivalent implement `as_ref()`, which is expected
-/// to hold the standard SCALE-encoded form of that key. This is typically
-/// just the bytes of the key.
+/// Every field type must implement [`BoundToRuntimeAppPublic`](crate::BoundToRuntimeAppPublic).
+/// `KeyTypeIdProviders` is set to the types given as fields.
 ///
 /// ```rust
-/// use sr_primitives::{impl_opaque_keys, KeyTypeId, app_crypto::{sr25519, ed25519}};
-/// use primitives::testing::{SR25519, ED25519};
+/// use sr_primitives::{
+/// 	impl_opaque_keys, KeyTypeId, BoundToRuntimeAppPublic, app_crypto::{sr25519, ed25519}
+/// };
+///
+/// pub struct KeyModule;
+/// impl BoundToRuntimeAppPublic for KeyModule { type Public = ed25519::AppPublic; }
+///
+/// pub struct KeyModule2;
+/// impl BoundToRuntimeAppPublic for KeyModule2 { type Public = sr25519::AppPublic; }
 ///
 /// impl_opaque_keys! {
 /// 	pub struct Keys {
-/// 		#[id(ED25519)]
-/// 		pub ed25519: ed25519::AppPublic,
-/// 		#[id(SR25519)]
-/// 		pub sr25519: sr25519::AppPublic,
+/// 		pub key_module: KeyModule,
+/// 		pub key_module2: KeyModule2,
 /// 	}
 /// }
 /// ```
@@ -1191,16 +1113,20 @@ macro_rules! impl_opaque_keys {
 	(
 		pub struct $name:ident {
 			$(
-				#[id($key_id:expr)]
 				pub $field:ident: $type:ty,
 			)*
 		}
 	) => {
-		#[derive(Default, Clone, PartialEq, Eq, $crate::codec::Encode, $crate::codec::Decode)]
-		#[cfg_attr(feature = "std", derive(Debug, $crate::serde::Serialize, $crate::serde::Deserialize))]
+		#[derive(
+			Default, Clone, PartialEq, Eq,
+			$crate::codec::Encode,
+			$crate::codec::Decode,
+			$crate::RuntimeDebug,
+		)]
+		#[cfg_attr(feature = "std", derive($crate::serde::Serialize, $crate::serde::Deserialize))]
 		pub struct $name {
 			$(
-				pub $field: $type,
+				pub $field: <$type as $crate::BoundToRuntimeAppPublic>::Public,
 			)*
 		}
 
@@ -1213,7 +1139,11 @@ macro_rules! impl_opaque_keys {
 			pub fn generate(seed: Option<&str>) -> $crate::rstd::vec::Vec<u8> {
 				let keys = Self{
 					$(
-						$field: <$type as $crate::app_crypto::RuntimeAppPublic>::generate_pair(seed),
+						$field: <
+							<
+								$type as $crate::BoundToRuntimeAppPublic
+							>::Public as $crate::RuntimeAppPublic
+						>::generate_pair(seed),
 					)*
 				};
 				$crate::codec::Encode::encode(&keys)
@@ -1221,17 +1151,30 @@ macro_rules! impl_opaque_keys {
 		}
 
 		impl $crate::traits::OpaqueKeys for $name {
-			type KeyTypeIds = $crate::rstd::iter::Cloned<
-				$crate::rstd::slice::Iter<'static, $crate::KeyTypeId>
-			>;
+			type KeyTypeIdProviders = ( $( $type, )* );
 
-			fn key_ids() -> Self::KeyTypeIds {
-				[ $($key_id),* ].iter().cloned()
+			fn key_ids() -> &'static [$crate::KeyTypeId] {
+				&[
+					$(
+						<
+							<
+								$type as $crate::BoundToRuntimeAppPublic
+							>::Public as $crate::RuntimeAppPublic
+						>::ID
+					),*
+				]
 			}
 
 			fn get_raw(&self, i: $crate::KeyTypeId) -> &[u8] {
 				match i {
-					$( i if i == $key_id => self.$field.as_ref(), )*
+					$(
+						i if i == <
+							<
+								$type as $crate::BoundToRuntimeAppPublic
+							>::Public as $crate::RuntimeAppPublic
+						>::ID =>
+							self.$field.as_ref(),
+					)*
 					_ => &[],
 				}
 			}
@@ -1247,7 +1190,25 @@ pub trait Printable {
 
 impl Printable for u8 {
 	fn print(&self) {
-		u64::from(*self).print()
+		(*self as u64).print()
+	}
+}
+
+impl Printable for u32 {
+	fn print(&self) {
+		(*self as u64).print()
+	}
+}
+
+impl Printable for usize {
+	fn print(&self) {
+		(*self as u64).print()
+	}
+}
+
+impl Printable for u64 {
+	fn print(&self) {
+		runtime_io::print_num(*self);
 	}
 }
 
@@ -1263,9 +1224,10 @@ impl Printable for &str {
 	}
 }
 
-impl Printable for u64 {
+#[impl_for_tuples(1, 12)]
+impl Printable for Tuple {
 	fn print(&self) {
-		runtime_io::print_num(*self);
+		for_tuples!( #( Tuple.print(); )* )
 	}
 }
 
@@ -1273,6 +1235,21 @@ impl Printable for u64 {
 mod tests {
 	use super::AccountIdConversion;
 	use crate::codec::{Encode, Decode, Input};
+
+	mod t {
+		use primitives::crypto::KeyTypeId;
+		use app_crypto::{app_crypto, sr25519};
+		app_crypto!(sr25519, KeyTypeId(*b"test"));
+	}
+
+	#[test]
+	fn app_verify_works() {
+		use t::*;
+		use super::AppVerify;
+
+		let s = Signature::default();
+		let _ = s.verify(&[0u8; 100][..], &Public::default());
+	}
 
 	#[derive(Encode, Decode, Default, PartialEq, Debug)]
 	struct U32Value(u32);

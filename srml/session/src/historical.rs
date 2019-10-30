@@ -56,9 +56,9 @@ pub trait Trait: super::Trait {
 decl_storage! {
 	trait Store for Module<T: Trait> as Session {
 		/// Mapping from historical session indices to session-data root hash and validator count.
-		HistoricalSessions get(historical_root): map SessionIndex => Option<(T::Hash, ValidatorCount)>;
+		HistoricalSessions get(fn historical_root): map SessionIndex => Option<(T::Hash, ValidatorCount)>;
 		/// Queued full identifications for queued sessions whose validators have become obsolete.
-		CachedObsolete get(cached_obsolete): map SessionIndex
+		CachedObsolete get(fn cached_obsolete): map SessionIndex
 			=> Option<Vec<(T::ValidatorId, T::FullIdentification)>>;
 		/// The range of historical sessions we store. [first, last)
 		StoredRange: Option<(SessionIndex, SessionIndex)>;
@@ -182,11 +182,9 @@ impl<T: Trait> ProvingTrie<T> {
 
 				// map each key to the owner index.
 				for key_id in T::Keys::key_ids() {
-					let key = keys.get_raw(key_id);
+					let key = keys.get_raw(*key_id);
 					let res = (key_id, key).using_encoded(|k|
-						i.using_encoded(|v|
-							trie.insert(k, v)
-						)
+						i.using_encoded(|v| trie.insert(k, v))
 					);
 
 					let _ = res.map_err(|_| "failed to insert into trie")?;

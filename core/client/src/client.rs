@@ -342,15 +342,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		self.backend.state_at(*block)
 	}
 
-	/// Expose backend reference. To be used in tests only
-	#[doc(hidden)]
-	#[deprecated(note="Rather than relying on `client` to provide this, access \
-	to the backend should be handled at setup only - see #1134. This function \
-	will be removed once that is in place.")]
-	pub fn backend(&self) -> &Arc<B> {
-		&self.backend
-	}
-
 	/// Given a `BlockId` and a key prefix, return the matching child storage keys in that block.
 	pub fn storage_keys(&self, id: &BlockId<Block>, key_prefix: &StorageKey) -> error::Result<Vec<StorageKey>> {
 		let keys = self.state_at(id)?.keys(&key_prefix.0).into_iter().map(StorageKey).collect();
@@ -1059,10 +1050,10 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 					}
 				};
 
-				let encoded_block = <Block as BlockT>::new(
-					import_headers.pre().clone(),
-					body.unwrap_or_default(),
-				).encode();
+				let encoded_block = <Block as BlockT>::encode_from(
+					import_headers.pre(),
+					&body.unwrap_or_default()
+				);
 
 				let (_, storage_update, changes_update) = self.executor
 					.call_at_state::<_, _, NeverNativeValue, fn() -> _>(
@@ -1125,7 +1116,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		// then some other block is the common ancestor.
 		if route_from_best.common_block().hash != block {
 			// NOTE: we're setting the finalized block as best block, this might
-			// be slightly innacurate since we might have a "better" block
+			// be slightly inaccurate since we might have a "better" block
 			// further along this chain, but since best chain selection logic is
 			// pluggable we cannot make a better choice here. usages that need
 			// an accurate "best" block need to go through `SelectChain`

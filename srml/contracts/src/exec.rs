@@ -60,7 +60,7 @@ impl ExecReturnValue {
 /// VM-specific errors during execution (eg. division by 0, OOB access, failure to satisfy some
 /// precondition of a system call, etc.) or errors with the orchestration (eg. out-of-gas errors, a
 /// non-existent destination contract, etc.).
-#[cfg_attr(test, derive(Debug))]
+#[cfg_attr(test, derive(sr_primitives::RuntimeDebug))]
 pub struct ExecError {
 	pub reason: &'static str,
 	/// This is an allocated buffer that may be reused. The buffer must be cleared explicitly
@@ -231,7 +231,8 @@ impl<T: Trait> Token<T> for ExecFeeToken {
 	}
 }
 
-#[cfg_attr(any(feature = "std", test), derive(Debug, PartialEq, Eq, Clone))]
+#[cfg_attr(any(feature = "std", test), derive(PartialEq, Eq, Clone))]
+#[derive(sr_primitives::RuntimeDebug)]
 pub enum DeferredAction<T: Trait> {
 	DepositEvent {
 		/// A list of topics this event will be deposited with.
@@ -641,7 +642,7 @@ fn transfer<'a, T: Trait, V: Vm<T>, L: Loader<T>>(
 	if would_create && value < ctx.config.existential_deposit {
 		return Err("value too low to create account");
 	}
-	T::Currency::ensure_can_withdraw(transactor, value, WithdrawReason::Transfer, new_from_balance)?;
+	T::Currency::ensure_can_withdraw(transactor, value, WithdrawReason::Transfer.into(), new_from_balance)?;
 
 	let new_to_balance = match to_balance.checked_add(&value) {
 		Some(b) => b,

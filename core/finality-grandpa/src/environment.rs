@@ -52,6 +52,7 @@ use crate::authorities::{AuthoritySet, SharedAuthoritySet};
 use crate::consensus_changes::SharedConsensusChanges;
 use crate::justification::GrandpaJustification;
 use crate::until_imported::UntilVoteTargetImported;
+use crate::voting_rule::VotingRule;
 use fg_primitives::{AuthorityId, AuthoritySignature, SetId, RoundNumber};
 
 type HistoricalVotes<Block> = grandpa::HistoricalVotes<
@@ -368,8 +369,8 @@ impl<Block: BlockT> SharedVoterSetState<Block> {
 }
 
 /// The environment we run GRANDPA in.
-pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA, SC> {
-	pub(crate) inner: Arc<Client<B, E, Block, RA>>,
+pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA, SC, VR> {
+	pub(crate) client: Arc<Client<B, E, Block, RA>>,
 	pub(crate) select_chain: SC,
 	pub(crate) voters: Arc<VoterSet<AuthorityId>>,
 	pub(crate) config: Config,
@@ -378,9 +379,10 @@ pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA, SC> {
 	pub(crate) network: crate::communication::NetworkBridge<Block, N>,
 	pub(crate) set_id: SetId,
 	pub(crate) voter_set_state: SharedVoterSetState<Block>,
+	pub(crate) voting_rule: VR,
 }
 
-impl<B, E, Block: BlockT, N: Network<Block>, RA, SC> Environment<B, E, Block, N, RA, SC> {
+impl<B, E, Block: BlockT, N: Network<Block>, RA, SC, VR> Environment<B, E, Block, N, RA, SC, VR> {
 	/// Updates the voter set state using the given closure. The write lock is
 	/// held during evaluation of the closure and the environment's voter set
 	/// state is set to its result if successful.
@@ -396,20 +398,22 @@ impl<B, E, Block: BlockT, N: Network<Block>, RA, SC> Environment<B, E, Block, N,
 	}
 }
 
-impl<Block: BlockT<Hash=H256>, B, E, N, RA, SC>
+impl<Block: BlockT<Hash=H256>, B, E, N, RA, SC, VR>
 	grandpa::Chain<Block::Hash, NumberFor<Block>>
-for Environment<B, E, Block, N, RA, SC>
+for Environment<B, E, Block, N, RA, SC, VR>
 where
 	Block: 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
 	N: Network<Block> + 'static,
 	N::In: 'static,
 	SC: SelectChain<Block> + 'static,
+	VR: VotingRule<Block, Client<B, E, Block, RA>>,
+	RA: Send + Sync,
 	NumberFor<Block>: BlockNumberOps,
 {
 	fn ancestry(&self, base: Block::Hash, block: Block::Hash) -> Result<Vec<Block::Hash>, GrandpaError> {
-		ancestry(&self.inner, base, block)
+		ancestry(&self.client, base, block)
 	}
 
 	fn best_chain_containing(&self, block: Block::Hash) -> Option<(Block::Hash, NumberFor<Block>)> {
@@ -429,8 +433,8 @@ where
 		debug!(target: "afg", "Finding best chain containing block {:?} with number limit {:?}", block, limit);
 
 		match self.select_chain.finality_target(block, None) {
-			Ok(Some(mut best_hash)) => {
-				let base_header = self.inner.header(&BlockId::Hash(block)).ok()?
+			Ok(Some(best_hash)) => {
+				let base_header = self.client.header(&BlockId::Hash(block)).ok()?
 					.expect("Header known to exist after `best_containing` call; qed");
 
 				if let Some(limit) = limit {
@@ -445,35 +449,51 @@ where
 					}
 				}
 
-				let mut best_header = self.inner.header(&BlockId::Hash(best_hash)).ok()?
+				let best_header = self.client.header(&BlockId::Hash(best_hash)).ok()?
 					.expect("Header known to exist after `best_containing` call; qed");
 
-				// we target a vote towards 3/4 of the unfinalized chain (rounding up)
-				let target = {
-					let two = NumberFor::<Block>::one() + One::one();
-					let three = two + One::one();
-					let four = three + One::one();
+				// check if our vote is currently being limited due to a pending change
+				let limit = limit.filter(|limit| limit < best_header.number());
+				let target;
 
-					let diff = *best_header.number() - *base_header.number();
-					let diff = ((diff * three) + two) / four;
+				let target_header = if let Some(target_number) = limit {
+					let mut target_header = best_header.clone();
 
-					*base_header.number() + diff
-				};
+					// walk backwards until we find the target block
+					loop {
+						if *target_header.number() < target_number {
+							unreachable!(
+								"we are traversing backwards from a known block; \
+								 blocks are stored contiguously; \
+								 qed"
+							);
+						}
 
-				// unless our vote is currently being limited due to a pending change
-				let target = limit.map(|limit| limit.min(target)).unwrap_or(target);
+						if *target_header.number() == target_number {
+							break;
+						}
 
-				// walk backwards until we find the target block
-				loop {
-					if *best_header.number() < target { unreachable!(); }
-					if *best_header.number() == target {
-						return Some((best_hash, *best_header.number()));
+						target_header = self.client.header(&BlockId::Hash(*target_header.parent_hash())).ok()?
+							.expect("Header known to exist after `best_containing` call; qed");
 					}
 
-					best_hash = *best_header.parent_hash();
-					best_header = self.inner.header(&BlockId::Hash(best_hash)).ok()?
-						.expect("Header known to exist after `best_containing` call; qed");
-				}
+					target = target_header;
+					&target
+				} else {
+					// otherwise just use the given best as the target
+					&best_header
+				};
+
+				// restrict vote according to the given voting rule, if the
+				// voting rule doesn't restrict the vote then we keep the
+				// previous target.
+				//
+				// note that we pass the original `best_header`, i.e. before the
+				// authority set limit filter, which can be considered a
+				// mandatory/implicit voting rule.
+				self.voting_rule
+					.restrict_vote(&*self.client, &base_header, &best_header, target_header)
+					.or(Some((target_header.hash(), *target_header.number())))
 			},
 			Ok(None) => {
 				debug!(target: "afg", "Encountered error finding best chain containing {:?}: couldn't find target block", block);
@@ -519,9 +539,9 @@ pub(crate) fn ancestry<B, Block: BlockT<Hash=H256>, E, RA>(
 	Ok(tree_route.retracted().iter().skip(1).map(|e| e.hash).collect())
 }
 
-impl<B, E, Block: BlockT<Hash=H256>, N, RA, SC>
+impl<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR>
 	voter::Environment<Block::Hash, NumberFor<Block>>
-for Environment<B, E, Block, N, RA, SC>
+for Environment<B, E, Block, N, RA, SC, VR>
 where
 	Block: 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
@@ -530,6 +550,7 @@ where
 	N::In: 'static + Send,
 	RA: 'static + Send + Sync,
 	SC: SelectChain<Block> + 'static,
+	VR: VotingRule<Block, Client<B, E, Block, RA>>,
 	NumberFor<Block>: BlockNumberOps,
 {
 	type Timer = Box<dyn Future<Item = (), Error = Self::Error> + Send>;
@@ -580,8 +601,9 @@ where
 		// schedule incoming messages from the network to be held until
 		// corresponding blocks are imported.
 		let incoming = Box::new(UntilVoteTargetImported::new(
-			self.inner.import_notification_stream(),
-			self.inner.clone(),
+			self.client.import_notification_stream(),
+			self.network.clone(),
+			self.client.clone(),
 			incoming,
 			"round",
 		).map_err(Into::into));
@@ -629,7 +651,7 @@ where
 				current_rounds,
 			};
 
-			crate::aux_schema::write_voter_set_state(&*self.inner, &set_state)?;
+			crate::aux_schema::write_voter_set_state(&*self.client, &set_state)?;
 
 			Ok(Some(set_state))
 		})?;
@@ -670,7 +692,7 @@ where
 				current_rounds,
 			};
 
-			crate::aux_schema::write_voter_set_state(&*self.inner, &set_state)?;
+			crate::aux_schema::write_voter_set_state(&*self.client, &set_state)?;
 
 			Ok(Some(set_state))
 		})?;
@@ -721,7 +743,7 @@ where
 				current_rounds,
 			};
 
-			crate::aux_schema::write_voter_set_state(&*self.inner, &set_state)?;
+			crate::aux_schema::write_voter_set_state(&*self.client, &set_state)?;
 
 			Ok(Some(set_state))
 		})?;
@@ -779,7 +801,7 @@ where
 				current_rounds,
 			};
 
-			crate::aux_schema::write_voter_set_state(&*self.inner, &set_state)?;
+			crate::aux_schema::write_voter_set_state(&*self.client, &set_state)?;
 
 			Ok(Some(set_state))
 		})?;
@@ -795,7 +817,7 @@ where
 		commit: Commit<Block>,
 	) -> Result<(), Self::Error> {
 		finalize_block(
-			&*self.inner,
+			&*self.client,
 			&self.authority_set,
 			&self.consensus_changes,
 			Some(self.config.justification_period.into()),

@@ -24,6 +24,10 @@ mod app {
 	use crate::Vec;
 	use primitives::testing::ED25519;
 	crate::app_crypto!(super, ED25519);
+
+	impl crate::traits::BoundToRuntimeAppPublic for Public {
+		type Public = Self;
+	}
 }
 
 pub use app::Public as AppPublic;

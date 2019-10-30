@@ -151,9 +151,7 @@ macro_rules! impl_outer_origin {
 		$( $module:ident $( < $generic:ident > )? $( { $generic_instance:ident } )? ,)*
 	) => {
 		$crate::paste::item! {
-			// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-			#[derive(Clone, PartialEq, Eq)]
-			#[cfg_attr(feature = "std", derive(Debug))]
+			#[derive(Clone, PartialEq, Eq, $crate::RuntimeDebug)]
 			$(#[$attr])*
 			#[allow(non_camel_case_types)]
 			pub enum $name {

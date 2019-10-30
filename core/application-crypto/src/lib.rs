@@ -21,7 +21,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[doc(hidden)]
-pub use primitives::{self, crypto::{CryptoType, Public, Derive, IsWrappedBy, Wraps}};
+pub use primitives::{self, crypto::{CryptoType, Public, Derive, IsWrappedBy, Wraps}, RuntimeDebug};
 #[doc(hidden)]
 #[cfg(feature = "full_crypto")]
 pub use primitives::crypto::{SecretStringError, DeriveJunction, Ss58Codec, Pair};
@@ -91,22 +91,12 @@ macro_rules! app_crypto {
 			}
 			fn derive<
 				Iter: Iterator<Item=$crate::DeriveJunction>
-			>(&self, path: Iter) -> Result<Self, Self::DeriveError> {
-				self.0.derive(path).map(Self)
+			>(&self, path: Iter, seed: Option<Self::Seed>) -> Result<(Self, Option<Self::Seed>), Self::DeriveError> {
+				self.0.derive(path, seed).map(|x| (Self(x.0), x.1))
 			}
 			fn from_seed(seed: &Self::Seed) -> Self { Self(<$pair>::from_seed(seed)) }
 			fn from_seed_slice(seed: &[u8]) -> Result<Self, $crate::SecretStringError> {
 				<$pair>::from_seed_slice(seed).map(Self)
-			}
-			#[cfg(feature = "std")]
-			fn from_standard_components<
-				I: Iterator<Item=$crate::DeriveJunction>
-			>(
-				seed: &str,
-				password: Option<&str>,
-				path: I,
-			) -> Result<Self, $crate::SecretStringError> {
-				<$pair>::from_standard_components::<I>(seed, password, path).map(Self)
 			}
 			fn sign(&self, msg: &[u8]) -> Self::Signature {
 				Signature(self.0.sign(msg))
@@ -143,10 +133,11 @@ macro_rules! app_crypto {
 		$crate::wrap!{
 			/// A generic `AppPublic` wrapper type over $public crypto; this has no specific App.
 			#[derive(
-				Clone, Default, Eq, PartialEq, Ord, PartialOrd, $crate::codec::Encode,
+				Clone, Default, Eq, PartialEq, Ord, PartialOrd,
+				$crate::codec::Encode,
 				$crate::codec::Decode,
+				$crate::RuntimeDebug,
 			)]
-			#[cfg_attr(feature = "std", derive(Debug))]
 			#[cfg_attr(feature = "full_crypto", derive(Hash))]
 			pub struct Public($public);
 		}
@@ -244,9 +235,13 @@ macro_rules! app_crypto {
 
 		$crate::wrap! {
 			/// A generic `AppPublic` wrapper type over $public crypto; this has no specific App.
-			#[derive(Clone, Default, Eq, PartialEq, $crate::codec::Encode, $crate::codec::Decode)]
-			#[cfg_attr(feature = "std", derive(Debug))]
+			#[derive(Clone, Default, Eq, PartialEq,
+				$crate::codec::Encode,
+				$crate::codec::Decode,
+				$crate::RuntimeDebug,
+			)]
 			#[cfg_attr(feature = "full_crypto", derive(Hash))]
+
 			pub struct Signature($sig);
 		}
 
