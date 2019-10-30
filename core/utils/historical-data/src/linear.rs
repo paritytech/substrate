@@ -303,6 +303,7 @@ impl States {
 
 #[inline]
 /// Get previous index of pending state.
+///
 /// Used to say if it is possible to drop a committed transaction
 /// state value.
 /// Committed index is seen as a transaction state.
@@ -310,11 +311,9 @@ pub fn find_previous_tx_start(states: &States, from: usize) -> usize {
 	states.previous_transaction[from]
 }
 
-
-
 impl<V> History<V> {
 	/// Set a value, it uses a state history as parameter.
-	/// This method uses `get_mut` and do remove pending
+	/// This method uses `get_mut` and does remove pending
 	/// dropped value.
 	pub fn set(&mut self, states: &States, value: V) {
 		if let Some(v) = self.get_mut(states) {
