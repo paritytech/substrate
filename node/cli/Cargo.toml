@@ -48,8 +48,6 @@ balances = { package = "srml-balances", path = "../../srml/balances" }
 transaction-payment = { package = "srml-transaction-payment", path = "../../srml/transaction-payment" }
 support = { package = "srml-support", path = "../../srml/support", default-features = false }
 im_online = { package = "srml-im-online", path = "../../srml/im-online", default-features = false }
-sr-authority-discovery = { package = "srml-authority-discovery", path = "../../srml/authority-discovery", default-features = false }
-authority-discovery = { package = "substrate-authority-discovery", path = "../../core/authority-discovery"}
 serde = { version = "1.0.101", features = [ "derive" ] }
 client_db = { package = "substrate-client-db", path = "../../core/client/db", features = ["kvdb-rocksdb"] }
 offchain = { package = "substrate-offchain", path = "../../core/offchain" }

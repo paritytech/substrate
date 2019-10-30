@@ -33,7 +33,14 @@ use primitives::offchain::{
 use sr_primitives::{generic::BlockId, traits::{self, Extrinsic}};
 use transaction_pool::txpool::{Pool, ChainApi};
 
+#[cfg(not(target_os = "unknown"))]
 mod http;
+
+#[cfg(target_os = "unknown")]
+use http_dummy as http;
+#[cfg(target_os = "unknown")]
+mod http_dummy;
+
 mod timestamp;
 
 /// A message between the offchain extension and the processing thread.
@@ -317,12 +324,12 @@ impl<A: ChainApi> AsyncApi<A> {
 			},
 		};
 
-		info!("Submitting to the pool: {:?} (isSigned: {:?})", xt, xt.is_signed());
+		info!("Submitting transaction to the pool: {:?} (isSigned: {:?})", xt, xt.is_signed());
 		future::Either::Right(self.transaction_pool
 			.submit_one(&self.at, xt.clone())
 			.map(|result| match result {
 				Ok(hash) => { debug!("[{:?}] Offchain transaction added to the pool.", hash); },
-				Err(e) => { debug!("Couldn't submit transaction: {:?}", e); },
+				Err(e) => { warn!("Couldn't submit offchain transaction: {:?}", e); },
 			}))
 	}
 }

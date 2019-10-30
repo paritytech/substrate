@@ -18,12 +18,12 @@
 //!
 //! NOTE: If you're looking for `parameter_types`, it has moved in to the top-level module.
 
-use rstd::{prelude::*, result, marker::PhantomData, ops::Div};
+use rstd::{prelude::*, result, marker::PhantomData, ops::Div, fmt::Debug};
 use codec::{FullCodec, Codec, Encode, Decode};
 use primitives::u32_trait::Value as U32;
 use sr_primitives::{
 	ConsensusEngineId,
-	traits::{MaybeSerializeDebug, SimpleArithmetic, Saturating},
+	traits::{MaybeSerializeDeserialize, SimpleArithmetic, Saturating},
 };
 
 /// Anything that can have a `::len()` method.
@@ -257,7 +257,7 @@ pub enum SignedImbalance<B, P: Imbalance<B>>{
 impl<
 	P: Imbalance<B, Opposite=N>,
 	N: Imbalance<B, Opposite=P>,
-	B: SimpleArithmetic + FullCodec + Copy + MaybeSerializeDebug + Default,
+	B: SimpleArithmetic + FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default,
 > SignedImbalance<B, P> {
 	pub fn zero() -> Self {
 		SignedImbalance::Positive(P::zero())
@@ -320,7 +320,7 @@ impl<
 /// Abstraction over a fungible assets system.
 pub trait Currency<AccountId> {
 	/// The balance of an account.
-	type Balance: SimpleArithmetic + FullCodec + Copy + MaybeSerializeDebug + Default;
+	type Balance: SimpleArithmetic + FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default;
 
 	/// The opaque token type for an imbalance. This is returned by unbalanced operations
 	/// and must be dealt with. It may be dropped but cannot be cloned.
@@ -381,7 +381,7 @@ pub trait Currency<AccountId> {
 	fn ensure_can_withdraw(
 		who: &AccountId,
 		_amount: Self::Balance,
-		reason: WithdrawReason,
+		reasons: WithdrawReasons,
 		new_balance: Self::Balance,
 	) -> result::Result<(), &'static str>;
 
@@ -459,7 +459,7 @@ pub trait Currency<AccountId> {
 	fn withdraw(
 		who: &AccountId,
 		value: Self::Balance,
-		reason: WithdrawReason,
+		reasons: WithdrawReasons,
 		liveness: ExistenceRequirement,
 	) -> result::Result<Self::NegativeImbalance, &'static str>;
 
@@ -467,11 +467,11 @@ pub trait Currency<AccountId> {
 	fn settle(
 		who: &AccountId,
 		value: Self::PositiveImbalance,
-		reason: WithdrawReason,
+		reasons: WithdrawReasons,
 		liveness: ExistenceRequirement,
 	) -> result::Result<(), Self::PositiveImbalance> {
 		let v = value.peek();
-		match Self::withdraw(who, v, reason, liveness) {
+		match Self::withdraw(who, v, reasons, liveness) {
 			Ok(opposite) => Ok(drop(value.offset(opposite))),
 			_ => Err(value),
 		}
@@ -614,6 +614,8 @@ bitmask! {
 		Reserve = 0b00000100,
 		/// In order to pay some other (higher-level) fees.
 		Fee = 0b00001000,
+		/// In order to tip a validator for transaction inclusion.
+		Tip = 0b00010000,
 	}
 }
 
@@ -630,7 +632,7 @@ impl WithdrawReasons {
 	/// # use srml_support::traits::{WithdrawReason, WithdrawReasons};
 	/// # fn main() {
 	/// assert_eq!(
-	/// 	WithdrawReason::Fee | WithdrawReason::Transfer | WithdrawReason::Reserve,
+	/// 	WithdrawReason::Fee | WithdrawReason::Transfer | WithdrawReason::Reserve | WithdrawReason::Tip,
 	/// 	WithdrawReasons::except(WithdrawReason::TransactionPayment),
 	///	);
 	/// # }

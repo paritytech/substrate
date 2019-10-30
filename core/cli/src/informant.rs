@@ -22,6 +22,7 @@ use futures03::{StreamExt as _, TryStreamExt as _};
 use log::{info, warn};
 use sr_primitives::traits::Header;
 use service::AbstractService;
+use std::time::Duration;
 
 mod display;
 
@@ -31,11 +32,13 @@ pub fn build(service: &impl AbstractService) -> impl Future<Item = (), Error = (
 
 	let mut display = display::InformantDisplay::new();
 
-	let display_notifications = service.network_status().for_each(move |(net_status, _)| {
-		let info = client.info();
-		display.display(&info, net_status);
-		Ok(())
-	});
+	let display_notifications = service
+		.network_status(Duration::from_millis(5000))
+		.for_each(move |(net_status, _)| {
+			let info = client.info();
+			display.display(&info, net_status);
+			Ok(())
+		});
 
 	let client = service.client();
 	let mut last_best = {

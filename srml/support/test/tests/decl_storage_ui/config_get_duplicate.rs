@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -14,12 +14,20 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-/// Unwraps the trailing parameter or falls back with the closure result.
-pub fn unwrap_or_else<F, H, E>(or_else: F, optional: Option<H>) -> Result<H, E> where
-	F: FnOnce() -> Result<H, E>,
-{
-	match optional.into() {
-		None => or_else(),
-		Some(x) => Ok(x),
+pub trait Trait {
+	type Origin;
+	type BlockNumber: codec::Codec + codec::EncodeLike + Default + Clone;
+}
+
+support::decl_module! {
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+}
+
+support::decl_storage!{
+	trait Store for Module<T: Trait> as FinalKeysNone {
+		pub Value get(fn value) config(): u32;
+		pub Value2 config(value): u32;
 	}
 }
+
+fn main() {}

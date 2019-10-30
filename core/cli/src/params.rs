@@ -150,7 +150,6 @@ arg_enum! {
 	#[allow(missing_docs)]
 	#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 	pub enum NodeKeyType {
-		Secp256k1,
 		Ed25519
 	}
 }
@@ -163,10 +162,6 @@ pub struct NodeKeyParams {
 	///
 	/// The value is a string that is parsed according to the choice of
 	/// `--node-key-type` as follows:
-	///
-	///   `secp256k1`:
-	///   The value is parsed as a hex-encoded Secp256k1 32 bytes secret key,
-	///   i.e. 64 hex characters.
 	///
 	///   `ed25519`:
 	///   The value is parsed as a hex-encoded Ed25519 32 bytes secret key,
@@ -198,10 +193,6 @@ pub struct NodeKeyParams {
 	///
 	/// The node's secret key determines the corresponding public key and hence the
 	/// node's peer ID in the context of libp2p.
-	///
-	/// NOTE: The current default key type is `secp256k1` for a transition period only
-	/// but will eventually change to `ed25519` in a future release. To continue using
-	/// `secp256k1` keys, use `--node-key-type=secp256k1`.
 	#[structopt(
 		long = "node-key-type",
 		value_name = "TYPE",
@@ -215,9 +206,6 @@ pub struct NodeKeyParams {
 	///
 	/// The contents of the file are parsed according to the choice of `--node-key-type`
 	/// as follows:
-	///
-	///   `secp256k1`:
-	///   The file must contain an unencoded 32 bytes Secp256k1 secret key.
 	///
 	///   `ed25519`:
 	///   The file must contain an unencoded 32 bytes Ed25519 secret key.
@@ -313,8 +301,30 @@ pub struct ExecutionStrategies {
 #[derive(Debug, StructOpt, Clone)]
 pub struct RunCmd {
 	/// Enable validator mode.
-	#[structopt(long = "validator")]
+	///
+	/// The node will be started with the authority role and actively
+	/// participate in any consensus task that it can (e.g. depending on
+	/// availability of local keys).
+	#[structopt(
+		long = "validator",
+		conflicts_with_all = &[ "sentry" ]
+	)]
 	pub validator: bool,
+
+	/// Enable sentry mode.
+	///
+	/// The node will be started with the authority role and participate in
+	/// consensus tasks as an "observer", it will never actively participate
+	/// regardless of whether it could (e.g. keys are available locally). This
+	/// mode is useful as a secure proxy for validators (which would run
+	/// detached from the network), since we want this node to participate in
+	/// the full consensus protocols in order to have all needed consensus data
+	/// available to relay to private nodes.
+	#[structopt(
+		long = "sentry",
+		conflicts_with_all = &[ "validator" ]
+	)]
+	pub sentry: bool,
 
 	/// Disable GRANDPA voter when running in validator mode, otherwise disables the GRANDPA observer.
 	#[structopt(long = "no-grandpa")]
@@ -366,11 +376,21 @@ pub struct RunCmd {
 	#[structopt(long = "rpc-cors", value_name = "ORIGINS", parse(try_from_str = parse_cors))]
 	pub rpc_cors: Option<Cors>,
 
-	/// Specify the pruning mode, a number of blocks to keep or 'archive'.
+	/// Specify the state pruning mode, a number of blocks to keep or 'archive'.
 	///
-	/// Default is 256.
+	/// Default is to keep all block states if the node is running as a
+	/// validator (i.e. 'archive'), otherwise state is only kept for the last
+	/// 256 blocks.
 	#[structopt(long = "pruning", value_name = "PRUNING_MODE")]
 	pub pruning: Option<String>,
+
+	/// Force start with unsafe pruning settings.
+	///
+	/// When running as a validator it is highly recommended to disable state
+	/// pruning (i.e. 'archive') which is the default. The node will refuse to
+	/// start as a validator if pruning is enabled unless this option is set.
+	#[structopt(long = "unsafe-pruning")]
+	pub unsafe_pruning: bool,
 
 	/// The human-readable name for this node.
 	///
@@ -604,6 +624,13 @@ pub struct BuildSpecCmd {
 	#[structopt(long = "raw")]
 	pub raw: bool,
 
+	/// Disable adding the default bootnode to the specification.
+	///
+	/// By default the `/ip4/127.0.0.1/tcp/30333/p2p/NODE_PEER_ID` bootnode is added to the
+	/// specification when no bootnode exists.
+	#[structopt(long = "disable-default-bootnode")]
+	pub disable_default_bootnode: bool,
+
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
@@ -753,7 +780,7 @@ impl<CC, RP> StructOpt for CoreParams<CC, RP> where
 			)
 		).subcommand(
 			BuildSpecCmd::augment_clap(SubCommand::with_name("build-spec"))
-				.about("Build a spec.json file, outputing to stdout.")
+				.about("Build a spec.json file, outputting to stdout.")
 		)
 		.subcommand(
 			ExportBlocksCmd::augment_clap(SubCommand::with_name("export-blocks"))

@@ -22,15 +22,15 @@ use bip39::{Language, Mnemonic, MnemonicType};
 use clap::{load_yaml, App, ArgMatches};
 use codec::{Decode, Encode};
 use hex_literal::hex;
-use node_primitives::{Balance, Hash, Index};
+use node_primitives::{Balance, Hash, Index, AccountId, Signature};
 use node_runtime::{BalancesCall, Call, Runtime, SignedPayload, UncheckedExtrinsic, VERSION};
 use primitives::{
 	crypto::{set_default_ss58_version, Ss58AddressFormat, Ss58Codec},
-	ed25519, sr25519, Pair, Public, H256, hexdisplay::HexDisplay,
+	ed25519, sr25519, ecdsa, Pair, Public, H256, hexdisplay::HexDisplay,
 };
-use sr_primitives::generic::Era;
+use sr_primitives::{traits::{IdentifyAccount, Verify}, generic::Era};
 use std::{
-	convert::TryInto,
+	convert::{TryInto, TryFrom},
 	io::{stdin, Read},
 	str::FromStr,
 };
@@ -43,8 +43,10 @@ trait Crypto: Sized {
 	fn pair_from_suri(suri: &str, password: Option<&str>) -> Self::Pair {
 		Self::Pair::from_string(suri, password).expect("Invalid phrase")
 	}
-	fn ss58_from_pair(pair: &Self::Pair) -> String {
-		pair.public().to_ss58check()
+	fn ss58_from_pair(pair: &Self::Pair) -> String where
+		<Self::Pair as Pair>::Public: PublicT,
+	{
+		pair.public().into_runtime().into_account().to_ss58check()
 	}
 	fn public_from_pair(pair: &Self::Pair) -> Self::Public {
 		pair.public()
@@ -58,28 +60,43 @@ trait Crypto: Sized {
 	{
 		if let Ok((pair, seed)) = Self::Pair::from_phrase(uri, password) {
 			let public_key = Self::public_from_pair(&pair);
-			println!("Secret phrase `{}` is account:\n  Secret seed: {}\n  Public key (hex): {}\n  Address (SS58): {}",
+			println!("Secret phrase `{}` is account:\n  \
+				Secret seed:      {}\n  \
+				Public key (hex): {}\n  \
+				Account ID:       {}\n  \
+				SS58 Address:     {}",
 				uri,
 				format_seed::<Self>(seed),
-				format_public_key::<Self>(public_key),
+				format_public_key::<Self>(public_key.clone()),
+				format_account_id::<Self>(public_key),
 				Self::ss58_from_pair(&pair)
 			);
-		} else if let Ok(pair) = Self::Pair::from_string(uri, password) {
+		} else if let Ok((pair, seed)) = Self::Pair::from_string_with_seed(uri, password) {
 			let public_key = Self::public_from_pair(&pair);
-			println!(
-				"Secret Key URI `{}` is account:\n  Public key (hex): {}\n  Address (SS58): {}",
+			println!("Secret Key URI `{}` is account:\n  \
+				Secret seed:      {}\n  \
+				Public key (hex): {}\n  \
+				Account ID:       {}\n  \
+				SS58 Address:     {}",
 				uri,
-				format_public_key::<Self>(public_key),
+				if let Some(seed) = seed { format_seed::<Self>(seed) } else { "n/a".into() },
+				format_public_key::<Self>(public_key.clone()),
+				format_account_id::<Self>(public_key),
 				Self::ss58_from_pair(&pair)
 			);
 		} else if let Ok((public_key, v)) =
 			<Self::Pair as Pair>::Public::from_string_with_version(uri)
 		{
 			let v = network_override.unwrap_or(v);
-			println!("Public Key URI `{}` is account:\n  Network ID/version: {}\n  Public key (hex): {}\n  Address (SS58): {}",
+			println!("Public Key URI `{}` is account:\n  \
+				Network ID/version: {}\n  \
+				Public key (hex):   {}\n  \
+				Account ID:         {}\n  \
+				SS58 Address:       {}",
 				uri,
 				String::from(v),
 				format_public_key::<Self>(public_key.clone()),
+				format_account_id::<Self>(public_key.clone()),
 				public_key.to_ss58check_with_version(v)
 			);
 		} else {
@@ -106,17 +123,37 @@ impl Crypto for Sr25519 {
 	type Public = sr25519::Public;
 }
 
+struct Ecdsa;
+
+impl Crypto for Ecdsa {
+	type Pair = ecdsa::Pair;
+	type Public = ecdsa::Public;
+}
+
 type SignatureOf<C> = <<C as Crypto>::Pair as Pair>::Signature;
 type PublicOf<C> = <<C as Crypto>::Pair as Pair>::Public;
 type SeedOf<C> = <<C as Crypto>::Pair as Pair>::Seed;
+type AccountPublic = <Signature as Verify>::Signer;
 
-trait SignatureT: AsRef<[u8]> + AsMut<[u8]> + Default {}
-trait PublicT: Sized + AsRef<[u8]> + Ss58Codec {}
+trait SignatureT: AsRef<[u8]> + AsMut<[u8]> + Default {
+	/// Converts the signature into a runtime account signature, if possible. If not possible, bombs out.
+	fn into_runtime(self) -> Signature {
+		panic!("This cryptography isn't supported for this runtime.")
+	}
+}
+trait PublicT: Sized + AsRef<[u8]> + Ss58Codec {
+	/// Converts the public key into a runtime account public key, if possible. If not possible, bombs out.
+	fn into_runtime(self) -> AccountPublic {
+		panic!("This cryptography isn't supported for this runtime.")
+	}
+}
 
-impl SignatureT for sr25519::Signature {}
-impl SignatureT for ed25519::Signature {}
-impl PublicT for sr25519::Public {}
-impl PublicT for ed25519::Public {}
+impl SignatureT for sr25519::Signature { fn into_runtime(self) -> Signature { self.into() } }
+impl SignatureT for ed25519::Signature { fn into_runtime(self) -> Signature { self.into() } }
+impl SignatureT for ecdsa::Signature { fn into_runtime(self) -> Signature { self.into() } }
+impl PublicT for sr25519::Public { fn into_runtime(self) -> AccountPublic { self.into() } }
+impl PublicT for ed25519::Public { fn into_runtime(self) -> AccountPublic { self.into() } }
+impl PublicT for ecdsa::Public { fn into_runtime(self) -> AccountPublic { self.into() } }
 
 fn main() {
 	let yaml = load_yaml!("cli.yml");
@@ -125,10 +162,12 @@ fn main() {
 		.get_matches();
 
 	if matches.is_present("ed25519") {
-		execute::<Ed25519>(matches)
-	} else {
-		execute::<Sr25519>(matches)
+		return execute::<Ed25519>(matches)
 	}
+	if matches.is_present("secp256k1") {
+		return execute::<Ecdsa>(matches)
+	}
+	return execute::<Sr25519>(matches)
 }
 
 fn execute<C: Crypto>(matches: ArgMatches)
@@ -165,7 +204,7 @@ where
 		("verify", Some(matches)) => {
 			let should_decode = matches.is_present("hex");
 			let message = read_message_from_stdin(should_decode);
-			let is_valid_signature = do_verify::<C>(matches, message, password);
+			let is_valid_signature = do_verify::<C>(matches, message);
 			if is_valid_signature {
 				println!("Signature verifies correctly.");
 			} else {
@@ -182,20 +221,20 @@ where
 			C::print_from_uri(&formated_seed, None, maybe_network);
 		}
 		("transfer", Some(matches)) => {
-			let signer = read_pair::<Sr25519>(matches.value_of("from"), password);
+			let signer = read_pair::<C>(matches.value_of("from"), password);
 			let index = read_required_parameter::<Index>(matches, "index");
 			let genesis_hash = read_genesis_hash(matches);
 
-			let to = read_public_key::<Sr25519>(matches.value_of("to"), password);
+			let to: AccountId = read_account_id(matches.value_of("to"));
 			let amount = read_required_parameter::<Balance>(matches, "amount");
 			let function = Call::Balances(BalancesCall::transfer(to.into(), amount));
 
-			let extrinsic = create_extrinsic(function, index, signer, genesis_hash);
+			let extrinsic = create_extrinsic::<C>(function, index, signer, genesis_hash);
 
 			print_extrinsic(extrinsic);
 		}
 		("sign-transaction", Some(matches)) => {
-			let signer = read_pair::<Sr25519>(matches.value_of("suri"), password);
+			let signer = read_pair::<C>(matches.value_of("suri"), password);
 			let index = read_required_parameter::<Index>(matches, "nonce");
 			let genesis_hash = read_genesis_hash(matches);
 
@@ -205,7 +244,7 @@ where
 				.and_then(|x| Decode::decode(&mut &x[..]).ok())
 				.unwrap();
 
-			let extrinsic = create_extrinsic(function, index, signer, genesis_hash);
+			let extrinsic = create_extrinsic::<C>(function, index, signer, genesis_hash);
 
 			print_extrinsic(extrinsic);
 		}
@@ -236,13 +275,13 @@ where
 	format_signature::<C>(&signature)
 }
 
-fn do_verify<C: Crypto>(matches: &ArgMatches, message: Vec<u8>, password: Option<&str>) -> bool
+fn do_verify<C: Crypto>(matches: &ArgMatches, message: Vec<u8>) -> bool
 where
 	SignatureOf<C>: SignatureT,
 	PublicOf<C>: PublicT,
 {
 	let signature = read_signature::<C>(matches);
-	let pubkey = read_public_key::<C>(matches.value_of("uri"), password);
+	let pubkey = read_public_key::<C>(matches.value_of("uri"));
 	<<C as Crypto>::Pair as Pair>::verify(&signature, &message, &pubkey)
 }
 
@@ -305,9 +344,7 @@ where
 	signature
 }
 
-fn read_public_key<C: Crypto>(matched_uri: Option<&str>, password: Option<&str>) -> PublicOf<C>
-where
-	SignatureOf<C>: SignatureT,
+fn read_public_key<C: Crypto>(matched_uri: Option<&str>) -> PublicOf<C> where
 	PublicOf<C>: PublicT,
 {
 	let uri = matched_uri.expect("parameter is required; thus it can't be None; qed");
@@ -319,10 +356,25 @@ where
 	if let Ok(pubkey_vec) = hex::decode(uri) {
 		<C as Crypto>::Public::from_slice(pubkey_vec.as_slice())
 	} else {
-		<C as Crypto>::Pair::from_string(uri, password)
+		<C as Crypto>::Public::from_string(uri)
 			.ok()
-			.map(|p| p.public())
 			.expect("Invalid URI; expecting either a secret URI or a public URI.")
+	}
+}
+
+fn read_account_id(matched_uri: Option<&str>) -> AccountId {
+	let uri = matched_uri.expect("parameter is required; thus it can't be None; qed");
+	let uri = if uri.starts_with("0x") {
+		&uri[2..]
+	} else {
+		uri
+	};
+	if let Ok(data_vec) = hex::decode(uri) {
+		AccountId::try_from(data_vec.as_slice())
+			.expect("Invalid hex length for account ID; should be 32 bytes")
+	} else {
+		AccountId::from_ss58check(uri).ok()
+			.expect("Invalid SS58-check address given for account ID.")
 	}
 }
 
@@ -350,12 +402,21 @@ fn format_public_key<C: Crypto>(public_key: PublicOf<C>) -> String {
 	format!("0x{}", HexDisplay::from(&public_key.as_ref()))
 }
 
-fn create_extrinsic(
+fn format_account_id<C: Crypto>(public_key: PublicOf<C>) -> String where
+	PublicOf<C>: PublicT,
+{
+	format!("0x{}", HexDisplay::from(&public_key.into_runtime().into_account().as_ref()))
+}
+
+fn create_extrinsic<C: Crypto>(
 	function: Call,
 	index: Index,
-	signer: <Sr25519 as Crypto>::Pair,
+	signer: C::Pair,
 	genesis_hash: H256,
-) -> UncheckedExtrinsic {
+) -> UncheckedExtrinsic where
+	PublicOf<C>: PublicT,
+	SignatureOf<C>: SignatureT,
+{
 	let extra = |i: Index, f: Balance| {
 		(
 			system::CheckVersion::<Runtime>::new(),
@@ -380,13 +441,14 @@ fn create_extrinsic(
 			(),
 		),
 	);
-	let signature = raw_payload.using_encoded(|payload| signer.sign(payload));
+	let signature = raw_payload.using_encoded(|payload| signer.sign(payload)).into_runtime();
+	let signer = signer.public().into_runtime();
 	let (function, extra, _) = raw_payload.deconstruct();
 
 	UncheckedExtrinsic::new_signed(
 		function,
-		signer.public().into(),
-		signature.into(),
+		signer.into_account().into(),
+		signature,
 		extra,
 	)
 }
@@ -439,7 +501,7 @@ mod tests {
 
 		let matches = App::from_yaml(yaml).get_matches_from(arg_vec);
 		let matches = matches.subcommand().1.unwrap();
-		assert!(do_verify::<CryptoType>(matches, message, password));
+		assert!(do_verify::<CryptoType>(matches, message));
 	}
 
 	#[test]
