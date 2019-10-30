@@ -650,10 +650,19 @@ decl_module! {
 	}
 }
 
+/// The possible errors that can happen querying the storage of a contract.
+pub enum GetStorageError {
+	/// The given address doesn't point on a contract.
+	ContractDoesntExist,
+	/// The specified contract is a tombstone and thus cannot have any storage.
+	IsTombstone,
+}
+
+/// Public APIs provided by the contracts module.
 impl<T: Trait> Module<T> {
 	/// Perform a call to a specified contract.
 	///
-	/// This function is similar to `Self::call`, but doesn't perform any lookups and better
+	/// This function is similar to `Self::call`, but doesn't perform any address lookups and better
 	/// suitable for calling directly from Rust.
 	pub fn bare_call(
 		origin: T::AccountId,
@@ -667,6 +676,27 @@ impl<T: Trait> Module<T> {
 		})
 	}
 
+	/// Query storage of a specified contract under a specified key.
+	pub fn get_storage(
+		address: T::AccountId,
+		key: [u8; 32],
+	) -> rstd::result::Result<Option<Vec<u8>>, GetStorageError> {
+		let contract_info = <ContractInfoOf<T>>::get(&address)
+			.ok_or(GetStorageError::ContractDoesntExist)?
+			.get_alive()
+			.ok_or(GetStorageError::IsTombstone)?;
+
+		let maybe_value = AccountDb::<T>::get_storage(
+			&DirectAccountDb,
+			&address,
+			Some(&contract_info.trie_id),
+			&key,
+		);
+		Ok(maybe_value)
+	}
+}
+
+impl<T: Trait> Module<T> {
 	fn execute_wasm(
 		origin: T::AccountId,
 		gas_limit: Gas,

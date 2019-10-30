@@ -139,6 +139,8 @@ fn config() -> crate::Config {
 		justification_period: 256,
 		keystore: None,
 		name: None,
+		is_authority: true,
+		observer_enabled: true,
 	}
 }
 
@@ -186,7 +188,6 @@ fn make_test_network() -> (
 		config(),
 		voter_set_state(),
 		Exit,
-		true,
 	);
 
 	(

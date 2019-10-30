@@ -82,6 +82,10 @@ pub struct Configuration<C, G, E = NoExtension> {
 	pub default_heap_pages: Option<u64>,
 	/// Should offchain workers be executed.
 	pub offchain_worker: bool,
+	/// Sentry mode is enabled, the node's role is AUTHORITY but it should not
+	/// actively participate in consensus (i.e. no keystores should be passed to
+	/// consensus modules).
+	pub sentry_mode: bool,
 	/// Enable authoring even when offline.
 	pub force_authoring: bool,
 	/// Disable GRANDPA when running in validator mode
@@ -129,6 +133,7 @@ impl<C, G, E> Configuration<C, G, E> where
 			telemetry_external_transport: None,
 			default_heap_pages: None,
 			offchain_worker: Default::default(),
+			sentry_mode: false,
 			force_authoring: false,
 			disable_grandpa: false,
 			keystore_password: None,
