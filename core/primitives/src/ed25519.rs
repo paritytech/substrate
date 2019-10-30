@@ -241,14 +241,12 @@ impl rstd::fmt::Debug for Signature {
 	}
 }
 
-#[cfg(all(feature = "full_crypto", feature = "std"))]
+#[cfg(feature = "full_crypto")]
 impl rstd::hash::Hash for Signature {
 	fn hash<H: rstd::hash::Hasher>(&self, state: &mut H) {
 		rstd::hash::Hash::hash(&self.0[..], state);
 	}
 }
-
-
 
 impl Signature {
 	/// A new instance from the given 64-byte `data`.

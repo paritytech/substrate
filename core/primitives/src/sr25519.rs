@@ -249,9 +249,9 @@ impl rstd::fmt::Debug for Signature {
 }
 
 #[cfg(feature = "full_crypto")]
-impl core::hash::Hash for Signature {
-	fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
-		core::hash::Hash::hash(&self.0[..], state);
+impl rstd::hash::Hash for Signature {
+	fn hash<H: rstd::hash::Hasher>(&self, state: &mut H) {
+		rstd::hash::Hash::hash(&self.0[..], state);
 	}
 }
 
