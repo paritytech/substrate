@@ -48,7 +48,7 @@ pub trait StorageValue<T: FullCodec> {
 	/// Returns `Err` if the storage item could not be interpreted as the old type, and Ok, along
 	/// with the new value if it could.
 	///
-	/// NOTE: This operates from and to `Option<>` types; no effort is made to respect the default
+	/// NOTE: This operates from and to `Option<_>` types; no effort is made to respect the default
 	/// value of the original type.
 	///
 	/// # Warning
@@ -59,8 +59,8 @@ pub trait StorageValue<T: FullCodec> {
 	/// # Usage
 	///
 	/// This would typically be called inside the module implementation of on_initialize, while
-	/// ensuring no usage of this storage are made before the call to on_initialize.
-	/// (More precisely prior initialized modules doesn't make use of this storage).
+	/// ensuring **no usage of this storage are made before the call to `on_initialize`**. (More
+	/// precisely prior initialized modules doesn't make use of this storage).
 	fn translate<O: Decode, F: FnOnce(Option<O>) -> Option<T>>(f: F) -> Result<Option<T>, ()>;
 
 	/// Store a value under this key into the provided storage instance.
