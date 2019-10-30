@@ -196,6 +196,7 @@ check-web-wasm:
     - time cargo web build -p sr-io
     - time cargo web build -p sr-primitives
     - time cargo web build -p sr-std
+    - time cargo web build -p substrate-chain-spec
     - time cargo web build -p substrate-client
     - time cargo web build -p substrate-consensus-aura
     - time cargo web build -p substrate-consensus-babe
