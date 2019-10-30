@@ -260,7 +260,7 @@ use support::{
 		WithdrawReasons, OnUnbalanced, Imbalance, Get, Time
 	}
 };
-use session::{historical::OnSessionEnding, SelectInitialValidators};
+use session::{historical::OnSessionEnd, SelectInitialValidators};
 use sr_primitives::{
 	Perbill,
 	RuntimeDebug,
@@ -470,7 +470,7 @@ impl<T: Trait> SessionInterface<<T as system::Trait>::AccountId> for T where
 		FullIdentificationOf = ExposureOf<T>,
 	>,
 	T::SessionHandler: session::SessionHandler<<T as system::Trait>::AccountId>,
-	T::OnSessionEnding: session::OnSessionEnding<<T as system::Trait>::AccountId>,
+	T::OnSessionEnd: session::OnSessionEnd<<T as system::Trait>::AccountId>,
 	T::SelectInitialValidators: session::SelectInitialValidators<<T as system::Trait>::AccountId>,
 	T::ValidatorIdOf: Convert<<T as system::Trait>::AccountId, Option<<T as system::Trait>::AccountId>>
 {
@@ -1430,14 +1430,40 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> session::OnSessionEnding<T::AccountId> for Module<T> {
-	fn on_session_ending(_ending: SessionIndex, start_session: SessionIndex) -> Option<Vec<T::AccountId>> {
+impl<T: Trait> session::OnSessionEnd<T::AccountId> for Module<T> {
+	fn on_session_ending() {
+		let session_index = <session::Module<T>>::current_index();
+		let current_validators = <session::Module<T>>::validators();
+		let validator_set_count = current_validators.len();
+
+		let era_points = CurrentEraPointsEarned::get().individual;
+		let offenders = current_validators.into_iter()
+			.zip(era_points.into_iter())
+			.filter_map(|(v, p)| if p == 0 { Some(v) } else { None })
+			.map(|v| )
+			.collect::<Vec<_>>();
+
+		if offenders.is_empty() {
+			return;
+		}
+
+		let validator_set_count = keys.len() as u32;
+		let offence = UnresponsivenessOffence {
+			session_index,
+			validator_set_count,
+			offenders,
+		};
+
+		T::ReportUnresponsiveness::report_offence(vec![], offence);
+	}
+
+	fn on_session_starting(_ending: SessionIndex, start_session: SessionIndex) -> Option<Vec<T::AccountId>> {
 		Self::new_session(start_session - 1).map(|(new, _old)| new)
 	}
 }
 
-impl<T: Trait> OnSessionEnding<T::AccountId, Exposure<T::AccountId, BalanceOf<T>>> for Module<T> {
-	fn on_session_ending(_ending: SessionIndex, start_session: SessionIndex)
+impl<T: Trait> OnSessionEnd<T::AccountId, Exposure<T::AccountId, BalanceOf<T>>> for Module<T> {
+	fn on_session_starting(_ending: SessionIndex, start_session: SessionIndex)
 		-> Option<(Vec<T::AccountId>, Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>)>
 	{
 		Self::new_session(start_session - 1)
@@ -1502,7 +1528,7 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, session::historical::Identificati
 		FullIdentificationOf = ExposureOf<T>,
 	>,
 	T::SessionHandler: session::SessionHandler<<T as system::Trait>::AccountId>,
-	T::OnSessionEnding: session::OnSessionEnding<<T as system::Trait>::AccountId>,
+	T::OnSessionEnd: session::OnSessionEnd<<T as system::Trait>::AccountId>,
 	T::SelectInitialValidators: session::SelectInitialValidators<<T as system::Trait>::AccountId>,
 	T::ValidatorIdOf: Convert<<T as system::Trait>::AccountId, Option<<T as system::Trait>::AccountId>>
 {
@@ -1595,5 +1621,47 @@ impl<T, Reporter, Offender, R, O> ReportOffence<Reporter, Offender, O>
 				RawEvent::OldSlashingReportDiscarded(offence_session)
 			)
 		}
+	}
+}
+
+/// An offence that is filed if a validator didn't send a heartbeat message.
+#[derive(RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Clone, PartialEq, Eq))]
+pub struct UnresponsivenessOffence<Offender> {
+	/// The current session index in which we report the unresponsive validators.
+	///
+	/// It acts as a time measure for unresponsiveness reports and effectively will always point
+	/// at the end of the session.
+	session_index: SessionIndex,
+	/// The size of the validator set in current session/era.
+	validator_set_count: u32,
+	/// Authorities that were unresponsive during the current era.
+	offenders: Vec<Offender>,
+}
+
+impl<Offender: Clone> Offence<Offender> for UnresponsivenessOffence<Offender> {
+	const ID: Kind = *b"staking:offlin";
+	type TimeSlot = SessionIndex;
+
+	fn offenders(&self) -> Vec<Offender> {
+		self.offenders.clone()
+	}
+
+	fn session_index(&self) -> SessionIndex {
+		self.session_index
+	}
+
+	fn validator_set_count(&self) -> u32 {
+		self.validator_set_count
+	}
+
+	fn time_slot(&self) -> Self::TimeSlot {
+		self.session_index
+	}
+
+	fn slash_fraction(offenders: u32, validator_set_count: u32) -> Perbill {
+		// the formula is min((3 * (k - 1)) / n, 1) * 0.05
+		let x = Perbill::from_rational_approximation(3 * (offenders - 1), validator_set_count);
+		x.saturating_mul(Perbill::from_percent(5))
 	}
 }

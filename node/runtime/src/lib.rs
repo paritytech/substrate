@@ -222,7 +222,7 @@ parameter_types! {
 }
 
 impl session::Trait for Runtime {
-	type OnSessionEnding = Staking;
+	type OnSessionEnd = Staking;
 	type SessionHandler = <SessionKeys as OpaqueKeys>::KeyTypeIdProviders;
 	type ShouldEndSession = Babe;
 	type Event = Event;

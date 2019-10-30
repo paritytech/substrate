@@ -452,43 +452,6 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	}
 
 	fn on_before_session_ending() {
-		let mut unresponsive = vec![];
-
-		let current_session = <session::Module<T>>::current_index();
-
-		let keys = Keys::<T>::get();
-		let current_validators = <session::Module<T>>::validators();
-
-		for (auth_idx, validator_id) in current_validators.into_iter().enumerate() {
-			let auth_idx = auth_idx as u32;
-			let exists = <ReceivedHeartbeats>::exists(&current_session, &auth_idx);
-			if !exists {
-				let full_identification = T::FullIdentificationOf::convert(validator_id.clone())
-					.expect(
-						"we got the validator_id from current_validators;
-						current_validators is set of currently acting validators;
-						the mapping between the validator id and its full identification should be valid;
-						thus `FullIdentificationOf::convert` can't return `None`;
-						qed",
-					);
-
-				unresponsive.push((validator_id, full_identification));
-			}
-		}
-
-		if unresponsive.is_empty() {
-			return;
-		}
-
-		let validator_set_count = keys.len() as u32;
-		let offence = UnresponsivenessOffence {
-			session_index: current_session,
-			validator_set_count,
-			offenders: unresponsive,
-		};
-
-		T::ReportUnresponsiveness::report_offence(vec![], offence);
-
 		// Remove all received heartbeats from the current session, they have
 		// already been processed and won't be needed anymore.
 		<ReceivedHeartbeats>::remove_prefix(&<session::Module<T>>::current_index());
@@ -541,47 +504,5 @@ impl<T: Trait> support::unsigned::ValidateUnsigned for Module<T> {
 		} else {
 			InvalidTransaction::Call.into()
 		}
-	}
-}
-
-/// An offence that is filed if a validator didn't send a heartbeat message.
-#[derive(RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Clone, PartialEq, Eq))]
-pub struct UnresponsivenessOffence<Offender> {
-	/// The current session index in which we report the unresponsive validators.
-	///
-	/// It acts as a time measure for unresponsiveness reports and effectively will always point
-	/// at the end of the session.
-	session_index: SessionIndex,
-	/// The size of the validator set in current session/era.
-	validator_set_count: u32,
-	/// Authorities that were unresponsive during the current era.
-	offenders: Vec<Offender>,
-}
-
-impl<Offender: Clone> Offence<Offender> for UnresponsivenessOffence<Offender> {
-	const ID: Kind = *b"im-online:offlin";
-	type TimeSlot = SessionIndex;
-
-	fn offenders(&self) -> Vec<Offender> {
-		self.offenders.clone()
-	}
-
-	fn session_index(&self) -> SessionIndex {
-		self.session_index
-	}
-
-	fn validator_set_count(&self) -> u32 {
-		self.validator_set_count
-	}
-
-	fn time_slot(&self) -> Self::TimeSlot {
-		self.session_index
-	}
-
-	fn slash_fraction(offenders: u32, validator_set_count: u32) -> Perbill {
-		// the formula is min((3 * (k - 1)) / n, 1) * 0.05
-		let x = Perbill::from_rational_approximation(3 * (offenders - 1), validator_set_count);
-		x.saturating_mul(Perbill::from_percent(5))
 	}
 }

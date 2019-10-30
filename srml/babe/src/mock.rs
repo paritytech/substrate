@@ -78,7 +78,7 @@ impl session::Trait for Test {
 	type ValidatorId = <Self as system::Trait>::AccountId;
 	type ShouldEndSession = Babe;
 	type SessionHandler = (Babe,Babe,);
-	type OnSessionEnding = ();
+	type OnSessionEnd = ();
 	type ValidatorIdOf = ();
 	type SelectInitialValidators = ();
 	type Keys = MockSessionKeys;

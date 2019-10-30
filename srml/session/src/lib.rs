@@ -31,7 +31,7 @@
 //! - **Session:** A session is a period of time that has a constant set of validators. Validators can only join
 //! or exit the validator set at a session change. It is measured in block numbers. The block where a session is
 //! ended is determined by the `ShouldSessionEnd` trait. When the session is ending, a new validator set
-//! can be chosen by `OnSessionEnding` implementations.
+//! can be chosen by `OnSessionEnd` implementations.
 //! - **Session key:** A session key is actually several keys kept together that provide the various signing
 //! functions required by network authorities/validators in pursuit of their duties.
 //! - **Validator ID:** Every account has an associated validator ID. For some simple staking systems, this
@@ -166,9 +166,11 @@ impl<
 }
 
 /// An event handler for when the session is ending.
-/// TODO [slashing] consider renaming to OnSessionStarting
-pub trait OnSessionEnding<ValidatorId> {
-	/// Handle the fact that the session is ending, and optionally provide the new validator set.
+pub trait OnSessionEnd<ValidatorId> {
+	/// Handle the fact that the session is coming to an end.
+	fn on_session_ending() {}
+
+	/// Handle the fact that the session has ended, and optionally provide the new validator set.
 	///
 	/// Even if the validator-set is the same as before, if any underlying economic
 	/// conditions have changed (i.e. stake-weights), the new validator set must be returned.
@@ -176,18 +178,18 @@ pub trait OnSessionEnding<ValidatorId> {
 	/// issue a validator-set change so misbehavior can be provably associated with the new
 	/// economic conditions as opposed to the old.
 	///
-	/// `ending_index` is the index of the currently ending session.
+	/// `ending_index` is the index of the session which has just ended.
 	/// The returned validator set, if any, will not be applied until `will_apply_at`.
 	/// `will_apply_at` is guaranteed to be at least `ending_index + 1`, since session indices don't
 	/// repeat, but it could be some time after in case we are staging authority set changes.
-	fn on_session_ending(
-		ending_index: SessionIndex,
+	fn on_session_starting(
+		ended_index: SessionIndex,
 		will_apply_at: SessionIndex
 	) -> Option<Vec<ValidatorId>>;
 }
 
-impl<A> OnSessionEnding<A> for () {
-	fn on_session_ending(_: SessionIndex, _: SessionIndex) -> Option<Vec<A>> { None }
+impl<A> OnSessionEnd<A> for () {
+	fn on_session_starting(_: SessionIndex, _: SessionIndex) -> Option<Vec<A>> { None }
 }
 
 /// Handler for session lifecycle events.
@@ -217,7 +219,7 @@ pub trait SessionHandler<ValidatorId> {
 
 	/// A notification for end of the session.
 	///
-	/// Note it is triggered before any `OnSessionEnding` handlers,
+	/// Note it is triggered before any `OnSessionEnd` handlers,
 	/// so we can still affect the validator set.
 	fn on_before_session_ending() {}
 
@@ -251,7 +253,7 @@ pub trait OneSessionHandler<ValidatorId>: BoundToRuntimeAppPublic {
 
 	/// A notification for end of the session.
 	///
-	/// Note it is triggered before any `OnSessionEnding` handlers,
+	/// Note it is triggered before any `OnSessionEnd` handlers,
 	/// so we can still affect the validator set.
 	fn on_before_session_ending() {}
 
@@ -336,7 +338,7 @@ pub trait Trait: system::Trait {
 	type ShouldEndSession: ShouldEndSession<Self::BlockNumber>;
 
 	/// Handler for when a session is about to end.
-	type OnSessionEnding: OnSessionEnding<Self::ValidatorId>;
+	type OnSessionEnd: OnSessionEnd<Self::ValidatorId>;
 
 	/// Handler when a session has changed.
 	type SessionHandler: SessionHandler<Self::ValidatorId>;
@@ -374,7 +376,7 @@ decl_storage! {
 
 		/// Indices of disabled validators.
 		///
-		/// The set is cleared when `on_session_ending` returns a new set of identities.
+		/// The set is cleared when `on_session_starting` returns a new set of identities.
 		DisabledValidators get(fn disabled_validators): Vec<u32>;
 
 		/// The next session keys for a validator.
@@ -503,6 +505,9 @@ impl<T: Trait> Module<T> {
 		// Inform the session handlers that a session is going to end.
 		T::SessionHandler::on_before_session_ending();
 
+		// Do anything at the end of the session.
+		T::OnSessionEnd::on_session_ending();
+
 		// Get queued session keys and validators.
 		let session_keys = <QueuedKeys<T>>::get();
 		let validators = session_keys.iter()
@@ -518,11 +523,11 @@ impl<T: Trait> Module<T> {
 		let applied_at = session_index + 2;
 
 		// Get next validator set.
-		let maybe_next_validators = T::OnSessionEnding::on_session_ending(session_index, applied_at);
+		let maybe_next_validators = T::OnSessionEnd::on_session_starting(session_index, applied_at);
 		let (next_validators, next_identities_changed)
 			= if let Some(validators) = maybe_next_validators
 		{
-			// NOTE: as per the documentation on `OnSessionEnding`, we consider
+			// NOTE: as per the documentation on `OnSessionEnd`, we consider
 			// the validator set as having changed even if the validators are the
 			// same as before, as underlying economic conditions may have changed.
 			(validators, true)

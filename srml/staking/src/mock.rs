@@ -149,7 +149,7 @@ parameter_types! {
 	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(25);
 }
 impl session::Trait for Test {
-	type OnSessionEnding = session::historical::NoteHistoricalRoot<Test, Staking>;
+	type OnSessionEnd = session::historical::NoteHistoricalRoot<Test, Staking>;
 	type Keys = UintAuthorityId;
 	type ShouldEndSession = session::PeriodicSessions<Period, Offset>;
 	type SessionHandler = TestSessionHandler;

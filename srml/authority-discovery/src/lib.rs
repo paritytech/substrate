@@ -158,9 +158,9 @@ mod tests {
 
 	type AuthorityId = babe_primitives::AuthorityId;
 
-	pub struct TestOnSessionEnding;
-	impl session::OnSessionEnding<AuthorityId> for TestOnSessionEnding {
-		fn on_session_ending(_: SessionIndex, _: SessionIndex) -> Option<Vec<AuthorityId>> {
+	pub struct TestOnSessionEnd;
+	impl session::OnSessionEnd<AuthorityId> for TestOnSessionEnd {
+		fn on_session_starting(_: SessionIndex, _: SessionIndex) -> Option<Vec<AuthorityId>> {
 			None
 		}
 	}
@@ -170,7 +170,7 @@ mod tests {
 	}
 
 	impl session::Trait for Test {
-		type OnSessionEnding = TestOnSessionEnding;
+		type OnSessionEnd = TestOnSessionEnd;
 		type Keys = UintAuthorityId;
 		type ShouldEndSession = session::PeriodicSessions<Period, Offset>;
 		type SessionHandler = TestSessionHandler;

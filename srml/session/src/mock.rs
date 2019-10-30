@@ -88,9 +88,9 @@ impl SessionHandler<u64> for TestSessionHandler {
 	}
 }
 
-pub struct TestOnSessionEnding;
-impl OnSessionEnding<u64> for TestOnSessionEnding {
-	fn on_session_ending(_: SessionIndex, _: SessionIndex) -> Option<Vec<u64>> {
+pub struct TestOnSessionEnd;
+impl OnSessionEnd<u64> for TestOnSessionEnd {
+	fn on_session_starting(_: SessionIndex, _: SessionIndex) -> Option<Vec<u64>> {
 		if !TEST_SESSION_CHANGED.with(|l| *l.borrow()) {
 			VALIDATORS.with(|v| {
 				let mut v = v.borrow_mut();
@@ -108,12 +108,12 @@ impl OnSessionEnding<u64> for TestOnSessionEnding {
 }
 
 #[cfg(feature = "historical")]
-impl crate::historical::OnSessionEnding<u64, u64> for TestOnSessionEnding {
-	fn on_session_ending(ending_index: SessionIndex, will_apply_at: SessionIndex)
+impl crate::historical::OnSessionEnd<u64, u64> for TestOnSessionEnd {
+	fn on_session_starting(ending_index: SessionIndex, will_apply_at: SessionIndex)
 		-> Option<(Vec<u64>, Vec<(u64, u64)>)>
 	{
 		let pair_with_ids = |vals: &[u64]| vals.iter().map(|&v| (v, v)).collect::<Vec<_>>();
-		<Self as OnSessionEnding<_>>::on_session_ending(ending_index, will_apply_at)
+		<Self as OnSessionEnd<_>>::on_session_starting(ending_index, will_apply_at)
 			.map(|vals| (pair_with_ids(&vals), vals))
 			.map(|(ids, vals)| (vals, ids))
 	}
@@ -189,9 +189,9 @@ parameter_types! {
 impl Trait for Test {
 	type ShouldEndSession = TestShouldEndSession;
 	#[cfg(feature = "historical")]
-	type OnSessionEnding = crate::historical::NoteHistoricalRoot<Test, TestOnSessionEnding>;
+	type OnSessionEnd = crate::historical::NoteHistoricalRoot<Test, TestOnSessionEnd>;
 	#[cfg(not(feature = "historical"))]
-	type OnSessionEnding = TestOnSessionEnding;
+	type OnSessionEnd = TestOnSessionEnd;
 	type SessionHandler = TestSessionHandler;
 	type ValidatorId = u64;
 	type ValidatorIdOf = ConvertInto;

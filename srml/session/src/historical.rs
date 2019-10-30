@@ -49,7 +49,7 @@ pub trait Trait: super::Trait {
 	/// historical trie.
 	///
 	/// This mapping is expected to remain stable in between calls to
-	/// `Self::OnSessionEnding::on_session_ending` which return new validators.
+	/// `Self::OnSessionEnd::on_session_starting` which return new validators.
 	type FullIdentificationOf: Convert<Self::ValidatorId, Option<Self::FullIdentification>>;
 }
 
@@ -97,28 +97,28 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-/// Specialization of the crate-level `OnSessionEnding` which returns the old
+/// Specialization of the crate-level `OnSessionEnd` which returns the old
 /// set of full identification when changing the validator set.
-pub trait OnSessionEnding<ValidatorId, FullIdentification>: crate::OnSessionEnding<ValidatorId> {
+pub trait OnSessionEnd<ValidatorId, FullIdentification>: crate::OnSessionEnd<ValidatorId> {
 	/// If there was a validator set change, its returns the set of new validators along with the
 	/// old validators and their full identifications.
-	fn on_session_ending(ending: SessionIndex, will_apply_at: SessionIndex)
+	fn on_session_starting(ending: SessionIndex, will_apply_at: SessionIndex)
 		-> Option<(Vec<ValidatorId>, Vec<(ValidatorId, FullIdentification)>)>;
 }
 
-/// An `OnSessionEnding` implementation that wraps an inner `I` and also
+/// An `OnSessionEnd` implementation that wraps an inner `I` and also
 /// sets the historical trie root of the ending session.
 pub struct NoteHistoricalRoot<T, I>(rstd::marker::PhantomData<(T, I)>);
 
-impl<T: Trait, I> crate::OnSessionEnding<T::ValidatorId> for NoteHistoricalRoot<T, I>
-	where I: OnSessionEnding<T::ValidatorId, T::FullIdentification>
+impl<T: Trait, I> crate::OnSessionEnd<T::ValidatorId> for NoteHistoricalRoot<T, I>
+	where I: OnSessionEnd<T::ValidatorId, T::FullIdentification>
 {
-	fn on_session_ending(ending: SessionIndex, applied_at: SessionIndex) -> Option<Vec<T::ValidatorId>> {
+	fn on_session_starting(ending: SessionIndex, applied_at: SessionIndex) -> Option<Vec<T::ValidatorId>> {
 		StoredRange::mutate(|range| {
 			range.get_or_insert_with(|| (ending, ending)).1 = ending + 1;
 		});
 
-		// do all of this _before_ calling the other `on_session_ending` impl
+		// do all of this _before_ calling the other `on_session_starting` impl
 		// so that we have e.g. correct exposures from the _current_.
 
 		let count = <SessionModule<T>>::validators().len() as u32;
@@ -133,7 +133,7 @@ impl<T: Trait, I> crate::OnSessionEnding<T::ValidatorId> for NoteHistoricalRoot<
 		// trie has been generated for this session, so it's no longer queued.
 		<CachedObsolete<T>>::remove(&ending);
 
-		let (new_validators, old_exposures) = <I as OnSessionEnding<_, _>>::on_session_ending(ending, applied_at)?;
+		let (new_validators, old_exposures) = <I as OnSessionEnd<_, _>>::on_session_starting(ending, applied_at)?;
 
 		// every session from `ending+1 .. applied_at` now has obsolete `FullIdentification`
 		// now that a new validator election has occurred.
