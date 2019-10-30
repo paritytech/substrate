@@ -53,8 +53,8 @@ pub trait StorageValue<T: FullCodec> {
 	///
 	/// # Warning
 	///
-	/// This function must be used with care as every other call to the storage still contains the
-	/// old type.
+	/// This function must be used with care, before being updated the storage still contains the
+	/// old type, thus other calls (such as `get`) will fail at decoding it.
 	///
 	/// # Usage
 	///
