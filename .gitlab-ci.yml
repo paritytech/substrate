@@ -50,7 +50,7 @@ variables:
     - web
     - /^[0-9]+$/                   # PRs
   retry:
-    max: 5
+    max: 2
     when: 
       - runner_system_failure
       - unknown_failure
