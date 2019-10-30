@@ -612,10 +612,15 @@ pub fn create_instance<E: Externalities>(
 
 	let mut ext = AssertUnwindSafe(ext);
 	let call_instance = AssertUnwindSafe(&instance);
+	let host_functions_slice = host_functions.as_slice();
 	let version = crate::native_executor::safe_call(
-		move || call_in_wasm_module(&mut **ext, *call_instance, "Core_version", &[], &host_functions)
-				.ok()
-				.and_then(|v| RuntimeVersion::decode(&mut v.as_slice()).ok())
+		move || call_in_wasm_module(
+			&mut **ext,
+			*call_instance,
+			"Core_version",
+			&[],
+			host_functions_slice,
+		).ok().and_then(|v| RuntimeVersion::decode(&mut v.as_slice()).ok())
 	).map_err(WasmError::Instantiation)?;
 
 	Ok(WasmiRuntime {
