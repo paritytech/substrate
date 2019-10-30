@@ -25,6 +25,8 @@ use substrate_service::{AbstractService, RpcSession, Roles as ServiceRoles, Conf
 use wasm_bindgen::prelude::*;
 
 /// Starts the client.
+///
+/// You must pass a libp2p transport that supports .
 #[wasm_bindgen]
 pub fn start_client(wasm_ext: wasm_ext::ffi::Transport) -> Result<Client, JsValue> {
 	start_inner(wasm_ext)
@@ -35,35 +37,40 @@ fn start_inner(wasm_ext: wasm_ext::ffi::Transport) -> Result<Client, Box<dyn std
 	console_error_panic_hook::set_once();
 	console_log::init_with_level(log::Level::Info);
 
-	let wasm_ext = wasm_ext::ExtTransport::new(wasm_ext);
-
-	let chain_spec = ChainSpec::FlamingFir.load().map_err(|e| format!("{:?}", e))?;
-	let mut config = Configuration::<(), _, _>::default_with_spec(chain_spec);
-	config.network.transport = network::config::TransportConfig::Normal {
-		wasm_external_transport: Some(wasm_ext.clone()),
-		enable_mdns: false,
+	// Build the configuration to pass to the service.
+	let config = {
+		let wasm_ext = wasm_ext::ExtTransport::new(wasm_ext);
+		let chain_spec = ChainSpec::FlamingFir.load().map_err(|e| format!("{:?}", e))?;
+		let mut config = Configuration::<(), _, _>::default_with_spec(chain_spec);
+		config.network.transport = network::config::TransportConfig::Normal {
+			wasm_external_transport: Some(wasm_ext.clone()),
+			enable_mdns: false,
+		};
+		config.telemetry_external_transport = Some(wasm_ext);
+		config.roles = ServiceRoles::LIGHT;
+		config.name = "Browser node".to_string();
+		config.database = {
+			let db = Arc::new(kvdb_memorydb::create(10));
+			DatabaseConfig::Custom(db)
+		};
+		config
 	};
-	config.telemetry_external_transport = Some(wasm_ext);
-	config.roles = ServiceRoles::FULL;
-	config.name = "Browser node".to_string();
-	config.database = {
-		let db = Arc::new(kvdb_memorydb::create(10));
-		DatabaseConfig::Custom(db)
-	};
 
-	//info!("{}", version.name);
+	info!("Substrate browser node");
 	info!("  version {}", config.full_version());
 	info!("  by Parity Technologies, 2017-2019");
 	info!("Chain specification: {}", config.chain_spec.name());
 	info!("Node name: {}", config.name);
 	info!("Roles: {:?}", config.roles);
 
-	let mut service = new_full!(config)
-		.map_err(|e: String| format!("{:?}", e))?.0;
+	// Create the service. This is the most heavy initialization step.
+	let mut service = crate::service::new_light(config).map_err(|e| format!("{:?}", e))?;
 
-	/*let informant = substrate_cli::informant::build(&service);
-	wasm_bindgen_futures::spawn_local(informant);*/
-
+	// We now dispatch a background task responsible for processing the service.
+	//
+	// The main action performed by the code below consists in polling the service with
+	// `service.poll()`.
+	// The rest consists in handling RPC requests.
 	let (rpc_send_tx, mut rpc_send_rx) = mpsc::unbounded::<RpcMessage>();
 	wasm_bindgen_futures::spawn_local(futures::future::poll_fn(move || {
 		loop {
