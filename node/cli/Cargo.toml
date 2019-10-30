@@ -76,6 +76,9 @@ console_log = { version = "0.1.2", optional = true }
 js-sys = { version = "0.3.22", optional = true }
 wasm-bindgen = { version = "0.2.45", optional = true }
 wasm-bindgen-futures = { version = "0.3.22", optional = true }
+kvdb-memorydb = { git = "https://github.com/paritytech/parity-common", rev="b0317f649ab2c665b7987b8475878fc4d2e1f81d", optional = true }
+# TODO: need the feature
+rand6 = { package = "rand", version = "0.6", features = ["wasm-bindgen"] }
 
 [dev-dependencies]
 keystore = { package = "substrate-keystore", path = "../../core/keystore" }
@@ -93,6 +96,6 @@ vergen = "3.0.4"
 [features]
 default = ["cli"]
 # TODO: docs
-browser = ["clear_on_drop", "console_error_panic_hook", "console_log", "js-sys", "libp2p", "wasm-bindgen", "wasm-bindgen-futures", "rand/wasm-bindgen"]
+browser = ["clear_on_drop", "console_error_panic_hook", "console_log", "js-sys", "libp2p", "wasm-bindgen", "wasm-bindgen-futures", "kvdb-memorydb", "rand/wasm-bindgen"]
 # TODO: docs
 cli = ["substrate-cli", "transaction-factory", "tokio", "exit-future", "ctrlc", "client_db/kvdb-rocksdb"]
