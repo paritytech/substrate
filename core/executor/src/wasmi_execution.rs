@@ -614,7 +614,7 @@ pub fn create_instance<E: Externalities>(ext: &mut E, code: &[u8], heap_pages: u
 
 	// Instantiate this module.
 	let instance = instantiate_module(heap_pages as usize, &module)
-		.map_err(WasmError::Instantiation)?;
+		.map_err(|e| WasmError::Instantiation(e.to_string()))?;
 
 	// Take state snapshot before executing anything.
 	let state_snapshot = StateSnapshot::take(&instance, data_segments, heap_pages)

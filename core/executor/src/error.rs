@@ -126,7 +126,7 @@ pub enum WasmError {
 	/// The number of heap pages requested is disallowed by the module.
 	InvalidHeapPages,
 	/// Instantiation error.
-	Instantiation(Error),
+	Instantiation(String),
 	/// The compiler does not support the host machine as a target.
 	#[cfg(feature = "wasmtime")]
 	MissingCompilerSupport(&'static str),

@@ -242,7 +242,7 @@ fn instantiate_env_module(
 			&mut fn_builder_ctx,
 			func_id.index() as u32,
 			&sig,
-		);
+		)?;
 		finished_functions.push(trampoline);
 	}
 
