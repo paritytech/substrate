@@ -39,6 +39,7 @@ impl HttpApi {
 		_: &str,
 		_: &str
 	) -> Result<HttpRequestId, ()> {
+		/// Because this always returns an error, none of the other methods should ever be called.
 		Err(())
 	}
 
@@ -67,11 +68,15 @@ impl HttpApi {
 	/// Mimicks the corresponding method in the offchain API.
 	pub fn response_wait(
 		&mut self,
-		_: &[HttpRequestId],
+		requests: &[HttpRequestId],
 		_: Option<Timestamp>
 	) -> Vec<HttpRequestStatus> {
-		unreachable!("Creating a request always fails, thus this function will \
-			never be called; qed")
+		if requests.is_empty() {
+			Vec::new()
+		} else {
+			unreachable!("Creating a request always fails, thus the list of requests should \
+				always be empty; qed")
+		}
 	}
 
 	/// Mimicks the corresponding method in the offchain API.
