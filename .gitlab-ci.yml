@@ -50,14 +50,13 @@ variables:
     - web
     - /^[0-9]+$/                   # PRs
   retry:
-    max: 2
+    max: 5
     when: 
       - runner_system_failure
       - unknown_failure
       - api_failure
   tags:
     - linux-docker
-
 
 .build-only:                       &build-only
   only:
