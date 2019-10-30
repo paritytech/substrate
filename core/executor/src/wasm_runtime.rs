@@ -23,7 +23,7 @@ use crate::error::{Error, WasmError};
 use crate::wasmi_execution;
 use log::{trace, warn};
 use codec::Decode;
-use primitives::{storage::well_known_keys, traits::Externalities};
+use primitives::{storage::well_known_keys, traits::Externalities, H256};
 use runtime_version::RuntimeVersion;
 use std::{collections::hash_map::{Entry, HashMap}};
 
@@ -99,9 +99,8 @@ impl RuntimesCache {
 	///
 	/// # Return value
 	///
-	/// If no error occurred a tuple `(wasmi::ModuleRef, Option<RuntimeVersion>)` is
-	/// returned. `RuntimeVersion` is contained if the call to `Core_version` returned
-	/// a version.
+	/// If no error occurred a tuple `(&mut WasmRuntime, H256)` is
+	/// returned. `H256` is the hash of the runtime code.
 	///
 	/// In case of failure one of two errors can be returned:
 	///
@@ -114,7 +113,7 @@ impl RuntimesCache {
 		ext: &mut E,
 		wasm_method: WasmExecutionMethod,
 		default_heap_pages: u64,
-	) -> Result<&mut (dyn WasmRuntime + 'static), Error> {
+	) -> Result<(&mut (dyn WasmRuntime + 'static), H256), Error> {
 		let code_hash = ext
 			.original_storage_hash(well_known_keys::CODE)
 			.ok_or(Error::InvalidCode("`CODE` not found in storage.".into()))?;
@@ -131,7 +130,7 @@ impl RuntimesCache {
 					if !cached_runtime.update_heap_pages(heap_pages) {
 						trace!(
 							target: "runtimes_cache",
-							"heap_pages were changed. Reinstantiating the instance"
+							"heap_pages were changed. Reinstantiating the instance",
 						);
 						*result = create_wasm_runtime(ext, wasm_method, heap_pages);
 						if let Err(ref err) = result {
@@ -152,8 +151,22 @@ impl RuntimesCache {
 		};
 
 		result.as_mut()
-			.map(|runtime| runtime.as_mut())
+			.map(|runtime| (runtime.as_mut(), code_hash))
 			.map_err(|ref e| Error::InvalidCode(format!("{:?}", e)))
+	}
+
+	/// Invalidate the runtime for the given `wasm_method` and `code_hash`.
+	///
+	/// Invalidation of a runtime is useful when there was a `panic!` in native while executing it.
+	/// The `panic!` maybe have brought the runtime into a poisoned state and so, it is better to
+	/// invalidate this runtime instance.
+	pub fn invalidate_runtime(
+		&mut self,
+		wasm_method: WasmExecutionMethod,
+		code_hash: H256,
+	) {
+		// Just remove the instance, it will be re-created the next time it is requested.
+		self.instances.remove(&(wasm_method, code_hash.into()));
 	}
 }
 
