@@ -257,6 +257,7 @@ pub enum PublicError {
 #[cfg(feature = "full_crypto")]
 pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 	/// Some if the string is a properly encoded SS58Check address.
+	#[cfg(feature = "std")]
 	fn from_ss58check(s: &str) -> Result<Self, PublicError> {
 		Self::from_ss58check_with_version(s)
 			.and_then(|(r, v)| match v {
@@ -269,6 +270,7 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 			})
 	}
 	/// Some if the string is a properly encoded SS58Check address.
+	#[cfg(feature = "std")]
 	fn from_ss58check_with_version(s: &str) -> Result<(Self, Ss58AddressFormat), PublicError> {
 		let mut res = Self::default();
 		let len = res.as_mut().len();
@@ -806,6 +808,7 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 	/// Interprets the string `s` in order to generate a key pair.
 	///
 	/// See [`from_string_with_seed`](Self::from_string_with_seed) for more extensive documentation.
+	#[cfg(feature = "std")]
 	fn from_string(s: &str, password_override: Option<&str>) -> Result<Self, SecretStringError> {
 		Self::from_string_with_seed(s, password_override).map(|x| x.0)
 	}

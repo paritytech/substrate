@@ -31,8 +31,11 @@ use substrate_bip39::mini_secret_from_entropy;
 use bip39::{Mnemonic, Language, MnemonicType};
 #[cfg(feature = "full_crypto")]
 use crate::crypto::{
-	Pair as TraitPair, DeriveJunction, Infallible, SecretStringError, Ss58Codec
+	Pair as TraitPair, DeriveJunction, Infallible, SecretStringError
 };
+#[cfg(feature = "std")]
+use crate::crypto::Ss58Codec;
+
 use crate::{crypto::{Public as TraitPublic, UncheckedFrom, CryptoType, Derive}};
 use crate::hash::{H256, H512};
 use codec::{Encode, Decode};
@@ -47,7 +50,7 @@ use schnorrkel::keys::{MINI_SECRET_KEY_LENGTH, SECRET_KEY_LENGTH};
 const SIGNING_CTX: &[u8] = b"substrate";
 
 /// An Schnorrkel/Ristretto x25519 ("sr25519") public key.
-#[cfg_attr(feature = "std", derive(Hash))]
+#[cfg_attr(feature = "full_crypto", derive(Hash))]
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default)]
 pub struct Public(pub [u8; 32]);
 
@@ -440,7 +443,7 @@ impl TraitPair for Pair {
 			_ => Err(SecretStringError::InvalidSeedLength)
 		}
 	}
-
+	#[cfg(feature = "std")]
 	fn generate_with_phrase(password: Option<&str>) -> (Pair, String, Seed) {
 		let mnemonic = Mnemonic::new(MnemonicType::Words12, Language::English);
 		let phrase = mnemonic.phrase();

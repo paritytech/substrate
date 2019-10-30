@@ -30,7 +30,9 @@ use substrate_bip39::seed_from_entropy;
 #[cfg(feature = "std")]
 use bip39::{Mnemonic, Language, MnemonicType};
 #[cfg(feature = "full_crypto")]
-use crate::crypto::{Pair as TraitPair, DeriveJunction, SecretStringError, Ss58Codec};
+use crate::crypto::{Pair as TraitPair, DeriveJunction, SecretStringError};
+#[cfg(feature = "std")]
+use crate::crypto::Ss58Codec;
 #[cfg(feature = "std")]
 use serde::{de, Serializer, Serialize, Deserializer, Deserialize};
 use crate::{crypto::{Public as TraitPublic, UncheckedFrom, CryptoType, Derive}};
@@ -42,7 +44,7 @@ use crate::{crypto::{Public as TraitPublic, UncheckedFrom, CryptoType, Derive}};
 type Seed = [u8; 32];
 
 /// A public key.
-#[cfg_attr(feature = "std", derive(Hash))]
+#[cfg_attr(feature = "full_crypto", derive(Hash))]
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default)]
 pub struct Public(pub [u8; 32]);
 
