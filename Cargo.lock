@@ -4934,6 +4934,7 @@ dependencies = [
  "sr-primitives 2.0.0",
  "sr-std 2.0.0",
  "sr-version 2.0.0",
+ "substrate-client-db 2.0.0",
  "substrate-consensus-common 2.0.0",
  "substrate-executor 2.0.0",
  "substrate-header-metadata 2.0.0",
