@@ -28,7 +28,7 @@ pub mod informant;
 
 use client::ExecutionStrategies;
 use service::{
-	config::{Configuration, ConfigurationDb},
+	config::{Configuration, DatabaseConfig},
 	ServiceBuilderExport, ServiceBuilderImport, ServiceBuilderRevert,
 	RuntimeGenesis, ChainSpecExtension, PruningMode, ChainSpec,
 };
@@ -340,7 +340,7 @@ impl<'a> ParseAndPrepareExport<'a> {
 	{
 		let config = create_config_with_db_path(spec_factory, &self.params.shared_params, self.version)?;
 
-		if let ConfigurationDb::Path { ref path, .. } = &config.database {
+		if let DatabaseConfig::Path { ref path, .. } = &config.database {
 			info!("DB path: {}", path.display());
 		}
 		let from = self.params.from.unwrap_or(1);
@@ -422,9 +422,9 @@ impl<'a> ParseAndPreparePurge<'a> {
 			spec_factory, &self.params.shared_params, self.version
 		)?;
 		let db_path = match config.database {
-			ConfigurationDb::Path { path, .. } => path,
+			DatabaseConfig::Path { path, .. } => path,
 			_ => {
-				println!("Cannot purge custom database implementation");
+				eprintln!("Cannot purge custom database implementation");
 				return Ok(());
 			}
 		};
@@ -452,7 +452,7 @@ impl<'a> ParseAndPreparePurge<'a> {
 				Ok(())
 			},
 			Result::Err(ref err) if err.kind() == ErrorKind::NotFound => {
-				println!("{:?} did not exist.", &db_path);
+				eprintln!("{:?} did not exist.", &db_path);
 				Ok(())
 			},
 			Result::Err(err) => Result::Err(err.into())
@@ -661,7 +661,7 @@ where
 		|| keystore_path(&base_path, config.chain_spec.id())
 	);
 
-	config.database = ConfigurationDb::Path {
+	config.database = DatabaseConfig::Path {
 		path: db_path(&base_path, config.chain_spec.id()),
 		cache_size: cli.database_cache_size,
 	};
@@ -824,7 +824,7 @@ where
 	let base_path = base_path(cli, version);
 
 	let mut config = service::Configuration::default_with_spec(spec.clone());
-	config.database = ConfigurationDb::Path {
+	config.database = DatabaseConfig::Path {
 		path: db_path(&base_path, spec.id()),
 		cache_size: None,
 	};

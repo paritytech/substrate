@@ -214,8 +214,7 @@ pub enum DatabaseSettingsSrc {
 		cache_size: Option<usize>,
 	},
 
-	/// Use a custom already-open database. Recommended only for testing purposes, or in
-	/// situations where a file system is not available.
+	/// Use a custom already-open database.
 	Custom(Arc<dyn KeyValueDB>),
 }
 

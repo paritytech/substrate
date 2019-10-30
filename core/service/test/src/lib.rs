@@ -29,7 +29,7 @@ use service::{
 	AbstractService,
 	ChainSpec,
 	Configuration,
-	config::ConfigurationDb,
+	config::DatabaseConfig,
 	Roles,
 	Error,
 };
@@ -171,7 +171,7 @@ fn node_config<G, E: Clone> (
 		network: network_config,
 		keystore_path: root.join("key"),
 		keystore_password: None,
-		database: ConfigurationDb::Path {
+		database: DatabaseConfig::Path {
 			path: root.join("db"),
 			cache_size: None
 		},

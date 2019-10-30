@@ -46,7 +46,7 @@ pub struct Configuration<C, G, E = NoExtension> {
 	/// Path to key files.
 	pub keystore_path: PathBuf,
 	/// Configuration for the database.
-	pub database: ConfigurationDb,
+	pub database: DatabaseConfig,
 	/// Size of internal state cache in Bytes
 	pub state_cache_size: usize,
 	/// Size in percent of cache size dedicated to child tries
@@ -96,8 +96,8 @@ pub struct Configuration<C, G, E = NoExtension> {
 
 /// Configuration of the database of the client.
 #[derive(Clone)]
-pub enum ConfigurationDb {
-	/// Database file at a specific path. This is the default option.
+pub enum DatabaseConfig {
+	/// Database file at a specific path. Recommended for most uses.
 	Path {
 		/// Path to the database.
 		path: PathBuf,
@@ -106,8 +106,6 @@ pub enum ConfigurationDb {
 	},
 
 	/// A custom implementation of an already-open database.
-	///
-	/// Recommended only for situations where a filesystem doesn't exist.
 	Custom(Arc<dyn KeyValueDB>),
 }
 
@@ -128,7 +126,7 @@ impl<C, G, E> Configuration<C, G, E> where
 			transaction_pool: Default::default(),
 			network: Default::default(),
 			keystore_path: Default::default(),
-			database: ConfigurationDb::Path {
+			database: DatabaseConfig::Path {
 				path: Default::default(),
 				cache_size: Default::default(),
 			},

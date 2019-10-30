@@ -17,7 +17,7 @@
 use crate::{Service, NetworkStatus, NetworkState, error::{self, Error}, DEFAULT_PROTOCOL_ID};
 use crate::{SpawnTaskHandle, start_rpc_servers, build_network_future, TransactionPoolAdapter};
 use crate::status_sinks;
-use crate::config::{Configuration, ConfigurationDb};
+use crate::config::{Configuration, DatabaseConfig};
 use client::{
 	BlockchainEvents, Client, runtime_api,
 	backend::RemoteBackend, light::blockchain::RemoteBlockchain,
@@ -175,12 +175,12 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 					config.state_cache_child_ratio.map(|v| (v, 100)),
 				pruning: config.pruning.clone(),
 				source: match &config.database {
-					ConfigurationDb::Path { path, cache_size } =>
+					DatabaseConfig::Path { path, cache_size } =>
 						client_db::DatabaseSettingsSrc::Path {
 							path: path.clone(),
 							cache_size: cache_size.clone().map(|u| u as usize),
 						},
-					ConfigurationDb::Custom(db) =>
+					DatabaseConfig::Custom(db) =>
 						client_db::DatabaseSettingsSrc::Custom(db.clone()),
 				},
 			};
@@ -250,12 +250,12 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 					config.state_cache_child_ratio.map(|v| (v, 100)),
 				pruning: config.pruning.clone(),
 				source: match &config.database {
-					ConfigurationDb::Path { path, cache_size } =>
+					DatabaseConfig::Path { path, cache_size } =>
 						client_db::DatabaseSettingsSrc::Path {
 							path: path.clone(),
 							cache_size: cache_size.clone().map(|u| u as usize),
 						},
-					ConfigurationDb::Custom(db) =>
+					DatabaseConfig::Custom(db) =>
 						client_db::DatabaseSettingsSrc::Custom(db.clone()),
 				},
 			};
