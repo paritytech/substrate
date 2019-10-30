@@ -37,7 +37,6 @@ pub enum TransactionState {
 	Dropped,
 }
 
-
 /// An entry at a given history height.
 #[derive(Debug, Clone)]
 #[cfg_attr(any(test, feature = "test-helpers"), derive(PartialEq))]
@@ -158,22 +157,10 @@ impl<V> History<V> {
 #[cfg_attr(any(test, feature = "test-helpers"), derive(PartialEq))]
 pub struct States {
 	history: Vec<TransactionState>,
-	// keep trace of previous transaction.
-	// associatied logic is that of:
-	// ```
-	// use historical_data::linear::States;
-	// fn find_previous_tx_start(states: &States, from: usize) -> usize {
-	//	for i in (states.commit .. from).rev() {
-	//		match states.history[i] {
-	//			TransactionState::TxPending => {
-	//				return i;
-	//			},
-	//			_ => (),
-	//		}
-	//	}
-	//	states.commit
-	// }
-	// ```
+	// Keep track of the transaction positions.
+	// This is redundant with `history`, but is
+	// used to avoid some backwards iteration in
+	// `find_previous_tx_start` function.
 	previous_transaction: Vec<usize>,
 	commit: usize,
 }
@@ -197,13 +184,11 @@ impl States {
 	}
 
 	/// Current number of inner states.
-	pub fn len(&self) -> usize {
+	pub fn num_states(&self) -> usize {
 		self.history.len()
 	}
 
-	/// Get index of committed layer, this is
-	/// additional information needed to manage
-	/// commit and garbage collect.
+	/// Get index of committed layer.
 	pub fn committed(&self) -> usize {
 		self.commit
 	}
@@ -298,7 +283,6 @@ impl States {
 			.cloned().unwrap_or(self.commit);
 		self.previous_transaction.resize(self.history.len(), previous);
 	}
-
 }
 
 #[inline]
@@ -313,26 +297,29 @@ pub fn find_previous_tx_start(states: &States, from: usize) -> usize {
 
 impl<V> History<V> {
 	/// Set a value, it uses a state history as parameter.
+	///
 	/// This method uses `get_mut` and does remove pending
 	/// dropped value.
 	pub fn set(&mut self, states: &States, value: V) {
+		let last_state_index = states.num_states() - 1;
 		if let Some(v) = self.get_mut(states) {
-			if v.index == states.history.len() - 1 {
+			if v.index == last_state_index {
 				*v.value = value;
 				return;
 			}
+			debug_assert!(v.index < last_state_index, "History expects \
+				only new values at the latest state");
 		}
 		self.push_unchecked(HistoricalValue {
 			value,
-			index: states.history.len() - 1,
+			index: last_state_index,
 		});
 	}
 
-	/// Access to latest pending value (non dropped state).
+	/// Access to the latest pending value (non dropped state).
 	/// When possible please prefer `get_mut` as it can free
 	/// some memory.
 	pub fn get(&self, states: &[TransactionState]) -> Option<&V> {
-		// index is never 0,
 		let mut index = self.len();
 		if index == 0 {
 			return None;
@@ -417,7 +404,6 @@ impl<V> History<V> {
 	}
 
 	pub fn into_committed(mut self, states: &[TransactionState], committed: usize) -> Option<V> {
-		// index is never 0,
 		let mut index = self.len();
 		if index == 0 {
 			return None;
@@ -461,7 +447,7 @@ impl<V> History<V> {
 			match states.history[state_index] {
 				TransactionState::TxPending => {
 					if state_index >= previous_transaction {
-						previous_switch = Some((index, state_index));
+						previous_switch = Some(index);
 					} else {
 						if result.is_none() {
 							result = Some((index, state_index));
@@ -471,7 +457,7 @@ impl<V> History<V> {
 				},
 				TransactionState::Pending => {
 					if state_index >= previous_transaction {
-						previous_switch = Some((index, state_index));
+						previous_switch = Some(index);
 					} else {
 						if result.is_none() {
 							result = Some((index, state_index));
@@ -484,7 +470,7 @@ impl<V> History<V> {
 				TransactionState::Dropped => (),
 			}
 		}
-		self.clear_terminal_values(result, previous_switch, 0)
+		self.drop_last_values(result, previous_switch, 0)
 	}
 
 
@@ -497,7 +483,7 @@ impl<V> History<V> {
 		&mut self,
 		states: &States,
 		prune_to_commit: bool,
-	) -> Option<HistoricalValue<&mut V>>  {
+	) -> Option<HistoricalValue<&mut V>> {
 		let mut index = self.len();
 		if index == 0 {
 			return None;
@@ -518,7 +504,7 @@ impl<V> History<V> {
 					}
 
 					if state_index >= previous_transaction {
-						previous_switch = Some((index, state_index));
+						previous_switch = Some(index);
 					} else {
 						if result.is_none() {
 							result = Some((index, state_index));
@@ -545,21 +531,33 @@ impl<V> History<V> {
 		} else {
 			0
 		};
-		self.clear_terminal_values(result, previous_switch, deleted)
+		self.drop_last_values(result, previous_switch, deleted)
 	}
 
-	#[inline]
-	fn clear_terminal_values(
+	// Function used to remove all last values for `get_mut` and
+	// `get_mut_pruning`.
+	//
+	// It expects the `result` of the iteration that lookup
+	// for the latest non dropped value (coupled with its state
+	// index). That is to remove terminal dropped states.
+	//
+	// It also does remove values on committed state that are
+	// not needed (before another committed value).
+	// `previous_switch` is the index to the first unneeded value.
+	//
+	// An index offset is here in case some content was `deleted` before
+	// this function call.
+	fn drop_last_values(
 		&mut self,
 		result: Option<(usize, usize)>,
-		previous_switch: Option<(usize, usize)>,
+		previous_switch: Option<usize>,
 		deleted: usize,
-	) -> Option<HistoricalValue<&mut V>>  {
+	) -> Option<HistoricalValue<&mut V>> {
 		if let Some((index, state_index)) = result {
 			if index + 1 - deleted < self.len() {
 				self.truncate(index + 1 - deleted);
 			}
-			if let Some((switch_index, state_index)) = previous_switch {
+			if let Some(switch_index) = previous_switch {
 				if let Some(mut value) = self.pop() {
 					self.truncate(switch_index - deleted);
 					value.index = state_index;

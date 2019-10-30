@@ -116,7 +116,7 @@ fn set_with_extrinsic_inner_overlayed_value(
 	value: Option<Vec<u8>>,
 	extrinsic_index: u32,
 ) {
-	let state = states.len() - 1;
+	let state = states.num_states() - 1;
 	if let Some(current) = h_value.get_mut(states) {
 		if current.index == state {
 			current.value.value = value;
