@@ -49,6 +49,12 @@ variables:
     - schedules
     - web
     - /^[0-9]+$/                   # PRs
+  retry:
+    max: 2
+    when: 
+      - runner_system_failure
+      - unknown_failure
+      - api_failure
   tags:
     - linux-docker
 
