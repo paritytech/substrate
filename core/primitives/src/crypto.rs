@@ -769,7 +769,9 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 	///
 	/// `None` is returned if no matches are found.
 	#[cfg(feature = "std")]
-  fn from_string_with_seed(s: &str, password_override: Option<&str>) -> Result<(Self, Option<Self::Seed>), SecretStringError> {
+    fn from_string_with_seed(s: &str, password_override: Option<&str>) 
+		-> Result<(Self, Option<Self::Seed>), SecretStringError> 
+	{
 		let re = Regex::new(r"^(?P<phrase>[\d\w ]+)?(?P<path>(//?[^/]+)*)(///(?P<password>.*))?$")
 			.expect("constructed from known-good static value; qed");
 		let cap = re.captures(s).ok_or(SecretStringError::InvalidFormat)?;

@@ -26,6 +26,7 @@ substrate-offchain = { path = "../offchain" }
 bench = []
 default = ["std"]
 std = [
+	"full_crypto",
 	"app-crypto/std",
 	"arithmetic/std",
 	"codec/std",
@@ -36,3 +37,8 @@ std = [
 	"runtime_io/std",
 	"serde",
 ]
+
+# This feature enables all crypto primitives for `no_std` builds like microcontrollers 
+# or Intel SGX. 
+# For the regular wasm runtime builds this should not be used.
+full_crypto = []
