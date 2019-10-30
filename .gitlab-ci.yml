@@ -200,7 +200,6 @@ check-web-wasm:
     - time cargo web build -p substrate-consensus-aura
     - time cargo web build -p substrate-consensus-babe
     - time cargo web build -p substrate-consensus-common
-    - time cargo web build -p substrate-finality-grandpa
     - time cargo web build -p substrate-service
     - time cargo web build -p substrate-telemetry
     # Note: the command below is a bit weird because several Cargo issues prevent us from compiling the node in a more straight-forward way.
