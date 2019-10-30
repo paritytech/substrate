@@ -18,10 +18,8 @@
 //!
 //! These are the host functions callable from within the Substrate runtime.
 
-use crate::error::{Error, Result};
-
 use codec::Encode;
-use std::{convert::TryFrom, str, panic};
+use std::{convert::TryFrom, str};
 use primitives::{
 	blake2_128, blake2_256, twox_64, twox_128, twox_256, ed25519, sr25519, Blake2Hasher, Pair,
 	crypto::KeyTypeId, offchain,
@@ -211,10 +209,7 @@ impl_wasm_host_interface! {
 				.map_err(|_| "Invalid attempt to determine key in ext_set_storage")?;
 			let value = context.read_memory(value_data, value_len)
 				.map_err(|_| "Invalid attempt to determine value in ext_set_storage")?;
-			with_external_storage(move ||
-				Ok(runtime_io::set_storage(&key, &value))
-			)?;
-			Ok(())
+			Ok(runtime_io::set_storage(&key, &value))
 		}
 
 		ext_set_child_storage(
@@ -232,10 +227,7 @@ impl_wasm_host_interface! {
 			let value = context.read_memory(value_data, value_len)
 				.map_err(|_| "Invalid attempt to determine value in ext_set_child_storage")?;
 
-			with_external_storage(move ||
-				Ok(runtime_io::set_child_storage(&storage_key, &key, &value))
-			)?;
-			Ok(())
+			Ok(runtime_io::set_child_storage(&storage_key, &key, &value))
 		}
 
 		ext_clear_child_storage(
@@ -249,27 +241,19 @@ impl_wasm_host_interface! {
 			let key = context.read_memory(key_data, key_len)
 				.map_err(|_| "Invalid attempt to determine key in ext_clear_child_storage")?;
 
-			with_external_storage(move ||
-				Ok(runtime_io::clear_child_storage(&storage_key, &key))
-			)?;
-			Ok(())
+			Ok(runtime_io::clear_child_storage(&storage_key, &key))
 		}
 
 		ext_clear_storage(key_data: Pointer<u8>, key_len: WordSize) {
 			let key = context.read_memory(key_data, key_len)
 				.map_err(|_| "Invalid attempt to determine key in ext_clear_storage")?;
-			with_external_storage(move ||
-				Ok(runtime_io::clear_storage(&key))
-			)?;
-			Ok(())
+			Ok(runtime_io::clear_storage(&key))
 		}
 
 		ext_exists_storage(key_data: Pointer<u8>, key_len: WordSize) -> u32 {
 			let key = context.read_memory(key_data, key_len)
 				.map_err(|_| "Invalid attempt to determine key in ext_exists_storage")?;
-			with_external_storage(move ||
-				Ok(if runtime_io::exists_storage(&key) { 1 } else { 0 })
-			)
+			Ok(if runtime_io::exists_storage(&key) { 1 } else { 0 })
 		}
 
 		ext_exists_child_storage(
@@ -283,18 +267,13 @@ impl_wasm_host_interface! {
 			let key = context.read_memory(key_data, key_len)
 				.map_err(|_| "Invalid attempt to determine key in ext_exists_child_storage")?;
 
-			with_external_storage(move ||
-				Ok(if runtime_io::exists_child_storage(&storage_key, &key) { 1 } else { 0 })
-			)
+			Ok(if runtime_io::exists_child_storage(&storage_key, &key) { 1 } else { 0 })
 		}
 
 		ext_clear_prefix(prefix_data: Pointer<u8>, prefix_len: WordSize) {
 			let prefix = context.read_memory(prefix_data, prefix_len)
 				.map_err(|_| "Invalid attempt to determine prefix in ext_clear_prefix")?;
-			with_external_storage(move ||
-				Ok(runtime_io::clear_prefix(&prefix))
-			)?;
-			Ok(())
+			Ok(runtime_io::clear_prefix(&prefix))
 		}
 
 		ext_clear_child_prefix(
@@ -307,21 +286,13 @@ impl_wasm_host_interface! {
 				.map_err(|_| "Invalid attempt to determine storage_key in ext_clear_child_prefix")?;
 			let prefix = context.read_memory(prefix_data, prefix_len)
 				.map_err(|_| "Invalid attempt to determine prefix in ext_clear_child_prefix")?;
-			with_external_storage(move ||
-				Ok(runtime_io::clear_child_prefix(&storage_key, &prefix))
-			)?;
-
-			Ok(())
+			Ok(runtime_io::clear_child_prefix(&storage_key, &prefix))
 		}
 
 		ext_kill_child_storage(storage_key_data: Pointer<u8>, storage_key_len: WordSize) {
 			let storage_key = context.read_memory(storage_key_data, storage_key_len)
 				.map_err(|_| "Invalid attempt to determine storage_key in ext_kill_child_storage")?;
-			with_external_storage(move ||
-				Ok(runtime_io::kill_child_storage(&storage_key))
-			)?;
-
-			Ok(())
+			Ok(runtime_io::kill_child_storage(&storage_key))
 		}
 
 		ext_get_allocated_storage(
@@ -331,11 +302,8 @@ impl_wasm_host_interface! {
 		) -> Pointer<u8> {
 			let key = context.read_memory(key_data, key_len)
 				.map_err(|_| "Invalid attempt to determine key in ext_get_allocated_storage")?;
-			let maybe_value = with_external_storage(move ||
-				Ok(runtime_io::storage(&key))
-			)?;
 
-			if let Some(value) = maybe_value {
+			if let Some(value) = runtime_io::storage(&key) {
 				let offset = context.allocate_memory(value.len() as u32)?;
 				context.write_memory(offset, &value)
 					.map_err(|_| "Invalid attempt to set memory in ext_get_allocated_storage")?;
@@ -361,11 +329,7 @@ impl_wasm_host_interface! {
 			let key = context.read_memory(key_data, key_len)
 				.map_err(|_| "Invalid attempt to determine key in ext_get_allocated_child_storage")?;
 
-			let maybe_value = with_external_storage(move ||
-				Ok(runtime_io::child_storage(&storage_key, &key))
-			)?;
-
-			if let Some(value) = maybe_value {
+			if let Some(value) = runtime_io::child_storage(&storage_key, &key) {
 				let offset = context.allocate_memory(value.len() as u32)?;
 				context.write_memory(offset, &value)
 					.map_err(|_| "Invalid attempt to set memory in ext_get_allocated_child_storage")?;
@@ -388,11 +352,8 @@ impl_wasm_host_interface! {
 		) -> WordSize {
 			let key = context.read_memory(key_data, key_len)
 				.map_err(|_| "Invalid attempt to get key in ext_get_storage_into")?;
-			let maybe_value = with_external_storage(move ||
-				Ok(runtime_io::storage(&key))
-			)?;
 
-			if let Some(value) = maybe_value {
+			if let Some(value) = runtime_io::storage(&key) {
 				let data = &value[value.len().min(value_offset as usize)..];
 				let written = std::cmp::min(value_len as usize, data.len());
 				context.write_memory(value_data, &data[..written])
@@ -417,11 +378,7 @@ impl_wasm_host_interface! {
 			let key = context.read_memory(key_data, key_len)
 				.map_err(|_| "Invalid attempt to get key in ext_get_child_storage_into")?;
 
-			let maybe_value = with_external_storage(move ||
-				Ok(runtime_io::child_storage(&storage_key, &key))
-			)?;
-
-			if let Some(value) = maybe_value {
+			if let Some(value) = runtime_io::child_storage(&storage_key, &key) {
 				let data = &value[value.len().min(value_offset as usize)..];
 				let written = std::cmp::min(value_len as usize, data.len());
 				context.write_memory(value_data, &data[..written])
@@ -433,12 +390,8 @@ impl_wasm_host_interface! {
 		}
 
 		ext_storage_root(result: Pointer<u8>) {
-			let r = with_external_storage(move ||
-				Ok(runtime_io::storage_root())
-			)?;
-			context.write_memory(result, r.as_ref())
-				.map_err(|_| "Invalid attempt to set memory in ext_storage_root")?;
-			Ok(())
+			context.write_memory(result, runtime_io::storage_root().as_ref())
+				.map_err(|_| "Invalid attempt to set memory in ext_storage_root".into())
 		}
 
 		ext_child_storage_root(
@@ -448,9 +401,7 @@ impl_wasm_host_interface! {
 		) -> Pointer<u8> {
 			let storage_key = context.read_memory(storage_key_data, storage_key_len)
 				.map_err(|_| "Invalid attempt to determine storage_key in ext_child_storage_root")?;
-			let value = with_external_storage(move ||
-				Ok(runtime_io::child_storage_root(&storage_key))
-			)?;
+			let value = runtime_io::child_storage_root(&storage_key);
 
 			let offset = context.allocate_memory(value.len() as u32)?;
 			context.write_memory(offset, &value)
@@ -468,11 +419,8 @@ impl_wasm_host_interface! {
 			let mut parent_hash = [0u8; 32];
 			context.read_memory_into(parent_hash_data, &mut parent_hash[..])
 				.map_err(|_| "Invalid attempt to get parent_hash in ext_storage_changes_root")?;
-			let r = with_external_storage(move ||
-				Ok(runtime_io::storage_changes_root(parent_hash))
-			)?;
 
-			if let Some(r) = r {
+			if let Some(r) = runtime_io::storage_changes_root(parent_hash) {
 				context.write_memory(result, &r[..])
 					.map_err(|_| "Invalid attempt to set memory in ext_storage_changes_root")?;
 				Ok(1)
@@ -1144,25 +1092,6 @@ impl ReadPrimitive<u32> for &mut dyn FunctionContext {
 		self.read_memory_into(ptr.cast(), &mut r)?;
 		Ok(u32::from_le_bytes(r))
 	}
-}
-
-/// Execute closure that access external storage.
-///
-/// All panics that happen within closure are captured and transformed into
-/// runtime error. This requires special panic handler mode to be enabled
-/// during the call (see `panic_handler::AbortGuard::never_abort`).
-/// If this mode isn't enabled, then all panics within externalities are
-/// leading to process abort.
-fn with_external_storage<T, F>(f: F) -> std::result::Result<T, String>
-	where
-		F: panic::UnwindSafe + FnOnce() -> Result<T>
-{
-	// it is safe beause basic methods of StorageExternalities are guaranteed to touch only
-	// its internal state + we should discard it on error
-	panic::catch_unwind(move || f())
-		.map_err(|_| Error::Runtime)
-		.and_then(|result| result)
-		.map_err(|err| format!("{}", err))
 }
 
 fn deadline_to_timestamp(deadline: u64) -> Option<offchain::Timestamp> {
