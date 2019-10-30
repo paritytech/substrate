@@ -29,7 +29,7 @@ consensus_common = { package = "substrate-consensus-common", path = "../../core/
 network = { package = "substrate-network", path = "../../core/network" }
 chain-spec = { package = "substrate-chain-spec", path = "../chain-spec" }
 client = { package = "substrate-client", path = "../../core/client" }
-client_db = { package = "substrate-client-db", path = "../../core/client/db", features = ["kvdb-rocksdb"] }
+client_db = { package = "substrate-client-db", path = "../../core/client/db" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 substrate-executor = { path = "../../core/executor" }
 transaction_pool = { package = "substrate-transaction-pool", path = "../../core/transaction-pool" }
