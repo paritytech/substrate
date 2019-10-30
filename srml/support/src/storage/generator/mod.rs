@@ -36,6 +36,7 @@ pub use value::StorageValue;
 #[allow(dead_code)]
 mod tests {
 	use runtime_io::TestExternalities;
+	use codec::Encode;
 	use crate::storage::{unhashed, generator::StorageValue};
 
 	struct Runtime {}
@@ -55,10 +56,6 @@ mod tests {
 
 	crate::decl_storage! {
 		trait Store for Module<T: Trait> as Runtime {
-			// assume this had a previous signature of `u32`. `ValueOld` acts as a proxy of the old
-			// value stored in storage.
-			ValueOld: u32;
-			// new storage should be `(1111, 1111 * 2)`
 			Value get(fn value) config(): (u64, u64);
 		}
 	}
@@ -67,12 +64,7 @@ mod tests {
 	fn value_translate_works() {
 		let t = GenesisConfig::default().build_storage().unwrap();
 		TestExternalities::new(t).execute_with(|| {
-			// write and get the encoded value via proxy
-			ValueOld::put(1111);
-			let old_key = ValueOld::storage_value_final_key();
-			let old_raw_value = unhashed::get_raw(&old_key).unwrap();
-
-			// put the old value in the new key.
+			// put the old value `1111u32` in the storage.
 			let key = Value::storage_value_final_key();
 			unhashed::put_raw(&key, &1111u32.encode());
 
@@ -81,6 +73,8 @@ mod tests {
 				old.map(|o| (o.into(), (o*2).into()))
 			};
 			let _ = Value::translate(translate_fn);
+
+			// new storage should be `(1111, 1111 * 2)`
 			assert_eq!(Value::get(), (1111, 2222));
 		})
 	}
