@@ -18,8 +18,7 @@
 //! Cryptographic utilities.
 // end::description[]
 
-use rstd::vec::Vec;
-use core::hash::Hash;
+use rstd::{vec::Vec, hash::Hash};
 #[cfg(feature = "std")]
 use rstd::convert::TryInto;
 use rstd::convert::TryFrom;
@@ -49,7 +48,7 @@ pub enum Infallible {}
 
 /// The length of the junction identifier. Note that this is also referred to as the
 /// `CHAIN_CODE_LENGTH` in the context of Schnorrkel.
-#[cfg(feature = "with_crypto")]
+#[cfg(feature = "full_crypto")]
 pub const JUNCTION_ID_LEN: usize = 32;
 
 /// Similar to `From`, except that the onus is on the part of the caller to ensure
@@ -121,7 +120,7 @@ impl<T: Zeroize> Drop for Protected<T> {
 
 /// An error with the interpretation of a secret.
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg(feature = "with_crypto")]
+#[cfg(feature = "full_crypto")]
 pub enum SecretStringError {
 	/// The overall format was invalid (e.g. the seed phrase contained symbols).
 	InvalidFormat,
@@ -141,7 +140,7 @@ pub enum SecretStringError {
 /// a new secret key from an existing secret key and, in the case of `SoftRaw` and `SoftIndex`
 /// a new public key from an existing public key.
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug, Encode, Decode)]
-#[cfg(feature = "with_crypto")]
+#[cfg(feature = "full_crypto")]
 pub enum DeriveJunction {
 	/// Soft (vanilla) derivation. Public keys have a correspondent derivation.
 	Soft([u8; JUNCTION_ID_LEN]),
@@ -149,7 +148,7 @@ pub enum DeriveJunction {
 	Hard([u8; JUNCTION_ID_LEN]),
 }
 
-#[cfg(feature = "with_crypto")]
+#[cfg(feature = "full_crypto")]
 impl DeriveJunction {
 	/// Consume self to return a soft derive junction with the same chain code.
 	pub fn soften(self) -> Self { DeriveJunction::Soft(self.unwrap_inner()) }
@@ -210,7 +209,7 @@ impl DeriveJunction {
 	}
 }
 
-#[cfg(feature = "with_crypto")]
+#[cfg(feature = "full_crypto")]
 impl<T: AsRef<str>> From<T> for DeriveJunction {
 	fn from(j: T) -> DeriveJunction {
 		let j = j.as_ref();
@@ -237,7 +236,7 @@ impl<T: AsRef<str>> From<T> for DeriveJunction {
 }
 
 /// An error type for SS58 decoding.
-#[cfg(feature = "with_crypto")]
+#[cfg(feature = "full_crypto")]
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]
 pub enum PublicError {
 	/// Bad alphabet.
@@ -255,10 +254,9 @@ pub enum PublicError {
 }
 
 /// Key that can be encoded to/from SS58.
-#[cfg(feature = "with_crypto")]
+#[cfg(feature = "full_crypto")]
 pub trait Ss58Codec: Sized {
 	/// Some if the string is a properly encoded SS58Check address.
-	#[cfg(feature = "std")]
 	fn from_ss58check(s: &str) -> Result<Self, PublicError> {
 		Self::from_ss58check_with_version(s)
 			.and_then(|(r, v)| match v {
@@ -330,7 +328,7 @@ lazy_static::lazy_static! {
 }
 
 /// A known address (sub)format/network ID for SS58.
-#[cfg(feature = "with_crypto")]
+#[cfg(feature = "full_crypto")]
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum Ss58AddressFormat {
 	/// Any Substrate network, direct checksum, standard account (*25519).
@@ -345,7 +343,7 @@ pub enum Ss58AddressFormat {
 	Custom(u8),
 }
 
-#[cfg(feature = "with_crypto")]
+#[cfg(feature = "full_crypto")]
 impl From<Ss58AddressFormat> for u8 {
 	fn from(x: Ss58AddressFormat) -> u8 {
 		match x {
@@ -358,7 +356,7 @@ impl From<Ss58AddressFormat> for u8 {
 	}
 }
 
-#[cfg(feature = "with_crypto")]
+#[cfg(feature = "full_crypto")]
 impl TryFrom<u8> for Ss58AddressFormat {
 	type Error = ();
 	fn try_from(x: u8) -> Result<Ss58AddressFormat, ()> {
@@ -372,7 +370,7 @@ impl TryFrom<u8> for Ss58AddressFormat {
 	}
 }
 
-#[cfg(feature = "with_crypto")]
+#[cfg(feature = "full_crypto")]
 impl<'a> TryFrom<&'a str> for Ss58AddressFormat {
 	type Error = ();
 	fn try_from(x: &'a str) -> Result<Ss58AddressFormat, ()> {
@@ -574,7 +572,7 @@ mod dummy {
 /// Trait suitable for typical cryptographic PKI key pair type.
 ///
 /// For now it just specifies how to create a key from a phrase and derivation path.
-#[cfg(feature = "with_crypto")]
+#[cfg(feature = "full_crypto")]
 pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 	/// The type which is used to encode a public key.
 	type Public: Public + Hash;
@@ -744,7 +742,7 @@ impl<Inner, Outer, T> UncheckedFrom<T> for Outer where
 /// Type which has a particular kind of crypto associated with it.
 pub trait CryptoType {
 	/// The pair key type of this crypto.
-	#[cfg(feature = "with_crypto")]
+	#[cfg(feature = "full_crypto")]
 	type Pair: Pair;
 }
 

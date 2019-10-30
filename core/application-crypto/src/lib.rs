@@ -23,7 +23,7 @@
 #[doc(hidden)]
 pub use primitives::{self, crypto::{CryptoType, Public, Derive, IsWrappedBy, Wraps}};
 #[doc(hidden)]
-#[cfg(feature = "with_crypto")]
+#[cfg(feature = "full_crypto")]
 pub use primitives::crypto::{SecretStringError, DeriveJunction, Ss58Codec, Pair};
 pub use primitives::{crypto::{KeyTypeId, key_types}};
 
@@ -53,9 +53,9 @@ pub use traits::*;
 #[macro_export]
 macro_rules! app_crypto {
 	($module:ident, $key_type:expr) => {
-		#[cfg(feature = "with_crypto")]
+		#[cfg(feature = "full_crypto")]
 		$crate::app_crypto!($module::Pair, $module::Public, $module::Signature, $key_type);
-		#[cfg(not(feature = "with_crypto"))]
+		#[cfg(not(feature = "full_crypto"))]
 		$crate::app_crypto!($module::Public, $module::Signature, $key_type);
 	};
 	($pair:ty, $public:ty, $sig:ty, $key_type:expr) => {
@@ -71,7 +71,7 @@ macro_rules! app_crypto {
 			type Pair = Pair;
 		}
 
-		#[cfg(feature = "with_crypto")]
+		#[cfg(feature = "full_crypto")]
 		impl $crate::Pair for Pair {
 			type Public = Public;
 			type Seed = <$pair as $crate::Pair>::Seed;
@@ -147,7 +147,7 @@ macro_rules! app_crypto {
 				$crate::codec::Decode,
 			)]
 			#[cfg_attr(feature = "std", derive(Debug))]
-			#[cfg_attr(feature = "with_crypto", derive(Hash))]
+			#[cfg_attr(feature = "full_crypto", derive(Hash))]
 			pub struct Public($public);
 		}
 
@@ -196,7 +196,7 @@ macro_rules! app_crypto {
 		}
 
 		impl $crate::CryptoType for Public {
-			#[cfg(feature = "with_crypto")]
+			#[cfg(feature = "full_crypto")]
 			type Pair = Pair;
 		}
 
@@ -207,7 +207,7 @@ macro_rules! app_crypto {
 		impl $crate::AppKey for Public {
 			type UntypedGeneric = $public;
 			type Public = Public;
-			#[cfg(feature = "with_crypto")]
+			#[cfg(feature = "full_crypto")]
 			type Pair = Pair;
 			type Signature = Signature;
 			const ID: $crate::KeyTypeId = $key_type;
@@ -246,7 +246,7 @@ macro_rules! app_crypto {
 			/// A generic `AppPublic` wrapper type over $public crypto; this has no specific App.
 			#[derive(Clone, Default, Eq, PartialEq, $crate::codec::Encode, $crate::codec::Decode)]
 			#[cfg_attr(feature = "std", derive(Debug))]
-			#[cfg_attr(feature = "with_crypto", derive(Hash))]
+			#[cfg_attr(feature = "full_crypto", derive(Hash))]
 			pub struct Signature($sig);
 		}
 
@@ -261,14 +261,14 @@ macro_rules! app_crypto {
 		}
 
 		impl $crate::CryptoType for Signature {
-			#[cfg(feature = "with_crypto")]
+			#[cfg(feature = "full_crypto")]
 			type Pair = Pair;
 		}
 
 		impl $crate::AppKey for Signature {
 			type UntypedGeneric = $sig;
 			type Public = Public;
-			#[cfg(feature = "with_crypto")]
+			#[cfg(feature = "full_crypto")]
 			type Pair = Pair;
 			type Signature = Signature;
 			const ID: $crate::KeyTypeId = $key_type;

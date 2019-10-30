@@ -51,7 +51,7 @@ bench = false
 [features]
 default = ["std"]
 std = [
-	"with_crypto",
+	"full_crypto",
 	"log",
 	"wasmi",
 	"lazy_static",
@@ -86,9 +86,13 @@ std = [
 	"primitives-storage/std",
 ]
 
-with_crypto = [
+# This feature enables all crypto primitives for `no_std` builds like microcontrollers 
+# or Intel SGX. 
+# For the regular wasm runtime builds this should not be used.
+full_crypto = [
 	"ed25519-dalek",
 	"blake2-rfc",
 	"schnorrkel",
 	"hex",
+	"twox-hash"
 ]

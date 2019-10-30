@@ -21,7 +21,7 @@
 //! for this to work.
 // end::description[]
 use rstd::vec::Vec;
-#[cfg(feature = "with_crypto")]
+#[cfg(feature = "full_crypto")]
 use schnorrkel::{signing_context, ExpansionMode, Keypair, SecretKey, MiniSecretKey, PublicKey,
 	derive::{Derivation, ChainCode, CHAIN_CODE_LENGTH}
 };
@@ -29,7 +29,7 @@ use schnorrkel::{signing_context, ExpansionMode, Keypair, SecretKey, MiniSecretK
 use substrate_bip39::mini_secret_from_entropy;
 #[cfg(feature = "std")]
 use bip39::{Mnemonic, Language, MnemonicType};
-#[cfg(feature = "with_crypto")]
+#[cfg(feature = "full_crypto")]
 use crate::crypto::{
 	Pair as TraitPair, DeriveJunction, Infallible, SecretStringError, Ss58Codec
 };
@@ -39,11 +39,11 @@ use codec::{Encode, Decode};
 
 #[cfg(feature = "std")]
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
-#[cfg(feature = "with_crypto")]
+#[cfg(feature = "full_crypto")]
 use schnorrkel::keys::{MINI_SECRET_KEY_LENGTH, SECRET_KEY_LENGTH};
 
 // signing context
-#[cfg(feature = "with_crypto")]
+#[cfg(feature = "full_crypto")]
 const SIGNING_CTX: &[u8] = b"substrate";
 
 /// An Schnorrkel/Ristretto x25519 ("sr25519") public key.
@@ -51,10 +51,10 @@ const SIGNING_CTX: &[u8] = b"substrate";
 pub struct Public(pub [u8; 32]);
 
 /// An Schnorrkel/Ristretto x25519 ("sr25519") key pair.
-#[cfg(feature = "with_crypto")]
+#[cfg(feature = "full_crypto")]
 pub struct Pair(Keypair);
 
-#[cfg(feature = "with_crypto")]
+#[cfg(feature = "full_crypto")]
 impl Clone for Pair {
 	fn clone(&self) -> Self {
 		Pair(schnorrkel::Keypair {
@@ -151,19 +151,13 @@ impl<'de> Deserialize<'de> for Public {
 	}
 }
 
-#[cfg(all(feature = "with_crypto", feature = "std"))]
-impl std::hash::Hash for Public {
-	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+#[cfg(all(feature = "full_crypto", feature = "std"))]
+impl rstd::hash::Hash for Public {
+	fn hash<H: rstd::hash::Hasher>(&self, state: &mut H) {
 		self.0.hash(state);
 	}
 }
 
-#[cfg(all(feature = "with_crypto", not(feature = "std")))]
-impl core::hash::Hash for Public {
-	fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
-		self.0.hash(state);
-	}
-}
 /// An Schnorrkel/Ristretto x25519 ("sr25519") signature.
 ///
 /// Instead of importing it for the local module, alias it to be available as a public type
@@ -236,7 +230,7 @@ impl AsMut<[u8]> for Signature {
 	}
 }
 
-#[cfg(feature = "with_crypto")]
+#[cfg(feature = "full_crypto")]
 impl From<schnorrkel::Signature> for Signature {
 	fn from(s: schnorrkel::Signature) -> Signature {
 		Signature(s.to_bytes())
@@ -250,7 +244,7 @@ impl std::fmt::Debug for Signature {
 	}
 }
 
-#[cfg(feature = "with_crypto")]
+#[cfg(feature = "full_crypto")]
 impl core::hash::Hash for Signature {
 	fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
 		core::hash::Hash::hash(&self.0[..], state);
@@ -364,21 +358,21 @@ impl From<SecretKey> for Pair {
 	}
 }
 
-#[cfg(feature = "with_crypto")]
+#[cfg(feature = "full_crypto")]
 impl From<schnorrkel::Keypair> for Pair {
 	fn from(p: schnorrkel::Keypair) -> Pair {
 		Pair(p)
 	}
 }
 
-#[cfg(feature = "with_crypto")]
+#[cfg(feature = "full_crypto")]
 impl From<Pair> for schnorrkel::Keypair {
 	fn from(p: Pair) -> schnorrkel::Keypair {
 		p.0
 	}
 }
 
-#[cfg(feature = "with_crypto")]
+#[cfg(feature = "full_crypto")]
 impl AsRef<schnorrkel::Keypair> for Pair {
 	fn as_ref(&self) -> &schnorrkel::Keypair {
 		&self.0
@@ -386,16 +380,16 @@ impl AsRef<schnorrkel::Keypair> for Pair {
 }
 
 /// Derive a single hard junction.
-#[cfg(feature = "with_crypto")]
+#[cfg(feature = "full_crypto")]
 fn derive_hard_junction(secret: &SecretKey, cc: &[u8; CHAIN_CODE_LENGTH]) -> SecretKey {
 	secret.hard_derive_mini_secret_key(Some(ChainCode(cc.clone())), b"").0.expand(ExpansionMode::Ed25519)
 }
 
 /// The raw secret seed, which can be used to recreate the `Pair`.
-#[cfg(feature = "with_crypto")]
+#[cfg(feature = "full_crypto")]
 type Seed = [u8; MINI_SECRET_KEY_LENGTH];
 
-#[cfg(feature = "with_crypto")]
+#[cfg(feature = "full_crypto")]
 impl TraitPair for Pair {
 	type Public = Public;
 	type Seed = Seed;
@@ -527,16 +521,16 @@ impl Pair {
 }
 
 impl CryptoType for Public {
-	#[cfg(feature = "with_crypto")]
+	#[cfg(feature = "full_crypto")]
 	type Pair = Pair;
 }
 
 impl CryptoType for Signature {
-	#[cfg(feature = "with_crypto")]
+	#[cfg(feature = "full_crypto")]
 	type Pair = Pair;
 }
 
-#[cfg(feature = "with_crypto")]
+#[cfg(feature = "full_crypto")]
 impl CryptoType for Pair {
 	type Pair = Pair;
 }
