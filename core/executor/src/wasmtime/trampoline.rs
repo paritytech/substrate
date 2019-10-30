@@ -25,10 +25,15 @@ use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
 use wasmtime_jit::{CodeMemory, Compiler};
 use wasmtime_runtime::{VMContext, VMFunctionBody};
 use wasm_interface::{HostFunctions, Function, Value, ValueType};
-use std::{cmp, ptr};
+use std::{cmp, panic, ptr};
 
 use crate::error::{Error, Result};
 use crate::wasmtime::function_executor::{FunctionExecutorState, FunctionExecutor};
+
+const CALL_SUCCESS: u32 = 0;
+const CALL_FAILED_WITH_ERROR: u32 = 1;
+const CALL_WITH_BAD_HOST_STATE: u32 = 2;
+const CALL_PANICKED: u32 = 3;
 
 /// The top-level host state of the "env" module. This state is used by the trampoline function to
 /// construct a `FunctionExecutor` which can execute the host call.
@@ -63,27 +68,31 @@ impl EnvState {
 }
 
 /// This is called by the dynamically generated trampoline taking the function index and reference
-/// to the call arguments on the stack as arguments. Returns 0 on success and 1 on an error.
+/// to the call arguments on the stack as arguments. Returns zero on success and a non-zero value
+/// on failure.
 unsafe extern "C" fn stub_fn(vmctx: *mut VMContext, func_index: u32, values_vec: *mut i64) -> u32 {
-	if let Some(state) = (*vmctx).host_state().downcast_mut::<EnvState>() {
-		match stub_fn_inner(
-			vmctx,
-			state.externals,
-			&mut state.compiler,
-			state.executor_state.as_mut(),
-			func_index,
-			values_vec
-		) {
-			Ok(()) => 0,
-			Err(err) => {
-				state.trap = Some(err);
-				1
+	let result = panic::catch_unwind(|| {
+		if let Some(state) = (*vmctx).host_state().downcast_mut::<EnvState>() {
+			match stub_fn_inner(
+				vmctx,
+				state.externals,
+				&mut state.compiler,
+				state.executor_state.as_mut(),
+				func_index,
+				values_vec
+			) {
+				Ok(()) => CALL_SUCCESS,
+				Err(err) => {
+					state.trap = Some(err);
+					CALL_FAILED_WITH_ERROR
+				}
 			}
+		} else {
+			// Well, we can't even set a trap message, so we'll just exit without one.
+			CALL_WITH_BAD_HOST_STATE
 		}
-	} else {
-		// Well, we can't even set a trap message, so we'll just exit without one.
-		1
-	}
+	});
+	result.unwrap_or(CALL_PANICKED)
 }
 
 /// Implements most of the logic in `stub_fn` but returning a `Result` instead of an integer error
