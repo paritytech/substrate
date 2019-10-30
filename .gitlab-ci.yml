@@ -208,8 +208,7 @@ check-web-wasm:
     - time cargo web build -p substrate-panic-handler
     - time cargo web build -p substrate-peerset
     - time cargo web build -p substrate-primitives
-    # TODO: we can't use cargo web until https://github.com/paritytech/jsonrpc/pull/436 is deployed
-    - time cargo build -p substrate-rpc-servers --target wasm32-unknown-unknown
+    - time cargo web build -p substrate-rpc-servers
     - time cargo web build -p substrate-serializer
     - time cargo web build -p substrate-state-db
     - time cargo web build -p substrate-state-machine
