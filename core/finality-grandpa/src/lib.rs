@@ -201,6 +201,13 @@ pub struct Config {
 	/// at least every justification_period blocks. There are some other events which might cause
 	/// justification generation.
 	pub justification_period: u32,
+	/// Whether the GRANDPA observer protocol is live on the network and thereby
+	/// a full-node not running as a validator is running the GRANDPA observer
+	/// protocol (we will only issue catch-up requests to authorities when the
+	/// observer protocol is enabled).
+	pub observer_enabled: bool,
+	/// Whether the node is running as an authority (i.e. running the full GRANDPA protocol).
+	pub is_authority: bool,
 	/// Some local identifier of the voter.
 	pub name: Option<String>,
 	/// The keystore that manages the keys of this node.
@@ -548,7 +555,6 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X>(
 		config.clone(),
 		persistent_data.set_state.clone(),
 		on_exit.clone(),
-		true,
 	);
 
 	register_finality_tracker_inherent_data_provider(client.clone(), &inherent_data_providers)?;
