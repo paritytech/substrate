@@ -286,23 +286,11 @@ decl_module! {
 /// well since they're a valid proof of onlineness.
 impl<T: Trait + authorship::Trait> authorship::EventHandler<T::ValidatorId, T::BlockNumber> for Module<T> {
 	fn note_author(author: T::ValidatorId) {
-		let current_session = <session::Module<T>>::current_index();
-
-		<AuthoredBlocks<T>>::mutate(
-			&current_session,
-			author,
-			|authored| *authored += 1,
-		);
+		Self::note_authorship(author);
 	}
 
 	fn note_uncle(author: T::ValidatorId, _age: T::BlockNumber) {
-		let current_session = <session::Module<T>>::current_index();
-
-		<AuthoredBlocks<T>>::mutate(
-			&current_session,
-			author,
-			|authored| *authored += 1,
-		);
+		Self::note_authorship(author);
 	}
 }
 
@@ -323,11 +311,32 @@ impl<T: Trait> Module<T> {
 		Self::is_online_in_current_session_aux(authority_index, authority)
 	}
 
+	fn is_online_in_current_session_aux(authority_index: AuthIndex, authority: &T::ValidatorId) -> bool {
+		let current_session = <session::Module<T>>::current_index();
+
+		<ReceivedHeartbeats>::exists(&current_session, &authority_index) ||
+			<AuthoredBlocks<T>>::get(
+				&current_session,
+				authority,
+			) != 0
+	}
+
 	/// Returns `true` if a heartbeat has been received for the authority at `authority_index` in
 	/// the authorities series, during the current session. Otherwise `false`.
 	pub fn received_heartbeat_in_current_session(authority_index: AuthIndex) -> bool {
 		let current_session = <session::Module<T>>::current_index();
 		<ReceivedHeartbeats>::exists(&current_session, &authority_index)
+	}
+
+	/// Note that the given authority has authored a block in the current session.
+	fn note_authorship(author: T::ValidatorId) {
+		let current_session = <session::Module<T>>::current_index();
+
+		<AuthoredBlocks<T>>::mutate(
+			&current_session,
+			author,
+			|authored| *authored += 1,
+		);
 	}
 
 	pub(crate) fn offchain(now: T::BlockNumber) {
@@ -362,16 +371,6 @@ impl<T: Trait> Module<T> {
 				if not_yet_gossipped { "not gossipped" } else { "gossipped" }
 			);
 		}
-	}
-
-	fn is_online_in_current_session_aux(authority_index: AuthIndex, authority: &T::ValidatorId) -> bool {
-		let current_session = <session::Module<T>>::current_index();
-
-		<ReceivedHeartbeats>::exists(&current_session, &authority_index) ||
-			<AuthoredBlocks<T>>::get(
-				&current_session,
-				authority,
-			) != 0
 	}
 
 	fn do_gossip_at(block_number: T::BlockNumber) -> Result<(), OffchainErr> {
