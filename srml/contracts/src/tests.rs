@@ -67,7 +67,6 @@ thread_local! {
 	static EXISTENTIAL_DEPOSIT: RefCell<u64> = RefCell::new(0);
 	static TRANSFER_FEE: RefCell<u64> = RefCell::new(0);
 	static INSTANTIATION_FEE: RefCell<u64> = RefCell::new(0);
-	static BLOCK_GAS_LIMIT: RefCell<u64> = RefCell::new(0);
 }
 
 pub struct ExistentialDeposit;
@@ -85,10 +84,6 @@ impl Get<u64> for CreationFee {
 	fn get() -> u64 { INSTANTIATION_FEE.with(|v| *v.borrow()) }
 }
 
-pub struct BlockGasLimit;
-impl Get<u64> for BlockGasLimit {
-	fn get() -> u64 { BLOCK_GAS_LIMIT.with(|v| *v.borrow()) }
-}
 
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Test;
@@ -176,7 +171,6 @@ impl Trait for Test {
 	type InstantiateBaseFee = InstantiateBaseFee;
 	type MaxDepth = MaxDepth;
 	type MaxValueSize = MaxValueSize;
-	type BlockGasLimit = BlockGasLimit;
 	type WeightToFee = ();
 	type WeightPerGasUnit = WeightPerGasUnit;
 }
@@ -228,7 +222,6 @@ const DJANGO: u64 = 4;
 
 pub struct ExtBuilder {
 	existential_deposit: u64,
-	block_gas_limit: u64,
 	transfer_fee: u64,
 	instantiation_fee: u64,
 }
@@ -236,7 +229,6 @@ impl Default for ExtBuilder {
 	fn default() -> Self {
 		Self {
 			existential_deposit: 0,
-			block_gas_limit: 100_000_000,
 			transfer_fee: 0,
 			instantiation_fee: 0,
 		}
@@ -245,10 +237,6 @@ impl Default for ExtBuilder {
 impl ExtBuilder {
 	pub fn existential_deposit(mut self, existential_deposit: u64) -> Self {
 		self.existential_deposit = existential_deposit;
-		self
-	}
-	pub fn block_gas_limit(mut self, block_gas_limit: u64) -> Self {
-		self.block_gas_limit = block_gas_limit;
 		self
 	}
 	pub fn transfer_fee(mut self, transfer_fee: u64) -> Self {
@@ -263,7 +251,6 @@ impl ExtBuilder {
 		EXISTENTIAL_DEPOSIT.with(|v| *v.borrow_mut() = self.existential_deposit);
 		TRANSFER_FEE.with(|v| *v.borrow_mut() = self.transfer_fee);
 		INSTANTIATION_FEE.with(|v| *v.borrow_mut() = self.instantiation_fee);
-		BLOCK_GAS_LIMIT.with(|v| *v.borrow_mut() = self.block_gas_limit);
 	}
 	pub fn build(self) -> runtime_io::TestExternalities {
 		self.set_associated_consts();
@@ -2319,19 +2306,22 @@ fn cannot_self_destruct_in_constructor() {
 }
 
 // TODO: This test relies on put_code, which no longer requires any gas.
-#[ignore]
 #[test]
 fn check_block_gas_limit_works() {
-	ExtBuilder::default().block_gas_limit(50).build().execute_with(|| {
+	ExtBuilder::default().build().execute_with(|| {
 		let info = DispatchInfo { weight: 100, class: DispatchClass::Normal };
 		let check = CheckBlockGasLimit::<Test>(Default::default());
 		let call: Call = crate::Call::put_code(vec![]).into();
+		match check.pre_dispatch(&0, &call, info, 0) {
+			Ok(None) => {},
+			_ => panic!("put_code is not dynamic and should pass validation"),
+		}
 
-		assert_eq!(
-			check.validate(&0, &call, info, 0), InvalidTransaction::ExhaustsResources.into(),
-		);
-
-		let call: Call = crate::Call::update_schedule(Default::default()).into();
-		assert_eq!(check.validate(&0, &call, info, 0), Ok(Default::default()));
+		let check = CheckBlockGasLimit::<Test>(Default::default());
+		let call: Call = crate::Call::call(Default::default(), 0, 100, vec![]).into();
+		match check.pre_dispatch(&0, &call, info, 0) {
+			Ok(Some(_)) => {},
+			_ => panic!(),
+		}
 	});
 }

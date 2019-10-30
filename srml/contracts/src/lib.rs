@@ -333,8 +333,6 @@ parameter_types! {
 	pub const DefaultMaxDepth: u32 = 32;
 	/// A reasonable default value for [`Trait::MaxValueSize`].
 	pub const DefaultMaxValueSize: u32 = 16_384;
-	/// A reasonable default value for [`Trait::BlockGasLimit`].
-	pub const DefaultBlockGasLimit: u32 = 10_000_000;
 }
 
 pub trait Trait: system::Trait {
@@ -421,9 +419,6 @@ pub trait Trait: system::Trait {
 
 	/// The maximum size of a storage value in bytes.
 	type MaxValueSize: Get<u32>;
-
-	/// The maximum amount of gas that could be expended per block.
-	type BlockGasLimit: Get<Gas>;
 
 	/// Convert a weight value into a deductible fee based on the currency type.
 	type WeightToFee: Convert<Weight, BalanceOf<Self>>;
@@ -530,10 +525,6 @@ decl_module! {
 
 		/// The maximum size of a storage value in bytes. A reasonable default is 16 KiB.
 		const MaxValueSize: u32 = T::MaxValueSize::get();
-
-		/// The maximum amount of gas that could be expended per block. A reasonable
-		/// default value is 10_000_000.
-		const BlockGasLimit: Gas = T::BlockGasLimit::get();
 
 		fn deposit_event() = default;
 
@@ -1018,6 +1009,7 @@ impl Default for Schedule {
 }
 
 #[doc(hidden)]
+#[cfg_attr(test, derive(Debug))]
 pub struct DynamicWeightData<AccountId, NegativeImbalance> {
 	/// The account id who should receive the refund from the gas leftovers.
 	transactor: AccountId,

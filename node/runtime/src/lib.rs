@@ -410,7 +410,6 @@ impl contracts::Trait for Runtime {
 	type InstantiateBaseFee = contracts::DefaultInstantiateBaseFee;
 	type MaxDepth = contracts::DefaultMaxDepth;
 	type MaxValueSize = contracts::DefaultMaxValueSize;
-	type BlockGasLimit = contracts::DefaultBlockGasLimit;
 	type WeightToFee = LinearWeightToFee<WeightFeeCoefficient>;
 	type WeightPerGasUnit = WeightPerGasUnit;
 }
