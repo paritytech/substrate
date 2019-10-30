@@ -82,7 +82,6 @@ pub fn config(support_changes_trie: bool, code: Option<&[u8]>) -> GenesisConfig 
 		}),
 		contracts: Some(ContractsConfig {
 			current_schedule: Default::default(),
-			gas_price: 1 * MILLICENTS,
 		}),
 		babe: Some(Default::default()),
 		grandpa: Some(GrandpaConfig {

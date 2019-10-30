@@ -14,11 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-use crate::{GasUsageReport, Trait, BalanceOf};
+use crate::{Trait, BalanceOf};
 use sr_primitives::traits::{
 	Zero, SaturatedConversion, SimpleArithmetic,
 };
-use support::StorageValue;
 
 #[cfg(test)]
 use std::{any::Any, fmt::Debug};
@@ -181,7 +180,7 @@ impl<T: Trait> GasMeter<T> {
 	}
 
 	/// Returns how much gas was spent.
-	fn spent(&self) -> Gas {
+	pub fn spent(&self) -> Gas {
 		self.limit - self.gas_left
 	}
 
@@ -189,26 +188,6 @@ impl<T: Trait> GasMeter<T> {
 	pub fn tokens(&self) -> &[ErasedToken] {
 		&self.tokens
 	}
-}
-
-/// Buy the given amount of gas.
-///
-/// Cost is calculated by multiplying the gas cost (taken from the storage) by the `gas_limit`.
-/// The funds are deducted from `transactor`.
-pub fn buy_gas<T: Trait>(gas_limit: Gas) -> Result<GasMeter<T>, &'static str> {
-	Ok(GasMeter::with_limit(gas_limit, 1.into()))
-}
-
-/// Refund the unused gas.
-pub fn refund_unused_gas<T: Trait>(gas_meter: GasMeter<T>) {
-	let gas_spent = gas_meter.spent();
-	let gas_left = gas_meter.gas_left();
-
-	GasUsageReport::put((gas_left, gas_spent));
-}
-
-pub fn take_gas_usage_report() -> (Gas, Gas) { // (gas_left, gas_spent)
-	GasUsageReport::take()
 }
 
 /// A little handy utility for converting a value in balance units into approximate value in gas units

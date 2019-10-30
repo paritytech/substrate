@@ -228,7 +228,6 @@ const DJANGO: u64 = 4;
 
 pub struct ExtBuilder {
 	existential_deposit: u64,
-	gas_price: u64,
 	block_gas_limit: u64,
 	transfer_fee: u64,
 	instantiation_fee: u64,
@@ -237,7 +236,6 @@ impl Default for ExtBuilder {
 	fn default() -> Self {
 		Self {
 			existential_deposit: 0,
-			gas_price: 2,
 			block_gas_limit: 100_000_000,
 			transfer_fee: 0,
 			instantiation_fee: 0,
@@ -247,10 +245,6 @@ impl Default for ExtBuilder {
 impl ExtBuilder {
 	pub fn existential_deposit(mut self, existential_deposit: u64) -> Self {
 		self.existential_deposit = existential_deposit;
-		self
-	}
-	pub fn gas_price(mut self, gas_price: u64) -> Self {
-		self.gas_price = gas_price;
 		self
 	}
 	pub fn block_gas_limit(mut self, block_gas_limit: u64) -> Self {
@@ -278,12 +272,11 @@ impl ExtBuilder {
 			balances: vec![],
 			vesting: vec![],
 		}.assimilate_storage(&mut t).unwrap();
-		GenesisConfig::<Test> {
+		GenesisConfig {
 			current_schedule: Schedule {
 				enable_println: true,
 				..Default::default()
 			},
-			gas_price: self.gas_price,
 		}.assimilate_storage(&mut t).unwrap();
 		runtime_io::TestExternalities::new(t)
 	}
@@ -301,7 +294,7 @@ fn compile_module<T>(wabt_module: &str)
 
 #[test]
 fn call_doesnt_consume_gas() {
-	ExtBuilder::default().gas_price(2).build().execute_with(|| {
+	ExtBuilder::default().build().execute_with(|| {
 		Balances::deposit_creating(&ALICE, 100_000_000);
 		assert_ok!(Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, Vec::new()));
 		assert_eq!(Balances::free_balance(&ALICE), 100_000_000);

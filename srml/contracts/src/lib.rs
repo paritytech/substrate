@@ -115,7 +115,10 @@ use runtime_io::blake2_256;
 use sr_primitives::{
 	ApplyError,
 	RuntimeDebug,
-	traits::{Hash, StaticLookup, Zero, MaybeSerializeDeserialize, Member, SignedExtension, Convert},
+	traits::{
+		Hash, StaticLookup, Zero, MaybeSerializeDeserialize, Member, SignedExtension, Convert,
+		CheckedDiv,
+	},
 	weights::{DispatchInfo, Weight},
 	transaction_validity::{
 		ValidTransaction, InvalidTransaction, TransactionValidity, TransactionValidityError,
@@ -652,6 +655,7 @@ decl_module! {
 
 		fn on_finalize() {
 			GasUsageReport::kill();
+			<GasPrice<T>>::kill();
 		}
 	}
 }
@@ -708,13 +712,10 @@ impl<T: Trait> Module<T> {
 		gas_limit: Gas,
 		func: impl FnOnce(&mut ExecutionContext<T, WasmVm, WasmLoader>, &mut GasMeter<T>) -> ExecResult
 	) -> ExecResult {
-		// Pay for the gas upfront.
-		//
-		// NOTE: it is very important to avoid any state changes before
-		// paying for the gas.
+		// TODO: Set the proper gas price.
 		let mut gas_meter =
 			try_or_exec_error!(
-				gas::buy_gas::<T>(gas_limit),
+				Ok(GasMeter::<T>::with_limit(gas_limit, 1.into())),
 				// We don't have a spare buffer here in the first place, so create a new empty one.
 				Vec::new()
 			);
@@ -731,11 +732,13 @@ impl<T: Trait> Module<T> {
 			DirectAccountDb.commit(ctx.overlay.into_change_set());
 		}
 
-		// Refund cost of the unused gas.
+		// Save the gas usage report.
 		//
 		// NOTE: This should go after the commit to the storage, since the storage changes
 		// can alter the balance of the caller.
-		gas::refund_unused_gas::<T>(gas_meter);
+		let gas_spent = gas_meter.spent();
+		let gas_left = gas_meter.gas_left();
+		GasUsageReport::put((gas_left, gas_spent));
 
 		// Execute deferred actions.
 		ctx.deferred.into_iter().for_each(|deferred| {
@@ -875,7 +878,7 @@ decl_storage! {
 	trait Store for Module<T: Trait> as Contract {
 		/// The amount of gas left from the execution of the latest contract.
 		///
-		/// This value is transient and removed at the block finalization stage.
+		/// This value is transient and removed before block finalization.
 		GasUsageReport: (Gas, Gas);
 		/// Current cost schedule for contracts.
 		CurrentSchedule get(fn current_schedule) config(): Schedule = Schedule::default();
@@ -888,7 +891,9 @@ decl_storage! {
 		/// The code associated with a given account.
 		pub ContractInfoOf: map T::AccountId => Option<ContractInfo<T>>;
 		/// The price of one unit of gas.
-		GasPrice get(fn gas_price) config(): BalanceOf<T> = 1.into();
+		///
+		/// This value is transint and remove before block finalization.
+		GasPrice: BalanceOf<T> = 1.into();
 	}
 }
 
@@ -1053,6 +1058,13 @@ impl<T: Trait + Send + Sync> CheckBlockGasLimit<T> {
 				// Compute the fee corresponding for the given gas_weight_limit and attempt
 				// withdrawing from the origin of this transaction.
 				let fee = T::WeightToFee::convert(gas_weight_limit);
+
+				// Compute and store the effective price per unit of gas.
+				let gas_price = <BalanceOf<T>>::from(gas_weight_limit)
+					.checked_div(&fee)
+					.unwrap_or(1.into());
+				<GasPrice<T>>::put(gas_price);
+
 				let imbalance = match T::Currency::withdraw(
 					who,
 					fee,
@@ -1129,7 +1141,8 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckBlockGasLimit<T> {
 			transactor,
 			imbalance,
 		}) = pre {
-			let (gas_left, gas_spent) = gas::take_gas_usage_report();
+			let (gas_left, gas_spent) = GasUsageReport::take();
+
 
 			let unused_weight = gas_to_weight::<T>(gas_left);
 			let refund = T::WeightToFee::convert(unused_weight);
