@@ -1794,7 +1794,7 @@ fn offence_ensures_new_era_without_clobbering() {
 	ExtBuilder::default().build().execute_with(|| {
 		assert_ok!(Staking::force_new_era_always(Origin::ROOT));
 
-		Staking::on_offence(
+		on_offence_now(
 			&[OffenceDetails {
 				offender: (
 					11,
@@ -1813,7 +1813,7 @@ fn offence_ensures_new_era_without_clobbering() {
 fn offence_deselects_validator_when_slash_is_zero() {
 	ExtBuilder::default().build().execute_with(|| {
 		assert!(<Validators<Test>>::exists(11));
-		Staking::on_offence(
+		on_offence_now(
 			&[OffenceDetails {
 				offender: (
 					11,
@@ -1853,6 +1853,70 @@ fn slashing_performed_according_exposure() {
 
 		// The stash account should be slashed for 250 (50% of 500).
 		assert_eq!(Balances::free_balance(&11), 1000 - 250);
+	});
+}
+
+#[test]
+fn slash_in_old_span_does_not_deselect() {
+	ExtBuilder::default().build().execute_with(|| {
+		start_era(1);
+
+		assert!(<Validators<Test>>::exists(11));
+		on_offence_now(
+			&[OffenceDetails {
+				offender: (
+					11,
+					Staking::stakers(&11),
+				),
+				reporters: vec![],
+			}],
+			&[Perbill::from_percent(0)],
+		);
+		assert_eq!(Staking::force_era(), Forcing::ForceNew);
+		assert!(!<Validators<Test>>::exists(11));
+
+		start_era(2);
+
+		Staking::validate(Origin::signed(10), Default::default()).unwrap();
+		assert_eq!(Staking::force_era(), Forcing::NotForcing);
+		assert!(<Validators<Test>>::exists(11));
+
+		start_era(3);
+
+		// this staker is in a new slashing span now, having re-registered after
+		// their prior slash.
+
+		on_offence_in_era(
+			&[OffenceDetails {
+				offender: (
+					11,
+					Staking::stakers(&11),
+				),
+				reporters: vec![],
+			}],
+			&[Perbill::from_percent(0)],
+			1,
+		);
+
+		// not for zero-slash.
+		assert_eq!(Staking::force_era(), Forcing::NotForcing);
+		assert!(<Validators<Test>>::exists(11));
+
+		on_offence_in_era(
+			&[OffenceDetails {
+				offender: (
+					11,
+					Staking::stakers(&11),
+				),
+				reporters: vec![],
+			}],
+			&[Perbill::from_percent(100)],
+			1,
+		);
+
+		// or non-zero.
+		assert_eq!(Staking::force_era(), Forcing::NotForcing);
+		assert!(<Validators<Test>>::exists(11));
 	});
 }
 

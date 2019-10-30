@@ -54,7 +54,7 @@ use super::{
 };
 use sr_primitives::traits::{Zero, Saturating};
 use support::{
-	StorageValue, StorageMap, StorageDoubleMap,
+	StorageMap, StorageDoubleMap,
 	traits::{Currency, OnUnbalanced, Imbalance},
 };
 use rstd::vec::Vec;
@@ -217,12 +217,21 @@ pub(crate) fn slash<T: Trait>(params: SlashParams<T>) -> RewardPayout<T> {
 
 	// is the slash amount here a maximum for the era?
 	let own_slash = slash * exposure.own;
-	let (prior_slash_p, era_slash) = <Module<T> as Store>::ValidatorSlashInEra::get(
+	if slash * exposure.total == Zero::zero() {
+		// kick out the validator even if they won't be slashed,
+		// as long as the misbehavior is from their most recent slashing span.
+		kick_out_if_recent::<T>(params);
+		return RewardPayout(None)
+	}
+
+	let (prior_slash_p, _era_slash) = <Module<T> as Store>::ValidatorSlashInEra::get(
 		&slash_era,
 		stash,
 	).unwrap_or((Perbill::zero(), Zero::zero()));
 
-	if own_slash > era_slash {
+	// compare slash proportions rather than slash values to avoid issues due to rounding
+	// error.
+	if slash.deconstruct() > prior_slash_p.deconstruct() {
 		<Module<T> as Store>::ValidatorSlashInEra::insert(
 			&slash_era,
 			stash,
@@ -274,6 +283,34 @@ pub(crate) fn slash<T: Trait>(params: SlashParams<T>) -> RewardPayout<T> {
 	reward_payout += slash_nominators::<T>(params, prior_slash_p, &mut slash_imbalance);
 
 	RewardPayout(Some((reward_payout, slash_imbalance)))
+}
+
+// doesn't apply any slash, but kicks out the validator if the misbehavior is from
+// the most recent slashing span.
+fn kick_out_if_recent<T: Trait>(
+	params: SlashParams<T>,
+) {
+	// these are not updated by era-span or end-span.
+	let mut reward_payout = Zero::zero();
+	let mut slash_imbalance = <NegativeImbalanceOf<T>>::zero();
+	let mut spans = fetch_spans::<T>(
+		params.stash,
+		params.window_start,
+		&mut reward_payout,
+		&mut slash_imbalance,
+		params.reward_proportion,
+	);
+
+	if spans.era_span(params.slash_era).map(|s| s.index) == Some(spans.span_index()) {
+		spans.end_span(params.now);
+		<Module<T>>::chill_stash(params.stash);
+
+		// make sure to disable validator till the end of this session
+		if T::SessionInterface::disable_validator(params.stash).unwrap_or(false) {
+			// force a new era, to select a new validator set
+			<Module<T>>::ensure_new_era()
+		}
+	}
 }
 
 /// Slash nominators. Accepts general parameters and the prior slash percentage of the nominator.
@@ -408,6 +445,11 @@ impl<'a, T: 'a + Trait> InspectingSpans<'a, T> {
 		*total_deferred = *total_deferred + amount;
 	}
 
+	// find the span index of the given era, if covered.
+	fn era_span(&self, era: EraIndex) -> Option<SlashingSpan> {
+		self.spans.iter().find(|span| span.contains_era(era))
+	}
+
 	// compares the slash in an era to the overall current span slash.
 	// if it's higher, applies the difference of the slashes and then updates the span on disk.
 	//
@@ -417,7 +459,7 @@ impl<'a, T: 'a + Trait> InspectingSpans<'a, T> {
 		slash_era: EraIndex,
 		slash: BalanceOf<T>,
 	) -> Option<SpanIndex> {
-		let target_span = self.spans.iter().find(|span| span.contains_era(slash_era))?;
+		let target_span = self.era_span(slash_era)?;
 		let span_slash_key = (self.stash.clone(), target_span.index);
 		let mut span_record = <Module<T> as Store>::SpanSlash::get(&span_slash_key);
 		let mut changed = false;

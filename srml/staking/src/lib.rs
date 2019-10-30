@@ -1488,23 +1488,6 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, session::historical::Identificati
 				continue
 			}
 
-			// Auto deselect validator on any offence and force a new era if they haven't previously
-			// been deselected.
-			if <Validators<T>>::exists(stash) {
-				<Validators<T>>::remove(stash);
-				Self::ensure_new_era();
-			}
-
-			// calculate the amount to slash
-			let slash_exposure = exposure.total;
-			let amount = *slash_fraction * slash_exposure;
-
-			// in some cases `slash_fraction` can be just `0`,
-			// which means we are not slashing this time.
-			if amount.is_zero() {
-				continue;
-			}
-
 			let reward_payout = slashing::slash::<T>(slashing::SlashParams {
 				stash,
 				slash: *slash_fraction,
