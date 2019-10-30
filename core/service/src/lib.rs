@@ -550,6 +550,7 @@ fn start_rpc_servers<C, G, E, H: FnMut() -> rpc_servers::RpcHandler<rpc::Metadat
 
 /// An RPC session. Used to perform in-memory RPC queries (ie. RPC queries that don't go through
 /// the HTTP or WebSockets server).
+#[derive(Clone)]
 pub struct RpcSession {
 	metadata: rpc::Metadata,
 }

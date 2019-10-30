@@ -23,9 +23,12 @@ pub mod chain_spec;
 
 #[macro_use]
 mod service;
+mod browser;
 mod cli;
 mod factory_impl;
 
+#[cfg(feature = "browser")]
+pub use browser::*;
 #[cfg(feature = "cli")]
 pub use cli::*;
 
