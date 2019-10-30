@@ -220,6 +220,26 @@ node-exits:
   script:
     - ./ci/check_for_exit.sh
 
+
+test-full-crypto-feature:          &test-full-crypto-feature
+  stage:                           test
+  <<:                              *docker-env
+  variables:
+    # Enable debug assertions since we are running optimized builds for testing
+    # but still want to have debug assertions.
+    RUSTFLAGS: -Cdebug-assertions=y
+    RUST_BACKTRACE: 1
+  except:
+    variables:
+      - $DEPLOY_TAG
+  script:
+    - cd core/primitives/
+    - time cargo build --verbose --no-default-features --features full_crypto
+    - cd ../application-crypto
+    - time cargo build --verbose --no-default-features --features full_crypto
+    - sccache -s
+
+
 #### stage:                        build
 
 build-linux-substrate:
@@ -269,25 +289,6 @@ build-linux-subkey:
           tee ./artifacts/subkey/VERSION;
     - sha256sum ./artifacts/subkey/subkey | tee ./artifacts/subkey/subkey.sha256
     - cp -r scripts/docker/subkey.Dockerfile ./artifacts/subkey/
-    - sccache -s
-
-build-full-crypto-feature:         
-  stage:                           build
-  <<:                              *collect-artifacts
-  <<:                              *docker-env
-  <<:                              *build-only
-  variables:
-    # Enable debug assertions since we are running optimized builds for testing
-    # but still want to have debug assertions.
-    RUST_BACKTRACE: 1
-  except:
-    variables:
-      - $DEPLOY_TAG
-  script:
-    - cd core/primitives/
-    - time cargo build --verbose --no-default-features --features full_crypto
-    - cd ../application-crypto
-    - time cargo build --verbose --no-default-features --features full_crypto
     - sccache -s
 
 build-rust-doc-release:
