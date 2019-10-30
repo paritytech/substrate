@@ -5,7 +5,7 @@
 	<title>Substrate node</title>
 	<link rel="shortcut icon" href="/favicon.png" />
 	<script type="module">
-import { start_client, default as init } from './pkg/node_browser.js';
+import { start_client, default as init } from './pkg/node_cli.js';
 import ws from './ws.js';
 
 function log(msg) {
@@ -14,7 +14,7 @@ function log(msg) {
 
 async function start() {
 	log('Loading WASM');
-	await init('./pkg/node_browser_bg.wasm');
+	await init('./pkg/node_cli_bg.wasm');
 	log('Successfully loaded WASM');
 
 	// Build our client.

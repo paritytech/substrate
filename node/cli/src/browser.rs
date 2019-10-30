@@ -28,7 +28,7 @@ use wasm_bindgen::prelude::*;
 #[wasm_bindgen]
 pub fn start_client(wasm_ext: wasm_ext::ffi::Transport) -> Result<Client, JsValue> {
 	start_inner(wasm_ext)
-		.map_err(|err| JsValue::from_str(err.description()))
+		.map_err(|err| JsValue::from_str(&err.to_string()))
 }
 
 fn start_inner(wasm_ext: wasm_ext::ffi::Transport) -> Result<Client, Box<dyn std::error::Error>> {
