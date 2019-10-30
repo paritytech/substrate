@@ -18,22 +18,19 @@
 //! A way to check whether or not two headers are related to eachother.
 
 use crate::error::Error;
-
-// Question: Since this is from std, am I allowed to use it?
-use std::collections::HashMap;
 use sr_primitives::traits::Header;
 
 /// A struct used to check whether or not two headers
 /// are related to one another.
 pub struct AncestryProofChecker<H: Header> {
-	proof: HashMap<H::Hash, H>,
+	proof: Vec<H>,
 }
 
 impl<H> AncestryProofChecker<H>
 	where H: Header {
 	/// Creates a new AncestryProofChecker, which is used
 	/// to verify whether two headers are related.
-	pub fn new(proof: HashMap<H::Hash, H>) -> Self {
+	pub fn new(proof: Vec<H>) -> Self {
 		AncestryProofChecker {
 			proof
 		}
@@ -45,22 +42,29 @@ impl<H> AncestryProofChecker<H>
 	/// could be updated to use something like Log2 Ancestors (#2053)
 	/// in the future.
 	pub fn verify_ancestry(&self, ancestor: H, child: H) -> Result<(), Error> {
-		let mut curr_header = &child;
-		let mut curr_hash = curr_header.hash();
+		let mut curr_header = &self.proof[0];
+		if curr_header.hash() != child.hash() {
+			return Err(Error::AncestorNotFound);
+		}
 
-		loop {
-			// Check in our proof to see if we have a header (parent from previous round)
-			// We'll go around until we find a hash that isn't in the proof
-			curr_header = self.proof.get(&curr_hash).ok_or(Error::AncestorNotFound)?;
+		let mut parent_hash = curr_header.parent_hash();
 
-			// If we find that the header's hash matches our ancestor's hash we're done
-			if curr_header.hash() == ancestor.hash() {
-				return Ok(())
+		// If we find that the header's parent hash matches our ancestor's hash we're done
+		for i in 1..self.proof.len() {
+			curr_header = &self.proof[i];
+
+			// Need to check that blocks are actually related
+			if curr_header.hash() != *parent_hash {
+				break;
 			}
 
-			// Otherwise we'll need to try again
-			curr_hash = *curr_header.parent_hash();
+			parent_hash = curr_header.parent_hash();
+			if *parent_hash == ancestor.hash() {
+				return Ok(())
+			}
 		}
+
+		Err(Error::AncestorNotFound)
 	}
 }
 
@@ -106,10 +110,10 @@ mod tests {
 	fn check_that_child_is_ancestor_of_grandparent() {
 		let (grandparent, parent, child) = get_related_block_headers();
 
-		let mut proof = HashMap::new();
-		proof.insert(child.hash(), child.clone());
-		proof.insert(parent.hash(), parent);
-		proof.insert(grandparent.hash(), grandparent.clone());
+		let mut proof = Vec::new();
+		proof.push(child.clone());
+		proof.push(parent);
+		proof.push(grandparent.clone());
 
 		let checker = <AncestryProofChecker<Header>>::new(proof);
 		assert_ok!(checker.verify_ancestry(grandparent, child));
@@ -119,10 +123,10 @@ mod tests {
 	fn check_that_child_ancestor_is_not_correct() {
 		let (grandparent, parent, child) = get_related_block_headers();
 
-		let mut proof = HashMap::new();
-		proof.insert(child.hash(), child.clone());
-		proof.insert(parent.hash(), parent);
-		proof.insert(grandparent.hash(), grandparent.clone());
+		let mut proof = Vec::new();
+		proof.push(child.clone());
+		proof.push(parent);
+		proof.push(grandparent.clone());
 
 		let fake_grandparent = Header {
 			parent_hash: H256::from_slice(&[1u8; 32]),
@@ -141,7 +145,7 @@ mod tests {
 
 	#[test]
 	fn checker_fails_if_given_invalid_proof() {
-		let (grandparent, _parent, child) = get_related_block_headers();
+		let (grandparent, parent, child) = get_related_block_headers();
 		let fake_ancestor = Header {
 			parent_hash: H256::from_slice(&[1u8; 32]),
 			number: 42,
@@ -150,10 +154,11 @@ mod tests {
 			digest: Digest::default(),
 		};
 
-		let mut invalid_proof = HashMap::new();
-		invalid_proof.insert(child.hash(), child.clone());
-		invalid_proof.insert(fake_ancestor.hash(), fake_ancestor);
-		invalid_proof.insert(grandparent.hash(), grandparent.clone());
+		let mut invalid_proof = Vec::new();
+		invalid_proof.push(child.clone());
+		invalid_proof.push(fake_ancestor);
+		invalid_proof.push(parent);
+		invalid_proof.push(grandparent.clone());
 
 		let checker = <AncestryProofChecker<Header>>::new(invalid_proof);
 		assert_err!(
