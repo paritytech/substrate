@@ -23,6 +23,7 @@ offchain = { package = "substrate-offchain", path = "../../core/offchain" }
 [features]
 default = ["std", "session/historical"]
 std = [
+	"full_crypto",
 	"app-crypto/std",
 	"codec/std",
 	"primitives/std",
@@ -35,3 +36,8 @@ std = [
 	"support/std",
 	"system/std",
 ]
+
+# This feature enables all crypto primitives for `no_std` builds like microcontrollers 
+# or Intel SGX. 
+# For the regular wasm runtime builds this should not be used.
+full_crypto = []

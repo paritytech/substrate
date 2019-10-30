@@ -15,6 +15,7 @@ serde = { version = "1.0.101", optional = true, features = ["derive"] }
 [features]
 default = ["std"]
 std = [
+	"full_crypto",
 	"client/std",
 	"codec/std",
 	"sr-primitives/std",
@@ -22,3 +23,8 @@ std = [
 	"serde",
 	"app-crypto/std",
 ]
+
+# This feature enables all crypto primitives for `no_std` builds like microcontrollers 
+# or Intel SGX. 
+# For the regular wasm runtime builds this should not be used.
+full_crypto = []

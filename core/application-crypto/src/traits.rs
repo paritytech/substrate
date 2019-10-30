@@ -42,9 +42,9 @@ pub trait AppKey: 'static + Send + Sync + Sized + CryptoType + Clone {
 
 /// Type which implements Hash in std, not when no-std (std variant).
 #[cfg(feature = "std")]
-pub trait MaybeHash: std::hash::Hash {}
+pub trait MaybeHash: rstd::hash::Hash {}
 #[cfg(feature = "std")]
-impl<T: std::hash::Hash> MaybeHash for T {}
+impl<T: rstd::hash::Hash> MaybeHash for T {}
 
 /// Type which implements Hash in std, not when no-std (no-std variant).
 #[cfg(all(not(feature = "std"), not(feature = "full_crypto")))]
@@ -54,9 +54,9 @@ impl<T> MaybeHash for T {}
 
 /// Type which implements Debug and Hash in std, not when no-std (no-std variant with crypto).
 #[cfg(all(not(feature = "std"), feature = "full_crypto"))]
-pub trait MaybeDebugHash: core::hash::Hash  {}
+pub trait MaybeDebugHash: rstd::hash::Hash  {}
 #[cfg(all(not(feature = "std"), feature = "full_crypto"))]
-impl<T: core::hash::Hash> MaybeDebugHash for T {}
+impl<T: rstd::hash::Hash> MaybeDebugHash for T {}
 
 /// A application's public key.
 pub trait AppPublic:
