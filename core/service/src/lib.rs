@@ -541,10 +541,10 @@ fn start_rpc_servers<C, G, E, H: FnMut() -> rpc_servers::RpcHandler<rpc::Metadat
 
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
 #[cfg(target_os = "unknown")]
-fn start_rpc_servers<C, G, E, H: FnMut() -> components::RpcHandler>(
+fn start_rpc_servers<C, G, E, H: FnMut() -> rpc_servers::RpcHandler<rpc::Metadata>>(
 	_: &Configuration<C, G, E>,
 	_: H
-) -> Result<Box<std::any::Any + Send + Sync>, error::Error> {
+) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
 	Ok(Box::new(()))
 }
 
