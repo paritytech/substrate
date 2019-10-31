@@ -69,7 +69,6 @@ members = [
 	"core/transaction-pool/graph",
 	"core/trie",
 	"core/utils/fork-tree",
-	"core/utils/historical-data",
 	"core/utils/wasm-builder",
 	"core/utils/wasm-builder-runner",
 	"core/wasm-interface",

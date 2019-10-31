@@ -31,7 +31,6 @@
 
 mod noncanonical;
 mod pruning;
-mod branch;
 #[cfg(test)] mod test;
 
 use std::fmt;
@@ -73,22 +72,6 @@ pub trait NodeDb {
 
 	/// Get state trie node.
 	fn get(&self, key: &Self::Key) -> Result<Option<DBValue>, Self::Error>;
-}
-
-/// Backend database trait. Read-only.
-///
-/// All query uses a state parameter which indicates
-/// where to query kv storage.
-/// It any additional information that is needed to resolve
-/// a chain state (depending on the implementation).
-pub trait KvDb<State> {
-	type Error: fmt::Debug;
-
-	/// Get state trie node.
-	fn get_kv(&self, key: &[u8], state: &State) -> Result<Option<DBValue>, Self::Error>;
-
-	/// Get all pairs of key values at current state.
-	fn get_kv_pairs(&self, state: &State) -> Vec<(KvKey, DBValue)>;
 }
 
 /// Error type.
@@ -141,31 +124,14 @@ pub struct ChangeSet<H: Hash> {
 	pub deleted: Vec<H>,
 }
 
-/// A set of key values state changes.
-///
-/// This assumes that we only commit block per block (otherwhise
-/// we will need to include a block number value).
-pub type KvChangeSet<H> = Vec<(H, Option<DBValue>)>;
-
-/// Info for pruning key values.
-/// This is a last prune index (pruning will be done up to this index),
-/// and a set keys to prune.
-/// Is set to none when not initialized.
-pub type KvChangeSetPrune = Option<(u64, HashSet<KvKey>)>;
-
-/// Commit set on block canonicalization operation.
-pub type CommitSetCanonical<H> = (CommitSet<H>, KvChangeSetPrune);
 
 /// A set of changes to the backing database.
-/// It only contain a single block change set.
 #[derive(Default, Debug, Clone)]
 pub struct CommitSet<H: Hash> {
 	/// State node changes.
 	pub data: ChangeSet<H>,
 	/// Metadata changes.
 	pub meta: ChangeSet<Vec<u8>>,
-	/// Key values data changes.
-	pub kv: KvChangeSet<KvKey>,
 }
 
 /// Pruning constraints. If none are specified pruning is

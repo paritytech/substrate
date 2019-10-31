@@ -34,7 +34,6 @@ mod storage_cache;
 mod utils;
 
 use std::sync::Arc;
-use std::ops::Deref;
 use std::path::PathBuf;
 use std::io;
 use std::collections::{HashMap, HashSet};
@@ -67,16 +66,10 @@ use crate::utils::{Meta, db_err, meta_keys, read_db, read_meta};
 use client::leaves::{LeafSet, FinalizationDisplaced};
 use client::children;
 use state_db::StateDb;
-use state_db::BranchRanges;
 use header_metadata::{CachedHeaderMetadata, HeaderMetadata, HeaderMetadataCache};
 use crate::storage_cache::{CachingState, SharedCache, new_shared_cache};
 use log::{trace, debug, warn};
 pub use state_db::PruningMode;
-use historical_data::tree::Serialized;
-use historical_data::PruneResult;
-use historical_data::linear::DefaultVersion;
-
-type Ser<'a> = Serialized<'a, DefaultVersion>;
 
 #[cfg(feature = "test-helpers")]
 use client::in_mem::Backend as InMemoryBackend;
@@ -135,7 +128,6 @@ impl<B: BlockT> StateBackend<Blake2Hasher> for RefTrackingState<B> {
 	type Error =  <DbState as StateBackend<Blake2Hasher>>::Error;
 	type Transaction = <DbState as StateBackend<Blake2Hasher>>::Transaction;
 	type TrieBackendStorage = <DbState as StateBackend<Blake2Hasher>>::TrieBackendStorage;
-	type KvBackend = <DbState as StateBackend<Blake2Hasher>>::KvBackend;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.state.storage(key)
@@ -147,10 +139,6 @@ impl<B: BlockT> StateBackend<Blake2Hasher> for RefTrackingState<B> {
 
 	fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.state.child_storage(storage_key, key)
-	}
-
-	fn kv_storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.state.kv_storage(key)
 	}
 
 	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {
@@ -191,27 +179,8 @@ impl<B: BlockT> StateBackend<Blake2Hasher> for RefTrackingState<B> {
 		self.state.child_storage_root(storage_key, delta)
 	}
 
-	fn kv_transaction<I>(&self, delta: I) -> Self::Transaction
-		where
-			I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
-	{
-		self.state.kv_transaction(delta)
-	}
-
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
 		self.state.pairs()
-	}
-
-	fn children_storage_keys(&self) -> Vec<Vec<u8>> {
-		self.state.children_storage_keys()
-	}
-
-	fn child_pairs(&self, child_storage_key: &[u8]) -> Vec<(Vec<u8>, Vec<u8>)> {
-		self.state.child_pairs(child_storage_key)
-	}
-
-	fn kv_in_memory(&self) -> InMemoryKvBackend {
-		self.state.kv_in_memory()
 	}
 
 	fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> {
@@ -288,10 +257,6 @@ pub(crate) mod columns {
 	pub const AUX: Option<u32> = Some(8);
 	/// Offchain workers local storage
 	pub const OFFCHAIN: Option<u32> = Some(9);
-	/// Kv storage main collection.
-	/// Content here should be organized by prefixing
-	/// keys to avoid conflicts.
-	pub const KV: Option<u32> = Some(10);
 }
 
 struct PendingBlock<Block: BlockT> {
@@ -609,11 +574,6 @@ struct StorageDb<Block: BlockT> {
 	pub state_db: StateDb<Block::Hash, Vec<u8>>,
 }
 
-struct StorageDbAt<Block: BlockT, State> {
-	pub storage_db: Arc<StorageDb<Block>>,
-	pub state: State,
-}
-
 impl<Block: BlockT> state_machine::Storage<Blake2Hasher> for StorageDb<Block> {
 	fn get(&self, key: &H256, prefix: Prefix) -> Result<Option<DBValue>, String> {
 		let key = prefixed_key::<Blake2Hasher>(key, prefix);
@@ -628,44 +588,6 @@ impl<Block: BlockT> state_db::NodeDb for StorageDb<Block> {
 
 	fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.db.get(columns::STATE, key).map(|r| r.map(|v| v.to_vec()))
-	}
-}
-
-impl<Block: BlockT> state_db::KvDb<u64> for StorageDb<Block> {
-
-	type Error = io::Error;
-
-	fn get_kv(&self, key: &[u8], state: &u64) -> Result<Option<Vec<u8>>, Self::Error> {
-		Ok(self.db.get(columns::KV, key)?
-			.as_ref()
-			.map(|s| Ser::from_slice(&s[..]))
-			.and_then(|s| s.get(*state)
-				.unwrap_or(None) // flatten
-				.map(Into::into)
-		))
-	}
-
-	fn get_kv_pairs(&self, state: &u64) -> Vec<(Vec<u8>, Vec<u8>)> {
-		self.db.iter(columns::KV).filter_map(|(k, v)|
-			Ser::from_slice(&v[..]).get(*state)
-				.unwrap_or(None) // flatten
-				.map(Into::into)
-				.map(|v| (k.to_vec(), v))
-		).collect()
-	}
-}
-
-impl<Block: BlockT> state_machine::KvBackend for StorageDbAt<Block, (BranchRanges, u64)> {
-
-	fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
-		self.storage_db.state_db.get_kv(key, &self.state, self.storage_db.deref())
-			.map_err(|e| format!("Database backend error: {:?}", e))
-	}
-
-	fn in_memory(&self) -> InMemoryKvBackend {
-		self.storage_db.state_db.get_kv_pairs(&self.state, self.storage_db.deref())
-			// No deletion on storage db.
-			.into_iter().map(|(k, v)| (k, Some(v))).collect()
 	}
 }
 
@@ -1160,11 +1082,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 			trace!(target: "db", "Canonicalize block #{} ({:?})", new_canonical, hash);
 			let commit = self.storage.state_db.canonicalize_block(&hash)
 				.map_err(|e: state_db::Error<io::Error>| client::error::Error::from(format!("State database error: {:?}", e)))?;
-			apply_state_commit_canonical(transaction, commit.0, &self.storage.db, commit.1).map_err(|err|
-				client::error::Error::Backend(
-					format!("Error building commit transaction : {}", err)
-				)
-			)?;
+			apply_state_commit(transaction, commit);
 		};
 
 		Ok(())
@@ -1244,24 +1162,10 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 					changeset.deleted.push(key);
 				}
 			}
-			let kv_changeset: state_db::KvChangeSet<Vec<u8>> = operation.db_updates.1
-				// switch to vec for size
-				.into_iter().collect();
 			let number_u64 = number.saturated_into::<u64>();
-			let commit = self.storage.state_db.insert_block(
-				&hash,
-				number_u64,
-				&pending_block.header.parent_hash(),
-				changeset,
-				kv_changeset,
-			).map_err(|e: state_db::Error<io::Error>|
-				client::error::Error::from(format!("State database error: {:?}", e))
-			)?;
-			apply_state_commit(&mut transaction, commit, &self.storage.db, number_u64).map_err(|err|
-				client::error::Error::Backend(
-					format!("Error building commit transaction : {}", err)
-				)
-			)?;
+			let commit = self.storage.state_db.insert_block(&hash, number_u64, &pending_block.header.parent_hash(), changeset)
+				.map_err(|e: state_db::Error<io::Error>| client::error::Error::from(format!("State database error: {:?}", e)))?;
+			apply_state_commit(&mut transaction, commit);
 
 			// Check if need to finalize. Genesis is always finalized instantly.
 			let finalized = number_u64 == 0 || pending_block.leaf_state.is_final();
@@ -1405,13 +1309,8 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 			transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, &lookup_key);
 
 			let commit = self.storage.state_db.canonicalize_block(&f_hash)
-				.map_err(|e: state_db::Error<io::Error>|
-					client::error::Error::from(format!("State database error: {:?}", e))
-				)?;
-			apply_state_commit_canonical(transaction, commit.0, &self.storage.db, commit.1)
-				.map_err(|err| client::error::Error::Backend(
-					format!("Error building commit transaction : {}", err)
-				))?;
+				.map_err(|e: state_db::Error<io::Error>| client::error::Error::from(format!("State database error: {:?}", e)))?;
+			apply_state_commit(transaction, commit);
 
 			let changes_trie_config = self.changes_trie_config(parent_hash)?;
 			if let Some(changes_trie_config) = changes_trie_config {
@@ -1429,75 +1328,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 	}
 }
 
-fn apply_state_commit(
-	transaction: &mut DBTransaction,
-	commit: state_db::CommitSet<Vec<u8>>,
-	db: &Arc<dyn KeyValueDB>,
-	last_block: u64,
-) -> Result<(), io::Error> {
-	apply_state_commit_inner(transaction, commit, db, last_block, None)
-}
-
-fn apply_state_commit_inner(
-	transaction: &mut DBTransaction,
-	commit: state_db::CommitSet<Vec<u8>>,
-	db: &Arc<dyn KeyValueDB>,
-	last_block: u64,
-	mut kv_prune_key: state_db::KvChangeSetPrune,
-) -> Result<(), io::Error> {
-
-	for (key, change) in commit.kv.iter() {
-		let (mut ser, new) = if let Some(stored) = db.get(columns::KV, key)? {
-			(Ser::from_vec(stored.to_vec()), false)
-		} else {
-			if change.is_some() {
-				(Ser::default(), true)
-			} else {
-				break;
-			}
-		};
-		ser.push(last_block, change.as_ref().map(|v| v.as_slice()));
-		if let Some((block_prune, kv_prune_keys)) = kv_prune_key.as_mut() {
-			if !new && kv_prune_keys.remove(key) {
-				match ser.prune(*block_prune) {
-					PruneResult::Cleared => transaction.delete(columns::KV, &key),
-					PruneResult::Changed
-					| PruneResult::Unchanged => transaction.put(columns::KV, &key[..], &ser.into_vec()),
-				}
-			} else {
-				transaction.put(columns::KV, &key[..], &ser.into_vec())
-			}
-		} else {
-			transaction.put(columns::KV, &key[..], &ser.into_vec())
-		}
-	}
-
-	if let Some((block_prune, kv_prune_key)) = kv_prune_key {
-		// no need to into_iter
-		for key in kv_prune_key.iter() {
-			let mut ser = if let Some(stored) = db.get(columns::KV, key)? {
-				Ser::from_vec(stored.to_vec())
-			} else {
-				break;
-			};
-
-			match ser.prune(block_prune) {
-				PruneResult::Cleared => transaction.delete(columns::KV, &key),
-				PruneResult::Changed => transaction.put(columns::KV, &key[..], &ser.into_vec()),
-				PruneResult::Unchanged => (),
-			}
-		}
-
-	}
-	apply_state_commit_no_kv(transaction, commit);
-	Ok(())
-}
-
-fn apply_state_commit_no_kv(
-	transaction: &mut DBTransaction,
-	commit: state_db::CommitSet<Vec<u8>>,
-	) {
-
+fn apply_state_commit(transaction: &mut DBTransaction, commit: state_db::CommitSet<Vec<u8>>) {
 	for (key, val) in commit.data.inserted.into_iter() {
 		transaction.put(columns::STATE, &key[..], &val);
 	}
@@ -1510,17 +1341,6 @@ fn apply_state_commit_no_kv(
 	for key in commit.meta.deleted.into_iter() {
 		transaction.delete(columns::STATE_META, &key[..]);
 	}
-
-}
-
-
-fn apply_state_commit_canonical(
-	transaction: &mut DBTransaction,
-	commit: state_db::CommitSetCanonical<Vec<u8>>,
-	db: &Arc<dyn KeyValueDB>,
-	last_block: u64,
-) -> Result<(), io::Error> {
-	apply_state_commit_inner(transaction, commit.0, db, last_block, commit.1)
 }
 
 impl<Block> client::backend::AuxStore for Backend<Block> where Block: BlockT<Hash=H256> {
@@ -1648,8 +1468,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 			let mut transaction = DBTransaction::new();
 			match self.storage.state_db.revert_one() {
 				Some(commit) => {
-					debug_assert!(commit.kv.is_empty(), "revert do not change key value store");
-					apply_state_commit_no_kv(&mut transaction, commit);
+					apply_state_commit(&mut transaction, commit);
 					let removed = self.blockchain.header(BlockId::Number(best))?.ok_or_else(
 						|| client::error::Error::UnknownBlock(
 							format!("Error reverting to {}. Block hash not found.", best)))?;
@@ -1701,14 +1520,8 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 			Ok(Some(ref hdr)) => {
 				let hash = hdr.hash();
 				if let Ok(()) = self.storage.state_db.pin(&hash) {
-					let block_number = hdr.number().clone().saturated_into::<u64>();
-					let range = self.storage.state_db.get_branch_range(&hash, block_number);
 					let root = H256::from_slice(hdr.state_root().as_ref());
-					let kv = StorageDbAt {
-						storage_db: self.storage.clone(),
-						state: (range.unwrap_or_else(Default::default), block_number),
-					};
-					let db_state = DbState::new(self.storage.clone(), root, Arc::new(kv));
+					let db_state = DbState::new(self.storage.clone(), root);
 					let state = RefTrackingState::new(db_state, self.storage.clone(), Some(hash.clone()));
 					Ok(CachingState::new(state, self.shared_cache.clone(), Some(hash)))
 				} else {
@@ -1814,69 +1627,6 @@ mod tests {
 		backend.commit_operation(op).unwrap();
 
 		header_hash
-	}
-
-	fn insert_kvs_and_finalize(
-		backend: &Backend<Block>,
-		number: u64,
-		parent_hash: H256,
-		kvs: Vec<(Vec<u8>, Option<Vec<u8>>)>,
-		extrinsics_root: H256,
-		finalize: Option<Vec<H256>>,
-	) -> H256 {
-		let header = Header {
-			number,
-			parent_hash,
-			state_root: BlakeTwo256::trie_root(Vec::new()),
-			digest: Default::default(),
-			extrinsics_root,
-		};
-		let header_hash = header.hash();
-
-		let block_id = if number == 0 {
-			BlockId::Hash(Default::default())
-		} else {
-			BlockId::Number(number - 1)
-		};
-		let mut op = backend.begin_operation().unwrap();
-		backend.begin_state_operation(&mut op, block_id).unwrap();
-		if let Some(finalize) = finalize {
-			for finalize in finalize {
-				op.mark_finalized(BlockId::hash(finalize), None).unwrap();
-			}
-		}
-		let kv_transaction = kvs.into_iter().collect(); 
-		op.update_db_storage((Default::default(), kv_transaction)).unwrap();
-		op.set_block_data(header, None, None, NewBlockState::Best).unwrap();
-		backend.commit_operation(op).unwrap();
-		header_hash
-	}
-
-
-	fn insert_kvs(
-		backend: &Backend<Block>,
-		number: u64,
-		parent_hash: H256,
-		kvs: Vec<(Vec<u8>, Option<Vec<u8>>)>,
-		extrinsics_root: H256,
-	) -> H256 {
-		insert_kvs_and_finalize(
-			backend,
-			number,
-			parent_hash,
-			kvs,
-			extrinsics_root,
-			None,
-		)
-	}
-	
-	fn check_kv (backend: &Backend<Block>, block: H256, val: &Vec<(Vec<u8>, Option<Vec<u8>>)>) {
-		let block = BlockId::Hash(block);
-		let state = backend.state_at(block).unwrap();
-		for (k, v) in val {
-			let content = state.kv_storage(k).unwrap();
-			assert_eq!(v, &content);
-		}
 	}
 
 	#[test]
