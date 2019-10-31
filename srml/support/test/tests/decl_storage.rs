@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -14,276 +14,17 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Strongly typed wrappers around values in storage.
-//!
-//! This crate exports a macro `storage_items!` and traits describing behavior of generated
-//! structs.
-//!
-//! Two kinds of data types are currently supported:
-//!   - values
-//!   - maps
-//!
-//! # Examples:
-//!
-//! ```rust
-//! #[macro_use]
-//! extern crate srml_support;
-//!
-//! type AuthorityId = [u8; 32];
-//! type Balance = u64;
-//! pub type SessionKey = [u8; 32];
-//!
-//! storage_items! {
-//!     // public value
-//!     pub Value: b"putd_key" => SessionKey;
-//!     // private map.
-//!     Balances: b"private_map:" => map [AuthorityId => Balance];
-//! }
-//!
-//!# fn main() { }
-//! ```
-
-#[doc(hidden)]
-pub use crate::rstd::borrow::Borrow;
-#[doc(hidden)]
-pub use crate::rstd::marker::PhantomData;
-#[doc(hidden)]
-pub use crate::rstd::boxed::Box;
-
-#[doc(hidden)]
-pub fn id<T>(t: T) -> T {
-	t
-}
-
-#[doc(hidden)]
-pub use Some;
-
-#[doc(hidden)]
-pub fn unwrap_or_default<T: Default>(t: Option<T>) -> T {
-	t.unwrap_or_else(|| Default::default())
-}
-
-#[doc(hidden)]
-pub fn require<T: Default>(t: Option<T>) -> T {
-	t.expect("Required values must be in storage")
-}
-
-// FIXME #1466 Remove this in favor of `decl_storage` macro.
-/// Declares strongly-typed wrappers around codec-compatible types in storage.
-#[macro_export]
-macro_rules! storage_items {
-	// simple values
-	($name:ident : $key:expr => $ty:ty; $($t:tt)*) => {
-		$crate::__storage_items_internal!(() () (OPTION_TYPE Option<$ty>) (id) (id) $name: $key => $ty);
-		storage_items!($($t)*);
-	};
-	(pub $name:ident : $key:expr => $ty:ty; $($t:tt)*) => {
-		$crate::__storage_items_internal!((pub) () (OPTION_TYPE Option<$ty>) (id) (id) $name: $key => $ty);
-		storage_items!($($t)*);
-	};
-	($name:ident : $key:expr => default $ty:ty; $($t:tt)*) => {
-		$crate::__storage_items_internal!(() () (RAW_TYPE $ty) (unwrap_or_default) (Some) $name: $key => $ty);
-		storage_items!($($t)*);
-	};
-	(pub $name:ident : $key:expr => default $ty:ty; $($t:tt)*) => {
-		$crate::__storage_items_internal!((pub) () (RAW_TYPE $ty) (unwrap_or_default) (Some) $name: $key => $ty);
-		storage_items!($($t)*);
-	};
-	($name:ident : $key:expr => required $ty:ty; $($t:tt)*) => {
-		$crate::__storage_items_internal!(() () (RAW_TYPE $ty) (require) (Some) $name: $key => $ty);
-		storage_items!($($t)*);
-	};
-	(pub $name:ident : $key:expr => required $ty:ty; $($t:tt)*) => {
-		$crate::__storage_items_internal!((pub) () (RAW_TYPE $ty) (require) (Some) $name: $key => $ty);
-		storage_items!($($t)*);
-	};
-
-	($name:ident get($getfn:ident) : $key:expr => $ty:ty; $($t:tt)*) => {
-		$crate::__storage_items_internal!(() ($getfn) (OPTION_TYPE Option<$ty>) (id) (id) $name: $key => $ty);
-		storage_items!($($t)*);
-	};
-	(pub $name:ident get($getfn:ident) : $key:expr => $ty:ty; $($t:tt)*) => {
-		$crate::__storage_items_internal!((pub) ($getfn) (OPTION_TYPE Option<$ty>) (id) (id) $name: $key => $ty);
-		storage_items!($($t)*);
-	};
-	($name:ident get($getfn:ident) : $key:expr => default $ty:ty; $($t:tt)*) => {
-		$crate::__storage_items_internal!(() ($getfn) (RAW_TYPE $ty) (unwrap_or_default) (Some) $name: $key => $ty);
-		storage_items!($($t)*);
-	};
-	(pub $name:ident get($getfn:ident) : $key:expr => default $ty:ty; $($t:tt)*) => {
-		$crate::__storage_items_internal!((pub) ($getfn) (RAW_TYPE $ty) (unwrap_or_default) (Some) $name: $key => $ty);
-		storage_items!($($t)*);
-	};
-	($name:ident get($getfn:ident) : $key:expr => required $ty:ty; $($t:tt)*) => {
-		$crate::__storage_items_internal!(() ($getfn) (RAW_TYPE $ty) (require) (Some) $name: $key => $ty);
-		storage_items!($($t)*);
-	};
-	(pub $name:ident get($getfn:ident) : $key:expr => required $ty:ty; $($t:tt)*) => {
-		$crate::__storage_items_internal!((pub) ($getfn) (RAW_TYPE $ty) (require) (Some) $name: $key => $ty);
-		storage_items!($($t)*);
-	};
-
-	// maps
-	($name:ident : $prefix:expr => map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		$crate::__storage_items_internal!(() () (OPTION_TYPE Option<$ty>) (id) (id) $name: $prefix => map [$kty => $ty]);
-		storage_items!($($t)*);
-	};
-	(pub $name:ident : $prefix:expr => map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		$crate::__storage_items_internal!((pub) () (OPTION_TYPE Option<$ty>) (id) (id) $name: $prefix => map [$kty => $ty]);
-		storage_items!($($t)*);
-	};
-	($name:ident : $prefix:expr => default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		$crate::__storage_items_internal!(() () (RAW_TYPE $ty) (unwrap_or_default) (Some) $name: $prefix => map [$kty => $ty]);
-		storage_items!($($t)*);
-	};
-	(pub $name:ident : $prefix:expr => default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		$crate::__storage_items_internal!((pub) () (RAW_TYPE $ty) (unwrap_or_default) (Some) $name: $prefix => map [$kty => $ty]);
-		storage_items!($($t)*);
-	};
-	($name:ident : $prefix:expr => required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		$crate::__storage_items_internal!(() () (RAW_TYPE $ty) (require) (Some) $name: $prefix => map [$kty => $ty]);
-		storage_items!($($t)*);
-	};
-	(pub $name:ident : $prefix:expr => required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		$crate::__storage_items_internal!((pub) () (RAW_TYPE $ty) (require) (Some) $name: $prefix => map [$kty => $ty]);
-		storage_items!($($t)*);
-	};
-
-	($name:ident get($getfn:ident) : $prefix:expr => map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		$crate::__storage_items_internal!(() ($getfn) (OPTION_TYPE Option<$ty>) (id) (id) $name: $prefix => map [$kty => $ty]);
-		storage_items!($($t)*);
-	};
-	(pub $name:ident get($getfn:ident) : $prefix:expr => map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		$crate::__storage_items_internal!((pub) ($getfn) (OPTION_TYPE Option<$ty>) (id) (id) $name: $prefix => map [$kty => $ty]);
-		storage_items!($($t)*);
-	};
-	($name:ident get($getfn:ident) : $prefix:expr => default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		$crate::__storage_items_internal!(() ($getfn) (RAW_TYPE $ty) (unwrap_or_default) (Some) $name: $prefix => map [$kty => $ty]);
-		storage_items!($($t)*);
-	};
-	(pub $name:ident get($getfn:ident) : $prefix:expr => default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		$crate::__storage_items_internal!((pub) ($getfn) (RAW_TYPE $ty) (unwrap_or_default) (Some) $name: $prefix => map [$kty => $ty]);
-		storage_items!($($t)*);
-	};
-	($name:ident get($getfn:ident) : $prefix:expr => required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		$crate::__storage_items_internal!(() ($getfn) (RAW_TYPE $ty) (require) (Some) $name: $prefix => map [$kty => $ty]);
-		storage_items!($($t)*);
-	};
-	(pub $name:ident get($getfn:ident) : $prefix:expr => required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		$crate::__storage_items_internal!((pub) ($getfn) (RAW_TYPE $ty) (require) (Some) $name: $prefix => map [$kty => $ty]);
-		storage_items!($($t)*);
-	};
-
-	() => ()
-}
-
-#[macro_export]
-#[doc(hidden)]
-macro_rules! __storage_items_internal {
-	// generator for values.
-	(($($vis:tt)*) ($get_fn:ident) ($wraptype:ident $gettype:ty) ($into_query:ident) ($into_opt_val:ident) $name:ident : $key:expr => $ty:ty) => {
-		$crate::__storage_items_internal!{ ($($vis)*) () ($wraptype $gettype) ($into_query) ($into_opt_val) $name : $key => $ty }
-		pub fn $get_fn() -> $gettype { <$name as $crate::storage::StorageValue<$ty>> :: get() }
-	};
-	(($($vis:tt)*) () ($wraptype:ident $gettype:ty) ($into_query:ident) ($into_opt_val:ident) $name:ident : $key:expr => $ty:ty) => {
-		$($vis)* struct $name;
-
-		impl $crate::storage::generator::StorageValue<$ty> for $name {
-			type Query = $gettype;
-
-			fn unhashed_key() -> &'static [u8] {
-				$key
-			}
-
-			fn from_optional_value_to_query(v: Option<$ty>) -> Self::Query {
-				$crate::storage::storage_items::$into_query(v)
-			}
-
-			fn from_query_to_optional_value(v: Self::Query) -> Option<$ty> {
-				$crate::storage::storage_items::$into_opt_val(v)
-			}
-		}
-	};
-	// generator for maps.
-	(($($vis:tt)*) ($get_fn:ident) ($wraptype:ident $gettype:ty) ($into_query:ident) ($into_opt_val:ident) $name:ident : $prefix:expr => map [$kty:ty => $ty:ty]) => {
-		$crate::__storage_items_internal!{ ($($vis)*) () ($wraptype $gettype) ($into_query) ($into_opt_val) $name : $prefix => map [$kty => $ty] }
-		pub fn $get_fn<K: $crate::storage::storage_items::Borrow<$kty>>(key: K) -> $gettype {
-			<$name as $crate::storage::StorageMap<$kty, $ty>> :: get(key.borrow())
-		}
-	};
-	(($($vis:tt)*) () ($wraptype:ident $gettype:ty) ($into_query:ident) ($into_opt_val:ident) $name:ident : $prefix:expr => map [$kty:ty => $ty:ty]) => {
-		$($vis)* struct $name;
-
-		impl $crate::storage::generator::StorageMap<$kty, $ty> for $name {
-			type Query = $gettype;
-			type Hasher = $crate::Blake2_256;
-
-			fn prefix() -> &'static [u8] {
-				$prefix
-			}
-
-			fn from_optional_value_to_query(v: Option<$ty>) -> Self::Query {
-				$crate::storage::storage_items::$into_query(v)
-			}
-
-			fn from_query_to_optional_value(v: Self::Query) -> Option<$ty> {
-				$crate::storage::storage_items::$into_opt_val(v)
-			}
-		}
-	};
-}
-
-#[macro_export]
-#[doc(hidden)]
-macro_rules! __handle_wrap_internal {
-	(RAW_TYPE { $($raw:tt)* } { $($option:tt)* }) => {
-		$($raw)*;
-	};
-	(OPTION_TYPE { $($raw:tt)* } { $($option:tt)* }) => {
-		$($option)*;
-	};
-}
-
-// FIXME: revisit this idiom once we get `type`s in `impl`s.
-/*impl<T: Trait> Module<T> {
-	type Now = super::Now<T>;
-}*/
-
 #[cfg(test)]
 // Do not complain about unused `dispatch` and `dispatch_aux`.
 #[allow(dead_code)]
 mod tests {
-	use crate::metadata::*;
-	use crate::metadata::StorageHasher;
-	use crate::rstd::marker::PhantomData;
-	use crate::codec::{Encode, Decode, EncodeLike};
+	use support::metadata::*;
+	use support::metadata::StorageHasher;
+	use support::rstd::marker::PhantomData;
+	use support::codec::{Encode, Decode, EncodeLike};
 
-	storage_items! {
-		Value: b"a" => u32;
-		Map: b"c:" => map [u32 => [u8; 32]];
-	}
-
-	#[test]
-	fn value() {
-		runtime_io::with_storage(&mut Default::default(), || {
-			assert!(Value::get().is_none());
-			Value::put(&100_000);
-			assert_eq!(Value::get(), Some(100_000));
-			Value::kill();
-			assert!(Value::get().is_none());
-		})
-	}
-
-	#[test]
-	fn map() {
-		runtime_io::with_storage(&mut Default::default(), || {
-			assert!(Map::get(&5).is_none());
-			Map::insert(&5, &[1; 32]);
-			assert_eq!(Map::get(&5), Some([1; 32]));
-			assert_eq!(Map::take(&5), Some([1; 32]));
-			assert!(Map::get(&5).is_none());
-			assert!(Map::get(&999).is_none());
-		})
+	support::decl_module! {
+		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 	}
 
 	pub trait Trait {
@@ -291,11 +32,7 @@ mod tests {
 		type BlockNumber;
 	}
 
-	decl_module! {
-		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
-	}
-
-	crate::decl_storage! {
+	support::decl_storage! {
 		trait Store for Module<T: Trait> as TestStorage {
 			// non-getters: pub / $default
 
@@ -701,13 +438,13 @@ mod test2 {
 		type BlockNumber;
 	}
 
-	decl_module! {
+	support::decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 	}
 
 	type PairOf<T> = (T, T);
 
-	crate::decl_storage! {
+	support::decl_storage! {
 		trait Store for Module<T: Trait> as TestStorage {
 			SingleDef : u32;
 			PairDef : PairOf<u32>;
@@ -736,10 +473,10 @@ mod test3 {
 		type Origin;
 		type BlockNumber;
 	}
-	decl_module! {
+	support::decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 	}
-	crate::decl_storage! {
+	support::decl_storage! {
 		trait Store for Module<T: Trait> as Test {
 			Foo get(fn foo) config(initial_foo): u32;
 		}
@@ -766,14 +503,14 @@ mod test_append_and_len {
 		type BlockNumber;
 	}
 
-	decl_module! {
+	support::decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 	}
 
 	#[derive(PartialEq, Eq, Clone, Encode, Decode)]
 	struct NoDef(u32);
 
-	crate::decl_storage! {
+	support::decl_storage! {
 		trait Store for Module<T: Trait> as Test {
 			NoDefault: Option<NoDef>;
 
