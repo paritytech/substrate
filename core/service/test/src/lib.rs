@@ -171,6 +171,7 @@ fn node_config<G, E: Clone> (
 		network: network_config,
 		keystore_path: root.join("key"),
 		keystore_password: None,
+		config_dir: root.clone(),
 		database: DatabaseConfig::Path {
 			path: root.join("db"),
 			cache_size: None
