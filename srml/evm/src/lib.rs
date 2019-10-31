@@ -62,8 +62,8 @@ pub trait Precompiles {
 	/// Try to execute the code address as precompile. If the code address is not
 	/// a precompile or the precompile is not yet available, return `None`.
 	/// Otherwise, calculate the amount of gas needed with given `input` and
-	/// `target_gas`. Return `Ok(Some(status, output, gas_used))` if the execution
-	/// is successful. Otherwise return `Ok(Err(_))`.
+	/// `target_gas`. Return `Some(Ok(status, output, gas_used))` if the execution
+	/// is successful. Otherwise return `Some(Err(_))`.
 	fn execute(
 		address: H160,
 		input: &[u8],
