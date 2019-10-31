@@ -25,4 +25,3 @@ std = [
 	"slots",
 	"app-crypto/std",
 ]
-
