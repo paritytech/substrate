@@ -371,7 +371,7 @@ pub enum NodeKeyConfig {
 pub type Ed25519Secret = Secret<ed25519::SecretKey>;
 
 /// The configuration options for obtaining a secret key `K`.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub enum Secret<K> {
 	/// Use the given secret key `K`.
 	Input(K),
@@ -383,6 +383,16 @@ pub enum Secret<K> {
 	File(PathBuf),
 	/// Always generate a new secret key `K`.
 	New
+}
+
+impl<K> fmt::Debug for Secret<K> {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			Secret::Input(_) => f.debug_tuple("Secret::Input").finish(),
+			Secret::File(path) => f.debug_tuple("Secret::File").field(path).finish(),
+			Secret::New => f.debug_tuple("Secret::New").finish(),
+		}
+	}
 }
 
 impl NodeKeyConfig {
