@@ -643,11 +643,6 @@ decl_module! {
 				T::Currency::deposit_into_existing(&rewarded, T::SurchargeReward::get())?;
 			}
 		}
-
-		fn on_finalize() {
-			GasUsageReport::kill();
-			<GasPrice<T>>::kill();
-		}
 	}
 }
 
@@ -703,10 +698,12 @@ impl<T: Trait> Module<T> {
 		gas_limit: Gas,
 		func: impl FnOnce(&mut ExecutionContext<T, WasmVm, WasmLoader>, &mut GasMeter<T>) -> ExecResult
 	) -> ExecResult {
-		// TODO: Set the proper gas price.
+		// Take the gas price prepared by the signed extension.
+		let gas_price = GasPrice::<T>::take();
+		debug_assert!(gas_price != 0.into());
 		let mut gas_meter =
 			try_or_exec_error!(
-				Ok(GasMeter::<T>::with_limit(gas_limit, 1.into())),
+				Ok(GasMeter::<T>::with_limit(gas_limit, gas_price)),
 				// We don't have a spare buffer here in the first place, so create a new empty one.
 				Vec::new()
 			);
@@ -1052,10 +1049,17 @@ impl<T: Trait + Send + Sync> CheckBlockGasLimit<T> {
 				let fee = T::WeightToFee::convert(gas_weight_limit);
 
 				// Compute and store the effective price per unit of gas.
-				let gas_price = <BalanceOf<T>>::from(gas_weight_limit)
-					.checked_div(&fee)
+				let gas_price = fee
+					.checked_div(&<BalanceOf<T>>::from(gas_weight_limit))
 					.unwrap_or(1.into());
 				<GasPrice<T>>::put(gas_price);
+
+				if true {
+					use rstd::convert::TryInto;
+					runtime_io::print_num(gas_weight_limit.try_into().unwrap_or(0) as u64);
+					runtime_io::print_num(fee.try_into().unwrap_or(0) as u64);
+					runtime_io::print_num(gas_price.try_into().unwrap_or(0) as u64);
+				}
 
 				let imbalance = match T::Currency::withdraw(
 					who,
