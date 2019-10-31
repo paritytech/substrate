@@ -54,10 +54,8 @@ where
 		self.signed.as_ref().map(|x| &x.0)
 	}
 
-	fn validate<
-		#[allow(deprecated)]
-		U: ValidateUnsigned<Call = Self::Call>
-	>(
+	#[allow(deprecated)] // Allow ValidateUnsigned
+	fn validate<U: ValidateUnsigned<Call = Self::Call>>(
 		&self,
 		info: DispatchInfo,
 		len: usize,
@@ -71,10 +69,8 @@ where
 		}
 	}
 
-	fn apply<
-		#[allow(deprecated)]
-		U: ValidateUnsigned<Call=Self::Call>
-	>(
+	#[allow(deprecated)] // Allow ValidateUnsigned
+	fn apply<U: ValidateUnsigned<Call=Self::Call>>(
 		self,
 		info: DispatchInfo,
 		len: usize,

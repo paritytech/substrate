@@ -32,6 +32,7 @@ pub use crate::sr_primitives::ApplyError;
 /// # mod timestamp {
 /// # 	pub struct Module;
 /// #
+/// #	#[allow(deprecated)]
 /// # 	impl srml_support::unsigned::ValidateUnsigned for Module {
 /// # 		type Call = Call;
 /// #
@@ -70,7 +71,7 @@ macro_rules! impl_outer_validate_unsigned {
 			$( $module:ident )*
 		}
 	) => {
-		#[allow(deprecated)]
+		#[allow(deprecated)] // Allow ValidateUnsigned
 		impl $crate::unsigned::ValidateUnsigned for $runtime {
 			type Call = Call;
 
@@ -113,6 +114,7 @@ mod test_partial_and_full_call {
 	pub mod timestamp {
 		pub struct Module;
 
+		#[allow(deprecated)] // Allow ValidateUnsigned
 		impl super::super::ValidateUnsigned for Module {
 			type Call = Call;
 

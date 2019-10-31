@@ -60,7 +60,9 @@
 //! # pub type AllModules = u64;
 //! # pub enum Runtime {};
 //! # use sr_primitives::transaction_validity::{TransactionValidity, UnknownTransaction};
+//!	# #[allow(deprecated)]
 //! # use sr_primitives::traits::ValidateUnsigned;
+//!	# #[allow(deprecated)]
 //! # impl ValidateUnsigned for Runtime {
 //! # 	type Call = ();
 //! #
@@ -102,8 +104,7 @@ pub struct Executive<System, Block, Context, UnsignedValidator, AllModules>(
 	PhantomData<(System, Block, Context, UnsignedValidator, AllModules)>
 );
 
-// We allow ValidateUnsigned deprecation. Make sure to remove this when we remove `ValidateUnsigned`.
-#[allow(deprecated)]
+#[allow(deprecated)] // Allow ValidateUnsigned, remove the attribute when the trait is removed.
 impl<
 	System: system::Trait,
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
@@ -123,8 +124,7 @@ where
 	}
 }
 
-// We allow ValidateUnsigned deprecation. Make sure to remove this when we remove `ValidateUnsigned`.
-#[allow(deprecated)]
+#[allow(deprecated)] // Allow ValidateUnsigned, remove the attribute when the trait is removed.
 impl<
 	System: system::Trait,
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,

@@ -886,10 +886,8 @@ pub trait Applyable: Sized + Send + Sync {
 	fn sender(&self) -> Option<&Self::AccountId>;
 
 	/// Checks to see if this is a valid *transaction*. It returns information on it if so.
-	fn validate<
-		#[allow(deprecated)]
-		V: ValidateUnsigned<Call=Self::Call>
-	>(
+	#[allow(deprecated)] // Allow ValidateUnsigned
+	fn validate<V: ValidateUnsigned<Call=Self::Call>>(
 		&self,
 		info: DispatchInfo,
 		len: usize,
@@ -897,10 +895,8 @@ pub trait Applyable: Sized + Send + Sync {
 
 	/// Executes all necessary logic needed prior to dispatch and deconstructs into function call,
 	/// index and sender.
-	fn apply<
-		#[allow(deprecated)]
-		V: ValidateUnsigned<Call=Self::Call>
-	>(
+	#[allow(deprecated)] // Allow ValidateUnsigned
+	fn apply<V: ValidateUnsigned<Call=Self::Call>>(
 		self,
 		info: DispatchInfo,
 		len: usize,

@@ -325,10 +325,8 @@ impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 	fn sender(&self) -> Option<&Self::AccountId> { self.0.as_ref().map(|x| &x.0) }
 
 	/// Checks to see if this is a valid *transaction*. It returns information on it if so.
-	fn validate<
-		#[allow(deprecated)]
-		U: ValidateUnsigned<Call=Self::Call>
-	>(
+	#[allow(deprecated)] // Allow ValidateUnsigned
+	fn validate<U: ValidateUnsigned<Call=Self::Call>>(
 		&self,
 		_info: DispatchInfo,
 		_len: usize,
@@ -338,10 +336,8 @@ impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 
 	/// Executes all necessary logic needed prior to dispatch and deconstructs into function call,
 	/// index and sender.
-	fn apply<
-		#[allow(deprecated)]
-		U: ValidateUnsigned<Call=Self::Call>
-	>(
+	#[allow(deprecated)] // Allow ValidateUnsigned
+	fn apply<U: ValidateUnsigned<Call=Self::Call>>(
 		self,
 		info: DispatchInfo,
 		len: usize,
