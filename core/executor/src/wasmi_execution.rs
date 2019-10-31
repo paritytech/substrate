@@ -16,7 +16,7 @@
 
 //! Implementation of a Wasm runtime using the Wasmi interpreter.
 
-use std::{str, mem};
+use std::{str, mem, panic::AssertUnwindSafe};
 use wasmi::{
 	Module, ModuleInstance, MemoryInstance, MemoryRef, TableRef, ImportsBuilder, ModuleRef,
 	memory_units::Pages, RuntimeValue::{I32, I64, self},
@@ -625,9 +625,14 @@ pub fn create_instance<E: Externalities>(ext: &mut E, code: &[u8], heap_pages: u
 				",
 		);
 
-	let version = call_in_wasm_module(ext, &instance, "Core_version", &[])
-		.ok()
-		.and_then(|v| RuntimeVersion::decode(&mut v.as_slice()).ok());
+	let mut ext = AssertUnwindSafe(ext);
+	let call_instance = AssertUnwindSafe(&instance);
+	let version = crate::native_executor::safe_call(
+		move || call_in_wasm_module(&mut **ext, *call_instance, "Core_version", &[])
+				.ok()
+				.and_then(|v| RuntimeVersion::decode(&mut v.as_slice()).ok())
+	).map_err(WasmError::Instantiation)?;
+
 	Ok(WasmiRuntime {
 		instance,
 		version,

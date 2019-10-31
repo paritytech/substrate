@@ -49,6 +49,12 @@ variables:
     - schedules
     - web
     - /^[0-9]+$/                   # PRs
+  retry:
+    max: 2
+    when: 
+      - runner_system_failure
+      - unknown_failure
+      - api_failure
   tags:
     - linux-docker
 
@@ -196,6 +202,7 @@ check-web-wasm:
     - time cargo web build -p sr-io
     - time cargo web build -p sr-primitives
     - time cargo web build -p sr-std
+    - time cargo web build -p substrate-chain-spec
     - time cargo web build -p substrate-client
     - time cargo web build -p substrate-consensus-aura
     - time cargo web build -p substrate-consensus-babe
@@ -204,11 +211,11 @@ check-web-wasm:
     - time cargo web build -p substrate-keystore
     - time cargo web build -p substrate-executor
     - time cargo web build -p substrate-network
+    - time cargo web build -p substrate-offchain
     - time cargo web build -p substrate-panic-handler
     - time cargo web build -p substrate-peerset
     - time cargo web build -p substrate-primitives
-    # TODO: we can't use cargo web until https://github.com/paritytech/jsonrpc/pull/436 is deployed
-    - time cargo build -p substrate-rpc-servers --target wasm32-unknown-unknown
+    - time cargo web build -p substrate-rpc-servers
     - time cargo web build -p substrate-serializer
     - time cargo web build -p substrate-state-db
     - time cargo web build -p substrate-state-machine

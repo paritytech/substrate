@@ -28,7 +28,7 @@ pub mod informant;
 
 use client::ExecutionStrategies;
 use service::{
-	config::Configuration,
+	config::{Configuration, DatabaseConfig},
 	ServiceBuilderExport, ServiceBuilderImport, ServiceBuilderRevert,
 	RuntimeGenesis, ChainSpecExtension, PruningMode, ChainSpec,
 };
@@ -236,6 +236,17 @@ where
 	}
 }
 
+/// Returns a string displaying the node role, special casing the sentry mode
+/// (returning `SENTRY`), since the node technically has an `AUTHORITY` role but
+/// doesn't participate.
+pub fn display_role<A, B, C>(config: &Configuration<A, B, C>) -> String {
+	if config.sentry_mode {
+		"SENTRY".to_string()
+	} else {
+		format!("{:?}", config.roles)
+	}
+}
+
 /// Output of calling `parse_and_prepare`.
 #[must_use]
 pub enum ParseAndPrepare<'a, CC, RP> {
@@ -340,7 +351,9 @@ impl<'a> ParseAndPrepareExport<'a> {
 	{
 		let config = create_config_with_db_path(spec_factory, &self.params.shared_params, self.version)?;
 
-		info!("DB path: {}", config.database_path.display());
+		if let DatabaseConfig::Path { ref path, .. } = &config.database {
+			info!("DB path: {}", path.display());
+		}
 		let from = self.params.from.unwrap_or(1);
 		let to = self.params.to;
 		let json = self.params.json;
@@ -419,7 +432,13 @@ impl<'a> ParseAndPreparePurge<'a> {
 		let config = create_config_with_db_path::<(), _, _, _>(
 			spec_factory, &self.params.shared_params, self.version
 		)?;
-		let db_path = config.database_path;
+		let db_path = match config.database {
+			DatabaseConfig::Path { path, .. } => path,
+			_ => {
+				eprintln!("Cannot purge custom database implementation");
+				return Ok(());
+			}
+		};
 
 		if !self.params.yes {
 			print!("Are you sure to remove {:?}? [y/N]: ", &db_path);
@@ -444,7 +463,7 @@ impl<'a> ParseAndPreparePurge<'a> {
 				Ok(())
 			},
 			Result::Err(ref err) if err.kind() == ErrorKind::NotFound => {
-				println!("{:?} did not exist.", &db_path);
+				eprintln!("{:?} did not exist.", &db_path);
 				Ok(())
 			},
 			Result::Err(err) => Result::Err(err.into())
@@ -653,20 +672,26 @@ where
 		|| keystore_path(&base_path, config.chain_spec.id())
 	);
 
-	config.database_path = db_path(&base_path, config.chain_spec.id());
-	config.database_cache_size = cli.database_cache_size;
+	config.database = DatabaseConfig::Path {
+		path: db_path(&base_path, config.chain_spec.id()),
+		cache_size: cli.database_cache_size,
+	};
 	config.state_cache_size = cli.state_cache_size;
 
 	let is_dev = cli.shared_params.dev;
+	let is_authority = cli.validator || cli.sentry || is_dev || cli.keyring.account.is_some();
 
 	let role =
 		if cli.light {
 			service::Roles::LIGHT
-		} else if cli.validator || is_dev || cli.keyring.account.is_some() {
+		} else if is_authority {
 			service::Roles::AUTHORITY
 		} else {
 			service::Roles::FULL
 		};
+
+	// set sentry mode (i.e. act as an authority but **never** actively participate)
+	config.sentry_mode = cli.sentry;
 
 	// by default we disable pruning if the node is an authority (i.e.
 	// `ArchiveAll`), otherwise we keep state for the last 256 blocks. if the
@@ -814,7 +839,10 @@ where
 	let base_path = base_path(cli, version);
 
 	let mut config = service::Configuration::default_with_spec(spec.clone());
-	config.database_path = db_path(&base_path, spec.id());
+	config.database = DatabaseConfig::Path {
+		path: db_path(&base_path, spec.id()),
+		cache_size: None,
+	};
 
 	Ok(config)
 }
