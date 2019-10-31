@@ -35,4 +35,3 @@ std = [
 	"session/std",
 	"finality-tracker/std",
 ]
-migrate-authorities = []
