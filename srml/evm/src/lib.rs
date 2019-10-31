@@ -125,7 +125,7 @@ decl_module! {
 				ExistenceRequirement::KeepAlive,
 			)?;
 
-			let bvalue = U256::from(UniqueSaturatedInto::<u64>::unique_saturated_into(value));
+			let bvalue = U256::from(UniqueSaturatedInto::<u128>::unique_saturated_into(value));
 			let address = T::ConvertAccountId::convert_account_id(sender);
 			Accounts::mutate(&address, |account| {
 				account.balance += bvalue;
