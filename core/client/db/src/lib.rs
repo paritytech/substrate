@@ -131,6 +131,7 @@ impl<B: BlockT> StateBackend<Blake2Hasher> for RefTrackingState<B> {
 	type Error =  <DbState as StateBackend<Blake2Hasher>>::Error;
 	type Transaction = <DbState as StateBackend<Blake2Hasher>>::Transaction;
 	type TrieBackendStorage = <DbState as StateBackend<Blake2Hasher>>::TrieBackendStorage;
+	type KvBackend = <DbState as StateBackend<Blake2Hasher>>::KvBackend;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.state.storage(key)
@@ -142,6 +143,10 @@ impl<B: BlockT> StateBackend<Blake2Hasher> for RefTrackingState<B> {
 
 	fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.state.child_storage(storage_key, key)
+	}
+
+	fn kv_storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		self.state.kv_storage(key)
 	}
 
 	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {
@@ -182,8 +187,27 @@ impl<B: BlockT> StateBackend<Blake2Hasher> for RefTrackingState<B> {
 		self.state.child_storage_root(storage_key, delta)
 	}
 
+	fn kv_transaction<I>(&self, delta: I) -> Self::Transaction
+		where
+			I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
+	{
+		self.state.kv_transaction(delta)
+	}
+
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
 		self.state.pairs()
+	}
+
+	fn children_storage_keys(&self) -> Vec<Vec<u8>> {
+		self.state.children_storage_keys()
+	}
+
+	fn child_pairs(&self, child_storage_key: &[u8]) -> Vec<(Vec<u8>, Vec<u8>)> {
+		self.state.child_pairs(child_storage_key)
+	}
+
+	fn kv_in_memory(&self) -> InMemoryKvBackend {
+		self.state.kv_in_memory()
 	}
 
 	fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> {
@@ -589,6 +613,11 @@ struct StorageDb<Block: BlockT> {
 	pub state_db: StateDb<Block::Hash, Vec<u8>>,
 }
 
+struct StorageDbAt<Block: BlockT, State> {
+	pub storage_db: Arc<StorageDb<Block>>,
+	pub state: State,
+}
+
 impl<Block: BlockT> state_machine::Storage<Blake2Hasher> for StorageDb<Block> {
 	fn get(&self, key: &H256, prefix: Prefix) -> Result<Option<DBValue>, String> {
 		let key = prefixed_key::<Blake2Hasher>(key, prefix);
@@ -603,6 +632,17 @@ impl<Block: BlockT> state_db::NodeDb for StorageDb<Block> {
 
 	fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.db.get(columns::STATE, key).map(|r| r.map(|v| v.to_vec()))
+	}
+}
+
+impl<Block: BlockT> state_machine::KvBackend for StorageDbAt<Block, ()> {
+
+	fn get(&self, _key: &[u8]) -> Result<Option<Vec<u8>>, String> {
+		unimplemented!("this is a stub, it requires state db implementation")
+	}
+
+	fn in_memory(&self) -> InMemoryKvBackend {
+		unimplemented!("this is a stub, it requires state db implementation")
 	}
 }
 
@@ -1515,7 +1555,11 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 				let hash = hdr.hash();
 				if let Ok(()) = self.storage.state_db.pin(&hash) {
 					let root = H256::from_slice(hdr.state_root().as_ref());
-					let db_state = DbState::new(self.storage.clone(), root);
+					let kv = StorageDbAt {
+						storage_db: self.storage.clone(),
+						state: (),
+					};
+					let db_state = DbState::new(self.storage.clone(), root, Arc::new(kv));
 					let state = RefTrackingState::new(db_state, self.storage.clone(), Some(hash.clone()));
 					Ok(CachingState::new(state, self.shared_cache.clone(), Some(hash)))
 				} else {
@@ -2148,147 +2192,6 @@ mod tests {
 		assert!(backend.changes_tries_storage.get(&root2, EMPTY_PREFIX).unwrap().is_none());
 		assert!(backend.changes_tries_storage.get(&root3, EMPTY_PREFIX).unwrap().is_some());
 	}
-
-	#[test]
-	fn kv_storage_works() {
-		let backend = Backend::<Block>::new_test(1000, 100);
-
-		let changes0 = vec![(b"key_at_0".to_vec(), Some(b"val_at_0".to_vec()))];
-		let changes1 = vec![
-			(b"key_at_1".to_vec(), Some(b"val_at_1".to_vec())),
-			(b"another_key_at_1".to_vec(), Some(b"another_val_at_1".to_vec())),
-		];
-		let changes2 = vec![(b"key_at_2".to_vec(), Some(b"val_at_2".to_vec()))];
-		let changes3 = vec![(b"another_key_at_1".to_vec(), None)];
-
-		let block0 = insert_kvs(&backend, 0, Default::default(), changes0.clone(), Default::default());
-		let block1 = insert_kvs(&backend, 1, block0, changes1.clone(), Default::default());
-		let block2 = insert_kvs(&backend, 2, block1, changes2.clone(), Default::default());
-		let block3 = insert_kvs(&backend, 3, block2, changes3.clone(), Default::default());
-
-		check_kv(&backend, block0, &changes0);
-		check_kv(&backend, block1, &changes0);
-		check_kv(&backend, block1, &changes1);
-		check_kv(&backend, block2, &changes1);
-		check_kv(&backend, block2, &changes2);
-		check_kv(&backend, block3, &changes3);
-	}
-
-	#[test]
-	fn kv_storage_works_with_forks() {
-		let backend = Backend::<Block>::new_test(4, 4);
-
-		let changes0 = vec![(b"k0".to_vec(), Some(b"v0".to_vec()))];
-		let changes1 = vec![
-			(b"k1".to_vec(), Some(b"v1".to_vec())),
-			(b"k0".to_vec(), None),
-		];
-		let changes2 = vec![(b"k2".to_vec(), Some(b"v2".to_vec()))];
-		let block0 = insert_kvs(&backend, 0, Default::default(), changes0.clone(), Default::default());
-		let block1 = insert_kvs(&backend, 1, block0, changes1.clone(), Default::default());
-		let block2 = insert_kvs(&backend, 2, block1, changes2.clone(), Default::default());
-
-		let changes2_1_0 = vec![(b"k3".to_vec(), Some(b"v3".to_vec()))];
-		let changes2_1_1 = vec![(b"k4".to_vec(), Some(b"v4".to_vec()))];
-		let block2_1_0 = insert_kvs(&backend, 3, block2, changes2_1_0.clone(), Default::default());
-		let block2_1_1 = insert_kvs(&backend, 4, block2_1_0, changes2_1_1.clone(), Default::default());
-
-		let changes2_2_0 = vec![(b"k5".to_vec(), Some(b"v5".to_vec()))];
-		let changes2_2_1 = vec![(b"k6".to_vec(), Some(b"v6".to_vec()))];
-		// use different extrinsic root to have different hash than 2_1_0
-		let block2_2_0 = insert_kvs(&backend, 3, block2, changes2_2_0.clone(), [1u8; 32].into());
-		let block2_2_1 = insert_kvs(&backend, 4, block2_2_0, changes2_2_1.clone(), Default::default());
-
-		// branch1: when asking for finalized block hash
-		check_kv(&backend, block0, &changes0);
-		check_kv(&backend, block1, &vec![]);
-		check_kv(&backend, block1, &changes1);
-		check_kv(&backend, block2, &changes2);
-		check_kv(&backend, block2_1_0, &changes2_1_0);
-		check_kv(&backend, block2_1_1, &changes2_1_1);
-		check_kv(&backend, block2_2_0, &changes2_2_0);
-		check_kv(&backend, block2_2_1, &changes2_2_1);
-
-		// after canonicalize range on 2_2_0 side
-		let mut block_prev = block2_1_1;
-		let mut nb_prev = 4;
-		let mut next = || {
-			block_prev = insert_kvs(&backend, nb_prev, block_prev, vec![], Default::default());
-			nb_prev += 1;
-		};
-
-		next();
-		next();
-		next();
-		check_kv(&backend, block0, &changes0);
-		check_kv(&backend, block1, &changes1);
-		check_kv(&backend, block2, &changes2);
-		check_kv(&backend, block2_1_0, &changes2_1_0);
-		check_kv(&backend, block2_2_0, &changes2_2_0);
-		let state = backend.state_at(BlockId::Hash(block2_2_0)).unwrap();
-		assert!(state.kv_storage(&b"k5"[..]).unwrap().is_some());
-		next();
-		check_kv(&backend, block2_1_0, &changes2_1_0);
-		assert!(backend.state_at(BlockId::Hash(block2_2_0)).is_err());
-		// pinned state is not garbage collected
-		assert!(state.kv_storage(&b"k5"[..]).unwrap().is_some());
-
-		// check pruning is called on storage
-		check_kv(&backend, block0, &changes0);
-		assert!(backend.storage.db.get(crate::columns::KV, &b"k0"[..]).unwrap().is_some());
-		next();
-		assert!(backend.state_at(BlockId::Hash(block0)).is_err());
-		assert!(backend.storage.db.get(crate::columns::KV, &b"k0"[..]).unwrap().is_none());
-	}
-
-	#[test]
-	fn kv_storage_works_with_finalize() {
-		let backend = Backend::<Block>::new_test(1000, 100);
-
-		let changes0 = vec![(b"k0".to_vec(), Some(b"v0".to_vec()))];
-		let changes1 = vec![(b"k1".to_vec(), Some(b"v1".to_vec()))];
-		let changes2 = vec![(b"k2".to_vec(), Some(b"v2".to_vec()))];
-		let block0 = insert_kvs(&backend, 0, Default::default(), changes0.clone(), Default::default());
-		let block1 = insert_kvs(&backend, 1, block0, changes1.clone(), Default::default());
-		let block2 = insert_kvs(&backend, 2, block1, changes2.clone(), Default::default());
-
-		let changes2_1_0 = vec![(b"k3".to_vec(), Some(b"v3".to_vec()))];
-		let changes2_1_1 = vec![(b"k4".to_vec(), Some(b"v4".to_vec()))];
-		let block2_1_0 = insert_kvs(&backend, 3, block2, changes2_1_0.clone(), Default::default());
-		let _block2_1_1 = insert_kvs(&backend, 4, block2_1_0, changes2_1_1.clone(), Default::default());
-
-		let changes2_2_0 = vec![(b"k5".to_vec(), Some(b"v5".to_vec()))];
-		let changes2_2_1 = vec![(b"k6".to_vec(), Some(b"v6".to_vec()))];
-		// use different extrinsic root to have different hash than 2_1_0
-		let block2_2_0 = insert_kvs(&backend, 3, block2, changes2_2_0.clone(), [1u8; 32].into());
-		let state = backend.state_at(BlockId::Hash(block2_1_0)).unwrap();
-
-		let block2_2_1 = insert_kvs_and_finalize(
-			&backend,
-			4,
-			block2_2_0,
-			changes2_2_1.clone(),
-			Default::default(),
-			Some(vec![
-				block1,
-				block2,
-				block2_2_0,
-			]),
-		);
-
-		check_kv(&backend, block0, &changes0);
-		check_kv(&backend, block1, &changes0);
-		check_kv(&backend, block1, &changes1);
-		check_kv(&backend, block2, &changes2);
-		check_kv(&backend, block2_2_0, &changes2_2_0);
-		check_kv(&backend, block2_2_1, &changes2_2_1);
-
-		// still accessible due to pinned state
-		assert!(state.kv_storage(&b"k3"[..]).unwrap().is_some());
-		assert!(backend.state_at(BlockId::Hash(block2_1_0)).is_err());
-	}
-
-
 
 	#[test]
 	fn tree_route_works() {
