@@ -358,6 +358,9 @@ pub struct RunCmd {
 	#[structopt(long = "rpc-port", value_name = "PORT")]
 	pub rpc_port: Option<u16>,
 
+	#[structopt(long = "prometheus-port", value_name = "PORT")]
+	pub prometheus_port: Option<u16>,	
+
 	/// Specify WebSockets RPC server TCP port.
 	#[structopt(long = "ws-port", value_name = "PORT")]
 	pub ws_port: Option<u16>,
@@ -413,6 +416,8 @@ pub struct RunCmd {
 	#[structopt(long = "telemetry-url", value_name = "URL VERBOSITY", parse(try_from_str = parse_telemetry_endpoints))]
 	pub telemetry_endpoints: Vec<(String, u8)>,
 
+	#[structopt(long = "prometheus-port", value_name = "PORT")]
+	pub prometheus_port: Option<u16>,
 	/// Should execute offchain workers on every block.
 	///
 	/// By default it's only enabled for nodes that are authoring new blocks.

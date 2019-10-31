@@ -19,6 +19,7 @@ vergen = "3.0.4"
 
 [workspace]
 members = [
+	"core/prometheus",
 	"core/authority-discovery",
 	"core/application-crypto",
 	"core/chain-spec",

@@ -1,0 +1,17 @@
+[package]
+name = "substrate-prometheus"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+description = "prometheus utils"
+edition = "2018"
+
+[dependencies]
+hyper = "0.12"
+lazy_static = "1.0"
+log = "0.4"
+prometheus = { version = "0.7", features = ["nightly", "process"]}
+tokio = "0.1"
+
+
+[dev-dependencies]
+reqwest = "0.9"
