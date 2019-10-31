@@ -321,27 +321,27 @@ impl<H: Hasher, B: BlockT> CacheChanges<H, B> {
 		// Propagate cache only if committing on top of the latest canonical state
 		// blocks are ordered by number and only one block with a given number is marked as canonical
 		// (contributed to canonical state cache)
-		if let Some(_) = self.parent_hash {
-			let mut local_cache = self.local_cache.write();
-			if is_best {
-				trace!(
-					"Committing {} local, {} hashes, {} modified root entries, {} modified child entries",
-					local_cache.storage.len(),
-					local_cache.hashes.len(),
-					changes.len(),
-					child_changes.iter().map(|v|v.1.len()).sum::<usize>(),
-				);
-				for (k, v) in local_cache.storage.drain() {
-					cache.lru_storage.add(k, v);
-				}
-				for (k, v) in local_cache.child_storage.drain() {
-					cache.lru_child_storage.add(k, v);
-				}
-				for (k, v) in local_cache.hashes.drain() {
-					cache.lru_hashes.add(k, OptionHOut(v));
-				}
-			}
-		}
+		// if let Some(_) = self.parent_hash {
+		// 	let mut local_cache = self.local_cache.write();
+		// 	if is_best {
+		// 		trace!(
+		// 			"Committing {} local, {} hashes, {} modified root entries, {} modified child entries",
+		// 			local_cache.storage.len(),
+		// 			local_cache.hashes.len(),
+		// 			changes.len(),
+		// 			child_changes.iter().map(|v|v.1.len()).sum::<usize>(),
+		// 		);
+		// 		for (k, v) in local_cache.storage.drain() {
+					// cache.lru_storage.add(k, v);
+				// }
+				// for (k, v) in local_cache.child_storage.drain() {
+					// cache.lru_child_storage.add(k, v);
+				// }
+				// for (k, v) in local_cache.hashes.drain() {
+					// cache.lru_hashes.add(k, OptionHOut(v));
+		// 		}
+		// 	}
+		// }
 
 		if let (
 			Some(ref number), Some(ref hash), Some(ref parent))
