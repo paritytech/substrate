@@ -22,6 +22,7 @@ use sr_primitives::traits::{
 	Header as HeaderT, Hash, Block as BlockT, One, HashFor, ProvideRuntimeApi, ApiRef, DigestFor,
 };
 use primitives::{H256, ExecutionContext};
+use state_machine::StorageProof;
 use crate::blockchain::HeaderBackend;
 use crate::runtime_api::{Core, ApiExt};
 use crate::error;
@@ -140,7 +141,7 @@ where
 	///
 	/// The proof will be `Some(_)`, if proof recording was enabled while creating
 	/// the block builder.
-	pub fn bake_and_extract_proof(mut self) -> error::Result<(Block, Option<Vec<Vec<u8>>>)> {
+	pub fn bake_and_extract_proof(mut self) -> error::Result<(Block, Option<StorageProof>)> {
 		self.bake_impl()?;
 
 		let proof = self.api.extract_proof();
