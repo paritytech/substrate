@@ -33,8 +33,11 @@ pub mod chain_spec;
 
 #[macro_use]
 mod service;
+#[cfg(feature = "browser")]
 mod browser;
+#[cfg(feature = "cli")]
 mod cli;
+#[cfg(feature = "cli")]
 mod factory_impl;
 
 #[cfg(feature = "browser")]

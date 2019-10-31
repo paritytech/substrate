@@ -18,8 +18,6 @@
 //! using the cli to manufacture transactions and distribute them
 //! to accounts.
 
-#![cfg(feature = "cli")]
-
 use rand::{Rng, SeedableRng};
 use rand::rngs::StdRng;
 

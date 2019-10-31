@@ -14,8 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-#![cfg(feature = "browser")]
-
 use crate::ChainSpec;
 use futures::{prelude::*, sync::oneshot, sync::mpsc};
 use libp2p::wasm_ext;
