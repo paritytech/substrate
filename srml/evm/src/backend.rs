@@ -9,7 +9,7 @@ use support::storage::{StorageMap, StorageDoubleMap};
 use sha3::{Keccak256, Digest};
 use evm::Config;
 use evm::backend::{Backend as BackendT, ApplyBackend, Apply};
-use crate::{Trait, Accounts, AccountStorages, Module, Event};
+use crate::{Trait, Accounts, AccountStorages, AccountCodes, Module, Event};
 
 #[derive(Clone, Eq, PartialEq, Encode, Decode, Default)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
@@ -19,16 +19,6 @@ pub struct Account {
 	pub nonce: U256,
 	/// Account balance.
 	pub balance: U256,
-	/// Account code.
-	pub code: Vec<u8>,
-}
-
-impl Account {
-	/// Whether the account is considered empty, in EIP-161's definition.
-	pub fn is_empty(&self) -> bool {
-		self.nonce == U256::zero() && self.balance == U256::zero() &&
-			self.code.len() == 0
-	}
 }
 
 #[derive(Clone, Eq, PartialEq, Encode, Decode)]
@@ -67,10 +57,6 @@ impl<'vicinity, T> Backend<'vicinity, T> {
 	/// Create a new backend with given vicinity.
 	pub fn new(vicinity: &'vicinity Vicinity) -> Self {
 		Self { vicinity, _marker: PhantomData }
-	}
-
-	fn account(&self, address: H160) -> Account {
-		Accounts::get(address)
 	}
 }
 
@@ -118,7 +104,7 @@ impl<'vicinity, T: Trait> BackendT for Backend<'vicinity, T> {
 	}
 
 	fn basic(&self, address: H160) -> evm::backend::Basic {
-		let account = self.account(address);
+		let account = Accounts::get(&address);
 
 		evm::backend::Basic {
 			balance: account.balance,
@@ -127,15 +113,15 @@ impl<'vicinity, T: Trait> BackendT for Backend<'vicinity, T> {
 	}
 
 	fn code_size(&self, address: H160) -> usize {
-		self.account(address).code.len()
+		AccountCodes::get(&address).len()
 	}
 
 	fn code_hash(&self, address: H160) -> H256 {
-		H256::from_slice(Keccak256::digest(&self.account(address).code).as_slice())
+		H256::from_slice(Keccak256::digest(&AccountCodes::get(&address)).as_slice())
 	}
 
 	fn code(&self, address: H160) -> Vec<u8> {
-		self.account(address).code.clone()
+		AccountCodes::get(&address)
 	}
 
 	fn storage(&self, address: H160, index: H256) -> H256 {
@@ -159,12 +145,13 @@ impl<'vicinity, T: Trait> ApplyBackend for Backend<'vicinity, T> {
 				Apply::Modify {
 					address, basic, code, storage, reset_storage,
 				} => {
-					let mut account = self.account(address);
+					Accounts::mutate(&address, |account| {
+						account.balance = basic.balance;
+						account.nonce = basic.nonce;
+					});
 
-					account.balance = basic.balance;
-					account.nonce = basic.nonce;
 					if let Some(code) = code {
-						account.code = code;
+						AccountCodes::insert(address, code);
 					}
 
 					if reset_storage {
@@ -179,10 +166,8 @@ impl<'vicinity, T: Trait> ApplyBackend for Backend<'vicinity, T> {
 						}
 					}
 
-					if delete_empty && account.is_empty() {
-						Accounts::remove(address);
-					} else {
-						Accounts::insert(address, account);
+					if delete_empty {
+						Module::<T>::remove_account_if_empty(&address);
 					}
 				},
 				Apply::Delete { address } => {

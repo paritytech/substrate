@@ -52,7 +52,7 @@ pub trait FeeCalculator {
 /// mapping of Substrate account to Ethereum address.
 pub trait ConvertAccountId<A> {
 	/// Given a Substrate address, return the corresponding Ethereum address.
-	fn convert_account_id(account_id: A) -> H160;
+	fn convert_account_id(account_id: &A) -> H160;
 }
 
 /// Custom precompiles to be used by EVM engine.
@@ -96,6 +96,7 @@ pub trait Trait: system::Trait + timestamp::Trait {
 decl_storage! {
 	trait Store for Module<T: Trait> as Example {
 		Accounts get(fn accounts) config(): map H160 => Account;
+		AccountCodes: map H160 => Vec<u8>;
 		AccountStorages: double_map H160, blake2_256(H256) => H256;
 	}
 }
@@ -124,7 +125,7 @@ decl_module! {
 			)?;
 
 			let bvalue = U256::from(UniqueSaturatedInto::<u128>::unique_saturated_into(value));
-			let address = T::ConvertAccountId::convert_account_id(sender);
+			let address = T::ConvertAccountId::convert_account_id(&sender);
 			Accounts::mutate(&address, |account| {
 				account.balance += bvalue;
 			});
@@ -135,7 +136,7 @@ decl_module! {
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
 		fn withdraw_balance(origin, value: BalanceOf<T>) -> Result {
 			let sender = ensure_signed(origin)?;
-			let address = T::ConvertAccountId::convert_account_id(sender.clone());
+			let address = T::ConvertAccountId::convert_account_id(&sender);
 			let bvalue = U256::from(UniqueSaturatedInto::<u128>::unique_saturated_into(value));
 
 			if Accounts::get(&address).balance < bvalue {
@@ -154,7 +155,7 @@ decl_module! {
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
 		fn call(origin, target: H160, input: Vec<u8>, value: U256, gas_limit: u32) -> Result {
 			let sender = ensure_signed(origin)?;
-			let source = T::ConvertAccountId::convert_account_id(sender.clone());
+			let source = T::ConvertAccountId::convert_account_id(&sender);
 			let gas_price = T::FeeCalculator::gas_price();
 
 			let vicinity = Vicinity {
@@ -200,7 +201,7 @@ decl_module! {
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
 		fn create(origin, init: Vec<u8>, value: U256, gas_limit: u32) -> Result {
 			let sender = ensure_signed(origin)?;
-			let source = T::ConvertAccountId::convert_account_id(sender.clone());
+			let source = T::ConvertAccountId::convert_account_id(&sender);
 			let gas_price = T::FeeCalculator::gas_price();
 
 			let vicinity = Vicinity {
@@ -240,6 +241,27 @@ decl_module! {
 			backend.apply(values, logs, true);
 
 			ret
+		}
+	}
+}
+
+impl<T: Trait> Module<T> {
+	/// Check whether an account is empty.
+	pub fn is_account_empty(address: &H160) -> bool {
+		let account = Accounts::get(address);
+		let code = AccountCodes::get(address);
+
+		account.nonce == U256::zero() &&
+			account.balance == U256::zero() &&
+			code.len() == 0
+	}
+
+	/// Remove an account if its empty.
+	pub fn remove_account_if_empty(address: &H160) {
+		if Self::is_account_empty(address) {
+			Accounts::remove(address);
+			AccountCodes::remove(address);
+			AccountStorages::remove_prefix(address);
 		}
 	}
 }
