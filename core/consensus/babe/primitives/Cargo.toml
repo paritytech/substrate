@@ -17,7 +17,6 @@ codec = { package = "parity-scale-codec", version = "1.0.0", default-features = 
 [features]
 default = ["std"]
 std = [
-	"full_crypto",
 	"rstd/std",
 	"sr-primitives/std",
 	"substrate-client/std",
@@ -27,7 +26,3 @@ std = [
 	"app-crypto/std",
 ]
 
-# This feature enables all crypto primitives for `no_std` builds like microcontrollers 
-# or Intel SGX. 
-# For the regular wasm runtime builds this should not be used.
-full_crypto = []

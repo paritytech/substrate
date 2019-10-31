@@ -39,9 +39,5 @@ env_logger = "0.7.0"
 tempfile = "3.1.0"
 
 [features]
-default = ["full_crypto"]
-
-# This feature enables all crypto primitives for `no_std` builds like microcontrollers 
-# or Intel SGX. 
-# For the regular wasm runtime builds this should not be used.
-full_crypto = []
+default = ["std"]
+std = []
