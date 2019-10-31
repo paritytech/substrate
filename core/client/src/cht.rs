@@ -30,7 +30,7 @@ use trie;
 use primitives::{H256, convert_hash};
 use sr_primitives::traits::{Header as HeaderT, SimpleArithmetic, Zero, One};
 use state_machine::backend::InMemory as InMemoryState;
-use state_machine::{MemoryDB, TrieBackend, Backend as StateBackend,
+use state_machine::{MemoryDB, TrieBackend, Backend as StateBackend, StorageProof,
 	prove_read_on_trie_backend, read_proof_check, read_proof_check_on_proving_backend};
 
 use crate::error::{Error as ClientError, Result as ClientResult};
@@ -88,7 +88,7 @@ pub fn build_proof<Header, Hasher, BlocksI, HashesI>(
 	cht_num: Header::Number,
 	blocks: BlocksI,
 	hashes: HashesI
-) -> ClientResult<Vec<Vec<u8>>>
+) -> ClientResult<StorageProof>
 	where
 		Header: HeaderT,
 		Hasher: hash_db::Hasher,
@@ -114,7 +114,7 @@ pub fn check_proof<Header, Hasher>(
 	local_root: Header::Hash,
 	local_number: Header::Number,
 	remote_hash: Header::Hash,
-	remote_proof: Vec<Vec<u8>>
+	remote_proof: StorageProof,
 ) -> ClientResult<()>
 	where
 		Header: HeaderT,

@@ -289,7 +289,6 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		config: crate::Config,
 		set_state: crate::environment::SharedVoterSetState<B>,
 		on_exit: impl Future<Item = (), Error = ()> + Clone + Send + 'static,
-		catch_up_enabled: bool,
 	) -> (
 		Self,
 		impl Future<Item = (), Error = ()> + Send + 'static,
@@ -298,7 +297,6 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		let (validator, report_stream) = GossipValidator::new(
 			config,
 			set_state.clone(),
-			catch_up_enabled,
 		);
 
 		let validator = Arc::new(validator);
@@ -683,7 +681,7 @@ impl<B: BlockT, N: Network<B>> Clone for NetworkBridge<B, N> {
 	}
 }
 
-fn localized_payload<E: Encode>(round: RoundNumber, set_id: SetIdNumber, message: &E) -> Vec<u8> {
+pub(crate) fn localized_payload<E: Encode>(round: RoundNumber, set_id: SetIdNumber, message: &E) -> Vec<u8> {
 	(message, round, set_id).encode()
 }
 

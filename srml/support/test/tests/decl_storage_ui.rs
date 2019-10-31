@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -14,12 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-/// Unwraps the trailing parameter or falls back with the closure result.
-pub fn unwrap_or_else<F, H, E>(or_else: F, optional: Option<H>) -> Result<H, E> where
-	F: FnOnce() -> Result<H, E>,
-{
-	match optional.into() {
-		None => or_else(),
-		Some(x) => Ok(x),
-	}
+#[test]
+fn decl_storage_ui() {
+	// As trybuild is using `cargo check`, we don't need the real WASM binaries.
+	std::env::set_var("BUILD_DUMMY_WASM_BINARY", "1");
+
+	let t = trybuild::TestCases::new();
+	t.compile_fail("tests/decl_storage_ui/*.rs");
 }
