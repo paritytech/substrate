@@ -121,7 +121,7 @@ decl_module! {
 			T::Currency::withdraw(
 				&sender,
 				value,
-				WithdrawReason::Reserve,
+				WithdrawReason::Reserve.into(),
 				ExistenceRequirement::KeepAlive,
 			)?;
 
