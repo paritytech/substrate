@@ -30,7 +30,7 @@ pub mod generator;
 /// A trait for working with macro-generated storage values under the substrate storage API.
 ///
 /// Details on implementation can be found at
-/// [generator::StorageValue](./generator/trait.StorageValue.html)
+/// [`generator::StorageValue`]
 pub trait StorageValue<T: FullCodec> {
 	/// The type that get/take return.
 	type Query;
@@ -118,7 +118,7 @@ pub trait StorageValue<T: FullCodec> {
 /// A strongly-typed map in storage.
 ///
 /// Details on implementation can be found at
-/// [generator::StorageMap](./generator/trait.StorageMap.html)
+/// [`generator::StorageMap`]
 pub trait StorageMap<K: FullEncode, V: FullCodec> {
 	/// The type that get/take return.
 	type Query;
@@ -188,7 +188,7 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 /// Similar to `StorageMap` but allows to enumerate other elements and doesn't implement append.
 ///
 /// Details on implementation can be found at
-/// [generator::StorageLinkedMap](./generator/trait.StorageLinkedMap.html)
+/// [`generator::StorageLinkedMap`]
 pub trait StorageLinkedMap<K: FullCodec, V: FullCodec> {
 	/// The type that get/take return.
 	type Query;
@@ -240,7 +240,7 @@ pub trait StorageLinkedMap<K: FullCodec, V: FullCodec> {
 /// that have a common first key.
 ///
 /// Details on implementation can be found at
-/// [generator::StorageDoubleMap](./generator/trait.StorageDoubleMap.html)
+/// [`generator::StorageDoubleMap`]
 pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 	/// The type that get/take returns.
 	type Query;
