@@ -772,7 +772,6 @@ impl<T: Trait + Send + Sync> CheckWeight<T> {
 	fn get_dispatch_limit_ratio(class: DispatchClass) -> Perbill {
 		match class {
 			DispatchClass::Operational => Perbill::one(),
-			// TODO: this must be some sort of a constant.
 			DispatchClass::Normal => T::AvailableBlockRatio::get(),
 		}
 	}

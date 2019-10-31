@@ -240,6 +240,7 @@ impl<B: ChainApi> Pool<B> {
 		tags: impl IntoIterator<Item=Tag>,
 		known_imported_hashes: impl IntoIterator<Item=ExHash<B>> + Clone,
 	) -> impl Future<Output=Result<(), B::Error>> {
+		log::trace!(target: "txpool", "Pruning at {:?}", at);
 		// Prune all transactions that provide given tags
 		let prune_status = match self.validated_pool.prune_tags(tags) {
 			Ok(prune_status) => prune_status,
@@ -257,6 +258,7 @@ impl<B: ChainApi> Pool<B> {
 		let pruned_transactions = prune_status.pruned.into_iter().map(|tx| tx.data.clone());
 		let reverify_future = self.verify(at, pruned_transactions, false);
 
+		log::trace!(target: "txpool", "Prunning at {:?}. Resubmitting transactions.", at);
 		// And finally - submit reverified transactions back to the pool
 		let at = at.clone();
 		let validated_pool = self.validated_pool.clone();
@@ -474,7 +476,6 @@ mod tests {
 	fn pool() -> Pool<TestApi> {
 		Pool::new(Default::default(), TestApi::default())
 	}
-
 
 	#[test]
 	fn should_validate_and_import_transaction() {
@@ -909,3 +910,4 @@ mod tests {
 		}
 	}
 }
+

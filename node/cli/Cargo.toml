@@ -5,6 +5,17 @@ authors = ["Parity Technologies <admin@parity.io>"]
 description = "Substrate node implementation in Rust."
 build = "build.rs"
 edition = "2018"
+default-run = "substrate"
+
+[badges]
+travis-ci = { repository = "paritytech/substrate", branch = "master" }
+maintenance = { status = "actively-developed" }
+is-it-maintained-issue-resolution = { repository = "paritytech/substrate" }
+is-it-maintained-open-issues = { repository = "paritytech/substrate" }
+
+[[bin]]
+name = "substrate"
+path = "bin/main.rs"
 
 [dependencies]
 log = "0.4.8"
@@ -48,11 +59,10 @@ balances = { package = "srml-balances", path = "../../srml/balances" }
 transaction-payment = { package = "srml-transaction-payment", path = "../../srml/transaction-payment" }
 support = { package = "srml-support", path = "../../srml/support", default-features = false }
 im_online = { package = "srml-im-online", path = "../../srml/im-online", default-features = false }
-sr-authority-discovery = { package = "srml-authority-discovery", path = "../../srml/authority-discovery", default-features = false }
-authority-discovery = { package = "substrate-authority-discovery", path = "../../core/authority-discovery"}
 serde = { version = "1.0.101", features = [ "derive" ] }
 client_db = { package = "substrate-client-db", path = "../../core/client/db", features = ["kvdb-rocksdb"] }
 offchain = { package = "substrate-offchain", path = "../../core/offchain" }
+ctrlc = { version = "3.1.3", features = ["termination"] }
 
 [dev-dependencies]
 keystore = { package = "substrate-keystore", path = "../../core/keystore" }
@@ -65,3 +75,4 @@ tempfile = "3.1.0"
 [build-dependencies]
 cli = { package = "substrate-cli", path = "../../core/cli" }
 structopt = "0.3.3"
+vergen = "3.0.4"

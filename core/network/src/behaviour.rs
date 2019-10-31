@@ -26,7 +26,7 @@ use libp2p::core::{Multiaddr, PeerId, PublicKey};
 use libp2p::kad::record;
 use libp2p::swarm::{NetworkBehaviourAction, NetworkBehaviourEventProcess};
 use libp2p::core::{nodes::Substream, muxing::StreamMuxerBox};
-use log::warn;
+use log::{debug, warn};
 use sr_primitives::traits::Block as BlockT;
 use std::iter;
 use void;
@@ -133,7 +133,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> NetworkBehaviourEventPr
 			warn!(target: "sub-libp2p", "Connected to a non-Substrate node: {:?}", info);
 		}
 		if info.listen_addrs.len() > 30 {
-			warn!(target: "sub-libp2p", "Node {:?} has reported more than 30 addresses; \
+			debug!(target: "sub-libp2p", "Node {:?} has reported more than 30 addresses; \
 				it is identified by {:?} and {:?}", peer_id, info.protocol_version,
 				info.agent_version
 			);

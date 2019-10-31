@@ -80,6 +80,7 @@ use sr_primitives::{
 	traits::{Convert, Member, Printable, Saturating}, Perbill,
 	transaction_validity::{
 		TransactionValidity, TransactionLongevity, ValidTransaction, InvalidTransaction,
+		TransactionPriority,
 	},
 };
 use sr_staking_primitives::{
@@ -427,8 +428,11 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
+impl<T: Trait> sr_primitives::BoundToRuntimeAppPublic for Module<T> {
+	type Public = T::AuthorityId;
+}
 
+impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	type Key = T::AuthorityId;
 
 	fn on_genesis_session<'a, I: 'a>(validators: I)
@@ -529,7 +533,7 @@ impl<T: Trait> support::unsigned::ValidateUnsigned for Module<T> {
 			}
 
 			Ok(ValidTransaction {
-				priority: 0,
+				priority: TransactionPriority::max_value(),
 				requires: vec![],
 				provides: vec![(current_session, authority_id).encode()],
 				longevity: TransactionLongevity::max_value(),
