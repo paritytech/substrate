@@ -18,8 +18,10 @@
 //! stage.
 
 use crate::traits::{
-	self, Member, MaybeDisplay, SignedExtension, Dispatchable, ValidateUnsigned,
+	self, Member, MaybeDisplay, SignedExtension, Dispatchable,
 };
+#[allow(deprecated)]
+use crate::traits::ValidateUnsigned;
 use crate::weights::{GetDispatchInfo, DispatchInfo};
 use crate::transaction_validity::TransactionValidity;
 
@@ -52,7 +54,10 @@ where
 		self.signed.as_ref().map(|x| &x.0)
 	}
 
-	fn validate<U: ValidateUnsigned<Call = Self::Call>>(
+	fn validate<
+		#[allow(deprecated)]
+		U: ValidateUnsigned<Call = Self::Call>
+	>(
 		&self,
 		info: DispatchInfo,
 		len: usize,
@@ -61,11 +66,15 @@ where
 			Extra::validate(extra, id, &self.function, info, len)
 		} else {
 			let valid = Extra::validate_unsigned(&self.function, info, len)?;
-			Ok(valid.combine_with(U::validate_unsigned(&self.function)?))
+			let unsigned_validation = U::validate_unsigned(&self.function)?;
+			Ok(valid.combine_with(unsigned_validation))
 		}
 	}
 
-	fn apply(
+	fn apply<
+		#[allow(deprecated)]
+		U: ValidateUnsigned<Call=Self::Call>
+	>(
 		self,
 		info: DispatchInfo,
 		len: usize,
@@ -75,6 +84,7 @@ where
 			(Some(id), pre)
 		} else {
 			let pre = Extra::pre_dispatch_unsigned(&self.function, info, len)?;
+			U::pre_dispatch(&self.function)?;
 			(None, pre)
 		};
 		let res = self.function.dispatch(Origin::from(maybe_who));

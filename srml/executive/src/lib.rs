@@ -79,10 +79,12 @@ use sr_primitives::{
 	generic::Digest, ApplyResult, weights::GetDispatchInfo,
 	traits::{
 		self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalize, OnInitialize,
-		NumberFor, Block as BlockT, OffchainWorker, ValidateUnsigned, Dispatchable
+		NumberFor, Block as BlockT, OffchainWorker, Dispatchable,
 	},
 	transaction_validity::TransactionValidity,
 };
+#[allow(deprecated)]
+use sr_primitives::traits::ValidateUnsigned;
 use codec::{Codec, Encode};
 use system::{extrinsics_root, DigestOf};
 
@@ -100,6 +102,8 @@ pub struct Executive<System, Block, Context, UnsignedValidator, AllModules>(
 	PhantomData<(System, Block, Context, UnsignedValidator, AllModules)>
 );
 
+// We allow ValidateUnsigned deprecation. Make sure to remove this when we remove `ValidateUnsigned`.
+#[allow(deprecated)]
 impl<
 	System: system::Trait,
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
@@ -119,6 +123,8 @@ where
 	}
 }
 
+// We allow ValidateUnsigned deprecation. Make sure to remove this when we remove `ValidateUnsigned`.
+#[allow(deprecated)]
 impl<
 	System: system::Trait,
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
@@ -242,7 +248,7 @@ where
 
 		// Decode parameters and dispatch
 		let dispatch_info = xt.get_dispatch_info();
-		let r = Applyable::apply(xt, dispatch_info, encoded_len)?;
+		let r = Applyable::apply::<UnsignedValidator>(xt, dispatch_info, encoded_len)?;
 
 		<system::Module<System>>::note_applied_extrinsic(&r, encoded_len as u32);
 
