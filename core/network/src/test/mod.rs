@@ -124,11 +124,6 @@ impl NetworkSpecialization<Block> for DummySpecialization {
 		_peer_id: PeerId,
 		_message: Vec<u8>,
 	) {}
-
-	fn on_event(
-		&mut self,
-		_event: crate::specialization::Event
-	) {}
 }
 
 pub type PeersFullClient =
