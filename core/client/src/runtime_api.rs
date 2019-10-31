@@ -18,7 +18,7 @@
 
 #[doc(hidden)]
 #[cfg(feature = "std")]
-pub use state_machine::OverlayedChanges;
+pub use state_machine::{OverlayedChanges, StorageProof};
 #[doc(hidden)]
 #[cfg(feature = "std")]
 pub use primitives::NativeOrEncoded;
@@ -106,7 +106,7 @@ pub trait ApiExt<Block: BlockT> {
 
 	/// Extract the recorded proof.
 	/// This stops the proof recording.
-	fn extract_proof(&mut self) -> Option<Vec<Vec<u8>>>;
+	fn extract_proof(&mut self) -> Option<StorageProof>;
 }
 
 /// Before calling any runtime api function, the runtime need to be initialized
