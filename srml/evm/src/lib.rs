@@ -63,7 +63,7 @@ pub trait Precompiles {
 	/// a precompile or the precompile is not yet available, return `None`.
 	/// Otherwise, calculate the amount of gas needed with given `input` and
 	/// `target_gas`. Return `Ok(Some(status, output, gas_used))` if the execution
-	/// is successful. Otherwise return `Ok(Err(_))`.
+	/// is successful. Otherwise return `Some(Err(_))`.
 	fn execute(
 		address: H160,
 		input: &[u8],
