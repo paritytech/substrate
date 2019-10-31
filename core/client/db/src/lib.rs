@@ -83,6 +83,9 @@ const DEFAULT_CHILD_RATIO: (usize, usize) = (1, 10);
 /// DB-backed patricia trie state, transaction type is an overlay of changes to commit.
 pub type DbState = state_machine::TrieBackend<Arc<dyn state_machine::Storage<Blake2Hasher>>, Blake2Hasher>;
 
+/// Re-export the KVDB trait so that one can pass an implementation of it.
+pub use kvdb;
+
 /// A reference tracking state.
 ///
 /// It makes sure that the hash we are using stays pinned in storage
@@ -191,16 +194,28 @@ impl<B: BlockT> StateBackend<Blake2Hasher> for RefTrackingState<B> {
 
 /// Database settings.
 pub struct DatabaseSettings {
-	/// Cache size in bytes. If `None` default is used.
-	pub cache_size: Option<usize>,
 	/// State cache size.
 	pub state_cache_size: usize,
 	/// Ratio of cache size dedicated to child tries.
 	pub state_cache_child_ratio: Option<(usize, usize)>,
-	/// Path to the database.
-	pub path: PathBuf,
 	/// Pruning mode.
 	pub pruning: PruningMode,
+	/// Where to find the database.
+	pub source: DatabaseSettingsSrc,
+}
+
+/// Where to find the database..
+pub enum DatabaseSettingsSrc {
+	/// Load a database from a given path. Recommended for most uses.
+	Path {
+		/// Path to the database.
+		path: PathBuf,
+		/// Cache size in bytes. If `None` default is used.
+		cache_size: Option<usize>,
+	},
+
+	/// Use a custom already-open database.
+	Custom(Arc<dyn KeyValueDB>),
 }
 
 /// Create an instance of db-backed client.
@@ -775,17 +790,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 	///
 	/// The pruning window is how old a block must be before the state is pruned.
 	pub fn new(config: DatabaseSettings, canonicalization_delay: u64) -> ClientResult<Self> {
-		Self::new_inner(config, canonicalization_delay)
-	}
-
-	fn new_inner(config: DatabaseSettings, canonicalization_delay: u64) -> ClientResult<Self> {
-		#[cfg(feature = "kvdb-rocksdb")]
 		let db = crate::utils::open_database(&config, columns::META, "full")?;
-		#[cfg(not(feature = "kvdb-rocksdb"))]
-		let db = {
-			log::warn!("Running without the RocksDB feature. The database will NOT be saved.");
-			Arc::new(kvdb_memorydb::create(crate::utils::NUM_COLUMNS))
-		};
 		Self::from_kvdb(db as Arc<_>, canonicalization_delay, &config)
 	}
 
@@ -793,25 +798,14 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 	#[cfg(any(test, feature = "test-helpers"))]
 	pub fn new_test(keep_blocks: u32, canonicalization_delay: u64) -> Self {
 		let db = Arc::new(kvdb_memorydb::create(crate::utils::NUM_COLUMNS));
-		Self::new_test_db(keep_blocks, canonicalization_delay, db as Arc<_>)
-	}
-
-	/// Creates a client backend with test settings.
-	#[cfg(any(test, feature = "test-helpers"))]
-	pub fn new_test_db(keep_blocks: u32, canonicalization_delay: u64, db: Arc<dyn KeyValueDB>) -> Self {
-
 		let db_setting = DatabaseSettings {
-			cache_size: None,
 			state_cache_size: 16777216,
 			state_cache_child_ratio: Some((50, 100)),
-			path: Default::default(),
 			pruning: PruningMode::keep_blocks(keep_blocks),
+			source: DatabaseSettingsSrc::Custom(db),
 		};
-		Self::from_kvdb(
-			db,
-			canonicalization_delay,
-			&db_setting,
-		).expect("failed to create test-db")
+
+		Self::new(db_setting, canonicalization_delay).expect("failed to create test-db")
 	}
 
 	fn from_kvdb(
@@ -1636,7 +1630,12 @@ mod tests {
 			db.storage.db.clone()
 		};
 
-		let backend = Backend::<Block>::new_test_db(1, 0, backing);
+		let backend = Backend::<Block>::new(DatabaseSettings {
+			state_cache_size: 16777216,
+			state_cache_child_ratio: Some((50, 100)),
+			pruning: PruningMode::keep_blocks(1),
+			source: DatabaseSettingsSrc::Custom(backing),
+		}, 0).unwrap();
 		assert_eq!(backend.blockchain().info().best_number, 9);
 		for i in 0..10 {
 			assert!(backend.blockchain().hash(i).unwrap().is_some())

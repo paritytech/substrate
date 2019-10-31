@@ -54,5 +54,5 @@ fn main() -> Result<(), cli::error::Error> {
 		support_url: "https://github.com/paritytech/substrate/issues/new",
 	};
 
-	cli::run(std::env::args(), Exit, version)
+	node_cli::run(std::env::args(), Exit, version)
 }
