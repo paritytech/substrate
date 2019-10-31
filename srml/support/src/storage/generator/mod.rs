@@ -23,14 +23,15 @@
 
 mod linked_map;
 mod map;
+mod prefixed_map;
 mod double_map;
 mod value;
 
 pub use linked_map::{StorageLinkedMap, Enumerator, Linkage};
 pub use map::StorageMap;
+pub use prefixed_map::StoragePrefixedMap;
 pub use double_map::StorageDoubleMap;
 pub use value::StorageValue;
-
 
 #[cfg(test)]
 #[allow(dead_code)]

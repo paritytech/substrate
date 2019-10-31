@@ -239,6 +239,10 @@ impl StorageLineDefExt {
 				ext::type_contains_ident(&map.key, &def.module_runtime_generic)
 					|| ext::type_contains_ident(&map.value, &def.module_runtime_generic)
 			}
+			StorageLineTypeDef::PrefixedMap(map) => {
+				ext::type_contains_ident(&map.key, &def.module_runtime_generic)
+					|| ext::type_contains_ident(&map.value, &def.module_runtime_generic)
+			}
 			StorageLineTypeDef::DoubleMap(map) => {
 				ext::type_contains_ident(&map.key1, &def.module_runtime_generic)
 					|| ext::type_contains_ident(&map.key2, &def.module_runtime_generic)
@@ -250,6 +254,7 @@ impl StorageLineDefExt {
 			StorageLineTypeDef::Simple(value) => value.clone(),
 			StorageLineTypeDef::Map(map) => map.value.clone(),
 			StorageLineTypeDef::LinkedMap(map) => map.value.clone(),
+			StorageLineTypeDef::PrefixedMap(map) => map.value.clone(),
 			StorageLineTypeDef::DoubleMap(map) => map.value.clone(),
 		};
 		let is_option = ext::extract_type_option(&query_type).is_some();
@@ -295,6 +300,10 @@ impl StorageLineDefExt {
 				let key = &map.key;
 				quote!( StorageLinkedMap<#key, #value_type> )
 			},
+			StorageLineTypeDef::PrefixedMap(map) => {
+				let key = &map.key;
+				quote!( StoragePrefixedMap<#key, #value_type> )
+			},
 			StorageLineTypeDef::DoubleMap(map) => {
 				let key1 = &map.key1;
 				let key2 = &map.key2;
@@ -337,6 +346,7 @@ impl StorageLineDefExt {
 pub enum StorageLineTypeDef {
 	Map(MapDef),
 	LinkedMap(MapDef),
+	PrefixedMap(MapDef),
 	DoubleMap(DoubleMapDef),
 	Simple(syn::Type),
 }
@@ -418,6 +428,7 @@ pub fn decl_storage_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStr
 			StorageValue as _,
 			StorageMap as _,
 			StorageLinkedMap as _,
+			StoragePrefixedMap as _,
 			StorageDoubleMap as _
 		};
 

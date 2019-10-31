@@ -181,6 +181,29 @@ pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 					}
 				)
 			},
+			StorageLineTypeDef::PrefixedMap(map) => {
+				let hasher = map.hasher.to_storage_hasher_struct();
+				quote!(
+					impl<#impl_trait> #scrate::#storage_generator_trait for #storage_struct
+					#optional_storage_where_clause
+					{
+						type Query = #query_type;
+						type Hasher = #scrate::#hasher;
+
+						fn prefix() -> &'static [u8] {
+							#final_prefix
+						}
+
+						fn from_optional_value_to_query(v: Option<#value_type>) -> Self::Query {
+							#from_optional_value_to_query
+						}
+
+						fn from_query_to_optional_value(v: Self::Query) -> Option<#value_type> {
+							#from_query_to_optional_value
+						}
+					}
+				)
+			},
 			StorageLineTypeDef::DoubleMap(map) => {
 				let hasher1 = map.hasher1.to_storage_hasher_struct();
 				let hasher2 = map.hasher2.to_storage_hasher_struct();

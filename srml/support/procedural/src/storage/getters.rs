@@ -40,7 +40,10 @@ pub fn impl_getters(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStrea
 					}
 				}
 			},
-			StorageLineTypeDef::Map(map) | StorageLineTypeDef::LinkedMap(map) => {
+			StorageLineTypeDef::Map(map)
+				| StorageLineTypeDef::LinkedMap(map)
+				| StorageLineTypeDef::PrefixedMap(map)
+			=> {
 				let key = &map.key;
 				let value = &map.value;
 				quote!{

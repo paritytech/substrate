@@ -66,7 +66,10 @@ impl BuilderDef {
 							<#storage_struct as #scrate::#storage_trait>::put::<&#value_type>(v);
 						}}
 					},
-					StorageLineTypeDef::Map(map) | StorageLineTypeDef::LinkedMap(map) => {
+					StorageLineTypeDef::Map(map)
+						| StorageLineTypeDef::LinkedMap(map)
+						| StorageLineTypeDef::PrefixedMap(map)
+					=> {
 						let key = &map.key;
 						quote!{{
 							let data: &#scrate::rstd::vec::Vec<(#key, #value_type)> = #data;

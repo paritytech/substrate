@@ -41,6 +41,9 @@ mod no_instance {
 			pub LinkedMap: linked_map u32 => u32;
 			pub LinkedMap2: linked_map hasher(twox_128) u32 => u32;
 
+			pub PrefixedMap: prefixed_map u32 => u32;
+			pub PrefixedMap2: prefixed_map hasher(twox_128) u32 => u32;
+
 			pub DoubleMap: double_map u32, blake2_256(u32) => u32;
 			pub DoubleMap2: double_map hasher(twox_128) u32, blake2_128(u32) => u32;
 

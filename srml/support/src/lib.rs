@@ -67,7 +67,7 @@ pub mod error;
 pub mod traits;
 
 pub use self::hash::{Twox256, Twox128, Blake2_256, Blake2_128, Twox64Concat, Hashable};
-pub use self::storage::{StorageValue, StorageMap, StorageLinkedMap, StorageDoubleMap};
+pub use self::storage::{StorageValue, StorageMap, StorageLinkedMap, StoragePrefixedMap, StorageDoubleMap};
 pub use self::dispatch::{Parameter, Callable, IsSubType};
 pub use sr_primitives::{self, ConsensusEngineId, print, traits::Printable};
 
@@ -241,7 +241,7 @@ mod tests {
 	use codec::{Codec, EncodeLike};
 	use srml_metadata::{
 		DecodeDifferent, StorageEntryMetadata, StorageMetadata, StorageEntryType,
-		StorageEntryModifier, DefaultByteGetter, StorageHasher,
+		StorageEntryModifier, DefaultByteGetter, StorageHasher, StorageMapKind,
 	};
 	use rstd::marker::PhantomData;
 
@@ -471,7 +471,7 @@ mod tests {
 						hasher: StorageHasher::Twox64Concat,
 						key: DecodeDifferent::Encode("u32"),
 						value: DecodeDifferent::Encode("u64"),
-						is_linked: true,
+						kind: StorageMapKind::LinkedMap,
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructData(PhantomData::<Test>))
@@ -485,7 +485,7 @@ mod tests {
 						hasher: StorageHasher::Blake2_256,
 						key: DecodeDifferent::Encode("u32"),
 						value: DecodeDifferent::Encode("u32"),
-						is_linked: true,
+						kind: StorageMapKind::LinkedMap,
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructOptionLinkedMap(PhantomData::<Test>))
@@ -499,7 +499,7 @@ mod tests {
 						hasher: StorageHasher::Twox128,
 						key: DecodeDifferent::Encode("T::BlockNumber"),
 						value: DecodeDifferent::Encode("T::BlockNumber"),
-						is_linked: true
+						kind: StorageMapKind::LinkedMap
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructGenericData(PhantomData::<Test>))
@@ -513,7 +513,7 @@ mod tests {
 						hasher: StorageHasher::Blake2_256,
 						key: DecodeDifferent::Encode("T::BlockNumber"),
 						value: DecodeDifferent::Encode("T::BlockNumber"),
-						is_linked: true
+						kind: StorageMapKind::LinkedMap
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructGenericData2(PhantomData::<Test>))

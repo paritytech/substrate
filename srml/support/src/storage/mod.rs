@@ -234,6 +234,74 @@ pub trait StorageLinkedMap<K: FullCodec, V: FullCodec> {
 		where V: codec::DecodeLength + Len;
 }
 
+/// A strongly-typed map in storage. All keys are prefixed in the storage. This isolate and for
+/// instance allow to kill them all.
+///
+/// Details on implementation can be found at [`generator::StoragePrefixedMap`]
+pub trait StoragePrefixedMap<K: FullEncode, V: FullCodec> {
+	/// The type that get/take return.
+	type Query;
+
+	/// Does the value (explicitly) exist in storage?
+	fn exists<KeyArg: EncodeLike<K>>(key: KeyArg) -> bool;
+
+	/// Remove all values of this storage.
+	fn remove_all();
+
+	/// Load the value associated with the given key from the map.
+	fn get<KeyArg: EncodeLike<K>>(key: KeyArg) -> Self::Query;
+
+	/// Swap the values of two keys.
+	fn swap<KeyArg1: EncodeLike<K>, KeyArg2: EncodeLike<K>>(key1: KeyArg1, key2: KeyArg2);
+
+	/// Store a value to be associated with the given key from the map.
+	fn insert<KeyArg: EncodeLike<K>, ValArg: EncodeLike<V>>(key: KeyArg, val: ValArg);
+
+	/// Remove the value under a key.
+	fn remove<KeyArg: EncodeLike<K>>(key: KeyArg);
+
+	/// Mutate the value under a key.
+	fn mutate<KeyArg: EncodeLike<K>, R, F: FnOnce(&mut Self::Query) -> R>(key: KeyArg, f: F) -> R;
+
+	/// Take the value under a key.
+	fn take<KeyArg: EncodeLike<K>>(key: KeyArg) -> Self::Query;
+
+	/// Append the given items to the value in the storage.
+	///
+	/// `V` is required to implement `codec::EncodeAppend`.
+	fn append<Items, Item, EncodeLikeItem, KeyArg>(key: KeyArg, items: Items) -> Result<(), &'static str>
+	where
+		KeyArg: EncodeLike<K>,
+		Item: Encode,
+		EncodeLikeItem: EncodeLike<Item>,
+		V: EncodeAppend<Item=Item>,
+		Items: IntoIterator<Item=EncodeLikeItem>,
+		Items::IntoIter: ExactSizeIterator;
+
+	/// Safely append the given items to the value in the storage. If a codec error occurs, then the
+	/// old (presumably corrupt) value is replaced with the given `items`.
+	///
+	/// `V` is required to implement `codec::EncodeAppend`.
+	fn append_or_insert<Items, Item, EncodeLikeItem, KeyArg>(key: KeyArg, items: Items)
+	where
+		KeyArg: EncodeLike<K>,
+		Item: Encode,
+		EncodeLikeItem: EncodeLike<Item>,
+		V: EncodeAppend<Item=Item>,
+		Items: IntoIterator<Item=EncodeLikeItem> + Clone + EncodeLike<V>,
+		Items::IntoIter: ExactSizeIterator;
+
+	/// Read the length of the value in a fast way, without decoding the entire value.
+	///
+	/// `T` is required to implement `Codec::DecodeLength`.
+	///
+	/// Note that `0` is returned as the default value if no encoded value exists at the given key.
+	/// Therefore, this function cannot be used as a sign of _existence_. use the `::exists()`
+	/// function for this purpose.
+	fn decode_len<KeyArg: EncodeLike<K>>(key: KeyArg) -> Result<usize, &'static str>
+		where V: codec::DecodeLength + Len;
+}
+
 /// An implementation of a map with a two keys.
 ///
 /// It provides an important ability to efficiently remove all entries
