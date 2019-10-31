@@ -40,24 +40,6 @@ use rstd::borrow::Cow;
 use crate::HistoricalValue;
 
 
-/// Array like buffer for in memory storage.
-/// By in memory we expect that this will
-/// not required persistence and is not serialized.
-#[cfg(not(feature = "std"))]
-pub(crate) type InMemory<V, I> = Vec<HistoricalValue<V, I>>;
-
-/// Array like buffer for in memory storage.
-/// By in memory we expect that this will
-/// not required persistence and is not serialized.
-#[cfg(feature = "std")]
-pub(crate) type InMemory<V, I> = smallvec::SmallVec<[HistoricalValue<V, I>; ALLOCATED_HISTORY]>;
-
-/// Size of preallocated history per element.
-/// Currently at two for committed and prospective only.
-/// It means that using transaction in a module got a direct allocation cost.
-#[cfg(feature = "std")]
-const ALLOCATED_HISTORY: usize = 2;
-
 /// Arraylike buffer with in place byte data.
 /// Can be written as is in underlying storage.
 /// Could be extended to direct access memory too.

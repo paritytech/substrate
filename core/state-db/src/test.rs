@@ -77,6 +77,7 @@ pub fn make_commit(inserted: &[u64], deleted: &[u64]) -> CommitSet<H256> {
 	CommitSet {
 		data: make_changeset(inserted, deleted),
 		meta: ChangeSet::default(),
+		kv: Default::default(),
 	}
 }
 
