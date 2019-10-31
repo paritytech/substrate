@@ -515,10 +515,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		self.context_data.peers.iter().map(|(id, peer)| (id, &peer.info))
 	}
 
-	pub fn on_event(&mut self, event: Event) {
-		self.specialization.on_event(event);
-	}
-
 	pub fn on_custom_message(
 		&mut self,
 		who: PeerId,
