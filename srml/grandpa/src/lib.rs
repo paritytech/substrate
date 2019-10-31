@@ -138,7 +138,7 @@ decl_storage! {
 		/// This used to store the current authority set, which has been migrated to the well-known
 		/// GRANDPA_AUTHORITES_KEY unhashed key.
 		#[cfg(feature = "migrate-authorities")]
-		pub(crate) Authorities get(authorities): AuthorityList;
+		pub(crate) Authorities get(fn authorities): AuthorityList;
 
 		/// State of the current authority set.
 		State get(fn state): StoredState<T::BlockNumber> = StoredState::Live;
