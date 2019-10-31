@@ -32,7 +32,7 @@ use system::ensure_signed;
 use sr_primitives::weights::SimpleDispatchInfo;
 use sr_primitives::traits::UniqueSaturatedInto;
 use primitives::{U256, H256, H160};
-use evm::ExitReason;
+use evm::{ExitReason, ExitSucceed, ExitError};
 use evm::executor::StackExecutor;
 use evm::backend::ApplyBackend;
 
@@ -46,6 +46,25 @@ pub trait ConvertAccountId<A> {
 	fn convert_account_id(account_id: A) -> H160;
 }
 
+/// Precompiles
+pub trait Precompiles {
+	fn execute(
+		address: H160,
+		input: &[u8],
+		target_gas: Option<usize>
+	) -> Option<core::result::Result<(ExitSucceed, Vec<u8>, usize), ExitError>>;
+}
+
+impl Precompiles for () {
+	fn execute(
+		_address: H160,
+		_input: &[u8],
+		_target_gas: Option<usize>
+	) -> Option<core::result::Result<(ExitSucceed, Vec<u8>, usize), ExitError>> {
+		None
+	}
+}
+
 /// EVM module trait
 pub trait Trait: system::Trait + timestamp::Trait {
 	/// Calculator for current gas price.
@@ -56,6 +75,8 @@ pub trait Trait: system::Trait + timestamp::Trait {
 	type Currency: Currency<Self::AccountId>;
 	/// The overarching event type.
 	type Event: From<Event> + Into<<Self as system::Trait>::Event>;
+	/// Precompiles associated with this EVM engine.
+	type Precompiles: Precompiles;
 }
 
 decl_storage! {
@@ -128,10 +149,11 @@ decl_module! {
 			};
 
 			let mut backend = Backend::<T>::new(&vicinity);
-			let mut executor = StackExecutor::new(
+			let mut executor = StackExecutor::new_with_precompile(
 				&backend,
 				gas_limit as usize,
 				&backend::GASOMETER_CONFIG,
+				T::Precompiles::execute,
 			);
 
 			let total_fee = gas_price * U256::from(gas_limit);
@@ -173,10 +195,11 @@ decl_module! {
 			};
 
 			let mut backend = Backend::<T>::new(&vicinity);
-			let mut executor = StackExecutor::new(
+			let mut executor = StackExecutor::new_with_precompile(
 				&backend,
 				gas_limit as usize,
 				&backend::GASOMETER_CONFIG,
+				T::Precompiles::execute,
 			);
 
 			let total_fee = gas_price * U256::from(gas_limit);
