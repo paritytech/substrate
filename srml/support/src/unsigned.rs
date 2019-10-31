@@ -32,13 +32,8 @@ pub use crate::sr_primitives::ApplyError;
 /// # mod timestamp {
 /// # 	pub struct Module;
 /// #
-/// #	#[allow(deprecated)]
 /// # 	impl srml_support::unsigned::ValidateUnsigned for Module {
 /// # 		type Call = Call;
-/// #
-/// #		fn pre_dispatch(call: &Self::Call) -> Result<(), srml_support::unsigned::ApplyError> {
-///	#			unimplemented!();
-/// #		}
 /// #
 /// # 		fn validate_unsigned(call: &Self::Call) -> srml_support::unsigned::TransactionValidity {
 /// # 			unimplemented!();
