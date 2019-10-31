@@ -668,6 +668,7 @@ mod tests {
 	}
 
 	#[test]
+	#[should_panic(expected = "Failed to allocate memory: \"AllocatorOutOfSpace\"")]
 	fn sandbox_should_trap_when_heap_exhausted() {
 		let mut ext = TestExternalities::default();
 		let mut ext = ext.ext();
@@ -683,17 +684,7 @@ mod tests {
 		)
 		"#).unwrap().encode();
 
-		let res = call_wasm(&mut ext, 8, &test_code[..], "test_exhaust_heap", &code);
-		assert_eq!(res.is_err(), true);
-		if let Err(err) = res {
-			assert_eq!(
-				format!("{}", err),
-				format!(
-					"{}",
-					wasmi::Error::Trap(Error::FunctionExecution("AllocatorOutOfSpace".into()).into()),
-				),
-			);
-		}
+		call_wasm(&mut ext, 8, &test_code[..], "test_exhaust_heap", &code).unwrap();
 	}
 
 	#[test]

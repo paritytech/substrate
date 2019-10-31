@@ -248,7 +248,7 @@ fn execute_sandboxed(
 	};
 
 	let mut instance = sandbox::Instance::new(code, &env_builder, &mut state)?;
-	let result = instance.invoke(b"call", args, &mut state);
+	let result = instance.invoke("call", args, &mut state);
 
 	result.map_err(|_| sandbox::HostError)
 }

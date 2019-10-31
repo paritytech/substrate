@@ -70,6 +70,7 @@ pub enum EcdsaVerifyError {
 ///
 /// Panicking here is aligned with what the `without_std` environment would do
 /// in the case of an invalid child storage key.
+#[cfg(feature = "std")]
 fn child_storage_key_or_panic(storage_key: &[u8]) -> ChildStorageKey {
 	match ChildStorageKey::from_slice(storage_key) {
 		Some(storage_key) => storage_key,
@@ -596,20 +597,12 @@ pub trait Offchain {
 trait Allocator {
 	/// Malloc the given number of bytes and return the pointer to the allocated memory location.
 	fn malloc(&mut self, size: u32) -> Pointer<u8> {
-		match self.allocate_memory(size) {
-			Ok(res) => res,
-			Err(e) => {
-				log::warn!(target: "runtime-interface", "Failed to allocate memory: {}", e);
-				Pointer::new(0)
-			}
-		}
+		self.allocate_memory(size).expect("Failed to allocate memory")
 	}
 
 	/// Free the given pointer.
 	fn free(&mut self, ptr: Pointer<u8>) {
-		if let Err(e) = self.deallocate_memory(ptr) {
-			log::warn!(target: "runtime-interface", "Failed to free a given pointer: {}", e);
-		}
+		self.deallocate_memory(ptr).expect("Failed to deallocate memory")
 	}
 }
 
@@ -631,6 +624,86 @@ pub trait Logging {
 				message,
 			)
 		}
+	}
+}
+
+/// Wasm-only interface that provides functions for interacting with the sandbox.
+#[runtime_interface(wasm_only)]
+pub trait Sandbox {
+	/// Instantiate a new sandbox instance with the given `wasm_code`.
+	fn instantiate(
+		&mut self,
+		dispatch_thunk: u32,
+		wasm_code: &[u8],
+		env_def: &[u8],
+		state_ptr: Pointer<u8>,
+	) -> u32 {
+		self.sandbox()
+			.instance_new(dispatch_thunk, wasm_code, env_def, state_ptr.into())
+			.expect("Failed to instantiate a new sandbox")
+	}
+
+	/// Invoke `function` in the sandbox with `sandbox_idx`.
+	fn invoke(
+		&mut self,
+		instance_idx: u32,
+		function: &str,
+		args: &[u8],
+		return_val_ptr: Pointer<u8>,
+		return_val_len: u32,
+		state_ptr: Pointer<u8>,
+	) -> u32 {
+		self.sandbox().invoke(
+			instance_idx,
+			&function,
+			&args,
+			return_val_ptr,
+			return_val_len,
+			state_ptr.into(),
+		).expect("Failed to invoke function with sandbox")
+	}
+
+	/// Create a new memory instance with the given `initial` and `maximum` size.
+	fn memory_new(&mut self, initial: u32, maximum: u32) -> u32 {
+		self.sandbox()
+			.memory_new(initial, maximum)
+			.expect("Failed to create new memory with sandbox")
+	}
+
+	/// Get the memory starting at `offset` from the instance with `memory_idx` into the buffer.
+	fn memory_get(
+		&mut self,
+		memory_idx: u32,
+		offset: u32,
+		buf_ptr: Pointer<u8>,
+		buf_len: u32,
+	) -> u32 {
+		self.sandbox()
+			.memory_get(memory_idx, offset, buf_ptr, buf_len)
+			.expect("Failed to get memory with sandbox")
+	}
+
+	/// Set the memory in the given `memory_idx` to the given value at `offset`.
+	fn memory_set(
+		&mut self,
+		memory_idx: u32,
+		offset: u32,
+		val_ptr: Pointer<u8>,
+		val_len: u32,
+	) -> u32 {
+		self.sandbox()
+			.memory_set(memory_idx, offset, val_ptr, val_len)
+			.expect("Failed to set memory with sandbox")
+	}
+
+	/// Teardown the memory instance with the given `memory_idx`.
+	fn memory_teardown(&mut self, memory_idx: u32) {
+		self.sandbox().memory_teardown(memory_idx).expect("Failed to teardown memory with sandbox")
+	}
+
+	/// Teardown the sandbox instance with the given `instance_idx`.
+	fn instance_teardown(&mut self, instance_idx: u32) {
+		self.sandbox().instance_teardown(instance_idx).expect("Failed to teardown sandbox instance")
 	}
 }
 
@@ -696,6 +769,7 @@ pub type SubstrateHostFunctions = (
 	hashing::HostFunctions,
 	allocator::HostFunctions,
 	logging::HostFunctions,
+	sandbox::HostFunctions,
 );
 
 #[cfg(test)]

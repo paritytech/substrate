@@ -282,13 +282,12 @@ impl<T> Instance<T> {
 
 	pub fn invoke(
 		&mut self,
-		name: &[u8],
+		name: &str,
 		args: &[TypedValue],
 		state: &mut T,
 	) -> Result<ReturnValue, Error> {
 		let args = args.iter().cloned().map(Into::into).collect::<Vec<_>>();
 
-		let name = ::std::str::from_utf8(name).map_err(|_| Error::Execution)?;
 		let mut externals = GuestExternals {
 			state,
 			defined_host_functions: &self.defined_host_functions,
