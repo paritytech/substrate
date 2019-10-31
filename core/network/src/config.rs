@@ -28,12 +28,11 @@ use crate::service::{ExHashT, TransactionPool};
 use bitflags::bitflags;
 use consensus::{block_validation::BlockAnnounceValidator, import_queue::ImportQueue};
 use sr_primitives::traits::{Block as BlockT};
-use std::sync::Arc;
 use libp2p::identity::{Keypair, ed25519};
 use libp2p::wasm_ext;
 use libp2p::{PeerId, Multiaddr, multiaddr};
-use std::error::Error;
-use std::{io::{self, Write}, iter, fmt, fs, net::Ipv4Addr, path::{Path, PathBuf}};
+use core::{fmt, iter};
+use std::{error::Error, fs, io::{self, Write}, net::Ipv4Addr, path::{Path, PathBuf}, sync::Arc};
 use zeroize::Zeroize;
 
 /// Network initialization parameters.
