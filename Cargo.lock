@@ -858,12 +858,12 @@ dependencies = [
 
 [[package]]
 name = "evm"
-version = "0.13.1"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "evm-core 0.13.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "evm-gasometer 0.13.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "evm-runtime 0.13.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "evm-core 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "evm-gasometer 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "evm-runtime 0.14.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "primitive-types 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rlp 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "sha3 0.8.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -871,7 +871,7 @@ dependencies = [
 
 [[package]]
 name = "evm-core"
-version = "0.13.1"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "primitive-types 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -879,20 +879,20 @@ dependencies = [
 
 [[package]]
 name = "evm-gasometer"
-version = "0.13.1"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "evm-core 0.13.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "evm-runtime 0.13.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "evm-core 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "evm-runtime 0.14.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "primitive-types 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "evm-runtime"
-version = "0.13.1"
+version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "evm-core 0.13.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "evm-core 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "primitive-types 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sha3 0.8.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -4251,7 +4251,7 @@ dependencies = [
 name = "srml-evm"
 version = "2.0.0"
 dependencies = [
- "evm 0.13.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "evm 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "primitive-types 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rlp 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -4263,6 +4263,7 @@ dependencies = [
  "srml-balances 2.0.0",
  "srml-support 2.0.0",
  "srml-system 2.0.0",
+ "srml-timestamp 2.0.0",
  "substrate-primitives 2.0.0",
 ]
 
@@ -6364,7 +6365,7 @@ name = "twox-hash"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "rand 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rand 0.3.23 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -6969,10 +6970,10 @@ dependencies = [
 "checksum environmental 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)" = "34f8467a0284de039e6bd0e25c14519538462ba5beb548bb1f03e645097837a8"
 "checksum erased-serde 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)" = "3beee4bc16478a1b26f2e80ad819a52d24745e292f521a63c16eea5f74b7eb60"
 "checksum error-chain 0.12.1 (registry+https://github.com/rust-lang/crates.io-index)" = "3ab49e9dcb602294bc42f9a7dfc9bc6e936fca4418ea300dbfb84fe16de0b7d9"
-"checksum evm 0.13.1 (registry+https://github.com/rust-lang/crates.io-index)" = "53c62a2ce4e74151f10f513313b8ebedc9297fd468eb139faee89bfaed6ede99"
-"checksum evm-core 0.13.1 (registry+https://github.com/rust-lang/crates.io-index)" = "42af303e687d1ba7f9475aa76c18094725d10bdb2297e14764502cb00dde2597"
-"checksum evm-gasometer 0.13.1 (registry+https://github.com/rust-lang/crates.io-index)" = "fba9309157d54268287bbd204dedbead455b6fbadb8c0a91fa15de7e561dc854"
-"checksum evm-runtime 0.13.1 (registry+https://github.com/rust-lang/crates.io-index)" = "c0f0dab7ad0a18c85f4e2e57d6576090d236387e92bda21143f22b1d59729e19"
+"checksum evm 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)" = "1138816a9b7f9a9d1fcabb1b8a7afed2687d035692baf297bd3fea122acdc96f"
+"checksum evm-core 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)" = "3bcde5af3d542874ddeb53de0919302d57586ea04b3f76f54d865f8a6cdc70ae"
+"checksum evm-gasometer 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)" = "b82bc9f275cb59d2bcc05d85c98736ddfaba003a7ef7b73893fa7c1c1fab29dc"
+"checksum evm-runtime 0.14.1 (registry+https://github.com/rust-lang/crates.io-index)" = "0dbbc89d29618c3722c17ba78ddf432d40ace8ee27e3f8b28b52a85921112e4b"
 "checksum exit-future 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)" = "d8013f441e38e31c670e7f34ec8f1d5d3a2bd9d303c1ff83976ca886005e8f48"
 "checksum failure 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)" = "f8273f13c977665c5db7eb2b99ae520952fe5ac831ae4cd09d80c4c7042b5ed9"
 "checksum failure_derive 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)" = "0bc225b78e0391e4b8683440bf2e63c2deeeb2ce5189eab46e2b68c6d3725d08"
