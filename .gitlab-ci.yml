@@ -327,8 +327,10 @@ check_polkadot:
     - test-linux-stable
   script:
     - git clone --depth 1 https://github.com/paritytech/polkadot.git
+    - COMMIT_HASH=$(git rev-parse HEAD)
     - cd polkadot
-    - git grep -l "polkadot-master" | xargs sed -i "s/polkadot-master/$CI_COMMIT_REF_NAME/"
+    - git grep -l "polkadot-master" | grep toml | xargs sed -i "s/branch.*=.*\"polkadot-master\"/rev = \"$COMMIT_HASH\"/"
+    - cargo update -p sr-io --precise $COMMIT_HASH
     - time cargo check
     - cd ..
     - sccache -s
