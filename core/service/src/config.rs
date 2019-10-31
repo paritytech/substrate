@@ -17,11 +17,11 @@
 //! Service configuration.
 
 pub use client::ExecutionStrategies;
-pub use client_db::PruningMode;
+pub use client_db::{kvdb::KeyValueDB, PruningMode};
 pub use network::config::{ExtTransport, NetworkConfiguration, Roles};
 pub use substrate_executor::WasmExecutionMethod;
 
-use std::{path::PathBuf, net::SocketAddr};
+use std::{path::PathBuf, net::SocketAddr, sync::Arc};
 use transaction_pool;
 use chain_spec::{ChainSpec, RuntimeGenesis, Extension, NoExtension};
 use primitives::crypto::Protected;
@@ -45,10 +45,8 @@ pub struct Configuration<C, G, E = NoExtension> {
 	pub network: NetworkConfiguration,
 	/// Path to key files.
 	pub keystore_path: PathBuf,
-	/// Path to the database.
-	pub database_path: PathBuf,
-	/// Cache Size for internal database in MiB
-	pub database_cache_size: Option<u32>,
+	/// Configuration for the database.
+	pub database: DatabaseConfig,
 	/// Size of internal state cache in Bytes
 	pub state_cache_size: usize,
 	/// Size in percent of cache size dedicated to child tries
@@ -82,6 +80,10 @@ pub struct Configuration<C, G, E = NoExtension> {
 	pub default_heap_pages: Option<u64>,
 	/// Should offchain workers be executed.
 	pub offchain_worker: bool,
+	/// Sentry mode is enabled, the node's role is AUTHORITY but it should not
+	/// actively participate in consensus (i.e. no keystores should be passed to
+	/// consensus modules).
+	pub sentry_mode: bool,
 	/// Enable authoring even when offline.
 	pub force_authoring: bool,
 	/// Disable GRANDPA when running in validator mode
@@ -94,6 +96,21 @@ pub struct Configuration<C, G, E = NoExtension> {
 	///
 	/// Should only be set when `node` is running development mode.
 	pub dev_key_seed: Option<String>,
+}
+
+/// Configuration of the database of the client.
+#[derive(Clone)]
+pub enum DatabaseConfig {
+	/// Database file at a specific path. Recommended for most uses.
+	Path {
+		/// Path to the database.
+		path: PathBuf,
+		/// Cache Size for internal database in MiB
+		cache_size: Option<u32>,
+	},
+
+	/// A custom implementation of an already-open database.
+	Custom(Arc<dyn KeyValueDB>),
 }
 
 impl<C, G, E> Configuration<C, G, E> where
@@ -113,8 +130,10 @@ impl<C, G, E> Configuration<C, G, E> where
 			transaction_pool: Default::default(),
 			network: Default::default(),
 			keystore_path: Default::default(),
-			database_path: Default::default(),
-			database_cache_size: Default::default(),
+			database: DatabaseConfig::Path {
+				path: Default::default(),
+				cache_size: Default::default(),
+			},
 			state_cache_size: Default::default(),
 			state_cache_child_ratio: Default::default(),
 			custom: Default::default(),
@@ -129,6 +148,7 @@ impl<C, G, E> Configuration<C, G, E> where
 			telemetry_external_transport: None,
 			default_heap_pages: None,
 			offchain_worker: Default::default(),
+			sentry_mode: false,
 			force_authoring: false,
 			disable_grandpa: false,
 			keystore_password: None,

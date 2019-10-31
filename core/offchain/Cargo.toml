@@ -13,8 +13,6 @@ fnv = "1.0.6"
 futures01 = { package = "futures", version = "0.1" }
 futures-preview = "0.3.0-alpha.19"
 futures-timer = "0.4.0"
-hyper = "0.12.35"
-hyper-tls = "0.3.2"
 log = "0.4.8"
 threadpool = "1.7"
 num_cpus = "1.10"
@@ -27,6 +25,10 @@ sr-primitives = { path = "../../core/sr-primitives" }
 transaction_pool = { package = "substrate-transaction-pool", path = "../../core/transaction-pool" }
 network = { package = "substrate-network", path = "../../core/network" }
 keystore = { package = "substrate-keystore", path = "../keystore" }
+
+[target.'cfg(not(target_os = "unknown"))'.dependencies]
+hyper = "0.12.35"
+hyper-tls = "0.3.2"
 
 [dev-dependencies]
 env_logger = "0.7.0"

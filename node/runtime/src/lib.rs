@@ -29,20 +29,18 @@ use node_primitives::{
 	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index,
 	Moment, Signature,
 };
-use babe_primitives::AuthorityId as BabeId;
 use grandpa::fg_primitives;
 use client::{
 	block_builder::api::{self as block_builder_api, InherentData, CheckInherentsResult},
 	runtime_api as client_api, impl_runtime_apis
 };
-use sr_primitives::{
-	Permill, Perbill, ApplyResult, impl_opaque_keys, generic, create_runtime_str, key_types
-};
+use sr_primitives::{Permill, Perbill, ApplyResult, impl_opaque_keys, generic, create_runtime_str};
 use sr_primitives::curve::PiecewiseLinear;
 use sr_primitives::transaction_validity::TransactionValidity;
 use sr_primitives::weights::Weight;
 use sr_primitives::traits::{
 	self, BlakeTwo256, Block as BlockT, NumberFor, StaticLookup, SaturatedConversion,
+	OpaqueKeys,
 };
 use version::RuntimeVersion;
 #[cfg(any(feature = "std", test))]
@@ -50,6 +48,8 @@ use version::NativeVersion;
 use primitives::OpaqueMetadata;
 use grandpa::{AuthorityId as GrandpaId, AuthorityWeight as GrandpaWeight};
 use im_online::sr25519::{AuthorityId as ImOnlineId};
+use transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
+use contracts_rpc_runtime_api::ContractExecResult;
 use system::offchain::TransactionSubmitter;
 
 #[cfg(any(feature = "std", test))]
@@ -81,8 +81,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to equal spec_version. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 189,
-	impl_version: 190,
+	spec_version: 190,
+	impl_version: 191,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -206,37 +206,24 @@ impl authorship::Trait for Runtime {
 	type FindAuthor = session::FindAccountFromAuthorIndex<Self, Babe>;
 	type UncleGenerations = UncleGenerations;
 	type FilterUncle = ();
-	type EventHandler = Staking;
+	type EventHandler = (Staking, ImOnline);
 }
-
-// !!!!!!!!!!!!!
-// WARNING!!!!!!  SEE NOTE BELOW BEFORE TOUCHING THIS CODE
-// !!!!!!!!!!!!!
-type SessionHandlers = (Grandpa, Babe, ImOnline);
 
 impl_opaque_keys! {
 	pub struct SessionKeys {
-		#[id(key_types::GRANDPA)]
-		pub grandpa: GrandpaId,
-		#[id(key_types::BABE)]
-		pub babe: BabeId,
-		#[id(key_types::IM_ONLINE)]
-		pub im_online: ImOnlineId,
+		pub grandpa: Grandpa,
+		pub babe: Babe,
+		pub im_online: ImOnline,
 	}
 }
 
-// NOTE: `SessionHandler` and `SessionKeys` are co-dependent: One key will be used for each handler.
-// The number and order of items in `SessionHandler` *MUST* be the same number and order of keys in
-// `SessionKeys`.
-// TODO: Introduce some structure to tie these together to make it a bit less of a footgun. This
-// should be easy, since OneSessionHandler trait provides the `Key` as an associated type. #2858
 parameter_types! {
 	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(17);
 }
 
 impl session::Trait for Runtime {
 	type OnSessionEnding = Staking;
-	type SessionHandler = SessionHandlers;
+	type SessionHandler = <SessionKeys as OpaqueKeys>::KeyTypeIdProviders;
 	type ShouldEndSession = Babe;
 	type Event = Event;
 	type Keys = SessionKeys;
@@ -661,9 +648,7 @@ impl_runtime_apis! {
 			value: Balance,
 			gas_limit: u64,
 			input_data: Vec<u8>,
-		) -> contracts_rpc_runtime_api::ContractExecResult {
-			use contracts_rpc_runtime_api::ContractExecResult;
-
+		) -> ContractExecResult {
 			let exec_result = Contracts::bare_call(
 				origin,
 				dest.into(),
@@ -679,11 +664,37 @@ impl_runtime_apis! {
 				Err(_) => ContractExecResult::Error,
 			}
 		}
+
+		fn get_storage(
+			address: AccountId,
+			key: [u8; 32],
+		) -> contracts_rpc_runtime_api::GetStorageResult {
+			Contracts::get_storage(address, key).map_err(|rpc_err| {
+				use contracts::GetStorageError;
+				use contracts_rpc_runtime_api::{GetStorageError as RpcGetStorageError};
+				/// Map the contract error into the RPC layer error.
+				match rpc_err {
+					GetStorageError::ContractDoesntExist => RpcGetStorageError::ContractDoesntExist,
+					GetStorageError::IsTombstone => RpcGetStorageError::IsTombstone,
+				}
+			})
+		}
+	}
+
+	impl transaction_payment_rpc_runtime_api::TransactionPaymentApi<
+		Block,
+		Balance,
+		UncheckedExtrinsic,
+	> for Runtime {
+		fn query_info(uxt: UncheckedExtrinsic, len: u32) -> RuntimeDispatchInfo<Balance> {
+			TransactionPayment::query_info(uxt, len)
+		}
 	}
 
 	impl substrate_session::SessionKeys<Block> for Runtime {
 		fn generate_session_keys(seed: Option<Vec<u8>>) -> Vec<u8> {
-			let seed = seed.as_ref().map(|s| rstd::str::from_utf8(&s).expect("Seed is an utf8 string"));
+			let seed = seed.as_ref().map(|s| rstd::str::from_utf8(&s)
+				.expect("Seed is an utf8 string"));
 			SessionKeys::generate(seed)
 		}
 	}

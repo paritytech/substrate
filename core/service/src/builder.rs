@@ -17,7 +17,7 @@
 use crate::{Service, NetworkStatus, NetworkState, error::{self, Error}, DEFAULT_PROTOCOL_ID};
 use crate::{SpawnTaskHandle, start_rpc_servers, build_network_future, TransactionPoolAdapter};
 use crate::status_sinks;
-use crate::config::Configuration;
+use crate::config::{Configuration, DatabaseConfig};
 use client::{
 	BlockchainEvents, Client, runtime_api,
 	backend::RemoteBackend, light::blockchain::RemoteBlockchain,
@@ -157,15 +157,6 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 	>, Error> {
 		let keystore = Keystore::open(config.keystore_path.clone(), config.keystore_password.clone())?;
 
-		let db_settings = client_db::DatabaseSettings {
-			cache_size: None,
-			state_cache_size: config.state_cache_size,
-			state_cache_child_ratio:
-				config.state_cache_child_ratio.map(|v| (v, 100)),
-			path: config.database_path.clone(),
-			pruning: config.pruning.clone(),
-		};
-
 		let executor = NativeExecutor::<TExecDisp>::new(
 			config.wasm_method,
 			config.default_heap_pages,
@@ -177,14 +168,32 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 			.cloned()
 			.unwrap_or_default();
 
-		let (client, backend) = client_db::new_client(
-			db_settings,
-			executor,
-			&config.chain_spec,
-			fork_blocks,
-			config.execution_strategies.clone(),
-			Some(keystore.clone()),
-		)?;
+		let (client, backend) = {
+			let db_config = client_db::DatabaseSettings {
+				state_cache_size: config.state_cache_size,
+				state_cache_child_ratio:
+					config.state_cache_child_ratio.map(|v| (v, 100)),
+				pruning: config.pruning.clone(),
+				source: match &config.database {
+					DatabaseConfig::Path { path, cache_size } =>
+						client_db::DatabaseSettingsSrc::Path {
+							path: path.clone(),
+							cache_size: cache_size.clone().map(|u| u as usize),
+						},
+					DatabaseConfig::Custom(db) =>
+						client_db::DatabaseSettingsSrc::Custom(db.clone()),
+				},
+			};
+			
+			client_db::new_client(
+				db_config,
+				executor,
+				&config.chain_spec,
+				fork_blocks,
+				config.execution_strategies.clone(),
+				Some(keystore.clone()),
+			)?
+		};
 
 		let client = Arc::new(client);
 
@@ -229,21 +238,29 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 	>, Error> {
 		let keystore = Keystore::open(config.keystore_path.clone(), config.keystore_password.clone())?;
 
-		let db_settings = client_db::DatabaseSettings {
-			cache_size: config.database_cache_size.map(|u| u as usize),
-			state_cache_size: config.state_cache_size,
-			state_cache_child_ratio:
-				config.state_cache_child_ratio.map(|v| (v, 100)),
-			path: config.database_path.clone(),
-			pruning: config.pruning.clone(),
-		};
-
 		let executor = NativeExecutor::<TExecDisp>::new(
 			config.wasm_method,
 			config.default_heap_pages,
 		);
 
-		let db_storage = client_db::light::LightStorage::new(db_settings)?;
+		let db_storage = {
+			let db_settings = client_db::DatabaseSettings {
+				state_cache_size: config.state_cache_size,
+				state_cache_child_ratio:
+					config.state_cache_child_ratio.map(|v| (v, 100)),
+				pruning: config.pruning.clone(),
+				source: match &config.database {
+					DatabaseConfig::Path { path, cache_size } =>
+						client_db::DatabaseSettingsSrc::Path {
+							path: path.clone(),
+							cache_size: cache_size.clone().map(|u| u as usize),
+						},
+					DatabaseConfig::Custom(db) =>
+						client_db::DatabaseSettingsSrc::Custom(db.clone()),
+				},
+			};
+			client_db::light::LightStorage::new(db_settings)?
+		};
 		let light_blockchain = client::light::new_light_blockchain(db_storage);
 		let fetch_checker = Arc::new(client::light::new_fetch_checker(light_blockchain.clone(), executor.clone()));
 		let fetcher = Arc::new(network::OnDemand::new(fetch_checker));

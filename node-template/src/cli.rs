@@ -3,7 +3,7 @@ use futures::{future, Future, sync::oneshot};
 use std::cell::RefCell;
 use tokio::runtime::Runtime;
 pub use substrate_cli::{VersionInfo, IntoExit, error};
-use substrate_cli::{informant, parse_and_prepare, ParseAndPrepare, NoCustom};
+use substrate_cli::{display_role, informant, parse_and_prepare, ParseAndPrepare, NoCustom};
 use substrate_service::{AbstractService, Roles as ServiceRoles, Configuration};
 use aura_primitives::sr25519::{AuthorityPair as AuraPair};
 use crate::chain_spec;
@@ -24,7 +24,7 @@ pub fn run<I, T, E>(args: I, exit: E, version: VersionInfo) -> error::Result<()>
 			info!("  by {}, 2017, 2018", version.author);
 			info!("Chain specification: {}", config.chain_spec.name());
 			info!("Node name: {}", config.name);
-			info!("Roles: {:?}", config.roles);
+			info!("Roles: {}", display_role(&config));
 			let runtime = Runtime::new().map_err(|e| format!("{:?}", e))?;
 			match config.roles {
 				ServiceRoles::LIGHT => run_until_exit(

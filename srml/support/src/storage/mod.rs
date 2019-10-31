@@ -17,7 +17,7 @@
 //! Stuff to do with the runtime's storage.
 
 use rstd::prelude::*;
-use codec::{FullCodec, FullEncode, Encode, EncodeAppend, EncodeLike};
+use codec::{FullCodec, FullEncode, Encode, EncodeAppend, EncodeLike, Decode};
 use crate::traits::Len;
 
 #[macro_use]
@@ -40,6 +40,28 @@ pub trait StorageValue<T: FullCodec> {
 
 	/// Load the value from the provided storage instance.
 	fn get() -> Self::Query;
+
+	/// Translate a value from some previous type (`O`) to the current type.
+	///
+	/// `f: F` is the translation function.
+	///
+	/// Returns `Err` if the storage item could not be interpreted as the old type, and Ok, along
+	/// with the new value if it could.
+	///
+	/// NOTE: This operates from and to `Option<_>` types; no effort is made to respect the default
+	/// value of the original type.
+	///
+	/// # Warning
+	///
+	/// This function must be used with care, before being updated the storage still contains the
+	/// old type, thus other calls (such as `get`) will fail at decoding it.
+	///
+	/// # Usage
+	///
+	/// This would typically be called inside the module implementation of on_initialize, while
+	/// ensuring **no usage of this storage are made before the call to `on_initialize`**. (More
+	/// precisely prior initialized modules doesn't make use of this storage).
+	fn translate<O: Decode, F: FnOnce(Option<O>) -> Option<T>>(f: F) -> Result<Option<T>, ()>;
 
 	/// Store a value under this key into the provided storage instance.
 	fn put<Arg: EncodeLike<T>>(val: Arg);

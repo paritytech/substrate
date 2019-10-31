@@ -536,6 +536,8 @@ pub enum Forcing {
 	ForceNew,
 	/// Avoid a new era indefinitely.
 	ForceNone,
+	/// Force a new era at the end of all sessions indefinitely.
+	ForceAlways,
 }
 
 impl Default for Forcing {
@@ -956,7 +958,7 @@ decl_module! {
 		}
 
 		/// The ideal number of validators.
-		#[weight = SimpleDispatchInfo::FixedOperational(150_000)]
+		#[weight = SimpleDispatchInfo::FreeOperational]
 		fn set_validator_count(origin, #[compact] new: u32) {
 			ensure_root(origin)?;
 			ValidatorCount::put(new);
@@ -969,7 +971,7 @@ decl_module! {
 		/// # <weight>
 		/// - No arguments.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
+		#[weight = SimpleDispatchInfo::FreeOperational]
 		fn force_no_eras(origin) {
 			ensure_root(origin)?;
 			ForceEra::put(Forcing::ForceNone);
@@ -981,14 +983,14 @@ decl_module! {
 		/// # <weight>
 		/// - No arguments.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
+		#[weight = SimpleDispatchInfo::FreeOperational]
 		fn force_new_era(origin) {
 			ensure_root(origin)?;
 			ForceEra::put(Forcing::ForceNew);
 		}
 
 		/// Set the validators who cannot be slashed (if any).
-		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
+		#[weight = SimpleDispatchInfo::FreeOperational]
 		fn set_invulnerables(origin, validators: Vec<T::AccountId>) {
 			ensure_root(origin)?;
 			<Invulnerables<T>>::put(validators);
@@ -1003,6 +1005,17 @@ decl_module! {
 			T::Currency::remove_lock(STAKING_ID, &stash);
 			// remove all staking-related information.
 			Self::kill_stash(&stash);
+		}
+
+		/// Force there to be a new era at the end of sessions indefinitely.
+		///
+		/// # <weight>
+		/// - One storage write
+		/// # </weight>
+		#[weight = SimpleDispatchInfo::FreeOperational]
+		fn force_new_era_always(origin) {
+			ensure_root(origin)?;
+			ForceEra::put(Forcing::ForceAlways);
 		}
 	}
 }
@@ -1155,6 +1168,7 @@ impl<T: Trait> Module<T> {
 		let era_length = session_index.checked_sub(Self::current_era_start_session_index()).unwrap_or(0);
 		match ForceEra::get() {
 			Forcing::ForceNew => ForceEra::kill(),
+			Forcing::ForceAlways => (),
 			Forcing::NotForcing if era_length >= T::SessionsPerEra::get() => (),
 			_ => return None,
 		}
@@ -1406,6 +1420,14 @@ impl<T: Trait> Module<T> {
 			}
 		});
 	}
+
+	/// Ensures that at the end of the current session there will be a new era.
+	fn ensure_new_era() {
+		match ForceEra::get() {
+			Forcing::ForceAlways | Forcing::ForceNew => (),
+			_ => ForceEra::put(Forcing::ForceNew),
+		}
+	}
 }
 
 impl<T: Trait> session::OnSessionEnding<T::AccountId> for Module<T> {
@@ -1502,6 +1524,13 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, session::historical::Identificati
 				continue
 			}
 
+			// Auto deselect validator on any offence and force a new era if they haven't previously
+			// been deselected.
+			if <Validators<T>>::exists(stash) {
+				<Validators<T>>::remove(stash);
+				Self::ensure_new_era();
+			}
+
 			// calculate the amount to slash
 			let slash_exposure = exposure.total;
 			let amount = *slash_fraction * slash_exposure;
@@ -1514,7 +1543,7 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, session::historical::Identificati
 			// make sure to disable validator till the end of this session
 			if T::SessionInterface::disable_validator(stash).unwrap_or(false) {
 				// force a new era, to select a new validator set
-				ForceEra::put(Forcing::ForceNew);
+				Self::ensure_new_era();
 			}
 			// actually slash the validator
 			let slashed_amount = Self::slash_validator(stash, amount, exposure, &mut journal);
