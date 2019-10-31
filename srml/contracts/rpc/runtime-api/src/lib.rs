@@ -45,6 +45,20 @@ pub enum ContractExecResult {
 	Error,
 }
 
+/// A result type of the get storage call.
+///
+/// See [`ContractsApi::get_storage`] for more info.
+pub type GetStorageResult = Result<Option<Vec<u8>>, GetStorageError>;
+
+/// The possible errors that can happen querying the storage of a contract.
+#[derive(Eq, PartialEq, Encode, Decode, RuntimeDebug)]
+pub enum GetStorageError {
+	/// The given address doesn't point on a contract.
+	ContractDoesntExist,
+	/// The specified contract is a tombstone and thus cannot have any storage.
+	IsTombstone,
+}
+
 client::decl_runtime_apis! {
 	/// The API to interact with contracts without using executive.
 	pub trait ContractsApi<AccountId, Balance> where
@@ -61,5 +75,16 @@ client::decl_runtime_apis! {
 			gas_limit: u64,
 			input_data: Vec<u8>,
 		) -> ContractExecResult;
+
+		/// Query a given storage key in a given contract.
+		///
+		/// Returns `Ok(Some(Vec<u8>))` if the storage value exists under the given key in the
+		/// specified account and `Ok(None)` if it doesn't. If the account specified by the address
+		/// doesn't exist, or doesn't have a contract or if the contract is a tombstone, then `Err`
+		/// is returned.
+		fn get_storage(
+			address: AccountId,
+			key: [u8; 32],
+		) -> GetStorageResult;
 	}
 }

@@ -33,7 +33,14 @@ use primitives::offchain::{
 use sr_primitives::{generic::BlockId, traits::{self, Extrinsic}};
 use transaction_pool::txpool::{Pool, ChainApi};
 
+#[cfg(not(target_os = "unknown"))]
 mod http;
+
+#[cfg(target_os = "unknown")]
+use http_dummy as http;
+#[cfg(target_os = "unknown")]
+mod http_dummy;
+
 mod timestamp;
 
 /// A message between the offchain extension and the processing thread.

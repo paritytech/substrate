@@ -900,7 +900,6 @@ pub mod key_types {
 	/// Key type for AuthorityDiscovery module, built-in.
 	pub const AUTHORITY_DISCOVERY: KeyTypeId = KeyTypeId(*b"audi");
 	/// A key type ID useful for tests.
-	#[cfg(feature = "std")]
 	pub const DUMMY: KeyTypeId = KeyTypeId(*b"dumy");
 }
 

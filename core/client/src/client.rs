@@ -342,15 +342,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		self.backend.state_at(*block)
 	}
 
-	/// Expose backend reference. To be used in tests only
-	#[doc(hidden)]
-	#[deprecated(note="Rather than relying on `client` to provide this, access \
-	to the backend should be handled at setup only - see #1134. This function \
-	will be removed once that is in place.")]
-	pub fn backend(&self) -> &Arc<B> {
-		&self.backend
-	}
-
 	/// Given a `BlockId` and a key prefix, return the matching child storage keys in that block.
 	pub fn storage_keys(&self, id: &BlockId<Block>, key_prefix: &StorageKey) -> error::Result<Vec<StorageKey>> {
 		let keys = self.state_at(id)?.keys(&key_prefix.0).into_iter().map(StorageKey).collect();
@@ -1880,7 +1871,7 @@ pub(crate) mod tests {
 	use consensus::{BlockOrigin, SelectChain};
 	use test_client::{
 		prelude::*,
-		client_db::{Backend, DatabaseSettings, PruningMode},
+		client_db::{Backend, DatabaseSettings, DatabaseSettingsSrc, PruningMode},
 		runtime::{self, Block, Transfer, RuntimeApi, TestAPI},
 	};
 
@@ -2764,11 +2755,13 @@ pub(crate) mod tests {
 		// states
 		let backend = Arc::new(Backend::new(
 			DatabaseSettings {
-				cache_size: None,
 				state_cache_size: 1 << 20,
 				state_cache_child_ratio: None,
-				path: tmp.path().into(),
 				pruning: PruningMode::ArchiveAll,
+				source: DatabaseSettingsSrc::Path {
+					path: tmp.path().into(),
+					cache_size: None,
+				}
 			},
 			u64::max_value(),
 		).unwrap());
