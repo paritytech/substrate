@@ -34,14 +34,13 @@
 //! finality proof (that finalizes some block C that is ancestor of the B and descendant
 //! of the U) could be returned.
 
-use std::iter;
 use std::sync::Arc;
 use log::{trace, warn};
 
 use client::{
 	backend::Backend, blockchain::Backend as BlockchainBackend, CallExecutor, Client,
 	error::{Error as ClientError, Result as ClientResult},
-	light::fetcher::{FetchChecker, RemoteReadRequest, StorageProof},
+	light::fetcher::{FetchChecker, RemoteCallRequest, StorageProof}, ExecutionStrategy,
 };
 use codec::{Encode, Decode};
 use grandpa::BlockNumberOps;
@@ -49,9 +48,9 @@ use sr_primitives::{
 	Justification, generic::BlockId,
 	traits::{NumberFor, Block as BlockT, Header as HeaderT, One},
 };
-use primitives::{H256, Blake2Hasher, storage::StorageKey};
+use primitives::{H256, Blake2Hasher};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
-use fg_primitives::{AuthorityId, AuthorityList, VersionedAuthorityList, GRANDPA_AUTHORITIES_KEY};
+use fg_primitives::AuthorityId;
 
 use crate::justification::GrandpaJustification;
 
@@ -60,9 +59,9 @@ const MAX_FRAGMENTS_IN_PROOF: usize = 8;
 
 /// GRANDPA authority set related methods for the finality proof provider.
 pub trait AuthoritySetForFinalityProver<Block: BlockT>: Send + Sync {
-	/// Read GRANDPA_AUTHORITIES_KEY from storage at given block.
-	fn authorities(&self, block: &BlockId<Block>) -> ClientResult<AuthorityList>;
-	/// Prove storage read of GRANDPA_AUTHORITIES_KEY at given block.
+	/// Call GrandpaApi::grandpa_authorities at given block.
+	fn authorities(&self, block: &BlockId<Block>) -> ClientResult<Vec<(AuthorityId, u64)>>;
+	/// Prove call of GrandpaApi::grandpa_authorities at given block.
 	fn prove_authorities(&self, block: &BlockId<Block>) -> ClientResult<StorageProof>;
 }
 
@@ -73,28 +72,33 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> AuthoritySetForFinalityProver<Block> fo
 		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 		RA: Send + Sync,
 {
-	fn authorities(&self, block: &BlockId<Block>) -> ClientResult<AuthorityList> {
-		let storage_key = StorageKey(GRANDPA_AUTHORITIES_KEY.to_vec());
-		self.storage(block, &storage_key)?
-			.and_then(|encoded| VersionedAuthorityList::decode(&mut encoded.0.as_slice()).ok())
-			.map(|versioned| versioned.into())
-			.ok_or(ClientError::InvalidAuthoritiesSet)
+	fn authorities(&self, block: &BlockId<Block>) -> ClientResult<Vec<(AuthorityId, u64)>> {
+		self.executor().call(
+			block,
+			"GrandpaApi_grandpa_authorities",
+			&[],
+			ExecutionStrategy::NativeElseWasm,
+			None,
+		).and_then(|call_result| Decode::decode(&mut &call_result[..])
+			.map_err(|err| ClientError::CallResultDecode(
+				"failed to decode GRANDPA authorities set proof".into(), err
+			)))
 	}
 
 	fn prove_authorities(&self, block: &BlockId<Block>) -> ClientResult<StorageProof> {
-		self.read_proof(block, iter::once(GRANDPA_AUTHORITIES_KEY))
+		self.execution_proof(block, "GrandpaApi_grandpa_authorities",&[]).map(|(_, proof)| proof)
 	}
 }
 
 /// GRANDPA authority set related methods for the finality proof checker.
 pub trait AuthoritySetForFinalityChecker<Block: BlockT>: Send + Sync {
-	/// Check storage read proof of GRANDPA_AUTHORITIES_KEY at given block.
+	/// Check execution proof of Grandpa::grandpa_authorities at given block.
 	fn check_authorities_proof(
 		&self,
 		hash: Block::Hash,
 		header: Block::Header,
 		proof: StorageProof,
-	) -> ClientResult<AuthorityList>;
+	) -> ClientResult<Vec<(AuthorityId, u64)>>;
 }
 
 /// FetchChecker-based implementation of AuthoritySetForFinalityChecker.
@@ -104,30 +108,22 @@ impl<Block: BlockT> AuthoritySetForFinalityChecker<Block> for Arc<dyn FetchCheck
 		hash: Block::Hash,
 		header: Block::Header,
 		proof: StorageProof,
-	) -> ClientResult<AuthorityList> {
-		let storage_key = GRANDPA_AUTHORITIES_KEY.to_vec();
-		let request = RemoteReadRequest {
+	) -> ClientResult<Vec<(AuthorityId, u64)>> {
+		let request = RemoteCallRequest {
 			block: hash,
 			header,
-			keys: vec![storage_key.clone()],
+			method: "GrandpaApi_grandpa_authorities".into(),
+			call_data: vec![],
 			retry_count: None,
 		};
 
-		self.check_read_proof(&request, proof)
-			.and_then(|results| {
-				let maybe_encoded = results.get(&storage_key)
-					.expect(
-						"storage_key is listed in the request keys; \
-						check_read_proof must return a value for each requested key;
-						qed"
-					);
-				maybe_encoded
-					.as_ref()
-					.and_then(|encoded| {
-						VersionedAuthorityList::decode(&mut encoded.as_slice()).ok()
-					})
-					.map(|versioned| versioned.into())
-					.ok_or(ClientError::InvalidAuthoritiesSet)
+		self.check_execution_proof(&request, proof)
+			.and_then(|authorities| {
+				let authorities: Vec<(AuthorityId, u64)> = Decode::decode(&mut &authorities[..])
+					.map_err(|err| ClientError::CallResultDecode(
+						"failed to decode GRANDPA authorities set proof".into(), err
+					))?;
+				Ok(authorities.into_iter().collect())
 			})
 	}
 }
@@ -193,7 +189,7 @@ pub struct FinalityEffects<Header: HeaderT> {
 	/// New authorities set id that should be applied starting from block.
 	pub new_set_id: u64,
 	/// New authorities set that should be applied starting from block.
-	pub new_authorities: AuthorityList,
+	pub new_authorities: Vec<(AuthorityId, u64)>,
 }
 
 /// Single fragment of proof-of-finality.
@@ -412,7 +408,7 @@ pub(crate) fn prove_finality<Block: BlockT<Hash=H256>, B: BlockchainBackend<Bloc
 pub(crate) fn check_finality_proof<Block: BlockT<Hash=H256>, B>(
 	blockchain: &B,
 	current_set_id: u64,
-	current_authorities: AuthorityList,
+	current_authorities: Vec<(AuthorityId, u64)>,
 	authorities_provider: &dyn AuthoritySetForFinalityChecker<Block>,
 	remote_proof: Vec<u8>,
 ) -> ClientResult<FinalityEffects<Block::Header>>
@@ -431,7 +427,7 @@ pub(crate) fn check_finality_proof<Block: BlockT<Hash=H256>, B>(
 fn do_check_finality_proof<Block: BlockT<Hash=H256>, B, J>(
 	blockchain: &B,
 	current_set_id: u64,
-	current_authorities: AuthorityList,
+	current_authorities: Vec<(AuthorityId, u64)>,
 	authorities_provider: &dyn AuthoritySetForFinalityChecker<Block>,
 	remote_proof: Vec<u8>,
 ) -> ClientResult<FinalityEffects<Block::Header>>
@@ -526,12 +522,12 @@ fn check_finality_proof_fragment<Block: BlockT<Hash=H256>, B, J>(
 
 /// Authorities set from initial authorities set or finality effects.
 enum AuthoritiesOrEffects<Header: HeaderT> {
-	Authorities(u64, AuthorityList),
+	Authorities(u64, Vec<(AuthorityId, u64)>),
 	Effects(FinalityEffects<Header>),
 }
 
 impl<Header: HeaderT> AuthoritiesOrEffects<Header> {
-	pub fn extract_authorities(self) -> (u64, AuthorityList) {
+	pub fn extract_authorities(self) -> (u64, Vec<(AuthorityId, u64)>) {
 		match self {
 			AuthoritiesOrEffects::Authorities(set_id, authorities) => (set_id, authorities),
 			AuthoritiesOrEffects::Effects(effects) => (effects.new_set_id, effects.new_authorities),
@@ -585,10 +581,10 @@ pub(crate) mod tests {
 
 	impl<GetAuthorities, ProveAuthorities> AuthoritySetForFinalityProver<Block> for (GetAuthorities, ProveAuthorities)
 		where
-			GetAuthorities: Send + Sync + Fn(BlockId<Block>) -> ClientResult<AuthorityList>,
+			GetAuthorities: Send + Sync + Fn(BlockId<Block>) -> ClientResult<Vec<(AuthorityId, u64)>>,
 			ProveAuthorities: Send + Sync + Fn(BlockId<Block>) -> ClientResult<StorageProof>,
 	{
-		fn authorities(&self, block: &BlockId<Block>) -> ClientResult<AuthorityList> {
+		fn authorities(&self, block: &BlockId<Block>) -> ClientResult<Vec<(AuthorityId, u64)>> {
 			self.0(*block)
 		}
 
@@ -601,14 +597,14 @@ pub(crate) mod tests {
 
 	impl<Closure> AuthoritySetForFinalityChecker<Block> for ClosureAuthoritySetForFinalityChecker<Closure>
 		where
-			Closure: Send + Sync + Fn(H256, Header, StorageProof) -> ClientResult<AuthorityList>,
+			Closure: Send + Sync + Fn(H256, Header, StorageProof) -> ClientResult<Vec<(AuthorityId, u64)>>,
 	{
 		fn check_authorities_proof(
 			&self,
 			hash: H256,
 			header: Header,
-			proof: StorageProof
-		) -> ClientResult<AuthorityList> {
+			proof: StorageProof,
+		) -> ClientResult<Vec<(AuthorityId, u64)>> {
 			self.0(hash, header, proof)
 		}
 	}

@@ -23,7 +23,7 @@ use runtime_io;
 use support::{impl_outer_origin, impl_outer_event, parameter_types};
 use primitives::H256;
 use codec::{Encode, Decode};
-use crate::{AuthorityId, AuthorityList, GenesisConfig, Trait, Module, ConsensusLog};
+use crate::{AuthorityId, GenesisConfig, Trait, Module, ConsensusLog};
 use substrate_finality_grandpa_primitives::GRANDPA_ENGINE_ID;
 
 impl_outer_origin!{
@@ -75,7 +75,7 @@ impl_outer_event!{
 	}
 }
 
-pub fn to_authorities(vec: Vec<(u64, u64)>) -> AuthorityList {
+pub fn to_authorities(vec: Vec<(u64, u64)>) -> Vec<(AuthorityId, u64)> {
 	vec.into_iter()
 		.map(|(id, weight)| (UintAuthorityId(id).to_public_key::<AuthorityId>(), weight))
 		.collect()
