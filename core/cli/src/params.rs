@@ -416,8 +416,8 @@ pub struct RunCmd {
 	#[structopt(long = "telemetry-url", value_name = "URL VERBOSITY", parse(try_from_str = parse_telemetry_endpoints))]
 	pub telemetry_endpoints: Vec<(String, u8)>,
 
-	#[structopt(long = "prometheus-port", value_name = "PORT")]
-	pub prometheus_port: Option<u16>,
+	#[structopt(long = "prometheus-addr", value_name = "Local IP address")]
+	pub prometheus_endpoint: Option<String>,
 	/// Should execute offchain workers on every block.
 	///
 	/// By default it's only enabled for nodes that are authoring new blocks.
