@@ -22,7 +22,7 @@ use grandpa::voter_set::VoterSet;
 use codec::{Encode, Decode};
 use log::{debug, info};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
-use fg_primitives::AuthorityId;
+use fg_primitives::{AuthorityId, AuthorityList};
 
 use std::cmp::Ord;
 use std::fmt::Debug;
@@ -86,7 +86,7 @@ pub(crate) struct Status<H, N> {
 /// A set of authorities.
 #[derive(Debug, Clone, Encode, Decode, PartialEq)]
 pub(crate) struct AuthoritySet<H, N> {
-	pub(crate) current_authorities: Vec<(AuthorityId, u64)>,
+	pub(crate) current_authorities: AuthorityList,
 	pub(crate) set_id: u64,
 	// Tree of pending standard changes across forks. Standard changes are
 	// enacted on finality and must be enacted (i.e. finalized) in-order across
@@ -103,7 +103,7 @@ where H: PartialEq,
 	  N: Ord,
 {
 	/// Get a genesis set with given authorities.
-	pub(crate) fn genesis(initial: Vec<(AuthorityId, u64)>) -> Self {
+	pub(crate) fn genesis(initial: AuthorityList) -> Self {
 		AuthoritySet {
 			current_authorities: initial,
 			set_id: 0,
@@ -390,7 +390,7 @@ pub(crate) enum DelayKind<N> {
 #[derive(Debug, Clone, Encode, PartialEq)]
 pub(crate) struct PendingChange<H, N> {
 	/// The new authorities and weights to apply.
-	pub(crate) next_authorities: Vec<(AuthorityId, u64)>,
+	pub(crate) next_authorities: AuthorityList,
 	/// How deep in the chain the announcing block must be
 	/// before the change is applied.
 	pub(crate) delay: N,

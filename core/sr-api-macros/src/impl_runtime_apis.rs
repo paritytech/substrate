@@ -300,15 +300,17 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 				self.recorder = Some(Default::default());
 			}
 
-			fn extract_proof(&mut self) -> Option<Vec<Vec<u8>>> {
+			fn extract_proof(&mut self) -> Option<#crate_::runtime_api::StorageProof> {
 				self.recorder
 					.take()
-					.map(|r| {
-						r.borrow_mut()
+					.map(|recorder| {
+						let trie_nodes = recorder
+							.borrow_mut()
 							.drain()
 							.into_iter()
-							.map(|n| n.data.to_vec())
-							.collect()
+							.map(|record| record.data)
+							.collect();
+						#crate_::runtime_api::StorageProof::new(trie_nodes)
 					})
 			}
 		}

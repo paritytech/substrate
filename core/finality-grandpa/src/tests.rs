@@ -27,7 +27,7 @@ use tokio::runtime::current_thread;
 use keyring::Ed25519Keyring;
 use client::{
 	error::Result,
-	runtime_api::{Core, RuntimeVersion, ApiExt},
+	runtime_api::{Core, RuntimeVersion, ApiExt, StorageProof},
 	LongestChain,
 };
 use test_client::{self, runtime::BlockNumber};
@@ -39,7 +39,8 @@ use codec::Decode;
 use sr_primitives::traits::{ApiRef, ProvideRuntimeApi, Header as HeaderT};
 use sr_primitives::generic::{BlockId, DigestItem};
 use primitives::{NativeOrEncoded, ExecutionContext, crypto::Public};
-use fg_primitives::{GRANDPA_ENGINE_ID, AuthorityId};
+use fg_primitives::{GRANDPA_ENGINE_ID, AuthorityList};
+use state_machine::{backend::InMemory, prove_read, read_proof_check};
 
 use authorities::AuthoritySet;
 use finality_proof::{FinalityProofProvider, AuthoritySetForFinalityProver, AuthoritySetForFinalityChecker};
@@ -136,8 +137,8 @@ impl TestNetFactory for GrandpaTestNet {
 				let import = light_block_import_without_justifications(
 					client.clone(),
 					backend.clone(),
+					&self.test_config,
 					authorities_provider,
-					Arc::new(self.test_config.clone())
 				).expect("Could not create block import for fresh peer.");
 				let finality_proof_req_builder = import.0.create_finality_proof_request_builder();
 				let proof_import = Box::new(import.clone());
@@ -187,26 +188,24 @@ impl Future for Exit {
 
 #[derive(Default, Clone)]
 pub(crate) struct TestApi {
-	genesis_authorities: Vec<(AuthorityId, u64)>,
+	genesis_authorities: AuthorityList,
 }
 
 impl TestApi {
-	pub fn new(genesis_authorities: Vec<(AuthorityId, u64)>) -> Self {
+	pub fn new(genesis_authorities: AuthorityList) -> Self {
 		TestApi {
 			genesis_authorities,
 		}
 	}
 }
 
-pub(crate) struct RuntimeApi {
-	inner: TestApi,
-}
+pub(crate) struct RuntimeApi;
 
 impl ProvideRuntimeApi for TestApi {
 	type Api = RuntimeApi;
 
 	fn runtime_api<'a>(&'a self) -> ApiRef<'a, Self::Api> {
-		RuntimeApi { inner: self.clone() }.into()
+		RuntimeApi.into()
 	}
 }
 
@@ -258,35 +257,30 @@ impl ApiExt<Block> for RuntimeApi {
 		unimplemented!("Not required for testing!")
 	}
 
-	fn extract_proof(&mut self) -> Option<Vec<Vec<u8>>> {
+	fn extract_proof(&mut self) -> Option<StorageProof> {
 		unimplemented!("Not required for testing!")
 	}
 }
 
-impl GrandpaApi<Block> for RuntimeApi {
-	fn GrandpaApi_grandpa_authorities_runtime_api_impl(
-		&self,
-		_: &BlockId<Block>,
-		_: ExecutionContext,
-		_: Option<()>,
-		_: Vec<u8>,
-	) -> Result<NativeOrEncoded<Vec<(AuthorityId, u64)>>> {
-		Ok(self.inner.genesis_authorities.clone()).map(NativeOrEncoded::Native)
+impl GenesisAuthoritySetProvider<Block> for TestApi {
+	fn get(&self) -> Result<AuthorityList> {
+		Ok(self.genesis_authorities.clone())
 	}
 }
 
 impl AuthoritySetForFinalityProver<Block> for TestApi {
-	fn authorities(&self, block: &BlockId<Block>) -> Result<Vec<(AuthorityId, u64)>> {
-		let runtime_api = RuntimeApi { inner: self.clone() };
-		runtime_api.GrandpaApi_grandpa_authorities_runtime_api_impl(block, ExecutionContext::Syncing, None, Vec::new())
-			.map(|v| match v {
-				NativeOrEncoded::Native(value) => value,
-				_ => unreachable!("only providing native values"),
-			})
+	fn authorities(&self, _block: &BlockId<Block>) -> Result<AuthorityList> {
+		Ok(self.genesis_authorities.clone())
 	}
 
-	fn prove_authorities(&self, block: &BlockId<Block>) -> Result<Vec<Vec<u8>>> {
-		self.authorities(block).map(|auth| vec![auth.encode()])
+	fn prove_authorities(&self, block: &BlockId<Block>) -> Result<StorageProof> {
+		let authorities = self.authorities(block)?;
+		let backend = <InMemory<Blake2Hasher>>::from(vec![
+			(None, b"authorities".to_vec(), Some(authorities.encode()))
+		]);
+		let proof = prove_read(backend, vec![b"authorities"])
+			.expect("failure proving read from in-memory storage backend");
+		Ok(proof)
 	}
 }
 
@@ -294,17 +288,26 @@ impl AuthoritySetForFinalityChecker<Block> for TestApi {
 	fn check_authorities_proof(
 		&self,
 		_hash: <Block as BlockT>::Hash,
-		_header: <Block as BlockT>::Header,
-		proof: Vec<Vec<u8>>,
-	) -> Result<Vec<(AuthorityId, u64)>> {
-		Decode::decode(&mut &proof[0][..])
-			.map_err(|_| unreachable!("incorrect value is passed as GRANDPA authorities proof"))
+		header: <Block as BlockT>::Header,
+		proof: StorageProof,
+	) -> Result<AuthorityList> {
+		let results = read_proof_check::<Blake2Hasher, _>(
+			*header.state_root(), proof, vec![b"authorities"]
+		)
+			.expect("failure checking read proof for authorities");
+		let encoded = results.get(&b"authorities"[..])
+			.expect("returned map must contain all proof keys")
+			.as_ref()
+			.expect("authorities in proof is None");
+		let authorities = Decode::decode(&mut &encoded[..])
+			.expect("failure decoding authorities read from proof");
+		Ok(authorities)
 	}
 }
 
 const TEST_GOSSIP_DURATION: Duration = Duration::from_millis(500);
 
-fn make_ids(keys: &[Ed25519Keyring]) -> Vec<(AuthorityId, u64)> {
+fn make_ids(keys: &[Ed25519Keyring]) -> AuthorityList {
 	keys.iter().map(|key| key.clone().public().into()).map(|id| (id, 1)).collect()
 }
 

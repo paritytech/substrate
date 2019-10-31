@@ -202,25 +202,13 @@ check-web-wasm:
     - time cargo web build -p sr-io
     - time cargo web build -p sr-primitives
     - time cargo web build -p sr-std
-    - time cargo web build -p substrate-chain-spec
     - time cargo web build -p substrate-client
     - time cargo web build -p substrate-consensus-aura
     - time cargo web build -p substrate-consensus-babe
     - time cargo web build -p substrate-consensus-common
-    - time cargo web build -p substrate-keyring
-    - time cargo web build -p substrate-keystore
-    - time cargo web build -p substrate-executor
-    - time cargo web build -p substrate-network
-    - time cargo web build -p substrate-offchain
-    - time cargo web build -p substrate-panic-handler
-    - time cargo web build -p substrate-peerset
-    - time cargo web build -p substrate-primitives
-    - time cargo web build -p substrate-rpc-servers
-    - time cargo web build -p substrate-serializer
-    - time cargo web build -p substrate-state-db
-    - time cargo web build -p substrate-state-machine
     - time cargo web build -p substrate-telemetry
-    - time cargo web build -p substrate-trie
+    # Note: the command below is a bit weird because several Cargo issues prevent us from compiling the node in a more straight-forward way.
+    - time cargo build --manifest-path=node/cli/Cargo.toml --no-default-features --features "browser" --target=wasm32-unknown-unknown
     - sccache -s
 
 node-exits:
