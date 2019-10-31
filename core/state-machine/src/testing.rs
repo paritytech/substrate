@@ -99,14 +99,6 @@ impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 		});
 	}
 
-	/// Insert key/value into ofstate information backend
-	pub fn insert_kv(&mut self, k: Vec<u8>, v: Vec<u8>) {
-		self.backend = self.backend.update(InMemoryTransaction {
-			storage: Default::default(),
-			kv: Some((k, Some(v))).into_iter().collect(),
-		});
-	}
-
 	/// Registers the given extension for this instance.
 	pub fn register_extension<E: Any + Extension>(&mut self, ext: E) {
 		self.extensions.register(ext);
@@ -131,12 +123,12 @@ impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 					.collect::<Vec<_>>()
 			});
 
-		let kv = self.overlay.committed.kv.clone().into_iter()
-			.chain(self.overlay.prospective.kv.clone().into_iter());
+		// TODO state machine kv implementation
+		let kv = Default::default();
 
 		self.backend.update(InMemoryTransaction {
 			storage: top.chain(children).collect(),
-			kv: kv.collect(),
+			kv,
 		})
 	}
 

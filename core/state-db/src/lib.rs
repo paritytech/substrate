@@ -31,7 +31,6 @@
 
 mod noncanonical;
 mod pruning;
-mod branch;
 #[cfg(test)] mod test;
 
 use std::fmt;
@@ -41,7 +40,9 @@ use std::collections::{HashSet, HashMap, hash_map::Entry};
 use noncanonical::NonCanonicalOverlay;
 use pruning::RefWindow;
 use log::trace;
-pub use branch::BranchRanges;
+// TODO this is a stub type, representing a query state
+// among multiple branch (a fork path)
+pub type BranchRanges = ();
 
 const PRUNING_MODE: &[u8] = b"mode";
 const PRUNING_MODE_ARCHIVE: &[u8] = b"archive";
@@ -157,7 +158,6 @@ pub type KvChangeSetPrune = Option<(u64, HashSet<KvKey>)>;
 pub type CommitSetCanonical<H> = (CommitSet<H>, KvChangeSetPrune);
 
 /// A set of changes to the backing database.
-/// It only contain a single block change set.
 #[derive(Default, Debug, Clone)]
 pub struct CommitSet<H: Hash> {
 	/// State node changes.
@@ -183,7 +183,6 @@ pub enum PruningMode {
 	/// Maintain a pruning window.
 	Constrained(Constraints),
 	/// No pruning. Canonicalization is a no-op.
-	/// Except for kv (key value without state) storage.
 	ArchiveAll,
 	/// Canonicalization discards non-canonical nodes. All the canonical nodes are kept in the DB.
 	ArchiveCanonical,
@@ -279,7 +278,7 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		number: u64,
 		parent_hash: &BlockHash,
 		mut changeset: ChangeSet<Key>,
-		kv_changeset: KvChangeSet<KvKey>,
+		_kv_changeset: KvChangeSet<KvKey>,
 	) -> Result<CommitSet<Key>, Error<E>> {
 		let mut meta = ChangeSet::default();
 		if number == 0 {
@@ -294,14 +293,11 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 				Ok(CommitSet {
 					data: changeset,
 					meta: meta,
-					// This is only the canonical changeset: archive
-					// all mode does not keep trace of kv storage for
-					// fork. This is a big limitation.
-					kv: kv_changeset,
+					kv: Default::default(),
 				})
 			},
 			PruningMode::Constrained(_) | PruningMode::ArchiveCanonical => {
-				let commit = self.non_canonical.insert(hash, number, parent_hash, changeset, kv_changeset);
+				let commit = self.non_canonical.insert(hash, number, parent_hash, changeset);
 				commit.map(|mut c| {
 					c.meta.inserted.extend(meta.inserted);
 					c
@@ -387,8 +383,9 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 
 	/// For a a given block return its path in the block tree.
 	/// Using a block hash and its number.
-	pub fn get_branch_range(&self, hash: &BlockHash, number: u64) -> Option<BranchRanges> {
-		self.non_canonical.get_branch_range(hash, number)
+	pub fn get_branch_range(&self, _hash: &BlockHash, _number: u64) -> Option<BranchRanges> {
+		// TODO implement kv for state-db
+		None
 	}
 
 	pub fn pin(&mut self, hash: &BlockHash) -> Result<(), PinError> {
@@ -443,36 +440,23 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 	/// and a block number for cannonical storage.
 	pub fn get_kv<D: KvDb<u64>>(
 		&self,
-		key: &[u8],
-		state: &(BranchRanges, u64),
-		db: &D,
+		_key: &[u8],
+		_state: &(BranchRanges, u64),
+		_db: &D,
 	) -> Result<Option<DBValue>, Error<D::Error>>	{
-		if let Some(value) = self.non_canonical.get_kv(key, &state.0) {
-			return Ok(value.clone());
-		}
-		db.get_kv(key, &state.1).map_err(|e| Error::Db(e))
+		// TODO state db kv implementation
+		Ok(None)
 	}
 
 	/// Access current full state for both backend and non cannoical.
 	/// Very inefficient and costly.
 	pub fn get_kv_pairs<D: KvDb<u64>>(
 		&self,
-		state: &(BranchRanges, u64),
-		db: &D,
+		_state: &(BranchRanges, u64),
+		_db: &D,
 	) -> Vec<(KvKey, DBValue)> {
-		let mut result = Vec::new();
-		let mut filter = HashSet::new();
-		for (k, o) in self.non_canonical.kv_iter(&state.0) {
-			if let Some(v) = o.as_ref() {
-				result.push((k.clone(), v.clone()));
-			}
-			filter.insert(k.clone());
-		}
-		result.extend(
-			db.get_kv_pairs(&state.1).into_iter()
-				.filter(|kv| !filter.contains(&kv.0))
-		);
-		result
+		// TODO state db kv implementation
+		Default::default()
 	}
 
 	pub fn apply_pending(&mut self) {
@@ -610,11 +594,10 @@ mod tests {
 	use std::io;
 	use primitives::H256;
 	use crate::{StateDb, PruningMode, Constraints};
-	use crate::test::{make_db, make_changeset, make_kv_changeset, TestDb};
+	use crate::test::{make_db, make_changeset, TestDb};
 
 	fn make_test_db(settings: PruningMode) -> (TestDb, StateDb<H256, H256>) {
 		let mut db = make_db(&[91, 921, 922, 93, 94]);
-		db.initialize_kv(&[81, 821, 822, 83, 84]);
 		let state_db = StateDb::new(settings, &db).unwrap();
 
 		db.commit(
@@ -624,7 +607,7 @@ mod tests {
 					1,
 					&H256::from_low_u64_be(0),
 					make_changeset(&[1], &[91]),
-					make_kv_changeset(&[1], &[81]),
+					Default::default(),
 				)
 				.unwrap(),
 		);
@@ -635,7 +618,7 @@ mod tests {
 					2,
 					&H256::from_low_u64_be(1),
 					make_changeset(&[21], &[921, 1]),
-					make_kv_changeset(&[21], &[821, 1]),
+					Default::default(),
 				)
 				.unwrap(),
 		);
@@ -646,7 +629,7 @@ mod tests {
 					2,
 					&H256::from_low_u64_be(1),
 					make_changeset(&[22], &[922]),
-					make_kv_changeset(&[22], &[822]),
+					Default::default(),
 				)
 				.unwrap(),
 		);
@@ -657,15 +640,12 @@ mod tests {
 					3,
 					&H256::from_low_u64_be(21),
 					make_changeset(&[3], &[93]),
-					make_kv_changeset(&[3], &[83]),
+					Default::default(),
 				)
 				.unwrap(),
 		);
 		state_db.apply_pending();
-		db.commit_canonical(
-			&state_db.canonicalize_block::<io::Error>(&H256::from_low_u64_be(1))
-				.unwrap().0
-		);
+		db.commit(&(state_db.canonicalize_block::<io::Error>(&H256::from_low_u64_be(1)).unwrap().0).0);
 		state_db.apply_pending();
 		db.commit(
 			&state_db
@@ -674,20 +654,14 @@ mod tests {
 					4,
 					&H256::from_low_u64_be(3),
 					make_changeset(&[4], &[94]),
-					make_kv_changeset(&[4], &[84]),
+					Default::default(),
 				)
 				.unwrap(),
 		);
 		state_db.apply_pending();
-		db.commit_canonical(
-			&state_db.canonicalize_block::<io::Error>(&H256::from_low_u64_be(21))
-				.unwrap().0
-		);
+		db.commit(&(state_db.canonicalize_block::<io::Error>(&H256::from_low_u64_be(21)).unwrap().0).0);
 		state_db.apply_pending();
-		db.commit_canonical(
-			&state_db.canonicalize_block::<io::Error>(&H256::from_low_u64_be(3))
-				.unwrap().0
-		);
+		db.commit(&(state_db.canonicalize_block::<io::Error>(&H256::from_low_u64_be(3)).unwrap().0).0);
 		state_db.apply_pending();
 
 		(db, state_db)
@@ -697,10 +671,6 @@ mod tests {
 	fn full_archive_keeps_everything() {
 		let (db, sdb) = make_test_db(PruningMode::ArchiveAll);
 		assert!(db.data_eq(&make_db(&[1, 21, 22, 3, 4, 91, 921, 922, 93, 94])));
-
-		// TODO EMCH implement archive all support for test db and complete this
-		// test for kv store.
-	
 		assert!(!sdb.is_pruned(&H256::from_low_u64_be(0), 0));
 	}
 
@@ -708,11 +678,6 @@ mod tests {
 	fn canonical_archive_keeps_canonical() {
 		let (db, _) = make_test_db(PruningMode::ArchiveCanonical);
 		assert!(db.data_eq(&make_db(&[1, 21, 3, 91, 921, 922, 93, 94])));
-		assert!(db.kv_eq_at(&[81, 821, 822, 83, 84], Some(0)));
-		assert!(db.kv_eq_at(&[1, 821, 822, 83, 84], Some(1)));
-		assert!(db.kv_eq_at(&[21, 822, 83, 84], Some(2)));
-		assert!(db.kv_eq_at(&[3, 21, 822, 84], Some(3)));
-		assert!(db.kv_eq(&[3, 21, 822, 84]));
 	}
 
 	#[test]
@@ -722,11 +687,6 @@ mod tests {
 			max_mem: None,
 		}));
 		assert!(db.data_eq(&make_db(&[21, 3, 922, 94])));
-		assert!(db.kv_eq_at(&[822, 84], Some(0)));
-		assert!(db.kv_eq_at(&[822, 84], Some(1)));
-		assert!(db.kv_eq_at(&[21, 822, 84], Some(2)));
-		assert!(db.kv_eq_at(&[3, 21, 822, 84], Some(3)));
-		assert!(db.kv_eq(&[3, 21, 822, 84]));
 	}
 
 	#[test]
@@ -740,11 +700,6 @@ mod tests {
 		assert!(sdb.is_pruned(&H256::from_low_u64_be(21), 2));
 		assert!(sdb.is_pruned(&H256::from_low_u64_be(22), 2));
 		assert!(db.data_eq(&make_db(&[21, 3, 922, 93, 94])));
-		assert!(db.kv_eq_at(&[822, 83, 84], Some(0)));
-		assert!(db.kv_eq_at(&[822, 83, 84], Some(1)));
-		assert!(db.kv_eq_at(&[21, 822, 83, 84], Some(2)));
-		assert!(db.kv_eq_at(&[3, 21, 822, 84], Some(3)));
-		assert!(db.kv_eq(&[3, 21, 822, 84]));
 	}
 
 	#[test]
@@ -758,11 +713,6 @@ mod tests {
 		assert!(!sdb.is_pruned(&H256::from_low_u64_be(21), 2));
 		assert!(sdb.is_pruned(&H256::from_low_u64_be(22), 2));
 		assert!(db.data_eq(&make_db(&[1, 21, 3, 921, 922, 93, 94])));
-		assert!(db.kv_eq_at(&[821, 822, 83, 84], Some(0)));
-		assert!(db.kv_eq_at(&[1, 821, 822, 83, 84], Some(1)));
-		assert!(db.kv_eq_at(&[21, 822, 83, 84], Some(2)));
-		assert!(db.kv_eq_at(&[3, 21, 822, 84], Some(3)));
-		assert!(db.kv_eq(&[3, 21, 822, 84]));
 	}
 
 	#[test]
@@ -776,7 +726,7 @@ mod tests {
 				0,
 				&H256::from_low_u64_be(0),
 				make_changeset(&[], &[]),
-				make_kv_changeset(&[], &[]),
+				Default::default(),
 			)
 			.unwrap(),
 		);

@@ -441,8 +441,8 @@ where
 		let delta = self.overlay.committed.top.iter().map(|(k, v)| (k.clone(), v.value.clone()))
 			.chain(self.overlay.prospective.top.iter().map(|(k, v)| (k.clone(), v.value.clone())));
 
-		let kv_delta = self.overlay.committed.kv.clone().into_iter()
-			.chain(self.overlay.prospective.kv.clone().into_iter());
+		// TODO this requires state machine implementation
+		let kv_delta = None.into_iter();
 		let (root, transaction) = self.backend.full_storage_root(delta, child_delta_iter, kv_delta);
 		self.storage_transaction = Some((transaction, root));
 		trace!(target: "state-trace", "{:04x}: Root {}",

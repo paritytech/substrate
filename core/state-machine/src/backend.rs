@@ -253,7 +253,6 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 		(*self).kv_in_memory()
 	}
 
-
 	fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], f: F) {
 		(*self).for_key_values_with_prefix(prefix, f);
 	}
@@ -277,6 +276,13 @@ impl<U> Consolidate for Vec<U> {
 	}
 }
 
+impl Consolidate for InMemoryTransaction {
+	fn consolidate(&mut self, other: Self) {
+		self.storage.consolidate(other.storage);
+		self.kv.consolidate(other.kv);
+	}
+}
+
 impl<K: Eq + std::hash::Hash, V> Consolidate for HashMap<K, V> {
 	fn consolidate(&mut self, other: Self) {
 		self.extend(other);
@@ -287,13 +293,6 @@ impl<U: Consolidate, V: Consolidate> Consolidate for (U, V) {
 	fn consolidate(&mut self, other: Self) {
 		self.0.consolidate(other.0);
 		self.1.consolidate(other.1);
-	}
-}
-
-impl Consolidate for InMemoryTransaction {
-	fn consolidate(&mut self, other: Self) {
-		self.storage.consolidate(other.storage);
-		self.kv.consolidate(other.kv);
 	}
 }
 
@@ -322,7 +321,6 @@ impl error::Error for Void {
 /// tests.
 pub struct InMemory<H: Hasher> {
 	inner: HashMap<Option<Vec<u8>>, HashMap<Vec<u8>, Vec<u8>>>,
-	kv: Option<InMemoryKvBackend>,
 	trie: Option<TrieBackend<MemoryDB<H>, H, InMemoryKvBackend>>,
 	_hasher: PhantomData<H>,
 }
@@ -338,7 +336,6 @@ impl<H: Hasher> Default for InMemory<H> {
 		InMemory {
 			inner: Default::default(),
 			trie: None,
-			kv: Some(Default::default()),
 			_hasher: PhantomData,
 		}
 	}
@@ -349,7 +346,6 @@ impl<H: Hasher> Clone for InMemory<H> {
 		InMemory {
 			inner: self.inner.clone(),
 			trie: None,
-			kv: self.kv.clone(),
 			_hasher: PhantomData,
 		}
 	}
@@ -358,54 +354,22 @@ impl<H: Hasher> Clone for InMemory<H> {
 impl<H: Hasher> PartialEq for InMemory<H> {
 	fn eq(&self, other: &Self) -> bool {
 		self.inner.eq(&other.inner)
-			&& self.kv().eq(other.kv()) 
 	}
 }
 
 impl<H: Hasher> InMemory<H> {
-	// the inmemory storage for kv is either in trie if initialized
-	// or in field.
-	fn kv(&self) -> &InMemoryKvBackend {
-		if let Some(kv) = self.kv.as_ref() {
-			kv
-		} else {
-			self.trie.as_ref().unwrap().kv_backend()
-		}
-	}
-
-	fn kv_mut(&mut self) -> &mut InMemoryKvBackend {
-		if let Some(kv) = self.kv.as_mut() {
-			kv
-		} else {
-			self.trie.as_mut().unwrap().kv_backend_mut()
-		}
-	}
-
-	fn extract_kv(&mut self) -> InMemoryKvBackend {
-		if let Some(kv) = self.kv.take() {
-			kv
-		} else {
-			std::mem::replace(
-				self.trie.as_mut().unwrap().kv_backend_mut(),
-				Default::default(),
-			)	
-		}
-	}
-
 	/// Copy the state, with applied updates
 	pub fn update(&self, changes: <Self as Backend<H>>::Transaction) -> Self {
 		let mut inner: HashMap<_, _> = self.inner.clone();
-		let mut kv: HashMap<_, _> = self.kv().clone();
 		for (storage_key, key, val) in changes.storage {
 			match val {
 				Some(v) => { inner.entry(storage_key).or_default().insert(key, v); },
 				None => { inner.entry(storage_key).or_default().remove(&key); },
 			}
 		}
-		kv.extend(changes.kv);
+		// TODO implement kv
 
-		let kv = Some(kv);
-		InMemory { inner, kv, trie: None, _hasher: PhantomData }
+		InMemory { inner, trie: None, _hasher: PhantomData }
 	}
 }
 
@@ -414,7 +378,6 @@ impl<H: Hasher> From<HashMap<Option<Vec<u8>>, HashMap<Vec<u8>, Vec<u8>>>> for In
 		InMemory {
 			inner: inner,
 			trie: None,
-			kv: Some(Default::default()),
 			_hasher: PhantomData,
 		}
 	}
@@ -434,7 +397,6 @@ impl<H: Hasher> From<(
 		InMemory {
 			inner: inner,
 			trie: None,
-			kv: Some(Default::default()),
 			_hasher: PhantomData,
 		}
 	}
@@ -447,7 +409,6 @@ impl<H: Hasher> From<HashMap<Vec<u8>, Vec<u8>>> for InMemory<H> {
 		InMemory {
 			inner: expanded,
 			trie: None,
-			kv: Some(Default::default()),
 			_hasher: PhantomData,
 		}
 	}
@@ -473,9 +434,8 @@ impl<H: Hasher> From<InMemoryTransaction> for InMemory<H> {
 				expanded.entry(child_key).or_default().insert(key, value);
 			}
 		}
-		let mut result: InMemory<H> = expanded.into();
-		*result.kv_mut() = inner.kv;
-		result
+		// TODO manage kv
+		expanded.into()
 	}
 }
 
@@ -510,12 +470,9 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 		Ok(self.inner.get(&Some(storage_key.to_vec())).and_then(|map| map.get(key).map(Clone::clone)))
 	}
 
-	fn kv_storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		Ok(
-			self.kv().get(key)
-				.map(Clone::clone)
-				.unwrap_or(None)
-		)
+	fn kv_storage(&self, _key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		// TODO implement this
+		Ok(None)
 	}
 
 	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {
@@ -592,13 +549,12 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 		)
 	}
 
-	fn kv_transaction<I>(&self, delta: I) -> Self::Transaction
+	fn kv_transaction<I>(&self, _delta: I) -> Self::Transaction
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
-		let mut kv = self.kv().clone();
-		kv.extend(delta.into_iter());
-		InMemoryTransaction { storage: Default::default(), kv}
+		// TODO implement this
+		Default::default()
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
@@ -620,7 +576,8 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 	}
 
 	fn kv_in_memory(&self) -> crate::InMemoryKvBackend {
-		self.kv().clone()
+		// TODO implement this
+		Default::default()
 	}
 
 	fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> {
@@ -663,7 +620,8 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 			Some(root) => root,
 			None => insert_into_memory_db::<H, _>(&mut mdb, ::std::iter::empty())?,
 		};
-		self.trie = Some(TrieBackend::new(mdb, root, self.extract_kv()));
+		// TODO get kv from self
+		self.trie = Some(TrieBackend::new(mdb, root, Default::default()));
 		self.trie.as_ref()
 	}
 }
