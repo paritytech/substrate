@@ -22,7 +22,7 @@ use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 use linked_hash_map::{LinkedHashMap, Entry};
 use hash_db::Hasher;
 use sr_primitives::traits::{Block as BlockT, Header};
-use state_machine::{backend::Backend as StateBackend, TrieBackend, InMemoryKvBackend};
+use state_machine::{backend::Backend as StateBackend, TrieBackend};
 use log::trace;
 use super::{StorageCollection, ChildStorageCollection};
 use std::hash::Hash as StdHash;
@@ -470,7 +470,6 @@ impl<H: Hasher, S: StateBackend<H>, B: BlockT> StateBackend<H> for CachingState<
 	type Error = S::Error;
 	type Transaction = S::Transaction;
 	type TrieBackendStorage = S::TrieBackendStorage;
-	type KvBackend = S::KvBackend;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		let local_cache = self.cache.local_cache.upgradable_read();
@@ -531,10 +530,6 @@ impl<H: Hasher, S: StateBackend<H>, B: BlockT> StateBackend<H> for CachingState<
 		Ok(value)
 	}
 
-	fn kv_storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.state.kv_storage(key)
-	}
-
 	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {
 		Ok(self.storage(key)?.is_some())
 	}
@@ -575,27 +570,8 @@ impl<H: Hasher, S: StateBackend<H>, B: BlockT> StateBackend<H> for CachingState<
 		self.state.child_storage_root(storage_key, delta)
 	}
 
-	fn kv_transaction<I>(&self, delta: I) -> Self::Transaction
-		where
-			I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
-	{
-		self.state.kv_transaction(delta)
-	}
-
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
 		self.state.pairs()
-	}
-
-	fn children_storage_keys(&self) -> Vec<Vec<u8>> {
-		self.state.children_storage_keys()
-	}
-
-	fn child_pairs(&self, storage_key: &[u8]) -> Vec<(Vec<u8>, Vec<u8>)> {
-		self.state.child_pairs(storage_key)
-	}
-
-	fn kv_in_memory(&self) -> InMemoryKvBackend {
-		self.state.kv_in_memory()
 	}
 
 	fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> {
@@ -606,9 +582,7 @@ impl<H: Hasher, S: StateBackend<H>, B: BlockT> StateBackend<H> for CachingState<
 		self.state.child_keys(child_key, prefix)
 	}
 
-	fn as_trie_backend(&mut self) -> Option<
-		&TrieBackend<Self::TrieBackendStorage, H, Self::KvBackend>
-	> {
+	fn as_trie_backend(&mut self) -> Option<&TrieBackend<Self::TrieBackendStorage, H>> {
 		self.state.as_trie_backend()
 	}
 }

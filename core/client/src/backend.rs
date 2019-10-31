@@ -36,24 +36,12 @@ pub type StorageCollection = Vec<(Vec<u8>, Option<Vec<u8>>)>;
 /// In memory arrays of storage values for multiple child tries.
 pub type ChildStorageCollection = Vec<(Vec<u8>, StorageCollection)>;
 
-#[derive(Clone)]
-/// Collection of all storage element, can manage a single state delta
-/// (deletion are included).
-pub struct FullStorageCollection {
-	/// Parent trie changes.
-	pub top: StorageCollection,
-	/// Children trie changes.
-	pub children: ChildStorageCollection,
-	/// Key value not in trie changes.
-	pub kv: StorageCollection,
-}
-
 pub(crate) struct ImportSummary<Block: BlockT> {
 	pub(crate) hash: Block::Hash,
 	pub(crate) origin: BlockOrigin,
 	pub(crate) header: Block::Header,
 	pub(crate) is_new_best: bool,
-	pub(crate) storage_changes: Option<FullStorageCollection>,
+	pub(crate) storage_changes: Option<(StorageCollection, ChildStorageCollection)>,
 	pub(crate) retracted: Vec<Block::Hash>,
 }
 
@@ -125,15 +113,14 @@ pub trait BlockImportOperation<Block, H> where
 	/// Set storage changes.
 	fn update_storage(
 		&mut self,
-		update: FullStorageCollection,
+		update: StorageCollection,
+		child_update: ChildStorageCollection,
 	) -> error::Result<()>;
-
 	/// Inject changes trie data into the database.
 	fn update_changes_trie(&mut self, update: ChangesTrieTransaction<H, NumberFor<Block>>) -> error::Result<()>;
 	/// Insert auxiliary keys. Values are `None` if should be deleted.
 	fn insert_aux<I>(&mut self, ops: I) -> error::Result<()>
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>;
-
 	/// Mark a block as finalized.
 	fn mark_finalized(&mut self, id: BlockId<Block>, justification: Option<Justification>) -> error::Result<()>;
 	/// Mark a block as new head. If both block import and set head are specified, set head overrides block import's best block rule.

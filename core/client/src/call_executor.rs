@@ -139,12 +139,9 @@ where
 	/// Execute a call to a contract on top of given trie state, gathering execution proof.
 	///
 	/// No changes are made.
-	fn prove_at_trie_state<
-		S: state_machine::TrieBackendStorage<H>,
-		K: state_machine::KvBackend,
-	>(
+	fn prove_at_trie_state<S: state_machine::TrieBackendStorage<H>>(
 		&self,
-		trie_state: &state_machine::TrieBackend<S, H, K>,
+		trie_state: &state_machine::TrieBackend<S, H>,
 		overlay: &mut OverlayedChanges,
 		method: &str,
 		call_data: &[u8]
@@ -374,12 +371,9 @@ where
 		.map_err(Into::into)
 	}
 
-	fn prove_at_trie_state<
-		S: state_machine::TrieBackendStorage<Blake2Hasher>,
-		K: state_machine::KvBackend,
-	>(
+	fn prove_at_trie_state<S: state_machine::TrieBackendStorage<Blake2Hasher>>(
 		&self,
-		trie_state: &state_machine::TrieBackend<S, Blake2Hasher, K>,
+		trie_state: &state_machine::TrieBackend<S, Blake2Hasher>,
 		overlay: &mut OverlayedChanges,
 		method: &str,
 		call_data: &[u8]

@@ -34,7 +34,6 @@ mod storage_cache;
 mod utils;
 
 use std::sync::Arc;
-use std::ops::Deref;
 use std::path::PathBuf;
 use std::io;
 use std::collections::{HashMap, HashSet};
@@ -42,7 +41,7 @@ use std::collections::{HashMap, HashSet};
 use client::backend::NewBlockState;
 use client::blockchain::{well_known_cache_keys, HeaderBackend};
 use client::{ForkBlocks, ExecutionStrategies};
-use client::backend::{StorageCollection, ChildStorageCollection, FullStorageCollection};
+use client::backend::{StorageCollection, ChildStorageCollection};
 use client::error::{Result as ClientResult, Error as ClientError};
 use codec::{Decode, Encode};
 use hash_db::{Hasher, Prefix};
@@ -61,27 +60,19 @@ use sr_primitives::traits::{
 use executor::RuntimeInfo;
 use state_machine::{
 	DBValue, ChangesTrieTransaction, ChangesTrieCacheAction, ChangesTrieBuildCache,
-	backend::Backend as StateBackend, InMemoryKvBackend,
+	backend::Backend as StateBackend,
 };
 use crate::utils::{Meta, db_err, meta_keys, read_db, read_meta};
 use client::leaves::{LeafSet, FinalizationDisplaced};
 use client::children;
 use state_db::StateDb;
-use state_db::BranchRanges;
 use header_metadata::{CachedHeaderMetadata, HeaderMetadata, HeaderMetadataCache};
 use crate::storage_cache::{CachingState, SharedCache, new_shared_cache};
 use log::{trace, debug, warn};
 pub use state_db::PruningMode;
-use historical_data::tree::Serialized;
-use historical_data::PruneResult;
-use historical_data::linear::DefaultVersion;
-
-type Ser<'a> = Serialized<'a, DefaultVersion>;
 
 #[cfg(feature = "test-helpers")]
 use client::in_mem::Backend as InMemoryBackend;
-#[cfg(feature = "test-helpers")]
-use state_machine::backend::InMemoryTransaction;
 
 const CANONICALIZATION_DELAY: u64 = 4096;
 const MIN_BLOCKS_TO_KEEP_CHANGES_TRIES_FOR: u32 = 32768;
@@ -90,12 +81,7 @@ const MIN_BLOCKS_TO_KEEP_CHANGES_TRIES_FOR: u32 = 32768;
 const DEFAULT_CHILD_RATIO: (usize, usize) = (1, 10);
 
 /// DB-backed patricia trie state, transaction type is an overlay of changes to commit.
-/// A simple key value backend is also accessible for direct key value storage.
-pub type DbState = state_machine::TrieBackend<
-	Arc<dyn state_machine::Storage<Blake2Hasher>>,
-	Blake2Hasher,
-	Arc<dyn state_machine::KvBackend>,
->;
+pub type DbState = state_machine::TrieBackend<Arc<dyn state_machine::Storage<Blake2Hasher>>, Blake2Hasher>;
 
 /// Re-export the KVDB trait so that one can pass an implementation of it.
 pub use kvdb;
@@ -138,7 +124,6 @@ impl<B: BlockT> StateBackend<Blake2Hasher> for RefTrackingState<B> {
 	type Error =  <DbState as StateBackend<Blake2Hasher>>::Error;
 	type Transaction = <DbState as StateBackend<Blake2Hasher>>::Transaction;
 	type TrieBackendStorage = <DbState as StateBackend<Blake2Hasher>>::TrieBackendStorage;
-	type KvBackend = <DbState as StateBackend<Blake2Hasher>>::KvBackend;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.state.storage(key)
@@ -150,10 +135,6 @@ impl<B: BlockT> StateBackend<Blake2Hasher> for RefTrackingState<B> {
 
 	fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.state.child_storage(storage_key, key)
-	}
-
-	fn kv_storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.state.kv_storage(key)
 	}
 
 	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {
@@ -194,27 +175,8 @@ impl<B: BlockT> StateBackend<Blake2Hasher> for RefTrackingState<B> {
 		self.state.child_storage_root(storage_key, delta)
 	}
 
-	fn kv_transaction<I>(&self, delta: I) -> Self::Transaction
-		where
-			I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
-	{
-		self.state.kv_transaction(delta)
-	}
-
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
 		self.state.pairs()
-	}
-
-	fn children_storage_keys(&self) -> Vec<Vec<u8>> {
-		self.state.children_storage_keys()
-	}
-
-	fn child_pairs(&self, child_storage_key: &[u8]) -> Vec<(Vec<u8>, Vec<u8>)> {
-		self.state.child_pairs(child_storage_key)
-	}
-
-	fn kv_in_memory(&self) -> InMemoryKvBackend {
-		self.state.kv_in_memory()
 	}
 
 	fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> {
@@ -225,9 +187,7 @@ impl<B: BlockT> StateBackend<Blake2Hasher> for RefTrackingState<B> {
 		self.state.child_keys(child_key, prefix)
 	}
 
-	fn as_trie_backend(&mut self) -> Option<
-		&state_machine::TrieBackend<Self::TrieBackendStorage, Blake2Hasher, Self::KvBackend>
-	> {
+	fn as_trie_backend(&mut self) -> Option<&state_machine::TrieBackend<Self::TrieBackendStorage, Blake2Hasher>> {
 		self.state.as_trie_backend()
 	}
 }
@@ -303,10 +263,6 @@ pub(crate) mod columns {
 	pub const AUX: Option<u32> = Some(8);
 	/// Offchain workers local storage
 	pub const OFFCHAIN: Option<u32> = Some(9);
-	/// Kv storage main collection.
-	/// Content here should be organized by prefixing
-	/// keys to avoid conflicts.
-	pub const KV: Option<u32> = Some(10);
 }
 
 struct PendingBlock<Block: BlockT> {
@@ -492,7 +448,7 @@ impl<Block: BlockT> HeaderMetadata<Block> for BlockchainDb<Block> {
 /// Database transaction
 pub struct BlockImportOperation<Block: BlockT, H: Hasher> {
 	old_state: CachingState<Blake2Hasher, RefTrackingState<Block>, Block>,
-	db_updates: (PrefixedMemoryDB<H>, InMemoryKvBackend),
+	db_updates: PrefixedMemoryDB<H>,
 	storage_updates: StorageCollection,
 	child_storage_updates: ChildStorageCollection,
 	changes_trie_updates: MemoryDB<H>,
@@ -544,10 +500,7 @@ impl<Block> client::backend::BlockImportOperation<Block, Blake2Hasher>
 		// Currently cache isn't implemented on full nodes.
 	}
 
-	fn update_db_storage(
-		&mut self,
-		update: (PrefixedMemoryDB<Blake2Hasher>, InMemoryKvBackend),
-	) -> ClientResult<()> {
+	fn update_db_storage(&mut self, update: PrefixedMemoryDB<Blake2Hasher>) -> ClientResult<()> {
 		self.db_updates = update;
 		Ok(())
 	}
@@ -574,8 +527,7 @@ impl<Block> client::backend::BlockImportOperation<Block, Blake2Hasher>
 
 		let (root, transaction) = self.old_state.full_storage_root(
 			top.into_iter().map(|(k, v)| (k, Some(v))),
-			child_delta,
-			None,
+			child_delta
 		);
 
 		self.db_updates = transaction;
@@ -600,10 +552,11 @@ impl<Block> client::backend::BlockImportOperation<Block, Blake2Hasher>
 
 	fn update_storage(
 		&mut self,
-		update: FullStorageCollection,
+		update: StorageCollection,
+		child_update: ChildStorageCollection,
 	) -> ClientResult<()> {
-		self.storage_updates = update.top;
-		self.child_storage_updates = update.children;
+		self.storage_updates = update;
+		self.child_storage_updates = child_update;
 		Ok(())
 	}
 
@@ -622,11 +575,6 @@ impl<Block> client::backend::BlockImportOperation<Block, Blake2Hasher>
 struct StorageDb<Block: BlockT> {
 	pub db: Arc<dyn KeyValueDB>,
 	pub state_db: StateDb<Block::Hash, Vec<u8>>,
-}
-
-struct StorageDbAt<Block: BlockT, State> {
-	pub storage_db: Arc<StorageDb<Block>>,
-	pub state: State,
 }
 
 impl<Block: BlockT> state_machine::Storage<Blake2Hasher> for StorageDb<Block> {
@@ -650,37 +598,12 @@ impl<Block: BlockT> state_db::KvDb<u64> for StorageDb<Block> {
 
 	type Error = io::Error;
 
-	fn get_kv(&self, key: &[u8], state: &u64) -> Result<Option<Vec<u8>>, Self::Error> {
-		Ok(self.db.get(columns::KV, key)?
-			.as_ref()
-			.map(|s| Ser::from_slice(&s[..]))
-			.and_then(|s| s.get(*state)
-				.unwrap_or(None) // flatten
-				.map(Into::into)
-		))
+	fn get_kv(&self, _key: &[u8], _state: &u64) -> Result<Option<Vec<u8>>, Self::Error> {
+		unimplemented!("stub before client db kv storage implementation");
 	}
 
-	fn get_kv_pairs(&self, state: &u64) -> Vec<(Vec<u8>, Vec<u8>)> {
-		self.db.iter(columns::KV).filter_map(|(k, v)|
-			Ser::from_slice(&v[..]).get(*state)
-				.unwrap_or(None) // flatten
-				.map(Into::into)
-				.map(|v| (k.to_vec(), v))
-		).collect()
-	}
-}
-
-impl<Block: BlockT> state_machine::KvBackend for StorageDbAt<Block, (BranchRanges, u64)> {
-
-	fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
-		self.storage_db.state_db.get_kv(key, &self.state, self.storage_db.deref())
-			.map_err(|e| format!("Database backend error: {:?}", e))
-	}
-
-	fn in_memory(&self) -> InMemoryKvBackend {
-		self.storage_db.state_db.get_kv_pairs(&self.state, self.storage_db.deref())
-			// No deletion on storage db.
-			.into_iter().map(|(k, v)| (k, Some(v))).collect()
+	fn get_kv_pairs(&self, _state: &u64) -> Vec<(Vec<u8>, Vec<u8>)> {
+		unimplemented!("stub before client db kv storage implementation");
 	}
 }
 
@@ -963,13 +886,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 			let id = BlockId::Hash(hash);
 			let justification = self.blockchain.justification(id).unwrap();
 			let body = self.blockchain.body(id).unwrap();
-			let state = self.state_at(id).unwrap();
-			let mut storage: Vec<_> = state.pairs().into_iter()
-				.map(|(k, v)| (None, k, Some(v))).collect();
-			for child_key in state.children_storage_keys() {
-				storage.extend(state.child_pairs(child_key.as_slice())
-					.into_iter().map(|(k, v)| (Some(child_key.clone()), k, Some(v))));
-			}
+			let state = self.state_at(id).unwrap().pairs();
 
 			let new_block_state = if number.is_zero() {
 				NewBlockState::Final
@@ -980,10 +897,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 			};
 			let mut op = inmem.begin_operation().unwrap();
 			op.set_block_data(header, body, justification, new_block_state).unwrap();
-			op.update_db_storage(InMemoryTransaction {
-				storage,
-				kv: state.kv_in_memory().clone(),
-			}).unwrap();
+			op.update_db_storage(state.into_iter().map(|(k, v)| (None, k, Some(v))).collect()).unwrap();
 			inmem.commit_operation(op).unwrap();
 		}
 
@@ -1231,16 +1145,16 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 			}
 
 			let mut changeset: state_db::ChangeSet<Vec<u8>> = state_db::ChangeSet::default();
-			for (key, (val, rc)) in operation.db_updates.0.drain() {
+			for (key, (val, rc)) in operation.db_updates.drain() {
 				if rc > 0 {
 					changeset.inserted.push((key, val.to_vec()));
 				} else if rc < 0 {
 					changeset.deleted.push(key);
 				}
 			}
-			let kv_changeset: state_db::KvChangeSet<Vec<u8>> = operation.db_updates.1
-				// switch to vec for size
-				.into_iter().collect();
+
+			// TODO feed this change set from block import, requires state machine implementation.
+			let kv_changeset: state_db::KvChangeSet<Vec<u8>> = Default::default();
 			let number_u64 = number.saturated_into::<u64>();
 			let commit = self.storage.state_db.insert_block(
 				&hash,
@@ -1291,20 +1205,9 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 				displaced_leaf
 			};
 
-			let mut children = children::read_children(
-				&*self.storage.db,
-				columns::META,
-				meta_keys::CHILDREN_PREFIX,
-				parent_hash,
-			)?;
+			let mut children = children::read_children(&*self.storage.db, columns::META, meta_keys::CHILDREN_PREFIX, parent_hash)?;
 			children.push(hash);
-			children::write_children(
-				&mut transaction,
-				columns::META,
-				meta_keys::CHILDREN_PREFIX,
-				parent_hash,
-				children,
-			);
+			children::write_children(&mut transaction, columns::META, meta_keys::CHILDREN_PREFIX, parent_hash, children);
 
 			meta_updates.push((hash, number, pending_block.leaf_state.is_best(), finalized));
 
@@ -1435,54 +1338,13 @@ fn apply_state_commit(
 fn apply_state_commit_inner(
 	transaction: &mut DBTransaction,
 	commit: state_db::CommitSet<Vec<u8>>,
-	db: &Arc<dyn KeyValueDB>,
-	last_block: u64,
-	mut kv_prune_key: state_db::KvChangeSetPrune,
+	_db: &Arc<dyn KeyValueDB>,
+	_last_block: u64,
+	_kv_prune_key: state_db::KvChangeSetPrune,
 ) -> Result<(), io::Error> {
 
-	for (key, change) in commit.kv.iter() {
-		let (mut ser, new) = if let Some(stored) = db.get(columns::KV, key)? {
-			(Ser::from_vec(stored.to_vec()), false)
-		} else {
-			if change.is_some() {
-				(Ser::default(), true)
-			} else {
-				break;
-			}
-		};
-		ser.push(last_block, change.as_ref().map(|v| v.as_slice()));
-		if let Some((block_prune, kv_prune_keys)) = kv_prune_key.as_mut() {
-			if !new && kv_prune_keys.remove(key) {
-				match ser.prune(*block_prune) {
-					PruneResult::Cleared => transaction.delete(columns::KV, &key),
-					PruneResult::Changed
-					| PruneResult::Unchanged => transaction.put(columns::KV, &key[..], &ser.into_vec()),
-				}
-			} else {
-				transaction.put(columns::KV, &key[..], &ser.into_vec())
-			}
-		} else {
-			transaction.put(columns::KV, &key[..], &ser.into_vec())
-		}
-	}
-
-	if let Some((block_prune, kv_prune_key)) = kv_prune_key {
-		// no need to into_iter
-		for key in kv_prune_key.iter() {
-			let mut ser = if let Some(stored) = db.get(columns::KV, key)? {
-				Ser::from_vec(stored.to_vec())
-			} else {
-				break;
-			};
-
-			match ser.prune(block_prune) {
-				PruneResult::Cleared => transaction.delete(columns::KV, &key),
-				PruneResult::Changed => transaction.put(columns::KV, &key[..], &ser.into_vec()),
-				PruneResult::Unchanged => (),
-			}
-		}
-
-	}
+	// TODO this requires to handle commit.kv.iter() and kv_prune_key
+	// unused parameters are here for that.
 	apply_state_commit_no_kv(transaction, commit);
 	Ok(())
 }
@@ -1683,8 +1545,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 			BlockId::Hash(h) if h == Default::default() => {
 				let genesis_storage = DbGenesisStorage::new();
 				let root = genesis_storage.0.clone();
-				let genesis_kv = InMemoryKvBackend::default();
-				let db_state = DbState::new(Arc::new(genesis_storage), root, Arc::new(genesis_kv));
+				let db_state = DbState::new(Arc::new(genesis_storage), root);
 				let state = RefTrackingState::new(db_state, self.storage.clone(), None);
 				return Ok(CachingState::new(state, self.shared_cache.clone(), None));
 			},
@@ -1695,14 +1556,8 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 			Ok(Some(ref hdr)) => {
 				let hash = hdr.hash();
 				if let Ok(()) = self.storage.state_db.pin(&hash) {
-					let block_number = hdr.number().clone().saturated_into::<u64>();
-					let range = self.storage.state_db.get_branch_range(&hash, block_number);
 					let root = H256::from_slice(hdr.state_root().as_ref());
-					let kv = StorageDbAt {
-						storage_db: self.storage.clone(),
-						state: (range.unwrap_or_else(Default::default), block_number),
-					};
-					let db_state = DbState::new(self.storage.clone(), root, Arc::new(kv));
+					let db_state = DbState::new(self.storage.clone(), root);
 					let state = RefTrackingState::new(db_state, self.storage.clone(), Some(hash.clone()));
 					Ok(CachingState::new(state, self.shared_cache.clone(), Some(hash)))
 				} else {
@@ -1808,69 +1663,6 @@ mod tests {
 		backend.commit_operation(op).unwrap();
 
 		header_hash
-	}
-
-	fn insert_kvs_and_finalize(
-		backend: &Backend<Block>,
-		number: u64,
-		parent_hash: H256,
-		kvs: Vec<(Vec<u8>, Option<Vec<u8>>)>,
-		extrinsics_root: H256,
-		finalize: Option<Vec<H256>>,
-	) -> H256 {
-		let header = Header {
-			number,
-			parent_hash,
-			state_root: BlakeTwo256::trie_root(Vec::new()),
-			digest: Default::default(),
-			extrinsics_root,
-		};
-		let header_hash = header.hash();
-
-		let block_id = if number == 0 {
-			BlockId::Hash(Default::default())
-		} else {
-			BlockId::Number(number - 1)
-		};
-		let mut op = backend.begin_operation().unwrap();
-		backend.begin_state_operation(&mut op, block_id).unwrap();
-		if let Some(finalize) = finalize {
-			for finalize in finalize {
-				op.mark_finalized(BlockId::hash(finalize), None).unwrap();
-			}
-		}
-		let kv_transaction = kvs.into_iter().collect(); 
-		op.update_db_storage((Default::default(), kv_transaction)).unwrap();
-		op.set_block_data(header, None, None, NewBlockState::Best).unwrap();
-		backend.commit_operation(op).unwrap();
-		header_hash
-	}
-
-
-	fn insert_kvs(
-		backend: &Backend<Block>,
-		number: u64,
-		parent_hash: H256,
-		kvs: Vec<(Vec<u8>, Option<Vec<u8>>)>,
-		extrinsics_root: H256,
-	) -> H256 {
-		insert_kvs_and_finalize(
-			backend,
-			number,
-			parent_hash,
-			kvs,
-			extrinsics_root,
-			None,
-		)
-	}
-	
-	fn check_kv (backend: &Backend<Block>, block: H256, val: &Vec<(Vec<u8>, Option<Vec<u8>>)>) {
-		let block = BlockId::Hash(block);
-		let state = backend.state_at(block).unwrap();
-		for (k, v) in val {
-			let content = state.kv_storage(k).unwrap();
-			assert_eq!(v, &content);
-		}
 	}
 
 	#[test]
@@ -1988,12 +1780,7 @@ mod tests {
 				(vec![5, 5, 5], Some(vec![4, 5, 6])),
 			];
 
-			let child: Option<(_, Option<_>)> = None;
-			let (root, overlay) = op.old_state.full_storage_root(
-				storage.iter().cloned(),
-				child,
-				storage.iter().cloned(),
-			);
+			let (root, overlay) = op.old_state.storage_root(storage.iter().cloned());
 			op.update_db_storage(overlay).unwrap();
 			header.state_root = root.into();
 
@@ -2011,12 +1798,6 @@ mod tests {
 			assert_eq!(state.storage(&[1, 3, 5]).unwrap(), None);
 			assert_eq!(state.storage(&[1, 2, 3]).unwrap(), Some(vec![9, 9, 9]));
 			assert_eq!(state.storage(&[5, 5, 5]).unwrap(), Some(vec![4, 5, 6]));
-			assert_eq!(state.kv_in_memory(), vec![
-				(vec![5, 5, 5], Some(vec![4, 5, 6]))
-			].into_iter().collect());
-			let state = db.state_at(BlockId::Number(0)).unwrap();
-			assert_eq!(state.kv_in_memory(), vec![].into_iter().collect());
-
 		}
 	}
 
@@ -2048,7 +1829,7 @@ mod tests {
 
 			op.reset_storage(storage.iter().cloned().collect(), Default::default()).unwrap();
 
-			key = op.db_updates.0.insert(EMPTY_PREFIX, b"hello");
+			key = op.db_updates.insert(EMPTY_PREFIX, b"hello");
 			op.set_block_data(
 				header,
 				Some(vec![]),
@@ -2084,8 +1865,8 @@ mod tests {
 			).0.into();
 			let hash = header.hash();
 
-			op.db_updates.0.insert(EMPTY_PREFIX, b"hello");
-			op.db_updates.0.remove(&key, EMPTY_PREFIX);
+			op.db_updates.insert(EMPTY_PREFIX, b"hello");
+			op.db_updates.remove(&key, EMPTY_PREFIX);
 			op.set_block_data(
 				header,
 				Some(vec![]),
@@ -2121,7 +1902,7 @@ mod tests {
 			).0.into();
 			let hash = header.hash();
 
-			op.db_updates.0.remove(&key, EMPTY_PREFIX);
+			op.db_updates.remove(&key, EMPTY_PREFIX);
 			op.set_block_data(
 				header,
 				Some(vec![]),
@@ -2398,147 +2179,6 @@ mod tests {
 		assert!(backend.changes_tries_storage.get(&root2, EMPTY_PREFIX).unwrap().is_none());
 		assert!(backend.changes_tries_storage.get(&root3, EMPTY_PREFIX).unwrap().is_some());
 	}
-
-	#[test]
-	fn kv_storage_works() {
-		let backend = Backend::<Block>::new_test(1000, 100);
-
-		let changes0 = vec![(b"key_at_0".to_vec(), Some(b"val_at_0".to_vec()))];
-		let changes1 = vec![
-			(b"key_at_1".to_vec(), Some(b"val_at_1".to_vec())),
-			(b"another_key_at_1".to_vec(), Some(b"another_val_at_1".to_vec())),
-		];
-		let changes2 = vec![(b"key_at_2".to_vec(), Some(b"val_at_2".to_vec()))];
-		let changes3 = vec![(b"another_key_at_1".to_vec(), None)];
-
-		let block0 = insert_kvs(&backend, 0, Default::default(), changes0.clone(), Default::default());
-		let block1 = insert_kvs(&backend, 1, block0, changes1.clone(), Default::default());
-		let block2 = insert_kvs(&backend, 2, block1, changes2.clone(), Default::default());
-		let block3 = insert_kvs(&backend, 3, block2, changes3.clone(), Default::default());
-
-		check_kv(&backend, block0, &changes0);
-		check_kv(&backend, block1, &changes0);
-		check_kv(&backend, block1, &changes1);
-		check_kv(&backend, block2, &changes1);
-		check_kv(&backend, block2, &changes2);
-		check_kv(&backend, block3, &changes3);
-	}
-
-	#[test]
-	fn kv_storage_works_with_forks() {
-		let backend = Backend::<Block>::new_test(4, 4);
-
-		let changes0 = vec![(b"k0".to_vec(), Some(b"v0".to_vec()))];
-		let changes1 = vec![
-			(b"k1".to_vec(), Some(b"v1".to_vec())),
-			(b"k0".to_vec(), None),
-		];
-		let changes2 = vec![(b"k2".to_vec(), Some(b"v2".to_vec()))];
-		let block0 = insert_kvs(&backend, 0, Default::default(), changes0.clone(), Default::default());
-		let block1 = insert_kvs(&backend, 1, block0, changes1.clone(), Default::default());
-		let block2 = insert_kvs(&backend, 2, block1, changes2.clone(), Default::default());
-
-		let changes2_1_0 = vec![(b"k3".to_vec(), Some(b"v3".to_vec()))];
-		let changes2_1_1 = vec![(b"k4".to_vec(), Some(b"v4".to_vec()))];
-		let block2_1_0 = insert_kvs(&backend, 3, block2, changes2_1_0.clone(), Default::default());
-		let block2_1_1 = insert_kvs(&backend, 4, block2_1_0, changes2_1_1.clone(), Default::default());
-
-		let changes2_2_0 = vec![(b"k5".to_vec(), Some(b"v5".to_vec()))];
-		let changes2_2_1 = vec![(b"k6".to_vec(), Some(b"v6".to_vec()))];
-		// use different extrinsic root to have different hash than 2_1_0
-		let block2_2_0 = insert_kvs(&backend, 3, block2, changes2_2_0.clone(), [1u8; 32].into());
-		let block2_2_1 = insert_kvs(&backend, 4, block2_2_0, changes2_2_1.clone(), Default::default());
-
-		// branch1: when asking for finalized block hash
-		check_kv(&backend, block0, &changes0);
-		check_kv(&backend, block1, &vec![]);
-		check_kv(&backend, block1, &changes1);
-		check_kv(&backend, block2, &changes2);
-		check_kv(&backend, block2_1_0, &changes2_1_0);
-		check_kv(&backend, block2_1_1, &changes2_1_1);
-		check_kv(&backend, block2_2_0, &changes2_2_0);
-		check_kv(&backend, block2_2_1, &changes2_2_1);
-
-		// after canonicalize range on 2_2_0 side
-		let mut block_prev = block2_1_1;
-		let mut nb_prev = 4;
-		let mut next = || {
-			block_prev = insert_kvs(&backend, nb_prev, block_prev, vec![], Default::default());
-			nb_prev += 1;
-		};
-
-		next();
-		next();
-		next();
-		check_kv(&backend, block0, &changes0);
-		check_kv(&backend, block1, &changes1);
-		check_kv(&backend, block2, &changes2);
-		check_kv(&backend, block2_1_0, &changes2_1_0);
-		check_kv(&backend, block2_2_0, &changes2_2_0);
-		let state = backend.state_at(BlockId::Hash(block2_2_0)).unwrap();
-		assert!(state.kv_storage(&b"k5"[..]).unwrap().is_some());
-		next();
-		check_kv(&backend, block2_1_0, &changes2_1_0);
-		assert!(backend.state_at(BlockId::Hash(block2_2_0)).is_err());
-		// pinned state is not garbage collected
-		assert!(state.kv_storage(&b"k5"[..]).unwrap().is_some());
-
-		// check pruning is called on storage
-		check_kv(&backend, block0, &changes0);
-		assert!(backend.storage.db.get(crate::columns::KV, &b"k0"[..]).unwrap().is_some());
-		next();
-		assert!(backend.state_at(BlockId::Hash(block0)).is_err());
-		assert!(backend.storage.db.get(crate::columns::KV, &b"k0"[..]).unwrap().is_none());
-	}
-
-	#[test]
-	fn kv_storage_works_with_finalize() {
-		let backend = Backend::<Block>::new_test(1000, 100);
-
-		let changes0 = vec![(b"k0".to_vec(), Some(b"v0".to_vec()))];
-		let changes1 = vec![(b"k1".to_vec(), Some(b"v1".to_vec()))];
-		let changes2 = vec![(b"k2".to_vec(), Some(b"v2".to_vec()))];
-		let block0 = insert_kvs(&backend, 0, Default::default(), changes0.clone(), Default::default());
-		let block1 = insert_kvs(&backend, 1, block0, changes1.clone(), Default::default());
-		let block2 = insert_kvs(&backend, 2, block1, changes2.clone(), Default::default());
-
-		let changes2_1_0 = vec![(b"k3".to_vec(), Some(b"v3".to_vec()))];
-		let changes2_1_1 = vec![(b"k4".to_vec(), Some(b"v4".to_vec()))];
-		let block2_1_0 = insert_kvs(&backend, 3, block2, changes2_1_0.clone(), Default::default());
-		let _block2_1_1 = insert_kvs(&backend, 4, block2_1_0, changes2_1_1.clone(), Default::default());
-
-		let changes2_2_0 = vec![(b"k5".to_vec(), Some(b"v5".to_vec()))];
-		let changes2_2_1 = vec![(b"k6".to_vec(), Some(b"v6".to_vec()))];
-		// use different extrinsic root to have different hash than 2_1_0
-		let block2_2_0 = insert_kvs(&backend, 3, block2, changes2_2_0.clone(), [1u8; 32].into());
-		let state = backend.state_at(BlockId::Hash(block2_1_0)).unwrap();
-
-		let block2_2_1 = insert_kvs_and_finalize(
-			&backend,
-			4,
-			block2_2_0,
-			changes2_2_1.clone(),
-			Default::default(),
-			Some(vec![
-				block1,
-				block2,
-				block2_2_0,
-			]),
-		);
-
-		check_kv(&backend, block0, &changes0);
-		check_kv(&backend, block1, &changes0);
-		check_kv(&backend, block1, &changes1);
-		check_kv(&backend, block2, &changes2);
-		check_kv(&backend, block2_2_0, &changes2_2_0);
-		check_kv(&backend, block2_2_1, &changes2_2_1);
-
-		// still accessible due to pinned state
-		assert!(state.kv_storage(&b"k3"[..]).unwrap().is_some());
-		assert!(backend.state_at(BlockId::Hash(block2_1_0)).is_err());
-	}
-
-
 
 	#[test]
 	fn tree_route_works() {

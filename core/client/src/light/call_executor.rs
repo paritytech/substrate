@@ -173,12 +173,9 @@ impl<Block, B, Local> CallExecutor<Block, Blake2Hasher> for
 		Err(ClientError::NotAvailableOnLightClient)
 	}
 
-	fn prove_at_trie_state<
-		S: state_machine::TrieBackendStorage<Blake2Hasher>,
-		K: state_machine::KvBackend,
-	>(
+	fn prove_at_trie_state<S: state_machine::TrieBackendStorage<Blake2Hasher>>(
 		&self,
-		_state: &state_machine::TrieBackend<S, Blake2Hasher, K>,
+		_state: &state_machine::TrieBackend<S, Blake2Hasher>,
 		_changes: &mut OverlayedChanges,
 		_method: &str,
 		_call_data: &[u8]
@@ -379,12 +376,9 @@ mod tests {
 			unreachable!()
 		}
 
-		fn prove_at_trie_state<
-			S: state_machine::TrieBackendStorage<Blake2Hasher>,
-			K: state_machine::KvBackend,
-		>(
+		fn prove_at_trie_state<S: state_machine::TrieBackendStorage<Blake2Hasher>>(
 			&self,
-			_trie_state: &state_machine::TrieBackend<S, Blake2Hasher, K>,
+			_trie_state: &state_machine::TrieBackend<S, Blake2Hasher>,
 			_overlay: &mut OverlayedChanges,
 			_method: &str,
 			_call_data: &[u8]

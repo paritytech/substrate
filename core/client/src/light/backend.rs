@@ -22,15 +22,12 @@ use std::sync::Arc;
 use parking_lot::{RwLock, Mutex};
 
 use sr_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
-use state_machine::{
-	Backend as StateBackend, TrieBackend, backend::InMemory as InMemoryState,
-	ChangesTrieTransaction, InMemoryKvBackend,
-};
+use state_machine::{Backend as StateBackend, TrieBackend, backend::InMemory as InMemoryState, ChangesTrieTransaction};
 use sr_primitives::traits::{Block as BlockT, NumberFor, Zero, Header};
 use crate::in_mem::{self, check_genesis_storage};
 use crate::backend::{
 	AuxStore, Backend as ClientBackend, BlockImportOperation, RemoteBackend, NewBlockState,
-	FullStorageCollection,
+	StorageCollection, ChildStorageCollection,
 };
 use crate::blockchain::{HeaderBackend as BlockchainHeaderBackend, well_known_cache_keys};
 use crate::error::{Error as ClientError, Result as ClientResult};
@@ -294,11 +291,7 @@ where
 		}
 
 		let storage_update: InMemoryState<H> = storage.into();
-		let (storage_root, _) = storage_update.full_storage_root(
-			::std::iter::empty(),
-			child_delta,
-			::std::iter::empty(),
-		);
+		let (storage_root, _) = storage_update.full_storage_root(::std::iter::empty(), child_delta);
 		self.storage_update = Some(storage_update);
 
 		Ok(storage_root)
@@ -313,7 +306,8 @@ where
 
 	fn update_storage(
 		&mut self,
-		_update: FullStorageCollection,
+		_update: StorageCollection,
+		_child_update: ChildStorageCollection,
 	) -> ClientResult<()> {
 		// we're not storing anything locally => ignore changes
 		Ok(())
@@ -346,7 +340,6 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 	type Error = ClientError;
 	type Transaction = ();
 	type TrieBackendStorage = MemoryDB<H>;
-	type KvBackend = state_machine::InMemoryKvBackend;
 
 	fn storage(&self, key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
 		match *self {
@@ -360,14 +353,6 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 		match *self {
 			GenesisOrUnavailableState::Genesis(ref state) =>
 				Ok(state.child_storage(storage_key, key).expect(IN_MEMORY_EXPECT_PROOF)),
-			GenesisOrUnavailableState::Unavailable => Err(ClientError::NotAvailableOnLightClient),
-		}
-	}
-
-	fn kv_storage(&self, key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
-		match *self {
-			GenesisOrUnavailableState::Genesis(ref state) =>
-				Ok(state.kv_storage(key).expect(IN_MEMORY_EXPECT_PROOF)),
 			GenesisOrUnavailableState::Unavailable => Err(ClientError::NotAvailableOnLightClient),
 		}
 	}
@@ -431,38 +416,10 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 		}
 	}
 
-	fn kv_transaction<I>(&self, _delta: I) -> Self::Transaction
-	where
-		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
-	{
-		()
-	}
-
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
 		match *self {
 			GenesisOrUnavailableState::Genesis(ref state) => state.pairs(),
 			GenesisOrUnavailableState::Unavailable => Vec::new(),
-		}
-	}
-
-	fn children_storage_keys(&self) -> Vec<Vec<u8>> {
-		match *self {
-			GenesisOrUnavailableState::Genesis(ref state) => state.children_storage_keys(),
-			GenesisOrUnavailableState::Unavailable => Vec::new(),
-		}
-	}
-
-	fn child_pairs(&self, child_storage_key: &[u8]) -> Vec<(Vec<u8>, Vec<u8>)> {
-		match *self {
-			GenesisOrUnavailableState::Genesis(ref state) => state.child_pairs(child_storage_key),
-			GenesisOrUnavailableState::Unavailable => Vec::new(),
-		}
-	}
-
-	fn kv_in_memory(&self) -> InMemoryKvBackend {
-		match *self {
-			GenesisOrUnavailableState::Genesis(ref state) => state.kv_in_memory(),
-			GenesisOrUnavailableState::Unavailable => Default::default(),
 		}
 	}
 
@@ -473,9 +430,7 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 		}
 	}
 
-	fn as_trie_backend(&mut self) -> Option<
-		&TrieBackend<Self::TrieBackendStorage, H, Self::KvBackend>
-	> {
+	fn as_trie_backend(&mut self) -> Option<&TrieBackend<Self::TrieBackendStorage, H>> {
 		match self {
 			GenesisOrUnavailableState::Genesis(ref mut state) => state.as_trie_backend(),
 			GenesisOrUnavailableState::Unavailable => None,

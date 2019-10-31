@@ -19,7 +19,7 @@
 use std::{collections::HashMap, any::{Any, TypeId}};
 use hash_db::Hasher;
 use crate::{
-	backend::{InMemory, InMemoryTransaction, Backend}, OverlayedChanges,
+	backend::{InMemory, Backend}, OverlayedChanges,
 	changes_trie::{
 		InMemoryStorage as ChangesTrieInMemoryStorage,
 		BlockNumber as ChangesTrieBlockNumber,
@@ -93,18 +93,7 @@ impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 
 	/// Insert key/value into backend
 	pub fn insert(&mut self, k: Vec<u8>, v: Vec<u8>) {
-		self.backend = self.backend.update(InMemoryTransaction {
-			storage: vec![(None, k, Some(v))],
-			kv: Default::default(),
-		});
-	}
-
-	/// Insert key/value into ofstate information backend
-	pub fn insert_kv(&mut self, k: Vec<u8>, v: Vec<u8>) {
-		self.backend = self.backend.update(InMemoryTransaction {
-			storage: Default::default(),
-			kv: Some((k, Some(v))).into_iter().collect(),
-		});
+		self.backend = self.backend.update(vec![(None, k, Some(v))]);
 	}
 
 	/// Registers the given extension for this instance.
@@ -131,13 +120,7 @@ impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 					.collect::<Vec<_>>()
 			});
 
-		let kv = self.overlay.committed.kv.clone().into_iter()
-			.chain(self.overlay.prospective.kv.clone().into_iter());
-
-		self.backend.update(InMemoryTransaction {
-			storage: top.chain(children).collect(),
-			kv: kv.collect(),
-		})
+		self.backend.update(top.chain(children).collect())
 	}
 
 	/// Execute the given closure while `self` is set as externalities.
