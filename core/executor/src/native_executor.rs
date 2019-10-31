@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{result, cell::RefCell, panic::UnwindSafe};
+use std::{result, cell::RefCell, panic::{UnwindSafe, AssertUnwindSafe}};
 use crate::error::{Error, Result};
 use crate::wasm_runtime::{RuntimesCache, WasmExecutionMethod, WasmRuntime};
 use crate::RuntimeInfo;
@@ -30,7 +30,7 @@ thread_local! {
 /// Default num of pages for the heap
 const DEFAULT_HEAP_PAGES: u64 = 1024;
 
-fn safe_call<F, U>(f: F) -> Result<U>
+pub(crate) fn safe_call<F, U>(f: F) -> Result<U>
 	where F: UnwindSafe + FnOnce() -> U
 {
 	// Substrate uses custom panic hook that terminates process on panic. Disable termination for the native call.
@@ -65,7 +65,7 @@ pub trait NativeExecutionDispatch: Send + Sync {
 #[derive(Debug)]
 pub struct NativeExecutor<D> {
 	/// Dummy field to avoid the compiler complaining about us not using `D`.
-	_dummy: ::std::marker::PhantomData<D>,
+	_dummy: std::marker::PhantomData<D>,
 	/// Method used to execute fallback Wasm code.
 	fallback_method: WasmExecutionMethod,
 	/// Native runtime version info.
@@ -92,15 +92,45 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 		}
 	}
 
+	/// Execute the given closure `f` with the latest runtime (based on the `CODE` key in `ext`).
+	///
+	/// The closure `f` is expected to return `Err(_)` when there happened a `panic!` in native code
+	/// while executing the runtime in Wasm. If a `panic!` occurred, the runtime is invalidated to
+	/// prevent any poisoned state. Native runtime execution does not need to report back
+	/// any `panic!`.
+	///
+	/// # Safety
+	///
+	/// `runtime` and `ext` are given as `AssertUnwindSafe` to the closure. As described above, the
+	/// runtime is invalidated on any `panic!` to prevent a poisoned state. `ext` is already
+	/// implicitly handled as unwind safe, as we store it in a global variable while executing the
+	/// native runtime.
 	fn with_runtime<E, R>(
 		&self,
 		ext: &mut E,
-		f: impl for <'a> FnOnce(&'a mut dyn WasmRuntime, &'a mut E) -> Result<R>,
+		f: impl for<'a> FnOnce(
+			AssertUnwindSafe<&'a mut (dyn WasmRuntime + 'static)>,
+			AssertUnwindSafe<&'a mut E>,
+		) -> Result<Result<R>>,
 	) -> Result<R> where E: Externalities {
 		RUNTIMES_CACHE.with(|cache| {
 			let mut cache = cache.borrow_mut();
-			let runtime = cache.fetch_runtime(ext, self.fallback_method, self.default_heap_pages)?;
-			f(runtime, ext)
+			let (runtime, code_hash) = cache.fetch_runtime(
+				ext,
+				self.fallback_method,
+				self.default_heap_pages,
+			)?;
+
+			let runtime = AssertUnwindSafe(runtime);
+			let ext = AssertUnwindSafe(ext);
+
+			match f(runtime, ext) {
+				Ok(res) => res,
+				Err(e) => {
+					cache.invalidate_runtime(self.fallback_method, code_hash);
+					Err(e)
+				}
+			}
 		})
 	}
 }
@@ -125,7 +155,7 @@ impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 		&self,
 		ext: &mut E,
 	) -> Option<RuntimeVersion> {
-		match self.with_runtime(ext, |runtime, _ext| Ok(runtime.version())) {
+		match self.with_runtime(ext, |runtime, _ext| Ok(Ok(runtime.version()))) {
 			Ok(version) => version,
 			Err(e) => {
 				warn!(target: "executor", "Failed to fetch runtime: {:?}", e);
@@ -141,8 +171,8 @@ impl<D: NativeExecutionDispatch> CodeExecutor for NativeExecutor<D> {
 	fn call
 	<
 		E: Externalities,
-		R:Decode + Encode + PartialEq,
-		NC: FnOnce() -> result::Result<R, String> + UnwindSafe
+		R: Decode + Encode + PartialEq,
+		NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
 	>(
 		&self,
 		ext: &mut E,
@@ -152,7 +182,7 @@ impl<D: NativeExecutionDispatch> CodeExecutor for NativeExecutor<D> {
 		native_call: Option<NC>,
 	) -> (Result<NativeOrEncoded<R>>, bool){
 		let mut used_native = false;
-		let result = self.with_runtime(ext, |runtime, ext| {
+		let result = self.with_runtime(ext, |mut runtime, mut ext| {
 			let onchain_version = runtime.version();
 			match (
 				use_native,
@@ -170,9 +200,16 @@ impl<D: NativeExecutionDispatch> CodeExecutor for NativeExecutor<D> {
 							.as_ref()
 							.map_or_else(||"<None>".into(), |v| format!("{}", v))
 					);
-					runtime.call(ext, method, data).map(NativeOrEncoded::Encoded)
+
+					safe_call(
+						move || runtime.call(&mut **ext, method, data).map(NativeOrEncoded::Encoded)
+					)
 				}
-				(false, _, _) => runtime.call(ext, method, data).map(NativeOrEncoded::Encoded),
+				(false, _, _) => {
+					safe_call(
+						move || runtime.call(&mut **ext, method, data).map(NativeOrEncoded::Encoded)
+					)
+				},
 				(true, true, Some(call)) => {
 					trace!(
 						target: "executor",
@@ -184,11 +221,13 @@ impl<D: NativeExecutionDispatch> CodeExecutor for NativeExecutor<D> {
 					);
 
 					used_native = true;
-					with_native_environment(ext, move || (call)())
+					let res = with_native_environment(&mut **ext, move || (call)())
 						.and_then(|r| r
 							.map(NativeOrEncoded::Native)
 							.map_err(|s| Error::ApiError(s.to_string()))
-						)
+						);
+
+					Ok(res)
 				}
 				_ => {
 					trace!(
@@ -199,7 +238,7 @@ impl<D: NativeExecutionDispatch> CodeExecutor for NativeExecutor<D> {
 					);
 
 					used_native = true;
-					D::dispatch(ext, method, data).map(NativeOrEncoded::Encoded)
+					Ok(D::dispatch(&mut **ext, method, data).map(NativeOrEncoded::Encoded))
 				}
 			}
 		});

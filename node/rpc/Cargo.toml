@@ -8,7 +8,9 @@ edition = "2018"
 client = { package = "substrate-client", path = "../../core/client" }
 jsonrpc-core = "13.2.0"
 node-primitives = { path = "../primitives" }
+node-runtime = { path = "../runtime" }
 sr-primitives = { path = "../../core/sr-primitives" }
 srml-contracts-rpc = { path = "../../srml/contracts/rpc/" }
+srml-transaction-payment-rpc = { path = "../../srml/transaction-payment/rpc/" }
 srml-system-rpc = { path = "../../srml/system/rpc/" }
 transaction_pool = { package = "substrate-transaction-pool", path = "../../core/transaction-pool" }

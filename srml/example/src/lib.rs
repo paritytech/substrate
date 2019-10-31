@@ -269,13 +269,13 @@ use sr_primitives::{
 // the arguments and makes a decision based upon them.
 //
 // The `WeightData<T>` trait has access to the arguments of the dispatch that it wants to assign a
-// weight to. Nonetheless, the trait itself can not make any assumptions about what that type
-// generic type of the arguments, `T`, is. Based on our needs, we could replace `T` with a more
-// concrete type while implementing the trait. The `decl_module!` expects whatever implements
-// `WeighData<T>` to replace `T` with a tuple of the dispatch arguments. This is exactly how we will
-// craft the implementation below.
+// weight to. Nonetheless, the trait itself can not make any assumptions about what the generic type
+// of the arguments (`T`) is. Based on our needs, we could replace `T` with a more concrete type
+// while implementing the trait. The `decl_module!` expects whatever implements `WeighData<T>` to
+// replace `T` with a tuple of the dispatch arguments. This is exactly how we will craft the
+// implementation below.
 //
-// The rules of `WeightForSetDummy` is as follows:
+// The rules of `WeightForSetDummy` are as follows:
 // - The final weight of each dispatch is calculated as the argument of the call multiplied by the
 //   parameter given to the `WeightForSetDummy`'s constructor.
 // - assigns a dispatch class `operational` if the argument of the call is more than 1000.
@@ -449,9 +449,8 @@ decl_module! {
 		// The _right-hand-side_ value of the `#[weight]` attribute can be any type that implements
 		// a set of traits, namely [`WeighData`] and [`ClassifyDispatch`]. The former conveys the
 		// weight (a numeric representation of pure execution time and difficulty) of the
-		// transaction and the latter demonstrates the `DispatchClass` of the call. A higher weight
-		//  means a larger transaction (less of which can be placed in a single block). See the
-		// `CheckWeight` signed extension struct in the `system` module for more information.
+		// transaction and the latter demonstrates the [`DispatchClass`] of the call. A higher
+		// weight means a larger transaction (less of which can be placed in a single block).
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
 		fn accumulate_dummy(origin, increase_by: T::Balance) -> Result {
 			// This is a public call, so we ensure that the origin is some signed account.

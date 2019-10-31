@@ -124,14 +124,19 @@ macro_rules! new_full {
 			$config.disable_grandpa
 		);
 
+		// sentry nodes announce themselves as authorities to the network
+		// and should run the same protocols authorities do, but it should
+		// never actively participate in any consensus process.
+		let participates_in_consensus = is_authority && !$config.sentry_mode;
+
 		let (builder, mut import_setup, inherent_data_providers) = new_full_start!($config);
 
 		// Dht event channel from the network to the authority discovery module. Use bounded channel to ensure
 		// back-pressure. Authority discovery is triggering one event per authority within the current authority set.
 		// This estimates the authority set size to be somewhere below 10 000 thereby setting the channel buffer size to
 		// 10 000.
-		let (dht_event_tx, dht_event_rx) =
-			mpsc::channel::<DhtEvent>(10000);
+		let (dht_event_tx, _dht_event_rx) =
+			mpsc::channel::<DhtEvent>(10_000);
 
 		let service = builder.with_network_protocol(|_| Ok(crate::service::NodeProtocol::new()))?
 			.with_finality_proof_provider(|client, backend|
@@ -145,7 +150,7 @@ macro_rules! new_full {
 
 		($with_startup_data)(&block_import, &babe_link);
 
-		if is_authority {
+		if participates_in_consensus {
 			let proposer = substrate_basic_authorship::ProposerFactory {
 				client: service.client(),
 				transaction_pool: service.transaction_pool(),
@@ -169,22 +174,24 @@ macro_rules! new_full {
 
 			let babe = babe::start_babe(babe_config)?;
 			service.spawn_essential_task(babe);
-
-			let authority_discovery = authority_discovery::AuthorityDiscovery::new(
-				service.client(),
-				service.network(),
-				dht_event_rx,
-			);
-
-			service.spawn_task(authority_discovery);
 		}
+
+		// if the node isn't actively participating in consensus then it doesn't
+		// need a keystore, regardless of which protocol we use below.
+		let keystore = if participates_in_consensus {
+			Some(service.keystore())
+		} else {
+			None
+		};
 
 		let config = grandpa::Config {
 			// FIXME #1578 make this available through chainspec
 			gossip_duration: std::time::Duration::from_millis(333),
 			justification_period: 512,
 			name: Some(name),
-			keystore: Some(service.keystore()),
+			observer_enabled: true,
+			keystore,
+			is_authority,
 		};
 
 		match (is_authority, disable_grandpa) {
