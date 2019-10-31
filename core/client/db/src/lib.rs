@@ -642,7 +642,8 @@ impl<Block: BlockT> state_machine::KvBackend for StorageDbAt<Block, ()> {
 	}
 
 	fn in_memory(&self) -> InMemoryKvBackend {
-		unimplemented!("this is a stub, it requires state db implementation")
+		// TODO implement client
+		Default::default()
 	}
 }
 
@@ -1782,12 +1783,7 @@ mod tests {
 				(vec![5, 5, 5], Some(vec![4, 5, 6])),
 			];
 
-			let child: Option<(_, Option<_>)> = None;
-			let (root, overlay) = op.old_state.full_storage_root(
-				storage.iter().cloned(),
-				child,
-				storage.iter().cloned(),
-			);
+			let (root, overlay) = op.old_state.storage_root(storage.iter().cloned());
 			op.update_db_storage(overlay).unwrap();
 			header.state_root = root.into();
 
@@ -1805,12 +1801,6 @@ mod tests {
 			assert_eq!(state.storage(&[1, 3, 5]).unwrap(), None);
 			assert_eq!(state.storage(&[1, 2, 3]).unwrap(), Some(vec![9, 9, 9]));
 			assert_eq!(state.storage(&[5, 5, 5]).unwrap(), Some(vec![4, 5, 6]));
-			assert_eq!(state.kv_in_memory(), vec![
-				(vec![5, 5, 5], Some(vec![4, 5, 6]))
-			].into_iter().collect());
-			let state = db.state_at(BlockId::Number(0)).unwrap();
-			assert_eq!(state.kv_in_memory(), vec![].into_iter().collect());
-
 		}
 	}
 
