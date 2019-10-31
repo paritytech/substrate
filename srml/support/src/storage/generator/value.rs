@@ -16,7 +16,7 @@
 
 #[cfg(not(feature = "std"))]
 use rstd::prelude::*;
-use codec::{FullCodec, Encode, EncodeAppend, EncodeLike};
+use codec::{FullCodec, Encode, EncodeAppend, EncodeLike, Decode};
 use crate::{storage::{self, unhashed}, hash::{Twox128, StorageHasher}, traits::Len};
 
 /// Generator for `StorageValue` used by `decl_storage`.
@@ -58,6 +58,23 @@ impl<T: FullCodec, G: StorageValue<T>> storage::StorageValue<T> for G {
 	fn get() -> Self::Query {
 		let value = unhashed::get(&Self::storage_value_final_key());
 		G::from_optional_value_to_query(value)
+	}
+
+	fn translate<O: Decode, F: FnOnce(Option<O>) -> Option<T>>(f: F) -> Result<Option<T>, ()> {
+		let key = Self::storage_value_final_key();
+
+		// attempt to get the length directly.
+		let maybe_old = match unhashed::get_raw(&key) {
+			Some(old_data) => Some(O::decode(&mut &old_data[..]).map_err(|_| ())?),
+			None => None,
+		};
+		let maybe_new = f(maybe_old);
+		if let Some(new) = maybe_new.as_ref() {
+			new.using_encoded(|d| unhashed::put_raw(&key, d));
+		} else {
+			unhashed::kill(&key);
+		}
+		Ok(maybe_new)
 	}
 
 	fn put<Arg: EncodeLike<T>>(val: Arg) {

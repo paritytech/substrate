@@ -332,7 +332,6 @@ mod tests {
 		}
 	}
 
-	// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Runtime;
 	parameter_types! {
@@ -388,8 +387,13 @@ mod tests {
 		type FeeMultiplierUpdate = ();
 	}
 
+	#[allow(deprecated)]
 	impl ValidateUnsigned for Runtime {
 		type Call = Call;
+
+		fn pre_dispatch(_call: &Self::Call) -> Result<(), ApplyError> {
+			Ok(())
+		}
 
 		fn validate_unsigned(call: &Self::Call) -> TransactionValidity {
 			match call {
