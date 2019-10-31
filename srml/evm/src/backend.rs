@@ -5,12 +5,11 @@ use serde::{Serialize, Deserialize};
 use codec::{Encode, Decode};
 use primitives::{U256, H256, H160};
 use sr_primitives::traits::UniqueSaturatedInto;
-use rstd::collections::btree_map::BTreeMap;
-use support::storage::StorageMap;
+use support::storage::{StorageMap, StorageDoubleMap};
 use sha3::{Keccak256, Digest};
 use evm::Config;
 use evm::backend::{Backend as BackendT, ApplyBackend, Apply};
-use crate::{Trait, Accounts, Module, Event};
+use crate::{Trait, Accounts, AccountStorages, Module, Event};
 
 #[derive(Clone, Eq, PartialEq, Encode, Decode, Default)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
@@ -18,7 +17,6 @@ pub struct Account {
 	pub nonce: U256,
 	pub balance: U256,
 	pub code: Vec<u8>,
-	pub storage: BTreeMap<H256, H256>,
 }
 
 impl Account {
@@ -125,7 +123,7 @@ impl<'vicinity, T: Trait> BackendT for Backend<'vicinity, T> {
 	}
 
 	fn storage(&self, address: H160, index: H256) -> H256 {
-		self.account(address).storage.get(&index).cloned().unwrap_or_default()
+		AccountStorages::get(address, index)
 	}
 }
 
@@ -154,14 +152,14 @@ impl<'vicinity, T: Trait> ApplyBackend for Backend<'vicinity, T> {
 					}
 
 					if reset_storage {
-						account.storage = BTreeMap::new();
+						AccountStorages::remove_prefix(address);
 					}
 
 					for (index, value) in storage {
 						if value == H256::default() {
-							account.storage.remove(&index);
+							AccountStorages::remove(address, index);
 						} else {
-							account.storage.insert(index, value);
+							AccountStorages::insert(address, index, value);
 						}
 					}
 

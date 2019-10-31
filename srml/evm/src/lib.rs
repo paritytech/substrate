@@ -31,7 +31,7 @@ use support::traits::{Currency, WithdrawReason, ExistenceRequirement};
 use system::ensure_signed;
 use sr_primitives::weights::SimpleDispatchInfo;
 use sr_primitives::traits::UniqueSaturatedInto;
-use primitives::{U256, H160};
+use primitives::{U256, H256, H160};
 use evm::ExitReason;
 use evm::executor::StackExecutor;
 use evm::backend::ApplyBackend;
@@ -61,6 +61,7 @@ pub trait Trait: system::Trait + timestamp::Trait {
 decl_storage! {
 	trait Store for Module<T: Trait> as Example {
 		Accounts get(fn accounts) config(): map H160 => Account;
+		AccountStorages: double_map H160, blake2_256(H256) => H256;
 	}
 }
 
