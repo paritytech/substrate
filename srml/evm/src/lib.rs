@@ -138,7 +138,7 @@ decl_module! {
 		fn withdraw_balance(origin, value: BalanceOf<T>) -> Result {
 			let sender = ensure_signed(origin)?;
 			let address = T::ConvertAccountId::convert_account_id(sender.clone());
-			let bvalue = U256::from(UniqueSaturatedInto::<u64>::unique_saturated_into(value));
+			let bvalue = U256::from(UniqueSaturatedInto::<u128>::unique_saturated_into(value));
 
 			if Accounts::get(&address).balance < bvalue {
 				return Err("Not enough balance to withdraw")
