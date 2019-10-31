@@ -44,7 +44,7 @@
 //!    4. Adds the retrieved external addresses as priority nodes to the peerset.
 
 use authority_discovery_primitives::{AuthorityDiscoveryApi, AuthorityId, Signature};
-use client::blockchain::HeaderBackend;
+use client::{blockchain::HeaderBackend, runtime_api::StorageProof};
 use error::{Error, Result};
 use futures::{prelude::*, sync::mpsc::Receiver};
 use log::{debug, error, log_enabled, warn};
@@ -528,7 +528,7 @@ mod tests {
 			unimplemented!("Not required for testing!")
 		}
 
-		fn extract_proof(&mut self) -> Option<Vec<Vec<u8>>> {
+		fn extract_proof(&mut self) -> Option<StorageProof> {
 			unimplemented!("Not required for testing!")
 		}
 	}
