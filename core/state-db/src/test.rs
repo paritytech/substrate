@@ -24,7 +24,7 @@ use crate::{
 };
 use historical_data::tree::Serialized;
 use historical_data::PruneResult;
-use historical_data::linear::DefaultVersion;
+type DefaultVersion = ();
 
 type Ser<'a> = Serialized<'a, DefaultVersion>;
 

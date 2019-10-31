@@ -24,13 +24,12 @@
 
 use crate::linear::{
 	InMemory as BranchBackend,
-	Serialized as SerializedInner,
-	SerializedConfig,
 };
 use crate::HistoricalValue;
 use crate::PruneResult;
 use crate::saturating_into;
 use rstd::vec::Vec;
+use rstd::marker::PhantomData;
 use rstd::convert::{TryFrom, TryInto};
 use num_traits::Bounded;
 
@@ -325,11 +324,7 @@ impl<V> History<V> {
 
 }
 
-impl<'a, F: SerializedConfig> Serialized<'a, F> {
-
-	pub fn into_vec(self) -> Vec<u8> {
-		self.0.into_vec()
-	}
+impl<'a, F> Serialized<'a, F> {
 
 	pub fn get<I, S> (&self, state: S) -> Option<Option<&[u8]>> 
 		where
@@ -342,8 +337,8 @@ impl<'a, F: SerializedConfig> Serialized<'a, F> {
 		}
 		while index > 0 {
 			index -= 1;
-			let HistoricalValue { value, index: state_index } = self.0.get_state(index);
-			let state_index = saturating_into(state_index);
+			let HistoricalValue { value, index: state_index } = &self.0[index];
+			let state_index = saturating_into(*state_index);
 			if state.get_node(state_index) {
 				// Note this extra byte is note optimal, should be part of index encoding
 				if value.len() > 0 {
@@ -366,17 +361,20 @@ impl<'a, F: SerializedConfig> Serialized<'a, F> {
 		let target_state_index = saturating_into(state.last_index());
 		let index = self.0.len();
 		if index > 0 {
-			let last = self.0.get_state(index - 1);
+			let last = &self.0[index - 1];
 			debug_assert!(target_state_index >= last.index); 
 			if target_state_index == last.index {
 				self.0.pop();
 			}
 		}
 		match value {
-			Some(value) =>
-				self.0.push_extra(HistoricalValue {value, index: target_state_index}, &[0][..]),
+			Some(value) => {
+				let mut value = value.to_vec();
+				value.push(0);
+				self.0.push(HistoricalValue {value, index: target_state_index})
+			},
 			None =>
-				self.0.push(HistoricalValue {value: &[], index: target_state_index}),
+				self.0.push(HistoricalValue {value: vec![], index: target_state_index}),
 		}
 	}
 
@@ -391,7 +389,7 @@ impl<'a, F: SerializedConfig> Serialized<'a, F> {
 		let mut last_index_with_value = None;
 		let mut index = 0;
 		while index < len {
-			let history = self.0.get_state(index);
+			let history = &self.0[index];
 			if history.index == from + 1 {
 				// new first content
 				if history.value.len() != 0 {
@@ -421,7 +419,11 @@ impl<'a, F: SerializedConfig> Serialized<'a, F> {
 
 		if let Some(last_index_with_value) = last_index_with_value {
 			if last_index_with_value > 0 {
-				self.0.truncate_until(last_index_with_value);
+				// TODO this will be replace when using
+				// client serialized backend with truncate_until
+				for _ in 0 .. last_index_with_value {
+					self.0.remove(0);
+				}
 				return PruneResult::Changed;
 			}
 		} else {
@@ -437,41 +439,24 @@ impl<'a, F: SerializedConfig> Serialized<'a, F> {
 #[derive(Debug, Clone)]
 /// Serialized implementation when transaction support is not
 /// needed.
-pub struct Serialized<'a, F>(SerializedInner<'a, F>);
+/// TODO at this time we use in memory implementation and
+/// stub types with a PhantomData. Target is a clone on write
+/// serialized implementation.
+pub struct Serialized<'a, F>(BranchBackend<Vec<u8>, u64>, PhantomData<&'a F>);
 
+#[cfg(any(test, feature = "test"))]
 impl<'a, 'b, F> PartialEq<Serialized<'b, F>> for Serialized<'a, F> {
   fn eq(&self, other: &Serialized<'b, F>) -> bool {
-		self.0.eq(&other.0)
+		self.0.iter().eq(other.0.iter())
 	}
 }
 
+#[cfg(any(test, feature = "test"))]
 impl<'a, F> Eq for Serialized<'a, F> { }
 
-impl<'a, F> Serialized<'a, F> {
-	pub fn from_slice(s: &'a [u8]) -> Serialized<'a, F> {
-		Serialized(s.into())
-	}
-
-	pub fn from_vec(s: Vec<u8>) -> Serialized<'static, F> {
-		Serialized(s.into())
-	}
-}
-
-impl<'a, F> Into<Serialized<'a, F>> for &'a [u8] {
-	fn into(self) -> Serialized<'a, F> {
-		Serialized(self.into())
-	}
-}
-
-impl<F> Into<Serialized<'static, F>> for Vec<u8> {
-	fn into(self) -> Serialized<'static, F> {
-		Serialized(self.into())
-	}
-}
-
-impl<'a, F: SerializedConfig> Default for Serialized<'a, F> {
+impl<'a, F> Default for Serialized<'a, F> {
 	fn default() -> Self {
-		Serialized(SerializedInner::<'a, F>::default())
+		Serialized(Default::default(), PhantomData)
 	}
 }
 
@@ -972,7 +957,7 @@ mod test {
 
 	#[test]
 	fn test_prune() {
-		let mut item: Serialized<crate::linear::NoVersion> = Default::default();
+		let mut item: Serialized<()> = Default::default();
 		// setting value respecting branch build order
 		for i in 1..6 {
 			item.push(i, Some(&[i as u8]));
@@ -1005,7 +990,7 @@ mod test {
 		}
 
 		// prune skip unrelevant delete
-		let mut item: Serialized<crate::linear::NoVersion> = Default::default();
+		let mut item: Serialized<()> = Default::default();
 		item.push(1, Some(&[1 as u8]));
 		item.push(2, None);
 		item.push(3, Some(&[3 as u8]));
@@ -1020,7 +1005,7 @@ mod test {
 		assert_eq!(item.get(3), Some(Some(&[3][..])));
 
 		// prune skip unrelevant delete
-		let mut item: Serialized<crate::linear::NoVersion> = Default::default();
+		let mut item: Serialized<()> = Default::default();
 		item.push(1, Some(&[1 as u8]));
 		item.push(3, None);
 		item.push(4, Some(&[4 as u8]));
@@ -1040,7 +1025,7 @@ mod test {
 		assert_eq!(item.get(4), Some(Some(&[4][..])));
 
 		// prune delete at block
-		let mut item: Serialized<crate::linear::DefaultVersion> = Default::default();
+		let mut item: Serialized<()> = Default::default();
 		item.push(0, Some(&[0 as u8]));
 		item.push(1, None);
 		assert_eq!(item.get(0), Some(Some(&[0][..])));
