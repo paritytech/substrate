@@ -187,7 +187,9 @@ decl_module! {
 
 			let ret = match reason {
 				ExitReason::Succeed(_) => Ok(()),
-				_ => Err("Execute message call failed")
+				ExitReason::Error(_) => Err("Execute message call failed"),
+				ExitReason::Revert(_) => Err("Execute message call reverted"),
+				ExitReason::Fatal(_) => Err("Execute message call returned VM fatal error"),
 			};
 			let actual_fee = executor.fee(gas_price);
 			executor.deposit(source, total_fee - actual_fee);
@@ -232,7 +234,9 @@ decl_module! {
 
 			let ret = match reason {
 				ExitReason::Succeed(_) => Ok(()),
-				_ => Err("Execute message call failed")
+				ExitReason::Error(_) => Err("Execute contract creation failed"),
+				ExitReason::Revert(_) => Err("Execute contract creation reverted"),
+				ExitReason::Fatal(_) => Err("Execute contract creation returned VM fatal error"),
 			};
 			let actual_fee = executor.fee(gas_price);
 			executor.deposit(source, total_fee - actual_fee);
