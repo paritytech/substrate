@@ -145,6 +145,17 @@ impl session::historical::Trait for Runtime {
 	type FullIdentificationOf = ConvertInto;
 }
 
+parameter_types! {
+	pub const UncleGenerations: u32 = 5;
+}
+
+impl authorship::Trait for Runtime {
+	type FindAuthor = ();
+	type UncleGenerations = UncleGenerations;
+	type FilterUncle = ();
+	type EventHandler = ImOnline;
+}
+
 impl Trait for Runtime {
 	type AuthorityId = UintAuthorityId;
 	type Event = ();
