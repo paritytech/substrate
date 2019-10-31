@@ -36,18 +36,34 @@ use evm::{ExitReason, ExitSucceed, ExitError};
 use evm::executor::StackExecutor;
 use evm::backend::ApplyBackend;
 
+/// Type alias for currency balance.
 pub type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 
+/// Trait that outputs the current transaction gas price.
 pub trait FeeCalculator {
+	/// Return the current gas price.
 	fn gas_price() -> U256;
 }
 
+/// Trait for converting account ids of `balances` module into
+/// `H160` for EVM module.
+///
+/// Accounts and contracts of this module are stored in its own
+/// storage, in an Ethereum-compatible format. In order to communicate
+/// with the rest of Substrate module, we require an one-to-one
+/// mapping of Substrate account to Ethereum address.
 pub trait ConvertAccountId<A> {
+	/// Given a Substrate address, return the corresponding Ethereum address.
 	fn convert_account_id(account_id: A) -> H160;
 }
 
-/// Precompiles
+/// Custom precompiles to be used by EVM engine.
 pub trait Precompiles {
+	/// Try to execute the code address as precompile. If the code address is not
+	/// a precompile or the precompile is not yet available, return `None`.
+	/// Otherwise, calculate the amount of gas needed with given `input` and
+	/// `target_gas`. Return `Ok(Some(status, output, gas_used))` if the execution
+	/// is successful. Otherwise return `Ok(Err(_))`.
 	fn execute(
 		address: H160,
 		input: &[u8],
@@ -228,8 +244,4 @@ decl_module! {
 			ret
 		}
 	}
-}
-
-impl<T: Trait> Module<T> {
-
 }

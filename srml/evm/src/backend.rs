@@ -13,13 +13,18 @@ use crate::{Trait, Accounts, AccountStorages, Module, Event};
 
 #[derive(Clone, Eq, PartialEq, Encode, Decode, Default)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+/// Ethereum account nonce, balance and code. Used by storage.
 pub struct Account {
+	/// Account nonce.
 	pub nonce: U256,
+	/// Account balance.
 	pub balance: U256,
+	/// Account code.
 	pub code: Vec<u8>,
 }
 
 impl Account {
+	/// Whether the account is considered empty, in EIP-161's definition.
 	pub fn is_empty(&self) -> bool {
 		self.nonce == U256::zero() && self.balance == U256::zero() &&
 			self.code.len() == 0
@@ -28,27 +33,38 @@ impl Account {
 
 #[derive(Clone, Eq, PartialEq, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+/// Ethereum log. Used for `deposit_event`.
 pub struct Log {
+	/// Source address of the log.
 	pub address: H160,
+	/// Topics of the log.
 	pub topics: Vec<H256>,
+	/// Bytearray data of the log.
 	pub data: Vec<u8>,
 }
 
 #[derive(Clone, Eq, PartialEq, Encode, Decode, Default)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+/// External input from the transaction.
 pub struct Vicinity {
+	/// Current transaction gas price.
 	pub gas_price: U256,
+	/// Origin of the transaction.
 	pub origin: H160,
 }
 
+/// Gasometer config used for executor. Currently this is hard-coded to
+/// Istanbul hard fork.
 pub static GASOMETER_CONFIG: Config = Config::istanbul();
 
+/// Substrate backend for EVM.
 pub struct Backend<'vicinity, T> {
 	vicinity: &'vicinity Vicinity,
 	_marker: PhantomData<T>,
 }
 
 impl<'vicinity, T> Backend<'vicinity, T> {
+	/// Create a new backend with given vicinity.
 	pub fn new(vicinity: &'vicinity Vicinity) -> Self {
 		Self { vicinity, _marker: PhantomData }
 	}
