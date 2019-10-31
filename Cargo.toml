@@ -109,7 +109,3 @@ members = [
 # Substrate runtime requires unwinding.
 panic = "unwind"
 
-[features]
-wasmtime = [
-    "cli/wasmtime",
-]

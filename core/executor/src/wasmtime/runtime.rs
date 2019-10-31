@@ -34,6 +34,7 @@ use cranelift_wasm::DefinedFuncIndex;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::convert::TryFrom;
+use std::panic::AssertUnwindSafe;
 use std::rc::Rc;
 use wasm_interface::{HostFunctions, Pointer, WordSize};
 use wasmtime_environ::{Module, translate_signature};
@@ -105,17 +106,31 @@ pub fn create_instance<E: Externalities>(ext: &mut E, code: &[u8], heap_pages: u
 		.ok_or_else(|| WasmError::InvalidHeapPages)?;
 
 	// Call to determine runtime version.
-	let version_result = call_method(
-		&mut context,
-		&mut compiled_module,
-		ext,
-		"Core_version",
-		&[],
-		heap_pages
-	);
+	let version_result = {
+		// `ext` is already implicitly handled as unwind safe, as we store it in a global variable.
+		let mut ext = AssertUnwindSafe(ext);
+
+		// The following unwind safety assertions are OK because if the method call panics, the
+		// context and compiled module will be dropped.
+		let mut context = AssertUnwindSafe(&mut context);
+		let mut compiled_module = AssertUnwindSafe(&mut compiled_module);
+		crate::native_executor::safe_call(move || {
+			call_method(
+				&mut **context,
+				&mut **compiled_module,
+				&mut **ext,
+				"Core_version",
+				&[],
+				heap_pages
+			)
+		}).map_err(|_| {
+			WasmError::Instantiation("panic in call to get runtime version".to_string())
+		})?
+	};
 	let version = version_result
 		.ok()
 		.and_then(|v| RuntimeVersion::decode(&mut v.as_slice()).ok());
+
 	Ok(WasmtimeRuntime {
 		module: compiled_module,
 		context,

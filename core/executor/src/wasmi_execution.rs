@@ -627,11 +627,12 @@ pub fn create_instance<E: Externalities>(ext: &mut E, code: &[u8], heap_pages: u
 
 	let mut ext = AssertUnwindSafe(ext);
 	let call_instance = AssertUnwindSafe(&instance);
-	let version = crate::native_executor::safe_call(
+	let version_result = crate::native_executor::safe_call(
 		move || call_in_wasm_module(&mut **ext, *call_instance, "Core_version", &[])
-				.ok()
-				.and_then(|v| RuntimeVersion::decode(&mut v.as_slice()).ok())
-	).map_err(WasmError::Instantiation)?;
+	).map_err(|_| WasmError::Instantiation("panic in call to get runtime version".to_string()))?;
+	let version = version_result
+		.ok()
+		.and_then(|v| RuntimeVersion::decode(&mut v.as_slice()).ok());
 
 	Ok(WasmiRuntime {
 		instance,
