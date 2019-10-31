@@ -28,7 +28,6 @@ use codec::Encode;
 use sr_primitives::traits::NumberFor;
 
 use crate::environment::SharedVoterSetState;
-use fg_primitives::AuthorityList;
 use super::gossip::{self, GossipValidator};
 use super::{AuthorityId, VoterSet, Round, SetId};
 
@@ -201,7 +200,7 @@ fn make_test_network() -> (
 	)
 }
 
-fn make_ids(keys: &[Ed25519Keyring]) -> AuthorityList {
+fn make_ids(keys: &[Ed25519Keyring]) -> Vec<(AuthorityId, u64)> {
 	keys.iter()
 		.map(|key| key.clone().public().into())
 		.map(|id| (id, 1))
