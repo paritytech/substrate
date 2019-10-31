@@ -36,7 +36,7 @@ node-primitives = { path = "../primitives" }
 hex-literal = "0.2.1"
 substrate-rpc = { package = "substrate-rpc", path = "../../core/rpc" }
 substrate-basic-authorship = { path = "../../core/basic-authorship" }
-substrate-service = { path = "../../core/service" }
+substrate-service = { path = "../../core/service", default-features = false }
 chain-spec = { package = "substrate-chain-spec", path = "../../core/chain-spec" }
 transaction_pool = { package = "substrate-transaction-pool", path = "../../core/transaction-pool" }
 network = { package = "substrate-network", path = "../../core/network" }
@@ -114,5 +114,5 @@ cli = [
 	"tokio",
 	"exit-future",
 	"ctrlc",
-	"client_db/kvdb-rocksdb"
+	"substrate-service/rocksdb"
 ]
