@@ -171,8 +171,11 @@ decl_module! {
 				T::Precompiles::execute,
 			);
 
-			let total_fee = gas_price * U256::from(gas_limit);
-			if Accounts::get(&source).balance < value + total_fee {
+			let total_fee = gas_price.checked_mul(U256::from(gas_limit))
+				.ok_or("Calculating total fee overflowed")?;
+			if Accounts::get(&source).balance <
+				value.checked_add(total_fee).ok_or("Calculating total payment overflowed")?
+			{
 				return Err("Not enough balance to pay transaction fee")
 			}
 			executor.withdraw(source, total_fee).map_err(|_| "Withdraw fee failed")?;
@@ -192,7 +195,7 @@ decl_module! {
 				ExitReason::Fatal(_) => Err("Execute message call returned VM fatal error"),
 			};
 			let actual_fee = executor.fee(gas_price);
-			executor.deposit(source, total_fee - actual_fee);
+			executor.deposit(source, total_fee.saturating_sub(actual_fee));
 
 			let (values, logs) = executor.deconstruct();
 			backend.apply(values, logs, true);
@@ -219,8 +222,11 @@ decl_module! {
 				T::Precompiles::execute,
 			);
 
-			let total_fee = gas_price * U256::from(gas_limit);
-			if Accounts::get(&source).balance < value + total_fee {
+			let total_fee = gas_price.checked_mul(U256::from(gas_limit))
+				.ok_or("Calculating total fee overflowed")?;
+			if Accounts::get(&source).balance <
+				value.checked_add(total_fee).ok_or("Calculating total payment overflowed")?
+			{
 				return Err("Not enough balance to pay transaction fee")
 			}
 			executor.withdraw(source, total_fee).map_err(|_| "Withdraw fee failed")?;
@@ -239,7 +245,7 @@ decl_module! {
 				ExitReason::Fatal(_) => Err("Execute contract creation returned VM fatal error"),
 			};
 			let actual_fee = executor.fee(gas_price);
-			executor.deposit(source, total_fee - actual_fee);
+			executor.deposit(source, total_fee.saturating_sub(actual_fee));
 
 			let (values, logs) = executor.deconstruct();
 			backend.apply(values, logs, true);
@@ -263,9 +269,14 @@ impl<T: Trait> Module<T> {
 	/// Remove an account if its empty.
 	pub fn remove_account_if_empty(address: &H160) {
 		if Self::is_account_empty(address) {
-			Accounts::remove(address);
-			AccountCodes::remove(address);
-			AccountStorages::remove_prefix(address);
+			Self::remove_account(address)
 		}
+	}
+
+	/// Remove an account from state.
+	fn remove_account(address: &H160) {
+		Accounts::remove(address);
+		AccountCodes::remove(address);
+		AccountStorages::remove_prefix(address);
 	}
 }

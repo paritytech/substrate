@@ -171,7 +171,7 @@ impl<'vicinity, T: Trait> ApplyBackend for Backend<'vicinity, T> {
 					}
 				},
 				Apply::Delete { address } => {
-					Accounts::remove(address);
+					Module::<T>::remove_account(&address)
 				},
 			}
 		}
