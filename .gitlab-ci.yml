@@ -328,7 +328,7 @@ check_polkadot:
   script:
     - git clone --depth 1 https://github.com/paritytech/polkadot.git
     - cd polkadot
-    - git grep "polkadot-master" -l | xargs sed -i "s/polkadot-master/$CI_COMMIT_REF_NAME/"
+    - git grep -l "polkadot-master" | xargs sed -i "s/polkadot-master/$CI_COMMIT_REF_NAME/"
     - time cargo check
     - cd ..
     - sccache -s
