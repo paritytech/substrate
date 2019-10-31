@@ -276,7 +276,6 @@ fn should_mark_online_validator_when_block_is_authored() {
 
 #[test]
 fn should_not_send_a_report_if_already_online() {
-	env_logger::init();
 	use authorship::EventHandler;
 
 	let mut ext = new_test_ext();

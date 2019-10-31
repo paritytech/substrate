@@ -20,7 +20,6 @@ system = { package = "srml-system", path = "../system", default-features = false
 
 [dev-dependencies]
 offchain = { package = "substrate-offchain", path = "../../core/offchain" }
-env_logger = "0.6"
 
 [features]
 default = ["std", "session/historical"]
