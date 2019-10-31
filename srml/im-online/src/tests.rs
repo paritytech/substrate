@@ -243,3 +243,33 @@ fn should_cleanup_received_heartbeats_on_session_end() {
 		assert!(ImOnline::received_heartbeats(&2, &0).is_empty());
 	});
 }
+
+#[test]
+fn should_mark_online_validator_when_block_is_authored() {
+	use authorship::EventHandler;
+
+	new_test_ext().execute_with(|| {
+		advance_session();
+		// given
+		VALIDATORS.with(|l| *l.borrow_mut() = Some(vec![1, 2, 3, 4, 5, 6]));
+		assert_eq!(Session::validators(), Vec::<u64>::new());
+		// enact the change and buffer another one
+		advance_session();
+
+		assert_eq!(Session::current_index(), 2);
+		assert_eq!(Session::validators(), vec![1, 2, 3]);
+
+		for i in 0..3 {
+			assert!(!ImOnline::is_online_in_current_session(i));
+		}
+
+		// when
+		ImOnline::note_author(1);
+		ImOnline::note_uncle(2, 0);
+
+		// then
+		assert!(ImOnline::is_online_in_current_session(0));
+		assert!(ImOnline::is_online_in_current_session(1));
+		assert!(!ImOnline::is_online_in_current_session(2));
+	});
+}
