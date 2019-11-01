@@ -120,11 +120,6 @@ impl<C, G, E> Configuration<C, G, E> where
 	G: RuntimeGenesis,
 	E: Extension,
 {
-	/// Create default config for given chain spec.
-	pub fn default_with_spec(chain_spec: ChainSpec<G, E>) -> Self {
-		Self::default_with_spec_and_base_path(chain_spec, Default::default())
-	}
-	
 	/// Create a default config for given chain spec and path to configuration dir
 	pub fn default_with_spec_and_base_path(chain_spec: ChainSpec<G, E>, config_dir: PathBuf) -> Self {
 		let mut configuration = Configuration {
