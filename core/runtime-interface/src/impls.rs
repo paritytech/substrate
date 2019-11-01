@@ -400,7 +400,7 @@ impl FromFFIValue for str {
 		let vec = context.read_memory(Pointer::new(ptr), len)?;
 
 		// The data is valid utf8, as it is stored as `&str` in wasm.
-		Ok(unsafe { String::from_utf8_unchecked(vec) })
+		String::from_utf8(vec).map_err(|_| "Invalid utf8 data provided".into())
 	}
 }
 

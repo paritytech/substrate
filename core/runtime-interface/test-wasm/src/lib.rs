@@ -71,6 +71,11 @@ pub trait TestApi {
 	fn return_input_public_key(key: Public) -> Public {
 		key
 	}
+
+	/// A function that is called with invalid utf8 data from the runtime.
+	fn invalid_utf8_data(_data: &str) {
+
+	}
 }
 
 /// This function is not used, but we require it for the compiler to include `runtime-io`.
@@ -142,5 +147,13 @@ wasm_export_functions! {
 		let key_data: &[u8] = key.as_ref();
 		let ret_key_data: &[u8] = ret_key.as_ref();
 		assert_eq!(key_data, ret_key_data);
+	}
+
+	fn test_invalid_utf8_data_should_return_an_error() {
+		let data = vec![0, 159, 146, 150];
+		// I'm an evil hacker, trying to hack!
+		let data_str = unsafe { rstd::str::from_utf8_unchecked(&data) };
+
+		test_api::invalid_utf8_data(data_str);
 	}
 }

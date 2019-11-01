@@ -136,4 +136,10 @@ mod tests {
 	fn host_function_not_found() {
 		call_wasm_method::<()>("test_return_data");
 	}
+
+	#[test]
+	#[should_panic(expected = "Trap { kind: Host(FunctionExecution(\"Invalid utf8 data provided\")")]
+	fn test_invalid_utf8_data_should_return_an_error() {
+		call_wasm_method::<HostFunctions>("test_invalid_utf8_data_should_return_an_error");
+	}
 }
