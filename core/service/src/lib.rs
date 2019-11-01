@@ -459,7 +459,7 @@ fn build_network_future<
 		let polling_dur = before_polling.elapsed();
 		log!(
 			target: "service",
-			if polling_dur >= Duration::from_millis(50) { Level::Debug } else { Level::Trace },
+			if polling_dur >= Duration::from_secs(1) { Level::Warn } else { Level::Trace },
 			"Polling the network future took {:?}",
 			polling_dur
 		);
@@ -541,15 +541,16 @@ fn start_rpc_servers<C, G, E, H: FnMut() -> rpc_servers::RpcHandler<rpc::Metadat
 
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
 #[cfg(target_os = "unknown")]
-fn start_rpc_servers<C, G, E, H: FnMut() -> components::RpcHandler>(
+fn start_rpc_servers<C, G, E, H: FnMut() -> rpc_servers::RpcHandler<rpc::Metadata>>(
 	_: &Configuration<C, G, E>,
 	_: H
-) -> Result<Box<std::any::Any + Send + Sync>, error::Error> {
+) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
 	Ok(Box::new(()))
 }
 
 /// An RPC session. Used to perform in-memory RPC queries (ie. RPC queries that don't go through
 /// the HTTP or WebSockets server).
+#[derive(Clone)]
 pub struct RpcSession {
 	metadata: rpc::Metadata,
 }

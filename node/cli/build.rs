@@ -14,9 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use cli::{NoCustom, CoreParams};
 use std::{fs, env, path::Path};
 use structopt::{StructOpt, clap::Shell};
+use substrate_cli::{NoCustom, CoreParams};
 use vergen::{ConstantsFlags, generate_cargo_keys};
 
 fn main() {
