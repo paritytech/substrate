@@ -33,8 +33,6 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(feature = "std")]
-use serde::{Serialize, Deserialize};
 use rstd::{prelude::*, collections::btree_map::BTreeMap};
 use sr_primitives::RuntimeDebug;
 use sr_primitives::{helpers_128bit::multiply_by_rational, Perbill, Rational128};
@@ -118,7 +116,7 @@ pub struct PhragmenResult<AccountId> {
 /// This, at the current version, resembles the `Exposure` defined in the staking SRML module, yet
 /// they do not necessarily have to be the same.
 #[derive(Default, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub struct Support<AccountId> {
 	/// The amount of support as the effect of self-vote.
 	pub own: ExtendedBalance,
