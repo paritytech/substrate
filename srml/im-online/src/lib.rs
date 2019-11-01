@@ -200,11 +200,14 @@ pub trait Trait: system::Trait + session::historical::Trait {
 decl_event!(
 	pub enum Event<T> where
 		<T as Trait>::AuthorityId,
+		IdentificationTuple = IdentificationTuple<T>,
 	{
 		/// A new heartbeat was received from `AuthorityId`
 		HeartbeatReceived(AuthorityId),
 		/// At the end of the session, no offence was committed.
 		AllGood,
+		/// At the end of the session, at least once validator was found to be offline.
+		SomeOffline(Vec<IdentificationTuple>),
 	}
 );
 
@@ -517,11 +520,8 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 			.filter(|(index, id)|
 				!Self::is_online_aux(*index as u32, id)
 			).filter_map(|(_, id)|
-				T::FullIdentificationOf::convert(id.clone())
-					.map(|full_id|
-						(id, full_id)
-					)
-			).collect::<Vec<_>>();
+				T::FullIdentificationOf::convert(id.clone()).map(|full_id| (id, full_id))
+			).collect::<Vec<IdentificationTuple<T>>>();
 
 		// Remove all received heartbeats and number of authored blocks from the
 		// current session, they have already been processed and won't be needed
@@ -531,12 +531,13 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 
 		if offenders.is_empty() {
 			Self::deposit_event(RawEvent::AllGood);
-			return;
-		}
+		} else {
+			Self::deposit_event(RawEvent::SomeOffline(offenders.clone()));
 
-		let validator_set_count = keys.len() as u32;
-		let offence = UnresponsivenessOffence { session_index, validator_set_count, offenders };
-		T::ReportUnresponsiveness::report_offence(vec![], offence);
+			let validator_set_count = keys.len() as u32;
+			let offence = UnresponsivenessOffence { session_index, validator_set_count, offenders };
+			T::ReportUnresponsiveness::report_offence(vec![], offence);
+		}
 	}
 
 	fn on_disabled(_i: usize) {
