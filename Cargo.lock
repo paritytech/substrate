@@ -4085,7 +4085,7 @@ dependencies = [
  "srml-session 2.0.0",
  "srml-support 2.0.0",
  "srml-system 2.0.0",
- "substrate-externalities 2.0.0",
+ "substrate-finality-grandpa-primitives 2.0.0",
  "substrate-primitives 2.0.0",
  "substrate-state-machine 2.0.0",
  "substrate-trie 2.0.0",
