@@ -138,7 +138,10 @@ mod tests {
 	}
 
 	#[test]
-	#[should_panic(expected = "Trap { kind: Host(FunctionExecution(\"Invalid utf8 data provided\")")]
+	#[should_panic(
+		expected =
+			"FunctionExecution(\"ext_test_api_invalid_utf8_data\", \"Invalid utf8 data provided\")"
+	)]
 	fn test_invalid_utf8_data_should_return_an_error() {
 		call_wasm_method::<HostFunctions>("test_invalid_utf8_data_should_return_an_error");
 	}

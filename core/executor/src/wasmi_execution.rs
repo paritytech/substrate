@@ -377,7 +377,7 @@ fn call_in_wasm_module(
 	match result {
 		Ok(Some(I64(r))) => {
 			let (ptr, length) = interpret_runtime_api_result(r);
-			memory.get(offset, length).map_err(|_| Error::Runtime)
+			memory.get(ptr.into(), length as usize).map_err(|_| Error::Runtime)
 		},
 		Err(e) => {
 			trace!(
@@ -619,7 +619,7 @@ pub fn create_instance<E: Externalities>(
 			*call_instance,
 			"Core_version",
 			&[],
-			host_function_slice,
+			host_functions_slice,
 		)
 	).map_err(|_| WasmError::Instantiation("panic in call to get runtime version".to_string()))?;
 	let version = version_result
