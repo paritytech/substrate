@@ -21,6 +21,8 @@
 
 use crate::error::{Error, WasmError};
 use crate::wasmi_execution;
+#[cfg(feature = "wasmtime")]
+use crate::wasmtime;
 use log::{trace, warn};
 use codec::Decode;
 use primitives::{storage::well_known_keys, traits::Externalities, H256};
@@ -51,6 +53,9 @@ pub trait WasmRuntime {
 pub enum WasmExecutionMethod {
 	/// Uses the Wasmi interpreter.
 	Interpreted,
+	/// Uses the Wasmtime compiled runtime.
+	#[cfg(feature = "wasmtime")]
+	Compiled,
 }
 
 /// Cache for the runtimes.
@@ -180,6 +185,10 @@ pub fn create_wasm_runtime_with_code<E: Externalities>(
 	match wasm_method {
 		WasmExecutionMethod::Interpreted =>
 			wasmi_execution::create_instance(ext, code, heap_pages)
+				.map(|runtime| -> Box<dyn WasmRuntime> { Box::new(runtime) }),
+		#[cfg(feature = "wasmtime")]
+		WasmExecutionMethod::Compiled =>
+			wasmtime::create_instance(ext, code, heap_pages)
 				.map(|runtime| -> Box<dyn WasmRuntime> { Box::new(runtime) }),
 	}
 }
