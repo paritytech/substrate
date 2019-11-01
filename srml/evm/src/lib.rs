@@ -259,11 +259,11 @@ impl<T: Trait> Module<T> {
 	/// Check whether an account is empty.
 	pub fn is_account_empty(address: &H160) -> bool {
 		let account = Accounts::get(address);
-		let code = AccountCodes::get(address);
+		let code_len = AccountCodes::decode_len(address).unwrap_or(0);
 
 		account.nonce == U256::zero() &&
 			account.balance == U256::zero() &&
-			code.len() == 0
+			code_len == 0
 	}
 
 	/// Remove an account if its empty.

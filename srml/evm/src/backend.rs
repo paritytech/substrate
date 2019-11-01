@@ -113,7 +113,7 @@ impl<'vicinity, T: Trait> BackendT for Backend<'vicinity, T> {
 	}
 
 	fn code_size(&self, address: H160) -> usize {
-		AccountCodes::get(&address).len()
+		AccountCodes::decode_len(&address).unwrap_or(0)
 	}
 
 	fn code_hash(&self, address: H160) -> H256 {
