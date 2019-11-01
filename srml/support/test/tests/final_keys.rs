@@ -17,7 +17,7 @@
 use runtime_io::with_storage;
 use support::storage::unhashed;
 use codec::Encode;
-use support::{StorageDoubleMap, StorageLinkedMap, StorageMap, StorageValue};
+use support::{StorageDoubleMap, StorageLinkedMap, StorageMap, StorageValue, StoragePrefixedMap};
 
 mod no_instance {
 	use codec::{Encode, Decode, EncodeLike};
@@ -74,6 +74,9 @@ mod instance {
 			pub LinkedMap: linked_map u32 => u32;
 			pub LinkedMap2: linked_map hasher(twox_128) u32 => u32;
 
+			pub PrefixedMap: prefixed_map u32 => u32;
+			pub PrefixedMap2: prefixed_map hasher(twox_128) u32 => u32;
+
 			pub DoubleMap: double_map u32, blake2_256(u32) => u32;
 			pub DoubleMap2: double_map hasher(twox_128) u32, blake2_128(u32) => u32;
 
@@ -117,6 +120,16 @@ fn final_keys_no_instance() {
 		let mut k = b"FinalKeysNone LinkedMap2".to_vec();
 		k.extend(1u32.encode());
 		assert_eq!(unhashed::get::<u32>(&runtime_io::twox_128(&k)), Some(2u32));
+
+		no_instance::PrefixedMap::insert(1, 2);
+		let mut k = runtime_io::twox_256(b"FinalKeysNone PrefixedMap").to_vec();
+		k.extend(&runtime_io::blake2_256(&1u32.encode()));
+		assert_eq!(unhashed::get::<u32>(&k), Some(2u32));
+
+		no_instance::PrefixedMap2::insert(1, 2);
+		let mut k = runtime_io::twox_256(b"FinalKeysNone PrefixedMap2").to_vec();
+		k.extend(&runtime_io::twox_128(&1u32.encode()));
+		assert_eq!(unhashed::get::<u32>(&k), Some(2u32));
 
 		no_instance::DoubleMap::insert(&1, &2, &3);
 		let mut k = b"FinalKeysNone DoubleMap".to_vec();
@@ -163,6 +176,16 @@ fn final_keys_default_instance() {
 		let mut k = b"FinalKeysSome LinkedMap2".to_vec();
 		k.extend(1u32.encode());
 		assert_eq!(unhashed::get::<u32>(&runtime_io::twox_128(&k)), Some(2u32));
+
+		<instance::PrefixedMap<instance::DefaultInstance>>::insert(1, 2);
+		let mut k = runtime_io::twox_256(b"FinalKeysSome PrefixedMap").to_vec();
+		k.extend(&runtime_io::blake2_256(&1u32.encode()));
+		assert_eq!(unhashed::get::<u32>(&k), Some(2u32));
+
+		<instance::PrefixedMap2<instance::DefaultInstance>>::insert(1, 2);
+		let mut k = runtime_io::twox_256(b"FinalKeysSome PrefixedMap2").to_vec();
+		k.extend(&runtime_io::twox_128(&1u32.encode()));
+		assert_eq!(unhashed::get::<u32>(&k), Some(2u32));
 
 		<instance::DoubleMap<instance::DefaultInstance>>::insert(&1, &2, &3);
 		let mut k = b"FinalKeysSome DoubleMap".to_vec();
@@ -212,6 +235,16 @@ fn final_keys_instance_2() {
 		let mut k = b"Instance2FinalKeysSome LinkedMap2".to_vec();
 		k.extend(1u32.encode());
 		assert_eq!(unhashed::get::<u32>(&runtime_io::twox_128(&k)), Some(2u32));
+
+		<instance::PrefixedMap<instance::Instance2>>::insert(1, 2);
+		let mut k = runtime_io::twox_256(b"Instance2FinalKeysSome PrefixedMap").to_vec();
+		k.extend(&runtime_io::blake2_256(&1u32.encode()));
+		assert_eq!(unhashed::get::<u32>(&k), Some(2u32));
+
+		<instance::PrefixedMap2<instance::Instance2>>::insert(1, 2);
+		let mut k = runtime_io::twox_256(b"Instance2FinalKeysSome PrefixedMap2").to_vec();
+		k.extend(&runtime_io::twox_128(&1u32.encode()));
+		assert_eq!(unhashed::get::<u32>(&k), Some(2u32));
 
 		<instance::DoubleMap<instance::Instance2>>::insert(&1, &2, &3);
 		let mut k = b"Instance2FinalKeysSome DoubleMap".to_vec();
