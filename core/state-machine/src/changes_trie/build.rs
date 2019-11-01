@@ -325,7 +325,8 @@ mod test {
 	use crate::changes_trie::{RootsStorage, Configuration, storage::InMemoryStorage};
 	use crate::changes_trie::build_cache::{IncompleteCacheAction, IncompleteCachedBuildData};
 	use crate::overlayed_changes::{OverlayedValue, OverlayedChangeSet};
-	use historical_data::linear::{History, States, HistoricalValue, TransactionState};
+	use historical_data::linear::transaction::{States, TransactionState};
+	use historical_data::linear::{History, HistoricalValue};
 	use super::*;
 
 	fn prepare_for_build(zero: u64) -> (
