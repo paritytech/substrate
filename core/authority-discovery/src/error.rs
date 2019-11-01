@@ -42,6 +42,4 @@ pub enum Error {
 	Decoding(prost::DecodeError),
 	/// Failed to parse a libp2p multi address.
 	ParsingMultiaddress(libp2p::core::multiaddr::Error),
-	/// Tokio timer error.
-	PollingTokioTimer(tokio_timer::Error)
 }
