@@ -9,6 +9,9 @@ default = ["rocksdb"]
 # The RocksDB feature activates the RocksDB database backend. If it is not activated, and you pass
 # a path to a database, an error will be produced at runtime.
 rocksdb = ["client_db/kvdb-rocksdb"]
+wasmtime = [
+    "substrate-executor/wasmtime",
+]
 
 [dependencies]
 derive_more = "0.15.0"
