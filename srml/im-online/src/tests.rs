@@ -134,25 +134,25 @@ fn should_mark_online_validator_when_heartbeat_is_received() {
 		assert_eq!(Session::current_index(), 2);
 		assert_eq!(Session::validators(), vec![1, 2, 3]);
 
-		assert!(!ImOnline::is_online_in_current_session(0));
-		assert!(!ImOnline::is_online_in_current_session(1));
-		assert!(!ImOnline::is_online_in_current_session(2));
+		assert!(!ImOnline::is_online(0));
+		assert!(!ImOnline::is_online(1));
+		assert!(!ImOnline::is_online(2));
 
 		// when
 		let _ = heartbeat(1, 2, 0, 1.into()).unwrap();
 
 		// then
-		assert!(ImOnline::is_online_in_current_session(0));
-		assert!(!ImOnline::is_online_in_current_session(1));
-		assert!(!ImOnline::is_online_in_current_session(2));
+		assert!(ImOnline::is_online(0));
+		assert!(!ImOnline::is_online(1));
+		assert!(!ImOnline::is_online(2));
 
 		// and when
 		let _ = heartbeat(1, 2, 2, 3.into()).unwrap();
 
 		// then
-		assert!(ImOnline::is_online_in_current_session(0));
-		assert!(!ImOnline::is_online_in_current_session(1));
-		assert!(ImOnline::is_online_in_current_session(2));
+		assert!(ImOnline::is_online(0));
+		assert!(!ImOnline::is_online(1));
+		assert!(ImOnline::is_online(2));
 	});
 }
 
@@ -233,14 +233,14 @@ fn should_cleanup_received_heartbeats_on_session_end() {
 		let _ = heartbeat(1, 2, 0, 1.into()).unwrap();
 
 		// the heartbeat is stored
-		assert!(!ImOnline::received_heartbeats(&2, &0).is_empty());
+		assert!(!ImOnline::received_heartbeats(&2, &0).is_none());
 
 		advance_session();
 
 		// after the session has ended we have already processed the heartbeat
 		// message, so any messages received on the previous session should have
 		// been pruned.
-		assert!(ImOnline::received_heartbeats(&2, &0).is_empty());
+		assert!(ImOnline::received_heartbeats(&2, &0).is_none());
 	});
 }
 
@@ -260,7 +260,7 @@ fn should_mark_online_validator_when_block_is_authored() {
 		assert_eq!(Session::validators(), vec![1, 2, 3]);
 
 		for i in 0..3 {
-			assert!(!ImOnline::is_online_in_current_session(i));
+			assert!(!ImOnline::is_online(i));
 		}
 
 		// when
@@ -268,8 +268,8 @@ fn should_mark_online_validator_when_block_is_authored() {
 		ImOnline::note_uncle(2, 0);
 
 		// then
-		assert!(ImOnline::is_online_in_current_session(0));
-		assert!(ImOnline::is_online_in_current_session(1));
-		assert!(!ImOnline::is_online_in_current_session(2));
+		assert!(ImOnline::is_online(0));
+		assert!(ImOnline::is_online(1));
+		assert!(!ImOnline::is_online(2));
 	});
 }
