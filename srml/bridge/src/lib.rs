@@ -166,7 +166,7 @@ impl<T: Trait> Module<T> {
 // is a chain of headers between (but not including) the `child`
 // and `ancestor`. This could be updated to use something like
 // Log2 Ancestors (#2053) in the future.
-fn verify_ancestry<H>(proof: Vec<H>, ancestor: H, child: H) -> Result<(), Error>
+fn verify_ancestry<H>(proof: Vec<H>, ancestor_hash: H::Hash, child: H) -> Result<(), Error>
 where
 	H: Header
 {
@@ -180,7 +180,7 @@ where
 		}
 
 		parent_hash = header.parent_hash();
-		if *parent_hash == ancestor.hash() {
+		if *parent_hash == ancestor_hash {
 			return Ok(())
 		}
 	}
@@ -369,7 +369,7 @@ mod tests {
 		let mut proof = build_header_chain(ancestor.clone(), 10);
 		let child = proof.remove(0);
 
-		assert_ok!(verify_ancestry(proof, ancestor, child));
+		assert_ok!(verify_ancestry(proof, ancestor.hash(), child));
 	}
 
 	#[test]
@@ -395,7 +395,7 @@ mod tests {
 		};
 
 		assert_err!(
-			verify_ancestry(proof, fake_ancestor, child),
+			verify_ancestry(proof, fake_ancestor.hash(), child),
 			Error::InvalidAncestryProof
 		);
 	}
@@ -425,7 +425,7 @@ mod tests {
 		invalid_proof.insert(5, fake_ancestor);
 
 		assert_err!(
-			verify_ancestry(invalid_proof, ancestor, child),
+			verify_ancestry(invalid_proof, ancestor.hash(), child),
 			Error::InvalidAncestryProof
 		);
 	}
