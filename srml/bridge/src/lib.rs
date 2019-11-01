@@ -139,7 +139,7 @@ impl<T: Trait> Module<T> {
 		state_root: &T::Hash,
 		proof: Vec<Vec<u8>>,
 		validator_set: &Vec<(T::ValidatorId, ValidatorWeight)>,
-	) -> std::result::Result<(), Error> {
+	) -> Result<(), Error> {
 
 		// pub const GRANDPA_AUTHORITIES_KEY: &'static [u8] = b":grandpa_authorities";
 		// pub type AuthorityList = Vec<(AuthorityId, AuthorityWeight)>;
@@ -161,31 +161,25 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-// A naive way to check whether a `child` header is an ancestor
+// A naive way to check whether a `child` header is a decendent
 // of an `ancestor` header. For this it requires a proof which
-// is a header chain, This could be updated to use something like
+// is a chain of headers between (but not including) the `child`
+// and `ancestor`. This could be updated to use something like
 // Log2 Ancestors (#2053) in the future.
-fn verify_ancestry<H>(proof: Vec<H>, ancestor: H, child: H) -> std::result::Result<(), Error>
+fn verify_ancestry<H>(proof: Vec<H>, ancestor: H, child: H) -> Result<(), Error>
 where
 	H: Header
 {
-	let mut curr_header = &proof[0];
-	if curr_header.hash() != child.hash() {
-		return Err(Error::AncestorNotFound);
-	}
-
-	let mut parent_hash = curr_header.parent_hash();
+	let mut parent_hash = child.parent_hash();
 
 	// If we find that the header's parent hash matches our ancestor's hash we're done
-	for i in 1..proof.len() {
-		curr_header = &proof[i];
-
+	for header in proof.iter() {
 		// Need to check that blocks are actually related
-		if curr_header.hash() != *parent_hash {
+		if header.hash() != *parent_hash {
 			break;
 		}
 
-		parent_hash = curr_header.parent_hash();
+		parent_hash = header.parent_hash();
 		if *parent_hash == ancestor.hash() {
 			return Ok(())
 		}
@@ -371,9 +365,7 @@ mod tests {
 		let (grandparent, parent, child) = get_related_block_headers();
 
 		let mut proof = Vec::new();
-		proof.push(child.clone());
 		proof.push(parent);
-		proof.push(grandparent.clone());
 
 		assert_ok!(verify_ancestry(proof, grandparent, child));
 	}
@@ -383,9 +375,7 @@ mod tests {
 		let (grandparent, parent, child) = get_related_block_headers();
 
 		let mut proof = Vec::new();
-		proof.push(child.clone());
 		proof.push(parent);
-		proof.push(grandparent.clone());
 
 		let fake_grandparent = Header {
 			parent_hash: H256::from_slice(&[1u8; 32]),
@@ -413,10 +403,8 @@ mod tests {
 		};
 
 		let mut invalid_proof = Vec::new();
-		invalid_proof.push(child.clone());
 		invalid_proof.push(fake_ancestor);
 		invalid_proof.push(parent);
-		invalid_proof.push(grandparent.clone());
 
 		assert_err!(
 			verify_ancestry(invalid_proof, grandparent, child),
