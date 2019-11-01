@@ -43,8 +43,10 @@ pub struct Configuration<C, G, E = NoExtension> {
 	pub transaction_pool: transaction_pool::txpool::Options,
 	/// Network configuration.
 	pub network: NetworkConfiguration,
+	/// Path to the base configuration directory.
+	pub config_dir: Option<PathBuf>,
 	/// Path to key files.
-	pub keystore_path: PathBuf,
+	pub keystore_path: Option<PathBuf>,
 	/// Configuration for the database.
 	pub database: DatabaseConfig,
 	/// Size of internal state cache in Bytes
@@ -118,18 +120,19 @@ impl<C, G, E> Configuration<C, G, E> where
 	G: RuntimeGenesis,
 	E: Extension,
 {
-	/// Create default config for given chain spec.
-	pub fn default_with_spec(chain_spec: ChainSpec<G, E>) -> Self {
+	/// Create a default config for given chain spec and path to configuration dir
+	pub fn default_with_spec_and_base_path(chain_spec: ChainSpec<G, E>, config_dir: Option<PathBuf>) -> Self {
 		let mut configuration = Configuration {
 			impl_name: "parity-substrate",
 			impl_version: "0.0.0",
 			impl_commit: "",
 			chain_spec,
+			config_dir: config_dir.clone(),
 			name: Default::default(),
 			roles: Roles::FULL,
 			transaction_pool: Default::default(),
 			network: Default::default(),
-			keystore_path: Default::default(),
+			keystore_path: config_dir.map(|c| c.join("keystore")),
 			database: DatabaseConfig::Path {
 				path: Default::default(),
 				cache_size: Default::default(),
@@ -161,6 +164,9 @@ impl<C, G, E> Configuration<C, G, E> where
 		configuration
 	}
 
+}
+
+impl<C, G, E> Configuration<C, G, E> {
 	/// Returns full version string of this configuration.
 	pub fn full_version(&self) -> String {
 		full_version_from_strs(self.impl_version, self.impl_commit)
@@ -169,6 +175,17 @@ impl<C, G, E> Configuration<C, G, E> where
 	/// Implementation id and version.
 	pub fn client_id(&self) -> String {
 		format!("{}/v{}", self.impl_name, self.full_version())
+	}
+
+	/// Generate a PathBuf to sub in the chain configuration directory
+	/// if given
+	pub fn in_chain_config_dir(&self, sub: &str) -> Option<PathBuf> {
+		self.config_dir.clone().map(|mut path| {
+			path.push("chains");
+			path.push(self.chain_spec.id());
+			path.push(sub);
+			path
+		})
 	}
 }
 

@@ -155,7 +155,10 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 		(),
 		TFullBackend<TBl>,
 	>, Error> {
-		let keystore = Keystore::open(config.keystore_path.clone(), config.keystore_password.clone())?;
+		let keystore = Keystore::open(
+			config.keystore_path.clone().ok_or("No basepath configured")?,
+			config.keystore_password.clone()
+		)?;
 
 		let executor = NativeExecutor::<TExecDisp>::new(
 			config.wasm_method,
@@ -236,7 +239,10 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 		(),
 		TLightBackend<TBl>,
 	>, Error> {
-		let keystore = Keystore::open(config.keystore_path.clone(), config.keystore_password.clone())?;
+		let keystore = Keystore::open(
+			config.keystore_path.clone().ok_or("No basepath configured")?,
+			config.keystore_password.clone()
+		)?;
 
 		let executor = NativeExecutor::<TExecDisp>::new(
 			config.wasm_method,
