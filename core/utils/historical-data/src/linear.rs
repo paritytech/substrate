@@ -362,6 +362,18 @@ pub fn transaction_start_windows(states: &States, from: usize) -> usize {
 }
 
 impl<V> History<V> {
+	fn get_pending_unchecked(&self, states: &[TransactionState], history_index: usize)
+		-> Option<HistoricalValue<&V>> {
+		let HistoricalValue { value, index } = self.get_unchecked(history_index);
+		match states[index] {
+			TransactionState::Dropped => (),
+			TransactionState::Pending
+			| TransactionState::TxPending =>
+				return Some(HistoricalValue { value, index }),
+		}
+		None
+	}
+
 	/// Set a value, it uses a state history as parameter.
 	///
 	/// This method uses `get_mut` and does remove pending
@@ -392,12 +404,8 @@ impl<V> History<V> {
 		}
 		debug_assert!(states.len() >= self_len);
 		for index in (0 .. self_len).rev() {
-			let HistoricalValue { value, index: state_index } = self.get_unchecked(index);
-			match states[state_index] {
-				TransactionState::Dropped => (),
-				TransactionState::Pending
-				| TransactionState::TxPending =>
-					return Some(value),
+			if let Some(h) = self.get_pending_unchecked(states, index) {
+				return Some(h.value);
 			}
 		}
 		None
@@ -411,14 +419,9 @@ impl<V> History<V> {
 		}
 		debug_assert!(states.len() >= self_len);
 		for index in (0 .. self_len).rev() {
-			let state_index = self.get_unchecked(index).index;
-			match states[state_index] {
-				TransactionState::Dropped => (),
-				TransactionState::Pending
-				| TransactionState::TxPending => {
-					self.truncate(index + 1);
-					return self.pop().map(|v| v.value);
-				},
+			if self.get_pending_unchecked(states, index).is_some() {
+				self.truncate(index + 1);
+				return self.pop().map(|v| v.value);
 			}
 		}
 		None
@@ -433,12 +436,8 @@ impl<V> History<V> {
 		}
 		debug_assert!(states.history.len() >= self_len);
 		for index in (states.commit .. self_len).rev() {
-			let HistoricalValue { value, index: state_index } = self.get_unchecked(index);
-			match states.history[state_index] {
-				TransactionState::Dropped => (),
-				TransactionState::Pending
-				| TransactionState::TxPending =>
-					return Some(value),
+			if let Some(h) = self.get_pending_unchecked(states.history.as_ref(), index) {
+				return Some(h.value);
 			}
 		}
 		None
@@ -452,13 +451,9 @@ impl<V> History<V> {
 		}
 		debug_assert!(states.history.len() >= self_len);
 		for index in (0 .. self_len).rev() {
-			let HistoricalValue { value, index: state_index } = self.get_unchecked(index);
-			if state_index < states.commit {
-				match states.history[state_index] {
-					TransactionState::Dropped => (),
-					TransactionState::Pending
-					| TransactionState::TxPending =>
-						return Some(value),
+			if let Some(h) = self.get_pending_unchecked(states.history.as_ref(), index) {
+				if h.index < states.commit {
+					return Some(h.value);
 				}
 			}
 		}
@@ -472,15 +467,10 @@ impl<V> History<V> {
 		}
 		debug_assert!(states.len() >= self_len);
 		for index in (0 .. self_len).rev() {
-			let state_index = self.get_unchecked(index).index;
-			if state_index < committed {
-				match states[state_index] {
-					TransactionState::Dropped => (),
-					TransactionState::Pending
-					| TransactionState::TxPending => {
+			if let Some(h) = self.get_pending_unchecked(states, index) {
+				if h.index < committed {
 						self.truncate(index + 1);
 						return self.pop().map(|v| v.value);
-					},
 				}
 			}
 		}
