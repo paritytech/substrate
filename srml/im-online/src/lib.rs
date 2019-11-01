@@ -394,7 +394,7 @@ impl<T: Trait> Module<T> {
 					.map(|location| (index as u32, &local_keys[location]))
 			})
 		{
-			if Self::is_online_in_current_session(authority_index) {
+			if Self::is_online(authority_index) {
 				debug::native::info!(
 					target: "imonline",
 					"[index: {:?}] Skipping sending heartbeat at block: {:?}. Already online.",
