@@ -762,5 +762,6 @@ mod tests {
 		s.cache.sync_cache(&[], &[], vec![], vec![], None, None, || true);
 
 		let s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h1.clone()));
-		assert_eq!(s.storage(&key).unwrap(), None);}
+		assert_eq!(s.storage(&key).unwrap(), None);
+	}
 }
