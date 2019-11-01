@@ -130,7 +130,7 @@ decl_error! {
 		InvalidStorageProof,
 		InvalidValidatorSetProof,
 		ValidatorSetMismatch,
-		AncestorNotFound,
+		InvalidAncestryProof,
 	}
 }
 
@@ -185,7 +185,7 @@ where
 		}
 	}
 
-	Err(Error::AncestorNotFound)
+	Err(Error::InvalidAncestryProof)
 }
 
 #[cfg(test)]
@@ -396,7 +396,7 @@ mod tests {
 
 		assert_err!(
 			verify_ancestry(proof, fake_ancestor, child),
-			Error::AncestorNotFound
+			Error::InvalidAncestryProof
 		);
 	}
 
@@ -426,7 +426,7 @@ mod tests {
 
 		assert_err!(
 			verify_ancestry(invalid_proof, ancestor, child),
-			Error::AncestorNotFound
+			Error::InvalidAncestryProof
 		);
 	}
 }
