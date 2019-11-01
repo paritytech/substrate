@@ -37,8 +37,8 @@ pub enum Error {
 	DeviceError,
 	/// No seed matching the give account
 	NoAccount,
-	/// sr only accept soft derive
-	HardNotSupport,
+	/// sr only accept hard derive
+	SoftNotSupport,
 }
 
 /// Result type.
@@ -74,12 +74,26 @@ pub struct Wookong;
 
 impl Wallet for Wookong {
 	type Pair = sr25519::Pair;
+/// the derive function will derive the 'keypair' in hardware and return the public
+/// when sign function required after derive
+/// the device will sign the message with derived key
 	fn derive_public(&self, path: &[DeriveJunction]) -> Result<Public> {
 		let mut pk: [u8; 32] = [0u8; 32];
 		let mut vec = Vec::new();
 		for j in path {
 			match j {
-				DeriveJunction::Soft(cc) => vec.push(cc),
+// the soft derive not supported yet because in the neccessary 'fn derive_secret_key' schnorrkel
+// ```
+// let mut nonce = [0u8; 32];
+// t.witness_bytes(b"HDKD-nonce", &mut nonce, &[&self.secret.nonce, &self.secret.to_bytes() as &[u8]]);
+// (SecretKey {
+//    key: self.secret.key + scalar,
+//    nonce,
+//}, chaincode)
+// ```
+// the witness_bytes requie rand_hack which panic("Attempted to use functionality that requires system randomness")
+// because the CortexM3 could not fit the rand crate
+				DeriveJunction::Soft(cc) => return Err(Error::SoftNotSupport),
 				DeriveJunction::Hard(cc) => vec.push(cc),
 			}
 		}
