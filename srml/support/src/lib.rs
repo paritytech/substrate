@@ -47,7 +47,6 @@ pub use sr_primitives::RuntimeDebug;
 pub mod debug;
 #[macro_use]
 pub mod dispatch;
-#[macro_use]
 pub mod storage;
 mod hash;
 #[macro_use]

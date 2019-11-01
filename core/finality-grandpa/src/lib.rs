@@ -61,7 +61,10 @@ use client::{
 use client::blockchain::HeaderBackend;
 use codec::Encode;
 use sr_primitives::generic::BlockId;
-use sr_primitives::traits::{NumberFor, Block as BlockT, DigestFor, Zero};
+use sr_primitives::traits::{
+	NumberFor, Block as BlockT, DigestFor, ProvideRuntimeApi
+};
+use fg_primitives::{GrandpaApi, AuthorityPair};
 use keystore::KeyStorePtr;
 use inherents::InherentDataProviders;
 use consensus_common::SelectChain;
@@ -105,7 +108,7 @@ use environment::{Environment, VoterSetState};
 use import::GrandpaBlockImport;
 use until_imported::UntilGlobalMessageBlocksImported;
 use communication::NetworkBridge;
-use fg_primitives::{AuthorityList, AuthorityPair, AuthoritySignature, SetId};
+use fg_primitives::{AuthoritySignature, SetId, AuthorityWeight};
 
 // Re-export these two because it's just so damn convenient.
 pub use fg_primitives::{AuthorityId, ScheduledChange};
@@ -292,7 +295,7 @@ pub(crate) struct NewAuthoritySet<H, N> {
 	pub(crate) canon_number: N,
 	pub(crate) canon_hash: H,
 	pub(crate) set_id: SetId,
-	pub(crate) authorities: AuthorityList,
+	pub(crate) authorities: Vec<(AuthorityId, AuthorityWeight)>,
 }
 
 /// Commands issued to the voter.
@@ -364,30 +367,11 @@ pub struct LinkHalf<B, E, Block: BlockT<Hash=H256>, RA, SC> {
 	voter_commands_rx: mpsc::UnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
 }
 
-/// Provider for the Grandpa authority set configured on the genesis block.
-pub trait GenesisAuthoritySetProvider<Block: BlockT> {
-	/// Get the authority set at the genesis block.
-	fn get(&self) -> Result<AuthorityList, ClientError>;
-}
-
-impl<B, E, Block: BlockT<Hash=H256>, RA> GenesisAuthoritySetProvider<Block> for Client<B, E, Block, RA>
-	where
-		B: Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
-		RA: Send + Sync,
-{
-	fn get(&self) -> Result<AuthorityList, ClientError> {
-		use finality_proof::AuthoritySetForFinalityProver;
-
-		self.authorities(&BlockId::Number(Zero::zero()))
-	}
-}
-
 /// Make block importer and link half necessary to tie the background voter
 /// to it.
-pub fn block_import<B, E, Block: BlockT<Hash=H256>, RA, SC>(
+pub fn block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC>(
 	client: Arc<Client<B, E, Block, RA>>,
-	genesis_authorities_provider: &dyn GenesisAuthoritySetProvider<Block>,
+	api: &PRA,
 	select_chain: SC,
 ) -> Result<(
 		GrandpaBlockImport<B, E, Block, RA, SC>,
@@ -397,8 +381,12 @@ where
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 	RA: Send + Sync,
+	PRA: ProvideRuntimeApi,
+	PRA::Api: GrandpaApi<Block>,
 	SC: SelectChain<Block>,
 {
+	use sr_primitives::traits::Zero;
+
 	let chain_info = client.info();
 	let genesis_hash = chain_info.chain.genesis_hash;
 
@@ -407,11 +395,12 @@ where
 		genesis_hash,
 		<NumberFor<Block>>::zero(),
 		|| {
-			let authorities = genesis_authorities_provider.get()?;
+			let genesis_authorities = api.runtime_api()
+				.grandpa_authorities(&BlockId::number(Zero::zero()))?;
 			telemetry!(CONSENSUS_DEBUG; "afg.loading_authorities";
-				"authorities_len" => ?authorities.len()
+				"authorities_len" => ?genesis_authorities.len()
 			);
-			Ok(authorities)
+			Ok(genesis_authorities)
 		}
 	)?;
 

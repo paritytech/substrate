@@ -20,8 +20,6 @@ use rstd::prelude::*;
 use codec::{FullCodec, FullEncode, Encode, EncodeAppend, EncodeLike, Decode};
 use crate::traits::Len;
 
-#[macro_use]
-pub mod storage_items;
 pub mod unhashed;
 pub mod hashed;
 pub mod child;
