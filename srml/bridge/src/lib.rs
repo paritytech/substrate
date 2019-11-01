@@ -332,8 +332,32 @@ mod tests {
 		});
 	}
 
-	fn get_related_block_headers() -> (Header, Header, Header) {
-		let grandparent = Header {
+	fn build_header_chain(root_header: Header, len: usize) -> Vec<Header> {
+		let mut header_chain = vec![root_header];
+		for i in 1..len {
+			let parent = &header_chain[i - 1];
+
+			let h = Header {
+				parent_hash: parent.hash(),
+				number: parent.number() + 1,
+				state_root: H256::default(),
+				extrinsics_root: H256::default(),
+				digest: Digest::default(),
+			};
+
+			header_chain.push(h);
+		}
+
+		// We want our proofs to go from newest to older headers
+		header_chain.reverse();
+		// We don't actually need the oldest header in the proof
+		header_chain.pop();
+		header_chain
+	}
+
+	#[test]
+	fn check_that_child_is_ancestor_of_grandparent() {
+		let ancestor = Header {
 			parent_hash: H256::default(),
 			number: 1,
 			state_root: H256::default(),
@@ -341,59 +365,27 @@ mod tests {
 			digest: Digest::default(),
 		};
 
-		let parent = Header {
-			parent_hash: grandparent.hash(),
-			number: grandparent.number() + 1,
+		// A valid proof doesn't include the child header, so remove it
+		let mut proof = build_header_chain(ancestor.clone(), 10);
+		let child = proof.remove(0);
+
+		assert_ok!(verify_ancestry(proof, ancestor, child));
+	}
+
+	#[test]
+	fn fake_ancestor_is_not_found_in_child_ancestry() {
+		let ancestor = Header {
+			parent_hash: H256::default(),
+			number: 1,
 			state_root: H256::default(),
 			extrinsics_root: H256::default(),
 			digest: Digest::default(),
 		};
 
-		let child = Header {
-			parent_hash: parent.hash(),
-			number: parent.number() + 1,
-			state_root: H256::default(),
-			extrinsics_root: H256::default(),
-			digest: Digest::default(),
-		};
+		// A valid proof doesn't include the child header, so remove it
+		let mut proof = build_header_chain(ancestor, 10);
+		let child = proof.remove(0);
 
-		(grandparent, parent, child)
-	}
-
-	#[test]
-	fn check_that_child_is_ancestor_of_grandparent() {
-		let (grandparent, parent, child) = get_related_block_headers();
-
-		let mut proof = Vec::new();
-		proof.push(parent);
-
-		assert_ok!(verify_ancestry(proof, grandparent, child));
-	}
-
-	#[test]
-	fn check_that_child_ancestor_is_not_correct() {
-		let (grandparent, parent, child) = get_related_block_headers();
-
-		let mut proof = Vec::new();
-		proof.push(parent);
-
-		let fake_grandparent = Header {
-			parent_hash: H256::from_slice(&[1u8; 32]),
-			number: 42,
-			state_root: H256::default(),
-			extrinsics_root: H256::default(),
-			digest: Digest::default(),
-		};
-
-		assert_err!(
-			verify_ancestry(proof, fake_grandparent, child),
-			Error::AncestorNotFound
-		);
-	}
-
-	#[test]
-	fn checker_fails_if_given_invalid_proof() {
-		let (grandparent, parent, child) = get_related_block_headers();
 		let fake_ancestor = Header {
 			parent_hash: H256::from_slice(&[1u8; 32]),
 			number: 42,
@@ -402,12 +394,38 @@ mod tests {
 			digest: Digest::default(),
 		};
 
-		let mut invalid_proof = Vec::new();
-		invalid_proof.push(fake_ancestor);
-		invalid_proof.push(parent);
+		assert_err!(
+			verify_ancestry(proof, fake_ancestor, child),
+			Error::AncestorNotFound
+		);
+	}
+
+	#[test]
+	fn checker_fails_if_given_an_unrelated_header() {
+		let ancestor = Header {
+			parent_hash: H256::default(),
+			number: 1,
+			state_root: H256::default(),
+			extrinsics_root: H256::default(),
+			digest: Digest::default(),
+		};
+
+		// A valid proof doesn't include the child header, so remove it
+		let mut invalid_proof = build_header_chain(ancestor.clone(), 10);
+		let child = invalid_proof.remove(0);
+
+		let fake_ancestor = Header {
+			parent_hash: H256::from_slice(&[1u8; 32]),
+			number: 42,
+			state_root: H256::default(),
+			extrinsics_root: H256::default(),
+			digest: Digest::default(),
+		};
+
+		invalid_proof.insert(5, fake_ancestor);
 
 		assert_err!(
-			verify_ancestry(invalid_proof, grandparent, child),
+			verify_ancestry(invalid_proof, ancestor, child),
 			Error::AncestorNotFound
 		);
 	}
