@@ -8,6 +8,7 @@ edition = "2018"
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false }
+fg_primitives = { package = "substrate-finality-grandpa-primitives", path = "../../core/finality-grandpa/primitives" }
 hash-db = { version = "0.15.2", default-features = false }
 primitives = { package = "substrate-primitives",  path = "../../core/primitives" }
 session = { package = "srml-session", path = "../session", default-features = false, features = ["historical"] }
