@@ -20,14 +20,15 @@ use rstd::prelude::*;
 use codec::{FullCodec, FullEncode, Encode, EncodeAppend, EncodeLike, Decode};
 use crate::traits::Len;
 
-#[macro_use]
-pub mod storage_items;
 pub mod unhashed;
 pub mod hashed;
 pub mod child;
 pub mod generator;
 
 /// A trait for working with macro-generated storage values under the substrate storage API.
+///
+/// Details on implementation can be found at
+/// [`generator::StorageValue`]
 pub trait StorageValue<T: FullCodec> {
 	/// The type that get/take return.
 	type Query;
@@ -113,6 +114,9 @@ pub trait StorageValue<T: FullCodec> {
 }
 
 /// A strongly-typed map in storage.
+///
+/// Details on implementation can be found at
+/// [`generator::StorageMap`]
 pub trait StorageMap<K: FullEncode, V: FullCodec> {
 	/// The type that get/take return.
 	type Query;
@@ -180,6 +184,9 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 /// A strongly-typed linked map in storage.
 ///
 /// Similar to `StorageMap` but allows to enumerate other elements and doesn't implement append.
+///
+/// Details on implementation can be found at
+/// [`generator::StorageLinkedMap`]
 pub trait StorageLinkedMap<K: FullCodec, V: FullCodec> {
 	/// The type that get/take return.
 	type Query;
@@ -229,6 +236,9 @@ pub trait StorageLinkedMap<K: FullCodec, V: FullCodec> {
 ///
 /// It provides an important ability to efficiently remove all entries
 /// that have a common first key.
+///
+/// Details on implementation can be found at
+/// [`generator::StorageDoubleMap`]
 pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 	/// The type that get/take returns.
 	type Query;

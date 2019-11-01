@@ -22,6 +22,7 @@ use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 use linked_hash_map::{LinkedHashMap, Entry};
 use hash_db::Hasher;
 use sr_primitives::traits::{Block as BlockT, Header};
+use primitives::hexdisplay::HexDisplay;
 use state_machine::{backend::Backend as StateBackend, TrieBackend};
 use log::trace;
 use super::{StorageCollection, ChildStorageCollection};
@@ -168,7 +169,7 @@ impl<B: BlockT, H: Hasher> Cache<B, H> {
 					trace!("Reverting enacted block {:?}", block);
 					m.is_canon = true;
 					for a in &m.storage {
-						trace!("Reverting enacted key {:?}", a);
+						trace!("Reverting enacted key {:?}", HexDisplay::from(a));
 						self.lru_storage.remove(a);
 					}
 					for a in &m.child_storage {
@@ -188,7 +189,7 @@ impl<B: BlockT, H: Hasher> Cache<B, H> {
 					trace!("Retracting block {:?}", block);
 					m.is_canon = false;
 					for a in &m.storage {
-						trace!("Retracted key {:?}", a);
+						trace!("Retracted key {:?}", HexDisplay::from(a));
 						self.lru_storage.remove(a);
 					}
 					for a in &m.child_storage {
@@ -416,21 +417,16 @@ impl<H: Hasher, S: StateBackend<H>, B: BlockT> CachingState<H, S, B> {
 		key: Option<&[u8]>,
 		child_key: Option<&ChildStorageKey>,
 		parent_hash: &Option<B::Hash>,
-		modifications:
-		&VecDeque<BlockChanges<B::Header>>
+		modifications: &VecDeque<BlockChanges<B::Header>>
 	) -> bool
 	{
 		let mut parent = match *parent_hash {
 			None => {
-				trace!("Cache lookup skipped for {:?}: no parent hash", key);
+				trace!("Cache lookup skipped for {:?}: no parent hash", key.as_ref().map(HexDisplay::from));
 				return false;
 			}
 			Some(ref parent) => parent,
 		};
-		if modifications.is_empty() {
-			trace!("Cache lookup allowed for {:?}", key);
-			return true;
-		}
 		// Ignore all storage modified in later blocks
 		// Modifications contains block ordered by the number
 		// We search for our parent in that list first and then for
@@ -445,7 +441,7 @@ impl<H: Hasher, S: StateBackend<H>, B: BlockT> CachingState<H, S, B> {
 			}
 			if let Some(key) = key {
 				if m.storage.contains(key) {
-					trace!("Cache lookup skipped for {:?}: modified in a later block", key);
+					trace!("Cache lookup skipped for {:?}: modified in a later block", HexDisplay::from(&key));
 					return false;
 				}
 			}
@@ -456,7 +452,7 @@ impl<H: Hasher, S: StateBackend<H>, B: BlockT> CachingState<H, S, B> {
 				}
 			}
 		}
-		trace!("Cache lookup skipped for {:?}: parent hash is unknown", key);
+		trace!("Cache lookup skipped for {:?}: parent hash is unknown", key.as_ref().map(HexDisplay::from));
 		false
 	}
 
@@ -475,17 +471,17 @@ impl<H: Hasher, S: StateBackend<H>, B: BlockT> StateBackend<H> for CachingState<
 		let local_cache = self.cache.local_cache.upgradable_read();
 		// Note that local cache makes that lru is not refreshed
 		if let Some(entry) = local_cache.storage.get(key).cloned() {
-			trace!("Found in local cache: {:?}", key);
+			trace!("Found in local cache: {:?}", HexDisplay::from(&key));
 			return Ok(entry)
 		}
 		let mut cache = self.cache.shared_cache.lock();
 		if Self::is_allowed(Some(key), None, &self.cache.parent_hash, &cache.modifications) {
 			if let Some(entry) = cache.lru_storage.get(key).map(|a| a.clone()) {
-				trace!("Found in shared cache: {:?}", key);
+				trace!("Found in shared cache: {:?}", HexDisplay::from(&key));
 				return Ok(entry)
 			}
 		}
-		trace!("Cache miss: {:?}", key);
+		trace!("Cache miss: {:?}", HexDisplay::from(&key));
 		let value = self.state.storage(key)?;
 		RwLockUpgradableReadGuard::upgrade(local_cache).storage.insert(key.to_vec(), value.clone());
 		Ok(value)
@@ -494,17 +490,17 @@ impl<H: Hasher, S: StateBackend<H>, B: BlockT> StateBackend<H> for CachingState<
 	fn storage_hash(&self, key: &[u8]) -> Result<Option<H::Out>, Self::Error> {
 		let local_cache = self.cache.local_cache.upgradable_read();
 		if let Some(entry) = local_cache.hashes.get(key).cloned() {
-			trace!("Found hash in local cache: {:?}", key);
+			trace!("Found hash in local cache: {:?}", HexDisplay::from(&key));
 			return Ok(entry)
 		}
 		let mut cache = self.cache.shared_cache.lock();
 		if Self::is_allowed(Some(key), None, &self.cache.parent_hash, &cache.modifications) {
 			if let Some(entry) = cache.lru_hashes.get(key).map(|a| a.0.clone()) {
-				trace!("Found hash in shared cache: {:?}", key);
+				trace!("Found hash in shared cache: {:?}", HexDisplay::from(&key));
 				return Ok(entry)
 			}
 		}
-		trace!("Cache hash miss: {:?}", key);
+		trace!("Cache hash miss: {:?}", HexDisplay::from(&key));
 		let hash = self.state.storage_hash(key)?;
 		RwLockUpgradableReadGuard::upgrade(local_cache).hashes.insert(key.to_vec(), hash.clone());
 		Ok(hash)
@@ -727,5 +723,45 @@ mod tests {
 		);
 		// 32 key, 2 byte size
 		assert_eq!(shared.lock().used_storage_cache_size(), 34 /* bytes */);
+	}
+
+	#[test]
+	fn fix_storage_mismatch_issue() {
+		let _ = ::env_logger::try_init();
+		let root_parent = H256::random();
+
+		let key = H256::random()[..].to_vec();
+
+		let h0 = H256::random();
+		let h1 = H256::random();
+
+		let shared = new_shared_cache::<Block, Blake2Hasher>(256*1024, (0, 1));
+		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(root_parent.clone()));
+		s.cache.sync_cache(&[], &[], vec![(key.clone(), Some(vec![2]))], vec![], Some(h0.clone()), Some(0), || true);
+
+		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h0.clone()));
+		s.cache.sync_cache(&[], &[], vec![(key.clone(), Some(vec![3]))], vec![], Some(h1.clone()), Some(1), || true);
+
+		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h1.clone()));
+		assert_eq!(s.storage(&key).unwrap(), Some(vec![3]));
+
+		// Restart (or unknown block?), clear caches.
+		{
+			let mut cache = s.cache.shared_cache.lock();
+			let cache = &mut *cache;
+			cache.lru_storage.clear();
+			cache.lru_hashes.clear();
+			cache.lru_child_storage.clear();
+			cache.modifications.clear();
+		}
+
+		// New value is written because of cache miss.
+		s.cache.local_cache.write().storage.insert(key.clone(), Some(vec![42]));
+
+		// New value is propagated.
+		s.cache.sync_cache(&[], &[], vec![], vec![], None, None, || true);
+
+		let s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h1.clone()));
+		assert_eq!(s.storage(&key).unwrap(), None);
 	}
 }

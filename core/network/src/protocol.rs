@@ -35,7 +35,6 @@ use sr_primitives::traits::{
 };
 use message::{BlockAnnounce, BlockAttributes, Direction, FromBlock, Message, RequestId};
 use message::generic::{Message as GenericMessage, ConsensusMessage};
-use event::Event;
 use consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
 use light_dispatch::{LightDispatch, LightDispatchNetwork, RequestData};
 use specialization::NetworkSpecialization;
@@ -513,10 +512,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// Returns information about all the peers we are connected to after the handshake message.
 	pub fn peers_info(&self) -> impl Iterator<Item = (&PeerId, &PeerInfo<B>)> {
 		self.context_data.peers.iter().map(|(id, peer)| (id, &peer.info))
-	}
-
-	pub fn on_event(&mut self, event: Event) {
-		self.specialization.on_event(event);
 	}
 
 	pub fn on_custom_message(

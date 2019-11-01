@@ -480,8 +480,8 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 
 	/// Start getting a value from the DHT.
 	///
-	/// This will generate either a `ValueFound` or a `ValueNotFound` event and pass it to
-	/// `on_event` on the network specialization.
+	/// This will generate either a `ValueFound` or a `ValueNotFound` event and pass it as an
+	/// item on the [`NetworkWorker`] stream.
 	pub fn get_value(&self, key: &record::Key) {
 		let _ = self
 			.to_worker
@@ -490,8 +490,8 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 
 	/// Start putting a value in the DHT.
 	///
-	/// This will generate either a `ValuePut` or a `ValuePutFailed` event and pass it to
-	/// `on_event` on the network specialization.
+	/// This will generate either a `ValuePut` or a `ValuePutFailed` event and pass it as an
+	/// item on the [`NetworkWorker`] stream.
 	pub fn put_value(&self, key: record::Key, value: Vec<u8>) {
 		let _ = self
 			.to_worker
@@ -718,12 +718,8 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Stream for Ne
 			let outcome = match poll_value {
 				Ok(Async::NotReady) => break,
 				Ok(Async::Ready(Some(BehaviourOut::SubstrateAction(outcome)))) => outcome,
-				Ok(Async::Ready(Some(BehaviourOut::Dht(ev)))) => {
-					self.network_service.user_protocol_mut()
-						.on_event(Event::Dht(ev.clone()));
-
-					return Ok(Async::Ready(Some(Event::Dht(ev))));
-				},
+				Ok(Async::Ready(Some(BehaviourOut::Dht(ev)))) =>
+					return Ok(Async::Ready(Some(Event::Dht(ev)))),
 				Ok(Async::Ready(None)) => CustomMessageOutcome::None,
 				Err(err) => {
 					error!(target: "sync", "Error in the network: {:?}", err);
