@@ -65,6 +65,13 @@ use lazy_static::lazy_static;
 use futures::Future;
 use substrate_telemetry::TelemetryEndpoints;
 
+/// default sub directory to store network config
+const DEFAULT_NETWORK_CONFIG_PATH : &'static str = "network";
+/// default sub directory to store database
+const DEFAULT_DB_CONFIG_PATH : &'static str = "db";
+/// default sub directory for the key store
+const DEFAULT_KEYSTORE_CONFIG_PATH : &'static str =  "keystore";
+
 /// The maximum number of characters for a node name.
 const NODE_NAME_MAX_LENGTH: usize = 32;
 
@@ -325,7 +332,7 @@ impl<'a> ParseAndPrepareBuildSpec<'a> {
 			let cfg = service::Configuration::<C,_,_>::default_with_spec_and_base_path(spec.clone(), Some(base_path));
 			let node_key = node_key_config(
 				self.params.node_key_params,
-				&Some(cfg.network_path().expect("We provided a base_path"))
+				&Some(cfg.in_chain_config_dir(DEFAULT_NETWORK_CONFIG_PATH).expect("We provided a base_path"))
 			)?;
 			let keys = node_key.into_keypair()?;
 			let peer_id = keys.public().into_peer_id();
@@ -682,10 +689,10 @@ where
 		)?
 	}
 
-	config.keystore_path = cli.keystore_path.or_else(|| config.in_chain_config_dir("keystore"));
+	config.keystore_path = cli.keystore_path.or_else(|| config.in_chain_config_dir(DEFAULT_KEYSTORE_CONFIG_PATH));
 
 	config.database = DatabaseConfig::Path {
-		path: config.in_chain_config_dir("db").expect("We provided a base_path."),
+		path: config.in_chain_config_dir(DEFAULT_DB_CONFIG_PATH).expect("We provided a base_path."),
 		cache_size: cli.database_cache_size,
 	};
 	config.state_cache_size = cli.state_cache_size;
@@ -752,7 +759,7 @@ where
 	let client_id = config.client_id();
 	fill_network_configuration(
 		cli.network_config,
-		config.network_path().expect("We provided a basepath"),
+		config.in_chain_config_dir(DEFAULT_NETWORK_CONFIG_PATH).expect("We provided a basepath"),
 		&mut config.network,
 		client_id,
 		is_dev,
@@ -818,7 +825,7 @@ where
 
 	let mut config = service::Configuration::default_with_spec_and_base_path(spec.clone(), Some(base_path));
 	config.database = DatabaseConfig::Path {
-		path: config.in_chain_config_dir("db").expect("We provided a base_path."),
+		path: config.in_chain_config_dir(DEFAULT_DB_CONFIG_PATH).expect("We provided a base_path."),
 		cache_size: None,
 	};
 

@@ -187,11 +187,6 @@ impl<C, G, E> Configuration<C, G, E> {
 			path
 		})
 	}
-
-	/// The basepath for the network file
-	pub fn network_path(&self) -> Option<PathBuf> {
-		self.in_chain_config_dir("network")
-	}
 }
 
 /// Returns platform info
