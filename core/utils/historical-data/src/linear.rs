@@ -386,13 +386,12 @@ impl<V> History<V> {
 	/// When possible please prefer `get_mut` as it can free
 	/// some memory.
 	pub fn get(&self, states: &[TransactionState]) -> Option<&V> {
-		let mut index = self.len();
-		if index == 0 {
+		let self_len = self.len();
+		if self_len == 0 {
 			return None;
 		}
-		debug_assert!(states.len() >= index);
-		while index > 0 {
-			index -= 1;
+		debug_assert!(states.len() >= self_len);
+		for index in (0 .. self_len).rev() {
 			let HistoricalValue { value, index: state_index } = self.get_unchecked(index);
 			match states[state_index] {
 				TransactionState::Dropped => (),
@@ -406,13 +405,12 @@ impl<V> History<V> {
 
 	/// Get latest value, consuming the historical data.
 	pub fn into_pending(mut self, states: &[TransactionState]) -> Option<V> {
-		let mut index = self.len();
-		if index == 0 {
+		let self_len = self.len();
+		if self_len == 0 {
 			return None;
 		}
-		debug_assert!(states.len() >= index);
-		while index > 0 {
-			index -= 1;
+		debug_assert!(states.len() >= self_len);
+		for index in (0 .. self_len).rev() {
 			let state_index = self.get_unchecked(index).index;
 			match states[state_index] {
 				TransactionState::Dropped => (),
@@ -429,13 +427,12 @@ impl<V> History<V> {
 
 	#[cfg(any(test, feature = "test-helpers"))]
 	pub fn get_prospective(&self, states: &States) -> Option<&V> {
-		let mut index = self.len();
-		if index == 0 {
+		let self_len = self.len();
+		if self_len == 0 {
 			return None;
 		}
-		debug_assert!(states.history.len() >= index);
-		while index > states.commit {
-			index -= 1;
+		debug_assert!(states.history.len() >= self_len);
+		for index in (states.commit .. self_len).rev() {
 			let HistoricalValue { value, index: state_index } = self.get_unchecked(index);
 			match states.history[state_index] {
 				TransactionState::Dropped => (),
@@ -449,13 +446,12 @@ impl<V> History<V> {
 
 	#[cfg(any(test, feature = "test-helpers"))]
 	pub fn get_committed(&self, states: &States) -> Option<&V> {
-		let mut index = self.len();
-		if index == 0 {
+		let self_len = self.len();
+		if self_len == 0 {
 			return None;
 		}
-		debug_assert!(states.history.len() >= index);
-		while index > 0 {
-			index -= 1;
+		debug_assert!(states.history.len() >= self_len);
+		for index in (0 .. self_len).rev() {
 			let HistoricalValue { value, index: state_index } = self.get_unchecked(index);
 			if state_index < states.commit {
 				match states.history[state_index] {
@@ -470,13 +466,12 @@ impl<V> History<V> {
 	}
 
 	pub fn into_committed(mut self, states: &[TransactionState], committed: usize) -> Option<V> {
-		let mut index = self.len();
-		if index == 0 {
+		let self_len = self.len();
+		if self_len == 0 {
 			return None;
 		}
-		debug_assert!(states.len() >= index);
-		while index > 0 {
-			index -= 1;
+		debug_assert!(states.len() >= self_len);
+		for index in (0 .. self_len).rev() {
 			let state_index = self.get_unchecked(index).index;
 			if state_index < committed {
 				match states[state_index] {
@@ -502,16 +497,15 @@ impl<V> History<V> {
 		&mut self,
 		states: &States,
 	) -> Option<HistoricalValue<&mut V>> {
-		let mut index = self.len();
-		if index == 0 {
+		let self_len = self.len();
+		if self_len == 0 {
 			return None;
 		}
-		debug_assert!(states.history.len() >= index);
+		debug_assert!(states.history.len() >= self_len);
 		let mut result = None;
 		let mut start_transaction_window = usize::max_value();
 		let mut previous_switch = None;
-		while index > 0 {
-			index -= 1;
+		for index in (0 .. self_len).rev() {
 			let state_index = self.get_unchecked(index).index;
 			match states.history[state_index] {
 				TransactionState::TxPending => {
@@ -553,17 +547,16 @@ impl<V> History<V> {
 		states: &States,
 		prune_to_commit: bool,
 	) -> Option<HistoricalValue<&mut V>> {
-		let mut index = self.len();
-		if index == 0 {
+		let self_len = self.len();
+		if self_len == 0 {
 			return None;
 		}
 		let mut prune_index = 0;
-		debug_assert!(states.history.len() >= index);
+		debug_assert!(states.history.len() >= self_len);
 		let mut result = None;
 		let mut start_transaction_window = usize::max_value();
 		let mut previous_switch = None;
-		while index > 0 {
-			index -= 1;
+		for index in (0 .. self_len).rev() {
 			let state_index = self.get_unchecked(index).index;
 			match states.history[state_index] {
 				state @ TransactionState::TxPending
