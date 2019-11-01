@@ -15,12 +15,74 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Transactional overlay implementation.
+//! 
+//! # Historical data
 //!
-//! This follows a linear succession of states.
-//! This contains multiple unbounded transaction layer
-//! and an additional top level 'prospective' layer.
-//! It only allows linear history (no branch so
-//! inner storage is only an array of element).
+//! General principle of historical data applies here.
+//! Therefore we got a state and values that keep an history
+//! in relation to this state.
+//!
+//! ## state operation
+//!
+//! State operation, are only changing the state and do not change
+//! stored values.
+//! Therefore they cannot modify the existing state values.
+//! Thus the state for transaction layer is an historic of all
+//! state operation that only append new state.
+//! Refering to this history is done through the history index.
+//! An operation on a value relates to the state by the index of the state
+//! the operation occurs at (field `index` of `HistoricalValue`).
+//!
+//! It should be possible to mutably change the state under the assumption all
+//! values related to the state where pruned or by changing all values related.
+//! Generally this is not a good idea because use case here should be a
+//! states marginal size (in comparison with values).
+//!
+//! ## value operation
+//!
+//! Operation are simple update of value, but to allow query at different historic state,
+//! the values (`HistoricalValue`) do keep reference to all possible values.
+//!
+//! The crate favors light state operation that do not force update
+//! of values.
+//! Therefore values alignment to updated state is done through
+//! manual prune call.
+//! Limited updates on values can be done on mutable access.
+//!
+//! # Transactional layer
+//!
+//! This module is defining a linear transactional state.
+//!
+//! ## state operation
+//!
+//! The state history contains multiple possible states `TransactionStates` and
+//! a committed index.
+//!
+//! There is two pending state, both indicate a valid value, but on also indicate
+//! the start of a transactional window.
+//! Dropping a transaction just invalidate all state from the start of the last
+//! transactional window.
+//! Committing a transaction fused it transaction window with the previous transaction
+//! window (changing a `TxPending` with a `Pending` state).
+//!
+//! The committed index is lie a upper transaction state and is considered as the start
+//! of a transaction, but cannot be dropped with the same operation.
+//! If dropped, all state after this index are dropped.
+//! If committed its index is updated and all state prior cannot be dropped.
+//!
+//! ## value operation
+//!
+//! Here access to latest state value is a reverse iteration over history of value and
+//! matching state, up to the first pending state.
+//!
+//! On mutable access, terminal dropped state or unneeded state values (values in a same transactional
+//! window) are dropped. This allows a clean state up to the latest transactional window at a small cost.
+//! 
+//! # Usage
+//!
+//! All the primitives for a value expect a reference to the state used to build 
+//! the value. ** Wrong state usage results in undefined behavior. **
+
 
 use rstd::vec::Vec;
 use rstd::vec;
@@ -43,7 +105,7 @@ pub enum TransactionState {
 pub struct HistoricalValue<V> {
 	/// The stored value.
 	pub value: V,
-	/// The moment in history when the value got set.
+	/// The moment in history when the value was set.
 	pub index: usize,
 }
 
@@ -89,8 +151,7 @@ impl<V> Default for History<V> {
 // Following implementation are here to isolate
 // buffer specific functions.
 impl<V> History<V> {
-
-	fn get_state(&self, index: usize) -> HistoricalValue<&V> {
+	fn get_unchecked(&self, index: usize) -> HistoricalValue<&V> {
 		self.0[index].as_ref()
 	}
 
@@ -113,7 +174,7 @@ impl<V> History<V> {
 		self.0.truncate(index)
 	}
 
-	fn truncate_until(&mut self, index: usize) {
+	fn remove_until(&mut self, index: usize) {
 		if index > 0 {
 			if self.0.spilled() {
 				let owned = rstd::mem::replace(&mut self.0, Default::default());
@@ -142,9 +203,7 @@ impl<V> History<V> {
 	fn mut_ref(&mut self, index: usize) -> &mut V {
 		&mut self.0[index].value
 	}
-
 }
-
 
 /// States is both an indexed state to query values with history
 /// and a committed index that indicates a point in time where
@@ -158,10 +217,17 @@ impl<V> History<V> {
 pub struct States {
 	history: Vec<TransactionState>,
 	// Keep track of the transaction positions.
-	// This is redundant with `history`, but is
-	// used to avoid some backwards iteration in
-	// `find_previous_tx_start` function.
-	previous_transaction: Vec<usize>,
+	// This is redundant with `history`.
+	// This is only use to precalculate the result
+	// of a backward iteration to find the start
+	// of a transactional window (function
+	// `transaction_start_windows`).
+	//
+	// At many place we could use this instead
+	// of the `TxPending` state, but `TxPending`
+	// state is favored, except for `start_windows`
+	// case.
+	start_transaction_window: Vec<usize>,
 	commit: usize,
 }
 
@@ -169,7 +235,7 @@ impl Default for States {
 	fn default() -> Self {
 		States {
 			history: vec![TransactionState::Pending],
-			previous_transaction: vec![0],
+			start_transaction_window: vec![0],
 			commit: 0,
 		}
 	}
@@ -206,10 +272,10 @@ impl States {
 	#[cfg(any(test, feature = "test-helpers"))]
 	pub fn test_vector(
 		history: Vec<TransactionState>,
-		previous_transaction: Vec<usize>,
+		start_transaction_window: Vec<usize>,
 		commit: usize,
 	) -> Self {
-		States { history, previous_transaction, commit }
+		States { history, start_transaction_window, commit }
 	}
 
 	/// Discard prospective changes to state.
@@ -217,10 +283,10 @@ impl States {
 	pub fn discard_prospective(&mut self) {
 		for i in self.commit .. self.history.len() {
 			self.history[i] = TransactionState::Dropped;
-			self.previous_transaction[i] = self.commit;
+			self.start_transaction_window[i] = self.commit;
 		}
 		self.history.push(TransactionState::Pending);
-		self.previous_transaction.push(self.commit);
+		self.start_transaction_window.push(self.commit);
 	}
 
 	/// Commit prospective changes to state.
@@ -228,14 +294,14 @@ impl States {
 		self.commit = self.history.len();
 		self.history.push(TransactionState::Pending);
 		for i in 0..self.history.len() - 1 {
-			self.previous_transaction[i] = self.commit;
+			self.start_transaction_window[i] = self.commit;
 		}
-		self.previous_transaction.push(self.commit);
+		self.start_transaction_window.push(self.commit);
 	}
 
 	/// Create a new transactional layer.
 	pub fn start_transaction(&mut self) {
-		self.previous_transaction.push(self.history.len());
+		self.start_transaction_window.push(self.history.len());
 		self.history.push(TransactionState::TxPending);
 	}
 
@@ -257,10 +323,10 @@ impl States {
 			}
 		}
 		self.history.push(TransactionState::Pending);
-		self.previous_transaction.truncate(i);
-		let previous = self.previous_transaction.last()
+		self.start_transaction_window.truncate(i);
+		let previous = self.start_transaction_window.last()
 			.cloned().unwrap_or(self.commit);
-		self.previous_transaction.resize(self.history.len(), previous);
+		self.start_transaction_window.resize(self.history.len(), previous);
 	}
 
 	/// Commit a transactional layer.
@@ -278,10 +344,10 @@ impl States {
 			}
 		}
 		self.history.push(TransactionState::Pending);
-		self.previous_transaction.truncate(i);
-		let previous = self.previous_transaction.last()
+		self.start_transaction_window.truncate(i);
+		let previous = self.start_transaction_window.last()
 			.cloned().unwrap_or(self.commit);
-		self.previous_transaction.resize(self.history.len(), previous);
+		self.start_transaction_window.resize(self.history.len(), previous);
 	}
 }
 
@@ -291,8 +357,8 @@ impl States {
 /// Used to say if it is possible to drop a committed transaction
 /// state value.
 /// Committed index is seen as a transaction state.
-pub fn find_previous_tx_start(states: &States, from: usize) -> usize {
-	states.previous_transaction[from]
+pub fn transaction_start_windows(states: &States, from: usize) -> usize {
+	states.start_transaction_window[from]
 }
 
 impl<V> History<V> {
@@ -327,7 +393,7 @@ impl<V> History<V> {
 		debug_assert!(states.len() >= index);
 		while index > 0 {
 			index -= 1;
-			let HistoricalValue { value, index: state_index } = self.get_state(index);
+			let HistoricalValue { value, index: state_index } = self.get_unchecked(index);
 			match states[state_index] {
 				TransactionState::Dropped => (),
 				TransactionState::Pending
@@ -347,7 +413,7 @@ impl<V> History<V> {
 		debug_assert!(states.len() >= index);
 		while index > 0 {
 			index -= 1;
-			let state_index = self.get_state(index).index;
+			let state_index = self.get_unchecked(index).index;
 			match states[state_index] {
 				TransactionState::Dropped => (),
 				TransactionState::Pending
@@ -370,7 +436,7 @@ impl<V> History<V> {
 		debug_assert!(states.history.len() >= index);
 		while index > states.commit {
 			index -= 1;
-			let HistoricalValue { value, index: state_index } = self.get_state(index);
+			let HistoricalValue { value, index: state_index } = self.get_unchecked(index);
 			match states.history[state_index] {
 				TransactionState::Dropped => (),
 				TransactionState::Pending
@@ -390,7 +456,7 @@ impl<V> History<V> {
 		debug_assert!(states.history.len() >= index);
 		while index > 0 {
 			index -= 1;
-			let HistoricalValue { value, index: state_index } = self.get_state(index);
+			let HistoricalValue { value, index: state_index } = self.get_unchecked(index);
 			if state_index < states.commit {
 				match states.history[state_index] {
 					TransactionState::Dropped => (),
@@ -411,7 +477,7 @@ impl<V> History<V> {
 		debug_assert!(states.len() >= index);
 		while index > 0 {
 			index -= 1;
-			let state_index = self.get_state(index).index;
+			let state_index = self.get_unchecked(index).index;
 			if state_index < committed {
 				match states[state_index] {
 					TransactionState::Dropped => (),
@@ -428,7 +494,10 @@ impl<V> History<V> {
 
 	/// Access to latest pending value (non dropped state).
 	///
-	/// This method removes latest dropped values up to the latest valid value.
+	/// This method removes latest dropped and merged values,
+	/// only keeping the latest valid value.
+	///
+	/// Returns mutable latest pending value.
 	pub fn get_mut(
 		&mut self,
 		states: &States,
@@ -439,14 +508,14 @@ impl<V> History<V> {
 		}
 		debug_assert!(states.history.len() >= index);
 		let mut result = None;
-		let mut previous_transaction = usize::max_value();
+		let mut start_transaction_window = usize::max_value();
 		let mut previous_switch = None;
 		while index > 0 {
 			index -= 1;
-			let state_index = self.get_state(index).index;
+			let state_index = self.get_unchecked(index).index;
 			match states.history[state_index] {
 				TransactionState::TxPending => {
-					if state_index >= previous_transaction {
+					if state_index >= start_transaction_window {
 						previous_switch = Some(index);
 					} else {
 						if result.is_none() {
@@ -456,12 +525,12 @@ impl<V> History<V> {
 					break;
 				},
 				TransactionState::Pending => {
-					if state_index >= previous_transaction {
+					if state_index >= start_transaction_window {
 						previous_switch = Some(index);
 					} else {
 						if result.is_none() {
 							result = Some((index, state_index));
-							previous_transaction = find_previous_tx_start(states, state_index);
+							start_transaction_window = transaction_start_windows(states, state_index);
 						} else {
 							break;
 						}
@@ -491,11 +560,11 @@ impl<V> History<V> {
 		let mut prune_index = 0;
 		debug_assert!(states.history.len() >= index);
 		let mut result = None;
-		let mut previous_transaction = usize::max_value();
+		let mut start_transaction_window = usize::max_value();
 		let mut previous_switch = None;
 		while index > 0 {
 			index -= 1;
-			let state_index = self.get_state(index).index;
+			let state_index = self.get_unchecked(index).index;
 			match states.history[state_index] {
 				state @ TransactionState::TxPending
 				| state @ TransactionState::Pending => {
@@ -503,13 +572,13 @@ impl<V> History<V> {
 						prune_index = index;
 					}
 
-					if state_index >= previous_transaction {
+					if state_index >= start_transaction_window {
 						previous_switch = Some(index);
 					} else {
 						if result.is_none() {
 							result = Some((index, state_index));
 							if state == TransactionState::Pending {
-								previous_transaction = find_previous_tx_start(states, state_index);
+								start_transaction_window = transaction_start_windows(states, state_index);
 							}
 						} else {
 							if prune_to_commit {
@@ -526,7 +595,7 @@ impl<V> History<V> {
 			}
 		}
 		let deleted = if prune_to_commit && prune_index > 0 && result.is_some() {
-			self.truncate_until(prune_index);
+			self.remove_until(prune_index);
 			prune_index
 		} else {
 			0

@@ -34,16 +34,13 @@ pub mod generator;
 /// it is committed.
 pub fn with_transaction<R, E>(f: impl FnOnce() -> Result<R, E>) -> Result<R, E> {
 	runtime_io::storage_start_transaction();
-	match f() {
-		Ok(r) => {
-			runtime_io::storage_commit_transaction();
-			Ok(r)
-		},
-		Err(e) => {
-			runtime_io::storage_discard_transaction();
-			Err(e)
-		}
+	let r = f();
+	if r.is_ok() {
+		runtime_io::storage_commit_transaction();
+	} else {
+		runtime_io::storage_discard_transaction();
 	}
+	r
 }
 
 /// A trait for working with macro-generated storage values under the substrate storage API.
