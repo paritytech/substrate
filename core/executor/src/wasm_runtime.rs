@@ -56,10 +56,7 @@ pub enum WasmExecutionMethod {
 struct VersionedRuntime {
 	runtime: Box<dyn WasmRuntime>,
 	/// Runtime version according to `Core_version`.
-	///
-	/// Can be `None` if the runtime doesn't provide the information or there was an error while
-	/// fetching it.
-	version: Option<RuntimeVersion>,
+	version: RuntimeVersion,
 }
 
 /// Cache for the runtimes.
@@ -101,8 +98,7 @@ impl RuntimesCache {
 	/// # Parameters
 	///
 	/// `ext` - Externalities to use for the runtime. This is used for setting
-	/// up an initial runtime instance. The parameter is only needed for calling
-	/// into the Wasm module to find out the `Core_version`.
+	/// up an initial runtime instance.
 	///
 	/// `default_heap_pages` - Number of 64KB pages to allocate for Wasm execution.
 	///
@@ -122,7 +118,7 @@ impl RuntimesCache {
 		ext: &mut E,
 		wasm_method: WasmExecutionMethod,
 		default_heap_pages: u64,
-	) -> Result<(&mut (dyn WasmRuntime + 'static), &Option<RuntimeVersion>, H256), Error> {
+	) -> Result<(&mut (dyn WasmRuntime + 'static), &RuntimeVersion, H256), Error> {
 		let code_hash = ext
 			.original_storage_hash(well_known_keys::CODE)
 			.ok_or(Error::InvalidCode("`CODE` not found in storage.".into()))?;
@@ -218,9 +214,10 @@ fn create_versioned_wasm_runtime<E: Externalities>(
 			move || runtime.call(&mut **ext, "Core_version", &[])
 		).map_err(|_| WasmError::Instantiation("panic in call to get runtime version".into()))?
 	};
-	let version = version_result
-		.ok()
-		.and_then(|v| RuntimeVersion::decode(&mut v.as_slice()).ok());
+	let encoded_version = version_result
+		.map_err(|e| WasmError::Instantiation(format!("failed to call \"Core_version\": {}", e)))?;
+	let version = RuntimeVersion::decode(&mut encoded_version.as_slice())
+		.map_err(|_| WasmError::Instantiation("failed to decode \"Core_version\" result".into()))?;
 
 	Ok(VersionedRuntime {
 		runtime,
