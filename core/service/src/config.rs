@@ -187,11 +187,6 @@ impl<C, G, E> Configuration<C, G, E> {
 			path
 		})
 	}
-	
-	/// The basepath for the db directory
-	pub fn database_path(&self) -> Option<PathBuf> {
-		self.in_chain_config_dir("db")
-	}
 
 	/// The basepath for the network file
 	pub fn network_path(&self) -> Option<PathBuf> {

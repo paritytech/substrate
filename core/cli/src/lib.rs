@@ -685,7 +685,7 @@ where
 	config.keystore_path = cli.keystore_path.or_else(|| config.in_chain_config_dir("keystore"));
 
 	config.database = DatabaseConfig::Path {
-		path: config.database_path().expect("We provided a base_path."),
+		path: config.in_chain_config_dir("db").expect("We provided a base_path."),
 		cache_size: cli.database_cache_size,
 	};
 	config.state_cache_size = cli.state_cache_size;
@@ -818,7 +818,7 @@ where
 
 	let mut config = service::Configuration::default_with_spec_and_base_path(spec.clone(), Some(base_path));
 	config.database = DatabaseConfig::Path {
-		path: config.database_path().expect("We provided a base_path."),
+		path: config.in_chain_config_dir("db").expect("We provided a base_path."),
 		cache_size: None,
 	};
 
