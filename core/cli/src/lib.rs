@@ -307,7 +307,7 @@ pub struct ParseAndPrepareBuildSpec<'a> {
 
 impl<'a> ParseAndPrepareBuildSpec<'a> {
 	/// Runs the command and build the chain specs.
-	pub fn run<C,G, S, E>(
+	pub fn run<C, G, S, E>(
 		self,
 		spec_factory: S
 	) -> error::Result<()> where
@@ -320,7 +320,7 @@ impl<'a> ParseAndPrepareBuildSpec<'a> {
 		let raw_output = self.params.raw;
 		let mut spec = load_spec(&self.params.shared_params, spec_factory)?;
 
-		if spec.boot_nodes().is_empty() {
+		if spec.boot_nodes().is_empty() && !self.params.disable_default_bootnode {
 			let base_path = base_path(&self.params.shared_params, self.version);
 			let config = service::Configuration::<C,_,_>::default_with_spec_and_base_path(spec.clone(), base_path);
 			let node_key = node_key_config(self.params.node_key_params, &Some(config.network_path()))?;
@@ -571,8 +571,7 @@ fn fill_transaction_pool_configuration<C, G, E>(
 }
 
 /// Fill the given `NetworkConfiguration` by looking at the cli parameters.
-fn fill_network_configuration
-(
+fn fill_network_configuration(
 	cli: NetworkConfigurationParams,
 	config_path: PathBuf,
 	config: &mut NetworkConfiguration,
@@ -680,7 +679,7 @@ where
 		)?
 	}
 
-	config.keystore_path = cli.keystore_path.unwrap_or_else( || config.in_chain_config_dir("keystore"));
+	config.keystore_path = cli.keystore_path.unwrap_or_else(|| config.in_chain_config_dir("keystore"));
 
 	config.database = DatabaseConfig::Path {
 		path: config.database_path(),

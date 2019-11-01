@@ -172,7 +172,6 @@ impl<C, G, E> Configuration<C, G, E> where
 }
 
 impl<C, G, E> Configuration<C, G, E> {
-
 	/// Returns full version string of this configuration.
 	pub fn full_version(&self) -> String {
 		full_version_from_strs(self.impl_version, self.impl_commit)
