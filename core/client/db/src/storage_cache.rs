@@ -321,27 +321,29 @@ impl<H: Hasher, B: BlockT> CacheChanges<H, B> {
 		// Propagate cache only if committing on top of the latest canonical state
 		// blocks are ordered by number and only one block with a given number is marked as canonical
 		// (contributed to canonical state cache)
-		// if let Some(_) = self.parent_hash {
-		// 	let mut local_cache = self.local_cache.write();
-		// 	if is_best {
-		// 		trace!(
-		// 			"Committing {} local, {} hashes, {} modified root entries, {} modified child entries",
-		// 			local_cache.storage.len(),
-		// 			local_cache.hashes.len(),
-		// 			changes.len(),
-		// 			child_changes.iter().map(|v|v.1.len()).sum::<usize>(),
-		// 		);
-		// 		for (k, v) in local_cache.storage.drain() {
-					// cache.lru_storage.add(k, v);
-				// }
-				// for (k, v) in local_cache.child_storage.drain() {
-					// cache.lru_child_storage.add(k, v);
-				// }
-				// for (k, v) in local_cache.hashes.drain() {
-					// cache.lru_hashes.add(k, OptionHOut(v));
-		// 		}
-		// 	}
-		// }
+
+		// TODO: Uncomment this if block to make the test pass.
+		if let Some(_) = self.parent_hash {
+			let mut local_cache = self.local_cache.write();
+			if is_best {
+				trace!(
+					"Committing {} local, {} hashes, {} modified root entries, {} modified child entries",
+					local_cache.storage.len(),
+					local_cache.hashes.len(),
+					changes.len(),
+					child_changes.iter().map(|v|v.1.len()).sum::<usize>(),
+				);
+				for (k, v) in local_cache.storage.drain() {
+					cache.lru_storage.add(k, v);
+				}
+				for (k, v) in local_cache.child_storage.drain() {
+					cache.lru_child_storage.add(k, v);
+				}
+				for (k, v) in local_cache.hashes.drain() {
+					cache.lru_hashes.add(k, OptionHOut(v));
+				}
+			}
+		}
 
 		if let (
 			Some(ref number), Some(ref hash), Some(ref parent))
@@ -727,5 +729,46 @@ mod tests {
 		);
 		// 32 key, 2 byte size
 		assert_eq!(shared.lock().used_storage_cache_size(), 34 /* bytes */);
+	}
+
+	#[test]
+	fn fix_storage_mismatch_issue() {
+		let root_parent = H256::random();
+
+		let key = H256::random()[..].to_vec();
+
+		let h0 = H256::random();
+		let h1 = H256::random();
+
+		let shared = new_shared_cache::<Block, Blake2Hasher>(256*1024, (0,1));
+		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(root_parent.clone()));
+		s.cache.sync_cache(&[], &[], vec![(key.clone(), Some(vec![2]))], vec![], Some(h0.clone()), Some(0), || true);
+
+		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h0.clone()));
+		s.cache.sync_cache(&[], &[], vec![(key.clone(), Some(vec![3]))], vec![], Some(h1.clone()), Some(1), || true);
+
+		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h1.clone()));
+		assert_eq!(s.storage(&key).unwrap(), Some(vec![3]));
+
+		// Restart (or unknown block?), clear caches.
+		{
+			let mut cache = s.cache.shared_cache.lock();
+			let cache = &mut *cache;
+			cache.lru_storage.clear();
+			cache.lru_hashes.clear();
+			cache.lru_child_storage.clear();
+			cache.modifications.clear();
+		}
+
+		// New value is written because of cache miss.
+		s.cache.local_cache.write().storage.insert(key.clone(), Some(vec![42]));
+
+		// New value is propagated.
+		s.cache.sync_cache(&[], &[], vec![], vec![], None, None, || true);
+
+		// Wrongly get new value 42. It should instead return None or old value 3 at block h1.
+		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h1.clone()));
+		s.cache.sync_cache(&[], &[], vec![], vec![], None, None, || false);
+		assert_eq!(s.storage(&key).unwrap(), Some(vec![42]));
 	}
 }
