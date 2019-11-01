@@ -93,8 +93,14 @@ impl Wallet for Wookong {
 // ```
 // the witness_bytes requie rand_hack which panic("Attempted to use functionality that requires system randomness")
 // because the CortexM3 could not fit the rand crate
-				DeriveJunction::Soft(cc) => return Err(Error::SoftNotSupport),
-				DeriveJunction::Hard(cc) => vec.push(cc),
+//
+// Jeff mentions the path and cc has  misissue in https://github.com/paritytech/substrate/pull/3777 and
+// https://github.com/paritytech/substrate/issues/3396
+// the one should pass to device is path and the device has chaincode inside
+// one more thing is the HDKD wallet actually decide if it is harden by data in path, the highest bit is 1
+// So when soft derive fixed, the hehavior will seem werid again here for just passing path to device
+				DeriveJunction::Soft(_path) => return Err(Error::SoftNotSupport),
+				DeriveJunction::Hard(path) => vec.push(path),
 			}
 		}
 		let rv = wk_getpub(&mut pk, &vec);
@@ -113,8 +119,8 @@ impl Wallet for Wookong {
 		let mut vec = Vec::new();
 		for j in path {
 			match j {
-				DeriveJunction::Soft(cc) => vec.push(cc),
-				DeriveJunction::Hard(cc) => vec.push(cc),
+				DeriveJunction::Soft(_path) => return Err(Error::SoftNotSupport),
+				DeriveJunction::Hard(path) => vec.push(path),
 			}
 		}
 		let rv = wk_sign(message, &mut sig, &vec);

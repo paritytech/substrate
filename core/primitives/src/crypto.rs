@@ -704,7 +704,6 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 				return Ok(r)
 			}
 		}
-		
 		let (phrase, password, path) = Self::parse_suri(s)?;
 		Self::from_standard_components(
 			phrase,
