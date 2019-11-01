@@ -8,7 +8,9 @@ edition = "2018"
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false }
+fg_primitives = { package = "substrate-finality-grandpa-primitives", path = "../../core/finality-grandpa/primitives" }
 hash-db = { version = "0.15.2", default-features = false }
+primitives = { package = "substrate-primitives",  path = "../../core/primitives" }
 session = { package = "srml-session", path = "../session", default-features = false, features = ["historical"] }
 serde = { version = "1.0", optional = true }
 sr-primitives = { path = "../../core/sr-primitives", default-features = false }
@@ -17,7 +19,6 @@ system = { package = "srml-system", path = "../system", default-features = false
 trie = { package = "substrate-trie", path = "../../core/trie", default-features = false }
 
 [dev-dependencies]
-primitives = { package = "substrate-primitives",  path = "../../core/primitives" }
 runtime-io = { package = "sr-io", path = "../../core/sr-io", default-features = false }
 state-machine = { package = "substrate-state-machine",  path = "../../core/state-machine" }
 
