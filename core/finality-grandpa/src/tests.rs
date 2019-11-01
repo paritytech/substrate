@@ -27,7 +27,7 @@ use tokio::runtime::current_thread;
 use keyring::Ed25519Keyring;
 use client::{
 	error::Result,
-	runtime_api::{Core, RuntimeVersion, ApiExt},
+	runtime_api::{Core, RuntimeVersion, ApiExt, StorageProof},
 	LongestChain,
 };
 use test_client::{self, runtime::BlockNumber};
@@ -40,6 +40,7 @@ use sr_primitives::traits::{ApiRef, ProvideRuntimeApi, Header as HeaderT};
 use sr_primitives::generic::{BlockId, DigestItem};
 use primitives::{NativeOrEncoded, ExecutionContext, crypto::Public};
 use fg_primitives::{GRANDPA_ENGINE_ID, AuthorityId};
+use state_machine::{backend::InMemory, prove_read, read_proof_check};
 
 use authorities::AuthoritySet;
 use finality_proof::{FinalityProofProvider, AuthoritySetForFinalityProver, AuthoritySetForFinalityChecker};
@@ -258,7 +259,7 @@ impl ApiExt<Block> for RuntimeApi {
 		unimplemented!("Not required for testing!")
 	}
 
-	fn extract_proof(&mut self) -> Option<Vec<Vec<u8>>> {
+	fn extract_proof(&mut self) -> Option<StorageProof> {
 		unimplemented!("Not required for testing!")
 	}
 }
@@ -285,8 +286,14 @@ impl AuthoritySetForFinalityProver<Block> for TestApi {
 			})
 	}
 
-	fn prove_authorities(&self, block: &BlockId<Block>) -> Result<Vec<Vec<u8>>> {
-		self.authorities(block).map(|auth| vec![auth.encode()])
+	fn prove_authorities(&self, block: &BlockId<Block>) -> Result<StorageProof> {
+		let authorities = self.authorities(block)?;
+		let backend = <InMemory<Blake2Hasher>>::from(vec![
+			(None, b"authorities".to_vec(), Some(authorities.encode()))
+		]);
+		let proof = prove_read(backend, vec![b"authorities"])
+			.expect("failure proving read from in-memory storage backend");
+		Ok(proof)
 	}
 }
 
@@ -294,11 +301,20 @@ impl AuthoritySetForFinalityChecker<Block> for TestApi {
 	fn check_authorities_proof(
 		&self,
 		_hash: <Block as BlockT>::Hash,
-		_header: <Block as BlockT>::Header,
-		proof: Vec<Vec<u8>>,
+		header: <Block as BlockT>::Header,
+		proof: StorageProof,
 	) -> Result<Vec<(AuthorityId, u64)>> {
-		Decode::decode(&mut &proof[0][..])
-			.map_err(|_| unreachable!("incorrect value is passed as GRANDPA authorities proof"))
+		let results = read_proof_check::<Blake2Hasher, _>(
+			*header.state_root(), proof, vec![b"authorities"]
+		)
+			.expect("failure checking read proof for authorities");
+		let encoded = results.get(&b"authorities"[..])
+			.expect("returned map must contain all proof keys")
+			.as_ref()
+			.expect("authorities in proof is None");
+		let authorities = Decode::decode(&mut &encoded[..])
+			.expect("failure decoding authorities read from proof");
+		Ok(authorities)
 	}
 }
 

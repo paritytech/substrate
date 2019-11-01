@@ -20,7 +20,8 @@
 //! components of the runtime that are expensive to initialize.
 
 use crate::{wasmi_execution, error::{Error, WasmError}};
-
+#[cfg(feature = "wasmtime")]
+use crate::wasmtime;
 use log::{trace, warn};
 
 use codec::Decode;
@@ -60,6 +61,9 @@ pub trait WasmRuntime {
 pub enum WasmExecutionMethod {
 	/// Uses the Wasmi interpreter.
 	Interpreted,
+	/// Uses the Wasmtime compiled runtime.
+	#[cfg(feature = "wasmtime")]
+	Compiled,
 }
 
 /// Cache for the runtimes.
@@ -202,6 +206,10 @@ pub fn create_wasm_runtime_with_code<E: Externalities>(
 	match wasm_method {
 		WasmExecutionMethod::Interpreted =>
 			wasmi_execution::create_instance(ext, code, heap_pages, host_functions)
+				.map(|runtime| -> Box<dyn WasmRuntime> { Box::new(runtime) }),
+		#[cfg(feature = "wasmtime")]
+		WasmExecutionMethod::Compiled =>
+			wasmtime::create_instance(ext, code, heap_pages)
 				.map(|runtime| -> Box<dyn WasmRuntime> { Box::new(runtime) }),
 	}
 }

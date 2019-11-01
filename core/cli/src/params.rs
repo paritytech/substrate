@@ -50,6 +50,19 @@ arg_enum! {
 	pub enum WasmExecutionMethod {
 		// Uses an interpreter.
 		Interpreted,
+		// Uses a compiled runtime.
+		Compiled,
+	}
+}
+
+impl WasmExecutionMethod {
+	/// Returns list of variants that are not disabled by feature flags.
+	fn enabled_variants() -> Vec<&'static str> {
+		Self::variants()
+			.iter()
+			.cloned()
+			.filter(|&name| cfg!(feature = "wasmtime") || name != "Compiled")
+			.collect()
 	}
 }
 
@@ -57,6 +70,12 @@ impl Into<service::config::WasmExecutionMethod> for WasmExecutionMethod {
 	fn into(self) -> service::config::WasmExecutionMethod {
 		match self {
 			WasmExecutionMethod::Interpreted => service::config::WasmExecutionMethod::Interpreted,
+			#[cfg(feature = "wasmtime")]
+			WasmExecutionMethod::Compiled => service::config::WasmExecutionMethod::Compiled,
+			#[cfg(not(feature = "wasmtime"))]
+			WasmExecutionMethod::Compiled => panic!(
+				"Substrate must be compiled with \"wasmtime\" feature for compiled Wasm execution"
+			),
 		}
 	}
 }
@@ -429,7 +448,7 @@ pub struct RunCmd {
 	#[structopt(
 		long = "wasm-execution",
 		value_name = "METHOD",
-		possible_values = &WasmExecutionMethod::variants(),
+		possible_values = &WasmExecutionMethod::enabled_variants(),
 		case_insensitive = true,
 		default_value = "Interpreted"
 	)]
