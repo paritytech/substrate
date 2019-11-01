@@ -31,6 +31,7 @@ use utils::generate_runtime_interface_include;
 mod bare_function_interface;
 mod host_function_interface;
 mod pass_by_codec;
+mod pass_by_enum;
 mod pass_by_inner;
 mod trait_decl_impl;
 mod utils;
@@ -91,4 +92,10 @@ pub fn pass_by_codec(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
 pub fn pass_by_inner(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 	let input = parse_macro_input!(input as DeriveInput);
 	pass_by_inner::derive_impl(input).unwrap_or_else(|e| e.to_compile_error()).into()
+}
+
+#[proc_macro_derive(PassByEnum)]
+pub fn pass_by_enum(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+	let input = parse_macro_input!(input as DeriveInput);
+	pass_by_enum::derive_impl(input).unwrap_or_else(|e| e.to_compile_error()).into()
 }

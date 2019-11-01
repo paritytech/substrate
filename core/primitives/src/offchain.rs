@@ -19,12 +19,12 @@
 use codec::{Encode, Decode};
 use rstd::{prelude::{Vec, Box}, convert::TryFrom};
 use crate::RuntimeDebug;
-use runtime_interface::pass_by::{PassByCodec, PassByInner};
+use runtime_interface::pass_by::{PassByCodec, PassByInner, PassByEnum};
 
 pub use crate::crypto::KeyTypeId;
 
 /// A type of supported crypto.
-#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, RuntimeDebug, PassByCodec)]
+#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, RuntimeDebug, PassByEnum)]
 #[repr(C)]
 pub enum StorageKind {
 	/// Persistent storage is non-revertible and not fork-aware. It means that any value
@@ -71,7 +71,7 @@ impl From<HttpRequestId> for u32 {
 }
 
 /// An error enum returned by some http methods.
-#[derive(Clone, Copy, PartialEq, Eq, RuntimeDebug, Encode, Decode, PassByCodec)]
+#[derive(Clone, Copy, PartialEq, Eq, RuntimeDebug, Encode, Decode, PassByEnum)]
 #[repr(C)]
 pub enum HttpError {
 	/// The requested action couldn't been completed within a deadline.

@@ -27,12 +27,12 @@ use crate::wasm::*;
 #[cfg(feature = "std")]
 use wasm_interface::{FunctionContext, Pointer, Result};
 
-use rstd::{marker::PhantomData};
+use rstd::{marker::PhantomData, convert::TryFrom};
 
 #[cfg(not(feature = "std"))]
 use rstd::{slice, vec::Vec};
 
-pub use substrate_runtime_interface_proc_macro::{PassByCodec, PassByInner};
+pub use substrate_runtime_interface_proc_macro::{PassByCodec, PassByInner, PassByEnum};
 
 /// Something that should be passed between wasm and the host using the given strategy.
 ///
@@ -89,6 +89,48 @@ pub trait PassByImpl<T>: RIType {
 	fn from_ffi_value(arg: Self::FFIType) -> T;
 }
 
+impl<T: PassBy> RIType for T {
+	type FFIType = <T::PassBy as RIType>::FFIType;
+}
+
+#[cfg(feature = "std")]
+impl<T: PassBy> IntoFFIValue for T {
+	fn into_ffi_value(
+		self,
+		context: &mut dyn FunctionContext,
+	) -> Result<<T::PassBy as RIType>::FFIType> {
+		T::PassBy::into_ffi_value(self, context)
+	}
+}
+
+#[cfg(feature = "std")]
+impl<T: PassBy> FromFFIValue for T {
+	type SelfInstance = Self;
+
+	fn from_ffi_value(
+		context: &mut dyn FunctionContext,
+		arg: <T::PassBy as RIType>::FFIType,
+	) -> Result<Self> {
+		T::PassBy::from_ffi_value(context, arg)
+	}
+}
+
+#[cfg(not(feature = "std"))]
+impl<T: PassBy> IntoFFIValue for T {
+	type Owned = <T::PassBy as PassByImpl<T>>::Owned;
+
+	fn into_ffi_value(&self) -> WrappedFFIValue<<T::PassBy as RIType>::FFIType, Self::Owned> {
+		T::PassBy::into_ffi_value(self)
+	}
+}
+
+#[cfg(not(feature = "std"))]
+impl<T: PassBy> FromFFIValue for T {
+	fn from_ffi_value(arg: <T::PassBy as RIType>::FFIType) -> Self {
+		T::PassBy::from_ffi_value(arg)
+	}
+}
+
 /// The implementation of the pass by codec strategy. This strategy uses a SCALE encoded
 /// representation of the type between wasm and the host.
 ///
@@ -127,7 +169,8 @@ impl<T: codec::Codec> PassByImpl<T> for Codec<T> {
 	) -> Result<T> {
 		let (ptr, len) = pointer_and_len_from_u64(arg);
 		let vec = context.read_memory(Pointer::new(ptr), len)?;
-		Ok(T::decode(&mut &vec[..]).expect("Wasm to host values are encoded correctly; qed"))
+		T::decode(&mut &vec[..])
+			.map_err(|e| format!("Could not decode value from wasm: {}", e.what()))
 	}
 }
 
@@ -243,45 +286,81 @@ impl<T: PassByInner<Inner = I>, I: RIType> RIType for Inner<T, I> {
 	type FFIType = I::FFIType;
 }
 
-impl<T: PassBy> RIType for T {
-	type FFIType = <T::PassBy as RIType>::FFIType;
-}
+/// The implementation of the pass by enum strategy. This strategy uses an `u8` internally to pass
+/// the enum between wasm and the host. So, this strategy only supports enums with unit variants.
+///
+/// Use this type as associated type for [`PassBy`] to implement this strategy for a type.
+///
+/// This type expects the type that wants to implement this strategy as generic parameter. Besides
+/// that the type needs to implement `TryFrom<u8>` and `From<Self> for u8`.
+///
+/// # Example
+/// ```
+/// # use substrate_runtime_interface::pass_by::{PassBy, Enum};
+/// #[derive(Clone, Copy)]
+/// enum Test {
+///     Test1,
+///     Test2,
+/// }
+///
+/// impl From<Test> for u8 {
+///     fn from(val: Test) -> u8 {
+///         match val {
+///             Test::Test1 => 0,
+///             Test::Test2 => 1,
+///         }
+///     }
+/// }
+///
+/// impl std::convert::TryFrom<u8> for Test {
+///     type Error = ();
+///
+///     fn try_from(val: u8) -> Result<Test, ()> {
+///         match val {
+///             0 => Ok(Test::Test1),
+///             1 => Ok(Test::Test2),
+///             _ => Err(()),
+///         }
+///     }
+/// }
+///
+/// impl PassBy for Test {
+///     type PassBy = Enum<Self>;
+/// }
+/// ```
+pub struct Enum<T: Copy + Into<u8> + TryFrom<u8>>(PhantomData<T>);
 
 #[cfg(feature = "std")]
-impl<T: PassBy> IntoFFIValue for T {
+impl<T: Copy + Into<u8> + TryFrom<u8>> PassByImpl<T> for Enum<T> {
 	fn into_ffi_value(
-		self,
-		context: &mut dyn FunctionContext,
-	) -> Result<<T::PassBy as RIType>::FFIType> {
-		T::PassBy::into_ffi_value(self, context)
+		instance: T,
+		_: &mut dyn FunctionContext,
+	) -> Result<Self::FFIType> {
+		Ok(instance.into())
 	}
-}
-
-#[cfg(feature = "std")]
-impl<T: PassBy> FromFFIValue for T {
-	type SelfInstance = Self;
 
 	fn from_ffi_value(
-		context: &mut dyn FunctionContext,
-		arg: <T::PassBy as RIType>::FFIType,
-	) -> Result<Self> {
-		T::PassBy::from_ffi_value(context, arg)
+		_: &mut dyn FunctionContext,
+		arg: Self::FFIType,
+	) -> Result<T> {
+		T::try_from(arg).map_err(|_| format!("Invalid enum discriminant: {}", arg))
 	}
 }
 
 #[cfg(not(feature = "std"))]
-impl<T: PassBy> IntoFFIValue for T {
-	type Owned = <T::PassBy as PassByImpl<T>>::Owned;
+impl<T: Copy + Into<u8> + TryFrom<u8, Error = ()>> PassByImpl<T> for Enum<T> {
+	type Owned = ();
 
-	fn into_ffi_value(&self) -> WrappedFFIValue<<T::PassBy as RIType>::FFIType, Self::Owned> {
-		T::PassBy::into_ffi_value(self)
+	fn into_ffi_value(instance: &T) -> WrappedFFIValue<Self::FFIType, Self::Owned> {
+		let value: u8 = (*instance).into();
+		value.into()
+	}
+
+	fn from_ffi_value(arg: Self::FFIType) -> T {
+		T::try_from(arg).expect("Host to wasm provides a valid enum discriminant; qed")
 	}
 }
 
-#[cfg(not(feature = "std"))]
-impl<T: PassBy> FromFFIValue for T {
-	fn from_ffi_value(arg: <T::PassBy as RIType>::FFIType) -> Self {
-		T::PassBy::from_ffi_value(arg)
-	}
+impl<T: Copy + Into<u8> + TryFrom<u8>> RIType for Enum<T> {
+	type FFIType = u8;
 }
-

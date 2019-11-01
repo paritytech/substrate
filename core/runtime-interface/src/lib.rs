@@ -30,6 +30,9 @@
 #[cfg(feature = "std")]
 pub use wasm_interface;
 
+#[doc(hidden)]
+pub use rstd;
+
 pub use substrate_runtime_interface_proc_macro::runtime_interface;
 
 #[doc(hidden)]
