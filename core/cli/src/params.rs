@@ -854,7 +854,7 @@ impl<CC, RP> GetLogFilter for CoreParams<CC, RP> where CC: GetLogFilter {
 
 /// A special commandline parameter that expands to nothing.
 /// Should be used as custom subcommand/run arguments if no custom values are required.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct NoCustom {}
 
 impl StructOpt for NoCustom {
