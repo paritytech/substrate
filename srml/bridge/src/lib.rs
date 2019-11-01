@@ -136,7 +136,7 @@ impl<T: Trait> Module<T> {
 		state_root: &T::Hash,
 		proof: Vec<Vec<u8>>,
 		validator_set: &Vec<(AuthorityId, AuthorityWeight)>,
-	) -> std::result::Result<(), Error> {
+	) -> Result<(), Error> {
 
 		let checker = <StorageProofChecker<<T::Hashing as sr_primitives::traits::Hash>::Hasher>>::new(
 			*state_root,
