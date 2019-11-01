@@ -44,9 +44,9 @@ pub struct Configuration<C, G, E = NoExtension> {
 	/// Network configuration.
 	pub network: NetworkConfiguration,
 	/// Path to the base configuration directory.
-	pub config_dir: PathBuf,
+	pub config_dir: Option<PathBuf>,
 	/// Path to key files.
-	pub keystore_path: PathBuf,
+	pub keystore_path: Option<PathBuf>,
 	/// Configuration for the database.
 	pub database: DatabaseConfig,
 	/// Size of internal state cache in Bytes
@@ -121,18 +121,18 @@ impl<C, G, E> Configuration<C, G, E> where
 	E: Extension,
 {
 	/// Create a default config for given chain spec and path to configuration dir
-	pub fn default_with_spec_and_base_path(chain_spec: ChainSpec<G, E>, config_dir: PathBuf) -> Self {
+	pub fn default_with_spec_and_base_path(chain_spec: ChainSpec<G, E>, config_dir: Option<PathBuf>) -> Self {
 		let mut configuration = Configuration {
 			impl_name: "parity-substrate",
 			impl_version: "0.0.0",
 			impl_commit: "",
 			chain_spec,
-			config_dir,
+			config_dir: config_dir.clone(),
 			name: Default::default(),
 			roles: Roles::FULL,
 			transaction_pool: Default::default(),
 			network: Default::default(),
-			keystore_path: Default::default(),
+			keystore_path: config_dir.map(|c| c.join("keystore")),
 			database: DatabaseConfig::Path {
 				path: Default::default(),
 				cache_size: Default::default(),
@@ -178,21 +178,23 @@ impl<C, G, E> Configuration<C, G, E> {
 	}
 
 	/// Generate a PathBuf to sub in the chain configuration directory
-	pub fn in_chain_config_dir(&self, sub: &str) -> PathBuf {
-		let mut path = self.config_dir.clone();
-		path.push("chains");
-		path.push(self.chain_spec.id());
-		path.push(sub);
-		path
+	/// if given
+	pub fn in_chain_config_dir(&self, sub: &str) -> Option<PathBuf> {
+		self.config_dir.clone().map(|mut path| {
+			path.push("chains");
+			path.push(self.chain_spec.id());
+			path.push(sub);
+			path
+		})
 	}
 	
 	/// The basepath for the db directory
-	pub fn database_path(&self) -> PathBuf {
+	pub fn database_path(&self) -> Option<PathBuf> {
 		self.in_chain_config_dir("db")
 	}
 
 	/// The basepath for the network file
-	pub fn network_path(&self) -> PathBuf {
+	pub fn network_path(&self) -> Option<PathBuf> {
 		self.in_chain_config_dir("network")
 	}
 }

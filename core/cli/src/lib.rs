@@ -322,8 +322,11 @@ impl<'a> ParseAndPrepareBuildSpec<'a> {
 
 		if spec.boot_nodes().is_empty() && !self.params.disable_default_bootnode {
 			let base_path = base_path(&self.params.shared_params, self.version);
-			let config = service::Configuration::<C,_,_>::default_with_spec_and_base_path(spec.clone(), base_path);
-			let node_key = node_key_config(self.params.node_key_params, &Some(config.network_path()))?;
+			let cfg = service::Configuration::<C,_,_>::default_with_spec_and_base_path(spec.clone(), Some(base_path));
+			let node_key = node_key_config(
+				self.params.node_key_params,
+				&Some(cfg.network_path().expect("We provided a base_path"))
+			)?;
 			let keys = node_key.into_keypair()?;
 			let peer_id = keys.public().into_peer_id();
 			let addr = build_multiaddr![
@@ -655,7 +658,7 @@ where
 {
 	let spec = load_spec(&cli.shared_params, spec_factory)?;
 	let base_path = base_path(&cli.shared_params, &version);
-	let mut config = service::Configuration::default_with_spec_and_base_path(spec.clone(), base_path);
+	let mut config = service::Configuration::default_with_spec_and_base_path(spec.clone(), Some(base_path));
 
 	fill_config_keystore_password(&mut config, &cli)?;
 
@@ -679,10 +682,10 @@ where
 		)?
 	}
 
-	config.keystore_path = cli.keystore_path.unwrap_or_else(|| config.in_chain_config_dir("keystore"));
+	config.keystore_path = cli.keystore_path.or_else(|| config.in_chain_config_dir("keystore"));
 
 	config.database = DatabaseConfig::Path {
-		path: config.database_path(),
+		path: config.database_path().expect("We provided a base_path."),
 		cache_size: cli.database_cache_size,
 	};
 	config.state_cache_size = cli.state_cache_size;
@@ -749,7 +752,7 @@ where
 	let client_id = config.client_id();
 	fill_network_configuration(
 		cli.network_config,
-		config.network_path(),
+		config.network_path().expect("We provided a basepath"),
 		&mut config.network,
 		client_id,
 		is_dev,
@@ -813,9 +816,9 @@ where
 	let spec = load_spec(cli, spec_factory)?;
 	let base_path = base_path(cli, version);
 
-	let mut config = service::Configuration::default_with_spec_and_base_path(spec.clone(), base_path);
+	let mut config = service::Configuration::default_with_spec_and_base_path(spec.clone(), Some(base_path));
 	config.database = DatabaseConfig::Path {
-		path: config.database_path(),
+		path: config.database_path().expect("We provided a base_path."),
 		cache_size: None,
 	};
 
