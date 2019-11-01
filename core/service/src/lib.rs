@@ -459,7 +459,7 @@ fn build_network_future<
 		let polling_dur = before_polling.elapsed();
 		log!(
 			target: "service",
-			if polling_dur >= Duration::from_millis(50) { Level::Debug } else { Level::Trace },
+			if polling_dur >= Duration::from_secs(1) { Level::Warn } else { Level::Trace },
 			"Polling the network future took {:?}",
 			polling_dur
 		);
