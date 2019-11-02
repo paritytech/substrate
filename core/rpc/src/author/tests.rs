@@ -53,7 +53,7 @@ struct TestSetup {
 
 impl Default for TestSetup {
 	fn default() -> Self {
-		let keystore = KeyStore::new();
+		let keystore = KeyStore::new_key_store_ptr();
 		let client = Arc::new(test_client::TestClientBuilder::new().set_keystore(keystore.clone()).build());
 		let pool = Arc::new(Pool::new(Default::default(), FullChainApi::new(client.clone())));
 		TestSetup {

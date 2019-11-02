@@ -17,7 +17,6 @@
 //! Substrate state machine implementation.
 
 #![warn(missing_docs)]
-#![allow(clippy::type_complexity)]
 
 use std::{fmt, result, collections::HashMap, panic::UnwindSafe, marker::PhantomData};
 use log::{warn, trace};
