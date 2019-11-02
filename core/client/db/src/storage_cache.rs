@@ -23,7 +23,7 @@ use linked_hash_map::{LinkedHashMap, Entry};
 use hash_db::Hasher;
 use sr_primitives::traits::{Block as BlockT, Header};
 use primitives::hexdisplay::HexDisplay;
-use state_machine::{backend::Backend as StateBackend, TrieBackend, InMemoryKvBackend};
+use state_machine::{backend::Backend as StateBackend, TrieBackend};
 use log::trace;
 use super::{StorageCollection, ChildStorageCollection};
 use std::hash::Hash as StdHash;
