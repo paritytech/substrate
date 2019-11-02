@@ -35,7 +35,6 @@ use sr_primitives::traits::{
 };
 use message::{BlockAnnounce, BlockAttributes, Direction, FromBlock, Message, RequestId};
 use message::generic::{Message as GenericMessage, ConsensusMessage};
-use event::Event;
 use consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
 use light_dispatch::{LightDispatch, LightDispatchNetwork, RequestData};
 use specialization::NetworkSpecialization;
@@ -48,7 +47,7 @@ use std::sync::Arc;
 use std::{cmp, num::NonZeroUsize, time};
 use log::{trace, debug, warn, error};
 use crate::chain::{Client, FinalityProofProvider};
-use client::light::fetcher::{FetchChecker, ChangesProof};
+use client::light::fetcher::{FetchChecker, ChangesProof, StorageProof};
 use crate::error;
 use util::LruHashSet;
 
@@ -513,10 +512,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// Returns information about all the peers we are connected to after the handshake message.
 	pub fn peers_info(&self) -> impl Iterator<Item = (&PeerId, &PeerInfo<B>)> {
 		self.context_data.peers.iter().map(|(id, peer)| (id, &peer.info))
-	}
-
-	pub fn on_event(&mut self, event: Event) {
-		self.specialization.on_event(event);
 	}
 
 	pub fn on_custom_message(
@@ -1121,18 +1116,13 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		};
 
 		match self.sync.on_block_announce(who.clone(), hash, &announce, is_their_best) {
-			sync::OnBlockAnnounce::Request(peer, req) => {
-				self.send_message(peer, GenericMessage::BlockRequest(req));
-				return CustomMessageOutcome::None
-			}
 			sync::OnBlockAnnounce::Nothing => {
-				// try_import is only true when we have all data required to import block
+				// `on_block_announce` returns `OnBlockAnnounce::ImportHeader`
+				// when we have all data required to import the block
 				// in the BlockAnnounce message. This is only when:
 				// 1) we're on light client;
 				// AND
-				// - EITHER 2.1) announced block is stale;
-				// - OR 2.2) announced block is NEW and we normally only want to download this single block (i.e.
-				//           there are no ascendants of this block scheduled for retrieval)
+				// 2) parent block is already imported and not pruned.
 				return CustomMessageOutcome::None
 			}
 			sync::OnBlockAnnounce::ImportHeader => () // We proceed with the import.
@@ -1231,7 +1221,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					error
 				);
 				self.peerset_handle.report_peer(who.clone(), RPC_FAILED_REPUTATION_CHANGE);
-				Default::default()
+				StorageProof::empty()
 			}
 		};
 
@@ -1348,7 +1338,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					request.block,
 					error
 				);
-				Default::default()
+				StorageProof::empty()
 			}
 		};
 		self.send_message(
@@ -1391,7 +1381,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					request.block,
 					error
 				);
-				Default::default()
+				StorageProof::empty()
 			}
 		};
 		self.send_message(
@@ -1431,7 +1421,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					request.block,
 					error
 				);
-				(Default::default(), Default::default())
+				(Default::default(), StorageProof::empty())
 			}
 		};
 		self.send_message(
@@ -1500,7 +1490,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					max_block: Zero::zero(),
 					proof: vec![],
 					roots: BTreeMap::new(),
-					roots_proof: vec![],
+					roots_proof: StorageProof::empty(),
 				}
 			}
 		};

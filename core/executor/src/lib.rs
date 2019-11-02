@@ -31,24 +31,54 @@
 
 #[macro_use]
 mod wasm_utils;
-mod wasm_executor;
+mod wasmi_execution;
 #[macro_use]
 mod native_executor;
 mod sandbox;
 mod allocator;
-mod wasm_runtimes_cache;
+mod host_interface;
+mod wasm_runtime;
+#[cfg(feature = "wasmtime")]
+mod wasmtime;
+#[cfg(test)]
+mod integration_tests;
 
 pub mod error;
 pub use wasmi;
-pub use wasm_executor::WasmExecutor;
 pub use native_executor::{with_native_environment, NativeExecutor, NativeExecutionDispatch};
-pub use wasm_runtimes_cache::RuntimesCache;
 pub use runtime_version::{RuntimeVersion, NativeVersion};
 pub use codec::Codec;
 #[doc(hidden)]
-pub use primitives::{Blake2Hasher, traits::Externalities};
+pub use primitives::traits::Externalities;
 #[doc(hidden)]
 pub use wasm_interface;
+pub use wasm_runtime::WasmExecutionMethod;
+
+/// Call the given `function` in the given wasm `code`.
+///
+/// The signature of `function` needs to follow the default Substrate function signature.
+///
+/// - `call_data`: Will be given as input parameters to `function`
+/// - `execution_method`: The execution method to use.
+/// - `ext`: The externalities that should be set while executing the wasm function.
+/// - `heap_pages`: The number of heap pages to allocate.
+///
+/// Returns the `Vec<u8>` that contains the return value of the function.
+pub fn call_in_wasm<E: Externalities>(
+	function: &str,
+	call_data: &[u8],
+	execution_method: WasmExecutionMethod,
+	ext: &mut E,
+	code: &[u8],
+	heap_pages: u64,
+) -> error::Result<Vec<u8>> {
+	let mut instance = wasm_runtime::create_wasm_runtime_with_code(
+		execution_method,
+		heap_pages,
+		code,
+	)?;
+	instance.call(ext, function, call_data)
+}
 
 /// Provides runtime information.
 pub trait RuntimeInfo {
@@ -56,8 +86,30 @@ pub trait RuntimeInfo {
 	fn native_version(&self) -> &NativeVersion;
 
 	/// Extract RuntimeVersion of given :code block
-	fn runtime_version<E: Externalities<Blake2Hasher>> (
+	fn runtime_version<E: Externalities> (
 		&self,
 		ext: &mut E,
 	) -> Option<RuntimeVersion>;
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use runtime_test::WASM_BINARY;
+	use runtime_io::TestExternalities;
+
+	#[test]
+	fn call_in_interpreted_wasm_works() {
+		let mut ext = TestExternalities::default();
+		let mut ext = ext.ext();
+		let res = call_in_wasm(
+			"test_empty_return",
+			&[],
+			WasmExecutionMethod::Interpreted,
+			&mut ext,
+			&WASM_BINARY,
+			8,
+		).unwrap();
+		assert_eq!(res, vec![0u8; 0]);
+	}
 }

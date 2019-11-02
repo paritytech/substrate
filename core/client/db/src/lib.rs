@@ -42,7 +42,7 @@ use client::backend::NewBlockState;
 use client::blockchain::{well_known_cache_keys, HeaderBackend};
 use client::{ForkBlocks, ExecutionStrategies};
 use client::backend::{StorageCollection, ChildStorageCollection};
-use client::error::Result as ClientResult;
+use client::error::{Result as ClientResult, Error as ClientError};
 use codec::{Decode, Encode};
 use hash_db::{Hasher, Prefix};
 use kvdb::{KeyValueDB, DBTransaction};
@@ -82,6 +82,9 @@ const DEFAULT_CHILD_RATIO: (usize, usize) = (1, 10);
 
 /// DB-backed patricia trie state, transaction type is an overlay of changes to commit.
 pub type DbState = state_machine::TrieBackend<Arc<dyn state_machine::Storage<Blake2Hasher>>, Blake2Hasher>;
+
+/// Re-export the KVDB trait so that one can pass an implementation of it.
+pub use kvdb;
 
 /// A reference tracking state.
 ///
@@ -191,16 +194,28 @@ impl<B: BlockT> StateBackend<Blake2Hasher> for RefTrackingState<B> {
 
 /// Database settings.
 pub struct DatabaseSettings {
-	/// Cache size in bytes. If `None` default is used.
-	pub cache_size: Option<usize>,
 	/// State cache size.
 	pub state_cache_size: usize,
 	/// Ratio of cache size dedicated to child tries.
 	pub state_cache_child_ratio: Option<(usize, usize)>,
-	/// Path to the database.
-	pub path: PathBuf,
 	/// Pruning mode.
 	pub pruning: PruningMode,
+	/// Where to find the database.
+	pub source: DatabaseSettingsSrc,
+}
+
+/// Where to find the database..
+pub enum DatabaseSettingsSrc {
+	/// Load a database from a given path. Recommended for most uses.
+	Path {
+		/// Path to the database.
+		path: PathBuf,
+		/// Cache size in bytes. If `None` default is used.
+		cache_size: Option<usize>,
+	},
+
+	/// Use a custom already-open database.
+	Custom(Arc<dyn KeyValueDB>),
 }
 
 /// Create an instance of db-backed client.
@@ -224,7 +239,7 @@ pub fn new_client<E, S, Block, RA>(
 >
 	where
 		Block: BlockT<Hash=H256>,
-		E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
+		E: CodeExecutor + RuntimeInfo,
 		S: BuildStorage,
 {
 	let backend = Arc::new(Backend::new(settings, CANONICALIZATION_DELAY)?);
@@ -417,7 +432,7 @@ impl<Block: BlockT> HeaderMetadata<Block> for BlockchainDb<Block> {
 					header_metadata.clone(),
 				);
 				header_metadata
-			}).ok_or(client::error::Error::UnknownBlock("header not found in db".to_owned()))
+			}).ok_or(ClientError::UnknownBlock(format!("header not found in db: {}", hash)))
 		})
 	}
 
@@ -456,8 +471,7 @@ impl<Block: BlockT, H: Hasher> BlockImportOperation<Block, H> {
 }
 
 impl<Block> client::backend::BlockImportOperation<Block, Blake2Hasher>
-for BlockImportOperation<Block, Blake2Hasher>
-where Block: BlockT<Hash=H256>,
+	for BlockImportOperation<Block, Blake2Hasher> where Block: BlockT<Hash=H256>,
 {
 	type State = CachingState<Blake2Hasher, RefTrackingState<Block>, Block>;
 
@@ -776,17 +790,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 	///
 	/// The pruning window is how old a block must be before the state is pruned.
 	pub fn new(config: DatabaseSettings, canonicalization_delay: u64) -> ClientResult<Self> {
-		Self::new_inner(config, canonicalization_delay)
-	}
-
-	fn new_inner(config: DatabaseSettings, canonicalization_delay: u64) -> ClientResult<Self> {
-		#[cfg(feature = "kvdb-rocksdb")]
 		let db = crate::utils::open_database(&config, columns::META, "full")?;
-		#[cfg(not(feature = "kvdb-rocksdb"))]
-		let db = {
-			log::warn!("Running without the RocksDB feature. The database will NOT be saved.");
-			Arc::new(kvdb_memorydb::create(crate::utils::NUM_COLUMNS))
-		};
 		Self::from_kvdb(db as Arc<_>, canonicalization_delay, &config)
 	}
 
@@ -794,25 +798,14 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 	#[cfg(any(test, feature = "test-helpers"))]
 	pub fn new_test(keep_blocks: u32, canonicalization_delay: u64) -> Self {
 		let db = Arc::new(kvdb_memorydb::create(crate::utils::NUM_COLUMNS));
-		Self::new_test_db(keep_blocks, canonicalization_delay, db as Arc<_>)
-	}
-
-	/// Creates a client backend with test settings.
-	#[cfg(any(test, feature = "test-helpers"))]
-	pub fn new_test_db(keep_blocks: u32, canonicalization_delay: u64, db: Arc<dyn KeyValueDB>) -> Self {
-
 		let db_setting = DatabaseSettings {
-			cache_size: None,
 			state_cache_size: 16777216,
 			state_cache_child_ratio: Some((50, 100)),
-			path: Default::default(),
 			pruning: PruningMode::keep_blocks(keep_blocks),
+			source: DatabaseSettingsSrc::Custom(db),
 		};
-		Self::from_kvdb(
-			db,
-			canonicalization_delay,
-			&db_setting,
-		).expect("failed to create test-db")
+
+		Self::new(db_setting, canonicalization_delay).expect("failed to create test-db")
 	}
 
 	fn from_kvdb(
@@ -1519,6 +1512,12 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 impl<Block> client::backend::LocalBackend<Block, Blake2Hasher> for Backend<Block>
 where Block: BlockT<Hash=H256> {}
 
+/// TODO: remove me in #3201
+pub fn unused_sink<Block: BlockT>(cache_tx: crate::cache::DbCacheTransaction<Block>) {
+	cache_tx.on_block_revert(&crate::cache::ComplexBlockId::new(Default::default(), 0.into())).unwrap();
+	unimplemented!()
+}
+
 #[cfg(test)]
 mod tests {
 	use hash_db::{HashDB, EMPTY_PREFIX};
@@ -1631,7 +1630,12 @@ mod tests {
 			db.storage.db.clone()
 		};
 
-		let backend = Backend::<Block>::new_test_db(1, 0, backing);
+		let backend = Backend::<Block>::new(DatabaseSettings {
+			state_cache_size: 16777216,
+			state_cache_child_ratio: Some((50, 100)),
+			pruning: PruningMode::keep_blocks(1),
+			source: DatabaseSettingsSrc::Custom(backing),
+		}, 0).unwrap();
 		assert_eq!(backend.blockchain().info().best_number, 9);
 		for i in 0..10 {
 			assert!(backend.blockchain().hash(i).unwrap().is_some())
@@ -2220,6 +2224,40 @@ mod tests {
 			assert_eq!(lca.hash, a2);
 			assert_eq!(lca.number, 2);
 		}
+	}
+
+	#[test]
+	fn test_tree_route_regression() {
+		// NOTE: this is a test for a regression introduced in #3665, the result
+		// of tree_route would be erroneously computed, since it was taking into
+		// account the `ancestor` in `CachedHeaderMetadata` for the comparison.
+		// in this test we simulate the same behavior with the side-effect
+		// triggering the issue being eviction of a previously fetched record
+		// from the cache, therefore this test is dependent on the LRU cache
+		// size for header metadata, which is currently set to 5000 elements.
+		let backend = Backend::<Block>::new_test(10000, 10000);
+		let blockchain = backend.blockchain();
+
+		let genesis = insert_header(&backend, 0, Default::default(), Vec::new(), Default::default());
+
+		let block100 = (1..=100).fold(genesis, |parent, n| {
+			insert_header(&backend, n, parent, Vec::new(), Default::default())
+		});
+
+		let block7000 = (101..=7000).fold(block100, |parent, n| {
+			insert_header(&backend, n, parent, Vec::new(), Default::default())
+		});
+
+		// This will cause the ancestor of `block100` to be set to `genesis` as a side-effect.
+		lowest_common_ancestor(blockchain, genesis, block100).unwrap();
+
+		// While traversing the tree we will have to do 6900 calls to
+		// `header_metadata`, which will make sure we will exhaust our cache
+		// which only takes 5000 elements. In particular, the `CachedHeaderMetadata` struct for
+		// block #100 will be evicted and will get a new value (with ancestor set to its parent).
+		let tree_route = tree_route(blockchain, block100, block7000).unwrap();
+
+		assert!(tree_route.retracted().is_empty());
 	}
 
 	#[test]

@@ -121,7 +121,7 @@
 
 use rstd::{prelude::*, marker::PhantomData, ops::{Sub, Rem}};
 use codec::Decode;
-use sr_primitives::{KeyTypeId, Perbill, RuntimeAppPublic};
+use sr_primitives::{KeyTypeId, Perbill, RuntimeAppPublic, BoundToRuntimeAppPublic};
 use sr_primitives::weights::SimpleDispatchInfo;
 use sr_primitives::traits::{Convert, Zero, Member, OpaqueKeys};
 use sr_staking_primitives::SessionIndex;
@@ -192,6 +192,12 @@ impl<A> OnSessionEnding<A> for () {
 
 /// Handler for session lifecycle events.
 pub trait SessionHandler<ValidatorId> {
+	/// All the key type ids this session handler can process.
+	///
+	/// The order must be the same as it expects them in
+	/// [`on_new_session`](Self::on_new_session) and [`on_genesis_session`](Self::on_genesis_session).
+	const KEY_TYPE_IDS: &'static [KeyTypeId];
+
 	/// The given validator set will be used for the genesis session.
 	/// It is guaranteed that the given validator set will also be used
 	/// for the second session, therefore the first call to `on_new_session`
@@ -220,7 +226,7 @@ pub trait SessionHandler<ValidatorId> {
 }
 
 /// A session handler for specific key type.
-pub trait OneSessionHandler<ValidatorId> {
+pub trait OneSessionHandler<ValidatorId>: BoundToRuntimeAppPublic {
 	/// The key type expected.
 	type Key: Decode + Default + RuntimeAppPublic;
 
@@ -253,10 +259,14 @@ pub trait OneSessionHandler<ValidatorId> {
 	fn on_disabled(_validator_index: usize);
 }
 
-#[impl_trait_for_tuples::impl_for_tuples(30)]
+#[impl_trait_for_tuples::impl_for_tuples(1, 30)]
 #[tuple_types_no_default_trait_bound]
 impl<AId> SessionHandler<AId> for Tuple {
 	for_tuples!( where #( Tuple: OneSessionHandler<AId> )* );
+
+	for_tuples!(
+		const KEY_TYPE_IDS: &'static [KeyTypeId] = &[ #( <Tuple::Key as RuntimeAppPublic>::ID ),* ];
+	);
 
 	fn on_genesis_session<Ks: OpaqueKeys>(validators: &[(AId, Ks)]) {
 		for_tuples!(
@@ -295,6 +305,20 @@ impl<AId> SessionHandler<AId> for Tuple {
 	fn on_disabled(i: usize) {
 		for_tuples!( #( Tuple::on_disabled(i); )* )
 	}
+}
+
+/// `SessionHandler` for tests that use `UintAuthorityId` as `Keys`.
+pub struct TestSessionHandler;
+impl<AId> SessionHandler<AId> for TestSessionHandler {
+	const KEY_TYPE_IDS: &'static [KeyTypeId] = &[sr_primitives::key_types::DUMMY];
+
+	fn on_genesis_session<Ks: OpaqueKeys>(_: &[(AId, Ks)]) {}
+
+	fn on_new_session<Ks: OpaqueKeys>(_: bool, _: &[(AId, Ks)], _: &[(AId, Ks)]) {}
+
+	fn on_before_session_ending() {}
+
+	fn on_disabled(_: usize) {}
 }
 
 /// Handler for selecting the genesis validator set.
@@ -349,10 +373,10 @@ const DEDUP_KEY_PREFIX: &[u8] = b":session:keys";
 decl_storage! {
 	trait Store for Module<T: Trait> as Session {
 		/// The current set of validators.
-		Validators get(validators): Vec<T::ValidatorId>;
+		Validators get(fn validators): Vec<T::ValidatorId>;
 
 		/// Current index of the session.
-		CurrentIndex get(current_index): SessionIndex;
+		CurrentIndex get(fn current_index): SessionIndex;
 
 		/// True if the underlying economic identities or weighting behind the validators
 		/// has changed in the queued validator set.
@@ -360,12 +384,12 @@ decl_storage! {
 
 		/// The queued keys for the next session. When the next session begins, these keys
 		/// will be used to determine the validator's session keys.
-		QueuedKeys get(queued_keys): Vec<(T::ValidatorId, T::Keys)>;
+		QueuedKeys get(fn queued_keys): Vec<(T::ValidatorId, T::Keys)>;
 
 		/// Indices of disabled validators.
 		///
 		/// The set is cleared when `on_session_ending` returns a new set of identities.
-		DisabledValidators get(disabled_validators): Vec<u32>;
+		DisabledValidators get(fn disabled_validators): Vec<u32>;
 
 		/// The next session keys for a validator.
 		///
@@ -382,6 +406,20 @@ decl_storage! {
 	add_extra_genesis {
 		config(keys): Vec<(T::ValidatorId, T::Keys)>;
 		build(|config: &GenesisConfig<T>| {
+			if T::SessionHandler::KEY_TYPE_IDS.len() != T::Keys::key_ids().len() {
+				panic!("Number of keys in session handler and session keys does not match");
+			}
+
+			T::SessionHandler::KEY_TYPE_IDS.iter().zip(T::Keys::key_ids()).enumerate()
+				.for_each(|(i, (sk, kk))| {
+					if sk != kk {
+						panic!(
+							"Session handler and session key expect different key type at index: {}",
+							i,
+						);
+					}
+				});
+
 			for (who, keys) in config.keys.iter().cloned() {
 				assert!(
 					<Module<T>>::load_keys(&who).is_none(),
@@ -594,23 +632,23 @@ impl<T: Trait> Module<T> {
 		let old_keys = Self::load_keys(&who);
 
 		for id in T::Keys::key_ids() {
-			let key = keys.get_raw(id);
+			let key = keys.get_raw(*id);
 
 			// ensure keys are without duplication.
 			ensure!(
-				Self::key_owner(id, key).map_or(true, |owner| &owner == who),
+				Self::key_owner(*id, key).map_or(true, |owner| &owner == who),
 				"registered duplicate key"
 			);
 
-			if let Some(old) = old_keys.as_ref().map(|k| k.get_raw(id)) {
+			if let Some(old) = old_keys.as_ref().map(|k| k.get_raw(*id)) {
 				if key == old {
 					continue;
 				}
 
-				Self::clear_key_owner(id, old);
+				Self::clear_key_owner(*id, old);
 			}
 
-			Self::put_key_owner(id, key, &who);
+			Self::put_key_owner(*id, key, &who);
 		}
 
 		Self::put_keys(&who, &keys);
@@ -621,8 +659,8 @@ impl<T: Trait> Module<T> {
 	fn prune_dead_keys(who: &T::ValidatorId) {
 		if let Some(old_keys) = Self::take_keys(who) {
 			for id in T::Keys::key_ids() {
-				let key_data = old_keys.get_raw(id);
-				Self::clear_key_owner(id, key_data);
+				let key_data = old_keys.get_raw(*id);
+				Self::clear_key_owner(*id, key_data);
 			}
 		}
 	}
@@ -680,19 +718,15 @@ impl<T: Trait, Inner: FindAuthor<u32>> FindAuthor<T::ValidatorId>
 mod tests {
 	use super::*;
 	use support::assert_ok;
-	use runtime_io::with_externalities;
-	use primitives::{Blake2Hasher, crypto::key_types::DUMMY};
-	use sr_primitives::{
-		traits::OnInitialize,
-		testing::UintAuthorityId,
-	};
+	use primitives::crypto::key_types::DUMMY;
+	use sr_primitives::{traits::OnInitialize, testing::UintAuthorityId};
 	use mock::{
 		NEXT_VALIDATORS, SESSION_CHANGED, TEST_SESSION_CHANGED, authorities, force_new_session,
 		set_next_validators, set_session_length, session_changed, Test, Origin, System, Session,
 		reset_before_session_end_called, before_session_end_called,
 	};
 
-	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+	fn new_test_ext() -> runtime_io::TestExternalities {
 		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		GenesisConfig::<Test> {
 			keys: NEXT_VALIDATORS.with(|l|
@@ -710,7 +744,7 @@ mod tests {
 
 	#[test]
 	fn simple_setup_should_work() {
-		with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
 			assert_eq!(Session::validators(), vec![1, 2, 3]);
 		});
@@ -718,7 +752,7 @@ mod tests {
 
 	#[test]
 	fn put_get_keys() {
-		with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			Session::put_keys(&10, &UintAuthorityId(10).into());
 			assert_eq!(Session::load_keys(&10), Some(UintAuthorityId(10).into()));
 		})
@@ -727,7 +761,7 @@ mod tests {
 	#[test]
 	fn keys_cleared_on_kill() {
 		let mut ext = new_test_ext();
-		with_externalities(&mut ext, || {
+		ext.execute_with(|| {
 			assert_eq!(Session::validators(), vec![1, 2, 3]);
 			assert_eq!(Session::load_keys(&1), Some(UintAuthorityId(1).into()));
 
@@ -744,7 +778,7 @@ mod tests {
 	fn authorities_should_track_validators() {
 		reset_before_session_end_called();
 
-		with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			set_next_validators(vec![1, 2]);
 			force_new_session();
 			initialize_block(1);
@@ -795,7 +829,7 @@ mod tests {
 
 	#[test]
 	fn should_work_with_early_exit() {
-		with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			set_session_length(10);
 
 			initialize_block(1);
@@ -818,7 +852,7 @@ mod tests {
 
 	#[test]
 	fn session_change_should_work() {
-		with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			// Block 1: No change
 			initialize_block(1);
 			assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
@@ -848,7 +882,7 @@ mod tests {
 
 	#[test]
 	fn duplicates_are_not_allowed() {
-		with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			System::set_block_number(1);
 			Session::on_initialize(1);
 			assert!(Session::set_keys(Origin::signed(4), UintAuthorityId(1).into(), vec![]).is_err());
@@ -863,7 +897,7 @@ mod tests {
 	fn session_changed_flag_works() {
 		reset_before_session_end_called();
 
-		with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			TEST_SESSION_CHANGED.with(|l| *l.borrow_mut() = true);
 
 			force_new_session();
@@ -952,7 +986,7 @@ mod tests {
 
 	#[test]
 	fn session_keys_generate_output_works_as_set_keys_input() {
-		with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			let new_keys = mock::MockSessionKeys::generate(None);
 			assert_ok!(
 				Session::set_keys(
@@ -966,7 +1000,7 @@ mod tests {
 
 	#[test]
 	fn return_true_if_more_than_third_is_disabled() {
-		with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			set_next_validators(vec![1, 2, 3, 4, 5, 6, 7]);
 			force_new_session();
 			initialize_block(1);
@@ -979,6 +1013,5 @@ mod tests {
 			assert_eq!(Session::disable_index(2), true);
 			assert_eq!(Session::disable_index(3), true);
 		});
-
 	}
 }

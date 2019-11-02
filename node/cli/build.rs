@@ -14,14 +14,16 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use cli::{NoCustom, CoreParams};
-
 use std::{fs, env, path::Path};
-
 use structopt::{StructOpt, clap::Shell};
+use substrate_cli::{NoCustom, CoreParams};
+use vergen::{ConstantsFlags, generate_cargo_keys};
 
 fn main() {
 	build_shell_completion();
+	generate_cargo_keys(ConstantsFlags::all())
+		.expect("Failed to generate metadata files");
+	println!("cargo:rerun-if-changed=.git/HEAD");
 }
 
 /// Build shell completion scripts for all known shells

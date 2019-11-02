@@ -83,8 +83,7 @@ fn generate_impl_call(
 			)*
 
 			#[allow(deprecated)]
-			let output = <#runtime as #impl_trait>::#fn_name(#( #pborrow #pnames2 ),*);
-			#c::runtime_api::Encode::encode(&output)
+			<#runtime as #impl_trait>::#fn_name(#( #pborrow #pnames2 ),*)
 		)
 	)
 }
@@ -175,11 +174,12 @@ fn generate_impl_calls(
 /// Generate the dispatch function that is used in native to call into the runtime.
 fn generate_dispatch_function(impls: &[ItemImpl]) -> Result<TokenStream> {
 	let data = Ident::new("data", Span::call_site());
+	let c = generate_crate_access(HIDDEN_INCLUDES_ID);
 	let impl_calls = generate_impl_calls(impls, &data)?
 		.into_iter()
 		.map(|(trait_, fn_name, impl_)| {
 			let name = prefix_function_with_trait(&trait_, &fn_name);
-			quote!( #name => Some({ #impl_ }), )
+			quote!( #name => Some(#c::runtime_api::Encode::encode(&{ #impl_ })), )
 		});
 
 	Ok(quote!(
@@ -218,13 +218,7 @@ fn generate_wasm_interface(impls: &[ItemImpl]) -> Result<TokenStream> {
 					};
 
 					let output = { #impl_ };
-					let res = output.as_ptr() as u64 + ((output.len() as u64) << 32);
-
-					// Leak the output vector to avoid it being freed.
-					// This is fine in a WASM context since the heap
-					// will be discarded after the call.
-					#c::runtime_api::mem::forget(output);
-					res
+					#c::runtime_api::to_substrate_wasm_fn_return_value(&output)
 				}
 			)
 		});
@@ -306,15 +300,17 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 				self.recorder = Some(Default::default());
 			}
 
-			fn extract_proof(&mut self) -> Option<Vec<Vec<u8>>> {
+			fn extract_proof(&mut self) -> Option<#crate_::runtime_api::StorageProof> {
 				self.recorder
 					.take()
-					.map(|r| {
-						r.borrow_mut()
+					.map(|recorder| {
+						let trie_nodes = recorder
+							.borrow_mut()
 							.drain()
 							.into_iter()
-							.map(|n| n.data.to_vec())
-							.collect()
+							.map(|record| record.data)
+							.collect();
+						#crate_::runtime_api::StorageProof::new(trie_nodes)
 					})
 			}
 		}

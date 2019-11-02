@@ -38,7 +38,7 @@ fn load_decode<C, T>(backend: &C, key: &[u8]) -> ClientResult<Option<T>>
 		None => Ok(None),
 		Some(t) => T::decode(&mut &t[..])
 			.map_err(
-				|e| ClientError::Backend(format!("Slots DB is corrupted. Decode error: {}", e.what())).into(),
+				|e| ClientError::Backend(format!("Slots DB is corrupted. Decode error: {}", e.what())),
 			)
 			.map(Some)
 	}

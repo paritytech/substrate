@@ -53,7 +53,7 @@ mod tests {
 		runtime::{Hash, Transfer, Block, BlockNumber, Header, Digest},
 		AccountKeyring, Sr25519Keyring,
 	};
-	use primitives::{Blake2Hasher, map, offchain::NeverOffchainExt};
+	use primitives::{Blake2Hasher, map};
 	use hex_literal::*;
 
 	native_executor_instance!(
@@ -63,7 +63,7 @@ mod tests {
 	);
 
 	fn executor() -> executor::NativeExecutor<Executor> {
-		executor::NativeExecutor::new(None)
+		executor::NativeExecutor::new(executor::WasmExecutionMethod::Interpreted, None)
 	}
 
 	fn construct_block(
@@ -93,7 +93,7 @@ mod tests {
 		StateMachine::new(
 			backend,
 			Some(&InMemoryChangesTrieStorage::<_, u64>::new()),
-			NeverOffchainExt::new(),
+			None,
 			&mut overlay,
 			&executor(),
 			"Core_initialize_block",
@@ -107,7 +107,7 @@ mod tests {
 			StateMachine::new(
 				backend,
 				Some(&InMemoryChangesTrieStorage::<_, u64>::new()),
-				NeverOffchainExt::new(),
+				None,
 				&mut overlay,
 				&executor(),
 				"BlockBuilder_apply_extrinsic",
@@ -121,7 +121,7 @@ mod tests {
 		let (ret_data, _, _) = StateMachine::new(
 			backend,
 			Some(&InMemoryChangesTrieStorage::<_, u64>::new()),
-			NeverOffchainExt::new(),
+			None,
 			&mut overlay,
 			&executor(),
 			"BlockBuilder_finalize_block",
@@ -169,7 +169,7 @@ mod tests {
 		let _ = StateMachine::new(
 			&backend,
 			Some(&InMemoryChangesTrieStorage::<_, u64>::new()),
-			NeverOffchainExt::new(),
+			None,
 			&mut overlay,
 			&executor(),
 			"Core_execute_block",
@@ -199,7 +199,7 @@ mod tests {
 		let _ = StateMachine::new(
 			&backend,
 			Some(&InMemoryChangesTrieStorage::<_, u64>::new()),
-			NeverOffchainExt::new(),
+			None,
 			&mut overlay,
 			&executor(),
 			"Core_execute_block",
@@ -229,7 +229,7 @@ mod tests {
 		let r = StateMachine::new(
 			&backend,
 			Some(&InMemoryChangesTrieStorage::<_, u64>::new()),
-			NeverOffchainExt::new(),
+			None,
 			&mut overlay,
 			&executor(),
 			"Core_execute_block",

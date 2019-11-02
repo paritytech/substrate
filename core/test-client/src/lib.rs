@@ -24,7 +24,7 @@ pub use client::{ExecutionStrategies, blockchain, backend, self};
 pub use client_db::{Backend, self};
 pub use client_ext::ClientExt;
 pub use consensus;
-pub use executor::{NativeExecutor, self};
+pub use executor::{NativeExecutor, WasmExecutionMethod, self};
 pub use keyring::{
 	AccountKeyring,
 	ed25519::Keyring as Ed25519Keyring,
@@ -198,7 +198,7 @@ impl<Executor, Backend, G: GenesisInit> TestClientBuilder<Executor, Backend, G> 
 }
 
 impl<E, Backend, G: GenesisInit> TestClientBuilder<
-	client::LocalCallExecutor<Backend, executor::NativeExecutor<E>>,
+	client::LocalCallExecutor<Backend, NativeExecutor<E>>,
 	Backend,
 	G,
 > {
@@ -209,18 +209,20 @@ impl<E, Backend, G: GenesisInit> TestClientBuilder<
 	) -> (
 		client::Client<
 			Backend,
-			client::LocalCallExecutor<Backend, executor::NativeExecutor<E>>,
+			client::LocalCallExecutor<Backend, NativeExecutor<E>>,
 			Block,
 			RuntimeApi
 		>,
 		client::LongestChain<Backend, Block>,
 	) where
-		I: Into<Option<executor::NativeExecutor<E>>>,
+		I: Into<Option<NativeExecutor<E>>>,
 		E: executor::NativeExecutionDispatch,
 		Backend: client::backend::Backend<Block, Blake2Hasher>,
 		Block: BlockT<Hash=<Blake2Hasher as Hasher>::Out>,
 	{
-		let executor = executor.into().unwrap_or_else(|| executor::NativeExecutor::new(None));
+		let executor = executor.into().unwrap_or_else(||
+			NativeExecutor::new(WasmExecutionMethod::Interpreted, None)
+		);
 		let executor = LocalCallExecutor::new(self.backend.clone(), executor, self.keystore.take());
 
 		self.build_with_executor(executor)

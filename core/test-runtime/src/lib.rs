@@ -25,14 +25,7 @@ pub mod system;
 use rstd::{prelude::*, marker::PhantomData};
 use codec::{Encode, Decode, Input, Error};
 
-use primitives::{
-	Blake2Hasher,
-	OpaqueMetadata,
-	testing::{
-		ED25519,
-		SR25519,
-	}
-};
+use primitives::{Blake2Hasher, OpaqueMetadata, RuntimeDebug};
 use app_crypto::{ed25519, sr25519, RuntimeAppPublic};
 pub use app_crypto;
 use trie_db::{TrieMut, Trie};
@@ -93,8 +86,7 @@ pub fn native_version() -> NativeVersion {
 }
 
 /// Calls in transactions.
-#[derive(Clone, PartialEq, Eq, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
 pub struct Transfer {
 	pub from: AccountId,
 	pub to: AccountId,
@@ -113,8 +105,7 @@ impl Transfer {
 }
 
 /// Extrinsic for test-runtime.
-#[derive(Clone, PartialEq, Eq, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
 pub enum Extrinsic {
 	AuthoritiesChange(Vec<AuthorityId>),
 	Transfer(Transfer, AccountSignature),
@@ -353,8 +344,7 @@ impl_outer_origin!{
 	pub enum Origin for Runtime where system = srml_system {}
 }
 
-#[derive(Clone, Encode, Decode, Eq, PartialEq)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
 pub struct Event;
 
 impl From<srml_system::Event> for Event {
@@ -382,7 +372,6 @@ impl srml_system::Trait for Runtime {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type WeightMultiplierUpdate = ();
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
 	type MaximumBlockLength = MaximumBlockLength;
@@ -405,6 +394,10 @@ parameter_types! {
 impl srml_babe::Trait for Runtime {
 	type EpochDuration = EpochDuration;
 	type ExpectedBlockTime = ExpectedBlockTime;
+	// there is no actual runtime in this test-runtime, so testing crates
+	// are manually adding the digests. normally in this situation you'd use
+	// srml_babe::SameAuthoritiesForever.
+	type EpochChangeTrigger = srml_babe::ExternalTrigger;
 }
 
 /// Adds one to the given input and returns the final result.
@@ -453,9 +446,7 @@ fn code_using_trie() -> u64 {
 
 impl_opaque_keys! {
 	pub struct SessionKeys {
-		#[id(ED25519)]
 		pub ed25519: ed25519::AppPublic,
-		#[id(SR25519)]
 		pub sr25519: sr25519::AppPublic,
 	}
 }
@@ -642,6 +633,12 @@ cfg_if! {
 			impl session::SessionKeys<Block> for Runtime {
 				fn generate_session_keys(_: Option<Vec<u8>>) -> Vec<u8> {
 					SessionKeys::generate(None)
+				}
+			}
+
+			impl srml_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {
+				fn account_nonce(_account: AccountId) -> Index {
+					0
 				}
 			}
 		}
@@ -852,6 +849,12 @@ cfg_if! {
 			impl session::SessionKeys<Block> for Runtime {
 				fn generate_session_keys(_: Option<Vec<u8>>) -> Vec<u8> {
 					SessionKeys::generate(None)
+				}
+			}
+
+			impl srml_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {
+				fn account_nonce(_account: AccountId) -> Index {
+					0
 				}
 			}
 		}

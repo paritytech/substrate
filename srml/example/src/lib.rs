@@ -258,13 +258,51 @@ use support::{dispatch::Result, decl_module, decl_storage, decl_event};
 use system::{ensure_signed, ensure_root};
 use codec::{Encode, Decode};
 use sr_primitives::{
-	traits::{SignedExtension, Bounded}, weights::{SimpleDispatchInfo, DispatchInfo},
+	traits::{SignedExtension, Bounded, SaturatedConversion},
+	weights::{SimpleDispatchInfo, DispatchInfo, DispatchClass, ClassifyDispatch, WeighData, Weight},
 	transaction_validity::{
 		ValidTransaction, TransactionValidityError, InvalidTransaction, TransactionValidity,
 	},
 };
 
-/// Our module's configuration trait. All our types and consts go in here. If the
+// A custom weight calculator tailored for the dispatch call `set_dummy()`. This actually examines
+// the arguments and makes a decision based upon them.
+//
+// The `WeightData<T>` trait has access to the arguments of the dispatch that it wants to assign a
+// weight to. Nonetheless, the trait itself can not make any assumptions about what the generic type
+// of the arguments (`T`) is. Based on our needs, we could replace `T` with a more concrete type
+// while implementing the trait. The `decl_module!` expects whatever implements `WeighData<T>` to
+// replace `T` with a tuple of the dispatch arguments. This is exactly how we will craft the
+// implementation below.
+//
+// The rules of `WeightForSetDummy` are as follows:
+// - The final weight of each dispatch is calculated as the argument of the call multiplied by the
+//   parameter given to the `WeightForSetDummy`'s constructor.
+// - assigns a dispatch class `operational` if the argument of the call is more than 1000.
+struct WeightForSetDummy<T: balances::Trait>(BalanceOf<T>);
+
+impl<T: balances::Trait> WeighData<(&BalanceOf<T>,)> for WeightForSetDummy<T>
+{
+	fn weigh_data(&self, target: (&BalanceOf<T>,)) -> Weight {
+		let multiplier = self.0;
+		(*target.0 * multiplier).saturated_into::<u32>()
+	}
+}
+
+impl<T: balances::Trait> ClassifyDispatch<(&BalanceOf<T>,)> for WeightForSetDummy<T> {
+	fn classify_dispatch(&self, target: (&BalanceOf<T>,)) -> DispatchClass {
+		if *target.0 > <BalanceOf<T>>::from(1000u32) {
+			DispatchClass::Operational
+		} else {
+			DispatchClass::Normal
+		}
+	}
+}
+
+/// A type alias for the balance type from this module's point of view.
+type BalanceOf<T> = <T as balances::Trait>::Balance;
+
+/// Our module's configuration trait. All our types and constants go in here. If the
 /// module is dependent on specific other modules, then their configuration traits
 /// should be added to our implied traits list.
 ///
@@ -280,7 +318,7 @@ decl_storage! {
 	// keep things around between blocks.
 	trait Store for Module<T: Trait> as Example {
 		// Any storage declarations of the form:
-		//   `pub? Name get(getter_name)? [config()|config(myname)] [build(|_| {...})] : <type> (= <new_default_value>)?;`
+		//   `pub? Name get(fn getter_name)? [config()|config(myname)] [build(|_| {...})] : <type> (= <new_default_value>)?;`
 		// where `<type>` is either:
 		//   - `Type` (a basic value item); or
 		//   - `map KeyType => ValueType` (a map item).
@@ -293,7 +331,7 @@ decl_storage! {
 		//   - `Foo::put(1); Foo::get()` returns `1`;
 		//   - `Foo::kill(); Foo::get()` returns `0` (u32::default()).
 		// e.g. Foo: u32;
-		// e.g. pub Bar get(bar): map T::AccountId => Vec<(T::Balance, u64)>;
+		// e.g. pub Bar get(fn bar): map T::AccountId => Vec<(T::Balance, u64)>;
 		//
 		// For basic value items, you'll get a type which implements
 		// `support::StorageValue`. For map items, you'll get a type which
@@ -302,13 +340,13 @@ decl_storage! {
 		// If they have a getter (`get(getter_name)`), then your module will come
 		// equipped with `fn getter_name() -> Type` for basic value items or
 		// `fn getter_name(key: KeyType) -> ValueType` for map items.
-		Dummy get(dummy) config(): Option<T::Balance>;
+		Dummy get(fn dummy) config(): Option<T::Balance>;
 
 		// A map that has enumerable entries.
-		Bar get(bar) config(): linked_map T::AccountId => T::Balance;
+		Bar get(fn bar) config(): linked_map T::AccountId => T::Balance;
 
 		// this one uses the default, we'll demonstrate the usage of 'mutate' API.
-		Foo get(foo) config(): T::Balance;
+		Foo get(fn foo) config(): T::Balance;
 	}
 }
 
@@ -411,9 +449,8 @@ decl_module! {
 		// The _right-hand-side_ value of the `#[weight]` attribute can be any type that implements
 		// a set of traits, namely [`WeighData`] and [`ClassifyDispatch`]. The former conveys the
 		// weight (a numeric representation of pure execution time and difficulty) of the
-		// transaction and the latter demonstrates the `DispatchClass` of the call. A higher weight
-		//  means a larger transaction (less of which can be placed in a single block). See the
-		// `CheckWeight` signed extension struct in the `system` module for more information.
+		// transaction and the latter demonstrates the [`DispatchClass`] of the call. A higher
+		// weight means a larger transaction (less of which can be placed in a single block).
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
 		fn accumulate_dummy(origin, increase_by: T::Balance) -> Result {
 			// This is a public call, so we ensure that the origin is some signed account.
@@ -454,6 +491,7 @@ decl_module! {
 		// without worrying about gameability or attack scenarios.
 		// If you not specify `Result` explicitly as return value, it will be added automatically
 		// for you and `Ok(())` will be returned.
+		#[weight = WeightForSetDummy::<T>(<BalanceOf<T>>::from(100u32))]
 		fn set_dummy(origin, #[compact] new_value: T::Balance) {
 			ensure_root(origin)?;
 			// Put the new value into storage.
@@ -545,10 +583,9 @@ impl<T: Trait> Module<T> {
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
 pub struct WatchDummy<T: Trait + Send + Sync>(PhantomData<T>);
 
-#[cfg(feature = "std")]
 impl<T: Trait + Send + Sync> rstd::fmt::Debug for WatchDummy<T> {
 	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
-		write!(f, "WatchDummy<T>")
+		write!(f, "WatchDummy")
 	}
 }
 
@@ -595,12 +632,12 @@ mod tests {
 	use super::*;
 
 	use support::{assert_ok, impl_outer_origin, parameter_types};
-	use runtime_io::with_externalities;
-	use primitives::{H256, Blake2Hasher};
+	use primitives::H256;
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
 	use sr_primitives::{
-		Perbill, traits::{BlakeTwo256, OnInitialize, OnFinalize, IdentityLookup}, testing::Header
+		Perbill, weights::GetDispatchInfo, testing::Header,
+		traits::{BlakeTwo256, OnInitialize, OnFinalize, IdentityLookup},
 	};
 
 	impl_outer_origin! {
@@ -628,7 +665,6 @@ mod tests {
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
-		type WeightMultiplierUpdate = ();
 		type Event = ();
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
@@ -640,23 +676,17 @@ mod tests {
 		pub const ExistentialDeposit: u64 = 0;
 		pub const TransferFee: u64 = 0;
 		pub const CreationFee: u64 = 0;
-		pub const TransactionBaseFee: u64 = 0;
-		pub const TransactionByteFee: u64 = 0;
 	}
 	impl balances::Trait for Test {
 		type Balance = u64;
 		type OnFreeBalanceZero = ();
 		type OnNewAccount = ();
 		type Event = ();
-		type TransactionPayment = ();
 		type TransferPayment = ();
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
 		type TransferFee = TransferFee;
 		type CreationFee = CreationFee;
-		type TransactionBaseFee = TransactionBaseFee;
-		type TransactionByteFee = TransactionByteFee;
-		type WeightToFee = ();
 	}
 	impl Trait for Test {
 		type Event = ();
@@ -665,7 +695,7 @@ mod tests {
 
 	// This function basically just builds a genesis storage key/value store according to
 	// our desired mockup.
-	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+	fn new_test_ext() -> runtime_io::TestExternalities {
 		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		// We use default for brevity, but you can configure as desired if needed.
 		balances::GenesisConfig::<Test>::default().assimilate_storage(&mut t).unwrap();
@@ -680,7 +710,7 @@ mod tests {
 
 	#[test]
 	fn it_works_for_optional_value() {
-		with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			// Check that GenesisBuilder works properly.
 			assert_eq!(Example::dummy(), Some(42));
 
@@ -701,7 +731,7 @@ mod tests {
 
 	#[test]
 	fn it_works_for_default_value() {
-		with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			assert_eq!(Example::foo(), 24);
 			assert_ok!(Example::accumulate_foo(Origin::signed(1), 1));
 			assert_eq!(Example::foo(), 25);
@@ -710,7 +740,7 @@ mod tests {
 
 	#[test]
 	fn signed_ext_watch_dummy_works() {
-		with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			let call = <Call<Test>>::set_dummy(10);
 			let info = DispatchInfo::default();
 
@@ -725,5 +755,19 @@ mod tests {
 				InvalidTransaction::ExhaustsResources.into(),
 			);
 		})
+	}
+
+	#[test]
+	fn weights_work() {
+		// must have a default weight.
+		let default_call = <Call<Test>>::accumulate_dummy(10);
+		let info = default_call.get_dispatch_info();
+		// aka. `let info = <Call<Test> as GetDispatchInfo>::get_dispatch_info(&default_call);`
+		assert_eq!(info.weight, 10_000);
+
+		// must have a custom weight of `100 * arg = 2000`
+		let custom_call = <Call<Test>>::set_dummy(20);
+		let info = custom_call.get_dispatch_info();
+		assert_eq!(info.weight, 2000);
 	}
 }

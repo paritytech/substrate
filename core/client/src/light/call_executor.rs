@@ -16,21 +16,20 @@
 
 //! Methods that light client could use to execute runtime calls.
 
-use std::{
-	collections::HashSet, sync::Arc, panic::UnwindSafe, result,
-	cell::RefCell, rc::Rc,
-};
+use std::{sync::Arc, panic::UnwindSafe, result, cell::RefCell, rc::Rc};
 
 use codec::{Encode, Decode};
 use primitives::{
-	offchain, H256, Blake2Hasher, convert_hash, NativeOrEncoded,
+	offchain::OffchainExt, H256, Blake2Hasher, convert_hash, NativeOrEncoded,
 	traits::CodeExecutor,
 };
-use sr_primitives::generic::BlockId;
-use sr_primitives::traits::{One, Block as BlockT, Header as HeaderT, NumberFor};
+use sr_primitives::{
+	generic::BlockId, traits::{One, Block as BlockT, Header as HeaderT, NumberFor},
+};
 use state_machine::{
 	self, Backend as StateBackend, OverlayedChanges, ExecutionStrategy, create_proof_check_backend,
-	execution_proof_check_on_trie_backend, ExecutionManager, ChangesTrieTransaction,
+	execution_proof_check_on_trie_backend, ExecutionManager, ChangesTrieTransaction, StorageProof,
+	merge_storage_proofs,
 };
 use hash_db::Hasher;
 
@@ -74,15 +73,13 @@ impl<Block, B, Local> CallExecutor<Block, Blake2Hasher> for
 {
 	type Error = ClientError;
 
-	fn call<
-		O: offchain::Externalities,
-	>(
+	fn call(
 		&self,
 		id: &BlockId<Block>,
 		method: &str,
 		call_data: &[u8],
 		strategy: ExecutionStrategy,
-		side_effects_handler: Option<&mut O>,
+		side_effects_handler: Option<OffchainExt>,
 	) -> ClientResult<Vec<u8>> {
 		match self.backend.is_local_state_available(id) {
 			true => self.local.call(id, method, call_data, strategy, side_effects_handler),
@@ -92,7 +89,6 @@ impl<Block, B, Local> CallExecutor<Block, Blake2Hasher> for
 
 	fn contextual_call<
 		'a,
-		O: offchain::Externalities,
 		IB: Fn() -> ClientResult<()>,
 		EM: Fn(
 			Result<NativeOrEncoded<R>, Self::Error>,
@@ -110,7 +106,7 @@ impl<Block, B, Local> CallExecutor<Block, Blake2Hasher> for
 		initialize_block: InitializeBlock<'a, Block>,
 		_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
-		side_effects_handler: Option<&mut O>,
+		side_effects_handler: Option<OffchainExt>,
 		recorder: &Option<Rc<RefCell<ProofRecorder<Block>>>>,
 		enable_keystore: bool,
 	) -> ClientResult<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone {
@@ -119,7 +115,6 @@ impl<Block, B, Local> CallExecutor<Block, Blake2Hasher> for
 
 		match self.backend.is_local_state_available(at) {
 			true => CallExecutor::contextual_call::<
-				_,
 				_,
 				fn(
 					Result<NativeOrEncoded<R>, Local::Error>,
@@ -153,7 +148,6 @@ impl<Block, B, Local> CallExecutor<Block, Blake2Hasher> for
 	}
 
 	fn call_at_state<
-		O: offchain::Externalities,
 		S: StateBackend<Blake2Hasher>,
 		FF: FnOnce(
 			Result<NativeOrEncoded<R>, Self::Error>,
@@ -168,7 +162,7 @@ impl<Block, B, Local> CallExecutor<Block, Blake2Hasher> for
 		_call_data: &[u8],
 		_manager: ExecutionManager<FF>,
 		_native_call: Option<NC>,
-		_side_effects_handler: Option<&mut O>,
+		_side_effects_handler: Option<OffchainExt>,
 	) -> ClientResult<(
 		NativeOrEncoded<R>,
 		(S::Transaction, <Blake2Hasher as Hasher>::Out),
@@ -183,7 +177,7 @@ impl<Block, B, Local> CallExecutor<Block, Blake2Hasher> for
 		_changes: &mut OverlayedChanges,
 		_method: &str,
 		_call_data: &[u8]
-	) -> ClientResult<(Vec<u8>, Vec<Vec<u8>>)> {
+	) -> ClientResult<(Vec<u8>, StorageProof)> {
 		Err(ClientError::NotAvailableOnLightClient)
 	}
 
@@ -202,7 +196,7 @@ pub fn prove_execution<Block, S, E>(
 	executor: &E,
 	method: &str,
 	call_data: &[u8],
-) -> ClientResult<(Vec<u8>, Vec<Vec<u8>>)>
+) -> ClientResult<(Vec<u8>, StorageProof)>
 	where
 		Block: BlockT<Hash=H256>,
 		S: StateBackend<Blake2Hasher>,
@@ -222,11 +216,7 @@ pub fn prove_execution<Block, S, E>(
 
 	// execute method + record execution proof
 	let (result, exec_proof) = executor.prove_at_trie_state(&trie_state, &mut changes, method, call_data)?;
-	let total_proof = init_proof.into_iter()
-		.chain(exec_proof.into_iter())
-		.collect::<HashSet<_>>()
-		.into_iter()
-		.collect();
+	let total_proof = merge_storage_proofs(vec![init_proof, exec_proof]);
 
 	Ok((result, total_proof))
 }
@@ -238,15 +228,14 @@ pub fn prove_execution<Block, S, E>(
 pub fn check_execution_proof<Header, E, H>(
 	executor: &E,
 	request: &RemoteCallRequest<Header>,
-	remote_proof: Vec<Vec<u8>>,
+	remote_proof: StorageProof,
 ) -> ClientResult<Vec<u8>>
 	where
 		Header: HeaderT,
-		E: CodeExecutor<H>,
-		H: Hasher,
-		H::Out: Ord + 'static,
+		E: CodeExecutor,
+		H: Hasher<Out=H256>,
 {
-	check_execution_proof_with_make_header(
+	check_execution_proof_with_make_header::<Header, E, H, _>(
 		executor,
 		request,
 		remote_proof,
@@ -263,14 +252,13 @@ pub fn check_execution_proof<Header, E, H>(
 fn check_execution_proof_with_make_header<Header, E, H, MakeNextHeader: Fn(&Header) -> Header>(
 	executor: &E,
 	request: &RemoteCallRequest<Header>,
-	remote_proof: Vec<Vec<u8>>,
+	remote_proof: StorageProof,
 	make_next_header: MakeNextHeader,
 ) -> ClientResult<Vec<u8>>
 	where
 		Header: HeaderT,
-		E: CodeExecutor<H>,
-		H: Hasher,
-		H::Out: Ord + 'static,
+		E: CodeExecutor,
+		H: Hasher<Out=H256>,
 {
 	let local_state_root = request.header.state_root();
 	let root: H::Out = convert_hash(&local_state_root);
@@ -301,33 +289,32 @@ fn check_execution_proof_with_make_header<Header, E, H, MakeNextHeader: Fn(&Head
 
 #[cfg(test)]
 mod tests {
+	use super::*;
 	use consensus::BlockOrigin;
-	use primitives::offchain::NeverOffchainExt;
 	use test_client::{self, runtime::{Header, Digest, Block}, ClientExt, TestClient};
-	use executor::NativeExecutor;
+	use executor::{NativeExecutor, WasmExecutionMethod};
+	use primitives::Blake2Hasher;
 	use crate::backend::{Backend, NewBlockState};
 	use crate::in_mem::Backend as InMemBackend;
-	use super::*;
 
 	struct DummyCallExecutor;
 
 	impl CallExecutor<Block, Blake2Hasher> for DummyCallExecutor {
 		type Error = ClientError;
 
-		fn call<O: offchain::Externalities>(
+		fn call(
 			&self,
 			_id: &BlockId<Block>,
 			_method: &str,
 			_call_data: &[u8],
 			_strategy: ExecutionStrategy,
-			_side_effects_handler: Option<&mut O>,
+			_side_effects_handler: Option<OffchainExt>,
 		) -> Result<Vec<u8>, ClientError> {
 			Ok(vec![42])
 		}
 
 		fn contextual_call<
 			'a,
-			O: offchain::Externalities,
 			IB: Fn() -> ClientResult<()>,
 			EM: Fn(
 				Result<NativeOrEncoded<R>, Self::Error>,
@@ -345,7 +332,7 @@ mod tests {
 			_initialize_block: InitializeBlock<'a, Block>,
 			_execution_manager: ExecutionManager<EM>,
 			_native_call: Option<NC>,
-			_side_effects_handler: Option<&mut O>,
+			_side_effects_handler: Option<OffchainExt>,
 			_proof_recorder: &Option<Rc<RefCell<ProofRecorder<Block>>>>,
 			_enable_keystore: bool,
 		) -> ClientResult<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone {
@@ -357,7 +344,6 @@ mod tests {
 		}
 
 		fn call_at_state<
-			O: offchain::Externalities,
 			S: state_machine::Backend<Blake2Hasher>,
 			F: FnOnce(
 				Result<NativeOrEncoded<R>, Self::Error>,
@@ -372,7 +358,7 @@ mod tests {
 			_call_data: &[u8],
 			_manager: ExecutionManager<F>,
 			_native_call: Option<NC>,
-			_side_effects_handler: Option<&mut O>,
+			_side_effects_handler: Option<OffchainExt>,
 		) -> Result<
 			(
 				NativeOrEncoded<R>,
@@ -390,13 +376,17 @@ mod tests {
 			_overlay: &mut OverlayedChanges,
 			_method: &str,
 			_call_data: &[u8]
-		) -> Result<(Vec<u8>, Vec<Vec<u8>>), ClientError> {
+		) -> Result<(Vec<u8>, StorageProof), ClientError> {
 			unreachable!()
 		}
 
 		fn native_runtime_version(&self) -> Option<&NativeVersion> {
 			unreachable!()
 		}
+	}
+
+	fn local_executor() -> NativeExecutor<test_client::LocalExecutor> {
+		NativeExecutor::new(WasmExecutionMethod::Interpreted, None)
 	}
 
 	#[test]
@@ -413,14 +403,17 @@ mod tests {
 			).unwrap();
 
 			// check remote execution proof locally
-			let local_executor = NativeExecutor::<test_client::LocalExecutor>::new(None);
-			let local_result = check_execution_proof(&local_executor, &RemoteCallRequest {
-				block: test_client::runtime::Hash::default(),
-				header: remote_header,
-				method: method.into(),
-				call_data: vec![],
-				retry_count: None,
-			}, remote_execution_proof).unwrap();
+			let local_result = check_execution_proof::<_, _, Blake2Hasher>(
+				&local_executor(),
+				&RemoteCallRequest {
+					block: test_client::runtime::Hash::default(),
+					header: remote_header,
+					method: method.into(),
+					call_data: vec![],
+					retry_count: None,
+				},
+				remote_execution_proof,
+			).unwrap();
 
 			(remote_result, local_result)
 		}
@@ -437,9 +430,8 @@ mod tests {
 			).unwrap();
 
 			// check remote execution proof locally
-			let local_executor = NativeExecutor::<test_client::LocalExecutor>::new(None);
-			let execution_result = check_execution_proof_with_make_header(
-				&local_executor,
+			let execution_result = check_execution_proof_with_make_header::<_, _, Blake2Hasher, _>(
+				&local_executor(),
 				&RemoteCallRequest {
 					block: test_client::runtime::Hash::default(),
 					header: remote_header,
@@ -516,7 +508,7 @@ mod tests {
 				"test_method",
 				&[],
 				ExecutionStrategy::NativeElseWasm,
-				NeverOffchainExt::new(),
+				None,
 			).unwrap(),
 			vec![42],
 		);
@@ -526,7 +518,7 @@ mod tests {
 			"test_method",
 			&[],
 			ExecutionStrategy::NativeElseWasm,
-			NeverOffchainExt::new(),
+			None,
 		);
 
 		match call_on_unavailable {

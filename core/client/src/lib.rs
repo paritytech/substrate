@@ -49,7 +49,7 @@
 //! use substrate_client::{Client, in_mem::Backend, LocalCallExecutor};
 //! use primitives::Blake2Hasher;
 //! use sr_primitives::{StorageOverlay, ChildrenStorageOverlay};
-//! use executor::NativeExecutor;
+//! use executor::{NativeExecutor, WasmExecutionMethod};
 //!
 //! // In this example, we're using the `Block` and `RuntimeApi` types from the
 //! // `substrate-test-runtime-client` crate. These types are automatically generated when
@@ -62,7 +62,7 @@
 //! 	backend.clone(),
 //! 	LocalCallExecutor::new(
 //! 		backend.clone(),
-//! 		NativeExecutor::<LocalExecutor>::new(None),
+//! 		NativeExecutor::<LocalExecutor>::new(WasmExecutionMethod::Interpreted, None),
 //! 		None,
 //!		),
 //! 	// This parameter provides the storage for the chain genesis.
@@ -122,7 +122,7 @@ pub use crate::client::{
 #[cfg(feature = "std")]
 pub use crate::notifications::{StorageEventStream, StorageChangeSet};
 #[cfg(feature = "std")]
-pub use state_machine::ExecutionStrategy;
+pub use state_machine::{ExecutionStrategy, StorageProof};
 #[cfg(feature = "std")]
 pub use crate::leaves::LeafSet;
 #[cfg(feature = "std")]

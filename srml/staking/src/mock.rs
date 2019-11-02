@@ -17,12 +17,12 @@
 //! Test utilities
 
 use std::{collections::HashSet, cell::RefCell};
-use sr_primitives::Perbill;
+use sr_primitives::{Perbill, KeyTypeId};
 use sr_primitives::curve::PiecewiseLinear;
 use sr_primitives::traits::{IdentityLookup, Convert, OpaqueKeys, OnInitialize, SaturatedConversion};
 use sr_primitives::testing::{Header, UintAuthorityId};
 use sr_staking_primitives::SessionIndex;
-use primitives::{H256, Blake2Hasher};
+use primitives::{H256, crypto::key_types};
 use runtime_io;
 use support::{assert_ok, impl_outer_origin, parameter_types, StorageLinkedMap};
 use support::traits::{Currency, Get, FindAuthor};
@@ -52,6 +52,8 @@ thread_local! {
 
 pub struct TestSessionHandler;
 impl session::SessionHandler<AccountId> for TestSessionHandler {
+	const KEY_TYPE_IDS: &'static [KeyTypeId] = &[key_types::DUMMY];
+
 	fn on_genesis_session<Ks: OpaqueKeys>(_validators: &[(AccountId, Ks)]) {}
 
 	fn on_new_session<Ks: OpaqueKeys>(
@@ -118,7 +120,6 @@ impl system::Trait for Test {
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type WeightMultiplierUpdate = ();
 	type Event = ();
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
@@ -129,23 +130,17 @@ impl system::Trait for Test {
 parameter_types! {
 	pub const TransferFee: Balance = 0;
 	pub const CreationFee: Balance = 0;
-	pub const TransactionBaseFee: u64 = 0;
-	pub const TransactionByteFee: u64 = 0;
 }
 impl balances::Trait for Test {
 	type Balance = Balance;
 	type OnFreeBalanceZero = Staking;
 	type OnNewAccount = ();
 	type Event = ();
-	type TransactionPayment = ();
 	type TransferPayment = ();
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type TransferFee = TransferFee;
 	type CreationFee = CreationFee;
-	type TransactionBaseFee = TransactionBaseFee;
-	type TransactionByteFee = TransactionByteFee;
-	type WeightToFee = ();
 }
 parameter_types! {
 	pub const Period: BlockNumber = 1;
@@ -274,7 +269,7 @@ impl ExtBuilder {
 	pub fn set_associated_consts(&self) {
 		EXISTENTIAL_DEPOSIT.with(|v| *v.borrow_mut() = self.existential_deposit);
 	}
-	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
+	pub fn build(self) -> runtime_io::TestExternalities {
 		self.set_associated_consts();
 		let mut storage = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		let balance_factor = if self.existential_deposit > 0 {
@@ -340,8 +335,8 @@ impl ExtBuilder {
 			keys: validators.iter().map(|x| (*x, UintAuthorityId(*x))).collect(),
 		}.assimilate_storage(&mut storage);
 
-		let mut ext = storage.into();
-		runtime_io::with_externalities(&mut ext, || {
+		let mut ext = runtime_io::TestExternalities::from(storage);
+		ext.execute_with(|| {
 			let validators = Session::validators();
 			SESSION.with(|x|
 				*x.borrow_mut() = (validators.clone(), HashSet::new())

@@ -29,14 +29,16 @@ support::decl_event!(
 
 support::decl_error! {
 	pub enum Error {
+		/// Test error documentation
 		TestError,
+		/// Error documentation
+		/// with multiple lines
 		AnotherError
 	}
 }
 
 /// Origin for the system module.
-#[derive(PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(PartialEq, Eq, Clone, sr_primitives::RuntimeDebug)]
 pub enum RawOrigin<AccountId> {
 	Root,
 	Signed(AccountId),

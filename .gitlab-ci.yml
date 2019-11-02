@@ -49,6 +49,12 @@ variables:
     - schedules
     - web
     - /^[0-9]+$/                   # PRs
+  retry:
+    max: 2
+    when: 
+      - runner_system_failure
+      - unknown_failure
+      - api_failure
   tags:
     - linux-docker
 
@@ -200,20 +206,9 @@ check-web-wasm:
     - time cargo web build -p substrate-consensus-aura
     - time cargo web build -p substrate-consensus-babe
     - time cargo web build -p substrate-consensus-common
-    - time cargo web build -p substrate-keyring
-    - time cargo web build -p substrate-keystore
-    - time cargo web build -p substrate-executor
-    - time cargo web build -p substrate-network
-    - time cargo web build -p substrate-panic-handler
-    - time cargo web build -p substrate-peerset
-    - time cargo web build -p substrate-primitives
-    # TODO: we can't use cargo web until https://github.com/paritytech/jsonrpc/pull/436 is deployed
-    - time cargo build -p substrate-rpc-servers --target wasm32-unknown-unknown
-    - time cargo web build -p substrate-serializer
-    - time cargo web build -p substrate-state-db
-    - time cargo web build -p substrate-state-machine
     - time cargo web build -p substrate-telemetry
-    - time cargo web build -p substrate-trie
+    # Note: the command below is a bit weird because several Cargo issues prevent us from compiling the node in a more straight-forward way.
+    - time cargo build --manifest-path=node/cli/Cargo.toml --no-default-features --features "browser" --target=wasm32-unknown-unknown
     - sccache -s
 
 node-exits:
@@ -288,7 +283,7 @@ build-rust-doc-release:
   <<:                              *build-only
   script:
     - rm -f ./crate-docs/index.html # use it as an indicator if the job succeeds
-    - BUILD_DUMMY_WASM_BINARY=1 time cargo +nightly doc --release --all --verbose
+    - BUILD_DUMMY_WASM_BINARY=1 RUSTDOCFLAGS="--html-in-header $(pwd)/rustdoc-header.html" time cargo +nightly doc --release --all --verbose
     - cp -R ./target/doc ./crate-docs
     - echo "<meta http-equiv=refresh content=0;url=substrate_service/index.html>" > ./crate-docs/index.html
     - sccache -s

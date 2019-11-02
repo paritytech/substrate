@@ -17,14 +17,13 @@
 //! Offchain workers types
 
 use codec::{Encode, Decode};
-use rstd::prelude::{Vec, Box};
-use rstd::convert::TryFrom;
+use rstd::{prelude::{Vec, Box}, convert::TryFrom};
+use crate::RuntimeDebug;
 
 pub use crate::crypto::KeyTypeId;
 
 /// A type of supported crypto.
-#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
 #[repr(C)]
 pub enum StorageKind {
 	/// Persistent storage is non-revertible and not fork-aware. It means that any value
@@ -60,8 +59,8 @@ impl From<StorageKind> for u32 {
 }
 
 /// Opaque type for offchain http requests.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-#[cfg_attr(feature = "std", derive(Debug, Hash))]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Hash))]
 pub struct HttpRequestId(pub u16);
 
 impl From<HttpRequestId> for u32 {
@@ -71,8 +70,7 @@ impl From<HttpRequestId> for u32 {
 }
 
 /// An error enum returned by some http methods.
-#[derive(Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Clone, Copy, PartialEq, Eq, RuntimeDebug)]
 #[repr(C)]
 pub enum HttpError {
 	/// The requested action couldn't been completed within a deadline.
@@ -103,8 +101,7 @@ impl From<HttpError> for u32 {
 }
 
 /// Status of the HTTP request
-#[derive(Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Clone, Copy, PartialEq, Eq, RuntimeDebug)]
 pub enum HttpRequestStatus {
 	/// Deadline was reached while we waited for this request to finish.
 	///
@@ -150,8 +147,7 @@ impl TryFrom<u32> for HttpRequestStatus {
 
 /// A blob to hold information about the local node's network state
 /// without committing to its format.
-#[derive(Clone, Eq, PartialEq, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug)]
 pub struct OpaqueNetworkState {
 	/// PeerId of the local node.
 	pub peer_id: OpaquePeerId,
@@ -160,8 +156,7 @@ pub struct OpaqueNetworkState {
 }
 
 /// Simple blob to hold a `PeerId` without committing to its format.
-#[derive(Default, Clone, Eq, PartialEq, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Default, Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug)]
 pub struct OpaquePeerId(pub Vec<u8>);
 
 impl OpaquePeerId {
@@ -172,8 +167,7 @@ impl OpaquePeerId {
 }
 
 /// Simple blob to hold a `Multiaddr` without committing to its format.
-#[derive(Clone, Eq, PartialEq, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug)]
 pub struct OpaqueMultiaddr(pub Vec<u8>);
 
 impl OpaqueMultiaddr {
@@ -184,13 +178,11 @@ impl OpaqueMultiaddr {
 }
 
 /// Opaque timestamp type
-#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Default)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Default, RuntimeDebug)]
 pub struct Timestamp(u64);
 
 /// Duration type
-#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Default)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Default, RuntimeDebug)]
 pub struct Duration(u64);
 
 impl Duration {
@@ -663,110 +655,17 @@ impl<T: Externalities> Externalities for LimitedExternalities<T> {
 	}
 }
 
-/// An implementation of offchain extensions that should never be triggered.
-pub enum NeverOffchainExt {}
-
-impl NeverOffchainExt {
-	/// Create new offchain extensions.
-	pub fn new<'a>() -> Option<&'a mut Self> {
-		None
-	}
+#[cfg(feature = "std")]
+externalities::decl_extension! {
+	/// The offchain extension that will be registered at the Substrate externalities.
+	pub struct OffchainExt(Box<dyn Externalities>);
 }
 
-impl Externalities for NeverOffchainExt {
-	fn is_validator(&self) -> bool {
-		unreachable!()
-	}
-
-	fn submit_transaction(&mut self, _extrinsic: Vec<u8>) -> Result<(), ()> {
-		unreachable!()
-	}
-
-	fn network_state(
-		&self,
-	) -> Result<OpaqueNetworkState, ()> {
-		unreachable!()
-	}
-
-	fn timestamp(&mut self) -> Timestamp {
-		unreachable!()
-	}
-
-	fn sleep_until(&mut self, _deadline: Timestamp) {
-		unreachable!()
-	}
-
-	fn random_seed(&mut self) -> [u8; 32] {
-		unreachable!()
-	}
-
-	fn local_storage_set(&mut self, _kind: StorageKind, _key: &[u8], _value: &[u8]) {
-		unreachable!()
-	}
-
-	fn local_storage_compare_and_set(
-		&mut self,
-		_kind: StorageKind,
-		_key: &[u8],
-		_old_value: Option<&[u8]>,
-		_new_value: &[u8],
-	) -> bool {
-		unreachable!()
-	}
-
-	fn local_storage_get(&mut self, _kind: StorageKind, _key: &[u8]) -> Option<Vec<u8>> {
-		unreachable!()
-	}
-
-	fn http_request_start(
-		&mut self,
-		_method: &str,
-		_uri: &str,
-		_meta: &[u8]
-	) -> Result<HttpRequestId, ()> {
-		unreachable!()
-	}
-
-	fn http_request_add_header(
-		&mut self,
-		_request_id: HttpRequestId,
-		_name: &str,
-		_value: &str
-	) -> Result<(), ()> {
-		unreachable!()
-	}
-
-	fn http_request_write_body(
-		&mut self,
-		_request_id: HttpRequestId,
-		_chunk: &[u8],
-		_deadline: Option<Timestamp>
-	) -> Result<(), HttpError> {
-		unreachable!()
-	}
-
-	fn http_response_wait(
-		&mut self,
-		_ids: &[HttpRequestId],
-		_deadline: Option<Timestamp>
-	) -> Vec<HttpRequestStatus> {
-		unreachable!()
-	}
-
-	fn http_response_headers(
-		&mut self,
-		_request_id: HttpRequestId
-	) -> Vec<(Vec<u8>, Vec<u8>)> {
-		unreachable!()
-	}
-
-	fn http_response_read_body(
-		&mut self,
-		_request_id: HttpRequestId,
-		_buffer: &mut [u8],
-		_deadline: Option<Timestamp>
-	) -> Result<usize, HttpError> {
-		unreachable!()
+#[cfg(feature = "std")]
+impl OffchainExt {
+	/// Create a new instance of `Self`.
+	pub fn new<O: Externalities + 'static>(offchain: O) -> Self {
+		Self(Box::new(offchain))
 	}
 }
 

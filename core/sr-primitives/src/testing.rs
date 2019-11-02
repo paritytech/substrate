@@ -117,10 +117,10 @@ impl app_crypto::RuntimeAppPublic for UintAuthorityId {
 }
 
 impl OpaqueKeys for UintAuthorityId {
-	type KeyTypeIds = std::iter::Cloned<std::slice::Iter<'static, KeyTypeId>>;
+	type KeyTypeIdProviders = ();
 
-	fn key_ids() -> Self::KeyTypeIds {
-		[key_types::DUMMY].iter().cloned()
+	fn key_ids() -> &'static [KeyTypeId] {
+		&[key_types::DUMMY]
 	}
 
 	fn get_raw(&self, _: KeyTypeId) -> &[u8] {
@@ -130,6 +130,10 @@ impl OpaqueKeys for UintAuthorityId {
 	fn get<T: Decode>(&self, _: KeyTypeId) -> Option<T> {
 		self.using_encoded(|mut x| T::decode(&mut x)).ok()
 	}
+}
+
+impl crate::BoundToRuntimeAppPublic for UintAuthorityId {
+	type Public = Self;
 }
 
 /// Digest item
@@ -258,6 +262,9 @@ impl<Xt: 'static + Codec + Sized + Send + Sync + Serialize + Clone + Eq + Debug 
 	}
 	fn new(header: Self::Header, extrinsics: Vec<Self::Extrinsic>) -> Self {
 		Block { header, extrinsics }
+	}
+	fn encode_from(header: &Self::Header, extrinsics: &[Self::Extrinsic]) -> Vec<u8> {
+		(header, extrinsics).encode()
 	}
 }
 

@@ -20,7 +20,7 @@ use super::*;
 
 use std::cell::RefCell;
 use support::{impl_outer_origin, parameter_types};
-use primitives::{H256, Blake2Hasher};
+use primitives::H256;
 // The testing primitives are very useful for avoiding having to work with signatures
 // or public keys. `u64` is used as the `AccountId` and no `Signature`s are requried.
 use sr_primitives::{
@@ -52,8 +52,6 @@ parameter_types! {
 	pub const ExistentialDeposit: u64 = 0;
 	pub const TransferFee: u64 = 0;
 	pub const CreationFee: u64 = 0;
-	pub const TransactionBaseFee: u64 = 0;
-	pub const TransactionByteFee: u64 = 0;
 }
 
 impl system::Trait for Test {
@@ -66,7 +64,6 @@ impl system::Trait for Test {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type WeightMultiplierUpdate = ();
 	type Event = ();
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
@@ -80,15 +77,11 @@ impl balances::Trait for Test {
 	type OnFreeBalanceZero = ();
 	type OnNewAccount = ();
 	type Event = ();
-	type TransactionPayment = ();
 	type TransferPayment = ();
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type TransferFee = TransferFee;
 	type CreationFee = CreationFee;
-	type TransactionBaseFee = TransactionBaseFee;
-	type TransactionByteFee = TransactionByteFee;
-	type WeightToFee = ();
 }
 
 thread_local! {
@@ -132,7 +125,7 @@ impl Trait for Test {
 
 // This function basically just builds a genesis storage key/value store according to
 // our desired mockup.
-pub fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+pub fn new_test_ext() -> runtime_io::TestExternalities {
 	let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	// We use default for brevity, but you can configure as desired if needed.
 	balances::GenesisConfig::<Test> {

@@ -89,12 +89,11 @@ pub fn config(support_changes_trie: bool, code: Option<&[u8]>) -> GenesisConfig 
 			authorities: vec![],
 		}),
 		im_online: Some(Default::default()),
-		authority_discovery: Some(Default::default()),
 		democracy: Some(Default::default()),
 		collective_Instance1: Some(Default::default()),
 		collective_Instance2: Some(Default::default()),
 		membership_Instance1: Some(Default::default()),
-		elections: Some(Default::default()),
 		sudo: Some(Default::default()),
+		treasury: Some(Default::default()),
 	}
 }

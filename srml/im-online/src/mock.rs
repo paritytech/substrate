@@ -25,7 +25,7 @@ use sr_primitives::Perbill;
 use sr_staking_primitives::{SessionIndex, offence::ReportOffence};
 use sr_primitives::testing::{Header, UintAuthorityId, TestXt};
 use sr_primitives::traits::{IdentityLookup, BlakeTwo256, ConvertInto};
-use primitives::{H256, Blake2Hasher};
+use primitives::H256;
 use support::{impl_outer_origin, impl_outer_dispatch, parameter_types};
 use {runtime_io, system};
 
@@ -85,7 +85,7 @@ impl ReportOffence<u64, IdentificationTuple, Offence> for OffenceHandler {
 	}
 }
 
-pub fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+pub fn new_test_ext() -> runtime_io::TestExternalities {
 	let t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 	t.into()
 }
@@ -111,7 +111,6 @@ impl system::Trait for Runtime {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type WeightMultiplierUpdate = ();
 	type Event = ();
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
@@ -144,6 +143,17 @@ impl session::Trait for Runtime {
 impl session::historical::Trait for Runtime {
 	type FullIdentification = u64;
 	type FullIdentificationOf = ConvertInto;
+}
+
+parameter_types! {
+	pub const UncleGenerations: u32 = 5;
+}
+
+impl authorship::Trait for Runtime {
+	type FindAuthor = ();
+	type UncleGenerations = UncleGenerations;
+	type FilterUncle = ();
+	type EventHandler = ImOnline;
 }
 
 impl Trait for Runtime {

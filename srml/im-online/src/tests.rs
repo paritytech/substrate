@@ -21,11 +21,9 @@
 use super::*;
 use crate::mock::*;
 use offchain::testing::TestOffchainExt;
-use primitives::offchain::OpaquePeerId;
-use runtime_io::with_externalities;
+use primitives::offchain::{OpaquePeerId, OffchainExt};
 use support::{dispatch, assert_noop};
 use sr_primitives::testing::UintAuthorityId;
-
 
 #[test]
 fn test_unresponsiveness_slash_fraction() {
@@ -49,7 +47,7 @@ fn test_unresponsiveness_slash_fraction() {
 
 #[test]
 fn should_report_offline_validators() {
-	with_externalities(&mut new_test_ext(), || {
+	new_test_ext().execute_with(|| {
 		// given
 		let block = 1;
 		System::set_block_number(block);
@@ -125,7 +123,7 @@ fn heartbeat(
 
 #[test]
 fn should_mark_online_validator_when_heartbeat_is_received() {
-	with_externalities(&mut new_test_ext(), || {
+	new_test_ext().execute_with(|| {
 		advance_session();
 		// given
 		VALIDATORS.with(|l| *l.borrow_mut() = Some(vec![1, 2, 3, 4, 5, 6]));
@@ -136,31 +134,31 @@ fn should_mark_online_validator_when_heartbeat_is_received() {
 		assert_eq!(Session::current_index(), 2);
 		assert_eq!(Session::validators(), vec![1, 2, 3]);
 
-		assert!(!ImOnline::is_online_in_current_session(0));
-		assert!(!ImOnline::is_online_in_current_session(1));
-		assert!(!ImOnline::is_online_in_current_session(2));
+		assert!(!ImOnline::is_online(0));
+		assert!(!ImOnline::is_online(1));
+		assert!(!ImOnline::is_online(2));
 
 		// when
 		let _ = heartbeat(1, 2, 0, 1.into()).unwrap();
 
 		// then
-		assert!(ImOnline::is_online_in_current_session(0));
-		assert!(!ImOnline::is_online_in_current_session(1));
-		assert!(!ImOnline::is_online_in_current_session(2));
+		assert!(ImOnline::is_online(0));
+		assert!(!ImOnline::is_online(1));
+		assert!(!ImOnline::is_online(2));
 
 		// and when
 		let _ = heartbeat(1, 2, 2, 3.into()).unwrap();
 
 		// then
-		assert!(ImOnline::is_online_in_current_session(0));
-		assert!(!ImOnline::is_online_in_current_session(1));
-		assert!(ImOnline::is_online_in_current_session(2));
+		assert!(ImOnline::is_online(0));
+		assert!(!ImOnline::is_online(1));
+		assert!(ImOnline::is_online(2));
 	});
 }
 
 #[test]
 fn late_heartbeat_should_fail() {
-	with_externalities(&mut new_test_ext(), || {
+	new_test_ext().execute_with(|| {
 		advance_session();
 		// given
 		VALIDATORS.with(|l| *l.borrow_mut() = Some(vec![1, 2, 4, 4, 5, 6]));
@@ -181,9 +179,9 @@ fn late_heartbeat_should_fail() {
 fn should_generate_heartbeats() {
 	let mut ext = new_test_ext();
 	let (offchain, state) = TestOffchainExt::new();
-	ext.set_offchain_externalities(offchain);
+	ext.register_extension(OffchainExt::new(offchain));
 
-	with_externalities(&mut ext, || {
+	ext.execute_with(|| {
 		// given
 		let block = 1;
 		System::set_block_number(block);
@@ -219,7 +217,7 @@ fn should_generate_heartbeats() {
 
 #[test]
 fn should_cleanup_received_heartbeats_on_session_end() {
-	with_externalities(&mut new_test_ext(), || {
+	new_test_ext().execute_with(|| {
 		advance_session();
 
 		VALIDATORS.with(|l| *l.borrow_mut() = Some(vec![1, 2, 3]));
@@ -235,13 +233,43 @@ fn should_cleanup_received_heartbeats_on_session_end() {
 		let _ = heartbeat(1, 2, 0, 1.into()).unwrap();
 
 		// the heartbeat is stored
-		assert!(!ImOnline::received_heartbeats(&2, &0).is_empty());
+		assert!(!ImOnline::received_heartbeats(&2, &0).is_none());
 
 		advance_session();
 
 		// after the session has ended we have already processed the heartbeat
 		// message, so any messages received on the previous session should have
 		// been pruned.
-		assert!(ImOnline::received_heartbeats(&2, &0).is_empty());
+		assert!(ImOnline::received_heartbeats(&2, &0).is_none());
+	});
+}
+
+#[test]
+fn should_mark_online_validator_when_block_is_authored() {
+	use authorship::EventHandler;
+
+	new_test_ext().execute_with(|| {
+		advance_session();
+		// given
+		VALIDATORS.with(|l| *l.borrow_mut() = Some(vec![1, 2, 3, 4, 5, 6]));
+		assert_eq!(Session::validators(), Vec::<u64>::new());
+		// enact the change and buffer another one
+		advance_session();
+
+		assert_eq!(Session::current_index(), 2);
+		assert_eq!(Session::validators(), vec![1, 2, 3]);
+
+		for i in 0..3 {
+			assert!(!ImOnline::is_online(i));
+		}
+
+		// when
+		ImOnline::note_author(1);
+		ImOnline::note_uncle(2, 0);
+
+		// then
+		assert!(ImOnline::is_online(0));
+		assert!(ImOnline::is_online(1));
+		assert!(!ImOnline::is_online(2));
 	});
 }

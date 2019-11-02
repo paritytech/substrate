@@ -17,8 +17,7 @@
 use crate::traits::{AugmentClap, GetLogFilter};
 
 use std::path::PathBuf;
-use structopt::{StructOpt, clap::{arg_enum, App, AppSettings, _clap_count_exprs, SubCommand, Arg}};
-use client;
+use structopt::{StructOpt, clap::{arg_enum, App, AppSettings, SubCommand, Arg}};
 
 pub use crate::execution_strategy::ExecutionStrategy;
 
@@ -40,6 +39,43 @@ impl Into<client::ExecutionStrategy> for ExecutionStrategy {
 			ExecutionStrategy::Wasm => client::ExecutionStrategy::AlwaysWasm,
 			ExecutionStrategy::Both => client::ExecutionStrategy::Both,
 			ExecutionStrategy::NativeElseWasm => client::ExecutionStrategy::NativeElseWasm,
+		}
+	}
+}
+
+arg_enum! {
+	/// How to execute Wasm runtime code
+	#[allow(missing_docs)]
+	#[derive(Debug, Clone)]
+	pub enum WasmExecutionMethod {
+		// Uses an interpreter.
+		Interpreted,
+		// Uses a compiled runtime.
+		Compiled,
+	}
+}
+
+impl WasmExecutionMethod {
+	/// Returns list of variants that are not disabled by feature flags.
+	fn enabled_variants() -> Vec<&'static str> {
+		Self::variants()
+			.iter()
+			.cloned()
+			.filter(|&name| cfg!(feature = "wasmtime") || name != "Compiled")
+			.collect()
+	}
+}
+
+impl Into<service::config::WasmExecutionMethod> for WasmExecutionMethod {
+	fn into(self) -> service::config::WasmExecutionMethod {
+		match self {
+			WasmExecutionMethod::Interpreted => service::config::WasmExecutionMethod::Interpreted,
+			#[cfg(feature = "wasmtime")]
+			WasmExecutionMethod::Compiled => service::config::WasmExecutionMethod::Compiled,
+			#[cfg(not(feature = "wasmtime"))]
+			WasmExecutionMethod::Compiled => panic!(
+				"Substrate must be compiled with \"wasmtime\" feature for compiled Wasm execution"
+			),
 		}
 	}
 }
@@ -133,7 +169,6 @@ arg_enum! {
 	#[allow(missing_docs)]
 	#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 	pub enum NodeKeyType {
-		Secp256k1,
 		Ed25519
 	}
 }
@@ -146,10 +181,6 @@ pub struct NodeKeyParams {
 	///
 	/// The value is a string that is parsed according to the choice of
 	/// `--node-key-type` as follows:
-	///
-	///   `secp256k1`:
-	///   The value is parsed as a hex-encoded Secp256k1 32 bytes secret key,
-	///   i.e. 64 hex characters.
 	///
 	///   `ed25519`:
 	///   The value is parsed as a hex-encoded Ed25519 32 bytes secret key,
@@ -181,18 +212,12 @@ pub struct NodeKeyParams {
 	///
 	/// The node's secret key determines the corresponding public key and hence the
 	/// node's peer ID in the context of libp2p.
-	///
-	/// NOTE: The current default key type is `secp256k1` for a transition period only
-	/// but will eventually change to `ed25519` in a future release. To continue using
-	/// `secp256k1` keys, use `--node-key-type=secp256k1`.
 	#[structopt(
 		long = "node-key-type",
 		value_name = "TYPE",
-		raw(
-			possible_values = "&NodeKeyType::variants()",
-			case_insensitive = "true",
-			default_value = r#""Ed25519""#
-		)
+		possible_values = &NodeKeyType::variants(),
+		case_insensitive = true,
+		default_value = "Ed25519"
 	)]
 	pub node_key_type: NodeKeyType,
 
@@ -200,9 +225,6 @@ pub struct NodeKeyParams {
 	///
 	/// The contents of the file are parsed according to the choice of `--node-key-type`
 	/// as follows:
-	///
-	///   `secp256k1`:
-	///   The file must contain an unencoded 32 bytes Secp256k1 secret key.
 	///
 	///   `ed25519`:
 	///   The file must contain an unencoded 32 bytes Ed25519 secret key.
@@ -231,11 +253,9 @@ pub struct ExecutionStrategies {
 	#[structopt(
 		long = "execution-syncing",
 		value_name = "STRATEGY",
-		raw(
-			possible_values = "&ExecutionStrategy::variants()",
-			case_insensitive = "true",
-			default_value = r#""NativeElseWasm""#
-		)
+		possible_values = &ExecutionStrategy::variants(),
+		case_insensitive = true,
+		default_value = "NativeElseWasm"
 	)]
 	pub execution_syncing: ExecutionStrategy,
 
@@ -243,11 +263,9 @@ pub struct ExecutionStrategies {
 	#[structopt(
 		long = "execution-import-block",
 		value_name = "STRATEGY",
-		raw(
-			possible_values = "&ExecutionStrategy::variants()",
-			case_insensitive = "true",
-			default_value = r#""NativeElseWasm""#
-		)
+		possible_values = &ExecutionStrategy::variants(),
+		case_insensitive = true,
+		default_value = "NativeElseWasm"
 	)]
 	pub execution_import_block: ExecutionStrategy,
 
@@ -255,11 +273,9 @@ pub struct ExecutionStrategies {
 	#[structopt(
 		long = "execution-block-construction",
 		value_name = "STRATEGY",
-		raw(
-			possible_values = "&ExecutionStrategy::variants()",
-			case_insensitive = "true",
-			default_value = r#""Wasm""#
-		)
+		possible_values = &ExecutionStrategy::variants(),
+		case_insensitive = true,
+		default_value = "Wasm"
 	)]
 	pub execution_block_construction: ExecutionStrategy,
 
@@ -267,11 +283,9 @@ pub struct ExecutionStrategies {
 	#[structopt(
 		long = "execution-offchain-worker",
 		value_name = "STRATEGY",
-		raw(
-			possible_values = "&ExecutionStrategy::variants()",
-			case_insensitive = "true",
-			default_value = r#""Native""#
-		)
+		possible_values = &ExecutionStrategy::variants(),
+		case_insensitive = true,
+		default_value = "Native"
 	)]
 	pub execution_offchain_worker: ExecutionStrategy,
 
@@ -279,11 +293,9 @@ pub struct ExecutionStrategies {
 	#[structopt(
 		long = "execution-other",
 		value_name = "STRATEGY",
-		raw(
-			possible_values = "&ExecutionStrategy::variants()",
-			case_insensitive = "true",
-			default_value = r#""Native""#
-		)
+		possible_values = &ExecutionStrategy::variants(),
+		case_insensitive = true,
+		default_value = "Native"
 	)]
 	pub execution_other: ExecutionStrategy,
 
@@ -291,17 +303,15 @@ pub struct ExecutionStrategies {
 	#[structopt(
 		long = "execution",
 		value_name = "STRATEGY",
-		raw(
-			possible_values = "&ExecutionStrategy::variants()",
-			case_insensitive = "true",
-			conflicts_with_all = "&[
-				\"execution_other\",
-				\"execution_offchain_worker\",
-				\"execution_block_construction\",
-				\"execution_import_block\",
-				\"execution_syncing\",
-			]"
-		)
+		possible_values = &ExecutionStrategy::variants(),
+		case_insensitive = true,
+		conflicts_with_all = &[
+			"execution-other",
+			"execution-offchain-worker",
+			"execution-block-construction",
+			"execution-import-block",
+			"execution-syncing",
+		]
 	)]
 	pub execution: Option<ExecutionStrategy>,
 }
@@ -310,8 +320,30 @@ pub struct ExecutionStrategies {
 #[derive(Debug, StructOpt, Clone)]
 pub struct RunCmd {
 	/// Enable validator mode.
-	#[structopt(long = "validator")]
+	///
+	/// The node will be started with the authority role and actively
+	/// participate in any consensus task that it can (e.g. depending on
+	/// availability of local keys).
+	#[structopt(
+		long = "validator",
+		conflicts_with_all = &[ "sentry" ]
+	)]
 	pub validator: bool,
+
+	/// Enable sentry mode.
+	///
+	/// The node will be started with the authority role and participate in
+	/// consensus tasks as an "observer", it will never actively participate
+	/// regardless of whether it could (e.g. keys are available locally). This
+	/// mode is useful as a secure proxy for validators (which would run
+	/// detached from the network), since we want this node to participate in
+	/// the full consensus protocols in order to have all needed consensus data
+	/// available to relay to private nodes.
+	#[structopt(
+		long = "sentry",
+		conflicts_with_all = &[ "validator" ]
+	)]
+	pub sentry: bool,
 
 	/// Disable GRANDPA voter when running in validator mode, otherwise disables the GRANDPA observer.
 	#[structopt(long = "no-grandpa")]
@@ -360,14 +392,24 @@ pub struct RunCmd {
 	/// allow localhost, https://polkadot.js.org and
 	/// https://substrate-ui.parity.io origins. When running in --dev mode the
 	/// default is to allow all origins.
-	#[structopt(long = "rpc-cors", value_name = "ORIGINS", parse(try_from_str = "parse_cors"))]
+	#[structopt(long = "rpc-cors", value_name = "ORIGINS", parse(try_from_str = parse_cors))]
 	pub rpc_cors: Option<Cors>,
 
-	/// Specify the pruning mode, a number of blocks to keep or 'archive'.
+	/// Specify the state pruning mode, a number of blocks to keep or 'archive'.
 	///
-	/// Default is 256.
+	/// Default is to keep all block states if the node is running as a
+	/// validator (i.e. 'archive'), otherwise state is only kept for the last
+	/// 256 blocks.
 	#[structopt(long = "pruning", value_name = "PRUNING_MODE")]
 	pub pruning: Option<String>,
+
+	/// Force start with unsafe pruning settings.
+	///
+	/// When running as a validator it is highly recommended to disable state
+	/// pruning (i.e. 'archive') which is the default. The node will refuse to
+	/// start as a validator if pruning is enabled unless this option is set.
+	#[structopt(long = "unsafe-pruning")]
+	pub unsafe_pruning: bool,
 
 	/// The human-readable name for this node.
 	///
@@ -387,7 +429,7 @@ pub struct RunCmd {
 	/// telemetry endpoints. Verbosity levels range from 0-9, with 0 denoting
 	/// the least verbosity. If no verbosity level is specified the default is
 	/// 0.
-	#[structopt(long = "telemetry-url", value_name = "URL VERBOSITY", parse(try_from_str = "parse_telemetry_endpoints"))]
+	#[structopt(long = "telemetry-url", value_name = "URL VERBOSITY", parse(try_from_str = parse_telemetry_endpoints))]
 	pub telemetry_endpoints: Vec<(String, u8)>,
 
 	/// Should execute offchain workers on every block.
@@ -396,13 +438,21 @@ pub struct RunCmd {
 	#[structopt(
 		long = "offchain-worker",
 		value_name = "ENABLED",
-		raw(
-			possible_values = "&OffchainWorkerEnabled::variants()",
-			case_insensitive = "true",
-			default_value = r#""WhenValidating""#
-		)
+		possible_values = &OffchainWorkerEnabled::variants(),
+		case_insensitive = true,
+		default_value = "WhenValidating"
 	)]
 	pub offchain_worker: OffchainWorkerEnabled,
+
+	/// Method for executing Wasm runtime code.
+	#[structopt(
+		long = "wasm-execution",
+		value_name = "METHOD",
+		possible_values = &WasmExecutionMethod::enabled_variants(),
+		case_insensitive = true,
+		default_value = "Interpreted"
+	)]
+	pub wasm_method: WasmExecutionMethod,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
@@ -435,14 +485,14 @@ pub struct RunCmd {
 	/// Use interactive shell for entering the password used by the keystore.
 	#[structopt(
 		long = "password-interactive",
-		raw(conflicts_with_all = "&[ \"password\", \"password_filename\" ]")
+		conflicts_with_all = &[ "password", "password-filename" ]
 	)]
 	pub password_interactive: bool,
 
 	/// Password used by the keystore.
 	#[structopt(
 		long = "password",
-		raw(conflicts_with_all = "&[ \"password_interactive\", \"password_filename\" ]")
+		conflicts_with_all = &[ "password-interactive", "password-filename" ]
 	)]
 	pub password: Option<String>,
 
@@ -451,7 +501,7 @@ pub struct RunCmd {
 		long = "password-filename",
 		value_name = "PATH",
 		parse(from_os_str),
-		raw(conflicts_with_all = "&[ \"password_interactive\", \"password\" ]")
+		conflicts_with_all = &[ "password-interactive", "password" ]
 	)]
 	pub password_filename: Option<PathBuf>
 }
@@ -593,6 +643,13 @@ pub struct BuildSpecCmd {
 	#[structopt(long = "raw")]
 	pub raw: bool,
 
+	/// Disable adding the default bootnode to the specification.
+	///
+	/// By default the `/ip4/127.0.0.1/tcp/30333/p2p/NODE_PEER_ID` bootnode is added to the
+	/// specification when no bootnode exists.
+	#[structopt(long = "disable-default-bootnode")]
+	pub disable_default_bootnode: bool,
+
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
@@ -651,15 +708,23 @@ pub struct ImportBlocksCmd {
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
 
+	/// Method for executing Wasm runtime code.
+	#[structopt(
+		long = "wasm-execution",
+		value_name = "METHOD",
+		possible_values = &WasmExecutionMethod::variants(),
+		case_insensitive = true,
+		default_value = "Interpreted"
+	)]
+	pub wasm_method: WasmExecutionMethod,
+
 	/// The means of execution used when calling into the runtime while importing blocks.
 	#[structopt(
 		long = "execution",
 		value_name = "STRATEGY",
-		raw(
-			possible_values = "&ExecutionStrategy::variants()",
-			case_insensitive = "true",
-			default_value = r#""NativeElseWasm""#
-		)
+		possible_values = &ExecutionStrategy::variants(),
+		case_insensitive = true,
+		default_value = "NativeElseWasm"
 	)]
 	pub execution: ExecutionStrategy,
 }
@@ -734,7 +799,7 @@ impl<CC, RP> StructOpt for CoreParams<CC, RP> where
 			)
 		).subcommand(
 			BuildSpecCmd::augment_clap(SubCommand::with_name("build-spec"))
-				.about("Build a spec.json file, outputing to stdout.")
+				.about("Build a spec.json file, outputting to stdout.")
 		)
 		.subcommand(
 			ExportBlocksCmd::augment_clap(SubCommand::with_name("export-blocks"))
@@ -789,7 +854,7 @@ impl<CC, RP> GetLogFilter for CoreParams<CC, RP> where CC: GetLogFilter {
 
 /// A special commandline parameter that expands to nothing.
 /// Should be used as custom subcommand/run arguments if no custom values are required.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct NoCustom {}
 
 impl StructOpt for NoCustom {

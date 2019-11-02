@@ -96,17 +96,17 @@ pub trait Trait: SystemTrait {
 decl_storage! {
 	trait Store for Module<T: Trait> as Timestamp {
 		/// Recent hints.
-		RecentHints get(recent_hints) build(|_| vec![T::BlockNumber::zero()]): Vec<T::BlockNumber>;
+		RecentHints get(fn recent_hints) build(|_| vec![T::BlockNumber::zero()]): Vec<T::BlockNumber>;
 		/// Ordered recent hints.
-		OrderedHints get(ordered_hints) build(|_| vec![T::BlockNumber::zero()]): Vec<T::BlockNumber>;
+		OrderedHints get(fn ordered_hints) build(|_| vec![T::BlockNumber::zero()]): Vec<T::BlockNumber>;
 		/// The median.
-		Median get(median) build(|_| T::BlockNumber::zero()): T::BlockNumber;
+		Median get(fn median) build(|_| T::BlockNumber::zero()): T::BlockNumber;
 
 		/// Final hint to apply in the block. `None` means "same as parent".
 		Update: Option<T::BlockNumber>;
 
 		// when initialized through config this is set in the beginning.
-		Initialized get(initialized) build(|_| false): bool;
+		Initialized get(fn initialized) build(|_| false): bool;
 	}
 }
 
@@ -247,11 +247,12 @@ impl<T: Trait> ProvideInherent for Module<T> {
 mod tests {
 	use super::*;
 
-	use runtime_io::{with_externalities, TestExternalities};
+	use runtime_io::TestExternalities;
 	use primitives::H256;
-	use sr_primitives::traits::{BlakeTwo256, IdentityLookup, OnFinalize, Header as HeaderT};
-	use sr_primitives::testing::Header;
-	use sr_primitives::Perbill;
+	use sr_primitives::{
+		testing::Header, Perbill,
+		traits::{BlakeTwo256, IdentityLookup, OnFinalize, Header as HeaderT},
+	};
 	use support::{assert_ok, impl_outer_origin, parameter_types};
 	use srml_system as system;
 	use std::cell::RefCell;
@@ -297,7 +298,6 @@ mod tests {
 		type AccountId = u64;
 		type Lookup = IdentityLookup<u64>;
 		type Header = Header;
-		type WeightMultiplierUpdate = ();
 		type Event = ();
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
@@ -321,7 +321,7 @@ mod tests {
 	#[test]
 	fn median_works() {
 		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		with_externalities(&mut TestExternalities::new(t), || {
+		TestExternalities::new(t).execute_with(|| {
 			FinalityTracker::update_hint(Some(500));
 			assert_eq!(FinalityTracker::median(), 250);
 			assert!(NOTIFICATIONS.with(|n| n.borrow().is_empty()));
@@ -331,7 +331,7 @@ mod tests {
 	#[test]
 	fn notifies_when_stalled() {
 		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		with_externalities(&mut TestExternalities::new(t), || {
+		TestExternalities::new(t).execute_with(|| {
 			let mut parent_hash = System::parent_hash();
 			for i in 2..106 {
 				System::initialize(&i, &parent_hash, &Default::default(), &Default::default());
@@ -350,7 +350,7 @@ mod tests {
 	#[test]
 	fn recent_notifications_prevent_stalling() {
 		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		with_externalities(&mut TestExternalities::new(t), || {
+		TestExternalities::new(t).execute_with(|| {
 			let mut parent_hash = System::parent_hash();
 			for i in 2..106 {
 				System::initialize(&i, &parent_hash, &Default::default(), &Default::default());

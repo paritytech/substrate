@@ -14,28 +14,58 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Primitives for transaction weighting.
+//! # Primitives for transaction weighting.
 //!
-//! Each dispatch function within `decl_module!` can have an optional `#[weight = $x]` attribute.
-//! `$x` can be any type that implements the `ClassifyDispatch<T>` and `WeighData<T>` traits. By
-//! default, All transactions are annotated with `#[weight = SimpleDispatchInfo::default()]`.
+//! All dispatchable functions defined in `decl_module!` must provide two trait implementations:
+//!   - [`WeightData`]: To determine the weight of the dispatch.
+//!   - [`ClassifyDispatch`]: To determine the class of the dispatch. See the enum definition for
+//!     more information on dispatch classes.
+//!
+//! Every dispatchable function is responsible for providing this data via an optional `#[weight =
+//! $x]` attribute. In this snipped, `$x` can be any user provided struct that implements the
+//! two aforementioned traits.
+//!
+//! Substrate then bundles then output information of the two traits into [`DispatchInfo`] struct
+//! and provides it by implementing the [`GetDispatchInfo`] for all `Call` variants, and opaque
+//! extrinsic types.
+//!
+//! If no `#[weight]` is defined, the macro automatically injects the `Default` implementation of
+//! the [`SimpleDispatchInfo`].
 //!
 //! Note that the decl_module macro _cannot_ enforce this and will simply fail if an invalid struct
 //! (something that does not  implement `Weighable`) is passed in.
 
-use crate::{Fixed64, traits::Saturating};
-use crate::codec::{Encode, Decode};
+#[cfg(feature = "std")]
+use serde::{Serialize, Deserialize};
+use codec::{Encode, Decode};
+use arithmetic::traits::Bounded;
+use crate::RuntimeDebug;
 
+/// Re-export priority as type
 pub use crate::transaction_validity::TransactionPriority;
-use crate::traits::Bounded;
 
 /// Numeric range of a transaction weight.
 pub type Weight = u32;
 
+/// Means of weighing some particular kind of data (`T`).
+pub trait WeighData<T> {
+	/// Weigh the data `T` given by `target`. When implementing this for a dispatchable, `T` will be
+	/// a tuple of all arguments given to the function (except origin).
+	fn weigh_data(&self, target: T) -> Weight;
+}
+
+/// Means of classifying a dispatchable function.
+pub trait ClassifyDispatch<T> {
+	/// Classify the dispatch function based on input data `target` of type `T`. When implementing
+	/// this for a dispatchable, `T` will be a tuple of all arguments given to the function (except
+	/// origin).
+	fn classify_dispatch(&self, target: T) -> DispatchClass;
+}
+
 /// A generalized group of dispatch types. This is only distinguishing normal, user-triggered transactions
 /// (`Normal`) and anything beyond which serves a higher purpose to the system (`Operational`).
-#[cfg_attr(feature = "std", derive(Debug))]
-#[derive(PartialEq, Eq, Clone, Copy)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
 pub enum DispatchClass {
 	/// A normal dispatch.
 	Normal,
@@ -64,8 +94,8 @@ impl From<SimpleDispatchInfo> for DispatchClass {
 }
 
 /// A bundle of static information collected from the `#[weight = $x]` attributes.
-#[cfg_attr(feature = "std", derive(PartialEq, Eq, Debug))]
-#[derive(Clone, Copy, Default)]
+#[cfg_attr(feature = "std", derive(PartialEq, Eq))]
+#[derive(Clone, Copy, Default, RuntimeDebug)]
 pub struct DispatchInfo {
 	/// Weight of this transaction.
 	pub weight: Weight,
@@ -84,25 +114,13 @@ impl DispatchInfo {
 	}
 }
 
-/// A `Dispatchable` function (aka transaction) that can carry some static information along with it, using the
-/// `#[weight]` attribute.
+/// A `Dispatchable` function (aka transaction) that can carry some static information along with
+/// it, using the `#[weight]` attribute.
 pub trait GetDispatchInfo {
 	/// Return a `DispatchInfo`, containing relevant information of this dispatch.
 	///
 	/// This is done independently of its encoded size.
 	fn get_dispatch_info(&self) -> DispatchInfo;
-}
-
-/// Means of weighing some particular kind of data (`T`).
-pub trait WeighData<T> {
-	/// Weigh the data `T` given by `target`.
-	fn weigh_data(&self, target: T) -> Weight;
-}
-
-/// Means of classifying a dispatchable function.
-pub trait ClassifyDispatch<T> {
-	/// Classify the dispatch function based on input data `target` of type `T`.
-	fn classify_dispatch(&self, target: T) -> DispatchClass;
 }
 
 /// Default type used with the `#[weight = x]` attribute in a substrate chain.
@@ -116,13 +134,9 @@ pub trait ClassifyDispatch<T> {
 ///   - A `Free` variant is equal to `::Fixed(0)`. Note that this does not guarantee inclusion.
 ///   - A `Max` variant is equal to `::Fixed(Weight::max_value())`.
 ///
-/// Based on the final weight value, based on the above variants:
-///   - A _weight-fee_  is deducted.
-///   - The block weight is consumed proportionally.
-///
 /// As for the generalized groups themselves:
 ///   - `Normal` variants will be assigned a priority proportional to their weight. They can only
-///     consume a portion (1/4) of the maximum block resource limits.
+///     consume a portion (defined in the system module) of the maximum block resource limits.
 ///   - `Operational` variants will be assigned the maximum priority. They can potentially consume
 ///     the entire block resource limit.
 #[derive(Clone, Copy)]
@@ -165,78 +179,5 @@ impl Default for SimpleDispatchInfo {
 	fn default() -> Self {
 		// Default weight of all transactions.
 		SimpleDispatchInfo::FixedNormal(10_000)
-	}
-}
-
-/// Representation of a weight multiplier. This represents how a fee value can be computed from a
-/// weighted transaction.
-///
-/// This is basically a wrapper for the `Fixed64` type a slightly tailored multiplication to u32
-/// in the form of the `apply_to` method.
-#[cfg_attr(feature = "std", derive(Debug))]
-#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct WeightMultiplier(Fixed64);
-
-impl WeightMultiplier {
-	/// Apply the inner Fixed64 as a weight multiplier to a weight value.
-	///
-	/// This will perform a saturated  `weight + weight * self.0`.
-	pub fn apply_to(&self, weight: Weight) -> Weight {
-		self.0.saturated_multiply_accumulate(weight)
-	}
-
-	/// build self from raw parts per billion.
-	#[cfg(feature = "std")]
-	pub fn from_parts(parts: i64) -> Self {
-		Self(Fixed64::from_parts(parts))
-	}
-
-	/// build self from a fixed64 value.
-	pub fn from_fixed(f: Fixed64) -> Self {
-		Self(f)
-	}
-
-	/// Approximate the fraction `n/d`.
-	pub fn from_rational(n: i64, d: u64) -> Self {
-		Self(Fixed64::from_rational(n, d))
-	}
-}
-
-impl Saturating for WeightMultiplier {
-	fn saturating_add(self, rhs: Self) -> Self {
-		Self(self.0.saturating_add(rhs.0))
-	}
-	fn saturating_mul(self, rhs: Self) -> Self {
-		Self(self.0.saturating_mul(rhs.0))
-
-	}
-	fn saturating_sub(self, rhs: Self) -> Self {
-		Self(self.0.saturating_sub(rhs.0))
-	}
-}
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-
-	#[test]
-	fn multiplier_apply_to_works() {
-		let test_set = vec![0, 1, 10, 1000, 1_000_000_000];
-
-		// negative (1/2)
-		let mut fm = WeightMultiplier::from_rational(-1, 2);
-		test_set.clone().into_iter().for_each(|i| { assert_eq!(fm.apply_to(i) as i32, i as i32  - i as i32 / 2); });
-
-		// unit (1) multiplier
-		fm = WeightMultiplier::from_parts(0);
-		test_set.clone().into_iter().for_each(|i| { assert_eq!(fm.apply_to(i), i); });
-
-		// i.5 multiplier
-		fm = WeightMultiplier::from_rational(1, 2);
-		test_set.clone().into_iter().for_each(|i| { assert_eq!(fm.apply_to(i), i * 3 / 2); });
-
-		// dual multiplier
-		fm = WeightMultiplier::from_rational(1, 1);
-		test_set.clone().into_iter().for_each(|i| { assert_eq!(fm.apply_to(i), i * 2); });
 	}
 }

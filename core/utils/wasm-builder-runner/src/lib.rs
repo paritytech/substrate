@@ -227,6 +227,11 @@ fn run_project(project_folder: &Path) {
 		cmd.arg("--release");
 	}
 
+	// Unset the `CARGO_TARGET_DIR` to prevent a cargo deadlock (cargo locks a target dir exclusive).
+	// The runner project is created in `CARGO_TARGET_DIR` and executing it will create a sub target
+	// directory inside of `CARGO_TARGET_DIR`.
+	cmd.env_remove("CARGO_TARGET_DIR");
+
 	if !cmd.status().map(|s| s.success()).unwrap_or(false) {
 		// Don't spam the output with backtraces when a build failed!
 		process::exit(1);
@@ -255,7 +260,7 @@ fn check_provide_dummy_wasm_binary() -> bool {
 fn provide_dummy_wasm_binary(file_path: &Path) {
 	fs::write(
 		file_path,
-		"pub const WASM_BINARY: &[u8] = &[]; pub const WASM_BINARY_BLOATY: &[u8] = &[];"
+		"pub const WASM_BINARY: &[u8] = &[]; pub const WASM_BINARY_BLOATY: &[u8] = &[];",
 	).expect("Writing dummy WASM binary should not fail");
 }
 

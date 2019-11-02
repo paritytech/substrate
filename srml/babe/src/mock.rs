@@ -20,9 +20,7 @@
 use super::{Trait, Module, GenesisConfig};
 use babe_primitives::AuthorityId;
 use sr_primitives::{
-	traits::IdentityLookup, Perbill,
-	testing::{Header, UintAuthorityId},
-	impl_opaque_keys, key_types::DUMMY,
+	traits::IdentityLookup, Perbill, testing::{Header, UintAuthorityId}, impl_opaque_keys,
 };
 use sr_version::RuntimeVersion;
 use support::{impl_outer_origin, parameter_types};
@@ -62,7 +60,6 @@ impl system::Trait for Test {
 	type AccountId = DummyValidatorId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type WeightMultiplierUpdate = ();
 	type Event = ();
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
@@ -72,7 +69,6 @@ impl system::Trait for Test {
 
 impl_opaque_keys! {
 	pub struct MockSessionKeys {
-		#[id(DUMMY)]
 		pub dummy: UintAuthorityId,
 	}
 }
@@ -98,9 +94,10 @@ impl timestamp::Trait for Test {
 impl Trait for Test {
 	type EpochDuration = EpochDuration;
 	type ExpectedBlockTime = ExpectedBlockTime;
+	type EpochChangeTrigger = crate::ExternalTrigger;
 }
 
-pub fn new_test_ext(authorities: Vec<DummyValidatorId>) -> runtime_io::TestExternalities<Blake2Hasher> {
+pub fn new_test_ext(authorities: Vec<DummyValidatorId>) -> runtime_io::TestExternalities {
 	let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	GenesisConfig {
 		authorities: authorities.into_iter().map(|a| (UintAuthorityId(a).to_public_key(), 1)).collect(),

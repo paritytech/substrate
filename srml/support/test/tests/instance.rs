@@ -13,22 +13,22 @@
 
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+
 #![recursion_limit="128"]
 
-use runtime_io::with_externalities;
+use sr_primitives::{generic, BuildStorage, traits::{BlakeTwo256, Block as _, Verify}};
 use support::{
 	Parameter, traits::Get, parameter_types,
-	sr_primitives::{generic, BuildStorage, traits::{BlakeTwo256, Block as _, Verify}},
 	metadata::{
 		DecodeDifferent, StorageMetadata, StorageEntryModifier, StorageEntryType, DefaultByteGetter,
-		StorageEntryMetadata, StorageHasher
+		StorageEntryMetadata, StorageHasher,
 	},
 	StorageValue, StorageMap, StorageLinkedMap, StorageDoubleMap,
 };
 use inherents::{
 	ProvideInherent, InherentData, InherentIdentifier, RuntimeString, MakeFatalError
 };
-use primitives::{H256, sr25519, Blake2Hasher};
+use primitives::{H256, sr25519};
 
 mod system;
 
@@ -88,8 +88,7 @@ mod module1 {
 		}
 	}
 
-	#[derive(PartialEq, Eq, Clone)]
-	#[cfg_attr(feature = "std", derive(Debug))]
+	#[derive(PartialEq, Eq, Clone, sr_primitives::RuntimeDebug)]
 	pub enum Origin<T: Trait<I>, I> where T::BlockNumber: From<u32> {
 		Members(u32),
 		_Phantom(std::marker::PhantomData<(T, I)>),
@@ -151,8 +150,7 @@ mod module2 {
 		}
 	}
 
-	#[derive(PartialEq, Eq, Clone)]
-	#[cfg_attr(feature = "std", derive(Debug))]
+	#[derive(PartialEq, Eq, Clone, sr_primitives::RuntimeDebug)]
 	pub enum Origin<T: Trait<I>, I=DefaultInstance> {
 		Members(u32),
 		_Phantom(std::marker::PhantomData<(T, I)>),
@@ -275,7 +273,7 @@ pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, Call, Signature, ()>;
 
-fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+fn new_test_ext() -> runtime_io::TestExternalities {
 	GenesisConfig{
 		module1_Instance1: Some(module1::GenesisConfig {
 			value: 3,
@@ -329,7 +327,7 @@ fn storage_instance_independance() {
 
 #[test]
 fn storage_with_instance_basic_operation() {
-	with_externalities(&mut new_test_ext(), || {
+	new_test_ext().execute_with(|| {
 		type Value = module2::Value<Runtime, module2::Instance1>;
 		type Map = module2::Map<module2::Instance1>;
 		type LinkedMap = module2::LinkedMap<module2::Instance1>;

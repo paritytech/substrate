@@ -81,7 +81,7 @@ impl Environment<TestBlock> for DummyFactory {
 		-> Result<DummyProposer, Error>
 	{
 
-		let parent_slot = crate::find_pre_digest(parent_header)
+		let parent_slot = crate::find_pre_digest::<TestBlock>(parent_header)
 			.expect("parent header has a pre-digest")
 			.slot_number();
 
@@ -103,12 +103,13 @@ impl DummyProposer {
 			&BlockId::Hash(self.parent_hash),
 			pre_digests,
 		).unwrap();
+
 		let mut block = match block_builder.bake().map_err(|e| e.into()) {
 			Ok(b) => b,
 			Err(e) => return future::ready(Err(e)),
 		};
 
-		let this_slot = crate::find_pre_digest(block.header())
+		let this_slot = crate::find_pre_digest::<TestBlock>(block.header())
 			.expect("baked block has valid pre-digest")
 			.slot_number();
 
@@ -524,35 +525,33 @@ fn can_author_block() {
 	}
 }
 
-#[test]
-fn importing_block_one_sets_genesis_epoch() {
-	let mut net = BabeTestNet::new(1);
+// Propose and import a new BABE block on top of the given parent.
+fn propose_and_import_block(
+	parent: &TestHeader,
+	slot_number: Option<SlotNumber>,
+	proposer_factory: &mut DummyFactory,
+	block_import: &mut BoxBlockImport<TestBlock>,
+) -> H256 {
+	let mut proposer = proposer_factory.init(parent).unwrap();
 
-	let peer = net.peer(0);
-	let data = peer.data.as_ref().expect("babe link set up during initialization");
-	let client = peer.client().as_full().expect("Only full clients are used in tests").clone();
-
-	let mut environ = DummyFactory {
-		client: client.clone(),
-		config: data.link.config.clone(),
-		epoch_changes: data.link.epoch_changes.clone(),
-		mutator: Arc::new(|_, _| ()),
-	};
-
-	let genesis_header = client.header(&BlockId::Number(0)).unwrap().unwrap();
-
-	let mut proposer = environ.init(&genesis_header).unwrap();
-	let babe_claim = Item::babe_pre_digest(babe_primitives::BabePreDigest::Secondary {
-		authority_index: 0,
-		slot_number: 999,
+	let slot_number = slot_number.unwrap_or_else(|| {
+		let parent_pre_digest = find_pre_digest::<TestBlock>(parent).unwrap();
+		parent_pre_digest.slot_number() + 1
 	});
-	let pre_digest = sr_primitives::generic::Digest { logs: vec![babe_claim] };
 
-	let genesis_epoch = data.link.config.genesis_epoch(999);
+	let pre_digest = sr_primitives::generic::Digest {
+		logs: vec![
+			Item::babe_pre_digest(
+				BabePreDigest::Secondary {
+					authority_index: 0,
+					slot_number,
+				},
+			),
+		],
+	};
 
 	let mut block = futures::executor::block_on(proposer.propose_with(pre_digest)).unwrap();
 
-	// seal by alice.
 	let seal = {
 		// sign the pre-sealed hash of the block and then
 		// add it to a digest item.
@@ -568,18 +567,14 @@ fn importing_block_one_sets_genesis_epoch() {
 		block.header.digest_mut().pop();
 		h
 	};
-	assert_eq!(*block.header.number(), 1);
-	let (header, body) = block.deconstruct();
 
-	let post_digests = vec![seal];
-	let mut block_import = data.block_import.lock().take().expect("import set up during init");
-	block_import.import_block(
+	let import_result = block_import.import_block(
 		BlockImportParams {
 			origin: BlockOrigin::Own,
-			header,
+			header: block.header,
 			justification: None,
-			post_digests,
-			body: Some(body),
+			post_digests: vec![seal],
+			body: Some(block.extrinsics),
 			finalized: false,
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::LongestChain,
@@ -587,13 +582,197 @@ fn importing_block_one_sets_genesis_epoch() {
 		Default::default(),
 	).unwrap();
 
+	match import_result {
+		ImportResult::Imported(_) => {},
+		_ => panic!("expected block to be imported"),
+	}
+
+	post_hash
+}
+
+#[test]
+fn importing_block_one_sets_genesis_epoch() {
+	let mut net = BabeTestNet::new(1);
+
+	let peer = net.peer(0);
+	let data = peer.data.as_ref().expect("babe link set up during initialization");
+	let client = peer.client().as_full().expect("Only full clients are used in tests").clone();
+
+	let mut proposer_factory = DummyFactory {
+		client: client.clone(),
+		config: data.link.config.clone(),
+		epoch_changes: data.link.epoch_changes.clone(),
+		mutator: Arc::new(|_, _| ()),
+	};
+
+	let mut block_import = data.block_import.lock().take().expect("import set up during init");
+
+	let genesis_header = client.header(&BlockId::Number(0)).unwrap().unwrap();
+
+	let block_hash = propose_and_import_block(
+		&genesis_header,
+		Some(999),
+		&mut proposer_factory,
+		&mut block_import,
+	);
+
+	let genesis_epoch = data.link.config.genesis_epoch(999);
+
 	let epoch_changes = data.link.epoch_changes.lock();
 	let epoch_for_second_block = epoch_changes.epoch_for_child_of(
 		descendent_query(&*client),
-		&post_hash,
+		&block_hash,
 		1,
 		1000,
 		|slot| data.link.config.genesis_epoch(slot),
 	).unwrap().unwrap().into_inner();
+
 	assert_eq!(epoch_for_second_block, genesis_epoch);
+}
+
+#[test]
+fn importing_epoch_change_block_prunes_tree() {
+	use client::backend::Finalizer;
+
+	let mut net = BabeTestNet::new(1);
+
+	let peer = net.peer(0);
+	let data = peer.data.as_ref().expect("babe link set up during initialization");
+
+	let client = peer.client().as_full().expect("Only full clients are used in tests").clone();
+	let mut block_import = data.block_import.lock().take().expect("import set up during init");
+	let epoch_changes = data.link.epoch_changes.clone();
+
+	let mut proposer_factory = DummyFactory {
+		client: client.clone(),
+		config: data.link.config.clone(),
+		epoch_changes: data.link.epoch_changes.clone(),
+		mutator: Arc::new(|_, _| ()),
+	};
+
+	// This is just boilerplate code for proposing and importing n valid BABE
+	// blocks that are built on top of the given parent. The proposer takes care
+	// of producing epoch change digests according to the epoch duration (which
+	// is set to 6 slots in the test runtime).
+	let mut propose_and_import_blocks = |parent_id, n| {
+		let mut hashes = Vec::new();
+		let mut parent_header = client.header(&parent_id).unwrap().unwrap();
+
+		for _ in 0..n {
+			let block_hash = propose_and_import_block(
+				&parent_header,
+				None,
+				&mut proposer_factory,
+				&mut block_import,
+			);
+			hashes.push(block_hash);
+			parent_header = client.header(&BlockId::Hash(block_hash)).unwrap().unwrap();
+		}
+
+		hashes
+	};
+
+	// This is the block tree that we're going to use in this test. Each node
+	// represents an epoch change block, the epoch duration is 6 slots.
+	//
+	//    *---- F (#7)
+	//   /                 *------ G (#19) - H (#25)
+	//  /                 /
+	// A (#1) - B (#7) - C (#13) - D (#19) - E (#25)
+	//                              \
+	//                               *------ I (#25)
+
+	// Create and import the canon chain and keep track of fork blocks (A, C, D)
+	// from the diagram above.
+	let canon_hashes = propose_and_import_blocks(BlockId::Number(0), 30);
+
+	// Create the forks
+	let fork_1 = propose_and_import_blocks(BlockId::Hash(canon_hashes[0]), 10);
+	let fork_2 = propose_and_import_blocks(BlockId::Hash(canon_hashes[12]), 15);
+	let fork_3 = propose_and_import_blocks(BlockId::Hash(canon_hashes[18]), 10);
+
+	// We should be tracking a total of 9 epochs in the fork tree
+	assert_eq!(
+		epoch_changes.lock().tree().iter().count(),
+		9,
+	);
+
+	// And only one root
+	assert_eq!(
+		epoch_changes.lock().tree().roots().count(),
+		1,
+	);
+
+	// We finalize block #13 from the canon chain, so on the next epoch
+	// change the tree should be pruned, to not contain F (#7).
+	client.finalize_block(BlockId::Hash(canon_hashes[12]), None, false).unwrap();
+	propose_and_import_blocks(BlockId::Hash(client.info().chain.best_hash), 7);
+
+	// at this point no hashes from the first fork must exist on the tree
+	assert!(
+		!epoch_changes.lock().tree().iter().map(|(h, _, _)| h).any(|h| fork_1.contains(h)),
+	);
+
+	// but the epoch changes from the other forks must still exist
+	assert!(
+		epoch_changes.lock().tree().iter().map(|(h, _, _)| h).any(|h| fork_2.contains(h))
+	);
+
+	assert!(
+		epoch_changes.lock().tree().iter().map(|(h, _, _)| h).any(|h| fork_3.contains(h)),
+	);
+
+	// finalizing block #25 from the canon chain should prune out the second fork
+	client.finalize_block(BlockId::Hash(canon_hashes[24]), None, false).unwrap();
+	propose_and_import_blocks(BlockId::Hash(client.info().chain.best_hash), 8);
+
+	// at this point no hashes from the second fork must exist on the tree
+	assert!(
+		!epoch_changes.lock().tree().iter().map(|(h, _, _)| h).any(|h| fork_2.contains(h)),
+	);
+
+	// while epoch changes from the last fork should still exist
+	assert!(
+		epoch_changes.lock().tree().iter().map(|(h, _, _)| h).any(|h| fork_3.contains(h)),
+	);
+}
+
+#[test]
+#[should_panic]
+fn verify_slots_are_strictly_increasing() {
+	let mut net = BabeTestNet::new(1);
+
+	let peer = net.peer(0);
+	let data = peer.data.as_ref().expect("babe link set up during initialization");
+
+	let client = peer.client().as_full().expect("Only full clients are used in tests").clone();
+	let mut block_import = data.block_import.lock().take().expect("import set up during init");
+
+	let mut proposer_factory = DummyFactory {
+		client: client.clone(),
+		config: data.link.config.clone(),
+		epoch_changes: data.link.epoch_changes.clone(),
+		mutator: Arc::new(|_, _| ()),
+	};
+
+	let genesis_header = client.header(&BlockId::Number(0)).unwrap().unwrap();
+
+	// we should have no issue importing this block
+	let b1 = propose_and_import_block(
+		&genesis_header,
+		Some(999),
+		&mut proposer_factory,
+		&mut block_import,
+	);
+
+	let b1 = client.header(&BlockId::Hash(b1)).unwrap().unwrap();
+
+	// we should fail to import this block since the slot number didn't increase.
+	// we will panic due to the `PanickingBlockImport` defined above.
+	propose_and_import_block(
+		&b1,
+		Some(999),
+		&mut proposer_factory,
+		&mut block_import,
+	);
 }

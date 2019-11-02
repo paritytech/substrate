@@ -25,6 +25,7 @@
 
 use rstd::{prelude::*, result};
 use primitives::u32_trait::Value as U32;
+use sr_primitives::RuntimeDebug;
 use sr_primitives::traits::{Hash, EnsureOrigin};
 use sr_primitives::weights::SimpleDispatchInfo;
 use support::{
@@ -55,8 +56,7 @@ pub trait Trait<I=DefaultInstance>: system::Trait {
 }
 
 /// Origin for the collective module.
-#[derive(PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(PartialEq, Eq, Clone, RuntimeDebug)]
 pub enum RawOrigin<AccountId, I> {
 	/// It has been condoned by a given number of members of the collective from a given total.
 	Members(MemberCount, MemberCount),
@@ -69,8 +69,7 @@ pub enum RawOrigin<AccountId, I> {
 /// Origin for the collective module.
 pub type Origin<T, I=DefaultInstance> = RawOrigin<<T as system::Trait>::AccountId, I>;
 
-#[derive(PartialEq, Eq, Clone, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 /// Info for keeping track of a motion being voted on.
 pub struct Votes<AccountId> {
 	/// The proposal's unique index.
@@ -86,15 +85,15 @@ pub struct Votes<AccountId> {
 decl_storage! {
 	trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Collective {
 		/// The hashes of the active proposals.
-		pub Proposals get(proposals): Vec<T::Hash>;
+		pub Proposals get(fn proposals): Vec<T::Hash>;
 		/// Actual proposal for a given hash, if it's current.
-		pub ProposalOf get(proposal_of): map T::Hash => Option<<T as Trait<I>>::Proposal>;
+		pub ProposalOf get(fn proposal_of): map T::Hash => Option<<T as Trait<I>>::Proposal>;
 		/// Votes on a given proposal, if it is ongoing.
-		pub Voting get(voting): map T::Hash => Option<Votes<T::AccountId>>;
+		pub Voting get(fn voting): map T::Hash => Option<Votes<T::AccountId>>;
 		/// Proposals so far.
-		pub ProposalCount get(proposal_count): u32;
+		pub ProposalCount get(fn proposal_count): u32;
 		/// The current members of the collective. This is stored sorted (just by value).
-		pub Members get(members): Vec<T::AccountId>;
+		pub Members get(fn members): Vec<T::AccountId>;
 	}
 	add_extra_genesis {
 		config(phantom): rstd::marker::PhantomData<I>;
@@ -382,10 +381,10 @@ mod tests {
 	use support::{Hashable, assert_ok, assert_noop, parameter_types};
 	use system::{EventRecord, Phase};
 	use hex_literal::hex;
-	use runtime_io::with_externalities;
-	use primitives::{H256, Blake2Hasher};
+	use primitives::H256;
 	use sr_primitives::{
-		Perbill, traits::{BlakeTwo256, IdentityLookup, Block as BlockT}, testing::Header, BuildStorage
+		Perbill, traits::{BlakeTwo256, IdentityLookup, Block as BlockT}, testing::Header,
+		BuildStorage,
 	};
 	use crate as collective;
 
@@ -406,7 +405,6 @@ mod tests {
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = Event;
-		type WeightMultiplierUpdate = ();
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type MaximumBlockLength = MaximumBlockLength;
@@ -439,7 +437,7 @@ mod tests {
 		}
 	);
 
-	fn make_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+	fn make_ext() -> runtime_io::TestExternalities {
 		GenesisConfig {
 			collective_Instance1: Some(collective::GenesisConfig {
 				members: vec![1, 2, 3],
@@ -451,7 +449,7 @@ mod tests {
 
 	#[test]
 	fn motions_basic_environment_works() {
-		with_externalities(&mut make_ext(), || {
+		make_ext().execute_with(|| {
 			System::set_block_number(1);
 			assert_eq!(Collective::members(), vec![1, 2, 3]);
 			assert_eq!(Collective::proposals(), Vec::<H256>::new());
@@ -464,7 +462,7 @@ mod tests {
 
 	#[test]
 	fn removal_of_old_voters_votes_works() {
-		with_externalities(&mut make_ext(), || {
+		make_ext().execute_with(|| {
 			System::set_block_number(1);
 			let proposal = make_proposal(42);
 			let hash = BlakeTwo256::hash_of(&proposal);
@@ -498,7 +496,7 @@ mod tests {
 
 	#[test]
 	fn removal_of_old_voters_votes_works_with_set_members() {
-		with_externalities(&mut make_ext(), || {
+		make_ext().execute_with(|| {
 			System::set_block_number(1);
 			let proposal = make_proposal(42);
 			let hash = BlakeTwo256::hash_of(&proposal);
@@ -532,7 +530,7 @@ mod tests {
 
 	#[test]
 	fn propose_works() {
-		with_externalities(&mut make_ext(), || {
+		make_ext().execute_with(|| {
 			System::set_block_number(1);
 			let proposal = make_proposal(42);
 			let hash = proposal.blake2_256().into();
@@ -561,7 +559,7 @@ mod tests {
 
 	#[test]
 	fn motions_ignoring_non_collective_proposals_works() {
-		with_externalities(&mut make_ext(), || {
+		make_ext().execute_with(|| {
 			System::set_block_number(1);
 			let proposal = make_proposal(42);
 			assert_noop!(
@@ -573,29 +571,35 @@ mod tests {
 
 	#[test]
 	fn motions_ignoring_non_collective_votes_works() {
-		with_externalities(&mut make_ext(), || {
+		make_ext().execute_with(|| {
 			System::set_block_number(1);
 			let proposal = make_proposal(42);
 			let hash: H256 = proposal.blake2_256().into();
 			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone())));
-			assert_noop!(Collective::vote(Origin::signed(42), hash.clone(), 0, true), "voter not a member");
+			assert_noop!(
+				Collective::vote(Origin::signed(42), hash.clone(), 0, true),
+				"voter not a member",
+			);
 		});
 	}
 
 	#[test]
 	fn motions_ignoring_bad_index_collective_vote_works() {
-		with_externalities(&mut make_ext(), || {
+		make_ext().execute_with(|| {
 			System::set_block_number(3);
 			let proposal = make_proposal(42);
 			let hash: H256 = proposal.blake2_256().into();
 			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone())));
-			assert_noop!(Collective::vote(Origin::signed(2), hash.clone(), 1, true), "mismatched index");
+			assert_noop!(
+				Collective::vote(Origin::signed(2), hash.clone(), 1, true),
+				"mismatched index",
+			);
 		});
 	}
 
 	#[test]
 	fn motions_revoting_works() {
-		with_externalities(&mut make_ext(), || {
+		make_ext().execute_with(|| {
 			System::set_block_number(1);
 			let proposal = make_proposal(42);
 			let hash: H256 = proposal.blake2_256().into();
@@ -604,13 +608,19 @@ mod tests {
 				Collective::voting(&hash),
 				Some(Votes { index: 0, threshold: 2, ayes: vec![1], nays: vec![] })
 			);
-			assert_noop!(Collective::vote(Origin::signed(1), hash.clone(), 0, true), "duplicate vote ignored");
+			assert_noop!(
+				Collective::vote(Origin::signed(1), hash.clone(), 0, true),
+				"duplicate vote ignored",
+			);
 			assert_ok!(Collective::vote(Origin::signed(1), hash.clone(), 0, false));
 			assert_eq!(
 				Collective::voting(&hash),
 				Some(Votes { index: 0, threshold: 2, ayes: vec![], nays: vec![1] })
 			);
-			assert_noop!(Collective::vote(Origin::signed(1), hash.clone(), 0, false), "duplicate vote ignored");
+			assert_noop!(
+				Collective::vote(Origin::signed(1), hash.clone(), 0, false),
+				"duplicate vote ignored",
+			);
 
 			assert_eq!(System::events(), vec![
 				EventRecord {
@@ -640,7 +650,7 @@ mod tests {
 
 	#[test]
 	fn motions_disapproval_works() {
-		with_externalities(&mut make_ext(), || {
+		make_ext().execute_with(|| {
 			System::set_block_number(1);
 			let proposal = make_proposal(42);
 			let hash: H256 = proposal.blake2_256().into();
@@ -683,7 +693,7 @@ mod tests {
 
 	#[test]
 	fn motions_approval_works() {
-		with_externalities(&mut make_ext(), || {
+		make_ext().execute_with(|| {
 			System::set_block_number(1);
 			let proposal = make_proposal(42);
 			let hash: H256 = proposal.blake2_256().into();
