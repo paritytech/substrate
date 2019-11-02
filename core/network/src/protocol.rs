@@ -35,7 +35,6 @@ use sr_primitives::traits::{
 };
 use message::{BlockAnnounce, BlockAttributes, Direction, FromBlock, Message, RequestId};
 use message::generic::{Message as GenericMessage, ConsensusMessage};
-use event::Event;
 use consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
 use light_dispatch::{LightDispatch, LightDispatchNetwork, RequestData};
 use specialization::NetworkSpecialization;

@@ -38,3 +38,8 @@ rpassword = "4.0.1"
 
 [dev-dependencies]
 tempdir = "0.3.7"
+
+[features]
+wasmtime = [
+    "service/wasmtime",
+]
