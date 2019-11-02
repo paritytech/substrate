@@ -370,7 +370,7 @@ impl<Block: BlockT> SharedVoterSetState<Block> {
 
 /// The environment we run GRANDPA in.
 pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA, SC, VR> {
-	pub(crate) inner: Arc<Client<B, E, Block, RA>>,
+	pub(crate) client: Arc<Client<B, E, Block, RA>>,
 	pub(crate) select_chain: SC,
 	pub(crate) voters: Arc<VoterSet<AuthorityId>>,
 	pub(crate) config: Config,
@@ -413,7 +413,7 @@ where
 	NumberFor<Block>: BlockNumberOps,
 {
 	fn ancestry(&self, base: Block::Hash, block: Block::Hash) -> Result<Vec<Block::Hash>, GrandpaError> {
-		ancestry(&self.inner, base, block)
+		ancestry(&self.client, base, block)
 	}
 
 	fn best_chain_containing(&self, block: Block::Hash) -> Option<(Block::Hash, NumberFor<Block>)> {
@@ -434,7 +434,7 @@ where
 
 		match self.select_chain.finality_target(block, None) {
 			Ok(Some(best_hash)) => {
-				let base_header = self.inner.header(&BlockId::Hash(block)).ok()?
+				let base_header = self.client.header(&BlockId::Hash(block)).ok()?
 					.expect("Header known to exist after `best_containing` call; qed");
 
 				if let Some(limit) = limit {
@@ -449,7 +449,7 @@ where
 					}
 				}
 
-				let best_header = self.inner.header(&BlockId::Hash(best_hash)).ok()?
+				let best_header = self.client.header(&BlockId::Hash(best_hash)).ok()?
 					.expect("Header known to exist after `best_containing` call; qed");
 
 				// check if our vote is currently being limited due to a pending change
@@ -473,7 +473,7 @@ where
 							break;
 						}
 
-						target_header = self.inner.header(&BlockId::Hash(*target_header.parent_hash())).ok()?
+						target_header = self.client.header(&BlockId::Hash(*target_header.parent_hash())).ok()?
 							.expect("Header known to exist after `best_containing` call; qed");
 					}
 
@@ -492,7 +492,7 @@ where
 				// authority set limit filter, which can be considered a
 				// mandatory/implicit voting rule.
 				self.voting_rule
-					.restrict_vote(&*self.inner, &base_header, &best_header, target_header)
+					.restrict_vote(&*self.client, &base_header, &best_header, target_header)
 					.or(Some((target_header.hash(), *target_header.number())))
 			},
 			Ok(None) => {
@@ -601,8 +601,9 @@ where
 		// schedule incoming messages from the network to be held until
 		// corresponding blocks are imported.
 		let incoming = Box::new(UntilVoteTargetImported::new(
-			self.inner.import_notification_stream(),
-			self.inner.clone(),
+			self.client.import_notification_stream(),
+			self.network.clone(),
+			self.client.clone(),
 			incoming,
 			"round",
 		).map_err(Into::into));
@@ -650,7 +651,7 @@ where
 				current_rounds,
 			};
 
-			crate::aux_schema::write_voter_set_state(&*self.inner, &set_state)?;
+			crate::aux_schema::write_voter_set_state(&*self.client, &set_state)?;
 
 			Ok(Some(set_state))
 		})?;
@@ -691,7 +692,7 @@ where
 				current_rounds,
 			};
 
-			crate::aux_schema::write_voter_set_state(&*self.inner, &set_state)?;
+			crate::aux_schema::write_voter_set_state(&*self.client, &set_state)?;
 
 			Ok(Some(set_state))
 		})?;
@@ -742,7 +743,7 @@ where
 				current_rounds,
 			};
 
-			crate::aux_schema::write_voter_set_state(&*self.inner, &set_state)?;
+			crate::aux_schema::write_voter_set_state(&*self.client, &set_state)?;
 
 			Ok(Some(set_state))
 		})?;
@@ -800,7 +801,7 @@ where
 				current_rounds,
 			};
 
-			crate::aux_schema::write_voter_set_state(&*self.inner, &set_state)?;
+			crate::aux_schema::write_voter_set_state(&*self.client, &set_state)?;
 
 			Ok(Some(set_state))
 		})?;
@@ -816,7 +817,7 @@ where
 		commit: Commit<Block>,
 	) -> Result<(), Self::Error> {
 		finalize_block(
-			&*self.inner,
+			&*self.client,
 			&self.authority_set,
 			&self.consensus_changes,
 			Some(self.config.justification_period.into()),

@@ -23,6 +23,10 @@ pub use primitives::sr25519::*;
 mod app {
 	use primitives::testing::SR25519;
 	crate::app_crypto!(super, SR25519);
+
+	impl crate::traits::BoundToRuntimeAppPublic for Public {
+		type Public = Self;
+	}
 }
 
 pub use app::Public as AppPublic;

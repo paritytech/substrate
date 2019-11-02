@@ -406,7 +406,10 @@ impl TraitPair for Pair {
 	}
 
 	/// Derive a child key from a series of given junctions.
-	fn derive<Iter: Iterator<Item=DeriveJunction>>(&self, path: Iter) -> Result<Pair, DeriveError> {
+	fn derive<Iter: Iterator<Item=DeriveJunction>>(&self,
+		path: Iter,
+		_seed: Option<Seed>,
+	) -> Result<(Pair, Option<Seed>), DeriveError> {
 		let mut acc = self.0.secret.to_bytes();
 		for j in path {
 			match j {
@@ -414,18 +417,7 @@ impl TraitPair for Pair {
 				DeriveJunction::Hard(cc) => acc = derive_hard_junction(&acc, &cc),
 			}
 		}
-		Ok(Self::from_seed(&acc))
-	}
-
-	/// Generate a key from the phrase, password and derivation path.
-	fn from_standard_components<I: Iterator<Item=DeriveJunction>>(
-		phrase: &str,
-		password: Option<&str>,
-		path: I
-	) -> Result<Pair, SecretStringError> {
-		Self::from_phrase(phrase, password)?.0
-			.derive(path)
-			.map_err(|_| SecretStringError::InvalidPath)
+		Ok((Self::from_seed(&acc), Some(acc)))
 	}
 
 	/// Get the public key.
@@ -528,7 +520,7 @@ mod test {
 		let pair = Pair::from_seed(&seed);
 		assert_eq!(pair.seed(), &seed);
 		let path = vec![DeriveJunction::Hard([0u8; 32])];
-		let derived = pair.derive(path.into_iter()).ok().unwrap();
+		let derived = pair.derive(path.into_iter(), None).ok().unwrap().0;
 		assert_eq!(
 			derived.seed(),
 			&hex!("ede3354e133f9c8e337ddd6ee5415ed4b4ffe5fc7d21e933f4930a3730e5b21c")

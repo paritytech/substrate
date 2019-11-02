@@ -17,10 +17,6 @@
 //! A `CodeExecutor` specialization which uses natively compiled runtime when the wasm to be
 //! executed is equivalent to the natively compiled code.
 
-#![cfg_attr(feature = "benchmarks", feature(test))]
-
-#[cfg(feature = "benchmarks")] extern crate test;
-
 pub use substrate_executor::NativeExecutor;
 use substrate_executor::native_executor_instance;
 
@@ -38,9 +34,7 @@ mod tests {
 	use super::Executor;
 	use {balances, contracts, indices, system, timestamp};
 	use codec::{Encode, Decode, Joiner};
-	use runtime_support::{
-		Hashable, StorageValue, StorageMap, traits::Currency,
-	};
+	use runtime_support::{Hashable, StorageValue, StorageMap, traits::Currency};
 	use state_machine::TestExternalities as CoreTestExternalities;
 	use primitives::{
 		Blake2Hasher, NeverNativeValue, NativeOrEncoded, map,
@@ -57,8 +51,9 @@ mod tests {
 	use node_runtime::{
 		Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances, BuildStorage,
 		System, TransactionPayment, Event, TransferFee, TransactionBaseFee, TransactionByteFee,
-		constants::currency::*, impls::WeightToFee,
+		WeightFeeCoefficient, constants::currency::*,
 	};
+	use node_runtime::impls::LinearWeightToFee;
 	use node_primitives::{Balance, Hash, BlockNumber};
 	use node_testing::keyring::*;
 	use wabt;
@@ -501,8 +496,6 @@ mod tests {
 		).0.unwrap();
 
 		t.execute_with(|| {
-			// NOTE: fees differ slightly in tests that execute more than one block due to the
-			// weight update. Hence, using `assert_eq_error_rate`.
 			assert_eq!(
 				Balances::total_balance(&alice()),
 				alice_last_known_balance - 10 * DOLLARS - transfer_fee(&xt(), fm),
@@ -1069,7 +1062,7 @@ mod tests {
 			balance_alice -= length_fee;
 
 			let weight = default_transfer_call().get_dispatch_info().weight;
-			let weight_fee = WeightToFee::convert(weight);
+			let weight_fee = LinearWeightToFee::<WeightFeeCoefficient>::convert(weight);
 
 			// we know that weight to fee multiplier is effect-less in block 1.
 			assert_eq!(weight_fee as Balance, MILLICENTS);
@@ -1209,23 +1202,6 @@ mod tests {
 			nonce += 1;
 			time += 10;
 			block_number += 1;
-		}
-	}
-
-	#[cfg(feature = "benchmarks")]
-	mod benches {
-		use super::*;
-		use test::Bencher;
-
-		#[bench]
-		fn wasm_execute_block(b: &mut Bencher) {
-			let (block1, block2) = blocks();
-
-			b.iter(|| {
-				let mut t = new_test_ext(COMPACT_CODE, false);
-				WasmExecutor::new().call(&mut t, "Core_execute_block", &block1.0).unwrap();
-				WasmExecutor::new().call(&mut t, "Core_execute_block", &block2.0).unwrap();
-			});
 		}
 	}
 }

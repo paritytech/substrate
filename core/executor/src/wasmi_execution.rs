@@ -27,10 +27,10 @@ use primitives::{sandbox as sandbox_primitives, traits::Externalities};
 use crate::host_interface::SubstrateExternals;
 use crate::sandbox;
 use crate::allocator;
+use crate::wasm_utils::interpret_runtime_api_result;
 use crate::wasm_runtime::WasmRuntime;
 use log::trace;
 use parity_wasm::elements::{deserialize_buffer, DataSegment, Instruction, Module as RawModule};
-use runtime_version::RuntimeVersion;
 use wasm_interface::{
 	FunctionContext, HostFunctions, Pointer, WordSize, Sandbox, MemoryId, Result as WResult,
 };
@@ -110,24 +110,24 @@ impl sandbox::SandboxCapabilities for FunctionExecutor {
 
 impl FunctionContext for FunctionExecutor {
 	fn read_memory_into(&self, address: Pointer<u8>, dest: &mut [u8]) -> WResult<()> {
-		self.memory.get_into(address.into(), dest).map_err(|e| format!("{:?}", e))
+		self.memory.get_into(address.into(), dest).map_err(|e| e.to_string())
 	}
 
 	fn write_memory(&mut self, address: Pointer<u8>, data: &[u8]) -> WResult<()> {
-		self.memory.set(address.into(), data).map_err(|e| format!("{:?}", e))
+		self.memory.set(address.into(), data).map_err(|e| e.to_string())
 	}
 
 	fn allocate_memory(&mut self, size: WordSize) -> WResult<Pointer<u8>> {
 		let heap = &mut self.heap;
 		self.memory.with_direct_access_mut(|mem| {
-			heap.allocate(mem, size).map_err(|e| format!("{:?}", e))
+			heap.allocate(mem, size).map_err(|e| e.to_string())
 		})
 	}
 
 	fn deallocate_memory(&mut self, ptr: Pointer<u8>) -> WResult<()> {
 		let heap = &mut self.heap;
 		self.memory.with_direct_access_mut(|mem| {
-			heap.deallocate(mem, ptr).map_err(|e| format!("{:?}", e))
+			heap.deallocate(mem, ptr).map_err(|e| e.to_string())
 		})
 	}
 
@@ -138,13 +138,13 @@ impl FunctionContext for FunctionExecutor {
 
 impl Sandbox for FunctionExecutor {
 	fn memory_get(
-		&self,
+		&mut self,
 		memory_id: MemoryId,
 		offset: WordSize,
 		buf_ptr: Pointer<u8>,
 		buf_len: WordSize,
 	) -> WResult<u32> {
-		let sandboxed_memory = self.sandbox_store.memory(memory_id).map_err(|e| format!("{:?}", e))?;
+		let sandboxed_memory = self.sandbox_store.memory(memory_id).map_err(|e| e.to_string())?;
 
 		match MemoryInstance::transfer(
 			&sandboxed_memory,
@@ -165,7 +165,7 @@ impl Sandbox for FunctionExecutor {
 		val_ptr: Pointer<u8>,
 		val_len: WordSize,
 	) -> WResult<u32> {
-		let sandboxed_memory = self.sandbox_store.memory(memory_id).map_err(|e| format!("{:?}", e))?;
+		let sandboxed_memory = self.sandbox_store.memory(memory_id).map_err(|e| e.to_string())?;
 
 		match MemoryInstance::transfer(
 			&self.memory,
@@ -180,7 +180,7 @@ impl Sandbox for FunctionExecutor {
 	}
 
 	fn memory_teardown(&mut self, memory_id: MemoryId) -> WResult<()> {
-		self.sandbox_store.memory_teardown(memory_id).map_err(|e| format!("{:?}", e))
+		self.sandbox_store.memory_teardown(memory_id).map_err(|e| e.to_string())
 	}
 
 	fn memory_new(
@@ -188,7 +188,7 @@ impl Sandbox for FunctionExecutor {
 		initial: u32,
 		maximum: u32,
 	) -> WResult<MemoryId> {
-		self.sandbox_store.new_memory(initial, maximum).map_err(|e| format!("{:?}", e))
+		self.sandbox_store.new_memory(initial, maximum).map_err(|e| e.to_string())
 	}
 
 	fn invoke(
@@ -209,7 +209,7 @@ impl Sandbox for FunctionExecutor {
 			.map(Into::into)
 			.collect::<Vec<_>>();
 
-		let instance = self.sandbox_store.instance(instance_id).map_err(|e| format!("{:?}", e))?;
+		let instance = self.sandbox_store.instance(instance_id).map_err(|e| e.to_string())?;
 		let result = instance.invoke(export_name, &args, self, state);
 
 		match result {
@@ -229,7 +229,7 @@ impl Sandbox for FunctionExecutor {
 	}
 
 	fn instance_teardown(&mut self, instance_id: u32) -> WResult<()> {
-		self.sandbox_store.instance_teardown(instance_id).map_err(|e| format!("{:?}", e))
+		self.sandbox_store.instance_teardown(instance_id).map_err(|e| e.to_string())
 	}
 
 	fn instance_new(
@@ -309,7 +309,7 @@ impl wasmi::Externals for FunctionExecutor {
 		)?;
 
 		function.execute(self, &mut args)
-			.map_err(Error::FunctionExecution)
+			.map_err(|msg| Error::FunctionExecution(function.name().to_string(), msg))
 			.map_err(wasmi::Trap::from)
 			.map(|v| v.map(Into::into))
 	}
@@ -356,10 +356,9 @@ fn call_in_wasm_module(
 			Ok(vec![I32(offset as i32), I32(data.len() as i32)])
 		},
 		|res, memory| {
-			if let Some(I64(r)) = res {
-				let offset = r as u32;
-				let length = (r as u64 >> 32) as usize;
-				memory.get(offset, length).map_err(|_| Error::Runtime).map(Some)
+			if let Some(I64(retval)) = res {
+				let (ptr, length) = interpret_runtime_api_result(retval);
+				memory.get(ptr.into(), length as usize).map_err(|_| Error::Runtime).map(Some)
 			} else {
 				Ok(None)
 			}
@@ -553,15 +552,11 @@ impl StateSnapshot {
 	}
 }
 
-/// A runtime along with its version and initial state snapshot.
+/// A runtime along with its initial state snapshot.
 #[derive(Clone)]
 pub struct WasmiRuntime {
 	/// A wasm module instance.
 	instance: ModuleRef,
-	/// Runtime version according to `Core_version`.
-	///
-	/// Can be `None` if the runtime doesn't expose this function.
-	version: Option<RuntimeVersion>,
 	/// The snapshot of the instance's state taken just after the instantiation.
 	state_snapshot: StateSnapshot,
 }
@@ -595,15 +590,9 @@ impl WasmRuntime for WasmiRuntime {
 			call_in_wasm_module(ext, module, method, data)
 		})
 	}
-
-	fn version(&self) -> Option<RuntimeVersion> {
-		self.version.clone()
-	}
 }
 
-pub fn create_instance<E: Externalities>(ext: &mut E, code: &[u8], heap_pages: u64)
-	-> Result<WasmiRuntime, WasmError>
-{
+pub fn create_instance(code: &[u8], heap_pages: u64) -> Result<WasmiRuntime, WasmError> {
 	let module = Module::from_buffer(&code).map_err(|_| WasmError::InvalidModule)?;
 
 	// Extract the data segments from the wasm code.
@@ -614,7 +603,7 @@ pub fn create_instance<E: Externalities>(ext: &mut E, code: &[u8], heap_pages: u
 
 	// Instantiate this module.
 	let instance = instantiate_module(heap_pages as usize, &module)
-		.map_err(WasmError::Instantiation)?;
+		.map_err(|e| WasmError::Instantiation(e.to_string()))?;
 
 	// Take state snapshot before executing anything.
 	let state_snapshot = StateSnapshot::take(&instance, data_segments, heap_pages)
@@ -625,12 +614,8 @@ pub fn create_instance<E: Externalities>(ext: &mut E, code: &[u8], heap_pages: u
 				",
 		);
 
-	let version = call_in_wasm_module(ext, &instance, "Core_version", &[])
-		.ok()
-		.and_then(|v| RuntimeVersion::decode(&mut v.as_slice()).ok());
 	Ok(WasmiRuntime {
 		instance,
-		version,
 		state_snapshot,
 	})
 }
@@ -648,316 +633,4 @@ fn extract_data_segments(wasm_code: &[u8]) -> Result<Vec<DataSegment>, WasmError
 		.unwrap_or(&[])
 		.to_vec();
 	Ok(segments)
-}
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-
-	use state_machine::TestExternalities as CoreTestExternalities;
-	use hex_literal::hex;
-	use primitives::{
-		Blake2Hasher, blake2_128, blake2_256, ed25519, sr25519, map, Pair, offchain::OffchainExt,
-	};
-	use runtime_test::WASM_BINARY;
-	use substrate_offchain::testing;
-	use trie::{TrieConfiguration, trie_types::Layout};
-	use codec::{Encode, Decode};
-
-	type TestExternalities = CoreTestExternalities<Blake2Hasher, u64>;
-
-	fn call<E: Externalities>(
-		ext: &mut E,
-		heap_pages: u64,
-		code: &[u8],
-		method: &str,
-		data: &[u8],
-	) -> Result<Vec<u8>, Error> {
-		let mut instance = create_instance(ext, code, heap_pages)
-			.map_err(|err| err.to_string())?;
-		instance.call(ext, method, data)
-	}
-
-	#[test]
-	fn returning_should_work() {
-		let mut ext = TestExternalities::default();
-		let mut ext = ext.ext();
-		let test_code = WASM_BINARY;
-
-		let output = call(&mut ext, 8, &test_code[..], "test_empty_return", &[]).unwrap();
-		assert_eq!(output, vec![0u8; 0]);
-	}
-
-	#[test]
-	fn panicking_should_work() {
-		let mut ext = TestExternalities::default();
-		let mut ext = ext.ext();
-		let test_code = WASM_BINARY;
-
-		let output = call(&mut ext, 8, &test_code[..], "test_panic", &[]);
-		assert!(output.is_err());
-
-		let output = call(&mut ext, 8, &test_code[..], "test_conditional_panic", &[0]);
-		assert_eq!(Decode::decode(&mut &output.unwrap()[..]), Ok(Vec::<u8>::new()));
-
-		let output = call(&mut ext, 8, &test_code[..], "test_conditional_panic", &vec![2].encode());
-		assert!(output.is_err());
-	}
-
-	#[test]
-	fn storage_should_work() {
-		let mut ext = TestExternalities::default();
-
-		{
-			let mut ext = ext.ext();
-			ext.set_storage(b"foo".to_vec(), b"bar".to_vec());
-			let test_code = WASM_BINARY;
-
-			let output = call(
-				&mut ext,
-				8,
-				&test_code[..],
-				"test_data_in",
-				&b"Hello world".to_vec().encode(),
-			).unwrap();
-
-			assert_eq!(output, b"all ok!".to_vec().encode());
-		}
-
-		let expected = TestExternalities::new((map![
-			b"input".to_vec() => b"Hello world".to_vec(),
-			b"foo".to_vec() => b"bar".to_vec(),
-			b"baz".to_vec() => b"bar".to_vec()
-		], map![]));
-		assert_eq!(ext, expected);
-	}
-
-	#[test]
-	fn clear_prefix_should_work() {
-		let mut ext = TestExternalities::default();
-		{
-			let mut ext = ext.ext();
-			ext.set_storage(b"aaa".to_vec(), b"1".to_vec());
-			ext.set_storage(b"aab".to_vec(), b"2".to_vec());
-			ext.set_storage(b"aba".to_vec(), b"3".to_vec());
-			ext.set_storage(b"abb".to_vec(), b"4".to_vec());
-			ext.set_storage(b"bbb".to_vec(), b"5".to_vec());
-			let test_code = WASM_BINARY;
-
-			// This will clear all entries which prefix is "ab".
-			let output = call(
-				&mut ext,
-				8,
-				&test_code[..],
-				"test_clear_prefix",
-				&b"ab".to_vec().encode(),
-			).unwrap();
-
-			assert_eq!(output, b"all ok!".to_vec().encode());
-		}
-
-		let expected = TestExternalities::new((map![
-			b"aaa".to_vec() => b"1".to_vec(),
-			b"aab".to_vec() => b"2".to_vec(),
-			b"bbb".to_vec() => b"5".to_vec()
-		], map![]));
-		assert_eq!(expected, ext);
-	}
-
-	#[test]
-	fn blake2_256_should_work() {
-		let mut ext = TestExternalities::default();
-		let mut ext = ext.ext();
-		let test_code = WASM_BINARY;
-		assert_eq!(
-			call(&mut ext, 8, &test_code[..], "test_blake2_256", &[0]).unwrap(),
-			blake2_256(&b""[..]).to_vec().encode(),
-		);
-		assert_eq!(
-			call(
-				&mut ext,
-				8,
-				&test_code[..],
-				"test_blake2_256",
-				&b"Hello world!".to_vec().encode(),
-			).unwrap(),
-			blake2_256(&b"Hello world!"[..]).to_vec().encode(),
-		);
-	}
-
-	#[test]
-	fn blake2_128_should_work() {
-		let mut ext = TestExternalities::default();
-		let mut ext = ext.ext();
-		let test_code = WASM_BINARY;
-		assert_eq!(
-			call(&mut ext, 8, &test_code[..], "test_blake2_128", &[0]).unwrap(),
-			blake2_128(&b""[..]).to_vec().encode(),
-		);
-		assert_eq!(
-			call(
-				&mut ext,
-				8,
-				&test_code[..],
-				"test_blake2_128",
-				&b"Hello world!".to_vec().encode(),
-			).unwrap(),
-			blake2_128(&b"Hello world!"[..]).to_vec().encode(),
-		);
-	}
-
-	#[test]
-	fn twox_256_should_work() {
-		let mut ext = TestExternalities::default();
-		let mut ext = ext.ext();
-		let test_code = WASM_BINARY;
-		assert_eq!(
-			call(&mut ext, 8, &test_code[..], "test_twox_256", &[0]).unwrap(),
-			hex!(
-				"99e9d85137db46ef4bbea33613baafd56f963c64b1f3685a4eb4abd67ff6203a"
-			).to_vec().encode(),
-		);
-		assert_eq!(
-			call(
-				&mut ext,
-				8,
-				&test_code[..],
-				"test_twox_256",
-				&b"Hello world!".to_vec().encode(),
-			).unwrap(),
-			hex!(
-				"b27dfd7f223f177f2a13647b533599af0c07f68bda23d96d059da2b451a35a74"
-			).to_vec().encode(),
-		);
-	}
-
-	#[test]
-	fn twox_128_should_work() {
-		let mut ext = TestExternalities::default();
-		let mut ext = ext.ext();
-		let test_code = WASM_BINARY;
-		assert_eq!(
-			call(&mut ext, 8, &test_code[..], "test_twox_128", &[0]).unwrap(),
-			hex!("99e9d85137db46ef4bbea33613baafd5").to_vec().encode(),
-		);
-		assert_eq!(
-			call(
-				&mut ext,
-				8,
-				&test_code[..],
-				"test_twox_128",
-				&b"Hello world!".to_vec().encode(),
-			).unwrap(),
-			hex!("b27dfd7f223f177f2a13647b533599af").to_vec().encode(),
-		);
-	}
-
-	#[test]
-	fn ed25519_verify_should_work() {
-		let mut ext = TestExternalities::default();
-		let mut ext = ext.ext();
-		let test_code = WASM_BINARY;
-		let key = ed25519::Pair::from_seed(&blake2_256(b"test"));
-		let sig = key.sign(b"all ok!");
-		let mut calldata = vec![];
-		calldata.extend_from_slice(key.public().as_ref());
-		calldata.extend_from_slice(sig.as_ref());
-
-		assert_eq!(
-			call(&mut ext, 8, &test_code[..], "test_ed25519_verify", &calldata.encode()).unwrap(),
-			true.encode(),
-		);
-
-		let other_sig = key.sign(b"all is not ok!");
-		let mut calldata = vec![];
-		calldata.extend_from_slice(key.public().as_ref());
-		calldata.extend_from_slice(other_sig.as_ref());
-
-		assert_eq!(
-			call(&mut ext, 8, &test_code[..], "test_ed25519_verify", &calldata.encode()).unwrap(),
-			false.encode(),
-		);
-	}
-
-	#[test]
-	fn sr25519_verify_should_work() {
-		let mut ext = TestExternalities::default();
-		let mut ext = ext.ext();
-		let test_code = WASM_BINARY;
-		let key = sr25519::Pair::from_seed(&blake2_256(b"test"));
-		let sig = key.sign(b"all ok!");
-		let mut calldata = vec![];
-		calldata.extend_from_slice(key.public().as_ref());
-		calldata.extend_from_slice(sig.as_ref());
-
-		assert_eq!(
-			call(&mut ext, 8, &test_code[..], "test_sr25519_verify", &calldata.encode()).unwrap(),
-			true.encode(),
-		);
-
-		let other_sig = key.sign(b"all is not ok!");
-		let mut calldata = vec![];
-		calldata.extend_from_slice(key.public().as_ref());
-		calldata.extend_from_slice(other_sig.as_ref());
-
-		assert_eq!(
-			call(&mut ext, 8, &test_code[..], "test_sr25519_verify", &calldata.encode()).unwrap(),
-			false.encode(),
-		);
-	}
-
-	#[test]
-	fn ordered_trie_root_should_work() {
-		let mut ext = TestExternalities::default();
-		let mut ext = ext.ext();
-		let trie_input = vec![b"zero".to_vec(), b"one".to_vec(), b"two".to_vec()];
-		let test_code = WASM_BINARY;
-		assert_eq!(
-			call(&mut ext, 8, &test_code[..], "test_ordered_trie_root", &[0]).unwrap(),
-			Layout::<Blake2Hasher>::ordered_trie_root(trie_input.iter()).as_bytes().encode(),
-		);
-	}
-
-	#[test]
-	fn offchain_local_storage_should_work() {
-		use substrate_client::backend::OffchainStorage;
-
-		let mut ext = TestExternalities::default();
-		let (offchain, state) = testing::TestOffchainExt::new();
-		ext.register_extension(OffchainExt::new(offchain));
-		let test_code = WASM_BINARY;
-		let mut ext = ext.ext();
-		assert_eq!(
-			call(&mut ext, 8, &test_code[..], "test_offchain_local_storage", &[0]).unwrap(),
-			true.encode(),
-		);
-		assert_eq!(state.read().persistent_storage.get(b"", b"test"), Some(vec![]));
-	}
-
-	#[test]
-	fn offchain_http_should_work() {
-		let mut ext = TestExternalities::default();
-		let (offchain, state) = testing::TestOffchainExt::new();
-		ext.register_extension(OffchainExt::new(offchain));
-		state.write().expect_request(
-			0,
-			testing::PendingRequest {
-				method: "POST".into(),
-				uri: "http://localhost:12345".into(),
-				body: vec![1, 2, 3, 4],
-				headers: vec![("X-Auth".to_owned(), "test".to_owned())],
-				sent: true,
-				response: Some(vec![1, 2, 3]),
-				response_headers: vec![("X-Auth".to_owned(), "hello".to_owned())],
-				..Default::default()
-			},
-		);
-
-		let test_code = WASM_BINARY;
-		let mut ext = ext.ext();
-		assert_eq!(
-			call(&mut ext, 8, &test_code[..], "test_offchain_http", &[0]).unwrap(),
-			true.encode(),
-		);
-	}
 }

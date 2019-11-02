@@ -71,7 +71,7 @@ impl<G: RuntimeGenesis> GenesisSource<G> {
 }
 
 impl<'a, G: RuntimeGenesis, E> BuildStorage for &'a ChainSpec<G, E> {
-	fn build_storage(self) -> Result<(StorageOverlay, ChildrenStorageOverlay), String> {
+	fn build_storage(&self) -> Result<(StorageOverlay, ChildrenStorageOverlay), String> {
 		match self.genesis.resolve()? {
 			Genesis::Runtime(gc) => gc.build_storage(),
 			Genesis::Raw(map, children_map) => Ok((
@@ -85,7 +85,7 @@ impl<'a, G: RuntimeGenesis, E> BuildStorage for &'a ChainSpec<G, E> {
 	}
 
 	fn assimilate_storage(
-		self,
+		&self,
 		_: &mut (StorageOverlay, ChildrenStorageOverlay)
 	) -> Result<(), String> {
 		Err("`assimilate_storage` not implemented for `ChainSpec`.".into())
@@ -289,11 +289,11 @@ mod tests {
 
 	impl BuildStorage for Genesis {
 		fn assimilate_storage(
-			self,
+			&self,
 			storage: &mut (StorageOverlay, ChildrenStorageOverlay),
 		) -> Result<(), String> {
 			storage.0.extend(
-				self.0.into_iter().map(|(a, b)| (a.into_bytes(), b.into_bytes()))
+				self.0.iter().map(|(a, b)| (a.clone().into_bytes(), b.clone().into_bytes()))
 			);
 			Ok(())
 		}

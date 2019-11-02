@@ -41,6 +41,11 @@ use noncanonical::NonCanonicalOverlay;
 use pruning::RefWindow;
 use log::trace;
 
+const PRUNING_MODE: &[u8] = b"mode";
+const PRUNING_MODE_ARCHIVE: &[u8] = b"archive";
+const PRUNING_MODE_ARCHIVE_CANON: &[u8] = b"archive_canonical";
+const PRUNING_MODE_CONSTRAINED: &[u8] = b"constrained";
+
 /// Database value type.
 pub type DBValue = Vec<u8>;
 
@@ -77,6 +82,8 @@ pub enum Error<E: fmt::Debug> {
 	InvalidBlockNumber,
 	/// Trying to insert block with unknown parent.
 	InvalidParent,
+	/// Invalid pruning mode specified. Contains expected mode.
+	InvalidPruningMode(String),
 }
 
 /// Pinning error type.
@@ -99,6 +106,7 @@ impl<E: fmt::Debug> fmt::Debug for Error<E> {
 			Error::InvalidBlock => write!(f, "Trying to canonicalize invalid block"),
 			Error::InvalidBlockNumber => write!(f, "Trying to insert block with invalid number"),
 			Error::InvalidParent => write!(f, "Trying to insert block with unknown parent"),
+			Error::InvalidPruningMode(e) => write!(f, "Expected pruning mode: {}", e),
 		}
 	}
 }
@@ -159,6 +167,14 @@ impl PruningMode {
 		}
 	}
 
+	/// Is this an archive (either ArchiveAll or ArchiveCanonical) pruning mode?
+	pub fn id(&self) -> &[u8] {
+		match self {
+			PruningMode::ArchiveAll => PRUNING_MODE_ARCHIVE,
+			PruningMode::ArchiveCanonical => PRUNING_MODE_ARCHIVE_CANON,
+			PruningMode::Constrained(_) => PRUNING_MODE_CONSTRAINED,
+		}
+	}
 }
 
 impl Default for PruningMode {
@@ -183,6 +199,10 @@ struct StateDbSync<BlockHash: Hash, Key: Hash> {
 impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 	pub fn new<D: MetaDb>(mode: PruningMode, db: &D) -> Result<StateDbSync<BlockHash, Key>, Error<D::Error>> {
 		trace!(target: "state-db", "StateDb settings: {:?}", mode);
+
+		// Check that settings match
+		Self::check_meta(&mode, db)?;
+
 		let non_canonical: NonCanonicalOverlay<BlockHash, Key> = NonCanonicalOverlay::new(db)?;
 		let pruning: Option<RefWindow<BlockHash, Key>> = match mode {
 			PruningMode::Constrained(Constraints {
@@ -192,6 +212,7 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 			PruningMode::Constrained(_) => Some(RefWindow::new(db)?),
 			PruningMode::ArchiveAll | PruningMode::ArchiveCanonical => None,
 		};
+
 		Ok(StateDbSync {
 			mode,
 			non_canonical,
@@ -200,18 +221,41 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		})
 	}
 
+	fn check_meta<D: MetaDb>(mode: &PruningMode, db: &D) -> Result<(), Error<D::Error>> {
+		let db_mode = db.get_meta(&to_meta_key(PRUNING_MODE, &())).map_err(Error::Db)?;
+		trace!(target: "state-db",
+			"DB pruning mode: {:?}",
+			db_mode.as_ref().map(|v| std::str::from_utf8(&v))
+		);
+		match &db_mode {
+			Some(v) if v.as_slice() == mode.id() => Ok(()),
+			Some(v) => Err(Error::InvalidPruningMode(String::from_utf8_lossy(v).into())),
+			None => Ok(()),
+		}
+	}
+
 	pub fn insert_block<E: fmt::Debug>(&mut self, hash: &BlockHash, number: u64, parent_hash: &BlockHash, mut changeset: ChangeSet<Key>) -> Result<CommitSet<Key>, Error<E>> {
+		let mut meta = ChangeSet::default();
+		if number == 0 {
+			// Save pruning mode when writing first block.
+			meta.inserted.push((to_meta_key(PRUNING_MODE, &()), self.mode.id().into()));
+		}
+
 		match self.mode {
 			PruningMode::ArchiveAll => {
 				changeset.deleted.clear();
 				// write changes immediately
 				Ok(CommitSet {
 					data: changeset,
-					meta: Default::default(),
+					meta: meta,
 				})
 			},
 			PruningMode::Constrained(_) | PruningMode::ArchiveCanonical => {
-				self.non_canonical.insert(hash, number, parent_hash, changeset)
+				let commit = self.non_canonical.insert(hash, number, parent_hash, changeset);
+				commit.map(|mut c| {
+					c.meta.inserted.extend(meta.inserted);
+					c
+				})
 			}
 		}
 	}
@@ -543,5 +587,24 @@ mod tests {
 		assert!(!sdb.is_pruned(&H256::from_low_u64_be(21), 2));
 		assert!(sdb.is_pruned(&H256::from_low_u64_be(22), 2));
 		assert!(db.data_eq(&make_db(&[1, 21, 3, 921, 922, 93, 94])));
+	}
+
+	#[test]
+	fn detects_incompatible_mode() {
+		let mut db = make_db(&[]);
+		let state_db = StateDb::new(PruningMode::ArchiveAll, &db).unwrap();
+		db.commit(
+			&state_db
+			.insert_block::<io::Error>(
+				&H256::from_low_u64_be(0),
+				0,
+				&H256::from_low_u64_be(0),
+				make_changeset(&[], &[]),
+			)
+			.unwrap(),
+		);
+		let new_mode = PruningMode::Constrained(Constraints { max_blocks: Some(2), max_mem: None });
+		let state_db: Result<StateDb<H256, H256>, _> = StateDb::new(new_mode, &db);
+		assert!(state_db.is_err());
 	}
 }

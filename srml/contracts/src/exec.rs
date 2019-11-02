@@ -29,6 +29,7 @@ pub type CallOf<T> = <T as Trait>::Call;
 pub type MomentOf<T> = <<T as Trait>::Time as Time>::Moment;
 pub type SeedOf<T> = <T as system::Trait>::Hash;
 pub type BlockNumberOf<T> = <T as system::Trait>::BlockNumber;
+pub type StorageKey = [u8; 32];
 
 /// A type that represents a topic of an event. At the moment a hash is used.
 pub type TopicOf<T> = <T as system::Trait>::Hash;
@@ -83,8 +84,6 @@ macro_rules! try_or_exec_error {
 		}
 	}
 }
-
-pub type StorageKey = [u8; 32];
 
 /// An interface that provides access to the external environment in which the
 /// smart-contract is executed.
@@ -642,7 +641,7 @@ fn transfer<'a, T: Trait, V: Vm<T>, L: Loader<T>>(
 	if would_create && value < ctx.config.existential_deposit {
 		return Err("value too low to create account");
 	}
-	T::Currency::ensure_can_withdraw(transactor, value, WithdrawReason::Transfer, new_from_balance)?;
+	T::Currency::ensure_can_withdraw(transactor, value, WithdrawReason::Transfer.into(), new_from_balance)?;
 
 	let new_to_balance = match to_balance.checked_add(&value) {
 		Some(b) => b,

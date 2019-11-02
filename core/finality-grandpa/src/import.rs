@@ -465,17 +465,15 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, SC> BlockImport<Block>
 			_ => {},
 		}
 
-		if !needs_justification && !enacts_consensus_change {
-			return Ok(ImportResult::Imported(imported_aux));
-		}
-
 		match justification {
 			Some(justification) => {
 				self.import_justification(hash, number, justification, needs_justification).unwrap_or_else(|err| {
-					debug!(target: "finality", "Imported block #{} that enacts authority set change with \
-						invalid justification: {:?}, requesting justification from peers.", number, err);
-					imported_aux.bad_justification = true;
-					imported_aux.needs_justification = true;
+					if needs_justification || enacts_consensus_change {
+						debug!(target: "finality", "Imported block #{} that enacts authority set change with \
+							invalid justification: {:?}, requesting justification from peers.", number, err);
+						imported_aux.bad_justification = true;
+						imported_aux.needs_justification = true;
+					}
 				});
 			},
 			None => {

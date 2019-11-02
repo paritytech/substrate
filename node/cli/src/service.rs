@@ -33,7 +33,7 @@ use transaction_pool::{self, txpool::{Pool as TransactionPool}};
 use inherents::InherentDataProviders;
 use network::construct_simple_protocol;
 
-use substrate_service::{NewService, NetworkStatus};
+use substrate_service::{Service, NetworkStatus};
 use client::{Client, LocalCallExecutor};
 use client_db::Backend;
 use sr_primitives::traits::Block as BlockT;
@@ -95,7 +95,7 @@ macro_rules! new_full_start {
 				import_setup = Some((block_import, grandpa_link, babe_link));
 				Ok(import_queue)
 			})?
-			.with_rpc_extensions(|client, pool| -> RpcExtension {
+			.with_rpc_extensions(|client, pool, _backend| -> RpcExtension {
 				node_rpc::create(client, pool)
 			})?;
 
@@ -124,14 +124,19 @@ macro_rules! new_full {
 			$config.disable_grandpa
 		);
 
+		// sentry nodes announce themselves as authorities to the network
+		// and should run the same protocols authorities do, but it should
+		// never actively participate in any consensus process.
+		let participates_in_consensus = is_authority && !$config.sentry_mode;
+
 		let (builder, mut import_setup, inherent_data_providers) = new_full_start!($config);
 
 		// Dht event channel from the network to the authority discovery module. Use bounded channel to ensure
 		// back-pressure. Authority discovery is triggering one event per authority within the current authority set.
 		// This estimates the authority set size to be somewhere below 10 000 thereby setting the channel buffer size to
 		// 10 000.
-		let (dht_event_tx, dht_event_rx) =
-			mpsc::channel::<DhtEvent>(10000);
+		let (dht_event_tx, _dht_event_rx) =
+			mpsc::channel::<DhtEvent>(10_000);
 
 		let service = builder.with_network_protocol(|_| Ok(crate::service::NodeProtocol::new()))?
 			.with_finality_proof_provider(|client, backend|
@@ -145,7 +150,7 @@ macro_rules! new_full {
 
 		($with_startup_data)(&block_import, &babe_link);
 
-		if is_authority {
+		if participates_in_consensus {
 			let proposer = substrate_basic_authorship::ProposerFactory {
 				client: service.client(),
 				transaction_pool: service.transaction_pool(),
@@ -169,32 +174,35 @@ macro_rules! new_full {
 
 			let babe = babe::start_babe(babe_config)?;
 			service.spawn_essential_task(babe);
-
-			let authority_discovery = authority_discovery::AuthorityDiscovery::new(
-				service.client(),
-				service.network(),
-				dht_event_rx,
-			);
-			service.spawn_task(authority_discovery);
 		}
+
+		// if the node isn't actively participating in consensus then it doesn't
+		// need a keystore, regardless of which protocol we use below.
+		let keystore = if participates_in_consensus {
+			Some(service.keystore())
+		} else {
+			None
+		};
 
 		let config = grandpa::Config {
 			// FIXME #1578 make this available through chainspec
 			gossip_duration: std::time::Duration::from_millis(333),
 			justification_period: 512,
 			name: Some(name),
-			keystore: Some(service.keystore()),
+			observer_enabled: true,
+			keystore,
+			is_authority,
 		};
 
 		match (is_authority, disable_grandpa) {
 			(false, false) => {
 				// start the lightweight GRANDPA observer
-				service.spawn_task(Box::new(grandpa::run_grandpa_observer(
+				service.spawn_task(grandpa::run_grandpa_observer(
 					config,
 					grandpa_link,
 					service.network(),
 					service.on_exit(),
-				)?));
+				)?);
 			},
 			(true, false) => {
 				// start the full GRANDPA voter
@@ -207,7 +215,9 @@ macro_rules! new_full {
 					telemetry_on_connect: Some(service.telemetry_on_connect_stream()),
 					voting_rule: grandpa::VotingRulesBuilder::default().build(),
 				};
-				service.spawn_task(Box::new(grandpa::run_grandpa_voter(grandpa_config)?));
+				// the GRANDPA voter task is considered infallible, i.e.
+				// if it fails we take down the service with it.
+				service.spawn_essential_task(grandpa::run_grandpa_voter(grandpa_config)?);
 			},
 			(_, true) => {
 				grandpa::setup_disabled_grandpa(
@@ -245,7 +255,7 @@ pub type NodeConfiguration<C> = Configuration<C, GenesisConfig, crate::chain_spe
 /// Builds a new service for a full client.
 pub fn new_full<C: Send + Default + 'static>(config: NodeConfiguration<C>)
 -> Result<
-	NewService<
+	Service<
 		ConcreteBlock,
 		ConcreteClient,
 		LongestChain<ConcreteBackend, ConcreteBlock>,
@@ -312,7 +322,7 @@ pub fn new_light<C: Send + Default + 'static>(config: NodeConfiguration<C>)
 		.with_finality_proof_provider(|client, backend|
 			Ok(Arc::new(GrandpaFinalityProofProvider::new(backend, client)) as _)
 		)?
-		.with_rpc_extensions(|client, pool| -> RpcExtension {
+		.with_rpc_extensions(|client, pool, _backend| -> RpcExtension {
 			node_rpc::create(client, pool)
 		})?
 		.build()?;
@@ -327,17 +337,15 @@ mod tests {
 	use consensus_common::{
 		Environment, Proposer, BlockImportParams, BlockOrigin, ForkChoiceStrategy, BlockImport,
 	};
-	use node_primitives::{Block, DigestItem};
-	use node_runtime::{BalancesCall, Call, UncheckedExtrinsic};
+	use node_primitives::{Block, DigestItem, Signature};
+	use node_runtime::{BalancesCall, Call, UncheckedExtrinsic, Address};
 	use node_runtime::constants::{currency::CENTS, time::SLOT_DURATION};
 	use codec::{Encode, Decode};
-	use primitives::{
-		crypto::Pair as CryptoPair,
-		sr25519::Public as AddressPublic, H256,
-	};
+	use primitives::{crypto::Pair as CryptoPair, H256};
 	use sr_primitives::{
 		generic::{BlockId, Era, Digest, SignedPayload},
 		traits::Block as BlockT,
+		traits::Verify,
 		OpaqueExtrinsic,
 	};
 	use timestamp;
@@ -345,6 +353,9 @@ mod tests {
 	use keyring::AccountKeyring;
 	use substrate_service::{AbstractService, Roles};
 	use crate::service::new_full;
+	use sr_primitives::traits::IdentifyAccount;
+
+	type AccountPublic = <Signature as Verify>::Signer;
 
 	#[cfg(feature = "rhd")]
 	fn test_sync() {
@@ -515,8 +526,8 @@ mod tests {
 			},
 			|service, _| {
 				let amount = 5 * CENTS;
-				let to = AddressPublic::from_raw(bob.public().0);
-				let from = AddressPublic::from_raw(charlie.public().0);
+				let to: Address = AccountPublic::from(bob.public()).into_account().into();
+				let from: Address = AccountPublic::from(charlie.public()).into_account().into();
 				let genesis_hash = service.client().block_hash(0).unwrap().unwrap();
 				let best_block_id = BlockId::number(service.client().info().chain.best_number);
 				let version = service.client().runtime_version_at(&best_block_id).unwrap().spec_version;

@@ -323,6 +323,8 @@ we support multiple environment variables:
                          this environment variable should only be required in certain circumstances.
 * `WASM_TARGET_DIRECTORY` - Will copy any build WASM binary to the given directory. The path needs
                             to be absolute.
+* `WASM_BUILD_RUSTFLAGS` - Extend `RUSTFLAGS` given to `cargo build` while building the wasm binary.
+* `WASM_BUILD_NO_COLOR` - Disable color output of the wasm build.
 
 Each project can be skipped individually by using the environment variable `SKIP_PROJECT_NAME_WASM_BUILD`.
 Where `PROJECT_NAME` needs to be replaced by the name of the cargo project, e.g. `node-runtime` will
@@ -418,7 +420,7 @@ curl -H 'Content-Type: application/json' --data '{ "jsonrpc":"2.0", "method":"au
 === Viewing documentation for Substrate packages
 
 You can generate documentation for a Substrate Rust package and have it automatically open in your web browser using https://doc.rust-lang.org/rustdoc/what-is-rustdoc.html#using-rustdoc-with-cargo[rustdoc with Cargo],
-(of the The Rustdoc Book), by running the the following command:
+(of the The Rustdoc Book), by running the following command:
 
 ```
 cargo doc --package <spec> --open

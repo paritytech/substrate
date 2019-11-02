@@ -107,6 +107,10 @@ impl<T: Trait> Module<T> {
 	}
 }
 
+impl<T: Trait> sr_primitives::BoundToRuntimeAppPublic for Module<T> {
+	type Public = T::AuthorityId;
+}
+
 impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	type Key = T::AuthorityId;
 
@@ -139,7 +143,7 @@ mod tests {
 	use runtime_io::TestExternalities;
 	use sr_primitives::{
 		testing::{Header, UintAuthorityId}, traits::{ConvertInto, IdentityLookup, OpaqueKeys},
-		Perbill,
+		Perbill, KeyTypeId,
 	};
 	use support::{impl_outer_origin, parameter_types};
 
@@ -218,6 +222,8 @@ mod tests {
 
 	pub struct TestSessionHandler;
 	impl session::SessionHandler<AuthorityId> for TestSessionHandler {
+		const KEY_TYPE_IDS: &'static [KeyTypeId] = &[key_types::DUMMY];
+
 		fn on_new_session<Ks: OpaqueKeys>(
 			_changed: bool,
 			_validators: &[(AuthorityId, Ks)],

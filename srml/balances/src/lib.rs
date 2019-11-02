@@ -824,13 +824,13 @@ where
 	fn ensure_can_withdraw(
 		who: &T::AccountId,
 		_amount: T::Balance,
-		reason: WithdrawReason,
+		reasons: WithdrawReasons,
 		new_balance: T::Balance,
 	) -> Result {
-		match reason {
-			WithdrawReason::Reserve | WithdrawReason::Transfer if Self::vesting_balance(who) > new_balance =>
-				return Err("vesting balance too high to send value"),
-			_ => {}
+		if reasons.intersects(WithdrawReason::Reserve | WithdrawReason::Transfer)
+			&& Self::vesting_balance(who) > new_balance
+		{
+			return Err("vesting balance too high to send value");
 		}
 		let locks = Self::locks(who);
 		if locks.is_empty() {
@@ -842,7 +842,7 @@ where
 			.all(|l|
 				now >= l.until
 				|| new_balance >= l.amount
-				|| !l.reasons.contains(reason)
+				|| !l.reasons.intersects(reasons)
 			)
 		{
 			Ok(())
@@ -868,7 +868,7 @@ where
 		if would_create && value < T::ExistentialDeposit::get() {
 			return Err("value too low to create account");
 		}
-		Self::ensure_can_withdraw(transactor, value, WithdrawReason::Transfer, new_from_balance)?;
+		Self::ensure_can_withdraw(transactor, value, WithdrawReason::Transfer.into(), new_from_balance)?;
 
 		// NOTE: total stake being stored in the same type means that this could never overflow
 		// but better to be safe than sorry.
@@ -893,7 +893,7 @@ where
 	fn withdraw(
 		who: &T::AccountId,
 		value: Self::Balance,
-		reason: WithdrawReason,
+		reasons: WithdrawReasons,
 		liveness: ExistenceRequirement,
 	) -> result::Result<Self::NegativeImbalance, &'static str> {
 		let old_balance = Self::free_balance(who);
@@ -907,7 +907,7 @@ where
 			{
 				return Err("payment would kill account")
 			}
-			Self::ensure_can_withdraw(who, value, reason, new_balance)?;
+			Self::ensure_can_withdraw(who, value, reasons, new_balance)?;
 			Self::set_free_balance(who, new_balance);
 			Ok(NegativeImbalance::new(value))
 		} else {
@@ -1014,7 +1014,7 @@ where
 		Self::free_balance(who)
 			.checked_sub(&value)
 			.map_or(false, |new_balance|
-				Self::ensure_can_withdraw(who, value, WithdrawReason::Reserve, new_balance).is_ok()
+				Self::ensure_can_withdraw(who, value, WithdrawReason::Reserve.into(), new_balance).is_ok()
 			)
 	}
 
@@ -1028,7 +1028,7 @@ where
 			return Err("not enough free funds")
 		}
 		let new_balance = b - value;
-		Self::ensure_can_withdraw(who, value, WithdrawReason::Reserve, new_balance)?;
+		Self::ensure_can_withdraw(who, value, WithdrawReason::Reserve.into(), new_balance)?;
 		Self::set_reserved_balance(who, Self::reserved_balance(who) + value);
 		Self::set_free_balance(who, new_balance);
 		Ok(())

@@ -25,15 +25,7 @@ pub mod system;
 use rstd::{prelude::*, marker::PhantomData};
 use codec::{Encode, Decode, Input, Error};
 
-use primitives::{
-	Blake2Hasher,
-	OpaqueMetadata,
-	RuntimeDebug,
-	testing::{
-		ED25519,
-		SR25519,
-	}
-};
+use primitives::{Blake2Hasher, OpaqueMetadata, RuntimeDebug};
 use app_crypto::{ed25519, sr25519, RuntimeAppPublic};
 pub use app_crypto;
 use trie_db::{TrieMut, Trie};
@@ -454,9 +446,7 @@ fn code_using_trie() -> u64 {
 
 impl_opaque_keys! {
 	pub struct SessionKeys {
-		#[id(ED25519)]
 		pub ed25519: ed25519::AppPublic,
-		#[id(SR25519)]
 		pub sr25519: sr25519::AppPublic,
 	}
 }

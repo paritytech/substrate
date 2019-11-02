@@ -196,15 +196,7 @@ macro_rules! wasm_export_functions {
 				$( $fn_impl )*
 			}
 
-			// We need to return *something*
-			let output = Vec::<u8>::new();
-			let res = output.as_ptr() as u64 + ((output.len() as u64) << 32);
-
-			// Leak the output vector to avoid it being freed.
-			// This is fine in a WASM context since the heap
-			// will be discarded after the call.
-			$crate::rstd::mem::forget(output);
-			res
+			$crate::to_substrate_wasm_fn_return_value(&())
 		}
 	};
 	(@IMPL
@@ -232,14 +224,7 @@ macro_rules! wasm_export_functions {
 				$( $fn_impl )*
 			};
 
-			let output = $crate::Encode::encode(&output);
-			let res = output.as_ptr() as u64 + ((output.len() as u64) << 32);
-
-			// Leak the output vector to avoid it being freed.
-			// This is fine in a WASM context since the heap
-			// will be discarded after the call.
-			$crate::rstd::mem::forget(output);
-			res
+			$crate::to_substrate_wasm_fn_return_value(&output)
 		}
 	};
 }

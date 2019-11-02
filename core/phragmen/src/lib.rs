@@ -116,6 +116,7 @@ pub struct PhragmenResult<AccountId> {
 /// This, at the current version, resembles the `Exposure` defined in the staking SRML module, yet
 /// they do not necessarily have to be the same.
 #[derive(Default, RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub struct Support<AccountId> {
 	/// The amount of support as the effect of self-vote.
 	pub own: ExtendedBalance,
@@ -290,7 +291,9 @@ pub fn elect<AccountId, Balance, FS, C>(
 		let mut assignment = (n.who.clone(), vec![]);
 		for e in &mut n.edges {
 			if let Some(c) = elected_candidates.iter().cloned().find(|(c, _)| *c == e.who) {
-				if c.0 != n.who {
+				// if self_vote == false, this branch should always be executed as we want to
+				// collect all nominations
+				if c.0 != n.who || !self_vote  {
 					let per_bill_parts =
 					{
 						if n.load == e.load {
@@ -358,6 +361,47 @@ pub fn elect<AccountId, Balance, FS, C>(
 		winners: elected_candidates,
 		assignments: assigned,
 	})
+}
+
+/// Build the support map from the given phragmen result.
+pub fn build_support_map<Balance, AccountId, FS, C>(
+	elected_stashes: &Vec<AccountId>,
+	assignments: &Vec<(AccountId, Vec<PhragmenAssignment<AccountId>>)>,
+	stake_of: FS,
+	assume_self_vote: bool,
+) -> SupportMap<AccountId> where
+	AccountId: Default + Ord + Member,
+	Balance: Default + Copy + SimpleArithmetic,
+	C: Convert<Balance, u64> + Convert<u128, Balance>,
+	for<'r> FS: Fn(&'r AccountId) -> Balance,
+{
+	let to_votes = |b: Balance| <C as Convert<Balance, u64>>::convert(b) as ExtendedBalance;
+	// Initialize the support of each candidate.
+	let mut supports = <SupportMap<AccountId>>::new();
+	elected_stashes
+		.iter()
+		.map(|e| (e, if assume_self_vote { to_votes(stake_of(e)) } else { Zero::zero() } ))
+		.for_each(|(e, s)| {
+			let item = Support { own: s, total: s, ..Default::default() };
+			supports.insert(e.clone(), item);
+		});
+
+	// build support struct.
+	for (n, assignment) in assignments.iter() {
+		for (c, per_thing) in assignment.iter() {
+			let nominator_stake = to_votes(stake_of(n));
+			// AUDIT: it is crucially important for the `Mul` implementation of all
+			// per-things to be sound.
+			let other_stake = *per_thing * nominator_stake;
+			if let Some(support) = supports.get_mut(c) {
+				// For an astronomically rich validator with more astronomically rich
+				// set of nominators, this might saturate.
+				support.total = support.total.saturating_add(other_stake);
+				support.others.push((n.clone(), other_stake));
+			}
+		}
+	}
+	supports
 }
 
 /// Performs equalize post-processing to the output of the election algorithm. This happens in

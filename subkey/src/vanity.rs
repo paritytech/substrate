@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use super::Crypto;
+use super::{PublicOf, PublicT, Crypto};
 use primitives::Pair;
 use rand::{rngs::OsRng, RngCore};
 
@@ -62,7 +62,9 @@ fn calculate_score(_desired: &str, key: &str) -> usize {
 	0
 }
 
-pub(super) fn generate_key<C: Crypto>(desired: &str) -> Result<KeyPair<C>, &str> {
+pub(super) fn generate_key<C: Crypto>(desired: &str) -> Result<KeyPair<C>, &str> where
+		PublicOf<C>: PublicT,
+{
 	if desired.is_empty() {
 		return Err("Pattern must not be empty");
 	}
