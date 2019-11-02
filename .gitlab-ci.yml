@@ -51,7 +51,7 @@ variables:
     - /^[0-9]+$/                   # PRs
   retry:
     max: 2
-    when: 
+    when:
       - runner_system_failure
       - unknown_failure
       - api_failure
@@ -133,7 +133,7 @@ test-linux-stable:                 &test-linux
     variables:
       - $DEPLOY_TAG
   script:
-    - time cargo test --all --release --verbose --locked |
+    - WASM_BUILD_NO_COLOR=1 time cargo test --all --release --verbose --locked |
         tee output.log
     - sccache -s
   after_script:
@@ -159,7 +159,7 @@ test-srml-staking:                 &test-srml-staking
       - $DEPLOY_TAG
   script:
     - cd srml/staking/
-    - time cargo test --release --verbose --no-default-features --features std
+    - WASM_BUILD_NO_COLOR=1 time cargo test --release --verbose --no-default-features --features std
     - sccache -s
 
 
@@ -177,7 +177,7 @@ test-linux-stable-int:
   script:
     - echo "___Logs will be partly shown at the end in case of failure.___"
     - echo "___Full log will be saved to the job artifacts only in case of failure.___"
-    - RUST_LOG=sync=trace,consensus=trace,client=trace,state-db=trace,db=trace,forks=trace,state_db=trace,storage_cache=trace
+    - WASM_BUILD_NO_COLOR=1 RUST_LOG=sync=trace,consensus=trace,client=trace,state-db=trace,db=trace,forks=trace,state_db=trace,storage_cache=trace
         time cargo test -p node-cli --release --verbose --locked -- --ignored --test-threads=1
         &> ${CI_COMMIT_SHORT_SHA}_int_failure.log
     - sccache -s
@@ -230,7 +230,7 @@ build-linux-substrate:
     variables:
       - $DEPLOY_TAG
   script:
-    - time cargo build --release --verbose
+    - WASM_BUILD_NO_COLOR=1 time cargo build --release --verbose
     - mkdir -p ./artifacts/substrate/
     - mv ./target/release/substrate ./artifacts/substrate/.
     - echo -n "Substrate version = "
