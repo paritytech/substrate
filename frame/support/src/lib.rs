@@ -300,7 +300,7 @@ mod tests {
 			DataDM::insert(0, 3, 2);
 			DataDM::insert(0, 4, 3);
 
-			let collect = || DataDM::enumerate().collect::<Vec<_>>();
+			let collect = || DataDM::collect::<Vec<_>>();
 			assert_eq!(collect(), vec![(3, 3), (2, 2), (1, 1), (0, 0)]);
 
 			// Two existing

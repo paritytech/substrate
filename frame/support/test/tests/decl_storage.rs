@@ -644,13 +644,13 @@ mod test_append_and_len {
 			assert_eq!(OptionLinkedMapVec::decode_len(0), Ok(0));
 
 			// Double map
-			assert_eq!(DoubleMapVec::get(0), vec![]);
+			assert_eq!(DoubleMapVec::get(0, 0), vec![]);
 			assert_eq!(DoubleMapVec::decode_len(0, 1), Ok(0));
 
-			assert_eq!(DoubleMapVecWithDefault::get(0), vec![6, 9]);
+			assert_eq!(DoubleMapVecWithDefault::get(0, 0), vec![6, 9]);
 			assert_eq!(DoubleMapVecWithDefault::decode_len(0, 1), Ok(2));
 
-			assert_eq!(OptionDoubleMapVec::get(0), None);
+			assert_eq!(OptionDoubleMapVec::get(0, 0), None);
 			assert_eq!(OptionDoubleMapVec::decode_len(0, 1), Ok(0));
 		});
 	}

@@ -137,10 +137,12 @@ where
 		G::from_optional_value_to_query(value)
 	}
 
-	fn swap<KArg1, KArg2>(key11: KArg1, key12: KArg2, key21: KArg1, key22: KArg2)
+	fn swap<KArg1, KArg2, KArg3, KArg4>(key11: KArg1, key12: KArg2, key21: KArg3, key22: KArg4)
 	where
 		KArg1: EncodeLike<K1>,
 		KArg2: EncodeLike<K2>,
+		KArg3: EncodeLike<K1>,
+		KArg4: EncodeLike<K2>,
 	{
 		let final_k1 = Self::storage_double_map_final_key(key11, key12);
 		let final_k2 = Self::storage_double_map_final_key(key21, key22);
