@@ -378,22 +378,27 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 	}
 
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
-		if let Some(map) = self.inner.get(&None) { map.keys().filter(|key| key.starts_with(prefix))
-			.map(|k| &**k).for_each(f) }
+		if let Some(map) = self.inner.get(&None) {
+			map.keys().filter(|key| key.starts_with(prefix)).map(|k| &**k).for_each(f)
+		}
 	}
 
 	fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], mut f: F) {
-		if let Some(map) = self.inner.get(&None) { map.iter().filter(|(key, _val)| key.starts_with(prefix))
-			.for_each(|(k, v)| f(k, v)) }
+		if let Some(map) = self.inner.get(&None) {
+			map.iter().filter(|(key, _val)| key.starts_with(prefix)).for_each(|(k, v)| f(k, v))
+		}
 	}
 
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], mut f: F) {
-		if let Some(map) = self.inner.get(&Some(storage_key.to_vec())) { map.keys().for_each(|k| f(&k)) }
+		if let Some(map) = self.inner.get(&Some(storage_key.to_vec())) {
+			map.keys().for_each(|k| f(&k))
+		}
 	}
 
 	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(&self, storage_key: &[u8], prefix: &[u8], f: F) {
-		if let Some(map) = self.inner.get(&Some(storage_key.to_vec())) { map.keys().filter(|key| key.starts_with(prefix))
-			.map(|k| &**k).for_each(f) }
+		if let Some(map) = self.inner.get(&Some(storage_key.to_vec())) {
+			map.keys().filter(|key| key.starts_with(prefix)).map(|k| &**k).for_each(f)
+		}
 	}
 
 	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)

@@ -103,7 +103,7 @@ impl Default for Options {
 			},
 			future: base::Limit {
 				count: 128,
-				total_bytes: 1024 * 1024,
+				total_bytes: 1 * 1024 * 1024,
 			},
 		}
 	}

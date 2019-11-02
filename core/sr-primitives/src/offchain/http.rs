@@ -472,7 +472,7 @@ impl Headers {
 	}
 
 	/// Convert this headers into an iterator.
-	pub fn to_iter(&self) -> HeadersIterator {
+	pub fn iter(&self) -> HeadersIterator {
 		HeadersIterator { collection: &self.raw, index: None }
 	}
 }
@@ -488,8 +488,7 @@ impl<'a> HeadersIterator<'a> {
 	/// Move the iterator to the next position.
 	///
 	/// Returns `true` is `current` has been set by this call.
-	#[allow(clippy::should_implement_trait)]
-	pub fn next(&mut self) -> bool {
+		pub fn next(&mut self) -> bool {
 		let index = self.index.map(|x| x + 1).unwrap_or(0);
 		self.index = Some(index);
 		index < self.collection.len()

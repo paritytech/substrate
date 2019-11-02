@@ -419,11 +419,11 @@ impl<T: AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
 		}
 		let ver = d[0].try_into().map_err(|_: ()| PublicError::UnknownVersion)?;
 
-		if d[len+1..len+3] != ss58hash(&d[0..=len]).as_bytes()[0..2] {
+		if d[len+1..len+3] != ss58hash(&d[0..len+1]).as_bytes()[0..2] {
 			// Invalid checksum.
 			return Err(PublicError::InvalidChecksum);
 		}
-		res.as_mut().copy_from_slice(&d[1..=len]);
+		res.as_mut().copy_from_slice(&d[1..len+1]);
 		Ok((res, ver))
 	}
 
@@ -510,8 +510,7 @@ mod dummy {
 		fn as_ref(&self) -> &[u8] { &b""[..] }
 	}
 
-	#[allow(clippy::transmute_ptr_to_ptr)]
-	impl AsMut<[u8]> for Dummy {
+		impl AsMut<[u8]> for Dummy {
 		fn as_mut(&mut self) -> &mut[u8] {
 			unsafe {
 				#[allow(mutable_transmutes)]

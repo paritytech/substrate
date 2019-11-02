@@ -520,7 +520,7 @@ mod tests {
 			memtrie.commit();
 			if *memtrie.root() != real {
 				println!("TRIE MISMATCH");
-				println!();
+				println!("");
 				println!("{:?} vs {:?}", memtrie.root(), real);
 				for i in &x {
 					println!("{:#x?} -> {:#x?}", i.0, i.1);
@@ -532,7 +532,7 @@ mod tests {
 			let hashed_null_node = hashed_null_node::<Layout>();
 			if *memtrie.root() != hashed_null_node {
 				println!("- TRIE MISMATCH");
-				println!();
+				println!("");
 				println!("{:?} vs {:?}", memtrie.root(), hashed_null_node);
 				for i in &x {
 					println!("{:#x?} -> {:#x?}", i.0, i.1);

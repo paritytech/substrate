@@ -61,7 +61,6 @@ pub fn to_big_uint(x: u128) -> biguint::BigUint {
 ///     cannot be safely casted back to u128.
 ///
 /// Invariant: c must be greater than or equal to 1.
-#[allow(clippy::many_single_char_names)]
 pub fn multiply_by_rational(mut a: u128, mut b: u128, mut c: u128) -> Result<u128, &'static str> {
 	if a.is_zero() || b.is_zero() { return Ok(Zero::zero()); }
 	c = c.max(1);

@@ -120,7 +120,6 @@ pub fn key_changes_proof<'a, H: Hasher, Number: BlockNumber>(
 /// Check key changes proof and return changes of the key at given blocks range.
 /// `max` is the number of best known block.
 /// Changes are returned in descending order (i.e. last block comes first).
-#[allow(clippy::too_many_arguments)]
 pub fn key_changes_proof_check<'a, H: Hasher, Number: BlockNumber>(
 	config: ConfigurationRange<'a, Number>,
 	roots_storage: &dyn RootsStorage<H, Number>,
@@ -144,7 +143,6 @@ pub fn key_changes_proof_check<'a, H: Hasher, Number: BlockNumber>(
 }
 
 /// Similar to the `key_changes_proof_check` function, but works with prepared proof storage.
-#[allow(clippy::too_many_arguments)]
 pub fn key_changes_proof_check_with_db<'a, H: Hasher, Number: BlockNumber>(
 	config: ConfigurationRange<'a, Number>,
 	roots_storage: &dyn RootsStorage<H, Number>,

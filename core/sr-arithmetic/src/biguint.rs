@@ -179,9 +179,7 @@ impl BigUint {
 	/// limbs. The caller may strip the output if desired.
 	///
 	/// Taken from "The Art of Computer Programming" by D.E. Knuth, vol 2, chapter 4.
-	#[allow(clippy::many_single_char_names)]
-	#[allow(clippy::should_implement_trait)]
-	pub fn add(self, other: &Self) -> Self {
+			pub fn add(self, other: &Self) -> Self {
 		let n = self.len().max(other.len());
 		let mut k: Double = 0;
 		let mut w = Self::with_capacity(n + 1);
@@ -204,9 +202,7 @@ impl BigUint {
 	/// If `other` is bigger than `self`, `Err(B - borrow)` is returned.
 	///
 	/// Taken from "The Art of Computer Programming" by D.E. Knuth, vol 2, chapter 4.
-	#[allow(clippy::many_single_char_names)]
-	#[allow(clippy::should_implement_trait)]
-	pub fn sub(self, other: &Self) -> Result<Self, Self> {
+			pub fn sub(self, other: &Self) -> Result<Self, Self> {
 		let n = self.len().max(other.len());
 		let mut k = 0;
 		let mut w = Self::with_capacity(n);
@@ -254,9 +250,7 @@ impl BigUint {
 	/// limbs. The caller may strip the output if desired.
 	///
 	/// Taken from "The Art of Computer Programming" by D.E. Knuth, vol 2, chapter 4.
-	#[allow(clippy::many_single_char_names)]
-	#[allow(clippy::should_implement_trait)]
-	pub fn mul(self, other: &Self) -> Self {
+			pub fn mul(self, other: &Self) -> Self {
 		let n = self.len();
 		let m = other.len();
 		let mut w = Self::with_capacity(m + n);
@@ -316,8 +310,7 @@ impl BigUint {
 	/// the above fails, `None` is returned.`
 	///
 	/// Taken from "The Art of Computer Programming" by D.E. Knuth, vol 2, chapter 4.
-	#[allow(clippy::many_single_char_names)]
-	pub fn div(self, other: &Self, rem: bool) -> Option<(Self, Self)> {
+		pub fn div(self, other: &Self, rem: bool) -> Option<(Self, Self)> {
 		if other.len() <= 1
 			|| other.msb() == 0
 			|| self.msb() == 0

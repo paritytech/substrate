@@ -359,7 +359,6 @@ pub struct BlakeTwo256;
 
 // Search for Note [clippy::derive_hash_xor_eq] for an explanation of the line
 // below.
-#[allow(clippy::derive_hash_xor_eq)]
 impl Hash for BlakeTwo256 {
 	type Output = primitives::H256;
 	type Hasher = Blake2Hasher;
@@ -771,7 +770,6 @@ pub trait ModuleDispatchError {
 }
 
 #[impl_for_tuples(1, 12)]
-#[allow(clippy::type_complexity)]
 impl<AccountId, Call> SignedExtension for Tuple {
 	for_tuples!( where #( Tuple: SignedExtension<AccountId=AccountId, Call=Call> )* );
 	type AccountId = AccountId;

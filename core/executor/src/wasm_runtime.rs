@@ -65,7 +65,6 @@ pub enum WasmExecutionMethod {
 ///
 /// For now the cache grows indefinitely, but that should be fine for now since runtimes can only be
 /// upgraded rarely and there are no other ways to make the node to execute some other runtime.
-#[allow(clippy::type_complexity)]
 pub struct RuntimesCache {
 	/// A cache of runtime instances along with metadata, ready to be reused.
 	///

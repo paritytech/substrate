@@ -103,7 +103,6 @@ fn discard_values<Key: Hash>(
 //
 // In summary, the above means using `filter` results in moving data that is
 // behind a shared reference.
-#[allow(clippy::unnecessary_filter_map)]
 fn discard_descendants<BlockHash: Hash, Key: Hash>(
 	levels: &mut VecDeque<Vec<BlockOverlay<BlockHash, Key>>>,
 	mut values: &mut HashMap<Key, (u32, DBValue)>,

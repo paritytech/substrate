@@ -126,7 +126,6 @@ impl<B: BlockT> ImportQueue<B> for BasicQueue<B> {
 
 /// Message destinated to the background worker.
 #[derive(Debug)]
-#[allow(clippy::enum_variant_names)]
 enum ToWorkerMsg<B: BlockT> {
 	ImportBlocks(BlockOrigin, Vec<IncomingBlock<B>>),
 	ImportJustification(Origin, B::Hash, NumberFor<B>, Justification),

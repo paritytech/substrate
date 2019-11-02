@@ -75,7 +75,6 @@ impl<B: BlockT> Clone for BufferedLinkSender<B> {
 }
 
 /// Internal buffered message.
-#[allow(clippy::type_complexity)]
 enum BlockImportWorkerMsg<B: BlockT> {
 	BlocksProcessed(usize, usize, Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>),
 	JustificationImported(Origin, B::Hash, NumberFor<B>, bool),
@@ -85,8 +84,7 @@ enum BlockImportWorkerMsg<B: BlockT> {
 }
 
 impl<B: BlockT> Link<B> for BufferedLinkSender<B> {
-	#[allow(clippy::type_complexity)]
-	fn blocks_processed(
+		fn blocks_processed(
 		&mut self,
 		imported: usize,
 		count: usize,
@@ -139,7 +137,6 @@ impl<B: BlockT> BufferedLinkReceiver<B> {
 	/// it is as if this method always returned `Poll::Pending`.
 	pub fn poll_actions(&mut self, cx: &mut Context, link: &mut dyn Link<B>) {
 		while let Poll::Ready(Some(msg)) = Stream::poll_next(Pin::new(&mut self.rx), cx) {
-
 			match msg {
 				BlockImportWorkerMsg::BlocksProcessed(imported, count, results) =>
 					link.blocks_processed(imported, count, results),

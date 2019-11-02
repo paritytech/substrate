@@ -175,7 +175,6 @@ pub struct StateMachine<'a, B, H, N, T, Exec> where H: Hasher<Out=H256>, B: Back
 	_marker: PhantomData<(H, N)>,
 }
 
-#[allow(clippy::too_many_arguments)]
 impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec> where
 	H: Hasher<Out=H256>,
 	Exec: CodeExecutor,

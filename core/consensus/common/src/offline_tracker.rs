@@ -53,7 +53,6 @@ impl Observed {
 }
 
 /// Tracks offline validators and can issue a report for those offline.
-#[allow(clippy::new_without_default)]
 pub struct OfflineTracker<AuthorityId> {
 	observed: HashMap<AuthorityId, Observed>,
 }

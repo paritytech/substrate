@@ -46,7 +46,6 @@ struct InMemoryStorageData<H: Hasher, Number: BlockNumber> {
 	mdb: MemoryDB<H>,
 }
 
-#[allow(clippy::new_without_default)]
 impl<H: Hasher, Number: BlockNumber> InMemoryStorage<H, Number> {
 	/// Creates storage from given in-memory database.
 	pub fn with_db(mdb: MemoryDB<H>) -> Self {

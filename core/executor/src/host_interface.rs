@@ -41,7 +41,6 @@ macro_rules! debug_trace {
 
 pub struct SubstrateExternals;
 
-#[allow(clippy::unit_arg)]
 impl_wasm_host_interface! {
 	impl SubstrateExternals where context {
 		ext_malloc(size: WordSize) -> Pointer<u8> {

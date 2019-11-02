@@ -419,8 +419,7 @@ pub trait Currency<AccountId> {
 
 	/// Similar to deposit_creating, only accepts a `NegativeImbalance` and returns nothing on
 	/// success.
-	#[allow(clippy::unit_arg)]
-	fn resolve_into_existing(
+		fn resolve_into_existing(
 		who: &AccountId,
 		value: Self::NegativeImbalance,
 	) -> result::Result<(), Self::NegativeImbalance> {
@@ -465,8 +464,7 @@ pub trait Currency<AccountId> {
 	) -> result::Result<Self::NegativeImbalance, &'static str>;
 
 	/// Similar to withdraw, only accepts a `PositiveImbalance` and returns nothing on success.
-	#[allow(clippy::unit_arg)]
-	fn settle(
+		fn settle(
 		who: &AccountId,
 		value: Self::PositiveImbalance,
 		reason: WithdrawReason,

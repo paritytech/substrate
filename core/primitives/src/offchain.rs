@@ -204,13 +204,11 @@ impl Timestamp {
 	}
 
 	/// Increase the timestamp by given `Duration`.
-	#[allow(clippy::should_implement_trait)]
-	pub fn add(self, duration: Duration) -> Timestamp {
+		pub fn add(self, duration: Duration) -> Timestamp {
 		Timestamp(self.0.saturating_add(duration.0))
 	}
 
-	#[allow(clippy::should_implement_trait)]
-	/// Decrease the timestamp by given `Duration`
+		/// Decrease the timestamp by given `Duration`
 	pub fn sub(self, duration: Duration) -> Timestamp {
 		Timestamp(self.0.saturating_sub(duration.0))
 	}

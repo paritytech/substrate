@@ -69,7 +69,6 @@ pub struct IncomingBlock<B: BlockT> {
 pub type CacheKeyId = [u8; 4];
 
 /// Verify a justification of a block
-#[allow(clippy::type_complexity)]
 pub trait Verifier<B: BlockT>: Send + Sync {
 	/// Verify the given data and return the BlockImportParams and an optional
 	/// new set of validators to import. If not, err with an Error-Message
@@ -117,7 +116,6 @@ pub trait ImportQueue<B: BlockT>: Send {
 
 /// Hooks that the verification queue can use to influence the synchronization
 /// algorithm.
-#[allow(clippy::type_complexity)]
 pub trait Link<B: BlockT>: Send {
 	/// Batch of blocks imported, with or without error.
 	fn blocks_processed(
@@ -156,7 +154,6 @@ pub enum BlockImportResult<N: ::std::fmt::Debug + PartialEq> {
 
 /// Block import error.
 #[derive(Debug)]
-#[allow(clippy::large_enum_variant)]
 pub enum BlockImportError {
 	/// Block missed header, can't be imported
 	IncompleteHeader(Option<Origin>),

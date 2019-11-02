@@ -128,7 +128,6 @@ impl<H, N, V> ForkTree<H, N, V> where
 	}
 }
 
-#[allow(clippy::new_without_default)]
 impl<H, N, V> ForkTree<H, N, V> where
 	H: PartialEq,
 	N: Ord,

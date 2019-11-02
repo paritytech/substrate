@@ -47,8 +47,7 @@ impl<H: Hasher> NodeCodecT<H> for NodeCodec<H> {
 		H::hash(<Self as NodeCodecT<_>>::empty_node())
 	}
 
-	#[allow(clippy::needless_range_loop)]
-	fn decode(data: &[u8]) -> rstd::result::Result<Node, Self::Error> {
+		fn decode(data: &[u8]) -> rstd::result::Result<Node, Self::Error> {
 		let input = &mut &*data;
 		let head = NodeHeader::decode(input)?;
 		match head {

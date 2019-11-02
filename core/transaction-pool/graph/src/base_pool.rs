@@ -228,7 +228,6 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: ::std::fmt::Debug> BasePool<Hash
 
 		// take first transaction from the list
 		while let Some(tx) = to_import.pop() {
-
 			// find transactions in Future that it unlocks
 			to_import.append(&mut self.future.satisfy_tags(&tx.transaction.provides));
 

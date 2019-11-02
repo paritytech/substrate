@@ -167,7 +167,6 @@ impl<E: Encode + serde::Serialize> serde::Serialize for FnEncode<E> {
 /// All the metadata about an outer event.
 #[derive(Clone, PartialEq, Eq, Encode, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Decode, Serialize))]
-#[allow(clippy::type_complexity)]
 pub struct OuterEventMetadata {
 	pub name: DecodeDifferentStr,
 	pub events: DecodeDifferentArray<

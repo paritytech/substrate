@@ -111,7 +111,7 @@ mod implementation {
 		}
 	}
 
-	fn derive_fields<'a>(
+	fn derive_fields(
 		name_str: &str,
 		fields: Fields,
 	) -> TokenStream {

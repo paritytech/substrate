@@ -24,7 +24,6 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 /// Error type.
 #[derive(Debug, derive_more::Display, derive_more::From)]
-#[allow(clippy::large_enum_variant)]
 pub enum Error {
 	/// Missing state at block with given descriptor.
 	#[display(fmt="State unavailable at block {}", _0)]
