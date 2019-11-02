@@ -292,8 +292,9 @@ mod tests {
 		});
 	}
 
+	#[test]
 	fn double_map_swap_works() {
-		with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			type DoubleMap = DataDM;
 			DataDM::insert(0, 1, 0);
 			DataDM::insert(0, 2, 1);
