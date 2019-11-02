@@ -12,7 +12,7 @@ rstd = { package = "sr-std", path = "../../core/sr-std", default-features = fals
 sr-primitives = { path = "../../core/sr-primitives", default-features = false }
 support = { package = "srml-support", path = "../support", default-features = false }
 srml-system = { path = "../system", default-features = false }
-impl-trait-for-tuples = "0.1.2"
+impl-trait-for-tuples = "0.1.3"
 
 [dev-dependencies]
 primitives = { package = "substrate-primitives",  path = "../../core/primitives", default-features = false }

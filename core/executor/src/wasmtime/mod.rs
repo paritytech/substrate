@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -14,22 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! The Offchain Worker runtime api primitives.
+///! Defines a `WasmRuntime` that uses the Wasmtime JIT to execute.
 
-#![cfg_attr(not(feature = "std"), no_std)]
-#![warn(missing_docs)]
+mod function_executor;
+mod runtime;
+mod trampoline;
+mod util;
 
-use client::decl_runtime_apis;
-use sr_primitives::traits::NumberFor;
-
-/// Local Storage Prefix used by the Offchain Worker API to
-pub const STORAGE_PREFIX: &[u8] = b"storage";
-
-decl_runtime_apis! {
-	/// The offchain worker api.
-	pub trait OffchainWorkerApi {
-		/// Starts the off-chain task for given block number.
-		#[skip_initialize_block]
-		fn offchain_worker(number: NumberFor<Block>);
-	}
-}
+pub use runtime::create_instance;
