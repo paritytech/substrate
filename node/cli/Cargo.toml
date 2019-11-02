@@ -116,3 +116,9 @@ cli = [
 	"ctrlc",
 	"substrate-service/rocksdb"
 ]
+wasmtime = [
+	"cli",
+    "node-executor/wasmtime",
+    "substrate-cli/wasmtime",
+    "substrate-service/wasmtime",
+]

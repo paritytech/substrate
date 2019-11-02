@@ -43,7 +43,7 @@ pub trait NetworkSpecialization<B: BlockT>: Send + Sync + 'static {
 
 	/// Called when a network-specific event arrives.
 	#[deprecated(note = "This method is never called; please use `with_dht_event_tx` when building the service")]
-	fn on_event(&mut self, event: Event) {}
+	fn on_event(&mut self, _event: Event) {}
 
 	/// Called on abort.
 	#[deprecated(note = "This method is never called; aborting corresponds to dropping the object")]
