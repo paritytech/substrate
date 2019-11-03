@@ -95,7 +95,7 @@ macro_rules! new_full_start {
 				import_setup = Some((block_import, grandpa_link, babe_link));
 				Ok(import_queue)
 			})?
-			.with_rpc_extensions(|client, pool| -> RpcExtension {
+			.with_rpc_extensions(|client, pool, _backend| -> RpcExtension {
 				node_rpc::create(client, pool)
 			})?;
 
@@ -322,7 +322,7 @@ pub fn new_light<C: Send + Default + 'static>(config: NodeConfiguration<C>)
 		.with_finality_proof_provider(|client, backend|
 			Ok(Arc::new(GrandpaFinalityProofProvider::new(backend, client)) as _)
 		)?
-		.with_rpc_extensions(|client, pool| -> RpcExtension {
+		.with_rpc_extensions(|client, pool, _backend| -> RpcExtension {
 			node_rpc::create(client, pool)
 		})?
 		.build()?;

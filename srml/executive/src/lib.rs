@@ -60,7 +60,9 @@
 //! # pub type AllModules = u64;
 //! # pub enum Runtime {};
 //! # use sr_primitives::transaction_validity::{TransactionValidity, UnknownTransaction};
+//!	# #[allow(deprecated)]
 //! # use sr_primitives::traits::ValidateUnsigned;
+//!	# #[allow(deprecated)]
 //! # impl ValidateUnsigned for Runtime {
 //! # 	type Call = ();
 //! #
@@ -79,10 +81,12 @@ use sr_primitives::{
 	generic::Digest, ApplyResult, weights::GetDispatchInfo,
 	traits::{
 		self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalize, OnInitialize,
-		NumberFor, Block as BlockT, OffchainWorker, ValidateUnsigned, Dispatchable
+		NumberFor, Block as BlockT, OffchainWorker, Dispatchable,
 	},
 	transaction_validity::TransactionValidity,
 };
+#[allow(deprecated)]
+use sr_primitives::traits::ValidateUnsigned;
 use codec::{Codec, Encode};
 use system::{extrinsics_root, DigestOf};
 
@@ -100,6 +104,7 @@ pub struct Executive<System, Block, Context, UnsignedValidator, AllModules>(
 	PhantomData<(System, Block, Context, UnsignedValidator, AllModules)>
 );
 
+#[allow(deprecated)] // Allow ValidateUnsigned, remove the attribute when the trait is removed.
 impl<
 	System: system::Trait,
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
@@ -119,6 +124,7 @@ where
 	}
 }
 
+#[allow(deprecated)] // Allow ValidateUnsigned, remove the attribute when the trait is removed.
 impl<
 	System: system::Trait,
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
@@ -242,7 +248,7 @@ where
 
 		// Decode parameters and dispatch
 		let dispatch_info = xt.get_dispatch_info();
-		let r = Applyable::apply(xt, dispatch_info, encoded_len)?;
+		let r = Applyable::apply::<UnsignedValidator>(xt, dispatch_info, encoded_len)?;
 
 		<system::Module<System>>::note_applied_extrinsic(&r, encoded_len as u32);
 
@@ -326,7 +332,6 @@ mod tests {
 		}
 	}
 
-	// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Runtime;
 	parameter_types! {
@@ -382,8 +387,13 @@ mod tests {
 		type FeeMultiplierUpdate = ();
 	}
 
+	#[allow(deprecated)]
 	impl ValidateUnsigned for Runtime {
 		type Call = Call;
+
+		fn pre_dispatch(_call: &Self::Call) -> Result<(), ApplyError> {
+			Ok(())
+		}
 
 		fn validate_unsigned(call: &Self::Call) -> TransactionValidity {
 			match call {

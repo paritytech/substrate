@@ -21,11 +21,13 @@
 
 use crate::error::{Error, WasmError};
 use crate::wasmi_execution;
+#[cfg(feature = "wasmtime")]
+use crate::wasmtime;
 use log::{trace, warn};
 use codec::Decode;
-use primitives::{storage::well_known_keys, traits::Externalities};
+use primitives::{storage::well_known_keys, traits::Externalities, H256};
 use runtime_version::RuntimeVersion;
-use std::{collections::hash_map::{Entry, HashMap}};
+use std::{collections::hash_map::{Entry, HashMap}, panic::AssertUnwindSafe};
 
 /// The Substrate Wasm runtime.
 pub trait WasmRuntime {
@@ -38,12 +40,6 @@ pub trait WasmRuntime {
 	/// Call a method in the Substrate runtime by name. Returns the encoded result on success.
 	fn call(&mut self, ext: &mut dyn Externalities, method: &str, data: &[u8])
 		-> Result<Vec<u8>, Error>;
-
-	/// Returns the version of this runtime.
-	///
-	/// Returns `None` if the runtime doesn't provide the information or there was an error
-	/// while fetching it.
-	fn version(&self) -> Option<RuntimeVersion>;
 }
 
 /// Specification of different methods of executing the runtime Wasm code.
@@ -51,6 +47,16 @@ pub trait WasmRuntime {
 pub enum WasmExecutionMethod {
 	/// Uses the Wasmi interpreter.
 	Interpreted,
+	/// Uses the Wasmtime compiled runtime.
+	#[cfg(feature = "wasmtime")]
+	Compiled,
+}
+
+/// A Wasm runtime object along with its cached runtime version.
+struct VersionedRuntime {
+	runtime: Box<dyn WasmRuntime>,
+	/// Runtime version according to `Core_version`.
+	version: RuntimeVersion,
 }
 
 /// Cache for the runtimes.
@@ -69,7 +75,7 @@ pub struct RuntimesCache {
 	/// A cache of runtime instances along with metadata, ready to be reused.
 	///
 	/// Instances are keyed by the Wasm execution method and the hash of their code.
-	instances: HashMap<(WasmExecutionMethod, [u8; 32]), Result<Box<dyn WasmRuntime>, WasmError>>,
+	instances: HashMap<(WasmExecutionMethod, [u8; 32]), Result<VersionedRuntime, WasmError>>,
 }
 
 impl RuntimesCache {
@@ -92,16 +98,14 @@ impl RuntimesCache {
 	/// # Parameters
 	///
 	/// `ext` - Externalities to use for the runtime. This is used for setting
-	/// up an initial runtime instance. The parameter is only needed for calling
-	/// into the Wasm module to find out the `Core_version`.
+	/// up an initial runtime instance.
 	///
 	/// `default_heap_pages` - Number of 64KB pages to allocate for Wasm execution.
 	///
 	/// # Return value
 	///
-	/// If no error occurred a tuple `(wasmi::ModuleRef, Option<RuntimeVersion>)` is
-	/// returned. `RuntimeVersion` is contained if the call to `Core_version` returned
-	/// a version.
+	/// If no error occurred a tuple `(&mut WasmRuntime, H256)` is
+	/// returned. `H256` is the hash of the runtime code.
 	///
 	/// In case of failure one of two errors can be returned:
 	///
@@ -114,7 +118,7 @@ impl RuntimesCache {
 		ext: &mut E,
 		wasm_method: WasmExecutionMethod,
 		default_heap_pages: u64,
-	) -> Result<&mut (dyn WasmRuntime + 'static), Error> {
+	) -> Result<(&mut (dyn WasmRuntime + 'static), &RuntimeVersion, H256), Error> {
 		let code_hash = ext
 			.original_storage_hash(well_known_keys::CODE)
 			.ok_or(Error::InvalidCode("`CODE` not found in storage.".into()))?;
@@ -128,12 +132,12 @@ impl RuntimesCache {
 			Entry::Occupied(o) => {
 				let result = o.into_mut();
 				if let Ok(ref mut cached_runtime) = result {
-					if !cached_runtime.update_heap_pages(heap_pages) {
+					if !cached_runtime.runtime.update_heap_pages(heap_pages) {
 						trace!(
 							target: "runtimes_cache",
-							"heap_pages were changed. Reinstantiating the instance"
+							"heap_pages were changed. Reinstantiating the instance",
 						);
-						*result = create_wasm_runtime(ext, wasm_method, heap_pages);
+						*result = create_versioned_wasm_runtime(ext, wasm_method, heap_pages);
 						if let Err(ref err) = result {
 							warn!(target: "runtimes_cache", "cannot create a runtime: {:?}", err);
 						}
@@ -143,7 +147,7 @@ impl RuntimesCache {
 			},
 			Entry::Vacant(v) => {
 				trace!(target: "runtimes_cache", "no instance found in cache, creating now.");
-				let result = create_wasm_runtime(ext, wasm_method, heap_pages);
+				let result = create_versioned_wasm_runtime(ext, wasm_method, heap_pages);
 				if let Err(ref err) = result {
 					warn!(target: "runtimes_cache", "cannot create a runtime: {:?}", err);
 				}
@@ -152,32 +156,71 @@ impl RuntimesCache {
 		};
 
 		result.as_mut()
-			.map(|runtime| runtime.as_mut())
+			.map(|entry| (entry.runtime.as_mut(), &entry.version, code_hash))
 			.map_err(|ref e| Error::InvalidCode(format!("{:?}", e)))
+	}
+
+	/// Invalidate the runtime for the given `wasm_method` and `code_hash`.
+	///
+	/// Invalidation of a runtime is useful when there was a `panic!` in native while executing it.
+	/// The `panic!` maybe have brought the runtime into a poisoned state and so, it is better to
+	/// invalidate this runtime instance.
+	pub fn invalidate_runtime(
+		&mut self,
+		wasm_method: WasmExecutionMethod,
+		code_hash: H256,
+	) {
+		// Just remove the instance, it will be re-created the next time it is requested.
+		self.instances.remove(&(wasm_method, code_hash.into()));
 	}
 }
 
 /// Create a wasm runtime with the given `code`.
-pub fn create_wasm_runtime_with_code<E: Externalities>(
-	ext: &mut E,
+pub fn create_wasm_runtime_with_code(
 	wasm_method: WasmExecutionMethod,
 	heap_pages: u64,
 	code: &[u8],
 ) -> Result<Box<dyn WasmRuntime>, WasmError> {
 	match wasm_method {
 		WasmExecutionMethod::Interpreted =>
-			wasmi_execution::create_instance(ext, code, heap_pages)
+			wasmi_execution::create_instance(code, heap_pages)
+				.map(|runtime| -> Box<dyn WasmRuntime> { Box::new(runtime) }),
+		#[cfg(feature = "wasmtime")]
+		WasmExecutionMethod::Compiled =>
+			wasmtime::create_instance(code, heap_pages)
 				.map(|runtime| -> Box<dyn WasmRuntime> { Box::new(runtime) }),
 	}
 }
 
-fn create_wasm_runtime<E: Externalities>(
+fn create_versioned_wasm_runtime<E: Externalities>(
 	ext: &mut E,
 	wasm_method: WasmExecutionMethod,
 	heap_pages: u64,
-) -> Result<Box<dyn WasmRuntime>, WasmError> {
+) -> Result<VersionedRuntime, WasmError> {
 	let code = ext
 		.original_storage(well_known_keys::CODE)
 		.ok_or(WasmError::CodeNotFound)?;
-	create_wasm_runtime_with_code(ext, wasm_method, heap_pages, &code)
+	let mut runtime = create_wasm_runtime_with_code(wasm_method, heap_pages, &code)?;
+
+	// Call to determine runtime version.
+	let version_result = {
+		// `ext` is already implicitly handled as unwind safe, as we store it in a global variable.
+		let mut ext = AssertUnwindSafe(ext);
+
+		// The following unwind safety assertion is OK because if the method call panics, the
+		// runtime will be dropped.
+		let mut runtime = AssertUnwindSafe(runtime.as_mut());
+		crate::native_executor::safe_call(
+			move || runtime.call(&mut **ext, "Core_version", &[])
+		).map_err(|_| WasmError::Instantiation("panic in call to get runtime version".into()))?
+	};
+	let encoded_version = version_result
+		.map_err(|e| WasmError::Instantiation(format!("failed to call \"Core_version\": {}", e)))?;
+	let version = RuntimeVersion::decode(&mut encoded_version.as_slice())
+		.map_err(|_| WasmError::Instantiation("failed to decode \"Core_version\" result".into()))?;
+
+	Ok(VersionedRuntime {
+		runtime,
+		version,
+	})
 }

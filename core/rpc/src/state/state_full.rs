@@ -77,7 +77,7 @@ impl<B, E, Block: BlockT, RA> FullState<B, E, Block, RA>
 
 	/// Returns given block hash or best block hash if None is passed.
 	fn block_or_best(&self, hash: Option<Block::Hash>) -> ClientResult<Block::Hash> {
-		crate::helpers::unwrap_or_else(|| Ok(self.client.info().chain.best_hash), hash)
+		Ok(hash.unwrap_or_else(|| self.client.info().chain.best_hash))
 	}
 
 	/// Splits the `query_storage` block range into 'filtered' and 'unfiltered' subranges.

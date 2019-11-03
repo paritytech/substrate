@@ -253,7 +253,7 @@ impl<B, E> Extension for Forks<B, E> where
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use chain_spec_derive::{ChainSpecGroup, ChainSpecExtension};
+	use substrate_chain_spec_derive::{ChainSpecGroup, ChainSpecExtension};
 	// Make the proc macro work for tests and doc tests.
 	use crate as substrate_chain_spec;
 

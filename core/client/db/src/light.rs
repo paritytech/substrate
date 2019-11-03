@@ -70,19 +70,7 @@ impl<Block> LightStorage<Block>
 {
 	/// Create new storage with given settings.
 	pub fn new(config: DatabaseSettings) -> ClientResult<Self> {
-		Self::new_inner(config)
-	}
-
-	#[cfg(feature = "kvdb-rocksdb")]
-	fn new_inner(config: DatabaseSettings) -> ClientResult<Self> {
 		let db = crate::utils::open_database(&config, columns::META, "light")?;
-		Self::from_kvdb(db as Arc<_>)
-	}
-
-	#[cfg(not(feature = "kvdb-rocksdb"))]
-	fn new_inner(_config: DatabaseSettings) -> ClientResult<Self> {
-		log::warn!("Running without the RocksDB feature. The database will NOT be saved.");
-		let db = Arc::new(kvdb_memorydb::create(crate::utils::NUM_COLUMNS));
 		Self::from_kvdb(db as Arc<_>)
 	}
 
