@@ -15,35 +15,61 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use grafana_data_source::{run_server, record_metrics};
-use std::{thread::{spawn, sleep}, time::Duration};
+use std::{time::Duration, sync::atomic::{AtomicBool, Ordering}};
 use rand::Rng;
+use futures::{Async, Future, Stream};
+use stream_cancel::StreamExt;
+use tokio::{runtime::Runtime, timer::Interval};
 
-// futures::future::empty is not cloneable.
-#[derive(Clone)]
-struct EmptyFuture;
+static EXIT: AtomicBool = AtomicBool::new(false);
 
-impl futures::Future for EmptyFuture {
+struct ExitFuture;
+
+impl futures::Future for ExitFuture {
 	type Item = ();
 	type Error = ();
 
 	fn poll(&mut self) -> futures::Poll<(), ()> {
-		Ok(futures::Async::NotReady)
+		let value = EXIT.load(Ordering::Relaxed);
+
+		println!("Polling, got: {}", value);
+
+		if value {
+			Ok(Async::Ready(()))
+		} else {
+			Ok(Async::NotReady)
+		}
 	}
 }
 
 fn main() {
-	let handle = spawn(|| {
-		let mut rng = rand::thread_rng();
+	ctrlc::set_handler(|| {
+		println!(" - Ctrl-C received");
+		EXIT.store(true, Ordering::Relaxed);
+	}).unwrap();
 
-		loop {
-			let random = rng.gen_range(0.0, 1000.0);
+	let address = "127.0.0.1:9955".parse().unwrap();
+
+	let randomness_future = Interval::new_interval(Duration::from_secs(1))
+		.take_until(ExitFuture)
+		.for_each(move |_| {
+			let random = rand::thread_rng().gen_range(0.0, 1000.0);
 			record_metrics!(
 				"random data" => random,
 				"random^2" => random * random
 			);
-			sleep(Duration::from_secs(1));
-		}
-	});
-	hyper::rt::run(run_server(&"127.0.0.1:9955".parse().unwrap(), EmptyFuture));
-	handle.join().unwrap();
+			futures::future::ok(())
+		})
+		.map_err(|_| ())
+		.map(|_| println!("Shutting down randomness future"));
+
+	let server_future = run_server(&address, ExitFuture)
+		.map(|_| println!("Shutting down server future"));
+
+	let mut rt = Runtime::new().unwrap();
+
+	rt.spawn(randomness_future);
+	rt.spawn(server_future);
+
+	rt.shutdown_on_idle().wait().unwrap();
 }

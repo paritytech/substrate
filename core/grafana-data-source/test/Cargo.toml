@@ -11,3 +11,6 @@ hyper = "0.12"
 grafana-data-source = { path = ".." }
 rand = "0.7"
 futures = "0.1"
+ctrlc = "3.1"
+tokio = "0.1"
+stream-cancel = "0.4"

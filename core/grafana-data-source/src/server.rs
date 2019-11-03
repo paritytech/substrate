@@ -18,7 +18,6 @@ use serde::{Serialize, de::DeserializeOwned};
 use hyper::{Body, Request, Response, header, service::service_fn, Server};
 use futures::{future, Future, stream::Stream};
 use chrono::{Duration, Utc};
-use stream_cancel::StreamExt;
 use crate::{METRICS, util, types::{Target, Query, TimeseriesData}};
 
 type GenericError = Box<dyn std::error::Error + Send + Sync>;
@@ -91,23 +90,21 @@ fn map_request_to_response<Req, Res, T>(req: Request<Body>, transformation: T) -
 ///
 /// The server shuts down cleanly when `shutdown` resolves.
 pub fn run_server<F>(address: &std::net::SocketAddr, shutdown: F) -> impl Future<Item=(), Error=()>
-	where F: Future<Item=(), Error=()> + Clone
+	where F: Future<Item=(), Error=()>
 {
 	Server::bind(address)
 		.serve(|| service_fn(api_response))
-		.with_graceful_shutdown(shutdown.clone())
+		.with_graceful_shutdown(shutdown)
 		.map_err(|_| ())
 		// Clean up week-old metrics once a day
-		.join(clean_up(Duration::days(1), Duration::weeks(1), shutdown))
+		.select(clean_up(Duration::days(1), Duration::weeks(1)))
 		.map(|_| ())
+		.map_err(|_| ())
 }
 
 // Remove all metrics before a certain duration every so often.
-fn clean_up<F>(every: Duration, before: Duration, exit: F) -> impl Future<Item=(), Error=()>
-	where F: Future<Item=(), Error=()>
-{
+fn clean_up(every: Duration, before: Duration) -> impl Future<Item=(), Error=()> {
 	tokio_timer::Interval::new_interval(every.to_std().unwrap())
-		.take_until(exit)
 		.for_each(move |_| {
 			let oldest_allowed = (Utc::now() - before).timestamp_millis();
 
