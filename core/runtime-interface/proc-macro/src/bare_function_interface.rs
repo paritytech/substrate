@@ -21,11 +21,12 @@
 //! functions will prepare the parameters for the FFI boundary, call the external host function
 //! exported into wasm and convert back the result.
 //!
-//! [`generate`] is the entry point for generating for each trait method one bare function.
+//! [`generate`](bare_function_interface::generate) is the entry point for generating for each
+//! trait method one bare function.
 //!
-//! [`function_for_method`] generates the bare function per trait method. Each bare function
-//! contains both implementations. The implementations are feature-gated, so that one is compiled
-//! for the native and the other for the wasm side.
+//! [`function_for_method`](bare_function_interface::function_for_method) generates the bare
+//! function per trait method. Each bare function contains both implementations. The implementations
+//! are feature-gated, so that one is compiled for the native and the other for the wasm side.
 
 use crate::utils::{
 	generate_crate_access, create_host_function_ident, get_function_arguments,

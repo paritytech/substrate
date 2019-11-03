@@ -14,8 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Provides the [`PassBy`] trait to simplify the implementation of the runtime interface traits
-//! for custom types. [`Codec`] and [`Inner`] are the two provided strategy implementations.
+//! Provides the [`PassBy`](pass_by::PassBy) trait to simplify the implementation of the
+//! runtime interface traits for custom types. [`Codec`](pass_by::Codec), [`Inner`](pass_by::Inner)
+//! and [`Enum`](pass_by::Enum) are the provided strategy implementations.
 
 use crate::{RIType, impls::{pointer_and_len_from_u64, pointer_and_len_to_u64}};
 
@@ -138,6 +139,8 @@ impl<T: PassBy> FromFFIValue for T {
 ///
 /// This type expects the type that wants to implement this strategy as generic parameter.
 ///
+/// [`PassByCodec`](derive.PassByCodec.html) is a derive macro to implement this strategy.
+///
 /// # Example
 /// ```
 /// # use substrate_runtime_interface::pass_by::{PassBy, Codec};
@@ -223,6 +226,8 @@ pub trait PassByInner: Sized {
 /// This type expects the type that wants to use this strategy as generic parameter `T` and the
 /// inner type as generic parameter `I`.
 ///
+/// [`PassByInner`](derive.PassByInner.html) is a derive macro to implement this strategy.
+///
 /// # Example
 /// ```
 /// # use substrate_runtime_interface::pass_by::{PassBy, Inner, PassByInner};
@@ -293,6 +298,8 @@ impl<T: PassByInner<Inner = I>, I: RIType> RIType for Inner<T, I> {
 ///
 /// This type expects the type that wants to implement this strategy as generic parameter. Besides
 /// that the type needs to implement `TryFrom<u8>` and `From<Self> for u8`.
+///
+/// [`PassByEnum`](derive.PassByEnum.html) is a derive macro to implement this strategy.
 ///
 /// # Example
 /// ```

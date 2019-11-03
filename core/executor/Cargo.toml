@@ -47,12 +47,12 @@ test-case = "0.3.3"
 default = []
 wasm-extern-trace = []
 wasmtime = [
-    "cranelift-codegen",
-    "cranelift-entity",
-    "cranelift-frontend",
-    "cranelift-native",
-    "cranelift-wasm",
-    "wasmtime-environ",
-    "wasmtime-jit",
-    "wasmtime-runtime",
+	"cranelift-codegen",
+	"cranelift-entity",
+	"cranelift-frontend",
+	"cranelift-native",
+	"cranelift-wasm",
+	"wasmtime-environ",
+	"wasmtime-jit",
+	"wasmtime-runtime",
 ]

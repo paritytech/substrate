@@ -209,7 +209,7 @@ pub fn create_wasm_runtime_with_code<E: Externalities>(
 				.map(|runtime| -> Box<dyn WasmRuntime> { Box::new(runtime) }),
 		#[cfg(feature = "wasmtime")]
 		WasmExecutionMethod::Compiled =>
-			wasmtime::create_instance(ext, code, heap_pages)
+			wasmtime::create_instance(ext, code, heap_pages, host_functions)
 				.map(|runtime| -> Box<dyn WasmRuntime> { Box::new(runtime) }),
 	}
 }
