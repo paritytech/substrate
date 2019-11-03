@@ -103,6 +103,9 @@ fn heartbeat(
 	authority_index: u32,
 	id: UintAuthorityId,
 ) -> dispatch::Result {
+	#[allow(deprecated)]
+	use support::unsigned::ValidateUnsigned;
+
 	let heartbeat = Heartbeat {
 		block_number,
 		network_state: OpaqueNetworkState {
@@ -114,6 +117,8 @@ fn heartbeat(
 	};
 	let signature = id.sign(&heartbeat.encode()).unwrap();
 
+	#[allow(deprecated)] // Allow ValidateUnsigned
+	ImOnline::pre_dispatch(&crate::Call::heartbeat(heartbeat.clone(), signature.clone()))?;
 	ImOnline::heartbeat(
 		Origin::system(system::RawOrigin::None),
 		heartbeat,
@@ -170,8 +175,8 @@ fn late_heartbeat_should_fail() {
 		assert_eq!(Session::validators(), vec![1, 2, 3]);
 
 		// when
-		assert_noop!(heartbeat(1, 3, 0, 1.into()), "Outdated heartbeat received.");
-		assert_noop!(heartbeat(1, 1, 0, 1.into()), "Outdated heartbeat received.");
+		assert_noop!(heartbeat(1, 3, 0, 1.into()), "Transaction is outdated");
+		assert_noop!(heartbeat(1, 1, 0, 1.into()), "Transaction is outdated");
 	});
 }
 
