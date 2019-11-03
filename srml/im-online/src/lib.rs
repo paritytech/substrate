@@ -369,7 +369,7 @@ impl<T: Trait> Module<T> {
 				Err(err) => print(err),
 			}
 		} else {
-			debug::native::trace!(
+			debug::native::debug!(
 				target: "imonline",
 				"Skipping gossip at: {:?} >= {:?} || {:?}",
 				next_gossip,
@@ -382,6 +382,7 @@ impl<T: Trait> Module<T> {
 	fn do_gossip_at(block_number: T::BlockNumber) -> Result<(), OffchainErr> {
 		// we run only when a local authority key is configured
 		let authorities = Keys::<T>::get();
+		let mut results = Vec::new();
 		let mut local_keys = T::AuthorityId::all();
 		local_keys.sort();
 
@@ -393,6 +394,16 @@ impl<T: Trait> Module<T> {
 					.map(|location| (index as u32, &local_keys[location]))
 			})
 		{
+			if Self::is_online(authority_index) {
+				debug::native::info!(
+					target: "imonline",
+					"[index: {:?}] Skipping sending heartbeat at block: {:?}. Already online.",
+					authority_index,
+					block_number
+				);
+				continue;
+			}
+
 			let network_state = runtime_io::network_state().map_err(|_| OffchainErr::NetworkState)?;
 			let heartbeat_data = Heartbeat {
 				block_number,
@@ -410,14 +421,21 @@ impl<T: Trait> Module<T> {
 				authority_index,
 				block_number
 			);
-			T::SubmitTransaction::submit_unsigned(call)
-				.map_err(|_| OffchainErr::SubmitTransaction)?;
 
-			// once finished we set the worker status without comparing
-			// if the existing value changed in the meantime. this is
-			// because at this point the heartbeat was definitely submitted.
-			Self::set_worker_status(block_number, true);
+			results.push(
+				T::SubmitTransaction::submit_unsigned(call)
+					.map_err(|_| OffchainErr::SubmitTransaction)
+			);
 		}
+
+		// fail only after trying all keys.
+		results.into_iter().collect::<Result<Vec<_>, OffchainErr>>()?;
+
+		// once finished we set the worker status without comparing
+		// if the existing value changed in the meantime. this is
+		// because at this point the heartbeat was definitely submitted.
+		Self::set_worker_status(block_number, true);
+
 		Ok(())
 	}
 
