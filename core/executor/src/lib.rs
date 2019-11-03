@@ -38,6 +38,10 @@ mod sandbox;
 mod allocator;
 mod host_interface;
 mod wasm_runtime;
+#[cfg(feature = "wasmtime")]
+mod wasmtime;
+#[cfg(test)]
+mod integration_tests;
 
 pub mod error;
 pub use wasmi;
@@ -69,7 +73,6 @@ pub fn call_in_wasm<E: Externalities>(
 	heap_pages: u64,
 ) -> error::Result<Vec<u8>> {
 	let mut instance = wasm_runtime::create_wasm_runtime_with_code(
-		ext,
 		execution_method,
 		heap_pages,
 		code,

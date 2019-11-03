@@ -77,10 +77,12 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use rstd::prelude::*;
+use codec::Decode;
 use sr_primitives::{print, traits::{Zero, StaticLookup, Bounded, Convert}};
 use sr_primitives::weights::SimpleDispatchInfo;
 use srml_support::{
 	decl_storage, decl_event, ensure, decl_module, dispatch,
+	storage::unhashed,
 	traits::{
 		Currency, Get, LockableCurrency, LockIdentifier, ReservableCurrency, WithdrawReasons,
 		ChangeMembers, OnUnbalanced, WithdrawReason
@@ -159,6 +161,11 @@ decl_storage! {
 		/// The present candidate list. Sorted based on account id. A current member can never enter
 		/// this vector and is always implicitly assumed to be a candidate.
 		pub Candidates get(fn candidates): Vec<T::AccountId>;
+
+		/// Has the storage format been updated?
+		/// NOTE: Only use and set to false if you have used an early version of this module. Should
+		/// be set to true otherwise.
+		DidMigrate: bool;
 	}
 }
 
@@ -373,6 +380,10 @@ decl_module! {
 
 		/// What to do at the end of each block. Checks if an election needs to happen or not.
 		fn on_initialize(n: T::BlockNumber) {
+			if !DidMigrate::exists() {
+				DidMigrate::put(true);
+				Self::do_migrate();
+			}
 			if let Err(e) = Self::end_block(n) {
 				print("Guru meditation");
 				print(e);
@@ -626,6 +637,32 @@ impl<T: Trait> Module<T> {
 
 		ElectionRounds::mutate(|v| *v += 1);
 	}
+
+	/// Perform the storage update needed to migrate the module from the initial version of the
+	/// storage.
+	///
+	/// If decoding the old storage fails in any way, the consequence is that we start with an empty
+	/// set.
+	fn do_migrate() {
+		// old storage format.
+		let old_members: Vec<T::AccountId> = unhashed::get_raw(&<Members<T>>::hashed_key())
+			.and_then(|bytes| Decode::decode(&mut &*bytes).ok()).unwrap_or_default();
+		let old_runners: Vec<T::AccountId> = unhashed::get_raw(&<RunnersUp<T>>::hashed_key())
+			.and_then(|bytes| Decode::decode(&mut &*bytes).ok()).unwrap_or_default();
+
+		// new storage format.
+		let new_runners: Vec<(T::AccountId, BalanceOf<T>)> = old_runners
+			.into_iter()
+			.map(|r| (r, Zero::zero()))
+			.collect();
+		let new_members: Vec<(T::AccountId, BalanceOf<T>)> = old_members
+			.into_iter()
+			.map(|r| (r, Zero::zero()))
+			.collect();
+
+		<Members<T>>::put(new_members);
+		<RunnersUp<T>>::put(new_runners);
+	}
 }
 
 #[cfg(test)]
@@ -636,7 +673,7 @@ mod tests {
 	use primitives::H256;
 	use sr_primitives::{
 		Perbill, testing::Header, BuildStorage,
-		traits::{BlakeTwo256, IdentityLookup, Block as BlockT},
+		traits::{OnInitialize, BlakeTwo256, IdentityLookup, Block as BlockT},
 	};
 	use crate as elections;
 
@@ -823,6 +860,30 @@ mod tests {
 		let lock = Balances::locks(who)[0].clone();
 		assert_eq!(lock.id, MODULE_ID);
 		lock.amount
+	}
+
+	#[test]
+	fn temp_migration_works() {
+		ExtBuilder::default().build().execute_with(|| {
+			use srml_support::storage::unhashed;
+			use codec::Encode;
+
+			let old_members = vec![1u64, 2];
+			let old_runners = vec![3u64];
+
+			let members_key = <Members<Test>>::hashed_key();
+			let runners_key = <RunnersUp<Test>>::hashed_key();
+
+			unhashed::put_raw(&members_key, &old_members.encode()[..]);
+			unhashed::put_raw(&runners_key, &old_runners.encode()[..]);
+
+			assert_eq!(DidMigrate::get(), false);
+			<Elections as OnInitialize<u64>>::on_initialize(1);
+			assert_eq!(DidMigrate::get(), true);
+
+			assert_eq!(Elections::members(), vec![(1, 0), (2, 0)]);
+			assert_eq!(Elections::runners_up(), vec![(3, 0)]);
+		});
 	}
 
 	#[test]

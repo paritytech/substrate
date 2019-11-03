@@ -49,6 +49,18 @@ pub enum Value {
 	F64(u64),
 }
 
+impl Value {
+	/// Returns the type of this value.
+	pub fn value_type(&self) -> ValueType {
+		match self {
+			Value::I32(_) => ValueType::I32,
+			Value::I64(_) => ValueType::I64,
+			Value::F32(_) => ValueType::F32,
+			Value::F64(_) => ValueType::F64,
+		}
+	}
+}
+
 /// Provides `Sealed` trait to prevent implementing trait `PointerType` outside of this crate.
 mod private {
 	pub trait Sealed {}
@@ -180,7 +192,7 @@ pub trait Function {
 	fn execute(
 		&self,
 		context: &mut dyn FunctionContext,
-		args: &mut dyn Iterator<Item=Value>,
+		args: &mut dyn Iterator<Item = Value>,
 	) -> Result<Option<Value>>;
 }
 
@@ -212,7 +224,7 @@ pub type MemoryId = u32;
 pub trait Sandbox {
 	/// Get sandbox memory from the `memory_id` instance at `offset` into the given buffer.
 	fn memory_get(
-		&self,
+		&mut self,
 		memory_id: MemoryId,
 		offset: WordSize,
 		buf_ptr: Pointer<u8>,

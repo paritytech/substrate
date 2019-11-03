@@ -50,6 +50,19 @@ arg_enum! {
 	pub enum WasmExecutionMethod {
 		// Uses an interpreter.
 		Interpreted,
+		// Uses a compiled runtime.
+		Compiled,
+	}
+}
+
+impl WasmExecutionMethod {
+	/// Returns list of variants that are not disabled by feature flags.
+	fn enabled_variants() -> Vec<&'static str> {
+		Self::variants()
+			.iter()
+			.cloned()
+			.filter(|&name| cfg!(feature = "wasmtime") || name != "Compiled")
+			.collect()
 	}
 }
 
@@ -57,6 +70,12 @@ impl Into<service::config::WasmExecutionMethod> for WasmExecutionMethod {
 	fn into(self) -> service::config::WasmExecutionMethod {
 		match self {
 			WasmExecutionMethod::Interpreted => service::config::WasmExecutionMethod::Interpreted,
+			#[cfg(feature = "wasmtime")]
+			WasmExecutionMethod::Compiled => service::config::WasmExecutionMethod::Compiled,
+			#[cfg(not(feature = "wasmtime"))]
+			WasmExecutionMethod::Compiled => panic!(
+				"Substrate must be compiled with \"wasmtime\" feature for compiled Wasm execution"
+			),
 		}
 	}
 }
@@ -301,8 +320,30 @@ pub struct ExecutionStrategies {
 #[derive(Debug, StructOpt, Clone)]
 pub struct RunCmd {
 	/// Enable validator mode.
-	#[structopt(long = "validator")]
+	///
+	/// The node will be started with the authority role and actively
+	/// participate in any consensus task that it can (e.g. depending on
+	/// availability of local keys).
+	#[structopt(
+		long = "validator",
+		conflicts_with_all = &[ "sentry" ]
+	)]
 	pub validator: bool,
+
+	/// Enable sentry mode.
+	///
+	/// The node will be started with the authority role and participate in
+	/// consensus tasks as an "observer", it will never actively participate
+	/// regardless of whether it could (e.g. keys are available locally). This
+	/// mode is useful as a secure proxy for validators (which would run
+	/// detached from the network), since we want this node to participate in
+	/// the full consensus protocols in order to have all needed consensus data
+	/// available to relay to private nodes.
+	#[structopt(
+		long = "sentry",
+		conflicts_with_all = &[ "validator" ]
+	)]
+	pub sentry: bool,
 
 	/// Disable GRANDPA voter when running in validator mode, otherwise disables the GRANDPA observer.
 	#[structopt(long = "no-grandpa")]
@@ -417,7 +458,7 @@ pub struct RunCmd {
 	#[structopt(
 		long = "wasm-execution",
 		value_name = "METHOD",
-		possible_values = &WasmExecutionMethod::variants(),
+		possible_values = &WasmExecutionMethod::enabled_variants(),
 		case_insensitive = true,
 		default_value = "Interpreted"
 	)]
@@ -823,7 +864,7 @@ impl<CC, RP> GetLogFilter for CoreParams<CC, RP> where CC: GetLogFilter {
 
 /// A special commandline parameter that expands to nothing.
 /// Should be used as custom subcommand/run arguments if no custom values are required.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct NoCustom {}
 
 impl StructOpt for NoCustom {

@@ -20,9 +20,7 @@
 use super::{Trait, Module, GenesisConfig};
 use babe_primitives::AuthorityId;
 use sr_primitives::{
-	traits::IdentityLookup, Perbill,
-	testing::{Header, UintAuthorityId},
-	impl_opaque_keys, key_types::DUMMY,
+	traits::IdentityLookup, Perbill, testing::{Header, UintAuthorityId}, impl_opaque_keys,
 };
 use sr_version::RuntimeVersion;
 use support::{impl_outer_origin, parameter_types};
@@ -71,7 +69,6 @@ impl system::Trait for Test {
 
 impl_opaque_keys! {
 	pub struct MockSessionKeys {
-		#[id(DUMMY)]
 		pub dummy: UintAuthorityId,
 	}
 }

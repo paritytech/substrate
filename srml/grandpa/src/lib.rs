@@ -36,8 +36,7 @@ use support::{
 	decl_event, decl_storage, decl_module, dispatch::Result,
 };
 use sr_primitives::{
-	generic::{DigestItem, OpaqueDigestItemId}, traits::Zero,
-	Perbill,
+	generic::{DigestItem, OpaqueDigestItemId}, traits::Zero, Perbill,
 };
 use sr_staking_primitives::{
 	SessionIndex,
@@ -372,6 +371,10 @@ impl<T: Trait> Module<T> {
 	{
 		Self::grandpa_log(digest).and_then(|signal| signal.try_into_resume())
 	}
+}
+
+impl<T: Trait> sr_primitives::BoundToRuntimeAppPublic for Module<T> {
+	type Public = AuthorityId;
 }
 
 impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T>

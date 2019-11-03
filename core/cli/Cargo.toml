@@ -28,7 +28,7 @@ header-metadata = { package = "substrate-header-metadata", path = "../../core/cl
 network = { package = "substrate-network", path = "../../core/network" }
 sr-primitives = { path = "../../core/sr-primitives" }
 primitives = { package = "substrate-primitives", path = "../../core/primitives" }
-service = { package = "substrate-service", path = "../../core/service" }
+service = { package = "substrate-service", path = "../../core/service", default-features = false }
 state-machine = { package = "substrate-state-machine", path = "../../core/state-machine" }
 substrate-telemetry = { path = "../../core/telemetry" }
 keyring = { package = "substrate-keyring", path = "../keyring" }
@@ -38,3 +38,8 @@ rpassword = "4.0.1"
 
 [dev-dependencies]
 tempdir = "0.3.7"
+
+[features]
+wasmtime = [
+    "service/wasmtime",
+]
