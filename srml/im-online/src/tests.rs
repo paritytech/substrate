@@ -273,3 +273,47 @@ fn should_mark_online_validator_when_block_is_authored() {
 		assert!(!ImOnline::is_online(2));
 	});
 }
+
+#[test]
+fn should_not_send_a_report_if_already_online() {
+	use authorship::EventHandler;
+
+	let mut ext = new_test_ext();
+	let (offchain, state) = TestOffchainExt::new();
+	ext.register_extension(OffchainExt::new(offchain));
+
+	ext.execute_with(|| {
+		advance_session();
+		// given
+		VALIDATORS.with(|l| *l.borrow_mut() = Some(vec![1, 2, 3, 4, 5, 6]));
+		assert_eq!(Session::validators(), Vec::<u64>::new());
+		// enact the change and buffer another one
+		advance_session();
+		assert_eq!(Session::current_index(), 2);
+		assert_eq!(Session::validators(), vec![1, 2, 3]);
+		ImOnline::note_author(2);
+		ImOnline::note_uncle(3, 0);
+
+		// when
+		UintAuthorityId::set_all_keys(vec![0]); // all authorities use session key 0
+		ImOnline::offchain(4);
+
+		// then
+		let transaction = state.write().transactions.pop().unwrap();
+		// All validators have `0` as their session key, but we should only produce 1 hearbeat.
+		assert_eq!(state.read().transactions.len(), 0);
+		// check stuff about the transaction.
+		let ex: Extrinsic = Decode::decode(&mut &*transaction).unwrap();
+		let heartbeat = match ex.1 {
+			crate::mock::Call::ImOnline(crate::Call::heartbeat(h, _)) => h,
+			e => panic!("Unexpected call: {:?}", e),
+		};
+
+		assert_eq!(heartbeat, Heartbeat {
+			block_number: 4,
+			network_state: runtime_io::network_state().unwrap(),
+			session_index: 2,
+			authority_index: 0,
+		});
+	});
+}
