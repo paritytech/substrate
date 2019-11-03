@@ -88,7 +88,7 @@ use sr_staking_primitives::{
 	offence::{ReportOffence, Offence, Kind},
 };
 use support::{
-	decl_module, decl_event, decl_storage, print, ensure, Parameter, debug
+	decl_module, decl_event, decl_storage, print, Parameter, debug
 };
 use system::ensure_none;
 use system::offchain::SubmitUnsignedTransaction;
@@ -243,24 +243,20 @@ decl_module! {
 		fn heartbeat(
 			origin,
 			heartbeat: Heartbeat<T::BlockNumber>,
-			signature: <T::AuthorityId as RuntimeAppPublic>::Signature
+			// since signature verification is done in `validate_unsigned`
+			// we can skip doing it here again.
+			_signature: <T::AuthorityId as RuntimeAppPublic>::Signature
 		) {
 			ensure_none(origin)?;
 
 			let current_session = <session::Module<T>>::current_index();
-			ensure!(current_session == heartbeat.session_index, "Outdated heartbeat received.");
 			let exists = <ReceivedHeartbeats>::exists(
 				&current_session,
 				&heartbeat.authority_index
 			);
 			let keys = Keys::<T>::get();
-			let maybe_public = keys.get(heartbeat.authority_index as usize);
-			if let (false, Some(public)) = (exists, maybe_public) {
-				let signature_valid = heartbeat.using_encoded(|encoded_heartbeat| {
-					public.verify(&encoded_heartbeat, &signature)
-				});
-				ensure!(signature_valid, "Invalid heartbeat signature.");
-
+			let public = keys.get(heartbeat.authority_index as usize);
+			if let (false, Some(public)) = (exists, public) {
 				Self::deposit_event(Event::<T>::HeartbeatReceived(public.clone()));
 
 				let network_state = heartbeat.network_state.encode();
@@ -563,6 +559,7 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	}
 }
 
+#[allow(deprecated)]
 impl<T: Trait> support::unsigned::ValidateUnsigned for Module<T> {
 	type Call = Call<T>;
 

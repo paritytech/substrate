@@ -15,6 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 #[doc(hidden)]
+#[allow(deprecated)]
 pub use crate::sr_primitives::traits::ValidateUnsigned;
 #[doc(hidden)]
 pub use crate::sr_primitives::transaction_validity::{TransactionValidity, UnknownTransaction};
@@ -65,8 +66,19 @@ macro_rules! impl_outer_validate_unsigned {
 			$( $module:ident )*
 		}
 	) => {
+		#[allow(deprecated)] // Allow ValidateUnsigned
 		impl $crate::unsigned::ValidateUnsigned for $runtime {
 			type Call = Call;
+
+			fn pre_dispatch(call: &Self::Call) -> Result<(), $crate::unsigned::ApplyError> {
+				#[allow(unreachable_patterns)]
+				match call {
+					$( Call::$module(inner_call) => $module::pre_dispatch(inner_call), )*
+					// pre-dispatch should not stop inherent extrinsics, validation should prevent
+					// including arbitrary (non-inherent) extrinsics to blocks.
+					_ => Ok(()),
+				}
+			}
 
 			fn validate_unsigned(call: &Self::Call) -> $crate::unsigned::TransactionValidity {
 				#[allow(unreachable_patterns)]
@@ -97,6 +109,7 @@ mod test_partial_and_full_call {
 	pub mod timestamp {
 		pub struct Module;
 
+		#[allow(deprecated)] // Allow ValidateUnsigned
 		impl super::super::ValidateUnsigned for Module {
 			type Call = Call;
 
