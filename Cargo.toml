@@ -93,6 +93,7 @@ members = [
 	"srml/transaction-payment",
 	"srml/transaction-payment/rpc",
 	"srml/utility",
+	"srml/evm",
 	"node/cli",
 	"node/executor",
 	"node/primitives",
