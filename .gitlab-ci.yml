@@ -162,10 +162,21 @@ test-srml-staking:                 &test-srml-staking
     - WASM_BUILD_NO_COLOR=1 time cargo test --release --verbose --no-default-features --features std
     - sccache -s
 
-
-
-
-
+test-wasmtime:                 &test-wasmtime
+  stage:                           test
+  <<:                              *docker-env
+  variables:
+    # Enable debug assertions since we are running optimized builds for testing
+    # but still want to have debug assertions.
+    RUSTFLAGS: -Cdebug-assertions=y
+    RUST_BACKTRACE: 1
+  except:
+    variables:
+      - $DEPLOY_TAG
+  script:
+    - cd core/executor
+    - WASM_BUILD_NO_COLOR=1 time cargo test --release --verbose --features wasmtime
+    - sccache -s
 
 test-linux-stable-int:
   <<:                              *test-linux
