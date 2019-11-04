@@ -79,7 +79,7 @@ use sr_primitives::{
 	RuntimeDebug,
 	traits::{Convert, Member, Printable, Saturating}, Perbill,
 	transaction_validity::{
-		TransactionValidity, TransactionLongevity, ValidTransaction, InvalidTransaction,
+		TransactionValidity, ValidTransaction, InvalidTransaction,
 		TransactionPriority,
 	},
 };
