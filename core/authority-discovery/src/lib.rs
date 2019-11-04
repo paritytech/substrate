@@ -57,7 +57,7 @@ use futures::Future;
 use futures_timer::Interval;
 
 use authority_discovery_primitives::{AuthorityDiscoveryApi, AuthorityId, Signature};
-use client::{blockchain::HeaderBackend, runtime_api::StorageProof};
+use client::blockchain::HeaderBackend;
 use error::{Error, Result};
 use log::{debug, error, log_enabled, warn};
 use network::specialization::NetworkSpecialization;
