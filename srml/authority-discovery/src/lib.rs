@@ -197,7 +197,7 @@ mod tests {
 			.collect();
 
 		// Needed for `session::OneSessionHandler::on_new_session`.
-		let first_authorities_and_account_ids: Vec<(&AuthorityId, AuthorityId)>  = first_authorities.clone()
+		let first_authorities_and_account_ids: Vec<(&AuthorityId, AuthorityId)> = first_authorities.clone()
 			.into_iter()
 			.map(|id| (&account_id, id))
 			.collect();

@@ -68,7 +68,7 @@ fn session_keys(
 	im_online: ImOnlineId,
 	authority_discovery: AuthorityDiscoveryId,
 ) -> SessionKeys {
-	SessionKeys { grandpa, babe, im_online, authority_discovery}
+	SessionKeys { grandpa, babe, im_online, authority_discovery }
 }
 
 fn staging_testnet_config_genesis() -> GenesisConfig {
