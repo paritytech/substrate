@@ -404,7 +404,7 @@ fn hash_authority_id(id: &[u8]) -> Result<libp2p::kad::record::Key> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use client::runtime_api::{ApiExt, Core, RuntimeVersion};
+	use client::runtime_api::{ApiExt, Core, RuntimeVersion, StorageProof};
 	use futures::channel::mpsc::channel;
 	use futures::executor::block_on;
 	use futures::future::poll_fn;
