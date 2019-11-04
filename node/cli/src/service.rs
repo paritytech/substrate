@@ -19,6 +19,11 @@
 //! Service implementation. Specialized wrapper over substrate service.
 
 use std::sync::Arc;
+use futures03::{
+	compat::Stream01CompatExt,
+	stream::StreamExt,
+	future::{FutureExt, TryFutureExt},
+};
 
 use babe;
 use client::{self, LongestChain};
@@ -95,7 +100,7 @@ macro_rules! new_full_start {
 				import_setup = Some((block_import, grandpa_link, babe_link));
 				Ok(import_queue)
 			})?
-			.with_rpc_extensions(|client, pool| -> RpcExtension {
+			.with_rpc_extensions(|client, pool, _backend| -> RpcExtension {
 				node_rpc::create(client, pool)
 			})?;
 
@@ -175,14 +180,16 @@ macro_rules! new_full {
 			let babe = babe::start_babe(babe_config)?;
 			service.spawn_essential_task(babe);
 
+			let future03_dht_event_rx = dht_event_rx.compat().map(|x| x.unwrap()).boxed();
 			let authority_discovery = authority_discovery::AuthorityDiscovery::new(
 				service.client(),
 				service.network(),
 				service.keystore(),
-				dht_event_rx,
+				future03_dht_event_rx,
 			);
+			let future01_authority_discovery = authority_discovery.map(|x| Ok(x)).compat();
 
-			service.spawn_task(authority_discovery);
+			service.spawn_task(future01_authority_discovery);
 		}
 
 		// if the node isn't actively participating in consensus then it doesn't
@@ -331,7 +338,7 @@ pub fn new_light<C: Send + Default + 'static>(config: NodeConfiguration<C>)
 		.with_finality_proof_provider(|client, backend|
 			Ok(Arc::new(GrandpaFinalityProofProvider::new(backend, client)) as _)
 		)?
-		.with_rpc_extensions(|client, pool| -> RpcExtension {
+		.with_rpc_extensions(|client, pool, _backend| -> RpcExtension {
 			node_rpc::create(client, pool)
 		})?
 		.build()?;

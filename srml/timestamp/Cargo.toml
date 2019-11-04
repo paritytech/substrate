@@ -12,7 +12,7 @@ sr-primitives = { path = "../../core/sr-primitives", default-features = false }
 inherents = { package = "substrate-inherents", path = "../../core/inherents", default-features = false }
 support = { package = "srml-support", path = "../support", default-features = false }
 system = { package = "srml-system", path = "../system", default-features = false }
-impl-trait-for-tuples = "0.1.2"
+impl-trait-for-tuples = "0.1.3"
 
 [dev-dependencies]
 runtime-io ={ package = "sr-io", path = "../../core/sr-io" }
