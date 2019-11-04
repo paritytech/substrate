@@ -230,6 +230,26 @@ node-exits:
   script:
     - ./ci/check_for_exit.sh
 
+
+test-full-crypto-feature:          &test-full-crypto-feature
+  stage:                           test
+  <<:                              *docker-env
+  variables:
+    # Enable debug assertions since we are running optimized builds for testing
+    # but still want to have debug assertions.
+    RUSTFLAGS: -Cdebug-assertions=y
+    RUST_BACKTRACE: 1
+  except:
+    variables:
+      - $DEPLOY_TAG
+  script:
+    - cd core/primitives/
+    - time cargo +nightly build --verbose --no-default-features --features full_crypto
+    - cd ../application-crypto
+    - time cargo +nightly build --verbose --no-default-features --features full_crypto
+    - sccache -s
+
+
 #### stage:                        build
 
 build-linux-substrate:
