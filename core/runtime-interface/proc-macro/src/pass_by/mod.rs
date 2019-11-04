@@ -20,6 +20,6 @@ mod codec;
 mod enum_;
 mod inner;
 
-pub use codec::derive_impl as codec_derive_impl;
+pub use self::codec::derive_impl as codec_derive_impl;
 pub use enum_::derive_impl as enum_derive_impl;
 pub use inner::derive_impl as inner_derive_impl;

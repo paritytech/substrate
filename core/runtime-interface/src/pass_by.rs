@@ -37,7 +37,7 @@ pub use substrate_runtime_interface_proc_macro::{PassByCodec, PassByInner, PassB
 
 /// Something that should be passed between wasm and the host using the given strategy.
 ///
-/// See [`Codec`] or [`Inner`] for more information about the provided strategies.
+/// See [`Codec`], [`Inner`] or [`Enum`] for more information about the provided strategies.
 pub trait PassBy: Sized {
 	/// The strategy that should be used to pass the type.
 	type PassBy: PassByImpl<Self>;
