@@ -24,7 +24,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 log = "0.4.8"
 futures = "0.1.29"
-jsonrpc-core = "13.2.0"
+jsonrpc-core = "14.0.3"
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 sr-io = { path = "../../core/sr-io" }
 client = { package = "substrate-client", path = "../../core/client" }
