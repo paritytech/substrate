@@ -42,7 +42,7 @@ pub enum ImportResult {
 /// Auxiliary data associated with an imported block result.
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct ImportedAux {
-	/// ONly the header has been imported. Block body verification was skipped.
+	/// Only the header has been imported. Block body verification was skipped.
 	pub header_only: bool,
 	/// Clear all pending justification requests.
 	pub clear_justification_requests: bool,
