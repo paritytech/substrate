@@ -50,7 +50,6 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use futures::channel::mpsc::Receiver;
 use futures::stream::StreamExt;
 use futures::task::{Context, Poll};
 use futures::Future;
@@ -58,7 +57,7 @@ use futures_timer::Interval;
 use futures::prelude::*;
 
 use authority_discovery_primitives::{AuthorityDiscoveryApi, AuthorityId, AuthoritySignature, AuthorityPair};
-use client::{blockchain::HeaderBackend, runtime_api::StorageProof};
+use client::blockchain::HeaderBackend;
 use codec::{Decode, Encode};
 use error::{Error, Result};
 use log::{debug, error, log_enabled, warn};
@@ -457,7 +456,7 @@ fn hash_authority_id(id: &[u8]) -> Result<libp2p::kad::record::Key> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use client::runtime_api::{ApiExt, Core, RuntimeVersion};
+	use client::runtime_api::{ApiExt, Core, RuntimeVersion, StorageProof};
 	use futures::channel::mpsc::channel;
 	use futures::executor::block_on;
 	use futures::future::poll_fn;
