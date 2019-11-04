@@ -60,6 +60,11 @@ pub fn generate_crate_access() -> TokenStream {
 	}
 }
 
+/// Create the exchangeable host function identifier for the given function name.
+pub fn create_exchangeable_host_function_ident(name: &Ident) -> Ident {
+	Ident::new(&format!("host_{}", name), Span::call_site())
+}
+
 /// Create the host function identifier for the given function name.
 pub fn create_host_function_ident(name: &Ident, trait_name: &Ident) -> Ident {
 	Ident::new(
@@ -85,6 +90,11 @@ pub fn get_function_arguments<'a>(sig: &'a Signature) -> impl Iterator<Item = &'
 /// Returns the function argument names of the given `Signature`, minus any `self`.
 pub fn get_function_argument_names<'a>(sig: &'a Signature) -> impl Iterator<Item = &'a Box<Pat>> {
 	get_function_arguments(sig).map(|pt| &pt.pat)
+}
+
+/// Returns the function argument types of the given `Signature`, minus any `Self` type.
+pub fn get_function_argument_types<'a>(sig: &'a Signature) -> impl Iterator<Item = &'a Box<Type>> {
+	get_function_arguments(sig).map(|pt| &pt.ty)
 }
 
 /// Returns the function argument types, minus any `Self` type. If any of the arguments

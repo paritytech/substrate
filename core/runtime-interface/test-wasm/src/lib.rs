@@ -73,8 +73,12 @@ pub trait TestApi {
 	}
 
 	/// A function that is called with invalid utf8 data from the runtime.
-	fn invalid_utf8_data(_data: &str) {
+	fn invalid_utf8_data(_data: &str) {}
 
+	/// Overwrite the native implementation in wasm. The native implementation always returns
+	/// `false` and the replacement function will return always `true`.
+	fn overwrite_native_function_implementation() -> bool {
+		false
 	}
 }
 
@@ -155,5 +159,19 @@ wasm_export_functions! {
 		let data_str = unsafe { rstd::str::from_utf8_unchecked(&data) };
 
 		test_api::invalid_utf8_data(data_str);
+	}
+
+	fn test_overwrite_native_function_implementation() {
+		fn new_implementation() -> bool {
+			true
+		}
+
+		// Check native implementation
+		assert!(!test_api::overwrite_native_function_implementation());
+
+		let _guard = test_api::host_overwrite_native_function_implementation
+			.replace_implementation(new_implementation);
+
+		assert!(test_api::overwrite_native_function_implementation());
 	}
 }

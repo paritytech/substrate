@@ -148,4 +148,9 @@ mod tests {
 	fn test_invalid_utf8_data_should_return_an_error() {
 		call_wasm_method::<HostFunctions>("test_invalid_utf8_data_should_return_an_error");
 	}
+
+	#[test]
+	fn test_overwrite_native_function_implementation() {
+		call_wasm_method::<HostFunctions>("test_overwrite_native_function_implementation");
+	}
 }

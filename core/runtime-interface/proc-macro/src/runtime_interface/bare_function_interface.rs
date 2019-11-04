@@ -29,13 +29,12 @@
 //! are feature-gated, so that one is compiled for the native and the other for the wasm side.
 
 use crate::utils::{
-	generate_crate_access, create_host_function_ident, get_function_arguments,
-	get_function_argument_names, get_function_argument_types_without_ref, get_trait_methods,
+	generate_crate_access, create_exchangeable_host_function_ident, get_function_arguments,
+	get_function_argument_names, get_trait_methods,
 };
 
 use syn::{
-	Ident, ItemTrait, TraitItemMethod, FnArg, Signature, Result, ReturnType, spanned::Spanned,
-	parse_quote,
+	Ident, ItemTrait, TraitItemMethod, FnArg, Signature, Result, spanned::Spanned, parse_quote,
 };
 
 use proc_macro2::{TokenStream, Span};
@@ -61,7 +60,7 @@ fn function_for_method(
 	is_wasm_only: bool,
 ) -> Result<TokenStream> {
 	let std_impl = function_std_impl(trait_name, method, is_wasm_only)?;
-	let no_std_impl = function_no_std_impl(trait_name, method)?;
+	let no_std_impl = function_no_std_impl(method)?;
 
 	Ok(
 		quote! {
@@ -73,21 +72,12 @@ fn function_for_method(
 }
 
 /// Generates the bare function implementation for `cfg(not(feature = "std"))`.
-fn function_no_std_impl(trait_name: &Ident, method: &TraitItemMethod) -> Result<TokenStream> {
+fn function_no_std_impl(method: &TraitItemMethod) -> Result<TokenStream> {
 	let function_name = &method.sig.ident;
-	let host_function_name = create_host_function_ident(&method.sig.ident, trait_name);
+	let host_function_name = create_exchangeable_host_function_ident(&method.sig.ident);
 	let args = get_function_arguments(&method.sig);
 	let arg_names = get_function_argument_names(&method.sig);
-	let arg_names2 = get_function_argument_names(&method.sig);
-	let arg_types = get_function_argument_types_without_ref(&method.sig);
-	let crate_ = generate_crate_access();
 	let return_value = &method.sig.output;
-	let convert_return_value = match return_value {
-		ReturnType::Default => quote!(),
-		ReturnType::Type(_, ref ty) => quote! {
-			<#ty as #crate_::wasm::FromFFIValue>::from_ffi_value(result)
-		}
-	};
 	let attrs = &method.attrs;
 
 	Ok(
@@ -95,17 +85,8 @@ fn function_no_std_impl(trait_name: &Ident, method: &TraitItemMethod) -> Result<
 			#[cfg(not(feature = "std"))]
 			#( #attrs )*
 			pub fn #function_name( #( #args, )* ) #return_value {
-				// Generate all wrapped ffi values.
-				#(
-					let #arg_names = <#arg_types as #crate_::wasm::IntoFFIValue>::into_ffi_value(
-						&#arg_names,
-					);
-				)*
-
 				// Call the host function
-				let result = unsafe { #host_function_name.get()( #( #arg_names2.get(), )* ) };
-
-				#convert_return_value
+				#host_function_name.get()( #( #arg_names, )* )
 			}
 		}
 	)

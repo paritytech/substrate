@@ -34,14 +34,14 @@ use rstd::ops::Deref;
 #[cfg(feature = "std")]
 use primitives::{
 	crypto::Pair, traits::KeystoreExt, offchain::OffchainExt, hexdisplay::HexDisplay,
+	storage::ChildStorageKey,
 };
 
 use primitives::{
-	crypto::KeyTypeId, ed25519, sr25519, H256, storage::ChildStorageKey,
+	crypto::KeyTypeId, ed25519, sr25519, H256, LogLevel,
 	offchain::{
 		Timestamp, HttpRequestId, HttpRequestStatus, HttpError, StorageKind, OpaqueNetworkState,
 	},
-	LogLevel,
 };
 
 #[cfg(feature = "std")]
