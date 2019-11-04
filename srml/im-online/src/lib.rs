@@ -596,7 +596,7 @@ impl<T: Trait> support::unsigned::ValidateUnsigned for Module<T> {
 				priority: TransactionPriority::max_value(),
 				requires: vec![],
 				provides: vec![(current_session, authority_id).encode()],
-				longevity: TransactionLongevity::max_value(),
+				longevity: 128,
 				propagate: true,
 			})
 		} else {
