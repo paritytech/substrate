@@ -127,6 +127,7 @@ decl_error! {
 		StorageValueUnavailable,
 		InvalidValidatorSetProof,
 		ValidatorSetMismatch,
+		InvalidAncestryProof,
 	}
 }
 
@@ -135,7 +136,7 @@ impl<T: Trait> Module<T> {
 		state_root: &T::Hash,
 		proof: Vec<Vec<u8>>,
 		validator_set: &Vec<(AuthorityId, AuthorityWeight)>,
-	) -> std::result::Result<(), Error> {
+	) -> Result<(), Error> {
 
 		let checker = <StorageProofChecker<<T::Hashing as sr_primitives::traits::Hash>::Hasher>>::new(
 			*state_root,
@@ -155,6 +156,33 @@ impl<T: Trait> Module<T> {
 			Err(Error::ValidatorSetMismatch)
 		}
 	}
+}
+
+// A naive way to check whether a `child` header is a decendent
+// of an `ancestor` header. For this it requires a proof which
+// is a chain of headers between (but not including) the `child`
+// and `ancestor`. This could be updated to use something like
+// Log2 Ancestors (#2053) in the future.
+fn verify_ancestry<H>(proof: Vec<H>, ancestor_hash: H::Hash, child: H) -> Result<(), Error>
+where
+	H: Header
+{
+	let mut parent_hash = child.parent_hash();
+
+	// If we find that the header's parent hash matches our ancestor's hash we're done
+	for header in proof.iter() {
+		// Need to check that blocks are actually related
+		if header.hash() != *parent_hash {
+			break;
+		}
+
+		parent_hash = header.parent_hash();
+		if *parent_hash == ancestor_hash {
+			return Ok(())
+		}
+	}
+
+	Err(Error::InvalidAncestryProof)
 }
 
 #[cfg(test)]
@@ -307,5 +335,103 @@ mod tests {
 
 			assert_eq!(MockBridge::num_bridges(), 1);
 		});
+	}
+
+	fn build_header_chain(root_header: Header, len: usize) -> Vec<Header> {
+		let mut header_chain = vec![root_header];
+		for i in 1..len {
+			let parent = &header_chain[i - 1];
+
+			let h = Header {
+				parent_hash: parent.hash(),
+				number: parent.number() + 1,
+				state_root: H256::default(),
+				extrinsics_root: H256::default(),
+				digest: Digest::default(),
+			};
+
+			header_chain.push(h);
+		}
+
+		// We want our proofs to go from newest to older headers
+		header_chain.reverse();
+		// We don't actually need the oldest header in the proof
+		header_chain.pop();
+		header_chain
+	}
+
+	#[test]
+	fn check_that_child_is_ancestor_of_grandparent() {
+		let ancestor = Header {
+			parent_hash: H256::default(),
+			number: 1,
+			state_root: H256::default(),
+			extrinsics_root: H256::default(),
+			digest: Digest::default(),
+		};
+
+		// A valid proof doesn't include the child header, so remove it
+		let mut proof = build_header_chain(ancestor.clone(), 10);
+		let child = proof.remove(0);
+
+		assert_ok!(verify_ancestry(proof, ancestor.hash(), child));
+	}
+
+	#[test]
+	fn fake_ancestor_is_not_found_in_child_ancestry() {
+		let ancestor = Header {
+			parent_hash: H256::default(),
+			number: 1,
+			state_root: H256::default(),
+			extrinsics_root: H256::default(),
+			digest: Digest::default(),
+		};
+
+		// A valid proof doesn't include the child header, so remove it
+		let mut proof = build_header_chain(ancestor, 10);
+		let child = proof.remove(0);
+
+		let fake_ancestor = Header {
+			parent_hash: H256::from_slice(&[1u8; 32]),
+			number: 42,
+			state_root: H256::default(),
+			extrinsics_root: H256::default(),
+			digest: Digest::default(),
+		};
+
+		assert_err!(
+			verify_ancestry(proof, fake_ancestor.hash(), child),
+			Error::InvalidAncestryProof
+		);
+	}
+
+	#[test]
+	fn checker_fails_if_given_an_unrelated_header() {
+		let ancestor = Header {
+			parent_hash: H256::default(),
+			number: 1,
+			state_root: H256::default(),
+			extrinsics_root: H256::default(),
+			digest: Digest::default(),
+		};
+
+		// A valid proof doesn't include the child header, so remove it
+		let mut invalid_proof = build_header_chain(ancestor.clone(), 10);
+		let child = invalid_proof.remove(0);
+
+		let fake_ancestor = Header {
+			parent_hash: H256::from_slice(&[1u8; 32]),
+			number: 42,
+			state_root: H256::default(),
+			extrinsics_root: H256::default(),
+			digest: Digest::default(),
+		};
+
+		invalid_proof.insert(5, fake_ancestor);
+
+		assert_err!(
+			verify_ancestry(invalid_proof, ancestor.hash(), child),
+			Error::InvalidAncestryProof
+		);
 	}
 }
