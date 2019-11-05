@@ -680,7 +680,6 @@ pub mod tests {
 			bad_justification: false,
 			needs_finality_proof: false,
 			is_new_best: true,
-			header_only: false,
 		}));
 	}
 
@@ -693,7 +692,6 @@ pub mod tests {
 			bad_justification: false,
 			needs_finality_proof: false,
 			is_new_best: true,
-			header_only: false,
 		}));
 	}
 
@@ -707,7 +705,6 @@ pub mod tests {
 			bad_justification: false,
 			needs_finality_proof: true,
 			is_new_best: true,
-			header_only: false,
 		}));
 	}
 
@@ -724,7 +721,6 @@ pub mod tests {
 				bad_justification: false,
 				needs_finality_proof: true,
 				is_new_best: false,
-				header_only: false,
 			},
 		));
 	}

@@ -203,10 +203,6 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>>(
 				Ok(BlockImportResult::ImportedKnown(number))
 			},
 			Ok(ImportResult::Imported(aux)) => Ok(BlockImportResult::ImportedUnknown(number, aux, peer.clone())),
-			Ok(ImportResult::MissingState) => {
-				debug!(target: "sync", "Parent state is missing for {}: {:?}, parent: {:?}", number, hash, parent_hash);
-				Err(BlockImportError::UnknownParent)
-			},
 			Ok(ImportResult::UnknownParent) => {
 				debug!(target: "sync", "Block with unknown parent {}: {:?}, parent: {:?}", number, hash, parent_hash);
 				Err(BlockImportError::UnknownParent)
@@ -221,12 +217,7 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>>(
 			}
 		}
 	};
-	match import_error(import_handle.check_block(BlockCheckParams {
-		hash,
-		number,
-		parent_hash,
-		header_only: block.body.is_none(),
-	}))? {
+	match import_error(import_handle.check_block(BlockCheckParams { hash, number, parent_hash }))? {
 		BlockImportResult::ImportedUnknown { .. } => (),
 		r => return Ok(r), // Any other successful result means that the block is already imported.
 	}
