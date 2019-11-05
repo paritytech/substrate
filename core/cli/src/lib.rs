@@ -28,7 +28,7 @@ pub mod informant;
 
 use client::ExecutionStrategies;
 use service::{
-	config::Configuration,
+	config::{Configuration, DatabaseConfig},
 	ServiceBuilderExport, ServiceBuilderImport, ServiceBuilderRevert,
 	RuntimeGenesis, ChainSpecExtension, PruningMode, ChainSpec,
 };
@@ -65,13 +65,15 @@ use lazy_static::lazy_static;
 use futures::Future;
 use substrate_telemetry::TelemetryEndpoints;
 
+/// default sub directory to store network config
+const DEFAULT_NETWORK_CONFIG_PATH : &'static str = "network";
+/// default sub directory to store database
+const DEFAULT_DB_CONFIG_PATH : &'static str = "db";
+/// default sub directory for the key store
+const DEFAULT_KEYSTORE_CONFIG_PATH : &'static str =  "keystore";
+
 /// The maximum number of characters for a node name.
 const NODE_NAME_MAX_LENGTH: usize = 32;
-
-/// The file name of the node's Secp256k1 secret key inside the chain-specific
-/// network config directory, if neither `--node-key` nor `--node-key-file`
-/// is specified in combination with `--node-key-type=secp256k1`.
-const NODE_KEY_SECP256K1_FILE: &str = "secret";
 
 /// The file name of the node's Ed25519 secret key inside the chain-specific
 /// network config directory, if neither `--node-key` nor `--node-key-file`
@@ -241,6 +243,17 @@ where
 	}
 }
 
+/// Returns a string displaying the node role, special casing the sentry mode
+/// (returning `SENTRY`), since the node technically has an `AUTHORITY` role but
+/// doesn't participate.
+pub fn display_role<A, B, C>(config: &Configuration<A, B, C>) -> String {
+	if config.sentry_mode {
+		"SENTRY".to_string()
+	} else {
+		format!("{:?}", config.roles)
+	}
+}
+
 /// Output of calling `parse_and_prepare`.
 #[must_use]
 pub enum ParseAndPrepare<'a, CC, RP> {
@@ -269,22 +282,24 @@ pub struct ParseAndPrepareRun<'a, RP> {
 
 impl<'a, RP> ParseAndPrepareRun<'a, RP> {
 	/// Runs the command and runs the main client.
-	pub fn run<C, G, E, S, Exit, RS>(
+	pub fn run<C, G, CE, S, Exit, RS, E>(
 		self,
 		spec_factory: S,
 		exit: Exit,
 		run_service: RS,
 	) -> error::Result<()>
-	where S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
+	where
+		S: FnOnce(&str) -> Result<Option<ChainSpec<G, CE>>, String>,
+		E: Into<error::Error>,
 		RP: StructOpt + Clone,
 		C: Default,
 		G: RuntimeGenesis,
-		E: ChainSpecExtension,
+		CE: ChainSpecExtension,
 		Exit: IntoExit,
-		RS: FnOnce(Exit, RunCmd, RP, Configuration<C, G, E>) -> Result<(), String>
+		RS: FnOnce(Exit, RunCmd, RP, Configuration<C, G, CE>) -> Result<(), E>
 	{
 		let config = create_run_node_config(
-			self.params.left.clone(), spec_factory, self.impl_name, self.version
+			self.params.left.clone(), spec_factory, self.impl_name, self.version,
 		)?;
 
 		run_service(exit, self.params.left, self.params.right, config).map_err(Into::into)
@@ -299,18 +314,36 @@ pub struct ParseAndPrepareBuildSpec<'a> {
 
 impl<'a> ParseAndPrepareBuildSpec<'a> {
 	/// Runs the command and build the chain specs.
-	pub fn run<G, S, E>(
+	pub fn run<C, G, S, E>(
 		self,
 		spec_factory: S
 	) -> error::Result<()> where
 		S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
+		C: Default,
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
 	{
 		info!("Building chain spec");
 		let raw_output = self.params.raw;
 		let mut spec = load_spec(&self.params.shared_params, spec_factory)?;
-		with_default_boot_node(&mut spec, self.params, self.version)?;
+
+		if spec.boot_nodes().is_empty() && !self.params.disable_default_bootnode {
+			let base_path = base_path(&self.params.shared_params, self.version);
+			let cfg = service::Configuration::<C,_,_>::default_with_spec_and_base_path(spec.clone(), Some(base_path));
+			let node_key = node_key_config(
+				self.params.node_key_params,
+				&Some(cfg.in_chain_config_dir(DEFAULT_NETWORK_CONFIG_PATH).expect("We provided a base_path"))
+			)?;
+			let keys = node_key.into_keypair()?;
+			let peer_id = keys.public().into_peer_id();
+			let addr = build_multiaddr![
+				Ip4([127, 0, 0, 1]),
+				Tcp(30333u16),
+				P2p(peer_id)
+			];
+			spec.add_boot_node(addr)
+		}
+		
 		let json = service::chain_ops::build_spec(spec, raw_output)?;
 
 		print!("{}", json);
@@ -343,7 +376,9 @@ impl<'a> ParseAndPrepareExport<'a> {
 	{
 		let config = create_config_with_db_path(spec_factory, &self.params.shared_params, self.version)?;
 
-		info!("DB path: {}", config.database_path.display());
+		if let DatabaseConfig::Path { ref path, .. } = &config.database {
+			info!("DB path: {}", path.display());
+		}
 		let from = self.params.from.unwrap_or(1);
 		let to = self.params.to;
 		let json = self.params.json;
@@ -422,7 +457,13 @@ impl<'a> ParseAndPreparePurge<'a> {
 		let config = create_config_with_db_path::<(), _, _, _>(
 			spec_factory, &self.params.shared_params, self.version
 		)?;
-		let db_path = config.database_path;
+		let db_path = match config.database {
+			DatabaseConfig::Path { path, .. } => path,
+			_ => {
+				eprintln!("Cannot purge custom database implementation");
+				return Ok(());
+			}
+		};
 
 		if !self.params.yes {
 			print!("Are you sure to remove {:?}? [y/N]: ", &db_path);
@@ -447,7 +488,7 @@ impl<'a> ParseAndPreparePurge<'a> {
 				Ok(())
 			},
 			Result::Err(ref err) if err.kind() == ErrorKind::NotFound => {
-				println!("{:?} did not exist.", &db_path);
+				eprintln!("{:?} did not exist.", &db_path);
 				Ok(())
 			},
 			Result::Err(err) => Result::Err(err.into())
@@ -492,14 +533,6 @@ where
 	P: AsRef<Path>
 {
 	match params.node_key_type {
-		NodeKeyType::Secp256k1 =>
-			params.node_key.as_ref().map(parse_secp256k1_secret).unwrap_or_else(||
-				Ok(params.node_key_file
-					.or_else(|| net_config_file(net_config_dir, NODE_KEY_SECP256K1_FILE))
-					.map(network::config::Secret::File)
-					.unwrap_or(network::config::Secret::New)))
-				.map(NodeKeyConfig::Secp256k1),
-
 		NodeKeyType::Ed25519 =>
 			params.node_key.as_ref().map(parse_ed25519_secret).unwrap_or_else(||
 				Ok(params.node_key_file
@@ -520,14 +553,6 @@ where
 /// Create an error caused by an invalid node key argument.
 fn invalid_node_key(e: impl std::fmt::Display) -> error::Error {
 	error::Error::Input(format!("Invalid node key: {}", e))
-}
-
-/// Parse a Secp256k1 secret key from a hex string into a `network::Secret`.
-fn parse_secp256k1_secret(hex: &String) -> error::Result<network::config::Secp256k1Secret> {
-	H256::from_str(hex).map_err(invalid_node_key).and_then(|bytes|
-		network::config::identity::secp256k1::SecretKey::from_bytes(bytes)
-			.map(network::config::Secret::Input)
-			.map_err(invalid_node_key))
 }
 
 /// Parse a Ed25519 secret key from a hex string into a `network::Secret`.
@@ -558,16 +583,13 @@ fn fill_transaction_pool_configuration<C, G, E>(
 /// Fill the given `NetworkConfiguration` by looking at the cli parameters.
 fn fill_network_configuration(
 	cli: NetworkConfigurationParams,
-	base_path: &Path,
-	chain_spec_id: &str,
+	config_path: PathBuf,
 	config: &mut NetworkConfiguration,
 	client_id: String,
 	is_dev: bool,
 ) -> error::Result<()> {
 	config.boot_nodes.extend(cli.bootnodes.into_iter());
-	config.config_path = Some(
-		network_path(&base_path, chain_spec_id).to_string_lossy().into()
-	);
+	config.config_path = Some(config_path.to_string_lossy().into());
 	config.net_config_path = config.config_path.clone();
 	config.reserved_nodes.extend(cli.reserved_nodes.into_iter());
 
@@ -633,7 +655,7 @@ fn fill_config_keystore_password<C, G, E>(
 }
 
 fn create_run_node_config<C, G, E, S>(
-	cli: RunCmd, spec_factory: S, impl_name: &'static str, version: &VersionInfo
+	cli: RunCmd, spec_factory: S, impl_name: &'static str, version: &VersionInfo,
 ) -> error::Result<Configuration<C, G, E>>
 where
 	C: Default,
@@ -642,7 +664,8 @@ where
 	S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
 {
 	let spec = load_spec(&cli.shared_params, spec_factory)?;
-	let mut config = service::Configuration::default_with_spec(spec.clone());
+	let base_path = base_path(&cli.shared_params, &version);
+	let mut config = service::Configuration::default_with_spec_and_base_path(spec.clone(), Some(base_path));
 
 	fill_config_keystore_password(&mut config, &cli)?;
 
@@ -666,33 +689,50 @@ where
 		)?
 	}
 
-	let base_path = base_path(&cli.shared_params, version);
+	config.keystore_path = cli.keystore_path.or_else(|| config.in_chain_config_dir(DEFAULT_KEYSTORE_CONFIG_PATH));
 
-	config.keystore_path = cli.keystore_path.unwrap_or_else(
-		|| keystore_path(&base_path, config.chain_spec.id())
-	);
-
-	config.database_path = db_path(&base_path, config.chain_spec.id());
-	config.database_cache_size = cli.database_cache_size;
-	config.state_cache_size = cli.state_cache_size;
-	config.pruning = match cli.pruning {
-		Some(ref s) if s == "archive" => PruningMode::ArchiveAll,
-		None => PruningMode::default(),
-		Some(s) => PruningMode::keep_blocks(s.parse()
-			.map_err(|_| error::Error::Input("Invalid pruning mode specified".to_string()))?
-		),
+	config.database = DatabaseConfig::Path {
+		path: config.in_chain_config_dir(DEFAULT_DB_CONFIG_PATH).expect("We provided a base_path."),
+		cache_size: cli.database_cache_size,
 	};
+	config.state_cache_size = cli.state_cache_size;
 
 	let is_dev = cli.shared_params.dev;
+	let is_authority = cli.validator || cli.sentry || is_dev || cli.keyring.account.is_some();
 
 	let role =
 		if cli.light {
 			service::Roles::LIGHT
-		} else if cli.validator || is_dev || cli.keyring.account.is_some() {
+		} else if is_authority {
 			service::Roles::AUTHORITY
 		} else {
 			service::Roles::FULL
 		};
+
+	// set sentry mode (i.e. act as an authority but **never** actively participate)
+	config.sentry_mode = cli.sentry;
+
+	// by default we disable pruning if the node is an authority (i.e.
+	// `ArchiveAll`), otherwise we keep state for the last 256 blocks. if the
+	// node is an authority and pruning is enabled explicitly, then we error
+	// unless `unsafe_pruning` is set.
+	config.pruning = match cli.pruning {
+		Some(ref s) if s == "archive" => PruningMode::ArchiveAll,
+		None if role == service::Roles::AUTHORITY => PruningMode::ArchiveAll,
+		None => PruningMode::default(),
+		Some(s) => {
+			if role == service::Roles::AUTHORITY && !cli.unsafe_pruning {
+				return Err(error::Error::Input(
+					"Validators should run with state pruning disabled (i.e. archive). \
+					You can ignore this check with `--unsafe-pruning`.".to_string()
+				));
+			}
+
+			PruningMode::keep_blocks(s.parse()
+				.map_err(|_| error::Error::Input("Invalid pruning mode specified".to_string()))?
+			)
+		},
+	};
 
 	config.wasm_method = cli.wasm_method.into();
 
@@ -719,8 +759,7 @@ where
 	let client_id = config.client_id();
 	fill_network_configuration(
 		cli.network_config,
-		&base_path,
-		spec.id(),
+		config.in_chain_config_dir(DEFAULT_NETWORK_CONFIG_PATH).expect("We provided a basepath"),
 		&mut config.network,
 		client_id,
 		is_dev,
@@ -771,39 +810,6 @@ where
 	Ok(config)
 }
 
-//
-// IANA unassigned port ranges that we could use:
-// 6717-6766		Unassigned
-// 8504-8553		Unassigned
-// 9556-9591		Unassigned
-// 9803-9874		Unassigned
-// 9926-9949		Unassigned
-
-fn with_default_boot_node<G, E>(
-	spec: &mut ChainSpec<G, E>,
-	cli: BuildSpecCmd,
-	version: &VersionInfo,
-) -> error::Result<()>
-where
-	G: RuntimeGenesis,
-	E: ChainSpecExtension,
-{
-	if spec.boot_nodes().is_empty() {
-		let base_path = base_path(&cli.shared_params, version);
-		let storage_path = network_path(&base_path, spec.id());
-		let node_key = node_key_config(cli.node_key_params, &Some(storage_path))?;
-		let keys = node_key.into_keypair()?;
-		let peer_id = keys.public().into_peer_id();
-		let addr = build_multiaddr![
-			Ip4([127, 0, 0, 1]),
-			Tcp(30333u16),
-			P2p(peer_id)
-		];
-		spec.add_boot_node(addr)
-	}
-	Ok(())
-}
-
 /// Creates a configuration including the database path.
 pub fn create_config_with_db_path<C, G, E, S>(
 	spec_factory: S, cli: &SharedParams, version: &VersionInfo,
@@ -817,8 +823,11 @@ where
 	let spec = load_spec(cli, spec_factory)?;
 	let base_path = base_path(cli, version);
 
-	let mut config = service::Configuration::default_with_spec(spec.clone());
-	config.database_path = db_path(&base_path, spec.id());
+	let mut config = service::Configuration::default_with_spec_and_base_path(spec.clone(), Some(base_path));
+	config.database = DatabaseConfig::Path {
+		path: config.in_chain_config_dir(DEFAULT_DB_CONFIG_PATH).expect("We provided a base_path."),
+		cache_size: None,
+	};
 
 	Ok(config)
 }
@@ -842,30 +851,6 @@ fn parse_address(
 	Ok(address)
 }
 
-fn keystore_path(base_path: &Path, chain_id: &str) -> PathBuf {
-	let mut path = base_path.to_owned();
-	path.push("chains");
-	path.push(chain_id);
-	path.push("keystore");
-	path
-}
-
-fn db_path(base_path: &Path, chain_id: &str) -> PathBuf {
-	let mut path = base_path.to_owned();
-	path.push("chains");
-	path.push(chain_id);
-	path.push("db");
-	path
-}
-
-fn network_path(base_path: &Path, chain_id: &str) -> PathBuf {
-	let mut path = base_path.to_owned();
-	path.push("chains");
-	path.push(chain_id);
-	path.push("network");
-	path
-}
-
 fn init_logger(pattern: &str) {
 	use ansi_term::Colour;
 
@@ -873,6 +858,7 @@ fn init_logger(pattern: &str) {
 	// Disable info logging by default for some modules:
 	builder.filter(Some("ws"), log::LevelFilter::Off);
 	builder.filter(Some("hyper"), log::LevelFilter::Warn);
+	builder.filter(Some("cranelift_wasm"), log::LevelFilter::Warn);
 	// Enable info for others.
 	builder.filter(None, log::LevelFilter::Info);
 
@@ -935,7 +921,7 @@ fn kill_color(s: &str) -> String {
 mod tests {
 	use super::*;
 	use tempdir::TempDir;
-	use network::config::identity::{secp256k1, ed25519};
+	use network::config::identity::ed25519;
 
 	#[test]
 	fn tests_node_name_good() {
@@ -958,7 +944,6 @@ mod tests {
 			NodeKeyType::variants().into_iter().try_for_each(|t| {
 				let node_key_type = NodeKeyType::from_str(t).unwrap();
 				let sk = match node_key_type {
-					NodeKeyType::Secp256k1 => secp256k1::SecretKey::generate().to_bytes().to_vec(),
 					NodeKeyType::Ed25519 => ed25519::SecretKey::generate().as_ref().to_vec()
 				};
 				let params = NodeKeyParams {
@@ -967,9 +952,6 @@ mod tests {
 					node_key_file: None
 				};
 				node_key_config(params, &net_config_dir).and_then(|c| match c {
-					NodeKeyConfig::Secp256k1(network::config::Secret::Input(ref ski))
-						if node_key_type == NodeKeyType::Secp256k1 &&
-							&sk[..] == ski.to_bytes() => Ok(()),
 					NodeKeyConfig::Ed25519(network::config::Secret::Input(ref ski))
 						if node_key_type == NodeKeyType::Ed25519 &&
 							&sk[..] == ski.as_ref() => Ok(()),
@@ -995,8 +977,6 @@ mod tests {
 					node_key_file: Some(file.clone())
 				};
 				node_key_config(params, &net_config_dir).and_then(|c| match c {
-					NodeKeyConfig::Secp256k1(network::config::Secret::File(ref f))
-						if node_key_type == NodeKeyType::Secp256k1 && f == &file => Ok(()),
 					NodeKeyConfig::Ed25519(network::config::Secret::File(ref f))
 						if node_key_type == NodeKeyType::Ed25519 && f == &file => Ok(()),
 					_ => Err(error::Error::Input("Unexpected node key config".into()))
@@ -1029,8 +1009,6 @@ mod tests {
 				let typ = params.node_key_type;
 				node_key_config::<String>(params, &None)
 					.and_then(|c| match c {
-						NodeKeyConfig::Secp256k1(network::config::Secret::New)
-							if typ == NodeKeyType::Secp256k1 => Ok(()),
 						NodeKeyConfig::Ed25519(network::config::Secret::New)
 							if typ == NodeKeyType::Ed25519 => Ok(()),
 						_ => Err(error::Error::Input("Unexpected node key config".into()))
@@ -1044,9 +1022,6 @@ mod tests {
 				let typ = params.node_key_type;
 				node_key_config(params, &Some(net_config_dir.clone()))
 					.and_then(move |c| match c {
-						NodeKeyConfig::Secp256k1(network::config::Secret::File(ref f))
-							if typ == NodeKeyType::Secp256k1 &&
-								f == &dir.join(NODE_KEY_SECP256K1_FILE) => Ok(()),
 						NodeKeyConfig::Ed25519(network::config::Secret::File(ref f))
 							if typ == NodeKeyType::Ed25519 &&
 								f == &dir.join(NODE_KEY_ED25519_FILE) => Ok(()),

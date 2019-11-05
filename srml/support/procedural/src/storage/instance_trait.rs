@@ -184,8 +184,12 @@ fn create_and_impl_instance_struct(
 
 	quote! {
 		// Those trait are derived because of wrong bounds for generics
-		#[cfg_attr(feature = "std", derive(Debug))]
-		#[derive(Clone, Eq, PartialEq, #scrate::codec::Encode, #scrate::codec::Decode)]
+		#[derive(
+			Clone, Eq, PartialEq,
+			#scrate::codec::Encode,
+			#scrate::codec::Decode,
+			#scrate::RuntimeDebug,
+		)]
 		#doc
 		pub struct #instance_struct;
 		impl #instance_trait for #instance_struct {

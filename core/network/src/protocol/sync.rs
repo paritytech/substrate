@@ -392,7 +392,8 @@ impl<B: BlockT> ChainSync<B> {
 						state: PeerSyncState::Available,
 						recently_announced: Default::default(),
 					});
-					return Ok(self.select_new_blocks(who).map(|(_, req)| req))
+					self.is_idle = false;
+					return Ok(None)
 				}
 
 				let common_best = std::cmp::min(self.best_queued_number, info.best_number);
@@ -456,14 +457,24 @@ impl<B: BlockT> ChainSync<B> {
 
 	/// Request syncing for the given block from given set of peers.
 	// The implementation is similar to on_block_announce with unknown parent hash.
-	pub fn set_sync_fork_request(&mut self, peers: Vec<PeerId>, hash: &B::Hash, number: NumberFor<B>) {
+	pub fn set_sync_fork_request(&mut self, mut peers: Vec<PeerId>, hash: &B::Hash, number: NumberFor<B>) {
 		if peers.is_empty() {
-			if let Some(_) = self.fork_targets.remove(hash) {
-				debug!(target: "sync", "Cleared sync request for block {:?} with {:?}", hash, peers);
-			}
-			return;
+			debug!(
+				target: "sync",
+				"Explicit sync request for block {:?} with no peers specified. \
+				 Syncing from all connected peers {:?} instead.",
+				hash, peers,
+			);
+
+			peers = self.peers.iter()
+				// Only request blocks from peers who are ahead or on a par.
+				.filter(|(_, peer)| peer.best_number >= number)
+				.map(|(id, _)| id.clone())
+				.collect();
+		} else {
+			debug!(target: "sync", "Explicit sync request for block {:?} with {:?}", hash, peers);
 		}
-		debug!(target: "sync", "Explicit sync request for block {:?} with {:?}", hash, peers);
+
 		if self.is_known(&hash) {
 			debug!(target: "sync", "Refusing to sync known hash {:?}", hash);
 			return;
@@ -557,6 +568,7 @@ impl<B: BlockT> ChainSync<B> {
 			trace!(target: "sync", "Too many blocks in the queue.");
 			return Either::Left(std::iter::empty())
 		}
+		let major_sync = self.status().state == SyncState::Downloading;
 		let blocks = &mut self.blocks;
 		let attrs = &self.required_block_attributes;
 		let fork_targets = &self.fork_targets;
@@ -586,7 +598,7 @@ impl<B: BlockT> ChainSync<B> {
 				peer.state = PeerSyncState::DownloadingStale(hash);
 				have_requests = true;
 				Some((id.clone(), req))
-			} else if let Some((range, req)) = peer_block_request(id, peer, blocks, attrs) {
+			} else if let Some((range, req)) = peer_block_request(id, peer, blocks, attrs, major_sync) {
 				peer.state = PeerSyncState::DownloadingNew(range.start);
 				trace!(target: "sync", "New block request for {}", id);
 				have_requests = true;
@@ -1074,7 +1086,7 @@ impl<B: BlockT> ChainSync<B> {
 					parent_hash: Some(header.parent_hash().clone()),
 					peers: Default::default(),
 				})
-			.peers.insert(who);
+				.peers.insert(who);
 		}
 
 		OnBlockAnnounce::Nothing
@@ -1111,39 +1123,6 @@ impl<B: BlockT> ChainSync<B> {
 				Err(e) => Some(Err(e))
 			}
 		})
-	}
-
-	/// Select a range of new blocks to download from the given peer.
-	fn select_new_blocks(&mut self, who: PeerId) -> Option<(Range<NumberFor<B>>, BlockRequest<B>)> {
-		// when there are too many blocks in the queue => do not try to download new blocks
-		if self.queue_blocks.len() > MAX_IMPORTING_BLOCKS {
-			trace!(target: "sync", "Too many blocks in the queue.");
-			return None
-		}
-
-		let peer = self.peers.get_mut(&who)?;
-
-		if !peer.state.is_available() {
-			trace!(target: "sync", "Peer {} is busy", who);
-			return None
-		}
-
-		trace!(
-			target: "sync",
-			"Considering new block download from {}, common block is {}, best is {:?}",
-			who,
-			peer.common_number,
-			peer.best_number
-		);
-
-		if let Some((range, req)) = peer_block_request(&who, peer, &mut self.blocks, &self.required_block_attributes) {
-			trace!(target: "sync", "Requesting blocks from {}, ({} to {})", who, range.start, range.end);
-			peer.state = PeerSyncState::DownloadingNew(range.start);
-			Some((range, req))
-		} else {
-			trace!(target: "sync", "Nothing to request from {}", who);
-			None
-		}
 	}
 
 	/// What is the status of the block corresponding to the given hash?
@@ -1244,8 +1223,16 @@ fn peer_block_request<B: BlockT>(
 	peer: &PeerSync<B>,
 	blocks: &mut BlockCollection<B>,
 	attrs: &message::BlockAttributes,
+	major_sync: bool,
 ) -> Option<(Range<NumberFor<B>>, BlockRequest<B>)> {
-	if let Some(range) = blocks.needed_blocks(id.clone(), MAX_BLOCKS_TO_REQUEST, peer.best_number, peer.common_number) {
+	let max_parallel = if major_sync { 1 } else { 3 };
+	if let Some(range) = blocks.needed_blocks(
+		id.clone(),
+		MAX_BLOCKS_TO_REQUEST,
+		peer.best_number,
+		peer.common_number,
+		max_parallel,
+	) {
 		let request = message::generic::BlockRequest {
 			id: 0,
 			fields: attrs.clone(),

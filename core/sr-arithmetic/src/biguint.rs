@@ -21,7 +21,7 @@ use rstd::{cmp::Ordering, ops, prelude::*, cell::RefCell, convert::TryFrom};
 
 // A sensible value for this would be half of the dword size of the host machine. Since the
 // runtime is compiled to 32bit webassembly, using 32 and 64 for single and double respectively
-// should yield the most performance. TODO #3745 we could benchmark this and verify.
+// should yield the most performance.
 /// Representation of a single limb.
 pub type Single = u32;
 /// Representation of two limbs.
@@ -427,8 +427,8 @@ impl BigUint {
 	}
 }
 
-#[cfg(feature = "std")]
 impl rstd::fmt::Debug for BigUint {
+	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut rstd::fmt::Formatter<'_>) -> rstd::fmt::Result {
 		write!(
 			f,
@@ -437,6 +437,12 @@ impl rstd::fmt::Debug for BigUint {
 			u128::try_from(self.clone()).unwrap_or(0),
 		)
 	}
+
+	#[cfg(not(feature = "std"))]
+	fn fmt(&self, _: &mut rstd::fmt::Formatter<'_>) -> rstd::fmt::Result {
+		Ok(())
+	}
+
 }
 
 impl PartialEq for BigUint {
@@ -555,8 +561,6 @@ impl From<Double> for BigUint {
 #[cfg(test)]
 pub mod tests {
 	use super::*;
-	#[cfg(feature = "bench")]
-	use test::Bencher;
 
 	fn with_limbs(n: usize) -> BigUint {
 		BigUint { digits: vec![1; n] }
@@ -727,83 +731,5 @@ pub mod tests {
 		assert_eq!(b.clone().div_unit(2), BigUint::from(((B + 100) / 2) as Single));
 		assert_eq!(b.clone().div_unit(7), BigUint::from(((B + 100) / 7) as Single));
 
-	}
-
-	#[cfg(feature = "bench")]
-	fn random_big_uint(size: usize) -> BigUint {
-		use rand::Rng;
-		let mut rng = rand::thread_rng();
-		let digits = (0..size).map(|_| rng.gen_range(0, Single::max_value())).collect();
-		BigUint { digits }
-	}
-
-	#[cfg(feature = "bench")]
-	#[bench]
-	fn bench_addition_2_digit(bencher: &mut Bencher) {
-		let a = random_big_uint(2);
-		let b = random_big_uint(2);
-		bencher.iter(|| {
-			let _ = a.clone().add(&b);
-		});
-	}
-
-	#[cfg(feature = "bench")]
-	#[bench]
-	fn bench_addition_4_digit(bencher: &mut Bencher) {
-		let a = random_big_uint(4);
-		let b = random_big_uint(4);
-		bencher.iter(|| {
-			let _ = a.clone().add(&b);
-		});
-	}
-
-	#[cfg(feature = "bench")]
-	#[bench]
-	fn bench_subtraction_2_digit(bencher: &mut Bencher) {
-		let a = random_big_uint(2);
-		let b = random_big_uint(2);
-		bencher.iter(|| {
-			let _ = a.clone().sub(&b);
-		});
-	}
-
-	#[cfg(feature = "bench")]
-	#[bench]
-	fn bench_subtraction_4_digit(bencher: &mut Bencher) {
-		let a = random_big_uint(4);
-		let b = random_big_uint(4);
-		bencher.iter(|| {
-			let _ = a.clone().sub(&b);
-		});
-	}
-
-	#[cfg(feature = "bench")]
-	#[bench]
-	fn bench_multiplication_2_digit(bencher: &mut Bencher) {
-		let a = random_big_uint(2);
-		let b = random_big_uint(2);
-		bencher.iter(|| {
-			let _ = a.clone().mul(&b);
-		});
-	}
-
-	#[cfg(feature = "bench")]
-	#[bench]
-	fn bench_multiplication_4_digit(bencher: &mut Bencher) {
-		let a = random_big_uint(4);
-		let b = random_big_uint(4);
-		bencher.iter(|| {
-			let _ = a.clone().mul(&b);
-		});
-	}
-
-	#[cfg(feature = "bench")]
-	#[bench]
-	fn bench_division_4_digit(bencher: &mut Bencher) {
-		let a = random_big_uint(4);
-		let b = random_big_uint(2);
-		bencher.iter(|| {
-			let _ = a.clone().div(&b, true);
-		});
 	}
 }

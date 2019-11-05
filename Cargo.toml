@@ -1,22 +1,3 @@
-[[bin]]
-name = "substrate"
-path = "node/src/main.rs"
-
-[package]
-name = "substrate"
-version = "2.0.0"
-authors = ["Parity Technologies <admin@parity.io>"]
-build = "build.rs"
-edition = "2018"
-
-[dependencies]
-cli = { package = "node-cli", path = "node/cli" }
-futures = "0.1.29"
-ctrlc = { version = "3.1.3", features = ["termination"] }
-
-[build-dependencies]
-vergen = "3.0.4"
-
 [workspace]
 members = [
 	"core/authority-discovery",
@@ -54,7 +35,6 @@ members = [
 	"core/session",
 	"core/sr-api-macros",
 	"core/sr-arithmetic",
-	"core/sr-arithmetic/fuzzer",
 	"core/sr-io",
 	"core/sr-primitives",
 	"core/sr-staking-primitives",
@@ -83,6 +63,7 @@ members = [
 	"srml/aura",
 	"srml/balances",
 	"srml/contracts",
+	"srml/contracts/rpc",
 	"srml/collective",
 	"srml/democracy",
 	"srml/elections",
@@ -97,6 +78,7 @@ members = [
 	"srml/indices",
 	"srml/membership",
 	"srml/metadata",
+	"srml/nicks",
 	"srml/offences",
 	"srml/randomness-collective-flip",
 	"srml/scored-pool",
@@ -109,7 +91,9 @@ members = [
 	"srml/timestamp",
 	"srml/treasury",
 	"srml/transaction-payment",
+	"srml/transaction-payment/rpc",
 	"srml/utility",
+	"srml/evm",
 	"node/cli",
 	"node/executor",
 	"node/primitives",
@@ -122,12 +106,7 @@ members = [
 	"test-utils/chain-spec-builder",
 ]
 
-[badges]
-travis-ci = { repository = "paritytech/substrate", branch = "master" }
-maintenance = { status = "actively-developed" }
-is-it-maintained-issue-resolution = { repository = "paritytech/substrate" }
-is-it-maintained-open-issues = { repository = "paritytech/substrate" }
-
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"
+

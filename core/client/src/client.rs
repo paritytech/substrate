@@ -43,7 +43,7 @@ use state_machine::{
 	DBValue, Backend as StateBackend, ChangesTrieAnchorBlockId, ExecutionStrategy, ExecutionManager,
 	prove_read, prove_child_read, ChangesTrieRootsStorage, ChangesTrieStorage,
 	ChangesTrieTransaction, ChangesTrieConfigurationRange, key_changes, key_changes_proof,
-	OverlayedChanges, BackendTrustLevel,
+	OverlayedChanges, BackendTrustLevel, StorageProof, merge_storage_proofs,
 };
 use executor::{RuntimeVersion, RuntimeInfo};
 use consensus::{
@@ -342,15 +342,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		self.backend.state_at(*block)
 	}
 
-	/// Expose backend reference. To be used in tests only
-	#[doc(hidden)]
-	#[deprecated(note="Rather than relying on `client` to provide this, access \
-	to the backend should be handled at setup only - see #1134. This function \
-	will be removed once that is in place.")]
-	pub fn backend(&self) -> &Arc<B> {
-		&self.backend
-	}
-
 	/// Given a `BlockId` and a key prefix, return the matching child storage keys in that block.
 	pub fn storage_keys(&self, id: &BlockId<Block>, key_prefix: &StorageKey) -> error::Result<Vec<StorageKey>> {
 		let keys = self.state_at(id)?.keys(&key_prefix.0).into_iter().map(StorageKey).collect();
@@ -430,7 +421,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	}
 
 	/// Reads storage value at a given block + key, returning read proof.
-	pub fn read_proof<I>(&self, id: &BlockId<Block>, keys: I) -> error::Result<Vec<Vec<u8>>> where
+	pub fn read_proof<I>(&self, id: &BlockId<Block>, keys: I) -> error::Result<StorageProof> where
 		I: IntoIterator,
 		I::Item: AsRef<[u8]>,
 	{
@@ -446,7 +437,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		id: &BlockId<Block>,
 		storage_key: &[u8],
 		keys: I,
-	) -> error::Result<Vec<Vec<u8>>> where
+	) -> error::Result<StorageProof> where
 		I: IntoIterator,
 		I::Item: AsRef<[u8]>,
 	{
@@ -463,14 +454,14 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		id: &BlockId<Block>,
 		method: &str,
 		call_data: &[u8]
-	) -> error::Result<(Vec<u8>, Vec<Vec<u8>>)> {
+	) -> error::Result<(Vec<u8>, StorageProof)> {
 		let state = self.state_at(id)?;
 		let header = self.prepare_environment_block(id)?;
 		prove_execution(state, header, &self.executor, method, call_data)
 	}
 
 	/// Reads given header and generates CHT-based header proof.
-	pub fn header_proof(&self, id: &BlockId<Block>) -> error::Result<(Block::Header, Vec<Vec<u8>>)> {
+	pub fn header_proof(&self, id: &BlockId<Block>) -> error::Result<(Block::Header, StorageProof)> {
 		self.header_proof_with_cht_size(id, cht::size())
 	}
 
@@ -486,7 +477,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		&self,
 		id: &BlockId<Block>,
 		cht_size: NumberFor<Block>,
-	) -> error::Result<(Block::Header, Vec<Vec<u8>>)> {
+	) -> error::Result<(Block::Header, StorageProof)> {
 		let proof_error = || error::Error::Backend(format!("Failed to generate header proof for {:?}", id));
 		let header = self.backend.blockchain().expect_header(*id)?;
 		let block_num = *header.number();
@@ -705,18 +696,18 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		&self,
 		cht_size: NumberFor<Block>,
 		blocks: I
-	) -> error::Result<Vec<Vec<u8>>> {
+	) -> error::Result<StorageProof> {
 		// most probably we have touched several changes tries that are parts of the single CHT
 		// => GroupBy changes tries by CHT number and then gather proof for the whole group at once
-		let mut proof = HashSet::new();
+		let mut proofs = Vec::new();
 
 		cht::for_each_cht_group::<Block::Header, _, _, _>(cht_size, blocks, |_, cht_num, cht_blocks| {
 			let cht_proof = self.changes_trie_roots_proof_at_cht(cht_size, cht_num, cht_blocks)?;
-			proof.extend(cht_proof);
+			proofs.push(cht_proof);
 			Ok(())
 		}, ())?;
 
-		Ok(proof.into_iter().collect())
+		Ok(merge_storage_proofs(proofs))
 	}
 
 	/// Generates CHT-based proof for roots of changes tries at given blocks (that are part of single CHT).
@@ -725,7 +716,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		cht_size: NumberFor<Block>,
 		cht_num: NumberFor<Block>,
 		blocks: Vec<NumberFor<Block>>
-	) -> error::Result<Vec<Vec<u8>>> {
+	) -> error::Result<StorageProof> {
 		let cht_start = cht::start_number(cht_size, cht_num);
 		let mut current_num = cht_start;
 		let cht_range = ::std::iter::from_fn(|| {
@@ -1880,7 +1871,7 @@ pub(crate) mod tests {
 	use consensus::{BlockOrigin, SelectChain};
 	use test_client::{
 		prelude::*,
-		client_db::{Backend, DatabaseSettings, PruningMode},
+		client_db::{Backend, DatabaseSettings, DatabaseSettingsSrc, PruningMode},
 		runtime::{self, Block, Transfer, RuntimeApi, TestAPI},
 	};
 
@@ -2764,11 +2755,13 @@ pub(crate) mod tests {
 		// states
 		let backend = Arc::new(Backend::new(
 			DatabaseSettings {
-				cache_size: None,
 				state_cache_size: 1 << 20,
 				state_cache_child_ratio: None,
-				path: tmp.path().into(),
 				pruning: PruningMode::ArchiveAll,
+				source: DatabaseSettingsSrc::Path {
+					path: tmp.path().into(),
+					cache_size: None,
+				}
 			},
 			u64::max_value(),
 		).unwrap());

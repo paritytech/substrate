@@ -48,6 +48,12 @@ impl Fixed64 {
 		DIV
 	}
 
+	/// Consume self and return the inner value.
+	///
+	/// This should only be used for testing.
+	#[cfg(any(feature = "std", test))]
+	pub fn into_inner(self) -> i64 { self.0 }
+
 	/// Raw constructor. Equal to `parts / 1_000_000_000`.
 	pub fn from_parts(parts: i64) -> Self {
 		Self(parts)
@@ -144,10 +150,15 @@ impl CheckedAdd for Fixed64 {
 	}
 }
 
-#[cfg(feature = "std")]
 impl rstd::fmt::Debug for Fixed64 {
-	fn fmt(&self, f: &mut rstd::fmt::Formatter<'_>) -> rstd::fmt::Result {
+	#[cfg(feature = "std")]
+	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
 		write!(f, "Fixed64({},{})", self.0 / DIV, (self.0 % DIV) / 1000)
+	}
+
+	#[cfg(not(feature = "std"))]
+	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+		Ok(())
 	}
 }
 

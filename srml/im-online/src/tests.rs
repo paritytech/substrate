@@ -103,6 +103,9 @@ fn heartbeat(
 	authority_index: u32,
 	id: UintAuthorityId,
 ) -> dispatch::Result {
+	#[allow(deprecated)]
+	use support::unsigned::ValidateUnsigned;
+
 	let heartbeat = Heartbeat {
 		block_number,
 		network_state: OpaqueNetworkState {
@@ -114,6 +117,8 @@ fn heartbeat(
 	};
 	let signature = id.sign(&heartbeat.encode()).unwrap();
 
+	#[allow(deprecated)] // Allow ValidateUnsigned
+	ImOnline::pre_dispatch(&crate::Call::heartbeat(heartbeat.clone(), signature.clone()))?;
 	ImOnline::heartbeat(
 		Origin::system(system::RawOrigin::None),
 		heartbeat,
@@ -134,25 +139,25 @@ fn should_mark_online_validator_when_heartbeat_is_received() {
 		assert_eq!(Session::current_index(), 2);
 		assert_eq!(Session::validators(), vec![1, 2, 3]);
 
-		assert!(!ImOnline::is_online_in_current_session(0));
-		assert!(!ImOnline::is_online_in_current_session(1));
-		assert!(!ImOnline::is_online_in_current_session(2));
+		assert!(!ImOnline::is_online(0));
+		assert!(!ImOnline::is_online(1));
+		assert!(!ImOnline::is_online(2));
 
 		// when
 		let _ = heartbeat(1, 2, 0, 1.into()).unwrap();
 
 		// then
-		assert!(ImOnline::is_online_in_current_session(0));
-		assert!(!ImOnline::is_online_in_current_session(1));
-		assert!(!ImOnline::is_online_in_current_session(2));
+		assert!(ImOnline::is_online(0));
+		assert!(!ImOnline::is_online(1));
+		assert!(!ImOnline::is_online(2));
 
 		// and when
 		let _ = heartbeat(1, 2, 2, 3.into()).unwrap();
 
 		// then
-		assert!(ImOnline::is_online_in_current_session(0));
-		assert!(!ImOnline::is_online_in_current_session(1));
-		assert!(ImOnline::is_online_in_current_session(2));
+		assert!(ImOnline::is_online(0));
+		assert!(!ImOnline::is_online(1));
+		assert!(ImOnline::is_online(2));
 	});
 }
 
@@ -170,8 +175,8 @@ fn late_heartbeat_should_fail() {
 		assert_eq!(Session::validators(), vec![1, 2, 3]);
 
 		// when
-		assert_noop!(heartbeat(1, 3, 0, 1.into()), "Outdated heartbeat received.");
-		assert_noop!(heartbeat(1, 1, 0, 1.into()), "Outdated heartbeat received.");
+		assert_noop!(heartbeat(1, 3, 0, 1.into()), "Transaction is outdated");
+		assert_noop!(heartbeat(1, 1, 0, 1.into()), "Transaction is outdated");
 	});
 }
 
@@ -233,13 +238,87 @@ fn should_cleanup_received_heartbeats_on_session_end() {
 		let _ = heartbeat(1, 2, 0, 1.into()).unwrap();
 
 		// the heartbeat is stored
-		assert!(!ImOnline::received_heartbeats(&2, &0).is_empty());
+		assert!(!ImOnline::received_heartbeats(&2, &0).is_none());
 
 		advance_session();
 
 		// after the session has ended we have already processed the heartbeat
 		// message, so any messages received on the previous session should have
 		// been pruned.
-		assert!(ImOnline::received_heartbeats(&2, &0).is_empty());
+		assert!(ImOnline::received_heartbeats(&2, &0).is_none());
+	});
+}
+
+#[test]
+fn should_mark_online_validator_when_block_is_authored() {
+	use authorship::EventHandler;
+
+	new_test_ext().execute_with(|| {
+		advance_session();
+		// given
+		VALIDATORS.with(|l| *l.borrow_mut() = Some(vec![1, 2, 3, 4, 5, 6]));
+		assert_eq!(Session::validators(), Vec::<u64>::new());
+		// enact the change and buffer another one
+		advance_session();
+
+		assert_eq!(Session::current_index(), 2);
+		assert_eq!(Session::validators(), vec![1, 2, 3]);
+
+		for i in 0..3 {
+			assert!(!ImOnline::is_online(i));
+		}
+
+		// when
+		ImOnline::note_author(1);
+		ImOnline::note_uncle(2, 0);
+
+		// then
+		assert!(ImOnline::is_online(0));
+		assert!(ImOnline::is_online(1));
+		assert!(!ImOnline::is_online(2));
+	});
+}
+
+#[test]
+fn should_not_send_a_report_if_already_online() {
+	use authorship::EventHandler;
+
+	let mut ext = new_test_ext();
+	let (offchain, state) = TestOffchainExt::new();
+	ext.register_extension(OffchainExt::new(offchain));
+
+	ext.execute_with(|| {
+		advance_session();
+		// given
+		VALIDATORS.with(|l| *l.borrow_mut() = Some(vec![1, 2, 3, 4, 5, 6]));
+		assert_eq!(Session::validators(), Vec::<u64>::new());
+		// enact the change and buffer another one
+		advance_session();
+		assert_eq!(Session::current_index(), 2);
+		assert_eq!(Session::validators(), vec![1, 2, 3]);
+		ImOnline::note_author(2);
+		ImOnline::note_uncle(3, 0);
+
+		// when
+		UintAuthorityId::set_all_keys(vec![0]); // all authorities use session key 0
+		ImOnline::offchain(4);
+
+		// then
+		let transaction = state.write().transactions.pop().unwrap();
+		// All validators have `0` as their session key, but we should only produce 1 hearbeat.
+		assert_eq!(state.read().transactions.len(), 0);
+		// check stuff about the transaction.
+		let ex: Extrinsic = Decode::decode(&mut &*transaction).unwrap();
+		let heartbeat = match ex.1 {
+			crate::mock::Call::ImOnline(crate::Call::heartbeat(h, _)) => h,
+			e => panic!("Unexpected call: {:?}", e),
+		};
+
+		assert_eq!(heartbeat, Heartbeat {
+			block_number: 4,
+			network_state: runtime_io::network_state().unwrap(),
+			session_index: 2,
+			authority_index: 0,
+		});
 	});
 }

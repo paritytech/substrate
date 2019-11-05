@@ -21,6 +21,7 @@
 use rstd::prelude::*;
 use rstd::{result, convert::TryFrom};
 use sr_primitives::{
+	RuntimeDebug,
 	traits::{Zero, Bounded, CheckedMul, CheckedDiv, EnsureOrigin, Hash, Dispatchable},
 	weights::SimpleDispatchInfo,
 };
@@ -48,8 +49,7 @@ pub type PropIndex = u32;
 pub type ReferendumIndex = u32;
 
 /// A value denoting the strength of conviction of a vote.
-#[derive(Encode, Decode, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Encode, Decode, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, RuntimeDebug)]
 pub enum Conviction {
 	/// 0.1x votes, unlocked.
 	None,
@@ -148,8 +148,7 @@ impl Bounded for Conviction {
 const MAX_RECURSION_LIMIT: u32 = 16;
 
 /// A number of lock periods, plus a vote, one way or the other.
-#[derive(Copy, Clone, Eq, PartialEq, Default)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Copy, Clone, Eq, PartialEq, Default, RuntimeDebug)]
 pub struct Vote {
 	pub aye: bool,
 	pub conviction: Conviction,
@@ -231,8 +230,7 @@ pub trait Trait: system::Trait + Sized {
 }
 
 /// Info regarding an ongoing referendum.
-#[derive(Encode, Decode, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct ReferendumInfo<BlockNumber: Parameter, Proposal: Parameter> {
 	/// When voting on this referendum will end.
 	end: BlockNumber,
@@ -488,9 +486,10 @@ decl_module! {
 		/// but it is not a majority-carries referendum then it fails.
 		///
 		/// - `proposal_hash`: The hash of the current external proposal.
-		/// - `voting_period`: The period that is allowed for voting on this proposal.
+		/// - `voting_period`: The period that is allowed for voting on this proposal. Increased to
+		///   `EmergencyVotingPeriod` if too low.
 		/// - `delay`: The number of block after voting has ended in approval and this should be
-		///   enacted. Increased to `EmergencyVotingPeriod` if too low.
+		///   enacted. This doesn't have a minimum amount.
 		#[weight = SimpleDispatchInfo::FixedNormal(200_000)]
 		fn fast_track(origin,
 			proposal_hash: T::Hash,

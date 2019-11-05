@@ -10,6 +10,37 @@ error[E0053]: method `test` has an incompatible type for trait
    = note: expected type `fn(u64)`
               found type `fn(std::string::String)`
 
+error[E0053]: method `Api_test_runtime_api_impl` has an incompatible type for trait
+  --> $DIR/impl_incorrect_method_signature.rs:18:1
+   |
+12 | / decl_runtime_apis! {
+13 | |     pub trait Api {
+14 | |         fn test(data: u64);
+15 | |     }
+16 | | }
+   | |_- type in trait
+17 | 
+18 |   impl_runtime_apis! {
+   |   ^^^^^^^^^^^^^^^^^^ expected u64, found struct `std::string::String`
+   |
+   = note: expected type `fn(&RuntimeApiImpl<RuntimeApiImplCall>, &sr_primitives::generic::block::BlockId<sr_primitives::generic::block::Block<sr_primitives::generic::header::Header<u64, sr_primitives::traits::BlakeTwo256>, substrate_test_runtime::Extrinsic>>, sr_api_hidden_includes_DECL_RUNTIME_APIS::sr_api_client::runtime_api::ExecutionContext, std::option::Option<u64>, std::vec::Vec<u8>) -> std::result::Result<sr_api_hidden_includes_DECL_RUNTIME_APIS::sr_api_client::runtime_api::NativeOrEncoded<()>, sr_api_hidden_includes_DECL_RUNTIME_APIS::sr_api_client::error::Error>`
+              found type `fn(&RuntimeApiImpl<RuntimeApiImplCall>, &sr_primitives::generic::block::BlockId<sr_primitives::generic::block::Block<sr_primitives::generic::header::Header<u64, sr_primitives::traits::BlakeTwo256>, substrate_test_runtime::Extrinsic>>, sr_api_hidden_includes_DECL_RUNTIME_APIS::sr_api_client::runtime_api::ExecutionContext, std::option::Option<std::string::String>, std::vec::Vec<u8>) -> std::result::Result<sr_api_hidden_includes_DECL_RUNTIME_APIS::sr_api_client::runtime_api::NativeOrEncoded<()>, sr_api_hidden_includes_DECL_RUNTIME_APIS::sr_api_client::error::Error>`
+
+error[E0308]: mismatched types
+  --> $DIR/impl_incorrect_method_signature.rs:18:1
+   |
+18 | / impl_runtime_apis! {
+19 | |     impl self::Api<Block> for Runtime {
+20 | |         fn test(data: String) {}
+21 | |     }
+...  |
+33 | |     }
+34 | | }
+   | |_^ expected u64, found struct `std::string::String`
+   |
+   = note: expected type `u64`
+              found type `std::string::String`
+
 error[E0308]: mismatched types
   --> $DIR/impl_incorrect_method_signature.rs:20:11
    |
@@ -18,6 +49,3 @@ error[E0308]: mismatched types
    |
    = note: expected type `u64`
               found type `std::string::String`
-
-Some errors have detailed explanations: E0053, E0308.
-For more information about an error, try `rustc --explain E0053`.

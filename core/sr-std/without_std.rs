@@ -53,6 +53,7 @@ pub use core::clone;
 pub use core::cmp;
 pub use core::convert;
 pub use core::default;
+pub use core::fmt;
 pub use core::hash;
 pub use core::intrinsics;
 pub use core::iter;

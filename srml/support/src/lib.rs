@@ -40,10 +40,13 @@ pub use paste;
 pub use runtime_io::with_storage;
 #[doc(hidden)]
 pub use runtime_io::storage_root;
+#[doc(hidden)]
+pub use sr_primitives::RuntimeDebug;
 
 #[macro_use]
-pub mod dispatch;
+pub mod debug;
 #[macro_use]
+pub mod dispatch;
 pub mod storage;
 mod hash;
 #[macro_use]
@@ -224,8 +227,7 @@ macro_rules! __assert_eq_uvec {
 
 /// The void type - it cannot exist.
 // Oh rust, you crack me up...
-#[derive(Clone, Eq, PartialEq)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Clone, Eq, PartialEq, RuntimeDebug)]
 pub enum Void {}
 
 #[cfg(feature = "std")]
