@@ -411,22 +411,6 @@ decl_module! {
 			Self::transfer_inner(&transactor, &dest, value, ExistenceRequirement::AllowDeath)?;
 		}
 
-		/// Transfer some liquid free balance to another account, while checking that the transfer
-		/// will not kill the account.
-		///
-		/// 99% of the time you want `transfer` instead.
-		#[weight = SimpleDispatchInfo::FixedNormal(1_000_000)]
-		pub fn transfer_some(
-			origin,
-			dest: <T::Lookup as StaticLookup>::Source,
-			#[compact] value: T::Balance
-		) {
-			let transactor = ensure_signed(origin)?;
-			let dest = T::Lookup::lookup(dest)?;
-
-			Self::transfer_inner(&transactor, &dest, value, ExistenceRequirement::KeepAlive)?;
-		}
-
 		/// Set the balances of a given account.
 		///
 		/// This will alter `FreeBalance` and `ReservedBalance` in storage. it will
@@ -481,6 +465,23 @@ decl_module! {
 			let dest = T::Lookup::lookup(dest)?;
 			<Self as Currency<_>>::transfer(&source, &dest, value)?;
 		}
+		
+		/// Transfer some liquid free balance to another account, while checking that the transfer
+		/// will not kill the account.
+		///
+		/// 99% of the time you want `transfer` instead.
+		#[weight = SimpleDispatchInfo::FixedNormal(1_000_000)]
+		pub fn transfer_some(
+			origin,
+			dest: <T::Lookup as StaticLookup>::Source,
+			#[compact] value: T::Balance
+		) {
+			let transactor = ensure_signed(origin)?;
+			let dest = T::Lookup::lookup(dest)?;
+
+			Self::transfer_inner(&transactor, &dest, value, ExistenceRequirement::KeepAlive)?;
+		}
+
 	}
 }
 
