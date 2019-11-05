@@ -155,7 +155,10 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 		(),
 		TFullBackend<TBl>,
 	>, Error> {
-		let keystore = Keystore::open(config.keystore_path.clone(), config.keystore_password.clone())?;
+		let keystore = Keystore::open(
+			config.keystore_path.clone().ok_or("No basepath configured")?,
+			config.keystore_password.clone()
+		)?;
 
 		let executor = NativeExecutor::<TExecDisp>::new(
 			config.wasm_method,
@@ -236,7 +239,10 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 		(),
 		TLightBackend<TBl>,
 	>, Error> {
-		let keystore = Keystore::open(config.keystore_path.clone(), config.keystore_password.clone())?;
+		let keystore = Keystore::open(
+			config.keystore_path.clone().ok_or("No basepath configured")?,
+			config.keystore_password.clone()
+		)?;
 
 		let executor = NativeExecutor::<TExecDisp>::new(
 			config.wasm_method,
@@ -568,10 +574,10 @@ impl<TBl, TRtApi, TCfg, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNet
 	/// Defines the RPC extensions to use.
 	pub fn with_rpc_extensions<URpc>(
 		self,
-		rpc_ext_builder: impl FnOnce(Arc<TCl>, Arc<TExPool>) -> URpc
+		rpc_ext_builder: impl FnOnce(Arc<TCl>, Arc<TExPool>, Arc<Backend>) -> URpc
 	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp,
 		TNetP, TExPool, URpc, Backend>, Error> {
-		let rpc_extensions = rpc_ext_builder(self.client.clone(), self.transaction_pool.clone());
+		let rpc_extensions = rpc_ext_builder(self.client.clone(), self.transaction_pool.clone(), self.backend.clone());
 
 		Ok(ServiceBuilder {
 			config: self.config,

@@ -18,6 +18,8 @@
 
 use serializer;
 use wasmi;
+#[cfg(feature = "wasmtime")]
+use wasmtime_jit::{ActionError, SetupError};
 
 /// Result type alias.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -31,6 +33,9 @@ pub enum Error {
 	Trap(wasmi::Trap),
 	/// Wasmi loading/instantiating error
 	Wasmi(wasmi::Error),
+	/// Wasmtime action error
+	#[cfg(feature = "wasmtime")]
+	Wasmtime(ActionError),
 	/// Error in the API. Parameter is an error message.
 	ApiError(String),
 	/// Method is not found
@@ -75,9 +80,9 @@ pub enum Error {
 	/// Someone tried to allocate more memory than the allowed maximum per allocation.
 	#[display(fmt="Requested allocation size is too large")]
 	RequestedAllocationTooLarge,
-	/// Executing the given function failed with the given error.
-	#[display(fmt="Function execution failed with: {}", _0)]
-	FunctionExecution(String),
+	/// Execution of a host function failed.
+	#[display(fmt="Host function {} execution failed with: {}", _0, _1)]
+	FunctionExecution(String, String),
 }
 
 impl std::error::Error for Error {
@@ -116,6 +121,16 @@ pub enum WasmError {
 	InvalidModule,
 	/// Wasm code could not be deserialized.
 	CantDeserializeWasm,
+	/// The module does not export a linear memory named `memory`.
+	InvalidMemory,
+	/// The number of heap pages requested is disallowed by the module.
+	InvalidHeapPages,
 	/// Instantiation error.
-	Instantiation(Error),
+	Instantiation(String),
+	/// The compiler does not support the host machine as a target.
+	#[cfg(feature = "wasmtime")]
+	MissingCompilerSupport(&'static str),
+	/// Wasmtime setup error.
+	#[cfg(feature = "wasmtime")]
+	WasmtimeSetup(SetupError),
 }

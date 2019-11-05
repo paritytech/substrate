@@ -116,6 +116,7 @@ pub struct PhragmenResult<AccountId> {
 /// This, at the current version, resembles the `Exposure` defined in the staking SRML module, yet
 /// they do not necessarily have to be the same.
 #[derive(Default, RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub struct Support<AccountId> {
 	/// The amount of support as the effect of self-vote.
 	pub own: ExtendedBalance,

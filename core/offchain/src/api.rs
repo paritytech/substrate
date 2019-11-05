@@ -30,6 +30,7 @@ use primitives::offchain::{
 	Externalities as OffchainExt, HttpRequestId, Timestamp, HttpRequestStatus, HttpError,
 	OpaqueNetworkState, OpaquePeerId, OpaqueMultiaddr, StorageKind,
 };
+pub use offchain_primitives::STORAGE_PREFIX;
 use sr_primitives::{generic::BlockId, traits::{self, Extrinsic}};
 use transaction_pool::txpool::{Pool, ChainApi};
 
@@ -71,7 +72,6 @@ fn unavailable_yet<R: Default>(name: &str) -> R {
 }
 
 const LOCAL_DB: &str = "LOCAL (fork-aware) DB";
-const STORAGE_PREFIX: &[u8] = b"storage";
 
 impl<Storage, Block> OffchainExt for Api<Storage, Block>
 where
