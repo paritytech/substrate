@@ -162,6 +162,7 @@ impl Trait for Runtime {
 	type Call = Call;
 	type SubmitTransaction = SubmitTransaction;
 	type ReportUnresponsiveness = OffenceHandler;
+	type SessionDuration = Period;
 }
 
 /// Im Online module.
