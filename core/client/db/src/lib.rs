@@ -1512,7 +1512,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 		if self.is_archive {
 			match self.blockchain.header(BlockId::Hash(hash.clone())) {
 				Ok(Some(header)) => {
-					state_machine::Storage::get(self.storage.as_ref(), &header.state_root(), (&[], None)).unwrap_or(None).is_some();
+					state_machine::Storage::get(self.storage.as_ref(), &header.state_root(), (&[], None)).unwrap_or(None).is_some()
 				},
 				_ => false,
 			}
