@@ -984,7 +984,6 @@ fn allows_reimporting_change_blocks() {
 			bad_justification: false,
 			needs_finality_proof: false,
 			is_new_best: true,
-			header_only: false,
 		}),
 	);
 
