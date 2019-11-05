@@ -72,12 +72,12 @@ use serde::{Serialize, Deserialize};
 use rstd::prelude::*;
 use support::{decl_module, decl_storage, decl_event, ensure, print};
 use support::traits::{
-	Currency, ExistenceRequirement, Get, Imbalance, OnDilution, OnUnbalanced,
+	Currency, ExistenceRequirement, Get, Imbalance, OnUnbalanced,
 	ReservableCurrency, WithdrawReason
 };
-use sr_primitives::{Permill, Perbill, ModuleId};
+use sr_primitives::{Permill, ModuleId};
 use sr_primitives::traits::{
-	Zero, EnsureOrigin, StaticLookup, AccountIdConversion, CheckedSub, Saturating
+	Zero, EnsureOrigin, StaticLookup, AccountIdConversion, Saturating
 };
 use sr_primitives::weights::SimpleDispatchInfo;
 use codec::{Encode, Decode};
@@ -351,27 +351,6 @@ impl<T: Trait> OnUnbalanced<NegativeImbalanceOf<T>> for Module<T> {
 	}
 }
 
-/// Mint extra funds for the treasury to keep the ratio of portion to total_issuance equal
-/// pre dilution and post-dilution.
-///
-/// i.e.
-/// ```nocompile
-/// portion / total_issuance_before_dilution ==
-///   (portion + minted) / (total_issuance_before_dilution + minted_to_treasury + minted)
-/// ```
-impl<T: Trait> OnDilution<BalanceOf<T>> for Module<T> {
-	fn on_dilution(minted: BalanceOf<T>, portion: BalanceOf<T>) {
-		if !minted.is_zero() && !portion.is_zero() {
-			let total_issuance = T::Currency::total_issuance();
-			if let Some(funding) = total_issuance.checked_sub(&portion) {
-				let increase_ratio = Perbill::from_rational_approximation(minted, portion);
-				let funding = increase_ratio * funding;
-				Self::on_unbalanced(T::Currency::issue(funding));
-			}
-		}
-	}
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -379,7 +358,7 @@ mod tests {
 	use support::{assert_noop, assert_ok, impl_outer_origin, parameter_types};
 	use primitives::H256;
 	use sr_primitives::{
-		traits::{BlakeTwo256, OnFinalize, IdentityLookup}, testing::Header, assert_eq_error_rate,
+		traits::{BlakeTwo256, OnFinalize, IdentityLookup}, testing::Header, Perbill
 	};
 
 	impl_outer_origin! {
@@ -470,35 +449,9 @@ mod tests {
 	fn minting_works() {
 		new_test_ext().execute_with(|| {
 			// Check that accumulate works when we have Some value in Dummy already.
-			Treasury::on_dilution(100, 100);
+			Balances::make_free_balance_be(&Treasury::account_id(), 101);
 			assert_eq!(Treasury::pot(), 100);
 		});
-	}
-
-	#[test]
-	fn minting_works_2() {
-		let tests = [(1, 10), (1, 20), (40, 130), (2, 66), (2, 67), (2, 100), (2, 101), (2, 134)];
-		for &(minted, portion) in &tests {
-			new_test_ext().execute_with(|| {
-				let init_total_issuance = Balances::total_issuance();
-				Treasury::on_dilution(minted, portion);
-
-				assert_eq!(
-					Treasury::pot(),
-					(((init_total_issuance - portion) * minted) as f32 / portion as f32)
-						.round() as u64
-				);
-
-				// Assert:
-				// portion / init_total_issuance
-				// == (portion + minted) / (init_total_issuance + Treasury::pot() + minted),
-				assert_eq_error_rate!(
-					portion * 1_000 / init_total_issuance,
-					(portion + minted) * 1_000 / (init_total_issuance + Treasury::pot() + minted),
-					2,
-				);
-			});
-		}
 	}
 
 	#[test]
@@ -529,7 +482,7 @@ mod tests {
 	#[test]
 	fn accepted_spend_proposal_ignored_outside_spend_period() {
 		new_test_ext().execute_with(|| {
-			Treasury::on_dilution(100, 100);
+			Balances::make_free_balance_be(&Treasury::account_id(), 101);
 
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
 			assert_ok!(Treasury::approve_proposal(Origin::ROOT, 0));
@@ -544,7 +497,7 @@ mod tests {
 	fn unused_pot_should_diminish() {
 		new_test_ext().execute_with(|| {
 			let init_total_issuance = Balances::total_issuance();
-			Treasury::on_dilution(100, 100);
+			Balances::make_free_balance_be(&Treasury::account_id(), 101);
 			assert_eq!(Balances::total_issuance(), init_total_issuance + 100);
 
 			<Treasury as OnFinalize<u64>>::on_finalize(2);
@@ -556,7 +509,7 @@ mod tests {
 	#[test]
 	fn rejected_spend_proposal_ignored_on_spend_period() {
 		new_test_ext().execute_with(|| {
-			Treasury::on_dilution(100, 100);
+			Balances::make_free_balance_be(&Treasury::account_id(), 101);
 
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
 			assert_ok!(Treasury::reject_proposal(Origin::ROOT, 0));
@@ -570,7 +523,7 @@ mod tests {
 	#[test]
 	fn reject_already_rejected_spend_proposal_fails() {
 		new_test_ext().execute_with(|| {
-			Treasury::on_dilution(100, 100);
+			Balances::make_free_balance_be(&Treasury::account_id(), 101);
 
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
 			assert_ok!(Treasury::reject_proposal(Origin::ROOT, 0));
@@ -595,7 +548,7 @@ mod tests {
 	#[test]
 	fn accept_already_rejected_spend_proposal_fails() {
 		new_test_ext().execute_with(|| {
-			Treasury::on_dilution(100, 100);
+			Balances::make_free_balance_be(&Treasury::account_id(), 101);
 
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
 			assert_ok!(Treasury::reject_proposal(Origin::ROOT, 0));
@@ -606,7 +559,7 @@ mod tests {
 	#[test]
 	fn accepted_spend_proposal_enacted_on_spend_period() {
 		new_test_ext().execute_with(|| {
-			Treasury::on_dilution(100, 100);
+			Balances::make_free_balance_be(&Treasury::account_id(), 101);
 			assert_eq!(Treasury::pot(), 100);
 
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
@@ -621,7 +574,7 @@ mod tests {
 	#[test]
 	fn pot_underflow_should_not_diminish() {
 		new_test_ext().execute_with(|| {
-			Treasury::on_dilution(100, 100);
+			Balances::make_free_balance_be(&Treasury::account_id(), 101);
 			assert_eq!(Treasury::pot(), 100);
 
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 150, 3));
@@ -630,10 +583,10 @@ mod tests {
 			<Treasury as OnFinalize<u64>>::on_finalize(2);
 			assert_eq!(Treasury::pot(), 100); // Pot hasn't changed
 
-			Treasury::on_dilution(100, 100);
+			Balances::deposit_into_existing(&Treasury::account_id(), 100);
 			<Treasury as OnFinalize<u64>>::on_finalize(4);
 			assert_eq!(Balances::free_balance(&3), 150); // Fund has been spent
-			assert_eq!(Treasury::pot(), 75); // Pot has finally changed
+			assert_eq!(Treasury::pot(), 25); // Pot has finally changed
 		});
 	}
 
@@ -642,7 +595,7 @@ mod tests {
 	#[test]
 	fn treasury_account_doesnt_get_deleted() {
 		new_test_ext().execute_with(|| {
-			Treasury::on_dilution(100, 100);
+			Balances::make_free_balance_be(&Treasury::account_id(), 101);
 			assert_eq!(Treasury::pot(), 100);
 			let treasury_balance = Balances::free_balance(&Treasury::account_id());
 
@@ -685,7 +638,7 @@ mod tests {
 			assert_eq!(Treasury::pot(), 0); // Pot hasn't changed
 			assert_eq!(Balances::free_balance(&3), 0); // Balance of `3` hasn't changed
 
-			Treasury::on_dilution(100, 100);
+			Balances::make_free_balance_be(&Treasury::account_id(), 100);
 			assert_eq!(Treasury::pot(), 99); // Pot now contains funds
 			assert_eq!(Balances::free_balance(&Treasury::account_id()), 100); // Account does exist
 
