@@ -23,9 +23,9 @@ use quote::quote;
 use super::super::{DeclStorageDefExt, StorageLineTypeDef};
 
 pub struct GenesisConfigFieldDef {
-	pub doc: Vec<syn::Meta>,
 	pub name: syn::Ident,
 	pub typ: syn::Type,
+	pub attrs: Vec<syn::Meta>,
 	pub default: TokenStream,
 }
 
@@ -114,17 +114,16 @@ impl GenesisConfigDef {
 				.unwrap_or_else(|| quote!( Default::default() ));
 
 			config_field_defs.push(GenesisConfigFieldDef {
-				doc: line.doc_attrs.clone(),
 				name: config_field,
 				typ,
+				attrs: line.doc_attrs.clone(),
 				default,
 			});
 		}
 
 		for line in &def.extra_genesis_config_lines {
-			let doc = line.attrs.iter()
-				.filter_map(|a| a.parse_meta().ok())
-				.filter(|m| m.name() == "doc")
+			let attrs = line.attrs.iter()
+				.map(|a| a.parse_meta().expect("attribute cannot be parsed"))
 				.collect();
 
 			let default = line.default.as_ref().map(|e| quote!( #e ))
@@ -132,9 +131,9 @@ impl GenesisConfigDef {
 
 
 			config_field_defs.push(GenesisConfigFieldDef {
-				doc,
 				name: line.name.clone(),
 				typ: line.typ.clone(),
+				attrs,
 				default,
 			});
 		}

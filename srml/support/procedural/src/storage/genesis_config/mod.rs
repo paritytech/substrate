@@ -33,13 +33,13 @@ fn decl_genesis_config_and_impl_default(
 	genesis_config: &GenesisConfigDef,
 ) -> TokenStream {
 	let config_fields = genesis_config.fields.iter().map(|field| {
-		let (name, typ, doc) = (&field.name, &field.typ, &field.doc);
-		quote!( #( #[ #doc] )* pub #name: #typ, )
+		let (name, typ, attrs) = (&field.name, &field.typ, &field.attrs);
+		quote!( #( #[ #attrs] )* pub #name: #typ, )
 	});
 
 	let config_field_defaults = genesis_config.fields.iter().map(|field| {
-		let (name, default, doc) = (&field.name, &field.default, &field.doc);
-		quote!( #( #[ #doc] )* #name: #default, )
+		let (name, default) = (&field.name, &field.default);
+		quote!( #name: #default, )
 	});
 
 	let serde_bug_bound = if !genesis_config.fields.is_empty() {
