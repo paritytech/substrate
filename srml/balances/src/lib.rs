@@ -407,7 +407,6 @@ decl_module! {
 		) {
 			let transactor = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
-
 			Self::transfer_inner(&transactor, &dest, value, ExistenceRequirement::AllowDeath)?;
 		}
 
@@ -465,7 +464,7 @@ decl_module! {
 			let dest = T::Lookup::lookup(dest)?;
 			<Self as Currency<_>>::transfer(&source, &dest, value)?;
 		}
-		
+
 		/// Transfer some liquid free balance to another account, while checking that the transfer
 		/// will not kill the account.
 		///
