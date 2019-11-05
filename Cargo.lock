@@ -2672,6 +2672,7 @@ dependencies = [
  "srml-transaction-payment 2.0.0",
  "structopt 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-basic-authorship 2.0.0",
+ "substrate-build-script-utils 2.0.0",
  "substrate-chain-spec 2.0.0",
  "substrate-cli 2.0.0",
  "substrate-client 2.0.0",
@@ -2836,6 +2837,7 @@ dependencies = [
  "sr-io 2.0.0",
  "sr-primitives 2.0.0",
  "substrate-basic-authorship 2.0.0",
+ "substrate-build-script-utils 2.0.0",
  "substrate-cli 2.0.0",
  "substrate-client 2.0.0",
  "substrate-consensus-aura 2.0.0",
@@ -5218,6 +5220,10 @@ dependencies = [
  "schnorrkel 0.8.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "sha2 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
+
+[[package]]
+name = "substrate-build-script-utils"
+version = "2.0.0"
 
 [[package]]
 name = "substrate-chain-spec"
