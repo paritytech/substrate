@@ -1168,7 +1168,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 
 		if transactor != dest {
 			if existential_requirement == ExistenceRequirement::KeepAlive {
-				if new_from_balance < T::ExistentialDeposit::get() {
+				if new_from_balance < Self::minimum_balance() {
 					return Err("payment would kill account");
 				}
 			}
