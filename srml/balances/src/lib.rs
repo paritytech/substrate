@@ -407,7 +407,7 @@ decl_module! {
 		) {
 			let transactor = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
-			<Self as Currency<_>>::transfer(&source, &dest, value)?;
+			<Self as Currency<_>>::transfer(&transactor, &dest, value)?;
 		}
 
 		/// Set the balances of a given account.
