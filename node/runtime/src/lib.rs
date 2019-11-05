@@ -372,16 +372,15 @@ impl treasury::Trait for Runtime {
 }
 
 parameter_types! {
-	pub const ContractTransferFee: Balance = 1 * CENTS;
-	pub const ContractCreationFee: Balance = 1 * CENTS;
-	pub const ContractTransactionBaseFee: Balance = 1 * CENTS;
-	pub const ContractTransactionByteFee: Balance = 10 * MILLICENTS;
-	pub const ContractFee: Balance = 1 * CENTS;
+	pub const ContractTransferFee: Balance = 1000;
+	pub const ContractCreationFee: Balance = 1000;
+	pub const ContractTransactionBaseFee: Balance = 1000;
+	pub const ContractTransactionByteFee: Balance = 10;
+	pub const ContractFee: Balance = 1;
 	pub const TombstoneDeposit: Balance = 1 * DOLLARS;
 	pub const RentByteFee: Balance = 1 * DOLLARS;
 	pub const RentDepositOffset: Balance = 1000 * DOLLARS;
 	pub const SurchargeReward: Balance = 150 * DOLLARS;
-	pub const WeightPerGasUnit: Weight = 1;
 }
 
 impl contracts::Trait for Runtime {
@@ -411,7 +410,6 @@ impl contracts::Trait for Runtime {
 	type MaxDepth = contracts::DefaultMaxDepth;
 	type MaxValueSize = contracts::DefaultMaxValueSize;
 	type WeightToFee = LinearWeightToFee<WeightFeeCoefficient>;
-	type WeightPerGasUnit = WeightPerGasUnit;
 }
 
 impl sudo::Trait for Runtime {
@@ -520,7 +518,7 @@ construct_runtime!(
 		FinalityTracker: finality_tracker::{Module, Call, Inherent},
 		Grandpa: grandpa::{Module, Call, Storage, Config, Event},
 		Treasury: treasury::{Module, Call, Storage, Config, Event<T>},
-		Contracts: contracts,
+		Contracts: contracts::{Module, Call, Storage, Config, Event<T>},
 		Sudo: sudo,
 		ImOnline: im_online::{Module, Call, Storage, Event<T>, ValidateUnsigned, Config<T>},
 		Offences: offences::{Module, Call, Storage, Event},

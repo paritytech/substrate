@@ -422,9 +422,6 @@ pub trait Trait: system::Trait {
 
 	/// Convert a weight value into a deductible fee based on the currency type.
 	type WeightToFee: Convert<Weight, BalanceOf<Self>>;
-
-	/// The number of weight units used by one gas unit.
-	type WeightPerGasUnit: Get<Weight>;
 }
 
 /// Simple contract address determiner.
@@ -1024,6 +1021,8 @@ impl<T: Trait + Send + Sync> CheckBlockGasLimit<T> {
 		who: &T::AccountId,
 		call: &<T as Trait>::Call,
 	) -> rstd::result::Result<Option<DynamicWeightData<T::AccountId, NegativeImbalanceOf<T>>>, TransactionValidityError> {
+		use rstd::convert::TryInto;
+
 		let call = match call.is_sub_type() {
 			Some(call) => call,
 			None => return Ok(None),
@@ -1034,10 +1033,12 @@ impl<T: Trait + Send + Sync> CheckBlockGasLimit<T> {
 			Call::call(_, _, gas_limit, _) | Call::instantiate(_, gas_limit, _, _) => {
 				// Compute how much block weight this transaction can take up in case if it
 				// depleted devoted gas to zero.
-				let gas_weight_limit = gas_to_weight::<T>(gas_limit);
-
-				// Obtain the the available amount of weight left in the current block and discard
-				// this transaction if it can potentially overrun the available amount.
+				// We are achieving this by obtain the the available amount of weight left in
+				// the current block and discard this transaction if it can potentially overrun the
+				// available amount.
+				let gas_weight_limit = gas_limit
+					.try_into()
+					.map_err(|_| InvalidTransaction::ExhaustsResources)?;
 				let weight_available = <T as system::Trait>::MaximumBlockWeight::get()
 					.saturating_sub(<system::Module<T>>::all_extrinsics_weight());
 				if gas_weight_limit > weight_available {
@@ -1055,7 +1056,6 @@ impl<T: Trait + Send + Sync> CheckBlockGasLimit<T> {
 				<GasPrice<T>>::put(gas_price);
 
 				if true {
-					use rstd::convert::TryInto;
 					runtime_io::print_num(gas_weight_limit.try_into().unwrap_or(0) as u64);
 					runtime_io::print_num(fee.try_into().unwrap_or(0) as u64);
 					runtime_io::print_num(gas_price.try_into().unwrap_or(0) as u64);
@@ -1139,8 +1139,10 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckBlockGasLimit<T> {
 		}) = pre {
 			let (gas_left, gas_spent) = GasUsageReport::take();
 
+			// These should be OK since we don't buy more
+			let unused_weight = gas_left as Weight;
+			let spent_weight = gas_spent as Weight;
 
-			let unused_weight = gas_to_weight::<T>(gas_left);
 			let refund = T::WeightToFee::convert(unused_weight);
 
 			// Refund the unused gas.
@@ -1149,13 +1151,8 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckBlockGasLimit<T> {
 				T::GasPayment::on_unbalanced(imbalance);
 			}
 
-			let spent_weight = gas_to_weight::<T>(gas_spent);
 			let next_weight = <system::Module<T>>::all_extrinsics_weight().saturating_add(spent_weight);
 			<system::Module<T>>::set_extrinsics_weight(next_weight);
 		}
 	}
-}
-
-fn gas_to_weight<T: Trait>(gas: Gas) -> Weight {
-	(T::WeightPerGasUnit::get() as Gas * gas) as Weight
 }

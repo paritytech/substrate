@@ -713,7 +713,7 @@ mod tests {
 				CheckedExtrinsic {
 					signed: Some((charlie(), signed_extra(0, 0))),
 					function: Call::Contracts(
-						contracts::Call::put_code::<Runtime>(10_000, transfer_code)
+						contracts::Call::put_code::<Runtime>(transfer_code)
 					),
 				},
 				CheckedExtrinsic {
