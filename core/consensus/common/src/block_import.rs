@@ -35,15 +35,11 @@ pub enum ImportResult {
 	KnownBad,
 	/// Block parent is not in the chain.
 	UnknownParent,
-	/// Parent state is missing.
-	MissingState,
 }
 
 /// Auxiliary data associated with an imported block result.
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct ImportedAux {
-	/// Only the header has been imported. Block body verification was skipped.
-	pub header_only: bool,
 	/// Clear all pending justification requests.
 	pub clear_justification_requests: bool,
 	/// Request a justification for the given block.
@@ -102,8 +98,6 @@ pub struct BlockCheckParams<Block: BlockT> {
 	pub number: NumberFor<Block>,
 	/// Parent hash of the block that we verify.
 	pub parent_hash: Block::Hash,
-	/// Don't check state availability
-	pub header_only: bool,
 }
 
 /// Data required to import a Block.
