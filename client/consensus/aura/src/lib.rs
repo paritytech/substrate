@@ -826,7 +826,7 @@ pub fn import_queue<B, I, C, P, T>(
 	};
 	Ok(BasicQueue::new(
 		verifier,
-		Box::new(AuraBlockImport::<_, _, _, P>::new(block_import, client)),
+		Box::new(block_impor),
 		justification_import,
 		finality_proof_import,
 	))
