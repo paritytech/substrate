@@ -766,7 +766,7 @@ impl<Block: BlockT, C, I, P> BlockImport<Block> for AuraBlockImport<Block, C, I,
 	) -> Result<ImportResult, Self::Error> {
 		let hash = block.post_header().hash();
 		let slot_number = find_pre_digest::<Block, P>(&block.header)
-			.expect("valid babe headers must contain a predigest; \
+			.expect("valid Aura headers must contain a predigest; \
 					 header has been already verified; qed");
 
 		let parent_hash = *block.header.parent_hash();
@@ -777,7 +777,7 @@ impl<Block: BlockT, C, I, P> BlockImport<Block> for AuraBlockImport<Block, C, I,
 			).into()))?;
 
 		let parent_slot = find_pre_digest::<Block, P>(&parent_header)
-			.expect("parent is non-genesis; valid BABE headers contain a pre-digest; \
+			.expect("parent is non-genesis; valid Aura headers contain a pre-digest; \
 					header has already been verified; qed");
 
 		// make sure that slot number is strictly increasing
