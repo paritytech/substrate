@@ -777,8 +777,8 @@ impl<Block: BlockT, C, I, P> BlockImport<Block> for AuraBlockImport<Block, C, I,
 			).into()))?;
 
 		let parent_slot = find_pre_digest::<Block, P>(&parent_header)
-			.expect("parent is non-genesis; valid Aura headers contain a pre-digest; \
-					header has already been verified; qed");
+			.expect("valid Aura headers contain a pre-digest; \
+					parent header has already been verified; qed");
 
 		// make sure that slot number is strictly increasing
 		if slot_number <= parent_slot {
