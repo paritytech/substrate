@@ -635,7 +635,7 @@ mod tests {
 		let test_api = Arc::new(TestApi {authorities: vec![public.into()]});
 
 		let mut authority_discovery =
-			AuthorityDiscovery::new(test_api, network.clone(), key_store, dht_event_rx);
+			AuthorityDiscovery::new(test_api, network.clone(), key_store, dht_event_rx.boxed());
 
 		authority_discovery.publish_own_ext_addresses().unwrap();
 
@@ -659,7 +659,7 @@ mod tests {
 		let key_store = KeyStore::new();
 
 		let mut authority_discovery =
-			AuthorityDiscovery::new(test_api, network.clone(), key_store, dht_event_rx);
+			AuthorityDiscovery::new(test_api, network.clone(), key_store, dht_event_rx.boxed());
 
 		authority_discovery.request_addresses_of_others().unwrap();
 
@@ -678,7 +678,7 @@ mod tests {
 		let key_store = KeyStore::new();
 
 		let mut authority_discovery =
-			AuthorityDiscovery::new(test_api, network.clone(), key_store, dht_event_rx);
+			AuthorityDiscovery::new(test_api, network.clone(), key_store, dht_event_rx.boxed());
 
 		// Create sample dht event.
 
