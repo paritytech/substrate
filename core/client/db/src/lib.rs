@@ -783,6 +783,7 @@ pub struct Backend<Block: BlockT> {
 	canonicalization_delay: u64,
 	shared_cache: SharedCache<Block, Blake2Hasher>,
 	import_lock: Mutex<()>,
+	is_archive: bool,
 }
 
 impl<Block: BlockT<Hash=H256>> Backend<Block> {
@@ -843,6 +844,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 				config.state_cache_child_ratio.unwrap_or(DEFAULT_CHILD_RATIO),
 			),
 			import_lock: Default::default(),
+			is_archive: is_archive_pruning,
 		})
 	}
 
@@ -1489,6 +1491,9 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 		match self.blockchain.header(block) {
 			Ok(Some(ref hdr)) => {
 				let hash = hdr.hash();
+				if !self.have_state_at(&hash, *hdr.number()) {
+					return Err(client::error::Error::UnknownBlock(format!("State already discarded for {:?}", block)))
+				}
 				if let Ok(()) = self.storage.state_db.pin(&hash) {
 					let root = H256::from_slice(hdr.state_root().as_ref());
 					let db_state = DbState::new(self.storage.clone(), root);
@@ -1504,7 +1509,16 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 	}
 
 	fn have_state_at(&self, hash: &Block::Hash, number: NumberFor<Block>) -> bool {
-		!self.storage.state_db.is_pruned(hash, number.saturated_into::<u64>())
+		if self.is_archive {
+			match self.blockchain.header(BlockId::Hash(hash.clone())) {
+				Ok(Some(header)) => {
+					state_machine::Storage::get(self.storage.as_ref(), &header.state_root(), (&[], None)).unwrap_or(None).is_some();
+				},
+				_ => false,
+			}
+		} else {
+			!self.storage.state_db.is_pruned(hash, number.saturated_into::<u64>())
+		}
 	}
 
 	fn destroy_state(&self, state: Self::State) -> ClientResult<()> {
