@@ -468,11 +468,16 @@ mod tests {
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
+					event: Event::treasury(treasury::RawEvent::Deposit(1984800000000)),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(1),
 					event: Event::balances(balances::RawEvent::Transfer(
 						alice().into(),
 						bob().into(),
 						69 * DOLLARS,
-						1 * CENTS
+						1 * CENTS,
 					)),
 					topics: vec![],
 				},
@@ -512,6 +517,11 @@ mod tests {
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
+					event: Event::treasury(treasury::RawEvent::Deposit(1984780231392)),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(1),
 					event: Event::balances(
 						balances::RawEvent::Transfer(
 							bob().into(),
@@ -525,6 +535,11 @@ mod tests {
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
 					event: Event::system(system::Event::ExtrinsicSuccess),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(2),
+					event: Event::treasury(treasury::RawEvent::Deposit(1984780231392)),
 					topics: vec![],
 				},
 				EventRecord {
