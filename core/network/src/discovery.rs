@@ -63,6 +63,7 @@ use libp2p::multiaddr::Protocol;
 use log::{debug, info, trace, warn};
 use std::{cmp, collections::VecDeque, time::Duration};
 use tokio_io::{AsyncRead, AsyncWrite};
+use primitives::hexdisplay::HexDisplay;
 
 /// Implementation of `NetworkBehaviour` that discovers the nodes on the network.
 pub struct DiscoveryBehaviour<TSubstream> {
@@ -316,16 +317,16 @@ where
 					KademliaEvent::GetClosestPeersResult(res) => {
 						match res {
 							Err(GetClosestPeersError::Timeout { key, peers }) => {
-								warn!(target: "sub-libp2p",
-									"Libp2p => Query for {:?} timed out with {:?} results",
-									key, peers.len());
+								debug!(target: "sub-libp2p",
+									"Libp2p => Query for {:?} timed out with {} results",
+									HexDisplay::from(&key), peers.len());
 							},
 							Ok(ok) => {
 								trace!(target: "sub-libp2p",
 									"Libp2p => Query for {:?} yielded {:?} results",
-									ok.key, ok.peers.len());
+									HexDisplay::from(&ok.key), ok.peers.len());
 								if ok.peers.is_empty() && self.num_connections != 0 {
-									warn!(target: "sub-libp2p", "Libp2p => Random Kademlia query has yielded empty \
+									debug!(target: "sub-libp2p", "Libp2p => Random Kademlia query has yielded empty \
 										results");
 								}
 							}
