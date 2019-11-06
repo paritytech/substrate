@@ -29,7 +29,7 @@ use crate::api::timestamp;
 use bytes::Buf as _;
 use fnv::FnvHashMap;
 use futures::{prelude::*, channel::mpsc, compat::Compat01As03};
-use log::{warn, error};
+use log::error;
 use primitives::offchain::{HttpRequestId, Timestamp, HttpRequestStatus, HttpError};
 use std::{fmt, io::Read as _, mem, pin::Pin, task::Context, task::Poll};
 
@@ -554,9 +554,7 @@ enum WorkerToApi {
 /// Wraps around a `hyper::Client` with either TLS enabled or disabled.
 enum HyperClient {
 	/// Everything is ok and HTTPS is available.
-	Https(hyper::Client<hyper_tls::HttpsConnector<hyper::client::HttpConnector>, hyper::Body>),
-	/// We failed to initialize HTTPS and therefore only allow HTTP.
-	Http(hyper::Client<hyper::client::HttpConnector, hyper::Body>),
+	Https(hyper::Client<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>, hyper::Body>),
 }
 
 impl HyperClient {
@@ -565,13 +563,8 @@ impl HyperClient {
 	/// By default we will try to initialize the `HttpsConnector`,
 	/// If that's not possible we'll fall back to `HttpConnector`.
 	pub fn new() -> Self {
-		match hyper_tls::HttpsConnector::new(1) {
-			Ok(tls) => HyperClient::Https(hyper::Client::builder().build(tls)),
-			Err(e) => {
-				warn!("Unable to initialize TLS client. Falling back to HTTP-only: {:?}", e);
-				HyperClient::Http(hyper::Client::new())
-			},
-		}
+		let tls = hyper_rustls::HttpsConnector::new(1);
+		HyperClient::Https(hyper::Client::builder().build(tls))
 	}
 }
 
@@ -687,7 +680,6 @@ impl Future for HttpWorker {
 			Poll::Ready(None) => return Poll::Ready(()),	// stops the worker
 			Poll::Ready(Some(ApiToWorker::Dispatch { id, request })) => {
 				let future = Compat01As03::new(match me.http_client {
-					HyperClient::Http(ref mut c) => c.request(request),
 					HyperClient::Https(ref mut c) => c.request(request),
 				});
 				debug_assert!(me.requests.iter().all(|(i, _)| *i != id));
