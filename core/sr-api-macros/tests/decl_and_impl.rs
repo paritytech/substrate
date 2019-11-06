@@ -33,6 +33,7 @@ decl_runtime_apis! {
 		fn something_with_block(block: Block) -> Block;
 		fn function_with_two_args(data: u64, block: Block);
 		fn same_name();
+		fn wild_card(_: u32);
 	}
 
 	#[api_version(2)]
@@ -58,6 +59,8 @@ impl_runtime_apis! {
 		}
 
 		fn same_name() {}
+
+		fn wild_card(_: u32) {}
 	}
 
 	impl self::ApiWithCustomVersion<Block> for Runtime {

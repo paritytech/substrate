@@ -63,6 +63,7 @@ use libp2p::multiaddr::Protocol;
 use log::{debug, info, trace, warn};
 use std::{cmp, collections::VecDeque, time::Duration};
 use tokio_io::{AsyncRead, AsyncWrite};
+use primitives::hexdisplay::HexDisplay;
 
 /// Implementation of `NetworkBehaviour` that discovers the nodes on the network.
 pub struct DiscoveryBehaviour<TSubstream> {
@@ -316,16 +317,16 @@ where
 					KademliaEvent::GetClosestPeersResult(res) => {
 						match res {
 							Err(GetClosestPeersError::Timeout { key, peers }) => {
-								warn!(target: "sub-libp2p",
-									"Libp2p => Query for {:?} timed out with {:?} results",
-									key, peers.len());
+								debug!(target: "sub-libp2p",
+									"Libp2p => Query for {:?} timed out with {} results",
+									HexDisplay::from(&key), peers.len());
 							},
 							Ok(ok) => {
 								trace!(target: "sub-libp2p",
 									"Libp2p => Query for {:?} yielded {:?} results",
-									ok.key, ok.peers.len());
+									HexDisplay::from(&ok.key), ok.peers.len());
 								if ok.peers.is_empty() && self.num_connections != 0 {
-									warn!(target: "sub-libp2p", "Libp2p => Random Kademlia query has yielded empty \
+									debug!(target: "sub-libp2p", "Libp2p => Random Kademlia query has yielded empty \
 										results");
 								}
 							}
@@ -436,16 +437,24 @@ mod tests {
 		// Build swarms whose behaviour is `DiscoveryBehaviour`.
 		let mut swarms = (0..25).map(|_| {
 			let keypair = Keypair::generate_ed25519();
+			let keypair2 = keypair.clone();
 
 			let transport = MemoryTransport
-				.with_upgrade(libp2p::secio::SecioConfig::new(keypair.clone()))
 				.and_then(move |out, endpoint| {
-					let peer_id = out.remote_key.into_peer_id();
+					let secio = libp2p::secio::SecioConfig::new(keypair2);
+					libp2p::core::upgrade::apply(
+						out,
+						secio,
+						endpoint,
+						libp2p::core::upgrade::Version::V1
+					)
+				})
+				.and_then(move |(peer_id, stream), endpoint| {
 					let peer_id2 = peer_id.clone();
 					let upgrade = libp2p::yamux::Config::default()
 						.map_inbound(move |muxer| (peer_id, muxer))
 						.map_outbound(move |muxer| (peer_id2, muxer));
-					upgrade::apply(out.stream, upgrade, endpoint)
+					upgrade::apply(stream, upgrade, endpoint, libp2p::core::upgrade::Version::V1)
 				});
 
 			let behaviour = DiscoveryBehaviour::new(keypair.public(), user_defined.clone(), false);
