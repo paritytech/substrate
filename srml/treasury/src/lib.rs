@@ -257,6 +257,8 @@ decl_event!(
 		Burnt(Balance),
 		/// Spending has finished; this is the amount that rolls over until next spend.
 		Rollover(Balance),
+		/// Some funds have been deposited.
+		Deposit(Balance),
 	}
 );
 
@@ -346,8 +348,12 @@ impl<T: Trait> Module<T> {
 
 impl<T: Trait> OnUnbalanced<NegativeImbalanceOf<T>> for Module<T> {
 	fn on_unbalanced(amount: NegativeImbalanceOf<T>) {
+		let numeric_amount = amount.peek();
+
 		// Must resolve into existing but better to be safe.
 		let _ = T::Currency::resolve_creating(&Self::account_id(), amount);
+
+		Self::deposit_event(RawEvent::Deposit(numeric_amount));
 	}
 }
 
