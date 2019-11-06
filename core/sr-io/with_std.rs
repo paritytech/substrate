@@ -180,17 +180,17 @@ impl OtherApi for () {
 	}
 
 	fn print_num(val: u64) {
-		println!("{}", val);
+		log::debug!(target: "runtime", "{}", val);
 	}
 
 	fn print_utf8(utf8: &[u8]) {
 		if let Ok(data) = std::str::from_utf8(utf8) {
-			println!("{}", data)
+			log::debug!(target: "runtime", "{}", data)
 		}
 	}
 
 	fn print_hex(data: &[u8]) {
-		println!("{}", HexDisplay::from(&data));
+		log::debug!(target: "runtime", "{}", HexDisplay::from(&data));
 	}
 
 	fn log(
