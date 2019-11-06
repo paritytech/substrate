@@ -57,7 +57,7 @@ use futures::Future;
 use futures_timer::Interval;
 
 use authority_discovery_primitives::{AuthorityDiscoveryApi, AuthorityId, Signature};
-use client::{blockchain::HeaderBackend, runtime_api::StorageProof};
+use client::blockchain::HeaderBackend;
 use error::{Error, Result};
 use log::{debug, error, log_enabled, warn};
 use network::specialization::NetworkSpecialization;
@@ -413,6 +413,7 @@ mod tests {
 	use sr_primitives::traits::{ApiRef, Block as BlockT, NumberFor, ProvideRuntimeApi};
 	use std::sync::{Arc, Mutex};
 	use test_client::runtime::Block;
+	use client::runtime_api::StorageProof;
 
 	#[derive(Clone)]
 	struct TestApi {}

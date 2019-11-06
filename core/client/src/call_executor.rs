@@ -128,7 +128,7 @@ where
 		method: &str,
 		call_data: &[u8]
 	) -> Result<(Vec<u8>, StorageProof), error::Error> {
-		let trie_state = state.as_trie_backend()
+		let trie_state = state.as_state_backend()
 			.ok_or_else(||
 				Box::new(state_machine::ExecutionError::UnableToGenerateProof)
 					as Box<dyn state_machine::Error>
@@ -144,7 +144,7 @@ where
 		K: state_machine::KvBackend,
 	>(
 		&self,
-		trie_state: &state_machine::TrieBackend<S, H, K>,
+		trie_state: &state_machine::StateBackend<S, H, K>,
 		overlay: &mut OverlayedChanges,
 		method: &str,
 		call_data: &[u8]
@@ -266,7 +266,7 @@ where
 
 		let result = match recorder {
 			Some(recorder) => {
-				let trie_state = state.as_trie_backend()
+				let trie_state = state.as_state_backend()
 					.ok_or_else(||
 						Box::new(state_machine::ExecutionError::UnableToGenerateProof)
 							as Box<dyn state_machine::Error>
@@ -379,7 +379,7 @@ where
 		K: state_machine::KvBackend,
 	>(
 		&self,
-		trie_state: &state_machine::TrieBackend<S, Blake2Hasher, K>,
+		trie_state: &state_machine::StateBackend<S, Blake2Hasher, K>,
 		overlay: &mut OverlayedChanges,
 		method: &str,
 		call_data: &[u8]

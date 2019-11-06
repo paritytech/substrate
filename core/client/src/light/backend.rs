@@ -23,7 +23,7 @@ use parking_lot::{RwLock, Mutex};
 
 use sr_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
 use state_machine::{
-	Backend as StateBackend, TrieBackend, backend::InMemory as InMemoryState,
+	Backend as StateBackendTrait, StateBackend, backend::InMemory as InMemoryState,
 	ChangesTrieTransaction, InMemoryKvBackend,
 };
 use sr_primitives::traits::{Block as BlockT, NumberFor, Zero, Header};
@@ -265,7 +265,10 @@ where
 		self.cache = cache;
 	}
 
-	fn update_db_storage(&mut self, _update: <Self::State as StateBackend<H>>::Transaction) -> ClientResult<()> {
+	fn update_db_storage(
+		&mut self,
+		_update: <Self::State as StateBackendTrait<H>>::Transaction,
+	) -> ClientResult<()> {
 		// we're not storing anything locally => ignore changes
 		Ok(())
 	}
@@ -339,7 +342,7 @@ impl<H: Hasher> std::fmt::Debug for GenesisOrUnavailableState<H> {
 	}
 }
 
-impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
+impl<H: Hasher> StateBackendTrait<H> for GenesisOrUnavailableState<H>
 	where
 		H::Out: Ord,
 {
@@ -473,11 +476,11 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 		}
 	}
 
-	fn as_trie_backend(&mut self) -> Option<
-		&TrieBackend<Self::TrieBackendStorage, H, Self::KvBackend>
+	fn as_state_backend(&mut self) -> Option<
+		&StateBackend<Self::TrieBackendStorage, H, Self::KvBackend>
 	> {
 		match self {
-			GenesisOrUnavailableState::Genesis(ref mut state) => state.as_trie_backend(),
+			GenesisOrUnavailableState::Genesis(ref mut state) => state.as_state_backend(),
 			GenesisOrUnavailableState::Unavailable => None,
 		}
 	}

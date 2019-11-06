@@ -19,7 +19,7 @@
 use std::{error, fmt, cmp::Ord, collections::HashMap, marker::PhantomData};
 use log::warn;
 use hash_db::Hasher;
-use crate::trie_backend::TrieBackend;
+use crate::state_backend::StateBackend;
 use crate::trie_backend_essence::TrieBackendStorage;
 use crate::kv_backend::{KvBackend, InMemory as InMemoryKvBackend};
 use trie::{
@@ -140,8 +140,8 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	}
 
 	/// Try convert into trie backend.
-	fn as_trie_backend(&mut self) -> Option<
-		&TrieBackend<Self::TrieBackendStorage, H, Self::KvBackend>
+	fn as_state_backend(&mut self) -> Option<
+		&StateBackend<Self::TrieBackendStorage, H, Self::KvBackend>
 	> {
 		None
 	}
@@ -323,7 +323,7 @@ impl error::Error for Void {
 pub struct InMemory<H: Hasher> {
 	inner: HashMap<Option<Vec<u8>>, HashMap<Vec<u8>, Vec<u8>>>,
 	kv: Option<InMemoryKvBackend>,
-	trie: Option<TrieBackend<MemoryDB<H>, H, InMemoryKvBackend>>,
+	trie: Option<StateBackend<MemoryDB<H>, H, InMemoryKvBackend>>,
 	_hasher: PhantomData<H>,
 }
 
@@ -637,8 +637,8 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 			.collect()
 	}
 
-	fn as_trie_backend(&mut self)-> Option<
-		&TrieBackend<Self::TrieBackendStorage, H, Self::KvBackend>
+	fn as_state_backend(&mut self)-> Option<
+		&StateBackend<Self::TrieBackendStorage, H, Self::KvBackend>
 	> {
 		let mut mdb = MemoryDB::default();
 		let mut root = None;
@@ -663,7 +663,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 			Some(root) => root,
 			None => insert_into_memory_db::<H, _>(&mut mdb, ::std::iter::empty())?,
 		};
-		self.trie = Some(TrieBackend::new(mdb, root, self.extract_kv()));
+		self.trie = Some(StateBackend::new(mdb, root, self.extract_kv()));
 		self.trie.as_ref()
 	}
 }

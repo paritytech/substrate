@@ -91,7 +91,7 @@ const DEFAULT_CHILD_RATIO: (usize, usize) = (1, 10);
 
 /// DB-backed patricia trie state, transaction type is an overlay of changes to commit.
 /// A simple key value backend is also accessible for direct key value storage.
-pub type DbState = state_machine::TrieBackend<
+pub type DbState = state_machine::StateBackend<
 	Arc<dyn state_machine::Storage<Blake2Hasher>>,
 	Blake2Hasher,
 	Arc<dyn state_machine::KvBackend>,
@@ -225,10 +225,10 @@ impl<B: BlockT> StateBackend<Blake2Hasher> for RefTrackingState<B> {
 		self.state.child_keys(child_key, prefix)
 	}
 
-	fn as_trie_backend(&mut self) -> Option<
-		&state_machine::TrieBackend<Self::TrieBackendStorage, Blake2Hasher, Self::KvBackend>
+	fn as_state_backend(&mut self) -> Option<
+		&state_machine::StateBackend<Self::TrieBackendStorage, Blake2Hasher, Self::KvBackend>
 	> {
-		self.state.as_trie_backend()
+		self.state.as_state_backend()
 	}
 }
 

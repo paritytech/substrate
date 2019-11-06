@@ -21,24 +21,18 @@ use hash_db::Hasher;
 use trie::{Trie, delta_trie_root, default_child_trie_root, child_delta_trie_root};
 use trie::trie_types::{TrieDB, TrieError, Layout};
 use crate::trie_backend_essence::{TrieBackendEssence, TrieBackendStorage, Ephemeral};
-use crate::Backend;
-use crate::kv_backend::KvBackend;
 use primitives::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX;
-use std::collections::HashMap;
 
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
-/// A simple key value backend is also accessible for direct key value storage.
-pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher, K: KvBackend> {
-	essence: TrieBackendEssence<S, H>,
-	kv_storage: K,
+pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher> {
+	pub(crate) essence: TrieBackendEssence<S, H>,
 }
 
-impl<S: TrieBackendStorage<H>, K: KvBackend, H: Hasher> TrieBackend<S, H, K> {
+impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> {
 	/// Create new trie-based backend.
-	pub fn new(storage: S, root: H::Out, kv_storage: K) -> Self {
+	pub fn new(storage: S, root: H::Out) -> Self {
 		TrieBackend {
 			essence: TrieBackendEssence::new(storage, root),
-			kv_storage,
 		}
 	}
 
@@ -52,16 +46,6 @@ impl<S: TrieBackendStorage<H>, K: KvBackend, H: Hasher> TrieBackend<S, H, K> {
 		self.essence.backend_storage()
 	}
 
-	/// Get key value storage backend reference.
-	pub fn kv_backend(&self) -> &K {
-		&self.kv_storage
-	}
-
-	/// Get key value storage backend mutable reference.
-	pub fn kv_backend_mut(&mut self) -> &mut K {
-		&mut self.kv_storage
-	}
-
 	/// Get trie root.
 	pub fn root(&self) -> &H::Out {
 		self.essence.root()
@@ -72,59 +56,38 @@ impl<S: TrieBackendStorage<H>, K: KvBackend, H: Hasher> TrieBackend<S, H, K> {
 		self.essence.into_storage()
 	}
 
-}
-
-impl<
-	S: TrieBackendStorage<H>,
-	H: Hasher,
-	K: KvBackend,
-> std::fmt::Debug for TrieBackend<S, H, K> {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "TrieBackend")
-	}
-}
-
-impl<
-	S: TrieBackendStorage<H>,
-	H: Hasher,
-	K: KvBackend,
-> Backend<H> for TrieBackend<S, H, K> where
-	H::Out: Ord,
-{
-	type Error = String;
-	type Transaction = (S::Overlay, HashMap<Vec<u8>, Option<Vec<u8>>>);
-	type TrieBackendStorage = S;
-	type KvBackend = K;
-
-	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+	/// `Backend` method inner implementation.
+	pub fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
 		self.essence.storage(key)
 	}
 
-	fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+	/// `Backend` method inner implementation.
+	pub fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, String> {
 		self.essence.child_storage(storage_key, key)
 	}
 
-	fn kv_storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.kv_storage.get(key)
-	}
-
-	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
+	/// `Backend` method inner implementation.
+	pub fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
 		self.essence.for_keys_with_prefix(prefix, f)
 	}
 
-	fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], f: F) {
+	/// `Backend` method inner implementation.
+	pub fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], f: F) {
 		self.essence.for_key_values_with_prefix(prefix, f)
 	}
 
-	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], f: F) {
+	/// `Backend` method inner implementation.
+	pub fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], f: F) {
 		self.essence.for_keys_in_child_storage(storage_key, f)
 	}
 
-	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(&self, storage_key: &[u8], prefix: &[u8], f: F) {
+	/// `Backend` method inner implementation.
+	pub fn for_child_keys_with_prefix<F: FnMut(&[u8])>(&self, storage_key: &[u8], prefix: &[u8], f: F) {
 		self.essence.for_child_keys_with_prefix(storage_key, prefix, f)
 	}
 
-	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
+	/// `Backend` method inner implementation.
+	pub fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
 		let mut read_overlay = S::Overlay::default();
 		let eph = Ephemeral::new(self.essence.backend_storage(), &mut read_overlay);
 
@@ -148,13 +111,15 @@ impl<
 		}
 	}
 
-	fn children_storage_keys(&self) -> Vec<Vec<u8>> {
+	/// `Backend` method inner implementation.
+	pub fn children_storage_keys(&self) -> Vec<Vec<u8>> {
 		let mut result = Vec::new();
-		self.for_keys_with_prefix(CHILD_STORAGE_KEY_PREFIX, |k| result.push(k.to_vec()));
+		self.essence.for_keys_with_prefix(CHILD_STORAGE_KEY_PREFIX, |k| result.push(k.to_vec()));
 		result
 	}
 
-	fn child_pairs(&self, storage_key: &[u8]) -> Vec<(Vec<u8>, Vec<u8>)> {
+	/// `Backend` method inner implementation.
+	pub fn child_pairs(&self, storage_key: &[u8]) -> Vec<(Vec<u8>, Vec<u8>)> {
 
 		let root_slice = self.essence.storage(storage_key)
 			.unwrap_or(None)
@@ -185,11 +150,8 @@ impl<
 		}
 	}
 
-	fn kv_in_memory(&self) -> HashMap<Vec<u8>, Option<Vec<u8>>> {
-		self.kv_storage.in_memory()
-	}
-
-	fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> {
+	/// `Backend` method inner implementation.
+	pub fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> {
 		let mut read_overlay = S::Overlay::default();
 		let eph = Ephemeral::new(self.essence.backend_storage(), &mut read_overlay);
 
@@ -209,7 +171,8 @@ impl<
 		collect_all().map_err(|e| debug!(target: "trie", "Error extracting trie keys: {}", e)).unwrap_or_default()
 	}
 
-	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
+	/// `Backend` method inner implementation.
+	pub fn storage_root<I>(&self, delta: I) -> (H::Out, S::Overlay)
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
 		let mut write_overlay = S::Overlay::default();
@@ -227,10 +190,11 @@ impl<
 			}
 		}
 
-		(root, (write_overlay, Default::default()))
+		(root, write_overlay)
 	}
 
-	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (Vec<u8>, bool, Self::Transaction)
+	/// `Backend` method inner implementation.
+	pub fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (Vec<u8>, bool, S::Overlay)
 		where
 			I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 			H::Out: Ord
@@ -238,7 +202,7 @@ impl<
 		let default_root = default_child_trie_root::<Layout<H>>(storage_key);
 
 		let mut write_overlay = S::Overlay::default();
-		let mut root = match self.storage(storage_key) {
+		let mut root = match self.essence.storage(storage_key) {
 			Ok(value) => value.unwrap_or(default_root.clone()),
 			Err(e) => {
 				warn!(target: "trie", "Failed to read child storage root: {}", e);
@@ -265,23 +229,9 @@ impl<
 
 		let is_default = root == default_root;
 
-		(root, is_default, (write_overlay, Default::default()))
+		(root, is_default, write_overlay)
 	}
 
-	fn kv_transaction<I>(&self, delta: I) -> Self::Transaction
-		where
-			I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
-	{
-		let mut result = self.kv_storage.in_memory();
-		result.extend(delta.into_iter());
-		(Default::default(), result)
-	}
-
-	fn as_trie_backend(&mut self) -> Option<
-		&TrieBackend<Self::TrieBackendStorage, H, Self::KvBackend>
-	> {
-		Some(self)
-	}
 }
 
 #[cfg(test)]
@@ -292,9 +242,9 @@ pub mod tests {
 	use trie::{TrieMut, PrefixedMemoryDB, trie_types::TrieDBMut};
 	use super::*;
 
-	type KvBackend = crate::kv_backend::InMemory;
+	pub type KvBackend = crate::kv_backend::InMemory;
 
-	fn test_db() -> (PrefixedMemoryDB<Blake2Hasher>, H256, KvBackend) {
+	pub fn test_db() -> (PrefixedMemoryDB<Blake2Hasher>, H256, KvBackend) {
 		let mut root = H256::default();
 		let mut mdb = PrefixedMemoryDB::<Blake2Hasher>::default();
 		{
@@ -324,9 +274,9 @@ pub mod tests {
 	}
 
 	pub(crate) fn test_trie(
-	) -> TrieBackend<PrefixedMemoryDB<Blake2Hasher>, Blake2Hasher, KvBackend> {
-		let (mdb, root, kv) = test_db();
-		TrieBackend::new(mdb, root, kv)
+	) -> TrieBackend<PrefixedMemoryDB<Blake2Hasher>, Blake2Hasher> {
+		let (mdb, root, _kv) = test_db();
+		TrieBackend::new(mdb, root)
 	}
 
 	#[test]
@@ -346,8 +296,7 @@ pub mod tests {
 
 	#[test]
 	fn pairs_are_empty_on_empty_storage() {
-		assert!(TrieBackend::<PrefixedMemoryDB<Blake2Hasher>, Blake2Hasher, KvBackend>::new(
-			Default::default(),
+		assert!(TrieBackend::<PrefixedMemoryDB<Blake2Hasher>, Blake2Hasher>::new(
 			Default::default(),
 			Default::default(),
 		).pairs().is_empty());
@@ -361,14 +310,13 @@ pub mod tests {
 	#[test]
 	fn storage_root_transaction_is_empty() {
 		let mut tx = test_trie().storage_root(::std::iter::empty()).1;
-		assert!(tx.0.drain().is_empty());
-		assert!(tx.1.is_empty());
+		assert!(tx.drain().is_empty());
 	}
 
 	#[test]
 	fn storage_root_transaction_is_non_empty() {
 		let (new_root, mut tx) = test_trie().storage_root(vec![(b"new-key".to_vec(), Some(b"new-value".to_vec()))]);
-		assert!(!tx.0.drain().is_empty());
+		assert!(!tx.drain().is_empty());
 		assert!(new_root != test_trie().storage_root(::std::iter::empty()).0);
 	}
 
