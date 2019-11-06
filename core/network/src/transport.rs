@@ -22,8 +22,8 @@ use libp2p::{
 #[cfg(not(target_os = "unknown"))]
 use libp2p::{tcp, dns, websocket, noise};
 #[cfg(not(target_os = "unknown"))]
-use libp2p::core::{upgrade, either::EitherError, either::EitherOutput};
-use libp2p::core::{self, transport::boxed::Boxed, transport::OptionalTransport, muxing::StreamMuxerBox};
+use libp2p::core::{either::EitherError, either::EitherOutput};
+use libp2p::core::{self, upgrade, transport::boxed::Boxed, transport::OptionalTransport, muxing::StreamMuxerBox};
 use std::{io, sync::Arc, time::Duration, usize};
 
 pub use self::bandwidth::BandwidthSinks;
