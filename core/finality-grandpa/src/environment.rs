@@ -24,8 +24,8 @@ use codec::{Decode, Encode};
 use futures::prelude::*;
 use tokio_timer::Delay;
 use parking_lot::RwLock;
-use substrate_prometheus::{SaturatedConversion};
-use substrate_prometheus::metrics;
+use sr_primitives::traits::SaturatedConversion;
+use substrate_prometheus::metrics; // for global metrics
 
 
 
@@ -44,7 +44,7 @@ use sr_primitives::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, One, Zero,
 };
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
-//use crate::metrics;
+//use crate::metrics; // for local metrics
 use crate::{
 	CommandOrError, Commit, Config, Error, Network, Precommit, Prevote,
 	PrimaryPropose, SignedMessage, NewAuthoritySet, VoterCommand,

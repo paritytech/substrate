@@ -12,7 +12,6 @@ log = "0.4"
 prometheus = { version = "0.7", features = ["nightly", "process"]}
 tokio = "0.1"
 sr-primitives = { package = "sr-primitives",  path = "../sr-primitives", default-features = false } 
-sr-arithmetic = { package = "sr-arithmetic", path = "../sr-arithmetic", default-features = false }
 
 [dev-dependencies]
 reqwest = "0.9"
