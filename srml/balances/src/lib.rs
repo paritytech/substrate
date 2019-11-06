@@ -397,6 +397,8 @@ decl_module! {
 		///      `T::OnNewAccount::on_new_account` to be called.
 		///   - Removing enough funds from an account will trigger
 		///     `T::DustRemoval::on_unbalanced` and `T::OnFreeBalanceZero::on_free_balance_zero`.
+		///   - `transfer_keep_alive` works the same way as `transfer`, but has an additional
+		///     check that the transfer will not kill the origin account.
 		///
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(1_000_000)]
@@ -465,12 +467,14 @@ decl_module! {
 			<Self as Currency<_>>::transfer(&source, &dest, value)?;
 		}
 
-		/// Transfer some liquid free balance to another account, while checking that the transfer
-		/// will not kill the account.
+		/// Same as the [`transfer`] call, but with a check that the transfer will not kill the
+		/// origin account.
 		///
-		/// 99% of the time you want `transfer` instead.
+		/// 99% of the time you want [`transfer`] instead.
+		///
+		/// [`transfer`]: struct.Module.html#method.transfer
 		#[weight = SimpleDispatchInfo::FixedNormal(1_000_000)]
-		pub fn transfer_some(
+		pub fn transfer_keep_alive(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
 			#[compact] value: T::Balance
@@ -1169,7 +1173,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		if transactor != dest {
 			if existential_requirement == ExistenceRequirement::KeepAlive {
 				if new_from_balance < Self::minimum_balance() {
-					return Err("payment would kill account");
+					return Err("transfer would kill account");
 				}
 			}
 

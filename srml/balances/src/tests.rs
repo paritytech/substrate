@@ -746,3 +746,17 @@ fn burn_must_work() {
 		assert_eq!(Balances::total_issuance(), init_total_issuance);
 	});
 }
+
+#[test]
+fn transfer_keep_alive_works() {
+	ExtBuilder::default().existential_deposit(1).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&1, 100);
+		assert_err!(
+			Balances::transfer_keep_alive(Some(1).into(), 2, 100),
+			"transfer would kill account"
+		);
+		assert_eq!(Balances::is_dead_account(&1), false);
+		assert_eq!(Balances::total_balance(&1), 100);
+		assert_eq!(Balances::total_balance(&2), 0);
+	});
+}
