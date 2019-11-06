@@ -19,11 +19,6 @@
 //! Service implementation. Specialized wrapper over substrate service.
 
 use std::sync::Arc;
-use futures03::{
-	compat::Stream01CompatExt,
-	stream::StreamExt,
-	future::{FutureExt, TryFutureExt},
-};
 
 use babe;
 use client::{self, LongestChain};
@@ -116,6 +111,11 @@ macro_rules! new_full {
 	($config:expr, $with_startup_data: expr) => {{
 		use futures::sync::mpsc;
 		use network::DhtEvent;
+		use futures03::{
+			compat::Stream01CompatExt,
+			stream::StreamExt,
+			future::{FutureExt, TryFutureExt},
+		};
 
 		let (
 			is_authority,
