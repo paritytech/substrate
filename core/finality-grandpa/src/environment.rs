@@ -24,6 +24,9 @@ use codec::{Decode, Encode};
 use futures::prelude::*;
 use tokio_timer::Delay;
 use parking_lot::RwLock;
+use sr_arithmetic::traits::SaturatedConversion;
+
+
 
 use client::{
 	backend::Backend, apply_aux, BlockchainEvents, CallExecutor,
@@ -40,7 +43,7 @@ use sr_primitives::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, One, Zero,
 };
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
-
+use crate::metrics;
 use crate::{
 	CommandOrError, Commit, Config, Error, Network, Precommit, Prevote,
 	PrimaryPropose, SignedMessage, NewAuthoritySet, VoterCommand,
@@ -1000,7 +1003,7 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 		telemetry!(CONSENSUS_INFO; "afg.finalized_blocks_up_to";
 			"number" => ?number, "hash" => ?hash,
 		);
-
+		metrics::set_gauge(&metrics::HEIGHT, number.saturated_into::<u64>());
 		let new_authorities = if let Some((canon_hash, canon_number)) = status.new_set_block {
 			// the authority set has changed.
 			let (new_id, set_ref) = authority_set.current();

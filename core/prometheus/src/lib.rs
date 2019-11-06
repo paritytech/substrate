@@ -10,6 +10,22 @@ use hyper::service::service_fn_ok;
 use hyper::{Body, Request, Response, Server};
 use prometheus::{Counter, Encoder, Gauge, HistogramVec, TextEncoder,register_counter};
 use std::{net::{ SocketAddr}};
+use prometheus::{HistogramOpts, HistogramTimer, Opts};
+
+pub use prometheus::{Histogram, IntCounter, IntGauge, Result};
+
+pub fn try_create_int_gauge(name: &str, help: &str) -> Result<IntGauge> {
+    let opts = Opts::new(name, help);
+    let gauge = IntGauge::with_opts(opts)?;
+    prometheus::register(Box::new(gauge.clone()))?;
+    Ok(gauge)
+}
+
+pub fn set_gauge(gauge: &Result<IntGauge>, value: u64) {
+    if let Ok(gauge) = gauge {
+        gauge.set(value as i64);
+    }
+}
 
 lazy_static! {
     static ref HTTP_COUNTER: Counter = register_counter!(opts!(
@@ -80,3 +96,8 @@ pub fn init_prometheus(prometheus_addr: SocketAddr) {
         rt.shutdown_on_idle().wait().unwrap();
     });
 }
+
+
+//impl trait<Number> for dyn Header {
+//    type Number = u64;
+//}

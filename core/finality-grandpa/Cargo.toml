@@ -27,6 +27,9 @@ network = { package = "substrate-network", path = "../network" }
 srml-finality-tracker = { path = "../../srml/finality-tracker" }
 fg_primitives = { package = "substrate-finality-grandpa-primitives", path = "primitives" }
 grandpa = { package = "finality-grandpa", version = "0.9.0", features = ["derive-codec"] }
+substrate-prometheus= { path = "../prometheus"}
+lazy_static = "1.0"
+sr-arithmetic = { path = "../sr-arithmetic" }
 
 [dev-dependencies]
 grandpa = { package = "finality-grandpa", version = "0.9.0", features = ["derive-codec", "test-helpers"] }
