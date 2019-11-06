@@ -17,3 +17,9 @@ proc-macro-crate = "0.1.4"
 [dev-dependencies]
 substrate-runtime-interface = { path = ".." }
 codec = { package = "parity-scale-codec", version = "1.0.6", features = [ "derive" ] }
+externalities = { package = "substrate-externalities", path = "../../externalities" }
+
+# We actually don't need the `std` feature in this crate, but the tests require it.
+[features]
+default = [ "std" ]
+std = []

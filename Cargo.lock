@@ -5923,6 +5923,7 @@ dependencies = [
  "proc-macro-crate 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "proc-macro2 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "quote 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "substrate-externalities 2.0.0",
  "substrate-runtime-interface 2.0.0",
  "syn 1.0.7 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
