@@ -27,7 +27,7 @@ use std::{collections::HashMap, any::{Any, TypeId}, ops::DerefMut};
 ///
 /// As extensions are stored as `Box<Any>`, this trait should give more confidence that the correct
 /// type is registered and requested.
-pub trait Extension: Send + Sync + Any {
+pub trait Extension: Send + Any {
 	/// Return the extension as `&mut dyn Any`.
 	///
 	/// This is a trick to make the trait type castable into an `Any`.
@@ -116,11 +116,12 @@ impl Extensions {
 mod tests {
 	use super::*;
 
-	struct DummyExt(u32);
-	impl Extension for DummyExt {}
-
-	struct DummyExt2(u32);
-	impl Extension for DummyExt2 {}
+	decl_extension! {
+		struct DummyExt(u32);
+	}
+	decl_extension! {
+		struct DummyExt2(u32);
+	}
 
 	#[test]
 	fn register_and_retrieve_extension() {

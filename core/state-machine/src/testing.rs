@@ -194,8 +194,8 @@ mod tests {
 	}
 
 	#[test]
-	fn check_send_and_sync() {
-		fn assert_send_sync<T: Send + Sync>() {}
-		assert_send_sync::<TestExternalities::<Blake2Hasher, u64>>();
+	fn check_send() {
+		fn assert_send<T: Send>() {}
+		assert_send::<TestExternalities::<Blake2Hasher, u64>>();
 	}
 }
