@@ -241,7 +241,7 @@ impl session::historical::Trait for Runtime {
 srml_staking_reward_curve::build! {
 	const REWARD_CURVE: PiecewiseLinear<'static> = curve!(
 		min_inflation: 0_025_000,
-		max_inflation: 0_100_000,
+		max_inflation: 0_100_000,   // 10% - must be equal to MaxReward below.
 		ideal_stake: 0_500_000,
 		falloff: 0_050_000,
 		max_piece_count: 40,
@@ -253,13 +253,15 @@ parameter_types! {
 	pub const SessionsPerEra: sr_staking_primitives::SessionIndex = 6;
 	pub const BondingDuration: staking::EraIndex = 24 * 28;
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &REWARD_CURVE;
+	pub const MaxReward: Perbill = Perbill::from_percent(10);
+	// ^^^ 10% - must be equal to max_inflation, above.
 }
 
 impl staking::Trait for Runtime {
 	type Currency = Balances;
 	type Time = Timestamp;
 	type CurrencyToVote = CurrencyToVoteHandler;
-	type OnRewardMinted = Treasury;
+	type RewardRemainder = Treasury;
 	type Event = Event;
 	type Slash = Treasury; // send the slashed funds to the treasury.
 	type Reward = (); // rewards are minted from the void
@@ -267,6 +269,7 @@ impl staking::Trait for Runtime {
 	type BondingDuration = BondingDuration;
 	type SessionInterface = Self;
 	type RewardCurve = RewardCurve;
+	type MaxPossibleReward = MaxReward;
 }
 
 parameter_types! {
