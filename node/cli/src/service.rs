@@ -519,6 +519,7 @@ mod tests {
 					finalized: true,
 					auxiliary: Vec::new(),
 					fork_choice: ForkChoiceStrategy::LongestChain,
+					allow_missing_state: false,
 				};
 
 				block_import.import_block(params, Default::default())

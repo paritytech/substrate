@@ -973,6 +973,7 @@ fn allows_reimporting_change_blocks() {
 			finalized: false,
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::LongestChain,
+			allow_missing_state: false,
 		}
 	};
 
@@ -984,6 +985,7 @@ fn allows_reimporting_change_blocks() {
 			bad_justification: false,
 			needs_finality_proof: false,
 			is_new_best: true,
+			header_only: false,
 		}),
 	);
 
@@ -1024,6 +1026,7 @@ fn test_bad_justification() {
 			finalized: false,
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::LongestChain,
+			allow_missing_state: false,
 		}
 	};
 
@@ -1720,6 +1723,7 @@ fn imports_justification_for_regular_blocks_on_import() {
 		finalized: false,
 		auxiliary: Vec::new(),
 		fork_choice: ForkChoiceStrategy::LongestChain,
+		allow_missing_state: false,
 	};
 
 	assert_eq!(

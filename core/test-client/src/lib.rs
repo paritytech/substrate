@@ -98,6 +98,12 @@ impl<Block, Executor, G: GenesisInit> TestClientBuilder<
 	pub fn backend(&self) -> Arc<Backend<Block>> {
 		self.backend.clone()
 	}
+
+	/// Create new `TestClientBuilder` with default backend and pruning window size
+	pub fn with_pruning_window(keep_blocks: u32) -> Self {
+		let backend = Arc::new(Backend::new_test(keep_blocks, 0));
+		Self::with_backend(backend)
+	}
 }
 
 impl<Executor, Backend, G: GenesisInit> TestClientBuilder<Executor, Backend, G> {
