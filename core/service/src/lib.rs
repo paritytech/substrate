@@ -637,13 +637,13 @@ where
 					.then(move |import_result| {
 						match import_result {
 							Ok(_) => report_handle.report_peer(who, reputation_change_good),
-							Err(e) => {
-								report_handle.report_peer(who, reputation_change_bad);
-								match e.into_pool_error() {
-									Ok(txpool::error::Error::AlreadyImported(_)) => (),
-									Ok(e) => debug!("Error adding transaction to the pool: {:?}", e),
-									Err(e) => debug!("Error converting pool error: {:?}", e),
+							Err(e) => match e.into_pool_error() {
+								Ok(txpool::error::Error::AlreadyImported(_)) => (),
+								Ok(e) => {
+									report_handle.report_peer(who, reputation_change_bad);
+									debug!("Error adding transaction to the pool: {:?}", e)
 								}
+								Err(e) => debug!("Error converting pool error: {:?}", e),
 							}
 						}
 						ready(Ok(()))
