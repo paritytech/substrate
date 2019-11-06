@@ -293,7 +293,7 @@ where TSubstream: AsyncRead + AsyncWrite {
 							return Async::Ready(NetworkBehaviourAction::GenerateEvent(event));
 						}
 						IdentifyEvent::Error { peer_id, error } =>
-							debug!(target: "sub-libp2p", "Error when sending back identify info \
+							debug!(target: "sub-libp2p", "Identification with peer {:?} failed => {}", peer_id, error)
 								to {:?} => {}", peer_id, error),
 						IdentifyEvent::Sent { .. } => {}
 					}
