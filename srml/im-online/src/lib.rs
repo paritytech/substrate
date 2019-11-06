@@ -74,12 +74,13 @@ use app_crypto::RuntimeAppPublic;
 use codec::{Encode, Decode};
 use primitives::offchain::{OpaqueNetworkState, StorageKind};
 use rstd::prelude::*;
+use rstd::convert::TryInto;
 use session::historical::IdentificationTuple;
 use sr_primitives::{
 	RuntimeDebug,
 	traits::{Convert, Member, Printable, Saturating}, Perbill,
 	transaction_validity::{
-		TransactionValidity, TransactionLongevity, ValidTransaction, InvalidTransaction,
+		TransactionValidity, ValidTransaction, InvalidTransaction,
 		TransactionPriority,
 	},
 };
@@ -88,7 +89,8 @@ use sr_staking_primitives::{
 	offence::{ReportOffence, Offence, Kind},
 };
 use support::{
-	decl_module, decl_event, decl_storage, print, Parameter, debug
+	decl_module, decl_event, decl_storage, print, Parameter, debug,
+	traits::Get,
 };
 use system::ensure_none;
 use system::offchain::SubmitUnsignedTransaction;
@@ -187,6 +189,12 @@ pub trait Trait: system::Trait + session::historical::Trait {
 
 	/// A transaction submitter.
 	type SubmitTransaction: SubmitUnsignedTransaction<Self, <Self as Trait>::Call>;
+
+	/// An expected duration of the session.
+	///
+	/// This parameter is used to determine the longevity of `heartbeat` transaction
+	/// and a rough time when the heartbeat should be sent.
+	type SessionDuration: Get<Self::BlockNumber>;
 
 	/// A type that gives us the ability to submit unresponsiveness offence reports.
 	type ReportUnresponsiveness:
@@ -519,7 +527,11 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 		where I: Iterator<Item=(&'a T::AccountId, T::AuthorityId)>
 	{
 		// Tell the offchain worker to start making the next session's heartbeats.
-		<GossipAt<T>>::put(<system::Module<T>>::block_number());
+		// Since we consider producing blocks as being online,
+		// the hearbeat is defered a bit to prevent spaming.
+		let block_number = <system::Module<T>>::block_number();
+		let half_session = T::SessionDuration::get() / 2.into();
+		<GossipAt<T>>::put(block_number + half_session);
 
 		// Remember who the authorities are for the new session.
 		Keys::<T>::put(validators.map(|x| x.1).collect::<Vec<_>>());
@@ -596,7 +608,7 @@ impl<T: Trait> support::unsigned::ValidateUnsigned for Module<T> {
 				priority: TransactionPriority::max_value(),
 				requires: vec![],
 				provides: vec![(current_session, authority_id).encode()],
-				longevity: TransactionLongevity::max_value(),
+				longevity: TryInto::<u64>::try_into(T::SessionDuration::get() / 2.into()).unwrap_or(64_u64),
 				propagate: true,
 			})
 		} else {
