@@ -192,4 +192,10 @@ mod tests {
 
 		assert_eq!(&ext.storage(CODE).unwrap(), &code);
 	}
+
+	#[test]
+	fn check_send_and_sync() {
+		fn assert_send_sync<T: Send + Sync>() {}
+		assert_send_sync::<TestExternalities::<Blake2Hasher, u64>>();
+	}
 }

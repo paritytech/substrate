@@ -658,13 +658,13 @@ impl<T: Externalities> Externalities for LimitedExternalities<T> {
 #[cfg(feature = "std")]
 externalities::decl_extension! {
 	/// The offchain extension that will be registered at the Substrate externalities.
-	pub struct OffchainExt(Box<dyn Externalities>);
+	pub struct OffchainExt(Box<dyn Externalities + Send + Sync>);
 }
 
 #[cfg(feature = "std")]
 impl OffchainExt {
 	/// Create a new instance of `Self`.
-	pub fn new<O: Externalities + 'static>(offchain: O) -> Self {
+	pub fn new<O: Externalities + 'static + Send + Sync>(offchain: O) -> Self {
 		Self(Box::new(offchain))
 	}
 }
