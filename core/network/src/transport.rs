@@ -109,8 +109,8 @@ pub fn build_transport(
 	// For WASM, we only support secio for now.
 	#[cfg(target_os = "unknown")]
 	let transport = transport.and_then(move |stream, endpoint| {
-		core::upgrade::apply(stream, secio_config, endpoint)
-			.and_then(|out| Ok((out.stream, out.remote_key.into_peer_id())))
+		core::upgrade::apply(stream, secio_config, endpoint, upgrade::Version::V1)
+			.and_then(|(id, stream)| Ok((stream, id)))
 	});
 
 	// Multiplexing
