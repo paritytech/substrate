@@ -175,7 +175,7 @@ pub fn impl_metadata(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 		let mut docs = TokenStream::new();
 		for attr in line.attrs.iter().filter_map(|v| v.parse_meta().ok()) {
 			if let syn::Meta::NameValue(meta) = attr {
-				if meta.ident == "doc" {
+				if meta.path.is_ident("doc") {
 					let lit = meta.lit;
 					docs.extend(quote!(#lit,));
 				}

@@ -21,7 +21,7 @@ use libp2p::Multiaddr;
 use libp2p::core::{ConnectedPoint, either::EitherOutput, PeerId, PublicKey};
 use libp2p::swarm::{IntoProtocolsHandler, IntoProtocolsHandlerSelect, ProtocolsHandler};
 use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters};
-use libp2p::identify::{Identify, IdentifyEvent, protocol::IdentifyInfo};
+use libp2p::identify::{Identify, IdentifyEvent, IdentifyInfo};
 use libp2p::ping::{Ping, PingConfig, PingEvent, PingSuccess};
 use log::{debug, trace, error};
 use std::collections::hash_map::Entry;
@@ -287,16 +287,14 @@ where TSubstream: AsyncRead + AsyncWrite {
 				Async::NotReady => break,
 				Async::Ready(NetworkBehaviourAction::GenerateEvent(event)) => {
 					match event {
-						IdentifyEvent::Identified { peer_id, info, .. } => {
+						IdentifyEvent::Received { peer_id, info, .. } => {
 							self.handle_identify_report(&peer_id, &info);
 							let event = DebugInfoEvent::Identified { peer_id, info };
 							return Async::Ready(NetworkBehaviourAction::GenerateEvent(event));
 						}
-						IdentifyEvent::Error { .. } => {}
-						IdentifyEvent::SendBack { result: Err(ref err), ref peer_id } =>
-							debug!(target: "sub-libp2p", "Error when sending back identify info \
-								to {:?} => {}", peer_id, err),
-						IdentifyEvent::SendBack { .. } => {}
+						IdentifyEvent::Error { peer_id, error } =>
+							debug!(target: "sub-libp2p", "Identification with peer {:?} failed => {}", peer_id, error),
+						IdentifyEvent::Sent { .. } => {}
 					}
 				},
 				Async::Ready(NetworkBehaviourAction::DialAddress { address }) =>
