@@ -437,16 +437,24 @@ mod tests {
 		// Build swarms whose behaviour is `DiscoveryBehaviour`.
 		let mut swarms = (0..25).map(|_| {
 			let keypair = Keypair::generate_ed25519();
+			let keypair2 = keypair.clone();
 
 			let transport = MemoryTransport
-				.with_upgrade(libp2p::secio::SecioConfig::new(keypair.clone()))
 				.and_then(move |out, endpoint| {
-					let peer_id = out.remote_key.into_peer_id();
+					let secio = libp2p::secio::SecioConfig::new(keypair2);
+					libp2p::core::upgrade::apply(
+						out,
+						secio,
+						endpoint,
+						libp2p::core::upgrade::Version::V1
+					)
+				})
+				.and_then(move |(peer_id, stream), endpoint| {
 					let peer_id2 = peer_id.clone();
 					let upgrade = libp2p::yamux::Config::default()
 						.map_inbound(move |muxer| (peer_id, muxer))
 						.map_outbound(move |muxer| (peer_id2, muxer));
-					upgrade::apply(out.stream, upgrade, endpoint)
+					upgrade::apply(stream, upgrade, endpoint, libp2p::core::upgrade::Version::V1)
 				});
 
 			let behaviour = DiscoveryBehaviour::new(keypair.public(), user_defined.clone(), false);
