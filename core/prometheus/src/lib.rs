@@ -15,6 +15,8 @@ pub use sr_arithmetic::traits::SaturatedConversion;
 
 pub use prometheus::{Histogram, IntCounter, IntGauge, Result};
 
+pub mod metrics;
+
 pub fn try_create_int_gauge(name: &str, help: &str) -> Result<IntGauge> {
     let opts = Opts::new(name, help);
     let gauge = IntGauge::with_opts(opts)?;
