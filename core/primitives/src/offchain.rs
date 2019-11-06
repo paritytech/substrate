@@ -289,7 +289,7 @@ impl<'a> From<&'a [Capability]> for Capabilities {
 }
 
 /// An extended externalities for offchain workers.
-pub trait Externalities {
+pub trait Externalities: Send + Sync {
 	/// Returns if the local node is a potential validator.
 	///
 	/// Even if this function returns `true`, it does not mean that any keys are configured
@@ -658,13 +658,13 @@ impl<T: Externalities> Externalities for LimitedExternalities<T> {
 #[cfg(feature = "std")]
 externalities::decl_extension! {
 	/// The offchain extension that will be registered at the Substrate externalities.
-	pub struct OffchainExt(Box<dyn Externalities + Send + Sync>);
+	pub struct OffchainExt(Box<dyn Externalities>);
 }
 
 #[cfg(feature = "std")]
 impl OffchainExt {
 	/// Create a new instance of `Self`.
-	pub fn new<O: Externalities + 'static + Send + Sync>(offchain: O) -> Self {
+	pub fn new<O: Externalities + 'static>(offchain: O) -> Self {
 		Self(Box::new(offchain))
 	}
 }
