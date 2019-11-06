@@ -73,6 +73,7 @@ const UNREGISTERED_TOPIC_REPUTATION_CHANGE: i32 = -(1 << 10);
 
 struct PeerConsensus<H> {
 	known_messages: HashSet<H>,
+    filtered_messages: HashMap<H, usize>,
 	roles: Roles,
 }
 
@@ -105,8 +106,12 @@ pub enum MessageRecipient {
 /// The reason for sending out the message.
 #[derive(Eq, PartialEq, Copy, Clone)]
 pub enum MessageIntent {
-	/// Requested broadcast
-	Broadcast,
+	/// Requested broadcast.
+	Broadcast {
+		/// How many times this message was previously filtered by the gossip
+		/// validator when trying to propagate to a given peer.
+		previous_attempts: usize
+	},
 	/// Requested broadcast to all peers.
 	ForcedBroadcast,
 	/// Periodic rebroadcast of all messages to all peers.
@@ -121,6 +126,12 @@ pub enum ValidationResult<H> {
 	ProcessAndDiscard(H),
 	/// Message should be ignored.
 	Discard,
+}
+
+impl MessageIntent {
+	fn broadcast() -> MessageIntent {
+		MessageIntent::Broadcast { previous_attempts: 0 }
+	}
 }
 
 /// Validation context. Allows reacting to incoming messages by sending out further messages.
@@ -196,12 +207,17 @@ fn propagate<'a, B: BlockT, I>(
 
 	for (message_hash, topic, message) in messages {
 		for (id, ref mut peer) in peers.iter_mut() {
+			let previous_attempts = peer.filtered_messages
+				.get(&message_hash)
+				.cloned()
+				.unwrap_or(0);
+
 			let intent = match intent {
-				MessageIntent::Broadcast =>
+				MessageIntent::Broadcast { .. } =>
 					if peer.known_messages.contains(&message_hash) {
-						continue
+						continue;
 					} else {
-						MessageIntent::Broadcast
+						MessageIntent::Broadcast { previous_attempts }
 					},
 				MessageIntent::PeriodicRebroadcast =>
 					if peer.known_messages.contains(&message_hash) {
@@ -209,15 +225,24 @@ fn propagate<'a, B: BlockT, I>(
 					} else {
 						// peer doesn't know message, so the logic should treat it as an
 						// initial broadcast.
-						MessageIntent::Broadcast
+						MessageIntent::Broadcast { previous_attempts }
 					},
 				other => other,
 			};
 
 			if !message_allowed(id, intent, &topic, &message) {
-				continue
+				let count = peer.filtered_messages
+					.entry(message_hash.clone())
+					.or_insert(0);
+
+				*count += 1;
+
+				continue;
 			}
+
+			peer.filtered_messages.remove(message_hash);
 			peer.known_messages.insert(message_hash.clone());
+
 			trace!(target: "gossip", "Propagating to {}: {:?}", id, message);
 			protocol.send_consensus(id.clone(), message.clone());
 		}
@@ -310,6 +335,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 		trace!(target:"gossip", "Registering {:?} {}", roles, who);
 		self.peers.insert(who.clone(), PeerConsensus {
 			known_messages: HashSet::new(),
+            filtered_messages: HashMap::new(),
 			roles,
 		});
 		for (engine_id, v) in self.validators.clone() {
@@ -379,7 +405,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 			.filter_map(|entry|
 				if entry.topic == topic { Some((&entry.message_hash, &entry.topic, &entry.message)) } else { None }
 			);
-		let intent = if force { MessageIntent::ForcedBroadcast } else { MessageIntent::Broadcast };
+		let intent = if force { MessageIntent::ForcedBroadcast } else { MessageIntent::broadcast() };
 		propagate(protocol, messages, intent, &mut self.peers, &self.validators);
 	}
 
@@ -527,17 +553,36 @@ impl<B: BlockT> ConsensusGossip<B> {
 			Some(validator) => validator.message_allowed(),
 		};
 
-		let intent = if force { MessageIntent::ForcedBroadcast } else { MessageIntent::Broadcast };
-
 		if let Some(ref mut peer) = self.peers.get_mut(who) {
 			for entry in self.messages.iter().filter(|m| m.topic == topic && m.message.engine_id == engine_id) {
+				let intent = if force {
+					MessageIntent::ForcedBroadcast
+				} else {
+					let previous_attempts = peer.filtered_messages
+						.get(&entry.message_hash)
+						.cloned()
+						.unwrap_or(0);
+
+					MessageIntent::Broadcast { previous_attempts }
+				};
+
 				if !force && peer.known_messages.contains(&entry.message_hash) {
-					continue
+					continue;
 				}
+
 				if !message_allowed(who, intent, &entry.topic, &entry.message.data) {
-					continue
+					let count = peer.filtered_messages
+						.entry(entry.message_hash)
+						.or_insert(0);
+
+					*count += 1;
+
+					continue;
 				}
+
+				peer.filtered_messages.remove(&entry.message_hash);
 				peer.known_messages.insert(entry.message_hash.clone());
+
 				trace!(target: "gossip", "Sending topic message to {}: {:?}", who, entry.message);
 				protocol.send_consensus(who.clone(), ConsensusMessage {
 					engine_id: engine_id.clone(),
@@ -557,7 +602,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 	) {
 		let message_hash = HashFor::<B>::hash(&message.data);
 		self.register_message_hashed(message_hash, topic, message.clone(), None);
-		let intent = if force { MessageIntent::ForcedBroadcast } else { MessageIntent::Broadcast };
+		let intent = if force { MessageIntent::ForcedBroadcast } else { MessageIntent::broadcast() };
 		propagate(protocol, iter::once((&message_hash, &topic, &message)), intent, &mut self.peers, &self.validators);
 	}
 

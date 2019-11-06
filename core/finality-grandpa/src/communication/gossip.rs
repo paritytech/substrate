@@ -92,6 +92,7 @@ use substrate_telemetry::{telemetry, CONSENSUS_DEBUG};
 use log::{trace, debug, warn};
 use futures::prelude::*;
 use futures::sync::mpsc;
+use rand::Rng;
 
 use crate::{environment, CatchUp, CompactCommit, SignedMessage};
 use super::{cost, benefit, Round, SetId};
@@ -483,6 +484,14 @@ impl<N: Ord> Peers<N> {
 	fn peer<'a>(&'a self, who: &PeerId) -> Option<&'a PeerInfo<N>> {
 		self.inner.get(who)
 	}
+
+    fn authorities(&self) -> usize {
+        self.inner.iter().filter(|(_, info)| info.roles.is_authority()).count()
+    }
+
+    fn non_authorities(&self) -> usize {
+        self.inner.iter().filter(|(_, info)| !info.roles.is_authority()).count()
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -980,6 +989,64 @@ impl<Block: BlockT> Inner<Block> {
 
 		(true, report)
 	}
+
+    /// The initial logic for filtering messages follows the given state
+    /// transitions.
+    ///
+    /// - State 0: not allowed to anyone (only if our local node is not an authority)
+    /// - State 1: allowed to random `sqrt(authorities)`
+    /// - State 2: allowed to all authorities
+    /// - State 3: allowed to random `sqrt(non-authorities)`
+    /// - State 4: allowed to all non-authorities
+    ///
+    /// Transitions will be triggered on repropagation attempts by the
+    /// underlying gossip layer, which should happen every 30 seconds.
+    fn message_allowed<N>(&self, peer: &PeerInfo<N>, mut previous_attempts: usize) -> bool {
+        if !self.config.is_authority && previous_attempts == 0 {
+            // non-authority nodes don't gossip any messages right away. we
+            // assume that authorities (and sentries) are strongly connected, so
+            // it should be unnecessary for non-authorities to gossip all
+            // messages right away.
+            return false;
+        }
+
+        if !self.config.is_authority {
+            // since the node is not an authority we skipped the initial attempt
+            // to gossip the message, therefore we decrement `previous_attempts`
+            // so that the state machine below works the same way it does for
+            // authority nodes.
+            previous_attempts -= 1;
+        }
+
+        if peer.roles.is_authority() {
+            // the target node is an authority, on the first attempt we start by
+            // sending the message to only `sqrt(authorities)`.
+            if previous_attempts == 0 {
+                let authorities = self.peers.authorities() as f64;
+                let p = authorities.sqrt() / authorities;
+                rand::thread_rng().gen_bool(p)
+            } else {
+                // otherwise we already went through the step above, so
+                // we won't filter the message and send it to all
+                // authorities for whom it is polite to do so
+                true
+            }
+        } else {
+            // the node is not an authority so we apply stricter filters
+            if previous_attempts >= 3 {
+                // if we previously tried to send this message 3 (or more)
+                // times, then it is allowed to be sent to all peers.
+                true
+            } else if previous_attempts == 2 {
+                // otherwise we only send it to `sqrt(non-authorities)`.
+                let non_authorities = self.peers.non_authorities() as f64;
+                let p = non_authorities.sqrt() / non_authorities;
+                rand::thread_rng().gen_bool(p)
+            } else {
+                false
+            }
+        }
+    }
 }
 
 /// A validator for GRANDPA gossip messages.
@@ -1183,6 +1250,13 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 				Some(x) => x,
 			};
 
+            if let MessageIntent::Broadcast { previous_attempts } = intent {
+                // early return if the message isn't allowed at this stage.
+                if !inner.message_allowed(peer, previous_attempts) {
+                    return false;
+                }
+            }
+
 			// if the topic is not something we're keeping at the moment,
 			// do not send.
 			let (maybe_round, set_id) = match inner.live_topics.topic_info(&topic) {
@@ -1209,8 +1283,8 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 				Ok(GossipMessage::Commit(full)) => {
 					// we only broadcast our best commit and only if it's
 					// better than last received by peer.
-					Some(full.message.target_number) == our_best_commit
-					&& Some(full.message.target_number) > peer_best_commit
+					Some(full.message.target_number) == our_best_commit &&
+                        Some(full.message.target_number) > peer_best_commit
 				}
 				Ok(GossipMessage::Neighbor(_)) => false,
 				Ok(GossipMessage::CatchUpRequest(_)) => false,
