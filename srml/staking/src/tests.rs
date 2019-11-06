@@ -79,7 +79,7 @@ fn basic_setup_works() {
 			Staking::ledger(100),
 			Some(StakingLedger { stash: 101, total: 500, active: 500, unlocking: vec![] })
 		);
-		assert_eq!(Staking::nominators(101), vec![11, 21]);
+		assert_eq!(Staking::nominators(101).unwrap().targets, vec![11, 21]);
 
 		if cfg!(feature = "equalize") {
 			assert_eq!(

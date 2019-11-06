@@ -27,6 +27,7 @@ srml-staking-reward-curve = { path = "../staking/reward-curve"}
 
 [features]
 equalize = []
+migrate-storage-v1 = []
 default = ["std", "equalize"]
 std = [
 	"serde",

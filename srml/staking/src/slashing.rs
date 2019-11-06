@@ -136,6 +136,11 @@ impl SlashingSpans {
 		rstd::iter::once(last).chain(prior)
 	}
 
+	/// Yields the era index where the last (current) slashing span started.
+	pub(crate) fn last_start(&self) -> EraIndex {
+		self.last_start
+	}
+
 	// prune the slashing spans against a window, whose start era index is given.
 	//
 	// If this returns `Some`, then it includes a range start..end of all the span
@@ -641,6 +646,9 @@ pub(crate) fn pay_reporters<T: Trait>(
 ) {
 	reward_payout.pay_to(reporters)
 }
+
+// TODO: function for undoing a slash.
+//
 
 #[cfg(test)]
 mod tests {

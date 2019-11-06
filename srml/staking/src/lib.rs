@@ -279,7 +279,7 @@ use sr_staking_primitives::{
 use sr_primitives::{Serialize, Deserialize};
 use system::{ensure_signed, ensure_root};
 
-use phragmen::{elect, equalize, build_support_map, ExtendedBalance, PhragmenStakedAssignment};
+use phragmen::{ExtendedBalance, PhragmenStakedAssignment};
 
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
 const MAX_NOMINATIONS: usize = 16;
@@ -387,6 +387,17 @@ pub struct StakingLedger<AccountId, Balance: HasCompact> {
 	/// Any balance that is becoming free, which may eventually be transferred out
 	/// of the stash (assuming it doesn't get slashed first).
 	pub unlocking: Vec<UnlockChunk<Balance>>,
+}
+
+/// A record of the nominations made by a specific account.
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+pub struct Nominations<AccountId> {
+	/// The targets of nomination.
+	pub targets: Vec<AccountId>,
+	/// The era the nominations were submitted.
+	pub submitted_in: EraIndex,
+	/// Whether the nominations have been suppressed.
+	pub suppressed: bool,
 }
 
 impl<
@@ -564,7 +575,7 @@ decl_storage! {
 		pub Validators get(fn validators): linked_map T::AccountId => ValidatorPrefs<BalanceOf<T>>;
 
 		/// The map from nominator stash key to the set of stash keys of all validators to nominate.
-		pub Nominators get(fn nominators): linked_map T::AccountId => Vec<T::AccountId>;
+		pub Nominators get(fn nominators): linked_map T::AccountId => Option<Nominations<T::AccountId>>;
 
 		/// Nominators for a particular account that is in action right now. You can't iterate
 		/// through validators here, but you can find them in the Session module.
@@ -893,8 +904,14 @@ decl_module! {
 				.map(|t| T::Lookup::lookup(t))
 				.collect::<result::Result<Vec<T::AccountId>, _>>()?;
 
+			let nominations = Nominations {
+				targets,
+				submitted_in: Self::current_era(),
+				suppressed: false,
+			};
+
 			<Validators<T>>::remove(stash);
-			<Nominators<T>>::insert(stash, targets);
+			<Nominators<T>>::insert(stash, &nominations);
 		}
 
 		/// Declare no desire to either validate or nominate.
@@ -1209,11 +1226,26 @@ impl<T: Trait> Module<T> {
 	///
 	/// Returns the new `SlotStake` value and a set of newly selected _stash_ IDs.
 	fn select_validators() -> (BalanceOf<T>, Option<Vec<T::AccountId>>) {
-		let maybe_phragmen_result = elect::<_, _, _, T::CurrencyToVote>(
+		let votes = <Nominators<T>>::enumerate().map(|(nominator, nominations)| {
+			let Nominations { submitted_in, mut targets, suppressed: _ } = nominations;
+
+			// Filter out nomination targets which were nominated before the most recent
+			// slashing span.
+			targets.retain(|stash| {
+				<Self as Store>::SlashingSpans::get(&stash).map_or(
+					true,
+					|spans| submitted_in >= spans.last_start(),
+				)
+			});
+
+			(nominator, targets)
+		}).collect::<Vec<_>>();
+
+		let maybe_phragmen_result = phragmen::elect::<_, _, _, T::CurrencyToVote>(
 			Self::validator_count() as usize,
 			Self::minimum_validator_count().max(1) as usize,
 			<Validators<T>>::enumerate().map(|(who, _)| who).collect::<Vec<T::AccountId>>(),
-			<Nominators<T>>::enumerate().collect(),
+			votes,
 			Self::slashable_balance_of,
 			true,
 		);
@@ -1229,7 +1261,7 @@ impl<T: Trait> Module<T> {
 			let to_balance = |e: ExtendedBalance|
 				<T::CurrencyToVote as Convert<ExtendedBalance, BalanceOf<T>>>::convert(e);
 
-			let mut supports = build_support_map::<_, _, _, T::CurrencyToVote>(
+			let mut supports = phragmen::build_support_map::<_, _, _, T::CurrencyToVote>(
 				&elected_stashes,
 				&assignments,
 				Self::slashable_balance_of,
@@ -1254,7 +1286,7 @@ impl<T: Trait> Module<T> {
 
 				let tolerance = 0_u128;
 				let iterations = 2_usize;
-				equalize::<_, _, T::CurrencyToVote, _>(
+				phragmen::equalize::<_, _, T::CurrencyToVote, _>(
 					staked_assignments,
 					&mut supports,
 					tolerance,
