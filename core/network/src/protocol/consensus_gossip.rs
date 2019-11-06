@@ -623,7 +623,9 @@ impl<B: BlockT> ConsensusGossip<B> {
 
 		trace!(target: "gossip", "Sending direct to {}: {:?}", who, message);
 
+		peer.filtered_messages.remove(&message_hash);
 		peer.known_messages.insert(message_hash);
+
 		protocol.send_consensus(who.clone(), message.clone());
 	}
 }
