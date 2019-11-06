@@ -192,4 +192,10 @@ mod tests {
 
 		assert_eq!(&ext.storage(CODE).unwrap(), &code);
 	}
+
+	#[test]
+	fn check_send() {
+		fn assert_send<T: Send>() {}
+		assert_send::<TestExternalities::<Blake2Hasher, u64>>();
+	}
 }
