@@ -11,6 +11,7 @@ use hyper::{Body, Request, Response, Server};
 use prometheus::{Counter, Encoder, Gauge, HistogramVec, TextEncoder,register_counter};
 use std::{net::{ SocketAddr}};
 use prometheus::{HistogramOpts, HistogramTimer, Opts};
+pub use sr_arithmetic::traits::SaturatedConversion;
 
 pub use prometheus::{Histogram, IntCounter, IntGauge, Result};
 

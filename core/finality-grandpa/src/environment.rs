@@ -24,7 +24,7 @@ use codec::{Decode, Encode};
 use futures::prelude::*;
 use tokio_timer::Delay;
 use parking_lot::RwLock;
-use sr_arithmetic::traits::SaturatedConversion;
+use substrate_prometheus::{SaturatedConversion};
 
 
 
