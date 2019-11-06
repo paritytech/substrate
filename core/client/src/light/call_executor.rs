@@ -176,7 +176,7 @@ impl<Block, B, Local> CallExecutor<Block, Blake2Hasher> for
 		K: state_machine::KvBackend,
 	>(
 		&self,
-		_state: &state_machine::TrieBackend<S, Blake2Hasher, K>,
+		_state: &state_machine::StateBackend<S, Blake2Hasher, K>,
 		_changes: &mut OverlayedChanges,
 		_method: &str,
 		_call_data: &[u8]
@@ -205,7 +205,7 @@ pub fn prove_execution<Block, S, E>(
 		S: StateBackend<Blake2Hasher>,
 		E: CallExecutor<Block, Blake2Hasher>,
 {
-	let trie_state = state.as_trie_backend()
+	let trie_state = state.as_state_backend()
 		.ok_or_else(|| Box::new(state_machine::ExecutionError::UnableToGenerateProof) as Box<dyn state_machine::Error>)?;
 
 	// prepare execution environment + record preparation proof
@@ -378,7 +378,7 @@ mod tests {
 			K: state_machine::KvBackend,
 		>(
 			&self,
-			_trie_state: &state_machine::TrieBackend<S, Blake2Hasher, K>,
+			_trie_state: &state_machine::StateBackend<S, Blake2Hasher, K>,
 			_overlay: &mut OverlayedChanges,
 			_method: &str,
 			_call_data: &[u8]

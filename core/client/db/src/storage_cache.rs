@@ -23,7 +23,7 @@ use linked_hash_map::{LinkedHashMap, Entry};
 use hash_db::Hasher;
 use sr_primitives::traits::{Block as BlockT, Header};
 use primitives::hexdisplay::HexDisplay;
-use state_machine::{backend::Backend as StateBackend, TrieBackend, InMemoryKvBackend};
+use state_machine::{backend::Backend as StateBackendTrait, StateBackend, InMemoryKvBackend};
 use log::trace;
 use super::{StorageCollection, ChildStorageCollection};
 use std::hash::Hash as StdHash;
@@ -279,14 +279,14 @@ pub struct CacheChanges<H: Hasher, B: BlockT> {
 /// For canonical instances local cache is accumulated and applied
 /// in `sync_cache` along with the change overlay.
 /// For non-canonical clones local cache and changes are dropped.
-pub struct CachingState<H: Hasher, S: StateBackend<H>, B: BlockT> {
+pub struct CachingState<H: Hasher, S: StateBackendTrait<H>, B: BlockT> {
 	/// Backing state.
 	state: S,
 	/// Cache data.
 	pub cache: CacheChanges<H, B>
 }
 
-impl<H: Hasher, S: StateBackend<H>, B: BlockT> std::fmt::Debug for CachingState<H, S, B> {
+impl<H: Hasher, S: StateBackendTrait<H>, B: BlockT> std::fmt::Debug for CachingState<H, S, B> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "Block {:?}", self.cache.parent_hash)
 	}
@@ -394,7 +394,7 @@ impl<H: Hasher, B: BlockT> CacheChanges<H, B> {
 
 }
 
-impl<H: Hasher, S: StateBackend<H>, B: BlockT> CachingState<H, S, B> {
+impl<H: Hasher, S: StateBackendTrait<H>, B: BlockT> CachingState<H, S, B> {
 	/// Create a new instance wrapping generic State and shared cache.
 	pub fn new(state: S, shared_cache: SharedCache<B, H>, parent_hash: Option<B::Hash>) -> CachingState<H, S, B> {
 		CachingState {
@@ -462,7 +462,7 @@ impl<H: Hasher, S: StateBackend<H>, B: BlockT> CachingState<H, S, B> {
 	}
 }
 
-impl<H: Hasher, S: StateBackend<H>, B: BlockT> StateBackend<H> for CachingState<H, S, B> {
+impl<H: Hasher, S: StateBackendTrait<H>, B: BlockT> StateBackendTrait<H> for CachingState<H, S, B> {
 	type Error = S::Error;
 	type Transaction = S::Transaction;
 	type TrieBackendStorage = S::TrieBackendStorage;
@@ -602,10 +602,10 @@ impl<H: Hasher, S: StateBackend<H>, B: BlockT> StateBackend<H> for CachingState<
 		self.state.child_keys(child_key, prefix)
 	}
 
-	fn as_trie_backend(&mut self) -> Option<
-		&TrieBackend<Self::TrieBackendStorage, H, Self::KvBackend>
+	fn as_state_backend(&mut self) -> Option<
+		&StateBackend<Self::TrieBackendStorage, H, Self::KvBackend>
 	> {
-		self.state.as_trie_backend()
+		self.state.as_state_backend()
 	}
 }
 

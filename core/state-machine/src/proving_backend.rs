@@ -27,7 +27,7 @@ use trie::{
 use std::collections::HashMap;
 pub use trie::Recorder;
 pub use trie::trie_types::{Layout, TrieError};
-use crate::trie_backend::TrieBackend;
+use crate::state_backend::StateBackend;
 use crate::trie_backend_essence::{Ephemeral, TrieBackendEssence, TrieBackendStorage};
 use crate::{Error, ExecutionError, Backend};
 use crate::kv_backend::{KvBackend, InMemory as InMemoryKvBackend};
@@ -187,7 +187,7 @@ pub struct ProvingBackend<'a,
 	H: 'a + Hasher,
 	K: 'a + KvBackend,
 > {
-	backend: &'a TrieBackend<S, H, K>,
+	backend: &'a StateBackend<S, H, K>,
 	proof_recorder: Rc<RefCell<Recorder<H::Out>>>,
 }
 
@@ -197,7 +197,7 @@ impl<'a,
 	K: 'a + KvBackend,
 > ProvingBackend<'a, S, H, K> {
 	/// Create new proving backend.
-	pub fn new(backend: &'a TrieBackend<S, H, K>) -> Self {
+	pub fn new(backend: &'a StateBackend<S, H, K>) -> Self {
 		ProvingBackend {
 			backend,
 			proof_recorder: Rc::new(RefCell::new(Recorder::new())),
@@ -206,7 +206,7 @@ impl<'a,
 
 	/// Create new proving backend with the given recorder.
 	pub fn new_with_recorder(
-		backend: &'a TrieBackend<S, H, K>,
+		backend: &'a StateBackend<S, H, K>,
 		proof_recorder: Rc<RefCell<Recorder<H::Out>>>,
 	) -> Self {
 		ProvingBackend {
@@ -251,7 +251,7 @@ impl<'a, S, H, K> Backend<H> for ProvingBackend<'a, S, H, K>
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		ProvingBackendEssence {
-			backend: self.backend.essence(),
+			backend: self.backend.trie().essence(),
 			proof_recorder: &mut *self.proof_recorder.try_borrow_mut()
 				.expect("only fails when already borrowed; storage() is non-reentrant; qed"),
 		}.storage(key)
@@ -259,7 +259,7 @@ impl<'a, S, H, K> Backend<H> for ProvingBackend<'a, S, H, K>
 
 	fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		ProvingBackendEssence {
-			backend: self.backend.essence(),
+			backend: self.backend.trie().essence(),
 			proof_recorder: &mut *self.proof_recorder.try_borrow_mut()
 				.expect("only fails when already borrowed; child_storage() is non-reentrant; qed"),
 		}.child_storage(storage_key, key)
@@ -336,7 +336,7 @@ impl<'a, S, H, K> Backend<H> for ProvingBackend<'a, S, H, K>
 pub fn create_proof_check_backend<H>(
 	root: H::Out,
 	proof: StorageProof,
-) -> Result<TrieBackend<MemoryDB<H>, H, InMemoryKvBackend>, Box<dyn Error>>
+) -> Result<StateBackend<MemoryDB<H>, H, InMemoryKvBackend>, Box<dyn Error>>
 where
 	H: Hasher,
 {
@@ -346,7 +346,7 @@ where
 	let kv = InMemoryKvBackend::default(); 
 
 	if db.contains(&root, EMPTY_PREFIX) {
-		Ok(TrieBackend::new(db, root, kv))
+		Ok(StateBackend::new(db, root, kv))
 	} else {
 		Err(Box::new(ExecutionError::InvalidProof))
 	}
@@ -369,28 +369,28 @@ where
 #[cfg(test)]
 mod tests {
 	use crate::backend::{InMemory, InMemoryTransaction};
-	use crate::trie_backend::tests::test_trie;
+	use crate::state_backend::tests::test_state;
 	use super::*;
 	use primitives::{Blake2Hasher, storage::ChildStorageKey};
 
 	type KvBackend = InMemoryKvBackend;
 
 	fn test_proving<'a>(
-		trie_backend: &'a TrieBackend<PrefixedMemoryDB<Blake2Hasher>, Blake2Hasher, KvBackend>,
+		state_backend: &'a StateBackend<PrefixedMemoryDB<Blake2Hasher>, Blake2Hasher, KvBackend>,
 	) -> ProvingBackend<'a, PrefixedMemoryDB<Blake2Hasher>, Blake2Hasher, KvBackend> {
-		ProvingBackend::new(trie_backend)
+		ProvingBackend::new(state_backend)
 	}
 
 	#[test]
 	fn proof_is_empty_until_value_is_read() {
-		let trie_backend = test_trie();
-		assert!(test_proving(&trie_backend).extract_proof().is_empty());
+		let state_backend = test_state();
+		assert!(test_proving(&state_backend).extract_proof().is_empty());
 	}
 
 	#[test]
 	fn proof_is_non_empty_after_value_is_read() {
-		let trie_backend = test_trie();
-		let backend = test_proving(&trie_backend);
+		let state_backend = test_state();
+		let backend = test_proving(&state_backend);
 		assert_eq!(backend.storage(b"key").unwrap(), Some(b"value".to_vec()));
 		assert!(!backend.extract_proof().is_empty());
 	}
@@ -407,12 +407,12 @@ mod tests {
 
 	#[test]
 	fn passes_throgh_backend_calls() {
-		let trie_backend = test_trie();
-		let proving_backend = test_proving(&trie_backend);
-		assert_eq!(trie_backend.storage(b"key").unwrap(), proving_backend.storage(b"key").unwrap());
-		assert_eq!(trie_backend.pairs(), proving_backend.pairs());
+		let state_backend = test_state();
+		let proving_backend = test_proving(&state_backend);
+		assert_eq!(state_backend.storage(b"key").unwrap(), proving_backend.storage(b"key").unwrap());
+		assert_eq!(state_backend.pairs(), proving_backend.pairs());
 
-		let (trie_root, mut trie_mdb) = trie_backend.storage_root(::std::iter::empty());
+		let (trie_root, mut trie_mdb) = state_backend.storage_root(::std::iter::empty());
 		let (proving_root, mut proving_mdb) = proving_backend.storage_root(::std::iter::empty());
 		assert_eq!(trie_root, proving_root);
 		assert_eq!(trie_mdb.0.drain(), proving_mdb.0.drain());
@@ -431,7 +431,7 @@ mod tests {
 		let in_memory_root = in_memory.storage_root(::std::iter::empty()).0;
 		(0..64).for_each(|i| assert_eq!(in_memory.storage(&[i]).unwrap().unwrap(), vec![i]));
 
-		let trie = in_memory.as_trie_backend().unwrap();
+		let trie = in_memory.as_state_backend().unwrap();
 		let trie_root = trie.storage_root(::std::iter::empty()).0;
 		assert_eq!(in_memory_root, trie_root);
 		(0..64).for_each(|i| assert_eq!(trie.storage(&[i]).unwrap().unwrap(), vec![i]));
@@ -478,7 +478,7 @@ mod tests {
 			vec![i]
 		));
 
-		let trie = in_memory.as_trie_backend().unwrap();
+		let trie = in_memory.as_state_backend().unwrap();
 		let trie_root = trie.storage_root(::std::iter::empty()).0;
 		assert_eq!(in_memory_root, trie_root);
 		(0..64).for_each(|i| assert_eq!(

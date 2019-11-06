@@ -30,7 +30,7 @@ use sr_primitives::traits::{
 };
 use state_machine::{
 	ChangesTrieRootsStorage, ChangesTrieAnchorBlockId, ChangesTrieConfigurationRange,
-	TrieBackend, read_proof_check, key_changes_proof_check, create_proof_check_backend_storage,
+	StateBackend, read_proof_check, key_changes_proof_check, create_proof_check_backend_storage,
 	read_child_proof_check,
 };
 pub use state_machine::StorageProof;
@@ -356,7 +356,7 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>> LightDataChecker<E, H, B, S> {
 				let kv = state_machine::InMemoryKvBackend::default();
 
 				// check proof for single changes trie root
-				let proving_backend = TrieBackend::new(storage, cht_root, kv);
+				let proving_backend = StateBackend::new(storage, cht_root, kv);
 				let remote_changes_trie_root = remote_roots[&block];
 				cht::check_proof_on_proving_backend::<B::Header, H>(
 					local_cht_root,
