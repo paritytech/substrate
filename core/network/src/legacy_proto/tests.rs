@@ -44,14 +44,27 @@ fn build_nodes()
 		.collect();
 
 	for index in 0 .. 2 {
+		let keypair = keypairs[index].clone();
 		let transport = libp2p::core::transport::MemoryTransport
-			.with_upgrade(libp2p::secio::SecioConfig::new(keypairs[index].clone()))
 			.and_then(move |out, endpoint| {
-				let peer_id = out.remote_key.into_peer_id();
-				libp2p::core::upgrade::apply(out.stream, libp2p::yamux::Config::default(), endpoint)
+				let secio = libp2p::secio::SecioConfig::new(keypair);
+				libp2p::core::upgrade::apply(
+					out,
+					secio,
+					endpoint,
+					libp2p::core::upgrade::Version::V1
+				)
+			})
+			.and_then(move |(peer_id, stream), endpoint| {
+				libp2p::core::upgrade::apply(
+					stream,
+					libp2p::yamux::Config::default(),
+					endpoint,
+					libp2p::core::upgrade::Version::V1
+				)
 					.map(|muxer| (peer_id, libp2p::core::muxing::StreamMuxerBox::new(muxer)))
 			})
-			.with_timeout(Duration::from_secs(20))
+			.timeout(Duration::from_secs(20))
 			.map_err(|err| io::Error::new(io::ErrorKind::Other, err))
 			.boxed();
 
