@@ -663,6 +663,7 @@ pub mod tests {
 			finalized: false,
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::LongestChain,
+			allow_missing_state: true,
 		};
 		do_import_block::<_, _, _, TestJustification>(
 			&client,
@@ -680,6 +681,7 @@ pub mod tests {
 			bad_justification: false,
 			needs_finality_proof: false,
 			is_new_best: true,
+			header_only: false,
 		}));
 	}
 
@@ -692,6 +694,7 @@ pub mod tests {
 			bad_justification: false,
 			needs_finality_proof: false,
 			is_new_best: true,
+			header_only: false,
 		}));
 	}
 
@@ -705,6 +708,7 @@ pub mod tests {
 			bad_justification: false,
 			needs_finality_proof: true,
 			is_new_best: true,
+			header_only: false,
 		}));
 	}
 
@@ -721,6 +725,7 @@ pub mod tests {
 				bad_justification: false,
 				needs_finality_proof: true,
 				is_new_best: false,
+				header_only: false,
 			},
 		));
 	}
