@@ -410,16 +410,20 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	}
 
 	/// Tries to connect to `dest` if necessary, opens a substream to it using the protocol
-	/// `proto_name`, sends `message` on it, and waits for an answer to come back.
+	/// `proto_name`, sends `message` on it, and waits for a single answer to come back.
 	///
-	/// The network will keep the connection alive until the response comes.
+	/// In some literature, what this method is called performing an RPC query.
+	///
+	/// > **Note**: When using this method, the network will not garbage-collect the connection
+	/// >			until the response has come back, contrary to if you use
+	/// >			[`NetworkService::write_gossip`].
 	///
 	/// The protocol name must be one of the elements of `extra_request_response_protos` that was
 	/// passed in the configuration.
 	pub fn send_request(&self, proto_name: &[u8], dest: PeerId, message: impl Encode)
 		-> impl Future<Item = impl Decode, Error = ()>		// TODO: proper error
 	{
-
+		futures::future::empty::<(), ()>()
 	}
 
 	/// Writes a message on an open gossiping channel. Has no effect if the gossiping channel with
