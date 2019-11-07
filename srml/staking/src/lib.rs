@@ -256,7 +256,7 @@ use codec::{HasCompact, Encode, Decode};
 use support::{
 	decl_module, decl_event, decl_storage, ensure,
 	traits::{
-		Currency, OnFreeBalanceZero, OnDilution, LockIdentifier, LockableCurrency,
+		Currency, OnFreeBalanceZero, LockIdentifier, LockableCurrency,
 		WithdrawReasons, OnUnbalanced, Imbalance, Get, Time
 	}
 };
@@ -501,8 +501,8 @@ pub trait Trait: system::Trait {
 	/// The post-processing needs it but will be moved to off-chain. TODO: #2908
 	type CurrencyToVote: Convert<BalanceOf<Self>, u64> + Convert<u128, BalanceOf<Self>>;
 
-	/// Some tokens minted.
-	type OnRewardMinted: OnDilution<BalanceOf<Self>>;
+	/// Tokens have been minted and are unused for validator-reward.
+	type RewardRemainder: OnUnbalanced<NegativeImbalanceOf<Self>>;
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
@@ -652,8 +652,9 @@ decl_storage! {
 
 decl_event!(
 	pub enum Event<T> where Balance = BalanceOf<T>, <T as system::Trait>::AccountId {
-		/// All validators have been rewarded by the given balance.
-		Reward(Balance),
+		/// All validators have been rewarded by the first balance; the second is the remainder
+		/// from the maximum amount of reward.
+		Reward(Balance, Balance),
 		/// One validator (and its nominators) has been slashed by the given amount.
 		Slash(AccountId, Balance),
 		/// An old slashing report from a prior era was discarded because it could
@@ -1198,7 +1199,7 @@ impl<T: Trait> Module<T> {
 			let validator_len: BalanceOf<T> = (validators.len() as u32).into();
 			let total_rewarded_stake = Self::slot_stake() * validator_len;
 
-			let total_payout = inflation::compute_total_payout(
+			let (total_payout, max_payout) = inflation::compute_total_payout(
 				&T::RewardCurve::get(),
 				total_rewarded_stake.clone(),
 				T::Currency::total_issuance(),
@@ -1215,12 +1216,14 @@ impl<T: Trait> Module<T> {
 				}
 			}
 
-			let total_reward = total_imbalance.peek();
-			// assert!(total_reward <= total_payout)
+			// assert!(total_imbalance.peek() == total_payout)
+			let total_payout = total_imbalance.peek();
 
-			Self::deposit_event(RawEvent::Reward(total_reward));
+			let rest = max_payout.saturating_sub(total_payout);
+			Self::deposit_event(RawEvent::Reward(total_payout, rest));
+
 			T::Reward::on_unbalanced(total_imbalance);
-			T::OnRewardMinted::on_dilution(total_reward, total_rewarded_stake);
+			T::RewardRemainder::on_unbalanced(T::Currency::issue(rest));
 		}
 
 		// Increment current era.

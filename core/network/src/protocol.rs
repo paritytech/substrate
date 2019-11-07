@@ -90,7 +90,9 @@ const UNEXPECTED_STATUS_REPUTATION_CHANGE: i32 = -(1 << 20);
 /// Reputation change when we are a light client and a peer is behind us.
 const PEER_BEHIND_US_LIGHT_REPUTATION_CHANGE: i32 = -(1 << 8);
 /// Reputation change when a peer sends us an extrinsic that we didn't know about.
-const NEW_EXTRINSIC_REPUTATION_CHANGE: i32 = 1 << 7;
+const GOOD_EXTRINSIC_REPUTATION_CHANGE: i32 = 1 << 7;
+/// Reputation change when a peer sends us a bad extrinsic.
+const BAD_EXTRINSIC_REPUTATION_CHANGE: i32 = -(1 << 12);
 /// We sent an RPC query to the given node, but it failed.
 const RPC_FAILED_REPUTATION_CHANGE: i32 = -(1 << 12);
 /// We received a message that failed to decode.
@@ -1019,7 +1021,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				self.transaction_pool.import(
 					self.peerset_handle.clone().into(),
 					who.clone(),
-					NEW_EXTRINSIC_REPUTATION_CHANGE,
+					GOOD_EXTRINSIC_REPUTATION_CHANGE,
+					BAD_EXTRINSIC_REPUTATION_CHANGE,
 					t,
 				);
 			}

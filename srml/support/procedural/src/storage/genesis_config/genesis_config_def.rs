@@ -123,9 +123,9 @@ impl GenesisConfigDef {
 
 		for line in &def.extra_genesis_config_lines {
 			let attrs = line.attrs.iter()
-				.filter_map(|a| a.parse_meta().ok())
-				.filter(|m| m.name() == "doc" || m.name() == "serde")
-				.collect();
+                .filter_map(|a| a.parse_meta().ok())
+                .filter(|m| m.path().is_ident("doc") || m.path().is_ident("serde"))
+                .collect();
 
 			let default = line.default.as_ref().map(|e| quote!( #e ))
 				.unwrap_or_else(|| quote!( Default::default() ));

@@ -374,10 +374,16 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 		}
 	}
 
-	/// Count the total number of imported blocks.
-	pub fn blocks_count(&self) -> u64 {
+	/// Count the current number of known blocks. Note that:
+	///  1. this might be expensive as it creates an in-memory-copy of the chain
+	///     to count the blocks, thus if you have a different way of testing this
+	///     (e.g. `info.best_hash`) - use that.
+	///  2. This is not always increasing nor accurate, as the
+	///     orphaned and proven-to-never-finalized blocks may be pruned at any time.
+	///     Therefore, this number can drop again.
+	pub fn blocks_count(&self) -> usize {
 		self.backend.as_ref().map(
-			|backend| backend.blocks_count()
+			|backend| backend.as_in_memory().blockchain().blocks_count()
 		).unwrap_or(0)
 	}
 }
@@ -393,7 +399,14 @@ impl TransactionPool<Hash, Block> for EmptyTransactionPool {
 		Hash::default()
 	}
 
-	fn import(&self, _report_handle: ReportHandle, _who: PeerId, _rep_change: i32, _transaction: Extrinsic) {}
+	fn import(
+		&self,
+		_report_handle: ReportHandle,
+		_who: PeerId,
+		_rep_change_good: i32,
+		_rep_change_bad: i32,
+		_transaction: Extrinsic
+	) {}
 
 	fn on_broadcasted(&self, _: HashMap<Hash, Vec<String>>) {}
 }
@@ -513,16 +526,9 @@ pub trait TestNetFactory: Sized {
 		net
 	}
 
-	fn add_full_peer(&mut self, config: &ProtocolConfig) {
-		self.add_full_peer_with_states(config, None)
-	}
-
 	/// Add a full peer.
-	fn add_full_peer_with_states(&mut self, config: &ProtocolConfig, keep_blocks: Option<u32>) {
-		let test_client_builder = match keep_blocks {
-			Some(keep_blocks) => TestClientBuilder::with_pruning_window(keep_blocks),
-			None => TestClientBuilder::with_default_backend(),
-		};
+	fn add_full_peer(&mut self, config: &ProtocolConfig) {
+		let test_client_builder = TestClientBuilder::with_default_backend();
 		let backend = test_client_builder.backend();
 		let (c, longest_chain) = test_client_builder.build_with_longest_chain();
 		let client = Arc::new(c);
@@ -680,7 +686,7 @@ pub trait TestNetFactory: Sized {
 			if peer.is_major_syncing() || peer.network.num_queued_blocks() != 0 {
 				return Async::NotReady
 			}
-			match (highest, peer.client.info().chain.best_hash) {
+			match (highest, peer.client.info().chain.best_number) {
 				(None, b) => highest = Some(b),
 				(Some(ref a), ref b) if a == b => {},
 				(Some(_), _) => return Async::NotReady,
