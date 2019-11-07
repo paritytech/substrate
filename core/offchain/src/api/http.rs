@@ -47,12 +47,11 @@ pub fn http() -> (HttpApi, HttpWorker) {
 		requests: FnvHashMap::default(),
 	};
 
+	let tls = hyper_rustls::HttpsConnector::new(1);
 	let engine = HttpWorker {
 		to_api,
 		from_api,
-		// TODO: don't unwrap; we should fall back to the HttpConnector if we fail to create the
-		// Https one; there doesn't seem to be any built-in way to do this
-		http_client: HyperClient::new(),
+		http_client: hyper::Client::builder().build(tls),
 		requests: Vec::new(),
 	};
 
@@ -551,23 +550,6 @@ enum WorkerToApi {
 	},
 }
 
-/// Wraps around a `hyper::Client` with either TLS enabled or disabled.
-enum HyperClient {
-	/// Everything is ok and HTTPS is available.
-	Https(hyper::Client<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>, hyper::Body>),
-}
-
-impl HyperClient {
-	/// Creates new hyper client.
-	///
-	/// By default we will try to initialize the `HttpsConnector`,
-	/// If that's not possible we'll fall back to `HttpConnector`.
-	pub fn new() -> Self {
-		let tls = hyper_rustls::HttpsConnector::new(1);
-		HyperClient::Https(hyper::Client::builder().build(tls))
-	}
-}
-
 /// Must be continuously polled for the [`HttpApi`] to properly work.
 pub struct HttpWorker {
 	/// Used to sends messages to the `HttpApi`.
@@ -575,7 +557,7 @@ pub struct HttpWorker {
 	/// Used to receive messages from the `HttpApi`.
 	from_api: mpsc::UnboundedReceiver<ApiToWorker>,
 	/// The engine that runs HTTP requests.
-	http_client: HyperClient,
+	http_client: hyper::Client<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>, hyper::Body>,
 	/// HTTP requests that are being worked on by the engine.
 	requests: Vec<(HttpRequestId, HttpWorkerRequest)>,
 }
@@ -679,9 +661,7 @@ impl Future for HttpWorker {
 			Poll::Pending => {},
 			Poll::Ready(None) => return Poll::Ready(()),	// stops the worker
 			Poll::Ready(Some(ApiToWorker::Dispatch { id, request })) => {
-				let future = Compat01As03::new(match me.http_client {
-					HyperClient::Https(ref mut c) => c.request(request),
-				});
+				let future = Compat01As03::new(me.http_client.request(request));
 				debug_assert!(me.requests.iter().all(|(i, _)| *i != id));
 				me.requests.push((id, HttpWorkerRequest::Dispatched(future)));
 				cx.waker().wake_by_ref();	// reschedule the task to poll the request
