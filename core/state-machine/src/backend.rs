@@ -322,7 +322,7 @@ impl error::Error for Void {
 pub struct InMemory<H: Hasher> {
 	inner: HashMap<Option<Vec<u8>>, HashMap<Vec<u8>, Vec<u8>>>,
 	kv: Option<InMemoryKvBackend>,
-	trie: Option<StateBackend<MemoryDB<H>, H, InMemoryKvBackend>>,
+	state: Option<StateBackend<MemoryDB<H>, H, InMemoryKvBackend>>,
 	_hasher: PhantomData<H>,
 }
 
@@ -336,7 +336,7 @@ impl<H: Hasher> Default for InMemory<H> {
 	fn default() -> Self {
 		InMemory {
 			inner: Default::default(),
-			trie: None,
+			state: None,
 			kv: Some(Default::default()),
 			_hasher: PhantomData,
 		}
@@ -347,7 +347,7 @@ impl<H: Hasher> Clone for InMemory<H> {
 	fn clone(&self) -> Self {
 		InMemory {
 			inner: self.inner.clone(),
-			trie: None,
+			state: None,
 			kv: self.kv.clone(),
 			_hasher: PhantomData,
 		}
@@ -362,21 +362,23 @@ impl<H: Hasher> PartialEq for InMemory<H> {
 }
 
 impl<H: Hasher> InMemory<H> {
-	// the inmemory storage for kv is either in trie if initialized
-	// or in field.
+	/// Key value inmemory storage is either used from the
+	/// state db or its own field.
+	/// This function access the right field.
 	fn kv(&self) -> &InMemoryKvBackend {
 		if let Some(kv) = self.kv.as_ref() {
 			kv
 		} else {
-			self.trie.as_ref().unwrap().kv_backend()
+			self.state.as_ref().unwrap().kv_backend()
 		}
 	}
 
+	/// Access the current key value db in a mutable way.
 	fn kv_mut(&mut self) -> &mut InMemoryKvBackend {
 		if let Some(kv) = self.kv.as_mut() {
 			kv
 		} else {
-			self.trie.as_mut().unwrap().kv_backend_mut()
+			self.state.as_mut().unwrap().kv_backend_mut()
 		}
 	}
 
@@ -386,7 +388,7 @@ impl<H: Hasher> InMemory<H> {
 			kv
 		} else {
 			std::mem::replace(
-				self.trie.as_mut().unwrap().kv_backend_mut(),
+				self.state.as_mut().unwrap().kv_backend_mut(),
 				Default::default(),
 			)	
 		}
@@ -405,7 +407,7 @@ impl<H: Hasher> InMemory<H> {
 		kv.extend(changes.kv);
 
 		let kv = Some(kv);
-		InMemory { inner, kv, trie: None, _hasher: PhantomData }
+		InMemory { inner, kv, state: None, _hasher: PhantomData }
 	}
 }
 
@@ -413,7 +415,7 @@ impl<H: Hasher> From<HashMap<Option<Vec<u8>>, HashMap<Vec<u8>, Vec<u8>>>> for In
 	fn from(inner: HashMap<Option<Vec<u8>>, HashMap<Vec<u8>, Vec<u8>>>) -> Self {
 		InMemory {
 			inner: inner,
-			trie: None,
+			state: None,
 			kv: Some(Default::default()),
 			_hasher: PhantomData,
 		}
@@ -433,7 +435,7 @@ impl<H: Hasher> From<(
 		inner.insert(None, inners.0);
 		InMemory {
 			inner: inner,
-			trie: None,
+			state: None,
 			kv: Some(Default::default()),
 			_hasher: PhantomData,
 		}
@@ -446,7 +448,7 @@ impl<H: Hasher> From<HashMap<Vec<u8>, Vec<u8>>> for InMemory<H> {
 		expanded.insert(None, inner);
 		InMemory {
 			inner: expanded,
-			trie: None,
+			state: None,
 			kv: Some(Default::default()),
 			_hasher: PhantomData,
 		}
@@ -663,8 +665,8 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 			Some(root) => root,
 			None => insert_into_memory_db::<H, _>(&mut mdb, ::std::iter::empty())?,
 		};
-		self.trie = Some(StateBackend::new(mdb, root, self.extract_kv()));
-		self.trie.as_ref()
+		self.state = Some(StateBackend::new(mdb, root, self.extract_kv()));
+		self.state.as_ref()
 	}
 }
 
