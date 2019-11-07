@@ -27,6 +27,7 @@ members = [
 	"core/panic-handler",
 	"core/primitives",
 	"core/rpc",
+	"core/rpc/custom",
 	"core/rpc/primitives",
 	"core/rpc-servers",
 	"core/serializer",
@@ -109,4 +110,3 @@ members = [
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"
-
