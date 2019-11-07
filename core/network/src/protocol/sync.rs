@@ -594,11 +594,17 @@ impl<B: BlockT> ChainSync<B> {
 				Some((id.clone(), req))
 			} else if let Some((range, req)) = peer_block_request(id, peer, blocks, attrs, major_sync) {
 				peer.state = PeerSyncState::DownloadingNew(range.start);
-				trace!(target: "sync", "New block request for {}", id);
+				trace!(
+					target: "sync",
+					"New block request for {}, (best:{}, common:{}) {:?}",
+					id,
+					peer.best_number,
+					peer.common_number,
+					req,
+				);
 				have_requests = true;
 				Some((id.clone(), req))
 			} else {
-				trace!(target: "sync", "No new block request for {}", id);
 				None
 			}
 		});
@@ -1006,7 +1012,7 @@ impl<B: BlockT> ChainSync<B> {
 	{
 		let header = &announce.header;
 		let number = *header.number();
-		debug!(target: "sync", "Received block announcement with number {:?}", number);
+		debug!(target: "sync", "Received block announcement {:?} with number {:?} from {}", hash, number, who);
 		if number.is_zero() {
 			warn!(target: "sync", "Ignored genesis block (#0) announcement from {}: {}", who, hash);
 			return OnBlockAnnounce::Nothing
@@ -1228,7 +1234,7 @@ fn peer_block_request<B: BlockT>(
 	attrs: &message::BlockAttributes,
 	major_sync: bool,
 ) -> Option<(Range<NumberFor<B>>, BlockRequest<B>)> {
-	let max_parallel = if major_sync { 1 } else { 3 };
+	let max_parallel = if major_sync { 1 } else { 5 };
 	if let Some(range) = blocks.needed_blocks(
 		id.clone(),
 		MAX_BLOCKS_TO_REQUEST,
