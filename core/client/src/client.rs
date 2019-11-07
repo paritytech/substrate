@@ -967,7 +967,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				}
 				storage_changes
 			},
-			_ => Default::default()
+			_ => None,
 		};
 
 		let is_new_best = finalized || match fork_choice {
