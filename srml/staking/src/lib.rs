@@ -524,10 +524,6 @@ pub trait Trait: system::Trait {
 
 	/// The NPoS reward curve to use.
 	type RewardCurve: Get<&'static PiecewiseLinear<'static>>;
-
-	/// The maximum possible reward (in proportion of total issued tokens) that can be paid in one
-	/// reward cycle.
-	type MaxPossibleReward: Get<Perbill>;
 }
 
 /// Mode of era-forcing.
@@ -1203,7 +1199,7 @@ impl<T: Trait> Module<T> {
 			let validator_len: BalanceOf<T> = (validators.len() as u32).into();
 			let total_rewarded_stake = Self::slot_stake() * validator_len;
 
-			let total_payout = inflation::compute_total_payout(
+			let (total_payout, max_payout) = inflation::compute_total_payout(
 				&T::RewardCurve::get(),
 				total_rewarded_stake.clone(),
 				T::Currency::total_issuance(),
@@ -1220,16 +1216,14 @@ impl<T: Trait> Module<T> {
 				}
 			}
 
-			let total_reward = total_imbalance.peek();
-			// assert!(total_reward <= total_payout)
+			// assert!(total_imbalance.peek() == total_payout)
+			let total_payout = total_imbalance.peek();
 
-			let max_reward = T::MaxPossibleReward::get() * T::Currency::total_issuance();
-			let rest_reward = max_reward.saturating_sub(total_reward);
-
-			Self::deposit_event(RawEvent::Reward(total_reward, rest_reward));
+			let rest = max_payout.saturating_sub(total_payout);
+			Self::deposit_event(RawEvent::Reward(total_payout, rest));
 
 			T::Reward::on_unbalanced(total_imbalance);
-			T::RewardRemainder::on_unbalanced(T::Currency::issue(rest_reward));
+			T::RewardRemainder::on_unbalanced(T::Currency::issue(rest));
 		}
 
 		// Increment current era.
