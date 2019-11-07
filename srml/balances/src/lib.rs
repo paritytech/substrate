@@ -1143,7 +1143,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		transactor: &T::AccountId,
 		dest: &T::AccountId,
 		value: T::Balance,
-		existential_requirement: ExistenceRequirement,
+		existence_requirement: ExistenceRequirement,
 	) -> Result {
 		let from_balance = Self::free_balance(transactor);
 		let to_balance = Self::free_balance(dest);
