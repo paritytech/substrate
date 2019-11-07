@@ -188,10 +188,13 @@ pub fn genesis_config_and_build_storage(
 ) -> TokenStream {
 	let builders = BuilderDef::from_def(scrate, def);
 	if !builders.blocks.is_empty() {
-		let genesis_config = &GenesisConfigDef::from_def(def);
+		let genesis_config = match GenesisConfigDef::from_def(def) {
+			Ok(genesis_config) => genesis_config,
+			Err(err) => return err.to_compile_error(),
+		};
 		let decl_genesis_config_and_impl_default =
-			decl_genesis_config_and_impl_default(scrate, genesis_config);
-		let impl_build_storage = impl_build_storage(scrate, def, genesis_config, &builders);
+			decl_genesis_config_and_impl_default(scrate, &genesis_config);
+		let impl_build_storage = impl_build_storage(scrate, def, &genesis_config, &builders);
 
 		quote!{
 			#decl_genesis_config_and_impl_default
