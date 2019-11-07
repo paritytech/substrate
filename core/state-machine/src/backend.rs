@@ -38,7 +38,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	/// Storage changes to be applied if committing
 	type Transaction: Consolidate + Default;
 
-	/// Type of trie backend storage.
+	/// Type of key value backend storage.
 	type TrieBackendStorage: TrieBackendStorage<H>;
 
 	/// Type of trie backend storage.
@@ -253,7 +253,6 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 		(*self).kv_in_memory()
 	}
 
-
 	fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], f: F) {
 		(*self).for_key_values_with_prefix(prefix, f);
 	}
@@ -381,6 +380,7 @@ impl<H: Hasher> InMemory<H> {
 		}
 	}
 
+	/// Extract key values from `InMemory`, by emptying it.
 	fn extract_kv(&mut self) -> InMemoryKvBackend {
 		if let Some(kv) = self.kv.take() {
 			kv
