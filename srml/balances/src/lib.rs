@@ -409,7 +409,7 @@ decl_module! {
 		) {
 			let transactor = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
-			<Self as Currency<_>>::transfer(&transactor, &dest, value)?;
+			<Self as Currency<_>>::transfer(&transactor, &dest, value, ExistenceRequirement::AllowDeath)?;
 		}
 
 		/// Set the balances of a given account.
@@ -464,7 +464,7 @@ decl_module! {
 			ensure_root(origin)?;
 			let source = T::Lookup::lookup(source)?;
 			let dest = T::Lookup::lookup(dest)?;
-			<Self as Currency<_>>::transfer(&source, &dest, value)?;
+			<Self as Currency<_>>::transfer(&source, &dest, value, ExistenceRequirement::AllowDeath)?;
 		}
 
 		/// Same as the [`transfer`] call, but with a check that the transfer will not kill the
@@ -481,8 +481,7 @@ decl_module! {
 		) {
 			let transactor = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
-
-			Self::transfer_inner(&transactor, &dest, value, ExistenceRequirement::KeepAlive)?;
+			<Self as Currency<_>>::transfer(&transactor, &dest, value, ExistenceRequirement::KeepAlive)?;
 		}
 
 	}
@@ -872,8 +871,54 @@ where
 		}
 	}
 
-	fn transfer(transactor: &T::AccountId, dest: &T::AccountId, value: Self::Balance) -> Result {
-		Self::transfer_inner(transactor, dest, value, ExistenceRequirement::AllowDeath)
+	fn transfer(
+		transactor: &T::AccountId,
+		dest: &T::AccountId,
+		value: Self::Balance,
+		existence_requirement: ExistenceRequirement,
+	) -> Result {
+		let from_balance = Self::free_balance(transactor);
+		let to_balance = Self::free_balance(dest);
+		let would_create = to_balance.is_zero();
+		let fee = if would_create { T::CreationFee::get() } else { T::TransferFee::get() };
+		let liability = match value.checked_add(&fee) {
+			Some(l) => l,
+			None => return Err("got overflow after adding a fee to value"),
+		};
+
+		let new_from_balance = match from_balance.checked_sub(&liability) {
+			None => return Err("balance too low to send value"),
+			Some(b) => b,
+		};
+		if would_create && value < T::ExistentialDeposit::get() {
+			return Err("value too low to create account");
+		}
+		Self::ensure_can_withdraw(transactor, value, WithdrawReason::Transfer.into(), new_from_balance)?;
+
+		// NOTE: total stake being stored in the same type means that this could never overflow
+		// but better to be safe than sorry.
+		let new_to_balance = match to_balance.checked_add(&value) {
+			Some(b) => b,
+			None => return Err("destination balance too high to receive value"),
+		};
+
+		if transactor != dest {
+			if existence_requirement == ExistenceRequirement::KeepAlive {
+				if new_from_balance < Self::minimum_balance() {
+					return Err("transfer would kill account");
+				}
+			}
+
+			Self::set_free_balance(transactor, new_from_balance);
+			if !<FreeBalance<T, I>>::exists(dest) {
+				Self::new_account(dest, new_to_balance);
+			}
+			Self::set_free_balance(dest, new_to_balance);
+			T::TransferPayment::on_unbalanced(NegativeImbalance::new(fee));
+			Self::deposit_event(RawEvent::Transfer(transactor.clone(), dest.clone(), value, fee));
+		}
+
+		Ok(())
 	}
 
 	fn withdraw(
@@ -1135,57 +1180,5 @@ where
 {
 	fn is_dead_account(who: &T::AccountId) -> bool {
 		Self::total_balance(who).is_zero()
-	}
-}
-
-impl<T: Trait<I>, I: Instance> Module<T, I> {
-	fn transfer_inner(
-		transactor: &T::AccountId,
-		dest: &T::AccountId,
-		value: T::Balance,
-		existence_requirement: ExistenceRequirement,
-	) -> Result {
-		let from_balance = Self::free_balance(transactor);
-		let to_balance = Self::free_balance(dest);
-		let would_create = to_balance.is_zero();
-		let fee = if would_create { T::CreationFee::get() } else { T::TransferFee::get() };
-		let liability = match value.checked_add(&fee) {
-			Some(l) => l,
-			None => return Err("got overflow after adding a fee to value"),
-		};
-
-		let new_from_balance = match from_balance.checked_sub(&liability) {
-			None => return Err("balance too low to send value"),
-			Some(b) => b,
-		};
-		if would_create && value < T::ExistentialDeposit::get() {
-			return Err("value too low to create account");
-		}
-		Self::ensure_can_withdraw(transactor, value, WithdrawReason::Transfer.into(), new_from_balance)?;
-
-		// NOTE: total stake being stored in the same type means that this could never overflow
-		// but better to be safe than sorry.
-		let new_to_balance = match to_balance.checked_add(&value) {
-			Some(b) => b,
-			None => return Err("destination balance too high to receive value"),
-		};
-
-		if transactor != dest {
-			if existential_requirement == ExistenceRequirement::KeepAlive {
-				if new_from_balance < Self::minimum_balance() {
-					return Err("transfer would kill account");
-				}
-			}
-
-			Self::set_free_balance(transactor, new_from_balance);
-			if !<FreeBalance<T, I>>::exists(dest) {
-				Self::new_account(dest, new_to_balance);
-			}
-			Self::set_free_balance(dest, new_to_balance);
-			T::TransferPayment::on_unbalanced(NegativeImbalance::new(fee));
-			Self::deposit_event(RawEvent::Transfer(transactor.clone(), dest.clone(), value, fee));
-		}
-
-		Ok(())
 	}
 }
