@@ -93,7 +93,7 @@ fn replace_path_dependencies_with_git(cargo_toml_path: &Path, commit_id: &str, c
 			.remove(table)
 			.and_then(|v| v.try_into().ok()) {
 			Some(deps) => deps,
-			None => return,
+			None => continue,
 		};
 
 		let deps_rewritten = dependencies
