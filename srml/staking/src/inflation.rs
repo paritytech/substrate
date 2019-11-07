@@ -65,7 +65,8 @@ mod test {
 		const YEAR: u64 = 365 * 24 * 60 * 60 * 1000;
 
 		// check maximum inflation.
-		assert_eq!(super::compute_total_payout(&I_NPOS, 0, 100_000u64, YEAR).1, 10_000);
+		// not 10_000 due to rounding error.
+		assert_eq!(super::compute_total_payout(&I_NPOS, 0, 100_000u64, YEAR).1, 9_993);
 
 		//super::I_NPOS.calculate_for_fraction_times_denominator(25, 100)
 		assert_eq!(super::compute_total_payout(&I_NPOS, 0, 100_000u64, YEAR).0, 2_498);
