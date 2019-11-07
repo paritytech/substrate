@@ -28,10 +28,10 @@
 use std::{collections::{HashMap, HashSet}, fs, marker::PhantomData, io, path::Path};
 use std::sync::{Arc, atomic::{AtomicBool, AtomicUsize, Ordering}};
 
-use codec::{Encode, Decode};
+use codec::{Encode, Decode, DecodeAll};
 use consensus::import_queue::{ImportQueue, Link};
 use consensus::import_queue::{BlockImportResult, BlockImportError};
-use futures::{prelude::*, sync::mpsc};
+use futures::{prelude::*, sync::mpsc, sync::oneshot};
 use futures03::TryFutureExt as _;
 use log::{warn, error, info};
 use libp2p::{PeerId, Multiaddr, kad::record};
@@ -420,10 +420,31 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	///
 	/// The protocol name must be one of the elements of `extra_request_response_protos` that was
 	/// passed in the configuration.
-	pub fn send_request(&self, proto_name: &[u8], dest: PeerId, message: impl Encode)
-		-> impl Future<Item = impl Decode, Error = ()>		// TODO: proper error
+	pub fn send_request<Rp>(&self, proto_name: impl Into<Vec<u8>>, target: PeerId, message: impl Encode)
+		-> impl Future<Item = Rp, Error = ()>		// TODO: proper error
+	where
+		Rp: Decode,
 	{
-		futures::future::empty::<(), ()>()
+		let (response_send_back, rx) = oneshot::channel();
+		let _ = self.to_worker.unbounded_send(ServerToWorkerMsg::SendRequest {
+			proto_name: proto_name.into(),
+			target,
+			message: message.encode(),
+			response_send_back,
+		});
+
+		rx.then(|r| {
+			match r {
+				Ok(Ok(mut v)) => match DecodeAll::decode_all(&mut v) {
+					Ok(m) => Ok(m),
+					Err(_) => Err(()),
+				},
+				// Channel sent back an error.
+				Ok(Err(err)) => Err(err),
+				// Channel has been dropped unexpectedly.
+				Err(_) => Err(())
+			}
+		})
 	}
 
 	/// Writes a message on an open gossiping channel. Has no effect if the gossiping channel with
@@ -438,8 +459,24 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	///
 	/// The protocol name must be one of the elements of `extra_gossip_protos` that was passed in
 	/// the configuration.
-	pub fn write_gossip(&self, dest: &PeerId, proto_name: &[u8], message: impl Encode) {
+	pub fn write_gossip(&self, target: PeerId, proto_name: impl Into<Vec<u8>>, message: impl Encode) {
+		let _ = self.to_worker.unbounded_send(ServerToWorkerMsg::WriteGossip {
+			target,
+			proto_name: proto_name.into(),
+			message: message.encode(),
+		});
+	}
 
+	/// Returns a stream containing the events that happen on the network.
+	///
+	/// If this method is called multiple times, the events are duplicated.
+	///
+	/// The stream never ends (unless the `NetworkWorker` gets shut down).
+	// Note: when transitioning to stable futures, remove the `Error` entirely
+	pub fn events_stream(&self) -> impl Stream<Item = Event, Error = ()> {
+		let (tx, rx) = mpsc::unbounded();
+		let _ = self.to_worker.unbounded_send(ServerToWorkerMsg::EventsStream(tx));
+		rx
 	}
 
 	/// You must call this when new transactons are imported by the transaction pool.
@@ -662,6 +699,18 @@ enum ServerToWorkerMsg<B: BlockT, S: NetworkSpecialization<B>> {
 	PutValue(record::Key, Vec<u8>),
 	AddKnownAddress(PeerId, Multiaddr),
 	SyncFork(Vec<PeerId>, B::Hash, NumberFor<B>),
+	EventsStream(mpsc::UnboundedSender<Event>),
+	SendRequest {
+		message: Vec<u8>,
+		proto_name: Vec<u8>,
+		target: PeerId,
+		response_send_back: oneshot::Sender<Result<Vec<u8>, ()>>,
+	},
+	WriteGossip {
+		message: Vec<u8>,
+		proto_name: Vec<u8>,
+		target: PeerId,
+	},
 }
 
 /// Main network worker. Must be polled in order for the network to advance.
@@ -742,6 +791,12 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Stream for Ne
 					self.network_service.add_known_address(peer_id, addr),
 				ServerToWorkerMsg::SyncFork(peer_ids, hash, number) =>
 					self.network_service.user_protocol_mut().set_sync_fork_request(peer_ids, &hash, number),
+				ServerToWorkerMsg::EventsStream(_) =>
+					unimplemented!(),
+				ServerToWorkerMsg::SendRequest { .. } =>
+					unimplemented!(),
+				ServerToWorkerMsg::WriteGossip { .. } =>
+					unimplemented!(),
 			}
 		}
 
