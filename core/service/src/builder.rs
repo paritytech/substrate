@@ -1138,7 +1138,7 @@ ServiceBuilder<
 		// Grafana data source
 		if let Some(port) = config.grafana_port {
 			let _ = to_spawn_tx.unbounded_send(Box::new(
-				grafana_data_source::run_server(&port, exit.clone())
+				grafana_data_source::run_server(port).map_err(|_| ()).boxed().compat()
 			));
 		}
 

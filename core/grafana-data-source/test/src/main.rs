@@ -15,34 +15,49 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use grafana_data_source::{run_server, record_metrics};
-use std::{time::Duration, sync::atomic::{AtomicBool, Ordering}};
+use std::{
+	time::Duration, sync::atomic::{AtomicBool, Ordering}, task::{Context, Poll}, future::Future,
+	pin::Pin
+};
 use rand::Rng;
-use futures::{Async, Future, Stream};
-use stream_cancel::StreamExt;
-use tokio::{runtime::Runtime, timer::Interval};
+use futures::{FutureExt, future::select};
+use tokio::timer::delay_for;
 
 static EXIT: AtomicBool = AtomicBool::new(false);
 
 struct ExitFuture;
 
-impl futures::Future for ExitFuture {
-	type Item = ();
-	type Error = ();
+impl Future for ExitFuture {
+	type Output = ();
 
-	fn poll(&mut self) -> futures::Poll<(), ()> {
-		let value = EXIT.load(Ordering::Relaxed);
+	fn poll(self: Pin<&mut Self>, _: &mut Context) -> Poll<Self::Output> {
+		let exit = EXIT.load(Ordering::Relaxed);
 
-		println!("Polling, got: {}", value);
+		println!("Polling, got: {}", exit);
 
-		if value {
-			Ok(Async::Ready(()))
+		if exit {
+			Poll::Ready(())
 		} else {
-			Ok(Async::NotReady)
+			Poll::Pending
 		}
 	}
 }
 
-fn main() {
+async fn randomness() {
+	loop {
+		delay_for(Duration::from_secs(1)).await;
+
+		let random = rand::thread_rng().gen_range(0.0, 1000.0);
+
+		record_metrics!(
+			"random data" => random,
+			"random^2" => random * random
+		);
+	}
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 	ctrlc::set_handler(|| {
 		println!(" - Ctrl-C received");
 		EXIT.store(true, Ordering::Relaxed);
@@ -50,26 +65,14 @@ fn main() {
 
 	let address = "127.0.0.1:9955".parse().unwrap();
 
-	let randomness_future = Interval::new_interval(Duration::from_secs(1))
-		.take_until(ExitFuture)
-		.for_each(move |_| {
-			let random = rand::thread_rng().gen_range(0.0, 1000.0);
-			record_metrics!(
-				"random data" => random,
-				"random^2" => random * random
-			);
-			futures::future::ok(())
-		})
-		.map_err(|_| ())
-		.map(|_| println!("Shutting down randomness future"));
+	let server_future = run_server(address).boxed();
 
-	let server_future = run_server(&address, ExitFuture)
-		.map(|_| println!("Shutting down server future"));
+	let randomness_future = randomness().boxed();
 
-	let mut rt = Runtime::new().unwrap();
+	select(
+		select(randomness_future, server_future),
+		ExitFuture
+	).await;
 
-	rt.spawn(randomness_future);
-	rt.spawn(server_future);
-
-	rt.shutdown_on_idle().wait().unwrap();
+	Ok(())
 }
