@@ -28,6 +28,7 @@
 use std::{collections::{HashMap, HashSet}, fs, marker::PhantomData, io, path::Path};
 use std::sync::{Arc, atomic::{AtomicBool, AtomicUsize, Ordering}};
 
+use codec::{Encode, Decode};
 use consensus::import_queue::{ImportQueue, Link};
 use consensus::import_queue::{BlockImportResult, BlockImportError};
 use futures::{prelude::*, sync::mpsc};
@@ -406,6 +407,35 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	/// Returns the network identity of the node.
 	pub fn local_peer_id(&self) -> PeerId {
 		self.local_peer_id.clone()
+	}
+
+	/// Tries to connect to `dest` if necessary, opens a substream to it using the protocol
+	/// `proto_name`, sends `message` on it, and waits for an answer to come back.
+	///
+	/// The network will keep the connection alive until the response comes.
+	///
+	/// The protocol name must be one of the elements of `extra_request_response_protos` that was
+	/// passed in the configuration.
+	pub fn send_request(&self, proto_name: &[u8], dest: PeerId, message: impl Encode)
+		-> impl Future<Item = impl Decode, Error = ()>		// TODO: proper error
+	{
+
+	}
+
+	/// Writes a message on an open gossiping channel. Has no effect if the gossiping channel with
+	/// this protocol name is closed.
+	///
+	/// > **Note**: The reason why this is a no-op in the situation where we have no channel is
+	/// >			that we don't guarantee message delivery anyway. Networking issues can cause
+	/// >			connections to drop at any time, and when it comes to messages delivery it
+	/// >			doesn't fundamentally make a difference to differentiate between the remote
+	/// >			voluntarily closing a substream or a network error preventing the message from
+	/// >			being delivered.
+	///
+	/// The protocol name must be one of the elements of `extra_gossip_protos` that was passed in
+	/// the configuration.
+	pub fn write_gossip(&self, dest: &PeerId, proto_name: &[u8], message: impl Encode) {
+
 	}
 
 	/// You must call this when new transactons are imported by the transaction pool.

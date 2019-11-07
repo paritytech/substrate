@@ -261,6 +261,18 @@ pub struct NetworkConfiguration {
 	pub node_name: String,
 	/// Configuration for the transport layer.
 	pub transport: TransportConfig,
+
+	/// Extra protocol names for the request-response scheme.
+	///
+	/// If a remote tries to open a substream with one of these protocol names, we know that it is
+	/// a request-response type of protocol.
+	pub extra_request_response_protos: Vec<Vec<u8>>,
+
+	/// Extra protocol names for the gossiping scheme.
+	///
+	/// If a remote tries to open a substream with one of these protocol names, we know that it is
+	/// a gossiping protocol that requires a handshake message.
+	pub extra_gossip_protos: Vec<Vec<u8>>,
 }
 
 impl Default for NetworkConfiguration {
@@ -282,6 +294,8 @@ impl Default for NetworkConfiguration {
 				enable_mdns: false,
 				wasm_external_transport: None,
 			},
+			extra_request_response_protos: Vec::new(),
+			extra_gossip_protos: Vec::new(),
 		}
 	}
 }
