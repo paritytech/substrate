@@ -452,46 +452,27 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	}
 
 	fn on_before_session_ending() {
-		let mut unresponsive = vec![];
-
-		let current_session = <session::Module<T>>::current_index();
-
-		let keys = Keys::<T>::get();
+		let session_index = <session::Module<T>>::current_index();
 		let current_validators = <session::Module<T>>::validators();
+		let validator_set_count = current_validators.len();
 
-		for (auth_idx, validator_id) in current_validators.into_iter().enumerate() {
-			let auth_idx = auth_idx as u32;
-			let exists = <ReceivedHeartbeats>::exists(&current_session, &auth_idx);
-			if !exists {
-				let full_identification = T::FullIdentificationOf::convert(validator_id.clone())
-					.expect(
-						"we got the validator_id from current_validators;
-						current_validators is set of currently acting validators;
-						the mapping between the validator id and its full identification should be valid;
-						thus `FullIdentificationOf::convert` can't return `None`;
-						qed",
-					);
+		let era_points = CurrentEraPointsEarned::get().individual;
+		let offenders = current_validators.into_iter()
+			.enumerate()
+			.filter_map(|(i, v)|
+				if ReceivedHeartbeats::exists(&session_index, &i) { Some(v) } else { None }
+			).filter_map(|v| T::FullIdentificationOf::convert(v.clone()).map(|f| (v, f)))
+			.collect::<Vec<_>>();
 
-				unresponsive.push((validator_id, full_identification));
-			}
+		if !offenders.is_empty() {
+			let validator_set_count = Keys::<T>::get().len() as u32;
+			let offence = UnresponsivenessOffence { session_index, validator_set_count, offenders };
+			T::ReportUnresponsiveness::report_offence(vec![], offence);
+
+			// Remove all received heartbeats from the current session, they have
+			// already been processed and won't be needed anymore.
+			ReceivedHeartbeats::remove_prefix(&<session::Module<T>>::current_index());
 		}
-
-		if unresponsive.is_empty() {
-			return;
-		}
-
-		let validator_set_count = keys.len() as u32;
-		let offence = UnresponsivenessOffence {
-			session_index: current_session,
-			validator_set_count,
-			offenders: unresponsive,
-		};
-
-		T::ReportUnresponsiveness::report_offence(vec![], offence);
-
-		// Remove all received heartbeats from the current session, they have
-		// already been processed and won't be needed anymore.
-		<ReceivedHeartbeats>::remove_prefix(&<session::Module<T>>::current_index());
 	}
 
 	fn on_disabled(_i: usize) {

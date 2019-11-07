@@ -68,8 +68,6 @@ type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::
 
 const MODULE_ID: ModuleId = ModuleId(*b"py/refun");
 
-
-
 pub trait Trait: system::Trait {
 	/// The staking balance.
 	type Currency: Currency<Self::AccountId> + ReservableCurrency<Self::AccountId>;
