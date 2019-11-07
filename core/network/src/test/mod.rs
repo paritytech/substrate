@@ -399,7 +399,14 @@ impl TransactionPool<Hash, Block> for EmptyTransactionPool {
 		Hash::default()
 	}
 
-	fn import(&self, _report_handle: ReportHandle, _who: PeerId, _rep_change: i32, _transaction: Extrinsic) {}
+	fn import(
+		&self,
+		_report_handle: ReportHandle,
+		_who: PeerId,
+		_rep_change_good: i32,
+		_rep_change_bad: i32,
+		_transaction: Extrinsic
+	) {}
 
 	fn on_broadcasted(&self, _: HashMap<Hash, Vec<String>>) {}
 }
