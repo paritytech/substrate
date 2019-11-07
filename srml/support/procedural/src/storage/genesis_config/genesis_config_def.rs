@@ -127,14 +127,13 @@ impl GenesisConfigDef {
 			let attrs = line.attrs.iter()
 				.map(|attr| {
 					let meta = attr.parse_meta()?;
-					if meta.path().is_ident("doc") || meta.path().is_ident("serde") {
-						Ok(meta)
-					} else {
-						Err(syn::Error::new(
+					if meta.path().is_ident("cfg") {
+						return Err(syn::Error::new(
 							meta.span(),
-							"extra genesis config item only supports `doc` and `serde` attributes"
-						))
+							"extra genesis config items do not support `cfg` attribute"
+						));
 					}
+					Ok(meta)
 				})
 				.collect::<syn::Result<_>>()?;
 
