@@ -192,7 +192,6 @@ parameter_types! {
 	pub const SessionsPerEra: SessionIndex = 3;
 	pub const BondingDuration: EraIndex = 3;
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &I_NPOS;
-	pub const MaxReward: Perbill = Perbill::from_percent(10);
 }
 impl Trait for Test {
 	type Currency = balances::Module<Self>;
@@ -206,7 +205,6 @@ impl Trait for Test {
 	type BondingDuration = BondingDuration;
 	type SessionInterface = Self;
 	type RewardCurve = RewardCurve;
-	type MaxPossibleReward = MaxReward;
 }
 
 pub struct ExtBuilder {
@@ -434,14 +432,12 @@ pub fn start_era(era_index: EraIndex) {
 }
 
 pub fn current_total_payout_for_duration(duration: u64) -> u64 {
-	let res = inflation::compute_total_payout(
+	inflation::compute_total_payout(
 		<Test as Trait>::RewardCurve::get(),
 		<Module<Test>>::slot_stake() * 2,
 		Balances::total_issuance(),
 		duration,
-	);
-
-	res
+	).0
 }
 
 pub fn reward_all_elected() {
