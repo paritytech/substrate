@@ -1,8 +1,8 @@
 //! Combines [substrate_rpc_api::state::StateClient] with [srml_support::storage::generator] traits
 //! to provide strongly typed chain state queries over rpc.
 
+use futures::compat::Future01CompatExt;
 use jsonrpc_client_transports::RpcError;
-use jsonrpc_core::futures::Future;
 use parity_scale_codec::{DecodeAll, FullCodec};
 use serde::{de::DeserializeOwned, Serialize};
 use srml_support::storage::generator::{
@@ -33,22 +33,24 @@ use substrate_rpc_api::state::StateClient;
 ///
 /// ```no_run
 /// # use jsonrpc_client_transports::RpcError;
+/// # use futures::compat::Compat;
+/// # use futures::future::FutureExt;
 /// #
 /// # fn main() -> Result<(), RpcError> {
+/// #     tokio::runtime::Runtime::new().unwrap().block_on(Compat::new(test().boxed()))
+/// # }
+/// # async fn test() -> Result<(), RpcError> {
 /// use substrate_rpc_custom::storage_value;
 /// use substrate_test_runtime::Runtime;
 /// use substrate_test_runtime::system::Authorities;
 /// use substrate_rpc_api::state::StateClient;
-/// use jsonrpc_core::futures::Future;
 /// use jsonrpc_client_transports::transports::http;
-///
+/// use futures::compat::Future01CompatExt;
 /// type Hash = <Runtime as srml_system::Trait>::Hash;
 ///
-/// let fut = http::connect("http://[::1]:9933")
-///     .map(|conn| StateClient::<Hash>::new(conn))
-///     .and_then(|cl| storage_value::<Authorities, _, _>(&cl, None));
-///
-/// tokio::runtime::Runtime::new().unwrap().block_on(fut)?;
+/// let conn = http::connect("http://[::1]:9933").compat().await?;
+/// let cl = StateClient::<Hash>::new(conn);
+/// let ret: Option<Vec<_>> = storage_value::<Authorities, _, _>(&cl, None).await?;
 /// # Ok(())
 /// # }
 /// ```
@@ -101,19 +103,20 @@ use substrate_rpc_api::state::StateClient;
 /// #
 /// # fn main() {}
 /// ```
-pub fn storage_value<
+pub async fn storage_value<
     St: StorageValue<T>,
     T: FullCodec,
     Hash: Send + Sync + 'static + DeserializeOwned + Serialize,
 >(
     state_client: &StateClient<Hash>,
     block_index: Option<Hash>,
-) -> impl Future<Item = Option<T>, Error = RpcError> {
+) -> Result<Option<T>, RpcError> {
     storage_get(
         state_client,
         StorageKey(St::storage_value_final_key().to_vec()),
         block_index,
     )
+    .await
 }
 
 /// Uses a typed key to query a typed value from chain state.
@@ -123,6 +126,22 @@ pub fn storage_value<
 /// # use srml_support::decl_module;
 /// # use parity_scale_codec::Encode;
 /// # use srml_system::Trait;
+/// # use substrate_rpc_custom::storage_map_value;
+/// # use substrate_rpc_api::state::StateClient;
+/// # use jsonrpc_core::futures::Future;
+/// # use jsonrpc_client_transports::transports::http;
+/// # use jsonrpc_client_transports::RpcError;
+/// # use futures::compat::Compat;
+/// # use futures::future::FutureExt;
+/// # use futures::compat::Future01CompatExt;
+/// #
+/// # // Hash would normally be <TestRuntime as srml_system::Trait>::Hash, but we don't have
+/// # // srml_system::Trait implemented for TestRuntime. Here we just pretend.
+/// # type Hash = ();
+/// #
+/// # fn main() -> Result<(), RpcError> {
+/// #     tokio::runtime::Runtime::new().unwrap().block_on(Compat::new(test().boxed()))
+/// # }
 /// #
 /// # struct TestRuntime;
 /// #
@@ -135,31 +154,16 @@ pub fn storage_value<
 ///         pub Voxels: map (i64, i64, i64) => u8;
 ///     }
 /// }
-/// #
-/// # use jsonrpc_client_transports::RpcError;
-/// #
-/// # fn main() -> Result<(), RpcError> {
-/// # use substrate_rpc_custom::storage_map_value;
-/// # use substrate_rpc_api::state::StateClient;
-/// # use jsonrpc_core::futures::Future;
-/// # use jsonrpc_client_transports::transports::http;
-/// #
-/// # // Hash would normally be <TestRuntime as srml_system::Trait>::Hash, but we don't have
-/// # // srml_system::Trait implemented for TestRuntime. Here we just pretend.
-/// # type Hash = ();
 ///
-/// let fut = http::connect("http://[::1]:9933")
-///     .map(|conn| StateClient::<Hash>::new(conn))
-///     .and_then(|cl| {
-///         let loc = (0, 0, 0);
-///         storage_map_value::<Voxels, _, _, _>(&cl, loc, None)
-///     });
-///
-/// let ret: Option<u8> = tokio::runtime::Runtime::new().unwrap().block_on(fut)?;
+/// # async fn test() -> Result<(), RpcError> {
+/// let conn = http::connect("http://[::1]:9933").compat().await?;
+/// let cl = StateClient::<Hash>::new(conn);
+/// let loc = (0, 0, 0);
+/// let ret: Option<u8> = storage_map_value::<Voxels, _, _, _>(&cl, loc, None).await?;
 /// # Ok(())
 /// # }
 /// ```
-pub fn storage_map_value<
+pub async fn storage_map_value<
     St: StorageMap<K, V>,
     K: FullCodec,
     V: FullCodec,
@@ -168,12 +172,13 @@ pub fn storage_map_value<
     state_client: &StateClient<Hash>,
     key: K,
     block_index: Option<Hash>,
-) -> impl Future<Item = Option<V>, Error = RpcError> {
+) -> Result<Option<V>, RpcError> {
     storage_get(
         state_client,
         StorageKey(St::storage_map_final_key(key).as_ref().to_vec()),
         block_index,
     )
+    .await
 }
 
 /// Uses a typed key to query a typed value from chain state.
@@ -183,6 +188,22 @@ pub fn storage_map_value<
 /// # use srml_support::decl_module;
 /// # use parity_scale_codec::Encode;
 /// # use srml_system::Trait;
+/// # use substrate_rpc_custom::storage_linked_map_value;
+/// # use substrate_rpc_api::state::StateClient;
+/// # use jsonrpc_core::futures::Future;
+/// # use jsonrpc_client_transports::transports::http;
+/// # use jsonrpc_client_transports::RpcError;
+/// # use futures::compat::Compat;
+/// # use futures::future::FutureExt;
+/// # use futures::compat::Future01CompatExt;
+/// #
+/// # // Hash would normally be <TestRuntime as srml_system::Trait>::Hash, but we don't have
+/// # // srml_system::Trait implemented for TestRuntime. Here we just pretend.
+/// # type Hash = ();
+/// #
+/// # fn main() -> Result<(), RpcError> {
+/// #     tokio::runtime::Runtime::new().unwrap().block_on(Compat::new(test().boxed()))
+/// # }
 /// #
 /// # struct TestRuntime;
 /// #
@@ -195,31 +216,16 @@ pub fn storage_map_value<
 ///         pub Voxels: linked_map (i64, i64, i64) => u8;
 ///     }
 /// }
-/// #
-/// # use jsonrpc_client_transports::RpcError;
-/// #
-/// # fn main() -> Result<(), RpcError> {
-/// # use substrate_rpc_custom::storage_linked_map_value;
-/// # use substrate_rpc_api::state::StateClient;
-/// # use jsonrpc_core::futures::Future;
-/// # use jsonrpc_client_transports::transports::http;
-/// #
-/// # // Hash would normally be <TestRuntime as srml_system::Trait>::Hash, but we don't have
-/// # // srml_system::Trait implemented for TestRuntime. Here we just pretend.
-/// # type Hash = ();
 ///
-/// let fut = http::connect("http://[::1]:9933")
-///     .map(|conn| StateClient::<Hash>::new(conn))
-///     .and_then(|cl| {
-///         let loc = (0, 0, 0);
-///         storage_linked_map_value::<Voxels, _, _, _>(&cl, loc, None)
-///     });
-///
-/// let ret: Option<u8> = tokio::runtime::Runtime::new().unwrap().block_on(fut)?;
+/// # async fn test() -> Result<(), RpcError> {
+/// let conn = http::connect("http://[::1]:9933").compat().await?;
+/// let cl = StateClient::<Hash>::new(conn);
+/// let loc = (0, 0, 0);
+/// let ret: Option<u8> = storage_linked_map_value::<Voxels, _, _, _>(&cl, loc, None).await?;
 /// # Ok(())
 /// # }
 /// ```
-pub fn storage_linked_map_value<
+pub async fn storage_linked_map_value<
     St: StorageLinkedMap<K, V>,
     K: FullCodec,
     V: FullCodec,
@@ -228,12 +234,13 @@ pub fn storage_linked_map_value<
     state_client: &StateClient<Hash>,
     key: K,
     block_index: Option<Hash>,
-) -> impl Future<Item = Option<V>, Error = RpcError> {
+) -> Result<Option<V>, RpcError> {
     storage_get(
         state_client,
         StorageKey(St::storage_linked_map_final_key(key).as_ref().to_vec()),
         block_index,
     )
+    .await
 }
 
 /// Uses two typed keys to query a typed value from chain state.
@@ -243,6 +250,22 @@ pub fn storage_linked_map_value<
 /// # use srml_support::decl_module;
 /// # use parity_scale_codec::Encode;
 /// # use srml_system::Trait;
+/// # use substrate_rpc_custom::storage_double_map_value;
+/// # use substrate_rpc_api::state::StateClient;
+/// # use jsonrpc_core::futures::Future;
+/// # use jsonrpc_client_transports::transports::http;
+/// # use jsonrpc_client_transports::RpcError;
+/// # use futures::compat::Compat;
+/// # use futures::future::FutureExt;
+/// # use futures::compat::Future01CompatExt;
+/// #
+/// # // Hash would normally be <TestRuntime as srml_system::Trait>::Hash, but we don't have
+/// # // srml_system::Trait implemented for TestRuntime. Here we just pretend.
+/// # type Hash = ();
+/// #
+/// # fn main() -> Result<(), RpcError> {
+/// #     tokio::runtime::Runtime::new().unwrap().block_on(Compat::new(test().boxed()))
+/// # }
 /// #
 /// # struct TestRuntime;
 /// #
@@ -255,32 +278,19 @@ pub fn storage_linked_map_value<
 ///         pub ChunkedVoxels: double_map (u64, u64, u64), blake2_256(u16) => u8;
 ///     }
 /// }
-/// #
-/// # use jsonrpc_client_transports::RpcError;
-/// #
-/// # fn main() -> Result<(), RpcError> {
-/// # use substrate_rpc_custom::storage_double_map_value;
-/// # use substrate_rpc_api::state::StateClient;
-/// # use jsonrpc_core::futures::Future;
-/// # use jsonrpc_client_transports::transports::http;
-/// #
-/// # // Hash would normally be <TestRuntime as srml_system::Trait>::Hash, but we don't have
-/// # // srml_system::Trait implemented for TestRuntime. Here we just pretend.
-/// # type Hash = ();
 ///
-/// let fut = http::connect("http://[::1]:9933")
-///     .map(|conn| StateClient::<Hash>::new(conn))
-///     .and_then(|cl| {
-///         let chunk = (0, 0, 0);
-///         let block_index = 63999;
-///         storage_double_map_value::<ChunkedVoxels, _, _, _, _>(&cl, chunk, block_index, None)
-///     });
-///
-/// let ret: Option<u8> = tokio::runtime::Runtime::new().unwrap().block_on(fut)?;
+/// # async fn test() -> Result<(), RpcError> {
+/// let conn = http::connect("http://[::1]:9933").compat().await?;
+/// let cl = StateClient::<Hash>::new(conn);
+/// let chunk = (0, 0, 0);
+/// let block_index = 63999;
+/// let ret: Option<u8> =
+///     storage_double_map_value::<ChunkedVoxels, _, _, _, _>(&cl, chunk, block_index, None)
+///         .await?;
 /// # Ok(())
 /// # }
 /// ```
-pub fn storage_double_map_value<
+pub async fn storage_double_map_value<
     St: StorageDoubleMap<K1, K2, V>,
     K1: FullCodec,
     K2: FullCodec,
@@ -291,26 +301,23 @@ pub fn storage_double_map_value<
     key1: K1,
     key2: K2,
     block_index: Option<Hash>,
-) -> impl Future<Item = Option<V>, Error = RpcError> {
+) -> Result<Option<V>, RpcError> {
     storage_get(
         state_client,
         StorageKey(St::storage_double_map_final_key(key1, key2)),
         block_index,
     )
+    .await
 }
 
 /// Lookup a typed value from storage using an encoded key.
-fn storage_get<V: FullCodec, Hash: Send + Sync + 'static + DeserializeOwned + Serialize>(
+async fn storage_get<V: FullCodec, Hash: Send + Sync + 'static + DeserializeOwned + Serialize>(
     state_client: &StateClient<Hash>,
     key: StorageKey,
     block_index: Option<Hash>,
-) -> impl Future<Item = Option<V>, Error = RpcError> {
-    state_client.storage(key, block_index).and_then(
-        |opt_data: Option<StorageData>| -> Result<Option<V>, RpcError> {
-            opt_data
-                .map(|storage_data| V::decode_all(&storage_data.0))
-                .transpose()
-                .map_err(|decode_err| RpcError::Other(decode_err.into()))
-        },
-    )
+) -> Result<Option<V>, RpcError> {
+    let opt: Option<StorageData> = state_client.storage(key, block_index).compat().await?;
+    opt.map(|storage_data| V::decode_all(&storage_data.0))
+        .transpose()
+        .map_err(|decode_err| RpcError::Other(decode_err.into()))
 }
