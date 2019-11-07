@@ -384,6 +384,7 @@ pub trait Currency<AccountId> {
 		source: &AccountId,
 		dest: &AccountId,
 		value: Self::Balance,
+		existence_requirement: ExistenceRequirement,
 	) -> result::Result<(), &'static str>;
 
 	/// Deducts up to `value` from the combined balance of `who`, preferring to deduct from the
