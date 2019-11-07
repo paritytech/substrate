@@ -338,6 +338,22 @@ check_warnings:
       fi
   allow_failure:                   true
 
+check_polkadot:
+  stage:                           build
+  <<:                              *docker-env
+  allow_failure:                   true
+  dependencies:
+    - test-linux-stable
+  script:
+    - git clone --depth 1 https://github.com/paritytech/polkadot.git
+    - COMMIT_HASH=$(git rev-parse HEAD)
+    - cd polkadot
+    - git grep -l "polkadot-master" | grep toml | xargs sed -i "s/branch.*=.*\"polkadot-master\"/rev = \"$COMMIT_HASH\"/"
+    - cargo update -p sr-io --precise $COMMIT_HASH
+    - time cargo check
+    - cd ..
+    - sccache -s
+
 #### stage:                        publish
 
 .publish-docker-release:           &publish-docker-release
