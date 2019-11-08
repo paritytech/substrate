@@ -14,9 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Definition and implementation of the Substrate Wasm host interface.
-//!
-//! These are the host functions callable from within the Substrate runtime.
+//! Definition and implementation of the old and deprecated Substrate runtime interface for the host.
 
 use codec::Encode;
 use std::{convert::TryFrom, str};

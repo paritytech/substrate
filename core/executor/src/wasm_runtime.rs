@@ -32,7 +32,7 @@ use runtime_version::RuntimeVersion;
 
 use std::{collections::hash_map::{Entry, HashMap}};
 
-use wasm_interface::Function;
+use wasm_interface::{Function, HostFunctions};
 
 /// The Substrate Wasm runtime.
 pub trait WasmRuntime {
@@ -201,8 +201,11 @@ pub fn create_wasm_runtime_with_code<E: Externalities>(
 	wasm_method: WasmExecutionMethod,
 	heap_pages: u64,
 	code: &[u8],
-	host_functions: Vec<&'static dyn Function>,
+	mut host_functions: Vec<&'static dyn Function>,
 ) -> Result<Box<dyn WasmRuntime>, WasmError> {
+	// Add the old and deprecated host functions as well, so that we support old wasm runtimes.
+	host_functions.extend(crate::host_interface::SubstrateExternals::host_functions());
+
 	match wasm_method {
 		WasmExecutionMethod::Interpreted =>
 			wasmi_execution::create_instance(ext, code, heap_pages, host_functions)

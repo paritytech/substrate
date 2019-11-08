@@ -84,6 +84,21 @@ pub trait TestApi {
 	}
 }
 
+/// Two random external functions from the old runtime interface.
+/// This ensures that we still inherently export these functions from the host and that we are still
+/// compatible with old wasm runtimes.
+extern "C" {
+	pub fn ext_clear_storage(key_data: *const u8, key_len: u32);
+	pub fn ext_keccak_256(data: *const u8, len: u32, out: *mut u8);
+}
+
+/// Make sure the old runtime interface needs to be imported.
+#[no_mangle]
+pub fn force_old_runtime_interface_import() {
+	unsafe { ext_clear_storage(rstd::ptr::null(), 0); }
+	unsafe { ext_keccak_256(rstd::ptr::null(), 0, rstd::ptr::null_mut()); }
+}
+
 /// This function is not used, but we require it for the compiler to include `runtime-io`.
 /// `runtime-io` is required for its panic and oom handler.
 #[no_mangle]

@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{
-	RuntimeInfo, error::{Error, Result}, host_interface::SubstrateExternals,
+	RuntimeInfo, error::{Error, Result},
 	wasm_runtime::{RuntimesCache, WasmExecutionMethod, WasmRuntime},
 };
 
@@ -127,8 +127,7 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 				ext,
 				self.fallback_method,
 				self.default_heap_pages,
-				// Use the `SubstrateExternals` as well, to be backwards compatible.
-				<(runtime_io::SubstrateHostFunctions, SubstrateExternals)>::host_functions(),
+				runtime_io::SubstrateHostFunctions::host_functions(),
 			)?;
 
 			let runtime = AssertUnwindSafe(runtime);
