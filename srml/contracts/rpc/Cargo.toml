@@ -7,9 +7,9 @@ edition = "2018"
 [dependencies]
 client = { package = "substrate-client", path = "../../../core/client" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
-jsonrpc-core = "13.2.0"
-jsonrpc-core-client = "13.2.0"
-jsonrpc-derive = "13.2.0"
+jsonrpc-core = "14.0.3"
+jsonrpc-core-client = "14.0.3"
+jsonrpc-derive = "14.0.3"
 primitives = { package = "substrate-primitives",  path = "../../../core/primitives" }
 rpc-primitives = { package = "substrate-rpc-primitives", path = "../../../core/rpc/primitives" }
 serde = { version = "1.0.101", features = ["derive"] }

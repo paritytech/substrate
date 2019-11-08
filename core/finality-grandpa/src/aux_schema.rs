@@ -25,7 +25,7 @@ use fork_tree::ForkTree;
 use grandpa::round::State as RoundState;
 use sr_primitives::traits::{Block as BlockT, NumberFor};
 use log::{info, warn};
-use fg_primitives::{AuthorityId, AuthorityWeight, SetId, RoundNumber};
+use fg_primitives::{AuthorityList, SetId, RoundNumber};
 
 use crate::authorities::{AuthoritySet, SharedAuthoritySet, PendingChange, DelayKind};
 use crate::consensus_changes::{SharedConsensusChanges, ConsensusChanges};
@@ -55,7 +55,7 @@ type V0VoterSetState<H, N> = (RoundNumber, RoundState<H, N>);
 
 #[derive(Debug, Clone, Encode, Decode, PartialEq)]
 struct V0PendingChange<H, N> {
-	next_authorities: Vec<(AuthorityId, AuthorityWeight)>,
+	next_authorities: AuthorityList,
 	delay: N,
 	canon_height: N,
 	canon_hash: H,
@@ -63,7 +63,7 @@ struct V0PendingChange<H, N> {
 
 #[derive(Debug, Clone, Encode, Decode, PartialEq)]
 struct V0AuthoritySet<H, N> {
-	current_authorities: Vec<(AuthorityId, AuthorityWeight)>,
+	current_authorities: AuthorityList,
 	set_id: SetId,
 	pending_changes: Vec<V0PendingChange<H, N>>,
 }
@@ -266,7 +266,7 @@ pub(crate) fn load_persistent<Block: BlockT, B, G>(
 	-> ClientResult<PersistentData<Block>>
 	where
 		B: AuxStore,
-		G: FnOnce() -> ClientResult<Vec<(AuthorityId, AuthorityWeight)>>,
+		G: FnOnce() -> ClientResult<AuthorityList>,
 {
 	let version: Option<u32> = load_decode(backend, VERSION_KEY)?;
 	let consensus_changes = load_decode(backend, CONSENSUS_CHANGES_KEY)?
@@ -426,6 +426,7 @@ pub(crate) fn load_authorities<B: AuxStore, H: Decode, N: Decode>(backend: &B)
 
 #[cfg(test)]
 mod test {
+	use fg_primitives::AuthorityId;
 	use primitives::H256;
 	use test_client;
 	use super::*;

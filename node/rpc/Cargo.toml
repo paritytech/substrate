@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 client = { package = "substrate-client", path = "../../core/client" }
-jsonrpc-core = "13.2.0"
+jsonrpc-core = "14.0.3"
 node-primitives = { path = "../primitives" }
 node-runtime = { path = "../runtime" }
 sr-primitives = { path = "../../core/sr-primitives" }

@@ -22,8 +22,8 @@ use libp2p::{
 #[cfg(not(target_os = "unknown"))]
 use libp2p::{tcp, dns, websocket, noise};
 #[cfg(not(target_os = "unknown"))]
-use libp2p::core::{upgrade, either::EitherError, either::EitherOutput};
-use libp2p::core::{self, transport::boxed::Boxed, transport::OptionalTransport, muxing::StreamMuxerBox};
+use libp2p::core::{either::EitherError, either::EitherOutput};
+use libp2p::core::{self, upgrade, transport::boxed::Boxed, transport::OptionalTransport, muxing::StreamMuxerBox};
 use std::{io, sync::Arc, time::Duration, usize};
 
 pub use self::bandwidth::BandwidthSinks;
@@ -90,7 +90,7 @@ pub fn build_transport(
 	#[cfg(not(target_os = "unknown"))]
 	let transport = transport.and_then(move |stream, endpoint| {
 		let upgrade = core::upgrade::SelectUpgrade::new(noise_config, secio_config);
-		core::upgrade::apply(stream, upgrade, endpoint)
+		core::upgrade::apply(stream, upgrade, endpoint, upgrade::Version::V1)
 			.and_then(|out| match out {
 				// We negotiated noise
 				EitherOutput::First((remote_id, out)) => {
@@ -101,16 +101,16 @@ pub fn build_transport(
 					Ok((EitherOutput::First(out), remote_key.into_peer_id()))
 				}
 				// We negotiated secio
-				EitherOutput::Second(out) =>
-					Ok((EitherOutput::Second(out.stream), out.remote_key.into_peer_id()))
+				EitherOutput::Second((remote_id, out)) =>
+					Ok((EitherOutput::Second(out), remote_id))
 			})
 	});
 
 	// For WASM, we only support secio for now.
 	#[cfg(target_os = "unknown")]
 	let transport = transport.and_then(move |stream, endpoint| {
-		core::upgrade::apply(stream, secio_config, endpoint)
-			.and_then(|out| Ok((out.stream, out.remote_key.into_peer_id())))
+		core::upgrade::apply(stream, secio_config, endpoint, upgrade::Version::V1)
+			.and_then(|(id, stream)| Ok((stream, id)))
 	});
 
 	// Multiplexing
@@ -120,11 +120,11 @@ pub fn build_transport(
 				.map_inbound(move |muxer| (peer_id, muxer))
 				.map_outbound(move |muxer| (peer_id2, muxer));
 
-			core::upgrade::apply(stream, upgrade, endpoint)
+			core::upgrade::apply(stream, upgrade, endpoint, upgrade::Version::V1)
 				.map(|(id, muxer)| (id, core::muxing::StreamMuxerBox::new(muxer)))
 		})
 
-		.with_timeout(Duration::from_secs(20))
+		.timeout(Duration::from_secs(20))
 		.map_err(|err| io::Error::new(io::ErrorKind::Other, err))
 		.boxed();
 

@@ -31,7 +31,7 @@ mod app {
 
 pub use app::Public as AppPublic;
 pub use app::Signature as AppSignature;
-#[cfg(feature="std")]
+#[cfg(feature = "full_crypto")]
 pub use app::Pair as AppPair;
 
 impl RuntimePublic for Public {

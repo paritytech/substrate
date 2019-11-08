@@ -23,7 +23,9 @@ use core::ops::Sub;
 #[derive(PartialEq, Eq, primitives::RuntimeDebug)]
 pub struct PiecewiseLinear<'a> {
 	/// Array of points. Must be in order from the lowest abscissas to the highest.
-	pub points: &'a [(Perbill, Perbill)]
+	pub points: &'a [(Perbill, Perbill)],
+	/// The maximum value that can be returned.
+	pub maximum: Perbill,
 }
 
 fn abs_sub<N: Ord + Sub<Output=N> + Clone>(a: N, b: N) -> N where {
@@ -135,7 +137,8 @@ fn test_calculate_for_fraction_times_denominator() {
 			(Perbill::from_parts(0_000_000_000), Perbill::from_parts(0_500_000_000)),
 			(Perbill::from_parts(0_500_000_000), Perbill::from_parts(1_000_000_000)),
 			(Perbill::from_parts(1_000_000_000), Perbill::from_parts(0_000_000_000)),
-		]
+		],
+		maximum: Perbill::from_parts(1_000_000_000),
 	};
 
 	pub fn formal_calculate_for_fraction_times_denominator(n: u64, d: u64) -> u64 {

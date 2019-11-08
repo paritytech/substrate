@@ -162,10 +162,21 @@ test-srml-staking:                 &test-srml-staking
     - WASM_BUILD_NO_COLOR=1 time cargo test --release --verbose --no-default-features --features std
     - sccache -s
 
-
-
-
-
+test-wasmtime:                 &test-wasmtime
+  stage:                           test
+  <<:                              *docker-env
+  variables:
+    # Enable debug assertions since we are running optimized builds for testing
+    # but still want to have debug assertions.
+    RUSTFLAGS: -Cdebug-assertions=y
+    RUST_BACKTRACE: 1
+  except:
+    variables:
+      - $DEPLOY_TAG
+  script:
+    - cd core/executor
+    - WASM_BUILD_NO_COLOR=1 time cargo test --release --verbose --features wasmtime
+    - sccache -s
 
 test-linux-stable-int:
   <<:                              *test-linux
@@ -218,6 +229,26 @@ node-exits:
     - /^v[0-9]+\.[0-9]+.*$/        # i.e. v1.0, v2.1rc1
   script:
     - ./ci/check_for_exit.sh
+
+
+test-full-crypto-feature:          &test-full-crypto-feature
+  stage:                           test
+  <<:                              *docker-env
+  variables:
+    # Enable debug assertions since we are running optimized builds for testing
+    # but still want to have debug assertions.
+    RUSTFLAGS: -Cdebug-assertions=y
+    RUST_BACKTRACE: 1
+  except:
+    variables:
+      - $DEPLOY_TAG
+  script:
+    - cd core/primitives/
+    - time cargo +nightly build --verbose --no-default-features --features full_crypto
+    - cd ../application-crypto
+    - time cargo +nightly build --verbose --no-default-features --features full_crypto
+    - sccache -s
+
 
 #### stage:                        build
 
@@ -306,6 +337,22 @@ check_warnings:
         echo "___No warnings___";
       fi
   allow_failure:                   true
+
+check_polkadot:
+  stage:                           build
+  <<:                              *docker-env
+  allow_failure:                   true
+  dependencies:
+    - test-linux-stable
+  script:
+    - git clone --depth 1 https://github.com/paritytech/polkadot.git
+    - COMMIT_HASH=$(git rev-parse HEAD)
+    - cd polkadot
+    - git grep -l "polkadot-master" | grep toml | xargs sed -i "s/branch.*=.*\"polkadot-master\"/rev = \"$COMMIT_HASH\"/"
+    - cargo update -p sr-io --precise $COMMIT_HASH
+    - time cargo check
+    - cd ..
+    - sccache -s
 
 #### stage:                        publish
 
