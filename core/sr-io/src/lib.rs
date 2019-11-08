@@ -217,19 +217,19 @@ pub trait Misc {
 
 	/// Print a number.
 	fn print_num(val: u64) {
-		println!("{}", val);
+		log::debug!(target: "runtime", "{}", val);
 	}
 
 	/// Print any valid `utf8` buffer.
 	fn print_utf8(utf8: &[u8]) {
 		if let Ok(data) = std::str::from_utf8(utf8) {
-			println!("{}", data)
+			log::debug!(target: "runtime", "{}", data)
 		}
 	}
 
 	/// Print any `u8` slice as hex.
 	fn print_hex(data: &[u8]) {
-		println!("{}", HexDisplay::from(&data));
+		log::debug!(target: "runtime", "{}", HexDisplay::from(&data));
 	}
 }
 

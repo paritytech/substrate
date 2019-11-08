@@ -26,7 +26,7 @@ use proc_macro2::{Span, TokenStream};
 use quote::quote;
 
 use syn::{
-	spanned::Spanned, parse_macro_input, Ident, Type, ItemImpl, MethodSig, Path,
+	spanned::Spanned, parse_macro_input, Ident, Type, ItemImpl, Path, Signature,
 	ImplItem, parse::{Parse, ParseStream, Result, Error}, PathArguments, GenericArgument, TypePath,
 	fold::{self, Fold}, parse_quote
 };
@@ -56,12 +56,12 @@ impl Parse for RuntimeApiImpls {
 /// Generates the call to the implementation of the requested function.
 /// The generated code includes decoding of the input arguments and encoding of the output.
 fn generate_impl_call(
-	signature: &MethodSig,
+	signature: &Signature,
 	runtime: &Type,
 	input: &Ident,
 	impl_trait: &Path
 ) -> Result<TokenStream> {
-	let params = extract_parameter_names_types_and_borrows(&signature.decl)?;
+	let params = extract_parameter_names_types_and_borrows(signature)?;
 
 	let c = generate_crate_access(HIDDEN_INCLUDES_ID);
 	let c_iter = iter::repeat(&c);
@@ -110,23 +110,20 @@ fn extract_impl_trait<'a>(impl_: &'a ItemImpl) -> Result<&'a Path> {
 /// Extracts the runtime block identifier.
 fn extract_runtime_block_ident(trait_: &Path) -> Result<&TypePath> {
 	let span = trait_.span();
-	let segment = trait_
+	let generics = trait_
 		.segments
 		.last()
-		.ok_or_else(
-			|| Error::new(span, "Empty path not supported")
-		)?;
-	let generics = segment.value();
+		.ok_or_else(|| Error::new(span, "Empty path not supported"))?;
 
 	match &generics.arguments {
 		PathArguments::AngleBracketed(ref args) => {
-			args.args.first().and_then(|v| match v.value() {
-			GenericArgument::Type(Type::Path(block)) => Some(block),
+			args.args.first().and_then(|v| match v {
+			GenericArgument::Type(Type::Path(ref block)) => Some(block),
 				_ => None
 			}).ok_or_else(|| Error::new(args.span(), "Missing `Block` generic parameter."))
 		},
 		PathArguments::None => {
-			let span = trait_.segments.last().as_ref().unwrap().value().span();
+			let span = trait_.segments.last().as_ref().unwrap().span();
 			Err(Error::new(span, "Missing `Block` generic parameter."))
 		},
 		PathArguments::Parenthesized(_) => {
@@ -149,7 +146,6 @@ fn generate_impl_calls(
 			.segments
 			.last()
 			.ok_or_else(|| Error::new(impl_trait_path.span(), "Empty trait path not possible!"))?
-			.value()
 			.ident;
 
 		for item in &impl_.items {
@@ -363,7 +359,7 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 				res
 			}
 
-			fn commit_on_ok<R, E>(&self, res: &::std::result::Result<R, E>) {
+			fn commit_on_ok<R, E>(&self, res: &std::result::Result<R, E>) {
 				if *self.commit_on_success.borrow() {
 					if res.is_err() {
 						self.changes.borrow_mut().discard_prospective();
@@ -385,7 +381,6 @@ fn extend_with_runtime_decl_path(mut trait_: Path) -> Path {
 			.last()
 			.as_ref()
 			.expect("Trait path should always contain at least one item; qed")
-			.value()
 			.ident;
 
 		generate_runtime_mod_name_for_trait(trait_name)
@@ -455,16 +450,16 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 			let block_id = self.node_block_id;
 
 			// Generate the access to the native parameters
-			let param_tuple_access = if input.sig.decl.inputs.len() == 1 {
+			let param_tuple_access = if input.sig.inputs.len() == 1 {
 				vec![ quote!( p ) ]
 			} else {
-				input.sig.decl.inputs.iter().enumerate().map(|(i, _)| {
+				input.sig.inputs.iter().enumerate().map(|(i, _)| {
 					let i = syn::Index::from(i);
 					quote!( p.#i )
 				}).collect::<Vec<_>>()
 			};
 
-			let (param_types, error) = match extract_parameter_names_types_and_borrows(&input.sig.decl) {
+			let (param_types, error) = match extract_parameter_names_types_and_borrows(&input.sig) {
 				Ok(res) => (
 					res.into_iter().map(|v| {
 						let ty = v.1;
@@ -476,18 +471,23 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 				Err(e) => (Vec::new(), Some(e.to_compile_error())),
 			};
 
-			let context_arg: syn::FnArg = parse_quote!( context: #crate_::runtime_api::ExecutionContext );
-
 			// Rewrite the input parameters.
-			input.sig.decl.inputs = parse_quote! {
-				&self, at: &#block_id, #context_arg, params: Option<( #( #param_types ),* )>, params_encoded: Vec<u8>
+			input.sig.inputs = parse_quote! {
+				&self,
+				at: &#block_id,
+				context: #crate_::runtime_api::ExecutionContext,
+				params: Option<( #( #param_types ),* )>,
+				params_encoded: Vec<u8>,
 			};
 
-			input.sig.ident = generate_method_runtime_api_impl_name(&self.impl_trait, &input.sig.ident);
-			let ret_type = return_type_extract_type(&input.sig.decl.output);
+			input.sig.ident = generate_method_runtime_api_impl_name(
+				&self.impl_trait,
+				&input.sig.ident,
+			);
+			let ret_type = return_type_extract_type(&input.sig.output);
 
 			// Generate the correct return type.
-			input.sig.decl.output = parse_quote!(
+			input.sig.output = parse_quote!(
 				-> #crate_::error::Result<#crate_::runtime_api::NativeOrEncoded<#ret_type>>
 			);
 
@@ -495,7 +495,7 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 			parse_quote!(
 				{
 					// Get the error to the user (if we have one).
-					#( #error )*
+					#error
 
 					self.call_api_at(
 						|call_runtime_at, core_api, changes, initialized_block, recorder| {
@@ -556,7 +556,7 @@ fn generate_api_impl_for_runtime_api(impls: &[ItemImpl]) -> Result<TokenStream> 
 			.segments
 			.last()
 			.ok_or_else(|| Error::new(impl_trait_path.span(), "Empty trait path not possible!"))?
-			.into_value();
+			.clone();
 		let runtime_block = extract_runtime_block_ident(impl_trait_path)?;
 		let (node_block, node_block_id) = generate_node_block_and_block_id_ty(&impl_.self_ty);
 		let runtime_type = &impl_.self_ty;

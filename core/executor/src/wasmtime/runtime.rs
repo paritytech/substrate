@@ -22,9 +22,8 @@ use crate::wasm_utils::interpret_runtime_api_result;
 use crate::wasmtime::function_executor::FunctionExecutorState;
 use crate::wasmtime::trampoline::{EnvState, make_trampoline};
 use crate::wasmtime::util::{cranelift_ir_signature, read_memory_into, write_memory_from};
-use crate::{Externalities, RuntimeVersion};
+use crate::Externalities;
 
-use codec::Decode;
 use cranelift_codegen::ir;
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_entity::{EntityRef, PrimaryMap};
@@ -33,7 +32,6 @@ use cranelift_wasm::DefinedFuncIndex;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::convert::TryFrom;
-use std::panic::AssertUnwindSafe;
 use std::rc::Rc;
 use wasm_interface::{Pointer, WordSize, Function};
 use wasmtime_environ::{Module, translate_signature};
@@ -50,7 +48,6 @@ pub struct WasmtimeRuntime {
 	context: Context,
 	max_heap_pages: Option<u32>,
 	heap_pages: u32,
-	version: Option<RuntimeVersion>,
 	/// The host functions registered for this instance.
 	host_functions: Vec<&'static dyn Function>,
 }
@@ -80,16 +77,11 @@ impl WasmRuntime for WasmtimeRuntime {
 			self.heap_pages,
 		)
 	}
-
-	fn version(&self) -> Option<RuntimeVersion> {
-		self.version.clone()
-	}
 }
 
 /// Create a new `WasmtimeRuntime` given the code. This function performs translation from Wasm to
 /// machine code, which can be computationally heavy.
-pub fn create_instance<E: Externalities>(
-	ext: &mut E,
+pub fn create_instance(
 	code: &[u8],
 	heap_pages: u64,
 	host_functions: Vec<&'static dyn Function>,
@@ -113,38 +105,11 @@ pub fn create_instance<E: Externalities>(
 	let heap_pages = heap_pages_valid(heap_pages, max_heap_pages)
 		.ok_or_else(|| WasmError::InvalidHeapPages)?;
 
-	// Call to determine runtime version.
-	let version_result = {
-		// `ext` is already implicitly handled as unwind safe, as we store it in a global variable.
-		let mut ext = AssertUnwindSafe(ext);
-
-		// The following unwind safety assertions are OK because if the method call panics, the
-		// context and compiled module will be dropped.
-		let mut context = AssertUnwindSafe(&mut context);
-		let mut compiled_module = AssertUnwindSafe(&mut compiled_module);
-		crate::native_executor::safe_call(move || {
-			call_method(
-				&mut **context,
-				&mut **compiled_module,
-				&mut **ext,
-				"Core_version",
-				&[],
-				heap_pages
-			)
-		}).map_err(|_| {
-			WasmError::Instantiation("panic in call to get runtime version".to_string())
-		})?
-	};
-	let version = version_result
-		.ok()
-		.and_then(|v| RuntimeVersion::decode(&mut v.as_slice()).ok());
-
 	Ok(WasmtimeRuntime {
 		module: compiled_module,
 		context,
 		max_heap_pages,
 		heap_pages,
-		version,
 		host_functions,
 	})
 }

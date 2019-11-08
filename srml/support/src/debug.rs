@@ -120,6 +120,12 @@ pub mod native {
 }
 
 /// Print out a formatted message.
+///
+/// # Example
+///
+/// ```
+/// srml_support::runtime_print!("my value is {}", 3);
+/// ```
 #[macro_export]
 macro_rules! runtime_print {
 	($($arg:tt)+) => {

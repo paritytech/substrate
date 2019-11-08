@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-#[cfg(feature = "std")]
+#[cfg(feature = "full_crypto")]
 use primitives::crypto::Pair;
 
 use codec::Codec;
@@ -30,7 +30,7 @@ pub trait AppKey: 'static + Send + Sync + Sized + CryptoType + Clone {
 	type Public: AppPublic;
 
 	/// The corresponding key pair type in this application scheme.
-	#[cfg(feature="std")]
+	#[cfg(feature = "full_crypto")]
 	type Pair: AppPair;
 
 	/// The corresponding signature type in this application scheme.
@@ -42,15 +42,21 @@ pub trait AppKey: 'static + Send + Sync + Sized + CryptoType + Clone {
 
 /// Type which implements Hash in std, not when no-std (std variant).
 #[cfg(feature = "std")]
-pub trait MaybeHash: std::hash::Hash {}
+pub trait MaybeHash: rstd::hash::Hash {}
 #[cfg(feature = "std")]
-impl<T: std::hash::Hash> MaybeHash for T {}
+impl<T: rstd::hash::Hash> MaybeHash for T {}
 
 /// Type which implements Hash in std, not when no-std (no-std variant).
-#[cfg(not(feature = "std"))]
+#[cfg(all(not(feature = "std"), not(feature = "full_crypto")))]
 pub trait MaybeHash {}
-#[cfg(not(feature = "std"))]
+#[cfg(all(not(feature = "std"), not(feature = "full_crypto")))]
 impl<T> MaybeHash for T {}
+
+/// Type which implements Debug and Hash in std, not when no-std (no-std variant with crypto).
+#[cfg(all(not(feature = "std"), feature = "full_crypto"))]
+pub trait MaybeDebugHash: rstd::hash::Hash  {}
+#[cfg(all(not(feature = "std"), feature = "full_crypto"))]
+impl<T: rstd::hash::Hash> MaybeDebugHash for T {}
 
 /// A application's public key.
 pub trait AppPublic:
@@ -62,7 +68,7 @@ pub trait AppPublic:
 }
 
 /// A application's key pair.
-#[cfg(feature = "std")]
+#[cfg(feature = "full_crypto")]
 pub trait AppPair: AppKey + Pair<Public=<Self as AppKey>::Public> {
 	/// The wrapped type which is just a plain instance of `Pair`.
 	type Generic: IsWrappedBy<Self> + Pair<Public=<<Self as AppKey>::Public as AppPublic>::Generic>;

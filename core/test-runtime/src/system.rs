@@ -22,7 +22,7 @@ use runtime_io::{
 	storage::root as storage_root, storage::changes_root as storage_changes_root,
 	hashing::blake2_256,
 };
-use runtime_support::storage::{self, StorageValue, StorageMap};
+use runtime_support::storage::{self, StorageMap};
 use runtime_support::{decl_storage, decl_module};
 use sr_primitives::{
 	traits::{Hash as HashT, BlakeTwo256, Header as _}, generic, ApplyError, ApplyResult,

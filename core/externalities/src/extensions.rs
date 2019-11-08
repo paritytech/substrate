@@ -27,7 +27,12 @@ use std::{collections::HashMap, any::{Any, TypeId}, ops::DerefMut};
 ///
 /// As extensions are stored as `Box<Any>`, this trait should give more confidence that the correct
 /// type is registered and requested.
-pub trait Extension: Sized {}
+pub trait Extension: Send + Any {
+	/// Return the extension as `&mut dyn Any`.
+	///
+	/// This is a trick to make the trait type castable into an `Any`.
+	fn as_mut_any(&mut self) -> &mut dyn Any;
+}
 
 /// Macro for declaring an extension that usable with [`Extensions`].
 ///
@@ -51,7 +56,11 @@ macro_rules! decl_extension {
 		$( #[ $attr ] )*
 		$vis struct $ext_name (pub $inner);
 
-		impl $crate::Extension for $ext_name {}
+		impl $crate::Extension for $ext_name {
+			fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
+				self
+			}
+		}
 
 		impl std::ops::Deref for $ext_name {
 			type Target = $inner;
@@ -83,7 +92,7 @@ pub trait ExtensionStore {
 /// Stores extensions that should be made available through the externalities.
 #[derive(Default)]
 pub struct Extensions {
-	extensions: HashMap<TypeId, Box<dyn Any>>,
+	extensions: HashMap<TypeId, Box<dyn Extension>>,
 }
 
 impl Extensions {
@@ -93,13 +102,13 @@ impl Extensions {
 	}
 
 	/// Register the given extension.
-	pub fn register<E: Any + Extension>(&mut self, ext: E) {
+	pub fn register<E: Extension>(&mut self, ext: E) {
 		self.extensions.insert(ext.type_id(), Box::new(ext));
 	}
 
 	/// Return a mutable reference to the requested extension.
 	pub fn get_mut(&mut self, ext_type_id: TypeId) -> Option<&mut dyn Any> {
-		self.extensions.get_mut(&ext_type_id).map(DerefMut::deref_mut)
+		self.extensions.get_mut(&ext_type_id).map(DerefMut::deref_mut).map(Extension::as_mut_any)
 	}
 }
 
@@ -107,11 +116,12 @@ impl Extensions {
 mod tests {
 	use super::*;
 
-	struct DummyExt(u32);
-	impl Extension for DummyExt {}
-
-	struct DummyExt2(u32);
-	impl Extension for DummyExt2 {}
+	decl_extension! {
+		struct DummyExt(u32);
+	}
+	decl_extension! {
+		struct DummyExt2(u32);
+	}
 
 	#[test]
 	fn register_and_retrieve_extension() {

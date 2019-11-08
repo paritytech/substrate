@@ -16,7 +16,7 @@
 
 //! Implementation of a Wasm runtime using the Wasmi interpreter.
 
-use std::{str, mem, panic::AssertUnwindSafe};
+use std::{str, mem};
 use wasmi::{
 	Module, ModuleInstance, MemoryInstance, MemoryRef, TableRef, ImportsBuilder, ModuleRef,
 	memory_units::Pages, RuntimeValue::{I32, I64, self},
@@ -30,7 +30,6 @@ use crate::wasm_utils::interpret_runtime_api_result;
 use crate::wasm_runtime::WasmRuntime;
 use log::trace;
 use parity_wasm::elements::{deserialize_buffer, DataSegment, Instruction, Module as RawModule};
-use runtime_version::RuntimeVersion;
 use wasm_interface::{
 	FunctionContext, Pointer, WordSize, Sandbox, MemoryId, Result as WResult, Function,
 };
@@ -526,15 +525,11 @@ impl StateSnapshot {
 	}
 }
 
-/// A runtime along with its version and initial state snapshot.
+/// A runtime along with its initial state snapshot.
 #[derive(Clone)]
 pub struct WasmiRuntime {
 	/// A wasm module instance.
 	instance: ModuleRef,
-	/// Runtime version according to `Core_version`.
-	///
-	/// Can be `None` if the runtime doesn't expose this function.
-	version: Option<RuntimeVersion>,
 	/// The snapshot of the instance's state taken just after the instantiation.
 	state_snapshot: StateSnapshot,
 	/// The host functions registered for this instance.
@@ -577,14 +572,9 @@ impl WasmRuntime for WasmiRuntime {
 			call_in_wasm_module(ext, module, method, data, &self.host_functions)
 		})
 	}
-
-	fn version(&self) -> Option<RuntimeVersion> {
-		self.version.clone()
-	}
 }
 
-pub fn create_instance<E: Externalities>(
-	ext: &mut E,
+pub fn create_instance(
 	code: &[u8],
 	heap_pages: u64,
 	host_functions: Vec<&'static dyn Function>,
@@ -610,25 +600,8 @@ pub fn create_instance<E: Externalities>(
 				",
 		);
 
-	let mut ext = AssertUnwindSafe(ext);
-	let call_instance = AssertUnwindSafe(&instance);
-	let host_functions_slice = host_functions.as_slice();
-	let version_result = crate::native_executor::safe_call(
-		move || call_in_wasm_module(
-			&mut **ext,
-			*call_instance,
-			"Core_version",
-			&[],
-			host_functions_slice,
-		)
-	).map_err(|_| WasmError::Instantiation("panic in call to get runtime version".to_string()))?;
-	let version = version_result
-		.ok()
-		.and_then(|v| RuntimeVersion::decode(&mut v.as_slice()).ok());
-
 	Ok(WasmiRuntime {
 		instance,
-		version,
 		state_snapshot,
 		host_functions,
 	})
