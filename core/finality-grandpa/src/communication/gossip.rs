@@ -1002,6 +1002,8 @@ impl<Block: BlockT> Inner<Block> {
     /// Transitions will be triggered on repropagation attempts by the
     /// underlying gossip layer, which should happen every 30 seconds.
     fn message_allowed<N>(&self, peer: &PeerInfo<N>, mut previous_attempts: usize) -> bool {
+        const MIN_AUTHORITIES: usize = 5;
+
         if !self.config.is_authority && previous_attempts == 0 {
             // non-authority nodes don't gossip any messages right away. we
             // assume that authorities (and sentries) are strongly connected, so
@@ -1022,10 +1024,11 @@ impl<Block: BlockT> Inner<Block> {
             let authorities = self.peers.authorities();
 
             // the target node is an authority, on the first attempt we start by
-            // sending the message to only `sqrt(authorities)`.
-            if previous_attempts == 0 && authorities > 5 {
+            // sending the message to only `sqrt(authorities)` (if we're
+            // connected to at least `MIN_AUTHORITIES`).
+            if previous_attempts == 0 && authorities > MIN_AUTHORITIES {
                 let authorities = authorities as f64;
-                let p = authorities.sqrt() / authorities;
+                let p = (authorities.sqrt()).max(MIN_AUTHORITIES as f64) / authorities;
                 rand::thread_rng().gen_bool(p)
             } else {
                 // otherwise we already went through the step above, so
@@ -1387,7 +1390,7 @@ mod tests {
 	use super::environment::SharedVoterSetState;
 	use network_gossip::Validator as GossipValidatorT;
 	use network::test::Block;
-	use primitives::crypto::Public;
+	use primitives::{crypto::Public, H256};
 
 	// some random config (not really needed)
 	fn config() -> crate::Config {
@@ -1405,9 +1408,8 @@ mod tests {
 	fn voter_set_state() -> SharedVoterSetState<Block> {
 		use crate::authorities::AuthoritySet;
 		use crate::environment::VoterSetState;
-		use primitives::H256;
 
-		let base = (H256::zero(), 0);
+        let base = (H256::zero(), 0);
 		let voters = AuthoritySet::genesis(Vec::new());
 		let set_state = VoterSetState::live(
 			0,
@@ -2067,4 +2069,113 @@ mod tests {
 			)
 		}
 	}
+
+    #[test]
+    fn progressively_gossips_to_more_peers() {
+		let (val, _) = GossipValidator::<Block>::new(
+			config(),
+			voter_set_state(),
+		);
+
+        // the validator start at set id 0
+        val.note_set(SetId(0), Vec::new(), |_, _| {});
+
+        // add 60 peers, 30 authorities and 30 full nodes
+        let mut authorities = Vec::new();
+        authorities.resize_with(30, || PeerId::random());
+
+        let mut full_nodes = Vec::new();
+        full_nodes.resize_with(30, || PeerId::random());
+
+        for i in 0..30 {
+            val.inner.write().peers.new_peer(authorities[i].clone(), Roles::AUTHORITY);
+            val.inner.write().peers.new_peer(full_nodes[i].clone(), Roles::FULL);
+        }
+
+        let test = |previous_attempts, peers| {
+            let mut message_allowed = val.message_allowed();
+
+            move || {
+                let mut allowed = 0;
+                for peer in peers {
+                    if message_allowed(
+                        peer,
+                        MessageIntent::Broadcast { previous_attempts },
+                        &crate::communication::round_topic::<Block>(1, 0),
+                        &[],
+                    ) {
+                        allowed += 1;
+                    }
+                }
+                allowed
+            }
+        };
+
+        fn trial<F: FnMut() -> usize>(mut test: F) -> usize {
+            let mut results = Vec::new();
+            let n = 1000;
+
+            for _ in 0..n {
+                results.push(test());
+            }
+
+            let n = results.len();
+            let sum: usize = results.iter().sum();
+
+            sum / n
+        }
+
+        // on the first attempt we will only gossip to `sqrt(authorities)`,
+        // which should average out to 5 peers after a couple of trials
+        assert_eq!(trial(test(0, &authorities)), 5);
+
+        // on the second (and subsequent attempts) we should gossip to all
+        // authorities we're connected to.
+        assert_eq!(trial(test(1, &authorities)), 30);
+        assert_eq!(trial(test(2, &authorities)), 30);
+
+        // we should only gossip to non-authorities after the third attempt
+        assert_eq!(trial(test(0, &full_nodes)), 0);
+        assert_eq!(trial(test(1, &full_nodes)), 0);
+
+        // and only to `sqrt(non-authorities)`
+        assert_eq!(trial(test(2, &full_nodes)), 5);
+
+        // only on the fourth attempt should we gossip to all non-authorities
+        assert_eq!(trial(test(3, &full_nodes)), 30);
+    }
+
+    #[test]
+    fn only_restricts_gossip_to_authorities_after_a_minimum_threshold() {
+		let (val, _) = GossipValidator::<Block>::new(
+			config(),
+			voter_set_state(),
+		);
+
+        // the validator start at set id 0
+        val.note_set(SetId(0), Vec::new(), |_, _| {});
+
+        let mut authorities = Vec::new();
+        for _ in 0..5 {
+            let peer_id = PeerId::random();
+            val.inner.write().peers.new_peer(peer_id.clone(), Roles::AUTHORITY);
+            authorities.push(peer_id);
+        }
+
+        let mut message_allowed = val.message_allowed();
+
+        // since we're only connected to 5 authorities, we should never restrict
+        // sending of gossip messages, and instead just allow them to all
+        // non-authorities on the first attempt.
+        for authority in &authorities {
+            assert!(
+                message_allowed(
+                    authority,
+                    MessageIntent::Broadcast { previous_attempts: 0 },
+                    &crate::communication::round_topic::<Block>(1, 0),
+                    &[],
+                )
+            );
+        }
+    }
 }
