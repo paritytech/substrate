@@ -991,7 +991,7 @@ impl<Block: BlockT> Inner<Block> {
 	}
 
     /// The initial logic for filtering messages follows the given state
-    /// transitions.
+    /// transitions:
     ///
     /// - State 0: not allowed to anyone (only if our local node is not an authority)
     /// - State 1: allowed to random `sqrt(authorities)`
