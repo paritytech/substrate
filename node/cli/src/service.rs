@@ -181,8 +181,9 @@ macro_rules! new_full {
 			let babe = babe::start_babe(babe_config)?;
 			service.spawn_essential_task(babe);
 
-			// TODO: Safe to unwrap here?
-			let future03_dht_event_rx = dht_event_rx.compat().map(|x| x.unwrap()).boxed();
+			let future03_dht_event_rx = dht_event_rx.compat()
+				.map(|x| x.expect("<mpsc::channel::Receiver as Stream> never returns an error; qed"))
+				.boxed();
 			let authority_discovery = authority_discovery::AuthorityDiscovery::new(
 				service.client(),
 				service.network(),
