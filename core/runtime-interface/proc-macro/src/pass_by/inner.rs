@@ -101,5 +101,10 @@ fn extract_inner_ty_and_name(data: &Data) -> Result<(Type, Option<Ident>)> {
 		}
 	}
 
-	Err(Error::new(Span::call_site(), "Only newtype structs are supported by `PassByInner`!"))
+	Err(
+		Error::new(
+			Span::call_site(),
+			"Only newtype/one field structs are supported by `PassByInner`!",
+		)
+	)
 }

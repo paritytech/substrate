@@ -21,7 +21,7 @@ use crate::utils::{generate_crate_access, get_function_argument_types_without_re
 
 use syn::{
 	ItemTrait, TraitItemMethod, Result, TraitItem, Error, fold::{self, Fold}, spanned::Spanned,
-	Visibility, Receiver, Type,
+	Visibility, Receiver, Type, Generics,
 };
 
 use proc_macro2::TokenStream;
@@ -57,7 +57,7 @@ impl ToEssentialTraitDef {
 			errors: Vec::new(),
 		};
 
-		let res = fold::fold_item_trait(&mut folder, trait_def);
+		let res = folder.fold_item_trait(trait_def);
 
 		if let Some(first_error) = folder.errors.pop() {
 			Err(
@@ -74,12 +74,18 @@ impl ToEssentialTraitDef {
 	fn push_error<S: Spanned>(&mut self, span: &S, msg: &str) {
 		self.errors.push(Error::new(span.span(), msg));
 	}
+
+	fn error_on_generic_parameters(&mut self, generics: &Generics) {
+		if let Some(param) = generics.params.first() {
+			self.push_error(param, "Generic parameters not supported.");
+		}
+	}
 }
 
 impl Fold for ToEssentialTraitDef {
 	fn fold_trait_item_method(&mut self, mut method: TraitItemMethod) -> TraitItemMethod {
 		if method.default.take().is_none() {
-			self.push_error(&method, "Methods need to have an implementation");
+			self.push_error(&method, "Methods need to have an implementation.");
 		}
 
 		let arg_types = get_function_argument_types_without_ref(&method.sig);
@@ -90,13 +96,13 @@ impl Fold for ToEssentialTraitDef {
 			}
 		).for_each(|invalid| self.push_error(&invalid, "`impl Trait` syntax not supported."));
 
+		self.error_on_generic_parameters(&method.sig.generics);
+
 		fold::fold_trait_item_method(self, method)
 	}
 
 	fn fold_item_trait(&mut self, mut trait_def: ItemTrait) -> ItemTrait {
-		if let Some(first_param) = trait_def.generics.params.first() {
-			self.push_error(first_param, "Generic parameters are not supported");
-		}
+		self.error_on_generic_parameters(&trait_def.generics);
 
 		trait_def.vis = Visibility::Inherited;
 		fold::fold_item_trait(self, trait_def)
@@ -104,7 +110,7 @@ impl Fold for ToEssentialTraitDef {
 
 	fn fold_receiver(&mut self, receiver: Receiver) -> Receiver {
 		if receiver.reference.is_none() {
-			self.push_error(&receiver, "Taking `Self` by value is not allowed");
+			self.push_error(&receiver, "Taking `Self` by value is not allowed.");
 		}
 
 		fold::fold_receiver(self, receiver)

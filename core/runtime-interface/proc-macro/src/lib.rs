@@ -43,7 +43,7 @@ mod utils;
 /// The macro expects the runtime interface declaration as trait declaration:
 ///
 /// ```
-/// # use substrate_runtime_interface::runtime_interface;
+/// # use runtime_interface::runtime_interface;
 ///
 /// #[runtime_interface]
 /// trait Interface {
@@ -190,7 +190,7 @@ pub fn runtime_interface(
 /// # Example
 ///
 /// ```
-/// # use substrate_runtime_interface::pass_by::PassByCodec;
+/// # use runtime_interface::pass_by::PassByCodec;
 /// # use codec::{Encode, Decode};
 /// #[derive(PassByCodec, Encode, Decode)]
 /// struct EncodableType {
@@ -215,13 +215,13 @@ pub fn pass_by_codec(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
 /// # Example
 ///
 /// ```
-/// # use substrate_runtime_interface::pass_by::PassByInner;
+/// # use runtime_interface::pass_by::PassByInner;
 /// #[derive(PassByInner)]
 /// struct Data([u8; 32]);
 /// ```
 ///
 /// ```
-/// # use substrate_runtime_interface::pass_by::PassByInner;
+/// # use runtime_interface::pass_by::PassByInner;
 /// #[derive(PassByInner)]
 /// struct Data {
 ///     data: [u8; 32],
@@ -244,7 +244,7 @@ pub fn pass_by_inner(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
 /// # Example
 ///
 /// ```
-/// # use substrate_runtime_interface::pass_by::PassByEnum;
+/// # use runtime_interface::pass_by::PassByEnum;
 /// #[derive(PassByEnum, Copy, Clone)]
 /// enum Data {
 ///     Okay,
