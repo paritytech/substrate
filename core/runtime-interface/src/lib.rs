@@ -62,7 +62,7 @@
 //! #[substrate_runtime_interface::runtime_interface]
 //! trait RuntimeInterface {
 //!     fn some_function(value: &[u8]) -> bool {
-//!         value.iter().all(|v| v > 125)
+//!         value.iter().all(|v| *v > 125)
 //!     }
 //! }
 //! ```

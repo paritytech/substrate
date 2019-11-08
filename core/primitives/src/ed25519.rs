@@ -18,6 +18,7 @@
 //! Simple Ed25519 API.
 // end::description[]
 
+#[cfg(feature = "full_crypto")]
 use rstd::vec::Vec;
 
 use crate::{hash::H256, hash::H512};

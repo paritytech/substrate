@@ -20,6 +20,7 @@
 //! Note: `CHAIN_CODE_LENGTH` must be equal to `crate::crypto::JUNCTION_ID_LEN`
 //! for this to work.
 // end::description[]
+#[cfg(feature = "full_crypto")]
 use rstd::vec::Vec;
 #[cfg(feature = "full_crypto")]
 use schnorrkel::{signing_context, ExpansionMode, Keypair, SecretKey, MiniSecretKey, PublicKey,

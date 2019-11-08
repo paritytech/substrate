@@ -142,8 +142,9 @@ impl RuntimesCache {
 			Entry::Occupied(o) => {
 				let result = o.into_mut();
 				if let Ok(ref mut cached_runtime) = result {
-					let heap_pages_changed = !cached_runtime.update_heap_pages(heap_pages);
-					let host_functions_changed = cached_runtime.host_functions() != &host_functions[..];
+					let heap_pages_changed = !cached_runtime.runtime.update_heap_pages(heap_pages);
+					let host_functions_changed = cached_runtime.runtime.host_functions()
+						!= &host_functions[..];
 					if heap_pages_changed || host_functions_changed {
 						let changed = if heap_pages_changed {
 							"heap_pages"
@@ -240,13 +241,12 @@ fn create_versioned_wasm_runtime<E: Externalities>(
 	let version_result = {
 		// `ext` is already implicitly handled as unwind safe, as we store it in a global variable.
 		let mut ext = AssertUnwindSafe(ext);
-		let host_functions = runtime.host_functions();
 
 		// The following unwind safety assertion is OK because if the method call panics, the
 		// runtime will be dropped.
 		let mut runtime = AssertUnwindSafe(runtime.as_mut());
 		crate::native_executor::safe_call(
-			move || runtime.call(&mut **ext, "Core_version", &[], host_functions)
+			move || runtime.call(&mut **ext, "Core_version", &[])
 		).map_err(|_| WasmError::Instantiation("panic in call to get runtime version".into()))?
 	};
 	let encoded_version = version_result

@@ -55,7 +55,7 @@ pub fn generate_runtime_interface_include() -> TokenStream {
 /// Generates the access to the `substrate-runtime-interface` crate.
 pub fn generate_crate_access() -> TokenStream {
 	if env::var("CARGO_PKG_NAME").unwrap() == "substrate-runtime-interface" {
-		quote!( crate )
+		quote!( substrate_runtime_interface )
 	} else {
 		quote!( proc_macro_runtime_interface )
 	}
