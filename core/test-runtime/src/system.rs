@@ -47,7 +47,7 @@ decl_storage! {
 		ParentHash get(fn parent_hash): Hash;
 		NewAuthorities get(fn new_authorities): Option<Vec<AuthorityId>>;
 		StorageDigest get(fn storage_digest): Option<Digest>;
-		pub Authorities get(fn authorities) config(): Vec<AuthorityId>;
+		Authorities get(fn authorities) config(): Vec<AuthorityId>;
 	}
 }
 
