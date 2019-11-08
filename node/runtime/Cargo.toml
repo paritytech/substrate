@@ -6,24 +6,29 @@ edition = "2018"
 build = "build.rs"
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
+# third-party dependencies
+codec = { package = "parity-scale-codec", version = "1.0.6", default-features = false, features = ["derive"] }
 integer-sqrt = { version = "0.1.2" }
-rustc-hex = { version = "2.0", optional = true }
 safe-mix = { version = "1.0", default-features = false }
-serde = { version = "1.0.101", optional = true }
+rustc-hex = { version = "2.0", optional = true }
+serde = { version = "1.0.102", optional = true }
 
+# primitives
 babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../../core/consensus/babe/primitives", default-features = false }
-client = { package = "substrate-client", path = "../../core/client", default-features = false }
 node-primitives = { path = "../primitives", default-features = false }
 offchain-primitives = { package = "substrate-offchain-primitives", path = "../../core/offchain/primitives", default-features = false }
 primitives = { package = "substrate-primitives",  path = "../../core/primitives", default-features = false }
-rstd = { package = "sr-std", path = "../../core/sr-std", default-features = false }
 sr-primitives = { path = "../../core/sr-primitives", default-features = false }
 sr-staking-primitives = { path = "../../core/sr-staking-primitives", default-features = false }
-substrate-keyring = { path = "../../core/keyring", optional = true }
-substrate-session = { path = "../../core/session", default-features = false }
-version = { package = "sr-version", path = "../../core/sr-version", default-features = false }
 
+# core dependencies
+client = { package = "substrate-client", path = "../../core/client", default-features = false }
+rstd = { package = "sr-std", path = "../../core/sr-std", default-features = false }
+version = { package = "sr-version", path = "../../core/sr-version", default-features = false }
+substrate-session = { path = "../../core/session", default-features = false }
+substrate-keyring = { path = "../../core/keyring", optional = true }
+
+# srml dependencies
 authorship = { package = "srml-authorship", path = "../../srml/authorship", default-features = false }
 babe = { package = "srml-babe", path = "../../srml/babe", default-features = false }
 balances = { package = "srml-balances", path = "../../srml/balances", default-features = false }
