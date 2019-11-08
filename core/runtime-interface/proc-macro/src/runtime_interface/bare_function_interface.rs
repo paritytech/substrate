@@ -100,7 +100,7 @@ fn function_std_impl(
 ) -> Result<TokenStream> {
 	let function_name = &method.sig.ident;
 	let crate_ = generate_crate_access();
-	let args = get_function_arguments(&method.sig).cloned().map(FnArg::Typed).chain(
+	let args = get_function_arguments(&method.sig).map(FnArg::Typed).chain(
 		// Add the function context as last parameter when this is a wasm only interface.
 		iter::from_fn(||
 			if is_wasm_only {

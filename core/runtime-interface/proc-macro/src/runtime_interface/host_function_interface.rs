@@ -287,7 +287,7 @@ fn generate_wasm_to_ffi_values<'a>(
 				trait_name,
 			);
 
-			let var_name = generate_ffi_value_var_name(name)?;
+			let var_name = generate_ffi_value_var_name(&name)?;
 
 			Ok(quote! {
 				let val = args.next().ok_or_else(|| #error_message)?;
@@ -308,7 +308,7 @@ fn generate_ffi_to_host_value<'a>(
 	get_function_argument_names_and_types_without_ref(sig)
 		.zip(mut_access.map(|v| v.and_then(|m| m.1)))
 		.map(move |((name, ty), mut_access)| {
-			let ffi_value_var_name = generate_ffi_value_var_name(name)?;
+			let ffi_value_var_name = generate_ffi_value_var_name(&name)?;
 
 			Ok(
 				quote! {
@@ -380,7 +380,7 @@ fn generate_into_preallocated_ffi_value(sig: &Signature) -> Result<TokenStream> 
 	ref_and_mut.zip(names_and_types)
 		.filter_map(|(ram, (name, ty))| ram.map(|_| (name, ty)))
 		.map(|(name, ty)| {
-			let ffi_var_name = generate_ffi_value_var_name(name)?;
+			let ffi_var_name = generate_ffi_value_var_name(&name)?;
 
 			Ok(
 				quote! {

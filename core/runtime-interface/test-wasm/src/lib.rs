@@ -73,7 +73,9 @@ pub trait TestApi {
 	}
 
 	/// A function that is called with invalid utf8 data from the runtime.
-	fn invalid_utf8_data(_data: &str) {}
+	///
+	/// This also checks that we accept `_` (wild card) argument names.
+	fn invalid_utf8_data(_: &str) {}
 
 	/// Overwrite the native implementation in wasm. The native implementation always returns
 	/// `false` and the replacement function will return always `true`.

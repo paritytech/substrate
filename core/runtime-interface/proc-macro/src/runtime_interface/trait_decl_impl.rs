@@ -84,11 +84,11 @@ impl Fold for ToEssentialTraitDef {
 
 		let arg_types = get_function_argument_types_without_ref(&method.sig);
 		arg_types.filter_map(|ty|
-			match &**ty {
+			match *ty {
 				Type::ImplTrait(impl_trait) => Some(impl_trait),
 				_ => None
 			}
-		).for_each(|invalid| self.push_error(invalid, "`impl Trait` syntax not supported."));
+		).for_each(|invalid| self.push_error(&invalid, "`impl Trait` syntax not supported."));
 
 		fold::fold_trait_item_method(self, method)
 	}
