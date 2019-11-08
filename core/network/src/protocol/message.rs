@@ -104,7 +104,7 @@ impl Decode for BlockAttributes {
 pub enum Direction {
 	/// Enumerate in ascending order (from child to parent).
 	Ascending = 0,
-	/// Enumerate in descendfing order (from parent to canonical child).
+	/// Enumerate in descending order (from parent to canonical child).
 	Descending = 1,
 }
 
