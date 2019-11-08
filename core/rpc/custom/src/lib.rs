@@ -7,7 +7,7 @@ use jsonrpc_client_transports::RpcError;
 use parity_scale_codec::{DecodeAll, FullCodec, FullEncode};
 use serde::{de::DeserializeOwned, Serialize};
 use srml_support::storage::generator::{
-    StorageDoubleMap, StorageLinkedMap, StorageMap, StorageValue,
+	StorageDoubleMap, StorageLinkedMap, StorageMap, StorageValue,
 };
 use substrate_primitives_storage::{StorageData, StorageKey};
 use substrate_rpc_api::state::StateClient;
@@ -74,64 +74,64 @@ use substrate_rpc_api::state::StateClient;
 /// ```
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
 pub struct StorageQuery<V> {
-    key: StorageKey,
-    _spook: PhantomData<V>,
+	key: StorageKey,
+	_spook: PhantomData<V>,
 }
 
 impl<V: FullCodec> StorageQuery<V> {
-    /// Create a storage query for a StorageValue.
-    pub fn value<St: StorageValue<V>>() -> Self {
-        Self {
-            key: StorageKey(St::storage_value_final_key().to_vec()),
-            _spook: PhantomData,
-        }
-    }
+	/// Create a storage query for a StorageValue.
+	pub fn value<St: StorageValue<V>>() -> Self {
+		Self {
+			key: StorageKey(St::storage_value_final_key().to_vec()),
+			_spook: PhantomData,
+		}
+	}
 
-    /// Create a storage query for a value in a StorageMap.
-    pub fn map<St: StorageMap<K, V>, K: FullEncode>(key: K) -> Self {
-        Self {
-            key: StorageKey(St::storage_map_final_key(key).as_ref().to_vec()),
-            _spook: PhantomData,
-        }
-    }
+	/// Create a storage query for a value in a StorageMap.
+	pub fn map<St: StorageMap<K, V>, K: FullEncode>(key: K) -> Self {
+		Self {
+			key: StorageKey(St::storage_map_final_key(key).as_ref().to_vec()),
+			_spook: PhantomData,
+		}
+	}
 
-    /// Create a storage query for a value in a StorageLinkedMap.
-    pub fn linked_map<St: StorageLinkedMap<K, V>, K: FullCodec>(key: K) -> Self {
-        Self {
-            key: StorageKey(St::storage_linked_map_final_key(key).as_ref().to_vec()),
-            _spook: PhantomData,
-        }
-    }
+	/// Create a storage query for a value in a StorageLinkedMap.
+	pub fn linked_map<St: StorageLinkedMap<K, V>, K: FullCodec>(key: K) -> Self {
+		Self {
+			key: StorageKey(St::storage_linked_map_final_key(key).as_ref().to_vec()),
+			_spook: PhantomData,
+		}
+	}
 
-    /// Create a storage query for a value in a StorageDoubleMap.
-    pub fn double_map<St: StorageDoubleMap<K1, K2, V>, K1: FullEncode, K2: FullEncode>(
-        key1: K1,
-        key2: K2,
-    ) -> Self {
-        Self {
-            key: StorageKey(St::storage_double_map_final_key(key1, key2)),
-            _spook: PhantomData,
-        }
-    }
+	/// Create a storage query for a value in a StorageDoubleMap.
+	pub fn double_map<St: StorageDoubleMap<K1, K2, V>, K1: FullEncode, K2: FullEncode>(
+		key1: K1,
+		key2: K2,
+	) -> Self {
+		Self {
+			key: StorageKey(St::storage_double_map_final_key(key1, key2)),
+			_spook: PhantomData,
+		}
+	}
 
-    /// Send this query over RPC, await the typed result.
-    ///
-    /// Hash should be <YourRuntime as srml::Trait>::Hash.
-    ///
-    /// # Arguments
-    ///
-    /// state_client represents a connection to the RPC server.
-    ///
-    /// block_index indicates the block for which state will be queried. A value of None indicates the
-    /// latest block.
-    pub async fn get<Hash: Send + Sync + 'static + DeserializeOwned + Serialize>(
-        self,
-        state_client: &StateClient<Hash>,
-        block_index: Option<Hash>,
-    ) -> Result<Option<V>, RpcError> {
-        let opt: Option<StorageData> = state_client.storage(self.key, block_index).compat().await?;
-        opt.map(|encoded| V::decode_all(&encoded.0))
-            .transpose()
-            .map_err(|decode_err| RpcError::Other(decode_err.into()))
-    }
+	/// Send this query over RPC, await the typed result.
+	///
+	/// Hash should be <YourRuntime as srml::Trait>::Hash.
+	///
+	/// # Arguments
+	///
+	/// state_client represents a connection to the RPC server.
+	///
+	/// block_index indicates the block for which state will be queried. A value of None indicates the
+	/// latest block.
+	pub async fn get<Hash: Send + Sync + 'static + DeserializeOwned + Serialize>(
+		self,
+		state_client: &StateClient<Hash>,
+		block_index: Option<Hash>,
+	) -> Result<Option<V>, RpcError> {
+		let opt: Option<StorageData> = state_client.storage(self.key, block_index).compat().await?;
+		opt.map(|encoded| V::decode_all(&encoded.0))
+			.transpose()
+			.map_err(|decode_err| RpcError::Other(decode_err.into()))
+	}
 }
