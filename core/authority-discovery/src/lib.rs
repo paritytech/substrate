@@ -180,9 +180,6 @@ where
 			let mut signed_addresses = vec![];
 			schema::SignedAuthorityAddresses {
 				addresses: serialized_addresses.clone(),
-				// TODO: Instead of encoding via scale and then encoding via proto, we could also convert the signature
-				// to a [u8] and protobuf encode from there. Important to keep in mind that this module is not anywhere
-				// close to a resource hot path.
 				signature: signature.encode(),
 			}
 			.encode(&mut signed_addresses)
@@ -270,8 +267,6 @@ where
 				signature,
 				addresses,
 			} = schema::SignedAuthorityAddresses::decode(value).map_err(Error::DecodingProto)?;
-			// TODO: Should we rather have a `TryFrom<&[u8]> for Signature` instead of encoding a scale encoded
-			// signature as Protobuf?
 			let signature = AuthoritySignature::decode(&mut &signature[..]).map_err(Error::EncodingDecodingScale)?;
 
 			if !AuthorityPair::verify(&signature, &addresses, authority_id) {
