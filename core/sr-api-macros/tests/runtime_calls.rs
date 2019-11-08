@@ -50,7 +50,10 @@ fn calling_wasm_runtime_function() {
 }
 
 #[test]
-#[should_panic(expected = "Could not convert parameter `param` between node and runtime!")]
+#[should_panic(
+	expected =
+		"Could not convert parameter `param` between node and runtime: DecodeFails always fails"
+)]
 fn calling_native_runtime_function_with_non_decodable_parameter() {
 	let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::NativeWhenPossible).build();
 	let runtime_api = client.runtime_api();
@@ -183,8 +186,8 @@ fn record_proof_works() {
 
 	// Use the proof backend to execute `execute_block`.
 	let mut overlay = Default::default();
-	let executor = NativeExecutor::<LocalExecutor>::new(None);
-	execution_proof_check_on_trie_backend(
+	let executor = NativeExecutor::<LocalExecutor>::new(WasmExecutionMethod::Interpreted, None);
+	execution_proof_check_on_trie_backend::<_, u64, _>(
 		&backend,
 		&mut overlay,
 		&executor,

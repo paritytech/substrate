@@ -14,11 +14,5 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Test crate for srml_support. Allow to make use of `srml_support::decl_storage`.
+//! Test crate for srml_support. Allow to make use of `support::decl_storage`.
 //! See tests directory.
-
-#[test]
-fn reserved_keyword() {
-    let t = trybuild::TestCases::new();
-    t.compile_fail("tests/reserved_keyword/*.rs");
-}

@@ -72,8 +72,6 @@
 //! - [`Imbalance`](../srml_support/traits/trait.Imbalance.html): Functions for handling
 //! imbalances between total issuance in the system and account balances. Must be used when a function
 //! creates new funds (e.g. a reward) or destroys some funds (e.g. a system fee).
-//! - [`MakePayment`](../srml_support/traits/trait.MakePayment.html): Simple trait designed
-//! for hooking into a transaction payment.
 //! - [`IsDeadAccount`](../srml_system/trait.IsDeadAccount.html): Determiner to say whether a
 //! given account is unused.
 //!
@@ -97,7 +95,7 @@
 //! The Contract module uses the `Currency` trait to handle gas payment, and its types inherit from `Currency`:
 //!
 //! ```
-//! use srml_support::traits::Currency;
+//! use support::traits::Currency;
 //! # pub trait Trait: system::Trait {
 //! # 	type Currency: Currency<Self::AccountId>;
 //! # }
@@ -111,14 +109,14 @@
 //! The Staking module uses the `LockableCurrency` trait to lock a stash account's funds:
 //!
 //! ```
-//! use srml_support::traits::{WithdrawReasons, LockableCurrency};
+//! use support::traits::{WithdrawReasons, LockableCurrency};
 //! use sr_primitives::traits::Bounded;
 //! pub trait Trait: system::Trait {
 //! 	type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
 //! }
 //! # struct StakingLedger<T: Trait> {
 //! # 	stash: <T as system::Trait>::AccountId,
-//! # 	total: <<T as Trait>::Currency as srml_support::traits::Currency<<T as system::Trait>::AccountId>>::Balance,
+//! # 	total: <<T as Trait>::Currency as support::traits::Currency<<T as system::Trait>::AccountId>>::Balance,
 //! # 	phantom: std::marker::PhantomData<T>,
 //! # }
 //! # const STAKING_ID: [u8; 8] = *b"staking ";
@@ -150,21 +148,25 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use rstd::prelude::*;
-use rstd::{cmp, result, mem};
+use rstd::{cmp, result, mem, fmt::Debug};
 use codec::{Codec, Encode, Decode};
-use srml_support::{StorageValue, StorageMap, Parameter, decl_event, decl_storage, decl_module};
-use srml_support::traits::{
-	UpdateBalanceOutcome, Currency, OnFreeBalanceZero, OnUnbalanced,
-	WithdrawReason, WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
-	Imbalance, SignedImbalance, ReservableCurrency, Get,
+use support::{
+	StorageValue, Parameter, decl_event, decl_storage, decl_module,
+	traits::{
+		UpdateBalanceOutcome, Currency, OnFreeBalanceZero, OnUnbalanced,
+		WithdrawReason, WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
+		Imbalance, SignedImbalance, ReservableCurrency, Get,
+	},
+	dispatch::Result,
 };
-use srml_support::dispatch::Result;
-use sr_primitives::traits::{
-	Zero, SimpleArithmetic, StaticLookup, Member, CheckedAdd, CheckedSub, MaybeSerializeDebug,
-	Saturating, Bounded, SignedExtension, SaturatedConversion, DispatchError, Convert,
+use sr_primitives::{
+	RuntimeDebug,
+	traits::{
+		Zero, SimpleArithmetic, StaticLookup, Member, CheckedAdd, CheckedSub, MaybeSerializeDeserialize,
+		Saturating, Bounded,
+	},
+	weights::SimpleDispatchInfo,
 };
-use sr_primitives::transaction_validity::{TransactionPriority, ValidTransaction};
-use sr_primitives::weights::{DispatchInfo, SimpleDispatchInfo, Weight};
 use system::{IsDeadAccount, OnNewAccount, ensure_signed, ensure_root};
 
 mod mock;
@@ -172,16 +174,10 @@ mod tests;
 
 pub use self::imbalances::{PositiveImbalance, NegativeImbalance};
 
-pub const DEFAULT_EXISTENTIAL_DEPOSIT: u32 = 0;
-pub const DEFAULT_TRANSFER_FEE: u32 = 0;
-pub const DEFAULT_CREATION_FEE: u32 = 0;
-pub const DEFAULT_TRANSACTION_BASE_FEE: u32 = 0;
-pub const DEFAULT_TRANSACTION_BYTE_FEE: u32 = 0;
-
 pub trait Subtrait<I: Instance = DefaultInstance>: system::Trait {
 	/// The balance of an account.
 	type Balance: Parameter + Member + SimpleArithmetic + Codec + Default + Copy +
-		MaybeSerializeDebug + From<Self::BlockNumber>;
+		MaybeSerializeDeserialize + Debug + From<Self::BlockNumber>;
 
 	/// A function that is invoked when the free-balance has fallen below the existential deposit and
 	/// has been reduced to zero.
@@ -200,21 +196,12 @@ pub trait Subtrait<I: Instance = DefaultInstance>: system::Trait {
 
 	/// The fee required to create an account.
 	type CreationFee: Get<Self::Balance>;
-
-	/// The fee to be paid for making a transaction; the base.
-	type TransactionBaseFee: Get<Self::Balance>;
-
-	/// The fee to be paid for making a transaction; the per-byte portion.
-	type TransactionByteFee: Get<Self::Balance>;
-
-	/// Convert a weight value into a deductible fee based on the currency type.
-	type WeightToFee: Convert<Weight, Self::Balance>;
 }
 
 pub trait Trait<I: Instance = DefaultInstance>: system::Trait {
 	/// The balance of an account.
 	type Balance: Parameter + Member + SimpleArithmetic + Codec + Default + Copy +
-		MaybeSerializeDebug + From<Self::BlockNumber>;
+		MaybeSerializeDeserialize + Debug + From<Self::BlockNumber>;
 
 	/// A function that is invoked when the free-balance has fallen below the existential deposit and
 	/// has been reduced to zero.
@@ -224,9 +211,6 @@ pub trait Trait<I: Instance = DefaultInstance>: system::Trait {
 
 	/// Handler for when a new account is created.
 	type OnNewAccount: OnNewAccount<Self::AccountId>;
-
-	/// Handler for the unbalanced reduction when taking transaction fees.
-	type TransactionPayment: OnUnbalanced<NegativeImbalance<Self, I>>;
 
 	/// Handler for the unbalanced reduction when taking fees associated with balance
 	/// transfer (which may also include account creation).
@@ -246,15 +230,6 @@ pub trait Trait<I: Instance = DefaultInstance>: system::Trait {
 
 	/// The fee required to create an account.
 	type CreationFee: Get<Self::Balance>;
-
-	/// The fee to be paid for making a transaction; the base.
-	type TransactionBaseFee: Get<Self::Balance>;
-
-	/// The fee to be paid for making a transaction; the per-byte portion.
-	type TransactionByteFee: Get<Self::Balance>;
-
-	/// Convert a weight value into a deductible fee based on the currency type.
-	type WeightToFee: Convert<Weight, Self::Balance>;
 }
 
 impl<T: Trait<I>, I: Instance> Subtrait<I> for T {
@@ -264,9 +239,6 @@ impl<T: Trait<I>, I: Instance> Subtrait<I> for T {
 	type ExistentialDeposit = T::ExistentialDeposit;
 	type TransferFee = T::TransferFee;
 	type CreationFee = T::CreationFee;
-	type TransactionBaseFee = T::TransactionBaseFee;
-	type TransactionByteFee = T::TransactionByteFee;
-	type WeightToFee = T::WeightToFee;
 }
 
 decl_event!(
@@ -284,8 +256,7 @@ decl_event!(
 );
 
 /// Struct to encode the vesting schedule of an individual account.
-#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct VestingSchedule<Balance, BlockNumber> {
 	/// Locked amount at genesis.
 	pub locked: Balance,
@@ -312,8 +283,7 @@ impl<Balance: SimpleArithmetic + Copy, BlockNumber: SimpleArithmetic + Copy> Ves
 	}
 }
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct BalanceLock<Balance, BlockNumber> {
 	pub id: LockIdentifier,
 	pub amount: Balance,
@@ -324,12 +294,12 @@ pub struct BalanceLock<Balance, BlockNumber> {
 decl_storage! {
 	trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Balances {
 		/// The total units issued in the system.
-		pub TotalIssuance get(total_issuance) build(|config: &GenesisConfig<T, I>| {
+		pub TotalIssuance get(fn total_issuance) build(|config: &GenesisConfig<T, I>| {
 			config.balances.iter().fold(Zero::zero(), |acc: T::Balance, &(_, n)| acc + n)
 		}): T::Balance;
 
 		/// Information regarding the vesting of a given account.
-		pub Vesting get(vesting) build(|config: &GenesisConfig<T, I>| {
+		pub Vesting get(fn vesting) build(|config: &GenesisConfig<T, I>| {
 			// Generate initial vesting configuration
 			// * who - Account which we are generating vesting configuration for
 			// * begin - Block when the account will start to vest
@@ -366,7 +336,7 @@ decl_storage! {
 		///
 		/// `system::AccountNonce` is also deleted if `ReservedBalance` is also zero (it also gets
 		/// collapsed to zero if it ever becomes less than `ExistentialDeposit`.
-		pub FreeBalance get(free_balance)
+		pub FreeBalance get(fn free_balance)
 			build(|config: &GenesisConfig<T, I>| config.balances.clone()):
 			map T::AccountId => T::Balance;
 
@@ -381,10 +351,10 @@ decl_storage! {
 		///
 		/// `system::AccountNonce` is also deleted if `FreeBalance` is also zero (it also gets
 		/// collapsed to zero if it ever becomes less than `ExistentialDeposit`.)
-		pub ReservedBalance get(reserved_balance): map T::AccountId => T::Balance;
+		pub ReservedBalance get(fn reserved_balance): map T::AccountId => T::Balance;
 
 		/// Any liquidity locks on some account balances.
-		pub Locks get(locks): map T::AccountId => Vec<BalanceLock<T::Balance, T::BlockNumber>>;
+		pub Locks get(fn locks): map T::AccountId => Vec<BalanceLock<T::Balance, T::BlockNumber>>;
 	}
 	add_extra_genesis {
 		config(balances): Vec<(T::AccountId, T::Balance)>;
@@ -404,13 +374,7 @@ decl_module! {
 		/// The fee required to create an account.
 		const CreationFee: T::Balance = T::CreationFee::get();
 
-		/// The fee to be paid for making a transaction; the base.
-		const TransactionBaseFee: T::Balance = T::TransactionBaseFee::get();
-
-		/// The fee to be paid for making a transaction; the per-byte portion.
-		const TransactionByteFee: T::Balance = T::TransactionByteFee::get();
-
-		fn deposit_event<T, I>() = default;
+		fn deposit_event() = default;
 
 		/// Transfer some liquid free balance to another account.
 		///
@@ -433,6 +397,8 @@ decl_module! {
 		///      `T::OnNewAccount::on_new_account` to be called.
 		///   - Removing enough funds from an account will trigger
 		///     `T::DustRemoval::on_unbalanced` and `T::OnFreeBalanceZero::on_free_balance_zero`.
+		///   - `transfer_keep_alive` works the same way as `transfer`, but has an additional
+		///     check that the transfer will not kill the origin account.
 		///
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(1_000_000)]
@@ -443,7 +409,7 @@ decl_module! {
 		) {
 			let transactor = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
-			<Self as Currency<_>>::transfer(&transactor, &dest, value)?;
+			<Self as Currency<_>>::transfer(&transactor, &dest, value, ExistenceRequirement::AllowDeath)?;
 		}
 
 		/// Set the balances of a given account.
@@ -459,7 +425,7 @@ decl_module! {
 		/// - Independent of the arguments.
 		/// - Contains a limited number of reads and writes.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedOperational(500_000)]
+		#[weight = SimpleDispatchInfo::FixedOperational(50_000)]
 		fn set_balance(
 			origin,
 			who: <T::Lookup as StaticLookup>::Source,
@@ -485,6 +451,39 @@ decl_module! {
 			}
 			Self::set_reserved_balance(&who, new_reserved);
 		}
+
+		/// Exactly as `transfer`, except the origin must be root and the source account may be
+		/// specified.
+		#[weight = SimpleDispatchInfo::FixedNormal(1_000_000)]
+		pub fn force_transfer(
+			origin,
+			source: <T::Lookup as StaticLookup>::Source,
+			dest: <T::Lookup as StaticLookup>::Source,
+			#[compact] value: T::Balance
+		) {
+			ensure_root(origin)?;
+			let source = T::Lookup::lookup(source)?;
+			let dest = T::Lookup::lookup(dest)?;
+			<Self as Currency<_>>::transfer(&source, &dest, value, ExistenceRequirement::AllowDeath)?;
+		}
+
+		/// Same as the [`transfer`] call, but with a check that the transfer will not kill the
+		/// origin account.
+		///
+		/// 99% of the time you want [`transfer`] instead.
+		///
+		/// [`transfer`]: struct.Module.html#method.transfer
+		#[weight = SimpleDispatchInfo::FixedNormal(1_000_000)]
+		pub fn transfer_keep_alive(
+			origin,
+			dest: <T::Lookup as StaticLookup>::Source,
+			#[compact] value: T::Balance
+		) {
+			let transactor = ensure_signed(origin)?;
+			let dest = T::Lookup::lookup(dest)?;
+			<Self as Currency<_>>::transfer(&transactor, &dest, value, ExistenceRequirement::KeepAlive)?;
+		}
+
 	}
 }
 
@@ -751,7 +750,7 @@ mod imbalances {
 // This works as long as `increase_total_issuance_by` doesn't use the Imbalance
 // types (basically for charging fees).
 // This should eventually be refactored so that the three type items that do
-// depend on the Imbalance type (TransactionPayment, TransferPayment, DustRemoval)
+// depend on the Imbalance type (TransferPayment, DustRemoval)
 // are placed in their own SRML module.
 struct ElevatedTrait<T: Subtrait<I>, I: Instance>(T, I);
 impl<T: Subtrait<I>, I: Instance> Clone for ElevatedTrait<T, I> {
@@ -771,32 +770,28 @@ impl<T: Subtrait<I>, I: Instance> system::Trait for ElevatedTrait<T, I> {
 	type AccountId = T::AccountId;
 	type Lookup = T::Lookup;
 	type Header = T::Header;
-	type WeightMultiplierUpdate = T::WeightMultiplierUpdate;
 	type Event = ();
 	type BlockHashCount = T::BlockHashCount;
 	type MaximumBlockWeight = T::MaximumBlockWeight;
 	type MaximumBlockLength = T::MaximumBlockLength;
 	type AvailableBlockRatio = T::AvailableBlockRatio;
+	type Version = T::Version;
 }
 impl<T: Subtrait<I>, I: Instance> Trait<I> for ElevatedTrait<T, I> {
 	type Balance = T::Balance;
 	type OnFreeBalanceZero = T::OnFreeBalanceZero;
 	type OnNewAccount = T::OnNewAccount;
 	type Event = ();
-	type TransactionPayment = ();
 	type TransferPayment = ();
 	type DustRemoval = ();
 	type ExistentialDeposit = T::ExistentialDeposit;
 	type TransferFee = T::TransferFee;
 	type CreationFee = T::CreationFee;
-	type TransactionBaseFee = T::TransactionBaseFee;
-	type TransactionByteFee = T::TransactionByteFee;
-	type WeightToFee = T::WeightToFee;
 }
 
 impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I>
 where
-	T::Balance: MaybeSerializeDebug
+	T::Balance: MaybeSerializeDeserialize + Debug
 {
 	type Balance = T::Balance;
 	type PositiveImbalance = PositiveImbalance<T, I>;
@@ -823,12 +818,12 @@ where
 	}
 
 	fn burn(mut amount: Self::Balance) -> Self::PositiveImbalance {
-		<TotalIssuance<T, I>>::mutate(|issued|
-			issued.checked_sub(&amount).unwrap_or_else(|| {
+		<TotalIssuance<T, I>>::mutate(|issued| {
+			*issued = issued.checked_sub(&amount).unwrap_or_else(|| {
 				amount = *issued;
 				Zero::zero()
-			})
-		);
+			});
+		});
 		PositiveImbalance::new(amount)
 	}
 
@@ -849,13 +844,13 @@ where
 	fn ensure_can_withdraw(
 		who: &T::AccountId,
 		_amount: T::Balance,
-		reason: WithdrawReason,
+		reasons: WithdrawReasons,
 		new_balance: T::Balance,
 	) -> Result {
-		match reason {
-			WithdrawReason::Reserve | WithdrawReason::Transfer if Self::vesting_balance(who) > new_balance =>
-				return Err("vesting balance too high to send value"),
-			_ => {}
+		if reasons.intersects(WithdrawReason::Reserve | WithdrawReason::Transfer)
+			&& Self::vesting_balance(who) > new_balance
+		{
+			return Err("vesting balance too high to send value");
 		}
 		let locks = Self::locks(who);
 		if locks.is_empty() {
@@ -867,7 +862,7 @@ where
 			.all(|l|
 				now >= l.until
 				|| new_balance >= l.amount
-				|| !l.reasons.contains(reason)
+				|| !l.reasons.intersects(reasons)
 			)
 		{
 			Ok(())
@@ -876,7 +871,12 @@ where
 		}
 	}
 
-	fn transfer(transactor: &T::AccountId, dest: &T::AccountId, value: Self::Balance) -> Result {
+	fn transfer(
+		transactor: &T::AccountId,
+		dest: &T::AccountId,
+		value: Self::Balance,
+		existence_requirement: ExistenceRequirement,
+	) -> Result {
 		let from_balance = Self::free_balance(transactor);
 		let to_balance = Self::free_balance(dest);
 		let would_create = to_balance.is_zero();
@@ -893,7 +893,7 @@ where
 		if would_create && value < T::ExistentialDeposit::get() {
 			return Err("value too low to create account");
 		}
-		Self::ensure_can_withdraw(transactor, value, WithdrawReason::Transfer, new_from_balance)?;
+		Self::ensure_can_withdraw(transactor, value, WithdrawReason::Transfer.into(), new_from_balance)?;
 
 		// NOTE: total stake being stored in the same type means that this could never overflow
 		// but better to be safe than sorry.
@@ -903,6 +903,12 @@ where
 		};
 
 		if transactor != dest {
+			if existence_requirement == ExistenceRequirement::KeepAlive {
+				if new_from_balance < Self::minimum_balance() {
+					return Err("transfer would kill account");
+				}
+			}
+
 			Self::set_free_balance(transactor, new_from_balance);
 			if !<FreeBalance<T, I>>::exists(dest) {
 				Self::new_account(dest, new_to_balance);
@@ -918,14 +924,21 @@ where
 	fn withdraw(
 		who: &T::AccountId,
 		value: Self::Balance,
-		reason: WithdrawReason,
+		reasons: WithdrawReasons,
 		liveness: ExistenceRequirement,
 	) -> result::Result<Self::NegativeImbalance, &'static str> {
-		if let Some(new_balance) = Self::free_balance(who).checked_sub(&value) {
-			if liveness == ExistenceRequirement::KeepAlive && new_balance < T::ExistentialDeposit::get() {
+		let old_balance = Self::free_balance(who);
+		if let Some(new_balance) = old_balance.checked_sub(&value) {
+			// if we need to keep the account alive...
+			if liveness == ExistenceRequirement::KeepAlive
+				// ...and it would be dead afterwards...
+				&& new_balance < T::ExistentialDeposit::get()
+				// ...yet is was alive before
+				&& old_balance >= T::ExistentialDeposit::get()
+			{
 				return Err("payment would kill account")
 			}
-			Self::ensure_can_withdraw(who, value, reason, new_balance)?;
+			Self::ensure_can_withdraw(who, value, reasons, new_balance)?;
 			Self::set_free_balance(who, new_balance);
 			Ok(NegativeImbalance::new(value))
 		} else {
@@ -1026,13 +1039,13 @@ where
 
 impl<T: Trait<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I>
 where
-	T::Balance: MaybeSerializeDebug
+	T::Balance: MaybeSerializeDeserialize + Debug
 {
 	fn can_reserve(who: &T::AccountId, value: Self::Balance) -> bool {
 		Self::free_balance(who)
 			.checked_sub(&value)
 			.map_or(false, |new_balance|
-				Self::ensure_can_withdraw(who, value, WithdrawReason::Reserve, new_balance).is_ok()
+				Self::ensure_can_withdraw(who, value, WithdrawReason::Reserve.into(), new_balance).is_ok()
 			)
 	}
 
@@ -1046,7 +1059,7 @@ where
 			return Err("not enough free funds")
 		}
 		let new_balance = b - value;
-		Self::ensure_can_withdraw(who, value, WithdrawReason::Reserve, new_balance)?;
+		Self::ensure_can_withdraw(who, value, WithdrawReason::Reserve.into(), new_balance)?;
 		Self::set_reserved_balance(who, Self::reserved_balance(who) + value);
 		Self::set_free_balance(who, new_balance);
 		Ok(())
@@ -1089,7 +1102,7 @@ where
 
 impl<T: Trait<I>, I: Instance> LockableCurrency<T::AccountId> for Module<T, I>
 where
-	T::Balance: MaybeSerializeDebug
+	T::Balance: MaybeSerializeDeserialize + Debug
 {
 	type Moment = T::BlockNumber;
 
@@ -1161,92 +1174,9 @@ where
 	}
 }
 
-/// Require the transactor pay for themselves and maybe include a tip to gain additional priority
-/// in the queue.
-#[derive(Encode, Decode, Clone, Eq, PartialEq)]
-pub struct TakeFees<T: Trait<I>, I: Instance = DefaultInstance>(#[codec(compact)] T::Balance);
-
-impl<T: Trait<I>, I: Instance> TakeFees<T, I> {
-	/// utility constructor. Used only in client/factory code.
-	#[cfg(feature = "std")]
-	pub fn from(fee: T::Balance) -> Self {
-		Self(fee)
-	}
-
-	/// Compute the final fee value for a particular transaction.
-	///
-	/// The final fee is composed of:
-	///   - _length-fee_: This is the amount paid merely to pay for size of the transaction.
-	///   - _weight-fee_: This amount is computed based on the weight of the transaction. Unlike
-	///      size-fee, this is not input dependent and reflects the _complexity_ of the execution
-	///      and the time it consumes.
-	///   - (optional) _tip_: if included in the transaction, it will be added on top. Only signed
-	///      transactions can have a tip.
-	fn compute_fee(len: usize, info: DispatchInfo, tip: T::Balance) -> T::Balance {
-		let len_fee = if info.pay_length_fee() {
-			let len = T::Balance::from(len as u32);
-			let base = T::TransactionBaseFee::get();
-			let per_byte = T::TransactionByteFee::get();
-			base.saturating_add(per_byte.saturating_mul(len))
-		} else {
-			Zero::zero()
-		};
-
-		let weight_fee = {
-			// cap the weight to the maximum defined in runtime, otherwise it will be the `Bounded`
-			// maximum of its data type, which is not desired.
-			let capped_weight = info.weight.min(<T as system::Trait>::MaximumBlockWeight::get());
-			let weight_update = <system::Module<T>>::next_weight_multiplier();
-			let adjusted_weight = weight_update.apply_to(capped_weight);
-			T::WeightToFee::convert(adjusted_weight)
-		};
-
-		len_fee.saturating_add(weight_fee).saturating_add(tip)
-	}
-}
-
-#[cfg(feature = "std")]
-impl<T: Trait<I>, I: Instance> rstd::fmt::Debug for TakeFees<T, I> {
-	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
-		self.0.fmt(f)
-	}
-}
-
-impl<T: Trait<I>, I: Instance + Clone + Eq> SignedExtension for TakeFees<T, I> {
-	type AccountId = T::AccountId;
-	type Call = T::Call;
-	type AdditionalSigned = ();
-	type Pre = ();
-	fn additional_signed(&self) -> rstd::result::Result<(), &'static str> { Ok(()) }
-
-	fn validate(
-		&self,
-		who: &Self::AccountId,
-		_call: &Self::Call,
-		info: DispatchInfo,
-		len: usize,
-	) -> rstd::result::Result<ValidTransaction, DispatchError> {
-		// pay any fees.
-		let fee = Self::compute_fee(len, info, self.0);
-		let imbalance = <Module<T, I>>::withdraw(
-			who,
-			fee,
-			WithdrawReason::TransactionPayment,
-			ExistenceRequirement::KeepAlive,
-		).map_err(|_| DispatchError::Payment)?;
-		T::TransactionPayment::on_unbalanced(imbalance);
-
-		let mut r = ValidTransaction::default();
-		// NOTE: we probably want to maximize the _fee (of any type) per weight unit_ here, which
-		// will be a bit more than setting the priority to tip. For now, this is enough.
-		r.priority = fee.saturated_into::<TransactionPriority>();
-		Ok(r)
-	}
-}
-
 impl<T: Trait<I>, I: Instance> IsDeadAccount<T::AccountId> for Module<T, I>
 where
-	T::Balance: MaybeSerializeDebug
+	T::Balance: MaybeSerializeDeserialize + Debug
 {
 	fn is_dead_account(who: &T::AccountId) -> bool {
 		Self::total_balance(who).is_zero()

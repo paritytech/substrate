@@ -17,12 +17,12 @@
 use super::api::BlockBuilder as BlockBuilderApi;
 use std::vec::Vec;
 use codec::Encode;
-use sr_primitives::ApplyOutcome;
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{
 	Header as HeaderT, Hash, Block as BlockT, One, HashFor, ProvideRuntimeApi, ApiRef, DigestFor,
 };
 use primitives::{H256, ExecutionContext};
+use state_machine::StorageProof;
 use crate::blockchain::HeaderBackend;
 use crate::runtime_api::{Core, ApiExt};
 use crate::error;
@@ -104,7 +104,7 @@ where
 				ExecutionContext::BlockConstruction,
 				xt.clone()
 			)? {
-				Ok(ApplyOutcome::Success) | Ok(ApplyOutcome::Fail) => {
+				Ok(_) => {
 					extrinsics.push(xt);
 					Ok(())
 				}
@@ -129,7 +129,7 @@ where
 		debug_assert_eq!(
 			self.header.extrinsics_root().clone(),
 			HashFor::<Block>::ordered_trie_root(
-				self.extrinsics.iter().map(Encode::encode)
+				self.extrinsics.iter().map(Encode::encode).collect(),
 			),
 		);
 
@@ -141,7 +141,7 @@ where
 	///
 	/// The proof will be `Some(_)`, if proof recording was enabled while creating
 	/// the block builder.
-	pub fn bake_and_extract_proof(mut self) -> error::Result<(Block, Option<Vec<Vec<u8>>>)> {
+	pub fn bake_and_extract_proof(mut self) -> error::Result<(Block, Option<StorageProof>)> {
 		self.bake_impl()?;
 
 		let proof = self.api.extract_proof();

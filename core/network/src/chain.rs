@@ -16,10 +16,10 @@
 
 //! Blockchain access trait
 
-use client::{self, Client as SubstrateClient, ClientInfo, BlockStatus, CallExecutor};
+use client::{self, Client as SubstrateClient, ClientInfo, CallExecutor};
 use client::error::Error;
-use client::light::fetcher::ChangesProof;
-use consensus::{BlockImport, Error as ConsensusError};
+use client::light::fetcher::{ChangesProof, StorageProof};
+use consensus::{BlockImport, BlockStatus, Error as ConsensusError};
 use sr_primitives::traits::{Block as BlockT, Header as HeaderT};
 use sr_primitives::generic::{BlockId};
 use sr_primitives::Justification;
@@ -46,13 +46,22 @@ pub trait Client<Block: BlockT>: Send + Sync {
 	fn justification(&self, id: &BlockId<Block>) -> Result<Option<Justification>, Error>;
 
 	/// Get block header proof.
-	fn header_proof(&self, block_number: <Block::Header as HeaderT>::Number) -> Result<(Block::Header, Vec<Vec<u8>>), Error>;
+	fn header_proof(&self, block_number: <Block::Header as HeaderT>::Number)
+		-> Result<(Block::Header, StorageProof), Error>;
 
 	/// Get storage read execution proof.
-	fn read_proof(&self, block: &Block::Hash, key: &[u8]) -> Result<Vec<Vec<u8>>, Error>;
+	fn read_proof(&self, block: &Block::Hash, keys: &[Vec<u8>]) -> Result<StorageProof, Error>;
+
+	/// Get child storage read execution proof.
+	fn read_child_proof(
+		&self,
+		block: &Block::Hash,
+		storage_key: &[u8],
+		keys: &[Vec<u8>],
+	) -> Result<StorageProof, Error>;
 
 	/// Get method execution proof.
-	fn execution_proof(&self, block: &Block::Hash, method: &str, data: &[u8]) -> Result<(Vec<u8>, Vec<Vec<u8>>), Error>;
+	fn execution_proof(&self, block: &Block::Hash, method: &str, data: &[u8]) -> Result<(Vec<u8>, StorageProof), Error>;
 
 	/// Get key changes proof.
 	fn key_changes_proof(
@@ -61,6 +70,7 @@ pub trait Client<Block: BlockT>: Send + Sync {
 		last: Block::Hash,
 		min: Block::Hash,
 		max: Block::Hash,
+		storage_key: Option<&StorageKey>,
 		key: &StorageKey
 	) -> Result<ChangesProof<Block::Header>, Error>;
 
@@ -72,6 +82,12 @@ pub trait Client<Block: BlockT>: Send + Sync {
 pub trait FinalityProofProvider<Block: BlockT>: Send + Sync {
 	/// Prove finality of the block.
 	fn prove_finality(&self, for_block: Block::Hash, request: &[u8]) -> Result<Option<Vec<u8>>, Error>;
+}
+
+impl<Block: BlockT> FinalityProofProvider<Block> for () {
+	fn prove_finality(&self, _for_block: Block::Hash, _request: &[u8]) -> Result<Option<Vec<u8>>, Error> {
+		Ok(None)
+	}
 }
 
 impl<B, E, Block, RA> Client<Block> for SubstrateClient<B, E, Block, RA> where
@@ -105,15 +121,27 @@ impl<B, E, Block, RA> Client<Block> for SubstrateClient<B, E, Block, RA> where
 		(self as &SubstrateClient<B, E, Block, RA>).justification(id)
 	}
 
-	fn header_proof(&self, block_number: <Block::Header as HeaderT>::Number) -> Result<(Block::Header, Vec<Vec<u8>>), Error> {
+	fn header_proof(&self, block_number: <Block::Header as HeaderT>::Number)
+		-> Result<(Block::Header, StorageProof), Error>
+	{
 		(self as &SubstrateClient<B, E, Block, RA>).header_proof(&BlockId::Number(block_number))
 	}
 
-	fn read_proof(&self, block: &Block::Hash, key: &[u8]) -> Result<Vec<Vec<u8>>, Error> {
-		(self as &SubstrateClient<B, E, Block, RA>).read_proof(&BlockId::Hash(block.clone()), key)
+	fn read_proof(&self, block: &Block::Hash, keys: &[Vec<u8>]) -> Result<StorageProof, Error> {
+		(self as &SubstrateClient<B, E, Block, RA>).read_proof(&BlockId::Hash(block.clone()), keys)
 	}
 
-	fn execution_proof(&self, block: &Block::Hash, method: &str, data: &[u8]) -> Result<(Vec<u8>, Vec<Vec<u8>>), Error> {
+	fn read_child_proof(
+		&self,
+		block: &Block::Hash,
+		storage_key: &[u8],
+		keys: &[Vec<u8>],
+	) -> Result<StorageProof, Error> {
+		(self as &SubstrateClient<B, E, Block, RA>)
+			.read_child_proof(&BlockId::Hash(block.clone()), storage_key, keys)
+	}
+
+	fn execution_proof(&self, block: &Block::Hash, method: &str, data: &[u8]) -> Result<(Vec<u8>, StorageProof), Error> {
 		(self as &SubstrateClient<B, E, Block, RA>).execution_proof(&BlockId::Hash(block.clone()), method, data)
 	}
 
@@ -123,9 +151,10 @@ impl<B, E, Block, RA> Client<Block> for SubstrateClient<B, E, Block, RA> where
 		last: Block::Hash,
 		min: Block::Hash,
 		max: Block::Hash,
-		key: &StorageKey
+		storage_key: Option<&StorageKey>,
+		key: &StorageKey,
 	) -> Result<ChangesProof<Block::Header>, Error> {
-		(self as &SubstrateClient<B, E, Block, RA>).key_changes_proof(first, last, min, max, key)
+		(self as &SubstrateClient<B, E, Block, RA>).key_changes_proof(first, last, min, max, storage_key, key)
 	}
 
 	fn is_descendent_of(&self, base: &Block::Hash, block: &Block::Hash) -> Result<bool, Error> {
@@ -133,13 +162,8 @@ impl<B, E, Block, RA> Client<Block> for SubstrateClient<B, E, Block, RA> where
 			return Ok(false);
 		}
 
-		let tree_route = ::client::blockchain::tree_route(
-			#[allow(deprecated)]
-			self.backend().blockchain(),
-			BlockId::Hash(*block),
-			BlockId::Hash(*base),
-		)?;
+		let ancestor = header_metadata::lowest_common_ancestor(self, *block, *base)?;
 
-		Ok(tree_route.common_block().hash == *base)
+		Ok(ancestor.hash == *base)
 	}
 }

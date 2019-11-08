@@ -91,6 +91,8 @@ impl<Number: BlockNumber> Iterator for DigestBuildIterator<Number> {
 	type Item = Number;
 
 	fn next(&mut self) -> Option<Self::Item> {
+		// when we're building skewed digest, we might want to skip some blocks if
+		// they're not covered by current configuration
 		loop {
 			if let Some(next) = self.current_range.as_mut().and_then(|iter| iter.next()) {
 				if next < self.end {

@@ -21,39 +21,43 @@ use crate::{RuntimePublic, KeyTypeId};
 pub use primitives::sr25519::*;
 
 mod app {
-	use crate::key_types::SR25519;
+	use primitives::testing::SR25519;
 	crate::app_crypto!(super, SR25519);
+
+	impl crate::traits::BoundToRuntimeAppPublic for Public {
+		type Public = Self;
+	}
 }
 
 pub use app::Public as AppPublic;
 pub use app::Signature as AppSignature;
-#[cfg(feature="std")]
+#[cfg(feature = "full_crypto")]
 pub use app::Pair as AppPair;
 
 impl RuntimePublic for Public {
 	type Signature = Signature;
 
 	fn all(key_type: KeyTypeId) -> crate::Vec<Self> {
-		rio::sr25519_public_keys(key_type)
+		runtime_io::sr25519_public_keys(key_type)
 	}
 
 	fn generate_pair(key_type: KeyTypeId, seed: Option<&str>) -> Self {
-		rio::sr25519_generate(key_type, seed)
+		runtime_io::sr25519_generate(key_type, seed)
 	}
 
 	fn sign<M: AsRef<[u8]>>(&self, key_type: KeyTypeId, msg: &M) -> Option<Self::Signature> {
-		rio::sr25519_sign(key_type, self, msg)
+		runtime_io::sr25519_sign(key_type, self, msg.as_ref())
 	}
 
 	fn verify<M: AsRef<[u8]>>(&self, msg: &M, signature: &Self::Signature) -> bool {
-		rio::sr25519_verify(&signature, msg.as_ref(), self)
+		runtime_io::sr25519_verify(&signature, msg.as_ref(), self)
 	}
 }
 
 #[cfg(test)]
 mod tests {
 	use sr_primitives::{generic::BlockId, traits::ProvideRuntimeApi};
-	use primitives::{testing::KeyStore, crypto::Pair, traits::BareCryptoStore as _};
+	use primitives::{testing::{KeyStore, SR25519}, crypto::Pair};
 	use test_client::{
 		TestClientBuilder, DefaultTestClientBuilderExt, TestClientBuilderExt,
 		runtime::{TestAPI, app_crypto::sr25519::{AppPair, AppPublic}},
@@ -67,7 +71,7 @@ mod tests {
 			.test_sr25519_crypto(&BlockId::Number(0))
 			.expect("Tests `sr25519` crypto.");
 
-		let key_pair = keystore.read().sr25519_key_pair(crate::key_types::SR25519, public.as_ref())
+		let key_pair = keystore.read().sr25519_key_pair(SR25519, public.as_ref())
 			.expect("There should be at a `sr25519` key in the keystore for the given public key.");
 
 		assert!(AppPair::verify(&signature, "sr25519", &AppPublic::from(key_pair.public())));

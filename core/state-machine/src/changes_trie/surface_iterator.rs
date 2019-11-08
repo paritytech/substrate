@@ -17,13 +17,16 @@
 //! The best way to understand how this iterator works is to imagine some 2D terrain that have some mountains
 //! (digest changes tries) and valleys (changes tries for regular blocks). There are gems (blocks) beneath the
 //! terrain. Given the request to find all gems in the range [X1; X2] this iterator will return **minimal set**
-//! of points at the terrain (mountains and valleys() inside this range that have to be drilled down to
+//! of points at the terrain (mountains and valleys) inside this range that have to be drilled down to
 //! search for gems.
 
 use num_traits::One;
 use crate::changes_trie::{ConfigurationRange, BlockNumber};
 
 /// Returns surface iterator for given range of blocks.
+///
+/// `max` is the number of best block, known to caller. We can't access any changes tries
+/// that are built after this block, even though we may have them built already.
 pub fn surface_iterator<'a, Number: BlockNumber>(
 	config: ConfigurationRange<'a, Number>,
 	max: Number,
@@ -226,7 +229,12 @@ mod tests {
 
 		// when config activates at 0
 		assert_eq!(
-			surface_iterator(configuration_range(&config, 0u64), 100_000u64, 40u64, 180u64).unwrap().collect::<Vec<_>>(),
+			surface_iterator(
+				configuration_range(&config, 0u64),
+				100_000u64,
+				40u64,
+				180u64,
+			).unwrap().collect::<Vec<_>>(),
 			vec![
 				Ok((192, Some(2))), Ok((176, Some(2))), Ok((160, Some(2))), Ok((144, Some(2))),
 				Ok((128, Some(2))), Ok((112, Some(2))), Ok((96, Some(2))), Ok((80, Some(2))),
@@ -236,7 +244,12 @@ mod tests {
 
 		// when config activates at 30
 		assert_eq!(
-			surface_iterator(configuration_range(&config, 30u64), 100_000u64, 40u64, 180u64).unwrap().collect::<Vec<_>>(),
+			surface_iterator(
+				configuration_range(&config, 30u64),
+				100_000u64,
+				40u64,
+				180u64,
+			).unwrap().collect::<Vec<_>>(),
 			vec![
 				Ok((190, Some(2))), Ok((174, Some(2))), Ok((158, Some(2))), Ok((142, Some(2))), Ok((126, Some(2))),
 				Ok((110, Some(2))), Ok((94, Some(2))), Ok((78, Some(2))), Ok((62, Some(2))), Ok((46, Some(2))),

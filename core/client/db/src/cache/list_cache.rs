@@ -87,7 +87,8 @@ pub enum CommitOperation<Block: BlockT, T: CacheItemT> {
 	/// - new entry is finalized AND/OR
 	/// - some forks are destroyed
 	BlockFinalized(ComplexBlockId<Block>, Option<Entry<Block, T>>, BTreeSet<usize>),
-	/// When best block is reverted - contains the forks that have to be updated.
+	/// When best block is reverted - contains the forks that have to be updated
+	/// (they're either destroyed, or their best entry is updated to earlier block).
 	BlockReverted(BTreeMap<usize, Option<Fork<Block, T>>>),
 }
 
@@ -147,7 +148,7 @@ impl<Block: BlockT, T: CacheItemT + ::std::fmt::Debug, S: Storage<Block, T>> Lis
 	/// Get value valid at block.
 	pub fn value_at_block(
 		&self,
-		at: ComplexBlockId<Block>,
+		at: &ComplexBlockId<Block>,
 	) -> ClientResult<Option<(ComplexBlockId<Block>, Option<ComplexBlockId<Block>>, T)>> {
 		let head = if at.number <= self.best_finalized_block.number {
 			// if the block is older than the best known finalized block
@@ -353,29 +354,38 @@ impl<Block: BlockT, T: CacheItemT + ::std::fmt::Debug, S: Storage<Block, T>> Lis
 		Ok(Some(operation))
 	}
 
-	/// When previously inserted block is finalized.
+	/// When block is reverted.
 	pub fn on_block_revert<Tx: StorageTransaction<Block, T>>(
 		&self,
 		tx: &mut Tx,
-		block: NumberFor<Block>,
+		reverted_block: &ComplexBlockId<Block>,
 	) -> ClientResult<CommitOperation<Block, T>> {
 		// can't revert finalized blocks
-		debug_assert!(self.best_finalized_block.number < block);
+		debug_assert!(self.best_finalized_block.number < reverted_block.number);
 
 		// iterate all unfinalized forks and truncate/destroy if required
 		let mut updated = BTreeMap::new();
 		for (index, fork) in self.unfinalized.iter().enumerate() {
-			if fork.head.valid_from.number >= block {
-				let updated_fork = fork.truncate(
-					&self.storage,
-					tx,
-					block,
-					self.best_finalized_block.number,
-				)?;
-				updated.insert(index, updated_fork);
+			// we only need to truncate fork if its head is ancestor of truncated block
+			if fork.head.valid_from.number < reverted_block.number {
+				continue;
 			}
+
+			// we only need to truncate fork if its head is connected to truncated block
+			if !chain::is_connected_to_block(&self.storage, reverted_block, &fork.head.valid_from)? {
+				continue;
+			}
+
+			let updated_fork = fork.truncate(
+				&self.storage,
+				tx,
+				reverted_block.number,
+				self.best_finalized_block.number,
+			)?;
+			updated.insert(index, updated_fork);
 		}
 
+		// schedule commit operation and update meta
 		let operation = CommitOperation::BlockReverted(updated);
 		tx.update_meta(self.best_finalized_entry.as_ref(), &self.unfinalized, &operation);
 
@@ -384,6 +394,7 @@ impl<Block: BlockT, T: CacheItemT + ::std::fmt::Debug, S: Storage<Block, T>> Lis
 
 	/// When transaction is committed.
 	pub fn on_transaction_commit(&mut self, ops: Vec<CommitOperation<Block, T>>) {
+println!("=== on_transaction_commit: {:?}", ops);
 		for op in ops {
 			match op {
 				CommitOperation::AppendNewBlock(index, best_block) => {
@@ -412,8 +423,8 @@ impl<Block: BlockT, T: CacheItemT + ::std::fmt::Debug, S: Storage<Block, T>> Lis
 					if let Some(finalizing_entry) = finalizing_entry {
 						self.best_finalized_entry = Some(finalizing_entry);
 					}
-					for fork_index in forks.into_iter().rev() {
-						self.unfinalized.remove(fork_index);
+					for fork_index in forks.iter().rev() {
+						self.unfinalized.remove(*fork_index);
 					}
 				},
 				CommitOperation::BlockReverted(forks) => {
@@ -613,7 +624,7 @@ impl<Block: BlockT, T: CacheItemT> Fork<Block, T> {
 		&self,
 		storage: &S,
 		tx: &mut Tx,
-		truncating_block: NumberFor<Block>,
+		reverting_block: NumberFor<Block>,
 		best_finalized_block: NumberFor<Block>,
 	) -> ClientResult<Option<Fork<Block, T>>> {
 		let mut current = self.head.valid_from.clone();
@@ -621,13 +632,13 @@ impl<Block: BlockT, T: CacheItemT> Fork<Block, T> {
 			// read pointer to previous entry
 			let entry = storage.require_entry(&current)?;
 
-			// truncation stops when we have reached the ancestor of truncated block
-			if current.number < truncating_block {
+ 			// truncation stops when we have reached the ancestor of truncated block
+			if current.number < reverting_block {
 				// if we have reached finalized block => destroy fork
 				if chain::is_finalized_block(storage, &current, best_finalized_block)? {
 					return Ok(None);
 				}
-				
+
 				// else fork needs to be updated
 				return Ok(Some(Fork {
 					best_block: None,
@@ -830,7 +841,7 @@ pub mod tests {
 		// --- 50 ---
 		// ----------> [100]
 		assert_eq!(ListCache::<_, u64, _>::new(DummyStorage::new(), PruningStrategy::ByDepth(1024), test_id(100))
-			.unwrap().value_at_block(test_id(50)).unwrap(), None);
+			.unwrap().value_at_block(&test_id(50)).unwrap(), None);
 		// when block is earlier than best finalized block AND it is finalized AND value is some
 		// [30] ---- 50 ---> [100]
 		assert_eq!(ListCache::new(
@@ -840,7 +851,7 @@ pub mod tests {
 				.with_entry(test_id(100), StorageEntry { prev_valid_from: Some(test_id(30)), value: 100 })
 				.with_entry(test_id(30), StorageEntry { prev_valid_from: None, value: 30 }),
 			PruningStrategy::ByDepth(1024), test_id(100)
-		).unwrap().value_at_block(test_id(50)).unwrap(), Some((test_id(30), Some(test_id(100)), 30)));
+		).unwrap().value_at_block(&test_id(50)).unwrap(), Some((test_id(30), Some(test_id(100)), 30)));
 		// when block is the best finalized block AND value is some
 		// ---> [100]
 		assert_eq!(ListCache::new(
@@ -850,7 +861,7 @@ pub mod tests {
 				.with_entry(test_id(100), StorageEntry { prev_valid_from: Some(test_id(30)), value: 100 })
 				.with_entry(test_id(30), StorageEntry { prev_valid_from: None, value: 30 }),
 			PruningStrategy::ByDepth(1024), test_id(100)
-		).unwrap().value_at_block(test_id(100)).unwrap(), Some((test_id(100), None, 100)));
+		).unwrap().value_at_block(&test_id(100)).unwrap(), Some((test_id(100), None, 100)));
 		// when block is parallel to the best finalized block
 		// ---- 100
 		// ---> [100]
@@ -861,7 +872,7 @@ pub mod tests {
 				.with_entry(test_id(100), StorageEntry { prev_valid_from: Some(test_id(30)), value: 100 })
 				.with_entry(test_id(30), StorageEntry { prev_valid_from: None, value: 30 }),
 			PruningStrategy::ByDepth(1024), test_id(100)
-		).unwrap().value_at_block(ComplexBlockId::new(H256::from_low_u64_be(2), 100)).unwrap(), None);
+		).unwrap().value_at_block(&ComplexBlockId::new(H256::from_low_u64_be(2), 100)).unwrap(), None);
 
 		// when block is later than last finalized block AND there are no forks AND finalized value is Some
 		// ---> [100] --- 200
@@ -871,7 +882,7 @@ pub mod tests {
 				.with_id(50, H256::from_low_u64_be(50))
 				.with_entry(test_id(100), StorageEntry { prev_valid_from: Some(test_id(30)), value: 100 }),
 			PruningStrategy::ByDepth(1024), test_id(100)
-		).unwrap().value_at_block(test_id(200)).unwrap(), Some((test_id(100), None, 100)));
+		).unwrap().value_at_block(&test_id(200)).unwrap(), Some((test_id(100), None, 100)));
 
 		// when block is later than last finalized block AND there are no matching forks
 		// AND block is connected to finalized block AND finalized value is Some
@@ -887,7 +898,7 @@ pub mod tests {
 				.with_header(test_header(4))
 				.with_header(fork_header(0, 2, 3)),
 			PruningStrategy::ByDepth(1024), test_id(2)
-		).unwrap().value_at_block(fork_id(0, 2, 3)).unwrap(), Some((correct_id(2), None, 2)));
+		).unwrap().value_at_block(&fork_id(0, 2, 3)).unwrap(), Some((correct_id(2), None, 2)));
 		// when block is later than last finalized block AND there are no matching forks
 		// AND block is not connected to finalized block
 		//    ---   2  --- 3
@@ -904,7 +915,7 @@ pub mod tests {
 				.with_header(fork_header(0, 1, 3))
 				.with_header(fork_header(0, 1, 2)),
 			PruningStrategy::ByDepth(1024), test_id(2)
-		).unwrap().value_at_block(fork_id(0, 1, 3)).unwrap(), None);
+		).unwrap().value_at_block(&fork_id(0, 1, 3)).unwrap(), None);
 
 		// when block is later than last finalized block AND it appends to unfinalized fork from the end
 		// AND unfinalized value is Some
@@ -917,7 +928,7 @@ pub mod tests {
 				.with_header(test_header(4))
 				.with_header(test_header(5)),
 			PruningStrategy::ByDepth(1024), test_id(2)
-		).unwrap().value_at_block(correct_id(5)).unwrap(), Some((correct_id(4), None, 4)));
+		).unwrap().value_at_block(&correct_id(5)).unwrap(), Some((correct_id(4), None, 4)));
 		// when block is later than last finalized block AND it does not fits unfinalized fork
 		// AND it is connected to the finalized block AND finalized value is Some
 		// ---> [2] ----------> [4]
@@ -932,7 +943,7 @@ pub mod tests {
 				.with_header(test_header(4))
 				.with_header(fork_header(0, 2, 3)),
 			PruningStrategy::ByDepth(1024), test_id(2)
-		).unwrap().value_at_block(fork_id(0, 2, 3)).unwrap(), Some((correct_id(2), None, 2)));
+		).unwrap().value_at_block(&fork_id(0, 2, 3)).unwrap(), Some((correct_id(2), None, 2)));
 	}
 
 	#[test]
@@ -1552,32 +1563,53 @@ pub mod tests {
 
 	#[test]
 	fn revert_block_works() {
+		// 1 -> (2) -> 3 -> 4 -> 5
+		//                   \
+		//                    -> 5''
+		//         \
+		//          -> (3') -> 4' -> 5'
 		let mut cache = ListCache::new(
 			DummyStorage::new()
-				.with_meta(Some(test_id(10)), vec![test_id(15), fork_id(1, 11, 17)])
-				.with_id(10, test_id(10).hash)
-				.with_entry(test_id(10), StorageEntry { prev_valid_from: None, value: 10 })
-				.with_entry(test_id(15), StorageEntry { prev_valid_from: Some(test_id(10)), value: 15 })
-				.with_entry(fork_id(1, 11,13), StorageEntry { prev_valid_from: Some(test_id(10)), value: 13 })
-				.with_entry(fork_id(1, 11,17), StorageEntry { prev_valid_from: Some(fork_id(1, 11, 13)), value: 17 }),
-			PruningStrategy::NeverPrune, test_id(10)
+				.with_meta(Some(correct_id(1)), vec![correct_id(5), fork_id(1, 2, 5), fork_id(2, 4, 5)])
+				.with_id(1, correct_id(1).hash)
+				.with_entry(correct_id(1), StorageEntry { prev_valid_from: None, value: 1 })
+				.with_entry(correct_id(3), StorageEntry { prev_valid_from: Some(correct_id(1)), value: 3 })
+				.with_entry(correct_id(4), StorageEntry { prev_valid_from: Some(correct_id(3)), value: 4 })
+				.with_entry(correct_id(5), StorageEntry { prev_valid_from: Some(correct_id(4)), value: 5 })
+				.with_entry(fork_id(1, 2, 4), StorageEntry { prev_valid_from: Some(correct_id(1)), value: 14 })
+				.with_entry(fork_id(1, 2, 5), StorageEntry { prev_valid_from: Some(fork_id(1, 2, 4)), value: 15 })
+				.with_entry(fork_id(2, 4, 5), StorageEntry { prev_valid_from: Some(correct_id(4)), value: 25 })
+				.with_header(test_header(1))
+				.with_header(test_header(2))
+				.with_header(test_header(3))
+				.with_header(test_header(4))
+				.with_header(test_header(5))
+				.with_header(fork_header(1, 2, 3))
+				.with_header(fork_header(1, 2, 4))
+				.with_header(fork_header(1, 2, 5))
+				.with_header(fork_header(2, 4, 5)),
+			PruningStrategy::ByDepth(1024), correct_id(1)
 		).unwrap();
 
-		let op = cache.on_block_revert(&mut DummyTransaction::new(), 17).unwrap();
+		// when 5 is reverted: entry 5 is truncated
+		let op = cache.on_block_revert(&mut DummyTransaction::new(), &correct_id(5)).unwrap();
 		assert_eq!(op, CommitOperation::BlockReverted(vec![
-			(1, Some(Fork { best_block: None, head: Entry { valid_from: fork_id(1, 11, 13), value: 13 } })),
+			(0, Some(Fork { best_block: None, head: Entry { valid_from: correct_id(4), value: 4 } })),
 		].into_iter().collect()));
 		cache.on_transaction_commit(vec![op]);
 
-		let op = cache.on_block_revert(&mut DummyTransaction::new(), 14).unwrap();
+		// when 3 is reverted: entries 4+5' are truncated
+		let op = cache.on_block_revert(&mut DummyTransaction::new(), &correct_id(3)).unwrap();
 		assert_eq!(op, CommitOperation::BlockReverted(vec![
 			(0, None),
+			(2, None),
 		].into_iter().collect()));
 		cache.on_transaction_commit(vec![op]);
 
-		let op = cache.on_block_revert(&mut DummyTransaction::new(), 11).unwrap();
+		// when 2 is reverted: entries 4'+5' are truncated
+		let op = cache.on_block_revert(&mut DummyTransaction::new(), &correct_id(2)).unwrap();
 		assert_eq!(op, CommitOperation::BlockReverted(vec![
-			(0, None), // it is actually 1, because 0 has been destroyed already
+			(0, None),
 		].into_iter().collect()));
 		cache.on_transaction_commit(vec![op]);
 	}

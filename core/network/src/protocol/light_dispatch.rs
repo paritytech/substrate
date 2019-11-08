@@ -28,7 +28,7 @@ use linked_hash_map::{Entry, LinkedHashMap};
 use client::error::Error as ClientError;
 use client::light::fetcher::{FetchChecker, RemoteHeaderRequest,
 	RemoteCallRequest, RemoteReadRequest, RemoteChangesRequest, ChangesProof,
-	RemoteReadChildRequest, RemoteBodyRequest};
+	RemoteReadChildRequest, RemoteBodyRequest, StorageProof};
 use crate::message::{self, BlockAttributes, Direction, FromBlock, RequestId};
 use libp2p::PeerId;
 use crate::config::Roles;
@@ -53,7 +53,13 @@ pub trait LightDispatchNetwork<B: BlockT> {
 	fn send_header_request(&mut self, who: &PeerId, id: RequestId, block: <<B as BlockT>::Header as HeaderT>::Number);
 
 	/// Send to `who` a read request.
-	fn send_read_request(&mut self, who: &PeerId, id: RequestId, block: <B as BlockT>::Hash, key: Vec<u8>);
+	fn send_read_request(
+		&mut self,
+		who: &PeerId,
+		id: RequestId,
+		block: <B as BlockT>::Hash,
+		keys: Vec<Vec<u8>>,
+	);
 
 	/// Send to `who` a child read request.
 	fn send_read_child_request(
@@ -62,7 +68,7 @@ pub trait LightDispatchNetwork<B: BlockT> {
 		id: RequestId,
 		block: <B as BlockT>::Hash,
 		storage_key: Vec<u8>,
-		key: Vec<u8>
+		keys: Vec<Vec<u8>>,
 	);
 
 	/// Send to `who` a call request.
@@ -84,7 +90,8 @@ pub trait LightDispatchNetwork<B: BlockT> {
 		last: <B as BlockT>::Hash,
 		min: <B as BlockT>::Hash,
 		max: <B as BlockT>::Hash,
-		key: Vec<u8>
+		storage_key: Option<Vec<u8>>,
+		key: Vec<u8>,
 	);
 
 	/// Send to `who` a body request.
@@ -134,10 +141,13 @@ struct Request<Block: BlockT> {
 pub(crate) enum RequestData<Block: BlockT> {
 	RemoteBody(RemoteBodyRequest<Block::Header>, OneShotSender<Result<Vec<Block::Extrinsic>, ClientError>>),
 	RemoteHeader(RemoteHeaderRequest<Block::Header>, OneShotSender<Result<Block::Header, ClientError>>),
-	RemoteRead(RemoteReadRequest<Block::Header>, OneShotSender<Result<Option<Vec<u8>>, ClientError>>),
+	RemoteRead(
+		RemoteReadRequest<Block::Header>,
+		OneShotSender<Result<HashMap<Vec<u8>, Option<Vec<u8>>>, ClientError>>,
+	),
 	RemoteReadChild(
 		RemoteReadChildRequest<Block::Header>,
-		OneShotSender<Result<Option<Vec<u8>>, ClientError>>
+		OneShotSender<Result<HashMap<Vec<u8>, Option<Vec<u8>>>, ClientError>>
 	),
 	RemoteCall(RemoteCallRequest<Block::Header>, OneShotSender<Result<Vec<u8>, ClientError>>),
 	RemoteChanges(
@@ -164,7 +174,7 @@ impl<Block: BlockT> FetchChecker<Block> for AlwaysBadChecker {
 		&self,
 		_request: &RemoteHeaderRequest<Block::Header>,
 		_remote_header: Option<Block::Header>,
-		_remote_proof: Vec<Vec<u8>>
+		_remote_proof: StorageProof,
 	) -> Result<Block::Header, ClientError> {
 		Err(ClientError::Msg("AlwaysBadChecker".into()))
 	}
@@ -172,23 +182,23 @@ impl<Block: BlockT> FetchChecker<Block> for AlwaysBadChecker {
 	fn check_read_proof(
 		&self,
 		_request: &RemoteReadRequest<Block::Header>,
-		_remote_proof: Vec<Vec<u8>>
-	) -> Result<Option<Vec<u8>>, ClientError> {
+		_remote_proof: StorageProof,
+	) -> Result<HashMap<Vec<u8>,Option<Vec<u8>>>, ClientError> {
 		Err(ClientError::Msg("AlwaysBadChecker".into()))
 	}
 
 	fn check_read_child_proof(
 		&self,
 		_request: &RemoteReadChildRequest<Block::Header>,
-		_remote_proof: Vec<Vec<u8>>
-	) -> Result<Option<Vec<u8>>, ClientError> {
+		_remote_proof: StorageProof,
+	) -> Result<HashMap<Vec<u8>, Option<Vec<u8>>>, ClientError> {
 		Err(ClientError::Msg("AlwaysBadChecker".into()))
 	}
 
 	fn check_execution_proof(
 		&self,
 		_request: &RemoteCallRequest<Block::Header>,
-		_remote_proof: Vec<Vec<u8>>
+		_remote_proof: StorageProof,
 	) -> Result<Vec<u8>, ClientError> {
 		Err(ClientError::Msg("AlwaysBadChecker".into()))
 	}
@@ -603,7 +613,7 @@ impl<Block: BlockT> Request<Block> {
 					peer,
 					self.id,
 					data.block,
-					data.key.clone(),
+					data.keys.clone(),
 				),
 			RequestData::RemoteReadChild(ref data, _) =>
 				out.send_read_child_request(
@@ -611,7 +621,7 @@ impl<Block: BlockT> Request<Block> {
 					self.id,
 					data.block,
 					data.storage_key.clone(),
-					data.key.clone(),
+					data.keys.clone(),
 				),
 			RequestData::RemoteCall(ref data, _) =>
 				out.send_call_request(
@@ -629,6 +639,7 @@ impl<Block: BlockT> Request<Block> {
 					data.last_block.1.clone(),
 					data.tries_roots.1.clone(),
 					data.max_block.1.clone(),
+					data.storage_key.clone(),
 					data.key.clone(),
 				),
 			RequestData::RemoteBody(ref data, _) =>
@@ -661,7 +672,7 @@ impl<Block: BlockT> RequestData<Block> {
 
 #[cfg(test)]
 pub mod tests {
-	use std::collections::HashSet;
+	use std::collections::{HashMap, HashSet};
 	use std::sync::Arc;
 	use std::time::Instant;
 	use futures::{Future, sync::oneshot};
@@ -669,12 +680,12 @@ pub mod tests {
 	use sr_primitives::traits::{Block as BlockT, NumberFor, Header as HeaderT};
 	use client::{error::{Error as ClientError, Result as ClientResult}};
 	use client::light::fetcher::{FetchChecker, RemoteHeaderRequest,
-		ChangesProof,	RemoteCallRequest, RemoteReadRequest,
+		ChangesProof, RemoteCallRequest, RemoteReadRequest,
 		RemoteReadChildRequest, RemoteChangesRequest, RemoteBodyRequest};
 	use crate::config::Roles;
 	use crate::message::{self, BlockAttributes, Direction, FromBlock, RequestId};
 	use libp2p::PeerId;
-	use super::{REQUEST_TIMEOUT, LightDispatch, LightDispatchNetwork, RequestData};
+	use super::{REQUEST_TIMEOUT, LightDispatch, LightDispatchNetwork, RequestData, StorageProof};
 	use test_client::runtime::{Block, Extrinsic, Header};
 
 	struct DummyFetchChecker { ok: bool }
@@ -684,7 +695,7 @@ pub mod tests {
 			&self,
 			_request: &RemoteHeaderRequest<Header>,
 			header: Option<Header>,
-			_remote_proof: Vec<Vec<u8>>
+			_remote_proof: StorageProof,
 		) -> ClientResult<Header> {
 			match self.ok {
 				true if header.is_some() => Ok(header.unwrap()),
@@ -692,25 +703,39 @@ pub mod tests {
 			}
 		}
 
-		fn check_read_proof(&self, _: &RemoteReadRequest<Header>, _: Vec<Vec<u8>>) -> ClientResult<Option<Vec<u8>>> {
+		fn check_read_proof(
+			&self,
+			request: &RemoteReadRequest<Header>,
+			_: StorageProof,
+		) -> ClientResult<HashMap<Vec<u8>, Option<Vec<u8>>>> {
 			match self.ok {
-				true => Ok(Some(vec![42])),
+				true => Ok(request.keys
+					.iter()
+					.cloned()
+					.map(|k| (k, Some(vec![42])))
+					.collect()
+				),
 				false => Err(ClientError::Backend("Test error".into())),
 			}
 		}
 
 		fn check_read_child_proof(
 			&self,
-			_: &RemoteReadChildRequest<Header>,
-			_: Vec<Vec<u8>>
-		) -> ClientResult<Option<Vec<u8>>> {
+			request: &RemoteReadChildRequest<Header>,
+			_: StorageProof,
+		) -> ClientResult<HashMap<Vec<u8>, Option<Vec<u8>>>> {
 			match self.ok {
-				true => Ok(Some(vec![42])),
+				true => Ok(request.keys
+					.iter()
+					.cloned()
+					.map(|k| (k, Some(vec![42])))
+					.collect()
+				),
 				false => Err(ClientError::Backend("Test error".into())),
 			}
 		}
 
-		fn check_execution_proof(&self, _: &RemoteCallRequest<Header>, _: Vec<Vec<u8>>) -> ClientResult<Vec<u8>> {
+		fn check_execution_proof(&self, _: &RemoteCallRequest<Header>, _: StorageProof) -> ClientResult<Vec<u8>> {
 			match self.ok {
 				true => Ok(vec![42]),
 				false => Err(ClientError::Backend("Test error".into())),
@@ -756,7 +781,7 @@ pub mod tests {
 	) {
 		light_dispatch.on_remote_call_response(network_interface, peer, message::RemoteCallResponse {
 			id: id,
-			proof: vec![vec![2]],
+			proof: StorageProof::empty(),
 		});
 	}
 
@@ -781,12 +806,12 @@ pub mod tests {
 			self.disconnected_peers.insert(who.clone());
 		}
 		fn send_header_request(&mut self, _: &PeerId, _: RequestId, _: <<B as BlockT>::Header as HeaderT>::Number) {}
-		fn send_read_request(&mut self, _: &PeerId, _: RequestId, _: <B as BlockT>::Hash, _: Vec<u8>) {}
+		fn send_read_request(&mut self, _: &PeerId, _: RequestId, _: <B as BlockT>::Hash, _: Vec<Vec<u8>>) {}
 		fn send_read_child_request(&mut self, _: &PeerId, _: RequestId, _: <B as BlockT>::Hash, _: Vec<u8>,
-			_: Vec<u8>) {}
+			_: Vec<Vec<u8>>) {}
 		fn send_call_request(&mut self, _: &PeerId, _: RequestId, _: <B as BlockT>::Hash, _: String, _: Vec<u8>) {}
 		fn send_changes_request(&mut self, _: &PeerId, _: RequestId, _: <B as BlockT>::Hash, _: <B as BlockT>::Hash,
-			_: <B as BlockT>::Hash, _: <B as BlockT>::Hash, _: Vec<u8>) {}
+			_: <B as BlockT>::Hash, _: <B as BlockT>::Hash, _: Option<Vec<u8>>, _: Vec<u8>) {}
 		fn send_body_request(&mut self, _: &PeerId, _: RequestId, _: BlockAttributes, _: FromBlock<<B as BlockT>::Hash,
 			<<B as BlockT>::Header as HeaderT>::Number>, _: Option<B::Hash>, _: Direction, _: Option<u32>) {}
 	}
@@ -919,7 +944,7 @@ pub mod tests {
 
 		light_dispatch.on_remote_read_response(&mut network_interface, peer0.clone(), message::RemoteReadResponse {
 			id: 0,
-			proof: vec![vec![2]],
+			proof: StorageProof::empty(),
 		});
 		assert_disconnected_peer(&network_interface);
 		assert_eq!(light_dispatch.pending_requests.len(), 1);
@@ -983,15 +1008,15 @@ pub mod tests {
 		light_dispatch.add_request(&mut network_interface, RequestData::RemoteRead(RemoteReadRequest {
 			header: dummy_header(),
 			block: Default::default(),
-			key: b":key".to_vec(),
+			keys: vec![b":key".to_vec()],
 			retry_count: None,
 		}, tx));
 
 		light_dispatch.on_remote_read_response(&mut network_interface, peer0.clone(), message::RemoteReadResponse {
 			id: 0,
-			proof: vec![vec![2]],
+			proof: StorageProof::empty(),
 		});
-		assert_eq!(response.wait().unwrap().unwrap(), Some(vec![42]));
+		assert_eq!(response.wait().unwrap().unwrap().remove(b":key".as_ref()).unwrap(), Some(vec![42]));
 	}
 
 	#[test]
@@ -1006,16 +1031,16 @@ pub mod tests {
 			header: dummy_header(),
 			block: Default::default(),
 			storage_key: b":child_storage:sub".to_vec(),
-			key: b":key".to_vec(),
+			keys: vec![b":key".to_vec()],
 			retry_count: None,
 		}, tx));
 
 		light_dispatch.on_remote_read_response(&mut network_interface,
 			peer0.clone(), message::RemoteReadResponse {
 				id: 0,
-				proof: vec![vec![2]],
+				proof: StorageProof::empty(),
 		});
-		assert_eq!(response.wait().unwrap().unwrap(), Some(vec![42]));
+		assert_eq!(response.wait().unwrap().unwrap().remove(b":key".as_ref()).unwrap(), Some(vec![42]));
 	}
 
 	#[test]
@@ -1041,7 +1066,7 @@ pub mod tests {
 				extrinsics_root: Default::default(),
 				digest: Default::default(),
 			}),
-			proof: vec![vec![2]],
+			proof: StorageProof::empty(),
 		});
 		assert_eq!(
 			response.wait().unwrap().unwrap().hash(),
@@ -1064,6 +1089,7 @@ pub mod tests {
 			max_block: (100, Default::default()),
 			tries_roots: (1, Default::default(), vec![]),
 			key: vec![],
+			storage_key: None,
 			retry_count: None,
 		}, tx));
 
@@ -1072,7 +1098,7 @@ pub mod tests {
 			max: 1000,
 			proof: vec![vec![2]],
 			roots: vec![],
-			roots_proof: vec![],
+			roots_proof: StorageProof::empty(),
 		});
 		assert_eq!(response.wait().unwrap().unwrap(), vec![(100, 2)]);
 	}
@@ -1120,7 +1146,7 @@ pub mod tests {
 		light_dispatch.on_remote_header_response(&mut network_interface, peer1.clone(), message::RemoteHeaderResponse {
 			id: 0,
 			header: Some(dummy_header()),
-			proof: vec![],
+			proof: StorageProof::empty(),
 		});
 
 		assert!(!light_dispatch.idle_peers.iter().any(|_| true));

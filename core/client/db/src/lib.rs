@@ -40,31 +40,35 @@ use std::io;
 use std::collections::HashMap;
 
 use client::backend::NewBlockState;
-use client::blockchain::HeaderBackend;
-use client::ExecutionStrategies;
+use client::blockchain::{well_known_cache_keys, HeaderBackend};
+use client::{ForkBlocks, ExecutionStrategies};
 use client::backend::{StorageCollection, ChildStorageCollection, PrunableStateChangesTrieStorage};
+use client::error::{Result as ClientResult, Error as ClientError};
 use codec::{Decode, Encode};
 use hash_db::{Hasher, Prefix};
 use kvdb::{KeyValueDB, DBTransaction};
 use trie::{MemoryDB, PrefixedMemoryDB, prefixed_key};
 use parking_lot::{Mutex, RwLock};
-use primitives::{H256, Blake2Hasher, ChangesTrieConfiguration};
+use primitives::{H256, Blake2Hasher, ChangesTrieConfiguration, traits::CodeExecutor};
 use primitives::storage::well_known_keys;
 use sr_primitives::{
 	generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay,
-	BuildStorage
+	BuildStorage,
 };
 use sr_primitives::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, Zero, One, SaturatedConversion
 };
-use state_machine::backend::Backend as StateBackend;
 use executor::RuntimeInfo;
-use state_machine::{CodeExecutor, DBValue};
-use crate::utils::{Meta, db_err, meta_keys, read_db, block_id_to_lookup_key, read_meta};
+use state_machine::{
+	DBValue, ChangesTrieTransaction, ChangesTrieCacheAction,
+	backend::Backend as StateBackend,
+};
+use crate::utils::{Meta, db_err, meta_keys, read_db, read_meta};
 use crate::changes_tries_storage::{DbChangesTrieStorage, DbChangesTrieStorageTransaction};
 use client::leaves::{LeafSet, FinalizationDisplaced};
-use client::{children, well_known_cache_keys};
+use client::children;
 use state_db::StateDb;
+use header_metadata::{CachedHeaderMetadata, HeaderMetadata, HeaderMetadataCache};
 use crate::storage_cache::{CachingState, SharedCache, new_shared_cache};
 use log::{trace, debug, warn};
 pub use state_db::PruningMode;
@@ -80,6 +84,9 @@ const DEFAULT_CHILD_RATIO: (usize, usize) = (1, 10);
 
 /// DB-backed patricia trie state, transaction type is an overlay of changes to commit.
 pub type DbState = state_machine::TrieBackend<Arc<dyn state_machine::Storage<Blake2Hasher>>, Blake2Hasher>;
+
+/// Re-export the KVDB trait so that one can pass an implementation of it.
+pub use kvdb;
 
 /// A reference tracking state.
 ///
@@ -106,6 +113,12 @@ impl<B: BlockT> Drop for RefTrackingState<B> {
 		if let Some(hash) = &self.parent_hash {
 			self.storage.state_db.unpin(hash);
 		}
+	}
+}
+
+impl<Block: BlockT> std::fmt::Debug for RefTrackingState<Block> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "Block {:?}", self.parent_hash)
 	}
 }
 
@@ -136,6 +149,10 @@ impl<B: BlockT> StateBackend<Blake2Hasher> for RefTrackingState<B> {
 
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
 		self.state.for_keys_with_prefix(prefix, f)
+	}
+
+	fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], f: F) {
+		self.state.for_key_values_with_prefix(prefix, f)
 	}
 
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], f: F) {
@@ -179,16 +196,28 @@ impl<B: BlockT> StateBackend<Blake2Hasher> for RefTrackingState<B> {
 
 /// Database settings.
 pub struct DatabaseSettings {
-	/// Cache size in bytes. If `None` default is used.
-	pub cache_size: Option<usize>,
 	/// State cache size.
 	pub state_cache_size: usize,
 	/// Ratio of cache size dedicated to child tries.
 	pub state_cache_child_ratio: Option<(usize, usize)>,
-	/// Path to the database.
-	pub path: PathBuf,
 	/// Pruning mode.
 	pub pruning: PruningMode,
+	/// Where to find the database.
+	pub source: DatabaseSettingsSrc,
+}
+
+/// Where to find the database..
+pub enum DatabaseSettingsSrc {
+	/// Load a database from a given path. Recommended for most uses.
+	Path {
+		/// Path to the database.
+		path: PathBuf,
+		/// Cache size in bytes. If `None` default is used.
+		cache_size: Option<usize>,
+	},
+
+	/// Use a custom already-open database.
+	Custom(Arc<dyn KeyValueDB>),
 }
 
 /// Create an instance of db-backed client.
@@ -196,20 +225,31 @@ pub fn new_client<E, S, Block, RA>(
 	settings: DatabaseSettings,
 	executor: E,
 	genesis_storage: S,
+	fork_blocks: ForkBlocks<Block>,
 	execution_strategies: ExecutionStrategies,
 	keystore: Option<primitives::traits::BareCryptoStorePtr>,
-) -> Result<
-	client::Client<Backend<Block>,
-	client::LocalCallExecutor<Backend<Block>, E>, Block, RA>, client::error::Error
+) -> Result<(
+		client::Client<
+			Backend<Block>,
+			client::LocalCallExecutor<Backend<Block>, E>,
+			Block,
+			RA,
+		>,
+		Arc<Backend<Block>>,
+	),
+	client::error::Error,
 >
 	where
 		Block: BlockT<Hash=H256>,
-		E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
+		E: CodeExecutor + RuntimeInfo,
 		S: BuildStorage,
 {
 	let backend = Arc::new(Backend::new(settings, CANONICALIZATION_DELAY)?);
 	let executor = client::LocalCallExecutor::new(backend.clone(), executor, keystore);
-	Ok(client::Client::new(backend, executor, genesis_storage, execution_strategies)?)
+	Ok((
+		client::Client::new(backend.clone(), executor, genesis_storage, fork_blocks, execution_strategies)?,
+		backend,
+	))
 }
 
 pub(crate) mod columns {
@@ -251,16 +291,18 @@ pub struct BlockchainDb<Block: BlockT> {
 	db: Arc<dyn KeyValueDB>,
 	meta: Arc<RwLock<Meta<NumberFor<Block>, Block::Hash>>>,
 	leaves: RwLock<LeafSet<Block::Hash, NumberFor<Block>>>,
+	header_metadata_cache: HeaderMetadataCache<Block>,
 }
 
 impl<Block: BlockT> BlockchainDb<Block> {
-	fn new(db: Arc<dyn KeyValueDB>) -> Result<Self, client::error::Error> {
+	fn new(db: Arc<dyn KeyValueDB>) -> ClientResult<Self> {
 		let meta = read_meta::<Block>(&*db, columns::META, columns::HEADER)?;
 		let leaves = LeafSet::read_from_db(&*db, columns::META, meta_keys::LEAF_PREFIX)?;
 		Ok(BlockchainDb {
 			db,
 			leaves: RwLock::new(leaves),
 			meta: Arc::new(RwLock::new(meta)),
+			header_metadata_cache: HeaderMetadataCache::default(),
 		})
 	}
 
@@ -290,7 +332,7 @@ impl<Block: BlockT> BlockchainDb<Block> {
 }
 
 impl<Block: BlockT> client::blockchain::HeaderBackend<Block> for BlockchainDb<Block> {
-	fn header(&self, id: BlockId<Block>) -> Result<Option<Block::Header>, client::error::Error> {
+	fn header(&self, id: BlockId<Block>) -> ClientResult<Option<Block::Header>> {
 		utils::read_header(&*self.db, columns::KEY_LOOKUP, columns::HEADER, id)
 	}
 
@@ -305,7 +347,7 @@ impl<Block: BlockT> client::blockchain::HeaderBackend<Block> for BlockchainDb<Bl
 		}
 	}
 
-	fn status(&self, id: BlockId<Block>) -> Result<client::blockchain::BlockStatus, client::error::Error> {
+	fn status(&self, id: BlockId<Block>) -> ClientResult<client::blockchain::BlockStatus> {
 		let exists = match id {
 			BlockId::Hash(_) => read_db(
 				&*self.db,
@@ -321,16 +363,11 @@ impl<Block: BlockT> client::blockchain::HeaderBackend<Block> for BlockchainDb<Bl
 		}
 	}
 
-	fn number(&self, hash: Block::Hash) -> Result<Option<NumberFor<Block>>, client::error::Error> {
-		if let Some(lookup_key) = block_id_to_lookup_key::<Block>(&*self.db, columns::KEY_LOOKUP, BlockId::Hash(hash))? {
-			let number = utils::lookup_key_to_number(&lookup_key)?;
-			Ok(Some(number))
-		} else {
-			Ok(None)
-		}
+	fn number(&self, hash: Block::Hash) -> ClientResult<Option<NumberFor<Block>>> {
+		Ok(self.header_metadata(hash).ok().map(|header_metadata| header_metadata.number))
 	}
 
-	fn hash(&self, number: NumberFor<Block>) -> Result<Option<Block::Hash>, client::error::Error> {
+	fn hash(&self, number: NumberFor<Block>) -> ClientResult<Option<Block::Hash>> {
 		self.header(BlockId::Number(number)).and_then(|maybe_header| match maybe_header {
 			Some(header) => Ok(Some(header.hash().clone())),
 			None => Ok(None),
@@ -339,7 +376,7 @@ impl<Block: BlockT> client::blockchain::HeaderBackend<Block> for BlockchainDb<Bl
 }
 
 impl<Block: BlockT> client::blockchain::Backend<Block> for BlockchainDb<Block> {
-	fn body(&self, id: BlockId<Block>) -> Result<Option<Vec<Block::Extrinsic>>, client::error::Error> {
+	fn body(&self, id: BlockId<Block>) -> ClientResult<Option<Vec<Block::Extrinsic>>> {
 		match read_db(&*self.db, columns::KEY_LOOKUP, columns::BODY, id)? {
 			Some(body) => match Decode::decode(&mut &body[..]) {
 				Ok(body) => Ok(Some(body)),
@@ -351,7 +388,7 @@ impl<Block: BlockT> client::blockchain::Backend<Block> for BlockchainDb<Block> {
 		}
 	}
 
-	fn justification(&self, id: BlockId<Block>) -> Result<Option<Justification>, client::error::Error> {
+	fn justification(&self, id: BlockId<Block>) -> ClientResult<Option<Justification>> {
 		match read_db(&*self.db, columns::KEY_LOOKUP, columns::JUSTIFICATION, id)? {
 			Some(justification) => match Decode::decode(&mut &justification[..]) {
 				Ok(justification) => Ok(Some(justification)),
@@ -363,7 +400,7 @@ impl<Block: BlockT> client::blockchain::Backend<Block> for BlockchainDb<Block> {
 		}
 	}
 
-	fn last_finalized(&self) -> Result<Block::Hash, client::error::Error> {
+	fn last_finalized(&self) -> ClientResult<Block::Hash> {
 		Ok(self.meta.read().finalized_hash.clone())
 	}
 
@@ -371,11 +408,11 @@ impl<Block: BlockT> client::blockchain::Backend<Block> for BlockchainDb<Block> {
 		None
 	}
 
-	fn leaves(&self) -> Result<Vec<Block::Hash>, client::error::Error> {
+	fn leaves(&self) -> ClientResult<Vec<Block::Hash>> {
 		Ok(self.leaves.read().hashes())
 	}
 
-	fn children(&self, parent_hash: Block::Hash) -> Result<Vec<Block::Hash>, client::error::Error> {
+	fn children(&self, parent_hash: Block::Hash) -> ClientResult<Vec<Block::Hash>> {
 		children::read_children(&*self.db, columns::META, meta_keys::CHILDREN_PREFIX, parent_hash)
 	}
 }
@@ -386,6 +423,31 @@ impl<Block: BlockT> client::blockchain::ProvideCache<Block> for BlockchainDb<Blo
 	}
 }
 
+impl<Block: BlockT> HeaderMetadata<Block> for BlockchainDb<Block> {
+	type Error = client::error::Error;
+
+	fn header_metadata(&self, hash: Block::Hash) -> Result<CachedHeaderMetadata<Block>, Self::Error> {
+		self.header_metadata_cache.header_metadata(hash).or_else(|_| {
+			self.header(BlockId::hash(hash))?.map(|header| {
+				let header_metadata = CachedHeaderMetadata::from(&header);
+				self.header_metadata_cache.insert_header_metadata(
+					header_metadata.hash,
+					header_metadata.clone(),
+				);
+				header_metadata
+			}).ok_or(ClientError::UnknownBlock(format!("header not found in db: {}", hash)))
+		})
+	}
+
+	fn insert_header_metadata(&self, hash: Block::Hash, metadata: CachedHeaderMetadata<Block>) {
+		self.header_metadata_cache.insert_header_metadata(hash, metadata)
+	}
+
+	fn remove_header_metadata(&self, hash: Block::Hash) {
+		self.header_metadata_cache.remove_header_metadata(hash);
+	}
+}
+
 /// Database transaction
 pub struct BlockImportOperation<Block: BlockT, H: Hasher> {
 	old_state: CachingState<Blake2Hasher, RefTrackingState<Block>, Block>,
@@ -393,6 +455,7 @@ pub struct BlockImportOperation<Block: BlockT, H: Hasher> {
 	storage_updates: StorageCollection,
 	child_storage_updates: ChildStorageCollection,
 	changes_trie_updates: MemoryDB<H>,
+	changes_trie_cache_update: Option<ChangesTrieCacheAction<H::Out, NumberFor<Block>>>,
 	changes_trie_config_update: Option<Option<ChangesTrieConfiguration>>,
 	pending_block: Option<PendingBlock<Block>>,
 	aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
@@ -412,12 +475,11 @@ impl<Block: BlockT, H: Hasher> BlockImportOperation<Block, H> {
 }
 
 impl<Block> client::backend::BlockImportOperation<Block, Blake2Hasher>
-for BlockImportOperation<Block, Blake2Hasher>
-where Block: BlockT<Hash=H256>,
+	for BlockImportOperation<Block, Blake2Hasher> where Block: BlockT<Hash=H256>,
 {
 	type State = CachingState<Blake2Hasher, RefTrackingState<Block>, Block>;
 
-	fn state(&self) -> Result<Option<&Self::State>, client::error::Error> {
+	fn state(&self) -> ClientResult<Option<&Self::State>> {
 		Ok(Some(&self.old_state))
 	}
 
@@ -427,7 +489,7 @@ where Block: BlockT<Hash=H256>,
 		body: Option<Vec<Block::Extrinsic>>,
 		justification: Option<Justification>,
 		leaf_state: NewBlockState,
-	) -> Result<(), client::error::Error> {
+	) -> ClientResult<()> {
 		assert!(self.pending_block.is_none(), "Only one block per operation is allowed");
 		if let Some(changes_trie_config_update) = changes_tries_storage::extract_new_configuration(&header) {
 			self.changes_trie_config_update = Some(changes_trie_config_update.clone());
@@ -445,7 +507,7 @@ where Block: BlockT<Hash=H256>,
 		// Currently cache isn't implemented on full nodes.
 	}
 
-	fn update_db_storage(&mut self, update: PrefixedMemoryDB<Blake2Hasher>) -> Result<(), client::error::Error> {
+	fn update_db_storage(&mut self, update: PrefixedMemoryDB<Blake2Hasher>) -> ClientResult<()> {
 		self.db_updates = update;
 		Ok(())
 	}
@@ -454,7 +516,7 @@ where Block: BlockT<Hash=H256>,
 		&mut self,
 		top: StorageOverlay,
 		children: ChildrenStorageOverlay
-	) -> Result<H256, client::error::Error> {
+	) -> ClientResult<H256> {
 
 		if top.iter().any(|(k, _)| well_known_keys::is_child_storage_key(k)) {
 			return Err(client::error::Error::GenesisInvalid.into());
@@ -490,12 +552,16 @@ where Block: BlockT<Hash=H256>,
 		Ok(root)
 	}
 
-	fn update_changes_trie(&mut self, update: MemoryDB<Blake2Hasher>) -> Result<(), client::error::Error> {
-		self.changes_trie_updates = update;
+	fn update_changes_trie(
+		&mut self,
+		update: ChangesTrieTransaction<Blake2Hasher, NumberFor<Block>>,
+	) -> ClientResult<()> {
+		self.changes_trie_updates = update.0;
+		self.changes_trie_cache_update = Some(update.1);
 		Ok(())
 	}
 
-	fn insert_aux<I>(&mut self, ops: I) -> Result<(), client::error::Error>
+	fn insert_aux<I>(&mut self, ops: I) -> ClientResult<()>
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
 		self.aux_ops.append(&mut ops.into_iter().collect());
@@ -506,18 +572,18 @@ where Block: BlockT<Hash=H256>,
 		&mut self,
 		update: StorageCollection,
 		child_update: ChildStorageCollection,
-	) -> Result<(), client::error::Error> {
+	) -> ClientResult<()> {
 		self.storage_updates = update;
 		self.child_storage_updates = child_update;
 		Ok(())
 	}
 
-	fn mark_finalized(&mut self, block: BlockId<Block>, justification: Option<Justification>) -> Result<(), client::error::Error> {
+	fn mark_finalized(&mut self, block: BlockId<Block>, justification: Option<Justification>) -> ClientResult<()> {
 		self.finalized_blocks.push((block, justification));
 		Ok(())
 	}
 
-	fn mark_head(&mut self, block: BlockId<Block>) -> Result<(), client::error::Error> {
+	fn mark_head(&mut self, block: BlockId<Block>) -> ClientResult<()> {
 		assert!(self.set_head.is_none(), "Only one set head per operation is allowed");
 		self.set_head = Some(block);
 		Ok(())
@@ -579,18 +645,8 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 	/// Create a new instance of database backend.
 	///
 	/// The pruning window is how old a block must be before the state is pruned.
-	pub fn new(config: DatabaseSettings, canonicalization_delay: u64) -> client::error::Result<Self> {
-		Self::new_inner(config, canonicalization_delay)
-	}
-
-	fn new_inner(config: DatabaseSettings, canonicalization_delay: u64) -> Result<Self, client::error::Error> {
-		#[cfg(feature = "kvdb-rocksdb")]
+	pub fn new(config: DatabaseSettings, canonicalization_delay: u64) -> ClientResult<Self> {
 		let db = crate::utils::open_database(&config, columns::META, "full")?;
-		#[cfg(not(feature = "kvdb-rocksdb"))]
-		let db = {
-			log::warn!("Running without the RocksDB feature. The database will NOT be saved.");
-			Arc::new(kvdb_memorydb::create(crate::utils::NUM_COLUMNS))
-		};
 		Self::from_kvdb(db as Arc<_>, canonicalization_delay, &config)
 	}
 
@@ -598,32 +654,21 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 	#[cfg(any(test, feature = "test-helpers"))]
 	pub fn new_test(keep_blocks: u32, canonicalization_delay: u64) -> Self {
 		let db = Arc::new(kvdb_memorydb::create(crate::utils::NUM_COLUMNS));
-		Self::new_test_db(keep_blocks, canonicalization_delay, db as Arc<_>)
-	}
-
-	/// Creates a client backend with test settings.
-	#[cfg(any(test, feature = "test-helpers"))]
-	pub fn new_test_db(keep_blocks: u32, canonicalization_delay: u64, db: Arc<dyn KeyValueDB>) -> Self {
-
 		let db_setting = DatabaseSettings {
-			cache_size: None,
 			state_cache_size: 16777216,
 			state_cache_child_ratio: Some((50, 100)),
-			path: Default::default(),
 			pruning: PruningMode::keep_blocks(keep_blocks),
+			source: DatabaseSettingsSrc::Custom(db),
 		};
-		Self::from_kvdb(
-			db,
-			canonicalization_delay,
-			&db_setting,
-		).expect("failed to create test-db")
+
+		Self::new(db_setting, canonicalization_delay).expect("failed to create test-db")
 	}
 
 	fn from_kvdb(
 		db: Arc<dyn KeyValueDB>,
 		canonicalization_delay: u64,
 		config: &DatabaseSettings
-	) -> Result<Self, client::error::Error> {
+	) -> ClientResult<Self> {
 		let is_archive_pruning = config.pruning.is_archive();
 		let blockchain = BlockchainDb::new(db.clone())?;
 		let meta = blockchain.meta.clone();
@@ -714,7 +759,12 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 	/// In the case where the new best block is a block to be imported, `route_to`
 	/// should be the parent of `best_to`. In the case where we set an existing block
 	/// to be best, `route_to` should equal to `best_to`.
-	fn set_head_with_transaction(&self, transaction: &mut DBTransaction, route_to: Block::Hash, best_to: (NumberFor<Block>, Block::Hash)) -> Result<(Vec<Block::Hash>, Vec<Block::Hash>), client::error::Error> {
+	fn set_head_with_transaction(
+		&self,
+		transaction: &mut DBTransaction,
+		route_to: Block::Hash,
+		best_to: (NumberFor<Block>, Block::Hash),
+	) -> ClientResult<(Vec<Block::Hash>, Vec<Block::Hash>)> {
 		let mut enacted = Vec::default();
 		let mut retracted = Vec::default();
 
@@ -722,10 +772,10 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 
 		// cannot find tree route with empty DB.
 		if meta.best_hash != Default::default() {
-			let tree_route = ::client::blockchain::tree_route(
+			let tree_route = header_metadata::tree_route(
 				&self.blockchain,
-				BlockId::Hash(meta.best_hash),
-				BlockId::Hash(route_to),
+				meta.best_hash,
+				route_to,
 			)?;
 
 			// uncanonicalize: check safety violations and ensure the numbers no longer
@@ -776,7 +826,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 		&self,
 		header: &Block::Header,
 		last_finalized: Option<Block::Hash>,
-	) -> Result<(), client::error::Error> {
+	) -> ClientResult<()> {
 		let last_finalized = last_finalized.unwrap_or_else(|| self.blockchain.meta.read().finalized_hash);
 		if *header.parent_hash() != last_finalized {
 			return Err(::client::error::Error::NonSequentialFinalization(
@@ -795,7 +845,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 		justification: Option<Justification>,
 		changes_trie_cache_ops: &mut Option<DbChangesTrieStorageTransaction<Block>>,
 		finalization_displaced: &mut Option<FinalizationDisplaced<Block::Hash, NumberFor<Block>>>,
-	) -> Result<(Block::Hash, <Block::Header as HeaderT>::Number, bool, bool), client::error::Error> {
+	) -> ClientResult<(Block::Hash, <Block::Header as HeaderT>::Number, bool, bool)> {
 		// TODO: ensure best chain contains this block.
 		let number = *header.number();
 		self.ensure_sequential_finalization(header, last_finalized)?;
@@ -825,7 +875,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 		hash: Block::Hash,
 		number: NumberFor<Block>,
 	)
-		-> Result<(), client::error::Error>
+		-> ClientResult<()>
 	{
 		let number_u64 = number.saturated_into::<u64>();
 		if number_u64 > self.canonicalization_delay {
@@ -853,33 +903,31 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 	}
 
 	fn try_commit_operation(&self, mut operation: BlockImportOperation<Block, Blake2Hasher>)
-		-> Result<(), client::error::Error>
+		-> ClientResult<()>
 	{
 		let mut transaction = DBTransaction::new();
 		let mut finalization_displaced_leaves = None;
 
 		operation.apply_aux(&mut transaction);
 
-		let mut meta_updates = Vec::new();
+		let mut meta_updates = Vec::with_capacity(operation.finalized_blocks.len());
 		let mut last_finalized_hash = self.blockchain.meta.read().finalized_hash;
 
 		let mut changes_trie_cache_ops = None;
-		if !operation.finalized_blocks.is_empty() {
-			for (block, justification) in operation.finalized_blocks {
-				let block_hash = self.blockchain.expect_block_hash_from_id(&block)?;
-				let block_header = self.blockchain.expect_header(BlockId::Hash(block_hash))?;
+		for (block, justification) in operation.finalized_blocks {
+			let block_hash = self.blockchain.expect_block_hash_from_id(&block)?;
+			let block_header = self.blockchain.expect_header(BlockId::Hash(block_hash))?;
 
-				meta_updates.push(self.finalize_block_with_transaction(
-					&mut transaction,
-					&block_hash,
-					&block_header,
-					Some(last_finalized_hash),
-					justification,
-					&mut changes_trie_cache_ops,
-					&mut finalization_displaced_leaves,
-				)?);
-				last_finalized_hash = block_hash;
-			}
+			meta_updates.push(self.finalize_block_with_transaction(
+				&mut transaction,
+				&block_hash,
+				&block_header,
+				Some(last_finalized_hash),
+				justification,
+				&mut changes_trie_cache_ops,
+				&mut finalization_displaced_leaves,
+			)?);
+			last_finalized_hash = block_hash;
 		}
 
 		let imported = if let Some(pending_block) = operation.pending_block {
@@ -902,6 +950,12 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 				number,
 				hash,
 			)?;
+
+			let header_metadata = CachedHeaderMetadata::from(&pending_block.header);
+			self.blockchain.insert_header_metadata(
+				header_metadata.hash,
+				header_metadata,
+			);
 
 			transaction.put(columns::HEADER, &lookup_key, &pending_block.header.encode());
 			if let Some(body) = pending_block.body {
@@ -1014,6 +1068,10 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 
 		let write_result = self.storage.db.write(transaction).map_err(db_err);
 
+		if let Some(changes_trie_cache_update) = operation.changes_trie_cache_update {
+			self.changes_tries_storage.commit_build_cache(changes_trie_cache_update);
+		}
+
 		if let Some((
 			number,
 			hash,
@@ -1074,7 +1132,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 		f_hash: Block::Hash,
 		changes_trie_cache_ops: &mut Option<DbChangesTrieStorageTransaction<Block>>,
 		displaced: &mut Option<FinalizationDisplaced<Block::Hash, NumberFor<Block>>>,
-	) -> Result<(), client::error::Error> where
+	) -> ClientResult<()> where
 		Block: BlockT<Hash=H256>,
 	{
 		let f_num = f_header.number().clone();
@@ -1132,7 +1190,7 @@ impl<Block> client::backend::AuxStore for Backend<Block> where Block: BlockT<Has
 		'c: 'a,
 		I: IntoIterator<Item=&'a(&'c [u8], &'c [u8])>,
 		D: IntoIterator<Item=&'a &'b [u8]>,
-	>(&self, insert: I, delete: D) -> client::error::Result<()> {
+	>(&self, insert: I, delete: D) -> ClientResult<()> {
 		let mut transaction = DBTransaction::new();
 		for (k, v) in insert {
 			transaction.put(columns::AUX, k, v);
@@ -1144,7 +1202,7 @@ impl<Block> client::backend::AuxStore for Backend<Block> where Block: BlockT<Has
 		Ok(())
 	}
 
-	fn get_aux(&self, key: &[u8]) -> Result<Option<Vec<u8>>, client::error::Error> {
+	fn get_aux(&self, key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
 		Ok(self.storage.db.get(columns::AUX, key).map(|r| r.map(|v| v.to_vec())).map_err(db_err)?)
 	}
 }
@@ -1155,7 +1213,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 	type State = CachingState<Blake2Hasher, RefTrackingState<Block>, Block>;
 	type OffchainStorage = offchain::LocalStorage;
 
-	fn begin_operation(&self) -> Result<Self::BlockImportOperation, client::error::Error> {
+	fn begin_operation(&self) -> ClientResult<Self::BlockImportOperation> {
 		let old_state = self.state_at(BlockId::Hash(Default::default()))?;
 		Ok(BlockImportOperation {
 			pending_block: None,
@@ -1165,19 +1223,24 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 			child_storage_updates: Default::default(),
 			changes_trie_config_update: None,
 			changes_trie_updates: MemoryDB::default(),
+			changes_trie_cache_update: None,
 			aux_ops: Vec::new(),
 			finalized_blocks: Vec::new(),
 			set_head: None,
 		})
 	}
 
-	fn begin_state_operation(&self, operation: &mut Self::BlockImportOperation, block: BlockId<Block>) -> Result<(), client::error::Error> {
+	fn begin_state_operation(
+		&self,
+		operation: &mut Self::BlockImportOperation,
+		block: BlockId<Block>,
+	) -> ClientResult<()> {
 		operation.old_state = self.state_at(block)?;
 		Ok(())
 	}
 
 	fn commit_operation(&self, operation: Self::BlockImportOperation)
-		-> Result<(), client::error::Error>
+		-> ClientResult<()>
 	{
 		match self.try_commit_operation(operation) {
 			Ok(_) => {
@@ -1192,7 +1255,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 	}
 
 	fn finalize_block(&self, block: BlockId<Block>, justification: Option<Justification>)
-		-> Result<(), client::error::Error>
+		-> ClientResult<()>
 	{
 		let mut transaction = DBTransaction::new();
 		let hash = self.blockchain.expect_block_hash_from_id(&block)?;
@@ -1235,7 +1298,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 		Some(self.offchain_storage.clone())
 	}
 
-	fn revert(&self, n: NumberFor<Block>) -> Result<NumberFor<Block>, client::error::Error> {
+	fn revert(&self, n: NumberFor<Block>) -> ClientResult<NumberFor<Block>> {
 		let mut best = self.blockchain.info().best_number;
 		let finalized = self.blockchain.info().finalized_number;
 		let revertible = best - finalized;
@@ -1259,7 +1322,13 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 						|| client::error::Error::UnknownBlock(
 							format!("Error reverting to {}. Block hash not found.", best)))?;
 					let key = utils::number_and_hash_to_lookup_key(best.clone(), &hash)?;
-					let changes_trie_cache_ops = self.changes_tries_storage.revert(&mut transaction, removed_number)?;
+					let changes_trie_cache_ops = self.changes_tries_storage.revert(
+						&mut transaction,
+						&cache::ComplexBlockId::new(
+							removed.hash(),
+							removed_number,
+						),
+					)?;
 					transaction.put(columns::META, meta_keys::BEST_BLOCK, &key);
 					transaction.delete(columns::KEY_LOOKUP, removed.hash().as_ref());
 					children::remove_children(&mut transaction, columns::META, meta_keys::CHILDREN_PREFIX, hash);
@@ -1283,7 +1352,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 		Some(used)
 	}
 
-	fn state_at(&self, block: BlockId<Block>) -> Result<Self::State, client::error::Error> {
+	fn state_at(&self, block: BlockId<Block>) -> ClientResult<Self::State> {
 		use client::blockchain::HeaderBackend as BcHeaderBackend;
 
 		// special case for genesis initialization
@@ -1319,7 +1388,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 		!self.storage.state_db.is_pruned(hash, number.saturated_into::<u64>())
 	}
 
-	fn destroy_state(&self, state: Self::State) -> Result<(), client::error::Error> {
+	fn destroy_state(&self, state: Self::State) -> ClientResult<()> {
 		if let Some(hash) = state.cache.parent_hash.clone() {
 			let is_best = || self.blockchain.meta.read().best_hash == hash;
 			state.release().sync_cache(&[], &[], vec![], vec![], None, None, is_best);
@@ -1346,7 +1415,8 @@ pub(crate) mod tests {
 	use sr_primitives::generic::DigestItem;
 	use sr_primitives::testing::{Header, Block as RawBlock, ExtrinsicWrapper};
 	use sr_primitives::traits::{Hash, BlakeTwo256};
-	use state_machine::{TrieMut, TrieDBMut};
+	use state_machine::{TrieMut, TrieDBMut, ChangesTrieRootsStorage, ChangesTrieStorage};
+	use header_metadata::{lowest_common_ancestor, tree_route};
 	use test_client;
 
 	pub type Block = RawBlock<ExtrinsicWrapper<u64>>;
@@ -1386,7 +1456,7 @@ pub(crate) mod tests {
 		let header = Header {
 			number,
 			parent_hash,
-			state_root: BlakeTwo256::trie_root::<_, &[u8], &[u8]>(Vec::new()),
+			state_root: BlakeTwo256::trie_root(Vec::new()),
 			digest,
 			extrinsics_root,
 		};
@@ -1400,7 +1470,7 @@ pub(crate) mod tests {
 		let mut op = backend.begin_operation().unwrap();
 		backend.begin_state_operation(&mut op, block_id).unwrap();
 		op.set_block_data(header, None, None, NewBlockState::Best).unwrap();
-		op.update_changes_trie(changes_trie_update).unwrap();
+		op.update_changes_trie((changes_trie_update, ChangesTrieCacheAction::Clear)).unwrap();
 		backend.commit_operation(op).unwrap();
 
 		header_hash
@@ -1448,7 +1518,12 @@ pub(crate) mod tests {
 			db.storage.db.clone()
 		};
 
-		let backend = Backend::<Block>::new_test_db(1, 0, backing);
+		let backend = Backend::<Block>::new(DatabaseSettings {
+			state_cache_size: 16777216,
+			state_cache_child_ratio: Some((50, 100)),
+			pruning: PruningMode::keep_blocks(1),
+			source: DatabaseSettingsSrc::Custom(backing),
+		}, 0).unwrap();
 		assert_eq!(backend.blockchain().info().best_number, 9);
 		for i in 0..10 {
 			assert!(backend.blockchain().hash(i).unwrap().is_some())
@@ -1701,6 +1776,7 @@ pub(crate) mod tests {
 	#[test]
 	fn tree_route_works() {
 		let backend = Backend::<Block>::new_test(1000, 100);
+		let blockchain = backend.blockchain();
 		let block0 = insert_header(&backend, 0, Default::default(), None, Default::default());
 
 		// fork from genesis: 3 prong.
@@ -1713,11 +1789,7 @@ pub(crate) mod tests {
 		let b2 = insert_header(&backend, 2, b1, None, Default::default());
 
 		{
-			let tree_route = ::client::blockchain::tree_route(
-				backend.blockchain(),
-				BlockId::Hash(a3),
-				BlockId::Hash(b2)
-			).unwrap();
+			let tree_route = tree_route(blockchain, a3, b2).unwrap();
 
 			assert_eq!(tree_route.common_block().hash, block0);
 			assert_eq!(tree_route.retracted().iter().map(|r| r.hash).collect::<Vec<_>>(), vec![a3, a2, a1]);
@@ -1725,11 +1797,7 @@ pub(crate) mod tests {
 		}
 
 		{
-			let tree_route = ::client::blockchain::tree_route(
-				backend.blockchain(),
-				BlockId::Hash(a1),
-				BlockId::Hash(a3),
-			).unwrap();
+			let tree_route = tree_route(blockchain, a1, a3).unwrap();
 
 			assert_eq!(tree_route.common_block().hash, a1);
 			assert!(tree_route.retracted().is_empty());
@@ -1737,11 +1805,7 @@ pub(crate) mod tests {
 		}
 
 		{
-			let tree_route = ::client::blockchain::tree_route(
-				backend.blockchain(),
-				BlockId::Hash(a3),
-				BlockId::Hash(a1),
-			).unwrap();
+			let tree_route = tree_route(blockchain, a3, a1).unwrap();
 
 			assert_eq!(tree_route.common_block().hash, a1);
 			assert_eq!(tree_route.retracted().iter().map(|r| r.hash).collect::<Vec<_>>(), vec![a3, a2]);
@@ -1749,11 +1813,7 @@ pub(crate) mod tests {
 		}
 
 		{
-			let tree_route = ::client::blockchain::tree_route(
-				backend.blockchain(),
-				BlockId::Hash(a2),
-				BlockId::Hash(a2),
-			).unwrap();
+			let tree_route = tree_route(blockchain, a2, a2).unwrap();
 
 			assert_eq!(tree_route.common_block().hash, a2);
 			assert!(tree_route.retracted().is_empty());
@@ -1764,21 +1824,110 @@ pub(crate) mod tests {
 	#[test]
 	fn tree_route_child() {
 		let backend = Backend::<Block>::new_test(1000, 100);
+		let blockchain = backend.blockchain();
 
 		let block0 = insert_header(&backend, 0, Default::default(), None, Default::default());
 		let block1 = insert_header(&backend, 1, block0, None, Default::default());
 
 		{
-			let tree_route = ::client::blockchain::tree_route(
-				backend.blockchain(),
-				BlockId::Hash(block0),
-				BlockId::Hash(block1),
-			).unwrap();
+			let tree_route = tree_route(blockchain, block0, block1).unwrap();
 
 			assert_eq!(tree_route.common_block().hash, block0);
 			assert!(tree_route.retracted().is_empty());
 			assert_eq!(tree_route.enacted().iter().map(|r| r.hash).collect::<Vec<_>>(), vec![block1]);
 		}
+	}
+
+	#[test]
+	fn lowest_common_ancestor_works() {
+		let backend = Backend::<Block>::new_test(1000, 100);
+		let blockchain = backend.blockchain();
+		let block0 = insert_header(&backend, 0, Default::default(), None, Default::default());
+
+		// fork from genesis: 3 prong.
+		let a1 = insert_header(&backend, 1, block0, None, Default::default());
+		let a2 = insert_header(&backend, 2, a1, None, Default::default());
+		let a3 = insert_header(&backend, 3, a2, None, Default::default());
+
+		// fork from genesis: 2 prong.
+		let b1 = insert_header(&backend, 1, block0, None, H256::from([1; 32]));
+		let b2 = insert_header(&backend, 2, b1, None, Default::default());
+
+		{
+			let lca = lowest_common_ancestor(blockchain, a3, b2).unwrap();
+
+			assert_eq!(lca.hash, block0);
+			assert_eq!(lca.number, 0);
+		}
+
+		{
+			let lca = lowest_common_ancestor(blockchain, a1, a3).unwrap();
+
+			assert_eq!(lca.hash, a1);
+			assert_eq!(lca.number, 1);
+		}
+
+		{
+			let lca = lowest_common_ancestor(blockchain, a3, a1).unwrap();
+
+			assert_eq!(lca.hash, a1);
+			assert_eq!(lca.number, 1);
+		}
+
+		{
+			let lca = lowest_common_ancestor(blockchain, a2, a3).unwrap();
+
+			assert_eq!(lca.hash, a2);
+			assert_eq!(lca.number, 2);
+		}
+
+		{
+			let lca = lowest_common_ancestor(blockchain, a2, a1).unwrap();
+
+			assert_eq!(lca.hash, a1);
+			assert_eq!(lca.number, 1);
+		}
+
+		{
+			let lca = lowest_common_ancestor(blockchain, a2, a2).unwrap();
+
+			assert_eq!(lca.hash, a2);
+			assert_eq!(lca.number, 2);
+		}
+	}
+
+	#[test]
+	fn test_tree_route_regression() {
+		// NOTE: this is a test for a regression introduced in #3665, the result
+		// of tree_route would be erroneously computed, since it was taking into
+		// account the `ancestor` in `CachedHeaderMetadata` for the comparison.
+		// in this test we simulate the same behavior with the side-effect
+		// triggering the issue being eviction of a previously fetched record
+		// from the cache, therefore this test is dependent on the LRU cache
+		// size for header metadata, which is currently set to 5000 elements.
+		let backend = Backend::<Block>::new_test(10000, 10000);
+		let blockchain = backend.blockchain();
+
+		let genesis = insert_header(&backend, 0, Default::default(), None, Default::default());
+
+		let block100 = (1..=100).fold(genesis, |parent, n| {
+			insert_header(&backend, n, parent, None, Default::default())
+		});
+
+		let block7000 = (101..=7000).fold(block100, |parent, n| {
+			insert_header(&backend, n, parent, None, Default::default())
+		});
+
+		// This will cause the ancestor of `block100` to be set to `genesis` as a side-effect.
+		lowest_common_ancestor(blockchain, genesis, block100).unwrap();
+
+		// While traversing the tree we will have to do 6900 calls to
+		// `header_metadata`, which will make sure we will exhaust our cache
+		// which only takes 5000 elements. In particular, the `CachedHeaderMetadata` struct for
+		// block #100 will be evicted and will get a new value (with ancestor set to its parent).
+		let tree_route = tree_route(blockchain, block100, block7000).unwrap();
+
+		assert!(tree_route.retracted().is_empty());
 	}
 
 	#[test]

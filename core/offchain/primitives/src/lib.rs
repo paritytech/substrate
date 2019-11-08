@@ -22,10 +22,14 @@
 use client::decl_runtime_apis;
 use sr_primitives::traits::NumberFor;
 
+/// Local Storage Prefix used by the Offchain Worker API to
+pub const STORAGE_PREFIX: &[u8] = b"storage";
+
 decl_runtime_apis! {
 	/// The offchain worker api.
 	pub trait OffchainWorkerApi {
 		/// Starts the off-chain task for given block number.
+		#[skip_initialize_block]
 		fn offchain_worker(number: NumberFor<Block>);
 	}
 }

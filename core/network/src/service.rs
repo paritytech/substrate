@@ -33,7 +33,7 @@ use consensus::import_queue::{BlockImportResult, BlockImportError};
 use futures::{prelude::*, sync::mpsc};
 use futures03::TryFutureExt as _;
 use log::{warn, error, info};
-use libp2p::{PeerId, Multiaddr, multihash::Multihash};
+use libp2p::{PeerId, Multiaddr, kad::record};
 use libp2p::core::{transport::boxed::Boxed, muxing::StreamMuxerBox};
 use libp2p::swarm::NetworkBehaviour;
 use parking_lot::Mutex;
@@ -42,7 +42,7 @@ use sr_primitives::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
 
 use crate::{behaviour::{Behaviour, BehaviourOut}, config::{parse_str_addr, parse_addr}};
 use crate::{NetworkState, NetworkStateNotConnectedPeer, NetworkStatePeer};
-use crate::{transport, config::NodeKeyConfig, config::NonReservedPeerMode};
+use crate::{transport, config::NonReservedPeerMode};
 use crate::config::{Params, TransportConfig};
 use crate::error::Error;
 use crate::protocol::{self, Protocol, Context, CustomMessageOutcome, PeerInfo};
@@ -52,21 +52,29 @@ use crate::protocol::specialization::NetworkSpecialization;
 use crate::protocol::sync::SyncState;
 
 /// Minimum Requirements for a Hash within Networking
-pub trait ExHashT:
-	::std::hash::Hash + Eq + ::std::fmt::Debug + Clone + Send + Sync + 'static
-{
-}
+pub trait ExHashT: std::hash::Hash + Eq + std::fmt::Debug + Clone + Send + Sync + 'static {}
+
 impl<T> ExHashT for T where
-	T: ::std::hash::Hash + Eq + ::std::fmt::Debug + Clone + Send + Sync + 'static
-{
-}
+	T: std::hash::Hash + Eq + std::fmt::Debug + Clone + Send + Sync + 'static
+{}
 
 /// Transaction pool interface
 pub trait TransactionPool<H: ExHashT, B: BlockT>: Send + Sync {
 	/// Get transactions from the pool that are ready to be propagated.
 	fn transactions(&self) -> Vec<(H, B::Extrinsic)>;
+	/// Get hash of transaction.
+	fn hash_of(&self, transaction: &B::Extrinsic) -> H;
 	/// Import a transaction into the pool.
-	fn import(&self, transaction: &B::Extrinsic) -> Option<H>;
+	///
+	/// Peer reputation is changed by reputation_change if transaction is accepted by the pool.
+	fn import(
+		&self,
+		report_handle: ReportHandle,
+		who: PeerId,
+		reputation_change_good: i32,
+		reputation_change_bad: i32,
+		transaction: B::Extrinsic,
+	);
 	/// Notify the pool about transactions broadcast.
 	fn on_broadcasted(&self, propagations: HashMap<H, Vec<String>>);
 }
@@ -75,6 +83,12 @@ pub trait TransactionPool<H: ExHashT, B: BlockT>: Send + Sync {
 #[derive(Clone)]
 pub struct ReportHandle {
 	inner: PeersetHandle, // wraps it so we don't have to worry about breaking API.
+}
+
+impl From<PeersetHandle> for ReportHandle {
+	fn from(peerset_handle: PeersetHandle) -> Self {
+		ReportHandle { inner: peerset_handle }
+	}
 }
 
 impl ReportHandle {
@@ -113,9 +127,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 	/// Returns a `NetworkWorker` that implements `Future` and must be regularly polled in order
 	/// for the network processing to advance. From it, you can extract a `NetworkService` using
 	/// `worker.service()`. The `NetworkService` can be shared through the codebase.
-	pub fn new(
-		params: Params<B, S, H>,
-	) -> Result<NetworkWorker<B, S, H>, Error> {
+	pub fn new(params: Params<B, S, H>) -> Result<NetworkWorker<B, S, H>, Error> {
 		let (to_worker, from_worker) = mpsc::unbounded();
 
 		if let Some(ref path) = params.network_config.net_config_path {
@@ -138,6 +150,23 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 			}
 		}
 
+		// Check for duplicate bootnodes.
+		known_addresses.iter()
+			.try_for_each(|(peer_id, addr)|
+				if let Some(other) = known_addresses
+					.iter()
+					.find(|o| o.1 == *addr && o.0 != *peer_id)
+				{
+					Err(Error::DuplicateBootnode {
+						address: addr.clone(),
+						first_id: peer_id.clone(),
+						second_id: other.0.clone(),
+					})
+				} else {
+					Ok(())
+				}
+			)?;
+
 		// Initialize the reserved peers.
 		for reserved in params.network_config.reserved_nodes.iter() {
 			if let Ok((peer_id, addr)) = parse_str_addr(reserved) {
@@ -157,9 +186,6 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 		};
 
 		// Private and public keys configuration.
-		if let NodeKeyConfig::Secp256k1(_) = params.network_config.node_key {
-			warn!(target: "sub-libp2p", "Secp256k1 keys are deprecated in favour of ed25519");
-		}
 		let local_identity = params.network_config.node_key.clone().into_keypair()?;
 		let local_public = local_identity.public();
 		let local_peer_id = local_public.clone().into_peer_id();
@@ -178,6 +204,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 			params.finality_proof_request_builder,
 			params.protocol_id,
 			peerset_config,
+			params.block_announce_validator
 		)?;
 
 		// Build the swarm.
@@ -297,8 +324,8 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 	}
 
 	/// You must call this when a new block is imported by the client.
-	pub fn on_block_imported(&mut self, hash: B::Hash, header: B::Header) {
-		self.network_service.user_protocol_mut().on_block_imported(hash, &header);
+	pub fn on_block_imported(&mut self, hash: B::Hash, header: B::Header, data: Vec<u8>, is_best: bool) {
+		self.network_service.user_protocol_mut().on_block_imported(hash, &header, data, is_best);
 	}
 
 	/// You must call this when a new block is finalized by the client.
@@ -394,8 +421,8 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	///
 	/// In chain-based consensus, we often need to make sure non-best forks are
 	/// at least temporarily synced. This function forces such an announcement.
-	pub fn announce_block(&self, hash: B::Hash) {
-		let _ = self.to_worker.unbounded_send(ServerToWorkerMsg::AnnounceBlock(hash));
+	pub fn announce_block(&self, hash: B::Hash, data: Vec<u8>) {
+		let _ = self.to_worker.unbounded_send(ServerToWorkerMsg::AnnounceBlock(hash, data));
 	}
 
 	/// Send a consensus message through the gossip
@@ -454,9 +481,9 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 
 	/// Start getting a value from the DHT.
 	///
-	/// This will generate either a `ValueFound` or a `ValueNotFound` event and pass it to
-	/// `on_event` on the network specialization.
-	pub fn get_value(&self, key: &Multihash) {
+	/// This will generate either a `ValueFound` or a `ValueNotFound` event and pass it as an
+	/// item on the [`NetworkWorker`] stream.
+	pub fn get_value(&self, key: &record::Key) {
 		let _ = self
 			.to_worker
 			.unbounded_send(ServerToWorkerMsg::GetValue(key.clone()));
@@ -464,9 +491,9 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 
 	/// Start putting a value in the DHT.
 	///
-	/// This will generate either a `ValuePut` or a `ValuePutFailed` event and pass it to
-	/// `on_event` on the network specialization.
-	pub fn put_value(&self, key: Multihash, value: Vec<u8>) {
+	/// This will generate either a `ValuePut` or a `ValuePutFailed` event and pass it as an
+	/// item on the [`NetworkWorker`] stream.
+	pub fn put_value(&self, key: record::Key, value: Vec<u8>) {
 		let _ = self
 			.to_worker
 			.unbounded_send(ServerToWorkerMsg::PutValue(key, value));
@@ -495,6 +522,18 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 			.to_worker
 			.unbounded_send(ServerToWorkerMsg::AddKnownAddress(peer_id, addr));
 		Ok(())
+	}
+
+	/// Configure an explicit fork sync request.
+	/// Note that this function should not be used for recent blocks.
+	/// Sync should be able to download all the recent forks normally.
+	/// `set_sync_fork_request` should only be used if external code detects that there's
+	/// a stale fork missing.
+	/// Passing empty `peers` set effectively removes the sync request.
+	pub fn set_sync_fork_request(&self, peers: Vec<PeerId>, hash: B::Hash, number: NumberFor<B>) {
+		let _ = self
+			.to_worker
+			.unbounded_send(ServerToWorkerMsg::SyncFork(peers, hash, number));
 	}
 
 	/// Modify a peerset priority group.
@@ -526,8 +565,9 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	}
 }
 
-impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>
-	::consensus::SyncOracle for NetworkService<B, S, H> {
+impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> consensus::SyncOracle
+	for NetworkService<B, S, H>
+{
 	fn is_major_syncing(&mut self) -> bool {
 		NetworkService::is_major_syncing(self)
 	}
@@ -537,8 +577,9 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>
 	}
 }
 
-impl<'a, B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>
-	::consensus::SyncOracle for &'a NetworkService<B, S, H> {
+impl<'a, B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> consensus::SyncOracle
+	for &'a NetworkService<B, S, H>
+{
 	fn is_major_syncing(&mut self) -> bool {
 		NetworkService::is_major_syncing(self)
 	}
@@ -580,13 +621,14 @@ impl<B, S, H> NetworkStateInfo for NetworkService<B, S, H>
 enum ServerToWorkerMsg<B: BlockT, S: NetworkSpecialization<B>> {
 	PropagateExtrinsics,
 	RequestJustification(B::Hash, NumberFor<B>),
-	AnnounceBlock(B::Hash),
+	AnnounceBlock(B::Hash, Vec<u8>),
 	ExecuteWithSpec(Box<dyn FnOnce(&mut S, &mut dyn Context<B>) + Send>),
 	ExecuteWithGossip(Box<dyn FnOnce(&mut ConsensusGossip<B>, &mut dyn Context<B>) + Send>),
 	GossipConsensusMessage(B::Hash, ConsensusEngineId, Vec<u8>, GossipMessageRecipient),
-	GetValue(Multihash),
-	PutValue(Multihash, Vec<u8>),
+	GetValue(record::Key),
+	PutValue(record::Key, Vec<u8>),
 	AddKnownAddress(PeerId, Multiaddr),
+	SyncFork(Vec<PeerId>, B::Hash, NumberFor<B>),
 }
 
 /// Main network worker. Must be polled in order for the network to advance.
@@ -612,11 +654,11 @@ pub struct NetworkWorker<B: BlockT + 'static, S: NetworkSpecialization<B>, H: Ex
 	light_client_rqs: Option<mpsc::UnboundedReceiver<RequestData<B>>>,
 }
 
-impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for NetworkWorker<B, S, H> {
-	type Item = ();
+impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Stream for NetworkWorker<B, S, H> {
+	type Item = Event;
 	type Error = io::Error;
 
-	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+	fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
 		// Poll the import queue for actions to perform.
 		let _ = futures03::future::poll_fn(|cx| {
 			self.import_queue.poll_actions(cx, &mut NetworkLink {
@@ -636,7 +678,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 			// Process the next message coming from the `NetworkService`.
 			let msg = match self.from_worker.poll() {
 				Ok(Async::Ready(Some(msg))) => msg,
-				Ok(Async::Ready(None)) | Err(_) => return Ok(Async::Ready(())),
+				Ok(Async::Ready(None)) | Err(_) => return Ok(Async::Ready(None)),
 				Ok(Async::NotReady) => break,
 			};
 
@@ -653,8 +695,8 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 				}
 				ServerToWorkerMsg::GossipConsensusMessage(topic, engine_id, message, recipient) =>
 					self.network_service.user_protocol_mut().gossip_consensus_message(topic, engine_id, message, recipient),
-				ServerToWorkerMsg::AnnounceBlock(hash) =>
-					self.network_service.user_protocol_mut().announce_block(hash),
+				ServerToWorkerMsg::AnnounceBlock(hash, data) =>
+					self.network_service.user_protocol_mut().announce_block(hash, data),
 				ServerToWorkerMsg::RequestJustification(hash, number) =>
 					self.network_service.user_protocol_mut().request_justification(&hash, number),
 				ServerToWorkerMsg::PropagateExtrinsics =>
@@ -665,6 +707,8 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 					self.network_service.put_value(key, value),
 				ServerToWorkerMsg::AddKnownAddress(peer_id, addr) =>
 					self.network_service.add_known_address(peer_id, addr),
+				ServerToWorkerMsg::SyncFork(peer_ids, hash, number) =>
+					self.network_service.user_protocol_mut().set_sync_fork_request(peer_ids, &hash, number),
 			}
 		}
 
@@ -675,11 +719,8 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 			let outcome = match poll_value {
 				Ok(Async::NotReady) => break,
 				Ok(Async::Ready(Some(BehaviourOut::SubstrateAction(outcome)))) => outcome,
-				Ok(Async::Ready(Some(BehaviourOut::Dht(ev)))) => {
-					self.network_service.user_protocol_mut()
-						.on_event(Event::Dht(ev));
-					CustomMessageOutcome::None
-				},
+				Ok(Async::Ready(Some(BehaviourOut::Dht(ev)))) =>
+					return Ok(Async::Ready(Some(Event::Dht(ev)))),
 				Ok(Async::Ready(None)) => CustomMessageOutcome::None,
 				Err(err) => {
 					error!(target: "sync", "Error in the network: {:?}", err);

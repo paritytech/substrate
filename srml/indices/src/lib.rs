@@ -19,10 +19,10 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::{prelude::*, result, marker::PhantomData, convert::TryInto};
+use rstd::{prelude::*, marker::PhantomData, convert::TryInto};
 use codec::{Encode, Codec};
-use srml_support::{StorageValue, StorageMap, Parameter, decl_module, decl_event, decl_storage};
-use sr_primitives::traits::{One, SimpleArithmetic, StaticLookup, Member};
+use support::{Parameter, decl_module, decl_event, decl_storage};
+use sr_primitives::traits::{One, SimpleArithmetic, StaticLookup, Member, LookupError};
 use system::{IsDeadAccount, OnNewAccount};
 
 use self::address::Address as RawAddress;
@@ -73,7 +73,7 @@ pub trait Trait: system::Trait {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn deposit_event<T>() = default;
+		fn deposit_event() = default;
 	}
 }
 
@@ -93,12 +93,12 @@ decl_event!(
 decl_storage! {
 	trait Store for Module<T: Trait> as Indices {
 		/// The next free enumeration set.
-		pub NextEnumSet get(next_enum_set) build(|config: &GenesisConfig<T>| {
+		pub NextEnumSet get(fn next_enum_set) build(|config: &GenesisConfig<T>| {
 			(config.ids.len() as u32 / ENUM_SET_SIZE).into()
 		}): T::AccountIndex;
 
 		/// The enumeration sets.
-		pub EnumSet get(enum_set) build(|config: &GenesisConfig<T>| {
+		pub EnumSet get(fn enum_set) build(|config: &GenesisConfig<T>| {
 			(0..((config.ids.len() as u32) + ENUM_SET_SIZE - 1) / ENUM_SET_SIZE)
 				.map(|i| (
 					i.into(),
@@ -224,9 +224,11 @@ impl<T: Trait> OnNewAccount<T::AccountId> for Module<T> {
 impl<T: Trait> StaticLookup for Module<T> {
 	type Source = address::Address<T::AccountId, T::AccountIndex>;
 	type Target = T::AccountId;
-	fn lookup(a: Self::Source) -> result::Result<Self::Target, &'static str> {
-		Self::lookup_address(a).ok_or("invalid account index")
+
+	fn lookup(a: Self::Source) -> Result<T::AccountId, LookupError> {
+		Self::lookup_address(a).ok_or(LookupError)
 	}
+
 	fn unlookup(a: Self::Target) -> Self::Source {
 		address::Address::Id(a)
 	}

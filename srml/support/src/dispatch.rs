@@ -17,26 +17,26 @@
 //! Dispatch system. Contains a macro for defining runtime modules and
 //! generating values representing lazy module function calls.
 
-pub use crate::rstd::{result, prelude::{Vec, Clone, Eq, PartialEq}, marker};
-#[cfg(feature = "std")]
-pub use std::fmt;
-pub use crate::codec::{Codec, Decode, Encode, Input, Output, HasCompact, EncodeAsRef};
+pub use crate::rstd::{result, fmt, prelude::{Vec, Clone, Eq, PartialEq}, marker};
+pub use crate::codec::{Codec, EncodeLike, Decode, Encode, Input, Output, HasCompact, EncodeAsRef};
 pub use srml_metadata::{
 	FunctionMetadata, DecodeDifferent, DecodeDifferentArray, FunctionArgumentMetadata,
-	ModuleConstantMetadata, DefaultByte, DefaultByteGetter,
+	ModuleConstantMetadata, DefaultByte, DefaultByteGetter, ModuleErrorMetadata, ErrorMetadata
 };
-pub use sr_primitives::weights::{SimpleDispatchInfo, GetDispatchInfo, DispatchInfo, WeighData,
-	ClassifyDispatch,
-	TransactionPriority
+pub use sr_primitives::{
+	weights::{
+		SimpleDispatchInfo, GetDispatchInfo, DispatchInfo, WeighData, ClassifyDispatch,
+		TransactionPriority
+	},
+	traits::{Dispatchable, DispatchResult, ModuleDispatchError},
+	DispatchError,
 };
-pub use sr_primitives::traits::{Dispatchable, DispatchResult};
 
 /// A type that cannot be instantiated.
 pub enum Never {}
 
-/// Result of a module function call; either nothing (functions are only called for "side effects")
-/// or an error message.
-pub type Result = DispatchResult;
+/// Result with string error message. This exists for backward compatibility purpose.
+pub type Result = DispatchResult<&'static str>;
 
 /// Serializable version of Dispatchable.
 /// This value can be used as a "function" in an extrinsic.
@@ -48,17 +48,8 @@ pub trait Callable<T> {
 // https://github.com/rust-lang/rust/issues/51331
 pub type CallableCallFor<A, T> = <A as Callable<T>>::Call;
 
-#[cfg(feature = "std")]
-pub trait Parameter: Codec + Clone + Eq + fmt::Debug {}
-
-#[cfg(feature = "std")]
-impl<T> Parameter for T where T: Codec + Clone + Eq + fmt::Debug {}
-
-#[cfg(not(feature = "std"))]
-pub trait Parameter: Codec + Clone + Eq {}
-
-#[cfg(not(feature = "std"))]
-impl<T> Parameter for T where T: Codec + Clone + Eq {}
+pub trait Parameter: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
+impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 
 /// Declares a `Module` struct and a `Call` enum, which implements the dispatch logic.
 ///
@@ -171,6 +162,9 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 /// # fn main() {}
 /// ```
 ///
+/// Note: `decl_storage` must be called to generate `Instance` trait and optionally
+/// `DefaultInstance` type.
+///
 /// ## Where clause
 ///
 /// Besides the default `origin: T::Origin`, you can also pass other bounds to the module declaration.
@@ -200,7 +194,7 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 /// * `deposit_event`: Helper function for depositing an [event](https://docs.substrate.dev/docs/event-enum).
 /// The default behavior is to call `deposit_event` from the [System module](../srml_system/index.html).
 /// However, you can write your own implementation for events in your runtime. To use the default behavior,
-/// add `fn deposit_event<T>() = default;` to your `Module`.
+/// add `fn deposit_event() = default;` to your `Module`.
 ///
 /// The following reserved functions also take the block number (with type `T::BlockNumber`) as an optional input:
 ///
@@ -231,6 +225,7 @@ macro_rules! decl_module {
 			>
 			for enum $call_type where origin: $origin_type, system = system
 			{ $( $where_ty: $where_bound ),* }
+			{}
 			{}
 			{}
 			{}
@@ -267,6 +262,7 @@ macro_rules! decl_module {
 			{}
 			{}
 			{}
+			{}
 			[]
 			$($t)*
 		);
@@ -283,9 +279,10 @@ macro_rules! decl_module {
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
+		{ $( $error_type:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
-		$vis:vis fn deposit_event $(<$dpeg:ident $(, $dpeg_instance:ident)?>)* () = default;
+		$vis:vis fn deposit_event() = default;
 		$($rest:tt)*
 	) => {
 		$crate::decl_module!(@normalize
@@ -293,11 +290,12 @@ macro_rules! decl_module {
 			pub struct $mod_type<$trait_instance: $trait_name$(<I>, I: $instantiable $(= $module_default_instance)?)?>
 			for enum $call_type where origin: $origin_type, system = $system
 			{ $( $other_where_bounds )* }
-			{ $vis fn deposit_event $(<$dpeg $(, $dpeg_instance)?>)* () = default; }
+			{ $vis fn deposit_event() = default; }
 			{ $( $on_initialize )* }
 			{ $( $on_finalize )* }
 			{ $( $offchain )* }
 			{ $( $constants )* }
+			{ $( $error_type )* }
 			[ $( $dispatchables )* ]
 			$($rest)*
 		);
@@ -312,25 +310,14 @@ macro_rules! decl_module {
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
+		{ $( $error_type:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
-		$vis:vis fn deposit_event $(<$dpeg:ident $(, $dpeg_instance:ident)?>)* (
-			$($param_name:ident : $param:ty),*
-		) { $( $impl:tt )* }
+		$vis:vis fn deposit_event
 		$($rest:tt)*
 	) => {
-		$crate::decl_module!(@normalize
-			$(#[$attr])*
-			pub struct $mod_type<$trait_instance: $trait_name$(<I>, I: $instantiable $(= $module_default_instance)?)?>
-			for enum $call_type where origin: $origin_type, system = $system
-			{ $( $other_where_bounds )* }
-			{ $vis fn deposit_event $(<$dpeg $(, $dpeg_instance)?>)* ($( $param_name: $param ),* ) { $( $impl )* } }
-			{ $( $on_initialize )* }
-			{ $( $on_finalize )* }
-			{ $( $offchain )* }
-			{ $( $constants )* }
-			[ $( $dispatchables )* ]
-			$($rest)*
+		compile_error!(
+			"`deposit_event` function is reserved and must follow the syntax: `$vis:vis fn deposit_event() = default;`"
 		);
 	};
 	(@normalize
@@ -343,9 +330,10 @@ macro_rules! decl_module {
 		{}
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
+		{ $( $error_type:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
-		fn on_finalize($($param_name:ident : $param:ty),* ) { $( $impl:tt )* }
+		fn on_finalize( $( $param_name:ident : $param:ty ),* $(,)? ) { $( $impl:tt )* }
 		$($rest:tt)*
 	) => {
 		$crate::decl_module!(@normalize
@@ -358,27 +346,9 @@ macro_rules! decl_module {
 			{ fn on_finalize( $( $param_name : $param ),* ) { $( $impl )* } }
 			{ $( $offchain )* }
 			{ $( $constants )* }
+			{ $( $error_type )* }
 			[ $( $dispatchables )* ]
 			$($rest)*
-		);
-	};
-	(@normalize
-		$(#[$attr:meta])*
-		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?>
-		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
-		{ $( $other_where_bounds:tt )* }
-		{ $( $deposit_event:tt )* }
-		{ $( $on_initialize:tt )* }
-		{}
-		{ $( $offchain:tt )* }
-		{ $( $constants:tt )* }
-		[ $( $dispatchables:tt )* ]
-		$(#[doc = $doc_attr:tt])*
-		fn on_finalise($($param_name:ident : $param:ty),* ) { $( $impl:tt )* }
-		$($rest:tt)*
-	) => {
-		compile_error!(
-			"`on_finalise` was renamed to `on_finalize`. Please rename your function accordingly."
 		);
 	};
 	(@normalize
@@ -391,9 +361,10 @@ macro_rules! decl_module {
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
+		{ $( $error_type:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
-		fn on_initialize($($param_name:ident : $param:ty),* ) { $( $impl:tt )* }
+		fn on_initialize( $( $param_name:ident : $param:ty ),* $(,)? ) { $( $impl:tt )* }
 		$($rest:tt)*
 	) => {
 		$crate::decl_module!(@normalize
@@ -406,27 +377,9 @@ macro_rules! decl_module {
 			{ $( $on_finalize )* }
 			{ $( $offchain )* }
 			{ $( $constants )* }
+			{ $( $error_type )* }
 			[ $( $dispatchables )* ]
 			$($rest)*
-		);
-	};
-	(@normalize
-		$(#[$attr:meta])*
-		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?>
-		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
-		{ $( $other_where_bounds:tt )* }
-		{ $( $deposit_event:tt )* }
-		{}
-		{ $( $on_finalize:tt )* }
-		{ $( $offchain:tt )* }
-		{ $( $constants:tt )* }
-		[ $( $dispatchables:tt )* ]
-		$(#[doc = $doc_attr:tt])*
-		fn on_initialise($($param_name:ident : $param:ty),* ) { $( $impl:tt )* }
-		$($rest:tt)*
-	) => {
-		compile_error!(
-			"`on_initialise` was renamed to `on_initialize`. Please rename your function accordingly."
 		);
 	};
 	(@normalize
@@ -442,9 +395,10 @@ macro_rules! decl_module {
 		{ $( $on_finalize:tt )* }
 		{ }
 		{ $( $constants:tt )* }
+		{ $( $error_type:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
-		fn offchain_worker($($param_name:ident : $param:ty),* ) { $( $impl:tt )* }
+		fn offchain_worker( $( $param_name:ident : $param:ty ),* $(,)? ) { $( $impl:tt )* }
 		$($rest:tt)*
 	) => {
 		$crate::decl_module!(@normalize
@@ -459,6 +413,7 @@ macro_rules! decl_module {
 			{ $( $on_finalize )* }
 			{ fn offchain_worker( $( $param_name : $param ),* ) { $( $impl )* } }
 			{ $( $constants )* }
+			{ $( $error_type )* }
 			[ $( $dispatchables )* ]
 			$($rest)*
 		);
@@ -478,6 +433,7 @@ macro_rules! decl_module {
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
+		{ $( $error_type:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$( #[doc = $doc_attr:tt] )*
 		const $name:ident: $ty:ty = $value:expr;
@@ -500,7 +456,81 @@ macro_rules! decl_module {
 				$( #[doc = $doc_attr ] )*
 				$name: $ty = $value;
 			}
+			{ $( $error_type )* }
 			[ $( $dispatchables )* ]
+			$($rest)*
+		);
+	};
+
+	// Parse error type
+	(@normalize
+		$(#[$attr:meta])*
+		pub struct $mod_type:ident<
+			$trait_instance:ident:
+				$trait_name:ident$(<I>, $instance:ident: $instantiable:path $(= $module_default_instance:path)?)?
+			>
+		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{ $( $other_where_bounds:tt )* }
+		{ $( $deposit_event:tt )* }
+		{ $( $on_initialize:tt )* }
+		{ $( $on_finalize:tt )* }
+		{ $( $offchain:tt )* }
+		{ $( $constants:tt )* }
+		{ }
+		[ $( $dispatchables:tt )* ]
+		$(#[doc = $doc_attr:tt])*
+		type Error = $error_type:ty;
+		$($rest:tt)*
+	) => {
+		$crate::decl_module!(@normalize
+			$(#[$attr])*
+			pub struct $mod_type<
+				$trait_instance: $trait_name$(<I>, $instance: $instantiable $(= $module_default_instance)?)?
+			>
+			for enum $call_type where origin: $origin_type, system = $system
+			{ $( $other_where_bounds )* }
+			{ $( $deposit_event )* }
+			{ $( $on_initialize )* }
+			{ $( $on_finalize )* }
+			{ $( $offchain )* }
+			{ $( $constants )* }
+			{ $error_type }
+			[ $( $dispatchables )* ]
+			$($rest)*
+		);
+	};
+	// Add default Error if none supplied
+	(@normalize
+		$(#[$attr:meta])*
+		pub struct $mod_type:ident<
+			$trait_instance:ident:
+				$trait_name:ident$(<I>, $instance:ident: $instantiable:path $(= $module_default_instance:path)?)?
+			>
+		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{ $( $other_where_bounds:tt )* }
+		{ $( $deposit_event:tt )* }
+		{ $( $on_initialize:tt )* }
+		{ $( $on_finalize:tt )* }
+		{ $( $offchain:tt )* }
+		{ $( $constants:tt )* }
+		{ }
+		[ $($t:tt)* ]
+		$($rest:tt)*
+	) => {
+		$crate::decl_module!(@normalize
+			$(#[$attr])*
+			pub struct $mod_type<
+				$trait_instance: $trait_name$(<I>, $instance: $instantiable $(= $module_default_instance)?)?
+			>
+			for enum $call_type where origin: $origin_type, system = $system
+			{ $( $other_where_bounds )* }
+			{ $( $deposit_event )* }
+			{ $( $on_initialize )* }
+			{ $( $on_finalize )* }
+			{ $( $offchain )* }
+			{ $( $constants )* }
+			{ &'static str }
+			[ $($t)* ]
 			$($rest)*
 		);
 	};
@@ -519,11 +549,12 @@ macro_rules! decl_module {
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
+		{ $error_type:ty }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		#[weight = $weight:expr]
 		$fn_vis:vis fn $fn_name:ident(
-			$origin:ident $(, $(#[$codec_attr:ident])* $param_name:ident : $param:ty)*
+			$origin:ident $( , $(#[$codec_attr:ident])* $param_name:ident : $param:ty )* $(,)?
 		) $( -> $result:ty )* { $( $impl:tt )* }
 		$($rest:tt)*
 	) => {
@@ -539,6 +570,7 @@ macro_rules! decl_module {
 			{ $( $on_finalize )* }
 			{ $( $offchain )* }
 			{ $( $constants )* }
+			{ $error_type }
 			[
 				$( $dispatchables )*
 				$(#[doc = $doc_attr])*
@@ -565,10 +597,11 @@ macro_rules! decl_module {
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
+		{ $( $error_type:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		$fn_vis:vis fn $fn_name:ident(
-			$from:ident $(, $(#[$codec_attr:ident])* $param_name:ident : $param:ty)*
+			$from:ident $( , $( #[$codec_attr:ident] )* $param_name:ident : $param:ty )* $(,)?
 		) $( -> $result:ty )* { $( $impl:tt )* }
 		$($rest:tt)*
 	) => {
@@ -584,6 +617,7 @@ macro_rules! decl_module {
 			{ $( $on_finalize )* }
 			{ $( $offchain )* }
 			{ $( $constants )* }
+			{ $( $error_type )* }
 			[ $( $dispatchables )* ]
 			$(#[doc = $doc_attr])*
 			#[weight = $crate::dispatch::SimpleDispatchInfo::default()]
@@ -604,11 +638,12 @@ macro_rules! decl_module {
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
+		{ $( $error_type:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		$(#[weight = $weight:expr])?
 		$fn_vis:vis fn $fn_name:ident(
-			$origin:ident : T::Origin $(, $(#[$codec_attr:ident])* $param_name:ident : $param:ty)*
+			$origin:ident : T::Origin $( , $( #[$codec_attr:ident] )* $param_name:ident : $param:ty )* $(,)?
 		) $( -> $result:ty )* { $( $impl:tt )* }
 		$($rest:tt)*
 	) => {
@@ -628,11 +663,12 @@ macro_rules! decl_module {
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
+		{ $( $error_type:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		$(#[weight = $weight:expr])?
 		$fn_vis:vis fn $fn_name:ident(
-			origin : $origin:ty $(, $(#[$codec_attr:ident])* $param_name:ident : $param:ty)*
+			origin : $origin:ty $( , $( #[$codec_attr:ident] )* $param_name:ident : $param:ty )* $(,)?
 		) $( -> $result:ty )* { $( $impl:tt )* }
 		$($rest:tt)*
 	) => {
@@ -652,11 +688,12 @@ macro_rules! decl_module {
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
+		{ $( $error_type:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		$(#[weight = $weight:expr])?
 		$fn_vis:vis fn $fn_name:ident(
-			$( $(#[$codec_attr:ident])* $param_name:ident : $param:ty),*
+			$( $(#[$codec_attr:ident])* $param_name:ident : $param:ty ),* $(,)?
 		) $( -> $result:ty )* { $( $impl:tt )* }
 		$($rest:tt)*
 	) => {
@@ -677,6 +714,7 @@ macro_rules! decl_module {
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
+		{ $( $error_type:tt )* }
 		[ $( $dispatchables:tt )* ]
 	) => {
 		$crate::decl_module!(@imp
@@ -691,6 +729,7 @@ macro_rules! decl_module {
 			{ $( $on_finalize )* }
 			{ $( $offchain )* }
 			{ $( $constants )* }
+			{ $( $error_type )* }
 		);
 	};
 
@@ -720,25 +759,10 @@ macro_rules! decl_module {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?> $module<$trait_instance $(, $instance)?>
 			where $( $other_where_bounds )*
 		{
-			$vis fn deposit_event(event: Event$(<$event_trait_instance $(, $event_instance)?>)?) {
-				<$system::Module<$trait_instance>>::deposit_event(
-					<$trait_instance as $trait_name$(<$instance>)?>::Event::from(event).into()
-				);
-			}
-		}
-	};
-
-	(@impl_deposit_event
-		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
-		$system:ident;
-		{ $( $other_where_bounds:tt )* }
-		$vis:vis fn deposit_event($param:ident : $param_ty:ty) { $( $impl:tt )* }
-	) => {
-		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?> $module<$trait_instance $(, $instance)?>
-			where $( $other_where_bounds )*
-		{
-			$vis fn deposit_event($param: $param_ty) {
-				$( $impl )*
+			$vis fn deposit_event(
+				event: impl Into<< $trait_instance as $trait_name $(<$instance>)? >::Event>
+			) {
+				<$system::Module<$trait_instance>>::deposit_event(event.into())
 			}
 		}
 	};
@@ -856,6 +880,7 @@ macro_rules! decl_module {
 	(@impl_function
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
 		$origin_ty:ty;
+		$error_type:ty;
 		$ignore:ident;
 		$(#[doc = $doc_attr:tt])*
 		$vis:vis fn $name:ident (
@@ -866,7 +891,7 @@ macro_rules! decl_module {
 		#[allow(unreachable_code)]
 		$vis fn $name(
 			$origin: $origin_ty $(, $param: $param_ty )*
-		) -> $crate::dispatch::Result {
+		) -> $crate::dispatch::DispatchResult<$error_type> {
 			{ $( $impl )* }
 			// May be unreachable.
 			Ok(())
@@ -877,6 +902,7 @@ macro_rules! decl_module {
 	(@impl_function
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
 		$origin_ty:ty;
+		$error_type:ty;
 		$ignore:ident;
 		$(#[doc = $doc_attr:tt])*
 		$vis:vis fn $name:ident (
@@ -1031,12 +1057,12 @@ macro_rules! decl_module {
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
+		{ $error_type:ty }
 	) => {
 		$crate::__check_reserved_fn_name! { $( $fn_name )* }
 
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-		#[derive(Clone, Copy, PartialEq, Eq)]
-		#[cfg_attr(feature = "std", derive(Debug))]
+		#[derive(Clone, Copy, PartialEq, Eq, $crate::RuntimeDebug)]
 		pub struct $mod_type<
 			$trait_instance: $trait_name
 			$(<I>, $instance: $instantiable $( = $module_default_instance)?)?
@@ -1082,6 +1108,7 @@ macro_rules! decl_module {
 					@impl_function
 					$mod_type<$trait_instance: $trait_name $(<I>, $fn_instance: $fn_instantiable)?>;
 					$origin_type;
+					$error_type;
 					$from;
 					$(#[doc = $doc_attr])*
 					$fn_vis fn $fn_name (
@@ -1186,7 +1213,6 @@ macro_rules! decl_module {
 			for $call_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
 		{}
 
-		#[cfg(feature = "std")]
 		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::fmt::Debug
 			for $call_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
 		{
@@ -1212,7 +1238,8 @@ macro_rules! decl_module {
 		{
 			type Trait = $trait_instance;
 			type Origin = $origin_type;
-			fn dispatch(self, _origin: Self::Origin) -> $crate::dispatch::Result {
+			type Error = $error_type;
+			fn dispatch(self, _origin: Self::Origin) -> $crate::dispatch::DispatchResult<Self::Error> {
 				match self {
 					$(
 						$call_type::$fn_name( $( $param_name ),* ) => {
@@ -1239,8 +1266,8 @@ macro_rules! decl_module {
 			#[doc(hidden)]
 			pub fn dispatch<D: $crate::dispatch::Dispatchable<Trait = $trait_instance>>(
 				d: D,
-				origin: D::Origin,
-			) -> $crate::dispatch::Result {
+				origin: D::Origin
+			) -> $crate::dispatch::DispatchResult<D::Error> {
 				d.dispatch(origin)
 			}
 		}
@@ -1259,6 +1286,14 @@ macro_rules! decl_module {
 			$mod_type<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?>
 			{ $( $other_where_bounds )* }
 			$( $constants )*
+		}
+
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::ModuleErrorMetadata
+			for $mod_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
+		{
+			fn metadata() -> &'static [$crate::dispatch::ErrorMetadata] {
+				<$error_type as $crate::dispatch::ModuleErrorMetadata>::metadata()
+			}
 		}
 	}
 }
@@ -1279,8 +1314,12 @@ macro_rules! impl_outer_dispatch {
 		}
 	) => {
 		$(#[$attr])*
-		#[derive(Clone, PartialEq, Eq, $crate::codec::Encode, $crate::codec::Decode)]
-		#[cfg_attr(feature = "std", derive(Debug))]
+		#[derive(
+			Clone, PartialEq, Eq,
+			$crate::codec::Encode,
+			$crate::codec::Decode,
+			$crate::RuntimeDebug,
+		)]
 		pub enum $call_type {
 			$(
 				$camelcase ( $crate::dispatch::CallableCallFor<$camelcase, $runtime> )
@@ -1296,9 +1335,19 @@ macro_rules! impl_outer_dispatch {
 		impl $crate::dispatch::Dispatchable for $call_type {
 			type Origin = $origin;
 			type Trait = $call_type;
-			fn dispatch(self, origin: $origin) -> $crate::dispatch::Result {
-				match self {
-					$( $call_type::$camelcase(call) => call.dispatch(origin), )*
+			type Error = $crate::dispatch::DispatchError;
+			fn dispatch(
+				self,
+				origin: $origin,
+			) -> $crate::dispatch::DispatchResult<$crate::dispatch::DispatchError> {
+				$crate::impl_outer_dispatch! {
+					@DISPATCH_MATCH
+					self
+					$call_type
+					origin
+					{}
+					0;
+					$( $camelcase ),*
 				}
 			}
 		}
@@ -1320,6 +1369,43 @@ macro_rules! impl_outer_dispatch {
 				}
 			}
 		)*
+	};
+	(@DISPATCH_MATCH
+		$self:ident
+		$call_type:ident
+		$origin:ident
+		{ $( $generated:tt )* }
+		$index:expr;
+		$name:ident
+		$( , $rest:ident )*
+	) => {
+		$crate::impl_outer_dispatch! {
+			@DISPATCH_MATCH
+			$self
+			$call_type
+			$origin
+			{
+				$( $generated )*
+				$call_type::$name(call) => call.dispatch($origin).map_err(|e| {
+					let mut error: $crate::dispatch::DispatchError = e.into();
+					error.module = Some($index);
+					error
+				}),
+			}
+			$index + 1;
+			$( $rest ),*
+		}
+	};
+	(@DISPATCH_MATCH
+		$self:ident
+		$call_type:ident
+		$origin:ident
+		{ $( $generated:tt )* }
+		$index:expr;
+	) => {
+		match $self {
+			$( $generated )*
+		}
 	}
 }
 
@@ -1576,13 +1662,13 @@ macro_rules! __check_reserved_fn_name {
 		$crate::__check_reserved_fn_name!(@compile_error on_initialize);
 	};
 	(on_initialise $( $rest:ident )*) => {
-		$crate::__check_reserved_fn_name!(@compile_error on_initialise);
+		$crate::__check_reserved_fn_name!(@compile_error_renamed on_initialise on_initialize);
 	};
 	(on_finalize $( $rest:ident )*) => {
 		$crate::__check_reserved_fn_name!(@compile_error on_finalize);
 	};
 	(on_finalise $( $rest:ident )*) => {
-		$crate::__check_reserved_fn_name!(@compile_error on_finalise);
+		$crate::__check_reserved_fn_name!(@compile_error_renamed on_finalise on_finalize);
 	};
 	(offchain_worker $( $rest:ident )*) => {
 		$crate::__check_reserved_fn_name!(@compile_error offchain_worker);
@@ -1592,9 +1678,26 @@ macro_rules! __check_reserved_fn_name {
 	};
 	() => {};
 	(@compile_error $ident:ident) => {
-		compile_error!(concat!("Invalid call fn name: `", stringify!($ident),
-		"`, name is reserved and doesn't match expected signature, please refer to `decl_module!`",
-		" documentation to see the appropriate usage, or rename it to an unreserved keyword."));
+		compile_error!(
+			concat!(
+				"Invalid call fn name: `",
+				stringify!($ident),
+				"`, name is reserved and doesn't match expected signature, please refer to ",
+				"`decl_module!` documentation to see the appropriate usage, or rename it to an ",
+				"unreserved keyword."
+			),
+		);
+	};
+	(@compile_error_renamed $ident:ident $new_ident:ident) => {
+		compile_error!(
+			concat!(
+				"`",
+				stringify!($ident),
+				"` was renamed to `",
+				stringify!($new_ident),
+				"`. Please rename your function accordingly.",
+			),
+		);
 	};
 }
 
@@ -1628,19 +1731,19 @@ mod tests {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin, T::AccountId: From<u32> {
 			/// Hi, this is a comment.
 			fn aux_0(_origin) -> Result { unreachable!() }
-			fn aux_1(_origin, #[compact] _data: u32) -> Result { unreachable!() }
+			fn aux_1(_origin, #[compact] _data: u32,) -> Result { unreachable!() }
 			fn aux_2(_origin, _data: i32, _data2: String) -> Result { unreachable!() }
 			#[weight = SimpleDispatchInfo::FixedNormal(3)]
 			fn aux_3(_origin) -> Result { unreachable!() }
 			fn aux_4(_origin, _data: i32) -> Result { unreachable!() }
-			fn aux_5(_origin, _data: i32, #[compact] _data2: u32) -> Result { unreachable!() }
+			fn aux_5(_origin, _data: i32, #[compact] _data2: u32,) -> Result { unreachable!() }
 
-			fn on_initialize(n: T::BlockNumber) { if n.into() == 42 { panic!("on_initialize") } }
+			fn on_initialize(n: T::BlockNumber,) { if n.into() == 42 { panic!("on_initialize") } }
 			fn on_finalize(n: T::BlockNumber) { if n.into() == 42 { panic!("on_finalize") } }
 			fn offchain_worker() {}
 
 			#[weight = SimpleDispatchInfo::FixedOperational(5)]
-			fn operational(_origin) { unreachable!() }
+			fn operational(_origin,) { unreachable!() }
 		}
 	}
 

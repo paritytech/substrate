@@ -23,15 +23,19 @@ use parking_lot::RwLock;
 use kvdb::{KeyValueDB, DBTransaction};
 
 use client::backend::{AuxStore, NewBlockState};
-use client::blockchain::{BlockStatus, Cache as BlockchainCache,
-	HeaderBackend as BlockchainHeaderBackend, Info as BlockchainInfo};
-use client::{cht, well_known_cache_keys};
+use client::blockchain::{
+	BlockStatus, Cache as BlockchainCache,
+	HeaderBackend as BlockchainHeaderBackend, Info as BlockchainInfo,
+	well_known_cache_keys,
+};
+use client::cht;
 use client::error::{Error as ClientError, Result as ClientResult};
 use client::light::blockchain::Storage as LightBlockchainStorage;
 use codec::{Decode, Encode};
 use primitives::Blake2Hasher;
 use sr_primitives::generic::{DigestItem, BlockId};
 use sr_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One, NumberFor};
+use header_metadata::{CachedHeaderMetadata, HeaderMetadata, HeaderMetadataCache};
 use crate::cache::{DbCacheSync, DbCache, ComplexBlockId, EntryType as CacheEntryType};
 use crate::utils::{self, meta_keys, Meta, db_err, read_db, block_id_to_lookup_key, read_meta};
 use crate::DatabaseSettings;
@@ -57,6 +61,7 @@ pub struct LightStorage<Block: BlockT> {
 	db: Arc<dyn KeyValueDB>,
 	meta: RwLock<Meta<NumberFor<Block>, Block::Hash>>,
 	cache: Arc<DbCacheSync<Block>>,
+	header_metadata_cache: HeaderMetadataCache<Block>,
 }
 
 impl<Block> LightStorage<Block>
@@ -65,19 +70,7 @@ impl<Block> LightStorage<Block>
 {
 	/// Create new storage with given settings.
 	pub fn new(config: DatabaseSettings) -> ClientResult<Self> {
-		Self::new_inner(config)
-	}
-
-	#[cfg(feature = "kvdb-rocksdb")]
-	fn new_inner(config: DatabaseSettings) -> ClientResult<Self> {
 		let db = crate::utils::open_database(&config, columns::META, "light")?;
-		Self::from_kvdb(db as Arc<_>)
-	}
-
-	#[cfg(not(feature = "kvdb-rocksdb"))]
-	fn new_inner(_config: DatabaseSettings) -> ClientResult<Self> {
-		log::warn!("Running without the RocksDB feature. The database will NOT be saved.");
-		let db = Arc::new(kvdb_memorydb::create(crate::utils::NUM_COLUMNS));
 		Self::from_kvdb(db as Arc<_>)
 	}
 
@@ -106,6 +99,7 @@ impl<Block> LightStorage<Block>
 			db,
 			meta: RwLock::new(meta),
 			cache: Arc::new(DbCacheSync(RwLock::new(cache))),
+			header_metadata_cache: HeaderMetadataCache::default(),
 		})
 	}
 
@@ -189,6 +183,31 @@ impl<Block> BlockchainHeaderBackend<Block> for LightStorage<Block>
 	}
 }
 
+impl<Block: BlockT> HeaderMetadata<Block> for LightStorage<Block> {
+	type Error = ClientError;
+
+	fn header_metadata(&self, hash: Block::Hash) -> Result<CachedHeaderMetadata<Block>, Self::Error> {
+		self.header_metadata_cache.header_metadata(hash).or_else(|_| {
+			self.header(BlockId::hash(hash))?.map(|header| {
+				let header_metadata = CachedHeaderMetadata::from(&header);
+				self.header_metadata_cache.insert_header_metadata(
+					header_metadata.hash,
+					header_metadata.clone(),
+				);
+				header_metadata
+			}).ok_or(ClientError::UnknownBlock(format!("header not found in db: {}", hash)))
+		})
+	}
+
+	fn insert_header_metadata(&self, hash: Block::Hash, metadata: CachedHeaderMetadata<Block>) {
+		self.header_metadata_cache.insert_header_metadata(hash, metadata)
+	}
+
+	fn remove_header_metadata(&self, hash: Block::Hash) {
+		self.header_metadata_cache.remove_header_metadata(hash);
+	}
+}
+
 impl<Block: BlockT> LightStorage<Block> {
 	// Get block changes trie root, if available.
 	fn changes_trie_root(&self, block: BlockId<Block>) -> ClientResult<Option<Block::Hash>> {
@@ -205,17 +224,18 @@ impl<Block: BlockT> LightStorage<Block> {
 	/// In the case where the new best block is a block to be imported, `route_to`
 	/// should be the parent of `best_to`. In the case where we set an existing block
 	/// to be best, `route_to` should equal to `best_to`.
-	fn set_head_with_transaction(&self, transaction: &mut DBTransaction, route_to: Block::Hash, best_to: (NumberFor<Block>, Block::Hash)) -> Result<(), client::error::Error> {
+	fn set_head_with_transaction(
+		&self,
+		transaction: &mut DBTransaction,
+		route_to: Block::Hash,
+		best_to: (NumberFor<Block>, Block::Hash),
+	) -> ClientResult<()> {
 		let lookup_key = utils::number_and_hash_to_lookup_key(best_to.0, &best_to.1)?;
 
 		// handle reorg.
 		let meta = self.meta.read();
 		if meta.best_hash != Default::default() {
-			let tree_route = ::client::blockchain::tree_route(
-				self,
-				BlockId::Hash(meta.best_hash),
-				BlockId::Hash(route_to),
-			)?;
+			let tree_route = header_metadata::tree_route(self, meta.best_hash, route_to)?;
 
 			// update block number to hash lookup entries.
 			for retracted in tree_route.retracted() {
@@ -415,6 +435,12 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 		)?;
 		transaction.put(columns::HEADER, &lookup_key, &header.encode());
 
+		let header_metadata = CachedHeaderMetadata::from(&header);
+		self.header_metadata_cache.insert_header_metadata(
+			header.hash().clone(),
+			header_metadata,
+		);
+
 		let is_genesis = number.is_zero();
 		if is_genesis {
 			self.cache.0.write().set_genesis_hash(hash);
@@ -547,6 +573,7 @@ pub(crate) mod tests {
 	use primitives::ChangesTrieConfiguration;
 	use sr_primitives::generic::{BlockId, DigestItem, ChangesTrieSignal};
 	use sr_primitives::testing::{H256 as Hash, Header, Block as RawBlock, ExtrinsicWrapper};
+	use header_metadata::{lowest_common_ancestor, tree_route};
 	use super::*;
 
 	type Block = RawBlock<ExtrinsicWrapper<u32>>;
@@ -791,11 +818,7 @@ pub(crate) mod tests {
 		let b2 = insert_block(&db, HashMap::new(), || default_header(&b1, 2));
 
 		{
-			let tree_route = ::client::blockchain::tree_route(
-				&db,
-				BlockId::Hash(a3),
-				BlockId::Hash(b2)
-			).unwrap();
+			let tree_route = tree_route(&db, a3, b2).unwrap();
 
 			assert_eq!(tree_route.common_block().hash, block0);
 			assert_eq!(tree_route.retracted().iter().map(|r| r.hash).collect::<Vec<_>>(), vec![a3, a2, a1]);
@@ -803,11 +826,7 @@ pub(crate) mod tests {
 		}
 
 		{
-			let tree_route = ::client::blockchain::tree_route(
-				&db,
-				BlockId::Hash(a1),
-				BlockId::Hash(a3),
-			).unwrap();
+			let tree_route = tree_route(&db, a1, a3).unwrap();
 
 			assert_eq!(tree_route.common_block().hash, a1);
 			assert!(tree_route.retracted().is_empty());
@@ -815,11 +834,7 @@ pub(crate) mod tests {
 		}
 
 		{
-			let tree_route = ::client::blockchain::tree_route(
-				&db,
-				BlockId::Hash(a3),
-				BlockId::Hash(a1),
-			).unwrap();
+			let tree_route = tree_route(&db, a3, a1).unwrap();
 
 			assert_eq!(tree_route.common_block().hash, a1);
 			assert_eq!(tree_route.retracted().iter().map(|r| r.hash).collect::<Vec<_>>(), vec![a3, a2]);
@@ -827,15 +842,68 @@ pub(crate) mod tests {
 		}
 
 		{
-			let tree_route = ::client::blockchain::tree_route(
-				&db,
-				BlockId::Hash(a2),
-				BlockId::Hash(a2),
-			).unwrap();
+			let tree_route = tree_route(&db, a2, a2).unwrap();
 
 			assert_eq!(tree_route.common_block().hash, a2);
 			assert!(tree_route.retracted().is_empty());
 			assert!(tree_route.enacted().is_empty());
+		}
+	}
+
+	#[test]
+	fn lowest_common_ancestor_works() {
+		let db = LightStorage::new_test();
+		let block0 = insert_block(&db, HashMap::new(), || default_header(&Default::default(), 0));
+
+		// fork from genesis: 3 prong.
+		let a1 = insert_block(&db, HashMap::new(), || default_header(&block0, 1));
+		let a2 = insert_block(&db, HashMap::new(), || default_header(&a1, 2));
+		let a3 = insert_block(&db, HashMap::new(), || default_header(&a2, 3));
+
+		// fork from genesis: 2 prong.
+		let b1 = insert_block(&db, HashMap::new(), || header_with_extrinsics_root(&block0, 1, Hash::from([1; 32])));
+		let b2 = insert_block(&db, HashMap::new(), || default_header(&b1, 2));
+
+		{
+			let lca = lowest_common_ancestor(&db, a3, b2).unwrap();
+
+			assert_eq!(lca.hash, block0);
+			assert_eq!(lca.number, 0);
+		}
+
+		{
+			let lca = lowest_common_ancestor(&db, a1, a3).unwrap();
+
+			assert_eq!(lca.hash, a1);
+			assert_eq!(lca.number, 1);
+		}
+
+		{
+			let lca = lowest_common_ancestor(&db, a3, a1).unwrap();
+
+			assert_eq!(lca.hash, a1);
+			assert_eq!(lca.number, 1);
+		}
+
+		{
+			let lca = lowest_common_ancestor(&db, a2, a3).unwrap();
+
+			assert_eq!(lca.hash, a2);
+			assert_eq!(lca.number, 2);
+		}
+
+		{
+			let lca = lowest_common_ancestor(&db, a2, a1).unwrap();
+
+			assert_eq!(lca.hash, a1);
+			assert_eq!(lca.number, 1);
+		}
+
+		{
+			let lca = lowest_common_ancestor(&db, a2, a2).unwrap();
+
+			assert_eq!(lca.hash, a2);
+			assert_eq!(lca.number, 2);
 		}
 	}
 
@@ -1042,27 +1110,41 @@ pub(crate) mod tests {
 
 	#[test]
 	fn cache_can_be_initialized_after_genesis_inserted() {
-		let db = LightStorage::<Block>::new_test();
+		let (genesis_hash, storage) = {
+			let db = LightStorage::<Block>::new_test();
 
-		// before cache is initialized => None
-		assert_eq!(db.cache().get_at(b"test", &BlockId::Number(0)), None);
+			// before cache is initialized => None
+			assert_eq!(db.cache().get_at(b"test", &BlockId::Number(0)), None);
 
-		// insert genesis block (no value for cache is provided)
-		let mut genesis_hash = None;
-		insert_block(&db, HashMap::new(), || {
-			let header = default_header(&Default::default(), 0);
-			genesis_hash = Some(header.hash());
-			header
-		});
+			// insert genesis block (no value for cache is provided)
+			let mut genesis_hash = None;
+			insert_block(&db, HashMap::new(), || {
+				let header = default_header(&Default::default(), 0);
+				genesis_hash = Some(header.hash());
+				header
+			});
 
-		// after genesis is inserted => None
-		assert_eq!(db.cache().get_at(b"test", &BlockId::Number(0)), None);
+			// after genesis is inserted => None
+			assert_eq!(db.cache().get_at(b"test", &BlockId::Number(0)), None);
 
-		// initialize cache
-		db.cache().initialize(b"test", vec![42]).unwrap();
+			// initialize cache
+			db.cache().initialize(b"test", vec![42]).unwrap();
 
-		// after genesis is inserted + cache is initialized => Some
-		assert_eq!(db.cache().get_at(b"test", &BlockId::Number(0)), Some(((0, genesis_hash.unwrap()), None, vec![42])));
+			// after genesis is inserted + cache is initialized => Some
+			assert_eq!(
+				db.cache().get_at(b"test", &BlockId::Number(0)),
+				Some(((0, genesis_hash.unwrap()), None, vec![42])),
+			);
+
+			(genesis_hash, db.db)
+		};
+
+		// restart && check that after restart value is read from the cache
+		let db = LightStorage::<Block>::from_kvdb(storage as Arc<_>).expect("failed to create test-db");
+		assert_eq!(
+			db.cache().get_at(b"test", &BlockId::Number(0)),
+			Some(((0, genesis_hash.unwrap()), None, vec![42])),
+		);
 	}
 
 	#[test]

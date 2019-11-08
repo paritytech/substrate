@@ -23,16 +23,21 @@ use primitives::storage::well_known_keys;
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, NumberFor};
 use sr_primitives::{Justification, StorageOverlay, ChildrenStorageOverlay};
-use state_machine::backend::{Backend as StateBackend, InMemory};
+use state_machine::{
+	backend::{Backend as StateBackend, InMemory},
+	ChangesTrieTransaction,
+};
 
 use hash_db::Hasher;
-use trie::MemoryDB;
+use header_metadata::{CachedHeaderMetadata, HeaderMetadata};
 
 use crate::error;
 use crate::backend::{self, NewBlockState, StorageCollection, ChildStorageCollection};
 use crate::light;
 use crate::leaves::LeafSet;
-use crate::blockchain::{self, BlockStatus, HeaderBackend, well_known_cache_keys::Id as CacheKeyId};
+use crate::blockchain::{
+	self, BlockStatus, HeaderBackend, well_known_cache_keys::Id as CacheKeyId
+};
 
 struct PendingBlock<B: BlockT> {
 	block: StoredBlock<B>,
@@ -221,11 +226,7 @@ impl<Block: BlockT> Blockchain<Block> {
 			if &best_hash == header.parent_hash() {
 				None
 			} else {
-				let route = crate::blockchain::tree_route(
-					self,
-					BlockId::Hash(best_hash),
-					BlockId::Hash(*header.parent_hash()),
-				)?;
+				let route = header_metadata::tree_route(self, best_hash, *header.parent_hash())?;
 				Some(route)
 			}
 		};
@@ -320,6 +321,21 @@ impl<Block: BlockT> HeaderBackend<Block> for Blockchain<Block> {
 	}
 }
 
+impl<Block: BlockT> HeaderMetadata<Block> for Blockchain<Block> {
+	type Error = error::Error;
+
+	fn header_metadata(&self, hash: Block::Hash) -> Result<CachedHeaderMetadata<Block>, Self::Error> {
+		self.header(BlockId::hash(hash))?.map(|header| CachedHeaderMetadata::from(&header))
+			.ok_or(error::Error::UnknownBlock(format!("header not found: {}", hash)))
+	}
+
+	fn insert_header_metadata(&self, _hash: Block::Hash, _metadata: CachedHeaderMetadata<Block>) {
+		// No need to implement.
+	}
+	fn remove_header_metadata(&self, _hash: Block::Hash) {
+		// No need to implement.
+	}
+}
 
 impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
 	fn body(&self, id: BlockId<Block>) -> error::Result<Option<Vec<<Block as BlockT>::Extrinsic>>> {
@@ -440,7 +456,6 @@ pub struct BlockImportOperation<Block: BlockT, H: Hasher> {
 	pending_cache: HashMap<CacheKeyId, Vec<u8>>,
 	old_state: InMemory<H>,
 	new_state: Option<InMemory<H>>,
-	changes_trie_update: Option<MemoryDB<H>>,
 	aux: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	finalized_blocks: Vec<(BlockId<Block>, Option<Justification>)>,
 	set_head: Option<BlockId<Block>>,
@@ -483,11 +498,6 @@ where
 		Ok(())
 	}
 
-	fn update_changes_trie(&mut self, update: MemoryDB<H>) -> error::Result<()> {
-		self.changes_trie_update = Some(update);
-		Ok(())
-	}
-
 	fn reset_storage(&mut self, top: StorageOverlay, children: ChildrenStorageOverlay) -> error::Result<H::Out> {
 		check_genesis_storage(&top, &children)?;
 
@@ -502,6 +512,13 @@ where
 
 		self.new_state = Some(InMemory::from(transaction));
 		Ok(root)
+	}
+
+	fn update_changes_trie(
+		&mut self,
+		_update: ChangesTrieTransaction<H, NumberFor<Block>>,
+	) -> error::Result<()> {
+		Ok(())
 	}
 
 	fn insert_aux<I>(&mut self, ops: I) -> error::Result<()>
@@ -601,7 +618,6 @@ where
 			pending_cache: Default::default(),
 			old_state,
 			new_state: None,
-			changes_trie_update: None,
 			aux: Default::default(),
 			finalized_blocks: Default::default(),
 			set_head: None,
@@ -702,6 +718,10 @@ where
 		self.blockchain.expect_block_number_from_id(block)
 			.map(|num| num.is_zero())
 			.unwrap_or(false)
+	}
+
+	fn remote_blockchain(&self) -> Arc<dyn crate::light::blockchain::RemoteBlockchain<Block>> {
+		unimplemented!()
 	}
 }
 

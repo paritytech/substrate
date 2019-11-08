@@ -26,6 +26,7 @@ pub use self::generic::{
 	FinalityProofRequest, FinalityProofResponse,
 	FromBlock, RemoteReadChildRequest,
 };
+use client::light::fetcher::StorageProof;
 
 /// A unique ID of a request.
 pub type RequestId = u64;
@@ -107,13 +108,22 @@ pub enum Direction {
 	Descending = 1,
 }
 
+/// Block state in the chain.
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Encode, Decode)]
+pub enum BlockState {
+	/// Block is not part of the best chain.
+	Normal,
+	/// Latest best block.
+	Best,
+}
+
 /// Remote call response.
 #[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 pub struct RemoteCallResponse {
 	/// Id of a request this response was made for.
 	pub id: RequestId,
 	/// Execution proof.
-	pub proof: Vec<Vec<u8>>,
+	pub proof: StorageProof,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
@@ -122,17 +132,18 @@ pub struct RemoteReadResponse {
 	/// Id of a request this response was made for.
 	pub id: RequestId,
 	/// Read proof.
-	pub proof: Vec<Vec<u8>>,
+	pub proof: StorageProof,
 }
 
 /// Generic types.
 pub mod generic {
-	use codec::{Encode, Decode};
+	use codec::{Encode, Decode, Input, Output};
 	use sr_primitives::Justification;
 	use crate::config::Roles;
 	use super::{
 		RemoteReadResponse, Transactions, Direction,
 		RequestId, BlockAttributes, RemoteCallResponse, ConsensusEngineId,
+		BlockState, StorageProof,
 	};
 	/// Consensus is mostly opaque to us
 	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
@@ -211,6 +222,32 @@ pub mod generic {
 		ChainSpecific(Vec<u8>),
 	}
 
+	impl<Header, Hash, Number, Extrinsic> Message<Header, Hash, Number, Extrinsic> {
+		/// Message id useful for logging.
+		pub fn id(&self) -> &'static str {
+			match self {
+				Message::Status(_) => "Status",
+				Message::BlockRequest(_) => "BlockRequest",
+				Message::BlockResponse(_) => "BlockResponse",
+				Message::BlockAnnounce(_) => "BlockAnnounce",
+				Message::Transactions(_) => "Transactions",
+				Message::Consensus(_) => "Consensus",
+				Message::RemoteCallRequest(_) => "RemoteCallRequest",
+				Message::RemoteCallResponse(_) => "RemoteCallResponse",
+				Message::RemoteReadRequest(_) => "RemoteReadRequest",
+				Message::RemoteReadResponse(_) => "RemoteReadResponse",
+				Message::RemoteHeaderRequest(_) => "RemoteHeaderRequest",
+				Message::RemoteHeaderResponse(_) => "RemoteHeaderResponse",
+				Message::RemoteChangesRequest(_) => "RemoteChangesRequest",
+				Message::RemoteChangesResponse(_) => "RemoteChangesResponse",
+				Message::RemoteReadChildRequest(_) => "RemoteReadChildRequest",
+				Message::FinalityProofRequest(_) => "FinalityProofRequest",
+				Message::FinalityProofResponse(_) => "FinalityProofResponse",
+				Message::ChainSpecific(_) => "ChainSpecific",
+			}
+		}
+	}
+
 	/// Status sent on connection.
 	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 	pub struct Status<Hash, Number> {
@@ -257,10 +294,42 @@ pub mod generic {
 	}
 
 	/// Announce a new complete relay chain block on the network.
-	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
+	#[derive(Debug, PartialEq, Eq, Clone)]
 	pub struct BlockAnnounce<H> {
 		/// New block header.
 		pub header: H,
+		/// Block state. TODO: Remove `Option` and custom encoding when v4 becomes common.
+		pub state: Option<BlockState>,
+		/// Data associated with this block announcement, e.g. a candidate message.
+		pub data: Option<Vec<u8>>,
+	}
+
+	// Custom Encode/Decode impl to maintain backwards compatibility with v3.
+	// This assumes that the packet contains nothing but the announcement message.
+	// TODO: Get rid of it once protocol v4 is common.
+	impl<H: Encode> Encode for BlockAnnounce<H> {
+		fn encode_to<T: Output>(&self, dest: &mut T) {
+			self.header.encode_to(dest);
+			if let Some(state) = &self.state {
+				state.encode_to(dest);
+			}
+			if let Some(data) = &self.data {
+				data.encode_to(dest)
+			}
+		}
+	}
+
+	impl<H: Decode> Decode for BlockAnnounce<H> {
+		fn decode<I: Input>(input: &mut I) -> Result<Self, codec::Error> {
+			let header = H::decode(input)?;
+			let state = BlockState::decode(input).ok();
+			let data = Vec::decode(input).ok();
+			Ok(BlockAnnounce {
+				header,
+				state,
+				data,
+			})
+		}
 	}
 
 	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
@@ -284,7 +353,7 @@ pub mod generic {
 		/// Block at which to perform call.
 		pub block: H,
 		/// Storage key.
-		pub key: Vec<u8>,
+		pub keys: Vec<Vec<u8>>,
 	}
 
 	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
@@ -297,7 +366,7 @@ pub mod generic {
 		/// Child Storage key.
 		pub storage_key: Vec<u8>,
 		/// Storage key.
-		pub key: Vec<u8>,
+		pub keys: Vec<Vec<u8>>,
 	}
 
 	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
@@ -317,7 +386,7 @@ pub mod generic {
 		/// Header. None if proof generation has failed (e.g. header is unknown).
 		pub header: Option<Header>,
 		/// Header proof.
-		pub proof: Vec<Vec<u8>>,
+		pub proof: StorageProof,
 	}
 
 	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
@@ -334,6 +403,8 @@ pub mod generic {
 		pub min: H,
 		/// Hash of the last block that we can use when querying changes.
 		pub max: H,
+		/// Storage child node key which changes are requested.
+		pub storage_key: Option<Vec<u8>>,
 		/// Storage key which changes are requested.
 		pub key: Vec<u8>,
 	}
@@ -351,7 +422,7 @@ pub mod generic {
 		/// Changes tries roots missing on the requester' node.
 		pub roots: Vec<(N, H)>,
 		/// Missing changes tries roots proof.
-		pub roots_proof: Vec<Vec<u8>>,
+		pub roots_proof: StorageProof,
 	}
 
 	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]

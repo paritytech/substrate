@@ -17,19 +17,18 @@
 //! Generic implementation of an extrinsic that has passed the verification
 //! stage.
 
-use rstd::result::Result;
 use crate::traits::{
-	self, Member, MaybeDisplay, SignedExtension, DispatchError, Dispatchable, DispatchResult,
-	ValidateUnsigned
+	self, Member, MaybeDisplay, SignedExtension, Dispatchable,
 };
+#[allow(deprecated)]
+use crate::traits::ValidateUnsigned;
 use crate::weights::{GetDispatchInfo, DispatchInfo};
 use crate::transaction_validity::TransactionValidity;
 
 /// Definition of something that the external world might want to say; its
 /// existence implies that it has been checked and is good, particularly with
 /// regards to the signature.
-#[derive(PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(PartialEq, Eq, Clone, primitives::RuntimeDebug)]
 pub struct CheckedExtrinsic<AccountId, Call, Extra> {
 	/// Who this purports to be from and the number of extrinsics have come before
 	/// from the same signer, if anyone (note this is not a signature).
@@ -39,8 +38,7 @@ pub struct CheckedExtrinsic<AccountId, Call, Extra> {
 	pub function: Call,
 }
 
-impl<AccountId, Call, Extra, Origin> traits::Applyable
-for
+impl<AccountId, Call, Extra, Origin> traits::Applyable for
 	CheckedExtrinsic<AccountId, Call, Extra>
 where
 	AccountId: Member + MaybeDisplay,
@@ -55,38 +53,38 @@ where
 		self.signed.as_ref().map(|x| &x.0)
 	}
 
-	fn validate<U: ValidateUnsigned<Call=Self::Call>>(&self,
+	#[allow(deprecated)] // Allow ValidateUnsigned
+	fn validate<U: ValidateUnsigned<Call = Self::Call>>(
+		&self,
 		info: DispatchInfo,
 		len: usize,
 	) -> TransactionValidity {
 		if let Some((ref id, ref extra)) = self.signed {
-			Extra::validate(extra, id, &self.function, info, len).into()
+			Extra::validate(extra, id, &self.function, info, len)
 		} else {
-			match Extra::validate_unsigned(&self.function, info, len) {
-				Ok(extra) => match U::validate_unsigned(&self.function) {
-					TransactionValidity::Valid(v) =>
-						TransactionValidity::Valid(v.combine_with(extra)),
-					x => x,
-				},
-				x => x.into(),
-			}
+			let valid = Extra::validate_unsigned(&self.function, info, len)?;
+			let unsigned_validation = U::validate_unsigned(&self.function)?;
+			Ok(valid.combine_with(unsigned_validation))
 		}
 	}
 
-	fn dispatch(self,
+	#[allow(deprecated)] // Allow ValidateUnsigned
+	fn apply<U: ValidateUnsigned<Call=Self::Call>>(
+		self,
 		info: DispatchInfo,
 		len: usize,
-	) -> Result<DispatchResult, DispatchError> {
+	) -> crate::ApplyResult {
 		let (maybe_who, pre) = if let Some((id, extra)) = self.signed {
 			let pre = Extra::pre_dispatch(extra, &id, &self.function, info, len)?;
 			(Some(id), pre)
 		} else {
 			let pre = Extra::pre_dispatch_unsigned(&self.function, info, len)?;
+			U::pre_dispatch(&self.function)?;
 			(None, pre)
 		};
 		let res = self.function.dispatch(Origin::from(maybe_who));
 		Extra::post_dispatch(pre, info, len);
-		Ok(res)
+		Ok(res.map_err(Into::into))
 	}
 }
 

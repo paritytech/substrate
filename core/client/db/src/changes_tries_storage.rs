@@ -16,7 +16,7 @@
 
 //! DB-backed changes tries storage.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use hash_db::Prefix;
 use kvdb::{KeyValueDB, DBTransaction};
@@ -31,7 +31,7 @@ use sr_primitives::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, One, Zero, CheckedSub,
 };
 use sr_primitives::generic::{BlockId, DigestItem, ChangesTrieSignal};
-use state_machine::DBValue;
+use state_machine::{DBValue, ChangesTrieBuildCache, ChangesTrieCacheAction};
 use crate::utils::{self, Meta, meta_keys, db_err};
 use crate::cache::{
 	DbCacheSync, DbCache, DbCacheTransactionOps,
@@ -85,6 +85,7 @@ pub struct DbChangesTrieStorage<Block: BlockT> {
 	tries_meta: RwLock<ChangesTriesMeta<Block>>,
 	min_blocks_to_keep: Option<u32>,
 	cache: DbCacheSync<Block>,
+	build_cache: RwLock<ChangesTrieBuildCache<Block::Hash, NumberFor<Block>>>,
 }
 
 /// Persistent struct that contains all the changes tries metadata.
@@ -136,6 +137,7 @@ impl<Block: BlockT<Hash=H256>> DbChangesTrieStorage<Block> {
 				genesis_hash,
 				ComplexBlockId::new(finalized_hash, finalized_number),
 			))),
+			build_cache: RwLock::new(ChangesTrieBuildCache::new()),
 			tries_meta: RwLock::new(tries_meta),
 		})
 	}
@@ -242,7 +244,7 @@ impl<Block: BlockT<Hash=H256>> DbChangesTrieStorage<Block> {
 	pub fn revert(
 		&self,
 		tx: &mut DBTransaction,
-		block: NumberFor<Block>,
+		block: &ComplexBlockId<Block>,
 	) -> ClientResult<DbChangesTrieStorageTransaction<Block>> {
 		Ok(self.cache.0.write().transaction(tx)
 			.on_block_revert(block)?
@@ -257,6 +259,11 @@ impl<Block: BlockT<Hash=H256>> DbChangesTrieStorage<Block> {
 				.expect("only fails if cache with given name isn't loaded yet;\
 						cache is already loaded because there is tx; qed");
 		}
+	}
+
+	/// Commit changes into changes trie build cache.
+	pub fn commit_build_cache(&self, cache_update: ChangesTrieCacheAction<Block::Hash, NumberFor<Block>>) {
+		self.build_cache.write().perform(cache_update);
 	}
 
 	/// Prune obsolete changes tries.
@@ -326,6 +333,11 @@ impl<Block: BlockT<Hash=H256>> DbChangesTrieStorage<Block> {
 						end: None,
 						config,
 					}
+				},
+				_ if config_for_new_block => {
+					self.configuration_at(&BlockId::Hash(*new_header.expect(
+						"config_for_new_block is only true when new_header is passed; qed"
+					).parent_hash()))?
 				},
 				_ => self.configuration_at(&BlockId::Hash(next_digest_range_start_hash))?,
 			};
@@ -451,6 +463,14 @@ where
 		self
 	}
 
+	fn with_cached_changed_keys(
+		&self,
+		root: &H256,
+		functor: &mut dyn FnMut(&HashMap<Option<Vec<u8>>, HashSet<Vec<u8>>>),
+	) -> bool {
+		self.build_cache.read().with_changed_keys(root, functor)
+	}
+
 	fn get(&self, key: &H256, _prefix: Prefix) -> Result<Option<DBValue>, String> {
 		self.db.get(self.changes_tries_column, &key[..])
 			.map_err(|err| format!("{}", err))
@@ -520,7 +540,7 @@ mod tests {
 		let header = Header {
 			number,
 			parent_hash,
-			state_root: BlakeTwo256::trie_root::<_, &[u8], &[u8]>(Vec::new()),
+			state_root: BlakeTwo256::trie_root(Vec::new()),
 			digest,
 			extrinsics_root: Default::default(),
 		};
@@ -534,7 +554,7 @@ mod tests {
 		let mut op = backend.begin_operation().unwrap();
 		backend.begin_state_operation(&mut op, block_id).unwrap();
 		op.set_block_data(header, None, None, NewBlockState::Best).unwrap();
-		op.update_changes_trie(changes_trie_update).unwrap();
+		op.update_changes_trie((changes_trie_update, ChangesTrieCacheAction::Clear)).unwrap();
 		backend.commit_operation(op).unwrap();
 
 		header_hash
@@ -950,7 +970,7 @@ mod tests {
 		);
 
 		// after truncating block2_1 && block2_2 - there are still two unfinalized forks (cache impl specifics),
-		// though they're pointing to the same block
+		// the 1st one points to the block #3 because it isn't truncated
 		backend.revert(1).unwrap();
 		assert_eq!(
 			backend.changes_tries_storage.cache.0.write()
@@ -960,18 +980,7 @@ mod tests {
 				.iter()
 				.map(|fork| fork.head().valid_from.number)
 				.collect::<Vec<_>>(),
-			vec![2, 2],
-		);
-		assert_eq!(
-			backend.changes_tries_storage.cache.0.write()
-				.get_cache(well_known_cache_keys::CHANGES_TRIE_CONFIG)
-				.unwrap()
-				.unfinalized()
-				.iter()
-				.map(|fork| fork.head().valid_from.number)
-				.collect::<::std::collections::HashSet<_>>()
-				.len(),
-			1,
+			vec![3, 2],
 		);
 
 		// after truncating block2 - there are no unfinalized forks

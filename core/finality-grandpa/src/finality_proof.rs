@@ -40,14 +40,13 @@ use log::{trace, warn};
 use client::{
 	backend::Backend, blockchain::Backend as BlockchainBackend, CallExecutor, Client,
 	error::{Error as ClientError, Result as ClientResult},
-	light::fetcher::{FetchChecker, RemoteCallRequest},
-	ExecutionStrategy, NeverOffchainExt,
+	light::fetcher::{FetchChecker, RemoteCallRequest, StorageProof}, ExecutionStrategy,
 };
 use codec::{Encode, Decode};
 use grandpa::BlockNumberOps;
-use sr_primitives::{Justification, generic::BlockId};
-use sr_primitives::traits::{
-	NumberFor, Block as BlockT, Header as HeaderT, One,
+use sr_primitives::{
+	Justification, generic::BlockId,
+	traits::{NumberFor, Block as BlockT, Header as HeaderT, One},
 };
 use primitives::{H256, Blake2Hasher};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
@@ -63,7 +62,7 @@ pub trait AuthoritySetForFinalityProver<Block: BlockT>: Send + Sync {
 	/// Call GrandpaApi::grandpa_authorities at given block.
 	fn authorities(&self, block: &BlockId<Block>) -> ClientResult<Vec<(AuthorityId, u64)>>;
 	/// Prove call of GrandpaApi::grandpa_authorities at given block.
-	fn prove_authorities(&self, block: &BlockId<Block>) -> ClientResult<Vec<Vec<u8>>>;
+	fn prove_authorities(&self, block: &BlockId<Block>) -> ClientResult<StorageProof>;
 }
 
 /// Client-based implementation of AuthoritySetForFinalityProver.
@@ -79,14 +78,14 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> AuthoritySetForFinalityProver<Block> fo
 			"GrandpaApi_grandpa_authorities",
 			&[],
 			ExecutionStrategy::NativeElseWasm,
-			NeverOffchainExt::new(),
+			None,
 		).and_then(|call_result| Decode::decode(&mut &call_result[..])
 			.map_err(|err| ClientError::CallResultDecode(
 				"failed to decode GRANDPA authorities set proof".into(), err
 			)))
 	}
 
-	fn prove_authorities(&self, block: &BlockId<Block>) -> ClientResult<Vec<Vec<u8>>> {
+	fn prove_authorities(&self, block: &BlockId<Block>) -> ClientResult<StorageProof> {
 		self.execution_proof(block, "GrandpaApi_grandpa_authorities",&[]).map(|(_, proof)| proof)
 	}
 }
@@ -98,7 +97,7 @@ pub trait AuthoritySetForFinalityChecker<Block: BlockT>: Send + Sync {
 		&self,
 		hash: Block::Hash,
 		header: Block::Header,
-		proof: Vec<Vec<u8>>,
+		proof: StorageProof,
 	) -> ClientResult<Vec<(AuthorityId, u64)>>;
 }
 
@@ -108,7 +107,7 @@ impl<Block: BlockT> AuthoritySetForFinalityChecker<Block> for Arc<dyn FetchCheck
 		&self,
 		hash: Block::Hash,
 		header: Block::Header,
-		proof: Vec<Vec<u8>>,
+		proof: StorageProof,
 	) -> ClientResult<Vec<(AuthorityId, u64)>> {
 		let request = RemoteCallRequest {
 			block: hash,
@@ -130,36 +129,31 @@ impl<Block: BlockT> AuthoritySetForFinalityChecker<Block> for Arc<dyn FetchCheck
 }
 
 /// Finality proof provider for serving network requests.
-pub struct FinalityProofProvider<B, E, Block: BlockT<Hash=H256>, RA> {
-	client: Arc<Client<B, E, Block, RA>>,
+pub struct FinalityProofProvider<B,  Block: BlockT<Hash=H256>> {
+	backend: Arc<B>,
 	authority_provider: Arc<dyn AuthoritySetForFinalityProver<Block>>,
 }
 
-impl<B, E, Block: BlockT<Hash=H256>, RA> FinalityProofProvider<B, E, Block, RA>
-	where
-		B: Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
-		RA: Send + Sync,
+impl<B, Block: BlockT<Hash=H256>> FinalityProofProvider<B, Block>
+	where B: Backend<Block, Blake2Hasher> + Send + Sync + 'static
 {
 	/// Create new finality proof provider using:
 	///
-	/// - client for accessing blockchain data;
+	/// - backend for accessing blockchain data;
 	/// - authority_provider for calling and proving runtime methods.
 	pub fn new(
-		client: Arc<Client<B, E, Block, RA>>,
+		backend: Arc<B>,
 		authority_provider: Arc<dyn AuthoritySetForFinalityProver<Block>>,
 	) -> Self {
-		FinalityProofProvider { client, authority_provider }
+		FinalityProofProvider { backend, authority_provider }
 	}
 }
 
-impl<B, E, Block, RA> network::FinalityProofProvider<Block> for FinalityProofProvider<B, E, Block, RA>
+impl<B, Block> network::FinalityProofProvider<Block> for FinalityProofProvider<B, Block>
 	where
 		Block: BlockT<Hash=H256>,
 		NumberFor<Block>: BlockNumberOps,
 		B: Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
-		RA: Send + Sync,
 {
 	fn prove_finality(
 		&self,
@@ -173,8 +167,7 @@ impl<B, E, Block, RA> network::FinalityProofProvider<Block> for FinalityProofPro
 			})?;
 		match request {
 			FinalityProofRequest::Original(request) => prove_finality::<_, _, GrandpaJustification<Block>>(
-				#[allow(deprecated)]
-				&*self.client.backend().blockchain(),
+				&*self.backend.blockchain(),
 				&*self.authority_provider,
 				request.authorities_set_id,
 				request.last_finalized,
@@ -214,7 +207,7 @@ struct FinalityProofFragment<Header: HeaderT> {
 	/// The set of headers in the range (U; F] that we believe are unknown to the caller. Ordered.
 	pub unknown_headers: Vec<Header>,
 	/// Optional proof of execution of GRANDPA::authorities().
-	pub authorities_proof: Option<Vec<Vec<u8>>>,
+	pub authorities_proof: Option<StorageProof>,
 }
 
 /// Proof of finality is the ordered set of finality fragments, where:
@@ -589,13 +582,13 @@ pub(crate) mod tests {
 	impl<GetAuthorities, ProveAuthorities> AuthoritySetForFinalityProver<Block> for (GetAuthorities, ProveAuthorities)
 		where
 			GetAuthorities: Send + Sync + Fn(BlockId<Block>) -> ClientResult<Vec<(AuthorityId, u64)>>,
-			ProveAuthorities: Send + Sync + Fn(BlockId<Block>) -> ClientResult<Vec<Vec<u8>>>,
+			ProveAuthorities: Send + Sync + Fn(BlockId<Block>) -> ClientResult<StorageProof>,
 	{
 		fn authorities(&self, block: &BlockId<Block>) -> ClientResult<Vec<(AuthorityId, u64)>> {
 			self.0(*block)
 		}
 
-		fn prove_authorities(&self, block: &BlockId<Block>) -> ClientResult<Vec<Vec<u8>>> {
+		fn prove_authorities(&self, block: &BlockId<Block>) -> ClientResult<StorageProof> {
 			self.1(*block)
 		}
 	}
@@ -604,13 +597,13 @@ pub(crate) mod tests {
 
 	impl<Closure> AuthoritySetForFinalityChecker<Block> for ClosureAuthoritySetForFinalityChecker<Closure>
 		where
-			Closure: Send + Sync + Fn(H256, Header, Vec<Vec<u8>>) -> ClientResult<Vec<(AuthorityId, u64)>>,
+			Closure: Send + Sync + Fn(H256, Header, StorageProof) -> ClientResult<Vec<(AuthorityId, u64)>>,
 	{
 		fn check_authorities_proof(
 			&self,
 			hash: H256,
 			header: Header,
-			proof: Vec<Vec<u8>>,
+			proof: StorageProof,
 		) -> ClientResult<Vec<(AuthorityId, u64)>> {
 			self.0(hash, header, proof)
 		}
@@ -831,8 +824,8 @@ pub(crate) mod tests {
 					_ => unreachable!("no other authorities should be fetched: {:?}", block_id),
 				},
 				|block_id| match block_id {
-					BlockId::Number(4) => Ok(vec![vec![40]]),
-					BlockId::Number(6) => Ok(vec![vec![60]]),
+					BlockId::Number(4) => Ok(StorageProof::new(vec![vec![40]])),
+					BlockId::Number(6) => Ok(StorageProof::new(vec![vec![60]])),
 					_ => unreachable!("no other authorities should be proved: {:?}", block_id),
 				},
 			),
@@ -848,14 +841,14 @@ pub(crate) mod tests {
 				block: header(5).hash(),
 				justification: just5,
 				unknown_headers: Vec::new(),
-				authorities_proof: Some(vec![vec![40]]),
+				authorities_proof: Some(StorageProof::new(vec![vec![40]])),
 			},
 			// last fragment provides justification for #7 && unknown#7
 			FinalityProofFragment {
 				block: header(7).hash(),
 				justification: just7,
 				unknown_headers: vec![header(7)],
-				authorities_proof: Some(vec![vec![60]]),
+				authorities_proof: Some(StorageProof::new(vec![vec![60]])),
 			},
 		]);
 	}
@@ -902,7 +895,7 @@ pub(crate) mod tests {
 				block: header(4).hash(),
 				justification: TestJustification(true, vec![7]).encode(),
 				unknown_headers: vec![header(4)],
-				authorities_proof: Some(vec![vec![42]]),
+				authorities_proof: Some(StorageProof::new(vec![vec![42]])),
 			}, FinalityProofFragment {
 				block: header(5).hash(),
 				justification: TestJustification(true, vec![8]).encode(),
@@ -949,7 +942,7 @@ pub(crate) mod tests {
 				block: header(2).hash(),
 				justification: TestJustification(true, vec![7]).encode(),
 				unknown_headers: Vec::new(),
-				authorities_proof: Some(vec![vec![42]]),
+				authorities_proof: Some(StorageProof::new(vec![vec![42]])),
 			}, FinalityProofFragment {
 				block: header(4).hash(),
 				justification: TestJustification(true, vec![8]).encode(),

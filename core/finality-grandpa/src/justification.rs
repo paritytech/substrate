@@ -18,7 +18,6 @@ use std::collections::{HashMap, HashSet};
 
 use client::{CallExecutor, Client};
 use client::backend::Backend;
-use client::blockchain::HeaderBackend;
 use client::error::Error as ClientError;
 use codec::{Encode, Decode};
 use grandpa::voter_set::VoterSet;
@@ -40,7 +39,7 @@ use crate::communication;
 /// This is meant to be stored in the db and passed around the network to other
 /// nodes, and are used by syncing nodes to prove authority set handoffs.
 #[derive(Encode, Decode)]
-pub(crate) struct GrandpaJustification<Block: BlockT> {
+pub struct GrandpaJustification<Block: BlockT> {
 	round: u64,
 	pub(crate) commit: Commit<Block>,
 	votes_ancestries: Vec<Block::Header>,
@@ -71,8 +70,7 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 			loop {
 				if current_hash == commit.target_hash { break; }
 
-				#[allow(deprecated)]
-				match client.backend().blockchain().header(BlockId::Hash(current_hash))? {
+				match client.header(&BlockId::Hash(current_hash))? {
 					Some(current_header) => {
 						if *current_header.number() <= commit.target_number {
 							return error();

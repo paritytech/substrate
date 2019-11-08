@@ -18,6 +18,7 @@
 use super::*;
 
 use codec::Encode;
+use futures::executor::block_on;
 use txpool::{self, Pool};
 use test_client::{runtime::{AccountId, Block, Hash, Index, Extrinsic, Transfer}, AccountKeyring::{self, *}};
 use sr_primitives::{
@@ -26,11 +27,15 @@ use sr_primitives::{
 	transaction_validity::{TransactionValidity, ValidTransaction},
 };
 
-struct TestApi;
+struct TestApi {
+	pub modifier: Box<dyn Fn(&mut ValidTransaction) + Send + Sync>,
+}
 
 impl TestApi {
 	fn default() -> Self {
-		TestApi
+		TestApi {
+			modifier: Box::new(|_| {}),
+		}
 	}
 }
 
@@ -38,8 +43,13 @@ impl txpool::ChainApi for TestApi {
 	type Block = Block;
 	type Hash = Hash;
 	type Error = error::Error;
+	type ValidationFuture = futures::future::Ready<error::Result<TransactionValidity>>;
 
-	fn validate_transaction(&self, at: &BlockId<Self::Block>, uxt: txpool::ExtrinsicFor<Self>) -> error::Result<TransactionValidity> {
+	fn validate_transaction(
+		&self,
+		at: &BlockId<Self::Block>,
+		uxt: txpool::ExtrinsicFor<Self>,
+	) -> Self::ValidationFuture {
 		let expected = index(at);
 		let requires = if expected == uxt.transfer().nonce {
 			vec![]
@@ -48,13 +58,19 @@ impl txpool::ChainApi for TestApi {
 		};
 		let provides = vec![vec![uxt.transfer().nonce as u8]];
 
-		Ok(TransactionValidity::Valid(ValidTransaction {
+		let mut validity = ValidTransaction {
 			priority: 1,
 			requires,
 			provides,
 			longevity: 64,
 			propagate: true,
-		}))
+		};
+
+		(self.modifier)(&mut validity);
+
+		futures::future::ready(Ok(
+			Ok(validity)
+		))
 	}
 
 	fn block_id_to_number(&self, at: &BlockId<Self::Block>) -> error::Result<Option<txpool::NumberFor<Self>>> {
@@ -105,7 +121,7 @@ fn pool() -> Pool<TestApi> {
 fn submission_should_work() {
 	let pool = pool();
 	assert_eq!(209, index(&BlockId::number(0)));
-	pool.submit_one(&BlockId::number(0), uxt(Alice, 209)).unwrap();
+	block_on(pool.submit_one(&BlockId::number(0), uxt(Alice, 209))).unwrap();
 
 	let pending: Vec<_> = pool.ready().map(|a| a.data.transfer().nonce).collect();
 	assert_eq!(pending, vec![209]);
@@ -114,8 +130,8 @@ fn submission_should_work() {
 #[test]
 fn multiple_submission_should_work() {
 	let pool = pool();
-	pool.submit_one(&BlockId::number(0), uxt(Alice, 209)).unwrap();
-	pool.submit_one(&BlockId::number(0), uxt(Alice, 210)).unwrap();
+	block_on(pool.submit_one(&BlockId::number(0), uxt(Alice, 209))).unwrap();
+	block_on(pool.submit_one(&BlockId::number(0), uxt(Alice, 210))).unwrap();
 
 	let pending: Vec<_> = pool.ready().map(|a| a.data.transfer().nonce).collect();
 	assert_eq!(pending, vec![209, 210]);
@@ -124,7 +140,7 @@ fn multiple_submission_should_work() {
 #[test]
 fn early_nonce_should_be_culled() {
 	let pool = pool();
-	pool.submit_one(&BlockId::number(0), uxt(Alice, 208)).unwrap();
+	block_on(pool.submit_one(&BlockId::number(0), uxt(Alice, 208))).unwrap();
 
 	let pending: Vec<_> = pool.ready().map(|a| a.data.transfer().nonce).collect();
 	assert_eq!(pending, Vec::<Index>::new());
@@ -134,11 +150,11 @@ fn early_nonce_should_be_culled() {
 fn late_nonce_should_be_queued() {
 	let pool = pool();
 
-	pool.submit_one(&BlockId::number(0), uxt(Alice, 210)).unwrap();
+	block_on(pool.submit_one(&BlockId::number(0), uxt(Alice, 210))).unwrap();
 	let pending: Vec<_> = pool.ready().map(|a| a.data.transfer().nonce).collect();
 	assert_eq!(pending, Vec::<Index>::new());
 
-	pool.submit_one(&BlockId::number(0), uxt(Alice, 209)).unwrap();
+	block_on(pool.submit_one(&BlockId::number(0), uxt(Alice, 209))).unwrap();
 	let pending: Vec<_> = pool.ready().map(|a| a.data.transfer().nonce).collect();
 	assert_eq!(pending, vec![209, 210]);
 }
@@ -146,13 +162,13 @@ fn late_nonce_should_be_queued() {
 #[test]
 fn prune_tags_should_work() {
 	let pool = pool();
-	pool.submit_one(&BlockId::number(0), uxt(Alice, 209)).unwrap();
-	pool.submit_one(&BlockId::number(0), uxt(Alice, 210)).unwrap();
+	block_on(pool.submit_one(&BlockId::number(0), uxt(Alice, 209))).unwrap();
+	block_on(pool.submit_one(&BlockId::number(0), uxt(Alice, 210))).unwrap();
 
 	let pending: Vec<_> = pool.ready().map(|a| a.data.transfer().nonce).collect();
 	assert_eq!(pending, vec![209, 210]);
 
-	pool.prune_tags(&BlockId::number(1), vec![vec![209]], vec![]).unwrap();
+	block_on(pool.prune_tags(&BlockId::number(1), vec![vec![209]], vec![])).unwrap();
 
 	let pending: Vec<_> = pool.ready().map(|a| a.data.transfer().nonce).collect();
 	assert_eq!(pending, vec![210]);
@@ -162,14 +178,45 @@ fn prune_tags_should_work() {
 fn should_ban_invalid_transactions() {
 	let pool = pool();
 	let uxt = uxt(Alice, 209);
-	let hash = pool.submit_one(&BlockId::number(0), uxt.clone()).unwrap();
+	let hash = block_on(pool.submit_one(&BlockId::number(0), uxt.clone())).unwrap();
 	pool.remove_invalid(&[hash]);
-	pool.submit_one(&BlockId::number(0), uxt.clone()).unwrap_err();
+	block_on(pool.submit_one(&BlockId::number(0), uxt.clone())).unwrap_err();
 
 	// when
 	let pending: Vec<_> = pool.ready().map(|a| a.data.transfer().nonce).collect();
 	assert_eq!(pending, Vec::<Index>::new());
 
 	// then
-	pool.submit_one(&BlockId::number(0), uxt.clone()).unwrap_err();
+	block_on(pool.submit_one(&BlockId::number(0), uxt.clone())).unwrap_err();
+}
+
+#[test]
+fn should_correctly_prune_transactions_providing_more_than_one_tag() {
+	let mut api = TestApi::default();
+	api.modifier = Box::new(|v: &mut ValidTransaction| {
+		v.provides.push(vec![155]);
+	});
+	let pool = Pool::new(Default::default(), api);
+	let xt = uxt(Alice, 209);
+	block_on(pool.submit_one(&BlockId::number(0), xt.clone())).expect("1. Imported");
+	assert_eq!(pool.status().ready, 1);
+
+	// remove the transaction that just got imported.
+	block_on(pool.prune_tags(&BlockId::number(1), vec![vec![209]], vec![])).expect("1. Pruned");
+	assert_eq!(pool.status().ready, 0);
+	// it's re-imported to future
+	assert_eq!(pool.status().future, 1);
+
+	// so now let's insert another transaction that also provides the 155
+	let xt = uxt(Alice, 211);
+	block_on(pool.submit_one(&BlockId::number(2), xt.clone())).expect("2. Imported");
+	assert_eq!(pool.status().ready, 1);
+	assert_eq!(pool.status().future, 1);
+	let pending: Vec<_> = pool.ready().map(|a| a.data.transfer().nonce).collect();
+	assert_eq!(pending, vec![211]);
+
+	// prune it and make sure the pool is empty
+	block_on(pool.prune_tags(&BlockId::number(3), vec![vec![155]], vec![])).expect("2. Pruned");
+	assert_eq!(pool.status().ready, 0);
+	assert_eq!(pool.status().future, 2);
 }

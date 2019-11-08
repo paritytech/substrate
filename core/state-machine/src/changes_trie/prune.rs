@@ -24,13 +24,15 @@ use crate::proving_backend::ProvingBackendEssence;
 use crate::trie_backend_essence::TrieBackendEssence;
 use crate::changes_trie::{AnchorBlockId, Storage, BlockNumber};
 use crate::changes_trie::storage::TrieBackendAdapter;
+use crate::changes_trie::input::{ChildIndex, InputKey};
+use codec::Decode;
 
 /// Prune obsolete changes tries. Pruning happens at the same block, where highest
 /// level digest is created. Pruning guarantees to save changes tries for last
 /// `min_blocks_to_keep` blocks. We only prune changes tries at `max_digest_interval`
 /// ranges.
 pub fn prune<H: Hasher, Number: BlockNumber, F: FnMut(H::Out)>(
-	storage: &Storage<H, Number>,
+	storage: &dyn Storage<H, Number>,
 	first: Number,
 	last: Number,
 	current_block: &AnchorBlockId<H::Out, Number>,
@@ -56,23 +58,55 @@ pub fn prune<H: Hasher, Number: BlockNumber, F: FnMut(H::Out)>(
 				continue;
 			},
 		};
+		let children_roots = {
+			let trie_storage = TrieBackendEssence::<_, H>::new(
+				crate::changes_trie::TrieBackendStorageAdapter(storage),
+				root,
+			);
+			let child_prefix = ChildIndex::key_neutral_prefix(block.clone());
+			let mut children_roots = Vec::new();
+			trie_storage.for_key_values_with_prefix(&child_prefix, |key, value| {
+				if let Ok(InputKey::ChildIndex::<Number>(_trie_key)) = Decode::decode(&mut &key[..]) {
+					if let Ok(value) = <Vec<u8>>::decode(&mut &value[..]) {
+						let mut trie_root = <H as Hasher>::Out::default();
+						trie_root.as_mut().copy_from_slice(&value[..]);
+						children_roots.push(trie_root);
+					}
+				}
+			});
 
-		// enumerate all changes trie' keys, recording all nodes that have been 'touched'
-		// (effectively - all changes trie nodes)
-		let mut proof_recorder: Recorder<H::Out> = Default::default();
-		{
-			let mut trie = ProvingBackendEssence::<_, H> {
-				backend: &TrieBackendEssence::new(TrieBackendAdapter::new(storage), root),
-				proof_recorder: &mut proof_recorder,
-			};
-			trie.record_all_keys();
+			children_roots
+		};
+		for root in children_roots.into_iter() {
+			prune_trie(storage, root, &mut remove_trie_node);
 		}
 
-		// all nodes of this changes trie should be pruned
-		remove_trie_node(root);
-		for node in proof_recorder.drain().into_iter().map(|n| n.hash) {
-			remove_trie_node(node);
-		}
+		prune_trie(storage, root, &mut remove_trie_node);
+	}
+}
+
+// Prune a trie.
+fn prune_trie<H: Hasher, Number: BlockNumber, F: FnMut(H::Out)>(
+	storage: &dyn Storage<H, Number>,
+	root: H::Out,
+	remove_trie_node: &mut F,
+) {
+
+	// enumerate all changes trie' keys, recording all nodes that have been 'touched'
+	// (effectively - all changes trie nodes)
+	let mut proof_recorder: Recorder<H::Out> = Default::default();
+	{
+		let mut trie = ProvingBackendEssence::<_, H> {
+			backend: &TrieBackendEssence::new(TrieBackendAdapter::new(storage), root),
+			proof_recorder: &mut proof_recorder,
+		};
+		trie.record_all_keys();
+	}
+
+	// all nodes of this changes trie should be pruned
+	remove_trie_node(root);
+	for node in proof_recorder.drain().into_iter().map(|n| n.hash) {
+		remove_trie_node(node);
 	}
 }
 
@@ -83,10 +117,11 @@ mod tests {
 	use primitives::{H256, Blake2Hasher};
 	use crate::backend::insert_into_memory_db;
 	use crate::changes_trie::storage::InMemoryStorage;
+	use codec::Encode;
 	use super::*;
 
 	fn prune_by_collect(
-		storage: &Storage<Blake2Hasher, u64>,
+		storage: &dyn Storage<Blake2Hasher, u64>,
 		first: u64,
 		last: u64,
 		current_block: u64,
@@ -101,6 +136,8 @@ mod tests {
 	#[test]
 	fn prune_works() {
 		fn prepare_storage() -> InMemoryStorage<Blake2Hasher, u64> {
+
+			let child_key = ChildIndex { block: 67u64, storage_key: b"1".to_vec() }.encode();
 			let mut mdb1 = MemoryDB::<Blake2Hasher>::default();
 			let root1 = insert_into_memory_db::<Blake2Hasher, _>(&mut mdb1, vec![(vec![10], vec![20])]).unwrap();
 			let mut mdb2 = MemoryDB::<Blake2Hasher>::default();
@@ -109,10 +146,12 @@ mod tests {
 				vec![(vec![11], vec![21]), (vec![12], vec![22])],
 			).unwrap();
 			let mut mdb3 = MemoryDB::<Blake2Hasher>::default();
-			let root3 = insert_into_memory_db::<Blake2Hasher, _>(
-				&mut mdb3,
-				vec![(vec![13], vec![23]), (vec![14], vec![24])],
-			).unwrap();
+			let ch_root3 = insert_into_memory_db::<Blake2Hasher, _>(&mut mdb3, vec![(vec![110], vec![120])]).unwrap();
+			let root3 = insert_into_memory_db::<Blake2Hasher, _>(&mut mdb3, vec![
+				(vec![13], vec![23]),
+				(vec![14], vec![24]),
+				(child_key, ch_root3.as_ref().encode()),
+			]).unwrap();
 			let mut mdb4 = MemoryDB::<Blake2Hasher>::default();
 			let root4 = insert_into_memory_db::<Blake2Hasher, _>(
 				&mut mdb4,

@@ -25,7 +25,7 @@ pub mod system;
 use rstd::{prelude::*, marker::PhantomData};
 use codec::{Encode, Decode, Input, Error};
 
-use primitives::{Blake2Hasher, OpaqueMetadata, ChangesTrieConfiguration};
+use primitives::{Blake2Hasher, OpaqueMetadata, RuntimeDebug, ChangesTrieConfiguration};
 use app_crypto::{ed25519, sr25519, RuntimeAppPublic};
 pub use app_crypto;
 use trie_db::{TrieMut, Trie};
@@ -38,14 +38,16 @@ use substrate_client::{
 };
 use sr_primitives::{
 	ApplyResult, create_runtime_str, Perbill, impl_opaque_keys,
-	transaction_validity::{TransactionValidity, ValidTransaction},
+	transaction_validity::{
+		TransactionValidity, ValidTransaction, TransactionValidityError, InvalidTransaction,
+	},
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
 		GetNodeBlockType, GetRuntimeBlockType, Verify, IdentityLookup,
 	},
 };
 use runtime_version::RuntimeVersion;
-pub use primitives::{hash::H256, crypto::key_types};
+pub use primitives::{hash::H256};
 #[cfg(any(feature = "std", test))]
 use runtime_version::NativeVersion;
 use runtime_support::{impl_outer_origin, parameter_types};
@@ -84,8 +86,7 @@ pub fn native_version() -> NativeVersion {
 }
 
 /// Calls in transactions.
-#[derive(Clone, PartialEq, Eq, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
 pub struct Transfer {
 	pub from: AccountId,
 	pub to: AccountId,
@@ -104,8 +105,7 @@ impl Transfer {
 }
 
 /// Extrinsic for test-runtime.
-#[derive(Clone, PartialEq, Eq, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
 pub enum Extrinsic {
 	AuthoritiesChange(Vec<AuthorityId>),
 	Transfer(Transfer, AccountSignature),
@@ -124,17 +124,17 @@ impl serde::Serialize for Extrinsic {
 impl BlindCheckable for Extrinsic {
 	type Checked = Self;
 
-	fn check(self) -> Result<Self, &'static str> {
+	fn check(self) -> Result<Self, TransactionValidityError> {
 		match self {
 			Extrinsic::AuthoritiesChange(new_auth) => Ok(Extrinsic::AuthoritiesChange(new_auth)),
 			Extrinsic::Transfer(transfer, signature) => {
 				if sr_primitives::verify_encoded_lazy(&signature, &transfer, &transfer.from) {
 					Ok(Extrinsic::Transfer(transfer, signature))
 				} else {
-					Err(sr_primitives::BAD_SIGNATURE)
+					Err(InvalidTransaction::BadProof.into())
 				}
 			},
-			Extrinsic::IncludeData(_) => Err(sr_primitives::BAD_SIGNATURE),
+			Extrinsic::IncludeData(_) => Err(InvalidTransaction::BadProof.into()),
 			Extrinsic::StorageChange(key, value) => Ok(Extrinsic::StorageChange(key, value)),
 			Extrinsic::ChangesTrieConfigUpdate(new_config) =>
 				Ok(Extrinsic::ChangesTrieConfigUpdate(new_config)),
@@ -144,6 +144,7 @@ impl BlindCheckable for Extrinsic {
 
 impl ExtrinsicT for Extrinsic {
 	type Call = Extrinsic;
+	type SignaturePayload = ();
 
 	fn is_signed(&self) -> Option<bool> {
 		if let Extrinsic::IncludeData(_) = *self {
@@ -153,7 +154,7 @@ impl ExtrinsicT for Extrinsic {
 		}
 	}
 
-	fn new_unsigned(call: Self::Call) -> Option<Self> {
+	fn new(call: Self::Call, _signature_payload: Option<Self::SignaturePayload>) -> Option<Self> {
 		Some(call)
 	}
 }
@@ -188,7 +189,7 @@ pub type Header = sr_primitives::generic::Header<BlockNumber, BlakeTwo256>;
 
 /// Run whatever tests we have.
 pub fn run_tests(mut input: &[u8]) -> Vec<u8> {
-	use runtime_io::print;
+	use sr_primitives::print;
 
 	print("run_tests...");
 	let block = Block::decode(&mut input).unwrap();
@@ -256,6 +257,7 @@ cfg_if! {
 				fn benchmark_direct_call() -> u64;
 				fn returns_mutable_static() -> u64;
 				fn allocates_huge_stack_array(trap: bool) -> Vec<u8>;
+				fn vec_with_capacity(size: u32) -> Vec<u8>;
 				/// Returns the initialized block number.
 				fn get_block_number() -> u64;
 				/// Takes and returns the initialized block number.
@@ -271,6 +273,8 @@ cfg_if! {
 				///
 				/// Returns the signature generated for the message `sr25519`.
 				fn test_sr25519_crypto() -> (sr25519::AppSignature, sr25519::AppPublic);
+				/// Run various tests against storage.
+				fn test_storage();
 			}
 		}
 	} else {
@@ -297,6 +301,7 @@ cfg_if! {
 				fn benchmark_direct_call() -> u64;
 				fn returns_mutable_static() -> u64;
 				fn allocates_huge_stack_array(trap: bool) -> Vec<u8>;
+				fn vec_with_capacity(size: u32) -> Vec<u8>;
 				/// Returns the initialized block number.
 				fn get_block_number() -> u64;
 				/// Takes and returns the initialized block number.
@@ -312,6 +317,8 @@ cfg_if! {
 				///
 				/// Returns the signature generated for the message `sr25519`.
 				fn test_sr25519_crypto() -> (sr25519::AppSignature, sr25519::AppPublic);
+				/// Run various tests against storage.
+				fn test_storage();
 			}
 		}
 	}
@@ -332,8 +339,7 @@ impl_outer_origin!{
 	pub enum Origin for Runtime where system = srml_system {}
 }
 
-#[derive(Clone, Encode, Decode, Eq, PartialEq)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
 pub struct Event;
 
 impl From<srml_system::Event> for Event {
@@ -361,11 +367,11 @@ impl srml_system::Trait for Runtime {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type WeightMultiplierUpdate = ();
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
 	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
+	type Version = ();
 }
 
 impl srml_timestamp::Trait for Runtime {
@@ -383,6 +389,10 @@ parameter_types! {
 impl srml_babe::Trait for Runtime {
 	type EpochDuration = EpochDuration;
 	type ExpectedBlockTime = ExpectedBlockTime;
+	// there is no actual runtime in this test-runtime, so testing crates
+	// are manually adding the digests. normally in this situation you'd use
+	// srml_babe::SameAuthoritiesForever.
+	type EpochChangeTrigger = srml_babe::ExternalTrigger;
 }
 
 /// Adds one to the given input and returns the final result.
@@ -431,9 +441,7 @@ fn code_using_trie() -> u64 {
 
 impl_opaque_keys! {
 	pub struct SessionKeys {
-		#[id(key_types::ED25519)]
 		pub ed25519: ed25519::AppPublic,
-		#[id(key_types::SR25519)]
 		pub sr25519: sr25519::AppPublic,
 	}
 }
@@ -469,7 +477,7 @@ cfg_if! {
 			impl client_api::TaggedTransactionQueue<Block> for Runtime {
 				fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 					if let Extrinsic::IncludeData(data) = utx {
-						return TransactionValidity::Valid(ValidTransaction {
+						return Ok(ValidTransaction {
 							priority: data.len() as u64,
 							requires: vec![],
 							provides: vec![data],
@@ -556,6 +564,10 @@ cfg_if! {
 					unimplemented!("is not expected to be invoked from non-wasm builds");
 				}
 
+				fn vec_with_capacity(_size: u32) -> Vec<u8> {
+					unimplemented!("is not expected to be invoked from non-wasm builds");
+				}
+
 				fn get_block_number() -> u64 {
 					system::get_block_number().expect("Block number is initialized")
 				}
@@ -575,6 +587,11 @@ cfg_if! {
 				fn test_sr25519_crypto() -> (sr25519::AppSignature, sr25519::AppPublic) {
 					test_sr25519_crypto()
 				}
+
+				fn test_storage() {
+					test_read_storage();
+					test_read_child_storage();
+				}
 			}
 
 			impl aura_primitives::AuraApi<Block, AuraId> for Runtime {
@@ -588,24 +605,15 @@ cfg_if! {
 			}
 
 			impl babe_primitives::BabeApi<Block> for Runtime {
-				fn startup_data() -> babe_primitives::BabeConfiguration {
+				fn configuration() -> babe_primitives::BabeConfiguration {
 					babe_primitives::BabeConfiguration {
-						median_required_blocks: 0,
-						slot_duration: 3000,
+						slot_duration: 1000,
+						epoch_length: EpochDuration::get(),
 						c: (3, 10),
-					}
-				}
-
-				fn epoch() -> babe_primitives::Epoch {
-					let authorities = system::authorities();
-					let authorities: Vec<_> = authorities.into_iter().map(|x|(x, 1)).collect();
-
-					babe_primitives::Epoch {
-						start_slot: <srml_babe::Module<Runtime>>::epoch_start_slot(),
-						authorities,
+						genesis_authorities: system::authorities()
+							.into_iter().map(|x|(x, 1)).collect(),
 						randomness: <srml_babe::Module<Runtime>>::randomness(),
-						epoch_index: <srml_babe::Module<Runtime>>::epoch_index(),
-						duration: EpochDuration::get(),
+						secondary_slots: true,
 					}
 				}
 			}
@@ -613,13 +621,19 @@ cfg_if! {
 			impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
 				fn offchain_worker(block: u64) {
 					let ex = Extrinsic::IncludeData(block.encode());
-					runtime_io::submit_transaction(&ex).unwrap();
+					runtime_io::submit_transaction(ex.encode()).unwrap();
 				}
 			}
 
 			impl session::SessionKeys<Block> for Runtime {
 				fn generate_session_keys(_: Option<Vec<u8>>) -> Vec<u8> {
 					SessionKeys::generate(None)
+				}
+			}
+
+			impl srml_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {
+				fn account_nonce(_account: AccountId) -> Index {
+					0
 				}
 			}
 		}
@@ -648,7 +662,7 @@ cfg_if! {
 			impl client_api::TaggedTransactionQueue<Block> for Runtime {
 				fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 					if let Extrinsic::IncludeData(data) = utx {
-						return TransactionValidity::Valid(ValidTransaction{
+						return Ok(ValidTransaction{
 							priority: data.len() as u64,
 							requires: vec![],
 							provides: vec![data],
@@ -766,6 +780,10 @@ cfg_if! {
 					data.to_vec()
 				}
 
+				fn vec_with_capacity(size: u32) -> Vec<u8> {
+					Vec::with_capacity(size as usize)
+				}
+
 				fn get_block_number() -> u64 {
 					system::get_block_number().expect("Block number is initialized")
 				}
@@ -785,6 +803,11 @@ cfg_if! {
 				fn test_sr25519_crypto() -> (sr25519::AppSignature, sr25519::AppPublic) {
 					test_sr25519_crypto()
 				}
+
+				fn test_storage() {
+					test_read_storage();
+					test_read_child_storage();
+				}
 			}
 
 			impl aura_primitives::AuraApi<Block, AuraId> for Runtime {
@@ -798,24 +821,15 @@ cfg_if! {
 			}
 
 			impl babe_primitives::BabeApi<Block> for Runtime {
-				fn startup_data() -> babe_primitives::BabeConfiguration {
+				fn configuration() -> babe_primitives::BabeConfiguration {
 					babe_primitives::BabeConfiguration {
-						median_required_blocks: 0,
 						slot_duration: 1000,
+						epoch_length: EpochDuration::get(),
 						c: (3, 10),
-					}
-				}
-
-				fn epoch() -> babe_primitives::Epoch {
-					let authorities = system::authorities();
-					let authorities: Vec<_> = authorities.into_iter().map(|x|(x, 1)).collect();
-
-					babe_primitives::Epoch {
-						start_slot: <srml_babe::Module<Runtime>>::epoch_start_slot(),
-						authorities,
+						genesis_authorities: system::authorities()
+							.into_iter().map(|x|(x, 1)).collect(),
 						randomness: <srml_babe::Module<Runtime>>::randomness(),
-						epoch_index: <srml_babe::Module<Runtime>>::epoch_index(),
-						duration: EpochDuration::get(),
+						secondary_slots: true,
 					}
 				}
 			}
@@ -823,13 +837,19 @@ cfg_if! {
 			impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
 				fn offchain_worker(block: u64) {
 					let ex = Extrinsic::IncludeData(block.encode());
-					runtime_io::submit_transaction(&ex).unwrap()
+					runtime_io::submit_transaction(ex.encode()).unwrap()
 				}
 			}
 
 			impl session::SessionKeys<Block> for Runtime {
 				fn generate_session_keys(_: Option<Vec<u8>>) -> Vec<u8> {
 					SessionKeys::generate(None)
+				}
+			}
+
+			impl srml_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {
+				fn account_nonce(_account: AccountId) -> Index {
+					0
 				}
 			}
 		}
@@ -866,10 +886,51 @@ fn test_sr25519_crypto() -> (sr25519::AppSignature, sr25519::AppPublic) {
 	(signature, public0)
 }
 
+fn test_read_storage() {
+	const KEY: &[u8] = b":read_storage";
+	runtime_io::set_storage(KEY, b"test");
+
+	let mut v = [0u8; 4];
+	let r = runtime_io::read_storage(
+		KEY,
+		&mut v,
+		0
+	);
+	assert_eq!(r, Some(4));
+	assert_eq!(&v, b"test");
+
+	let mut v = [0u8; 4];
+	let r = runtime_io::read_storage(KEY, &mut v, 8);
+	assert_eq!(r, Some(4));
+	assert_eq!(&v, &[0, 0, 0, 0]);
+}
+
+fn test_read_child_storage() {
+	const CHILD_KEY: &[u8] = b":child_storage:default:read_child_storage";
+	const KEY: &[u8] = b":read_child_storage";
+	runtime_io::set_child_storage(CHILD_KEY, KEY, b"test");
+
+	let mut v = [0u8; 4];
+	let r = runtime_io::read_child_storage(
+		CHILD_KEY,
+		KEY,
+		&mut v,
+		0
+	);
+	assert_eq!(r, Some(4));
+	assert_eq!(&v, b"test");
+
+	let mut v = [0u8; 4];
+	let r = runtime_io::read_child_storage(CHILD_KEY, KEY, &mut v, 8);
+	assert_eq!(r, Some(4));
+	assert_eq!(&v, &[0, 0, 0, 0]);
+}
+
 #[cfg(test)]
 mod tests {
 	use substrate_test_runtime_client::{
 		prelude::*,
+		consensus::BlockOrigin,
 		DefaultTestClientBuilderExt, TestClientBuilder,
 		runtime::TestAPI,
 	};
@@ -877,7 +938,9 @@ mod tests {
 		generic::BlockId,
 		traits::ProvideRuntimeApi,
 	};
+	use primitives::storage::well_known_keys::HEAP_PAGES;
 	use state_machine::ExecutionStrategy;
+	use codec::Encode;
 
 	#[test]
 	fn returns_mutable_static() {
@@ -925,4 +988,47 @@ mod tests {
 		assert!(ret.is_ok());
 	}
 
+	#[test]
+	fn heap_pages_is_respected() {
+		// This tests that the on-chain HEAP_PAGES parameter is respected.
+
+		// Create a client devoting only 8 pages of wasm memory. This gives us ~512k of heap memory.
+		let client = TestClientBuilder::new()
+			.set_execution_strategy(ExecutionStrategy::AlwaysWasm)
+			.set_heap_pages(8)
+			.build();
+		let runtime_api = client.runtime_api();
+		let block_id = BlockId::Number(client.info().chain.best_number);
+
+		// Try to allocate 1024k of memory on heap. This is going to fail since it is twice larger
+		// than the heap.
+		let ret = runtime_api.vec_with_capacity(&block_id, 1048576);
+		assert!(ret.is_err());
+
+		// Create a block that sets the `:heap_pages` to 32 pages of memory which corresponds to
+		// ~2048k of heap memory.
+		let new_block_id = {
+			let mut builder = client.new_block(Default::default()).unwrap();
+			builder.push_storage_change(HEAP_PAGES.to_vec(), Some(32u64.encode())).unwrap();
+			let block = builder.bake().unwrap();
+			let hash = block.header.hash();
+			client.import(BlockOrigin::Own, block).unwrap();
+			BlockId::Hash(hash)
+		};
+
+		// Allocation of 1024k while having ~2048k should succeed.
+		let ret = runtime_api.vec_with_capacity(&new_block_id, 1048576);
+		assert!(ret.is_ok());
+	}
+
+	#[test]
+	fn test_storage() {
+		let client = TestClientBuilder::new()
+			.set_execution_strategy(ExecutionStrategy::Both)
+			.build();
+		let runtime_api = client.runtime_api();
+		let block_id = BlockId::Number(client.info().chain.best_number);
+
+		runtime_api.test_storage(&block_id).unwrap();
+	}
 }

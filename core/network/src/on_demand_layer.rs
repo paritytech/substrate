@@ -17,6 +17,7 @@
 //! On-demand requests service.
 
 use crate::protocol::light_dispatch::RequestData;
+use std::collections::HashMap;
 use std::sync::Arc;
 use futures::{prelude::*, sync::mpsc, sync::oneshot};
 use futures03::compat::{Compat01As03, Future01CompatExt as _};
@@ -84,7 +85,7 @@ impl<B> Fetcher<B> for OnDemand<B> where
 	B::Header: HeaderT,
 {
 	type RemoteHeaderResult = Compat01As03<RemoteResponse<B::Header>>;
-	type RemoteReadResult = Compat01As03<RemoteResponse<Option<Vec<u8>>>>;
+	type RemoteReadResult = Compat01As03<RemoteResponse<HashMap<Vec<u8>, Option<Vec<u8>>>>>;
 	type RemoteCallResult = Compat01As03<RemoteResponse<Vec<u8>>>;
 	type RemoteChangesResult = Compat01As03<RemoteResponse<Vec<(NumberFor<B>, u32)>>>;
 	type RemoteBodyResult = Compat01As03<RemoteResponse<Vec<B::Extrinsic>>>;

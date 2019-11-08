@@ -21,8 +21,7 @@ use parking_lot::RwLock;
 
 use kvdb::{KeyValueDB, DBTransaction};
 
-use client::blockchain::{well_known_cache_keys, Cache as BlockchainCache};
-use client::well_known_cache_keys::Id as CacheKeyId;
+use client::blockchain::{well_known_cache_keys::{self, Id as CacheKeyId}, Cache as BlockchainCache};
 use client::error::Result as ClientResult;
 use codec::{Encode, Decode};
 use sr_primitives::generic::BlockId;
@@ -241,7 +240,7 @@ impl<'a, Block: BlockT> DbCacheTransaction<'a, Block> {
 		// prepare list of caches that are not update
 		// (we might still need to do some cache maintenance in this case)
 		let missed_caches = self.cache.cache_at.keys()
-			.filter(|cache| !data_at.contains_key(cache.clone()))
+			.filter(|cache| !data_at.contains_key(*cache))
 			.cloned()
 			.collect::<Vec<_>>();
 
@@ -307,7 +306,7 @@ impl<'a, Block: BlockT> DbCacheTransaction<'a, Block> {
 	/// When block is reverted.
 	pub fn on_block_revert(
 		mut self,
-		block: NumberFor<Block>,
+		reverted_block: &ComplexBlockId<Block>,
 	) -> ClientResult<Self> {
 		for (name, cache) in self.cache.cache_at.iter() {
 			let mut cache_ops = self.cache_at_ops.remove(name).unwrap_or_default();
@@ -316,7 +315,7 @@ impl<'a, Block: BlockT> DbCacheTransaction<'a, Block> {
 					cache.storage(),
 					&mut self.tx
 				),
-				block,
+				reverted_block,
 			)?;
 
 			cache_ops.push(op);
@@ -355,42 +354,52 @@ impl<Block: BlockT> BlockchainCache<Block> for DbCacheSync<Block> {
 		key: &CacheKeyId,
 		at: &BlockId<Block>,
 	) -> Option<((NumberFor<Block>, Block::Hash), Option<(NumberFor<Block>, Block::Hash)>, Vec<u8>)> {
-		let id = {
-			let cache = self.0.read();
-			let storage = cache.cache_at.get(key)?.storage();
-			let db = storage.db();
-			let columns = storage.columns();
-			match *at {
-				BlockId::Hash(hash) => {
-					let header = utils::read_header::<Block>(
-						&**db,
-						columns.key_lookup,
-						columns.header,
-						BlockId::Hash(hash.clone())).ok()??;
-					ComplexBlockId::new(hash, *header.number())
-				},
-				BlockId::Number(number) => {
-					let hash = utils::read_header::<Block>(
-						&**db,
-						columns.key_lookup,
-						columns.header,
-						BlockId::Number(number.clone())).ok()??.hash();
-					ComplexBlockId::new(hash, number)
-				},
-			}
+		let mut cache = self.0.write();
+		let storage = cache.get_cache(*key).ok()?.storage();
+		let db = storage.db();
+		let columns = storage.columns();
+		let at = match *at {
+			BlockId::Hash(hash) => {
+				let header = utils::read_header::<Block>(
+					&**db,
+					columns.key_lookup,
+					columns.header,
+					BlockId::Hash(hash.clone())).ok()??;
+				ComplexBlockId::new(hash, *header.number())
+			},
+			BlockId::Number(number) => {
+				let hash = utils::read_header::<Block>(
+					&**db,
+					columns.key_lookup,
+					columns.header,
+					BlockId::Number(number.clone())).ok()??.hash();
+				ComplexBlockId::new(hash, number)
+			},
 		};
 
-		self.0.read().cache_at.get(key)?
-			.value_at_block(id)
+		cache.cache_at
+			.get(key)?
+			.value_at_block(&at)
 			.map(|block_and_value| block_and_value.map(|(begin_block, end_block, value)|
-				((begin_block.number, begin_block.hash), end_block.map(|end_block| (end_block.number, end_block.hash)), value)))
+				(
+					(begin_block.number, begin_block.hash),
+					end_block.map(|end_block| (end_block.number, end_block.hash)),
+					value,
+				)))
 			.ok()?
 	}
 }
 
 /// Get pruning strategy for given cache.
 fn cache_pruning_strategy<N: From<u32>>(cache: CacheKeyId) -> PruningStrategy<N> {
+	// the cache is mostly used to store data from consensus engines
+	// this kind of data is only required for non-finalized blocks
+	// => by default we prune finalized cached entries
+
 	match cache {
+		// we need to keep changes tries configurations forever (or at least until changes tries,
+		// that were built using this configuration, are pruned) to make it possible to refer
+		// to old changes tries
 		well_known_cache_keys::CHANGES_TRIE_CONFIG => PruningStrategy::NeverPrune,
 		_ => PruningStrategy::ByDepth(PRUNE_DEPTH.into()),
 	}

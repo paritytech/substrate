@@ -26,18 +26,14 @@
 #![cfg_attr(feature = "std", doc = "Substrate runtime standard library as compiled when linked with Rust's standard library.")]
 #![cfg_attr(not(feature = "std"), doc = "Substrate's runtime standard library as compiled without Rust's standard library.")]
 
-use hash_db::Hasher;
 use rstd::vec::Vec;
 
-#[doc(hidden)]
-pub use codec;
-
-pub use primitives::Blake2Hasher;
 use primitives::{
-	crypto::KeyTypeId, ed25519, sr25519,
+	crypto::KeyTypeId, ed25519, sr25519, H256,
 	offchain::{
 		Timestamp, HttpRequestId, HttpRequestStatus, HttpError, StorageKind, OpaqueNetworkState,
 	},
+	LogLevel,
 };
 
 /// Error verifying ECDSA signature
@@ -50,14 +46,6 @@ pub enum EcdsaVerifyError {
 	BadSignature,
 }
 
-pub mod offchain;
-
-/// Trait for things which can be printed.
-pub trait Printable {
-	/// Print the object.
-	fn print(self);
-}
-
 /// Converts a public trait definition into a private trait and set of public functions
 /// that assume the trait is implemented for `()` for ease of calling.
 macro_rules! export_api {
@@ -67,7 +55,6 @@ macro_rules! export_api {
 			$(
 				$( #[$attr:meta] )*
 				fn $name:ident
-					$(< $( $g_name:ident $( : $g_ty:path )? ),+ >)?
 					( $( $arg:ident : $arg_ty:ty ),* $(,)? )
 					$( -> $ret:ty )?
 					$( where $( $w_name:path : $w_ty:path ),+ )?;
@@ -78,18 +65,18 @@ macro_rules! export_api {
 		pub(crate) trait $trait_name {
 			$(
 				$( #[$attr] )*
-				fn $name $(< $( $g_name $( : $g_ty )? ),+ >)? ( $($arg : $arg_ty ),* ) $( -> $ret )?
+				fn $name ( $($arg : $arg_ty ),* ) $( -> $ret )?
 				$( where $( $w_name : $w_ty ),+ )?;
 			)*
 		}
 
 		$(
 			$( #[$attr] )*
-			pub fn $name $(< $( $g_name $( : $g_ty )? ),+ >)? ( $($arg : $arg_ty ),* ) $( -> $ret )?
+			pub fn $name ( $($arg : $arg_ty ),* ) $( -> $ret )?
 				$( where $( $w_name : $w_ty ),+ )?
 			{
 				#[allow(deprecated)]
-				<()>:: $name $(::< $( $g_name ),+ > )?  ( $( $arg ),* )
+				<()>:: $name ( $( $arg ),* )
 			}
 		)*
 	}
@@ -154,26 +141,10 @@ export_api! {
 		fn storage_changes_root(parent_hash: [u8; 32]) -> Option<[u8; 32]>;
 
 		/// A trie root formed from the iterated items.
-		fn trie_root<H, I, A, B>(input: I) -> H::Out
-		where
-			I: IntoIterator<Item = (A, B)>,
-			A: AsRef<[u8]>,
-			A: Ord,
-			B: AsRef<[u8]>,
-			H: Hasher,
-			H: self::imp::HasherBounds,
-			H::Out: Ord
-		;
+		fn blake2_256_trie_root(input: Vec<(Vec<u8>, Vec<u8>)>) -> H256;
 
 		/// A trie root formed from the enumerated items.
-		fn ordered_trie_root<H, I, A>(input: I) -> H::Out
-		where
-			I: IntoIterator<Item = A>,
-			A: AsRef<[u8]>,
-			H: Hasher,
-			H: self::imp::HasherBounds,
-			H::Out: Ord
-		;
+		fn blake2_256_ordered_trie_root(input: Vec<Vec<u8>>) -> H256;
 	}
 }
 
@@ -182,12 +153,26 @@ export_api! {
 		/// The current relay chain identifier.
 		fn chain_id() -> u64;
 
-		/// Print a printable value.
-		fn print<T>(value: T)
-		where
-			T: Printable,
-			T: Sized
-		;
+		/// Print a number.
+		fn print_num(val: u64);
+		/// Print any valid `utf8` buffer.
+		fn print_utf8(utf8: &[u8]);
+		/// Print any `u8` slice as hex.
+		fn print_hex(data: &[u8]);
+
+		/// Request to print a log message (stderr) on the host.
+		///
+		/// Note that this will be only displayed if the host
+		/// is enabed to display log messages with given
+		/// level and target.
+		///
+		/// Instead of using directly, prefer setting up `RuntimeLogger`
+		/// and using `log` macros.
+		fn log(
+			level: LogLevel,
+			target: &[u8],
+			message: &[u8]
+		);
 	}
 }
 
@@ -203,10 +188,10 @@ export_api! {
 		/// key type in the keystore.
 		///
 		/// Returns the raw signature.
-		fn ed25519_sign<M: AsRef<[u8]>>(
+		fn ed25519_sign(
 			id: KeyTypeId,
 			pubkey: &ed25519::Public,
-			msg: &M,
+			msg: &[u8],
 		) -> Option<ed25519::Signature>;
 		/// Verify an ed25519 signature.
 		///
@@ -223,10 +208,10 @@ export_api! {
 		/// key type in the keystore.
 		///
 		/// Returns the raw signature.
-		fn sr25519_sign<M: AsRef<[u8]>>(
+		fn sr25519_sign(
 			id: KeyTypeId,
 			pubkey: &sr25519::Public,
-			msg: &M,
+			msg: &[u8],
 		) -> Option<sr25519::Signature>;
 		/// Verify an sr25519 signature.
 		///
@@ -235,15 +220,20 @@ export_api! {
 
 		/// Verify and recover a SECP256k1 ECDSA signature.
 		/// - `sig` is passed in RSV format. V should be either 0/1 or 27/28.
-		/// - returns `Err` if the signature is bad, otherwise the 64-byte pubkey (doesn't include the 0x04 prefix).
+		/// - returns `Err` if the signature is bad, otherwise the 64-byte raw pubkey (doesn't include the 0x04 prefix).
 		fn secp256k1_ecdsa_recover(sig: &[u8; 65], msg: &[u8; 32]) -> Result<[u8; 64], EcdsaVerifyError>;
+
+		/// Verify and recover a SECP256k1 ECDSA signature.
+		/// - `sig` is passed in RSV format. V should be either 0/1 or 27/28.
+		/// - returns `Err` if the signature is bad, otherwise the 33-byte compressed pubkey.
+		fn secp256k1_ecdsa_recover_compressed(sig: &[u8; 65], msg: &[u8; 32]) -> Result<[u8; 33], EcdsaVerifyError>;
 	}
 }
 
 export_api! {
 	pub(crate) trait HashingApi {
 		/// Conduct a 256-bit Keccak hash.
-		fn keccak_256(data: &[u8]) -> [u8; 32] ;
+		fn keccak_256(data: &[u8]) -> [u8; 32];
 
 		/// Conduct a 128-bit Blake2 hash.
 		fn blake2_128(data: &[u8]) -> [u8; 16];
@@ -269,10 +259,11 @@ export_api! {
 		/// Even if this function returns `true`, it does not mean that any keys are configured
 		/// and that the validator is registered in the chain.
 		fn is_validator() -> bool;
+
 		/// Submit transaction to the pool.
 		///
 		/// The transaction will end up in the pool.
-		fn submit_transaction<T: codec::Encode>(data: &T) -> Result<(), ()>;
+		fn submit_transaction(data: Vec<u8>) -> Result<(), ()>;
 
 		/// Returns information about the local node's network state.
 		fn network_state() -> Result<OpaqueNetworkState, ()>;
@@ -308,7 +299,7 @@ export_api! {
 			kind: StorageKind,
 			key: &[u8],
 			old_value: Option<&[u8]>,
-			new_value: &[u8]
+			new_value: &[u8],
 		) -> bool;
 
 		/// Gets a value from the local storage.
@@ -325,14 +316,14 @@ export_api! {
 		fn http_request_start(
 			method: &str,
 			uri: &str,
-			meta: &[u8]
+			meta: &[u8],
 		) -> Result<HttpRequestId, ()>;
 
 		/// Append header to the request.
 		fn http_request_add_header(
 			request_id: HttpRequestId,
 			name: &str,
-			value: &str
+			value: &str,
 		) -> Result<(), ()>;
 
 		/// Write a chunk of request body.
@@ -344,7 +335,7 @@ export_api! {
 		fn http_request_write_body(
 			request_id: HttpRequestId,
 			chunk: &[u8],
-			deadline: Option<Timestamp>
+			deadline: Option<Timestamp>,
 		) -> Result<(), HttpError>;
 
 		/// Block and wait for the responses for given requests.
@@ -356,16 +347,14 @@ export_api! {
 		/// Passing `None` as deadline blocks forever.
 		fn http_response_wait(
 			ids: &[HttpRequestId],
-			deadline: Option<Timestamp>
+			deadline: Option<Timestamp>,
 		) -> Vec<HttpRequestStatus>;
 
 		/// Read all response headers.
 		///
 		/// Returns a vector of pairs `(HeaderKey, HeaderValue)`.
 		/// NOTE response headers have to be read before response body.
-		fn http_response_headers(
-			request_id: HttpRequestId
-		) -> Vec<(Vec<u8>, Vec<u8>)>;
+		fn http_response_headers(request_id: HttpRequestId) -> Vec<(Vec<u8>, Vec<u8>)>;
 
 		/// Read a chunk of body response to given buffer.
 		///
@@ -378,7 +367,7 @@ export_api! {
 		fn http_response_read_body(
 			request_id: HttpRequestId,
 			buffer: &mut [u8],
-			deadline: Option<Timestamp>
+			deadline: Option<Timestamp>,
 		) -> Result<usize, HttpError>;
 	}
 }
@@ -399,13 +388,10 @@ mod imp {
 }
 
 #[cfg(feature = "std")]
-pub use self::imp::{
-	StorageOverlay, ChildrenStorageOverlay, with_storage,
-	with_externalities
-};
+pub use self::imp::{StorageOverlay, ChildrenStorageOverlay, with_storage};
 #[cfg(not(feature = "std"))]
 pub use self::imp::ext::*;
 
 /// Type alias for Externalities implementation used in tests.
 #[cfg(feature = "std")]
-pub type TestExternalities<H> = self::imp::TestExternalities<H, u64>;
+pub type TestExternalities = self::imp::TestExternalities<primitives::Blake2Hasher, u64>;

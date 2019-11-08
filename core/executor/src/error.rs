@@ -16,9 +16,10 @@
 
 //! Rust executor possible errors.
 
-use state_machine;
 use serializer;
 use wasmi;
+#[cfg(feature = "wasmtime")]
+use wasmtime_jit::{ActionError, SetupError};
 
 /// Result type alias.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -32,6 +33,9 @@ pub enum Error {
 	Trap(wasmi::Trap),
 	/// Wasmi loading/instantiating error
 	Wasmi(wasmi::Error),
+	/// Wasmtime action error
+	#[cfg(feature = "wasmtime")]
+	Wasmtime(ActionError),
 	/// Error in the API. Parameter is an error message.
 	ApiError(String),
 	/// Method is not found
@@ -66,16 +70,19 @@ pub enum Error {
 	#[display(fmt="The runtime has the `start` function")]
 	RuntimeHasStartFn,
 	/// Some other error occurred
-	Other(&'static str),
+	Other(String),
 	/// Some error occurred in the allocator
 	#[display(fmt="Error in allocator: {}", _0)]
 	Allocator(&'static str),
-	/// The allocator run out of space.
-	#[display(fmt="Allocator run out of space")]
+	/// The allocator ran out of space.
+	#[display(fmt="Allocator ran out of space")]
 	AllocatorOutOfSpace,
 	/// Someone tried to allocate more memory than the allowed maximum per allocation.
 	#[display(fmt="Requested allocation size is too large")]
 	RequestedAllocationTooLarge,
+	/// Execution of a host function failed.
+	#[display(fmt="Host function {} execution failed with: {}", _0, _1)]
+	FunctionExecution(String, String),
 }
 
 impl std::error::Error for Error {
@@ -89,12 +96,41 @@ impl std::error::Error for Error {
 	}
 }
 
-impl state_machine::Error for Error {}
-
 impl wasmi::HostError for Error {}
 
-impl From<&'static str> for Error {
-	fn from(err: &'static str) -> Error {
+impl From<String> for Error {
+	fn from(err: String) -> Error {
 		Error::Other(err)
 	}
+}
+
+impl From<WasmError> for Error {
+	fn from(err: WasmError) -> Error {
+		Error::Other(err.to_string())
+	}
+}
+
+/// Type for errors occurring during Wasm runtime construction.
+#[derive(Debug, derive_more::Display)]
+pub enum WasmError {
+	/// Code could not be read from the state.
+	CodeNotFound,
+	/// Failure to reinitialize runtime instance from snapshot.
+	ApplySnapshotFailed,
+	/// Wasm code failed validation.
+	InvalidModule,
+	/// Wasm code could not be deserialized.
+	CantDeserializeWasm,
+	/// The module does not export a linear memory named `memory`.
+	InvalidMemory,
+	/// The number of heap pages requested is disallowed by the module.
+	InvalidHeapPages,
+	/// Instantiation error.
+	Instantiation(String),
+	/// The compiler does not support the host machine as a target.
+	#[cfg(feature = "wasmtime")]
+	MissingCompilerSupport(&'static str),
+	/// Wasmtime setup error.
+	#[cfg(feature = "wasmtime")]
+	WasmtimeSetup(SetupError),
 }

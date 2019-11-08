@@ -191,8 +191,7 @@ macro_rules! construct_runtime {
 			)*
 		};
 	) => {
-		#[derive(Clone, Copy, PartialEq, Eq)]
-		#[cfg_attr(feature = "std", derive(Debug))]
+		#[derive(Clone, Copy, PartialEq, Eq, $crate::RuntimeDebug)]
 		pub struct $runtime;
 		impl $crate::sr_primitives::traits::GetNodeBlockType for $runtime {
 			type NodeBlock = $node_block;
@@ -219,6 +218,7 @@ macro_rules! construct_runtime {
 		$crate::__decl_all_modules!(
 			$runtime;
 			;
+			{};
 			{};
 			$(
 				$name: $module:: $( < $module_instance >:: )? { $( $modules ),* },
@@ -299,6 +299,7 @@ macro_rules! __create_decl_macro {
 					)*
 				);
 			};
+			// Parse system module
 			(@inner
 				$runtime:ident;
 				; // there can not be multiple `System`s
@@ -315,6 +316,7 @@ macro_rules! __create_decl_macro {
 					$d( $rest )*
 				);
 			};
+			// Parse instantiable module with generic
 			(@inner
 				$runtime:ident;
 				$d( $system:ident )?;
@@ -334,6 +336,23 @@ macro_rules! __create_decl_macro {
 					$d( $rest )*
 				);
 			};
+			// Parse instantiable module with no generic
+			(@inner
+				$runtime:ident;
+				$d( $system:ident )?;
+				{ $d( $parsed:tt )* };
+				$name:ident : $module:ident:: < $module_instance:ident >:: {
+					$macro_enum_name $d(, $ingore:ident $d( <$ignor:ident> )* )*
+				},
+				$d( $rest:tt )*
+			) => {
+				compile_error!(concat!(
+					"Instantiable module with not generic ", stringify!($macro_enum_name),
+					" cannot be constructed: module `", stringify!($name), "` must have generic ",
+					stringify!($macro_enum_name), "."
+				));
+			};
+			// Parse instantiable module with no generic
 			(@inner
 				$runtime:ident;
 				$d( $system:ident )?;
@@ -353,6 +372,7 @@ macro_rules! __create_decl_macro {
 					$d( $rest )*
 				);
 			};
+			// Ignore keyword
 			(@inner
 				$runtime:ident;
 				$d( $system:ident )?;
@@ -370,6 +390,7 @@ macro_rules! __create_decl_macro {
 					$d( $rest )*
 				);
 			};
+			// Ignore module
 			(@inner
 				$runtime:ident;
 				$d( $system:ident )?;
@@ -384,6 +405,7 @@ macro_rules! __create_decl_macro {
 					$d( $rest )*
 				);
 			};
+			// Expand
 			(@inner
 				$runtime:ident;
 				$system:ident;
@@ -412,6 +434,7 @@ macro_rules! __decl_all_modules {
 		$runtime:ident;
 		;
 		{ $( $parsed:tt )* };
+		{ $( $parsed_nested:tt )* };
 		System: $module:ident::{ Module $(, $modules:ident )* },
 		$( $rest:tt )*
 	) => {
@@ -419,6 +442,7 @@ macro_rules! __decl_all_modules {
 			$runtime;
 			$module;
 			{ $( $parsed )* };
+			{ $( $parsed_nested )* };
 			$( $rest )*
 		);
 	};
@@ -426,6 +450,7 @@ macro_rules! __decl_all_modules {
 		$runtime:ident;
 		$( $system:ident )?;
 		{ $( $parsed:tt )* };
+		{};
 		$name:ident: $module:ident:: $( < $module_instance:ident >:: )? { Module $(, $modules:ident )* },
 		$( $rest:tt )*
 	) => {
@@ -436,6 +461,7 @@ macro_rules! __decl_all_modules {
 				$( $parsed )*
 				$module::$name $(<$module_instance>)?,
 			};
+			{ $name };
 			$( $rest )*
 		);
 	};
@@ -443,6 +469,26 @@ macro_rules! __decl_all_modules {
 		$runtime:ident;
 		$( $system:ident )?;
 		{ $( $parsed:tt )* };
+		{ $( $parsed_nested:tt )* };
+		$name:ident: $module:ident:: $( < $module_instance:ident >:: )? { Module $(, $modules:ident )* },
+		$( $rest:tt )*
+	) => {
+		$crate::__decl_all_modules!(
+			$runtime;
+			$( $system )?;
+			{
+				$( $parsed )*
+				$module::$name $(<$module_instance>)?,
+			};
+			{ ( $( $parsed_nested )*, $name, ) };
+			$( $rest )*
+		);
+	};
+	(
+		$runtime:ident;
+		$( $system:ident )?;
+		{ $( $parsed:tt )* };
+		{ $( $parsed_nested:tt )* };
 		$name:ident: $module:ident:: $( < $module_instance:ident >:: )? { $ignore:ident $(, $modules:ident )* },
 		$( $rest:tt )*
 	) => {
@@ -450,6 +496,7 @@ macro_rules! __decl_all_modules {
 			$runtime;
 			$( $system )?;
 			{ $( $parsed )* };
+			{ $( $parsed_nested )* };
 			$name: $module::{ $( $modules ),* },
 			$( $rest )*
 		);
@@ -465,6 +512,7 @@ macro_rules! __decl_all_modules {
 			$runtime;
 			$( $system )?;
 			{ $( $parsed )* };
+			{ $( $parsed_nested )* };
 			$( $rest )*
 		);
 	};
@@ -472,12 +520,13 @@ macro_rules! __decl_all_modules {
 		$runtime:ident;
 		$system:ident;
 		{ $( $parsed_module:ident :: $parsed_name:ident $(<$instance:ident>)? ,)*};
+		{ $( $parsed_nested:tt )* };
 	) => {
 		pub type System = system::Module<$runtime>;
 		$(
 			pub type $parsed_name = $parsed_module::Module<$runtime $(, $parsed_module::$instance )?>;
 		)*
-		type AllModules = ( $( $parsed_name, )* );
+		type AllModules = ( $( $parsed_nested )* );
 	}
 }
 
