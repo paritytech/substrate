@@ -73,7 +73,7 @@ const UNREGISTERED_TOPIC_REPUTATION_CHANGE: i32 = -(1 << 10);
 
 struct PeerConsensus<H> {
 	known_messages: HashSet<H>,
-    filtered_messages: HashMap<H, usize>,
+	filtered_messages: HashMap<H, usize>,
 	roles: Roles,
 }
 
@@ -336,7 +336,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 		trace!(target:"gossip", "Registering {:?} {}", roles, who);
 		self.peers.insert(who.clone(), PeerConsensus {
 			known_messages: HashSet::new(),
-            filtered_messages: HashMap::new(),
+			filtered_messages: HashMap::new(),
 			roles,
 		});
 		for (engine_id, v) in self.validators.clone() {
