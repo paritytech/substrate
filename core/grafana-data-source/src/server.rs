@@ -15,10 +15,9 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use serde::{Serialize, de::DeserializeOwned};
-use hyper::{Body, Request, Response, header, service::service_fn, Server, Chunk};
-use futures::{FutureExt, StreamExt, future::select};
+use hyper::{Body, Request, Response, header, service::{service_fn, make_service_fn}, Server};
 use chrono::{Duration, Utc};
-use futures_util::stream::TryStreamExt;
+use futures_util::{TryStreamExt, FutureExt, future::select};
 use futures_timer::Delay;
 use crate::{METRICS, util, types::{Target, Query, TimeseriesData}};
 
@@ -95,7 +94,7 @@ async fn map_request_to_response<Req, Res, T>(req: Request<Body>, transformation
 
 /// Start the data source server.
 pub async fn run_server(address: std::net::SocketAddr) -> Result<(), hyper::Error> {
-	let service = hyper::service::make_service_fn(|_| {
+	let service = make_service_fn(|_| {
 		async {
 			Ok::<_, Error>(service_fn(api_response))
 		}
@@ -105,7 +104,7 @@ pub async fn run_server(address: std::net::SocketAddr) -> Result<(), hyper::Erro
 		.serve(service)
 		.boxed();
 
-	let clean = clean_up()
+	let clean = clean_up(Duration::days(1), Duration::weeks(1))
 		.boxed();
 
 	select(server, clean).await;
@@ -114,10 +113,7 @@ pub async fn run_server(address: std::net::SocketAddr) -> Result<(), hyper::Erro
 }
 
 /// Periodically remove old metrics.
-async fn clean_up() {
-	let every = Duration::days(1);
-	let before = Duration::weeks(1);
-
+async fn clean_up(every: Duration, before: Duration) {
 	loop {
 		Delay::new(every.to_std().unwrap()).await;
 

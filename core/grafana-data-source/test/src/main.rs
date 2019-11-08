@@ -20,7 +20,7 @@ use std::{
 	pin::Pin
 };
 use rand::Rng;
-use futures::{FutureExt, future::select};
+use futures_util::{FutureExt, future::select};
 use tokio::timer::delay_for;
 
 static EXIT: AtomicBool = AtomicBool::new(false);
