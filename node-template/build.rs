@@ -1,5 +1,3 @@
-use std::{env, path::PathBuf};
-
 use vergen::{ConstantsFlags, generate_cargo_keys};
 
 const ERROR_MSG: &str = "Failed to generate metadata files";

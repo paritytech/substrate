@@ -32,13 +32,17 @@ pub fn compute_total_payout<N>(
 	npos_token_staked: N,
 	total_tokens: N,
 	era_duration: u64
-) -> N where N: SimpleArithmetic + Clone
-{
+) -> (N, N) where N: SimpleArithmetic + Clone {
 	// Milliseconds per year for the Julian year (365.25 days).
 	const MILLISECONDS_PER_YEAR: u64 = 1000 * 3600 * 24 * 36525 / 100;
 
-	Perbill::from_rational_approximation(era_duration as u64, MILLISECONDS_PER_YEAR)
-		* yearly_inflation.calculate_for_fraction_times_denominator(npos_token_staked, total_tokens)
+	let portion = Perbill::from_rational_approximation(era_duration as u64, MILLISECONDS_PER_YEAR);
+	let payout = portion * yearly_inflation.calculate_for_fraction_times_denominator(
+		npos_token_staked,
+		total_tokens.clone(),
+	);
+	let maximum = portion * (yearly_inflation.maximum * total_tokens);
+	(payout, maximum)
 }
 
 #[cfg(test)]
@@ -59,26 +63,31 @@ mod test {
 	#[test]
 	fn npos_curve_is_sensible() {
 		const YEAR: u64 = 365 * 24 * 60 * 60 * 1000;
+
+		// check maximum inflation.
+		// not 10_000 due to rounding error.
+		assert_eq!(super::compute_total_payout(&I_NPOS, 0, 100_000u64, YEAR).1, 9_993);
+
 		//super::I_NPOS.calculate_for_fraction_times_denominator(25, 100)
-		assert_eq!(super::compute_total_payout(&I_NPOS, 0, 100_000u64, YEAR), 2_498);
-		assert_eq!(super::compute_total_payout(&I_NPOS, 5_000, 100_000u64, YEAR), 3_248);
-		assert_eq!(super::compute_total_payout(&I_NPOS, 25_000, 100_000u64, YEAR), 6_246);
-		assert_eq!(super::compute_total_payout(&I_NPOS, 40_000, 100_000u64, YEAR), 8_494);
-		assert_eq!(super::compute_total_payout(&I_NPOS, 50_000, 100_000u64, YEAR), 9_993);
-		assert_eq!(super::compute_total_payout(&I_NPOS, 60_000, 100_000u64, YEAR), 4_379);
-		assert_eq!(super::compute_total_payout(&I_NPOS, 75_000, 100_000u64, YEAR), 2_733);
-		assert_eq!(super::compute_total_payout(&I_NPOS, 95_000, 100_000u64, YEAR), 2_513);
-		assert_eq!(super::compute_total_payout(&I_NPOS, 100_000, 100_000u64, YEAR), 2_505);
+		assert_eq!(super::compute_total_payout(&I_NPOS, 0, 100_000u64, YEAR).0, 2_498);
+		assert_eq!(super::compute_total_payout(&I_NPOS, 5_000, 100_000u64, YEAR).0, 3_248);
+		assert_eq!(super::compute_total_payout(&I_NPOS, 25_000, 100_000u64, YEAR).0, 6_246);
+		assert_eq!(super::compute_total_payout(&I_NPOS, 40_000, 100_000u64, YEAR).0, 8_494);
+		assert_eq!(super::compute_total_payout(&I_NPOS, 50_000, 100_000u64, YEAR).0, 9_993);
+		assert_eq!(super::compute_total_payout(&I_NPOS, 60_000, 100_000u64, YEAR).0, 4_379);
+		assert_eq!(super::compute_total_payout(&I_NPOS, 75_000, 100_000u64, YEAR).0, 2_733);
+		assert_eq!(super::compute_total_payout(&I_NPOS, 95_000, 100_000u64, YEAR).0, 2_513);
+		assert_eq!(super::compute_total_payout(&I_NPOS, 100_000, 100_000u64, YEAR).0, 2_505);
 
 		const DAY: u64 = 24 * 60 * 60 * 1000;
-		assert_eq!(super::compute_total_payout(&I_NPOS, 25_000, 100_000u64, DAY), 17);
-		assert_eq!(super::compute_total_payout(&I_NPOS, 50_000, 100_000u64, DAY), 27);
-		assert_eq!(super::compute_total_payout(&I_NPOS, 75_000, 100_000u64, DAY), 7);
+		assert_eq!(super::compute_total_payout(&I_NPOS, 25_000, 100_000u64, DAY).0, 17);
+		assert_eq!(super::compute_total_payout(&I_NPOS, 50_000, 100_000u64, DAY).0, 27);
+		assert_eq!(super::compute_total_payout(&I_NPOS, 75_000, 100_000u64, DAY).0, 7);
 
 		const SIX_HOURS: u64 = 6 * 60 * 60 * 1000;
-		assert_eq!(super::compute_total_payout(&I_NPOS, 25_000, 100_000u64, SIX_HOURS), 4);
-		assert_eq!(super::compute_total_payout(&I_NPOS, 50_000, 100_000u64, SIX_HOURS), 7);
-		assert_eq!(super::compute_total_payout(&I_NPOS, 75_000, 100_000u64, SIX_HOURS), 2);
+		assert_eq!(super::compute_total_payout(&I_NPOS, 25_000, 100_000u64, SIX_HOURS).0, 4);
+		assert_eq!(super::compute_total_payout(&I_NPOS, 50_000, 100_000u64, SIX_HOURS).0, 7);
+		assert_eq!(super::compute_total_payout(&I_NPOS, 75_000, 100_000u64, SIX_HOURS).0, 2);
 
 		const HOUR: u64 = 60 * 60 * 1000;
 		assert_eq!(
@@ -87,7 +96,7 @@ mod test {
 				2_500_000_000_000_000_000_000_000_000u128,
 				5_000_000_000_000_000_000_000_000_000u128,
 				HOUR
-			),
+			).0,
 			57_038_500_000_000_000_000_000
 		);
 	}

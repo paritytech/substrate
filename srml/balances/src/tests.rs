@@ -24,7 +24,7 @@ use sr_primitives::traits::SignedExtension;
 use support::{
 	assert_noop, assert_ok, assert_err,
 	traits::{LockableCurrency, LockIdentifier, WithdrawReason, WithdrawReasons,
-	Currency, ReservableCurrency}
+	Currency, ReservableCurrency, ExistenceRequirement::AllowDeath}
 };
 use transaction_payment::ChargeTransactionPayment;
 use system::RawOrigin;
@@ -39,7 +39,7 @@ fn basic_locking_should_work() {
 		assert_eq!(Balances::free_balance(&1), 10);
 		Balances::set_lock(ID_1, &1, 9, u64::max_value(), WithdrawReasons::all());
 		assert_noop!(
-			<Balances as Currency<_>>::transfer(&1, &2, 5),
+			<Balances as Currency<_>>::transfer(&1, &2, 5, AllowDeath),
 			"account liquidity restrictions prevent withdrawal"
 		);
 	});
@@ -49,7 +49,7 @@ fn basic_locking_should_work() {
 fn partial_locking_should_work() {
 	ExtBuilder::default().existential_deposit(1).monied(true).build().execute_with(|| {
 		Balances::set_lock(ID_1, &1, 5, u64::max_value(), WithdrawReasons::all());
-		assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1));
+		assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath));
 	});
 }
 
@@ -58,7 +58,7 @@ fn lock_removal_should_work() {
 	ExtBuilder::default().existential_deposit(1).monied(true).build().execute_with(|| {
 		Balances::set_lock(ID_1, &1, u64::max_value(), u64::max_value(), WithdrawReasons::all());
 		Balances::remove_lock(ID_1, &1);
-		assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1));
+		assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath));
 	});
 }
 
@@ -67,7 +67,7 @@ fn lock_replacement_should_work() {
 	ExtBuilder::default().existential_deposit(1).monied(true).build().execute_with(|| {
 		Balances::set_lock(ID_1, &1, u64::max_value(), u64::max_value(), WithdrawReasons::all());
 		Balances::set_lock(ID_1, &1, 5, u64::max_value(), WithdrawReasons::all());
-		assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1));
+		assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath));
 	});
 }
 
@@ -76,7 +76,7 @@ fn double_locking_should_work() {
 	ExtBuilder::default().existential_deposit(1).monied(true).build().execute_with(|| {
 		Balances::set_lock(ID_1, &1, 5, u64::max_value(), WithdrawReasons::all());
 		Balances::set_lock(ID_2, &1, 5, u64::max_value(), WithdrawReasons::all());
-		assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1));
+		assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath));
 	});
 }
 
@@ -86,7 +86,7 @@ fn combination_locking_should_work() {
 		Balances::set_lock(ID_1, &1, u64::max_value(), 0, WithdrawReasons::none());
 		Balances::set_lock(ID_2, &1, 0, u64::max_value(), WithdrawReasons::none());
 		Balances::set_lock(ID_3, &1, 0, 0, WithdrawReasons::all());
-		assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1));
+		assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath));
 	});
 }
 
@@ -95,17 +95,17 @@ fn lock_value_extension_should_work() {
 	ExtBuilder::default().existential_deposit(1).monied(true).build().execute_with(|| {
 		Balances::set_lock(ID_1, &1, 5, u64::max_value(), WithdrawReasons::all());
 		assert_noop!(
-			<Balances as Currency<_>>::transfer(&1, &2, 6),
+			<Balances as Currency<_>>::transfer(&1, &2, 6, AllowDeath),
 			"account liquidity restrictions prevent withdrawal"
 		);
 		Balances::extend_lock(ID_1, &1, 2, u64::max_value(), WithdrawReasons::all());
 		assert_noop!(
-			<Balances as Currency<_>>::transfer(&1, &2, 6),
+			<Balances as Currency<_>>::transfer(&1, &2, 6, AllowDeath),
 			"account liquidity restrictions prevent withdrawal"
 		);
 		Balances::extend_lock(ID_1, &1, 8, u64::max_value(), WithdrawReasons::all());
 		assert_noop!(
-			<Balances as Currency<_>>::transfer(&1, &2, 3),
+			<Balances as Currency<_>>::transfer(&1, &2, 3, AllowDeath),
 			"account liquidity restrictions prevent withdrawal"
 		);
 	});
@@ -120,7 +120,7 @@ fn lock_reasons_should_work() {
 		.execute_with(|| {
 			Balances::set_lock(ID_1, &1, 10, u64::max_value(), WithdrawReason::Transfer.into());
 			assert_noop!(
-				<Balances as Currency<_>>::transfer(&1, &2, 1),
+				<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath),
 				"account liquidity restrictions prevent withdrawal"
 			);
 			assert_ok!(<Balances as ReservableCurrency<_>>::reserve(&1, 1));
@@ -134,7 +134,7 @@ fn lock_reasons_should_work() {
 			).is_ok());
 
 			Balances::set_lock(ID_1, &1, 10, u64::max_value(), WithdrawReason::Reserve.into());
-			assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1));
+			assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath));
 			assert_noop!(
 				<Balances as ReservableCurrency<_>>::reserve(&1, 1),
 				"account liquidity restrictions prevent withdrawal"
@@ -148,7 +148,7 @@ fn lock_reasons_should_work() {
 			).is_ok());
 
 			Balances::set_lock(ID_1, &1, 10, u64::max_value(), WithdrawReason::TransactionPayment.into());
-			assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1));
+			assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath));
 			assert_ok!(<Balances as ReservableCurrency<_>>::reserve(&1, 1));
 			assert!(<ChargeTransactionPayment<Runtime> as SignedExtension>::pre_dispatch(
 				ChargeTransactionPayment::from(1),
@@ -165,12 +165,12 @@ fn lock_block_number_should_work() {
 	ExtBuilder::default().existential_deposit(1).monied(true).build().execute_with(|| {
 		Balances::set_lock(ID_1, &1, 10, 2, WithdrawReasons::all());
 		assert_noop!(
-			<Balances as Currency<_>>::transfer(&1, &2, 1),
+			<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath),
 			"account liquidity restrictions prevent withdrawal"
 		);
 
 		System::set_block_number(2);
-		assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1));
+		assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath));
 	});
 }
 
@@ -179,18 +179,18 @@ fn lock_block_number_extension_should_work() {
 	ExtBuilder::default().existential_deposit(1).monied(true).build().execute_with(|| {
 		Balances::set_lock(ID_1, &1, 10, 2, WithdrawReasons::all());
 		assert_noop!(
-			<Balances as Currency<_>>::transfer(&1, &2, 6),
+			<Balances as Currency<_>>::transfer(&1, &2, 6, AllowDeath),
 			"account liquidity restrictions prevent withdrawal"
 		);
 		Balances::extend_lock(ID_1, &1, 10, 1, WithdrawReasons::all());
 		assert_noop!(
-			<Balances as Currency<_>>::transfer(&1, &2, 6),
+			<Balances as Currency<_>>::transfer(&1, &2, 6, AllowDeath),
 			"account liquidity restrictions prevent withdrawal"
 		);
 		System::set_block_number(2);
 		Balances::extend_lock(ID_1, &1, 10, 8, WithdrawReasons::all());
 		assert_noop!(
-			<Balances as Currency<_>>::transfer(&1, &2, 3),
+			<Balances as Currency<_>>::transfer(&1, &2, 3, AllowDeath),
 			"account liquidity restrictions prevent withdrawal"
 		);
 	});
@@ -201,17 +201,17 @@ fn lock_reasons_extension_should_work() {
 	ExtBuilder::default().existential_deposit(1).monied(true).build().execute_with(|| {
 		Balances::set_lock(ID_1, &1, 10, 10, WithdrawReason::Transfer.into());
 		assert_noop!(
-			<Balances as Currency<_>>::transfer(&1, &2, 6),
+			<Balances as Currency<_>>::transfer(&1, &2, 6, AllowDeath),
 			"account liquidity restrictions prevent withdrawal"
 		);
 		Balances::extend_lock(ID_1, &1, 10, 10, WithdrawReasons::none());
 		assert_noop!(
-			<Balances as Currency<_>>::transfer(&1, &2, 6),
+			<Balances as Currency<_>>::transfer(&1, &2, 6, AllowDeath),
 			"account liquidity restrictions prevent withdrawal"
 		);
 		Balances::extend_lock(ID_1, &1, 10, 10, WithdrawReason::Reserve.into());
 		assert_noop!(
-			<Balances as Currency<_>>::transfer(&1, &2, 6),
+			<Balances as Currency<_>>::transfer(&1, &2, 6, AllowDeath),
 			"account liquidity restrictions prevent withdrawal"
 		);
 	});
@@ -744,5 +744,19 @@ fn burn_must_work() {
 		assert_eq!(Balances::total_issuance(), init_total_issuance - 10);
 		drop(imbalance);
 		assert_eq!(Balances::total_issuance(), init_total_issuance);
+	});
+}
+
+#[test]
+fn transfer_keep_alive_works() {
+	ExtBuilder::default().existential_deposit(1).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&1, 100);
+		assert_err!(
+			Balances::transfer_keep_alive(Some(1).into(), 2, 100),
+			"transfer would kill account"
+		);
+		assert_eq!(Balances::is_dead_account(&1), false);
+		assert_eq!(Balances::total_balance(&1), 100);
+		assert_eq!(Balances::total_balance(&2), 0);
 	});
 }

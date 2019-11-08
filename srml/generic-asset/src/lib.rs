@@ -1096,7 +1096,12 @@ where
 		Zero::zero()
 	}
 
-	fn transfer(transactor: &T::AccountId, dest: &T::AccountId, value: Self::Balance) -> Result {
+	fn transfer(
+		transactor: &T::AccountId,
+		dest: &T::AccountId,
+		value: Self::Balance,
+		_: ExistenceRequirement, // no existential deposit policy for generic asset
+	) -> Result {
 		<Module<T>>::make_transfer(&U::asset_id(), transactor, dest, value)
 	}
 

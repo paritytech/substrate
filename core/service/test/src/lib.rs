@@ -160,6 +160,7 @@ fn node_config<G, E: Clone> (
 			enable_mdns: false,
 			wasm_external_transport: None,
 		},
+		max_parallel_downloads: NetworkConfiguration::default().max_parallel_downloads,
 	};
 
 	Configuration {
