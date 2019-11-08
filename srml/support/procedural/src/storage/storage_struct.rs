@@ -20,7 +20,7 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use super::{
 	DeclStorageDefExt, StorageLineTypeDef,
-	instance_trait::{PREFIX_FOR, HEAD_KEY_FOR},
+	instance_trait::{PREFIX_FOR, HEAD_KEY_FOR, LINKED_MAP_KEY_FORMAT_FOR},
 };
 
 fn from_optional_value_to_query(is_option: bool, default: &Option<syn::Expr>) -> TokenStream {
@@ -156,19 +156,31 @@ pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 					quote!( #prefix.as_bytes() )
 				};
 
+				let key_format_struct = syn::Ident::new(
+					&format!("{}{}", LINKED_MAP_KEY_FORMAT_FOR, line.name),
+					proc_macro2::Span::call_site(),
+				);
+
 				quote!(
+					#visibility struct #key_format_struct;
+
+					impl #scrate::storage::generator::LinkedMapKeyFormat for #key_format_struct {
+						type Hasher = #scrate::#hasher;
+
+						fn head_key() -> &'static [u8] {
+							#head_key
+						}
+					}
+
 					impl<#impl_trait> #scrate::#storage_generator_trait for #storage_struct
 					#optional_storage_where_clause
 					{
 						type Query = #query_type;
 						type Hasher = #scrate::#hasher;
+						type KeyFormat = #key_format_struct;
 
 						fn prefix() -> &'static [u8] {
 							#final_prefix
-						}
-
-						fn head_key() -> &'static [u8] {
-							#head_key
 						}
 
 						fn from_optional_value_to_query(v: Option<#value_type>) -> Self::Query {
