@@ -139,6 +139,18 @@ pub struct Enumerator<K, V, F> {
 	_phantom: PhantomData<(V, F)>,
 }
 
+impl<K, V, F> Enumerator<K, V, F> {
+	/// Create an explicit enumerator for testing.
+	#[cfg(test)]
+	pub fn from_head(head: K, prefix: &'static [u8]) -> Self {
+		Enumerator {
+			next: Some(head),
+			prefix,
+			_phantom: Default::default(),
+		}
+	}
+}
+
 impl<K, V, F> Iterator for Enumerator<K, V, F>
 where
 	K: FullCodec,
@@ -149,10 +161,11 @@ where
 
 	fn next(&mut self) -> Option<Self::Item> {
 		let next = self.next.take()?;
+
 		let (val, linkage): (V, Linkage<K>) = {
 			let next_full_key = F::storage_linked_map_final_key(self.prefix, &next);
 			read_with_linkage::<K, V>(next_full_key.as_ref())
-				.expect("previous/next only contain existing entries;
+				.expect("previous/next only contains existing entries;
 						we enumerate using next; entry exists; qed")
 		};
 
@@ -200,7 +213,7 @@ where
 }
 
 /// Read the contained data and its linkage.
-fn read_with_linkage<K, V>(key: &[u8]) -> Option<(V, Linkage<K>)>
+pub(super) fn read_with_linkage<K, V>(key: &[u8]) -> Option<(V, Linkage<K>)>
 where
 	K: Decode,
 	V: Decode,
@@ -211,7 +224,7 @@ where
 /// Generate linkage for newly inserted element.
 ///
 /// Takes care of updating head and previous head's pointer.
-fn new_head_linkage<KeyArg, K, V, F>(key: KeyArg, prefix: &[u8]) -> Linkage<K>
+pub(super) fn new_head_linkage<KeyArg, K, V, F>(key: KeyArg, prefix: &[u8]) -> Linkage<K>
 where
 	KeyArg: EncodeLike<K>,
 	K: FullCodec,
@@ -247,7 +260,7 @@ where
 }
 
 /// Read current head pointer.
-fn read_head<K, F>() -> Option<K>
+pub(crate) fn read_head<K, F>() -> Option<K>
 where
 	K: Decode,
 	F: KeyFormat,
@@ -258,7 +271,7 @@ where
 /// Overwrite current head pointer.
 ///
 /// If `None` is given head is removed from storage.
-fn write_head<KeyArg, K, F>(head: Option<KeyArg>)
+pub(super) fn write_head<KeyArg, K, F>(head: Option<KeyArg>)
 where
 	KeyArg: EncodeLike<K>,
 	K: FullCodec,
@@ -407,7 +420,7 @@ where
 		loop {
 			let old_raw_key = G::KeyFormat::storage_linked_map_final_key(prefix, &current_key);
 			let (val, linkage) = read_with_linkage::<K2, V2>(old_raw_key.as_ref()).ok_or(())?;
-			let previous = linkage.previous.clone();
+			let next = linkage.next.clone();
 
 			let val = translate_val(val);
 			let linkage = translate_linkage(linkage);
@@ -419,9 +432,9 @@ where
 			let new_raw_key = G::storage_linked_map_final_key(&translate_key(current_key.clone()));
 			unhashed::put(new_raw_key.as_ref(), &(&val, &linkage));
 
-			match previous {
+			match next {
 				None => break,
-				Some(prev) => { current_key = prev },
+				Some(next) => { current_key = next },
 			}
 		}
 
