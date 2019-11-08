@@ -1019,10 +1019,12 @@ impl<Block: BlockT> Inner<Block> {
         }
 
         if peer.roles.is_authority() {
+            let authorities = self.peers.authorities();
+
             // the target node is an authority, on the first attempt we start by
             // sending the message to only `sqrt(authorities)`.
-            if previous_attempts == 0 {
-                let authorities = self.peers.authorities() as f64;
+            if previous_attempts == 0 && authorities > 5 {
+                let authorities = authorities as f64;
                 let p = authorities.sqrt() / authorities;
                 rand::thread_rng().gen_bool(p)
             } else {
