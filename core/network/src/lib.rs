@@ -173,6 +173,7 @@ mod chain;
 mod legacy_proto;
 mod debug_info;
 mod discovery;
+mod generic_proto;
 mod on_demand_layer;
 mod protocol;
 mod service;

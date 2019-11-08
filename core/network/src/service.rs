@@ -269,6 +269,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 			import_queue: params.import_queue,
 			from_worker,
 			light_client_rqs: params.on_demand.and_then(|od| od.extract_receiver()),
+			events_streams: Vec::new(),
 		})
 	}
 
@@ -734,6 +735,8 @@ pub struct NetworkWorker<B: BlockT + 'static, S: NetworkSpecialization<B>, H: Ex
 	from_worker: mpsc::UnboundedReceiver<ServerToWorkerMsg<B, S>>,
 	/// Receiver for queries from the light client that must be processed.
 	light_client_rqs: Option<mpsc::UnboundedReceiver<RequestData<B>>>,
+	/// Senders for events that happen on the network.
+	events_streams: Vec<mpsc::UnboundedSender<Event>>,
 }
 
 impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Stream for NetworkWorker<B, S, H> {
@@ -791,8 +794,8 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Stream for Ne
 					self.network_service.add_known_address(peer_id, addr),
 				ServerToWorkerMsg::SyncFork(peer_ids, hash, number) =>
 					self.network_service.user_protocol_mut().set_sync_fork_request(peer_ids, &hash, number),
-				ServerToWorkerMsg::EventsStream(_) =>
-					unimplemented!(),
+				ServerToWorkerMsg::EventsStream(sender) =>
+					self.events_streams.push(sender),
 				ServerToWorkerMsg::SendRequest { .. } =>
 					unimplemented!(),
 				ServerToWorkerMsg::WriteGossip { .. } =>
@@ -807,8 +810,10 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Stream for Ne
 			let outcome = match poll_value {
 				Ok(Async::NotReady) => break,
 				Ok(Async::Ready(Some(BehaviourOut::SubstrateAction(outcome)))) => outcome,
-				Ok(Async::Ready(Some(BehaviourOut::Dht(ev)))) =>
-					return Ok(Async::Ready(Some(Event::Dht(ev)))),
+				Ok(Async::Ready(Some(BehaviourOut::Event(ev)))) => {
+					self.events_streams.retain(|sender| sender.unbounded_send(ev.clone()).is_ok());
+					return Ok(Async::Ready(Some(ev)));
+				},
 				Ok(Async::Ready(None)) => CustomMessageOutcome::None,
 				Err(err) => {
 					error!(target: "sync", "Error in the network: {:?}", err);
