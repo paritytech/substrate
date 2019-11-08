@@ -413,15 +413,19 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	/// Tries to connect to `dest` if necessary, opens a substream to it using the protocol
 	/// `proto_name`, sends `message` on it, and waits for a single answer to come back.
 	///
-	/// In some literature, what this method is called performing an RPC query.
+	/// This API is racy in the sense that it is possible that we are actually disconnected from
+	/// the target. This situation is treated the same way as if the disconnection happened after
+	/// this method is called, and an error is returned.
+	///
+	/// In some literature, what this method does is called performing an RPC query.
 	///
 	/// > **Note**: When using this method, the network will not garbage-collect the connection
 	/// >			until the response has come back, contrary to if you use
-	/// >			[`NetworkService::write_gossip`].
+	/// >			[`NetworkService::write_notif`].
 	///
-	/// The protocol name must be one of the elements of `extra_request_response_protos` that was
-	/// passed in the configuration.
-	pub fn send_request<Rp>(&self, proto_name: impl Into<Vec<u8>>, target: PeerId, message: impl Encode)
+	/// It is encouraged that protocol name is one of the elements of
+	/// `extra_request_response_protos` that was passed in the configuration.
+	pub fn send_request<Rp>(&self, target: PeerId, proto_name: impl Into<Vec<u8>>, message: impl Encode)
 		-> impl Future<Item = Rp, Error = ()>		// TODO: proper error
 	where
 		Rp: Decode,
@@ -460,8 +464,8 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	///
 	/// The protocol name must be one of the elements of `extra_gossip_protos` that was passed in
 	/// the configuration.
-	pub fn write_gossip(&self, target: PeerId, proto_name: impl Into<Vec<u8>>, message: impl Encode) {
-		let _ = self.to_worker.unbounded_send(ServerToWorkerMsg::WriteGossip {
+	pub fn write_notif(&self, target: PeerId, proto_name: impl Into<Vec<u8>>, message: impl Encode) {
+		let _ = self.to_worker.unbounded_send(ServerToWorkerMsg::WriteNotif {
 			target,
 			proto_name: proto_name.into(),
 			message: message.encode(),
@@ -707,7 +711,7 @@ enum ServerToWorkerMsg<B: BlockT, S: NetworkSpecialization<B>> {
 		target: PeerId,
 		response_send_back: oneshot::Sender<Result<Vec<u8>, ()>>,
 	},
-	WriteGossip {
+	WriteNotif {
 		message: Vec<u8>,
 		proto_name: Vec<u8>,
 		target: PeerId,
@@ -798,7 +802,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Stream for Ne
 					self.events_streams.push(sender),
 				ServerToWorkerMsg::SendRequest { .. } =>
 					unimplemented!(),
-				ServerToWorkerMsg::WriteGossip { .. } =>
+				ServerToWorkerMsg::WriteNotif { .. } =>
 					unimplemented!(),
 			}
 		}

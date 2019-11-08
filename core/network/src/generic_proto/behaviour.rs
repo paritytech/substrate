@@ -60,7 +60,7 @@ use tokio_io::{AsyncRead, AsyncWrite};
 /// Note that this "banning" system is not an actual ban. If a "banned" node tries to connect to
 /// us, we accept the connection. The "banning" system is only about delaying dialing attempts.
 ///
-pub struct GenericProto< TSubstream> {
+pub struct GenericProto<TSubstream, TRqUd> {
 	/// List of protocols to open with peers. Never modified.
 	protocol: RegisteredProtocol,
 
@@ -186,15 +186,9 @@ struct IncomingPeer {
 	incoming_id: peerset::IncomingIndex,
 }
 
-impl<TSubstream> GenericProto<TSubstream> {
-	/// Creates a `CustomProtos`.
-	pub fn new(
-		protocol: impl Into<ProtocolId>,
-		versions: &[u8],
-		peerset: peerset::Peerset,
-	) -> Self {
-		let protocol = RegisteredProtocol::new(protocol, versions);
-
+impl<TSubstream, TRqUd> GenericProto<TSubstream, TRqUd> {
+	/// Creates a `GenericProto`.
+	pub fn new() -> Self {
 		GenericProto {
 			protocol,
 			peerset,
@@ -204,6 +198,47 @@ impl<TSubstream> GenericProto<TSubstream> {
 			events: SmallVec::new(),
 			marker: PhantomData,
 		}
+	}
+
+	/*/// Starts the process of sending a request to the given peer.
+	///
+	// TODO: explain more in details
+	pub fn send_request(
+		&mut self,
+		target: PeerId,
+		proto_name: Vec<u8>,
+		message: Vec<u8>,
+		user_data: TRqUd
+	) {
+		trace!(target: "sub-libp2p", "External API => Request with proto {:?} for {:?}", proto_name, target);
+		trace!(target: "sub-libp2p", "Handler({:?}) <= Request with proto {:?}", proto_name, target);
+
+		// TODO: properly implement
+		self.events.push(NetworkBehaviourAction::SendEvent {
+			peer_id: target,
+			event: CustomProtoHandlerIn::SendRequest {
+				/// Identifier for the request. Decided by the user.
+				unique_id: u64,
+				proto_name: proto_name.into(),
+				message,
+				timeout: Duration::from_secs(15),
+			},
+		});
+		unimplemented!()
+	}*/ // TODO: extract to other behaviour
+
+	/// If we have a gossiping substream open with the given node, write a notification to it.
+	/// Otherwise, has no effect.
+	pub fn write_notif(&mut self, target: PeerId, proto_name: Vec<u8>, message: Vec<u8>) {
+		trace!(target: "sub-libp2p", "External API => Notification with proto {:?} for {:?}", proto_name, target);
+		trace!(target: "sub-libp2p", "Handler({:?}) <= Notification with proto {:?}", proto_name, target);
+
+		// TODO: properly implement
+		self.events.push(NetworkBehaviourAction::SendEvent {
+			peer_id: target,
+			event: CustomProtoHandlerIn::OpenNotif,
+		});
+		unimplemented!()
 	}
 
 	/// Returns the list of all the peers we have an open channel to.
@@ -302,27 +337,6 @@ impl<TSubstream> GenericProto<TSubstream> {
 			Some(PeerState::Banned { .. }) => false,
 			Some(PeerState::Poisoned) => false,
 		}
-	}
-
-	/// Sends a message to a peer.
-	///
-	/// Has no effect if the custom protocol is not open with the given peer.
-	///
-	/// Also note that even we have a valid open substream, it may in fact be already closed
-	/// without us knowing, in which case the packet will not be received.
-	pub fn send_packet(&mut self, target: &PeerId, message: Vec<u8>) {
-		if !self.is_open(target) {
-			return;
-		}
-
-		trace!(target: "sub-libp2p", "External API => Packet for {:?}", target);
-		trace!(target: "sub-libp2p", "Handler({:?}) <= Packet", target);
-		self.events.push(NetworkBehaviourAction::SendEvent {
-			peer_id: target.clone(),
-			event: CustomProtoHandlerIn::SendCustomMessage {
-				message,
-			}
-		});
 	}
 
 	/// Returns the state of the peerset manager, for debugging purposes.
