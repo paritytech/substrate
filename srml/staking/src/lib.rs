@@ -258,7 +258,7 @@ use support::{
 	decl_module, decl_event, decl_storage, ensure,
 	traits::{
 		Currency, OnFreeBalanceZero, OnDilution, LockIdentifier, LockableCurrency,
-		WithdrawReasons, OnUnbalanced, Imbalance, Get, Time
+		WithdrawReasons, OnUnbalanced, Imbalance, Get, Time,
 	}
 };
 use session::{historical::OnSessionEnding, SelectInitialValidators};
@@ -269,6 +269,7 @@ use sr_primitives::{
 	weights::SimpleDispatchInfo,
 	traits::{
 		Convert, Zero, One, StaticLookup, CheckedSub, Saturating, Bounded, SaturatedConversion,
+		SimpleArithmetic,
 	}
 };
 use sr_staking_primitives::{
@@ -389,17 +390,6 @@ pub struct StakingLedger<AccountId, Balance: HasCompact> {
 	pub unlocking: Vec<UnlockChunk<Balance>>,
 }
 
-/// A record of the nominations made by a specific account.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub struct Nominations<AccountId> {
-	/// The targets of nomination.
-	pub targets: Vec<AccountId>,
-	/// The era the nominations were submitted.
-	pub submitted_in: EraIndex,
-	/// Whether the nominations have been suppressed.
-	pub suppressed: bool,
-}
-
 impl<
 	AccountId,
 	Balance: HasCompact + Copy + Saturating,
@@ -418,6 +408,74 @@ impl<
 			.collect();
 		Self { total, active: self.active, stash: self.stash, unlocking }
 	}
+
+}
+
+impl<AccountId, Balance> StakingLedger<AccountId, Balance> where
+	Balance: SimpleArithmetic + Saturating + Copy,
+{
+	/// Slash the validator for a given amount of balance. This can grow the value
+	/// of the slash in the case that the validator has less than `minimum_balance`
+	/// active funds. Returns the amount of funds actually slashed.
+	///
+	/// Slashes from `active` funds first, and then `unlocking`, starting with the
+	/// chunks that are closest to unlocking.
+	fn slash(
+		&mut self,
+		mut value: Balance,
+		minimum_balance: Balance,
+	) -> Balance {
+		let pre_total = self.total;
+		let total = &mut self.total;
+		let active = &mut self.active;
+
+		let slash_out_of = |
+			total_remaining: &mut Balance,
+			target: &mut Balance,
+			value: &mut Balance,
+		| {
+			let mut slash_from_target = (*value).min(*target);
+
+			if !slash_from_target.is_zero() {
+				*target -= slash_from_target;
+
+				// don't leave a dust balance in the staking system.
+				if *target <= minimum_balance {
+					slash_from_target += *target;
+					*value += rstd::mem::replace(target, Zero::zero());
+				}
+
+				*total_remaining = total_remaining.saturating_sub(slash_from_target);
+				*value -= slash_from_target;
+			}
+		};
+
+		slash_out_of(total, active, &mut value);
+
+		let i = self.unlocking.iter_mut()
+			.map(|chunk| {
+				slash_out_of(total, &mut chunk.value, &mut value);
+				chunk.value
+			})
+			.take_while(|value| value.is_zero()) // take all fully-consumed chunks out.
+			.count();
+
+		// kill all drained chunks.
+		let _ = self.unlocking.drain(..i);
+
+		pre_total.saturating_sub(*total)
+	}
+}
+
+/// A record of the nominations made by a specific account.
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+pub struct Nominations<AccountId> {
+	/// The targets of nomination.
+	pub targets: Vec<AccountId>,
+	/// The era the nominations were submitted.
+	pub submitted_in: EraIndex,
+	/// Whether the nominations have been suppressed.
+	pub suppressed: bool,
 }
 
 /// The amount of exposure (to slashing) than an individual nominator has.
@@ -441,6 +499,24 @@ pub struct Exposure<AccountId, Balance: HasCompact> {
 	pub own: Balance,
 	/// The portions of nominators stashes that are exposed.
 	pub others: Vec<IndividualExposure<AccountId, Balance>>,
+}
+
+/// A pending slash record. The value of the slash has been computed but not applied yet,
+/// rather deferred for several eras.
+#[derive(Encode, Decode, Default, RuntimeDebug)]
+pub struct PendingSlashRecord<AccountId, Balance: HasCompact> {
+	/// The era where the slashed offence was actually applied
+	era: EraIndex,
+	/// The stash ID of the offending validator.
+	validator: AccountId,
+	/// The validator's own slash.
+	own: Balance,
+	/// All other slashed stakers and amounts.
+	others: Vec<(AccountId, Balance)>,
+	/// Reporters of the offence; bounty payout recipients.
+	reporters: Vec<AccountId>,
+	/// The amount of payout.
+	payout: Balance,
 }
 
 pub type BalanceOf<T> =
@@ -522,6 +598,10 @@ pub trait Trait: system::Trait {
 
 	/// Number of eras that staked funds must remain bonded for.
 	type BondingDuration: Get<EraIndex>;
+
+	// /// Number of eras that slashes are deferred by, after computation. This
+	// /// should be less than the bonding duration.
+	// type SlashDeferDuration: Get<EraIndex>;
 
 	/// Interface for interacting with a session module.
 	type SessionInterface: self::SessionInterface<Self::AccountId>;
@@ -632,6 +712,12 @@ decl_storage! {
 		/// as well as how much reward has been paid out.
 		SpanSlash: map (T::AccountId, slashing::SpanIndex)
 			=> slashing::SpanRecord<BalanceOf<T>>;
+
+		/// The earliest era for which we have a pending slash.
+		EarliestPendingSlash: EraIndex;
+
+		/// All pending slashes that have not been applied yet.
+		PendingSlashes get(pending_slashes): map EraIndex => Vec<PendingSlashRecord<T::AccountId, BalanceOf<T>>>;
 	}
 	add_extra_genesis {
 		config(stakers):

@@ -205,7 +205,7 @@ pub(crate) struct SlashParams<'a, T: 'a + Trait> {
 #[must_use = "Reward payout must be explicitly applied"]
 pub(crate) struct RewardPayout<T: Trait>(Option<(BalanceOf<T>, NegativeImbalanceOf<T>)>);
 
-/// Slash a validator and their nominators, if necessary.
+/// Computes a slash of a validator and nominators, if necessary.
 pub(crate) fn slash<T: Trait>(params: SlashParams<T>) -> RewardPayout<T> {
 	let SlashParams {
 		stash,
@@ -568,19 +568,9 @@ fn apply_slash<T: Trait>(
 		None => return, // nothing to do.
 	};
 
-	let mut value = value.min(ledger.active);
+	let value = ledger.slash(value, T::Currency::minimum_balance());
 
 	if !value.is_zero() {
-		ledger.active -= value;
-
-		// Avoid there being a dust balance left in the staking system.
-		if ledger.active < T::Currency::minimum_balance() {
-			value += ledger.active;
-			ledger.active = Zero::zero();
-		}
-
-		ledger.total -= value;
-
 		let (imbalance, missing) = T::Currency::slash(stash, value);
 		slash_imbalance.subsume(imbalance);
 
