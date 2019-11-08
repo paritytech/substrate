@@ -1917,6 +1917,7 @@ fn slash_in_old_span_does_not_deselect() {
 		// or non-zero.
 		assert_eq!(Staking::force_era(), Forcing::NotForcing);
 		assert!(<Validators<Test>>::exists(11));
+		assert_ledger_consistent(11);
 	});
 }
 
@@ -1950,6 +1951,7 @@ fn reporters_receive_their_slice() {
 		let reward_each = reward / 2; // split into two pieces.
 		assert_eq!(Balances::free_balance(&1), 10 + reward_each);
 		assert_eq!(Balances::free_balance(&2), 20 + reward_each);
+		assert_ledger_consistent(11);
 	});
 }
 
@@ -1999,6 +2001,7 @@ fn subsequent_reports_in_same_span_pay_out_less() {
 		// 50% * (10% * (initial_balance / 2) - prior_payout)
 		let reward = ((initial_balance / 20) - prior_payout) / 2;
 		assert_eq!(Balances::free_balance(&1), 10 + prior_payout + reward);
+		assert_ledger_consistent(11);
 	});
 }
 
@@ -2041,6 +2044,8 @@ fn invulnerables_are_not_slashed() {
 				initial_balance - (2 * other.value / 10),
 			);
 		}
+		assert_ledger_consistent(11);
+		assert_ledger_consistent(21);
 	});
 }
 
@@ -2063,6 +2068,7 @@ fn dont_slash_if_fraction_is_zero() {
 
 		// The validator hasn't been slashed. The new era is not forced.
 		assert_eq!(Balances::free_balance(&11), 1000);
+		assert_ledger_consistent(11);
 	});
 }
 
@@ -2110,6 +2116,7 @@ fn only_slash_for_max_in_era() {
 
 		// The validator got slashed 10% more.
 		assert_eq!(Balances::free_balance(&11), 400);
+		assert_ledger_consistent(11);
 	})
 }
 

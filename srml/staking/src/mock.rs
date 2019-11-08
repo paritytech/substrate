@@ -393,6 +393,14 @@ pub fn assert_is_stash(acc: u64) {
 	assert!(Staking::bonded(&acc).is_some(), "Not a stash.");
 }
 
+pub fn assert_ledger_consistent(stash: u64) {
+	assert_is_stash(stash);
+	let ledger = Staking::ledger(stash - 1).unwrap();
+
+	let real_total: Balance = ledger.unlocking.iter().fold(ledger.active, |a, c| a + c.value);
+	assert_eq!(real_total, ledger.total);
+}
+
 pub fn bond_validator(acc: u64, val: u64) {
 	// a = controller
 	// a + 1 = stash
