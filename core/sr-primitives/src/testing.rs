@@ -145,7 +145,7 @@ pub type DigestItem = generic::DigestItem<H256>;
 pub type Digest = generic::Digest<H256>;
 
 /// Block Header
-#[derive(PartialEq, Eq, Clone, Serialize, Debug, Encode, Decode)]
+#[derive(PartialEq, Eq, Clone, Serialize, Debug, Encode, Decode, Default)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 pub struct Header {
@@ -194,6 +194,16 @@ impl traits::Header for Header {
 			state_root,
 			parent_hash,
 			digest,
+		}
+	}
+}
+
+impl Header {
+	/// A new header with the given number and default hash for all other fields.
+	pub fn new_from_number(number: <Self as traits::Header>::Number) -> Self {
+		Self {
+			number,
+			..Default::default()
 		}
 	}
 }

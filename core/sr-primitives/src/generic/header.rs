@@ -164,6 +164,17 @@ impl<Number, Hash> Header<Number, Hash> where
 }
 
 #[cfg(all(test, feature = "std"))]
+impl Header where Self::Hash: Default {
+	/// A new header with the given number and default hash for all other fields.
+	pub fn new_from_number(number: <Self as traits::Header>::Number) -> Self {
+		Self {
+			number,
+			..Default::default()
+		}
+	}
+}
+
+#[cfg(all(test, feature = "std"))]
 mod tests {
 	use super::*;
 

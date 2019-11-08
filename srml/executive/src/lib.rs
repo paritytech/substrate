@@ -78,7 +78,8 @@
 
 use rstd::{prelude::*, marker::PhantomData};
 use sr_primitives::{
-	generic::Digest, ApplyResult, weights::GetDispatchInfo,
+	generic::Digest, ApplyResult,
+	weights::{GetDispatchInfo, WeighBlock},
 	traits::{
 		self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalize, OnInitialize,
 		NumberFor, Block as BlockT, OffchainWorker, Dispatchable,
@@ -110,7 +111,7 @@ impl<
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
 	Context: Default,
 	UnsignedValidator,
-	AllModules: OnInitialize<System::BlockNumber> + OnFinalize<System::BlockNumber> + OffchainWorker<System::BlockNumber>,
+	AllModules: OnInitialize<System::BlockNumber> + OnFinalize<System::BlockNumber> + OffchainWorker<System::BlockNumber> + WeighBlock,
 > ExecuteBlock<Block> for Executive<System, Block, Context, UnsignedValidator, AllModules>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
@@ -130,7 +131,7 @@ impl<
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
 	Context: Default,
 	UnsignedValidator,
-	AllModules: OnInitialize<System::BlockNumber> + OnFinalize<System::BlockNumber> + OffchainWorker<System::BlockNumber>,
+	AllModules: OnInitialize<System::BlockNumber> + OnFinalize<System::BlockNumber> + OffchainWorker<System::BlockNumber> + WeighBlock,
 > Executive<System, Block, Context, UnsignedValidator, AllModules>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
@@ -154,6 +155,10 @@ where
 	) {
 		<system::Module<System>>::initialize(block_number, parent_hash, extrinsics_root, digest);
 		<AllModules as OnInitialize<System::BlockNumber>>::on_initialize(*block_number);
+		// TODO: so what if we already know that we are fucked here? Maybe call it unchecked for now
+		// TODO: add block number as parameter.
+		<system::Module<System>>::register_extra_weight(<AllModules as WeighBlock>::on_initialize());
+		<system::Module<System>>::register_extra_weight(<AllModules as WeighBlock>::on_finalize());
 	}
 
 	fn initial_checks(block: &Block) {
@@ -309,12 +314,48 @@ mod tests {
 		impl_outer_event, impl_outer_origin, parameter_types, impl_outer_dispatch,
 		traits::{Currency, LockIdentifier, LockableCurrency, WithdrawReasons, WithdrawReason},
 	};
-	use system::Call as SystemCall;
+	use system::{Call as SystemCall, ChainContext};
 	use balances::Call as BalancesCall;
 	use hex_literal::hex;
 
+	mod custom {
+		use sr_primitives::weights::SimpleDispatchInfo;
+
+		pub trait Trait: system::Trait {}
+
+		support::decl_module! {
+			pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+				#[weight = SimpleDispatchInfo::FixedNormal(100)]
+				fn some_function(origin) {
+					// NOTE: does not make any different.
+					let _ = system::ensure_signed(origin);
+				}
+				#[weight = SimpleDispatchInfo::FixedOperational(200)]
+				fn some_root_operation(origin) {
+					let _ = system::ensure_root(origin);
+				}
+				#[weight = SimpleDispatchInfo::FreeNormal]
+				fn some_unsigned_message(origin) {
+					let _ = system::ensure_none(origin);
+				}
+
+				// module hooks.
+				// one with block number arg and one without
+				#[weight = SimpleDispatchInfo::FixedNormal(25)]
+				fn on_initialize(n: T::BlockNumber) {
+					println!("on_initialize({})", n);
+				}
+				#[weight = SimpleDispatchInfo::FixedNormal(150)]
+				fn on_finalize() {
+					println!("on_finalize(?)");
+				}
+			}
+		}
+	}
+
 	type System = system::Module<Runtime>;
 	type Balances = balances::Module<Runtime>;
+	type Custom = custom::Module<Runtime>;
 
 	impl_outer_origin! {
 		pub enum Origin for Runtime { }
@@ -386,6 +427,7 @@ mod tests {
 		type WeightToFee = ConvertInto;
 		type FeeMultiplierUpdate = ();
 	}
+	impl custom::Trait for Runtime {}
 
 	#[allow(deprecated)]
 	impl ValidateUnsigned for Runtime {
@@ -409,8 +451,9 @@ mod tests {
 		system::CheckWeight<Runtime>,
 		transaction_payment::ChargeTransactionPayment<Runtime>
 	);
+	type AllModules = (System, Balances, Custom);
 	type TestXt = sr_primitives::testing::TestXt<Call, SignedExtra>;
-	type Executive = super::Executive<Runtime, Block<TestXt>, system::ChainContext<Runtime>, Runtime, ()>;
+	type Executive = super::Executive<Runtime, Block<TestXt>, ChainContext<Runtime>, Runtime, AllModules>;
 
 	fn extra(nonce: u64, fee: u64) -> SignedExtra {
 		(
@@ -534,7 +577,7 @@ mod tests {
 		let xt = sr_primitives::testing::TestXt(sign_extra(1, 0, 0), Call::Balances(BalancesCall::transfer(33, 0)));
 		let encoded = xt.encode();
 		let encoded_len = encoded.len() as Weight;
-		let limit = AvailableBlockRatio::get() * MaximumBlockWeight::get();
+		let limit = AvailableBlockRatio::get() * MaximumBlockWeight::get() - 175;
 		let num_to_exhaust_block = limit / encoded_len;
 		t.execute_with(|| {
 			Executive::initialize_block(&Header::new(
@@ -544,7 +587,8 @@ mod tests {
 				[69u8; 32].into(),
 				Digest::default(),
 			));
-			assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 0);
+			// Initial block weight form the custom module.
+			assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 175);
 
 			for nonce in 0..=num_to_exhaust_block {
 				let xt = sr_primitives::testing::TestXt(
@@ -555,7 +599,7 @@ mod tests {
 					assert!(res.is_ok());
 					assert_eq!(
 						<system::Module<Runtime>>::all_extrinsics_weight(),
-						encoded_len * (nonce + 1),
+						encoded_len * (nonce + 1) + 175,
 					);
 					assert_eq!(<system::Module<Runtime>>::extrinsic_index(), Some(nonce as u32 + 1));
 				} else {
@@ -651,5 +695,135 @@ mod tests {
 
 		execute_with_lock(WithdrawReasons::all());
 		execute_with_lock(WithdrawReasons::except(WithdrawReason::TransactionPayment));
+	}
+
+	#[test]
+	fn block_hooks_weight_is_stored() {
+		new_test_ext(0).execute_with(|| {
+
+			Executive::initialize_block(&Header::new_from_number(1));
+			// NOTE: might need updates over time if system and balance introduce new weights. For
+			// now only accounts for the custom module.
+			assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 150 + 25);
+		})
+	}
+}
+
+#[cfg(test)]
+mod tests_weights {
+	use codec::{Encode, Decode, EncodeLike, Codec};
+	use sr_primitives::traits::{BlakeTwo256, IdentityLookup, Verify, StaticLookup};
+	use sr_primitives::{Perbill, transaction_validity::TransactionValidityError, generic, testing};
+	use system::ChainContext;
+	use super::*;
+
+	mod custom {
+		use sr_primitives::weights::SimpleDispatchInfo;
+
+		pub trait Trait: system::Trait {}
+
+		support::decl_module! {
+			pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+				#[weight = SimpleDispatchInfo::FixedNormal(100)]
+				fn some_function(origin) {
+					// NOTE: does not make any different.
+					let _ = system::ensure_signed(origin);
+				}
+				#[weight = SimpleDispatchInfo::FixedOperational(200)]
+				fn some_root_operation(origin) {
+					let _ = system::ensure_root(origin);
+				}
+				#[weight = SimpleDispatchInfo::FreeNormal]
+				fn some_unsigned_message(origin) {
+					let _ = system::ensure_none(origin);
+				}
+
+				// module hooks.
+				// one with block number arg and one without
+				#[weight = SimpleDispatchInfo::FixedNormal(50)]
+				fn on_initialize(n: T::BlockNumber) {
+					println!("on_initialize({})", n);
+				}
+				#[weight = SimpleDispatchInfo::FixedNormal(150)]
+				fn on_finalize() {
+					println!("on_finalize(?)");
+				}
+			}
+		}
+	}
+
+	support::parameter_types! {
+		pub const BlockHashCount: u64 = 250;
+		pub const MaximumBlockWeight: u32 = 1024;
+		pub const MaximumBlockLength: u32 = 2 * 1024;
+		pub const AvailableBlockRatio: Perbill = Perbill::one();
+	}
+	impl system::Trait for Runtime {
+		type Hash = primitives::H256;
+		type Origin = Origin;
+		type BlockNumber = u64;
+		type AccountId = AccountId;
+		type Hashing = HashT;
+		type Index = u64;
+		type Call = Call;
+		type Lookup = IdentityLookup<AccountId>;
+		type Header = Header;
+		type Event = ();
+		type BlockHashCount = BlockHashCount;
+		type MaximumBlockWeight = MaximumBlockWeight;
+		type AvailableBlockRatio = AvailableBlockRatio;
+		type MaximumBlockLength = MaximumBlockLength;
+		type Version = ();
+	}
+	impl indices::Trait for Runtime {
+		type AccountIndex = u32;
+		type IsDeadAccount = ();
+		type ResolveHint = indices::SimpleResolveHint<Self::AccountId, Self::AccountIndex>;
+		type Event = ();
+	}
+	impl custom::Trait for Runtime {}
+
+	// impl<Context> Checkable<Context> for UncheckedExtrinsic {
+	// 	type Checked = Self;
+	// 	fn check(self, _: &Context) -> Result<Self::Checked, TransactionValidityError> { Ok(self) }
+	// }
+
+	type HashT = BlakeTwo256;
+	type Address = <Indices as StaticLookup>::Source;
+	type Signature = primitives::sr25519::Signature;
+	type AccountId = <Signature as Verify>::Signer;
+	// type AccountId = u64;
+	type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Call, Signature, ()>;
+	// type Header = testing::Header;
+	// type Block = testing::Block<UncheckedExtrinsic>;
+	type Header = generic::Header<u64, BlakeTwo256>;
+	type Block = generic::Block<Header, UncheckedExtrinsic>;
+	type Executive = super::Executive<Runtime, Block, ChainContext<Runtime>, Runtime, AllModules>;
+
+	support::construct_runtime!(
+		pub enum Runtime where
+			Block = Block,
+			NodeBlock = Block,
+			UncheckedExtrinsic = UncheckedExtrinsic
+		{
+			System: system::{Module, Call, Event},
+			Indices: indices::{Module, Call},
+			Custom: custom::{Module, Call},
+		}
+	);
+
+	fn new_test_ext() -> runtime_io::TestExternalities {
+		system::GenesisConfig::default().build_storage::<Runtime>().unwrap().into()
+	}
+
+	#[test]
+	fn block_hooks_weight_is_stored() {
+		new_test_ext().execute_with(|| {
+			// let a = UncheckedExtrinsic::new_unsigned(Call::System(system::Call::remark(vec![0])));
+			// <UncheckedExtrinsic as Checkable<ChainContext<Runtime>>>::check(a, &Default::default());
+
+			// Executive::initialize_block(&Header::new_from_number(1));
+			// assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 0);
+		})
 	}
 }
