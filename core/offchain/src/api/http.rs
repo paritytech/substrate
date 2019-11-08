@@ -47,11 +47,10 @@ pub fn http() -> (HttpApi, HttpWorker) {
 		requests: FnvHashMap::default(),
 	};
 
-	let tls = hyper_rustls::HttpsConnector::new(1);
 	let engine = HttpWorker {
 		to_api,
 		from_api,
-		http_client: hyper::Client::builder().build(tls),
+		http_client: hyper::Client::builder().build(hyper_rustls::HttpsConnector::new(1)),
 		requests: Vec::new(),
 	};
 
