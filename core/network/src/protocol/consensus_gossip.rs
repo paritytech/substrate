@@ -213,6 +213,7 @@ fn propagate<'a, B: BlockT, I>(
 				.get(&message_hash)
 				.cloned()
 				.unwrap_or(0);
+
 			let intent = match intent {
 				MessageIntent::Broadcast { .. } =>
 					if peer.known_messages.contains(&message_hash) {
