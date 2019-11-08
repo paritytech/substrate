@@ -15,8 +15,10 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Provides the [`PassBy`](pass_by::PassBy) trait to simplify the implementation of the
-//! runtime interface traits for custom types. [`Codec`](pass_by::Codec), [`Inner`](pass_by::Inner)
-//! and [`Enum`](pass_by::Enum) are the provided strategy implementations.
+//! runtime interface traits for custom types.
+//!
+//! [`Codec`](pass_by::Codec), [`Inner`](pass_by::Inner) and [`Enum`](pass_by::Enum) are the
+//! provided strategy implementations.
 
 use crate::{RIType, impls::{pointer_and_len_from_u64, pointer_and_len_to_u64}};
 
@@ -196,6 +198,11 @@ impl<T: codec::Codec> PassByImpl<T> for Codec<T> {
 	}
 }
 
+/// The type is passed as `u64`.
+///
+/// The `u64` value is build by `length 32bit << 32 | pointer 32bit`
+///
+/// `Self` is encoded and the length and the pointer are taken from the encoded vector.
 impl<T: codec::Codec> RIType for Codec<T> {
 	type FFIType = u64;
 }
@@ -287,6 +294,7 @@ impl<T: PassByInner<Inner = I>, I: RIType> PassByImpl<T> for Inner<T, I>
 	}
 }
 
+/// The type is passed as the inner type.
 impl<T: PassByInner<Inner = I>, I: RIType> RIType for Inner<T, I> {
 	type FFIType = I::FFIType;
 }
@@ -368,6 +376,9 @@ impl<T: Copy + Into<u8> + TryFrom<u8, Error = ()>> PassByImpl<T> for Enum<T> {
 	}
 }
 
+/// The type is passed as `u8`.
+///
+/// The value is corresponds to the discriminant of the variant.
 impl<T: Copy + Into<u8> + TryFrom<u8>> RIType for Enum<T> {
 	type FFIType = u8;
 }

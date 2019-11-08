@@ -344,7 +344,9 @@ impl_into_and_from_value! {
 	i64, I64,
 }
 
+/// Something that can write a primitive to wasm memory location.
 pub trait WritePrimitive<T: PointerType> {
+	/// Write the given value `t` to the given memory location `ptr`.
 	fn write_primitive(&mut self, ptr: Pointer<T>, t: T) -> Result<()>;
 }
 
@@ -362,8 +364,10 @@ impl WritePrimitive<u64> for &mut dyn FunctionContext {
 	}
 }
 
+/// Something that can read a primitive from a wasm memory location.
 pub trait ReadPrimitive<T: PointerType> {
-	fn read_primitive(&self, offset: Pointer<T>) -> Result<T>;
+	/// Read a primitive from the given memory location `ptr`.
+	fn read_primitive(&self, ptr: Pointer<T>) -> Result<T>;
 }
 
 impl ReadPrimitive<u32> for &mut dyn FunctionContext {

@@ -65,6 +65,7 @@ macro_rules! impl_traits_for_primitives {
 		)*
 	) => {
 		$(
+			/// The type is passed directly.
 			impl RIType for $rty {
 				type FFIType = $fty;
 			}
@@ -115,6 +116,10 @@ impl_traits_for_primitives! {
 	i64, i64,
 }
 
+/// `bool` is passed as `u8`.
+///
+/// - `1`: true
+/// - `0`: false
 impl RIType for bool {
 	type FFIType = u8;
 }
@@ -151,6 +156,12 @@ impl IntoFFIValue for bool {
 	}
 }
 
+/// The type is passed as `u64`.
+///
+/// The `u64` value is build by `length 32bit << 32 | pointer 32bit`
+///
+/// If `T == u8` the length and the pointer are taken directly from the `Self`.
+/// Otherwise `Self` is encoded and the length and the pointer are taken from the encoded vector.
 impl<T> RIType for Vec<T> {
 	type FFIType = u64;
 }
@@ -204,6 +215,12 @@ impl<T: 'static + Decode> FromFFIValue for Vec<T> {
 	}
 }
 
+/// The type is passed as `u64`.
+///
+/// The `u64` value is build by `length 32bit << 32 | pointer 32bit`
+///
+/// If `T == u8` the length and the pointer are taken directly from the `Self`.
+/// Otherwise `Self` is encoded and the length and the pointer are taken from the encoded vector.
 impl<T> RIType for [T] {
 	type FFIType = u64;
 }
@@ -275,6 +292,9 @@ macro_rules! impl_traits_for_arrays {
 		$(,)?
 	) => {
 		$(
+			/// The type is passed as `u32`.
+			///
+			/// The `u32` is the pointer to the array.
 			impl RIType for [u8; $n] {
 				type FFIType = u32;
 			}
@@ -386,6 +406,11 @@ for_primitive_types! {
 	H512 64,
 }
 
+/// The type is passed as `u64`.
+///
+/// The `u64` value is build by `length 32bit << 32 | pointer 32bit`
+///
+/// The length and the pointer are taken directly from the `Self`.
 impl RIType for str {
 	type FFIType = u64;
 }
@@ -419,6 +444,7 @@ impl<T: wasm_interface::PointerType> RIType for Pointer<T> {
 	type FFIType = u32;
 }
 
+/// The type is passed as `u32`.
 #[cfg(not(feature = "std"))]
 impl<T> RIType for Pointer<T> {
 	type FFIType = u32;
