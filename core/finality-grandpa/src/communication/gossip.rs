@@ -990,7 +990,7 @@ impl<Block: BlockT> Inner<Block> {
 		(true, report)
 	}
 
-	/// The initial logic for filtering messages follows the given state
+	/// The initial logic for filtering round messages follows the given state
 	/// transitions:
 	///
 	/// - State 0: not allowed to anyone (only if our local node is not an authority)
@@ -1001,7 +1001,7 @@ impl<Block: BlockT> Inner<Block> {
 	///
 	/// Transitions will be triggered on repropagation attempts by the
 	/// underlying gossip layer, which should happen every 30 seconds.
-	fn message_allowed<N>(&self, peer: &PeerInfo<N>, mut previous_attempts: usize) -> bool {
+	fn round_message_allowed<N>(&self, peer: &PeerInfo<N>, mut previous_attempts: usize) -> bool {
 		const MIN_AUTHORITIES: usize = 5;
 
 		if !self.config.is_authority && previous_attempts == 0 {
@@ -1049,6 +1049,59 @@ impl<Block: BlockT> Inner<Block> {
 				rand::thread_rng().gen_bool(p)
 			} else {
 				false
+			}
+		}
+	}
+
+	/// The initial logic for filtering global messages follows the given state
+	/// transitions:
+	///
+	/// - State 0: send to `sqrt(authorities)` ++ `sqrt(non-authorities)`.
+	/// - State 1: send to all authorities
+	/// - State 2: send to all non-authorities
+	///
+	/// We are more lenient with global messages since there should be a lot
+	/// less global messages than round messages (just commits), and we want
+	/// these to propagate to non-authorities fast enough so that they can
+	/// observe finality.
+	///
+	/// Transitions will be triggered on repropagation attempts by the
+	/// underlying gossip layer, which should happen every 30 seconds.
+	fn global_message_allowed<N>(&self, peer: &PeerInfo<N>, previous_attempts: usize) -> bool {
+		const MIN_PEERS: usize = 5;
+
+		if peer.roles.is_authority() {
+			let authorities = self.peers.authorities();
+
+			// the target node is an authority, on the first attempt we start by
+			// sending the message to only `sqrt(authorities)` (if we're
+			// connected to at least `MIN_PEERS`).
+			if previous_attempts == 0 && authorities > MIN_PEERS {
+				let authorities = authorities as f64;
+				let p = (authorities.sqrt()).max(MIN_PEERS as f64) / authorities;
+				rand::thread_rng().gen_bool(p)
+			} else {
+				// otherwise we already went through the step above, so
+				// we won't filter the message and send it to all
+				// authorities for whom it is polite to do so
+				true
+			}
+		} else {
+			let non_authorities = self.peers.non_authorities();
+
+			// the target node is not an authority, on the first and second
+			// attempt we start by sending the message to only
+			// `sqrt(non_authorities)` (if we're connected to at least
+			// `MIN_PEERS`).
+			if previous_attempts <= 1 && non_authorities > MIN_PEERS {
+				let non_authorities = non_authorities as f64;
+				let p = (non_authorities.sqrt()).max(MIN_PEERS as f64) / non_authorities ;
+				rand::thread_rng().gen_bool(p)
+			} else {
+				// otherwise we already went through the step above, so
+				// we won't filter the message and send it to all
+				// non-authorities for whom it is polite to do so
+				true
 			}
 		}
 	}
@@ -1255,19 +1308,26 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 				Some(x) => x,
 			};
 
-			if let MessageIntent::Broadcast { previous_attempts } = intent {
-				// early return if the message isn't allowed at this stage.
-				if !inner.message_allowed(peer, previous_attempts) {
-					return false;
-				}
-			}
-
 			// if the topic is not something we're keeping at the moment,
 			// do not send.
 			let (maybe_round, set_id) = match inner.live_topics.topic_info(&topic) {
 				None => return false,
 				Some(x) => x,
 			};
+
+			if let MessageIntent::Broadcast { previous_attempts } = intent {
+				if maybe_round.is_some() {
+					if !inner.round_message_allowed(peer, previous_attempts) {
+						// early return if the vote message isn't allowed at this stage.
+						return false;
+					}
+				} else {
+					if !inner.global_message_allowed(peer, previous_attempts) {
+						// early return if the global message isn't allowed at this stage.
+						return false;
+					}
+				}
+			}
 
 			// if the topic is not something the peer accepts, discard.
 			if let Some(round) = maybe_round {
