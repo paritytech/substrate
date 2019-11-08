@@ -127,7 +127,9 @@ pub struct ChainSync<B: BlockT> {
 	/// A flag that caches idle state with no pending requests.
 	is_idle: bool,
 	/// A type to check incoming block announcements.
-	block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>
+	block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>,
+	/// Maximum number of peers to ask the same blocks in parallel.
+	max_parallel_downloads: u32,
 }
 
 /// All the data we have about a Peer that we are trying to sync with
@@ -282,7 +284,8 @@ impl<B: BlockT> ChainSync<B> {
 		client: Arc<dyn crate::chain::Client<B>>,
 		info: &ClientInfo<B>,
 		request_builder: Option<BoxFinalityProofRequestBuilder<B>>,
-		block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>
+		block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>,
+		max_parallel_downloads: u32,
 	) -> Self {
 		let mut required_block_attributes = BlockAttributes::HEADER | BlockAttributes::JUSTIFICATION;
 
@@ -306,6 +309,7 @@ impl<B: BlockT> ChainSync<B> {
 			fork_targets: Default::default(),
 			is_idle: false,
 			block_announce_validator,
+			max_parallel_downloads,
 		}
 	}
 
@@ -571,6 +575,7 @@ impl<B: BlockT> ChainSync<B> {
 		let best_queued = self.best_queued_number;
 		let client = &self.client;
 		let queue = &self.queue_blocks;
+		let max_parallel = if major_sync { 1 } else { self.max_parallel_downloads };
 		let iter = self.peers.iter_mut().filter_map(move |(id, peer)| {
 			if !peer.state.is_available() {
 				trace!(target: "sync", "Peer {} is busy", id);
@@ -592,13 +597,19 @@ impl<B: BlockT> ChainSync<B> {
 				peer.state = PeerSyncState::DownloadingStale(hash);
 				have_requests = true;
 				Some((id.clone(), req))
-			} else if let Some((range, req)) = peer_block_request(id, peer, blocks, attrs, major_sync) {
+			} else if let Some((range, req)) = peer_block_request(id, peer, blocks, attrs, max_parallel) {
 				peer.state = PeerSyncState::DownloadingNew(range.start);
-				trace!(target: "sync", "New block request for {}", id);
+				trace!(
+					target: "sync",
+					"New block request for {}, (best:{}, common:{}) {:?}",
+					id,
+					peer.best_number,
+					peer.common_number,
+					req,
+				);
 				have_requests = true;
 				Some((id.clone(), req))
 			} else {
-				trace!(target: "sync", "No new block request for {}", id);
 				None
 			}
 		});
@@ -1006,7 +1017,7 @@ impl<B: BlockT> ChainSync<B> {
 	{
 		let header = &announce.header;
 		let number = *header.number();
-		debug!(target: "sync", "Received block announcement with number {:?}", number);
+		debug!(target: "sync", "Received block announcement {:?} with number {:?} from {}", hash, number, who);
 		if number.is_zero() {
 			warn!(target: "sync", "Ignored genesis block (#0) announcement from {}: {}", who, hash);
 			return OnBlockAnnounce::Nothing
@@ -1226,15 +1237,14 @@ fn peer_block_request<B: BlockT>(
 	peer: &PeerSync<B>,
 	blocks: &mut BlockCollection<B>,
 	attrs: &message::BlockAttributes,
-	major_sync: bool,
+	max_parallel_downloads: u32,
 ) -> Option<(Range<NumberFor<B>>, BlockRequest<B>)> {
-	let max_parallel = if major_sync { 1 } else { 3 };
 	if let Some(range) = blocks.needed_blocks(
 		id.clone(),
 		MAX_BLOCKS_TO_REQUEST,
 		peer.best_number,
 		peer.common_number,
-		max_parallel,
+		max_parallel_downloads,
 	) {
 		let request = message::generic::BlockRequest {
 			id: 0,

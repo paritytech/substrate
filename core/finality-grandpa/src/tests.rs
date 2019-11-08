@@ -94,9 +94,9 @@ impl TestNetFactory for GrandpaTestNet {
 
 	fn default_config() -> ProtocolConfig {
 		// the authority role ensures gossip hits all nodes here.
-		ProtocolConfig {
-			roles: Roles::AUTHORITY,
-		}
+		let mut config = ProtocolConfig::default();
+		config.roles = Roles::AUTHORITY;
+		config
 	}
 
 	fn make_verifier(
