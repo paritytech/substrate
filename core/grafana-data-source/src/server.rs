@@ -17,7 +17,7 @@
 use serde::{Serialize, de::DeserializeOwned};
 use hyper::{Body, Request, Response, header, service::{service_fn, make_service_fn}, Server};
 use chrono::{Duration, Utc};
-use futures_util::{TryStreamExt, FutureExt, future::select};
+use futures_util::{TryStreamExt, FutureExt, future::{select, Either}};
 use futures_timer::Delay;
 use crate::{METRICS, util, types::{Target, Query, TimeseriesData}};
 
@@ -107,9 +107,10 @@ pub async fn run_server(address: std::net::SocketAddr) -> Result<(), hyper::Erro
 	let clean = clean_up(Duration::days(1), Duration::weeks(1))
 		.boxed();
 
-	select(server, clean).await;
-
-	Ok(())
+	match select(server, clean).await {
+		Either::Left((result, _)) => result,
+		Either::Right(_) => Ok(())
+	}
 }
 
 /// Periodically remove old metrics.

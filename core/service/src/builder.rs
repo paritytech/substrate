@@ -27,10 +27,11 @@ use codec::{Decode, Encode, IoReader};
 use consensus_common::import_queue::ImportQueue;
 use futures::{prelude::*, sync::mpsc};
 use futures03::{
-	compat::Compat,
+	compat::*,
 	future::ready,
 	FutureExt as _, TryFutureExt as _,
 	StreamExt as _, TryStreamExt as _,
+	future::{select, Either}
 };
 use keystore::{Store as Keystore};
 use log::{info, warn};
@@ -1137,9 +1138,15 @@ ServiceBuilder<
 
 		// Grafana data source
 		if let Some(port) = config.grafana_port {
-			let _ = to_spawn_tx.unbounded_send(Box::new(
-				grafana_data_source::run_server(port).map_err(|_| ()).boxed().compat()
-			));
+			let future = select(
+				grafana_data_source::run_server(port).boxed(),
+				exit.clone().compat()
+			).map(|either| match either {
+				Either::Left((result, _)) => result.map_err(|_| ()),
+				Either::Right(_) => Ok(())
+			}).compat();
+
+			let _ = to_spawn_tx.unbounded_send(Box::new(future));
 		}
 
 		Ok(Service {
