@@ -2178,4 +2178,53 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn non_authorities_never_gossip_messages_on_first_attempt() {
+        let mut config = config();
+        config.is_authority = false;
+
+        let (val, _) = GossipValidator::<Block>::new(
+			config,
+			voter_set_state(),
+		);
+
+        // the validator start at set id 0
+        val.note_set(SetId(0), Vec::new(), |_, _| {});
+
+        let mut authorities = Vec::new();
+        for _ in 0..100 {
+            let peer_id = PeerId::random();
+            val.inner.write().peers.new_peer(peer_id.clone(), Roles::AUTHORITY);
+            authorities.push(peer_id);
+        }
+
+        let mut message_allowed = val.message_allowed();
+
+        // since our node is not an authority we should **never** gossip any
+        // messages on the first attempt.
+        for authority in &authorities {
+            assert!(
+                !message_allowed(
+                    authority,
+                    MessageIntent::Broadcast { previous_attempts: 0 },
+                    &crate::communication::round_topic::<Block>(1, 0),
+                    &[],
+                )
+            );
+        }
+
+        // on the third attempt we should allow messages to authorities
+        // (on the second attempt we would do `sqrt(authorities)`)
+        for authority in &authorities {
+            assert!(
+                message_allowed(
+                    authority,
+                    MessageIntent::Broadcast { previous_attempts: 2 },
+                    &crate::communication::round_topic::<Block>(1, 0),
+                    &[],
+                )
+            );
+        }
+    }
 }
