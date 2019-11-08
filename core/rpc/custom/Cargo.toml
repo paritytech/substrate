@@ -15,7 +15,6 @@ futures-preview = { version = "0.3.0-alpha.19", features = ["compat"] }
 serde = "1"
 
 [dev-dependencies]
-substrate-test-runtime = { path = "../../../core/test-runtime" }
 srml-system = { path = "../../../srml/system" }
 srml-support = { path = "../../../srml/support" }
 jsonrpc-client-transports = { version = "14", features = ["http"] }
