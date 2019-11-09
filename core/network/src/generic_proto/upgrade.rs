@@ -14,11 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+pub use self::collec::UpgradeCollec;
 pub use self::notifications::{NotificationsIn, NotificationsOut};
 pub use self::request_response::RequestResponse;
 pub use self::responder::{Responder, ResponderResponse};
 pub use self::select::SelectUpgrade;
 
+mod collec;
 mod notifications;
 mod request_response;
 mod responder;

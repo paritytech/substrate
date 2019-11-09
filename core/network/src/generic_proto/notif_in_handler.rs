@@ -17,8 +17,7 @@
 use crate::generic_proto::upgrade::NotificationsIn;
 use futures::prelude::*;
 use libp2p::core::{ConnectedPoint, PeerId, Endpoint};
-use libp2p::core::either::EitherError;
-use libp2p::core::upgrade::{EitherUpgrade, ReadOneError, DeniedUpgrade, InboundUpgrade, OutboundUpgrade};
+use libp2p::core::upgrade::{DeniedUpgrade, InboundUpgrade, OutboundUpgrade};
 use libp2p::swarm::{
 	ProtocolsHandler, ProtocolsHandlerEvent,
 	IntoProtocolsHandler,

@@ -17,8 +17,7 @@
 use crate::generic_proto::upgrade::NotificationsOut;
 use futures::prelude::*;
 use libp2p::core::{ConnectedPoint, PeerId, Endpoint};
-use libp2p::core::either::EitherError;
-use libp2p::core::upgrade::{EitherUpgrade, ReadOneError, DeniedUpgrade, InboundUpgrade, OutboundUpgrade};
+use libp2p::core::upgrade::{ReadOneError, DeniedUpgrade, InboundUpgrade, OutboundUpgrade};
 use libp2p::swarm::{
 	ProtocolsHandler, ProtocolsHandlerEvent,
 	IntoProtocolsHandler,
@@ -27,7 +26,7 @@ use libp2p::swarm::{
 	SubstreamProtocol,
 };
 use smallvec::SmallVec;
-use std::{borrow::Cow, error, fmt, marker::PhantomData};
+use std::{borrow::Cow, fmt, marker::PhantomData};
 use tokio_io::{AsyncRead, AsyncWrite};
 
 /// Implements the `IntoProtocolsHandler` trait of libp2p.

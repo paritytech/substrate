@@ -14,14 +14,15 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::generic_proto::handler::{
-	notif_in_handler::NotifHandlerProto,
-	notif_out_handler::NotifsOutProtoHandlerProto,
+use crate::generic_proto::{
+	notif_in_handler::{NotifsInHandlerProto, NotifsInHandler},
+	notif_out_handler::{NotifsOutHandlerProto, NotifsOutHandler},
+	upgrade::{NotificationsIn, NotificationsOut, UpgradeCollec},
 };
 use futures::prelude::*;
-use libp2p::core::{ConnectedPoint, PeerId, Endpoint};
+use libp2p::core::{ConnectedPoint, PeerId};
 use libp2p::core::either::EitherError;
-use libp2p::core::upgrade::{EitherUpgrade, ReadOneError, DeniedUpgrade, InboundUpgrade, OutboundUpgrade};
+use libp2p::core::upgrade::{ReadOneError, InboundUpgrade, OutboundUpgrade};
 use libp2p::swarm::{
 	ProtocolsHandler, ProtocolsHandlerEvent,
 	IntoProtocolsHandler,
@@ -29,71 +30,68 @@ use libp2p::swarm::{
 	ProtocolsHandlerUpgrErr,
 	SubstreamProtocol,
 };
-use smallvec::SmallVec;
-use std::{borrow::Cow, error, fmt, marker::PhantomData};
+use std::borrow::Cow;
 use tokio_io::{AsyncRead, AsyncWrite};
 
 /// Implements the `IntoProtocolsHandler` trait of libp2p.
 ///
 /// Every time a connection with a remote starts, an instance of this struct is created and
 /// sent to a background task dedicated to this connection. Once the connection is established,
-/// it is turned into a [`NotifHandler`].
-pub struct NotifHandlerProto<TSubstream> {
-	in_handlers: ,
+/// it is turned into a [`NotifsHandler`].
+pub struct NotifsHandlerProto<TSubstream> {
+	in_handlers: Vec<NotifsInHandlerProto<TSubstream>>,
+	out_handlers: Vec<NotifsOutHandlerProto<TSubstream>>,
 }
 
-impl<TSubstream> NotifHandlerProto<TSubstream>
+impl<TSubstream> NotifsHandlerProto<TSubstream>
 where
 	TSubstream: AsyncRead + AsyncWrite,
 {
-	/// Builds a new `NotifHandlerProto`.
-	pub fn new(proto_name: impl Into<Cow<'static, [u8]>>, handshake_msg: impl Into<Vec<u8>>) -> Self {
-		NotifHandlerProto {
-			in_protocol: NotificationsIn::new(proto_name, handshake_msg),
-			marker: PhantomData,
+	/// Builds a new `NotifsHandlerProto`.
+	pub fn new() -> Self {
+		NotifsHandlerProto {
+			in_handlers: Vec::new(),
+			out_handlers: Vec::new(),
 		}
 	}
 }
 
-impl<TSubstream> IntoProtocolsHandler for NotifHandlerProto<TSubstream>
+impl<TSubstream> IntoProtocolsHandler for NotifsHandlerProto<TSubstream>
 where
 	TSubstream: AsyncRead + AsyncWrite + 'static,
 {
-	type Handler = NotifHandler<TSubstream>;
+	type Handler = NotifsHandler<TSubstream>;
 
-	fn inbound_protocol(&self) -> NotificationsIn {
-		self.in_handlers.clone()
+	fn inbound_protocol(&self) -> UpgradeCollec<NotificationsIn> {
+		unimplemented!()	// TODO:
 	}
 
 	fn into_handler(self, remote_peer_id: &PeerId, connected_point: &ConnectedPoint) -> Self::Handler {
-		NotifHandler {
-			in_protocol: self.in_protocol,
-			endpoint: connected_point.to_endpoint(),
-			remote_peer_id: remote_peer_id.clone(),
-			events_queue: SmallVec::new(),
-			marker: PhantomData,
+		NotifsHandler {
+			in_handlers: self.in_handlers
+				.into_iter()
+				.map(|p| p.into_handler(remote_peer_id, connected_point))
+				.collect(),
+			out_handlers: self.out_handlers
+				.into_iter()
+				.map(|p| p.into_handler(remote_peer_id, connected_point))
+				.collect(),
 		}
 	}
 }
 
 /// The actual handler once the connection has been established.
-pub struct NotifHandler<TSubstream> {
-	/// Configuration for the protocol upgrade to negotiate for inbound substreams.
-	in_handlers: NotificationsIn,
+pub struct NotifsHandler<TSubstream> {
+	/// Handlers for ingoing substreams.
+	in_handlers: Vec<NotifsInHandler<TSubstream>>,
 
-	/// Queue of events to send to the outside.
-	///
-	/// This queue must only ever be modified to insert elements at the back, or remove the first
-	/// element.
-	events_queue: SmallVec<[ProtocolsHandlerEvent<DeniedUpgrade, (), NotifHandlerOut>; 16]>,
-
-	/// Marker to pin the generic type.
-	marker: PhantomData<TSubstream>,
+	/// Handlers for outgoing substreams.
+	out_handlers: Vec<NotifsOutHandler<TSubstream>>,
 }
 
-/// Event that can be received by a `NotifHandler`.
+/// Event that can be received by a `NotifsHandler`.
 #[derive(Debug)]
-pub enum NotifHandlerIn {
+pub enum NotifsHandlerIn {
 	/// Whenever a remote opens a notifications substream, we send to it a "node information"
 	/// handshake message. This message is cached in the `ProtocolsHandler`, and `UpdateNodeInfos`
 	/// updates this cached message.
@@ -129,9 +127,9 @@ pub enum NotifHandlerIn {
 	},
 }
 
-/// Event that can be emitted by a `NotifHandler`.
+/// Event that can be emitted by a `NotifsHandler`.
 #[derive(Debug)]
-pub enum NotifHandlerOut {
+pub enum NotifsHandlerOut {
 	/// The notifications substream has been open by the remote.
 	RemoteOpen {
 		/// Protocol for which we opened a substream.
@@ -178,58 +176,67 @@ pub enum NotifHandlerOut {
 	},
 }
 
-impl<TSubstream> ProtocolsHandler for NotifHandler<TSubstream>
+impl<TSubstream> ProtocolsHandler for NotifsHandler<TSubstream>
 where TSubstream: AsyncRead + AsyncWrite + 'static {
-	type InEvent = NotifHandlerIn;
-	type OutEvent = NotifHandlerOut;
+	type InEvent = NotifsHandlerIn;
+	type OutEvent = NotifsHandlerOut;
 	type Substream = TSubstream;
-	type Error = ConnectionKillError;
-	type InboundProtocol = NotificationsIn;
-	type OutboundProtocol = DeniedUpgrade;
+	type Error = EitherError<
+		<NotifsInHandler<TSubstream> as ProtocolsHandler>::Error,
+		<NotifsOutHandler<TSubstream> as ProtocolsHandler>::Error,
+	>;
+	type InboundProtocol = UpgradeCollec<NotificationsIn>;
+	type OutboundProtocol = UpgradeCollec<NotificationsOut>;
 	type OutboundOpenInfo = ();
 
 	fn listen_protocol(&self) -> SubstreamProtocol<Self::InboundProtocol> {
-		SubstreamProtocol::new(self.in_protocol.clone())
+		unimplemented!()	// TODO:
 	}
 
 	fn inject_fully_negotiated_inbound(
 		&mut self,
-		proto: <Self::InboundProtocol as InboundUpgrade<TSubstream>>::Output
+		(out, num): <Self::InboundProtocol as InboundUpgrade<TSubstream>>::Output
 	) {
-		unimplemented!()
+		self.in_handlers[num].inject_fully_negotiated_inbound(out)
 	}
 
 	fn inject_fully_negotiated_outbound(
 		&mut self,
-		out: <Self::OutboundProtocol as OutboundUpgrade<TSubstream>>::Output,
+		(out, num): <Self::OutboundProtocol as OutboundUpgrade<TSubstream>>::Output,
 		_: Self::OutboundOpenInfo
 	) {
-		// We never emit any outgoing substream.
-		match out {}
+		self.out_handlers[num].inject_fully_negotiated_outbound(out, ())
 	}
 
-	fn inject_event(&mut self, message: NotifHandlerIn) {
-		match message {
-			NotifHandlerIn::UpdateNodeInfos { infos } =>
-				self.in_protocol.set_handshake_message(infos),
-		}
-	}
-
-	fn inject_dial_upgrade_error(&mut self, _: (), err: ProtocolsHandlerUpgrErr<void::Void>) {
+	fn inject_event(&mut self, message: NotifsHandlerIn) {
 		unimplemented!()		// TODO:
-		/*let is_severe = match err {
-			ProtocolsHandlerUpgrErr::Upgrade(_) => true,
-			_ => false,
-		};
+	}
 
-		self.events_queue.push(ProtocolsHandlerEvent::Custom(NotifHandlerOut::ProtocolError {
-			is_severe,
-			error: Box::new(err),
-		}));*/
+	fn inject_dial_upgrade_error(&mut self, _: (), err: ProtocolsHandlerUpgrErr<(ReadOneError, usize)>) {
+		unimplemented!()		// TODO:
 	}
 
 	fn connection_keep_alive(&self) -> KeepAlive {
-		KeepAlive::No
+		// Iterate over each handler and return the maximum value.
+		let mut ret = KeepAlive::No;
+
+		for handler in &self.in_handlers {
+			let val = handler.connection_keep_alive();
+			if val.is_yes() {
+				return KeepAlive::Yes;
+			}
+			if ret < val { ret = val; }
+		}
+
+		for handler in &self.out_handlers {
+			let val = handler.connection_keep_alive();
+			if val.is_yes() {
+				return KeepAlive::Yes;
+			}
+			if ret < val { ret = val; }
+		}
+
+		ret
 	}
 
 	fn poll(
@@ -238,34 +245,18 @@ where TSubstream: AsyncRead + AsyncWrite + 'static {
 		ProtocolsHandlerEvent<Self::OutboundProtocol, Self::OutboundOpenInfo, Self::OutEvent>,
 		Self::Error,
 	> {
-		// Flush the events queue if necessary.
-		if !self.events_queue.is_empty() {
-			let event = self.events_queue.remove(0);
-			return Ok(Async::Ready(event))
+		for handler in &mut self.in_handlers {
+			if let Async::Ready(v) = handler.poll().map_err(EitherError::A)? {
+				unimplemented!() // TODO: return Ok(Async::Ready(v));
+			}
+		}
+
+		for handler in &mut self.out_handlers {
+			if let Async::Ready(v) = handler.poll().map_err(EitherError::B)? {
+				unimplemented!() // TODO: return Ok(Async::Ready(v));
+			}
 		}
 
 		Ok(Async::NotReady)
-	}
-}
-
-impl<TSubstream> fmt::Debug for NotifHandler<TSubstream>
-where
-	TSubstream: AsyncRead + AsyncWrite,
-{
-	fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-		f.debug_struct("NotifHandler")
-			.finish()
-	}
-}
-
-#[derive(Debug)]
-pub struct ConnectionKillError;
-
-impl error::Error for ConnectionKillError {
-}
-
-impl fmt::Display for ConnectionKillError {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		unimplemented!()		// TODO:
 	}
 }

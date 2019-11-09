@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use libp2p::core::{Negotiated, UpgradeInfo, InboundUpgrade, OutboundUpgrade, upgrade, upgrade::ProtocolName};
-use std::{borrow::Cow, iter, vec};
+use std::{borrow::Cow, iter};
 use futures::prelude::*;
 use tokio_io::{AsyncRead, AsyncWrite};
 
