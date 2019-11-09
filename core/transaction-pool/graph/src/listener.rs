@@ -17,12 +17,13 @@
 
 use std::{
 	collections::HashMap,
+	fmt,
 	hash,
 };
 use serde::Serialize;
 use crate::watcher;
 use sr_primitives::traits;
-use log::warn;
+use log::{debug, trace, warn};
 
 /// Extrinsic pool default listener.
 pub struct Listener<H: hash::Hash + Eq, H2> {
@@ -37,7 +38,7 @@ impl<H: hash::Hash + Eq, H2> Default for Listener<H, H2> {
 	}
 }
 
-impl<H: hash::Hash + traits::Member + Serialize, H2: Clone> Listener<H, H2> {
+impl<H: hash::Hash + traits::Member + Serialize, H2: Clone + fmt::Debug> Listener<H, H2> {
 	fn fire<F>(&mut self, hash: &H, fun: F) where F: FnOnce(&mut watcher::Sender<H, H2>) {
 		let clean = if let Some(h) = self.watchers.get_mut(hash) {
 			fun(h);
@@ -61,11 +62,13 @@ impl<H: hash::Hash + traits::Member + Serialize, H2: Clone> Listener<H, H2> {
 
 	/// Notify the listeners about extrinsic broadcast.
 	pub fn broadcasted(&mut self, hash: &H, peers: Vec<String>) {
+		trace!(target: "txpool", "[{:?}] Broadcasted", hash);
 		self.fire(hash, |watcher| watcher.broadcast(peers));
 	}
 
 	/// New transaction was added to the ready pool or promoted from the future pool.
 	pub fn ready(&mut self, tx: &H, old: Option<&H>) {
+		trace!(target: "txpool", "[{:?}] Ready (replaced: {:?})", tx, old);
 		self.fire(tx, |watcher| watcher.ready());
 		if let Some(old) = old {
 			self.fire(old, |watcher| watcher.usurped(tx.clone()));
@@ -74,11 +77,13 @@ impl<H: hash::Hash + traits::Member + Serialize, H2: Clone> Listener<H, H2> {
 
 	/// New transaction was added to the future pool.
 	pub fn future(&mut self, tx: &H) {
+		trace!(target: "txpool", "[{:?}] Future", tx);
 		self.fire(tx, |watcher| watcher.future());
 	}
 
 	/// Transaction was dropped from the pool because of the limit.
 	pub fn dropped(&mut self, tx: &H, by: Option<&H>) {
+		trace!(target: "txpool", "[{:?}] Dropped (replaced by {:?})", tx, by);
 		self.fire(tx, |watcher| match by {
 			Some(t) => watcher.usurped(t.clone()),
 			None => watcher.dropped(),
@@ -93,6 +98,7 @@ impl<H: hash::Hash + traits::Member + Serialize, H2: Clone> Listener<H, H2> {
 
 	/// Transaction was pruned from the pool.
 	pub fn pruned(&mut self, header_hash: H2, tx: &H) {
+		debug!(target: "txpool", "[{:?}] Pruned at {:?}", tx, header_hash);
 		self.fire(tx, |watcher| watcher.finalized(header_hash))
 	}
 }
