@@ -17,5 +17,6 @@
 //pub use self::behaviour::{LegacyProto, LegacyProtoOut};
 
 //mod behaviour;
-mod handler;
+mod notif_in_handler;
+mod notif_out_handler;
 mod upgrade;

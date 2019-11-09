@@ -23,9 +23,10 @@ use tokio_io::{AsyncRead, AsyncWrite};
 /// stream of messages.
 #[derive(Debug, Clone)]
 pub struct NotificationsIn {
-	/// Protocol names to support when negotiating the substream, and the corresponding handshake
-	/// message to send to the remote when they open a substream.
-	protocol_names: Vec<(Cow<'static, [u8]>/*, Vec<u8>*/)>,
+	/// Protocol name to use when negotiating the substream.
+	protocol_name: Cow<'static, [u8]>,
+	/// Handshake message to send to the remote when they open a substream.
+	handshake_message: Vec<u8>,
 }
 
 /// Upgrade that opens a substream, waits for the remote to accept by sending back a status
@@ -36,12 +37,27 @@ pub struct NotificationsOut {
 	protocol_name: Cow<'static, [u8]>,
 }
 
+impl NotificationsIn {
+	/// Builds a new potential upgrade.
+	pub fn new(proto_name: impl Into<Cow<'static, [u8]>>, handshake_msg: impl Into<Vec<u8>>) -> Self {
+		NotificationsIn {
+			protocol_name: proto_name.into(),
+			handshake_message: handshake_msg.into(),
+		}
+	}
+
+	/// Modifies the handshake message.
+	pub fn set_handshake_message(&mut self, message: impl Into<Vec<u8>>) {
+		self.handshake_message = message.into();
+	}
+}
+
 impl UpgradeInfo for NotificationsIn {
 	type Info = Cow<'static, [u8]>;
-	type InfoIter = vec::IntoIter<Self::Info>;
+	type InfoIter = iter::Once<Self::Info>;
 
 	fn protocol_info(&self) -> Self::InfoIter {
-		self.protocol_names.clone().into_iter()
+		iter::once(self.protocol_name.clone())
 	}
 }
 
@@ -83,13 +99,5 @@ where TSubstream: AsyncRead + AsyncWrite + 'static,
 		proto_name: Self::Info,
 	) -> Self::Future {
 		unimplemented!()
-	}
-}
-
-impl Default for NotificationsIn {
-	fn default() -> Self {
-		NotificationsIn {
-			protocol_names: Vec::new(),
-		}
 	}
 }
