@@ -640,10 +640,19 @@ fn does_not_sync_announced_old_best_block() {
 	let mut net = TestNet::new(3);
 
 	let old_hash = net.peer(0).push_blocks(1, false);
-	net.peer(0).push_blocks(19, true);
+	let old_hash_with_parent = net.peer(0).push_blocks(1, false);
+	net.peer(0).push_blocks(18, true);
 	net.peer(1).push_blocks(20, true);
 
 	net.peer(0).announce_block(old_hash, Vec::new());
+	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| -> Result<_, ()> {
+		// poll once to import announcement
+		net.poll();
+		Ok(Async::Ready(()))
+	})).unwrap();
+	assert!(!net.peer(1).is_major_syncing());
+
+	net.peer(0).announce_block(old_hash_with_parent, Vec::new());
 	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| -> Result<_, ()> {
 		// poll once to import announcement
 		net.poll();
