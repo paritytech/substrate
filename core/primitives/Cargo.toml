@@ -94,8 +94,8 @@ std = [
 	"runtime-interface/std",
 ]
 
-# This feature enables all crypto primitives for `no_std` builds like microcontrollers 
-# or Intel SGX. 
+# This feature enables all crypto primitives for `no_std` builds like microcontrollers
+# or Intel SGX.
 # For the regular wasm runtime builds this should not be used.
 full_crypto = [
 	"ed25519-dalek",
@@ -104,5 +104,6 @@ full_crypto = [
 	"libsecp256k1",
 	"hex",
 	"sha2",
-	"twox-hash"
+	"twox-hash",
+	"runtime-interface/disable_target_static_assertions",
 ]

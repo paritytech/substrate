@@ -22,7 +22,7 @@ use crate::host::*;
 #[cfg(not(feature = "std"))]
 use crate::wasm::*;
 
-#[cfg(not(feature = "std"))]
+#[cfg(all(not(feature = "std"), not(feature = "disable_target_static_assertions")))]
 use static_assertions::assert_eq_size;
 
 #[cfg(feature = "std")]
@@ -39,18 +39,26 @@ use rstd::borrow::Cow;
 use rstd::{slice, boxed::Box};
 
 // Make sure that our assumptions for storing a pointer + its size in `u64` is valid.
-#[cfg(not(feature = "std"))]
+#[cfg(all(not(feature = "std"), not(feature = "disable_target_static_assertions")))]
 assert_eq_size!(usize, u32);
-#[cfg(not(feature = "std"))]
+#[cfg(all(not(feature = "std"), not(feature = "disable_target_static_assertions")))]
 assert_eq_size!(*const u8, u32);
 
 /// Converts a pointer and length into an `u64`.
 pub fn pointer_and_len_to_u64(ptr: u32, len: u32) -> u64 {
+	// The static assertions from above are changed into a runtime check.
+	#[cfg(all(feature = "std", not(feature = "disable_target_static_assertions")))]
+	assert_eq!(4, rstd::mem::size_of::<usize>());
+
 	(u64::from(len) << 32) | u64::from(ptr)
 }
 
 /// Splits an `u64` into the pointer and length.
 pub fn pointer_and_len_from_u64(val: u64) -> (u32, u32) {
+	// The static assertions from above are changed into a runtime check.
+	#[cfg(all(feature = "std", not(feature = "disable_target_static_assertions")))]
+	assert_eq!(4, rstd::mem::size_of::<usize>());
+
 	let ptr = (val & (!0u32 as u64)) as u32;
 	let len = (val >> 32) as u32;
 
