@@ -329,7 +329,7 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 				call: &'a C,
 			) -> #crate_::runtime_api::ApiRef<'a, Self::RuntimeApi> {
 				RuntimeApiImpl {
-					call: unsafe { ::std::mem::transmute(call) },
+					call: unsafe { std::mem::transmute(call) },
 					commit_on_success: true.into(),
 					initialized_block: None.into(),
 					changes: Default::default(),
@@ -353,15 +353,13 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 				&self,
 				call_api_at: F,
 			) -> #crate_::error::Result<#crate_::runtime_api::NativeOrEncoded<R>> {
-				let res = unsafe {
-					call_api_at(
-						&self.call,
-						self,
-						&self.changes,
-						&self.initialized_block,
-						&self.recorder,
-					)
-				};
+				let res = call_api_at(
+					&self.call,
+					self,
+					&self.changes,
+					&self.initialized_block,
+					&self.recorder,
+				);
 
 				self.commit_on_ok(&res);
 				res

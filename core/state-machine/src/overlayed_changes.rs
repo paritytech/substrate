@@ -16,12 +16,23 @@
 
 //! The overlayed changes to state.
 
+use crate::{
+	backend::Backend, ChangesTrieTransaction,
+	changes_trie::{
+		NO_EXTRINSIC_INDEX, Configuration as ChangesTrieConfig, BlockNumber, build_changes_trie,
+		Storage as ChangesTrieStorage,
+	},
+};
+
 #[cfg(test)]
 use std::iter::FromIterator;
 use std::collections::{HashMap, BTreeSet};
+
 use codec::Decode;
-use crate::changes_trie::{NO_EXTRINSIC_INDEX, Configuration as ChangesTrieConfig};
+
 use primitives::storage::well_known_keys::EXTRINSIC_INDEX;
+
+use hash_db::Hasher;
 
 /// The overlayed changes to state to be queried on top of the backend.
 ///
@@ -274,7 +285,7 @@ impl OverlayedChanges {
 	/// Commit prospective changes to state.
 	pub fn commit_prospective(&mut self) {
 		if self.committed.is_empty() {
-			::std::mem::swap(&mut self.prospective, &mut self.committed);
+			std::mem::swap(&mut self.prospective, &mut self.committed);
 		} else {
 			for (key, val) in self.prospective.top.drain() {
 				let entry = self.committed.top.entry(key).or_default();
@@ -327,7 +338,7 @@ impl OverlayedChanges {
 	/// Returns current extrinsic index to use in changes trie construction.
 	/// None is returned if it is not set or changes trie config is not set.
 	/// Persistent value (from the backend) can be ignored because runtime must
-	/// set this index before first and unset after last extrinsic is executied.
+	/// set this index before first and unset after last extrinsic is executed.
 	/// Changes that are made outside of extrinsics, are marked with
 	/// `NO_EXTRINSIC_INDEX` index.
 	fn extrinsic_index(&self) -> Option<u32> {
@@ -338,6 +349,49 @@ impl OverlayedChanges {
 					.unwrap_or(NO_EXTRINSIC_INDEX)),
 			false => None,
 		}
+	}
+
+	/// Generate the storage root using `backend` and all changes from `prospective` and `committed`.
+	///
+	/// Returns the storage root and the storage transaction that can be used to commit these
+	/// changes to the backend.
+	pub fn storage_root<H: Hasher, B: Backend<H>>(&self, backend: &B) -> (H::Out, B::Transaction)
+		where H::Out: Ord
+	{
+		let child_storage_keys = self.prospective.children.keys()
+			.chain(self.committed.children.keys());
+		let child_delta_iter = child_storage_keys.map(|storage_key|
+			(storage_key.clone(), self.committed.children.get(storage_key)
+				.into_iter()
+				.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), v.value.clone())))
+				.chain(self.prospective.children.get(storage_key)
+					.into_iter()
+					.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), v.value.clone()))))));
+
+
+		// compute and memoize
+		let delta = self.committed.top.iter().map(|(k, v)| (k.clone(), v.value.clone()))
+			.chain(self.prospective.top.iter().map(|(k, v)| (k.clone(), v.value.clone())));
+
+		backend.full_storage_root(delta, child_delta_iter)
+	}
+
+	/// Generate the changes trie root.
+	///
+	/// Returns the changes trie root and the storage transaction to commit the changes trie to
+	/// the backend.
+	pub fn changes_trie_root<H: Hasher, N: BlockNumber, B: Backend<H>, T: ChangesTrieStorage<H, N>>(
+		&self,
+		backend: &B,
+		changes_trie_storage: Option<&T>,
+		parent_hash: H::Out,
+	) -> Result<Option<(H::Out, ChangesTrieTransaction<H, N>)>, ()> where H::Out: Ord + 'static {
+		build_changes_trie::<_, T, H, N>(
+			backend,
+			changes_trie_storage,
+			self,
+			parent_hash,
+		).map(|r| r.map(|(db, hash, cache)| (hash, (db, cache))))
 	}
 }
 

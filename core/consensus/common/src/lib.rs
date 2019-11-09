@@ -80,6 +80,16 @@ pub trait Environment<B: BlockT> {
 	fn init(&mut self, parent_header: &B::Header) -> Result<Self::Proposer, Self::Error>;
 }
 
+/// A proposal that is created by a [`Proposer`].
+pub struct Proposal<B> {
+	/// The block that was build.
+	pub block: B,
+	/// Optional proof that was recorded while building the block.
+	pub proof: Option<Vec<Vec<u8>>>,
+	/// The storage changes combined as transaction.
+	pub transaction: (),
+}
+
 /// Logic for a proposer.
 ///
 /// This will encapsulate creation and evaluation of proposals at a specific
@@ -90,7 +100,7 @@ pub trait Proposer<B: BlockT> {
 	/// Error type which can occur when proposing or evaluating.
 	type Error: From<Error> + std::fmt::Debug + 'static;
 	/// Future that resolves to a committed proposal with an optional proof.
-	type Proposal: Future<Output = Result<(B, Option<Vec<Vec<u8>>>), Self::Error>> + Send + Unpin + 'static;
+	type Proposal: Future<Output = Result<Proposal<B>, Self::Error>> + Send + Unpin + 'static;
 
 	/// Create a proposal.
 	///
@@ -98,9 +108,13 @@ pub trait Proposer<B: BlockT> {
 	/// a maximum duration for building this proposal is given. If building the proposal takes
 	/// longer than this maximum, the proposal will be very likely discarded.
 	///
-	/// When proof recording is enabled, all accessed trie nodes should be saved. These recorded
+	/// When `record_proof` is set to `true`, all accessed trie nodes should be saved. These recorded
 	/// trie nodes can be used by a third party to proof this proposal without having access to the
 	/// full storage.
+	///
+	/// # Return
+	///
+	/// Returns a future that resolves to a [`Proposal`] or to [`Self::Error`].
 	fn propose(
 		&mut self,
 		inherent_data: InherentData,

@@ -17,7 +17,7 @@
 //! Concrete externalities implementation.
 
 use crate::{
-	backend::Backend, OverlayedChanges,
+	backend::Backend, OverlayedChanges, ChangesTrieTransaction,
 	changes_trie::{
 		Storage as ChangesTrieStorage, CacheAction as ChangesTrieCacheAction, build_changes_trie,
 	},
@@ -82,7 +82,7 @@ pub struct Ext<'a, H, N, B, T> where H: Hasher<Out=H256>, B: 'a + Backend<H> {
 	/// This differs from `storage_transaction` behavior, because the moment when
 	/// `storage_changes_root` is called matters + we need to remember additional
 	/// data at this moment (block number).
-	changes_trie_transaction: Option<(MemoryDB<H>, H::Out, ChangesTrieCacheAction<H::Out, N>)>,
+	changes_trie_transaction: Option<(ChangesTrieTransaction<H, N>, H::Out)>,
 	/// Pseudo-unique id used for tracing.
 	pub id: u16,
 	/// Dummy usage of N arg.
@@ -425,28 +425,9 @@ where
 			return root.clone();
 		}
 
-		let child_storage_keys =
-			self.overlay.prospective.children.keys()
-				.chain(self.overlay.committed.children.keys());
-		let child_delta_iter = child_storage_keys.map(|storage_key|
-			(storage_key.clone(), self.overlay.committed.children.get(storage_key)
-				.into_iter()
-				.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), v.value.clone())))
-				.chain(self.overlay.prospective.children.get(storage_key)
-					.into_iter()
-					.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), v.value.clone()))))));
-
-
-		// compute and memoize
-		let delta = self.overlay.committed.top.iter().map(|(k, v)| (k.clone(), v.value.clone()))
-			.chain(self.overlay.prospective.top.iter().map(|(k, v)| (k.clone(), v.value.clone())));
-
-		let (root, transaction) = self.backend.full_storage_root(delta, child_delta_iter);
+		let (root, transaction) = self.overlay.storage_root(&self.backend);
 		self.storage_transaction = Some((transaction, root));
-		trace!(target: "state-trace", "{:04x}: Root {}",
-			self.id,
-			HexDisplay::from(&root.as_ref()),
-		);
+		trace!(target: "state-trace", "{:04x}: Root {}", self.id, HexDisplay::from(&root.as_ref()));
 		root
 	}
 
@@ -496,13 +477,12 @@ where
 
 	fn storage_changes_root(&mut self, parent_hash: H256) -> Result<Option<H256>, ()> {
 		let _guard = panic_handler::AbortGuard::force_abort();
-		self.changes_trie_transaction = build_changes_trie::<_, T, H, N>(
+		self.changes_trie_transaction = self.overlay.changes_trie_root(
 			self.backend,
 			self.changes_trie_storage.clone(),
-			self.overlay,
 			parent_hash,
-		)?;
-		let result = Ok(self.changes_trie_transaction.as_ref().map(|(_, root, _)| root.clone()));
+		)?.map(|(root, tx)| (tx, root));
+		let result = Ok(self.changes_trie_transaction.as_ref().map(|(_, root)| root.clone()));
 		trace!(target: "state-trace", "{:04x}: ChangesRoot({}) {:?}",
 			self.id,
 			HexDisplay::from(&parent_hash.as_ref()),

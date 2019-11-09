@@ -118,7 +118,7 @@ pub trait ApiExt<Block: BlockT> {
 pub enum InitializeBlock<'a, Block: BlockT> {
 	/// Skip initializing the runtime for a given block.
 	///
-	/// This is used by functions who do the initialization by themself or don't
+	/// This is used by functions who do the initialization by themselves or don't
 	/// require it.
 	Skip,
 	/// Initialize the runtime for a given block.
@@ -131,6 +131,8 @@ pub enum InitializeBlock<'a, Block: BlockT> {
 /// Something that can call into the runtime at a given block.
 #[cfg(feature = "std")]
 pub trait CallRuntimeAt<Block: BlockT> {
+	type Backend: crate::Backend::Backend<Block>;
+
 	/// Calls the given api function with the given encoded arguments at the given block
 	/// and returns the encoded result.
 	fn call_api_at<
