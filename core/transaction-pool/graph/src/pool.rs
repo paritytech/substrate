@@ -177,6 +177,12 @@ impl<B: ChainApi> Pool<B> {
 		parent: &BlockId<B::Block>,
 		extrinsics: &[ExtrinsicFor<B>],
 	) -> impl Future<Output=Result<(), B::Error>> {
+		log::debug!(
+			target: "txpool",
+			"Starting pruning of block {:?} (extrinsics: {})",
+			at,
+			extrinsics.len()
+		);
 		// Get details of all extrinsics that are already in the pool
 		let (in_pool_hashes, in_pool_tags) = self.validated_pool.extrinsics_tags(extrinsics);
 
