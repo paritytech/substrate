@@ -755,9 +755,6 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 
 	/// Validate an unsigned transaction for the transaction queue.
 	///
-	/// Normally the default implementation is fine since `ValidateUnsigned`
-	/// is a better way of recognising and validating unsigned transactions.
-	///
 	/// This function can be called frequently by the transaction queue,
 	/// to obtain transaction validity against current state.
 	/// It should perform all checks that determine a valid unsigned transaction,
@@ -889,6 +886,7 @@ pub trait Applyable: Sized + Send + Sync {
 	fn sender(&self) -> Option<&Self::AccountId>;
 
 	/// Checks to see if this is a valid *transaction*. It returns information on it if so.
+	#[allow(deprecated)] // Allow ValidateUnsigned
 	fn validate<V: ValidateUnsigned<Call=Self::Call>>(
 		&self,
 		info: DispatchInfo,
@@ -897,7 +895,8 @@ pub trait Applyable: Sized + Send + Sync {
 
 	/// Executes all necessary logic needed prior to dispatch and deconstructs into function call,
 	/// index and sender.
-	fn apply(
+	#[allow(deprecated)] // Allow ValidateUnsigned
+	fn apply<V: ValidateUnsigned<Call=Self::Call>>(
 		self,
 		info: DispatchInfo,
 		len: usize,
@@ -966,9 +965,26 @@ pub trait RuntimeApiInfo {
 /// the transaction for the transaction pool.
 /// During block execution phase one need to perform the same checks anyway,
 /// since this function is not being called.
+#[deprecated(note = "Use SignedExtensions instead.")]
 pub trait ValidateUnsigned {
 	/// The call to validate
 	type Call;
+
+	/// Validate the call right before dispatch.
+	///
+	/// This method should be used to prevent transactions already in the pool
+	/// (i.e. passing `validate_unsigned`) from being included in blocks
+	/// in case we know they now became invalid.
+	///
+	/// By default it's a good idea to call `validate_unsigned` from within
+	/// this function again to make sure we never include an invalid transaction.
+	///
+	/// Changes made to storage WILL be persisted if the call returns `Ok`.
+	fn pre_dispatch(call: &Self::Call) -> Result<(), crate::ApplyError> {
+		Self::validate_unsigned(call)
+			.map(|_| ())
+			.map_err(Into::into)
+	}
 
 	/// Return the validity of the call
 	///

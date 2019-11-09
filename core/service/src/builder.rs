@@ -44,7 +44,10 @@ use sr_primitives::traits::{
 	Block as BlockT, Extrinsic, ProvideRuntimeApi, NumberFor, One, Zero, Header, SaturatedConversion
 };
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
-use std::{io::{Read, Write, Seek}, marker::PhantomData, sync::Arc, sync::atomic::AtomicBool};
+use std::{
+	io::{Read, Write, Seek},
+	marker::PhantomData, sync::Arc, sync::atomic::AtomicBool, time::SystemTime
+};
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use tel::{telemetry, SUBSTRATE_INFO};
 use transaction_pool::txpool::{self, ChainApi, Pool as TransactionPool};
@@ -155,7 +158,10 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 		(),
 		TFullBackend<TBl>,
 	>, Error> {
-		let keystore = Keystore::open(config.keystore_path.clone(), config.keystore_password.clone())?;
+		let keystore = Keystore::open(
+			config.keystore_path.clone().ok_or("No basepath configured")?,
+			config.keystore_password.clone()
+		)?;
 
 		let executor = NativeExecutor::<TExecDisp>::new(
 			config.wasm_method,
@@ -240,7 +246,10 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 		(),
 		TLightBackend<TBl>,
 	>, Error> {
-		let keystore = Keystore::open(config.keystore_path.clone(), config.keystore_password.clone())?;
+		let keystore = Keystore::open(
+			config.keystore_path.clone().ok_or("No basepath configured")?,
+			config.keystore_password.clone()
+		)?;
 
 		let executor = NativeExecutor::<TExecDisp>::new(
 			config.wasm_method,
@@ -572,10 +581,10 @@ impl<TBl, TRtApi, TCfg, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNet
 	/// Defines the RPC extensions to use.
 	pub fn with_rpc_extensions<URpc>(
 		self,
-		rpc_ext_builder: impl FnOnce(Arc<TCl>, Arc<TExPool>) -> URpc
+		rpc_ext_builder: impl FnOnce(Arc<TCl>, Arc<TExPool>, Arc<Backend>) -> URpc
 	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCSExt, TCl, TFchr, TSc, TImpQu, TFprb, TFpp,
 		TNetP, TExPool, URpc, Backend>, Error> {
-		let rpc_extensions = rpc_ext_builder(self.client.clone(), self.transaction_pool.clone());
+		let rpc_extensions = rpc_ext_builder(self.client.clone(), self.transaction_pool.clone(), self.backend.clone());
 
 		Ok(ServiceBuilder {
 			config: self.config,
@@ -1097,6 +1106,9 @@ ServiceBuilder<
 				endpoints,
 				wasm_external_transport: config.telemetry_external_transport.take(),
 			});
+			let startup_time = SystemTime::UNIX_EPOCH.elapsed()
+				.map(|dur| dur.as_millis())
+				.unwrap_or(0);
 			let future = telemetry.clone()
 				.map(|ev| Ok::<_, ()>(ev))
 				.compat()
@@ -1111,6 +1123,7 @@ ServiceBuilder<
 						"config" => "",
 						"chain" => chain_name.clone(),
 						"authority" => is_authority,
+						"startup_time" => startup_time,
 						"network_id" => network_id.clone()
 					);
 

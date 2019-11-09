@@ -289,7 +289,7 @@ impl<'a> From<&'a [Capability]> for Capabilities {
 }
 
 /// An extended externalities for offchain workers.
-pub trait Externalities {
+pub trait Externalities: Send {
 	/// Returns if the local node is a potential validator.
 	///
 	/// Even if this function returns `true`, it does not mean that any keys are configured

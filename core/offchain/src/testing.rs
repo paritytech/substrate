@@ -119,7 +119,8 @@ impl State {
 
 impl Drop for State {
 	fn drop(&mut self) {
-		if !self.expected_requests.is_empty() {
+		// If we panic! while we are already in a panic, the test dies with an illegal instruction.
+		if !self.expected_requests.is_empty() && !std::thread::panicking() {
 			panic!("Unfulfilled expected requests: {:?}", self.expected_requests);
 		}
 	}

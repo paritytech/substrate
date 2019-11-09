@@ -110,12 +110,13 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 		ext: &mut E,
 		f: impl for<'a> FnOnce(
 			AssertUnwindSafe<&'a mut (dyn WasmRuntime + 'static)>,
+			&'a RuntimeVersion,
 			AssertUnwindSafe<&'a mut E>,
 		) -> Result<Result<R>>,
 	) -> Result<R> where E: Externalities {
 		RUNTIMES_CACHE.with(|cache| {
 			let mut cache = cache.borrow_mut();
-			let (runtime, code_hash) = cache.fetch_runtime(
+			let (runtime, version, code_hash) = cache.fetch_runtime(
 				ext,
 				self.fallback_method,
 				self.default_heap_pages,
@@ -124,7 +125,7 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 			let runtime = AssertUnwindSafe(runtime);
 			let ext = AssertUnwindSafe(ext);
 
-			match f(runtime, ext) {
+			match f(runtime, version, ext) {
 				Ok(res) => res,
 				Err(e) => {
 					cache.invalidate_runtime(self.fallback_method, code_hash);
@@ -155,8 +156,8 @@ impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 		&self,
 		ext: &mut E,
 	) -> Option<RuntimeVersion> {
-		match self.with_runtime(ext, |runtime, _ext| Ok(Ok(runtime.version()))) {
-			Ok(version) => version,
+		match self.with_runtime(ext, |_runtime, version, _ext| Ok(Ok(version.clone()))) {
+			Ok(version) => Some(version),
 			Err(e) => {
 				warn!(target: "executor", "Failed to fetch runtime: {:?}", e);
 				None
@@ -182,13 +183,10 @@ impl<D: NativeExecutionDispatch> CodeExecutor for NativeExecutor<D> {
 		native_call: Option<NC>,
 	) -> (Result<NativeOrEncoded<R>>, bool){
 		let mut used_native = false;
-		let result = self.with_runtime(ext, |mut runtime, mut ext| {
-			let onchain_version = runtime.version();
+		let result = self.with_runtime(ext, |mut runtime, onchain_version, mut ext| {
 			match (
 				use_native,
-				onchain_version
-					.as_ref()
-					.map_or(false, |v| v.can_call_with(&self.native_version.runtime_version)),
+				onchain_version.can_call_with(&self.native_version.runtime_version),
 				native_call,
 			) {
 				(_, false, _) => {
@@ -197,8 +195,6 @@ impl<D: NativeExecutionDispatch> CodeExecutor for NativeExecutor<D> {
 						"Request for native execution failed (native: {}, chain: {})",
 						self.native_version.runtime_version,
 						onchain_version
-							.as_ref()
-							.map_or_else(||"<None>".into(), |v| format!("{}", v))
 					);
 
 					safe_call(
@@ -216,8 +212,6 @@ impl<D: NativeExecutionDispatch> CodeExecutor for NativeExecutor<D> {
 						"Request for native execution with native call succeeded (native: {}, chain: {}).",
 						self.native_version.runtime_version,
 						onchain_version
-							.as_ref()
-							.map_or_else(||"<None>".into(), |v| format!("{}", v))
 					);
 
 					used_native = true;
@@ -234,7 +228,7 @@ impl<D: NativeExecutionDispatch> CodeExecutor for NativeExecutor<D> {
 						target: "executor",
 						"Request for native execution succeeded (native: {}, chain: {})",
 						self.native_version.runtime_version,
-						onchain_version.as_ref().map_or_else(||"<None>".into(), |v| format!("{}", v))
+						onchain_version
 					);
 
 					used_native = true;

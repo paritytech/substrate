@@ -9,8 +9,8 @@ proc-macro = true
 
 [dependencies]
 proc-macro-crate = "0.1.4"
-proc-macro2 = "1.0.4"
+proc-macro2 = "1.0.6"
 quote = "1.0.2"
-syn = "1.0.5"
+syn = "1.0.7"
 
 [dev-dependencies]

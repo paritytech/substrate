@@ -15,9 +15,15 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use proc_macro2::{TokenStream, Span};
-use syn::{Result, Ident, FnDecl, parse_quote, Type, Pat, spanned::Spanned, FnArg, Error};
+
+use syn::{
+	Result, Ident, Signature, parse_quote, Type, Pat, spanned::Spanned, FnArg, Error, token::And,
+};
+
 use quote::quote;
+
 use std::env;
+
 use proc_macro_crate::crate_name;
 
 /// Unwrap the given result, if it is an error, `compile_error!` will be generated.
@@ -82,23 +88,33 @@ pub fn return_type_extract_type(rt: &syn::ReturnType) -> Type {
 	}
 }
 
-/// Fold the given `FnDecl` to make it usable on the client side.
+/// Replace the `_` (wild card) parameter names in the given signature with unique identifiers.
+pub fn replace_wild_card_parameter_names(input: &mut Signature) {
+	let mut generated_pattern_counter = 0;
+	input.inputs.iter_mut().for_each(|arg| if let FnArg::Typed(arg) = arg {
+		arg.pat = Box::new(
+			generate_unique_pattern((*arg.pat).clone(), &mut generated_pattern_counter),
+		);
+	});
+}
+
+/// Fold the given `Signature` to make it usable on the client side.
 pub fn fold_fn_decl_for_client_side(
-	mut input: FnDecl,
+	input: &mut Signature,
 	block_id: &TokenStream,
-	crate_: &TokenStream
-) -> FnDecl {
+	crate_: &TokenStream,
+) {
+	replace_wild_card_parameter_names(input);
+
 	// Add `&self, at:& BlockId` as parameters to each function at the beginning.
-	input.inputs.insert(0, parse_quote!( at: &#block_id ));
+	input.inputs.insert(0, parse_quote!( __runtime_api_at_param__: &#block_id ));
 	input.inputs.insert(0, parse_quote!( &self ));
 
 	// Wrap the output in a `Result`
 	input.output = {
 		let ty = return_type_extract_type(&input.output);
-		parse_quote!( -> ::std::result::Result<#ty, #crate_::error::Error> )
+		parse_quote!( -> std::result::Result<#ty, #crate_::error::Error> )
 	};
-
-	input
 }
 
 /// Generate an unique pattern based on the given counter, if the given pattern is a `_`.
@@ -106,8 +122,8 @@ pub fn generate_unique_pattern(pat: Pat, counter: &mut u32) -> Pat {
 	match pat {
 		Pat::Wild(_) => {
 			let generated_name = Ident::new(
-				&format!("runtime_api_generated_name_{}", counter),
-				pat.span()
+				&format!("__runtime_api_generated_name_{}__", counter),
+				pat.span(),
 			);
 			*counter += 1;
 
@@ -115,38 +131,31 @@ pub fn generate_unique_pattern(pat: Pat, counter: &mut u32) -> Pat {
 		},
 		_ => pat,
 	}
-}
+ }
 
 /// Extracts the name, the type and `&` or ``(if it is a reference or not)
-/// for each parameter in the given function declaration.
-pub fn extract_parameter_names_types_and_borrows(fn_decl: &FnDecl)
-	-> Result<Vec<(Pat, Type, TokenStream)>>
+/// for each parameter in the given function signature.
+pub fn extract_parameter_names_types_and_borrows(sig: &Signature)
+	-> Result<Vec<(Pat, Type, Option<And>)>>
 {
 	let mut result = Vec::new();
 	let mut generated_pattern_counter = 0;
-	for input in fn_decl.inputs.iter() {
+	for input in sig.inputs.iter() {
 		match input {
-			FnArg::Captured(arg) => {
-				let (ty, borrow) = match &arg.ty {
+			FnArg::Typed(arg) => {
+				let (ty, borrow) = match &*arg.ty {
 					Type::Reference(t) => {
-						let ty = &t.elem;
-						(parse_quote!( #ty ), quote!( & ))
+						((*t.elem).clone(), Some(t.and_token))
 					},
-					t => { (t.clone(), quote!()) },
+					t => { (t.clone(), None) },
 				};
 
 				let name =
-					generate_unique_pattern(arg.pat.clone(), &mut generated_pattern_counter);
+					generate_unique_pattern((*arg.pat).clone(), &mut generated_pattern_counter);
 				result.push((name, ty, borrow));
 			},
-			_ => {
-				return Err(
-					Error::new(
-						input.span(),
-						"Only function arguments with the following \
-						pattern are accepted: `name: type`!"
-					)
-				)
+			FnArg::Receiver(_) => {
+				return Err(Error::new(input.span(), "`self` parameter not supported!"))
 			}
 		}
 	}

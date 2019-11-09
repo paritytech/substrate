@@ -69,17 +69,6 @@ pub trait OnFreeBalanceZero<AccountId> {
 	fn on_free_balance_zero(who: &AccountId);
 }
 
-/// Trait for a hook to get called when some balance has been minted, causing dilution.
-pub trait OnDilution<Balance> {
-	/// Some `portion` of the total balance just "grew" by `minted`. `portion` is the pre-growth
-	/// amount (it doesn't take account of the recent growth).
-	fn on_dilution(minted: Balance, portion: Balance);
-}
-
-impl<Balance> OnDilution<Balance> for () {
-	fn on_dilution(_minted: Balance, _portion: Balance) {}
-}
-
 /// Outcome of a balance update.
 pub enum UpdateBalanceOutcome {
 	/// Account balance was simply updated.
@@ -395,6 +384,7 @@ pub trait Currency<AccountId> {
 		source: &AccountId,
 		dest: &AccountId,
 		value: Self::Balance,
+		existence_requirement: ExistenceRequirement,
 	) -> result::Result<(), &'static str>;
 
 	/// Deducts up to `value` from the combined balance of `who`, preferring to deduct from the
