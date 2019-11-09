@@ -143,11 +143,11 @@ impl offchain::Externalities for TestOffchainExt {
 		unimplemented!("not needed in tests so far")
 	}
 
-	fn submit_transaction(&mut self, ex: Vec<u8>) -> Result<(), ()> {
-		let mut state = self.0.write();
-		state.transactions.push(ex);
-		Ok(())
-	}
+	// fn submit_transaction(&mut self, ex: Vec<u8>) -> Result<(), ()> {
+	// 	let mut state = self.0.write();
+	// 	state.transactions.push(ex);
+	// 	Ok(())
+	// }
 
 	fn network_state(&self) -> Result<OpaqueNetworkState, ()> {
 		Ok(OpaqueNetworkState {

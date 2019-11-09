@@ -82,12 +82,12 @@ where
 		self.is_validator
 	}
 
-	fn submit_transaction(&mut self, ext: Vec<u8>) -> Result<(), ()> {
-		self.sender
-			.unbounded_send(ExtMessage::SubmitExtrinsic(ext))
-			.map(|_| ())
-			.map_err(|_| ())
-	}
+	// fn submit_transaction(&mut self, ext: Vec<u8>) -> Result<(), ()> {
+	// 	self.sender
+	// 		.unbounded_send(ExtMessage::SubmitExtrinsic(ext))
+	// 		.map(|_| ())
+	// 		.map_err(|_| ())
+	// }
 
 	fn network_state(&self) -> Result<OpaqueNetworkState, ()> {
 		let external_addresses = self.network_state.external_addresses();

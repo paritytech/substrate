@@ -295,10 +295,6 @@ pub trait Externalities {
 	/// Even if this function returns `true`, it does not mean that any keys are configured
 	/// and that the validator is registered in the chain.
 	fn is_validator(&self) -> bool;
-	/// Submit transaction.
-	///
-	/// The transaction will end up in the pool and be propagated to others.
-	fn submit_transaction(&mut self, extrinsic: Vec<u8>) -> Result<(), ()>;
 
 	/// Returns information about the local node's network state.
 	fn network_state(&self) -> Result<OpaqueNetworkState, ()>;
@@ -465,10 +461,6 @@ impl<T: Externalities + ?Sized> Externalities for Box<T> {
 		(& **self).is_validator()
 	}
 
-	fn submit_transaction(&mut self, ex: Vec<u8>) -> Result<(), ()> {
-		(&mut **self).submit_transaction(ex)
-	}
-
 	fn network_state(&self) -> Result<OpaqueNetworkState, ()> {
 		(& **self).network_state()
 	}
@@ -568,11 +560,6 @@ impl<T: Externalities> Externalities for LimitedExternalities<T> {
 		self.externalities.is_validator()
 	}
 
-	fn submit_transaction(&mut self, ex: Vec<u8>) -> Result<(), ()> {
-		self.check(Capability::TransactionPool, "submit_transaction");
-		self.externalities.submit_transaction(ex)
-	}
-
 	fn network_state(&self) -> Result<OpaqueNetworkState, ()> {
 		self.check(Capability::NetworkState, "network_state");
 		self.externalities.network_state()
@@ -668,6 +655,20 @@ impl OffchainExt {
 		Self(Box::new(offchain))
 	}
 }
+
+#[cfg(feature = "std")]
+pub trait TransactionPool {
+	/// Submit transaction.
+	///
+	/// The transaction will end up in the pool and be propagated to others.
+	fn submit_transaction(&mut self, extrinsic: Vec<u8>) -> Result<(), ()>;
+}
+
+#[cfg(feature = "std")]
+externalities::decl_extension! {
+	pub struct TransactionPoolExt(Box<dyn TransactionPool>);
+}
+
 
 #[cfg(test)]
 mod tests {

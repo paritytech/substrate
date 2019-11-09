@@ -26,9 +26,10 @@ use parking_lot::{Mutex, RwLock};
 use codec::{Encode, Decode};
 use hash_db::{Hasher, Prefix};
 use primitives::{
-	Blake2Hasher, H256, ChangesTrieConfiguration, convert_hash, NeverNativeValue, ExecutionContext,
-	NativeOrEncoded, storage::{StorageKey, StorageData, well_known_keys},
-	offchain::{OffchainExt, self}, traits::CodeExecutor,
+	Blake2Hasher, H256, ChangesTrieConfiguration, convert_hash,
+	NeverNativeValue, ExecutionContext, NativeOrEncoded,
+	storage::{StorageKey, StorageData, well_known_keys},
+	traits::CodeExecutor,
 };
 use substrate_telemetry::{telemetry, SUBSTRATE_INFO};
 use sr_primitives::{
@@ -46,7 +47,6 @@ use state_machine::{
 	OverlayedChanges, BackendTrustLevel, StorageProof, merge_storage_proofs,
 };
 use executor::{RuntimeVersion, RuntimeInfo};
-use externalities::Extensions;
 use consensus::{
 	Error as ConsensusError, BlockStatus, BlockImportParams, BlockCheckParams,
 	ImportResult, BlockOrigin, ForkChoiceStrategy,
@@ -69,6 +69,7 @@ use crate::{
 		well_known_cache_keys::Id as CacheKeyId,
 	},
 	call_executor::{CallExecutor, LocalCallExecutor},
+	execution_extensions::ExecutionExtensions,
 	notifications::{StorageNotifications, StorageEventStream},
 	light::{call_executor::prove_execution, fetcher::ChangesProof},
 	block_builder::{self, api::BlockBuilder as BlockBuilderAPI},
@@ -94,33 +95,6 @@ type ChangesUpdate<Block> = ChangesTrieTransaction<Blake2Hasher, NumberFor<Block
 /// This may be used as chain spec extension to filter out known, unwanted forks.
 pub type ForkBlocks<Block> = Option<HashMap<NumberFor<Block>, <Block as BlockT>::Hash>>;
 
-/// Execution strategies settings.
-#[derive(Debug, Clone)]
-pub struct ExecutionStrategies {
-	/// Execution strategy used when syncing.
-	pub syncing: ExecutionStrategy,
-	/// Execution strategy used when importing blocks.
-	pub importing: ExecutionStrategy,
-	/// Execution strategy used when constructing blocks.
-	pub block_construction: ExecutionStrategy,
-	/// Execution strategy used for offchain workers.
-	pub offchain_worker: ExecutionStrategy,
-	/// Execution strategy used in other cases.
-	pub other: ExecutionStrategy,
-}
-
-impl Default for ExecutionStrategies {
-	fn default() -> ExecutionStrategies {
-		ExecutionStrategies {
-			syncing: ExecutionStrategy::NativeElseWasm,
-			importing: ExecutionStrategy::NativeElseWasm,
-			block_construction: ExecutionStrategy::AlwaysWasm,
-			offchain_worker: ExecutionStrategy::NativeWhenPossible,
-			other: ExecutionStrategy::NativeElseWasm,
-		}
-	}
-}
-
 /// Substrate Client
 pub struct Client<B, E, Block, RA> where Block: BlockT {
 	backend: Arc<B>,
@@ -131,7 +105,7 @@ pub struct Client<B, E, Block, RA> where Block: BlockT {
 	// holds the block hash currently being imported. TODO: replace this with block queue
 	importing_block: RwLock<Option<Block::Hash>>,
 	fork_blocks: ForkBlocks<Block>,
-	execution_strategies: ExecutionStrategies,
+	execution_extensions: ExecutionExtensions<Block>,
 	_phantom: PhantomData<RA>,
 }
 
@@ -299,7 +273,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		executor: E,
 		build_genesis_storage: S,
 		fork_blocks: ForkBlocks<Block>,
-		execution_strategies: ExecutionStrategies
+		execution_extensions: ExecutionExtensions<Block>,
 	) -> error::Result<Self> {
 		if backend.blockchain().header(BlockId::Number(Zero::zero()))?.is_none() {
 			let (genesis_storage, children_genesis_storage) = build_genesis_storage.build_storage()?;
@@ -328,14 +302,14 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			finality_notification_sinks: Default::default(),
 			importing_block: Default::default(),
 			fork_blocks,
-			execution_strategies,
+			execution_extensions,
 			_phantom: Default::default(),
 		})
 	}
 
-	/// Get a reference to the execution strategies.
-	pub fn execution_strategies(&self) -> &ExecutionStrategies {
-		&self.execution_strategies
+	/// Get a reference to the execution extensions.
+	pub fn execution_extensions(&self) -> &ExecutionExtensions<Block> {
+		&self.execution_extensions
 	}
 
 	/// Get a reference to the state at a given block.
@@ -1064,9 +1038,9 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 						&encoded_block,
 						match origin {
 							BlockOrigin::NetworkInitialSync => get_execution_manager(
-								self.execution_strategies().syncing,
+								self.execution_extensions().strategies().syncing,
 							),
-							_ => get_execution_manager(self.execution_strategies().importing),
+							_ => get_execution_manager(self.execution_extensions().strategies().importing),
 						},
 						None,
 						None,
@@ -1447,37 +1421,7 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 		context: ExecutionContext,
 		recorder: &Option<Rc<RefCell<ProofRecorder<Block>>>>,
 	) -> error::Result<NativeOrEncoded<R>> {
-		let manager = match context {
-			ExecutionContext::BlockConstruction =>
-				self.execution_strategies.block_construction.get_manager(),
-			ExecutionContext::Syncing =>
-				self.execution_strategies.syncing.get_manager(),
-			ExecutionContext::Importing =>
-				self.execution_strategies.importing.get_manager(),
-			ExecutionContext::OffchainCall(Some((_, capabilities))) if capabilities.has_all() =>
-				self.execution_strategies.offchain_worker.get_manager(),
-			ExecutionContext::OffchainCall(_) =>
-				self.execution_strategies.other.get_manager(),
-		};
-
-		let extensions = {
-			let mut extensions = Extensions::new();
-			let capabilities = context.capabilities();
-
-			// TODO [ToDr] Keystore
-			// if capabilities.has(offchain::Capability::Keystore) {
-			// 	extensions.register(self.keystore.clone());
-			// }
-
-			if let ExecutionContext::OffchainCall(Some(ext)) = context {
-				extensions.register(
-					OffchainExt::new(offchain::LimitedExternalities::new(capabilities, ext.0))
-				)
-			}
-
-			extensions
-		};
-
+		let (manager, extensions) = self.execution_extensions.manager_and_extensions(at, context);
 		self.executor.contextual_call::<_, fn(_,_) -> _,_,_>(
 			|| core_api.initialize_block(at, &self.prepare_environment_block(at)?),
 			at,

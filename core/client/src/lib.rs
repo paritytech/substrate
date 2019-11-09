@@ -103,30 +103,29 @@ mod call_executor;
 #[cfg(feature = "std")]
 mod client;
 #[cfg(feature = "std")]
+mod execution_extensions;
+#[cfg(feature = "std")]
 mod notifications;
 
 
 #[cfg(feature = "std")]
-pub use crate::blockchain::Info as ChainInfo;
-#[cfg(feature = "std")]
-pub use crate::call_executor::{CallExecutor, LocalCallExecutor};
-#[cfg(feature = "std")]
-pub use crate::client::{
-	new_with_backend,
-	new_in_mem,
-	BlockBody, ImportNotifications, FinalityNotifications, BlockchainEvents,
-	BlockImportNotification, Client, ClientInfo, ExecutionStrategies, FinalityNotification,
-	LongestChain, BlockOf, ProvideUncles, ForkBlocks,
-	utils, apply_aux,
+pub use crate::{
+	blockchain::{Info as ChainInfo, well_known_cache_keys},
+	call_executor::{CallExecutor, LocalCallExecutor},
+	execution_extensions::{ExecutionStrategies, ExecutionExtensions},
+	client::{
+		new_with_backend,
+		new_in_mem,
+		BlockBody, ImportNotifications, FinalityNotifications, BlockchainEvents,
+		BlockImportNotification, Client, ClientInfo, FinalityNotification,
+		LongestChain, BlockOf, ProvideUncles, ForkBlocks,
+		utils, apply_aux,
+	},
+	notifications::{StorageEventStream, StorageChangeSet},
+	leaves::LeafSet,
 };
 #[cfg(feature = "std")]
-pub use crate::notifications::{StorageEventStream, StorageChangeSet};
-#[cfg(feature = "std")]
 pub use state_machine::{ExecutionStrategy, StorageProof};
-#[cfg(feature = "std")]
-pub use crate::leaves::LeafSet;
-#[cfg(feature = "std")]
-pub use crate::blockchain::well_known_cache_keys;
 
 #[doc(inline)]
 pub use sr_api_macros::{decl_runtime_apis, impl_runtime_apis};

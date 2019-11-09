@@ -16,8 +16,10 @@
 
 use primitives::{
 	blake2_128, blake2_256, twox_128, twox_256, twox_64, ed25519, Blake2Hasher, sr25519, Pair, H256,
-	traits::KeystoreExt, storage::ChildStorageKey, hexdisplay::HexDisplay, Hasher,
-	offchain::{self, OffchainExt},
+	traits::KeystoreExt,
+	storage::ChildStorageKey,
+	hexdisplay::HexDisplay, Hasher,
+	offchain::{self, OffchainExt, TransactionPoolExt, TransactionPool},
 };
 // Switch to this after PoC-3
 // pub use primitives::BlakeHasher;
@@ -347,16 +349,20 @@ fn with_offchain<R>(f: impl FnOnce(&mut dyn offchain::Externalities) -> R, msg: 
 }
 
 impl OffchainApi for () {
+	fn submit_transaction(data: Vec<u8>) -> Result<(), ()> {
+		with_externalities(|ext| ext
+			.extension::<TransactionPoolExt>()
+			.map(|ext| ext.submit_transaction(data))
+			.expect(r#"submit_transaction can be called only in the offchain context
+				with TransactionPool capabilities"#
+			)
+		).expect("submit_transaction cannot be called outside of an Externalities-provided environment.")
+	}
+
 	fn is_validator() -> bool {
 		with_offchain(|ext| {
 			ext.is_validator()
 		}, "is_validator can be called only in the offchain worker context")
-	}
-
-	fn submit_transaction(data: Vec<u8>) -> Result<(), ()> {
-		with_offchain(|ext| {
-			ext.submit_transaction(data)
-		}, "submit_transaction can be called only in the offchain worker context")
 	}
 
 	fn network_state() -> Result<OpaqueNetworkState, ()> {

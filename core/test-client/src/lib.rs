@@ -20,7 +20,7 @@
 
 pub mod client_ext;
 
-pub use client::{ExecutionStrategies, blockchain, backend, self};
+pub use client::{ExecutionStrategies, ExecutionExtensions, blockchain, backend, self};
 pub use client_db::{Backend, self};
 pub use client_ext::ClientExt;
 pub use consensus;
@@ -188,7 +188,10 @@ impl<Executor, Backend, G: GenesisInit> TestClientBuilder<Executor, Backend, G> 
 			executor,
 			storage,
 			Default::default(),
-			self.execution_strategies,
+			ExecutionExtensions::new(
+				self.execution_strategies,
+				self.keystore.clone(),
+			)
 		).expect("Creates new client");
 
 		let longest_chain = client::LongestChain::new(self.backend);
@@ -204,7 +207,7 @@ impl<E, Backend, G: GenesisInit> TestClientBuilder<
 > {
 	/// Build the test client with the given native executor.
 	pub fn build_with_native_executor<Block, RuntimeApi, I>(
-		mut self,
+		self,
 		executor: I,
 	) -> (
 		client::Client<

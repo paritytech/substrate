@@ -184,14 +184,18 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 						client_db::DatabaseSettingsSrc::Custom(db.clone()),
 				},
 			};
-			
+
+			let extensions = client::ExecutionExtensions::new(
+				config.execution_strategies.clone(),
+				Some(keystore.clone()),
+			);
+
 			client_db::new_client(
 				db_config,
 				executor,
 				&config.chain_spec,
 				fork_blocks,
-				config.execution_strategies.clone(),
-				Some(keystore.clone()),
+				extensions,
 			)?
 		};
 
@@ -819,6 +823,10 @@ ServiceBuilder<
 			"height" => chain_info.best_number.saturated_into::<u64>(),
 			"best" => ?chain_info.best_hash
 		);
+
+		// make transaction pool available for off-chain runtime calls.
+		client.execution_extensions()
+			.register_transaction_pool(Arc::downgrade(&transaction_pool) as _);
 
 		let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {
 			imports_external_transactions: !config.roles.is_light(),

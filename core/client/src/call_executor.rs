@@ -369,8 +369,8 @@ where
 			&self.executor,
 			method,
 			call_data,
-			// TODO [ToDr] Do we really need keystore here?
-			// self.keystore.clone().map(KeystoreExt),
+			// Passing `None` here, since we don't really want to prove anything
+			// about our local keys.
 			None,
 		)
 		.map_err(Into::into)

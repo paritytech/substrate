@@ -68,7 +68,8 @@ pub use error::{Error, ExecutionError};
 
 type CallResult<R, E> = Result<NativeOrEncoded<R>, E>;
 
-type DefaultHandler<R, E> = fn(CallResult<R, E>, CallResult<R, E>) -> CallResult<R, E>;
+/// Default handler of the execution manager.
+pub type DefaultHandler<R, E> = fn(CallResult<R, E>, CallResult<R, E>) -> CallResult<R, E>;
 
 /// Type of changes trie transaction.
 pub type ChangesTrieTransaction<H, N> = (
