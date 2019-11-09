@@ -155,13 +155,12 @@ impl<B: BlockT, H: Hasher> Cache<B, H> {
 
 	/// Synchronize the shared cache with the best block state.
 	/// This function updates the shared cache by removing entries
-	/// that are invalidated by chain reorganization. It should be
-	/// be called when chain reorg happens without importing a new block.
+	/// that are invalidated by chain reorganization. It should be called
+	/// externally when chain reorg happens without importing a new block.
 	pub fn sync(&mut self, enacted: &[B::Hash], retracted: &[B::Hash]) {
 		trace!("Syncing shared cache, enacted = {:?}, retracted = {:?}", enacted, retracted);
 
 		// Purge changes from re-enacted and retracted blocks.
-		// Filter out commiting block if any.
 		let mut clear = false;
 		for block in enacted {
 			clear = clear || {
@@ -313,6 +312,7 @@ impl<H: Hasher, B: BlockT> CacheChanges<H, B> {
 		let is_best = is_best();
 		trace!("Syncing cache, id = (#{:?}, {:?}), parent={:?}, best={}", commit_number, commit_hash, self.parent_hash, is_best);
 		let cache = &mut *cache;
+		// Filter out commiting block if any.
 		let enacted: Vec<_> = enacted
 			.iter()
 			.filter(|h| commit_hash.as_ref().map_or(true, |p| *h != p))
@@ -370,7 +370,7 @@ impl<H: Hasher, B: BlockT> CacheChanges<H, B> {
 				modifications.insert(k);
 			}
 
-			// Save modified storage. These are ordered by the block number.
+			// Save modified storage. These are ordered by the block number in reverse.
 			let block_changes = BlockChanges {
 				storage: modifications,
 				child_storage: child_modifications,
@@ -427,10 +427,10 @@ impl<H: Hasher, S: StateBackend<H>, B: BlockT> CachingState<H, S, B> {
 			}
 			Some(ref parent) => parent,
 		};
-		// Ignore all storage modified in later blocks
+		// Ignore all storage entries modified in later blocks.
 		// Modifications contains block ordered by the number
 		// We search for our parent in that list first and then for
-		// all its parent until we hit the canonical block,
+		// all its parents until we hit the canonical block,
 		// checking against all the intermediate modifications.
 		for m in modifications {
 			if &m.hash == parent {
