@@ -1,6 +1,6 @@
 [package]
 name = "substrate-wasm-builder-runner"
-version = "1.0.3"
+version = "1.0.4"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Runner for substrate-wasm-builder"
 edition = "2018"

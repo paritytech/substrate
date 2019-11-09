@@ -30,3 +30,52 @@ pub use linked_map::{StorageLinkedMap, Enumerator, Linkage};
 pub use map::StorageMap;
 pub use double_map::StorageDoubleMap;
 pub use value::StorageValue;
+
+
+#[cfg(test)]
+#[allow(dead_code)]
+mod tests {
+	use runtime_io::TestExternalities;
+	use codec::Encode;
+	use crate::storage::{unhashed, generator::StorageValue};
+
+	struct Runtime {}
+	pub trait Trait {
+		type Origin;
+		type BlockNumber;
+	}
+
+	impl Trait for Runtime {
+		type Origin = u32;
+		type BlockNumber = u32;
+	}
+
+	decl_module! {
+		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+	}
+
+	crate::decl_storage! {
+		trait Store for Module<T: Trait> as Runtime {
+			Value get(fn value) config(): (u64, u64);
+		}
+	}
+
+	#[test]
+	fn value_translate_works() {
+		let t = GenesisConfig::default().build_storage().unwrap();
+		TestExternalities::new(t).execute_with(|| {
+			// put the old value `1111u32` in the storage.
+			let key = Value::storage_value_final_key();
+			unhashed::put_raw(&key, &1111u32.encode());
+
+			// translate
+			let translate_fn = |old: Option<u32>| -> Option<(u64, u64)> {
+				old.map(|o| (o.into(), (o*2).into()))
+			};
+			let _ = Value::translate(translate_fn);
+
+			// new storage should be `(1111, 1111 * 2)`
+			assert_eq!(Value::get(), (1111, 2222));
+		})
+	}
+}

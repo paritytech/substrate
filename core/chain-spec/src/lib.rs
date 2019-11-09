@@ -113,7 +113,7 @@ mod extension;
 
 pub use chain_spec::{ChainSpec, Properties, NoExtension};
 pub use extension::{Group, Fork, Forks, Extension};
-pub use chain_spec_derive::{ChainSpecExtension, ChainSpecGroup};
+pub use substrate_chain_spec_derive::{ChainSpecExtension, ChainSpecGroup};
 
 use serde::{Serialize, de::DeserializeOwned};
 use sr_primitives::BuildStorage;

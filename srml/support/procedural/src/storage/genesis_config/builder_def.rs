@@ -51,7 +51,7 @@ impl BuilderDef {
 				is_generic |= ext::expr_contains_ident(&builder, &def.module_runtime_generic);
 				is_generic |= line.is_generic;
 
-				data = Some(quote_spanned!(builder.span() => &(#builder)(&self)));
+				data = Some(quote_spanned!(builder.span() => &(#builder)(self)));
 			} else if let Some(config) = &line.config {
 				is_generic |= line.is_generic;
 
@@ -98,7 +98,7 @@ impl BuilderDef {
 
 			blocks.push(quote_spanned! { builder.span() =>
 				let extra_genesis_builder: fn(&Self) = #builder;
-				extra_genesis_builder(&self);
+				extra_genesis_builder(self);
 			});
 		}
 

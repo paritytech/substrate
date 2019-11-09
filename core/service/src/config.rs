@@ -17,11 +17,11 @@
 //! Service configuration.
 
 pub use client::ExecutionStrategies;
-pub use client_db::PruningMode;
+pub use client_db::{kvdb::KeyValueDB, PruningMode};
 pub use network::config::{ExtTransport, NetworkConfiguration, Roles};
 pub use substrate_executor::WasmExecutionMethod;
 
-use std::{path::PathBuf, net::SocketAddr};
+use std::{path::PathBuf, net::SocketAddr, sync::Arc};
 use transaction_pool;
 use chain_spec::{ChainSpec, RuntimeGenesis, Extension, NoExtension};
 use primitives::crypto::Protected;
@@ -43,12 +43,12 @@ pub struct Configuration<C, G, E = NoExtension> {
 	pub transaction_pool: transaction_pool::txpool::Options,
 	/// Network configuration.
 	pub network: NetworkConfiguration,
+	/// Path to the base configuration directory.
+	pub config_dir: Option<PathBuf>,
 	/// Path to key files.
-	pub keystore_path: PathBuf,
-	/// Path to the database.
-	pub database_path: PathBuf,
-	/// Cache Size for internal database in MiB
-	pub database_cache_size: Option<u32>,
+	pub keystore_path: Option<PathBuf>,
+	/// Configuration for the database.
+	pub database: DatabaseConfig,
 	/// Size of internal state cache in Bytes
 	pub state_cache_size: usize,
 	/// Size in percent of cache size dedicated to child tries
@@ -82,6 +82,10 @@ pub struct Configuration<C, G, E = NoExtension> {
 	pub default_heap_pages: Option<u64>,
 	/// Should offchain workers be executed.
 	pub offchain_worker: bool,
+	/// Sentry mode is enabled, the node's role is AUTHORITY but it should not
+	/// actively participate in consensus (i.e. no keystores should be passed to
+	/// consensus modules).
+	pub sentry_mode: bool,
 	/// Enable authoring even when offline.
 	pub force_authoring: bool,
 	/// Disable GRANDPA when running in validator mode
@@ -96,25 +100,43 @@ pub struct Configuration<C, G, E = NoExtension> {
 	pub dev_key_seed: Option<String>,
 }
 
+/// Configuration of the database of the client.
+#[derive(Clone)]
+pub enum DatabaseConfig {
+	/// Database file at a specific path. Recommended for most uses.
+	Path {
+		/// Path to the database.
+		path: PathBuf,
+		/// Cache Size for internal database in MiB
+		cache_size: Option<u32>,
+	},
+
+	/// A custom implementation of an already-open database.
+	Custom(Arc<dyn KeyValueDB>),
+}
+
 impl<C, G, E> Configuration<C, G, E> where
 	C: Default,
 	G: RuntimeGenesis,
 	E: Extension,
 {
-	/// Create default config for given chain spec.
-	pub fn default_with_spec(chain_spec: ChainSpec<G, E>) -> Self {
+	/// Create a default config for given chain spec and path to configuration dir
+	pub fn default_with_spec_and_base_path(chain_spec: ChainSpec<G, E>, config_dir: Option<PathBuf>) -> Self {
 		let mut configuration = Configuration {
 			impl_name: "parity-substrate",
 			impl_version: "0.0.0",
 			impl_commit: "",
 			chain_spec,
+			config_dir: config_dir.clone(),
 			name: Default::default(),
 			roles: Roles::FULL,
 			transaction_pool: Default::default(),
 			network: Default::default(),
-			keystore_path: Default::default(),
-			database_path: Default::default(),
-			database_cache_size: Default::default(),
+			keystore_path: config_dir.map(|c| c.join("keystore")),
+			database: DatabaseConfig::Path {
+				path: Default::default(),
+				cache_size: Default::default(),
+			},
 			state_cache_size: Default::default(),
 			state_cache_child_ratio: Default::default(),
 			custom: Default::default(),
@@ -129,6 +151,7 @@ impl<C, G, E> Configuration<C, G, E> where
 			telemetry_external_transport: None,
 			default_heap_pages: None,
 			offchain_worker: Default::default(),
+			sentry_mode: false,
 			force_authoring: false,
 			disable_grandpa: false,
 			keystore_password: None,
@@ -141,6 +164,9 @@ impl<C, G, E> Configuration<C, G, E> where
 		configuration
 	}
 
+}
+
+impl<C, G, E> Configuration<C, G, E> {
 	/// Returns full version string of this configuration.
 	pub fn full_version(&self) -> String {
 		full_version_from_strs(self.impl_version, self.impl_commit)
@@ -149,6 +175,17 @@ impl<C, G, E> Configuration<C, G, E> where
 	/// Implementation id and version.
 	pub fn client_id(&self) -> String {
 		format!("{}/v{}", self.impl_name, self.full_version())
+	}
+
+	/// Generate a PathBuf to sub in the chain configuration directory
+	/// if given
+	pub fn in_chain_config_dir(&self, sub: &str) -> Option<PathBuf> {
+		self.config_dir.clone().map(|mut path| {
+			path.push("chains");
+			path.push(self.chain_spec.id());
+			path.push(sub);
+			path
+		})
 	}
 }
 

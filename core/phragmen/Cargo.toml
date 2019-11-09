@@ -5,8 +5,9 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-sr-primitives = { path = "../sr-primitives", default-features = false }
+serde = { version = "1.0.101", optional = true, features = ["derive"] }
 rstd = { package = "sr-std", path = "../sr-std", default-features = false }
+sr-primitives = { path = "../sr-primitives", default-features = false }
 
 [dev-dependencies]
 runtime-io ={ package = "sr-io", path = "../sr-io" }
@@ -16,6 +17,7 @@ rand = "0.7.2"
 [features]
 default = ["std"]
 std = [
+	"serde",
 	"rstd/std",
 	"sr-primitives/std",
 ]

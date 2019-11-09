@@ -33,6 +33,7 @@ decl_runtime_apis! {
 		fn something_with_block(block: Block) -> Block;
 		fn function_with_two_args(data: u64, block: Block);
 		fn same_name();
+		fn wild_card(_: u32);
 	}
 
 	#[api_version(2)]
@@ -58,6 +59,8 @@ impl_runtime_apis! {
 		}
 
 		fn same_name() {}
+
+		fn wild_card(_: u32) {}
 	}
 
 	impl self::ApiWithCustomVersion<Block> for Runtime {
@@ -91,13 +94,6 @@ fn test_client_side_function_signature() {
 	let _same_name_before_version_2:
 		fn(&RuntimeApiImpl<TestClient>, &BlockId<Block>) -> Result<String> =
 			RuntimeApiImpl::<TestClient>::same_name_before_version_2;
-}
-
-#[test]
-fn test_runtime_side_function_signature() {
-	let _api_same_name: fn(input_data: *mut u8, input_len: usize) -> u64 = api::Api_same_name;
-	let _api_with_version_same_name: fn(input_data: *mut u8, input_len: usize) -> u64 =
-		api::ApiWithCustomVersion_same_name;
 }
 
 #[test]

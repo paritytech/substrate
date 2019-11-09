@@ -22,11 +22,11 @@
 //!
 //! # Usage
 //!
-//! First, create a block-import wrapper with the `block_import` function.
-//! The GRANDPA worker needs to be linked together with this block import object,
-//! so a `LinkHalf` is returned as well. All blocks imported (from network or consensus or otherwise)
-//! must pass through this wrapper, otherwise consensus is likely to break in
-//! unexpected ways.
+//! First, create a block-import wrapper with the `block_import` function. The
+//! GRANDPA worker needs to be linked together with this block import object, so
+//! a `LinkHalf` is returned as well. All blocks imported (from network or
+//! consensus or otherwise) must pass through this wrapper, otherwise consensus
+//! is likely to break in unexpected ways.
 //!
 //! Next, use the `LinkHalf` and a local configuration to `run_grandpa_voter`.
 //! This requires a `Network` implementation. The returned future should be
@@ -57,14 +57,12 @@ use log::{debug, error, info};
 use futures::sync::mpsc;
 use client::{
 	BlockchainEvents, CallExecutor, Client, backend::Backend, error::Error as ClientError,
+	ExecutionStrategy,
 };
 use client::blockchain::HeaderBackend;
-use codec::Encode;
+use codec::{Decode, Encode};
 use sr_primitives::generic::BlockId;
-use sr_primitives::traits::{
-	NumberFor, Block as BlockT, DigestFor, ProvideRuntimeApi
-};
-use fg_primitives::{GrandpaApi, AuthorityPair};
+use sr_primitives::traits::{NumberFor, Block as BlockT, DigestFor, Zero};
 use keystore::KeyStorePtr;
 use inherents::InherentDataProviders;
 use consensus_common::SelectChain;
@@ -96,6 +94,7 @@ mod voting_rule;
 
 pub use communication::Network;
 pub use finality_proof::FinalityProofProvider;
+pub use justification::GrandpaJustification;
 pub use light_import::light_block_import;
 pub use observer::run_grandpa_observer;
 pub use voting_rule::{
@@ -107,7 +106,7 @@ use environment::{Environment, VoterSetState};
 use import::GrandpaBlockImport;
 use until_imported::UntilGlobalMessageBlocksImported;
 use communication::NetworkBridge;
-use fg_primitives::{AuthoritySignature, SetId, AuthorityWeight};
+use fg_primitives::{AuthorityList, AuthorityPair, AuthoritySignature, SetId};
 
 // Re-export these two because it's just so damn convenient.
 pub use fg_primitives::{AuthorityId, ScheduledChange};
@@ -200,6 +199,13 @@ pub struct Config {
 	/// at least every justification_period blocks. There are some other events which might cause
 	/// justification generation.
 	pub justification_period: u32,
+	/// Whether the GRANDPA observer protocol is live on the network and thereby
+	/// a full-node not running as a validator is running the GRANDPA observer
+	/// protocol (we will only issue catch-up requests to authorities when the
+	/// observer protocol is enabled).
+	pub observer_enabled: bool,
+	/// Whether the node is running as an authority (i.e. running the full GRANDPA protocol).
+	pub is_authority: bool,
 	/// Some local identifier of the voter.
 	pub name: Option<String>,
 	/// The keystore that manages the keys of this node.
@@ -242,7 +248,7 @@ impl From<ClientError> for Error {
 }
 
 /// Something which can determine if a block is known.
-pub trait BlockStatus<Block: BlockT> {
+pub(crate) trait BlockStatus<Block: BlockT> {
 	/// Return `Ok(Some(number))` or `Ok(None)` depending on whether the block
 	/// is definitely known and has been imported.
 	/// If an unexpected error occurs, return that.
@@ -261,13 +267,33 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> BlockStatus<Block> for Arc<Client<B, E,
 	}
 }
 
+/// Something that one can ask to do a block sync request.
+pub(crate) trait BlockSyncRequester<Block: BlockT> {
+	/// Notifies the sync service to try and sync the given block from the given
+	/// peers.
+	///
+	/// If the given vector of peers is empty then the underlying implementation
+	/// should make a best effort to fetch the block from any peers it is
+	/// connected to (NOTE: this assumption will change in the future #3629).
+	fn set_sync_fork_request(&self, peers: Vec<network::PeerId>, hash: Block::Hash, number: NumberFor<Block>);
+}
+
+impl<Block, N> BlockSyncRequester<Block> for NetworkBridge<Block, N> where
+	Block: BlockT,
+	N: communication::Network<Block>,
+{
+	fn set_sync_fork_request(&self, peers: Vec<network::PeerId>, hash: Block::Hash, number: NumberFor<Block>) {
+		NetworkBridge::set_sync_fork_request(self, peers, hash, number)
+	}
+}
+
 /// A new authority set along with the canonical block it changed at.
 #[derive(Debug)]
 pub(crate) struct NewAuthoritySet<H, N> {
 	pub(crate) canon_number: N,
 	pub(crate) canon_hash: H,
 	pub(crate) set_id: SetId,
-	pub(crate) authorities: Vec<(AuthorityId, AuthorityWeight)>,
+	pub(crate) authorities: AuthorityList,
 }
 
 /// Commands issued to the voter.
@@ -339,11 +365,44 @@ pub struct LinkHalf<B, E, Block: BlockT<Hash=H256>, RA, SC> {
 	voter_commands_rx: mpsc::UnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
 }
 
+/// Provider for the Grandpa authority set configured on the genesis block.
+pub trait GenesisAuthoritySetProvider<Block: BlockT> {
+	/// Get the authority set at the genesis block.
+	fn get(&self) -> Result<AuthorityList, ClientError>;
+}
+
+impl<B, E, Block: BlockT<Hash=H256>, RA> GenesisAuthoritySetProvider<Block> for Client<B, E, Block, RA>
+	where
+		B: Backend<Block, Blake2Hasher> + Send + Sync + 'static,
+		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
+		RA: Send + Sync,
+{
+	fn get(&self) -> Result<AuthorityList, ClientError> {
+		// This implementation uses the Grandpa runtime API instead of reading directly from the
+		// `GRANDPA_AUTHORITIES_KEY` as the data may have been migrated since the genesis block of
+		// the chain, whereas the runtime API is backwards compatible.
+		self.executor()
+			.call(
+				&BlockId::Number(Zero::zero()),
+				"GrandpaApi_grandpa_authorities",
+				&[],
+				ExecutionStrategy::NativeElseWasm,
+				None,
+			)
+			.and_then(|call_result| {
+				Decode::decode(&mut &call_result[..])
+					.map_err(|err| ClientError::CallResultDecode(
+						"failed to decode GRANDPA authorities set proof".into(), err
+					))
+			})
+	}
+}
+
 /// Make block importer and link half necessary to tie the background voter
 /// to it.
-pub fn block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC>(
+pub fn block_import<B, E, Block: BlockT<Hash=H256>, RA, SC>(
 	client: Arc<Client<B, E, Block, RA>>,
-	api: &PRA,
+	genesis_authorities_provider: &dyn GenesisAuthoritySetProvider<Block>,
 	select_chain: SC,
 ) -> Result<(
 		GrandpaBlockImport<B, E, Block, RA, SC>,
@@ -353,12 +412,8 @@ where
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 	RA: Send + Sync,
-	PRA: ProvideRuntimeApi,
-	PRA::Api: GrandpaApi<Block>,
 	SC: SelectChain<Block>,
 {
-	use sr_primitives::traits::Zero;
-
 	let chain_info = client.info();
 	let genesis_hash = chain_info.chain.genesis_hash;
 
@@ -367,12 +422,11 @@ where
 		genesis_hash,
 		<NumberFor<Block>>::zero(),
 		|| {
-			let genesis_authorities = api.runtime_api()
-				.grandpa_authorities(&BlockId::number(Zero::zero()))?;
+			let authorities = genesis_authorities_provider.get()?;
 			telemetry!(CONSENSUS_DEBUG; "afg.loading_authorities";
-				"authorities_len" => ?genesis_authorities.len()
+				"authorities_len" => ?authorities.len()
 			);
-			Ok(genesis_authorities)
+			Ok(authorities)
 		}
 	)?;
 
@@ -429,6 +483,7 @@ fn global_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 	// block commit and catch up messages until relevant blocks are imported.
 	let global_in = UntilGlobalMessageBlocksImported::new(
 		client.import_notification_stream(),
+		network.clone(),
 		client.clone(),
 		global_in,
 		"global",
@@ -526,7 +581,6 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X>(
 		config.clone(),
 		persistent_data.set_state.clone(),
 		on_exit.clone(),
-		true,
 	);
 
 	register_finality_tracker_inherent_data_provider(client.clone(), &inherent_data_providers)?;
@@ -617,7 +671,7 @@ where
 
 		let voters = persistent_data.authority_set.current_authorities();
 		let env = Arc::new(Environment {
-			inner: client,
+			client,
 			select_chain,
 			voting_rule,
 			voters: Arc::new(voters),
@@ -656,7 +710,7 @@ where
 			"authority_id" => authority_id.to_string(),
 		);
 
-		let chain_info = self.env.inner.info();
+		let chain_info = self.env.client.info();
 		telemetry!(CONSENSUS_INFO; "afg.authority_set";
 			"number" => ?chain_info.chain.finalized_number,
 			"hash" => ?chain_info.chain.finalized_hash,
@@ -680,7 +734,7 @@ where
 				let global_comms = global_communication(
 					self.env.set_id,
 					&self.env.voters,
-					&self.env.inner,
+					&self.env.client,
 					&self.env.network,
 					&self.env.config.keystore,
 				);
@@ -728,7 +782,7 @@ where
 						(new.canon_hash, new.canon_number),
 					);
 
-					aux_schema::write_voter_set_state(&*self.env.inner, &set_state)?;
+					aux_schema::write_voter_set_state(&*self.env.client, &set_state)?;
 					Ok(Some(set_state))
 				})?;
 
@@ -737,7 +791,7 @@ where
 					set_id: new.set_id,
 					voter_set_state: self.env.voter_set_state.clone(),
 					// Fields below are simply transferred and not updated.
-					inner: self.env.inner.clone(),
+					client: self.env.client.clone(),
 					select_chain: self.env.select_chain.clone(),
 					config: self.env.config.clone(),
 					authority_set: self.env.authority_set.clone(),
@@ -757,7 +811,7 @@ where
 					let completed_rounds = voter_set_state.completed_rounds();
 					let set_state = VoterSetState::Paused { completed_rounds };
 
-					aux_schema::write_voter_set_state(&*self.env.inner, &set_state)?;
+					aux_schema::write_voter_set_state(&*self.env.client, &set_state)?;
 					Ok(Some(set_state))
 				})?;
 

@@ -27,7 +27,7 @@ use tokio::runtime::current_thread;
 use keyring::Ed25519Keyring;
 use client::{
 	error::Result,
-	runtime_api::{Core, RuntimeVersion, ApiExt},
+	runtime_api::{Core, RuntimeVersion, ApiExt, StorageProof},
 	LongestChain,
 };
 use test_client::{self, runtime::BlockNumber};
@@ -39,7 +39,8 @@ use codec::Decode;
 use sr_primitives::traits::{ApiRef, ProvideRuntimeApi, Header as HeaderT};
 use sr_primitives::generic::{BlockId, DigestItem};
 use primitives::{NativeOrEncoded, ExecutionContext, crypto::Public};
-use fg_primitives::{GRANDPA_ENGINE_ID, AuthorityId};
+use fg_primitives::{GRANDPA_ENGINE_ID, AuthorityList, GrandpaApi};
+use state_machine::{backend::InMemory, prove_read, read_proof_check};
 
 use authorities::AuthoritySet;
 use finality_proof::{FinalityProofProvider, AuthoritySetForFinalityProver, AuthoritySetForFinalityChecker};
@@ -93,9 +94,9 @@ impl TestNetFactory for GrandpaTestNet {
 
 	fn default_config() -> ProtocolConfig {
 		// the authority role ensures gossip hits all nodes here.
-		ProtocolConfig {
-			roles: Roles::AUTHORITY,
-		}
+		let mut config = ProtocolConfig::default();
+		config.roles = Roles::AUTHORITY;
+		config
 	}
 
 	fn make_verifier(
@@ -136,8 +137,8 @@ impl TestNetFactory for GrandpaTestNet {
 				let import = light_block_import_without_justifications(
 					client.clone(),
 					backend.clone(),
+					&self.test_config,
 					authorities_provider,
-					Arc::new(self.test_config.clone())
 				).expect("Could not create block import for fresh peer.");
 				let finality_proof_req_builder = import.0.create_finality_proof_request_builder();
 				let proof_import = Box::new(import.clone());
@@ -187,11 +188,11 @@ impl Future for Exit {
 
 #[derive(Default, Clone)]
 pub(crate) struct TestApi {
-	genesis_authorities: Vec<(AuthorityId, u64)>,
+	genesis_authorities: AuthorityList,
 }
 
 impl TestApi {
-	pub fn new(genesis_authorities: Vec<(AuthorityId, u64)>) -> Self {
+	pub fn new(genesis_authorities: AuthorityList) -> Self {
 		TestApi {
 			genesis_authorities,
 		}
@@ -258,7 +259,7 @@ impl ApiExt<Block> for RuntimeApi {
 		unimplemented!("Not required for testing!")
 	}
 
-	fn extract_proof(&mut self) -> Option<Vec<Vec<u8>>> {
+	fn extract_proof(&mut self) -> Option<StorageProof> {
 		unimplemented!("Not required for testing!")
 	}
 }
@@ -270,23 +271,30 @@ impl GrandpaApi<Block> for RuntimeApi {
 		_: ExecutionContext,
 		_: Option<()>,
 		_: Vec<u8>,
-	) -> Result<NativeOrEncoded<Vec<(AuthorityId, u64)>>> {
+	) -> Result<NativeOrEncoded<AuthorityList>> {
 		Ok(self.inner.genesis_authorities.clone()).map(NativeOrEncoded::Native)
 	}
 }
 
+impl GenesisAuthoritySetProvider<Block> for TestApi {
+	fn get(&self) -> Result<AuthorityList> {
+		Ok(self.genesis_authorities.clone())
+	}
+}
+
 impl AuthoritySetForFinalityProver<Block> for TestApi {
-	fn authorities(&self, block: &BlockId<Block>) -> Result<Vec<(AuthorityId, u64)>> {
-		let runtime_api = RuntimeApi { inner: self.clone() };
-		runtime_api.GrandpaApi_grandpa_authorities_runtime_api_impl(block, ExecutionContext::Syncing, None, Vec::new())
-			.map(|v| match v {
-				NativeOrEncoded::Native(value) => value,
-				_ => unreachable!("only providing native values"),
-			})
+	fn authorities(&self, _block: &BlockId<Block>) -> Result<AuthorityList> {
+		Ok(self.genesis_authorities.clone())
 	}
 
-	fn prove_authorities(&self, block: &BlockId<Block>) -> Result<Vec<Vec<u8>>> {
-		self.authorities(block).map(|auth| vec![auth.encode()])
+	fn prove_authorities(&self, block: &BlockId<Block>) -> Result<StorageProof> {
+		let authorities = self.authorities(block)?;
+		let backend = <InMemory<Blake2Hasher>>::from(vec![
+			(None, b"authorities".to_vec(), Some(authorities.encode()))
+		]);
+		let proof = prove_read(backend, vec![b"authorities"])
+			.expect("failure proving read from in-memory storage backend");
+		Ok(proof)
 	}
 }
 
@@ -294,17 +302,26 @@ impl AuthoritySetForFinalityChecker<Block> for TestApi {
 	fn check_authorities_proof(
 		&self,
 		_hash: <Block as BlockT>::Hash,
-		_header: <Block as BlockT>::Header,
-		proof: Vec<Vec<u8>>,
-	) -> Result<Vec<(AuthorityId, u64)>> {
-		Decode::decode(&mut &proof[0][..])
-			.map_err(|_| unreachable!("incorrect value is passed as GRANDPA authorities proof"))
+		header: <Block as BlockT>::Header,
+		proof: StorageProof,
+	) -> Result<AuthorityList> {
+		let results = read_proof_check::<Blake2Hasher, _>(
+			*header.state_root(), proof, vec![b"authorities"]
+		)
+			.expect("failure checking read proof for authorities");
+		let encoded = results.get(&b"authorities"[..])
+			.expect("returned map must contain all proof keys")
+			.as_ref()
+			.expect("authorities in proof is None");
+		let authorities = Decode::decode(&mut &encoded[..])
+			.expect("failure decoding authorities read from proof");
+		Ok(authorities)
 	}
 }
 
 const TEST_GOSSIP_DURATION: Duration = Duration::from_millis(500);
 
-fn make_ids(keys: &[Ed25519Keyring]) -> Vec<(AuthorityId, u64)> {
+fn make_ids(keys: &[Ed25519Keyring]) -> AuthorityList {
 	keys.iter().map(|key| key.clone().public().into()).map(|id| (id, 1)).collect()
 }
 
@@ -379,6 +396,8 @@ fn run_to_completion_with<F>(
 				justification_period: 32,
 				keystore: Some(keystore),
 				name: Some(format!("peer#{}", peer_id)),
+				is_authority: true,
+				observer_enabled: true,
 			},
 			link: link,
 			network: net_service,
@@ -511,6 +530,8 @@ fn finalize_3_voters_1_full_observer() {
 				justification_period: 32,
 				keystore,
 				name: Some(format!("peer#{}", peer_id)),
+				is_authority: true,
+				observer_enabled: true,
 			},
 			link: link,
 			network: net_service,
@@ -672,6 +693,8 @@ fn transition_3_voters_twice_1_full_observer() {
 				justification_period: 32,
 				keystore: Some(keystore),
 				name: Some(format!("peer#{}", peer_id)),
+				is_authority: true,
+				observer_enabled: true,
 			},
 			link: link,
 			network: net_service,
@@ -951,6 +974,7 @@ fn allows_reimporting_change_blocks() {
 			finalized: false,
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::LongestChain,
+			allow_missing_state: false,
 		}
 	};
 
@@ -962,6 +986,7 @@ fn allows_reimporting_change_blocks() {
 			bad_justification: false,
 			needs_finality_proof: false,
 			is_new_best: true,
+			header_only: false,
 		}),
 	);
 
@@ -1002,6 +1027,7 @@ fn test_bad_justification() {
 			finalized: false,
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::LongestChain,
+			allow_missing_state: false,
 		}
 	};
 
@@ -1095,6 +1121,8 @@ fn voter_persists_its_votes() {
 								justification_period: 32,
 								keystore: Some(self.keystore.clone()),
 								name: Some(format!("peer#{}", 0)),
+								is_authority: true,
+								observer_enabled: true,
 							},
 							link,
 							network: self.net.lock().peers[0].network_service().clone(),
@@ -1150,6 +1178,8 @@ fn voter_persists_its_votes() {
 			justification_period: 32,
 			keystore: Some(keystore),
 			name: Some(format!("peer#{}", 1)),
+			is_authority: true,
+			observer_enabled: true,
 		};
 
 		let set_state = {
@@ -1164,7 +1194,6 @@ fn voter_persists_its_votes() {
 			config.clone(),
 			set_state,
 			Exit,
-			true,
 		);
 		runtime.block_on(routing_work).unwrap();
 
@@ -1299,6 +1328,8 @@ fn finalize_3_voters_1_light_observer() {
 					justification_period: 32,
 					keystore: None,
 					name: Some("observer".to_string()),
+					is_authority: false,
+					observer_enabled: true,
 				},
 				link,
 				net.lock().peers[3].network_service().clone(),
@@ -1426,6 +1457,8 @@ fn voter_catches_up_to_latest_round_when_behind() {
 				justification_period: 32,
 				keystore,
 				name: Some(format!("peer#{}", peer_id)),
+				is_authority: true,
+				observer_enabled: true,
 			},
 			link,
 			network: net.lock().peer(peer_id).network_service().clone(),
@@ -1542,6 +1575,8 @@ fn grandpa_environment_respects_voting_rules() {
 			justification_period: 32,
 			keystore: None,
 			name: None,
+			is_authority: true,
+			observer_enabled: true,
 		};
 
 		let (network, _) = NetworkBridge::new(
@@ -1549,14 +1584,13 @@ fn grandpa_environment_respects_voting_rules() {
 			config.clone(),
 			set_state.clone(),
 			Exit,
-			true,
 		);
 
 		Environment {
 			authority_set: authority_set.clone(),
 			config: config.clone(),
 			consensus_changes: consensus_changes.clone(),
-			inner: link.client.clone(),
+			client: link.client.clone(),
 			select_chain: link.select_chain.clone(),
 			set_id: authority_set.set_id(),
 			voter_set_state: set_state.clone(),
@@ -1625,5 +1659,87 @@ fn grandpa_environment_respects_voting_rules() {
 			peer.client().info().chain.finalized_hash
 		).unwrap().1,
 		19,
+	);
+}
+
+#[test]
+fn imports_justification_for_regular_blocks_on_import() {
+	// NOTE: this is a regression test since initially we would only import
+	// justifications for authority change blocks, and would discard any
+	// existing justification otherwise.
+	let peers = &[Ed25519Keyring::Alice];
+	let voters = make_ids(peers);
+	let api = TestApi::new(voters);
+	let mut net = GrandpaTestNet::new(api.clone(), 1);
+
+	let client = net.peer(0).client().clone();
+	let (mut block_import, ..) = net.make_block_import(client.clone());
+
+	let full_client = client.as_full().expect("only full clients are used in test");
+	let builder = full_client.new_block_at(&BlockId::Number(0), Default::default()).unwrap();
+	let block = builder.bake().unwrap();
+
+	let block_hash = block.hash();
+
+	// create a valid justification, with one precommit targeting the block
+	let justification = {
+		let round = 1;
+		let set_id = 0;
+
+		let precommit = grandpa::Precommit {
+			target_hash: block_hash,
+			target_number: *block.header.number(),
+		};
+
+		let msg = grandpa::Message::Precommit(precommit.clone());
+		let encoded = communication::localized_payload(round, set_id, &msg);
+		let signature = peers[0].sign(&encoded[..]).into();
+
+		let precommit = grandpa::SignedPrecommit {
+			precommit,
+			signature,
+			id: peers[0].public().into(),
+		};
+
+		let commit = grandpa::Commit {
+			target_hash: block_hash,
+			target_number: *block.header.number(),
+			precommits: vec![precommit],
+		};
+
+		GrandpaJustification::from_commit(
+			&full_client,
+			round,
+			commit,
+		).unwrap()
+	};
+
+	// we import the block with justification attached
+	let block = BlockImportParams {
+		origin: BlockOrigin::File,
+		header: block.header,
+		justification: Some(justification.encode()),
+		post_digests: Vec::new(),
+		body: Some(block.extrinsics),
+		finalized: false,
+		auxiliary: Vec::new(),
+		fork_choice: ForkChoiceStrategy::LongestChain,
+		allow_missing_state: false,
+	};
+
+	assert_eq!(
+		block_import.import_block(block, HashMap::new()).unwrap(),
+		ImportResult::Imported(ImportedAux {
+			needs_justification: false,
+			clear_justification_requests: false,
+			bad_justification: false,
+			is_new_best: true,
+			..Default::default()
+		}),
+	);
+
+	// the justification should be imported and available from the client
+	assert!(
+		client.justification(&BlockId::Hash(block_hash)).unwrap().is_some(),
 	);
 }

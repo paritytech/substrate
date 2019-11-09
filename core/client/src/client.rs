@@ -43,7 +43,7 @@ use state_machine::{
 	DBValue, Backend as StateBackend, ChangesTrieAnchorBlockId, ExecutionStrategy, ExecutionManager,
 	prove_read, prove_child_read, ChangesTrieRootsStorage, ChangesTrieStorage,
 	ChangesTrieTransaction, ChangesTrieConfigurationRange, key_changes, key_changes_proof,
-	OverlayedChanges, BackendTrustLevel,
+	OverlayedChanges, BackendTrustLevel, StorageProof, merge_storage_proofs,
 };
 use executor::{RuntimeVersion, RuntimeInfo};
 use consensus::{
@@ -342,15 +342,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		self.backend.state_at(*block)
 	}
 
-	/// Expose backend reference. To be used in tests only
-	#[doc(hidden)]
-	#[deprecated(note="Rather than relying on `client` to provide this, access \
-	to the backend should be handled at setup only - see #1134. This function \
-	will be removed once that is in place.")]
-	pub fn backend(&self) -> &Arc<B> {
-		&self.backend
-	}
-
 	/// Given a `BlockId` and a key prefix, return the matching child storage keys in that block.
 	pub fn storage_keys(&self, id: &BlockId<Block>, key_prefix: &StorageKey) -> error::Result<Vec<StorageKey>> {
 		let keys = self.state_at(id)?.keys(&key_prefix.0).into_iter().map(StorageKey).collect();
@@ -430,7 +421,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	}
 
 	/// Reads storage value at a given block + key, returning read proof.
-	pub fn read_proof<I>(&self, id: &BlockId<Block>, keys: I) -> error::Result<Vec<Vec<u8>>> where
+	pub fn read_proof<I>(&self, id: &BlockId<Block>, keys: I) -> error::Result<StorageProof> where
 		I: IntoIterator,
 		I::Item: AsRef<[u8]>,
 	{
@@ -446,7 +437,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		id: &BlockId<Block>,
 		storage_key: &[u8],
 		keys: I,
-	) -> error::Result<Vec<Vec<u8>>> where
+	) -> error::Result<StorageProof> where
 		I: IntoIterator,
 		I::Item: AsRef<[u8]>,
 	{
@@ -463,14 +454,14 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		id: &BlockId<Block>,
 		method: &str,
 		call_data: &[u8]
-	) -> error::Result<(Vec<u8>, Vec<Vec<u8>>)> {
+	) -> error::Result<(Vec<u8>, StorageProof)> {
 		let state = self.state_at(id)?;
 		let header = self.prepare_environment_block(id)?;
 		prove_execution(state, header, &self.executor, method, call_data)
 	}
 
 	/// Reads given header and generates CHT-based header proof.
-	pub fn header_proof(&self, id: &BlockId<Block>) -> error::Result<(Block::Header, Vec<Vec<u8>>)> {
+	pub fn header_proof(&self, id: &BlockId<Block>) -> error::Result<(Block::Header, StorageProof)> {
 		self.header_proof_with_cht_size(id, cht::size())
 	}
 
@@ -486,7 +477,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		&self,
 		id: &BlockId<Block>,
 		cht_size: NumberFor<Block>,
-	) -> error::Result<(Block::Header, Vec<Vec<u8>>)> {
+	) -> error::Result<(Block::Header, StorageProof)> {
 		let proof_error = || error::Error::Backend(format!("Failed to generate header proof for {:?}", id));
 		let header = self.backend.blockchain().expect_header(*id)?;
 		let block_num = *header.number();
@@ -506,7 +497,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	/// Get longest range within [first; last] that is possible to use in `key_changes`
 	/// and `key_changes_proof` calls.
 	/// Range could be shortened from the beginning if some changes tries have been pruned.
-	/// Returns Ok(None) if changes trues are not supported.
+	/// Returns Ok(None) if changes tries are not supported.
 	pub fn max_key_changes_range(
 		&self,
 		first: NumberFor<Block>,
@@ -705,18 +696,18 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		&self,
 		cht_size: NumberFor<Block>,
 		blocks: I
-	) -> error::Result<Vec<Vec<u8>>> {
+	) -> error::Result<StorageProof> {
 		// most probably we have touched several changes tries that are parts of the single CHT
 		// => GroupBy changes tries by CHT number and then gather proof for the whole group at once
-		let mut proof = HashSet::new();
+		let mut proofs = Vec::new();
 
 		cht::for_each_cht_group::<Block::Header, _, _, _>(cht_size, blocks, |_, cht_num, cht_blocks| {
 			let cht_proof = self.changes_trie_roots_proof_at_cht(cht_size, cht_num, cht_blocks)?;
-			proof.extend(cht_proof);
+			proofs.push(cht_proof);
 			Ok(())
 		}, ())?;
 
-		Ok(proof.into_iter().collect())
+		Ok(merge_storage_proofs(proofs))
 	}
 
 	/// Generates CHT-based proof for roots of changes tries at given blocks (that are part of single CHT).
@@ -725,7 +716,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		cht_size: NumberFor<Block>,
 		cht_num: NumberFor<Block>,
 		blocks: Vec<NumberFor<Block>>
-	) -> error::Result<Vec<Vec<u8>>> {
+	) -> error::Result<StorageProof> {
 		let cht_start = cht::start_number(cht_size, cht_num);
 		let mut current_num = cht_start;
 		let cht_range = ::std::iter::from_fn(|| {
@@ -847,15 +838,22 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			finalized,
 			auxiliary,
 			fork_choice,
+			allow_missing_state,
 		} = import_block;
 
 		assert!(justification.is_some() && finalized || justification.is_none());
 
 		let parent_hash = header.parent_hash().clone();
+		let mut enact_state = true;
 
-		match self.backend.blockchain().status(BlockId::Hash(parent_hash))? {
-			blockchain::BlockStatus::InChain => {},
-			blockchain::BlockStatus::Unknown => return Ok(ImportResult::UnknownParent),
+		match self.block_status(&BlockId::Hash(parent_hash))? {
+			BlockStatus::Unknown => return Ok(ImportResult::UnknownParent),
+			BlockStatus::InChainWithState | BlockStatus::Queued => {},
+			BlockStatus::InChainPruned if allow_missing_state => {
+				enact_state = false;
+			},
+			BlockStatus::InChainPruned => return Ok(ImportResult::MissingState),
+			BlockStatus::KnownBad => return Ok(ImportResult::KnownBad),
 		}
 
 		let import_headers = if post_digests.is_empty() {
@@ -884,6 +882,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			finalized,
 			auxiliary,
 			fork_choice,
+			enact_state,
 		);
 
 		if let Ok(ImportResult::Imported(ref aux)) = result {
@@ -911,6 +910,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		finalized: bool,
 		aux: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 		fork_choice: ForkChoiceStrategy,
+		enact_state: bool,
 	) -> error::Result<ImportResult> where
 		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
 	{
@@ -936,22 +936,39 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			BlockOrigin::Genesis | BlockOrigin::NetworkInitialSync | BlockOrigin::File => false,
 		};
 
-		self.backend.begin_state_operation(&mut operation.op, BlockId::Hash(parent_hash))?;
+		let storage_changes = match &body {
+			Some(body) if enact_state => {
+				self.backend.begin_state_operation(&mut operation.op, BlockId::Hash(parent_hash))?;
 
-		// ensure parent block is finalized to maintain invariant that
-		// finality is called sequentially.
-		if finalized {
-			self.apply_finality_with_block_hash(operation, parent_hash, None, info.best_hash, make_notifications)?;
-		}
+				// ensure parent block is finalized to maintain invariant that
+				// finality is called sequentially.
+				if finalized {
+					self.apply_finality_with_block_hash(operation, parent_hash, None, info.best_hash, make_notifications)?;
+				}
 
-		// FIXME #1232: correct path logic for when to execute this function
-		let (storage_update, changes_update, storage_changes) = self.block_execution(
-			&operation.op,
-			&import_headers,
-			origin,
-			hash,
-			body.clone(),
-		)?;
+				// FIXME #1232: correct path logic for when to execute this function
+				let (storage_update, changes_update, storage_changes) = self.block_execution(
+					&operation.op,
+					&import_headers,
+					origin,
+					hash,
+					&body,
+				)?;
+
+				operation.op.update_cache(new_cache);
+				if let Some(storage_update) = storage_update {
+					operation.op.update_db_storage(storage_update)?;
+				}
+				if let Some(storage_changes) = storage_changes.clone() {
+					operation.op.update_storage(storage_changes.0, storage_changes.1)?;
+				}
+				if let Some(Some(changes_update)) = changes_update {
+					operation.op.update_changes_trie(changes_update)?;
+				}
+				storage_changes
+			},
+			_ => None,
+		};
 
 		let is_new_best = finalized || match fork_choice {
 			ForkChoiceStrategy::LongestChain => import_headers.post().number() > &info.best_number,
@@ -986,17 +1003,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			leaf_state,
 		)?;
 
-		operation.op.update_cache(new_cache);
-		if let Some(storage_update) = storage_update {
-			operation.op.update_db_storage(storage_update)?;
-		}
-		if let Some(storage_changes) = storage_changes.clone() {
-			operation.op.update_storage(storage_changes.0, storage_changes.1)?;
-		}
-		if let Some(Some(changes_update)) = changes_update {
-			operation.op.update_changes_trie(changes_update)?;
-		}
-
 		operation.op.insert_aux(aux)?;
 
 		if make_notifications {
@@ -1023,7 +1029,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		import_headers: &PrePostHeader<Block::Header>,
 		origin: BlockOrigin,
 		hash: Block::Hash,
-		body: Option<Vec<Block::Extrinsic>>,
+		body: &[Block::Extrinsic],
 	) -> error::Result<(
 		Option<StorageUpdate<B, Block>>,
 		Option<Option<ChangesUpdate<Block>>>,
@@ -1061,7 +1067,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 				let encoded_block = <Block as BlockT>::encode_from(
 					import_headers.pre(),
-					&body.unwrap_or_default()
+					body,
 				);
 
 				let (_, storage_update, changes_update) = self.executor
@@ -1532,7 +1538,7 @@ impl<'a, B, E, Block, RA> consensus::BlockImport<Block> for &'a Client<B, E, Blo
 		&mut self,
 		block: BlockCheckParams<Block>,
 	) -> Result<ImportResult, Self::Error> {
-		let BlockCheckParams { hash, number, parent_hash } = block;
+		let BlockCheckParams { hash, number, parent_hash, allow_missing_state } = block;
 
 		if let Some(h) = self.fork_blocks.as_ref().and_then(|x| x.get(&number)) {
 			if &hash != h  {
@@ -1550,7 +1556,9 @@ impl<'a, B, E, Block, RA> consensus::BlockImport<Block> for &'a Client<B, E, Blo
 			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
 		{
 			BlockStatus::InChainWithState | BlockStatus::Queued => {},
-			BlockStatus::Unknown | BlockStatus::InChainPruned => return Ok(ImportResult::UnknownParent),
+			BlockStatus::Unknown => return Ok(ImportResult::UnknownParent),
+			BlockStatus::InChainPruned if allow_missing_state => {},
+			BlockStatus::InChainPruned => return Ok(ImportResult::MissingState),
 			BlockStatus::KnownBad => return Ok(ImportResult::KnownBad),
 		}
 
@@ -1561,7 +1569,6 @@ impl<'a, B, E, Block, RA> consensus::BlockImport<Block> for &'a Client<B, E, Blo
 			BlockStatus::Unknown | BlockStatus::InChainPruned => {},
 			BlockStatus::KnownBad => return Ok(ImportResult::KnownBad),
 		}
-
 
 		Ok(ImportResult::imported(false))
 	}
@@ -1880,7 +1887,7 @@ pub(crate) mod tests {
 	use consensus::{BlockOrigin, SelectChain};
 	use test_client::{
 		prelude::*,
-		client_db::{Backend, DatabaseSettings, PruningMode},
+		client_db::{Backend, DatabaseSettings, DatabaseSettingsSrc, PruningMode},
 		runtime::{self, Block, Transfer, RuntimeApi, TestAPI},
 	};
 
@@ -2764,11 +2771,13 @@ pub(crate) mod tests {
 		// states
 		let backend = Arc::new(Backend::new(
 			DatabaseSettings {
-				cache_size: None,
 				state_cache_size: 1 << 20,
 				state_cache_child_ratio: None,
-				path: tmp.path().into(),
 				pruning: PruningMode::ArchiveAll,
+				source: DatabaseSettingsSrc::Path {
+					path: tmp.path().into(),
+					cache_size: None,
+				}
 			},
 			u64::max_value(),
 		).unwrap());

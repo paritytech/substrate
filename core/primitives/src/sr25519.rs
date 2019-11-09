@@ -20,8 +20,8 @@
 //! Note: `CHAIN_CODE_LENGTH` must be equal to `crate::crypto::JUNCTION_ID_LEN`
 //! for this to work.
 // end::description[]
-
-#[cfg(feature = "std")]
+use rstd::vec::Vec;
+#[cfg(feature = "full_crypto")]
 use schnorrkel::{signing_context, ExpansionMode, Keypair, SecretKey, MiniSecretKey, PublicKey,
 	derive::{Derivation, ChainCode, CHAIN_CODE_LENGTH}
 };
@@ -29,33 +29,36 @@ use schnorrkel::{signing_context, ExpansionMode, Keypair, SecretKey, MiniSecretK
 use substrate_bip39::mini_secret_from_entropy;
 #[cfg(feature = "std")]
 use bip39::{Mnemonic, Language, MnemonicType};
-#[cfg(feature = "std")]
+#[cfg(feature = "full_crypto")]
 use crate::crypto::{
-	Pair as TraitPair, DeriveJunction, Infallible, SecretStringError, Ss58Codec
+	Pair as TraitPair, DeriveJunction, Infallible, SecretStringError
 };
+#[cfg(feature = "std")]
+use crate::crypto::Ss58Codec;
+
 use crate::{crypto::{Public as TraitPublic, UncheckedFrom, CryptoType, Derive}};
 use crate::hash::{H256, H512};
 use codec::{Encode, Decode};
 
 #[cfg(feature = "std")]
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
-#[cfg(feature = "std")]
+#[cfg(feature = "full_crypto")]
 use schnorrkel::keys::{MINI_SECRET_KEY_LENGTH, SECRET_KEY_LENGTH};
 
 // signing context
-#[cfg(feature = "std")]
+#[cfg(feature = "full_crypto")]
 const SIGNING_CTX: &[u8] = b"substrate";
 
 /// An Schnorrkel/Ristretto x25519 ("sr25519") public key.
-#[cfg_attr(feature = "std", derive(Hash))]
+#[cfg_attr(feature = "full_crypto", derive(Hash))]
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default)]
 pub struct Public(pub [u8; 32]);
 
 /// An Schnorrkel/Ristretto x25519 ("sr25519") key pair.
-#[cfg(feature = "std")]
+#[cfg(feature = "full_crypto")]
 pub struct Pair(Keypair);
 
-#[cfg(feature = "std")]
+#[cfg(feature = "full_crypto")]
 impl Clone for Pair {
 	fn clone(&self) -> Self {
 		Pair(schnorrkel::Keypair {
@@ -129,11 +132,16 @@ impl std::fmt::Display for Public {
 	}
 }
 
-#[cfg(feature = "std")]
-impl std::fmt::Debug for Public {
-	fn fmt(&self, f: &mut std::fmt::Formatter) -> ::std::fmt::Result {
+impl rstd::fmt::Debug for Public {
+	#[cfg(feature = "std")]
+	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
 		let s = self.to_ss58check();
 		write!(f, "{} ({}...)", crate::hexdisplay::HexDisplay::from(&self.0), &s[0..8])
+	}
+
+	#[cfg(not(feature = "std"))]
+	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+		Ok(())
 	}
 }
 
@@ -224,24 +232,29 @@ impl AsMut<[u8]> for Signature {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "full_crypto")]
 impl From<schnorrkel::Signature> for Signature {
 	fn from(s: schnorrkel::Signature) -> Signature {
 		Signature(s.to_bytes())
 	}
 }
 
-#[cfg(feature = "std")]
-impl std::fmt::Debug for Signature {
-	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+impl rstd::fmt::Debug for Signature {
+	#[cfg(feature = "std")]
+	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
 		write!(f, "{}", crate::hexdisplay::HexDisplay::from(&self.0))
+	}
+
+	#[cfg(not(feature = "std"))]
+	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+		Ok(())
 	}
 }
 
-#[cfg(feature = "std")]
-impl std::hash::Hash for Signature {
-	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-		std::hash::Hash::hash(&self.0[..], state);
+#[cfg(feature = "full_crypto")]
+impl rstd::hash::Hash for Signature {
+	fn hash<H: rstd::hash::Hasher>(&self, state: &mut H) {
+		rstd::hash::Hash::hash(&self.0[..], state);
 	}
 }
 
@@ -352,21 +365,21 @@ impl From<SecretKey> for Pair {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "full_crypto")]
 impl From<schnorrkel::Keypair> for Pair {
 	fn from(p: schnorrkel::Keypair) -> Pair {
 		Pair(p)
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "full_crypto")]
 impl From<Pair> for schnorrkel::Keypair {
 	fn from(p: Pair) -> schnorrkel::Keypair {
 		p.0
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "full_crypto")]
 impl AsRef<schnorrkel::Keypair> for Pair {
 	fn as_ref(&self) -> &schnorrkel::Keypair {
 		&self.0
@@ -374,16 +387,16 @@ impl AsRef<schnorrkel::Keypair> for Pair {
 }
 
 /// Derive a single hard junction.
-#[cfg(feature = "std")]
-fn derive_hard_junction(secret: &SecretKey, cc: &[u8; CHAIN_CODE_LENGTH]) -> SecretKey {
-	secret.hard_derive_mini_secret_key(Some(ChainCode(cc.clone())), b"").0.expand(ExpansionMode::Ed25519)
+#[cfg(feature = "full_crypto")]
+fn derive_hard_junction(secret: &SecretKey, cc: &[u8; CHAIN_CODE_LENGTH]) -> MiniSecretKey {
+	secret.hard_derive_mini_secret_key(Some(ChainCode(cc.clone())), b"").0
 }
 
 /// The raw secret seed, which can be used to recreate the `Pair`.
-#[cfg(feature = "std")]
+#[cfg(feature = "full_crypto")]
 type Seed = [u8; MINI_SECRET_KEY_LENGTH];
 
-#[cfg(feature = "std")]
+#[cfg(feature = "full_crypto")]
 impl TraitPair for Pair {
 	type Public = Public;
 	type Seed = Seed;
@@ -430,18 +443,7 @@ impl TraitPair for Pair {
 			_ => Err(SecretStringError::InvalidSeedLength)
 		}
 	}
-
-	/// Generate a key from the phrase, password and derivation path.
-	fn from_standard_components<I: Iterator<Item=DeriveJunction>>(
-		phrase: &str,
-		password: Option<&str>,
-		path: I
-	) -> Result<Pair, SecretStringError> {
-		Self::from_phrase(phrase, password)?.0
-			.derive(path)
-			.map_err(|_| SecretStringError::InvalidPath)
-	}
-
+	#[cfg(feature = "std")]
 	fn generate_with_phrase(password: Option<&str>) -> (Pair, String, Seed) {
 		let mnemonic = Mnemonic::new(MnemonicType::Words12, Language::English);
 		let phrase = mnemonic.phrase();
@@ -453,20 +455,34 @@ impl TraitPair for Pair {
 			seed,
 		)
 	}
-
+	#[cfg(feature = "std")]
 	fn from_phrase(phrase: &str, password: Option<&str>) -> Result<(Pair, Seed), SecretStringError> {
 		Mnemonic::from_phrase(phrase, Language::English)
 			.map_err(|_| SecretStringError::InvalidPhrase)
 			.map(|m| Self::from_entropy(m.entropy(), password))
 	}
 
-	fn derive<Iter: Iterator<Item=DeriveJunction>>(&self, path: Iter) -> Result<Pair, Self::DeriveError> {
+	fn derive<Iter: Iterator<Item=DeriveJunction>>(&self,
+		path: Iter,
+		seed: Option<Seed>,
+	) -> Result<(Pair, Option<Seed>), Self::DeriveError> {
+		let seed = if let Some(s) = seed {
+			if let Ok(msk) = MiniSecretKey::from_bytes(&s) {
+				if msk.expand(ExpansionMode::Ed25519) == self.0.secret {
+					Some(msk)
+				} else { None }
+			} else { None }
+		} else { None };
 		let init = self.0.secret.clone();
-		let result = path.fold(init, |acc, j| match j {
-			DeriveJunction::Soft(cc) => acc.derived_key_simple(ChainCode(cc), &[]).0,
-			DeriveJunction::Hard(cc) => derive_hard_junction(&acc, &cc),
+		let (result, seed) = path.fold((init, seed), |(acc, acc_seed), j| match (j, acc_seed) {
+			(DeriveJunction::Soft(cc), _) =>
+				(acc.derived_key_simple(ChainCode(cc), &[]).0, None),
+			(DeriveJunction::Hard(cc), maybe_seed) => {
+				let seed = derive_hard_junction(&acc, &cc);
+				(seed.expand(ExpansionMode::Ed25519), maybe_seed.map(|_| seed))
+			}
 		});
-		Ok(Self(result.into()))
+		Ok((Self(result.into()), seed.map(|s| MiniSecretKey::to_bytes(&s))))
 	}
 
 	fn sign(&self, message: &[u8]) -> Signature {
@@ -514,16 +530,16 @@ impl Pair {
 }
 
 impl CryptoType for Public {
-	#[cfg(feature="std")]
+	#[cfg(feature = "full_crypto")]
 	type Pair = Pair;
 }
 
 impl CryptoType for Signature {
-	#[cfg(feature="std")]
+	#[cfg(feature = "full_crypto")]
 	type Pair = Pair;
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "full_crypto")]
 impl CryptoType for Pair {
 	type Pair = Pair;
 }
@@ -608,9 +624,9 @@ mod test {
 		let pair = Pair::from_seed(&hex!(
 			"9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
 		));
-		let derive_1 = pair.derive(Some(DeriveJunction::soft(1)).into_iter()).unwrap();
-		let derive_1b = pair.derive(Some(DeriveJunction::soft(1)).into_iter()).unwrap();
-		let derive_2 = pair.derive(Some(DeriveJunction::soft(2)).into_iter()).unwrap();
+		let derive_1 = pair.derive(Some(DeriveJunction::soft(1)).into_iter(), None).unwrap().0;
+		let derive_1b = pair.derive(Some(DeriveJunction::soft(1)).into_iter(), None).unwrap().0;
+		let derive_2 = pair.derive(Some(DeriveJunction::soft(2)).into_iter(), None).unwrap().0;
 		assert_eq!(derive_1.public(), derive_1b.public());
 		assert_ne!(derive_1.public(), derive_2.public());
 	}
@@ -620,9 +636,9 @@ mod test {
 		let pair = Pair::from_seed(&hex!(
 			"9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
 		));
-		let derive_1 = pair.derive(Some(DeriveJunction::hard(1)).into_iter()).unwrap();
-		let derive_1b = pair.derive(Some(DeriveJunction::hard(1)).into_iter()).unwrap();
-		let derive_2 = pair.derive(Some(DeriveJunction::hard(2)).into_iter()).unwrap();
+		let derive_1 = pair.derive(Some(DeriveJunction::hard(1)).into_iter(), None).unwrap().0;
+		let derive_1b = pair.derive(Some(DeriveJunction::hard(1)).into_iter(), None).unwrap().0;
+		let derive_2 = pair.derive(Some(DeriveJunction::hard(2)).into_iter(), None).unwrap().0;
 		assert_eq!(derive_1.public(), derive_1b.public());
 		assert_ne!(derive_1.public(), derive_2.public());
 	}
@@ -633,7 +649,7 @@ mod test {
 			"9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
 		));
 		let path = Some(DeriveJunction::soft(1));
-		let pair_1 = pair.derive(path.clone().into_iter()).unwrap();
+		let pair_1 = pair.derive(path.clone().into_iter(), None).unwrap().0;
 		let public_1 = pair.public().derive(path.into_iter()).unwrap();
 		assert_eq!(pair_1.public(), public_1);
 	}

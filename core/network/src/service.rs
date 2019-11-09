@@ -42,7 +42,7 @@ use sr_primitives::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
 
 use crate::{behaviour::{Behaviour, BehaviourOut}, config::{parse_str_addr, parse_addr}};
 use crate::{NetworkState, NetworkStateNotConnectedPeer, NetworkStatePeer};
-use crate::{transport, config::NodeKeyConfig, config::NonReservedPeerMode};
+use crate::{transport, config::NonReservedPeerMode};
 use crate::config::{Params, TransportConfig};
 use crate::error::Error;
 use crate::protocol::{self, Protocol, Context, CustomMessageOutcome, PeerInfo};
@@ -52,14 +52,11 @@ use crate::protocol::specialization::NetworkSpecialization;
 use crate::protocol::sync::SyncState;
 
 /// Minimum Requirements for a Hash within Networking
-pub trait ExHashT:
-	::std::hash::Hash + Eq + ::std::fmt::Debug + Clone + Send + Sync + 'static
-{
-}
+pub trait ExHashT: std::hash::Hash + Eq + std::fmt::Debug + Clone + Send + Sync + 'static {}
+
 impl<T> ExHashT for T where
-	T: ::std::hash::Hash + Eq + ::std::fmt::Debug + Clone + Send + Sync + 'static
-{
-}
+	T: std::hash::Hash + Eq + std::fmt::Debug + Clone + Send + Sync + 'static
+{}
 
 /// Transaction pool interface
 pub trait TransactionPool<H: ExHashT, B: BlockT>: Send + Sync {
@@ -74,7 +71,8 @@ pub trait TransactionPool<H: ExHashT, B: BlockT>: Send + Sync {
 		&self,
 		report_handle: ReportHandle,
 		who: PeerId,
-		reputation_change: i32,
+		reputation_change_good: i32,
+		reputation_change_bad: i32,
 		transaction: B::Extrinsic,
 	);
 	/// Notify the pool about transactions broadcast.
@@ -152,6 +150,23 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 			}
 		}
 
+		// Check for duplicate bootnodes.
+		known_addresses.iter()
+			.try_for_each(|(peer_id, addr)|
+				if let Some(other) = known_addresses
+					.iter()
+					.find(|o| o.1 == *addr && o.0 != *peer_id)
+				{
+					Err(Error::DuplicateBootnode {
+						address: addr.clone(),
+						first_id: peer_id.clone(),
+						second_id: other.0.clone(),
+					})
+				} else {
+					Ok(())
+				}
+			)?;
+
 		// Initialize the reserved peers.
 		for reserved in params.network_config.reserved_nodes.iter() {
 			if let Ok((peer_id, addr)) = parse_str_addr(reserved) {
@@ -171,9 +186,6 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 		};
 
 		// Private and public keys configuration.
-		if let NodeKeyConfig::Secp256k1(_) = params.network_config.node_key {
-			warn!(target: "sub-libp2p", "Secp256k1 keys are deprecated in favour of ed25519");
-		}
 		let local_identity = params.network_config.node_key.clone().into_keypair()?;
 		let local_public = local_identity.public();
 		let local_peer_id = local_public.clone().into_peer_id();
@@ -182,7 +194,10 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 		let num_connected = Arc::new(AtomicUsize::new(0));
 		let is_major_syncing = Arc::new(AtomicBool::new(false));
 		let (protocol, peerset_handle) = Protocol::new(
-			protocol::ProtocolConfig { roles: params.roles },
+			protocol::ProtocolConfig {
+				roles: params.roles,
+				max_parallel_downloads: params.network_config.max_parallel_downloads,
+			},
 			params.chain,
 			params.on_demand.as_ref().map(|od| od.checker().clone())
 				.unwrap_or(Arc::new(AlwaysBadChecker)),
@@ -469,8 +484,8 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 
 	/// Start getting a value from the DHT.
 	///
-	/// This will generate either a `ValueFound` or a `ValueNotFound` event and pass it to
-	/// `on_event` on the network specialization.
+	/// This will generate either a `ValueFound` or a `ValueNotFound` event and pass it as an
+	/// item on the [`NetworkWorker`] stream.
 	pub fn get_value(&self, key: &record::Key) {
 		let _ = self
 			.to_worker
@@ -479,8 +494,8 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 
 	/// Start putting a value in the DHT.
 	///
-	/// This will generate either a `ValuePut` or a `ValuePutFailed` event and pass it to
-	/// `on_event` on the network specialization.
+	/// This will generate either a `ValuePut` or a `ValuePutFailed` event and pass it as an
+	/// item on the [`NetworkWorker`] stream.
 	pub fn put_value(&self, key: record::Key, value: Vec<u8>) {
 		let _ = self
 			.to_worker
@@ -553,8 +568,9 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	}
 }
 
-impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>
-	::consensus::SyncOracle for NetworkService<B, S, H> {
+impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> consensus::SyncOracle
+	for NetworkService<B, S, H>
+{
 	fn is_major_syncing(&mut self) -> bool {
 		NetworkService::is_major_syncing(self)
 	}
@@ -564,8 +580,9 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>
 	}
 }
 
-impl<'a, B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>
-	::consensus::SyncOracle for &'a NetworkService<B, S, H> {
+impl<'a, B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> consensus::SyncOracle
+	for &'a NetworkService<B, S, H>
+{
 	fn is_major_syncing(&mut self) -> bool {
 		NetworkService::is_major_syncing(self)
 	}
@@ -705,12 +722,8 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Stream for Ne
 			let outcome = match poll_value {
 				Ok(Async::NotReady) => break,
 				Ok(Async::Ready(Some(BehaviourOut::SubstrateAction(outcome)))) => outcome,
-				Ok(Async::Ready(Some(BehaviourOut::Dht(ev)))) => {
-					self.network_service.user_protocol_mut()
-						.on_event(Event::Dht(ev.clone()));
-
-					return Ok(Async::Ready(Some(Event::Dht(ev))));
-				},
+				Ok(Async::Ready(Some(BehaviourOut::Dht(ev)))) =>
+					return Ok(Async::Ready(Some(Event::Dht(ev)))),
 				Ok(Async::Ready(None)) => CustomMessageOutcome::None,
 				Err(err) => {
 					error!(target: "sync", "Error in the network: {:?}", err);

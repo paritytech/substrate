@@ -33,6 +33,7 @@ use primitives::{
 	offchain::{
 		Timestamp, HttpRequestId, HttpRequestStatus, HttpError, StorageKind, OpaqueNetworkState,
 	},
+	LogLevel,
 };
 
 /// Error verifying ECDSA signature
@@ -158,6 +159,20 @@ export_api! {
 		fn print_utf8(utf8: &[u8]);
 		/// Print any `u8` slice as hex.
 		fn print_hex(data: &[u8]);
+
+		/// Request to print a log message (stderr) on the host.
+		///
+		/// Note that this will be only displayed if the host
+		/// is enabed to display log messages with given
+		/// level and target.
+		///
+		/// Instead of using directly, prefer setting up `RuntimeLogger`
+		/// and using `log` macros.
+		fn log(
+			level: LogLevel,
+			target: &[u8],
+			message: &[u8]
+		);
 	}
 }
 
@@ -205,15 +220,20 @@ export_api! {
 
 		/// Verify and recover a SECP256k1 ECDSA signature.
 		/// - `sig` is passed in RSV format. V should be either 0/1 or 27/28.
-		/// - returns `Err` if the signature is bad, otherwise the 64-byte pubkey (doesn't include the 0x04 prefix).
+		/// - returns `Err` if the signature is bad, otherwise the 64-byte raw pubkey (doesn't include the 0x04 prefix).
 		fn secp256k1_ecdsa_recover(sig: &[u8; 65], msg: &[u8; 32]) -> Result<[u8; 64], EcdsaVerifyError>;
+
+		/// Verify and recover a SECP256k1 ECDSA signature.
+		/// - `sig` is passed in RSV format. V should be either 0/1 or 27/28.
+		/// - returns `Err` if the signature is bad, otherwise the 33-byte compressed pubkey.
+		fn secp256k1_ecdsa_recover_compressed(sig: &[u8; 65], msg: &[u8; 32]) -> Result<[u8; 33], EcdsaVerifyError>;
 	}
 }
 
 export_api! {
 	pub(crate) trait HashingApi {
 		/// Conduct a 256-bit Keccak hash.
-		fn keccak_256(data: &[u8]) -> [u8; 32] ;
+		fn keccak_256(data: &[u8]) -> [u8; 32];
 
 		/// Conduct a 128-bit Blake2 hash.
 		fn blake2_128(data: &[u8]) -> [u8; 16];

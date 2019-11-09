@@ -23,6 +23,28 @@ use sr_staking_primitives::offence::{OffenceDetails, OnOffenceHandler};
 use support::{assert_ok, assert_noop, assert_eq_uvec, traits::{Currency, ReservableCurrency}};
 
 #[test]
+fn force_unstake_works() {
+	// Verifies initial conditions of mock
+	ExtBuilder::default().build().execute_with(|| {
+		// Account 11 is stashed and locked, and account 10 is the controller
+		assert_eq!(Staking::bonded(&11), Some(10));
+		// Cant transfer
+		assert_noop!(
+			Balances::transfer(Origin::signed(11), 1, 10),
+			"account liquidity restrictions prevent withdrawal"
+		);
+		// Force unstake requires root.
+		assert_noop!(Staking::force_unstake(Origin::signed(11), 11), "RequireRootOrigin");
+		// We now force them to unstake
+		assert_ok!(Staking::force_unstake(Origin::ROOT, 11));
+		// No longer bonded.
+		assert_eq!(Staking::bonded(&11), None);
+		// Transfer works.
+		assert_ok!(Balances::transfer(Origin::signed(11), 1, 10));
+	});
+}
+
+#[test]
 fn basic_setup_works() {
 	// Verifies initial conditions of mock
 	ExtBuilder::default().build().execute_with(|| {
@@ -753,7 +775,7 @@ fn forcing_new_era_works() {
 		assert_eq!(Staking::current_era(), 1);
 
 		// back to normal.
-		// this immediatelly starts a new session.
+		// this immediately starts a new session.
 		ForceEra::put(Forcing::NotForcing);
 		start_session(7);
 		assert_eq!(Staking::current_era(), 2);
@@ -761,9 +783,23 @@ fn forcing_new_era_works() {
 		assert_eq!(Staking::current_era(), 2);
 
 		// forceful change
-		ForceEra::put(Forcing::ForceNew);
+		ForceEra::put(Forcing::ForceAlways);
 		start_session(9);
 		assert_eq!(Staking::current_era(), 3);
+		start_session(10);
+		assert_eq!(Staking::current_era(), 4);
+		start_session(11);
+		assert_eq!(Staking::current_era(), 5);
+
+		// just one forceful change
+		ForceEra::put(Forcing::ForceNew);
+		start_session(12);
+		assert_eq!(Staking::current_era(), 6);
+
+		assert_eq!(ForceEra::get(), Forcing::NotForcing);
+		start_session(13);
+		assert_eq!(Staking::current_era(), 6);
+
 	});
 }
 
@@ -1740,6 +1776,45 @@ fn offence_forces_new_era() {
 }
 
 #[test]
+fn offence_ensures_new_era_without_clobbering() {
+	ExtBuilder::default().build().execute_with(|| {
+		assert_ok!(Staking::force_new_era_always(Origin::ROOT));
+
+		Staking::on_offence(
+			&[OffenceDetails {
+				offender: (
+					11,
+					Staking::stakers(&11),
+				),
+				reporters: vec![],
+			}],
+			&[Perbill::from_percent(5)],
+		);
+
+		assert_eq!(Staking::force_era(), Forcing::ForceAlways);
+	});
+}
+
+#[test]
+fn offence_deselects_validator_when_slash_is_zero() {
+	ExtBuilder::default().build().execute_with(|| {
+		assert!(<Validators<Test>>::exists(11));
+		Staking::on_offence(
+			&[OffenceDetails {
+				offender: (
+					11,
+					Staking::stakers(&11),
+				),
+				reporters: vec![],
+			}],
+			&[Perbill::from_percent(0)],
+		);
+		assert_eq!(Staking::force_era(), Forcing::ForceNew);
+		assert!(!<Validators<Test>>::exists(11));
+	});
+}
+
+#[test]
 fn slashing_performed_according_exposure() {
 	// This test checks that slashing is performed according the exposure (or more precisely,
 	// historical exposure), not the current balance.
@@ -1851,6 +1926,5 @@ fn dont_slash_if_fraction_is_zero() {
 
 		// The validator hasn't been slashed. The new era is not forced.
 		assert_eq!(Balances::free_balance(&11), 1000);
-		assert_eq!(Staking::force_era(), Forcing::NotForcing);
 	});
 }

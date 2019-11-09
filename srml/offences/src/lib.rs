@@ -59,7 +59,7 @@ pub trait Trait: system::Trait {
 decl_storage! {
 	trait Store for Module<T: Trait> as Offences {
 		/// The primary structure that holds all offence records keyed by report identifiers.
-		Reports get(reports): map ReportIdOf<T> => Option<OffenceDetails<T::AccountId, T::IdentificationTuple>>;
+		Reports get(fn reports): map ReportIdOf<T> => Option<OffenceDetails<T::AccountId, T::IdentificationTuple>>;
 
 		/// A vector of reports of the same kind that happened at the same time slot.
 		ConcurrentReportsIndex: double_map Kind, blake2_256(OpaqueTimeSlot) => Vec<ReportIdOf<T>>;

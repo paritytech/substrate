@@ -109,7 +109,7 @@ impl TelemetryWorker {
 
 		let transport = transport
 			.map((|inner, _| Compat01As03Sink::new(inner)) as fn(_, _) -> _)
-			.with_timeout(CONNECT_TIMEOUT);
+			.timeout(CONNECT_TIMEOUT);
 
 		TelemetryWorker {
 			nodes: endpoints.into_iter().map(|(addr, verbosity)| {

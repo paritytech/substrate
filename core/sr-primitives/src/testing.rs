@@ -20,9 +20,11 @@ use serde::{Serialize, Serializer, Deserialize, de::Error as DeError, Deserializ
 use std::{fmt::Debug, ops::Deref, fmt, cell::RefCell};
 use crate::codec::{Codec, Encode, Decode};
 use crate::traits::{
-	self, Checkable, Applyable, BlakeTwo256, OpaqueKeys, ValidateUnsigned,
+	self, Checkable, Applyable, BlakeTwo256, OpaqueKeys,
 	SignedExtension, Dispatchable,
 };
+#[allow(deprecated)]
+use crate::traits::ValidateUnsigned;
 use crate::{generic, KeyTypeId, ApplyResult};
 use crate::weights::{GetDispatchInfo, DispatchInfo};
 pub use primitives::{H256, sr25519};
@@ -117,10 +119,10 @@ impl app_crypto::RuntimeAppPublic for UintAuthorityId {
 }
 
 impl OpaqueKeys for UintAuthorityId {
-	type KeyTypeIds = std::iter::Cloned<std::slice::Iter<'static, KeyTypeId>>;
+	type KeyTypeIdProviders = ();
 
-	fn key_ids() -> Self::KeyTypeIds {
-		[key_types::DUMMY].iter().cloned()
+	fn key_ids() -> &'static [KeyTypeId] {
+		&[key_types::DUMMY]
 	}
 
 	fn get_raw(&self, _: KeyTypeId) -> &[u8] {
@@ -130,6 +132,10 @@ impl OpaqueKeys for UintAuthorityId {
 	fn get<T: Decode>(&self, _: KeyTypeId) -> Option<T> {
 		self.using_encoded(|mut x| T::decode(&mut x)).ok()
 	}
+}
+
+impl crate::BoundToRuntimeAppPublic for UintAuthorityId {
+	type Public = Self;
 }
 
 /// Digest item
@@ -319,6 +325,7 @@ impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 	fn sender(&self) -> Option<&Self::AccountId> { self.0.as_ref().map(|x| &x.0) }
 
 	/// Checks to see if this is a valid *transaction*. It returns information on it if so.
+	#[allow(deprecated)] // Allow ValidateUnsigned
 	fn validate<U: ValidateUnsigned<Call=Self::Call>>(
 		&self,
 		_info: DispatchInfo,
@@ -329,7 +336,8 @@ impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 
 	/// Executes all necessary logic needed prior to dispatch and deconstructs into function call,
 	/// index and sender.
-	fn apply(
+	#[allow(deprecated)] // Allow ValidateUnsigned
+	fn apply<U: ValidateUnsigned<Call=Self::Call>>(
 		self,
 		info: DispatchInfo,
 		len: usize,

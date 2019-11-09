@@ -21,7 +21,7 @@ use sr_primitives::{
 };
 use state_machine::{
 	self, OverlayedChanges, Ext, ExecutionManager, StateMachine, ExecutionStrategy,
-	backend::Backend as _, ChangesTrieTransaction,
+	backend::Backend as _, ChangesTrieTransaction, StorageProof,
 };
 use executor::{RuntimeVersion, RuntimeInfo, NativeVersion};
 use hash_db::Hasher;
@@ -127,7 +127,7 @@ where
 		overlay: &mut OverlayedChanges,
 		method: &str,
 		call_data: &[u8]
-	) -> Result<(Vec<u8>, Vec<Vec<u8>>), error::Error> {
+	) -> Result<(Vec<u8>, StorageProof), error::Error> {
 		let trie_state = state.as_trie_backend()
 			.ok_or_else(||
 				Box::new(state_machine::ExecutionError::UnableToGenerateProof)
@@ -145,7 +145,7 @@ where
 		overlay: &mut OverlayedChanges,
 		method: &str,
 		call_data: &[u8]
-	) -> Result<(Vec<u8>, Vec<Vec<u8>>), error::Error>;
+	) -> Result<(Vec<u8>, StorageProof), error::Error>;
 
 	/// Get runtime version if supported.
 	fn native_runtime_version(&self) -> Option<&NativeVersion>;
@@ -377,7 +377,7 @@ where
 		overlay: &mut OverlayedChanges,
 		method: &str,
 		call_data: &[u8]
-	) -> Result<(Vec<u8>, Vec<Vec<u8>>), error::Error> {
+	) -> Result<(Vec<u8>, StorageProof), error::Error> {
 		state_machine::prove_execution_on_trie_backend(
 			trie_state,
 			overlay,
