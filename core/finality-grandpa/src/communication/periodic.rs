@@ -126,10 +126,10 @@ struct BlockAnnouncer<B: BlockT, N> {
 
 /// Actions to trigger in the background block announcer.
 enum BlockAnnouncerAction<B: BlockT> {
-    /// Add the given block for periodic reannouncement.
-    Announce((B::Hash, Vec<u8>)),
-    /// Clear existing blocks to reannounce.
-    Clear,
+	/// Add the given block for periodic reannouncement.
+	Announce((B::Hash, Vec<u8>)),
+	/// Clear existing blocks to reannounce.
+	Clear,
 }
 
 /// A background worker for announcing block hashes to peers. The worker keeps
@@ -192,9 +192,9 @@ impl<B: BlockT, N> BlockAnnouncer<B, N> {
 		}
 	}
 
-    fn clear(&mut self) {
-        self.latest_voted_blocks.clear();
-    }
+	fn clear(&mut self) {
+		self.latest_voted_blocks.clear();
+	}
 
 	fn reset_delay(&mut self) {
 		self.delay.reset(Instant::now() + self.reannounce_after);
@@ -217,8 +217,8 @@ impl<B: BlockT, N: Network<B>> Future for BlockAnnouncer<B, N> {
 					}
 				},
 				Async::Ready(Some(BlockAnnouncerAction::Clear)) => {
-                    self.clear();
-                }
+					self.clear();
+				}
 				Async::NotReady => break,
 			}
 		}
@@ -256,21 +256,21 @@ impl<B: BlockT, N: Network<B>> Future for BlockAnnouncer<B, N> {
 /// A sender used to send block hashes to announce to a background job.
 #[derive(Clone)]
 pub(super) struct BlockAnnounceSender<B: BlockT>(
-    mpsc::UnboundedSender<BlockAnnouncerAction<B>>,
+	mpsc::UnboundedSender<BlockAnnouncerAction<B>>,
 );
 
 impl<B: BlockT> BlockAnnounceSender<B> {
 	/// Send a block hash for the background worker to announce.
 	pub fn send(&self, block: B::Hash, associated_data: Vec<u8>) {
-        let action = BlockAnnouncerAction::Announce((block, associated_data));
+		let action = BlockAnnouncerAction::Announce((block, associated_data));
 		if let Err(err) = self.0.unbounded_send(action) {
 			debug!(target: "afg", "Failed to send block to background announcer: {:?}", err);
 		}
 	}
 
-    /// Clear all existing blocks from the background worker.
+	/// Clear all existing blocks from the background worker.
 	pub fn clear(&self) {
-        let action = BlockAnnouncerAction::Clear;
+		let action = BlockAnnouncerAction::Clear;
 		if let Err(err) = self.0.unbounded_send(action) {
 			debug!(target: "afg", "Failed to clear blocks from background announcer: {:?}", err);
 		}

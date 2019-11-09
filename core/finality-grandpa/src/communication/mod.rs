@@ -729,9 +729,9 @@ struct OutgoingMessages<Block: BlockT, N: Network<Block>> {
 }
 
 impl<Block: BlockT, N: Network<Block>> Drop for OutgoingMessages<Block, N> {
-    fn drop(&mut self) {
-        self.announce_sender.clear();
-    }
+	fn drop(&mut self) {
+		self.announce_sender.clear();
+	}
 }
 
 impl<Block: BlockT, N: Network<Block>> Sink for OutgoingMessages<Block, N>
