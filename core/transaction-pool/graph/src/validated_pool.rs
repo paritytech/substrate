@@ -16,6 +16,7 @@
 
 use std::{
 	collections::{HashSet, HashMap},
+	fmt,
 	hash,
 	time,
 };
@@ -355,7 +356,7 @@ fn fire_events<H, H2, Ex>(
 	imported: &base::Imported<H, Ex>,
 ) where
 	H: hash::Hash + Eq + traits::Member + Serialize,
-	H2: Clone,
+	H2: Clone + fmt::Debug,
 {
 	match *imported {
 		base::Imported::Ready { ref promoted, ref failed, ref removed, ref hash } => {
