@@ -18,6 +18,7 @@ use proc_macro2::Span;
 use srml_support_procedural_tools::{syn_ext as ext, Parse, ToTokens};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use syn::{
+	token,
 	parse::{Parse, ParseStream},
 	spanned::Spanned,
 	Ident, Result, Token,
@@ -65,6 +66,7 @@ impl Parse for WhereSection {
 		let mut seen_keys = HashSet::new();
 		let mut definitions = HashMap::new();
 		loop {
+			if input.peek(token::Brace) { break; }
 			let WhereDefinition { kind, value } = WhereDefinition::parse(input, &mut seen_keys)?;
 			definitions.insert(kind, value);
 			if !input.peek(Token![,]) { break; }
