@@ -16,7 +16,7 @@
 
 use proc_macro2::Span;
 use srml_support_procedural_tools::{syn_ext as ext, Parse, ToTokens};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap, HashSet};
 use syn::{
 	parse::{Parse, ParseStream},
 	spanned::Spanned,
@@ -29,7 +29,7 @@ mod keyword {
 	syn::custom_keyword!(UncheckedExtrinsic);
 }
 
-#[derive(Parse, ToTokens, Debug)]
+#[derive(Debug)]
 pub struct RuntimeDefinition {
 	pub visibility_token: Token![pub],
 	pub enum_token: Token![enum],
@@ -38,21 +38,103 @@ pub struct RuntimeDefinition {
 	pub modules: ext::Braces<ext::Punctuated<ModuleDeclaration, Token![,]>>,
 }
 
-#[derive(Parse, ToTokens, Debug)]
+impl Parse for RuntimeDefinition {
+	fn parse(input: ParseStream) -> Result<Self> {
+		Ok(
+			Self {
+				visibility_token: input.parse()?,
+				enum_token: input.parse()?,
+				name: input.parse()?,
+				where_section: input.parse()?,
+				modules: input.parse()?,
+			}
+		)
+	}
+}
+
+#[derive(Debug)]
 pub struct WhereSection {
-	pub token: Token![where],
-	pub block_token: keyword::Block,
-	pub block_eq: Token![=],
 	pub block: syn::TypePath,
-	pub block_sep: Token![,],
-	pub node_block_token: keyword::NodeBlock,
-	pub node_block_eq: Token![=],
 	pub node_block: syn::TypePath,
-	pub node_block_sep: Token![,],
-	pub unchecked_extrinsic_token: keyword::UncheckedExtrinsic,
-	pub unchecked_extrinsic_eq: Token![=],
 	pub unchecked_extrinsic: syn::TypePath,
-	pub trailing_comma: ext::Opt<Token![,]>,
+}
+
+impl Parse for WhereSection {
+	fn parse(input: ParseStream) -> Result<Self> {
+		let mut seen_keys = HashSet::new();
+		let mut definitions = HashMap::new();
+		loop {
+			let WhereDefinition { kind, value } = WhereDefinition::parse(input, &mut seen_keys)?;
+			definitions.insert(kind, value);
+			if !input.peek(Token![,]) { break; }
+			let _: Token![,] = input.parse()?;
+		}
+		let expected_seen_keys: HashSet<_> = vec![WhereKind::Block, WhereKind::NodeBlock, WhereKind::UncheckedExtrinsic].into_iter().collect();
+		let diff: Vec<_> = expected_seen_keys.difference(&seen_keys).collect();
+		if diff.len() > 0 {
+			let msg = format!("Missing associated type for `{:?}`. Add `{:?}` = ... to where section", diff[0], diff[0]);
+			return Err(input.error(msg))
+		}
+		Ok(
+			Self {
+				block: definitions.remove(&WhereKind::Block).expect("Definitions is guaranteed to have this key; qed"),
+				node_block: definitions.remove(&WhereKind::NodeBlock).expect("Definitions is guaranteed to have this key; qed"),
+				unchecked_extrinsic: definitions.remove(&WhereKind::UncheckedExtrinsic).expect("Definitions is guaranteed to have this key; qed"),
+			}
+		)
+	}
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
+pub enum WhereKind {
+	Block,
+	NodeBlock,
+	UncheckedExtrinsic,
+}
+
+impl WhereKind {
+	pub fn parse(input: ParseStream, seen_keys: &mut HashSet<WhereKind>) -> Result<Self> {
+		let lookahead = input.lookahead1();
+        if lookahead.peek(keyword::Block) {
+			WhereKind::Block.parse_concrete::<keyword::Block>(input, seen_keys)
+        } else if lookahead.peek(keyword::NodeBlock) {
+			WhereKind::NodeBlock.parse_concrete::<keyword::NodeBlock>(input, seen_keys)
+        } else if lookahead.peek(keyword::UncheckedExtrinsic) {
+			WhereKind::UncheckedExtrinsic.parse_concrete::<keyword::UncheckedExtrinsic>(input, seen_keys)
+        } else {
+            Err(lookahead.error())
+        }
+	}
+
+	fn parse_concrete<KW: Parse>(&self, input: ParseStream, seen_keys: &mut HashSet<WhereKind>) -> Result<Self> {
+		if seen_keys.contains(self) {
+			let msg = format!("`{:?}` was declared above. Please use exactly one delcataion for `{:?}`", self, self);
+			return Err(input.error(msg))
+		}
+		seen_keys.insert(*self);
+		let _: KW = input.parse()?;
+		Ok(*self)
+	}
+}
+
+#[derive(Debug)]
+pub struct WhereDefinition {
+	pub kind: WhereKind,
+	pub value: syn::TypePath,
+}
+
+impl WhereDefinition {
+	fn parse(input: ParseStream, seen_keys: &mut HashSet<WhereKind>) -> Result<Self> {
+		Ok(
+			Self {
+				kind: WhereKind::parse(input, seen_keys)?,
+				value: {
+					let _: Token![=] = input.parse()?;
+					input.parse()?
+				}
+			}
+		)
+	}
 }
 
 #[derive(Parse, ToTokens, Debug)]
