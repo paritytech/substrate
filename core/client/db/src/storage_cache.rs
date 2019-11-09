@@ -668,11 +668,14 @@ mod tests {
 
 	#[test]
 	fn simple_fork() {
+		let _ = ::env_logger::try_init();
+
 		let root_parent = H256::random();
 		let key = H256::random()[..].to_vec();
 		let h1 = H256::random();
 		let h2a = H256::random();
 		let h2b = H256::random();
+		let h3b = H256::random();
 
 		let shared = new_shared_cache::<Block, Blake2Hasher>(256*1024, (0,1));
 
@@ -680,10 +683,13 @@ mod tests {
 		s.cache.sync_cache(&[], &[], vec![(key.clone(), Some(vec![2]))], vec![], Some(h1), Some(1), || true);
 
 		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h1));
-		s.cache.sync_cache(&[], &[], vec![(key.clone(), Some(vec![2]))], vec![], Some(h2a), Some(2), || true);
+		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h2a), Some(2), || true);
 
 		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h1));
 		s.cache.sync_cache(&[], &[], vec![(key.clone(), Some(vec![3]))], vec![], Some(h2b), Some(2), || false);
+
+		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h2b));
+		s.cache.sync_cache(&[], &[], vec![(key.clone(), Some(vec![3]))], vec![], Some(h3b), Some(2), || false);
 
 		let s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h2a));
 		assert_eq!(s.storage(&key).unwrap().unwrap(), vec![2]);
@@ -1179,9 +1185,8 @@ mod qc {
 						return false;
 					}
 				},
-				(None, Some(y)) => {
-					eprintln!("<missing> != {:?}", y);
-					return false;
+				(None, Some(_y)) => {
+					// TODO: cache miss is not tracked atm
 				},
 				(Some(x), None) => {
 					eprintln!("{:?} != <missing>", x);
@@ -1204,9 +1209,8 @@ mod qc {
 							return false;
 						}
 					},
-					(None, Some(y)) => {
-						eprintln!("at [{}]: <missing> != {:?}", node.hash, y);
-						return false;
+					(None, Some(_y)) => {
+						// cache miss is not tracked atm
 					},
 					(Some(x), None) => {
 						eprintln!("at [{}]: {:?} != <missing>", node.hash, x);
@@ -1280,6 +1284,23 @@ mod qc {
 		mutator.mutate_static(Action::Fork { depth: 2, hash: h3b, changes: keyval(1, 2) });
 
 		assert!(is_head_match(&mutator))
+	}
+
+	#[test]
+	fn fork3() {
+		let h1 = H256::random();
+		let h2a = H256::random();
+		let h2b = H256::random();
+		let h3a = H256::random();
+
+		let mut mutator = Mutator::new_empty();
+		mutator.mutate_static(Action::Next { hash: h1, changes: keyval(1, 1) });
+		mutator.mutate_static(Action::Next { hash: h2a, changes: keyval(2, 2) });
+		mutator.mutate_static(Action::Next { hash: h3a, changes: keyval(3, 3) });
+
+		mutator.mutate_static(Action::Fork { depth: 2, hash: h2b, changes: keyval(1, 3) });
+
+		assert!(is_canon_match(&mutator))
 	}
 
 	quickcheck! {
