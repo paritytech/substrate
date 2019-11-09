@@ -1037,7 +1037,7 @@ impl<B: BlockT> ChainSync<B> {
 			peer.recently_announced.pop_front();
 		}
 		peer.recently_announced.push_back(hash.clone());
-		if is_best && number > peer.best_number {
+		if is_best {
 			// update their best block
 			peer.best_number = number;
 			peer.best_hash = hash;
