@@ -497,7 +497,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	/// Get longest range within [first; last] that is possible to use in `key_changes`
 	/// and `key_changes_proof` calls.
 	/// Range could be shortened from the beginning if some changes tries have been pruned.
-	/// Returns Ok(None) if changes trues are not supported.
+	/// Returns Ok(None) if changes tries are not supported.
 	pub fn max_key_changes_range(
 		&self,
 		first: NumberFor<Block>,

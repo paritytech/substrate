@@ -105,6 +105,10 @@ impl<B: BlockT> BlockCollection<B> {
 		max_parallel: u32,
 	) -> Option<Range<NumberFor<B>>>
 	{
+		if peer_best <= common {
+			// Bail out early
+			return None;
+		}
 		// First block number that we need to download
 		let first_different = common + <NumberFor<B>>::one();
 		let count = (count as u32).into();

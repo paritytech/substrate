@@ -628,6 +628,8 @@ fn fill_network_configuration(
 		wasm_external_transport: None,
 	};
 
+	config.max_parallel_downloads = cli.max_parallel_downloads;
+
 	Ok(())
 }
 

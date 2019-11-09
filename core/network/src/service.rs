@@ -194,7 +194,10 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 		let num_connected = Arc::new(AtomicUsize::new(0));
 		let is_major_syncing = Arc::new(AtomicBool::new(false));
 		let (protocol, peerset_handle) = Protocol::new(
-			protocol::ProtocolConfig { roles: params.roles },
+			protocol::ProtocolConfig {
+				roles: params.roles,
+				max_parallel_downloads: params.network_config.max_parallel_downloads,
+			},
 			params.chain,
 			params.on_demand.as_ref().map(|od| od.checker().clone())
 				.unwrap_or(Arc::new(AlwaysBadChecker)),
