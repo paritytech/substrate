@@ -17,7 +17,7 @@ decl_runtime_apis! {
 
 impl_runtime_apis! {
 	impl self::Api<Block> for Runtime {
-		fn test(data: &u64) {
+		fn test(data: u64) {
 			unimplemented!()
 		}
 	}
