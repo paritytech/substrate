@@ -28,7 +28,6 @@ pub(crate) const DEFAULT_INSTANTIABLE_TRAIT_NAME: &str = "__GeneratedInstantiabl
 // prefix for consts in trait Instance
 pub(crate) const PREFIX_FOR: &str = "PREFIX_FOR_";
 pub(crate) const HEAD_KEY_FOR: &str = "HEAD_KEY_FOR_";
-pub(crate) const LINKED_MAP_KEY_FORMAT_FOR: &str = "LINKED_MAP_KEY_FORMAT_FOR_";
 
 // Used to generate the const:
 // `const $name: &'static str = $value_prefix ++ instance_prefix ++ $value_suffix`
