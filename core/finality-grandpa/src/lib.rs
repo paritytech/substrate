@@ -746,7 +746,8 @@ where
 					(*self.env.voters).clone(),
 					global_comms,
 					last_completed_round.number,
-					last_completed_round.state.clone(),
+					last_completed_round.votes.clone(),
+					last_completed_round.base.clone(),
 					last_finalized,
 				);
 
