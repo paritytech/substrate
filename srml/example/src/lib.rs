@@ -500,7 +500,8 @@ decl_module! {
 
 		// The signature could also look like: `fn on_initialize()`.
 		// This function could also very well have a weight annotation, similar to any other. The
-		// only difference being the default value.
+		// only difference being that if it is not annotated, the default is
+		// `SimpleDispatchInfo::zero()`, which resolves into no weight.
 		#[weight = SimpleDispatchInfo::FixedNormal(1000)]
 		fn on_initialize(_n: T::BlockNumber) {
 			// Anything that needs to be done at the start of the block.

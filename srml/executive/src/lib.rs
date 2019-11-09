@@ -111,7 +111,11 @@ impl<
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
 	Context: Default,
 	UnsignedValidator,
-	AllModules: OnInitialize<System::BlockNumber> + OnFinalize<System::BlockNumber> + OffchainWorker<System::BlockNumber> + WeighBlock,
+	AllModules:
+		OnInitialize<System::BlockNumber> +
+		OnFinalize<System::BlockNumber> +
+		OffchainWorker<System::BlockNumber> +
+		WeighBlock<System::BlockNumber>,
 > ExecuteBlock<Block> for Executive<System, Block, Context, UnsignedValidator, AllModules>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
@@ -131,7 +135,11 @@ impl<
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
 	Context: Default,
 	UnsignedValidator,
-	AllModules: OnInitialize<System::BlockNumber> + OnFinalize<System::BlockNumber> + OffchainWorker<System::BlockNumber> + WeighBlock,
+	AllModules:
+		OnInitialize<System::BlockNumber> +
+		OnFinalize<System::BlockNumber> +
+		OffchainWorker<System::BlockNumber> +
+		WeighBlock<System::BlockNumber>,
 > Executive<System, Block, Context, UnsignedValidator, AllModules>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
@@ -155,10 +163,12 @@ where
 	) {
 		<system::Module<System>>::initialize(block_number, parent_hash, extrinsics_root, digest);
 		<AllModules as OnInitialize<System::BlockNumber>>::on_initialize(*block_number);
-		// TODO: so what if we already know that we are fucked here? Maybe call it unchecked for now
-		// TODO: add block number as parameter.
-		<system::Module<System>>::register_extra_weight(<AllModules as WeighBlock>::on_initialize());
-		<system::Module<System>>::register_extra_weight(<AllModules as WeighBlock>::on_finalize());
+		<system::Module<System>>::register_extra_weight_unchecked(
+			<AllModules as WeighBlock<System::BlockNumber>>::on_initialize(*block_number)
+		);
+		<system::Module<System>>::register_extra_weight_unchecked(
+			<AllModules as WeighBlock<System::BlockNumber>>::on_finalize(*block_number)
+		);
 	}
 
 	fn initial_checks(block: &Block) {

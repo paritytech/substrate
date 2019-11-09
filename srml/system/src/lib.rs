@@ -617,15 +617,15 @@ impl<T: Trait> Module<T> {
 	/// unknown, user provided call's weight, it would only make sense to use it if you are sure you
 	/// can rapidly compute the weight of the inner call.
 	///
-	/// Even more dangerous is to note that this function does NOT
+	/// Even more dangerous is to note that this function does NOT take any action, if the new sum
+	/// of block weight is more than the block weight limit. This is what the _unchecked_.
 	///
-	/// Another use-case could be for the `on_initialise` and `on_finalize` hooks.
+	/// Another potential use-case could be for the `on_initialise` and `on_finalize` hooks.
 	///
-	/// If no previous transactions exist, the function initializes the weight to zero.
-	pub fn register_extra_weight(weight: Weight) {
+	/// If no previous weight exists, the function initializes the weight to zero.
+	pub fn register_extra_weight_unchecked(weight: Weight) {
 		let current_weight = AllExtrinsicsWeight::get().unwrap_or_default();
 		let next_weight = current_weight.saturating_add(weight).min(T::MaximumBlockWeight::get());
-		// dbg!(current_weight, next_weight);
 		AllExtrinsicsWeight::put(next_weight);
 	}
 

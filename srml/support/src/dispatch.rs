@@ -924,7 +924,6 @@ macro_rules! decl_module {
 		}
 	};
 
-	// TODO: is this how you do optional single repetition?
 	(@impl_block_hooks_weight
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
 		{ $( $other_where_bounds:tt )* }
@@ -937,17 +936,17 @@ macro_rules! decl_module {
 			fn on_finalize($( $param_finalize:ident : $param_ty_finalize:ty )*) { $( $impl_finalize:tt )* }
 		)?
 	) => {
-		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?> $crate::dispatch::WeighBlock
+		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?> $crate::dispatch::WeighBlock<$trait_instance::BlockNumber>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			$(
-				fn on_initialize() -> $crate::dispatch::Weight {
-					<dyn $crate::dispatch::WeighData<()>>::weigh_data(&$weight_initialize, ())
+				fn on_initialize(n: $trait_instance::BlockNumber) -> $crate::dispatch::Weight {
+					<dyn $crate::dispatch::WeighData<$trait_instance::BlockNumber>>::weigh_data(&$weight_initialize, n)
 				}
 			)?
 			$(
-				fn on_finalize() -> $crate::dispatch::Weight {
-					<dyn $crate::dispatch::WeighData<()>>::weigh_data(&$weight_finalize, ())
+				fn on_finalize(n: $trait_instance::BlockNumber) -> $crate::dispatch::Weight {
+					<dyn $crate::dispatch::WeighData<$trait_instance::BlockNumber>>::weigh_data(&$weight_finalize, n)
 				}
 			)?
 		}
@@ -1848,6 +1847,14 @@ mod tests {
 		}
 	}
 
+	struct BLockWeight;
+	impl<BlockNumber: Into<u32>> WeighData<BlockNumber> for BLockWeight {
+		fn weigh_data(&self, target: BlockNumber) -> Weight {
+			let target: u32 = target.into();
+			if target % 2 == 0 { 10 } else { 0 }
+		}
+	}
+
 	decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin, T::AccountId: From<u32> {
 			/// Hi, this is a comment.
@@ -1861,7 +1868,7 @@ mod tests {
 
 			#[weight = SimpleDispatchInfo::FixedNormal(7)]
 			fn on_initialize(n: T::BlockNumber,) { if n.into() == 42 { panic!("on_initialize") } }
-			#[weight = SimpleDispatchInfo::FixedOperational(11)]
+			#[weight = BLockWeight]
 			fn on_finalize(n: T::BlockNumber) { if n.into() == 42 { panic!("on_finalize") } }
 			fn offchain_worker() {}
 
@@ -2025,7 +2032,13 @@ mod tests {
 
 	#[test]
 	fn weight_for_block_hooks() {
-		assert_eq!(<Test as WeighBlock>::on_initialize(), 7);
-		assert_eq!(<Test as WeighBlock>::on_finalize(), 11);
+		// independent of block number
+		assert_eq!(<Test as WeighBlock<u32>>::on_initialize(0), 7);
+		assert_eq!(<Test as WeighBlock<u32>>::on_initialize(10), 7);
+		assert_eq!(<Test as WeighBlock<u32>>::on_initialize(100), 7);
+
+		// dependent
+		assert_eq!(<Test as WeighBlock<u32>>::on_finalize(2), 10);
+		assert_eq!(<Test as WeighBlock<u32>>::on_finalize(3), 0);
 	}
 }

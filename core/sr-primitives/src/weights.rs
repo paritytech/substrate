@@ -65,28 +65,28 @@ pub trait ClassifyDispatch<T> {
 
 /// Means of determining the weight of a block's lifecycle hooks: on_initialize, on_finalize and
 /// such.
-pub trait WeighBlock {
+pub trait WeighBlock<BlockNumber> {
 	/// Return the weight of the block's on_initialize hook.
-	fn on_initialize() -> Weight { Zero::zero() }
+	fn on_initialize(_: BlockNumber) -> Weight { Zero::zero() }
 	/// Return the weight of the block's on_finalize hook.
-	fn on_finalize() -> Weight { Zero::zero() }
+	fn on_finalize(_: BlockNumber) -> Weight { Zero::zero() }
 }
 
 /// Maybe I can do something to remove the duplicate code here.
-#[impl_for_tuples(5)]
-impl WeighBlock for SingleModule {
-	fn on_initialize() -> Weight {
+#[impl_for_tuples(30)]
+impl<BlockNumber: Copy> WeighBlock<BlockNumber> for SingleModule {
+	fn on_initialize(n: BlockNumber) -> Weight {
 		let mut accumulated_weight: Weight = Zero::zero();
 		for_tuples!(
-			#( accumulated_weight = accumulated_weight.saturating_add(SingleModule::on_initialize()); )*
+			#( accumulated_weight = accumulated_weight.saturating_add(SingleModule::on_initialize(n)); )*
 		);
 		accumulated_weight
 	}
 
-	fn on_finalize() -> Weight {
+	fn on_finalize(n: BlockNumber) -> Weight {
 		let mut accumulated_weight: Weight = Zero::zero();
 		for_tuples!(
-			#( accumulated_weight = accumulated_weight.saturating_add(SingleModule::on_finalize()); )*
+			#( accumulated_weight = accumulated_weight.saturating_add(SingleModule::on_finalize(n)); )*
 		);
 		accumulated_weight
 	}

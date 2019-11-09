@@ -92,9 +92,6 @@ impl<Address, Call, Signature, Extra: SignedExtension> Extrinsic
 	}
 }
 
-
-pub trait Marker {}
-
 impl<Address, AccountId, Call, Signature, Extra, Lookup>
 	Checkable<Lookup>
 for
