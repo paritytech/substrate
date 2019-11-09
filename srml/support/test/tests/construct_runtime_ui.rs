@@ -6,5 +6,5 @@ fn ui() {
 	env::set_var("BUILD_DUMMY_WASM_BINARY", "1");
 
 	let t = trybuild::TestCases::new();
-	t.compile_fail("tests/ui/*.rs");
+	t.compile_fail("tests/construct_runtime_ui/*.rs");
 }
