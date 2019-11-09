@@ -728,6 +728,12 @@ struct OutgoingMessages<Block: BlockT, N: Network<Block>> {
 	has_voted: HasVoted<Block>,
 }
 
+impl<Block: BlockT, N: Network<Block>> Drop for OutgoingMessages<Block, N> {
+    fn drop(&mut self) {
+        self.announce_sender.clear();
+    }
+}
+
 impl<Block: BlockT, N: Network<Block>> Sink for OutgoingMessages<Block, N>
 {
 	type SinkItem = Message<Block>;
