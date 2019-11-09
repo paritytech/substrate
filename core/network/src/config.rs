@@ -81,7 +81,7 @@ pub struct Params<B: BlockT, S, H: ExHashT> {
 	pub specialization: S,
 
 	/// Type to check incoming block announcements.
-	pub block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>
+	pub block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>,
 }
 
 bitflags! {
@@ -273,6 +273,9 @@ pub struct NetworkConfiguration {
 	/// If a remote tries to open a substream with one of these protocol names, we know that it is
 	/// a gossiping protocol that requires a handshake message.
 	pub extra_gossip_protos: Vec<Vec<u8>>,
+
+	/// Maximum number of peers to ask the same blocks in parallel.
+	pub max_parallel_downloads: u32,
 }
 
 impl Default for NetworkConfiguration {
@@ -296,6 +299,7 @@ impl Default for NetworkConfiguration {
 			},
 			extra_request_response_protos: Vec::new(),
 			extra_gossip_protos: Vec::new(),
+			max_parallel_downloads: 5,
 		}
 	}
 }

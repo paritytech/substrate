@@ -88,33 +88,35 @@ fn replace_path_dependencies_with_git(cargo_toml_path: &Path, commit_id: &str, c
 	// remove `Cargo.toml`
 	cargo_toml_path.pop();
 
-	let mut dependencies: toml::value::Table = match cargo_toml
-		.remove("dependencies")
-		.and_then(|v| v.try_into().ok()) {
-		Some(deps) => deps,
-		None => return,
-	};
+	for table in &["dependencies", "build-dependencies"] {
+		let mut dependencies: toml::value::Table = match cargo_toml
+			.remove(table)
+			.and_then(|v| v.try_into().ok()) {
+			Some(deps) => deps,
+			None => continue,
+		};
 
-	let deps_rewritten = dependencies
-		.iter()
-		.filter_map(|(k, v)| v.clone().try_into::<toml::value::Table>().ok().map(move |v| (k, v)))
-		.filter(|t| t.1.contains_key("path"))
-		.filter(|t| {
-			// if the path does not exists, we need to add this as git dependency
-			t.1.get("path").unwrap().as_str().map(|path| !cargo_toml_path.join(path).exists()).unwrap_or(false)
-		})
-		.map(|(k, mut v)| {
-			// remove `path` and add `git` and `rev`
-			v.remove("path");
-			v.insert("git".into(), SUBSTRATE_GIT_URL.into());
-			v.insert("rev".into(), commit_id.into());
+		let deps_rewritten = dependencies
+			.iter()
+			.filter_map(|(k, v)| v.clone().try_into::<toml::value::Table>().ok().map(move |v| (k, v)))
+			.filter(|t| t.1.contains_key("path"))
+			.filter(|t| {
+				// if the path does not exists, we need to add this as git dependency
+				t.1.get("path").unwrap().as_str().map(|path| !cargo_toml_path.join(path).exists()).unwrap_or(false)
+			})
+			.map(|(k, mut v)| {
+				// remove `path` and add `git` and `rev`
+				v.remove("path");
+				v.insert("git".into(), SUBSTRATE_GIT_URL.into());
+				v.insert("rev".into(), commit_id.into());
 
-			(k.clone(), v.into())
-		}).collect::<HashMap<_, _>>();
+				(k.clone(), v.into())
+			}).collect::<HashMap<_, _>>();
 
-	dependencies.extend(deps_rewritten.into_iter());
+		dependencies.extend(deps_rewritten.into_iter());
 
-	cargo_toml.insert("dependencies".into(), dependencies.into());
+		cargo_toml.insert(table.into(), dependencies.into());
+	}
 }
 
 /// Update the top level (workspace) `Cargo.toml` file.
