@@ -14,7 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::generic_proto::upgrade::NotificationsIn;
+use crate::generic_proto::handler::{
+	notif_in_handler::NotifHandlerProto,
+	notif_out_handler::NotifsOutProtoHandlerProto,
+};
 use futures::prelude::*;
 use libp2p::core::{ConnectedPoint, PeerId, Endpoint};
 use libp2p::core::either::EitherError;
@@ -34,40 +37,36 @@ use tokio_io::{AsyncRead, AsyncWrite};
 ///
 /// Every time a connection with a remote starts, an instance of this struct is created and
 /// sent to a background task dedicated to this connection. Once the connection is established,
-/// it is turned into a [`NotifsInHandler`].
-pub struct NotifsInHandlerProto<TSubstream> {
-	/// Configuration for the protocol upgrade to negotiate.
-	in_protocol: NotificationsIn,
-
-	/// Marker to pin the generic type.
-	marker: PhantomData<TSubstream>,
+/// it is turned into a [`NotifHandler`].
+pub struct NotifHandlerProto<TSubstream> {
+	in_handlers: ,
 }
 
-impl<TSubstream> NotifsInHandlerProto<TSubstream>
+impl<TSubstream> NotifHandlerProto<TSubstream>
 where
 	TSubstream: AsyncRead + AsyncWrite,
 {
-	/// Builds a new `NotifsInHandlerProto`.
+	/// Builds a new `NotifHandlerProto`.
 	pub fn new(proto_name: impl Into<Cow<'static, [u8]>>, handshake_msg: impl Into<Vec<u8>>) -> Self {
-		NotifsInHandlerProto {
+		NotifHandlerProto {
 			in_protocol: NotificationsIn::new(proto_name, handshake_msg),
 			marker: PhantomData,
 		}
 	}
 }
 
-impl<TSubstream> IntoProtocolsHandler for NotifsInHandlerProto<TSubstream>
+impl<TSubstream> IntoProtocolsHandler for NotifHandlerProto<TSubstream>
 where
 	TSubstream: AsyncRead + AsyncWrite + 'static,
 {
-	type Handler = NotifsInHandler<TSubstream>;
+	type Handler = NotifHandler<TSubstream>;
 
 	fn inbound_protocol(&self) -> NotificationsIn {
-		self.in_protocol.clone()
+		self.in_handlers.clone()
 	}
 
 	fn into_handler(self, remote_peer_id: &PeerId, connected_point: &ConnectedPoint) -> Self::Handler {
-		NotifsInHandler {
+		NotifHandler {
 			in_protocol: self.in_protocol,
 			endpoint: connected_point.to_endpoint(),
 			remote_peer_id: remote_peer_id.clone(),
@@ -78,70 +77,111 @@ where
 }
 
 /// The actual handler once the connection has been established.
-pub struct NotifsInHandler<TSubstream> {
+pub struct NotifHandler<TSubstream> {
 	/// Configuration for the protocol upgrade to negotiate for inbound substreams.
-	in_protocol: NotificationsIn,
-
-	/// Identifier of the node we're talking to. Used only for logging purposes and shouldn't have
-	/// any influence on the behaviour.
-	// TODO: remove?
-	remote_peer_id: PeerId,
-
-	/// Whether we are the connection dialer or listener. Used only for logging purposes and
-	/// shouldn't have any influence on the behaviour.
-	// TODO: remove?
-	endpoint: Endpoint,
+	in_handlers: NotificationsIn,
 
 	/// Queue of events to send to the outside.
 	///
 	/// This queue must only ever be modified to insert elements at the back, or remove the first
 	/// element.
-	events_queue: SmallVec<[ProtocolsHandlerEvent<DeniedUpgrade, (), NotifsInHandlerOut>; 16]>,
+	events_queue: SmallVec<[ProtocolsHandlerEvent<DeniedUpgrade, (), NotifHandlerOut>; 16]>,
 
 	/// Marker to pin the generic type.
 	marker: PhantomData<TSubstream>,
 }
 
-/// Event that can be received by a `NotifsInHandler`.
+/// Event that can be received by a `NotifHandler`.
 #[derive(Debug)]
-pub enum NotifsInHandlerIn {
+pub enum NotifHandlerIn {
 	/// Whenever a remote opens a notifications substream, we send to it a "node information"
 	/// handshake message. This message is cached in the `ProtocolsHandler`, and `UpdateNodeInfos`
 	/// updates this cached message.
 	UpdateNodeInfos {
+		/// Notifications protocol for which we want to modify the information.
+		proto_name: Cow<'static, [u8]>,
 		/// Information sent to the remote.
 		infos: Vec<u8>,
 	},
+
+	/// Enables the notifications substream for this node for this protocol. The handler will try
+	/// to maintain a substream with the remote.
+	Enable {
+		/// Protocol for which we should open a substream.
+		proto_name: Cow<'static, [u8]>,
+	},
+
+	/// Disables the notifications substream for this node for this protocol.
+	Disable {
+		/// Protocol for which we close the substream.
+		proto_name: Cow<'static, [u8]>,
+	},
+
+	/// Sends a message on the notifications substream. Ignored if the substream isn't open.
+	///
+	/// It is only valid to send this if the handler has been enabled.
+	// TODO: is ignoring the correct way to do this?
+	Send {
+		/// Protocol for which we opened a substream.
+		proto_name: Cow<'static, [u8]>,
+		/// Message to send.
+		message: Vec<u8>,
+	},
 }
 
-/// Event that can be emitted by a `NotifsInHandler`.
+/// Event that can be emitted by a `NotifHandler`.
 #[derive(Debug)]
-pub enum NotifsInHandlerOut {
+pub enum NotifHandlerOut {
 	/// The notifications substream has been open by the remote.
-	NotifOpen,
+	RemoteOpen {
+		/// Protocol for which we opened a substream.
+		proto_name: Cow<'static, [u8]>,
+	},
 
 	/// The notifications substream has been closed by the remote.
-	NotifClosed,
+	RemoteClosed {
+		/// Protocol for the substream was closed.
+		proto_name: Cow<'static, [u8]>,
+	},
 
 	/// Received a message on the notifications substream.
 	///
-	/// Can only happen after a `NotifOpen` and before a `NotifClosed`.
-	Notif(Vec<u8>),
+	/// Can only happen after a `NotifOpen` and before a `NotifClosed` for the corresponding
+	/// protocol.
+	InNotif {
+		/// Protocol for which we received a message.
+		proto_name: Cow<'static, [u8]>,
+		/// The message.
+		message: Vec<u8>,
+	},
 
-	// TODO: needed?
-	/*/// An error has happened on the protocol level with this node.
-	ProtocolError {
-		/// If true the error is severe, such as a protocol violation.
-		is_severe: bool,
-		/// The error that happened.
-		error: Box<dyn error::Error + Send + Sync>,
-	},*/
+	/// Our notifications substream has been accepted by the remote.
+	LocalOpen {
+		/// Protocol for which we opened a substream.
+		proto_name: Cow<'static, [u8]>,
+		/// Handshake message sent by the remote after we opened the substream.
+		handshake: Vec<u8>,
+	},
+
+	/// Our notifications substream has been closed by the remote.
+	LocalClosed {
+		/// Protocol for the substream was closed.
+		proto_name: Cow<'static, [u8]>,
+	},
+
+	/// We tried to open a notifications substream, but the remote refused it.
+	///
+	/// The handler is still enabled and will try again in a few seconds.
+	Refused {
+		/// Protocol for the substream was refused.
+		proto_name: Cow<'static, [u8]>,
+	},
 }
 
-impl<TSubstream> ProtocolsHandler for NotifsInHandler<TSubstream>
+impl<TSubstream> ProtocolsHandler for NotifHandler<TSubstream>
 where TSubstream: AsyncRead + AsyncWrite + 'static {
-	type InEvent = NotifsInHandlerIn;
-	type OutEvent = NotifsInHandlerOut;
+	type InEvent = NotifHandlerIn;
+	type OutEvent = NotifHandlerOut;
 	type Substream = TSubstream;
 	type Error = ConnectionKillError;
 	type InboundProtocol = NotificationsIn;
@@ -168,9 +208,9 @@ where TSubstream: AsyncRead + AsyncWrite + 'static {
 		match out {}
 	}
 
-	fn inject_event(&mut self, message: NotifsInHandlerIn) {
+	fn inject_event(&mut self, message: NotifHandlerIn) {
 		match message {
-			NotifsInHandlerIn::UpdateNodeInfos { infos } =>
+			NotifHandlerIn::UpdateNodeInfos { infos } =>
 				self.in_protocol.set_handshake_message(infos),
 		}
 	}
@@ -182,7 +222,7 @@ where TSubstream: AsyncRead + AsyncWrite + 'static {
 			_ => false,
 		};
 
-		self.events_queue.push(ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::ProtocolError {
+		self.events_queue.push(ProtocolsHandlerEvent::Custom(NotifHandlerOut::ProtocolError {
 			is_severe,
 			error: Box::new(err),
 		}));*/
@@ -208,12 +248,12 @@ where TSubstream: AsyncRead + AsyncWrite + 'static {
 	}
 }
 
-impl<TSubstream> fmt::Debug for NotifsInHandler<TSubstream>
+impl<TSubstream> fmt::Debug for NotifHandler<TSubstream>
 where
 	TSubstream: AsyncRead + AsyncWrite,
 {
 	fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-		f.debug_struct("NotifsInHandler")
+		f.debug_struct("NotifHandler")
 			.finish()
 	}
 }

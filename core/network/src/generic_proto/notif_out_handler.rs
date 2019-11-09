@@ -34,10 +34,10 @@ use tokio_io::{AsyncRead, AsyncWrite};
 ///
 /// Every time a connection with a remote starts, an instance of this struct is created and
 /// sent to a background task dedicated to this connection. Once the connection is established,
-/// it is turned into a [`NotifsOutProtoHandler`].
+/// it is turned into a [`NotifsOutHandler`].
 ///
-/// See the documentation of [`NotifsOutProtoHandler`] for more information.
-pub struct NotifsOutProtoHandlerProto<TSubstream> {
+/// See the documentation of [`NotifsOutHandler`] for more information.
+pub struct NotifsOutHandlerProto<TSubstream> {
 	/// Name of the protocol to negotiate.
 	proto_name: Cow<'static, [u8]>,
 
@@ -45,32 +45,32 @@ pub struct NotifsOutProtoHandlerProto<TSubstream> {
 	marker: PhantomData<TSubstream>,
 }
 
-impl<TSubstream> NotifsOutProtoHandlerProto<TSubstream>
+impl<TSubstream> NotifsOutHandlerProto<TSubstream>
 where
 	TSubstream: AsyncRead + AsyncWrite,
 {
-	/// Builds a new [`NotifsOutProtoHandlerProto`]. Will use the given protocol name for the
+	/// Builds a new [`NotifsOutHandlerProto`]. Will use the given protocol name for the
 	/// notifications substream.
 	pub fn new(proto_name: impl Into<Cow<'static, [u8]>>) -> Self {
-		NotifsOutProtoHandlerProto {
+		NotifsOutHandlerProto {
 			proto_name: proto_name.into(),
 			marker: PhantomData,
 		}
 	}
 }
 
-impl<TSubstream> IntoProtocolsHandler for NotifsOutProtoHandlerProto<TSubstream>
+impl<TSubstream> IntoProtocolsHandler for NotifsOutHandlerProto<TSubstream>
 where
 	TSubstream: AsyncRead + AsyncWrite + 'static,
 {
-	type Handler = NotifsOutProtoHandler<TSubstream>;
+	type Handler = NotifsOutHandler<TSubstream>;
 
 	fn inbound_protocol(&self) -> DeniedUpgrade {
 		DeniedUpgrade
 	}
 
 	fn into_handler(self, remote_peer_id: &PeerId, connected_point: &ConnectedPoint) -> Self::Handler {
-		NotifsOutProtoHandler {
+		NotifsOutHandler {
 			proto_name: self.proto_name,
 			endpoint: connected_point.to_endpoint(),
 			remote_peer_id: remote_peer_id.clone(),
@@ -86,10 +86,10 @@ where
 /// When a connection is established, this handler starts in the "disabled" state, meaning that
 /// no substream will be open.
 ///
-/// One can try open a substream by sending an [`NotifsOutProtoHandlerIn::Enable`] message to the
+/// One can try open a substream by sending an [`NotifsOutHandlerIn::Enable`] message to the
 /// handler. Once done, the handler will try to establish then maintain an outbound substream with
 /// the remote for the purpose of sending notifications to it.
-pub struct NotifsOutProtoHandler<TSubstream> {
+pub struct NotifsOutHandler<TSubstream> {
 	/// Name of the protocol to negotiate.
 	proto_name: Cow<'static, [u8]>,
 
@@ -110,7 +110,7 @@ pub struct NotifsOutProtoHandler<TSubstream> {
 	///
 	/// This queue must only ever be modified to insert elements at the back, or remove the first
 	/// element.
-	events_queue: SmallVec<[ProtocolsHandlerEvent<NotificationsOut, (), NotifsOutProtoHandlerOut>; 16]>,
+	events_queue: SmallVec<[ProtocolsHandlerEvent<NotificationsOut, (), NotifsOutHandlerOut>; 16]>,
 
 	/// Marker to pin the generic type.
 	marker: PhantomData<TSubstream>,
@@ -133,9 +133,9 @@ enum State {
 	Refused,
 }
 
-/// Event that can be received by a `NotifsOutProtoHandler`.
+/// Event that can be received by a `NotifsOutHandler`.
 #[derive(Debug)]
-pub enum NotifsOutProtoHandlerIn {
+pub enum NotifsOutHandlerIn {
 	/// Enables the notifications substream for this node. The handler will try to maintain a
 	/// substream with the remote.
 	Enable,
@@ -150,10 +150,10 @@ pub enum NotifsOutProtoHandlerIn {
 	Send(Vec<u8>),
 }
 
-/// Event that can be emitted by a `NotifsOutProtoHandler`.
+/// Event that can be emitted by a `NotifsOutHandler`.
 #[derive(Debug)]
-pub enum NotifsOutProtoHandlerOut {
-	/// The notifications substream has been open by the remote.
+pub enum NotifsOutHandlerOut {
+	/// The notifications substream has been accepted by the remote.
 	Open {
 		/// Handshake message sent by the remote after we opened the substream.
 		handshake: Vec<u8>,
@@ -168,10 +168,10 @@ pub enum NotifsOutProtoHandlerOut {
 	Refused,
 }
 
-impl<TSubstream> ProtocolsHandler for NotifsOutProtoHandler<TSubstream>
+impl<TSubstream> ProtocolsHandler for NotifsOutHandler<TSubstream>
 where TSubstream: AsyncRead + AsyncWrite + 'static {
-	type InEvent = NotifsOutProtoHandlerIn;
-	type OutEvent = NotifsOutProtoHandlerOut;
+	type InEvent = NotifsOutHandlerIn;
+	type OutEvent = NotifsOutHandlerOut;
 	type Substream = TSubstream;
 	type Error = void::Void;
 	type InboundProtocol = DeniedUpgrade;
@@ -198,18 +198,18 @@ where TSubstream: AsyncRead + AsyncWrite + 'static {
 		unimplemented!()
 	}
 
-	fn inject_event(&mut self, message: NotifsOutProtoHandlerIn) {
+	fn inject_event(&mut self, message: NotifsOutHandlerIn) {
 		// TODO: implement
 		match message {
-			NotifsOutProtoHandlerIn::Enable => unimplemented!(),
-			NotifsOutProtoHandlerIn::Disable => unimplemented!(),
-			NotifsOutProtoHandlerIn::Send(msg) => unimplemented!(),
+			NotifsOutHandlerIn::Enable => unimplemented!(),
+			NotifsOutHandlerIn::Disable => unimplemented!(),
+			NotifsOutHandlerIn::Send(msg) => unimplemented!(),
 		}
 	}
 
 	fn inject_dial_upgrade_error(&mut self, _: (), err: ProtocolsHandlerUpgrErr<ReadOneError>) {
 		unimplemented!()		// TODO:
-		/*self.events_queue.push(ProtocolsHandlerEvent::Custom(NotifsOutProtoHandlerOut::ProtocolError {
+		/*self.events_queue.push(ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::ProtocolError {
 			is_severe,
 			error: Box::new(err),
 		}));*/
@@ -235,12 +235,12 @@ where TSubstream: AsyncRead + AsyncWrite + 'static {
 	}
 }
 
-impl<TSubstream> fmt::Debug for NotifsOutProtoHandler<TSubstream>
+impl<TSubstream> fmt::Debug for NotifsOutHandler<TSubstream>
 where
 	TSubstream: AsyncRead + AsyncWrite,
 {
 	fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-		f.debug_struct("NotifsOutProtoHandler")
+		f.debug_struct("NotifsOutHandler")
 			.finish()
 	}
 }
