@@ -118,12 +118,12 @@ mod utils;
 /// mod interface {
 ///     mod extern_host_functions_impls {
 ///         extern "C" {
-///             /// Every function is exported as `ext_TRAIT_NAME_FUNCTION_NAME`.
+///             /// Every function is exported as `ext_TRAIT_NAME_FUNCTION_NAME_version_VERSION`.
 ///             ///
 ///             /// The type for each argument of the exported function depends on
 ///             /// `<ARGUMENT_TYPE as RIType>::FFIType`.
-///             pub fn ext_Interface_call_some_complex_code(data: u64);
-///             pub fn ext_Interface_set_or_clear(optional: u64);
+///             pub fn ext_Interface_call_some_complex_code_version_1(data: u64);
+///             pub fn ext_Interface_set_or_clear_version_1(optional: u64);
 ///         }
 ///     }
 ///

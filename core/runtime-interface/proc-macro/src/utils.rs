@@ -70,7 +70,7 @@ pub fn create_exchangeable_host_function_ident(name: &Ident) -> Ident {
 pub fn create_host_function_ident(name: &Ident, trait_name: &Ident) -> Ident {
 	Ident::new(
 		&format!(
-			"ext_{}_{}",
+			"ext_{}_{}_version_1",
 			trait_name.to_string().to_snake_case(),
 			name,
 		),
