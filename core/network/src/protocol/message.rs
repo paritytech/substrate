@@ -217,6 +217,8 @@ pub mod generic {
 		FinalityProofRequest(FinalityProofRequest<Hash>),
 		/// Finality proof reponse.
 		FinalityProofResponse(FinalityProofResponse<Hash>),
+		/// Batch of consensus protocol messages.
+		ConsensusBatch(Vec<ConsensusMessage>),
 		/// Chain-specific message.
 		#[codec(index = "255")]
 		ChainSpecific(Vec<u8>),
@@ -243,6 +245,7 @@ pub mod generic {
 				Message::RemoteReadChildRequest(_) => "RemoteReadChildRequest",
 				Message::FinalityProofRequest(_) => "FinalityProofRequest",
 				Message::FinalityProofResponse(_) => "FinalityProofResponse",
+				Message::ConsensusBatch(_) => "ConsensusBatch",
 				Message::ChainSpecific(_) => "ChainSpecific",
 			}
 		}
