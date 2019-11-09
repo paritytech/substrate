@@ -504,9 +504,7 @@ pub struct Exposure<AccountId, Balance: HasCompact> {
 /// A pending slash record. The value of the slash has been computed but not applied yet,
 /// rather deferred for several eras.
 #[derive(Encode, Decode, Default, RuntimeDebug)]
-pub struct PendingSlashRecord<AccountId, Balance: HasCompact> {
-	/// The era where the slashed offence was actually applied
-	era: EraIndex,
+pub struct UnappliedSlash<AccountId, Balance: HasCompact> {
 	/// The stash ID of the offending validator.
 	validator: AccountId,
 	/// The validator's own slash.
@@ -599,9 +597,9 @@ pub trait Trait: system::Trait {
 	/// Number of eras that staked funds must remain bonded for.
 	type BondingDuration: Get<EraIndex>;
 
-	// /// Number of eras that slashes are deferred by, after computation. This
-	// /// should be less than the bonding duration.
-	// type SlashDeferDuration: Get<EraIndex>;
+	/// Number of eras that slashes are deferred by, after computation. This
+	/// should be less than the bonding duration.
+	type SlashDeferDuration: Get<EraIndex>;
 
 	/// Interface for interacting with a session module.
 	type SessionInterface: self::SessionInterface<Self::AccountId>;
@@ -693,6 +691,10 @@ decl_storage! {
 		/// The rest of the slashed value is handled by the `Slash`.
 		pub SlashRewardFraction get(fn slash_reward_fraction) config(): Perbill;
 
+		/// The amount of currency given to reporters of a slash event which was
+		/// canceled by extraordinary circumstances (e.g. governance).
+		pub CanceledSlashPayout get(fn canceled_payout) config(): BalanceOf<T>;
+
 		/// A mapping from still-bonded eras to the first session index of that era.
 		BondedEras: Vec<(EraIndex, SessionIndex)>;
 
@@ -717,7 +719,7 @@ decl_storage! {
 		EarliestPendingSlash: EraIndex;
 
 		/// All pending slashes that have not been applied yet.
-		PendingSlashes get(pending_slashes): map EraIndex => Vec<PendingSlashRecord<T::AccountId, BalanceOf<T>>>;
+		PendingSlashes get(pending_slashes): map EraIndex => Vec<UnappliedSlash<T::AccountId, BalanceOf<T>>>;
 	}
 	add_extra_genesis {
 		config(stakers):
@@ -1606,7 +1608,7 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, session::historical::Identificati
 				continue
 			}
 
-			let reward_payout = slashing::slash::<T>(slashing::SlashParams {
+			let unapplied = slashing::compute_slash::<T>(slashing::SlashParams {
 				stash,
 				slash: *slash_fraction,
 				exposure,
@@ -1616,7 +1618,10 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, session::historical::Identificati
 				reward_proportion,
 			});
 
-			slashing::pay_reporters::<T>(reward_payout, &details.reporters);
+			if let Some(mut unapplied) = unapplied {
+				unapplied.reporters = details.reporters.clone();
+				slashing::apply_slash::<T>(unapplied);
+			}
 		}
 	}
 }

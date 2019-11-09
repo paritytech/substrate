@@ -109,6 +109,7 @@ parameter_types! {
 	pub const MaximumBlockWeight: u32 = 1024;
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
+	pub const SlashDeferDuration: EraIndex = 10;
 }
 impl system::Trait for Test {
 	type Origin = Origin;
@@ -202,6 +203,7 @@ impl Trait for Test {
 	type Slash = ();
 	type Reward = ();
 	type SessionsPerEra = SessionsPerEra;
+	type SlashDeferDuration = SlashDeferDuration;
 	type BondingDuration = BondingDuration;
 	type SessionInterface = Self;
 	type RewardCurve = RewardCurve;
