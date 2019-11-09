@@ -668,7 +668,6 @@ mod tests {
 
 	#[test]
 	fn simple_fork() {
-		//init_log();
 		let root_parent = H256::random();
 		let key = H256::random()[..].to_vec();
 		let h1 = H256::random();
@@ -692,7 +691,6 @@ mod tests {
 
 	#[test]
 	fn double_fork() {
-		//init_log();
 		let root_parent = H256::random();
 		let key = H256::random()[..].to_vec();
 		let h1 = H256::random();
