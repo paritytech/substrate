@@ -45,7 +45,7 @@ pub enum ValidatedTransaction<Hash, Ex, Error> {
 	/// Transaction that has been validated successfully.
 	Valid(base::Transaction<Hash, Ex>),
 	/// Transaction that is invalid.
-	Invalid(Error),
+	Invalid(Hash, Error),
 	/// Transaction which validity can't be determined.
 	///
 	/// We're notifying watchers about failure, if 'unknown' transaction is submitted.
@@ -125,7 +125,10 @@ impl<B: ChainApi> ValidatedPool<B> {
 				fire_events(&mut *listener, &imported);
 				Ok(imported.hash().clone())
 			}
-			ValidatedTransaction::Invalid(err) => Err(err.into()),
+			ValidatedTransaction::Invalid(hash, err) => {
+				self.rotator.ban(&std::time::Instant::now(), std::iter::once(hash));
+				Err(err.into())
+			},
 			ValidatedTransaction::Unknown(hash, err) => {
 				self.listener.write().invalid(&hash);
 				Err(err.into())
@@ -177,7 +180,10 @@ impl<B: ChainApi> ValidatedPool<B> {
 					.expect("One extrinsic passed; one result returned; qed")
 					.map(|_| watcher)
 			},
-			ValidatedTransaction::Invalid(err) => Err(err.into()),
+			ValidatedTransaction::Invalid(hash, err) => {
+				self.rotator.ban(&std::time::Instant::now(), std::iter::once(hash));
+				Err(err.into())
+			},
 			ValidatedTransaction::Unknown(_, err) => Err(err.into()),
 		}
 	}

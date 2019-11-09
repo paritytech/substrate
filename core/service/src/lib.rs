@@ -615,7 +615,14 @@ where
 		self.pool.hash_of(transaction)
 	}
 
-	fn import(&self, report_handle: ReportHandle, who: PeerId, reputation_change: i32, transaction: B::Extrinsic) {
+	fn import(
+		&self,
+		report_handle: ReportHandle,
+		who: PeerId,
+		reputation_change_good: i32,
+		reputation_change_bad: i32,
+		transaction: B::Extrinsic
+	) {
 		if !self.imports_external_transactions {
 			debug!("Transaction rejected");
 			return;
@@ -629,10 +636,13 @@ where
 				let import_future = import_future
 					.then(move |import_result| {
 						match import_result {
-							Ok(_) => report_handle.report_peer(who, reputation_change),
+							Ok(_) => report_handle.report_peer(who, reputation_change_good),
 							Err(e) => match e.into_pool_error() {
 								Ok(txpool::error::Error::AlreadyImported(_)) => (),
-								Ok(e) => debug!("Error adding transaction to the pool: {:?}", e),
+								Ok(e) => {
+									report_handle.report_peer(who, reputation_change_bad);
+									debug!("Error adding transaction to the pool: {:?}", e)
+								}
 								Err(e) => debug!("Error converting pool error: {:?}", e),
 							}
 						}
