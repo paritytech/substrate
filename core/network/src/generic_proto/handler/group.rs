@@ -175,9 +175,10 @@ where TSubstream: AsyncRead + AsyncWrite + 'static {
 
 	fn listen_protocol(&self) -> SubstreamProtocol<Self::InboundProtocol> {
 		let in_handlers = self.in_handlers.iter()
-			.map(|h| h.listen_protocol().into_upgrade().1)
+			.map(|h| h.listen_protocol().into_upgrade().1)		// TODO: map_upgrade() instead
 			.collect::<UpgradeCollec<_>>();
 
+		// TODO: map_upgrade() instead
 		let proto = SelectUpgrade::new(in_handlers, self.legacy.listen_protocol().into_upgrade().1);
 		SubstreamProtocol::new(proto)
 	}
@@ -278,8 +279,27 @@ where TSubstream: AsyncRead + AsyncWrite + 'static {
 		}
 
 		for handler in &mut self.out_handlers {
-			if let Async::Ready(v) = handler.poll().map_err(|e| EitherError::A(EitherError::B(e)))? {
-				unimplemented!() // TODO: return Ok(Async::Ready(v));
+			if let Async::Ready(ev) = handler.poll().map_err(|e| EitherError::A(EitherError::B(e)))? {
+				match ev {
+					ProtocolsHandlerEvent::OutboundSubstreamRequest { protocol, info: () } =>
+						return ProtocolsHandlerEvent::OutboundSubstreamRequest {
+							protocol: SubstreamProtocol::new(protocol.map_upgrade(EitherUpgrade::A)),
+							info: (),
+						};
+				}
+				return Ok(Async::Ready(ev
+					.map_protocol(EitherUpgrade::A)
+					.map_custom(|ev| match ev {
+						NotifsOutHandlerOut::Open { .. } =>
+							NotifsHandlerOut::CustomProtocolOpen { version },
+						NotifsOutHandlerOut::Closed =>
+							NotifsHandlerOut::CustomProtocolClosed { reason },
+						NotifsOutHandlerOut::Refused =>
+							NotifsHandlerOut::CustomMessage { message },
+						NotifsOutHandlerOut::Clogged { .. } => {},
+						NotifsOutHandlerOut::ProtocolError { is_severe, error } =>
+							NotifsHandlerOut::ProtocolError { is_severe, error },
+					})));
 			}
 		}
 
