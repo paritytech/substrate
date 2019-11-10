@@ -259,7 +259,7 @@ fn create_versioned_wasm_runtime<E: Externalities>(
 
 #[cfg(test)]
 mod tests {
-	use super::*;
+	use wasm_interface::HostFunctions;
 
 	#[test]
 	fn host_functions_are_equal() {
