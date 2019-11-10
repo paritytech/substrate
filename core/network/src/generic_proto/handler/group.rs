@@ -16,8 +16,8 @@
 
 use crate::generic_proto::{
 	handler::legacy::{LegacyProtoHandler, LegacyProtoHandlerProto, LegacyProtoHandlerIn, LegacyProtoHandlerOut},
-	handler::notif_in::{NotifsInHandlerProto, NotifsInHandler},
-	handler::notif_out::{NotifsOutHandlerProto, NotifsOutHandler},
+	handler::notif_in::{NotifsInHandlerProto, NotifsInHandler, NotifsInHandlerIn, NotifsInHandlerOut},
+	handler::notif_out::{NotifsOutHandlerProto, NotifsOutHandler, NotifsOutHandlerIn, NotifsOutHandlerOut},
 	upgrade::{NotificationsIn, NotificationsOut, RegisteredProtocol, SelectUpgrade, UpgradeCollec},
 };
 use bytes::BytesMut;
@@ -209,10 +209,18 @@ where TSubstream: AsyncRead + AsyncWrite + 'static {
 
 	fn inject_event(&mut self, message: NotifsHandlerIn) {
 		match message {
-			NotifsHandlerIn::Enable =>
-				self.legacy.inject_event(LegacyProtoHandlerIn::Enable),
-			NotifsHandlerIn::Disable =>
-				self.legacy.inject_event(LegacyProtoHandlerIn::Disable),
+			NotifsHandlerIn::Enable => {
+				self.legacy.inject_event(LegacyProtoHandlerIn::Enable);
+				for handler in &mut self.out_handlers {
+					handler.inject_event(NotifsOutHandlerIn::Enable);
+				}
+			},
+			NotifsHandlerIn::Disable => {
+				self.legacy.inject_event(LegacyProtoHandlerIn::Disable);
+				for handler in &mut self.out_handlers {
+					handler.inject_event(NotifsOutHandlerIn::Disable);
+				}
+			},
 			NotifsHandlerIn::SendCustomMessage { message } =>
 				self.legacy.inject_event(LegacyProtoHandlerIn::SendCustomMessage { message }),
 		}
@@ -268,7 +276,7 @@ where TSubstream: AsyncRead + AsyncWrite + 'static {
 		}
 
 		if let Async::Ready(ev) = self.legacy.poll().map_err(EitherError::B)? {
-			let ev = ev
+			return Ok(Async::Ready(ev
 				.map_protocol(EitherUpgrade::B)
 				.map_custom(|ev| match ev {
 					LegacyProtoHandlerOut::CustomProtocolOpen { version } =>
@@ -281,8 +289,7 @@ where TSubstream: AsyncRead + AsyncWrite + 'static {
 						NotifsHandlerOut::Clogged { messages },
 					LegacyProtoHandlerOut::ProtocolError { is_severe, error } =>
 						NotifsHandlerOut::ProtocolError { is_severe, error },
-				});
-			return Ok(Async::Ready(ev));
+				})));
 		}
 
 		Ok(Async::NotReady)
