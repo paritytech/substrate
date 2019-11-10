@@ -86,7 +86,7 @@ pub fn create_instance(
 	heap_pages: u64,
 	host_functions: Vec<&'static dyn Function>,
 ) -> std::result::Result<WasmtimeRuntime, WasmError> {
-	let (mut compiled_module, mut context) = create_compiled_unit(code, &host_functions)?;
+	let (compiled_module, context) = create_compiled_unit(code, &host_functions)?;
 
 	// Inspect the module for the min and max memory sizes.
 	let (min_memory_size, max_memory_size) = {

@@ -629,7 +629,7 @@ pub trait Logging {
 
 /// Wasm-only interface that provides functions for interacting with the sandbox.
 #[runtime_interface(wasm_only)]
-pub trait Sandboxing {
+pub trait Sandbox {
 	/// Instantiate a new sandbox instance with the given `wasm_code`.
 	fn instantiate(
 		&mut self,
@@ -769,7 +769,7 @@ pub type SubstrateHostFunctions = (
 	hashing::HostFunctions,
 	allocator::HostFunctions,
 	logging::HostFunctions,
-	sandboxing::HostFunctions,
+	sandbox::HostFunctions,
 );
 
 #[cfg(test)]
