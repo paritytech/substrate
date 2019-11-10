@@ -17,25 +17,22 @@
 mod parse;
 
 use parse::{ModuleDeclaration, ModulePart, RuntimeDefinition, WhereSection};
-use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
+use proc_macro::TokenStream;
 use quote::quote;
 use srml_support_procedural_tools::syn_ext as ext;
 use srml_support_procedural_tools::{generate_crate_access, generate_hidden_includes};
-use syn::Ident;
-
-// try macro but returning tokenized error
-macro_rules! try_tok(( $expre : expr ) => {
-	match $expre {
-		Ok(r) => r,
-		Err (err) => {
-			return err.to_compile_error().into()
-		}
-	}
-});
+use syn::{Ident, Result};
 
 pub fn construct_runtime(input: TokenStream) -> TokenStream {
 	let definition = syn::parse_macro_input!(input as RuntimeDefinition);
+	match construct_runtime_parsed(definition) {
+		Ok(stream) => stream.into(),
+		Err(e) => e.to_compile_error().into(),
+	}
+}
+
+fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream2> {
 	let RuntimeDefinition {
 		name,
 		where_section: WhereSection {
@@ -55,13 +52,11 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 	let system_module = match find_system_module(modules.iter()) {
 		Some(sm) => sm,
 		None => {
-			return syn::Error::new(
+			return Err(syn::Error::new(
 				modules_token.span,
 				"`System` module declaration is missing. \
 				 Please add this line: `System: system::{Module, Call, Storage, Config, Event},`",
-			)
-			.to_compile_error()
-			.into()
+			))
 		}
 	};
 	let hidden_crate_name = "construct_runtime";
@@ -70,20 +65,20 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 
 	let all_but_system_modules = modules.iter().filter(|module| module.name != "System");
 
-	let outer_event = try_tok!(decl_outer_event_or_origin(
+	let outer_event = decl_outer_event_or_origin(
 		&name,
 		all_but_system_modules.clone(),
 		&system_module,
 		&scrate,
 		DeclOuterKind::Event,
-	));
-	let outer_origin = try_tok!(decl_outer_event_or_origin(
+	)?;
+	let outer_origin = decl_outer_event_or_origin(
 		&name,
 		all_but_system_modules.clone(),
 		&system_module,
 		&scrate,
 		DeclOuterKind::Origin,
-	));
+	)?;
 	let all_modules = decl_all_modules(&name, all_but_system_modules);
 
 	let dispatch = decl_outer_dispatch(&name, modules.iter(), &scrate);
@@ -92,38 +87,38 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 	let inherent = decl_outer_inherent(&block, &unchecked_extrinsic, modules.iter(), &scrate);
 	let validate_unsigned = decl_validate_unsigned(&name, modules.iter(), &scrate);
 
-	let res: TokenStream = quote!(
-		#scrate_decl
+	Ok(
+		quote!(
+			#scrate_decl
 
-		#[derive(Clone, Copy, PartialEq, Eq)]
-		#[cfg_attr(feature = "std", derive(Debug))]
-		pub struct #name;
-		impl #scrate::sr_primitives::traits::GetNodeBlockType for #name {
-			type NodeBlock = #node_block;
-		}
-		impl #scrate::sr_primitives::traits::GetRuntimeBlockType for #name {
-			type RuntimeBlock = #block;
-		}
+			#[derive(Clone, Copy, PartialEq, Eq)]
+			#[cfg_attr(feature = "std", derive(Debug))]
+			pub struct #name;
+			impl #scrate::sr_primitives::traits::GetNodeBlockType for #name {
+				type NodeBlock = #node_block;
+			}
+			impl #scrate::sr_primitives::traits::GetRuntimeBlockType for #name {
+				type RuntimeBlock = #block;
+			}
 
-		#outer_event
+			#outer_event
 
-		#outer_origin
+			#outer_origin
 
-		#all_modules
+			#all_modules
 
-		#dispatch
+			#dispatch
 
-		#metadata
+			#metadata
 
-		#outer_config
+			#outer_config
 
-		#inherent
+			#inherent
 
-		#validate_unsigned
+			#validate_unsigned
+		)
+		.into()
 	)
-	.into();
-
-	res
 }
 
 fn decl_validate_unsigned<'a>(
