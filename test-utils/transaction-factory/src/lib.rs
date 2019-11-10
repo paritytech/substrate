@@ -194,6 +194,7 @@ fn import_block<Backend, Exec, Block, RtApi>(
 		justification: None,
 		auxiliary: Vec::new(),
 		fork_choice: ForkChoiceStrategy::LongestChain,
+		allow_missing_state: false,
 	};
 	(&**client).import_block(import, HashMap::new()).expect("Failed to import block");
 }

@@ -457,6 +457,7 @@ pub struct BlockImportOperation<Block: BlockT, H: Hasher> {
 	aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	finalized_blocks: Vec<(BlockId<Block>, Option<Justification>)>,
 	set_head: Option<BlockId<Block>>,
+	commit_state: bool,
 }
 
 impl<Block: BlockT, H: Hasher> BlockImportOperation<Block, H> {
@@ -531,6 +532,7 @@ impl<Block> client::backend::BlockImportOperation<Block, Blake2Hasher>
 		);
 
 		self.db_updates = transaction;
+		self.commit_state = true;
 		Ok(root)
 	}
 
@@ -783,6 +785,7 @@ pub struct Backend<Block: BlockT> {
 	canonicalization_delay: u64,
 	shared_cache: SharedCache<Block, Blake2Hasher>,
 	import_lock: Mutex<()>,
+	is_archive: bool,
 }
 
 impl<Block: BlockT<Hash=H256>> Backend<Block> {
@@ -843,6 +846,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 				config.state_cache_child_ratio.unwrap_or(DEFAULT_CHILD_RATIO),
 			),
 			import_lock: Default::default(),
+			is_archive: is_archive_pruning,
 		})
 	}
 
@@ -892,6 +896,12 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 		inmem.finalize_block(BlockId::Hash(info.finalized_hash), None).unwrap();
 
 		inmem
+	}
+
+	/// Returns total numbet of blocks (headers) in the block DB.
+	#[cfg(feature = "test-helpers")]
+	pub fn blocks_count(&self) -> u64 {
+		self.blockchain.db.iter(columns::HEADER).count() as u64
 	}
 
 	/// Read (from storage or cache) changes trie config.
@@ -1115,7 +1125,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 			);
 
 			transaction.put(columns::HEADER, &lookup_key, &pending_block.header.encode());
-			if let Some(body) = pending_block.body {
+			if let Some(body) = &pending_block.body {
 				transaction.put(columns::BODY, &lookup_key, &body.encode());
 			}
 			if let Some(justification) = pending_block.justification {
@@ -1127,21 +1137,26 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 				transaction.put(columns::META, meta_keys::GENESIS_HASH, hash.as_ref());
 			}
 
-			let mut changeset: state_db::ChangeSet<Vec<u8>> = state_db::ChangeSet::default();
-			for (key, (val, rc)) in operation.db_updates.drain() {
-				if rc > 0 {
-					changeset.inserted.push((key, val.to_vec()));
-				} else if rc < 0 {
-					changeset.deleted.push(key);
+			let finalized = if operation.commit_state {
+				let mut changeset: state_db::ChangeSet<Vec<u8>> = state_db::ChangeSet::default();
+				for (key, (val, rc)) in operation.db_updates.drain() {
+					if rc > 0 {
+						changeset.inserted.push((key, val.to_vec()));
+					} else if rc < 0 {
+						changeset.deleted.push(key);
+					}
 				}
-			}
-			let number_u64 = number.saturated_into::<u64>();
-			let commit = self.storage.state_db.insert_block(&hash, number_u64, &pending_block.header.parent_hash(), changeset)
-				.map_err(|e: state_db::Error<io::Error>| client::error::Error::from(format!("State database error: {:?}", e)))?;
-			apply_state_commit(&mut transaction, commit);
+				let number_u64 = number.saturated_into::<u64>();
+				let commit = self.storage.state_db.insert_block(&hash, number_u64, &pending_block.header.parent_hash(), changeset)
+					.map_err(|e: state_db::Error<io::Error>| client::error::Error::from(format!("State database error: {:?}", e)))?;
+				apply_state_commit(&mut transaction, commit);
 
-			// Check if need to finalize. Genesis is always finalized instantly.
-			let finalized = number_u64 == 0 || pending_block.leaf_state.is_final();
+				// Check if need to finalize. Genesis is always finalized instantly.
+				let finalized = number_u64 == 0 || pending_block.leaf_state.is_final();
+				finalized
+			} else {
+				false
+			};
 
 			let header = &pending_block.header;
 			let is_best = pending_block.leaf_state.is_best();
@@ -1347,6 +1362,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 			aux_ops: Vec::new(),
 			finalized_blocks: Vec::new(),
 			set_head: None,
+			commit_state: false,
 		})
 	}
 
@@ -1356,6 +1372,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 		block: BlockId<Block>,
 	) -> ClientResult<()> {
 		operation.old_state = self.state_at(block)?;
+		operation.commit_state = true;
 		Ok(())
 	}
 
@@ -1478,6 +1495,9 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 		match self.blockchain.header(block) {
 			Ok(Some(ref hdr)) => {
 				let hash = hdr.hash();
+				if !self.have_state_at(&hash, *hdr.number()) {
+					return Err(client::error::Error::UnknownBlock(format!("State already discarded for {:?}", block)))
+				}
 				if let Ok(()) = self.storage.state_db.pin(&hash) {
 					let root = H256::from_slice(hdr.state_root().as_ref());
 					let db_state = DbState::new(self.storage.clone(), root);
@@ -1493,7 +1513,16 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 	}
 
 	fn have_state_at(&self, hash: &Block::Hash, number: NumberFor<Block>) -> bool {
-		!self.storage.state_db.is_pruned(hash, number.saturated_into::<u64>())
+		if self.is_archive {
+			match self.blockchain.header(BlockId::Hash(hash.clone())) {
+				Ok(Some(header)) => {
+					state_machine::Storage::get(self.storage.as_ref(), &header.state_root(), (&[], None)).unwrap_or(None).is_some()
+				},
+				_ => false,
+			}
+		} else {
+			!self.storage.state_db.is_pruned(hash, number.saturated_into::<u64>())
+		}
 	}
 
 	fn destroy_state(&self, state: Self::State) -> ClientResult<()> {
@@ -1581,7 +1610,7 @@ mod tests {
 		};
 		let mut op = backend.begin_operation().unwrap();
 		backend.begin_state_operation(&mut op, block_id).unwrap();
-		op.set_block_data(header, None, None, NewBlockState::Best).unwrap();
+		op.set_block_data(header, Some(Vec::new()), None, NewBlockState::Best).unwrap();
 		op.update_changes_trie((changes_trie_update, ChangesTrieCacheAction::Clear)).unwrap();
 		backend.commit_operation(op).unwrap();
 

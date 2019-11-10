@@ -104,7 +104,7 @@ impl Decode for BlockAttributes {
 pub enum Direction {
 	/// Enumerate in ascending order (from child to parent).
 	Ascending = 0,
-	/// Enumerate in descendfing order (from parent to canonical child).
+	/// Enumerate in descending order (from parent to canonical child).
 	Descending = 1,
 }
 
@@ -217,6 +217,8 @@ pub mod generic {
 		FinalityProofRequest(FinalityProofRequest<Hash>),
 		/// Finality proof reponse.
 		FinalityProofResponse(FinalityProofResponse<Hash>),
+		/// Batch of consensus protocol messages.
+		ConsensusBatch(Vec<ConsensusMessage>),
 		/// Chain-specific message.
 		#[codec(index = "255")]
 		ChainSpecific(Vec<u8>),
@@ -243,6 +245,7 @@ pub mod generic {
 				Message::RemoteReadChildRequest(_) => "RemoteReadChildRequest",
 				Message::FinalityProofRequest(_) => "FinalityProofRequest",
 				Message::FinalityProofResponse(_) => "FinalityProofResponse",
+				Message::ConsensusBatch(_) => "ConsensusBatch",
 				Message::ChainSpecific(_) => "ChainSpecific",
 			}
 		}

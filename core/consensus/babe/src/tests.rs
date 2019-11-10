@@ -578,6 +578,7 @@ fn propose_and_import_block(
 			finalized: false,
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::LongestChain,
+			allow_missing_state: false,
 		},
 		Default::default(),
 	).unwrap();
