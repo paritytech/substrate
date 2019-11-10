@@ -974,34 +974,34 @@ impl<B: BlockT> ChainSync<B> {
 	/// Updates our internal state for best queued block and then goes
 	/// through all peers to update our view of their state as well.
 	fn on_block_queued(&mut self, hash: &B::Hash, number: NumberFor<B>) {
-		if number > self.best_queued_number {
-			self.best_queued_number = number;
-			self.best_queued_hash = *hash;
-		}
 		if let Some(_) = self.fork_targets.remove(&hash) {
 			trace!(target: "sync", "Completed fork sync {:?}", hash);
 		}
-		// Update common blocks
-		for (n, peer) in self.peers.iter_mut() {
-			if let PeerSyncState::AncestorSearch(_, _) = peer.state {
-				// Wait for ancestry search to complete first.
-				continue;
+		if number > self.best_queued_number {
+			self.best_queued_number = number;
+			self.best_queued_hash = *hash;
+			// Update common blocks
+			for (n, peer) in self.peers.iter_mut() {
+				if let PeerSyncState::AncestorSearch(_, _) = peer.state {
+					// Wait for ancestry search to complete first.
+					continue;
+				}
+				let new_common_number = if peer.best_number >= number {
+					number
+				} else {
+					peer.best_number
+				};
+				trace!(
+					target: "sync",
+					"Updating peer {} info, ours={}, common={}->{}, their best={}",
+					n,
+					number,
+					peer.common_number,
+					new_common_number,
+					peer.best_number,
+				);
+				peer.common_number = new_common_number;
 			}
-			let new_common_number = if peer.best_number >= number {
-				number
-			} else {
-				peer.best_number
-			};
-			trace!(
-				target: "sync",
-				"Updating peer {} info, ours={}, common={}->{}, their best={}",
-				n,
-				number,
-				peer.common_number,
-				new_common_number,
-				peer.best_number,
-			);
-			peer.common_number = new_common_number;
 		}
 		self.is_idle = false;
 	}
@@ -1037,7 +1037,7 @@ impl<B: BlockT> ChainSync<B> {
 			peer.recently_announced.pop_front();
 		}
 		peer.recently_announced.push_back(hash.clone());
-		if is_best && number > peer.best_number {
+		if is_best {
 			// update their best block
 			peer.best_number = number;
 			peer.best_hash = hash;
@@ -1047,10 +1047,12 @@ impl<B: BlockT> ChainSync<B> {
 		}
 		// If the announced block is the best they have seen, our common number
 		// is either one further ahead or it's the one they just announced, if we know about it.
-		if known && is_best {
-			peer.common_number = number
-		} else if header.parent_hash() == &self.best_queued_hash || known_parent {
-			peer.common_number = number - One::one();
+		if is_best {
+			if known {
+				peer.common_number = number
+			} else if header.parent_hash() == &self.best_queued_hash || known_parent {
+				peer.common_number = number - One::one();
+			}
 		}
 		self.is_idle = false;
 
