@@ -69,12 +69,14 @@ const TICK_TIMEOUT: time::Duration = time::Duration::from_millis(1100);
 const PROPAGATE_TIMEOUT: time::Duration = time::Duration::from_millis(2900);
 
 /// Current protocol version.
-pub(crate) const CURRENT_VERSION: u32 = 4;
+pub(crate) const CURRENT_VERSION: u32 = 5;
 /// Lowest version we support
 pub(crate) const MIN_VERSION: u32 = 3;
 
 // Maximum allowed entries in `BlockResponse`
 const MAX_BLOCK_DATA_RESPONSE: u32 = 128;
+// Maximum allowed entries in `ConsensusBatch`
+const MAX_CONSENSUS_MESSAGES: usize = 256;
 /// When light node connects to the full node and the full node is behind light node
 /// for at least `LIGHT_MAXIMAL_BLOCKS_DIFFERENCE` blocks, we consider it unuseful
 /// and disconnect to free connection slot.
@@ -298,7 +300,7 @@ pub trait Context<B: BlockT> {
 	fn disconnect_peer(&mut self, who: PeerId);
 
 	/// Send a consensus message to a peer.
-	fn send_consensus(&mut self, who: PeerId, consensus: ConsensusMessage);
+	fn send_consensus(&mut self, who: PeerId, messages: Vec<ConsensusMessage>);
 
 	/// Send a chain-specific message to a peer.
 	fn send_chain_specific(&mut self, who: PeerId, message: Vec<u8>);
@@ -330,13 +332,33 @@ impl<'a, B: BlockT + 'a, H: ExHashT + 'a> Context<B> for ProtocolContext<'a, B, 
 		self.behaviour.disconnect_peer(&who)
 	}
 
-	fn send_consensus(&mut self, who: PeerId, consensus: ConsensusMessage) {
-		send_message::<B> (
-			self.behaviour,
-			&mut self.context_data.stats,
-			&who,
-			GenericMessage::Consensus(consensus)
-		)
+	fn send_consensus(&mut self, who: PeerId, messages: Vec<ConsensusMessage>) {
+		if self.context_data.peers.get(&who).map_or(false, |peer| peer.info.protocol_version > 4) {
+			let mut batch = Vec::new();
+			let len = messages.len();
+			for (index, message) in messages.into_iter().enumerate() {
+				batch.reserve(MAX_CONSENSUS_MESSAGES);
+				batch.push(message);
+				if batch.len() == MAX_CONSENSUS_MESSAGES || index == len - 1 {
+					send_message::<B> (
+						self.behaviour,
+						&mut self.context_data.stats,
+						&who,
+						GenericMessage::ConsensusBatch(std::mem::replace(&mut batch, Vec::new())),
+					)
+				}
+			}
+		} else {
+			// Backwards compatibility
+			for message in messages {
+				send_message::<B> (
+					self.behaviour,
+					&mut self.context_data.stats,
+					&who,
+					GenericMessage::Consensus(message)
+				)
+			}
+		}
 	}
 
 	fn send_chain_specific(&mut self, who: PeerId, message: Vec<u8>) {
@@ -598,13 +620,18 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			GenericMessage::RemoteReadChildRequest(request) =>
 				self.on_remote_read_child_request(who, request),
 			GenericMessage::Consensus(msg) => {
-				if self.context_data.peers.get(&who).map_or(false, |peer| peer.info.protocol_version > 2) {
-					self.consensus_gossip.on_incoming(
-						&mut ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle),
-						who,
-						msg,
-					);
-				}
+				self.consensus_gossip.on_incoming(
+					&mut ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle),
+					who,
+					vec![msg],
+				);
+			}
+			GenericMessage::ConsensusBatch(messages) => {
+				self.consensus_gossip.on_incoming(
+					&mut ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle),
+					who,
+					messages,
+				);
 			}
 			GenericMessage::ChainSpecific(msg) => self.specialization.on_message(
 				&mut ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle),
