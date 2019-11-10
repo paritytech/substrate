@@ -31,7 +31,7 @@ pub trait Trait: system::Trait + session::Trait {}
 
 decl_storage! {
 	trait Store for Module<T: Trait> as AuthorityDiscovery {
-		// Keys of the current authority set.
+		/// Keys of the current authority set.
 		Keys get(fn keys): Vec<AuthorityId>;
 	}
 	add_extra_genesis {
