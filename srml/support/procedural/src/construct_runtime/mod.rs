@@ -161,7 +161,6 @@ fn decl_outer_inherent<'a>(
 		maybe_config_part.map(|config_part| {
 			let arg = config_part
 				.args
-				.inner
 				.as_ref()
 				.and_then(|parens| parens.content.inner.iter().next())
 				.unwrap_or(&module_declaration.name);
@@ -206,9 +205,7 @@ fn decl_outer_config<'a>(
 			);
 			let instance = module_declaration
 				.instance
-				.inner
 				.as_ref()
-				.map(|inst| &inst.name)
 				.into_iter();
 			quote!(
 				#name =>
@@ -250,10 +247,8 @@ fn decl_runtime_metadata<'a>(
 			let name = &module_declaration.name;
 			let instance = module_declaration
 				.instance
-				.inner
 				.as_ref()
-				.map(|inst| {
-					let name = &inst.name;
+				.map(|name| {
 					quote!(<#name>)
 				})
 				.into_iter();
@@ -312,9 +307,7 @@ fn decl_outer_event_or_origin<'a>(
 				let module = &module_declaration.module;
 				let instance = module_declaration
 					.instance
-					.inner
-					.as_ref()
-					.map(|instance| &instance.name);
+					.as_ref();
 				let generics = &module_entry.generics;
 				if instance.is_some() && generics.params.len() == 0 {
 					let msg = format!(
@@ -354,8 +347,7 @@ fn decl_all_modules<'a>(
 		let type_name = &module_declaration.name;
 		let module = &module_declaration.module;
 		let mut generics = vec![quote!(#runtime)];
-		generics.extend(module_declaration.instance.inner.iter().map(|mi| {
-			let name = &mi.name;
+		generics.extend(module_declaration.instance.iter().map(|name| {
 			quote!(#module::#name)
 		}));
 		let type_decl = quote!(

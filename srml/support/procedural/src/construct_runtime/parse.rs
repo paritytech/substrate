@@ -155,13 +155,13 @@ impl Parse for ModuleDeclaration {
 		let module = input.parse()?;
 		let instance = if input.peek(Token![::]) && input.peek3(Token![<]) {
 			let _: Token![::] = input.parse()?;
-			Some(input.parse()?);
+			Some(input.parse()?)
 		} else {
 			None
 		};
 		let details = if input.peek(Token![::]) {
 			let _: Token![::] = input.parse()?;
-			Some(input.parse()?);
+			Some(input.parse()?)
 		} else {
 			None
 		};
@@ -183,7 +183,7 @@ pub enum ModuleEntry {
 }
 
 impl Parse for ModuleEntry {
-	fn parse(input: TokenStream) -> Result<Self> {
+	fn parse(input: ParseStream) -> Result<Self> {
 		let lookahead = input.lookahead1();
         if lookahead.peek(Token![default]) {
 			Ok(ModuleEntry::Default(input.parse()?))
@@ -199,29 +199,71 @@ impl Parse for ModuleEntry {
 pub struct ModulePart {
 	pub name: Ident,
 	pub generics: syn::Generics,
-	pub args: ext::Opt<ext::Parens<ext::Punctuated<Ident, Token![,]>>>,
+	pub args: Option<ext::Parens<ext::Punctuated<Ident, Token![,]>>>,
 }
 
 impl Parse for ModulePart {
 	fn parse(input: ParseStream) -> Result<Self> {
 		let name = input.parse()?;
-		if !Self::is_allowed_ident(name) {
-			let allowed: Vec<_> = self.allowed_names().into_iter().map(|s| format!("`{}`", s)).collect();
-			let allowed = allowed.join(", ");
-			let msg = format!("Please use one of the following indentifiers: {}", allowed);
+		if !Self::is_allowed_ident(&name) {
+			let valid_names = ModulePart::format_names(ModulePart::allowed_names());
+			let msg = format!("Please use one of the following indentifiers: {}", valid_names);
 			return Err(syn::Error::new(name.span(), msg))
 		}
-
+		let generics: syn::Generics = input.parse()?;
+		if !generics.params.is_empty() && !Self::is_allowed_generic(&name) {
+			let valid_generics = ModulePart::format_names(ModulePart::allowed_generics());
+			let msg = format!("Generics are only available for the following indentifiers: {}", valid_generics);
+			return Err(syn::Error::new(name.span(), msg))
+		}
+		let args = if input.peek(token::Paren) {
+			if !Self::is_allowed_arg(&name) {
+				let valid_names = ModulePart::format_names(ModulePart::allowed_args());
+				let msg = format!("Only the following identifiers are allowed to have arguments in parens: {}", valid_names);
+				return Err(syn::Error::new(name.span(), msg))
+			}
+			Some(input.parse()?)
+		} else {
+			None
+		};
+		Ok(
+			Self {
+				name,
+				generics,
+				args
+			}
+		)
 	}
 }
 
 impl ModulePart {
-	pub fn is_allowed_ident(ident: Ident) -> bool {
-		Self::allowed_names.into_iter().any(|n| n == ident)
+	pub fn is_allowed_ident(ident: &Ident) -> bool {
+		Self::allowed_names().into_iter().any(|n| ident == n)
 	}
 
-	pub fn allowed_names() -> [&'static str; 8] {
-		["Module", "Call", "Storage", "Event", "Origin", "Config", "Inherent", "ValidateUnsigned"]
+	pub fn is_allowed_generic(ident: &Ident) -> bool {
+		Self::allowed_generics().into_iter().any(|n| ident == n)
+	}
+
+	pub fn is_allowed_arg(ident: &Ident) -> bool {
+		Self::allowed_args().into_iter().any(|n| ident == n)
+	}
+
+	pub fn allowed_names() -> Vec<&'static str> {
+		vec!["Module", "Call", "Storage", "Event", "Origin", "Config", "Inherent", "ValidateUnsigned"]
+	}
+
+	pub fn allowed_generics() -> Vec<&'static str> {
+		vec!["Event", "Origin", "Config"]
+	}
+
+	pub fn allowed_args() -> Vec<&'static str> {
+		vec!["Inherent"]
+	}
+
+	pub fn format_names(names: Vec<&'static str>) -> String {
+		let res: Vec<_> = names.into_iter().map(|s| format!("`{}`", s)).collect();
+		res.join(", ")
 	}
 }
 
@@ -229,13 +271,12 @@ impl ModuleDeclaration {
 	/// Get resolved module parts, i.e. after expanding `default` keyword
 	/// or empty declaration
 	pub fn module_parts(&self) -> Vec<ModulePart> {
-		if let Some(ref details) = self.details.inner {
+		if let Some(ref details) = self.details {
 			let uniq: BTreeMap<_, _> = details
-				.entries
 				.content
 				.inner
 				.iter()
-				.flat_map(|entry| match &entry.inner {
+				.flat_map(|entry| match entry {
 					ModuleEntry::Default(ref token) => Self::default_modules(token.span()),
 					ModuleEntry::Part(ref part) => vec![part.clone()],
 				})
@@ -273,7 +314,7 @@ impl ModulePart {
 				where_clause: None,
 				..Default::default()
 			},
-			args: ext::Opt { inner: None },
+			args: None,
 		}
 	}
 
@@ -292,7 +333,7 @@ impl ModulePart {
 		Self {
 			name,
 			generics,
-			args: ext::Opt { inner: None },
+			args: None,
 		}
 	}
 }
