@@ -39,8 +39,7 @@ pub type AuthoritySignature = app::Signature;
 decl_runtime_apis! {
 	/// The authority discovery api.
 	///
-	/// This api is used by the `core/authority-discovery` module to retrieve identifiers of the
-	/// current authority set.
+	/// This api is used by the `core/authority-discovery` module to retrieve identifiers of the current authority set.
 	pub trait AuthorityDiscoveryApi {
 		/// Retrieve authority identifiers of the current authority set.
 		fn authorities() -> Vec<AuthorityId>;
