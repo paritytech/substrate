@@ -64,25 +64,27 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 			.into()
 		}
 	};
-
 	let hidden_crate_name = "construct_runtime";
 	let scrate = generate_crate_access(&hidden_crate_name, "srml-support");
 	let scrate_decl = generate_hidden_includes(&hidden_crate_name, "srml-support");
+
+	let all_but_system_modules = modules.iter().filter(|module| module.name != "System");
+
 	let outer_event = try_tok!(decl_outer_event_or_origin(
 		&name,
-		modules.iter().filter(|module| module.name != "System"),
+		all_but_system_modules.clone(),
 		&system_module,
 		&scrate,
 		DeclOuterKind::Event,
 	));
 	let outer_origin = try_tok!(decl_outer_event_or_origin(
 		&name,
-		modules.iter().filter(|module| module.name != "System"),
+		all_but_system_modules.clone(),
 		&system_module,
 		&scrate,
 		DeclOuterKind::Origin,
 	));
-	let all_modules = decl_all_modules(&name, modules.iter().filter(|module| module.name != "System"));
+	let all_modules = decl_all_modules(&name, all_but_system_modules);
 
 	let dispatch = decl_outer_dispatch(&name, modules.iter(), &scrate);
 	let metadata = decl_runtime_metadata(&name, modules.iter(), &scrate);
