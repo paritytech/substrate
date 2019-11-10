@@ -155,7 +155,10 @@ impl Parse for ModuleDeclaration {
 		let module = input.parse()?;
 		let instance = if input.peek(Token![::]) && input.peek3(Token![<]) {
 			let _: Token![::] = input.parse()?;
-			Some(input.parse()?)
+			let _: Token![<] = input.parse()?;
+			let res = Some(input.parse()?);
+			let _: Token![>] = input.parse()?;
+			res
 		} else {
 			None
 		};
@@ -205,11 +208,6 @@ pub struct ModulePart {
 impl Parse for ModulePart {
 	fn parse(input: ParseStream) -> Result<Self> {
 		let name = input.parse()?;
-		if !Self::is_allowed_ident(&name) {
-			let valid_names = ModulePart::format_names(ModulePart::allowed_names());
-			let msg = format!("Please use one of the following indentifiers: {}", valid_names);
-			return Err(syn::Error::new(name.span(), msg))
-		}
 		let generics: syn::Generics = input.parse()?;
 		if !generics.params.is_empty() && !Self::is_allowed_generic(&name) {
 			let valid_generics = ModulePart::format_names(ModulePart::allowed_generics());
@@ -237,20 +235,12 @@ impl Parse for ModulePart {
 }
 
 impl ModulePart {
-	pub fn is_allowed_ident(ident: &Ident) -> bool {
-		Self::allowed_names().into_iter().any(|n| ident == n)
-	}
-
 	pub fn is_allowed_generic(ident: &Ident) -> bool {
 		Self::allowed_generics().into_iter().any(|n| ident == n)
 	}
 
 	pub fn is_allowed_arg(ident: &Ident) -> bool {
 		Self::allowed_args().into_iter().any(|n| ident == n)
-	}
-
-	pub fn allowed_names() -> Vec<&'static str> {
-		vec!["Module", "Call", "Storage", "Event", "Origin", "Config", "Inherent", "ValidateUnsigned"]
 	}
 
 	pub fn allowed_generics() -> Vec<&'static str> {
