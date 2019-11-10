@@ -12,7 +12,7 @@
 #
 # 1. Build `target/release/substrate` binary: `cargo build --release`
 #
-# 2. Start networks and containers: `sudo docker-compose -f scripts/sentry-node/docker-compose.yml up`
+# 2. Start networks and containers: `sudo docker-compose -f .maintain/sentry-node/docker-compose.yml up`
 #
 # 3. Reach:
 #   - polkadot/apps on localhost:3000

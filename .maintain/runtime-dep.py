@@ -4,7 +4,7 @@
 # pip install toml
 # sudo apt-get install graphviz
 # the first parameter is the runtime folder
-# python ./scripts/runtime-dep.py ./substrate/runtime | dot -Tpng -o output.png
+# python ./.maintain/runtime-dep.py ./substrate/runtime | dot -Tpng -o output.png
 import sys
 import os
 import toml

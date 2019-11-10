@@ -11,6 +11,6 @@ if [ "$#" -ne 1 ]; then
 fi
 
 PATH_TO_ARCHIVE=$(pwd)/$1
-cd $PROJECT_ROOT/scripts/node-template-release
+cd $PROJECT_ROOT/.maintain/node-template-release
 
 cargo run $PROJECT_ROOT/node-template $PATH_TO_ARCHIVE
