@@ -14,6 +14,26 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+/// Notifications protocol.
+///
+/// The Substrate notifications protocol consists in the following:
+///
+/// - Node A opens a substream to node B.
+/// - If node B accepts the substream, it sends back a message which contains some
+///   protocol-specific higher-level logic. This message is prefixed with a variable-length
+///   integer message length. This message can be empty, in which case `0` is sent. Afterwards,
+///   the sending side of B is closed.
+/// - If instead the node refuses the connection (which typically happens because no empty slot
+///   is available), then it immediately closes the substream after the multistream-select
+///   negotiation.
+/// - Node A can then send notifications to B, prefixed with a variable-length integer indicating
+///   the length of the message.
+/// - Node A closes its writing side if it doesn't want the notifications substream anymore.
+///
+/// Notification substreams are unidirectional. If A opens a substream with B, then B is
+/// encouraged but not required to open a substream to A as well.
+///
+
 use libp2p::core::{Negotiated, UpgradeInfo, InboundUpgrade, OutboundUpgrade, upgrade, upgrade::ProtocolName};
 use std::{borrow::Cow, iter};
 use futures::prelude::*;
@@ -39,6 +59,8 @@ pub struct NotificationsOut {
 
 impl NotificationsIn {
 	/// Builds a new potential upgrade.
+	// TODO: don't send back the handshake message; instead the user should be able to choose
+	// whether to accept or refuse the substream
 	pub fn new(proto_name: impl Into<Cow<'static, [u8]>>, handshake_msg: impl Into<Vec<u8>>) -> Self {
 		NotificationsIn {
 			protocol_name: proto_name.into(),
@@ -47,6 +69,7 @@ impl NotificationsIn {
 	}
 
 	/// Modifies the handshake message.
+	// TODO: remove
 	pub fn set_handshake_message(&mut self, message: impl Into<Vec<u8>>) {
 		self.handshake_message = message.into();
 	}

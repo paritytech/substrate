@@ -176,6 +176,17 @@ pub enum NotifsHandlerOut {
 	},
 }
 
+impl<TSubstream> NotifsHandlerProto<TSubstream> {
+	pub fn new(list: impl Into<Vec<(Cow<'static, [u8]>, Vec<u8>)>>) -> Self {
+		let list = list.into();
+
+		NotifsHandlerProto {
+			in_handlers: list.clone().into_iter().map(|(p, msg)| NotifsInHandlerProto::new(p, msg)),
+			out_handlers: list.clone().into_iter().map(|(p, _)| NotifsOutHandlerProto::new(p)),
+		}
+	}
+}
+
 impl<TSubstream> ProtocolsHandler for NotifsHandler<TSubstream>
 where TSubstream: AsyncRead + AsyncWrite + 'static {
 	type InEvent = NotifsHandlerIn;
