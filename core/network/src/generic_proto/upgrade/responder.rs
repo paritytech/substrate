@@ -45,7 +45,7 @@ impl UpgradeInfo for Responder {
 }
 
 impl<TSubstream> InboundUpgrade<TSubstream> for Responder
-where TSubstream: AsyncRead + AsyncWrite + 'static,
+where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 {
 	type Output = ResponderResponse<TSubstream>;
 	type Future = Box<dyn Future<Item = Self::Output, Error = Self::Error> + Send>;

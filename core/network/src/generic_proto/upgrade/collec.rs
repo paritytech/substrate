@@ -23,7 +23,7 @@ use libp2p::core::{
 	upgrade::{InboundUpgrade, OutboundUpgrade, UpgradeInfo},
 	Negotiated
 };
-use std::iter::FromIterator;
+use std::{iter::FromIterator, vec};
 
 // TODO: move this to libp2p
 
@@ -46,16 +46,16 @@ impl<T> FromIterator<T> for UpgradeCollec<T> {
 
 impl<T: UpgradeInfo> UpgradeInfo for UpgradeCollec<T> {
 	type Info = T::Info;
-	type InfoIter = T::InfoIter;
+	type InfoIter = vec::IntoIter<T::Info>;
 
 	fn protocol_info(&self) -> Self::InfoIter {
-		unimplemented!()
+		self.0.iter().flat_map(|p| p.protocol_info()).collect::<Vec<_>>().into_iter()
 	}
 }
 
 impl<T, C> InboundUpgrade<C> for UpgradeCollec<T>
 where
-	T: InboundUpgrade<C>
+	T: InboundUpgrade<C>,
 {
 	type Output = (T::Output, usize);
 	type Error = (T::Error, usize);
@@ -68,7 +68,7 @@ where
 
 impl<T, C> OutboundUpgrade<C> for UpgradeCollec<T>
 where
-	T: OutboundUpgrade<C>
+	T: OutboundUpgrade<C>,
 {
 	type Output = (T::Output, usize);
 	type Error = (T::Error, usize);

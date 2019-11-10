@@ -18,12 +18,12 @@ use crate::generic_proto::{
 	handler::legacy::{LegacyProtoHandler, LegacyProtoHandlerProto},
 	handler::notif_in::{NotifsInHandlerProto, NotifsInHandler},
 	handler::notif_out::{NotifsOutHandlerProto, NotifsOutHandler},
-	upgrade::{NotificationsIn, NotificationsOut, RegisteredProtocol, UpgradeCollec},
+	upgrade::{NotificationsIn, NotificationsOut, RegisteredProtocol, SelectUpgrade, UpgradeCollec},
 };
 use bytes::BytesMut;
 use futures::prelude::*;
 use libp2p::core::{ConnectedPoint, PeerId};
-use libp2p::core::either::EitherError;
+use libp2p::core::either::{EitherError, EitherOutput};
 use libp2p::core::upgrade::{ReadOneError, InboundUpgrade, OutboundUpgrade};
 use libp2p::swarm::{
 	ProtocolsHandler, ProtocolsHandlerEvent,
@@ -32,7 +32,7 @@ use libp2p::swarm::{
 	ProtocolsHandlerUpgrErr,
 	SubstreamProtocol,
 };
-use std::{borrow::Cow, error};
+use std::{borrow::Cow, error, io};
 use tokio_io::{AsyncRead, AsyncWrite};
 
 /// Implements the `IntoProtocolsHandler` trait of libp2p.
@@ -69,8 +69,12 @@ where
 {
 	type Handler = NotifsHandler<TSubstream>;
 
-	fn inbound_protocol(&self) -> UpgradeCollec<NotificationsIn> {
-		unimplemented!()	// TODO:
+	fn inbound_protocol(&self) -> SelectUpgrade<UpgradeCollec<NotificationsIn>, RegisteredProtocol> {
+		let in_handlers = self.in_handlers.iter()
+			.map(|h| h.inbound_protocol())
+			.collect::<UpgradeCollec<_>>();
+
+		SelectUpgrade::new(in_handlers, self.legacy.inbound_protocol())
 	}
 
 	fn into_handler(self, remote_peer_id: &PeerId, connected_point: &ConnectedPoint) -> Self::Handler {
@@ -162,34 +166,49 @@ where TSubstream: AsyncRead + AsyncWrite + 'static {
 		<NotifsInHandler<TSubstream> as ProtocolsHandler>::Error,
 		<NotifsOutHandler<TSubstream> as ProtocolsHandler>::Error,
 	>;
-	type InboundProtocol = UpgradeCollec<NotificationsIn>;
-	type OutboundProtocol = UpgradeCollec<NotificationsOut>;
+	type InboundProtocol = SelectUpgrade<UpgradeCollec<NotificationsIn>, RegisteredProtocol>;
+	type OutboundProtocol = SelectUpgrade<UpgradeCollec<NotificationsOut>, RegisteredProtocol>;
 	type OutboundOpenInfo = ();
 
 	fn listen_protocol(&self) -> SubstreamProtocol<Self::InboundProtocol> {
-		unimplemented!()	// TODO:
+		let in_handlers = self.in_handlers.iter()
+			.map(|h| h.listen_protocol().into_upgrade().1)
+			.collect::<UpgradeCollec<_>>();
+
+		let proto = SelectUpgrade::new(in_handlers, self.legacy.listen_protocol().into_upgrade().1);
+		SubstreamProtocol::new(proto)
 	}
 
 	fn inject_fully_negotiated_inbound(
 		&mut self,
-		(out, num): <Self::InboundProtocol as InboundUpgrade<TSubstream>>::Output
+		out: <Self::InboundProtocol as InboundUpgrade<TSubstream>>::Output
 	) {
-		self.in_handlers[num].inject_fully_negotiated_inbound(out)
+		match out {
+			EitherOutput::First((out, num)) =>
+				self.in_handlers[num].inject_fully_negotiated_inbound(out),
+			EitherOutput::Second(out) =>
+				self.legacy.inject_fully_negotiated_inbound(out),
+		}
 	}
 
 	fn inject_fully_negotiated_outbound(
 		&mut self,
-		(out, num): <Self::OutboundProtocol as OutboundUpgrade<TSubstream>>::Output,
+		out: <Self::OutboundProtocol as OutboundUpgrade<TSubstream>>::Output,
 		_: Self::OutboundOpenInfo
 	) {
-		self.out_handlers[num].inject_fully_negotiated_outbound(out, ())
+		match out {
+			EitherOutput::First((out, num)) =>
+				self.out_handlers[num].inject_fully_negotiated_outbound(out, ()),
+			EitherOutput::Second(out) =>
+				self.legacy.inject_fully_negotiated_outbound(out, ()),
+		}
 	}
 
 	fn inject_event(&mut self, message: NotifsHandlerIn) {
 		unimplemented!()		// TODO:
 	}
 
-	fn inject_dial_upgrade_error(&mut self, _: (), err: ProtocolsHandlerUpgrErr<(ReadOneError, usize)>) {
+	fn inject_dial_upgrade_error(&mut self, _: (), err: ProtocolsHandlerUpgrErr<EitherError<(ReadOneError, usize), io::Error>>) {
 		unimplemented!()		// TODO:
 	}
 
