@@ -358,9 +358,7 @@ impl<TSubstream> LegacyProto<TSubstream> {
 		trace!(target: "sub-libp2p", "Handler({:?}) <= Packet", target);
 		self.events.push(NetworkBehaviourAction::SendEvent {
 			peer_id: target.clone(),
-			event: NotifsHandlerIn::SendCustomMessage {
-				message,
-			}
+			event: NotifsHandlerIn::Send { message },
 		});
 	}
 
@@ -622,7 +620,7 @@ where
 	type OutEvent = LegacyProtoOut;
 
 	fn new_handler(&mut self) -> Self::ProtocolsHandler {
-		NotifsHandlerProto::new(self.protocol.clone(), Vec::new())
+		NotifsHandlerProto::new(self.protocol.clone(), vec![(Cow::from(&b"/substrate/foo"[..]), Vec::new())])
 	}
 
 	fn addresses_of_peer(&mut self, _: &PeerId) -> Vec<Multiaddr> {

@@ -75,6 +75,15 @@ impl NotificationsIn {
 	}
 }
 
+impl NotificationsOut {
+	/// Builds a new potential upgrade.
+	pub fn new(proto_name: impl Into<Cow<'static, [u8]>>) -> Self {
+		NotificationsOut {
+			protocol_name: proto_name.into(),
+		}
+	}
+}
+
 impl UpgradeInfo for NotificationsIn {
 	type Info = Cow<'static, [u8]>;
 	type InfoIter = iter::Once<Self::Info>;

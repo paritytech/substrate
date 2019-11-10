@@ -25,8 +25,9 @@ use libp2p::swarm::{
 	ProtocolsHandlerUpgrErr,
 	SubstreamProtocol,
 };
+use log::error;
 use smallvec::SmallVec;
-use std::{borrow::Cow, fmt, marker::PhantomData};
+use std::{borrow::Cow, fmt, marker::PhantomData, mem, time::Duration};
 use tokio_io::{AsyncRead, AsyncWrite};
 
 /// Implements the `IntoProtocolsHandler` trait of libp2p.
@@ -119,7 +120,7 @@ enum State {
 
 	/// The handler is disabled. A substream is open and needs to be closed.
 	// TODO: needed?
-	DisabledOpen,
+	DisabledOpen(()),
 
 	/// The handler is enabled and we are trying to open a substream with the remote.
 	Opening,
@@ -127,6 +128,12 @@ enum State {
 	/// The handler is enabled. We have tried opening a substream in the past but the remote
 	/// refused it.
 	Refused,
+
+	/// The handler is enabled and substream is open.
+	Open(()),
+
+	/// Poisoned state. Shouldn't be found in the wild.
+	Poisoned,
 }
 
 /// Event that can be received by a `NotifsOutHandler`.
@@ -164,6 +171,25 @@ pub enum NotifsOutHandlerOut {
 	Refused,
 }
 
+impl<TSubstream> NotifsOutHandler<TSubstream> {
+	/// Returns true if the substream is open.
+	pub fn is_open(&self) -> bool {
+		match &self.state {
+			State::Disabled => false,
+			State::DisabledOpen(_) => true,
+			State::Opening => false,
+			State::Refused => false,
+			State::Open(_) => true,
+			State::Poisoned => false,
+		}
+	}
+
+	/// Returns the name of the protocol that we negotiate.
+	pub fn protocol_name(&self) -> &[u8] {
+		&self.proto_name
+	}
+}
+
 impl<TSubstream> ProtocolsHandler for NotifsOutHandler<TSubstream>
 where TSubstream: AsyncRead + AsyncWrite + 'static {
 	type InEvent = NotifsOutHandlerIn;
@@ -195,11 +221,52 @@ where TSubstream: AsyncRead + AsyncWrite + 'static {
 	}
 
 	fn inject_event(&mut self, message: NotifsOutHandlerIn) {
-		// TODO: implement
 		match message {
-			NotifsOutHandlerIn::Enable => unimplemented!(),
-			NotifsOutHandlerIn::Disable => unimplemented!(),
-			NotifsOutHandlerIn::Send(msg) => unimplemented!(),
+			NotifsOutHandlerIn::Enable => {
+				match mem::replace(&mut self.state, State::Poisoned) {
+					State::Disabled => {
+						self.events_queue.push(ProtocolsHandlerEvent::OutboundSubstreamRequest {
+							protocol: SubstreamProtocol::new(NotificationsOut::new(self.proto_name.clone()))
+								.with_timeout(Duration::from_secs(30)),		// TODO: proper timeout config
+							info: (),
+						});
+						self.state = State::Opening;
+					},
+					State::DisabledOpen(sub) => self.state = State::Open(sub),
+					State::Opening | State::Refused | State::Open(_) => {
+						error!("Tried to enable notifications handler that was already enabled");
+						return;
+					},
+					State::Poisoned => {
+						error!("Notifications handler in a poisoned state");
+						return;
+					},
+				}
+			},
+			NotifsOutHandlerIn::Disable => {
+				match mem::replace(&mut self.state, State::Poisoned) {
+					State::Disabled => {
+						error!("Tried to disable notifications handler that was already disabled");
+						return;
+					},
+					State::DisabledOpen(sub) => self.state = State::Open(sub),
+					State::Opening | State::Refused => {
+						self.state = State::Disabled;
+						return;
+					},
+					State::Open(sub) => {
+						self.state = State::DisabledOpen(sub);
+						return;
+					}
+					State::Poisoned => {
+						error!("Notifications handler in a poisoned state");
+						return;
+					},
+				}
+			},
+			NotifsOutHandlerIn::Send(msg) => {
+				unimplemented!()
+			},
 		}
 	}
 

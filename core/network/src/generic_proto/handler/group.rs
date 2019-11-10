@@ -102,7 +102,7 @@ pub enum NotifsHandlerIn {
 	Disable,
 
 	/// Sends a message through a custom protocol substream.
-	SendCustomMessage {
+	Send {
 		/// The message to send.
 		message: Vec<u8>,
 	},
@@ -221,8 +221,16 @@ where TSubstream: AsyncRead + AsyncWrite + 'static {
 					handler.inject_event(NotifsOutHandlerIn::Disable);
 				}
 			},
-			NotifsHandlerIn::SendCustomMessage { message } =>
-				self.legacy.inject_event(LegacyProtoHandlerIn::SendCustomMessage { message }),
+			NotifsHandlerIn::Send { message } => {
+				for handler in &mut self.out_handlers {
+					if handler.protocol_name() == b"/substrate/foo" {	// FIXME:
+						handler.inject_event(NotifsOutHandlerIn::Send(message));
+						return;
+					}
+				}
+
+				self.legacy.inject_event(LegacyProtoHandlerIn::SendCustomMessage { message });
+			},
 		}
 	}
 
