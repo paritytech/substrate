@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{DiscoveryNetBehaviour, config::ProtocolId};
-use crate::legacy_proto::{LegacyProto, LegacyProtoOut};
+use crate::generic_proto::{LegacyProto, LegacyProtoOut};
 use bytes::BytesMut;
 use futures::prelude::*;
 use futures03::{StreamExt as _, TryStreamExt as _};

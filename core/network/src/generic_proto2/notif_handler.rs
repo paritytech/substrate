@@ -41,6 +41,7 @@ use tokio_io::{AsyncRead, AsyncWrite};
 pub struct NotifsHandlerProto<TSubstream> {
 	in_handlers: Vec<NotifsInHandlerProto<TSubstream>>,
 	out_handlers: Vec<NotifsOutHandlerProto<TSubstream>>,
+	legacy: CustomProtoHandlerProto<TSubstream>,
 }
 
 impl<TSubstream> NotifsHandlerProto<TSubstream>

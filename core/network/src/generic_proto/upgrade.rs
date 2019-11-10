@@ -15,12 +15,14 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 pub use self::collec::UpgradeCollec;
+pub use self::legacy::{RegisteredProtocol, RegisteredProtocolEvent, RegisteredProtocolName, RegisteredProtocolSubstream};
 pub use self::notifications::{NotificationsIn, NotificationsOut};
 pub use self::request_response::RequestResponse;
 pub use self::responder::{Responder, ResponderResponse};
 pub use self::select::SelectUpgrade;
 
 mod collec;
+mod legacy;
 mod notifications;
 mod request_response;
 mod responder;
