@@ -1,0 +1,78 @@
+= Structure
+:Author: Substrate developers
+:Revision: 0.3.0
+:toc:
+:sectnums:
+
+
+==
+
+Substrate is split into multiple levels with increasing opinion and decreasing flexibility:
+
+- runtime
+- client
+- PAINT (formerly `srml`)
+- node
+
+=== Runtime
+
+ - _found in_: `/runtime`
+ - _crates prefix_: `sr-`
+ - _constrains_:
+    - must be `[no_std]`
+    - crates may not (dev-)depend on crates in other subfolders of this repo
+    - excluding `test`-crates, which **must not** to be published to crates.io
+
+
+In the lowest level, substrate defines primitives, interfaces and traits to implement any on-chain substrate transition system and its interactions with the outside world. This is the lowest level of abstraction and opinion everything else builds upon.
+
+=== Client
+
+ - _found in_: `/client`
+ - _crates prefix_: `substrate-`
+ - _constrains_:
+    - crates may not (dev-)depend on any `paint-`-crates
+    - excluding `test`-crates, which **must not** to be published to crates.io
+
+In the client you can find a set of crates to construct the outer substrate-node, implementing outer runtime interfaces, thus it depends on `runtime`. It provides the outer building blocks like transaction queue, networking layer, database backend, full- and light-client support.
+
+=== PAINT (formerly `srml`)
+
+ - _found in_: `/paint`
+ - _crates prefix_: `paint-`
+ - _constrains_:
+    - must be `[no_std]`
+
+PAINT, the Parity Application Interface for Networked Transitions, is a set of modules implementing specific transition functions and features one (might) want to have in their runtime.
+
+=== the final Node
+
+ - _found in_: `/examples`
+
+The node pulls it all together, constructs the (upgradable) runtime and wires up the client around it. You can find an example client, which includes a full wasm-contracts chain in  `node`. This is also what is being build and run if you do `cargo run`.
+
+
+== Internal Dependency Tree
+
+[ditaa]
+...
++---------------+       +----------------+
+|               |       |                |
+|    runtime    +<------+   paint        |
+|               |       |                |
++------+-----+--+       +-------------+--+
+       ^     ^                        ^
+       |     +----------------+       |
+       |                      |       |
++------+--------+             |       |
+|               |             |       |
+|   client      |          +--+-------+--------+
+|               +<---------+                   |
++---------------+          |                   |
+                           |    Node           |
+                           |                   |
+                           |                   |
+                           +-------------------+
+
+....
+
