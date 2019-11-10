@@ -156,7 +156,7 @@ fn phragmen_accuracy_on_large_scale_only_validators() {
 	).unwrap();
 
 	assert_eq_uvec!(winners, vec![(1, 18446744073709551614u128), (5, 18446744073709551613u128)]);
-	assert_eq!(assignments.len(), 0);
+	assert_eq!(assignments.len(), 2);
 	check_assignments(assignments);
 }
 
@@ -189,7 +189,12 @@ fn phragmen_accuracy_on_large_scale_validators_and_nominators() {
 	assert_eq_uvec!(winners, vec![(2, 36893488147419103226u128), (1, 36893488147419103219u128)]);
 	assert_eq!(
 		assignments,
-		vec![(13, vec![(1, Perbill::one())]), (14, vec![(2, Perbill::one())])]
+		vec![
+			(13, vec![(1, Perbill::one())]),
+			(14, vec![(2, Perbill::one())]),
+			(1, vec![(1, Perbill::one())]),
+			(2, vec![(2, Perbill::one())]),
+		]
 	);
 	check_assignments(assignments);
 }
@@ -308,7 +313,11 @@ fn phragmen_large_scale_test_2() {
 	assert_eq_uvec!(winners, vec![(2, 1000000000004000000u128), (4, 1000000000004000000u128)]);
 	assert_eq!(
 		assignments,
-		vec![(50, vec![(2, Perbill::from_parts(500000001)), (4, Perbill::from_parts(499999999))])],
+		vec![
+			(50, vec![(2, Perbill::from_parts(500000001)), (4, Perbill::from_parts(499999999))]),
+			(2, vec![(2, Perbill::one())]),
+			(4, vec![(4, Perbill::one())]),
+		],
 	);
 	check_assignments(assignments);
 }
