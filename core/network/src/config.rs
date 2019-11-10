@@ -81,7 +81,7 @@ pub struct Params<B: BlockT, S, H: ExHashT> {
 	pub specialization: S,
 
 	/// Type to check incoming block announcements.
-	pub block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>
+	pub block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>,
 }
 
 bitflags! {
@@ -261,6 +261,8 @@ pub struct NetworkConfiguration {
 	pub node_name: String,
 	/// Configuration for the transport layer.
 	pub transport: TransportConfig,
+	/// Maximum number of peers to ask the same blocks in parallel.
+	pub max_parallel_downloads: u32,
 }
 
 impl Default for NetworkConfiguration {
@@ -282,6 +284,7 @@ impl Default for NetworkConfiguration {
 				enable_mdns: false,
 				wasm_external_transport: None,
 			},
+			max_parallel_downloads: 5,
 		}
 	}
 }

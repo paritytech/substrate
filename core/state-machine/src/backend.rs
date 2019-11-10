@@ -317,12 +317,13 @@ impl error::Error for Void {
 	fn description(&self) -> &str { "unreachable error" }
 }
 
-/// In-memory backend. Fully recomputes tries on each commit but useful for
-/// tests.
+/// In-memory backend. Fully recomputes tries each time `as_trie_backend` is called but useful for
+/// tests and proof checking.
 pub struct InMemory<H: Hasher> {
 	inner_trie: HashMap<Option<Vec<u8>>, HashMap<Vec<u8>, Vec<u8>>>,
 	inner_kv: Option<InMemoryKvBackend>,
-	state: Option<StateBackend<MemoryDB<H>, H, InMemoryKvBackend>>,
+	// This field is only needed for returning reference in `as_state_backend`.
+	as_state: Option<StateBackend<MemoryDB<H>, H, InMemoryKvBackend>>,
 	_hasher: PhantomData<H>,
 }
 
@@ -337,7 +338,7 @@ impl<H: Hasher> Default for InMemory<H> {
 	fn default() -> Self {
 		InMemory {
 			inner_trie: Default::default(),
-			state: None,
+			as_state: None,
 			inner_kv: Some(Default::default()),
 			_hasher: PhantomData,
 		}
@@ -348,7 +349,7 @@ impl<H: Hasher> Clone for InMemory<H> {
 	fn clone(&self) -> Self {
 		InMemory {
 			inner_trie: self.inner_trie.clone(),
-			state: None,
+			as_state: None,
 			inner_kv: self.inner_kv.clone(),
 			_hasher: PhantomData,
 		}
@@ -370,7 +371,7 @@ impl<H: Hasher> InMemory<H> {
 		if let Some(kv) = self.inner_kv.as_ref() {
 			kv
 		} else {
-			self.state.as_ref().unwrap().kv_backend()
+			self.as_state.as_ref().unwrap().kv_backend()
 		}
 	}
 
@@ -379,7 +380,7 @@ impl<H: Hasher> InMemory<H> {
 		if let Some(kv) = self.inner_kv.as_mut() {
 			kv
 		} else {
-			self.state.as_mut().unwrap().kv_backend_mut()
+			self.as_state.as_mut().unwrap().kv_backend_mut()
 		}
 	}
 
@@ -389,7 +390,7 @@ impl<H: Hasher> InMemory<H> {
 			kv
 		} else {
 			std::mem::replace(
-				self.state.as_mut().unwrap().kv_backend_mut(),
+				self.as_state.as_mut().unwrap().kv_backend_mut(),
 				Default::default(),
 			)	
 		}
@@ -408,7 +409,7 @@ impl<H: Hasher> InMemory<H> {
 		kv.extend(changes.kv);
 
 		let inner_kv = Some(kv);
-		InMemory { inner_trie, inner_kv, state: None, _hasher: PhantomData }
+		InMemory { inner_trie, inner_kv, as_state: None, _hasher: PhantomData }
 	}
 }
 
@@ -416,7 +417,7 @@ impl<H: Hasher> From<HashMap<Option<Vec<u8>>, HashMap<Vec<u8>, Vec<u8>>>> for In
 	fn from(inner_trie: HashMap<Option<Vec<u8>>, HashMap<Vec<u8>, Vec<u8>>>) -> Self {
 		InMemory {
 			inner_trie,
-			state: None,
+			as_state: None,
 			inner_kv: Some(Default::default()),
 			_hasher: PhantomData,
 		}
@@ -436,7 +437,7 @@ impl<H: Hasher> From<(
 		inner_trie.insert(None, inner_tries.0);
 		InMemory {
 			inner_trie,
-			state: None,
+			as_state: None,
 			inner_kv: Some(Default::default()),
 			_hasher: PhantomData,
 		}
@@ -449,7 +450,7 @@ impl<H: Hasher> From<HashMap<Vec<u8>, Vec<u8>>> for InMemory<H> {
 		expanded.insert(None, inner_trie);
 		InMemory {
 			inner_trie: expanded,
-			state: None,
+			as_state: None,
 			inner_kv: Some(Default::default()),
 			_hasher: PhantomData,
 		}
@@ -644,7 +645,6 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 		&StateBackend<Self::TrieBackendStorage, H, Self::KvBackend>
 	> {
 		let mut mdb = MemoryDB::default();
-		let mut root = None;
 		let mut new_child_roots = Vec::new();
 		let mut root_map = None;
 		for (storage_key, map) in &self.inner_trie {
@@ -655,19 +655,18 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 				root_map = Some(map);
 			}
 		}
-		// root handling
-		if let Some(map) = root_map.take() {
-			root = Some(insert_into_memory_db::<H, _>(
+		let root = match root_map {
+			Some(map) => insert_into_memory_db::<H, _>(
 				&mut mdb,
-				map.clone().into_iter().chain(new_child_roots.into_iter())
-			)?);
-		}
-		let root = match root {
-			Some(root) => root,
-			None => insert_into_memory_db::<H, _>(&mut mdb, ::std::iter::empty())?,
+				map.clone().into_iter().chain(new_child_roots.into_iter()),
+			)?,
+			None => insert_into_memory_db::<H, _>(
+				&mut mdb,
+				new_child_roots.into_iter(),
+			)?,
 		};
-		self.state = Some(StateBackend::new(mdb, root, self.extract_kv()));
-		self.state.as_ref()
+		self.as_state = Some(StateBackend::new(mdb, root, self.extract_kv()));
+		self.as_state.as_ref()
 	}
 }
 
@@ -689,4 +688,22 @@ pub(crate) fn insert_into_memory_db<H, I>(mdb: &mut MemoryDB<H>, input: I) -> Op
 	}
 
 	Some(root)
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	/// Assert in memory backend with only child trie keys works as trie backend.
+	#[test]
+	fn in_memory_with_child_trie_only() {
+		let storage = InMemory::<primitives::Blake2Hasher>::default();
+		let mut storage = storage.update(InMemoryTransaction {
+			storage: vec![(Some(b"1".to_vec()), b"2".to_vec(), Some(b"3".to_vec()))],
+			kv: Default::default(),
+		});
+		let trie_backend = storage.as_state_backend().unwrap();
+		assert_eq!(trie_backend.child_storage(b"1", b"2").unwrap(), Some(b"3".to_vec()));
+		assert!(trie_backend.storage(b"1").unwrap().is_some());
+	}
 }

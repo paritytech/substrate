@@ -146,11 +146,11 @@ pub struct NetworkConfigurationParams {
 	pub port: Option<u16>,
 
 	/// Specify the number of outgoing connections we're trying to maintain.
-	#[structopt(long = "out-peers", value_name = "OUT_PEERS", default_value = "25")]
+	#[structopt(long = "out-peers", value_name = "COUNT", default_value = "25")]
 	pub out_peers: u32,
 
 	/// Specify the maximum number of incoming connections we're accepting.
-	#[structopt(long = "in-peers", value_name = "IN_PEERS", default_value = "25")]
+	#[structopt(long = "in-peers", value_name = "COUNT", default_value = "25")]
 	pub in_peers: u32,
 
 	/// Disable mDNS discovery.
@@ -159,6 +159,13 @@ pub struct NetworkConfigurationParams {
 	/// local network. This disables it. Automatically implied when using --dev.
 	#[structopt(long = "no-mdns")]
 	pub no_mdns: bool,
+
+	/// Maximum number of peers to ask the same blocks in parallel.
+	///
+	/// This allows downlading announced blocks from multiple peers. Decrease to save
+	/// traffic and risk increased latency.
+	#[structopt(long = "max-parallel-downloads", value_name = "COUNT", default_value = "5")]
+	pub max_parallel_downloads: u32,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]

@@ -8,9 +8,9 @@ edition = "2018"
 proc-macro = true
 
 [dependencies]
-quote = "0.6.12"
-syn = { version = "0.15.44", features = [ "full", "fold", "extra-traits", "visit" ] }
-proc-macro2 = "0.4.27"
+quote = "1.0.2"
+syn = { version = "1.0.7", features = [ "full", "fold", "extra-traits", "visit" ] }
+proc-macro2 = "1.0.6"
 blake2-rfc = "0.2.18"
 proc-macro-crate = "0.1.4"
 
