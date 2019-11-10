@@ -345,10 +345,11 @@ check_polkadot:
   dependencies:
     - test-linux-stable
   script:
-    - git clone --depth 1 https://github.com/paritytech/polkadot.git
     - COMMIT_HASH=$(git rev-parse HEAD)
+    - SUBSTRATE_PATH=$(pwd)
+    - git clone --depth 1 https://gitlab.parity.io/parity/polkadot.git
     - cd polkadot
-    - git grep -l "polkadot-master" | grep toml | xargs sed -i "s/branch.*=.*\"polkadot-master\"/rev = \"$COMMIT_HASH\"/"
+    - git grep -l "polkadot-master" | grep toml | xargs sed -i "s/branch.*=.*\"polkadot-master\"/rev = \"$COMMIT_HASH\"/; s~https://github.com/paritytech/substrate~file://$SUBSTRATE_PATH~"
     - cargo update -p sr-io --precise $COMMIT_HASH
     - time cargo check
     - cd ..
