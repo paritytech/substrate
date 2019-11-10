@@ -237,7 +237,7 @@ impl Parse for ModulePart {
         }
         let args = if input.peek(token::Paren) {
             if !Self::is_allowed_arg(&name) {
-				let syn::group::Parens { token: parens, .. } = syn::group::parse_parens(input)?;
+                let syn::group::Parens { token: parens, .. } = syn::group::parse_parens(input)?;
                 let valid_names = ModulePart::format_names(ModulePart::allowed_args());
                 let msg = format!(
                     "Only the following modules are allowed to have arguments in parens: {}",
