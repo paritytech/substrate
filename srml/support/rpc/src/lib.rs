@@ -24,7 +24,9 @@ use futures::compat::Future01CompatExt;
 use jsonrpc_client_transports::RpcError;
 use parity_scale_codec::{DecodeAll, FullCodec, FullEncode};
 use serde::{de::DeserializeOwned, Serialize};
-use srml_support::storage::generator::{StorageDoubleMap, StorageLinkedMap, StorageMap, StorageValue};
+use srml_support::storage::generator::{
+	StorageDoubleMap, StorageLinkedMap, StorageMap, StorageValue
+};
 use substrate_primitives_storage::{StorageData, StorageKey};
 use substrate_rpc_api::state::StateClient;
 
@@ -138,8 +140,8 @@ impl<V: FullCodec> StorageQuery<V> {
 	///
 	/// state_client represents a connection to the RPC server.
 	///
-	/// block_index indicates the block for which state will be queried. A value of None indicates the
-	/// latest block.
+	/// block_index indicates the block for which state will be queried. A value of None indicates
+	/// the latest block.
 	pub async fn get<Hash: Send + Sync + 'static + DeserializeOwned + Serialize>(
 		self,
 		state_client: &StateClient<Hash>,
