@@ -1265,13 +1265,21 @@ impl<T: Trait> Module<T> {
 	///
 	/// Returns the new `SlotStake` value and a set of newly selected _stash_ IDs.
 	fn select_validators() -> (BalanceOf<T>, Option<Vec<T::AccountId>>) {
+		let mut all_nominators: Vec<(T::AccountId, Vec<T::AccountId>)> = Vec::new();
+		let all_validator_candidates_iter = <Validators<T>>::enumerate();
+		let all_validators = all_validator_candidates_iter.map(|(who, _pref)| {
+			let self_vote = (who.clone(), vec![who.clone()]);
+			all_nominators.push(self_vote);
+			who
+		}).collect::<Vec<T::AccountId>>();
+		all_nominators.extend(<Nominators<T>>::enumerate());
+
 		let maybe_phragmen_result = elect::<_, _, _, T::CurrencyToVote>(
 			Self::validator_count() as usize,
 			Self::minimum_validator_count().max(1) as usize,
-			<Validators<T>>::enumerate().map(|(who, _)| who).collect::<Vec<T::AccountId>>(),
-			<Nominators<T>>::enumerate().collect(),
+			all_validators,
+			all_nominators,
 			Self::slashable_balance_of,
-			true,
 		);
 
 		if let Some(phragmen_result) = maybe_phragmen_result {
@@ -1289,7 +1297,6 @@ impl<T: Trait> Module<T> {
 				&elected_stashes,
 				&assignments,
 				Self::slashable_balance_of,
-				true,
 			);
 
 			if cfg!(feature = "equalize") {
@@ -1300,6 +1307,13 @@ impl<T: Trait> Module<T> {
 					let mut staked_assignment
 						: Vec<PhragmenStakedAssignment<T::AccountId>>
 						= Vec::with_capacity(assignment.len());
+
+					// If this is a self vote, then we don't need to equalise it at all. While the
+					// staking system does not allow nomination and validation at the same time,
+					// this must always be 100% support.
+					if assignment.len() == 1 && assignment[0].0 == *n {
+						continue;
+					}
 					for (c, per_thing) in assignment.iter() {
 						let nominator_stake = to_votes(Self::slashable_balance_of(n));
 						let other_stake = *per_thing * nominator_stake;
