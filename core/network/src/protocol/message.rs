@@ -104,7 +104,7 @@ impl Decode for BlockAttributes {
 pub enum Direction {
 	/// Enumerate in ascending order (from child to parent).
 	Ascending = 0,
-	/// Enumerate in descendfing order (from parent to canonical child).
+	/// Enumerate in descending order (from parent to canonical child).
 	Descending = 1,
 }
 
@@ -217,9 +217,38 @@ pub mod generic {
 		FinalityProofRequest(FinalityProofRequest<Hash>),
 		/// Finality proof reponse.
 		FinalityProofResponse(FinalityProofResponse<Hash>),
+		/// Batch of consensus protocol messages.
+		ConsensusBatch(Vec<ConsensusMessage>),
 		/// Chain-specific message.
 		#[codec(index = "255")]
 		ChainSpecific(Vec<u8>),
+	}
+
+	impl<Header, Hash, Number, Extrinsic> Message<Header, Hash, Number, Extrinsic> {
+		/// Message id useful for logging.
+		pub fn id(&self) -> &'static str {
+			match self {
+				Message::Status(_) => "Status",
+				Message::BlockRequest(_) => "BlockRequest",
+				Message::BlockResponse(_) => "BlockResponse",
+				Message::BlockAnnounce(_) => "BlockAnnounce",
+				Message::Transactions(_) => "Transactions",
+				Message::Consensus(_) => "Consensus",
+				Message::RemoteCallRequest(_) => "RemoteCallRequest",
+				Message::RemoteCallResponse(_) => "RemoteCallResponse",
+				Message::RemoteReadRequest(_) => "RemoteReadRequest",
+				Message::RemoteReadResponse(_) => "RemoteReadResponse",
+				Message::RemoteHeaderRequest(_) => "RemoteHeaderRequest",
+				Message::RemoteHeaderResponse(_) => "RemoteHeaderResponse",
+				Message::RemoteChangesRequest(_) => "RemoteChangesRequest",
+				Message::RemoteChangesResponse(_) => "RemoteChangesResponse",
+				Message::RemoteReadChildRequest(_) => "RemoteReadChildRequest",
+				Message::FinalityProofRequest(_) => "FinalityProofRequest",
+				Message::FinalityProofResponse(_) => "FinalityProofResponse",
+				Message::ConsensusBatch(_) => "ConsensusBatch",
+				Message::ChainSpecific(_) => "ChainSpecific",
+			}
+		}
 	}
 
 	/// Status sent on connection.

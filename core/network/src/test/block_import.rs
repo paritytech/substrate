@@ -37,9 +37,10 @@ fn prepare_good_block() -> (TestClient, Hash, u64, PeerId, IncomingBlock<Block>)
 	(client, hash, number, peer_id.clone(), IncomingBlock {
 		hash,
 		header,
-		body: None,
+		body: Some(Vec::new()),
 		justification,
-		origin: Some(peer_id.clone())
+		origin: Some(peer_id.clone()),
+		allow_missing_state: false,
 	})
 }
 
@@ -53,7 +54,7 @@ fn import_single_good_block_works() {
 	match import_single_block(&mut test_client::new(), BlockOrigin::File, block, &mut PassThroughVerifier(true)) {
 		Ok(BlockImportResult::ImportedUnknown(ref num, ref aux, ref org))
 			if *num == number && *aux == expected_aux && *org == Some(peer_id) => {}
-		_ => panic!()
+		r @ _ => panic!("{:?}", r)
 	}
 }
 

@@ -317,8 +317,8 @@ impl error::Error for Void {
 	fn description(&self) -> &str { "unreachable error" }
 }
 
-/// In-memory backend. Fully recomputes tries on each commit but useful for
-/// tests.
+/// In-memory backend. Fully recomputes tries each time `as_trie_backend` is called but useful for
+/// tests and proof checking.
 pub struct InMemory<H: Hasher> {
 	inner: HashMap<Option<Vec<u8>>, HashMap<Vec<u8>, Vec<u8>>>,
 	kv: Option<InMemoryKvBackend>,
@@ -643,7 +643,6 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 		&StateBackend<Self::TrieBackendStorage, H, Self::KvBackend>
 	> {
 		let mut mdb = MemoryDB::default();
-		let mut root = None;
 		let mut new_child_roots = Vec::new();
 		let mut root_map = None;
 		for (storage_key, map) in &self.inner {
@@ -654,16 +653,15 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 				root_map = Some(map);
 			}
 		}
-		// root handling
-		if let Some(map) = root_map.take() {
-			root = Some(insert_into_memory_db::<H, _>(
+		let root = match root_map {
+			Some(map) => insert_into_memory_db::<H, _>(
 				&mut mdb,
-				map.clone().into_iter().chain(new_child_roots.into_iter())
-			)?);
-		}
-		let root = match root {
-			Some(root) => root,
-			None => insert_into_memory_db::<H, _>(&mut mdb, ::std::iter::empty())?,
+				map.clone().into_iter().chain(new_child_roots.into_iter()),
+			)?,
+			None => insert_into_memory_db::<H, _>(
+				&mut mdb,
+				new_child_roots.into_iter(),
+			)?,
 		};
 		self.state = Some(StateBackend::new(mdb, root, self.extract_kv()));
 		self.state.as_ref()
@@ -688,4 +686,22 @@ pub(crate) fn insert_into_memory_db<H, I>(mdb: &mut MemoryDB<H>, input: I) -> Op
 	}
 
 	Some(root)
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	/// Assert in memory backend with only child trie keys works as trie backend.
+	#[test]
+	fn in_memory_with_child_trie_only() {
+		let storage = InMemory::<primitives::Blake2Hasher>::default();
+		let mut storage = storage.update(InMemoryTransaction {
+			storage: vec![(Some(b"1".to_vec()), b"2".to_vec(), Some(b"3".to_vec()))],
+			kv: Default::default(),
+		});
+		let trie_backend = storage.as_state_backend().unwrap();
+		assert_eq!(trie_backend.child_storage(b"1", b"2").unwrap(), Some(b"3".to_vec()));
+		assert!(trie_backend.storage(b"1").unwrap().is_some());
+	}
 }

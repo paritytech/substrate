@@ -84,7 +84,7 @@ impl GenesisConfig {
 		let mut storage = (map, self.child_extra_storage.clone());
 		let mut config = system::GenesisConfig::default();
 		config.authorities = self.authorities.clone();
-		config.assimilate_storage(&mut storage);
+		config.assimilate_storage(&mut storage).expect("Adding `system::GensisConfig` to the genesis");
 
 		storage
 	}
