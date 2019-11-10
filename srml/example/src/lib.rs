@@ -489,7 +489,7 @@ decl_module! {
 		// calls to be executed - we don't need to care why. Because it's privileged, we can
 		// assume it's a one-off operation and substantial processing/storage/memory can be used
 		// without worrying about gameability or attack scenarios.
-		// If you not specify `Result` explicitly as return value, it will be added automatically
+		// If you do not specify `Result` explicitly as return value, it will be added automatically
 		// for you and `Ok(())` will be returned.
 		#[weight = WeightForSetDummy::<T>(<BalanceOf<T>>::from(100u32))]
 		fn set_dummy(origin, #[compact] new_value: T::Balance) {

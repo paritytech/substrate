@@ -29,7 +29,6 @@ use node_primitives::{
 	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index,
 	Moment, Signature,
 };
-use grandpa::fg_primitives;
 use client::{
 	block_builder::api::{self as block_builder_api, InherentData, CheckInherentsResult},
 	runtime_api as client_api, impl_runtime_apis
@@ -46,7 +45,8 @@ use version::RuntimeVersion;
 #[cfg(any(feature = "std", test))]
 use version::NativeVersion;
 use primitives::OpaqueMetadata;
-use grandpa::{AuthorityId as GrandpaId, AuthorityWeight as GrandpaWeight};
+use grandpa::AuthorityList as GrandpaAuthorityList;
+use grandpa::fg_primitives;
 use im_online::sr25519::{AuthorityId as ImOnlineId};
 use transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
 use contracts_rpc_runtime_api::ContractExecResult;
@@ -81,8 +81,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to equal spec_version. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 192,
-	impl_version: 191,
+	spec_version: 193,
+	impl_version: 193,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -259,7 +259,7 @@ impl staking::Trait for Runtime {
 	type Currency = Balances;
 	type Time = Timestamp;
 	type CurrencyToVote = CurrencyToVoteHandler;
-	type OnRewardMinted = Treasury;
+	type RewardRemainder = Treasury;
 	type Event = Event;
 	type Slash = Treasury; // send the slashed funds to the treasury.
 	type Reward = (); // rewards are minted from the void
@@ -419,12 +419,17 @@ impl sudo::Trait for Runtime {
 
 type SubmitTransaction = TransactionSubmitter<ImOnlineId, Runtime, UncheckedExtrinsic>;
 
+parameter_types! {
+	pub const SessionDuration: BlockNumber = EPOCH_DURATION_IN_SLOTS as _;
+}
+
 impl im_online::Trait for Runtime {
 	type AuthorityId = ImOnlineId;
 	type Call = Call;
 	type Event = Event;
 	type SubmitTransaction = SubmitTransaction;
 	type ReportUnresponsiveness = Offences;
+	type SessionDuration = SessionDuration;
 }
 
 impl offences::Trait for Runtime {
@@ -612,7 +617,7 @@ impl_runtime_apis! {
 	}
 
 	impl fg_primitives::GrandpaApi<Block> for Runtime {
-		fn grandpa_authorities() -> Vec<(GrandpaId, GrandpaWeight)> {
+		fn grandpa_authorities() -> GrandpaAuthorityList {
 			Grandpa::grandpa_authorities()
 		}
 	}

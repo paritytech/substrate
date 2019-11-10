@@ -23,7 +23,7 @@ use client::{
 	runtime_api as client_api, impl_runtime_apis
 };
 use aura_primitives::sr25519::AuthorityId as AuraId;
-use grandpa::{AuthorityId as GrandpaId, AuthorityWeight as GrandpaWeight};
+use grandpa::AuthorityList as GrandpaAuthorityList;
 use grandpa::fg_primitives;
 use version::RuntimeVersion;
 #[cfg(feature = "std")]
@@ -355,7 +355,7 @@ impl_runtime_apis! {
 	}
 
 	impl fg_primitives::GrandpaApi<Block> for Runtime {
-		fn grandpa_authorities() -> Vec<(GrandpaId, GrandpaWeight)> {
+		fn grandpa_authorities() -> GrandpaAuthorityList {
 			Grandpa::grandpa_authorities()
 		}
 	}
