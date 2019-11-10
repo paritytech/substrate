@@ -338,6 +338,7 @@ check_warnings:
       fi
   allow_failure:                   true
 
+# Check whether Polkadot 'master' branch builds using this Substrate commit.
 check_polkadot:
   stage:                           build
   <<:                              *docker-env
@@ -347,11 +348,19 @@ check_polkadot:
   script:
     - COMMIT_HASH=$(git rev-parse HEAD)
     - SUBSTRATE_PATH=$(pwd)
+    # Clone the current Polkadot master branch into ./polkadot.
     - git clone --depth 1 https://gitlab.parity.io/parity/polkadot.git
     - cd polkadot
-    - git grep -l "polkadot-master" | grep toml | xargs sed -i "s/branch.*=.*\"polkadot-master\"/rev = \"$COMMIT_HASH\"/; s~https://github.com/paritytech/substrate~file://$SUBSTRATE_PATH~"
+    # Within each Cargo.toml that references the Substrate 'polkadot-master' branch:
+    # 1. Remove the 'branch = .*' statement.
+    # 2. Replace 'git = "https://.*"' with 'git = "file://.*"' (the local
+    #    checked out Substrate commit one folder above).
+    - git grep -l "polkadot-master" | grep toml | xargs sed -i "s/branch.*=.*\"polkadot-master\"//; s~https://github.com/paritytech/substrate~file://$SUBSTRATE_PATH~; s/,\s*}/ }/"
     - git diff
+    # Make sure 'Cargo.lock' matches 'Cargo.toml'. It's enough to update one
+    # package, others are updated along the way.
     - cargo update -p sr-io
+    # Check whether Polkadot 'master' branch builds with this Substrate commit.
     - time cargo check
     - cd -
     - sccache -s
