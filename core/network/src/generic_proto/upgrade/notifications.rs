@@ -97,7 +97,7 @@ impl<TSubstream> InboundUpgrade<TSubstream> for NotificationsIn
 where TSubstream: AsyncRead + AsyncWrite + 'static,
 {
 	type Output = Vec<u8>;
-	type Future = Box<dyn Future<Item = Self::Output, Error = Self::Error>>;
+	type Future = Box<dyn Future<Item = Self::Output, Error = Self::Error> + Send>;
 	type Error = upgrade::ReadOneError;
 
 	fn upgrade_inbound(
@@ -113,7 +113,7 @@ impl<TSubstream> OutboundUpgrade<TSubstream> for NotificationsOut
 where TSubstream: AsyncRead + AsyncWrite + 'static,
 {
 	type Output = Vec<u8>;
-	type Future = Box<dyn Future<Item = Self::Output, Error = Self::Error>>;
+	type Future = Box<dyn Future<Item = Self::Output, Error = Self::Error> + Send>;
 	type Error = upgrade::ReadOneError;
 
 	fn upgrade_outbound(
