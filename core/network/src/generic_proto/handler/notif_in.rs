@@ -42,10 +42,7 @@ pub struct NotifsInHandlerProto<TSubstream> {
 	marker: PhantomData<TSubstream>,
 }
 
-impl<TSubstream> NotifsInHandlerProto<TSubstream>
-where
-	TSubstream: AsyncRead + AsyncWrite,
-{
+impl<TSubstream> NotifsInHandlerProto<TSubstream> {
 	/// Builds a new `NotifsInHandlerProto`.
 	pub fn new(proto_name: impl Into<Cow<'static, [u8]>>, handshake_msg: impl Into<Vec<u8>>) -> Self {
 		NotifsInHandlerProto {

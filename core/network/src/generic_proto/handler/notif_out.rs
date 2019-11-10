@@ -44,10 +44,7 @@ pub struct NotifsOutHandlerProto<TSubstream> {
 	marker: PhantomData<TSubstream>,
 }
 
-impl<TSubstream> NotifsOutHandlerProto<TSubstream>
-where
-	TSubstream: AsyncRead + AsyncWrite,
-{
+impl<TSubstream> NotifsOutHandlerProto<TSubstream> {
 	/// Builds a new [`NotifsOutHandlerProto`]. Will use the given protocol name for the
 	/// notifications substream.
 	pub fn new(proto_name: impl Into<Cow<'static, [u8]>>) -> Self {

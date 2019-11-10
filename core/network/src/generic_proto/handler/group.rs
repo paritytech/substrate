@@ -15,10 +15,12 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::generic_proto::{
-	notif_in_handler::{NotifsInHandlerProto, NotifsInHandler},
-	notif_out_handler::{NotifsOutHandlerProto, NotifsOutHandler},
-	upgrade::{NotificationsIn, NotificationsOut, UpgradeCollec},
+	handler::legacy::{LegacyProtoHandler, LegacyProtoHandlerProto},
+	handler::notif_in::{NotifsInHandlerProto, NotifsInHandler},
+	handler::notif_out::{NotifsOutHandlerProto, NotifsOutHandler},
+	upgrade::{NotificationsIn, NotificationsOut, RegisteredProtocol, UpgradeCollec},
 };
+use bytes::BytesMut;
 use futures::prelude::*;
 use libp2p::core::{ConnectedPoint, PeerId};
 use libp2p::core::either::EitherError;
@@ -30,7 +32,7 @@ use libp2p::swarm::{
 	ProtocolsHandlerUpgrErr,
 	SubstreamProtocol,
 };
-use std::borrow::Cow;
+use std::{borrow::Cow, error};
 use tokio_io::{AsyncRead, AsyncWrite};
 
 /// Implements the `IntoProtocolsHandler` trait of libp2p.
@@ -39,22 +41,26 @@ use tokio_io::{AsyncRead, AsyncWrite};
 /// sent to a background task dedicated to this connection. Once the connection is established,
 /// it is turned into a [`NotifsHandler`].
 pub struct NotifsHandlerProto<TSubstream> {
+	/// Prototypes for handlers for ingoing substreams.
 	in_handlers: Vec<NotifsInHandlerProto<TSubstream>>,
+
+	/// Prototypes for handlers for outgoing substreams.
 	out_handlers: Vec<NotifsOutHandlerProto<TSubstream>>,
-	legacy: CustomProtoHandlerProto<TSubstream>,
+
+	/// Prototype for handler for backwards-compatibility.
+	legacy: LegacyProtoHandlerProto<TSubstream>,
 }
 
-impl<TSubstream> NotifsHandlerProto<TSubstream>
-where
-	TSubstream: AsyncRead + AsyncWrite,
-{
-	/// Builds a new `NotifsHandlerProto`.
-	pub fn new() -> Self {
-		NotifsHandlerProto {
-			in_handlers: Vec::new(),
-			out_handlers: Vec::new(),
-		}
-	}
+/// The actual handler once the connection has been established.
+pub struct NotifsHandler<TSubstream> {
+	/// Handlers for ingoing substreams.
+	in_handlers: Vec<NotifsInHandler<TSubstream>>,
+
+	/// Handlers for outgoing substreams.
+	out_handlers: Vec<NotifsOutHandler<TSubstream>>,
+
+	/// Handler for backwards-compatibility.
+	legacy: LegacyProtoHandler<TSubstream>,
 }
 
 impl<TSubstream> IntoProtocolsHandler for NotifsHandlerProto<TSubstream>
@@ -77,53 +83,23 @@ where
 				.into_iter()
 				.map(|p| p.into_handler(remote_peer_id, connected_point))
 				.collect(),
+			legacy: self.legacy.into_handler(remote_peer_id, connected_point),
 		}
 	}
-}
-
-/// The actual handler once the connection has been established.
-pub struct NotifsHandler<TSubstream> {
-	/// Handlers for ingoing substreams.
-	in_handlers: Vec<NotifsInHandler<TSubstream>>,
-
-	/// Handlers for outgoing substreams.
-	out_handlers: Vec<NotifsOutHandler<TSubstream>>,
 }
 
 /// Event that can be received by a `NotifsHandler`.
 #[derive(Debug)]
 pub enum NotifsHandlerIn {
-	/// Whenever a remote opens a notifications substream, we send to it a "node information"
-	/// handshake message. This message is cached in the `ProtocolsHandler`, and `UpdateNodeInfos`
-	/// updates this cached message.
-	UpdateNodeInfos {
-		/// Notifications protocol for which we want to modify the information.
-		proto_name: Cow<'static, [u8]>,
-		/// Information sent to the remote.
-		infos: Vec<u8>,
-	},
+	/// The node should start using custom protocols.
+	Enable,
 
-	/// Enables the notifications substream for this node for this protocol. The handler will try
-	/// to maintain a substream with the remote.
-	Enable {
-		/// Protocol for which we should open a substream.
-		proto_name: Cow<'static, [u8]>,
-	},
+	/// The node should stop using custom protocols.
+	Disable,
 
-	/// Disables the notifications substream for this node for this protocol.
-	Disable {
-		/// Protocol for which we close the substream.
-		proto_name: Cow<'static, [u8]>,
-	},
-
-	/// Sends a message on the notifications substream. Ignored if the substream isn't open.
-	///
-	/// It is only valid to send this if the handler has been enabled.
-	// TODO: is ignoring the correct way to do this?
-	Send {
-		/// Protocol for which we opened a substream.
-		proto_name: Cow<'static, [u8]>,
-		/// Message to send.
+	/// Sends a message through a custom protocol substream.
+	SendCustomMessage {
+		/// The message to send.
 		message: Vec<u8>,
 	},
 }
@@ -131,59 +107,48 @@ pub enum NotifsHandlerIn {
 /// Event that can be emitted by a `NotifsHandler`.
 #[derive(Debug)]
 pub enum NotifsHandlerOut {
-	/// The notifications substream has been open by the remote.
-	RemoteOpen {
-		/// Protocol for which we opened a substream.
-		proto_name: Cow<'static, [u8]>,
+	/// Opened a custom protocol with the remote.
+	CustomProtocolOpen {
+		/// Version of the protocol that has been opened.
+		version: u8,
 	},
 
-	/// The notifications substream has been closed by the remote.
-	RemoteClosed {
-		/// Protocol for the substream was closed.
-		proto_name: Cow<'static, [u8]>,
+	/// Closed a custom protocol with the remote.
+	CustomProtocolClosed {
+		/// Reason why the substream closed, for diagnostic purposes.
+		reason: Cow<'static, str>,
 	},
 
-	/// Received a message on the notifications substream.
-	///
-	/// Can only happen after a `NotifOpen` and before a `NotifClosed` for the corresponding
-	/// protocol.
-	InNotif {
-		/// Protocol for which we received a message.
-		proto_name: Cow<'static, [u8]>,
-		/// The message.
-		message: Vec<u8>,
+	/// Receives a message on a custom protocol substream.
+	CustomMessage {
+		/// Message that has been received.
+		message: BytesMut,
 	},
 
-	/// Our notifications substream has been accepted by the remote.
-	LocalOpen {
-		/// Protocol for which we opened a substream.
-		proto_name: Cow<'static, [u8]>,
-		/// Handshake message sent by the remote after we opened the substream.
-		handshake: Vec<u8>,
+	/// A substream to the remote is clogged. The send buffer is very large, and we should print
+	/// a diagnostic message and/or avoid sending more data.
+	Clogged {
+		/// Copy of the messages that are within the buffer, for further diagnostic.
+		messages: Vec<Vec<u8>>,
 	},
 
-	/// Our notifications substream has been closed by the remote.
-	LocalClosed {
-		/// Protocol for the substream was closed.
-		proto_name: Cow<'static, [u8]>,
-	},
-
-	/// We tried to open a notifications substream, but the remote refused it.
-	///
-	/// The handler is still enabled and will try again in a few seconds.
-	Refused {
-		/// Protocol for the substream was refused.
-		proto_name: Cow<'static, [u8]>,
+	/// An error has happened on the protocol level with this node.
+	ProtocolError {
+		/// If true the error is severe, such as a protocol violation.
+		is_severe: bool,
+		/// The error that happened.
+		error: Box<dyn error::Error + Send + Sync>,
 	},
 }
 
 impl<TSubstream> NotifsHandlerProto<TSubstream> {
-	pub fn new(list: impl Into<Vec<(Cow<'static, [u8]>, Vec<u8>)>>) -> Self {
+	pub fn new(legacy: RegisteredProtocol, list: impl Into<Vec<(Cow<'static, [u8]>, Vec<u8>)>>) -> Self {
 		let list = list.into();
 
 		NotifsHandlerProto {
-			in_handlers: list.clone().into_iter().map(|(p, msg)| NotifsInHandlerProto::new(p, msg)),
-			out_handlers: list.clone().into_iter().map(|(p, _)| NotifsOutHandlerProto::new(p)),
+			in_handlers: list.clone().into_iter().map(|(p, msg)| NotifsInHandlerProto::new(p, msg)).collect(),
+			out_handlers: list.clone().into_iter().map(|(p, _)| NotifsOutHandlerProto::new(p)).collect(),
+			legacy: LegacyProtoHandlerProto::new(legacy),
 		}
 	}
 }
