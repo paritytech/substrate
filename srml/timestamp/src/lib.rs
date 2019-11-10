@@ -288,7 +288,7 @@ impl<T: Trait> ProvideInherent for Module<T> {
 	}
 
 	fn check_inherent(call: &Self::Call, data: &InherentData) -> result::Result<(), Self::Error> {
-		const MAX_TIMESTAMP_DRIFT: u64 = 60;
+		const MAX_TIMESTAMP_DRIFT: u64 = 30 * 1000;
 
 		let t: u64 = match call {
 			Call::set(ref t) => t.clone().saturated_into::<u64>(),
