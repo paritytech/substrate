@@ -350,6 +350,7 @@ check_polkadot:
     - git clone --depth 1 https://gitlab.parity.io/parity/polkadot.git
     - cd polkadot
     - git grep -l "polkadot-master" | grep toml | xargs sed -i "s/branch.*=.*\"polkadot-master\"/rev = \"$COMMIT_HASH\"/; s~https://github.com/paritytech/substrate~file://$SUBSTRATE_PATH~"
+    - git diff
     - cargo update -p sr-io --precise $COMMIT_HASH
     - time cargo check
     - cd ..
