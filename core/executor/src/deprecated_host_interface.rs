@@ -37,6 +37,8 @@ macro_rules! debug_trace {
 	( $( $x:tt )* ) => ()
 }
 
+/// The old and deprecated Substrate externals. These are still required for backwards compatibility
+/// reasons.
 pub struct SubstrateExternals;
 
 enum RecoverResult {

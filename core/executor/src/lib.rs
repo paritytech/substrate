@@ -36,7 +36,7 @@ mod wasmi_execution;
 mod native_executor;
 mod sandbox;
 mod allocator;
-mod host_interface;
+pub mod deprecated_host_interface;
 mod wasm_runtime;
 #[cfg(feature = "wasmtime")]
 mod wasmtime;

@@ -189,7 +189,7 @@ impl Signature {
 }
 
 /// Something that provides a function implementation on the host for a wasm function.
-pub trait Function: std::panic::RefUnwindSafe {
+pub trait Function: std::panic::RefUnwindSafe + Send + Sync {
 	/// Returns the name of this function.
 	fn name(&self) -> &str;
 	/// Returns the signature of this function.

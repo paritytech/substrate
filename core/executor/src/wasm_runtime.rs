@@ -31,7 +31,7 @@ use primitives::{storage::well_known_keys, traits::Externalities, H256};
 use runtime_version::RuntimeVersion;
 use std::{collections::hash_map::{Entry, HashMap}, panic::AssertUnwindSafe};
 
-use wasm_interface::{Function, HostFunctions};
+use wasm_interface::Function;
 
 /// The Substrate Wasm runtime.
 pub trait WasmRuntime {
@@ -127,7 +127,7 @@ impl RuntimesCache {
 		ext: &mut E,
 		wasm_method: WasmExecutionMethod,
 		default_heap_pages: u64,
-		host_functions: Vec<&'static dyn Function>,
+		host_functions: &[&'static dyn Function],
 	) -> Result<(&mut (dyn WasmRuntime + 'static), &RuntimeVersion, H256), Error> {
 		let code_hash = ext
 			.original_storage_hash(well_known_keys::CODE)
@@ -144,7 +144,7 @@ impl RuntimesCache {
 				if let Ok(ref mut cached_runtime) = result {
 					let heap_pages_changed = !cached_runtime.runtime.update_heap_pages(heap_pages);
 					let host_functions_changed = cached_runtime.runtime.host_functions()
-						!= &host_functions[..];
+						!= host_functions;
 					if heap_pages_changed || host_functions_changed {
 						let changed = if heap_pages_changed {
 							"heap_pages"
@@ -161,7 +161,7 @@ impl RuntimesCache {
 							ext,
 							wasm_method,
 							heap_pages,
-							host_functions,
+							host_functions.into(),
 						);
 						if let Err(ref err) = result {
 							warn!(target: "runtimes_cache", "cannot create a runtime: {:?}", err);
@@ -176,7 +176,7 @@ impl RuntimesCache {
 					ext,
 					wasm_method,
 					heap_pages,
-					host_functions,
+					host_functions.into(),
 				);
 				if let Err(ref err) = result {
 					warn!(target: "runtimes_cache", "cannot create a runtime: {:?}", err);
@@ -210,11 +210,8 @@ pub fn create_wasm_runtime_with_code(
 	wasm_method: WasmExecutionMethod,
 	heap_pages: u64,
 	code: &[u8],
-	mut host_functions: Vec<&'static dyn Function>,
+	host_functions: Vec<&'static dyn Function>,
 ) -> Result<Box<dyn WasmRuntime>, WasmError> {
-	// Add the old and deprecated host functions as well, so that we support old wasm runtimes.
-	host_functions.extend(crate::host_interface::SubstrateExternals::host_functions());
-
 	match wasm_method {
 		WasmExecutionMethod::Interpreted =>
 			wasmi_execution::create_instance(code, heap_pages, host_functions)
@@ -258,4 +255,17 @@ fn create_versioned_wasm_runtime<E: Externalities>(
 		runtime,
 		version,
 	})
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn host_functions_are_equal() {
+		let host_functions = runtime_io::SubstrateHostFunctions::host_functions();
+
+		let equal = &host_functions[..] == &host_functions[..];
+		assert!(equal, "Host functions are not equal");
+	}
 }
