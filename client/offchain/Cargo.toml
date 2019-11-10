@@ -8,7 +8,7 @@ edition = "2018"
 
 [dependencies]
 bytes = "0.4.12"
-client = { package = "substrate-client", path = "../../core/client" }
+client = { package = "substrate-client", path = "../../client/client" }
 fnv = "1.0.6"
 futures01 = { package = "futures", version = "0.1" }
 futures-preview = "0.3.0-alpha.19"
@@ -19,11 +19,11 @@ num_cpus = "1.10"
 offchain-primitives = { package = "substrate-offchain-primitives", path = "./primitives" }
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
 parking_lot = "0.9.0"
-primitives = { package = "substrate-primitives", path = "../../core/primitives" }
+primitives = { package = "substrate-primitives", path = "../../client/primitives" }
 rand = "0.7.2"
-sr-primitives = { path = "../../core/sr-primitives" }
-transaction_pool = { package = "substrate-transaction-pool", path = "../../core/transaction-pool" }
-network = { package = "substrate-network", path = "../../core/network" }
+sr-primitives = { path = "../../client/sr-primitives" }
+transaction_pool = { package = "substrate-transaction-pool", path = "../../client/transaction-pool" }
+network = { package = "substrate-network", path = "../../client/network" }
 keystore = { package = "substrate-keystore", path = "../keystore" }
 
 [target.'cfg(not(target_os = "unknown"))'.dependencies]
@@ -32,8 +32,8 @@ hyper-rustls = "0.17.1"
 
 [dev-dependencies]
 env_logger = "0.7.0"
-client-db = { package = "substrate-client-db", path = "../../core/client/db/", default-features = true }
-test-client = { package = "substrate-test-runtime-client", path = "../../core/test-runtime/client" }
+client-db = { package = "substrate-client-db", path = "../../client/client/db/", default-features = true }
+test-client = { package = "substrate-test-runtime-client", path = "../../client/test-runtime/client" }
 tokio = "0.1.22"
 
 [features]

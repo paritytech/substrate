@@ -16,5 +16,5 @@ primitives = { package = "substrate-primitives",  path = "../primitives" }
 txpool = { package = "substrate-transaction-graph", path = "./graph" }
 
 [dev-dependencies]
-keyring = { package = "substrate-keyring", path = "../../core/keyring" }
-test-client = { package = "substrate-test-runtime-client", path = "../../core/test-runtime/client" }
+keyring = { package = "substrate-keyring", path = "../../client/keyring" }
+test-client = { package = "substrate-test-runtime-client", path = "../../client/test-runtime/client" }

@@ -26,7 +26,7 @@
 //!
 //! The heartbeat is a signed transaction, which was signed using the session key
 //! and includes the recent best block number of the local validators chain as well
-//! as the [NetworkState](../../core/offchain/struct.NetworkState.html).
+//! as the [NetworkState](../../client/offchain/struct.NetworkState.html).
 //! It is submitted as an Unsigned Transaction via off-chain workers.
 //!
 //! - [`im_online::Trait`](./trait.Trait.html)

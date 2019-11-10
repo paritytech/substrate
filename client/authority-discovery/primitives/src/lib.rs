@@ -32,7 +32,7 @@ pub struct AuthorityId(pub Vec<u8>);
 decl_runtime_apis! {
 	/// The authority discovery api.
 	///
-	/// This api is used by the `core/authority-discovery` module to retrieve our
+	/// This api is used by the `client/authority-discovery` module to retrieve our
 	/// own authority identifier, to retrieve identifiers of the current authority
 	/// set, as well as sign and verify Kademlia Dht external address payloads
 	/// from and to other authorities.

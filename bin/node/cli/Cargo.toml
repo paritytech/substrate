@@ -33,27 +33,27 @@ rand = "0.7.2"
 structopt = "0.3.3"
 
 # primitives
-primitives = { package = "substrate-primitives", path = "../../../core/primitives" }
-sr-primitives = { path = "../../../core/sr-primitives" }
-babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../../../core/consensus/babe/primitives" }
-grandpa_primitives = { package = "substrate-finality-grandpa-primitives", path = "../../../core/finality-grandpa/primitives" }
+primitives = { package = "substrate-primitives", path = "../../../client/primitives" }
+sr-primitives = { path = "../../../client/sr-primitives" }
+babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../../../client/consensus/babe/primitives" }
+grandpa_primitives = { package = "substrate-finality-grandpa-primitives", path = "../../../client/finality-grandpa/primitives" }
 
 # core dependencies
-sr-io = { path = "../../../core/sr-io" }
-client = { package = "substrate-client", path = "../../../core/client" }
-inherents = { package = "substrate-inherents", path = "../../../core/inherents" }
-chain-spec = { package = "substrate-chain-spec", path = "../../../core/chain-spec" }
-transaction_pool = { package = "substrate-transaction-pool", path = "../../../core/transaction-pool" }
-network = { package = "substrate-network", path = "../../../core/network" }
-babe = { package = "substrate-consensus-babe", path = "../../../core/consensus/babe" }
-grandpa = { package = "substrate-finality-grandpa", path = "../../../core/finality-grandpa" }
-keyring = { package = "substrate-keyring", path = "../../../core/keyring" }
-client_db = { package = "substrate-client-db", path = "../../../core/client/db", default-features = false }
-offchain = { package = "substrate-offchain", path = "../../../core/offchain" }
-substrate-rpc = { package = "substrate-rpc", path = "../../../core/rpc" }
-substrate-basic-authorship = { path = "../../../core/basic-authorship" }
-substrate-service = { path = "../../../core/service", default-features = false }
-substrate-telemetry = { package = "substrate-telemetry", path = "../../../core/telemetry" }
+sr-io = { path = "../../../client/sr-io" }
+client = { package = "substrate-client", path = "../../../client/client" }
+inherents = { package = "substrate-inherents", path = "../../../client/inherents" }
+chain-spec = { package = "substrate-chain-spec", path = "../../../client/chain-spec" }
+transaction_pool = { package = "substrate-transaction-pool", path = "../../../client/transaction-pool" }
+network = { package = "substrate-network", path = "../../../client/network" }
+babe = { package = "substrate-consensus-babe", path = "../../../client/consensus/babe" }
+grandpa = { package = "substrate-finality-grandpa", path = "../../../client/finality-grandpa" }
+keyring = { package = "substrate-keyring", path = "../../../client/keyring" }
+client_db = { package = "substrate-client-db", path = "../../../client/client/db", default-features = false }
+offchain = { package = "substrate-offchain", path = "../../../client/offchain" }
+substrate-rpc = { package = "substrate-rpc", path = "../../../client/rpc" }
+substrate-basic-authorship = { path = "../../../client/basic-authorship" }
+substrate-service = { path = "../../../client/service", default-features = false }
+substrate-telemetry = { package = "substrate-telemetry", path = "../../../client/telemetry" }
 
 # srml dependencies
 indices = { package = "srml-indices", path = "../../../srml/indices" }
@@ -75,7 +75,7 @@ node-executor = { path = "../executor" }
 # CLI-specific dependencies
 tokio = { version = "0.1.22", optional = true }
 exit-future = { version = "0.1.4", optional = true }
-substrate-cli = { path = "../../../core/cli", optional = true }
+substrate-cli = { path = "../../../client/cli", optional = true }
 transaction-factory = { path = "../../../test-utils/transaction-factory", optional = true }
 ctrlc = { version = "3.1.3", features = ["termination"], optional = true }
 
@@ -91,16 +91,16 @@ kvdb-memorydb = { git = "https://github.com/paritytech/parity-common", rev="b031
 rand6 = { package = "rand", version = "0.6", features = ["wasm-bindgen"], optional = true }	# Imported just for the `wasm-bindgen` feature
 
 [dev-dependencies]
-keystore = { package = "substrate-keystore", path = "../../../core/keystore" }
-babe = { package = "substrate-consensus-babe", path = "../../../core/consensus/babe", features = ["test-helpers"] }
-consensus-common = { package = "substrate-consensus-common", path = "../../../core/consensus/common" }
-service-test = { package = "substrate-service-test", path = "../../../core/service/test" }
+keystore = { package = "substrate-keystore", path = "../../../client/keystore" }
+babe = { package = "substrate-consensus-babe", path = "../../../client/consensus/babe", features = ["test-helpers"] }
+consensus-common = { package = "substrate-consensus-common", path = "../../../client/consensus/common" }
+service-test = { package = "substrate-service-test", path = "../../../client/service/test" }
 futures03 = { package = "futures-preview", version = "0.3.0-alpha.19" }
 tempfile = "3.1.0"
 
 [build-dependencies]
-substrate-cli = { package = "substrate-cli", path = "../../../core/cli" }
-build-script-utils = { package = "substrate-build-script-utils", path = "../../../core/utils/build-script-utils" }
+substrate-cli = { package = "substrate-cli", path = "../../../client/cli" }
+build-script-utils = { package = "substrate-build-script-utils", path = "../../../client/utils/build-script-utils" }
 structopt = "0.3.3"
 vergen = "3.0.4"
 

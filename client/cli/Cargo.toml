@@ -22,15 +22,15 @@ futures03 = { package = "futures-preview", version = "=0.3.0-alpha.19", features
 fdlimit = "0.1.1"
 exit-future = "0.1.4"
 serde_json = "1.0.41"
-panic-handler = { package = "substrate-panic-handler", path = "../../core/panic-handler" }
-client = { package = "substrate-client", path = "../../core/client" }
-header-metadata = { package = "substrate-header-metadata", path = "../../core/client/header-metadata" }
-network = { package = "substrate-network", path = "../../core/network" }
-sr-primitives = { path = "../../core/sr-primitives" }
-primitives = { package = "substrate-primitives", path = "../../core/primitives" }
-service = { package = "substrate-service", path = "../../core/service", default-features = false }
-state-machine = { package = "substrate-state-machine", path = "../../core/state-machine" }
-substrate-telemetry = { path = "../../core/telemetry" }
+panic-handler = { package = "substrate-panic-handler", path = "../../client/panic-handler" }
+client = { package = "substrate-client", path = "../../client/client" }
+header-metadata = { package = "substrate-header-metadata", path = "../../client/client/header-metadata" }
+network = { package = "substrate-network", path = "../../client/network" }
+sr-primitives = { path = "../../client/sr-primitives" }
+primitives = { package = "substrate-primitives", path = "../../client/primitives" }
+service = { package = "substrate-service", path = "../../client/service", default-features = false }
+state-machine = { package = "substrate-state-machine", path = "../../client/state-machine" }
+substrate-telemetry = { path = "../../client/telemetry" }
 keyring = { package = "substrate-keyring", path = "../keyring" }
 names = "0.11.0"
 structopt = "0.3.3"

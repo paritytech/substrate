@@ -1,0 +1,20 @@
+[package]
+name = "substrate-basic-authorship"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
+log = "0.4.8"
+futures-preview = "0.3.0-alpha.19"
+codec = { package = "parity-scale-codec", version = "1.0.0" }
+sr-primitives = { path = "../../client/sr-primitives" }
+primitives = { package = "substrate-primitives", path = "../../client/primitives" }
+client = { package = "substrate-client", path = "../../client/client" }
+consensus_common = { package = "substrate-consensus-common", path = "../../client/consensus/common" }
+inherents = { package = "substrate-inherents", path = "../inherents" }
+substrate-telemetry = { path = "../telemetry" }
+transaction_pool = { package = "substrate-transaction-pool", path = "../../client/transaction-pool" }
+
+[dev-dependencies]
+test-client = { package = "substrate-test-runtime-client", path = "../../client/test-runtime/client" }

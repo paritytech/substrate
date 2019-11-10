@@ -442,7 +442,7 @@ fn build_network_future<
 		while let Ok(Async::Ready(Some(Event::Dht(event)))) = network.poll().map_err(|err| {
 			warn!(target: "service", "Error in network: {:?}", err);
 		}) {
-			// Given that core/authority-discovery is the only upper stack consumer of Dht events at the moment, all Dht
+			// Given that client/authority-discovery is the only upper stack consumer of Dht events at the moment, all Dht
 			// events are being passed on to the authority-discovery module. In the future there might be multiple
 			// consumers of these events. In that case this would need to be refactored to properly dispatch the events,
 			// e.g. via a subscriber model.

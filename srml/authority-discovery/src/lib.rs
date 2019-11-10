@@ -16,7 +16,7 @@
 
 //! # Authority discovery module.
 //!
-//! This module is used by the `core/authority-discovery` to retrieve the
+//! This module is used by the `client/authority-discovery` to retrieve the
 //! current set of authorities, learn its own authority id as well as sign and
 //! verify messages to and from other authorities.
 //!

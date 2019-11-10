@@ -8,18 +8,18 @@ edition = "2018"
 [dependencies]
 trie-root = "0.15.2"
 codec = { package = "parity-scale-codec", version = "1.0.0" }
-runtime_io = { package = "sr-io", path = "../../../core/sr-io" }
-state_machine = { package = "substrate-state-machine", path = "../../../core/state-machine" }
-substrate-executor = { path = "../../../core/executor" }
-primitives = { package = "substrate-primitives", path = "../../../core/primitives" }
-trie = { package = "substrate-trie", path = "../../../core/trie" }
+runtime_io = { package = "sr-io", path = "../../../client/sr-io" }
+state_machine = { package = "substrate-state-machine", path = "../../../client/state-machine" }
+substrate-executor = { path = "../../../client/executor" }
+primitives = { package = "substrate-primitives", path = "../../../client/primitives" }
+trie = { package = "substrate-trie", path = "../../../client/trie" }
 node-primitives = { path = "../primitives" }
 node-runtime = { path = "../runtime" }
 
 [dev-dependencies]
 node-testing = { path = "../testing" }
-test-client = { package = "substrate-test-client", path = "../../../core/test-client" }
-sr-primitives = { path = "../../../core/sr-primitives" }
+test-client = { package = "substrate-test-client", path = "../../../client/test-client" }
+sr-primitives = { path = "../../../client/sr-primitives" }
 runtime_support = { package = "srml-support", path = "../../../srml/support" }
 balances = { package = "srml-balances", path = "../../../srml/balances" }
 transaction-payment = { package = "srml-transaction-payment", path = "../../../srml/transaction-payment" }

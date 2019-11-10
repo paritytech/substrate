@@ -8,19 +8,19 @@ edition = "2018"
 serde = { version = "1.0.101", optional = true }
 safe-mix = { version = "1.0.0", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-substrate-keyring = { path = "../../core/keyring", optional = true }
-rstd = { package = "sr-std", path = "../../core/sr-std", default-features = false }
-phragmen = { package = "substrate-phragmen", path = "../../core/phragmen", default-features = false }
-runtime-io ={ package = "sr-io", path = "../../core/sr-io", default-features = false }
-sr-primitives = { path = "../../core/sr-primitives", default-features = false }
-sr-staking-primitives = { path = "../../core/sr-staking-primitives", default-features = false }
+substrate-keyring = { path = "../../client/keyring", optional = true }
+rstd = { package = "sr-std", path = "../../client/sr-std", default-features = false }
+phragmen = { package = "substrate-phragmen", path = "../../client/phragmen", default-features = false }
+runtime-io ={ package = "sr-io", path = "../../client/sr-io", default-features = false }
+sr-primitives = { path = "../../client/sr-primitives", default-features = false }
+sr-staking-primitives = { path = "../../client/sr-staking-primitives", default-features = false }
 support = { package = "srml-support", path = "../support", default-features = false }
 system = { package = "srml-system", path = "../system", default-features = false }
 session = { package = "srml-session", path = "../session", default-features = false, features = ["historical"] }
 authorship = { package = "srml-authorship", path = "../authorship", default-features = false }
 
 [dev-dependencies]
-primitives = { package = "substrate-primitives",  path = "../../core/primitives" }
+primitives = { package = "substrate-primitives",  path = "../../client/primitives" }
 balances = { package = "srml-balances", path = "../balances" }
 timestamp = { package = "srml-timestamp", path = "../timestamp" }
 srml-staking-reward-curve = { path = "../staking/reward-curve"}

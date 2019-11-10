@@ -19,7 +19,7 @@
 //! Since `substrate` core functionality makes no assumptions
 //! about the modules used inside the runtime, so do
 //! RPC methods defined in `substrate-rpc` crate.
-//! It means that `core/rpc` can't have any methods that
+//! It means that `client/rpc` can't have any methods that
 //! need some strong assumptions about the particular runtime.
 //!
 //! The RPCs available in this crate however can make some assumptions
