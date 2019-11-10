@@ -75,13 +75,16 @@ pub(crate) struct _PhragmenResult<A: Clone> {
 	pub assignments: Vec<(A, Vec<_PhragmenAssignment<A>>)>
 }
 
+pub(crate) fn auto_generate_self_voters<A: Clone>(candidates: &[A]) -> Vec<(A, Vec<A>)> {
+	candidates.iter().map(|c| (c.clone(), vec![c.clone()])).collect()
+}
+
 pub(crate) fn elect_float<A, FS>(
 	candidate_count: usize,
 	minimum_candidate_count: usize,
 	initial_candidates: Vec<A>,
 	initial_voters: Vec<(A, Vec<A>)>,
 	stake_of: FS,
-	self_vote: bool,
 ) -> Option<_PhragmenResult<A>> where
 	A: Default + Ord + Member + Copy,
 	for<'r> FS: Fn(&'r A) -> Balance,
@@ -92,36 +95,14 @@ pub(crate) fn elect_float<A, FS>(
 	let num_voters = initial_candidates.len() + initial_voters.len();
 	let mut voters: Vec<_Voter<A>> = Vec::with_capacity(num_voters);
 
-	let mut candidates = if self_vote {
-		initial_candidates.into_iter().map(|who| {
-			let stake = stake_of(&who) as f64;
-			_Candidate { who, approval_stake: stake, ..Default::default() }
-		})
-		.filter(|c| c.approval_stake != 0f64)
+	let mut candidates = initial_candidates
+		.into_iter()
 		.enumerate()
-		.map(|(i, c)| {
-			let who = c.who;
-			voters.push(_Voter {
-				who: who.clone(),
-				edges: vec![
-					_Edge { who: who.clone(), candidate_index: i, ..Default::default() }
-				],
-				budget: c.approval_stake,
-				load: 0f64,
-			});
-			c_idx_cache.insert(c.who.clone(), i);
-			c
+		.map(|(idx, who)| {
+			c_idx_cache.insert(who.clone(), idx);
+			_Candidate { who, ..Default::default() }
 		})
-		.collect::<Vec<_Candidate<A>>>()
-	} else {
-		initial_candidates.into_iter()
-			.enumerate()
-			.map(|(idx, who)| {
-				c_idx_cache.insert(who.clone(), idx);
-				_Candidate { who, ..Default::default() }
-			})
-			.collect::<Vec<_Candidate<A>>>()
-	};
+		.collect::<Vec<_Candidate<A>>>();
 
 	if candidates.len() < minimum_candidate_count {
 		return None;
@@ -359,7 +340,6 @@ pub(crate) fn run_and_compare(
 	stake_of: Box<dyn Fn(&AccountId) -> Balance>,
 	to_elect: usize,
 	min_to_elect: usize,
-	self_vote: bool,
 ) {
 	// run fixed point code.
 	let PhragmenResult { winners, assignments } = elect::<_, _, _, TestCurrencyToVote>(
@@ -368,7 +348,6 @@ pub(crate) fn run_and_compare(
 		candidates.clone(),
 		voters.clone(),
 		&stake_of,
-		self_vote,
 	).unwrap();
 
 	// run float poc code.
@@ -378,7 +357,6 @@ pub(crate) fn run_and_compare(
 		candidates,
 		voters,
 		&stake_of,
-		self_vote,
 	).unwrap();
 
 	assert_eq!(winners, truth_value.winners);
