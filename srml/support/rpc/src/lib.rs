@@ -1,30 +1,46 @@
+// Copyright 2019 Parity Technologies (UK) Ltd.
+// This file is part of Substrate.
+
+// Substrate is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// Substrate is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+
 //! Combines [substrate_rpc_api::state::StateClient] with [srml_support::storage::generator] traits
 //! to provide strongly typed chain state queries over rpc.
+
+#![warn(missing_docs)]
 
 use core::marker::PhantomData;
 use futures::compat::Future01CompatExt;
 use jsonrpc_client_transports::RpcError;
 use parity_scale_codec::{DecodeAll, FullCodec, FullEncode};
 use serde::{de::DeserializeOwned, Serialize};
-use srml_support::storage::generator::{
-	StorageDoubleMap, StorageLinkedMap, StorageMap, StorageValue,
-};
+use srml_support::storage::generator::{StorageDoubleMap, StorageLinkedMap, StorageMap, StorageValue};
 use substrate_primitives_storage::{StorageData, StorageKey};
 use substrate_rpc_api::state::StateClient;
 
 /// A typed query on chain state usable from an RPC client.
 ///
 /// ```no_run
-/// # use srml_support::{decl_storage, decl_module};
-/// # use parity_scale_codec::Encode;
-/// # use srml_system::Trait;
-/// # use substrate_rpc_custom::StorageQuery;
-/// # use substrate_rpc_api::state::StateClient;
-/// # use jsonrpc_client_transports::transports::http;
-/// # use jsonrpc_client_transports::RpcError;
 /// # use futures::compat::Compat;
-/// # use futures::future::FutureExt;
 /// # use futures::compat::Future01CompatExt;
+/// # use futures::future::FutureExt;
+/// # use jsonrpc_client_transports::RpcError;
+/// # use jsonrpc_client_transports::transports::http;
+/// # use parity_scale_codec::Encode;
+/// # use srml_support::{decl_storage, decl_module};
+/// # use srml_system::Trait;
+/// # use substrate_rpc_api::state::StateClient;
+/// # use substrate_rpc_custom::StorageQuery;
 /// #
 /// # // Hash would normally be <TestRuntime as srml_system::Trait>::Hash, but we don't have
 /// # // srml_system::Trait implemented for TestRuntime. Here we just pretend.
