@@ -155,7 +155,7 @@ impl fmt::Write for Writer {
 impl Writer {
 	/// Print the content of this `Writer` out.
 	pub fn print(&self) {
-		runtime_io::print_utf8(&self.0)
+		runtime_io::misc::print_utf8(&self.0)
 	}
 }
 
@@ -204,9 +204,9 @@ impl log::Log for RuntimeLogger {
 		let mut w = Writer::default();
 		let _ = core::write!(&mut w, "{}", record.args());
 
-		runtime_io::log(
+		runtime_io::logging::log(
 			record.level().into(),
-			record.target().as_bytes(),
+			record.target(),
 			&w.0,
 		);
 	}

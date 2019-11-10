@@ -14,14 +14,22 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{result, cell::RefCell, panic::{UnwindSafe, AssertUnwindSafe}};
-use crate::error::{Error, Result};
-use crate::wasm_runtime::{RuntimesCache, WasmExecutionMethod, WasmRuntime};
-use crate::RuntimeInfo;
+use crate::{
+	RuntimeInfo, error::{Error, Result},
+	wasm_runtime::{RuntimesCache, WasmExecutionMethod, WasmRuntime},
+};
+
 use runtime_version::{NativeVersion, RuntimeVersion};
+
 use codec::{Decode, Encode};
+
 use primitives::{NativeOrEncoded, traits::{CodeExecutor, Externalities}};
+
 use log::{trace, warn};
+
+use std::{result, cell::RefCell, panic::{UnwindSafe, AssertUnwindSafe}};
+
+use wasm_interface::{HostFunctions, Function};
 
 thread_local! {
 	static RUNTIMES_CACHE: RefCell<RuntimesCache> = RefCell::new(RuntimesCache::new());
@@ -62,7 +70,6 @@ pub trait NativeExecutionDispatch: Send + Sync {
 
 /// A generic `CodeExecutor` implementation that uses a delegate to determine wasm code equivalence
 /// and dispatch to native code when possible, falling back on `WasmExecutor` when not.
-#[derive(Debug)]
 pub struct NativeExecutor<D> {
 	/// Dummy field to avoid the compiler complaining about us not using `D`.
 	_dummy: std::marker::PhantomData<D>,
@@ -72,6 +79,8 @@ pub struct NativeExecutor<D> {
 	native_version: NativeVersion,
 	/// The number of 64KB pages to allocate for Wasm execution.
 	default_heap_pages: u64,
+	/// The host functions registered with this instance.
+	host_functions: Vec<&'static dyn Function>,
 }
 
 impl<D: NativeExecutionDispatch> NativeExecutor<D> {
@@ -84,11 +93,18 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 	/// `default_heap_pages` - Number of 64KB pages to allocate for Wasm execution.
 	/// 	Defaults to `DEFAULT_HEAP_PAGES` if `None` is provided.
 	pub fn new(fallback_method: WasmExecutionMethod, default_heap_pages: Option<u64>) -> Self {
+		let mut host_functions = runtime_io::SubstrateHostFunctions::host_functions();
+		// Add the old and deprecated host functions as well, so that we support old wasm runtimes.
+		host_functions.extend(
+			crate::deprecated_host_interface::SubstrateExternals::host_functions(),
+		);
+
 		NativeExecutor {
 			_dummy: Default::default(),
 			fallback_method,
 			native_version: D::native_version(),
 			default_heap_pages: default_heap_pages.unwrap_or(DEFAULT_HEAP_PAGES),
+			host_functions,
 		}
 	}
 
@@ -120,6 +136,7 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 				ext,
 				self.fallback_method,
 				self.default_heap_pages,
+				&self.host_functions,
 			)?;
 
 			let runtime = AssertUnwindSafe(runtime);
@@ -143,6 +160,7 @@ impl<D: NativeExecutionDispatch> Clone for NativeExecutor<D> {
 			fallback_method: self.fallback_method,
 			native_version: D::native_version(),
 			default_heap_pages: self.default_heap_pages,
+			host_functions: self.host_functions.clone(),
 		}
 	}
 }
@@ -194,7 +212,7 @@ impl<D: NativeExecutionDispatch> CodeExecutor for NativeExecutor<D> {
 						target: "executor",
 						"Request for native execution failed (native: {}, chain: {})",
 						self.native_version.runtime_version,
-						onchain_version
+						onchain_version,
 					);
 
 					safe_call(
@@ -211,7 +229,7 @@ impl<D: NativeExecutionDispatch> CodeExecutor for NativeExecutor<D> {
 						target: "executor",
 						"Request for native execution with native call succeeded (native: {}, chain: {}).",
 						self.native_version.runtime_version,
-						onchain_version
+						onchain_version,
 					);
 
 					used_native = true;

@@ -8,6 +8,7 @@ edition = "2018"
 serde = { version = "1.0.101", default-features = false, features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 runtime-io ={ package = "sr-io", path = "../../../core/sr-io", default-features = false }
+state-machine ={ package = "substrate-state-machine", path = "../../../core/state-machine", optional = true }
 support = { package = "srml-support", version = "2", path = "../", default-features = false }
 inherents = { package = "substrate-inherents", path = "../../../core/inherents", default-features = false }
 sr-primitives = { package = "sr-primitives", path = "../../../core/sr-primitives", default-features = false }
@@ -25,4 +26,5 @@ std = [
 	"inherents/std",
 	"primitives/std",
 	"sr-primitives/std",
+	"state-machine",
 ]

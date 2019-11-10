@@ -85,21 +85,24 @@ pub trait Verify {
 impl Verify for primitives::ed25519::Signature {
 	type Signer = primitives::ed25519::Public;
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &primitives::ed25519::Public) -> bool {
-		runtime_io::ed25519_verify(self, msg.get(), signer)
+		runtime_io::crypto::ed25519_verify(self, msg.get(), signer)
 	}
 }
 
 impl Verify for primitives::sr25519::Signature {
 	type Signer = primitives::sr25519::Public;
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &primitives::sr25519::Public) -> bool {
-		runtime_io::sr25519_verify(self, msg.get(), signer)
+		runtime_io::crypto::sr25519_verify(self, msg.get(), signer)
 	}
 }
 
 impl Verify for primitives::ecdsa::Signature {
 	type Signer = primitives::ecdsa::Public;
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &primitives::ecdsa::Public) -> bool {
-		match runtime_io::secp256k1_ecdsa_recover_compressed(self.as_ref(), &runtime_io::blake2_256(msg.get())) {
+		match runtime_io::crypto::secp256k1_ecdsa_recover_compressed(
+			self.as_ref(),
+			&runtime_io::hashing::blake2_256(msg.get()),
+		) {
 			Ok(pubkey) => <dyn AsRef<[u8]>>::as_ref(signer) == &pubkey[..],
 			_ => false,
 		}
@@ -399,23 +402,23 @@ impl Hash for BlakeTwo256 {
 	type Output = primitives::H256;
 	type Hasher = Blake2Hasher;
 	fn hash(s: &[u8]) -> Self::Output {
-		runtime_io::blake2_256(s).into()
+		runtime_io::hashing::blake2_256(s).into()
 	}
 
 	fn trie_root(input: Vec<(Vec<u8>, Vec<u8>)>) -> Self::Output {
-		runtime_io::blake2_256_trie_root(input)
+		runtime_io::storage::blake2_256_trie_root(input)
 	}
 
 	fn ordered_trie_root(input: Vec<Vec<u8>>) -> Self::Output {
-		runtime_io::blake2_256_ordered_trie_root(input)
+		runtime_io::storage::blake2_256_ordered_trie_root(input)
 	}
 
 	fn storage_root() -> Self::Output {
-		runtime_io::storage_root().into()
+		runtime_io::storage::root().into()
 	}
 
 	fn storage_changes_root(parent_hash: Self::Output) -> Option<Self::Output> {
-		runtime_io::storage_changes_root(parent_hash.into()).map(Into::into)
+		runtime_io::storage::changes_root(parent_hash.into()).map(Into::into)
 	}
 }
 
@@ -1152,14 +1155,14 @@ macro_rules! impl_opaque_keys {
 			/// The generated key pairs are stored in the keystore.
 			///
 			/// Returns the concatenated SCALE encoded public keys.
-			pub fn generate(seed: Option<&str>) -> $crate::rstd::vec::Vec<u8> {
+			pub fn generate(seed: Option<$crate::rstd::vec::Vec<u8>>) -> $crate::rstd::vec::Vec<u8> {
 				let keys = Self{
 					$(
 						$field: <
 							<
 								$type as $crate::BoundToRuntimeAppPublic
 							>::Public as $crate::RuntimeAppPublic
-						>::generate_pair(seed),
+						>::generate_pair(seed.clone()),
 					)*
 				};
 				$crate::codec::Encode::encode(&keys)
@@ -1224,19 +1227,19 @@ impl Printable for usize {
 
 impl Printable for u64 {
 	fn print(&self) {
-		runtime_io::print_num(*self);
+		runtime_io::misc::print_num(*self);
 	}
 }
 
 impl Printable for &[u8] {
 	fn print(&self) {
-		runtime_io::print_hex(self);
+		runtime_io::misc::print_hex(self);
 	}
 }
 
 impl Printable for &str {
 	fn print(&self) {
-		runtime_io::print_utf8(self.as_bytes());
+		runtime_io::misc::print_utf8(self.as_bytes());
 	}
 }
 
