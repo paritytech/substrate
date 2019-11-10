@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use proc_macro2::Span;
-use srml_support_procedural_tools::{syn_ext as ext, Parse, ToTokens};
+use srml_support_procedural_tools::{syn_ext as ext};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use syn::{
 	token,
@@ -140,7 +140,7 @@ impl WhereDefinition {
 	}
 }
 
-#[derive(ToTokens, Debug)]
+#[derive(Debug)]
 pub struct ModuleDeclaration {
 	pub name: Ident,
 	pub module: Ident,
@@ -176,7 +176,7 @@ impl Parse for ModuleDeclaration {
 	}
 }
 
-#[derive(ToTokens, Debug)]
+#[derive(Debug)]
 pub enum ModuleEntry {
 	Default(Token![default]),
 	Part(ModulePart),
@@ -195,7 +195,7 @@ impl Parse for ModuleEntry {
 	}
 }
 
-#[derive(ToTokens, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct ModulePart {
 	pub name: Ident,
 	pub generics: syn::Generics,
