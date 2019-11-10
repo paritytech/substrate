@@ -64,8 +64,8 @@ use tokio_io::{AsyncRead, AsyncWrite};
 /// The handler starts in the "Initializing" state and must be transitionned to Enabled or Disabled
 /// as soon as possible.
 ///
-/// The Open/Closed state is decided by the handler and is reported with the `LegacyProtocolOpen`
-/// and `LegacyProtocolClosed` events. The `CustomMessage` event can only be generated if the
+/// The Open/Closed state is decided by the handler and is reported with the `CustomProtocolOpen`
+/// and `CustomProtocolClosed` events. The `CustomMessage` event can only be generated if the
 /// handler is open.
 ///
 /// ## How it works
@@ -163,14 +163,14 @@ enum ProtocolState<TSubstream> {
 	},
 
 	/// Handler is opening a substream in order to activate itself.
-	/// If we are in this state, we haven't sent any `LegacyProtocolOpen` yet.
+	/// If we are in this state, we haven't sent any `CustomProtocolOpen` yet.
 	Opening {
 		/// Deadline after which the opening is abnormally long.
 		deadline: Compat<Delay>,
 	},
 
 	/// Normal operating mode. Contains the substreams that are open.
-	/// If we are in this state, we have sent a `LegacyProtocolOpen` message to the outside.
+	/// If we are in this state, we have sent a `CustomProtocolOpen` message to the outside.
 	Normal {
 		/// The substreams where bidirectional communications happen.
 		substreams: SmallVec<[RegisteredProtocolSubstream<TSubstream>; 4]>,
@@ -179,8 +179,8 @@ enum ProtocolState<TSubstream> {
 	},
 
 	/// We are disabled. Contains substreams that are being closed.
-	/// If we are in this state, either we have sent a `LegacyProtocolClosed` message to the
-	/// outside or we have never sent any `LegacyProtocolOpen` in the first place.
+	/// If we are in this state, either we have sent a `CustomProtocolClosed` message to the
+	/// outside or we have never sent any `CustomProtocolOpen` in the first place.
 	Disabled {
 		/// List of substreams to shut down.
 		shutdown: SmallVec<[RegisteredProtocolSubstream<TSubstream>; 6]>,
@@ -222,13 +222,13 @@ pub enum LegacyProtoHandlerIn {
 #[derive(Debug)]
 pub enum LegacyProtoHandlerOut {
 	/// Opened a custom protocol with the remote.
-	LegacyProtocolOpen {
+	CustomProtocolOpen {
 		/// Version of the protocol that has been opened.
 		version: u8,
 	},
 
 	/// Closed a custom protocol with the remote.
-	LegacyProtocolClosed {
+	CustomProtocolClosed {
 		/// Reason why the substream closed, for diagnostic purposes.
 		reason: Cow<'static, str>,
 	},
@@ -281,7 +281,7 @@ where
 					}
 
 				} else {
-					let event = LegacyProtoHandlerOut::LegacyProtocolOpen {
+					let event = LegacyProtoHandlerOut::CustomProtocolOpen {
 						version: incoming[0].protocol_version()
 					};
 					self.events_queue.push(ProtocolsHandlerEvent::Custom(event));
@@ -407,7 +407,7 @@ where
 						Ok(Async::Ready(None)) => {
 							shutdown.push(substream);
 							if substreams.is_empty() {
-								let event = LegacyProtoHandlerOut::LegacyProtocolClosed {
+								let event = LegacyProtoHandlerOut::CustomProtocolClosed {
 									reason: "All substreams have been closed by the remote".into(),
 								};
 								self.state = ProtocolState::Disabled {
@@ -419,7 +419,7 @@ where
 						}
 						Err(err) => {
 							if substreams.is_empty() {
-								let event = LegacyProtoHandlerOut::LegacyProtocolClosed {
+								let event = LegacyProtoHandlerOut::CustomProtocolClosed {
 									reason: format!("Error on the last substream: {:?}", err).into(),
 								};
 								self.state = ProtocolState::Disabled {
@@ -483,7 +483,7 @@ where
 			}
 
 			ProtocolState::Opening { .. } => {
-				let event = LegacyProtoHandlerOut::LegacyProtocolOpen {
+				let event = LegacyProtoHandlerOut::CustomProtocolOpen {
 					version: substream.protocol_version()
 				};
 				self.events_queue.push(ProtocolsHandlerEvent::Custom(event));

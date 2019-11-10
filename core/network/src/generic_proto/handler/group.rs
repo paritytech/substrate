@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::generic_proto::{
-	handler::legacy::{LegacyProtoHandler, LegacyProtoHandlerProto},
+	handler::legacy::{LegacyProtoHandler, LegacyProtoHandlerProto, LegacyProtoHandlerIn, LegacyProtoHandlerOut},
 	handler::notif_in::{NotifsInHandlerProto, NotifsInHandler},
 	handler::notif_out::{NotifsOutHandlerProto, NotifsOutHandler},
 	upgrade::{NotificationsIn, NotificationsOut, RegisteredProtocol, SelectUpgrade, UpgradeCollec},
@@ -24,7 +24,7 @@ use bytes::BytesMut;
 use futures::prelude::*;
 use libp2p::core::{ConnectedPoint, PeerId};
 use libp2p::core::either::{EitherError, EitherOutput};
-use libp2p::core::upgrade::{ReadOneError, InboundUpgrade, OutboundUpgrade};
+use libp2p::core::upgrade::{EitherUpgrade, ReadOneError, InboundUpgrade, OutboundUpgrade};
 use libp2p::swarm::{
 	ProtocolsHandler, ProtocolsHandlerEvent,
 	IntoProtocolsHandler,
@@ -163,11 +163,14 @@ where TSubstream: AsyncRead + AsyncWrite + 'static {
 	type OutEvent = NotifsHandlerOut;
 	type Substream = TSubstream;
 	type Error = EitherError<
-		<NotifsInHandler<TSubstream> as ProtocolsHandler>::Error,
-		<NotifsOutHandler<TSubstream> as ProtocolsHandler>::Error,
+		EitherError<
+			<NotifsInHandler<TSubstream> as ProtocolsHandler>::Error,
+			<NotifsOutHandler<TSubstream> as ProtocolsHandler>::Error,
+		>,
+		<LegacyProtoHandler<TSubstream> as ProtocolsHandler>::Error,
 	>;
 	type InboundProtocol = SelectUpgrade<UpgradeCollec<NotificationsIn>, RegisteredProtocol>;
-	type OutboundProtocol = SelectUpgrade<UpgradeCollec<NotificationsOut>, RegisteredProtocol>;
+	type OutboundProtocol = EitherUpgrade<UpgradeCollec<NotificationsOut>, RegisteredProtocol>;
 	type OutboundOpenInfo = ();
 
 	fn listen_protocol(&self) -> SubstreamProtocol<Self::InboundProtocol> {
@@ -205,7 +208,14 @@ where TSubstream: AsyncRead + AsyncWrite + 'static {
 	}
 
 	fn inject_event(&mut self, message: NotifsHandlerIn) {
-		unimplemented!()		// TODO:
+		match message {
+			NotifsHandlerIn::Enable =>
+				self.legacy.inject_event(LegacyProtoHandlerIn::Enable),
+			NotifsHandlerIn::Disable =>
+				self.legacy.inject_event(LegacyProtoHandlerIn::Disable),
+			NotifsHandlerIn::SendCustomMessage { message } =>
+				self.legacy.inject_event(LegacyProtoHandlerIn::SendCustomMessage { message }),
+		}
 	}
 
 	fn inject_dial_upgrade_error(&mut self, _: (), err: ProtocolsHandlerUpgrErr<EitherError<(ReadOneError, usize), io::Error>>) {
@@ -214,7 +224,11 @@ where TSubstream: AsyncRead + AsyncWrite + 'static {
 
 	fn connection_keep_alive(&self) -> KeepAlive {
 		// Iterate over each handler and return the maximum value.
-		let mut ret = KeepAlive::No;
+
+		let mut ret = self.legacy.connection_keep_alive();
+		if ret.is_yes() {
+			return KeepAlive::Yes;
+		}
 
 		for handler in &self.in_handlers {
 			let val = handler.connection_keep_alive();
@@ -242,15 +256,33 @@ where TSubstream: AsyncRead + AsyncWrite + 'static {
 		Self::Error,
 	> {
 		for handler in &mut self.in_handlers {
-			if let Async::Ready(v) = handler.poll().map_err(EitherError::A)? {
+			if let Async::Ready(v) = handler.poll().map_err(|e| EitherError::A(EitherError::A(e)))? {
 				unimplemented!() // TODO: return Ok(Async::Ready(v));
 			}
 		}
 
 		for handler in &mut self.out_handlers {
-			if let Async::Ready(v) = handler.poll().map_err(EitherError::B)? {
+			if let Async::Ready(v) = handler.poll().map_err(|e| EitherError::A(EitherError::B(e)))? {
 				unimplemented!() // TODO: return Ok(Async::Ready(v));
 			}
+		}
+
+		if let Async::Ready(ev) = self.legacy.poll().map_err(EitherError::B)? {
+			let ev = ev
+				.map_protocol(EitherUpgrade::B)
+				.map_custom(|ev| match ev {
+					LegacyProtoHandlerOut::CustomProtocolOpen { version } =>
+						NotifsHandlerOut::CustomProtocolOpen { version },
+					LegacyProtoHandlerOut::CustomProtocolClosed { reason } =>
+						NotifsHandlerOut::CustomProtocolClosed { reason },
+					LegacyProtoHandlerOut::CustomMessage { message } =>
+						NotifsHandlerOut::CustomMessage { message },
+					LegacyProtoHandlerOut::Clogged { messages } =>
+						NotifsHandlerOut::Clogged { messages },
+					LegacyProtoHandlerOut::ProtocolError { is_severe, error } =>
+						NotifsHandlerOut::ProtocolError { is_severe, error },
+				});
+			return Ok(Async::Ready(ev));
 		}
 
 		Ok(Async::NotReady)
