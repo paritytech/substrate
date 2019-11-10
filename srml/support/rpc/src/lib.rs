@@ -40,9 +40,9 @@ use substrate_rpc_api::state::StateClient;
 /// # use jsonrpc_client_transports::transports::http;
 /// # use parity_scale_codec::Encode;
 /// # use srml_support::{decl_storage, decl_module};
+/// # use srml_support_rpc::StorageQuery;
 /// # use srml_system::Trait;
 /// # use substrate_rpc_api::state::StateClient;
-/// # use substrate_rpc_custom::StorageQuery;
 /// #
 /// # // Hash would normally be <TestRuntime as srml_system::Trait>::Hash, but we don't have
 /// # // srml_system::Trait implemented for TestRuntime. Here we just pretend.
