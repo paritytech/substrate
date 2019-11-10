@@ -145,6 +145,12 @@ pub struct NetworkConfigurationParams {
 	#[structopt(long = "port", value_name = "PORT")]
 	pub port: Option<u16>,
 
+	/// Allow connecting to private IPv4 addresses (as specified in
+	/// [RFC1918](https://tools.ietf.org/html/rfc1918)), unless the address was passed with
+	/// `--reserved-nodes` or `--bootnodes`.
+	#[structopt(long = "no-private-ipv4")]
+	pub no_private_ipv4: bool,
+
 	/// Specify the number of outgoing connections we're trying to maintain.
 	#[structopt(long = "out-peers", value_name = "COUNT", default_value = "25")]
 	pub out_peers: u32,
