@@ -50,7 +50,6 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use futures::stream::StreamExt;
 use futures::task::{Context, Poll};
 use futures::Future;
 use futures_timer::Interval;
