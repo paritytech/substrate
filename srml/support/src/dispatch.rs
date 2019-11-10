@@ -394,7 +394,9 @@ macro_rules! decl_module {
 	// Add on_initialize, without a given weight.
 	(@normalize
 		$(#[$attr:meta])*
-		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?>
+		pub struct $mod_type:ident<
+			$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?
+		>
 		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
 		{ $( $other_where_bounds:tt )* }
 		{ $( $deposit_event:tt )* }
@@ -429,7 +431,9 @@ macro_rules! decl_module {
 	// Add on_initialize, given weight.
 	(@normalize
 		$(#[$attr:meta])*
-		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?>
+		pub struct $mod_type:ident<
+			$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?
+		>
 		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
 		{ $( $other_where_bounds:tt )* }
 		{ $( $deposit_event:tt )* }
@@ -936,8 +940,9 @@ macro_rules! decl_module {
 			fn on_finalize($( $param_finalize:ident : $param_ty_finalize:ty )*) { $( $impl_finalize:tt )* }
 		)?
 	) => {
-		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?> $crate::dispatch::WeighBlock<$trait_instance::BlockNumber>
-			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
+		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
+		$crate::dispatch::WeighBlock<$trait_instance::BlockNumber> for $module<$trait_instance$(, $instance)?> where
+			$( $other_where_bounds )*
 		{
 			$(
 				fn on_initialize(n: $trait_instance::BlockNumber) -> $crate::dispatch::Weight {
