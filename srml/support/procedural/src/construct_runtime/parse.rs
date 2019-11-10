@@ -140,87 +140,89 @@ impl WhereDefinition {
 	}
 }
 
-#[derive(Parse, ToTokens, Debug)]
+#[derive(ToTokens, Debug)]
 pub struct ModuleDeclaration {
 	pub name: Ident,
-	pub name_colon: Token![:],
 	pub module: Ident,
-	pub instance: ModuleInstanceWrapper,
-	pub details: ModuleDetailsWrapper,
+	pub instance: Option<Ident>,
+	pub details: Option<ext::Braces<ext::Punctuated<ModuleEntry, Token![,]>>>,
 }
 
-#[derive(ToTokens, Debug)]
-pub struct ModuleInstanceWrapper {
-	pub inner: Option<ModuleInstance>,
-}
-
-impl Parse for ModuleInstanceWrapper {
+impl Parse for ModuleDeclaration {
 	fn parse(input: ParseStream) -> Result<Self> {
-		// In this case we're sure it needs to be a ModuleInstance
-		if input.peek(Token![::]) && input.peek3(Token![<]) {
-			let inner = Some(input.parse()?);
-			Ok(ModuleInstanceWrapper { inner })
+		let name = input.parse()?;
+		let _: Token![:] = input.parse()?;
+		let module = input.parse()?;
+		let instance = if input.peek(Token![::]) && input.peek3(Token![<]) {
+			let _: Token![::] = input.parse()?;
+			Some(input.parse()?);
 		} else {
-			Ok(ModuleInstanceWrapper { inner: None })
-		}
-	}
-}
-
-#[derive(ToTokens, Debug)]
-pub struct ModuleDetailsWrapper {
-	pub inner: Option<ModuleDetails>,
-}
-
-impl Parse for ModuleDetailsWrapper {
-	fn parse(input: ParseStream) -> Result<Self> {
-		// In this case we're sure it needs to be a ModuleDetails
-		if input.peek(Token![::]) {
-			let inner = Some(input.parse()?);
-			Ok(ModuleDetailsWrapper { inner })
+			None
+		};
+		let details = if input.peek(Token![::]) {
+			let _: Token![::] = input.parse()?;
+			Some(input.parse()?);
 		} else {
-			Ok(ModuleDetailsWrapper { inner: None })
-		}
+			None
+		};
+		Ok(
+			Self {
+				name,
+				module,
+				instance,
+				details
+			}
+		)
 	}
-}
-
-#[derive(Parse, ToTokens, Debug)]
-pub struct ModuleInstance {
-	pub colons: Token![::],
-	pub lt: Token![<],
-	pub name: Ident,
-	pub gt: Token![>],
-}
-
-#[derive(Parse, ToTokens, Debug)]
-pub struct ModuleDetails {
-	pub colons: Token![::],
-	pub entries: ext::Braces<ext::Punctuated<ModuleEntryWrapper, Token![,]>>,
 }
 
 #[derive(ToTokens, Debug)]
-pub struct ModuleEntryWrapper {
-	pub inner: ModuleEntry,
-}
-
-impl Parse for ModuleEntryWrapper {
-	fn parse(input: ParseStream) -> Result<Self> {
-		ModuleEntry::parse(input)
-			.map(|inner| ModuleEntryWrapper { inner })
-			.map_err(|_| input.error("Expected `default` or module export name (e.g. Call, Event, etc.)"))
-	}
-}
-
-#[derive(Parse, ToTokens, Debug)]
 pub enum ModuleEntry {
 	Default(Token![default]),
 	Part(ModulePart),
 }
 
-#[derive(Parse, ToTokens, Debug, Clone)]
+impl Parse for ModuleEntry {
+	fn parse(input: TokenStream) -> Result<Self> {
+		let lookahead = input.lookahead1();
+        if lookahead.peek(Token![default]) {
+			Ok(ModuleEntry::Default(input.parse()?))
+		} else if lookahead.peek(Ident) {
+			Ok(ModuleEntry::Part(input.parse()?))
+		} else {
+			Err(lookahead.error())
+		}
+	}
+}
+
+#[derive(ToTokens, Debug, Clone)]
 pub struct ModulePart {
 	pub name: Ident,
 	pub generics: syn::Generics,
 	pub args: ext::Opt<ext::Parens<ext::Punctuated<Ident, Token![,]>>>,
+}
+
+impl Parse for ModulePart {
+	fn parse(input: ParseStream) -> Result<Self> {
+		let name = input.parse()?;
+		if !Self::is_allowed_ident(name) {
+			let allowed: Vec<_> = self.allowed_names().into_iter().map(|s| format!("`{}`", s)).collect();
+			let allowed = allowed.join(", ");
+			let msg = format!("Please use one of the following indentifiers: {}", allowed);
+			return Err(syn::Error::new(name.span(), msg))
+		}
+
+	}
+}
+
+impl ModulePart {
+	pub fn is_allowed_ident(ident: Ident) -> bool {
+		Self::allowed_names.into_iter().any(|n| n == ident)
+	}
+
+	pub fn allowed_names() -> [&'static str; 8] {
+		["Module", "Call", "Storage", "Event", "Origin", "Config", "Inherent", "ValidateUnsigned"]
+	}
 }
 
 impl ModuleDeclaration {
