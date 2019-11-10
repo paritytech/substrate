@@ -480,7 +480,7 @@ mod tests {
 					upgrade::apply(stream, upgrade, endpoint, libp2p::core::upgrade::Version::V1)
 				});
 
-			let behaviour = DiscoveryBehaviour::new(keypair.public(), user_defined.clone(), false);
+			let behaviour = DiscoveryBehaviour::new(keypair.public(), user_defined.clone(), false, true);
 			let mut swarm = Swarm::new(transport, behaviour, keypair.public().into_peer_id());
 			let listen_addr: Multiaddr = format!("/memory/{}", rand::random::<u64>()).parse().unwrap();
 
