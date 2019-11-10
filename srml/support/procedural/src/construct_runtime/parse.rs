@@ -237,12 +237,13 @@ impl Parse for ModulePart {
         }
         let args = if input.peek(token::Paren) {
             if !Self::is_allowed_arg(&name) {
+				let syn::group::Parens { token: parens, .. } = syn::group::parse_parens(input)?;
                 let valid_names = ModulePart::format_names(ModulePart::allowed_args());
                 let msg = format!(
-                    "Only the following identifiers are allowed to have arguments in parens: {}",
+                    "Only the following modules are allowed to have arguments in parens: {}",
                     valid_names
                 );
-                return Err(syn::Error::new(name.span(), msg));
+                return Err(syn::Error::new(parens.span, msg));
             }
             Some(input.parse()?)
         } else {
