@@ -18,6 +18,7 @@
 //! Simple ECDSA API.
 // end::description[]
 
+#[cfg(feature = "full_crypto")]
 use rstd::vec::Vec;
 
 use rstd::cmp::Ordering;

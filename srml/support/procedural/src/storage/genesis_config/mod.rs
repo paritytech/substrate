@@ -158,7 +158,7 @@ fn impl_build_storage(
 					#scrate::sr_primitives::ChildrenStorageOverlay,
 				),
 			) -> std::result::Result<(), String> #fn_where_clause {
-				#scrate::with_storage(tuple_storage, || {
+				#scrate::BasicExternalities::execute_with_storage(tuple_storage, || {
 					#( #builder_blocks )*
 					Ok(())
 				})

@@ -24,7 +24,7 @@ use crate::exec::StorageKey;
 use rstd::cell::RefCell;
 use rstd::collections::btree_map::{BTreeMap, Entry};
 use rstd::prelude::*;
-use runtime_io::blake2_256;
+use runtime_io::hashing::blake2_256;
 use sr_primitives::traits::{Bounded, Zero};
 use support::traits::{Currency, Get, Imbalance, SignedImbalance, UpdateBalanceOutcome};
 use support::{storage::child, StorageMap};

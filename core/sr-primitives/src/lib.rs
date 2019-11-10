@@ -38,7 +38,7 @@ pub use paste;
 pub use app_crypto;
 
 #[cfg(feature = "std")]
-pub use runtime_io::{StorageOverlay, ChildrenStorageOverlay};
+pub use primitives::storage::{StorageOverlay, ChildrenStorageOverlay};
 
 use rstd::prelude::*;
 use rstd::convert::TryFrom;
@@ -66,10 +66,7 @@ pub use app_crypto::{RuntimeAppPublic, BoundToRuntimeAppPublic};
 pub use primitives::RuntimeDebug;
 
 /// Re-export top-level arithmetic stuff.
-pub use arithmetic::{
-	Perquintill, Perbill, Permill, Percent,
-	Rational128, Fixed64
-};
+pub use arithmetic::{Perquintill, Perbill, Permill, Percent, Rational128, Fixed64};
 /// Re-export 128 bit helpers.
 pub use arithmetic::helpers_128bit;
 /// Re-export big_uint stuff.
@@ -244,7 +241,7 @@ impl traits::IdentifyAccount for MultiSigner {
 		match self {
 			MultiSigner::Ed25519(who) => <[u8; 32]>::from(who).into(),
 			MultiSigner::Sr25519(who) => <[u8; 32]>::from(who).into(),
-			MultiSigner::Ecdsa(who) => runtime_io::blake2_256(who.as_ref()).into(),
+			MultiSigner::Ecdsa(who) => runtime_io::hashing::blake2_256(who.as_ref()).into(),
 		}
 	}
 }
@@ -307,9 +304,11 @@ impl Verify for MultiSignature {
 			(MultiSignature::Ed25519(ref sig), who) => sig.verify(msg, &ed25519::Public::from_slice(who.as_ref())),
 			(MultiSignature::Sr25519(ref sig), who) => sig.verify(msg, &sr25519::Public::from_slice(who.as_ref())),
 			(MultiSignature::Ecdsa(ref sig), who) => {
-				let m = runtime_io::blake2_256(msg.get());
-				match runtime_io::secp256k1_ecdsa_recover_compressed(sig.as_ref(), &m) {
-					Ok(pubkey) => &runtime_io::blake2_256(pubkey.as_ref()) == <dyn AsRef<[u8; 32]>>::as_ref(who),
+				let m = runtime_io::hashing::blake2_256(msg.get());
+				match runtime_io::crypto::secp256k1_ecdsa_recover_compressed(sig.as_ref(), &m) {
+					Ok(pubkey) =>
+						&runtime_io::hashing::blake2_256(pubkey.as_ref())
+							== <dyn AsRef<[u8; 32]>>::as_ref(who),
 					_ => false,
 				}
 			}
