@@ -85,6 +85,9 @@ pub struct DiscoveryBehaviour<TSubstream> {
 	local_peer_id: PeerId,
 	/// Number of nodes we're currently connected to.
 	num_connections: u64,
+	/// If false, `addresses_of_peer` won't return any private IPv4 address, except for the ones
+	/// stored in `user_defined`.
+	allow_private_ipv4: bool,
 }
 
 impl<TSubstream> DiscoveryBehaviour<TSubstream> {
@@ -94,7 +97,8 @@ impl<TSubstream> DiscoveryBehaviour<TSubstream> {
 	pub fn new(
 		local_public_key: PublicKey,
 		user_defined: Vec<(PeerId, Multiaddr)>,
-		enable_mdns: bool
+		enable_mdns: bool,
+		allow_private_ipv4: bool,
 	) -> Self {
 		if enable_mdns {
 			#[cfg(target_os = "unknown")]
@@ -116,6 +120,7 @@ impl<TSubstream> DiscoveryBehaviour<TSubstream> {
 			discoveries: VecDeque::new(),
 			local_peer_id: local_public_key.into_peer_id(),
 			num_connections: 0,
+			allow_private_ipv4,
 			#[cfg(not(target_os = "unknown"))]
 			mdns: if enable_mdns {
 				match Mdns::new() {
@@ -214,9 +219,27 @@ where
 		let mut list = self.user_defined.iter()
 			.filter_map(|(p, a)| if p == peer_id { Some(a.clone()) } else { None })
 			.collect::<Vec<_>>();
-		list.extend(self.kademlia.addresses_of_peer(peer_id));
-		#[cfg(not(target_os = "unknown"))]
-		list.extend(self.mdns.addresses_of_peer(peer_id));
+
+		{
+			let mut list_to_filter = self.kademlia.addresses_of_peer(peer_id);
+			#[cfg(not(target_os = "unknown"))]
+			list_to_filter.extend(self.mdns.addresses_of_peer(peer_id));
+
+			if !self.allow_private_ipv4 {
+				list_to_filter.retain(|addr| {
+					if let Some(Protocol::Ip4(addr)) = addr.iter().next() {
+						if addr.is_private() {
+							return false;
+						}
+					}
+
+					true
+				});
+			}
+
+			list.extend(list_to_filter);
+		}
+
 		trace!(target: "sub-libp2p", "Addresses of {:?} are {:?}", peer_id, list);
 		if list.is_empty() {
 			if self.kademlia.kbuckets_entries().any(|p| p == peer_id) {
@@ -457,7 +480,7 @@ mod tests {
 					upgrade::apply(stream, upgrade, endpoint, libp2p::core::upgrade::Version::V1)
 				});
 
-			let behaviour = DiscoveryBehaviour::new(keypair.public(), user_defined.clone(), false);
+			let behaviour = DiscoveryBehaviour::new(keypair.public(), user_defined.clone(), false, true);
 			let mut swarm = Swarm::new(transport, behaviour, keypair.public().into_peer_id());
 			let listen_addr: Multiaddr = format!("/memory/{}", rand::random::<u64>()).parse().unwrap();
 
