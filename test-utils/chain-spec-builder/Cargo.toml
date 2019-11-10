@@ -8,7 +8,7 @@ build = "build.rs"
 [dependencies]
 ansi_term = "0.12.1"
 keystore = { package = "substrate-keystore", path = "../../core/keystore" }
-node-cli = { path = "../../node/cli" }
+node-cli = { path = "../../bin/node/cli" }
 primitives = { package = "substrate-primitives",  path = "../../core/primitives" }
 rand = "0.7.2"
 structopt = "0.3.3"

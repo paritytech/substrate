@@ -50,9 +50,9 @@ parity-multiaddr = { package = "parity-multiaddr", version = "0.5.0" }
 
 [dev-dependencies]
 substrate-test-runtime-client = { path = "../test-runtime/client" }
-node-executor = { path = "../../node/executor" }
-node-primitives = { path = "../../node/primitives" }
-node-runtime = { path = "../../node/runtime" }
+node-executor = { path = "../../bin/node/executor" }
+node-primitives = { path = "../../bin/node/primitives" }
+node-runtime = { path = "../../bin/node/runtime" }
 babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../../core/consensus/babe/primitives" }
 grandpa = { package = "substrate-finality-grandpa", path = "../../core/finality-grandpa" }
 grandpa-primitives = { package = "substrate-finality-grandpa-primitives", path = "../../core/finality-grandpa/primitives" }

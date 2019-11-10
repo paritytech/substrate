@@ -5,10 +5,10 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-primitives = { package = "substrate-primitives",  version = "*", path = "../core/primitives" }
+primitives = { package = "substrate-primitives",  version = "*", path = "../../core/primitives" }
 node-runtime = { version = "*", path = "../node/runtime" }
 node-primitives = { version = "*", path = "../node/primitives" }
-sr-primitives = { version = "*", path = "../core/sr-primitives" }
+sr-primitives = { version = "*", path = "../../core/sr-primitives" }
 rand = "0.7.2"
 clap = { version = "2.33.0", features = ["yaml"] }
 tiny-bip39 = "0.6.2"
@@ -17,9 +17,9 @@ substrate-bip39 = "0.3.1"
 hex = "0.3.2"
 hex-literal = "0.2.1"
 codec = { package = "parity-scale-codec", version = "1.0.0" }
-system = { package = "srml-system", path = "../srml/system" }
-balances = { package = "srml-balances", path = "../srml/balances" }
-transaction-payment = { package = "srml-transaction-payment", path = "../srml/transaction-payment" }
+system = { package = "srml-system", path = "../../srml/system" }
+balances = { package = "srml-balances", path = "../../srml/balances" }
+transaction-payment = { package = "srml-transaction-payment", path = "../../srml/transaction-payment" }
 
 [features]
 bench = []
