@@ -289,7 +289,7 @@ build-linux-subkey:
   script:
     - cd ./subkey
     - BUILD_DUMMY_WASM_BINARY=1 time cargo build --release --verbose
-    - cd ..
+    - cd -
     - sccache -s
     - mkdir -p ./artifacts/subkey
     - mv ./target/release/subkey ./artifacts/subkey/.
@@ -350,9 +350,9 @@ check_polkadot:
     - git clone --depth 1 https://gitlab.parity.io/parity/polkadot.git
     - cd polkadot
     - git grep -l "polkadot-master" | grep toml | xargs sed -i "s/branch.*=.*\"polkadot-master\"/rev = \"$COMMIT_HASH\"/; s~https://github.com/paritytech/substrate~file://$SUBSTRATE_PATH~"
-    - cargo update -p sr-io --precise $COMMIT_HASH
+    - cargo update -p sr-io
     - time cargo check
-    - cd ..
+    - cd -
     - sccache -s
 
 #### stage:                        publish
