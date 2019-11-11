@@ -9,6 +9,7 @@ interfaces = { package = "substrate-client-interfaces", path = "interfaces" }
 block-builder = { package = "substrate-block-builder", path = "block-builder" }
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
 consensus = { package = "substrate-consensus-common", path = "../primitives/consensus/common" }
+kvdb = { git = "https://github.com/paritytech/parity-common", rev="b0317f649ab2c665b7987b8475878fc4d2e1f81d" }
 derive_more = { version = "0.15.0" }
 executor = { package = "substrate-executor", path = "executor" }
 fnv = { version = "1.0.6" }
