@@ -22,7 +22,7 @@ primitives = { package = "substrate-primitives", path = "../primitives" }
 prost = "0.5.0"
 serde_json = "1.0.41"
 sr-primitives = { path = "../../core/sr-primitives" }
-futures-timer = "0.4"
+async-std = { version = "0.99.12", features = ["unstable"] }
 
 [dev-dependencies]
 parking_lot = "0.9.0"

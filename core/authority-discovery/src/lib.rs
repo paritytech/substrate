@@ -54,7 +54,7 @@ use futures::channel::mpsc::Receiver;
 use futures::stream::StreamExt;
 use futures::task::{Context, Poll};
 use futures::Future;
-use futures_timer::Interval;
+use async_std::stream::{interval, Interval};
 
 use authority_discovery_primitives::{AuthorityDiscoveryApi, AuthorityId, Signature};
 use client::blockchain::HeaderBackend;
@@ -117,11 +117,11 @@ where
 		// Kademlia's default time-to-live for Dht records is 36h, republishing records every 24h. Given that a node
 		// could restart at any point in time, one can not depend on the republishing process, thus publishing own
 		// external addresses should happen on an interval < 36h.
-		let publish_interval = Interval::new(Duration::from_secs(12 * 60 * 60));
+		let publish_interval = interval(Duration::from_secs(12 * 60 * 60));
 
 		// External addresses of other authorities can change at any given point in time. The interval on which to query
 		// for external addresses of other authorities is a trade off between efficiency and performance.
-		let query_interval = Interval::new(Duration::from_secs(10 * 60));
+		let query_interval = interval(Duration::from_secs(10 * 60));
 
 		let address_cache = HashMap::new();
 

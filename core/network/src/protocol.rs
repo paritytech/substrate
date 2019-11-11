@@ -53,6 +53,7 @@ use crate::chain::{Client, FinalityProofProvider};
 use client::light::fetcher::{FetchChecker, ChangesProof, StorageProof};
 use crate::error;
 use util::LruHashSet;
+use async_std::stream::interval;
 
 mod util;
 pub mod consensus_gossip;
@@ -425,8 +426,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		let behaviour = LegacyProto::new(protocol_id, versions, peerset);
 
 		let protocol = Protocol {
-			tick_timeout: Box::new(futures_timer::Interval::new(TICK_TIMEOUT).map(|v| Ok::<_, ()>(v)).compat()),
-			propagate_timeout: Box::new(futures_timer::Interval::new(PROPAGATE_TIMEOUT).map(|v| Ok::<_, ()>(v)).compat()),
+			tick_timeout: Box::new(interval(TICK_TIMEOUT).map(|v| Ok::<_, ()>(v)).compat()),
+			propagate_timeout: Box::new(interval(PROPAGATE_TIMEOUT).map(|v| Ok::<_, ()>(v)).compat()),
 			config,
 			context_data: ContextData {
 				peers: HashMap::new(),
