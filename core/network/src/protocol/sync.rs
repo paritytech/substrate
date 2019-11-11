@@ -704,12 +704,8 @@ impl<B: BlockT> ChainSync<B> {
 								matching_hash,
 								peer.common_number,
 							);
-							let client = &self.client;
 							if peer.common_number < peer.best_number
 								&& peer.best_number < self.best_queued_number
-								&& matching_hash.and_then(
-									|h| client.block_status(&BlockId::Hash(h)).ok()
-								).unwrap_or(BlockStatus::Unknown) != BlockStatus::InChainPruned
 							{
 								trace!(target: "sync", "Added fork target {} for {}" , peer.best_hash, who);
 								self.fork_targets
