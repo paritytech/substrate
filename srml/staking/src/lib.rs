@@ -712,14 +712,14 @@ decl_storage! {
 
 		/// Records information about the maximum slash of a stash within a slashing span,
 		/// as well as how much reward has been paid out.
-		SpanSlash: map (T::AccountId, slashing::SpanIndex)
-			=> slashing::SpanRecord<BalanceOf<T>>;
+		SpanSlash:
+			map (T::AccountId, slashing::SpanIndex) => slashing::SpanRecord<BalanceOf<T>>;
 
-		/// The earliest era for which we have a pending slash.
-		EarliestPendingSlash: EraIndex;
+		/// The earliest era for which we have a pending, unapplied slash.
+		EarliestUnappliedSlash: Option<EraIndex>;
 
-		/// All pending slashes that have not been applied yet.
-		PendingSlashes get(pending_slashes): map EraIndex => Vec<UnappliedSlash<T::AccountId, BalanceOf<T>>>;
+		/// All unapplied slashes that are queued for later.
+		UnappliedSlashes: map EraIndex => Vec<UnappliedSlash<T::AccountId, BalanceOf<T>>>;
 	}
 	add_extra_genesis {
 		config(stakers):
@@ -1306,8 +1306,25 @@ impl<T: Trait> Module<T> {
 
 		// Reassign all Stakers.
 		let (_slot_stake, maybe_new_validators) = Self::select_validators();
+		Self::apply_unapplied_slashes(current_era);
 
 		maybe_new_validators
+	}
+
+	/// Apply previously-unapplied slashes on the beginning of a new era, after a delay.
+	fn apply_unapplied_slashes(current_era: EraIndex) {
+		let slash_defer_duration = T::SlashDeferDuration::get();
+		<Self as Store>::EarliestUnappliedSlash::mutate(|earliest| if let Some(ref mut earliest) = earliest {
+			let keep_from = current_era.saturating_sub(slash_defer_duration) + 1;
+			for era in (*earliest)..keep_from {
+				let era_slashes = <Self as Store>::UnappliedSlashes::take(&era);
+				for slash in era_slashes {
+					slashing::apply_slash::<T>(slash);
+				}
+			}
+
+			*earliest = (*earliest).max(keep_from)
+		})
 	}
 
 	/// Select a new validator set from the assembled stakers and their role preferences.
@@ -1599,6 +1616,12 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, session::historical::Identificati
 			}
 		};
 
+		<Self as Store>::EarliestUnappliedSlash::mutate(|earliest| {
+			if earliest.is_none() {
+				*earliest = Some(era_now)
+			}
+		});
+
 		for (details, slash_fraction) in offenders.iter().zip(slash_fraction) {
 			let stash = &details.offender.0;
 			let exposure = &details.offender.1;
@@ -1620,7 +1643,10 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, session::historical::Identificati
 
 			if let Some(mut unapplied) = unapplied {
 				unapplied.reporters = details.reporters.clone();
-				slashing::apply_slash::<T>(unapplied);
+				<Self as Store>::UnappliedSlashes::mutate(
+					era_now,
+					move |for_later| for_later.push(unapplied),
+				);
 			}
 		}
 	}

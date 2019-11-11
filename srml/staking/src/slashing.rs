@@ -328,7 +328,7 @@ fn kick_out_if_recent<T: Trait>(
 	}
 }
 
-/// Slash nominators. Accepts general parameters and the prior slash percentage of the nominator.
+/// Slash nominators. Accepts general parameters and the prior slash percentage of the validator.
 ///
 /// Returns the amount of reward to pay out.
 fn slash_nominators<T: Trait>(
