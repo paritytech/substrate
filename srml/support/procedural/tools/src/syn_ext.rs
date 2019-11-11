@@ -20,7 +20,7 @@
 
 use syn::{visit::{Visit, self}, parse::{Parse, ParseStream, Result}, Ident};
 use proc_macro2::{TokenStream, TokenTree};
-use quote::{ToTokens, quote};
+use quote::ToTokens;
 use std::iter::once;
 use srml_support_procedural_tools_derive::{ToTokens, Parse};
 
@@ -124,13 +124,7 @@ impl Parse for Meta {
 impl ToTokens for Meta {
 	fn to_tokens(&self, tokens: &mut TokenStream) {
 		match self.inner {
-			syn::Meta::Word(ref ident) => {
-				let ident = ident.clone();
-				let toks = quote!{
-					#[#ident]
-				};
-				tokens.extend(toks);
-			},
+			syn::Meta::Path(ref path) => path.to_tokens(tokens),
 			syn::Meta::List(ref l) => l.to_tokens(tokens),
 			syn::Meta::NameValue(ref n) => n.to_tokens(tokens),
 		}
@@ -187,10 +181,10 @@ impl<P: ToTokens> ToTokens for Opt<P> {
 pub fn extract_type_option(typ: &syn::Type) -> Option<syn::Type> {
 	if let syn::Type::Path(ref path) = typ {
 		let v = path.path.segments.last()?;
-		if v.value().ident == "Option" {
+		if v.ident == "Option" {
 			// Option has only one type argument in angle bracket.
-			if let syn::PathArguments::AngleBracketed(a) = &v.value().arguments {
-				if let syn::GenericArgument::Type(typ) = a.args.last()?.value() {
+			if let syn::PathArguments::AngleBracketed(a) = &v.arguments {
+				if let syn::GenericArgument::Type(typ) = a.args.last()? {
 					return Some(typ.clone())
 				}
 			}
@@ -230,7 +224,7 @@ impl<'ast> Visit<'ast> for ContainsIdent<'ast> {
 	}
 
 	fn visit_macro(&mut self, input: &'ast syn::Macro) {
-		self.visit_tokenstream(input.tts.clone());
+		self.visit_tokenstream(input.tokens.clone());
 		visit::visit_macro(self, input);
 	}
 }

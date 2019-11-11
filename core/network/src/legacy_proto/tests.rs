@@ -17,6 +17,7 @@
 #![cfg(test)]
 
 use futures::{future, prelude::*, try_ready};
+use codec::{Encode, Decode};
 use libp2p::core::nodes::Substream;
 use libp2p::core::{ConnectedPoint, transport::boxed::Boxed, muxing::StreamMuxerBox};
 use libp2p::swarm::{Swarm, ProtocolsHandler, IntoProtocolsHandler};
@@ -24,9 +25,9 @@ use libp2p::swarm::{PollParameters, NetworkBehaviour, NetworkBehaviourAction};
 use libp2p::{PeerId, Multiaddr, Transport};
 use rand::seq::SliceRandom;
 use std::{io, time::Duration, time::Instant};
-use test_client::runtime::Block;
-use crate::message::generic::Message;
+use crate::message::Message;
 use crate::legacy_proto::{LegacyProto, LegacyProtoOut};
+use test_client::runtime::Block;
 
 /// Builds two nodes that have each other as bootstrap nodes.
 /// This is to be used only for testing, and a panic will happen if something goes wrong.
@@ -43,14 +44,27 @@ fn build_nodes()
 		.collect();
 
 	for index in 0 .. 2 {
+		let keypair = keypairs[index].clone();
 		let transport = libp2p::core::transport::MemoryTransport
-			.with_upgrade(libp2p::secio::SecioConfig::new(keypairs[index].clone()))
 			.and_then(move |out, endpoint| {
-				let peer_id = out.remote_key.into_peer_id();
-				libp2p::core::upgrade::apply(out.stream, libp2p::yamux::Config::default(), endpoint)
+				let secio = libp2p::secio::SecioConfig::new(keypair);
+				libp2p::core::upgrade::apply(
+					out,
+					secio,
+					endpoint,
+					libp2p::core::upgrade::Version::V1
+				)
+			})
+			.and_then(move |(peer_id, stream), endpoint| {
+				libp2p::core::upgrade::apply(
+					stream,
+					libp2p::yamux::Config::default(),
+					endpoint,
+					libp2p::core::upgrade::Version::V1
+				)
 					.map(|muxer| (peer_id, libp2p::core::muxing::StreamMuxerBox::new(muxer)))
 			})
-			.with_timeout(Duration::from_secs(20))
+			.timeout(Duration::from_secs(20))
 			.map_err(|err| io::Error::new(io::ErrorKind::Other, err))
 			.boxed();
 
@@ -101,12 +115,12 @@ fn build_nodes()
 
 /// Wraps around the `CustomBehaviour` network behaviour, and adds hardcoded node addresses to it.
 struct CustomProtoWithAddr {
-	inner: LegacyProto<Block, Substream<StreamMuxerBox>>,
+	inner: LegacyProto<Substream<StreamMuxerBox>>,
 	addrs: Vec<(PeerId, Multiaddr)>,
 }
 
 impl std::ops::Deref for CustomProtoWithAddr {
-	type Target = LegacyProto<Block, Substream<StreamMuxerBox>>;
+	type Target = LegacyProto<Substream<StreamMuxerBox>>;
 
 	fn deref(&self) -> &Self::Target {
 		&self.inner
@@ -121,8 +135,8 @@ impl std::ops::DerefMut for CustomProtoWithAddr {
 
 impl NetworkBehaviour for CustomProtoWithAddr {
 	type ProtocolsHandler =
-		<LegacyProto<Block, Substream<StreamMuxerBox>> as NetworkBehaviour>::ProtocolsHandler;
-	type OutEvent = <LegacyProto<Block, Substream<StreamMuxerBox>> as NetworkBehaviour>::OutEvent;
+		<LegacyProto<Substream<StreamMuxerBox>> as NetworkBehaviour>::ProtocolsHandler;
+	type OutEvent = <LegacyProto<Substream<StreamMuxerBox>> as NetworkBehaviour>::OutEvent;
 
 	fn new_handler(&mut self) -> Self::ProtocolsHandler {
 		self.inner.new_handler()
@@ -209,7 +223,7 @@ fn two_nodes_transfer_lots_of_packets() {
 					for n in 0 .. NUM_PACKETS {
 						service1.send_packet(
 							&peer_id,
-							Message::ChainSpecific(vec![(n % 256) as u8])
+							Message::<Block>::ChainSpecific(vec![(n % 256) as u8]).encode()
 						);
 					}
 				},
@@ -223,11 +237,16 @@ fn two_nodes_transfer_lots_of_packets() {
 		loop {
 			match try_ready!(service2.poll()) {
 				Some(LegacyProtoOut::CustomProtocolOpen { .. }) => {},
-				Some(LegacyProtoOut::CustomMessage { message: Message::ChainSpecific(message), .. }) => {
-					assert_eq!(message.len(), 1);
-					packet_counter += 1;
-					if packet_counter == NUM_PACKETS {
-						return Ok(Async::Ready(()))
+				Some(LegacyProtoOut::CustomMessage { message, .. }) => {
+					match Message::<Block>::decode(&mut &message[..]).unwrap() {
+						Message::<Block>::ChainSpecific(message) => {
+							assert_eq!(message.len(), 1);
+							packet_counter += 1;
+							if packet_counter == NUM_PACKETS {
+								return Ok(Async::Ready(()))
+							}
+						},
+						_ => panic!(),
 					}
 				}
 				_ => panic!(),
@@ -248,7 +267,7 @@ fn basic_two_nodes_requests_in_parallel() {
 		let mut to_send = Vec::new();
 		for _ in 0..200 { // Note: don't make that number too high or the CPU usage will explode.
 			let msg = (0..10).map(|_| rand::random::<u8>()).collect::<Vec<_>>();
-			to_send.push(Message::ChainSpecific(msg));
+			to_send.push(Message::<Block>::ChainSpecific(msg));
 		}
 		to_send
 	};
@@ -263,7 +282,7 @@ fn basic_two_nodes_requests_in_parallel() {
 			match try_ready!(service1.poll()) {
 				Some(LegacyProtoOut::CustomProtocolOpen { peer_id, .. }) => {
 					for msg in to_send.drain(..) {
-						service1.send_packet(&peer_id, msg);
+						service1.send_packet(&peer_id, msg.encode());
 					}
 				},
 				_ => panic!(),
@@ -276,7 +295,7 @@ fn basic_two_nodes_requests_in_parallel() {
 			match try_ready!(service2.poll()) {
 				Some(LegacyProtoOut::CustomProtocolOpen { .. }) => {},
 				Some(LegacyProtoOut::CustomMessage { message, .. }) => {
-					let pos = to_receive.iter().position(|m| *m == message).unwrap();
+					let pos = to_receive.iter().position(|m| m.encode() == message).unwrap();
 					to_receive.remove(pos);
 					if to_receive.is_empty() {
 						return Ok(Async::Ready(()))

@@ -124,6 +124,12 @@ impl<'a> From<&'a str> for Error {
 	}
 }
 
+impl From<block_builder::ApplyExtrinsicFailed> for Error {
+	fn from(err: block_builder::ApplyExtrinsicFailed) -> Self {
+		Self::ApplyExtrinsicFailed(err.0)
+	}
+}
+
 impl Error {
 	/// Chain a blockchain error.
 	pub fn from_blockchain(e: Box<Error>) -> Self {

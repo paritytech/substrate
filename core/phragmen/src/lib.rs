@@ -116,6 +116,7 @@ pub struct PhragmenResult<AccountId> {
 /// This, at the current version, resembles the `Exposure` defined in the staking SRML module, yet
 /// they do not necessarily have to be the same.
 #[derive(Default, RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub struct Support<AccountId> {
 	/// The amount of support as the effect of self-vote.
 	pub own: ExtendedBalance,
@@ -139,16 +140,17 @@ pub type SupportMap<A> = BTreeMap<A, Support<A>>;
 /// * `initial_candidates`: candidates list to be elected from.
 /// * `initial_voters`: voters list.
 /// * `stake_of`: something that can return the stake stake of a particular candidate or voter.
-/// * `self_vote`. If true, then each candidate will automatically vote for themselves with the a
-///   weight indicated by their stake. Note that when this is `true` candidates are filtered by
-/// having at least some backed stake from themselves.
+///
+/// This function does not strip out candidates who do not have any backing stake. It is the
+/// responsibility of the caller to make sure only those candidates who have a sensible economic
+/// value are passed in. From the perspective of this function, a candidate can easily be among the
+/// winner with no backing stake.
 pub fn elect<AccountId, Balance, FS, C>(
 	candidate_count: usize,
 	minimum_candidate_count: usize,
 	initial_candidates: Vec<AccountId>,
 	initial_voters: Vec<(AccountId, Vec<AccountId>)>,
 	stake_of: FS,
-	self_vote: bool,
 ) -> Option<PhragmenResult<AccountId>> where
 	AccountId: Default + Ord + Member,
 	Balance: Default + Copy + SimpleArithmetic,
@@ -168,36 +170,16 @@ pub fn elect<AccountId, Balance, FS, C>(
 	let num_voters = initial_candidates.len() + initial_voters.len();
 	let mut voters: Vec<Voter<AccountId>> = Vec::with_capacity(num_voters);
 
-	// collect candidates. self vote or filter might apply
-	let mut candidates = if self_vote {
-		// self vote. filter.
-		initial_candidates.into_iter().map(|who| {
-			let stake = stake_of(&who);
-			Candidate { who, approval_stake: to_votes(stake), ..Default::default() }
-		})
-		.filter(|c| !c.approval_stake.is_zero())
+	// Iterate once to create a cache of candidates indexes. This could be optimized by being
+	// provided by the call site.
+	let mut candidates = initial_candidates
+		.into_iter()
 		.enumerate()
-		.map(|(i, c)| {
-			voters.push(Voter {
-				who: c.who.clone(),
-				edges: vec![Edge { who: c.who.clone(), candidate_index: i, ..Default::default() }],
-				budget: c.approval_stake,
-				load: Rational128::zero(),
-			});
-			c_idx_cache.insert(c.who.clone(), i);
-			c
+		.map(|(idx, who)| {
+			c_idx_cache.insert(who.clone(), idx);
+			Candidate { who, ..Default::default() }
 		})
-		.collect::<Vec<Candidate<AccountId>>>()
-	} else {
-		// no self vote. just collect.
-		initial_candidates.into_iter()
-			.enumerate()
-			.map(|(idx, who)| {
-				c_idx_cache.insert(who.clone(), idx);
-				Candidate { who, ..Default::default() }
-			})
-			.collect::<Vec<Candidate<AccountId>>>()
-	};
+		.collect::<Vec<Candidate<AccountId>>>();
 
 	// early return if we don't have enough candidates
 	if candidates.len() < minimum_candidate_count { return None; }
@@ -289,37 +271,33 @@ pub fn elect<AccountId, Balance, FS, C>(
 	for n in &mut voters {
 		let mut assignment = (n.who.clone(), vec![]);
 		for e in &mut n.edges {
-			if let Some(c) = elected_candidates.iter().cloned().find(|(c, _)| *c == e.who) {
-				// if self_vote == false, this branch should always be executed as we want to
-				// collect all nominations
-				if c.0 != n.who || !self_vote  {
-					let per_bill_parts =
-					{
-						if n.load == e.load {
-							// Full support. No need to calculate.
-							Perbill::accuracy().into()
+			if elected_candidates.iter().position(|(ref c, _)| *c == e.who).is_some() {
+				let per_bill_parts =
+				{
+					if n.load == e.load {
+						// Full support. No need to calculate.
+						Perbill::accuracy().into()
+					} else {
+						if e.load.d() == n.load.d() {
+							// return e.load / n.load.
+							let desired_scale: u128 = Perbill::accuracy().into();
+							multiply_by_rational(
+								desired_scale,
+								e.load.n(),
+								n.load.n(),
+							).unwrap_or(Bounded::max_value())
 						} else {
-							if e.load.d() == n.load.d() {
-								// return e.load / n.load.
-								let desired_scale: u128 = Perbill::accuracy().into();
-								multiply_by_rational(
-									desired_scale,
-									e.load.n(),
-									n.load.n(),
-								).unwrap_or(Bounded::max_value())
-							} else {
-								// defensive only. Both edge and nominator loads are built from
-								// scores, hence MUST have the same denominator.
-								Zero::zero()
-							}
+							// defensive only. Both edge and nominator loads are built from
+							// scores, hence MUST have the same denominator.
+							Zero::zero()
 						}
-					};
-					// safer to .min() inside as well to argue as u32 is safe.
-					let per_thing = Perbill::from_parts(
-						per_bill_parts.min(Perbill::accuracy().into()) as u32
-					);
-					assignment.1.push((e.who.clone(), per_thing));
-				}
+					}
+				};
+				// safer to .min() inside as well to argue as u32 is safe.
+				let per_thing = Perbill::from_parts(
+					per_bill_parts.min(Perbill::accuracy().into()) as u32
+				);
+				assignment.1.push((e.who.clone(), per_thing));
 			}
 		}
 
@@ -367,7 +345,6 @@ pub fn build_support_map<Balance, AccountId, FS, C>(
 	elected_stashes: &Vec<AccountId>,
 	assignments: &Vec<(AccountId, Vec<PhragmenAssignment<AccountId>>)>,
 	stake_of: FS,
-	assume_self_vote: bool,
 ) -> SupportMap<AccountId> where
 	AccountId: Default + Ord + Member,
 	Balance: Default + Copy + SimpleArithmetic,
@@ -379,11 +356,7 @@ pub fn build_support_map<Balance, AccountId, FS, C>(
 	let mut supports = <SupportMap<AccountId>>::new();
 	elected_stashes
 		.iter()
-		.map(|e| (e, if assume_self_vote { to_votes(stake_of(e)) } else { Zero::zero() } ))
-		.for_each(|(e, s)| {
-			let item = Support { own: s, total: s, ..Default::default() };
-			supports.insert(e.clone(), item);
-		});
+		.for_each(|e| { supports.insert(e.clone(), Default::default()); });
 
 	// build support struct.
 	for (n, assignment) in assignments.iter() {
@@ -393,10 +366,20 @@ pub fn build_support_map<Balance, AccountId, FS, C>(
 			// per-things to be sound.
 			let other_stake = *per_thing * nominator_stake;
 			if let Some(support) = supports.get_mut(c) {
-				// For an astronomically rich validator with more astronomically rich
-				// set of nominators, this might saturate.
-				support.total = support.total.saturating_add(other_stake);
-				support.others.push((n.clone(), other_stake));
+				if c == n {
+					// This is a nomination from `n` to themselves. This will increase both the
+					// `own` and `total` field.
+					debug_assert!(*per_thing == Perbill::one()); // TODO: deal with this: do we want it?
+					support.own = support.own.saturating_add(other_stake);
+					support.total = support.total.saturating_add(other_stake);
+				} else {
+					// This is a nomination from `n` to someone else. Increase `total` and add an entry
+					// inside `others`.
+					// For an astronomically rich validator with more astronomically rich
+					// set of nominators, this might saturate.
+					support.total = support.total.saturating_add(other_stake);
+					support.others.push((n.clone(), other_stake));
+				}
 			}
 		}
 	}

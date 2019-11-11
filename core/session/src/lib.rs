@@ -21,11 +21,9 @@
 use rstd::vec::Vec;
 
 #[cfg(feature = "std")]
-use sr_primitives::traits::{ProvideRuntimeApi, Block as BlockT};
-#[cfg(feature = "std")]
-use primitives::{H256, Blake2Hasher};
+use sr_primitives::{generic::BlockId, traits::{ProvideRuntimeApi, Block as BlockT}};
 
-client::decl_runtime_apis! {
+sr_api::decl_runtime_apis! {
 	/// Session keys runtime api.
 	pub trait SessionKeys {
 		/// Generate a set of session keys with optionally using the given seed.
@@ -39,28 +37,23 @@ client::decl_runtime_apis! {
 	}
 }
 
-/// Generate the initial session keys with the given seeds and store them in
+/// Generate the initial session keys with the given seeds, at the given block and store them in
 /// the client's keystore.
 #[cfg(feature = "std")]
-pub fn generate_initial_session_keys<B, E, Block, RA>(
-	client: std::sync::Arc<client::Client<B, E, Block, RA>>,
+pub fn generate_initial_session_keys<Block, T>(
+	client: std::sync::Arc<T>,
+	at: &BlockId<Block>,
 	seeds: Vec<String>,
-) -> Result<(), client::error::Error>
+) -> Result<(), <<T as ProvideRuntimeApi>::Api as sr_api::ApiExt<Block>>::Error>
 where
-	B: client::backend::Backend<Block, Blake2Hasher>,
-	E: client::CallExecutor<Block, Blake2Hasher>,
-	Block: BlockT<Hash=H256>,
-	client::Client<B, E, Block, RA>: ProvideRuntimeApi,
-	<client::Client<B, E, Block, RA> as ProvideRuntimeApi>::Api: SessionKeys<Block>,
+	Block: BlockT,
+	T: ProvideRuntimeApi,
+	<T as ProvideRuntimeApi>::Api: SessionKeys<Block>,
 {
-	let info = client.info().chain;
 	let runtime_api = client.runtime_api();
 
 	for seed in seeds {
-		runtime_api.generate_session_keys(
-			&sr_primitives::generic::BlockId::Number(info.best_number),
-			Some(seed.as_bytes().to_vec()),
-		)?;
+		runtime_api.generate_session_keys(at, Some(seed.as_bytes().to_vec()))?;
 	}
 
 	Ok(())

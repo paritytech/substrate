@@ -28,12 +28,11 @@ use crate::service::{ExHashT, TransactionPool};
 use bitflags::bitflags;
 use consensus::{block_validation::BlockAnnounceValidator, import_queue::ImportQueue};
 use sr_primitives::traits::{Block as BlockT};
-use std::sync::Arc;
 use libp2p::identity::{Keypair, ed25519};
 use libp2p::wasm_ext;
 use libp2p::{PeerId, Multiaddr, multiaddr};
-use std::error::Error;
-use std::{io::{self, Write}, iter, fmt, fs, net::Ipv4Addr, path::{Path, PathBuf}};
+use core::{fmt, iter};
+use std::{error::Error, fs, io::{self, Write}, net::Ipv4Addr, path::{Path, PathBuf}, sync::Arc};
 use zeroize::Zeroize;
 
 /// Network initialization parameters.
@@ -82,7 +81,7 @@ pub struct Params<B: BlockT, S, H: ExHashT> {
 	pub specialization: S,
 
 	/// Type to check incoming block announcements.
-	pub block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>
+	pub block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>,
 }
 
 bitflags! {
@@ -234,7 +233,7 @@ impl From<multiaddr::Error> for ParseErr {
 }
 
 /// Network service configuration.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct NetworkConfiguration {
 	/// Directory path to store general network configuration. None means nothing will be saved.
 	pub config_path: Option<String>,
@@ -262,6 +261,8 @@ pub struct NetworkConfiguration {
 	pub node_name: String,
 	/// Configuration for the transport layer.
 	pub transport: TransportConfig,
+	/// Maximum number of peers to ask the same blocks in parallel.
+	pub max_parallel_downloads: u32,
 }
 
 impl Default for NetworkConfiguration {
@@ -281,8 +282,10 @@ impl Default for NetworkConfiguration {
 			node_name: "unknown".into(),
 			transport: TransportConfig::Normal {
 				enable_mdns: false,
+				allow_private_ipv4: true,
 				wasm_external_transport: None,
 			},
+			max_parallel_downloads: 5,
 		}
 	}
 }
@@ -317,13 +320,18 @@ impl NetworkConfiguration {
 }
 
 /// Configuration for the transport layer.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum TransportConfig {
 	/// Normal transport mode.
 	Normal {
 		/// If true, the network will use mDNS to discover other libp2p nodes on the local network
 		/// and connect to them if they support the same chain.
 		enable_mdns: bool,
+
+		/// If true, allow connecting to private IPv4 addresses (as defined in
+		/// [RFC1918](https://tools.ietf.org/html/rfc1918)), unless the address has been passed in
+		/// [`NetworkConfiguration::reserved_nodes`] or [`NetworkConfiguration::boot_nodes`].
+		allow_private_ipv4: bool,
 
 		/// Optional external implementation of a libp2p transport. Used in WASM contexts where we
 		/// need some binding between the networking provided by the operating system or environment
@@ -362,7 +370,7 @@ impl NonReservedPeerMode {
 /// The configuration of a node's secret key, describing the type of key
 /// and how it is obtained. A node's identity keypair is the result of
 /// the evaluation of the node key configuration.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum NodeKeyConfig {
 	/// A Ed25519 secret key configuration.
 	Ed25519(Secret<ed25519::SecretKey>)
@@ -384,6 +392,16 @@ pub enum Secret<K> {
 	File(PathBuf),
 	/// Always generate a new secret key `K`.
 	New
+}
+
+impl<K> fmt::Debug for Secret<K> {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			Secret::Input(_) => f.debug_tuple("Secret::Input").finish(),
+			Secret::File(path) => f.debug_tuple("Secret::File").field(path).finish(),
+			Secret::New => f.debug_tuple("Secret::New").finish(),
+		}
+	}
 }
 
 impl NodeKeyConfig {

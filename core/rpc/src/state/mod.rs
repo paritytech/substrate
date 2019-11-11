@@ -24,17 +24,10 @@ mod tests;
 
 use std::sync::Arc;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
-use rpc::{
-	Result as RpcResult,
-	futures::Future,
-};
+use rpc::{Result as RpcResult, futures::Future};
 
 use api::Subscriptions;
-use client::{
-	Client, CallExecutor,
-	runtime_api::Metadata,
-	light::{blockchain::RemoteBlockchain, fetcher::Fetcher},
-};
+use client::{Client, CallExecutor, light::{blockchain::RemoteBlockchain, fetcher::Fetcher}};
 use primitives::{
 	Blake2Hasher, Bytes, H256,
 	storage::{StorageKey, StorageData, StorageChangeSet},
@@ -43,6 +36,8 @@ use runtime_version::RuntimeVersion;
 use sr_primitives::{
 	traits::{Block as BlockT, ProvideRuntimeApi},
 };
+
+use sr_api::Metadata;
 
 use self::error::{Error, FutureResult};
 
@@ -188,7 +183,8 @@ pub fn new_full<B, E, Block: BlockT, RA>(
 		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static + Clone,
 		RA: Send + Sync + 'static,
 		Client<B, E, Block, RA>: ProvideRuntimeApi,
-		<Client<B, E, Block, RA> as ProvideRuntimeApi>::Api: Metadata<Block>,
+		<Client<B, E, Block, RA> as ProvideRuntimeApi>::Api:
+			Metadata<Block, Error = client::error::Error>,
 {
 	State {
 		backend: Box::new(self::state_full::FullState::new(client, subscriptions)),

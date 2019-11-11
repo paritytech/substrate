@@ -20,9 +20,11 @@ use serde::{Serialize, Serializer, Deserialize, de::Error as DeError, Deserializ
 use std::{fmt::Debug, ops::Deref, fmt, cell::RefCell};
 use crate::codec::{Codec, Encode, Decode};
 use crate::traits::{
-	self, Checkable, Applyable, BlakeTwo256, OpaqueKeys, ValidateUnsigned,
+	self, Checkable, Applyable, BlakeTwo256, OpaqueKeys,
 	SignedExtension, Dispatchable,
 };
+#[allow(deprecated)]
+use crate::traits::ValidateUnsigned;
 use crate::{generic, KeyTypeId, ApplyResult};
 use crate::weights::{GetDispatchInfo, DispatchInfo};
 pub use primitives::{H256, sr25519};
@@ -88,7 +90,7 @@ impl app_crypto::RuntimeAppPublic for UintAuthorityId {
 		ALL_KEYS.with(|l| l.borrow().clone())
 	}
 
-	fn generate_pair(_: Option<&str>) -> Self {
+	fn generate_pair(_: Option<Vec<u8>>) -> Self {
 		use rand::RngCore;
 		UintAuthorityId(rand::thread_rng().next_u64())
 	}
@@ -323,6 +325,7 @@ impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 	fn sender(&self) -> Option<&Self::AccountId> { self.0.as_ref().map(|x| &x.0) }
 
 	/// Checks to see if this is a valid *transaction*. It returns information on it if so.
+	#[allow(deprecated)] // Allow ValidateUnsigned
 	fn validate<U: ValidateUnsigned<Call=Self::Call>>(
 		&self,
 		_info: DispatchInfo,
@@ -333,7 +336,8 @@ impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 
 	/// Executes all necessary logic needed prior to dispatch and deconstructs into function call,
 	/// index and sender.
-	fn apply(
+	#[allow(deprecated)] // Allow ValidateUnsigned
+	fn apply<U: ValidateUnsigned<Call=Self::Call>>(
 		self,
 		info: DispatchInfo,
 		len: usize,

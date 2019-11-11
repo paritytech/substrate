@@ -205,7 +205,7 @@ impl Trait for Test {
 	type Currency = balances::Module<Self>;
 	type Time = timestamp::Module<Self>;
 	type CurrencyToVote = CurrencyToVoteHandler;
-	type OnRewardMinted = ();
+	type RewardRemainder = ();
 	type Event = ();
 	type Slash = ();
 	type Reward = ();
@@ -456,14 +456,12 @@ pub fn start_era(era_index: EraIndex) {
 }
 
 pub fn current_total_payout_for_duration(duration: u64) -> u64 {
-	let res = inflation::compute_total_payout(
+	inflation::compute_total_payout(
 		<Test as Trait>::RewardCurve::get(),
 		<Module<Test>>::slot_stake() * 2,
 		Balances::total_issuance(),
 		duration,
-	);
-
-	res
+	).0
 }
 
 pub fn reward_all_elected() {

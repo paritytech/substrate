@@ -21,7 +21,7 @@ use codec::{Encode, Decode};
 
 /// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
 pub fn get<T: Decode + Sized>(key: &[u8]) -> Option<T> {
-	runtime_io::storage(key).map(|val| {
+	runtime_io::storage::get(key).map(|val| {
 		Decode::decode(&mut &val[..]).expect("storage is not null, therefore must be a valid type")
 	})
 }
@@ -46,7 +46,7 @@ pub fn get_or_else<T: Decode + Sized, F: FnOnce() -> T>(key: &[u8], default_valu
 
 /// Put `value` in storage under `key`.
 pub fn put<T: Encode + ?Sized>(key: &[u8], value: &T) {
-	value.using_encoded(|slice| runtime_io::set_storage(key, slice));
+	value.using_encoded(|slice| runtime_io::storage::set(key, slice));
 }
 
 /// Remove `key` from storage, returning its value if it had an explicit entry or `None` otherwise.
@@ -78,25 +78,25 @@ pub fn take_or_else<T: Decode + Sized, F: FnOnce() -> T>(key: &[u8], default_val
 
 /// Check to see if `key` has an explicit entry in storage.
 pub fn exists(key: &[u8]) -> bool {
-	runtime_io::read_storage(key, &mut [0;0][..], 0).is_some()
+	runtime_io::storage::read(key, &mut [0;0][..], 0).is_some()
 }
 
 /// Ensure `key` has no explicit entry in storage.
 pub fn kill(key: &[u8]) {
-	runtime_io::clear_storage(key);
+	runtime_io::storage::clear(key);
 }
 
 /// Ensure keys with the given `prefix` have no entries in storage.
 pub fn kill_prefix(prefix: &[u8]) {
-	runtime_io::clear_prefix(prefix);
+	runtime_io::storage::clear_prefix(prefix);
 }
 
 /// Get a Vec of bytes from storage.
 pub fn get_raw(key: &[u8]) -> Option<Vec<u8>> {
-	runtime_io::storage(key)
+	runtime_io::storage::get(key)
 }
 
 /// Put a raw byte slice into storage.
 pub fn put_raw(key: &[u8], value: &[u8]) {
-	runtime_io::set_storage(key, value)
+	runtime_io::storage::set(key, value)
 }

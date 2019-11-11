@@ -4,6 +4,15 @@ version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
+[features]
+default = ["rocksdb"]
+# The RocksDB feature activates the RocksDB database backend. If it is not activated, and you pass
+# a path to a database, an error will be produced at runtime.
+rocksdb = ["client_db/kvdb-rocksdb"]
+wasmtime = [
+	"substrate-executor/wasmtime",
+]
+
 [dependencies]
 derive_more = "0.15.0"
 futures = "0.1.29"
@@ -29,7 +38,9 @@ consensus_common = { package = "substrate-consensus-common", path = "../../core/
 network = { package = "substrate-network", path = "../../core/network" }
 chain-spec = { package = "substrate-chain-spec", path = "../chain-spec" }
 client = { package = "substrate-client", path = "../../core/client" }
-client_db = { package = "substrate-client-db", path = "../../core/client/db", features = ["kvdb-rocksdb"] }
+sr-api = { path = "../sr-api" }
+tx-pool-api = { package = "substrate-transaction-pool-runtime-api", path = "../transaction-pool/runtime-api" }
+client_db = { package = "substrate-client-db", path = "../../core/client/db" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 substrate-executor = { path = "../../core/executor" }
 transaction_pool = { package = "substrate-transaction-pool", path = "../../core/transaction-pool" }
