@@ -53,7 +53,7 @@ ${PACKAGES[$I]}
 
 
 EOF
-	I+=1
+	I=$I+1
 done
 
 exit ${#VIOLATIONS[@]}
