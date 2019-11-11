@@ -145,6 +145,14 @@ test-linux-stable:                 &test-linux
     paths:
       - ${CI_COMMIT_SHORT_SHA}_warnings.log
 
+test-dependency-rules:             &test-linux
+  stage:                           test
+  <<:                              *docker-env
+  except:
+    variables:
+      - $DEPLOY_TAG
+  script:
+    - .maintain/ensure-deps.sh
 
 test-srml-staking:                 &test-srml-staking
   stage:                           test
