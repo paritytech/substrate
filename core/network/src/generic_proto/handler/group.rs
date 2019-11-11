@@ -24,7 +24,7 @@ use bytes::BytesMut;
 use futures::prelude::*;
 use libp2p::core::{ConnectedPoint, PeerId};
 use libp2p::core::either::{EitherError, EitherOutput};
-use libp2p::core::upgrade::{EitherUpgrade, ReadOneError, InboundUpgrade, OutboundUpgrade};
+use libp2p::core::upgrade::{EitherUpgrade, ReadOneError, UpgradeError, InboundUpgrade, OutboundUpgrade};
 use libp2p::swarm::{
 	ProtocolsHandler, ProtocolsHandlerEvent,
 	IntoProtocolsHandler,
@@ -32,6 +32,7 @@ use libp2p::swarm::{
 	ProtocolsHandlerUpgrErr,
 	SubstreamProtocol,
 };
+use log::error;
 use std::{borrow::Cow, error, io};
 use tokio_io::{AsyncRead, AsyncWrite};
 
@@ -61,6 +62,9 @@ pub struct NotifsHandler<TSubstream> {
 
 	/// Handler for backwards-compatibility.
 	legacy: LegacyProtoHandler<TSubstream>,
+
+	/// True if the handler is in the enabled state.
+	enabled: bool,
 }
 
 impl<TSubstream> IntoProtocolsHandler for NotifsHandlerProto<TSubstream>
@@ -88,6 +92,7 @@ where
 				.map(|p| p.into_handler(remote_peer_id, connected_point))
 				.collect(),
 			legacy: self.legacy.into_handler(remote_peer_id, connected_point),
+			enabled: false,
 		}
 	}
 }
@@ -170,8 +175,8 @@ where TSubstream: AsyncRead + AsyncWrite + 'static {
 		<LegacyProtoHandler<TSubstream> as ProtocolsHandler>::Error,
 	>;
 	type InboundProtocol = SelectUpgrade<UpgradeCollec<NotificationsIn>, RegisteredProtocol>;
-	type OutboundProtocol = EitherUpgrade<UpgradeCollec<NotificationsOut>, RegisteredProtocol>;
-	type OutboundOpenInfo = ();
+	type OutboundProtocol = EitherUpgrade<NotificationsOut, RegisteredProtocol>;
+	type OutboundOpenInfo = Option<usize>;	// Index within the `out_handlers`; None for legacy
 
 	fn listen_protocol(&self) -> SubstreamProtocol<Self::InboundProtocol> {
 		let in_handlers = self.in_handlers.iter()
@@ -198,25 +203,28 @@ where TSubstream: AsyncRead + AsyncWrite + 'static {
 	fn inject_fully_negotiated_outbound(
 		&mut self,
 		out: <Self::OutboundProtocol as OutboundUpgrade<TSubstream>>::Output,
-		_: Self::OutboundOpenInfo
+		num: Self::OutboundOpenInfo
 	) {
-		match out {
-			EitherOutput::First((out, num)) =>
+		match (out, num) {
+			(EitherOutput::First(out), Some(num)) =>
 				self.out_handlers[num].inject_fully_negotiated_outbound(out, ()),
-			EitherOutput::Second(out) =>
+			(EitherOutput::Second(out), None) =>
 				self.legacy.inject_fully_negotiated_outbound(out, ()),
+			_ => error!("inject_fully_negotiated_outbound called with wrong parameters"),
 		}
 	}
 
 	fn inject_event(&mut self, message: NotifsHandlerIn) {
 		match message {
 			NotifsHandlerIn::Enable => {
+				self.enabled = true;
 				self.legacy.inject_event(LegacyProtoHandlerIn::Enable);
 				for handler in &mut self.out_handlers {
 					handler.inject_event(NotifsOutHandlerIn::Enable);
 				}
 			},
 			NotifsHandlerIn::Disable => {
+				self.enabled = false;
 				self.legacy.inject_event(LegacyProtoHandlerIn::Disable);
 				for handler in &mut self.out_handlers {
 					handler.inject_event(NotifsOutHandlerIn::Disable);
@@ -224,7 +232,7 @@ where TSubstream: AsyncRead + AsyncWrite + 'static {
 			},
 			NotifsHandlerIn::Send { message } => {
 				for handler in &mut self.out_handlers {
-					if handler.protocol_name() == b"/substrate/foo" {	// FIXME:
+					if handler.is_open() && handler.protocol_name() == b"/substrate/foo" {	// FIXME:
 						handler.inject_event(NotifsOutHandlerIn::Send(message));
 						return;
 					}
@@ -235,8 +243,48 @@ where TSubstream: AsyncRead + AsyncWrite + 'static {
 		}
 	}
 
-	fn inject_dial_upgrade_error(&mut self, _: (), err: ProtocolsHandlerUpgrErr<EitherError<(ReadOneError, usize), io::Error>>) {
-		unimplemented!()		// TODO:
+	fn inject_dial_upgrade_error(
+		&mut self,
+		num: Option<usize>,
+		err: ProtocolsHandlerUpgrErr<EitherError<ReadOneError, io::Error>>
+	) {
+		match (err, num) {
+			(ProtocolsHandlerUpgrErr::Timeout, Some(num)) =>
+				self.out_handlers[num].inject_dial_upgrade_error(
+					(),
+					ProtocolsHandlerUpgrErr::Timeout
+				),
+			(ProtocolsHandlerUpgrErr::Timeout, None) =>
+				self.legacy.inject_dial_upgrade_error((), ProtocolsHandlerUpgrErr::Timeout),
+			(ProtocolsHandlerUpgrErr::Timer, Some(num)) =>
+				self.out_handlers[num].inject_dial_upgrade_error(
+					(),
+					ProtocolsHandlerUpgrErr::Timer
+				),
+			(ProtocolsHandlerUpgrErr::Timer, None) =>
+				self.legacy.inject_dial_upgrade_error((), ProtocolsHandlerUpgrErr::Timer),
+			(ProtocolsHandlerUpgrErr::Upgrade(UpgradeError::Select(err)), Some(num)) =>
+				self.out_handlers[num].inject_dial_upgrade_error(
+					(),
+					ProtocolsHandlerUpgrErr::Upgrade(UpgradeError::Select(err))
+				),
+			(ProtocolsHandlerUpgrErr::Upgrade(UpgradeError::Select(err)), None) =>
+				self.legacy.inject_dial_upgrade_error(
+					(),
+					ProtocolsHandlerUpgrErr::Upgrade(UpgradeError::Select(err))
+				),
+			(ProtocolsHandlerUpgrErr::Upgrade(UpgradeError::Apply(EitherError::A(err))), Some(num)) =>
+				self.out_handlers[num].inject_dial_upgrade_error(
+					(),
+					ProtocolsHandlerUpgrErr::Upgrade(UpgradeError::Apply(err))
+				),
+			(ProtocolsHandlerUpgrErr::Upgrade(UpgradeError::Apply(EitherError::B(err))), None) =>
+				self.legacy.inject_dial_upgrade_error(
+					(),
+					ProtocolsHandlerUpgrErr::Upgrade(UpgradeError::Apply(err))
+				),
+			_ => error!("inject_dial_upgrade_error called with bad parameters"),
+		}
 	}
 
 	fn connection_keep_alive(&self) -> KeepAlive {
@@ -272,40 +320,51 @@ where TSubstream: AsyncRead + AsyncWrite + 'static {
 		ProtocolsHandlerEvent<Self::OutboundProtocol, Self::OutboundOpenInfo, Self::OutEvent>,
 		Self::Error,
 	> {
-		for handler in &mut self.in_handlers {
-			if let Async::Ready(v) = handler.poll().map_err(|e| EitherError::A(EitherError::A(e)))? {
-				unimplemented!() // TODO: return Ok(Async::Ready(v));
+		for (handler_num, handler) in self.in_handlers.iter_mut().enumerate() {
+			if let Async::Ready(ev) = handler.poll().map_err(|e| EitherError::A(EitherError::A(e)))? {
+				match ev {
+					ProtocolsHandlerEvent::OutboundSubstreamRequest { protocol, info: () } =>
+						error!("Incoming substream handler tried to open a substream"),
+					ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::OpenRequest) =>
+						if self.enabled {
+							panic!();
+							// TODO: also open outbound
+							//handler.inject_event(NotifsInHandlerIn::Accept(Vec::new()));		// TODO: message
+						} else {
+							handler.inject_event(NotifsInHandlerIn::Refuse);
+						},
+					ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::Closed) => unimplemented!(),
+					ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::Notif(msg)) => unimplemented!(),
+				}
 			}
 		}
 
-		for handler in &mut self.out_handlers {
+		for (handler_num, handler) in self.out_handlers.iter_mut().enumerate() {
 			if let Async::Ready(ev) = handler.poll().map_err(|e| EitherError::A(EitherError::B(e)))? {
 				match ev {
 					ProtocolsHandlerEvent::OutboundSubstreamRequest { protocol, info: () } =>
-						return ProtocolsHandlerEvent::OutboundSubstreamRequest {
-							protocol: SubstreamProtocol::new(protocol.map_upgrade(EitherUpgrade::A)),
-							info: (),
-						};
+						return Ok(Async::Ready(ProtocolsHandlerEvent::OutboundSubstreamRequest {
+							protocol: protocol.map_upgrade(EitherUpgrade::A),
+							info: Some(handler_num),
+						})),
+					// TODO:
+					/*ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Open { .. }) =>
+						return ProtocolsHandlerEvent::Custom(NotifsHandlerOut::CustomProtocolOpen { version }),
+					ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Closed) =>
+						return ProtocolsHandlerEvent::Custom(NotifsHandlerOut::CustomProtocolClosed { reason }),
+					ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Refused) =>
+						return ProtocolsHandlerEvent::Custom(NotifsHandlerOut::CustomMessage { message }),
+					ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::ProtocolError { is_severe, error }) =>
+						return ProtocolsHandlerEvent::Custom(NotifsHandlerOut::ProtocolError { is_severe, error }),*/
+					_ => {}
 				}
-				return Ok(Async::Ready(ev
-					.map_protocol(EitherUpgrade::A)
-					.map_custom(|ev| match ev {
-						NotifsOutHandlerOut::Open { .. } =>
-							NotifsHandlerOut::CustomProtocolOpen { version },
-						NotifsOutHandlerOut::Closed =>
-							NotifsHandlerOut::CustomProtocolClosed { reason },
-						NotifsOutHandlerOut::Refused =>
-							NotifsHandlerOut::CustomMessage { message },
-						NotifsOutHandlerOut::Clogged { .. } => {},
-						NotifsOutHandlerOut::ProtocolError { is_severe, error } =>
-							NotifsHandlerOut::ProtocolError { is_severe, error },
-					})));
 			}
 		}
 
 		if let Async::Ready(ev) = self.legacy.poll().map_err(EitherError::B)? {
 			return Ok(Async::Ready(ev
 				.map_protocol(EitherUpgrade::B)
+				.map_outbound_open_info(|()| None)
 				.map_custom(|ev| match ev {
 					LegacyProtoHandlerOut::CustomProtocolOpen { version } =>
 						NotifsHandlerOut::CustomProtocolOpen { version },

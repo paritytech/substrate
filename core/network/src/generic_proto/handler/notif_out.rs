@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::generic_proto::upgrade::NotificationsOut;
+use crate::generic_proto::upgrade::{NotificationsOut, NotificationsOutSubstream};
 use futures::prelude::*;
 use libp2p::core::{ConnectedPoint, PeerId, Endpoint};
 use libp2p::core::upgrade::{ReadOneError, DeniedUpgrade, InboundUpgrade, OutboundUpgrade};
@@ -120,7 +120,12 @@ enum State {
 
 	/// The handler is disabled. A substream is open and needs to be closed.
 	// TODO: needed?
-	DisabledOpen(()),
+	DisabledOpen(NotificationsOutSubstream),
+
+	/// The handler is disabled but we are still trying to open a substream with the remote.
+	///
+	/// If the handler gets enabled again, we can immediately switch to `Opening`.
+	DisabledOpening,
 
 	/// The handler is enabled and we are trying to open a substream with the remote.
 	Opening,
@@ -130,7 +135,7 @@ enum State {
 	Refused,
 
 	/// The handler is enabled and substream is open.
-	Open(()),
+	Open(NotificationsOutSubstream),
 
 	/// Poisoned state. Shouldn't be found in the wild.
 	Poisoned,
@@ -176,6 +181,7 @@ impl<TSubstream> NotifsOutHandler<TSubstream> {
 	pub fn is_open(&self) -> bool {
 		match &self.state {
 			State::Disabled => false,
+			State::DisabledOpening => false,
 			State::DisabledOpen(_) => true,
 			State::Opening => false,
 			State::Refused => false,
@@ -209,15 +215,27 @@ where TSubstream: AsyncRead + AsyncWrite + 'static {
 		proto: <Self::InboundProtocol as InboundUpgrade<TSubstream>>::Output
 	) {
 		// We should never reach here. `proto` is a `Void`.
-		match proto {}
+		void::unreachable(proto)
 	}
 
 	fn inject_fully_negotiated_outbound(
 		&mut self,
-		out: <Self::OutboundProtocol as OutboundUpgrade<TSubstream>>::Output,
-		_: Self::OutboundOpenInfo
+		(handshake_msg, sub): <Self::OutboundProtocol as OutboundUpgrade<TSubstream>>::Output,
+		_: ()
 	) {
-		unimplemented!()
+		match mem::replace(&mut self.state, State::Poisoned) {
+			State::Opening => {
+				let ev = NotifsOutHandlerOut::Open { handshake: handshake_msg };
+				self.events_queue.push(ProtocolsHandlerEvent::Custom(ev));
+				self.state = State::Open(sub);
+			},
+			// If the handler was disabled while we were negotiating the protocol, immediately
+			// close it.
+			State::DisabledOpening => self.state = State::Disabled,
+			State::Disabled | State::Refused | State::Open(_) | State::DisabledOpen(_) =>
+				error!("State mismatch in notifications handler: substream already open"),
+			State::Poisoned => error!("Notifications handler in a poisoned state"),
+		}
 	}
 
 	fn inject_event(&mut self, message: NotifsOutHandlerIn) {
@@ -232,50 +250,41 @@ where TSubstream: AsyncRead + AsyncWrite + 'static {
 						});
 						self.state = State::Opening;
 					},
+					State::DisabledOpening => self.state = State::Opening,
 					State::DisabledOpen(sub) => self.state = State::Open(sub),
-					State::Opening | State::Refused | State::Open(_) => {
-						error!("Tried to enable notifications handler that was already enabled");
-						return;
-					},
-					State::Poisoned => {
-						error!("Notifications handler in a poisoned state");
-						return;
-					},
+					State::Opening | State::Refused | State::Open(_) =>
+						error!("Tried to enable notifications handler that was already enabled"),
+					State::Poisoned => error!("Notifications handler in a poisoned state"),
 				}
 			},
 			NotifsOutHandlerIn::Disable => {
 				match mem::replace(&mut self.state, State::Poisoned) {
-					State::Disabled => {
-						error!("Tried to disable notifications handler that was already disabled");
-						return;
-					},
+					State::Disabled | State::DisabledOpening =>
+						error!("Tried to disable notifications handler that was already disabled"),
 					State::DisabledOpen(sub) => self.state = State::Open(sub),
-					State::Opening | State::Refused => {
-						self.state = State::Disabled;
-						return;
-					},
-					State::Open(sub) => {
-						self.state = State::DisabledOpen(sub);
-						return;
-					}
-					State::Poisoned => {
-						error!("Notifications handler in a poisoned state");
-						return;
-					},
+					State::Opening => self.state = State::DisabledOpening,
+					State::Refused => self.state = State::Disabled,
+					State::Open(sub) => self.state = State::DisabledOpen(sub),
+					State::Poisoned => error!("Notifications handler in a poisoned state"),
 				}
 			},
 			NotifsOutHandlerIn::Send(msg) => {
-				unimplemented!()
+				if let State::Open(sub) = &self.state {
+					unimplemented!()
+				}
 			},
 		}
 	}
 
 	fn inject_dial_upgrade_error(&mut self, _: (), err: ProtocolsHandlerUpgrErr<ReadOneError>) {
-		unimplemented!()		// TODO:
-		/*self.events_queue.push(ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::ProtocolError {
-			is_severe,
-			error: Box::new(err),
-		}));*/
+		match mem::replace(&mut self.state, State::Poisoned) {
+			State::Disabled => {},
+			State::DisabledOpen(_) | State::Refused | State::Open(_) =>
+				error!("State mismatch in NotificationsOut"),
+			State::Opening => self.state = State::Refused,
+			State::DisabledOpening => self.state = State::Disabled,
+			State::Poisoned => error!("Notifications handler in a poisoned state"),
+		}
 	}
 
 	fn connection_keep_alive(&self) -> KeepAlive {
@@ -304,6 +313,7 @@ where
 {
 	fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
 		f.debug_struct("NotifsOutHandler")
+			.field("open", &self.is_open())
 			.finish()
 	}
 }

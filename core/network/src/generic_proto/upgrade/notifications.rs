@@ -57,6 +57,19 @@ pub struct NotificationsOut {
 	protocol_name: Cow<'static, [u8]>,
 }
 
+/// A substream for incoming notification messages.
+///
+/// When creating, this struct starts in a state in which we must first send back a handshake
+/// message to the remote. No message will come before this has been done.
+pub struct NotificationsInSubstream<TSubstream> {
+	socket: Negotiated<TSubstream>,
+	handshake_sent: bool,
+}
+
+pub struct NotificationsOutSubstream {
+
+}
+
 impl NotificationsIn {
 	/// Builds a new potential upgrade.
 	// TODO: don't send back the handshake message; instead the user should be able to choose
@@ -105,23 +118,26 @@ impl UpgradeInfo for NotificationsOut {
 impl<TSubstream> InboundUpgrade<TSubstream> for NotificationsIn
 where TSubstream: AsyncRead + AsyncWrite + 'static,
 {
-	type Output = Vec<u8>;
-	type Future = Box<dyn Future<Item = Self::Output, Error = Self::Error> + Send>;
+	type Output = NotificationsInSubstream<TSubstream>;
+	type Future = futures::future::FutureResult<Self::Output, Self::Error>;
 	type Error = upgrade::ReadOneError;
 
 	fn upgrade_inbound(
 		self,
 		socket: Negotiated<TSubstream>,
-		proto_name: Self::Info,
+		_: Self::Info,
 	) -> Self::Future {
-		unimplemented!()
+		futures::future::ok(NotificationsInSubstream {
+			socket,
+			handshake_sent: false,
+		})
 	}
 }
 
 impl<TSubstream> OutboundUpgrade<TSubstream> for NotificationsOut
 where TSubstream: AsyncRead + AsyncWrite + 'static,
 {
-	type Output = Vec<u8>;
+	type Output = (Vec<u8>, NotificationsOutSubstream);
 	type Future = Box<dyn Future<Item = Self::Output, Error = Self::Error> + Send>;
 	type Error = upgrade::ReadOneError;
 

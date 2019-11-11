@@ -20,7 +20,7 @@
 
 use futures::prelude::*;
 use libp2p::core::{
-	upgrade::{InboundUpgrade, OutboundUpgrade, UpgradeInfo},
+	upgrade::{InboundUpgrade, ProtocolName, UpgradeInfo},
 	Negotiated
 };
 use std::{iter::FromIterator, vec};
@@ -45,11 +45,15 @@ impl<T> FromIterator<T> for UpgradeCollec<T> {
 }
 
 impl<T: UpgradeInfo> UpgradeInfo for UpgradeCollec<T> {
-	type Info = T::Info;
-	type InfoIter = vec::IntoIter<T::Info>;
+	type Info = ProtoNameWithUsize<T::Info>;
+	type InfoIter = vec::IntoIter<Self::Info>;
 
 	fn protocol_info(&self) -> Self::InfoIter {
-		self.0.iter().flat_map(|p| p.protocol_info()).collect::<Vec<_>>().into_iter()
+		self.0.iter().enumerate()
+			.flat_map(|(n, p)|
+				p.protocol_info().into_iter().map(move |i| ProtoNameWithUsize(i, n)))
+			.collect::<Vec<_>>()
+			.into_iter()
 	}
 }
 
@@ -61,21 +65,19 @@ where
 	type Error = (T::Error, usize);
 	type Future = FutWithUsize<T::Future>;
 
-	fn upgrade_inbound(self, sock: Negotiated<C>, info: Self::Info) -> Self::Future {
-		unimplemented!()
+	fn upgrade_inbound(mut self, sock: Negotiated<C>, info: Self::Info) -> Self::Future {
+		let fut = self.0.remove(info.1).upgrade_inbound(sock, info.0);
+		FutWithUsize(fut, info.1)
 	}
 }
 
-impl<T, C> OutboundUpgrade<C> for UpgradeCollec<T>
-where
-	T: OutboundUpgrade<C>,
-{
-	type Output = (T::Output, usize);
-	type Error = (T::Error, usize);
-	type Future = FutWithUsize<T::Future>;
+/// Groups a `ProtocolName` with a `usize`.
+#[derive(Debug, Clone)]
+pub struct ProtoNameWithUsize<T>(T, usize);
 
-	fn upgrade_outbound(self, sock: Negotiated<C>, info: Self::Info) -> Self::Future {
-		unimplemented!()
+impl<T: ProtocolName> ProtocolName for ProtoNameWithUsize<T> {
+	fn protocol_name(&self) -> &[u8] {
+		self.0.protocol_name()
 	}
 }
 
