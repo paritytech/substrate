@@ -2458,8 +2458,15 @@ fn remove_deferred() {
 
 		start_era(5);
 
+		let slash_10 = Perbill::from_percent(10);
+		let slash_15 = Perbill::from_percent(15);
+		let initial_slash = slash_10 * nominated_value;
+
+		let total_slash = slash_15 * nominated_value;
+		let actual_slash = total_slash - initial_slash;
+
 		// 5% slash (15 - 10) processed now.
 		assert_eq!(Balances::free_balance(&11), 950);
-		assert_eq!(Balances::free_balance(&101), 2000 - (nominated_value / 20));
+		assert_eq!(Balances::free_balance(&101), 2000 - actual_slash);
 	})
 }
