@@ -66,9 +66,9 @@ impl Parse for WhereSection {
             let WhereDefinition { kind, value } = WhereDefinition::parse(input, &mut seen_keys)?;
             definitions.insert(kind, value);
             if !input.peek(Token![,]) {
-				if !input.peek(token::Brace) {
-					return Err(input.error("Expected `,` or `{`"));
-				}
+                if !input.peek(token::Brace) {
+                    return Err(input.error("Expected `,` or `{`"));
+                }
                 break;
             }
             let _: Token![,] = input.parse()?;
@@ -230,8 +230,8 @@ impl Parse for ModulePart {
         if !generics.params.is_empty() && !Self::is_allowed_generic(&name) {
             let valid_generics = ModulePart::format_names(ModulePart::allowed_generics());
             let msg = format!(
-				"`{}` is not allowed to have generics. \
-                Only the following modules are allowed to have generics: {}.",
+                "`{}` is not allowed to have generics. \
+                 Only the following modules are allowed to have generics: {}.",
                 name, valid_generics
             );
             return Err(syn::Error::new(name.span(), msg));
@@ -242,7 +242,7 @@ impl Parse for ModulePart {
                 let valid_names = ModulePart::format_names(ModulePart::allowed_args());
                 let msg = format!(
                     "`{}` is not allowed to have arguments in parens. \
-					Only the following modules are allowed to have arguments in parens: {}.",
+                     Only the following modules are allowed to have arguments in parens: {}.",
                     name, valid_names
                 );
                 return Err(syn::Error::new(parens.span, msg));
