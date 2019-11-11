@@ -1819,11 +1819,7 @@ Protocol<B, S, H> {
 		};
 
 		let outcome = match event {
-			LegacyProtoOut::CustomProtocolOpen { peer_id, version, .. } => {
-				debug_assert!(
-					version <= CURRENT_VERSION as u8
-					&& version >= MIN_VERSION as u8
-				);
+			LegacyProtoOut::CustomProtocolOpen { peer_id, .. } => {
 				self.on_peer_connected(peer_id);
 				CustomMessageOutcome::None
 			}

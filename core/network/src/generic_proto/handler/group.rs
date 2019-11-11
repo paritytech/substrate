@@ -108,6 +108,12 @@ pub enum NotifsHandlerIn {
 
 	/// Sends a message through a custom protocol substream.
 	Send {
+		/// Name of the protocol for the message, or `None` to force the legacy protocol.
+		///
+		/// If `Some`, must match one of the registered protocols. For backwards-compatibility
+		/// reasons, if the remote doesn't support this protocol, we use the legacy substream.
+		proto_name: Option<Cow<'static, [u8]>>,
+
 		/// The message to send.
 		message: Vec<u8>,
 	},
@@ -117,10 +123,7 @@ pub enum NotifsHandlerIn {
 #[derive(Debug)]
 pub enum NotifsHandlerOut {
 	/// Opened a custom protocol with the remote.
-	CustomProtocolOpen {
-		/// Version of the protocol that has been opened.
-		version: u8,
-	},
+	CustomProtocolOpen,
 
 	/// Closed a custom protocol with the remote.
 	CustomProtocolClosed {
@@ -230,11 +233,13 @@ where TSubstream: AsyncRead + AsyncWrite + 'static {
 					handler.inject_event(NotifsOutHandlerIn::Disable);
 				}
 			},
-			NotifsHandlerIn::Send { message } => {
-				for handler in &mut self.out_handlers {
-					if handler.is_open() && handler.protocol_name() == b"/substrate/foo" {	// FIXME:
-						handler.inject_event(NotifsOutHandlerIn::Send(message));
-						return;
+			NotifsHandlerIn::Send { proto_name, message } => {
+				if let Some(proto_name) = proto_name {
+					for handler in &mut self.out_handlers {
+						if handler.is_open() && handler.protocol_name() == &proto_name[..] {
+							handler.inject_event(NotifsOutHandlerIn::Send(message));
+							return;
+						}
 					}
 				}
 
@@ -327,7 +332,6 @@ where TSubstream: AsyncRead + AsyncWrite + 'static {
 						error!("Incoming substream handler tried to open a substream"),
 					ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::OpenRequest) =>
 						if self.enabled {
-							panic!();
 							// TODO: also open outbound
 							//handler.inject_event(NotifsInHandlerIn::Accept(Vec::new()));		// TODO: message
 						} else {
@@ -366,8 +370,8 @@ where TSubstream: AsyncRead + AsyncWrite + 'static {
 				.map_protocol(EitherUpgrade::B)
 				.map_outbound_open_info(|()| None)
 				.map_custom(|ev| match ev {
-					LegacyProtoHandlerOut::CustomProtocolOpen { version } =>
-						NotifsHandlerOut::CustomProtocolOpen { version },
+					LegacyProtoHandlerOut::CustomProtocolOpen { .. } =>
+						NotifsHandlerOut::CustomProtocolOpen,
 					LegacyProtoHandlerOut::CustomProtocolClosed { reason } =>
 						NotifsHandlerOut::CustomProtocolClosed { reason },
 					LegacyProtoHandlerOut::CustomMessage { message } =>

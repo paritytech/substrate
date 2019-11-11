@@ -191,8 +191,6 @@ struct IncomingPeer {
 pub enum LegacyProtoOut {
 	/// Opened a custom protocol with the remote.
 	CustomProtocolOpen {
-		/// Version of the protocol that has been opened.
-		version: u8,
 		/// Id of the node we have opened a connection with.
 		peer_id: PeerId,
 		/// Endpoint used for this custom protocol.
@@ -358,7 +356,7 @@ impl<TSubstream> LegacyProto<TSubstream> {
 		trace!(target: "sub-libp2p", "Handler({:?}) <= Packet", target);
 		self.events.push(NetworkBehaviourAction::SendEvent {
 			peer_id: target.clone(),
-			event: NotifsHandlerIn::Send { message },
+			event: NotifsHandlerIn::Send { message, proto_name: None },
 		});
 	}
 
@@ -876,8 +874,8 @@ where
 				}
 			}
 
-			NotifsHandlerOut::CustomProtocolOpen { version } => {
-				debug!(target: "sub-libp2p", "Handler({:?}) => Open: version {:?}", source, version);
+			NotifsHandlerOut::CustomProtocolOpen => {
+				debug!(target: "sub-libp2p", "Handler({:?}) => Open", source);
 				let endpoint = match self.peers.get_mut(&source) {
 					Some(PeerState::Enabled { ref mut open, ref connected_point }) |
 					Some(PeerState::DisabledPendingEnable { ref mut open, ref connected_point, .. }) |
@@ -893,7 +891,6 @@ where
 
 				debug!(target: "sub-libp2p", "External API <= Open({:?})", source);
 				let event = LegacyProtoOut::CustomProtocolOpen {
-					version,
 					peer_id: source,
 					endpoint,
 				};
