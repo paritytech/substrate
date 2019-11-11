@@ -90,7 +90,7 @@ impl app_crypto::RuntimeAppPublic for UintAuthorityId {
 		ALL_KEYS.with(|l| l.borrow().clone())
 	}
 
-	fn generate_pair(_: Option<&str>) -> Self {
+	fn generate_pair(_: Option<Vec<u8>>) -> Self {
 		use rand::RngCore;
 		UintAuthorityId(rand::thread_rng().next_u64())
 	}

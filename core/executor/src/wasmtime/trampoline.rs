@@ -24,8 +24,8 @@ use cranelift_codegen::ir::{InstBuilder, StackSlotData, StackSlotKind, TrapCode}
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
 use wasmtime_jit::{CodeMemory, Compiler};
 use wasmtime_runtime::{VMContext, VMFunctionBody};
-use wasm_interface::{HostFunctions, Function, Value, ValueType};
-use std::{cmp, panic, ptr};
+use wasm_interface::{Function, Value, ValueType};
+use std::{cmp, panic::{self, AssertUnwindSafe}, ptr};
 
 use crate::error::{Error, WasmError};
 use crate::wasmtime::function_executor::{FunctionExecutorState, FunctionExecutor};
@@ -33,7 +33,6 @@ use crate::wasmtime::function_executor::{FunctionExecutorState, FunctionExecutor
 const CALL_SUCCESS: u32 = 0;
 const CALL_FAILED_WITH_ERROR: u32 = 1;
 const CALL_WITH_BAD_HOST_STATE: u32 = 2;
-const CALL_PANICKED: u32 = 3;
 
 /// A code to trap with that indicates a host call error.
 const TRAP_USER_CODE: u16 = 0;
@@ -45,7 +44,7 @@ const MAX_WASM_TYPE_SIZE: usize = 8;
 /// The top-level host state of the "env" module. This state is used by the trampoline function to
 /// construct a `FunctionExecutor` which can execute the host call.
 pub struct EnvState {
-	externals: &'static [&'static dyn Function],
+	host_functions: Vec<&'static dyn Function>,
 	compiler: Compiler,
 	// The code memory must be kept around on the state to prevent it from being dropped.
 	#[allow(dead_code)]
@@ -58,13 +57,17 @@ pub struct EnvState {
 
 impl EnvState {
 	/// Construct a new `EnvState` which owns the given code memory.
-	pub fn new<HF: HostFunctions>(code_memory: CodeMemory, compiler: Compiler) -> Self {
+	pub fn new(
+		code_memory: CodeMemory,
+		compiler: Compiler,
+		host_functions: &[&'static dyn Function],
+	) -> Self {
 		EnvState {
-			externals: HF::functions(),
 			trap: None,
 			compiler,
 			code_memory,
 			executor_state: None,
+			host_functions: host_functions.to_vec(),
 		}
 	}
 
@@ -78,11 +81,10 @@ impl EnvState {
 /// to the call arguments on the stack as arguments. Returns zero on success and a non-zero value
 /// on failure.
 unsafe extern "C" fn stub_fn(vmctx: *mut VMContext, func_index: u32, values_vec: *mut i64) -> u32 {
-	let result = panic::catch_unwind(|| {
-		if let Some(state) = (*vmctx).host_state().downcast_mut::<EnvState>() {
+	if let Some(state) = (*vmctx).host_state().downcast_mut::<EnvState>() {
 			match stub_fn_inner(
 				vmctx,
-				state.externals,
+				&state.host_functions,
 				&mut state.compiler,
 				state.executor_state.as_mut(),
 				func_index,
@@ -94,12 +96,10 @@ unsafe extern "C" fn stub_fn(vmctx: *mut VMContext, func_index: u32, values_vec:
 					CALL_FAILED_WITH_ERROR
 				}
 			}
-		} else {
-			// Well, we can't even set a trap message, so we'll just exit without one.
-			CALL_WITH_BAD_HOST_STATE
-		}
-	});
-	result.unwrap_or(CALL_PANICKED)
+	} else {
+		// Well, we can't even set a trap message, so we'll just exit without one.
+		CALL_WITH_BAD_HOST_STATE
+	}
 }
 
 /// Implements most of the logic in `stub_fn` but returning a `Result` instead of an integer error
@@ -111,8 +111,7 @@ unsafe fn stub_fn_inner(
 	executor_state: Option<&mut FunctionExecutorState>,
 	func_index: u32,
 	values_vec: *mut i64,
-) -> Result<(), Error>
-{
+) -> Result<(), Error> {
 	let func = externals.get(func_index as usize)
 		.ok_or_else(|| format!("call to undefined external function with index {}", func_index))?;
 	let executor_state = executor_state
@@ -120,22 +119,41 @@ unsafe fn stub_fn_inner(
 
 	// Build the external function context.
 	let mut context = FunctionExecutor::new(vmctx, compiler, executor_state)?;
-
-	let signature = func.signature();
-
-	// Read the arguments from the stack.
-	let mut args = signature.args.iter()
-		.enumerate()
-		.map(|(i, &param_type)| read_value_from(values_vec.offset(i as isize), param_type));
+	let mut context = AssertUnwindSafe(&mut context);
 
 	// Execute and write output back to the stack.
-	let return_val = func.execute(&mut context, &mut args)
-		.map_err(|e| Error::FunctionExecution(func.name().to_string(), e))?;
-	if let Some(val) = return_val {
-		write_value_to(values_vec, val);
-	}
+	let return_val = panic::catch_unwind(move || {
+		let signature = func.signature();
 
-	Ok(())
+		// Read the arguments from the stack.
+		let mut args = signature.args.iter()
+			.enumerate()
+			.map(|(i, &param_type)| read_value_from(values_vec.offset(i as isize), param_type));
+
+		func.execute(&mut **context, &mut args)
+	});
+
+	match return_val {
+		Ok(ret_val) => {
+			if let Some(val) = ret_val
+				.map_err(|e| Error::FunctionExecution(func.name().to_string(), e))? {
+				write_value_to(values_vec, val);
+			}
+
+			Ok(())
+		},
+		Err(e) => {
+			let message = if let Some(err) = e.downcast_ref::<String>() {
+				err.to_string()
+			} else if let Some(err) = e.downcast_ref::<&str>() {
+				err.to_string()
+			} else {
+				"Panicked without any further information!".into()
+			};
+
+			Err(Error::FunctionExecution(func.name().to_string(), message))
+		}
+	}
 }
 
 /// Create a trampoline for invoking a host function.

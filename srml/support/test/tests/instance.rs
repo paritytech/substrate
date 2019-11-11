@@ -303,7 +303,7 @@ fn new_test_ext() -> runtime_io::TestExternalities {
 #[test]
 fn storage_instance_independance() {
 	let mut storage = (std::collections::HashMap::new(), std::collections::HashMap::new());
-	runtime_io::with_storage(&mut storage, || {
+	state_machine::BasicExternalities::execute_with_storage(&mut storage, || {
 		module2::Value::<Runtime>::put(0);
 		module2::Value::<Runtime, module2::Instance1>::put(0);
 		module2::Value::<Runtime, module2::Instance2>::put(0);

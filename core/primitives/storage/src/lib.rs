@@ -40,6 +40,14 @@ pub struct StorageData(
 	pub Vec<u8>,
 );
 
+/// A set of key value pairs for storage.
+#[cfg(feature = "std")]
+pub type StorageOverlay = std::collections::HashMap<Vec<u8>, Vec<u8>>;
+
+/// A set of key value pairs for children storage;
+#[cfg(feature = "std")]
+pub type ChildrenStorageOverlay = std::collections::HashMap<Vec<u8>, StorageOverlay>;
+
 /// Storage change set
 #[derive(RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, PartialEq, Eq))]

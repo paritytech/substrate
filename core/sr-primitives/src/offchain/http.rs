@@ -221,11 +221,15 @@ impl<'a, I: AsRef<[u8]>, T: IntoIterator<Item=I>> Request<'a, T> {
 		let meta = &[];
 
 		// start an http request.
-		let id = runtime_io::http_request_start(self.method.as_ref(), self.url, meta).map_err(|_| HttpError::IoError)?;
+		let id = runtime_io::offchain::http_request_start(
+			self.method.as_ref(),
+			self.url,
+			meta,
+		).map_err(|_| HttpError::IoError)?;
 
 		// add custom headers
 		for header in &self.headers {
-			runtime_io::http_request_add_header(
+			runtime_io::offchain::http_request_add_header(
 				id,
 				header.name(),
 				header.value(),
@@ -234,11 +238,11 @@ impl<'a, I: AsRef<[u8]>, T: IntoIterator<Item=I>> Request<'a, T> {
 
 		// write body
 		for chunk in self.body {
-			runtime_io::http_request_write_body(id, chunk.as_ref(), self.deadline)?;
+			runtime_io::offchain::http_request_write_body(id, chunk.as_ref(), self.deadline)?;
 		}
 
 		// finalise the request
-		runtime_io::http_request_write_body(id, &[], self.deadline)?;
+		runtime_io::offchain::http_request_write_body(id, &[], self.deadline)?;
 
 		Ok(PendingRequest {
 			id,
@@ -303,7 +307,7 @@ impl PendingRequest {
 		deadline: impl Into<Option<Timestamp>>
 	) -> Vec<Result<HttpResult, PendingRequest>> {
 		let ids = requests.iter().map(|r| r.id).collect::<Vec<_>>();
-		let statuses = runtime_io::http_response_wait(&ids, deadline.into());
+		let statuses = runtime_io::offchain::http_response_wait(&ids, deadline.into());
 
 		statuses
 			.into_iter()
@@ -341,7 +345,9 @@ impl Response {
 	/// Retrieve the headers for this response.
 	pub fn headers(&mut self) -> &Headers {
 		if self.headers.is_none() {
-			self.headers = Some(Headers { raw: runtime_io::http_response_headers(self.id) });
+			self.headers = Some(
+				Headers { raw: runtime_io::offchain::http_response_headers(self.id) },
+			);
 		}
 		self.headers.as_ref().expect("Headers were just set; qed")
 	}
@@ -420,7 +426,10 @@ impl Iterator for ResponseBody {
 		}
 
 		if self.filled_up_to.is_none() {
-			let result = runtime_io::http_response_read_body(self.id, &mut self.buffer, self.deadline);
+			let result = runtime_io::offchain::http_response_read_body(
+				self.id,
+				&mut self.buffer,
+				self.deadline);
 			match result {
 				Err(e) => {
 					self.error = Some(e);
@@ -431,7 +440,7 @@ impl Iterator for ResponseBody {
 				}
 				Ok(size) => {
 					self.position = 0;
-					self.filled_up_to = Some(size);
+					self.filled_up_to = Some(size as usize);
 				}
 			}
 		}

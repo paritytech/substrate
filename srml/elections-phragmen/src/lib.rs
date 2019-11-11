@@ -542,7 +542,6 @@ impl<T: Trait> Module<T> {
 			candidates,
 			voters_and_votes,
 			Self::locked_stake_of,
-			false,
 		);
 
 		let mut to_release_bond: Vec<T::AccountId> = Vec::with_capacity(desired_seats);
@@ -563,7 +562,6 @@ impl<T: Trait> Module<T> {
 				&new_set,
 				&phragmen_result.assignments,
 				Self::locked_stake_of,
-				false,
 			);
 
 			let to_balance = |e: ExtendedBalance|
