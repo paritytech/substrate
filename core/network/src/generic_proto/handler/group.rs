@@ -133,6 +133,9 @@ pub enum NotifsHandlerOut {
 
 	/// Receives a message on a custom protocol substream.
 	CustomMessage {
+		/// Engine corresponding to the message, or `None` if this came from the legacy substream.
+		proto_name: Option<Cow<'static, [u8]>>,
+
 		/// Message that has been received.
 		message: BytesMut,
 	},
@@ -374,7 +377,7 @@ where TSubstream: AsyncRead + AsyncWrite + 'static {
 					LegacyProtoHandlerOut::CustomProtocolClosed { reason } =>
 						NotifsHandlerOut::CustomProtocolClosed { reason },
 					LegacyProtoHandlerOut::CustomMessage { message } =>
-						NotifsHandlerOut::CustomMessage { message },
+						NotifsHandlerOut::CustomMessage { message, proto_name: None },
 					LegacyProtoHandlerOut::Clogged { messages } =>
 						NotifsHandlerOut::Clogged { messages },
 					LegacyProtoHandlerOut::ProtocolError { is_severe, error } =>

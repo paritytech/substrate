@@ -898,7 +898,7 @@ where
 				self.events.push(NetworkBehaviourAction::GenerateEvent(event));
 			}
 
-			NotifsHandlerOut::CustomMessage { message } => {
+			NotifsHandlerOut::CustomMessage { proto_name, message } => {
 				debug_assert!(self.is_open(&source));
 				trace!(target: "sub-libp2p", "Handler({:?}) => Message", source);
 				trace!(target: "sub-libp2p", "External API <= Message({:?})", source);
