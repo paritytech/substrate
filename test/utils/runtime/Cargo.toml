@@ -6,33 +6,36 @@ edition = "2018"
 build = "build.rs"
 
 [dependencies]
-log = { version = "0.4.8", optional = true }
-serde = { version = "1.0.101", optional = true, features = ["derive"] }
-codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-keyring = { package = "substrate-keyring", path = "../../../client/keyring", optional = true }
-substrate-client = { path = "../../../client/", default-features = false }
-primitives = { package = "substrate-primitives", path = "../../../primitives/core", default-features = false }
 app-crypto = { package = "substrate-application-crypto", path = "../../../primitives/application-crypto", default-features = false }
-inherents = { package = "substrate-inherents", path = "../../../primitives/inherents", default-features = false }
 aura-primitives = { package = "substrate-consensus-aura-primitives", path = "../../../primitives/consensus/aura", default-features = false }
 babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../../../primitives/consensus/babe", default-features = false }
-rstd = { package = "sr-std", path = "../../../primitives/sr-std", default-features = false }
-runtime_io = { package = "sr-io", path = "../../../primitives/sr-io", default-features = false }
-sr-primitives = {  path = "../../../primitives/sr-primitives", default-features = false }
-session = { package = "substrate-session", path = "../../../primitives/session", default-features = false }
-runtime_version = { package = "sr-version", path = "../../../primitives/sr-version", default-features = false }
-runtime_support = { package = "srml-support", path = "../../../paint/support", default-features = false }
-substrate-trie = { path = "../../../client/trie", default-features = false }
-trie-db = { version = "0.15.2", default-features = false }
+block-builder-api = { package = "substrate-block-builder-runtime-api", path = "../../../primitives/block-builder/runtime-api", default-features = false }
+cfg-if = "0.1.10"
+codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
+executive = { package = "srml-executive", path = "../../../paint/executive", default-features = false }
+inherents = { package = "substrate-inherents", path = "../../../primitives/inherents", default-features = false }
+keyring = { package = "substrate-keyring", path = "../../../client/keyring", optional = true }
+log = { version = "0.4.8", optional = true }
 memory-db = { version = "0.15.2", default-features = false }
 offchain-primitives = { package = "substrate-offchain-primitives", path = "../../../primitives/offchain", default-features = false}
+primitives = { package = "substrate-primitives", path = "../../../primitives/core", default-features = false }
+rstd = { package = "sr-std", path = "../../../primitives/sr-std", default-features = false }
 runtime-interface = { package = "substrate-runtime-interface", path = "../../../primitives/runtime-interface", default-features = false}
-executive = { package = "srml-executive", path = "../../../paint/executive", default-features = false }
-cfg-if = "0.1.10"
+runtime_io = { package = "sr-io", path = "../../../primitives/sr-io", default-features = false }
+runtime_support = { package = "srml-support", path = "../../../paint/support", default-features = false }
+runtime_version = { package = "sr-version", path = "../../../primitives/sr-version", default-features = false }
+serde = { version = "1.0.101", optional = true, features = ["derive"] }
+session = { package = "substrate-session", path = "../../../primitives/session", default-features = false }
+sr-api = { path = "../../../primitives/sr-api", default-features = false }
+sr-primitives = {  path = "../../../primitives/sr-primitives", default-features = false }
 srml-babe = { path = "../../../paint/babe", default-features = false }
-srml-timestamp = { path = "../../../paint/timestamp", default-features = false }
 srml-system = { path = "../../../paint/system", default-features = false }
 srml-system-rpc-runtime-api = { path = "../../../paint/system/rpc/runtime-api", default-features = false }
+srml-timestamp = { path = "../../../paint/timestamp", default-features = false }
+substrate-client = { path = "../../../client", optional = true }
+substrate-trie = { path = "../../../client/trie", default-features = false }
+transaction-pool-api = { package = "substrate-transaction-pool-runtime-api", path = "../../../primitives/transaction-pool/runtime-api", default-features = false }
+trie-db = { version = "0.15.2", default-features = false }
 
 [dev-dependencies]
 substrate-executor = { path = "../../../client/executor" }
@@ -47,30 +50,34 @@ default = [
 	"std",
 ]
 std = [
-	"log",
-	"serde",
-	"keyring",
-	"codec/std",
-	"rstd/std",
-	"runtime_io/std",
-	"runtime_support/std",
-	"primitives/std",
-	"inherents/std",
-	"sr-primitives/std",
-	"runtime_version/std",
+	"app-crypto/std",
 	"aura-primitives/std",
 	"babe-primitives/std",
-	"primitives/std",
-	"substrate-trie/std",
-	"trie-db/std",
+	"block-builder-api/std",
+	"codec/std",
+	"executive/std",
+	"inherents/std",
+	"keyring",
+	"log",
 	"memory-db/std",
 	"offchain-primitives/std",
-	"executive/std",
-	"srml-babe/std",
-	"srml-timestamp/std",
-	"srml-system/std",
-	"srml-system-rpc-runtime-api/std",
-	"app-crypto/std",
-	"session/std",
+	"primitives/std",
+	"primitives/std",
+	"rstd/std",
 	"runtime-interface/std",
+	"runtime_io/std",
+	"runtime_support/std",
+	"runtime_version/std",
+	"serde",
+	"session/std",
+	"sr-api/std",
+	"sr-primitives/std",
+	"srml-babe/std",
+	"srml-system-rpc-runtime-api/std",
+	"srml-system/std",
+	"srml-timestamp/std",
+	"substrate-client",
+	"substrate-trie/std",
+	"transaction-pool-api/std",
+	"trie-db/std",
 ]

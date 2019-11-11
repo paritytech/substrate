@@ -6,7 +6,7 @@
 # [top-lvl-dir]<[crate-name-prefix]
 
 # For instance no crate within `./client` directory
-# is allowed to import any crate with a name starting with `srml`.
+# is allowed to import any crate with a directory path containing `srml`.
 # Such rule is just: `client<srml`.
 
 # The script should be run from the main repo directory!
@@ -18,7 +18,7 @@ PLEASE_DONT=(
 	"client<node"
 	"paint<node"
 	"paint<substrate"
-	"primitives<srml"
+	"primitives<paint"
 	"primitives<substrate"
 )
 
@@ -32,7 +32,7 @@ do
 
 	cd $from
 	echo "Checking rule $rule"
-	packages=$(find -name Cargo.toml | xargs grep -wn ^$to)
+	packages=$(find -name Cargo.toml | xargs grep -wn "path.*$to")
 	has_references=$(echo -n $packages | wc -c)
 	if [ "$has_references" != "0" ]; then
 		VIOLATIONS+=("$rule")
