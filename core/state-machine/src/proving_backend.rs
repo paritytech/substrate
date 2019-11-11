@@ -220,7 +220,7 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
 		ProvingBackend(TrieBackend::new(recorder, root))
 	}
 
-	/// Extracting the gathered proof in undefined order.
+	/// Extracting the gathered unordered proof.
 	pub fn extract_proof(&self) -> StorageProof {
 		let trie_nodes = self.0.essence().backend_storage().proof_recorder
 			.read()
