@@ -54,7 +54,6 @@ use consensus::{
 use header_metadata::{HeaderMetadata, CachedHeaderMetadata};
 
 use sr_api::{CallRuntimeAt, ConstructRuntimeApi, Core as CoreApi, ProofRecorder, InitializeBlock};
-
 use block_builder::BlockBuilderApi;
 
 use crate::{

@@ -74,7 +74,7 @@ pub enum Error<B: BlockT> {
 	BestHashSelectChain(ConsensusError),
 	#[display(fmt = "Error with block built on {:?}: {:?}", _0, _1)]
 	BlockBuiltError(B::Hash, ConsensusError),
-	#[display(fmt = "Creating inherents failed: {:?}", _0)]
+	#[display(fmt = "Creating inherents failed: {}", _0)]
 	CreateInherents(inherents::Error),
 	#[display(fmt = "Checking inherents failed: {}", _0)]
 	CheckInherents(String),

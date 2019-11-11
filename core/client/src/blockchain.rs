@@ -75,7 +75,6 @@ pub trait HeaderBackend<Block: BlockT>: Send + Sync {
 	}
 }
 
-
 /// Blockchain database backend. Does not perform any validation.
 pub trait Backend<Block: BlockT>: HeaderBackend<Block> + HeaderMetadata<Block, Error=Error> {
 	/// Get block body. Returns `None` if block is not found.

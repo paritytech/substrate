@@ -35,7 +35,7 @@ pub enum Error {
 	#[display(fmt="Timer error: {}", _0)]
 	FaultyTimer(std::io::Error),
 	/// Error while working with inherent data.
-	#[display(fmt="InherentData error: {:?}", _0)]
+	#[display(fmt="InherentData error: {}", _0)]
 	InherentData(inherents::Error),
 	/// Unable to propose a block.
 	#[display(fmt="Unable to create block proposal.")]
