@@ -197,7 +197,7 @@ impl<T> Instance<T> {
 	/// - Trap occured at the execution time.
 	pub fn invoke(
 		&mut self,
-		name: &[u8],
+		name: &str,
 		args: &[TypedValue],
 		state: &mut T,
 	) -> Result<ReturnValue, Error> {

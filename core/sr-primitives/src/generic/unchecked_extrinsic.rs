@@ -16,13 +16,13 @@
 
 //! Generic implementation of an unchecked (pre-verification) extrinsic.
 
-use rstd::prelude::*;
-use rstd::fmt;
-use runtime_io::blake2_256;
+use rstd::{fmt, prelude::*};
+use runtime_io::hashing::blake2_256;
 use codec::{Decode, Encode, EncodeLike, Input, Error};
 use crate::{
 	traits::{self, Member, MaybeDisplay, SignedExtension, Checkable, Extrinsic, IdentifyAccount},
 	generic::CheckedExtrinsic, transaction_validity::{TransactionValidityError, InvalidTransaction},
+	weights::{GetDispatchInfo, DispatchInfo},
 };
 
 const TRANSACTION_VERSION: u8 = 4;
@@ -280,10 +280,21 @@ where
 	}
 }
 
+impl<Address, Call, Signature, Extra> GetDispatchInfo
+	for UncheckedExtrinsic<Address, Call, Signature, Extra>
+where
+	Call: GetDispatchInfo,
+	Extra: SignedExtension,
+{
+	fn get_dispatch_info(&self) -> DispatchInfo {
+		self.function.get_dispatch_info()
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use runtime_io::blake2_256;
+	use runtime_io::hashing::blake2_256;
 	use crate::codec::{Encode, Decode};
 	use crate::traits::{SignedExtension, IdentifyAccount, IdentityLookup};
 	use serde::{Serialize, Deserialize};

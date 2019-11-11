@@ -424,11 +424,11 @@ decl_storage! {
 		build(|config: &GenesisConfig| {
 			use codec::Encode;
 
-			runtime_io::set_storage(well_known_keys::CODE, &config.code);
-			runtime_io::set_storage(well_known_keys::EXTRINSIC_INDEX, &0u32.encode());
+			runtime_io::storage::set(well_known_keys::CODE, &config.code);
+			runtime_io::storage::set(well_known_keys::EXTRINSIC_INDEX, &0u32.encode());
 
 			if let Some(ref changes_trie_config) = config.changes_trie_config {
-				runtime_io::set_storage(
+				runtime_io::storage::set(
 					well_known_keys::CHANGES_TRIE_CONFIG,
 					&changes_trie_config.encode(),
 				);
@@ -772,7 +772,6 @@ impl<T: Trait + Send + Sync> CheckWeight<T> {
 	fn get_dispatch_limit_ratio(class: DispatchClass) -> Perbill {
 		match class {
 			DispatchClass::Operational => Perbill::one(),
-			// TODO: this must be some sort of a constant.
 			DispatchClass::Normal => T::AvailableBlockRatio::get(),
 		}
 	}

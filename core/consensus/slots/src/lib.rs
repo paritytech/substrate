@@ -410,7 +410,7 @@ impl<T: Clone> SlotDuration<T> {
 					cb(client.runtime_api(), &BlockId::number(Zero::zero()))?;
 
 				info!(
-					"Loaded block-time = {:?} seconds from genesis on first-launch",
+					"Loaded block-time = {:?} milliseconds from genesis on first-launch",
 					genesis_slot_duration
 				);
 

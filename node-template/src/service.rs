@@ -48,7 +48,7 @@ macro_rules! new_full_start {
 					.ok_or_else(|| substrate_service::Error::SelectChainRequired)?;
 
 				let (grandpa_block_import, grandpa_link) =
-					grandpa::block_import::<_, _, _, runtime::RuntimeApi, _, _>(
+					grandpa::block_import::<_, _, _, runtime::RuntimeApi, _>(
 						client.clone(), &*client, select_chain
 					)?;
 
@@ -80,6 +80,11 @@ pub fn new_full<C: Send + Default + 'static>(config: Configuration<C, GenesisCon
 	let name = config.name.clone();
 	let disable_grandpa = config.disable_grandpa;
 
+	// sentry nodes announce themselves as authorities to the network
+	// and should run the same protocols authorities do, but it should
+	// never actively participate in any consensus process.
+	let participates_in_consensus = is_authority && !config.sentry_mode;
+
 	let (builder, mut import_setup, inherent_data_providers) = new_full_start!(config);
 
 	let (block_import, grandpa_link) =
@@ -92,7 +97,7 @@ pub fn new_full<C: Send + Default + 'static>(config: Configuration<C, GenesisCon
 		)?
 		.build()?;
 
-	if is_authority {
+	if participates_in_consensus {
 		let proposer = basic_authorship::ProposerFactory {
 			client: service.client(),
 			transaction_pool: service.transaction_pool(),
@@ -119,12 +124,22 @@ pub fn new_full<C: Send + Default + 'static>(config: Configuration<C, GenesisCon
 		service.spawn_essential_task(aura);
 	}
 
+	// if the node isn't actively participating in consensus then it doesn't
+	// need a keystore, regardless of which protocol we use below.
+	let keystore = if participates_in_consensus {
+		Some(service.keystore())
+	} else {
+		None
+	};
+
 	let grandpa_config = grandpa::Config {
 		// FIXME #1578 make this available through chainspec
 		gossip_duration: Duration::from_millis(333),
 		justification_period: 512,
 		name: Some(name),
-		keystore: Some(service.keystore()),
+		observer_enabled: true,
+		keystore,
+		is_authority,
 	};
 
 	match (is_authority, disable_grandpa) {
@@ -182,8 +197,8 @@ pub fn new_light<C: Send + Default + 'static>(config: Configuration<C, GenesisCo
 			let fetch_checker = fetcher
 				.map(|fetcher| fetcher.checker().clone())
 				.ok_or_else(|| "Trying to start light import queue without active fetch checker")?;
-			let grandpa_block_import = grandpa::light_block_import::<_, _, _, RuntimeApi, _>(
-				client.clone(), backend, Arc::new(fetch_checker), client.clone()
+			let grandpa_block_import = grandpa::light_block_import::<_, _, _, RuntimeApi>(
+				client.clone(), backend, &*client.clone(), Arc::new(fetch_checker),
 			)?;
 			let finality_proof_import = grandpa_block_import.clone();
 			let finality_proof_request_builder =

@@ -16,6 +16,8 @@
 
 //! Utilities for defining the wasm host environment.
 
+use wasm_interface::{Pointer, WordSize};
+
 /// Converts arguments into respective WASM types.
 #[macro_export]
 macro_rules! convert_args {
@@ -45,7 +47,7 @@ macro_rules! gen_functions {
 		{ $( $generated:tt )* }
 		$context:ident,
 	) => (
-		&[ $( $generated )* ]
+		vec![ $( $generated )* ]
 	);
 	(@INTERNAL
 		{ $( $generated:tt )* }
@@ -162,7 +164,7 @@ macro_rules! impl_wasm_host_interface {
 	) => (
 		impl $crate::wasm_interface::HostFunctions for $interface_name {
 			#[allow(non_camel_case_types)]
-			fn functions() -> &'static [&'static dyn $crate::wasm_interface::Function] {
+			fn host_functions() -> Vec<&'static dyn $crate::wasm_interface::Function> {
 				gen_functions!(
 					$context,
 					$( $name( $( $names: $params ),* ) $( -> $returns )? { $( $body )* } )*
@@ -171,3 +173,14 @@ macro_rules! impl_wasm_host_interface {
 		}
 	);
 }
+
+/// Runtime API functions return an i64 which encodes a pointer in the least-significant 32 bits
+/// and a length in the most-significant 32 bits. This interprets the returned value as a pointer,
+/// length tuple.
+pub fn interpret_runtime_api_result(retval: i64) -> (Pointer<u8>, WordSize) {
+	let ptr = <Pointer<u8>>::new(retval as u32);
+	// The first cast to u64 is necessary so that the right shift does not sign-extend.
+	let len = ((retval as u64) >> 32) as WordSize;
+	(ptr, len)
+}
+

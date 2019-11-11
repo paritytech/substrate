@@ -26,6 +26,7 @@ pub use self::generic::{
 	FinalityProofRequest, FinalityProofResponse,
 	FromBlock, RemoteReadChildRequest,
 };
+use client::light::fetcher::StorageProof;
 
 /// A unique ID of a request.
 pub type RequestId = u64;
@@ -103,7 +104,7 @@ impl Decode for BlockAttributes {
 pub enum Direction {
 	/// Enumerate in ascending order (from child to parent).
 	Ascending = 0,
-	/// Enumerate in descendfing order (from parent to canonical child).
+	/// Enumerate in descending order (from parent to canonical child).
 	Descending = 1,
 }
 
@@ -122,7 +123,7 @@ pub struct RemoteCallResponse {
 	/// Id of a request this response was made for.
 	pub id: RequestId,
 	/// Execution proof.
-	pub proof: Vec<Vec<u8>>,
+	pub proof: StorageProof,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
@@ -131,7 +132,7 @@ pub struct RemoteReadResponse {
 	/// Id of a request this response was made for.
 	pub id: RequestId,
 	/// Read proof.
-	pub proof: Vec<Vec<u8>>,
+	pub proof: StorageProof,
 }
 
 /// Generic types.
@@ -142,7 +143,7 @@ pub mod generic {
 	use super::{
 		RemoteReadResponse, Transactions, Direction,
 		RequestId, BlockAttributes, RemoteCallResponse, ConsensusEngineId,
-		BlockState,
+		BlockState, StorageProof,
 	};
 	/// Consensus is mostly opaque to us
 	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
@@ -216,9 +217,38 @@ pub mod generic {
 		FinalityProofRequest(FinalityProofRequest<Hash>),
 		/// Finality proof reponse.
 		FinalityProofResponse(FinalityProofResponse<Hash>),
+		/// Batch of consensus protocol messages.
+		ConsensusBatch(Vec<ConsensusMessage>),
 		/// Chain-specific message.
 		#[codec(index = "255")]
 		ChainSpecific(Vec<u8>),
+	}
+
+	impl<Header, Hash, Number, Extrinsic> Message<Header, Hash, Number, Extrinsic> {
+		/// Message id useful for logging.
+		pub fn id(&self) -> &'static str {
+			match self {
+				Message::Status(_) => "Status",
+				Message::BlockRequest(_) => "BlockRequest",
+				Message::BlockResponse(_) => "BlockResponse",
+				Message::BlockAnnounce(_) => "BlockAnnounce",
+				Message::Transactions(_) => "Transactions",
+				Message::Consensus(_) => "Consensus",
+				Message::RemoteCallRequest(_) => "RemoteCallRequest",
+				Message::RemoteCallResponse(_) => "RemoteCallResponse",
+				Message::RemoteReadRequest(_) => "RemoteReadRequest",
+				Message::RemoteReadResponse(_) => "RemoteReadResponse",
+				Message::RemoteHeaderRequest(_) => "RemoteHeaderRequest",
+				Message::RemoteHeaderResponse(_) => "RemoteHeaderResponse",
+				Message::RemoteChangesRequest(_) => "RemoteChangesRequest",
+				Message::RemoteChangesResponse(_) => "RemoteChangesResponse",
+				Message::RemoteReadChildRequest(_) => "RemoteReadChildRequest",
+				Message::FinalityProofRequest(_) => "FinalityProofRequest",
+				Message::FinalityProofResponse(_) => "FinalityProofResponse",
+				Message::ConsensusBatch(_) => "ConsensusBatch",
+				Message::ChainSpecific(_) => "ChainSpecific",
+			}
+		}
 	}
 
 	/// Status sent on connection.
@@ -359,7 +389,7 @@ pub mod generic {
 		/// Header. None if proof generation has failed (e.g. header is unknown).
 		pub header: Option<Header>,
 		/// Header proof.
-		pub proof: Vec<Vec<u8>>,
+		pub proof: StorageProof,
 	}
 
 	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
@@ -395,7 +425,7 @@ pub mod generic {
 		/// Changes tries roots missing on the requester' node.
 		pub roots: Vec<(N, H)>,
 		/// Missing changes tries roots proof.
-		pub roots_proof: Vec<Vec<u8>>,
+		pub roots_proof: StorageProof,
 	}
 
 	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]

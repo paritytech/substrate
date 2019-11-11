@@ -23,7 +23,7 @@
 #[doc(hidden)]
 pub use primitives::{self, crypto::{CryptoType, Public, Derive, IsWrappedBy, Wraps}, RuntimeDebug};
 #[doc(hidden)]
-#[cfg(feature = "std")]
+#[cfg(feature = "full_crypto")]
 pub use primitives::crypto::{SecretStringError, DeriveJunction, Ss58Codec, Pair};
 pub use primitives::{crypto::{KeyTypeId, key_types}};
 
@@ -50,17 +50,43 @@ pub use traits::*;
 /// // of value `b"fuba"`.
 /// app_crypto!(ed25519, KeyTypeId(*b"_uba"));
 /// ```
+#[cfg(feature = "full_crypto")]
 #[macro_export]
 macro_rules! app_crypto {
 	($module:ident, $key_type:expr) => {
-		#[cfg(feature="std")]
-		$crate::app_crypto!($module::Pair, $module::Public, $module::Signature, $key_type);
-		#[cfg(not(feature="std"))]
-		$crate::app_crypto!($module::Public, $module::Signature, $key_type);
+		$crate::app_crypto_public_full_crypto!($module::Public, $key_type);
+		$crate::app_crypto_public_common!($module::Public, $module::Signature, $key_type);
+		$crate::app_crypto_signature_full_crypto!($module::Signature, $key_type);
+		$crate::app_crypto_signature_common!($module::Signature, $key_type);
+		$crate::app_crypto_pair!($module::Pair, $key_type);
 	};
-	($pair:ty, $public:ty, $sig:ty, $key_type:expr) => {
-		$crate::app_crypto!($public, $sig, $key_type);
+}
 
+/// Declares Public, Pair, Signature types which are functionally equivalent to `$pair`, but are new
+/// Application-specific types whose identifier is `$key_type`.
+///
+/// ```rust
+///# use substrate_application_crypto::{app_crypto, wrap, ed25519, KeyTypeId};
+/// // Declare a new set of crypto types using Ed25519 logic that identifies as `KeyTypeId`
+/// // of value `b"fuba"`.
+/// app_crypto!(ed25519, KeyTypeId(*b"_uba"));
+/// ```
+#[cfg(not(feature = "full_crypto"))]
+#[macro_export]
+macro_rules! app_crypto {
+	($module:ident, $key_type:expr) => {
+		$crate::app_crypto_public_not_full_crypto!($module::Public, $key_type);
+		$crate::app_crypto_public_common!($module::Public, $module::Signature, $key_type);
+		$crate::app_crypto_signature_not_full_crypto!($module::Signature, $key_type);
+		$crate::app_crypto_signature_common!($module::Signature, $key_type);
+	};
+}
+
+/// Declares Pair type which is functionally equivalent to `$pair`, but is new
+/// Application-specific type whose identifier is `$key_type`.
+#[macro_export]
+macro_rules! app_crypto_pair {
+	($pair:ty, $key_type:expr) => {
 		$crate::wrap!{
 			/// A generic `AppPublic` wrapper type over $pair crypto; this has no specific App.
 			#[derive(Clone)]
@@ -71,16 +97,18 @@ macro_rules! app_crypto {
 			type Pair = Pair;
 		}
 
-		#[cfg(feature = "std")]
 		impl $crate::Pair for Pair {
 			type Public = Public;
 			type Seed = <$pair as $crate::Pair>::Seed;
 			type Signature = Signature;
 			type DeriveError = <$pair as $crate::Pair>::DeriveError;
+			
+			#[cfg(feature = "std")]
 			fn generate_with_phrase(password: Option<&str>) -> (Self, String, Self::Seed) {
 				let r = <$pair>::generate_with_phrase(password);
 				(Self(r.0), r.1, r.2)
 			}
+			#[cfg(feature = "std")]
 			fn from_phrase(phrase: &str, password: Option<&str>)
 				-> Result<(Self, Self::Seed), $crate::SecretStringError>
 			{
@@ -115,6 +143,7 @@ macro_rules! app_crypto {
 			fn public(&self) -> Self::Public { Public(self.0.public()) }
 			fn to_raw_vec(&self) -> Vec<u8> { self.0.to_raw_vec() }
 		}
+
 		impl $crate::AppKey for Pair {
 			type UntypedGeneric = $pair;
 			type Public = Public;
@@ -122,11 +151,20 @@ macro_rules! app_crypto {
 			type Signature = Signature;
 			const ID: $crate::KeyTypeId = $key_type;
 		}
+
 		impl $crate::AppPair for Pair {
 			type Generic = $pair;
 		}
 	};
-	($public:ty, $sig:ty, $key_type:expr) => {
+}
+
+/// Declares Public type which is functionally equivalent to `$public`, but is new
+/// Application-specific type whose identifier is `$key_type`.
+/// can only be used together with `full_crypto` feature
+/// For full functionality, app_crypto_public_common! must be called too.
+#[macro_export]
+macro_rules! app_crypto_public_full_crypto {
+	($public:ty, $key_type:expr) => {
 		$crate::wrap!{
 			/// A generic `AppPublic` wrapper type over $public crypto; this has no specific App.
 			#[derive(
@@ -135,10 +173,59 @@ macro_rules! app_crypto {
 				$crate::codec::Decode,
 				$crate::RuntimeDebug,
 			)]
-			#[cfg_attr(feature = "std", derive(Hash))]
+			#[derive(Hash)]
 			pub struct Public($public);
 		}
 
+		impl $crate::CryptoType for Public {
+			type Pair = Pair;
+		}
+
+		impl $crate::AppKey for Public {
+			type UntypedGeneric = $public;
+			type Public = Public;
+			type Pair = Pair;
+			type Signature = Signature;
+			const ID: $crate::KeyTypeId = $key_type;
+		}
+	}
+}
+
+/// Declares Public type which is functionally equivalent to `$public`, but is new
+/// Application-specific type whose identifier is `$key_type`.
+/// can only be used without `full_crypto` feature
+/// For full functionality, app_crypto_public_common! must be called too.
+#[macro_export]
+macro_rules! app_crypto_public_not_full_crypto {
+	($public:ty, $key_type:expr) => {
+		$crate::wrap!{
+			/// A generic `AppPublic` wrapper type over $public crypto; this has no specific App.
+			#[derive(
+				Clone, Default, Eq, PartialEq, Ord, PartialOrd,
+				$crate::codec::Encode,
+				$crate::codec::Decode,
+				$crate::RuntimeDebug,
+			)]
+			pub struct Public($public);
+		}
+
+		impl $crate::CryptoType for Public {}
+
+		impl $crate::AppKey for Public {
+			type UntypedGeneric = $public;
+			type Public = Public;
+			type Signature = Signature;
+			const ID: $crate::KeyTypeId = $key_type;
+		}
+	}
+}
+
+/// Declares Public type which is functionally equivalent to `$public`, but is new
+/// Application-specific type whose identifier is `$key_type`.
+/// For full functionality, app_crypto_public_(not)_full_crypto! must be called too.
+#[macro_export]
+macro_rules! app_crypto_public_common {
+	($public:ty, $sig:ty, $key_type:expr) => {
 		impl $crate::Derive for Public {
 			#[cfg(feature = "std")]
 			fn derive<Iter: Iterator<Item=$crate::DeriveJunction>>(&self,
@@ -183,22 +270,8 @@ macro_rules! app_crypto {
 			fn as_mut(&mut self) -> &mut [u8] { self.0.as_mut() }
 		}
 
-		impl $crate::CryptoType for Public {
-			#[cfg(feature="std")]
-			type Pair = Pair;
-		}
-
 		impl $crate::Public for Public {
 			fn from_slice(x: &[u8]) -> Self { Self(<$public>::from_slice(x)) }
-		}
-
-		impl $crate::AppKey for Public {
-			type UntypedGeneric = $public;
-			type Public = Public;
-			#[cfg(feature="std")]
-			type Pair = Pair;
-			type Signature = Signature;
-			const ID: $crate::KeyTypeId = $key_type;
 		}
 
 		impl $crate::AppPublic for Public {
@@ -213,7 +286,7 @@ macro_rules! app_crypto {
 				<$public as $crate::RuntimePublic>::all($key_type).into_iter().map(Self).collect()
 			}
 
-			fn generate_pair(seed: Option<&str>) -> Self {
+			fn generate_pair(seed: Option<$crate::Vec<u8>>) -> Self {
 				Self(<$public as $crate::RuntimePublic>::generate_pair($key_type, seed))
 			}
 
@@ -229,7 +302,16 @@ macro_rules! app_crypto {
 				<$public as $crate::RuntimePublic>::verify(self.as_ref(), msg, &signature.as_ref())
 			}
 		}
+	}
+}
 
+/// Declares Signature type which is functionally equivalent to `$sig`, but is new
+/// Application-specific type whose identifier is `$key_type`.
+/// can only be used together with `full_crypto` feature
+/// For full functionality, app_crypto_public_common! must be called too.
+#[macro_export]
+macro_rules! app_crypto_signature_full_crypto {
+	($sig:ty, $key_type:expr) => {
 		$crate::wrap! {
 			/// A generic `AppPublic` wrapper type over $public crypto; this has no specific App.
 			#[derive(Clone, Default, Eq, PartialEq,
@@ -237,10 +319,58 @@ macro_rules! app_crypto {
 				$crate::codec::Decode,
 				$crate::RuntimeDebug,
 			)]
-			#[cfg_attr(feature = "std", derive(Hash))]
+			#[derive(Hash)]
 			pub struct Signature($sig);
 		}
 
+		impl $crate::CryptoType for Signature {
+			type Pair = Pair;
+		}
+
+		impl $crate::AppKey for Signature {
+			type UntypedGeneric = $sig;
+			type Public = Public;
+			type Pair = Pair;
+			type Signature = Signature;
+			const ID: $crate::KeyTypeId = $key_type;
+		}
+	}
+}
+
+/// Declares Signature type which is functionally equivalent to `$sig`, but is new
+/// Application-specific type whose identifier is `$key_type`.
+/// can only be used without `full_crypto` feature
+/// For full functionality, app_crypto_public_common! must be called too.
+#[macro_export]
+macro_rules! app_crypto_signature_not_full_crypto {
+	($sig:ty, $key_type:expr) => {
+		$crate::wrap! {
+			/// A generic `AppPublic` wrapper type over $public crypto; this has no specific App.
+			#[derive(Clone, Default, Eq, PartialEq,
+				$crate::codec::Encode,
+				$crate::codec::Decode,
+				$crate::RuntimeDebug,
+			)]
+			pub struct Signature($sig);
+		}
+		
+		impl $crate::CryptoType for Signature {}
+
+		impl $crate::AppKey for Signature {
+			type UntypedGeneric = $sig;
+			type Public = Public;
+			type Signature = Signature;
+			const ID: $crate::KeyTypeId = $key_type;
+		}
+	}
+}
+
+/// Declares Signature type which is functionally equivalent to `$sig`, but is new
+/// Application-specific type whose identifier is `$key_type`.
+/// For full functionality, app_crypto_public_(not)_full_crypto! must be called too.
+#[macro_export]
+macro_rules! app_crypto_signature_common {
+	($sig:ty, $key_type:expr) => {
 		impl $crate::Deref for Signature {
 			type Target = [u8];
 
@@ -249,20 +379,6 @@ macro_rules! app_crypto {
 
 		impl AsRef<[u8]> for Signature {
 			fn as_ref(&self) -> &[u8] { self.0.as_ref() }
-		}
-
-		impl $crate::CryptoType for Signature {
-			#[cfg(feature="std")]
-			type Pair = Pair;
-		}
-
-		impl $crate::AppKey for Signature {
-			type UntypedGeneric = $sig;
-			type Public = Public;
-			#[cfg(feature="std")]
-			type Pair = Pair;
-			type Signature = Signature;
-			const ID: $crate::KeyTypeId = $key_type;
 		}
 
 		impl $crate::AppSignature for Signature {

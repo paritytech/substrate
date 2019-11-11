@@ -38,3 +38,4 @@ sr-primitives = { path = "../core/sr-primitives" }
 
 [build-dependencies]
 vergen = "3.0.4"
+build-script-utils = { package = "substrate-build-script-utils", path = "../core/utils/build-script-utils" }

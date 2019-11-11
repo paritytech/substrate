@@ -207,6 +207,13 @@ fn print_seeds(
 }
 
 fn main() -> Result<(), String> {
+	#[cfg(build_type="debug")]
+	println!(
+		"The chain spec builder builds a chain specification that includes a Substrate runtime compiled as WASM. To \
+		 ensure proper functioning of the included runtime compile (or run) the chain spec builder binary in \
+		 `--release` mode.\n",
+	);
+
 	let builder = ChainSpecBuilder::from_args();
 	let chain_spec_path = builder.chain_spec_path().to_path_buf();
 

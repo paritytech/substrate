@@ -1,5 +1,0 @@
-error: `decl_runtime_apis!` adds automatically a parameter `at: &BlockId<Block>`. Please rename/remove your parameter.
- --> $DIR/adding_at_parameter.rs:5:11
-  |
-5 |         fn test(at: u64);
-  |                 ^^

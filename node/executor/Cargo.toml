@@ -31,7 +31,15 @@ contracts = { package = "srml-contracts", path = "../../srml/contracts" }
 grandpa = { package = "srml-grandpa", path = "../../srml/grandpa" }
 indices = { package = "srml-indices", path = "../../srml/indices" }
 wabt = "0.9.2"
+criterion = "0.3.0"
 
 [features]
-benchmarks = []
+wasmtime = [
+    "substrate-executor/wasmtime",
+]
 stress-test = []
+
+[[bench]]
+name = "bench"
+harness = false
+

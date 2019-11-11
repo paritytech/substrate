@@ -4,6 +4,15 @@ version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
+[features]
+default = ["rocksdb"]
+# The RocksDB feature activates the RocksDB database backend. If it is not activated, and you pass
+# a path to a database, an error will be produced at runtime.
+rocksdb = ["client_db/kvdb-rocksdb"]
+wasmtime = [
+    "substrate-executor/wasmtime",
+]
+
 [dependencies]
 derive_more = "0.15.0"
 futures = "0.1.29"
@@ -29,17 +38,15 @@ consensus_common = { package = "substrate-consensus-common", path = "../../core/
 network = { package = "substrate-network", path = "../../core/network" }
 chain-spec = { package = "substrate-chain-spec", path = "../chain-spec" }
 client = { package = "substrate-client", path = "../../core/client" }
-client_db = { package = "substrate-client-db", path = "../../core/client/db", features = ["kvdb-rocksdb"] }
+client_db = { package = "substrate-client-db", path = "../../core/client/db" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 substrate-executor = { path = "../../core/executor" }
-substrate-authority-discovery = { path = "../../core/authority-discovery"}
 transaction_pool = { package = "substrate-transaction-pool", path = "../../core/transaction-pool" }
 rpc-servers = { package = "substrate-rpc-servers", path = "../../core/rpc-servers" }
 rpc = { package = "substrate-rpc", path = "../../core/rpc" }
 tel = { package = "substrate-telemetry", path = "../../core/telemetry" }
 offchain = { package = "substrate-offchain", path = "../../core/offchain" }
 parity-multiaddr = { package = "parity-multiaddr", version = "0.5.0" }
-authority-discovery-primitives = { package = "substrate-authority-discovery-primitives", path = "../authority-discovery/primitives", default-features = false }
 
 [dev-dependencies]
 substrate-test-runtime-client = { path = "../test-runtime/client" }

@@ -47,9 +47,9 @@ pub use substrate_debug_derive::RuntimeDebug;
 #[cfg(feature = "std")]
 pub use impl_serde::serialize as bytes;
 
-#[cfg(feature = "std")]
+#[cfg(feature = "full_crypto")]
 pub mod hashing;
-#[cfg(feature = "std")]
+#[cfg(feature = "full_crypto")]
 pub use hashing::{blake2_128, blake2_256, twox_64, twox_128, twox_256};
 #[cfg(feature = "std")]
 pub mod hexdisplay;
@@ -76,7 +76,7 @@ mod tests;
 pub use self::hash::{H160, H256, H512, convert_hash};
 pub use self::uint::U256;
 pub use changes_trie::ChangesTrieConfiguration;
-#[cfg(feature = "std")]
+#[cfg(feature = "full_crypto")]
 pub use crypto::{DeriveJunction, Pair, Public};
 
 pub use hash_db::Hasher;
@@ -236,7 +236,7 @@ pub trait TypeId {
 /// A log level matching the one from `log` crate.
 ///
 /// Used internally by `runtime_io::log` method.
-#[repr(u32)]
+#[derive(Encode, Decode, runtime_interface::pass_by::PassByEnum, Copy, Clone)]
 pub enum LogLevel {
 	/// `Error` log level.
 	Error = 1,

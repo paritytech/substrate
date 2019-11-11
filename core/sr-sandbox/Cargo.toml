@@ -2,16 +2,13 @@
 name = "sr-sandbox"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
-build = "build.rs"
 edition = "2018"
-
-[build-dependencies]
-rustc_version = "0.2.3"
 
 [dependencies]
 wasmi = { version = "0.5.1", optional = true }
 primitives = { package = "substrate-primitives", path = "../primitives", default-features = false }
 rstd = { package = "sr-std", path = "../sr-std", default-features = false }
+runtime-io = { package = "sr-io", path = "../sr-io", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false }
 
 [dev-dependencies]
@@ -25,6 +22,6 @@ std = [
 	"primitives/std",
 	"rstd/std",
 	"codec/std",
+	"runtime-io/std",
 ]
-nightly = []
 strict = []

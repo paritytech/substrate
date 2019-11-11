@@ -33,13 +33,13 @@ fn decl_genesis_config_and_impl_default(
 	genesis_config: &GenesisConfigDef,
 ) -> TokenStream {
 	let config_fields = genesis_config.fields.iter().map(|field| {
-		let (name, typ, doc) = (&field.name, &field.typ, &field.doc);
-		quote!( #( #[ #doc] )* pub #name: #typ, )
+		let (name, typ, attrs) = (&field.name, &field.typ, &field.attrs);
+		quote!( #( #[ #attrs] )* pub #name: #typ, )
 	});
 
 	let config_field_defaults = genesis_config.fields.iter().map(|field| {
-		let (name, default, doc) = (&field.name, &field.default, &field.doc);
-		quote!( #( #[ #doc] )* #name: #default, )
+		let (name, default) = (&field.name, &field.default);
+		quote!( #name: #default, )
 	});
 
 	let serde_bug_bound = if !genesis_config.fields.is_empty() {
@@ -158,7 +158,7 @@ fn impl_build_storage(
 					#scrate::sr_primitives::ChildrenStorageOverlay,
 				),
 			) -> std::result::Result<(), String> #fn_where_clause {
-				#scrate::with_storage(tuple_storage, || {
+				#scrate::BasicExternalities::execute_with_storage(tuple_storage, || {
 					#( #builder_blocks )*
 					Ok(())
 				})
@@ -188,10 +188,13 @@ pub fn genesis_config_and_build_storage(
 ) -> TokenStream {
 	let builders = BuilderDef::from_def(scrate, def);
 	if !builders.blocks.is_empty() {
-		let genesis_config = &GenesisConfigDef::from_def(def);
+		let genesis_config = match GenesisConfigDef::from_def(def) {
+			Ok(genesis_config) => genesis_config,
+			Err(err) => return err.to_compile_error(),
+		};
 		let decl_genesis_config_and_impl_default =
-			decl_genesis_config_and_impl_default(scrate, genesis_config);
-		let impl_build_storage = impl_build_storage(scrate, def, genesis_config, &builders);
+			decl_genesis_config_and_impl_default(scrate, &genesis_config);
+		let impl_build_storage = impl_build_storage(scrate, def, &genesis_config, &builders);
 
 		quote!{
 			#decl_genesis_config_and_impl_default

@@ -1,0 +1,5 @@
+error: Methods need to have an implementation.
+ --> $DIR/no_method_implementation.rs:5:2
+  |
+5 |     fn test();
+  |     ^^

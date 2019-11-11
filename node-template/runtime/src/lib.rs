@@ -9,7 +9,7 @@
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
 use rstd::prelude::*;
-use primitives::{OpaqueMetadata, crypto::key_types};
+use primitives::OpaqueMetadata;
 use sr_primitives::{
 	ApplyResult, transaction_validity::TransactionValidity, generic, create_runtime_str,
 	impl_opaque_keys, MultiSignature
@@ -23,7 +23,7 @@ use client::{
 	runtime_api as client_api, impl_runtime_apis
 };
 use aura_primitives::sr25519::AuthorityId as AuraId;
-use grandpa::{AuthorityId as GrandpaId, AuthorityWeight as GrandpaWeight};
+use grandpa::AuthorityList as GrandpaAuthorityList;
 use grandpa::fg_primitives;
 use version::RuntimeVersion;
 #[cfg(feature = "std")]
@@ -84,10 +84,8 @@ pub mod opaque {
 
 	impl_opaque_keys! {
 		pub struct SessionKeys {
-			#[id(key_types::AURA)]
-			pub aura: AuraId,
-			#[id(key_types::GRANDPA)]
-			pub grandpa: GrandpaId,
+			pub aura: Aura,
+			pub grandpa: Grandpa,
 		}
 	}
 }
@@ -351,13 +349,12 @@ impl_runtime_apis! {
 
 	impl substrate_session::SessionKeys<Block> for Runtime {
 		fn generate_session_keys(seed: Option<Vec<u8>>) -> Vec<u8> {
-			let seed = seed.as_ref().map(|s| rstd::str::from_utf8(&s).expect("Seed is an utf8 string"));
 			opaque::SessionKeys::generate(seed)
 		}
 	}
 
 	impl fg_primitives::GrandpaApi<Block> for Runtime {
-		fn grandpa_authorities() -> Vec<(GrandpaId, GrandpaWeight)> {
+		fn grandpa_authorities() -> GrandpaAuthorityList {
 			Grandpa::grandpa_authorities()
 		}
 	}

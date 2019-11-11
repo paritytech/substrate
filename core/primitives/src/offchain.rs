@@ -19,11 +19,12 @@
 use codec::{Encode, Decode};
 use rstd::{prelude::{Vec, Box}, convert::TryFrom};
 use crate::RuntimeDebug;
+use runtime_interface::pass_by::{PassByCodec, PassByInner, PassByEnum};
 
 pub use crate::crypto::KeyTypeId;
 
 /// A type of supported crypto.
-#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
+#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, RuntimeDebug, PassByEnum)]
 #[repr(C)]
 pub enum StorageKind {
 	/// Persistent storage is non-revertible and not fork-aware. It means that any value
@@ -59,7 +60,7 @@ impl From<StorageKind> for u32 {
 }
 
 /// Opaque type for offchain http requests.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, RuntimeDebug)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, RuntimeDebug, Encode, Decode, PassByInner)]
 #[cfg_attr(feature = "std", derive(Hash))]
 pub struct HttpRequestId(pub u16);
 
@@ -70,7 +71,7 @@ impl From<HttpRequestId> for u32 {
 }
 
 /// An error enum returned by some http methods.
-#[derive(Clone, Copy, PartialEq, Eq, RuntimeDebug)]
+#[derive(Clone, Copy, PartialEq, Eq, RuntimeDebug, Encode, Decode, PassByEnum)]
 #[repr(C)]
 pub enum HttpError {
 	/// The requested action couldn't been completed within a deadline.
@@ -101,7 +102,7 @@ impl From<HttpError> for u32 {
 }
 
 /// Status of the HTTP request
-#[derive(Clone, Copy, PartialEq, Eq, RuntimeDebug)]
+#[derive(Clone, Copy, PartialEq, Eq, RuntimeDebug, Encode, Decode, PassByCodec)]
 pub enum HttpRequestStatus {
 	/// Deadline was reached while we waited for this request to finish.
 	///
@@ -147,7 +148,7 @@ impl TryFrom<u32> for HttpRequestStatus {
 
 /// A blob to hold information about the local node's network state
 /// without committing to its format.
-#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug)]
+#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, PassByCodec)]
 pub struct OpaqueNetworkState {
 	/// PeerId of the local node.
 	pub peer_id: OpaquePeerId,
@@ -156,7 +157,7 @@ pub struct OpaqueNetworkState {
 }
 
 /// Simple blob to hold a `PeerId` without committing to its format.
-#[derive(Default, Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug)]
+#[derive(Default, Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, PassByInner)]
 pub struct OpaquePeerId(pub Vec<u8>);
 
 impl OpaquePeerId {
@@ -167,7 +168,7 @@ impl OpaquePeerId {
 }
 
 /// Simple blob to hold a `Multiaddr` without committing to its format.
-#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug)]
+#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, PassByInner)]
 pub struct OpaqueMultiaddr(pub Vec<u8>);
 
 impl OpaqueMultiaddr {
@@ -178,11 +179,11 @@ impl OpaqueMultiaddr {
 }
 
 /// Opaque timestamp type
-#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Default, RuntimeDebug)]
+#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Default, RuntimeDebug, PassByInner, Encode, Decode)]
 pub struct Timestamp(u64);
 
 /// Duration type
-#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Default, RuntimeDebug)]
+#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Default, RuntimeDebug, PassByInner, Encode, Decode)]
 pub struct Duration(u64);
 
 impl Duration {
@@ -289,7 +290,7 @@ impl<'a> From<&'a [Capability]> for Capabilities {
 }
 
 /// An extended externalities for offchain workers.
-pub trait Externalities {
+pub trait Externalities: Send {
 	/// Returns if the local node is a potential validator.
 	///
 	/// Even if this function returns `true`, it does not mean that any keys are configured
