@@ -25,7 +25,6 @@ extern crate alloc;
 use serde::Serialize;
 use codec::{Encode, Decode, Input, Codec};
 use sr_primitives::{ConsensusEngineId, RuntimeDebug};
-use client::decl_runtime_apis;
 use rstd::borrow::Cow;
 use rstd::vec::Vec;
 
@@ -211,7 +210,7 @@ impl<'a> Decode for VersionedAuthorityList<'a> {
 	}
 }
 
-decl_runtime_apis! {
+sr_api::decl_runtime_apis! {
 	/// APIs for integrating the GRANDPA finality gadget into runtimes.
 	/// This should be implemented on the runtime side.
 	///

@@ -1250,6 +1250,25 @@ impl Printable for Tuple {
 	}
 }
 
+/// Something that can convert a [`BlockId`] to a number or a hash.
+#[cfg(feature = "std")]
+pub trait BlockIdTo<Block: self::Block> {
+	/// The error type that will be returned by the functions.
+	type Error: std::fmt::Debug;
+
+	/// Convert the given `block_id` to the corresponding block hash.
+	fn to_hash(
+		&self,
+		block_id: &crate::generic::BlockId<Block>,
+	) -> Result<Option<Block::Hash>, Self::Error>;
+
+	/// Convert the given `block_id` to the corresponding block number.
+	fn to_number(
+		&self,
+		block_id: &crate::generic::BlockId<Block>,
+	) -> Result<Option<NumberFor<Block>>, Self::Error>;
+}
+
 #[cfg(test)]
 mod tests {
 	use super::AccountIdConversion;

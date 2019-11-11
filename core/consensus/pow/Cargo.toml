@@ -10,6 +10,7 @@ codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive
 primitives = { package = "substrate-primitives", path = "../../primitives" }
 sr-primitives = { path = "../../sr-primitives" }
 client = { package = "substrate-client", path = "../../client" }
+block-builder-api = { package = "substrate-block-builder-runtime-api", path = "../../block-builder/runtime-api" }
 srml-timestamp = { path = "../../../srml/timestamp" }
 inherents = { package = "substrate-inherents", path = "../../inherents" }
 pow-primitives = { package = "substrate-consensus-pow-primitives", path = "primitives" }
