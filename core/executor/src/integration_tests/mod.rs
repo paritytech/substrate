@@ -28,9 +28,27 @@ use substrate_offchain::testing;
 use test_case::test_case;
 use trie::{TrieConfiguration, trie_types::Layout};
 
-use crate::{WasmExecutionMethod, call_in_wasm};
+use crate::WasmExecutionMethod;
 
 pub type TestExternalities = CoreTestExternalities<Blake2Hasher, u64>;
+
+fn call_in_wasm<E: Externalities>(
+	function: &str,
+	call_data: &[u8],
+	execution_method: WasmExecutionMethod,
+	ext: &mut E,
+	code: &[u8],
+	heap_pages: u64,
+) -> crate::error::Result<Vec<u8>> {
+	crate::call_in_wasm::<E, runtime_io::SubstrateHostFunctions>(
+		function,
+		call_data,
+		execution_method,
+		ext,
+		code,
+		heap_pages,
+	)
+}
 
 #[test_case(WasmExecutionMethod::Interpreted)]
 #[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]

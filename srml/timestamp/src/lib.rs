@@ -288,7 +288,7 @@ impl<T: Trait> ProvideInherent for Module<T> {
 	}
 
 	fn check_inherent(call: &Self::Call, data: &InherentData) -> result::Result<(), Self::Error> {
-		const MAX_TIMESTAMP_DRIFT: u64 = 60;
+		const MAX_TIMESTAMP_DRIFT_MILLIS: u64 = 30 * 1000;
 
 		let t: u64 = match call {
 			Call::set(ref t) => t.clone().saturated_into::<u64>(),
@@ -298,7 +298,7 @@ impl<T: Trait> ProvideInherent for Module<T> {
 		let data = extract_inherent_data(data).map_err(|e| InherentError::Other(e))?;
 
 		let minimum = (Self::now() + T::MinimumPeriod::get()).saturated_into::<u64>();
-		if t > data + MAX_TIMESTAMP_DRIFT {
+		if t > data + MAX_TIMESTAMP_DRIFT_MILLIS {
 			Err(InherentError::Other("Timestamp too far in future to accept".into()))
 		} else if t < minimum {
 			Err(InherentError::ValidAtTimestamp(minimum))
