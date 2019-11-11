@@ -5,6 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
+interfaces = { package = "substrate-client-interfaces", path = "interfaces" }
 block-builder = { package = "substrate-block-builder", path = "block-builder" }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 consensus = { package = "substrate-consensus-common", path = "../primitives/consensus/common", optional = true }

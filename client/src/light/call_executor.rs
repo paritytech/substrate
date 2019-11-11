@@ -37,7 +37,7 @@ use sr_api::{ProofRecorder, InitializeBlock};
 
 use crate::backend::RemoteBackend;
 use crate::call_executor::CallExecutor;
-use crate::error::{Error as ClientError, Result as ClientResult};
+use interfaces::error::{Error as ClientError, Result as ClientResult};
 use crate::light::fetcher::RemoteCallRequest;
 use executor::{RuntimeVersion, NativeVersion};
 
@@ -450,7 +450,7 @@ mod tests {
 				),
 			);
 			match execution_result {
-				Err(crate::error::Error::Execution(_)) => (),
+				Err(interfaces::error::Error::Execution(_)) => (),
 				_ => panic!("Unexpected execution result: {:?}", execution_result),
 			}
 		}

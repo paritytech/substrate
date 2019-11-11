@@ -18,7 +18,7 @@
 
 use std::sync::Arc;
 use std::collections::HashMap;
-use crate::error;
+use interfaces::error;
 use crate::light::blockchain::RemoteBlockchain;
 use primitives::ChangesTrieConfiguration;
 use sr_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};

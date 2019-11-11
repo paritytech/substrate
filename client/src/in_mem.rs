@@ -29,7 +29,7 @@ use hash_db::{Hasher, Prefix};
 use trie::MemoryDB;
 use header_metadata::{CachedHeaderMetadata, HeaderMetadata};
 
-use crate::error;
+use interfaces::error;
 use crate::backend::{self, NewBlockState, StorageCollection, ChildStorageCollection};
 use crate::light;
 use crate::leaves::LeafSet;
@@ -154,7 +154,7 @@ impl<Block: BlockT> Blockchain<Block> {
 		justification: Option<Justification>,
 		body: Option<Vec<<Block as BlockT>::Extrinsic>>,
 		new_state: NewBlockState,
-	) -> crate::error::Result<()> {
+	) -> interfaces::error::Result<()> {
 		let number = header.number().clone();
 		if new_state.is_best() {
 			self.apply_head(&header)?;

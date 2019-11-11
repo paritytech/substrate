@@ -32,7 +32,7 @@ use primitives::{
 
 use sr_api::{ProofRecorder, InitializeBlock};
 use crate::backend;
-use crate::error;
+use interfaces::error;
 
 /// Method call executor.
 pub trait CallExecutor<B, H>

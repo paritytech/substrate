@@ -76,7 +76,6 @@
 #![warn(missing_docs)]
 #![recursion_limit="128"]
 
-pub mod error;
 pub mod blockchain;
 pub mod backend;
 pub mod cht;
@@ -89,7 +88,7 @@ mod call_executor;
 mod client;
 mod notifications;
 
-
+pub use interfaces::error;
 pub use crate::blockchain::Info as ChainInfo;
 pub use crate::call_executor::{CallExecutor, LocalCallExecutor};
 pub use crate::client::{

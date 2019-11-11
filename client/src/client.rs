@@ -1863,7 +1863,7 @@ where
 /// Utility methods for the client.
 pub mod utils {
 	use super::*;
-	use crate::error;
+	use interfaces::error;
 	use primitives::H256;
 	use std::borrow::Borrow;
 

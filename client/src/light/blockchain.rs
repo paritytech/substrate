@@ -32,7 +32,7 @@ use crate::blockchain::{
 	well_known_cache_keys
 };
 use crate::cht;
-use crate::error::{Error as ClientError, Result as ClientResult};
+use interfaces::error::{Error as ClientError, Result as ClientResult};
 use crate::light::fetcher::{Fetcher, RemoteHeaderRequest};
 
 /// Light client blockchain storage.

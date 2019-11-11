@@ -30,7 +30,7 @@ use crate::backend::{
 	StorageCollection, ChildStorageCollection,
 };
 use crate::blockchain::{HeaderBackend as BlockchainHeaderBackend, well_known_cache_keys};
-use crate::error::{Error as ClientError, Result as ClientResult};
+use interfaces::error::{Error as ClientError, Result as ClientResult};
 use crate::light::blockchain::{Blockchain, Storage as BlockchainStorage};
 use hash_db::Hasher;
 use trie::MemoryDB;

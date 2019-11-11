@@ -36,7 +36,7 @@ use state_machine::{
 pub use state_machine::StorageProof;
 
 use crate::cht;
-use crate::error::{Error as ClientError, Result as ClientResult};
+use interfaces::error::{Error as ClientError, Result as ClientResult};
 use crate::light::blockchain::{Blockchain, Storage as BlockchainStorage};
 use crate::light::call_executor::check_execution_proof;
 
@@ -504,7 +504,7 @@ pub mod tests {
 	use codec::Decode;
 	use crate::client::tests::prepare_client_with_key_changes;
 	use executor::{NativeExecutor, WasmExecutionMethod};
-	use crate::error::Error as ClientError;
+	use interfaces::error::Error as ClientError;
 	use test_client::{
 		self, ClientExt, blockchain::HeaderBackend, AccountKeyring,
 		runtime::{self, Hash, Block, Header, Extrinsic}

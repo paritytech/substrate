@@ -26,7 +26,7 @@ use parking_lot::Mutex;
 
 use header_metadata::HeaderMetadata;
 
-use crate::error::{Error, Result};
+use interfaces::error::{Error, Result};
 
 /// Blockchain database header backend. Does not perform any validation.
 pub trait HeaderBackend<Block: BlockT>: Send + Sync {

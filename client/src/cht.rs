@@ -33,7 +33,7 @@ use state_machine::backend::InMemory as InMemoryState;
 use state_machine::{MemoryDB, TrieBackend, Backend as StateBackend, StorageProof,
 	prove_read_on_trie_backend, read_proof_check, read_proof_check_on_proving_backend};
 
-use crate::error::{Error as ClientError, Result as ClientResult};
+use interfaces::error::{Error as ClientError, Result as ClientResult};
 
 /// The size of each CHT. This value is passed to every CHT-related function from
 /// production code. Other values are passed from tests.
