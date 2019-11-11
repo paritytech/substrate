@@ -29,6 +29,7 @@
 pub mod light;
 pub mod offchain;
 
+mod children;
 mod cache;
 mod storage_cache;
 mod utils;
@@ -64,7 +65,6 @@ use state_machine::{
 };
 use crate::utils::{Meta, db_err, meta_keys, read_db, read_meta};
 use client::leaves::{LeafSet, FinalizationDisplaced};
-use client::children;
 use state_db::StateDb;
 use header_metadata::{CachedHeaderMetadata, HeaderMetadata, HeaderMetadataCache};
 use crate::storage_cache::{CachingState, SharedCache, new_shared_cache};

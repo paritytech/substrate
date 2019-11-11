@@ -57,7 +57,7 @@ use futures::Future;
 use futures_timer::Interval;
 
 use authority_discovery_primitives::{AuthorityDiscoveryApi, AuthorityId, Signature};
-use client::blockchain::HeaderBackend;
+use interfaces::blockchain::HeaderBackend;
 use error::{Error, Result};
 use log::{debug, error, log_enabled, warn};
 use network::specialization::NetworkSpecialization;
@@ -105,7 +105,7 @@ where
 	Block: BlockT + Unpin + 'static,
 	Network: NetworkProvider,
 	Client: ProvideRuntimeApi + Send + Sync + 'static + HeaderBackend<Block>,
-	<Client as ProvideRuntimeApi>::Api: AuthorityDiscoveryApi<Block, Error = client::error::Error>,
+	<Client as ProvideRuntimeApi>::Api: AuthorityDiscoveryApi<Block, Error = interfaces::error::Error>,
 	Self: Future<Output = ()>,
 {
 	/// Return a new authority discovery.
@@ -303,7 +303,7 @@ where
 	Block: BlockT + Unpin + 'static,
 	Network: NetworkProvider,
 	Client: ProvideRuntimeApi + Send + Sync + 'static + HeaderBackend<Block>,
-	<Client as ProvideRuntimeApi>::Api: AuthorityDiscoveryApi<Block, Error = client::error::Error>,
+	<Client as ProvideRuntimeApi>::Api: AuthorityDiscoveryApi<Block, Error = interfaces::error::Error>,
 {
 	type Output = ();
 
@@ -430,12 +430,12 @@ mod tests {
 		fn header(
 			&self,
 			_id: BlockId<Block>,
-		) -> std::result::Result<Option<Block::Header>, client::error::Error> {
+		) -> std::result::Result<Option<Block::Header>, interfaces::error::Error> {
 			Ok(None)
 		}
 
-		fn info(&self) -> client::blockchain::Info<Block> {
-			client::blockchain::Info {
+		fn info(&self) -> interfaces::blockchain::Info<Block> {
+			interfaces::blockchain::Info {
 				best_hash: Default::default(),
 				best_number: Zero::zero(),
 				finalized_hash: Default::default(),
@@ -447,21 +447,21 @@ mod tests {
 		fn status(
 			&self,
 			_id: BlockId<Block>,
-		) -> std::result::Result<client::blockchain::BlockStatus, client::error::Error> {
-			Ok(client::blockchain::BlockStatus::Unknown)
+		) -> std::result::Result<interfaces::blockchain::BlockStatus, interfaces::error::Error> {
+			Ok(interfaces::blockchain::BlockStatus::Unknown)
 		}
 
 		fn number(
 			&self,
 			_hash: Block::Hash,
-		) -> std::result::Result<Option<NumberFor<Block>>, client::error::Error> {
+		) -> std::result::Result<Option<NumberFor<Block>>, interfaces::error::Error> {
 			Ok(None)
 		}
 
 		fn hash(
 			&self,
 			_number: NumberFor<Block>,
-		) -> std::result::Result<Option<Block::Hash>, client::error::Error> {
+		) -> std::result::Result<Option<Block::Hash>, interfaces::error::Error> {
 			Ok(None)
 		}
 	}
@@ -475,7 +475,7 @@ mod tests {
 			_: ExecutionContext,
 			_: Option<()>,
 			_: Vec<u8>,
-		) -> std::result::Result<NativeOrEncoded<RuntimeVersion>, client::error::Error> {
+		) -> std::result::Result<NativeOrEncoded<RuntimeVersion>, interfaces::error::Error> {
 			unimplemented!("Not required for testing!")
 		}
 
@@ -485,7 +485,7 @@ mod tests {
 			_: ExecutionContext,
 			_: Option<(Block)>,
 			_: Vec<u8>,
-		) -> std::result::Result<NativeOrEncoded<()>, client::error::Error> {
+		) -> std::result::Result<NativeOrEncoded<()>, interfaces::error::Error> {
 			unimplemented!("Not required for testing!")
 		}
 
@@ -495,13 +495,13 @@ mod tests {
 			_: ExecutionContext,
 			_: Option<&<Block as BlockT>::Header>,
 			_: Vec<u8>,
-		) -> std::result::Result<NativeOrEncoded<()>, client::error::Error> {
+		) -> std::result::Result<NativeOrEncoded<()>, interfaces::error::Error> {
 			unimplemented!("Not required for testing!")
 		}
 	}
 
 	impl ApiExt<Block> for RuntimeApi {
-		type Error = client::error::Error;
+		type Error = interfaces::error::Error;
 
 		fn map_api_result<F: FnOnce(&Self) -> std::result::Result<R, E>, R, E>(
 			&self,
@@ -513,7 +513,7 @@ mod tests {
 		fn runtime_version_at(
 			&self,
 			_: &BlockId<Block>,
-		) -> std::result::Result<RuntimeVersion, client::error::Error> {
+		) -> std::result::Result<RuntimeVersion, interfaces::error::Error> {
 			unimplemented!("Not required for testing!")
 		}
 
@@ -533,7 +533,7 @@ mod tests {
 			_: ExecutionContext,
 			_: Option<()>,
 			_: Vec<u8>,
-		) -> std::result::Result<NativeOrEncoded<Vec<AuthorityId>>, client::error::Error> {
+		) -> std::result::Result<NativeOrEncoded<Vec<AuthorityId>>, interfaces::error::Error> {
 			return Ok(NativeOrEncoded::Native(vec![
 				AuthorityId("test-authority-id-1".as_bytes().to_vec()),
 				AuthorityId("test-authority-id-2".as_bytes().to_vec()),
@@ -547,7 +547,7 @@ mod tests {
 			_: Vec<u8>,
 		) -> std::result::Result<
 			NativeOrEncoded<Option<(Signature, AuthorityId)>>,
-			client::error::Error,
+			interfaces::error::Error,
 		> {
 			return Ok(NativeOrEncoded::Native(Some((
 				Signature("test-signature-1".as_bytes().to_vec()),
@@ -560,7 +560,7 @@ mod tests {
 			_: ExecutionContext,
 			args: Option<(&Vec<u8>, &Signature, &AuthorityId)>,
 			_: Vec<u8>,
-		) -> std::result::Result<NativeOrEncoded<bool>, client::error::Error> {
+		) -> std::result::Result<NativeOrEncoded<bool>, interfaces::error::Error> {
 			if *args.unwrap().1 == Signature("test-signature-1".as_bytes().to_vec()) {
 				return Ok(NativeOrEncoded::Native(true));
 			}

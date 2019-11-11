@@ -29,7 +29,7 @@ use crate::backend::{
 	AuxStore, Backend as ClientBackend, BlockImportOperation, RemoteBackend, NewBlockState,
 	StorageCollection, ChildStorageCollection,
 };
-use crate::blockchain::{HeaderBackend as BlockchainHeaderBackend, well_known_cache_keys};
+use interfaces::blockchain::{HeaderBackend as BlockchainHeaderBackend, well_known_cache_keys};
 use interfaces::error::{Error as ClientError, Result as ClientResult};
 use crate::light::blockchain::{Blockchain, Storage as BlockchainStorage};
 use hash_db::Hasher;

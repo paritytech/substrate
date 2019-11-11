@@ -33,7 +33,7 @@ use interfaces::error;
 use crate::backend::{self, NewBlockState, StorageCollection, ChildStorageCollection};
 use crate::light;
 use crate::leaves::LeafSet;
-use crate::blockchain::{
+use interfaces::blockchain::{
 	self, BlockStatus, HeaderBackend, well_known_cache_keys::Id as CacheKeyId
 };
 

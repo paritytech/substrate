@@ -26,7 +26,7 @@ use sr_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero}
 use header_metadata::{HeaderMetadata, CachedHeaderMetadata};
 
 use crate::backend::{AuxStore, NewBlockState};
-use crate::blockchain::{
+use interfaces::blockchain::{
 	Backend as BlockchainBackend, BlockStatus, Cache as BlockchainCache,
 	HeaderBackend as BlockchainHeaderBackend, Info as BlockchainInfo, ProvideCache,
 	well_known_cache_keys
@@ -250,7 +250,7 @@ pub mod tests {
 	use std::collections::HashMap;
 	use parking_lot::Mutex;
 	use test_client::runtime::{Hash, Block, Header};
-	use crate::blockchain::Info;
+	use interfaces::blockchain::Info;
 	use super::*;
 
 	pub type DummyBlockchain = Blockchain<DummyStorage>;

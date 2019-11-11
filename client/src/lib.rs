@@ -76,20 +76,19 @@
 #![warn(missing_docs)]
 #![recursion_limit="128"]
 
-pub mod blockchain;
 pub mod backend;
 pub mod cht;
 pub mod in_mem;
 pub mod genesis;
 pub mod light;
 pub mod leaves;
-pub mod children;
 mod call_executor;
 mod client;
 mod notifications;
 
 pub use interfaces::error;
-pub use crate::blockchain::Info as ChainInfo;
+pub use interfaces::blockchain;
+pub use interfaces::blockchain::Info as ChainInfo;
 pub use crate::call_executor::{CallExecutor, LocalCallExecutor};
 pub use crate::client::{
 	new_with_backend,
@@ -102,4 +101,4 @@ pub use crate::client::{
 pub use crate::notifications::{StorageEventStream, StorageChangeSet};
 pub use state_machine::{ExecutionStrategy, StorageProof};
 pub use crate::leaves::LeafSet;
-pub use crate::blockchain::well_known_cache_keys;
+pub use interfaces::blockchain::well_known_cache_keys;

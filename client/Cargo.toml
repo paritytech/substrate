@@ -19,7 +19,6 @@ header-metadata = { package = "substrate-header-metadata", path = "header-metada
 hex-literal = { version = "0.2.1" }
 inherents = { package = "substrate-inherents", path = "../primitives/inherents" }
 keyring = { package = "substrate-keyring", path = "keyring" }
-kvdb = { git = "https://github.com/paritytech/parity-common", rev="b0317f649ab2c665b7987b8475878fc4d2e1f81d" }
 log = { version = "0.4.8" }
 parking_lot = { version = "0.9.0" }
 primitives = { package = "substrate-primitives", path = "../primitives/core" }

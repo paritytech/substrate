@@ -25,7 +25,7 @@ use sr_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenSto
 use sr_primitives::traits::{Block as BlockT, NumberFor};
 use state_machine::backend::Backend as StateBackend;
 use state_machine::{ChangesTrieStorage as StateChangesTrieStorage, ChangesTrieTransaction};
-use crate::blockchain::well_known_cache_keys;
+use interfaces::blockchain::well_known_cache_keys;
 use consensus::BlockOrigin;
 use hash_db::Hasher;
 use parking_lot::Mutex;
@@ -216,7 +216,7 @@ pub trait Backend<Block, H>: AuxStore + Send + Sync where
 	/// Associated block insertion operation type.
 	type BlockImportOperation: BlockImportOperation<Block, H, State=Self::State>;
 	/// Associated blockchain backend type.
-	type Blockchain: crate::blockchain::Backend<Block>;
+	type Blockchain: interfaces::blockchain::Backend<Block>;
 	/// Associated state backend type.
 	type State: StateBackend<H>;
 	/// Changes trie storage.

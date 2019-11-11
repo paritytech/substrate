@@ -27,7 +27,7 @@ pub enum Error {
 	/// Failed to hash the authority id to be used as a dht key.
 	HashingAuthorityId(libp2p::core::multiaddr::multihash::EncodeError),
 	/// Failed calling into the Substrate runtime.
-	CallingRuntime(client::error::Error),
+	CallingRuntime(interfaces::error::Error),
 	/// Failed signing the dht payload via the Substrate runtime.
 	SigningDhtPayload,
 	/// From the Dht we only get the hashed authority id. In order to retrieve the actual authority id and to ensure it
