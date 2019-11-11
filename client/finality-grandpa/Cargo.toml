@@ -32,7 +32,7 @@ grandpa = { package = "finality-grandpa", version = "0.9.0", features = ["derive
 grandpa = { package = "finality-grandpa", version = "0.9.0", features = ["derive-codec", "test-helpers"] }
 network = { package = "substrate-network", path = "../network", features = ["test-helpers"] }
 keyring = { package = "substrate-keyring", path = "../keyring" }
-test-client = { package = "substrate-test-runtime-client", path = "../test-runtime/client"}
+test-client = { package = "substrate-test-runtime-client", path = "../../test/utils/runtime/client"}
 babe_primitives = { package = "substrate-consensus-babe-primitives", path = "../consensus/babe/primitives" }
 state_machine = { package = "substrate-state-machine", path = "../state-machine" }
 env_logger = "0.7.0"

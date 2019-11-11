@@ -17,7 +17,7 @@ sr-primitives = { path = "../../sr-primitives" }
 assert_matches = "1.3.0"
 env_logger = "0.7.0"
 codec = { package = "parity-scale-codec", version = "1.0.0" }
-test_runtime = { package = "substrate-test-runtime", path = "../../test-runtime" }
+test_runtime = { package = "substrate-test-runtime", path = "../../../test/utils/runtime" }
 criterion = "0.3"
 
 [[bench]]

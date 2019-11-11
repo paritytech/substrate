@@ -49,7 +49,7 @@ offchain = { package = "substrate-offchain", path = "../../client/offchain" }
 parity-multiaddr = { package = "parity-multiaddr", version = "0.5.0" }
 
 [dev-dependencies]
-substrate-test-runtime-client = { path = "../test-runtime/client" }
+substrate-test-runtime-client = { path = "../../test/utils/runtime/client" }
 node-executor = { path = "../../bin/node/executor" }
 node-primitives = { path = "../../bin/node/primitives" }
 node-runtime = { path = "../../bin/node/runtime" }
