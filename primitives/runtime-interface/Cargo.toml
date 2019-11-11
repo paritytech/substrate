@@ -17,7 +17,7 @@ primitive-types = { version = "0.6.1", default-features = false }
 [dev-dependencies]
 executor = { package = "substrate-executor", path = "../../client/executor" }
 test-wasm = { package = "substrate-runtime-interface-test-wasm", path = "test-wasm" }
-state_machine = { package = "substrate-state-machine", path = "../../client/state-machine"  }
+state_machine = { package = "substrate-state-machine", path = "../../primitives/state-machine"  }
 primitives = { package = "substrate-primitives", path = "../core" }
 runtime-io = { package = "sr-io", path = "../sr-io" }
 

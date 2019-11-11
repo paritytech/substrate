@@ -19,7 +19,7 @@ serde_json = "1.0.41"
 session = { package = "substrate-session", path = "../../primitives/session" }
 sr-primitives = { path = "../../primitives/sr-primitives" }
 rpc-primitives = { package = "substrate-rpc-primitives", path = "../../primitives/rpc" }
-state_machine = { package = "substrate-state-machine", path = "../state-machine" }
+state_machine = { package = "substrate-state-machine", path = "../../primitives/state-machine" }
 substrate-executor = { path = "../executor" }
 substrate-keystore = { path = "../keystore" }
 transaction_pool = { package = "substrate-transaction-pool", path = "../transaction-pool" }

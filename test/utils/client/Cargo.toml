@@ -15,4 +15,4 @@ keyring = { package = "substrate-keyring", path = "../../../client/keyring" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 primitives = { package = "substrate-primitives", path = "../../../primitives/core" }
 sr-primitives = {  path = "../../../primitives/sr-primitives" }
-state_machine = { package = "substrate-state-machine", path = "../../../client/state-machine" }
+state_machine = { package = "substrate-state-machine", path = "../../../primitives/state-machine" }

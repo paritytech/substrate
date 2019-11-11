@@ -17,11 +17,11 @@ interfaces = { package = "substrate-client-interfaces", path = "../interfaces" }
 primitives = { package = "substrate-primitives", path = "../../primitives/core" }
 sr-primitives = {  path = "../../primitives/sr-primitives" }
 client = { package = "substrate-client", path = "../" }
-state-machine = { package = "substrate-state-machine", path = "../state-machine" }
+state-machine = { package = "substrate-state-machine", path = "../../primitives/state-machine" }
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
 executor = { package = "substrate-executor", path = "../executor" }
 state_db = { package = "substrate-state-db", path = "../state-db" }
-trie = { package = "substrate-trie", path = "../trie" }
+trie = { package = "substrate-trie", path = "../../primitives/trie" }
 consensus_common = { package = "substrate-consensus-common", path = "../../primitives/consensus/common" }
 header_metadata = { package = "substrate-header-metadata", path = "../header-metadata" }
 

@@ -26,9 +26,9 @@ rstd = { package = "sr-std", path = "../primitives/sr-std" }
 runtime-version = { package = "sr-version", path = "../primitives/sr-version" }
 sr-api = { path = "../primitives/sr-api" }
 sr-primitives = { path = "../primitives/sr-primitives" }
-state-machine = { package = "substrate-state-machine", path = "state-machine" }
+state-machine = { package = "substrate-state-machine", path = "../primitives/state-machine" }
 substrate-telemetry = { path = "telemetry" }
-trie = { package = "substrate-trie", path = "trie" }
+trie = { package = "substrate-trie", path = "../primitives/trie" }
 
 [dev-dependencies]
 env_logger = "0.7.0"
@@ -36,5 +36,5 @@ tempfile = "3.1.0"
 client-db = { package = "substrate-client-db", path = "./db", features = ["kvdb-rocksdb"] }
 test-client = { package = "substrate-test-runtime-client", path = "../test/utils/runtime/client" }
 kvdb-memorydb = { git = "https://github.com/paritytech/parity-common", rev="b0317f649ab2c665b7987b8475878fc4d2e1f81d" }
-panic-handler = { package = "substrate-panic-handler", path = "panic-handler" }
+panic-handler = { package = "substrate-panic-handler", path = "../primitives/panic-handler" }
 

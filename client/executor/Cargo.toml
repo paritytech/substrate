@@ -9,10 +9,10 @@ derive_more = "0.15.0"
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 runtime_io = { package = "sr-io", path = "../../primitives/sr-io" }
 primitives = { package = "substrate-primitives", path = "../../primitives/core" }
-trie = { package = "substrate-trie", path = "../trie" }
+trie = { package = "substrate-trie", path = "../../primitives/trie" }
 serializer = { package = "substrate-serializer", path = "../../primitives/serializer" }
 runtime_version = { package = "sr-version", path = "../../primitives/sr-version" }
-panic-handler = { package = "substrate-panic-handler", path = "../panic-handler" }
+panic-handler = { package = "substrate-panic-handler", path = "../../primitives/panic-handler" }
 wasmi = "0.5.1"
 parity-wasm = "0.40.3"
 lazy_static = "1.4.0"
@@ -40,7 +40,7 @@ hex-literal = "0.2.1"
 runtime-test = { package = "substrate-runtime-test", path = "runtime-test" }
 substrate-client = { path = "../" }
 substrate-offchain = { path = "../offchain/" }
-state_machine = { package = "substrate-state-machine", path = "../state-machine"  }
+state_machine = { package = "substrate-state-machine", path = "../../primitives/state-machine"  }
 test-case = "0.3.3"
 
 [features]

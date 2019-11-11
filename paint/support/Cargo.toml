@@ -17,7 +17,7 @@ inherents = { package = "substrate-inherents", path = "../../primitives/inherent
 srml-support-procedural = { package = "srml-support-procedural", path = "./procedural" }
 paste = "0.1.6"
 once_cell = { version = "0.2.4", default-features = false, optional = true }
-state-machine = { package = "substrate-state-machine", path = "../../client/state-machine", optional = true }
+state-machine = { package = "substrate-state-machine", path = "../../primitives/state-machine", optional = true }
 bitmask = { version = "0.5.0", default-features = false }
 impl-trait-for-tuples = "0.1.3"
 

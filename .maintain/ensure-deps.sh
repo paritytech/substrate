@@ -17,9 +17,9 @@ PLEASE_DONT=(
 	"client<paint"
 	"client<node"
 	"paint<node"
-	"paint<substrate"
+	"paint<client"
 	"primitives<paint"
-	"primitives<substrate"
+	"primitives<client"
 )
 
 VIOLATIONS=()

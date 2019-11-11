@@ -9,10 +9,10 @@ edition = "2018"
 trie-root = "0.15.2"
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 runtime_io = { package = "sr-io", path = "../../../primitives/sr-io" }
-state_machine = { package = "substrate-state-machine", path = "../../../client/state-machine" }
+state_machine = { package = "substrate-state-machine", path = "../../../primitives/state-machine" }
 substrate-executor = { path = "../../../client/executor" }
 primitives = { package = "substrate-primitives", path = "../../../primitives/core" }
-trie = { package = "substrate-trie", path = "../../../client/trie" }
+trie = { package = "substrate-trie", path = "../../../primitives/trie" }
 node-primitives = { path = "../primitives" }
 node-runtime = { path = "../runtime" }
 

@@ -14,7 +14,7 @@ sr-staking-primitives = { path = "../../primitives/sr-staking-primitives", defau
 support = { package = "srml-support", path = "../support", default-features = false }
 system = { package = "srml-system", path = "../system", default-features = false }
 timestamp = { package = "srml-timestamp", path = "../timestamp", default-features = false }
-substrate-trie = { path = "../../client/trie", default-features = false, optional = true }
+substrate-trie = { path = "../../primitives/trie", default-features = false, optional = true }
 runtime-io ={ package = "sr-io", path = "../../primitives/sr-io", default-features = false }
 impl-trait-for-tuples = "0.1.3"
 
