@@ -18,6 +18,6 @@ substrate-primitives = { path = "../../../client/primitives" }
 transaction_pool = { package = "substrate-transaction-pool", path = "../../../client/transaction-pool" }
 
 [dev-dependencies]
-test-client = { package = "substrate-test-runtime-client", path = "../../../client/test-runtime/client" }
+test-client = { package = "substrate-test-runtime-client", path = "../../../test/utils/runtime/client" }
 env_logger = "0.7.0"
 futures03 = { package = "futures-preview", version = "=0.3.0-alpha.19" }

@@ -43,9 +43,9 @@ members = [
 	"client/sr-version",
 	"client/state-machine",
 	"client/telemetry",
-	"client/test-client",
-	"client/test-runtime",
-	"client/test-runtime/client",
+	"test/utils/client",
+	"test/utils/runtime",
+	"test/utils/runtime/client",
 	"client/transaction-pool",
 	"client/transaction-pool/graph",
 	"client/trie",
@@ -103,7 +103,7 @@ members = [
 	"bin/node/testing",
 	"bin/node-template",
 	"bin/subkey",
-	"test-utils/chain-spec-builder",
+	"test/utils/chain-spec-builder",
 ]
 
 [profile.release]

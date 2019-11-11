@@ -76,7 +76,7 @@ node-executor = { path = "../executor" }
 tokio = { version = "0.1.22", optional = true }
 exit-future = { version = "0.1.4", optional = true }
 substrate-cli = { path = "../../../client/cli", optional = true }
-transaction-factory = { path = "../../../test-utils/transaction-factory", optional = true }
+transaction-factory = { path = "../../../test/utils/transaction-factory", optional = true }
 ctrlc = { version = "3.1.3", features = ["termination"], optional = true }
 
 # WASM-specific dependencies

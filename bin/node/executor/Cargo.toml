@@ -18,7 +18,7 @@ node-runtime = { path = "../runtime" }
 
 [dev-dependencies]
 node-testing = { path = "../testing" }
-test-client = { package = "substrate-test-client", path = "../../../client/test-client" }
+test-client = { package = "substrate-test-client", path = "../../../test/utils/client" }
 sr-primitives = { path = "../../../client/sr-primitives" }
 runtime_support = { package = "srml-support", path = "../../../srml/support" }
 balances = { package = "srml-balances", path = "../../../srml/balances" }

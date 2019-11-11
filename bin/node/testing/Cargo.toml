@@ -24,7 +24,7 @@ session = { package = "srml-session", path = "../../../srml/session" }
 staking = { package = "srml-staking", path = "../../../srml/staking" }
 substrate-executor = { path = "../../../client/executor" }
 system = { package = "srml-system", path = "../../../srml/system" }
-test-client = { package = "substrate-test-client", path = "../../../client/test-client" }
+test-client = { package = "substrate-test-client", path = "../../../test/utils/client" }
 timestamp = { package = "srml-timestamp", path = "../../../srml/timestamp" }
 treasury = { package = "srml-treasury", path = "../../../srml/treasury" }
 transaction-payment = { package = "srml-transaction-payment", path = "../../../srml/transaction-payment" }
