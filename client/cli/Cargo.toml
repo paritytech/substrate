@@ -26,7 +26,7 @@ panic-handler = { package = "substrate-panic-handler", path = "../../client/pani
 client = { package = "substrate-client", path = "../../client/client" }
 header-metadata = { package = "substrate-header-metadata", path = "../../client/client/header-metadata" }
 network = { package = "substrate-network", path = "../../client/network" }
-sr-primitives = { path = "../../client/sr-primitives" }
+sr-primitives = { path = "../../primitives/sr-primitives" }
 primitives = { package = "substrate-primitives", path = "../../client/primitives" }
 service = { package = "substrate-service", path = "../../client/service", default-features = false }
 state-machine = { package = "substrate-state-machine", path = "../../client/state-machine" }

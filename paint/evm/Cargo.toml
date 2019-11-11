@@ -12,9 +12,9 @@ system = { package = "srml-system", path = "../system", default-features = false
 timestamp = { package = "srml-timestamp", path = "../timestamp", default-features = false }
 balances = { package = "srml-balances", path = "../balances", default-features = false }
 primitives = { package = "substrate-primitives", path = "../../client/primitives", default-features = false }
-sr-primitives = { path = "../../client/sr-primitives", default-features = false }
-rstd = { package = "sr-std", path = "../../client/sr-std", default-features = false }
-runtime-io = { package = "sr-io", path = "../../client/sr-io", default-features = false }
+sr-primitives = { path = "../../primitives/sr-primitives", default-features = false }
+rstd = { package = "sr-std", path = "../../primitives/sr-std", default-features = false }
+runtime-io = { package = "sr-io", path = "../../primitives/sr-io", default-features = false }
 primitive-types = { version = "0.6", default-features = false, features = ["rlp"] }
 rlp = { version = "0.4", default-features = false }
 evm = { version = "0.14", default-features = false }

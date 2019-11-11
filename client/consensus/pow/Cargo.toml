@@ -8,7 +8,7 @@ edition = "2018"
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
 primitives = { package = "substrate-primitives", path = "../../primitives" }
-sr-primitives = { path = "../../sr-primitives" }
+sr-primitives = { path = "../../../primitives/sr-primitives" }
 client = { package = "substrate-client", path = "../../client" }
 srml-timestamp = { path = "../../../paint/timestamp" }
 inherents = { package = "substrate-inherents", path = "../../inherents" }

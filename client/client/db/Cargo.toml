@@ -14,7 +14,7 @@ kvdb-memorydb = { git = "https://github.com/paritytech/parity-common", rev="b031
 linked-hash-map = "0.5.2"
 hash-db = "0.15.2"
 primitives = { package = "substrate-primitives", path = "../../primitives" }
-sr-primitives = {  path = "../../sr-primitives" }
+sr-primitives = {  path = "../../../primitives/sr-primitives" }
 client = { package = "substrate-client", path = "../../client" }
 state-machine = { package = "substrate-state-machine", path = "../../state-machine" }
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }

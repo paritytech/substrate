@@ -17,8 +17,8 @@ node-primitives = { path = "../primitives" }
 node-runtime = { path = "../runtime" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 primitives = { package = "substrate-primitives", path = "../../../client/primitives" }
-runtime-io = { package = "sr-io", path = "../../../client/sr-io" }
-sr-primitives = { path = "../../../client/sr-primitives" }
+runtime-io = { package = "sr-io", path = "../../../primitives/sr-io" }
+sr-primitives = { path = "../../../primitives/sr-primitives" }
 runtime_support = { package = "srml-support", path = "../../../paint/support" }
 session = { package = "srml-session", path = "../../../paint/session" }
 staking = { package = "srml-staking", path = "../../../paint/staking" }

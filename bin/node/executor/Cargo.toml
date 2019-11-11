@@ -8,7 +8,7 @@ edition = "2018"
 [dependencies]
 trie-root = "0.15.2"
 codec = { package = "parity-scale-codec", version = "1.0.0" }
-runtime_io = { package = "sr-io", path = "../../../client/sr-io" }
+runtime_io = { package = "sr-io", path = "../../../primitives/sr-io" }
 state_machine = { package = "substrate-state-machine", path = "../../../client/state-machine" }
 substrate-executor = { path = "../../../client/executor" }
 primitives = { package = "substrate-primitives", path = "../../../client/primitives" }
@@ -19,7 +19,7 @@ node-runtime = { path = "../runtime" }
 [dev-dependencies]
 node-testing = { path = "../testing" }
 test-client = { package = "substrate-test-client", path = "../../../test/utils/client" }
-sr-primitives = { path = "../../../client/sr-primitives" }
+sr-primitives = { path = "../../../primitives/sr-primitives" }
 runtime_support = { package = "srml-support", path = "../../../paint/support" }
 balances = { package = "srml-balances", path = "../../../paint/balances" }
 transaction-payment = { package = "srml-transaction-payment", path = "../../../paint/transaction-payment" }

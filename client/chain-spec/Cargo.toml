@@ -11,7 +11,7 @@ network = { package = "substrate-network", path = "../../client/network" }
 primitives = { package = "substrate-primitives", path = "../primitives" }
 serde = { version = "1.0.101", features = ["derive"] }
 serde_json = "1.0.41"
-sr-primitives = { path = "../../client/sr-primitives" }
+sr-primitives = { path = "../../primitives/sr-primitives" }
 tel = { package = "substrate-telemetry", path = "../../client/telemetry" }
 
 [dev-dependencies]

@@ -8,5 +8,5 @@ edition = "2018"
 [dependencies]
 primitive-types = { version = "0.6", features = ["codec"] }
 primitives-storage = { package = "substrate-primitives-storage", path = "../primitives/storage" }
-rstd = { package = "sr-std", path = "../sr-std" }
+rstd = { package = "sr-std", path = "../../primitives/sr-std" }
 environmental = { version = "1.0.2" }

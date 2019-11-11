@@ -29,8 +29,8 @@ serde_json = "1.0.41"
 sysinfo = "0.9.5"
 target_info = "0.1.0"
 keystore = { package = "substrate-keystore", path = "../../client/keystore" }
-sr-io = { path = "../../client/sr-io" }
-sr-primitives = { path = "../../client/sr-primitives" }
+sr-io = { path = "../../primitives/sr-io" }
+sr-primitives = { path = "../../primitives/sr-primitives" }
 primitives = { package = "substrate-primitives", path = "../primitives" }
 session = { package = "substrate-session", path = "../session" }
 app-crypto = { package = "substrate-application-crypto", path = "../application-crypto" }

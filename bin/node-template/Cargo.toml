@@ -19,7 +19,7 @@ exit-future = "0.1.4"
 parking_lot = "0.9.0"
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 trie-root = "0.15.2"
-sr-io = { path = "../../client/sr-io" }
+sr-io = { path = "../../primitives/sr-io" }
 substrate-cli = { path = "../../client/cli" }
 primitives = { package = "substrate-primitives", path = "../../client/primitives" }
 substrate-executor = { path = "../../client/executor" }
@@ -33,7 +33,7 @@ grandpa = { package = "substrate-finality-grandpa", path = "../../client/finalit
 grandpa-primitives = { package = "substrate-finality-grandpa-primitives", path = "../../client/finality-grandpa/primitives" }
 substrate-client = {  path = "../../client/client" }
 runtime = { package = "node-template-runtime", path = "runtime" }
-sr-primitives = { path = "../../client/sr-primitives" }
+sr-primitives = { path = "../../primitives/sr-primitives" }
 basic-authorship = { package = "substrate-basic-authorship", path  = "../../client/basic-authorship"}
 
 [build-dependencies]

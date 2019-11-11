@@ -8,17 +8,17 @@ edition = "2018"
 app-crypto = { package = "substrate-application-crypto", path = "../../client/application-crypto", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 primitives = { package = "substrate-primitives",  path = "../../client/primitives", default-features = false }
-rstd = { package = "sr-std", path = "../../client/sr-std", default-features = false }
+rstd = { package = "sr-std", path = "../../primitives/sr-std", default-features = false }
 serde = { version = "1.0.101", optional = true }
-runtime-io = { package = "sr-io", path = "../../client/sr-io", default-features = false }
+runtime-io = { package = "sr-io", path = "../../primitives/sr-io", default-features = false }
 session = { package = "srml-session", path = "../session", default-features = false }
-sr-primitives = { path = "../../client/sr-primitives", default-features = false }
+sr-primitives = { path = "../../primitives/sr-primitives", default-features = false }
 support = { package = "srml-support", path = "../support", default-features = false }
 system = { package = "srml-system", path = "../system", default-features = false }
 
 [dev-dependencies]
 babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../../client/consensus/babe/primitives", default-features = false }
-sr-staking-primitives = { path = "../../client/sr-staking-primitives", default-features = false }
+sr-staking-primitives = { path = "../../primitives/sr-staking-primitives", default-features = false }
 
 [features]
 default = ["std"]

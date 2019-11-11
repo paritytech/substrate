@@ -16,11 +16,11 @@ app-crypto = { package = "substrate-application-crypto", path = "../../../client
 inherents = { package = "substrate-inherents", path = "../../../client/inherents", default-features = false }
 aura-primitives = { package = "substrate-consensus-aura-primitives", path = "../../../client/consensus/aura/primitives", default-features = false }
 babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../../../client/consensus/babe/primitives", default-features = false }
-rstd = { package = "sr-std", path = "../../../client/sr-std", default-features = false }
-runtime_io = { package = "sr-io", path = "../../../client/sr-io", default-features = false }
-sr-primitives = {  path = "../../../client/sr-primitives", default-features = false }
+rstd = { package = "sr-std", path = "../../../primitives/sr-std", default-features = false }
+runtime_io = { package = "sr-io", path = "../../../primitives/sr-io", default-features = false }
+sr-primitives = {  path = "../../../primitives/sr-primitives", default-features = false }
 session = { package = "substrate-session", path = "../../../client/session", default-features = false }
-runtime_version = { package = "sr-version", path = "../../../client/sr-version", default-features = false }
+runtime_version = { package = "sr-version", path = "../../../primitives/sr-version", default-features = false }
 runtime_support = { package = "srml-support", path = "../../../paint/support", default-features = false }
 substrate-trie = { path = "../../../client/trie", default-features = false }
 trie-db = { version = "0.15.2", default-features = false }

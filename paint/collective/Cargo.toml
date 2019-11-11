@@ -9,9 +9,9 @@ serde = { version = "1.0.101", optional = true }
 safe-mix = { version = "1.0.0", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 primitives = { package = "substrate-primitives",  path = "../../client/primitives", default-features = false }
-rstd = { package = "sr-std", path = "../../client/sr-std", default-features = false }
-runtime-io = { package = "sr-io", path = "../../client/sr-io", default-features = false }
-sr-primitives = { path = "../../client/sr-primitives", default-features = false }
+rstd = { package = "sr-std", path = "../../primitives/sr-std", default-features = false }
+runtime-io = { package = "sr-io", path = "../../primitives/sr-io", default-features = false }
+sr-primitives = { path = "../../primitives/sr-primitives", default-features = false }
 support = { package = "srml-support", path = "../support", default-features = false }
 system = { package = "srml-system", path = "../system", default-features = false }
 

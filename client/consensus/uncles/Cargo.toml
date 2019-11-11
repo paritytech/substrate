@@ -8,7 +8,7 @@ edition = "2018"
 [dependencies]
 client = { package = "substrate-client", path = "../../client" }
 primitives = { package = "substrate-primitives", path = "../../primitives" }
-sr-primitives = {  path = "../../sr-primitives" }
+sr-primitives = {  path = "../../../primitives/sr-primitives" }
 srml-authorship = {  path = "../../../paint/authorship" }
 consensus_common = { package = "substrate-consensus-common", path = "../common" }
 inherents = { package = "substrate-inherents", path = "../../inherents" }

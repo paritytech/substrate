@@ -8,7 +8,7 @@ edition = "2018"
 primitives = { package = "substrate-primitives",  version = "*", path = "../../client/primitives" }
 node-runtime = { version = "*", path = "../node/runtime" }
 node-primitives = { version = "*", path = "../node/primitives" }
-sr-primitives = { version = "*", path = "../../client/sr-primitives" }
+sr-primitives = { version = "*", path = "../../primitives/sr-primitives" }
 rand = "0.7.2"
 clap = { version = "2.33.0", features = ["yaml"] }
 tiny-bip39 = "0.6.2"

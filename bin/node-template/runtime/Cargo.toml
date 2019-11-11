@@ -8,9 +8,9 @@ edition = "2018"
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
 safe-mix = { version = "1.0.0", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-rstd = { package = "sr-std", path = "../../../client/sr-std", default_features = false }
-runtime-io = { package = "sr-io", path = "../../../client/sr-io", default_features = false }
-version = { package = "sr-version", path = "../../../client/sr-version", default_features = false }
+rstd = { package = "sr-std", path = "../../../primitives/sr-std", default_features = false }
+runtime-io = { package = "sr-io", path = "../../../primitives/sr-io", default_features = false }
+version = { package = "sr-version", path = "../../../primitives/sr-version", default_features = false }
 support = { package = "srml-support", path = "../../../paint/support", default_features = false }
 primitives = { package = "substrate-primitives", path = "../../../client/primitives", default_features = false }
 substrate-session = { path = "../../../client/session", default-features = false }
@@ -25,7 +25,7 @@ system = { package = "srml-system", path = "../../../paint/system", default_feat
 timestamp = { package = "srml-timestamp", path = "../../../paint/timestamp", default_features = false }
 sudo = { package = "srml-sudo", path = "../../../paint/sudo", default_features = false }
 transaction-payment = { package = "srml-transaction-payment", path = "../../../paint/transaction-payment", default_features = false }
-sr-primitives = { path = "../../../client/sr-primitives", default_features = false }
+sr-primitives = { path = "../../../primitives/sr-primitives", default_features = false }
 client = { package = "substrate-client", path = "../../../client/client", default_features = false }
 offchain-primitives = { package = "substrate-offchain-primitives", path = "../../../client/offchain/primitives", default-features = false }
 

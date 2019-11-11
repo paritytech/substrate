@@ -14,8 +14,8 @@ num-bigint = "0.2.3"
 num-rational = "0.2.2"
 num-traits = "0.2.8"
 runtime-support = { package = "srml-support", path = "../../../paint/support" }
-runtime-version = { package = "sr-version", path = "../../sr-version" }
-runtime-io = { package = "sr-io", path = "../../sr-io" }
+runtime-version = { package = "sr-version", path = "../../../primitives/sr-version" }
+runtime-io = { package = "sr-io", path = "../../../primitives/sr-io" }
 inherents = { package = "substrate-inherents", path = "../../inherents" }
 substrate-telemetry = { path = "../../telemetry" }
 keystore = { package = "substrate-keystore", path = "../../keystore" }
@@ -25,7 +25,7 @@ header-metadata = { package = "substrate-header-metadata", path = "../../client/
 consensus-common = { package = "substrate-consensus-common", path = "../common" }
 uncles = { package = "substrate-consensus-uncles", path = "../uncles" }
 slots = { package = "substrate-consensus-slots", path = "../slots"  }
-sr-primitives = {  path = "../../sr-primitives" }
+sr-primitives = {  path = "../../../primitives/sr-primitives" }
 fork-tree = { path = "../../utils/fork-tree" }
 futures-preview = { version = "0.3.0-alpha.19", features = ["compat"] }
 futures01 = { package = "futures", version = "0.1" }

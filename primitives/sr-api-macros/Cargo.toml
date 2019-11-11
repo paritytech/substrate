@@ -15,14 +15,14 @@ blake2-rfc = "0.2.18"
 proc-macro-crate = "0.1.4"
 
 [dev-dependencies]
-client = { package = "substrate-client", path = "../client" }
+client = { package = "substrate-client", path = "../../client/client" }
 test-client = { package = "substrate-test-runtime-client", path = "../../test/utils/runtime/client" }
-state_machine = { package = "substrate-state-machine", path = "../state-machine" }
+state_machine = { package = "substrate-state-machine", path = "../../client/state-machine" }
 sr-primitives = {  path = "../sr-primitives" }
 sr-version = { path = "../sr-version" }
-primitives = { package = "substrate-primitives",  path = "../primitives" }
+primitives = { package = "substrate-primitives",  path = "../../client/primitives" }
 criterion = "0.3.0"
-consensus_common = { package = "substrate-consensus-common", path = "../consensus/common" }
+consensus_common = { package = "substrate-consensus-common", path = "../../client/consensus/common" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 trybuild = "1.0.17"
 rustversion = "1.0.0"

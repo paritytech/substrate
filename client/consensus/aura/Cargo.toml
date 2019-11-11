@@ -10,8 +10,8 @@ codec = { package = "parity-scale-codec", version = "1.0.0" }
 primitives = { package = "substrate-primitives", path = "../../primitives" }
 app-crypto = { package = "substrate-application-crypto", path = "../../application-crypto" }
 runtime_support = { package = "srml-support", path = "../../../paint/support" }
-runtime_version = { package = "sr-version", path = "../../sr-version" }
-runtime_io = { package = "sr-io", path = "../../sr-io" }
+runtime_version = { package = "sr-version", path = "../../../primitives/sr-version" }
+runtime_io = { package = "sr-io", path = "../../../primitives/sr-io" }
 slots = { package = "substrate-consensus-slots", path = "../slots" }
 aura_primitives = { package = "substrate-consensus-aura-primitives", path = "primitives" }
 inherents = { package = "substrate-inherents", path = "../../inherents" }
@@ -20,7 +20,7 @@ client = { package = "substrate-client", path = "../../client" }
 substrate-telemetry = { path = "../../telemetry" }
 keystore = { package = "substrate-keystore", path = "../../keystore" }
 consensus_common = { package = "substrate-consensus-common", path = "../common" }
-sr-primitives = {  path = "../../sr-primitives" }
+sr-primitives = {  path = "../../../primitives/sr-primitives" }
 futures-preview = { version = "0.3.0-alpha.19", features = ["compat"] }
 futures01 = { package = "futures", version = "0.1" }
 futures-timer = "0.4.0"

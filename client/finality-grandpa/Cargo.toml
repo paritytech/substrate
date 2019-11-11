@@ -14,7 +14,7 @@ tokio-executor = "0.1.8"
 tokio-timer = "0.2.11"
 rand = "0.7.2"
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
-sr-primitives = {  path = "../sr-primitives" }
+sr-primitives = {  path = "../../primitives/sr-primitives" }
 consensus_common = { package = "substrate-consensus-common", path = "../consensus/common" }
 primitives = { package = "substrate-primitives",  path = "../primitives" }
 substrate-telemetry = { path = "../telemetry" }

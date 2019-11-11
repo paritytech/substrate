@@ -11,7 +11,7 @@ consensus_common = { package = "substrate-consensus-common", path = "../../../cl
 log = "0.4.8"
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 primitives = { package = "substrate-primitives", path = "../../../client/primitives", default-features = false }
-sr-primitives = { path = "../../../client/sr-primitives", default-features = false }
+sr-primitives = { path = "../../../primitives/sr-primitives", default-features = false }
 substrate-service = { path = "../../../client/service" }
 
 [features]

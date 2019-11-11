@@ -27,7 +27,7 @@ fork-tree = { path = "../../client/utils/fork-tree" }
 consensus = { package = "substrate-consensus-common", path = "../../client/consensus/common" }
 client = { package = "substrate-client", path = "../../client/client" }
 header_metadata = { package = "substrate-header-metadata", path = "../../client/client/header-metadata" }
-sr-primitives = { path = "../../client/sr-primitives" }
+sr-primitives = { path = "../../primitives/sr-primitives" }
 primitives = { package = "substrate-primitives", path = "../../client/primitives" }
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
 peerset = { package = "substrate-peerset", path = "../../client/peerset" }
