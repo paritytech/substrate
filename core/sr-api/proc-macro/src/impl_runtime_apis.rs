@@ -655,6 +655,5 @@ pub fn impl_runtime_apis_impl(input: proc_macro::TokenStream) -> proc_macro::Tok
 
 			#wasm_interface
 		}
-	);
-	res.into()
+	).into()
 }
