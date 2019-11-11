@@ -14,13 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Data storage containing multiple state for a value.
-//! This is use to store historical information for an item,
-//! and does have to include any kind of proof.
+//! Linear detached historical.
 
-
-#![cfg_attr(not(feature = "std"), no_std)]
-
-pub mod synch;
-pub mod detached;
-pub mod linear;
+pub mod transaction;
