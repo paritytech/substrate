@@ -9,7 +9,7 @@ edition = "2018"
 app-crypto = { package = "substrate-application-crypto", path = "../../../primitives/application-crypto" }
 aura_primitives = { package = "substrate-consensus-aura-primitives", path = "../../../primitives/consensus/aura" }
 block-builder-api = { package = "substrate-block-builder-runtime-api", path = "../../../primitives/block-builder/runtime-api" }
-client = { package = "substrate-client", path = "../../client" }
+client = { package = "substrate-client", path = "../../" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 consensus_common = { package = "substrate-consensus-common", path = "../../../primitives/consensus/common" }
 derive_more = "0.15.0"

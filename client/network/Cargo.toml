@@ -25,11 +25,11 @@ rand = "0.7.2"
 libp2p = { version = "0.13.0", default-features = false, features = ["libp2p-websocket"] }
 fork-tree = { path = "../utils/fork-tree" }
 consensus = { package = "substrate-consensus-common", path = "../../primitives/consensus/common" }
-client = { package = "substrate-client", path = "../client" }
-header_metadata = { package = "substrate-header-metadata", path = "../client/header-metadata" }
+client = { package = "substrate-client", path = "../" }
+header_metadata = { package = "substrate-header-metadata", path = "../header-metadata" }
 sr-primitives = { path = "../../primitives/sr-primitives" }
 primitives = { package = "substrate-primitives", path = "../../primitives/core" }
-block-builder = { package = "substrate-block-builder", path = "../../client/block-builder" }
+block-builder = { package = "substrate-block-builder", path = "../block-builder" }
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
 peerset = { package = "substrate-peerset", path = "../../primitives/peerset" }
 serde = { version = "1.0.101", features = ["derive"] }

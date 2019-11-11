@@ -7,7 +7,7 @@ edition = "2018"
 
 [dependencies]
 balances = { package = "srml-balances", path = "../../../paint/balances" }
-client = { package = "substrate-client", path = "../../../client/client" }
+client = { package = "substrate-client", path = "../../../client/" }
 contracts = { package = "srml-contracts", path = "../../../paint/contracts" }
 grandpa = { package = "srml-grandpa", path = "../../../paint/grandpa" }
 indices = { package = "srml-indices", path = "../../../paint/indices" }

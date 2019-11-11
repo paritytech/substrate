@@ -7,7 +7,7 @@ edition = "2018"
 [dependencies]
 block-builder-api = { package = "substrate-block-builder-runtime-api", path = "../../../primitives/block-builder/runtime-api" }
 cli = { package = "substrate-cli", path = "../../../client/cli" }
-client = { package = "substrate-client", path = "../../../client/client" }
+client = { package = "substrate-client", path = "../../../client" }
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
 consensus_common = { package = "substrate-consensus-common", path = "../../../primitives/consensus/common" }
 log = "0.4.8"

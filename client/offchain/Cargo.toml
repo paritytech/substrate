@@ -8,7 +8,7 @@ edition = "2018"
 
 [dependencies]
 bytes = "0.4.12"
-client = { package = "substrate-client", path = "../client" }
+client = { package = "substrate-client", path = "../" }
 sr-api = { path = "../../primitives/sr-api" }
 fnv = "1.0.6"
 futures01 = { package = "futures", version = "0.1" }
@@ -33,7 +33,7 @@ hyper-rustls = "0.17.1"
 
 [dev-dependencies]
 env_logger = "0.7.0"
-client-db = { package = "substrate-client-db", path = "../client/db/", default-features = true }
+client-db = { package = "substrate-client-db", path = "../db/", default-features = true }
 test-client = { package = "substrate-test-runtime-client", path = "../../test/utils/runtime/client" }
 tokio = "0.1.22"
 
