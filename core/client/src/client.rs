@@ -1587,16 +1587,8 @@ impl<'a, B, E, Block, RA> consensus::BlockImport<Block> for &'a Client<B, E, Blo
 			}
 		}
 
-		match self.block_status(&BlockId::Hash(parent_hash))
-			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
-		{
-			BlockStatus::InChainWithState | BlockStatus::Queued => {},
-			BlockStatus::Unknown => return Ok(ImportResult::UnknownParent),
-			BlockStatus::InChainPruned if allow_missing_state => {},
-			BlockStatus::InChainPruned => return Ok(ImportResult::MissingState),
-			BlockStatus::KnownBad => return Ok(ImportResult::KnownBad),
-		}
-
+		// Own status must be checked first. If the block and ancestry is pruned
+		// this function must return `AlreadyInChain` rather than `MissingState`
 		match self.block_status(&BlockId::Hash(hash))
 			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
 		{
@@ -1604,6 +1596,17 @@ impl<'a, B, E, Block, RA> consensus::BlockImport<Block> for &'a Client<B, E, Blo
 			BlockStatus::Unknown | BlockStatus::InChainPruned => {},
 			BlockStatus::KnownBad => return Ok(ImportResult::KnownBad),
 		}
+
+		match self.block_status(&BlockId::Hash(parent_hash))
+			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
+			{
+				BlockStatus::InChainWithState | BlockStatus::Queued => {},
+				BlockStatus::Unknown => return Ok(ImportResult::UnknownParent),
+				BlockStatus::InChainPruned if allow_missing_state => {},
+				BlockStatus::InChainPruned => return Ok(ImportResult::MissingState),
+				BlockStatus::KnownBad => return Ok(ImportResult::KnownBad),
+			}
+
 
 		Ok(ImportResult::imported(false))
 	}
