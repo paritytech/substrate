@@ -56,6 +56,10 @@ use header_metadata::{HeaderMetadata, CachedHeaderMetadata};
 use sr_api::{CallRuntimeAt, ConstructRuntimeApi, Core as CoreApi, ProofRecorder, InitializeBlock};
 use block_builder::BlockBuilderApi;
 
+use interfaces::{
+	notifications::{StorageNotifications, StorageEventStream},
+};
+
 use crate::{
 	backend::{
 		self, BlockImportOperation, PrunableStateChangesTrieStorage,
@@ -67,7 +71,6 @@ use crate::{
 		well_known_cache_keys::Id as CacheKeyId,
 	},
 	call_executor::{CallExecutor, LocalCallExecutor},
-	notifications::{StorageNotifications, StorageEventStream},
 	light::{call_executor::prove_execution, fetcher::ChangesProof},
 	error::Error, cht, error, in_mem, genesis
 };

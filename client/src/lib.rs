@@ -84,7 +84,6 @@ pub mod light;
 pub mod leaves;
 mod call_executor;
 mod client;
-mod notifications;
 
 pub use interfaces::error;
 pub use interfaces::blockchain;
@@ -98,7 +97,7 @@ pub use crate::client::{
 	LongestChain, BlockOf, ProvideUncles, ForkBlocks,
 	utils, apply_aux,
 };
-pub use crate::notifications::{StorageEventStream, StorageChangeSet};
+pub use interfaces::notifications::{StorageEventStream, StorageChangeSet};
 pub use state_machine::{ExecutionStrategy, StorageProof};
 pub use crate::leaves::LeafSet;
 pub use interfaces::blockchain::well_known_cache_keys;
