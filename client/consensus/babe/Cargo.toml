@@ -13,13 +13,13 @@ app-crypto = { package = "substrate-application-crypto", path = "../../applicati
 num-bigint = "0.2.3"
 num-rational = "0.2.2"
 num-traits = "0.2.8"
-runtime-support = { package = "srml-support", path = "../../../srml/support" }
+runtime-support = { package = "srml-support", path = "../../../paint/support" }
 runtime-version = { package = "sr-version", path = "../../sr-version" }
 runtime-io = { package = "sr-io", path = "../../sr-io" }
 inherents = { package = "substrate-inherents", path = "../../inherents" }
 substrate-telemetry = { path = "../../telemetry" }
 keystore = { package = "substrate-keystore", path = "../../keystore" }
-srml-babe = { path = "../../../srml/babe" }
+srml-babe = { path = "../../../paint/babe" }
 client = { package = "substrate-client", path = "../../client" }
 header-metadata = { package = "substrate-header-metadata", path = "../../client/header-metadata" }
 consensus-common = { package = "substrate-consensus-common", path = "../common" }

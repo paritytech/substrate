@@ -13,8 +13,8 @@ primitives = { package = "substrate-primitives", path = "../../primitives" }
 consensus = { package = "substrate-consensus-common", path = "../common" }
 client = { package = "substrate-client", path = "../../client" }
 transaction_pool = { package = "substrate-transaction-pool", path = "../../transaction-pool" }
-runtime_support = { package = "srml-support", path = "../../../srml/support" }
-srml-system = { path = "../../../srml/system" }
+runtime_support = { package = "srml-support", path = "../../../paint/support" }
+srml-system = { path = "../../../paint/system" }
 sr-primitives = {  path = "../../sr-primitives" }
 runtime_version = { package = "sr-version", path = "../../sr-version" }
 runtime_io = { package = "sr-io", path = "../../sr-io" }

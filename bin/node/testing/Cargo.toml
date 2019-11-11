@@ -6,11 +6,11 @@ description = "Test utilities for Substrate node."
 edition = "2018"
 
 [dependencies]
-balances = { package = "srml-balances", path = "../../../srml/balances" }
+balances = { package = "srml-balances", path = "../../../paint/balances" }
 client = { package = "substrate-client", path = "../../../client/client" }
-contracts = { package = "srml-contracts", path = "../../../srml/contracts" }
-grandpa = { package = "srml-grandpa", path = "../../../srml/grandpa" }
-indices = { package = "srml-indices", path = "../../../srml/indices" }
+contracts = { package = "srml-contracts", path = "../../../paint/contracts" }
+grandpa = { package = "srml-grandpa", path = "../../../paint/grandpa" }
+indices = { package = "srml-indices", path = "../../../paint/indices" }
 keyring = { package = "substrate-keyring", path = "../../../client/keyring" }
 node-executor = { path = "../executor" }
 node-primitives = { path = "../primitives" }
@@ -19,13 +19,13 @@ codec = { package = "parity-scale-codec", version = "1.0.0" }
 primitives = { package = "substrate-primitives", path = "../../../client/primitives" }
 runtime-io = { package = "sr-io", path = "../../../client/sr-io" }
 sr-primitives = { path = "../../../client/sr-primitives" }
-runtime_support = { package = "srml-support", path = "../../../srml/support" }
-session = { package = "srml-session", path = "../../../srml/session" }
-staking = { package = "srml-staking", path = "../../../srml/staking" }
+runtime_support = { package = "srml-support", path = "../../../paint/support" }
+session = { package = "srml-session", path = "../../../paint/session" }
+staking = { package = "srml-staking", path = "../../../paint/staking" }
 substrate-executor = { path = "../../../client/executor" }
-system = { package = "srml-system", path = "../../../srml/system" }
+system = { package = "srml-system", path = "../../../paint/system" }
 test-client = { package = "substrate-test-client", path = "../../../test/utils/client" }
-timestamp = { package = "srml-timestamp", path = "../../../srml/timestamp" }
-treasury = { package = "srml-treasury", path = "../../../srml/treasury" }
-transaction-payment = { package = "srml-transaction-payment", path = "../../../srml/transaction-payment" }
+timestamp = { package = "srml-timestamp", path = "../../../paint/timestamp" }
+treasury = { package = "srml-treasury", path = "../../../paint/treasury" }
+transaction-payment = { package = "srml-transaction-payment", path = "../../../paint/transaction-payment" }
 wabt = "0.9.2"

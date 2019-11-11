@@ -20,16 +20,16 @@ node-runtime = { path = "../runtime" }
 node-testing = { path = "../testing" }
 test-client = { package = "substrate-test-client", path = "../../../test/utils/client" }
 sr-primitives = { path = "../../../client/sr-primitives" }
-runtime_support = { package = "srml-support", path = "../../../srml/support" }
-balances = { package = "srml-balances", path = "../../../srml/balances" }
-transaction-payment = { package = "srml-transaction-payment", path = "../../../srml/transaction-payment" }
-session = { package = "srml-session", path = "../../../srml/session" }
-system = { package = "srml-system", path = "../../../srml/system" }
-timestamp = { package = "srml-timestamp", path = "../../../srml/timestamp" }
-treasury = { package = "srml-treasury", path = "../../../srml/treasury" }
-contracts = { package = "srml-contracts", path = "../../../srml/contracts" }
-grandpa = { package = "srml-grandpa", path = "../../../srml/grandpa" }
-indices = { package = "srml-indices", path = "../../../srml/indices" }
+runtime_support = { package = "srml-support", path = "../../../paint/support" }
+balances = { package = "srml-balances", path = "../../../paint/balances" }
+transaction-payment = { package = "srml-transaction-payment", path = "../../../paint/transaction-payment" }
+session = { package = "srml-session", path = "../../../paint/session" }
+system = { package = "srml-system", path = "../../../paint/system" }
+timestamp = { package = "srml-timestamp", path = "../../../paint/timestamp" }
+treasury = { package = "srml-treasury", path = "../../../paint/treasury" }
+contracts = { package = "srml-contracts", path = "../../../paint/contracts" }
+grandpa = { package = "srml-grandpa", path = "../../../paint/grandpa" }
+indices = { package = "srml-indices", path = "../../../paint/indices" }
 wabt = "0.9.2"
 criterion = "0.3.0"
 

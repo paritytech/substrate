@@ -11,7 +11,7 @@ sr-primitives = { path = "../sr-primitives", default-features = false }
 
 [dev-dependencies]
 runtime-io ={ package = "sr-io", path = "../sr-io" }
-support = { package = "srml-support", path = "../../srml/support" }
+support = { package = "srml-support", path = "../../paint/support" }
 rand = "0.7.2"
 
 [features]

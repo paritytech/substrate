@@ -29,35 +29,35 @@ substrate-session = { path = "../../../client/session", default-features = false
 substrate-keyring = { path = "../../../client/keyring", optional = true }
 
 # srml dependencies
-authorship = { package = "srml-authorship", path = "../../../srml/authorship", default-features = false }
-babe = { package = "srml-babe", path = "../../../srml/babe", default-features = false }
-balances = { package = "srml-balances", path = "../../../srml/balances", default-features = false }
-collective = { package = "srml-collective", path = "../../../srml/collective", default-features = false }
-contracts = { package = "srml-contracts", path = "../../../srml/contracts", default-features = false }
-contracts-rpc-runtime-api = { package = "srml-contracts-rpc-runtime-api", path = "../../../srml/contracts/rpc/runtime-api/", default-features = false }
-democracy = { package = "srml-democracy", path = "../../../srml/democracy", default-features = false }
-elections-phragmen = { package = "srml-elections-phragmen", path = "../../../srml/elections-phragmen", default-features = false }
-executive = { package = "srml-executive", path = "../../../srml/executive", default-features = false }
-finality-tracker = { package = "srml-finality-tracker", path = "../../../srml/finality-tracker", default-features = false }
-grandpa = { package = "srml-grandpa", path = "../../../srml/grandpa", default-features = false }
-im-online = { package = "srml-im-online", path = "../../../srml/im-online", default-features = false }
-indices = { package = "srml-indices", path = "../../../srml/indices", default-features = false }
-membership = { package = "srml-membership", path = "../../../srml/membership", default-features = false }
-nicks = { package = "srml-nicks", path = "../../../srml/nicks", default-features = false }
-offences = { package = "srml-offences", path = "../../../srml/offences", default-features = false }
-randomness-collective-flip = { package = "srml-randomness-collective-flip", path = "../../../srml/randomness-collective-flip", default-features = false }
-session = { package = "srml-session", path = "../../../srml/session", default-features = false, features = ["historical"] }
-staking = { package = "srml-staking", path = "../../../srml/staking", default-features = false }
-srml-staking-reward-curve = { path = "../../../srml/staking/reward-curve"}
-sudo = { package = "srml-sudo", path = "../../../srml/sudo", default-features = false }
-support = { package = "srml-support", path = "../../../srml/support", default-features = false }
-system = { package = "srml-system", path = "../../../srml/system", default-features = false }
-system-rpc-runtime-api = { package = "srml-system-rpc-runtime-api", path = "../../../srml/system/rpc/runtime-api/", default-features = false }
-timestamp = { package = "srml-timestamp", path = "../../../srml/timestamp", default-features = false }
-treasury = { package = "srml-treasury", path = "../../../srml/treasury", default-features = false }
-utility = { package = "srml-utility", path = "../../../srml/utility", default-features = false }
-transaction-payment = { package = "srml-transaction-payment", path = "../../../srml/transaction-payment", default-features = false }
-transaction-payment-rpc-runtime-api = { package = "srml-transaction-payment-rpc-runtime-api", path = "../../../srml/transaction-payment/rpc/runtime-api/", default-features = false }
+authorship = { package = "srml-authorship", path = "../../../paint/authorship", default-features = false }
+babe = { package = "srml-babe", path = "../../../paint/babe", default-features = false }
+balances = { package = "srml-balances", path = "../../../paint/balances", default-features = false }
+collective = { package = "srml-collective", path = "../../../paint/collective", default-features = false }
+contracts = { package = "srml-contracts", path = "../../../paint/contracts", default-features = false }
+contracts-rpc-runtime-api = { package = "srml-contracts-rpc-runtime-api", path = "../../../paint/contracts/rpc/runtime-api/", default-features = false }
+democracy = { package = "srml-democracy", path = "../../../paint/democracy", default-features = false }
+elections-phragmen = { package = "srml-elections-phragmen", path = "../../../paint/elections-phragmen", default-features = false }
+executive = { package = "srml-executive", path = "../../../paint/executive", default-features = false }
+finality-tracker = { package = "srml-finality-tracker", path = "../../../paint/finality-tracker", default-features = false }
+grandpa = { package = "srml-grandpa", path = "../../../paint/grandpa", default-features = false }
+im-online = { package = "srml-im-online", path = "../../../paint/im-online", default-features = false }
+indices = { package = "srml-indices", path = "../../../paint/indices", default-features = false }
+membership = { package = "srml-membership", path = "../../../paint/membership", default-features = false }
+nicks = { package = "srml-nicks", path = "../../../paint/nicks", default-features = false }
+offences = { package = "srml-offences", path = "../../../paint/offences", default-features = false }
+randomness-collective-flip = { package = "srml-randomness-collective-flip", path = "../../../paint/randomness-collective-flip", default-features = false }
+session = { package = "srml-session", path = "../../../paint/session", default-features = false, features = ["historical"] }
+staking = { package = "srml-staking", path = "../../../paint/staking", default-features = false }
+srml-staking-reward-curve = { path = "../../../paint/staking/reward-curve"}
+sudo = { package = "srml-sudo", path = "../../../paint/sudo", default-features = false }
+support = { package = "srml-support", path = "../../../paint/support", default-features = false }
+system = { package = "srml-system", path = "../../../paint/system", default-features = false }
+system-rpc-runtime-api = { package = "srml-system-rpc-runtime-api", path = "../../../paint/system/rpc/runtime-api/", default-features = false }
+timestamp = { package = "srml-timestamp", path = "../../../paint/timestamp", default-features = false }
+treasury = { package = "srml-treasury", path = "../../../paint/treasury", default-features = false }
+utility = { package = "srml-utility", path = "../../../paint/utility", default-features = false }
+transaction-payment = { package = "srml-transaction-payment", path = "../../../paint/transaction-payment", default-features = false }
+transaction-payment-rpc-runtime-api = { package = "srml-transaction-payment-rpc-runtime-api", path = "../../../paint/transaction-payment/rpc/runtime-api/", default-features = false }
 
 [build-dependencies]
 wasm-builder-runner = { package = "substrate-wasm-builder-runner", version = "1.0.4", path = "../../../client/utils/wasm-builder-runner" }

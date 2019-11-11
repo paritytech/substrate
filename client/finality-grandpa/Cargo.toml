@@ -24,7 +24,7 @@ client = { package = "substrate-client", path = "../client" }
 header-metadata = { package = "substrate-header-metadata", path = "../client/header-metadata" }
 inherents = { package = "substrate-inherents", path = "../../client/inherents" }
 network = { package = "substrate-network", path = "../network" }
-srml-finality-tracker = { path = "../../srml/finality-tracker" }
+srml-finality-tracker = { path = "../../paint/finality-tracker" }
 fg_primitives = { package = "substrate-finality-grandpa-primitives", path = "primitives" }
 grandpa = { package = "finality-grandpa", version = "0.9.0", features = ["derive-codec"] }
 
