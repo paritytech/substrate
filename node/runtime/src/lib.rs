@@ -501,9 +501,9 @@ impl system::offchain::CreateTransaction<Runtime, UncheckedExtrinsic> for Runtim
 
 construct_runtime!(
 	pub enum Runtime where
-		Block = Block,
+		UncheckedExtrinsic = UncheckedExtrinsic,
 		NodeBlock = node_primitives::Block,
-		UncheckedExtrinsic = UncheckedExtrinsic
+		Block = Block,
 	{
 		System: system::{Module, Call, Storage, Config, Event},
 		Utility: utility::{Module, Call, Event},

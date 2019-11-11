@@ -62,13 +62,13 @@ impl Parse for WhereSection {
         let _: Token![where] = input.parse()?;
         let mut seen_keys = HashSet::new();
         let mut definitions = HashMap::new();
-        loop {
-            if input.peek(token::Brace) {
-                break;
-            }
+        while !input.peek(token::Brace) {
             let WhereDefinition { kind, value } = WhereDefinition::parse(input, &mut seen_keys)?;
             definitions.insert(kind, value);
             if !input.peek(Token![,]) {
+				if !input.peek(token::Brace) {
+					return Err(input.error("Expected `,` or `{`"));
+				}
                 break;
             }
             let _: Token![,] = input.parse()?;
