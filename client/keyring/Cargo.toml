@@ -5,7 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-primitives = { package = "substrate-primitives",  path = "../primitives" }
+primitives = { package = "substrate-primitives",  path = "../../primitives/core" }
 sr-primitives = { path = "../../primitives/sr-primitives" }
 lazy_static = "1.4.0"
 strum = "0.15.0"

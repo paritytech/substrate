@@ -11,7 +11,7 @@ jsonrpc-core = "14"
 parity-scale-codec = "1"
 serde = "1"
 srml-support = { path = "../" }
-substrate-primitives-storage = { path = "../../../client/primitives/storage" }
+substrate-primitives-storage = { path = "../../../primitives/core/storage" }
 substrate-rpc-api = { path = "../../../client/rpc/api" }
 
 [dev-dependencies]

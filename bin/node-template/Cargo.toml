@@ -21,16 +21,16 @@ codec = { package = "parity-scale-codec", version = "1.0.0" }
 trie-root = "0.15.2"
 sr-io = { path = "../../primitives/sr-io" }
 substrate-cli = { path = "../../client/cli" }
-primitives = { package = "substrate-primitives", path = "../../client/primitives" }
+primitives = { package = "substrate-primitives", path = "../../primitives/core" }
 substrate-executor = { path = "../../client/executor" }
 substrate-service = { path = "../../client/service" }
-inherents = { package = "substrate-inherents", path = "../../client/inherents" }
+inherents = { package = "substrate-inherents", path = "../../primitives/inherents" }
 transaction-pool = { package = "substrate-transaction-pool", path = "../../client/transaction-pool" }
 network = { package = "substrate-network", path = "../../client/network" }
 aura = { package = "substrate-consensus-aura", path = "../../client/consensus/aura" }
-aura-primitives = { package = "substrate-consensus-aura-primitives", path = "../../client/consensus/aura/primitives" }
+aura-primitives = { package = "substrate-consensus-aura-primitives", path = "../../primitives/consensus/aura" }
 grandpa = { package = "substrate-finality-grandpa", path = "../../client/finality-grandpa" }
-grandpa-primitives = { package = "substrate-finality-grandpa-primitives", path = "../../client/finality-grandpa/primitives" }
+grandpa-primitives = { package = "substrate-finality-grandpa-primitives", path = "../../primitives/finality-grandpa" }
 substrate-client = {  path = "../../client/client" }
 runtime = { package = "node-template-runtime", path = "runtime" }
 sr-primitives = { path = "../../primitives/sr-primitives" }

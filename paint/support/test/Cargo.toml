@@ -10,9 +10,9 @@ codec = { package = "parity-scale-codec", version = "1.0.0", default-features = 
 runtime-io ={ package = "sr-io", path = "../../../primitives/sr-io", default-features = false }
 state-machine ={ package = "substrate-state-machine", path = "../../../client/state-machine", optional = true }
 support = { package = "srml-support", version = "2", path = "../", default-features = false }
-inherents = { package = "substrate-inherents", path = "../../../client/inherents", default-features = false }
+inherents = { package = "substrate-inherents", path = "../../../primitives/inherents", default-features = false }
 sr-primitives = { package = "sr-primitives", path = "../../../primitives/sr-primitives", default-features = false }
-primitives = { package = "substrate-primitives", path = "../../../client/primitives", default-features = false }
+primitives = { package = "substrate-primitives", path = "../../../primitives/core", default-features = false }
 trybuild = "1.0.17"
 pretty_assertions = "0.6.1"
 

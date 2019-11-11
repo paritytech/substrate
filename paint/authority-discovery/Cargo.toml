@@ -5,9 +5,9 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-app-crypto = { package = "substrate-application-crypto", path = "../../client/application-crypto", default-features = false }
+app-crypto = { package = "substrate-application-crypto", path = "../../primitives/application-crypto", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-primitives = { package = "substrate-primitives",  path = "../../client/primitives", default-features = false }
+primitives = { package = "substrate-primitives",  path = "../../primitives/core", default-features = false }
 rstd = { package = "sr-std", path = "../../primitives/sr-std", default-features = false }
 serde = { version = "1.0.101", optional = true }
 runtime-io = { package = "sr-io", path = "../../primitives/sr-io", default-features = false }
@@ -17,7 +17,7 @@ support = { package = "srml-support", path = "../support", default-features = fa
 system = { package = "srml-system", path = "../system", default-features = false }
 
 [dev-dependencies]
-babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../../client/consensus/babe/primitives", default-features = false }
+babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../../primitives/consensus/babe", default-features = false }
 sr-staking-primitives = { path = "../../primitives/sr-staking-primitives", default-features = false }
 
 [features]

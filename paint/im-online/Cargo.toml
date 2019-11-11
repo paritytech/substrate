@@ -5,10 +5,10 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-app-crypto = { package = "substrate-application-crypto", path = "../../client/application-crypto", default-features = false }
+app-crypto = { package = "substrate-application-crypto", path = "../../primitives/application-crypto", default-features = false }
 authorship = { package = "srml-authorship", path = "../authorship", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-primitives = { package="substrate-primitives", path = "../../client/primitives", default-features = false }
+primitives = { package="substrate-primitives", path = "../../primitives/core", default-features = false }
 rstd = { package = "sr-std", path = "../../primitives/sr-std", default-features = false }
 serde = { version = "1.0.101", optional = true }
 session = { package = "srml-session", path = "../session", default-features = false }

@@ -7,10 +7,10 @@ edition = "2018"
 [dependencies]
 cli = { package = "substrate-cli", path = "../../../client/cli" }
 client = { package = "substrate-client", path = "../../../client/client" }
-consensus_common = { package = "substrate-consensus-common", path = "../../../client/consensus/common" }
+consensus_common = { package = "substrate-consensus-common", path = "../../../primitives/consensus/common" }
 log = "0.4.8"
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-primitives = { package = "substrate-primitives", path = "../../../client/primitives", default-features = false }
+primitives = { package = "substrate-primitives", path = "../../../primitives/core", default-features = false }
 sr-primitives = { path = "../../../primitives/sr-primitives", default-features = false }
 substrate-service = { path = "../../../client/service" }
 

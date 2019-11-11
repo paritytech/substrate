@@ -20,9 +20,9 @@ test-client = { package = "substrate-test-runtime-client", path = "../../test/ut
 state_machine = { package = "substrate-state-machine", path = "../../client/state-machine" }
 sr-primitives = {  path = "../sr-primitives" }
 sr-version = { path = "../sr-version" }
-primitives = { package = "substrate-primitives",  path = "../../client/primitives" }
+primitives = { package = "substrate-primitives",  path = "../core" }
 criterion = "0.3.0"
-consensus_common = { package = "substrate-consensus-common", path = "../../client/consensus/common" }
+consensus_common = { package = "substrate-consensus-common", path = "../consensus/common" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 trybuild = "1.0.17"
 rustversion = "1.0.0"

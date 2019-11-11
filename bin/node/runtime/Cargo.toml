@@ -14,10 +14,10 @@ rustc-hex = { version = "2.0", optional = true }
 serde = { version = "1.0.102", optional = true }
 
 # primitives
-babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../../../client/consensus/babe/primitives", default-features = false }
+babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../../../primitives/consensus/babe", default-features = false }
 node-primitives = { path = "../primitives", default-features = false }
-offchain-primitives = { package = "substrate-offchain-primitives", path = "../../../client/offchain/primitives", default-features = false }
-primitives = { package = "substrate-primitives",  path = "../../../client/primitives", default-features = false }
+offchain-primitives = { package = "substrate-offchain-primitives", path = "../../../primitives/offchain", default-features = false }
+primitives = { package = "substrate-primitives",  path = "../../../primitives/core", default-features = false }
 sr-primitives = { path = "../../../primitives/sr-primitives", default-features = false }
 sr-staking-primitives = { path = "../../../primitives/sr-staking-primitives", default-features = false }
 
@@ -25,7 +25,7 @@ sr-staking-primitives = { path = "../../../primitives/sr-staking-primitives", de
 client = { package = "substrate-client", path = "../../../client/client", default-features = false }
 rstd = { package = "sr-std", path = "../../../primitives/sr-std", default-features = false }
 version = { package = "sr-version", path = "../../../primitives/sr-version", default-features = false }
-substrate-session = { path = "../../../client/session", default-features = false }
+substrate-session = { path = "../../../primitives/session", default-features = false }
 substrate-keyring = { path = "../../../client/keyring", optional = true }
 
 # srml dependencies

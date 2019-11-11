@@ -28,24 +28,24 @@ serde = "1.0.101"
 serde_json = "1.0.41"
 sysinfo = "0.9.5"
 target_info = "0.1.0"
-keystore = { package = "substrate-keystore", path = "../../client/keystore" }
+keystore = { package = "substrate-keystore", path = "../keystore" }
 sr-io = { path = "../../primitives/sr-io" }
 sr-primitives = { path = "../../primitives/sr-primitives" }
-primitives = { package = "substrate-primitives", path = "../primitives" }
-session = { package = "substrate-session", path = "../session" }
-app-crypto = { package = "substrate-application-crypto", path = "../application-crypto" }
-consensus_common = { package = "substrate-consensus-common", path = "../../client/consensus/common" }
-network = { package = "substrate-network", path = "../../client/network" }
+primitives = { package = "substrate-primitives", path = "../../primitives/core" }
+session = { package = "substrate-session", path = "../../primitives/session" }
+app-crypto = { package = "substrate-application-crypto", path = "../../primitives/application-crypto" }
+consensus_common = { package = "substrate-consensus-common", path = "../../primitives/consensus/common" }
+network = { package = "substrate-network", path = "../network" }
 chain-spec = { package = "substrate-chain-spec", path = "../chain-spec" }
-client = { package = "substrate-client", path = "../../client/client" }
-client_db = { package = "substrate-client-db", path = "../../client/client/db" }
+client = { package = "substrate-client", path = "../client" }
+client_db = { package = "substrate-client-db", path = "../client/db" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
-substrate-executor = { path = "../../client/executor" }
-transaction_pool = { package = "substrate-transaction-pool", path = "../../client/transaction-pool" }
-rpc-servers = { package = "substrate-rpc-servers", path = "../../client/rpc-servers" }
-rpc = { package = "substrate-rpc", path = "../../client/rpc" }
-tel = { package = "substrate-telemetry", path = "../../client/telemetry" }
-offchain = { package = "substrate-offchain", path = "../../client/offchain" }
+substrate-executor = { path = "../executor" }
+transaction_pool = { package = "substrate-transaction-pool", path = "../transaction-pool" }
+rpc-servers = { package = "substrate-rpc-servers", path = "../rpc-servers" }
+rpc = { package = "substrate-rpc", path = "../rpc" }
+tel = { package = "substrate-telemetry", path = "../telemetry" }
+offchain = { package = "substrate-offchain", path = "../offchain" }
 parity-multiaddr = { package = "parity-multiaddr", version = "0.5.0" }
 
 [dev-dependencies]
@@ -53,7 +53,7 @@ substrate-test-runtime-client = { path = "../../test/utils/runtime/client" }
 node-executor = { path = "../../bin/node/executor" }
 node-primitives = { path = "../../bin/node/primitives" }
 node-runtime = { path = "../../bin/node/runtime" }
-babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../../client/consensus/babe/primitives" }
-grandpa = { package = "substrate-finality-grandpa", path = "../../client/finality-grandpa" }
-grandpa-primitives = { package = "substrate-finality-grandpa-primitives", path = "../../client/finality-grandpa/primitives" }
+babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../../primitives/consensus/babe" }
+grandpa = { package = "substrate-finality-grandpa", path = "../finality-grandpa" }
+grandpa-primitives = { package = "substrate-finality-grandpa-primitives", path = "../../primitives/finality-grandpa" }
 tokio = "0.1"

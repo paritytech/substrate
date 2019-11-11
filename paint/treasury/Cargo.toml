@@ -15,7 +15,7 @@ balances = { package = "srml-balances", path = "../balances", default-features =
 
 [dev-dependencies]
 runtime-io ={ package = "sr-io", path = "../../primitives/sr-io" }
-primitives = { package = "substrate-primitives",  path = "../../client/primitives" }
+primitives = { package = "substrate-primitives",  path = "../../primitives/core" }
 
 [features]
 default = ["std"]

@@ -12,12 +12,12 @@ hash-db = "0.15.2"
 trie-db = "0.15.2"
 trie-root = "0.15.2"
 trie = { package = "substrate-trie", path = "../trie" }
-primitives = { package = "substrate-primitives", path = "../primitives" }
+primitives = { package = "substrate-primitives", path = "../../primitives/core" }
 panic-handler = { package = "substrate-panic-handler", path = "../panic-handler" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 num-traits = "0.2.8"
 rand = "0.7.2"
-externalities = { package = "substrate-externalities", path = "../externalities" }
+externalities = { package = "substrate-externalities", path = "../../primitives/externalities" }
 
 [dev-dependencies]
 hex-literal = "0.2.1"

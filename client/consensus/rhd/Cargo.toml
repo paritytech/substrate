@@ -9,8 +9,8 @@ edition = "2018"
 derive_more = "0.15.0"
 futures = "0.1.29"
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
-primitives = { package = "substrate-primitives", path = "../../primitives" }
-consensus = { package = "substrate-consensus-common", path = "../common" }
+primitives = { package = "substrate-primitives", path = "../../../primitives/core" }
+consensus = { package = "substrate-consensus-common", path = "../../../primitives/consensus/common" }
 client = { package = "substrate-client", path = "../../client" }
 transaction_pool = { package = "substrate-transaction-pool", path = "../../transaction-pool" }
 runtime_support = { package = "srml-support", path = "../../../paint/support" }

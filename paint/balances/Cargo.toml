@@ -16,7 +16,7 @@ system = { package = "srml-system", path = "../system", default-features = false
 
 [dev-dependencies]
 runtime-io = { package = "sr-io", path = "../../primitives/sr-io" }
-primitives = { package = "substrate-primitives",  path = "../../client/primitives" }
+primitives = { package = "substrate-primitives",  path = "../../primitives/core" }
 transaction-payment = { package = "srml-transaction-payment", path = "../transaction-payment" }
 
 [features]

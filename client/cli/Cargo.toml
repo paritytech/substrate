@@ -22,15 +22,15 @@ futures03 = { package = "futures-preview", version = "=0.3.0-alpha.19", features
 fdlimit = "0.1.1"
 exit-future = "0.1.4"
 serde_json = "1.0.41"
-panic-handler = { package = "substrate-panic-handler", path = "../../client/panic-handler" }
-client = { package = "substrate-client", path = "../../client/client" }
-header-metadata = { package = "substrate-header-metadata", path = "../../client/client/header-metadata" }
-network = { package = "substrate-network", path = "../../client/network" }
+panic-handler = { package = "substrate-panic-handler", path = "../panic-handler" }
+client = { package = "substrate-client", path = "../client" }
+header-metadata = { package = "substrate-header-metadata", path = "../client/header-metadata" }
+network = { package = "substrate-network", path = "../network" }
 sr-primitives = { path = "../../primitives/sr-primitives" }
-primitives = { package = "substrate-primitives", path = "../../client/primitives" }
-service = { package = "substrate-service", path = "../../client/service", default-features = false }
-state-machine = { package = "substrate-state-machine", path = "../../client/state-machine" }
-substrate-telemetry = { path = "../../client/telemetry" }
+primitives = { package = "substrate-primitives", path = "../../primitives/core" }
+service = { package = "substrate-service", path = "../service", default-features = false }
+state-machine = { package = "substrate-state-machine", path = "../state-machine" }
+substrate-telemetry = { path = "../telemetry" }
 keyring = { package = "substrate-keyring", path = "../keyring" }
 names = "0.11.0"
 structopt = "0.3.3"

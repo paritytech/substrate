@@ -33,15 +33,15 @@ rand = "0.7.2"
 structopt = "0.3.3"
 
 # primitives
-primitives = { package = "substrate-primitives", path = "../../../client/primitives" }
+primitives = { package = "substrate-primitives", path = "../../../primitives/core" }
 sr-primitives = { path = "../../../primitives/sr-primitives" }
-babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../../../client/consensus/babe/primitives" }
-grandpa_primitives = { package = "substrate-finality-grandpa-primitives", path = "../../../client/finality-grandpa/primitives" }
+babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../../../primitives/consensus/babe" }
+grandpa_primitives = { package = "substrate-finality-grandpa-primitives", path = "../../../primitives/finality-grandpa" }
 
 # core dependencies
 runtime-io = { package = "sr-io", path = "../../../primitives/sr-io" }
 client = { package = "substrate-client", path = "../../../client/client" }
-inherents = { package = "substrate-inherents", path = "../../../client/inherents" }
+inherents = { package = "substrate-inherents", path = "../../../primitives/inherents" }
 chain-spec = { package = "substrate-chain-spec", path = "../../../client/chain-spec" }
 transaction_pool = { package = "substrate-transaction-pool", path = "../../../client/transaction-pool" }
 network = { package = "substrate-network", path = "../../../client/network" }
@@ -93,7 +93,7 @@ rand6 = { package = "rand", version = "0.6", features = ["wasm-bindgen"], option
 [dev-dependencies]
 keystore = { package = "substrate-keystore", path = "../../../client/keystore" }
 babe = { package = "substrate-consensus-babe", path = "../../../client/consensus/babe", features = ["test-helpers"] }
-consensus-common = { package = "substrate-consensus-common", path = "../../../client/consensus/common" }
+consensus-common = { package = "substrate-consensus-common", path = "../../../primitives/consensus/common" }
 service-test = { package = "substrate-service-test", path = "../../../client/service/test" }
 futures03 = { package = "futures-preview", version = "0.3.0-alpha.19" }
 tempfile = "3.1.0"

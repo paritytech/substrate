@@ -16,7 +16,7 @@ node-executor = { path = "../executor" }
 node-primitives = { path = "../primitives" }
 node-runtime = { path = "../runtime" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
-primitives = { package = "substrate-primitives", path = "../../../client/primitives" }
+primitives = { package = "substrate-primitives", path = "../../../primitives/core" }
 runtime-io = { package = "sr-io", path = "../../../primitives/sr-io" }
 sr-primitives = { path = "../../../primitives/sr-primitives" }
 runtime_support = { package = "srml-support", path = "../../../paint/support" }

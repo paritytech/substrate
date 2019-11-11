@@ -13,7 +13,7 @@ system = { package = "srml-system", path = "../system", default-features = false
 rstd = { package = "sr-std", path = "../../primitives/sr-std", default-features = false }
 
 [dev-dependencies]
-primitives = { package = "substrate-primitives",  path = "../../client/primitives" }
+primitives = { package = "substrate-primitives",  path = "../../primitives/core" }
 runtime-io = { package = "sr-io", path = "../../primitives/sr-io" }
 
 [features]

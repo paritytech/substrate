@@ -11,7 +11,7 @@ codec = { package = "parity-scale-codec", version = "1.0.0" }
 runtime_io = { package = "sr-io", path = "../../../primitives/sr-io" }
 state_machine = { package = "substrate-state-machine", path = "../../../client/state-machine" }
 substrate-executor = { path = "../../../client/executor" }
-primitives = { package = "substrate-primitives", path = "../../../client/primitives" }
+primitives = { package = "substrate-primitives", path = "../../../primitives/core" }
 trie = { package = "substrate-trie", path = "../../../client/trie" }
 node-primitives = { path = "../primitives" }
 node-runtime = { path = "../runtime" }

@@ -14,7 +14,7 @@ transaction-payment-rpc-runtime-api = { package = "srml-transaction-payment-rpc-
 
 [dev-dependencies]
 runtime-io = { package = "sr-io", path = "../../primitives/sr-io" }
-primitives = { package = "substrate-primitives",  path = "../../client/primitives" }
+primitives = { package = "substrate-primitives",  path = "../../primitives/core" }
 balances = { package = "srml-balances", path = "../balances" }
 
 [features]

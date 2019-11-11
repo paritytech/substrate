@@ -13,15 +13,15 @@ kvdb-rocksdb = { git = "https://github.com/paritytech/parity-common", rev="b0317
 kvdb-memorydb = { git = "https://github.com/paritytech/parity-common", rev="b0317f649ab2c665b7987b8475878fc4d2e1f81d" }
 linked-hash-map = "0.5.2"
 hash-db = "0.15.2"
-primitives = { package = "substrate-primitives", path = "../../primitives" }
+primitives = { package = "substrate-primitives", path = "../../../primitives/core" }
 sr-primitives = {  path = "../../../primitives/sr-primitives" }
-client = { package = "substrate-client", path = "../../client" }
+client = { package = "substrate-client", path = "../" }
 state-machine = { package = "substrate-state-machine", path = "../../state-machine" }
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
 executor = { package = "substrate-executor", path = "../../executor" }
 state_db = { package = "substrate-state-db", path = "../../state-db" }
 trie = { package = "substrate-trie", path = "../../trie" }
-consensus_common = { package = "substrate-consensus-common", path = "../../consensus/common" }
+consensus_common = { package = "substrate-consensus-common", path = "../../../primitives/consensus/common" }
 header_metadata = { package = "substrate-header-metadata", path = "../header-metadata" }
 
 [dev-dependencies]

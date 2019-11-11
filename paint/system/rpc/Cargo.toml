@@ -14,7 +14,7 @@ log = "0.4.8"
 serde = { version = "1.0.101", features = ["derive"] }
 sr-primitives = { path = "../../../primitives/sr-primitives" }
 srml-system-rpc-runtime-api = { path = "./runtime-api" }
-substrate-primitives = { path = "../../../client/primitives" }
+substrate-primitives = { path = "../../../primitives/core" }
 transaction_pool = { package = "substrate-transaction-pool", path = "../../../client/transaction-pool" }
 
 [dev-dependencies]

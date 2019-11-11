@@ -211,7 +211,7 @@ pub trait SandboxCapabilities {
 /// Implementation of [`Externals`] that allows execution of guest module with
 /// [externals][`Externals`] that might refer functions defined by supervisor.
 ///
-/// [`Externals`]: ../../wasmi/trait.Externals.html
+/// [`Externals`]: ../wasmi/trait.Externals.html
 pub struct GuestExternals<'a, FE: SandboxCapabilities + 'a> {
 	supervisor_externals: &'a mut FE,
 	sandbox_instance: &'a SandboxInstance<FE::SupervisorFuncRef>,
@@ -432,7 +432,7 @@ fn decode_environment_definition(
 /// - `raw_env_def` can't be deserialized as a [`EnvironmentDefinition`].
 /// - Module in `wasm` is invalid or couldn't be instantiated.
 ///
-/// [`EnvironmentDefinition`]: ../../sandbox/struct.EnvironmentDefinition.html
+/// [`EnvironmentDefinition`]: ../sandbox/struct.EnvironmentDefinition.html
 pub fn instantiate<FE: SandboxCapabilities>(
 	supervisor_externals: &mut FE,
 	dispatch_thunk: FE::SupervisorFuncRef,

@@ -19,8 +19,8 @@ runtime-io ={ package = "sr-io", path = "../../primitives/sr-io", default-featur
 impl-trait-for-tuples = "0.1.3"
 
 [dev-dependencies]
-primitives = { package = "substrate-primitives",  path = "../../client/primitives" }
-app-crypto = { package = "substrate-application-crypto",  path = "../../client/application-crypto" }
+primitives = { package = "substrate-primitives",  path = "../../primitives/core" }
+app-crypto = { package = "substrate-application-crypto",  path = "../../primitives/application-crypto" }
 lazy_static = "1.4.0"
 
 [features]

@@ -39,7 +39,7 @@
 //! ## References
 //!
 //! If you're interested in hacking on this module, it is useful to understand the interaction with
-//! `substrate/client/inherents/src/lib.rs` and, specifically, the required implementation of
+//! `substrate/primitives/inherents/src/lib.rs` and, specifically, the required implementation of
 //! [`ProvideInherent`](../substrate_inherents/trait.ProvideInherent.html) and
 //! [`ProvideInherentData`](../substrate_inherents/trait.ProvideInherentData.html) to create and check inherents.
 

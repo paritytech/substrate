@@ -12,11 +12,11 @@ rstd = { package = "sr-std", path = "../../../primitives/sr-std", default_featur
 runtime-io = { package = "sr-io", path = "../../../primitives/sr-io", default_features = false }
 version = { package = "sr-version", path = "../../../primitives/sr-version", default_features = false }
 support = { package = "srml-support", path = "../../../paint/support", default_features = false }
-primitives = { package = "substrate-primitives", path = "../../../client/primitives", default_features = false }
-substrate-session = { path = "../../../client/session", default-features = false }
+primitives = { package = "substrate-primitives", path = "../../../primitives/core", default_features = false }
+substrate-session = { path = "../../../primitives/session", default-features = false }
 balances = { package = "srml-balances", path = "../../../paint/balances", default_features = false }
 aura = { package = "srml-aura", path = "../../../paint/aura", default_features = false }
-aura-primitives = { package = "substrate-consensus-aura-primitives", path = "../../../client/consensus/aura/primitives", default_features = false }
+aura-primitives = { package = "substrate-consensus-aura-primitives", path = "../../../primitives/consensus/aura", default_features = false }
 grandpa = { package = "srml-grandpa", path = "../../../paint/grandpa", default_features = false }
 executive = { package = "srml-executive", path = "../../../paint/executive", default_features = false }
 indices = { package = "srml-indices", path = "../../../paint/indices", default_features = false }
@@ -27,7 +27,7 @@ sudo = { package = "srml-sudo", path = "../../../paint/sudo", default_features =
 transaction-payment = { package = "srml-transaction-payment", path = "../../../paint/transaction-payment", default_features = false }
 sr-primitives = { path = "../../../primitives/sr-primitives", default_features = false }
 client = { package = "substrate-client", path = "../../../client/client", default_features = false }
-offchain-primitives = { package = "substrate-offchain-primitives", path = "../../../client/offchain/primitives", default-features = false }
+offchain-primitives = { package = "substrate-offchain-primitives", path = "../../../primitives/offchain", default-features = false }
 
 [build-dependencies]
 wasm-builder-runner = { package = "substrate-wasm-builder-runner", version = "1.0.4" }

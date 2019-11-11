@@ -9,12 +9,12 @@ log = "0.4.8"
 futures-preview = "0.3.0-alpha.19"
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 sr-primitives = { path = "../../primitives/sr-primitives" }
-primitives = { package = "substrate-primitives", path = "../../client/primitives" }
-client = { package = "substrate-client", path = "../../client/client" }
-consensus_common = { package = "substrate-consensus-common", path = "../../client/consensus/common" }
-inherents = { package = "substrate-inherents", path = "../inherents" }
+primitives = { package = "substrate-primitives", path = "../../primitives/core" }
+client = { package = "substrate-client", path = "../client" }
+consensus_common = { package = "substrate-consensus-common", path = "../../primitives/consensus/common" }
+inherents = { package = "substrate-inherents", path = "../../primitives/inherents" }
 substrate-telemetry = { path = "../telemetry" }
-transaction_pool = { package = "substrate-transaction-pool", path = "../../client/transaction-pool" }
+transaction_pool = { package = "substrate-transaction-pool", path = "../transaction-pool" }
 
 [dev-dependencies]
 test-client = { package = "substrate-test-runtime-client", path = "../../test/utils/runtime/client" }

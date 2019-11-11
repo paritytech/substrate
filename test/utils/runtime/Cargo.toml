@@ -11,22 +11,22 @@ serde = { version = "1.0.101", optional = true, features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 keyring = { package = "substrate-keyring", path = "../../../client/keyring", optional = true }
 substrate-client = { path = "../../../client/client", default-features = false }
-primitives = { package = "substrate-primitives", path = "../../../client/primitives", default-features = false }
-app-crypto = { package = "substrate-application-crypto", path = "../../../client/application-crypto", default-features = false }
-inherents = { package = "substrate-inherents", path = "../../../client/inherents", default-features = false }
-aura-primitives = { package = "substrate-consensus-aura-primitives", path = "../../../client/consensus/aura/primitives", default-features = false }
-babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../../../client/consensus/babe/primitives", default-features = false }
+primitives = { package = "substrate-primitives", path = "../../../primitives/core", default-features = false }
+app-crypto = { package = "substrate-application-crypto", path = "../../../primitives/application-crypto", default-features = false }
+inherents = { package = "substrate-inherents", path = "../../../primitives/inherents", default-features = false }
+aura-primitives = { package = "substrate-consensus-aura-primitives", path = "../../../primitives/consensus/aura", default-features = false }
+babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../../../primitives/consensus/babe", default-features = false }
 rstd = { package = "sr-std", path = "../../../primitives/sr-std", default-features = false }
 runtime_io = { package = "sr-io", path = "../../../primitives/sr-io", default-features = false }
 sr-primitives = {  path = "../../../primitives/sr-primitives", default-features = false }
-session = { package = "substrate-session", path = "../../../client/session", default-features = false }
+session = { package = "substrate-session", path = "../../../primitives/session", default-features = false }
 runtime_version = { package = "sr-version", path = "../../../primitives/sr-version", default-features = false }
 runtime_support = { package = "srml-support", path = "../../../paint/support", default-features = false }
 substrate-trie = { path = "../../../client/trie", default-features = false }
 trie-db = { version = "0.15.2", default-features = false }
 memory-db = { version = "0.15.2", default-features = false }
-offchain-primitives = { package = "substrate-offchain-primitives", path = "../../../client/offchain/primitives", default-features = false}
-runtime-interface = { package = "substrate-runtime-interface", path = "../../../client/runtime-interface", default-features = false}
+offchain-primitives = { package = "substrate-offchain-primitives", path = "../../../primitives/offchain", default-features = false}
+runtime-interface = { package = "substrate-runtime-interface", path = "../../../primitives/runtime-interface", default-features = false}
 executive = { package = "srml-executive", path = "../../../paint/executive", default-features = false }
 cfg-if = "0.1.10"
 srml-babe = { path = "../../../paint/babe", default-features = false }

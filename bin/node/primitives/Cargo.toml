@@ -5,11 +5,11 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-primitives = { package = "substrate-primitives", path = "../../../client/primitives", default-features = false }
+primitives = { package = "substrate-primitives", path = "../../../primitives/core", default-features = false }
 sr-primitives = { path = "../../../primitives/sr-primitives", default-features = false }
 
 [dev-dependencies]
-substrate-serializer = { path = "../../../client/serializer" }
+substrate-serializer = { path = "../../../primitives/serializer" }
 pretty_assertions = "0.6.1"
 
 [features]

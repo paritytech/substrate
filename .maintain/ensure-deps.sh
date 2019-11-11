@@ -14,10 +14,12 @@
 set -u
 
 PLEASE_DONT=(
-	"client<srml"
+	"client<paint"
 	"client<node"
-	"srml<node"
-	"srml<client"
+	"paint<node"
+	"paint<substrate"
+	"primitives<srml"
+	"primitives<substrate"
 )
 
 VIOLATIONS=()
