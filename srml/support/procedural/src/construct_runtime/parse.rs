@@ -230,8 +230,9 @@ impl Parse for ModulePart {
         if !generics.params.is_empty() && !Self::is_allowed_generic(&name) {
             let valid_generics = ModulePart::format_names(ModulePart::allowed_generics());
             let msg = format!(
-                "Generics are only available for the following indentifiers: {}",
-                valid_generics
+				"`{}` is not allowed to have generics. \
+                Only the following modules are allowed to have generics: {}.",
+                name, valid_generics
             );
             return Err(syn::Error::new(name.span(), msg));
         }
@@ -240,8 +241,9 @@ impl Parse for ModulePart {
                 let syn::group::Parens { token: parens, .. } = syn::group::parse_parens(input)?;
                 let valid_names = ModulePart::format_names(ModulePart::allowed_args());
                 let msg = format!(
-                    "Only the following modules are allowed to have arguments in parens: {}",
-                    valid_names
+                    "`{}` is not allowed to have arguments in parens. \
+					Only the following modules are allowed to have arguments in parens: {}.",
+                    name, valid_names
                 );
                 return Err(syn::Error::new(parens.span, msg));
             }
