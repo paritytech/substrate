@@ -12,6 +12,7 @@ use substrate_executor::native_executor_instance;
 pub use substrate_executor::NativeExecutor;
 use aura_primitives::sr25519::{AuthorityPair as AuraPair};
 use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider};
+use basic_authorship;
 
 // Our native executor instance.
 native_executor_instance!(

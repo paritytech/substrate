@@ -32,7 +32,7 @@ fn float_phragmen_poc_works() {
 		(30, vec![2, 3]),
 	];
 	let stake_of = create_stake_of(&[(10, 10), (20, 20), (30, 30), (1, 0), (2, 0), (3, 0)]);
-	let mut phragmen_result = elect_float(2, 2, candidates, voters, &stake_of, false).unwrap();
+	let mut phragmen_result = elect_float(2, 2, candidates, voters, &stake_of).unwrap();
 	let winners = phragmen_result.clone().winners;
 	let assignments = phragmen_result.clone().assignments;
 
@@ -84,7 +84,6 @@ fn phragmen_poc_works() {
 		candidates,
 		voters,
 		create_stake_of(&[(10, 10), (20, 20), (30, 30)]),
-		false,
 	).unwrap();
 
 	assert_eq_uvec!(winners, vec![(2, 40), (3, 50)]);
@@ -114,7 +113,7 @@ fn phragmen_poc_2_works() {
 		(4, 500),
 	]);
 
-	run_and_compare(candidates, voters, stake_of, 2, 2, true);
+	run_and_compare(candidates, voters, stake_of, 2, 2);
 }
 
 #[test]
@@ -132,7 +131,7 @@ fn phragmen_poc_3_works() {
 		(4, 1000),
 	]);
 
-	run_and_compare(candidates, voters, stake_of, 2, 2, true);
+	run_and_compare(candidates, voters, stake_of, 2, 2);
 }
 
 #[test]
@@ -151,24 +150,24 @@ fn phragmen_accuracy_on_large_scale_only_validators() {
 	let PhragmenResult { winners, assignments } = elect::<_, _, _, TestCurrencyToVote>(
 		2,
 		2,
-		candidates,
-		vec![],
+		candidates.clone(),
+		auto_generate_self_voters(&candidates),
 		stake_of,
-		true,
 	).unwrap();
 
 	assert_eq_uvec!(winners, vec![(1, 18446744073709551614u128), (5, 18446744073709551613u128)]);
-	assert_eq!(assignments.len(), 0);
+	assert_eq!(assignments.len(), 2);
 	check_assignments(assignments);
 }
 
 #[test]
 fn phragmen_accuracy_on_large_scale_validators_and_nominators() {
 	let candidates = vec![1, 2, 3, 4, 5];
-	let voters = vec![
+	let mut voters = vec![
 		(13, vec![1, 3, 5]),
 		(14, vec![2, 4]),
 	];
+	voters.extend(auto_generate_self_voters(&candidates));
 	let stake_of = create_stake_of(&[
 		(1,  (u64::max_value() - 1).into()),
 		(2,  (u64::max_value() - 4).into()),
@@ -185,13 +184,17 @@ fn phragmen_accuracy_on_large_scale_validators_and_nominators() {
 		candidates,
 		voters,
 		stake_of,
-		true,
 	).unwrap();
 
 	assert_eq_uvec!(winners, vec![(2, 36893488147419103226u128), (1, 36893488147419103219u128)]);
 	assert_eq!(
 		assignments,
-		vec![(13, vec![(1, Perbill::one())]), (14, vec![(2, Perbill::one())])]
+		vec![
+			(13, vec![(1, Perbill::one())]),
+			(14, vec![(2, Perbill::one())]),
+			(1, vec![(1, Perbill::one())]),
+			(2, vec![(2, Perbill::one())]),
+		]
 	);
 	check_assignments(assignments);
 }
@@ -199,7 +202,7 @@ fn phragmen_accuracy_on_large_scale_validators_and_nominators() {
 #[test]
 fn phragmen_accuracy_on_small_scale_self_vote() {
 	let candidates = vec![40, 10, 20, 30];
-	let voters = vec![];
+	let voters = auto_generate_self_voters(&candidates);
 	let stake_of = create_stake_of(&[
 		(40, 0),
 		(10, 1),
@@ -213,7 +216,6 @@ fn phragmen_accuracy_on_small_scale_self_vote() {
 		candidates,
 		voters,
 		stake_of,
-		true,
 	).unwrap();
 
 	assert_eq_uvec!(winners, vec![(20, 2), (10, 1), (30, 1)]);
@@ -245,7 +247,6 @@ fn phragmen_accuracy_on_small_scale_no_self_vote() {
 		candidates,
 		voters,
 		stake_of,
-		false,
 	).unwrap();
 
 	assert_eq_uvec!(winners, vec![(20, 2), (10, 1), (30, 1)]);
@@ -254,9 +255,10 @@ fn phragmen_accuracy_on_small_scale_no_self_vote() {
 #[test]
 fn phragmen_large_scale_test() {
 	let candidates = vec![2, 4, 6, 8, 10, 12, 14, 16 ,18, 20, 22, 24];
-	let voters = vec![
+	let mut voters = vec![
 		(50, vec![2, 4, 6, 8, 10, 12, 14, 16 ,18, 20, 22, 24]),
 	];
+	voters.extend(auto_generate_self_voters(&candidates));
 	let stake_of = create_stake_of(&[
 		(2,  1),
 		(4,  100),
@@ -279,7 +281,6 @@ fn phragmen_large_scale_test() {
 		candidates,
 		voters,
 		stake_of,
-		true,
 	).unwrap();
 
 	assert_eq_uvec!(winners, vec![(24, 1490000000000200000u128), (22, 1490000000000100000u128)]);
@@ -292,7 +293,8 @@ fn phragmen_large_scale_test_2() {
 	let c_budget: u64 = 4_000_000;
 
 	let candidates = vec![2, 4];
-	let voters = vec![(50, vec![2, 4])];
+	let mut voters = vec![(50, vec![2, 4])];
+	voters.extend(auto_generate_self_voters(&candidates));
 
 	let stake_of = create_stake_of(&[
 		(2,  c_budget.into()),
@@ -306,13 +308,16 @@ fn phragmen_large_scale_test_2() {
 		candidates,
 		voters,
 		stake_of,
-		true,
 	).unwrap();
 
 	assert_eq_uvec!(winners, vec![(2, 1000000000004000000u128), (4, 1000000000004000000u128)]);
 	assert_eq!(
 		assignments,
-		vec![(50, vec![(2, Perbill::from_parts(500000001)), (4, Perbill::from_parts(499999999))])],
+		vec![
+			(50, vec![(2, Perbill::from_parts(500000001)), (4, Perbill::from_parts(499999999))]),
+			(2, vec![(2, Perbill::one())]),
+			(4, vec![(4, Perbill::one())]),
+		],
 	);
 	check_assignments(assignments);
 }
@@ -347,5 +352,5 @@ fn phragmen_linear_equalize() {
 		(130, 1000),
 	]);
 
-	run_and_compare(candidates, voters, stake_of, 2, 2, true);
+	run_and_compare(candidates, voters, stake_of, 2, 2);
 }

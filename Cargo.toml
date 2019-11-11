@@ -29,6 +29,9 @@ members = [
 	"client/rpc",
 	"client/rpc/primitives",
 	"client/rpc-servers",
+	"client/runtime-interface",
+	"client/runtime-interface/proc-macro",
+	"client/runtime-interface/test-wasm",
 	"client/serializer",
 	"client/service",
 	"client/service/test",
@@ -43,9 +46,6 @@ members = [
 	"client/sr-version",
 	"client/state-machine",
 	"client/telemetry",
-	"test/utils/client",
-	"test/utils/runtime",
-	"test/utils/runtime/client",
 	"client/transaction-pool",
 	"client/transaction-pool/graph",
 	"client/trie",
@@ -53,7 +53,11 @@ members = [
 	"client/utils/wasm-builder",
 	"client/utils/wasm-builder-runner",
 	"client/wasm-interface",
+
+# SRML
+
 	"srml/support",
+	"srml/support/rpc",
 	"srml/support/procedural",
 	"srml/support/procedural/tools",
 	"srml/support/procedural/tools/derive",
@@ -94,6 +98,9 @@ members = [
 	"srml/transaction-payment/rpc",
 	"srml/utility",
 	"srml/evm",
+
+# BIN
+
 	"bin/node/cli",
 	"bin/node/executor",
 	"bin/node/primitives",
@@ -103,10 +110,17 @@ members = [
 	"bin/node/testing",
 	"bin/node-template",
 	"bin/subkey",
+
+# TEST HELPERS
+
+	"test/utils/client",
+	"test/utils/runtime",
+	"test/utils/runtime/client",
 	"test/utils/chain-spec-builder",
+
+# TESTS
 ]
 
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"
-

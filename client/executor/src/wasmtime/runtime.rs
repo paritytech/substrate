@@ -17,7 +17,6 @@
 //! Defines the compiled Wasm runtime that uses Wasmtime internally.
 
 use crate::error::{Error, Result, WasmError};
-use crate::host_interface::SubstrateExternals;
 use crate::wasm_runtime::WasmRuntime;
 use crate::wasm_utils::interpret_runtime_api_result;
 use crate::wasmtime::function_executor::FunctionExecutorState;
@@ -34,7 +33,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::rc::Rc;
-use wasm_interface::{HostFunctions, Pointer, WordSize};
+use wasm_interface::{Pointer, WordSize, Function};
 use wasmtime_environ::{Module, translate_signature};
 use wasmtime_jit::{
 	ActionOutcome, ActionError, CodeMemory, CompilationStrategy, CompiledModule, Compiler, Context,
@@ -49,6 +48,8 @@ pub struct WasmtimeRuntime {
 	context: Context,
 	max_heap_pages: Option<u32>,
 	heap_pages: u32,
+	/// The host functions registered for this instance.
+	host_functions: Vec<&'static dyn Function>,
 }
 
 impl WasmRuntime for WasmtimeRuntime {
@@ -60,6 +61,10 @@ impl WasmRuntime for WasmtimeRuntime {
 			}
 			None => false,
 		}
+	}
+
+	fn host_functions(&self) -> &[&'static dyn Function] {
+		&self.host_functions
 	}
 
 	fn call(&mut self, ext: &mut dyn Externalities, method: &str, data: &[u8]) -> Result<Vec<u8>> {
@@ -76,10 +81,12 @@ impl WasmRuntime for WasmtimeRuntime {
 
 /// Create a new `WasmtimeRuntime` given the code. This function performs translation from Wasm to
 /// machine code, which can be computationally heavy.
-pub fn create_instance(code: &[u8], heap_pages: u64)
-	-> std::result::Result<WasmtimeRuntime, WasmError>
-{
-	let (compiled_module, context) = create_compiled_unit(code)?;
+pub fn create_instance(
+	code: &[u8],
+	heap_pages: u64,
+	host_functions: Vec<&'static dyn Function>,
+) -> std::result::Result<WasmtimeRuntime, WasmError> {
+	let (compiled_module, context) = create_compiled_unit(code, &host_functions)?;
 
 	// Inspect the module for the min and max memory sizes.
 	let (min_memory_size, max_memory_size) = {
@@ -103,12 +110,14 @@ pub fn create_instance(code: &[u8], heap_pages: u64)
 		context,
 		max_heap_pages,
 		heap_pages,
+		host_functions,
 	})
 }
 
-fn create_compiled_unit(code: &[u8])
-	-> std::result::Result<(CompiledModule, Context), WasmError>
-{
+fn create_compiled_unit(
+	code: &[u8],
+	host_functions: &[&'static dyn Function],
+) -> std::result::Result<(CompiledModule, Context), WasmError> {
 	let compilation_strategy = CompilationStrategy::Cranelift;
 
 	let compiler = new_compiler(compilation_strategy)?;
@@ -120,7 +129,7 @@ fn create_compiled_unit(code: &[u8])
 	// Instantiate and link the env module.
 	let global_exports = context.get_global_exports();
 	let compiler = new_compiler(compilation_strategy)?;
-	let env_module = instantiate_env_module(global_exports, compiler)?;
+	let env_module = instantiate_env_module(global_exports, compiler, host_functions)?;
 	context.name_instance("env".to_owned(), env_module);
 
 	// Compile the wasm module.
@@ -174,14 +183,12 @@ fn call_method(
 	let trap_error = reset_env_state_and_take_trap(context, None)?;
 	let (output_ptr, output_len) = match outcome {
 		ActionOutcome::Returned { values } => match values.as_slice() {
-			[RuntimeValue::I64(retval)] =>
-				interpret_runtime_api_result(*retval),
+			[RuntimeValue::I64(retval)] => interpret_runtime_api_result(*retval),
 			_ => return Err(Error::InvalidReturn),
 		}
-		ActionOutcome::Trapped { message } =>
-			return Err(trap_error.unwrap_or_else(||
-				format!("Wasm execution trapped: {}", message).into()
-			)),
+		ActionOutcome::Trapped { message } => return Err(trap_error.unwrap_or_else(
+			|| format!("Wasm execution trapped: {}", message).into()
+		)),
 	};
 
 	// Read the output data from guest memory.
@@ -195,6 +202,7 @@ fn call_method(
 fn instantiate_env_module(
 	global_exports: Rc<RefCell<HashMap<String, Option<Export>>>>,
 	compiler: Compiler,
+	host_functions: &[&'static dyn Function],
 ) -> std::result::Result<InstanceHandle, WasmError>
 {
 	let isa = target_isa()?;
@@ -206,7 +214,7 @@ fn instantiate_env_module(
 	let mut finished_functions = <PrimaryMap<DefinedFuncIndex, *const VMFunctionBody>>::new();
 	let mut code_memory = CodeMemory::new();
 
-	for function in SubstrateExternals::functions().iter() {
+	for function in host_functions {
 		let sig = translate_signature(
 			cranelift_ir_signature(function.signature(), &call_conv),
 			pointer_type
@@ -232,7 +240,7 @@ fn instantiate_env_module(
 	let imports = Imports::none();
 	let data_initializers = Vec::new();
 	let signatures = PrimaryMap::new();
-	let env_state = EnvState::new::<SubstrateExternals>(code_memory, compiler);
+	let env_state = EnvState::new(code_memory, compiler, host_functions);
 
 	let result = InstanceHandle::new(
 		Rc::new(module),

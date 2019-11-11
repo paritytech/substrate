@@ -32,9 +32,9 @@ aura-primitives = { package = "substrate-consensus-aura-primitives", path = "../
 grandpa = { package = "substrate-finality-grandpa", path = "../../client/finality-grandpa" }
 grandpa-primitives = { package = "substrate-finality-grandpa-primitives", path = "../../client/finality-grandpa/primitives" }
 substrate-client = {  path = "../../client/client" }
-basic-authorship = { package = "substrate-basic-authorship", path = "../../client/basic-authorship" }
 runtime = { package = "node-template-runtime", path = "runtime" }
 sr-primitives = { path = "../../client/sr-primitives" }
+basic-authorship = { package = "substrate-basic-authorship", path  = "../../client/basic-authorship"}
 
 [build-dependencies]
 vergen = "3.0.4"

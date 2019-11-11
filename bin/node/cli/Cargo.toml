@@ -39,7 +39,7 @@ babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../
 grandpa_primitives = { package = "substrate-finality-grandpa-primitives", path = "../../../client/finality-grandpa/primitives" }
 
 # core dependencies
-sr-io = { path = "../../../client/sr-io" }
+runtime-io = { package = "sr-io", path = "../../../client/sr-io" }
 client = { package = "substrate-client", path = "../../../client/client" }
 inherents = { package = "substrate-inherents", path = "../../../client/inherents" }
 chain-spec = { package = "substrate-chain-spec", path = "../../../client/chain-spec" }

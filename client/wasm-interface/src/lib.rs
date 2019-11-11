@@ -131,6 +131,12 @@ impl<T: PointerType> From<Pointer<T>> for u32 {
 	}
 }
 
+impl<T: PointerType> From<Pointer<T>> for u64 {
+	fn from(ptr: Pointer<T>) -> Self {
+		u64::from(ptr.ptr)
+	}
+}
+
 impl<T: PointerType> From<Pointer<T>> for usize {
 	fn from(ptr: Pointer<T>) -> Self {
 		ptr.ptr as _
@@ -183,7 +189,7 @@ impl Signature {
 }
 
 /// Something that provides a function implementation on the host for a wasm function.
-pub trait Function {
+pub trait Function: std::panic::RefUnwindSafe + Send + Sync {
 	/// Returns the name of this function.
 	fn name(&self) -> &str;
 	/// Returns the signature of this function.
@@ -194,6 +200,12 @@ pub trait Function {
 		context: &mut dyn FunctionContext,
 		args: &mut dyn Iterator<Item = Value>,
 	) -> Result<Option<Value>>;
+}
+
+impl PartialEq for dyn Function {
+	fn eq(&self, other: &Self) -> bool {
+		other.name() == self.name() && other.signature() == self.signature()
+	}
 }
 
 /// Context used by `Function` to interact with the allocator and the memory of the wasm instance.
@@ -266,9 +278,20 @@ pub trait Sandbox {
 }
 
 /// Something that provides implementations for host functions.
-pub trait HostFunctions {
-	/// Returns all host functions.
-	fn functions() -> &'static [&'static dyn Function];
+pub trait HostFunctions: 'static {
+	/// Returns the host functions `Self` provides.
+	fn host_functions() -> Vec<&'static dyn Function>;
+}
+
+#[impl_trait_for_tuples::impl_for_tuples(30)]
+impl HostFunctions for Tuple {
+	fn host_functions() -> Vec<&'static dyn Function> {
+		let mut host_functions = Vec::new();
+
+		for_tuples!( #( host_functions.extend(Tuple::host_functions()); )* );
+
+		host_functions
+	}
 }
 
 /// Something that can be converted into a wasm compatible `Value`.
@@ -311,10 +334,56 @@ macro_rules! impl_into_and_from_value {
 }
 
 impl_into_and_from_value! {
+	u8, I32,
+	u16, I32,
 	u32, I32,
-	i32, I32,
 	u64, I64,
+	i8, I32,
+	i16, I32,
+	i32, I32,
 	i64, I64,
+}
+
+/// Something that can write a primitive to wasm memory location.
+pub trait WritePrimitive<T: PointerType> {
+	/// Write the given value `t` to the given memory location `ptr`.
+	fn write_primitive(&mut self, ptr: Pointer<T>, t: T) -> Result<()>;
+}
+
+impl WritePrimitive<u32> for &mut dyn FunctionContext {
+	fn write_primitive(&mut self, ptr: Pointer<u32>, t: u32) -> Result<()> {
+		let r = t.to_le_bytes();
+		self.write_memory(ptr.cast(), &r)
+	}
+}
+
+impl WritePrimitive<u64> for &mut dyn FunctionContext {
+	fn write_primitive(&mut self, ptr: Pointer<u64>, t: u64) -> Result<()> {
+		let r = t.to_le_bytes();
+		self.write_memory(ptr.cast(), &r)
+	}
+}
+
+/// Something that can read a primitive from a wasm memory location.
+pub trait ReadPrimitive<T: PointerType> {
+	/// Read a primitive from the given memory location `ptr`.
+	fn read_primitive(&self, ptr: Pointer<T>) -> Result<T>;
+}
+
+impl ReadPrimitive<u32> for &mut dyn FunctionContext {
+	fn read_primitive(&self, ptr: Pointer<u32>) -> Result<u32> {
+		let mut r = [0u8; 4];
+		self.read_memory_into(ptr.cast(), &mut r)?;
+		Ok(u32::from_le_bytes(r))
+	}
+}
+
+impl ReadPrimitive<u64> for &mut dyn FunctionContext {
+	fn read_primitive(&self, ptr: Pointer<u64>) -> Result<u64> {
+		let mut r = [0u8; 8];
+		self.read_memory_into(ptr.cast(), &mut r)?;
+		Ok(u64::from_le_bytes(r))
+	}
 }
 
 #[cfg(test)]

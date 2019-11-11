@@ -21,12 +21,13 @@ runtime_io = { package = "sr-io", path = "../../../client/sr-io", default-featur
 sr-primitives = {  path = "../../../client/sr-primitives", default-features = false }
 session = { package = "substrate-session", path = "../../../client/session", default-features = false }
 runtime_version = { package = "sr-version", path = "../../../client/sr-version", default-features = false }
-runtime_support = { package = "srml-support", path = "../../../client/../srml/support", default-features = false }
+runtime_support = { package = "srml-support", path = "../../../srml/support", default-features = false }
 substrate-trie = { path = "../../../client/trie", default-features = false }
 trie-db = { version = "0.15.2", default-features = false }
 memory-db = { version = "0.15.2", default-features = false }
 offchain-primitives = { package = "substrate-offchain-primitives", path = "../../../client/offchain/primitives", default-features = false}
-executive = { package = "srml-executive", path = "../../../client/../srml/executive", default-features = false }
+runtime-interface = { package = "substrate-runtime-interface", path = "../../../client/runtime-interface", default-features = false}
+executive = { package = "srml-executive", path = "../../../srml/executive", default-features = false }
 cfg-if = "0.1.10"
 srml-babe = { path = "../../../srml/babe", default-features = false }
 srml-timestamp = { path = "../../../srml/timestamp", default-features = false }
@@ -72,4 +73,5 @@ std = [
 	"srml-system-rpc-runtime-api/std",
 	"app-crypto/std",
 	"session/std",
+	"runtime-interface/std",
 ]
