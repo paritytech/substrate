@@ -15,6 +15,7 @@ state-machine = { package = "substrate-state-machine", path = "../state-machine"
 
 [dev-dependencies]
 criterion = "0.3.0"
+test-client = { package = "substrate-test-runtime-client", path = "../test-runtime/client" }
 
 [[bench]]
 name = "bench"

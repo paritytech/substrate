@@ -4245,6 +4245,7 @@ dependencies = [
  "sr-version 2.0.0",
  "substrate-primitives 2.0.0",
  "substrate-state-machine 2.0.0",
+ "substrate-test-runtime-client 2.0.0",
 ]
 
 [[package]]
