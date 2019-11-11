@@ -225,7 +225,11 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 				match params.network_config.transport {
 					TransportConfig::MemoryOnly => false,
 					TransportConfig::Normal { enable_mdns, .. } => enable_mdns,
-				}
+				},
+				match params.network_config.transport {
+					TransportConfig::MemoryOnly => false,
+					TransportConfig::Normal { allow_private_ipv4, .. } => allow_private_ipv4,
+				},
 			);
 			let (transport, bandwidth) = {
 				let (config_mem, config_wasm) = match params.network_config.transport {

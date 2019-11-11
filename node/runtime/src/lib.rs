@@ -25,14 +25,8 @@ use support::{
 	construct_runtime, parameter_types, traits::{SplitTwoWays, Currency, Randomness}
 };
 use primitives::u32_trait::{_1, _2, _3, _4};
-use node_primitives::{
-	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index,
-	Moment, Signature,
-};
-use client::{
-	block_builder::api::{self as block_builder_api, InherentData, CheckInherentsResult},
-	runtime_api as client_api, impl_runtime_apis
-};
+use node_primitives::{AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, Moment, Signature};
+use sr_api::impl_runtime_apis;
 use sr_primitives::{Permill, Perbill, ApplyResult, impl_opaque_keys, generic, create_runtime_str};
 use sr_primitives::curve::PiecewiseLinear;
 use sr_primitives::transaction_validity::TransactionValidity;
@@ -52,6 +46,7 @@ use authority_discovery_primitives::AuthorityId as AuthorityDiscoveryId;
 use transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
 use contracts_rpc_runtime_api::ContractExecResult;
 use system::offchain::TransactionSubmitter;
+use inherents::{InherentData, CheckInherentsResult};
 
 #[cfg(any(feature = "std", test))]
 pub use sr_primitives::BuildStorage;
@@ -567,7 +562,7 @@ pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Call, SignedExt
 pub type Executive = executive::Executive<Runtime, Block, system::ChainContext<Runtime>, Runtime, AllModules>;
 
 impl_runtime_apis! {
-	impl client_api::Core<Block> for Runtime {
+	impl sr_api::Core<Block> for Runtime {
 		fn version() -> RuntimeVersion {
 			VERSION
 		}
@@ -581,7 +576,7 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl client_api::Metadata<Block> for Runtime {
+	impl sr_api::Metadata<Block> for Runtime {
 		fn metadata() -> OpaqueMetadata {
 			Runtime::metadata().into()
 		}
@@ -609,7 +604,7 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl client_api::TaggedTransactionQueue<Block> for Runtime {
+	impl tx_pool_api::TaggedTransactionQueue<Block> for Runtime {
 		fn validate_transaction(tx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 			Executive::validate_transaction(tx)
 		}
@@ -709,8 +704,6 @@ impl_runtime_apis! {
 
 	impl substrate_session::SessionKeys<Block> for Runtime {
 		fn generate_session_keys(seed: Option<Vec<u8>>) -> Vec<u8> {
-			let seed = seed.as_ref().map(|s| rstd::str::from_utf8(&s)
-				.expect("Seed is an utf8 string"));
 			SessionKeys::generate(seed)
 		}
 	}

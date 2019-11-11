@@ -59,7 +59,7 @@ pub enum GetStorageError {
 	IsTombstone,
 }
 
-client::decl_runtime_apis! {
+sr_api::decl_runtime_apis! {
 	/// The API to interact with contracts without using executive.
 	pub trait ContractsApi<AccountId, Balance> where
 		AccountId: Codec,

@@ -6,3 +6,4 @@ edition = "2018"
 
 [dependencies]
 wasmi = "0.5.1"
+impl-trait-for-tuples = "0.1.2"

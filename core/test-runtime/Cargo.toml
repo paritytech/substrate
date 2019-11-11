@@ -10,7 +10,8 @@ log = { version = "0.4.8", optional = true }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 keyring = { package = "substrate-keyring", path = "../keyring", optional = true }
-substrate-client = { path = "../client", default-features = false }
+sr-api = { path = "../sr-api", default-features = false }
+substrate-client = { path = "../client", optional = true }
 primitives = { package = "substrate-primitives", path = "../primitives", default-features = false }
 app-crypto = { package = "substrate-application-crypto", path = "../application-crypto", default-features = false }
 inherents = { package = "substrate-inherents", path = "../inherents", default-features = false }
@@ -26,12 +27,15 @@ substrate-trie = { path = "../trie", default-features = false }
 trie-db = { version = "0.15.2", default-features = false }
 memory-db = { version = "0.15.2", default-features = false }
 offchain-primitives = { package = "substrate-offchain-primitives", path = "../offchain/primitives", default-features = false}
+runtime-interface = { package = "substrate-runtime-interface", path = "../runtime-interface", default-features = false}
 executive = { package = "srml-executive", path = "../../srml/executive", default-features = false }
 cfg-if = "0.1.10"
 srml-babe = { path = "../../srml/babe", default-features = false }
 srml-timestamp = { path = "../../srml/timestamp", default-features = false }
 srml-system = { path = "../../srml/system", default-features = false }
 srml-system-rpc-runtime-api = { path = "../../srml/system/rpc/runtime-api", default-features = false }
+transaction-pool-api = { package = "substrate-transaction-pool-runtime-api", path = "../transaction-pool/runtime-api", default-features = false }
+block-builder-api = { package = "substrate-block-builder-runtime-api", path = "../block-builder/runtime-api", default-features = false }
 
 [dev-dependencies]
 substrate-executor = { path = "../executor" }
@@ -48,7 +52,7 @@ default = [
 std = [
 	"log",
 	"serde",
-	"substrate-client/std",
+	"sr-api/std",
 	"keyring",
 	"codec/std",
 	"rstd/std",
@@ -72,4 +76,8 @@ std = [
 	"srml-system-rpc-runtime-api/std",
 	"app-crypto/std",
 	"session/std",
+	"runtime-interface/std",
+	"transaction-pool-api/std",
+	"block-builder-api/std",
+	"substrate-client",
 ]

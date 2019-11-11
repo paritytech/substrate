@@ -18,6 +18,7 @@
 //! Simple Ed25519 API.
 // end::description[]
 
+#[cfg(feature = "full_crypto")]
 use rstd::vec::Vec;
 
 use crate::{hash::H256, hash::H512};
@@ -36,6 +37,7 @@ use crate::crypto::Ss58Codec;
 #[cfg(feature = "std")]
 use serde::{de, Serializer, Serialize, Deserializer, Deserialize};
 use crate::{crypto::{Public as TraitPublic, UncheckedFrom, CryptoType, Derive}};
+use runtime_interface::pass_by::PassByInner;
 
 /// A secret seed. It's not called a "secret key" because ring doesn't expose the secret keys
 /// of the key pair (yeah, dumb); as such we're forced to remember the seed manually if we
@@ -45,7 +47,7 @@ type Seed = [u8; 32];
 
 /// A public key.
 #[cfg_attr(feature = "full_crypto", derive(Hash))]
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, PassByInner)]
 pub struct Public(pub [u8; 32]);
 
 /// A key pair.
@@ -162,7 +164,7 @@ impl<'de> Deserialize<'de> for Public {
 }
 
 /// A signature (a 512-bit value).
-#[derive(Encode, Decode)]
+#[derive(Encode, Decode, PassByInner)]
 pub struct Signature(pub [u8; 64]);
 
 impl rstd::convert::TryFrom<&[u8]> for Signature {

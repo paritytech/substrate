@@ -18,7 +18,6 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use client::decl_runtime_apis;
 use rstd::vec::Vec;
 
 mod app {
@@ -36,7 +35,7 @@ pub type AuthorityId = app::Public;
 /// An authority discovery authority signature.
 pub type AuthoritySignature = app::Signature;
 
-decl_runtime_apis! {
+sr_api::decl_runtime_apis! {
 	/// The authority discovery api.
 	///
 	/// This api is used by the `core/authority-discovery` module to retrieve identifiers of the current authority set.

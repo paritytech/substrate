@@ -7,6 +7,8 @@ edition = "2018"
 [dependencies]
 cli = { package = "substrate-cli", path = "../../core/cli" }
 client = { package = "substrate-client", path = "../../core/client" }
+sr-api = { path = "../../core/sr-api" }
+block-builder-api = { package = "substrate-block-builder-runtime-api", path = "../../core/block-builder/runtime-api" }
 consensus_common = { package = "substrate-consensus-common", path = "../../core/consensus/common" }
 log = "0.4.8"
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }

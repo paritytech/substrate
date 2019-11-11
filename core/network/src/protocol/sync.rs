@@ -597,7 +597,14 @@ impl<B: BlockT> ChainSync<B> {
 				peer.state = PeerSyncState::DownloadingStale(hash);
 				have_requests = true;
 				Some((id.clone(), req))
-			} else if let Some((range, req)) = peer_block_request(id, peer, blocks, attrs, max_parallel) {
+			} else if let Some((range, req)) = peer_block_request(
+				id,
+				peer,
+				blocks,
+				attrs,
+				max_parallel,
+				last_finalized
+			) {
 				peer.state = PeerSyncState::DownloadingNew(range.start);
 				trace!(
 					target: "sync",
@@ -704,12 +711,8 @@ impl<B: BlockT> ChainSync<B> {
 								matching_hash,
 								peer.common_number,
 							);
-							let client = &self.client;
 							if peer.common_number < peer.best_number
 								&& peer.best_number < self.best_queued_number
-								&& matching_hash.and_then(
-									|h| client.block_status(&BlockId::Hash(h)).ok()
-								).unwrap_or(BlockStatus::Unknown) != BlockStatus::InChainPruned
 							{
 								trace!(target: "sync", "Added fork target {} for {}" , peer.best_hash, who);
 								self.fork_targets
@@ -974,34 +977,34 @@ impl<B: BlockT> ChainSync<B> {
 	/// Updates our internal state for best queued block and then goes
 	/// through all peers to update our view of their state as well.
 	fn on_block_queued(&mut self, hash: &B::Hash, number: NumberFor<B>) {
-		if number > self.best_queued_number {
-			self.best_queued_number = number;
-			self.best_queued_hash = *hash;
-		}
 		if let Some(_) = self.fork_targets.remove(&hash) {
 			trace!(target: "sync", "Completed fork sync {:?}", hash);
 		}
-		// Update common blocks
-		for (n, peer) in self.peers.iter_mut() {
-			if let PeerSyncState::AncestorSearch(_, _) = peer.state {
-				// Wait for ancestry search to complete first.
-				continue;
+		if number > self.best_queued_number {
+			self.best_queued_number = number;
+			self.best_queued_hash = *hash;
+			// Update common blocks
+			for (n, peer) in self.peers.iter_mut() {
+				if let PeerSyncState::AncestorSearch(_, _) = peer.state {
+					// Wait for ancestry search to complete first.
+					continue;
+				}
+				let new_common_number = if peer.best_number >= number {
+					number
+				} else {
+					peer.best_number
+				};
+				trace!(
+					target: "sync",
+					"Updating peer {} info, ours={}, common={}->{}, their best={}",
+					n,
+					number,
+					peer.common_number,
+					new_common_number,
+					peer.best_number,
+				);
+				peer.common_number = new_common_number;
 			}
-			let new_common_number = if peer.best_number >= number {
-				number
-			} else {
-				peer.best_number
-			};
-			trace!(
-				target: "sync",
-				"Updating peer {} info, ours={}, common={}->{}, their best={}",
-				n,
-				number,
-				peer.common_number,
-				new_common_number,
-				peer.best_number,
-			);
-			peer.common_number = new_common_number;
 		}
 		self.is_idle = false;
 	}
@@ -1240,7 +1243,11 @@ fn peer_block_request<B: BlockT>(
 	blocks: &mut BlockCollection<B>,
 	attrs: &message::BlockAttributes,
 	max_parallel_downloads: u32,
+	finalized: NumberFor<B>,
 ) -> Option<(Range<NumberFor<B>>, BlockRequest<B>)> {
+	if peer.common_number < finalized {
+		return None;
+	}
 	if let Some(range) = blocks.needed_blocks(
 		id.clone(),
 		MAX_BLOCKS_TO_REQUEST,

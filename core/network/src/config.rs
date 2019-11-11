@@ -282,6 +282,7 @@ impl Default for NetworkConfiguration {
 			node_name: "unknown".into(),
 			transport: TransportConfig::Normal {
 				enable_mdns: false,
+				allow_private_ipv4: true,
 				wasm_external_transport: None,
 			},
 			max_parallel_downloads: 5,
@@ -326,6 +327,11 @@ pub enum TransportConfig {
 		/// If true, the network will use mDNS to discover other libp2p nodes on the local network
 		/// and connect to them if they support the same chain.
 		enable_mdns: bool,
+
+		/// If true, allow connecting to private IPv4 addresses (as defined in
+		/// [RFC1918](https://tools.ietf.org/html/rfc1918)), unless the address has been passed in
+		/// [`NetworkConfiguration::reserved_nodes`] or [`NetworkConfiguration::boot_nodes`].
+		allow_private_ipv4: bool,
 
 		/// Optional external implementation of a libp2p transport. Used in WASM contexts where we
 		/// need some binding between the networking provided by the operating system or environment

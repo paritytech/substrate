@@ -15,7 +15,7 @@ support = { package = "srml-support", path = "../support", default-features = fa
 system = { package = "srml-system", path = "../system", default-features = false }
 timestamp = { package = "srml-timestamp", path = "../timestamp", default-features = false }
 substrate-trie = { path = "../../core/trie", default-features = false, optional = true }
-runtime-io ={ package = "sr-io", path = "../../core/sr-io", default-features = false }
+runtime-io = { package = "sr-io", path = "../../core/sr-io", default-features = false }
 impl-trait-for-tuples = "0.1.3"
 
 [dev-dependencies]

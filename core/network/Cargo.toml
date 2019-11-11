@@ -26,6 +26,7 @@ libp2p = { version = "0.13.0", default-features = false, features = ["libp2p-web
 fork-tree = { path = "../../core/utils/fork-tree" }
 consensus = { package = "substrate-consensus-common", path = "../../core/consensus/common" }
 client = { package = "substrate-client", path = "../../core/client" }
+block-builder = { package = "substrate-block-builder", path = "../../core/block-builder" }
 header_metadata = { package = "substrate-header-metadata", path = "../../core/client/header-metadata" }
 sr-primitives = { path = "../../core/sr-primitives" }
 primitives = { package = "substrate-primitives", path = "../../core/primitives" }

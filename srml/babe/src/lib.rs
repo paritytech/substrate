@@ -34,7 +34,7 @@ use sr_staking_primitives::{
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
 use codec::{Encode, Decode};
-use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
+use inherents::{InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
 use babe_primitives::{
@@ -57,13 +57,13 @@ pub type InherentType = u64;
 /// Auxiliary trait to extract BABE inherent data.
 pub trait BabeInherentData {
 	/// Get BABE inherent data.
-	fn babe_inherent_data(&self) -> result::Result<InherentType, RuntimeString>;
+	fn babe_inherent_data(&self) -> result::Result<InherentType, inherents::Error>;
 	/// Replace BABE inherent data.
 	fn babe_replace_inherent_data(&mut self, new: InherentType);
 }
 
 impl BabeInherentData for InherentData {
-	fn babe_inherent_data(&self) -> result::Result<InherentType, RuntimeString> {
+	fn babe_inherent_data(&self) -> result::Result<InherentType, inherents::Error> {
 		self.get_data(&INHERENT_IDENTIFIER)
 			.and_then(|r| r.ok_or_else(|| "BABE inherent data not found".into()))
 	}
@@ -94,7 +94,7 @@ impl ProvideInherentData for InherentDataProvider {
 	fn on_register(
 		&self,
 		providers: &InherentDataProviders,
-	) -> result::Result<(), RuntimeString> {
+	) -> result::Result<(), inherents::Error> {
 		if !providers.has_provider(&timestamp::INHERENT_IDENTIFIER) {
 			// Add the timestamp inherent data provider, as we require it.
 			providers.register_provider(timestamp::InherentDataProvider)
@@ -110,14 +110,14 @@ impl ProvideInherentData for InherentDataProvider {
 	fn provide_inherent_data(
 		&self,
 		inherent_data: &mut InherentData,
-	) -> result::Result<(), RuntimeString> {
+	) -> result::Result<(), inherents::Error> {
 		let timestamp = inherent_data.timestamp_inherent_data()?;
 		let slot_number = timestamp / self.slot_duration;
 		inherent_data.put_data(INHERENT_IDENTIFIER, &slot_number)
 	}
 
 	fn error_to_string(&self, error: &[u8]) -> Option<String> {
-		RuntimeString::decode(&mut &error[..]).map(Into::into).ok()
+		inherents::Error::decode(&mut &error[..]).map(|e| e.into_string()).ok()
 	}
 }
 
@@ -597,12 +597,12 @@ fn compute_randomness(
 		s.extend_from_slice(&vrf_output[..]);
 	}
 
-	runtime_io::blake2_256(&s)
+	runtime_io::hashing::blake2_256(&s)
 }
 
 impl<T: Trait> ProvideInherent for Module<T> {
 	type Call = timestamp::Call<T>;
-	type Error = MakeFatalError<RuntimeString>;
+	type Error = MakeFatalError<inherents::Error>;
 	const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
 	fn create_inherent(_: &InherentData) -> Option<Self::Call> {
@@ -621,7 +621,7 @@ impl<T: Trait> ProvideInherent for Module<T> {
 		if timestamp_based_slot == seal_slot {
 			Ok(())
 		} else {
-			Err(RuntimeString::from("timestamp set in block doesn't match slot in seal").into())
+			Err(inherents::Error::from("timestamp set in block doesn't match slot in seal").into())
 		}
 	}
 }

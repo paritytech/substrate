@@ -125,10 +125,7 @@ use sr_primitives::{KeyTypeId, Perbill, RuntimeAppPublic, BoundToRuntimeAppPubli
 use sr_primitives::weights::SimpleDispatchInfo;
 use sr_primitives::traits::{Convert, Zero, Member, OpaqueKeys};
 use sr_staking_primitives::SessionIndex;
-use support::{
-	dispatch::Result, ConsensusEngineId, decl_module, decl_event,
-	decl_storage,
-};
+use support::{dispatch::Result, ConsensusEngineId, decl_module, decl_event, decl_storage};
 use support::{ensure, traits::{OnFreeBalanceZero, Get, FindAuthor}, Parameter};
 use system::{self, ensure_signed};
 

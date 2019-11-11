@@ -84,7 +84,7 @@ pub fn sign(xt: CheckedExtrinsic, version: u32, genesis_hash: [u8; 32]) -> Unche
 			let key = AccountKeyring::from_account_id(&signed).unwrap();
 			let signature = payload.using_encoded(|b| {
 				if b.len() > 256 {
-					key.sign(&sr_io::blake2_256(b))
+					key.sign(&runtime_io::hashing::blake2_256(b))
 				} else {
 					key.sign(b)
 				}

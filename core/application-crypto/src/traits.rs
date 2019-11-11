@@ -19,7 +19,7 @@ use primitives::crypto::Pair;
 
 use codec::Codec;
 use primitives::crypto::{KeyTypeId, CryptoType, IsWrappedBy, Public};
-use rstd::fmt::Debug;
+use rstd::{fmt::Debug, vec::Vec};
 
 /// An application-specific key.
 pub trait AppKey: 'static + Send + Sync + Sized + CryptoType + Clone {
@@ -88,10 +88,13 @@ pub trait RuntimePublic: Sized {
 	/// Returns all public keys for the given key type in the keystore.
 	fn all(key_type: KeyTypeId) -> crate::Vec<Self>;
 
-	/// Generate a public/private pair for the given key type and store it in the keystore.
+	/// Generate a public/private pair for the given key type with an optional `seed` and
+	/// store it in the keystore.
+	///
+	/// The `seed` needs to be valid utf8.
 	///
 	/// Returns the generated public key.
-	fn generate_pair(key_type: KeyTypeId, seed: Option<&str>) -> Self;
+	fn generate_pair(key_type: KeyTypeId, seed: Option<Vec<u8>>) -> Self;
 
 	/// Sign the given message with the corresponding private key of this public key.
 	///
@@ -116,10 +119,12 @@ pub trait RuntimeAppPublic: Sized  {
 	/// Returns all public keys for this application in the keystore.
 	fn all() -> crate::Vec<Self>;
 
-	/// Generate a public/private pair and store it in the keystore.
+	/// Generate a public/private pair with an optional `seed` and store it in the keystore.
+	///
+	/// The `seed` needs to be valid utf8.
 	///
 	/// Returns the generated public key.
-	fn generate_pair(seed: Option<&str>) -> Self;
+	fn generate_pair(seed: Option<Vec<u8>>) -> Self;
 
 	/// Sign the given message with the corresponding private key of this public key.
 	///

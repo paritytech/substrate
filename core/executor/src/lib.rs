@@ -36,7 +36,7 @@ mod wasmi_execution;
 mod native_executor;
 mod sandbox;
 mod allocator;
-mod host_interface;
+pub mod deprecated_host_interface;
 mod wasm_runtime;
 #[cfg(feature = "wasmtime")]
 mod wasmtime;
@@ -64,7 +64,7 @@ pub use wasm_runtime::WasmExecutionMethod;
 /// - `heap_pages`: The number of heap pages to allocate.
 ///
 /// Returns the `Vec<u8>` that contains the return value of the function.
-pub fn call_in_wasm<E: Externalities>(
+pub fn call_in_wasm<E: Externalities, HF: wasm_interface::HostFunctions>(
 	function: &str,
 	call_data: &[u8],
 	execution_method: WasmExecutionMethod,
@@ -76,6 +76,7 @@ pub fn call_in_wasm<E: Externalities>(
 		execution_method,
 		heap_pages,
 		code,
+		HF::host_functions(),
 	)?;
 	instance.call(ext, function, call_data)
 }
@@ -102,7 +103,7 @@ mod tests {
 	fn call_in_interpreted_wasm_works() {
 		let mut ext = TestExternalities::default();
 		let mut ext = ext.ext();
-		let res = call_in_wasm(
+		let res = call_in_wasm::<_, runtime_io::SubstrateHostFunctions>(
 			"test_empty_return",
 			&[],
 			WasmExecutionMethod::Interpreted,

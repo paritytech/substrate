@@ -448,6 +448,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 
 		for (_, ref mut peer) in self.peers.iter_mut() {
 			peer.known_messages.retain(|h| known_messages.contains_key(h));
+			peer.filtered_messages.retain(|h, _| known_messages.contains_key(h));
 		}
 	}
 
