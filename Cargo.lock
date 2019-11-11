@@ -1354,6 +1354,7 @@ name = "futures-util"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
+ "futures 0.1.29 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures-channel 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures-core 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures-io 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1683,6 +1684,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "hyper-tls"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "bytes 0.4.12 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.29 (registry+https://github.com/rust-lang/crates.io-index)",
+ "hyper 0.12.35 (registry+https://github.com/rust-lang/crates.io-index)",
+ "native-tls 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tokio-io 0.1.12 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "idna"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1803,6 +1816,7 @@ dependencies = [
  "failure 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.29 (registry+https://github.com/rust-lang/crates.io-index)",
  "hyper 0.12.35 (registry+https://github.com/rust-lang/crates.io-index)",
+ "hyper-tls 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "jsonrpc-core 14.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "jsonrpc-pubsub 14.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -4896,6 +4910,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "srml-support-rpc"
+version = "2.0.0"
+dependencies = [
+ "futures 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "jsonrpc-client-transports 14.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "jsonrpc-core 14.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
+ "srml-support 2.0.0",
+ "srml-system 2.0.0",
+ "substrate-primitives-storage 2.0.0",
+ "substrate-rpc-api 2.0.0",
+ "tokio 0.1.22 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "srml-support-test"
 version = "2.0.0"
 dependencies = [
@@ -7612,6 +7642,7 @@ dependencies = [
 "checksum hyper 0.10.16 (registry+https://github.com/rust-lang/crates.io-index)" = "0a0652d9a2609a968c14be1a9ea00bf4b1d64e2e1f53a1b51b6fff3a6e829273"
 "checksum hyper 0.12.35 (registry+https://github.com/rust-lang/crates.io-index)" = "9dbe6ed1438e1f8ad955a4701e9a944938e9519f6888d12d8558b645e247d5f6"
 "checksum hyper-rustls 0.17.1 (registry+https://github.com/rust-lang/crates.io-index)" = "719d85c7df4a7f309a77d145340a063ea929dcb2e025bae46a80345cffec2952"
+"checksum hyper-tls 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)" = "3a800d6aa50af4b5850b2b0f659625ce9504df908e9733b635720483be26174f"
 "checksum idna 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)" = "38f09e0f0b1fb55fdee1f17470ad800da77af5186a1a76c026b679358b7e844e"
 "checksum idna 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "02e2673c30ee86b5b96a9cb52ad15718aa1f966f5ab9ad54a8b95d5ca33120a9"
 "checksum impl-codec 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)" = "3fa0086251524c50fd53b32e7b05eb6d79e2f97221eaf0c53c0ca9c3096f21d3"

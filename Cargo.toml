@@ -57,6 +57,7 @@ members = [
 	"core/utils/wasm-builder-runner",
 	"core/wasm-interface",
 	"srml/support",
+	"srml/support/rpc",
 	"srml/support/procedural",
 	"srml/support/procedural/tools",
 	"srml/support/procedural/tools/derive",
@@ -112,4 +113,3 @@ members = [
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"
-
