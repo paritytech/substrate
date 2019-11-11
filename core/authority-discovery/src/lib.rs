@@ -105,7 +105,7 @@ where
 	Block: BlockT + Unpin + 'static,
 	Network: NetworkProvider,
 	Client: ProvideRuntimeApi + Send + Sync + 'static + HeaderBackend<Block>,
-	<Client as ProvideRuntimeApi>::Api: AuthorityDiscoveryApi<Block>,
+	<Client as ProvideRuntimeApi>::Api: AuthorityDiscoveryApi<Block, Error = client::error::Error>,
 	Self: Future<Output = ()>,
 {
 	/// Return a new authority discovery.
@@ -303,7 +303,7 @@ where
 	Block: BlockT + Unpin + 'static,
 	Network: NetworkProvider,
 	Client: ProvideRuntimeApi + Send + Sync + 'static + HeaderBackend<Block>,
-	<Client as ProvideRuntimeApi>::Api: AuthorityDiscoveryApi<Block>,
+	<Client as ProvideRuntimeApi>::Api: AuthorityDiscoveryApi<Block, Error = client::error::Error>,
 {
 	type Output = ();
 
@@ -404,7 +404,7 @@ fn hash_authority_id(id: &[u8]) -> Result<libp2p::kad::record::Key> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use client::runtime_api::{ApiExt, Core, RuntimeVersion, StorageProof};
+	use sr_api::{ApiExt, Core, RuntimeVersion, StorageProof};
 	use futures::channel::mpsc::channel;
 	use futures::executor::block_on;
 	use futures::future::poll_fn;
@@ -501,6 +501,8 @@ mod tests {
 	}
 
 	impl ApiExt<Block> for RuntimeApi {
+		type Error = client::error::Error;
+
 		fn map_api_result<F: FnOnce(&Self) -> std::result::Result<R, E>, R, E>(
 			&self,
 			_: F,

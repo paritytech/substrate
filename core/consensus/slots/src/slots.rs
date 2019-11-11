@@ -146,7 +146,7 @@ impl<SC: SlotCompatible + Unpin> Stream for Slots<SC> {
 
 			let inherent_data = match self.inherent_data_providers.create_inherent_data() {
 				Ok(id) => id,
-				Err(err) => return Poll::Ready(Some(Err(consensus_common::Error::InherentData(err.into_owned())))),
+				Err(err) => return Poll::Ready(Some(Err(consensus_common::Error::InherentData(err)))),
 			};
 			let result = self.timestamp_extractor.extract_timestamp_and_slot(&inherent_data);
 			let (timestamp, slot_num, offset) = match result {

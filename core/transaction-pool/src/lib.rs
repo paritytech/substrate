@@ -20,10 +20,9 @@
 #![warn(unused_extern_crates)]
 
 mod api;
+pub mod error;
 #[cfg(test)]
 mod tests;
-
-pub mod error;
 
 pub use api::FullChainApi;
 pub use txpool;

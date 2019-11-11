@@ -26,8 +26,11 @@ timestamp = { package = "srml-timestamp", path = "../../srml/timestamp", default
 sudo = { package = "srml-sudo", path = "../../srml/sudo", default_features = false }
 transaction-payment = { package = "srml-transaction-payment", path = "../../srml/transaction-payment", default_features = false }
 sr-primitives = { path = "../../core/sr-primitives", default_features = false }
-client = { package = "substrate-client", path = "../../core/client", default_features = false }
+sr-api = { path = "../../core/sr-api", default_features = false }
 offchain-primitives = { package = "substrate-offchain-primitives", path = "../../core/offchain/primitives", default-features = false }
+block-builder-api = { package = "substrate-block-builder-runtime-api", path = "../../core/block-builder/runtime-api", default-features = false }
+tx-pool-api = { package = "substrate-transaction-pool-runtime-api", path = "../../core/transaction-pool/runtime-api", default-features = false }
+inherents = { package = "substrate-inherents", path = "../../core/inherents", default-features = false }
 
 [build-dependencies]
 wasm-builder-runner = { package = "substrate-wasm-builder-runner", version = "1.0.4" }
@@ -36,7 +39,7 @@ wasm-builder-runner = { package = "substrate-wasm-builder-runner", version = "1.
 default = ["std"]
 std = [
 	"codec/std",
-	"client/std",
+	"sr-api/std",
 	"rstd/std",
 	"runtime-io/std",
 	"support/std",
@@ -58,4 +61,7 @@ std = [
 	"safe-mix/std",
 	"offchain-primitives/std",
 	"substrate-session/std",
+	"block-builder-api/std",
+	"tx-pool-api/std",
+	"inherents/std",
 ]
