@@ -32,10 +32,7 @@ use trie_db::{TrieMut, Trie};
 use substrate_trie::PrefixedMemoryDB;
 use substrate_trie::trie_types::{TrieDB, TrieDBMut};
 
-use substrate_client::{
-	runtime_api as client_api, block_builder::api as block_builder_api, decl_runtime_apis,
-	impl_runtime_apis,
-};
+use sr_api::{decl_runtime_apis, impl_runtime_apis};
 use sr_primitives::{
 	ApplyResult, create_runtime_str, Perbill, impl_opaque_keys,
 	transaction_validity::{
@@ -408,7 +405,8 @@ fn benchmark_add_one(i: u64) -> u64 {
 
 /// The `benchmark_add_one` function as function pointer.
 #[cfg(not(feature = "std"))]
-static BENCHMARK_ADD_ONE: runtime_io::ExchangeableFunction<fn(u64) -> u64> = runtime_io::ExchangeableFunction::new(benchmark_add_one);
+static BENCHMARK_ADD_ONE: runtime_interface::wasm::ExchangeableFunction<fn(u64) -> u64> =
+	runtime_interface::wasm::ExchangeableFunction::new(benchmark_add_one);
 
 fn code_using_trie() -> u64 {
 	let pairs = [
@@ -459,7 +457,7 @@ static mut MUTABLE_STATIC: u64 = 32;
 cfg_if! {
 	if #[cfg(feature = "std")] {
 		impl_runtime_apis! {
-			impl client_api::Core<Block> for Runtime {
+			impl sr_api::Core<Block> for Runtime {
 				fn version() -> RuntimeVersion {
 					version()
 				}
@@ -473,13 +471,13 @@ cfg_if! {
 				}
 			}
 
-			impl client_api::Metadata<Block> for Runtime {
+			impl sr_api::Metadata<Block> for Runtime {
 				fn metadata() -> OpaqueMetadata {
 					unimplemented!()
 				}
 			}
 
-			impl client_api::TaggedTransactionQueue<Block> for Runtime {
+			impl transaction_pool_api::TaggedTransactionQueue<Block> for Runtime {
 				fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 					if let Extrinsic::IncludeData(data) = utx {
 						return Ok(ValidTransaction {
@@ -626,7 +624,7 @@ cfg_if! {
 			impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
 				fn offchain_worker(block: u64) {
 					let ex = Extrinsic::IncludeData(block.encode());
-					runtime_io::submit_transaction(ex.encode()).unwrap();
+					runtime_io::offchain::submit_transaction(ex.encode()).unwrap();
 				}
 			}
 
@@ -644,7 +642,7 @@ cfg_if! {
 		}
 	} else {
 		impl_runtime_apis! {
-			impl client_api::Core<Block> for Runtime {
+			impl sr_api::Core<Block> for Runtime {
 				fn version() -> RuntimeVersion {
 					version()
 				}
@@ -658,13 +656,13 @@ cfg_if! {
 				}
 			}
 
-			impl client_api::Metadata<Block> for Runtime {
+			impl sr_api::Metadata<Block> for Runtime {
 				fn metadata() -> OpaqueMetadata {
 					unimplemented!()
 				}
 			}
 
-			impl client_api::TaggedTransactionQueue<Block> for Runtime {
+			impl transaction_pool_api::TaggedTransactionQueue<Block> for Runtime {
 				fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 					if let Extrinsic::IncludeData(data) = utx {
 						return Ok(ValidTransaction{
@@ -842,7 +840,7 @@ cfg_if! {
 			impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
 				fn offchain_worker(block: u64) {
 					let ex = Extrinsic::IncludeData(block.encode());
-					runtime_io::submit_transaction(ex.encode()).unwrap()
+					runtime_io::offchain::submit_transaction(ex.encode()).unwrap()
 				}
 			}
 
@@ -893,10 +891,10 @@ fn test_sr25519_crypto() -> (sr25519::AppSignature, sr25519::AppPublic) {
 
 fn test_read_storage() {
 	const KEY: &[u8] = b":read_storage";
-	runtime_io::set_storage(KEY, b"test");
+	runtime_io::storage::set(KEY, b"test");
 
 	let mut v = [0u8; 4];
-	let r = runtime_io::read_storage(
+	let r = runtime_io::storage::read(
 		KEY,
 		&mut v,
 		0
@@ -905,7 +903,7 @@ fn test_read_storage() {
 	assert_eq!(&v, b"test");
 
 	let mut v = [0u8; 4];
-	let r = runtime_io::read_storage(KEY, &mut v, 8);
+	let r = runtime_io::storage::read(KEY, &mut v, 8);
 	assert_eq!(r, Some(4));
 	assert_eq!(&v, &[0, 0, 0, 0]);
 }
@@ -913,10 +911,10 @@ fn test_read_storage() {
 fn test_read_child_storage() {
 	const CHILD_KEY: &[u8] = b":child_storage:default:read_child_storage";
 	const KEY: &[u8] = b":read_child_storage";
-	runtime_io::set_child_storage(CHILD_KEY, KEY, b"test");
+	runtime_io::storage::child_set(CHILD_KEY, KEY, b"test");
 
 	let mut v = [0u8; 4];
-	let r = runtime_io::read_child_storage(
+	let r = runtime_io::storage::child_read(
 		CHILD_KEY,
 		KEY,
 		&mut v,
@@ -926,7 +924,7 @@ fn test_read_child_storage() {
 	assert_eq!(&v, b"test");
 
 	let mut v = [0u8; 4];
-	let r = runtime_io::read_child_storage(CHILD_KEY, KEY, &mut v, 8);
+	let r = runtime_io::storage::child_read(CHILD_KEY, KEY, &mut v, 8);
 	assert_eq!(r, Some(4));
 	assert_eq!(&v, &[0, 0, 0, 0]);
 }

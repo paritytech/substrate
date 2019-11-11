@@ -19,8 +19,7 @@ use crate::{SpawnTaskHandle, start_rpc_servers, build_network_future, Transactio
 use crate::status_sinks;
 use crate::config::{Configuration, DatabaseConfig};
 use client::{
-	BlockchainEvents, Client, runtime_api,
-	backend::RemoteBackend, light::blockchain::RemoteBlockchain,
+	BlockchainEvents, Client, backend::RemoteBackend, light::blockchain::RemoteBlockchain,
 };
 use chain_spec::{RuntimeGenesis, Extension};
 use codec::{Decode, Encode, IoReader};
@@ -44,7 +43,10 @@ use sr_primitives::traits::{
 	Block as BlockT, Extrinsic, ProvideRuntimeApi, NumberFor, One, Zero, Header, SaturatedConversion
 };
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
-use std::{io::{Read, Write, Seek}, marker::PhantomData, sync::Arc, sync::atomic::AtomicBool};
+use std::{
+	io::{Read, Write, Seek},
+	marker::PhantomData, sync::Arc, sync::atomic::AtomicBool, time::SystemTime
+};
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use tel::{telemetry, SUBSTRATE_INFO};
 use transaction_pool::txpool::{self, ChainApi, Pool as TransactionPool};
@@ -187,7 +189,7 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 						client_db::DatabaseSettingsSrc::Custom(db.clone()),
 				},
 			};
-			
+
 			client_db::new_client(
 				db_config,
 				executor,
@@ -754,10 +756,11 @@ ServiceBuilder<
 > where
 	Client<TBackend, TExec, TBl, TRtApi>: ProvideRuntimeApi,
 	<Client<TBackend, TExec, TBl, TRtApi> as ProvideRuntimeApi>::Api:
-		runtime_api::Metadata<TBl> +
+		sr_api::Metadata<TBl> +
 		offchain::OffchainWorkerApi<TBl> +
-		runtime_api::TaggedTransactionQueue<TBl> +
-		session::SessionKeys<TBl>,
+		tx_pool_api::TaggedTransactionQueue<TBl> +
+		session::SessionKeys<TBl> +
+		sr_api::ApiExt<TBl, Error = client::error::Error>,
 	TBl: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
 	TRtApi: 'static + Send + Sync,
 	TCfg: Default,
@@ -805,7 +808,8 @@ ServiceBuilder<
 
 		session::generate_initial_session_keys(
 			client.clone(),
-			config.dev_key_seed.clone().map(|s| vec![s]).unwrap_or_default()
+			&BlockId::Hash(client.info().chain.best_hash),
+			config.dev_key_seed.clone().map(|s| vec![s]).unwrap_or_default(),
 		)?;
 
 		let (signal, exit) = exit_future::signal();
@@ -1095,6 +1099,9 @@ ServiceBuilder<
 				endpoints,
 				wasm_external_transport: config.telemetry_external_transport.take(),
 			});
+			let startup_time = SystemTime::UNIX_EPOCH.elapsed()
+				.map(|dur| dur.as_millis())
+				.unwrap_or(0);
 			let future = telemetry.clone()
 				.map(|ev| Ok::<_, ()>(ev))
 				.compat()
@@ -1109,6 +1116,7 @@ ServiceBuilder<
 						"config" => "",
 						"chain" => chain_name.clone(),
 						"authority" => is_authority,
+						"startup_time" => startup_time,
 						"network_id" => network_id.clone()
 					);
 
@@ -1155,7 +1163,8 @@ pub(crate) fn maintain_transaction_pool<Api, Backend, Block, Executor, PoolApi>(
 	Block: BlockT<Hash = <Blake2Hasher as primitives::Hasher>::Out>,
 	Backend: 'static + client::backend::Backend<Block, Blake2Hasher>,
 	Client<Backend, Executor, Block, Api>: ProvideRuntimeApi,
-	<Client<Backend, Executor, Block, Api> as ProvideRuntimeApi>::Api: runtime_api::TaggedTransactionQueue<Block>,
+	<Client<Backend, Executor, Block, Api> as ProvideRuntimeApi>::Api:
+		tx_pool_api::TaggedTransactionQueue<Block>,
 	Executor: 'static + client::CallExecutor<Block, Blake2Hasher>,
 	PoolApi: 'static + txpool::ChainApi<Hash = Block::Hash, Block = Block>,
 	Api: 'static,

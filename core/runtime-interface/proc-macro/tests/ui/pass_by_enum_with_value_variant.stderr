@@ -1,0 +1,5 @@
+error: `PassByEnum` only supports unit variants.
+ --> $DIR/pass_by_enum_with_value_variant.rs:3:10
+  |
+3 | #[derive(PassByEnum)]
+  |          ^^^^^^^^^^

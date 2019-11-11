@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+pub use std::alloc;
+pub use std::any;
 pub use std::borrow;
 pub use std::boxed;
 pub use std::cell;

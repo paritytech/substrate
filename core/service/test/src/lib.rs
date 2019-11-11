@@ -160,6 +160,7 @@ fn node_config<G, E: Clone> (
 		extra_request_response_protos: Vec::new(),
 		transport: TransportConfig::Normal {
 			enable_mdns: false,
+			allow_private_ipv4: true,
 			wasm_external_transport: None,
 		},
 		max_parallel_downloads: NetworkConfiguration::default().max_parallel_downloads,

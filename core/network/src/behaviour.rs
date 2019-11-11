@@ -62,11 +62,17 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Behaviour<B, S, H> {
 		local_public_key: PublicKey,
 		known_addresses: Vec<(PeerId, Multiaddr)>,
 		enable_mdns: bool,
+		allow_private_ipv4: bool,
 	) -> Self {
 		Behaviour {
 			substrate,
 			debug_info: debug_info::DebugInfoBehaviour::new(user_agent, local_public_key.clone()),
-			discovery: DiscoveryBehaviour::new(local_public_key, known_addresses, enable_mdns),
+			discovery: DiscoveryBehaviour::new(
+				local_public_key,
+				known_addresses,
+				enable_mdns,
+				allow_private_ipv4
+			),
 			events: Vec::new(),
 		}
 	}

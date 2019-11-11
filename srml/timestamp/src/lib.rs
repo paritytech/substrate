@@ -98,12 +98,15 @@ use codec::Decode;
 use inherents::ProvideInherentData;
 use support::{Parameter, decl_storage, decl_module};
 use support::traits::{Time, Get};
-use sr_primitives::traits::{
-	SimpleArithmetic, Zero, SaturatedConversion, Scale
+use sr_primitives::{
+	RuntimeString,
+	traits::{
+		SimpleArithmetic, Zero, SaturatedConversion, Scale
+	}
 };
 use sr_primitives::weights::SimpleDispatchInfo;
 use system::ensure_none;
-use inherents::{RuntimeString, InherentIdentifier, ProvideInherent, IsFatalError, InherentData};
+use inherents::{InherentIdentifier, ProvideInherent, IsFatalError, InherentData};
 
 /// The identifier for the `timestamp` inherent.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"timstap0";
@@ -145,11 +148,11 @@ impl InherentError {
 /// Auxiliary trait to extract timestamp inherent data.
 pub trait TimestampInherentData {
 	/// Get timestamp inherent data.
-	fn timestamp_inherent_data(&self) -> Result<InherentType, RuntimeString>;
+	fn timestamp_inherent_data(&self) -> Result<InherentType, inherents::Error>;
 }
 
 impl TimestampInherentData for InherentData {
-	fn timestamp_inherent_data(&self) -> Result<InherentType, RuntimeString> {
+	fn timestamp_inherent_data(&self) -> Result<InherentType, inherents::Error> {
 		self.get_data(&INHERENT_IDENTIFIER)
 			.and_then(|r| r.ok_or_else(|| "Timestamp inherent data not found".into()))
 	}
@@ -164,7 +167,10 @@ impl ProvideInherentData for InherentDataProvider {
 		&INHERENT_IDENTIFIER
 	}
 
-	fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), RuntimeString> {
+	fn provide_inherent_data(
+		&self,
+		inherent_data: &mut InherentData,
+	) -> Result<(), inherents::Error> {
 		use std::time::SystemTime;
 
 		let now = SystemTime::now();
@@ -288,7 +294,7 @@ impl<T: Trait> ProvideInherent for Module<T> {
 	}
 
 	fn check_inherent(call: &Self::Call, data: &InherentData) -> result::Result<(), Self::Error> {
-		const MAX_TIMESTAMP_DRIFT: u64 = 60;
+		const MAX_TIMESTAMP_DRIFT_MILLIS: u64 = 30 * 1000;
 
 		let t: u64 = match call {
 			Call::set(ref t) => t.clone().saturated_into::<u64>(),
@@ -298,7 +304,7 @@ impl<T: Trait> ProvideInherent for Module<T> {
 		let data = extract_inherent_data(data).map_err(|e| InherentError::Other(e))?;
 
 		let minimum = (Self::now() + T::MinimumPeriod::get()).saturated_into::<u64>();
-		if t > data + MAX_TIMESTAMP_DRIFT {
+		if t > data + MAX_TIMESTAMP_DRIFT_MILLIS {
 			Err(InherentError::Other("Timestamp too far in future to accept".into()))
 		} else if t < minimum {
 			Err(InherentError::ValidAtTimestamp(minimum))

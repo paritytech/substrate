@@ -257,7 +257,11 @@ pub struct Instance<T> {
 }
 
 impl<T> Instance<T> {
-	pub fn new(code: &[u8], env_def_builder: &EnvironmentDefinitionBuilder<T>, state: &mut T) -> Result<Instance<T>, Error> {
+	pub fn new(
+		code: &[u8],
+		env_def_builder: &EnvironmentDefinitionBuilder<T>,
+		state: &mut T,
+	) -> Result<Instance<T>, Error> {
 		let module = Module::from_buffer(code).map_err(|_| Error::Module)?;
 		let not_started_instance = ModuleInstance::new(&module, env_def_builder)
 			.map_err(|_| Error::Module)?;
@@ -269,7 +273,8 @@ impl<T> Instance<T> {
 				state,
 				defined_host_functions: &defined_host_functions,
 			};
-			let instance = not_started_instance.run_start(&mut externals).map_err(|_| Error::Execution)?;
+			let instance = not_started_instance.run_start(&mut externals)
+				.map_err(|_| Error::Execution)?;
 			instance
 		};
 
@@ -282,13 +287,12 @@ impl<T> Instance<T> {
 
 	pub fn invoke(
 		&mut self,
-		name: &[u8],
+		name: &str,
 		args: &[TypedValue],
 		state: &mut T,
 	) -> Result<ReturnValue, Error> {
 		let args = args.iter().cloned().map(Into::into).collect::<Vec<_>>();
 
-		let name = ::std::str::from_utf8(name).map_err(|_| Error::Execution)?;
 		let mut externals = GuestExternals {
 			state,
 			defined_host_functions: &self.defined_host_functions,
@@ -350,7 +354,7 @@ mod tests {
 		env_builder.add_host_func("env", "polymorphic_id", env_polymorphic_id);
 
 		let mut instance = Instance::new(code, &env_builder, &mut state)?;
-		let result = instance.invoke(b"call", args, &mut state);
+		let result = instance.invoke("call", args, &mut state);
 
 		result.map_err(|_| HostError)
 	}
@@ -474,7 +478,7 @@ mod tests {
 
 		// But this fails since we imported a function that returns i32 as if it returned i64.
 		assert_matches!(
-			instance.invoke(b"call", &[], &mut ()),
+			instance.invoke("call", &[], &mut ()),
 			Err(Error::Execution)
 		);
 	}
