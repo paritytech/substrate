@@ -41,7 +41,7 @@ tokio = { version = "0.1.22", optional = true }
 unsigned-varint = { version = "0.2.2", features = ["codec"] }
 keyring = { package = "substrate-keyring", path = "../../client/keyring", optional = true }
 test_client = { package = "substrate-test-client", path = "../../test/utils/client", optional = true }
-test-client = { package = "substrate-test-runtime-client", path = "../../client/test-runtime/client", optional = true }
+test-client = { package = "substrate-test-runtime-client", path = "../../test/utils/runtime/client", optional = true }
 erased-serde = "0.3.9"
 void = "1.0.2"
 zeroize = "0.10.1"
@@ -52,8 +52,8 @@ env_logger = "0.7.0"
 keyring = { package = "substrate-keyring", path = "../../client/keyring" }
 quickcheck = "0.9.0"
 rand = "0.7.2"
-test-client = { package = "substrate-test-runtime-client", path = "../../client/test-runtime/client" }
-test_runtime = { package = "substrate-test-runtime", path = "../../client/test-runtime" }
+test-client = { package = "substrate-test-runtime-client", path = "../../test/utils/runtime/client" }
+test_runtime = { package = "substrate-test-runtime", path = "../../test/utils/runtime" }
 tempdir = "0.3.7"
 tokio = "0.1.22"
 
