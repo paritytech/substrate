@@ -1,0 +1,14 @@
+[package]
+name = "substrate-block-builder"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
+state-machine = { package = "substrate-state-machine", path = "../state-machine" }
+sr-primitives = { path = "../sr-primitives" }
+primitives = { package = "substrate-primitives", path = "../primitives" }
+codec = { package = "parity-scale-codec", version = "1.0.6", features = ["derive"] }
+runtime_api = { package = "substrate-block-builder-runtime-api", path = "runtime-api" }
+sr-api = { path = "../sr-api" }
+

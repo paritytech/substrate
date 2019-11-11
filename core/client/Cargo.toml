@@ -5,29 +5,30 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-derive_more = { version = "0.15.0", optional = true }
-fnv = { version = "1.0.6", optional = true }
-log = { version = "0.4.8", optional = true }
-parking_lot = { version = "0.9.0", optional = true }
-hex-literal = { version = "0.2.1", optional = true }
-futures = { version = "0.1.29", optional = true }
-futures03 = { package = "futures-preview", version = "0.3.0-alpha.19", features = ["compat"], optional = true }
-consensus = { package = "substrate-consensus-common", path = "../consensus/common", optional = true }
-executor = { package = "substrate-executor", path = "../executor", optional = true }
-state-machine = { package = "substrate-state-machine", path = "../state-machine", optional = true }
-keyring = { package = "substrate-keyring", path = "../keyring", optional = true }
-trie = { package = "substrate-trie", path = "../trie", optional = true }
-substrate-telemetry = { path = "../telemetry", optional = true }
-hash-db = { version = "0.15.2", default-features = false }
-kvdb = { git = "https://github.com/paritytech/parity-common", optional = true, rev="b0317f649ab2c665b7987b8475878fc4d2e1f81d" }
-codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-primitives = { package = "substrate-primitives", path = "../primitives", default-features = false }
-sr-primitives = { path = "../sr-primitives", default-features = false }
-runtime-version = { package = "sr-version", path = "../sr-version", default-features = false }
-rstd = { package = "sr-std", path = "../sr-std", default-features = false }
-inherents = { package = "substrate-inherents", path = "../inherents", default-features = false }
-sr-api-macros = { path = "../sr-api-macros" }
-header-metadata = { package = "substrate-header-metadata", path = "header-metadata", optional = true }
+derive_more = { version = "0.15.0" }
+fnv = { version = "1.0.6" }
+log = { version = "0.4.8" }
+parking_lot = { version = "0.9.0" }
+hex-literal = { version = "0.2.1" }
+futures = { version = "0.1.29" }
+futures03 = { package = "futures-preview", version = "0.3.0-alpha.19", features = ["compat"] }
+consensus = { package = "substrate-consensus-common", path = "../consensus/common" }
+executor = { package = "substrate-executor", path = "../executor" }
+state-machine = { package = "substrate-state-machine", path = "../state-machine" }
+keyring = { package = "substrate-keyring", path = "../keyring" }
+trie = { package = "substrate-trie", path = "../trie" }
+substrate-telemetry = { path = "../telemetry" }
+hash-db = { version = "0.15.2" }
+kvdb = { git = "https://github.com/paritytech/parity-common", rev="b0317f649ab2c665b7987b8475878fc4d2e1f81d" }
+codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
+primitives = { package = "substrate-primitives", path = "../primitives" }
+sr-primitives = { path = "../sr-primitives" }
+runtime-version = { package = "sr-version", path = "../sr-version" }
+rstd = { package = "sr-std", path = "../sr-std" }
+inherents = { package = "substrate-inherents", path = "../inherents" }
+sr-api = { path = "../sr-api" }
+header-metadata = { package = "substrate-header-metadata", path = "header-metadata" }
+block-builder = { package = "substrate-block-builder", path = "../block-builder" }
 
 [dev-dependencies]
 env_logger = "0.7.0"
@@ -37,29 +38,3 @@ test-client = { package = "substrate-test-runtime-client", path = "../test-runti
 kvdb-memorydb = { git = "https://github.com/paritytech/parity-common", rev="b0317f649ab2c665b7987b8475878fc4d2e1f81d" }
 panic-handler = { package = "substrate-panic-handler", path = "../panic-handler" }
 
-[features]
-default = ["std"]
-std = [
-	"rstd/std",
-	"codec/std",
-	"primitives/std",
-	"inherents/std",
-	"sr-primitives/std",
-	"runtime-version/std",
-	"hash-db/std",
-	"header-metadata",
-	"consensus",
-	"parking_lot",
-	"derive_more",
-	"fnv",
-	"log",
-	"hex-literal",
-	"futures",
-	"futures03",
-	"executor",
-	"state-machine",
-	"keyring",
-	"trie",
-	"substrate-telemetry",
-	"kvdb"
-]

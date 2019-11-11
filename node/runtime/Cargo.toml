@@ -22,7 +22,10 @@ sr-primitives = { path = "../../core/sr-primitives", default-features = false }
 sr-staking-primitives = { path = "../../core/sr-staking-primitives", default-features = false }
 
 # core dependencies
-client = { package = "substrate-client", path = "../../core/client", default-features = false }
+sr-api = { path = "../../core/sr-api", default-features = false }
+inherents = { package = "substrate-inherents", path = "../../core/inherents", default-features = false }
+block-builder-api = { package = "substrate-block-builder-runtime-api", path = "../../core/block-builder/runtime-api", default-features = false }
+tx-pool-api = { package = "substrate-transaction-pool-runtime-api", path = "../../core/transaction-pool/runtime-api", default-features = false }
 rstd = { package = "sr-std", path = "../../core/sr-std", default-features = false }
 version = { package = "sr-version", path = "../../core/sr-version", default-features = false }
 substrate-session = { path = "../../core/session", default-features = false }
@@ -72,7 +75,7 @@ std = [
 	"babe-primitives/std",
 	"babe/std",
 	"balances/std",
-	"client/std",
+	"sr-api/std",
 	"codec/std",
 	"collective/std",
 	"contracts/std",
@@ -111,4 +114,7 @@ std = [
 	"transaction-payment/std",
 	"transaction-payment-rpc-runtime-api/std",
 	"version/std",
+	"block-builder-api/std",
+	"tx-pool-api/std",
+	"inherents/std",
 ]
