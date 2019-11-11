@@ -32,17 +32,22 @@
 
 #[doc(hidden)]
 #[cfg(feature = "std")]
-pub use state_machine::{OverlayedChanges, StorageProof};
+pub use state_machine::{
+	OverlayedChanges, StorageProof, Backend, StorageChanges, ChangesTrieStorage,
+};
 #[doc(hidden)]
 #[cfg(feature = "std")]
 pub use primitives::NativeOrEncoded;
+#[doc(hidden)]
+#[cfg(feature = "std")]
+pub use hash_db::Hasher;
 #[doc(hidden)]
 #[cfg(not(feature = "std"))]
 pub use primitives::to_substrate_wasm_fn_return_value;
 #[doc(hidden)]
 pub use sr_primitives::{
 	traits::{
-		Block as BlockT, GetNodeBlockType, GetRuntimeBlockType,
+		Block as BlockT, GetNodeBlockType, GetRuntimeBlockType, HasherFor, NumberFor,
 		Header as HeaderT, ApiRef, RuntimeApiInfo, Hash as HashT,
 	},
 	generic::BlockId, transaction_validity::TransactionValidity,
@@ -94,13 +99,13 @@ pub trait ApiExt<Block: BlockT> {
 	/// On `Ok`, the structure commits the changes to an internal buffer.
 	fn map_api_result<F: FnOnce(&Self) -> result::Result<R, E>, R, E>(
 		&self,
-		map_call: F
+		map_call: F,
 	) -> result::Result<R, E> where Self: Sized;
 
 	/// Checks if the given api is implemented and versions match.
 	fn has_api<A: RuntimeApiInfo + ?Sized>(
 		&self,
-		at: &BlockId<Block>
+		at: &BlockId<Block>,
 	) -> Result<bool, Self::Error> where Self: Sized {
 		self.runtime_version_at(at).map(|v| v.has_api::<A>())
 	}
@@ -121,8 +126,25 @@ pub trait ApiExt<Block: BlockT> {
 	fn record_proof(&mut self);
 
 	/// Extract the recorded proof.
+	///
 	/// This stops the proof recording.
+	///
+	/// If `record_proof` was not called before, this will return `None`.
 	fn extract_proof(&mut self) -> Option<StorageProof>;
+
+	/// Convert the api object into the storage changes that were done while executing runtime
+	/// api functions.
+	fn into_storage_changes<
+		B: Backend<HasherFor<Block>>, T: ChangesTrieStorage<HasherFor<Block>, NumberFor<Block>>
+	>(
+		self,
+		backend: &B,
+		changes_trie_storage: Option<&T>,
+		parent_hash: Block::Hash,
+	) -> Result<StorageChanges<B, HasherFor<Block>, NumberFor<Block>>, String>
+		where
+			Block::Hash: Ord + 'static,
+			Self: Sized;
 }
 
 /// Before calling any runtime api function, the runtime need to be initialized

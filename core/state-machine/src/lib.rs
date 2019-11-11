@@ -56,8 +56,9 @@ pub use changes_trie::{
 	key_changes, key_changes_proof, key_changes_proof_check,
 	prune as prune_changes_tries,
 	oldest_non_pruned_trie as oldest_non_pruned_changes_trie,
+	BlockNumber as ChangesTrieBlockNumber,
 };
-pub use overlayed_changes::OverlayedChanges;
+pub use overlayed_changes::{OverlayedChanges, StorageChanges};
 pub use proving_backend::{
 	create_proof_check_backend, create_proof_check_backend_storage, merge_storage_proofs,
 	Recorder as ProofRecorder, ProvingBackend, StorageProof,

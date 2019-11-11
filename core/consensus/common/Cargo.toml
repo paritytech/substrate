@@ -11,6 +11,7 @@ libp2p = { version = "0.13.0", default-features = false }
 log = "0.4.8"
 primitives = { package = "substrate-primitives", path= "../../primitives" }
 inherents = { package = "substrate-inherents", path = "../../inherents" }
+state-machine = { package = "substrate-state-machine", path = "../../state-machine" }
 futures-preview = "0.3.0-alpha.19"
 futures-timer = "0.4.0"
 rstd = { package = "sr-std", path = "../../sr-std" }

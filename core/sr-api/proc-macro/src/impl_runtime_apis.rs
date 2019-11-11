@@ -309,6 +309,28 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 						#crate_::StorageProof::new(trie_nodes)
 					})
 			}
+
+			fn into_storage_changes<
+				B: #crate_::Backend<#crate_::HasherFor<#block>>,
+				T: #crate_::ChangesTrieStorage<#crate_::HasherFor<#block>, #crate_::NumberFor<#block>>
+			>(
+				self,
+				backend: &B,
+				changes_trie_storage: Option<&T>,
+				parent_hash: <#block as #crate_::BlockT>::Hash,
+			) -> std::result::Result<
+				#crate_::StorageChanges<B, #crate_::HasherFor<#block>, #crate_::NumberFor<#block>>,
+				String
+			> where
+				<#block as #crate_::BlockT>::Hash: Ord + 'static,
+				Self: Sized,
+			{
+				self.changes.into_inner().into_storage_changes(
+					backend,
+					changes_trie_storage,
+					parent_hash,
+				)
+			}
 		}
 
 		#[cfg(any(feature = "std", test))]

@@ -12,6 +12,7 @@ rstd = { package = "sr-std", path = "../sr-std", default-features = false }
 sr-primitives = { path = "../sr-primitives", default-features = false }
 sr-version = { path = "../sr-version", default-features = false }
 state-machine = { package = "substrate-state-machine", path = "../state-machine", optional = true }
+hash-db = { version = "0.15.2", optional = true }
 
 [dev-dependencies]
 criterion = "0.3.0"
@@ -30,4 +31,5 @@ std = [
 	"sr-primitives/std",
 	"state-machine",
 	"sr-version/std",
+	"hash-db",
 ]

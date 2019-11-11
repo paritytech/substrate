@@ -193,7 +193,8 @@ pub trait Storage {
 
 	/// "Commit" all existing operations and get the resulting storage change root.
 	fn changes_root(&mut self, parent_hash: [u8; 32]) -> Option<H256> {
-		self.storage_changes_root(parent_hash.into()).ok().and_then(|h| h)
+		self.storage_changes_root(parent_hash.into())
+			.expect("Invalid `parent_hash` given to `changes_root`.")
 	}
 
 	/// A trie root formed from the iterated items.

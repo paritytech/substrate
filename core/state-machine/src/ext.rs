@@ -18,9 +18,7 @@
 
 use crate::{
 	backend::Backend, OverlayedChanges, ChangesTrieTransaction,
-	changes_trie::{
-		Storage as ChangesTrieStorage, CacheAction as ChangesTrieCacheAction, build_changes_trie,
-	},
+	changes_trie::Storage as ChangesTrieStorage,
 };
 
 use hash_db::Hasher;
@@ -28,7 +26,7 @@ use primitives::{
 	storage::{ChildStorageKey, well_known_keys::is_child_storage_key},
 	traits::Externalities, hexdisplay::HexDisplay, hash::H256,
 };
-use trie::{trie_types::Layout, MemoryDB, default_child_trie_root};
+use trie::{trie_types::Layout, default_child_trie_root};
 use externalities::Extensions;
 
 use std::{error, fmt, any::{Any, TypeId}};
@@ -131,7 +129,7 @@ where
 				.expect("storage_transaction always set after calling storage root; qed"),
 			self.changes_trie_transaction
 				.take()
-				.map(|(tx, _, cache)| (tx, cache)),
+				.map(|t| t.0),
 		);
 
 		(
@@ -481,6 +479,7 @@ where
 			self.backend,
 			self.changes_trie_storage.clone(),
 			parent_hash,
+			true,
 		)?.map(|(root, tx)| (tx, root));
 		let result = Ok(self.changes_trie_transaction.as_ref().map(|(_, root)| root.clone()));
 		trace!(target: "state-trace", "{:04x}: ChangesRoot({}) {:?}",

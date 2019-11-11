@@ -85,7 +85,7 @@ pub struct Proposal<B> {
 	/// The block that was build.
 	pub block: B,
 	/// Optional proof that was recorded while building the block.
-	pub proof: Option<Vec<Vec<u8>>>,
+	pub proof: Option<state_machine::StorageProof>,
 	/// The storage changes combined as transaction.
 	pub transaction: (),
 }

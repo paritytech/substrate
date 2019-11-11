@@ -24,7 +24,7 @@ use authorship::claim_slot;
 
 use babe_primitives::{AuthorityPair, SlotNumber};
 use block_builder::BlockBuilder;
-use consensus_common::NoNetwork as DummyOracle;
+use consensus_common::{NoNetwork as DummyOracle, Proposal};
 use consensus_common::import_queue::{
 	BoxBlockImport, BoxJustificationImport, BoxFinalityProofImport,
 };
@@ -96,7 +96,7 @@ impl Environment<TestBlock> for DummyFactory {
 
 impl DummyProposer {
 	fn propose_with(&mut self, pre_digests: DigestFor<TestBlock>)
-		-> future::Ready<Result<(TestBlock, Option<Vec<Vec<u8>>>), Error>>
+		-> future::Ready<Result<Proposal<TestBlock>, Error>>
 	{
 		use codec::Encode;
 		let block_builder = self.factory.client.new_block_at(
@@ -145,13 +145,13 @@ impl DummyProposer {
 		// mutate the block header according to the mutator.
 		(self.factory.mutator)(&mut block.header, Stage::PreSeal);
 
-		future::ready(Ok((block, None)))
+		future::ready(Ok(Proposal { block, proof: None, transaction: () }))
 	}
 }
 
 impl Proposer<TestBlock> for DummyProposer {
 	type Error = Error;
-	type Proposal = future::Ready<Result<(TestBlock, Option<Vec<Vec<u8>>>), Error>>;
+	type Proposal = future::Ready<Result<Proposal<TestBlock>, Error>>;
 
 	fn propose(
 		&mut self,
@@ -552,7 +552,7 @@ fn propose_and_import_block(
 		],
 	};
 
-	let mut block = futures::executor::block_on(proposer.propose_with(pre_digest)).unwrap().0;
+	let mut block = futures::executor::block_on(proposer.propose_with(pre_digest)).unwrap().block;
 
 	let seal = {
 		// sign the pre-sealed hash of the block and then

@@ -31,9 +31,9 @@
 use std::{sync::Arc, time::Duration, thread, marker::PhantomData, hash::Hash, fmt::Debug, pin::Pin};
 
 use codec::{Encode, Decode, Codec};
-use consensus_common::{self, BlockImport, Environment, Proposer,
-	ForkChoiceStrategy, BlockImportParams, BlockOrigin, Error as ConsensusError,
-	SelectChain,
+use consensus_common::{
+	self, BlockImport, Environment, Proposer, ForkChoiceStrategy, BlockImportParams, BlockOrigin,
+	Error as ConsensusError, SelectChain,
 };
 use consensus_common::import_queue::{
 	Verifier, BasicQueue, BoxBlockImport, BoxJustificationImport, BoxFinalityProofImport,
@@ -699,7 +699,7 @@ pub fn import_queue<B, C, P, T>(
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use consensus_common::NoNetwork as DummyOracle;
+	use consensus_common::{NoNetwork as DummyOracle, Proposal};
 	use network::test::*;
 	use network::test::{Block as TestBlock, PeersClient, PeersFullClient};
 	use sr_primitives::traits::{Block as BlockT, DigestFor};
@@ -736,7 +736,7 @@ mod tests {
 
 	impl Proposer<TestBlock> for DummyProposer {
 		type Error = Error;
-		type Proposal = future::Ready<Result<(TestBlock, Option<Vec<Vec<u8>>>), Error>>;
+		type Proposal = future::Ready<Result<Proposal<TestBlock>, Error>>;
 
 		fn propose(
 			&mut self,
@@ -746,7 +746,7 @@ mod tests {
 			_: bool,
 		) -> Self::Proposal {
 			let r = self.1.new_block(digests).unwrap().bake().map_err(|e| e.into());
-			future::ready(r.map(|b| (b, None)))
+			future::ready(r.map(|b| Proposal { block: b, proof: None, transaction: () }))
 		}
 	}
 

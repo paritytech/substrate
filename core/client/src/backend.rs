@@ -207,11 +207,11 @@ pub trait AuxStore {
 /// should not be pruned. The backend should internally reference-count
 /// its state objects.
 ///
-/// The same applies for live `BlockImportOperation`s: while an import operation building on a parent `P`
-/// is alive, the state for `P` should not be pruned.
+/// The same applies for live `BlockImportOperation`s: while an import operation building on a
+/// parent `P` is alive, the state for `P` should not be pruned.
 pub trait Backend<Block, H>: AuxStore + Send + Sync where
 	Block: BlockT,
-	H: Hasher<Out=Block::Hash>,
+	H: Hasher<Out = Block::Hash>,
 {
 	/// Associated block insertion operation type.
 	type BlockImportOperation: BlockImportOperation<Block, H, State=Self::State>;
@@ -230,7 +230,11 @@ pub trait Backend<Block, H>: AuxStore + Send + Sync where
 	fn begin_operation(&self) -> error::Result<Self::BlockImportOperation>;
 
 	/// Note an operation to contain state transition.
-	fn begin_state_operation(&self, operation: &mut Self::BlockImportOperation, block: BlockId<Block>) -> error::Result<()>;
+	fn begin_state_operation(
+		&self,
+		operation: &mut Self::BlockImportOperation,
+		block: BlockId<Block>,
+	) -> error::Result<()>;
 
 	/// Commit block insertion.
 	fn commit_operation(&self, transaction: Self::BlockImportOperation) -> error::Result<()>;
@@ -238,7 +242,11 @@ pub trait Backend<Block, H>: AuxStore + Send + Sync where
 	/// Finalize block with given Id.
 	///
 	/// This should only be called if the parent of the given block has been finalized.
-	fn finalize_block(&self, block: BlockId<Block>, justification: Option<Justification>) -> error::Result<()>;
+	fn finalize_block(
+		&self,
+		block: BlockId<Block>,
+		justification: Option<Justification>,
+	) -> error::Result<()>;
 
 	/// Returns reference to blockchain backend.
 	fn blockchain(&self) -> &Self::Blockchain;

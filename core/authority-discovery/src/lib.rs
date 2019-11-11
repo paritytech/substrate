@@ -524,6 +524,24 @@ mod tests {
 		fn extract_proof(&mut self) -> Option<StorageProof> {
 			unimplemented!("Not required for testing!")
 		}
+
+		fn into_storage_changes<
+			B: sr_api::Backend<sr_api::HasherFor<Block>>,
+			T: sr_api::ChangesTrieStorage<sr_api::HasherFor<Block>, sr_api::NumberFor<Block>>
+		>(
+			self,
+			_: &B,
+			_: Option<&T>,
+			_: <Block as sr_api::BlockT>::Hash,
+		) -> std::result::Result<
+			sr_api::StorageChanges<B, sr_api::HasherFor<Block>, sr_api::NumberFor<Block>>,
+			String
+		> where
+			<Block as sr_api::BlockT>::Hash: Ord + 'static,
+			Self: Sized
+		{
+			unimplemented!("Not required for testing!")
+		}
 	}
 
 	impl AuthorityDiscoveryApi<Block> for RuntimeApi {

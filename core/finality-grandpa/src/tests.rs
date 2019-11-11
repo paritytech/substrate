@@ -261,6 +261,24 @@ impl ApiExt<Block> for RuntimeApi {
 	fn extract_proof(&mut self) -> Option<StorageProof> {
 		unimplemented!("Not required for testing!")
 	}
+
+	fn into_storage_changes<
+		B: sr_api::Backend<sr_api::HasherFor<Block>>,
+		T: sr_api::ChangesTrieStorage<sr_api::HasherFor<Block>, sr_api::NumberFor<Block>>
+	>(
+		self,
+		_: &B,
+		_: Option<&T>,
+		_: <Block as sr_api::BlockT>::Hash,
+	) -> std::result::Result<
+		sr_api::StorageChanges<B, sr_api::HasherFor<Block>, sr_api::NumberFor<Block>>,
+		String
+	> where
+		<Block as sr_api::BlockT>::Hash: Ord + 'static,
+		Self: Sized
+	{
+		unimplemented!("Not required for testing!")
+	}
 }
 
 impl GrandpaApi<Block> for RuntimeApi {
@@ -1675,7 +1693,7 @@ fn imports_justification_for_regular_blocks_on_import() {
 	let (mut block_import, ..) = net.make_block_import(client.clone());
 
 	let full_client = client.as_full().expect("only full clients are used in test");
-	let builder = full_client.new_block_at(&BlockId::Number(0), Default::default()).unwrap();
+	let builder = full_client.new_block_at(&BlockId::Number(0), Default::default(), false).unwrap();
 	let block = builder.bake().unwrap();
 
 	let block_hash = block.hash();
