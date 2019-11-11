@@ -40,6 +40,7 @@ use crate::storage_proof::StorageProofChecker;
 use codec::{Encode, Decode};
 use fg_primitives::{AuthorityId, AuthorityWeight};
 use sr_primitives::traits::Header;
+use state_machine::StorageProof;
 use support::{
 	decl_error, decl_module, decl_storage,
 };
@@ -89,12 +90,11 @@ decl_storage! {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		// TODO: Change proof type to StorageProof once #3834 is merged
 		fn initialize_bridge(
 			origin,
 			block_header: T::Header,
 			validator_set: Vec<(AuthorityId, AuthorityWeight)>,
-			validator_set_proof: Vec<Vec<u8>>,
+			validator_set_proof: StorageProof,
 		) {
 			// NOTE: Will want to make this a governance issued call
 			let _sender = ensure_signed(origin)?;
@@ -134,7 +134,7 @@ decl_error! {
 impl<T: Trait> Module<T> {
 	fn check_validator_set_proof(
 		state_root: &T::Hash,
-		proof: Vec<Vec<u8>>,
+		proof: StorageProof,
 		validator_set: &Vec<(AuthorityId, AuthorityWeight)>,
 	) -> Result<(), Error> {
 
@@ -259,7 +259,7 @@ mod tests {
 		vec![authority1, authority2, authority3]
 	}
 
-	fn create_dummy_validator_proof(validator_set: Vec<(AuthorityId, AuthorityWeight)>) -> (H256, Vec<Vec<u8>>) {
+	fn create_dummy_validator_proof(validator_set: Vec<(AuthorityId, AuthorityWeight)>) -> (H256, StorageProof) {
 		use state_machine::{prove_read, backend::{Backend, InMemory}};
 
 		let encoded_set = validator_set.encode();

@@ -17,6 +17,7 @@
 //! Logic for checking Substrate storage proofs.
 
 use hash_db::{Hasher, HashDB, EMPTY_PREFIX};
+use state_machine::StorageProof;
 use trie::{MemoryDB, Trie, trie_types::TrieDB};
 
 use crate::Error;
@@ -37,9 +38,9 @@ impl<H> StorageProofChecker<H>
 	/// Constructs a new storage proof checker.
 	///
 	/// This returns an error if the given proof is invalid with respect to the given root.
-	pub fn new(root: H::Out, proof: Vec<Vec<u8>>) -> Result<Self, Error> {
+	pub fn new(root: H::Out, proof: StorageProof) -> Result<Self, Error> {
 		let mut db = MemoryDB::default();
-		for item in proof {
+		for item in proof.iter_nodes() {
 			db.insert(EMPTY_PREFIX, &item);
 		}
 		let checker = StorageProofChecker {
