@@ -83,7 +83,7 @@ impl Parse for WhereSection {
         let diff: Vec<_> = expected_seen_keys.difference(&seen_keys).collect();
         if diff.len() > 0 {
             let msg = format!(
-                "Missing associated type for `{:?}`. Add `{:?}` = ... to where section",
+                "Missing associated type for `{:?}`. Add `{:?}` = ... to where section.",
                 diff[0], diff[0]
             );
             return Err(input.error(msg));
@@ -131,7 +131,7 @@ impl WhereKind {
     ) -> Result<Self> {
         if seen_keys.contains(self) {
             let msg = format!(
-                "`{:?}` was declared above. Please use exactly one delcataion for `{:?}`",
+                "`{:?}` was declared above. Please use exactly one delcataion for `{:?}`.",
                 self, self
             );
             return Err(input.error(msg));
