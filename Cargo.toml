@@ -43,7 +43,7 @@ members = [
 	"client/sr-version",
 	"client/state-machine",
 	"client/telemetry",
-	"client/test-client",
+	"test/utils/client",
 	"client/test-runtime",
 	"client/test-runtime/client",
 	"client/transaction-pool",
