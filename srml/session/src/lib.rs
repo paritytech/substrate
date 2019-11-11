@@ -121,14 +121,11 @@
 
 use rstd::{prelude::*, marker::PhantomData, ops::{Sub, Rem}};
 use codec::Decode;
-use sr_primitives::{KeyTypeId, Perbill, RuntimeAppPublic};
+use sr_primitives::{KeyTypeId, Perbill, RuntimeAppPublic, BoundToRuntimeAppPublic};
 use sr_primitives::weights::SimpleDispatchInfo;
 use sr_primitives::traits::{Convert, Zero, Member, OpaqueKeys};
 use sr_staking_primitives::SessionIndex;
-use support::{
-	dispatch::Result, ConsensusEngineId, decl_module, decl_event,
-	decl_storage,
-};
+use support::{dispatch::Result, ConsensusEngineId, decl_module, decl_event, decl_storage};
 use support::{ensure, traits::{OnFreeBalanceZero, Get, FindAuthor}, Parameter};
 use system::{self, ensure_signed};
 
@@ -192,6 +189,12 @@ impl<A> OnSessionEnding<A> for () {
 
 /// Handler for session lifecycle events.
 pub trait SessionHandler<ValidatorId> {
+	/// All the key type ids this session handler can process.
+	///
+	/// The order must be the same as it expects them in
+	/// [`on_new_session`](Self::on_new_session) and [`on_genesis_session`](Self::on_genesis_session).
+	const KEY_TYPE_IDS: &'static [KeyTypeId];
+
 	/// The given validator set will be used for the genesis session.
 	/// It is guaranteed that the given validator set will also be used
 	/// for the second session, therefore the first call to `on_new_session`
@@ -220,7 +223,7 @@ pub trait SessionHandler<ValidatorId> {
 }
 
 /// A session handler for specific key type.
-pub trait OneSessionHandler<ValidatorId> {
+pub trait OneSessionHandler<ValidatorId>: BoundToRuntimeAppPublic {
 	/// The key type expected.
 	type Key: Decode + Default + RuntimeAppPublic;
 
@@ -253,10 +256,14 @@ pub trait OneSessionHandler<ValidatorId> {
 	fn on_disabled(_validator_index: usize);
 }
 
-#[impl_trait_for_tuples::impl_for_tuples(30)]
+#[impl_trait_for_tuples::impl_for_tuples(1, 30)]
 #[tuple_types_no_default_trait_bound]
 impl<AId> SessionHandler<AId> for Tuple {
 	for_tuples!( where #( Tuple: OneSessionHandler<AId> )* );
+
+	for_tuples!(
+		const KEY_TYPE_IDS: &'static [KeyTypeId] = &[ #( <Tuple::Key as RuntimeAppPublic>::ID ),* ];
+	);
 
 	fn on_genesis_session<Ks: OpaqueKeys>(validators: &[(AId, Ks)]) {
 		for_tuples!(
@@ -295,6 +302,20 @@ impl<AId> SessionHandler<AId> for Tuple {
 	fn on_disabled(i: usize) {
 		for_tuples!( #( Tuple::on_disabled(i); )* )
 	}
+}
+
+/// `SessionHandler` for tests that use `UintAuthorityId` as `Keys`.
+pub struct TestSessionHandler;
+impl<AId> SessionHandler<AId> for TestSessionHandler {
+	const KEY_TYPE_IDS: &'static [KeyTypeId] = &[sr_primitives::key_types::DUMMY];
+
+	fn on_genesis_session<Ks: OpaqueKeys>(_: &[(AId, Ks)]) {}
+
+	fn on_new_session<Ks: OpaqueKeys>(_: bool, _: &[(AId, Ks)], _: &[(AId, Ks)]) {}
+
+	fn on_before_session_ending() {}
+
+	fn on_disabled(_: usize) {}
 }
 
 /// Handler for selecting the genesis validator set.
@@ -349,10 +370,10 @@ const DEDUP_KEY_PREFIX: &[u8] = b":session:keys";
 decl_storage! {
 	trait Store for Module<T: Trait> as Session {
 		/// The current set of validators.
-		Validators get(validators): Vec<T::ValidatorId>;
+		Validators get(fn validators): Vec<T::ValidatorId>;
 
 		/// Current index of the session.
-		CurrentIndex get(current_index): SessionIndex;
+		CurrentIndex get(fn current_index): SessionIndex;
 
 		/// True if the underlying economic identities or weighting behind the validators
 		/// has changed in the queued validator set.
@@ -360,12 +381,12 @@ decl_storage! {
 
 		/// The queued keys for the next session. When the next session begins, these keys
 		/// will be used to determine the validator's session keys.
-		QueuedKeys get(queued_keys): Vec<(T::ValidatorId, T::Keys)>;
+		QueuedKeys get(fn queued_keys): Vec<(T::ValidatorId, T::Keys)>;
 
 		/// Indices of disabled validators.
 		///
 		/// The set is cleared when `on_session_ending` returns a new set of identities.
-		DisabledValidators get(disabled_validators): Vec<u32>;
+		DisabledValidators get(fn disabled_validators): Vec<u32>;
 
 		/// The next session keys for a validator.
 		///
@@ -382,6 +403,20 @@ decl_storage! {
 	add_extra_genesis {
 		config(keys): Vec<(T::ValidatorId, T::Keys)>;
 		build(|config: &GenesisConfig<T>| {
+			if T::SessionHandler::KEY_TYPE_IDS.len() != T::Keys::key_ids().len() {
+				panic!("Number of keys in session handler and session keys does not match");
+			}
+
+			T::SessionHandler::KEY_TYPE_IDS.iter().zip(T::Keys::key_ids()).enumerate()
+				.for_each(|(i, (sk, kk))| {
+					if sk != kk {
+						panic!(
+							"Session handler and session key expect different key type at index: {}",
+							i,
+						);
+					}
+				});
+
 			for (who, keys) in config.keys.iter().cloned() {
 				assert!(
 					<Module<T>>::load_keys(&who).is_none(),
@@ -594,23 +629,23 @@ impl<T: Trait> Module<T> {
 		let old_keys = Self::load_keys(&who);
 
 		for id in T::Keys::key_ids() {
-			let key = keys.get_raw(id);
+			let key = keys.get_raw(*id);
 
 			// ensure keys are without duplication.
 			ensure!(
-				Self::key_owner(id, key).map_or(true, |owner| &owner == who),
+				Self::key_owner(*id, key).map_or(true, |owner| &owner == who),
 				"registered duplicate key"
 			);
 
-			if let Some(old) = old_keys.as_ref().map(|k| k.get_raw(id)) {
+			if let Some(old) = old_keys.as_ref().map(|k| k.get_raw(*id)) {
 				if key == old {
 					continue;
 				}
 
-				Self::clear_key_owner(id, old);
+				Self::clear_key_owner(*id, old);
 			}
 
-			Self::put_key_owner(id, key, &who);
+			Self::put_key_owner(*id, key, &who);
 		}
 
 		Self::put_keys(&who, &keys);
@@ -621,8 +656,8 @@ impl<T: Trait> Module<T> {
 	fn prune_dead_keys(who: &T::ValidatorId) {
 		if let Some(old_keys) = Self::take_keys(who) {
 			for id in T::Keys::key_ids() {
-				let key_data = old_keys.get_raw(id);
-				Self::clear_key_owner(id, key_data);
+				let key_data = old_keys.get_raw(*id);
+				Self::clear_key_owner(*id, key_data);
 			}
 		}
 	}

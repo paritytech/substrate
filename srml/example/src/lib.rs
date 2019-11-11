@@ -269,13 +269,13 @@ use sr_primitives::{
 // the arguments and makes a decision based upon them.
 //
 // The `WeightData<T>` trait has access to the arguments of the dispatch that it wants to assign a
-// weight to. Nonetheless, the trait itself can not make any assumptions about what that type
-// generic type of the arguments, `T`, is. Based on our needs, we could replace `T` with a more
-// concrete type while implementing the trait. The `decl_module!` expects whatever implements
-// `WeighData<T>` to replace `T` with a tuple of the dispatch arguments. This is exactly how we will
-// craft the implementation below.
+// weight to. Nonetheless, the trait itself can not make any assumptions about what the generic type
+// of the arguments (`T`) is. Based on our needs, we could replace `T` with a more concrete type
+// while implementing the trait. The `decl_module!` expects whatever implements `WeighData<T>` to
+// replace `T` with a tuple of the dispatch arguments. This is exactly how we will craft the
+// implementation below.
 //
-// The rules of `WeightForSetDummy` is as follows:
+// The rules of `WeightForSetDummy` are as follows:
 // - The final weight of each dispatch is calculated as the argument of the call multiplied by the
 //   parameter given to the `WeightForSetDummy`'s constructor.
 // - assigns a dispatch class `operational` if the argument of the call is more than 1000.
@@ -318,7 +318,7 @@ decl_storage! {
 	// keep things around between blocks.
 	trait Store for Module<T: Trait> as Example {
 		// Any storage declarations of the form:
-		//   `pub? Name get(getter_name)? [config()|config(myname)] [build(|_| {...})] : <type> (= <new_default_value>)?;`
+		//   `pub? Name get(fn getter_name)? [config()|config(myname)] [build(|_| {...})] : <type> (= <new_default_value>)?;`
 		// where `<type>` is either:
 		//   - `Type` (a basic value item); or
 		//   - `map KeyType => ValueType` (a map item).
@@ -331,7 +331,7 @@ decl_storage! {
 		//   - `Foo::put(1); Foo::get()` returns `1`;
 		//   - `Foo::kill(); Foo::get()` returns `0` (u32::default()).
 		// e.g. Foo: u32;
-		// e.g. pub Bar get(bar): map T::AccountId => Vec<(T::Balance, u64)>;
+		// e.g. pub Bar get(fn bar): map T::AccountId => Vec<(T::Balance, u64)>;
 		//
 		// For basic value items, you'll get a type which implements
 		// `support::StorageValue`. For map items, you'll get a type which
@@ -340,13 +340,13 @@ decl_storage! {
 		// If they have a getter (`get(getter_name)`), then your module will come
 		// equipped with `fn getter_name() -> Type` for basic value items or
 		// `fn getter_name(key: KeyType) -> ValueType` for map items.
-		Dummy get(dummy) config(): Option<T::Balance>;
+		Dummy get(fn dummy) config(): Option<T::Balance>;
 
 		// A map that has enumerable entries.
-		Bar get(bar) config(): linked_map T::AccountId => T::Balance;
+		Bar get(fn bar) config(): linked_map T::AccountId => T::Balance;
 
 		// this one uses the default, we'll demonstrate the usage of 'mutate' API.
-		Foo get(foo) config(): T::Balance;
+		Foo get(fn foo) config(): T::Balance;
 	}
 }
 
@@ -449,9 +449,8 @@ decl_module! {
 		// The _right-hand-side_ value of the `#[weight]` attribute can be any type that implements
 		// a set of traits, namely [`WeighData`] and [`ClassifyDispatch`]. The former conveys the
 		// weight (a numeric representation of pure execution time and difficulty) of the
-		// transaction and the latter demonstrates the `DispatchClass` of the call. A higher weight
-		//  means a larger transaction (less of which can be placed in a single block). See the
-		// `CheckWeight` signed extension struct in the `system` module for more information.
+		// transaction and the latter demonstrates the [`DispatchClass`] of the call. A higher
+		// weight means a larger transaction (less of which can be placed in a single block).
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
 		fn accumulate_dummy(origin, increase_by: T::Balance) -> Result {
 			// This is a public call, so we ensure that the origin is some signed account.
@@ -490,7 +489,7 @@ decl_module! {
 		// calls to be executed - we don't need to care why. Because it's privileged, we can
 		// assume it's a one-off operation and substantial processing/storage/memory can be used
 		// without worrying about gameability or attack scenarios.
-		// If you not specify `Result` explicitly as return value, it will be added automatically
+		// If you do not specify `Result` explicitly as return value, it will be added automatically
 		// for you and `Ok(())` will be returned.
 		#[weight = WeightForSetDummy::<T>(<BalanceOf<T>>::from(100u32))]
 		fn set_dummy(origin, #[compact] new_value: T::Balance) {
@@ -584,10 +583,9 @@ impl<T: Trait> Module<T> {
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
 pub struct WatchDummy<T: Trait + Send + Sync>(PhantomData<T>);
 
-#[cfg(feature = "std")]
 impl<T: Trait + Send + Sync> rstd::fmt::Debug for WatchDummy<T> {
 	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
-		write!(f, "WatchDummy<T>")
+		write!(f, "WatchDummy")
 	}
 }
 

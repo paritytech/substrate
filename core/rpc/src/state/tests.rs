@@ -22,7 +22,7 @@ use std::sync::Arc;
 use assert_matches::assert_matches;
 use futures::stream::Stream;
 use primitives::storage::well_known_keys;
-use sr_io::blake2_256;
+use sr_io::hashing::blake2_256;
 use test_client::{
 	prelude::*,
 	consensus::BlockOrigin,
@@ -312,4 +312,12 @@ fn should_notify_on_runtime_version_initially() {
 	assert!(notification.is_some());
 		// no more notifications on this channel
 	assert_eq!(core.block_on(next.into_future()).unwrap().0, None);
+}
+
+#[test]
+fn should_deserialize_storage_key() {
+	let k = "\"0x7f864e18e3dd8b58386310d2fe0919eef27c6e558564b7f67f22d99d20f587b\"";
+	let k: StorageKey = serde_json::from_str(k).unwrap();
+
+	assert_eq!(k.0.len(), 32);
 }

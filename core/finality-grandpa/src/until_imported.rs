@@ -20,7 +20,13 @@
 //!
 //! This is used for votes and commit messages currently.
 
-use super::{BlockStatus, CommunicationIn, Error, SignedMessage};
+use super::{
+	BlockStatus as BlockStatusT,
+	BlockSyncRequester as BlockSyncRequesterT,
+	CommunicationIn,
+	Error,
+	SignedMessage,
+};
 
 use log::{debug, warn};
 use client::{BlockImportNotification, ImportNotifications};
@@ -54,8 +60,8 @@ pub(crate) trait BlockUntilImported<Block: BlockT>: Sized {
 		wait: Wait,
 		ready: Ready,
 	) -> Result<(), Error> where
-		S: BlockStatus<Block>,
-		Wait: FnMut(Block::Hash, Self),
+		S: BlockStatusT<Block>,
+		Wait: FnMut(Block::Hash, NumberFor<Block>, Self),
 		Ready: FnMut(Self::Blocked);
 
 	/// called when the wait has completed. The canonical number is passed through
@@ -64,23 +70,31 @@ pub(crate) trait BlockUntilImported<Block: BlockT>: Sized {
 }
 
 /// Buffering imported messages until blocks with given hashes are imported.
-pub(crate) struct UntilImported<Block: BlockT, Status, I, M: BlockUntilImported<Block>> {
+pub(crate) struct UntilImported<Block: BlockT, BlockStatus, BlockSyncRequester, I, M: BlockUntilImported<Block>> {
 	import_notifications: Fuse<Box<dyn Stream<Item = BlockImportNotification<Block>, Error = ()> + Send>>,
-	status_check: Status,
+	block_sync_requester: BlockSyncRequester,
+	status_check: BlockStatus,
 	inner: Fuse<I>,
 	ready: VecDeque<M::Blocked>,
 	check_pending: Interval,
-	pending: HashMap<Block::Hash, (Instant, Vec<M>)>,
+	/// Mapping block hashes to their block number, the point in time it was
+	/// first encountered (Instant) and a list of GRANDPA messages referencing
+	/// the block hash.
+	pending: HashMap<Block::Hash, (NumberFor<Block>, Instant, Vec<M>)>,
 	identifier: &'static str,
 }
 
-impl<Block: BlockT, Status, I: Stream, M> UntilImported<Block, Status, I, M>
-	where Status: BlockStatus<Block>, M: BlockUntilImported<Block>
+impl<Block, BlockStatus, BlockSyncRequester, I, M> UntilImported<Block, BlockStatus, BlockSyncRequester, I, M> where
+	Block: BlockT,
+	BlockStatus: BlockStatusT<Block>,
+	M: BlockUntilImported<Block>,
+	I: Stream,
 {
 	/// Create a new `UntilImported` wrapper.
 	pub(crate) fn new(
 		import_notifications: ImportNotifications<Block>,
-		status_check: Status,
+		block_sync_requester: BlockSyncRequester,
+		status_check: BlockStatus,
 		stream: I,
 		identifier: &'static str,
 	) -> Self {
@@ -98,6 +112,7 @@ impl<Block: BlockT, Status, I: Stream, M> UntilImported<Block, Status, I, M>
 				let stream = import_notifications.map::<_, fn(_) -> _>(|v| Ok::<_, ()>(v)).compat();
 				Box::new(stream) as Box<dyn Stream<Item = _, Error = _> + Send>
 			}.fuse(),
+			block_sync_requester,
 			status_check,
 			inner: stream.fuse(),
 			ready: VecDeque::new(),
@@ -108,8 +123,10 @@ impl<Block: BlockT, Status, I: Stream, M> UntilImported<Block, Status, I, M>
 	}
 }
 
-impl<Block: BlockT, Status, I, M> Stream for UntilImported<Block, Status, I, M> where
-	Status: BlockStatus<Block>,
+impl<Block, BStatus, BSyncRequester, I, M> Stream for UntilImported<Block, BStatus, BSyncRequester, I, M> where
+	Block: BlockT,
+	BStatus: BlockStatusT<Block>,
+	BSyncRequester: BlockSyncRequesterT<Block>,
 	I: Stream<Item=M::Blocked,Error=Error>,
 	M: BlockUntilImported<Block>,
 {
@@ -128,10 +145,10 @@ impl<Block: BlockT, Status, I, M> Stream for UntilImported<Block, Status, I, M> 
 					M::schedule_wait(
 						input,
 						&self.status_check,
-						|target_hash, wait| pending
+						|target_hash, target_number, wait| pending
 							.entry(target_hash)
-							.or_insert_with(|| (Instant::now(), Vec::new()))
-							.1
+							.or_insert_with(|| (target_number, Instant::now(), Vec::new()))
+							.2
 							.push(wait),
 						|ready_item| ready.push_back(ready_item),
 					)?;
@@ -146,7 +163,7 @@ impl<Block: BlockT, Status, I, M> Stream for UntilImported<Block, Status, I, M> 
 				Ok(Async::Ready(None)) => return Ok(Async::Ready(None)),
 				Ok(Async::Ready(Some(notification))) => {
 					// new block imported. queue up all messages tied to that hash.
-					if let Some((_, messages)) = self.pending.remove(&notification.hash) {
+					if let Some((_, _, messages)) = self.pending.remove(&notification.hash) {
 						let canon_number = notification.header.number().clone();
 						let ready_messages = messages.into_iter()
 							.filter_map(|m| m.wait_completed(canon_number));
@@ -165,19 +182,29 @@ impl<Block: BlockT, Status, I, M> Stream for UntilImported<Block, Status, I, M> 
 
 		if update_interval {
 			let mut known_keys = Vec::new();
-			for (&block_hash, &mut (ref mut last_log, ref v)) in &mut self.pending {
+			for (&block_hash, &mut (block_number, ref mut last_log, ref v)) in &mut self.pending {
 				if let Some(number) = self.status_check.block_number(block_hash)? {
 					known_keys.push((block_hash, number));
 				} else {
 					let next_log = *last_log + LOG_PENDING_INTERVAL;
-					if Instant::now() <= next_log {
+					if Instant::now() >= next_log {
 						debug!(
 							target: "afg",
 							"Waiting to import block {} before {} {} messages can be imported. \
+							Requesting network sync service to retrieve block from. \
 							Possible fork?",
 							block_hash,
 							v.len(),
 							self.identifier,
+						);
+
+						// NOTE: when sending an empty vec of peers the
+						// underlying should make a best effort to sync the
+						// block from any peers it knows about.
+						self.block_sync_requester.set_sync_fork_request(
+							vec![],
+							block_hash,
+							block_number,
 						);
 
 						*last_log = next_log;
@@ -186,7 +213,7 @@ impl<Block: BlockT, Status, I, M> Stream for UntilImported<Block, Status, I, M> 
 			}
 
 			for (known_hash, canon_number) in known_keys {
-				if let Some((_, pending_messages)) = self.pending.remove(&known_hash) {
+				if let Some((_, _, pending_messages)) = self.pending.remove(&known_hash) {
 					let ready_messages = pending_messages.into_iter()
 						.filter_map(|m| m.wait_completed(canon_number));
 
@@ -220,14 +247,14 @@ fn warn_authority_wrong_target<H: ::std::fmt::Display>(hash: H, id: AuthorityId)
 impl<Block: BlockT> BlockUntilImported<Block> for SignedMessage<Block> {
 	type Blocked = Self;
 
-	fn schedule_wait<S, Wait, Ready>(
+	fn schedule_wait<BlockStatus, Wait, Ready>(
 		msg: Self::Blocked,
-		status_check: &S,
+		status_check: &BlockStatus,
 		mut wait: Wait,
 		mut ready: Ready,
 	) -> Result<(), Error> where
-		S: BlockStatus<Block>,
-		Wait: FnMut(Block::Hash, Self),
+		BlockStatus: BlockStatusT<Block>,
+		Wait: FnMut(Block::Hash, NumberFor<Block>, Self),
 		Ready: FnMut(Self::Blocked),
 	{
 		let (&target_hash, target_number) = msg.target();
@@ -239,7 +266,7 @@ impl<Block: BlockT> BlockUntilImported<Block> for SignedMessage<Block> {
 				ready(msg);
 			}
 		} else {
-			wait(target_hash, msg)
+			wait(target_hash, target_number, msg)
 		}
 
 		Ok(())
@@ -259,7 +286,13 @@ impl<Block: BlockT> BlockUntilImported<Block> for SignedMessage<Block> {
 
 /// Helper type definition for the stream which waits until vote targets for
 /// signed messages are imported.
-pub(crate) type UntilVoteTargetImported<Block, Status, I> = UntilImported<Block, Status, I, SignedMessage<Block>>;
+pub(crate) type UntilVoteTargetImported<Block, BlockStatus, BlockSyncRequester, I> = UntilImported<
+	Block,
+	BlockStatus,
+	BlockSyncRequester,
+	I,
+	SignedMessage<Block>,
+>;
 
 /// This blocks a global message import, i.e. a commit or catch up messages,
 /// until all blocks referenced in its votes are known.
@@ -274,14 +307,14 @@ pub(crate) struct BlockGlobalMessage<Block: BlockT> {
 impl<Block: BlockT> BlockUntilImported<Block> for BlockGlobalMessage<Block> {
 	type Blocked = CommunicationIn<Block>;
 
-	fn schedule_wait<S, Wait, Ready>(
+	fn schedule_wait<BlockStatus, Wait, Ready>(
 		input: Self::Blocked,
-		status_check: &S,
+		status_check: &BlockStatus,
 		mut wait: Wait,
 		mut ready: Ready,
 	) -> Result<(), Error> where
-		S: BlockStatus<Block>,
-		Wait: FnMut(Block::Hash, Self),
+		BlockStatus: BlockStatusT<Block>,
+		Wait: FnMut(Block::Hash, NumberFor<Block>, Self),
 		Ready: FnMut(Self::Blocked),
 	{
 		use std::collections::hash_map::Entry;
@@ -383,7 +416,7 @@ impl<Block: BlockT> BlockUntilImported<Block> for BlockGlobalMessage<Block> {
 		// if this is taking a long time.
 		for (hash, is_known) in checked_hashes {
 			if let KnownOrUnknown::Unknown(target_number) = is_known {
-				wait(hash, BlockGlobalMessage {
+				wait(hash, target_number, BlockGlobalMessage {
 					inner: locked_global.clone(),
 					target_number,
 				})
@@ -425,9 +458,10 @@ impl<Block: BlockT> BlockUntilImported<Block> for BlockGlobalMessage<Block> {
 
 /// A stream which gates off incoming global messages, i.e. commit and catch up
 /// messages, until all referenced block hashes have been imported.
-pub(crate) type UntilGlobalMessageBlocksImported<Block, Status, I> = UntilImported<
+pub(crate) type UntilGlobalMessageBlocksImported<Block, BlockStatus, BlockSyncRequester, I> = UntilImported<
 	Block,
-	Status,
+	BlockStatus,
+	BlockSyncRequester,
 	I,
 	BlockGlobalMessage<Block>,
 >;
@@ -485,9 +519,28 @@ mod tests {
 		inner: Arc<Mutex<HashMap<Hash, u64>>>,
 	}
 
-	impl BlockStatus<Block> for TestBlockStatus {
+	impl BlockStatusT<Block> for TestBlockStatus {
 		fn block_number(&self, hash: Hash) -> Result<Option<u64>, Error> {
 			Ok(self.inner.lock().get(&hash).map(|x| x.clone()))
+		}
+	}
+
+	#[derive(Clone)]
+	struct TestBlockSyncRequester {
+		requests: Arc<Mutex<Vec<(Hash, NumberFor<Block>)>>>,
+	}
+
+	impl Default for TestBlockSyncRequester {
+		fn default() -> Self {
+			TestBlockSyncRequester {
+				requests: Arc::new(Mutex::new(Vec::new())),
+			}
+		}
+	}
+
+	impl BlockSyncRequesterT<Block> for TestBlockSyncRequester {
+		fn set_sync_fork_request(&self, _peers: Vec<network::PeerId>, hash: Hash, number: NumberFor<Block>) {
+			self.requests.lock().push((hash, number));
 		}
 	}
 
@@ -535,6 +588,7 @@ mod tests {
 
 		let until_imported = UntilGlobalMessageBlocksImported::new(
 			import_notifications,
+			TestBlockSyncRequester::default(),
 			block_status,
 			global_rx.map_err(|_| panic!("should never error")),
 			"global",
@@ -561,6 +615,7 @@ mod tests {
 
 		let until_imported = UntilGlobalMessageBlocksImported::new(
 			import_notifications,
+			TestBlockSyncRequester::default(),
 			block_status,
 			global_rx.map_err(|_| panic!("should never error")),
 			"global",
@@ -805,5 +860,81 @@ mod tests {
 			unapply_catch_up(res),
 			unapply_catch_up(unknown_catch_up()),
 		);
+	}
+
+	#[test]
+	fn request_block_sync_for_needed_blocks() {
+		let (chain_state, import_notifications) = TestChainState::new();
+		let block_status = chain_state.block_status();
+
+		let (global_tx, global_rx) = futures::sync::mpsc::unbounded();
+
+		let block_sync_requester = TestBlockSyncRequester::default();
+
+		let until_imported = UntilGlobalMessageBlocksImported::new(
+			import_notifications,
+			block_sync_requester.clone(),
+			block_status,
+			global_rx.map_err(|_| panic!("should never error")),
+			"global",
+		);
+
+		let h1 = make_header(5);
+		let h2 = make_header(6);
+		let h3 = make_header(7);
+
+		// we create a commit message, with precommits for blocks 6 and 7 which
+		// we haven't imported.
+		let unknown_commit = CompactCommit::<Block> {
+			target_hash: h1.hash(),
+			target_number: 5,
+			precommits: vec![
+				Precommit {
+					target_hash: h2.hash(),
+					target_number: 6,
+				},
+				Precommit {
+					target_hash: h3.hash(),
+					target_number: 7,
+				},
+			],
+			auth_data: Vec::new(), // not used
+		};
+
+		let unknown_commit = || voter::CommunicationIn::Commit(
+			0,
+			unknown_commit.clone(),
+			voter::Callback::Blank,
+		);
+
+		// we send the commit message and spawn the until_imported stream
+		global_tx.unbounded_send(unknown_commit()).unwrap();
+
+		let mut runtime = Runtime::new().unwrap();
+		runtime.spawn(until_imported.into_future().map(|_| ()).map_err(|_| ()));
+
+		// assert that we will make sync requests
+		let assert = futures::future::poll_fn::<(), (), _>(|| {
+			let block_sync_requests = block_sync_requester.requests.lock();
+
+			// we request blocks targeted by the precommits that aren't imported
+			if block_sync_requests.contains(&(h2.hash(), *h2.number())) &&
+				block_sync_requests.contains(&(h3.hash(), *h3.number()))
+			{
+				return Ok(Async::Ready(()));
+			}
+
+			Ok(Async::NotReady)
+		});
+
+		// the `until_imported` stream doesn't request the blocks immediately,
+		// but it should request them after a small timeout
+		let timeout = Delay::new(Instant::now() + Duration::from_secs(60));
+		let test = assert.select2(timeout).map(|res| match res {
+			Either::A(_) => {},
+			Either::B(_) => panic!("timed out waiting for block sync request"),
+		}).map_err(|_| ());
+
+		runtime.block_on(test).unwrap();
 	}
 }

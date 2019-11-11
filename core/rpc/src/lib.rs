@@ -20,7 +20,6 @@
 
 #![warn(missing_docs)]
 
-mod helpers;
 mod metadata;
 
 pub use api::Subscriptions;

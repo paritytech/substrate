@@ -50,6 +50,19 @@ arg_enum! {
 	pub enum WasmExecutionMethod {
 		// Uses an interpreter.
 		Interpreted,
+		// Uses a compiled runtime.
+		Compiled,
+	}
+}
+
+impl WasmExecutionMethod {
+	/// Returns list of variants that are not disabled by feature flags.
+	fn enabled_variants() -> Vec<&'static str> {
+		Self::variants()
+			.iter()
+			.cloned()
+			.filter(|&name| cfg!(feature = "wasmtime") || name != "Compiled")
+			.collect()
 	}
 }
 
@@ -57,6 +70,12 @@ impl Into<service::config::WasmExecutionMethod> for WasmExecutionMethod {
 	fn into(self) -> service::config::WasmExecutionMethod {
 		match self {
 			WasmExecutionMethod::Interpreted => service::config::WasmExecutionMethod::Interpreted,
+			#[cfg(feature = "wasmtime")]
+			WasmExecutionMethod::Compiled => service::config::WasmExecutionMethod::Compiled,
+			#[cfg(not(feature = "wasmtime"))]
+			WasmExecutionMethod::Compiled => panic!(
+				"Substrate must be compiled with \"wasmtime\" feature for compiled Wasm execution"
+			),
 		}
 	}
 }
@@ -126,12 +145,18 @@ pub struct NetworkConfigurationParams {
 	#[structopt(long = "port", value_name = "PORT")]
 	pub port: Option<u16>,
 
+	/// Allow connecting to private IPv4 addresses (as specified in
+	/// [RFC1918](https://tools.ietf.org/html/rfc1918)), unless the address was passed with
+	/// `--reserved-nodes` or `--bootnodes`.
+	#[structopt(long = "no-private-ipv4")]
+	pub no_private_ipv4: bool,
+
 	/// Specify the number of outgoing connections we're trying to maintain.
-	#[structopt(long = "out-peers", value_name = "OUT_PEERS", default_value = "25")]
+	#[structopt(long = "out-peers", value_name = "COUNT", default_value = "25")]
 	pub out_peers: u32,
 
 	/// Specify the maximum number of incoming connections we're accepting.
-	#[structopt(long = "in-peers", value_name = "IN_PEERS", default_value = "25")]
+	#[structopt(long = "in-peers", value_name = "COUNT", default_value = "25")]
 	pub in_peers: u32,
 
 	/// Disable mDNS discovery.
@@ -140,6 +165,13 @@ pub struct NetworkConfigurationParams {
 	/// local network. This disables it. Automatically implied when using --dev.
 	#[structopt(long = "no-mdns")]
 	pub no_mdns: bool,
+
+	/// Maximum number of peers to ask the same blocks in parallel.
+	///
+	/// This allows downlading announced blocks from multiple peers. Decrease to save
+	/// traffic and risk increased latency.
+	#[structopt(long = "max-parallel-downloads", value_name = "COUNT", default_value = "5")]
+	pub max_parallel_downloads: u32,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
@@ -150,7 +182,6 @@ arg_enum! {
 	#[allow(missing_docs)]
 	#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 	pub enum NodeKeyType {
-		Secp256k1,
 		Ed25519
 	}
 }
@@ -163,10 +194,6 @@ pub struct NodeKeyParams {
 	///
 	/// The value is a string that is parsed according to the choice of
 	/// `--node-key-type` as follows:
-	///
-	///   `secp256k1`:
-	///   The value is parsed as a hex-encoded Secp256k1 32 bytes secret key,
-	///   i.e. 64 hex characters.
 	///
 	///   `ed25519`:
 	///   The value is parsed as a hex-encoded Ed25519 32 bytes secret key,
@@ -198,10 +225,6 @@ pub struct NodeKeyParams {
 	///
 	/// The node's secret key determines the corresponding public key and hence the
 	/// node's peer ID in the context of libp2p.
-	///
-	/// NOTE: The current default key type is `secp256k1` for a transition period only
-	/// but will eventually change to `ed25519` in a future release. To continue using
-	/// `secp256k1` keys, use `--node-key-type=secp256k1`.
 	#[structopt(
 		long = "node-key-type",
 		value_name = "TYPE",
@@ -215,9 +238,6 @@ pub struct NodeKeyParams {
 	///
 	/// The contents of the file are parsed according to the choice of `--node-key-type`
 	/// as follows:
-	///
-	///   `secp256k1`:
-	///   The file must contain an unencoded 32 bytes Secp256k1 secret key.
 	///
 	///   `ed25519`:
 	///   The file must contain an unencoded 32 bytes Ed25519 secret key.
@@ -313,8 +333,30 @@ pub struct ExecutionStrategies {
 #[derive(Debug, StructOpt, Clone)]
 pub struct RunCmd {
 	/// Enable validator mode.
-	#[structopt(long = "validator")]
+	///
+	/// The node will be started with the authority role and actively
+	/// participate in any consensus task that it can (e.g. depending on
+	/// availability of local keys).
+	#[structopt(
+		long = "validator",
+		conflicts_with_all = &[ "sentry" ]
+	)]
 	pub validator: bool,
+
+	/// Enable sentry mode.
+	///
+	/// The node will be started with the authority role and participate in
+	/// consensus tasks as an "observer", it will never actively participate
+	/// regardless of whether it could (e.g. keys are available locally). This
+	/// mode is useful as a secure proxy for validators (which would run
+	/// detached from the network), since we want this node to participate in
+	/// the full consensus protocols in order to have all needed consensus data
+	/// available to relay to private nodes.
+	#[structopt(
+		long = "sentry",
+		conflicts_with_all = &[ "validator" ]
+	)]
+	pub sentry: bool,
 
 	/// Disable GRANDPA voter when running in validator mode, otherwise disables the GRANDPA observer.
 	#[structopt(long = "no-grandpa")]
@@ -366,11 +408,21 @@ pub struct RunCmd {
 	#[structopt(long = "rpc-cors", value_name = "ORIGINS", parse(try_from_str = parse_cors))]
 	pub rpc_cors: Option<Cors>,
 
-	/// Specify the pruning mode, a number of blocks to keep or 'archive'.
+	/// Specify the state pruning mode, a number of blocks to keep or 'archive'.
 	///
-	/// Default is 256.
+	/// Default is to keep all block states if the node is running as a
+	/// validator (i.e. 'archive'), otherwise state is only kept for the last
+	/// 256 blocks.
 	#[structopt(long = "pruning", value_name = "PRUNING_MODE")]
 	pub pruning: Option<String>,
+
+	/// Force start with unsafe pruning settings.
+	///
+	/// When running as a validator it is highly recommended to disable state
+	/// pruning (i.e. 'archive') which is the default. The node will refuse to
+	/// start as a validator if pruning is enabled unless this option is set.
+	#[structopt(long = "unsafe-pruning")]
+	pub unsafe_pruning: bool,
 
 	/// The human-readable name for this node.
 	///
@@ -409,7 +461,7 @@ pub struct RunCmd {
 	#[structopt(
 		long = "wasm-execution",
 		value_name = "METHOD",
-		possible_values = &WasmExecutionMethod::variants(),
+		possible_values = &WasmExecutionMethod::enabled_variants(),
 		case_insensitive = true,
 		default_value = "Interpreted"
 	)]
@@ -604,6 +656,13 @@ pub struct BuildSpecCmd {
 	#[structopt(long = "raw")]
 	pub raw: bool,
 
+	/// Disable adding the default bootnode to the specification.
+	///
+	/// By default the `/ip4/127.0.0.1/tcp/30333/p2p/NODE_PEER_ID` bootnode is added to the
+	/// specification when no bootnode exists.
+	#[structopt(long = "disable-default-bootnode")]
+	pub disable_default_bootnode: bool,
+
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
@@ -753,7 +812,7 @@ impl<CC, RP> StructOpt for CoreParams<CC, RP> where
 			)
 		).subcommand(
 			BuildSpecCmd::augment_clap(SubCommand::with_name("build-spec"))
-				.about("Build a spec.json file, outputing to stdout.")
+				.about("Build a spec.json file, outputting to stdout.")
 		)
 		.subcommand(
 			ExportBlocksCmd::augment_clap(SubCommand::with_name("export-blocks"))
@@ -808,7 +867,7 @@ impl<CC, RP> GetLogFilter for CoreParams<CC, RP> where CC: GetLogFilter {
 
 /// A special commandline parameter that expands to nothing.
 /// Should be used as custom subcommand/run arguments if no custom values are required.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct NoCustom {}
 
 impl StructOpt for NoCustom {

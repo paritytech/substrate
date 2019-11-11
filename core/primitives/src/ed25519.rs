@@ -18,38 +18,43 @@
 //! Simple Ed25519 API.
 // end::description[]
 
+#[cfg(feature = "full_crypto")]
+use rstd::vec::Vec;
 
 use crate::{hash::H256, hash::H512};
 use codec::{Encode, Decode};
 
-#[cfg(feature = "std")]
+#[cfg(feature = "full_crypto")]
 use blake2_rfc;
 #[cfg(feature = "std")]
 use substrate_bip39::seed_from_entropy;
 #[cfg(feature = "std")]
 use bip39::{Mnemonic, Language, MnemonicType};
+#[cfg(feature = "full_crypto")]
+use crate::crypto::{Pair as TraitPair, DeriveJunction, SecretStringError};
 #[cfg(feature = "std")]
-use crate::crypto::{Pair as TraitPair, DeriveJunction, SecretStringError, Ss58Codec};
+use crate::crypto::Ss58Codec;
 #[cfg(feature = "std")]
 use serde::{de, Serializer, Serialize, Deserializer, Deserialize};
 use crate::{crypto::{Public as TraitPublic, UncheckedFrom, CryptoType, Derive}};
+use runtime_interface::pass_by::PassByInner;
 
 /// A secret seed. It's not called a "secret key" because ring doesn't expose the secret keys
 /// of the key pair (yeah, dumb); as such we're forced to remember the seed manually if we
 /// will need it later (such as for HDKD).
-#[cfg(feature = "std")]
+#[cfg(feature = "full_crypto")]
 type Seed = [u8; 32];
 
 /// A public key.
-#[cfg_attr(feature = "std", derive(Hash))]
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default)]
+#[cfg_attr(feature = "full_crypto", derive(Hash))]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, PassByInner)]
 pub struct Public(pub [u8; 32]);
 
 /// A key pair.
-#[cfg(feature = "std")]
+#[cfg(feature = "full_crypto")]
 pub struct Pair(ed25519_dalek::Keypair);
 
-#[cfg(feature = "std")]
+#[cfg(feature = "full_crypto")]
 impl Clone for Pair {
 	fn clone(&self) -> Self {
 		Pair(ed25519_dalek::Keypair {
@@ -98,7 +103,7 @@ impl From<Public> for [u8; 32] {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "full_crypto")]
 impl From<Pair> for Public {
 	fn from(x: Pair) -> Self {
 		x.public()
@@ -130,11 +135,16 @@ impl std::fmt::Display for Public {
 	}
 }
 
-#[cfg(feature = "std")]
-impl std::fmt::Debug for Public {
-	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl rstd::fmt::Debug for Public {
+	#[cfg(feature = "std")]
+	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
 		let s = self.to_ss58check();
 		write!(f, "{} ({}...)", crate::hexdisplay::HexDisplay::from(&self.0), &s[0..8])
+	}
+
+	#[cfg(not(feature = "std"))]
+	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+		Ok(())
 	}
 }
 
@@ -154,7 +164,7 @@ impl<'de> Deserialize<'de> for Public {
 }
 
 /// A signature (a 512-bit value).
-#[derive(Encode, Decode)]
+#[derive(Encode, Decode, PassByInner)]
 pub struct Signature(pub [u8; 64]);
 
 impl rstd::convert::TryFrom<&[u8]> for Signature {
@@ -223,17 +233,22 @@ impl AsMut<[u8]> for Signature {
 	}
 }
 
-#[cfg(feature = "std")]
-impl std::fmt::Debug for Signature {
-	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl rstd::fmt::Debug for Signature {
+	#[cfg(feature = "std")]
+	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
 		write!(f, "{}", crate::hexdisplay::HexDisplay::from(&self.0))
+	}
+
+	#[cfg(not(feature = "std"))]
+	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+		Ok(())
 	}
 }
 
-#[cfg(feature = "std")]
-impl std::hash::Hash for Signature {
-	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-		std::hash::Hash::hash(&self.0[..], state);
+#[cfg(feature = "full_crypto")]
+impl rstd::hash::Hash for Signature {
+	fn hash<H: rstd::hash::Hasher>(&self, state: &mut H) {
+		rstd::hash::Hash::hash(&self.0[..], state);
 	}
 }
 
@@ -327,7 +342,7 @@ impl TraitPublic for Public {
 impl Derive for Public {}
 
 /// Derive a single hard junction.
-#[cfg(feature = "std")]
+#[cfg(feature = "full_crypto")]
 fn derive_hard_junction(secret_seed: &Seed, cc: &[u8; 32]) -> Seed {
 	("Ed25519HDKD", secret_seed, cc).using_encoded(|data| {
 		let mut res = [0u8; 32];
@@ -337,13 +352,13 @@ fn derive_hard_junction(secret_seed: &Seed, cc: &[u8; 32]) -> Seed {
 }
 
 /// An error when deriving a key.
-#[cfg(feature = "std")]
+#[cfg(feature = "full_crypto")]
 pub enum DeriveError {
 	/// A soft key was found in the path (and is unsupported).
 	SoftKeyInPath,
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "full_crypto")]
 impl TraitPair for Pair {
 	type Public = Public;
 	type Seed = Seed;
@@ -353,6 +368,7 @@ impl TraitPair for Pair {
 	/// Generate new secure (random) key pair and provide the recovery phrase.
 	///
 	/// You can recover the same key later with `from_phrase`.
+	#[cfg(feature = "std")]
 	fn generate_with_phrase(password: Option<&str>) -> (Pair, String, Seed) {
 		let mnemonic = Mnemonic::new(MnemonicType::Words12, Language::English);
 		let phrase = mnemonic.phrase();
@@ -366,6 +382,7 @@ impl TraitPair for Pair {
 	}
 
 	/// Generate key pair from given recovery phrase and password.
+	#[cfg(feature = "std")]
 	fn from_phrase(phrase: &str, password: Option<&str>) -> Result<(Pair, Seed), SecretStringError> {
 		let big_seed = seed_from_entropy(
 			Mnemonic::from_phrase(phrase, Language::English)
@@ -396,7 +413,10 @@ impl TraitPair for Pair {
 	}
 
 	/// Derive a child key from a series of given junctions.
-	fn derive<Iter: Iterator<Item=DeriveJunction>>(&self, path: Iter) -> Result<Pair, DeriveError> {
+	fn derive<Iter: Iterator<Item=DeriveJunction>>(&self,
+		path: Iter,
+		_seed: Option<Seed>,
+	) -> Result<(Pair, Option<Seed>), DeriveError> {
 		let mut acc = self.0.secret.to_bytes();
 		for j in path {
 			match j {
@@ -404,18 +424,7 @@ impl TraitPair for Pair {
 				DeriveJunction::Hard(cc) => acc = derive_hard_junction(&acc, &cc),
 			}
 		}
-		Ok(Self::from_seed(&acc))
-	}
-
-	/// Generate a key from the phrase, password and derivation path.
-	fn from_standard_components<I: Iterator<Item=DeriveJunction>>(
-		phrase: &str,
-		password: Option<&str>,
-		path: I
-	) -> Result<Pair, SecretStringError> {
-		Self::from_phrase(phrase, password)?.0
-			.derive(path)
-			.map_err(|_| SecretStringError::InvalidPath)
+		Ok((Self::from_seed(&acc), Some(acc)))
 	}
 
 	/// Get the public key.
@@ -464,7 +473,7 @@ impl TraitPair for Pair {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "full_crypto")]
 impl Pair {
 	/// Get the seed for this key.
 	pub fn seed(&self) -> &Seed {
@@ -473,6 +482,7 @@ impl Pair {
 
 	/// Exactly as `from_string` except that if no matches are found then, the the first 32
 	/// characters are taken (padded with spaces as necessary) and used as the MiniSecretKey.
+	#[cfg(feature = "std")]
 	pub fn from_legacy_string(s: &str, password_override: Option<&str>) -> Pair {
 		Self::from_string(s, password_override).unwrap_or_else(|_| {
 			let mut padded_seed: Seed = [' ' as u8; 32];
@@ -484,16 +494,16 @@ impl Pair {
 }
 
 impl CryptoType for Public {
-	#[cfg(feature="std")]
+	#[cfg(feature = "full_crypto")]
 	type Pair = Pair;
 }
 
 impl CryptoType for Signature {
-	#[cfg(feature="std")]
+	#[cfg(feature = "full_crypto")]
 	type Pair = Pair;
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "full_crypto")]
 impl CryptoType for Pair {
 	type Pair = Pair;
 }
@@ -518,7 +528,7 @@ mod test {
 		let pair = Pair::from_seed(&seed);
 		assert_eq!(pair.seed(), &seed);
 		let path = vec![DeriveJunction::Hard([0u8; 32])];
-		let derived = pair.derive(path.into_iter()).ok().unwrap();
+		let derived = pair.derive(path.into_iter(), None).ok().unwrap().0;
 		assert_eq!(
 			derived.seed(),
 			&hex!("ede3354e133f9c8e337ddd6ee5415ed4b4ffe5fc7d21e933f4930a3730e5b21c")

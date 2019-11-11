@@ -20,27 +20,37 @@
 
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
+use substrate_debug_derive::RuntimeDebug;
 
 use rstd::{vec::Vec, borrow::Cow};
 
 /// Storage key.
-#[derive(PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug, Hash, PartialOrd, Ord, Clone))]
+#[derive(PartialEq, Eq, RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Hash, PartialOrd, Ord, Clone))]
 pub struct StorageKey(
 	#[cfg_attr(feature = "std", serde(with="impl_serde::serialize"))]
 	pub Vec<u8>,
 );
 
 /// Storage data associated to a [`StorageKey`].
-#[derive(PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug, Hash, PartialOrd, Ord, Clone))]
+#[derive(PartialEq, Eq, RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Hash, PartialOrd, Ord, Clone))]
 pub struct StorageData(
 	#[cfg_attr(feature = "std", serde(with="impl_serde::serialize"))]
 	pub Vec<u8>,
 );
 
+/// A set of key value pairs for storage.
+#[cfg(feature = "std")]
+pub type StorageOverlay = std::collections::HashMap<Vec<u8>, Vec<u8>>;
+
+/// A set of key value pairs for children storage;
+#[cfg(feature = "std")]
+pub type ChildrenStorageOverlay = std::collections::HashMap<Vec<u8>, StorageOverlay>;
+
 /// Storage change set
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug, PartialEq, Eq))]
+#[derive(RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, PartialEq, Eq))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 pub struct StorageChangeSet<Hash> {
 	/// Block hash

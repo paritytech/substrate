@@ -26,7 +26,9 @@ use std::fmt::Display;
 
 use log::info;
 
-use client::{Client, block_builder::api::BlockBuilder, runtime_api::ConstructRuntimeApi};
+use client::Client;
+use block_builder_api::BlockBuilder;
+use sr_api::ConstructRuntimeApi;
 use consensus_common::{
 	BlockOrigin, BlockImportParams, InherentData, ForkChoiceStrategy,
 	SelectChain
@@ -102,7 +104,8 @@ where
 	Exec: client::CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
 	Backend: client::backend::Backend<Block, Blake2Hasher> + Send,
 	Client<Backend, Exec, Block, RtApi>: ProvideRuntimeApi,
-	<Client<Backend, Exec, Block, RtApi> as ProvideRuntimeApi>::Api: BlockBuilder<Block>,
+	<Client<Backend, Exec, Block, RtApi> as ProvideRuntimeApi>::Api:
+		BlockBuilder<Block, Error = client::error::Error>,
 	RtApi: ConstructRuntimeApi<Block, Client<Backend, Exec, Block, RtApi>> + Send + Sync,
 	Sc: SelectChain<Block>,
 	RA: RuntimeAdapter,
@@ -161,7 +164,8 @@ where
 	Backend: client::backend::Backend<Block, Blake2Hasher> + Send,
 	Client<Backend, Exec, Block, RtApi>: ProvideRuntimeApi,
 	RtApi: ConstructRuntimeApi<Block, Client<Backend, Exec, Block, RtApi>> + Send + Sync,
-	<Client<Backend, Exec, Block, RtApi> as ProvideRuntimeApi>::Api: BlockBuilder<Block>,
+	<Client<Backend, Exec, Block, RtApi> as ProvideRuntimeApi>::Api:
+		BlockBuilder<Block, Error = client::error::Error>,
 	RA: RuntimeAdapter,
 {
 	let mut block = client.new_block(Default::default()).expect("Failed to create new block");
@@ -180,7 +184,7 @@ where
 fn import_block<Backend, Exec, Block, RtApi>(
 	client: &Arc<Client<Backend, Exec, Block, RtApi>>,
 	block: Block
-) -> () where 
+) -> () where
 	Block: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
 	Exec: client::CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
 	Backend: client::backend::Backend<Block, Blake2Hasher> + Send,
@@ -194,6 +198,7 @@ fn import_block<Backend, Exec, Block, RtApi>(
 		justification: None,
 		auxiliary: Vec::new(),
 		fork_choice: ForkChoiceStrategy::LongestChain,
+		allow_missing_state: false,
 	};
 	(&**client).import_block(import, HashMap::new()).expect("Failed to import block");
 }

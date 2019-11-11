@@ -18,14 +18,18 @@
 //! and depositing logs.
 
 use rstd::prelude::*;
-use runtime_io::{storage_root, storage_changes_root, blake2_256};
-use runtime_support::storage::{self, StorageValue, StorageMap};
-use runtime_support::storage_items;
+use runtime_io::{
+	storage::root as storage_root, storage::changes_root as storage_changes_root,
+	hashing::blake2_256,
+};
+use runtime_support::storage;
+use runtime_support::{decl_storage, decl_module};
 use sr_primitives::{
 	traits::{Hash as HashT, BlakeTwo256, Header as _}, generic, ApplyError, ApplyResult,
 	transaction_validity::{TransactionValidity, ValidTransaction, InvalidTransaction},
 };
 use codec::{KeyedVec, Encode};
+use srml_system::Trait;
 use crate::{
 	AccountId, BlockNumber, Extrinsic, Transfer, H256 as Hash, Block, Header, Digest, AuthorityId
 };
@@ -34,14 +38,20 @@ use primitives::storage::well_known_keys;
 const NONCE_OF: &[u8] = b"nonce:";
 const BALANCE_OF: &[u8] = b"balance:";
 
-storage_items! {
-	ExtrinsicData: b"sys:xtd" => required map [ u32 => Vec<u8> ];
-	// The current block number being processed. Set by `execute_block`.
-	Number: b"sys:num" => BlockNumber;
-	ParentHash: b"sys:pha" => required Hash;
-	NewAuthorities: b"sys:new_auth" => Vec<AuthorityId>;
-	StorageDigest: b"sys:digest" => Digest;
-	Authorities get(authorities): b"sys:auth" => default Vec<AuthorityId>;
+decl_module! {
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+}
+
+decl_storage! {
+	trait Store for Module<T: Trait> as TestRuntime {
+		ExtrinsicData: map u32 => Vec<u8>;
+		// The current block number being processed. Set by `execute_block`.
+		Number get(fn number): Option<BlockNumber>;
+		ParentHash get(fn parent_hash): Hash;
+		NewAuthorities get(fn new_authorities): Option<Vec<AuthorityId>>;
+		StorageDigest get(fn storage_digest): Option<Digest>;
+		Authorities get(fn authorities) config(): Vec<AuthorityId>;
+	}
 }
 
 pub fn balance_of_key(who: AccountId) -> Vec<u8> {
@@ -68,6 +78,10 @@ pub fn initialize_block(header: &Header) {
 	if let Some(generic::DigestItem::Other(v)) = header.digest().logs().iter().next() {
 		let _: Option<u32> = storage::unhashed::get(&v);
 	}
+}
+
+pub fn authorities() -> Vec<AuthorityId> {
+	Authorities::get()
 }
 
 pub fn get_block_number() -> Option<BlockNumber> {
@@ -316,7 +330,7 @@ mod tests {
 	use crate::{Header, Transfer, WASM_BINARY};
 	use primitives::{NeverNativeValue, map, traits::CodeExecutor};
 	use substrate_executor::{NativeExecutor, WasmExecutionMethod, native_executor_instance};
-	use runtime_io::twox_128;
+	use runtime_io::hashing::twox_128;
 
 	// Declare an instance of the native executor dispatch for the test runtime.
 	native_executor_instance!(

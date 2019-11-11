@@ -1,5 +1,0 @@
-error: Self values are not supported.
- --> $DIR/adding_self_parameter.rs:5:11
-  |
-5 |         fn test(&self);
-  |                 ^

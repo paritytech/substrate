@@ -32,19 +32,18 @@ pub use substrate_finality_grandpa_primitives as fg_primitives;
 
 use rstd::prelude::*;
 use codec::{self as codec, Encode, Decode, Error};
-use support::{
-	decl_event, decl_storage, decl_module, dispatch::Result,
-};
+use support::{decl_event, decl_storage, decl_module, dispatch::Result, storage};
 use sr_primitives::{
-	generic::{DigestItem, OpaqueDigestItemId}, traits::Zero,
-	Perbill,
+	generic::{DigestItem, OpaqueDigestItemId}, traits::Zero, Perbill,
 };
 use sr_staking_primitives::{
 	SessionIndex,
 	offence::{Offence, Kind},
 };
-use fg_primitives::{GRANDPA_ENGINE_ID, ScheduledChange, ConsensusLog, SetId, RoundNumber};
-pub use fg_primitives::{AuthorityId, AuthorityWeight};
+use fg_primitives::{
+	GRANDPA_AUTHORITIES_KEY, GRANDPA_ENGINE_ID, ScheduledChange, ConsensusLog, SetId, RoundNumber,
+};
+pub use fg_primitives::{AuthorityId, AuthorityList, AuthorityWeight, VersionedAuthorityList};
 use system::{ensure_signed, DigestOf};
 
 mod mock;
@@ -65,7 +64,7 @@ pub struct OldStoredPendingChange<N> {
 	/// The delay in blocks until it will be applied.
 	pub delay: N,
 	/// The next authority set.
-	pub next_authorities: Vec<(AuthorityId, AuthorityWeight)>,
+	pub next_authorities: AuthorityList,
 }
 
 /// A stored pending change.
@@ -76,7 +75,7 @@ pub struct StoredPendingChange<N> {
 	/// The delay in blocks until it will be applied.
 	pub delay: N,
 	/// The next authority set.
-	pub next_authorities: Vec<(AuthorityId, AuthorityWeight)>,
+	pub next_authorities: AuthorityList,
 	/// If defined it means the change was forced and the given block number
 	/// indicates the median last finalized block when the change was signaled.
 	pub forced: Option<N>,
@@ -127,7 +126,7 @@ pub enum StoredState<N> {
 decl_event!(
 	pub enum Event {
 		/// New authority set has been applied.
-		NewAuthorities(Vec<(AuthorityId, AuthorityWeight)>),
+		NewAuthorities(AuthorityList),
 		/// Current authority set has been paused.
 		Paused,
 		/// Current authority set has been resumed.
@@ -137,30 +136,34 @@ decl_event!(
 
 decl_storage! {
 	trait Store for Module<T: Trait> as GrandpaFinality {
-		/// The current authority set.
-		Authorities get(authorities): Vec<(AuthorityId, AuthorityWeight)>;
+		/// DEPRECATED
+		///
+		/// This used to store the current authority set, which has been migrated to the well-known
+		/// GRANDPA_AUTHORITES_KEY unhashed key.
+		#[cfg(feature = "migrate-authorities")]
+		pub(crate) Authorities get(fn authorities): AuthorityList;
 
 		/// State of the current authority set.
-		State get(state): StoredState<T::BlockNumber> = StoredState::Live;
+		State get(fn state): StoredState<T::BlockNumber> = StoredState::Live;
 
 		/// Pending change: (signaled at, scheduled change).
 		PendingChange: Option<StoredPendingChange<T::BlockNumber>>;
 
 		/// next block number where we can force a change.
-		NextForced get(next_forced): Option<T::BlockNumber>;
+		NextForced get(fn next_forced): Option<T::BlockNumber>;
 
 		/// `true` if we are currently stalled.
-		Stalled get(stalled): Option<(T::BlockNumber, T::BlockNumber)>;
+		Stalled get(fn stalled): Option<(T::BlockNumber, T::BlockNumber)>;
 
 		/// The number of changes (both in terms of keys and underlying economic responsibilities)
 		/// in the "set" of Grandpa validators from genesis.
-		CurrentSetId get(current_set_id) build(|_| fg_primitives::SetId::default()): SetId;
+		CurrentSetId get(fn current_set_id) build(|_| fg_primitives::SetId::default()): SetId;
 
 		/// A mapping from grandpa set ID to the index of the *most recent* session for which its members were responsible.
-		SetIdSession get(session_for_set): map SetId => Option<SessionIndex>;
+		SetIdSession get(fn session_for_set): map SetId => Option<SessionIndex>;
 	}
 	add_extra_genesis {
-		config(authorities): Vec<(AuthorityId, AuthorityWeight)>;
+		config(authorities): AuthorityList;
 		build(|config| Module::<T>::initialize_authorities(&config.authorities))
 	}
 }
@@ -173,6 +176,11 @@ decl_module! {
 		fn report_misbehavior(origin, _report: Vec<u8>) {
 			ensure_signed(origin)?;
 			// FIXME: https://github.com/paritytech/substrate/issues/1112
+		}
+
+		fn on_initialize() {
+			#[cfg(feature = "migrate-authorities")]
+			Self::migrate_authorities();
 		}
 
 		fn on_finalize(block_number: T::BlockNumber) {
@@ -200,7 +208,7 @@ decl_module! {
 
 				// enact the change if we've reached the enacting block
 				if block_number == pending_change.scheduled_at + pending_change.delay {
-					Authorities::put(&pending_change.next_authorities);
+					Self::set_grandpa_authorities(&pending_change.next_authorities);
 					Self::deposit_event(
 						Event::NewAuthorities(pending_change.next_authorities)
 					);
@@ -242,8 +250,16 @@ decl_module! {
 
 impl<T: Trait> Module<T> {
 	/// Get the current set of authorities, along with their respective weights.
-	pub fn grandpa_authorities() -> Vec<(AuthorityId, AuthorityWeight)> {
-		Authorities::get()
+	pub fn grandpa_authorities() -> AuthorityList {
+		storage::unhashed::get_or_default::<VersionedAuthorityList>(GRANDPA_AUTHORITIES_KEY).into()
+	}
+
+	/// Set the current set of authorities, along with their respective weights.
+	fn set_grandpa_authorities(authorities: &AuthorityList) {
+		storage::unhashed::put(
+			GRANDPA_AUTHORITIES_KEY,
+			&VersionedAuthorityList::from(authorities),
+		);
 	}
 
 	/// Schedule GRANDPA to pause starting in the given number of blocks.
@@ -294,7 +310,7 @@ impl<T: Trait> Module<T> {
 	/// No change should be signaled while any change is pending. Returns
 	/// an error if a change is already pending.
 	pub fn schedule_change(
-		next_authorities: Vec<(AuthorityId, AuthorityWeight)>,
+		next_authorities: AuthorityList,
 		in_blocks: T::BlockNumber,
 		forced: Option<T::BlockNumber>,
 	) -> Result {
@@ -330,10 +346,20 @@ impl<T: Trait> Module<T> {
 		<system::Module<T>>::deposit_log(log.into());
 	}
 
-	fn initialize_authorities(authorities: &[(AuthorityId, AuthorityWeight)]) {
+	fn initialize_authorities(authorities: &AuthorityList) {
 		if !authorities.is_empty() {
-			assert!(Authorities::get().is_empty(), "Authorities are already initialized!");
-			Authorities::put(authorities);
+			assert!(
+				Self::grandpa_authorities().is_empty(),
+				"Authorities are already initialized!"
+			);
+			Self::set_grandpa_authorities(authorities);
+		}
+	}
+
+	#[cfg(feature = "migrate-authorities")]
+	fn migrate_authorities() {
+		if Authorities::exists() {
+			Self::set_grandpa_authorities(&Authorities::take());
 		}
 	}
 }
@@ -372,6 +398,10 @@ impl<T: Trait> Module<T> {
 	{
 		Self::grandpa_log(digest).and_then(|signal| signal.try_into_resume())
 	}
+}
+
+impl<T: Trait> sr_primitives::BoundToRuntimeAppPublic for Module<T> {
+	type Public = AuthorityId;
 }
 
 impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T>

@@ -20,10 +20,7 @@
 //
 
 use std::{time, sync::Arc};
-use client::{
-	error, Client as SubstrateClient, CallExecutor,
-	block_builder::api::BlockBuilder as BlockBuilderApi,
-};
+use client::{error, Client as SubstrateClient, CallExecutor};
 use codec::Decode;
 use consensus_common::{evaluation};
 use inherents::InherentData;
@@ -37,6 +34,7 @@ use sr_primitives::{
 };
 use transaction_pool::txpool::{self, Pool as TransactionPool};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
+use block_builder::BlockBuilderApi;
 
 /// Proposer factory.
 pub struct ProposerFactory<C, A> where A: txpool::ChainApi {
@@ -48,14 +46,15 @@ pub struct ProposerFactory<C, A> where A: txpool::ChainApi {
 
 impl<B, E, Block, RA, A> consensus_common::Environment<Block> for
 	ProposerFactory<SubstrateClient<B, E, Block, RA>, A>
-	where
-		A: txpool::ChainApi<Block=Block> + 'static,
-		B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
-		Block: BlockT<Hash=H256>,
-		RA: Send + Sync + 'static,
-		SubstrateClient<B, E, Block, RA>: ProvideRuntimeApi,
-		<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api: BlockBuilderApi<Block>,
+		where
+			A: txpool::ChainApi<Block=Block>,
+			B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
+			E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
+			Block: BlockT<Hash=H256>,
+			RA: Send + Sync + 'static,
+			SubstrateClient<B, E, Block, RA>: ProvideRuntimeApi,
+			<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api:
+				BlockBuilderApi<Block, Error = client::error::Error>,
 {
 	type Proposer = Proposer<Block, SubstrateClient<B, E, Block, RA>, A>;
 	type Error = error::Error;
@@ -94,15 +93,16 @@ pub struct Proposer<Block: BlockT, C, A: txpool::ChainApi> {
 }
 
 impl<B, E, Block, RA, A> consensus_common::Proposer<Block> for
-	Proposer<Block, SubstrateClient<B, E, Block, RA>, A>
-	where
-		A: txpool::ChainApi<Block=Block>,
-		B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
-		Block: BlockT<Hash=H256>,
-		RA: Send + Sync + 'static,
-		SubstrateClient<B, E, Block, RA>: ProvideRuntimeApi,
-		<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api: BlockBuilderApi<Block>,
+Proposer<Block, SubstrateClient<B, E, Block, RA>, A>
+where
+	A: txpool::ChainApi<Block=Block>,
+	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
+	Block: BlockT<Hash=H256>,
+	RA: Send + Sync + 'static,
+	SubstrateClient<B, E, Block, RA>: ProvideRuntimeApi,
+	<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api:
+		BlockBuilderApi<Block, Error = client::error::Error>,
 {
 	type Proposal = futures::future::Ready<Result<(Block, Option<Vec<Vec<u8>>>), error::Error>>;
 	type Error = error::Error;
@@ -128,7 +128,8 @@ impl<Block, B, E, RA, A> Proposer<Block, SubstrateClient<B, E, Block, RA>, A>	wh
 	Block: BlockT<Hash=H256>,
 	RA: Send + Sync + 'static,
 	SubstrateClient<B, E, Block, RA>: ProvideRuntimeApi,
-	<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api: BlockBuilderApi<Block>,
+	<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api:
+		BlockBuilderApi<Block, Error = client::error::Error>,
 {
 	fn propose_with(
 		&self,
@@ -174,7 +175,7 @@ impl<Block, B, E, RA, A> Proposer<Block, SubstrateClient<B, E, Block, RA>, A>	wh
 			}
 
 			trace!("[{:?}] Pushing to the block.", pending.hash);
-			match client::block_builder::BlockBuilder::push(&mut block_builder, pending.data.clone()) {
+			match block_builder::BlockBuilder::push(&mut block_builder, pending.data.clone()) {
 				Ok(()) => {
 					debug!("[{:?}] Pushed to the block.", pending.hash);
 				}

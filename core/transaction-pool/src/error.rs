@@ -16,26 +16,26 @@
 
 //! Transaction pool error.
 
-use client;
-use txpool;
-
 /// Transaction pool result.
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// Transaction pool error type.
 #[derive(Debug, derive_more::Display, derive_more::From)]
 pub enum Error {
-	/// Client error.
-	Client(client::error::Error),
 	/// Pool error.
 	Pool(txpool::error::Error),
+	/// Error while converting a `BlockId`.
+	BlockIdConversion(String),
+	/// Error while calling the runtime api.
+	RuntimeApi(String),
 }
 
 impl std::error::Error for Error {
 	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
 		match self {
-			Error::Client(ref err) => Some(err),
 			Error::Pool(ref err) => Some(err),
+			Error::BlockIdConversion(_) => None,
+			Error::RuntimeApi(_) => None,
 		}
 	}
 }

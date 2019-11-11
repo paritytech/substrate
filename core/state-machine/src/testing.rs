@@ -46,7 +46,6 @@ pub struct TestExternalities<H: Hasher<Out=H256>=Blake2Hasher, N: ChangesTrieBlo
 }
 
 impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
-
 	/// Get externalities implementation.
 	pub fn ext(&mut self) -> Ext<H, N, InMemory<H>, ChangesTrieInMemoryStorage<H, N>> {
 		Ext::new(
@@ -191,5 +190,11 @@ mod tests {
 		ext.set_storage(CODE.to_vec(), code.clone());
 
 		assert_eq!(&ext.storage(CODE).unwrap(), &code);
+	}
+
+	#[test]
+	fn check_send() {
+		fn assert_send<T: Send>() {}
+		assert_send::<TestExternalities::<Blake2Hasher, u64>>();
 	}
 }

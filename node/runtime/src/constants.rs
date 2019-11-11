@@ -66,19 +66,3 @@ pub mod time {
 	pub const HOURS: BlockNumber = MINUTES * 60;
 	pub const DAYS: BlockNumber = HOURS * 24;
 }
-
-// CRITICAL NOTE: The system module maintains two constants: a _maximum_ block weight and a _ratio_
-// of it yielding the portion which is accessible to normal transactions (reserving the rest for
-// operational ones). `TARGET_BLOCK_FULLNESS` is entirely independent and the system module is not
-// aware of if, nor should it care about it. This constant simply denotes on which ratio of the
-// _maximum_ block weight we tweak the fees. It does NOT care about the type of the dispatch.
-//
-// For the system to be configured in a sane way, `TARGET_BLOCK_FULLNESS` should always be less than
-// the ratio that `system` module uses to find normal transaction quota.
-/// Fee-related.
-pub mod fee {
-	pub use sr_primitives::Perbill;
-
-	/// The block saturation level. Fees will be updates based on this value.
-	pub const TARGET_BLOCK_FULLNESS: Perbill = Perbill::from_percent(25);
-}

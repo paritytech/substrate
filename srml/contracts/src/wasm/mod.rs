@@ -58,7 +58,7 @@ pub struct PrefabWasmModule {
 
 /// Wasm executable loaded by `WasmLoader` and executed by `WasmVm`.
 pub struct WasmExecutable {
-	entrypoint_name: &'static [u8],
+	entrypoint_name: &'static str,
 	prefab_module: PrefabWasmModule,
 }
 
@@ -79,14 +79,14 @@ impl<'a, T: Trait> crate::exec::Loader<T> for WasmLoader<'a> {
 	fn load_init(&self, code_hash: &CodeHash<T>) -> Result<WasmExecutable, &'static str> {
 		let prefab_module = load_code::<T>(code_hash, self.schedule)?;
 		Ok(WasmExecutable {
-			entrypoint_name: b"deploy",
+			entrypoint_name: "deploy",
 			prefab_module,
 		})
 	}
 	fn load_main(&self, code_hash: &CodeHash<T>) -> Result<WasmExecutable, &'static str> {
 		let prefab_module = load_code::<T>(code_hash, self.schedule)?;
 		Ok(WasmExecutable {
-			entrypoint_name: b"call",
+			entrypoint_name: "call",
 			prefab_module,
 		})
 	}
@@ -406,7 +406,7 @@ mod tests {
 
 		let exec = WasmExecutable {
 			// Use a "call" convention.
-			entrypoint_name: b"call",
+			entrypoint_name: "call",
 			prefab_module,
 		};
 
