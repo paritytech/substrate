@@ -5,6 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
+block-builder = { package = "substrate-block-builder", path = "../../../../client/block-builder" }
 generic-test-client = { package = "substrate-test-client", path = "../../client" }
 primitives = { package = "substrate-primitives", path = "../../../../primitives/core" }
 runtime = { package = "substrate-test-runtime", path = "../../runtime" }

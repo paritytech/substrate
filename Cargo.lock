@@ -2797,6 +2797,7 @@ dependencies = [
  "rustc-hex 2.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-api 2.0.0",
  "sr-io 2.0.0",
  "sr-primitives 2.0.0",
  "sr-staking-primitives 2.0.0",
@@ -2831,12 +2832,14 @@ dependencies = [
  "srml-transaction-payment-rpc-runtime-api 2.0.0",
  "srml-treasury 2.0.0",
  "srml-utility 2.0.0",
- "substrate-client 2.0.0",
+ "substrate-block-builder-runtime-api 2.0.0",
  "substrate-consensus-babe-primitives 2.0.0",
+ "substrate-inherents 2.0.0",
  "substrate-keyring 2.0.0",
  "substrate-offchain-primitives 2.0.0",
  "substrate-primitives 2.0.0",
  "substrate-session 2.0.0",
+ "substrate-transaction-pool-runtime-api 2.0.0",
  "substrate-wasm-builder-runner 1.0.4",
 ]
 
@@ -2880,6 +2883,7 @@ dependencies = [
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-api 2.0.0",
  "sr-io 2.0.0",
  "sr-primitives 2.0.0",
  "sr-std 2.0.0",
@@ -2895,11 +2899,13 @@ dependencies = [
  "srml-system 2.0.0",
  "srml-timestamp 2.0.0",
  "srml-transaction-payment 2.0.0",
- "substrate-client 2.0.0",
+ "substrate-block-builder-runtime-api 2.0.0",
  "substrate-consensus-aura-primitives 2.0.0",
+ "substrate-inherents 2.0.0",
  "substrate-offchain-primitives 2.0.0",
  "substrate-primitives 2.0.0",
  "substrate-session 2.0.0",
+ "substrate-transaction-pool-runtime-api 2.0.0",
  "substrate-wasm-builder-runner 1.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -5430,6 +5436,7 @@ dependencies = [
 name = "substrate-consensus-aura-primitives"
 version = "2.0.0"
 dependencies = [
+ "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-api 2.0.0",
  "sr-primitives 2.0.0",
  "sr-std 2.0.0",
@@ -5648,6 +5655,7 @@ version = "2.0.0"
 dependencies = [
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-api 2.0.0",
  "sr-primitives 2.0.0",
  "sr-std 2.0.0",
  "substrate-application-crypto 2.0.0",
@@ -6169,6 +6177,7 @@ dependencies = [
  "memory-db 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-api 2.0.0",
  "sr-io 2.0.0",
  "sr-primitives 2.0.0",
  "sr-std 2.0.0",
@@ -6180,6 +6189,7 @@ dependencies = [
  "srml-system-rpc-runtime-api 2.0.0",
  "srml-timestamp 2.0.0",
  "substrate-application-crypto 2.0.0",
+ "substrate-block-builder-runtime-api 2.0.0",
  "substrate-client 2.0.0",
  "substrate-consensus-aura-primitives 2.0.0",
  "substrate-consensus-babe-primitives 2.0.0",
@@ -6192,6 +6202,7 @@ dependencies = [
  "substrate-session 2.0.0",
  "substrate-state-machine 2.0.0",
  "substrate-test-runtime-client 2.0.0",
+ "substrate-transaction-pool-runtime-api 2.0.0",
  "substrate-trie 2.0.0",
  "substrate-wasm-builder-runner 1.0.4",
  "trie-db 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -6203,6 +6214,7 @@ version = "2.0.0"
 dependencies = [
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 2.0.0",
+ "substrate-block-builder 2.0.0",
  "substrate-primitives 2.0.0",
  "substrate-test-client 2.0.0",
  "substrate-test-runtime 2.0.0",
@@ -6725,7 +6737,9 @@ version = "0.0.1"
 dependencies = [
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-api 2.0.0",
  "sr-primitives 2.0.0",
+ "substrate-block-builder-runtime-api 2.0.0",
  "substrate-cli 2.0.0",
  "substrate-client 2.0.0",
  "substrate-consensus-common 2.0.0",

@@ -6,29 +6,29 @@ edition = "2018"
 
 [dependencies]
 block-builder = { package = "substrate-block-builder", path = "../../client/block-builder" }
-codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-consensus = { package = "substrate-consensus-common", path = "../../primitives/consensus/common", optional = true }
-derive_more = { version = "0.15.0", optional = true }
-executor = { package = "substrate-executor", path = "../executor", optional = true }
-fnv = { version = "1.0.6", optional = true }
-futures = { version = "0.1.29", optional = true }
-futures03 = { package = "futures-preview", version = "0.3.0-alpha.19", features = ["compat"], optional = true }
-hash-db = { version = "0.15.2", default-features = false }
-header-metadata = { package = "substrate-header-metadata", path = "header-metadata", optional = true }
-hex-literal = { version = "0.2.1", optional = true }
-inherents = { package = "substrate-inherents", path = "../../primitives/inherents", default-features = false }
-keyring = { package = "substrate-keyring", path = "../keyring", optional = true }
-kvdb = { git = "https://github.com/paritytech/parity-common", optional = true, rev="b0317f649ab2c665b7987b8475878fc4d2e1f81d" }
-log = { version = "0.4.8", optional = true }
-parking_lot = { version = "0.9.0", optional = true }
-primitives = { package = "substrate-primitives", path = "../../primitives/core", default-features = false }
-rstd = { package = "sr-std", path = "../../primitives/sr-std", default-features = false }
-runtime-version = { package = "sr-version", path = "../../primitives/sr-version", default-features = false }
+codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
+consensus = { package = "substrate-consensus-common", path = "../../primitives/consensus/common" }
+derive_more = { version = "0.15.0" }
+executor = { package = "substrate-executor", path = "../executor" }
+fnv = { version = "1.0.6" }
+futures = { version = "0.1.29" }
+futures03 = { package = "futures-preview", version = "0.3.0-alpha.19", features = ["compat"] }
+hash-db = { version = "0.15.2" }
+header-metadata = { package = "substrate-header-metadata", path = "header-metadata" }
+hex-literal = { version = "0.2.1" }
+inherents = { package = "substrate-inherents", path = "../../primitives/inherents" }
+keyring = { package = "substrate-keyring", path = "../keyring" }
+kvdb = { git = "https://github.com/paritytech/parity-common", rev="b0317f649ab2c665b7987b8475878fc4d2e1f81d" }
+log = { version = "0.4.8" }
+parking_lot = { version = "0.9.0" }
+primitives = { package = "substrate-primitives", path = "../../primitives/core" }
+rstd = { package = "sr-std", path = "../../primitives/sr-std" }
+runtime-version = { package = "sr-version", path = "../../primitives/sr-version" }
 sr-api = { path = "../../primitives/sr-api" }
-sr-primitives = { path = "../../primitives/sr-primitives", default-features = false }
-state-machine = { package = "substrate-state-machine", path = "../state-machine", optional = true }
-substrate-telemetry = { path = "../telemetry", optional = true }
-trie = { package = "substrate-trie", path = "../trie", optional = true }
+sr-primitives = { path = "../../primitives/sr-primitives" }
+state-machine = { package = "substrate-state-machine", path = "../state-machine" }
+substrate-telemetry = { path = "../telemetry" }
+trie = { package = "substrate-trie", path = "../trie" }
 
 [dev-dependencies]
 env_logger = "0.7.0"
