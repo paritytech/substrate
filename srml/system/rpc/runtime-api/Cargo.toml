@@ -5,12 +5,12 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-client = { package = "substrate-client", path = "../../../../core/client", default-features = false }
+sr-api = { path = "../../../../core/sr-api", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false  }
 
 [features]
 default = ["std"]
 std = [
-	"client/std",
+	"sr-api/std",
 	"codec/std",
 ]

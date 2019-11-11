@@ -30,7 +30,7 @@ use primitives::{
 	traits::{CodeExecutor, KeystoreExt},
 };
 
-use crate::runtime_api::{ProofRecorder, InitializeBlock};
+use sr_api::{ProofRecorder, InitializeBlock};
 use crate::backend;
 use crate::error;
 

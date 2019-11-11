@@ -19,8 +19,7 @@ use crate::{SpawnTaskHandle, start_rpc_servers, build_network_future, Transactio
 use crate::status_sinks;
 use crate::config::{Configuration, DatabaseConfig};
 use client::{
-	BlockchainEvents, Client, runtime_api,
-	backend::RemoteBackend, light::blockchain::RemoteBlockchain,
+	BlockchainEvents, Client, backend::RemoteBackend, light::blockchain::RemoteBlockchain,
 };
 use chain_spec::{RuntimeGenesis, Extension};
 use codec::{Decode, Encode, IoReader};
@@ -757,10 +756,11 @@ ServiceBuilder<
 > where
 	Client<TBackend, TExec, TBl, TRtApi>: ProvideRuntimeApi,
 	<Client<TBackend, TExec, TBl, TRtApi> as ProvideRuntimeApi>::Api:
-		runtime_api::Metadata<TBl> +
+		sr_api::Metadata<TBl> +
 		offchain::OffchainWorkerApi<TBl> +
-		runtime_api::TaggedTransactionQueue<TBl> +
-		session::SessionKeys<TBl>,
+		tx_pool_api::TaggedTransactionQueue<TBl> +
+		session::SessionKeys<TBl> +
+		sr_api::ApiExt<TBl, Error = client::error::Error>,
 	TBl: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
 	TRtApi: 'static + Send + Sync,
 	TCfg: Default,
@@ -808,7 +808,8 @@ ServiceBuilder<
 
 		session::generate_initial_session_keys(
 			client.clone(),
-			config.dev_key_seed.clone().map(|s| vec![s]).unwrap_or_default()
+			&BlockId::Hash(client.info().chain.best_hash),
+			config.dev_key_seed.clone().map(|s| vec![s]).unwrap_or_default(),
 		)?;
 
 		let (signal, exit) = exit_future::signal();
@@ -1162,7 +1163,8 @@ pub(crate) fn maintain_transaction_pool<Api, Backend, Block, Executor, PoolApi>(
 	Block: BlockT<Hash = <Blake2Hasher as primitives::Hasher>::Out>,
 	Backend: 'static + client::backend::Backend<Block, Blake2Hasher>,
 	Client<Backend, Executor, Block, Api>: ProvideRuntimeApi,
-	<Client<Backend, Executor, Block, Api> as ProvideRuntimeApi>::Api: runtime_api::TaggedTransactionQueue<Block>,
+	<Client<Backend, Executor, Block, Api> as ProvideRuntimeApi>::Api:
+		tx_pool_api::TaggedTransactionQueue<Block>,
 	Executor: 'static + client::CallExecutor<Block, Blake2Hasher>,
 	PoolApi: 'static + txpool::ChainApi<Hash = Block::Hash, Block = Block>,
 	Api: 'static,

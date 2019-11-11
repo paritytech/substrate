@@ -20,10 +20,7 @@
 //
 
 use std::{time, sync::Arc};
-use client::{
-	error, Client as SubstrateClient, CallExecutor,
-	block_builder::api::BlockBuilder as BlockBuilderApi,
-};
+use client::{error, Client as SubstrateClient, CallExecutor};
 use codec::Decode;
 use consensus_common::{evaluation};
 use inherents::InherentData;
@@ -37,6 +34,7 @@ use sr_primitives::{
 };
 use transaction_pool::txpool::{self, Pool as TransactionPool};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
+use block_builder::BlockBuilderApi;
 
 /// Proposer factory.
 pub struct ProposerFactory<C, A> where A: txpool::ChainApi {
@@ -55,7 +53,8 @@ where
 	Block: BlockT<Hash=H256>,
 	RA: Send + Sync + 'static,
 	SubstrateClient<B, E, Block, RA>: ProvideRuntimeApi,
-	<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api: BlockBuilderApi<Block>,
+	<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api:
+		BlockBuilderApi<Block, Error = client::error::Error>,
 {
 	type Proposer = Proposer<Block, SubstrateClient<B, E, Block, RA>, A>;
 	type Error = error::Error;
@@ -102,7 +101,8 @@ where
 	Block: BlockT<Hash=H256>,
 	RA: Send + Sync + 'static,
 	SubstrateClient<B, E, Block, RA>: ProvideRuntimeApi,
-	<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api: BlockBuilderApi<Block>,
+	<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api:
+		BlockBuilderApi<Block, Error = client::error::Error>,
 {
 	type Create = futures::future::Ready<Result<Block, error::Error>>;
 	type Error = error::Error;
@@ -126,7 +126,8 @@ impl<Block, B, E, RA, A> Proposer<Block, SubstrateClient<B, E, Block, RA>, A>	wh
 	Block: BlockT<Hash=H256>,
 	RA: Send + Sync + 'static,
 	SubstrateClient<B, E, Block, RA>: ProvideRuntimeApi,
-	<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api: BlockBuilderApi<Block>,
+	<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api:
+		BlockBuilderApi<Block, Error = client::error::Error>,
 {
 	fn propose_with(
 		&self,
@@ -167,7 +168,7 @@ impl<Block, B, E, RA, A> Proposer<Block, SubstrateClient<B, E, Block, RA>, A>	wh
 			}
 
 			trace!("[{:?}] Pushing to the block.", pending.hash);
-			match client::block_builder::BlockBuilder::push(&mut block_builder, pending.data.clone()) {
+			match block_builder::BlockBuilder::push(&mut block_builder, pending.data.clone()) {
 				Ok(()) => {
 					debug!("[{:?}] Pushed to the block.", pending.hash);
 				}

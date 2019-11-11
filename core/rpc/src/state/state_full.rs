@@ -29,8 +29,7 @@ use rpc::{
 
 use api::Subscriptions;
 use client::{
-	Client, CallExecutor, BlockchainEvents, runtime_api::Metadata,
-	backend::Backend, error::Result as ClientResult,
+	Client, CallExecutor, BlockchainEvents, backend::Backend, error::Result as ClientResult,
 };
 use primitives::{
 	H256, Blake2Hasher, Bytes, storage::{well_known_keys, StorageKey, StorageData, StorageChangeSet},
@@ -41,6 +40,8 @@ use sr_primitives::{
 	generic::BlockId,
 	traits::{Block as BlockT, Header, NumberFor, ProvideRuntimeApi, SaturatedConversion},
 };
+
+use sr_api::Metadata;
 
 use super::{StateBackend, error::{FutureResult, Error, Result}, client_err};
 
@@ -229,7 +230,8 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static + Clone,
 		RA: Send + Sync + 'static,
 		Client<B, E, Block, RA>: ProvideRuntimeApi,
-		<Client<B, E, Block, RA> as ProvideRuntimeApi>::Api: Metadata<Block>,
+		<Client<B, E, Block, RA> as ProvideRuntimeApi>::Api:
+			Metadata<Block, Error = client::error::Error>,
 {
 	fn call(
 		&self,
@@ -326,7 +328,9 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 	fn metadata(&self, block: Option<Block::Hash>) -> FutureResult<Bytes> {
 		Box::new(result(
 			self.block_or_best(block)
-				.and_then(|block| self.client.runtime_api().metadata(&BlockId::Hash(block)).map(Into::into))
+				.and_then(|block|
+					self.client.runtime_api().metadata(&BlockId::Hash(block)).map(Into::into)
+				)
 				.map_err(client_err)))
 	}
 
