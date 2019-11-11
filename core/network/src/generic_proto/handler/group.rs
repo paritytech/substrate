@@ -332,8 +332,7 @@ where TSubstream: AsyncRead + AsyncWrite + 'static {
 						error!("Incoming substream handler tried to open a substream"),
 					ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::OpenRequest) =>
 						if self.enabled {
-							// TODO: also open outbound
-							//handler.inject_event(NotifsInHandlerIn::Accept(Vec::new()));		// TODO: message
+							handler.inject_event(NotifsInHandlerIn::Accept(Vec::new()));		// TODO: message
 						} else {
 							handler.inject_event(NotifsInHandlerIn::Refuse);
 						},
