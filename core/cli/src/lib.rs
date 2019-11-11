@@ -43,7 +43,7 @@ use primitives::H256;
 
 use std::{
 	io::{Write, Read, Seek, Cursor, stdin, stdout, ErrorKind}, iter, fs::{self, File},
-	net::{Ipv4Addr, SocketAddr}, path::{Path, PathBuf}, str::FromStr, marker::Unpin
+	net::{Ipv4Addr, SocketAddr}, path::{Path, PathBuf}, str::FromStr,
 };
 
 use names::{Generator, Name};

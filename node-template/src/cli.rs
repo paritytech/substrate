@@ -1,5 +1,5 @@
 use crate::service;
-use futures::{future::{select, Map}, FutureExt, TryFutureExt, channel::oneshot, compat::*};
+use futures::{future::{select, Map}, FutureExt, TryFutureExt, channel::oneshot, compat::Future01CompatExt};
 use std::cell::RefCell;
 use tokio::runtime::Runtime;
 pub use substrate_cli::{VersionInfo, IntoExit, error};

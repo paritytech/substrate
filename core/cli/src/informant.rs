@@ -17,7 +17,7 @@
 //! Console informant. Prints sync progress and block events. Runs on the calling thread.
 
 use client::BlockchainEvents;
-use futures::{StreamExt, TryStreamExt, FutureExt, future, compat::*};
+use futures::{StreamExt, TryStreamExt, FutureExt, future, compat::Stream01CompatExt};
 use log::{info, warn};
 use sr_primitives::traits::Header;
 use service::AbstractService;
