@@ -22,7 +22,7 @@ sr-primitives = { path = "../../../primitives/sr-primitives", default-features =
 sr-staking-primitives = { path = "../../../primitives/sr-staking-primitives", default-features = false }
 
 # core dependencies
-client = { package = "substrate-client", path = "../../../client/client", default-features = false }
+client = { package = "substrate-client", path = "../../../client/", default-features = false }
 rstd = { package = "sr-std", path = "../../../primitives/sr-std", default-features = false }
 version = { package = "sr-version", path = "../../../primitives/sr-version", default-features = false }
 substrate-session = { path = "../../../primitives/session", default-features = false }

@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 cli = { package = "substrate-cli", path = "../../../client/cli" }
-client = { package = "substrate-client", path = "../../../client/client" }
+client = { package = "substrate-client", path = "../../../client/" }
 consensus_common = { package = "substrate-consensus-common", path = "../../../primitives/consensus/common" }
 log = "0.4.8"
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }

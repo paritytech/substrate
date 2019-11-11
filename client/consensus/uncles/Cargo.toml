@@ -6,7 +6,7 @@ description = "Generic uncle inclusion utilities for consensus"
 edition = "2018"
 
 [dependencies]
-client = { package = "substrate-client", path = "../../client" }
+client = { package = "substrate-client", path = "../../" }
 primitives = { package = "substrate-primitives", path = "../../../primitives/core" }
 sr-primitives = {  path = "../../../primitives/sr-primitives" }
 srml-authorship = {  path = "../../../paint/authorship" }

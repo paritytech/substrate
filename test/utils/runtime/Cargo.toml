@@ -10,7 +10,7 @@ log = { version = "0.4.8", optional = true }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 keyring = { package = "substrate-keyring", path = "../../../client/keyring", optional = true }
-substrate-client = { path = "../../../client/client", default-features = false }
+substrate-client = { path = "../../../client/", default-features = false }
 primitives = { package = "substrate-primitives", path = "../../../primitives/core", default-features = false }
 app-crypto = { package = "substrate-application-crypto", path = "../../../primitives/application-crypto", default-features = false }
 inherents = { package = "substrate-inherents", path = "../../../primitives/inherents", default-features = false }

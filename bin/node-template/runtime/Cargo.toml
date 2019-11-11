@@ -26,7 +26,7 @@ timestamp = { package = "srml-timestamp", path = "../../../paint/timestamp", def
 sudo = { package = "srml-sudo", path = "../../../paint/sudo", default_features = false }
 transaction-payment = { package = "srml-transaction-payment", path = "../../../paint/transaction-payment", default_features = false }
 sr-primitives = { path = "../../../primitives/sr-primitives", default_features = false }
-client = { package = "substrate-client", path = "../../../client/client", default_features = false }
+client = { package = "substrate-client", path = "../../../client/", default_features = false }
 offchain-primitives = { package = "substrate-offchain-primitives", path = "../../../primitives/offchain", default-features = false }
 
 [build-dependencies]

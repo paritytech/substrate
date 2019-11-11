@@ -31,7 +31,7 @@ aura = { package = "substrate-consensus-aura", path = "../../client/consensus/au
 aura-primitives = { package = "substrate-consensus-aura-primitives", path = "../../primitives/consensus/aura" }
 grandpa = { package = "substrate-finality-grandpa", path = "../../client/finality-grandpa" }
 grandpa-primitives = { package = "substrate-finality-grandpa-primitives", path = "../../primitives/finality-grandpa" }
-substrate-client = {  path = "../../client/client" }
+substrate-client = {  path = "../../client/" }
 runtime = { package = "node-template-runtime", path = "runtime" }
 sr-primitives = { path = "../../primitives/sr-primitives" }
 basic-authorship = { package = "substrate-basic-authorship", path  = "../../client/basic-authorship"}
