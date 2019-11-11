@@ -49,7 +49,6 @@ default = [
 std = [
 	"log",
 	"serde",
-	"substrate-client/std",
 	"keyring",
 	"codec/std",
 	"rstd/std",

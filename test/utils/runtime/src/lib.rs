@@ -32,10 +32,7 @@ use trie_db::{TrieMut, Trie};
 use substrate_trie::PrefixedMemoryDB;
 use substrate_trie::trie_types::{TrieDB, TrieDBMut};
 
-use substrate_client::{
-	runtime_api as client_api, block_builder::api as block_builder_api, decl_runtime_apis,
-	impl_runtime_apis,
-};
+use sr_api::{decl_runtime_apis, impl_runtime_apis};
 use sr_primitives::{
 	ApplyResult, create_runtime_str, Perbill, impl_opaque_keys,
 	transaction_validity::{
@@ -460,7 +457,7 @@ static mut MUTABLE_STATIC: u64 = 32;
 cfg_if! {
 	if #[cfg(feature = "std")] {
 		impl_runtime_apis! {
-			impl client_api::Core<Block> for Runtime {
+			impl sr_api::Core<Block> for Runtime {
 				fn version() -> RuntimeVersion {
 					version()
 				}
@@ -474,13 +471,13 @@ cfg_if! {
 				}
 			}
 
-			impl client_api::Metadata<Block> for Runtime {
+			impl sr_api::Metadata<Block> for Runtime {
 				fn metadata() -> OpaqueMetadata {
 					unimplemented!()
 				}
 			}
 
-			impl client_api::TaggedTransactionQueue<Block> for Runtime {
+			impl transaction_pool_api::TaggedTransactionQueue<Block> for Runtime {
 				fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 					if let Extrinsic::IncludeData(data) = utx {
 						return Ok(ValidTransaction {
@@ -645,7 +642,7 @@ cfg_if! {
 		}
 	} else {
 		impl_runtime_apis! {
-			impl client_api::Core<Block> for Runtime {
+			impl sr_api::Core<Block> for Runtime {
 				fn version() -> RuntimeVersion {
 					version()
 				}
@@ -659,13 +656,13 @@ cfg_if! {
 				}
 			}
 
-			impl client_api::Metadata<Block> for Runtime {
+			impl sr_api::Metadata<Block> for Runtime {
 				fn metadata() -> OpaqueMetadata {
 					unimplemented!()
 				}
 			}
 
-			impl client_api::TaggedTransactionQueue<Block> for Runtime {
+			impl transaction_pool_api::TaggedTransactionQueue<Block> for Runtime {
 				fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 					if let Extrinsic::IncludeData(data) = utx {
 						return Ok(ValidTransaction{

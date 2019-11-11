@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
-client = { package = "substrate-client", path = "../../../../client/client", default-features = false }
+sr-api = { path = "../../../../primitives/sr-api", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.6", default-features = false, features = ["derive"] }
 rstd = { package = "sr-std", path = "../../../../primitives/sr-std", default-features = false }
 sr-primitives = { path = "../../../../primitives/sr-primitives", default-features = false }
@@ -15,7 +15,7 @@ sr-primitives = { path = "../../../../primitives/sr-primitives", default-feature
 default = ["std"]
 std = [
 	"serde",
-	"client/std",
+	"sr-api/std",
 	"codec/std",
 	"rstd/std",
 	"sr-primitives/std",

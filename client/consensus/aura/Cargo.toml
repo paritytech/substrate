@@ -6,27 +6,29 @@ description = "Aura consensus algorithm for substrate"
 edition = "2018"
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "1.0.0" }
-primitives = { package = "substrate-primitives", path = "../../../primitives/core" }
 app-crypto = { package = "substrate-application-crypto", path = "../../../primitives/application-crypto" }
+aura_primitives = { package = "substrate-consensus-aura-primitives", path = "../../../primitives/consensus/aura" }
+block-builder-api = { package = "substrate-block-builder-runtime-api", path = "../../../primitives/block-builder/runtime-api" }
+client = { package = "substrate-client", path = "../../client" }
+codec = { package = "parity-scale-codec", version = "1.0.0" }
+consensus_common = { package = "substrate-consensus-common", path = "../../../primitives/consensus/common" }
+derive_more = "0.15.0"
+futures-preview = { version = "0.3.0-alpha.19", features = ["compat"] }
+futures-timer = "0.4.0"
+futures01 = { package = "futures", version = "0.1" }
+inherents = { package = "substrate-inherents", path = "../../../primitives/inherents" }
+keystore = { package = "substrate-keystore", path = "../../keystore" }
+log = "0.4.8"
+parking_lot = "0.9.0"
+primitives = { package = "substrate-primitives", path = "../../../primitives/core" }
+runtime_io = { package = "sr-io", path = "../../../primitives/sr-io" }
 runtime_support = { package = "srml-support", path = "../../../paint/support" }
 runtime_version = { package = "sr-version", path = "../../../primitives/sr-version" }
-runtime_io = { package = "sr-io", path = "../../../primitives/sr-io" }
 slots = { package = "substrate-consensus-slots", path = "../slots" }
-aura_primitives = { package = "substrate-consensus-aura-primitives", path = "../../../primitives/consensus/aura" }
-inherents = { package = "substrate-inherents", path = "../../../primitives/inherents" }
-srml-aura = { path = "../../../paint/aura" }
-client = { package = "substrate-client", path = "../../client" }
-substrate-telemetry = { path = "../../telemetry" }
-keystore = { package = "substrate-keystore", path = "../../keystore" }
-consensus_common = { package = "substrate-consensus-common", path = "../../../primitives/consensus/common" }
+sr-api = { path = "../../../primitives/sr-api" }
 sr-primitives = {  path = "../../../primitives/sr-primitives" }
-futures-preview = { version = "0.3.0-alpha.19", features = ["compat"] }
-futures01 = { package = "futures", version = "0.1" }
-futures-timer = "0.4.0"
-parking_lot = "0.9.0"
-log = "0.4.8"
-derive_more = "0.15.0"
+srml-aura = { path = "../../../paint/aura" }
+substrate-telemetry = { path = "../../telemetry" }
 
 [dev-dependencies]
 keyring = { package = "substrate-keyring", path = "../../keyring" }

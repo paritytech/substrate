@@ -36,7 +36,7 @@ use std::time::{Duration, Instant};
 use futures::sync::mpsc;
 use parking_lot::Mutex;
 
-use client::{runtime_api::BlockT, Client};
+use client::Client;
 use exit_future::Signal;
 use futures::prelude::*;
 use futures03::{
@@ -51,7 +51,7 @@ use log::{log, warn, debug, error, Level};
 use codec::{Encode, Decode};
 use primitives::{Blake2Hasher, H256};
 use sr_primitives::generic::BlockId;
-use sr_primitives::traits::NumberFor;
+use sr_primitives::traits::{NumberFor, Block as BlockT};
 
 pub use self::error::Error;
 pub use self::builder::{ServiceBuilder, ServiceBuilderExport, ServiceBuilderImport, ServiceBuilderRevert};

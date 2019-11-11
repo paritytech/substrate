@@ -53,11 +53,10 @@ use consensus::{
 };
 use header_metadata::{HeaderMetadata, CachedHeaderMetadata};
 
+use sr_api::{CallRuntimeAt, ConstructRuntimeApi, Core as CoreApi, ProofRecorder, InitializeBlock};
+use block_builder::BlockBuilderApi;
+
 use crate::{
-	runtime_api::{
-		CallRuntimeAt, ConstructRuntimeApi, Core as CoreApi, ProofRecorder,
-		InitializeBlock,
-	},
 	backend::{
 		self, BlockImportOperation, PrunableStateChangesTrieStorage,
 		ClientImportOperation, Finalizer, ImportSummary,
@@ -70,9 +69,7 @@ use crate::{
 	call_executor::{CallExecutor, LocalCallExecutor},
 	notifications::{StorageNotifications, StorageEventStream},
 	light::{call_executor::prove_execution, fetcher::ChangesProof},
-	block_builder::{self, api::BlockBuilder as BlockBuilderAPI},
-	error::Error,
-	cht, error, in_mem, genesis
+	error::Error, cht, error, in_mem, genesis
 };
 
 /// Type that implements `futures::Stream` of block import events.
@@ -749,9 +746,16 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		E: Clone + Send + Sync,
 		RA: Send + Sync,
 		Self: ProvideRuntimeApi,
-		<Self as ProvideRuntimeApi>::Api: BlockBuilderAPI<Block>
+		<Self as ProvideRuntimeApi>::Api: BlockBuilderApi<Block, Error = Error>
 	{
-		block_builder::BlockBuilder::new(self, inherent_digests)
+		let info = self.info();
+		block_builder::BlockBuilder::new(
+			self,
+			info.chain.best_hash,
+			info.chain.best_number,
+			false,
+			inherent_digests,
+		)
 	}
 
 	/// Create a new block, built on top of `parent`.
@@ -763,9 +767,15 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		E: Clone + Send + Sync,
 		RA: Send + Sync,
 		Self: ProvideRuntimeApi,
-		<Self as ProvideRuntimeApi>::Api: BlockBuilderAPI<Block>
+		<Self as ProvideRuntimeApi>::Api: BlockBuilderApi<Block, Error = Error>
 	{
-		block_builder::BlockBuilder::at_block(parent, &self, false, inherent_digests)
+		block_builder::BlockBuilder::new(
+			self,
+			self.expect_block_hash_from_id(parent)?,
+			self.expect_block_number_from_id(parent)?,
+			false,
+			inherent_digests,
+		)
 	}
 
 	/// Create a new block, built on top of `parent` with proof recording enabled.
@@ -781,9 +791,15 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		E: Clone + Send + Sync,
 		RA: Send + Sync,
 		Self: ProvideRuntimeApi,
-		<Self as ProvideRuntimeApi>::Api: BlockBuilderAPI<Block>
+		<Self as ProvideRuntimeApi>::Api: BlockBuilderApi<Block, Error = Error>
 	{
-		block_builder::BlockBuilder::at_block(parent, &self, true, inherent_digests)
+		block_builder::BlockBuilder::new(
+			self,
+			self.expect_block_hash_from_id(parent)?,
+			self.expect_block_number_from_id(parent)?,
+			true,
+			inherent_digests,
+		)
 	}
 
 	/// Lock the import lock, and run operations inside.
@@ -1367,7 +1383,7 @@ impl<B, E, Block, RA> ChainHeaderBackend<Block> for Client<B, E, Block, RA> wher
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
 	Block: BlockT<Hash=H256>,
-	RA: Send + Sync
+	RA: Send + Sync,
 {
 	fn header(&self, id: BlockId<Block>) -> error::Result<Option<Block::Header>> {
 		self.backend.blockchain().header(id)
@@ -1387,6 +1403,23 @@ impl<B, E, Block, RA> ChainHeaderBackend<Block> for Client<B, E, Block, RA> wher
 
 	fn hash(&self, number: NumberFor<Block>) -> error::Result<Option<Block::Hash>> {
 		self.backend.blockchain().hash(number)
+	}
+}
+
+impl<B, E, Block, RA> sr_primitives::traits::BlockIdTo<Block> for Client<B, E, Block, RA> where
+	B: backend::Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
+	Block: BlockT<Hash=H256>,
+	RA: Send + Sync,
+{
+	type Error = Error;
+
+	fn to_hash(&self, block_id: &BlockId<Block>) -> error::Result<Option<Block::Hash>> {
+		self.block_hash_from_id(block_id)
+	}
+
+	fn to_number(&self, block_id: &BlockId<Block>) -> error::Result<Option<NumberFor<Block>>> {
+		self.block_number_from_id(block_id)
 	}
 }
 
@@ -1444,11 +1477,13 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 	E: CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync,
 	Block: BlockT<Hash=H256>,
 {
+	type Error = Error;
+
 	fn call_api_at<
 		'a,
 		R: Encode + Decode + PartialEq,
 		NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
-		C: CoreApi<Block>,
+		C: CoreApi<Block, Error = Error>,
 	>(
 		&self,
 		core_api: &C,

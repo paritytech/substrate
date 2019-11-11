@@ -45,12 +45,11 @@ use rstd::convert::TryFrom;
 use primitives::{crypto, ed25519, sr25519, ecdsa, hash::{H256, H512}};
 use codec::{Encode, Decode};
 
-#[cfg(feature = "std")]
-pub mod testing;
-
 pub mod curve;
 pub mod generic;
 pub mod offchain;
+#[cfg(feature = "std")]
+pub mod testing;
 pub mod traits;
 pub mod transaction_validity;
 pub mod weights;
@@ -93,19 +92,19 @@ impl TypeId for ModuleId {
 
 /// A String that is a `&'static str` on `no_std` and a `Cow<'static, str>` on `std`.
 #[cfg(feature = "std")]
-pub type RuntimeString = ::std::borrow::Cow<'static, str>;
+pub type RuntimeString = std::borrow::Cow<'static, str>;
 /// A String that is a `&'static str` on `no_std` and a `Cow<'static, str>` on `std`.
 #[cfg(not(feature = "std"))]
 pub type RuntimeString = &'static str;
 
-/// Create a const [RuntimeString].
+/// Create a const [`RuntimeString`].
 #[cfg(feature = "std")]
 #[macro_export]
 macro_rules! create_runtime_str {
-	( $y:expr ) => {{ ::std::borrow::Cow::Borrowed($y) }}
+	( $y:expr ) => {{ std::borrow::Cow::Borrowed($y) }}
 }
 
-/// Create a const [RuntimeString].
+/// Create a const [`RuntimeString`].
 #[cfg(not(feature = "std"))]
 #[macro_export]
 macro_rules! create_runtime_str {

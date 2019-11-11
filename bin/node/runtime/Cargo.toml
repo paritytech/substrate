@@ -72,7 +72,6 @@ std = [
 	"babe-primitives/std",
 	"babe/std",
 	"balances/std",
-	"client/std",
 	"codec/std",
 	"collective/std",
 	"contracts/std",

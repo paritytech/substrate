@@ -23,7 +23,8 @@ use std::{sync::Arc, convert::TryInto};
 use futures03::future::{FutureExt, TryFutureExt};
 use log::warn;
 
-use client::{self, Client};
+use client::{Client, error::Error as ClientError};
+
 use rpc::futures::{
 	Sink, Future,
 	future::result,
@@ -87,7 +88,8 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 	P::Error: 'static,
 	RA: Send + Sync + 'static,
 	Client<B, E, P::Block, RA>: ProvideRuntimeApi,
-	<Client<B, E, P::Block, RA> as ProvideRuntimeApi>::Api: SessionKeys<P::Block>,
+	<Client<B, E, P::Block, RA> as ProvideRuntimeApi>::Api:
+		SessionKeys<P::Block, Error = ClientError>,
 {
 	type Metadata = crate::metadata::Metadata;
 
@@ -131,8 +133,9 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 		Ok(self.pool.ready().map(|tx| tx.data.encode().into()).collect())
 	}
 
-	fn remove_extrinsic(&self,
-		bytes_or_hash: Vec<hash::ExtrinsicOrHash<ExHash<P>>>
+	fn remove_extrinsic(
+		&self,
+		bytes_or_hash: Vec<hash::ExtrinsicOrHash<ExHash<P>>>,
 	) -> Result<Vec<ExHash<P>>> {
 		let hashes = bytes_or_hash.into_iter()
 			.map(|x| match x {
@@ -155,7 +158,7 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 	fn watch_extrinsic(&self,
 		_metadata: Self::Metadata,
 		subscriber: Subscriber<Status<ExHash<P>, BlockHash<P>>>,
-		xt: Bytes
+		xt: Bytes,
 	) {
 		let submit = || -> Result<_> {
 			let best_block_hash = self.client.info().chain.best_hash;
