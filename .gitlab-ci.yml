@@ -359,7 +359,6 @@ check_polkadot:
     #    checked out Substrate repository one folder above).
     # 3. Remove any trailing commas.
     - git grep -l "polkadot-master" | grep toml | xargs sed -i "s/branch.*=.*\"polkadot-master\"/rev = \"$COMMIT_HASH\"/; s~https://github.com/paritytech/substrate~file://$SUBSTRATE_PATH~; s/,\s*}/ }/"
-    - git diff
     # Make sure 'Cargo.lock' matches 'Cargo.toml'. It's enough to update one
     # package, others are updated along the way.
     - cargo update -p sr-io
