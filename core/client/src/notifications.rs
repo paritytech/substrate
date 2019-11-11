@@ -22,7 +22,7 @@ use std::{
 };
 
 use fnv::{FnvHashSet, FnvHashMap};
-use futures03::channel::mpsc;
+use futures::channel::mpsc;
 use primitives::storage::{StorageKey, StorageData};
 use sr_primitives::traits::Block as BlockT;
 
@@ -347,7 +347,7 @@ mod tests {
 		// given
 		let mut notifications = StorageNotifications::<Block>::default();
 		let child_filter = [(StorageKey(vec![4]), None)];
-		let mut recv = futures03::executor::block_on_stream(
+		let mut recv = futures::executor::block_on_stream(
 			notifications.listen(None, Some(&child_filter[..]))
 		);
 
@@ -382,13 +382,13 @@ mod tests {
 		// given
 		let mut notifications = StorageNotifications::<Block>::default();
 		let child_filter = [(StorageKey(vec![4]), Some(vec![StorageKey(vec![5])]))];
-		let mut recv1 = futures03::executor::block_on_stream(
+		let mut recv1 = futures::executor::block_on_stream(
 			notifications.listen(Some(&[StorageKey(vec![1])]), None)
 		);
-		let mut recv2 = futures03::executor::block_on_stream(
+		let mut recv2 = futures::executor::block_on_stream(
 			notifications.listen(Some(&[StorageKey(vec![2])]), None)
 		);
-		let mut recv3 = futures03::executor::block_on_stream(
+		let mut recv3 = futures::executor::block_on_stream(
 			notifications.listen(Some(&[]), Some(&child_filter))
 		);
 
@@ -429,16 +429,16 @@ mod tests {
 		let mut notifications = StorageNotifications::<Block>::default();
 		{
 			let child_filter = [(StorageKey(vec![4]), Some(vec![StorageKey(vec![5])]))];
-			let _recv1 = futures03::executor::block_on_stream(
+			let _recv1 = futures::executor::block_on_stream(
 				notifications.listen(Some(&[StorageKey(vec![1])]), None)
 			);
-			let _recv2 = futures03::executor::block_on_stream(
+			let _recv2 = futures::executor::block_on_stream(
 				notifications.listen(Some(&[StorageKey(vec![2])]), None)
 			);
-			let _recv3 = futures03::executor::block_on_stream(
+			let _recv3 = futures::executor::block_on_stream(
 				notifications.listen(None, None)
 			);
-			let _recv4 = futures03::executor::block_on_stream(
+			let _recv4 = futures::executor::block_on_stream(
 				notifications.listen(None, Some(&child_filter))
 			);
 			assert_eq!(notifications.listeners.len(), 2);
@@ -465,7 +465,7 @@ mod tests {
 		// given
 		let mut recv = {
 			let mut notifications = StorageNotifications::<Block>::default();
-			let recv = futures03::executor::block_on_stream(notifications.listen(None, None));
+			let recv = futures::executor::block_on_stream(notifications.listen(None, None));
 
 			// when
 			let changeset = vec![];

@@ -15,5 +15,5 @@ inherents = { package = "substrate-inherents", path = "../../inherents" }
 pow-primitives = { package = "substrate-consensus-pow-primitives", path = "primitives" }
 consensus-common = { package = "substrate-consensus-common", path = "../common" }
 log = "0.4.8"
-futures-preview = { version = "0.3.0-alpha.19", features = ["compat"] }
+futures = { version = "0.3.1", features = ["compat"] }
 derive_more = "0.15.0"

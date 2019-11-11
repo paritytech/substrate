@@ -499,7 +499,7 @@ impl<'a, H, Number, Hash> ChangesTrieRootsStorage<H, Number> for RootsStorage<'a
 
 #[cfg(test)]
 pub mod tests {
-	use futures03::future::Ready;
+	use futures::future::Ready;
 	use parking_lot::Mutex;
 	use codec::Decode;
 	use crate::client::tests::prepare_client_with_key_changes;
@@ -527,7 +527,7 @@ pub mod tests {
 	where
 		E: std::convert::From<&'static str>,
 	{
-		futures03::future::ready(Err("Not implemented on test node".into()))
+		futures::future::ready(Err("Not implemented on test node".into()))
 	}
 
 	impl Fetcher<Block> for OkCallFetcher {
@@ -550,7 +550,7 @@ pub mod tests {
 		}
 
 		fn remote_call(&self, _request: RemoteCallRequest<Header>) -> Self::RemoteCallResult {
-			futures03::future::ready(Ok((*self.lock()).clone()))
+			futures::future::ready(Ok((*self.lock()).clone()))
 		}
 
 		fn remote_changes(&self, _request: RemoteChangesRequest<Header>) -> Self::RemoteChangesResult {

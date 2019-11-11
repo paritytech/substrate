@@ -43,7 +43,7 @@ use primitives::H256;
 
 use std::{
 	io::{Write, Read, Seek, Cursor, stdin, stdout, ErrorKind}, iter, fs::{self, File},
-	net::{Ipv4Addr, SocketAddr}, path::{Path, PathBuf}, str::FromStr,
+	net::{Ipv4Addr, SocketAddr}, path::{Path, PathBuf}, str::FromStr, marker::Unpin
 };
 
 use names::{Generator, Name};
@@ -61,8 +61,7 @@ pub use traits::{GetLogFilter, AugmentClap};
 use app_dirs::{AppInfo, AppDataType};
 use log::info;
 use lazy_static::lazy_static;
-
-use futures::Future;
+use futures::{Future, FutureExt, TryFutureExt};
 use substrate_telemetry::TelemetryEndpoints;
 
 /// default sub directory to store network config
@@ -102,7 +101,7 @@ pub struct VersionInfo {
 /// Something that can be converted into an exit signal.
 pub trait IntoExit {
 	/// Exit signal type.
-	type Exit: Future<Item=(),Error=()> + Send + 'static;
+	type Exit: Future<Output=()> + Unpin + Send + 'static;
 	/// Convert into exit signal.
 	fn into_exit(self) -> Self::Exit;
 }
@@ -388,7 +387,11 @@ impl<'a> ParseAndPrepareExport<'a> {
 			None => Box::new(stdout()),
 		};
 
-		builder(config)?.export_blocks(exit.into_exit(), file, from.into(), to.map(Into::into), json)?;
+		let exit = exit.into_exit()
+			.map(|_| Ok(()))
+			.compat();
+
+		builder(config)?.export_blocks(exit, file, from.into(), to.map(Into::into), json)?;
 		Ok(())
 	}
 }
@@ -432,7 +435,11 @@ impl<'a> ParseAndPrepareImport<'a> {
 			},
 		};
 
-		let fut = builder(config)?.import_blocks(exit.into_exit(), file)?;
+		let exit = exit.into_exit()
+			.map(|_| Ok(()))
+			.compat();
+
+		let fut = builder(config)?.import_blocks(exit, file)?;
 		tokio::run(fut);
 		Ok(())
 	}

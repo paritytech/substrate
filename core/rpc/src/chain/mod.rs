@@ -23,7 +23,7 @@ mod chain_light;
 mod tests;
 
 use std::sync::Arc;
-use futures03::{future, StreamExt as _, TryStreamExt as _};
+use futures::{future, StreamExt, TryStreamExt};
 use log::warn;
 use rpc::{
 	Result as RpcResult,
