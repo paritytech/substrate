@@ -1000,15 +1000,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "error-chain"
-version = "0.12.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-dependencies = [
- "backtrace 0.3.40 (registry+https://github.com/rust-lang/crates.io-index)",
- "version_check 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
 name = "evm"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3825,17 +3816,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rhododendron"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-dependencies = [
- "error-chain 0.12.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures 0.1.29 (registry+https://github.com/rust-lang/crates.io-index)",
- "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
 name = "ring"
 version = "0.16.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5544,30 +5524,6 @@ dependencies = [
  "sr-std 2.0.0",
  "substrate-client 2.0.0",
  "substrate-primitives 2.0.0",
-]
-
-[[package]]
-name = "substrate-consensus-rhd"
-version = "2.0.0"
-dependencies = [
- "derive_more 0.15.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "exit-future 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures 0.1.29 (registry+https://github.com/rust-lang/crates.io-index)",
- "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "parking_lot 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "rhododendron 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "sr-io 2.0.0",
- "sr-primitives 2.0.0",
- "sr-version 2.0.0",
- "srml-support 2.0.0",
- "srml-system 2.0.0",
- "substrate-client 2.0.0",
- "substrate-consensus-common 2.0.0",
- "substrate-keyring 2.0.0",
- "substrate-primitives 2.0.0",
- "substrate-transaction-pool 2.0.0",
- "tokio 0.1.22 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -7578,7 +7534,6 @@ dependencies = [
 "checksum erased-serde 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)" = "3beee4bc16478a1b26f2e80ad819a52d24745e292f521a63c16eea5f74b7eb60"
 "checksum errno 0.2.4 (registry+https://github.com/rust-lang/crates.io-index)" = "c2a071601ed01b988f896ab14b95e67335d1eeb50190932a1320f7fe3cadc84e"
 "checksum errno-dragonfly 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "14ca354e36190500e1e1fb267c647932382b54053c50b14970856c0b00a35067"
-"checksum error-chain 0.12.1 (registry+https://github.com/rust-lang/crates.io-index)" = "3ab49e9dcb602294bc42f9a7dfc9bc6e936fca4418ea300dbfb84fe16de0b7d9"
 "checksum evm 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)" = "1138816a9b7f9a9d1fcabb1b8a7afed2687d035692baf297bd3fea122acdc96f"
 "checksum evm-core 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)" = "3bcde5af3d542874ddeb53de0919302d57586ea04b3f76f54d865f8a6cdc70ae"
 "checksum evm-gasometer 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)" = "b82bc9f275cb59d2bcc05d85c98736ddfaba003a7ef7b73893fa7c1c1fab29dc"
@@ -7836,7 +7791,6 @@ dependencies = [
 "checksum regex-syntax 0.6.12 (registry+https://github.com/rust-lang/crates.io-index)" = "11a7e20d1cce64ef2fed88b66d347f88bd9babb82845b2b858f3edbf59a4f716"
 "checksum region 2.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "448e868c6e4cfddfa49b6a72c95906c04e8547465e9536575b95c70a4044f856"
 "checksum remove_dir_all 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)" = "4a83fa3702a688b9359eccba92d153ac33fd2e8462f9e0e3fdf155239ea7792e"
-"checksum rhododendron 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)" = "36542aafc2429a4c010fafa079a20dee953b663cb2427f51d86cf1d436846b4d"
 "checksum ring 0.16.9 (registry+https://github.com/rust-lang/crates.io-index)" = "6747f8da1f2b1fabbee1aaa4eb8a11abf9adef0bf58a41cee45db5d59cecdfac"
 "checksum rlp 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)" = "8376a3f725ebb53f69263bbebb42196361fdfd551212409c8a721239aab4f09f"
 "checksum rocksdb 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)" = "f1651697fefd273bfb4fd69466cc2a9d20de557a0213b97233b22b5e95924b5e"
