@@ -154,7 +154,7 @@ test-dependency-rules:             &test-linux
   script:
     - .maintain/ensure-deps.sh
 
-test-srml-staking:                 &test-srml-staking
+test-paint-staking:                 &test-paint-staking
   stage:                           test
   <<:                              *docker-env
   variables:
@@ -166,7 +166,7 @@ test-srml-staking:                 &test-srml-staking
     variables:
       - $DEPLOY_TAG
   script:
-    - cd srml/staking/
+    - cd paint/staking/
     - WASM_BUILD_NO_COLOR=1 time cargo test --release --verbose --no-default-features --features std
     - sccache -s
 
@@ -182,7 +182,7 @@ test-wasmtime:                 &test-wasmtime
     variables:
       - $DEPLOY_TAG
   script:
-    - cd core/executor
+    - cd client/executor
     - WASM_BUILD_NO_COLOR=1 time cargo test --release --verbose --features wasmtime
     - sccache -s
 
@@ -227,7 +227,7 @@ check-web-wasm:
     - time cargo web build -p substrate-consensus-common
     - time cargo web build -p substrate-telemetry
     # Note: the command below is a bit weird because several Cargo issues prevent us from compiling the node in a more straight-forward way.
-    - time cargo build --manifest-path=node/cli/Cargo.toml --no-default-features --features "browser" --target=wasm32-unknown-unknown
+    - time cargo build --manifest-path=bin/node/cli/Cargo.toml --no-default-features --features "browser" --target=wasm32-unknown-unknown
     - sccache -s
 
 node-exits:
@@ -251,7 +251,7 @@ test-full-crypto-feature:          &test-full-crypto-feature
     variables:
       - $DEPLOY_TAG
   script:
-    - cd core/primitives/
+    - cd primitives/core/
     - time cargo +nightly build --verbose --no-default-features --features full_crypto
     - cd ../application-crypto
     - time cargo +nightly build --verbose --no-default-features --features full_crypto
