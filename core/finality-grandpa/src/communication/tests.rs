@@ -28,6 +28,7 @@ use codec::Encode;
 use sr_primitives::traits::NumberFor;
 
 use crate::environment::SharedVoterSetState;
+use fg_primitives::AuthorityList;
 use super::gossip::{self, GossipValidator};
 use super::{AuthorityId, VoterSet, Round, SetId};
 
@@ -200,7 +201,7 @@ fn make_test_network() -> (
 	)
 }
 
-fn make_ids(keys: &[Ed25519Keyring]) -> Vec<(AuthorityId, u64)> {
+fn make_ids(keys: &[Ed25519Keyring]) -> AuthorityList {
 	keys.iter()
 		.map(|key| key.clone().public().into())
 		.map(|id| (id, 1))
@@ -502,80 +503,4 @@ fn peer_with_higher_view_leads_to_catch_up_request() {
 		});
 
 	current_thread::block_on_all(test).unwrap();
-}
-
-#[test]
-fn periodically_reannounce_voted_blocks_on_stall() {
-	use futures::try_ready;
-	use std::collections::HashSet;
-	use std::sync::Arc;
-	use std::time::Duration;
-	use parking_lot::Mutex;
-
-	let (tester, net) = make_test_network();
-	let (announce_worker, announce_sender) = super::periodic::block_announce_worker_with_delay(
-		net,
-		Duration::from_secs(1),
-	);
-
-	let hashes = Arc::new(Mutex::new(Vec::new()));
-
-	fn wait_all(tester: Tester, hashes: &[Hash]) -> impl Future<Item = Tester, Error = ()> {
-		struct WaitAll {
-			remaining_hashes: Arc<Mutex<HashSet<Hash>>>,
-			events_fut: Box<dyn Future<Item = Tester, Error = ()>>,
-		}
-
-		impl Future for WaitAll {
-			type Item = Tester;
-			type Error = ();
-
-			fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-				let tester = try_ready!(self.events_fut.poll());
-
-				if self.remaining_hashes.lock().is_empty() {
-					return Ok(Async::Ready(tester));
-				}
-
-				let remaining_hashes = self.remaining_hashes.clone();
-				self.events_fut = Box::new(tester.filter_network_events(move |event| match event {
-					Event::Announce(h) =>
-						remaining_hashes.lock().remove(&h) || panic!("unexpected announce"),
-					_ => false,
-				}));
-
-				self.poll()
-			}
-		}
-
-		WaitAll {
-			remaining_hashes: Arc::new(Mutex::new(hashes.iter().cloned().collect())),
-			events_fut: Box::new(futures::future::ok(tester)),
-		}
-	}
-
-	let test = tester
-		.and_then(move |tester| {
-			current_thread::spawn(announce_worker);
-			Ok(tester)
-		})
-		.and_then(|tester| {
-			// announce 12 blocks
-			for _ in 0..=12 {
-				let hash = Hash::random();
-				hashes.lock().push(hash);
-				announce_sender.send(hash, Vec::new());
-			}
-
-			// we should see an event for each of those announcements
-			wait_all(tester, &hashes.lock())
-		})
-		.and_then(|tester| {
-			// after a period of inactivity we should see the last
-			// `LATEST_VOTED_BLOCKS_TO_ANNOUNCE` being rebroadcast
-			wait_all(tester, &hashes.lock()[7..=12])
-		});
-
-	let mut runtime = current_thread::Runtime::new().unwrap();
-	runtime.block_on(test).unwrap();
 }

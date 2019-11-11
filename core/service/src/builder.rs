@@ -44,7 +44,10 @@ use sr_primitives::traits::{
 	Block as BlockT, Extrinsic, ProvideRuntimeApi, NumberFor, One, Zero, Header, SaturatedConversion
 };
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
-use std::{io::{Read, Write, Seek}, marker::PhantomData, sync::Arc, sync::atomic::AtomicBool};
+use std::{
+	io::{Read, Write, Seek},
+	marker::PhantomData, sync::Arc, sync::atomic::AtomicBool, time::SystemTime
+};
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use tel::{telemetry, SUBSTRATE_INFO};
 use transaction_pool::txpool::{self, ChainApi, Pool as TransactionPool};
@@ -187,7 +190,7 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 						client_db::DatabaseSettingsSrc::Custom(db.clone()),
 				},
 			};
-			
+
 			client_db::new_client(
 				db_config,
 				executor,
@@ -1095,6 +1098,9 @@ ServiceBuilder<
 				endpoints,
 				wasm_external_transport: config.telemetry_external_transport.take(),
 			});
+			let startup_time = SystemTime::UNIX_EPOCH.elapsed()
+				.map(|dur| dur.as_millis())
+				.unwrap_or(0);
 			let future = telemetry.clone()
 				.map(|ev| Ok::<_, ()>(ev))
 				.compat()
@@ -1109,6 +1115,7 @@ ServiceBuilder<
 						"config" => "",
 						"chain" => chain_name.clone(),
 						"authority" => is_authority,
+						"startup_time" => startup_time,
 						"network_id" => network_id.clone()
 					);
 

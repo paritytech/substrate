@@ -213,7 +213,7 @@ fn should_generate_heartbeats() {
 
 		assert_eq!(heartbeat, Heartbeat {
 			block_number: 2,
-			network_state: runtime_io::network_state().unwrap(),
+			network_state: runtime_io::offchain::network_state().unwrap(),
 			session_index: 2,
 			authority_index: 2,
 		});
@@ -316,7 +316,7 @@ fn should_not_send_a_report_if_already_online() {
 
 		assert_eq!(heartbeat, Heartbeat {
 			block_number: 4,
-			network_state: runtime_io::network_state().unwrap(),
+			network_state: runtime_io::offchain::network_state().unwrap(),
 			session_index: 2,
 			authority_index: 0,
 		});

@@ -10,8 +10,8 @@ use rstd::{vec::Vec, vec};
 
 #[cfg(not(feature = "std"))]
 use runtime_io::{
-	set_storage, storage, clear_prefix, blake2_128, blake2_256,
-	twox_128, twox_256, ed25519_verify, sr25519_verify,
+	storage, hashing::{blake2_128, blake2_256, twox_128, twox_256},
+	crypto::{ed25519_verify, sr25519_verify},
 };
 #[cfg(not(feature = "std"))]
 use sr_primitives::{print, traits::{BlakeTwo256, Hash}};
@@ -21,20 +21,20 @@ use primitives::{ed25519, sr25519};
 primitives::wasm_export_functions! {
 	fn test_data_in(input: Vec<u8>) -> Vec<u8> {
 		print("set_storage");
-		set_storage(b"input", &input);
+		storage::set(b"input", &input);
 
 		print("storage");
-		let foo = storage(b"foo").unwrap();
+		let foo = storage::get(b"foo").unwrap();
 
 		print("set_storage");
-		set_storage(b"baz", &foo);
+		storage::set(b"baz", &foo);
 
 		print("finished!");
 		b"all ok!".to_vec()
 	}
 
 	fn test_clear_prefix(input: Vec<u8>) -> Vec<u8> {
-		clear_prefix(&input);
+		storage::clear_prefix(&input);
 		b"all ok!".to_vec()
 	}
 
@@ -142,40 +142,49 @@ primitives::wasm_export_functions! {
 
 	fn test_offchain_local_storage() -> bool {
 		let kind = primitives::offchain::StorageKind::PERSISTENT;
-		assert_eq!(runtime_io::local_storage_get(kind, b"test"), None);
-		runtime_io::local_storage_set(kind, b"test", b"asd");
-		assert_eq!(runtime_io::local_storage_get(kind, b"test"), Some(b"asd".to_vec()));
+		assert_eq!(runtime_io::offchain::local_storage_get(kind, b"test"), None);
+		runtime_io::offchain::local_storage_set(kind, b"test", b"asd");
+		assert_eq!(runtime_io::offchain::local_storage_get(kind, b"test"), Some(b"asd".to_vec()));
 
-		let res = runtime_io::local_storage_compare_and_set(kind, b"test", Some(b"asd"), b"");
-		assert_eq!(runtime_io::local_storage_get(kind, b"test"), Some(b"".to_vec()));
+		let res = runtime_io::offchain::local_storage_compare_and_set(
+			kind,
+			b"test",
+			Some(b"asd".to_vec()),
+			b"",
+		);
+		assert_eq!(runtime_io::offchain::local_storage_get(kind, b"test"), Some(b"".to_vec()));
 		res
 	}
 
 	fn test_offchain_local_storage_with_none() {
 		let kind = primitives::offchain::StorageKind::PERSISTENT;
-		assert_eq!(runtime_io::local_storage_get(kind, b"test"), None);
+		assert_eq!(runtime_io::offchain::local_storage_get(kind, b"test"), None);
 
-		let res = runtime_io::local_storage_compare_and_set(kind, b"test", None, b"value");
+		let res = runtime_io::offchain::local_storage_compare_and_set(kind, b"test", None, b"value");
 		assert_eq!(res, true);
-		assert_eq!(runtime_io::local_storage_get(kind, b"test"), Some(b"value".to_vec()));
+		assert_eq!(runtime_io::offchain::local_storage_get(kind, b"test"), Some(b"value".to_vec()));
 	}
 
 	fn test_offchain_http() -> bool {
 		use primitives::offchain::HttpRequestStatus;
 		let run = || -> Option<()> {
-			let id = runtime_io::http_request_start("POST", "http://localhost:12345", &[]).ok()?;
-			runtime_io::http_request_add_header(id, "X-Auth", "test").ok()?;
-			runtime_io::http_request_write_body(id, &[1, 2, 3, 4], None).ok()?;
-			runtime_io::http_request_write_body(id, &[], None).ok()?;
-			let status = runtime_io::http_response_wait(&[id], None);
+			let id = runtime_io::offchain::http_request_start(
+				"POST",
+				"http://localhost:12345",
+				&[],
+			).ok()?;
+			runtime_io::offchain::http_request_add_header(id, "X-Auth", "test").ok()?;
+			runtime_io::offchain::http_request_write_body(id, &[1, 2, 3, 4], None).ok()?;
+			runtime_io::offchain::http_request_write_body(id, &[], None).ok()?;
+			let status = runtime_io::offchain::http_response_wait(&[id], None);
 			assert!(status == vec![HttpRequestStatus::Finished(200)], "Expected Finished(200) status.");
-			let headers = runtime_io::http_response_headers(id);
+			let headers = runtime_io::offchain::http_response_headers(id);
 			assert_eq!(headers, vec![(b"X-Auth".to_vec(), b"hello".to_vec())]);
 			let mut buffer = vec![0; 64];
-			let read = runtime_io::http_response_read_body(id, &mut buffer, None).ok()?;
+			let read = runtime_io::offchain::http_response_read_body(id, &mut buffer, None).ok()?;
 			assert_eq!(read, 3);
-			assert_eq!(&buffer[0..read], &[1, 2, 3]);
-			let read = runtime_io::http_response_read_body(id, &mut buffer, None).ok()?;
+			assert_eq!(&buffer[0..read as usize], &[1, 2, 3]);
+			let read = runtime_io::offchain::http_response_read_body(id, &mut buffer, None).ok()?;
 			assert_eq!(read, 0);
 
 			Some(())
@@ -239,7 +248,7 @@ fn execute_sandboxed(
 	};
 
 	let mut instance = sandbox::Instance::new(code, &env_builder, &mut state)?;
-	let result = instance.invoke(b"call", args, &mut state);
+	let result = instance.invoke("call", args, &mut state);
 
 	result.map_err(|_| sandbox::HostError)
 }

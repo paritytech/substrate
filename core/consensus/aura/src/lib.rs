@@ -267,6 +267,7 @@ impl<H, B, C, E, I, P, Error, SO> slots::SimpleSlotWorker<B> for AuraWorker<C, E
 				finalized: false,
 				auxiliary: Vec::new(),
 				fork_choice: ForkChoiceStrategy::LongestChain,
+				allow_missing_state: false,
 			}
 		})
 	}
@@ -570,6 +571,7 @@ impl<B: BlockT, C, P, T> Verifier<B> for AuraVerifier<C, P, T> where
 					justification,
 					auxiliary: Vec::new(),
 					fork_choice: ForkChoiceStrategy::LongestChain,
+					allow_missing_state: false,
 				};
 
 				Ok((block_import_params, maybe_keys))

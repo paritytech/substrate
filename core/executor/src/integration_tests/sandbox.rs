@@ -14,13 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+use super::{TestExternalities, call_in_wasm};
+use crate::WasmExecutionMethod;
+
 use codec::Encode;
 use runtime_test::WASM_BINARY;
 use test_case::test_case;
 use wabt;
-
-use crate::{WasmExecutionMethod, call_in_wasm};
-use crate::integration_tests::TestExternalities;
 
 #[test_case(WasmExecutionMethod::Interpreted)]
 #[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
@@ -97,6 +97,7 @@ fn sandbox_trap(wasm_method: WasmExecutionMethod) {
 
 #[test_case(WasmExecutionMethod::Interpreted)]
 #[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+#[should_panic(expected = "Allocator ran out of space")]
 fn sandbox_should_trap_when_heap_exhausted(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	ext.with_ext(|mut ext| {
@@ -110,20 +111,17 @@ fn sandbox_should_trap_when_heap_exhausted(wasm_method: WasmExecutionMethod) {
 					call $assert
 				)
 			)
-			"#).unwrap().encode();
+		)
+		"#).unwrap().encode();
 
-		let res = call_in_wasm(
+		call_in_wasm(
 			"test_exhaust_heap",
 			&code,
 			wasm_method,
 			&mut ext,
 			&test_code[..],
 			8,
-		);
-		assert!(res.is_err());
-		if let Err(err) = res {
-			assert!(err.to_string().contains("Allocator ran out of space"));
-		}
+		).unwrap();
 	});
 }
 

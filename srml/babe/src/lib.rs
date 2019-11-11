@@ -597,7 +597,7 @@ fn compute_randomness(
 		s.extend_from_slice(&vrf_output[..]);
 	}
 
-	runtime_io::blake2_256(&s)
+	runtime_io::hashing::blake2_256(&s)
 }
 
 impl<T: Trait> ProvideInherent for Module<T> {

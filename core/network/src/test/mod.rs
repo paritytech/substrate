@@ -96,6 +96,7 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 			post_digests: vec![],
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::LongestChain,
+			allow_missing_state: false,
 		}, maybe_keys))
 	}
 }
@@ -374,16 +375,10 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 		}
 	}
 
-	/// Count the current number of known blocks. Note that:
-	///  1. this might be expensive as it creates an in-memory-copy of the chain
-	///     to count the blocks, thus if you have a different way of testing this
-	///     (e.g. `info.best_hash`) - use that.
-	///  2. This is not always increasing nor accurate, as the
-	///     orphaned and proven-to-never-finalized blocks may be pruned at any time.
-	///     Therefore, this number can drop again.
-	pub fn blocks_count(&self) -> usize {
+	/// Count the total number of imported blocks.
+	pub fn blocks_count(&self) -> u64 {
 		self.backend.as_ref().map(
-			|backend| backend.as_in_memory().blockchain().blocks_count()
+			|backend| backend.blocks_count()
 		).unwrap_or(0)
 	}
 }
@@ -526,9 +521,16 @@ pub trait TestNetFactory: Sized {
 		net
 	}
 
-	/// Add a full peer.
 	fn add_full_peer(&mut self, config: &ProtocolConfig) {
-		let test_client_builder = TestClientBuilder::with_default_backend();
+		self.add_full_peer_with_states(config, None)
+	}
+
+	/// Add a full peer.
+	fn add_full_peer_with_states(&mut self, config: &ProtocolConfig, keep_blocks: Option<u32>) {
+		let test_client_builder = match keep_blocks {
+			Some(keep_blocks) => TestClientBuilder::with_pruning_window(keep_blocks),
+			None => TestClientBuilder::with_default_backend(),
+		};
 		let backend = test_client_builder.backend();
 		let (c, longest_chain) = test_client_builder.build_with_longest_chain();
 		let client = Arc::new(c);
@@ -686,7 +688,7 @@ pub trait TestNetFactory: Sized {
 			if peer.is_major_syncing() || peer.network.num_queued_blocks() != 0 {
 				return Async::NotReady
 			}
-			match (highest, peer.client.info().chain.best_number) {
+			match (highest, peer.client.info().chain.best_hash) {
 				(None, b) => highest = Some(b),
 				(Some(ref a), ref b) if a == b => {},
 				(Some(_), _) => return Async::NotReady,
