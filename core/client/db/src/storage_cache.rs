@@ -902,7 +902,8 @@ mod qc {
 	enum Action {
 		Next { hash: H256, changes: KeySet },
 		Fork { depth: usize, hash: H256, changes: KeySet },
-		Reorg { depth: usize, hash: H256 },
+		ReorgWithImport { depth: usize, hash: H256 },
+		FinalizationReorg { fork_depth: usize, depth: usize },
 	}
 
 	impl Arbitrary for Action {
@@ -924,11 +925,11 @@ mod qc {
 						}
 					}
 				},
-				175..=220 => {
+				176..=220 => {
 					gen.fill_bytes(&mut buf[..]);
 					Action::Fork {
 						hash: H256::from(&buf),
-						depth: ((gen.next_u32() as u8) / 64) as usize,
+						depth: ((gen.next_u32() as u8) / 32) as usize,
 						changes: {
 							let mut set = Vec::new();
 							for _ in 0..gen.next_u32()/(64*256*256*256) {
@@ -937,14 +938,21 @@ mod qc {
 							set
 						}
 					}
-				}
+				},
+				221..=240 => {
+					gen.fill_bytes(&mut buf[..]);
+					Action::ReorgWithImport {
+						hash: H256::from(&buf),
+						depth: ((gen.next_u32() as u8) / 32) as usize, // 0-7
+					}
+				},
 				_ => {
 					gen.fill_bytes(&mut buf[..]);
-					Action::Reorg {
-						hash: H256::from(&buf),
-						depth: ((gen.next_u32() as u8) / 64) as usize,
+					Action::FinalizationReorg {
+						fork_depth: ((gen.next_u32() as u8) / 32) as usize, // 0-7
+						depth: ((gen.next_u32() as u8) / 64) as usize, // 0-3
 					}
-				}
+				},
 			}
 		}
 	}
@@ -1089,7 +1097,7 @@ mod qc {
 
 					state
 				},
-				Action::Reorg { depth, hash } => {
+				Action::ReorgWithImport { depth, hash } => {
 					let pos = self.canon.len() as isize - depth as isize;
 					if pos < 0 || pos+1 >= self.canon.len() as isize { return Err(()); }
 					let fork_at = self.canon[pos as usize].hash;
@@ -1139,7 +1147,40 @@ mod qc {
 							return Err(()); // no reorg without a fork atm!
 						},
 					}
-				}
+				},
+				Action::FinalizationReorg { fork_depth, depth } => {
+					let pos = self.canon.len() as isize - fork_depth as isize;
+					if pos < 0 || pos+1 >= self.canon.len() as isize { return Err(()); }
+					let fork_at = self.canon[pos as usize].hash;
+					let pos = pos as usize;
+
+					match self.forks.get_mut(&fork_at) {
+						Some(fork_chain) => {
+							let sync_pos = fork_chain.len() as isize - fork_chain.len() as isize - depth as isize;
+							if sync_pos < 0 || sync_pos >= fork_chain.len() as isize { return Err (()); }
+							let sync_pos = sync_pos as usize;
+
+							let mut new_fork = self.canon.drain(pos+1..).collect::<Vec<Node>>();
+
+							let retracted: Vec<H256> = new_fork.iter().map(|node| node.hash).collect();
+							let enacted: Vec<H256> = fork_chain.iter().take(sync_pos+1).map(|node| node.hash).collect();
+
+							std::mem::swap(fork_chain, &mut new_fork);
+
+							self.shared.lock().sync(&retracted, &enacted);
+
+							self.head_state(
+								self.canon.last()
+								.expect("wasn't forking to emptiness so there shoud be one!")
+								.hash
+							)
+						},
+						None => {
+							return Err(()); // no reorg to nothing pls!
+						}
+					}
+
+				},
 			};
 
 			Ok(state)
@@ -1170,7 +1211,7 @@ mod qc {
 		assert!(mutator.head_state(h2b).storage(&key).unwrap().is_none());
 		assert!(mutator.head_state(h1b).storage(&key).unwrap().is_none());
 
-		mutator.mutate_static(Action::Reorg { depth: 4, hash: h3b });
+		mutator.mutate_static(Action::ReorgWithImport { depth: 4, hash: h3b });
 		assert!(mutator.head_state(h3a).storage(&key).unwrap().is_none());
 	}
 
@@ -1237,7 +1278,7 @@ mod qc {
 		mutator.mutate_static(Action::Next { hash: h1, changes: vec![] });
 		mutator.mutate_static(Action::Next { hash: h2, changes: vec![(key.clone(), Some(vec![2]))] });
 		mutator.mutate_static(Action::Fork { depth: 2, hash: h1b, changes: vec![(key.clone(), Some(vec![3]))] });
-		mutator.mutate_static(Action::Reorg { depth: 2, hash: h2b });
+		mutator.mutate_static(Action::ReorgWithImport { depth: 2, hash: h2b });
 
 		assert!(is_head_match(&mutator))
 	}
@@ -1262,7 +1303,7 @@ mod qc {
 
 		mutator.mutate_static(Action::Next { hash: h2a, changes: keyval(3, 3) });
 		mutator.mutate_static(Action::Next { hash: h3a, changes: keyval(4, 4) });
-		mutator.mutate_static(Action::Reorg { depth: 4, hash: h2b });
+		mutator.mutate_static(Action::ReorgWithImport { depth: 4, hash: h2b });
 
 		assert!(is_head_match(&mutator))
 	}
@@ -1321,10 +1362,6 @@ mod qc {
 		}
 
 		fn canon_complete(actions: Vec<Action>) -> TestResult {
-			if actions.len() > 9 {
-				return TestResult::discard();
-			}
-
 			let mut mutator = Mutator::new_empty();
 
 			for action in actions.into_iter() {
