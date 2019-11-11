@@ -2357,3 +2357,109 @@ fn slashes_are_summed_across_spans() {
 		assert_eq!(Balances::free_balance(&21), 1810);
 	});
 }
+
+#[test]
+fn deferred_slashes_are_deferred() {
+	ExtBuilder::default().slash_defer_duration(2).build().execute_with(|| {
+		start_era(1);
+
+		assert_eq!(Balances::free_balance(&11), 1000);
+
+		let exposure = Staking::stakers(&11);
+		assert_eq!(Balances::free_balance(&101), 2000);
+		let nominated_value = exposure.others.iter().find(|o| o.who == 101).unwrap().value;
+
+		on_offence_now(
+			&[
+				OffenceDetails {
+					offender: (11, Staking::stakers(&11)),
+					reporters: vec![],
+				},
+			],
+			&[Perbill::from_percent(10)],
+		);
+
+		assert_eq!(Balances::free_balance(&11), 1000);
+		assert_eq!(Balances::free_balance(&101), 2000);
+
+		start_era(2);
+
+		assert_eq!(Balances::free_balance(&11), 1000);
+		assert_eq!(Balances::free_balance(&101), 2000);
+
+		start_era(3);
+
+		assert_eq!(Balances::free_balance(&11), 1000);
+		assert_eq!(Balances::free_balance(&101), 2000);
+
+		// at the start of era 4, slashes from era 1 are processed,
+		// after being deferred for at least 2 full eras.
+		start_era(4);
+
+		assert_eq!(Balances::free_balance(&11), 900);
+		assert_eq!(Balances::free_balance(&101), 2000 - (nominated_value / 10));
+	})
+}
+
+#[test]
+fn remove_deferred() {
+	ExtBuilder::default().slash_defer_duration(2).build().execute_with(|| {
+		start_era(1);
+
+		assert_eq!(Balances::free_balance(&11), 1000);
+
+		let exposure = Staking::stakers(&11);
+		assert_eq!(Balances::free_balance(&101), 2000);
+		let nominated_value = exposure.others.iter().find(|o| o.who == 101).unwrap().value;
+
+		on_offence_now(
+			&[
+				OffenceDetails {
+					offender: (11, exposure.clone()),
+					reporters: vec![],
+				},
+			],
+			&[Perbill::from_percent(10)],
+		);
+
+		assert_eq!(Balances::free_balance(&11), 1000);
+		assert_eq!(Balances::free_balance(&101), 2000);
+
+		start_era(2);
+
+		on_offence_in_era(
+			&[
+				OffenceDetails {
+					offender: (11, exposure.clone()),
+					reporters: vec![],
+				},
+			],
+			&[Perbill::from_percent(15)],
+			1,
+		);
+
+		Staking::cancel_deferred_slash(Origin::ROOT, 1, vec![0]).unwrap();
+
+		assert_eq!(Balances::free_balance(&11), 1000);
+		assert_eq!(Balances::free_balance(&101), 2000);
+
+		start_era(3);
+
+		assert_eq!(Balances::free_balance(&11), 1000);
+		assert_eq!(Balances::free_balance(&101), 2000);
+
+		// at the start of era 4, slashes from era 1 are processed,
+		// after being deferred for at least 2 full eras.
+		start_era(4);
+
+		// the first slash for 10% was cancelled, so no effect.
+		assert_eq!(Balances::free_balance(&11), 1000);
+		assert_eq!(Balances::free_balance(&101), 2000);
+
+		start_era(5);
+
+		// 5% slash (15 - 10) processed now.
+		assert_eq!(Balances::free_balance(&11), 950);
+		assert_eq!(Balances::free_balance(&101), 2000 - (nominated_value / 20));
+	})
+}

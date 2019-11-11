@@ -598,7 +598,8 @@ pub trait Trait: system::Trait {
 	type BondingDuration: Get<EraIndex>;
 
 	/// Number of eras that slashes are deferred by, after computation. This
-	/// should be less than the bonding duration.
+	/// should be less than the bonding duration. Set to 0 if slashes should be
+	/// applied immediately, without opportunity for intervention.
 	type SlashDeferDuration: Get<EraIndex>;
 
 	/// Interface for interacting with a session module.
@@ -695,6 +696,9 @@ decl_storage! {
 		/// canceled by extraordinary circumstances (e.g. governance).
 		pub CanceledSlashPayout get(fn canceled_payout) config(): BalanceOf<T>;
 
+		/// All unapplied slashes that are queued for later.
+		pub UnappliedSlashes: map EraIndex => Vec<UnappliedSlash<T::AccountId, BalanceOf<T>>>;
+
 		/// A mapping from still-bonded eras to the first session index of that era.
 		BondedEras: Vec<(EraIndex, SessionIndex)>;
 
@@ -717,9 +721,6 @@ decl_storage! {
 
 		/// The earliest era for which we have a pending, unapplied slash.
 		EarliestUnappliedSlash: Option<EraIndex>;
-
-		/// All unapplied slashes that are queued for later.
-		UnappliedSlashes: map EraIndex => Vec<UnappliedSlash<T::AccountId, BalanceOf<T>>>;
 	}
 	add_extra_genesis {
 		config(stakers):
@@ -1126,6 +1127,33 @@ decl_module! {
 			ensure_root(origin)?;
 			ForceEra::put(Forcing::ForceAlways);
 		}
+
+		/// Cancel enactment of a deferred slash. Can only be called by the root origin,
+		/// passing the era and indices of the slashes for that era to kill.
+		///
+		/// # <weight>
+		/// - One storage write.
+		/// # </weight>
+		#[weight = SimpleDispatchInfo::FreeOperational]
+		fn cancel_deferred_slash(origin, era: EraIndex, slash_indices: Vec<u32>) {
+			ensure_root(origin)?;
+
+			let mut slash_indices = slash_indices;
+			slash_indices.sort_unstable();
+			let mut unapplied = <Self as Store>::UnappliedSlashes::get(&era);
+
+			for (removed, index) in slash_indices.into_iter().enumerate() {
+				let index = index as usize;
+
+				// if `index` is not duplicate, `removed` must be <= index.
+				if removed > index { return Err("duplicate index") }
+				if index >= unapplied.len() { return Err("slash record index out of bounds") }
+
+				unapplied.remove(index);
+			}
+
+			<Self as Store>::UnappliedSlashes::insert(&era, &unapplied);
+		}
 	}
 }
 
@@ -1315,7 +1343,7 @@ impl<T: Trait> Module<T> {
 	fn apply_unapplied_slashes(current_era: EraIndex) {
 		let slash_defer_duration = T::SlashDeferDuration::get();
 		<Self as Store>::EarliestUnappliedSlash::mutate(|earliest| if let Some(ref mut earliest) = earliest {
-			let keep_from = current_era.saturating_sub(slash_defer_duration) + 1;
+			let keep_from = current_era.saturating_sub(slash_defer_duration);
 			for era in (*earliest)..keep_from {
 				let era_slashes = <Self as Store>::UnappliedSlashes::take(&era);
 				for slash in era_slashes {
@@ -1622,6 +1650,8 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, session::historical::Identificati
 			}
 		});
 
+		let slash_defer_duration = T::SlashDeferDuration::get();
+
 		for (details, slash_fraction) in offenders.iter().zip(slash_fraction) {
 			let stash = &details.offender.0;
 			let exposure = &details.offender.1;
@@ -1643,10 +1673,16 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, session::historical::Identificati
 
 			if let Some(mut unapplied) = unapplied {
 				unapplied.reporters = details.reporters.clone();
-				<Self as Store>::UnappliedSlashes::mutate(
-					era_now,
-					move |for_later| for_later.push(unapplied),
-				);
+				if slash_defer_duration == 0 {
+					// apply right away.
+					slashing::apply_slash::<T>(unapplied);
+				} else {
+					// defer to end of some `slash_defer_duration` from now.
+					<Self as Store>::UnappliedSlashes::mutate(
+						era_now,
+						move |for_later| for_later.push(unapplied),
+					);
+				}
 			}
 		}
 	}

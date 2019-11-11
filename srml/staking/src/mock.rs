@@ -48,6 +48,7 @@ impl Convert<u128, u64> for CurrencyToVoteHandler {
 thread_local! {
 	static SESSION: RefCell<(Vec<AccountId>, HashSet<AccountId>)> = RefCell::new(Default::default());
 	static EXISTENTIAL_DEPOSIT: RefCell<u64> = RefCell::new(0);
+	static SLASH_DEFER_DURATION: RefCell<EraIndex> = RefCell::new(0);
 }
 
 pub struct TestSessionHandler;
@@ -87,6 +88,13 @@ impl Get<u64> for ExistentialDeposit {
 	}
 }
 
+pub struct SlashDeferDuration;
+impl Get<EraIndex> for SlashDeferDuration {
+	fn get() -> EraIndex {
+		SLASH_DEFER_DURATION.with(|v| *v.borrow())
+	}
+}
+
 impl_outer_origin!{
 	pub enum Origin for Test {}
 }
@@ -109,7 +117,6 @@ parameter_types! {
 	pub const MaximumBlockWeight: u32 = 1024;
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
-	pub const SlashDeferDuration: EraIndex = 10;
 }
 impl system::Trait for Test {
 	type Origin = Origin;
@@ -215,6 +222,7 @@ pub struct ExtBuilder {
 	nominate: bool,
 	validator_count: u32,
 	minimum_validator_count: u32,
+	slash_defer_duration: EraIndex,
 	fair: bool,
 	num_validators: Option<u32>,
 	invulnerables: Vec<u64>,
@@ -228,6 +236,7 @@ impl Default for ExtBuilder {
 			nominate: true,
 			validator_count: 2,
 			minimum_validator_count: 0,
+			slash_defer_duration: 0,
 			fair: true,
 			num_validators: None,
 			invulnerables: vec![],
@@ -256,6 +265,10 @@ impl ExtBuilder {
 		self.minimum_validator_count = count;
 		self
 	}
+	pub fn slash_defer_duration(mut self, eras: EraIndex) -> Self {
+		self.slash_defer_duration = eras;
+		self
+	}
 	pub fn fair(mut self, is_fair: bool) -> Self {
 		self.fair = is_fair;
 		self
@@ -270,6 +283,7 @@ impl ExtBuilder {
 	}
 	pub fn set_associated_consts(&self) {
 		EXISTENTIAL_DEPOSIT.with(|v| *v.borrow_mut() = self.existential_deposit);
+		SLASH_DEFER_DURATION.with(|v| *v.borrow_mut() = self.slash_defer_duration);
 	}
 	pub fn build(self) -> runtime_io::TestExternalities {
 		self.set_associated_consts();
