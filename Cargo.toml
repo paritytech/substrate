@@ -103,7 +103,7 @@ members = [
 	"bin/node/testing",
 	"bin/node-template",
 	"bin/subkey",
-	"test-utils/chain-spec-builder",
+	"test/utils/chain-spec-builder",
 ]
 
 [profile.release]
