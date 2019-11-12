@@ -95,6 +95,7 @@ pub enum ForkChoiceStrategy {
 }
 
 /// Data required to check validity of a Block.
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct BlockCheckParams<Block: BlockT> {
 	/// Hash of the block that we verify.
 	pub hash: Block::Hash,
