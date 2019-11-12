@@ -6358,6 +6358,7 @@ dependencies = [
  "criterion 0.2.11 (registry+https://github.com/rust-lang/crates.io-index)",
  "hash-db 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex-literal 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "keccak-hasher 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "memory-db 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-std 2.0.0",
