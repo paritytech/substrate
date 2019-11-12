@@ -167,7 +167,14 @@ impl<Block: BlockT<Hash=H256>> DbChangesTrieStorage<Block> {
 		let new_configuration = match new_configuration {
 			Some(new_configuration) => new_configuration,
 			None if !finalized => return Ok(DbCacheTransactionOps::empty().into()),
-			None => return self.finalize(tx, parent_block.hash, block.hash, block.number, Some(new_header), cache_tx),
+			None => return self.finalize(
+				tx,
+				parent_block.hash,
+				block.hash,
+				block.number,
+				Some(new_header),
+				cache_tx,
+			),
 		};
 
 		// update configuration cache
