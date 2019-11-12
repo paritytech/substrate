@@ -66,6 +66,12 @@ impl Default for ExecutionStrategies {
 	}
 }
 
+/// Figure out the block type for a given type (for now, just a `Client`).
+pub trait BlockOf {
+	/// The type of the block.
+	type Type: BlockT;
+}
+
 /// A source of blockchain events.
 pub trait BlockchainEvents<Block: BlockT> {
 	/// Get block import event stream. Not guaranteed to be fired for every

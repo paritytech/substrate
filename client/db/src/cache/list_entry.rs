@@ -16,7 +16,7 @@
 
 //! List-cache storage entries.
 
-use client::error::Result as ClientResult;
+use interfaces::error::Result as ClientResult;
 use sr_primitives::traits::{Block as BlockT, NumberFor};
 use codec::{Encode, Decode};
 

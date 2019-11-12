@@ -68,7 +68,8 @@ pub use interfaces::{
 	},
 	client::{
 		ImportNotifications, FinalityNotification, FinalityNotifications, BlockImportNotification,
-		ClientInfo, BlockchainEvents, BlockBody, ProvideUncles, ExecutionStrategies, ForkBlocks
+		ClientInfo, BlockchainEvents, BlockBody, ProvideUncles, ExecutionStrategies, ForkBlocks,
+		BlockOf,
 	},
 	notifications::{StorageNotifications, StorageEventStream},
 	error::Error,
@@ -172,12 +173,6 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 {
 	let call_executor = LocalCallExecutor::new(backend.clone(), executor, keystore);
 	Client::new(backend, call_executor, build_genesis_storage, Default::default(), Default::default())
-}
-
-/// Figure out the block type for a given type (for now, just a `Client`).
-pub trait BlockOf {
-	/// The type of the block.
-	type Type: BlockT<Hash=H256>;
 }
 
 impl<B, E, Block, RA> BlockOf for Client<B, E, Block, RA> where

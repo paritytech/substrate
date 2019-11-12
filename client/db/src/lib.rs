@@ -40,10 +40,10 @@ use std::io;
 use std::collections::{HashMap, HashSet};
 
 use interfaces::backend::NewBlockState;
-use client::blockchain::{well_known_cache_keys, HeaderBackend};
-use client::{ForkBlocks, ExecutionStrategies};
+use interfaces::blockchain::{well_known_cache_keys, HeaderBackend};
+use interfaces::{ForkBlocks, ExecutionStrategies};
 use interfaces::backend::{StorageCollection, ChildStorageCollection};
-use client::error::{Result as ClientResult, Error as ClientError};
+use interfaces::error::{Result as ClientResult, Error as ClientError};
 use codec::{Decode, Encode};
 use hash_db::{Hasher, Prefix};
 use kvdb::{KeyValueDB, DBTransaction};

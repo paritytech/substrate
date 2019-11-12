@@ -41,6 +41,7 @@ use sr_primitives::traits::{ApiRef, Block as BlockT, Header, ProvideRuntimeApi};
 use std::{fmt::Debug, ops::Deref, pin::Pin, sync::Arc};
 use substrate_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
 use parking_lot::Mutex;
+use interfaces;
 
 /// A worker that should be invoked at every new slot.
 pub trait SlotWorker<B: BlockT> {
@@ -389,17 +390,17 @@ impl<T: Clone> SlotDuration<T> {
 	///
 	/// `slot_key` is marked as `'static`, as it should really be a
 	/// compile-time constant.
-	pub fn get_or_compute<B: BlockT, C, CB>(client: &C, cb: CB) -> ::client::error::Result<Self> where
+	pub fn get_or_compute<B: BlockT, C, CB>(client: &C, cb: CB) -> interfaces::error::Result<Self> where
 		C: interfaces::backend::AuxStore,
 		C: ProvideRuntimeApi,
-		CB: FnOnce(ApiRef<C::Api>, &BlockId<B>) -> ::client::error::Result<T>,
+		CB: FnOnce(ApiRef<C::Api>, &BlockId<B>) -> interfaces::error::Result<T>,
 		T: SlotData + Encode + Decode + Debug,
 	{
 		match client.get_aux(T::SLOT_KEY)? {
 			Some(v) => <T as codec::Decode>::decode(&mut &v[..])
 				.map(SlotDuration)
 				.map_err(|_| {
-					client::error::Error::Backend({
+					interfaces::error::Error::Backend({
 						error!(target: "slots", "slot duration kept in invalid format");
 						"slot duration kept in invalid format".to_string()
 					})
