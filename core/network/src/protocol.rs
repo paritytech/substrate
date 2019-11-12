@@ -625,10 +625,9 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			GenericMessage::Consensus(msg) => {
 				let outcome = if let Some(proto_name) = self.protocol_name_by_engine.get(&msg.engine_id) {
 					// TODO: what if not open? check if open?
-					CustomMessageOutcome::NotifMessage {
+					CustomMessageOutcome::NotifMessages {
 						remote: who.clone(),
-						proto_name: proto_name.clone(),
-						message: msg.data.clone()
+						messages: vec![(proto_name.clone(), msg.data.clone())],
 					}
 				} else {
 					CustomMessageOutcome::None
@@ -643,13 +642,28 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				return outcome;
 			}
 			GenericMessage::ConsensusBatch(messages) => {
-				// TODO: send out as outcome
+				let outcome_messages = messages
+					.iter()
+					.filter_map(|msg| {
+						if let Some(proto_name) = self.protocol_name_by_engine.get(&msg.engine_id) {
+							// TODO: what if not open? check if open?
+							Some((proto_name.clone(), msg.data.clone()))
+						} else {
+							None
+						}
+					})
+					.collect::<Vec<_>>();
 
 				self.consensus_gossip.on_incoming(
 					&mut ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle),
-					who,
+					who.clone(),
 					messages,
 				);
+
+				return CustomMessageOutcome::NotifMessages {
+					remote: who,
+					messages: outcome_messages,
+				};
 			}
 			GenericMessage::ChainSpecific(msg) => self.specialization.on_message(
 				&mut ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle),
@@ -1742,7 +1756,7 @@ pub enum CustomMessageOutcome<B: BlockT> {
 	FinalityProofImport(Origin, B::Hash, NumberFor<B>, Vec<u8>),
 	NotifOpened { remote: PeerId, proto_name: Cow<'static, [u8]> },
 	NotifClosed { remote: PeerId, proto_name: Cow<'static, [u8]> },
-	NotifMessage { remote: PeerId, proto_name: Cow<'static, [u8]>, message: Vec<u8> },
+	NotifMessages { remote: PeerId, messages: Vec<(Cow<'static, [u8]>, Vec<u8>)> },
 	None,
 }
 

@@ -141,8 +141,8 @@ Behaviour<B, S, H> {
 				self.events.push(BehaviourOut::Event(Event::NotifOpened { remote, proto_name })),
 			CustomMessageOutcome::NotifClosed { remote, proto_name } =>
 				self.events.push(BehaviourOut::Event(Event::NotifClosed { remote, proto_name })),
-			CustomMessageOutcome::NotifMessage { remote, proto_name, message } => {
-				let ev = Event::NotifMessage { remote, proto_name, message };
+			CustomMessageOutcome::NotifMessages { remote, messages } => {
+				let ev = Event::NotifMessages { remote, messages };
 				self.events.push(BehaviourOut::Event(ev));
 			},
 			CustomMessageOutcome::None => {}
