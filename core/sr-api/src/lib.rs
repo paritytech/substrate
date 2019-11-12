@@ -59,16 +59,14 @@ use rstd::result;
 pub use codec::{Encode, Decode};
 use primitives::OpaqueMetadata;
 #[cfg(feature = "std")]
-use std::{panic::UnwindSafe, cell::RefCell, rc::Rc};
-#[cfg(feature = "std")]
-use primitives::Hasher as HasherT;
+use std::{panic::UnwindSafe, cell::RefCell};
 
 pub use sr_api_proc_macro::{decl_runtime_apis, impl_runtime_apis};
 
 #[cfg(feature = "std")]
 /// A type that records all accessed trie nodes and generates a proof out of it.
 pub type ProofRecorder<B> = state_machine::ProofRecorder<
-	<<<<B as BlockT>::Header as HeaderT>::Hashing as HashT>::Hasher as HasherT>::Out
+	<<<B as BlockT>::Header as HeaderT>::Hashing as HashT>::Hasher
 >;
 
 /// Something that can be constructed to a runtime api.
@@ -168,7 +166,7 @@ pub trait CallRuntimeAt<Block: BlockT> {
 		initialize_block: InitializeBlock<'a, Block>,
 		native_call: Option<NC>,
 		context: ExecutionContext,
-		recorder: &Option<Rc<RefCell<ProofRecorder<Block>>>>,
+		recorder: &Option<ProofRecorder<Block>>,
 	) -> Result<NativeOrEncoded<R>, Self::Error>;
 
 	/// Returns the runtime version at the given block.
