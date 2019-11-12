@@ -38,6 +38,10 @@ pub trait ClientExt<Block: BlockT>: Sized {
 	fn import_as_best(&self, origin: BlockOrigin, block: Block)
 		-> Result<(), ConsensusError>;
 
+	/// Import a block and finalize it.
+	fn import_as_final(&self, origin: BlockOrigin, block: Block)
+		-> Result<(), ConsensusError>;
+
 	/// Import block with justification, finalizes block.
 	fn import_justified(
 		&self,
@@ -94,6 +98,25 @@ impl<B, E, RA, Block> ClientExt<Block> for Client<B, E, Block, RA>
 			post_digests: vec![],
 			body: Some(extrinsics),
 			finalized: false,
+			auxiliary: Vec::new(),
+			fork_choice: ForkChoiceStrategy::Custom(true),
+			allow_missing_state: false,
+		};
+
+		BlockImport::import_block(&mut (&*self), import, HashMap::new()).map(|_| ())
+	}
+
+	fn import_as_final(&self, origin: BlockOrigin, block: Block)
+		-> Result<(), ConsensusError>
+	{
+		let (header, extrinsics) = block.deconstruct();
+		let import = BlockImportParams {
+			origin,
+			header,
+			justification: None,
+			post_digests: vec![],
+			body: Some(extrinsics),
+			finalized: true,
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::Custom(true),
 			allow_missing_state: false,
