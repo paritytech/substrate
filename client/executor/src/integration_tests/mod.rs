@@ -401,7 +401,7 @@ fn ordered_trie_root_should_work(wasm_method: WasmExecutionMethod) {
 #[test_case(WasmExecutionMethod::Interpreted)]
 #[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
 fn offchain_local_storage_should_work(wasm_method: WasmExecutionMethod) {
-	use substrate_client::backend::OffchainStorage;
+	use interfaces::OffchainStorage;
 
 	let mut ext = TestExternalities::default();
 	let (offchain, state) = testing::TestOffchainExt::new();
