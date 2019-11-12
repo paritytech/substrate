@@ -30,9 +30,10 @@ use interfaces::{
 	backend::{Backend, Finalizer},
 	call_executor::CallExecutor,
 	error::Error as ClientError,
+	utils::is_descendent_of,
 }
 use client::{
-	apply_aux, Client, utils::is_descendent_of,
+	apply_aux, Client, 
 };
 use grandpa::{
 	BlockNumberOps, Equivocation, Error as GrandpaError, round::State as RoundState,
