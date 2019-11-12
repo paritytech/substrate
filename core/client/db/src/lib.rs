@@ -1056,7 +1056,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 
 			meta_updates.push((hash, number, pending_block.leaf_state.is_best(), finalized));
 
-			Some((number, hash, enacted, retracted, displaced_leaf, is_best, cache, changes_trie_cache_ops))
+			Some((number, hash, enacted, retracted, displaced_leaf, is_best, cache))
 		} else {
 			None
 		};
@@ -1082,10 +1082,6 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 
 		let write_result = self.storage.db.write(transaction).map_err(db_err);
 
-		if let Some(changes_trie_build_cache_update) = operation.changes_trie_build_cache_update {
-			self.changes_tries_storage.commit_build_cache(changes_trie_build_cache_update);
-		}
-
 		if let Some((
 			number,
 			hash,
@@ -1094,7 +1090,6 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 			displaced_leaf,
 			is_best,
 			mut cache,
-			changes_trie_cache_ops,
 		)) = imported {
 			if let Err(e) = write_result {
 				let mut leaves = self.blockchain.leaves.write();
@@ -1110,8 +1105,6 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 				return Err(e)
 			}
 
-			self.changes_tries_storage.post_commit(changes_trie_cache_ops);
-
 			cache.sync_cache(
 				&enacted,
 				&retracted,
@@ -1122,6 +1115,11 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 				|| is_best,
 			);
 		}
+
+		if let Some(changes_trie_build_cache_update) = operation.changes_trie_build_cache_update {
+			self.changes_tries_storage.commit_build_cache(changes_trie_build_cache_update);
+		}
+		self.changes_tries_storage.post_commit(changes_trie_cache_ops);
 
 		if let Some((enacted, retracted)) = cache_update {
 			self.shared_cache.lock().sync(&enacted, &retracted);
@@ -2035,11 +2033,20 @@ pub(crate) mod tests {
 		let block0 = insert_header(&backend, 0, Default::default(), None, Default::default());
 		let block1 = insert_header(&backend, 1, block0, None, Default::default());
 		let block2 = insert_header(&backend, 2, block1, None, Default::default());
+		let block3 = insert_header(&backend, 3, block2, None, Default::default());
+		let block4 = insert_header(&backend, 4, block3, None, Default::default());
 		{
 			let mut op = backend.begin_operation().unwrap();
 			backend.begin_state_operation(&mut op, BlockId::Hash(block0)).unwrap();
 			op.mark_finalized(BlockId::Hash(block1), None).unwrap();
 			op.mark_finalized(BlockId::Hash(block2), None).unwrap();
+			backend.commit_operation(op).unwrap();
+		}
+		{
+			let mut op = backend.begin_operation().unwrap();
+			backend.begin_state_operation(&mut op, BlockId::Hash(block2)).unwrap();
+			op.mark_finalized(BlockId::Hash(block3), None).unwrap();
+			op.mark_finalized(BlockId::Hash(block4), None).unwrap();
 			backend.commit_operation(op).unwrap();
 		}
 	}
