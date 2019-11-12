@@ -24,3 +24,38 @@
 pub mod synch;
 pub mod detached;
 pub mod linear;
+
+/// An entry at a given history index.
+#[derive(Debug, Clone)]
+#[cfg_attr(any(test, feature = "test"), derive(PartialEq))]
+pub struct HistoricalValue<V, I> {
+	/// The stored value.
+	pub value: V,
+	/// The moment in history when the value got set.
+	pub index: I,
+}
+
+impl<V, I> From<(V, I)> for HistoricalValue<V, I> {
+	fn from(input: (V, I)) -> HistoricalValue<V, I> {
+		HistoricalValue { value: input.0, index: input.1 }
+	}
+}
+
+impl<V, I: Clone> HistoricalValue<V, I> {
+	fn as_ref(&self) -> HistoricalValue<&V, I> {
+		HistoricalValue { value: &self.value, index: self.index.clone() }
+	}
+
+	fn as_mut(&mut self) -> HistoricalValue<&mut V, I> {
+		HistoricalValue { value: &mut self.value, index: self.index.clone() }
+	}
+}
+
+#[cfg_attr(any(test, feature = "test"), derive(PartialEq, Debug))]
+/// Prunning result to be able to proceed
+/// with further update if the value needs it.
+pub enum PruneResult {
+	Unchanged,
+	Changed,
+	Cleared,
+}
