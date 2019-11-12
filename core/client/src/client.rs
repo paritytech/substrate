@@ -1593,7 +1593,8 @@ impl<'a, B, E, Block, RA> consensus::BlockImport<Block> for &'a Client<B, E, Blo
 			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
 		{
 			BlockStatus::InChainWithState | BlockStatus::Queued => return Ok(ImportResult::AlreadyInChain),
-			BlockStatus::Unknown | BlockStatus::InChainPruned => {},
+			BlockStatus::InChainPruned => return Ok(ImportResult::AlreadyInChain),
+			BlockStatus::Unknown => {},
 			BlockStatus::KnownBad => return Ok(ImportResult::KnownBad),
 		}
 
