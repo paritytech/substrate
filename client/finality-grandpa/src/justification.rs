@@ -16,9 +16,8 @@
 
 use std::collections::{HashMap, HashSet};
 
-use client::{CallExecutor, Client};
-use interfaces::backend::Backend;
-use client::error::Error as ClientError;
+use client::Client;
+use interfaces::{call_exectutor::CallExecutor, backend::Backend, error::Error as ClientError};
 use codec::{Encode, Decode};
 use grandpa::voter_set::VoterSet;
 use grandpa::{Error as GrandpaError};

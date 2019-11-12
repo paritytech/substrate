@@ -20,7 +20,8 @@
 //
 
 use std::{time, sync::Arc};
-use client::{error, Client as SubstrateClient, CallExecutor};
+use interfaces::{error, CallExecutor};
+use client::Client as SubstrateClient;
 use codec::Decode;
 use consensus_common::{evaluation};
 use inherents::InherentData;

@@ -35,11 +35,11 @@ use hash_db::Hasher;
 
 use sr_api::{ProofRecorder, InitializeBlock};
 
-use crate::call_executor::CallExecutor;
 use interfaces::{
 	backend::RemoteBackend,
 	error::{Error as ClientError, Result as ClientResult},
-	light::RemoteCallRequest
+	light::RemoteCallRequest,
+	call_executor::CallExecutor
 };
 use executor::{RuntimeVersion, NativeVersion};
 

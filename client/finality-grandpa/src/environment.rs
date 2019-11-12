@@ -25,10 +25,14 @@ use futures::prelude::*;
 use tokio_timer::Delay;
 use parking_lot::RwLock;
 
+use interfaces::{
+	blockchain::{HeaderBackend, BlockchainEvents},
+	backend::{Backend, Finalizer},
+	call_executor::CallExecutor,
+	error::Error as ClientError,
+}
 use client::{
-	backend::Backend, apply_aux, BlockchainEvents, CallExecutor,
-	Client, error::Error as ClientError, utils::is_descendent_of,
-	blockchain::HeaderBackend, backend::Finalizer,
+	apply_aux, Client, utils::is_descendent_of,
 };
 use grandpa::{
 	BlockNumberOps, Equivocation, Error as GrandpaError, round::State as RoundState,

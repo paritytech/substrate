@@ -90,8 +90,9 @@ pub use interfaces::{
 	blockchain::well_known_cache_keys,
 	blockchain::Info as ChainInfo,
 	notifications::{StorageEventStream, StorageChangeSet},
+	call_executor::CallExecutor,
 };
-pub use crate::call_executor::{CallExecutor, LocalCallExecutor};
+pub use crate::call_executor::LocalCallExecutor;
 pub use crate::client::{
 	new_with_backend,
 	new_in_mem,

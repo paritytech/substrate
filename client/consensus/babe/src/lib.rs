@@ -88,10 +88,11 @@ use consensus_common::SelectChain;
 use consensus_common::import_queue::{Verifier, BasicQueue, CacheKeyId};
 use interfaces::{
 	backend::{AuxStore, Backend},
+	call_executor::CallExecutor,
 	error::{Result as ClientResult, Error as ClientError}
 };
 use client::{
-	blockchain::{self, HeaderBackend, ProvideCache}, BlockchainEvents, CallExecutor, Client, ProvideUncles,
+	blockchain::{self, HeaderBackend, ProvideCache}, BlockchainEvents, Client, ProvideUncles,
 };
 
 use block_builder_api::BlockBuilder as BlockBuilderApi;

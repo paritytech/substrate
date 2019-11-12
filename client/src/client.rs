@@ -70,9 +70,9 @@ use interfaces::{
 	error::Error,
 	error,
 };
-
+use interfaces::{CallExecutor};
 use crate::{
-	call_executor::{CallExecutor, LocalCallExecutor},
+	call_executor::LocalCallExecutor,
 	light::{call_executor::prove_execution, fetcher::ChangesProof},
 	in_mem, genesis, cht,
 };

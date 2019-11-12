@@ -38,11 +38,12 @@ use std::iter;
 use std::sync::Arc;
 use log::{trace, warn};
 
-use client::{
-	backend::Backend, blockchain::Backend as BlockchainBackend, CallExecutor, Client,
+use interfaces::{
+	backend::Backend, blockchain::Backend as BlockchainBackend, CallExecutor,
 	error::{Error as ClientError, Result as ClientResult},
-	light::fetcher::{FetchChecker, RemoteReadRequest, StorageProof},
+	light::{FetchChecker, RemoteReadRequest, StorageProof},
 };
+use client::Client;
 use codec::{Encode, Decode};
 use grandpa::BlockNumberOps;
 use sr_primitives::{
