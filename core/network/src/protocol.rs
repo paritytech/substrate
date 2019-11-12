@@ -47,7 +47,7 @@ use rustc_hex::ToHex;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use std::fmt::Write;
-use std::{cmp, num::NonZeroUsize, time};
+use std::{borrow::Cow, cmp, num::NonZeroUsize, time};
 use log::{trace, debug, warn, error};
 use crate::chain::{Client, FinalityProofProvider};
 use client::light::fetcher::{FetchChecker, ChangesProof, StorageProof};
@@ -1058,6 +1058,18 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				);
 			}
 		}
+	}
+
+	/// Send a notification to the given peer we're connected to.
+	///
+	/// Doesn't do anything if we're not connected to that peer.
+	pub fn write_notif(
+		&mut self,
+		target: PeerId,
+		proto_name: impl Into<Cow<'static, [u8]>>,
+		message: impl Into<Vec<u8>>
+	) {
+		self.behaviour.write_notif(target, proto_name, message)
 	}
 
 	/// Call when we must propagate ready extrinsics to peers.

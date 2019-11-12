@@ -60,7 +60,7 @@ use tokio_io::{AsyncRead, AsyncWrite};
 /// Note that this "banning" system is not an actual ban. If a "banned" node tries to connect to
 /// us, we accept the connection. The "banning" system is only about delaying dialing attempts.
 ///
-pub struct LegacyProto< TSubstream> {
+pub struct LegacyProto<TSubstream> {
 	/// List of protocols to open with peers. Never modified.
 	protocol: RegisteredProtocol,
 
@@ -357,6 +357,30 @@ impl<TSubstream> LegacyProto<TSubstream> {
 		self.events.push(NetworkBehaviourAction::SendEvent {
 			peer_id: target.clone(),
 			event: NotifsHandlerIn::Send { message, proto_name: None },
+		});
+	}
+
+	/// Send a notification to the given peer we're connected to.
+	///
+	/// Doesn't do anything if we're not connected to that peer.
+	pub fn write_notif(
+		&mut self,
+		target: PeerId,
+		proto_name: impl Into<Cow<'static, [u8]>>,
+		message: impl Into<Vec<u8>>
+	) {
+		if !self.is_open(&target) {
+			return;
+		}
+
+		trace!(target: "sub-libp2p", "External API => Packet for {:?}", target);
+		trace!(target: "sub-libp2p", "Handler({:?}) <= Packet", target);
+		self.events.push(NetworkBehaviourAction::SendEvent {
+			peer_id: target,
+			event: NotifsHandlerIn::Send {
+				message: message.into(),
+				proto_name: Some(proto_name.into()),
+			},
 		});
 	}
 

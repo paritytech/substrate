@@ -28,10 +28,10 @@
 use std::{collections::{HashMap, HashSet}, fs, marker::PhantomData, io, path::Path};
 use std::sync::{Arc, atomic::{AtomicBool, AtomicUsize, Ordering}};
 
-use codec::{Encode, Decode, DecodeAll};
+use codec::Encode;
 use consensus::import_queue::{ImportQueue, Link};
 use consensus::import_queue::{BlockImportResult, BlockImportError};
-use futures::{prelude::*, sync::mpsc, sync::oneshot};
+use futures::{prelude::*, sync::mpsc};
 use futures03::TryFutureExt as _;
 use log::{warn, error, info};
 use libp2p::{PeerId, Multiaddr, kad::record};
@@ -418,48 +418,6 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 		self.local_peer_id.clone()
 	}
 
-	/// Tries to connect to `dest` if necessary, opens a substream to it using the protocol
-	/// `proto_name`, sends `message` on it, and waits for a single answer to come back.
-	///
-	/// This API is racy in the sense that it is possible that we are actually disconnected from
-	/// the target. This situation is treated the same way as if the disconnection happened after
-	/// this method is called, and an error is returned.
-	///
-	/// In some literature, what this method does is called performing an RPC query.
-	///
-	/// > **Note**: When using this method, the network will not garbage-collect the connection
-	/// >			until the response has come back, contrary to if you use
-	/// >			[`NetworkService::write_notif`].
-	///
-	/// It is encouraged that protocol name is one of the elements of
-	/// `extra_request_response_protos` that was passed in the configuration.
-	pub fn send_request<Rp>(&self, target: PeerId, proto_name: impl Into<Vec<u8>>, message: impl Encode)
-		-> impl Future<Item = Rp, Error = ()>		// TODO: proper error
-	where
-		Rp: Decode,
-	{
-		let (response_send_back, rx) = oneshot::channel();
-		let _ = self.to_worker.unbounded_send(ServerToWorkerMsg::SendRequest {
-			proto_name: proto_name.into(),
-			target,
-			message: message.encode(),
-			response_send_back,
-		});
-
-		rx.then(|r| {
-			match r {
-				Ok(Ok(mut v)) => match DecodeAll::decode_all(&mut v) {
-					Ok(m) => Ok(m),
-					Err(_) => Err(()),
-				},
-				// Channel sent back an error.
-				Ok(Err(err)) => Err(err),
-				// Channel has been dropped unexpectedly.
-				Err(_) => Err(())
-			}
-		})
-	}
-
 	/// Writes a message on an open gossiping channel. Has no effect if the gossiping channel with
 	/// this protocol name is closed.
 	///
@@ -713,12 +671,6 @@ enum ServerToWorkerMsg<B: BlockT, S: NetworkSpecialization<B>> {
 	AddKnownAddress(PeerId, Multiaddr),
 	SyncFork(Vec<PeerId>, B::Hash, NumberFor<B>),
 	EventsStream(mpsc::UnboundedSender<Event>),
-	SendRequest {
-		message: Vec<u8>,
-		proto_name: Vec<u8>,
-		target: PeerId,
-		response_send_back: oneshot::Sender<Result<Vec<u8>, ()>>,
-	},
 	WriteNotif {
 		message: Vec<u8>,
 		proto_name: Vec<u8>,
@@ -808,10 +760,8 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Stream for Ne
 					self.network_service.user_protocol_mut().set_sync_fork_request(peer_ids, &hash, number),
 				ServerToWorkerMsg::EventsStream(sender) =>
 					self.events_streams.push(sender),
-				ServerToWorkerMsg::SendRequest { .. } =>
-					unimplemented!(),
-				ServerToWorkerMsg::WriteNotif { .. } =>
-					unimplemented!(),
+				ServerToWorkerMsg::WriteNotif { message, proto_name, target } =>
+					self.network_service.user_protocol_mut().write_notif(target, proto_name, message),
 			}
 		}
 
