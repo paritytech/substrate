@@ -5719,7 +5719,6 @@ dependencies = [
  "sr-api 2.0.0",
  "sr-primitives 2.0.0",
  "srml-finality-tracker 2.0.0",
- "substrate-client 2.0.0",
  "substrate-client-interfaces 2.0.0",
  "substrate-consensus-babe-primitives 2.0.0",
  "substrate-consensus-common 2.0.0",

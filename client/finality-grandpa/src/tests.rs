@@ -25,7 +25,8 @@ use parking_lot::Mutex;
 use futures03::{StreamExt as _, TryStreamExt as _};
 use tokio::runtime::current_thread;
 use keyring::Ed25519Keyring;
-use client::{error::Result, LongestChain};
+use client::LongestChain;
+use interfaces::error::Result;
 use sr_api::{Core, RuntimeVersion, ApiExt, StorageProof};
 use test_client::{self, runtime::BlockNumber};
 use consensus_common::{BlockOrigin, ForkChoiceStrategy, ImportedAux, BlockImportParams, ImportResult};
@@ -241,7 +242,7 @@ impl Core<Block> for RuntimeApi {
 }
 
 impl ApiExt<Block> for RuntimeApi {
-	type Error = client::error::Error;
+	type Error = interfaces::error::Error;
 
 	fn map_api_result<F: FnOnce(&Self) -> result::Result<R, E>, R, E>(
 		&self,

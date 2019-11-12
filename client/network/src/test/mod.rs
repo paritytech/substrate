@@ -27,15 +27,16 @@ use std::sync::Arc;
 use crate::config::build_multiaddr;
 use log::trace;
 use crate::chain::FinalityProofProvider;
-use client::{
-	self, ClientInfo, BlockchainEvents, BlockImportNotification,
+use interfaces::{
+	ClientInfo, BlockchainEvents, BlockImportNotification,
 	FinalityNotifications, ImportNotifications,
 	FinalityNotification, LongestChain,
 	error::Result as ClientResult,
 	well_known_cache_keys::{self, Id as CacheKeyId},
+	::backend::{AuxStore, Backend, Finalizer}
 };
 use block_builder::BlockBuilder;
-use client::backend::{AuxStore, Backend, Finalizer};
+use client::Client;
 use crate::config::Roles;
 use consensus::block_validation::DefaultBlockAnnounceValidator;
 use consensus::import_queue::BasicQueue;

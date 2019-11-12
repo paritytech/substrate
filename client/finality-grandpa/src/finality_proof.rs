@@ -258,7 +258,7 @@ pub(crate) fn prove_finality<Block: BlockT<Hash=H256>, B: BlockchainBackend<Bloc
 	authorities_set_id: u64,
 	begin: Block::Hash,
 	end: Block::Hash,
-) -> ::client::error::Result<Option<Vec<u8>>>
+) -> ::interfaces::error::Result<Option<Vec<u8>>>
 	where
 		J: ProvableJustification<Block::Header>,
 {

@@ -55,11 +55,11 @@
 use futures::prelude::*;
 use log::{debug, error, info};
 use futures::sync::mpsc;
-use client::{
-	BlockchainEvents, CallExecutor, Client, backend::Backend, error::Error as ClientError,
-	ExecutionStrategy,
+use interfaces::{
+	BlockchainEvents, CallExecutor, backend::Backend, error::Error as ClientError,
+	ExecutionStrategy, ::blockchain::HeaderBackend
 };
-use client::blockchain::HeaderBackend;
+use client::Client;
 use codec::{Decode, Encode};
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{NumberFor, Block as BlockT, DigestFor, Zero};
@@ -546,7 +546,7 @@ pub struct GrandpaParams<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X> {
 /// block import worker that has already been instantiated with `block_import`.
 pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X>(
 	grandpa_params: GrandpaParams<B, E, Block, N, RA, SC, VR, X>,
-) -> client::error::Result<impl Future<Item=(),Error=()> + Send + 'static> where
+) -> interfacess::error::Result<impl Future<Item=(),Error=()> + Send + 'static> where
 	Block::Hash: Ord,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
@@ -879,7 +879,7 @@ where
 #[deprecated(since = "1.1.0", note = "Please switch to run_grandpa_voter.")]
 pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X>(
 	grandpa_params: GrandpaParams<B, E, Block, N, RA, SC, VR, X>,
-) -> ::client::error::Result<impl Future<Item=(),Error=()> + Send + 'static> where
+) -> ::interfaces::error::Result<impl Future<Item=(),Error=()> + Send + 'static> where
 	Block::Hash: Ord,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,

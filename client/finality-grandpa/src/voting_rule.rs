@@ -22,7 +22,7 @@
 
 use std::sync::Arc;
 
-use client::blockchain::HeaderBackend;
+use interfaces::blockchain::HeaderBackend;
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{Block as BlockT, Header, NumberFor, One, Zero};
 

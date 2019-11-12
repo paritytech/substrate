@@ -23,7 +23,8 @@ use std::{sync::Arc, convert::TryInto};
 use futures03::future::{FutureExt, TryFutureExt};
 use log::warn;
 
-use client::{Client, error::Error as ClientError};
+use client::Client;
+use interfaces::error::Error as ClientError;
 
 use rpc::futures::{
 	Sink, Future,
@@ -82,7 +83,7 @@ impl<B, E, P, RA> Author<B, E, P, RA> where P: PoolChainApi + Sync + Send + 'sta
 
 impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> where
 	B: interfaces::backend::Backend<<P as PoolChainApi>::Block, Blake2Hasher> + Send + Sync + 'static,
-	E: client::CallExecutor<<P as PoolChainApi>::Block, Blake2Hasher> + Send + Sync + 'static,
+	E: interfaces::CallExecutor<<P as PoolChainApi>::Block, Blake2Hasher> + Send + Sync + 'static,
 	P: PoolChainApi + Sync + Send + 'static,
 	P::Block: traits::Block<Hash=H256>,
 	P::Error: 'static,

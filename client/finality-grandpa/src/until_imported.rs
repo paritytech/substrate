@@ -29,7 +29,7 @@ use super::{
 };
 
 use log::{debug, warn};
-use client::{BlockImportNotification, ImportNotifications};
+use interfacess::{BlockImportNotification, ImportNotifications};
 use futures::prelude::*;
 use futures::stream::Fuse;
 use futures03::{StreamExt as _, TryStreamExt as _};
@@ -474,7 +474,7 @@ mod tests {
 	use tokio_timer::Delay;
 	use test_client::runtime::{Block, Hash, Header};
 	use consensus_common::BlockOrigin;
-	use client::BlockImportNotification;
+	use interfaces::BlockImportNotification;
 	use futures::future::Either;
 	use futures03::channel::mpsc;
 	use grandpa::Precommit;

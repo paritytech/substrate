@@ -18,9 +18,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use log::{info, trace, warn};
 use parking_lot::RwLock;
-
-use client::{
-	CallExecutor, Client,
+use client::Client;
+use interfaces::{
+	CallExecutor,
 	backend::{AuxStore, Backend, Finalizer},
 	blockchain::HeaderBackend,
 	error::Error as ClientError,
