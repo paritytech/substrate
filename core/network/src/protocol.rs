@@ -68,6 +68,11 @@ const TICK_TIMEOUT: time::Duration = time::Duration::from_millis(1100);
 /// Interval at which we propagate exstrinsics;
 const PROPAGATE_TIMEOUT: time::Duration = time::Duration::from_millis(2900);
 
+/// Maximim number of known block hashes to keep for a peer.
+const MAX_KNOWN_BLOCKS: usize = 1024; // ~32kb per peer + LruHashSet overhead
+/// Maximim number of known extrinsic hashes to keep for a peer.
+const MAX_KNOWN_EXTRINSICS: usize = 4096; // ~128kb per peer + overhead
+
 /// Current protocol version.
 pub(crate) const CURRENT_VERSION: u32 = 5;
 /// Lowest version we support
@@ -973,8 +978,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				}
 			}
 
-			let cache_limit = NonZeroUsize::new(1_000_000).expect("1_000_000 > 0; qed");
-
 			let info = match self.handshaking_peers.remove(&who) {
 				Some(_handshaking) => {
 					PeerInfo {
@@ -993,8 +996,10 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			let peer = Peer {
 				info,
 				block_request: None,
-				known_extrinsics: LruHashSet::new(cache_limit),
-				known_blocks: LruHashSet::new(cache_limit),
+				known_extrinsics: LruHashSet::new(NonZeroUsize::new(MAX_KNOWN_EXTRINSICS)
+					.expect("Constant is nonzero")),
+				known_blocks: LruHashSet::new(NonZeroUsize::new(MAX_KNOWN_BLOCKS)
+					.expect("Constant is nonzero")),
 				next_request_id: 0,
 				obsolete_requests: HashMap::new(),
 			};
