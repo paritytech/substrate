@@ -536,23 +536,6 @@ pub struct WasmiRuntime {
 	host_functions: Vec<&'static dyn Function>,
 }
 
-impl WasmiRuntime {
-	/// Perform an operation with the clean version of the runtime wasm instance.
-	fn with<R, F>(&self, f: F) -> R
-		where
-			F: FnOnce(&ModuleRef) -> R,
-	{
-		self.state_snapshot.apply(&self.instance).expect(
-			"applying the snapshot can only fail if the passed instance is different
-			from the one that was used for creation of the snapshot;
-			we use the snapshot that is directly associated with the instance;
-			thus the snapshot was created using the instance;
-			qed",
-		);
-		f(&self.instance)
-	}
-}
-
 impl WasmRuntime for WasmiRuntime {
 	fn update_heap_pages(&mut self, heap_pages: u64) -> bool {
 		self.state_snapshot.heap_pages == heap_pages
@@ -568,9 +551,14 @@ impl WasmRuntime for WasmiRuntime {
 		method: &str,
 		data: &[u8],
 	) -> Result<Vec<u8>, Error> {
-		self.with(|module| {
-			call_in_wasm_module(ext, module, method, data, &self.host_functions)
-		})
+		self.state_snapshot.apply(&self.instance).expect(
+			"applying the snapshot can only fail if the passed instance is different
+			from the one that was used for creation of the snapshot;
+			we use the snapshot that is directly associated with the instance;
+			thus the snapshot was created using the instance;
+			qed",
+		);
+		call_in_wasm_module(ext, &self.instance, method, data, &self.host_functions)
 	}
 }
 
