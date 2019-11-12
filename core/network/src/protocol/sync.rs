@@ -58,6 +58,9 @@ const MAX_BLOCKS_TO_REQUEST: usize = 128;
 /// Maximum blocks to store in the import queue.
 const MAX_IMPORTING_BLOCKS: usize = 2048;
 
+/// Maximum blocks to download ahead of any gap.
+const MAX_DOWNLOAD_AHEAD: u32 = 2048;
+
 /// We use a heuristic that with a high likelihood, by the time
 /// `MAJOR_SYNC_BLOCKS` have been imported we'll be on the same
 /// chain as (or at least closer to) the peer so we want to delay
@@ -1254,6 +1257,7 @@ fn peer_block_request<B: BlockT>(
 		peer.best_number,
 		peer.common_number,
 		max_parallel_downloads,
+		MAX_DOWNLOAD_AHEAD,
 	) {
 		let request = message::generic::BlockRequest {
 			id: 0,
