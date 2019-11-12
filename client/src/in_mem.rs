@@ -29,13 +29,14 @@ use hash_db::{Hasher, Prefix};
 use trie::MemoryDB;
 use header_metadata::{CachedHeaderMetadata, HeaderMetadata};
 
-use interfaces::error;
-use crate::backend::{self, NewBlockState, StorageCollection, ChildStorageCollection};
-use crate::light;
-use crate::leaves::LeafSet;
-use interfaces::blockchain::{
-	self, BlockStatus, HeaderBackend, well_known_cache_keys::Id as CacheKeyId
+use interfaces::{
+	error,
+	backend::{self, NewBlockState, StorageCollection, ChildStorageCollection},
+	blockchain::{
+		self, BlockStatus, HeaderBackend, well_known_cache_keys::Id as CacheKeyId
+	},
 };
+use crate::leaves::LeafSet;
 
 struct PendingBlock<B: BlockT> {
 	block: StoredBlock<B>,
@@ -395,7 +396,7 @@ impl<Block: BlockT> backend::AuxStore for Blockchain<Block> {
 	}
 }
 
-impl<Block: BlockT> light::blockchain::Storage<Block> for Blockchain<Block>
+impl<Block: BlockT> interfaces::light::Storage<Block> for Blockchain<Block>
 	where
 		Block::Hash: From<[u8; 32]>,
 {

@@ -39,8 +39,9 @@ use rpc::{
 };
 
 use api::Subscriptions;
+use interfaces::backend::Backend;
 use client::{
-	BlockchainEvents, Client, CallExecutor, backend::Backend,
+	BlockchainEvents, Client, CallExecutor, 
 	error::Error as ClientError,
 	light::{
 		blockchain::{future_header, RemoteBlockchain},

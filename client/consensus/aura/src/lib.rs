@@ -38,8 +38,9 @@ use consensus_common::{self, BlockImport, Environment, Proposer,
 use consensus_common::import_queue::{
 	Verifier, BasicQueue, BoxBlockImport, BoxJustificationImport, BoxFinalityProofImport,
 };
+use interfaces::{ error::Result as CResult, backend::AuxStore };
 use client::{
-	blockchain::ProvideCache, error::Result as CResult, backend::AuxStore, BlockOf,
+	blockchain::ProvideCache, BlockOf,
 	well_known_cache_keys::{self, Id as CacheKeyId},
 };
 
@@ -372,7 +373,7 @@ fn check_header<C, B: BlockT, P: Pair, T>(
 ) -> Result<CheckedHeader<B::Header, (u64, DigestItemFor<B>)>, Error<B>> where
 	DigestItemFor<B>: CompatibleDigestItem<P>,
 	P::Signature: Decode,
-	C: client::backend::AuxStore,
+	C: interfaces::backend::AuxStore,
 	P::Public: Encode + Decode + PartialEq + Clone,
 	T: Send + Sync + 'static,
 {
@@ -487,7 +488,7 @@ impl<C, P, T> AuraVerifier<C, P, T>
 
 #[forbid(deprecated)]
 impl<B: BlockT, C, P, T> Verifier<B> for AuraVerifier<C, P, T> where
-	C: ProvideRuntimeApi + Send + Sync + client::backend::AuxStore + ProvideCache<B> + BlockOf,
+	C: ProvideRuntimeApi + Send + Sync + interfaces::backend::AuxStore + ProvideCache<B> + BlockOf,
 	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>> + ApiExt<B, Error = client::error::Error>,
 	DigestItemFor<B>: CompatibleDigestItem<P>,
 	P: Pair + Send + Sync + 'static,

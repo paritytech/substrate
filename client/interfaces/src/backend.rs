@@ -18,14 +18,18 @@
 
 use std::sync::Arc;
 use std::collections::HashMap;
-use interfaces::error;
-use crate::light::blockchain::RemoteBlockchain;
 use primitives::ChangesTrieConfiguration;
 use sr_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
 use sr_primitives::traits::{Block as BlockT, NumberFor};
 use state_machine::backend::Backend as StateBackend;
 use state_machine::{ChangesTrieStorage as StateChangesTrieStorage, ChangesTrieTransaction};
-use interfaces::blockchain::well_known_cache_keys;
+use crate::{
+	blockchain::{
+		Backend as BlockchainBackend, well_known_cache_keys
+	},
+	error,
+	light::RemoteBlockchain,
+};
 use consensus::BlockOrigin;
 use hash_db::Hasher;
 use parking_lot::Mutex;
@@ -36,13 +40,13 @@ pub type StorageCollection = Vec<(Vec<u8>, Option<Vec<u8>>)>;
 /// In memory arrays of storage values for multiple child tries.
 pub type ChildStorageCollection = Vec<(Vec<u8>, StorageCollection)>;
 
-pub(crate) struct ImportSummary<Block: BlockT> {
-	pub(crate) hash: Block::Hash,
-	pub(crate) origin: BlockOrigin,
-	pub(crate) header: Block::Header,
-	pub(crate) is_new_best: bool,
-	pub(crate) storage_changes: Option<(StorageCollection, ChildStorageCollection)>,
-	pub(crate) retracted: Vec<Block::Hash>,
+pub struct ImportSummary<Block: BlockT> {
+	pub hash: Block::Hash,
+	pub origin: BlockOrigin,
+	pub header: Block::Header,
+	pub is_new_best: bool,
+	pub storage_changes: Option<(StorageCollection, ChildStorageCollection)>,
+	pub retracted: Vec<Block::Hash>,
 }
 
 /// Import operation wrapper
@@ -51,9 +55,9 @@ pub struct ClientImportOperation<
 	H: Hasher<Out=Block::Hash>,
 	B: Backend<Block, H>,
 > {
-	pub(crate) op: B::BlockImportOperation,
-	pub(crate) notify_imported: Option<ImportSummary<Block>>,
-	pub(crate) notify_finalized: Vec<Block::Hash>,
+	pub op: B::BlockImportOperation,
+	pub notify_imported: Option<ImportSummary<Block>>,
+	pub notify_finalized: Vec<Block::Hash>,
 }
 
 /// State of a new block.
@@ -216,7 +220,7 @@ pub trait Backend<Block, H>: AuxStore + Send + Sync where
 	/// Associated block insertion operation type.
 	type BlockImportOperation: BlockImportOperation<Block, H, State=Self::State>;
 	/// Associated blockchain backend type.
-	type Blockchain: interfaces::blockchain::Backend<Block>;
+	type Blockchain: BlockchainBackend<Block>;
 	/// Associated state backend type.
 	type State: StateBackend<H>;
 	/// Changes trie storage.

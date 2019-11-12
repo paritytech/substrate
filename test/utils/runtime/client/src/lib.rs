@@ -205,7 +205,7 @@ impl<B> TestClientBuilderExt<B> for TestClientBuilder<
 	client::LocalCallExecutor<B, executor::NativeExecutor<LocalExecutor>>,
 	B
 > where
-	B: client::backend::Backend<runtime::Block, Blake2Hasher>,
+	B: interfaces::backend::Backend<runtime::Block, Blake2Hasher>,
 {
 	fn set_heap_pages(mut self, heap_pages: u64) -> Self {
 		self.genesis_init_mut().heap_pages_override = Some(heap_pages);

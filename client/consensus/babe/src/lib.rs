@@ -86,10 +86,12 @@ use srml_babe::{
 };
 use consensus_common::SelectChain;
 use consensus_common::import_queue::{Verifier, BasicQueue, CacheKeyId};
+use interfaces::{
+	backend::{AuxStore, Backend},
+	error::{Result as ClientResult, Error as ClientError}
+};
 use client::{
-	blockchain::{self, HeaderBackend, ProvideCache}, BlockchainEvents, CallExecutor, Client,
-	error::Result as ClientResult, error::Error as ClientError, backend::{AuxStore, Backend},
-	ProvideUncles,
+	blockchain::{self, HeaderBackend, ProvideCache}, BlockchainEvents, CallExecutor, Client, ProvideUncles,
 };
 
 use block_builder_api::BlockBuilder as BlockBuilderApi;

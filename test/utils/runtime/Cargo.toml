@@ -11,6 +11,7 @@ aura-primitives = { package = "substrate-consensus-aura-primitives", path = "../
 babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../../../primitives/consensus/babe", default-features = false }
 block-builder-api = { package = "substrate-block-builder-runtime-api", path = "../../../primitives/block-builder/runtime-api", default-features = false }
 cfg-if = "0.1.10"
+interfaces = { package = "substrate-client-interfaces", path = "../../../client/interfaces" }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 executive = { package = "srml-executive", path = "../../../paint/executive", default-features = false }
 inherents = { package = "substrate-inherents", path = "../../../primitives/inherents", default-features = false }

@@ -47,7 +47,7 @@ pub use api::state::*;
 pub trait StateBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 	where
 		Block: BlockT<Hash=H256> + 'static,
-		B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
+		B: interfaces::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 		E: client::CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
 		RA: Send + Sync + 'static,
 {
@@ -179,7 +179,7 @@ pub fn new_full<B, E, Block: BlockT, RA>(
 ) -> State<B, E, Block, RA>
 	where
 		Block: BlockT<Hash=H256> + 'static,
-		B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
+		B: interfaces::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static + Clone,
 		RA: Send + Sync + 'static,
 		Client<B, E, Block, RA>: ProvideRuntimeApi,
@@ -200,7 +200,7 @@ pub fn new_light<B, E, Block: BlockT, RA, F: Fetcher<Block>>(
 ) -> State<B, E, Block, RA>
 	where
 		Block: BlockT<Hash=H256> + 'static,
-		B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
+		B: interfaces::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static + Clone,
 		RA: Send + Sync + 'static,
 		F: Send + Sync + 'static,
@@ -223,7 +223,7 @@ pub struct State<B, E, Block, RA> {
 impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA>
 	where
 		Block: BlockT<Hash=H256> + 'static,
-		B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
+		B: interfaces::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static + Clone,
 		RA: Send + Sync + 'static,
 {

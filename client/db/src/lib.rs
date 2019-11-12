@@ -39,10 +39,10 @@ use std::path::PathBuf;
 use std::io;
 use std::collections::{HashMap, HashSet};
 
-use client::backend::NewBlockState;
+use interfaces::backend::NewBlockState;
 use client::blockchain::{well_known_cache_keys, HeaderBackend};
 use client::{ForkBlocks, ExecutionStrategies};
-use client::backend::{StorageCollection, ChildStorageCollection};
+use interfaces::backend::{StorageCollection, ChildStorageCollection};
 use client::error::{Result as ClientResult, Error as ClientError};
 use codec::{Decode, Encode};
 use hash_db::{Hasher, Prefix};
@@ -471,7 +471,7 @@ impl<Block: BlockT, H: Hasher> BlockImportOperation<Block, H> {
 	}
 }
 
-impl<Block> client::backend::BlockImportOperation<Block, Blake2Hasher>
+impl<Block> interfaces::backend::BlockImportOperation<Block, Blake2Hasher>
 	for BlockImportOperation<Block, Blake2Hasher> where Block: BlockT<Hash=H256>,
 {
 	type State = CachingState<Blake2Hasher, RefTrackingState<Block>, Block>;
@@ -661,7 +661,7 @@ impl<Block: BlockT<Hash=H256>> DbChangesTrieStorage<Block> {
 	}
 }
 
-impl<Block> client::backend::PrunableStateChangesTrieStorage<Block, Blake2Hasher>
+impl<Block> interfaces::backend::PrunableStateChangesTrieStorage<Block, Blake2Hasher>
 	for DbChangesTrieStorage<Block>
 where
 	Block: BlockT<Hash=H256>,
@@ -853,7 +853,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 	/// Returns in-memory blockchain that contains the same set of blocks that the self.
 	#[cfg(feature = "test-helpers")]
 	pub fn as_in_memory(&self) -> InMemoryBackend<Block, Blake2Hasher> {
-		use client::backend::{Backend as ClientBackend, BlockImportOperation};
+		use interfaces::backend::{Backend as ClientBackend, BlockImportOperation};
 		use client::blockchain::Backend as BlockchainBackend;
 
 		let inmem = InMemoryBackend::<Block, Blake2Hasher>::new();
@@ -913,7 +913,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 		match cached_changes_trie_config.clone() {
 			Some(cached_changes_trie_config) => Ok(cached_changes_trie_config),
 			None => {
-				use client::backend::Backend;
+				use interfaces::backend::Backend;
 				let changes_trie_config = self
 					.state_at(BlockId::Hash(block))?
 					.storage(well_known_keys::CHANGES_TRIE_CONFIG)?
@@ -1318,7 +1318,7 @@ fn apply_state_commit(transaction: &mut DBTransaction, commit: state_db::CommitS
 	}
 }
 
-impl<Block> client::backend::AuxStore for Backend<Block> where Block: BlockT<Hash=H256> {
+impl<Block> interfaces::backend::AuxStore for Backend<Block> where Block: BlockT<Hash=H256> {
 	fn insert_aux<
 		'a,
 		'b: 'a,
@@ -1342,7 +1342,7 @@ impl<Block> client::backend::AuxStore for Backend<Block> where Block: BlockT<Has
 	}
 }
 
-impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> where Block: BlockT<Hash=H256> {
+impl<Block> interfaces::backend::Backend<Block, Blake2Hasher> for Backend<Block> where Block: BlockT<Hash=H256> {
 	type BlockImportOperation = BlockImportOperation<Block, Blake2Hasher>;
 	type Blockchain = BlockchainDb<Block>;
 	type State = CachingState<Blake2Hasher, RefTrackingState<Block>, Block>;
@@ -1538,7 +1538,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 	}
 }
 
-impl<Block> client::backend::LocalBackend<Block, Blake2Hasher> for Backend<Block>
+impl<Block> interfaces::backend::LocalBackend<Block, Blake2Hasher> for Backend<Block>
 where Block: BlockT<Hash=H256> {}
 
 /// TODO: remove me in #3201
@@ -1552,7 +1552,7 @@ mod tests {
 	use hash_db::{HashDB, EMPTY_PREFIX};
 	use super::*;
 	use crate::columns;
-	use client::backend::Backend as BTrait;
+	use interfaces::backend::Backend as BTrait;
 	use client::blockchain::Backend as BLBTrait;
 	use client::backend::BlockImportOperation as Op;
 	use sr_primitives::testing::{Header, Block as RawBlock, ExtrinsicWrapper};

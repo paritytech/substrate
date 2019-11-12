@@ -25,13 +25,20 @@ use sr_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenSto
 use state_machine::{Backend as StateBackend, TrieBackend, backend::InMemory as InMemoryState, ChangesTrieTransaction};
 use sr_primitives::traits::{Block as BlockT, NumberFor, Zero, Header};
 use crate::in_mem::{self, check_genesis_storage};
-use crate::backend::{
-	AuxStore, Backend as ClientBackend, BlockImportOperation, RemoteBackend, NewBlockState,
-	StorageCollection, ChildStorageCollection,
+use interfaces::{
+	backend::{
+		AuxStore, Backend as ClientBackend, BlockImportOperation, RemoteBackend, NewBlockState,
+		StorageCollection, ChildStorageCollection,
+	},
+	blockchain::{
+		HeaderBackend as BlockchainHeaderBackend, well_known_cache_keys,
+	},
+	error::{
+		Error as ClientError, Result as ClientResult
+	},
+	light::Storage as BlockchainStorage,
 };
-use interfaces::blockchain::{HeaderBackend as BlockchainHeaderBackend, well_known_cache_keys};
-use interfaces::error::{Error as ClientError, Result as ClientResult};
-use crate::light::blockchain::{Blockchain, Storage as BlockchainStorage};
+use crate::light::blockchain::{Blockchain};
 use hash_db::Hasher;
 use trie::MemoryDB;
 
@@ -442,7 +449,7 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 mod tests {
 	use primitives::Blake2Hasher;
 	use test_client::{self, runtime::Block};
-	use crate::backend::NewBlockState;
+	use interfaces::backend::NewBlockState;
 	use crate::light::blockchain::tests::{DummyBlockchain, DummyStorage};
 	use super::*;
 

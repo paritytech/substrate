@@ -20,6 +20,7 @@ inherents = { package = "substrate-inherents", path = "../../../primitives/inher
 substrate-telemetry = { path = "../../telemetry" }
 keystore = { package = "substrate-keystore", path = "../../keystore" }
 srml-babe = { path = "../../../paint/babe" }
+interfaces = { package = "substrate-client-interfaces", path = "../../interfaces" }
 client = { package = "substrate-client", path = "../../" }
 sr-api = { path = "../../../primitives/sr-api" }
 block-builder-api = { package = "substrate-block-builder-runtime-api", path = "../../../primitives/block-builder/runtime-api" }

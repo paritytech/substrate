@@ -20,7 +20,8 @@ use std::sync::Arc;
 use rpc::futures::future::result;
 
 use api::Subscriptions;
-use client::{backend::Backend, CallExecutor, Client};
+use interfaces::backend::Backend;
+use client::{CallExecutor, Client};
 use primitives::{H256, Blake2Hasher};
 use sr_primitives::{
 	generic::{BlockId, SignedBlock},

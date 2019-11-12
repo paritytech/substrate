@@ -76,7 +76,6 @@
 #![warn(missing_docs)]
 #![recursion_limit="128"]
 
-pub mod backend;
 pub mod cht;
 pub mod in_mem;
 pub mod genesis;
@@ -85,9 +84,13 @@ pub mod leaves;
 mod call_executor;
 mod client;
 
-pub use interfaces::error;
-pub use interfaces::blockchain;
-pub use interfaces::blockchain::Info as ChainInfo;
+pub use interfaces::{
+	error,
+	blockchain,
+	blockchain::well_known_cache_keys,
+	blockchain::Info as ChainInfo,
+	notifications::{StorageEventStream, StorageChangeSet},
+};
 pub use crate::call_executor::{CallExecutor, LocalCallExecutor};
 pub use crate::client::{
 	new_with_backend,
@@ -97,7 +100,5 @@ pub use crate::client::{
 	LongestChain, BlockOf, ProvideUncles, ForkBlocks,
 	utils, apply_aux,
 };
-pub use interfaces::notifications::{StorageEventStream, StorageChangeSet};
 pub use state_machine::{ExecutionStrategy, StorageProof};
 pub use crate::leaves::LeafSet;
-pub use interfaces::blockchain::well_known_cache_keys;

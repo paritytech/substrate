@@ -16,7 +16,8 @@
 
 //! Client extension for tests.
 
-use client::{self, Client, backend::Finalizer};
+use client::{self, Client};
+use interfaces::backend::Finalizer;
 use consensus::{
 	BlockImportParams, BlockImport, BlockOrigin, Error as ConsensusError,
 	ForkChoiceStrategy,
@@ -59,7 +60,7 @@ pub trait ClientExt<Block: BlockT>: Sized {
 
 impl<B, E, RA, Block> ClientExt<Block> for Client<B, E, Block, RA>
 	where
-		B: client::backend::Backend<Block, Blake2Hasher>,
+		B: interfaces::backend::Backend<Block, Blake2Hasher>,
 		E: client::CallExecutor<Block, Blake2Hasher>,
 		for<'r> &'r Self: BlockImport<Block, Error=ConsensusError>,
 		Block: BlockT<Hash=<Blake2Hasher as Hasher>::Out>,

@@ -35,10 +35,12 @@ use hash_db::Hasher;
 
 use sr_api::{ProofRecorder, InitializeBlock};
 
-use crate::backend::RemoteBackend;
 use crate::call_executor::CallExecutor;
-use interfaces::error::{Error as ClientError, Result as ClientResult};
-use crate::light::fetcher::RemoteCallRequest;
+use interfaces::{
+	backend::RemoteBackend,
+	error::{Error as ClientError, Result as ClientResult},
+	light::RemoteCallRequest
+};
 use executor::{RuntimeVersion, NativeVersion};
 
 /// Call executor that is able to execute calls only on genesis state.
@@ -295,7 +297,7 @@ mod tests {
 	use test_client::{self, runtime::{Header, Digest, Block}, ClientExt, TestClient};
 	use executor::{NativeExecutor, WasmExecutionMethod};
 	use primitives::Blake2Hasher;
-	use crate::backend::{Backend, NewBlockState};
+	use interfaces::backend::{Backend, NewBlockState};
 	use crate::in_mem::Backend as InMemBackend;
 
 	struct DummyCallExecutor;

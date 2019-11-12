@@ -19,11 +19,10 @@
 use std::sync::Arc;
 use std::collections::{BTreeMap, HashMap};
 use std::marker::PhantomData;
-use std::future::Future;
 
 use hash_db::{HashDB, Hasher, EMPTY_PREFIX};
 use codec::{Decode, Encode};
-use primitives::{ChangesTrieConfiguration, convert_hash, traits::CodeExecutor, H256};
+use primitives::{convert_hash, traits::CodeExecutor, H256};
 use sr_primitives::traits::{
 	Block as BlockT, Header as HeaderT, Hash, HashFor, NumberFor,
 	SimpleArithmetic, CheckedConversion, Zero,
@@ -36,190 +35,18 @@ use state_machine::{
 pub use state_machine::StorageProof;
 
 use crate::cht;
-use interfaces::error::{Error as ClientError, Result as ClientResult};
-use crate::light::blockchain::{Blockchain, Storage as BlockchainStorage};
+pub use interfaces::{
+	error::{
+		Error as ClientError, Result as ClientResult
+	},
+	light::{
+		RemoteCallRequest, RemoteHeaderRequest, RemoteReadRequest, RemoteReadChildRequest,
+		RemoteChangesRequest, ChangesProof, RemoteBodyRequest, Fetcher, FetchChecker,
+		Storage as BlockchainStorage,
+	},
+};
+use crate::light::blockchain::{Blockchain};
 use crate::light::call_executor::check_execution_proof;
-
-/// Remote call request.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct RemoteCallRequest<Header: HeaderT> {
-	/// Call at state of given block.
-	pub block: Header::Hash,
-	/// Header of block at which call is performed.
-	pub header: Header,
-	/// Method to call.
-	pub method: String,
-	/// Call data.
-	pub call_data: Vec<u8>,
-	/// Number of times to retry request. None means that default RETRY_COUNT is used.
-	pub retry_count: Option<usize>,
-}
-
-/// Remote canonical header request.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
-pub struct RemoteHeaderRequest<Header: HeaderT> {
-	/// The root of CHT this block is included in.
-	pub cht_root: Header::Hash,
-	/// Number of the header to query.
-	pub block: Header::Number,
-	/// Number of times to retry request. None means that default RETRY_COUNT is used.
-	pub retry_count: Option<usize>,
-}
-
-/// Remote storage read request.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct RemoteReadRequest<Header: HeaderT> {
-	/// Read at state of given block.
-	pub block: Header::Hash,
-	/// Header of block at which read is performed.
-	pub header: Header,
-	/// Storage key to read.
-	pub keys: Vec<Vec<u8>>,
-	/// Number of times to retry request. None means that default RETRY_COUNT is used.
-	pub retry_count: Option<usize>,
-}
-
-/// Remote storage read child request.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct RemoteReadChildRequest<Header: HeaderT> {
-	/// Read at state of given block.
-	pub block: Header::Hash,
-	/// Header of block at which read is performed.
-	pub header: Header,
-	/// Storage key for child.
-	pub storage_key: Vec<u8>,
-	/// Child storage key to read.
-	pub keys: Vec<Vec<u8>>,
-	/// Number of times to retry request. None means that default RETRY_COUNT is used.
-	pub retry_count: Option<usize>,
-}
-
-/// Remote key changes read request.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct RemoteChangesRequest<Header: HeaderT> {
-	/// Changes trie configuration.
-	pub changes_trie_config: ChangesTrieConfiguration,
-	/// Query changes from range of blocks, starting (and including) with this hash...
-	pub first_block: (Header::Number, Header::Hash),
-	/// ...ending (and including) with this hash. Should come after first_block and
-	/// be the part of the same fork.
-	pub last_block: (Header::Number, Header::Hash),
-	/// Only use digests from blocks up to this hash. Should be last_block OR come
-	/// after this block and be the part of the same fork.
-	pub max_block: (Header::Number, Header::Hash),
-	/// Known changes trie roots for the range of blocks [tries_roots.0..max_block].
-	/// Proofs for roots of ascendants of tries_roots.0 are provided by the remote node.
-	pub tries_roots: (Header::Number, Header::Hash, Vec<Header::Hash>),
-	/// Optional Child Storage key to read.
-	pub storage_key: Option<Vec<u8>>,
-	/// Storage key to read.
-	pub key: Vec<u8>,
-	/// Number of times to retry request. None means that default RETRY_COUNT is used.
-	pub retry_count: Option<usize>,
-}
-
-/// Key changes read proof.
-#[derive(Debug, PartialEq, Eq)]
-pub struct ChangesProof<Header: HeaderT> {
-	/// Max block that has been used in changes query.
-	pub max_block: Header::Number,
-	/// All touched nodes of all changes tries.
-	pub proof: Vec<Vec<u8>>,
-	/// All changes tries roots that have been touched AND are missing from
-	/// the requester' node. It is a map of block number => changes trie root.
-	pub roots: BTreeMap<Header::Number, Header::Hash>,
-	/// The proofs for all changes tries roots that have been touched AND are
-	/// missing from the requester' node. It is a map of CHT number => proof.
-	pub roots_proof: StorageProof,
-}
-
-/// Remote block body request
-#[derive(Clone, Default, Debug, PartialEq, Eq, Hash)]
-pub struct RemoteBodyRequest<Header: HeaderT> {
-	/// Header of the requested block body
-	pub header: Header,
-	/// Number of times to retry request. None means that default RETRY_COUNT is used.
-	pub retry_count: Option<usize>,
-}
-
-/// Light client data fetcher. Implementations of this trait must check if remote data
-/// is correct (see FetchedDataChecker) and return already checked data.
-pub trait Fetcher<Block: BlockT>: Send + Sync {
-	/// Remote header future.
-	type RemoteHeaderResult: Future<Output = Result<Block::Header, ClientError>> + Send + 'static;
-	/// Remote storage read future.
-	type RemoteReadResult: Future<Output = Result<HashMap<Vec<u8>, Option<Vec<u8>>>, ClientError>> + Send + 'static;
-	/// Remote call result future.
-	type RemoteCallResult: Future<Output = Result<Vec<u8>, ClientError>> + Send + 'static;
-	/// Remote changes result future.
-	type RemoteChangesResult: Future<Output = Result<Vec<(NumberFor<Block>, u32)>, ClientError>> + Send + 'static;
-	/// Remote block body result future.
-	type RemoteBodyResult: Future<Output = Result<Vec<Block::Extrinsic>, ClientError>> + Send + 'static;
-
-	/// Fetch remote header.
-	fn remote_header(&self, request: RemoteHeaderRequest<Block::Header>) -> Self::RemoteHeaderResult;
-	/// Fetch remote storage value.
-	fn remote_read(
-		&self,
-		request: RemoteReadRequest<Block::Header>
-	) -> Self::RemoteReadResult;
-	/// Fetch remote storage child value.
-	fn remote_read_child(
-		&self,
-		request: RemoteReadChildRequest<Block::Header>
-	) -> Self::RemoteReadResult;
-	/// Fetch remote call result.
-	fn remote_call(&self, request: RemoteCallRequest<Block::Header>) -> Self::RemoteCallResult;
-	/// Fetch remote changes ((block number, extrinsic index)) where given key has been changed
-	/// at a given blocks range.
-	fn remote_changes(&self, request: RemoteChangesRequest<Block::Header>) -> Self::RemoteChangesResult;
-	/// Fetch remote block body
-	fn remote_body(&self, request: RemoteBodyRequest<Block::Header>) -> Self::RemoteBodyResult;
-}
-
-/// Light client remote data checker.
-///
-/// Implementations of this trait should not use any prunable blockchain data
-/// except that is passed to its methods.
-pub trait FetchChecker<Block: BlockT>: Send + Sync {
-	/// Check remote header proof.
-	fn check_header_proof(
-		&self,
-		request: &RemoteHeaderRequest<Block::Header>,
-		header: Option<Block::Header>,
-		remote_proof: StorageProof,
-	) -> ClientResult<Block::Header>;
-	/// Check remote storage read proof.
-	fn check_read_proof(
-		&self,
-		request: &RemoteReadRequest<Block::Header>,
-		remote_proof: StorageProof,
-	) -> ClientResult<HashMap<Vec<u8>, Option<Vec<u8>>>>;
-	/// Check remote storage read proof.
-	fn check_read_child_proof(
-		&self,
-		request: &RemoteReadChildRequest<Block::Header>,
-		remote_proof: StorageProof,
-	) -> ClientResult<HashMap<Vec<u8>, Option<Vec<u8>>>>;
-	/// Check remote method execution proof.
-	fn check_execution_proof(
-		&self,
-		request: &RemoteCallRequest<Block::Header>,
-		remote_proof: StorageProof,
-	) -> ClientResult<Vec<u8>>;
-	/// Check remote changes query proof.
-	fn check_changes_proof(
-		&self,
-		request: &RemoteChangesRequest<Block::Header>,
-		proof: ChangesProof<Block::Header>
-	) -> ClientResult<Vec<(NumberFor<Block>, u32)>>;
-	/// Check remote body proof.
-	fn check_body_proof(
-		&self,
-		request: &RemoteBodyRequest<Block::Header>,
-		body: Vec<Block::Extrinsic>
-	) -> ClientResult<Vec<Block::Extrinsic>>;
-}
 
 /// Remote data checker.
 pub struct LightDataChecker<E, H, B: BlockT, S: BlockchainStorage<B>> {
@@ -504,7 +331,10 @@ pub mod tests {
 	use codec::Decode;
 	use crate::client::tests::prepare_client_with_key_changes;
 	use executor::{NativeExecutor, WasmExecutionMethod};
-	use interfaces::error::Error as ClientError;
+	use interfaces::{
+		backend::NewBlockState,
+		error::Error as ClientError
+	};
 	use test_client::{
 		self, ClientExt, blockchain::HeaderBackend, AccountKeyring,
 		runtime::{self, Hash, Block, Header, Extrinsic}
@@ -598,7 +428,7 @@ pub mod tests {
 			remote_block_header.clone(),
 			None,
 			None,
-			crate::backend::NewBlockState::Final,
+			NewBlockState::Final,
 		).unwrap();
 		let local_checker = LightDataChecker::new(
 			Arc::new(DummyBlockchain::new(DummyStorage::new())),
@@ -640,7 +470,7 @@ pub mod tests {
 			remote_block_header.clone(),
 			None,
 			None,
-			crate::backend::NewBlockState::Final,
+			NewBlockState::Final,
 		).unwrap();
 		let local_checker = LightDataChecker::new(
 			Arc::new(DummyBlockchain::new(DummyStorage::new())),

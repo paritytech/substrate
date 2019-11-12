@@ -19,8 +19,10 @@
 use log::info;
 use codec::{Decode, Encode};
 
-use client::backend::AuxStore;
-use client::error::{Result as ClientResult, Error as ClientError};
+use interfaces::{
+	backend::AuxStore,
+	error::{Result as ClientResult, Error as ClientError},
+};
 use sr_primitives::traits::Block as BlockT;
 use babe_primitives::BabeBlockWeight;
 

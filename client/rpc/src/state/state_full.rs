@@ -28,8 +28,9 @@ use rpc::{
 };
 
 use api::Subscriptions;
+use interfaces::{backend::Backend, error::Result as ClientResult};
 use client::{
-	Client, CallExecutor, BlockchainEvents, backend::Backend, error::Result as ClientResult,
+	Client, CallExecutor, BlockchainEvents, 
 };
 use primitives::{
 	H256, Blake2Hasher, Bytes, storage::{well_known_keys, StorageKey, StorageData, StorageChangeSet},

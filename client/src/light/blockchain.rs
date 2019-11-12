@@ -18,84 +18,30 @@
 //! blocks. CHT roots are stored for headers of ancient blocks.
 
 use std::future::Future;
-use std::{sync::Arc, collections::HashMap};
+use std::sync::Arc;
 
 use sr_primitives::{Justification, generic::BlockId};
 use sr_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero};
 
 use header_metadata::{HeaderMetadata, CachedHeaderMetadata};
-
-use crate::backend::{AuxStore, NewBlockState};
-use interfaces::blockchain::{
-	Backend as BlockchainBackend, BlockStatus, Cache as BlockchainCache,
-	HeaderBackend as BlockchainHeaderBackend, Info as BlockchainInfo, ProvideCache,
-	well_known_cache_keys
+pub use interfaces::{
+	backend::{
+		AuxStore, NewBlockState
+	},
+	blockchain::{
+		Backend as BlockchainBackend, BlockStatus, Cache as BlockchainCache,
+		HeaderBackend as BlockchainHeaderBackend, Info as BlockchainInfo, ProvideCache,
+		well_known_cache_keys,
+	},
+	error::{
+		Error as ClientError, Result as ClientResult
+	},
+	light::{
+		RemoteBlockchain, LocalOrRemote, Storage
+	}
 };
 use crate::cht;
-use interfaces::error::{Error as ClientError, Result as ClientResult};
 use crate::light::fetcher::{Fetcher, RemoteHeaderRequest};
-
-/// Light client blockchain storage.
-pub trait Storage<Block: BlockT>: AuxStore + BlockchainHeaderBackend<Block> + HeaderMetadata<Block, Error=ClientError> {
-	/// Store new header. Should refuse to revert any finalized blocks.
-	///
-	/// Takes new authorities, the leaf state of the new block, and
-	/// any auxiliary storage updates to place in the same operation.
-	fn import_header(
-		&self,
-		header: Block::Header,
-		cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
-		state: NewBlockState,
-		aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
-	) -> ClientResult<()>;
-
-	/// Set an existing block as new best block.
-	fn set_head(&self, block: BlockId<Block>) -> ClientResult<()>;
-
-	/// Mark historic header as finalized.
-	fn finalize_header(&self, block: BlockId<Block>) -> ClientResult<()>;
-
-	/// Get last finalized header.
-	fn last_finalized(&self) -> ClientResult<Block::Hash>;
-
-	/// Get headers CHT root for given block. Fails if the block is not pruned (not a part of any CHT).
-	fn header_cht_root(
-		&self,
-		cht_size: NumberFor<Block>,
-		block: NumberFor<Block>,
-	) -> ClientResult<Block::Hash>;
-
-	/// Get changes trie CHT root for given block. Fails if the block is not pruned (not a part of any CHT).
-	fn changes_trie_cht_root(
-		&self,
-		cht_size: NumberFor<Block>,
-		block: NumberFor<Block>,
-	) -> ClientResult<Block::Hash>;
-
-	/// Get storage cache.
-	fn cache(&self) -> Option<Arc<dyn BlockchainCache<Block>>>;
-}
-
-/// Remote header.
-#[derive(Debug)]
-pub enum LocalOrRemote<Data, Request> {
-	/// When data is available locally, it is returned.
-	Local(Data),
-	/// When data is unavailable locally, the request to fetch it from remote node is returned.
-	Remote(Request),
-	/// When data is unknown.
-	Unknown,
-}
-
-/// Futures-based blockchain backend that either resolves blockchain data
-/// locally, or fetches required data from remote node.
-pub trait RemoteBlockchain<Block: BlockT>: Send + Sync {
-	/// Get block header.
-	fn header(&self, id: BlockId<Block>) -> ClientResult<LocalOrRemote<
-		Block::Header,
-		RemoteHeaderRequest<Block::Header>,
-	>>;
-}
 
 /// Light client blockchain.
 pub struct Blockchain<S> {

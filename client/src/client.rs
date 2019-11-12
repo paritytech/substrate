@@ -57,22 +57,24 @@ use sr_api::{CallRuntimeAt, ConstructRuntimeApi, Core as CoreApi, ProofRecorder,
 use block_builder::BlockBuilderApi;
 
 use interfaces::{
-	notifications::{StorageNotifications, StorageEventStream},
-};
-
-use crate::{
 	backend::{
 		self, BlockImportOperation, PrunableStateChangesTrieStorage,
-		ClientImportOperation, Finalizer, ImportSummary,
+		ClientImportOperation, Finalizer, ImportSummary, NewBlockState,
 	},
 	blockchain::{
 		self, Info as ChainInfo, Backend as ChainBackend,
 		HeaderBackend as ChainHeaderBackend, ProvideCache, Cache,
 		well_known_cache_keys::Id as CacheKeyId,
 	},
+	notifications::{StorageNotifications, StorageEventStream},
+	error::Error,
+	error,
+};
+
+use crate::{
 	call_executor::{CallExecutor, LocalCallExecutor},
 	light::{call_executor::prove_execution, fetcher::ChangesProof},
-	error::Error, cht, error, in_mem, genesis
+	in_mem, genesis, cht,
 };
 
 /// Type that implements `futures::Stream` of block import events.
@@ -314,7 +316,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				genesis_block.deconstruct().0,
 				Some(vec![]),
 				None,
-				crate::backend::NewBlockState::Final
+				NewBlockState::Final
 			)?;
 			backend.commit_operation(op)?;
 		}
@@ -995,11 +997,11 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		};
 
 		let leaf_state = if finalized {
-			crate::backend::NewBlockState::Final
+			NewBlockState::Final
 		} else if is_new_best {
-			crate::backend::NewBlockState::Best
+			NewBlockState::Best
 		} else {
-			crate::backend::NewBlockState::Normal
+			NewBlockState::Normal
 		};
 
 		let retracted = if is_new_best {
@@ -1816,7 +1818,7 @@ impl<B, E, Block, RA> backend::AuxStore for Client<B, E, Block, RA>
 	}
 	/// Query auxiliary data from key-value store.
 	fn get_aux(&self, key: &[u8]) -> error::Result<Option<Vec<u8>>> {
-		crate::backend::AuxStore::get_aux(&*self.backend, key)
+		backend::AuxStore::get_aux(&*self.backend, key)
 	}
 }
 

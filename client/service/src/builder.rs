@@ -677,7 +677,7 @@ impl<
 	TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc, Backend
 > where
 	TBl: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
-	TBackend: 'static + client::backend::Backend<TBl, Blake2Hasher> + Send,
+	TBackend: 'static + interfaces::backend::Backend<TBl, Blake2Hasher> + Send,
 	TExec: 'static + client::CallExecutor<TBl, Blake2Hasher> + Send + Sync + Clone,
 	TImpQu: 'static + ImportQueue<TBl>,
 	TRtApi: 'static + Send + Sync,
@@ -699,7 +699,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCSExt, TBackend, TExec, TFchr, TSc, TImpQu, TFprb
 		TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc, TBackend>
 where
 	TBl: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
-	TBackend: 'static + client::backend::Backend<TBl, Blake2Hasher> + Send,
+	TBackend: 'static + interfaces::backend::Backend<TBl, Blake2Hasher> + Send,
 	TExec: 'static + client::CallExecutor<TBl, Blake2Hasher> + Send + Sync + Clone
 {
 	type Block = TBl;
@@ -722,7 +722,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCSExt, TBackend, TExec, TFchr, TSc, TImpQu, TFprb
 		TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc, TBackend>
 where
 	TBl: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
-	TBackend: 'static + client::backend::Backend<TBl, Blake2Hasher> + Send,
+	TBackend: 'static + interfaces::backend::Backend<TBl, Blake2Hasher> + Send,
 	TExec: 'static + client::CallExecutor<TBl, Blake2Hasher> + Send + Sync + Clone
 {
 	type Block = TBl;
@@ -766,7 +766,7 @@ ServiceBuilder<
 	TCfg: Default,
 	TGen: RuntimeGenesis,
 	TCSExt: Extension,
-	TBackend: 'static + client::backend::Backend<TBl, Blake2Hasher> + Send,
+	TBackend: 'static + interfaces::backend::Backend<TBl, Blake2Hasher> + Send,
 	TExec: 'static + client::CallExecutor<TBl, Blake2Hasher> + Send + Sync + Clone,
 	TSc: Clone,
 	TImpQu: 'static + ImportQueue<TBl>,
@@ -1161,7 +1161,7 @@ pub(crate) fn maintain_transaction_pool<Api, Backend, Block, Executor, PoolApi>(
 	retracted: &[Block::Hash],
 ) -> error::Result<Box<dyn Future<Item = (), Error = ()> + Send>> where
 	Block: BlockT<Hash = <Blake2Hasher as primitives::Hasher>::Out>,
-	Backend: 'static + client::backend::Backend<Block, Blake2Hasher>,
+	Backend: 'static + interfaces::backend::Backend<Block, Blake2Hasher>,
 	Client<Backend, Executor, Block, Api>: ProvideRuntimeApi,
 	<Client<Backend, Executor, Block, Api> as ProvideRuntimeApi>::Api:
 		tx_pool_api::TaggedTransactionQueue<Block>,

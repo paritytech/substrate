@@ -30,9 +30,12 @@ use sr_primitives::traits::Block as BlockT;
 
 use crate::call_executor::LocalCallExecutor;
 use crate::client::Client;
-use interfaces::error::Result as ClientResult;
+use interfaces::{
+	error::Result as ClientResult,
+	light::Storage as BlockchainStorage,
+};
 use crate::light::backend::Backend;
-use crate::light::blockchain::{Blockchain, Storage as BlockchainStorage};
+use crate::light::blockchain::Blockchain;
 use crate::light::call_executor::GenesisCallExecutor;
 use crate::light::fetcher::LightDataChecker;
 

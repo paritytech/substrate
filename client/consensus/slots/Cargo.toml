@@ -8,6 +8,7 @@ build = "build.rs"
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0" }
+interfaces = { package = "substrate-client-interfaces", path = "../../interfaces" }
 client = { package = "substrate-client", path = "../../" }
 primitives = { package = "substrate-primitives", path = "../../../primitives/core" }
 sr-primitives = {  path = "../../../primitives/sr-primitives" }

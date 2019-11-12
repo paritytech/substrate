@@ -390,7 +390,7 @@ impl<T: Clone> SlotDuration<T> {
 	/// `slot_key` is marked as `'static`, as it should really be a
 	/// compile-time constant.
 	pub fn get_or_compute<B: BlockT, C, CB>(client: &C, cb: CB) -> ::client::error::Result<Self> where
-		C: client::backend::AuxStore,
+		C: interfaces::backend::AuxStore,
 		C: ProvideRuntimeApi,
 		CB: FnOnce(ApiRef<C::Api>, &BlockId<B>) -> ::client::error::Result<T>,
 		T: SlotData + Encode + Decode + Debug,
