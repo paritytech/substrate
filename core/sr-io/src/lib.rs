@@ -376,7 +376,7 @@ pub trait Crypto {
 pub trait Hashing {
 	/// Conduct a 256-bit Keccak hash.
 	fn keccak_256(data: &[u8]) -> [u8; 32] {
-		tiny_keccak::keccak256(data)
+		primitives::hashing::keccak_256(data)
 	}
 
 	/// Conduct a 128-bit Blake2 hash.
