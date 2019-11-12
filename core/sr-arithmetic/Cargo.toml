@@ -15,9 +15,9 @@ substrate-debug-derive = { path = "../primitives/debug-derive", default-features
 [dev-dependencies]
 primitive-types = "0.6.0"
 rand = "0.7.2"
+criterion = "0.3"
 
 [features]
-bench = []
 default = ["std"]
 std = [
 	"codec/std",
@@ -26,3 +26,7 @@ std = [
 	"serde",
 	"substrate-debug-derive/std",
 ]
+
+[[bench]]
+name = "bench"
+harness = false

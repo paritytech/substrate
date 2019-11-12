@@ -17,12 +17,12 @@
 //! Test utilities
 
 use std::{collections::HashSet, cell::RefCell};
-use sr_primitives::Perbill;
+use sr_primitives::{Perbill, KeyTypeId};
 use sr_primitives::curve::PiecewiseLinear;
 use sr_primitives::traits::{IdentityLookup, Convert, OpaqueKeys, OnInitialize, SaturatedConversion};
 use sr_primitives::testing::{Header, UintAuthorityId};
 use sr_staking_primitives::SessionIndex;
-use primitives::H256;
+use primitives::{H256, crypto::key_types};
 use runtime_io;
 use support::{assert_ok, impl_outer_origin, parameter_types, StorageLinkedMap};
 use support::traits::{Currency, Get, FindAuthor};
@@ -52,6 +52,8 @@ thread_local! {
 
 pub struct TestSessionHandler;
 impl session::SessionHandler<AccountId> for TestSessionHandler {
+	const KEY_TYPE_IDS: &'static [KeyTypeId] = &[key_types::DUMMY];
+
 	fn on_genesis_session<Ks: OpaqueKeys>(_validators: &[(AccountId, Ks)]) {}
 
 	fn on_new_session<Ks: OpaqueKeys>(
@@ -195,7 +197,7 @@ impl Trait for Test {
 	type Currency = balances::Module<Self>;
 	type Time = timestamp::Module<Self>;
 	type CurrencyToVote = CurrencyToVoteHandler;
-	type OnRewardMinted = ();
+	type RewardRemainder = ();
 	type Event = ();
 	type Slash = ();
 	type Reward = ();
@@ -430,14 +432,12 @@ pub fn start_era(era_index: EraIndex) {
 }
 
 pub fn current_total_payout_for_duration(duration: u64) -> u64 {
-	let res = inflation::compute_total_payout(
+	inflation::compute_total_payout(
 		<Test as Trait>::RewardCurve::get(),
 		<Module<Test>>::slot_stake() * 2,
 		Balances::total_issuance(),
 		duration,
-	);
-
-	res
+	).0
 }
 
 pub fn reward_all_elected() {

@@ -43,7 +43,37 @@ use parking_lot::RwLock;
 #[cfg(feature = "std")]
 use std::{sync::Arc, format};
 
-pub use sr_primitives::RuntimeString;
+/// An error that can occur within the inherent data system.
+#[derive(Debug, Encode, Decode, derive_more::Display)]
+#[cfg(feature = "std")]
+pub struct Error(String);
+
+#[cfg(feature = "std")]
+impl<T: Into<String>> From<T> for Error {
+	fn from(data: T) -> Error {
+		Self(data.into())
+	}
+}
+
+#[cfg(feature = "std")]
+impl Error {
+	/// Convert this error into a `String`.
+	pub fn into_string(self) -> String {
+		self.0
+	}
+}
+
+/// An error that can occur within the inherent data system.
+#[derive(Encode, primitives::RuntimeDebug)]
+#[cfg(not(feature = "std"))]
+pub struct Error(&'static str);
+
+#[cfg(not(feature = "std"))]
+impl From<&'static str> for Error {
+	fn from(data: &'static str) -> Error {
+		Self(data)
+	}
+}
 
 /// An identifier for an inherent.
 pub type InherentIdentifier = [u8; 8];
@@ -73,7 +103,7 @@ impl InherentData {
 		&mut self,
 		identifier: InherentIdentifier,
 		inherent: &I,
-	) -> Result<(), RuntimeString> {
+	) -> Result<(), Error> {
 		match self.data.entry(identifier) {
 			Entry::Vacant(entry) => {
 				entry.insert(inherent.encode());
@@ -106,7 +136,7 @@ impl InherentData {
 	pub fn get_data<I: codec::Decode>(
 		&self,
 		identifier: &InherentIdentifier,
-	) -> Result<Option<I>, RuntimeString> {
+	) -> Result<Option<I>, Error> {
 		match self.data.get(identifier) {
 			Some(inherent) =>
 				I::decode(&mut &inherent[..])
@@ -163,7 +193,7 @@ impl CheckInherentsResult {
 		&mut self,
 		identifier: InherentIdentifier,
 		error: &E,
-	) -> Result<(), RuntimeString> {
+	) -> Result<(), Error> {
 		// Don't accept any other error
 		if self.fatal_error {
 			return Err("No other errors are accepted after an hard error!".into())
@@ -191,7 +221,7 @@ impl CheckInherentsResult {
 	pub fn get_error<E: codec::Decode>(
 		&self,
 		identifier: &InherentIdentifier,
-	) -> Result<Option<E>, RuntimeString> {
+	) -> Result<Option<E>, Error> {
 		self.errors.get_data(identifier)
 	}
 
@@ -245,7 +275,7 @@ impl InherentDataProviders {
 	pub fn register_provider<P: ProvideInherentData + Send + Sync +'static>(
 		&self,
 		provider: P,
-	) -> Result<(), RuntimeString> {
+	) -> Result<(), Error> {
 		if self.has_provider(&provider.inherent_identifier()) {
 			Err(
 				format!(
@@ -266,7 +296,7 @@ impl InherentDataProviders {
 	}
 
 	/// Create inherent data.
-	pub fn create_inherent_data(&self) -> Result<InherentData, RuntimeString> {
+	pub fn create_inherent_data(&self) -> Result<InherentData, Error> {
 		let mut data = InherentData::new();
 		self.providers.read().iter().try_for_each(|p| {
 			p.provide_inherent_data(&mut data)
@@ -305,7 +335,7 @@ impl InherentDataProviders {
 pub trait ProvideInherentData {
 	/// Is called when this inherent data provider is registered at the given
 	/// `InherentDataProviders`.
-	fn on_register(&self, _: &InherentDataProviders) -> Result<(), RuntimeString> {
+	fn on_register(&self, _: &InherentDataProviders) -> Result<(), Error> {
 		Ok(())
 	}
 
@@ -315,7 +345,7 @@ pub trait ProvideInherentData {
 	/// Provide inherent data that should be included in a block.
 	///
 	/// The data should be stored in the given `InherentData` structure.
-	fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), RuntimeString>;
+	fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), Error>;
 
 	/// Convert the given encoded error to a string.
 	///
@@ -445,7 +475,7 @@ mod tests {
 	const ERROR_TO_STRING: &str = "Found error!";
 
 	impl ProvideInherentData for TestInherentDataProvider {
-		fn on_register(&self, _: &InherentDataProviders) -> Result<(), RuntimeString> {
+		fn on_register(&self, _: &InherentDataProviders) -> Result<(), Error> {
 			*self.registered.write() = true;
 			Ok(())
 		}
@@ -454,7 +484,7 @@ mod tests {
 			&TEST_INHERENT_0
 		}
 
-		fn provide_inherent_data(&self, data: &mut InherentData) -> Result<(), RuntimeString> {
+		fn provide_inherent_data(&self, data: &mut InherentData) -> Result<(), Error> {
 			data.put_data(TEST_INHERENT_0, &42)
 		}
 

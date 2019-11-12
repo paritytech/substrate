@@ -22,7 +22,7 @@ use std::sync::Arc;
 use assert_matches::assert_matches;
 use futures::stream::Stream;
 use primitives::storage::well_known_keys;
-use sr_io::blake2_256;
+use sr_io::hashing::blake2_256;
 use test_client::{
 	prelude::*,
 	consensus::BlockOrigin,

@@ -23,7 +23,7 @@ use super::*;
 use authorship::claim_slot;
 
 use babe_primitives::{AuthorityPair, SlotNumber};
-use client::block_builder::BlockBuilder;
+use block_builder::BlockBuilder;
 use consensus_common::NoNetwork as DummyOracle;
 use consensus_common::import_queue::{
 	BoxBlockImport, BoxJustificationImport, BoxFinalityProofImport,
@@ -578,6 +578,7 @@ fn propose_and_import_block(
 			finalized: false,
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::LongestChain,
+			allow_missing_state: false,
 		},
 		Default::default(),
 	).unwrap();

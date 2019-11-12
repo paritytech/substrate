@@ -85,21 +85,24 @@ pub trait Verify {
 impl Verify for primitives::ed25519::Signature {
 	type Signer = primitives::ed25519::Public;
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &primitives::ed25519::Public) -> bool {
-		runtime_io::ed25519_verify(self, msg.get(), signer)
+		runtime_io::crypto::ed25519_verify(self, msg.get(), signer)
 	}
 }
 
 impl Verify for primitives::sr25519::Signature {
 	type Signer = primitives::sr25519::Public;
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &primitives::sr25519::Public) -> bool {
-		runtime_io::sr25519_verify(self, msg.get(), signer)
+		runtime_io::crypto::sr25519_verify(self, msg.get(), signer)
 	}
 }
 
 impl Verify for primitives::ecdsa::Signature {
 	type Signer = primitives::ecdsa::Public;
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &primitives::ecdsa::Public) -> bool {
-		match runtime_io::secp256k1_ecdsa_recover_compressed(self.as_ref(), &runtime_io::blake2_256(msg.get())) {
+		match runtime_io::crypto::secp256k1_ecdsa_recover_compressed(
+			self.as_ref(),
+			&runtime_io::hashing::blake2_256(msg.get()),
+		) {
 			Ok(pubkey) => <dyn AsRef<[u8]>>::as_ref(signer) == &pubkey[..],
 			_ => false,
 		}
@@ -399,23 +402,23 @@ impl Hash for BlakeTwo256 {
 	type Output = primitives::H256;
 	type Hasher = Blake2Hasher;
 	fn hash(s: &[u8]) -> Self::Output {
-		runtime_io::blake2_256(s).into()
+		runtime_io::hashing::blake2_256(s).into()
 	}
 
 	fn trie_root(input: Vec<(Vec<u8>, Vec<u8>)>) -> Self::Output {
-		runtime_io::blake2_256_trie_root(input)
+		runtime_io::storage::blake2_256_trie_root(input)
 	}
 
 	fn ordered_trie_root(input: Vec<Vec<u8>>) -> Self::Output {
-		runtime_io::blake2_256_ordered_trie_root(input)
+		runtime_io::storage::blake2_256_ordered_trie_root(input)
 	}
 
 	fn storage_root() -> Self::Output {
-		runtime_io::storage_root().into()
+		runtime_io::storage::root().into()
 	}
 
 	fn storage_changes_root(parent_hash: Self::Output) -> Option<Self::Output> {
-		runtime_io::storage_changes_root(parent_hash.into()).map(Into::into)
+		runtime_io::storage::changes_root(parent_hash.into()).map(Into::into)
 	}
 }
 
@@ -755,9 +758,6 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 
 	/// Validate an unsigned transaction for the transaction queue.
 	///
-	/// Normally the default implementation is fine since `ValidateUnsigned`
-	/// is a better way of recognising and validating unsigned transactions.
-	///
 	/// This function can be called frequently by the transaction queue,
 	/// to obtain transaction validity against current state.
 	/// It should perform all checks that determine a valid unsigned transaction,
@@ -889,6 +889,7 @@ pub trait Applyable: Sized + Send + Sync {
 	fn sender(&self) -> Option<&Self::AccountId>;
 
 	/// Checks to see if this is a valid *transaction*. It returns information on it if so.
+	#[allow(deprecated)] // Allow ValidateUnsigned
 	fn validate<V: ValidateUnsigned<Call=Self::Call>>(
 		&self,
 		info: DispatchInfo,
@@ -897,7 +898,8 @@ pub trait Applyable: Sized + Send + Sync {
 
 	/// Executes all necessary logic needed prior to dispatch and deconstructs into function call,
 	/// index and sender.
-	fn apply(
+	#[allow(deprecated)] // Allow ValidateUnsigned
+	fn apply<V: ValidateUnsigned<Call=Self::Call>>(
 		self,
 		info: DispatchInfo,
 		len: usize,
@@ -966,9 +968,26 @@ pub trait RuntimeApiInfo {
 /// the transaction for the transaction pool.
 /// During block execution phase one need to perform the same checks anyway,
 /// since this function is not being called.
+#[deprecated(note = "Use SignedExtensions instead.")]
 pub trait ValidateUnsigned {
 	/// The call to validate
 	type Call;
+
+	/// Validate the call right before dispatch.
+	///
+	/// This method should be used to prevent transactions already in the pool
+	/// (i.e. passing `validate_unsigned`) from being included in blocks
+	/// in case we know they now became invalid.
+	///
+	/// By default it's a good idea to call `validate_unsigned` from within
+	/// this function again to make sure we never include an invalid transaction.
+	///
+	/// Changes made to storage WILL be persisted if the call returns `Ok`.
+	fn pre_dispatch(call: &Self::Call) -> Result<(), crate::ApplyError> {
+		Self::validate_unsigned(call)
+			.map(|_| ())
+			.map_err(Into::into)
+	}
 
 	/// Return the validity of the call
 	///
@@ -982,11 +1001,11 @@ pub trait ValidateUnsigned {
 /// Opaque datatype that may be destructured into a series of raw byte slices (which represent
 /// individual keys).
 pub trait OpaqueKeys: Clone {
-	/// An iterator over the type IDs of keys that this holds.
-	type KeyTypeIds: IntoIterator<Item=super::KeyTypeId>;
+	/// Types bound to this opaque keys that provide the key type ids returned.
+	type KeyTypeIdProviders;
 
-	/// Return an iterator over the key-type IDs supported by this set.
-	fn key_ids() -> Self::KeyTypeIds;
+	/// Return the key-type IDs supported by this set.
+	fn key_ids() -> &'static [crate::KeyTypeId];
 	/// Get the raw bytes of key with key-type ID `i`.
 	fn get_raw(&self, i: super::KeyTypeId) -> &[u8];
 	/// Get the decoded key with index `i`.
@@ -1086,22 +1105,25 @@ macro_rules! count {
 }
 
 /// Implement `OpaqueKeys` for a described struct.
-/// Would be much nicer for this to be converted to `derive` code.
 ///
-/// Every field type must be equivalent implement `as_ref()`, which is expected
-/// to hold the standard SCALE-encoded form of that key. This is typically
-/// just the bytes of the key.
+/// Every field type must implement [`BoundToRuntimeAppPublic`](crate::BoundToRuntimeAppPublic).
+/// `KeyTypeIdProviders` is set to the types given as fields.
 ///
 /// ```rust
-/// use sr_primitives::{impl_opaque_keys, KeyTypeId, app_crypto::{sr25519, ed25519}};
-/// use primitives::testing::{SR25519, ED25519};
+/// use sr_primitives::{
+/// 	impl_opaque_keys, KeyTypeId, BoundToRuntimeAppPublic, app_crypto::{sr25519, ed25519}
+/// };
+///
+/// pub struct KeyModule;
+/// impl BoundToRuntimeAppPublic for KeyModule { type Public = ed25519::AppPublic; }
+///
+/// pub struct KeyModule2;
+/// impl BoundToRuntimeAppPublic for KeyModule2 { type Public = sr25519::AppPublic; }
 ///
 /// impl_opaque_keys! {
 /// 	pub struct Keys {
-/// 		#[id(ED25519)]
-/// 		pub ed25519: ed25519::AppPublic,
-/// 		#[id(SR25519)]
-/// 		pub sr25519: sr25519::AppPublic,
+/// 		pub key_module: KeyModule,
+/// 		pub key_module2: KeyModule2,
 /// 	}
 /// }
 /// ```
@@ -1110,7 +1132,6 @@ macro_rules! impl_opaque_keys {
 	(
 		pub struct $name:ident {
 			$(
-				#[id($key_id:expr)]
 				pub $field:ident: $type:ty,
 			)*
 		}
@@ -1119,12 +1140,12 @@ macro_rules! impl_opaque_keys {
 			Default, Clone, PartialEq, Eq,
 			$crate::codec::Encode,
 			$crate::codec::Decode,
-			$crate::RuntimeDebug
+			$crate::RuntimeDebug,
 		)]
 		#[cfg_attr(feature = "std", derive($crate::serde::Serialize, $crate::serde::Deserialize))]
 		pub struct $name {
 			$(
-				pub $field: $type,
+				pub $field: <$type as $crate::BoundToRuntimeAppPublic>::Public,
 			)*
 		}
 
@@ -1134,10 +1155,14 @@ macro_rules! impl_opaque_keys {
 			/// The generated key pairs are stored in the keystore.
 			///
 			/// Returns the concatenated SCALE encoded public keys.
-			pub fn generate(seed: Option<&str>) -> $crate::rstd::vec::Vec<u8> {
+			pub fn generate(seed: Option<$crate::rstd::vec::Vec<u8>>) -> $crate::rstd::vec::Vec<u8> {
 				let keys = Self{
 					$(
-						$field: <$type as $crate::app_crypto::RuntimeAppPublic>::generate_pair(seed),
+						$field: <
+							<
+								$type as $crate::BoundToRuntimeAppPublic
+							>::Public as $crate::RuntimeAppPublic
+						>::generate_pair(seed.clone()),
 					)*
 				};
 				$crate::codec::Encode::encode(&keys)
@@ -1145,17 +1170,30 @@ macro_rules! impl_opaque_keys {
 		}
 
 		impl $crate::traits::OpaqueKeys for $name {
-			type KeyTypeIds = $crate::rstd::iter::Cloned<
-				$crate::rstd::slice::Iter<'static, $crate::KeyTypeId>
-			>;
+			type KeyTypeIdProviders = ( $( $type, )* );
 
-			fn key_ids() -> Self::KeyTypeIds {
-				[ $($key_id),* ].iter().cloned()
+			fn key_ids() -> &'static [$crate::KeyTypeId] {
+				&[
+					$(
+						<
+							<
+								$type as $crate::BoundToRuntimeAppPublic
+							>::Public as $crate::RuntimeAppPublic
+						>::ID
+					),*
+				]
 			}
 
 			fn get_raw(&self, i: $crate::KeyTypeId) -> &[u8] {
 				match i {
-					$( i if i == $key_id => self.$field.as_ref(), )*
+					$(
+						i if i == <
+							<
+								$type as $crate::BoundToRuntimeAppPublic
+							>::Public as $crate::RuntimeAppPublic
+						>::ID =>
+							self.$field.as_ref(),
+					)*
 					_ => &[],
 				}
 			}
@@ -1189,19 +1227,19 @@ impl Printable for usize {
 
 impl Printable for u64 {
 	fn print(&self) {
-		runtime_io::print_num(*self);
+		runtime_io::misc::print_num(*self);
 	}
 }
 
 impl Printable for &[u8] {
 	fn print(&self) {
-		runtime_io::print_hex(self);
+		runtime_io::misc::print_hex(self);
 	}
 }
 
 impl Printable for &str {
 	fn print(&self) {
-		runtime_io::print_utf8(self.as_bytes());
+		runtime_io::misc::print_utf8(self.as_bytes());
 	}
 }
 
@@ -1210,6 +1248,25 @@ impl Printable for Tuple {
 	fn print(&self) {
 		for_tuples!( #( Tuple.print(); )* )
 	}
+}
+
+/// Something that can convert a [`BlockId`] to a number or a hash.
+#[cfg(feature = "std")]
+pub trait BlockIdTo<Block: self::Block> {
+	/// The error type that will be returned by the functions.
+	type Error: std::fmt::Debug;
+
+	/// Convert the given `block_id` to the corresponding block hash.
+	fn to_hash(
+		&self,
+		block_id: &crate::generic::BlockId<Block>,
+	) -> Result<Option<Block::Hash>, Self::Error>;
+
+	/// Convert the given `block_id` to the corresponding block number.
+	fn to_number(
+		&self,
+		block_id: &crate::generic::BlockId<Block>,
+	) -> Result<Option<NumberFor<Block>>, Self::Error>;
 }
 
 #[cfg(test)]

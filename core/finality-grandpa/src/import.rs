@@ -34,7 +34,7 @@ use fg_primitives::{GRANDPA_ENGINE_ID, ScheduledChange, ConsensusLog};
 use sr_primitives::Justification;
 use sr_primitives::generic::{BlockId, OpaqueDigestItemId};
 use sr_primitives::traits::{
-	Block as BlockT, DigestFor, Header as HeaderT, NumberFor,
+	Block as BlockT, DigestFor, Header as HeaderT, NumberFor, Zero,
 };
 use primitives::{H256, Blake2Hasher};
 
@@ -97,10 +97,14 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, SC> JustificationImport<Block>
 				pending_change.effective_number() > chain_info.finalized_number &&
 				pending_change.effective_number() <= chain_info.best_number
 			{
-				let effective_block_hash = self.select_chain.finality_target(
-					pending_change.canon_hash,
-					Some(pending_change.effective_number()),
-				);
+				let effective_block_hash = if !pending_change.delay.is_zero() {
+					self.select_chain.finality_target(
+						pending_change.canon_hash,
+						Some(pending_change.effective_number()),
+					)
+				} else {
+					Ok(Some(pending_change.canon_hash))
+				};
 
 				if let Ok(Some(hash)) = effective_block_hash {
 					if let Ok(Some(header)) = self.inner.header(&BlockId::Hash(hash)) {
@@ -465,17 +469,15 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, SC> BlockImport<Block>
 			_ => {},
 		}
 
-		if !needs_justification && !enacts_consensus_change {
-			return Ok(ImportResult::Imported(imported_aux));
-		}
-
 		match justification {
 			Some(justification) => {
 				self.import_justification(hash, number, justification, needs_justification).unwrap_or_else(|err| {
-					debug!(target: "finality", "Imported block #{} that enacts authority set change with \
-						invalid justification: {:?}, requesting justification from peers.", number, err);
-					imported_aux.bad_justification = true;
-					imported_aux.needs_justification = true;
+					if needs_justification || enacts_consensus_change {
+						debug!(target: "finality", "Imported block #{} that enacts authority set change with \
+							invalid justification: {:?}, requesting justification from peers.", number, err);
+						imported_aux.bad_justification = true;
+						imported_aux.needs_justification = true;
+					}
 				});
 			},
 			None => {

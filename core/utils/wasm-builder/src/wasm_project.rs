@@ -320,11 +320,15 @@ fn build_project(project: &Path, default_rustflags: &str) {
 		env::var(crate::WASM_BUILD_RUSTFLAGS_ENV).unwrap_or_default(),
 	);
 
-	build_cmd.args(&["build", "--target=wasm32-unknown-unknown"])
+	build_cmd.args(&["rustc", "--target=wasm32-unknown-unknown"])
 		.arg(format!("--manifest-path={}", manifest_path.display()))
 		.env("RUSTFLAGS", rustflags)
 		// We don't want to call ourselves recursively
 		.env(crate::SKIP_BUILD_ENV, "");
+
+	if env::var(crate::WASM_BUILD_NO_COLOR).is_err() {
+		build_cmd.arg("--color=always");
+	}
 
 	if is_release_build() {
 		build_cmd.arg("--release");

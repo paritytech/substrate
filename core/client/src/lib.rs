@@ -73,44 +73,25 @@
 //! ```
 //!
 
-#![cfg_attr(not(feature = "std"), no_std)]
 #![warn(missing_docs)]
 #![recursion_limit="128"]
 
-#[macro_use]
-pub mod runtime_api;
-#[cfg(feature = "std")]
 pub mod error;
-#[cfg(feature = "std")]
 pub mod blockchain;
-#[cfg(feature = "std")]
 pub mod backend;
-#[cfg(feature = "std")]
 pub mod cht;
-#[cfg(feature = "std")]
 pub mod in_mem;
-#[cfg(feature = "std")]
 pub mod genesis;
-pub mod block_builder;
-#[cfg(feature = "std")]
 pub mod light;
-#[cfg(feature = "std")]
 pub mod leaves;
-#[cfg(feature = "std")]
 pub mod children;
-#[cfg(feature = "std")]
 mod call_executor;
-#[cfg(feature = "std")]
 mod client;
-#[cfg(feature = "std")]
 mod notifications;
 
 
-#[cfg(feature = "std")]
 pub use crate::blockchain::Info as ChainInfo;
-#[cfg(feature = "std")]
 pub use crate::call_executor::{CallExecutor, LocalCallExecutor};
-#[cfg(feature = "std")]
 pub use crate::client::{
 	new_with_backend,
 	new_in_mem,
@@ -119,14 +100,7 @@ pub use crate::client::{
 	LongestChain, BlockOf, ProvideUncles, ForkBlocks,
 	utils, apply_aux,
 };
-#[cfg(feature = "std")]
 pub use crate::notifications::{StorageEventStream, StorageChangeSet};
-#[cfg(feature = "std")]
-pub use state_machine::ExecutionStrategy;
-#[cfg(feature = "std")]
+pub use state_machine::{ExecutionStrategy, StorageProof};
 pub use crate::leaves::LeafSet;
-#[cfg(feature = "std")]
 pub use crate::blockchain::well_known_cache_keys;
-
-#[doc(inline)]
-pub use sr_api_macros::{decl_runtime_apis, impl_runtime_apis};

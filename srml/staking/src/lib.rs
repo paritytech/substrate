@@ -256,7 +256,7 @@ use codec::{HasCompact, Encode, Decode};
 use support::{
 	decl_module, decl_event, decl_storage, ensure,
 	traits::{
-		Currency, OnFreeBalanceZero, OnDilution, LockIdentifier, LockableCurrency,
+		Currency, OnFreeBalanceZero, LockIdentifier, LockableCurrency,
 		WithdrawReasons, OnUnbalanced, Imbalance, Get, Time
 	}
 };
@@ -278,7 +278,7 @@ use sr_staking_primitives::{
 use sr_primitives::{Serialize, Deserialize};
 use system::{ensure_signed, ensure_root};
 
-use phragmen::{elect, equalize, ExtendedBalance, Support, SupportMap, PhragmenStakedAssignment};
+use phragmen::{elect, equalize, build_support_map, ExtendedBalance, PhragmenStakedAssignment};
 
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
 const MAX_NOMINATIONS: usize = 16;
@@ -501,8 +501,8 @@ pub trait Trait: system::Trait {
 	/// The post-processing needs it but will be moved to off-chain. TODO: #2908
 	type CurrencyToVote: Convert<BalanceOf<Self>, u64> + Convert<u128, BalanceOf<Self>>;
 
-	/// Some tokens minted.
-	type OnRewardMinted: OnDilution<BalanceOf<Self>>;
+	/// Tokens have been minted and are unused for validator-reward.
+	type RewardRemainder: OnUnbalanced<NegativeImbalanceOf<Self>>;
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
@@ -536,6 +536,8 @@ pub enum Forcing {
 	ForceNew,
 	/// Avoid a new era indefinitely.
 	ForceNone,
+	/// Force a new era at the end of all sessions indefinitely.
+	ForceAlways,
 }
 
 impl Default for Forcing {
@@ -650,8 +652,9 @@ decl_storage! {
 
 decl_event!(
 	pub enum Event<T> where Balance = BalanceOf<T>, <T as system::Trait>::AccountId {
-		/// All validators have been rewarded by the given balance.
-		Reward(Balance),
+		/// All validators have been rewarded by the first balance; the second is the remainder
+		/// from the maximum amount of reward.
+		Reward(Balance, Balance),
 		/// One validator (and its nominators) has been slashed by the given amount.
 		Slash(AccountId, Balance),
 		/// An old slashing report from a prior era was discarded because it could
@@ -956,7 +959,7 @@ decl_module! {
 		}
 
 		/// The ideal number of validators.
-		#[weight = SimpleDispatchInfo::FixedOperational(150_000)]
+		#[weight = SimpleDispatchInfo::FreeOperational]
 		fn set_validator_count(origin, #[compact] new: u32) {
 			ensure_root(origin)?;
 			ValidatorCount::put(new);
@@ -969,7 +972,7 @@ decl_module! {
 		/// # <weight>
 		/// - No arguments.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
+		#[weight = SimpleDispatchInfo::FreeOperational]
 		fn force_no_eras(origin) {
 			ensure_root(origin)?;
 			ForceEra::put(Forcing::ForceNone);
@@ -981,17 +984,39 @@ decl_module! {
 		/// # <weight>
 		/// - No arguments.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
+		#[weight = SimpleDispatchInfo::FreeOperational]
 		fn force_new_era(origin) {
 			ensure_root(origin)?;
 			ForceEra::put(Forcing::ForceNew);
 		}
 
 		/// Set the validators who cannot be slashed (if any).
-		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
+		#[weight = SimpleDispatchInfo::FreeOperational]
 		fn set_invulnerables(origin, validators: Vec<T::AccountId>) {
 			ensure_root(origin)?;
 			<Invulnerables<T>>::put(validators);
+		}
+
+		/// Force a current staker to become completely unstaked, immediately.
+		#[weight = SimpleDispatchInfo::FreeOperational]
+		fn force_unstake(origin, stash: T::AccountId) {
+			ensure_root(origin)?;
+
+			// remove the lock.
+			T::Currency::remove_lock(STAKING_ID, &stash);
+			// remove all staking-related information.
+			Self::kill_stash(&stash);
+		}
+
+		/// Force there to be a new era at the end of sessions indefinitely.
+		///
+		/// # <weight>
+		/// - One storage write
+		/// # </weight>
+		#[weight = SimpleDispatchInfo::FreeOperational]
+		fn force_new_era_always(origin) {
+			ensure_root(origin)?;
+			ForceEra::put(Forcing::ForceAlways);
 		}
 	}
 }
@@ -1144,6 +1169,7 @@ impl<T: Trait> Module<T> {
 		let era_length = session_index.checked_sub(Self::current_era_start_session_index()).unwrap_or(0);
 		match ForceEra::get() {
 			Forcing::ForceNew => ForceEra::kill(),
+			Forcing::ForceAlways => (),
 			Forcing::NotForcing if era_length >= T::SessionsPerEra::get() => (),
 			_ => return None,
 		}
@@ -1173,7 +1199,7 @@ impl<T: Trait> Module<T> {
 			let validator_len: BalanceOf<T> = (validators.len() as u32).into();
 			let total_rewarded_stake = Self::slot_stake() * validator_len;
 
-			let total_payout = inflation::compute_total_payout(
+			let (total_payout, max_payout) = inflation::compute_total_payout(
 				&T::RewardCurve::get(),
 				total_rewarded_stake.clone(),
 				T::Currency::total_issuance(),
@@ -1190,12 +1216,14 @@ impl<T: Trait> Module<T> {
 				}
 			}
 
-			let total_reward = total_imbalance.peek();
-			// assert!(total_reward <= total_payout)
+			// assert!(total_imbalance.peek() == total_payout)
+			let total_payout = total_imbalance.peek();
 
-			Self::deposit_event(RawEvent::Reward(total_reward));
+			let rest = max_payout.saturating_sub(total_payout);
+			Self::deposit_event(RawEvent::Reward(total_payout, rest));
+
 			T::Reward::on_unbalanced(total_imbalance);
-			T::OnRewardMinted::on_dilution(total_reward, total_rewarded_stake);
+			T::RewardRemainder::on_unbalanced(T::Currency::issue(rest));
 		}
 
 		// Increment current era.
@@ -1237,13 +1265,21 @@ impl<T: Trait> Module<T> {
 	///
 	/// Returns the new `SlotStake` value and a set of newly selected _stash_ IDs.
 	fn select_validators() -> (BalanceOf<T>, Option<Vec<T::AccountId>>) {
+		let mut all_nominators: Vec<(T::AccountId, Vec<T::AccountId>)> = Vec::new();
+		let all_validator_candidates_iter = <Validators<T>>::enumerate();
+		let all_validators = all_validator_candidates_iter.map(|(who, _pref)| {
+			let self_vote = (who.clone(), vec![who.clone()]);
+			all_nominators.push(self_vote);
+			who
+		}).collect::<Vec<T::AccountId>>();
+		all_nominators.extend(<Nominators<T>>::enumerate());
+
 		let maybe_phragmen_result = elect::<_, _, _, T::CurrencyToVote>(
 			Self::validator_count() as usize,
 			Self::minimum_validator_count().max(1) as usize,
-			<Validators<T>>::enumerate().map(|(who, _)| who).collect::<Vec<T::AccountId>>(),
-			<Nominators<T>>::enumerate().collect(),
+			all_validators,
+			all_nominators,
 			Self::slashable_balance_of,
-			true,
 		);
 
 		if let Some(phragmen_result) = maybe_phragmen_result {
@@ -1257,31 +1293,11 @@ impl<T: Trait> Module<T> {
 			let to_balance = |e: ExtendedBalance|
 				<T::CurrencyToVote as Convert<ExtendedBalance, BalanceOf<T>>>::convert(e);
 
-			// Initialize the support of each candidate.
-			let mut supports = <SupportMap<T::AccountId>>::new();
-			elected_stashes
-				.iter()
-				.map(|e| (e, to_votes(Self::slashable_balance_of(e))))
-				.for_each(|(e, s)| {
-					let item = Support { own: s, total: s, ..Default::default() };
-					supports.insert(e.clone(), item);
-				});
-
-			// build support struct.
-			for (n, assignment) in assignments.iter() {
-				for (c, per_thing) in assignment.iter() {
-					let nominator_stake = to_votes(Self::slashable_balance_of(n));
-					// AUDIT: it is crucially important for the `Mul` implementation of all
-					// per-things to be sound.
-					let other_stake = *per_thing * nominator_stake;
-					if let Some(support) = supports.get_mut(c) {
-						// For an astronomically rich validator with more astronomically rich
-						// set of nominators, this might saturate.
-						support.total = support.total.saturating_add(other_stake);
-						support.others.push((n.clone(), other_stake));
-					}
-				}
-			}
+			let mut supports = build_support_map::<_, _, _, T::CurrencyToVote>(
+				&elected_stashes,
+				&assignments,
+				Self::slashable_balance_of,
+			);
 
 			if cfg!(feature = "equalize") {
 				let mut staked_assignments
@@ -1291,6 +1307,13 @@ impl<T: Trait> Module<T> {
 					let mut staked_assignment
 						: Vec<PhragmenStakedAssignment<T::AccountId>>
 						= Vec::with_capacity(assignment.len());
+
+					// If this is a self vote, then we don't need to equalise it at all. While the
+					// staking system does not allow nomination and validation at the same time,
+					// this must always be 100% support.
+					if assignment.len() == 1 && assignment[0].0 == *n {
+						continue;
+					}
 					for (c, per_thing) in assignment.iter() {
 						let nominator_stake = to_votes(Self::slashable_balance_of(n));
 						let other_stake = *per_thing * nominator_stake;
@@ -1414,6 +1437,14 @@ impl<T: Trait> Module<T> {
 			}
 		});
 	}
+
+	/// Ensures that at the end of the current session there will be a new era.
+	fn ensure_new_era() {
+		match ForceEra::get() {
+			Forcing::ForceAlways | Forcing::ForceNew => (),
+			_ => ForceEra::put(Forcing::ForceNew),
+		}
+	}
 }
 
 impl<T: Trait> session::OnSessionEnding<T::AccountId> for Module<T> {
@@ -1510,6 +1541,13 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, session::historical::Identificati
 				continue
 			}
 
+			// Auto deselect validator on any offence and force a new era if they haven't previously
+			// been deselected.
+			if <Validators<T>>::exists(stash) {
+				<Validators<T>>::remove(stash);
+				Self::ensure_new_era();
+			}
+
 			// calculate the amount to slash
 			let slash_exposure = exposure.total;
 			let amount = *slash_fraction * slash_exposure;
@@ -1522,7 +1560,7 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, session::historical::Identificati
 			// make sure to disable validator till the end of this session
 			if T::SessionInterface::disable_validator(stash).unwrap_or(false) {
 				// force a new era, to select a new validator set
-				ForceEra::put(Forcing::ForceNew);
+				Self::ensure_new_era();
 			}
 			// actually slash the validator
 			let slashed_amount = Self::slash_validator(stash, amount, exposure, &mut journal);

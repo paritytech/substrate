@@ -22,10 +22,11 @@ linked_hash_set = "0.1.3"
 lru-cache = "0.1.2"
 rustc-hex = "2.0.1"
 rand = "0.7.2"
-libp2p = { version = "0.12.0", default-features = false, features = ["libp2p-websocket"] }
+libp2p = { version = "0.13.0", default-features = false, features = ["libp2p-websocket"] }
 fork-tree = { path = "../../core/utils/fork-tree" }
 consensus = { package = "substrate-consensus-common", path = "../../core/consensus/common" }
 client = { package = "substrate-client", path = "../../core/client" }
+block-builder = { package = "substrate-block-builder", path = "../../core/block-builder" }
 header_metadata = { package = "substrate-header-metadata", path = "../../core/client/header-metadata" }
 sr-primitives = { path = "../../core/sr-primitives" }
 primitives = { package = "substrate-primitives", path = "../../core/primitives" }

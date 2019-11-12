@@ -23,7 +23,8 @@ use std::{sync::Arc, convert::TryInto};
 use futures03::future::{FutureExt, TryFutureExt};
 use log::warn;
 
-use client::{self, Client};
+use client::{Client, error::Error as ClientError};
+
 use rpc::futures::{
 	Sink, Future,
 	future::result,
@@ -33,6 +34,7 @@ use api::Subscriptions;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use codec::{Encode, Decode};
 use primitives::{Bytes, Blake2Hasher, H256, traits::BareCryptoStorePtr};
+use sr_api::ConstructRuntimeApi;
 use sr_primitives::{generic, traits::{self, ProvideRuntimeApi}};
 use txpoolapi::{
 	TransactionPool, InPoolTransaction, TransactionStatus,
@@ -76,12 +78,13 @@ impl<B, E, P, Block: traits::Block, RA> Author<B, E, P, Block, RA> {
 impl<B, E, P, Block, RA> AuthorApi<Block::Hash, Block::Hash> for Author<B, E, P, Block, RA> where
 	Block: traits::Block<Hash=H256>,
 	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-	E: client::CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
+	E: client::CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync + 'static,
 	P: TransactionPool<Block=Block, Hash=Block::Hash> + Sync + Send + 'static,
 	P::Error: 'static,
-	RA: Send + Sync + 'static,
+	RA: ConstructRuntimeApi<Block, Client<B, E, Block, RA>> + Send + Sync + 'static,
 	Client<B, E, Block, RA>: ProvideRuntimeApi,
-	<Client<B, E, Block, RA> as ProvideRuntimeApi>::Api: SessionKeys<Block>,
+	<Client<B, E, Block, RA> as ProvideRuntimeApi>::Api:
+		SessionKeys<Block, Error = ClientError>,
 {
 	type Metadata = crate::metadata::Metadata;
 
@@ -125,8 +128,9 @@ impl<B, E, P, Block, RA> AuthorApi<Block::Hash, Block::Hash> for Author<B, E, P,
 		Ok(self.pool.ready().map(|tx| tx.data().encode().into()).collect())
 	}
 
-	fn remove_extrinsic(&self,
-		bytes_or_hash: Vec<hash::ExtrinsicOrHash<TxHash<P>>>
+	fn remove_extrinsic(
+		&self,
+		bytes_or_hash: Vec<hash::ExtrinsicOrHash<TxHash<P>>>,
 	) -> Result<Vec<TxHash<P>>> {
 		let hashes = bytes_or_hash.into_iter()
 			.map(|x| match x {
@@ -150,7 +154,7 @@ impl<B, E, P, Block, RA> AuthorApi<Block::Hash, Block::Hash> for Author<B, E, P,
 	fn watch_extrinsic(&self,
 		_metadata: Self::Metadata,
 		subscriber: Subscriber<TransactionStatus<TxHash<P>, BlockHash<P>>>,
-		xt: Bytes
+		xt: Bytes,
 	) {
 		let submit = || -> Result<_> {
 			let best_block_hash = self.client.info().chain.best_hash;

@@ -38,19 +38,19 @@ use std::borrow::Cow;
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 #[cfg(feature = "std")]
-pub use serde;// << for macro
+pub use serde;
 #[doc(hidden)]
-pub use codec::{Encode, Decode};// << for macro
+pub use codec::{Encode, Decode};
 
 pub use substrate_debug_derive::RuntimeDebug;
 
 #[cfg(feature = "std")]
 pub use impl_serde::serialize as bytes;
 
-#[cfg(feature = "std")]
+#[cfg(feature = "full_crypto")]
 pub mod hashing;
-#[cfg(feature = "std")]
-pub use hashing::{blake2_128, blake2_256, twox_64, twox_128, twox_256};
+#[cfg(feature = "full_crypto")]
+pub use hashing::{blake2_128, blake2_256, twox_64, twox_128, twox_256, keccak_256};
 #[cfg(feature = "std")]
 pub mod hexdisplay;
 pub mod crypto;
@@ -76,7 +76,7 @@ mod tests;
 pub use self::hash::{H160, H256, H512, convert_hash};
 pub use self::uint::U256;
 pub use changes_trie::ChangesTrieConfiguration;
-#[cfg(feature = "std")]
+#[cfg(feature = "full_crypto")]
 pub use crypto::{DeriveJunction, Pair, Public};
 
 pub use hash_db::Hasher;
@@ -236,7 +236,7 @@ pub trait TypeId {
 /// A log level matching the one from `log` crate.
 ///
 /// Used internally by `runtime_io::log` method.
-#[repr(u32)]
+#[derive(Encode, Decode, runtime_interface::pass_by::PassByEnum, Copy, Clone)]
 pub enum LogLevel {
 	/// `Error` log level.
 	Error = 1,
@@ -286,4 +286,26 @@ impl From<LogLevel> for log::Level {
 			Trace => Self::Trace,
 		}
 	}
+}
+
+/// Encodes the given value into a buffer and returns the pointer and the length as a single `u64`.
+///
+/// When Substrate calls into Wasm it expects a fixed signature for functions exported
+/// from the Wasm blob. The return value of this signature is always a `u64`.
+/// This `u64` stores the pointer to the encoded return value and the length of this encoded value.
+/// The low `32bits` are reserved for the pointer, followed by `32bit` for the length.
+#[cfg(not(feature = "std"))]
+pub fn to_substrate_wasm_fn_return_value(value: &impl Encode) -> u64 {
+	let encoded = value.encode();
+
+	let ptr = encoded.as_ptr() as u64;
+	let length = encoded.len() as u64;
+	let res = ptr | (length << 32);
+
+	// Leak the output vector to avoid it being freed.
+	// This is fine in a WASM context since the heap
+	// will be discarded after the call.
+	rstd::mem::forget(encoded);
+
+	res
 }

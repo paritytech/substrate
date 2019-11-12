@@ -215,7 +215,7 @@ pub fn buy_gas<T: Trait>(
 	let imbalance = T::Currency::withdraw(
 		transactor,
 		cost,
-		WithdrawReason::Fee,
+		WithdrawReason::Fee.into(),
 		ExistenceRequirement::KeepAlive
 	)?;
 

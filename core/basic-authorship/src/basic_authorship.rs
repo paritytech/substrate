@@ -20,10 +20,7 @@
 //
 
 use std::{time, sync::Arc};
-use client::{
-	error, Client as SubstrateClient, CallExecutor,
-	block_builder::api::BlockBuilder as BlockBuilderApi,
-};
+use client::{error, Client as SubstrateClient, CallExecutor};
 use codec::Decode;
 use consensus_common::{evaluation};
 use inherents::InherentData;
@@ -37,6 +34,7 @@ use sr_primitives::{
 };
 use txpoolapi::{TransactionPool, InPoolTransaction};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
+use block_builder::BlockBuilderApi;
 
 /// Proposer factory.
 pub struct ProposerFactory<C, A> where A: TransactionPool {
@@ -55,7 +53,8 @@ where
 	Block: BlockT<Hash=H256>,
 	RA: Send + Sync + 'static,
 	SubstrateClient<B, E, Block, RA>: ProvideRuntimeApi,
-	<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api: BlockBuilderApi<Block>,
+	<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api:
+		BlockBuilderApi<Block, Error = client::error::Error>,
 {
 	type Proposer = Proposer<Block, SubstrateClient<B, E, Block, RA>, A>;
 	type Error = error::Error;
@@ -102,7 +101,8 @@ where
 	Block: BlockT<Hash=H256>,
 	RA: Send + Sync + 'static,
 	SubstrateClient<B, E, Block, RA>: ProvideRuntimeApi,
-	<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api: BlockBuilderApi<Block>,
+	<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api:
+		BlockBuilderApi<Block, Error = client::error::Error>,
 {
 	type Create = futures::future::Ready<Result<Block, error::Error>>;
 	type Error = error::Error;
@@ -126,7 +126,8 @@ impl<Block, B, E, RA, A> Proposer<Block, SubstrateClient<B, E, Block, RA>, A>	wh
 	Block: BlockT<Hash=H256>,
 	RA: Send + Sync + 'static,
 	SubstrateClient<B, E, Block, RA>: ProvideRuntimeApi,
-	<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api: BlockBuilderApi<Block>,
+	<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api:
+		BlockBuilderApi<Block, Error = client::error::Error>,
 {
 	fn propose_with(
 		&self,
@@ -169,7 +170,7 @@ impl<Block, B, E, RA, A> Proposer<Block, SubstrateClient<B, E, Block, RA>, A>	wh
 			let pending_tx_data = pending_tx.data().clone();
 			let pending_tx_hash = pending_tx.hash().clone();
 			trace!("[{:?}] Pushing to the block.", pending_tx_hash);
-			match client::block_builder::BlockBuilder::push(&mut block_builder, pending_tx_data) {
+			match block_builder::BlockBuilder::push(&mut block_builder, pending_tx_data) {
 				Ok(()) => {
 					debug!("[{:?}] Pushed to the block.", pending_tx_hash);
 				}

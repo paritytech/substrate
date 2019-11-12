@@ -13,6 +13,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+
 #![recursion_limit="128"]
 
 use sr_primitives::{generic, BuildStorage, traits::{BlakeTwo256, Block as _, Verify}};
@@ -24,9 +25,7 @@ use support::{
 	},
 	StorageValue, StorageMap, StorageLinkedMap, StorageDoubleMap,
 };
-use inherents::{
-	ProvideInherent, InherentData, InherentIdentifier, RuntimeString, MakeFatalError
-};
+use inherents::{ProvideInherent, InherentData, InherentIdentifier, MakeFatalError};
 use primitives::{H256, sr25519};
 
 mod system;
@@ -99,7 +98,7 @@ mod module1 {
 		T::BlockNumber: From<u32>
 	{
 		type Call = Call<T, I>;
-		type Error = MakeFatalError<RuntimeString>;
+		type Error = MakeFatalError<inherents::Error>;
 		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
 		fn create_inherent(_data: &InherentData) -> Option<Self::Call> {
@@ -159,7 +158,7 @@ mod module2 {
 
 	impl<T: Trait<I>, I: Instance> ProvideInherent for Module<T, I> {
 		type Call = Call<T, I>;
-		type Error = MakeFatalError<RuntimeString>;
+		type Error = MakeFatalError<inherents::Error>;
 		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
 		fn create_inherent(_data: &InherentData) -> Option<Self::Call> {
@@ -302,7 +301,7 @@ fn new_test_ext() -> runtime_io::TestExternalities {
 #[test]
 fn storage_instance_independance() {
 	let mut storage = (std::collections::HashMap::new(), std::collections::HashMap::new());
-	runtime_io::with_storage(&mut storage, || {
+	state_machine::BasicExternalities::execute_with_storage(&mut storage, || {
 		module2::Value::<Runtime>::put(0);
 		module2::Value::<Runtime, module2::Instance1>::put(0);
 		module2::Value::<Runtime, module2::Instance2>::put(0);

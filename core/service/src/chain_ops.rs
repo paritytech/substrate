@@ -156,6 +156,7 @@ macro_rules! import_blocks {
 						body: block.body,
 						justification: block.justification,
 						origin: None,
+						allow_missing_state: false,
 					}
 				]);
 			}

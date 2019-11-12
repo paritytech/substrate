@@ -26,7 +26,7 @@ use codec::{Codec, Encode, Decode};
 
 /// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
 pub fn get<T: Decode + Sized>(storage_key: &[u8], key: &[u8]) -> Option<T> {
-	runtime_io::child_storage(storage_key, key).map(|v| {
+	runtime_io::storage::child_get(storage_key, key).map(|v| {
 		Decode::decode(&mut &v[..]).expect("storage is not null, therefore must be a valid type")
 	})
 }
@@ -45,13 +45,17 @@ pub fn get_or<T: Decode + Sized>(storage_key: &[u8], key: &[u8], default_value: 
 
 /// Return the value of the item in storage under `key`, or `default_value()` if there is no
 /// explicit entry.
-pub fn get_or_else<T: Decode + Sized, F: FnOnce() -> T>(storage_key: &[u8], key: &[u8], default_value: F) -> T {
+pub fn get_or_else<T: Decode + Sized, F: FnOnce() -> T>(
+	storage_key: &[u8],
+	key: &[u8],
+	default_value: F,
+) -> T {
 	get(storage_key, key).unwrap_or_else(default_value)
 }
 
 /// Put `value` in storage under `key`.
 pub fn put<T: Encode>(storage_key: &[u8], key: &[u8], value: &T) {
-	value.using_encoded(|slice| runtime_io::set_child_storage(storage_key, key, slice));
+	value.using_encoded(|slice| runtime_io::storage::child_set(storage_key, key, slice));
 }
 
 /// Remove `key` from storage, returning its value if it had an explicit entry or `None` otherwise.
@@ -77,31 +81,35 @@ pub fn take_or<T: Codec + Sized>(storage_key: &[u8],key: &[u8], default_value: T
 
 /// Return the value of the item in storage under `key`, or `default_value()` if there is no
 /// explicit entry. Ensure there is no explicit entry on return.
-pub fn take_or_else<T: Codec + Sized, F: FnOnce() -> T>(storage_key: &[u8], key: &[u8], default_value: F) -> T {
+pub fn take_or_else<T: Codec + Sized, F: FnOnce() -> T>(
+	storage_key: &[u8],
+	key: &[u8],
+	default_value: F,
+) -> T {
 	take(storage_key, key).unwrap_or_else(default_value)
 }
 
 /// Check to see if `key` has an explicit entry in storage.
 pub fn exists(storage_key: &[u8], key: &[u8]) -> bool {
-	runtime_io::read_child_storage(storage_key, key, &mut [0;0][..], 0).is_some()
+	runtime_io::storage::child_read(storage_key, key, &mut [0;0][..], 0).is_some()
 }
 
 /// Remove all `storage_key` key/values
 pub fn kill_storage(storage_key: &[u8]) {
-	runtime_io::kill_child_storage(storage_key)
+	runtime_io::storage::child_storage_kill(storage_key)
 }
 
 /// Ensure `key` has no explicit entry in storage.
 pub fn kill(storage_key: &[u8], key: &[u8]) {
-	runtime_io::clear_child_storage(storage_key, key);
+	runtime_io::storage::child_clear(storage_key, key);
 }
 
 /// Get a Vec of bytes from storage.
 pub fn get_raw(storage_key: &[u8], key: &[u8]) -> Option<Vec<u8>> {
-	runtime_io::child_storage(storage_key, key)
+	runtime_io::storage::child_get(storage_key, key)
 }
 
 /// Put a raw byte slice into storage.
 pub fn put_raw(storage_key: &[u8], key: &[u8], value: &[u8]) {
-	runtime_io::set_child_storage(storage_key, key, value)
+	runtime_io::storage::child_set(storage_key, key, value)
 }

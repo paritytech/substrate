@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+  <head>
+	<meta http-equiv="Content-type" content="text/html; charset=utf-8"/>
+	<title>Substrate node</title>
+	<link rel="shortcut icon" href="/favicon.png" />
+	<script type="module">
+import { start_client, default as init } from './pkg/node_cli.js';
+import ws from './ws.js';
+
+function log(msg) {
+	document.getElementsByTagName('body')[0].innerHTML += msg + '\n';
+}
+
+async function start() {
+	log('Loading WASM');
+	await init('./pkg/node_cli_bg.wasm');
+	log('Successfully loaded WASM');
+
+	// Build our client.
+	log('Starting client');
+	let client = start_client(ws());
+	log('Client started');
+
+	client.rpcSubscribe('{"method":"chain_subscribeNewHead","params":[],"id":1,"jsonrpc":"2.0"}',
+		(r) => log("New chain head: " + r));
+
+	setInterval(() => {
+		client
+			.rpcSend('{"method":"system_networkState","params":[],"id":1,"jsonrpc":"2.0"}')
+			.then((r) => log("Network state: " + r));
+	}, 1000);
+}
+
+start();
+	</script>
+  </head>
+  <body style="white-space: pre"></body>
+</html>

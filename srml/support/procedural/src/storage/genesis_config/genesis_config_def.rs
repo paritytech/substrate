@@ -18,14 +18,14 @@
 
 use srml_support_procedural_tools::syn_ext as ext;
 use proc_macro2::TokenStream;
-use syn::parse_quote;
+use syn::{spanned::Spanned, parse_quote};
 use quote::quote;
 use super::super::{DeclStorageDefExt, StorageLineTypeDef};
 
 pub struct GenesisConfigFieldDef {
-	pub doc: Vec<syn::Meta>,
 	pub name: syn::Ident,
 	pub typ: syn::Type,
+	pub attrs: Vec<syn::Meta>,
 	pub default: TokenStream,
 }
 
@@ -43,8 +43,8 @@ pub struct GenesisConfigDef {
 }
 
 impl GenesisConfigDef {
-	pub fn from_def(def: &DeclStorageDefExt) -> Self {
-		let fields = Self::get_genesis_config_field_defs(def);
+	pub fn from_def(def: &DeclStorageDefExt) -> syn::Result<Self> {
+		let fields = Self::get_genesis_config_field_defs(def)?;
 
 		let is_generic = fields.iter()
 			.any(|field| ext::type_contains_ident(&field.typ, &def.module_runtime_generic));
@@ -71,17 +71,19 @@ impl GenesisConfigDef {
 			(quote!(), quote!(), quote!(), None)
 		};
 
-		Self {
+		Ok(Self {
 			is_generic,
 			fields,
 			genesis_struct_decl,
 			genesis_struct,
 			genesis_impl,
 			genesis_where_clause,
-		}
+		})
 	}
 
-	fn get_genesis_config_field_defs(def: &DeclStorageDefExt) -> Vec<GenesisConfigFieldDef> {
+	fn get_genesis_config_field_defs(def: &DeclStorageDefExt)
+		-> syn::Result<Vec<GenesisConfigFieldDef>>
+	{
 		let mut config_field_defs = Vec::new();
 
 		for (config_field, line) in def.storage_lines.iter()
@@ -114,31 +116,39 @@ impl GenesisConfigDef {
 				.unwrap_or_else(|| quote!( Default::default() ));
 
 			config_field_defs.push(GenesisConfigFieldDef {
-				doc: line.doc_attrs.clone(),
 				name: config_field,
 				typ,
+				attrs: line.doc_attrs.clone(),
 				default,
 			});
 		}
 
 		for line in &def.extra_genesis_config_lines {
-			let doc = line.attrs.iter()
-				.filter_map(|a| a.parse_meta().ok())
-				.filter(|m| m.name() == "doc")
-				.collect();
+			let attrs = line.attrs.iter()
+				.map(|attr| {
+					let meta = attr.parse_meta()?;
+					if meta.path().is_ident("cfg") {
+						return Err(syn::Error::new(
+							meta.span(),
+							"extra genesis config items do not support `cfg` attribute"
+						));
+					}
+					Ok(meta)
+				})
+				.collect::<syn::Result<_>>()?;
 
 			let default = line.default.as_ref().map(|e| quote!( #e ))
 				.unwrap_or_else(|| quote!( Default::default() ));
 
 
 			config_field_defs.push(GenesisConfigFieldDef {
-				doc,
 				name: line.name.clone(),
 				typ: line.typ.clone(),
+				attrs,
 				default,
 			});
 		}
 
-		config_field_defs
+		Ok(config_field_defs)
 	}
 }

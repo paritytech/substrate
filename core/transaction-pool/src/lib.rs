@@ -21,10 +21,10 @@
 
 mod api;
 mod maintainer;
-#[cfg(test)]
-mod tests;
 
 pub mod error;
+#[cfg(test)]
+mod tests;
 
 pub use txpool;
 pub use crate::api::{FullChainApi, LightChainApi};

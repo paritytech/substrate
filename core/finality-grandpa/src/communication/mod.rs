@@ -276,7 +276,6 @@ pub(crate) struct NetworkBridge<B: BlockT, N: Network<B>> {
 	service: N,
 	validator: Arc<GossipValidator<B>>,
 	neighbor_sender: periodic::NeighborPacketSender<B>,
-	announce_sender: periodic::BlockAnnounceSender<B>,
 }
 
 impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
@@ -289,7 +288,6 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		config: crate::Config,
 		set_state: crate::environment::SharedVoterSetState<B>,
 		on_exit: impl Future<Item = (), Error = ()> + Clone + Send + 'static,
-		catch_up_enabled: bool,
 	) -> (
 		Self,
 		impl Future<Item = (), Error = ()> + Send + 'static,
@@ -298,7 +296,6 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		let (validator, report_stream) = GossipValidator::new(
 			config,
 			set_state.clone(),
-			catch_up_enabled,
 		);
 
 		let validator = Arc::new(validator);
@@ -343,10 +340,9 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		}
 
 		let (rebroadcast_job, neighbor_sender) = periodic::neighbor_packet_worker(service.clone());
-		let (announce_job, announce_sender) = periodic::block_announce_worker(service.clone());
 		let reporting_job = report_stream.consume(service.clone());
 
-		let bridge = NetworkBridge { service, validator, neighbor_sender, announce_sender };
+		let bridge = NetworkBridge { service, validator, neighbor_sender };
 
 		let startup_work = futures::future::lazy(move || {
 			// lazily spawn these jobs onto their own tasks. the lazy future has access
@@ -354,8 +350,6 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 			let mut executor = tokio_executor::DefaultExecutor::current();
 			executor.spawn(Box::new(rebroadcast_job.select(on_exit.clone()).then(|_| Ok(()))))
 				.expect("failed to spawn grandpa rebroadcast job task");
-			executor.spawn(Box::new(announce_job.select(on_exit.clone()).then(|_| Ok(()))))
-				.expect("failed to spawn grandpa block announce job task");
 			executor.spawn(Box::new(reporting_job.select(on_exit.clone()).then(|_| Ok(()))))
 				.expect("failed to spawn grandpa reporting job task");
 			Ok(())
@@ -472,7 +466,6 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 			network: self.service.clone(),
 			locals,
 			sender: tx,
-			announce_sender: self.announce_sender.clone(),
 			has_voted,
 		};
 
@@ -678,12 +671,11 @@ impl<B: BlockT, N: Network<B>> Clone for NetworkBridge<B, N> {
 			service: self.service.clone(),
 			validator: Arc::clone(&self.validator),
 			neighbor_sender: self.neighbor_sender.clone(),
-			announce_sender: self.announce_sender.clone(),
 		}
 	}
 }
 
-fn localized_payload<E: Encode>(round: RoundNumber, set_id: SetIdNumber, message: &E) -> Vec<u8> {
+pub(crate) fn localized_payload<E: Encode>(round: RoundNumber, set_id: SetIdNumber, message: &E) -> Vec<u8> {
 	(message, round, set_id).encode()
 }
 
@@ -725,7 +717,6 @@ struct OutgoingMessages<Block: BlockT, N: Network<Block>> {
 	set_id: SetIdNumber,
 	locals: Option<(AuthorityPair, AuthorityId)>,
 	sender: mpsc::UnboundedSender<SignedMessage<Block>>,
-	announce_sender: periodic::BlockAnnounceSender<Block>,
 	network: N,
 	has_voted: HasVoted<Block>,
 }
@@ -783,8 +774,8 @@ impl<Block: BlockT, N: Network<Block>> Sink for OutgoingMessages<Block, N>
 				"block" => ?target_hash, "round" => ?self.round, "set_id" => ?self.set_id,
 			);
 
-			// send the target block hash to the background block announcer
-			self.announce_sender.send(target_hash, Vec::new());
+			// announce the block we voted on to our peers.
+			self.network.announce(target_hash, Vec::new());
 
 			// propagate the message to peers
 			let topic = round_topic::<Block>(self.round, self.set_id);

@@ -38,19 +38,18 @@ pub use paste;
 pub use app_crypto;
 
 #[cfg(feature = "std")]
-pub use runtime_io::{StorageOverlay, ChildrenStorageOverlay};
+pub use primitives::storage::{StorageOverlay, ChildrenStorageOverlay};
 
 use rstd::prelude::*;
 use rstd::convert::TryFrom;
 use primitives::{crypto, ed25519, sr25519, ecdsa, hash::{H256, H512}};
 use codec::{Encode, Decode};
 
-#[cfg(feature = "std")]
-pub mod testing;
-
 pub mod curve;
 pub mod generic;
 pub mod offchain;
+#[cfg(feature = "std")]
+pub mod testing;
 pub mod traits;
 pub mod transaction_validity;
 pub mod weights;
@@ -60,16 +59,13 @@ pub use generic::{DigestItem, Digest};
 
 /// Re-export this since it's part of the API of this crate.
 pub use primitives::{TypeId, crypto::{key_types, KeyTypeId, CryptoType, AccountId32}};
-pub use app_crypto::RuntimeAppPublic;
+pub use app_crypto::{RuntimeAppPublic, BoundToRuntimeAppPublic};
 
 /// Re-export `RuntimeDebug`, to avoid dependency clutter.
 pub use primitives::RuntimeDebug;
 
 /// Re-export top-level arithmetic stuff.
-pub use arithmetic::{
-	Perquintill, Perbill, Permill, Percent,
-	Rational128, Fixed64
-};
+pub use arithmetic::{Perquintill, Perbill, Permill, Percent, Rational128, Fixed64};
 /// Re-export 128 bit helpers.
 pub use arithmetic::helpers_128bit;
 /// Re-export big_uint stuff.
@@ -96,19 +92,19 @@ impl TypeId for ModuleId {
 
 /// A String that is a `&'static str` on `no_std` and a `Cow<'static, str>` on `std`.
 #[cfg(feature = "std")]
-pub type RuntimeString = ::std::borrow::Cow<'static, str>;
+pub type RuntimeString = std::borrow::Cow<'static, str>;
 /// A String that is a `&'static str` on `no_std` and a `Cow<'static, str>` on `std`.
 #[cfg(not(feature = "std"))]
 pub type RuntimeString = &'static str;
 
-/// Create a const [RuntimeString].
+/// Create a const [`RuntimeString`].
 #[cfg(feature = "std")]
 #[macro_export]
 macro_rules! create_runtime_str {
-	( $y:expr ) => {{ ::std::borrow::Cow::Borrowed($y) }}
+	( $y:expr ) => {{ std::borrow::Cow::Borrowed($y) }}
 }
 
-/// Create a const [RuntimeString].
+/// Create a const [`RuntimeString`].
 #[cfg(not(feature = "std"))]
 #[macro_export]
 macro_rules! create_runtime_str {
@@ -244,7 +240,7 @@ impl traits::IdentifyAccount for MultiSigner {
 		match self {
 			MultiSigner::Ed25519(who) => <[u8; 32]>::from(who).into(),
 			MultiSigner::Sr25519(who) => <[u8; 32]>::from(who).into(),
-			MultiSigner::Ecdsa(who) => runtime_io::blake2_256(who.as_ref()).into(),
+			MultiSigner::Ecdsa(who) => runtime_io::hashing::blake2_256(who.as_ref()).into(),
 		}
 	}
 }
@@ -307,9 +303,11 @@ impl Verify for MultiSignature {
 			(MultiSignature::Ed25519(ref sig), who) => sig.verify(msg, &ed25519::Public::from_slice(who.as_ref())),
 			(MultiSignature::Sr25519(ref sig), who) => sig.verify(msg, &sr25519::Public::from_slice(who.as_ref())),
 			(MultiSignature::Ecdsa(ref sig), who) => {
-				let m = runtime_io::blake2_256(msg.get());
-				match runtime_io::secp256k1_ecdsa_recover_compressed(sig.as_ref(), &m) {
-					Ok(pubkey) => &runtime_io::blake2_256(pubkey.as_ref()) == <dyn AsRef<[u8; 32]>>::as_ref(who),
+				let m = runtime_io::hashing::blake2_256(msg.get());
+				match runtime_io::crypto::secp256k1_ecdsa_recover_compressed(sig.as_ref(), &m) {
+					Ok(pubkey) =>
+						&runtime_io::hashing::blake2_256(pubkey.as_ref())
+							== <dyn AsRef<[u8; 32]>>::as_ref(who),
 					_ => false,
 				}
 			}

@@ -153,7 +153,7 @@ use codec::{Codec, Encode, Decode};
 use support::{
 	StorageValue, Parameter, decl_event, decl_storage, decl_module,
 	traits::{
-		UpdateBalanceOutcome, Currency, OnFreeBalanceZero, OnUnbalanced,
+		UpdateBalanceOutcome, Currency, OnFreeBalanceZero, OnUnbalanced, TryDrop,
 		WithdrawReason, WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
 		Imbalance, SignedImbalance, ReservableCurrency, Get,
 	},
@@ -397,6 +397,8 @@ decl_module! {
 		///      `T::OnNewAccount::on_new_account` to be called.
 		///   - Removing enough funds from an account will trigger
 		///     `T::DustRemoval::on_unbalanced` and `T::OnFreeBalanceZero::on_free_balance_zero`.
+		///   - `transfer_keep_alive` works the same way as `transfer`, but has an additional
+		///     check that the transfer will not kill the origin account.
 		///
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(1_000_000)]
@@ -407,7 +409,7 @@ decl_module! {
 		) {
 			let transactor = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
-			<Self as Currency<_>>::transfer(&transactor, &dest, value)?;
+			<Self as Currency<_>>::transfer(&transactor, &dest, value, ExistenceRequirement::AllowDeath)?;
 		}
 
 		/// Set the balances of a given account.
@@ -462,8 +464,26 @@ decl_module! {
 			ensure_root(origin)?;
 			let source = T::Lookup::lookup(source)?;
 			let dest = T::Lookup::lookup(dest)?;
-			<Self as Currency<_>>::transfer(&source, &dest, value)?;
+			<Self as Currency<_>>::transfer(&source, &dest, value, ExistenceRequirement::AllowDeath)?;
 		}
+
+		/// Same as the [`transfer`] call, but with a check that the transfer will not kill the
+		/// origin account.
+		///
+		/// 99% of the time you want [`transfer`] instead.
+		///
+		/// [`transfer`]: struct.Module.html#method.transfer
+		#[weight = SimpleDispatchInfo::FixedNormal(1_000_000)]
+		pub fn transfer_keep_alive(
+			origin,
+			dest: <T::Lookup as StaticLookup>::Source,
+			#[compact] value: T::Balance
+		) {
+			let transactor = ensure_signed(origin)?;
+			let dest = T::Lookup::lookup(dest)?;
+			<Self as Currency<_>>::transfer(&transactor, &dest, value, ExistenceRequirement::KeepAlive)?;
+		}
+
 	}
 }
 
@@ -583,7 +603,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 mod imbalances {
 	use super::{
 		result, Subtrait, DefaultInstance, Imbalance, Trait, Zero, Instance, Saturating,
-		StorageValue,
+		StorageValue, TryDrop,
 	};
 	use rstd::mem;
 
@@ -608,6 +628,12 @@ mod imbalances {
 		/// Create a new negative imbalance from a balance.
 		pub fn new(amount: T::Balance) -> Self {
 			NegativeImbalance(amount)
+		}
+	}
+
+	impl<T: Trait<I>, I: Instance> TryDrop for PositiveImbalance<T, I> {
+		fn try_drop(self) -> result::Result<(), Self> {
+			self.drop_zero()
 		}
 	}
 
@@ -653,6 +679,12 @@ mod imbalances {
 		}
 		fn peek(&self) -> T::Balance {
 			self.0.clone()
+		}
+	}
+
+	impl<T: Trait<I>, I: Instance> TryDrop for NegativeImbalance<T, I> {
+		fn try_drop(self) -> result::Result<(), Self> {
+			self.drop_zero()
 		}
 	}
 
@@ -824,13 +856,13 @@ where
 	fn ensure_can_withdraw(
 		who: &T::AccountId,
 		_amount: T::Balance,
-		reason: WithdrawReason,
+		reasons: WithdrawReasons,
 		new_balance: T::Balance,
 	) -> Result {
-		match reason {
-			WithdrawReason::Reserve | WithdrawReason::Transfer if Self::vesting_balance(who) > new_balance =>
-				return Err("vesting balance too high to send value"),
-			_ => {}
+		if reasons.intersects(WithdrawReason::Reserve | WithdrawReason::Transfer)
+			&& Self::vesting_balance(who) > new_balance
+		{
+			return Err("vesting balance too high to send value");
 		}
 		let locks = Self::locks(who);
 		if locks.is_empty() {
@@ -842,7 +874,7 @@ where
 			.all(|l|
 				now >= l.until
 				|| new_balance >= l.amount
-				|| !l.reasons.contains(reason)
+				|| !l.reasons.intersects(reasons)
 			)
 		{
 			Ok(())
@@ -851,7 +883,12 @@ where
 		}
 	}
 
-	fn transfer(transactor: &T::AccountId, dest: &T::AccountId, value: Self::Balance) -> Result {
+	fn transfer(
+		transactor: &T::AccountId,
+		dest: &T::AccountId,
+		value: Self::Balance,
+		existence_requirement: ExistenceRequirement,
+	) -> Result {
 		let from_balance = Self::free_balance(transactor);
 		let to_balance = Self::free_balance(dest);
 		let would_create = to_balance.is_zero();
@@ -868,7 +905,7 @@ where
 		if would_create && value < T::ExistentialDeposit::get() {
 			return Err("value too low to create account");
 		}
-		Self::ensure_can_withdraw(transactor, value, WithdrawReason::Transfer, new_from_balance)?;
+		Self::ensure_can_withdraw(transactor, value, WithdrawReason::Transfer.into(), new_from_balance)?;
 
 		// NOTE: total stake being stored in the same type means that this could never overflow
 		// but better to be safe than sorry.
@@ -878,6 +915,12 @@ where
 		};
 
 		if transactor != dest {
+			if existence_requirement == ExistenceRequirement::KeepAlive {
+				if new_from_balance < Self::minimum_balance() {
+					return Err("transfer would kill account");
+				}
+			}
+
 			Self::set_free_balance(transactor, new_from_balance);
 			if !<FreeBalance<T, I>>::exists(dest) {
 				Self::new_account(dest, new_to_balance);
@@ -893,7 +936,7 @@ where
 	fn withdraw(
 		who: &T::AccountId,
 		value: Self::Balance,
-		reason: WithdrawReason,
+		reasons: WithdrawReasons,
 		liveness: ExistenceRequirement,
 	) -> result::Result<Self::NegativeImbalance, &'static str> {
 		let old_balance = Self::free_balance(who);
@@ -907,7 +950,7 @@ where
 			{
 				return Err("payment would kill account")
 			}
-			Self::ensure_can_withdraw(who, value, reason, new_balance)?;
+			Self::ensure_can_withdraw(who, value, reasons, new_balance)?;
 			Self::set_free_balance(who, new_balance);
 			Ok(NegativeImbalance::new(value))
 		} else {
@@ -1014,7 +1057,7 @@ where
 		Self::free_balance(who)
 			.checked_sub(&value)
 			.map_or(false, |new_balance|
-				Self::ensure_can_withdraw(who, value, WithdrawReason::Reserve, new_balance).is_ok()
+				Self::ensure_can_withdraw(who, value, WithdrawReason::Reserve.into(), new_balance).is_ok()
 			)
 	}
 
@@ -1028,7 +1071,7 @@ where
 			return Err("not enough free funds")
 		}
 		let new_balance = b - value;
-		Self::ensure_can_withdraw(who, value, WithdrawReason::Reserve, new_balance)?;
+		Self::ensure_can_withdraw(who, value, WithdrawReason::Reserve.into(), new_balance)?;
 		Self::set_reserved_balance(who, Self::reserved_balance(who) + value);
 		Self::set_free_balance(who, new_balance);
 		Ok(())
