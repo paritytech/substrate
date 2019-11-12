@@ -1587,23 +1587,27 @@ impl<'a, B, E, Block, RA> consensus::BlockImport<Block> for &'a Client<B, E, Blo
 			}
 		}
 
-		match self.block_status(&BlockId::Hash(parent_hash))
-			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
-		{
-			BlockStatus::InChainWithState | BlockStatus::Queued => {},
-			BlockStatus::Unknown => return Ok(ImportResult::UnknownParent),
-			BlockStatus::InChainPruned if allow_missing_state => {},
-			BlockStatus::InChainPruned => return Ok(ImportResult::MissingState),
-			BlockStatus::KnownBad => return Ok(ImportResult::KnownBad),
-		}
-
+		// Own status must be checked first. If the block and ancestry is pruned
+		// this function must return `AlreadyInChain` rather than `MissingState`
 		match self.block_status(&BlockId::Hash(hash))
 			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
 		{
 			BlockStatus::InChainWithState | BlockStatus::Queued => return Ok(ImportResult::AlreadyInChain),
-			BlockStatus::Unknown | BlockStatus::InChainPruned => {},
+			BlockStatus::InChainPruned => return Ok(ImportResult::AlreadyInChain),
+			BlockStatus::Unknown => {},
 			BlockStatus::KnownBad => return Ok(ImportResult::KnownBad),
 		}
+
+		match self.block_status(&BlockId::Hash(parent_hash))
+			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
+			{
+				BlockStatus::InChainWithState | BlockStatus::Queued => {},
+				BlockStatus::Unknown => return Ok(ImportResult::UnknownParent),
+				BlockStatus::InChainPruned if allow_missing_state => {},
+				BlockStatus::InChainPruned => return Ok(ImportResult::MissingState),
+				BlockStatus::KnownBad => return Ok(ImportResult::KnownBad),
+			}
+
 
 		Ok(ImportResult::imported(false))
 	}
@@ -1919,7 +1923,7 @@ pub(crate) mod tests {
 	use super::*;
 	use primitives::blake2_256;
 	use sr_primitives::DigestItem;
-	use consensus::{BlockOrigin, SelectChain};
+	use consensus::{BlockOrigin, SelectChain, BlockImport};
 	use test_client::{
 		prelude::*,
 		client_db::{Backend, DatabaseSettings, DatabaseSettingsSrc, PruningMode},
@@ -2888,5 +2892,104 @@ pub(crate) mod tests {
 			import_err.to_string(),
 			expected_err.to_string(),
 		);
+	}
+
+	#[test]
+	fn returns_status_for_pruned_blocks() {
+		let _ = env_logger::try_init();
+		let tmp = tempfile::tempdir().unwrap();
+
+		// set to prune after 1 block
+		// states
+		let backend = Arc::new(Backend::new(
+				DatabaseSettings {
+					state_cache_size: 1 << 20,
+					state_cache_child_ratio: None,
+					pruning: PruningMode::keep_blocks(1),
+					source: DatabaseSettingsSrc::Path {
+						path: tmp.path().into(),
+						cache_size: None,
+					}
+				},
+				u64::max_value(),
+		).unwrap());
+
+		let mut client = TestClientBuilder::with_backend(backend).build();
+
+		let a1 = client.new_block_at(&BlockId::Number(0), Default::default())
+			.unwrap().bake().unwrap();
+
+		let mut b1 = client.new_block_at(&BlockId::Number(0), Default::default()).unwrap();
+
+		// b1 is created, but not imported
+		b1.push_transfer(Transfer {
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Ferdie.into(),
+			amount: 1,
+			nonce: 0,
+		}).unwrap();
+		let b1 = b1.bake().unwrap();
+
+		let check_block_a1 = BlockCheckParams {
+			hash: a1.hash().clone(),
+			number: 0,
+			parent_hash: a1.header().parent_hash().clone(),
+			allow_missing_state: false
+		};
+
+		assert_eq!(client.check_block(check_block_a1.clone()).unwrap(), ImportResult::imported(false));
+		assert_eq!(client.block_status(&BlockId::hash(check_block_a1.hash)).unwrap(), BlockStatus::Unknown);
+
+		client.import_as_final(BlockOrigin::Own, a1.clone()).unwrap();
+
+		assert_eq!(client.check_block(check_block_a1.clone()).unwrap(), ImportResult::AlreadyInChain);
+		assert_eq!(client.block_status(&BlockId::hash(check_block_a1.hash)).unwrap(), BlockStatus::InChainWithState);
+
+		let a2 = client.new_block_at(&BlockId::Hash(a1.hash()), Default::default())
+			.unwrap().bake().unwrap();
+		client.import_as_final(BlockOrigin::Own, a2.clone()).unwrap();
+
+		let check_block_a2 = BlockCheckParams {
+			hash: a2.hash().clone(),
+			number: 1,
+			parent_hash: a1.header().parent_hash().clone(),
+			allow_missing_state: false
+		};
+
+		assert_eq!(client.check_block(check_block_a1.clone()).unwrap(), ImportResult::AlreadyInChain);
+		assert_eq!(client.block_status(&BlockId::hash(check_block_a1.hash)).unwrap(), BlockStatus::InChainPruned);
+		assert_eq!(client.check_block(check_block_a2.clone()).unwrap(), ImportResult::AlreadyInChain);
+		assert_eq!(client.block_status(&BlockId::hash(check_block_a2.hash)).unwrap(), BlockStatus::InChainWithState);
+
+		let a3 = client.new_block_at(&BlockId::Hash(a2.hash()), Default::default())
+			.unwrap().bake().unwrap();
+
+		client.import_as_final(BlockOrigin::Own, a3.clone()).unwrap();
+		let check_block_a3 = BlockCheckParams {
+			hash: a3.hash().clone(),
+			number: 2,
+			parent_hash: a2.header().parent_hash().clone(),
+			allow_missing_state: false
+		};
+
+		// a1 and a2 are both pruned at this point
+		assert_eq!(client.check_block(check_block_a1.clone()).unwrap(), ImportResult::AlreadyInChain);
+		assert_eq!(client.block_status(&BlockId::hash(check_block_a1.hash)).unwrap(), BlockStatus::InChainPruned);
+		assert_eq!(client.check_block(check_block_a2.clone()).unwrap(), ImportResult::AlreadyInChain);
+		assert_eq!(client.block_status(&BlockId::hash(check_block_a2.hash)).unwrap(), BlockStatus::InChainPruned);
+		assert_eq!(client.check_block(check_block_a3.clone()).unwrap(), ImportResult::AlreadyInChain);
+		assert_eq!(client.block_status(&BlockId::hash(check_block_a3.hash)).unwrap(), BlockStatus::InChainWithState);
+
+		let mut check_block_b1 = BlockCheckParams {
+			hash: b1.hash().clone(),
+			number: 0,
+			parent_hash: b1.header().parent_hash().clone(),
+			allow_missing_state: false
+		};
+		assert_eq!(client.check_block(check_block_b1.clone()).unwrap(), ImportResult::MissingState);
+		check_block_b1.allow_missing_state = true;
+		assert_eq!(client.check_block(check_block_b1.clone()).unwrap(), ImportResult::imported(false));
+		check_block_b1.parent_hash = H256::random();
+		assert_eq!(client.check_block(check_block_b1.clone()).unwrap(), ImportResult::UnknownParent);
 	}
 }
