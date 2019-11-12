@@ -697,6 +697,7 @@ impl_runtime_apis! {
 		}
 	}
 }
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -716,5 +717,37 @@ mod tests {
 	fn validate_bounds() {
 		let x = SubmitTransaction::default();
 		is_submit_signed_transaction(x);
+	}
+
+	#[test]
+	fn block_hooks_weight_should_not_exceed_limits() {
+		use sr_primitives::weights::WeighBlock;
+		let check_for_block = |b| {
+			let block_hooks_weight =
+				<AllModules as WeighBlock<BlockNumber>>::on_initialize(b) +
+				<AllModules as WeighBlock<BlockNumber>>::on_finalize(b);
+
+			assert_eq!(
+				block_hooks_weight,
+				0,
+				"This test might fail simply because the value being compared to has increased to a \
+				module declaring a new weight for a hook or call. In this case update the test and \
+				happily move on.",
+			);
+
+			// Invariant. Always must be like this to have a sane chain.
+			assert!(block_hooks_weight < MaximumBlockWeight::get());
+
+			// Warning.
+			if block_hooks_weight > MaximumBlockWeight::get() / 2 {
+				println!(
+					"block hooks weight is consuming more than a block's capacity. You probably want \
+					to re-think this. This test will fail now."
+				);
+				assert!(false);
+			}
+		};
+
+		let _ = (0..100_000).for_each(check_for_block);
 	}
 }
