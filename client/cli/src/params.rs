@@ -32,13 +32,13 @@ macro_rules! impl_get_log_filter {
 	}
 }
 
-impl Into<client::ExecutionStrategy> for ExecutionStrategy {
-	fn into(self) -> client::ExecutionStrategy {
+impl Into<interfaces::ExecutionStrategy> for ExecutionStrategy {
+	fn into(self) -> interfaces::ExecutionStrategy {
 		match self {
-			ExecutionStrategy::Native => client::ExecutionStrategy::NativeWhenPossible,
-			ExecutionStrategy::Wasm => client::ExecutionStrategy::AlwaysWasm,
-			ExecutionStrategy::Both => client::ExecutionStrategy::Both,
-			ExecutionStrategy::NativeElseWasm => client::ExecutionStrategy::NativeElseWasm,
+			ExecutionStrategy::Native => interfaces::ExecutionStrategy::NativeWhenPossible,
+			ExecutionStrategy::Wasm => interfaces::ExecutionStrategy::AlwaysWasm,
+			ExecutionStrategy::Both => interfaces::ExecutionStrategy::Both,
+			ExecutionStrategy::NativeElseWasm => interfaces::ExecutionStrategy::NativeElseWasm,
 		}
 	}
 }

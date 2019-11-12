@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use ansi_term::Colour;
-use client::ClientInfo;
+use interfaces::ClientInfo;
 use log::info;
 use network::SyncState;
 use sr_primitives::traits::{Block as BlockT, CheckedDiv, NumberFor, Zero, Saturating};
