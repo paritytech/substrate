@@ -156,7 +156,7 @@ fn final_keys_default_instance() {
 		assert_eq!(unhashed::get::<u32>(&hashing::blake2_256(&k)), Some(2u32));
 		assert_eq!(unhashed::get::<u32>(&hashing::blake2_256(&head)), Some(1u32));
 
-<		instance::LinkedMap2<instance::DefaultInstance>>::insert(1, 2);
+		<instance::LinkedMap2<instance::DefaultInstance>>::insert(1, 2);
 		let mut k = b"FinalKeysSome LinkedMap2".to_vec();
 		k.extend(1u32.encode());
 		assert_eq!(unhashed::get::<u32>(&hashing::twox_128(&k)), Some(2u32));
