@@ -1443,7 +1443,7 @@ pub(crate) mod tests {
 	use sr_primitives::generic::DigestItem;
 	use sr_primitives::testing::{Header, Block as RawBlock, ExtrinsicWrapper};
 	use sr_primitives::traits::{Hash, BlakeTwo256};
-	use state_machine::{TrieMut, TrieDBMut, ChangesTrieRootsStorage, ChangesTrieStorage};
+	use state_machine::{TrieMut, TrieDBMut};
 	use header_metadata::{lowest_common_ancestor, tree_route};
 	use test_client;
 

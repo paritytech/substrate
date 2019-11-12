@@ -115,7 +115,7 @@ pub enum ForkAppendResult<Block: BlockT> {
 	Fork(ComplexBlockId<Block>),
 }
 
-impl<Block: BlockT, T: CacheItemT + ::std::fmt::Debug, S: Storage<Block, T>> ListCache<Block, T, S> {
+impl<Block: BlockT, T: CacheItemT, S: Storage<Block, T>> ListCache<Block, T, S> {
 	/// Create new db list cache entry.
 	pub fn new(
 		storage: S,
@@ -394,7 +394,6 @@ impl<Block: BlockT, T: CacheItemT + ::std::fmt::Debug, S: Storage<Block, T>> Lis
 
 	/// When transaction is committed.
 	pub fn on_transaction_commit(&mut self, ops: Vec<CommitOperation<Block, T>>) {
-println!("=== on_transaction_commit: {:?}", ops);
 		for op in ops {
 			match op {
 				CommitOperation::AppendNewBlock(index, best_block) => {
@@ -660,6 +659,7 @@ impl<Block: BlockT, T: CacheItemT> Fork<Block, T> {
 impl<Block: BlockT, T: CacheItemT> CommitOperation<Block, T> {
 	/// Try to merge two ops into single one.
 	pub fn merge_with(self, other: CommitOperation<Block, T>) -> (Option<Self>, Option<Self>) {
+		// we only able to merge two consequent block finalization operations
 		match self {
 			CommitOperation::BlockFinalized(old_finalized_block, old_finalized_entry, old_abandoned_forks) => {
 				match other {
