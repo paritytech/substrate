@@ -29,7 +29,7 @@ use crate::backend::{AuxStore, NewBlockState};
 use crate::blockchain::{
 	Backend as BlockchainBackend, BlockStatus, Cache as BlockchainCache,
 	HeaderBackend as BlockchainHeaderBackend, Info as BlockchainInfo, ProvideCache,
-	well_known_cache_keys,
+	well_known_cache_keys
 };
 use crate::cht;
 use crate::error::{Error as ClientError, Result as ClientResult};
@@ -38,7 +38,9 @@ use crate::light::fetcher::{Fetcher, RemoteHeaderRequest};
 /// Light client blockchain storage.
 pub trait Storage<Block: BlockT>: AuxStore + BlockchainHeaderBackend<Block> + HeaderMetadata<Block, Error=ClientError> {
 	/// Store new header. Should refuse to revert any finalized blocks.
-
+	///
+	/// Takes new authorities, the leaf state of the new block, and
+	/// any auxiliary storage updates to place in the same operation.
 	fn import_header(
 		&self,
 		header: Block::Header,
