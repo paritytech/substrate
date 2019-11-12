@@ -48,8 +48,8 @@ fn to_tag(nonce: u64, from: AccountId) -> Tag {
 impl ChainApi for TestApi {
 	type Block = Block;
 	type Hash = H256;
-	type Error = error::Error;
-	type ValidationFuture = futures::future::Ready<error::Result<TransactionValidity>>;
+	type Error = txpoolapi::error::Error;
+	type ValidationFuture = futures::future::Ready<txpoolapi::error::Result<TransactionValidity>>;
 
 	fn validate_transaction(
 		&self,
