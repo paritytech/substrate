@@ -402,13 +402,16 @@ where
 		}
 	}
 
-	fn translate<K2, V2, TK, TV>(translate_key: TK, translate_val: TV) -> Result<(), ()>
+	fn translate<K2, V2, TK, TV>(translate_key: TK, translate_val: TV) -> Result<(), Option<K2>>
 		where K2: FullCodec + Clone, V2: Decode, TK: Fn(K2) -> K, TV: Fn(V2) -> V
 	{
-		let head_key = read_head::<K2, G::KeyFormat>().ok_or(())?;
+		let head_key = read_head::<K2, G::KeyFormat>().ok_or(None)?;
 		let prefix = G::prefix();
 
+		let mut last_key = None;
 		let mut current_key = head_key.clone();
+
+		write_head::<&K, K, G::KeyFormat>(Some(&translate_key(head_key)));
 
 		let translate_linkage = |old: Linkage<K2>| -> Linkage<K> {
 			Linkage {
@@ -419,31 +422,45 @@ where
 
 		loop {
 			let old_raw_key = G::KeyFormat::storage_linked_map_final_key(prefix, &current_key);
-			let (val, linkage) = read_with_linkage::<K2, V2>(old_raw_key.as_ref()).ok_or(())?;
+			let x = unhashed::take(old_raw_key.as_ref());
+			let (val, linkage): (V2, Linkage<K2>) = match x {
+				Some(v) => v,
+				None => {
+					// we failed to read value and linkage. Update the last key's linkage
+					// to end the map early, since it's impossible to iterate further.
+					if let Some(last_key) = last_key {
+						let last_raw_key = G::storage_linked_map_final_key(&last_key);
+						if let Some((val, mut linkage))
+							= read_with_linkage::<K, V>(last_raw_key.as_ref())
+						{
+							// defensive: should always happen, since it was just written
+							// in the last iteration of the loop.
+							linkage.next = None;
+							unhashed::put(last_raw_key.as_ref(), &(&val, &linkage));
+						}
+					}
+
+					return Err(Some(current_key));
+				}
+			};
 			let next = linkage.next.clone();
 
 			let val = translate_val(val);
 			let linkage = translate_linkage(linkage);
 
-			// now that we've successfully migrated the storage, kill the old key.
-			unhashed::kill(old_raw_key.as_ref());
-
 			// and write in the value and linkage under the new key.
-			let new_raw_key = G::storage_linked_map_final_key(&translate_key(current_key.clone()));
+			let new_key = translate_key(current_key.clone());
+			let new_raw_key = G::storage_linked_map_final_key(&new_key);
 			unhashed::put(new_raw_key.as_ref(), &(&val, &linkage));
 
 			match next {
 				None => break,
-				Some(next) => { current_key = next },
+				Some(next) => {
+					last_key = Some(new_key);
+					current_key = next
+				},
 			}
 		}
-
-		// update head at end, since it means that we made it through the entire
-		// list. this allows us to early-exit on the first `Linkage` we cannot decode,
-		// and it's impossible that we would ever decode the first successfully but
-		// fail on subsequent ones as long as storage was not already in a degenerate state.
-		// that means the error return indicates no underlying change in storage validity.
-		write_head::<&K, K, G::KeyFormat>(Some(&translate_key(head_key)));
 
 		Ok(())
 	}

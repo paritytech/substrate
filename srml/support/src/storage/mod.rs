@@ -236,6 +236,8 @@ pub trait StorageLinkedMap<K: FullCodec, V: FullCodec> {
 	/// `TK` translates keys from the old type, and `TV` translates values.
 	///
 	/// Returns `Err` if the map could not be interpreted as the old type, and Ok if it could.
+	/// The `Err` contains the first key which could not be migrated, or `None` if the
+	/// head of the list could not be read.
 	///
 	/// # Warning
 	///
@@ -247,7 +249,7 @@ pub trait StorageLinkedMap<K: FullCodec, V: FullCodec> {
 	/// This would typically be called inside the module implementation of on_initialize, while
 	/// ensuring **no usage of this storage are made before the call to `on_initialize`**. (More
 	/// precisely prior initialized modules doesn't make use of this storage).
-	fn translate<K2, V2, TK, TV>(translate_key: TK, translate_val: TV) -> Result<(), ()>
+	fn translate<K2, V2, TK, TV>(translate_key: TK, translate_val: TV) -> Result<(), Option<K2>>
 		where K2: FullCodec + Clone, V2: Decode, TK: Fn(K2) -> K, TV: Fn(V2) -> V;
 }
 
