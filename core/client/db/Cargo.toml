@@ -28,6 +28,7 @@ header_metadata = { package = "substrate-header-metadata", path = "../header-met
 substrate-keyring = { path = "../../keyring" }
 test-client = { package = "substrate-test-runtime-client", path = "../../test-runtime/client" }
 env_logger = "0.7.0"
+quickcheck = "0.8"
 
 [features]
 default = []
