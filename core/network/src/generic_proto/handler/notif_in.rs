@@ -137,6 +137,13 @@ pub enum NotifsInHandlerOut {
 	Notif(Vec<u8>),
 }
 
+impl<TSubstream> NotifsInHandler<TSubstream> {
+	/// Returns the name of the protocol that we accept.
+	pub fn protocol_name(&self) -> &[u8] {
+		self.in_protocol.protocol_name()
+	}
+}
+
 impl<TSubstream> ProtocolsHandler for NotifsInHandler<TSubstream>
 where TSubstream: AsyncRead + AsyncWrite + 'static {
 	type InEvent = NotifsInHandlerIn;

@@ -81,6 +81,11 @@ impl NotificationsIn {
 		}
 	}
 
+	/// Returns the name of the protocol that we accept.
+	pub fn protocol_name(&self) -> &[u8] {
+		&self.protocol_name
+	}
+
 	/// Modifies the handshake message.
 	// TODO: remove
 	pub fn set_handshake_message(&mut self, message: impl Into<Vec<u8>>) {

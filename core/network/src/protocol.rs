@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{DiscoveryNetBehaviour, config::ProtocolId};
-use crate::generic_proto::{LegacyProto, LegacyProtoOut};
+use crate::generic_proto::{GenericProto, GenericProtoOut};
 use bytes::BytesMut;
 use futures::prelude::*;
 use futures03::{StreamExt as _, TryStreamExt as _};
@@ -122,7 +122,7 @@ pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 	/// When asked for a proof of finality, we use this struct to build one.
 	finality_proof_provider: Option<Arc<dyn FinalityProofProvider<B>>>,
 	/// Handles opening the unique substream and sending and receiving raw messages.
-	behaviour: LegacyProto<Substream<StreamMuxerBox>>,
+	behaviour: GenericProto<Substream<StreamMuxerBox>>,
 }
 
 #[derive(Default)]
@@ -169,7 +169,7 @@ pub struct PeerInfo<B: BlockT> {
 }
 
 struct LightDispatchIn<'a> {
-	behaviour: &'a mut LegacyProto<Substream<StreamMuxerBox>>,
+	behaviour: &'a mut GenericProto<Substream<StreamMuxerBox>>,
 	peerset: peerset::PeersetHandle,
 }
 
@@ -308,7 +308,7 @@ pub trait Context<B: BlockT> {
 
 /// Protocol context.
 struct ProtocolContext<'a, B: 'a + BlockT, H: 'a + ExHashT> {
-	behaviour: &'a mut LegacyProto<Substream<StreamMuxerBox>>,
+	behaviour: &'a mut GenericProto<Substream<StreamMuxerBox>>,
 	context_data: &'a mut ContextData<B, H>,
 	peerset_handle: &'a peerset::PeersetHandle,
 }
@@ -316,7 +316,7 @@ struct ProtocolContext<'a, B: 'a + BlockT, H: 'a + ExHashT> {
 impl<'a, B: BlockT + 'a, H: 'a + ExHashT> ProtocolContext<'a, B, H> {
 	fn new(
 		context_data: &'a mut ContextData<B, H>,
-		behaviour: &'a mut LegacyProto<Substream<StreamMuxerBox>>,
+		behaviour: &'a mut GenericProto<Substream<StreamMuxerBox>>,
 		peerset_handle: &'a peerset::PeersetHandle,
 	) -> Self {
 		ProtocolContext { context_data, peerset_handle, behaviour }
@@ -422,7 +422,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		);
 		let (peerset, peerset_handle) = peerset::Peerset::from_config(peerset_config);
 		let versions = &((MIN_VERSION as u8)..=(CURRENT_VERSION as u8)).collect::<Vec<u8>>();
-		let behaviour = LegacyProto::new(protocol_id, versions, peerset);
+		let behaviour = GenericProto::new(protocol_id, versions, peerset);
 
 		let protocol = Protocol {
 			tick_timeout: Box::new(futures_timer::Interval::new(TICK_TIMEOUT).map(|v| Ok::<_, ()>(v)).compat()),
@@ -1711,7 +1711,7 @@ pub enum CustomMessageOutcome<B: BlockT> {
 }
 
 fn send_request<B: BlockT, H: ExHashT>(
-	behaviour: &mut LegacyProto<Substream<StreamMuxerBox>>,
+	behaviour: &mut GenericProto<Substream<StreamMuxerBox>>,
 	stats: &mut HashMap<&'static str, PacketStats>,
 	peers: &mut HashMap<PeerId, Peer<B, H>>,
 	who: &PeerId,
@@ -1732,7 +1732,7 @@ fn send_request<B: BlockT, H: ExHashT>(
 }
 
 fn send_message<B: BlockT>(
-	behaviour: &mut LegacyProto<Substream<StreamMuxerBox>>,
+	behaviour: &mut GenericProto<Substream<StreamMuxerBox>>,
 	stats: &mut HashMap<&'static str, PacketStats>,
 	who: &PeerId,
 	message: Message<B>,
@@ -1746,7 +1746,7 @@ fn send_message<B: BlockT>(
 
 impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> NetworkBehaviour for
 Protocol<B, S, H> {
-	type ProtocolsHandler = <LegacyProto<Substream<StreamMuxerBox>> as NetworkBehaviour>::ProtocolsHandler;
+	type ProtocolsHandler = <GenericProto<Substream<StreamMuxerBox>> as NetworkBehaviour>::ProtocolsHandler;
 	type OutEvent = CustomMessageOutcome<B>;
 
 	fn new_handler(&mut self) -> Self::ProtocolsHandler {
@@ -1831,17 +1831,17 @@ Protocol<B, S, H> {
 		};
 
 		let outcome = match event {
-			LegacyProtoOut::CustomProtocolOpen { peer_id, .. } => {
+			GenericProtoOut::CustomProtocolOpen { peer_id, .. } => {
 				self.on_peer_connected(peer_id);
 				CustomMessageOutcome::None
 			}
-			LegacyProtoOut::CustomProtocolClosed { peer_id, .. } => {
+			GenericProtoOut::CustomProtocolClosed { peer_id, .. } => {
 				self.on_peer_disconnected(peer_id);
 				CustomMessageOutcome::None
 			},
-			LegacyProtoOut::CustomMessage { peer_id, message } =>
+			GenericProtoOut::CustomMessage { peer_id, message } =>
 				self.on_custom_message(peer_id, message),
-			LegacyProtoOut::Clogged { peer_id, messages } => {
+			GenericProtoOut::Clogged { peer_id, messages } => {
 				debug!(target: "sync", "{} clogging messages:", messages.len());
 				for msg in messages.into_iter().take(5) {
 					let message: Option<Message<B>> = Decode::decode(&mut &msg[..]).ok();

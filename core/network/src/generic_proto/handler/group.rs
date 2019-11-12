@@ -137,6 +137,9 @@ pub enum NotifsHandlerOut {
 		proto_name: Option<Cow<'static, [u8]>>,
 
 		/// Message that has been received.
+		///
+		/// If `proto_name` is `None`, this decodes to a `Message`. If `proto_name` is `Some`,
+		/// this directly decodes to a gossiping message.
 		message: BytesMut,
 	},
 
@@ -186,10 +189,9 @@ where TSubstream: AsyncRead + AsyncWrite + 'static {
 
 	fn listen_protocol(&self) -> SubstreamProtocol<Self::InboundProtocol> {
 		let in_handlers = self.in_handlers.iter()
-			.map(|h| h.listen_protocol().into_upgrade().1)		// TODO: map_upgrade() instead
+			.map(|h| h.listen_protocol().into_upgrade().1)
 			.collect::<UpgradeCollec<_>>();
 
-		// TODO: map_upgrade() instead
 		let proto = SelectUpgrade::new(in_handlers, self.legacy.listen_protocol().into_upgrade().1);
 		SubstreamProtocol::new(proto)
 	}
@@ -340,7 +342,13 @@ where TSubstream: AsyncRead + AsyncWrite + 'static {
 							handler.inject_event(NotifsInHandlerIn::Refuse);
 						},
 					ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::Closed) => unimplemented!(),
-					ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::Notif(msg)) => unimplemented!(),
+					ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::Notif(message)) => {
+						let msg = NotifsHandlerOut::CustomMessage {
+							message: message.into(),
+							proto_name: Some(handler.protocol_name().to_owned().into()),
+						};
+						return Ok(Async::Ready(ProtocolsHandlerEvent::Custom(msg)));
+					},
 				}
 			}
 		}
@@ -353,16 +361,9 @@ where TSubstream: AsyncRead + AsyncWrite + 'static {
 							protocol: protocol.map_upgrade(EitherUpgrade::A),
 							info: Some(handler_num),
 						})),
-					// TODO:
-					/*ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Open { .. }) =>
-						return ProtocolsHandlerEvent::Custom(NotifsHandlerOut::CustomProtocolOpen { version }),
-					ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Closed) =>
-						return ProtocolsHandlerEvent::Custom(NotifsHandlerOut::CustomProtocolClosed { reason }),
-					ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Refused) =>
-						return ProtocolsHandlerEvent::Custom(NotifsHandlerOut::CustomMessage { message }),
-					ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::ProtocolError { is_severe, error }) =>
-						return ProtocolsHandlerEvent::Custom(NotifsHandlerOut::ProtocolError { is_severe, error }),*/
-					_ => {}
+					ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Open { handshake }) => unimplemented!(),
+					ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Closed) => unimplemented!(),
+					ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Refused) => unimplemented!(),
 				}
 			}
 		}
