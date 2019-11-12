@@ -7,6 +7,7 @@ edition = "2018"
 [dependencies]
 api = { package = "substrate-rpc-api", path = "./api" }
 client = { package = "substrate-client", path = "../client" }
+sr-api = { path = "../sr-api" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 futures03 = { package = "futures-preview", version = "0.3.0-alpha.19", features = ["compat"] }
 jsonrpc-pubsub = "14.0.3"

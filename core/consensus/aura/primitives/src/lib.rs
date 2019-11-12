@@ -19,7 +19,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::{Encode, Decode, Codec};
-use substrate_client::decl_runtime_apis;
 use rstd::vec::Vec;
 use sr_primitives::ConsensusEngineId;
 
@@ -74,7 +73,7 @@ pub enum ConsensusLog<AuthorityId: Codec> {
 	OnDisabled(AuthorityIndex),
 }
 
-decl_runtime_apis! {
+sr_api::decl_runtime_apis! {
 	/// API necessary for block authorship with aura.
 	pub trait AuraApi<AuthorityId: Codec> {
 		/// Return the slot duration in seconds for Aura.

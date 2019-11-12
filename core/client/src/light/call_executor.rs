@@ -33,7 +33,8 @@ use state_machine::{
 };
 use hash_db::Hasher;
 
-use crate::runtime_api::{ProofRecorder, InitializeBlock};
+use sr_api::{ProofRecorder, InitializeBlock};
+
 use crate::backend::RemoteBackend;
 use crate::call_executor::CallExecutor;
 use crate::error::{Error as ClientError, Result as ClientResult};
