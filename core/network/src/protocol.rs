@@ -116,6 +116,8 @@ pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 	context_data: ContextData<B, H>,
 	// Connected peers pending Status message.
 	handshaking_peers: HashMap<PeerId, HandshakingPeer>,
+	/// For each legacy gossiping engine ID, the corresponding new protocol name.
+	protocol_name_by_engine: HashMap<ConsensusEngineId, Cow<'static, [u8]>>,
 	/// Used to report reputation changes.
 	peerset_handle: peerset::PeersetHandle,
 	transaction_pool: Arc<dyn TransactionPool<H, B>>,
@@ -438,6 +440,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			sync,
 			specialization,
 			consensus_gossip: ConsensusGossip::new(),
+			protocol_name_by_engine: HashMap::new(),
 			handshaking_peers: HashMap::new(),
 			transaction_pool,
 			finality_proof_provider,
@@ -620,13 +623,28 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			GenericMessage::RemoteReadChildRequest(request) =>
 				self.on_remote_read_child_request(who, request),
 			GenericMessage::Consensus(msg) => {
+				let outcome = if let Some(proto_name) = self.protocol_name_by_engine.get(&msg.engine_id) {
+					// TODO: what if not open? check if open?
+					CustomMessageOutcome::NotifMessage {
+						remote: who.clone(),
+						proto_name: proto_name.clone(),
+						message: msg.data.clone()
+					}
+				} else {
+					CustomMessageOutcome::None
+				};
+
 				self.consensus_gossip.on_incoming(
 					&mut ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle),
 					who,
 					vec![msg],
 				);
+
+				return outcome;
 			}
 			GenericMessage::ConsensusBatch(messages) => {
+				// TODO: send out as outcome
+
 				self.consensus_gossip.on_incoming(
 					&mut ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle),
 					who,
@@ -1079,8 +1097,11 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	pub fn register_notif_protocol(
 		&mut self,
 		proto_name: impl Into<Cow<'static, [u8]>>,
-		handshake: impl Into<Vec<u8>>
+		engine_id: ConsensusEngineId,
+		handshake: impl Into<Vec<u8>>,
 	) {
+		let proto_name = proto_name.into();
+		self.protocol_name_by_engine.insert(engine_id, proto_name.clone());
 		self.behaviour.register_notif_protocol(proto_name, handshake);
 	}
 
@@ -1719,6 +1740,9 @@ pub enum CustomMessageOutcome<B: BlockT> {
 	BlockImport(BlockOrigin, Vec<IncomingBlock<B>>),
 	JustificationImport(Origin, B::Hash, NumberFor<B>, Justification),
 	FinalityProofImport(Origin, B::Hash, NumberFor<B>, Vec<u8>),
+	NotifOpened { remote: PeerId, proto_name: Cow<'static, [u8]> },
+	NotifClosed { remote: PeerId, proto_name: Cow<'static, [u8]> },
+	NotifMessage { remote: PeerId, proto_name: Cow<'static, [u8]>, message: Vec<u8> },
 	None,
 }
 

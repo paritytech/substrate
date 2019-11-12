@@ -46,7 +46,7 @@ use crate::{NetworkState, NetworkStateNotConnectedPeer, NetworkStatePeer};
 use crate::{transport, config::NonReservedPeerMode};
 use crate::config::{Params, TransportConfig};
 use crate::error::Error;
-use crate::protocol::{self, Protocol, Context, CustomMessageOutcome, PeerInfo};
+use crate::protocol::{self, Protocol, Context, PeerInfo};
 use crate::protocol::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
 use crate::protocol::{event::Event, light_dispatch::{AlwaysBadChecker, RequestData}};
 use crate::protocol::specialization::NetworkSpecialization;
@@ -211,8 +211,8 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 			params.block_announce_validator
 		)?;
 
-		for proto in params.network_config.extra_notif_protos {
-			protocol.register_notif_protocol(proto, Vec::new());
+		for (proto, engine_id) in params.network_config.extra_notif_protos {
+			protocol.register_notif_protocol(proto, engine_id, Vec::new());
 		}
 
 		// Build the swarm.
@@ -464,10 +464,12 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	pub fn register_notif_protocol(
 		&self,
 		proto_name: impl Into<Cow<'static, [u8]>>,
+		engine_id: ConsensusEngineId,
 		handshake: impl Into<Vec<u8>>
 	) {
 		let _ = self.to_worker.unbounded_send(ServerToWorkerMsg::RegisterNotifProtocol {
 			proto_name: proto_name.into(),
+			engine_id,
 			handshake: handshake.into(),
 		});
 	}
@@ -489,6 +491,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	}
 
 	/// Send a consensus message through the gossip
+	#[deprecated(note = "Use the new `notif protocol` API")]
 	pub fn gossip_consensus_message(
 		&self,
 		topic: B::Hash,
@@ -529,6 +532,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	}
 
 	/// Execute a closure with the consensus gossip.
+	#[deprecated(note = "Use the new `notif protocol` API")]
 	pub fn with_gossip<F>(&self, f: F)
 		where F: FnOnce(&mut ConsensusGossip<B>, &mut dyn Context<B>) + Send + 'static
 	{
@@ -700,6 +704,7 @@ enum ServerToWorkerMsg<B: BlockT, S: NetworkSpecialization<B>> {
 	},
 	RegisterNotifProtocol {
 		proto_name: Cow<'static, [u8]>,
+		engine_id: ConsensusEngineId,
 		handshake: Vec<u8>,
 	},
 }
@@ -788,8 +793,9 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Stream for Ne
 					self.events_streams.push(sender),
 				ServerToWorkerMsg::WriteNotif { message, proto_name, target } =>
 					self.network_service.user_protocol_mut().write_notif(target, proto_name, message),
-				ServerToWorkerMsg::RegisterNotifProtocol { proto_name, handshake } =>
-					self.network_service.user_protocol_mut().register_notif_protocol(proto_name, handshake),
+				ServerToWorkerMsg::RegisterNotifProtocol { proto_name, engine_id, handshake } =>
+					self.network_service.user_protocol_mut()
+						.register_notif_protocol(proto_name, engine_id, handshake),
 			}
 		}
 
@@ -799,27 +805,22 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Stream for Ne
 
 			let outcome = match poll_value {
 				Ok(Async::NotReady) => break,
-				Ok(Async::Ready(Some(BehaviourOut::SubstrateAction(outcome)))) => outcome,
+				Ok(Async::Ready(Some(BehaviourOut::BlockImport(origin, blocks)))) =>
+					self.import_queue.import_blocks(origin, blocks),
+				Ok(Async::Ready(Some(BehaviourOut::JustificationImport(origin, hash, nb, justification)))) =>
+					self.import_queue.import_justification(origin, hash, nb, justification),
+				Ok(Async::Ready(Some(BehaviourOut::FinalityProofImport(origin, hash, nb, proof)))) =>
+					self.import_queue.import_finality_proof(origin, hash, nb, proof),
 				Ok(Async::Ready(Some(BehaviourOut::Event(ev)))) => {
 					self.events_streams.retain(|sender| sender.unbounded_send(ev.clone()).is_ok());
 					return Ok(Async::Ready(Some(ev)));
 				},
-				Ok(Async::Ready(None)) => CustomMessageOutcome::None,
+				Ok(Async::Ready(None)) => {},
 				Err(err) => {
 					error!(target: "sync", "Error in the network: {:?}", err);
 					return Err(err)
 				}
 			};
-
-			match outcome {
-				CustomMessageOutcome::BlockImport(origin, blocks) =>
-					self.import_queue.import_blocks(origin, blocks),
-				CustomMessageOutcome::JustificationImport(origin, hash, nb, justification) =>
-					self.import_queue.import_justification(origin, hash, nb, justification),
-				CustomMessageOutcome::FinalityProofImport(origin, hash, nb, proof) =>
-					self.import_queue.import_finality_proof(origin, hash, nb, proof),
-				CustomMessageOutcome::None => {}
-			}
 		}
 
 		// Update the variables shared with the `NetworkService`.
