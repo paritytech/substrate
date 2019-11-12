@@ -188,7 +188,7 @@ impl<'a, B: BlockT> LightDispatchNetwork<B> for LightDispatchIn<'a> {
 			block,
 		});
 
-		self.behaviour.send_packet(who, message.encode())
+		self.behaviour.send_packet(who, None, message.encode())
 	}
 
 	fn send_read_request(
@@ -204,7 +204,7 @@ impl<'a, B: BlockT> LightDispatchNetwork<B> for LightDispatchIn<'a> {
 			keys,
 		});
 
-		self.behaviour.send_packet(who, message.encode())
+		self.behaviour.send_packet(who, None, message.encode())
 	}
 
 	fn send_read_child_request(
@@ -222,7 +222,7 @@ impl<'a, B: BlockT> LightDispatchNetwork<B> for LightDispatchIn<'a> {
 			keys,
 		});
 
-		self.behaviour.send_packet(who, message.encode())
+		self.behaviour.send_packet(who, None, message.encode())
 	}
 
 	fn send_call_request(
@@ -240,7 +240,7 @@ impl<'a, B: BlockT> LightDispatchNetwork<B> for LightDispatchIn<'a> {
 			data,
 		});
 
-		self.behaviour.send_packet(who, message.encode())
+		self.behaviour.send_packet(who, None, message.encode())
 	}
 
 	fn send_changes_request(
@@ -264,7 +264,7 @@ impl<'a, B: BlockT> LightDispatchNetwork<B> for LightDispatchIn<'a> {
 			key,
 		});
 
-		self.behaviour.send_packet(who, message.encode())
+		self.behaviour.send_packet(who, None, message.encode())
 	}
 
 	fn send_body_request(
@@ -286,7 +286,7 @@ impl<'a, B: BlockT> LightDispatchNetwork<B> for LightDispatchIn<'a> {
 			max,
 		});
 
-		self.behaviour.send_packet(who, message.encode())
+		self.behaviour.send_packet(who, None, message.encode())
 	}
 }
 
@@ -1069,7 +1069,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		proto_name: impl Into<Cow<'static, [u8]>>,
 		message: impl Into<Vec<u8>>
 	) {
-		self.behaviour.write_notif(target, proto_name, message)
+		self.behaviour.send_packet(&target, Some(proto_name.into()), message)
 	}
 
 	/// Call when we must propagate ready extrinsics to peers.
@@ -1741,7 +1741,7 @@ fn send_message<B: BlockT>(
 	let mut stats = stats.entry(message.id()).or_default();
 	stats.bytes_out += encoded.len() as u64;
 	stats.count_out += 1;
-	behaviour.send_packet(who, encoded);
+	behaviour.send_packet(who, None, encoded);
 }
 
 impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> NetworkBehaviour for

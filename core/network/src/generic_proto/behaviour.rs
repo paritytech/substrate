@@ -347,7 +347,12 @@ impl<TSubstream> LegacyProto<TSubstream> {
 	///
 	/// Also note that even we have a valid open substream, it may in fact be already closed
 	/// without us knowing, in which case the packet will not be received.
-	pub fn send_packet(&mut self, target: &PeerId, message: Vec<u8>) {
+	pub fn send_packet(
+		&mut self,
+		target: &PeerId,
+		proto_name: Option<Cow<'static, [u8]>>,
+		message: impl Into<Vec<u8>>,
+	) {
 		if !self.is_open(target) {
 			return;
 		}
@@ -356,30 +361,9 @@ impl<TSubstream> LegacyProto<TSubstream> {
 		trace!(target: "sub-libp2p", "Handler({:?}) <= Packet", target);
 		self.events.push(NetworkBehaviourAction::SendEvent {
 			peer_id: target.clone(),
-			event: NotifsHandlerIn::Send { message, proto_name: None },
-		});
-	}
-
-	/// Send a notification to the given peer we're connected to.
-	///
-	/// Doesn't do anything if we're not connected to that peer.
-	pub fn write_notif(
-		&mut self,
-		target: PeerId,
-		proto_name: impl Into<Cow<'static, [u8]>>,
-		message: impl Into<Vec<u8>>
-	) {
-		if !self.is_open(&target) {
-			return;
-		}
-
-		trace!(target: "sub-libp2p", "External API => Packet for {:?}", target);
-		trace!(target: "sub-libp2p", "Handler({:?}) <= Packet", target);
-		self.events.push(NetworkBehaviourAction::SendEvent {
-			peer_id: target,
 			event: NotifsHandlerIn::Send {
 				message: message.into(),
-				proto_name: Some(proto_name.into()),
+				proto_name: proto_name.map(Into::into),
 			},
 		});
 	}
