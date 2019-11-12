@@ -21,6 +21,8 @@ substrate-telemetry = { path = "../../telemetry" }
 keystore = { package = "substrate-keystore", path = "../../keystore" }
 srml-babe = { path = "../../../srml/babe" }
 client = { package = "substrate-client", path = "../../client" }
+sr-api = { path = "../../sr-api" }
+block-builder-api = { package = "substrate-block-builder-runtime-api", path = "../../block-builder/runtime-api" }
 header-metadata = { package = "substrate-header-metadata", path = "../../client/header-metadata" }
 consensus-common = { package = "substrate-consensus-common", path = "../common" }
 uncles = { package = "substrate-consensus-uncles", path = "../uncles" }
@@ -44,6 +46,7 @@ substrate-executor = { path = "../../executor" }
 network = { package = "substrate-network", path = "../../network", features = ["test-helpers"]}
 service = { package = "substrate-service", path = "../../service" }
 test-client = { package = "substrate-test-runtime-client", path = "../../test-runtime/client" }
+block-builder = { package = "substrate-block-builder", path = "../../block-builder" }
 tokio = "0.1.22"
 env_logger = "0.7.0"
 tempfile = "3.1.0"

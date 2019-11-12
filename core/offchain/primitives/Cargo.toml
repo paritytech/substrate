@@ -7,12 +7,12 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-client = { package = "substrate-client", path = "../../client", default-features = false }
+sr-api = { path = "../../sr-api", default-features = false }
 sr-primitives = {  path = "../../sr-primitives", default-features = false }
 
 [features]
 default = ["std"]
 std = [
-	"client/std",
+	"sr-api/std",
 	"sr-primitives/std"
 ]

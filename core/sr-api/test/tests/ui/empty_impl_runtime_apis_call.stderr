@@ -1,0 +1,5 @@
+error: No api implementation given!
+  --> $DIR/empty_impl_runtime_apis_call.rs:17:1
+   |
+17 | sr_api::impl_runtime_apis! {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ in this macro invocation

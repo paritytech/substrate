@@ -18,10 +18,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use inherents::{
-	RuntimeString, InherentIdentifier, ProvideInherent,
-	InherentData, MakeFatalError,
-};
+use inherents::{InherentIdentifier, ProvideInherent, InherentData, MakeFatalError};
 use sr_primitives::traits::{One, Zero, SaturatedConversion};
 use rstd::{prelude::*, result, cmp, vec};
 use codec::Decode;
@@ -38,11 +35,11 @@ pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"finalnum";
 /// Auxiliary trait to extract finalized inherent data.
 pub trait FinalizedInherentData<N: Decode> {
 	/// Get finalized inherent data.
-	fn finalized_number(&self) -> Result<N, RuntimeString>;
+	fn finalized_number(&self) -> Result<N, inherents::Error>;
 }
 
 impl<N: Decode> FinalizedInherentData<N> for InherentData {
-	fn finalized_number(&self) -> Result<N, RuntimeString> {
+	fn finalized_number(&self) -> Result<N, inherents::Error> {
 		self.get_data(&INHERENT_IDENTIFIER)
 			.and_then(|r| r.ok_or_else(|| "Finalized number inherent data not found".into()))
 	}
@@ -64,13 +61,16 @@ impl<F, N> InherentDataProvider<F, N> {
 
 #[cfg(feature = "std")]
 impl<F, N: Encode> inherents::ProvideInherentData for InherentDataProvider<F, N>
-	where F: Fn() -> Result<N, RuntimeString>
+	where F: Fn() -> Result<N, inherents::Error>
 {
 	fn inherent_identifier(&self) -> &'static InherentIdentifier {
 		&INHERENT_IDENTIFIER
 	}
 
-	fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), RuntimeString> {
+	fn provide_inherent_data(
+		&self,
+		inherent_data: &mut InherentData,
+	) -> Result<(), inherents::Error> {
 		(self.inner)()
 			.and_then(|n| inherent_data.put_data(INHERENT_IDENTIFIER, &n))
 	}

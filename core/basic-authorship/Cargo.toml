@@ -14,7 +14,8 @@ client = { package = "substrate-client", path = "../../core/client" }
 consensus_common = { package = "substrate-consensus-common", path = "../../core/consensus/common" }
 inherents = { package = "substrate-inherents", path = "../inherents" }
 substrate-telemetry = { path = "../telemetry" }
-transaction_pool = { package = "substrate-transaction-pool", path = "../../core/transaction-pool" }
+transaction_pool = { package = "substrate-transaction-pool", path = "../transaction-pool" }
+block-builder = { package = "substrate-block-builder", path = "../block-builder" }
 
 [dev-dependencies]
 test-client = { package = "substrate-test-runtime-client", path = "../../core/test-runtime/client" }

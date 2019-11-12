@@ -597,7 +597,14 @@ impl<B: BlockT> ChainSync<B> {
 				peer.state = PeerSyncState::DownloadingStale(hash);
 				have_requests = true;
 				Some((id.clone(), req))
-			} else if let Some((range, req)) = peer_block_request(id, peer, blocks, attrs, max_parallel) {
+			} else if let Some((range, req)) = peer_block_request(
+				id,
+				peer,
+				blocks,
+				attrs,
+				max_parallel,
+				last_finalized
+			) {
 				peer.state = PeerSyncState::DownloadingNew(range.start);
 				trace!(
 					target: "sync",
@@ -1236,7 +1243,11 @@ fn peer_block_request<B: BlockT>(
 	blocks: &mut BlockCollection<B>,
 	attrs: &message::BlockAttributes,
 	max_parallel_downloads: u32,
+	finalized: NumberFor<B>,
 ) -> Option<(Range<NumberFor<B>>, BlockRequest<B>)> {
+	if peer.common_number < finalized {
+		return None;
+	}
 	if let Some(range) = blocks.needed_blocks(
 		id.clone(),
 		MAX_BLOCKS_TO_REQUEST,

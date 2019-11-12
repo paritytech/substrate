@@ -1,0 +1,70 @@
+error[E0433]: failed to resolve: use of undeclared type or module `runtime_api`
+  --> $DIR/impl_incorrect_method_signature.rs:23:19
+   |
+23 |         fn version() -> runtime_api::RuntimeVersion {
+   |                         ^^^^^^^^^^^ use of undeclared type or module `runtime_api`
+
+error[E0053]: method `test` has an incompatible type for trait
+  --> $DIR/impl_incorrect_method_signature.rs:19:17
+   |
+13 |         fn test(data: u64);
+   |                       --- type in trait
+...
+19 |         fn test(data: String) {}
+   |                       ^^^^^^ expected u64, found struct `std::string::String`
+   |
+   = note: expected type `fn(u64)`
+              found type `fn(std::string::String)`
+
+error[E0053]: method `Api_test_runtime_api_impl` has an incompatible type for trait
+  --> $DIR/impl_incorrect_method_signature.rs:17:1
+   |
+11 | / sr_api::decl_runtime_apis! {
+12 | |     pub trait Api {
+13 | |         fn test(data: u64);
+14 | |     }
+15 | | }
+   | |_- type in trait
+16 | 
+17 |   sr_api::impl_runtime_apis! {
+   |   -^^^^^^^^^^^^^^^^^^^^^^^^^
+   |   |
+   |  _expected u64, found struct `std::string::String`
+   | |
+18 | |     impl self::Api<Block> for Runtime {
+19 | |         fn test(data: String) {}
+20 | |     }
+...  |
+32 | |     }
+33 | | }
+   | |_- in this macro invocation
+   |
+   = note: expected type `fn(&RuntimeApiImpl<RuntimeApiImplCall>, &sr_api_hidden_includes_DECL_RUNTIME_APIS::sr_api::BlockId<sr_primitives::generic::block::Block<sr_primitives::generic::header::Header<u64, sr_primitives::traits::BlakeTwo256>, substrate_test_runtime::Extrinsic>>, sr_api_hidden_includes_DECL_RUNTIME_APIS::sr_api::ExecutionContext, std::option::Option<u64>, std::vec::Vec<u8>) -> std::result::Result<sr_api_hidden_includes_DECL_RUNTIME_APIS::sr_api::NativeOrEncoded<()>, <RuntimeApiImplCall as sr_api_hidden_includes_DECL_RUNTIME_APIS::sr_api::CallRuntimeAt<sr_primitives::generic::block::Block<sr_primitives::generic::header::Header<u64, sr_primitives::traits::BlakeTwo256>, substrate_test_runtime::Extrinsic>>>::Error>`
+              found type `fn(&RuntimeApiImpl<RuntimeApiImplCall>, &sr_api_hidden_includes_DECL_RUNTIME_APIS::sr_api::BlockId<sr_primitives::generic::block::Block<sr_primitives::generic::header::Header<u64, sr_primitives::traits::BlakeTwo256>, substrate_test_runtime::Extrinsic>>, sr_api_hidden_includes_DECL_RUNTIME_APIS::sr_api::ExecutionContext, std::option::Option<std::string::String>, std::vec::Vec<u8>) -> std::result::Result<sr_api_hidden_includes_DECL_RUNTIME_APIS::sr_api::NativeOrEncoded<()>, <RuntimeApiImplCall as sr_api_hidden_includes_DECL_RUNTIME_APIS::sr_api::CallRuntimeAt<sr_primitives::generic::block::Block<sr_primitives::generic::header::Header<u64, sr_primitives::traits::BlakeTwo256>, substrate_test_runtime::Extrinsic>>>::Error>`
+
+error[E0308]: mismatched types
+  --> $DIR/impl_incorrect_method_signature.rs:17:1
+   |
+17 | / sr_api::impl_runtime_apis! {
+18 | |     impl self::Api<Block> for Runtime {
+19 | |         fn test(data: String) {}
+20 | |     }
+...  |
+32 | |     }
+33 | | }
+   | | ^
+   | | |
+   | |_expected u64, found struct `std::string::String`
+   |   in this macro invocation
+   |
+   = note: expected type `u64`
+              found type `std::string::String`
+
+error[E0308]: mismatched types
+  --> $DIR/impl_incorrect_method_signature.rs:19:11
+   |
+19 |         fn test(data: String) {}
+   |                 ^^^^ expected u64, found struct `std::string::String`
+   |
+   = note: expected type `u64`
+              found type `std::string::String`

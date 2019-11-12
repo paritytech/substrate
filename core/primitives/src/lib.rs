@@ -38,9 +38,9 @@ use std::borrow::Cow;
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 #[cfg(feature = "std")]
-pub use serde;// << for macro
+pub use serde;
 #[doc(hidden)]
-pub use codec::{Encode, Decode};// << for macro
+pub use codec::{Encode, Decode};
 
 pub use substrate_debug_derive::RuntimeDebug;
 

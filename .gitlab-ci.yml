@@ -289,7 +289,7 @@ build-linux-subkey:
   script:
     - cd ./subkey
     - BUILD_DUMMY_WASM_BINARY=1 time cargo build --release --verbose
-    - cd ..
+    - cd -
     - sccache -s
     - mkdir -p ./artifacts/subkey
     - mv ./target/release/subkey ./artifacts/subkey/.
@@ -338,6 +338,7 @@ check_warnings:
       fi
   allow_failure:                   true
 
+# Check whether Polkadot 'master' branch builds using this Substrate commit.
 check_polkadot:
   stage:                           build
   <<:                              *docker-env
@@ -345,13 +346,25 @@ check_polkadot:
   dependencies:
     - test-linux-stable
   script:
-    - git clone --depth 1 https://github.com/paritytech/polkadot.git
     - COMMIT_HASH=$(git rev-parse HEAD)
+    - SUBSTRATE_PATH=$(pwd)
+    # Clone the current Polkadot master branch into ./polkadot.
+    - git clone --depth 1 https://gitlab.parity.io/parity/polkadot.git
     - cd polkadot
-    - git grep -l "polkadot-master" | grep toml | xargs sed -i "s/branch.*=.*\"polkadot-master\"/rev = \"$COMMIT_HASH\"/"
-    - cargo update -p sr-io --precise $COMMIT_HASH
+    # Within Polkadot 'master' alter each Cargo.toml that references the
+    # Substrate 'polkadot-master' branch:
+    # 1. Replace the 'branch = "polkadot-master"' statements with the rev of our
+    #    commit.
+    # 2. Replace 'git = "https://.*"' with 'git = "file://.*"' (the local
+    #    checked out Substrate repository one folder above).
+    # 3. Remove any trailing commas.
+    - git grep -l "polkadot-master" | grep toml | xargs sed -i "s/branch.*=.*\"polkadot-master\"/rev = \"$COMMIT_HASH\"/; s~https://github.com/paritytech/substrate~file://$SUBSTRATE_PATH~; s/,\s*}/ }/"
+    # Make sure 'Cargo.lock' matches 'Cargo.toml'. It's enough to update one
+    # package, others are updated along the way.
+    - cargo update -p sr-io
+    # Check whether Polkadot 'master' branch builds with this Substrate commit.
     - time cargo check
-    - cd ..
+    - cd -
     - sccache -s
 
 #### stage:                        publish
