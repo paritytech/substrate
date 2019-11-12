@@ -19,16 +19,20 @@
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use std::ops::Range;
-use rpc::futures::future::result;
+use futures03::{future, StreamExt as _, TryStreamExt as _};
+use log::warn;
+use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
+use rpc::{
+	Result as RpcResult,
+	futures::{stream, Future, Sink, Stream, future::result},
+};
 
 use api::Subscriptions;
 use client::{
-	Client, CallExecutor, runtime_api::Metadata,
-	backend::Backend, error::Result as ClientResult,
+	Client, CallExecutor, BlockchainEvents, backend::Backend, error::Result as ClientResult,
 };
 use primitives::{
-	H256, Blake2Hasher, Bytes, offchain::NeverOffchainExt,
-	storage::{StorageKey, StorageData, StorageChangeSet},
+	H256, Blake2Hasher, Bytes, storage::{well_known_keys, StorageKey, StorageData, StorageChangeSet},
 };
 use runtime_version::RuntimeVersion;
 use state_machine::ExecutionStrategy;
@@ -37,6 +41,8 @@ use sr_primitives::{
 	traits::{Block as BlockT, NumberFor, ProvideRuntimeApi, SaturatedConversion},
 };
 use header_metadata::{HeaderMetadata, CachedHeaderMetadata};
+
+use sr_api::Metadata;
 
 use super::{StateBackend, error::{FutureResult, Error, Result}, client_err};
 
@@ -54,6 +60,7 @@ struct QueryStorageRange<Block: BlockT> {
 	pub filtered_range: Option<Range<usize>>,
 }
 
+/// State API backend for full nodes.
 pub struct FullState<B, E, Block: BlockT, RA> {
 	client: Arc<Client<B, E, Block, RA>>,
 	subscriptions: Subscriptions,
@@ -65,14 +72,14 @@ impl<B, E, Block: BlockT, RA> FullState<B, E, Block, RA>
 		B: Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static + Clone,
 {
-	///
+	/// Create new state API backend for full nodes.
 	pub fn new(client: Arc<Client<B, E, Block, RA>>, subscriptions: Subscriptions) -> Self {
 		Self { client, subscriptions }
 	}
 
 	/// Returns given block hash or best block hash if None is passed.
 	fn block_or_best(&self, hash: Option<Block::Hash>) -> ClientResult<Block::Hash> {
-		crate::helpers::unwrap_or_else(|| Ok(self.client.info().chain.best_hash), hash)
+		Ok(hash.unwrap_or_else(|| self.client.info().chain.best_hash))
 	}
 
 	/// Splits the `query_storage` block range into 'filtered' and 'unfiltered' subranges.
@@ -212,16 +219,9 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static + Clone,
 		RA: Send + Sync + 'static,
 		Client<B, E, Block, RA>: ProvideRuntimeApi,
-		<Client<B, E, Block, RA> as ProvideRuntimeApi>::Api: Metadata<Block>,
+		<Client<B, E, Block, RA> as ProvideRuntimeApi>::Api:
+			Metadata<Block, Error = client::error::Error>,
 {
-	fn client(&self) -> &Arc<Client<B, E, Block, RA>> {
-		&self.client
-	}
-
-	fn subscriptions(&self) -> &Subscriptions {
-		&self.subscriptions
-	}
-
 	fn call(
 		&self,
 		block: Option<Block::Hash>,
@@ -230,13 +230,16 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 	) -> FutureResult<Bytes> {
 		Box::new(result(
 			self.block_or_best(block)
-				.and_then(|block| self.client.executor()
+				.and_then(|block|
+					self
+					.client
+					.executor()
 					.call(
 						&BlockId::Hash(block),
 						&method,
 						&*call_data,
 						ExecutionStrategy::NativeElseWasm,
-						NeverOffchainExt::new(),
+						None,
 					)
 					.map(Into::into))
 				.map_err(client_err)))
@@ -314,7 +317,9 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 	fn metadata(&self, block: Option<Block::Hash>) -> FutureResult<Bytes> {
 		Box::new(result(
 			self.block_or_best(block)
-				.and_then(|block| self.client.runtime_api().metadata(&BlockId::Hash(block)).map(Into::into))
+				.and_then(|block|
+					self.client.runtime_api().metadata(&BlockId::Hash(block)).map(Into::into)
+				)
 				.map_err(client_err)))
 	}
 
@@ -340,6 +345,125 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 			Ok(changes)
 		};
 		Box::new(result(call_fn()))
+	}
+
+	fn subscribe_runtime_version(
+		&self,
+		_meta: crate::metadata::Metadata,
+		subscriber: Subscriber<RuntimeVersion>,
+	) {
+		let stream = match self.client.storage_changes_notification_stream(
+			Some(&[StorageKey(well_known_keys::CODE.to_vec())]),
+			None,
+		) {
+			Ok(stream) => stream,
+			Err(err) => {
+				let _ = subscriber.reject(Error::from(client_err(err)).into());
+				return;
+			}
+		};
+
+		self.subscriptions.add(subscriber, |sink| {
+			let version = self.runtime_version(None.into())
+				.map_err(Into::into)
+				.wait();
+
+			let client = self.client.clone();
+			let mut previous_version = version.clone();
+
+			let stream = stream
+				.filter_map(move |_| {
+					let info = client.info();
+					let version = client
+						.runtime_version_at(&BlockId::hash(info.chain.best_hash))
+						.map_err(client_err)
+						.map_err(Into::into);
+					if previous_version != version {
+						previous_version = version.clone();
+						future::ready(Some(Ok::<_, ()>(version)))
+					} else {
+						future::ready(None)
+					}
+				})
+				.compat();
+
+			sink
+				.sink_map_err(|e| warn!("Error sending notifications: {:?}", e))
+				.send_all(
+					stream::iter_result(vec![Ok(version)])
+					.chain(stream)
+				)
+				// we ignore the resulting Stream (if the first stream is over we are unsubscribed)
+				.map(|_| ())
+		});
+	}
+
+	fn unsubscribe_runtime_version(
+		&self,
+		_meta: Option<crate::metadata::Metadata>,
+		id: SubscriptionId,
+	) -> RpcResult<bool> {
+		Ok(self.subscriptions.cancel(id))
+	}
+
+	fn subscribe_storage(
+		&self,
+		_meta: crate::metadata::Metadata,
+		subscriber: Subscriber<StorageChangeSet<Block::Hash>>,
+		keys: Option<Vec<StorageKey>>,
+	) {
+		let keys = Into::<Option<Vec<_>>>::into(keys);
+		let stream = match self.client.storage_changes_notification_stream(
+			keys.as_ref().map(|x| &**x),
+			None
+		) {
+			Ok(stream) => stream,
+			Err(err) => {
+				let _ = subscriber.reject(client_err(err).into());
+				return;
+			},
+		};
+
+		// initial values
+		let initial = stream::iter_result(keys
+			.map(|keys| {
+				let block = self.client.info().chain.best_hash;
+				let changes = keys
+					.into_iter()
+					.map(|key| self.storage(Some(block.clone()).into(), key.clone())
+						.map(|val| (key.clone(), val))
+						.wait()
+						.unwrap_or_else(|_| (key, None))
+					)
+					.collect();
+				vec![Ok(Ok(StorageChangeSet { block, changes }))]
+			}).unwrap_or_default());
+
+		self.subscriptions.add(subscriber, |sink| {
+			let stream = stream
+				.map(|(block, changes)| Ok::<_, ()>(Ok(StorageChangeSet {
+					block,
+					changes: changes.iter()
+						.filter_map(|(o_sk, k, v)| if o_sk.is_none() {
+							Some((k.clone(),v.cloned()))
+						} else { None }).collect(),
+				})))
+				.compat();
+
+			sink
+				.sink_map_err(|e| warn!("Error sending notifications: {:?}", e))
+				.send_all(initial.chain(stream))
+				// we ignore the resulting Stream (if the first stream is over we are unsubscribed)
+				.map(|_| ())
+		});
+	}
+
+	fn unsubscribe_storage(
+		&self,
+		_meta: Option<crate::metadata::Metadata>,
+		id: SubscriptionId,
+	) -> RpcResult<bool> {
+		Ok(self.subscriptions.cancel(id))
 	}
 }
 

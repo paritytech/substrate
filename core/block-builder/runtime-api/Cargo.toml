@@ -1,0 +1,20 @@
+[package]
+name = "substrate-block-builder-runtime-api"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
+sr-primitives = { path = "../../sr-primitives", default-features = false }
+sr-api = { path = "../../sr-api", default-features = false }
+rstd = { package = "sr-std", path = "../../sr-std", default-features = false }
+inherents = { package = "substrate-inherents", path = "../../inherents", default-features = false }
+
+[features]
+default = [ "std" ]
+std = [
+	"sr-primitives/std",
+	"inherents/std",
+	"sr-api/std",
+	"rstd/std",
+]

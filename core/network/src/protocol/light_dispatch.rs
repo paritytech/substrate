@@ -28,7 +28,7 @@ use linked_hash_map::{Entry, LinkedHashMap};
 use client::error::Error as ClientError;
 use client::light::fetcher::{FetchChecker, RemoteHeaderRequest,
 	RemoteCallRequest, RemoteReadRequest, RemoteChangesRequest, ChangesProof,
-	RemoteReadChildRequest, RemoteBodyRequest};
+	RemoteReadChildRequest, RemoteBodyRequest, StorageProof};
 use crate::message::{self, BlockAttributes, Direction, FromBlock, RequestId};
 use libp2p::PeerId;
 use crate::config::Roles;
@@ -174,7 +174,7 @@ impl<Block: BlockT> FetchChecker<Block> for AlwaysBadChecker {
 		&self,
 		_request: &RemoteHeaderRequest<Block::Header>,
 		_remote_header: Option<Block::Header>,
-		_remote_proof: Vec<Vec<u8>>
+		_remote_proof: StorageProof,
 	) -> Result<Block::Header, ClientError> {
 		Err(ClientError::Msg("AlwaysBadChecker".into()))
 	}
@@ -182,7 +182,7 @@ impl<Block: BlockT> FetchChecker<Block> for AlwaysBadChecker {
 	fn check_read_proof(
 		&self,
 		_request: &RemoteReadRequest<Block::Header>,
-		_remote_proof: Vec<Vec<u8>>
+		_remote_proof: StorageProof,
 	) -> Result<HashMap<Vec<u8>,Option<Vec<u8>>>, ClientError> {
 		Err(ClientError::Msg("AlwaysBadChecker".into()))
 	}
@@ -190,7 +190,7 @@ impl<Block: BlockT> FetchChecker<Block> for AlwaysBadChecker {
 	fn check_read_child_proof(
 		&self,
 		_request: &RemoteReadChildRequest<Block::Header>,
-		_remote_proof: Vec<Vec<u8>>
+		_remote_proof: StorageProof,
 	) -> Result<HashMap<Vec<u8>, Option<Vec<u8>>>, ClientError> {
 		Err(ClientError::Msg("AlwaysBadChecker".into()))
 	}
@@ -198,7 +198,7 @@ impl<Block: BlockT> FetchChecker<Block> for AlwaysBadChecker {
 	fn check_execution_proof(
 		&self,
 		_request: &RemoteCallRequest<Block::Header>,
-		_remote_proof: Vec<Vec<u8>>
+		_remote_proof: StorageProof,
 	) -> Result<Vec<u8>, ClientError> {
 		Err(ClientError::Msg("AlwaysBadChecker".into()))
 	}
@@ -684,7 +684,7 @@ pub mod tests {
 	use crate::config::Roles;
 	use crate::message::{self, BlockAttributes, Direction, FromBlock, RequestId};
 	use libp2p::PeerId;
-	use super::{REQUEST_TIMEOUT, LightDispatch, LightDispatchNetwork, RequestData};
+	use super::{REQUEST_TIMEOUT, LightDispatch, LightDispatchNetwork, RequestData, StorageProof};
 	use test_client::runtime::{changes_trie_config, Block, Extrinsic, Header};
 
 	struct DummyFetchChecker { ok: bool }
@@ -694,7 +694,7 @@ pub mod tests {
 			&self,
 			_request: &RemoteHeaderRequest<Header>,
 			header: Option<Header>,
-			_remote_proof: Vec<Vec<u8>>
+			_remote_proof: StorageProof,
 		) -> ClientResult<Header> {
 			match self.ok {
 				true if header.is_some() => Ok(header.unwrap()),
@@ -705,7 +705,7 @@ pub mod tests {
 		fn check_read_proof(
 			&self,
 			request: &RemoteReadRequest<Header>,
-			_: Vec<Vec<u8>>,
+			_: StorageProof,
 		) -> ClientResult<HashMap<Vec<u8>, Option<Vec<u8>>>> {
 			match self.ok {
 				true => Ok(request.keys
@@ -721,7 +721,7 @@ pub mod tests {
 		fn check_read_child_proof(
 			&self,
 			request: &RemoteReadChildRequest<Header>,
-			_: Vec<Vec<u8>>
+			_: StorageProof,
 		) -> ClientResult<HashMap<Vec<u8>, Option<Vec<u8>>>> {
 			match self.ok {
 				true => Ok(request.keys
@@ -734,7 +734,7 @@ pub mod tests {
 			}
 		}
 
-		fn check_execution_proof(&self, _: &RemoteCallRequest<Header>, _: Vec<Vec<u8>>) -> ClientResult<Vec<u8>> {
+		fn check_execution_proof(&self, _: &RemoteCallRequest<Header>, _: StorageProof) -> ClientResult<Vec<u8>> {
 			match self.ok {
 				true => Ok(vec![42]),
 				false => Err(ClientError::Backend("Test error".into())),
@@ -780,7 +780,7 @@ pub mod tests {
 	) {
 		light_dispatch.on_remote_call_response(network_interface, peer, message::RemoteCallResponse {
 			id: id,
-			proof: vec![vec![2]],
+			proof: StorageProof::empty(),
 		});
 	}
 
@@ -943,7 +943,7 @@ pub mod tests {
 
 		light_dispatch.on_remote_read_response(&mut network_interface, peer0.clone(), message::RemoteReadResponse {
 			id: 0,
-			proof: vec![vec![2]],
+			proof: StorageProof::empty(),
 		});
 		assert_disconnected_peer(&network_interface);
 		assert_eq!(light_dispatch.pending_requests.len(), 1);
@@ -1013,7 +1013,7 @@ pub mod tests {
 
 		light_dispatch.on_remote_read_response(&mut network_interface, peer0.clone(), message::RemoteReadResponse {
 			id: 0,
-			proof: vec![vec![2]],
+			proof: StorageProof::empty(),
 		});
 		assert_eq!(response.wait().unwrap().unwrap().remove(b":key".as_ref()).unwrap(), Some(vec![42]));
 	}
@@ -1037,7 +1037,7 @@ pub mod tests {
 		light_dispatch.on_remote_read_response(&mut network_interface,
 			peer0.clone(), message::RemoteReadResponse {
 				id: 0,
-				proof: vec![vec![2]],
+				proof: StorageProof::empty(),
 		});
 		assert_eq!(response.wait().unwrap().unwrap().remove(b":key".as_ref()).unwrap(), Some(vec![42]));
 	}
@@ -1065,7 +1065,7 @@ pub mod tests {
 				extrinsics_root: Default::default(),
 				digest: Default::default(),
 			}),
-			proof: vec![vec![2]],
+			proof: StorageProof::empty(),
 		});
 		assert_eq!(
 			response.wait().unwrap().unwrap().hash(),
@@ -1097,7 +1097,7 @@ pub mod tests {
 			max: 1000,
 			proof: vec![vec![2]],
 			roots: vec![],
-			roots_proof: vec![],
+			roots_proof: StorageProof::empty(),
 		});
 		assert_eq!(response.wait().unwrap().unwrap(), vec![(100, 2)]);
 	}
@@ -1145,7 +1145,7 @@ pub mod tests {
 		light_dispatch.on_remote_header_response(&mut network_interface, peer1.clone(), message::RemoteHeaderResponse {
 			id: 0,
 			header: Some(dummy_header()),
-			proof: vec![],
+			proof: StorageProof::empty(),
 		});
 
 		assert!(!light_dispatch.idle_peers.iter().any(|_| true));

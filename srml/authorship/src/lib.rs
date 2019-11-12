@@ -29,10 +29,7 @@ use codec::{Encode, Decode};
 use system::ensure_none;
 use sr_primitives::traits::{Header as HeaderT, One, Zero};
 use sr_primitives::weights::SimpleDispatchInfo;
-use inherents::{
-	RuntimeString, InherentIdentifier, ProvideInherent,
-	InherentData, MakeFatalError,
-};
+use inherents::{InherentIdentifier, ProvideInherent, InherentData, MakeFatalError};
 
 /// The identifier for the `uncles` inherent.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"uncles00";
@@ -40,11 +37,11 @@ pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"uncles00";
 /// Auxiliary trait to extract uncles inherent data.
 pub trait UnclesInherentData<H: Decode> {
 	/// Get uncles.
-	fn uncles(&self) -> Result<Vec<H>, RuntimeString>;
+	fn uncles(&self) -> Result<Vec<H>, inherents::Error>;
 }
 
 impl<H: Decode> UnclesInherentData<H> for InherentData {
-	fn uncles(&self) -> Result<Vec<H>, RuntimeString> {
+	fn uncles(&self) -> Result<Vec<H>, inherents::Error> {
 		Ok(self.get_data(&INHERENT_IDENTIFIER)?.unwrap_or_default())
 	}
 }
@@ -71,7 +68,7 @@ where F: Fn() -> Vec<H>
 		&INHERENT_IDENTIFIER
 	}
 
-	fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), RuntimeString> {
+	fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), inherents::Error> {
 		let uncles = (self.inner)();
 		if !uncles.is_empty() {
 			inherent_data.put_data(INHERENT_IDENTIFIER, &uncles)
@@ -195,8 +192,8 @@ where
 	}
 }
 
-#[derive(Encode, Decode)]
-#[cfg_attr(any(feature = "std", test), derive(PartialEq, Debug))]
+#[derive(Encode, Decode, sr_primitives::RuntimeDebug)]
+#[cfg_attr(any(feature = "std", test), derive(PartialEq))]
 enum UncleEntryItem<BlockNumber, Hash, Author> {
 	InclusionHeight(BlockNumber),
 	Uncle(Hash, Option<Author>),
@@ -412,12 +409,10 @@ impl<T: Trait> ProvideInherent for Module<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use runtime_io::with_externalities;
-	use primitives::{H256, Blake2Hasher};
-	use sr_primitives::traits::{BlakeTwo256, IdentityLookup};
-	use sr_primitives::testing::Header;
-	use sr_primitives::generic::DigestItem;
-	use sr_primitives::Perbill;
+	use primitives::H256;
+	use sr_primitives::{
+		traits::{BlakeTwo256, IdentityLookup}, testing::Header, generic::DigestItem, Perbill,
+	};
 	use support::{parameter_types, impl_outer_origin, ConsensusEngineId};
 
 	impl_outer_origin!{
@@ -444,7 +439,6 @@ mod tests {
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
-		type WeightMultiplierUpdate = ();
 		type Event = ();
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
@@ -535,7 +529,7 @@ mod tests {
 		)
 	}
 
-	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+	fn new_test_ext() -> runtime_io::TestExternalities {
 		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		t.into()
 	}
@@ -543,7 +537,7 @@ mod tests {
 	#[test]
 	fn prune_old_uncles_works() {
 		use UncleEntryItem::*;
-		with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			let hash = Default::default();
 			let author = Default::default();
 			let uncles = vec![
@@ -562,7 +556,7 @@ mod tests {
 
 	#[test]
 	fn rejects_bad_uncles() {
-		with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			let author_a = 69;
 
 			struct CanonChain {
@@ -675,7 +669,7 @@ mod tests {
 
 	#[test]
 	fn sets_author_lazily() {
-		with_externalities(&mut new_test_ext(), || {
+		new_test_ext().execute_with(|| {
 			let author = 42;
 			let mut header = seal_header(
 				create_header(1, Default::default(), [1; 32].into()),

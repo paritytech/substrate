@@ -98,12 +98,15 @@ use codec::Decode;
 use inherents::ProvideInherentData;
 use support::{Parameter, decl_storage, decl_module};
 use support::traits::{Time, Get};
-use sr_primitives::traits::{
-	SimpleArithmetic, Zero, SaturatedConversion, Scale
+use sr_primitives::{
+	RuntimeString,
+	traits::{
+		SimpleArithmetic, Zero, SaturatedConversion, Scale
+	}
 };
 use sr_primitives::weights::SimpleDispatchInfo;
 use system::ensure_none;
-use inherents::{RuntimeString, InherentIdentifier, ProvideInherent, IsFatalError, InherentData};
+use inherents::{InherentIdentifier, ProvideInherent, IsFatalError, InherentData};
 
 /// The identifier for the `timestamp` inherent.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"timstap0";
@@ -111,8 +114,8 @@ pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"timstap0";
 pub type InherentType = u64;
 
 /// Errors that can occur while checking the timestamp inherent.
-#[derive(Encode)]
-#[cfg_attr(feature = "std", derive(Debug, Decode))]
+#[derive(Encode, sr_primitives::RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Decode))]
 pub enum InherentError {
 	/// The timestamp is valid in the future.
 	/// This is a non-fatal-error and will not stop checking the inherents.
@@ -145,11 +148,11 @@ impl InherentError {
 /// Auxiliary trait to extract timestamp inherent data.
 pub trait TimestampInherentData {
 	/// Get timestamp inherent data.
-	fn timestamp_inherent_data(&self) -> Result<InherentType, RuntimeString>;
+	fn timestamp_inherent_data(&self) -> Result<InherentType, inherents::Error>;
 }
 
 impl TimestampInherentData for InherentData {
-	fn timestamp_inherent_data(&self) -> Result<InherentType, RuntimeString> {
+	fn timestamp_inherent_data(&self) -> Result<InherentType, inherents::Error> {
 		self.get_data(&INHERENT_IDENTIFIER)
 			.and_then(|r| r.ok_or_else(|| "Timestamp inherent data not found".into()))
 	}
@@ -164,7 +167,10 @@ impl ProvideInherentData for InherentDataProvider {
 		&INHERENT_IDENTIFIER
 	}
 
-	fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), RuntimeString> {
+	fn provide_inherent_data(
+		&self,
+		inherent_data: &mut InherentData,
+	) -> Result<(), inherents::Error> {
 		use std::time::SystemTime;
 
 		let now = SystemTime::now();
@@ -244,7 +250,7 @@ decl_module! {
 decl_storage! {
 	trait Store for Module<T: Trait> as Timestamp {
 		/// Current time for the current block.
-		pub Now get(now) build(|_| 0.into()): T::Moment;
+		pub Now get(fn now) build(|_| 0.into()): T::Moment;
 
 		/// Did the timestamp get updated in this block?
 		DidUpdate: bool;
@@ -288,7 +294,7 @@ impl<T: Trait> ProvideInherent for Module<T> {
 	}
 
 	fn check_inherent(call: &Self::Call, data: &InherentData) -> result::Result<(), Self::Error> {
-		const MAX_TIMESTAMP_DRIFT: u64 = 60;
+		const MAX_TIMESTAMP_DRIFT_MILLIS: u64 = 30 * 1000;
 
 		let t: u64 = match call {
 			Call::set(ref t) => t.clone().saturated_into::<u64>(),
@@ -298,7 +304,7 @@ impl<T: Trait> ProvideInherent for Module<T> {
 		let data = extract_inherent_data(data).map_err(|e| InherentError::Other(e))?;
 
 		let minimum = (Self::now() + T::MinimumPeriod::get()).saturated_into::<u64>();
-		if t > data + MAX_TIMESTAMP_DRIFT {
+		if t > data + MAX_TIMESTAMP_DRIFT_MILLIS {
 			Err(InherentError::Other("Timestamp too far in future to accept".into()))
 		} else if t < minimum {
 			Err(InherentError::ValidAtTimestamp(minimum))
@@ -322,7 +328,7 @@ mod tests {
 	use super::*;
 
 	use support::{impl_outer_origin, assert_ok, parameter_types};
-	use runtime_io::{with_externalities, TestExternalities};
+	use runtime_io::TestExternalities;
 	use primitives::H256;
 	use sr_primitives::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 
@@ -348,7 +354,6 @@ mod tests {
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
-		type WeightMultiplierUpdate = ();
 		type Event = ();
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
@@ -369,7 +374,7 @@ mod tests {
 	#[test]
 	fn timestamp_works() {
 		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		with_externalities(&mut TestExternalities::new(t), || {
+		TestExternalities::new(t).execute_with(|| {
 			Timestamp::set_timestamp(42);
 			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::NONE));
 			assert_eq!(Timestamp::now(), 69);
@@ -380,7 +385,7 @@ mod tests {
 	#[should_panic(expected = "Timestamp must be updated only once in the block")]
 	fn double_timestamp_should_fail() {
 		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		with_externalities(&mut TestExternalities::new(t), || {
+		TestExternalities::new(t).execute_with(|| {
 			Timestamp::set_timestamp(42);
 			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::NONE));
 			let _ = Timestamp::dispatch(Call::set(70), Origin::NONE);
@@ -391,7 +396,7 @@ mod tests {
 	#[should_panic(expected = "Timestamp must increment by at least <MinimumPeriod> between sequential blocks")]
 	fn block_period_minimum_enforced() {
 		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		with_externalities(&mut TestExternalities::new(t), || {
+		TestExternalities::new(t).execute_with(|| {
 			Timestamp::set_timestamp(42);
 			let _ = Timestamp::dispatch(Call::set(46), Origin::NONE);
 		});

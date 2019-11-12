@@ -128,7 +128,7 @@
 //! 	T::Currency::withdraw(
 //! 		transactor,
 //! 		amount,
-//! 		WithdrawReason::TransactionPayment,
+//! 		WithdrawReason::TransactionPayment.into(),
 //! 		ExistenceRequirement::KeepAlive,
 //! 	)?;
 //! 	// ...
@@ -153,18 +153,20 @@
 
 use codec::{Decode, Encode, HasCompact, Input, Output, Error};
 
+use sr_primitives::RuntimeDebug;
 use sr_primitives::traits::{
-	CheckedAdd, CheckedSub, MaybeSerializeDebug, Member, One, Saturating, SimpleArithmetic, Zero, Bounded
+	CheckedAdd, CheckedSub, MaybeSerializeDeserialize, Member, One, Saturating, SimpleArithmetic,
+	Zero, Bounded,
 };
 
 use rstd::prelude::*;
-use rstd::{cmp, result};
+use rstd::{cmp, result, fmt::Debug};
 use support::dispatch::Result;
 use support::{
 	decl_event, decl_module, decl_storage, ensure,
 	traits::{
 		Currency, ExistenceRequirement, Imbalance, LockIdentifier, LockableCurrency, ReservableCurrency,
-		SignedImbalance, UpdateBalanceOutcome, WithdrawReason, WithdrawReasons,
+		SignedImbalance, UpdateBalanceOutcome, WithdrawReason, WithdrawReasons, TryDrop,
 	},
 	Parameter, StorageMap,
 };
@@ -181,7 +183,8 @@ pub trait Trait: system::Trait {
 		+ SimpleArithmetic
 		+ Default
 		+ Copy
-		+ MaybeSerializeDebug;
+		+ MaybeSerializeDeserialize
+		+ Debug;
 	type AssetId: Parameter + Member + SimpleArithmetic + Default + Copy;
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
@@ -192,7 +195,8 @@ pub trait Subtrait: system::Trait {
 		+ SimpleArithmetic
 		+ Default
 		+ Copy
-		+ MaybeSerializeDebug;
+		+ MaybeSerializeDeserialize
+		+ Debug;
 	type AssetId: Parameter + Member + SimpleArithmetic + Default + Copy;
 }
 
@@ -202,8 +206,7 @@ impl<T: Trait> Subtrait for T {
 }
 
 /// Asset creation options.
-#[cfg_attr(feature = "std", derive(Debug))]
-#[derive(Clone, Encode, Decode, PartialEq, Eq)]
+#[derive(Clone, Encode, Decode, PartialEq, Eq, RuntimeDebug)]
 pub struct AssetOptions<Balance: HasCompact, AccountId> {
 	/// Initial issuance of this asset. All deposit to the creater of the asset.
 	#[codec(compact)]
@@ -213,8 +216,7 @@ pub struct AssetOptions<Balance: HasCompact, AccountId> {
 }
 
 /// Owner of an asset.
-#[cfg_attr(feature = "std", derive(Debug))]
-#[derive(Clone, Encode, Decode, PartialEq, Eq)]
+#[derive(Clone, Encode, Decode, PartialEq, Eq, RuntimeDebug)]
 pub enum Owner<AccountId> {
 	/// No owner.
 	None,
@@ -229,8 +231,7 @@ impl<AccountId> Default for Owner<AccountId> {
 }
 
 /// Asset permissions
-#[cfg_attr(feature = "std", derive(Debug))]
-#[derive(Clone, Encode, Decode, PartialEq, Eq)]
+#[derive(Clone, Encode, Decode, PartialEq, Eq, RuntimeDebug)]
 pub struct PermissionsV1<AccountId> {
 	/// Who have permission to update asset permission
 	pub update: Owner<AccountId>,
@@ -240,16 +241,14 @@ pub struct PermissionsV1<AccountId> {
 	pub burn: Owner<AccountId>,
 }
 
-#[cfg_attr(feature = "std", derive(Debug))]
-#[derive(Clone, Encode, Decode, PartialEq, Eq)]
+#[derive(Clone, Encode, Decode, PartialEq, Eq, RuntimeDebug)]
 #[repr(u8)]
 enum PermissionVersionNumber {
 	V1 = 0,
 }
 
 /// Versioned asset permission
-#[cfg_attr(feature = "std", derive(Debug))]
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, RuntimeDebug)]
 pub enum PermissionVersions<AccountId> {
 	V1(PermissionsV1<AccountId>),
 }
@@ -435,8 +434,7 @@ decl_module! {
 	}
 }
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct BalanceLock<Balance, BlockNumber> {
 	pub id: LockIdentifier,
 	pub amount: Balance,
@@ -447,7 +445,7 @@ pub struct BalanceLock<Balance, BlockNumber> {
 decl_storage! {
 	trait Store for Module<T: Trait> as GenericAsset {
 		/// Total issuance of a given asset.
-		pub TotalIssuance get(total_issuance) build(|config: &GenesisConfig<T>| {
+		pub TotalIssuance get(fn total_issuance) build(|config: &GenesisConfig<T>| {
 			let issuance = config.initial_balance * (config.endowed_accounts.len() as u32).into();
 			config.assets.iter().map(|id| (id.clone(), issuance)).collect::<Vec<_>>()
 		}): map T::AssetId => T::Balance;
@@ -459,19 +457,19 @@ decl_storage! {
 		pub ReservedBalance: double_map T::AssetId, twox_128(T::AccountId) => T::Balance;
 
 		/// Next available ID for user-created asset.
-		pub NextAssetId get(next_asset_id) config(): T::AssetId;
+		pub NextAssetId get(fn next_asset_id) config(): T::AssetId;
 
 		/// Permission options for a given asset.
-		pub Permissions get(get_permission): map T::AssetId => PermissionVersions<T::AccountId>;
+		pub Permissions get(fn get_permission): map T::AssetId => PermissionVersions<T::AccountId>;
 
 		/// Any liquidity locks on some account balances.
-		pub Locks get(locks): map T::AccountId => Vec<BalanceLock<T::Balance, T::BlockNumber>>;
+		pub Locks get(fn locks): map T::AccountId => Vec<BalanceLock<T::Balance, T::BlockNumber>>;
 
 		/// The identity of the asset which is the one that is designated for the chain's staking system.
-		pub StakingAssetId get(staking_asset_id) config(): T::AssetId;
+		pub StakingAssetId get(fn staking_asset_id) config(): T::AssetId;
 
 		/// The identity of the asset which is the one that is designated for paying the chain's transaction fee.
-		pub SpendingAssetId get(spending_asset_id) config(): T::AssetId;
+		pub SpendingAssetId get(fn spending_asset_id) config(): T::AssetId;
 	}
 	add_extra_genesis {
 		config(assets): Vec<T::AssetId>;
@@ -566,11 +564,16 @@ impl<T: Trait> Module<T> {
 
 	/// Transfer some liquid free balance from one account to another.
 	/// This will not emit the `Transferred` event.
-	pub fn make_transfer(asset_id: &T::AssetId, from: &T::AccountId, to: &T::AccountId, amount: T::Balance) -> Result {
+	pub fn make_transfer(
+		asset_id: &T::AssetId,
+		from: &T::AccountId,
+		to: &T::AccountId,
+		amount: T::Balance
+	) -> Result {
 		let new_balance = Self::free_balance(asset_id, from)
 			.checked_sub(&amount)
 			.ok_or_else(|| "balance too low to send amount")?;
-		Self::ensure_can_withdraw(asset_id, from, amount, WithdrawReason::Transfer, new_balance)?;
+		Self::ensure_can_withdraw(asset_id, from, amount, WithdrawReason::Transfer.into(), new_balance)?;
 
 		if from != to {
 			<FreeBalance<T>>::mutate(asset_id, from, |balance| *balance -= amount);
@@ -737,7 +740,7 @@ impl<T: Trait> Module<T> {
 		asset_id: &T::AssetId,
 		who: &T::AccountId,
 		_amount: T::Balance,
-		reason: WithdrawReason,
+		reasons: WithdrawReasons,
 		new_balance: T::Balance,
 	) -> Result {
 		if asset_id != &Self::staking_asset_id() {
@@ -751,7 +754,7 @@ impl<T: Trait> Module<T> {
 		let now = <system::Module<T>>::block_number();
 		if Self::locks(who)
 			.into_iter()
-			.all(|l| now >= l.until || new_balance >= l.amount || !l.reasons.contains(reason))
+			.all(|l| now >= l.until || new_balance >= l.amount || !l.reasons.intersects(reasons))
 		{
 			Ok(())
 		} else {
@@ -860,7 +863,9 @@ pub trait AssetIdProvider {
 // wrapping these imbalanes in a private module is necessary to ensure absolute privacy
 // of the inner member.
 mod imbalances {
-	use super::{result, AssetIdProvider, Imbalance, Saturating, StorageMap, Subtrait, Zero};
+	use super::{
+		result, AssetIdProvider, Imbalance, Saturating, StorageMap, Subtrait, Zero, TryDrop
+	};
 	use rstd::mem;
 
 	/// Opaque, move-only struct with private fields that serves as a token denoting that
@@ -894,6 +899,16 @@ mod imbalances {
 	{
 		pub fn new(amount: T::Balance) -> Self {
 			NegativeImbalance(amount, Default::default())
+		}
+	}
+
+	impl<T, U> TryDrop for PositiveImbalance<T, U>
+	where
+		T: Subtrait,
+		U: AssetIdProvider<AssetId = T::AssetId>,
+	{
+		fn try_drop(self) -> result::Result<(), Self> {
+			self.drop_zero()
 		}
 	}
 
@@ -943,6 +958,16 @@ mod imbalances {
 		}
 		fn peek(&self) -> T::Balance {
 			self.0.clone()
+		}
+	}
+
+	impl<T, U> TryDrop for NegativeImbalance<T, U>
+	where
+		T: Subtrait,
+		U: AssetIdProvider<AssetId = T::AssetId>,
+	{
+		fn try_drop(self) -> result::Result<(), Self> {
+			self.drop_zero()
 		}
 	}
 
@@ -1056,7 +1081,6 @@ impl<T: Subtrait> system::Trait for ElevatedTrait<T> {
 	type MaximumBlockWeight = T::MaximumBlockWeight;
 	type MaximumBlockLength = T::MaximumBlockLength;
 	type AvailableBlockRatio = T::AvailableBlockRatio;
-	type WeightMultiplierUpdate = ();
 	type BlockHashCount = T::BlockHashCount;
 	type Version = T::Version;
 }
@@ -1066,8 +1090,7 @@ impl<T: Subtrait> Trait for ElevatedTrait<T> {
 	type Event = ();
 }
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct AssetCurrency<T, U>(rstd::marker::PhantomData<T>, rstd::marker::PhantomData<U>);
 
 impl<T, U> Currency<T::AccountId> for AssetCurrency<T, U>
@@ -1096,29 +1119,34 @@ where
 		Zero::zero()
 	}
 
-	fn transfer(transactor: &T::AccountId, dest: &T::AccountId, value: Self::Balance) -> Result {
+	fn transfer(
+		transactor: &T::AccountId,
+		dest: &T::AccountId,
+		value: Self::Balance,
+		_: ExistenceRequirement, // no existential deposit policy for generic asset
+	) -> Result {
 		<Module<T>>::make_transfer(&U::asset_id(), transactor, dest, value)
 	}
 
 	fn ensure_can_withdraw(
 		who: &T::AccountId,
 		amount: Self::Balance,
-		reason: WithdrawReason,
+		reasons: WithdrawReasons,
 		new_balance: Self::Balance,
 	) -> Result {
-		<Module<T>>::ensure_can_withdraw(&U::asset_id(), who, amount, reason, new_balance)
+		<Module<T>>::ensure_can_withdraw(&U::asset_id(), who, amount, reasons, new_balance)
 	}
 
 	fn withdraw(
 		who: &T::AccountId,
 		value: Self::Balance,
-		reason: WithdrawReason,
+		reasons: WithdrawReasons,
 		_: ExistenceRequirement, // no existential deposit policy for generic asset
 	) -> result::Result<Self::NegativeImbalance, &'static str> {
 		let new_balance = Self::free_balance(who)
 			.checked_sub(&value)
 			.ok_or_else(|| "account has too few funds")?;
-		Self::ensure_can_withdraw(who, value, reason, new_balance)?;
+		Self::ensure_can_withdraw(who, value, reasons, new_balance)?;
 		<Module<T>>::set_free_balance(&U::asset_id(), who, new_balance);
 		Ok(NegativeImbalance::new(value))
 	}
@@ -1201,7 +1229,9 @@ where
 		Self::free_balance(who)
 			.checked_sub(&value)
 			.map_or(false, |new_balance|
-				<Module<T>>::ensure_can_withdraw(&U::asset_id(), who, value, WithdrawReason::Reserve, new_balance).is_ok()
+				<Module<T>>::ensure_can_withdraw(
+					&U::asset_id(), who, value, WithdrawReason::Reserve.into(), new_balance
+				).is_ok()
 			)
 	}
 
@@ -1255,7 +1285,7 @@ impl<T: Trait> AssetIdProvider for SpendingAssetIdProvider<T> {
 impl<T> LockableCurrency<T::AccountId> for AssetCurrency<T, StakingAssetIdProvider<T>>
 where
 	T: Trait,
-	T::Balance: MaybeSerializeDebug,
+	T::Balance: MaybeSerializeDeserialize + Debug,
 {
 	type Moment = T::BlockNumber;
 

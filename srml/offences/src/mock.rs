@@ -28,7 +28,7 @@ use sr_staking_primitives::{
 };
 use sr_primitives::testing::Header;
 use sr_primitives::traits::{IdentityLookup, BlakeTwo256};
-use substrate_primitives::{H256, Blake2Hasher};
+use substrate_primitives::H256;
 use support::{impl_outer_origin, impl_outer_event, parameter_types, StorageMap, StorageDoubleMap};
 use {runtime_io, system};
 
@@ -78,7 +78,6 @@ impl system::Trait for Runtime {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type WeightMultiplierUpdate = ();
 	type Event = TestEvent;
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
@@ -103,7 +102,7 @@ impl_outer_event! {
 	}
 }
 
-pub fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+pub fn new_test_ext() -> runtime_io::TestExternalities {
 	let t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 	t.into()
 }

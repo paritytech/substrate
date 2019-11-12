@@ -35,11 +35,15 @@ pub enum ImportResult {
 	KnownBad,
 	/// Block parent is not in the chain.
 	UnknownParent,
+	/// Parent state is missing.
+	MissingState,
 }
 
 /// Auxiliary data associated with an imported block result.
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct ImportedAux {
+	/// Only the header has been imported. Block body verification was skipped.
+	pub header_only: bool,
 	/// Clear all pending justification requests.
 	pub clear_justification_requests: bool,
 	/// Request a justification for the given block.
@@ -91,6 +95,7 @@ pub enum ForkChoiceStrategy {
 }
 
 /// Data required to check validity of a Block.
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct BlockCheckParams<Block: BlockT> {
 	/// Hash of the block that we verify.
 	pub hash: Block::Hash,
@@ -98,6 +103,8 @@ pub struct BlockCheckParams<Block: BlockT> {
 	pub number: NumberFor<Block>,
 	/// Parent hash of the block that we verify.
 	pub parent_hash: Block::Hash,
+	/// Allow importing the block skipping state verification if parent state is missing.
+	pub allow_missing_state: bool,
 }
 
 /// Data required to import a Block.
@@ -133,6 +140,8 @@ pub struct BlockImportParams<Block: BlockT> {
 	/// Fork choice strategy of this import. This should only be set by a
 	/// synchronous import, otherwise it may race against other imports.
 	pub fork_choice: ForkChoiceStrategy,
+	/// Allow importing the block skipping state verification if parent state is missing.
+	pub allow_missing_state: bool,
 }
 
 impl<Block: BlockT> BlockImportParams<Block> {

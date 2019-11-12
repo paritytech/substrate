@@ -14,22 +14,31 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{result, cell::RefCell, panic::UnwindSafe};
-use crate::error::{Error, Result};
-use crate::wasm_executor::WasmExecutor;
+use crate::{
+	RuntimeInfo, error::{Error, Result},
+	wasm_runtime::{RuntimesCache, WasmExecutionMethod, WasmRuntime},
+};
+
 use runtime_version::{NativeVersion, RuntimeVersion};
+
 use codec::{Decode, Encode};
-use crate::RuntimeInfo;
-use primitives::{Blake2Hasher, NativeOrEncoded, traits::{CodeExecutor, Externalities}};
+
+use primitives::{NativeOrEncoded, traits::{CodeExecutor, Externalities}};
+
 use log::{trace, warn};
 
-use crate::RuntimesCache;
+use std::{result, cell::RefCell, panic::{UnwindSafe, AssertUnwindSafe}};
+
+use wasm_interface::{HostFunctions, Function};
 
 thread_local! {
 	static RUNTIMES_CACHE: RefCell<RuntimesCache> = RefCell::new(RuntimesCache::new());
 }
 
-fn safe_call<F, U>(f: F) -> Result<U>
+/// Default num of pages for the heap
+const DEFAULT_HEAP_PAGES: u64 = 1024;
+
+pub(crate) fn safe_call<F, U>(f: F) -> Result<U>
 	where F: UnwindSafe + FnOnce() -> U
 {
 	// Substrate uses custom panic hook that terminates process on panic. Disable termination for the native call.
@@ -40,10 +49,10 @@ fn safe_call<F, U>(f: F) -> Result<U>
 /// Set up the externalities and safe calling environment to execute calls to a native runtime.
 ///
 /// If the inner closure panics, it will be caught and return an error.
-pub fn with_native_environment<F, U>(ext: &mut dyn Externalities<Blake2Hasher>, f: F) -> Result<U>
+pub fn with_native_environment<F, U>(ext: &mut dyn Externalities, f: F) -> Result<U>
 	where F: UnwindSafe + FnOnce() -> U
 {
-	runtime_io::with_externalities(ext, move || safe_call(f))
+	externalities::set_and_run_with_externalities(ext, move || safe_call(f))
 }
 
 /// Delegate for dispatching a CodeExecutor call.
@@ -53,7 +62,7 @@ pub trait NativeExecutionDispatch: Send + Sync {
 	/// Dispatch a method in the runtime.
 	///
 	/// If the method with the specified name doesn't exist then `Err` is returned.
-	fn dispatch(ext: &mut dyn Externalities<Blake2Hasher>, method: &str, data: &[u8]) -> Result<Vec<u8>>;
+	fn dispatch(ext: &mut dyn Externalities, method: &str, data: &[u8]) -> Result<Vec<u8>>;
 
 	/// Provide native runtime version.
 	fn native_version() -> NativeVersion;
@@ -61,27 +70,86 @@ pub trait NativeExecutionDispatch: Send + Sync {
 
 /// A generic `CodeExecutor` implementation that uses a delegate to determine wasm code equivalence
 /// and dispatch to native code when possible, falling back on `WasmExecutor` when not.
-#[derive(Debug)]
 pub struct NativeExecutor<D> {
 	/// Dummy field to avoid the compiler complaining about us not using `D`.
-	_dummy: ::std::marker::PhantomData<D>,
-	/// The fallback executor in case native isn't available.
-	fallback: WasmExecutor,
+	_dummy: std::marker::PhantomData<D>,
+	/// Method used to execute fallback Wasm code.
+	fallback_method: WasmExecutionMethod,
 	/// Native runtime version info.
 	native_version: NativeVersion,
 	/// The number of 64KB pages to allocate for Wasm execution.
-	default_heap_pages: Option<u64>,
+	default_heap_pages: u64,
+	/// The host functions registered with this instance.
+	host_functions: Vec<&'static dyn Function>,
 }
 
 impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 	/// Create new instance.
-	pub fn new(default_heap_pages: Option<u64>) -> Self {
+	///
+	/// # Parameters
+	///
+	/// `fallback_method` - Method used to execute fallback Wasm code.
+	///
+	/// `default_heap_pages` - Number of 64KB pages to allocate for Wasm execution.
+	/// 	Defaults to `DEFAULT_HEAP_PAGES` if `None` is provided.
+	pub fn new(fallback_method: WasmExecutionMethod, default_heap_pages: Option<u64>) -> Self {
+		let mut host_functions = runtime_io::SubstrateHostFunctions::host_functions();
+		// Add the old and deprecated host functions as well, so that we support old wasm runtimes.
+		host_functions.extend(
+			crate::deprecated_host_interface::SubstrateExternals::host_functions(),
+		);
+
 		NativeExecutor {
 			_dummy: Default::default(),
-			fallback: WasmExecutor::new(),
+			fallback_method,
 			native_version: D::native_version(),
-			default_heap_pages: default_heap_pages,
+			default_heap_pages: default_heap_pages.unwrap_or(DEFAULT_HEAP_PAGES),
+			host_functions,
 		}
+	}
+
+	/// Execute the given closure `f` with the latest runtime (based on the `CODE` key in `ext`).
+	///
+	/// The closure `f` is expected to return `Err(_)` when there happened a `panic!` in native code
+	/// while executing the runtime in Wasm. If a `panic!` occurred, the runtime is invalidated to
+	/// prevent any poisoned state. Native runtime execution does not need to report back
+	/// any `panic!`.
+	///
+	/// # Safety
+	///
+	/// `runtime` and `ext` are given as `AssertUnwindSafe` to the closure. As described above, the
+	/// runtime is invalidated on any `panic!` to prevent a poisoned state. `ext` is already
+	/// implicitly handled as unwind safe, as we store it in a global variable while executing the
+	/// native runtime.
+	fn with_runtime<E, R>(
+		&self,
+		ext: &mut E,
+		f: impl for<'a> FnOnce(
+			AssertUnwindSafe<&'a mut (dyn WasmRuntime + 'static)>,
+			&'a RuntimeVersion,
+			AssertUnwindSafe<&'a mut E>,
+		) -> Result<Result<R>>,
+	) -> Result<R> where E: Externalities {
+		RUNTIMES_CACHE.with(|cache| {
+			let mut cache = cache.borrow_mut();
+			let (runtime, version, code_hash) = cache.fetch_runtime(
+				ext,
+				self.fallback_method,
+				self.default_heap_pages,
+				&self.host_functions,
+			)?;
+
+			let runtime = AssertUnwindSafe(runtime);
+			let ext = AssertUnwindSafe(ext);
+
+			match f(runtime, version, ext) {
+				Ok(res) => res,
+				Err(e) => {
+					cache.invalidate_runtime(self.fallback_method, code_hash);
+					Err(e)
+				}
+			}
+		})
 	}
 }
 
@@ -89,9 +157,10 @@ impl<D: NativeExecutionDispatch> Clone for NativeExecutor<D> {
 	fn clone(&self) -> Self {
 		NativeExecutor {
 			_dummy: Default::default(),
-			fallback: self.fallback.clone(),
+			fallback_method: self.fallback_method,
 			native_version: D::native_version(),
 			default_heap_pages: self.default_heap_pages,
+			host_functions: self.host_functions.clone(),
 		}
 	}
 }
@@ -101,32 +170,28 @@ impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 		&self.native_version
 	}
 
-	fn runtime_version<E: Externalities<Blake2Hasher>>(
+	fn runtime_version<E: Externalities>(
 		&self,
 		ext: &mut E,
 	) -> Option<RuntimeVersion> {
-		RUNTIMES_CACHE.with(|cache| {
-			let cache = &mut cache.borrow_mut();
-
-			match cache.fetch_runtime(&self.fallback, ext, self.default_heap_pages) {
-				Ok(runtime) => runtime.version(),
-				Err(e) => {
-					warn!(target: "executor", "Failed to fetch runtime: {:?}", e);
-					None
-				}
+		match self.with_runtime(ext, |_runtime, version, _ext| Ok(Ok(version.clone()))) {
+			Ok(version) => Some(version),
+			Err(e) => {
+				warn!(target: "executor", "Failed to fetch runtime: {:?}", e);
+				None
 			}
-		})
+		}
 	}
 }
 
-impl<D: NativeExecutionDispatch> CodeExecutor<Blake2Hasher> for NativeExecutor<D> {
+impl<D: NativeExecutionDispatch> CodeExecutor for NativeExecutor<D> {
 	type Error = Error;
 
 	fn call
 	<
-		E: Externalities<Blake2Hasher>,
-		R:Decode + Encode + PartialEq,
-		NC: FnOnce() -> result::Result<R, String> + UnwindSafe
+		E: Externalities,
+		R: Decode + Encode + PartialEq,
+		NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
 	>(
 		&self,
 		ext: &mut E,
@@ -135,20 +200,11 @@ impl<D: NativeExecutionDispatch> CodeExecutor<Blake2Hasher> for NativeExecutor<D
 		use_native: bool,
 		native_call: Option<NC>,
 	) -> (Result<NativeOrEncoded<R>>, bool){
-		RUNTIMES_CACHE.with(|cache| {
-			let cache = &mut cache.borrow_mut();
-			let cached_runtime = match cache.fetch_runtime(
-				&self.fallback, ext, self.default_heap_pages,
-			) {
-				Ok(cached_runtime) => cached_runtime,
-				Err(e) => return (Err(e), false),
-			};
-			let onchain_version = cached_runtime.version();
+		let mut used_native = false;
+		let result = self.with_runtime(ext, |mut runtime, onchain_version, mut ext| {
 			match (
 				use_native,
-				onchain_version
-					.as_ref()
-					.map_or(false, |v| v.can_call_with(&self.native_version.runtime_version)),
+				onchain_version.can_call_with(&self.native_version.runtime_version),
 				native_call,
 			) {
 				(_, false, _) => {
@@ -156,55 +212,49 @@ impl<D: NativeExecutionDispatch> CodeExecutor<Blake2Hasher> for NativeExecutor<D
 						target: "executor",
 						"Request for native execution failed (native: {}, chain: {})",
 						self.native_version.runtime_version,
-						onchain_version
-							.as_ref()
-							.map_or_else(||"<None>".into(), |v| format!("{}", v))
+						onchain_version,
 					);
-					(
-						cached_runtime.with(|module|
-							self.fallback
-								.call_in_wasm_module(ext, module, method, data)
-								.map(NativeOrEncoded::Encoded)
-						),
-						false
+
+					safe_call(
+						move || runtime.call(&mut **ext, method, data).map(NativeOrEncoded::Encoded)
 					)
 				}
 				(false, _, _) => {
-					(
-						cached_runtime.with(|module|
-							self.fallback
-								.call_in_wasm_module(ext, module, method, data)
-								.map(NativeOrEncoded::Encoded)
-						),
-						false
+					safe_call(
+						move || runtime.call(&mut **ext, method, data).map(NativeOrEncoded::Encoded)
 					)
-				}
+				},
 				(true, true, Some(call)) => {
 					trace!(
 						target: "executor",
 						"Request for native execution with native call succeeded (native: {}, chain: {}).",
 						self.native_version.runtime_version,
-						onchain_version
-							.as_ref()
-							.map_or_else(||"<None>".into(), |v| format!("{}", v))
+						onchain_version,
 					);
-					(
-						with_native_environment(ext, move || (call)())
-							.and_then(|r| r.map(NativeOrEncoded::Native).map_err(|s| Error::ApiError(s.to_string()))),
-						true
-					)
+
+					used_native = true;
+					let res = with_native_environment(&mut **ext, move || (call)())
+						.and_then(|r| r
+							.map(NativeOrEncoded::Native)
+							.map_err(|s| Error::ApiError(s.to_string()))
+						);
+
+					Ok(res)
 				}
 				_ => {
 					trace!(
 						target: "executor",
 						"Request for native execution succeeded (native: {}, chain: {})",
 						self.native_version.runtime_version,
-						onchain_version.as_ref().map_or_else(||"<None>".into(), |v| format!("{}", v))
+						onchain_version
 					);
-					(D::dispatch(ext, method, data).map(NativeOrEncoded::Encoded), true)
+
+					used_native = true;
+					Ok(D::dispatch(&mut **ext, method, data).map(NativeOrEncoded::Encoded))
 				}
 			}
-		})
+		});
+		(result, used_native)
 	}
 }
 
@@ -219,7 +269,7 @@ macro_rules! native_executor_instance {
 	(IMPL $name:ident, $dispatcher:path, $version:path) => {
 		impl $crate::NativeExecutionDispatch for $name {
 			fn dispatch(
-				ext: &mut $crate::Externalities<$crate::Blake2Hasher>,
+				ext: &mut $crate::Externalities,
 				method: &str,
 				data: &[u8]
 			) -> $crate::error::Result<Vec<u8>> {

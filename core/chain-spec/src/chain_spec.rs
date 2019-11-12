@@ -20,6 +20,7 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fs::File;
 use std::path::PathBuf;
+use std::rc::Rc;
 use serde::{Serialize, Deserialize};
 use primitives::storage::{StorageKey, StorageData};
 use sr_primitives::{BuildStorage, StorageOverlay, ChildrenStorageOverlay};
@@ -31,7 +32,7 @@ use tel::TelemetryEndpoints;
 enum GenesisSource<G> {
 	File(PathBuf),
 	Binary(Cow<'static, [u8]>),
-	Factory(fn() -> G),
+	Factory(Rc<dyn Fn() -> G>),
 }
 
 impl<G> Clone for GenesisSource<G> {
@@ -39,7 +40,7 @@ impl<G> Clone for GenesisSource<G> {
 		match *self {
 			GenesisSource::File(ref path) => GenesisSource::File(path.clone()),
 			GenesisSource::Binary(ref d) => GenesisSource::Binary(d.clone()),
-			GenesisSource::Factory(f) => GenesisSource::Factory(f),
+			GenesisSource::Factory(ref f) => GenesisSource::Factory(f.clone()),
 		}
 	}
 }
@@ -70,7 +71,7 @@ impl<G: RuntimeGenesis> GenesisSource<G> {
 }
 
 impl<'a, G: RuntimeGenesis, E> BuildStorage for &'a ChainSpec<G, E> {
-	fn build_storage(self) -> Result<(StorageOverlay, ChildrenStorageOverlay), String> {
+	fn build_storage(&self) -> Result<(StorageOverlay, ChildrenStorageOverlay), String> {
 		match self.genesis.resolve()? {
 			Genesis::Runtime(gc) => gc.build_storage(),
 			Genesis::Raw(map, children_map) => Ok((
@@ -84,7 +85,7 @@ impl<'a, G: RuntimeGenesis, E> BuildStorage for &'a ChainSpec<G, E> {
 	}
 
 	fn assimilate_storage(
-		self,
+		&self,
 		_: &mut (StorageOverlay, ChildrenStorageOverlay)
 	) -> Result<(), String> {
 		Err("`assimilate_storage` not implemented for `ChainSpec`.".into())
@@ -187,10 +188,10 @@ impl<G, E> ChainSpec<G, E> {
 	}
 
 	/// Create hardcoded spec.
-	pub fn from_genesis(
+	pub fn from_genesis<F: Fn() -> G + 'static>(
 		name: &str,
 		id: &str,
-		constructor: fn() -> G,
+		constructor: F,
 		boot_nodes: Vec<String>,
 		telemetry_endpoints: Option<TelemetryEndpoints>,
 		protocol_id: Option<&str>,
@@ -211,7 +212,7 @@ impl<G, E> ChainSpec<G, E> {
 
 		ChainSpec {
 			spec,
-			genesis: GenesisSource::Factory(constructor),
+			genesis: GenesisSource::Factory(Rc::new(constructor)),
 		}
 	}
 }
@@ -288,11 +289,11 @@ mod tests {
 
 	impl BuildStorage for Genesis {
 		fn assimilate_storage(
-			self,
+			&self,
 			storage: &mut (StorageOverlay, ChildrenStorageOverlay),
 		) -> Result<(), String> {
 			storage.0.extend(
-				self.0.into_iter().map(|(a, b)| (a.into_bytes(), b.into_bytes()))
+				self.0.iter().map(|(a, b)| (a.clone().into_bytes(), b.clone().into_bytes()))
 			);
 			Ok(())
 		}

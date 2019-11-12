@@ -323,6 +323,14 @@ fn compute_points(input: &INposInput) -> Vec<(u32, u32)> {
 fn generate_piecewise_linear(points: Vec<(u32, u32)>) -> TokenStream2 {
 	let mut points_tokens = quote!();
 
+	let max = points.iter()
+		.map(|&(_, x)| x)
+		.max()
+		.unwrap_or(0)
+		.checked_mul(1_000)
+		// clip at 1.0 for sanity only since it'll panic later if too high.
+		.unwrap_or(1_000_000_000);
+
 	for (x, y) in points {
 		let error = || panic!(format!(
 			"Generated reward curve approximation doesn't fit into [0, 1] -> [0, 1] \
@@ -346,6 +354,7 @@ fn generate_piecewise_linear(points: Vec<(u32, u32)>) -> TokenStream2 {
 	quote!(
 		_sr_primitives::curve::PiecewiseLinear::<'static> {
 			points: & [ #points_tokens ],
+			maximum: _sr_primitives::Perbill::from_parts(#max),
 		}
 	)
 }

@@ -17,8 +17,8 @@
 //! Tool for creating the genesis block.
 
 use std::collections::HashMap;
-use runtime_io::{blake2_256, twox_128};
-use super::{AuthorityId, AccountId, WASM_BINARY};
+use runtime_io::hashing::{blake2_256, twox_128};
+use super::{AuthorityId, AccountId, WASM_BINARY, system};
 use codec::{Encode, KeyedVec, Joiner};
 use primitives::{ChangesTrieConfiguration, map, storage::well_known_keys};
 use sr_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
@@ -77,10 +77,16 @@ impl GenesisConfig {
 			map.insert(well_known_keys::CHANGES_TRIE_CONFIG.to_vec(), changes_trie_config.encode());
 		}
 		map.insert(twox_128(&b"sys:auth"[..])[..].to_vec(), self.authorities.encode());
-		// Finally, add the extra storage entries.
+		// Add the extra storage entries.
 		map.extend(self.extra_storage.clone().into_iter());
 
-		(map, self.child_extra_storage.clone())
+		// Assimilate the system genesis config.
+		let mut storage = (map, self.child_extra_storage.clone());
+		let mut config = system::GenesisConfig::default();
+		config.authorities = self.authorities.clone();
+		config.assimilate_storage(&mut storage).expect("Adding `system::GensisConfig` to the genesis");
+
+		storage
 	}
 }
 

@@ -18,12 +18,12 @@
 //!
 //! NOTE: If you're looking for `parameter_types`, it has moved in to the top-level module.
 
-use rstd::{prelude::*, result, marker::PhantomData, ops::Div};
+use rstd::{prelude::*, result, marker::PhantomData, ops::Div, fmt::Debug};
 use codec::{FullCodec, Codec, Encode, Decode};
 use primitives::u32_trait::Value as U32;
 use sr_primitives::{
 	ConsensusEngineId,
-	traits::{MaybeSerializeDebug, SimpleArithmetic, Saturating},
+	traits::{MaybeSerializeDeserialize, SimpleArithmetic, Saturating},
 };
 
 /// Anything that can have a `::len()` method.
@@ -67,17 +67,6 @@ impl<V: PartialEq, T: Get<V>> Contains<V> for T {
 pub trait OnFreeBalanceZero<AccountId> {
 	/// The account was the given id was killed.
 	fn on_free_balance_zero(who: &AccountId);
-}
-
-/// Trait for a hook to get called when some balance has been minted, causing dilution.
-pub trait OnDilution<Balance> {
-	/// Some `portion` of the total balance just "grew" by `minted`. `portion` is the pre-growth
-	/// amount (it doesn't take account of the recent growth).
-	fn on_dilution(minted: Balance, portion: Balance);
-}
-
-impl<Balance> OnDilution<Balance> for () {
-	fn on_dilution(_minted: Balance, _portion: Balance) {}
 }
 
 /// Outcome of a balance update.
@@ -143,22 +132,37 @@ pub trait KeyOwnerProofSystem<Key> {
 ///
 /// - Someone got slashed.
 /// - Someone paid for a transaction to be included.
-pub trait OnUnbalanced<Imbalance> {
+pub trait OnUnbalanced<Imbalance: TryDrop> {
 	/// Handler for some imbalance. Infallible.
-	fn on_unbalanced(amount: Imbalance);
+	fn on_unbalanced(amount: Imbalance) {
+		amount.try_drop().unwrap_or_else(Self::on_nonzero_unbalanced)
+	}
+
+	/// Actually handle a non-zero imbalance. You probably want to implement this rather than
+	/// `on_unbalanced`.
+	fn on_nonzero_unbalanced(amount: Imbalance);
 }
 
-impl<Imbalance: Drop> OnUnbalanced<Imbalance> for () {
-	fn on_unbalanced(amount: Imbalance) { drop(amount); }
+impl<Imbalance: TryDrop> OnUnbalanced<Imbalance> for () {
+	fn on_nonzero_unbalanced(amount: Imbalance) { drop(amount); }
 }
 
 /// Simple boolean for whether an account needs to be kept in existence.
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub enum ExistenceRequirement {
 	/// Operation must not result in the account going out of existence.
+	///
+	/// Note this implies that if the account never existed in the first place, then the operation
+	/// may legitimately leave the account unchanged and still non-existent.
 	KeepAlive,
 	/// Operation may result in account going out of existence.
 	AllowDeath,
+}
+
+/// A type for which some values make sense to be able to drop without further consideration.
+pub trait TryDrop: Sized {
+	/// Drop an instance cleanly. Only works if its value represents "no-operation".
+	fn try_drop(self) -> Result<(), Self>;
 }
 
 /// A trait for a not-quite Linear Type that tracks an imbalance.
@@ -190,14 +194,14 @@ pub enum ExistenceRequirement {
 ///
 /// You can always retrieve the raw balance value using `peek`.
 #[must_use]
-pub trait Imbalance<Balance>: Sized {
+pub trait Imbalance<Balance>: Sized + TryDrop {
 	/// The oppositely imbalanced type. They come in pairs.
 	type Opposite: Imbalance<Balance>;
 
 	/// The zero imbalance. Can be destroyed with `drop_zero`.
 	fn zero() -> Self;
 
-	/// Drop an instance cleanly. Only works if its `value()` is zero.
+	/// Drop an instance cleanly. Only works if its `self.value()` is zero.
 	fn drop_zero(self) -> Result<(), Self>;
 
 	/// Consume `self` and return two independent instances; the first
@@ -254,7 +258,7 @@ pub enum SignedImbalance<B, P: Imbalance<B>>{
 impl<
 	P: Imbalance<B, Opposite=N>,
 	N: Imbalance<B, Opposite=P>,
-	B: SimpleArithmetic + FullCodec + Copy + MaybeSerializeDebug + Default,
+	B: SimpleArithmetic + FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default,
 > SignedImbalance<B, P> {
 	pub fn zero() -> Self {
 		SignedImbalance::Positive(P::zero())
@@ -305,7 +309,7 @@ impl<
 	Target2: OnUnbalanced<I>,
 > OnUnbalanced<I> for SplitTwoWays<Balance, I, Part1, Target1, Part2, Target2>
 {
-	fn on_unbalanced(amount: I) {
+	fn on_nonzero_unbalanced(amount: I) {
 		let total: u32 = Part1::VALUE + Part2::VALUE;
 		let amount1 = amount.peek().saturating_mul(Part1::VALUE.into()) / total.into();
 		let (imb1, imb2) = amount.split(amount1);
@@ -317,7 +321,7 @@ impl<
 /// Abstraction over a fungible assets system.
 pub trait Currency<AccountId> {
 	/// The balance of an account.
-	type Balance: SimpleArithmetic + FullCodec + Copy + MaybeSerializeDebug + Default;
+	type Balance: SimpleArithmetic + FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default;
 
 	/// The opaque token type for an imbalance. This is returned by unbalanced operations
 	/// and must be dealt with. It may be dropped but cannot be cloned.
@@ -378,7 +382,7 @@ pub trait Currency<AccountId> {
 	fn ensure_can_withdraw(
 		who: &AccountId,
 		_amount: Self::Balance,
-		reason: WithdrawReason,
+		reasons: WithdrawReasons,
 		new_balance: Self::Balance,
 	) -> result::Result<(), &'static str>;
 
@@ -392,6 +396,7 @@ pub trait Currency<AccountId> {
 		source: &AccountId,
 		dest: &AccountId,
 		value: Self::Balance,
+		existence_requirement: ExistenceRequirement,
 	) -> result::Result<(), &'static str>;
 
 	/// Deducts up to `value` from the combined balance of `who`, preferring to deduct from the
@@ -456,7 +461,7 @@ pub trait Currency<AccountId> {
 	fn withdraw(
 		who: &AccountId,
 		value: Self::Balance,
-		reason: WithdrawReason,
+		reasons: WithdrawReasons,
 		liveness: ExistenceRequirement,
 	) -> result::Result<Self::NegativeImbalance, &'static str>;
 
@@ -464,11 +469,11 @@ pub trait Currency<AccountId> {
 	fn settle(
 		who: &AccountId,
 		value: Self::PositiveImbalance,
-		reason: WithdrawReason,
+		reasons: WithdrawReasons,
 		liveness: ExistenceRequirement,
 	) -> result::Result<(), Self::PositiveImbalance> {
 		let v = value.peek();
-		match Self::withdraw(who, v, reason, liveness) {
+		match Self::withdraw(who, v, reasons, liveness) {
 			Ok(opposite) => Ok(drop(value.offset(opposite))),
 			_ => Err(value),
 		}
@@ -611,6 +616,8 @@ bitmask! {
 		Reserve = 0b00000100,
 		/// In order to pay some other (higher-level) fees.
 		Fee = 0b00001000,
+		/// In order to tip a validator for transaction inclusion.
+		Tip = 0b00010000,
 	}
 }
 
@@ -627,7 +634,7 @@ impl WithdrawReasons {
 	/// # use srml_support::traits::{WithdrawReason, WithdrawReasons};
 	/// # fn main() {
 	/// assert_eq!(
-	/// 	WithdrawReason::Fee | WithdrawReason::Transfer | WithdrawReason::Reserve,
+	/// 	WithdrawReason::Fee | WithdrawReason::Transfer | WithdrawReason::Reserve | WithdrawReason::Tip,
 	/// 	WithdrawReasons::except(WithdrawReason::TransactionPayment),
 	///	);
 	/// # }
@@ -716,4 +723,24 @@ pub trait InitializeMembers<AccountId> {
 
 impl<T> InitializeMembers<T> for () {
 	fn initialize_members(_: &[T]) {}
+}
+
+// A trait that is able to provide randomness.
+pub trait Randomness<Output> {
+	/// Get a "random" value
+	///
+	/// Being a deterministic blockchain, real randomness is difficult to come by. This gives you
+	/// something that approximates it. `subject` is a context identifier and allows you to get a
+	/// different result to other callers of this function; use it like
+	/// `random(&b"my context"[..])`.
+	fn random(subject: &[u8]) -> Output;
+
+	/// Get the basic random seed.
+	///
+	/// In general you won't want to use this, but rather `Self::random` which allows you to give a
+	/// subject for the random result and whose value will be independently low-influence random
+	/// from any other such seeds.
+	fn random_seed() -> Output {
+		Self::random(&[][..])
+	}
 }

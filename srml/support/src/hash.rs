@@ -18,7 +18,7 @@
 
 use codec::Codec;
 use rstd::prelude::Vec;
-use runtime_io::{blake2_128, blake2_256, twox_64, twox_128, twox_256};
+use runtime_io::hashing::{blake2_128, blake2_256, twox_64, twox_128, twox_256};
 
 // This trait must be kept coherent with srml-support-procedural HasherKind usage
 pub trait Hashable: Sized {
@@ -59,7 +59,7 @@ impl StorageHasher for Twox64Concat {
 	type Output = Vec<u8>;
 	fn hash(x: &[u8]) -> Vec<u8> {
 		twox_64(x)
-			.into_iter()
+			.iter()
 			.chain(x.into_iter())
 			.cloned()
 			.collect::<Vec<_>>()

@@ -16,22 +16,23 @@
 
 //! Concrete externalities implementation.
 
-use std::{error, fmt, cmp::Ord};
-use log::{warn, trace};
 use crate::{
 	backend::Backend, OverlayedChanges,
 	changes_trie::{
 		Storage as ChangesTrieStorage, CacheAction as ChangesTrieCacheAction, build_changes_trie,
 	},
 };
+
 use hash_db::Hasher;
 use primitives::{
-	offchain, storage::well_known_keys::is_child_storage_key,
-	traits::{BareCryptoStorePtr, Externalities}, child_storage_key::ChildStorageKey,
-	hexdisplay::HexDisplay,
+	storage::{ChildStorageKey, well_known_keys::is_child_storage_key},
+	traits::Externalities, hexdisplay::HexDisplay, hash::H256,
 };
-use trie::{MemoryDB, default_child_trie_root};
-use trie::trie_types::Layout;
+use trie::{trie_types::Layout, MemoryDB, default_child_trie_root};
+use externalities::Extensions;
+
+use std::{error, fmt, any::{Any, TypeId}};
+use log::{warn, trace};
 
 const EXT_NOT_ALLOWED_TO_FAIL: &str = "Externalities not allowed to fail within runtime";
 
@@ -65,11 +66,7 @@ impl<B: error::Error, E: error::Error> error::Error for Error<B, E> {
 }
 
 /// Wraps a read-only backend, call executor, and current overlayed changes.
-pub struct Ext<'a, H, N, B, T, O>
-where
-	H: Hasher,
-	B: 'a + Backend<H>,
-{
+pub struct Ext<'a, H, N, B, T> where H: Hasher<Out=H256>, B: 'a + Backend<H> {
 	/// The overlayed changes to write to.
 	overlay: &'a mut OverlayedChanges,
 	/// The storage backend to read from.
@@ -86,34 +83,28 @@ where
 	/// `storage_changes_root` is called matters + we need to remember additional
 	/// data at this moment (block number).
 	changes_trie_transaction: Option<(MemoryDB<H>, H::Out, ChangesTrieCacheAction<H::Out, N>)>,
-	/// Additional externalities for offchain workers.
-	///
-	/// If None, some methods from the trait might not be supported.
-	offchain_externalities: Option<&'a mut O>,
-	/// The keystore that manages the keys of the node.
-	keystore: Option<BareCryptoStorePtr>,
 	/// Pseudo-unique id used for tracing.
 	pub id: u16,
 	/// Dummy usage of N arg.
-	_phantom: ::std::marker::PhantomData<N>,
+	_phantom: std::marker::PhantomData<N>,
+	/// Extensions registered with this instance.
+	extensions: Option<&'a mut Extensions>,
 }
 
-impl<'a, H, N, B, T, O> Ext<'a, H, N, B, T, O>
+impl<'a, H, N, B, T> Ext<'a, H, N, B, T>
 where
-	H: Hasher,
+	H: Hasher<Out=H256>,
 	B: 'a + Backend<H>,
 	T: 'a + ChangesTrieStorage<H, N>,
-	O: 'a + offchain::Externalities,
-	H::Out: Ord + 'static,
 	N: crate::changes_trie::BlockNumber,
 {
+
 	/// Create a new `Ext` from overlayed changes and read-only backend
 	pub fn new(
 		overlay: &'a mut OverlayedChanges,
 		backend: &'a B,
 		changes_trie_storage: Option<&'a T>,
-		offchain_externalities: Option<&'a mut O>,
-		keystore: Option<BareCryptoStorePtr>,
+		extensions: Option<&'a mut Extensions>,
 	) -> Self {
 		Ext {
 			overlay,
@@ -121,21 +112,25 @@ where
 			storage_transaction: None,
 			changes_trie_storage,
 			changes_trie_transaction: None,
-			offchain_externalities,
-			keystore,
 			id: rand::random(),
 			_phantom: Default::default(),
+			extensions,
 		}
 	}
 
 	/// Get the transaction necessary to update the backend.
-	pub fn transaction(mut self) -> ((B::Transaction, H::Out), Option<crate::ChangesTrieTransaction<H, N>>) {
+	pub fn transaction(&mut self) -> (
+		(B::Transaction, H256),
+		Option<crate::ChangesTrieTransaction<H, N>>,
+	) {
 		let _ = self.storage_root();
 
 		let (storage_transaction, changes_trie_transaction) = (
 			self.storage_transaction
+				.take()
 				.expect("storage_transaction always set after calling storage root; qed"),
 			self.changes_trie_transaction
+				.take()
 				.map(|(tx, _, cache)| (tx, cache)),
 		);
 
@@ -151,16 +146,14 @@ where
 	fn mark_dirty(&mut self) {
 		self.storage_transaction = None;
 	}
-
 }
 
 #[cfg(test)]
-impl<'a, H, N, B, T, O> Ext<'a, H, N, B, T, O>
+impl<'a, H, N, B, T> Ext<'a, H, N, B, T>
 where
-	H: Hasher,
+	H: Hasher<Out=H256>,
 	B: 'a + Backend<H>,
 	T: 'a + ChangesTrieStorage<H, N>,
-	O: 'a + offchain::Externalities,
 	N: crate::changes_trie::BlockNumber,
 {
 	pub fn storage_pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
@@ -177,13 +170,12 @@ where
 	}
 }
 
-impl<'a, B, T, H, N, O> Externalities<H> for Ext<'a, H, N, B, T, O>
-where	H: Hasher,
+impl<'a, H, B, T, N> Externalities for Ext<'a, H, N, B, T>
+where
+	H: Hasher<Out=H256>,
 	B: 'a + Backend<H>,
 	T: 'a + ChangesTrieStorage<H, N>,
-	H::Out: Ord + 'static,
 	N: crate::changes_trie::BlockNumber,
-	O: 'a + offchain::Externalities,
 {
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
 		let _guard = panic_handler::AbortGuard::force_abort();
@@ -197,10 +189,14 @@ where	H: Hasher,
 		result
 	}
 
-	fn storage_hash(&self, key: &[u8]) -> Option<H::Out> {
+	fn storage_hash(&self, key: &[u8]) -> Option<H256> {
 		let _guard = panic_handler::AbortGuard::force_abort();
-		let result = self.overlay.storage(key).map(|x| x.map(|x| H::hash(x))).unwrap_or_else(||
-			self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL));
+		let result = self.overlay
+			.storage(key)
+			.map(|x| x.map(|x| H::hash(x)))
+			.unwrap_or_else(||
+				self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL)
+			);
 		trace!(target: "state-trace", "{:04x}: Hash {}={:?}",
 			self.id,
 			HexDisplay::from(&key),
@@ -220,7 +216,7 @@ where	H: Hasher,
 		result
 	}
 
-	fn original_storage_hash(&self, key: &[u8]) -> Option<H::Out> {
+	fn original_storage_hash(&self, key: &[u8]) -> Option<H256> {
 		let _guard = panic_handler::AbortGuard::force_abort();
 		let result = self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL);
 		trace!(target: "state-trace", "{:04x}: GetOriginalHash {}={:?}",
@@ -233,33 +229,48 @@ where	H: Hasher,
 
 	fn child_storage(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<Vec<u8>> {
 		let _guard = panic_handler::AbortGuard::force_abort();
-		let result = self.overlay.child_storage(storage_key.as_ref(), key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
-			self.backend.child_storage(storage_key.as_ref(), key).expect(EXT_NOT_ALLOWED_TO_FAIL));
+		let result = self.overlay
+			.child_storage(storage_key.as_ref(), key)
+			.map(|x| x.map(|x| x.to_vec()))
+			.unwrap_or_else(||
+				self.backend.child_storage(storage_key.as_ref(), key).expect(EXT_NOT_ALLOWED_TO_FAIL)
+			);
+
 		trace!(target: "state-trace", "{:04x}: GetChild({}) {}={:?}",
 			self.id,
 			HexDisplay::from(&storage_key.as_ref()),
 			HexDisplay::from(&key),
 			result.as_ref().map(HexDisplay::from)
 		);
+
 		result
 	}
 
-	fn child_storage_hash(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<H::Out> {
+	fn child_storage_hash(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<H256> {
 		let _guard = panic_handler::AbortGuard::force_abort();
-		let result = self.overlay.child_storage(storage_key.as_ref(), key).map(|x| x.map(|x| H::hash(x))).unwrap_or_else(||
-			self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL));
+		let result = self.overlay
+			.child_storage(storage_key.as_ref(), key)
+			.map(|x| x.map(|x| H::hash(x)))
+			.unwrap_or_else(||
+				self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL)
+			);
+
 		trace!(target: "state-trace", "{:04x}: ChildHash({}) {}={:?}",
 			self.id,
 			HexDisplay::from(&storage_key.as_ref()),
 			HexDisplay::from(&key),
 			result,
 		);
+
 		result
 	}
 
 	fn original_child_storage(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<Vec<u8>> {
 		let _guard = panic_handler::AbortGuard::force_abort();
-		let result = self.backend.child_storage(storage_key.as_ref(), key).expect(EXT_NOT_ALLOWED_TO_FAIL);
+		let result = self.backend
+			.child_storage(storage_key.as_ref(), key)
+			.expect(EXT_NOT_ALLOWED_TO_FAIL);
+
 		trace!(target: "state-trace", "{:04x}: ChildOriginal({}) {}={:?}",
 			self.id,
 			HexDisplay::from(&storage_key.as_ref()),
@@ -269,9 +280,12 @@ where	H: Hasher,
 		result
 	}
 
-	fn original_child_storage_hash(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<H::Out> {
+	fn original_child_storage_hash(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<H256> {
 		let _guard = panic_handler::AbortGuard::force_abort();
-		let result = self.backend.child_storage_hash(storage_key.as_ref(), key).expect(EXT_NOT_ALLOWED_TO_FAIL);
+		let result = self.backend
+			.child_storage_hash(storage_key.as_ref(), key)
+			.expect(EXT_NOT_ALLOWED_TO_FAIL);
+
 		trace!(target: "state-trace", "{}: ChildHashOriginal({}) {}={:?}",
 			self.id,
 			HexDisplay::from(&storage_key.as_ref()),
@@ -287,6 +301,7 @@ where	H: Hasher,
 			Some(x) => x.is_some(),
 			_ => self.backend.exists_storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL),
 		};
+
 		trace!(target: "state-trace", "{:04x}: Exists {}={:?}",
 			self.id,
 			HexDisplay::from(&key),
@@ -301,8 +316,11 @@ where	H: Hasher,
 
 		let result = match self.overlay.child_storage(storage_key.as_ref(), key) {
 			Some(x) => x.is_some(),
-			_ => self.backend.exists_child_storage(storage_key.as_ref(), key).expect(EXT_NOT_ALLOWED_TO_FAIL),
+			_ => self.backend
+				.exists_child_storage(storage_key.as_ref(), key)
+				.expect(EXT_NOT_ALLOWED_TO_FAIL),
 		};
+
 		trace!(target: "state-trace", "{:04x}: ChildExists({}) {}={:?}",
 			self.id,
 			HexDisplay::from(&storage_key.as_ref()),
@@ -328,7 +346,12 @@ where	H: Hasher,
 		self.overlay.set_storage(key, value);
 	}
 
-	fn place_child_storage(&mut self, storage_key: ChildStorageKey, key: Vec<u8>, value: Option<Vec<u8>>) {
+	fn place_child_storage(
+		&mut self,
+		storage_key: ChildStorageKey,
+		key: Vec<u8>,
+		value: Option<Vec<u8>>,
+	) {
 		trace!(target: "state-trace", "{:04x}: PutChild({}) {}={:?}",
 			self.id,
 			HexDisplay::from(&storage_key.as_ref()),
@@ -392,7 +415,7 @@ where	H: Hasher,
 		42
 	}
 
-	fn storage_root(&mut self) -> H::Out {
+	fn storage_root(&mut self) -> H256 {
 		let _guard = panic_handler::AbortGuard::force_abort();
 		if let Some((_, ref root)) = self.storage_transaction {
 			trace!(target: "state-trace", "{:04x}: Root (cached) {}",
@@ -444,16 +467,22 @@ where	H: Hasher,
 		} else {
 			let storage_key = storage_key.as_ref();
 
-			let delta = self.overlay.committed.children.get(storage_key)
-				.into_iter()
-				.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), v.value.clone())))
-				.chain(self.overlay.prospective.children.get(storage_key)
-						.into_iter()
-						.flat_map(|map| map.clone().into_iter().map(|(k, v)| (k.clone(), v.value.clone()))));
+			let (root, is_empty, _) = {
+				let delta = self.overlay.committed.children.get(storage_key)
+					.into_iter()
+					.flat_map(|map| map.clone().into_iter().map(|(k, v)| (k, v.value)))
+					.chain(self.overlay.prospective.children.get(storage_key)
+							.into_iter()
+							.flat_map(|map| map.clone().into_iter().map(|(k, v)| (k, v.value))));
 
-			let root = self.backend.child_storage_root(storage_key, delta).0;
+				self.backend.child_storage_root(storage_key, delta)
+			};
 
-			self.overlay.set_storage(storage_key.to_vec(), Some(root.to_vec()));
+			if is_empty {
+				self.overlay.set_storage(storage_key.into(), None);
+			} else {
+				self.overlay.set_storage(storage_key.into(), Some(root.clone()));
+			}
 
 			trace!(target: "state-trace", "{:04x}: ChildRoot({}) {}",
 				self.id,
@@ -465,7 +494,7 @@ where	H: Hasher,
 		}
 	}
 
-	fn storage_changes_root(&mut self, parent_hash: H::Out) -> Result<Option<H::Out>, ()> {
+	fn storage_changes_root(&mut self, parent_hash: H256) -> Result<Option<H256>, ()> {
 		let _guard = panic_handler::AbortGuard::force_abort();
 		self.changes_trie_transaction = build_changes_trie::<_, T, H, N>(
 			self.backend,
@@ -481,32 +510,36 @@ where	H: Hasher,
 		);
 		result
 	}
+}
 
-	fn offchain(&mut self) -> Option<&mut dyn offchain::Externalities> {
-		self.offchain_externalities.as_mut().map(|x| &mut **x as _)
+impl<'a, H, B, T, N> externalities::ExtensionStore for Ext<'a, H, N, B, T>
+where
+	H: Hasher<Out=H256>,
+	B: 'a + Backend<H>,
+	T: 'a + ChangesTrieStorage<H, N>,
+	N: crate::changes_trie::BlockNumber,
+{
+	fn extension_by_type_id(&mut self, type_id: TypeId) -> Option<&mut dyn Any> {
+		self.extensions.as_mut().and_then(|exts| exts.get_mut(type_id))
 	}
-
-	fn keystore(&self) -> Option<BareCryptoStorePtr> {
-		self.keystore.clone()
-	}
-
 }
 
 #[cfg(test)]
 mod tests {
+	use super::*;
 	use hex_literal::hex;
 	use codec::Encode;
-	use primitives::{Blake2Hasher};
-	use primitives::storage::well_known_keys::EXTRINSIC_INDEX;
-	use crate::backend::InMemory;
-	use crate::changes_trie::{Configuration as ChangesTrieConfiguration,
-		InMemoryStorage as InMemoryChangesTrieStorage};
-	use crate::overlayed_changes::OverlayedValue;
-	use super::*;
+	use primitives::{Blake2Hasher, storage::well_known_keys::EXTRINSIC_INDEX};
+	use crate::{
+		changes_trie::{
+			Configuration as ChangesTrieConfiguration,
+			InMemoryStorage as InMemoryChangesTrieStorage,
+		}, backend::InMemory, overlayed_changes::OverlayedValue,
+	};
 
 	type TestBackend = InMemory<Blake2Hasher>;
 	type TestChangesTrieStorage = InMemoryChangesTrieStorage<Blake2Hasher, u64>;
-	type TestExt<'a> = Ext<'a, Blake2Hasher, u64, TestBackend, TestChangesTrieStorage, crate::NeverOffchainExt>;
+	type TestExt<'a> = Ext<'a, Blake2Hasher, u64, TestBackend, TestChangesTrieStorage>;
 
 	fn prepare_overlay_with_changes() -> OverlayedChanges {
 		OverlayedChanges {
@@ -532,7 +565,7 @@ mod tests {
 	fn storage_changes_root_is_none_when_storage_is_not_provided() {
 		let mut overlay = prepare_overlay_with_changes();
 		let backend = TestBackend::default();
-		let mut ext = TestExt::new(&mut overlay, &backend, None, None, None);
+		let mut ext = TestExt::new(&mut overlay, &backend, None, None);
 		assert_eq!(ext.storage_changes_root(Default::default()).unwrap(), None);
 	}
 
@@ -542,7 +575,7 @@ mod tests {
 		overlay.changes_trie_config = None;
 		let storage = TestChangesTrieStorage::with_blocks(vec![(100, Default::default())]);
 		let backend = TestBackend::default();
-		let mut ext = TestExt::new(&mut overlay, &backend, Some(&storage), None, None);
+		let mut ext = TestExt::new(&mut overlay, &backend, Some(&storage), None);
 		assert_eq!(ext.storage_changes_root(Default::default()).unwrap(), None);
 	}
 
@@ -551,7 +584,7 @@ mod tests {
 		let mut overlay = prepare_overlay_with_changes();
 		let storage = TestChangesTrieStorage::with_blocks(vec![(99, Default::default())]);
 		let backend = TestBackend::default();
-		let mut ext = TestExt::new(&mut overlay, &backend, Some(&storage), None, None);
+		let mut ext = TestExt::new(&mut overlay, &backend, Some(&storage), None);
 		assert_eq!(
 			ext.storage_changes_root(Default::default()).unwrap(),
 			Some(hex!("bb0c2ef6e1d36d5490f9766cfcc7dfe2a6ca804504c3bb206053890d6dd02376").into()),
@@ -564,7 +597,7 @@ mod tests {
 		overlay.prospective.top.get_mut(&vec![1]).unwrap().value = None;
 		let storage = TestChangesTrieStorage::with_blocks(vec![(99, Default::default())]);
 		let backend = TestBackend::default();
-		let mut ext = TestExt::new(&mut overlay, &backend, Some(&storage), None, None);
+		let mut ext = TestExt::new(&mut overlay, &backend, Some(&storage), None);
 		assert_eq!(
 			ext.storage_changes_root(Default::default()).unwrap(),
 			Some(hex!("96f5aae4690e7302737b6f9b7f8567d5bbb9eac1c315f80101235a92d9ec27f4").into()),

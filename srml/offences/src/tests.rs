@@ -24,11 +24,10 @@ use crate::mock::{
 	offence_reports,
 };
 use system::{EventRecord, Phase};
-use runtime_io::with_externalities;
 
 #[test]
 fn should_report_an_authority_and_trigger_on_offence() {
-	with_externalities(&mut new_test_ext(), || {
+	new_test_ext().execute_with(|| {
 		// given
 		let time_slot = 42;
 		assert_eq!(offence_reports(KIND, time_slot), vec![]);
@@ -51,7 +50,7 @@ fn should_report_an_authority_and_trigger_on_offence() {
 
 #[test]
 fn should_calculate_the_fraction_correctly() {
-	with_externalities(&mut new_test_ext(), || {
+	new_test_ext().execute_with(|| {
 		// given
 		let time_slot = 42;
 		assert_eq!(offence_reports(KIND, time_slot), vec![]);
@@ -83,7 +82,7 @@ fn should_calculate_the_fraction_correctly() {
 
 #[test]
 fn should_not_report_the_same_authority_twice_in_the_same_slot() {
-	with_externalities(&mut new_test_ext(), || {
+	new_test_ext().execute_with(|| {
 		// given
 		let time_slot = 42;
 		assert_eq!(offence_reports(KIND, time_slot), vec![]);
@@ -113,7 +112,7 @@ fn should_not_report_the_same_authority_twice_in_the_same_slot() {
 
 #[test]
 fn should_report_in_different_time_slot() {
-	with_externalities(&mut new_test_ext(), || {
+	new_test_ext().execute_with(|| {
 		// given
 		let time_slot = 42;
 		assert_eq!(offence_reports(KIND, time_slot), vec![]);
@@ -143,7 +142,7 @@ fn should_report_in_different_time_slot() {
 
 #[test]
 fn should_deposit_event() {
-	with_externalities(&mut new_test_ext(), || {
+	new_test_ext().execute_with(|| {
 		// given
 		let time_slot = 42;
 		assert_eq!(offence_reports(KIND, time_slot), vec![]);
@@ -171,7 +170,7 @@ fn should_deposit_event() {
 
 #[test]
 fn doesnt_deposit_event_for_dups() {
-	with_externalities(&mut new_test_ext(), || {
+	new_test_ext().execute_with(|| {
 		// given
 		let time_slot = 42;
 		assert_eq!(offence_reports(KIND, time_slot), vec![]);
@@ -208,7 +207,7 @@ fn doesnt_deposit_event_for_dups() {
 fn should_properly_count_offences() {
 	// We report two different authorities for the same issue. Ultimately, the 1st authority
 	// should have `count` equal 2 and the count of the 2nd one should be equal to 1.
-	with_externalities(&mut new_test_ext(), || {
+	new_test_ext().execute_with(|| {
 		// given
 		let time_slot = 42;
 		assert_eq!(offence_reports(KIND, time_slot), vec![]);

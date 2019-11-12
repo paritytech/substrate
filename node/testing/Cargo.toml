@@ -17,7 +17,7 @@ node-primitives = { path = "../primitives" }
 node-runtime = { path = "../runtime" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 primitives = { package = "substrate-primitives", path = "../../core/primitives" }
-sr-io = { path = "../../core/sr-io" }
+runtime-io = { package = "sr-io", path = "../../core/sr-io" }
 sr-primitives = { path = "../../core/sr-primitives" }
 runtime_support = { package = "srml-support", path = "../../srml/support" }
 session = { package = "srml-session", path = "../../srml/session" }
@@ -27,4 +27,5 @@ system = { package = "srml-system", path = "../../srml/system" }
 test-client = { package = "substrate-test-client", path = "../../core/test-client" }
 timestamp = { package = "srml-timestamp", path = "../../srml/timestamp" }
 treasury = { package = "srml-treasury", path = "../../srml/treasury" }
+transaction-payment = { package = "srml-transaction-payment", path = "../../srml/transaction-payment" }
 wabt = "0.9.2"

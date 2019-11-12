@@ -9,8 +9,7 @@ proc-macro = true
 
 [dependencies]
 srml-support-procedural-tools = { package = "srml-support-procedural-tools", path = "./tools" }
-sr-api-macros = { path = "../../../core/sr-api-macros" }
 
-proc-macro2 = "0.4.27"
-quote = "0.6.12"
-syn = { version = "0.15.44", features = ["full"] }
+proc-macro2 = "1.0.6"
+quote = "1.0.2"
+syn = { version = "1.0.7", features = ["full"] }

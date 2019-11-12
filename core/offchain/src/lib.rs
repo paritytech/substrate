@@ -33,13 +33,11 @@
 
 #![warn(missing_docs)]
 
-use std::{
-	fmt,
-	marker::PhantomData,
-	sync::Arc,
-};
+use std::{fmt, marker::PhantomData, sync::Arc};
 
-use client::runtime_api::ApiExt;
+use parking_lot::Mutex;
+use threadpool::ThreadPool;
+use sr_api::ApiExt;
 use futures::future::Future;
 use log::{debug, warn};
 use network::NetworkStateInfo;
@@ -51,13 +49,14 @@ mod api;
 
 pub mod testing;
 
-pub use offchain_primitives::OffchainWorkerApi;
+pub use offchain_primitives::{OffchainWorkerApi, STORAGE_PREFIX};
 
 /// An offchain workers manager.
 pub struct OffchainWorkers<Client, Storage, Block: traits::Block> {
 	client: Arc<Client>,
 	db: Storage,
 	_block: PhantomData<Block>,
+	thread_pool: Mutex<ThreadPool>,
 }
 
 impl<Client, Storage, Block: traits::Block> OffchainWorkers<Client, Storage, Block> {
@@ -67,6 +66,7 @@ impl<Client, Storage, Block: traits::Block> OffchainWorkers<Client, Storage, Blo
 			client,
 			db,
 			_block: PhantomData,
+			thread_pool: Mutex::new(ThreadPool::new(num_cpus::get())),
 		}
 	}
 }
@@ -102,7 +102,7 @@ impl<Client, Storage, Block> OffchainWorkers<
 	) -> impl Future<Output = ()> where A: ChainApi<Block=Block> + 'static {
 		let runtime = self.client.runtime_api();
 		let at = BlockId::number(*number);
-		let has_api = runtime.has_api::<dyn OffchainWorkerApi<Block>>(&at);
+		let has_api = runtime.has_api::<dyn OffchainWorkerApi<Block, Error = ()>>(&at);
 		debug!("Checking offchain workers at {:?}: {:?}", at, has_api);
 
 		if has_api.unwrap_or(false) {
@@ -116,7 +116,7 @@ impl<Client, Storage, Block> OffchainWorkers<
 			debug!("Spawning offchain workers at {:?}", at);
 			let number = *number;
 			let client = self.client.clone();
-			spawn_worker(move || {
+			self.spawn_worker(move || {
 				let runtime = client.runtime_api();
 				let api = Box::new(api);
 				debug!("Running offchain workers at {:?}", at);
@@ -134,19 +134,18 @@ impl<Client, Storage, Block> OffchainWorkers<
 			futures::future::Either::Right(futures::future::ready(()))
 		}
 	}
-}
 
-/// Spawns a new offchain worker.
-///
-/// We spawn offchain workers for each block in a separate thread,
-/// since they can run for a significant amount of time
-/// in a blocking fashion and we don't want to block the runtime.
-///
-/// Note that we should avoid that if we switch to future-based runtime in the future,
-/// alternatively:
-/// TODO [ToDr] (#1458) we can consider using a thread pool instead.
-fn spawn_worker(f: impl FnOnce() -> () + Send + 'static) {
-	std::thread::spawn(f);
+	/// Spawns a new offchain worker.
+	///
+	/// We spawn offchain workers for each block in a separate thread,
+	/// since they can run for a significant amount of time
+	/// in a blocking fashion and we don't want to block the runtime.
+	///
+	/// Note that we should avoid that if we switch to future-based runtime in the future,
+	/// alternatively:
+	fn spawn_worker(&self, f: impl FnOnce() -> () + Send + 'static) {
+		self.thread_pool.lock().execute(f);
+	}
 }
 
 #[cfg(test)]

@@ -92,6 +92,7 @@ use substrate_telemetry::{telemetry, CONSENSUS_DEBUG};
 use log::{trace, debug, warn};
 use futures::prelude::*;
 use futures::sync::mpsc;
+use rand::Rng;
 
 use crate::{environment, CatchUp, CompactCommit, SignedMessage};
 use super::{cost, benefit, Round, SetId};
@@ -132,7 +133,7 @@ struct View<N> {
 impl<N> Default for View<N> {
 	fn default() -> Self {
 		View {
-			round: Round(0),
+			round: Round(1),
 			set_id: SetId(0),
 			last_commit: None,
 		}
@@ -144,7 +145,7 @@ impl<N: Ord> View<N> {
 	fn update_set(&mut self, set_id: SetId) {
 		if set_id != self.set_id {
 			self.set_id = set_id;
-			self.round = Round(0);
+			self.round = Round(1);
 		}
 	}
 
@@ -183,7 +184,13 @@ impl<N: Ord> View<N> {
 
 const KEEP_RECENT_ROUNDS: usize = 3;
 
-/// Tracks topics we keep messages for.
+/// Tracks gossip topics that we are keeping messages for. We keep topics of:
+///
+/// - the last `KEEP_RECENT_ROUNDS` complete GRANDPA rounds,
+///
+/// - the topic for the current and next round,
+///
+/// - and a global topic for commit and catch-up messages.
 struct KeepTopics<B: BlockT> {
 	current_set: SetId,
 	rounds: VecDeque<(Round, SetId)>,
@@ -194,21 +201,30 @@ impl<B: BlockT> KeepTopics<B> {
 	fn new() -> Self {
 		KeepTopics {
 			current_set: SetId(0),
-			rounds: VecDeque::with_capacity(KEEP_RECENT_ROUNDS + 1),
+			rounds: VecDeque::with_capacity(KEEP_RECENT_ROUNDS + 2),
 			reverse_map: HashMap::new(),
 		}
 	}
 
 	fn push(&mut self, round: Round, set_id: SetId) {
 		self.current_set = std::cmp::max(self.current_set, set_id);
-		self.rounds.push_back((round, set_id));
 
-		// the 1 is for the current round.
-		while self.rounds.len() > KEEP_RECENT_ROUNDS + 1 {
+		// under normal operation the given round is already tracked (since we
+		// track one round ahead). if we skip rounds (with a catch up) the given
+		// round topic might not be tracked yet.
+		if !self.rounds.contains(&(round, set_id)) {
+			self.rounds.push_back((round, set_id));
+		}
+
+		// we also accept messages for the next round
+		self.rounds.push_back((Round(round.0.saturating_add(1)), set_id));
+
+		// the 2 is for the current and next round.
+		while self.rounds.len() > KEEP_RECENT_ROUNDS + 2 {
 			let _ = self.rounds.pop_front();
 		}
 
-		let mut map = HashMap::with_capacity(KEEP_RECENT_ROUNDS + 2);
+		let mut map = HashMap::with_capacity(KEEP_RECENT_ROUNDS + 3);
 		map.insert(super::global_topic::<B>(self.current_set.0), (None, self.current_set));
 
 		for &(round, set) in &self.rounds {
@@ -247,7 +263,7 @@ fn neighbor_topics<B: BlockT>(view: &View<NumberFor<B>>) -> Vec<B::Hash> {
 #[derive(Debug, Encode, Decode)]
 pub(super) enum GossipMessage<Block: BlockT> {
 	/// Grandpa message with round and set info.
-	VoteOrPrecommit(VoteOrPrecommitMessage<Block>),
+	Vote(VoteMessage<Block>),
 	/// Grandpa commit message with round and set info.
 	Commit(FullCommitMessage<Block>),
 	/// A neighbor packet. Not repropagated.
@@ -264,9 +280,9 @@ impl<Block: BlockT> From<NeighborPacket<NumberFor<Block>>> for GossipMessage<Blo
 	}
 }
 
-/// Network level message with topic information.
+/// Network level vote message with topic information.
 #[derive(Debug, Encode, Decode)]
-pub(super) struct VoteOrPrecommitMessage<Block: BlockT> {
+pub(super) struct VoteMessage<Block: BlockT> {
 	/// The round this message is from.
 	pub(super) round: Round,
 	/// The voter set ID this message is from.
@@ -468,6 +484,14 @@ impl<N: Ord> Peers<N> {
 	fn peer<'a>(&'a self, who: &PeerId) -> Option<&'a PeerInfo<N>> {
 		self.inner.get(who)
 	}
+
+	fn authorities(&self) -> usize {
+		self.inner.iter().filter(|(_, info)| info.roles.is_authority()).count()
+	}
+
+	fn non_authorities(&self) -> usize {
+		self.inner.iter().filter(|(_, info)| !info.roles.is_authority()).count()
+	}
 }
 
 #[derive(Debug, PartialEq)]
@@ -497,6 +521,40 @@ enum PendingCatchUp {
 	},
 }
 
+/// Configuration for the round catch-up mechanism.
+enum CatchUpConfig {
+	/// Catch requests are enabled, our node will issue them whenever it sees a
+	/// neighbor packet for a round further than `CATCH_UP_THRESHOLD`. If
+	/// `only_from_authorities` is set, the node will only send catch-up
+	/// requests to other authorities it is connected to. This is useful if the
+	/// GRANDPA observer protocol is live on the network, in which case full
+	/// nodes (non-authorities) don't have the necessary round data to answer
+	/// catch-up requests.
+	Enabled { only_from_authorities: bool },
+	/// Catch-up requests are disabled, our node will never issue them. This is
+	/// useful for the GRANDPA observer mode, where we are only interested in
+	/// commit messages and don't need to follow the full round protocol.
+	Disabled,
+}
+
+impl CatchUpConfig {
+	fn enabled(only_from_authorities: bool) -> CatchUpConfig {
+		CatchUpConfig::Enabled { only_from_authorities }
+	}
+
+	fn disabled() -> CatchUpConfig {
+		CatchUpConfig::Disabled
+	}
+
+	fn request_allowed<N>(&self, peer: &PeerInfo<N>) -> bool {
+		match self {
+			CatchUpConfig::Disabled => false,
+			CatchUpConfig::Enabled { only_from_authorities, .. } =>
+				!only_from_authorities || peer.roles.is_authority(),
+		}
+	}
+}
+
 struct Inner<Block: BlockT> {
 	local_view: Option<View<NumberFor<Block>>>,
 	peers: Peers<NumberFor<Block>>,
@@ -505,13 +563,30 @@ struct Inner<Block: BlockT> {
 	config: crate::Config,
 	next_rebroadcast: Instant,
 	pending_catch_up: PendingCatchUp,
-	catch_up_enabled: bool,
+	catch_up_config: CatchUpConfig,
 }
 
 type MaybeMessage<Block> = Option<(Vec<PeerId>, NeighborPacket<NumberFor<Block>>)>;
 
 impl<Block: BlockT> Inner<Block> {
-	fn new(config: crate::Config, catch_up_enabled: bool) -> Self {
+	fn new(config: crate::Config) -> Self {
+		let catch_up_config = if config.observer_enabled {
+			if config.is_authority {
+				// since the observer protocol is enabled, we will only issue
+				// catch-up requests if we are an authority (and only to other
+				// authorities).
+				CatchUpConfig::enabled(true)
+			} else {
+				// otherwise, we are running the observer protocol and don't
+				// care about catch-up requests.
+				CatchUpConfig::disabled()
+			}
+		} else {
+			// if the observer protocol isn't enabled, then any full node should
+			// be able to answer catch-up requests.
+			CatchUpConfig::enabled(false)
+		};
+
 		Inner {
 			local_view: None,
 			peers: Peers::default(),
@@ -519,7 +594,7 @@ impl<Block: BlockT> Inner<Block> {
 			next_rebroadcast: Instant::now() + REBROADCAST_AFTER,
 			authorities: Vec::new(),
 			pending_catch_up: PendingCatchUp::None,
-			catch_up_enabled,
+			catch_up_config,
 			config,
 		}
 	}
@@ -554,7 +629,7 @@ impl<Block: BlockT> Inner<Block> {
 		{
 			let local_view = match self.local_view {
 				ref mut x @ None => x.get_or_insert(View {
-					round: Round(0),
+					round: Round(1),
 					set_id,
 					last_commit: None,
 				}),
@@ -566,7 +641,7 @@ impl<Block: BlockT> Inner<Block> {
 			};
 
 			local_view.update_set(set_id);
-			self.live_topics.push(Round(0), set_id);
+			self.live_topics.push(Round(1), set_id);
 			self.authorities = authorities;
 		}
 		self.multicast_neighbor_packet()
@@ -603,7 +678,7 @@ impl<Block: BlockT> Inner<Block> {
 		cost::PAST_REJECTION
 	}
 
-	fn validate_round_message(&self, who: &PeerId, full: &VoteOrPrecommitMessage<Block>)
+	fn validate_round_message(&self, who: &PeerId, full: &VoteMessage<Block>)
 		-> Action<Block::Hash>
 	{
 		match self.consider_vote(full.round, full.set_id) {
@@ -808,10 +883,6 @@ impl<Block: BlockT> Inner<Block> {
 	}
 
 	fn try_catch_up(&mut self, who: &PeerId) -> (Option<GossipMessage<Block>>, Option<Report>) {
-		if !self.catch_up_enabled {
-			return (None, None);
-		}
-
 		let mut catch_up = None;
 		let mut report = None;
 
@@ -821,7 +892,7 @@ impl<Block: BlockT> Inner<Block> {
 		// won't be able to reply since they don't follow the full GRANDPA
 		// protocol and therefore might not have the vote data available.
 		if let (Some(peer), Some(local_view)) = (self.peers.peer(who), &self.local_view) {
-			if peer.roles.is_authority() &&
+			if self.catch_up_config.request_allowed(&peer) &&
 				peer.view.set_id == local_view.set_id &&
 				peer.view.round.0.saturating_sub(CATCH_UP_THRESHOLD) > local_view.round.0
 			{
@@ -918,6 +989,122 @@ impl<Block: BlockT> Inner<Block> {
 
 		(true, report)
 	}
+
+	/// The initial logic for filtering round messages follows the given state
+	/// transitions:
+	///
+	/// - State 0: not allowed to anyone (only if our local node is not an authority)
+	/// - State 1: allowed to random `sqrt(authorities)`
+	/// - State 2: allowed to all authorities
+	/// - State 3: allowed to random `sqrt(non-authorities)`
+	/// - State 4: allowed to all non-authorities
+	///
+	/// Transitions will be triggered on repropagation attempts by the
+	/// underlying gossip layer, which should happen every 30 seconds.
+	fn round_message_allowed<N>(&self, peer: &PeerInfo<N>, mut previous_attempts: usize) -> bool {
+		const MIN_AUTHORITIES: usize = 5;
+
+		if !self.config.is_authority && previous_attempts == 0 {
+			// non-authority nodes don't gossip any messages right away. we
+			// assume that authorities (and sentries) are strongly connected, so
+			// it should be unnecessary for non-authorities to gossip all
+			// messages right away.
+			return false;
+		}
+
+		if !self.config.is_authority {
+			// since the node is not an authority we skipped the initial attempt
+			// to gossip the message, therefore we decrement `previous_attempts`
+			// so that the state machine below works the same way it does for
+			// authority nodes.
+			previous_attempts -= 1;
+		}
+
+		if peer.roles.is_authority() {
+			let authorities = self.peers.authorities();
+
+			// the target node is an authority, on the first attempt we start by
+			// sending the message to only `sqrt(authorities)` (if we're
+			// connected to at least `MIN_AUTHORITIES`).
+			if previous_attempts == 0 && authorities > MIN_AUTHORITIES {
+				let authorities = authorities as f64;
+				let p = (authorities.sqrt()).max(MIN_AUTHORITIES as f64) / authorities;
+				rand::thread_rng().gen_bool(p)
+			} else {
+				// otherwise we already went through the step above, so
+				// we won't filter the message and send it to all
+				// authorities for whom it is polite to do so
+				true
+			}
+		} else {
+			// the node is not an authority so we apply stricter filters
+			if previous_attempts >= 3 {
+				// if we previously tried to send this message 3 (or more)
+				// times, then it is allowed to be sent to all peers.
+				true
+			} else if previous_attempts == 2 {
+				// otherwise we only send it to `sqrt(non-authorities)`.
+				let non_authorities = self.peers.non_authorities() as f64;
+				let p = non_authorities.sqrt() / non_authorities;
+				rand::thread_rng().gen_bool(p)
+			} else {
+				false
+			}
+		}
+	}
+
+	/// The initial logic for filtering global messages follows the given state
+	/// transitions:
+	///
+	/// - State 0: send to `sqrt(authorities)` ++ `sqrt(non-authorities)`.
+	/// - State 1: send to all authorities
+	/// - State 2: send to all non-authorities
+	///
+	/// We are more lenient with global messages since there should be a lot
+	/// less global messages than round messages (just commits), and we want
+	/// these to propagate to non-authorities fast enough so that they can
+	/// observe finality.
+	///
+	/// Transitions will be triggered on repropagation attempts by the
+	/// underlying gossip layer, which should happen every 30 seconds.
+	fn global_message_allowed<N>(&self, peer: &PeerInfo<N>, previous_attempts: usize) -> bool {
+		const MIN_PEERS: usize = 5;
+
+		if peer.roles.is_authority() {
+			let authorities = self.peers.authorities();
+
+			// the target node is an authority, on the first attempt we start by
+			// sending the message to only `sqrt(authorities)` (if we're
+			// connected to at least `MIN_PEERS`).
+			if previous_attempts == 0 && authorities > MIN_PEERS {
+				let authorities = authorities as f64;
+				let p = (authorities.sqrt()).max(MIN_PEERS as f64) / authorities;
+				rand::thread_rng().gen_bool(p)
+			} else {
+				// otherwise we already went through the step above, so
+				// we won't filter the message and send it to all
+				// authorities for whom it is polite to do so
+				true
+			}
+		} else {
+			let non_authorities = self.peers.non_authorities();
+
+			// the target node is not an authority, on the first and second
+			// attempt we start by sending the message to only
+			// `sqrt(non_authorities)` (if we're connected to at least
+			// `MIN_PEERS`).
+			if previous_attempts <= 1 && non_authorities > MIN_PEERS {
+				let non_authorities = non_authorities as f64;
+				let p = (non_authorities.sqrt()).max(MIN_PEERS as f64) / non_authorities ;
+				rand::thread_rng().gen_bool(p)
+			} else {
+				// otherwise we already went through the step above, so
+				// we won't filter the message and send it to all
+				// non-authorities for whom it is polite to do so
+				true
+			}
+		}
+	}
 }
 
 /// A validator for GRANDPA gossip messages.
@@ -934,11 +1121,10 @@ impl<Block: BlockT> GossipValidator<Block> {
 	pub(super) fn new(
 		config: crate::Config,
 		set_state: environment::SharedVoterSetState<Block>,
-		catch_up_enabled: bool,
 	) -> (GossipValidator<Block>, ReportStream)	{
 		let (tx, rx) = mpsc::unbounded();
 		let val = GossipValidator {
-			inner: parking_lot::RwLock::new(Inner::new(config, catch_up_enabled)),
+			inner: parking_lot::RwLock::new(Inner::new(config)),
 			set_state,
 			report_sender: tx,
 		};
@@ -994,7 +1180,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 
 		let action = {
 			match GossipMessage::<Block>::decode(&mut data) {
-				Ok(GossipMessage::VoteOrPrecommit(ref message))
+				Ok(GossipMessage::Vote(ref message))
 					=> self.inner.write().validate_round_message(who, message),
 				Ok(GossipMessage::Commit(ref message)) => self.inner.write().validate_commit_message(who, message),
 				Ok(GossipMessage::Neighbor(update)) => {
@@ -1129,6 +1315,20 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 				Some(x) => x,
 			};
 
+			if let MessageIntent::Broadcast { previous_attempts } = intent {
+				if maybe_round.is_some() {
+					if !inner.round_message_allowed(peer, previous_attempts) {
+						// early return if the vote message isn't allowed at this stage.
+						return false;
+					}
+				} else {
+					if !inner.global_message_allowed(peer, previous_attempts) {
+						// early return if the global message isn't allowed at this stage.
+						return false;
+					}
+				}
+			}
+
 			// if the topic is not something the peer accepts, discard.
 			if let Some(round) = maybe_round {
 				return peer.view.consider_vote(round, set_id) == Consider::Accept
@@ -1148,13 +1348,13 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 				Ok(GossipMessage::Commit(full)) => {
 					// we only broadcast our best commit and only if it's
 					// better than last received by peer.
-					Some(full.message.target_number) == our_best_commit
-					&& Some(full.message.target_number) > peer_best_commit
+					Some(full.message.target_number) == our_best_commit &&
+						Some(full.message.target_number) > peer_best_commit
 				}
 				Ok(GossipMessage::Neighbor(_)) => false,
 				Ok(GossipMessage::CatchUpRequest(_)) => false,
 				Ok(GossipMessage::CatchUp(_)) => false,
-				Ok(GossipMessage::VoteOrPrecommit(_)) => false, // should not be the case.
+				Ok(GossipMessage::Vote(_)) => false, // should not be the case.
 			}
 		})
 	}
@@ -1250,7 +1450,7 @@ mod tests {
 	use super::environment::SharedVoterSetState;
 	use network_gossip::Validator as GossipValidatorT;
 	use network::test::Block;
-	use primitives::crypto::Public;
+	use primitives::{crypto::Public, H256};
 
 	// some random config (not really needed)
 	fn config() -> crate::Config {
@@ -1259,6 +1459,8 @@ mod tests {
 			justification_period: 256,
 			keystore: None,
 			name: None,
+			is_authority: true,
+			observer_enabled: true,
 		}
 	}
 
@@ -1266,7 +1468,6 @@ mod tests {
 	fn voter_set_state() -> SharedVoterSetState<Block> {
 		use crate::authorities::AuthoritySet;
 		use crate::environment::VoterSetState;
-		use primitives::H256;
 
 		let base = (H256::zero(), 0);
 		let voters = AuthoritySet::genesis(Vec::new());
@@ -1423,7 +1624,6 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(
 			config(),
 			voter_set_state(),
-			true,
 		);
 
 		let set_id = 1;
@@ -1459,18 +1659,17 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(
 			config(),
 			voter_set_state(),
-			true,
 		);
 		let set_id = 1;
 		let auth = AuthorityId::from_slice(&[1u8; 32]);
 		let peer = PeerId::random();
 
 		val.note_set(SetId(set_id), vec![auth.clone()], |_, _| {});
-		val.note_round(Round(0), |_, _| {});
+		val.note_round(Round(1), |_, _| {});
 
 		let inner = val.inner.read();
-		let unknown_voter = inner.validate_round_message(&peer, &VoteOrPrecommitMessage {
-			round: Round(0),
+		let unknown_voter = inner.validate_round_message(&peer, &VoteMessage {
+			round: Round(1),
 			set_id: SetId(set_id),
 			message: SignedMessage::<Block> {
 				message: grandpa::Message::Prevote(grandpa::Prevote {
@@ -1482,8 +1681,8 @@ mod tests {
 			}
 		});
 
-		let bad_sig = inner.validate_round_message(&peer, &VoteOrPrecommitMessage {
-			round: Round(0),
+		let bad_sig = inner.validate_round_message(&peer, &VoteMessage {
+			round: Round(1),
 			set_id: SetId(set_id),
 			message: SignedMessage::<Block> {
 				message: grandpa::Message::Prevote(grandpa::Prevote {
@@ -1504,7 +1703,6 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(
 			config(),
 			voter_set_state(),
-			true,
 		);
 
 		let set_id = 1;
@@ -1512,7 +1710,7 @@ mod tests {
 		let peer = PeerId::random();
 
 		val.note_set(SetId(set_id), vec![auth.clone()], |_, _| {});
-		val.note_round(Round(0), |_, _| {});
+		val.note_round(Round(1), |_, _| {});
 
 		let validate_catch_up = || {
 			let mut inner = val.inner.write();
@@ -1548,19 +1746,19 @@ mod tests {
 
 	#[test]
 	fn unanswerable_catch_up_requests_discarded() {
-		// create voter set state with round 1 completed
+		// create voter set state with round 2 completed
 		let set_state: SharedVoterSetState<Block> = {
 			let mut completed_rounds = voter_set_state().read().completed_rounds();
 
 			completed_rounds.push(environment::CompletedRound {
-				number: 1,
+				number: 2,
 				state: grandpa::round::State::genesis(Default::default()),
 				base: Default::default(),
 				votes: Default::default(),
 			});
 
 			let mut current_rounds = environment::CurrentRounds::new();
-			current_rounds.insert(2, environment::HasVoted::No);
+			current_rounds.insert(3, environment::HasVoted::No);
 
 			let set_state = environment::VoterSetState::<Block>::Live {
 				completed_rounds,
@@ -1573,7 +1771,6 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(
 			config(),
 			set_state.clone(),
-			true,
 		);
 
 		let set_id = 1;
@@ -1581,7 +1778,7 @@ mod tests {
 		let peer = PeerId::random();
 
 		val.note_set(SetId(set_id), vec![auth.clone()], |_, _| {});
-		val.note_round(Round(2), |_, _| {});
+		val.note_round(Round(3), |_, _| {});
 
 		// add the peer making the request to the validator,
 		// otherwise it is discarded
@@ -1597,7 +1794,7 @@ mod tests {
 			&set_state,
 		);
 
-		// we're at round 2, a catch up request for round 10 is out of scope
+		// we're at round 3, a catch up request for round 10 is out of scope
 		assert!(res.0.is_none());
 		assert_eq!(res.1, Action::Discard(cost::OUT_OF_SCOPE_MESSAGE));
 
@@ -1605,16 +1802,16 @@ mod tests {
 			&peer,
 			CatchUpRequestMessage {
 				set_id: SetId(set_id),
-				round: Round(1),
+				round: Round(2),
 			},
 			&set_state,
 		);
 
-		// a catch up request for round 1 should be answered successfully
+		// a catch up request for round 2 should be answered successfully
 		match res.0.unwrap() {
 			GossipMessage::CatchUp(catch_up) => {
 				assert_eq!(catch_up.set_id, SetId(set_id));
-				assert_eq!(catch_up.message.round_number, 1);
+				assert_eq!(catch_up.message.round_number, 2);
 
 				assert_eq!(res.1, Action::Discard(cost::CATCH_UP_REPLY));
 			},
@@ -1628,7 +1825,6 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(
 			config(),
 			set_state.clone(),
-			true,
 		);
 
 		// the validator starts at set id 2
@@ -1708,7 +1904,6 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(
 			config(),
 			voter_set_state(),
-			true,
 		);
 
 		// the validator starts at set id 1.
@@ -1768,10 +1963,20 @@ mod tests {
 	#[test]
 	fn doesnt_send_catch_up_requests_when_disabled() {
 		// we create a gossip validator with catch up requests disabled.
+		let config = {
+			let mut c = config();
+
+			// if the observer protocol is enabled and we are not an authority,
+			// then we don't issue any catch-up requests.
+			c.is_authority = false;
+			c.observer_enabled = true;
+
+			c
+		};
+
 		let (val, _) = GossipValidator::<Block>::new(
-			config(),
+			config,
 			voter_set_state(),
-			false,
 		);
 
 		// the validator starts at set id 1.
@@ -1801,11 +2006,10 @@ mod tests {
 	}
 
 	#[test]
-	fn doesnt_send_catch_up_requests_to_non_authorities() {
+	fn doesnt_send_catch_up_requests_to_non_authorities_when_observer_enabled() {
 		let (val, _) = GossipValidator::<Block>::new(
 			config(),
 			voter_set_state(),
-			true,
 		);
 
 		// the validator starts at set id 1.
@@ -1847,6 +2051,240 @@ mod tests {
 				assert_eq!(request.round, Round(41));
 			},
 			_ => panic!("expected catch up message"),
+		}
+	}
+
+	#[test]
+	fn sends_catch_up_requests_to_non_authorities_when_observer_disabled() {
+		let config = {
+			let mut c = config();
+
+			// if the observer protocol is disable any full-node should be able
+			// to answer catch-up requests.
+			c.observer_enabled = false;
+
+			c
+		};
+
+		let (val, _) = GossipValidator::<Block>::new(
+			config,
+			voter_set_state(),
+		);
+
+		// the validator starts at set id 1.
+		val.note_set(SetId(1), Vec::new(), |_, _| {});
+
+		// add the peer making the requests to the validator, otherwise it is
+		// discarded.
+		let peer_full = PeerId::random();
+		val.inner.write().peers.new_peer(peer_full.clone(), Roles::FULL);
+
+		let (_, _, catch_up_request, _) = val.inner.write().import_neighbor_message(
+			&peer_full,
+			NeighborPacket {
+				round: Round(42),
+				set_id: SetId(1),
+				commit_finalized_height: 50,
+			},
+		);
+
+		// importing a neighbor message from a peer in the same set in a later
+		// round should lead to a catch up request, the node is not an
+		// authority, but since the observer protocol is disabled we should
+		// issue a catch-up request to it anyway.
+		match catch_up_request {
+			Some(GossipMessage::CatchUpRequest(request)) => {
+				assert_eq!(request.set_id, SetId(1));
+				assert_eq!(request.round, Round(41));
+			},
+			_ => panic!("expected catch up message"),
+		}
+	}
+
+	#[test]
+	fn doesnt_expire_next_round_messages() {
+		// NOTE: this is a regression test
+		let (val, _) = GossipValidator::<Block>::new(
+			config(),
+			voter_set_state(),
+		);
+
+		// the validator starts at set id 1.
+		val.note_set(SetId(1), Vec::new(), |_, _| {});
+
+		// we are at round 10
+		val.note_round(Round(9), |_, _| {});
+		val.note_round(Round(10), |_, _| {});
+
+		let mut is_expired = val.message_expired();
+
+		// we accept messages from rounds 9, 10 and 11
+		// therefore neither of those should be considered expired
+		for round in &[9, 10, 11] {
+			assert!(
+				!is_expired(
+					crate::communication::round_topic::<Block>(*round, 1),
+					&[],
+				)
+			)
+		}
+	}
+
+	#[test]
+	fn progressively_gossips_to_more_peers() {
+		let (val, _) = GossipValidator::<Block>::new(
+			config(),
+			voter_set_state(),
+		);
+
+		// the validator start at set id 0
+		val.note_set(SetId(0), Vec::new(), |_, _| {});
+
+		// add 60 peers, 30 authorities and 30 full nodes
+		let mut authorities = Vec::new();
+		authorities.resize_with(30, || PeerId::random());
+
+		let mut full_nodes = Vec::new();
+		full_nodes.resize_with(30, || PeerId::random());
+
+		for i in 0..30 {
+			val.inner.write().peers.new_peer(authorities[i].clone(), Roles::AUTHORITY);
+			val.inner.write().peers.new_peer(full_nodes[i].clone(), Roles::FULL);
+		}
+
+		let test = |previous_attempts, peers| {
+			let mut message_allowed = val.message_allowed();
+
+			move || {
+				let mut allowed = 0;
+				for peer in peers {
+					if message_allowed(
+						peer,
+						MessageIntent::Broadcast { previous_attempts },
+						&crate::communication::round_topic::<Block>(1, 0),
+						&[],
+					) {
+						allowed += 1;
+					}
+				}
+				allowed
+			}
+		};
+
+		fn trial<F: FnMut() -> usize>(mut test: F) -> usize {
+			let mut results = Vec::new();
+			let n = 1000;
+
+			for _ in 0..n {
+				results.push(test());
+			}
+
+			let n = results.len();
+			let sum: usize = results.iter().sum();
+
+			sum / n
+		}
+
+		// on the first attempt we will only gossip to `sqrt(authorities)`,
+		// which should average out to 5 peers after a couple of trials
+		assert_eq!(trial(test(0, &authorities)), 5);
+
+		// on the second (and subsequent attempts) we should gossip to all
+		// authorities we're connected to.
+		assert_eq!(trial(test(1, &authorities)), 30);
+		assert_eq!(trial(test(2, &authorities)), 30);
+
+		// we should only gossip to non-authorities after the third attempt
+		assert_eq!(trial(test(0, &full_nodes)), 0);
+		assert_eq!(trial(test(1, &full_nodes)), 0);
+
+		// and only to `sqrt(non-authorities)`
+		assert_eq!(trial(test(2, &full_nodes)), 5);
+
+		// only on the fourth attempt should we gossip to all non-authorities
+		assert_eq!(trial(test(3, &full_nodes)), 30);
+	}
+
+	#[test]
+	fn only_restricts_gossip_to_authorities_after_a_minimum_threshold() {
+		let (val, _) = GossipValidator::<Block>::new(
+			config(),
+			voter_set_state(),
+		);
+
+		// the validator start at set id 0
+		val.note_set(SetId(0), Vec::new(), |_, _| {});
+
+		let mut authorities = Vec::new();
+		for _ in 0..5 {
+			let peer_id = PeerId::random();
+			val.inner.write().peers.new_peer(peer_id.clone(), Roles::AUTHORITY);
+			authorities.push(peer_id);
+		}
+
+		let mut message_allowed = val.message_allowed();
+
+		// since we're only connected to 5 authorities, we should never restrict
+		// sending of gossip messages, and instead just allow them to all
+		// non-authorities on the first attempt.
+		for authority in &authorities {
+			assert!(
+				message_allowed(
+					authority,
+					MessageIntent::Broadcast { previous_attempts: 0 },
+					&crate::communication::round_topic::<Block>(1, 0),
+					&[],
+				)
+			);
+		}
+	}
+
+	#[test]
+	fn non_authorities_never_gossip_messages_on_first_attempt() {
+		let mut config = config();
+		config.is_authority = false;
+
+		let (val, _) = GossipValidator::<Block>::new(
+			config,
+			voter_set_state(),
+		);
+
+		// the validator start at set id 0
+		val.note_set(SetId(0), Vec::new(), |_, _| {});
+
+		let mut authorities = Vec::new();
+		for _ in 0..100 {
+			let peer_id = PeerId::random();
+			val.inner.write().peers.new_peer(peer_id.clone(), Roles::AUTHORITY);
+			authorities.push(peer_id);
+		}
+
+		let mut message_allowed = val.message_allowed();
+
+		// since our node is not an authority we should **never** gossip any
+		// messages on the first attempt.
+		for authority in &authorities {
+			assert!(
+				!message_allowed(
+					authority,
+					MessageIntent::Broadcast { previous_attempts: 0 },
+					&crate::communication::round_topic::<Block>(1, 0),
+					&[],
+				)
+			);
+		}
+
+		// on the third attempt we should allow messages to authorities
+		// (on the second attempt we would do `sqrt(authorities)`)
+		for authority in &authorities {
+			assert!(
+				message_allowed(
+					authority,
+					MessageIntent::Broadcast { previous_attempts: 2 },
+					&crate::communication::round_topic::<Block>(1, 0),
+					&[],
+				)
+			);
 		}
 	}
 }

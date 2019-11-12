@@ -18,17 +18,17 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use client::decl_runtime_apis;
 use rstd::vec::Vec;
+use sr_primitives::RuntimeDebug;
 
-#[derive(codec::Encode, codec::Decode, Eq, PartialEq, Clone)]
-#[cfg_attr(feature = "std", derive(Debug, Hash))]
+#[derive(codec::Encode, codec::Decode, Eq, PartialEq, Clone, RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Hash))]
 pub struct Signature(pub Vec<u8>);
-#[derive(codec::Encode, codec::Decode, Eq, PartialEq, Clone)]
-#[cfg_attr(feature = "std", derive(Debug, Hash))]
+#[derive(codec::Encode, codec::Decode, Eq, PartialEq, Clone, RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Hash))]
 pub struct AuthorityId(pub Vec<u8>);
 
-decl_runtime_apis! {
+sr_api::decl_runtime_apis! {
 	/// The authority discovery api.
 	///
 	/// This api is used by the `core/authority-discovery` module to retrieve our

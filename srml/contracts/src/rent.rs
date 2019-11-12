@@ -17,7 +17,7 @@
 use crate::{BalanceOf, ContractInfo, ContractInfoOf, TombstoneContractInfo, Trait, AliveContractInfo};
 use sr_primitives::traits::{Bounded, CheckedDiv, CheckedMul, Saturating, Zero,
 	SaturatedConversion};
-use support::traits::{Currency, ExistenceRequirement, Get, WithdrawReason};
+use support::traits::{Currency, ExistenceRequirement, Get, WithdrawReason, OnUnbalanced};
 use support::StorageMap;
 
 #[derive(PartialEq, Eq, Copy, Clone)]
@@ -99,7 +99,7 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 	if balance < subsistence_threshold {
 		// The contract cannot afford to leave a tombstone, so remove the contract info altogether.
 		<ContractInfoOf<T>>::remove(account);
-		runtime_io::kill_child_storage(&contract.trie_id);
+		runtime_io::storage::child_storage_kill(&contract.trie_id);
 		return (RentOutcome::Evicted, None);
 	}
 
@@ -119,17 +119,17 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 	let can_withdraw_rent = T::Currency::ensure_can_withdraw(
 		account,
 		dues_limited,
-		WithdrawReason::Fee,
+		WithdrawReason::Fee.into(),
 		balance.saturating_sub(dues_limited),
 	)
 	.is_ok();
 
 	if can_withdraw_rent && (insufficient_rent || pay_rent) {
 		// Collect dues.
-		let _ = T::Currency::withdraw(
+		let imbalance = T::Currency::withdraw(
 			account,
 			dues_limited,
-			WithdrawReason::Fee,
+			WithdrawReason::Fee.into(),
 			ExistenceRequirement::KeepAlive,
 		)
 		.expect(
@@ -137,6 +137,8 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 			dues_limited < rent_budget < balance - subsistence < balance - existential_deposit;
 			qed",
 		);
+
+		T::RentPayment::on_unbalanced(imbalance);
 	}
 
 	if insufficient_rent || !can_withdraw_rent {
@@ -144,7 +146,7 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 		// threshold, so it leaves a tombstone.
 
 		// Note: this operation is heavy.
-		let child_storage_root = runtime_io::child_storage_root(&contract.trie_id);
+		let child_storage_root = runtime_io::storage::child_root(&contract.trie_id);
 
 		let tombstone = <TombstoneContractInfo<T>>::new(
 			&child_storage_root[..],
@@ -153,7 +155,7 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 		let tombstone_info = ContractInfo::Tombstone(tombstone);
 		<ContractInfoOf<T>>::insert(account, &tombstone_info);
 
-		runtime_io::kill_child_storage(&contract.trie_id);
+		runtime_io::storage::child_storage_kill(&contract.trie_id);
 
 		return (RentOutcome::Evicted, Some(tombstone_info));
 	}

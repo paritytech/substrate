@@ -21,6 +21,8 @@ substrate-telemetry = { path = "../../telemetry" }
 keystore = { package = "substrate-keystore", path = "../../keystore" }
 srml-babe = { path = "../../../srml/babe" }
 client = { package = "substrate-client", path = "../../client" }
+sr-api = { path = "../../sr-api" }
+block-builder-api = { package = "substrate-block-builder-runtime-api", path = "../../block-builder/runtime-api" }
 header-metadata = { package = "substrate-header-metadata", path = "../../client/header-metadata" }
 consensus-common = { package = "substrate-consensus-common", path = "../common" }
 uncles = { package = "substrate-consensus-uncles", path = "../uncles" }
@@ -36,6 +38,7 @@ schnorrkel = { version = "0.8.5", features = ["preaudit_deprecated"] }
 rand = "0.7.2"
 merlin = "1.2.1"
 pdqselect = "0.1.0"
+derive_more = "0.15.0"
 
 [dev-dependencies]
 keyring = { package = "substrate-keyring", path = "../../keyring" }
@@ -43,8 +46,9 @@ substrate-executor = { path = "../../executor" }
 network = { package = "substrate-network", path = "../../network", features = ["test-helpers"]}
 service = { package = "substrate-service", path = "../../service" }
 test-client = { package = "substrate-test-runtime-client", path = "../../test-runtime/client" }
+block-builder = { package = "substrate-block-builder", path = "../../block-builder" }
 tokio = "0.1.22"
-env_logger = "0.6.2"
+env_logger = "0.7.0"
 tempfile = "3.1.0"
 
 [features]

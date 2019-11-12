@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{process::{Command, Stdio}, fs};
+use std::fs;
 
 use tempfile::tempdir;
 
@@ -23,25 +23,15 @@ use tempfile::tempdir;
 /// # Returns
 /// Returns `None` if everything was found and `Some(ERR_MSG)` if something could not be found.
 pub fn check() -> Option<&'static str> {
-	if !check_nightly_installed() {
+	if !check_nightly_installed(){
 		return Some("Rust nightly not installed, please install it!")
-	}
-
-	if Command::new("wasm-gc")
-		.stdout(Stdio::null())
-		.stderr(Stdio::null())
-		.status()
-		.map(|s| !s.success()).unwrap_or(true)
-	{
-		return Some("`wasm-gc` not installed, please install it!")
 	}
 
 	check_wasm_toolchain_installed()
 }
 
 fn check_nightly_installed() -> bool {
-	let command = crate::get_nightly_cargo();
-	command.is_nightly()
+	crate::get_nightly_cargo().is_nightly()
 }
 
 fn check_wasm_toolchain_installed() -> Option<&'static str> {

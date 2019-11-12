@@ -17,7 +17,7 @@
 pub use srml_metadata::{
 	DecodeDifferent, FnEncode, RuntimeMetadata, ModuleMetadata, RuntimeMetadataLastVersion,
 	DefaultByteGetter, RuntimeMetadataPrefixed, StorageEntryMetadata, StorageMetadata,
-	StorageEntryType, StorageEntryModifier, DefaultByte, StorageHasher
+	StorageEntryType, StorageEntryModifier, DefaultByte, StorageHasher, ModuleErrorMetadata
 };
 
 /// Implements the metadata support for the given runtime and all its modules.
@@ -95,6 +95,11 @@ macro_rules! __runtime_modules_to_metadata {
 				constants: $crate::metadata::DecodeDifferent::Encode(
 					$crate::metadata::FnEncode(
 						$mod::$module::<$runtime $(, $mod::$instance )?>::module_constants_metadata
+					)
+				),
+				errors: $crate::metadata::DecodeDifferent::Encode(
+					$crate::metadata::FnEncode(
+						<$mod::$module::<$runtime $(, $mod::$instance )?> as $crate::metadata::ModuleErrorMetadata>::metadata
 					)
 				)
 			};
@@ -227,6 +232,7 @@ mod tests {
 	use srml_metadata::{
 		EventMetadata, StorageEntryModifier, StorageEntryType, FunctionMetadata, StorageEntryMetadata,
 		ModuleMetadata, RuntimeMetadataPrefixed, DefaultByte, ModuleConstantMetadata, DefaultByteGetter,
+		ErrorMetadata,
 	};
 	use codec::{Encode, Decode};
 	use crate::traits::Get;
@@ -278,7 +284,7 @@ mod tests {
 	}
 
 	mod event_module {
-		use crate::dispatch::Result;
+		use crate::dispatch::DispatchResult;
 
 		pub trait Trait {
 			type Origin;
@@ -296,7 +302,19 @@ mod tests {
 
 		decl_module! {
 			pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-				fn aux_0(_origin) -> Result { unreachable!() }
+				type Error = Error;
+
+				fn aux_0(_origin) -> DispatchResult<Error> { unreachable!() }
+			}
+		}
+
+		crate::decl_error! {
+			pub enum Error {
+				/// Some user input error
+				UserInputError,
+				/// Something bad happened
+				/// this could be due to many reasons
+				BadThingHappened,
 			}
 		}
 	}
@@ -447,6 +465,7 @@ mod tests {
 						}
 					])
 				),
+				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
 			},
 			ModuleMetadata {
 				name: DecodeDifferent::Encode("Module"),
@@ -469,6 +488,19 @@ mod tests {
 					])
 				)),
 				constants: DecodeDifferent::Encode(FnEncode(|| &[])),
+				errors: DecodeDifferent::Encode(FnEncode(|| &[
+					ErrorMetadata {
+						name: DecodeDifferent::Encode("UserInputError"),
+						documentation: DecodeDifferent::Encode(&[" Some user input error"]),
+					},
+					ErrorMetadata {
+						name: DecodeDifferent::Encode("BadThingHappened"),
+						documentation: DecodeDifferent::Encode(&[
+							" Something bad happened",
+							" this could be due to many reasons",
+						]),
+					},
+				])),
 			},
 			ModuleMetadata {
 				name: DecodeDifferent::Encode("Module2"),
@@ -505,6 +537,7 @@ mod tests {
 					])
 				)),
 				constants: DecodeDifferent::Encode(FnEncode(|| &[])),
+				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
 			},
 		])
 	};

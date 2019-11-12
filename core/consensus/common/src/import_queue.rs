@@ -63,6 +63,8 @@ pub struct IncomingBlock<B: BlockT> {
 	pub justification: Option<Justification>,
 	/// The peer, we received this from
 	pub origin: Option<Origin>,
+	/// Allow importing the block skipping state verification if parent state is missing.
+	pub allow_missing_state: bool,
 }
 
 /// Type of keys in the blockchain cache that consensus module could use for its needs.
@@ -161,6 +163,8 @@ pub enum BlockImportError {
 	VerificationFailed(Option<Origin>, String),
 	/// Block is known to be Bad
 	BadBlock(Option<Origin>),
+	/// Parent state is missing.
+	MissingState,
 	/// Block has an unknown parent
 	UnknownParent,
 	/// Block import has been cancelled. This can happen if the parent block fails to be imported.
@@ -203,6 +207,10 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>>(
 				Ok(BlockImportResult::ImportedKnown(number))
 			},
 			Ok(ImportResult::Imported(aux)) => Ok(BlockImportResult::ImportedUnknown(number, aux, peer.clone())),
+			Ok(ImportResult::MissingState) => {
+				debug!(target: "sync", "Parent state is missing for {}: {:?}, parent: {:?}", number, hash, parent_hash);
+				Err(BlockImportError::MissingState)
+			},
 			Ok(ImportResult::UnknownParent) => {
 				debug!(target: "sync", "Block with unknown parent {}: {:?}, parent: {:?}", number, hash, parent_hash);
 				Err(BlockImportError::UnknownParent)
@@ -217,12 +225,17 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>>(
 			}
 		}
 	};
-	match import_error(import_handle.check_block(BlockCheckParams { hash, number, parent_hash }))? {
+	match import_error(import_handle.check_block(BlockCheckParams {
+		hash,
+		number,
+		parent_hash,
+		allow_missing_state: block.allow_missing_state,
+	}))? {
 		BlockImportResult::ImportedUnknown { .. } => (),
 		r => return Ok(r), // Any other successful result means that the block is already imported.
 	}
 
-	let (import_block, maybe_keys) = verifier.verify(block_origin, header, justification, block.body)
+	let (mut import_block, maybe_keys) = verifier.verify(block_origin, header, justification, block.body)
 		.map_err(|msg| {
 			if let Some(ref peer) = peer {
 				trace!(target: "sync", "Verifying {}({}) from {} failed: {}", number, hash, peer, msg);
@@ -236,6 +249,7 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>>(
 	if let Some(keys) = maybe_keys {
 		cache.extend(keys.into_iter());
 	}
+	import_block.allow_missing_state = block.allow_missing_state;
 
 	import_error(import_handle.import_block(import_block, cache))
 }

@@ -34,17 +34,18 @@ use consensus_common::{
 };
 use network::config::{BoxFinalityProofRequestBuilder, FinalityProofRequestBuilder};
 use sr_primitives::Justification;
-use sr_primitives::traits::{
-	NumberFor, Block as BlockT, Header as HeaderT, ProvideRuntimeApi, DigestFor,
-};
-use fg_primitives::{self, GrandpaApi, AuthorityId};
+use sr_primitives::traits::{NumberFor, Block as BlockT, Header as HeaderT, DigestFor};
+use fg_primitives::{self, AuthorityList};
 use sr_primitives::generic::BlockId;
 use primitives::{H256, Blake2Hasher};
 
+use crate::GenesisAuthoritySetProvider;
 use crate::aux_schema::load_decode;
 use crate::consensus_changes::ConsensusChanges;
 use crate::environment::canonical_at_height;
-use crate::finality_proof::{AuthoritySetForFinalityChecker, ProvableJustification, make_finality_proof_request};
+use crate::finality_proof::{
+	AuthoritySetForFinalityChecker, ProvableJustification, make_finality_proof_request,
+};
 use crate::justification::GrandpaJustification;
 
 /// LightAuthoritySet is saved under this key in aux storage.
@@ -53,21 +54,23 @@ const LIGHT_AUTHORITY_SET_KEY: &[u8] = b"grandpa_voters";
 const LIGHT_CONSENSUS_CHANGES_KEY: &[u8] = b"grandpa_consensus_changes";
 
 /// Create light block importer.
-pub fn light_block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
+pub fn light_block_import<B, E, Block: BlockT<Hash=H256>, RA>(
 	client: Arc<Client<B, E, Block, RA>>,
 	backend: Arc<B>,
+	genesis_authorities_provider: &dyn GenesisAuthoritySetProvider<Block>,
 	authority_set_provider: Arc<dyn AuthoritySetForFinalityChecker<Block>>,
-	api: Arc<PRA>,
 ) -> Result<GrandpaLightBlockImport<B, E, Block, RA>, ClientError>
 	where
 		B: Backend<Block, Blake2Hasher> + 'static,
 		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 		RA: Send + Sync,
-		PRA: ProvideRuntimeApi,
-		PRA::Api: GrandpaApi<Block>,
 {
 	let info = client.info();
-	let import_data = load_aux_import_data(info.chain.finalized_hash, &*client, api)?;
+	let import_data = load_aux_import_data(
+		info.chain.finalized_hash,
+		&*client,
+		genesis_authorities_provider,
+	)?;
 	Ok(GrandpaLightBlockImport {
 		client,
 		backend,
@@ -110,7 +113,7 @@ struct LightImportData<Block: BlockT<Hash=H256>> {
 #[derive(Debug, Encode, Decode)]
 struct LightAuthoritySet {
 	set_id: u64,
-	authorities: Vec<(AuthorityId, u64)>,
+	authorities: AuthorityList,
 }
 
 impl<B, E, Block: BlockT<Hash=H256>, RA> GrandpaLightBlockImport<B, E, Block, RA> {
@@ -194,7 +197,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> FinalityProofImport<Block>
 
 impl LightAuthoritySet {
 	/// Get a genesis set with given authorities.
-	pub fn genesis(initial: Vec<(AuthorityId, u64)>) -> Self {
+	pub fn genesis(initial: AuthorityList) -> Self {
 		LightAuthoritySet {
 			set_id: fg_primitives::SetId::default(),
 			authorities: initial,
@@ -207,12 +210,12 @@ impl LightAuthoritySet {
 	}
 
 	/// Get latest authorities set.
-	pub fn authorities(&self) -> Vec<(AuthorityId, u64)> {
+	pub fn authorities(&self) -> AuthorityList {
 		self.authorities.clone()
 	}
 
 	/// Set new authorities set.
-	pub fn update(&mut self, set_id: u64, authorities: Vec<(AuthorityId, u64)>) {
+	pub fn update(&mut self, set_id: u64, authorities: AuthorityList) {
 		self.set_id = set_id;
 		std::mem::replace(&mut self.authorities, authorities);
 	}
@@ -472,17 +475,14 @@ fn do_finalize_block<B, C, Block: BlockT<Hash=H256>>(
 }
 
 /// Load light import aux data from the store.
-fn load_aux_import_data<B, Block: BlockT<Hash=H256>, PRA>(
+fn load_aux_import_data<B, Block: BlockT<Hash=H256>>(
 	last_finalized: Block::Hash,
 	aux_store: &B,
-	api: Arc<PRA>,
+	genesis_authorities_provider: &dyn GenesisAuthoritySetProvider<Block>,
 ) -> Result<LightImportData<Block>, ClientError>
 	where
 		B: AuxStore,
-		PRA: ProvideRuntimeApi,
-		PRA::Api: GrandpaApi<Block>,
 {
-	use sr_primitives::traits::Zero;
 	let authority_set = match load_decode(aux_store, LIGHT_AUTHORITY_SET_KEY)? {
 		Some(authority_set) => authority_set,
 		None => {
@@ -490,7 +490,7 @@ fn load_aux_import_data<B, Block: BlockT<Hash=H256>, PRA>(
 				from genesis on what appears to be first startup.");
 
 			// no authority set on disk: fetch authorities from genesis state
-			let genesis_authorities = api.runtime_api().grandpa_authorities(&BlockId::number(Zero::zero()))?;
+			let genesis_authorities = genesis_authorities_provider.get()?;
 
 			let authority_set = LightAuthoritySet::genesis(genesis_authorities);
 			let encoded = authority_set.encode();
@@ -546,6 +546,7 @@ fn on_post_finalization_error(error: ClientError, value_type: &str) -> Consensus
 pub mod tests {
 	use super::*;
 	use consensus_common::ForkChoiceStrategy;
+	use fg_primitives::AuthorityId;
 	use primitives::{H256, crypto::Public};
 	use test_client::client::in_mem::Blockchain as InMemoryAuxStore;
 	use test_client::runtime::{Block, Header};
@@ -622,20 +623,19 @@ pub mod tests {
 	}
 
 	/// Creates light block import that ignores justifications that came outside of finality proofs.
-	pub fn light_block_import_without_justifications<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
+	pub fn light_block_import_without_justifications<B, E, Block: BlockT<Hash=H256>, RA>(
 		client: Arc<Client<B, E, Block, RA>>,
 		backend: Arc<B>,
+		genesis_authorities_provider: &dyn GenesisAuthoritySetProvider<Block>,
 		authority_set_provider: Arc<dyn AuthoritySetForFinalityChecker<Block>>,
-		api: Arc<PRA>,
 	) -> Result<NoJustificationsImport<B, E, Block, RA>, ClientError>
 		where
 			B: Backend<Block, Blake2Hasher> + 'static,
 			E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 			RA: Send + Sync,
-			PRA: ProvideRuntimeApi,
-			PRA::Api: GrandpaApi<Block>,
 	{
-		light_block_import(client, backend, authority_set_provider, api).map(NoJustificationsImport)
+		light_block_import(client, backend, genesis_authorities_provider, authority_set_provider)
+			.map(NoJustificationsImport)
 	}
 
 	fn import_block(
@@ -663,6 +663,7 @@ pub mod tests {
 			finalized: false,
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::LongestChain,
+			allow_missing_state: true,
 		};
 		do_import_block::<_, _, _, TestJustification>(
 			&client,
@@ -680,6 +681,7 @@ pub mod tests {
 			bad_justification: false,
 			needs_finality_proof: false,
 			is_new_best: true,
+			header_only: false,
 		}));
 	}
 
@@ -692,6 +694,7 @@ pub mod tests {
 			bad_justification: false,
 			needs_finality_proof: false,
 			is_new_best: true,
+			header_only: false,
 		}));
 	}
 
@@ -705,6 +708,7 @@ pub mod tests {
 			bad_justification: false,
 			needs_finality_proof: true,
 			is_new_best: true,
+			header_only: false,
 		}));
 	}
 
@@ -721,6 +725,7 @@ pub mod tests {
 				bad_justification: false,
 				needs_finality_proof: true,
 				is_new_best: false,
+				header_only: false,
 			},
 		));
 	}
@@ -729,14 +734,14 @@ pub mod tests {
 	#[test]
 	fn aux_data_updated_on_start() {
 		let aux_store = InMemoryAuxStore::<Block>::new();
-		let api = Arc::new(TestApi::new(vec![(AuthorityId::from_slice(&[1; 32]), 1)]));
+		let api = TestApi::new(vec![(AuthorityId::from_slice(&[1; 32]), 1)]);
 
 		// when aux store is empty initially
 		assert!(aux_store.get_aux(LIGHT_AUTHORITY_SET_KEY).unwrap().is_none());
 		assert!(aux_store.get_aux(LIGHT_CONSENSUS_CHANGES_KEY).unwrap().is_none());
 
 		// it is updated on importer start
-		load_aux_import_data(Default::default(), &aux_store, api).unwrap();
+		load_aux_import_data(Default::default(), &aux_store, &api).unwrap();
 		assert!(aux_store.get_aux(LIGHT_AUTHORITY_SET_KEY).unwrap().is_some());
 		assert!(aux_store.get_aux(LIGHT_CONSENSUS_CHANGES_KEY).unwrap().is_some());
 	}
@@ -744,7 +749,7 @@ pub mod tests {
 	#[test]
 	fn aux_data_loaded_on_restart() {
 		let aux_store = InMemoryAuxStore::<Block>::new();
-		let api = Arc::new(TestApi::new(vec![(AuthorityId::from_slice(&[1; 32]), 1)]));
+		let api = TestApi::new(vec![(AuthorityId::from_slice(&[1; 32]), 1)]);
 
 		// when aux store is non-empty initially
 		let mut consensus_changes = ConsensusChanges::<H256, u64>::empty();
@@ -766,7 +771,7 @@ pub mod tests {
 		).unwrap();
 
 		// importer uses it on start
-		let data = load_aux_import_data(Default::default(), &aux_store, api).unwrap();
+		let data = load_aux_import_data(Default::default(), &aux_store, &api).unwrap();
 		assert_eq!(data.authority_set.authorities(), vec![(AuthorityId::from_slice(&[42; 32]), 2)]);
 		assert_eq!(data.consensus_changes.pending_changes(), &[(42, Default::default())]);
 	}

@@ -14,12 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use rstd::prelude::*;
-use rstd::{slice, marker, mem, vec};
-use rstd::rc::Rc;
+use rstd::{prelude::*, slice, marker, mem, vec, rc::Rc};
 use codec::{Decode, Encode};
 use primitives::sandbox as sandbox_primitives;
 use super::{Error, TypedValue, ReturnValue, HostFuncType};
+use runtime_io::sandbox;
 
 mod ffi {
 	use rstd::mem;
@@ -43,51 +42,6 @@ mod ffi {
 		assert!(mem::size_of::<HostFuncIndex>() == mem::size_of::<HostFuncType<T>>());
 		mem::transmute::<HostFuncIndex, HostFuncType<T>>(idx)
 	}
-
-	extern "C" {
-		pub fn ext_sandbox_instantiate(
-			dispatch_thunk: extern "C" fn(
-				serialized_args_ptr: *const u8,
-				serialized_args_len: usize,
-				state: usize,
-				f: HostFuncIndex,
-			) -> u64,
-			wasm_ptr: *const u8,
-			wasm_len: usize,
-			imports_ptr: *const u8,
-			imports_len: usize,
-			state: usize,
-		) -> u32;
-		pub fn ext_sandbox_invoke(
-			instance_idx: u32,
-			export_ptr: *const u8,
-			export_len: usize,
-			args_ptr: *const u8,
-			args_len: usize,
-			return_val_ptr: *mut u8,
-			return_val_len: usize,
-			state: usize,
-		) -> u32;
-		pub fn ext_sandbox_memory_new(initial: u32, maximum: u32) -> u32;
-		pub fn ext_sandbox_memory_get(
-			memory_idx: u32,
-			offset: u32,
-			buf_ptr: *mut u8,
-			buf_len: usize,
-		) -> u32;
-		pub fn ext_sandbox_memory_set(
-			memory_idx: u32,
-			offset: u32,
-			val_ptr: *const u8,
-			val_len: usize,
-		) -> u32;
-		pub fn ext_sandbox_memory_teardown(
-			memory_idx: u32,
-		);
-		pub fn ext_sandbox_instance_teardown(
-			instance_idx: u32,
-		);
-	}
 }
 
 struct MemoryHandle {
@@ -96,9 +50,7 @@ struct MemoryHandle {
 
 impl Drop for MemoryHandle {
 	fn drop(&mut self) {
-		unsafe {
-			ffi::ext_sandbox_memory_teardown(self.memory_idx);
-		}
+		sandbox::memory_teardown(self.memory_idx);
 	}
 }
 
@@ -111,15 +63,13 @@ pub struct Memory {
 
 impl Memory {
 	pub fn new(initial: u32, maximum: Option<u32>) -> Result<Memory, Error> {
-		let result = unsafe {
-			let maximum = if let Some(maximum) = maximum {
-				maximum
-			} else {
-				sandbox_primitives::MEM_UNLIMITED
-			};
-			ffi::ext_sandbox_memory_new(initial, maximum)
+		let maximum = if let Some(maximum) = maximum {
+			maximum
+		} else {
+			sandbox_primitives::MEM_UNLIMITED
 		};
-		match result {
+
+		match sandbox::memory_new(initial, maximum) {
 			sandbox_primitives::ERR_MODULE => Err(Error::Module),
 			memory_idx => Ok(Memory {
 				handle: Rc::new(MemoryHandle { memory_idx, }),
@@ -128,7 +78,12 @@ impl Memory {
 	}
 
 	pub fn get(&self, offset: u32, buf: &mut [u8]) -> Result<(), Error> {
-		let result = unsafe { ffi::ext_sandbox_memory_get(self.handle.memory_idx, offset, buf.as_mut_ptr(), buf.len()) };
+		let result = sandbox::memory_get(
+			self.handle.memory_idx,
+			offset,
+			buf.as_mut_ptr(),
+			buf.len() as u32,
+		);
 		match result {
 			sandbox_primitives::ERR_OK => Ok(()),
 			sandbox_primitives::ERR_OUT_OF_BOUNDS => Err(Error::OutOfBounds),
@@ -137,7 +92,12 @@ impl Memory {
 	}
 
 	pub fn set(&self, offset: u32, val: &[u8]) -> Result<(), Error> {
-		let result = unsafe { ffi::ext_sandbox_memory_set(self.handle.memory_idx, offset, val.as_ptr(), val.len()) };
+		let result = sandbox::memory_set(
+			self.handle.memory_idx,
+			offset,
+			val.as_ptr() as _ ,
+			val.len() as u32,
+		);
 		match result {
 			sandbox_primitives::ERR_OK => Ok(()),
 			sandbox_primitives::ERR_OUT_OF_BOUNDS => Err(Error::OutOfBounds),
@@ -251,26 +211,27 @@ extern "C" fn dispatch_thunk<T>(
 }
 
 impl<T> Instance<T> {
-	pub fn new(code: &[u8], env_def_builder: &EnvironmentDefinitionBuilder<T>, state: &mut T) -> Result<Instance<T>, Error> {
+	pub fn new(
+		code: &[u8],
+		env_def_builder: &EnvironmentDefinitionBuilder<T>,
+		state: &mut T,
+	) -> Result<Instance<T>, Error> {
 		let serialized_env_def: Vec<u8> = env_def_builder.env_def.encode();
-		let result = unsafe {
-			// It's very important to instantiate thunk with the right type.
-			let dispatch_thunk = dispatch_thunk::<T>;
+		// It's very important to instantiate thunk with the right type.
+		let dispatch_thunk = dispatch_thunk::<T>;
+		let result = sandbox::instantiate(
+			dispatch_thunk as u32,
+			code,
+			&serialized_env_def,
+			state as *const T as _,
+		);
 
-			ffi::ext_sandbox_instantiate(
-				dispatch_thunk,
-				code.as_ptr(),
-				code.len(),
-				serialized_env_def.as_ptr(),
-				serialized_env_def.len(),
-				state as *const T as usize,
-			)
-		};
 		let instance_idx = match result {
 			sandbox_primitives::ERR_MODULE => return Err(Error::Module),
 			sandbox_primitives::ERR_EXECUTION => return Err(Error::Execution),
 			instance_idx => instance_idx,
 		};
+
 		// We need to retain memories to keep them alive while the Instance is alive.
 		let retained_memories = env_def_builder.retained_memories.clone();
 		Ok(Instance {
@@ -282,25 +243,22 @@ impl<T> Instance<T> {
 
 	pub fn invoke(
 		&mut self,
-		name: &[u8],
+		name: &str,
 		args: &[TypedValue],
 		state: &mut T,
 	) -> Result<ReturnValue, Error> {
 		let serialized_args = args.to_vec().encode();
 		let mut return_val = vec![0u8; sandbox_primitives::ReturnValue::ENCODED_MAX_SIZE];
 
-		let result = unsafe {
-			ffi::ext_sandbox_invoke(
-				self.instance_idx,
-				name.as_ptr(),
-				name.len(),
-				serialized_args.as_ptr(),
-				serialized_args.len(),
-				return_val.as_mut_ptr(),
-				return_val.len(),
-				state as *const T as usize,
-			)
-		};
+		let result = sandbox::invoke(
+			self.instance_idx,
+			name,
+			&serialized_args,
+			return_val.as_mut_ptr() as _,
+			return_val.len() as u32,
+			state as *const T as _,
+		);
+
 		match result {
 			sandbox_primitives::ERR_OK => {
 				let return_val = sandbox_primitives::ReturnValue::decode(&mut &return_val[..])
@@ -315,8 +273,6 @@ impl<T> Instance<T> {
 
 impl<T> Drop for Instance<T> {
 	fn drop(&mut self) {
-		unsafe {
-			ffi::ext_sandbox_instance_teardown(self.instance_idx);
-		}
+		sandbox::instance_teardown(self.instance_idx);
 	}
 }

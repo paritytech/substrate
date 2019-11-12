@@ -66,7 +66,7 @@ pub trait ChainApi: Send + Sync {
 	/// Error type.
 	type Error: From<error::Error> + error::IntoPoolError;
 	/// Validate transaction future.
-	type ValidationFuture: Future<Output=Result<TransactionValidity, Self::Error>> + Send;
+	type ValidationFuture: Future<Output=Result<TransactionValidity, Self::Error>> + Send + Unpin;
 
 	/// Verify extrinsic at given block.
 	fn validate_transaction(
@@ -177,6 +177,12 @@ impl<B: ChainApi> Pool<B> {
 		parent: &BlockId<B::Block>,
 		extrinsics: &[ExtrinsicFor<B>],
 	) -> impl Future<Output=Result<(), B::Error>> {
+		log::debug!(
+			target: "txpool",
+			"Starting pruning of block {:?} (extrinsics: {})",
+			at,
+			extrinsics.len()
+		);
 		// Get details of all extrinsics that are already in the pool
 		let (in_pool_hashes, in_pool_tags) = self.validated_pool.extrinsics_tags(extrinsics);
 
@@ -240,6 +246,7 @@ impl<B: ChainApi> Pool<B> {
 		tags: impl IntoIterator<Item=Tag>,
 		known_imported_hashes: impl IntoIterator<Item=ExHash<B>> + Clone,
 	) -> impl Future<Output=Result<(), B::Error>> {
+		log::trace!(target: "txpool", "Pruning at {:?}", at);
 		// Prune all transactions that provide given tags
 		let prune_status = match self.validated_pool.prune_tags(tags) {
 			Ok(prune_status) => prune_status,
@@ -257,6 +264,7 @@ impl<B: ChainApi> Pool<B> {
 		let pruned_transactions = prune_status.pruned.into_iter().map(|tx| tx.data.clone());
 		let reverify_future = self.verify(at, pruned_transactions, false);
 
+		log::trace!(target: "txpool", "Prunning at {:?}. Resubmitting transactions.", at);
 		// And finally - submit reverified transactions back to the pool
 		let at = at.clone();
 		let validated_pool = self.validated_pool.clone();
@@ -340,14 +348,14 @@ impl<B: ChainApi> Pool<B> {
 	) -> impl Future<Output=ValidatedTransactionFor<B>> {
 		let (hash, bytes) = self.validated_pool.api().hash_and_length(&xt);
 		if !force && self.validated_pool.is_banned(&hash) {
-			return Either::Left(ready(ValidatedTransaction::Invalid(error::Error::TemporarilyBanned.into())))
+			return Either::Left(ready(ValidatedTransaction::Invalid(hash, error::Error::TemporarilyBanned.into())))
 		}
 
 		Either::Right(self.validated_pool.api().validate_transaction(block_id, xt.clone())
 			.then(move |validation_result| ready(match validation_result {
 				Ok(validity) => match validity {
 					Ok(validity) => if validity.provides.is_empty() {
-						ValidatedTransaction::Invalid(error::Error::NoTagsProvided.into())
+						ValidatedTransaction::Invalid(hash, error::Error::NoTagsProvided.into())
 					} else {
 						ValidatedTransaction::Valid(base::Transaction {
 							data: xt,
@@ -363,11 +371,11 @@ impl<B: ChainApi> Pool<B> {
 						})
 					},
 					Err(TransactionValidityError::Invalid(e)) =>
-						ValidatedTransaction::Invalid(error::Error::InvalidTransaction(e).into()),
+						ValidatedTransaction::Invalid(hash, error::Error::InvalidTransaction(e).into()),
 					Err(TransactionValidityError::Unknown(e)) =>
 						ValidatedTransaction::Unknown(hash, error::Error::UnknownTransaction(e).into()),
 				},
-				Err(e) => ValidatedTransaction::Invalid(e),
+				Err(e) => ValidatedTransaction::Invalid(hash, e),
 			})))
 	}
 }
@@ -474,7 +482,6 @@ mod tests {
 	fn pool() -> Pool<TestApi> {
 		Pool::new(Default::default(), TestApi::default())
 	}
-
 
 	#[test]
 	fn should_validate_and_import_transaction() {
@@ -909,3 +916,4 @@ mod tests {
 		}
 	}
 }
+

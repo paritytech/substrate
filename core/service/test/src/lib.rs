@@ -29,6 +29,7 @@ use service::{
 	AbstractService,
 	ChainSpec,
 	Configuration,
+	config::DatabaseConfig,
 	Roles,
 	Error,
 };
@@ -157,8 +158,10 @@ fn node_config<G, E: Clone> (
 		node_name: "unknown".to_owned(),
 		transport: TransportConfig::Normal {
 			enable_mdns: false,
+			allow_private_ipv4: true,
 			wasm_external_transport: None,
 		},
+		max_parallel_downloads: NetworkConfiguration::default().max_parallel_downloads,
 	};
 
 	Configuration {
@@ -168,16 +171,20 @@ fn node_config<G, E: Clone> (
 		roles: role,
 		transaction_pool: Default::default(),
 		network: network_config,
-		keystore_path: root.join("key"),
+		keystore_path: Some(root.join("key")),
 		keystore_password: None,
-		database_path: root.join("db"),
-		database_cache_size: None,
+		config_dir: Some(root.clone()),
+		database: DatabaseConfig::Path {
+			path: root.join("db"),
+			cache_size: None
+		},
 		state_cache_size: 16777216,
 		state_cache_child_ratio: None,
 		pruning: Default::default(),
 		chain_spec: (*spec).clone(),
 		custom: Default::default(),
 		name: format!("Node {}", index),
+		wasm_method: service::config::WasmExecutionMethod::Interpreted,
 		execution_strategies: Default::default(),
 		rpc_http: None,
 		rpc_ws: None,
@@ -187,6 +194,7 @@ fn node_config<G, E: Clone> (
 		telemetry_external_transport: None,
 		default_heap_pages: None,
 		offchain_worker: false,
+		sentry_mode: false,
 		force_authoring: false,
 		disable_grandpa: false,
 		dev_key_seed: key_seed,

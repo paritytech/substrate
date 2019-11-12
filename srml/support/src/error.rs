@@ -18,6 +18,7 @@
 
 #[doc(hidden)]
 pub use sr_primitives::traits::LookupError;
+pub use srml_metadata::{ModuleErrorMetadata, ErrorMetadata, DecodeDifferent};
 
 /// Declare an error type for a runtime module.
 ///
@@ -49,20 +50,19 @@ macro_rules! decl_error {
 		$(#[$attr:meta])*
 		pub enum $error:ident {
 			$(
-				$( #[$variant_attr:meta] )*
+				$( #[doc = $doc_attr:tt] )*
 				$name:ident
 			),*
 			$(,)?
 		}
 	) => {
-		#[derive(Clone, PartialEq, Eq)]
-		#[cfg_attr(feature = "std", derive(Debug))]
+		#[derive(Clone, PartialEq, Eq, $crate::RuntimeDebug)]
 		$(#[$attr])*
 		pub enum $error {
 			Other(&'static str),
 			CannotLookup,
 			$(
-				$(#[$variant_attr])*
+				$( #[doc = $doc_attr] )*
 				$name
 			),*
 		}
@@ -113,6 +113,21 @@ macro_rules! decl_error {
 			fn into(self) -> $crate::dispatch::DispatchError {
 				use $crate::dispatch::ModuleDispatchError;
 				$crate::dispatch::DispatchError::new(None, self.as_u8(), Some(self.as_str()))
+			}
+		}
+
+		impl $crate::error::ModuleErrorMetadata for $error {
+			fn metadata() -> &'static [$crate::error::ErrorMetadata] {
+				&[
+					$(
+						$crate::error::ErrorMetadata {
+							name: $crate::error::DecodeDifferent::Encode(stringify!($name)),
+							documentation: $crate::error::DecodeDifferent::Encode(&[
+								$( $doc_attr ),*
+							]),
+						}
+					),*
+				]
 			}
 		}
 	};

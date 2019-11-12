@@ -23,8 +23,7 @@ mod digest;
 
 use codec::{Encode, Decode};
 use rstd::vec::Vec;
-use sr_primitives::ConsensusEngineId;
-use substrate_client::decl_runtime_apis;
+use sr_primitives::{ConsensusEngineId, RuntimeDebug};
 
 #[cfg(feature = "std")]
 pub use digest::{BabePreDigest, CompatibleDigestItem};
@@ -79,8 +78,7 @@ pub type BabeAuthorityWeight = u64;
 pub type BabeBlockWeight = u32;
 
 /// BABE epoch information
-#[derive(Decode, Encode, Default, PartialEq, Eq, Clone)]
-#[cfg_attr(any(feature = "std", test), derive(Debug))]
+#[derive(Decode, Encode, Default, PartialEq, Eq, Clone, RuntimeDebug)]
 pub struct Epoch {
 	/// The epoch index
 	pub epoch_index: u64,
@@ -127,8 +125,7 @@ pub enum ConsensusLog {
 }
 
 /// Configuration data used by the BABE consensus engine.
-#[derive(Clone, PartialEq, Eq, Encode, Decode)]
-#[cfg_attr(any(feature = "std", test), derive(Debug))]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
 pub struct BabeConfiguration {
 	/// The slot duration in milliseconds for BABE. Currently, only
 	/// the value provided by this type at genesis will be used.
@@ -167,7 +164,7 @@ impl slots::SlotData for BabeConfiguration {
 	const SLOT_KEY: &'static [u8] = b"babe_configuration";
 }
 
-decl_runtime_apis! {
+sr_api::decl_runtime_apis! {
 	/// API necessary for block authorship with BABE.
 	pub trait BabeApi {
 		/// Return the configuration for BABE. Currently,

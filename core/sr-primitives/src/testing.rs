@@ -20,9 +20,11 @@ use serde::{Serialize, Serializer, Deserialize, de::Error as DeError, Deserializ
 use std::{fmt::Debug, ops::Deref, fmt, cell::RefCell};
 use crate::codec::{Codec, Encode, Decode};
 use crate::traits::{
-	self, Checkable, Applyable, BlakeTwo256, OpaqueKeys, ValidateUnsigned,
+	self, Checkable, Applyable, BlakeTwo256, OpaqueKeys,
 	SignedExtension, Dispatchable,
 };
+#[allow(deprecated)]
+use crate::traits::ValidateUnsigned;
 use crate::{generic, KeyTypeId, ApplyResult};
 use crate::weights::{GetDispatchInfo, DispatchInfo};
 pub use primitives::{H256, sr25519};
@@ -88,7 +90,7 @@ impl app_crypto::RuntimeAppPublic for UintAuthorityId {
 		ALL_KEYS.with(|l| l.borrow().clone())
 	}
 
-	fn generate_pair(_: Option<&str>) -> Self {
+	fn generate_pair(_: Option<Vec<u8>>) -> Self {
 		use rand::RngCore;
 		UintAuthorityId(rand::thread_rng().next_u64())
 	}
@@ -117,10 +119,10 @@ impl app_crypto::RuntimeAppPublic for UintAuthorityId {
 }
 
 impl OpaqueKeys for UintAuthorityId {
-	type KeyTypeIds = std::iter::Cloned<std::slice::Iter<'static, KeyTypeId>>;
+	type KeyTypeIdProviders = ();
 
-	fn key_ids() -> Self::KeyTypeIds {
-		[key_types::DUMMY].iter().cloned()
+	fn key_ids() -> &'static [KeyTypeId] {
+		&[key_types::DUMMY]
 	}
 
 	fn get_raw(&self, _: KeyTypeId) -> &[u8] {
@@ -132,6 +134,10 @@ impl OpaqueKeys for UintAuthorityId {
 	}
 }
 
+impl crate::BoundToRuntimeAppPublic for UintAuthorityId {
+	type Public = Self;
+}
+
 /// Digest item
 pub type DigestItem = generic::DigestItem<H256>;
 
@@ -139,7 +145,7 @@ pub type DigestItem = generic::DigestItem<H256>;
 pub type Digest = generic::Digest<H256>;
 
 /// Block Header
-#[derive(PartialEq, Eq, Clone, Serialize, Debug, Encode, Decode)]
+#[derive(PartialEq, Eq, Clone, Serialize, Debug, Encode, Decode, Default)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 pub struct Header {
@@ -188,6 +194,16 @@ impl traits::Header for Header {
 			state_root,
 			parent_hash,
 			digest,
+		}
+	}
+}
+
+impl Header {
+	/// A new header with the given number and default hash for all other fields.
+	pub fn new_from_number(number: <Self as traits::Header>::Number) -> Self {
+		Self {
+			number,
+			..Default::default()
 		}
 	}
 }
@@ -259,6 +275,9 @@ impl<Xt: 'static + Codec + Sized + Send + Sync + Serialize + Clone + Eq + Debug 
 	fn new(header: Self::Header, extrinsics: Vec<Self::Extrinsic>) -> Self {
 		Block { header, extrinsics }
 	}
+	fn encode_from(header: &Self::Header, extrinsics: &[Self::Extrinsic]) -> Vec<u8> {
+		(header, extrinsics).encode()
+	}
 }
 
 impl<'a, Xt> Deserialize<'a> for Block<Xt> where Block<Xt>: Decode {
@@ -316,6 +335,7 @@ impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 	fn sender(&self) -> Option<&Self::AccountId> { self.0.as_ref().map(|x| &x.0) }
 
 	/// Checks to see if this is a valid *transaction*. It returns information on it if so.
+	#[allow(deprecated)] // Allow ValidateUnsigned
 	fn validate<U: ValidateUnsigned<Call=Self::Call>>(
 		&self,
 		_info: DispatchInfo,
@@ -326,7 +346,8 @@ impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 
 	/// Executes all necessary logic needed prior to dispatch and deconstructs into function call,
 	/// index and sender.
-	fn apply(
+	#[allow(deprecated)] // Allow ValidateUnsigned
+	fn apply<U: ValidateUnsigned<Call=Self::Call>>(
 		self,
 		info: DispatchInfo,
 		len: usize,

@@ -22,6 +22,7 @@ test-client = { package = "substrate-test-client", path = "../../core/test-clien
 sr-primitives = { path = "../../core/sr-primitives" }
 runtime_support = { package = "srml-support", path = "../../srml/support" }
 balances = { package = "srml-balances", path = "../../srml/balances" }
+transaction-payment = { package = "srml-transaction-payment", path = "../../srml/transaction-payment" }
 session = { package = "srml-session", path = "../../srml/session" }
 system = { package = "srml-system", path = "../../srml/system" }
 timestamp = { package = "srml-timestamp", path = "../../srml/timestamp" }
@@ -30,7 +31,15 @@ contracts = { package = "srml-contracts", path = "../../srml/contracts" }
 grandpa = { package = "srml-grandpa", path = "../../srml/grandpa" }
 indices = { package = "srml-indices", path = "../../srml/indices" }
 wabt = "0.9.2"
+criterion = "0.3.0"
 
 [features]
-benchmarks = []
+wasmtime = [
+    "substrate-executor/wasmtime",
+]
 stress-test = []
+
+[[bench]]
+name = "bench"
+harness = false
+

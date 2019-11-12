@@ -51,6 +51,7 @@ use rstd::str;
 use rstd::prelude::Vec;
 #[cfg(not(feature = "std"))]
 use rstd::prelude::vec;
+use primitives::RuntimeDebug;
 use primitives::offchain::{
 	Timestamp,
 	HttpRequestId as RequestId,
@@ -59,8 +60,7 @@ use primitives::offchain::{
 };
 
 /// Request method (HTTP verb)
-#[derive(Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Clone, PartialEq, Eq, RuntimeDebug)]
 pub enum Method {
 	/// GET request
 	Get,
@@ -93,8 +93,7 @@ mod header {
 	use super::*;
 
 	/// A header type.
-	#[derive(Clone, PartialEq, Eq)]
-	#[cfg_attr(feature = "std", derive(Debug))]
+	#[derive(Clone, PartialEq, Eq, RuntimeDebug)]
 	pub struct Header {
 		name: Vec<u8>,
 		value: Vec<u8>,
@@ -128,8 +127,7 @@ mod header {
 }
 
 /// An HTTP request builder.
-#[derive(Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct Request<'a, T = Vec<&'static [u8]>> {
 	/// Request method
 	pub method: Method,
@@ -223,11 +221,15 @@ impl<'a, I: AsRef<[u8]>, T: IntoIterator<Item=I>> Request<'a, T> {
 		let meta = &[];
 
 		// start an http request.
-		let id = runtime_io::http_request_start(self.method.as_ref(), self.url, meta).map_err(|_| HttpError::IoError)?;
+		let id = runtime_io::offchain::http_request_start(
+			self.method.as_ref(),
+			self.url,
+			meta,
+		).map_err(|_| HttpError::IoError)?;
 
 		// add custom headers
 		for header in &self.headers {
-			runtime_io::http_request_add_header(
+			runtime_io::offchain::http_request_add_header(
 				id,
 				header.name(),
 				header.value(),
@@ -236,11 +238,11 @@ impl<'a, I: AsRef<[u8]>, T: IntoIterator<Item=I>> Request<'a, T> {
 
 		// write body
 		for chunk in self.body {
-			runtime_io::http_request_write_body(id, chunk.as_ref(), self.deadline)?;
+			runtime_io::offchain::http_request_write_body(id, chunk.as_ref(), self.deadline)?;
 		}
 
 		// finalise the request
-		runtime_io::http_request_write_body(id, &[], self.deadline)?;
+		runtime_io::offchain::http_request_write_body(id, &[], self.deadline)?;
 
 		Ok(PendingRequest {
 			id,
@@ -249,8 +251,7 @@ impl<'a, I: AsRef<[u8]>, T: IntoIterator<Item=I>> Request<'a, T> {
 }
 
 /// A request error
-#[derive(Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Clone, PartialEq, Eq, RuntimeDebug)]
 pub enum Error {
 	/// Deadline has been reached.
 	DeadlineReached,
@@ -261,8 +262,7 @@ pub enum Error {
 }
 
 /// A struct representing an uncompleted http request.
-#[derive(PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(PartialEq, Eq, RuntimeDebug)]
 pub struct PendingRequest {
 	/// Request ID
 	pub id: RequestId,
@@ -307,7 +307,7 @@ impl PendingRequest {
 		deadline: impl Into<Option<Timestamp>>
 	) -> Vec<Result<HttpResult, PendingRequest>> {
 		let ids = requests.iter().map(|r| r.id).collect::<Vec<_>>();
-		let statuses = runtime_io::http_response_wait(&ids, deadline.into());
+		let statuses = runtime_io::offchain::http_response_wait(&ids, deadline.into());
 
 		statuses
 			.into_iter()
@@ -323,7 +323,7 @@ impl PendingRequest {
 }
 
 /// A HTTP response.
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(RuntimeDebug)]
 pub struct Response {
 	/// Request id
 	pub id: RequestId,
@@ -345,7 +345,9 @@ impl Response {
 	/// Retrieve the headers for this response.
 	pub fn headers(&mut self) -> &Headers {
 		if self.headers.is_none() {
-			self.headers = Some(Headers { raw: runtime_io::http_response_headers(self.id) });
+			self.headers = Some(
+				Headers { raw: runtime_io::offchain::http_response_headers(self.id) },
+			);
 		}
 		self.headers.as_ref().expect("Headers were just set; qed")
 	}
@@ -424,7 +426,10 @@ impl Iterator for ResponseBody {
 		}
 
 		if self.filled_up_to.is_none() {
-			let result = runtime_io::http_response_read_body(self.id, &mut self.buffer, self.deadline);
+			let result = runtime_io::offchain::http_response_read_body(
+				self.id,
+				&mut self.buffer,
+				self.deadline);
 			match result {
 				Err(e) => {
 					self.error = Some(e);
@@ -435,7 +440,7 @@ impl Iterator for ResponseBody {
 				}
 				Ok(size) => {
 					self.position = 0;
-					self.filled_up_to = Some(size);
+					self.filled_up_to = Some(size as usize);
 				}
 			}
 		}
@@ -452,8 +457,7 @@ impl Iterator for ResponseBody {
 }
 
 /// A collection of Headers in the response.
-#[derive(Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct Headers {
 	/// Raw headers
 	pub raw: Vec<(Vec<u8>, Vec<u8>)>,
@@ -483,8 +487,7 @@ impl Headers {
 }
 
 /// A custom iterator traversing all the headers.
-#[derive(Clone)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Clone, RuntimeDebug)]
 pub struct HeadersIterator<'a> {
 	collection: &'a [(Vec<u8>, Vec<u8>)],
 	index: Option<usize>,
@@ -512,16 +515,17 @@ impl<'a> HeadersIterator<'a> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use runtime_io::{TestExternalities, with_externalities};
+	use runtime_io::TestExternalities;
 	use substrate_offchain::testing;
+	use primitives::offchain::OffchainExt;
 
 	#[test]
 	fn should_send_a_basic_request_and_get_response() {
 		let (offchain, state) = testing::TestOffchainExt::new();
 		let mut t = TestExternalities::default();
-		t.set_offchain_externalities(offchain);
+		t.register_extension(OffchainExt::new(offchain));
 
-		with_externalities(&mut t, || {
+		t.execute_with(|| {
 			let request: Request = Request::get("http://localhost:1234");
 			let pending = request
 				.add_header("X-Auth", "hunter2")
@@ -560,9 +564,9 @@ mod tests {
 	fn should_send_a_post_request() {
 		let (offchain, state) = testing::TestOffchainExt::new();
 		let mut t = TestExternalities::default();
-		t.set_offchain_externalities(offchain);
+		t.register_extension(OffchainExt::new(offchain));
 
-		with_externalities(&mut t, || {
+		t.execute_with(|| {
 			let pending = Request::default()
 				.method(Method::Post)
 				.url("http://localhost:1234")

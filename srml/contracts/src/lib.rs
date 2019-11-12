@@ -109,22 +109,23 @@ pub use crate::exec::{ExecResult, ExecReturnValue, ExecError, StatusCode};
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 use primitives::crypto::UncheckedFrom;
-use rstd::{prelude::*, marker::PhantomData};
+use rstd::{prelude::*, marker::PhantomData, fmt::Debug};
 use codec::{Codec, Encode, Decode};
-use runtime_io::blake2_256;
+use runtime_io::hashing::blake2_256;
 use sr_primitives::{
-	traits::{Hash, StaticLookup, Zero, MaybeSerializeDebug, Member, SignedExtension},
+	traits::{Hash, StaticLookup, Zero, MaybeSerializeDeserialize, Member, SignedExtension},
 	weights::DispatchInfo,
 	transaction_validity::{
 		ValidTransaction, InvalidTransaction, TransactionValidity, TransactionValidityError,
 	},
+	RuntimeDebug,
 };
 use support::dispatch::{Result, Dispatchable};
 use support::{
 	Parameter, decl_module, decl_event, decl_storage, storage::child,
-	parameter_types,
+	parameter_types, IsSubType
 };
-use support::{traits::{OnFreeBalanceZero, OnUnbalanced, Currency, Get, Time}, IsSubType};
+use support::traits::{OnFreeBalanceZero, OnUnbalanced, Currency, Get, Time, Randomness};
 use system::{ensure_signed, RawOrigin, ensure_root};
 use primitives::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX;
 
@@ -143,8 +144,7 @@ pub trait ComputeDispatchFee<Call, Balance> {
 
 /// Information for managing an acocunt and its sub trie abstraction.
 /// This is the required info to cache for an account
-#[derive(Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Encode, Decode, RuntimeDebug)]
 pub enum ContractInfo<T: Trait> {
 	Alive(AliveContractInfo<T>),
 	Tombstone(TombstoneContractInfo<T>),
@@ -207,9 +207,7 @@ pub type AliveContractInfo<T> =
 
 /// Information for managing an account and its sub trie abstraction.
 /// This is the required info to cache for an account.
-// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-#[derive(Encode, Decode, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct RawAliveContractInfo<CodeHash, Balance, BlockNumber> {
 	/// Unique ID for the subtree encoded as a bytes vector.
 	pub trie_id: TrieId,
@@ -228,15 +226,14 @@ pub struct RawAliveContractInfo<CodeHash, Balance, BlockNumber> {
 pub type TombstoneContractInfo<T> =
 	RawTombstoneContractInfo<<T as system::Trait>::Hash, <T as system::Trait>::Hashing>;
 
-// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-#[derive(Encode, Decode, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Encode, Decode, PartialEq, Eq, RuntimeDebug)]
 pub struct RawTombstoneContractInfo<H, Hasher>(H, PhantomData<Hasher>);
 
 impl<H, Hasher> RawTombstoneContractInfo<H, Hasher>
 where
-	H: Member + MaybeSerializeDebug + AsRef<[u8]> + AsMut<[u8]> + Copy + Default + rstd::hash::Hash
-		+ Codec,
+	H: Member + MaybeSerializeDeserialize+ Debug
+		+ AsRef<[u8]> + AsMut<[u8]> + Copy + Default
+		+ rstd::hash::Hash + Codec,
 	Hasher: Hash<Output=H>,
 {
 	fn new(storage_root: &[u8], code_hash: H) -> Self {
@@ -325,7 +322,7 @@ parameter_types! {
 	/// A reasonable default value for [`Trait::InstantiateBaseFee`].
 	pub const DefaultInstantiateBaseFee: u32 = 1000;
 	/// A reasonable default value for [`Trait::MaxDepth`].
-	pub const DefaultMaxDepth: u32 = 1024;
+	pub const DefaultMaxDepth: u32 = 32;
 	/// A reasonable default value for [`Trait::MaxValueSize`].
 	pub const DefaultMaxValueSize: u32 = 16_384;
 	/// A reasonable default value for [`Trait::BlockGasLimit`].
@@ -335,6 +332,7 @@ parameter_types! {
 pub trait Trait: system::Trait {
 	type Currency: Currency<Self::AccountId>;
 	type Time: Time;
+	type Randomness: Randomness<Self::Hash>;
 
 	/// The outer call dispatch type.
 	type Call: Parameter + Dispatchable<Origin=<Self as system::Trait>::Origin> + IsSubType<Module<Self>, Self>;
@@ -356,6 +354,9 @@ pub trait Trait: system::Trait {
 
 	/// Handler for the unbalanced reduction when making a gas payment.
 	type GasPayment: OnUnbalanced<NegativeImbalanceOf<Self>>;
+
+	/// Handler for rent payments.
+	type RentPayment: OnUnbalanced<NegativeImbalanceOf<Self>>;
 
 	/// Number of block delay an extrinsic claim surcharge has.
 	///
@@ -441,7 +442,7 @@ where
 }
 
 /// The default dispatch fee computor computes the fee in the same way that
-/// the implementation of `TakeFees` for the Balances module does. Note that this only takes a fixed
+/// the implementation of `ChargeTransactionPayment` for the Balances module does. Note that this only takes a fixed
 /// fee based on size. Unlike the balances module, weight-fee is applied.
 pub struct DefaultDispatchFeeComputor<T: Trait>(PhantomData<T>);
 impl<T: Trait> ComputeDispatchFee<<T as Trait>::Call, BalanceOf<T>> for DefaultDispatchFeeComputor<T> {
@@ -649,10 +650,19 @@ decl_module! {
 	}
 }
 
+/// The possible errors that can happen querying the storage of a contract.
+pub enum GetStorageError {
+	/// The given address doesn't point on a contract.
+	ContractDoesntExist,
+	/// The specified contract is a tombstone and thus cannot have any storage.
+	IsTombstone,
+}
+
+/// Public APIs provided by the contracts module.
 impl<T: Trait> Module<T> {
 	/// Perform a call to a specified contract.
 	///
-	/// This function is similar to `Self::call`, but doesn't perform any lookups and better
+	/// This function is similar to `Self::call`, but doesn't perform any address lookups and better
 	/// suitable for calling directly from Rust.
 	pub fn bare_call(
 		origin: T::AccountId,
@@ -666,6 +676,27 @@ impl<T: Trait> Module<T> {
 		})
 	}
 
+	/// Query storage of a specified contract under a specified key.
+	pub fn get_storage(
+		address: T::AccountId,
+		key: [u8; 32],
+	) -> rstd::result::Result<Option<Vec<u8>>, GetStorageError> {
+		let contract_info = <ContractInfoOf<T>>::get(&address)
+			.ok_or(GetStorageError::ContractDoesntExist)?
+			.get_alive()
+			.ok_or(GetStorageError::IsTombstone)?;
+
+		let maybe_value = AccountDb::<T>::get_storage(
+			&DirectAccountDb,
+			&address,
+			Some(&contract_info.trie_id),
+			&key,
+		);
+		Ok(maybe_value)
+	}
+}
+
+impl<T: Trait> Module<T> {
 	fn execute_wasm(
 		origin: T::AccountId,
 		gas_limit: Gas,
@@ -772,7 +803,7 @@ impl<T: Trait> Module<T> {
 		let tombstone = <TombstoneContractInfo<T>>::new(
 			// This operation is cheap enough because last_write (delta not included)
 			// is not this block as it has been checked earlier.
-			&runtime_io::child_storage_root(&origin_contract.trie_id)[..],
+			&runtime_io::storage::child_root(&origin_contract.trie_id)[..],
 			code_hash,
 		);
 
@@ -837,9 +868,9 @@ decl_event! {
 decl_storage! {
 	trait Store for Module<T: Trait> as Contract {
 		/// Gas spent so far in this block.
-		GasSpent get(gas_spent): Gas;
+		GasSpent get(fn gas_spent): Gas;
 		/// Current cost schedule for contracts.
-		CurrentSchedule get(current_schedule) config(): Schedule = Schedule::default();
+		CurrentSchedule get(fn current_schedule) config(): Schedule = Schedule::default();
 		/// A mapping from an original code hash to the original code, untouched by instrumentation.
 		pub PristineCode: map CodeHash<T> => Option<Vec<u8>>;
 		/// A mapping between an original code hash and instrumented wasm code, ready for execution.
@@ -849,7 +880,7 @@ decl_storage! {
 		/// The code associated with a given account.
 		pub ContractInfoOf: map T::AccountId => Option<ContractInfo<T>>;
 		/// The price of one unit of gas.
-		GasPrice get(gas_price) config(): BalanceOf<T> = 1.into();
+		GasPrice get(fn gas_price) config(): BalanceOf<T> = 1.into();
 	}
 }
 
@@ -890,8 +921,8 @@ impl<T: Trait> Config<T> {
 }
 
 /// Definition of the cost schedule and other parameterizations for wasm vm.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-#[derive(Clone, Encode, Decode, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(Clone, Encode, Decode, PartialEq, Eq, RuntimeDebug)]
 pub struct Schedule {
 	/// Version of the schedule.
 	pub version: u32,
@@ -987,9 +1018,14 @@ impl<T: Trait + Send + Sync> Default for CheckBlockGasLimit<T> {
 	}
 }
 
-#[cfg(feature = "std")]
-impl<T: Trait + Send + Sync> std::fmt::Debug for CheckBlockGasLimit<T> {
-	fn fmt(&self, _: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl<T: Trait + Send + Sync> rstd::fmt::Debug for CheckBlockGasLimit<T> {
+	#[cfg(feature = "std")]
+	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+		write!(f, "CheckBlockGasLimit")
+	}
+
+	#[cfg(not(feature = "std"))]
+	fn fmt(&self, _: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
 		Ok(())
 	}
 }
