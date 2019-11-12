@@ -1072,6 +1072,18 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		self.behaviour.send_packet(&target, Some(proto_name.into()), message)
 	}
 
+	/// Registers a new notifications protocol.
+	///
+	/// You are very strongly encouraged to call this method very early on. Any connection open
+	/// will retain the protocols that were registered then, and not any new one.
+	pub fn register_notif_protocol(
+		&mut self,
+		proto_name: impl Into<Cow<'static, [u8]>>,
+		handshake: impl Into<Vec<u8>>
+	) {
+		self.behaviour.register_notif_protocol(proto_name, handshake);
+	}
+
 	/// Call when we must propagate ready extrinsics to peers.
 	pub fn propagate_extrinsics(
 		&mut self,

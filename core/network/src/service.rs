@@ -25,7 +25,7 @@
 //! The methods of the [`NetworkService`] are implemented by sending a message over a channel,
 //! which is then processed by [`NetworkWorker::poll`].
 
-use std::{collections::{HashMap, HashSet}, fs, marker::PhantomData, io, path::Path};
+use std::{borrow::Cow, collections::{HashMap, HashSet}, fs, marker::PhantomData, io, path::Path};
 use std::sync::{Arc, atomic::{AtomicBool, AtomicUsize, Ordering}};
 
 use codec::Encode;
@@ -450,6 +450,21 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 		rx
 	}
 
+	/// Registers a new notifications protocol.
+	///
+	/// You are very strongly encouraged to call this method very early on. Any connection open
+	/// will retain the protocols that were registered then, and not any new one.
+	pub fn register_notif_protocol(
+		&self,
+		proto_name: impl Into<Cow<'static, [u8]>>,
+		handshake: impl Into<Vec<u8>>
+	) {
+		let _ = self.to_worker.unbounded_send(ServerToWorkerMsg::RegisterNotifProtocol {
+			proto_name: proto_name.into(),
+			handshake: handshake.into(),
+		});
+	}
+
 	/// You must call this when new transactons are imported by the transaction pool.
 	///
 	/// The latest transactions will be fetched from the `TransactionPool` that was passed at
@@ -676,6 +691,10 @@ enum ServerToWorkerMsg<B: BlockT, S: NetworkSpecialization<B>> {
 		proto_name: Vec<u8>,
 		target: PeerId,
 	},
+	RegisterNotifProtocol {
+		proto_name: Cow<'static, [u8]>,
+		handshake: Vec<u8>,
+	},
 }
 
 /// Main network worker. Must be polled in order for the network to advance.
@@ -762,6 +781,8 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Stream for Ne
 					self.events_streams.push(sender),
 				ServerToWorkerMsg::WriteNotif { message, proto_name, target } =>
 					self.network_service.user_protocol_mut().write_notif(target, proto_name, message),
+				ServerToWorkerMsg::RegisterNotifProtocol { proto_name, handshake } =>
+					self.network_service.user_protocol_mut().register_notif_protocol(proto_name, handshake),
 			}
 		}
 
