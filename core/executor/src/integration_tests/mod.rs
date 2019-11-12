@@ -456,3 +456,4 @@ fn offchain_http_should_work(wasm_method: WasmExecutionMethod) {
 		true.encode(),
 	);
 }
+

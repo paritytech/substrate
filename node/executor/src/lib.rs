@@ -772,6 +772,7 @@ mod tests {
 	#[test]
 	fn wasm_big_block_import_fails() {
 		let mut t = new_test_ext(COMPACT_CODE, false);
+
 		set_heap_pages(&mut t.ext(), 4);
 
 		let result = executor_call::<NeverNativeValue, fn() -> _>(
