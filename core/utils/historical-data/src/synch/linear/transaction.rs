@@ -62,8 +62,19 @@ impl States {
 	}
 
 	/// Update a value to a new prospective.
-	pub fn apply_discard_prospective(&self) {
-		unimplemented!("TODO History as mut param");
+	pub fn apply_discard_prospective<V>(&self, value: &mut History<V>) -> PruneResult {
+		if value.0.len() == 0 {
+			return PruneResult::Cleared;
+		}
+		if value.0[0].index == State::Committed {
+			if value.0.len() == 1 {
+				return PruneResult::Unchanged;
+			}
+			value.0.truncate(1);
+		} else {
+			value.0.clear();
+		}
+		PruneResult::Changed
 	}
 
 	/// Commit prospective changes to state.
@@ -76,10 +87,23 @@ impl States {
 
 	/// Update a value to a new prospective.
 	/// Multiple commit can be applied at the same time.
-	pub fn apply_commit_prospective(&self) {
-		unimplemented!("TODO History as mut param");
+	pub fn apply_commit_prospective<V>(&self, value: &mut History<V>) -> PruneResult {
+		if value.0.len() == 0 {
+			return PruneResult::Cleared;
+		}
+		if value.0.len() == 1 {
+			if value.0[0].index != State::Committed {
+				value.0[0].index = State::Committed;
+			} else {
+				return PruneResult::Unchanged;
+			}
+		} else if let Some(mut v) = value.0.pop() {
+			v.index = State::Committed;
+			value.0.clear();
+			value.0.push(v);
+		}
+		PruneResult::Changed
 	}
-
 
 	/// Create a new transactional layer.
 	pub fn start_transaction(&mut self) {
@@ -98,8 +122,25 @@ impl States {
 	/// Update a value to previous transaction.
 	/// Multiple discard can be applied at the same time.
 	/// Returns true if value is still needed.
-	pub fn apply_discard_transaction(&self) -> PruneResult {
-		unimplemented!("TODO History as mut param");
+	pub fn apply_discard_transaction<V>(&self, value: &mut History<V>) -> PruneResult {
+		let init_len = value.0.len();
+		for i in (0 .. value.0.len()).rev() {
+			if let HistoricalValue {
+				value: _,
+				index: State::Transaction(ix),
+			} = value.0[i] {
+				if ix > self.0 {
+					let _ = value.0.pop();
+				} else { break }
+			} else { break }
+		}
+		if value.0.len() == 0 {
+			PruneResult::Cleared
+		} else if value.0.len() != init_len {
+			PruneResult::Changed
+		} else {
+			PruneResult::Unchanged
+		}
 	}
 
 	/// Discard a transactional layer.
@@ -115,17 +156,46 @@ impl States {
 	/// after one or more `commit_transaction` calls.
 	/// Multiple discard can be applied at the same time.
 	/// Returns true if value is still needed.
-	pub fn apply_commit_transaction(&self) -> PruneResult {
-		unimplemented!("TODO History as mut param");
+	pub fn apply_commit_transaction<V>(&self, value: &mut History<V>) -> PruneResult {
+		let init_len = value.0.len();
+		let mut new_value = None;
+		for i in (0 .. value.0.len()).rev() {
+			if let HistoricalValue {
+				value: _,
+				index: State::Transaction(ix),
+			} = value.0[i] {
+				if ix > self.0 {
+					if let Some(v) = value.0.pop() {
+						if new_value.is_none() {
+							new_value = Some(v.value);
+						}
+					}
+				} else if ix == self.0 && new_value.is_some() {
+					let _ = value.0.pop();
+				} else { break }
+			} else { break }
+		}
+		let result = if value.0.len() == 0 {
+			PruneResult::Cleared
+		} else if value.0.len() != init_len {
+			PruneResult::Changed
+		} else {
+			PruneResult::Unchanged
+		};
+		if let Some(new_value) = new_value {
+			value.0.push(HistoricalValue {
+				value: new_value,
+				index: State::Transaction(self.0),
+			});
+		}
+		result
 	}
-
 }
 
 /// Possible state for a historical value, committed
 /// is not touched by transactional action, transaction
 /// stored the transaction index of insertion.
-#[derive(Debug, Clone)]
-#[cfg_attr(any(test, feature = "test-helpers"), derive(PartialEq))]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum State {
 	Committed,
 	Transaction(usize),
