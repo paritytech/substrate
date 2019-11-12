@@ -258,7 +258,7 @@ impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 		let mut ext = Ext::new(
 			self.overlay,
 			self.backend,
-			self.changes_trie_state.as_ref(),
+			self.changes_trie_state.clone(),
 			Some(&mut self.extensions),
 		);
 
@@ -906,11 +906,10 @@ mod tests {
 		};
 
 		{
-			let state = changes_trie::disabled_state::<_, u64>();
 			let mut ext = Ext::new(
 				&mut overlay,
 				backend,
-				state.as_ref(),
+				changes_trie::disabled_state::<_, u64>(),
 				None,
 			);
 			ext.clear_prefix(b"ab");
@@ -936,11 +935,10 @@ mod tests {
 		let mut state = InMemory::<Blake2Hasher>::default();
 		let backend = state.as_trie_backend().unwrap();
 		let mut overlay = OverlayedChanges::default();
-		let changes_trie_state = changes_trie::disabled_state::<_, u64>();
 		let mut ext = Ext::new(
 			&mut overlay,
 			backend,
-			changes_trie_state.as_ref(),
+			changes_trie::disabled_state::<_, u64>(),
 			None,
 		);
 

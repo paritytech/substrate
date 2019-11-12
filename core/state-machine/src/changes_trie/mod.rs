@@ -197,6 +197,16 @@ impl<'a, H, Number> State<'a, H, Number> {
 	}
 }
 
+impl<'a, H, Number: Clone> Clone for State<'a, H, Number> {
+	fn clone(&self) -> Self {
+		State {
+			config: self.config.clone(),
+			zero: self.zero.clone(),
+			storage: self.storage,
+		}
+	}
+}
+
 /// Create state where changes tries are disabled.
 pub fn disabled_state<'a, H, Number>() -> Option<State<'a, H, Number>> {
 	None

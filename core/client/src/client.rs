@@ -509,15 +509,12 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			return Err(error::Error::ChangesTrieAccessFailed("Invalid changes trie range".into()));
 		}
 
-		let (storage, mut configs) = match self.require_changes_trie(first, last_hash).ok() {
+		let (storage, configs) = match self.require_changes_trie(first, last_hash, true).ok() {
 			Some((storage, configs)) => (storage, configs),
 			None => return Ok(None),
 		};
 
-		let first_available_changes_trie = configs.into_iter().rev()
-			.take_while(|config| config.config.is_some())
-			.map(|config| config.zero + One::one())
-			.next();
+		let first_available_changes_trie = configs.last().map(|config| config.0);
 		match first_available_changes_trie {
 			Some(first_available_changes_trie) => {
 				let oldest_unpruned = storage.oldest_pruned_digest_range_end();
@@ -541,7 +538,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	) -> error::Result<Vec<(NumberFor<Block>, u32)>> {
 		let last_number = self.backend.blockchain().expect_block_number_from_id(&last)?;
 		let last_hash = self.backend.blockchain().expect_block_hash_from_id(&last)?;
-		let (storage, configs) = self.require_changes_trie(first, last_hash)?;
+		let (storage, configs) = self.require_changes_trie(first, last_hash, false)?;
 
 		let mut result = Vec::new();
 		let best_number = self.backend.blockchain().info().best_number;
@@ -663,7 +660,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 		let first_number = self.backend.blockchain()
 			.expect_block_number_from_id(&BlockId::Hash(first))?;
-		let (storage, configs) = self.require_changes_trie(first_number, last)?;
+		let (storage, configs) = self.require_changes_trie(first_number, last, false)?;
 		let min_number = self.backend.blockchain().expect_block_number_from_id(&BlockId::Hash(min))?;
 
 		let recording_storage = AccessedRootsRecorder::<Block> {
@@ -759,11 +756,14 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	/// Returns changes trie storage and all configurations that have been active in the range [first; last].
 	///
 	/// Configurations are returned in descending order (and obviously never overlap).
+	/// If prefer_configs is true, returns maximal consequent configurations ranges, starting from last and
+	/// stopping on either first, or when CT have been disabled.
 	/// Fails if or an error if it is not supported.
 	fn require_changes_trie(
 		&self,
 		first: NumberFor<Block>,
 		last: Block::Hash,
+		prefer_configs: bool,
 	) -> error::Result<(
 		&dyn PrunableStateChangesTrieStorage<Block, Blake2Hasher>,
 		Vec<(NumberFor<Block>, Option<(NumberFor<Block>, Block::Hash)>, ChangesTrieConfiguration)>,
@@ -779,6 +779,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			let config_range = storage.configuration_at(&BlockId::Hash(current))?;
 			match config_range.config {
 				Some(config) => configs.push((config_range.zero.0, config_range.end, config)),
+				None if prefer_configs => return Ok((storage, configs)),
 				None => return Err(error::Error::ChangesTriesNotSupported),
 			}
 

@@ -128,13 +128,14 @@ mod tests {
 		use_native: bool,
 		native_call: Option<NC>,
 	) -> (Result<NativeOrEncoded<R>>, bool) {
-		t.with_ext(|mut ext| executor().call::<_, R, NC>(
-			&mut ext,
+		let mut t = t.ext();
+		executor().call::<_, R, NC>(
+			&mut t,
 			method,
 			data,
 			use_native,
 			native_call,
-		))
+		)
 	}
 
 	#[test]
@@ -771,7 +772,7 @@ mod tests {
 	#[test]
 	fn wasm_big_block_import_fails() {
 		let mut t = new_test_ext(COMPACT_CODE, false);
-		t.with_ext(|mut ext| set_heap_pages(&mut ext, 4));
+		set_heap_pages(&mut t.ext(), 4);
 
 		let result = executor_call::<NeverNativeValue, fn() -> _>(
 			&mut t,
@@ -898,7 +899,7 @@ mod tests {
 			None,
 		).0.unwrap();
 
-		assert!(t.with_ext(|mut ext| ext.storage_changes_root(GENESIS_HASH.into()).unwrap()).is_some());
+		assert!(t.ext().storage_changes_root(GENESIS_HASH.into()).unwrap().is_some());
 	}
 
 	#[test]
@@ -914,7 +915,7 @@ mod tests {
 			None,
 		).0.unwrap();
 
-		assert!(t.with_ext(|mut ext| ext.storage_changes_root(GENESIS_HASH.into()).unwrap()).is_some());
+		assert!(t.ext().storage_changes_root(GENESIS_HASH.into()).unwrap().is_some());
 	}
 
 	#[test]

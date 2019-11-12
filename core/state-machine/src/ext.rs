@@ -76,7 +76,7 @@ pub struct Ext<'a, H, N, B> where H: Hasher<Out=H256>, B: 'a + Backend<H> {
 	/// `storage_root` is called and the cache is cleared on every subsequent change.
 	storage_transaction: Option<(B::Transaction, H::Out)>,
 	/// Changes trie state to read from.
-	changes_trie_state: Option<&'a ChangesTrieState<'a, H, N>>,
+	changes_trie_state: Option<ChangesTrieState<'a, H, N>>,
 	/// The changes trie transaction necessary to commit to the changes trie backend.
 	/// Set to Some when `storage_changes_root` is called. Could be replaced later
 	/// by calling `storage_changes_root` again => never used as cache.
@@ -103,7 +103,7 @@ where
 	pub fn new(
 		overlay: &'a mut OverlayedChanges,
 		backend: &'a B,
-		changes_trie_state: Option<&'a ChangesTrieState<'a, H, N>>,
+		changes_trie_state: Option<ChangesTrieState<'a, H, N>>,
 		extensions: Option<&'a mut Extensions>,
 	) -> Self {
 		Ext {
@@ -496,7 +496,7 @@ where
 		let _guard = panic_handler::AbortGuard::force_abort();
 		self.changes_trie_transaction = build_changes_trie::<_, H, N>(
 			self.backend,
-			self.changes_trie_state.clone(),
+			self.changes_trie_state.as_ref(),
 			self.overlay,
 			parent_hash,
 		)?;
@@ -584,7 +584,7 @@ mod tests {
 		let storage = TestChangesTrieStorage::with_blocks(vec![(99, Default::default())]);
 		let state = Some(ChangesTrieState::new(changes_trie_config(), Zero::zero(), &storage));
 		let backend = TestBackend::default();
-		let mut ext = TestExt::new(&mut overlay, &backend, state.as_ref(), None);
+		let mut ext = TestExt::new(&mut overlay, &backend, state, None);
 		let root = hex!("bb0c2ef6e1d36d5490f9766cfcc7dfe2a6ca804504c3bb206053890d6dd02376").into();
 		assert_eq!(
 			ext.storage_changes_root(Default::default()).unwrap(),
@@ -599,7 +599,7 @@ mod tests {
 		let storage = TestChangesTrieStorage::with_blocks(vec![(99, Default::default())]);
 		let state = Some(ChangesTrieState::new(changes_trie_config(), Zero::zero(), &storage));
 		let backend = TestBackend::default();
-		let mut ext = TestExt::new(&mut overlay, &backend, state.as_ref(), None);
+		let mut ext = TestExt::new(&mut overlay, &backend, state, None);
 		let root = hex!("96f5aae4690e7302737b6f9b7f8567d5bbb9eac1c315f80101235a92d9ec27f4").into();
 		assert_eq!(
 			ext.storage_changes_root(Default::default()).unwrap(),

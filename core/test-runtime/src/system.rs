@@ -33,7 +33,7 @@ use srml_system::Trait;
 use crate::{
 	AccountId, BlockNumber, Extrinsic, Transfer, H256 as Hash, Block, Header, Digest, AuthorityId
 };
-use primitives::{Blake2Hasher, storage::well_known_keys, ChangesTrieConfiguration};
+use primitives::{storage::well_known_keys, ChangesTrieConfiguration};
 
 const NONCE_OF: &[u8] = b"nonce:";
 const BALANCE_OF: &[u8] = b"balance:";
@@ -418,7 +418,8 @@ mod tests {
 
 	#[test]
 	fn block_import_works_wasm() {
-		block_import_works(|b, ext| ext.with_ext(|mut ext| {
+		block_import_works(|b, ext| {
+			let mut ext = ext.ext();
 			executor().call::<_, NeverNativeValue, fn() -> _>(
 				&mut ext,
 				"Core_execute_block",
@@ -426,7 +427,7 @@ mod tests {
 				false,
 				None,
 			).0.unwrap();
-		}))
+		})
 	}
 
 	fn block_import_with_transaction_works<F>(block_executor: F)
@@ -510,7 +511,8 @@ mod tests {
 
 	#[test]
 	fn block_import_with_transaction_works_wasm() {
-		block_import_with_transaction_works(|b, ext| ext.with_ext(|mut ext| {
+		block_import_with_transaction_works(|b, ext| {
+			let mut ext = ext.ext();
 			executor().call::<_, NeverNativeValue, fn() -> _>(
 				&mut ext,
 				"Core_execute_block",
@@ -518,6 +520,6 @@ mod tests {
 				false,
 				None,
 			).0.unwrap();
-		}))
+		})
 	}
 }

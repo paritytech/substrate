@@ -102,16 +102,15 @@ mod tests {
 	#[test]
 	fn call_in_interpreted_wasm_works() {
 		let mut ext = TestExternalities::default();
-		ext.with_ext(|mut ext| {
-			let res = call_in_wasm::<_, runtime_io::SubstrateHostFunctions>(
-				"test_empty_return",
-				&[],
-				WasmExecutionMethod::Interpreted,
-				&mut ext,
-				&WASM_BINARY,
-				8,
-			).unwrap();
-			assert_eq!(res, vec![0u8; 0]);
-		});
+		let mut ext = ext.ext();
+		let res = call_in_wasm::<_, runtime_io::SubstrateHostFunctions>(
+			"test_empty_return",
+			&[],
+			WasmExecutionMethod::Interpreted,
+			&mut ext,
+			&WASM_BINARY,
+			8,
+		).unwrap();
+		assert_eq!(res, vec![0u8; 0]);
 	}
 }

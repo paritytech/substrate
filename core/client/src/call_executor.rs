@@ -322,7 +322,7 @@ where
 		let mut ext = Ext::new(
 			&mut overlay,
 			&state,
-			changes_trie_state.as_ref(),
+			changes_trie_state,
 			None,
 		);
 		let version = self.executor.runtime_version(&mut ext);

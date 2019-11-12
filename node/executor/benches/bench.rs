@@ -59,9 +59,7 @@ fn new_test_ext(genesis_config: &GenesisConfig) -> TestExternalities<Blake2Hashe
 		COMPACT_CODE,
 		genesis_config.build_storage().unwrap(),
 	);
-	ext.with_ext(|ext| {
-		ext.place_storage(well_known_keys::HEAP_PAGES.to_vec(), Some(HEAP_PAGES.encode()));
-	});
+	test_ext.ext().place_storage(well_known_keys::HEAP_PAGES.to_vec(), Some(HEAP_PAGES.encode()));
 	test_ext
 }
 
@@ -142,13 +140,13 @@ fn test_blocks(genesis_config: &GenesisConfig, executor: &NativeExecutor<Executo
 			function: Call::Balances(balances::Call::transfer(bob().into(), 1 * DOLLARS)),
 		}
 	}));
-	let block1 = test_ext.with_ext(|ext| construct_block(
+	let block1 = test_ext.ext().construct_block(
 		executor,
 		&mut ext,
 		1,
 		GENESIS_HASH.into(),
 		block1_extrinsics,
-	));
+	);
 
 	vec![block1]
 }
@@ -167,7 +165,7 @@ fn bench_execute_block(c: &mut Criterion) {
 			// Get the runtime version to initialize the runtimes cache.
 			{
 				let mut test_ext = new_test_ext(&genesis_config);
-				test_ext.with_ext(|mut ext| executor.runtime_version(&mut ext));
+				executor.runtime_version(&mut ext.ext());
 			}
 
 			let blocks = test_blocks(&genesis_config, &executor);
@@ -176,15 +174,13 @@ fn bench_execute_block(c: &mut Criterion) {
 				|| new_test_ext(&genesis_config),
 				|test_ext| {
 					for block in blocks.iter() {
-						test_ext.with_ext(|mut ext|
-							executor.call::<_, NeverNativeValue, fn() -> _>(
-								&mut ext,
-								"Core_execute_block",
-								&block.0,
-								use_native,
-								None,
-							).0.unwrap()
-						);
+						executor.call::<_, NeverNativeValue, fn() -> _>(
+							&mut test_ext.ext(),
+							"Core_execute_block",
+							&block.0,
+							use_native,
+							None,
+						).0.unwrap();
 					}
 				},
 				BatchSize::LargeInput,

@@ -51,26 +51,20 @@ pub struct TestExternalities<H: Hasher<Out=H256>=Blake2Hasher, N: ChangesTrieBlo
 
 impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 	/// Get externalities implementation.
-	pub fn with_ext<'a, F: FnOnce(Ext<H, N, InMemory<H>>) -> T, T>(&'a mut self, f: F) -> T {
-		let overlay = &mut self.overlay;
-		let backend = &self.backend;
-		let extensions = &mut self.extensions;
-		let changes_trie_storage = &self.changes_trie_storage;
-		let changes_trie_state = match self.changes_trie_config.clone() {
-			Some(changes_trie_config) => Some(ChangesTrieState {
-				config: changes_trie_config,
-				zero: 0.into(),
-				storage: changes_trie_storage,
-			}),
-			None => None,
-		};
-
-		f(Ext::new(
-			overlay,
-			backend,
-			changes_trie_state.as_ref(),
-			Some(extensions),
-		))
+	pub fn ext(&mut self) -> Ext<H, N, InMemory<H>> {
+		Ext::new(
+			&mut self.overlay,
+			&self.backend,
+			match self.changes_trie_config.clone() {
+				Some(config) => Some(ChangesTrieState {
+					config,
+					zero: 0.into(),
+					storage: &self.changes_trie_storage,
+				}),
+				None => None,
+			},
+			Some(&mut self.extensions),
+		)
 	}
 
 	/// Create a new instance of `TestExternalities` with storage.
@@ -141,9 +135,8 @@ impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 	///
 	/// Returns the result of the given closure.
 	pub fn execute_with<R>(&mut self, execute: impl FnOnce() -> R) -> R {
-		self.with_ext(|mut ext| {
-			externalities::set_and_run_with_externalities(&mut ext, execute)
-		})
+		let mut ext = self.ext();
+		externalities::set_and_run_with_externalities(&mut ext, execute)
 	}
 }
 
@@ -189,24 +182,22 @@ mod tests {
 	#[test]
 	fn commit_should_work() {
 		let mut ext = TestExternalities::<Blake2Hasher, u64>::default();
-		ext.with_ext(|mut ext| {
-			ext.set_storage(b"doe".to_vec(), b"reindeer".to_vec());
-			ext.set_storage(b"dog".to_vec(), b"puppy".to_vec());
-			ext.set_storage(b"dogglesworth".to_vec(), b"cat".to_vec());
-			const ROOT: [u8; 32] = hex!("2a340d3dfd52f5992c6b117e9e45f479e6da5afffafeb26ab619cf137a95aeb8");
-			assert_eq!(ext.storage_root(), H256::from(ROOT));
-		});
+		let mut ext = ext.ext();
+		ext.set_storage(b"doe".to_vec(), b"reindeer".to_vec());
+		ext.set_storage(b"dog".to_vec(), b"puppy".to_vec());
+		ext.set_storage(b"dogglesworth".to_vec(), b"cat".to_vec());
+		const ROOT: [u8; 32] = hex!("2a340d3dfd52f5992c6b117e9e45f479e6da5afffafeb26ab619cf137a95aeb8");
+		assert_eq!(ext.storage_root(), H256::from(ROOT));
 	}
 
 	#[test]
 	fn set_and_retrieve_code() {
 		let mut ext = TestExternalities::<Blake2Hasher, u64>::default();
-		ext.with_ext(|mut ext| {
-			let code = vec![1, 2, 3];
-			ext.set_storage(CODE.to_vec(), code.clone());
+		let mut ext = ext.ext();
+		let code = vec![1, 2, 3];
+		ext.set_storage(CODE.to_vec(), code.clone());
 
-			assert_eq!(&ext.storage(CODE).unwrap(), &code);
-		});
+		assert_eq!(&ext.storage(CODE).unwrap(), &code);
 	}
 
 	#[test]
