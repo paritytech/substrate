@@ -27,12 +27,15 @@ use rstd::vec::Vec;
 use support::{dispatch::Result, decl_module, decl_storage, decl_event};
 use support::traits::{Currency, WithdrawReason, ExistenceRequirement};
 use system::ensure_signed;
+use sr_primitives::ModuleId;
 use sr_primitives::weights::SimpleDispatchInfo;
-use sr_primitives::traits::UniqueSaturatedInto;
+use sr_primitives::traits::{UniqueSaturatedInto, AccountIdConversion};
 use primitives::{U256, H256, H160};
 use evm::{ExitReason, ExitSucceed, ExitError};
 use evm::executor::StackExecutor;
 use evm::backend::ApplyBackend;
+
+const MODULE_ID: ModuleId = ModuleId(*b"py/ethvm");
 
 /// Type alias for currency balance.
 pub type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
@@ -117,12 +120,13 @@ decl_module! {
 		fn deposit_balance(origin, value: BalanceOf<T>) -> Result {
 			let sender = ensure_signed(origin)?;
 
-			T::Currency::withdraw(
+			let imbalance = T::Currency::withdraw(
 				&sender,
 				value,
 				WithdrawReason::Reserve.into(),
-				ExistenceRequirement::KeepAlive,
+				ExistenceRequirement::AllowDeath,
 			)?;
+			T::Currency::resolve_creating(&Self::account_id(), imbalance);
 
 			let bvalue = U256::from(UniqueSaturatedInto::<u128>::unique_saturated_into(value));
 			let address = T::ConvertAccountId::convert_account_id(&sender);
@@ -139,15 +143,20 @@ decl_module! {
 			let address = T::ConvertAccountId::convert_account_id(&sender);
 			let bvalue = U256::from(UniqueSaturatedInto::<u128>::unique_saturated_into(value));
 
-			if Accounts::get(&address).balance < bvalue {
-				return Err("Not enough balance to withdraw")
-			}
+			let mut account = Accounts::get(&address);
+			account.balance = account.balance.checked_sub(bvalue)
+				.ok_or("Not enough balance to withdraw")?;
 
-			Accounts::mutate(&address, |account| {
-				account.balance -= bvalue;
-			});
+			let imbalance = T::Currency::withdraw(
+				&Self::account_id(),
+				value,
+				WithdrawReason::Reserve.into(),
+				ExistenceRequirement::AllowDeath
+			)?;
 
-			T::Currency::deposit_creating(&sender, value);
+			Accounts::insert(&address, account);
+
+			T::Currency::resolve_creating(&sender, imbalance);
 
 			Ok(())
 		}
@@ -256,6 +265,14 @@ decl_module! {
 }
 
 impl<T: Trait> Module<T> {
+	/// The account ID of the EVM module.
+	///
+	/// This actually does computation. If you need to keep using it, then make sure you cache the
+	/// value and only call this once.
+	pub fn account_id() -> T::AccountId {
+		MODULE_ID.into_account()
+	}
+
 	/// Check whether an account is empty.
 	pub fn is_account_empty(address: &H160) -> bool {
 		let account = Accounts::get(address);
