@@ -89,13 +89,12 @@ use srml_babe::{
 	timestamp::{TimestampInherentData, InherentType as TimestampInherent}
 };
 use consensus_common::SelectChain;
-use consensus_common::import_queue::{Verifier, BasicQueue};
+use consensus_common::import_queue::{Verifier, BasicQueue, CacheKeyId};
 use client::{
 	block_builder::api::BlockBuilder as BlockBuilderApi,
 	blockchain::{self, HeaderBackend, ProvideCache}, BlockchainEvents, CallExecutor, Client,
 	error::Result as ClientResult, error::Error as ClientError, backend::{AuxStore, Backend},
 	ProvideUncles,
-	well_known_cache_keys::{self, Id as CacheKeyId},
 };
 use slots::{CheckedHeader, check_equivocation};
 use futures::prelude::*;

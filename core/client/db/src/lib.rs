@@ -455,7 +455,7 @@ pub struct BlockImportOperation<Block: BlockT, H: Hasher> {
 	storage_updates: StorageCollection,
 	child_storage_updates: ChildStorageCollection,
 	changes_trie_updates: MemoryDB<H>,
-	changes_trie_cache_update: Option<ChangesTrieCacheAction<H::Out, NumberFor<Block>>>,
+	changes_trie_build_cache_update: Option<ChangesTrieCacheAction<H::Out, NumberFor<Block>>>,
 	changes_trie_config_update: Option<Option<ChangesTrieConfiguration>>,
 	pending_block: Option<PendingBlock<Block>>,
 	aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
@@ -558,7 +558,7 @@ impl<Block> client::backend::BlockImportOperation<Block, Blake2Hasher>
 		update: ChangesTrieTransaction<Blake2Hasher, NumberFor<Block>>,
 	) -> ClientResult<()> {
 		self.changes_trie_updates = update.0;
-		self.changes_trie_cache_update = Some(update.1);
+		self.changes_trie_build_cache_update = Some(update.1);
 		Ok(())
 	}
 
@@ -1082,8 +1082,8 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 
 		let write_result = self.storage.db.write(transaction).map_err(db_err);
 
-		if let Some(changes_trie_cache_update) = operation.changes_trie_cache_update {
-			self.changes_tries_storage.commit_build_cache(changes_trie_cache_update);
+		if let Some(changes_trie_build_cache_update) = operation.changes_trie_build_cache_update {
+			self.changes_tries_storage.commit_build_cache(changes_trie_build_cache_update);
 		}
 
 		if let Some((
@@ -1237,7 +1237,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 			child_storage_updates: Default::default(),
 			changes_trie_config_update: None,
 			changes_trie_updates: MemoryDB::default(),
-			changes_trie_cache_update: None,
+			changes_trie_build_cache_update: None,
 			aux_ops: Vec::new(),
 			finalized_blocks: Vec::new(),
 			set_head: None,

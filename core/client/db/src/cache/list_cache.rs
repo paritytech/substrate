@@ -1412,9 +1412,21 @@ pub mod tests {
 	#[test]
 	fn is_connected_to_block_fails() {
 		// when storage returns error
-		assert!(chain::is_connected_to_block::<_, u64, _>(&FaultyStorage, (&test_id(1)).into(), &test_id(100)).is_err());
+		assert!(
+			chain::is_connected_to_block::<_, u64, _>(
+				&FaultyStorage,
+				(&test_id(1)).into(),
+				&test_id(100),
+			).is_err(),
+		);
 		// when there's no header in the storage
-		assert!(chain::is_connected_to_block::<_, u64, _>(&DummyStorage::new(), (&test_id(1)).into(), &test_id(100)).is_err());
+		assert!(
+			chain::is_connected_to_block::<_, u64, _>(
+				&DummyStorage::new(),
+				(&test_id(1)).into(),
+				&test_id(100),
+			).is_err(),
+		);
 	}
 
 	#[test]

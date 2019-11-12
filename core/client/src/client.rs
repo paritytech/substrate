@@ -514,17 +514,18 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			None => return Ok(None),
 		};
 
-		// TODO (#3282): we only work with the last config range here!!! Need to stabilize pruning before fixing this.
-		match configs.pop() {
-			Some((zero, _, _)) => {
-				let oldest = storage.oldest_pruned_digest_range_end();
-				let oldest = ::std::cmp::max(zero + One::one(), oldest);
-				let first = ::std::cmp::max(first, oldest);
+		let first_available_changes_trie = configs.into_iter().rev()
+			.take_while(|config| config.config.is_some())
+			.map(|config| config.zero + One::one())
+			.next();
+		match first_available_changes_trie {
+			Some(first_available_changes_trie) => {
+				let oldest_unpruned = storage.oldest_pruned_digest_range_end();
+				let first = std::cmp::max(first_available_changes_trie, oldest_unpruned);
 				Ok(Some((first, last)))
 			},
-			None => Ok(None),
+			None => Ok(None)
 		}
-
 	}
 
 	/// Get pairs of (block, extrinsic) where key has been changed at given blocks range.
@@ -757,6 +758,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 	/// Returns changes trie storage and all configurations that have been active in the range [first; last].
 	///
+	/// Configurations are returned in descending order (and obviously never overlap).
 	/// Fails if or an error if it is not supported.
 	fn require_changes_trie(
 		&self,
