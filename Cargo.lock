@@ -4347,6 +4347,8 @@ dependencies = [
  "sr-arithmetic 2.0.0",
  "sr-io 2.0.0",
  "sr-std 2.0.0",
+ "srml-support 2.0.0",
+ "srml-system 2.0.0",
  "substrate-application-crypto 2.0.0",
  "substrate-inherents 2.0.0",
  "substrate-offchain 2.0.0",
