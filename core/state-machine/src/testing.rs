@@ -194,6 +194,7 @@ mod tests {
 	fn set_and_retrieve_code() {
 		let mut ext = TestExternalities::<Blake2Hasher, u64>::default();
 		let mut ext = ext.ext();
+
 		let code = vec![1, 2, 3];
 		ext.set_storage(CODE.to_vec(), code.clone());
 

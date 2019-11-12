@@ -140,9 +140,9 @@ fn test_blocks(genesis_config: &GenesisConfig, executor: &NativeExecutor<Executo
 			function: Call::Balances(balances::Call::transfer(bob().into(), 1 * DOLLARS)),
 		}
 	}));
-	let block1 = test_ext.ext().construct_block(
+	let block1 = construct_block(
 		executor,
-		&mut ext,
+		&mut test_ext.ext(),
 		1,
 		GENESIS_HASH.into(),
 		block1_extrinsics,
@@ -165,7 +165,7 @@ fn bench_execute_block(c: &mut Criterion) {
 			// Get the runtime version to initialize the runtimes cache.
 			{
 				let mut test_ext = new_test_ext(&genesis_config);
-				executor.runtime_version(&mut ext.ext());
+				executor.runtime_version(&mut test_ext.ext());
 			}
 
 			let blocks = test_blocks(&genesis_config, &executor);

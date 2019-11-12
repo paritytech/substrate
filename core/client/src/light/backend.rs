@@ -56,7 +56,7 @@ pub struct ImportOperation<Block: BlockT, S, H: Hasher> {
 	set_head: Option<BlockId<Block>>,
 	storage_update: Option<InMemoryState<H>>,
 	changes_trie_config_update: Option<Option<ChangesTrieConfiguration>>,
-	_phantom: ::std::marker::PhantomData<(S)>,
+	_phantom: ::std::marker::PhantomData<S>,
 }
 
 /// Either in-memory genesis state, or locally-unavailable state.
