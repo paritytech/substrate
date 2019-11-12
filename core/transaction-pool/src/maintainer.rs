@@ -29,7 +29,6 @@ use parking_lot::Mutex;
 use client::{
 	Client,
 	light::fetcher::{Fetcher, RemoteBodyRequest},
-	runtime_api::TaggedTransactionQueue,
 };
 use primitives::{Blake2Hasher, H256};
 use sr_primitives::{
@@ -37,6 +36,7 @@ use sr_primitives::{
 	traits::{Block as BlockT, Extrinsic, Header, NumberFor, ProvideRuntimeApi, SimpleArithmetic},
 };
 use txpoolapi::TransactionPoolMaintainer;
+use tx_runtime_api::TaggedTransactionQueue;
 
 use txpool::{self, ChainApi};
 

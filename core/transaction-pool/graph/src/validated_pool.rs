@@ -278,7 +278,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 								final_statuses.insert(hash, Status::Failed);
 							},
 						},
-						ValidatedTransaction::Invalid(_) | ValidatedTransaction::Unknown(_, _) => {
+						ValidatedTransaction::Invalid(_, _) | ValidatedTransaction::Unknown(_, _) => {
 							final_statuses.insert(hash, Status::Failed);
 						},
 					}
