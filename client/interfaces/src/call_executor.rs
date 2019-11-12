@@ -14,21 +14,18 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{sync::Arc, cmp::Ord, panic::UnwindSafe, result, cell::RefCell, rc::Rc};
+use std::{cmp::Ord, panic::UnwindSafe, result, cell::RefCell, rc::Rc};
 use codec::{Encode, Decode};
 use sr_primitives::{
 	generic::BlockId, traits::Block as BlockT, traits::NumberFor,
 };
 use state_machine::{
-	self, OverlayedChanges, Ext, ExecutionManager, StateMachine, ExecutionStrategy,
-	backend::Backend as _, ChangesTrieTransaction, StorageProof,
+	self, OverlayedChanges, ExecutionManager, ExecutionStrategy,
+	ChangesTrieTransaction, StorageProof,
 };
-use executor::{RuntimeVersion, RuntimeInfo, NativeVersion};
+use executor::{RuntimeVersion, NativeVersion};
 use hash_db::Hasher;
-use primitives::{
-	offchain::OffchainExt, H256, Blake2Hasher, NativeOrEncoded, NeverNativeValue,
-	traits::{CodeExecutor, KeystoreExt},
-};
+use primitives::{offchain::OffchainExt, Blake2Hasher, NativeOrEncoded};
 
 use sr_api::{ProofRecorder, InitializeBlock};
 use crate::error;

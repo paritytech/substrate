@@ -37,6 +37,7 @@ use interfaces::{
 		Error as ClientError, Result as ClientResult
 	},
 	light::Storage as BlockchainStorage,
+	InMemOffchainStorage,
 };
 use crate::light::blockchain::{Blockchain};
 use hash_db::Hasher;
@@ -114,7 +115,7 @@ impl<S, Block, H> ClientBackend<Block, H> for Backend<S, H> where
 	type Blockchain = Blockchain<S>;
 	type State = GenesisOrUnavailableState<H>;
 	type ChangesTrieStorage = in_mem::ChangesTrieStorage<Block, H>;
-	type OffchainStorage = in_mem::OffchainStorage;
+	type OffchainStorage = InMemOffchainStorage;
 
 	fn begin_operation(&self) -> ClientResult<Self::BlockImportOperation> {
 		Ok(ImportOperation {

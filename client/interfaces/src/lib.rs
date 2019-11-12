@@ -16,12 +16,15 @@
 
 //! Substrate client interfaces.
 
+// TODO: make internal
 pub mod error;
 pub mod backend;
 pub mod blockchain;
 pub mod light;
 pub mod notifications;
 pub mod call_executor;
+pub mod client;
+pub mod offchain;
 
 pub use error::*;
 pub use backend::*;
@@ -29,3 +32,7 @@ pub use blockchain::*;
 pub use light::*;
 pub use notifications::*;
 pub use call_executor::*;
+pub use offchain::*;
+pub use client::*;
+
+pub use state_machine::{StorageProof, ExecutionStrategy};

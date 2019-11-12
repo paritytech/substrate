@@ -18,9 +18,12 @@ use crate::{Service, NetworkStatus, NetworkState, error::{self, Error}, DEFAULT_
 use crate::{SpawnTaskHandle, start_rpc_servers, build_network_future, TransactionPoolAdapter};
 use crate::status_sinks;
 use crate::config::{Configuration, DatabaseConfig};
-use client::{
-	BlockchainEvents, Client, backend::RemoteBackend, light::blockchain::RemoteBlockchain,
+use interfaces::{
+	self,
+	BlockchainEvents,
+	backend::RemoteBackend, light::RemoteBlockchain,
 };
+use client::Client;
 use chain_spec::{RuntimeGenesis, Extension};
 use codec::{Decode, Encode, IoReader};
 use consensus_common::import_queue::ImportQueue;

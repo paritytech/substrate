@@ -28,7 +28,7 @@
 //!
 
 use blocks::BlockCollection;
-use client::{ClientInfo, error::Error as ClientError};
+use interfaces::{ClientInfo, error::Error as ClientError};
 use consensus::{BlockOrigin, BlockStatus,
 	block_validation::{BlockAnnounceValidator, Validation},
 	import_queue::{IncomingBlock, BlockImportResult, BlockImportError}

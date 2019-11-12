@@ -8,7 +8,7 @@ edition = "2018"
 
 [dependencies]
 bytes = "0.4.12"
-client = { package = "substrate-client", path = "../" }
+interfaces = { package = "substrate-client-interfaces", path = "../interfaces" }
 sr-api = { path = "../../primitives/sr-api" }
 fnv = "1.0.6"
 futures01 = { package = "futures", version = "0.1" }

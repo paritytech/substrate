@@ -20,7 +20,7 @@ use std::{
 	collections::BTreeMap,
 	sync::Arc,
 };
-use client::backend::OffchainStorage;
+use interfaces::{OffchainStorage, InMemOffchainStorage};
 use parking_lot::RwLock;
 use primitives::offchain::{
 	self,
@@ -64,9 +64,9 @@ pub struct State {
 	pub requests: BTreeMap<RequestId, PendingRequest>,
 	expected_requests: BTreeMap<RequestId, PendingRequest>,
 	/// Persistent local storage
-	pub persistent_storage: client::in_mem::OffchainStorage,
+	pub persistent_storage: InMemOffchainStorage,
 	/// Local storage
-	pub local_storage: client::in_mem::OffchainStorage,
+	pub local_storage: InMemOffchainStorage,
 	/// A vector of transactions submitted from the runtime.
 	pub transactions: Vec<Vec<u8>>,
 }

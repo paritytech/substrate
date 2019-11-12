@@ -16,7 +16,7 @@
 
 //! Initialization errors.
 
-use client;
+use interfaces;
 
 /// Result type alias for the CLI.
 pub type Result<T> = std::result::Result<T, Error>;

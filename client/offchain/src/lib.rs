@@ -44,6 +44,7 @@ use network::NetworkStateInfo;
 use primitives::{offchain, ExecutionContext};
 use sr_primitives::{generic::BlockId, traits::{self, ProvideRuntimeApi}};
 use transaction_pool::txpool::{Pool, ChainApi};
+use interfaces::{OffchainStorage};
 
 mod api;
 
@@ -89,7 +90,7 @@ impl<Client, Storage, Block> OffchainWorkers<
 	Block: traits::Block,
 	Client: ProvideRuntimeApi + Send + Sync + 'static,
 	Client::Api: OffchainWorkerApi<Block>,
-	Storage: client::backend::OffchainStorage + 'static,
+	Storage: OffchainStorage + 'static,
 {
 	/// Start the offchain workers after given block.
 	#[must_use]

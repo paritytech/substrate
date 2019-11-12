@@ -27,6 +27,7 @@ use crate::{
 	blockchain::{
 		Backend as BlockchainBackend, well_known_cache_keys
 	},
+	offchain::OffchainStorage,
 	error,
 	light::RemoteBlockchain,
 };
@@ -297,26 +298,6 @@ pub trait Backend<Block, H>: AuxStore + Send + Sync where
 	/// something that the import of a block would interfere with, e.g. importing
 	/// a new block or calculating the best head.
 	fn get_import_lock(&self) -> &Mutex<()>;
-}
-
-/// Offchain workers local storage.
-pub trait OffchainStorage: Clone + Send + Sync {
-	/// Persist a value in storage under given key and prefix.
-	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]);
-
-	/// Retrieve a value from storage under given key and prefix.
-	fn get(&self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>>;
-
-	/// Replace the value in storage if given old_value matches the current one.
-	///
-	/// Returns `true` if the value has been set and false otherwise.
-	fn compare_and_set(
-		&mut self,
-		prefix: &[u8],
-		key: &[u8],
-		old_value: Option<&[u8]>,
-		new_value: &[u8],
-	) -> bool;
 }
 
 /// Changes trie storage that supports pruning.

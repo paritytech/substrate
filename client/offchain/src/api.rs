@@ -21,7 +21,7 @@ use std::{
 	thread::sleep,
 };
 
-use client::backend::OffchainStorage;
+use interfaces::OffchainStorage;
 use futures::{StreamExt as _, Future, FutureExt as _, future, channel::mpsc};
 use log::{info, debug, warn, error};
 use network::{PeerId, Multiaddr, NetworkStateInfo};

@@ -32,9 +32,9 @@ use consensus::{
 use codec::{Decode, Encode};
 use sr_primitives::{generic::BlockId, ConsensusEngineId, Justification};
 use sr_primitives::traits::{
-	Block as BlockT, Header as HeaderT, NumberFor, One, Zero,
-	CheckedSub, SaturatedConversion
+	Block as BlockT, Header as HeaderT, NumberFor, One, Zero, CheckedSub
 };
+use sr_arithmetic::traits::SaturatedConversion;
 use message::{BlockAnnounce, BlockAttributes, Direction, FromBlock, Message, RequestId};
 use message::generic::{Message as GenericMessage, ConsensusMessage};
 use consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
@@ -50,7 +50,7 @@ use std::fmt::Write;
 use std::{cmp, num::NonZeroUsize, time};
 use log::{trace, debug, warn, error};
 use crate::chain::{Client, FinalityProofProvider};
-use client::light::fetcher::{FetchChecker, ChangesProof, StorageProof};
+use interfaces::{FetchChecker, ChangesProof, StorageProof};
 use crate::error;
 use util::LruHashSet;
 

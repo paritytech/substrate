@@ -16,9 +16,9 @@
 
 //! Blockchain access trait
 
-use client::{self, Client as SubstrateClient, ClientInfo, CallExecutor};
-use client::error::Error;
-use client::light::fetcher::{ChangesProof, StorageProof};
+use client::Client as SubstrateClient;
+use interfaces::error::Error;
+use interfaces::{ChangesProof, StorageProof, ClientInfo, CallExecutor};
 use consensus::{BlockImport, BlockStatus, Error as ConsensusError};
 use sr_primitives::traits::{Block as BlockT, Header as HeaderT};
 use sr_primitives::generic::{BlockId};
