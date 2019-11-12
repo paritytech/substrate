@@ -341,7 +341,7 @@ where TSubstream: AsyncRead + AsyncWrite + 'static {
 						} else {
 							handler.inject_event(NotifsInHandlerIn::Refuse);
 						},
-					ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::Closed) => unimplemented!(),
+					ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::Closed) => {},
 					ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::Notif(message)) => {
 						let msg = NotifsHandlerOut::CustomMessage {
 							message: message.into(),
@@ -369,21 +369,33 @@ where TSubstream: AsyncRead + AsyncWrite + 'static {
 		}
 
 		if let Async::Ready(ev) = self.legacy.poll().map_err(EitherError::B)? {
-			return Ok(Async::Ready(ev
-				.map_protocol(EitherUpgrade::B)
-				.map_outbound_open_info(|()| None)
-				.map_custom(|ev| match ev {
-					LegacyProtoHandlerOut::CustomProtocolOpen { .. } =>
-						NotifsHandlerOut::CustomProtocolOpen,
-					LegacyProtoHandlerOut::CustomProtocolClosed { reason } =>
-						NotifsHandlerOut::CustomProtocolClosed { reason },
-					LegacyProtoHandlerOut::CustomMessage { message } =>
-						NotifsHandlerOut::CustomMessage { message, proto_name: None },
-					LegacyProtoHandlerOut::Clogged { messages } =>
-						NotifsHandlerOut::Clogged { messages },
-					LegacyProtoHandlerOut::ProtocolError { is_severe, error } =>
-						NotifsHandlerOut::ProtocolError { is_severe, error },
-				})));
+			match ev {
+				ProtocolsHandlerEvent::OutboundSubstreamRequest { protocol, info: () } =>
+					return Ok(Async::Ready(ProtocolsHandlerEvent::OutboundSubstreamRequest {
+						protocol: protocol.map_upgrade(EitherUpgrade::B),
+						info: None,
+					})),
+				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomProtocolOpen { .. }) =>
+					return Ok(Async::Ready(ProtocolsHandlerEvent::Custom(
+						NotifsHandlerOut::CustomProtocolOpen
+					))),
+				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomProtocolClosed { reason }) =>
+					return Ok(Async::Ready(ProtocolsHandlerEvent::Custom(
+						NotifsHandlerOut::CustomProtocolClosed { reason }
+					))),
+				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomMessage { message }) =>
+					return Ok(Async::Ready(ProtocolsHandlerEvent::Custom(
+						NotifsHandlerOut::CustomMessage { message, proto_name: None }
+					))),
+				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::Clogged { messages }) =>
+					return Ok(Async::Ready(ProtocolsHandlerEvent::Custom(
+						NotifsHandlerOut::Clogged { messages }
+					))),
+				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::ProtocolError { is_severe, error }) =>
+					return Ok(Async::Ready(ProtocolsHandlerEvent::Custom(
+						NotifsHandlerOut::ProtocolError { is_severe, error }
+					))),
+			}
 		}
 
 		Ok(Async::NotReady)
