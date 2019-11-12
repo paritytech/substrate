@@ -163,6 +163,8 @@ pub enum BlockImportError {
 	VerificationFailed(Option<Origin>, String),
 	/// Block is known to be Bad
 	BadBlock(Option<Origin>),
+	/// Parent state is missing.
+	MissingState,
 	/// Block has an unknown parent
 	UnknownParent,
 	/// Block import has been cancelled. This can happen if the parent block fails to be imported.
@@ -207,7 +209,7 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>>(
 			Ok(ImportResult::Imported(aux)) => Ok(BlockImportResult::ImportedUnknown(number, aux, peer.clone())),
 			Ok(ImportResult::MissingState) => {
 				debug!(target: "sync", "Parent state is missing for {}: {:?}, parent: {:?}", number, hash, parent_hash);
-				Err(BlockImportError::UnknownParent)
+				Err(BlockImportError::MissingState)
 			},
 			Ok(ImportResult::UnknownParent) => {
 				debug!(target: "sync", "Block with unknown parent {}: {:?}, parent: {:?}", number, hash, parent_hash);
