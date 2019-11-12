@@ -770,11 +770,15 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Stream for Ne
 				},
 				ServerToWorkerMsg::ExecuteWithGossip(task) => {
 					let protocol = self.network_service.user_protocol_mut();
+					#[allow(deprecated)]
 					let (mut context, gossip) = protocol.consensus_gossip_lock();
 					task(gossip, &mut context);
 				}
-				ServerToWorkerMsg::GossipConsensusMessage(topic, engine_id, message, recipient) =>
-					self.network_service.user_protocol_mut().gossip_consensus_message(topic, engine_id, message, recipient),
+				ServerToWorkerMsg::GossipConsensusMessage(topic, engine_id, message, recipient) => {
+					#[allow(deprecated)]
+					self.network_service.user_protocol_mut()
+						.gossip_consensus_message(topic, engine_id, message, recipient);
+				},
 				ServerToWorkerMsg::AnnounceBlock(hash, data) =>
 					self.network_service.user_protocol_mut().announce_block(hash, data),
 				ServerToWorkerMsg::RequestJustification(hash, number) =>
@@ -803,7 +807,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Stream for Ne
 			// Process the next action coming from the network.
 			let poll_value = self.network_service.poll();
 
-			let outcome = match poll_value {
+			match poll_value {
 				Ok(Async::NotReady) => break,
 				Ok(Async::Ready(Some(BehaviourOut::BlockImport(origin, blocks)))) =>
 					self.import_queue.import_blocks(origin, blocks),

@@ -695,6 +695,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	}
 
 	/// Locks `self` and returns a context plus the `ConsensusGossip` struct.
+	#[deprecated(note = "Use the new notif protocol API")]
 	pub fn consensus_gossip_lock<'a>(
 		&'a mut self,
 	) -> (impl Context<B> + 'a, &'a mut ConsensusGossip<B>) {
@@ -711,6 +712,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	}
 
 	/// Gossip a consensus message to the network.
+	#[deprecated(note = "Use the new notif protocol API")]
 	pub fn gossip_consensus_message(
 		&mut self,
 		topic: B::Hash,
