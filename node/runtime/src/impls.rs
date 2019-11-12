@@ -25,7 +25,7 @@ use crate::{Balances, System, Authorship, MaximumBlockWeight, NegativeImbalance}
 
 pub struct Author;
 impl OnUnbalanced<NegativeImbalance> for Author {
-	fn on_unbalanced(amount: NegativeImbalance) {
+	fn on_nonzero_unbalanced(amount: NegativeImbalance) {
 		Balances::resolve_creating(&Authorship::author(), amount);
 	}
 }

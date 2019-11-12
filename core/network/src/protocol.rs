@@ -1009,12 +1009,14 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			behaviour: &mut self.behaviour,
 			peerset: self.peerset_handle.clone(),
 		}, who.clone(), status.roles, status.best_number);
-		match self.sync.new_peer(who.clone(), info) {
-			Ok(None) => (),
-			Ok(Some(req)) => self.send_request(&who, GenericMessage::BlockRequest(req)),
-			Err(sync::BadPeer(id, repu)) => {
-				self.behaviour.disconnect_peer(&id);
-				self.peerset_handle.report_peer(id, repu)
+		if info.roles.is_full() {
+			match self.sync.new_peer(who.clone(), info.best_hash, info.best_number) {
+				Ok(None) => (),
+				Ok(Some(req)) => self.send_request(&who, GenericMessage::BlockRequest(req)),
+				Err(sync::BadPeer(id, repu)) => {
+					self.behaviour.disconnect_peer(&id);
+					self.peerset_handle.report_peer(id, repu)
+				}
 			}
 		}
 		let mut context = ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle);
@@ -1341,12 +1343,10 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		count: usize,
 		results: Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>
 	) {
-		let peers = self.context_data.peers.clone();
 		let results = self.sync.on_blocks_processed(
 			imported,
 			count,
 			results,
-			|peer_id| peers.get(peer_id).map(|i| i.info.clone())
 		);
 		for result in results {
 			match result {
