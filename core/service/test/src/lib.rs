@@ -156,8 +156,7 @@ fn node_config<G, E: Clone> (
 		non_reserved_mode: NonReservedPeerMode::Accept,
 		client_version: "network/test/0.1".to_owned(),
 		node_name: "unknown".to_owned(),
-		extra_gossip_protos: Vec::new(),
-		extra_request_response_protos: Vec::new(),
+		extra_notif_protos: Vec::new(),
 		transport: TransportConfig::Normal {
 			enable_mdns: false,
 			allow_private_ipv4: true,

@@ -194,7 +194,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 
 		let num_connected = Arc::new(AtomicUsize::new(0));
 		let is_major_syncing = Arc::new(AtomicBool::new(false));
-		let (protocol, peerset_handle) = Protocol::new(
+		let (mut protocol, peerset_handle) = Protocol::new(
 			protocol::ProtocolConfig {
 				roles: params.roles,
 				max_parallel_downloads: params.network_config.max_parallel_downloads,
@@ -210,6 +210,10 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 			peerset_config,
 			params.block_announce_validator
 		)?;
+
+		for proto in params.network_config.extra_notif_protos {
+			protocol.register_notif_protocol(proto, Vec::new());
+		}
 
 		// Build the swarm.
 		let (mut swarm, bandwidth) = {
@@ -428,7 +432,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	/// >			voluntarily closing a substream or a network error preventing the message from
 	/// >			being delivered.
 	///
-	/// The protocol name must be one of the elements of `extra_gossip_protos` that was passed in
+	/// The protocol name must be one of the elements of `extra_notif_protos` that was passed in
 	/// the configuration.
 	pub fn write_notif(&self, target: PeerId, proto_name: impl Into<Vec<u8>>, message: impl Encode) {
 		let _ = self.to_worker.unbounded_send(ServerToWorkerMsg::WriteNotif {
@@ -451,6 +455,9 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	}
 
 	/// Registers a new notifications protocol.
+	///
+	/// This has the same effect as having an extra entry in
+	/// [`NetworkConfiguration::extra_notif_protos`].
 	///
 	/// You are very strongly encouraged to call this method very early on. Any connection open
 	/// will retain the protocols that were registered then, and not any new one.
