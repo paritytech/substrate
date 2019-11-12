@@ -74,7 +74,7 @@ impl<Block: BlockT> From<DbCacheTransactionOps<Block>> for DbChangesTrieStorageT
 /// Changes tries storage.
 ///
 /// Stores all tries in separate DB column.
-/// Lock order: meta, tries_meta, cache.
+/// Lock order: meta, tries_meta, cache, build_cache.
 pub struct DbChangesTrieStorage<Block: BlockT> {
 	db: Arc<dyn KeyValueDB>,
 	meta_column: Option<u32>,
@@ -84,7 +84,11 @@ pub struct DbChangesTrieStorage<Block: BlockT> {
 	meta: Arc<RwLock<Meta<NumberFor<Block>, Block::Hash>>>,
 	tries_meta: RwLock<ChangesTriesMeta<Block>>,
 	min_blocks_to_keep: Option<u32>,
+	/// The cache stores all ever existing changes tries configurations.
 	cache: DbCacheSync<Block>,
+	/// Build cache is a map of block => set of storage keys changed at this block.
+	/// They're used to build digest blocks - instead of reading+parsing tries from db
+	/// we just use keys sets from the cache.
 	build_cache: RwLock<ChangesTrieBuildCache<Block::Hash, NumberFor<Block>>>,
 }
 
