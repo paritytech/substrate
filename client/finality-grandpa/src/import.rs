@@ -23,10 +23,10 @@ use parking_lot::RwLockWriteGuard;
 
 use interfaces::{
 	backend::Backend, blockchain,
-	CallExecutor, blockchain::HeaderBackend, well_known_cache_keys
+	CallExecutor, blockchain::HeaderBackend, well_known_cache_keys,
+	utils::is_descendent_of,
 };
 use client::Client;
-use client::utils::is_descendent_of;
 use consensus_common::{
 	BlockImport, Error as ConsensusError,
 	BlockCheckParams, BlockImportParams, ImportResult, JustificationImport,

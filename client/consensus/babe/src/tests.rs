@@ -34,7 +34,7 @@ use network::config::BoxFinalityProofRequestBuilder;
 use sr_primitives::{generic::DigestItem, traits::{Block as BlockT, DigestFor}};
 use network::config::ProtocolConfig;
 use tokio::runtime::current_thread;
-use client::BlockchainEvents;
+use interfaces::BlockchainEvents;
 use test_client;
 use log::debug;
 use std::{time::Duration, cell::RefCell};

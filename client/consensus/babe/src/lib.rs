@@ -90,10 +90,10 @@ use interfaces::{
 	backend::{AuxStore, Backend},
 	call_executor::CallExecutor,
 	error::{Result as ClientResult, Error as ClientError}
+	blockchain::{self, HeaderBackend, ProvideCache},
+	BlockchainEvents, ProvideUncles,
 };
-use client::{
-	blockchain::{self, HeaderBackend, ProvideCache}, BlockchainEvents, Client, ProvideUncles,
-};
+use client::Client;
 
 use block_builder_api::BlockBuilder as BlockBuilderApi;
 
@@ -156,11 +156,11 @@ enum Error<B: BlockT> {
 	#[display(fmt = "VRF verification failed: {:?}", _0)]
 	VRFVerificationFailed(SignatureError),
 	#[display(fmt = "Could not fetch parent header: {:?}", _0)]
-	FetchParentHeader(client::error::Error),
+	FetchParentHeader(interfaces::error::Error),
 	#[display(fmt = "Expected epoch change to happen at {:?}, s{}", _0, _1)]
 	ExpectedEpochChange(B::Hash, u64),
 	#[display(fmt = "Could not look up epoch: {:?}", _0)]
-	CouldNotLookUpEpoch(Box<fork_tree::Error<client::error::Error>>),
+	CouldNotLookUpEpoch(Box<fork_tree::Error<interfaces::error::Error>>),
 	#[display(fmt = "Block {} is not valid under any epoch.", _0)]
 	BlockNotValid(B::Hash),
 	#[display(fmt = "Unexpected epoch change")]
@@ -169,9 +169,9 @@ enum Error<B: BlockT> {
 	ParentBlockNoAssociatedWeight(B::Hash),
 	#[display(fmt = "Checking inherents failed: {}", _0)]
 	CheckInherents(String),
-	Client(client::error::Error),
+	Client(interfaces::error::Error),
 	Runtime(inherents::Error),
-	ForkTree(Box<fork_tree::Error<client::error::Error>>),
+	ForkTree(Box<fork_tree::Error<interfaces::error::Error>>),
 }
 
 impl<B: BlockT> std::convert::From<Error<B>> for String {
@@ -205,7 +205,7 @@ impl Config {
 	/// Either fetch the slot duration from disk or compute it from the genesis
 	/// state.
 	pub fn get_or_compute<B: BlockT, C>(client: &C) -> ClientResult<Self> where
-		C: AuxStore + ProvideRuntimeApi, C::Api: BabeApi<B, Error = client::error::Error>,
+		C: AuxStore + ProvideRuntimeApi, C::Api: BabeApi<B, Error = interfaces::error::Error>,
 	{
 		trace!(target: "babe", "Getting slot duration");
 		match slots::SlotDuration::get_or_compute(client, |a, b| a.configuration(b)).map(Self) {
@@ -557,7 +557,7 @@ impl<B, E, Block: BlockT, RA, PRA> BabeVerifier<B, E, Block, RA, PRA> {
 		block_id: BlockId<Block>,
 		inherent_data: InherentData,
 	) -> Result<(), Error<Block>>
-		where PRA: ProvideRuntimeApi, PRA::Api: BlockBuilderApi<Block, Error = client::error::Error>
+		where PRA: ProvideRuntimeApi, PRA::Api: BlockBuilderApi<Block, Error = interfaces::error::Error>
 	{
 		let inherent_res = self.api.runtime_api().check_inherents(
 			&block_id,
@@ -626,8 +626,8 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA
 	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 	RA: Send + Sync,
 	PRA: ProvideRuntimeApi + Send + Sync + AuxStore + ProvideCache<Block>,
-	PRA::Api: BlockBuilderApi<Block, Error = client::error::Error>
-		+ BabeApi<Block, Error = client::error::Error>,
+	PRA::Api: BlockBuilderApi<Block, Error = interfaces::error::Error>
+		+ BabeApi<Block, Error = interfaces::error::Error>,
 {
 	fn verify(
 		&mut self,
@@ -906,7 +906,7 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 				slot_number,
 				|slot| self.config.genesis_epoch(slot),
 			)
-				.map_err(|e: fork_tree::Error<client::error::Error>| ConsensusError::ChainLookup(
+				.map_err(|e: fork_tree::Error<interfaces::error::Error>| ConsensusError::ChainLookup(
 					babe_err(Error::<Block>::CouldNotLookUpEpoch(Box::new(e))).into()
 				))?
 				.ok_or_else(|| ConsensusError::ClientImport(
@@ -1145,7 +1145,7 @@ pub fn import_queue<B, E, Block: BlockT<Hash=H256>, I, RA, PRA>(
 	E: CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync + 'static,
 	RA: Send + Sync + 'static,
 	PRA: ProvideRuntimeApi + ProvideCache<Block> + Send + Sync + AuxStore + 'static,
-	PRA::Api: BlockBuilderApi<Block> + BabeApi<Block> + ApiExt<Block, Error = client::error::Error>,
+	PRA::Api: BlockBuilderApi<Block> + BabeApi<Block> + ApiExt<Block, Error = interfaces::error::Error>,
 {
 	register_babe_inherent_data_provider(&inherent_data_providers, babe_link.config.slot_duration)?;
 

@@ -25,9 +25,11 @@ use fork_tree::ForkTree;
 use parking_lot::{Mutex, MutexGuard};
 use sr_primitives::traits::{Block as BlockT, NumberFor, One, Zero};
 use codec::{Encode, Decode};
-use client::error::Error as ClientError;
-use client::utils as client_utils;
-use client::blockchain::HeaderBackend;
+use interfaces::{
+	error::Error as ClientError,
+	utils::is_descendent_of,
+	blockchain::HeaderBackend
+};
 use header_metadata::HeaderMetadata;
 use primitives::H256;
 use std::ops::Add;
@@ -72,7 +74,7 @@ impl<'a, H, Block> IsDescendentOfBuilder<H256>
 	fn build_is_descendent_of(&self, current: Option<(H256, H256)>)
 		-> Self::IsDescendentOf
 	{
-		Box::new(client_utils::is_descendent_of(self.0, current))
+		Box::new(is_descendent_of(self.0, current))
 	}
 }
 
