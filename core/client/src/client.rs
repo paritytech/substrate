@@ -2898,12 +2898,14 @@ pub(crate) mod tests {
 			.unwrap().bake().unwrap();
 		client.import(BlockOrigin::Own, b2.clone()).unwrap();
 
+		// prepare B3 before we finalize A2, because otherwise we won't be able to
+		// read changes trie configuration after A2 is finalized
+		let b3 = client.new_block_at(&BlockId::Hash(b2.hash()), Default::default())
+			.unwrap().bake().unwrap();
+
 		// we will finalize A2 which should make it impossible to import a new
 		// B3 at the same height but that doesnt't include it
 		client.finalize_block(BlockId::Hash(a2.hash()), None).unwrap();
-
-		let b3 = client.new_block_at(&BlockId::Hash(b2.hash()), Default::default())
-			.unwrap().bake().unwrap();
 
 		let import_err = client.import(BlockOrigin::Own, b3).err().unwrap();
 		let expected_err = ConsensusError::ClientImport(

@@ -157,7 +157,7 @@ impl<Block: BlockT, T: CacheItemT, S: Storage<Block, T>> ListCache<Block, T, S> 
 			// BUT since we're not guaranteeing to provide correct values for forks
 			// behind the finalized block, check if the block is finalized first
 			if !chain::is_finalized_block(&self.storage, &at, Bounded::max_value())? {
-				return Ok(None);
+				return Err(ClientError::NotInFinalizedChain);
 			}
 
 			self.best_finalized_entry.as_ref()
@@ -840,8 +840,8 @@ pub mod tests {
 		// when block is earlier than best finalized block AND it is not finalized
 		// --- 50 ---
 		// ----------> [100]
-		assert_eq!(ListCache::<_, u64, _>::new(DummyStorage::new(), PruningStrategy::ByDepth(1024), test_id(100))
-			.unwrap().value_at_block(&test_id(50)).unwrap(), None);
+		assert!(ListCache::<_, u64, _>::new(DummyStorage::new(), PruningStrategy::ByDepth(1024), test_id(100))
+			.unwrap().value_at_block(&test_id(50)).is_err());
 		// when block is earlier than best finalized block AND it is finalized AND value is some
 		// [30] ---- 50 ---> [100]
 		assert_eq!(ListCache::new(
@@ -865,14 +865,14 @@ pub mod tests {
 		// when block is parallel to the best finalized block
 		// ---- 100
 		// ---> [100]
-		assert_eq!(ListCache::new(
+		assert!(ListCache::new(
 			DummyStorage::new()
 				.with_meta(Some(test_id(100)), Vec::new())
 				.with_id(50, H256::from_low_u64_be(50))
 				.with_entry(test_id(100), StorageEntry { prev_valid_from: Some(test_id(30)), value: 100 })
 				.with_entry(test_id(30), StorageEntry { prev_valid_from: None, value: 30 }),
 			PruningStrategy::ByDepth(1024), test_id(100)
-		).unwrap().value_at_block(&ComplexBlockId::new(H256::from_low_u64_be(2), 100)).unwrap(), None);
+		).unwrap().value_at_block(&ComplexBlockId::new(H256::from_low_u64_be(2), 100)).is_err());
 
 		// when block is later than last finalized block AND there are no forks AND finalized value is Some
 		// ---> [100] --- 200

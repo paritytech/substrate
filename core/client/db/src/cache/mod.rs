@@ -353,40 +353,38 @@ impl<Block: BlockT> BlockchainCache<Block> for DbCacheSync<Block> {
 		&self,
 		key: &CacheKeyId,
 		at: &BlockId<Block>,
-	) -> Option<((NumberFor<Block>, Block::Hash), Option<(NumberFor<Block>, Block::Hash)>, Vec<u8>)> {
+	) -> ClientResult<Option<((NumberFor<Block>, Block::Hash), Option<(NumberFor<Block>, Block::Hash)>, Vec<u8>)>> {
 		let mut cache = self.0.write();
-		let storage = cache.get_cache(*key).ok()?.storage();
+		let cache = cache.get_cache(*key)?;
+		let storage = cache.storage();
 		let db = storage.db();
 		let columns = storage.columns();
 		let at = match *at {
 			BlockId::Hash(hash) => {
-				let header = utils::read_header::<Block>(
+				let header = utils::require_header::<Block>(
 					&**db,
 					columns.key_lookup,
 					columns.header,
-					BlockId::Hash(hash.clone())).ok()??;
+					BlockId::Hash(hash.clone()))?;
 				ComplexBlockId::new(hash, *header.number())
 			},
 			BlockId::Number(number) => {
-				let hash = utils::read_header::<Block>(
+				let hash = utils::require_header::<Block>(
 					&**db,
 					columns.key_lookup,
 					columns.header,
-					BlockId::Number(number.clone())).ok()??.hash();
+					BlockId::Number(number.clone()))?.hash();
 				ComplexBlockId::new(hash, number)
 			},
 		};
 
-		cache.cache_at
-			.get(key)?
-			.value_at_block(&at)
+		cache.value_at_block(&at)
 			.map(|block_and_value| block_and_value.map(|(begin_block, end_block, value)|
 				(
 					(begin_block.number, begin_block.hash),
 					end_block.map(|end_block| (end_block.number, end_block.hash)),
 					value,
 				)))
-			.ok()?
 	}
 }
 

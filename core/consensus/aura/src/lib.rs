@@ -608,19 +608,20 @@ fn initialize_authorities_cache<A, B, C>(client: &C) -> Result<(), ConsensusErro
 	};
 
 	// check if we already have initialized the cache
-	let genesis_id = BlockId::Number(Zero::zero());
-	let genesis_authorities: Option<Vec<A>> = cache
-		.get_at(&well_known_cache_keys::AUTHORITIES, &genesis_id)
-		.and_then(|(_, _, v)| Decode::decode(&mut &v[..]).ok());
-	if genesis_authorities.is_some() {
-		return Ok(());
-	}
-
 	let map_err = |error| consensus_common::Error::from(consensus_common::Error::ClientImport(
 		format!(
 			"Error initializing authorities cache: {}",
 			error,
 		)));
+
+	let genesis_id = BlockId::Number(Zero::zero());
+	let genesis_authorities: Option<Vec<A>> = cache
+		.get_at(&well_known_cache_keys::AUTHORITIES, &genesis_id).map_err(map_err)?
+		.and_then(|(_, _, v)| Decode::decode(&mut &v[..]).ok());
+	if genesis_authorities.is_some() {
+		return Ok(());
+	}
+
 	let genesis_authorities = authorities(client, &genesis_id)?;
 	cache.initialize(&well_known_cache_keys::AUTHORITIES, genesis_authorities.encode())
 		.map_err(map_err)?;
@@ -639,6 +640,7 @@ fn authorities<A, B, C>(client: &C, at: &BlockId<B>) -> Result<Vec<A>, Consensus
 		.cache()
 		.and_then(|cache| cache
 			.get_at(&well_known_cache_keys::AUTHORITIES, at)
+			.unwrap_or(None)
 			.and_then(|(_, _, v)| Decode::decode(&mut &v[..]).ok())
 		)
 		.or_else(|| AuraApi::authorities(&*client.runtime_api(), at).ok())

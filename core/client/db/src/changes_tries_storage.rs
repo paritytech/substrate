@@ -387,7 +387,7 @@ where
 
 	fn configuration_at(&self, at: &BlockId<Block>) -> ClientResult<ChangesTrieConfigurationRange<Block>> {
 		self.cache
-			.get_at(&well_known_cache_keys::CHANGES_TRIE_CONFIG, at)
+			.get_at(&well_known_cache_keys::CHANGES_TRIE_CONFIG, at)?
 			.and_then(|(zero, end, encoded)| Decode::decode(&mut &encoded[..]).ok()
 				.map(|config| ChangesTrieConfigurationRange { zero, end, config }))
 			.ok_or_else(|| ClientError::ErrorReadingChangesTriesConfig)

@@ -929,7 +929,7 @@ pub(crate) mod tests {
 		}
 
 		fn get_authorities(cache: &dyn BlockchainCache<Block>, at: BlockId<Block>) -> Option<Vec<AuthorityId>> {
-			cache.get_at(&well_known_cache_keys::AUTHORITIES, &at)
+			cache.get_at(&well_known_cache_keys::AUTHORITIES, &at).unwrap_or(None)
 				.and_then(|(_, _, val)| Decode::decode(&mut &val[..]).ok())
 		}
 
@@ -1113,8 +1113,8 @@ pub(crate) mod tests {
 		let (genesis_hash, storage) = {
 			let db = LightStorage::<Block>::new_test();
 
-			// before cache is initialized => None
-			assert_eq!(db.cache().get_at(b"test", &BlockId::Number(0)), None);
+			// before cache is initialized => Err
+			assert!(db.cache().get_at(b"test", &BlockId::Number(0)).is_err());
 
 			// insert genesis block (no value for cache is provided)
 			let mut genesis_hash = None;
@@ -1125,14 +1125,14 @@ pub(crate) mod tests {
 			});
 
 			// after genesis is inserted => None
-			assert_eq!(db.cache().get_at(b"test", &BlockId::Number(0)), None);
+			assert_eq!(db.cache().get_at(b"test", &BlockId::Number(0)).unwrap(), None);
 
 			// initialize cache
 			db.cache().initialize(b"test", vec![42]).unwrap();
 
 			// after genesis is inserted + cache is initialized => Some
 			assert_eq!(
-				db.cache().get_at(b"test", &BlockId::Number(0)),
+				db.cache().get_at(b"test", &BlockId::Number(0)).unwrap(),
 				Some(((0, genesis_hash.unwrap()), None, vec![42])),
 			);
 
@@ -1142,7 +1142,7 @@ pub(crate) mod tests {
 		// restart && check that after restart value is read from the cache
 		let db = LightStorage::<Block>::from_kvdb(storage as Arc<_>).expect("failed to create test-db");
 		assert_eq!(
-			db.cache().get_at(b"test", &BlockId::Number(0)),
+			db.cache().get_at(b"test", &BlockId::Number(0)).unwrap(),
 			Some(((0, genesis_hash.unwrap()), None, vec![42])),
 		);
 	}
@@ -1156,7 +1156,7 @@ pub(crate) mod tests {
 		// insert block#0 && block#1 (no value for cache is provided)
 		let hash0 = insert_block(&db, HashMap::new(), || default_header(&Default::default(), 0));
 		assert_eq!(
-			db.cache().get_at(&well_known_cache_keys::CHANGES_TRIE_CONFIG, &BlockId::Number(0))
+			db.cache().get_at(&well_known_cache_keys::CHANGES_TRIE_CONFIG, &BlockId::Number(0)).unwrap()
 				.map(|(_, _, v)| ChangesTrieConfiguration::decode(&mut &v[..]).unwrap()),
 			None,
 		);
@@ -1170,7 +1170,7 @@ pub(crate) mod tests {
 			header
 		});
 		assert_eq!(
-			db.cache().get_at(&well_known_cache_keys::CHANGES_TRIE_CONFIG, &BlockId::Number(1))
+			db.cache().get_at(&well_known_cache_keys::CHANGES_TRIE_CONFIG, &BlockId::Number(1)).unwrap()
 				.map(|(_, _, v)| Option::<ChangesTrieConfiguration>::decode(&mut &v[..]).unwrap()),
 			Some(new_config),
 		);
