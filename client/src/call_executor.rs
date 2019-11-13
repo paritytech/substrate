@@ -34,6 +34,8 @@ use sr_api::{ProofRecorder, InitializeBlock};
 use interfaces::{
 	error, backend, call_executor::CallExecutor,
 };
+use crate::backend;
+use crate::error;
 
 /// Call executor that executes methods locally, querying all required
 /// data from local backend.
@@ -125,7 +127,7 @@ where
 		execution_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
 		side_effects_handler: Option<OffchainExt>,
-		recorder: &Option<Rc<RefCell<ProofRecorder<Block>>>>,
+		recorder: &Option<ProofRecorder<Block>>,
 		enable_keystore: bool,
 	) -> Result<NativeOrEncoded<R>, error::Error> where ExecutionManager<EM>: Clone {
 		match initialize_block {

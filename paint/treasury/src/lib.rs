@@ -337,7 +337,7 @@ impl<T: Trait> Module<T> {
 }
 
 impl<T: Trait> OnUnbalanced<NegativeImbalanceOf<T>> for Module<T> {
-	fn on_unbalanced(amount: NegativeImbalanceOf<T>) {
+	fn on_nonzero_unbalanced(amount: NegativeImbalanceOf<T>) {
 		let numeric_amount = amount.peek();
 
 		// Must resolve into existing but better to be safe.

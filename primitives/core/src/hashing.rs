@@ -17,6 +17,7 @@
 //! Hashing functions.
 
 use blake2_rfc;
+use tiny_keccak::{Hasher, Keccak};
 use twox_hash;
 
 /// Do a Blake2 512-bit hash and place result in `dest`.
@@ -120,4 +121,13 @@ pub fn twox_256(data: &[u8]) -> [u8; 32] {
 	let mut r: [u8; 32] = [0; 32];
 	twox_256_into(data, &mut r);
 	r
+}
+
+/// Do a keccak 256 hash and return result.
+pub fn keccak_256(data: &[u8]) -> [u8; 32] {
+	let mut keccak = Keccak::v256();
+	keccak.update(data);
+	let mut output = [0u8; 32];
+	keccak.finalize(&mut output);
+	output
 }

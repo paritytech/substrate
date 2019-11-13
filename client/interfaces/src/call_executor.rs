@@ -77,7 +77,7 @@ where
 		execution_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
 		side_effects_handler: Option<OffchainExt>,
-		proof_recorder: &Option<Rc<RefCell<ProofRecorder<B>>>>,
+		proof_recorder: &Option<ProofRecorder<B>>,
 		enable_keystore: bool,
 	) -> error::Result<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone;
 

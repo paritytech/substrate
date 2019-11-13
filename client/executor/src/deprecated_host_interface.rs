@@ -19,7 +19,7 @@
 use codec::Encode;
 use std::{convert::TryFrom, str};
 use primitives::{
-	blake2_128, blake2_256, twox_64, twox_128, twox_256, ed25519, sr25519, Blake2Hasher, Pair,
+	blake2_128, blake2_256, twox_64, twox_128, twox_256, ed25519, sr25519, keccak_256, Blake2Hasher, Pair,
 	crypto::KeyTypeId, offchain,
 };
 use trie::{TrieConfiguration, trie_types::Layout};
@@ -538,11 +538,11 @@ impl_wasm_host_interface! {
 
 		ext_keccak_256(data: Pointer<u8>, len: WordSize, out: Pointer<u8>) {
 			let result: [u8; 32] = if len == 0 {
-				tiny_keccak::keccak256(&[0u8; 0])
+				keccak_256(&[0u8; 0])
 			} else {
 				let mem = context.read_memory(data, len)
 					.map_err(|_| "Invalid attempt to get data in ext_keccak_256")?;
-				tiny_keccak::keccak256(&mem)
+				keccak_256(&mem)
 			};
 			context.write_memory(out, &result)
 				.map_err(|_| "Invalid attempt to set result in ext_keccak_256")?;
