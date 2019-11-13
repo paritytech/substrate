@@ -605,6 +605,21 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	}
 }
 
+impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Clone for NetworkService<B, S, H> {
+	fn clone(&self) -> Self {
+		NetworkService {
+			num_connected: self.num_connected.clone(),
+			external_addresses: self.external_addresses.clone(),
+			is_major_syncing: self.is_major_syncing.clone(),
+			local_peer_id: self.local_peer_id.clone(),
+			bandwidth: self.bandwidth.clone(),
+			peerset: self.peerset.clone(),
+			to_worker: self.to_worker.clone(),
+			_marker: self._marker.clone(),
+		}
+	}
+}
+
 impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> consensus::SyncOracle
 	for NetworkService<B, S, H>
 {

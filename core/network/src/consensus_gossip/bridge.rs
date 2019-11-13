@@ -14,31 +14,16 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use futures03::{prelude::*, channel::mpsc, compat::Compat01As03};
-use libp2p::{Multiaddr, PeerId};
-use libp2p::core::{ConnectedPoint, nodes::Substream, muxing::StreamMuxerBox};
-use libp2p::swarm::{ProtocolsHandler, IntoProtocolsHandler};
-use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters};
-use primitives::storage::StorageKey;
-use consensus::{
-	BlockOrigin,
-	block_validation::BlockAnnounceValidator,
-	import_queue::{BlockImportResult, BlockImportError, IncomingBlock, Origin}
-};
-use codec::{Decode, Encode};
-use sr_primitives::{generic::BlockId, ConsensusEngineId, Justification};
-use sr_primitives::traits::{
-	Block as BlockT, Header as HeaderT, NumberFor, One, Zero,
-	CheckedSub, SaturatedConversion
-};
 use crate::protocol::Context;
-use crate::protocol::message::{BlockAnnounce, BlockAttributes, Direction, FromBlock, Message, RequestId};
-use crate::protocol::message::generic::{Message as GenericMessage, ConsensusMessage};
+use crate::protocol::message::generic::ConsensusMessage;
 use crate::protocol::specialization::NetworkSpecialization;
-use crate::consensus_gossip::state_machine::{ConsensusGossip, MessageRecipient as GossipMessageRecipient, Validator, TopicNotification};
+use crate::consensus_gossip::state_machine::{ConsensusGossip, Validator, TopicNotification};
 use crate::service::{NetworkService, ExHashT};
-use std::borrow::Cow;
-use std::sync::Arc;
+
+use futures03::{prelude::*, channel::mpsc, compat::Compat01As03};
+use libp2p::PeerId;
+use sr_primitives::{traits::{Block as BlockT, Header as HeaderT}, ConsensusEngineId};
+use std::{borrow::Cow, sync::Arc};
 
 pub struct Gossip<B: BlockT> {
 	state_machine: ConsensusGossip<B>,
@@ -51,11 +36,14 @@ impl<B: BlockT> Gossip<B> {
 		network_service: NetworkService<B, S, H>,
 		proto_name: impl Into<Cow<'static, [u8]>>,
 		engine_id: ConsensusEngineId,
-	) -> Self {
+	) -> Self where B: 'static, S: 'static, H: 'static {
 		let state_machine = ConsensusGossip::new();
-		let context = Box::new(ContextOverService { network_service });
+		let context = Box::new(ContextOverService {
+			network_service: network_service.clone(),
+			proto_name: proto_name.into(),
+		});
 
-		async_std::task::spawn(async {
+		async_std::task::spawn(async move {
 			let mut stream = Compat01As03::new(network_service.events_stream());
 			while let Some(event) = stream.next().await {
 				match event {
@@ -100,14 +88,14 @@ impl<B: BlockT> Gossip<B> {
 
 	/// Broadcast all messages with given topic.
 	pub fn broadcast_topic(&mut self, topic: B::Hash, force: bool) {
-		self.state_machine.broadcast_topic(topic, force);
+		self.state_machine.broadcast_topic(&mut *self.context, topic, force);
 	}
 
 	/// Get data of valid, incoming messages for a topic (but might have expired meanwhile)
 	pub fn messages_for(&mut self, engine_id: ConsensusEngineId, topic: B::Hash)
 		-> mpsc::UnboundedReceiver<TopicNotification>
 	{
-		self.state_machine.messages_for(&mut context, engine_id, topic)
+		self.state_machine.messages_for(engine_id, topic)
 	}
 
 	/// Send all messages with given topic to a peer.
@@ -118,7 +106,7 @@ impl<B: BlockT> Gossip<B> {
 		engine_id: ConsensusEngineId,
 		force: bool
 	) {
-		self.send_topic(who, topic, engine_id, force)
+		self.state_machine.send_topic(&mut *self.context, who, topic, engine_id, force)
 	}
 
 	/// Multicast a message to all peers.
@@ -128,7 +116,7 @@ impl<B: BlockT> Gossip<B> {
 		message: ConsensusMessage,
 		force: bool,
 	) {
-		self.state_machine.multicast(topic, message, force)
+		self.state_machine.multicast(&mut *self.context, topic, message, force)
 	}
 
 	/// Send addressed message to a peer. The message is not kept or multicast
@@ -138,7 +126,7 @@ impl<B: BlockT> Gossip<B> {
 		who: &PeerId,
 		message: ConsensusMessage,
 	) {
-		self.state_machine.send_message(&mut context, who, message);
+		self.state_machine.send_message(&mut *self.context, who, message);
 	}
 
 	// TODO: bad API?
@@ -149,21 +137,22 @@ impl<B: BlockT> Gossip<B> {
 
 struct ContextOverService<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 	network_service: NetworkService<B, S, H>,
+	proto_name: Cow<'static, [u8]>,
 }
 
 impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Context<B> for ContextOverService<B, S, H> {
 	fn report_peer(&mut self, who: PeerId, reputation: i32) {
-		self.peerset_handle.report_peer(who, reputation)
+		unimplemented!() // self.peerset_handle.report_peer(who, reputation)
 	}
 
 	fn disconnect_peer(&mut self, who: PeerId) {
-		self.behaviour.disconnect_peer(&who)
+		unimplemented!() // self.behaviour.disconnect_peer(&who)
 	}
 
 	fn send_consensus(&mut self, who: PeerId, messages: Vec<ConsensusMessage>) {
 		// TODO: send batch
 		for message in messages {
-			self.network_service.write_notif(who, message);
+			self.network_service.write_notif(who.clone(), self.proto_name.clone(), message);
 		}
 	}
 
