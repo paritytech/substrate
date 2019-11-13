@@ -90,28 +90,31 @@ impl<B, E, Block: BlockT, RA> FullState<B, E, Block, RA>
 		from: Block::Hash,
 		to: Option<Block::Hash>
 	) -> Result<QueryStorageRange<Block>> {
-		let to = self.block_or_best(to).map_err(client_err)?;
-		let from = self.client.header_metadata(from).map_err(client_err)?;
-		let to = self.client.header_metadata(to).map_err(client_err)?;
+		let to = self.block_or_best(to)
+			.map_err(|e| invalid_block::<Block>(from, to, e.to_string()))?;
+		let from_meta = self.client.header_metadata(from)
+			.map_err(|e| invalid_block::<Block>(from, Some(to), e.to_string()))?;
+		let to_meta = self.client.header_metadata(to)
+			.map_err(|e| invalid_block::<Block>(from, Some(to), e.to_string()))?;
 
-		if from.number > to.number {
-			return Err(invalid_block_range(from, to))
+		if from_meta.number > to_meta.number {
+			return Err(invalid_block_range(&from_meta, &to_meta, "from number > to number".to_owned()))
 		}
 
 		// check if we can get from `to` to `from` by going through parent_hashes.
-		let from_number = from.number;
+		let from_number = from_meta.number;
 		let blocks = {
-			let mut blocks = vec![to.hash];
-			let mut last = to.clone();
+			let mut blocks = vec![to_meta.hash];
+			let mut last = to_meta.clone();
 			while last.number > from_number {
 				let hdr = self.client
 					.header_metadata(last.parent)
-					.map_err(client_err)?;
+					.map_err(|e| invalid_block_range::<Block>(&from_meta, &to_meta, e.to_string()))?;
 				blocks.push(hdr.hash);
 				last = hdr;
 			}
-			if last.hash != from.hash {
-				return Err(invalid_block_range(from, to))
+			if last.hash != from_meta.hash {
+				return Err(invalid_block_range(&from_meta, &to_meta, "invalid block range".to_owned()))
 			}
 			blocks.reverse();
 			blocks
@@ -119,7 +122,7 @@ impl<B, E, Block: BlockT, RA> FullState<B, E, Block, RA>
 
 		// check if we can filter blocks-with-changes from some (sub)range using changes tries
 		let changes_trie_range = self.client
-			.max_key_changes_range(from_number, BlockId::Hash(to.hash))
+			.max_key_changes_range(from_number, BlockId::Hash(to_meta.hash))
 			.map_err(client_err)?;
 		let filtered_range_begin = changes_trie_range
 			.map(|(begin, _)| (begin - from_number).saturated_into::<usize>());
@@ -489,14 +492,27 @@ pub(crate) fn split_range(size: usize, middle: Option<usize>) -> (Range<usize>, 
 }
 
 fn invalid_block_range<B: BlockT>(
-	from: CachedHeaderMetadata<B>,
-	to: CachedHeaderMetadata<B>,
+	from: &CachedHeaderMetadata<B>,
+	to: &CachedHeaderMetadata<B>,
+	details: String,
 ) -> Error {
-	let to_string = |h: CachedHeaderMetadata<B>| format!("{} ({})", h.number, h.hash);
+	let to_string = |h: &CachedHeaderMetadata<B>| format!("{} ({})", h.number, h.hash);
 
 	Error::InvalidBlockRange {
 		from: to_string(from),
 		to: to_string(to),
-		details: "invalid block range".to_owned(),
+		details,
+	}
+}
+
+fn invalid_block<B: BlockT>(
+	from: B::Hash,
+	to: Option<B::Hash>,
+	details: String,
+) -> Error {
+	Error::InvalidBlockRange {
+		from: format!("{:?}", from),
+		to: format!("{:?}", to),
+		details,
 	}
 }
