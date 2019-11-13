@@ -31,7 +31,7 @@ use primitives::{
 };
 
 use sr_api::{ProofRecorder, InitializeBlock};
-use interfaces::{
+use client_api::{
 	error, backend, call_executor::CallExecutor,
 };
 

@@ -34,7 +34,7 @@ use network::config::BoxFinalityProofRequestBuilder;
 use sr_primitives::{generic::DigestItem, traits::{Block as BlockT, DigestFor}};
 use network::config::ProtocolConfig;
 use tokio::runtime::current_thread;
-use interfaces::BlockchainEvents;
+use client_api::BlockchainEvents;
 use test_client;
 use log::debug;
 use std::{time::Duration, cell::RefCell};
@@ -633,7 +633,7 @@ fn importing_block_one_sets_genesis_epoch() {
 
 #[test]
 fn importing_epoch_change_block_prunes_tree() {
-	use interfaces::Finalizer;
+	use client_api::Finalizer;
 
 	let mut net = BabeTestNet::new(1);
 

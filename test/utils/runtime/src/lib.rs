@@ -338,14 +338,14 @@ impl GetRuntimeBlockType for Runtime {
 }
 
 impl_outer_origin!{
-	pub enum Origin for Runtime where system = srml_system {}
+	pub enum Origin for Runtime where system = paint_system {}
 }
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
 pub struct Event;
 
-impl From<srml_system::Event> for Event {
-	fn from(_evt: srml_system::Event) -> Self {
+impl From<paint_system::Event> for Event {
+	fn from(_evt: paint_system::Event) -> Self {
 		unimplemented!("Not required in tests!")
 	}
 }
@@ -358,7 +358,7 @@ parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
 }
 
-impl srml_system::Trait for Runtime {
+impl paint_system::Trait for Runtime {
 	type Origin = Origin;
 	type Call = Extrinsic;
 	type Index = u64;
@@ -376,7 +376,7 @@ impl srml_system::Trait for Runtime {
 	type Version = ();
 }
 
-impl srml_timestamp::Trait for Runtime {
+impl paint_timestamp::Trait for Runtime {
 	/// A timestamp: milliseconds since the unix epoch.
 	type Moment = u64;
 	type OnTimestampSet = ();
@@ -388,13 +388,13 @@ parameter_types! {
 	pub const ExpectedBlockTime: u64 = 10_000;
 }
 
-impl srml_babe::Trait for Runtime {
+impl paint_babe::Trait for Runtime {
 	type EpochDuration = EpochDuration;
 	type ExpectedBlockTime = ExpectedBlockTime;
 	// there is no actual runtime in this test-runtime, so testing crates
 	// are manually adding the digests. normally in this situation you'd use
-	// srml_babe::SameAuthoritiesForever.
-	type EpochChangeTrigger = srml_babe::ExternalTrigger;
+	// paint_babe::SameAuthoritiesForever.
+	type EpochChangeTrigger = paint_babe::ExternalTrigger;
 }
 
 /// Adds one to the given input and returns the final result.
@@ -615,7 +615,7 @@ cfg_if! {
 						c: (3, 10),
 						genesis_authorities: system::authorities()
 							.into_iter().map(|x|(x, 1)).collect(),
-						randomness: <srml_babe::Module<Runtime>>::randomness(),
+						randomness: <paint_babe::Module<Runtime>>::randomness(),
 						secondary_slots: true,
 					}
 				}
@@ -634,7 +634,7 @@ cfg_if! {
 				}
 			}
 
-			impl srml_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {
+			impl paint_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {
 				fn account_nonce(_account: AccountId) -> Index {
 					0
 				}
@@ -831,7 +831,7 @@ cfg_if! {
 						c: (3, 10),
 						genesis_authorities: system::authorities()
 							.into_iter().map(|x|(x, 1)).collect(),
-						randomness: <srml_babe::Module<Runtime>>::randomness(),
+						randomness: <paint_babe::Module<Runtime>>::randomness(),
 						secondary_slots: true,
 					}
 				}
@@ -850,7 +850,7 @@ cfg_if! {
 				}
 			}
 
-			impl srml_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {
+			impl paint_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {
 				fn account_nonce(_account: AccountId) -> Index {
 					0
 				}

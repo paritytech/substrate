@@ -25,8 +25,8 @@ use std::time::{Instant, Duration};
 use log::{trace, info};
 use futures::sync::oneshot::{Sender as OneShotSender};
 use linked_hash_map::{Entry, LinkedHashMap};
-use interfaces::error::Error as ClientError;
-use interfaces::{FetchChecker, RemoteHeaderRequest,
+use client_api::error::Error as ClientError;
+use client_api::{FetchChecker, RemoteHeaderRequest,
 	RemoteCallRequest, RemoteReadRequest, RemoteChangesRequest, ChangesProof,
 	RemoteReadChildRequest, RemoteBodyRequest, StorageProof};
 use crate::message::{self, BlockAttributes, Direction, FromBlock, RequestId};
@@ -677,8 +677,8 @@ pub mod tests {
 	use std::time::Instant;
 	use futures::{Future, sync::oneshot};
 	use sr_primitives::traits::{Block as BlockT, NumberFor, Header as HeaderT};
-	use interfaces::{error::{Error as ClientError, Result as ClientResult}};
-	use interfaces::{FetchChecker, RemoteHeaderRequest,
+	use client_api::{error::{Error as ClientError, Result as ClientResult}};
+	use client_api::{FetchChecker, RemoteHeaderRequest,
 		ChangesProof, RemoteCallRequest, RemoteReadRequest,
 		RemoteReadChildRequest, RemoteChangesRequest, RemoteBodyRequest};
 	use crate::config::Roles;

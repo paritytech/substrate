@@ -40,7 +40,7 @@ grandpa_primitives = { package = "substrate-finality-grandpa-primitives", path =
 
 # core dependencies
 runtime-io = { package = "sr-io", path = "../../../primitives/sr-io" }
-interfaces = { package = "substrate-client-interfaces", path = "../../../client/interfaces" }
+client-api = { package = "substrate-client-api", path = "../../../client/api" }
 client = { package = "substrate-client", path = "../../../client/" }
 inherents = { package = "substrate-inherents", path = "../../../primitives/inherents" }
 chain-spec = { package = "substrate-chain-spec", path = "../../../client/chain-spec" }
@@ -56,16 +56,16 @@ substrate-basic-authorship = { path = "../../../client/basic-authorship" }
 substrate-service = { path = "../../../client/service", default-features = false }
 substrate-telemetry = { package = "substrate-telemetry", path = "../../../client/telemetry" }
 
-# srml dependencies
-indices = { package = "srml-indices", path = "../../../paint/indices" }
-timestamp = { package = "srml-timestamp", path = "../../../paint/timestamp", default-features = false }
-finality_tracker = { package = "srml-finality-tracker", path = "../../../paint/finality-tracker", default-features = false }
-contracts = { package = "srml-contracts", path = "../../../paint/contracts" }
-system = { package = "srml-system", path = "../../../paint/system" }
-balances = { package = "srml-balances", path = "../../../paint/balances" }
-transaction-payment = { package = "srml-transaction-payment", path = "../../../paint/transaction-payment" }
-support = { package = "srml-support", path = "../../../paint/support", default-features = false }
-im_online = { package = "srml-im-online", path = "../../../paint/im-online", default-features = false }
+# paint dependencies
+indices = { package = "paint-indices", path = "../../../paint/indices" }
+timestamp = { package = "paint-timestamp", path = "../../../paint/timestamp", default-features = false }
+finality_tracker = { package = "paint-finality-tracker", path = "../../../paint/finality-tracker", default-features = false }
+contracts = { package = "paint-contracts", path = "../../../paint/contracts" }
+system = { package = "paint-system", path = "../../../paint/system" }
+balances = { package = "paint-balances", path = "../../../paint/balances" }
+transaction-payment = { package = "paint-transaction-payment", path = "../../../paint/transaction-payment" }
+support = { package = "paint-support", path = "../../../paint/support", default-features = false }
+im_online = { package = "paint-im-online", path = "../../../paint/im-online", default-features = false }
 
 # node-specific dependencies
 node-runtime = { path = "../runtime" }

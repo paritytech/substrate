@@ -28,7 +28,7 @@ use rpc::{
 };
 
 use api::Subscriptions;
-use interfaces::{backend::Backend, error::Result as ClientResult};
+use client_api::{backend::Backend, error::Result as ClientResult};
 use client::{
 	Client, CallExecutor, BlockchainEvents, 
 };

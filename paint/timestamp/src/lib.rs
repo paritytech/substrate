@@ -62,7 +62,7 @@
 //!
 //! ```
 //! use support::{decl_module, dispatch::Result};
-//! # use srml_timestamp as timestamp;
+//! # use paint_timestamp as timestamp;
 //! use system::ensure_signed;
 //!
 //! pub trait Trait: timestamp::Trait {}
@@ -81,12 +81,12 @@
 //!
 //! ### Example from the SRML
 //!
-//! The [Session module](https://github.com/paritytech/substrate/blob/master/srml/session/src/lib.rs) uses
+//! The [Session module](https://github.com/paritytech/substrate/blob/master/paint/session/src/lib.rs) uses
 //! the Timestamp module for session management.
 //!
 //! ## Related Modules
 //!
-//! * [Session](../srml_session/index.html)
+//! * [Session](../paint_session/index.html)
 
 #![cfg_attr(not(feature = "std"), no_std)]
 

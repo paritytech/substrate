@@ -55,7 +55,7 @@
 use futures::prelude::*;
 use log::{debug, error, info};
 use futures::sync::mpsc;
-use interfaces::{
+use client_api::{
 	BlockchainEvents, CallExecutor, backend::Backend, error::Error as ClientError,
 	ExecutionStrategy, HeaderBackend
 };
@@ -70,7 +70,7 @@ use primitives::{H256, Blake2Hasher, Pair};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG, CONSENSUS_WARN};
 use serde_json;
 
-use srml_finality_tracker;
+use paint_finality_tracker;
 
 use grandpa::Error as GrandpaError;
 use grandpa::{voter, BlockNumberOps, voter_set::VoterSet};
@@ -505,9 +505,9 @@ fn register_finality_tracker_inherent_data_provider<B, E, Block: BlockT<Hash=H25
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
 	RA: Send + Sync + 'static,
 {
-	if !inherent_data_providers.has_provider(&srml_finality_tracker::INHERENT_IDENTIFIER) {
+	if !inherent_data_providers.has_provider(&paint_finality_tracker::INHERENT_IDENTIFIER) {
 		inherent_data_providers
-			.register_provider(srml_finality_tracker::InherentDataProvider::new(move || {
+			.register_provider(paint_finality_tracker::InherentDataProvider::new(move || {
 				#[allow(deprecated)]
 				{
 					let info = client.info().chain;
@@ -546,7 +546,7 @@ pub struct GrandpaParams<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X> {
 /// block import worker that has already been instantiated with `block_import`.
 pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X>(
 	grandpa_params: GrandpaParams<B, E, Block, N, RA, SC, VR, X>,
-) -> interfaces::error::Result<impl Future<Item=(),Error=()> + Send + 'static> where
+) -> client_api::error::Result<impl Future<Item=(),Error=()> + Send + 'static> where
 	Block::Hash: Ord,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
@@ -879,7 +879,7 @@ where
 #[deprecated(since = "1.1.0", note = "Please switch to run_grandpa_voter.")]
 pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X>(
 	grandpa_params: GrandpaParams<B, E, Block, N, RA, SC, VR, X>,
-) -> ::interfaces::error::Result<impl Future<Item=(),Error=()> + Send + 'static> where
+) -> ::client_api::error::Result<impl Future<Item=(),Error=()> + Send + 'static> where
 	Block::Hash: Ord,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,

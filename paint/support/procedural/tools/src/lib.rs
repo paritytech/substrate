@@ -19,7 +19,7 @@
 // end::description[]
 
 // reexport proc macros
-pub use srml_support_procedural_tools_derive::*;
+pub use paint_support_procedural_tools_derive::*;
 
 use proc_macro_crate::crate_name;
 use syn::parse::Error;
@@ -35,10 +35,10 @@ fn generate_hidden_includes_mod_name(unique_id: &str) -> Ident {
 	Ident::new(&format!("sr_api_hidden_includes_{}", unique_id), Span::call_site())
 }
 
-/// Generates the access to the `srml-support` crate.
+/// Generates the access to the `paint-support` crate.
 pub fn generate_crate_access(unique_id: &str, def_crate: &str) -> TokenStream {
 	if std::env::var("CARGO_PKG_NAME").unwrap() == def_crate {
-		quote::quote!( srml_support )
+		quote::quote!( paint_support )
 	} else {
 		let mod_name = generate_hidden_includes_mod_name(unique_id);
 		quote::quote!( self::#mod_name::hidden_include )

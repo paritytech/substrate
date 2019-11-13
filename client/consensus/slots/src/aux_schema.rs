@@ -17,8 +17,8 @@
 //! Schema for slots in the aux-db.
 
 use codec::{Encode, Decode};
-use interfaces::backend::AuxStore;
-use interfaces::error::{Result as ClientResult, Error as ClientError};
+use client_api::backend::AuxStore;
+use client_api::error::{Result as ClientResult, Error as ClientError};
 use sr_primitives::traits::Header;
 
 const SLOT_HEADER_MAP_KEY: &[u8] = b"slot_header_map";

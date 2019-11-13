@@ -20,7 +20,7 @@ use std::{
 	collections::BTreeMap,
 	sync::Arc,
 };
-use interfaces::{OffchainStorage, InMemOffchainStorage};
+use client_api::{OffchainStorage, InMemOffchainStorage};
 use parking_lot::RwLock;
 use primitives::offchain::{
 	self,

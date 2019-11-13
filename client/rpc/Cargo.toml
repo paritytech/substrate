@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 api = { package = "substrate-rpc-api", path = "./api" }
-interfaces = { package = "substrate-client-interfaces", path = "../interfaces" }
+client-api = { package = "substrate-client-api", path = "../api" }
 client = { package = "substrate-client", path = "../" }
 sr-api = { path = "../../primitives/sr-api" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }

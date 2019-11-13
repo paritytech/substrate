@@ -39,11 +39,11 @@ use std::path::PathBuf;
 use std::io;
 use std::collections::{HashMap, HashSet};
 
-use interfaces::backend::NewBlockState;
-use interfaces::blockchain::{well_known_cache_keys, HeaderBackend};
-use interfaces::{ForkBlocks, ExecutionStrategies};
-use interfaces::backend::{StorageCollection, ChildStorageCollection};
-use interfaces::error::{Result as ClientResult, Error as ClientError};
+use client_api::backend::NewBlockState;
+use client_api::blockchain::{well_known_cache_keys, HeaderBackend};
+use client_api::{ForkBlocks, ExecutionStrategies};
+use client_api::backend::{StorageCollection, ChildStorageCollection};
+use client_api::error::{Result as ClientResult, Error as ClientError};
 use codec::{Decode, Encode};
 use hash_db::{Hasher, Prefix};
 use kvdb::{KeyValueDB, DBTransaction};
@@ -471,7 +471,7 @@ impl<Block: BlockT, H: Hasher> BlockImportOperation<Block, H> {
 	}
 }
 
-impl<Block> interfaces::backend::BlockImportOperation<Block, Blake2Hasher>
+impl<Block> client_api::backend::BlockImportOperation<Block, Blake2Hasher>
 	for BlockImportOperation<Block, Blake2Hasher> where Block: BlockT<Hash=H256>,
 {
 	type State = CachingState<Blake2Hasher, RefTrackingState<Block>, Block>;
@@ -661,7 +661,7 @@ impl<Block: BlockT<Hash=H256>> DbChangesTrieStorage<Block> {
 	}
 }
 
-impl<Block> interfaces::backend::PrunableStateChangesTrieStorage<Block, Blake2Hasher>
+impl<Block> client_api::backend::PrunableStateChangesTrieStorage<Block, Blake2Hasher>
 	for DbChangesTrieStorage<Block>
 where
 	Block: BlockT<Hash=H256>,
@@ -853,7 +853,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 	/// Returns in-memory blockchain that contains the same set of blocks that the self.
 	#[cfg(feature = "test-helpers")]
 	pub fn as_in_memory(&self) -> InMemoryBackend<Block, Blake2Hasher> {
-		use interfaces::backend::{Backend as ClientBackend, BlockImportOperation};
+		use client_api::backend::{Backend as ClientBackend, BlockImportOperation};
 		use client::blockchain::Backend as BlockchainBackend;
 
 		let inmem = InMemoryBackend::<Block, Blake2Hasher>::new();
@@ -913,7 +913,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 		match cached_changes_trie_config.clone() {
 			Some(cached_changes_trie_config) => Ok(cached_changes_trie_config),
 			None => {
-				use interfaces::backend::Backend;
+				use client_api::backend::Backend;
 				let changes_trie_config = self
 					.state_at(BlockId::Hash(block))?
 					.storage(well_known_keys::CHANGES_TRIE_CONFIG)?
@@ -1318,7 +1318,7 @@ fn apply_state_commit(transaction: &mut DBTransaction, commit: state_db::CommitS
 	}
 }
 
-impl<Block> interfaces::backend::AuxStore for Backend<Block> where Block: BlockT<Hash=H256> {
+impl<Block> client_api::backend::AuxStore for Backend<Block> where Block: BlockT<Hash=H256> {
 	fn insert_aux<
 		'a,
 		'b: 'a,
@@ -1342,7 +1342,7 @@ impl<Block> interfaces::backend::AuxStore for Backend<Block> where Block: BlockT
 	}
 }
 
-impl<Block> interfaces::backend::Backend<Block, Blake2Hasher> for Backend<Block> where Block: BlockT<Hash=H256> {
+impl<Block> client_api::backend::Backend<Block, Blake2Hasher> for Backend<Block> where Block: BlockT<Hash=H256> {
 	type BlockImportOperation = BlockImportOperation<Block, Blake2Hasher>;
 	type Blockchain = BlockchainDb<Block>;
 	type State = CachingState<Blake2Hasher, RefTrackingState<Block>, Block>;
@@ -1538,7 +1538,7 @@ impl<Block> interfaces::backend::Backend<Block, Blake2Hasher> for Backend<Block>
 	}
 }
 
-impl<Block> interfaces::backend::LocalBackend<Block, Blake2Hasher> for Backend<Block>
+impl<Block> client_api::backend::LocalBackend<Block, Blake2Hasher> for Backend<Block>
 where Block: BlockT<Hash=H256> {}
 
 /// TODO: remove me in #3201
@@ -1552,7 +1552,7 @@ mod tests {
 	use hash_db::{HashDB, EMPTY_PREFIX};
 	use super::*;
 	use crate::columns;
-	use interfaces::backend::{Backend as BTrait, BlockImportOperation as Op};
+	use client_api::backend::{Backend as BTrait, BlockImportOperation as Op};
 	use client::blockchain::Backend as BLBTrait;
 	use sr_primitives::testing::{Header, Block as RawBlock, ExtrinsicWrapper};
 	use sr_primitives::traits::{Hash, BlakeTwo256};

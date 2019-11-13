@@ -44,7 +44,7 @@ use syn::parse::{Parse, ParseStream};
 /// # fn main() {}
 /// use sr_primitives::curve::PiecewiseLinear;
 ///
-/// srml_staking_reward_curve::build! {
+/// paint_staking_reward_curve::build! {
 /// 	const I_NPOS: PiecewiseLinear<'static> = curve!(
 /// 		min_inflation: 0_025_000,
 /// 		max_inflation: 0_100_000,
@@ -373,7 +373,7 @@ fn generate_test_module(input: &INposInput) -> TokenStream2 {
 
 	quote!(
 		#[cfg(test)]
-		mod __srml_staking_reward_curve_test_module {
+		mod __paint_staking_reward_curve_test_module {
 			fn i_npos(x: f64) -> f64 {
 				if x <= #x_ideal {
 					#i_0 + x * (#i_ideal - #i_0 / #x_ideal)

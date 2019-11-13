@@ -21,7 +21,7 @@ use std::cmp::Reverse;
 use kvdb::{KeyValueDB, DBTransaction};
 use sr_primitives::traits::SimpleArithmetic;
 use codec::{Encode, Decode};
-use interfaces::error;
+use client_api::error;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct LeafSetItem<H, N> {

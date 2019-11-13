@@ -56,7 +56,7 @@ use header_metadata::{HeaderMetadata, CachedHeaderMetadata};
 use sr_api::{CallRuntimeAt, ConstructRuntimeApi, Core as CoreApi, ProofRecorder, InitializeBlock};
 use block_builder::BlockBuilderApi;
 
-pub use interfaces::{
+pub use client_api::{
 	backend::{
 		self, BlockImportOperation, PrunableStateChangesTrieStorage,
 		ClientImportOperation, Finalizer, ImportSummary, NewBlockState,

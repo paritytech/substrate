@@ -138,7 +138,7 @@
 //! ```
 //! use support::{decl_module, dispatch::Result};
 //! use system::ensure_signed;
-//! use srml_staking::{self as staking};
+//! use paint_staking::{self as staking};
 //!
 //! pub trait Trait: staking::Trait {}
 //!
@@ -179,7 +179,7 @@
 //! [`reward_by_indices`](./enum.Call.html#variant.reward_by_indices).
 //!
 //! [`Module`](./struct.Module.html) implements
-//! [`authorship::EventHandler`](../srml_authorship/trait.EventHandler.html) to add reward points
+//! [`authorship::EventHandler`](../paint_authorship/trait.EventHandler.html) to add reward points
 //! to block producer and block producer of referenced uncles.
 //!
 //! The validator and its nominator split their reward as following:
@@ -237,8 +237,8 @@
 //!
 //! ## Related Modules
 //!
-//! - [Balances](../srml_balances/index.html): Used to manage values at stake.
-//! - [Session](../srml_session/index.html): Used to manage sessions. Also, a list of new validators
+//! - [Balances](../paint_balances/index.html): Used to manage values at stake.
+//! - [Session](../paint_session/index.html): Used to manage sessions. Also, a list of new validators
 //! is stored in the Session module's `Validators` at the end of each era.
 
 #![recursion_limit="128"]

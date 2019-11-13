@@ -18,7 +18,7 @@
 
 use kvdb::{KeyValueDB, DBTransaction};
 use codec::{Encode, Decode};
-use interfaces::error;
+use client_api::error;
 use std::hash::Hash;
 
 

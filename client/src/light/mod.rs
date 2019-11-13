@@ -30,7 +30,7 @@ use sr_primitives::traits::Block as BlockT;
 
 use crate::call_executor::LocalCallExecutor;
 use crate::client::Client;
-use interfaces::{
+use client_api::{
 	error::Result as ClientResult,
 	light::Storage as BlockchainStorage,
 };

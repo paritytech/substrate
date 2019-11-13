@@ -44,7 +44,7 @@
 //! ```
 //! use support::{decl_module, dispatch::Result};
 //! use system::ensure_signed;
-//! use srml_im_online::{self as im_online};
+//! use paint_im_online::{self as im_online};
 //!
 //! pub trait Trait: im_online::Trait {}
 //!
@@ -62,7 +62,7 @@
 //!
 //! ## Dependencies
 //!
-//! This module depends on the [Session module](../srml_session/index.html).
+//! This module depends on the [Session module](../paint_session/index.html).
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -131,7 +131,7 @@ pub mod ed25519 {
 
 /// The local storage database key under which the worker progress status
 /// is tracked.
-const DB_KEY: &[u8] = b"srml/im-online-worker-status";
+const DB_KEY: &[u8] = b"paint/im-online-worker-status";
 
 /// It's important to persist the worker state, since e.g. the
 /// server could be restarted while starting the gossip process, but before

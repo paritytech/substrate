@@ -50,7 +50,7 @@ use std::fmt::Write;
 use std::{cmp, num::NonZeroUsize, time};
 use log::{trace, debug, warn, error};
 use crate::chain::{Client, FinalityProofProvider};
-use interfaces::{FetchChecker, ChangesProof, StorageProof};
+use client_api::{FetchChecker, ChangesProof, StorageProof};
 use crate::error;
 use util::LruHashSet;
 

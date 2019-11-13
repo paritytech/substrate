@@ -631,7 +631,7 @@ impl WithdrawReasons {
 	/// Choose all variants except for `one`.
 	///
 	/// ```rust
-	/// # use srml_support::traits::{WithdrawReason, WithdrawReasons};
+	/// # use paint_support::traits::{WithdrawReason, WithdrawReasons};
 	/// # fn main() {
 	/// assert_eq!(
 	/// 	WithdrawReason::Fee | WithdrawReason::Transfer | WithdrawReason::Reserve | WithdrawReason::Tip,

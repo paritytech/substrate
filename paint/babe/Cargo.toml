@@ -1,5 +1,5 @@
 [package]
-name = "srml-babe"
+name = "paint-babe"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
@@ -12,10 +12,10 @@ inherents = { package = "substrate-inherents", path = "../../primitives/inherent
 rstd = { package = "sr-std", path = "../../primitives/sr-std", default-features = false }
 sr-primitives = { path = "../../primitives/sr-primitives", default-features = false }
 sr-staking-primitives = { path = "../../primitives/sr-staking-primitives", default-features = false }
-support = { package = "srml-support", path = "../support", default-features = false }
-system = { package = "srml-system", path = "../system", default-features = false }
-timestamp = { package = "srml-timestamp", path = "../timestamp", default-features = false }
-session = { package = "srml-session", path = "../session", default-features = false }
+support = { package = "paint-support", path = "../support", default-features = false }
+system = { package = "paint-system", path = "../system", default-features = false }
+timestamp = { package = "paint-timestamp", path = "../timestamp", default-features = false }
+session = { package = "paint-session", path = "../session", default-features = false }
 babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../../primitives/consensus/babe", default-features = false }
 runtime-io ={ package = "sr-io", path = "../../primitives/sr-io", default-features = false }
 

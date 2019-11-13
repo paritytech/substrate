@@ -18,8 +18,8 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-/// Export ourself as `srml_support` to make tests happy.
-extern crate self as srml_support;
+/// Export ourself as `paint_support` to make tests happy.
+extern crate self as paint_support;
 
 #[macro_use]
 extern crate bitmask;
@@ -113,7 +113,7 @@ macro_rules! parameter_types {
 }
 
 #[doc(inline)]
-pub use srml_support_procedural::decl_storage;
+pub use paint_support_procedural::decl_storage;
 
 /// Return Err of the expression: `return Err($expression);`.
 ///
@@ -190,8 +190,8 @@ macro_rules! assert_ok {
 ///
 /// ```rust
 /// #[macro_use]
-/// # extern crate srml_support;
-/// # use srml_support::{assert_eq_uvec};
+/// # extern crate paint_support;
+/// # use paint_support::{assert_eq_uvec};
 /// # fn main() {
 /// assert_eq_uvec!(vec![1,2], vec![2,1]);
 /// # }
@@ -199,8 +199,8 @@ macro_rules! assert_ok {
 ///
 /// ```rust,should_panic
 /// #[macro_use]
-/// # extern crate srml_support;
-/// # use srml_support::{assert_eq_uvec};
+/// # extern crate paint_support;
+/// # use paint_support::{assert_eq_uvec};
 /// # fn main() {
 /// assert_eq_uvec!(vec![1,2,3], vec![2,1]);
 /// # }
@@ -238,7 +238,7 @@ pub use serde::{Serialize, Deserialize};
 mod tests {
 	use super::*;
 	use codec::{Codec, EncodeLike};
-	use srml_metadata::{
+	use paint_metadata::{
 		DecodeDifferent, StorageEntryMetadata, StorageMetadata, StorageEntryType,
 		StorageEntryModifier, DefaultByteGetter, StorageHasher,
 	};

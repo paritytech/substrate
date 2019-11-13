@@ -38,7 +38,7 @@ use consensus_common::{self, BlockImport, Environment, Proposer,
 use consensus_common::import_queue::{
 	Verifier, BasicQueue, BoxBlockImport, BoxJustificationImport, BoxFinalityProofImport,
 };
-use interfaces::{ error::Result as CResult, backend::AuxStore };
+use client_api::{ error::Result as CResult, backend::AuxStore };
 use client::{
 	blockchain::ProvideCache, BlockOf,
 	well_known_cache_keys::{self, Id as CacheKeyId},
@@ -56,7 +56,7 @@ use futures::prelude::*;
 use parking_lot::Mutex;
 use log::{debug, info, trace};
 
-use srml_aura::{
+use paint_aura::{
 	InherentType as AuraInherent, AuraInherentData,
 	timestamp::{TimestampInherentData, InherentType as TimestampInherent, InherentError as TIError}
 };
@@ -373,7 +373,7 @@ fn check_header<C, B: BlockT, P: Pair, T>(
 ) -> Result<CheckedHeader<B::Header, (u64, DigestItemFor<B>)>, Error<B>> where
 	DigestItemFor<B>: CompatibleDigestItem<P>,
 	P::Signature: Decode,
-	C: interfaces::backend::AuxStore,
+	C: client_api::backend::AuxStore,
 	P::Public: Encode + Decode + PartialEq + Clone,
 	T: Send + Sync + 'static,
 {
@@ -488,7 +488,7 @@ impl<C, P, T> AuraVerifier<C, P, T>
 
 #[forbid(deprecated)]
 impl<B: BlockT, C, P, T> Verifier<B> for AuraVerifier<C, P, T> where
-	C: ProvideRuntimeApi + Send + Sync + interfaces::backend::AuxStore + ProvideCache<B> + BlockOf,
+	C: ProvideRuntimeApi + Send + Sync + client_api::backend::AuxStore + ProvideCache<B> + BlockOf,
 	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>> + ApiExt<B, Error = client::error::Error>,
 	DigestItemFor<B>: CompatibleDigestItem<P>,
 	P: Pair + Send + Sync + 'static,
@@ -654,9 +654,9 @@ fn register_aura_inherent_data_provider(
 	inherent_data_providers: &InherentDataProviders,
 	slot_duration: u64,
 ) -> Result<(), consensus_common::Error> {
-	if !inherent_data_providers.has_provider(&srml_aura::INHERENT_IDENTIFIER) {
+	if !inherent_data_providers.has_provider(&paint_aura::INHERENT_IDENTIFIER) {
 		inherent_data_providers
-			.register_provider(srml_aura::InherentDataProvider::new(slot_duration))
+			.register_provider(paint_aura::InherentDataProvider::new(slot_duration))
 			.map_err(Into::into)
 			.map_err(consensus_common::Error::InherentData)
 	} else {

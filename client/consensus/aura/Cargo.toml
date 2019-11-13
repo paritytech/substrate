@@ -10,7 +10,7 @@ app-crypto = { package = "substrate-application-crypto", path = "../../../primit
 aura_primitives = { package = "substrate-consensus-aura-primitives", path = "../../../primitives/consensus/aura" }
 block-builder-api = { package = "substrate-block-builder-runtime-api", path = "../../../primitives/block-builder/runtime-api" }
 client = { package = "substrate-client", path = "../../" }
-interfaces = { package = "substrate-client-interfaces", path = "../../interfaces" }
+client-api = { package = "substrate-client-api", path = "../../api" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 consensus_common = { package = "substrate-consensus-common", path = "../../../primitives/consensus/common" }
 derive_more = "0.15.0"
@@ -27,7 +27,7 @@ runtime_version = { package = "sr-version", path = "../../../primitives/sr-versi
 slots = { package = "substrate-consensus-slots", path = "../slots" }
 sr-api = { path = "../../../primitives/sr-api" }
 sr-primitives = {  path = "../../../primitives/sr-primitives" }
-srml-aura = { path = "../../../paint/aura" }
+paint-aura = { path = "../../../paint/aura" }
 substrate-telemetry = { path = "../../telemetry" }
 
 [dev-dependencies]

@@ -24,7 +24,7 @@ use rstd::{prelude::*, result, cmp, vec};
 use codec::Decode;
 use support::{decl_module, decl_storage};
 use support::traits::Get;
-use srml_system::{ensure_none, Trait as SystemTrait};
+use paint_system::{ensure_none, Trait as SystemTrait};
 
 #[cfg(feature = "std")]
 use codec::Encode;
@@ -124,7 +124,7 @@ decl_module! {
 			ensure_none(origin)?;
 			assert!(!<Self as Store>::Update::exists(), "Final hint must be updated only once in the block");
 			assert!(
-				srml_system::Module::<T>::block_number() >= hint,
+				paint_system::Module::<T>::block_number() >= hint,
 				"Finalized height above block number",
 			);
 			<Self as Store>::Update::put(hint);
@@ -199,7 +199,7 @@ impl<T: Trait> Module<T> {
 		<Self as Store>::Median::put(median);
 
 		if T::BlockNumber::from(our_window_size) == window_size {
-			let now = srml_system::Module::<T>::block_number();
+			let now = paint_system::Module::<T>::block_number();
 			let latency = T::ReportLatency::get();
 
 			// the delay is the latency plus half the window size.
@@ -254,7 +254,7 @@ mod tests {
 		traits::{BlakeTwo256, IdentityLookup, OnFinalize, Header as HeaderT},
 	};
 	use support::{assert_ok, impl_outer_origin, parameter_types};
-	use srml_system as system;
+	use paint_system as system;
 	use std::cell::RefCell;
 
 	#[derive(Clone, PartialEq, Debug)]

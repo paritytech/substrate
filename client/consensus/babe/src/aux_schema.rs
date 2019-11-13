@@ -19,7 +19,7 @@
 use log::info;
 use codec::{Decode, Encode};
 
-use interfaces::{
+use client_api::{
 	backend::AuxStore,
 	error::{Result as ClientResult, Error as ClientError},
 };

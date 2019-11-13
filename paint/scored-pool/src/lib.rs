@@ -55,7 +55,7 @@
 //! ```
 //! use support::{decl_module, dispatch::Result};
 //! use system::ensure_signed;
-//! use srml_scored_pool::{self as scored_pool};
+//! use paint_scored_pool::{self as scored_pool};
 //!
 //! pub trait Trait: scored_pool::Trait {}
 //!
@@ -77,7 +77,7 @@
 //!
 //! ## Dependencies
 //!
-//! This module depends on the [System module](../srml_system/index.html).
+//! This module depends on the [System module](../paint_system/index.html).
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]

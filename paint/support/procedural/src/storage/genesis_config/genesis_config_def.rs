@@ -16,7 +16,7 @@
 
 //! Genesis config defintion.
 
-use srml_support_procedural_tools::syn_ext as ext;
+use paint_support_procedural_tools::syn_ext as ext;
 use proc_macro2::TokenStream;
 use syn::{spanned::Spanned, parse_quote};
 use quote::quote;

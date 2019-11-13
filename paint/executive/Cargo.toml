@@ -1,5 +1,5 @@
 [package]
-name = "srml-executive"
+name = "paint-executive"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
@@ -10,14 +10,15 @@ codec = { package = "parity-scale-codec", version = "1.0.0", default-features = 
 rstd = { package = "sr-std", path = "../../primitives/sr-std", default-features = false }
 runtime-io ={ package = "sr-io", path = "../../primitives/sr-io", default-features = false }
 sr-primitives = { path = "../../primitives/sr-primitives", default-features = false }
-support = { package = "srml-support", path = "../support", default-features = false }
-system = { package = "srml-system", path = "../system", default-features = false }
+support = { package = "paint-support", path = "../support", default-features = false }
+system = { package = "paint-system", path = "../system", default-features = false }
 
 [dev-dependencies]
 hex-literal = "0.2.1"
 primitives = { package = "substrate-primitives",  path = "../../primitives/core" }
-balances = { package = "srml-balances", path = "../balances" }
-transaction-payment = { package = "srml-transaction-payment", path = "../transaction-payment" }
+paint-indices = { path = "../indices" }
+balances = { package = "paint-balances", path = "../balances" }
+transaction-payment = { package = "paint-transaction-payment", path = "../transaction-payment" }
 
 [features]
 default = ["std"]

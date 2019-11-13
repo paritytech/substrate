@@ -20,7 +20,7 @@
 //
 
 use std::{time, sync::Arc};
-use interfaces::{error, CallExecutor};
+use client_api::{error, CallExecutor};
 use client::Client as SubstrateClient;
 use codec::Decode;
 use consensus_common::{evaluation};
@@ -49,7 +49,7 @@ impl<B, E, Block, RA, A> consensus_common::Environment<Block> for
 ProposerFactory<SubstrateClient<B, E, Block, RA>, A>
 where
 	A: txpool::ChainApi<Block=Block>,
-	B: interfaces::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
+	B: client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
 	Block: BlockT<Hash=H256>,
 	RA: Send + Sync + 'static,
@@ -97,7 +97,7 @@ impl<B, E, Block, RA, A> consensus_common::Proposer<Block> for
 Proposer<Block, SubstrateClient<B, E, Block, RA>, A>
 where
 	A: txpool::ChainApi<Block=Block>,
-	B: interfaces::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
+	B: client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
 	Block: BlockT<Hash=H256>,
 	RA: Send + Sync + 'static,
@@ -122,7 +122,7 @@ where
 
 impl<Block, B, E, RA, A> Proposer<Block, SubstrateClient<B, E, Block, RA>, A>	where
 	A: txpool::ChainApi<Block=Block>,
-	B: interfaces::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
+	B: client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
 	Block: BlockT<Hash=H256>,
 	RA: Send + Sync + 'static,

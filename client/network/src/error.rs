@@ -31,7 +31,7 @@ pub enum Error {
 	/// Io error
 	Io(std::io::Error),
 	/// Client error
-	Client(interfaces::error::Error),
+	Client(client_api::error::Error),
 	/// The same bootnode (based on address) is registered with two different peer ids.
 	#[display(
 		fmt = "The same bootnode (`{}`) is registered with two different peer ids: `{}` and `{}`",

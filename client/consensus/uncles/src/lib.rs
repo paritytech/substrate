@@ -22,7 +22,7 @@
 use consensus_common::SelectChain;
 use inherents::{InherentDataProviders};
 use log::warn;
-use interfaces::ProvideUncles;
+use client_api::ProvideUncles;
 use sr_primitives::traits::{Block as BlockT, Header};
 use std::sync::Arc;
 
@@ -39,9 +39,9 @@ pub fn register_uncles_inherent_data_provider<B, C, SC>(
 	C: ProvideUncles<B> + Send + Sync + 'static,
 	SC: SelectChain<B> + 'static,
 {
-	if !inherent_data_providers.has_provider(&srml_authorship::INHERENT_IDENTIFIER) {
+	if !inherent_data_providers.has_provider(&paint_authorship::INHERENT_IDENTIFIER) {
 		inherent_data_providers
-			.register_provider(srml_authorship::InherentDataProvider::new(move || {
+			.register_provider(paint_authorship::InherentDataProvider::new(move || {
 				{
 					let chain_head = match select_chain.best_chain() {
 						Ok(x) => x,

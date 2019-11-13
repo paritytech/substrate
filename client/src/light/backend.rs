@@ -25,7 +25,7 @@ use sr_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenSto
 use state_machine::{Backend as StateBackend, TrieBackend, backend::InMemory as InMemoryState, ChangesTrieTransaction};
 use sr_primitives::traits::{Block as BlockT, NumberFor, Zero, Header};
 use crate::in_mem::{self, check_genesis_storage};
-use interfaces::{
+use client_api::{
 	backend::{
 		AuxStore, Backend as ClientBackend, BlockImportOperation, RemoteBackend, NewBlockState,
 		StorageCollection, ChildStorageCollection,
@@ -450,7 +450,7 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 mod tests {
 	use primitives::Blake2Hasher;
 	use test_client::{self, runtime::Block};
-	use interfaces::backend::NewBlockState;
+	use client_api::backend::NewBlockState;
 	use crate::light::blockchain::tests::{DummyBlockchain, DummyStorage};
 	use super::*;
 
