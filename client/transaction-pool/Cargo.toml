@@ -17,5 +17,5 @@ tx-runtime-api = { package = "substrate-transaction-pool-runtime-api", path = ".
 txpool = { package = "substrate-transaction-graph", path = "./graph" }
 
 [dev-dependencies]
-keyring = { package = "substrate-keyring", path = "../keyring" }
+keyring = { package = "substrate-keyring", path = "../../primitives/keyring" }
 test-client = { package = "substrate-test-runtime-client", path = "../../test/utils/runtime/client" }

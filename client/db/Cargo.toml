@@ -26,7 +26,7 @@ consensus_common = { package = "substrate-consensus-common", path = "../../primi
 header_metadata = { package = "substrate-header-metadata", path = "../header-metadata" }
 
 [dev-dependencies]
-substrate-keyring = { path = "../keyring" }
+substrate-keyring = { path = "../../primitives/keyring" }
 test-client = { package = "substrate-test-runtime-client", path = "../../test/utils/runtime/client" }
 env_logger = "0.7.0"
 quickcheck = "0.8"

@@ -13,7 +13,6 @@ app-crypto = { package = "substrate-application-crypto", path = "../../../primit
 num-bigint = "0.2.3"
 num-rational = "0.2.2"
 num-traits = "0.2.8"
-runtime-support = { package = "srml-support", path = "../../../paint/support" }
 runtime-version = { package = "sr-version", path = "../../../primitives/sr-version" }
 runtime-io = { package = "sr-io", path = "../../../primitives/sr-io" }
 inherents = { package = "substrate-inherents", path = "../../../primitives/inherents" }
@@ -42,7 +41,7 @@ pdqselect = "0.1.0"
 derive_more = "0.15.0"
 
 [dev-dependencies]
-keyring = { package = "substrate-keyring", path = "../../keyring" }
+keyring = { package = "substrate-keyring", path = "../../../primitives/keyring" }
 substrate-executor = { path = "../../executor" }
 network = { package = "substrate-network", path = "../../network", features = ["test-helpers"]}
 service = { package = "substrate-service", path = "../../service" }

@@ -31,7 +31,7 @@ primitives = { package = "substrate-primitives", path = "../../primitives/core" 
 service = { package = "substrate-service", path = "../service", default-features = false }
 state-machine = { package = "substrate-state-machine", path = "../../primitives/state-machine" }
 substrate-telemetry = { path = "../telemetry" }
-keyring = { package = "substrate-keyring", path = "../keyring" }
+keyring = { package = "substrate-keyring", path = "../../primitives/keyring" }
 names = "0.11.0"
 structopt = "0.3.3"
 rpassword = "4.0.1"

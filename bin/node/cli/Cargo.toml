@@ -48,8 +48,8 @@ transaction_pool = { package = "substrate-transaction-pool", path = "../../../cl
 network = { package = "substrate-network", path = "../../../client/network" }
 babe = { package = "substrate-consensus-babe", path = "../../../client/consensus/babe" }
 grandpa = { package = "substrate-finality-grandpa", path = "../../../client/finality-grandpa" }
-keyring = { package = "substrate-keyring", path = "../../../client/keyring" }
-client_db = { package = "substrate-client-db", path = "../../../client//db", default-features = false }
+keyring = { package = "substrate-keyring", path = "../../../primitives/keyring" }
+client_db = { package = "substrate-client-db", path = "../../../client/db", default-features = false }
 offchain = { package = "substrate-offchain", path = "../../../client/offchain" }
 substrate-rpc = { package = "substrate-rpc", path = "../../../client/rpc" }
 substrate-basic-authorship = { path = "../../../client/basic-authorship" }

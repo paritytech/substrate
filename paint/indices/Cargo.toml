@@ -8,7 +8,7 @@ edition = "2018"
 serde = { version = "1.0.101", optional = true }
 safe-mix = { version = "1.0.0", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-substrate-keyring = { path = "../../client/keyring", optional = true }
+substrate-keyring = { path = "../../primitives/keyring", optional = true }
 rstd = { package = "sr-std", path = "../../primitives/sr-std", default-features = false }
 runtime-io = { package = "sr-io", path = "../../primitives/sr-io", default-features = false }
 sr-primitives = { path = "../../primitives/sr-primitives", default-features = false }

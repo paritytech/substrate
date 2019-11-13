@@ -14,7 +14,7 @@ cfg-if = "0.1.10"
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 executive = { package = "srml-executive", path = "../../../paint/executive", default-features = false }
 inherents = { package = "substrate-inherents", path = "../../../primitives/inherents", default-features = false }
-keyring = { package = "substrate-keyring", path = "../../../client/keyring", optional = true }
+keyring = { package = "substrate-keyring", path = "../../../primitives/keyring", optional = true }
 log = { version = "0.4.8", optional = true }
 memory-db = { version = "0.15.2", default-features = false }
 offchain-primitives = { package = "substrate-offchain-primitives", path = "../../../primitives/offchain", default-features = false}
