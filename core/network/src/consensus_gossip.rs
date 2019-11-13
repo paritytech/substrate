@@ -16,4 +16,5 @@
 
 pub use self::state_machine::*;
 
+mod bridge;
 mod state_machine;

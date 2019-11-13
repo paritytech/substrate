@@ -45,7 +45,6 @@ use crate::{behaviour::{Behaviour, BehaviourOut}, config::{parse_str_addr, parse
 use crate::{NetworkState, NetworkStateNotConnectedPeer, NetworkStatePeer};
 use crate::{transport, config::NonReservedPeerMode};
 use crate::config::{Params, TransportConfig};
-use crate::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
 use crate::error::Error;
 use crate::protocol::{self, Protocol, Context, PeerInfo};
 use crate::protocol::{event::Event, light_dispatch::{AlwaysBadChecker, RequestData}};
@@ -490,22 +489,6 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 		let _ = self.to_worker.unbounded_send(ServerToWorkerMsg::AnnounceBlock(hash, data));
 	}
 
-	/// Send a consensus message through the gossip
-	#[deprecated(note = "Use the new `notif protocol` API")]
-	pub fn gossip_consensus_message(
-		&self,
-		topic: B::Hash,
-		engine_id: ConsensusEngineId,
-		message: Vec<u8>,
-		recipient: GossipMessageRecipient,
-	) {
-		let _ = self
-			.to_worker
-			.unbounded_send(ServerToWorkerMsg::GossipConsensusMessage(
-				topic, engine_id, message, recipient,
-			));
-	}
-
 	/// Report a given peer as either beneficial (+) or costly (-) according to the
 	/// given scalar.
 	pub fn report_peer(&self, who: PeerId, cost_benefit: i32) {
@@ -529,16 +512,6 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 		let _ = self
 			.to_worker
 			.unbounded_send(ServerToWorkerMsg::ExecuteWithSpec(Box::new(f)));
-	}
-
-	/// Execute a closure with the consensus gossip.
-	#[deprecated(note = "Use the new `notif protocol` API")]
-	pub fn with_gossip<F>(&self, f: F)
-		where F: FnOnce(&mut ConsensusGossip<B>, &mut dyn Context<B>) + Send + 'static
-	{
-		let _ = self
-			.to_worker
-			.unbounded_send(ServerToWorkerMsg::ExecuteWithGossip(Box::new(f)));
 	}
 
 	/// Are we in the process of downloading the chain?
@@ -690,8 +663,6 @@ enum ServerToWorkerMsg<B: BlockT, S: NetworkSpecialization<B>> {
 	RequestJustification(B::Hash, NumberFor<B>),
 	AnnounceBlock(B::Hash, Vec<u8>),
 	ExecuteWithSpec(Box<dyn FnOnce(&mut S, &mut dyn Context<B>) + Send>),
-	ExecuteWithGossip(Box<dyn FnOnce(&mut ConsensusGossip<B>, &mut dyn Context<B>) + Send>),
-	GossipConsensusMessage(B::Hash, ConsensusEngineId, Vec<u8>, GossipMessageRecipient),
 	GetValue(record::Key),
 	PutValue(record::Key, Vec<u8>),
 	AddKnownAddress(PeerId, Multiaddr),
@@ -767,17 +738,6 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Stream for Ne
 					let protocol = self.network_service.user_protocol_mut();
 					let (mut context, spec) = protocol.specialization_lock();
 					task(spec, &mut context);
-				},
-				ServerToWorkerMsg::ExecuteWithGossip(task) => {
-					let protocol = self.network_service.user_protocol_mut();
-					#[allow(deprecated)]
-					let (mut context, gossip) = protocol.consensus_gossip_lock();
-					task(gossip, &mut context);
-				}
-				ServerToWorkerMsg::GossipConsensusMessage(topic, engine_id, message, recipient) => {
-					#[allow(deprecated)]
-					self.network_service.user_protocol_mut()
-						.gossip_consensus_message(topic, engine_id, message, recipient);
 				},
 				ServerToWorkerMsg::AnnounceBlock(hash, data) =>
 					self.network_service.user_protocol_mut().announce_block(hash, data),

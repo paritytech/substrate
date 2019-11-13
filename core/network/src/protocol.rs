@@ -37,7 +37,6 @@ use sr_primitives::traits::{
 };
 use message::{BlockAnnounce, BlockAttributes, Direction, FromBlock, Message, RequestId};
 use message::generic::{Message as GenericMessage, ConsensusMessage};
-use crate::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
 use light_dispatch::{LightDispatch, LightDispatchNetwork, RequestData};
 use specialization::NetworkSpecialization;
 use sync::{ChainSync, SyncState};
@@ -111,7 +110,6 @@ pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 	genesis_hash: B::Hash,
 	sync: ChainSync<B>,
 	specialization: S,
-	consensus_gossip: ConsensusGossip<B>,
 	context_data: ContextData<B, H>,
 	// Connected peers pending Status message.
 	handshaking_peers: HashMap<PeerId, HandshakingPeer>,
@@ -438,7 +436,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			genesis_hash: info.chain.genesis_hash,
 			sync,
 			specialization,
-			consensus_gossip: ConsensusGossip::new(),
 			protocol_name_by_engine: HashMap::new(),
 			handshaking_peers: HashMap::new(),
 			transaction_pool,
@@ -632,12 +629,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					CustomMessageOutcome::None
 				};
 
-				self.consensus_gossip.on_incoming(
-					&mut ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle),
-					who,
-					vec![msg],
-				);
-
 				return outcome;
 			}
 			GenericMessage::ConsensusBatch(messages) => {
@@ -652,12 +643,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 						}
 					})
 					.collect::<Vec<_>>();
-
-				self.consensus_gossip.on_incoming(
-					&mut ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle),
-					who.clone(),
-					messages,
-				);
 
 				return CustomMessageOutcome::NotifMessages {
 					remote: who,
@@ -693,42 +678,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		);
 	}
 
-	/// Locks `self` and returns a context plus the `ConsensusGossip` struct.
-	#[deprecated(note = "Use the new notif protocol API")]
-	pub fn consensus_gossip_lock<'a>(
-		&'a mut self,
-	) -> (impl Context<B> + 'a, &'a mut ConsensusGossip<B>) {
-		let context = ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle);
-		(context, &mut self.consensus_gossip)
-	}
-
 	/// Locks `self` and returns a context plus the network specialization.
 	pub fn specialization_lock<'a>(
 		&'a mut self,
 	) -> (impl Context<B> + 'a, &'a mut S) {
 		let context = ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle);
 		(context, &mut self.specialization)
-	}
-
-	/// Gossip a consensus message to the network.
-	#[deprecated(note = "Use the new notif protocol API")]
-	pub fn gossip_consensus_message(
-		&mut self,
-		topic: B::Hash,
-		engine_id: ConsensusEngineId,
-		message: Vec<u8>,
-		recipient: GossipMessageRecipient,
-	) {
-		let mut context = ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle);
-		let message = ConsensusMessage { data: message, engine_id };
-		match recipient {
-			GossipMessageRecipient::BroadcastToAll =>
-				self.consensus_gossip.multicast(&mut context, topic, message, true),
-			GossipMessageRecipient::BroadcastNew =>
-				self.consensus_gossip.multicast(&mut context, topic, message, false),
-			GossipMessageRecipient::Peer(who) =>
-				self.send_message(&who, GenericMessage::Consensus(message)),
-		}
 	}
 
 	/// Called when a new peer is connected
@@ -748,9 +703,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		};
 		if let Some(peer_data) = removed {
 			let mut context = ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle);
-			if peer_data.info.protocol_version > 2 {
-				self.consensus_gossip.peer_disconnected(&mut context, peer.clone());
-			}
 			self.sync.peer_disconnected(peer.clone());
 			self.specialization.on_disconnect(&mut context, peer.clone());
 			self.light_dispatch.on_disconnect(LightDispatchIn {
@@ -913,9 +865,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	///
 	/// > **Note**: This method normally doesn't have to be called except for testing purposes.
 	pub fn tick(&mut self) {
-		self.consensus_gossip.tick(
-			&mut ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle)
-		);
 		self.maintain_peers();
 		self.light_dispatch.maintain_peers(LightDispatchIn {
 			behaviour: &mut self.behaviour,
@@ -1051,9 +1000,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			}
 		}
 		let mut context = ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle);
-		if protocol_version > 2 {
-			self.consensus_gossip.new_peer(&mut context, who.clone(), status.roles);
-		}
 		self.specialization.on_connect(&mut context, who, status);
 	}
 
