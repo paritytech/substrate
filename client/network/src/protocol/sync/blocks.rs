@@ -103,6 +103,7 @@ impl<B: BlockT> BlockCollection<B> {
 		peer_best: NumberFor<B>,
 		common: NumberFor<B>,
 		max_parallel: u32,
+		max_ahead: u32,
 	) -> Option<Range<NumberFor<B>>>
 	{
 		if peer_best <= common {
@@ -142,6 +143,12 @@ impl<B: BlockT> BlockCollection<B> {
 			return None;
 		}
 		range.end = cmp::min(peer_best + One::one(), range.end);
+
+		if self.blocks.iter().next().map_or(false, |(n, _)| range.start > *n + max_ahead.into()) {
+			trace!(target: "sync", "Too far ahead for peer {} ({})", who, range.start);
+			return None;
+		}
+
 		self.peer_requests.insert(who, range.start);
 		self.blocks.insert(range.start, BlockRangeState::Downloading {
 			len: range.end - range.start,
@@ -248,18 +255,18 @@ mod test {
 		let peer2 = PeerId::random();
 
 		let blocks = generate_blocks(150);
-		assert_eq!(bc.needed_blocks(peer0.clone(), 40, 150, 0, 1), Some(1 .. 41));
-		assert_eq!(bc.needed_blocks(peer1.clone(), 40, 150, 0, 1), Some(41 .. 81));
-		assert_eq!(bc.needed_blocks(peer2.clone(), 40, 150, 0, 1), Some(81 .. 121));
+		assert_eq!(bc.needed_blocks(peer0.clone(), 40, 150, 0, 1, 200), Some(1 .. 41));
+		assert_eq!(bc.needed_blocks(peer1.clone(), 40, 150, 0, 1, 200), Some(41 .. 81));
+		assert_eq!(bc.needed_blocks(peer2.clone(), 40, 150, 0, 1, 200), Some(81 .. 121));
 
 		bc.clear_peer_download(&peer1);
 		bc.insert(41, blocks[41..81].to_vec(), peer1.clone());
 		assert_eq!(bc.drain(1), vec![]);
-		assert_eq!(bc.needed_blocks(peer1.clone(), 40, 150, 0, 1), Some(121 .. 151));
+		assert_eq!(bc.needed_blocks(peer1.clone(), 40, 150, 0, 1, 200), Some(121 .. 151));
 		bc.clear_peer_download(&peer0);
 		bc.insert(1, blocks[1..11].to_vec(), peer0.clone());
 
-		assert_eq!(bc.needed_blocks(peer0.clone(), 40, 150, 0, 1), Some(11 .. 41));
+		assert_eq!(bc.needed_blocks(peer0.clone(), 40, 150, 0, 1, 200), Some(11 .. 41));
 		assert_eq!(bc.drain(1), blocks[1..11].iter()
 			.map(|b| BlockData { block: b.clone(), origin: Some(peer0.clone()) }).collect::<Vec<_>>());
 
@@ -273,7 +280,7 @@ mod test {
 			.map(|b| BlockData { block: b.clone(), origin: Some(peer1.clone()) }).collect::<Vec<_>>()[..]);
 
 		bc.clear_peer_download(&peer2);
-		assert_eq!(bc.needed_blocks(peer2.clone(), 40, 150, 80, 1), Some(81 .. 121));
+		assert_eq!(bc.needed_blocks(peer2.clone(), 40, 150, 80, 1, 200), Some(81 .. 121));
 		bc.clear_peer_download(&peer2);
 		bc.insert(81, blocks[81..121].to_vec(), peer2.clone());
 		bc.clear_peer_download(&peer1);
@@ -298,7 +305,8 @@ mod test {
 		bc.blocks.insert(114305, BlockRangeState::Complete(blocks));
 
 		let peer0 = PeerId::random();
-		assert_eq!(bc.needed_blocks(peer0.clone(), 128, 10000, 000, 1), Some(1 .. 100));
-		assert_eq!(bc.needed_blocks(peer0.clone(), 128, 10000, 600, 1), Some(100 + 128 .. 100 + 128 + 128));
+		assert_eq!(bc.needed_blocks(peer0.clone(), 128, 10000, 000, 1, 200), Some(1 .. 100));
+		assert_eq!(bc.needed_blocks(peer0.clone(), 128, 10000, 600, 1, 200), None); // too far ahead
+		assert_eq!(bc.needed_blocks(peer0.clone(), 128, 10000, 600, 1, 200000), Some(100 + 128 .. 100 + 128 + 128));
 	}
 }

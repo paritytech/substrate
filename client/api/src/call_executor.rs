@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{cmp::Ord, panic::UnwindSafe, result, cell::RefCell, rc::Rc};
+use std::{cmp::Ord, panic::UnwindSafe, result, cell::RefCell};
 use codec::{Encode, Decode};
 use sr_primitives::{
 	generic::BlockId, traits::Block as BlockT, traits::NumberFor,
@@ -77,7 +77,7 @@ where
 		execution_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
 		side_effects_handler: Option<OffchainExt>,
-		proof_recorder: &Option<Rc<RefCell<ProofRecorder<B>>>>,
+		proof_recorder: &Option<ProofRecorder<B>>,
 		enable_keystore: bool,
 	) -> error::Result<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone;
 

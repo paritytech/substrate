@@ -153,7 +153,7 @@ use codec::{Codec, Encode, Decode};
 use support::{
 	StorageValue, Parameter, decl_event, decl_storage, decl_module,
 	traits::{
-		UpdateBalanceOutcome, Currency, OnFreeBalanceZero, OnUnbalanced,
+		UpdateBalanceOutcome, Currency, OnFreeBalanceZero, OnUnbalanced, TryDrop,
 		WithdrawReason, WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
 		Imbalance, SignedImbalance, ReservableCurrency, Get,
 	},
@@ -603,7 +603,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 mod imbalances {
 	use super::{
 		result, Subtrait, DefaultInstance, Imbalance, Trait, Zero, Instance, Saturating,
-		StorageValue,
+		StorageValue, TryDrop,
 	};
 	use rstd::mem;
 
@@ -628,6 +628,12 @@ mod imbalances {
 		/// Create a new negative imbalance from a balance.
 		pub fn new(amount: T::Balance) -> Self {
 			NegativeImbalance(amount)
+		}
+	}
+
+	impl<T: Trait<I>, I: Instance> TryDrop for PositiveImbalance<T, I> {
+		fn try_drop(self) -> result::Result<(), Self> {
+			self.drop_zero()
 		}
 	}
 
@@ -673,6 +679,12 @@ mod imbalances {
 		}
 		fn peek(&self) -> T::Balance {
 			self.0.clone()
+		}
+	}
+
+	impl<T: Trait<I>, I: Instance> TryDrop for NegativeImbalance<T, I> {
+		fn try_drop(self) -> result::Result<(), Self> {
+			self.drop_zero()
 		}
 	}
 

@@ -120,9 +120,14 @@ mod utils;
 ///         extern "C" {
 ///             /// Every function is exported as `ext_TRAIT_NAME_FUNCTION_NAME_version_VERSION`.
 ///             ///
+///             /// `TRAIT_NAME` is converted into snake case.
+///             ///
 ///             /// The type for each argument of the exported function depends on
 ///             /// `<ARGUMENT_TYPE as RIType>::FFIType`.
-///             pub fn ext_Interface_call_some_complex_code_version_1(data: u64);
+///             ///
+///             /// `data` holds the pointer and the length to the `[u8]` slice.
+///             pub fn ext_Interface_call_some_complex_code_version_1(data: u64) -> u64;
+///             /// `optional` holds the pointer and the length of the encoded value.
 ///             pub fn ext_Interface_set_or_clear_version_1(optional: u64);
 ///         }
 ///     }
