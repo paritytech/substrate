@@ -45,9 +45,9 @@ use crate::{behaviour::{Behaviour, BehaviourOut}, config::{parse_str_addr, parse
 use crate::{NetworkState, NetworkStateNotConnectedPeer, NetworkStatePeer};
 use crate::{transport, config::NonReservedPeerMode};
 use crate::config::{Params, TransportConfig};
+use crate::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
 use crate::error::Error;
 use crate::protocol::{self, Protocol, Context, PeerInfo};
-use crate::protocol::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
 use crate::protocol::{event::Event, light_dispatch::{AlwaysBadChecker, RequestData}};
 use crate::protocol::specialization::NetworkSpecialization;
 use crate::protocol::sync::SyncState;

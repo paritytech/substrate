@@ -179,6 +179,7 @@ mod service;
 mod transport;
 
 pub mod config;
+pub mod consensus_gossip;
 pub mod error;
 
 #[cfg(any(test, feature = "test-helpers"))]
@@ -189,7 +190,7 @@ pub use service::{
 	NetworkService, NetworkWorker, TransactionPool, ExHashT, ReportHandle,
 	NetworkStateInfo,
 };
-pub use protocol::{PeerInfo, Context, consensus_gossip, message, specialization};
+pub use protocol::{PeerInfo, Context, message, specialization};
 pub use protocol::event::{Event, DhtEvent};
 pub use protocol::sync::SyncState;
 pub use libp2p::{Multiaddr, PeerId};

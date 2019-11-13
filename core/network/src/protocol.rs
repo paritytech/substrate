@@ -37,7 +37,7 @@ use sr_primitives::traits::{
 };
 use message::{BlockAnnounce, BlockAttributes, Direction, FromBlock, Message, RequestId};
 use message::generic::{Message as GenericMessage, ConsensusMessage};
-use consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
+use crate::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
 use light_dispatch::{LightDispatch, LightDispatchNetwork, RequestData};
 use specialization::NetworkSpecialization;
 use sync::{ChainSync, SyncState};
@@ -55,7 +55,6 @@ use crate::error;
 use util::LruHashSet;
 
 mod util;
-pub mod consensus_gossip;
 pub mod message;
 pub mod event;
 pub mod light_dispatch;
