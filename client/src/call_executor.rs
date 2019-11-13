@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{sync::Arc, panic::UnwindSafe, result, cell::RefCell, rc::Rc};
+use std::{sync::Arc, panic::UnwindSafe, result, cell::RefCell};
 use codec::{Encode, Decode};
 use sr_primitives::{
 	generic::BlockId, traits::Block as BlockT, traits::NumberFor,
@@ -34,8 +34,6 @@ use sr_api::{ProofRecorder, InitializeBlock};
 use interfaces::{
 	error, backend, call_executor::CallExecutor,
 };
-use crate::backend;
-use crate::error;
 
 /// Call executor that executes methods locally, querying all required
 /// data from local backend.

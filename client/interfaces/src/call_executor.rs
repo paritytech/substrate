@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{cmp::Ord, panic::UnwindSafe, result, cell::RefCell, rc::Rc};
+use std::{cmp::Ord, panic::UnwindSafe, result, cell::RefCell};
 use codec::{Encode, Decode};
 use sr_primitives::{
 	generic::BlockId, traits::Block as BlockT, traits::NumberFor,
