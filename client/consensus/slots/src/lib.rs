@@ -41,7 +41,7 @@ use sr_primitives::traits::{ApiRef, Block as BlockT, Header, ProvideRuntimeApi};
 use std::{fmt::Debug, ops::Deref, pin::Pin, sync::Arc};
 use substrate_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
 use parking_lot::Mutex;
-use interfaces;
+use client_api;
 
 /// A worker that should be invoked at every new slot.
 pub trait SlotWorker<B: BlockT> {

@@ -16,7 +16,7 @@
 
 //! Substrate network possible errors.
 
-use interfaces;
+use client_api;
 
 use libp2p::{PeerId, Multiaddr};
 

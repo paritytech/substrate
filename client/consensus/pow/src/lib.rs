@@ -50,7 +50,7 @@ use consensus_common::{
 };
 use consensus_common::import_queue::{BoxBlockImport, BasicQueue, Verifier};
 use codec::{Encode, Decode};
-use interfaces;
+use client_api;
 use log::*;
 
 #[derive(derive_more::Display, Debug)]
