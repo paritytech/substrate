@@ -500,7 +500,7 @@ impl StateSnapshot {
 		// First, erase the memory and copy the data segments into it.
 		memory
 			.erase()
-			.map_err(|_| WasmError::ApplySnapshotFailed)?;
+			.map_err(|e| WasmError::ErasingFailed(e.to_string()))?;
 		for (offset, contents) in &self.data_segments {
 			memory
 				.set(*offset, contents)
@@ -551,13 +551,7 @@ impl WasmRuntime for WasmiRuntime {
 		method: &str,
 		data: &[u8],
 	) -> Result<Vec<u8>, Error> {
-		self.state_snapshot.apply(&self.instance).expect(
-			"applying the snapshot can only fail if the passed instance is different
-			from the one that was used for creation of the snapshot;
-			we use the snapshot that is directly associated with the instance;
-			thus the snapshot was created using the instance;
-			qed",
-		);
+		self.state_snapshot.apply(&self.instance)?;
 		call_in_wasm_module(ext, &self.instance, method, data, &self.host_functions)
 	}
 }
