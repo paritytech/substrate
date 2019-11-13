@@ -11,4 +11,5 @@ primitives = { package = "substrate-primitives", path = "../../../../primitives/
 runtime = { package = "substrate-test-runtime", path = "../../runtime" }
 sr-primitives = { path = "../../../../primitives/sr-primitives" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
-
+interfaces = { package = "substrate-client-interfaces", path = "../../../../client/interfaces" }
+client = { package = "substrate-client", path = "../../../../client/" }

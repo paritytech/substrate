@@ -811,7 +811,7 @@ pub fn check_genesis_storage(top: &StorageOverlay, children: &ChildrenStorageOve
 
 #[cfg(test)]
 mod tests {
-	use super::*;
+	use interfaces::offchain::{OffchainStorage, InMemOffchainStorage};
 	use std::sync::Arc;
 	use test_client;
 	use primitives::Blake2Hasher;
@@ -834,9 +834,8 @@ mod tests {
 
 	#[test]
 	fn in_memory_offchain_storage() {
-		use crate::backend::OffchainStorage as _;
 
-		let mut storage = OffchainStorage::default();
+		let mut storage = InMemOffchainStorage::default();
 		assert_eq!(storage.get(b"A", b"B"), None);
 		assert_eq!(storage.get(b"B", b"A"), None);
 

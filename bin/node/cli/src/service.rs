@@ -265,7 +265,7 @@ pub fn new_full<C: Send + Default + 'static>(config: NodeConfiguration<C>)
 		TransactionPool<transaction_pool::FullChainApi<ConcreteClient, ConcreteBlock>>,
 		OffchainWorkers<
 			ConcreteClient,
-			<ConcreteBackend as client::backend::Backend<Block, Blake2Hasher>>::OffchainStorage,
+			<ConcreteBackend as interfaces::backend::Backend<Block, Blake2Hasher>>::OffchainStorage,
 			ConcreteBlock,
 		>
 	>,

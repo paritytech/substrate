@@ -110,6 +110,7 @@ members = [
 	"primitives/transaction-pool/runtime-api",
 	"primitives/trie",
 	"primitives/wasm-interface",
+	"test/utils/primitives",
 	"test/utils/chain-spec-builder",
 	"test/utils/client",
 	"test/utils/runtime",

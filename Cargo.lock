@@ -2720,6 +2720,7 @@ dependencies = [
  "substrate-cli 2.0.0",
  "substrate-client 2.0.0",
  "substrate-client-db 2.0.0",
+ "substrate-client-interfaces 2.0.0",
  "substrate-consensus-babe 2.0.0",
  "substrate-consensus-babe-primitives 2.0.0",
  "substrate-consensus-common 2.0.0",
@@ -5448,6 +5449,7 @@ dependencies = [
  "substrate-primitives 2.0.0",
  "substrate-state-machine 2.0.0",
  "substrate-telemetry 2.0.0",
+ "substrate-test-primitives 2.0.0",
  "substrate-test-runtime-client 2.0.0",
  "substrate-trie 2.0.0",
  "tempfile 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -5719,6 +5721,7 @@ dependencies = [
  "sr-api 2.0.0",
  "sr-primitives 2.0.0",
  "srml-finality-tracker 2.0.0",
+ "substrate-client 2.0.0",
  "substrate-client-interfaces 2.0.0",
  "substrate-consensus-babe-primitives 2.0.0",
  "substrate-consensus-common 2.0.0",
@@ -6263,6 +6266,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "substrate-test-primitives"
+version = "2.0.0"
+dependencies = [
+ "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-primitives 2.0.0",
+ "substrate-application-crypto 2.0.0",
+ "substrate-primitives 2.0.0",
+]
+
+[[package]]
 name = "substrate-test-runtime"
 version = "2.0.0"
 dependencies = [
@@ -6285,7 +6299,6 @@ dependencies = [
  "substrate-application-crypto 2.0.0",
  "substrate-block-builder-runtime-api 2.0.0",
  "substrate-client 2.0.0",
- "substrate-client-interfaces 2.0.0",
  "substrate-consensus-aura-primitives 2.0.0",
  "substrate-consensus-babe-primitives 2.0.0",
  "substrate-executor 2.0.0",
@@ -6310,6 +6323,8 @@ dependencies = [
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 2.0.0",
  "substrate-block-builder 2.0.0",
+ "substrate-client 2.0.0",
+ "substrate-client-interfaces 2.0.0",
  "substrate-primitives 2.0.0",
  "substrate-test-client 2.0.0",
  "substrate-test-runtime 2.0.0",

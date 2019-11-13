@@ -91,6 +91,7 @@ pub use interfaces::{
 	blockchain::Info as ChainInfo,
 	notifications::{StorageEventStream, StorageChangeSet},
 	call_executor::CallExecutor,
+	utils,
 };
 pub use crate::call_executor::LocalCallExecutor;
 pub use crate::client::{
@@ -98,8 +99,7 @@ pub use crate::client::{
 	new_in_mem,
 	BlockBody, ImportNotifications, FinalityNotifications, BlockchainEvents,
 	BlockImportNotification, Client, ClientInfo, ExecutionStrategies, FinalityNotification,
-	LongestChain, BlockOf, ProvideUncles, ForkBlocks,
-	utils, apply_aux,
+	LongestChain, BlockOf, ProvideUncles, ForkBlocks, apply_aux,
 };
 pub use state_machine::{ExecutionStrategy, StorageProof};
 pub use crate::leaves::LeafSet;

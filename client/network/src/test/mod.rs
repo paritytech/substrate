@@ -30,13 +30,13 @@ use crate::chain::FinalityProofProvider;
 use interfaces::{
 	ClientInfo, BlockchainEvents, BlockImportNotification,
 	FinalityNotifications, ImportNotifications,
-	FinalityNotification, LongestChain,
+	FinalityNotification,
 	error::Result as ClientResult,
 	well_known_cache_keys::{self, Id as CacheKeyId},
-	::backend::{AuxStore, Backend, Finalizer}
+	backend::{AuxStore, Backend, Finalizer}
 };
 use block_builder::BlockBuilder;
-use client::Client;
+use client::LongestChain;
 use crate::config::Roles;
 use consensus::block_validation::DefaultBlockAnnounceValidator;
 use consensus::import_queue::BasicQueue;

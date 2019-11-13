@@ -633,7 +633,7 @@ fn importing_block_one_sets_genesis_epoch() {
 
 #[test]
 fn importing_epoch_change_block_prunes_tree() {
-	use client::backend::Finalizer;
+	use interfaces::Finalizer;
 
 	let mut net = BabeTestNet::new(1);
 

@@ -26,12 +26,13 @@ use tokio_timer::Delay;
 use parking_lot::RwLock;
 
 use interfaces::{
-	blockchain::{HeaderBackend, BlockchainEvents},
-	backend::{Backend, Finalizer},
+	HeaderBackend, BlockchainEvents,
+	backend::{Backend},
+	Finalizer,
 	call_executor::CallExecutor,
 	error::Error as ClientError,
 	utils::is_descendent_of,
-}
+};
 use client::{
 	apply_aux, Client, 
 };

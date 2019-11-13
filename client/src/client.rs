@@ -1778,6 +1778,7 @@ pub(crate) mod tests {
 	use consensus::{BlockOrigin, SelectChain};
 	use test_client::{
 		prelude::*,
+		client_ext::ClientExt,
 		client_db::{Backend, DatabaseSettings, DatabaseSettingsSrc, PruningMode},
 		runtime::{self, Block, Transfer, RuntimeApi, TestAPI},
 	};
@@ -2561,7 +2562,7 @@ pub(crate) mod tests {
 
 		// we finalize block B1 which is on a different branch from current best
 		// which should trigger a re-org.
-		client.finalize_block(BlockId::Hash(b1.hash()), None).unwrap();
+		ClientExt::finalize_block(&client, BlockId::Hash(b1.hash()), None).unwrap();
 
 		// B1 should now be the latest finalized
 		assert_eq!(
@@ -2707,7 +2708,7 @@ pub(crate) mod tests {
 
 		// we will finalize A2 which should make it impossible to import a new
 		// B3 at the same height but that doesnt't include it
-		client.finalize_block(BlockId::Hash(a2.hash()), None).unwrap();
+		ClientExt::finalize_block(&client, BlockId::Hash(a2.hash()), None).unwrap();
 
 		let b3 = client.new_block_at(&BlockId::Hash(b2.hash()), Default::default())
 			.unwrap().bake().unwrap();

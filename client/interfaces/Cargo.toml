@@ -34,6 +34,7 @@ trie = { package = "substrate-trie", path = "../../primitives/trie" }
 env_logger = "0.7.0"
 tempfile = "3.1.0"
 client-db = { package = "substrate-client-db", path = ".././db", features = ["kvdb-rocksdb"] }
+test-primitives = { package = "substrate-test-primitives", path = "../../test/utils/primitives" }
 test-client = { package = "substrate-test-runtime-client", path = "../../test/utils/runtime/client" }
 kvdb-memorydb = { git = "https://github.com/paritytech/parity-common", rev="b0317f649ab2c665b7987b8475878fc4d2e1f81d" }
 panic-handler = { package = "substrate-panic-handler", path = "../../primitives/panic-handler" }

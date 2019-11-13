@@ -281,3 +281,55 @@ pub trait RemoteBlockchain<Block: BlockT>: Send + Sync {
 		RemoteHeaderRequest<Block::Header>,
 	>>;
 }
+
+
+
+#[cfg(test)]
+pub mod tests {
+	use futures03::future::Ready;
+	use parking_lot::Mutex;
+    use crate::error::Error as ClientError;
+    use test_primitives::{Block, Header, Extrinsic};
+	use super::*;
+
+	pub type OkCallFetcher = Mutex<Vec<u8>>;
+
+	fn not_implemented_in_tests<T, E>() -> Ready<Result<T, E>>
+	where
+		E: std::convert::From<&'static str>,
+	{
+		futures03::future::ready(Err("Not implemented on test node".into()))
+	}
+
+	impl Fetcher<Block> for OkCallFetcher {
+		type RemoteHeaderResult = Ready<Result<Header, ClientError>>;
+		type RemoteReadResult = Ready<Result<HashMap<Vec<u8>, Option<Vec<u8>>>, ClientError>>;
+		type RemoteCallResult = Ready<Result<Vec<u8>, ClientError>>;
+		type RemoteChangesResult = Ready<Result<Vec<(NumberFor<Block>, u32)>, ClientError>>;
+		type RemoteBodyResult = Ready<Result<Vec<Extrinsic>, ClientError>>;
+
+		fn remote_header(&self, _request: RemoteHeaderRequest<Header>) -> Self::RemoteHeaderResult {
+			not_implemented_in_tests()
+		}
+
+		fn remote_read(&self, _request: RemoteReadRequest<Header>) -> Self::RemoteReadResult {
+			not_implemented_in_tests()
+		}
+
+		fn remote_read_child(&self, _request: RemoteReadChildRequest<Header>) -> Self::RemoteReadResult {
+			not_implemented_in_tests()
+		}
+
+		fn remote_call(&self, _request: RemoteCallRequest<Header>) -> Self::RemoteCallResult {
+			futures03::future::ready(Ok((*self.lock()).clone()))
+		}
+
+		fn remote_changes(&self, _request: RemoteChangesRequest<Header>) -> Self::RemoteChangesResult {
+			not_implemented_in_tests()
+		}
+
+		fn remote_body(&self, _request: RemoteBodyRequest<Header>) -> Self::RemoteBodyResult {
+			not_implemented_in_tests()
+		}
+	}
+}

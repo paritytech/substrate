@@ -117,7 +117,7 @@ impl interfaces::OffchainStorage for LocalStorage {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use client::backend::OffchainStorage;
+	use interfaces::OffchainStorage;
 
 	#[test]
 	fn should_compare_and_set_and_clear_the_locks_map() {

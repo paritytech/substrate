@@ -29,7 +29,7 @@ use super::{
 };
 
 use log::{debug, warn};
-use interfacess::{BlockImportNotification, ImportNotifications};
+use interfaces::{BlockImportNotification, ImportNotifications};
 use futures::prelude::*;
 use futures::stream::Fuse;
 use futures03::{StreamExt as _, TryStreamExt as _};

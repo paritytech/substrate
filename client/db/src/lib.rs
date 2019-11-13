@@ -1552,9 +1552,8 @@ mod tests {
 	use hash_db::{HashDB, EMPTY_PREFIX};
 	use super::*;
 	use crate::columns;
-	use interfaces::backend::Backend as BTrait;
+	use interfaces::backend::{Backend as BTrait, BlockImportOperation as Op};
 	use client::blockchain::Backend as BLBTrait;
-	use client::backend::BlockImportOperation as Op;
 	use sr_primitives::testing::{Header, Block as RawBlock, ExtrinsicWrapper};
 	use sr_primitives::traits::{Hash, BlakeTwo256};
 	use state_machine::{TrieMut, TrieDBMut, ChangesTrieRootsStorage, ChangesTrieStorage};

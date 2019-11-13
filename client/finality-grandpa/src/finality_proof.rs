@@ -41,7 +41,8 @@ use log::{trace, warn};
 use interfaces::{
 	backend::Backend, blockchain::Backend as BlockchainBackend, CallExecutor,
 	error::{Error as ClientError, Result as ClientResult},
-	light::{FetchChecker, RemoteReadRequest, StorageProof},
+	light::{FetchChecker, RemoteReadRequest},
+	StorageProof,
 };
 use client::Client;
 use codec::{Encode, Decode};
@@ -577,7 +578,7 @@ impl<Block: BlockT<Hash=H256>> ProvableJustification<Block::Header> for GrandpaJ
 #[cfg(test)]
 pub(crate) mod tests {
 	use test_client::runtime::{Block, Header, H256};
-	use test_client::client::{backend::NewBlockState};
+	use interfaces::NewBlockState;
 	use test_client::client::in_mem::Blockchain as InMemoryBlockchain;
 	use super::*;
 	use primitives::crypto::Public;

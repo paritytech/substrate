@@ -40,6 +40,7 @@ grandpa_primitives = { package = "substrate-finality-grandpa-primitives", path =
 
 # core dependencies
 runtime-io = { package = "sr-io", path = "../../../primitives/sr-io" }
+interfaces = { package = "substrate-client-interfaces", path = "../../../client/interfaces" }
 client = { package = "substrate-client", path = "../../../client/" }
 inherents = { package = "substrate-inherents", path = "../../../primitives/inherents" }
 chain-spec = { package = "substrate-chain-spec", path = "../../../client/chain-spec" }

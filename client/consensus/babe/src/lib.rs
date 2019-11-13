@@ -89,7 +89,7 @@ use consensus_common::import_queue::{Verifier, BasicQueue, CacheKeyId};
 use interfaces::{
 	backend::{AuxStore, Backend},
 	call_executor::CallExecutor,
-	error::{Result as ClientResult, Error as ClientError}
+	error::{Result as ClientResult, Error as ClientError},
 	blockchain::{self, HeaderBackend, ProvideCache},
 	BlockchainEvents, ProvideUncles,
 };
