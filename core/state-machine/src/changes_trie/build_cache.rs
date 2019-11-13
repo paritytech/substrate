@@ -79,7 +79,7 @@ impl<H, N> BuildCache<H, N>
 		H: Eq + ::std::hash::Hash + Clone,
 {
 	/// Create new changes trie build cache.
-		pub fn new() -> Self {
+	pub fn new() -> Self {
 		BuildCache {
 			roots_by_number: HashMap::new(),
 			changed_keys: HashMap::new(),

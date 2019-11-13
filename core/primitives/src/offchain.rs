@@ -208,7 +208,7 @@ impl Timestamp {
 		Timestamp(self.0.saturating_add(duration.0))
 	}
 
-		/// Decrease the timestamp by given `Duration`
+	/// Decrease the timestamp by given `Duration`
 	pub fn sub(self, duration: Duration) -> Timestamp {
 		Timestamp(self.0.saturating_sub(duration.0))
 	}

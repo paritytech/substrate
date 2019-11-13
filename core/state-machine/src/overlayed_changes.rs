@@ -107,7 +107,7 @@ impl OverlayedChanges {
 	/// Returns a double-Option: None if the key is unknown (i.e. and the query should be refered
 	/// to the backend); Some(None) if the key has been deleted. Some(Some(...)) for a key whose
 	/// value has been set.
-		pub fn storage(&self, key: &[u8]) -> Option<Option<&[u8]>> {
+	pub fn storage(&self, key: &[u8]) -> Option<Option<&[u8]>> {
 		self.prospective.top.get(key)
 			.or_else(|| self.committed.top.get(key))
 			.map(|x| x.value.as_ref().map(AsRef::as_ref))
@@ -116,7 +116,7 @@ impl OverlayedChanges {
 	/// Returns a double-Option: None if the key is unknown (i.e. and the query should be refered
 	/// to the backend); Some(None) if the key has been deleted. Some(Some(...)) for a key whose
 	/// value has been set.
-		pub fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Option<Option<&[u8]>> {
+	pub fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Option<Option<&[u8]>> {
 		if let Some(map) = self.prospective.children.get(storage_key) {
 			if let Some(val) = map.get(key) {
 				return Some(val.value.as_ref().map(AsRef::as_ref));

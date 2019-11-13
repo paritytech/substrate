@@ -136,7 +136,7 @@ pub struct BlockImportParams<Block: BlockT> {
 }
 
 impl<Block: BlockT> BlockImportParams<Block> {
-	/// Deconstruct the justified header into parts.
+		/// Deconstruct the justified header into parts.
 		pub fn into_inner(self)
 		-> (
 			BlockOrigin,

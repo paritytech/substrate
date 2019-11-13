@@ -92,17 +92,6 @@ fn discard_values<Key: Hash>(
 	}
 }
 
-// `clippy` with `-D clippy::all` will fail because of the `filter_map` below.
-//
-// In this particular situation, it is the correct choice to use it because
-// the type of `filter`'s closure is `FnMut(&Self::Item) -> bool`, whereas
-// the closure in `filter_map` has type `FnMut(Self::Item) -> Option<B>`,
-// where `B` is type of the item being filter *after* the closure has worked
-// on it - notice that the argument is passed by reference in `filter`, and by
-// reference in `filter-map`.
-//
-// In summary, the above means using `filter` results in moving data that is
-// behind a shared reference.
 fn discard_descendants<BlockHash: Hash, Key: Hash>(
 	levels: &mut VecDeque<Vec<BlockOverlay<BlockHash, Key>>>,
 	mut values: &mut HashMap<Key, (u32, DBValue)>,

@@ -395,8 +395,6 @@ pub trait Hash: 'static + MaybeSerializeDeserialize + Debug + Clone + Eq + Parti
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct BlakeTwo256;
 
-// Search for Note [clippy::derive_hash_xor_eq] for an explanation of the line
-// below.
 impl Hash for BlakeTwo256 {
 	type Output = primitives::H256;
 	type Hasher = Blake2Hasher;
