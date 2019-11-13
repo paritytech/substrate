@@ -28,7 +28,7 @@ use crate::sandbox;
 use crate::allocator;
 use crate::wasm_utils::interpret_runtime_api_result;
 use crate::wasm_runtime::WasmRuntime;
-use log::trace;
+use log::{error, trace};
 use parity_wasm::elements::{deserialize_buffer, DataSegment, Instruction, Module as RawModule};
 use wasm_interface::{
 	FunctionContext, Pointer, WordSize, Sandbox, MemoryId, Result as WResult, Function,
@@ -551,7 +551,14 @@ impl WasmRuntime for WasmiRuntime {
 		method: &str,
 		data: &[u8],
 	) -> Result<Vec<u8>, Error> {
-		self.state_snapshot.apply(&self.instance)?;
+		self.state_snapshot.apply(&self.instance)
+			.map_err(|e| {
+				// Snapshot restoration failed. This is pretty unexpected since this can happen
+				// if some invariant is broken or if the system is under extreme memory pressure
+				// (so erasing fails).
+				error!(target: "wasm-executor", "snapshot restoration failed: {}", e);
+				e
+			})?;
 		call_in_wasm_module(ext, &self.instance, method, data, &self.host_functions)
 	}
 }
