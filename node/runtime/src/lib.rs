@@ -76,8 +76,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to equal spec_version. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 193,
-	impl_version: 193,
+	spec_version: 194,
+	impl_version: 194,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -247,6 +247,7 @@ srml_staking_reward_curve::build! {
 parameter_types! {
 	pub const SessionsPerEra: sr_staking_primitives::SessionIndex = 6;
 	pub const BondingDuration: staking::EraIndex = 24 * 28;
+	pub const SlashDeferDuration: staking::EraIndex = 24 * 7; // 1/4 the bonding duration.
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &REWARD_CURVE;
 }
 
@@ -260,6 +261,7 @@ impl staking::Trait for Runtime {
 	type Reward = (); // rewards are minted from the void
 	type SessionsPerEra = SessionsPerEra;
 	type BondingDuration = BondingDuration;
+	type SlashDeferDuration = SlashDeferDuration;
 	type SessionInterface = Self;
 	type RewardCurve = RewardCurve;
 }
