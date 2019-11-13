@@ -23,9 +23,9 @@ extern crate alloc;
 
 #[cfg(feature = "std")]
 use serde::Serialize;
-use codec::{Encode, Decode, Codec};
+use codec::{Encode, Decode, Input, Codec};
 use sr_primitives::{ConsensusEngineId, RuntimeDebug};
-use client::decl_runtime_apis;
+use rstd::borrow::Cow;
 use rstd::vec::Vec;
 
 mod app {
@@ -46,6 +46,10 @@ pub type AuthoritySignature = app::Signature;
 /// The `ConsensusEngineId` of GRANDPA.
 pub const GRANDPA_ENGINE_ID: ConsensusEngineId = *b"FRNK";
 
+/// The storage key for the current set of weighted Grandpa authorities.
+/// The value stored is an encoded VersionedAuthorityList.
+pub const GRANDPA_AUTHORITIES_KEY: &'static [u8] = b":grandpa_authorities";
+
 /// The weight of an authority.
 pub type AuthorityWeight = u64;
 
@@ -58,12 +62,15 @@ pub type SetId = u64;
 /// The round indicator.
 pub type RoundNumber = u64;
 
+/// A list of Grandpa authorities with associated weights.
+pub type AuthorityList = Vec<(AuthorityId, AuthorityWeight)>;
+
 /// A scheduled change of authority set.
 #[cfg_attr(feature = "std", derive(Serialize))]
 #[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug)]
 pub struct ScheduledChange<N> {
 	/// The new authorities after the change, along with their respective weights.
-	pub next_authorities: Vec<(AuthorityId, AuthorityWeight)>,
+	pub next_authorities: AuthorityList,
 	/// The number of blocks to delay.
 	pub delay: N,
 }
@@ -154,7 +161,56 @@ pub const PENDING_CHANGE_CALL: &str = "grandpa_pending_change";
 /// WASM function call to get current GRANDPA authorities.
 pub const AUTHORITIES_CALL: &str = "grandpa_authorities";
 
-decl_runtime_apis! {
+/// The current version of the stored AuthorityList type. The encoding version MUST be updated any
+/// time the AuthorityList type changes.
+const AUTHORITIES_VERISON: u8 = 1;
+
+/// An AuthorityList that is encoded with a version specifier. The encoding version is updated any
+/// time the AuthorityList type changes. This ensures that encodings of different versions of an
+/// AuthorityList are differentiable. Attempting to decode an authority list with an unknown
+/// version will fail.
+#[derive(Default)]
+pub struct VersionedAuthorityList<'a>(Cow<'a, AuthorityList>);
+
+impl<'a> From<AuthorityList> for VersionedAuthorityList<'a> {
+	fn from(authorities: AuthorityList) -> Self {
+		VersionedAuthorityList(Cow::Owned(authorities))
+	}
+}
+
+impl<'a> From<&'a AuthorityList> for VersionedAuthorityList<'a> {
+	fn from(authorities: &'a AuthorityList) -> Self {
+		VersionedAuthorityList(Cow::Borrowed(authorities))
+	}
+}
+
+impl<'a> Into<AuthorityList> for VersionedAuthorityList<'a> {
+	fn into(self) -> AuthorityList {
+		self.0.into_owned()
+	}
+}
+
+impl<'a> Encode for VersionedAuthorityList<'a> {
+	fn size_hint(&self) -> usize {
+		(AUTHORITIES_VERISON, self.0.as_ref()).size_hint()
+	}
+
+	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		(AUTHORITIES_VERISON, self.0.as_ref()).using_encoded(f)
+	}
+}
+
+impl<'a> Decode for VersionedAuthorityList<'a> {
+	fn decode<I: Input>(value: &mut I) -> Result<Self, codec::Error> {
+		let (version, authorities): (u8, AuthorityList) = Decode::decode(value)?;
+		if version != AUTHORITIES_VERISON {
+			return Err("unknown Grandpa authorities version".into());
+		}
+		Ok(authorities.into())
+	}
+}
+
+sr_api::decl_runtime_apis! {
 	/// APIs for integrating the GRANDPA finality gadget into runtimes.
 	/// This should be implemented on the runtime side.
 	///
@@ -172,6 +228,6 @@ decl_runtime_apis! {
 		/// When called at block B, it will return the set of authorities that should be
 		/// used to finalize descendants of this block (B+1, B+2, ...). The block B itself
 		/// is finalized by the authorities from block B-1.
-		fn grandpa_authorities() -> Vec<(AuthorityId, AuthorityWeight)>;
+		fn grandpa_authorities() -> AuthorityList;
 	}
 }

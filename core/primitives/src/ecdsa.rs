@@ -18,27 +18,32 @@
 //! Simple ECDSA API.
 // end::description[]
 
+#[cfg(feature = "full_crypto")]
+use rstd::vec::Vec;
+
 use rstd::cmp::Ordering;
 use codec::{Encode, Decode};
 
-#[cfg(feature = "std")]
-use std::convert::{TryFrom, TryInto};
+#[cfg(feature = "full_crypto")]
+use core::convert::{TryFrom, TryInto};
 #[cfg(feature = "std")]
 use substrate_bip39::seed_from_entropy;
 #[cfg(feature = "std")]
 use bip39::{Mnemonic, Language, MnemonicType};
+#[cfg(feature = "full_crypto")]
+use crate::{hashing::blake2_256, crypto::{Pair as TraitPair, DeriveJunction, SecretStringError}};
 #[cfg(feature = "std")]
-use crate::{hashing::blake2_256, crypto::{Pair as TraitPair, DeriveJunction, SecretStringError, Ss58Codec}};
+use crate::crypto::Ss58Codec;
 #[cfg(feature = "std")]
 use serde::{de, Serializer, Serialize, Deserializer, Deserialize};
 use crate::crypto::{Public as TraitPublic, UncheckedFrom, CryptoType, Derive};
-#[cfg(feature = "std")]
+#[cfg(feature = "full_crypto")]
 use secp256k1::{PublicKey, SecretKey};
 
 /// A secret seed (which is bytewise essentially equivalent to a SecretKey).
 ///
 /// We need it as a different type because `Seed` is expected to be AsRef<[u8]>.
-#[cfg(feature = "std")]
+#[cfg(feature = "full_crypto")]
 type Seed = [u8; 32];
 
 /// The ECDSA 33-byte compressed public key.
@@ -72,7 +77,7 @@ impl Default for Public {
 }
 
 /// A key pair.
-#[cfg(feature = "std")]
+#[cfg(feature = "full_crypto")]
 #[derive(Clone)]
 pub struct Pair {
 	public: PublicKey,
@@ -117,7 +122,7 @@ impl From<Public> for [u8; 33] {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "full_crypto")]
 impl From<Pair> for Public {
 	fn from(x: Pair) -> Self {
 		x.public()
@@ -160,9 +165,9 @@ impl<'de> Deserialize<'de> for Public {
 	}
 }
 
-#[cfg(feature = "std")]
-impl std::hash::Hash for Public {
-	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+#[cfg(feature = "full_crypto")]
+impl rstd::hash::Hash for Public {
+	fn hash<H: rstd::hash::Hasher>(&self, state: &mut H) {
 		self.0.hash(state);
 	}
 }
@@ -238,10 +243,10 @@ impl std::fmt::Debug for Signature {
 	}
 }
 
-#[cfg(feature = "std")]
-impl std::hash::Hash for Signature {
-	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-		std::hash::Hash::hash(&self.0[..], state);
+#[cfg(feature = "full_crypto")]
+impl rstd::hash::Hash for Signature {
+	fn hash<H: rstd::hash::Hasher>(&self, state: &mut H) {
+		rstd::hash::Hash::hash(&self.0[..], state);
 	}
 }
 
@@ -255,7 +260,7 @@ impl Signature {
 	}
 
 	/// Recover the public key from this signature and a message.
-	#[cfg(feature = "std")]
+	#[cfg(feature = "full_crypto")]
 	pub fn recover<M: AsRef<[u8]>>(&self, message: M) -> Option<Public> {
 		let message = secp256k1::Message::parse(&blake2_256(message.as_ref()));
 		let sig: (_, _) = self.try_into().ok()?;
@@ -264,7 +269,7 @@ impl Signature {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "full_crypto")]
 impl From<(secp256k1::Signature, secp256k1::RecoveryId)> for Signature {
 	fn from(x: (secp256k1::Signature, secp256k1::RecoveryId)) -> Signature {
 		let mut r = Self::default();
@@ -274,7 +279,7 @@ impl From<(secp256k1::Signature, secp256k1::RecoveryId)> for Signature {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "full_crypto")]
 impl<'a> TryFrom<&'a Signature> for (secp256k1::Signature, secp256k1::RecoveryId) {
 	type Error = ();
 	fn try_from(x: &'a Signature) -> Result<(secp256k1::Signature, secp256k1::RecoveryId), Self::Error> {
@@ -329,7 +334,7 @@ impl TraitPublic for Public {
 impl Derive for Public {}
 
 /// Derive a single hard junction.
-#[cfg(feature = "std")]
+#[cfg(feature = "full_crypto")]
 fn derive_hard_junction(secret_seed: &Seed, cc: &[u8; 32]) -> Seed {
 	("Secp256k1HDKD", secret_seed, cc).using_encoded(|data| {
 		let mut res = [0u8; 32];
@@ -339,13 +344,13 @@ fn derive_hard_junction(secret_seed: &Seed, cc: &[u8; 32]) -> Seed {
 }
 
 /// An error when deriving a key.
-#[cfg(feature = "std")]
+#[cfg(feature = "full_crypto")]
 pub enum DeriveError {
 	/// A soft key was found in the path (and is unsupported).
 	SoftKeyInPath,
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "full_crypto")]
 impl TraitPair for Pair {
 	type Public = Public;
 	type Seed = Seed;
@@ -355,6 +360,7 @@ impl TraitPair for Pair {
 	/// Generate new secure (random) key pair and provide the recovery phrase.
 	///
 	/// You can recover the same key later with `from_phrase`.
+	#[cfg(feature = "std")]
 	fn generate_with_phrase(password: Option<&str>) -> (Pair, String, Seed) {
 		let mnemonic = Mnemonic::new(MnemonicType::Words12, Language::English);
 		let phrase = mnemonic.phrase();
@@ -368,6 +374,7 @@ impl TraitPair for Pair {
 	}
 
 	/// Generate key pair from given recovery phrase and password.
+	#[cfg(feature = "std")]
 	fn from_phrase(phrase: &str, password: Option<&str>) -> Result<(Pair, Seed), SecretStringError> {
 		let big_seed = seed_from_entropy(
 			Mnemonic::from_phrase(phrase, Language::English)
@@ -454,7 +461,7 @@ impl TraitPair for Pair {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "full_crypto")]
 impl Pair {
 	/// Get the seed for this key.
 	pub fn seed(&self) -> Seed {
@@ -463,6 +470,7 @@ impl Pair {
 
 	/// Exactly as `from_string` except that if no matches are found then, the the first 32
 	/// characters are taken (padded with spaces as necessary) and used as the MiniSecretKey.
+	#[cfg(feature = "std")]
 	pub fn from_legacy_string(s: &str, password_override: Option<&str>) -> Pair {
 		Self::from_string(s, password_override).unwrap_or_else(|_| {
 			let mut padded_seed: Seed = [' ' as u8; 32];
@@ -474,16 +482,16 @@ impl Pair {
 }
 
 impl CryptoType for Public {
-	#[cfg(feature="std")]
+	#[cfg(feature="full_crypto")]
 	type Pair = Pair;
 }
 
 impl CryptoType for Signature {
-	#[cfg(feature="std")]
+	#[cfg(feature="full_crypto")]
 	type Pair = Pair;
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature="full_crypto")]
 impl CryptoType for Pair {
 	type Pair = Pair;
 }

@@ -177,6 +177,12 @@ impl<B: ChainApi> Pool<B> {
 		parent: &BlockId<B::Block>,
 		extrinsics: &[ExtrinsicFor<B>],
 	) -> impl Future<Output=Result<(), B::Error>> {
+		log::debug!(
+			target: "txpool",
+			"Starting pruning of block {:?} (extrinsics: {})",
+			at,
+			extrinsics.len()
+		);
 		// Get details of all extrinsics that are already in the pool
 		let (in_pool_hashes, in_pool_tags) = self.validated_pool.extrinsics_tags(extrinsics);
 
@@ -342,14 +348,14 @@ impl<B: ChainApi> Pool<B> {
 	) -> impl Future<Output=ValidatedTransactionFor<B>> {
 		let (hash, bytes) = self.validated_pool.api().hash_and_length(&xt);
 		if !force && self.validated_pool.is_banned(&hash) {
-			return Either::Left(ready(ValidatedTransaction::Invalid(error::Error::TemporarilyBanned.into())))
+			return Either::Left(ready(ValidatedTransaction::Invalid(hash, error::Error::TemporarilyBanned.into())))
 		}
 
 		Either::Right(self.validated_pool.api().validate_transaction(block_id, xt.clone())
 			.then(move |validation_result| ready(match validation_result {
 				Ok(validity) => match validity {
 					Ok(validity) => if validity.provides.is_empty() {
-						ValidatedTransaction::Invalid(error::Error::NoTagsProvided.into())
+						ValidatedTransaction::Invalid(hash, error::Error::NoTagsProvided.into())
 					} else {
 						ValidatedTransaction::Valid(base::Transaction {
 							data: xt,
@@ -365,11 +371,11 @@ impl<B: ChainApi> Pool<B> {
 						})
 					},
 					Err(TransactionValidityError::Invalid(e)) =>
-						ValidatedTransaction::Invalid(error::Error::InvalidTransaction(e).into()),
+						ValidatedTransaction::Invalid(hash, error::Error::InvalidTransaction(e).into()),
 					Err(TransactionValidityError::Unknown(e)) =>
 						ValidatedTransaction::Unknown(hash, error::Error::UnknownTransaction(e).into()),
 				},
-				Err(e) => ValidatedTransaction::Invalid(e),
+				Err(e) => ValidatedTransaction::Invalid(hash, e),
 			})))
 	}
 }

@@ -69,17 +69,6 @@ pub trait OnFreeBalanceZero<AccountId> {
 	fn on_free_balance_zero(who: &AccountId);
 }
 
-/// Trait for a hook to get called when some balance has been minted, causing dilution.
-pub trait OnDilution<Balance> {
-	/// Some `portion` of the total balance just "grew" by `minted`. `portion` is the pre-growth
-	/// amount (it doesn't take account of the recent growth).
-	fn on_dilution(minted: Balance, portion: Balance);
-}
-
-impl<Balance> OnDilution<Balance> for () {
-	fn on_dilution(_minted: Balance, _portion: Balance) {}
-}
-
 /// Outcome of a balance update.
 pub enum UpdateBalanceOutcome {
 	/// Account balance was simply updated.
@@ -143,13 +132,19 @@ pub trait KeyOwnerProofSystem<Key> {
 ///
 /// - Someone got slashed.
 /// - Someone paid for a transaction to be included.
-pub trait OnUnbalanced<Imbalance> {
+pub trait OnUnbalanced<Imbalance: TryDrop> {
 	/// Handler for some imbalance. Infallible.
-	fn on_unbalanced(amount: Imbalance);
+	fn on_unbalanced(amount: Imbalance) {
+		amount.try_drop().unwrap_or_else(Self::on_nonzero_unbalanced)
+	}
+
+	/// Actually handle a non-zero imbalance. You probably want to implement this rather than
+	/// `on_unbalanced`.
+	fn on_nonzero_unbalanced(amount: Imbalance);
 }
 
-impl<Imbalance> OnUnbalanced<Imbalance> for () {
-	fn on_unbalanced(amount: Imbalance) { drop(amount); }
+impl<Imbalance: TryDrop> OnUnbalanced<Imbalance> for () {
+	fn on_nonzero_unbalanced(amount: Imbalance) { drop(amount); }
 }
 
 /// Simple boolean for whether an account needs to be kept in existence.
@@ -162,6 +157,12 @@ pub enum ExistenceRequirement {
 	KeepAlive,
 	/// Operation may result in account going out of existence.
 	AllowDeath,
+}
+
+/// A type for which some values make sense to be able to drop without further consideration.
+pub trait TryDrop: Sized {
+	/// Drop an instance cleanly. Only works if its value represents "no-operation".
+	fn try_drop(self) -> Result<(), Self>;
 }
 
 /// A trait for a not-quite Linear Type that tracks an imbalance.
@@ -193,14 +194,14 @@ pub enum ExistenceRequirement {
 ///
 /// You can always retrieve the raw balance value using `peek`.
 #[must_use]
-pub trait Imbalance<Balance>: Sized {
+pub trait Imbalance<Balance>: Sized + TryDrop {
 	/// The oppositely imbalanced type. They come in pairs.
 	type Opposite: Imbalance<Balance>;
 
 	/// The zero imbalance. Can be destroyed with `drop_zero`.
 	fn zero() -> Self;
 
-	/// Drop an instance cleanly. Only works if its `value()` is zero.
+	/// Drop an instance cleanly. Only works if its `self.value()` is zero.
 	fn drop_zero(self) -> Result<(), Self>;
 
 	/// Consume `self` and return two independent instances; the first
@@ -308,7 +309,7 @@ impl<
 	Target2: OnUnbalanced<I>,
 > OnUnbalanced<I> for SplitTwoWays<Balance, I, Part1, Target1, Part2, Target2>
 {
-	fn on_unbalanced(amount: I) {
+	fn on_nonzero_unbalanced(amount: I) {
 		let total: u32 = Part1::VALUE + Part2::VALUE;
 		let amount1 = amount.peek().saturating_mul(Part1::VALUE.into()) / total.into();
 		let (imb1, imb2) = amount.split(amount1);
@@ -395,6 +396,7 @@ pub trait Currency<AccountId> {
 		source: &AccountId,
 		dest: &AccountId,
 		value: Self::Balance,
+		existence_requirement: ExistenceRequirement,
 	) -> result::Result<(), &'static str>;
 
 	/// Deducts up to `value` from the combined balance of `who`, preferring to deduct from the

@@ -2,15 +2,8 @@
 name = "sr-std"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
-build = "build.rs"
 edition = "2018"
-
-[build-dependencies]
-rustc_version = "0.2.3"
 
 [features]
 default = ["std"]
 std = []
-nightly = []
-strict = []
-no_global_allocator = []

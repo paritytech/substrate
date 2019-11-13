@@ -18,7 +18,7 @@
 
 use std::{
 	marker::PhantomData, collections::{HashSet, BTreeMap, HashMap}, sync::Arc,
-	panic::UnwindSafe, result, cell::RefCell, rc::Rc,
+	panic::UnwindSafe, result, cell::RefCell,
 };
 use log::{info, trace, warn};
 use futures03::channel::mpsc;
@@ -53,11 +53,10 @@ use consensus::{
 };
 use header_metadata::{HeaderMetadata, CachedHeaderMetadata};
 
+use sr_api::{CallRuntimeAt, ConstructRuntimeApi, Core as CoreApi, ProofRecorder, InitializeBlock};
+use block_builder::BlockBuilderApi;
+
 use crate::{
-	runtime_api::{
-		CallRuntimeAt, ConstructRuntimeApi, Core as CoreApi, ProofRecorder,
-		InitializeBlock,
-	},
 	backend::{
 		self, BlockImportOperation, PrunableStateChangesTrieStorage,
 		ClientImportOperation, Finalizer, ImportSummary,
@@ -70,9 +69,7 @@ use crate::{
 	call_executor::{CallExecutor, LocalCallExecutor},
 	notifications::{StorageNotifications, StorageEventStream},
 	light::{call_executor::prove_execution, fetcher::ChangesProof},
-	block_builder::{self, api::BlockBuilder as BlockBuilderAPI},
-	error::Error,
-	cht, error, in_mem, genesis
+	error::Error, cht, error, in_mem, genesis
 };
 
 /// Type that implements `futures::Stream` of block import events.
@@ -497,7 +494,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	/// Get longest range within [first; last] that is possible to use in `key_changes`
 	/// and `key_changes_proof` calls.
 	/// Range could be shortened from the beginning if some changes tries have been pruned.
-	/// Returns Ok(None) if changes trues are not supported.
+	/// Returns Ok(None) if changes tries are not supported.
 	pub fn max_key_changes_range(
 		&self,
 		first: NumberFor<Block>,
@@ -749,9 +746,16 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		E: Clone + Send + Sync,
 		RA: Send + Sync,
 		Self: ProvideRuntimeApi,
-		<Self as ProvideRuntimeApi>::Api: BlockBuilderAPI<Block>
+		<Self as ProvideRuntimeApi>::Api: BlockBuilderApi<Block, Error = Error>
 	{
-		block_builder::BlockBuilder::new(self, inherent_digests)
+		let info = self.info();
+		block_builder::BlockBuilder::new(
+			self,
+			info.chain.best_hash,
+			info.chain.best_number,
+			false,
+			inherent_digests,
+		)
 	}
 
 	/// Create a new block, built on top of `parent`.
@@ -763,9 +767,15 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		E: Clone + Send + Sync,
 		RA: Send + Sync,
 		Self: ProvideRuntimeApi,
-		<Self as ProvideRuntimeApi>::Api: BlockBuilderAPI<Block>
+		<Self as ProvideRuntimeApi>::Api: BlockBuilderApi<Block, Error = Error>
 	{
-		block_builder::BlockBuilder::at_block(parent, &self, false, inherent_digests)
+		block_builder::BlockBuilder::new(
+			self,
+			self.expect_block_hash_from_id(parent)?,
+			self.expect_block_number_from_id(parent)?,
+			false,
+			inherent_digests,
+		)
 	}
 
 	/// Create a new block, built on top of `parent` with proof recording enabled.
@@ -781,9 +791,15 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		E: Clone + Send + Sync,
 		RA: Send + Sync,
 		Self: ProvideRuntimeApi,
-		<Self as ProvideRuntimeApi>::Api: BlockBuilderAPI<Block>
+		<Self as ProvideRuntimeApi>::Api: BlockBuilderApi<Block, Error = Error>
 	{
-		block_builder::BlockBuilder::at_block(parent, &self, true, inherent_digests)
+		block_builder::BlockBuilder::new(
+			self,
+			self.expect_block_hash_from_id(parent)?,
+			self.expect_block_number_from_id(parent)?,
+			true,
+			inherent_digests,
+		)
 	}
 
 	/// Lock the import lock, and run operations inside.
@@ -838,15 +854,22 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			finalized,
 			auxiliary,
 			fork_choice,
+			allow_missing_state,
 		} = import_block;
 
 		assert!(justification.is_some() && finalized || justification.is_none());
 
 		let parent_hash = header.parent_hash().clone();
+		let mut enact_state = true;
 
-		match self.backend.blockchain().status(BlockId::Hash(parent_hash))? {
-			blockchain::BlockStatus::InChain => {},
-			blockchain::BlockStatus::Unknown => return Ok(ImportResult::UnknownParent),
+		match self.block_status(&BlockId::Hash(parent_hash))? {
+			BlockStatus::Unknown => return Ok(ImportResult::UnknownParent),
+			BlockStatus::InChainWithState | BlockStatus::Queued => {},
+			BlockStatus::InChainPruned if allow_missing_state => {
+				enact_state = false;
+			},
+			BlockStatus::InChainPruned => return Ok(ImportResult::MissingState),
+			BlockStatus::KnownBad => return Ok(ImportResult::KnownBad),
 		}
 
 		let import_headers = if post_digests.is_empty() {
@@ -875,6 +898,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			finalized,
 			auxiliary,
 			fork_choice,
+			enact_state,
 		);
 
 		if let Ok(ImportResult::Imported(ref aux)) = result {
@@ -902,6 +926,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		finalized: bool,
 		aux: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 		fork_choice: ForkChoiceStrategy,
+		enact_state: bool,
 	) -> error::Result<ImportResult> where
 		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
 	{
@@ -927,22 +952,39 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			BlockOrigin::Genesis | BlockOrigin::NetworkInitialSync | BlockOrigin::File => false,
 		};
 
-		self.backend.begin_state_operation(&mut operation.op, BlockId::Hash(parent_hash))?;
+		let storage_changes = match &body {
+			Some(body) if enact_state => {
+				self.backend.begin_state_operation(&mut operation.op, BlockId::Hash(parent_hash))?;
 
-		// ensure parent block is finalized to maintain invariant that
-		// finality is called sequentially.
-		if finalized {
-			self.apply_finality_with_block_hash(operation, parent_hash, None, info.best_hash, make_notifications)?;
-		}
+				// ensure parent block is finalized to maintain invariant that
+				// finality is called sequentially.
+				if finalized {
+					self.apply_finality_with_block_hash(operation, parent_hash, None, info.best_hash, make_notifications)?;
+				}
 
-		// FIXME #1232: correct path logic for when to execute this function
-		let (storage_update, changes_update, storage_changes) = self.block_execution(
-			&operation.op,
-			&import_headers,
-			origin,
-			hash,
-			body.clone(),
-		)?;
+				// FIXME #1232: correct path logic for when to execute this function
+				let (storage_update, changes_update, storage_changes) = self.block_execution(
+					&operation.op,
+					&import_headers,
+					origin,
+					hash,
+					&body,
+				)?;
+
+				operation.op.update_cache(new_cache);
+				if let Some(storage_update) = storage_update {
+					operation.op.update_db_storage(storage_update)?;
+				}
+				if let Some(storage_changes) = storage_changes.clone() {
+					operation.op.update_storage(storage_changes.0, storage_changes.1)?;
+				}
+				if let Some(Some(changes_update)) = changes_update {
+					operation.op.update_changes_trie(changes_update)?;
+				}
+				storage_changes
+			},
+			_ => None,
+		};
 
 		let is_new_best = finalized || match fork_choice {
 			ForkChoiceStrategy::LongestChain => import_headers.post().number() > &info.best_number,
@@ -977,17 +1019,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			leaf_state,
 		)?;
 
-		operation.op.update_cache(new_cache);
-		if let Some(storage_update) = storage_update {
-			operation.op.update_db_storage(storage_update)?;
-		}
-		if let Some(storage_changes) = storage_changes.clone() {
-			operation.op.update_storage(storage_changes.0, storage_changes.1)?;
-		}
-		if let Some(Some(changes_update)) = changes_update {
-			operation.op.update_changes_trie(changes_update)?;
-		}
-
 		operation.op.insert_aux(aux)?;
 
 		if make_notifications {
@@ -1014,7 +1045,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		import_headers: &PrePostHeader<Block::Header>,
 		origin: BlockOrigin,
 		hash: Block::Hash,
-		body: Option<Vec<Block::Extrinsic>>,
+		body: &[Block::Extrinsic],
 	) -> error::Result<(
 		Option<StorageUpdate<B, Block>>,
 		Option<Option<ChangesUpdate<Block>>>,
@@ -1052,7 +1083,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 				let encoded_block = <Block as BlockT>::encode_from(
 					import_headers.pre(),
-					&body.unwrap_or_default()
+					body,
 				);
 
 				let (_, storage_update, changes_update) = self.executor
@@ -1352,7 +1383,7 @@ impl<B, E, Block, RA> ChainHeaderBackend<Block> for Client<B, E, Block, RA> wher
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
 	Block: BlockT<Hash=H256>,
-	RA: Send + Sync
+	RA: Send + Sync,
 {
 	fn header(&self, id: BlockId<Block>) -> error::Result<Option<Block::Header>> {
 		self.backend.blockchain().header(id)
@@ -1372,6 +1403,23 @@ impl<B, E, Block, RA> ChainHeaderBackend<Block> for Client<B, E, Block, RA> wher
 
 	fn hash(&self, number: NumberFor<Block>) -> error::Result<Option<Block::Hash>> {
 		self.backend.blockchain().hash(number)
+	}
+}
+
+impl<B, E, Block, RA> sr_primitives::traits::BlockIdTo<Block> for Client<B, E, Block, RA> where
+	B: backend::Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
+	Block: BlockT<Hash=H256>,
+	RA: Send + Sync,
+{
+	type Error = Error;
+
+	fn to_hash(&self, block_id: &BlockId<Block>) -> error::Result<Option<Block::Hash>> {
+		self.block_hash_from_id(block_id)
+	}
+
+	fn to_number(&self, block_id: &BlockId<Block>) -> error::Result<Option<NumberFor<Block>>> {
+		self.block_number_from_id(block_id)
 	}
 }
 
@@ -1429,11 +1477,13 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 	E: CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync,
 	Block: BlockT<Hash=H256>,
 {
+	type Error = Error;
+
 	fn call_api_at<
 		'a,
 		R: Encode + Decode + PartialEq,
 		NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
-		C: CoreApi<Block>,
+		C: CoreApi<Block, Error = Error>,
 	>(
 		&self,
 		core_api: &C,
@@ -1444,7 +1494,7 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 		initialize_block: InitializeBlock<'a, Block>,
 		native_call: Option<NC>,
 		context: ExecutionContext,
-		recorder: &Option<Rc<RefCell<ProofRecorder<Block>>>>,
+		recorder: &Option<ProofRecorder<Block>>,
 	) -> error::Result<NativeOrEncoded<R>> {
 		let manager = match context {
 			ExecutionContext::BlockConstruction =>
@@ -1523,7 +1573,7 @@ impl<'a, B, E, Block, RA> consensus::BlockImport<Block> for &'a Client<B, E, Blo
 		&mut self,
 		block: BlockCheckParams<Block>,
 	) -> Result<ImportResult, Self::Error> {
-		let BlockCheckParams { hash, number, parent_hash } = block;
+		let BlockCheckParams { hash, number, parent_hash, allow_missing_state } = block;
 
 		if let Some(h) = self.fork_blocks.as_ref().and_then(|x| x.get(&number)) {
 			if &hash != h  {
@@ -1537,21 +1587,26 @@ impl<'a, B, E, Block, RA> consensus::BlockImport<Block> for &'a Client<B, E, Blo
 			}
 		}
 
-		match self.block_status(&BlockId::Hash(parent_hash))
-			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
-		{
-			BlockStatus::InChainWithState | BlockStatus::Queued => {},
-			BlockStatus::Unknown | BlockStatus::InChainPruned => return Ok(ImportResult::UnknownParent),
-			BlockStatus::KnownBad => return Ok(ImportResult::KnownBad),
-		}
-
+		// Own status must be checked first. If the block and ancestry is pruned
+		// this function must return `AlreadyInChain` rather than `MissingState`
 		match self.block_status(&BlockId::Hash(hash))
 			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
 		{
 			BlockStatus::InChainWithState | BlockStatus::Queued => return Ok(ImportResult::AlreadyInChain),
-			BlockStatus::Unknown | BlockStatus::InChainPruned => {},
+			BlockStatus::InChainPruned => return Ok(ImportResult::AlreadyInChain),
+			BlockStatus::Unknown => {},
 			BlockStatus::KnownBad => return Ok(ImportResult::KnownBad),
 		}
+
+		match self.block_status(&BlockId::Hash(parent_hash))
+			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
+			{
+				BlockStatus::InChainWithState | BlockStatus::Queued => {},
+				BlockStatus::Unknown => return Ok(ImportResult::UnknownParent),
+				BlockStatus::InChainPruned if allow_missing_state => {},
+				BlockStatus::InChainPruned => return Ok(ImportResult::MissingState),
+				BlockStatus::KnownBad => return Ok(ImportResult::KnownBad),
+			}
 
 
 		Ok(ImportResult::imported(false))
@@ -1868,7 +1923,7 @@ pub(crate) mod tests {
 	use super::*;
 	use primitives::blake2_256;
 	use sr_primitives::DigestItem;
-	use consensus::{BlockOrigin, SelectChain};
+	use consensus::{BlockOrigin, SelectChain, BlockImport};
 	use test_client::{
 		prelude::*,
 		client_db::{Backend, DatabaseSettings, DatabaseSettingsSrc, PruningMode},
@@ -2837,5 +2892,104 @@ pub(crate) mod tests {
 			import_err.to_string(),
 			expected_err.to_string(),
 		);
+	}
+
+	#[test]
+	fn returns_status_for_pruned_blocks() {
+		let _ = env_logger::try_init();
+		let tmp = tempfile::tempdir().unwrap();
+
+		// set to prune after 1 block
+		// states
+		let backend = Arc::new(Backend::new(
+				DatabaseSettings {
+					state_cache_size: 1 << 20,
+					state_cache_child_ratio: None,
+					pruning: PruningMode::keep_blocks(1),
+					source: DatabaseSettingsSrc::Path {
+						path: tmp.path().into(),
+						cache_size: None,
+					}
+				},
+				u64::max_value(),
+		).unwrap());
+
+		let mut client = TestClientBuilder::with_backend(backend).build();
+
+		let a1 = client.new_block_at(&BlockId::Number(0), Default::default())
+			.unwrap().bake().unwrap();
+
+		let mut b1 = client.new_block_at(&BlockId::Number(0), Default::default()).unwrap();
+
+		// b1 is created, but not imported
+		b1.push_transfer(Transfer {
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Ferdie.into(),
+			amount: 1,
+			nonce: 0,
+		}).unwrap();
+		let b1 = b1.bake().unwrap();
+
+		let check_block_a1 = BlockCheckParams {
+			hash: a1.hash().clone(),
+			number: 0,
+			parent_hash: a1.header().parent_hash().clone(),
+			allow_missing_state: false
+		};
+
+		assert_eq!(client.check_block(check_block_a1.clone()).unwrap(), ImportResult::imported(false));
+		assert_eq!(client.block_status(&BlockId::hash(check_block_a1.hash)).unwrap(), BlockStatus::Unknown);
+
+		client.import_as_final(BlockOrigin::Own, a1.clone()).unwrap();
+
+		assert_eq!(client.check_block(check_block_a1.clone()).unwrap(), ImportResult::AlreadyInChain);
+		assert_eq!(client.block_status(&BlockId::hash(check_block_a1.hash)).unwrap(), BlockStatus::InChainWithState);
+
+		let a2 = client.new_block_at(&BlockId::Hash(a1.hash()), Default::default())
+			.unwrap().bake().unwrap();
+		client.import_as_final(BlockOrigin::Own, a2.clone()).unwrap();
+
+		let check_block_a2 = BlockCheckParams {
+			hash: a2.hash().clone(),
+			number: 1,
+			parent_hash: a1.header().parent_hash().clone(),
+			allow_missing_state: false
+		};
+
+		assert_eq!(client.check_block(check_block_a1.clone()).unwrap(), ImportResult::AlreadyInChain);
+		assert_eq!(client.block_status(&BlockId::hash(check_block_a1.hash)).unwrap(), BlockStatus::InChainPruned);
+		assert_eq!(client.check_block(check_block_a2.clone()).unwrap(), ImportResult::AlreadyInChain);
+		assert_eq!(client.block_status(&BlockId::hash(check_block_a2.hash)).unwrap(), BlockStatus::InChainWithState);
+
+		let a3 = client.new_block_at(&BlockId::Hash(a2.hash()), Default::default())
+			.unwrap().bake().unwrap();
+
+		client.import_as_final(BlockOrigin::Own, a3.clone()).unwrap();
+		let check_block_a3 = BlockCheckParams {
+			hash: a3.hash().clone(),
+			number: 2,
+			parent_hash: a2.header().parent_hash().clone(),
+			allow_missing_state: false
+		};
+
+		// a1 and a2 are both pruned at this point
+		assert_eq!(client.check_block(check_block_a1.clone()).unwrap(), ImportResult::AlreadyInChain);
+		assert_eq!(client.block_status(&BlockId::hash(check_block_a1.hash)).unwrap(), BlockStatus::InChainPruned);
+		assert_eq!(client.check_block(check_block_a2.clone()).unwrap(), ImportResult::AlreadyInChain);
+		assert_eq!(client.block_status(&BlockId::hash(check_block_a2.hash)).unwrap(), BlockStatus::InChainPruned);
+		assert_eq!(client.check_block(check_block_a3.clone()).unwrap(), ImportResult::AlreadyInChain);
+		assert_eq!(client.block_status(&BlockId::hash(check_block_a3.hash)).unwrap(), BlockStatus::InChainWithState);
+
+		let mut check_block_b1 = BlockCheckParams {
+			hash: b1.hash().clone(),
+			number: 0,
+			parent_hash: b1.header().parent_hash().clone(),
+			allow_missing_state: false
+		};
+		assert_eq!(client.check_block(check_block_b1.clone()).unwrap(), ImportResult::MissingState);
+		check_block_b1.allow_missing_state = true;
+		assert_eq!(client.check_block(check_block_b1.clone()).unwrap(), ImportResult::imported(false));
+		check_block_b1.parent_hash = H256::random();
+		assert_eq!(client.check_block(check_block_b1.clone()).unwrap(), ImportResult::UnknownParent);
 	}
 }

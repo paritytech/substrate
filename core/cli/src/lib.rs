@@ -343,7 +343,7 @@ impl<'a> ParseAndPrepareBuildSpec<'a> {
 			];
 			spec.add_boot_node(addr)
 		}
-		
+
 		let json = service::chain_ops::build_spec(spec, raw_output)?;
 
 		print!("{}", json);
@@ -625,8 +625,11 @@ fn fill_network_configuration(
 
 	config.transport = TransportConfig::Normal {
 		enable_mdns: !is_dev && !cli.no_mdns,
+		allow_private_ipv4: !cli.no_private_ipv4,
 		wasm_external_transport: None,
 	};
+
+	config.max_parallel_downloads = cli.max_parallel_downloads;
 
 	Ok(())
 }

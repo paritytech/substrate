@@ -16,7 +16,9 @@
 
 //! Methods that light client could use to execute runtime calls.
 
-use std::{sync::Arc, panic::UnwindSafe, result, cell::RefCell, rc::Rc};
+use std::{
+	sync::Arc, panic::UnwindSafe, result, cell::RefCell,
+};
 
 use codec::{Encode, Decode};
 use primitives::{
@@ -33,7 +35,8 @@ use state_machine::{
 };
 use hash_db::Hasher;
 
-use crate::runtime_api::{ProofRecorder, InitializeBlock};
+use sr_api::{ProofRecorder, InitializeBlock};
+
 use crate::backend::RemoteBackend;
 use crate::call_executor::CallExecutor;
 use crate::error::{Error as ClientError, Result as ClientResult};
@@ -107,7 +110,7 @@ impl<Block, B, Local> CallExecutor<Block, Blake2Hasher> for
 		_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
 		side_effects_handler: Option<OffchainExt>,
-		recorder: &Option<Rc<RefCell<ProofRecorder<Block>>>>,
+		recorder: &Option<ProofRecorder<Block>>,
 		enable_keystore: bool,
 	) -> ClientResult<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone {
 		// there's no actual way/need to specify native/wasm execution strategy on light node
@@ -333,7 +336,7 @@ mod tests {
 			_execution_manager: ExecutionManager<EM>,
 			_native_call: Option<NC>,
 			_side_effects_handler: Option<OffchainExt>,
-			_proof_recorder: &Option<Rc<RefCell<ProofRecorder<Block>>>>,
+			_proof_recorder: &Option<ProofRecorder<Block>>,
 			_enable_keystore: bool,
 		) -> ClientResult<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone {
 			unreachable!()

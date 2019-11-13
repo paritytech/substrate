@@ -47,7 +47,7 @@ macro_rules! gen_functions {
 		{ $( $generated:tt )* }
 		$context:ident,
 	) => (
-		&[ $( $generated )* ]
+		vec![ $( $generated )* ]
 	);
 	(@INTERNAL
 		{ $( $generated:tt )* }
@@ -164,7 +164,7 @@ macro_rules! impl_wasm_host_interface {
 	) => (
 		impl $crate::wasm_interface::HostFunctions for $interface_name {
 			#[allow(non_camel_case_types)]
-			fn functions() -> &'static [&'static dyn $crate::wasm_interface::Function] {
+			fn host_functions() -> Vec<&'static dyn $crate::wasm_interface::Function> {
 				gen_functions!(
 					$context,
 					$( $name( $( $names: $params ),* ) $( -> $returns )? { $( $body )* } )*

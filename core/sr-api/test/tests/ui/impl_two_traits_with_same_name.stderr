@@ -1,0 +1,77 @@
+error: Two traits with the same name detected! The trait name is used to generate its ID. Please rename one trait at the declaration!
+  --> $DIR/impl_two_traits_with_same_name.rs:32:15
+   |
+32 |     impl second::Api<Block> for Runtime {
+   |                  ^^^
+
+error: cannot find macro `decl_runtime_apis` in this scope
+  --> $DIR/impl_two_traits_with_same_name.rs:20:2
+   |
+20 |     decl_runtime_apis! {
+   |     ^^^^^^^^^^^^^^^^^
+
+error[E0425]: cannot find function `test2_call_api_at` in `second::runtime_decl_for_Api`
+  --> $DIR/impl_two_traits_with_same_name.rs:27:1
+   |
+27 | / sr_api::impl_runtime_apis! {
+28 | |     impl self::Api<Block> for Runtime {
+29 | |         fn test(data: u64) {}
+30 | |     }
+...  |
+34 | |     }
+35 | | }
+   | | ^
+   | | |
+   | |_not found in `second::runtime_decl_for_Api`
+   |   in this macro invocation
+
+error[E0425]: cannot find function `test2_native_call_generator` in `second::runtime_decl_for_Api`
+  --> $DIR/impl_two_traits_with_same_name.rs:27:1
+   |
+27 | / sr_api::impl_runtime_apis! {
+28 | |     impl self::Api<Block> for Runtime {
+29 | |         fn test(data: u64) {}
+30 | |     }
+...  |
+34 | |     }
+35 | | }
+   | | ^
+   | | |
+   | |_not found in `second::runtime_decl_for_Api`
+   |   in this macro invocation
+
+error[E0576]: cannot find method or associated constant `test2` in `second::runtime_decl_for_Api::Api`
+  --> $DIR/impl_two_traits_with_same_name.rs:33:6
+   |
+33 |         fn test2(data: u64) {}
+   |            ^^^^^ not found in `second::runtime_decl_for_Api::Api`
+
+error[E0603]: module `runtime_decl_for_Api` is private
+  --> $DIR/impl_two_traits_with_same_name.rs:27:1
+   |
+27 | / sr_api::impl_runtime_apis! {
+28 | |     impl self::Api<Block> for Runtime {
+29 | |         fn test(data: u64) {}
+30 | |     }
+...  |
+34 | |     }
+35 | | }
+   | |_^
+
+error[E0119]: conflicting implementations of trait `runtime_decl_for_Api::Api<sr_primitives::generic::block::Block<sr_primitives::generic::header::Header<u64, sr_primitives::traits::BlakeTwo256>, substrate_test_runtime::Extrinsic>>` for type `Runtime`:
+  --> $DIR/impl_two_traits_with_same_name.rs:32:2
+   |
+28 |     impl self::Api<Block> for Runtime {
+   |     --------------------------------- first implementation here
+...
+32 |     impl second::Api<Block> for Runtime {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ conflicting implementation for `Runtime`
+
+error[E0119]: conflicting implementations of trait `Api<sr_primitives::generic::block::Block<sr_primitives::generic::header::Header<u64, sr_primitives::traits::BlakeTwo256>, substrate_test_runtime::Extrinsic>>` for type `RuntimeApiImpl<_>`:
+  --> $DIR/impl_two_traits_with_same_name.rs:32:2
+   |
+28 |     impl self::Api<Block> for Runtime {
+   |     --------------------------------- first implementation here
+...
+32 |     impl second::Api<Block> for Runtime {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ conflicting implementation for `RuntimeApiImpl<_>`

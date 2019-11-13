@@ -14,12 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-#[cfg(feature = "std")]
+#[cfg(feature = "full_crypto")]
 use primitives::crypto::Pair;
 
 use codec::Codec;
 use primitives::crypto::{KeyTypeId, CryptoType, IsWrappedBy, Public};
-use rstd::fmt::Debug;
+use rstd::{fmt::Debug, vec::Vec};
 
 /// An application-specific key.
 pub trait AppKey: 'static + Send + Sync + Sized + CryptoType + Clone {
@@ -30,7 +30,7 @@ pub trait AppKey: 'static + Send + Sync + Sized + CryptoType + Clone {
 	type Public: AppPublic;
 
 	/// The corresponding key pair type in this application scheme.
-	#[cfg(feature="std")]
+	#[cfg(feature = "full_crypto")]
 	type Pair: AppPair;
 
 	/// The corresponding signature type in this application scheme.
@@ -42,15 +42,21 @@ pub trait AppKey: 'static + Send + Sync + Sized + CryptoType + Clone {
 
 /// Type which implements Hash in std, not when no-std (std variant).
 #[cfg(feature = "std")]
-pub trait MaybeHash: std::hash::Hash {}
+pub trait MaybeHash: rstd::hash::Hash {}
 #[cfg(feature = "std")]
-impl<T: std::hash::Hash> MaybeHash for T {}
+impl<T: rstd::hash::Hash> MaybeHash for T {}
 
 /// Type which implements Hash in std, not when no-std (no-std variant).
-#[cfg(not(feature = "std"))]
+#[cfg(all(not(feature = "std"), not(feature = "full_crypto")))]
 pub trait MaybeHash {}
-#[cfg(not(feature = "std"))]
+#[cfg(all(not(feature = "std"), not(feature = "full_crypto")))]
 impl<T> MaybeHash for T {}
+
+/// Type which implements Debug and Hash in std, not when no-std (no-std variant with crypto).
+#[cfg(all(not(feature = "std"), feature = "full_crypto"))]
+pub trait MaybeDebugHash: rstd::hash::Hash  {}
+#[cfg(all(not(feature = "std"), feature = "full_crypto"))]
+impl<T: rstd::hash::Hash> MaybeDebugHash for T {}
 
 /// A application's public key.
 pub trait AppPublic:
@@ -62,7 +68,7 @@ pub trait AppPublic:
 }
 
 /// A application's key pair.
-#[cfg(feature = "std")]
+#[cfg(feature = "full_crypto")]
 pub trait AppPair: AppKey + Pair<Public=<Self as AppKey>::Public> {
 	/// The wrapped type which is just a plain instance of `Pair`.
 	type Generic: IsWrappedBy<Self> + Pair<Public=<<Self as AppKey>::Public as AppPublic>::Generic>;
@@ -82,10 +88,13 @@ pub trait RuntimePublic: Sized {
 	/// Returns all public keys for the given key type in the keystore.
 	fn all(key_type: KeyTypeId) -> crate::Vec<Self>;
 
-	/// Generate a public/private pair for the given key type and store it in the keystore.
+	/// Generate a public/private pair for the given key type with an optional `seed` and
+	/// store it in the keystore.
+	///
+	/// The `seed` needs to be valid utf8.
 	///
 	/// Returns the generated public key.
-	fn generate_pair(key_type: KeyTypeId, seed: Option<&str>) -> Self;
+	fn generate_pair(key_type: KeyTypeId, seed: Option<Vec<u8>>) -> Self;
 
 	/// Sign the given message with the corresponding private key of this public key.
 	///
@@ -110,10 +119,12 @@ pub trait RuntimeAppPublic: Sized  {
 	/// Returns all public keys for this application in the keystore.
 	fn all() -> crate::Vec<Self>;
 
-	/// Generate a public/private pair and store it in the keystore.
+	/// Generate a public/private pair with an optional `seed` and store it in the keystore.
+	///
+	/// The `seed` needs to be valid utf8.
 	///
 	/// Returns the generated public key.
-	fn generate_pair(seed: Option<&str>) -> Self;
+	fn generate_pair(seed: Option<Vec<u8>>) -> Self;
 
 	/// Sign the given message with the corresponding private key of this public key.
 	///

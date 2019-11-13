@@ -60,7 +60,7 @@ pub use changes_trie::{
 pub use overlayed_changes::OverlayedChanges;
 pub use proving_backend::{
 	create_proof_check_backend, create_proof_check_backend_storage, merge_storage_proofs,
-	Recorder as ProofRecorder, ProvingBackend, StorageProof,
+	ProofRecorder, ProvingBackend, ProvingBackendRecorder, StorageProof,
 };
 pub use trie_backend_essence::{TrieBackendStorage, Storage};
 pub use trie_backend::TrieBackend;
@@ -83,7 +83,7 @@ pub enum ExecutionStrategy {
 	NativeWhenPossible,
 	/// Use the given wasm module.
 	AlwaysWasm,
-	/// Run with both the wasm and the native variant (if compatible). Report any discrepency as an error.
+	/// Run with both the wasm and the native variant (if compatible). Report any discrepancy as an error.
 	Both,
 	/// First native, then if that fails or is not possible, wasm.
 	NativeElseWasm,
@@ -109,7 +109,7 @@ pub enum ExecutionManager<F> {
 	/// trusted to provide all storage or not (i.e. the light client cannot be trusted to provide
 	/// for all storage queries since the storage entries it has come from an external node).
 	AlwaysWasm(BackendTrustLevel),
-	/// Run with both the wasm and the native variant (if compatible). Call `F` in the case of any discrepency.
+	/// Run with both the wasm and the native variant (if compatible). Call `F` in the case of any discrepancy.
 	Both(F),
 	/// First native, then if that fails or is not possible, wasm.
 	NativeElseWasm,

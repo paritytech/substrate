@@ -66,7 +66,7 @@ use consensus_common::ImportResult;
 use consensus_common::import_queue::{
 	BoxJustificationImport, BoxFinalityProofImport,
 };
-use sr_primitives::{generic::{BlockId, OpaqueDigestItemId}, Justification, RuntimeString};
+use sr_primitives::{generic::{BlockId, OpaqueDigestItemId}, Justification};
 use sr_primitives::traits::{
 	Block as BlockT, Header, DigestItemFor, ProvideRuntimeApi,
 	Zero,
@@ -75,11 +75,7 @@ use keystore::KeyStorePtr;
 use parking_lot::Mutex;
 use primitives::{Blake2Hasher, H256, Pair};
 use inherents::{InherentDataProviders, InherentData};
-use substrate_telemetry::{
-	telemetry,
-	CONSENSUS_TRACE,
-	CONSENSUS_DEBUG,
-};
+use substrate_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG};
 use consensus_common::{
 	self, BlockImport, Environment, Proposer, BlockCheckParams,
 	ForkChoiceStrategy, BlockImportParams, BlockOrigin, Error as ConsensusError,
@@ -91,11 +87,13 @@ use srml_babe::{
 use consensus_common::SelectChain;
 use consensus_common::import_queue::{Verifier, BasicQueue, CacheKeyId};
 use client::{
-	block_builder::api::BlockBuilder as BlockBuilderApi,
 	blockchain::{self, HeaderBackend, ProvideCache}, BlockchainEvents, CallExecutor, Client,
 	error::Result as ClientResult, error::Error as ClientError, backend::{AuxStore, Backend},
 	ProvideUncles,
 };
+
+use block_builder_api::BlockBuilder as BlockBuilderApi;
+
 use slots::{CheckedHeader, check_equivocation};
 use futures::prelude::*;
 use log::{warn, debug, info, trace};
@@ -103,6 +101,8 @@ use slots::{SlotWorker, SlotData, SlotInfo, SlotCompatible};
 use epoch_changes::descendent_query;
 use header_metadata::HeaderMetadata;
 use schnorrkel::SignatureError;
+
+use sr_api::ApiExt;
 
 mod aux_schema;
 mod verification;
@@ -167,7 +167,7 @@ enum Error<B: BlockT> {
 	#[display(fmt = "Checking inherents failed: {}", _0)]
 	CheckInherents(String),
 	Client(client::error::Error),
-	Runtime(RuntimeString),
+	Runtime(inherents::Error),
 	ForkTree(Box<fork_tree::Error<client::error::Error>>),
 }
 
@@ -202,7 +202,7 @@ impl Config {
 	/// Either fetch the slot duration from disk or compute it from the genesis
 	/// state.
 	pub fn get_or_compute<B: BlockT, C>(client: &C) -> ClientResult<Self> where
-		C: AuxStore + ProvideRuntimeApi, C::Api: BabeApi<B>,
+		C: AuxStore + ProvideRuntimeApi, C::Api: BabeApi<B, Error = client::error::Error>,
 	{
 		trace!(target: "babe", "Getting slot duration");
 		match slots::SlotDuration::get_or_compute(client, |a, b| a.configuration(b)).map(Self) {
@@ -430,6 +430,7 @@ impl<B, C, E, I, Error, SO> slots::SimpleSlotWorker<B> for BabeWorker<B, C, E, I
 				// option to specify one.
 				// https://github.com/paritytech/substrate/issues/3623
 				fork_choice: ForkChoiceStrategy::LongestChain,
+				allow_missing_state: false,
 			}
 		})
 	}
@@ -553,7 +554,7 @@ impl<B, E, Block: BlockT, RA, PRA> BabeVerifier<B, E, Block, RA, PRA> {
 		block_id: BlockId<Block>,
 		inherent_data: InherentData,
 	) -> Result<(), Error<Block>>
-		where PRA: ProvideRuntimeApi, PRA::Api: BlockBuilderApi<Block>
+		where PRA: ProvideRuntimeApi, PRA::Api: BlockBuilderApi<Block, Error = client::error::Error>
 	{
 		let inherent_res = self.api.runtime_api().check_inherents(
 			&block_id,
@@ -622,7 +623,8 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA
 	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 	RA: Send + Sync,
 	PRA: ProvideRuntimeApi + Send + Sync + AuxStore + ProvideCache<Block>,
-	PRA::Api: BlockBuilderApi<Block> + BabeApi<Block>,
+	PRA::Api: BlockBuilderApi<Block, Error = client::error::Error>
+		+ BabeApi<Block, Error = client::error::Error>,
 {
 	fn verify(
 		&mut self,
@@ -741,6 +743,7 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA
 					// option to specify one.
 					// https://github.com/paritytech/substrate/issues/3623
 					fork_choice: ForkChoiceStrategy::LongestChain,
+					allow_missing_state: false,
 				};
 
 				Ok((block_import_params, Default::default()))
@@ -1139,7 +1142,7 @@ pub fn import_queue<B, E, Block: BlockT<Hash=H256>, I, RA, PRA>(
 	E: CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync + 'static,
 	RA: Send + Sync + 'static,
 	PRA: ProvideRuntimeApi + ProvideCache<Block> + Send + Sync + AuxStore + 'static,
-	PRA::Api: BlockBuilderApi<Block> + BabeApi<Block>,
+	PRA::Api: BlockBuilderApi<Block> + BabeApi<Block> + ApiExt<Block, Error = client::error::Error>,
 {
 	register_babe_inherent_data_provider(&inherent_data_providers, babe_link.config.slot_duration)?;
 

@@ -424,11 +424,11 @@ decl_storage! {
 		build(|config: &GenesisConfig| {
 			use codec::Encode;
 
-			runtime_io::set_storage(well_known_keys::CODE, &config.code);
-			runtime_io::set_storage(well_known_keys::EXTRINSIC_INDEX, &0u32.encode());
+			runtime_io::storage::set(well_known_keys::CODE, &config.code);
+			runtime_io::storage::set(well_known_keys::EXTRINSIC_INDEX, &0u32.encode());
 
 			if let Some(ref changes_trie_config) = config.changes_trie_config {
-				runtime_io::set_storage(
+				runtime_io::storage::set(
 					well_known_keys::CHANGES_TRIE_CONFIG,
 					&changes_trie_config.encode(),
 				);
@@ -604,6 +604,29 @@ impl<T: Trait> Module<T> {
 
 	pub fn all_extrinsics_len() -> u32 {
 		AllExtrinsicsLen::get().unwrap_or_default()
+	}
+
+	/// Inform the system module of some additional weight that should be accounted for, in the
+	/// current block.
+	///
+	/// NOTE: use with extra care; this function is made public only be used for certain modules
+	/// that need it. A runtime that does not have dynamic calls should never need this and should
+	/// stick to static weights. A typical use case for this is inner calls or smart contract calls.
+	/// Furthermore, it only makes sense to use this when it is presumably  _cheap_ to provide the
+	/// argument `weight`; In other words, if this function is to be used to account for some
+	/// unknown, user provided call's weight, it would only make sense to use it if you are sure you
+	/// can rapidly compute the weight of the inner call.
+	///
+	/// Even more dangerous is to note that this function does NOT take any action, if the new sum
+	/// of block weight is more than the block weight limit. This is what the _unchecked_.
+	///
+	/// Another potential use-case could be for the `on_initialise` and `on_finalize` hooks.
+	///
+	/// If no previous weight exists, the function initializes the weight to zero.
+	pub fn register_extra_weight_unchecked(weight: Weight) {
+		let current_weight = AllExtrinsicsWeight::get().unwrap_or_default();
+		let next_weight = current_weight.saturating_add(weight).min(T::MaximumBlockWeight::get());
+		AllExtrinsicsWeight::put(next_weight);
 	}
 
 	/// Start the execution of a particular block.

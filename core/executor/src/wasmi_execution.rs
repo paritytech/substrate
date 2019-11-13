@@ -24,7 +24,6 @@ use wasmi::{
 use crate::error::{Error, WasmError};
 use codec::{Encode, Decode};
 use primitives::{sandbox as sandbox_primitives, traits::Externalities};
-use crate::host_interface::SubstrateExternals;
 use crate::sandbox;
 use crate::allocator;
 use crate::wasm_utils::interpret_runtime_api_result;
@@ -32,28 +31,35 @@ use crate::wasm_runtime::WasmRuntime;
 use log::trace;
 use parity_wasm::elements::{deserialize_buffer, DataSegment, Instruction, Module as RawModule};
 use wasm_interface::{
-	FunctionContext, HostFunctions, Pointer, WordSize, Sandbox, MemoryId, Result as WResult,
+	FunctionContext, Pointer, WordSize, Sandbox, MemoryId, Result as WResult, Function,
 };
 
-struct FunctionExecutor {
+struct FunctionExecutor<'a> {
 	sandbox_store: sandbox::Store<wasmi::FuncRef>,
 	heap: allocator::FreeingBumpHeapAllocator,
 	memory: MemoryRef,
 	table: Option<TableRef>,
+	host_functions: &'a [&'static dyn Function],
 }
 
-impl FunctionExecutor {
-	fn new(m: MemoryRef, heap_base: u32, t: Option<TableRef>) -> Result<Self, Error> {
+impl<'a> FunctionExecutor<'a> {
+	fn new(
+		m: MemoryRef,
+		heap_base: u32,
+		t: Option<TableRef>,
+		host_functions: &'a [&'static dyn Function],
+	) -> Result<Self, Error> {
 		Ok(FunctionExecutor {
 			sandbox_store: sandbox::Store::new(),
 			heap: allocator::FreeingBumpHeapAllocator::new(heap_base),
 			memory: m,
 			table: t,
+			host_functions,
 		})
 	}
 }
 
-impl sandbox::SandboxCapabilities for FunctionExecutor {
+impl<'a> sandbox::SandboxCapabilities for FunctionExecutor<'a> {
 	type SupervisorFuncRef = wasmi::FuncRef;
 
 	fn store(&self) -> &sandbox::Store<Self::SupervisorFuncRef> {
@@ -108,7 +114,7 @@ impl sandbox::SandboxCapabilities for FunctionExecutor {
 	}
 }
 
-impl FunctionContext for FunctionExecutor {
+impl<'a> FunctionContext for FunctionExecutor<'a> {
 	fn read_memory_into(&self, address: Pointer<u8>, dest: &mut [u8]) -> WResult<()> {
 		self.memory.get_into(address.into(), dest).map_err(|e| e.to_string())
 	}
@@ -136,7 +142,7 @@ impl FunctionContext for FunctionExecutor {
 	}
 }
 
-impl Sandbox for FunctionExecutor {
+impl<'a> Sandbox for FunctionExecutor<'a> {
 	fn memory_get(
 		&mut self,
 		memory_id: MemoryId,
@@ -261,48 +267,44 @@ impl Sandbox for FunctionExecutor {
 	}
 }
 
-impl FunctionExecutor {
-	fn resolver() -> &'static dyn wasmi::ModuleImportResolver {
-		struct Resolver;
-		impl wasmi::ModuleImportResolver for Resolver {
-			fn resolve_func(&self, name: &str, signature: &wasmi::Signature)
-				-> std::result::Result<wasmi::FuncRef, wasmi::Error>
-			{
-				let signature = wasm_interface::Signature::from(signature);
+struct Resolver<'a>(&'a[&'static dyn Function]);
 
-				if let Some((index, func)) = SubstrateExternals::functions().iter()
-					.enumerate()
-					.find(|f| name == f.1.name())
-				{
-					if signature == func.signature() {
-						Ok(wasmi::FuncInstance::alloc_host(signature.into(), index))
-					} else {
-						Err(wasmi::Error::Instantiation(
-							format!(
-								"Invalid signature for function `{}` expected `{:?}`, got `{:?}`",
-								func.name(),
-								signature,
-								func.signature(),
-							)
-						))
-					}
+impl<'a> wasmi::ModuleImportResolver for Resolver<'a> {
+	fn resolve_func(&self, name: &str, signature: &wasmi::Signature)
+		-> std::result::Result<wasmi::FuncRef, wasmi::Error>
+	{
+		let signature = wasm_interface::Signature::from(signature);
+		for (function_index, function) in self.0.iter().enumerate() {
+			if name == function.name() {
+				if signature == function.signature() {
+					return Ok(
+						wasmi::FuncInstance::alloc_host(signature.into(), function_index),
+					)
 				} else {
-					Err(wasmi::Error::Instantiation(
-						format!("Export {} not found", name),
+					return Err(wasmi::Error::Instantiation(
+						format!(
+							"Invalid signature for function `{}` expected `{:?}`, got `{:?}`",
+							function.name(),
+							signature,
+							function.signature(),
+						),
 					))
 				}
 			}
 		}
-		&Resolver
+
+		Err(wasmi::Error::Instantiation(
+			format!("Export {} not found", name),
+		))
 	}
 }
 
-impl wasmi::Externals for FunctionExecutor {
+impl<'a> wasmi::Externals for FunctionExecutor<'a> {
 	fn invoke_index(&mut self, index: usize, args: wasmi::RuntimeArgs)
 		-> Result<Option<wasmi::RuntimeValue>, wasmi::Trap>
 	{
 		let mut args = args.as_ref().iter().copied().map(Into::into);
-		let function = SubstrateExternals::functions().get(index).ok_or_else(||
+		let function = self.host_functions.get(index).ok_or_else(||
 			Error::from(
 				format!("Could not find host function with index: {}", index),
 			)
@@ -346,38 +348,8 @@ fn call_in_wasm_module(
 	module_instance: &ModuleRef,
 	method: &str,
 	data: &[u8],
+	host_functions: &[&'static dyn Function],
 ) -> Result<Vec<u8>, Error> {
-	call_in_wasm_module_with_custom_signature(
-		ext,
-		module_instance,
-		method,
-		|alloc| {
-			let offset = alloc(data)?;
-			Ok(vec![I32(offset as i32), I32(data.len() as i32)])
-		},
-		|res, memory| {
-			if let Some(I64(retval)) = res {
-				let (ptr, length) = interpret_runtime_api_result(retval);
-				memory.get(ptr.into(), length as usize).map_err(|_| Error::Runtime).map(Some)
-			} else {
-				Ok(None)
-			}
-		}
-	)
-}
-
-/// Call a given method in the given wasm-module runtime.
-fn call_in_wasm_module_with_custom_signature<
-	F: FnOnce(&mut dyn FnMut(&[u8]) -> Result<u32, Error>) -> Result<Vec<RuntimeValue>, Error>,
-	FR: FnOnce(Option<RuntimeValue>, &MemoryRef) -> Result<Option<R>, Error>,
-	R,
->(
-	ext: &mut dyn Externalities,
-	module_instance: &ModuleRef,
-	method: &str,
-	create_parameters: F,
-	filter_result: FR,
-) -> Result<R, Error> {
 	// extract a reference to a linear memory, optional reference to a table
 	// and then initialize FunctionExecutor.
 	let memory = get_mem_instance(module_instance)?;
@@ -386,26 +358,25 @@ fn call_in_wasm_module_with_custom_signature<
 		.and_then(|e| e.as_table().cloned());
 	let heap_base = get_heap_base(module_instance)?;
 
-	let mut fec = FunctionExecutor::new(
-		memory.clone(),
-		heap_base,
-		table,
-	)?;
+	let mut fec = FunctionExecutor::new(memory.clone(), heap_base, table, host_functions)?;
 
-	let parameters = create_parameters(&mut |data: &[u8]| {
-		let offset = fec.allocate_memory(data.len() as u32)?;
-		fec.write_memory(offset, data).map(|_| offset.into()).map_err(Into::into)
-	})?;
+	// Write the call data
+	let offset = fec.allocate_memory(data.len() as u32)?;
+	fec.write_memory(offset, data)?;
 
 	let result = externalities::set_and_run_with_externalities(
 		ext,
-		|| module_instance.invoke_export(method, &parameters, &mut fec),
+		|| module_instance.invoke_export(
+			method,
+			&[I32(u32::from(offset) as i32), I32(data.len() as i32)],
+			&mut fec,
+		),
 	);
 
 	match result {
-		Ok(val) => match filter_result(val, &memory)? {
-			Some(val) => Ok(val),
-			None => Err(Error::InvalidReturn),
+		Ok(Some(I64(r))) => {
+			let (ptr, length) = interpret_runtime_api_result(r);
+			memory.get(ptr.into(), length as usize).map_err(|_| Error::Runtime)
 		},
 		Err(e) => {
 			trace!(
@@ -415,6 +386,7 @@ fn call_in_wasm_module_with_custom_signature<
 			);
 			Err(e.into())
 		},
+		_ => Err(Error::InvalidReturn),
 	}
 }
 
@@ -422,12 +394,13 @@ fn call_in_wasm_module_with_custom_signature<
 fn instantiate_module(
 	heap_pages: usize,
 	module: &Module,
+	host_functions: &[&'static dyn Function],
 ) -> Result<ModuleRef, Error> {
+	let resolver = Resolver(host_functions);
 	// start module instantiation. Don't run 'start' function yet.
 	let intermediate_instance = ModuleInstance::new(
 		module,
-		&ImportsBuilder::new()
-			.with_resolver("env", FunctionExecutor::resolver())
+		&ImportsBuilder::new().with_resolver("env", &resolver),
 	)?;
 
 	// Verify that the module has the heap base global variable.
@@ -559,6 +532,8 @@ pub struct WasmiRuntime {
 	instance: ModuleRef,
 	/// The snapshot of the instance's state taken just after the instantiation.
 	state_snapshot: StateSnapshot,
+	/// The host functions registered for this instance.
+	host_functions: Vec<&'static dyn Function>,
 }
 
 impl WasmiRuntime {
@@ -583,16 +558,27 @@ impl WasmRuntime for WasmiRuntime {
 		self.state_snapshot.heap_pages == heap_pages
 	}
 
-	fn call(&mut self, ext: &mut dyn Externalities, method: &str, data: &[u8])
-			-> Result<Vec<u8>, Error>
-	{
+	fn host_functions(&self) -> &[&'static dyn Function] {
+		&self.host_functions
+	}
+
+	fn call(
+		&mut self,
+		ext: &mut dyn Externalities,
+		method: &str,
+		data: &[u8],
+	) -> Result<Vec<u8>, Error> {
 		self.with(|module| {
-			call_in_wasm_module(ext, module, method, data)
+			call_in_wasm_module(ext, module, method, data, &self.host_functions)
 		})
 	}
 }
 
-pub fn create_instance(code: &[u8], heap_pages: u64) -> Result<WasmiRuntime, WasmError> {
+pub fn create_instance(
+	code: &[u8],
+	heap_pages: u64,
+	host_functions: Vec<&'static dyn Function>,
+) -> Result<WasmiRuntime, WasmError> {
 	let module = Module::from_buffer(&code).map_err(|_| WasmError::InvalidModule)?;
 
 	// Extract the data segments from the wasm code.
@@ -602,7 +588,7 @@ pub fn create_instance(code: &[u8], heap_pages: u64) -> Result<WasmiRuntime, Was
 	let data_segments = extract_data_segments(&code)?;
 
 	// Instantiate this module.
-	let instance = instantiate_module(heap_pages as usize, &module)
+	let instance = instantiate_module(heap_pages as usize, &module, &host_functions)
 		.map_err(|e| WasmError::Instantiation(e.to_string()))?;
 
 	// Take state snapshot before executing anything.
@@ -617,6 +603,7 @@ pub fn create_instance(code: &[u8], heap_pages: u64) -> Result<WasmiRuntime, Was
 	Ok(WasmiRuntime {
 		instance,
 		state_snapshot,
+		host_functions,
 	})
 }
 

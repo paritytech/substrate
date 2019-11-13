@@ -8,7 +8,7 @@ edition = "2018"
 env_logger = "0.7.0"
 futures = "0.1.29"
 hyper = "0.12.35"
-jsonrpc-core-client = { version = "13.1.0", features = ["http", "ws"] }
+jsonrpc-core-client = { version = "14.0.3", features = ["http", "ws"] }
 log = "0.4.8"
 node-primitives = { path = "../primitives" }
 substrate-rpc = { path = "../../core/rpc", version = "2.0.0" }

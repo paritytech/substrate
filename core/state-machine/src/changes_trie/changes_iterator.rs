@@ -28,7 +28,7 @@ use crate::changes_trie::input::{DigestIndex, ExtrinsicIndex, DigestIndexValue, 
 use crate::changes_trie::storage::{TrieBackendAdapter, InMemoryStorage};
 use crate::changes_trie::input::ChildIndex;
 use crate::changes_trie::surface_iterator::{surface_iterator, SurfaceIterator};
-use crate::proving_backend::ProvingBackendEssence;
+use crate::proving_backend::ProvingBackendRecorder;
 use crate::trie_backend_essence::{TrieBackendEssence};
 
 /// Return changes of given key at given blocks range.
@@ -366,7 +366,7 @@ impl<'a, H, Number> Iterator for ProvingDrilldownIterator<'a, H, Number>
 		let proof_recorder = &mut *self.proof_recorder.try_borrow_mut()
 			.expect("only fails when already borrowed; storage() is non-reentrant; qed");
 		self.essence.next(|storage, root, key|
-			ProvingBackendEssence::<_, H> {
+			ProvingBackendRecorder::<_, H> {
 				backend: &TrieBackendEssence::new(TrieBackendAdapter::new(storage), root),
 				proof_recorder,
 			}.storage(key))

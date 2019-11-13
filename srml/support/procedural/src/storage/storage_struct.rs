@@ -162,13 +162,10 @@ pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 					{
 						type Query = #query_type;
 						type Hasher = #scrate::#hasher;
+						type KeyFormat = Self;
 
 						fn prefix() -> &'static [u8] {
 							#final_prefix
-						}
-
-						fn head_key() -> &'static [u8] {
-							#head_key
 						}
 
 						fn from_optional_value_to_query(v: Option<#value_type>) -> Self::Query {
@@ -177,6 +174,14 @@ pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 
 						fn from_query_to_optional_value(v: Self::Query) -> Option<#value_type> {
 							#from_query_to_optional_value
+						}
+					}
+
+					impl<#impl_trait> #scrate::storage::generator::LinkedMapKeyFormat for #storage_struct {
+						type Hasher = #scrate::#hasher;
+
+						fn head_key() -> &'static [u8] {
+							#head_key
 						}
 					}
 				)

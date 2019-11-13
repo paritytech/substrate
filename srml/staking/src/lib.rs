@@ -256,7 +256,7 @@ use codec::{HasCompact, Encode, Decode};
 use support::{
 	decl_module, decl_event, decl_storage, ensure,
 	traits::{
-		Currency, OnFreeBalanceZero, OnDilution, LockIdentifier, LockableCurrency,
+		Currency, OnFreeBalanceZero, LockIdentifier, LockableCurrency,
 		WithdrawReasons, OnUnbalanced, Imbalance, Get, Time
 	}
 };
@@ -501,8 +501,8 @@ pub trait Trait: system::Trait {
 	/// The post-processing needs it but will be moved to off-chain. TODO: #2908
 	type CurrencyToVote: Convert<BalanceOf<Self>, u64> + Convert<u128, BalanceOf<Self>>;
 
-	/// Some tokens minted.
-	type OnRewardMinted: OnDilution<BalanceOf<Self>>;
+	/// Tokens have been minted and are unused for validator-reward.
+	type RewardRemainder: OnUnbalanced<NegativeImbalanceOf<Self>>;
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
@@ -652,8 +652,9 @@ decl_storage! {
 
 decl_event!(
 	pub enum Event<T> where Balance = BalanceOf<T>, <T as system::Trait>::AccountId {
-		/// All validators have been rewarded by the given balance.
-		Reward(Balance),
+		/// All validators have been rewarded by the first balance; the second is the remainder
+		/// from the maximum amount of reward.
+		Reward(Balance, Balance),
 		/// One validator (and its nominators) has been slashed by the given amount.
 		Slash(AccountId, Balance),
 		/// An old slashing report from a prior era was discarded because it could
@@ -1198,7 +1199,7 @@ impl<T: Trait> Module<T> {
 			let validator_len: BalanceOf<T> = (validators.len() as u32).into();
 			let total_rewarded_stake = Self::slot_stake() * validator_len;
 
-			let total_payout = inflation::compute_total_payout(
+			let (total_payout, max_payout) = inflation::compute_total_payout(
 				&T::RewardCurve::get(),
 				total_rewarded_stake.clone(),
 				T::Currency::total_issuance(),
@@ -1215,12 +1216,14 @@ impl<T: Trait> Module<T> {
 				}
 			}
 
-			let total_reward = total_imbalance.peek();
-			// assert!(total_reward <= total_payout)
+			// assert!(total_imbalance.peek() == total_payout)
+			let total_payout = total_imbalance.peek();
 
-			Self::deposit_event(RawEvent::Reward(total_reward));
+			let rest = max_payout.saturating_sub(total_payout);
+			Self::deposit_event(RawEvent::Reward(total_payout, rest));
+
 			T::Reward::on_unbalanced(total_imbalance);
-			T::OnRewardMinted::on_dilution(total_reward, total_rewarded_stake);
+			T::RewardRemainder::on_unbalanced(T::Currency::issue(rest));
 		}
 
 		// Increment current era.
@@ -1262,13 +1265,21 @@ impl<T: Trait> Module<T> {
 	///
 	/// Returns the new `SlotStake` value and a set of newly selected _stash_ IDs.
 	fn select_validators() -> (BalanceOf<T>, Option<Vec<T::AccountId>>) {
+		let mut all_nominators: Vec<(T::AccountId, Vec<T::AccountId>)> = Vec::new();
+		let all_validator_candidates_iter = <Validators<T>>::enumerate();
+		let all_validators = all_validator_candidates_iter.map(|(who, _pref)| {
+			let self_vote = (who.clone(), vec![who.clone()]);
+			all_nominators.push(self_vote);
+			who
+		}).collect::<Vec<T::AccountId>>();
+		all_nominators.extend(<Nominators<T>>::enumerate());
+
 		let maybe_phragmen_result = elect::<_, _, _, T::CurrencyToVote>(
 			Self::validator_count() as usize,
 			Self::minimum_validator_count().max(1) as usize,
-			<Validators<T>>::enumerate().map(|(who, _)| who).collect::<Vec<T::AccountId>>(),
-			<Nominators<T>>::enumerate().collect(),
+			all_validators,
+			all_nominators,
 			Self::slashable_balance_of,
-			true,
 		);
 
 		if let Some(phragmen_result) = maybe_phragmen_result {
@@ -1286,7 +1297,6 @@ impl<T: Trait> Module<T> {
 				&elected_stashes,
 				&assignments,
 				Self::slashable_balance_of,
-				true,
 			);
 
 			if cfg!(feature = "equalize") {
@@ -1297,6 +1307,13 @@ impl<T: Trait> Module<T> {
 					let mut staked_assignment
 						: Vec<PhragmenStakedAssignment<T::AccountId>>
 						= Vec::with_capacity(assignment.len());
+
+					// If this is a self vote, then we don't need to equalise it at all. While the
+					// staking system does not allow nomination and validation at the same time,
+					// this must always be 100% support.
+					if assignment.len() == 1 && assignment[0].0 == *n {
+						continue;
+					}
 					for (c, per_thing) in assignment.iter() {
 						let nominator_stake = to_votes(Self::slashable_balance_of(n));
 						let other_stake = *per_thing * nominator_stake;

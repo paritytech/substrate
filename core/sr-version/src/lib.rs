@@ -49,7 +49,7 @@ pub type ApisVec = &'static [(ApiId, u32)];
 #[macro_export]
 #[cfg(feature = "std")]
 macro_rules! create_apis_vec {
-	( $y:expr ) => { ::std::borrow::Cow::Borrowed(& $y) }
+	( $y:expr ) => { std::borrow::Cow::Borrowed(& $y) }
 }
 #[macro_export]
 #[cfg(not(feature = "std"))]

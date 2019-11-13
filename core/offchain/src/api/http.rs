@@ -29,7 +29,7 @@ use crate::api::timestamp;
 use bytes::Buf as _;
 use fnv::FnvHashMap;
 use futures::{prelude::*, channel::mpsc, compat::Compat01As03};
-use log::{warn, error};
+use log::error;
 use primitives::offchain::{HttpRequestId, Timestamp, HttpRequestStatus, HttpError};
 use std::{fmt, io::Read as _, mem, pin::Pin, task::Context, task::Poll};
 
@@ -50,9 +50,7 @@ pub fn http() -> (HttpApi, HttpWorker) {
 	let engine = HttpWorker {
 		to_api,
 		from_api,
-		// TODO: don't unwrap; we should fall back to the HttpConnector if we fail to create the
-		// Https one; there doesn't seem to be any built-in way to do this
-		http_client: HyperClient::new(),
+		http_client: hyper::Client::builder().build(hyper_rustls::HttpsConnector::new(1)),
 		requests: Vec::new(),
 	};
 
@@ -551,30 +549,6 @@ enum WorkerToApi {
 	},
 }
 
-/// Wraps around a `hyper::Client` with either TLS enabled or disabled.
-enum HyperClient {
-	/// Everything is ok and HTTPS is available.
-	Https(hyper::Client<hyper_tls::HttpsConnector<hyper::client::HttpConnector>, hyper::Body>),
-	/// We failed to initialize HTTPS and therefore only allow HTTP.
-	Http(hyper::Client<hyper::client::HttpConnector, hyper::Body>),
-}
-
-impl HyperClient {
-	/// Creates new hyper client.
-	///
-	/// By default we will try to initialize the `HttpsConnector`,
-	/// If that's not possible we'll fall back to `HttpConnector`.
-	pub fn new() -> Self {
-		match hyper_tls::HttpsConnector::new(1) {
-			Ok(tls) => HyperClient::Https(hyper::Client::builder().build(tls)),
-			Err(e) => {
-				warn!("Unable to initialize TLS client. Falling back to HTTP-only: {:?}", e);
-				HyperClient::Http(hyper::Client::new())
-			},
-		}
-	}
-}
-
 /// Must be continuously polled for the [`HttpApi`] to properly work.
 pub struct HttpWorker {
 	/// Used to sends messages to the `HttpApi`.
@@ -582,7 +556,7 @@ pub struct HttpWorker {
 	/// Used to receive messages from the `HttpApi`.
 	from_api: mpsc::UnboundedReceiver<ApiToWorker>,
 	/// The engine that runs HTTP requests.
-	http_client: HyperClient,
+	http_client: hyper::Client<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>, hyper::Body>,
 	/// HTTP requests that are being worked on by the engine.
 	requests: Vec<(HttpRequestId, HttpWorkerRequest)>,
 }
@@ -686,10 +660,7 @@ impl Future for HttpWorker {
 			Poll::Pending => {},
 			Poll::Ready(None) => return Poll::Ready(()),	// stops the worker
 			Poll::Ready(Some(ApiToWorker::Dispatch { id, request })) => {
-				let future = Compat01As03::new(match me.http_client {
-					HyperClient::Http(ref mut c) => c.request(request),
-					HyperClient::Https(ref mut c) => c.request(request),
-				});
+				let future = Compat01As03::new(me.http_client.request(request));
 				debug_assert!(me.requests.iter().all(|(i, _)| *i != id));
 				me.requests.push((id, HttpWorkerRequest::Dispatched(future)));
 				cx.waker().wake_by_ref();	// reschedule the task to poll the request

@@ -69,10 +69,11 @@ macro_rules! new_full_start {
 			.with_import_queue(|_config, client, mut select_chain, _transaction_pool| {
 				let select_chain = select_chain.take()
 					.ok_or_else(|| substrate_service::Error::SelectChainRequired)?;
-				let (grandpa_block_import, grandpa_link) =
-					grandpa::block_import::<_, _, _, node_runtime::RuntimeApi, _, _>(
-						client.clone(), &*client, select_chain
-					)?;
+				let (grandpa_block_import, grandpa_link) = grandpa::block_import(
+					client.clone(),
+					&*client,
+					select_chain,
+				)?;
 				let justification_import = grandpa_block_import.clone();
 
 				let (block_import, babe_link) = babe::block_import(
@@ -291,8 +292,11 @@ pub fn new_light<C: Send + Default + 'static>(config: NodeConfiguration<C>)
 			let fetch_checker = fetcher
 				.map(|fetcher| fetcher.checker().clone())
 				.ok_or_else(|| "Trying to start light import queue without active fetch checker")?;
-			let grandpa_block_import = grandpa::light_block_import::<_, _, _, RuntimeApi, _>(
-				client.clone(), backend, Arc::new(fetch_checker), client.clone()
+			let grandpa_block_import = grandpa::light_block_import::<_, _, _, RuntimeApi>(
+				client.clone(),
+				backend,
+				&*client,
+				Arc::new(fetch_checker),
 			)?;
 
 			let finality_proof_import = grandpa_block_import.clone();
@@ -386,7 +390,7 @@ mod tests {
 				origin: BlockOrigin::File,
 				justification: Vec::new(),
 				internal_justification: Vec::new(),
-				finalized: true,
+				finalized: false,
 				body: Some(block.extrinsics),
 				header: block.header,
 				auxiliary: Vec::new(),
@@ -516,9 +520,10 @@ mod tests {
 					justification: None,
 					post_digests: vec![item],
 					body: Some(new_body),
-					finalized: true,
+					finalized: false,
 					auxiliary: Vec::new(),
 					fork_choice: ForkChoiceStrategy::LongestChain,
+					allow_missing_state: false,
 				};
 
 				block_import.import_block(params, Default::default())

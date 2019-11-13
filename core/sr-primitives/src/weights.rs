@@ -37,8 +37,9 @@
 
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
+use impl_trait_for_tuples::impl_for_tuples;
 use codec::{Encode, Decode};
-use arithmetic::traits::Bounded;
+use arithmetic::traits::{Bounded, Zero};
 use crate::RuntimeDebug;
 
 /// Re-export priority as type
@@ -60,6 +61,35 @@ pub trait ClassifyDispatch<T> {
 	/// this for a dispatchable, `T` will be a tuple of all arguments given to the function (except
 	/// origin).
 	fn classify_dispatch(&self, target: T) -> DispatchClass;
+}
+
+/// Means of determining the weight of a block's lifecycle hooks: on_initialize, on_finalize and
+/// such.
+pub trait WeighBlock<BlockNumber> {
+	/// Return the weight of the block's on_initialize hook.
+	fn on_initialize(_: BlockNumber) -> Weight { Zero::zero() }
+	/// Return the weight of the block's on_finalize hook.
+	fn on_finalize(_: BlockNumber) -> Weight { Zero::zero() }
+}
+
+/// Maybe I can do something to remove the duplicate code here.
+#[impl_for_tuples(30)]
+impl<BlockNumber: Copy> WeighBlock<BlockNumber> for SingleModule {
+	fn on_initialize(n: BlockNumber) -> Weight {
+		let mut accumulated_weight: Weight = Zero::zero();
+		for_tuples!(
+			#( accumulated_weight = accumulated_weight.saturating_add(SingleModule::on_initialize(n)); )*
+		);
+		accumulated_weight
+	}
+
+	fn on_finalize(n: BlockNumber) -> Weight {
+		let mut accumulated_weight: Weight = Zero::zero();
+		for_tuples!(
+			#( accumulated_weight = accumulated_weight.saturating_add(SingleModule::on_finalize(n)); )*
+		);
+		accumulated_weight
+	}
 }
 
 /// A generalized group of dispatch types. This is only distinguishing normal, user-triggered transactions
@@ -179,5 +209,12 @@ impl Default for SimpleDispatchInfo {
 	fn default() -> Self {
 		// Default weight of all transactions.
 		SimpleDispatchInfo::FixedNormal(10_000)
+	}
+}
+
+impl SimpleDispatchInfo {
+	/// An _additive zero_ variant of SimpleDispatchInfo.
+	pub fn zero() -> Self {
+		Self::FixedNormal(0)
 	}
 }

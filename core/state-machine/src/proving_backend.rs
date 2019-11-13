@@ -16,10 +16,11 @@
 
 //! Proving state machine backend.
 
-use std::{cell::RefCell, collections::HashSet, rc::Rc};
+use std::sync::Arc;
+use parking_lot::RwLock;
 use codec::{Decode, Encode};
 use log::debug;
-use hash_db::{Hasher, HashDB, EMPTY_PREFIX};
+use hash_db::{Hasher, HashDB, EMPTY_PREFIX, Prefix};
 use trie::{
 	MemoryDB, PrefixedMemoryDB, default_child_trie_root,
 	read_trie_value_with, read_child_trie_value_with, record_all_keys
@@ -29,6 +30,14 @@ pub use trie::trie_types::{Layout, TrieError};
 use crate::trie_backend::TrieBackend;
 use crate::trie_backend_essence::{Ephemeral, TrieBackendEssence, TrieBackendStorage};
 use crate::{Error, ExecutionError, Backend};
+use std::collections::{HashMap, HashSet};
+use crate::DBValue;
+
+/// Patricia trie-based backend specialized in get value proofs.
+pub struct ProvingBackendRecorder<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
+	pub(crate) backend: &'a TrieBackendEssence<S, H>,
+	pub(crate) proof_recorder: &'a mut Recorder<H::Out>,
+}
 
 /// A proof that some set of key-value pairs are included in the storage trie. The proof contains
 /// the storage values so that the partial storage backend can be reconstructed by a verifier that
@@ -106,18 +115,12 @@ pub fn merge_storage_proofs<I>(proofs: I) -> StorageProof
 	StorageProof { trie_nodes }
 }
 
-/// Patricia trie-based backend essence which also tracks all touched storage trie values.
-/// These can be sent to remote node and used as a proof of execution.
-pub struct ProvingBackendEssence<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
-	pub(crate) backend: &'a TrieBackendEssence<S, H>,
-	pub(crate) proof_recorder: &'a mut Recorder<H::Out>,
-}
-
-impl<'a, S, H> ProvingBackendEssence<'a, S, H>
+impl<'a, S, H> ProvingBackendRecorder<'a, S, H>
 	where
 		S: TrieBackendStorage<H>,
 		H: Hasher,
 {
+	/// Produce proof for a key query.
 	pub fn storage(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
 		let mut read_overlay = S::Overlay::default();
 		let eph = Ephemeral::new(
@@ -135,6 +138,7 @@ impl<'a, S, H> ProvingBackendEssence<'a, S, H>
 		).map_err(map_e)
 	}
 
+	/// Produce proof for a child key query.
 	pub fn child_storage(
 		&mut self,
 		storage_key: &[u8],
@@ -160,6 +164,7 @@ impl<'a, S, H> ProvingBackendEssence<'a, S, H>
 		).map_err(map_e)
 	}
 
+	/// Produce proof for the whole backend.
 	pub fn record_all_keys(&mut self) {
 		let mut read_overlay = S::Overlay::default();
 		let eph = Ephemeral::new(
@@ -178,42 +183,64 @@ impl<'a, S, H> ProvingBackendEssence<'a, S, H>
 	}
 }
 
+/// Global proof recorder, act as a layer over a hash db for recording queried
+/// data.
+pub type ProofRecorder<H> = Arc<RwLock<HashMap<<H as Hasher>::Out, Option<DBValue>>>>;
+
 /// Patricia trie-based backend which also tracks all touched storage trie values.
 /// These can be sent to remote node and used as a proof of execution.
-pub struct ProvingBackend<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
-	backend: &'a TrieBackend<S, H>,
-	proof_recorder: Rc<RefCell<Recorder<H::Out>>>,
+pub struct ProvingBackend<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> (
+	TrieBackend<ProofRecorderBackend<'a, S, H>, H>,
+);
+
+/// Trie backend storage with its proof recorder.
+pub struct ProofRecorderBackend<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
+	backend: &'a S,
+	proof_recorder: ProofRecorder<H>,
 }
 
 impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H> {
 	/// Create new proving backend.
 	pub fn new(backend: &'a TrieBackend<S, H>) -> Self {
-		ProvingBackend {
-			backend,
-			proof_recorder: Rc::new(RefCell::new(Recorder::new())),
-		}
+		let proof_recorder = Default::default();
+		Self::new_with_recorder(backend, proof_recorder)
 	}
 
 	/// Create new proving backend with the given recorder.
 	pub fn new_with_recorder(
 		backend: &'a TrieBackend<S, H>,
-		proof_recorder: Rc<RefCell<Recorder<H::Out>>>,
+		proof_recorder: ProofRecorder<H>,
 	) -> Self {
-		ProvingBackend {
-			backend,
-			proof_recorder,
-		}
+		let essence = backend.essence();
+		let root = essence.root().clone();
+		let recorder = ProofRecorderBackend {
+			backend: essence.backend_storage(),
+			proof_recorder: proof_recorder,
+		};
+		ProvingBackend(TrieBackend::new(recorder, root))
 	}
 
-	/// Consume the backend, extracting the gathered proof in lexicographical order by value.
+	/// Extracting the gathered unordered proof.
 	pub fn extract_proof(&self) -> StorageProof {
-		let trie_nodes = self.proof_recorder
-			.borrow_mut()
-			.drain()
-			.into_iter()
-			.map(|record| record.data)
+		let trie_nodes = self.0.essence().backend_storage().proof_recorder
+			.read()
+			.iter()
+			.filter_map(|(_k, v)| v.as_ref().map(|v| v.to_vec()))
 			.collect();
 		StorageProof::new(trie_nodes)
+	}
+}
+
+impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> TrieBackendStorage<H> for ProofRecorderBackend<'a, S, H> {
+	type Overlay = S::Overlay;
+
+	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
+		if let Some(v) = self.proof_recorder.read().get(key) {
+			return Ok(v.clone());
+		}
+		let backend_value =  self.backend.get(key, prefix)?;
+		self.proof_recorder.write().insert(key.clone(), backend_value.clone());
+		Ok(backend_value)
 	}
 }
 
@@ -234,53 +261,45 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 	type TrieBackendStorage = PrefixedMemoryDB<H>;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		ProvingBackendEssence {
-			backend: self.backend.essence(),
-			proof_recorder: &mut *self.proof_recorder.try_borrow_mut()
-				.expect("only fails when already borrowed; storage() is non-reentrant; qed"),
-		}.storage(key)
+		self.0.storage(key)
 	}
 
 	fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		ProvingBackendEssence {
-			backend: self.backend.essence(),
-			proof_recorder: &mut *self.proof_recorder.try_borrow_mut()
-				.expect("only fails when already borrowed; child_storage() is non-reentrant; qed"),
-		}.child_storage(storage_key, key)
+		self.0.child_storage(storage_key, key)
 	}
 
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], f: F) {
-		self.backend.for_keys_in_child_storage(storage_key, f)
+		self.0.for_keys_in_child_storage(storage_key, f)
 	}
 
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
-		self.backend.for_keys_with_prefix(prefix, f)
+		self.0.for_keys_with_prefix(prefix, f)
 	}
 
 	fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], f: F) {
-		self.backend.for_key_values_with_prefix(prefix, f)
+		self.0.for_key_values_with_prefix(prefix, f)
 	}
 
 	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(&self, storage_key: &[u8], prefix: &[u8], f: F) {
-		self.backend.for_child_keys_with_prefix(storage_key, prefix, f)
+		self.0.for_child_keys_with_prefix(storage_key, prefix, f)
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
-		self.backend.pairs()
+		self.0.pairs()
 	}
 
 	fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> {
-		self.backend.keys(prefix)
+		self.0.keys(prefix)
 	}
 
 	fn child_keys(&self, child_storage_key: &[u8], prefix: &[u8]) -> Vec<Vec<u8>> {
-		self.backend.child_keys(child_storage_key, prefix)
+		self.0.child_keys(child_storage_key, prefix)
 	}
 
 	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
-		self.backend.storage_root(delta)
+		self.0.storage_root(delta)
 	}
 
 	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (Vec<u8>, bool, Self::Transaction)
@@ -288,7 +307,7 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		H::Out: Ord
 	{
-		self.backend.child_storage_root(storage_key, delta)
+		self.0.child_storage_root(storage_key, delta)
 	}
 }
 
@@ -329,6 +348,7 @@ mod tests {
 	use crate::trie_backend::tests::test_trie;
 	use super::*;
 	use primitives::{Blake2Hasher, storage::ChildStorageKey};
+	use crate::proving_backend::create_proof_check_backend;
 
 	fn test_proving<'a>(
 		trie_backend: &'a TrieBackend<PrefixedMemoryDB<Blake2Hasher>,Blake2Hasher>,

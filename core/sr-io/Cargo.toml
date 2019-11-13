@@ -2,20 +2,16 @@
 name = "sr-io"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
-build = "build.rs"
 edition = "2018"
 
-[build-dependencies]
-rustc_version = "0.2.3"
-
 [dependencies]
-codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false }
+codec = { package = "parity-scale-codec", version = "1.0.6", default-features = false }
 hash-db = { version = "0.15.2", default-features = false }
 primitives = { package = "substrate-primitives", path = "../primitives", default-features = false }
 rstd = { package = "sr-std", path = "../sr-std", default-features = false }
 libsecp256k1 = { version = "0.3.0", optional = true }
-tiny-keccak = { version = "1.5.0", optional = true }
 substrate-state-machine = { path = "../state-machine", optional = true }
+runtime-interface = { package = "substrate-runtime-interface", path = "../runtime-interface", default-features = false }
 trie = { package = "substrate-trie", path = "../trie", optional = true }
 externalities = { package = "substrate-externalities", path = "../externalities", optional = true }
 log = { version = "0.4.8", optional = true }
@@ -30,16 +26,15 @@ std = [
 	"trie",
 	"substrate-state-machine",
 	"libsecp256k1",
-	"tiny-keccak",
+	"runtime-interface/std",
 	"externalities",
 	"log",
 ]
-nightly = []
-strict = []
 
 # These two features are used for `no_std` builds for the environments which already provides
-# `#[panic_handler]` and `#[alloc_error_handler]`.
+# `#[panic_handler]`, `#[alloc_error_handler]` and `#[global_allocator]`.
 #
 # For the regular wasm runtime builds those are not used.
-no_panic_handler = []
-no_oom = []
+disable_panic_handler = []
+disable_oom = []
+disable_allocator = []

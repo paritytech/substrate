@@ -17,11 +17,11 @@ wasmi = "0.5.1"
 parity-wasm = "0.40.3"
 lazy_static = "1.4.0"
 wasm-interface = { package = "substrate-wasm-interface", path = "../wasm-interface" }
+runtime-interface = { package = "substrate-runtime-interface", path = "../runtime-interface" }
 externalities = { package = "substrate-externalities", path = "../externalities" }
 parking_lot = "0.9.0"
 log = "0.4.8"
-libsecp256k1 = "0.3.0"
-tiny-keccak = "1.5.0"
+libsecp256k1 = "0.3.2"
 
 cranelift-codegen = { version = "0.46.1", optional = true }
 cranelift-entity = { version = "0.46.1", optional = true }
@@ -46,12 +46,12 @@ test-case = "0.3.3"
 default = []
 wasm-extern-trace = []
 wasmtime = [
-    "cranelift-codegen",
-    "cranelift-entity",
-    "cranelift-frontend",
-    "cranelift-native",
-    "cranelift-wasm",
-    "wasmtime-environ",
-    "wasmtime-jit",
-    "wasmtime-runtime",
+	"cranelift-codegen",
+	"cranelift-entity",
+	"cranelift-frontend",
+	"cranelift-native",
+	"cranelift-wasm",
+	"wasmtime-environ",
+	"wasmtime-jit",
+	"wasmtime-runtime",
 ]
