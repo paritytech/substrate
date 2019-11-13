@@ -17,9 +17,9 @@ substrate-bip39 = "0.3.1"
 hex = "0.3.2"
 hex-literal = "0.2.1"
 codec = { package = "parity-scale-codec", version = "1.0.0" }
-system = { package = "srml-system", path = "../../paint/system" }
-balances = { package = "srml-balances", path = "../../paint/balances" }
-transaction-payment = { package = "srml-transaction-payment", path = "../../paint/transaction-payment" }
+system = { package = "paint-system", path = "../../paint/system" }
+balances = { package = "paint-balances", path = "../../paint/balances" }
+transaction-payment = { package = "paint-transaction-payment", path = "../../paint/transaction-payment" }
 
 [features]
 bench = []

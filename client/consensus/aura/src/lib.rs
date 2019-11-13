@@ -56,7 +56,7 @@ use futures::prelude::*;
 use parking_lot::Mutex;
 use log::{debug, info, trace};
 
-use srml_aura::{
+use paint_aura::{
 	InherentType as AuraInherent, AuraInherentData,
 	timestamp::{TimestampInherentData, InherentType as TimestampInherent, InherentError as TIError}
 };
@@ -654,9 +654,9 @@ fn register_aura_inherent_data_provider(
 	inherent_data_providers: &InherentDataProviders,
 	slot_duration: u64,
 ) -> Result<(), consensus_common::Error> {
-	if !inherent_data_providers.has_provider(&srml_aura::INHERENT_IDENTIFIER) {
+	if !inherent_data_providers.has_provider(&paint_aura::INHERENT_IDENTIFIER) {
 		inherent_data_providers
-			.register_provider(srml_aura::InherentDataProvider::new(slot_duration))
+			.register_provider(paint_aura::InherentDataProvider::new(slot_duration))
 			.map_err(Into::into)
 			.map_err(consensus_common::Error::InherentData)
 	} else {

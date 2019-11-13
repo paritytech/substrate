@@ -22,7 +22,7 @@ use syn::{visit::{Visit, self}, parse::{Parse, ParseStream, Result}, Ident};
 use proc_macro2::{TokenStream, TokenTree};
 use quote::ToTokens;
 use std::iter::once;
-use srml_support_procedural_tools_derive::{ToTokens, Parse};
+use paint_support_procedural_tools_derive::{ToTokens, Parse};
 
 /// stop parsing here getting remaining token as content
 /// Warn duplicate stream (part of)

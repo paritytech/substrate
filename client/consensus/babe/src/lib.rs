@@ -80,7 +80,7 @@ use consensus_common::{
 	self, BlockImport, Environment, Proposer, BlockCheckParams,
 	ForkChoiceStrategy, BlockImportParams, BlockOrigin, Error as ConsensusError,
 };
-use srml_babe::{
+use paint_babe::{
 	BabeInherentData,
 	timestamp::{TimestampInherentData, InherentType as TimestampInherent}
 };
@@ -771,9 +771,9 @@ fn register_babe_inherent_data_provider(
 	slot_duration: u64,
 ) -> Result<(), consensus_common::Error> {
 	debug!(target: "babe", "Registering");
-	if !inherent_data_providers.has_provider(&srml_babe::INHERENT_IDENTIFIER) {
+	if !inherent_data_providers.has_provider(&paint_babe::INHERENT_IDENTIFIER) {
 		inherent_data_providers
-			.register_provider(srml_babe::InherentDataProvider::new(slot_duration))
+			.register_provider(paint_babe::InherentDataProvider::new(slot_duration))
 			.map_err(Into::into)
 			.map_err(consensus_common::Error::InherentData)
 	} else {

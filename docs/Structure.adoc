@@ -11,7 +11,7 @@ Substrate is split into multiple levels with increasing opinion and decreasing f
 
 * primitives
 * client
-* PAINT (formerly `srml`)
+* PAINT (formerly `paint`)
 
 Putting all these components together we have:
 
@@ -39,7 +39,7 @@ In the lowest level, substrate defines primitives, interfaces and traits to impl
 
 In the client you can find a set of crates to construct the outer substrate-node, implementing outer runtime interfaces, thus it depends on `runtime`. It provides the outer building blocks like transaction queue, networking layer, database backend, full* and light-client support.
 
-=== PAINT (formerly `srml`)
+=== PAINT (formerly `paint`)
 
 * _found in_: `/paint`
 * _crates prefix_: `paint-`

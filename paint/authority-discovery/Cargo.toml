@@ -1,5 +1,5 @@
 [package]
-name = "srml-authority-discovery"
+name = "paint-authority-discovery"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
@@ -11,10 +11,10 @@ primitives = { package = "substrate-primitives",  path = "../../primitives/core"
 rstd = { package = "sr-std", path = "../../primitives/sr-std", default-features = false }
 serde = { version = "1.0.101", optional = true }
 runtime-io = { package = "sr-io", path = "../../primitives/sr-io", default-features = false }
-session = { package = "srml-session", path = "../session", default-features = false }
+session = { package = "paint-session", path = "../session", default-features = false }
 sr-primitives = { path = "../../primitives/sr-primitives", default-features = false }
-support = { package = "srml-support", path = "../support", default-features = false }
-system = { package = "srml-system", path = "../system", default-features = false }
+support = { package = "paint-support", path = "../support", default-features = false }
+system = { package = "paint-system", path = "../system", default-features = false }
 
 [dev-dependencies]
 babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../../primitives/consensus/babe", default-features = false }

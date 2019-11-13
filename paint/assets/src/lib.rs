@@ -124,8 +124,8 @@
 //!
 //! ## Related Modules
 //!
-//! * [`System`](../srml_system/index.html)
-//! * [`Support`](../srml_support/index.html)
+//! * [`System`](../paint_system/index.html)
+//! * [`Support`](../paint_support/index.html)
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]

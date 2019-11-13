@@ -17,14 +17,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-pub use srml_metadata::{EventMetadata, DecodeDifferent, OuterEventMetadata, FnEncode};
+pub use paint_metadata::{EventMetadata, DecodeDifferent, OuterEventMetadata, FnEncode};
 
 /// Implement the `Event` for a module.
 ///
 /// # Simple Event Example:
 ///
 /// ```rust
-/// srml_support::decl_event!(
+/// paint_support::decl_event!(
 ///    pub enum Event {
 ///       Success,
 ///       Failure(String),
@@ -44,7 +44,7 @@ pub use srml_metadata::{EventMetadata, DecodeDifferent, OuterEventMetadata, FnEn
 ///
 /// mod event1 {
 ///     // Event that specifies the generic parameter explicitly (`Balance`).
-///     srml_support::decl_event!(
+///     paint_support::decl_event!(
 ///        pub enum Event<T> where Balance = <T as super::Trait>::Balance {
 ///           Message(Balance),
 ///        }
@@ -55,7 +55,7 @@ pub use srml_metadata::{EventMetadata, DecodeDifferent, OuterEventMetadata, FnEn
 ///     // Event that uses the generic parameter `Balance`.
 ///     // If no name for the generic parameter is specified explicitly,
 ///     // the name will be taken from the type name of the trait.
-///     srml_support::decl_event!(
+///     paint_support::decl_event!(
 ///        pub enum Event<T> where <T as super::Trait>::Balance {
 ///           Message(Balance),
 ///        }
@@ -64,7 +64,7 @@ pub use srml_metadata::{EventMetadata, DecodeDifferent, OuterEventMetadata, FnEn
 ///
 /// mod event3 {
 ///     // And we even support declaring multiple generic parameters!
-///     srml_support::decl_event!(
+///     paint_support::decl_event!(
 ///        pub enum Event<T> where <T as super::Trait>::Balance, <T as super::Trait>::Token {
 ///           Message(Balance, Token),
 ///        }
@@ -88,7 +88,7 @@ pub use srml_metadata::{EventMetadata, DecodeDifferent, OuterEventMetadata, FnEn
 /// }
 ///
 /// // For module with instances, DefaultInstance is optional
-/// srml_support::decl_event!(
+/// paint_support::decl_event!(
 ///    pub enum Event<T, I: Instance = DefaultInstance> where
 ///       <T as Trait>::Balance,
 ///       <T as Trait>::Token

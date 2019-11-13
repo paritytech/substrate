@@ -1,5 +1,5 @@
 [package]
-name = "srml-staking"
+name = "paint-staking"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
@@ -14,16 +14,16 @@ phragmen = { package = "substrate-phragmen", path = "../../primitives/phragmen",
 runtime-io ={ package = "sr-io", path = "../../primitives/sr-io", default-features = false }
 sr-primitives = { path = "../../primitives/sr-primitives", default-features = false }
 sr-staking-primitives = { path = "../../primitives/sr-staking-primitives", default-features = false }
-support = { package = "srml-support", path = "../support", default-features = false }
-system = { package = "srml-system", path = "../system", default-features = false }
-session = { package = "srml-session", path = "../session", default-features = false, features = ["historical"] }
-authorship = { package = "srml-authorship", path = "../authorship", default-features = false }
+support = { package = "paint-support", path = "../support", default-features = false }
+system = { package = "paint-system", path = "../system", default-features = false }
+session = { package = "paint-session", path = "../session", default-features = false, features = ["historical"] }
+authorship = { package = "paint-authorship", path = "../authorship", default-features = false }
 
 [dev-dependencies]
 primitives = { package = "substrate-primitives",  path = "../../primitives/core" }
-balances = { package = "srml-balances", path = "../balances" }
-timestamp = { package = "srml-timestamp", path = "../timestamp" }
-srml-staking-reward-curve = { path = "../staking/reward-curve"}
+balances = { package = "paint-balances", path = "../balances" }
+timestamp = { package = "paint-timestamp", path = "../timestamp" }
+paint-staking-reward-curve = { path = "../staking/reward-curve"}
 
 [features]
 equalize = []

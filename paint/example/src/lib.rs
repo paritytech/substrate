@@ -20,7 +20,7 @@
 //! The Example: A simple example of a runtime module demonstrating
 //! concepts, APIs and structures common to most runtime modules.
 //!
-//! Run `cargo doc --package srml-example --open` to view this module's documentation.
+//! Run `cargo doc --package paint-example --open` to view this module's documentation.
 //!
 //! ### Documentation Guidelines:
 //!
@@ -49,8 +49,8 @@
 //!
 //! ### Documentation Template:<br>
 //!
-//! Copy and paste this template from srml/example/src/lib.rs into file
-//! `srml/<INSERT_CUSTOM_MODULE_NAME>/src/lib.rs` of your own custom module and complete it.
+//! Copy and paste this template from paint/example/src/lib.rs into file
+//! `paint/<INSERT_CUSTOM_MODULE_NAME>/src/lib.rs` of your own custom module and complete it.
 //! <details><p><pre>
 //! // Add heading with custom module name
 //!

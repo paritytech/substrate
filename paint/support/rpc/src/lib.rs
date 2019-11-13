@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Combines [substrate_rpc_api::state::StateClient] with [srml_support::storage::generator] traits
+//! Combines [substrate_rpc_api::state::StateClient] with [paint_support::storage::generator] traits
 //! to provide strongly typed chain state queries over rpc.
 
 #![warn(missing_docs)]
@@ -24,7 +24,7 @@ use futures::compat::Future01CompatExt;
 use jsonrpc_client_transports::RpcError;
 use parity_scale_codec::{DecodeAll, FullCodec, FullEncode};
 use serde::{de::DeserializeOwned, Serialize};
-use srml_support::storage::generator::{
+use paint_support::storage::generator::{
 	StorageDoubleMap, StorageLinkedMap, StorageMap, StorageValue
 };
 use substrate_primitives_storage::{StorageData, StorageKey};
@@ -39,13 +39,13 @@ use substrate_rpc_api::state::StateClient;
 /// # use jsonrpc_client_transports::RpcError;
 /// # use jsonrpc_client_transports::transports::http;
 /// # use parity_scale_codec::Encode;
-/// # use srml_support::{decl_storage, decl_module};
-/// # use srml_support_rpc::StorageQuery;
-/// # use srml_system::Trait;
+/// # use paint_support::{decl_storage, decl_module};
+/// # use paint_support_rpc::StorageQuery;
+/// # use paint_system::Trait;
 /// # use substrate_rpc_api::state::StateClient;
 /// #
-/// # // Hash would normally be <TestRuntime as srml_system::Trait>::Hash, but we don't have
-/// # // srml_system::Trait implemented for TestRuntime. Here we just pretend.
+/// # // Hash would normally be <TestRuntime as paint_system::Trait>::Hash, but we don't have
+/// # // paint_system::Trait implemented for TestRuntime. Here we just pretend.
 /// # type Hash = ();
 /// #
 /// # fn main() -> Result<(), RpcError> {
@@ -134,7 +134,7 @@ impl<V: FullCodec> StorageQuery<V> {
 
 	/// Send this query over RPC, await the typed result.
 	///
-	/// Hash should be <YourRuntime as srml::Trait>::Hash.
+	/// Hash should be <YourRuntime as paint::Trait>::Hash.
 	///
 	/// # Arguments
 	///

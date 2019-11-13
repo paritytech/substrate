@@ -6,8 +6,8 @@
 # [top-lvl-dir]<[crate-name-prefix]
 
 # For instance no crate within `./client` directory
-# is allowed to import any crate with a directory path containing `srml`.
-# Such rule is just: `client<srml`.
+# is allowed to import any crate with a directory path containing `paint`.
+# Such rule is just: `client<paint`.
 
 # The script should be run from the main repo directory!
 

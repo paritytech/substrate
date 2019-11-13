@@ -5,18 +5,18 @@ authors = ["Anonymous"]
 edition = "2018"
 
 [dependencies]
-aura = { package = "srml-aura", path = "../../../paint/aura", default-features = false }
+aura = { package = "paint-aura", path = "../../../paint/aura", default-features = false }
 aura-primitives = { package = "substrate-consensus-aura-primitives", path = "../../../primitives/consensus/aura", default-features = false }
-balances = { package = "srml-balances", path = "../../../paint/balances", default-features = false }
+balances = { package = "paint-balances", path = "../../../paint/balances", default-features = false }
 block-builder-api = { package = "substrate-block-builder-runtime-api", path = "../../../primitives/block-builder/runtime-api", default-features = false}
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-executive = { package = "srml-executive", path = "../../../paint/executive", default-features = false }
-grandpa = { package = "srml-grandpa", path = "../../../paint/grandpa", default-features = false }
-indices = { package = "srml-indices", path = "../../../paint/indices", default-features = false }
+executive = { package = "paint-executive", path = "../../../paint/executive", default-features = false }
+grandpa = { package = "paint-grandpa", path = "../../../paint/grandpa", default-features = false }
+indices = { package = "paint-indices", path = "../../../paint/indices", default-features = false }
 inherents = { package = "substrate-inherents", path = "../../../primitives/inherents", default-features = false}
 offchain-primitives = { package = "substrate-offchain-primitives", path = "../../../primitives/offchain", default-features = false }
 primitives = { package = "substrate-primitives", path = "../../../primitives/core", default-features = false }
-randomness-collective-flip = { package = "srml-randomness-collective-flip", path = "../../../paint/randomness-collective-flip", default-features = false }
+randomness-collective-flip = { package = "paint-randomness-collective-flip", path = "../../../paint/randomness-collective-flip", default-features = false }
 rstd = { package = "sr-std", path = "../../../primitives/sr-std", default-features = false }
 runtime-io = { package = "sr-io", path = "../../../primitives/sr-io", default-features = false }
 safe-mix = { version = "1.0.0", default-features = false }
@@ -24,11 +24,11 @@ serde = { version = "1.0.101", optional = true, features = ["derive"] }
 sr-api = { path = "../../../primitives/sr-api", default-features = false }
 sr-primitives = { path = "../../../primitives/sr-primitives", default-features = false }
 substrate-session = { path = "../../../primitives/session", default-features = false }
-sudo = { package = "srml-sudo", path = "../../../paint/sudo", default-features = false }
-support = { package = "srml-support", path = "../../../paint/support", default-features = false }
-system = { package = "srml-system", path = "../../../paint/system", default-features = false }
-timestamp = { package = "srml-timestamp", path = "../../../paint/timestamp", default-features = false }
-transaction-payment = { package = "srml-transaction-payment", path = "../../../paint/transaction-payment", default-features = false }
+sudo = { package = "paint-sudo", path = "../../../paint/sudo", default-features = false }
+support = { package = "paint-support", path = "../../../paint/support", default-features = false }
+system = { package = "paint-system", path = "../../../paint/system", default-features = false }
+timestamp = { package = "paint-timestamp", path = "../../../paint/timestamp", default-features = false }
+transaction-payment = { package = "paint-transaction-payment", path = "../../../paint/transaction-payment", default-features = false }
 tx-pool-api = { package = "substrate-transaction-pool-runtime-api", path = "../../../primitives/transaction-pool/runtime-api", default-features = false }
 version = { package = "sr-version", path = "../../../primitives/sr-version", default-features = false }
 
