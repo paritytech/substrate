@@ -20,7 +20,7 @@ use std::sync::Arc;
 use rpc::futures::future::result;
 
 use api::Subscriptions;
-use interfaces::{CallExecutor, backend::Backend};
+use client_api::{CallExecutor, backend::Backend};
 use client::Client;
 use primitives::{H256, Blake2Hasher};
 use sr_primitives::{

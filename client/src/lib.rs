@@ -84,7 +84,7 @@ pub mod leaves;
 mod call_executor;
 mod client;
 
-pub use interfaces::{
+pub use client_api::{
 	error,
 	blockchain,
 	blockchain::well_known_cache_keys,

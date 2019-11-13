@@ -44,7 +44,7 @@ use network::NetworkStateInfo;
 use primitives::{offchain, ExecutionContext};
 use sr_primitives::{generic::BlockId, traits::{self, ProvideRuntimeApi}};
 use transaction_pool::txpool::{Pool, ChainApi};
-use interfaces::{OffchainStorage};
+use client_api::{OffchainStorage};
 
 mod api;
 

@@ -24,7 +24,7 @@ use sr_primitives::{Justification, generic::BlockId};
 use sr_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero};
 
 use header_metadata::{HeaderMetadata, CachedHeaderMetadata};
-pub use interfaces::{
+pub use client_api::{
 	backend::{
 		AuxStore, NewBlockState
 	},
@@ -196,7 +196,7 @@ pub mod tests {
 	use std::collections::HashMap;
 	use parking_lot::Mutex;
 	use test_client::runtime::{Hash, Block, Header};
-	use interfaces::blockchain::Info;
+	use client_api::blockchain::Info;
 	use super::*;
 
 	pub type DummyBlockchain = Blockchain<DummyStorage>;

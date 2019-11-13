@@ -35,7 +35,7 @@ use hash_db::Hasher;
 
 use sr_api::{ProofRecorder, InitializeBlock};
 
-use interfaces::{
+use client_api::{
 	backend::RemoteBackend,
 	error::{Error as ClientError, Result as ClientResult},
 	light::RemoteCallRequest,
@@ -297,7 +297,7 @@ mod tests {
 	use test_client::{self, runtime::{Header, Digest, Block}, ClientExt, TestClient};
 	use executor::{NativeExecutor, WasmExecutionMethod};
 	use primitives::Blake2Hasher;
-	use interfaces::backend::{Backend, NewBlockState};
+	use client_api::backend::{Backend, NewBlockState};
 	use crate::in_mem::Backend as InMemBackend;
 
 	struct DummyCallExecutor;
@@ -452,7 +452,7 @@ mod tests {
 				),
 			);
 			match execution_result {
-				Err(interfaces::error::Error::Execution(_)) => (),
+				Err(client_api::error::Error::Execution(_)) => (),
 				_ => panic!("Unexpected execution result: {:?}", execution_result),
 			}
 		}

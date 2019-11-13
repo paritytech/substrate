@@ -21,7 +21,7 @@ use codec::Encode;
 use futures::sync::mpsc;
 use parking_lot::RwLockWriteGuard;
 
-use interfaces::{
+use client_api::{
 	backend::Backend, blockchain,
 	CallExecutor, blockchain::HeaderBackend, well_known_cache_keys,
 	utils::is_descendent_of,

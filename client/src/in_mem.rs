@@ -29,7 +29,7 @@ use hash_db::{Hasher, Prefix};
 use trie::MemoryDB;
 use header_metadata::{CachedHeaderMetadata, HeaderMetadata};
 
-use interfaces::{
+use client_api::{
 	error,
 	backend::{self, NewBlockState, StorageCollection, ChildStorageCollection},
 	blockchain::{
@@ -158,7 +158,7 @@ impl<Block: BlockT> Blockchain<Block> {
 		justification: Option<Justification>,
 		body: Option<Vec<<Block as BlockT>::Extrinsic>>,
 		new_state: NewBlockState,
-	) -> interfaces::error::Result<()> {
+	) -> client_api::error::Result<()> {
 		let number = header.number().clone();
 		if new_state.is_best() {
 			self.apply_head(&header)?;
@@ -399,7 +399,7 @@ impl<Block: BlockT> backend::AuxStore for Blockchain<Block> {
 	}
 }
 
-impl<Block: BlockT> interfaces::light::Storage<Block> for Blockchain<Block>
+impl<Block: BlockT> client_api::light::Storage<Block> for Blockchain<Block>
 	where
 		Block::Hash: From<[u8; 32]>,
 {
@@ -811,7 +811,7 @@ pub fn check_genesis_storage(top: &StorageOverlay, children: &ChildrenStorageOve
 
 #[cfg(test)]
 mod tests {
-	use interfaces::offchain::{OffchainStorage, InMemOffchainStorage};
+	use client_api::offchain::{OffchainStorage, InMemOffchainStorage};
 	use std::sync::Arc;
 	use test_client;
 	use primitives::Blake2Hasher;

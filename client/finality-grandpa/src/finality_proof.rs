@@ -38,7 +38,7 @@ use std::iter;
 use std::sync::Arc;
 use log::{trace, warn};
 
-use interfaces::{
+use client_api::{
 	backend::Backend, blockchain::Backend as BlockchainBackend, CallExecutor,
 	error::{Error as ClientError, Result as ClientResult},
 	light::{FetchChecker, RemoteReadRequest},
@@ -259,7 +259,7 @@ pub(crate) fn prove_finality<Block: BlockT<Hash=H256>, B: BlockchainBackend<Bloc
 	authorities_set_id: u64,
 	begin: Block::Hash,
 	end: Block::Hash,
-) -> ::interfaces::error::Result<Option<Vec<u8>>>
+) -> ::client_api::error::Result<Option<Vec<u8>>>
 	where
 		J: ProvableJustification<Block::Header>,
 {
@@ -578,7 +578,7 @@ impl<Block: BlockT<Hash=H256>> ProvableJustification<Block::Header> for GrandpaJ
 #[cfg(test)]
 pub(crate) mod tests {
 	use test_client::runtime::{Block, Header, H256};
-	use interfaces::NewBlockState;
+	use client_api::NewBlockState;
 	use test_client::client::in_mem::Blockchain as InMemoryBlockchain;
 	use super::*;
 	use primitives::crypto::Public;

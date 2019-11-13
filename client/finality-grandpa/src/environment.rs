@@ -25,7 +25,7 @@ use futures::prelude::*;
 use tokio_timer::Delay;
 use parking_lot::RwLock;
 
-use interfaces::{
+use client_api::{
 	HeaderBackend, BlockchainEvents,
 	backend::{Backend},
 	Finalizer,

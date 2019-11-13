@@ -102,7 +102,7 @@ pub fn factory<RA, Backend, Exec, Block, RtApi, Sc>(
 where
 	Block: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
 	Exec: client::CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
-	Backend: interfaces::backend::Backend<Block, Blake2Hasher> + Send,
+	Backend: client_api::backend::Backend<Block, Blake2Hasher> + Send,
 	Client<Backend, Exec, Block, RtApi>: ProvideRuntimeApi,
 	<Client<Backend, Exec, Block, RtApi> as ProvideRuntimeApi>::Api:
 		BlockBuilder<Block, Error = client::error::Error>,
@@ -161,7 +161,7 @@ pub fn create_block<RA, Backend, Exec, Block, RtApi>(
 where
 	Block: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
 	Exec: client::CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
-	Backend: interfaces::backend::Backend<Block, Blake2Hasher> + Send,
+	Backend: client_api::backend::Backend<Block, Blake2Hasher> + Send,
 	Client<Backend, Exec, Block, RtApi>: ProvideRuntimeApi,
 	RtApi: ConstructRuntimeApi<Block, Client<Backend, Exec, Block, RtApi>> + Send + Sync,
 	<Client<Backend, Exec, Block, RtApi> as ProvideRuntimeApi>::Api:
@@ -187,7 +187,7 @@ fn import_block<Backend, Exec, Block, RtApi>(
 ) -> () where
 	Block: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
 	Exec: client::CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
-	Backend: interfaces::backend::Backend<Block, Blake2Hasher> + Send,
+	Backend: client_api::backend::Backend<Block, Blake2Hasher> + Send,
 {
 	let import = BlockImportParams {
 		origin: BlockOrigin::File,

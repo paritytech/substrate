@@ -19,7 +19,7 @@ use std::sync::Arc;
 use log::{info, trace, warn};
 use parking_lot::RwLock;
 use client::Client;
-use interfaces::{
+use client_api::{
 	CallExecutor,
 	backend::{AuxStore, Backend, Finalizer},
 	blockchain::HeaderBackend,

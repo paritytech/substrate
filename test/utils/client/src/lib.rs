@@ -171,7 +171,7 @@ impl<Executor, Backend, G: GenesisInit> TestClientBuilder<Executor, Backend, G> 
 		client::LongestChain<Backend, Block>,
 	) where
 		Executor: client::CallExecutor<Block, Blake2Hasher>,
-		Backend: interfaces::backend::Backend<Block, Blake2Hasher>,
+		Backend: client_api::backend::Backend<Block, Blake2Hasher>,
 		Block: BlockT<Hash=<Blake2Hasher as Hasher>::Out>,
 	{
 
@@ -223,7 +223,7 @@ impl<E, Backend, G: GenesisInit> TestClientBuilder<
 	) where
 		I: Into<Option<NativeExecutor<E>>>,
 		E: executor::NativeExecutionDispatch,
-		Backend: interfaces::backend::Backend<Block, Blake2Hasher>,
+		Backend: client_api::backend::Backend<Block, Blake2Hasher>,
 		Block: BlockT<Hash=<Blake2Hasher as Hasher>::Out>,
 	{
 		let executor = executor.into().unwrap_or_else(||

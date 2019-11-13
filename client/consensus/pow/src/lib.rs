@@ -32,7 +32,7 @@
 use std::sync::Arc;
 use std::thread;
 use std::collections::HashMap;
-use interfaces::{
+use client_api::{
 	BlockOf, blockchain::{HeaderBackend, ProvideCache}, backend::AuxStore,
 	well_known_cache_keys::Id as CacheKeyId,
 };
@@ -66,7 +66,7 @@ pub enum Error<B: BlockT> {
 	#[display(fmt = "Fetching best header failed using select chain: {:?}", _0)]
 	BestHeaderSelectChain(ConsensusError),
 	#[display(fmt = "Fetching best header failed: {:?}", _0)]
-	BestHeader(interfaces::error::Error),
+	BestHeader(client_api::error::Error),
 	#[display(fmt = "Best header does not exist")]
 	NoBestHeader,
 	#[display(fmt = "Block proposing error: {:?}", _0)]
@@ -79,7 +79,7 @@ pub enum Error<B: BlockT> {
 	CreateInherents(inherents::Error),
 	#[display(fmt = "Checking inherents failed: {}", _0)]
 	CheckInherents(String),
-	Client(interfaces::error::Error),
+	Client(client_api::error::Error),
 	Codec(codec::Error),
 	Environment(String),
 	Runtime(RuntimeString)
@@ -211,7 +211,7 @@ impl<B: BlockT<Hash=H256>, C, S, Algorithm> PowVerifier<B, C, S, Algorithm> {
 		inherent_data: InherentData,
 		timestamp_now: u64,
 	) -> Result<(), Error<B>> where
-		C: ProvideRuntimeApi, C::Api: BlockBuilderApi<B, Error = interfaces::error::Error>
+		C: ProvideRuntimeApi, C::Api: BlockBuilderApi<B, Error = client_api::error::Error>
 	{
 		const MAX_TIMESTAMP_DRIFT_SECS: u64 = 60;
 
@@ -249,7 +249,7 @@ impl<B: BlockT<Hash=H256>, C, S, Algorithm> PowVerifier<B, C, S, Algorithm> {
 
 impl<B: BlockT<Hash=H256>, C, S, Algorithm> Verifier<B> for PowVerifier<B, C, S, Algorithm> where
 	C: ProvideRuntimeApi + Send + Sync + HeaderBackend<B> + AuxStore + ProvideCache<B> + BlockOf,
-	C::Api: BlockBuilderApi<B, Error = interfaces::error::Error>,
+	C::Api: BlockBuilderApi<B, Error = client_api::error::Error>,
 	S: SelectChain<B>,
 	Algorithm: PowAlgorithm<B> + Send + Sync,
 {
@@ -341,7 +341,7 @@ pub fn import_queue<B, C, S, Algorithm>(
 	B: BlockT<Hash=H256>,
 	C: ProvideRuntimeApi + HeaderBackend<B> + BlockOf + ProvideCache<B> + AuxStore,
 	C: Send + Sync + AuxStore + 'static,
-	C::Api: BlockBuilderApi<B, Error = interfaces::error::Error>,
+	C::Api: BlockBuilderApi<B, Error = client_api::error::Error>,
 	Algorithm: PowAlgorithm<B> + Send + Sync + 'static,
 	S: SelectChain<B> + 'static,
 {

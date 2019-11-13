@@ -25,7 +25,7 @@ use sr_primitives::traits::{Block as BlockT, Header};
 use primitives::hexdisplay::HexDisplay;
 use state_machine::{backend::Backend as StateBackend, TrieBackend};
 use log::trace;
-use interfaces::backend::{StorageCollection, ChildStorageCollection};
+use client_api::backend::{StorageCollection, ChildStorageCollection};
 use std::hash::Hash as StdHash;
 const STATE_CACHE_BLOCKS: usize = 12;
 

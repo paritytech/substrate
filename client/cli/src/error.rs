@@ -31,7 +31,7 @@ pub enum Error {
 	/// Service error
 	Service(service::Error),
 	/// Client error
-	Client(interfaces::error::Error),
+	Client(client_api::error::Error),
 	/// Input error
 	Input(String),
 	/// Invalid listen multiaddress

@@ -22,7 +22,7 @@
 use consensus_common::SelectChain;
 use inherents::{InherentDataProviders};
 use log::warn;
-use interfaces::ProvideUncles;
+use client_api::ProvideUncles;
 use sr_primitives::traits::{Block as BlockT, Header};
 use std::sync::Arc;
 

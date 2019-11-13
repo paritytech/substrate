@@ -17,8 +17,8 @@
 //! Blockchain access trait
 
 use client::Client as SubstrateClient;
-use interfaces::error::Error;
-use interfaces::{ChangesProof, StorageProof, ClientInfo, CallExecutor};
+use client_api::error::Error;
+use client_api::{ChangesProof, StorageProof, ClientInfo, CallExecutor};
 use consensus::{BlockImport, BlockStatus, Error as ConsensusError};
 use sr_primitives::traits::{Block as BlockT, Header as HeaderT};
 use sr_primitives::generic::{BlockId};
@@ -91,7 +91,7 @@ impl<Block: BlockT> FinalityProofProvider<Block> for () {
 }
 
 impl<B, E, Block, RA> Client<Block> for SubstrateClient<B, E, Block, RA> where
-	B: interfaces::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
+	B: client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
 	Self: BlockImport<Block, Error=ConsensusError>,
 	Block: BlockT<Hash=H256>,

@@ -35,7 +35,7 @@ use state_machine::{
 pub use state_machine::StorageProof;
 
 use crate::cht;
-pub use interfaces::{
+pub use client_api::{
 	error::{
 		Error as ClientError, Result as ClientResult
 	},
@@ -329,7 +329,7 @@ pub mod tests {
 	use codec::Decode;
 	use crate::client::tests::prepare_client_with_key_changes;
 	use executor::{NativeExecutor, WasmExecutionMethod};
-	use interfaces::{
+	use client_api::{
 		backend::NewBlockState,
 		error::Error as ClientError,
 	};
