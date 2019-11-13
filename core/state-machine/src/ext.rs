@@ -533,7 +533,8 @@ mod tests {
 	use crate::changes_trie::{Configuration as ChangesTrieConfiguration,
 		InMemoryStorage as InMemoryChangesTrieStorage};
 	use crate::overlayed_changes::{OverlayedValue, OverlayedChangeSet};
-	use historical_data::linear::{History, HistoricalValue};
+	use historical_data::synch::linear::transaction::{History, HistoricalValue};
+	use historical_data::synch::linear::transaction::{State};
 
 	type TestBackend = InMemory<Blake2Hasher>;
 	type TestChangesTrieStorage = InMemoryChangesTrieStorage<Blake2Hasher, u64>;
@@ -554,18 +555,16 @@ mod tests {
 						(OverlayedValue {
 							value: Some(3u32.encode()),
 							extrinsics: Some(vec![1].into_iter().collect())
-						}, 0),
+						}, State::Committed),
 					].into_iter().map(|(value, index)| HistoricalValue { value, index }))),
 					(vec![1], History::from_iter(vec![
 						(OverlayedValue {
 							value: Some(vec![100]),
 							extrinsics: Some(vec![1].into_iter().collect())
-						}, 0),
+						}, State::Committed),
 					].into_iter().map(|(value, index)| HistoricalValue { value, index }))),
 				].into_iter().collect(),
 			},
-			operation_from_last_gc: 0,
-			not_eager_gc: false,
 		}
 	}
 

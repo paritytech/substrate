@@ -27,7 +27,7 @@ pub mod linear;
 
 /// An entry at a given history index.
 #[derive(Debug, Clone)]
-#[cfg_attr(any(test, feature = "test"), derive(PartialEq))]
+#[cfg_attr(any(test, feature = "test-helpers"), derive(PartialEq))]
 pub struct HistoricalValue<V, I> {
 	/// The stored value.
 	pub value: V,
@@ -51,7 +51,8 @@ impl<V, I: Clone> HistoricalValue<V, I> {
 	}
 }
 
-#[cfg_attr(any(test, feature = "test"), derive(PartialEq, Debug))]
+#[derive(PartialEq)]
+#[cfg_attr(any(test, feature = "test"), derive(Debug))]
 /// Prunning result to be able to proceed
 /// with further update if the value needs it.
 pub enum PruneResult {

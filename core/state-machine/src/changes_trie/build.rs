@@ -325,8 +325,7 @@ mod test {
 	use crate::changes_trie::{RootsStorage, Configuration, storage::InMemoryStorage};
 	use crate::changes_trie::build_cache::{IncompleteCacheAction, IncompleteCachedBuildData};
 	use crate::overlayed_changes::{OverlayedValue, OverlayedChangeSet};
-	use historical_data::detached::linear::transaction::{States, TransactionState};
-	use historical_data::linear::{History, HistoricalValue};
+	use historical_data::synch::linear::transaction::{States, State, History, HistoricalValue};
 	use super::*;
 
 	fn prepare_for_build(zero: u64) -> (
@@ -397,39 +396,35 @@ mod test {
 		]);
 		let changes = OverlayedChanges {
 			changes: OverlayedChangeSet {
-				states: States::test_vector(
-					vec![TransactionState::Pending, TransactionState::Pending],
-					vec![0, 0],
-					1,
-				),
+				states: States::test_state(0),
 				top: vec![
 					(EXTRINSIC_INDEX.to_vec(), History::from_iter(vec![
 						(OverlayedValue {
 							value: Some(3u32.encode()),
 							extrinsics: None,
-						}, 0),
+						}, State::Committed),
 					].into_iter().map(|(value, index)| HistoricalValue { value, index }))),
 					(vec![100], History::from_iter(vec![
 						(OverlayedValue {
 							value: Some(vec![202]),
 							extrinsics: Some(vec![3].into_iter().collect())
-						}, 0),
+						}, State::Committed),
 						(OverlayedValue {
 							value: Some(vec![200]),
 							extrinsics: Some(vec![3, 0, 2].into_iter().collect())
-						}, 1),
+						}, State::Transaction(0)),
 					].into_iter().map(|(value, index)| HistoricalValue { value, index }))),
 					(vec![101], History::from_iter(vec![
 						(OverlayedValue {
 						value: Some(vec![203]),
 						extrinsics: Some(vec![1].into_iter().collect())
-						}, 0),
+						}, State::Committed),
 					].into_iter().map(|(value, index)| HistoricalValue { value, index }))),
 					(vec![103], History::from_iter(vec![
 						(OverlayedValue {
 						value: None,
 						extrinsics: Some(vec![0, 1].into_iter().collect())
-						}, 1),
+						}, State::Transaction(0)),
 					].into_iter().map(|(value, index)| HistoricalValue { value, index }))),
 				].into_iter().collect(),
 				children: vec![
@@ -438,11 +433,11 @@ mod test {
 							(OverlayedValue {
 								value: Some(vec![202]),
 								extrinsics: Some(vec![3].into_iter().collect())
-							}, 0),
+							}, State::Committed),
 							(OverlayedValue {
 								value: Some(vec![200]),
 								extrinsics: Some(vec![3, 0, 2].into_iter().collect())
-							}, 1),
+							}, State::Transaction(0)),
 						].into_iter().map(|(value, index)| HistoricalValue { value, index }))),
 					].into_iter().collect()),
 					(child_trie_key2, vec![
@@ -450,13 +445,11 @@ mod test {
 							(OverlayedValue {
 								value: Some(vec![200]),
 								extrinsics: Some(vec![0, 2].into_iter().collect())
-							}, 1),
+							}, State::Transaction(0)),
 						].into_iter().map(|(value, index)| HistoricalValue { value, index }))),
 					].into_iter().collect()),
 				].into_iter().collect(),
 			},
-			operation_from_last_gc: 0,
-			not_eager_gc: false,
 			changes_trie_config: Some(config.clone()),
 		};
 
@@ -653,7 +646,7 @@ mod test {
 				(OverlayedValue {
 					value: None,
 					extrinsics: Some(vec![1].into_iter().collect()),
-				}, 1),
+				}, State::Transaction(0)),
 			].into_iter().map(|(value, index)| HistoricalValue { value, index })));
 
 			let parent = AnchorBlockId { hash: Default::default(), number: zero + 3 };

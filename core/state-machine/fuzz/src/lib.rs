@@ -24,7 +24,7 @@ const KEY_SPACE: u8 = 20;
 /// Size of key, max 255
 const VALUE_SPACE: u8 = 50;
 
-fn fuzz_transactions_inner(input: &[u8], check_gc: bool) {
+fn fuzz_transactions_inner(input: &[u8], check_compactness: bool) {
 	let mut input_index: usize = 0;
 	let mut overlayed = OverlayedChanges::default();
 	let mut ref_overlayed = RefOverlayedChanges::default();
@@ -81,17 +81,16 @@ fn fuzz_transactions_inner(input: &[u8], check_gc: bool) {
 	let (check_value, len) = check_values(&overlayed, &ref_overlayed);
 	success &= check_value;
 
-	if check_gc {
+	if check_compactness {
 		let reference_size = ref_overlayed.total_length();
-		overlayed.gc(true);
 		let size = overlayed.top_count_keyvalue_pair();
 		if reference_size != size {
 			println!("inconsistent gc {} {}", size, reference_size);
 			success = false;
 		}
-		let (check_value, len_gc) = check_values(&overlayed, &ref_overlayed);
+		let (check_value, len_compactness) = check_values(&overlayed, &ref_overlayed);
 		success &= check_value;
-		success &= len_gc == len;
+		success &= len_compactness == len;
 	}
 	ref_overlayed.commit_prospective();
 	let ref_len = ref_overlayed.committed.len();
@@ -125,7 +124,7 @@ pub fn fuzz_transactions(input: &[u8]) {
 	fuzz_transactions_inner(input, false);
 }
 
-pub fn fuzz_transactions_then_gc(input: &[u8]) {
+pub fn fuzz_transactions_then_compactness(input: &[u8]) {
 	fuzz_transactions_inner(input, true);
 }
 
