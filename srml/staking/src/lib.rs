@@ -248,6 +248,7 @@
 mod mock;
 #[cfg(test)]
 mod tests;
+mod migration;
 mod slashing;
 
 pub mod inflation;
@@ -654,7 +655,10 @@ decl_storage! {
 		pub Validators get(fn validators): linked_map T::AccountId => ValidatorPrefs<BalanceOf<T>>;
 
 		/// The map from nominator stash key to the set of stash keys of all validators to nominate.
-		pub Nominators get(fn nominators): linked_map T::AccountId => Option<Nominations<T::AccountId>>;
+		///
+		/// NOTE: is private so that we can ensure upgraded before all typical accesses.
+		/// Direct storage APIs can still bypass this protection.
+		Nominators get(fn nominators): linked_map T::AccountId => Option<Nominations<T::AccountId>>;
 
 		/// Nominators for a particular account that is in action right now. You can't iterate
 		/// through validators here, but you can find them in the Session module.
@@ -721,6 +725,9 @@ decl_storage! {
 
 		/// The earliest era for which we have a pending, unapplied slash.
 		EarliestUnappliedSlash: Option<EraIndex>;
+
+		/// The version of storage for upgrade.
+		StorageVersion: u32;
 	}
 	add_extra_genesis {
 		config(stakers):
@@ -778,6 +785,10 @@ decl_module! {
 		const BondingDuration: EraIndex = T::BondingDuration::get();
 
 		fn deposit_event() = default;
+
+		fn on_initialize() {
+			Self::ensure_storage_upgraded();
+		}
 
 		fn on_finalize() {
 			// Set the start of the first era.
@@ -965,6 +976,8 @@ decl_module! {
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(750_000)]
 		fn validate(origin, prefs: ValidatorPrefs<BalanceOf<T>>) {
+			Self::ensure_storage_upgraded();
+
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or("not a controller")?;
 			let stash = &ledger.stash;
@@ -985,6 +998,8 @@ decl_module! {
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(750_000)]
 		fn nominate(origin, targets: Vec<<T::Lookup as StaticLookup>::Source>) {
+			Self::ensure_storage_upgraded();
+
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or("not a controller")?;
 			let stash = &ledger.stash;
@@ -1186,8 +1201,15 @@ impl<T: Trait> Module<T> {
 
 	/// Chill a stash account.
 	fn chill_stash(stash: &T::AccountId) {
+		Self::ensure_storage_upgraded();
+
 		<Validators<T>>::remove(stash);
 		<Nominators<T>>::remove(stash);
+	}
+
+	/// Ensures storage is upgraded to most recent necessary state.
+	fn ensure_storage_upgraded() {
+		migration::perform_migrations::<T>();
 	}
 
 	/// Actually make a payment to a staker. This uses the currency's reward function
@@ -1361,6 +1383,8 @@ impl<T: Trait> Module<T> {
 	/// Select a new validator set from the assembled stakers and their role preferences.
 	///
 	/// Returns the new `SlotStake` value and a set of newly selected _stash_ IDs.
+	///
+	/// Assumes storage is coherent with the declaration.
 	fn select_validators() -> (BalanceOf<T>, Option<Vec<T::AccountId>>) {
 		let mut all_nominators: Vec<(T::AccountId, Vec<T::AccountId>)> = Vec::new();
 		let all_validator_candidates_iter = <Validators<T>>::enumerate();
@@ -1500,6 +1524,8 @@ impl<T: Trait> Module<T> {
 	/// - Immediately when an account's balance falls below existential deposit.
 	/// - after a `withdraw_unbond()` call that frees all of a stash's bonded balance.
 	fn kill_stash(stash: &T::AccountId) {
+		Self::ensure_storage_upgraded();
+
 		if let Some(controller) = <Bonded<T>>::take(stash) {
 			<Ledger<T>>::remove(&controller);
 		}
@@ -1563,6 +1589,7 @@ impl<T: Trait> Module<T> {
 
 impl<T: Trait> session::OnSessionEnding<T::AccountId> for Module<T> {
 	fn on_session_ending(_ending: SessionIndex, start_session: SessionIndex) -> Option<Vec<T::AccountId>> {
+		Self::ensure_storage_upgraded();
 		Self::new_session(start_session - 1).map(|(new, _old)| new)
 	}
 }
@@ -1571,6 +1598,7 @@ impl<T: Trait> OnSessionEnding<T::AccountId, Exposure<T::AccountId, BalanceOf<T>
 	fn on_session_ending(_ending: SessionIndex, start_session: SessionIndex)
 		-> Option<(Vec<T::AccountId>, Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>)>
 	{
+		Self::ensure_storage_upgraded();
 		Self::new_session(start_session - 1)
 	}
 }
