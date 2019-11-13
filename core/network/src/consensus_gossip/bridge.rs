@@ -22,15 +22,20 @@ use crate::service::{NetworkService, ExHashT};
 
 use futures03::{prelude::*, channel::mpsc, compat::Compat01As03};
 use libp2p::PeerId;
+use parking_lot::Mutex;
 use sr_primitives::{traits::{Block as BlockT, Header as HeaderT}, ConsensusEngineId};
 use std::{borrow::Cow, sync::Arc};
 
-pub struct Gossip<B: BlockT> {
+pub struct GossipEngine<B: BlockT> {
+	inner: Arc<Mutex<GossipEngineInner<B>>>,
+}
+
+struct GossipEngineInner<B: BlockT> {
 	state_machine: ConsensusGossip<B>,
 	context: Box<dyn Context<B> + Send>,
 }
 
-impl<B: BlockT> Gossip<B> {
+impl<B: BlockT> GossipEngine<B> {
 	/// Create a new instance.
 	pub fn new<S: NetworkSpecialization<B>, H: ExHashT>(
 		network_service: NetworkService<B, S, H>,
@@ -52,15 +57,17 @@ impl<B: BlockT> Gossip<B> {
 			}
 		});
 
-		Gossip {
-			state_machine,
-			context,
+		GossipEngine {
+			inner: Arc::new(Mutex::new(GossipEngineInner {
+				state_machine,
+				context,
+			})),
 		}
 	}
 
 	/// Closes all notification streams.
 	pub fn abort(&mut self) {
-		self.state_machine.abort();
+		self.inner.lock().state_machine.abort();
 	}
 
 	/// Register message validator for a message type.
@@ -74,7 +81,7 @@ impl<B: BlockT> Gossip<B> {
 	}
 
 	/// Registers a message without propagating it to any peers. The message
-	/// becomes available to new peers or when the service is asked to gossip
+	/// becomes available to new peers or when the service is asked to GossipEngine
 	/// the message's topic. No validation is performed on the message, if the
 	/// message is already expired it should be dropped on the next garbage
 	/// collection.
@@ -83,19 +90,20 @@ impl<B: BlockT> Gossip<B> {
 		topic: B::Hash,
 		message: ConsensusMessage,
 	) {
-		self.state_machine.register_message(topic, message);
+		self.inner.lock().state_machine.register_message(topic, message);
 	}
 
 	/// Broadcast all messages with given topic.
 	pub fn broadcast_topic(&mut self, topic: B::Hash, force: bool) {
-		self.state_machine.broadcast_topic(&mut *self.context, topic, force);
+		let mut inner = self.inner.lock();
+		inner.state_machine.broadcast_topic(&mut *inner.context, topic, force);
 	}
 
 	/// Get data of valid, incoming messages for a topic (but might have expired meanwhile)
 	pub fn messages_for(&mut self, engine_id: ConsensusEngineId, topic: B::Hash)
 		-> mpsc::UnboundedReceiver<TopicNotification>
 	{
-		self.state_machine.messages_for(engine_id, topic)
+		self.inner.lock().state_machine.messages_for(engine_id, topic)
 	}
 
 	/// Send all messages with given topic to a peer.
@@ -106,7 +114,8 @@ impl<B: BlockT> Gossip<B> {
 		engine_id: ConsensusEngineId,
 		force: bool
 	) {
-		self.state_machine.send_topic(&mut *self.context, who, topic, engine_id, force)
+		let mut inner = self.inner.lock();
+		inner.state_machine.send_topic(&mut *inner.context, who, topic, engine_id, force)
 	}
 
 	/// Multicast a message to all peers.
@@ -116,7 +125,8 @@ impl<B: BlockT> Gossip<B> {
 		message: ConsensusMessage,
 		force: bool,
 	) {
-		self.state_machine.multicast(&mut *self.context, topic, message, force)
+		let mut inner = self.inner.lock();
+		inner.state_machine.multicast(&mut *inner.context, topic, message, force)
 	}
 
 	/// Send addressed message to a peer. The message is not kept or multicast
@@ -126,12 +136,21 @@ impl<B: BlockT> Gossip<B> {
 		who: &PeerId,
 		message: ConsensusMessage,
 	) {
-		self.state_machine.send_message(&mut *self.context, who, message);
+		let mut inner = self.inner.lock();
+		inner.state_machine.send_message(&mut *inner.context, who, message);
 	}
 
 	// TODO: bad API?
 	pub async fn process() {
 
+	}
+}
+
+impl<B: BlockT> Clone for GossipEngine<B> {
+	fn clone(&self) -> Self {
+		GossipEngine {
+			inner: self.inner.clone()
+		}
 	}
 }
 

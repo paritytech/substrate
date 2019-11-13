@@ -36,7 +36,7 @@ use grandpa::Message::{Prevote, Precommit, PrimaryPropose};
 use grandpa::{voter, voter_set::VoterSet};
 use log::{debug, trace};
 use network::{consensus_gossip as network_gossip, NetworkService};
-use network_gossip::ConsensusMessage;
+use network_gossip::{ConsensusMessage, GossipEngine};
 use codec::{Encode, Decode};
 use primitives::Pair;
 use sr_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, NumberFor};
@@ -149,35 +149,18 @@ pub(crate) fn global_topic<B: BlockT>(set_id: SetIdNumber) -> B::Hash {
 	<<B::Header as HeaderT>::Hashing as HashT>::hash(format!("{}-GLOBAL", set_id).as_bytes())
 }
 
-impl<B, S, H> Network<B> for Arc<NetworkService<B, S, H>> where
+impl<B> Network<B> for GossipEngine<B> where
 	B: BlockT,
-	S: network::specialization::NetworkSpecialization<B>,
-	H: network::ExHashT,
 {
 	type In = NetworkStream<
 		Box<dyn Stream<Item = network_gossip::TopicNotification, Error = ()> + Send + 'static>,
 	>;
 
 	fn messages_for(&self, topic: B::Hash) -> Self::In {
-		// Given that one can only communicate with the Substrate network via the `NetworkService` via message-passing,
-		// and given that methods on the network consensus gossip are not exposed but only reachable by passing a
-		// closure into `with_gossip` on the `NetworkService` this function needs to make use of the `NetworkStream`
-		// construction.
-		//
-		// We create a oneshot channel and pass the sender within a closure to the network. At some point in the future
-		// the network passes the message channel back through the oneshot channel. But the consumer of this function
-		// expects a stream, not a stream within a oneshot. This complexity is abstracted within `NetworkStream`,
-		// waiting for the oneshot to resolve and from there on acting like a normal message channel.
-		let (tx, rx) = oneshot::channel();
-		self.with_gossip(move |gossip, _| {
-			let inner_rx: Box<dyn Stream<Item = _, Error = ()> + Send> = Box::new(gossip
-				.messages_for(GRANDPA_ENGINE_ID, topic)
-				.map(|x| Ok(x))
-				.compat()
-			);
-			let _ = tx.send(inner_rx);
-		});
-		NetworkStream::PollingOneshot(rx)
+		let stream = self.messages_for(GRANDPA_ENGINE_ID, topic)
+			.map(|x| Ok(x))
+			.compat();
+		Box::new(stream)
 	}
 
 	fn register_validator(&self, validator: Arc<dyn network_gossip::Validator<B>>) {
