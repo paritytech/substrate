@@ -164,6 +164,7 @@ impl BuildStorage for (StorageOverlay, ChildrenStorageOverlay) {
 pub type ConsensusEngineId = [u8; 4];
 
 /// Signature verify that can work with any known signature types..
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Eq, PartialEq, Clone, Encode, Decode, RuntimeDebug)]
 pub enum MultiSignature {
 	/// An Ed25519 signature.
