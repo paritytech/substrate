@@ -31,16 +31,16 @@ use futures03::{
 	FutureExt as _, TryFutureExt as _,
 	StreamExt as _, TryStreamExt as _,
 };
-use keystore::{Store as Keystore};
+use keystore::Store as Keystore;
 use log::{info, warn};
 use network::{FinalityProofProvider, OnDemand, NetworkService, NetworkStateInfo, DhtEvent};
 use network::{config::BoxFinalityProofRequestBuilder, specialization::NetworkSpecialization};
 use parking_lot::{Mutex, RwLock};
-use primitives::{Blake2Hasher, H256, Hasher};
 use rpc;
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{
-	Block as BlockT, Extrinsic, ProvideRuntimeApi, NumberFor, One, Zero, Header, SaturatedConversion
+	Block as BlockT, Extrinsic, ProvideRuntimeApi, NumberFor, One, Zero, Header,
+	SaturatedConversion, HasherFor,
 };
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
 use std::{
@@ -117,19 +117,19 @@ type TLightClient<TBl, TRtApi, TExecDisp> = Client<
 /// Light client backend type.
 type TLightBackend<TBl> = client::light::backend::Backend<
 	client_db::light::LightStorage<TBl>,
-	Blake2Hasher,
+	HasherFor<TBl>,
 >;
 
 /// Light call executor type.
 type TLightCallExecutor<TBl, TExecDisp> = client::light::call_executor::GenesisCallExecutor<
 	client::light::backend::Backend<
 		client_db::light::LightStorage<TBl>,
-		Blake2Hasher
+		HasherFor<TBl>
 	>,
 	client::LocalCallExecutor<
 		client::light::backend::Backend<
 			client_db::light::LightStorage<TBl>,
-			Blake2Hasher
+			HasherFor<TBl>
 		>,
 		NativeExecutor<TExecDisp>
 	>,
@@ -138,7 +138,7 @@ type TLightCallExecutor<TBl, TExecDisp> = client::light::call_executor::GenesisC
 impl<TCfg, TGen, TCSExt> ServiceBuilder<(), (), TCfg, TGen, TCSExt, (), (), (), (), (), (), (), (), (), ()>
 where TGen: RuntimeGenesis, TCSExt: Extension {
 	/// Start the service builder with a configuration.
-	pub fn new_full<TBl: BlockT<Hash=H256>, TRtApi, TExecDisp: NativeExecutionDispatch>(
+	pub fn new_full<TBl: BlockT, TRtApi, TExecDisp: NativeExecutionDispatch>(
 		config: Configuration<TCfg, TGen, TCSExt>
 	) -> Result<ServiceBuilder<
 		TBl,
@@ -222,7 +222,7 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 	}
 
 	/// Start the service builder with a configuration.
-	pub fn new_light<TBl: BlockT<Hash=H256>, TRtApi, TExecDisp: NativeExecutionDispatch + 'static>(
+	pub fn new_light<TBl: BlockT, TRtApi, TExecDisp: NativeExecutionDispatch + 'static>(
 		config: Configuration<TCfg, TGen, TCSExt>
 	) -> Result<ServiceBuilder<
 		TBl,
@@ -270,7 +270,12 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 			client_db::light::LightStorage::new(db_settings)?
 		};
 		let light_blockchain = client::light::new_light_blockchain(db_storage);
-		let fetch_checker = Arc::new(client::light::new_fetch_checker(light_blockchain.clone(), executor.clone()));
+		let fetch_checker = Arc::new(
+			client::light::new_fetch_checker::<_, TBl, _>(
+				light_blockchain.clone(),
+				executor.clone(),
+			),
+		);
 		let fetcher = Arc::new(network::OnDemand::new(fetch_checker));
 		let backend = client::light::new_light_backend(light_blockchain);
 		let remote_blockchain = backend.remote_blockchain();
@@ -676,9 +681,9 @@ impl<
 	TBl, TRtApi, TCfg, TGen, TCSExt, Client<TBackend, TExec, TBl, TRtApi>,
 	TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc, Backend
 > where
-	TBl: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
-	TBackend: 'static + client::backend::Backend<TBl, Blake2Hasher> + Send,
-	TExec: 'static + client::CallExecutor<TBl, Blake2Hasher> + Send + Sync + Clone,
+	TBl: BlockT,
+	TBackend: 'static + client::backend::Backend<TBl> + Send,
+	TExec: 'static + client::CallExecutor<TBl> + Send + Sync + Clone,
 	TImpQu: 'static + ImportQueue<TBl>,
 	TRtApi: 'static + Send + Sync,
 {
@@ -698,9 +703,9 @@ impl<TBl, TRtApi, TCfg, TGen, TCSExt, TBackend, TExec, TFchr, TSc, TImpQu, TFprb
 	ServiceBuilderExport for ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCSExt, Client<TBackend, TExec, TBl, TRtApi>,
 		TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc, TBackend>
 where
-	TBl: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
-	TBackend: 'static + client::backend::Backend<TBl, Blake2Hasher> + Send,
-	TExec: 'static + client::CallExecutor<TBl, Blake2Hasher> + Send + Sync + Clone
+	TBl: BlockT,
+	TBackend: 'static + client::backend::Backend<TBl> + Send,
+	TExec: 'static + client::CallExecutor<TBl> + Send + Sync + Clone
 {
 	type Block = TBl;
 
@@ -721,9 +726,9 @@ impl<TBl, TRtApi, TCfg, TGen, TCSExt, TBackend, TExec, TFchr, TSc, TImpQu, TFprb
 	ServiceBuilderRevert for ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCSExt, Client<TBackend, TExec, TBl, TRtApi>,
 		TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc, TBackend>
 where
-	TBl: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
-	TBackend: 'static + client::backend::Backend<TBl, Blake2Hasher> + Send,
-	TExec: 'static + client::CallExecutor<TBl, Blake2Hasher> + Send + Sync + Clone
+	TBl: BlockT,
+	TBackend: 'static + client::backend::Backend<TBl> + Send,
+	TExec: 'static + client::CallExecutor<TBl> + Send + Sync + Clone
 {
 	type Block = TBl;
 
@@ -761,13 +766,13 @@ ServiceBuilder<
 		tx_pool_api::TaggedTransactionQueue<TBl> +
 		session::SessionKeys<TBl> +
 		sr_api::ApiExt<TBl, Error = client::error::Error>,
-	TBl: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
+	TBl: BlockT,
 	TRtApi: 'static + Send + Sync,
 	TCfg: Default,
 	TGen: RuntimeGenesis,
 	TCSExt: Extension,
-	TBackend: 'static + client::backend::Backend<TBl, Blake2Hasher> + Send,
-	TExec: 'static + client::CallExecutor<TBl, Blake2Hasher> + Send + Sync + Clone,
+	TBackend: 'static + client::backend::Backend<TBl> + Send,
+	TExec: 'static + client::CallExecutor<TBl> + Send + Sync + Clone,
 	TSc: Clone,
 	TImpQu: 'static + ImportQueue<TBl>,
 	TNetP: NetworkSpecialization<TBl>,
@@ -1160,12 +1165,12 @@ pub(crate) fn maintain_transaction_pool<Api, Backend, Block, Executor, PoolApi>(
 	transaction_pool: &TransactionPool<PoolApi>,
 	retracted: &[Block::Hash],
 ) -> error::Result<Box<dyn Future<Item = (), Error = ()> + Send>> where
-	Block: BlockT<Hash = <Blake2Hasher as primitives::Hasher>::Out>,
-	Backend: 'static + client::backend::Backend<Block, Blake2Hasher>,
+	Block: BlockT,
+	Backend: 'static + client::backend::Backend<Block>,
 	Client<Backend, Executor, Block, Api>: ProvideRuntimeApi,
 	<Client<Backend, Executor, Block, Api> as ProvideRuntimeApi>::Api:
 		tx_pool_api::TaggedTransactionQueue<Block>,
-	Executor: 'static + client::CallExecutor<Block, Blake2Hasher>,
+	Executor: 'static + client::CallExecutor<Block>,
 	PoolApi: 'static + txpool::ChainApi<Hash = Block::Hash, Block = Block>,
 	Api: 'static,
 {
@@ -1217,8 +1222,11 @@ mod tests {
 	#[test]
 	fn should_remove_transactions_from_the_pool() {
 		let (client, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
-		let client = Arc::new(client);
-		let pool = TransactionPool::new(Default::default(), ::transaction_pool::FullChainApi::new(client.clone()));
+		let mut client = Arc::new(client);
+		let pool = TransactionPool::new(
+			Default::default(),
+			transaction_pool::FullChainApi::new(client.clone()),
+		);
 		let transaction = Transfer {
 			amount: 5,
 			nonce: 0,
@@ -1254,8 +1262,11 @@ mod tests {
 	#[test]
 	fn should_add_reverted_transactions_to_the_pool() {
 		let (client, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
-		let client = Arc::new(client);
-		let pool = TransactionPool::new(Default::default(), ::transaction_pool::FullChainApi::new(client.clone()));
+		let mut client = Arc::new(client);
+		let pool = TransactionPool::new(
+			Default::default(),
+			transaction_pool::FullChainApi::new(client.clone()),
+		);
 		let transaction = Transfer {
 			amount: 5,
 			nonce: 0,

@@ -28,10 +28,7 @@ use rpc::{Result as RpcResult, futures::Future};
 
 use api::Subscriptions;
 use client::{Client, CallExecutor, light::{blockchain::RemoteBlockchain, fetcher::Fetcher}};
-use primitives::{
-	Blake2Hasher, Bytes, H256,
-	storage::{StorageKey, StorageData, StorageChangeSet},
-};
+use primitives::{Bytes, storage::{StorageKey, StorageData, StorageChangeSet}};
 use runtime_version::RuntimeVersion;
 use sr_primitives::{
 	traits::{Block as BlockT, ProvideRuntimeApi},
@@ -46,9 +43,9 @@ pub use api::state::*;
 /// State backend API.
 pub trait StateBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 	where
-		Block: BlockT<Hash=H256> + 'static,
-		B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-		E: client::CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
+		Block: BlockT + 'static,
+		B: client::backend::Backend<Block> + Send + Sync + 'static,
+		E: client::CallExecutor<Block> + Send + Sync + 'static,
 		RA: Send + Sync + 'static,
 {
 	/// Call runtime method at given block.
@@ -178,9 +175,9 @@ pub fn new_full<B, E, Block: BlockT, RA>(
 	subscriptions: Subscriptions,
 ) -> State<B, E, Block, RA>
 	where
-		Block: BlockT<Hash=H256> + 'static,
-		B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static + Clone,
+		Block: BlockT + 'static,
+		B: client::backend::Backend<Block> + Send + Sync + 'static,
+		E: CallExecutor<Block> + Send + Sync + 'static + Clone,
 		RA: Send + Sync + 'static,
 		Client<B, E, Block, RA>: ProvideRuntimeApi,
 		<Client<B, E, Block, RA> as ProvideRuntimeApi>::Api:
@@ -199,9 +196,9 @@ pub fn new_light<B, E, Block: BlockT, RA, F: Fetcher<Block>>(
 	fetcher: Arc<F>,
 ) -> State<B, E, Block, RA>
 	where
-		Block: BlockT<Hash=H256> + 'static,
-		B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static + Clone,
+		Block: BlockT + 'static,
+		B: client::backend::Backend<Block> + Send + Sync + 'static,
+		E: CallExecutor<Block> + Send + Sync + 'static + Clone,
 		RA: Send + Sync + 'static,
 		F: Send + Sync + 'static,
 {
@@ -222,9 +219,9 @@ pub struct State<B, E, Block, RA> {
 
 impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA>
 	where
-		Block: BlockT<Hash=H256> + 'static,
-		B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static + Clone,
+		Block: BlockT + 'static,
+		B: client::backend::Backend<Block> + Send + Sync + 'static,
+		E: CallExecutor<Block> + Send + Sync + 'static + Clone,
 		RA: Send + Sync + 'static,
 {
 	type Metadata = crate::metadata::Metadata;

@@ -47,15 +47,9 @@ use client::{
 		fetcher::{Fetcher, RemoteCallRequest, RemoteReadRequest, RemoteReadChildRequest},
 	},
 };
-use primitives::{
-	H256, Blake2Hasher, Bytes, OpaqueMetadata,
-	storage::{StorageKey, StorageData, StorageChangeSet},
-};
+use primitives::{Bytes, OpaqueMetadata, storage::{StorageKey, StorageData, StorageChangeSet}};
 use runtime_version::RuntimeVersion;
-use sr_primitives::{
-	generic::BlockId,
-	traits::Block as BlockT,
-};
+use sr_primitives::{generic::BlockId, traits::{Block as BlockT, HasherFor}};
 
 use super::{StateBackend, error::{FutureResult, Error}, client_err};
 
@@ -139,9 +133,9 @@ impl<Hash, V> SharedRequests<Hash, V> for SimpleSubscriptions<Hash, V> where
 
 impl<Block: BlockT, F: Fetcher<Block> + 'static, B, E, RA> LightState<Block, F, B, E, RA>
 	where
-		Block: BlockT<Hash=H256>,
-		B: Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static + Clone,
+		Block: BlockT,
+		B: Backend<Block> + Send + Sync + 'static,
+		E: CallExecutor<Block> + Send + Sync + 'static + Clone,
 		RA: Send + Sync + 'static,
 {
 	/// Create new state API backend for light nodes.
@@ -173,9 +167,9 @@ impl<Block: BlockT, F: Fetcher<Block> + 'static, B, E, RA> LightState<Block, F, 
 
 impl<Block, F, B, E, RA> StateBackend<B, E, Block, RA> for LightState<Block, F, B, E, RA>
 	where
-		Block: BlockT<Hash=H256>,
-		B: Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static + Clone,
+		Block: BlockT,
+		B: Backend<Block> + Send + Sync + 'static,
+		E: CallExecutor<Block> + Send + Sync + 'static + Clone,
 		RA: Send + Sync + 'static,
 		F: Fetcher<Block> + 'static
 {
@@ -226,7 +220,7 @@ impl<Block, F, B, E, RA> StateBackend<B, E, Block, RA> for LightState<Block, F, 
 		Box::new(self
 			.storage(block, key)
 			.and_then(|maybe_storage|
-				result(Ok(maybe_storage.map(|storage| Blake2Hasher::hash(&storage.0))))
+				result(Ok(maybe_storage.map(|storage| HasherFor::<Block>::hash(&storage.0))))
 			)
 		)
 	}
@@ -279,7 +273,7 @@ impl<Block, F, B, E, RA> StateBackend<B, E, Block, RA> for LightState<Block, F, 
 		Box::new(self
 			.child_storage(block, child_storage_key, key)
 			.and_then(|maybe_storage|
-				result(Ok(maybe_storage.map(|storage| Blake2Hasher::hash(&storage.0))))
+				result(Ok(maybe_storage.map(|storage| HasherFor::<Block>::hash(&storage.0))))
 			)
 		)
 	}
@@ -592,7 +586,7 @@ fn subscription_stream<
 	issue_request: IssueRequest,
 	compare_values: CompareValues,
 ) -> impl Stream<Item=N, Error=()> where
-	Block: BlockT<Hash=H256>,
+	Block: BlockT,
 	Requests: 'static + SharedRequests<Block::Hash, V>,
 	FutureBlocksStream: Stream<Item=Block::Hash, Error=()>,
 	V: Send + 'static + Clone,
@@ -695,13 +689,14 @@ fn ignore_error<F, T>(future: F) -> impl std::future::Future<Output=Result<Optio
 	future.then(|result| ready(match result {
 		Ok(result) => Ok(Some(result)),
 		Err(()) => Ok(None),
-	}))	
+	}))
 }
 
 #[cfg(test)]
 mod tests {
 	use rpc::futures::stream::futures_ordered;
 	use test_client::runtime::Block;
+	use primitives::H256;
 	use super::*;
 
 	#[test]

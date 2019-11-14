@@ -24,7 +24,6 @@ use grandpa::voter_set::VoterSet;
 use grandpa::{Error as GrandpaError};
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{NumberFor, Block as BlockT, Header as HeaderT};
-use primitives::{H256, Blake2Hasher};
 use fg_primitives::AuthorityId;
 
 use crate::{Commit, Error};
@@ -45,7 +44,7 @@ pub struct GrandpaJustification<Block: BlockT> {
 	votes_ancestries: Vec<Block::Header>,
 }
 
-impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
+impl<Block: BlockT> GrandpaJustification<Block> {
 	/// Create a GRANDPA justification from the given commit. This method
 	/// assumes the commit is valid and well-formed.
 	pub(crate) fn from_commit<B, E, RA>(
@@ -53,8 +52,8 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 		round: u64,
 		commit: Commit<Block>,
 	) -> Result<GrandpaJustification<Block>, Error> where
-		B: Backend<Block, Blake2Hasher>,
-		E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
+		B: Backend<Block>,
+		E: CallExecutor<Block> + Send + Sync,
 		RA: Send + Sync,
 	{
 		let mut votes_ancestries_hashes = HashSet::new();

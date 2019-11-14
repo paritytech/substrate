@@ -24,9 +24,9 @@ pub mod fetcher;
 use std::sync::Arc;
 
 use executor::RuntimeInfo;
-use primitives::{H256, Blake2Hasher, traits::CodeExecutor};
+use primitives::traits::CodeExecutor;
 use sr_primitives::BuildStorage;
-use sr_primitives::traits::Block as BlockT;
+use sr_primitives::traits::{Block as BlockT, HasherFor};
 
 use crate::call_executor::LocalCallExecutor;
 use crate::client::Client;
@@ -42,7 +42,7 @@ pub fn new_light_blockchain<B: BlockT, S: BlockchainStorage<B>>(storage: S) -> A
 }
 
 /// Create an instance of light client backend.
-pub fn new_light_backend<B, S>(blockchain: Arc<Blockchain<S>>) -> Arc<Backend<S, Blake2Hasher>>
+pub fn new_light_backend<B, S>(blockchain: Arc<Blockchain<S>>) -> Arc<Backend<S, HasherFor<B>>>
 	where
 		B: BlockT,
 		S: BlockchainStorage<B>,
@@ -52,15 +52,22 @@ pub fn new_light_backend<B, S>(blockchain: Arc<Blockchain<S>>) -> Arc<Backend<S,
 
 /// Create an instance of light client.
 pub fn new_light<B, S, GS, RA, E>(
-	backend: Arc<Backend<S, Blake2Hasher>>,
+	backend: Arc<Backend<S, HasherFor<B>>>,
 	genesis_storage: GS,
 	code_executor: E,
-) -> ClientResult<Client<Backend<S, Blake2Hasher>, GenesisCallExecutor<
-	Backend<S, Blake2Hasher>,
-	LocalCallExecutor<Backend<S, Blake2Hasher>, E>
->, B, RA>>
+) -> ClientResult<
+		Client<
+			Backend<S, HasherFor<B>>,
+			GenesisCallExecutor<
+				Backend<S, HasherFor<B>>,
+				LocalCallExecutor<Backend<S, HasherFor<B>>, E>
+			>,
+			B,
+			RA
+		>
+	>
 	where
-		B: BlockT<Hash=H256>,
+		B: BlockT,
 		S: BlockchainStorage<B> + 'static,
 		GS: BuildStorage,
 		E: CodeExecutor + RuntimeInfo,
@@ -74,7 +81,7 @@ pub fn new_light<B, S, GS, RA, E>(
 pub fn new_fetch_checker<E, B: BlockT, S: BlockchainStorage<B>>(
 	blockchain: Arc<Blockchain<S>>,
 	executor: E,
-) -> LightDataChecker<E, Blake2Hasher, B, S>
+) -> LightDataChecker<E, HasherFor<B>, B, S>
 	where
 		E: CodeExecutor,
 {

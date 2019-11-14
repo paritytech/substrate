@@ -134,7 +134,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 		I1: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		I2i: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		I2: IntoIterator<Item=(Vec<u8>, I2i)>,
-		<H as Hasher>::Out: Ord,
+		H::Out: Ord,
 	{
 		let mut txs: Self::Transaction = Default::default();
 		let mut child_roots: Vec<_> = Default::default();
@@ -380,7 +380,8 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 	}
 
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
-		self.inner.get(&None).map(|map| map.keys().filter(|key| key.starts_with(prefix)).map(|k| &**k).for_each(f));
+		self.inner.get(&None)
+			.map(|map| map.keys().filter(|key| key.starts_with(prefix)).map(|k| &**k).for_each(f));
 	}
 
 	fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], mut f: F) {

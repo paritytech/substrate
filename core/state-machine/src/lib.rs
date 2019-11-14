@@ -24,7 +24,7 @@ use hash_db::Hasher;
 use codec::{Decode, Encode};
 use primitives::{
 	storage::well_known_keys, NativeOrEncoded, NeverNativeValue, offchain::OffchainExt,
-	traits::{KeystoreExt, CodeExecutor}, hexdisplay::HexDisplay, hash::H256,
+	traits::{KeystoreExt, CodeExecutor}, hexdisplay::HexDisplay,
 };
 use overlayed_changes::OverlayedChangeSet;
 use externalities::Extensions;
@@ -140,8 +140,10 @@ impl ExecutionStrategy {
 				warn!(
 					"Consensus error between wasm {:?} and native {:?}. Using wasm.",
 					wasm_result,
-					native_result
+					native_result,
 				);
+				warn!("   Native result {:?}", native_result);
+				warn!("   Wasm result {:?}", wasm_result);
 				wasm_result
 			}),
 		}
@@ -164,7 +166,7 @@ fn always_untrusted_wasm<E, R: Decode>() -> ExecutionManager<DefaultHandler<R, E
 }
 
 /// The substrate state machine.
-pub struct StateMachine<'a, B, H, N, T, Exec> where H: Hasher<Out=H256>, B: Backend<H> {
+pub struct StateMachine<'a, B, H, N, T, Exec> where H: Hasher, B: Backend<H> {
 	backend: &'a B,
 	exec: &'a Exec,
 	method: &'a str,
@@ -176,7 +178,8 @@ pub struct StateMachine<'a, B, H, N, T, Exec> where H: Hasher<Out=H256>, B: Back
 }
 
 impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec> where
-	H: Hasher<Out=H256>,
+	H: Hasher,
+	H::Out: Ord + 'static + codec::Codec,
 	Exec: CodeExecutor,
 	B: Backend<H>,
 	T: ChangesTrieStorage<H, N>,
@@ -467,7 +470,8 @@ pub fn prove_execution<B, H, Exec>(
 ) -> Result<(Vec<u8>, StorageProof), Box<dyn Error>>
 where
 	B: Backend<H>,
-	H: Hasher<Out=H256>,
+	H: Hasher,
+	H::Out: Ord + 'static + codec::Codec,
 	Exec: CodeExecutor,
 {
 	let trie_backend = backend.as_trie_backend()
@@ -494,7 +498,8 @@ pub fn prove_execution_on_trie_backend<S, H, Exec>(
 ) -> Result<(Vec<u8>, StorageProof), Box<dyn Error>>
 where
 	S: trie_backend_essence::TrieBackendStorage<H>,
-	H: Hasher<Out=H256>,
+	H: Hasher,
+	H::Out: Ord + 'static + codec::Codec,
 	Exec: CodeExecutor,
 {
 	let proving_backend = proving_backend::ProvingBackend::new(trie_backend);
@@ -522,9 +527,9 @@ pub fn execution_proof_check<H, Exec>(
 	keystore: Option<KeystoreExt>,
 ) -> Result<Vec<u8>, Box<dyn Error>>
 where
-	H: Hasher<Out=H256>,
+	H: Hasher,
 	Exec: CodeExecutor,
-	H::Out: Ord + 'static,
+	H::Out: Ord + 'static + codec::Codec,
 {
 	let trie_backend = create_proof_check_backend::<H>(root.into(), proof)?;
 	execution_proof_check_on_trie_backend(&trie_backend, overlay, exec, method, call_data, keystore)
@@ -540,7 +545,8 @@ pub fn execution_proof_check_on_trie_backend<H, Exec>(
 	keystore: Option<KeystoreExt>,
 ) -> Result<Vec<u8>, Box<dyn Error>>
 where
-	H: Hasher<Out=H256>,
+	H: Hasher,
+	H::Out: Ord + 'static + codec::Codec,
 	Exec: CodeExecutor,
 {
 	let mut sm = StateMachine::<_, H, _, InMemoryChangesTrieStorage<H, u64>, Exec>::new(
@@ -561,7 +567,7 @@ pub fn prove_read<B, H, I>(
 ) -> Result<StorageProof, Box<dyn Error>>
 where
 	B: Backend<H>,
-	H: Hasher<Out=H256>,
+	H: Hasher,
 	H::Out: Ord,
 	I: IntoIterator,
 	I::Item: AsRef<[u8]>,

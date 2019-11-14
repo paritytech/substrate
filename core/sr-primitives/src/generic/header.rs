@@ -107,7 +107,7 @@ impl<Number, Hash> traits::Header for Header<Number, Hash> where
 	Number: Member + MaybeSerializeDeserialize + Debug + rstd::hash::Hash + MaybeDisplay +
 		SimpleArithmetic + Codec + Copy + Into<U256> + TryFrom<U256>,
 	Hash: HashT,
-	Hash::Output: Default + rstd::hash::Hash + Copy + Member +
+	Hash::Output: Default + rstd::hash::Hash + Copy + Member + Ord +
 		MaybeSerialize + Debug + MaybeDisplay + SimpleBitOps + Codec,
 {
 	type Number = Number;

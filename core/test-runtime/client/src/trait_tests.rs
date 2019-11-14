@@ -24,16 +24,17 @@ use std::sync::Arc;
 use crate::backend;
 use crate::block_builder_ext::BlockBuilderExt;
 use crate::blockchain::{Backend as BlockChainBackendT, HeaderBackend};
-use crate::{AccountKeyring, ClientExt, TestClientBuilder, TestClientBuilderExt};
+use crate::{AccountKeyring, ClientBlockImportExt, TestClientBuilder, TestClientBuilderExt};
 use generic_test_client::consensus::BlockOrigin;
-use primitives::Blake2Hasher;
 use runtime::{self, Transfer};
 use sr_primitives::generic::BlockId;
-use sr_primitives::traits::Block as BlockT;
+use sr_primitives::traits::{Block as BlockT, HasherFor};
 
 /// helper to test the `leaves` implementation for various backends
 pub fn test_leaves_for_backend<B: 'static>(backend: Arc<B>) where
-	B: backend::LocalBackend<runtime::Block, Blake2Hasher>,
+	B: backend::Backend<runtime::Block>,
+	// Rust bug: https://github.com/rust-lang/rust/issues/24159
+	<B as backend::Backend<runtime::Block>>::State: state_machine::Backend<HasherFor<runtime::Block>>,
 {
 	// block tree:
 	// G -> A1 -> A2 -> A3 -> A4 -> A5
@@ -41,7 +42,7 @@ pub fn test_leaves_for_backend<B: 'static>(backend: Arc<B>) where
 	//			  B2 -> C3
 	//		A1 -> D2
 
-	let client = TestClientBuilder::with_backend(backend.clone()).build();
+	let mut client = TestClientBuilder::with_backend(backend.clone()).build();
 	let blockchain = backend.blockchain();
 
 	let genesis_hash = client.info().chain.genesis_hash;
@@ -55,7 +56,8 @@ pub fn test_leaves_for_backend<B: 'static>(backend: Arc<B>) where
 	client.import(BlockOrigin::Own, a1.clone()).unwrap();
 	assert_eq!(
 		blockchain.leaves().unwrap(),
-		vec![a1.hash()]);
+		vec![a1.hash()],
+	);
 
 	// A1 -> A2
 	let a2 = client.new_block_at(
@@ -198,7 +200,9 @@ pub fn test_leaves_for_backend<B: 'static>(backend: Arc<B>) where
 
 /// helper to test the `children` implementation for various backends
 pub fn test_children_for_backend<B: 'static>(backend: Arc<B>) where
-	B: backend::LocalBackend<runtime::Block, Blake2Hasher>,
+	B: backend::LocalBackend<runtime::Block>,
+	// Rust bug: https://github.com/rust-lang/rust/issues/24159
+	<B as backend::Backend<runtime::Block>>::State: state_machine::Backend<HasherFor<runtime::Block>>,
 {
 	// block tree:
 	// G -> A1 -> A2 -> A3 -> A4 -> A5
@@ -206,7 +210,7 @@ pub fn test_children_for_backend<B: 'static>(backend: Arc<B>) where
 	//			  B2 -> C3
 	//		A1 -> D2
 
-	let client = TestClientBuilder::with_backend(backend.clone()).build();
+	let mut client = TestClientBuilder::with_backend(backend.clone()).build();
 	let blockchain = backend.blockchain();
 
 	// G -> A1
@@ -325,14 +329,16 @@ pub fn test_children_for_backend<B: 'static>(backend: Arc<B>) where
 }
 
 pub fn test_blockchain_query_by_number_gets_canonical<B: 'static>(backend: Arc<B>) where
-	B: backend::LocalBackend<runtime::Block, Blake2Hasher>,
+	B: backend::LocalBackend<runtime::Block>,
+	// Rust bug: https://github.com/rust-lang/rust/issues/24159
+	<B as backend::Backend<runtime::Block>>::State: state_machine::Backend<HasherFor<runtime::Block>>,
 {
 	// block tree:
 	// G -> A1 -> A2 -> A3 -> A4 -> A5
 	//		A1 -> B2 -> B3 -> B4
 	//			  B2 -> C3
 	//		A1 -> D2
-	let client = TestClientBuilder::with_backend(backend.clone()).build();
+	let mut client = TestClientBuilder::with_backend(backend.clone()).build();
 	let blockchain = backend.blockchain();
 
 	// G -> A1

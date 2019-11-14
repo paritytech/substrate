@@ -26,7 +26,7 @@ use sr_primitives::generic::BlockId;
 use super::*;
 
 fn prepare_good_block() -> (TestClient, Hash, u64, PeerId, IncomingBlock<Block>) {
-	let client = test_client::new();
+	let mut client = test_client::new();
 	let block = client.new_block(Default::default()).unwrap().bake().unwrap();
 	client.import(BlockOrigin::File, block).unwrap();
 

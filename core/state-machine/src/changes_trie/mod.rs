@@ -114,7 +114,7 @@ impl<T> BlockNumber for T where T:
 
 /// Block identifier that could be used to determine fork of this block.
 #[derive(Debug)]
-pub struct AnchorBlockId<Hash: ::std::fmt::Debug, Number: BlockNumber> {
+pub struct AnchorBlockId<Hash: std::fmt::Debug, Number: BlockNumber> {
 	/// Hash of this block.
 	pub hash: Hash,
 	/// Number of this block.

@@ -22,13 +22,8 @@ use rpc::futures::future::{result, Future, Either};
 
 use api::Subscriptions;
 use client::{
-	self, Client,
-	light::{
-		fetcher::{Fetcher, RemoteBodyRequest},
-		blockchain::RemoteBlockchain,
-	},
+	self, Client, light::{fetcher::{Fetcher, RemoteBodyRequest}, blockchain::RemoteBlockchain},
 };
-use primitives::{H256, Blake2Hasher};
 use sr_primitives::{
 	generic::{BlockId, SignedBlock},
 	traits::{Block as BlockT},
@@ -67,9 +62,9 @@ impl<B, E, Block: BlockT, RA, F: Fetcher<Block>> LightChain<B, E, Block, RA, F> 
 }
 
 impl<B, E, Block, RA, F> ChainBackend<B, E, Block, RA> for LightChain<B, E, Block, RA, F> where
-	Block: BlockT<Hash=H256> + 'static,
-	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-	E: client::CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
+	Block: BlockT + 'static,
+	B: client::backend::Backend<Block> + Send + Sync + 'static,
+	E: client::CallExecutor<Block> + Send + Sync + 'static,
 	RA: Send + Sync + 'static,
 	F: Fetcher<Block> + Send + Sync + 'static,
 {

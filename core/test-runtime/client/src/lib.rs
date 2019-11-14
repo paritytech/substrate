@@ -30,12 +30,15 @@ pub use runtime;
 
 use primitives::sr25519;
 use runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
-use sr_primitives::traits::{Block as BlockT, Header as HeaderT, Hash as HashT};
+use sr_primitives::traits::{Block as BlockT, Header as HeaderT, Hash as HashT, HasherFor};
 
 /// A prelude to import in tests.
 pub mod prelude {
 	// Trait extensions
-	pub use super::{BlockBuilderExt, DefaultTestClientBuilderExt, TestClientBuilderExt, ClientExt};
+	pub use super::{
+		BlockBuilderExt, DefaultTestClientBuilderExt, TestClientBuilderExt, ClientExt,
+		ClientBlockImportExt,
+	};
 	// Client structs
 	pub use super::{
 		TestClient, TestClientBuilder, Backend, LightBackend,
@@ -78,7 +81,7 @@ pub type LightExecutor = client::light::call_executor::GenesisCallExecutor<
 	client::LocalCallExecutor<
 		client::light::backend::Backend<
 			client_db::light::LightStorage<runtime::Block>,
-			Blake2Hasher,
+			HasherFor<runtime::Block>
 		>,
 		NativeExecutor<LocalExecutor>
 	>
@@ -156,10 +159,7 @@ pub trait DefaultTestClientBuilderExt: Sized {
 	fn new() -> Self;
 }
 
-impl DefaultTestClientBuilderExt for TestClientBuilder<
-	Executor,
-	Backend,
-> {
+impl DefaultTestClientBuilderExt for TestClientBuilder<Executor, Backend> {
 	fn new() -> Self {
 		Self::with_default_backend()
 	}
@@ -167,63 +167,25 @@ impl DefaultTestClientBuilderExt for TestClientBuilder<
 
 /// A `test-runtime` extensions to `TestClientBuilder`.
 pub trait TestClientBuilderExt<B>: Sized {
+	fn genesis_init_mut(&mut self) -> &mut GenesisParameters;
+
 	/// Enable or disable support for changes trie in genesis.
-	fn set_support_changes_trie(self, support_changes_trie: bool) -> Self;
+	fn set_support_changes_trie(mut self, support_changes_trie: bool) -> Self {
+		self.genesis_init_mut().support_changes_trie = support_changes_trie;
+		self
+	}
 
 	/// Override the default value for Wasm heap pages.
-	fn set_heap_pages(self, heap_pages: u64) -> Self;
+	fn set_heap_pages(mut self, heap_pages: u64) -> Self {
+		self.genesis_init_mut().heap_pages_override = Some(heap_pages);
+		self
+	}
 
 	/// Add an extra value into the genesis storage.
 	///
 	/// # Panics
 	///
 	/// Panics if the key is empty.
-	fn add_extra_child_storage<SK: Into<Vec<u8>>, K: Into<Vec<u8>>, V: Into<Vec<u8>>>(
-		self,
-		storage_key: SK,
-		key: K,
-		value: V,
-	) -> Self;
-
-	/// Add an extra child value into the genesis storage.
-	///
-	/// # Panics
-	///
-	/// Panics if the key is empty.
-	fn add_extra_storage<K: Into<Vec<u8>>, V: Into<Vec<u8>>>(self, key: K, value: V) -> Self;
-
-	/// Build the test client.
-	fn build(self) -> Client<B> {
-		self.build_with_longest_chain().0
-	}
-
-	/// Build the test client and longest chain selector.
-	fn build_with_longest_chain(self) -> (Client<B>, client::LongestChain<B, runtime::Block>);
-}
-
-impl<B> TestClientBuilderExt<B> for TestClientBuilder<
-	client::LocalCallExecutor<B, executor::NativeExecutor<LocalExecutor>>,
-	B
-> where
-	B: client::backend::Backend<runtime::Block, Blake2Hasher>,
-{
-	fn set_heap_pages(mut self, heap_pages: u64) -> Self {
-		self.genesis_init_mut().heap_pages_override = Some(heap_pages);
-		self
-	}
-
-	fn set_support_changes_trie(mut self, support_changes_trie: bool) -> Self {
-		self.genesis_init_mut().support_changes_trie = support_changes_trie;
-		self
-	}
-
-	fn add_extra_storage<K: Into<Vec<u8>>, V: Into<Vec<u8>>>(mut self, key: K, value: V) -> Self {
-		let key = key.into();
-		assert!(!key.is_empty());
-		self.genesis_init_mut().extra_storage.insert(key, value.into());
-		self
-	}
-
 	fn add_extra_child_storage<SK: Into<Vec<u8>>, K: Into<Vec<u8>>, V: Into<Vec<u8>>>(
 		mut self,
 		storage_key: SK,
@@ -241,6 +203,38 @@ impl<B> TestClientBuilderExt<B> for TestClientBuilder<
 		self
 	}
 
+	/// Add an extra child value into the genesis storage.
+	///
+	/// # Panics
+	///
+	/// Panics if the key is empty.
+	fn add_extra_storage<K: Into<Vec<u8>>, V: Into<Vec<u8>>>(mut self, key: K, value: V) -> Self {
+		let key = key.into();
+		assert!(!key.is_empty());
+		self.genesis_init_mut().extra_storage.insert(key, value.into());
+		self
+	}
+
+	/// Build the test client.
+	fn build(self) -> Client<B> {
+		self.build_with_longest_chain().0
+	}
+
+	/// Build the test client and longest chain selector.
+	fn build_with_longest_chain(self) -> (Client<B>, client::LongestChain<B, runtime::Block>);
+}
+
+impl<B> TestClientBuilderExt<B> for TestClientBuilder<
+	client::LocalCallExecutor<B, executor::NativeExecutor<LocalExecutor>>,
+	B
+> where
+	B: client::backend::Backend<runtime::Block>,
+	// Rust bug: https://github.com/rust-lang/rust/issues/24159
+	<B as client::backend::Backend<runtime::Block>>::State: state_machine::Backend<HasherFor<runtime::Block>>,
+{
+	fn genesis_init_mut(&mut self) -> &mut GenesisParameters {
+		Self::genesis_init_mut(self)
+	}
 
 	fn build_with_longest_chain(self) -> (Client<B>, client::LongestChain<B, runtime::Block>) {
 		self.build_with_native_executor(None)

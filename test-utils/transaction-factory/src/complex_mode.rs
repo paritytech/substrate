@@ -44,7 +44,6 @@ use log::info;
 use client::Client;
 use block_builder_api::BlockBuilder;
 use sr_api::ConstructRuntimeApi;
-use primitives::{Blake2Hasher, Hasher};
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{Block as BlockT, ProvideRuntimeApi, One, Zero};
 
@@ -59,9 +58,9 @@ pub fn next<RA, Backend, Exec, Block, RtApi>(
 	prior_block_id: BlockId<Block>,
 ) -> Option<Block>
 where
-	Block: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
-	Exec: client::CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
-	Backend: client::backend::Backend<Block, Blake2Hasher> + Send,
+	Block: BlockT,
+	Exec: client::CallExecutor<Block> + Send + Sync + Clone,
+	Backend: client::backend::Backend<Block> + Send,
 	Client<Backend, Exec, Block, RtApi>: ProvideRuntimeApi,
 	<Client<Backend, Exec, Block, RtApi> as ProvideRuntimeApi>::Api:
 		BlockBuilder<Block, Error = client::error::Error>,

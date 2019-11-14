@@ -22,7 +22,7 @@ pub mod client_ext;
 
 pub use client::{ExecutionStrategies, blockchain, backend, self};
 pub use client_db::{Backend, self};
-pub use client_ext::ClientExt;
+pub use client_ext::{ClientExt, ClientBlockImportExt};
 pub use consensus;
 pub use executor::{NativeExecutor, WasmExecutionMethod, self};
 pub use keyring::{
@@ -36,7 +36,6 @@ pub use state_machine::ExecutionStrategy;
 
 use std::sync::Arc;
 use std::collections::HashMap;
-use hash_db::Hasher;
 use primitives::storage::well_known_keys;
 use sr_primitives::traits::Block as BlockT;
 use client::LocalCallExecutor;
@@ -69,25 +68,14 @@ pub struct TestClientBuilder<Executor, Backend, G: GenesisInit> {
 	keystore: Option<BareCryptoStorePtr>,
 }
 
-impl<Block, Executor, G: GenesisInit> Default for TestClientBuilder<
-	Executor,
-	Backend<Block>,
-	G,
-> where
-	Block: BlockT<Hash=<Blake2Hasher as Hasher>::Out>,
-{
+impl<Block: BlockT, Executor, G: GenesisInit> Default
+	for TestClientBuilder<Executor, Backend<Block>, G> {
 	fn default() -> Self {
 		Self::with_default_backend()
 	}
 }
 
-impl<Block, Executor, G: GenesisInit> TestClientBuilder<
-	Executor,
-	Backend<Block>,
-	G,
-> where
-	Block: BlockT<Hash=<Blake2Hasher as Hasher>::Out>,
-{
+impl<Block: BlockT, Executor, G: GenesisInit> TestClientBuilder<Executor, Backend<Block>, G> {
 	/// Create new `TestClientBuilder` with default backend.
 	pub fn with_default_backend() -> Self {
 		let backend = Arc::new(Backend::new_test(std::u32::MAX, std::u64::MAX));
@@ -137,7 +125,7 @@ impl<Executor, Backend, G: GenesisInit> TestClientBuilder<Executor, Backend, G> 
 		child_key: impl AsRef<[u8]>,
 		value: impl AsRef<[u8]>,
 	) -> Self {
-		let entry = self.child_storage_extension.entry(key.as_ref().to_vec()).or_insert_with(Vec::new);
+		let entry = self.child_storage_extension.entry(key.as_ref().to_vec()).or_default();
 		entry.push((child_key.as_ref().to_vec(), value.as_ref().to_vec()));
 		self
 	}
@@ -162,17 +150,12 @@ impl<Executor, Backend, G: GenesisInit> TestClientBuilder<Executor, Backend, G> 
 		self,
 		executor: Executor,
 	) -> (
-		client::Client<
-			Backend,
-			Executor,
-			Block,
-			RuntimeApi,
-		>,
+		client::Client<Backend, Executor, Block, RuntimeApi>,
 		client::LongestChain<Backend, Block>,
 	) where
-		Executor: client::CallExecutor<Block, Blake2Hasher>,
-		Backend: client::backend::Backend<Block, Blake2Hasher>,
-		Block: BlockT<Hash=<Blake2Hasher as Hasher>::Out>,
+		Executor: client::CallExecutor<Block>,
+		Backend: client::backend::Backend<Block>,
+		Block: BlockT,
 	{
 
 		let storage = {
@@ -223,8 +206,8 @@ impl<E, Backend, G: GenesisInit> TestClientBuilder<
 	) where
 		I: Into<Option<NativeExecutor<E>>>,
 		E: executor::NativeExecutionDispatch,
-		Backend: client::backend::Backend<Block, Blake2Hasher>,
-		Block: BlockT<Hash=<Blake2Hasher as Hasher>::Out>,
+		Backend: client::backend::Backend<Block>,
+		Block: BlockT,
 	{
 		let executor = executor.into().unwrap_or_else(||
 			NativeExecutor::new(WasmExecutionMethod::Interpreted, None)

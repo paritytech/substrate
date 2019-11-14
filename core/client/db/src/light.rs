@@ -32,9 +32,8 @@ use client::cht;
 use client::error::{Error as ClientError, Result as ClientResult};
 use client::light::blockchain::Storage as LightBlockchainStorage;
 use codec::{Decode, Encode};
-use primitives::Blake2Hasher;
 use sr_primitives::generic::{DigestItem, BlockId};
-use sr_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One, NumberFor};
+use sr_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One, NumberFor, HasherFor};
 use header_metadata::{CachedHeaderMetadata, HeaderMetadata, HeaderMetadataCache};
 use crate::cache::{DbCacheSync, DbCache, ComplexBlockId, EntryType as CacheEntryType};
 use crate::utils::{self, meta_keys, Meta, db_err, read_db, block_id_to_lookup_key, read_meta};
@@ -302,7 +301,7 @@ impl<Block: BlockT> LightStorage<Block> {
 				Some(old_current_num)
 			});
 
-			let new_header_cht_root = cht::compute_root::<Block::Header, Blake2Hasher, _>(
+			let new_header_cht_root = cht::compute_root::<Block::Header, HasherFor<Block>, _>(
 				cht::size(), new_cht_number, cht_range.map(|num| self.hash(num))
 			)?;
 			transaction.put(
@@ -319,7 +318,7 @@ impl<Block: BlockT> LightStorage<Block> {
 					current_num = current_num + One::one();
 					Some(old_current_num)
 				});
-				let new_changes_trie_cht_root = cht::compute_root::<Block::Header, Blake2Hasher, _>(
+				let new_changes_trie_cht_root = cht::compute_root::<Block::Header, HasherFor<Block>, _>(
 					cht::size(), new_cht_number, cht_range
 						.map(|num| self.changes_trie_root(BlockId::Number(num)))
 				)?;

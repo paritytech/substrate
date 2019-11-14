@@ -33,7 +33,7 @@ use futures03::{StreamExt as _, compat::Compat, future::ready};
 use api::Subscriptions;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use codec::{Encode, Decode};
-use primitives::{Bytes, Blake2Hasher, H256, traits::BareCryptoStorePtr};
+use primitives::{Bytes, traits::BareCryptoStorePtr};
 use sr_primitives::{generic, traits::{self, ProvideRuntimeApi}};
 use transaction_pool::{
 	txpool::{
@@ -81,10 +81,10 @@ impl<B, E, P, RA> Author<B, E, P, RA> where P: PoolChainApi + Sync + Send + 'sta
 }
 
 impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> where
-	B: client::backend::Backend<<P as PoolChainApi>::Block, Blake2Hasher> + Send + Sync + 'static,
-	E: client::CallExecutor<<P as PoolChainApi>::Block, Blake2Hasher> + Send + Sync + 'static,
+	B: client::backend::Backend<<P as PoolChainApi>::Block> + Send + Sync + 'static,
+	E: client::CallExecutor<<P as PoolChainApi>::Block> + Send + Sync + 'static,
 	P: PoolChainApi + Sync + Send + 'static,
-	P::Block: traits::Block<Hash=H256>,
+	P::Block: traits::Block,
 	P::Error: 'static,
 	RA: Send + Sync + 'static,
 	Client<B, E, P::Block, RA>: ProvideRuntimeApi,

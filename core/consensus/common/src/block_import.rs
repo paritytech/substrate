@@ -185,7 +185,7 @@ impl<Block: BlockT> BlockImportParams<Block> {
 
 /// Block import trait.
 pub trait BlockImport<B: BlockT> {
-	type Error: ::std::error::Error + Send + 'static;
+	type Error: std::error::Error + Send + 'static;
 
 	/// Check block preconditions.
 	fn check_block(
@@ -227,7 +227,7 @@ impl<B: BlockT> BlockImport<B> for crate::import_queue::BoxBlockImport<B> {
 }
 
 impl<B: BlockT, T, E: std::error::Error + Send + 'static> BlockImport<B> for Arc<T>
-where for<'r> &'r T: BlockImport<B, Error = E>
+	where for<'r> &'r T: BlockImport<B, Error = E>
 {
 	type Error = E;
 
@@ -249,7 +249,7 @@ where for<'r> &'r T: BlockImport<B, Error = E>
 
 /// Justification import trait
 pub trait JustificationImport<B: BlockT> {
-	type Error: ::std::error::Error + Send + 'static;
+	type Error: std::error::Error + Send + 'static;
 
 	/// Called by the import queue when it is started. Returns a list of justifications to request
 	/// from the network.

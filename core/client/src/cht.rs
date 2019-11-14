@@ -317,7 +317,7 @@ pub fn decode_cht_value(value: &[u8]) -> Option<H256> {
 
 #[cfg(test)]
 mod tests {
-	use primitives::{Blake2Hasher};
+	use primitives::Blake2Hasher;
 	use test_client::runtime::Header;
 	use super::*;
 

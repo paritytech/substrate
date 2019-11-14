@@ -44,12 +44,13 @@
 //! let future = proposer.propose(
 //! 	Default::default(),
 //! 	Default::default(),
-//! 	Duration::from_secs(2)
+//! 	Duration::from_secs(2),
+//! 	false,
 //! );
 //!
 //! // We wait until the proposition is performed.
 //! let block = futures::executor::block_on(future).unwrap();
-//! println!("Generated block: {:?}", block);
+//! println!("Generated block: {:?}", block.block);
 //! ```
 //!
 

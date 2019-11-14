@@ -23,7 +23,7 @@ use std::future::Future;
 
 use hash_db::{HashDB, Hasher, EMPTY_PREFIX};
 use codec::{Decode, Encode};
-use primitives::{ChangesTrieConfiguration, convert_hash, traits::CodeExecutor, H256};
+use primitives::{ChangesTrieConfiguration, convert_hash, traits::CodeExecutor};
 use sr_primitives::traits::{
 	Block as BlockT, Header as HeaderT, Hash, HashFor, NumberFor,
 	SimpleArithmetic, CheckedConversion, Zero,
@@ -372,7 +372,8 @@ impl<E, Block, H, S> FetchChecker<Block> for LightDataChecker<E, H, Block, S>
 	where
 		Block: BlockT,
 		E: CodeExecutor,
-		H: Hasher<Out=H256>,
+		H: Hasher,
+		H::Out: Ord + codec::Codec + 'static,
 		S: BlockchainStorage<Block>,
 {
 	fn check_header_proof(
@@ -388,8 +389,8 @@ impl<E, Block, H, S> FetchChecker<Block> for LightDataChecker<E, H, Block, S>
 			request.cht_root,
 			request.block,
 			remote_header_hash,
-			remote_proof)
-			.map(|_| remote_header)
+			remote_proof,
+		).map(|_| remote_header)
 	}
 
 	fn check_read_proof(
@@ -506,7 +507,7 @@ pub mod tests {
 	use executor::{NativeExecutor, WasmExecutionMethod};
 	use crate::error::Error as ClientError;
 	use test_client::{
-		self, ClientExt, blockchain::HeaderBackend, AccountKeyring,
+		self, ClientBlockImportExt, blockchain::HeaderBackend, AccountKeyring,
 		runtime::{self, Hash, Block, Header, Extrinsic}
 	};
 	use consensus::BlockOrigin;
@@ -651,13 +652,15 @@ pub mod tests {
 
 	fn prepare_for_header_proof_check(insert_cht: bool) -> (TestChecker, Hash, Header, StorageProof) {
 		// prepare remote client
-		let remote_client = test_client::new();
+		let mut remote_client = test_client::new();
 		let mut local_headers_hashes = Vec::new();
 		for i in 0..4 {
-			let builder = remote_client.new_block(Default::default()).unwrap();
-			remote_client.import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
-			local_headers_hashes.push(remote_client.block_hash(i + 1)
-				.map_err(|_| ClientError::Backend("TestError".into())));
+			let block = remote_client.new_block(Default::default()).unwrap().bake().unwrap();
+			remote_client.import(BlockOrigin::Own, block).unwrap();
+			local_headers_hashes.push(
+				remote_client.block_hash(i + 1)
+					.map_err(|_| ClientError::Backend("TestError".into()))
+			);
 		}
 
 		// 'fetch' header proof from remote node

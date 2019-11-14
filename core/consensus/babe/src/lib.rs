@@ -73,7 +73,7 @@ use sr_primitives::traits::{
 };
 use keystore::KeyStorePtr;
 use parking_lot::Mutex;
-use primitives::{Blake2Hasher, H256, Pair};
+use primitives::Pair;
 use inherents::{InherentDataProviders, InherentData};
 use substrate_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG};
 use consensus_common::{
@@ -282,15 +282,15 @@ pub fn start_babe<B, C, SC, E, I, SO, Error>(BabeParams {
 	impl futures01::Future<Item=(), Error=()>,
 	consensus_common::Error,
 > where
-	B: BlockT<Hash=H256>,
+	B: BlockT,
 	C: ProvideRuntimeApi + ProvideCache<B> + ProvideUncles<B> + BlockchainEvents<B>
-		+ HeaderBackend<B> + HeaderMetadata<B, Error=ClientError> + Send + Sync + 'static,
+		+ HeaderBackend<B> + HeaderMetadata<B, Error = ClientError> + Send + Sync + 'static,
 	C::Api: BabeApi<B>,
 	SC: SelectChain<B> + 'static,
-	E: Environment<B, Error=Error> + Send + Sync,
-	E::Proposer: Proposer<B, Error=Error>,
-	I: BlockImport<B,Error=ConsensusError> + Send + Sync + 'static,
-	Error: std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
+	E: Environment<B, Error = Error> + Send + Sync,
+	E::Proposer: Proposer<B, Error = Error>,
+	I: BlockImport<B, Error = ConsensusError> + Send + Sync + 'static,
+	Error: std::error::Error + Send + From<consensus_common::Error> + From<I::Error> + 'static,
 	SO: SyncOracle + Send + Sync + Clone,
 {
 	let config = babe_link.config;
@@ -337,14 +337,14 @@ struct BabeWorker<B: BlockT, C, E, I, SO> {
 }
 
 impl<B, C, E, I, Error, SO> slots::SimpleSlotWorker<B> for BabeWorker<B, C, E, I, SO> where
-	B: BlockT<Hash=H256>,
+	B: BlockT,
 	C: ProvideRuntimeApi + ProvideCache<B> + HeaderBackend<B> + HeaderMetadata<B, Error=ClientError>,
 	C::Api: BabeApi<B>,
-	E: Environment<B, Error=Error>,
-	E::Proposer: Proposer<B, Error=Error>,
+	E: Environment<B, Error = Error>,
+	E::Proposer: Proposer<B, Error = Error>,
 	I: BlockImport<B> + Send + Sync + 'static,
 	SO: SyncOracle + Send + Clone,
-	Error: std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
+	Error: std::error::Error + Send + From<consensus_common::Error> + From<I::Error> + 'static,
 {
 	type EpochData = Epoch;
 	type Claim = (BabePreDigest, AuthorityPair);
@@ -360,7 +360,11 @@ impl<B, C, E, I, Error, SO> slots::SimpleSlotWorker<B> for BabeWorker<B, C, E, I
 		self.block_import.clone()
 	}
 
-	fn epoch_data(&self, parent: &B::Header, slot_number: u64) -> Result<Self::EpochData, consensus_common::Error> {
+	fn epoch_data(
+		&self,
+		parent: &B::Header,
+		slot_number: u64,
+	) -> Result<Self::EpochData, consensus_common::Error> {
 		self.epoch_changes.lock().epoch_for_child_of(
 			descendent_query(&*self.client),
 			&parent.hash(),
@@ -449,7 +453,7 @@ impl<B, C, E, I, Error, SO> slots::SimpleSlotWorker<B> for BabeWorker<B, C, E, I
 }
 
 impl<B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<B, C, E, I, SO> where
-	B: BlockT<Hash=H256>,
+	B: BlockT,
 	C: ProvideRuntimeApi + ProvideCache<B> + HeaderBackend<B> + HeaderMetadata<B, Error=ClientError> + Send + Sync,
 	C::Api: BabeApi<B>,
 	E: Environment<B, Error=Error> + Send + Sync,
@@ -615,9 +619,9 @@ fn median_algorithm(
 }
 
 impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA> where
-	Block: BlockT<Hash=H256>,
-	B: Backend<Block, Blake2Hasher> + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
+	Block: BlockT,
+	B: Backend<Block> + 'static,
+	E: CallExecutor<Block> + 'static + Clone + Send + Sync,
 	RA: Send + Sync,
 	PRA: ProvideRuntimeApi + Send + Sync + AuxStore + ProvideCache<Block>,
 	PRA::Api: BlockBuilderApi<Block, Error = client::error::Error>
@@ -822,11 +826,12 @@ impl<B, E, Block: BlockT, I, RA, PRA> BabeBlockImport<B, E, Block, I, RA, PRA> {
 }
 
 impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block, I, RA, PRA> where
-	Block: BlockT<Hash=H256>,
+	Block: BlockT,
 	I: BlockImport<Block> + Send + Sync,
 	I::Error: Into<ConsensusError>,
-	B: Backend<Block, Blake2Hasher> + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
+	B: Backend<Block> + 'static,
+	E: CallExecutor<Block> + 'static + Clone + Send + Sync,
+	Client<B, E, Block, RA>: AuxStore,
 	RA: Send + Sync,
 	PRA: ProvideRuntimeApi + ProvideCache<Block>,
 	PRA::Api: BabeApi<Block>,
@@ -1046,9 +1051,9 @@ fn prune_finalized<B, E, Block, RA>(
 	client: &Client<B, E, Block, RA>,
 	epoch_changes: &mut EpochChangesFor<Block>,
 ) -> Result<(), ConsensusError> where
-	Block: BlockT<Hash=H256>,
-	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
-	B: Backend<Block, Blake2Hasher>,
+	Block: BlockT,
+	E: CallExecutor<Block> + Send + Sync,
+	B: Backend<Block>,
 	RA: Send + Sync,
 {
 	let info = client.info().chain;
@@ -1080,15 +1085,16 @@ fn prune_finalized<B, E, Block, RA>(
 ///
 /// Also returns a link object used to correctly instantiate the import queue
 /// and background worker.
-pub fn block_import<B, E, Block: BlockT<Hash=H256>, I, RA, PRA>(
+pub fn block_import<B, E, Block: BlockT, I, RA, PRA>(
 	config: Config,
 	wrapped_block_import: I,
 	client: Arc<Client<B, E, Block, RA>>,
 	api: Arc<PRA>,
 ) -> ClientResult<(BabeBlockImport<B, E, Block, I, RA, PRA>, BabeLink<Block>)> where
-	B: Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
+	B: Backend<Block>,
+	E: CallExecutor<Block> + Send + Sync,
 	RA: Send + Sync,
+	Client<B, E, Block, RA>: AuxStore,
 {
 	let epoch_changes = aux_schema::load_epoch_changes(&*client)?;
 	let link = BabeLink {
@@ -1125,7 +1131,7 @@ pub fn block_import<B, E, Block: BlockT<Hash=H256>, I, RA, PRA>(
 ///
 /// The block import object provided must be the `BabeBlockImport` or a wrapper
 /// of it, otherwise crucial import logic will be omitted.
-pub fn import_queue<B, E, Block: BlockT<Hash=H256>, I, RA, PRA>(
+pub fn import_queue<B, E, Block: BlockT, I, RA, PRA>(
 	babe_link: BabeLink<Block>,
 	block_import: I,
 	justification_import: Option<BoxJustificationImport<Block>>,
@@ -1134,9 +1140,9 @@ pub fn import_queue<B, E, Block: BlockT<Hash=H256>, I, RA, PRA>(
 	api: Arc<PRA>,
 	inherent_data_providers: InherentDataProviders,
 ) -> ClientResult<BabeImportQueue<Block>> where
-	B: Backend<Block, Blake2Hasher> + 'static,
+	B: Backend<Block> + 'static,
 	I: BlockImport<Block,Error=ConsensusError> + Send + Sync + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync + 'static,
+	E: CallExecutor<Block> + Clone + Send + Sync + 'static,
 	RA: Send + Sync + 'static,
 	PRA: ProvideRuntimeApi + ProvideCache<Block> + Send + Sync + AuxStore + 'static,
 	PRA::Api: BlockBuilderApi<Block> + BabeApi<Block> + ApiExt<Block, Error = client::error::Error>,
@@ -1174,7 +1180,7 @@ pub mod test_helpers {
 		keystore: &KeyStorePtr,
 		link: &BabeLink<B>,
 	) -> Option<BabePreDigest> where
-		B: BlockT<Hash=H256>,
+		B: BlockT,
 		C: ProvideRuntimeApi + ProvideCache<B> + HeaderBackend<B> + HeaderMetadata<B, Error=ClientError>,
 		C::Api: BabeApi<B>,
 	{

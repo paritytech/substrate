@@ -533,7 +533,7 @@ fn propose_and_import_block(
 	slot_number: Option<SlotNumber>,
 	proposer_factory: &mut DummyFactory,
 	block_import: &mut BoxBlockImport<TestBlock>,
-) -> H256 {
+) -> primitives::H256 {
 	let mut proposer = proposer_factory.init(parent).unwrap();
 
 	let slot_number = slot_number.unwrap_or_else(|| {

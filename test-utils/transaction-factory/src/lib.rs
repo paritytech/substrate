@@ -35,7 +35,6 @@ use consensus_common::{
 };
 use consensus_common::block_import::BlockImport;
 use codec::{Decode, Encode};
-use primitives::{Blake2Hasher, Hasher};
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{
 	Block as BlockT, Header as HeaderT, ProvideRuntimeApi, SimpleArithmetic,
@@ -100,16 +99,16 @@ pub fn factory<RA, Backend, Exec, Block, RtApi, Sc>(
 	select_chain: &Sc,
 ) -> cli::error::Result<()>
 where
-	Block: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
-	Exec: client::CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
-	Backend: client::backend::Backend<Block, Blake2Hasher> + Send,
+	Block: BlockT,
+	Exec: client::CallExecutor<Block> + Send + Sync + Clone,
+	Backend: client::backend::Backend<Block> + Send,
 	Client<Backend, Exec, Block, RtApi>: ProvideRuntimeApi,
 	<Client<Backend, Exec, Block, RtApi> as ProvideRuntimeApi>::Api:
 		BlockBuilder<Block, Error = client::error::Error>,
 	RtApi: ConstructRuntimeApi<Block, Client<Backend, Exec, Block, RtApi>> + Send + Sync,
 	Sc: SelectChain<Block>,
-	RA: RuntimeAdapter,
-	<<RA as RuntimeAdapter>::Block as BlockT>::Hash: From<primitives::H256>,
+	RA: RuntimeAdapter<Block = Block>,
+	Block::Hash: From<primitives::H256>,
 {
 	if *factory_state.mode() != Mode::MasterToNToM && factory_state.rounds() > RA::Number::one() {
 		let msg = "The factory can only be used with rounds set to 1 in this mode.".into();
@@ -144,7 +143,7 @@ where
 	} {
 		best_hash = block.header().hash();
 		best_block_id = BlockId::<Block>::hash(best_hash);
-		import_block(&client, block);
+		import_block(client.clone(), block);
 
 		info!("Imported block at {}", factory_state.block_no());
 	}
@@ -159,9 +158,9 @@ pub fn create_block<RA, Backend, Exec, Block, RtApi>(
 	inherent_extrinsics: Vec<<Block as BlockT>::Extrinsic>,
 ) -> Block
 where
-	Block: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
-	Exec: client::CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
-	Backend: client::backend::Backend<Block, Blake2Hasher> + Send,
+	Block: BlockT,
+	Exec: client::CallExecutor<Block> + Send + Sync + Clone,
+	Backend: client::backend::Backend<Block> + Send,
 	Client<Backend, Exec, Block, RtApi>: ProvideRuntimeApi,
 	RtApi: ConstructRuntimeApi<Block, Client<Backend, Exec, Block, RtApi>> + Send + Sync,
 	<Client<Backend, Exec, Block, RtApi> as ProvideRuntimeApi>::Api:
@@ -182,12 +181,15 @@ where
 }
 
 fn import_block<Backend, Exec, Block, RtApi>(
-	client: &Arc<Client<Backend, Exec, Block, RtApi>>,
+	mut client: Arc<Client<Backend, Exec, Block, RtApi>>,
 	block: Block
 ) -> () where
-	Block: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
-	Exec: client::CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
-	Backend: client::backend::Backend<Block, Blake2Hasher> + Send,
+	Block: BlockT,
+	Exec: client::CallExecutor<Block> + Send + Sync + Clone,
+	Backend: client::backend::Backend<Block> + Send,
+	Client<Backend, Exec, Block, RtApi>: ProvideRuntimeApi,
+	<Client<Backend, Exec, Block, RtApi> as ProvideRuntimeApi>::Api:
+		sr_api::Core<Block, Error = client::error::Error>,
 {
 	let import = BlockImportParams {
 		origin: BlockOrigin::File,
@@ -200,5 +202,5 @@ fn import_block<Backend, Exec, Block, RtApi>(
 		fork_choice: ForkChoiceStrategy::LongestChain,
 		allow_missing_state: false,
 	};
-	(&**client).import_block(import, HashMap::new()).expect("Failed to import block");
+	client.import_block(import, HashMap::new()).expect("Failed to import block");
 }

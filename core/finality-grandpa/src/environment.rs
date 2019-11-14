@@ -26,7 +26,7 @@ use tokio_timer::Delay;
 use parking_lot::RwLock;
 
 use client::{
-	backend::Backend, apply_aux, BlockchainEvents, CallExecutor,
+	backend::{Backend, AuxStore}, apply_aux, BlockchainEvents, CallExecutor,
 	Client, error::Error as ClientError, utils::is_descendent_of,
 	blockchain::HeaderBackend, backend::Finalizer,
 };
@@ -34,7 +34,7 @@ use grandpa::{
 	BlockNumberOps, Equivocation, Error as GrandpaError, round::State as RoundState,
 	voter, voter_set::VoterSet,
 };
-use primitives::{Blake2Hasher, H256, Pair};
+use primitives::Pair;
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, One, Zero,
@@ -398,19 +398,18 @@ impl<B, E, Block: BlockT, N: Network<Block>, RA, SC, VR> Environment<B, E, Block
 	}
 }
 
-impl<Block: BlockT<Hash=H256>, B, E, N, RA, SC, VR>
-	grandpa::Chain<Block::Hash, NumberFor<Block>>
-for Environment<B, E, Block, N, RA, SC, VR>
-where
-	Block: 'static,
-	B: Backend<Block, Blake2Hasher> + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
-	N: Network<Block> + 'static,
-	N::In: 'static,
-	SC: SelectChain<Block> + 'static,
-	VR: VotingRule<Block, Client<B, E, Block, RA>>,
-	RA: Send + Sync,
-	NumberFor<Block>: BlockNumberOps,
+impl<Block: BlockT, B, E, N, RA, SC, VR> grandpa::Chain<Block::Hash, NumberFor<Block>>
+	for Environment<B, E, Block, N, RA, SC, VR>
+		where
+			Block: 'static,
+			B: Backend<Block> + 'static,
+			E: CallExecutor<Block> + Send + Sync + 'static,
+			N: Network<Block> + 'static,
+			N::In: 'static,
+			SC: SelectChain<Block> + 'static,
+			VR: VotingRule<Block, Client<B, E, Block, RA>>,
+			RA: Send + Sync,
+			NumberFor<Block>: BlockNumberOps,
 {
 	fn ancestry(&self, base: Block::Hash, block: Block::Hash) -> Result<Vec<Block::Hash>, GrandpaError> {
 		ancestry(&self.client, base, block)
@@ -508,13 +507,13 @@ where
 }
 
 
-pub(crate) fn ancestry<B, Block: BlockT<Hash=H256>, E, RA>(
+pub(crate) fn ancestry<B, Block: BlockT, E, RA>(
 	client: &Client<B, E, Block, RA>,
 	base: Block::Hash,
 	block: Block::Hash,
 ) -> Result<Vec<Block::Hash>, GrandpaError> where
-	B: Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher>,
+	B: Backend<Block>,
+	E: CallExecutor<Block>,
 {
 	if base == block { return Err(GrandpaError::NotDescendent) }
 
@@ -539,19 +538,20 @@ pub(crate) fn ancestry<B, Block: BlockT<Hash=H256>, E, RA>(
 	Ok(tree_route.retracted().iter().skip(1).map(|e| e.hash).collect())
 }
 
-impl<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR>
+impl<B, E, Block: BlockT, N, RA, SC, VR>
 	voter::Environment<Block::Hash, NumberFor<Block>>
 for Environment<B, E, Block, N, RA, SC, VR>
 where
 	Block: 'static,
-	B: Backend<Block, Blake2Hasher> + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + 'static + Send + Sync,
+	B: Backend<Block> + 'static,
+	E: CallExecutor<Block> + 'static + Send + Sync,
 	N: Network<Block> + 'static + Send,
 	N::In: 'static + Send,
 	RA: 'static + Send + Sync,
 	SC: SelectChain<Block> + 'static,
 	VR: VotingRule<Block, Client<B, E, Block, RA>>,
 	NumberFor<Block>: BlockNumberOps,
+	Client<B, E, Block, RA>: AuxStore,
 {
 	type Timer = Box<dyn Future<Item = (), Error = Self::Error> + Send>;
 	type Id = AuthorityId;
@@ -877,7 +877,7 @@ impl<Block: BlockT> From<GrandpaJustification<Block>> for JustificationOrCommit<
 /// authority set change is enacted then a justification is created (if not
 /// given) and stored with the block when finalizing it.
 /// This method assumes that the block being finalized has already been imported.
-pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
+pub(crate) fn finalize_block<B, Block: BlockT, E, RA>(
 	client: &Client<B, E, Block, RA>,
 	authority_set: &SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	consensus_changes: &SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
@@ -886,8 +886,8 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 	number: NumberFor<Block>,
 	justification_or_commit: JustificationOrCommit<Block>,
 ) -> Result<(), CommandOrError<Block::Hash, NumberFor<Block>>> where
-	B: Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
+	B: Backend<Block>,
+	E: CallExecutor<Block> + Send + Sync,
 	RA: Send + Sync,
 {
 	// NOTE: lock must be held through writing to DB to avoid race. this lock
@@ -925,7 +925,7 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 		let status = authority_set.apply_standard_changes(
 			hash,
 			number,
-			&is_descendent_of::<_, _, Block::Hash>(client, None),
+			&is_descendent_of::<Block, _>(client, None),
 		).map_err(|e| Error::Safety(e.to_string()))?;
 
 		// check if this is this is the first finalization of some consensus changes
@@ -1061,8 +1061,8 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 
 /// Using the given base get the block at the given height on this chain. The
 /// target block must be an ancestor of base, therefore `height <= base.height`.
-pub(crate) fn canonical_at_height<Block: BlockT<Hash=H256>, C: HeaderBackend<Block>>(
-	provider: C,
+pub(crate) fn canonical_at_height<Block: BlockT, C: HeaderBackend<Block>>(
+	provider: &C,
 	base: (Block::Hash, NumberFor<Block>),
 	base_is_canonical: bool,
 	height: NumberFor<Block>,

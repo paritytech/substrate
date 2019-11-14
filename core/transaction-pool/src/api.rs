@@ -22,9 +22,9 @@ use codec::Encode;
 
 use futures::{channel::oneshot, executor::{ThreadPool, ThreadPoolBuilder}, future::Future};
 
-use primitives::{H256, Blake2Hasher, Hasher};
-
 use sr_primitives::{generic::BlockId, traits, transaction_validity::TransactionValidity};
+
+use primitives::Hasher;
 
 use tx_runtime_api::TaggedTransactionQueue;
 
@@ -55,13 +55,13 @@ impl<T, Block> FullChainApi<T, Block> where
 }
 
 impl<T, Block> txpool::ChainApi for FullChainApi<T, Block> where
-	Block: traits::Block<Hash = H256>,
+	Block: traits::Block,
 	T: traits::ProvideRuntimeApi + traits::BlockIdTo<Block> + 'static + Send + Sync,
 	T::Api: TaggedTransactionQueue<Block>,
 	sr_api::ApiErrorFor<T, Block>: Send,
 {
 	type Block = Block;
-	type Hash = H256;
+	type Hash = Block::Hash;
 	type Error = error::Error;
 	type ValidationFuture = Pin<Box<dyn Future<Output = error::Result<TransactionValidity>> + Send>>;
 
@@ -106,7 +106,7 @@ impl<T, Block> txpool::ChainApi for FullChainApi<T, Block> where
 
 	fn hash_and_length(&self, ex: &txpool::ExtrinsicFor<Self>) -> (Self::Hash, usize) {
 		ex.using_encoded(|x| {
-			(Blake2Hasher::hash(x), x.len())
+			(traits::HasherFor::<Block>::hash(x), x.len())
 		})
 	}
 }

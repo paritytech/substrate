@@ -14,19 +14,18 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{sync::Arc, cmp::Ord, panic::UnwindSafe, result, cell::RefCell, rc::Rc};
+use std::{sync::Arc, panic::UnwindSafe, result, cell::RefCell, rc::Rc};
 use codec::{Encode, Decode};
 use sr_primitives::{
-	generic::BlockId, traits::Block as BlockT, traits::NumberFor,
+	generic::BlockId, traits::{Block as BlockT, NumberFor, HasherFor},
 };
 use state_machine::{
 	self, OverlayedChanges, Ext, ExecutionManager, StateMachine, ExecutionStrategy,
 	backend::Backend as _, ChangesTrieTransaction, StorageProof,
 };
 use executor::{RuntimeVersion, RuntimeInfo, NativeVersion};
-use hash_db::Hasher;
 use primitives::{
-	offchain::OffchainExt, H256, Blake2Hasher, NativeOrEncoded, NeverNativeValue,
+	offchain::OffchainExt, NativeOrEncoded, NeverNativeValue,
 	traits::{CodeExecutor, KeystoreExt},
 };
 
@@ -35,12 +34,7 @@ use crate::backend;
 use crate::error;
 
 /// Method call executor.
-pub trait CallExecutor<B, H>
-where
-	B: BlockT,
-	H: Hasher<Out=B::Hash>,
-	H::Out: Ord,
-{
+pub trait CallExecutor<B: BlockT> {
 	/// Externalities error type.
 	type Error: state_machine::Error;
 
@@ -94,7 +88,7 @@ where
 	///
 	/// No changes are made.
 	fn call_at_state<
-		S: state_machine::Backend<H>,
+		S: state_machine::Backend<HasherFor<B>>,
 		F: FnOnce(
 			Result<NativeOrEncoded<R>, Self::Error>,
 			Result<NativeOrEncoded<R>, Self::Error>,
@@ -112,8 +106,8 @@ where
 	) -> Result<
 		(
 			NativeOrEncoded<R>,
-			(S::Transaction, H::Out),
-			Option<ChangesTrieTransaction<Blake2Hasher, NumberFor<B>>>
+			(S::Transaction, B::Hash),
+			Option<ChangesTrieTransaction<HasherFor<B>, NumberFor<B>>>
 		),
 		error::Error,
 	>;
@@ -121,7 +115,7 @@ where
 	/// Execute a call to a contract on top of given state, gathering execution proof.
 	///
 	/// No changes are made.
-	fn prove_at_state<S: state_machine::Backend<H>>(
+	fn prove_at_state<S: state_machine::Backend<HasherFor<B>>>(
 		&self,
 		mut state: S,
 		overlay: &mut OverlayedChanges,
@@ -139,12 +133,12 @@ where
 	/// Execute a call to a contract on top of given trie state, gathering execution proof.
 	///
 	/// No changes are made.
-	fn prove_at_trie_state<S: state_machine::TrieBackendStorage<H>>(
+	fn prove_at_trie_state<S: state_machine::TrieBackendStorage<HasherFor<B>>>(
 		&self,
-		trie_state: &state_machine::TrieBackend<S, H>,
+		trie_state: &state_machine::TrieBackend<S, HasherFor<B>>,
 		overlay: &mut OverlayedChanges,
 		method: &str,
-		call_data: &[u8]
+		call_data: &[u8],
 	) -> Result<(Vec<u8>, StorageProof), error::Error>;
 
 	/// Get runtime version if supported.
@@ -184,11 +178,11 @@ impl<B, E> Clone for LocalCallExecutor<B, E> where E: Clone {
 	}
 }
 
-impl<B, E, Block> CallExecutor<Block, Blake2Hasher> for LocalCallExecutor<B, E>
+impl<B, E, Block> CallExecutor<Block> for LocalCallExecutor<B, E>
 where
-	B: backend::Backend<Block, Blake2Hasher>,
+	B: backend::Backend<Block>,
 	E: CodeExecutor + RuntimeInfo,
-	Block: BlockT<Hash=H256>,
+	Block: BlockT,
 {
 	type Error = E::Error;
 
@@ -329,7 +323,7 @@ where
 	}
 
 	fn call_at_state<
-		S: state_machine::Backend<Blake2Hasher>,
+		S: state_machine::Backend<HasherFor<Block>>,
 		F: FnOnce(
 			Result<NativeOrEncoded<R>, Self::Error>,
 			Result<NativeOrEncoded<R>, Self::Error>,
@@ -346,8 +340,8 @@ where
 		side_effects_handler: Option<OffchainExt>,
 	) -> error::Result<(
 		NativeOrEncoded<R>,
-		(S::Transaction, <Blake2Hasher as Hasher>::Out),
-		Option<ChangesTrieTransaction<Blake2Hasher, NumberFor<Block>>>,
+		(S::Transaction, Block::Hash),
+		Option<ChangesTrieTransaction<HasherFor<Block>, NumberFor<Block>>>,
 	)> {
 		StateMachine::new(
 			state,
@@ -371,9 +365,9 @@ where
 		.map_err(Into::into)
 	}
 
-	fn prove_at_trie_state<S: state_machine::TrieBackendStorage<Blake2Hasher>>(
+	fn prove_at_trie_state<S: state_machine::TrieBackendStorage<HasherFor<Block>>>(
 		&self,
-		trie_state: &state_machine::TrieBackend<S, Blake2Hasher>,
+		trie_state: &state_machine::TrieBackend<S, HasherFor<Block>>,
 		overlay: &mut OverlayedChanges,
 		method: &str,
 		call_data: &[u8]

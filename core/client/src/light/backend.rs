@@ -22,8 +22,10 @@ use std::sync::Arc;
 use parking_lot::{RwLock, Mutex};
 
 use sr_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
-use state_machine::{Backend as StateBackend, TrieBackend, backend::InMemory as InMemoryState, ChangesTrieTransaction};
-use sr_primitives::traits::{Block as BlockT, NumberFor, Zero, Header};
+use state_machine::{
+	Backend as StateBackend, TrieBackend, backend::InMemory as InMemoryState, ChangesTrieTransaction
+};
+use sr_primitives::traits::{Block as BlockT, NumberFor, Zero, Header, HasherFor};
 use crate::in_mem::{self, check_genesis_storage};
 use crate::backend::{
 	AuxStore, Backend as ClientBackend, BlockImportOperation, RemoteBackend, NewBlockState,
@@ -45,15 +47,15 @@ pub struct Backend<S, H: Hasher> {
 }
 
 /// Light block (header and justification) import operation.
-pub struct ImportOperation<Block: BlockT, S, H: Hasher> {
+pub struct ImportOperation<Block: BlockT, S> {
 	header: Option<Block::Header>,
 	cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 	leaf_state: NewBlockState,
 	aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	finalized_blocks: Vec<BlockId<Block>>,
 	set_head: Option<BlockId<Block>>,
-	storage_update: Option<InMemoryState<H>>,
-	_phantom: ::std::marker::PhantomData<(S)>,
+	storage_update: Option<InMemoryState<HasherFor<Block>>>,
+	_phantom: std::marker::PhantomData<S>,
 }
 
 /// Either in-memory genesis state, or locally-unavailable state.
@@ -97,16 +99,16 @@ impl<S: AuxStore, H: Hasher> AuxStore for Backend<S, H> {
 	}
 }
 
-impl<S, Block, H> ClientBackend<Block, H> for Backend<S, H> where
-	Block: BlockT,
-	S: BlockchainStorage<Block>,
-	H: Hasher<Out=Block::Hash>,
-	H::Out: Ord,
+impl<S, Block> ClientBackend<Block> for Backend<S, HasherFor<Block>>
+	where
+		Block: BlockT,
+		S: BlockchainStorage<Block>,
+		Block::Hash: Ord,
 {
-	type BlockImportOperation = ImportOperation<Block, S, H>;
+	type BlockImportOperation = ImportOperation<Block, S>;
 	type Blockchain = Blockchain<S>;
-	type State = GenesisOrUnavailableState<H>;
-	type ChangesTrieStorage = in_mem::ChangesTrieStorage<Block, H>;
+	type State = GenesisOrUnavailableState<HasherFor<Block>>;
+	type ChangesTrieStorage = in_mem::ChangesTrieStorage<Block>;
 	type OffchainStorage = in_mem::OffchainStorage;
 
 	fn begin_operation(&self) -> ClientResult<Self::BlockImportOperation> {
@@ -169,7 +171,11 @@ impl<S, Block, H> ClientBackend<Block, H> for Backend<S, H> where
 		Ok(())
 	}
 
-	fn finalize_block(&self, block: BlockId<Block>, _justification: Option<Justification>) -> ClientResult<()> {
+	fn finalize_block(
+		&self,
+		block: BlockId<Block>,
+		_justification: Option<Justification>,
+	) -> ClientResult<()> {
 		self.blockchain.storage().finalize_header(block)
 	}
 
@@ -213,12 +219,11 @@ impl<S, Block, H> ClientBackend<Block, H> for Backend<S, H> where
 	}
 }
 
-impl<S, Block, H> RemoteBackend<Block, H> for Backend<S, H>
+impl<S, Block> RemoteBackend<Block> for Backend<S, HasherFor<Block>>
 where
 	Block: BlockT,
 	S: BlockchainStorage<Block> + 'static,
-	H: Hasher<Out=Block::Hash>,
-	H::Out: Ord,
+	Block::Hash: Ord,
 {
 	fn is_local_state_available(&self, block: &BlockId<Block>) -> bool {
 		self.genesis_state.read().is_some()
@@ -232,14 +237,13 @@ where
 	}
 }
 
-impl<S, Block, H> BlockImportOperation<Block, H> for ImportOperation<Block, S, H>
-where
-	Block: BlockT,
-	S: BlockchainStorage<Block>,
-	H: Hasher<Out=Block::Hash>,
-	H::Out: Ord,
+impl<S, Block> BlockImportOperation<Block> for ImportOperation<Block, S>
+	where
+		Block: BlockT,
+		S: BlockchainStorage<Block>,
+		Block::Hash: Ord,
 {
-	type State = GenesisOrUnavailableState<H>;
+	type State = GenesisOrUnavailableState<HasherFor<Block>>;
 
 	fn state(&self) -> ClientResult<Option<&Self::State>> {
 		// None means 'locally-stateless' backend
@@ -262,17 +266,27 @@ where
 		self.cache = cache;
 	}
 
-	fn update_db_storage(&mut self, _update: <Self::State as StateBackend<H>>::Transaction) -> ClientResult<()> {
+	fn update_db_storage(
+		&mut self,
+		_update: <Self::State as StateBackend<HasherFor<Block>>>::Transaction,
+	) -> ClientResult<()> {
 		// we're not storing anything locally => ignore changes
 		Ok(())
 	}
 
-	fn update_changes_trie(&mut self, _update: ChangesTrieTransaction<H, NumberFor<Block>>) -> ClientResult<()> {
+	fn update_changes_trie(
+		&mut self,
+		_update: ChangesTrieTransaction<HasherFor<Block>, NumberFor<Block>>,
+	) -> ClientResult<()> {
 		// we're not storing anything locally => ignore changes
 		Ok(())
 	}
 
-	fn reset_storage(&mut self, top: StorageOverlay, children: ChildrenStorageOverlay) -> ClientResult<H::Out> {
+	fn reset_storage(
+		&mut self,
+		top: StorageOverlay,
+		children: ChildrenStorageOverlay,
+	) -> ClientResult<Block::Hash> {
 		check_genesis_storage(&top, &children)?;
 
 		// this is only called when genesis block is imported => shouldn't be performance bottleneck
@@ -290,8 +304,8 @@ where
 			storage.insert(Some(child_key), child_storage);
 		}
 
-		let storage_update: InMemoryState<H> = storage.into();
-		let (storage_root, _) = storage_update.full_storage_root(::std::iter::empty(), child_delta);
+		let storage_update = InMemoryState::from(storage);
+		let (storage_root, _) = storage_update.full_storage_root(std::iter::empty(), child_delta);
 		self.storage_update = Some(storage_update);
 
 		Ok(storage_root)
@@ -476,9 +490,9 @@ mod tests {
 	#[test]
 	fn light_aux_store_is_updated_via_non_importing_op() {
 		let backend = Backend::new(Arc::new(DummyBlockchain::new(DummyStorage::new())));
-		let mut op = ClientBackend::<Block, Blake2Hasher>::begin_operation(&backend).unwrap();
-		BlockImportOperation::<Block, Blake2Hasher>::insert_aux(&mut op, vec![(vec![1], Some(vec![2]))]).unwrap();
-		ClientBackend::<Block, Blake2Hasher>::commit_operation(&backend, op).unwrap();
+		let mut op = ClientBackend::<Block>::begin_operation(&backend).unwrap();
+		BlockImportOperation::<Block>::insert_aux(&mut op, vec![(vec![1], Some(vec![2]))]).unwrap();
+		ClientBackend::<Block>::commit_operation(&backend, op).unwrap();
 
 		assert_eq!(AuxStore::get_aux(&backend, &[1]).unwrap(), Some(vec![2]));
 	}

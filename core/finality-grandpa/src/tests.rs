@@ -33,9 +33,9 @@ use consensus_common::import_queue::{BoxBlockImport, BoxJustificationImport, Box
 use std::collections::{HashMap, HashSet};
 use std::result;
 use codec::Decode;
-use sr_primitives::traits::{ApiRef, ProvideRuntimeApi, Header as HeaderT};
+use sr_primitives::traits::{ApiRef, ProvideRuntimeApi, Header as HeaderT, HasherFor};
 use sr_primitives::generic::{BlockId, DigestItem};
-use primitives::{NativeOrEncoded, ExecutionContext, crypto::Public};
+use primitives::{NativeOrEncoded, ExecutionContext, crypto::Public, H256};
 use fg_primitives::{GRANDPA_ENGINE_ID, AuthorityList, GrandpaApi};
 use state_machine::{backend::InMemory, prove_read, read_proof_check};
 
@@ -306,7 +306,7 @@ impl AuthoritySetForFinalityProver<Block> for TestApi {
 
 	fn prove_authorities(&self, block: &BlockId<Block>) -> Result<StorageProof> {
 		let authorities = self.authorities(block)?;
-		let backend = <InMemory<Blake2Hasher>>::from(vec![
+		let backend = <InMemory<HasherFor<Block>>>::from(vec![
 			(None, b"authorities".to_vec(), Some(authorities.encode()))
 		]);
 		let proof = prove_read(backend, vec![b"authorities"])
@@ -322,7 +322,7 @@ impl AuthoritySetForFinalityChecker<Block> for TestApi {
 		header: <Block as BlockT>::Header,
 		proof: StorageProof,
 	) -> Result<AuthorityList> {
-		let results = read_proof_check::<Blake2Hasher, _>(
+		let results = read_proof_check::<HasherFor<Block>, _>(
 			*header.state_root(), proof, vec![b"authorities"]
 		)
 			.expect("failure checking read proof for authorities");

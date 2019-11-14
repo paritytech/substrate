@@ -30,7 +30,7 @@ use primitives::{
 	storage::{
 		well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES, is_child_storage_key}
 	},
-	hash::H256, Blake2Hasher,
+	Blake2Hasher,
 };
 use codec::Encode;
 use externalities::{Extensions, Extension};
@@ -38,14 +38,17 @@ use externalities::{Extensions, Extension};
 type StorageTuple = (HashMap<Vec<u8>, Vec<u8>>, HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>);
 
 /// Simple HashMap-based Externalities impl.
-pub struct TestExternalities<H: Hasher<Out=H256>=Blake2Hasher, N: ChangesTrieBlockNumber=u64> {
+pub struct TestExternalities<H: Hasher=Blake2Hasher, N: ChangesTrieBlockNumber=u64> {
 	overlay: OverlayedChanges,
 	backend: InMemory<H>,
 	changes_trie_storage: ChangesTrieInMemoryStorage<H, N>,
 	extensions: Extensions,
 }
 
-impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
+impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
+	where
+		H::Out: Ord + 'static + codec::Codec
+{
 	/// Get externalities implementation.
 	pub fn ext(&mut self) -> Ext<H, N, InMemory<H>, ChangesTrieInMemoryStorage<H, N>> {
 		Ext::new(
@@ -131,13 +134,16 @@ impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 	}
 }
 
-impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> std::fmt::Debug for TestExternalities<H, N> {
-	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+impl<H: Hasher, N: ChangesTrieBlockNumber> std::fmt::Debug for TestExternalities<H, N> {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		write!(f, "overlay: {:?}\nbackend: {:?}", self.overlay, self.backend.pairs())
 	}
 }
 
-impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> PartialEq for TestExternalities<H, N> {
+impl<H: Hasher, N: ChangesTrieBlockNumber> PartialEq for TestExternalities<H, N>
+	where
+		H::Out: Ord + 'static + codec::Codec
+{
 	/// This doesn't test if they are in the same state, only if they contains the
 	/// same data at this state
 	fn eq(&self, other: &TestExternalities<H, N>) -> bool {
@@ -145,18 +151,24 @@ impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> PartialEq for TestExternali
 	}
 }
 
-impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> Default for TestExternalities<H, N> {
+impl<H: Hasher, N: ChangesTrieBlockNumber> Default for TestExternalities<H, N>
+	where
+		H::Out: Ord + 'static + codec::Codec,
+{
 	fn default() -> Self { Self::new(Default::default()) }
 }
 
-impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> From<StorageTuple> for TestExternalities<H, N> {
+impl<H: Hasher, N: ChangesTrieBlockNumber> From<StorageTuple> for TestExternalities<H, N>
+	where
+		H::Out: Ord + 'static + codec::Codec,
+{
 	fn from(storage: StorageTuple) -> Self {
 		Self::new(storage)
 	}
 }
 
 impl<H, N> externalities::ExtensionStore for TestExternalities<H, N> where
-	H: Hasher<Out=H256>,
+	H: Hasher,
 	N: ChangesTrieBlockNumber,
 {
 	fn extension_by_type_id(&mut self, type_id: TypeId) -> Option<&mut dyn Any> {
@@ -178,7 +190,7 @@ mod tests {
 		ext.set_storage(b"dog".to_vec(), b"puppy".to_vec());
 		ext.set_storage(b"dogglesworth".to_vec(), b"cat".to_vec());
 		const ROOT: [u8; 32] = hex!("2a340d3dfd52f5992c6b117e9e45f479e6da5afffafeb26ab619cf137a95aeb8");
-		assert_eq!(ext.storage_root(), H256::from(ROOT));
+		assert_eq!(ext.storage_root(), primitives::H256::from(ROOT));
 	}
 
 	#[test]

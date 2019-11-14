@@ -63,8 +63,16 @@ impl<B: error::Error, E: error::Error> error::Error for Error<B, E> {
 	}
 }
 
+/// Use SCALE codec to convert between the generic `Block::Hash` and `H256`. Both are currently the
+/// same. To prevent the requirement on putting everywhere `BlockT<Hash = H256>`, we use this hack.
+/// To properly solve this, we need to change block dependent externality functions to return
+/// and take the hash as an encoded value.
+fn convert_hack<I: codec::Encode, O: codec::Decode>(val: I) -> O {
+	codec::Decode::decode(&mut &val.encode()[..]).unwrap()
+}
+
 /// Wraps a read-only backend, call executor, and current overlayed changes.
-pub struct Ext<'a, H, N, B, T> where H: Hasher<Out=H256>, B: 'a + Backend<H> {
+pub struct Ext<'a, H, N, B, T> where H: Hasher, B: 'a + Backend<H> {
 	/// The overlayed changes to write to.
 	overlay: &'a mut OverlayedChanges,
 	/// The storage backend to read from.
@@ -91,7 +99,8 @@ pub struct Ext<'a, H, N, B, T> where H: Hasher<Out=H256>, B: 'a + Backend<H> {
 
 impl<'a, H, N, B, T> Ext<'a, H, N, B, T>
 where
-	H: Hasher<Out=H256>,
+	H: Hasher,
+	H::Out: Ord + 'static + codec::Codec,
 	B: 'a + Backend<H>,
 	T: 'a + ChangesTrieStorage<H, N>,
 	N: crate::changes_trie::BlockNumber,
@@ -118,7 +127,7 @@ where
 
 	/// Get the transaction necessary to update the backend.
 	pub fn transaction(&mut self) -> (
-		(B::Transaction, H256),
+		(B::Transaction, H::Out),
 		Option<crate::ChangesTrieTransaction<H, N>>,
 	) {
 		let _ = self.storage_root();
@@ -149,7 +158,8 @@ where
 #[cfg(test)]
 impl<'a, H, N, B, T> Ext<'a, H, N, B, T>
 where
-	H: Hasher<Out=H256>,
+	H: Hasher,
+	H::Out: Ord + 'static,
 	B: 'a + Backend<H>,
 	T: 'a + ChangesTrieStorage<H, N>,
 	N: crate::changes_trie::BlockNumber,
@@ -170,7 +180,8 @@ where
 
 impl<'a, H, B, T, N> Externalities for Ext<'a, H, N, B, T>
 where
-	H: Hasher<Out=H256>,
+	H: Hasher,
+	H::Out: Ord + 'static + codec::Codec,
 	B: 'a + Backend<H>,
 	T: 'a + ChangesTrieStorage<H, N>,
 	N: crate::changes_trie::BlockNumber,
@@ -200,7 +211,8 @@ where
 			HexDisplay::from(&key),
 			result,
 		);
-		result
+
+		result.map(convert_hack)
 	}
 
 	fn original_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
@@ -222,7 +234,8 @@ where
 			HexDisplay::from(&key),
 			result,
 		);
-		result
+
+		result.map(convert_hack)
 	}
 
 	fn child_storage(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<Vec<u8>> {
@@ -260,7 +273,7 @@ where
 			result,
 		);
 
-		result
+		result.map(convert_hack)
 	}
 
 	fn original_child_storage(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<Vec<u8>> {
@@ -275,6 +288,7 @@ where
 			HexDisplay::from(&key),
 			result.as_ref().map(HexDisplay::from),
 		);
+
 		result
 	}
 
@@ -290,7 +304,8 @@ where
 			HexDisplay::from(&key),
 			result,
 		);
-		result
+
+		result.map(convert_hack)
 	}
 
 	fn exists_storage(&self, key: &[u8]) -> bool {
@@ -305,8 +320,8 @@ where
 			HexDisplay::from(&key),
 			result,
 		);
-		result
 
+		result
 	}
 
 	fn exists_child_storage(&self, storage_key: ChildStorageKey, key: &[u8]) -> bool {
@@ -420,13 +435,13 @@ where
 				self.id,
 				HexDisplay::from(&root.as_ref()),
 			);
-			return root.clone();
+			return convert_hack(root.clone())
 		}
 
 		let (root, transaction) = self.overlay.storage_root(&self.backend);
 		self.storage_transaction = Some((transaction, root));
 		trace!(target: "state-trace", "{:04x}: Root {}", self.id, HexDisplay::from(&root.as_ref()));
-		root
+		convert_hack(root)
 	}
 
 	fn child_storage_root(&mut self, storage_key: ChildStorageKey) -> Vec<u8> {
@@ -478,7 +493,7 @@ where
 		self.changes_trie_transaction = self.overlay.changes_trie_root(
 			self.backend,
 			self.changes_trie_storage.clone(),
-			parent_hash,
+			convert_hack(parent_hash),
 			true,
 		)?.map(|(root, tx)| (tx, root));
 		let result = Ok(self.changes_trie_transaction.as_ref().map(|(_, root)| root.clone()));
@@ -487,13 +502,14 @@ where
 			HexDisplay::from(&parent_hash.as_ref()),
 			result,
 		);
-		result
+
+		result.map(convert_hack)
 	}
 }
 
 impl<'a, H, B, T, N> externalities::ExtensionStore for Ext<'a, H, N, B, T>
 where
-	H: Hasher<Out=H256>,
+	H: Hasher,
 	B: 'a + Backend<H>,
 	T: 'a + ChangesTrieStorage<H, N>,
 	N: crate::changes_trie::BlockNumber,

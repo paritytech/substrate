@@ -31,9 +31,7 @@ use api::Subscriptions;
 use client::{
 	Client, CallExecutor, BlockchainEvents, backend::Backend, error::Result as ClientResult,
 };
-use primitives::{
-	H256, Blake2Hasher, Bytes, storage::{well_known_keys, StorageKey, StorageData, StorageChangeSet},
-};
+use primitives::{Bytes, storage::{well_known_keys, StorageKey, StorageData, StorageChangeSet}};
 use runtime_version::RuntimeVersion;
 use state_machine::ExecutionStrategy;
 use sr_primitives::{
@@ -67,9 +65,9 @@ pub struct FullState<B, E, Block: BlockT, RA> {
 
 impl<B, E, Block: BlockT, RA> FullState<B, E, Block, RA>
 	where
-		Block: BlockT<Hash=H256> + 'static,
-		B: Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static + Clone,
+		Block: BlockT + 'static,
+		B: Backend<Block> + Send + Sync + 'static,
+		E: CallExecutor<Block> + Send + Sync + 'static + Clone,
 {
 	/// Create new state API backend for full nodes.
 	pub fn new(client: Arc<Client<B, E, Block, RA>>, subscriptions: Subscriptions) -> Self {
@@ -225,9 +223,9 @@ impl<B, E, Block: BlockT, RA> FullState<B, E, Block, RA>
 
 impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, RA>
 	where
-		Block: BlockT<Hash=H256> + 'static,
-		B: Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static + Clone,
+		Block: BlockT + 'static,
+		B: Backend<Block> + Send + Sync + 'static,
+		E: CallExecutor<Block> + Send + Sync + 'static + Clone,
 		RA: Send + Sync + 'static,
 		Client<B, E, Block, RA>: ProvideRuntimeApi,
 		<Client<B, E, Block, RA> as ProvideRuntimeApi>::Api:

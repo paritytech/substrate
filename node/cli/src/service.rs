@@ -40,7 +40,6 @@ use sr_primitives::traits::Block as BlockT;
 use node_executor::NativeExecutor;
 use network::NetworkService;
 use offchain::OffchainWorkers;
-use primitives::Blake2Hasher;
 
 construct_simple_protocol! {
 	/// Demo protocol attachment for substrate.
@@ -265,7 +264,7 @@ pub fn new_full<C: Send + Default + 'static>(config: NodeConfiguration<C>)
 		TransactionPool<transaction_pool::FullChainApi<ConcreteClient, ConcreteBlock>>,
 		OffchainWorkers<
 			ConcreteClient,
-			<ConcreteBackend as client::backend::Backend<Block, Blake2Hasher>>::OffchainStorage,
+			<ConcreteBackend as client::backend::Backend<Block>>::OffchainStorage,
 			ConcreteBlock,
 		>
 	>,

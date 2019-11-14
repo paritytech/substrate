@@ -23,9 +23,10 @@ use futures::{prelude::*, sync::mpsc, sync::oneshot};
 use futures03::compat::{Compat01As03, Future01CompatExt as _};
 use parking_lot::Mutex;
 use client::error::Error as ClientError;
-use client::light::fetcher::{Fetcher, FetchChecker, RemoteHeaderRequest,
-	RemoteCallRequest, RemoteReadRequest, RemoteChangesRequest,
-	RemoteReadChildRequest, RemoteBodyRequest};
+use client::light::fetcher::{
+	Fetcher, FetchChecker, RemoteHeaderRequest, RemoteCallRequest, RemoteReadRequest,
+	RemoteChangesRequest, RemoteReadChildRequest, RemoteBodyRequest,
+};
 use sr_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 
 /// Implements the `Fetcher` trait of the client. Makes it possible for the light client to perform

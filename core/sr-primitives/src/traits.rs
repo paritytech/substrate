@@ -50,8 +50,8 @@ impl<'a> Lazy<[u8]> for &'a [u8] {
 	fn get(&mut self) -> &[u8] { &**self }
 }
 
-/// Some type that is able to be collapsed into an account ID. It is not possible to recreate the original value from
-/// the account ID.
+/// Some type that is able to be collapsed into an account ID. It is not possible to recreate the
+/// original value from the account ID.
 pub trait IdentifyAccount {
 	/// The account ID that this can be transformed into.
 	type AccountId;
@@ -537,7 +537,7 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 's
 	type Number: Member + MaybeSerializeDeserialize + Debug + rstd::hash::Hash
 		+ Copy + MaybeDisplay + SimpleArithmetic + Codec;
 	/// Header hash type
-	type Hash: Member + MaybeSerializeDeserialize + Debug + rstd::hash::Hash
+	type Hash: Member + MaybeSerializeDeserialize + Debug + rstd::hash::Hash + Ord
 		+ Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
 	/// Hashing algorithm
 	type Hashing: Hash<Output = Self::Hash>;
@@ -592,7 +592,7 @@ pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'st
 	/// Header type.
 	type Header: Header<Hash=Self::Hash>;
 	/// Block hash type.
-	type Hash: Member + MaybeSerializeDeserialize + Debug + rstd::hash::Hash
+	type Hash: Member + MaybeSerializeDeserialize + Debug + rstd::hash::Hash + Ord
 		+ Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
 
 	/// Returns a reference to the header.
@@ -910,6 +910,18 @@ pub trait Applyable: Sized + Send + Sync {
 
 /// Auxiliary wrapper that holds an api instance and binds it to the given lifetime.
 pub struct ApiRef<'a, T>(T, rstd::marker::PhantomData<&'a ()>);
+
+impl<'a, T> ApiRef<'a, T> {
+	/// Consume this type and call the given closure with the inner.
+	///
+	/// # Attention
+	///
+	/// The inner type should be consumed as well and not used outside of this ref. This is the
+	/// reason why this function is `unsafe`.
+	pub unsafe fn consume_inner<R>(self, consume: impl FnOnce(T) -> R) -> R {
+		consume(self.0)
+	}
+}
 
 impl<'a, T> From<T> for ApiRef<'a, T> {
 	fn from(api: T) -> Self {

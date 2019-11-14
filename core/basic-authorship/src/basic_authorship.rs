@@ -25,7 +25,7 @@ use codec::Decode;
 use consensus_common::{evaluation, Proposal};
 use inherents::InherentData;
 use log::{error, info, debug, trace};
-use primitives::{H256, Blake2Hasher, ExecutionContext};
+use primitives::ExecutionContext;
 use sr_primitives::{
 	traits::{
 		Block as BlockT, Hash as HashT, Header as HeaderT, ProvideRuntimeApi, DigestFor, BlakeTwo256
@@ -48,9 +48,9 @@ impl<B, E, Block, RA, A> consensus_common::Environment<Block> for
 	ProposerFactory<SubstrateClient<B, E, Block, RA>, A>
 		where
 			A: txpool::ChainApi<Block=Block> + 'static,
-			B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-			E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
-			Block: BlockT<Hash=H256>,
+			B: client::backend::Backend<Block> + Send + Sync + 'static,
+			E: CallExecutor<Block> + Send + Sync + Clone + 'static,
+			Block: BlockT,
 			RA: Send + Sync + 'static,
 			SubstrateClient<B, E, Block, RA>: ProvideRuntimeApi,
 			<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api:
@@ -96,9 +96,9 @@ impl<B, E, Block, RA, A> consensus_common::Proposer<Block> for
 	Proposer<Block, SubstrateClient<B, E, Block, RA>, A>
 		where
 			A: txpool::ChainApi<Block=Block>,
-			B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-			E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
-			Block: BlockT<Hash=H256>,
+			B: client::backend::Backend<Block> + Send + Sync + 'static,
+			E: CallExecutor<Block> + Send + Sync + Clone + 'static,
+			Block: BlockT,
 			RA: Send + Sync + 'static,
 			SubstrateClient<B, E, Block, RA>: ProvideRuntimeApi,
 			<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api:
@@ -123,9 +123,9 @@ impl<B, E, Block, RA, A> consensus_common::Proposer<Block> for
 
 impl<Block, B, E, RA, A> Proposer<Block, SubstrateClient<B, E, Block, RA>, A>	where
 	A: txpool::ChainApi<Block=Block>,
-	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
-	Block: BlockT<Hash=H256>,
+	B: client::backend::Backend<Block> + Send + Sync + 'static,
+	E: CallExecutor<Block> + Send + Sync + Clone + 'static,
+	Block: BlockT,
 	RA: Send + Sync + 'static,
 	SubstrateClient<B, E, Block, RA>: ProvideRuntimeApi,
 	<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api:
