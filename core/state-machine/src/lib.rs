@@ -311,7 +311,7 @@ impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec> where
 			CallResult<R, Exec::Error>,
 		) -> CallResult<R, Exec::Error>
 	{
-		let orig_committed = self.overlay.changes.states.clone();
+		let orig_committed = self.overlay.changes.clone();
 		let (result, was_native, storage_delta, changes_delta) = self.execute_aux(
 			compute_tx,
 			true,
@@ -319,7 +319,7 @@ impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec> where
 		);
 
 		if was_native {
-			self.overlay.changes.states = orig_committed;
+			self.overlay.changes = orig_committed;
 			let (wasm_result, _, wasm_storage_delta, wasm_changes_delta) = self.execute_aux(
 				compute_tx,
 				false,
