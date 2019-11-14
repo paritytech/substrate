@@ -69,7 +69,6 @@ impl<V, I> Default for History<V, I> {
 /// Size of preallocated history per element.
 /// Currently at two for committed and prospective only.
 /// It means that using transaction in a module got a direct allocation cost.
-#[cfg(feature = "std")]
 const ALLOCATED_HISTORY: usize = 2;
 
 impl<V, I> History<V, I> {
