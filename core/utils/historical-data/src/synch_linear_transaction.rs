@@ -27,7 +27,7 @@
 //!
 //! The only global state is a counter of overlayed transaction layer.
 //! Committing or discarding a layer must use this counter.
-//! 
+//!
 //! # Local state
 //!
 //! Local state is either a committed state (this is a single first independant level
@@ -36,10 +36,10 @@
 use rstd::vec::Vec;
 use crate::PruneResult;
 
-/// Global state is a simple counter to the current overlay layer index.
+/// Global states is a simple counter to the current overlay layer index.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct States(usize);
-	
+
 impl Default for States {
 	fn default() -> Self {
 		// we default to 1 to be able to discard this transaction.
@@ -74,7 +74,7 @@ impl States {
 	}
 
 	/// Discard prospective changes to state.
-	/// It does not reverts actual values. 
+	/// It does not reverts actual values.
 	/// A subsequent synchronisation of stored values is needed.
 	pub fn discard_prospective(&mut self) {
 		self.0 = 1;
@@ -226,6 +226,7 @@ impl State {
 		}
 	}
 }
+
 /// An entry at a given history height.
 pub type HistoricalValue<V> = crate::HistoricalValue<V, State>;
 

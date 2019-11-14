@@ -446,7 +446,7 @@ impl OverlayedChanges {
 	pub fn commit_transaction(&mut self) {
 		self.changes.commit_transaction();
 	}
-	
+
 	/// Consume `OverlayedChanges` and take committed set.
 	pub fn into_committed(self) -> (
 		impl Iterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
@@ -725,7 +725,7 @@ mod tests {
 		assert!(overlayed.storage(&key).is_none());
 
 		// discard transaction similar to discard prospective if no transaction.
- 
+
 		overlayed.set_storage(key.clone(), Some(vec![1, 2, 3]));
 		assert_eq!(overlayed.storage(&key).unwrap(), Some(&[1, 2, 3][..]));
 

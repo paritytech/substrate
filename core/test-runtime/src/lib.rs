@@ -919,7 +919,7 @@ fn test_historical_data() {
 	if value.get() != None {
 		panic!("Got a value for empty data");
 	}
- 
+
 	value.set(&states, 42u64);
 	states.start_transaction();
 	if value.get() != Some(&42) {
