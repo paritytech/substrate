@@ -101,7 +101,7 @@ tempfile = "3.1.0"
 
 [build-dependencies]
 substrate-cli = { package = "substrate-cli", path = "../../../client/cli" }
-build-script-utils = { package = "substrate-build-script-utils", path = "../../../client/utils/build-script-utils" }
+build-script-utils = { package = "substrate-build-script-utils", path = "../../../../utils/build-script-utils" }
 structopt = "0.3.3"
 vergen = "3.0.4"
 
