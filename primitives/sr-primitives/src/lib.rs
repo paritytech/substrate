@@ -453,7 +453,11 @@ impl From<&'static str> for DispatchError {
 
 /// Verify a signature on an encoded value in a lazy manner. This can be
 /// an optimization if the signature scheme has an "unsigned" escape hash.
-pub fn verify_encoded_lazy<V: Verify, T: codec::Encode>(sig: &V, item: &T, signer: &<V::Signer as IdentifyAccount>::AccountId) -> bool {
+pub fn verify_encoded_lazy<V: Verify, T: codec::Encode>(
+	sig: &V,
+	item: &T,
+	signer: &<V::Signer as IdentifyAccount>::AccountId
+) -> bool {
 	// The `Lazy<T>` trait expresses something like `X: FnMut<Output = for<'a> &'a T>`.
 	// unfortunately this is a lifetime relationship that can't
 	// be expressed without generic associated types, better unification of HRTBs in type position,

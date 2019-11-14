@@ -91,7 +91,9 @@ mod tests {
 			"\"0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\""
 		);
 		assert!(
-			ser::from_str::<U256>("\"0x1ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"").unwrap_err().is_data()
+			ser::from_str::<U256>("\"0x1ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"")
+			.unwrap_err()
+			.is_data()
 		);
 	}
 }

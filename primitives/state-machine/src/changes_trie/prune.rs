@@ -168,7 +168,9 @@ fn pruning_range<Number: BlockNumber>(
 
 	// last block for which changes trie is pruned
 	let last_block_to_prune = blocks_to_keep.and_then(|b| block.checked_sub(&b));
-	let first_block_to_prune = last_block_to_prune.clone().and_then(|b| b.checked_sub(&prune_interval.into()));
+	let first_block_to_prune = last_block_to_prune
+		.clone()
+		.and_then(|b| b.checked_sub(&prune_interval.into()));
 
 	last_block_to_prune
 		.and_then(|last| first_block_to_prune.map(|first| (first + One::one(), last)))
@@ -221,7 +223,10 @@ mod tests {
 		current_block: u64,
 	) -> HashSet<H::Out> {
 		let mut pruned_trie_nodes = HashSet::new();
-		prune(config, storage, min_blocks_to_keep, &AnchorBlockId { hash: Default::default(), number: current_block },
+		prune(config,
+			storage,
+			min_blocks_to_keep,
+			&AnchorBlockId { hash: Default::default(), number: current_block },
 			|node| { pruned_trie_nodes.insert(node); });
 		pruned_trie_nodes
 	}
@@ -232,18 +237,22 @@ mod tests {
 
 			let child_key = ChildIndex { block: 67u64, storage_key: b"1".to_vec() }.encode();
 			let mut mdb1 = MemoryDB::<Blake2Hasher>::default();
-			let root1 = insert_into_memory_db::<Blake2Hasher, _>(&mut mdb1, vec![(vec![10], vec![20])]).unwrap();
+			let root1 = insert_into_memory_db::<Blake2Hasher, _>(
+				&mut mdb1, vec![(vec![10], vec![20])]).unwrap();
 			let mut mdb2 = MemoryDB::<Blake2Hasher>::default();
-			let root2 = insert_into_memory_db::<Blake2Hasher, _>(&mut mdb2, vec![(vec![11], vec![21]), (vec![12], vec![22])]).unwrap();
+			let root2 = insert_into_memory_db::<Blake2Hasher, _>(
+				&mut mdb2, vec![(vec![11], vec![21]), (vec![12], vec![22])]).unwrap();
 			let mut mdb3 = MemoryDB::<Blake2Hasher>::default();
-			let ch_root3 = insert_into_memory_db::<Blake2Hasher, _>(&mut mdb3, vec![(vec![110], vec![120])]).unwrap();
+			let ch_root3 = insert_into_memory_db::<Blake2Hasher, _>(
+				&mut mdb3, vec![(vec![110], vec![120])]).unwrap();
 			let root3 = insert_into_memory_db::<Blake2Hasher, _>(&mut mdb3, vec![
 				(vec![13], vec![23]),
 				(vec![14], vec![24]),
 				(child_key, ch_root3.as_ref().encode()),
 			]).unwrap();
 			let mut mdb4 = MemoryDB::<Blake2Hasher>::default();
-			let root4 = insert_into_memory_db::<Blake2Hasher, _>(&mut mdb4, vec![(vec![15], vec![25])]).unwrap();
+			let root4 = insert_into_memory_db::<Blake2Hasher, _>(
+				&mut mdb4, vec![(vec![15], vec![25])]).unwrap();
 			let storage = InMemoryStorage::new();
 			storage.insert(65, root1, mdb1);
 			storage.insert(66, root2, mdb2);

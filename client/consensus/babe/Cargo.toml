@@ -28,7 +28,7 @@ consensus-common = { package = "substrate-consensus-common", path = "../../../pr
 uncles = { package = "substrate-consensus-uncles", path = "../uncles" }
 slots = { package = "substrate-consensus-slots", path = "../slots"  }
 sr-primitives = {  path = "../../../primitives/sr-primitives" }
-fork-tree = { path = "../../utils/fork-tree" }
+fork-tree = { path = "../../../utils/fork-tree" }
 futures-preview = { version = "0.3.0-alpha.19", features = ["compat"] }
 futures01 = { package = "futures", version = "0.1" }
 futures-timer = "0.4.0"

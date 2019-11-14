@@ -178,7 +178,9 @@ impl<T> Instance<T> {
 	/// be returned.
 	///
 	/// [`EnvironmentDefinitionBuilder`]: struct.EnvironmentDefinitionBuilder.html
-	pub fn new(code: &[u8], env_def_builder: &EnvironmentDefinitionBuilder<T>, state: &mut T) -> Result<Instance<T>, Error> {
+	pub fn new(code: &[u8], env_def_builder: &EnvironmentDefinitionBuilder<T>, state: &mut T)
+		-> Result<Instance<T>, Error>
+	{
 		Ok(Instance {
 			inner: imp::Instance::new(code, &env_def_builder.inner, state)?,
 		})
