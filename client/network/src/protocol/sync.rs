@@ -120,8 +120,9 @@ pub struct ChainSync<B: BlockT> {
 	/// A set of hashes of blocks that are being downloaded or have been
 	/// downloaded and are queued for import.
 	queue_blocks: HashSet<B::Hash>,
-	/// The best block number that we are currently importing.
-	best_importing_number: NumberFor<B>,
+	/// The best block number that was successfully imported into the chain.
+	/// This can not decrease.
+	best_imported_number: NumberFor<B>,
 	/// Finality proof handler.
 	request_builder: Option<BoxFinalityProofRequestBuilder<B>>,
 	/// Fork sync targets.
@@ -301,12 +302,12 @@ impl<B: BlockT> ChainSync<B> {
 			blocks: BlockCollection::new(),
 			best_queued_hash: info.chain.best_hash,
 			best_queued_number: info.chain.best_number,
+			best_imported_number: info.chain.best_number,
 			extra_finality_proofs: ExtraRequests::new(),
 			extra_justifications: ExtraRequests::new(),
 			role,
 			required_block_attributes,
 			queue_blocks: Default::default(),
-			best_importing_number: Zero::zero(),
 			request_builder,
 			fork_targets: Default::default(),
 			is_idle: false,
@@ -756,13 +757,7 @@ impl<B: BlockT> ChainSync<B> {
 			self.on_block_queued(h, n)
 		}
 
-		let new_best_importing_number = new_blocks.last()
-			.and_then(|b| b.header.as_ref().map(|h| *h.number()))
-			.unwrap_or_else(|| Zero::zero());
-
 		self.queue_blocks.extend(new_blocks.iter().map(|b| b.hash));
-
-		self.best_importing_number = std::cmp::max(new_best_importing_number, self.best_importing_number);
 
 		Ok(OnBlockData::Import(origin, new_blocks))
 	}
@@ -897,6 +892,10 @@ impl<B: BlockT> ChainSync<B> {
 						trace!(target: "sync", "Block imported but requires finality proof {}: {:?}", number, hash);
 						self.request_finality_proof(&hash, number);
 					}
+
+					if number > self.best_imported_number {
+						self.best_imported_number = number;
+					}
 				},
 				Err(BlockImportError::IncompleteHeader(who)) => {
 					if let Some(peer) = who {
@@ -935,9 +934,6 @@ impl<B: BlockT> ChainSync<B> {
 
 		for hash in hashes {
 			self.queue_blocks.remove(&hash);
-		}
-		if has_error {
-			self.best_importing_number = Zero::zero()
 		}
 
 		self.is_idle = false;
@@ -1130,11 +1126,10 @@ impl<B: BlockT> ChainSync<B> {
 	fn restart<'a>(&'a mut self) -> impl Iterator<Item = Result<(PeerId, BlockRequest<B>), BadPeer>> + 'a
 	{
 		self.queue_blocks.clear();
-		self.best_importing_number = Zero::zero();
 		self.blocks.clear();
 		let info = self.client.info();
 		self.best_queued_hash = info.chain.best_hash;
-		self.best_queued_number = info.chain.best_number;
+		self.best_queued_number = std::cmp::max(info.chain.best_number, self.best_imported_number);
 		self.is_idle = false;
 		debug!(target:"sync", "Restarted with {} ({})", self.best_queued_number, self.best_queued_hash);
 		let old_peers = std::mem::replace(&mut self.peers, HashMap::new());

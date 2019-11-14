@@ -117,6 +117,10 @@ pub enum WasmError {
 	CodeNotFound,
 	/// Failure to reinitialize runtime instance from snapshot.
 	ApplySnapshotFailed,
+	/// Failure to erase the wasm memory.
+	///
+	/// Depending on the implementation might mean failure of allocating memory.
+	ErasingFailed(String),
 	/// Wasm code failed validation.
 	InvalidModule,
 	/// Wasm code could not be deserialized.
