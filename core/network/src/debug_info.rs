@@ -27,7 +27,7 @@ use log::{debug, trace, error};
 use std::collections::hash_map::Entry;
 use std::time::{Duration, Instant};
 use tokio_io::{AsyncRead, AsyncWrite};
-use async_std::stream::interval;
+use crate::utils::interval;
 
 /// Time after we disconnect from a node before we purge its information from the cache.
 const CACHE_EXPIRE: Duration = Duration::from_secs(10 * 60);

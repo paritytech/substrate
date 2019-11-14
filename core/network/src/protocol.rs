@@ -16,6 +16,7 @@
 
 use crate::{DiscoveryNetBehaviour, config::ProtocolId};
 use crate::legacy_proto::{LegacyProto, LegacyProtoOut};
+use crate::utils::interval;
 use bytes::BytesMut;
 use futures::prelude::*;
 use futures03::{StreamExt as _, TryStreamExt as _};
@@ -53,7 +54,6 @@ use crate::chain::{Client, FinalityProofProvider};
 use client::light::fetcher::{FetchChecker, ChangesProof, StorageProof};
 use crate::error;
 use util::LruHashSet;
-use async_std::stream::interval;
 
 mod util;
 pub mod consensus_gossip;
