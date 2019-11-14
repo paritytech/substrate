@@ -149,9 +149,9 @@ pub fn build_current_project(file_name: &str, wasm_builder_source: WasmBuilderSo
 	build_current_project_with_rustflags(file_name, wasm_builder_source, "");
 }
 
-/// Returns the root path of the wasm-builder-runner workspace.
+/// Returns the root path of the wasm-builder workspace.
 ///
-/// The wasm-builder-runner workspace contains all wasm-builder-runner's projects.
+/// The wasm-builder workspace contains all wasm-builder's projects.
 fn get_workspace_root() -> PathBuf {
 	let out_dir_env = env::var("OUT_DIR").expect("`OUT_DIR` is set by cargo!");
 	let mut out_dir = PathBuf::from(&out_dir_env);

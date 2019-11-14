@@ -26,6 +26,7 @@ crate-type = ["cdylib", "rlib"]
 codec = { package = "parity-scale-codec", version = "1.0.6" }
 serde = { version = "1.0.102", features = [ "derive" ] }
 futures = "0.1.29"
+futures03 = { package = "futures-preview", version = "0.3.0-alpha.19", features = ["compat"] }
 hex-literal = "0.2.1"
 jsonrpc-core = "14.0.3"
 log = "0.4.8"
@@ -33,10 +34,11 @@ rand = "0.7.2"
 structopt = "0.3.3"
 
 # primitives
-primitives = { package = "substrate-primitives", path = "../../../primitives/core" }
-sr-primitives = { path = "../../../primitives/sr-primitives" }
+authority-discovery-primitives = { package = "substrate-authority-discovery-primitives", path = "../../../primitives/authority-discovery"}
 babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../../../primitives/consensus/babe" }
 grandpa_primitives = { package = "substrate-finality-grandpa-primitives", path = "../../../primitives/finality-grandpa" }
+primitives = { package = "substrate-primitives", path = "../../../primitives/core" }
+sr-primitives = { path = "../../../primitives/sr-primitives" }
 
 # core dependencies
 runtime-io = { package = "sr-io", path = "../../../primitives/sr-io" }
@@ -101,7 +103,7 @@ tempfile = "3.1.0"
 
 [build-dependencies]
 substrate-cli = { package = "substrate-cli", path = "../../../client/cli" }
-build-script-utils = { package = "substrate-build-script-utils", path = "../../../../utils/build-script-utils" }
+build-script-utils = { package = "substrate-build-script-utils", path = "../../../utils/build-script-utils" }
 structopt = "0.3.3"
 vergen = "3.0.4"
 

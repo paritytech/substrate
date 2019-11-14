@@ -14,6 +14,7 @@ rustc-hex = { version = "2.0", optional = true }
 serde = { version = "1.0.102", optional = true }
 
 # primitives
+authority-discovery-primitives = { package = "substrate-authority-discovery-primitives", path = "../../../primitives/authority-discovery", default-features = false }
 babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../../../primitives/consensus/babe", default-features = false }
 block-builder-api = { package = "substrate-block-builder-runtime-api", path = "../../../primitives/block-builder/runtime-api", default-features = false}
 inherents = { package = "substrate-inherents", path = "../../../primitives/inherents", default-features = false }
@@ -30,6 +31,7 @@ tx-pool-api = { package = "substrate-transaction-pool-runtime-api", path = "../.
 version = { package = "sr-version", path = "../../../primitives/sr-version", default-features = false }
 
 # paint dependencies
+authority-discovery = { package = "paint-authority-discovery", path = "../../../paint/authority-discovery", default-features = false }
 authorship = { package = "paint-authorship", path = "../../../paint/authorship", default-features = false }
 babe = { package = "paint-babe", path = "../../../paint/babe", default-features = false }
 balances = { package = "paint-balances", path = "../../../paint/balances", default-features = false }
@@ -61,7 +63,7 @@ transaction-payment = { package = "paint-transaction-payment", path = "../../../
 transaction-payment-rpc-runtime-api = { package = "paint-transaction-payment-rpc-runtime-api", path = "../../../paint/transaction-payment/rpc/runtime-api/", default-features = false }
 
 [build-dependencies]
-wasm-builder-runner = { package = "substrate-wasm-builder-runner", version = "1.0.4", path = "../../../utils/wasm-builder-runner" }
+wasm-builder = { package = "substrate-wasm-builder", version = "1.0.4", path = "../../../utils/wasm-builder" }
 
 [dev-dependencies]
 runtime_io = { package = "sr-io", path = "../../../primitives/sr-io" }
@@ -69,6 +71,8 @@ runtime_io = { package = "sr-io", path = "../../../primitives/sr-io" }
 [features]
 default = ["std"]
 std = [
+	"authority-discovery-primitives/std",
+	"authority-discovery/std",
 	"authorship/std",
 	"babe-primitives/std",
 	"babe/std",

@@ -38,4 +38,4 @@ basic-authorship = { package = "substrate-basic-authorship", path  = "../../clie
 
 [build-dependencies]
 vergen = "3.0.4"
-build-script-utils = { package = "substrate-build-script-utils", path = "../../../utils/build-script-utils" }
+build-script-utils = { package = "substrate-build-script-utils", path = "../../utils/build-script-utils" }

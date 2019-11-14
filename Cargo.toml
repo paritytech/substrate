@@ -37,7 +37,7 @@ members = [
 	"client/transaction-pool/graph",
 	"utils/fork-tree",
 	"utils/wasm-builder",
-	"utils/wasm-builder-runner",
+	"utils/wasm-builder",
 	"paint/assets",
 	"paint/aura",
 	"paint/authority-discovery",

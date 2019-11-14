@@ -8,7 +8,7 @@ The WASM builder is a tool that integrates the process of building the WASM bina
 A project that should be compiled as a WASM binary needs to:
 
 1. Add a `build.rs` file.
-2. Add `substrate-wasm-builder-runner` as dependency into `build-dependencies`.
+2. Add `substrate-wasm-builder` as dependency into `build-dependencies`.
 
 The `build.rs` file needs to contain the following code:
 

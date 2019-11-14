@@ -13,7 +13,7 @@ primitives = { package = "substrate-primitives",  path = "../../../primitives/co
 sr-primitives = { package = "sr-primitives",  path = "../../../primitives/sr-primitives", default-features = false }
 
 [build-dependencies]
-wasm-builder-runner = { package = "substrate-wasm-builder-runner", version = "1.0.4", path = "../../../utils/wasm-builder-runner" }
+wasm-builder = { package = "substrate-wasm-builder", version = "1.0.4", path = "../../../utils/wasm-builder" }
 
 [features]
 default = [ "std" ]

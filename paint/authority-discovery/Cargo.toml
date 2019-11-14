@@ -5,6 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
+authority-discovery-primitives = { package = "substrate-authority-discovery-primitives", path = "../../primitives/authority-discovery", default-features = false }
 app-crypto = { package = "substrate-application-crypto", path = "../../primitives/application-crypto", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 primitives = { package = "substrate-primitives",  path = "../../primitives/core", default-features = false }
@@ -17,13 +18,13 @@ support = { package = "paint-support", path = "../support", default-features = f
 system = { package = "paint-system", path = "../system", default-features = false }
 
 [dev-dependencies]
-babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../../primitives/consensus/babe", default-features = false }
 sr-staking-primitives = { path = "../../primitives/sr-staking-primitives", default-features = false }
 
 [features]
 default = ["std"]
 std = [
 	"app-crypto/std",
+	"authority-discovery-primitives/std",
 	"codec/std",
 	"primitives/std",
 	"rstd/std",

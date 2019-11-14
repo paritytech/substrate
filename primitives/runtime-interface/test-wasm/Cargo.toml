@@ -12,7 +12,7 @@ runtime-io = { package = "sr-io", path = "../../sr-io", default-features = false
 primitives = { package = "substrate-primitives", path = "../../core", default-features = false }
 
 [build-dependencies]
-wasm-builder-runner = { package = "substrate-wasm-builder-runner", version = "1.0.3", path = "../../../utils/wasm-builder-runner" }
+wasm-builder = { package = "substrate-wasm-builder", version = "1.0.3", path = "../../../utils/wasm-builder" }
 
 [features]
 default = [ "std" ]
