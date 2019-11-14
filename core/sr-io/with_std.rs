@@ -180,7 +180,7 @@ impl StorageApi for () {
 			ext.storage_commit_transaction()
 		);
 	}
-	
+
 	fn blake2_256_trie_root(input: Vec<(Vec<u8>, Vec<u8>)>) -> H256 {
 		Layout::<Blake2Hasher>::trie_root(input)
 	}

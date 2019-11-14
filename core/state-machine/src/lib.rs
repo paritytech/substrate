@@ -319,9 +319,7 @@ impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec> where
 		);
 
 		if was_native {
-			if result.is_ok() {
-				self.overlay.changes.states = orig_committed;
-			}
+			self.overlay.changes.states = orig_committed;
 			let (wasm_result, _, wasm_storage_delta, wasm_changes_delta) = self.execute_aux(
 				compute_tx,
 				false,

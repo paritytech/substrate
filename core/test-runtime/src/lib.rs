@@ -916,23 +916,25 @@ fn test_sr25519_crypto() -> (sr25519::AppSignature, sr25519::AppPublic) {
 }
 
 fn test_historical_data() {
-	let mut states = historical_data::detached::linear::transaction::States::default();
-	let mut value = historical_data::linear::History::default();
-	if value.get(states.as_ref()) != None {
+	let mut states = historical_data::synch_linear_transaction::States::default();
+	let mut value = historical_data::synch_linear_transaction::History::default();
+	if value.get() != None {
 		panic!("Got a value for empty data");
 	}
  
 	value.set(&states, 42u64);
 	states.start_transaction();
-	if value.get(states.as_ref()) != Some(&42) {
+	if value.get() != Some(&42) {
 		panic!("Got a wrong result accessing a one element data");
 	}
 	value.set(&states, 43u64);
-	if value.get(states.as_ref()) != Some(&43) {
+	if value.get() != Some(&43) {
 		panic!("Got a wrong result accessing a two element data");
 	}
 	states.discard_transaction();
-	if value.get(states.as_ref()) != Some(&42) {
+	states.apply_discard_transaction(&mut value);
+	states.ensure_running();
+	if value.get() != Some(&42) {
 		panic!("Got a wrong result accessing a one element data after a discard");
 	}
 }

@@ -19,12 +19,12 @@
 #[cfg(test)]
 use std::iter::FromIterator;
 #[cfg(test)]
-use historical_data::synch::linear::transaction::State;
+use historical_data::synch_linear_transaction::State;
 use std::collections::{HashMap, BTreeSet};
 use codec::Decode;
 use crate::changes_trie::{NO_EXTRINSIC_INDEX, Configuration as ChangesTrieConfig};
 use primitives::storage::well_known_keys::EXTRINSIC_INDEX;
-use historical_data::synch::linear::transaction::{History, HistoricalValue, States};
+use historical_data::synch_linear_transaction::{History, HistoricalValue, States};
 use historical_data::PruneResult;
 
 /// The overlayed changes to state to be queried on top of the backend.

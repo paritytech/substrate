@@ -533,8 +533,7 @@ mod tests {
 	use crate::changes_trie::{Configuration as ChangesTrieConfiguration,
 		InMemoryStorage as InMemoryChangesTrieStorage};
 	use crate::overlayed_changes::{OverlayedValue, OverlayedChangeSet};
-	use historical_data::synch::linear::transaction::{History, HistoricalValue};
-	use historical_data::synch::linear::transaction::{State};
+	use historical_data::synch_linear_transaction::{History, HistoricalValue, State};
 
 	type TestBackend = InMemory<Blake2Hasher>;
 	type TestChangesTrieStorage = InMemoryChangesTrieStorage<Blake2Hasher, u64>;

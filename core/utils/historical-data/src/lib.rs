@@ -16,14 +16,12 @@
 
 //! Data storage containing multiple state for a value.
 //! This is use to store historical information for an item,
-//! and does have to include any kind of proof.
+//! and does have to include any proof.
 
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-pub mod synch;
-pub mod detached;
-pub mod linear;
+pub mod synch_linear_transaction;
 
 /// An entry at a given history index.
 #[derive(Debug, Clone)]
@@ -42,10 +40,6 @@ impl<V, I> From<(V, I)> for HistoricalValue<V, I> {
 }
 
 impl<V, I: Clone> HistoricalValue<V, I> {
-	fn as_ref(&self) -> HistoricalValue<&V, I> {
-		HistoricalValue { value: &self.value, index: self.index.clone() }
-	}
-
 	fn as_mut(&mut self) -> HistoricalValue<&mut V, I> {
 		HistoricalValue { value: &mut self.value, index: self.index.clone() }
 	}

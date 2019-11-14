@@ -18,6 +18,11 @@
 //! support.
 //!
 //!
+//! Described as a synchronized module as it contains historical
+//! data that do not require a separated state for most operation.
+//! Global state operation must therefore apply on all local values
+//! with history synchronously.
+//!
 //! # Global state
 //!
 //! The only global state is a counter of overlayed transaction layer.

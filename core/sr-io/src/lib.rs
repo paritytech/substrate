@@ -148,7 +148,7 @@ export_api! {
 
 		/// Commit a transactional layer.
 		fn storage_commit_transaction();
-	
+
 		/// A trie root formed from the iterated items.
 		fn blake2_256_trie_root(input: Vec<(Vec<u8>, Vec<u8>)>) -> H256;
 
