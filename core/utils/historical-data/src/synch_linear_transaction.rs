@@ -33,8 +33,7 @@
 //! Local state is either a committed state (this is a single first independant level
 //! of transaction) or a reference to the transaction counter in use in time of creation.
 
-use rstd::vec::Vec;
-use crate::PruneResult;
+use crate::CleaningResult;
 
 /// Global state is a simple counter to the current overlay layer index.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -53,7 +52,6 @@ impl States {
 	pub fn as_state(&self) -> State {
 		State::Transaction(self.0)
 	}
-
 
 	/// Build any state for testing only.
 	#[cfg(any(test, feature = "test-helpers"))]
@@ -81,19 +79,19 @@ impl States {
 	}
 
 	/// Update a value to a new prospective.
-	pub fn apply_discard_prospective<V>(&self, value: &mut History<V>) -> PruneResult {
+	pub fn apply_discard_prospective<V>(&self, value: &mut History<V>) -> CleaningResult {
 		if value.0.len() == 0 {
-			return PruneResult::Cleared;
+			return CleaningResult::Cleared;
 		}
 		if value.0[0].index == State::Committed {
 			if value.0.len() == 1 {
-				return PruneResult::Unchanged;
+				return CleaningResult::Unchanged;
 			}
 			value.0.truncate(1);
 		} else {
 			value.0.clear();
 		}
-		PruneResult::Changed
+		CleaningResult::Changed
 	}
 
 	/// Commit prospective changes to state.
@@ -104,22 +102,22 @@ impl States {
 
 	/// Update a value to a new prospective.
 	/// Multiple commit can be applied at the same time.
-	pub fn apply_commit_prospective<V>(&self, value: &mut History<V>) -> PruneResult {
+	pub fn apply_commit_prospective<V>(&self, value: &mut History<V>) -> CleaningResult {
 		if value.0.len() == 0 {
-			return PruneResult::Cleared;
+			return CleaningResult::Cleared;
 		}
 		if value.0.len() == 1 {
 			if value.0[0].index != State::Committed {
 				value.0[0].index = State::Committed;
 			} else {
-				return PruneResult::Unchanged;
+				return CleaningResult::Unchanged;
 			}
 		} else if let Some(mut v) = value.0.pop() {
 			v.index = State::Committed;
 			value.0.clear();
 			value.0.push(v);
 		}
-		PruneResult::Changed
+		CleaningResult::Changed
 	}
 
 	/// Create a new transactional layer.
@@ -139,7 +137,7 @@ impl States {
 	/// Update a value to previous transaction.
 	/// Multiple discard can be applied at the same time.
 	/// Returns true if value is still needed.
-	pub fn apply_discard_transaction<V>(&self, value: &mut History<V>) -> PruneResult {
+	pub fn apply_discard_transaction<V>(&self, value: &mut History<V>) -> CleaningResult {
 		let init_len = value.0.len();
 		for i in (0 .. value.0.len()).rev() {
 			if let HistoricalValue {
@@ -152,11 +150,11 @@ impl States {
 			} else { break }
 		}
 		if value.0.len() == 0 {
-			PruneResult::Cleared
+			CleaningResult::Cleared
 		} else if value.0.len() != init_len {
-			PruneResult::Changed
+			CleaningResult::Changed
 		} else {
-			PruneResult::Unchanged
+			CleaningResult::Unchanged
 		}
 	}
 
@@ -173,7 +171,7 @@ impl States {
 	/// after one or more `commit_transaction` calls.
 	/// Multiple discard can be applied at the same time.
 	/// Returns true if value is still needed.
-	pub fn apply_commit_transaction<V>(&self, value: &mut History<V>) -> PruneResult {
+	pub fn apply_commit_transaction<V>(&self, value: &mut History<V>) -> CleaningResult {
 		let mut new_value = None;
 		for i in (0 .. value.0.len()).rev() {
 			if let HistoricalValue {
@@ -196,9 +194,9 @@ impl States {
 				value: new_value,
 				index: State::Transaction(self.0),
 			});
-			return PruneResult::Changed;
+			return CleaningResult::Changed;
 		}
-		PruneResult::Unchanged
+		CleaningResult::Unchanged
 	}
 }
 
@@ -224,32 +222,9 @@ impl State {
 pub type HistoricalValue<V> = crate::HistoricalValue<V, State>;
 
 /// History of value and their state.
-#[derive(Debug, Clone)]
-#[cfg_attr(any(test, feature = "test-helpers"), derive(PartialEq))]
-pub struct History<V>(pub(crate) Vec<HistoricalValue<V>>);
-
-impl<V> Default for History<V> {
-	fn default() -> Self {
-		History(Default::default())
-	}
-}
+pub type History<V> = crate::History<V, State>;
 
 impl<V> History<V> {
-
-	/// Get current number of stored historical values.
-	pub fn len(&self) -> usize {
-		self.0.len()
-	}
-
-	#[cfg(any(test, feature = "test-helpers"))]
-	/// Create an history from an existing history.
-	pub fn from_iter(input: impl IntoIterator<Item = HistoricalValue<V>>) -> Self {
-		let mut history = History::default();
-		for v in input {
-			history.push_unchecked(v);
-		}
-		history
-	}
 
 	/// Set a value, it uses a global state as parameter.
 	pub fn set(&mut self, states: &States, value: V) {
@@ -267,12 +242,6 @@ impl<V> History<V> {
 			value,
 			index: State::Transaction(states.0),
 		});
-	}
-
-	/// Push a value without checking if it can overwrite the current
-	/// state.
-	pub fn push_unchecked(&mut self, item: HistoricalValue<V>) {
-		self.0.push(item);
 	}
 
 	/// Access to the latest pending value.

@@ -25,7 +25,7 @@ use codec::Decode;
 use crate::changes_trie::{NO_EXTRINSIC_INDEX, Configuration as ChangesTrieConfig};
 use primitives::storage::well_known_keys::EXTRINSIC_INDEX;
 use historical_data::synch_linear_transaction::{History, HistoricalValue, States};
-use historical_data::PruneResult;
+use historical_data::CleaningResult;
 
 /// The overlayed changes to state to be queried on top of the backend.
 ///
@@ -152,9 +152,9 @@ impl OverlayedChangeSet {
 	pub fn discard_prospective(&mut self) {
 		self.states.discard_prospective();
 		let states = &self.states;
-		self.top.retain(|_, h_value| states.apply_discard_prospective(h_value) != PruneResult::Cleared);
+		self.top.retain(|_, h_value| states.apply_discard_prospective(h_value) != CleaningResult::Cleared);
 		self.children.retain(|_, m| {
-			m.retain(|_, h_value| states.apply_discard_prospective(h_value) != PruneResult::Cleared);
+			m.retain(|_, h_value| states.apply_discard_prospective(h_value) != CleaningResult::Cleared);
 			!m.is_empty()
 		});
 	}
@@ -163,9 +163,9 @@ impl OverlayedChangeSet {
 	pub fn commit_prospective(&mut self) {
 		self.states.commit_prospective();
 		let states = &self.states;
-		self.top.retain(|_, h_value| states.apply_commit_prospective(h_value) != PruneResult::Cleared);
+		self.top.retain(|_, h_value| states.apply_commit_prospective(h_value) != CleaningResult::Cleared);
 		self.children.retain(|_, m| {
-			m.retain(|_, h_value| states.apply_commit_prospective(h_value) != PruneResult::Cleared);
+			m.retain(|_, h_value| states.apply_commit_prospective(h_value) != CleaningResult::Cleared);
 			!m.is_empty()
 		});
 	}
@@ -180,9 +180,9 @@ impl OverlayedChangeSet {
 	pub fn discard_transaction(&mut self) {
 		self.states.discard_transaction();
 		let states = &self.states;
-		self.top.retain(|_, h_value| states.apply_discard_transaction(h_value) != PruneResult::Cleared);
+		self.top.retain(|_, h_value| states.apply_discard_transaction(h_value) != CleaningResult::Cleared);
 		self.children.retain(|_, m| {
-			m.retain(|_, h_value| states.apply_discard_transaction(h_value) != PruneResult::Cleared);
+			m.retain(|_, h_value| states.apply_discard_transaction(h_value) != CleaningResult::Cleared);
 			!m.is_empty()
 		});
 		self.states.finalize_discard();
@@ -192,9 +192,9 @@ impl OverlayedChangeSet {
 	pub fn commit_transaction(&mut self) {
 		self.states.commit_transaction();
 		let states = &self.states;
-		self.top.retain(|_, h_value| states.apply_commit_transaction(h_value) != PruneResult::Cleared);
+		self.top.retain(|_, h_value| states.apply_commit_transaction(h_value) != CleaningResult::Cleared);
 		self.children.retain(|_, m| {
-			m.retain(|_, h_value| states.apply_commit_transaction(h_value) != PruneResult::Cleared);
+			m.retain(|_, h_value| states.apply_commit_transaction(h_value) != CleaningResult::Cleared);
 			!m.is_empty()
 		});
 	}
@@ -319,7 +319,6 @@ impl OverlayedChanges {
 	pub(crate) fn remove_changes_trie_config(&mut self) -> Option<ChangesTrieConfig> {
 		self.changes_trie_config.take()
 	}
-
 
 	/// Returns a double-Option: None if the key is unknown (i.e. and the query should be refered
 	/// to the backend); Some(None) if the key has been deleted. Some(Some(...)) for a key whose
@@ -712,7 +711,6 @@ mod tests {
 			Default::default());
 	}
 
-
 	#[test]
 	fn overlayed_storage_transactions() {
 		let mut overlayed = OverlayedChanges::default();
@@ -737,7 +735,6 @@ mod tests {
 
 		overlayed.commit_transaction();
 		assert_eq!(overlayed.storage(&key).unwrap(), Some(&[1, 2, 3][..]));
-
 
 		overlayed.discard_transaction();
 		assert_eq!(overlayed.storage(&key), None);
