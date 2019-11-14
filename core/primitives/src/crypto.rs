@@ -916,6 +916,8 @@ pub mod key_types {
 	pub const AURA: KeyTypeId = KeyTypeId(*b"aura");
 	/// Key type for ImOnline module, built-in.
 	pub const IM_ONLINE: KeyTypeId = KeyTypeId(*b"imon");
+	/// Key type for AuthorityDiscovery module, built-in.
+	pub const AUTHORITY_DISCOVERY: KeyTypeId = KeyTypeId(*b"audi");
 	/// A key type ID useful for tests.
 	pub const DUMMY: KeyTypeId = KeyTypeId(*b"dumy");
 }

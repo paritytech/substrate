@@ -26,6 +26,7 @@ crate-type = ["cdylib", "rlib"]
 codec = { package = "parity-scale-codec", version = "1.0.6" }
 serde = { version = "1.0.102", features = [ "derive" ] }
 futures = "0.1.29"
+futures03 = { package = "futures-preview", version = "0.3.0-alpha.19", features = ["compat"] }
 hex-literal = "0.2.1"
 jsonrpc-core = "14.0.3"
 log = "0.4.8"
@@ -37,6 +38,7 @@ primitives = { package = "substrate-primitives", path = "../../core/primitives" 
 sr-primitives = { path = "../../core/sr-primitives" }
 babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../../core/consensus/babe/primitives" }
 grandpa_primitives = { package = "substrate-finality-grandpa-primitives", path = "../../core/finality-grandpa/primitives" }
+authority-discovery-primitives = { package = "substrate-authority-discovery-primitives", path = "../../core/authority-discovery/primitives"}
 
 # core dependencies
 runtime-io = { package = "sr-io", path = "../../core/sr-io" }
@@ -47,6 +49,7 @@ transaction_pool = { package = "substrate-transaction-pool", path = "../../core/
 network = { package = "substrate-network", path = "../../core/network" }
 babe = { package = "substrate-consensus-babe", path = "../../core/consensus/babe" }
 grandpa = { package = "substrate-finality-grandpa", path = "../../core/finality-grandpa" }
+authority-discovery = { package = "substrate-authority-discovery", path = "../../core/authority-discovery"}
 keyring = { package = "substrate-keyring", path = "../../core/keyring" }
 client_db = { package = "substrate-client-db", path = "../../core/client/db", default-features = false }
 offchain = { package = "substrate-offchain", path = "../../core/offchain" }
@@ -65,6 +68,7 @@ balances = { package = "srml-balances", path = "../../srml/balances" }
 transaction-payment = { package = "srml-transaction-payment", path = "../../srml/transaction-payment" }
 support = { package = "srml-support", path = "../../srml/support", default-features = false }
 im_online = { package = "srml-im-online", path = "../../srml/im-online", default-features = false }
+sr-authority-discovery = { package = "srml-authority-discovery", path = "../../srml/authority-discovery", default-features = false }
 
 # node-specific dependencies
 node-runtime = { path = "../runtime" }

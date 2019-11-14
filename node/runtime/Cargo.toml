@@ -14,6 +14,7 @@ rustc-hex = { version = "2.0", optional = true }
 serde = { version = "1.0.102", optional = true }
 
 # primitives
+authority-discovery-primitives = { package = "substrate-authority-discovery-primitives", path = "../../core/authority-discovery/primitives", default-features = false }
 babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../../core/consensus/babe/primitives", default-features = false }
 node-primitives = { path = "../primitives", default-features = false }
 offchain-primitives = { package = "substrate-offchain-primitives", path = "../../core/offchain/primitives", default-features = false }
@@ -44,6 +45,7 @@ executive = { package = "srml-executive", path = "../../srml/executive", default
 finality-tracker = { package = "srml-finality-tracker", path = "../../srml/finality-tracker", default-features = false }
 grandpa = { package = "srml-grandpa", path = "../../srml/grandpa", default-features = false }
 im-online = { package = "srml-im-online", path = "../../srml/im-online", default-features = false }
+authority-discovery = { package = "srml-authority-discovery", path = "../../srml/authority-discovery", default-features = false }
 indices = { package = "srml-indices", path = "../../srml/indices", default-features = false }
 membership = { package = "srml-membership", path = "../../srml/membership", default-features = false }
 nicks = { package = "srml-nicks", path = "../../srml/nicks", default-features = false }
@@ -71,6 +73,8 @@ runtime_io = { package = "sr-io", path = "../../core/sr-io" }
 [features]
 default = ["std"]
 std = [
+	"authority-discovery/std",
+	"authority-discovery-primitives/std",
 	"authorship/std",
 	"babe-primitives/std",
 	"babe/std",

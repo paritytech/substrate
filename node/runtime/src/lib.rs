@@ -42,6 +42,7 @@ use primitives::OpaqueMetadata;
 use grandpa::AuthorityList as GrandpaAuthorityList;
 use grandpa::fg_primitives;
 use im_online::sr25519::{AuthorityId as ImOnlineId};
+use authority_discovery_primitives::AuthorityId as AuthorityDiscoveryId;
 use transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
 use contracts_rpc_runtime_api::ContractExecResult;
 use system::offchain::TransactionSubmitter;
@@ -76,8 +77,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to equal spec_version. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 193,
-	impl_version: 193,
+	spec_version: 194,
+	impl_version: 194,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -209,6 +210,7 @@ impl_opaque_keys! {
 		pub grandpa: Grandpa,
 		pub babe: Babe,
 		pub im_online: ImOnline,
+		pub authority_discovery: AuthorityDiscovery,
 	}
 }
 
@@ -433,6 +435,8 @@ impl offences::Trait for Runtime {
 	type OnOffenceHandler = Staking;
 }
 
+impl authority_discovery::Trait for Runtime {}
+
 impl grandpa::Trait for Runtime {
 	type Event = Event;
 }
@@ -521,6 +525,7 @@ construct_runtime!(
 		Contracts: contracts,
 		Sudo: sudo,
 		ImOnline: im_online::{Module, Call, Storage, Event<T>, ValidateUnsigned, Config<T>},
+		AuthorityDiscovery: authority_discovery::{Module, Call, Config},
 		Offences: offences::{Module, Call, Storage, Event},
 		RandomnessCollectiveFlip: randomness_collective_flip::{Module, Call, Storage},
 		Nicks: nicks::{Module, Call, Storage, Event<T>},
@@ -632,6 +637,12 @@ impl_runtime_apis! {
 				randomness: Babe::randomness(),
 				secondary_slots: true,
 			}
+		}
+	}
+
+	impl authority_discovery_primitives::AuthorityDiscoveryApi<Block> for Runtime {
+		fn authorities() -> Vec<AuthorityDiscoveryId> {
+			AuthorityDiscovery::authorities()
 		}
 	}
 

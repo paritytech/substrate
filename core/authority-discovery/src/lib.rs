@@ -48,20 +48,22 @@ use std::iter::FromIterator;
 use std::marker::PhantomData;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-use futures::channel::mpsc::Receiver;
-use futures::stream::StreamExt;
 use futures::task::{Context, Poll};
 use futures::Future;
 use futures_timer::Interval;
+use futures::prelude::*;
 
-use authority_discovery_primitives::{AuthorityDiscoveryApi, AuthorityId, Signature};
+use authority_discovery_primitives::{AuthorityDiscoveryApi, AuthorityId, AuthoritySignature, AuthorityPair};
 use client::blockchain::HeaderBackend;
+use codec::{Decode, Encode};
 use error::{Error, Result};
 use log::{debug, error, log_enabled, warn};
 use network::specialization::NetworkSpecialization;
 use network::{DhtEvent, ExHashT};
+use primitives::crypto::{key_types, Pair};
+use primitives::traits::BareCryptoStorePtr;
 use prost::Message;
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{Block as BlockT, ProvideRuntimeApi};
@@ -72,6 +74,12 @@ mod schema {
 	include!(concat!(env!("OUT_DIR"), "/authority_discovery.rs"));
 }
 
+/// Upper bound estimation on how long one should wait before accessing the Kademlia DHT.
+const LIBP2P_KADEMLIA_BOOTSTRAP_TIME: Duration = Duration::from_secs(30);
+
+/// Name of the Substrate peerset priority group for authorities discovered through the authority discovery module.
+const AUTHORITIES_PRIORITY_GROUP_NAME: &'static str = "authorities";
+
 /// An `AuthorityDiscovery` makes a given authority discoverable and discovers other authorities.
 pub struct AuthorityDiscovery<Client, Network, Block>
 where
@@ -79,12 +87,15 @@ where
 	Network: NetworkProvider,
 	Client: ProvideRuntimeApi + Send + Sync + 'static + HeaderBackend<Block>,
 	<Client as ProvideRuntimeApi>::Api: AuthorityDiscoveryApi<Block>,
+
 {
 	client: Arc<Client>,
 
 	network: Arc<Network>,
 	/// Channel we receive Dht events on.
-	dht_event_rx: Receiver<DhtEvent>,
+	dht_event_rx: Pin<Box<dyn Stream<Item = DhtEvent> + Send>>,
+
+	key_store: BareCryptoStorePtr,
 
 	/// Interval to be proactive, publishing own addresses.
 	publish_interval: Interval,
@@ -112,16 +123,23 @@ where
 	pub fn new(
 		client: Arc<Client>,
 		network: Arc<Network>,
-		dht_event_rx: Receiver<DhtEvent>,
+		key_store: BareCryptoStorePtr,
+		dht_event_rx: Pin<Box<dyn Stream<Item = DhtEvent> + Send>>,
 	) -> Self {
 		// Kademlia's default time-to-live for Dht records is 36h, republishing records every 24h. Given that a node
 		// could restart at any point in time, one can not depend on the republishing process, thus publishing own
 		// external addresses should happen on an interval < 36h.
-		let publish_interval = Interval::new(Duration::from_secs(12 * 60 * 60));
+		let publish_interval = Interval::new_at(
+			Instant::now() + LIBP2P_KADEMLIA_BOOTSTRAP_TIME,
+			Duration::from_secs(12 * 60 * 60),
+		);
 
 		// External addresses of other authorities can change at any given point in time. The interval on which to query
 		// for external addresses of other authorities is a trade off between efficiency and performance.
-		let query_interval = Interval::new(Duration::from_secs(10 * 60));
+		let query_interval = Interval::new_at(
+			Instant::now() + LIBP2P_KADEMLIA_BOOTSTRAP_TIME,
+			Duration::from_secs(10 * 60),
+		);
 
 		let address_cache = HashMap::new();
 
@@ -129,6 +147,7 @@ where
 			client,
 			network,
 			dht_event_rx,
+			key_store,
 			publish_interval,
 			query_interval,
 			address_cache,
@@ -137,8 +156,6 @@ where
 	}
 
 	fn publish_own_ext_addresses(&mut self) -> Result<()> {
-		let id = BlockId::hash(self.client.info().best_hash);
-
 		let addresses = self
 			.network
 			.external_addresses()
@@ -154,27 +171,24 @@ where
 		let mut serialized_addresses = vec![];
 		schema::AuthorityAddresses { addresses }
 			.encode(&mut serialized_addresses)
-			.map_err(Error::Encoding)?;
+			.map_err(Error::EncodingProto)?;
 
-		let (signature, authority_id) = self
-			.client
-			.runtime_api()
-			.sign(&id, &serialized_addresses)
-			.map_err(Error::CallingRuntime)?
-			.ok_or(Error::SigningDhtPayload)?;
+		for key in self.get_priv_keys_within_authority_set()?.into_iter() {
+			let signature = key.sign(&serialized_addresses);
 
-		let mut signed_addresses = vec![];
-		schema::SignedAuthorityAddresses {
-			addresses: serialized_addresses,
-			signature: signature.0,
+			let mut signed_addresses = vec![];
+			schema::SignedAuthorityAddresses {
+				addresses: serialized_addresses.clone(),
+				signature: signature.encode(),
+			}
+			.encode(&mut signed_addresses)
+				.map_err(Error::EncodingProto)?;
+
+			self.network.put_value(
+				hash_authority_id(key.public().as_ref())?,
+				signed_addresses,
+			);
 		}
-		.encode(&mut signed_addresses)
-		.map_err(Error::Encoding)?;
-
-		self.network.put_value(
-			hash_authority_id(authority_id.0.as_ref())?,
-			signed_addresses,
-		);
 
 		Ok(())
 	}
@@ -190,7 +204,7 @@ where
 
 		for authority_id in authorities.iter() {
 			self.network
-				.get_value(&hash_authority_id(authority_id.0.as_ref())?);
+				.get_value(&hash_authority_id(authority_id.as_ref())?);
 		}
 
 		Ok(())
@@ -230,16 +244,16 @@ where
 	) -> Result<()> {
 		debug!(target: "sub-authority-discovery", "Got Dht value from network.");
 
-		let id = BlockId::hash(self.client.info().best_hash);
+		let block_id = BlockId::hash(self.client.info().best_hash);
 
 		// From the Dht we only get the hashed authority id. In order to retrieve the actual authority id and to ensure
 		// it is actually an authority, we match the hash against the hash of the authority id of all other authorities.
-		let authorities = self.client.runtime_api().authorities(&id)?;
+		let authorities = self.client.runtime_api().authorities(&block_id)?;
 		self.purge_old_authorities_from_cache(&authorities);
 
 		let authorities = authorities
 			.into_iter()
-			.map(|a| hash_authority_id(a.0.as_ref()).map(|h| (h, a)))
+			.map(|id| hash_authority_id(id.as_ref()).map(|h| (h, id)))
 			.collect::<Result<HashMap<_, _>>>()?;
 
 		for (key, value) in values.iter() {
@@ -251,22 +265,16 @@ where
 			let schema::SignedAuthorityAddresses {
 				signature,
 				addresses,
-			} = schema::SignedAuthorityAddresses::decode(value).map_err(Error::Decoding)?;
-			let signature = Signature(signature);
+			} = schema::SignedAuthorityAddresses::decode(value).map_err(Error::DecodingProto)?;
+			let signature = AuthoritySignature::decode(&mut &signature[..]).map_err(Error::EncodingDecodingScale)?;
 
-			let is_verified = self
-				.client
-				.runtime_api()
-				.verify(&id, &addresses, &signature, &authority_id.clone())
-				.map_err(Error::CallingRuntime)?;
-
-			if !is_verified {
+			if !AuthorityPair::verify(&signature, &addresses, authority_id) {
 				return Err(Error::VerifyingDhtPayload);
 			}
 
 			let addresses: Vec<libp2p::Multiaddr> = schema::AuthorityAddresses::decode(addresses)
 				.map(|a| a.addresses)
-				.map_err(Error::Decoding)?
+				.map_err(Error::DecodingProto)?
 				.into_iter()
 				.map(|a| a.try_into())
 				.collect::<std::result::Result<_, _>>()
@@ -275,7 +283,7 @@ where
 			self.address_cache.insert(authority_id.clone(), addresses);
 		}
 
-		// Let's update the peerset priority group with the all the addresses we have in our cache.
+		// Let's update the peerset priority group with all the addresses we have in our cache.
 
 		let addresses = HashSet::from_iter(
 			self.address_cache
@@ -286,7 +294,7 @@ where
 
 		debug!(target: "sub-authority-discovery", "Applying priority group {:#?} to peerset.", addresses);
 		self.network
-			.set_priority_group("authorities".to_string(), addresses)
+			.set_priority_group(AUTHORITIES_PRIORITY_GROUP_NAME.to_string(), addresses)
 			.map_err(Error::SettingPeersetPriorityGroup)?;
 
 		Ok(())
@@ -295,6 +303,52 @@ where
 	fn purge_old_authorities_from_cache(&mut self, current_authorities: &Vec<AuthorityId>) {
 		self.address_cache
 			.retain(|peer_id, _addresses| current_authorities.contains(peer_id))
+	}
+
+	/// Retrieve all local authority discovery private keys that are within the current authority
+	/// set.
+	fn get_priv_keys_within_authority_set(&mut self) -> Result<Vec<AuthorityPair>> {
+		let keys = self.get_own_public_keys_within_authority_set()?
+			.into_iter()
+			.map(std::convert::Into::into)
+			.filter_map(|pub_key| {
+				self.key_store.read().sr25519_key_pair(key_types::AUTHORITY_DISCOVERY, &pub_key)
+			})
+			.map(std::convert::Into::into)
+			.collect();
+
+		Ok(keys)
+	}
+
+	/// Retrieve our public keys within the current authority set.
+	//
+	// A node might have multiple authority discovery keys within its keystore, e.g. an old one and
+	// one for the upcoming session. In addition it could be participating in the current authority
+	// set with two keys. The function does not return all of the local authority discovery public
+	// keys, but only the ones intersecting with the current authority set.
+	fn get_own_public_keys_within_authority_set(&mut self) -> Result<HashSet<AuthorityId>> {
+		let local_pub_keys = self.key_store
+			.read()
+			.sr25519_public_keys(key_types::AUTHORITY_DISCOVERY)
+			.into_iter()
+			.collect::<HashSet<_>>();
+
+		let id = BlockId::hash(self.client.info().best_hash);
+		let current_authorities = self
+			.client
+			.runtime_api()
+			.authorities(&id)
+			.map_err(Error::CallingRuntime)?
+			.into_iter()
+			.map(std::convert::Into::into)
+			.collect::<HashSet<_>>();
+
+		let intersection = local_pub_keys.intersection(&current_authorities)
+			.cloned()
+			.map(std::convert::Into::into)
+			.collect();
+
+		Ok(intersection)
 	}
 }
 
@@ -408,20 +462,22 @@ mod tests {
 	use futures::channel::mpsc::channel;
 	use futures::executor::block_on;
 	use futures::future::poll_fn;
-	use primitives::{ExecutionContext, NativeOrEncoded};
+	use primitives::{ExecutionContext, NativeOrEncoded, testing::KeyStore};
 	use sr_primitives::traits::Zero;
 	use sr_primitives::traits::{ApiRef, Block as BlockT, NumberFor, ProvideRuntimeApi};
 	use std::sync::{Arc, Mutex};
 	use test_client::runtime::Block;
 
 	#[derive(Clone)]
-	struct TestApi {}
+	struct TestApi {
+		authorities: Vec<AuthorityId>,
+	}
 
 	impl ProvideRuntimeApi for TestApi {
 		type Api = RuntimeApi;
 
 		fn runtime_api<'a>(&'a self) -> ApiRef<'a, Self::Api> {
-			RuntimeApi {}.into()
+			RuntimeApi{authorities: self.authorities.clone()}.into()
 		}
 	}
 
@@ -466,7 +522,9 @@ mod tests {
 		}
 	}
 
-	struct RuntimeApi {}
+	struct RuntimeApi {
+		authorities: Vec<AuthorityId>,
+	}
 
 	impl Core<Block> for RuntimeApi {
 		fn Core_version_runtime_api_impl(
@@ -534,37 +592,7 @@ mod tests {
 			_: Option<()>,
 			_: Vec<u8>,
 		) -> std::result::Result<NativeOrEncoded<Vec<AuthorityId>>, client::error::Error> {
-			return Ok(NativeOrEncoded::Native(vec![
-				AuthorityId("test-authority-id-1".as_bytes().to_vec()),
-				AuthorityId("test-authority-id-2".as_bytes().to_vec()),
-			]));
-		}
-		fn AuthorityDiscoveryApi_sign_runtime_api_impl(
-			&self,
-			_: &BlockId<Block>,
-			_: ExecutionContext,
-			_: Option<&std::vec::Vec<u8>>,
-			_: Vec<u8>,
-		) -> std::result::Result<
-			NativeOrEncoded<Option<(Signature, AuthorityId)>>,
-			client::error::Error,
-		> {
-			return Ok(NativeOrEncoded::Native(Some((
-				Signature("test-signature-1".as_bytes().to_vec()),
-				AuthorityId("test-authority-id-1".as_bytes().to_vec()),
-			))));
-		}
-		fn AuthorityDiscoveryApi_verify_runtime_api_impl(
-			&self,
-			_: &BlockId<Block>,
-			_: ExecutionContext,
-			args: Option<(&Vec<u8>, &Signature, &AuthorityId)>,
-			_: Vec<u8>,
-		) -> std::result::Result<NativeOrEncoded<bool>, client::error::Error> {
-			if *args.unwrap().1 == Signature("test-signature-1".as_bytes().to_vec()) {
-				return Ok(NativeOrEncoded::Native(true));
-			}
-			return Ok(NativeOrEncoded::Native(false));
+			return Ok(NativeOrEncoded::Native(self.authorities.clone()));
 		}
 	}
 
@@ -605,11 +633,13 @@ mod tests {
 	#[test]
 	fn publish_own_ext_addresses_puts_record_on_dht() {
 		let (_dht_event_tx, dht_event_rx) = channel(1000);
-		let test_api = Arc::new(TestApi {});
 		let network: Arc<TestNetwork> = Arc::new(Default::default());
+		let key_store = KeyStore::new();
+		let public = key_store.write().sr25519_generate_new(key_types::AUTHORITY_DISCOVERY, None).unwrap();
+		let test_api = Arc::new(TestApi {authorities: vec![public.into()]});
 
 		let mut authority_discovery =
-			AuthorityDiscovery::new(test_api, network.clone(), dht_event_rx);
+			AuthorityDiscovery::new(test_api, network.clone(), key_store, dht_event_rx.boxed());
 
 		authority_discovery.publish_own_ext_addresses().unwrap();
 
@@ -620,11 +650,20 @@ mod tests {
 	#[test]
 	fn request_addresses_of_others_triggers_dht_get_query() {
 		let (_dht_event_tx, dht_event_rx) = channel(1000);
-		let test_api = Arc::new(TestApi {});
+
+		// Generate authority keys
+		let authority_1_key_pair = AuthorityPair::from_seed_slice(&[1; 32]).unwrap();
+		let authority_2_key_pair = AuthorityPair::from_seed_slice(&[2; 32]).unwrap();
+
+		let test_api = Arc::new(TestApi {
+			authorities: vec![authority_1_key_pair.public(), authority_2_key_pair.public()],
+		});
+
 		let network: Arc<TestNetwork> = Arc::new(Default::default());
+		let key_store = KeyStore::new();
 
 		let mut authority_discovery =
-			AuthorityDiscovery::new(test_api, network.clone(), dht_event_rx);
+			AuthorityDiscovery::new(test_api, network.clone(), key_store, dht_event_rx.boxed());
 
 		authority_discovery.request_addresses_of_others().unwrap();
 
@@ -637,15 +676,17 @@ mod tests {
 		// Create authority discovery.
 
 		let (mut dht_event_tx, dht_event_rx) = channel(1000);
-		let test_api = Arc::new(TestApi {});
+		let key_pair = AuthorityPair::from_seed_slice(&[1; 32]).unwrap();
+		let test_api = Arc::new(TestApi {authorities: vec![key_pair.public()]});
 		let network: Arc<TestNetwork> = Arc::new(Default::default());
+		let key_store = KeyStore::new();
 
 		let mut authority_discovery =
-			AuthorityDiscovery::new(test_api, network.clone(), dht_event_rx);
+			AuthorityDiscovery::new(test_api, network.clone(), key_store, dht_event_rx.boxed());
 
 		// Create sample dht event.
 
-		let authority_id_1 = hash_authority_id("test-authority-id-1".as_bytes()).unwrap();
+		let authority_id_1 = hash_authority_id(key_pair.public().as_ref()).unwrap();
 		let address_1: libp2p::Multiaddr = "/ip6/2001:db8::".parse().unwrap();
 
 		let mut serialized_addresses = vec![];
@@ -655,10 +696,11 @@ mod tests {
 		.encode(&mut serialized_addresses)
 		.unwrap();
 
+		let signature = key_pair.sign(serialized_addresses.as_ref()).encode();
 		let mut signed_addresses = vec![];
 		schema::SignedAuthorityAddresses {
 			addresses: serialized_addresses,
-			signature: "test-signature-1".as_bytes().to_vec(),
+			signature: signature,
 		}
 		.encode(&mut signed_addresses)
 		.unwrap();
