@@ -259,6 +259,16 @@ impl Signature {
 		Signature(data)
 	}
 
+	/// A new instance from the given slice that should be 65 bytes long.
+	///
+	/// NOTE: No checking goes on to ensure this is a real signature. Only use it if
+	/// you are certain that the array actually is a signature. GIGO!
+	pub fn from_slice(data: &[u8]) -> Self {
+		let mut r = [0u8; 65];
+		r.copy_from_slice(data);
+		Signature(r)
+	}
+
 	/// Recover the public key from this signature and a message.
 	#[cfg(feature = "full_crypto")]
 	pub fn recover<M: AsRef<[u8]>>(&self, message: M) -> Option<Public> {
