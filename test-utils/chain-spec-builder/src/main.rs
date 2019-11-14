@@ -141,7 +141,7 @@ fn generate_authority_keys_and_store(
 			None,
 		).map_err(|err| err.to_string())?;
 
-		let (_, _, grandpa, babe, im_online) =
+		let (_, _, grandpa, babe, im_online, authority_discovery) =
 			chain_spec::get_authority_keys_from_seed(seed);
 
 		let insert_key = |key_type, public| {
@@ -165,6 +165,11 @@ fn generate_authority_keys_and_store(
 		insert_key(
 			primitives::crypto::key_types::IM_ONLINE,
 			im_online.as_slice(),
+		)?;
+
+		insert_key(
+			primitives::crypto::key_types::AUTHORITY_DISCOVERY,
+			authority_discovery.as_slice(),
 		)?;
 	}
 

@@ -2713,6 +2713,7 @@ dependencies = [
  "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 2.0.0",
  "sr-primitives 2.0.0",
+ "srml-authority-discovery 0.1.0",
  "srml-balances 2.0.0",
  "srml-contracts 2.0.0",
  "srml-finality-tracker 2.0.0",
@@ -2723,6 +2724,8 @@ dependencies = [
  "srml-timestamp 2.0.0",
  "srml-transaction-payment 2.0.0",
  "structopt 0.3.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "substrate-authority-discovery 2.0.0",
+ "substrate-authority-discovery-primitives 2.0.0",
  "substrate-basic-authorship 2.0.0",
  "substrate-build-script-utils 2.0.0",
  "substrate-chain-spec 2.0.0",
@@ -2837,6 +2840,7 @@ dependencies = [
  "sr-staking-primitives 2.0.0",
  "sr-std 2.0.0",
  "sr-version 2.0.0",
+ "srml-authority-discovery 0.1.0",
  "srml-authorship 0.1.0",
  "srml-babe 2.0.0",
  "srml-balances 2.0.0",
@@ -2866,6 +2870,7 @@ dependencies = [
  "srml-transaction-payment-rpc-runtime-api 2.0.0",
  "srml-treasury 2.0.0",
  "srml-utility 2.0.0",
+ "substrate-authority-discovery-primitives 2.0.0",
  "substrate-block-builder-runtime-api 2.0.0",
  "substrate-consensus-babe-primitives 2.0.0",
  "substrate-inherents 2.0.0",
@@ -4457,7 +4462,7 @@ dependencies = [
  "srml-support 2.0.0",
  "srml-system 2.0.0",
  "substrate-application-crypto 2.0.0",
- "substrate-consensus-babe-primitives 2.0.0",
+ "substrate-authority-discovery-primitives 2.0.0",
  "substrate-primitives 2.0.0",
 ]
 
@@ -5273,6 +5278,7 @@ dependencies = [
  "sr-primitives 2.0.0",
  "substrate-authority-discovery-primitives 2.0.0",
  "substrate-client 2.0.0",
+ "substrate-keystore 2.0.0",
  "substrate-network 2.0.0",
  "substrate-peerset 2.0.0",
  "substrate-primitives 2.0.0",
@@ -5287,6 +5293,7 @@ dependencies = [
  "sr-api 2.0.0",
  "sr-primitives 2.0.0",
  "sr-std 2.0.0",
+ "substrate-application-crypto 2.0.0",
 ]
 
 [[package]]
