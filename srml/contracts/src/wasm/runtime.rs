@@ -28,7 +28,6 @@ use rstd::convert::TryInto;
 use rstd::mem;
 use codec::{Decode, Encode};
 use sr_primitives::traits::{Bounded, SaturatedConversion};
-use support::storage::unhashed;
 
 /// The value returned from ext_call and ext_instantiate contract external functions if the call or
 /// instantiation traps. This value is chosen as if the execution does not trap, the return value
@@ -847,7 +846,7 @@ define_env!(Env, <E: Ext>,
 		read_sandbox_memory_into_scratch(ctx, key_ptr, key_len)?;
 		let key_buf = mem::replace(&mut ctx.scratch_buf, Vec::new());
 
-		match unhashed::get_raw(&key_buf) {
+		match ctx.ext.get_runtime_storage(&key_buf) {
 			Some(value_buf) => {
 				// The given value exists.
 				ctx.scratch_buf = value_buf;
