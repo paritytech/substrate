@@ -61,7 +61,7 @@ transaction-payment = { package = "paint-transaction-payment", path = "../../../
 transaction-payment-rpc-runtime-api = { package = "paint-transaction-payment-rpc-runtime-api", path = "../../../paint/transaction-payment/rpc/runtime-api/", default-features = false }
 
 [build-dependencies]
-wasm-builder-runner = { package = "substrate-wasm-builder-runner", version = "1.0.4", path = "../../../client/utils/wasm-builder-runner" }
+wasm-builder-runner = { package = "substrate-wasm-builder-runner", version = "1.0.4", path = "../../../utils/wasm-builder-runner" }
 
 [dev-dependencies]
 runtime_io = { package = "sr-io", path = "../../../primitives/sr-io" }
