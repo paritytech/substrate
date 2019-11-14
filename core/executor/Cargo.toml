@@ -13,7 +13,7 @@ trie = { package = "substrate-trie", path = "../trie" }
 serializer = { package = "substrate-serializer", path = "../serializer" }
 runtime_version = { package = "sr-version", path = "../sr-version" }
 panic-handler = { package = "substrate-panic-handler", path = "../panic-handler" }
-wasmi = "0.5.1"
+wasmi = "0.6.2"
 parity-wasm = "0.40.3"
 lazy_static = "1.4.0"
 wasm-interface = { package = "substrate-wasm-interface", path = "../wasm-interface" }
@@ -54,4 +54,7 @@ wasmtime = [
 	"wasmtime-environ",
 	"wasmtime-jit",
 	"wasmtime-runtime",
+]
+wasmi-errno = [
+	"wasmi/errno"
 ]

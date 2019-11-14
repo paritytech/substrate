@@ -5,7 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-wasmi = { version = "0.5.1", optional = true }
+wasmi = { version = "0.6.2", optional = true }
 primitives = { package = "substrate-primitives", path = "../primitives", default-features = false }
 rstd = { package = "sr-std", path = "../sr-std", default-features = false }
 runtime-io = { package = "sr-io", path = "../sr-io", default-features = false }

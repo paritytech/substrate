@@ -38,6 +38,7 @@ use crate::crypto::Ss58Codec;
 use serde::{de, Serializer, Serialize, Deserializer, Deserialize};
 use crate::{crypto::{Public as TraitPublic, UncheckedFrom, CryptoType, Derive}};
 use runtime_interface::pass_by::PassByInner;
+use rstd::ops::Deref;
 
 /// A secret seed. It's not called a "secret key" because ring doesn't expose the secret keys
 /// of the key pair (yeah, dumb); as such we're forced to remember the seed manually if we
@@ -47,7 +48,7 @@ type Seed = [u8; 32];
 
 /// A public key.
 #[cfg_attr(feature = "full_crypto", derive(Hash))]
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, PassByInner)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Encode, Decode, Default, PassByInner)]
 pub struct Public(pub [u8; 32]);
 
 /// A key pair.
@@ -83,6 +84,14 @@ impl AsMut<[u8]> for Public {
 	}
 }
 
+impl Deref for Public {
+    type Target = [u8];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 impl rstd::convert::TryFrom<&[u8]> for Public {
 	type Error = ();
 
@@ -114,6 +123,15 @@ impl From<Public> for H256 {
 	fn from(x: Public) -> Self {
 		x.0.into()
 	}
+}
+
+#[cfg(feature = "std")]
+impl std::str::FromStr for Public {
+    type Err = crate::crypto::PublicError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::from_ss58check(s)
+    }
 }
 
 impl UncheckedFrom<[u8; 32]> for Public {

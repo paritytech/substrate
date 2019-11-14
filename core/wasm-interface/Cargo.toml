@@ -5,5 +5,5 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-wasmi = "0.5.1"
+wasmi = "0.6.2"
 impl-trait-for-tuples = "0.1.2"

@@ -28,7 +28,7 @@ use crate::sandbox;
 use crate::allocator;
 use crate::wasm_utils::interpret_runtime_api_result;
 use crate::wasm_runtime::WasmRuntime;
-use log::trace;
+use log::{error, trace};
 use parity_wasm::elements::{deserialize_buffer, DataSegment, Instruction, Module as RawModule};
 use wasm_interface::{
 	FunctionContext, Pointer, WordSize, Sandbox, MemoryId, Result as WResult, Function,
@@ -500,7 +500,7 @@ impl StateSnapshot {
 		// First, erase the memory and copy the data segments into it.
 		memory
 			.erase()
-			.map_err(|_| WasmError::ApplySnapshotFailed)?;
+			.map_err(|e| WasmError::ErasingFailed(e.to_string()))?;
 		for (offset, contents) in &self.data_segments {
 			memory
 				.set(*offset, contents)
@@ -536,23 +536,6 @@ pub struct WasmiRuntime {
 	host_functions: Vec<&'static dyn Function>,
 }
 
-impl WasmiRuntime {
-	/// Perform an operation with the clean version of the runtime wasm instance.
-	fn with<R, F>(&self, f: F) -> R
-		where
-			F: FnOnce(&ModuleRef) -> R,
-	{
-		self.state_snapshot.apply(&self.instance).expect(
-			"applying the snapshot can only fail if the passed instance is different
-			from the one that was used for creation of the snapshot;
-			we use the snapshot that is directly associated with the instance;
-			thus the snapshot was created using the instance;
-			qed",
-		);
-		f(&self.instance)
-	}
-}
-
 impl WasmRuntime for WasmiRuntime {
 	fn update_heap_pages(&mut self, heap_pages: u64) -> bool {
 		self.state_snapshot.heap_pages == heap_pages
@@ -568,9 +551,15 @@ impl WasmRuntime for WasmiRuntime {
 		method: &str,
 		data: &[u8],
 	) -> Result<Vec<u8>, Error> {
-		self.with(|module| {
-			call_in_wasm_module(ext, module, method, data, &self.host_functions)
-		})
+		self.state_snapshot.apply(&self.instance)
+			.map_err(|e| {
+				// Snapshot restoration failed. This is pretty unexpected since this can happen
+				// if some invariant is broken or if the system is under extreme memory pressure
+				// (so erasing fails).
+				error!(target: "wasm-executor", "snapshot restoration failed: {}", e);
+				e
+			})?;
+		call_in_wasm_module(ext, &self.instance, method, data, &self.host_functions)
 	}
 }
 

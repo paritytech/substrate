@@ -37,7 +37,6 @@ use crate::{
 	config::{Roles, BoxFinalityProofRequestBuilder},
 	message::{self, generic::FinalityProofRequest, BlockAnnounce, BlockAttributes, BlockRequest, BlockResponse,
 	FinalityProofResponse},
-	protocol
 };
 use either::Either;
 use extra_requests::ExtraRequests;
@@ -58,6 +57,9 @@ const MAX_BLOCKS_TO_REQUEST: usize = 128;
 
 /// Maximum blocks to store in the import queue.
 const MAX_IMPORTING_BLOCKS: usize = 2048;
+
+/// Maximum blocks to download ahead of any gap.
+const MAX_DOWNLOAD_AHEAD: u32 = 2048;
 
 /// We use a heuristic that with a high likelihood, by the time
 /// `MAJOR_SYNC_BLOCKS` have been imported we'll be on the same
@@ -118,8 +120,9 @@ pub struct ChainSync<B: BlockT> {
 	/// A set of hashes of blocks that are being downloaded or have been
 	/// downloaded and are queued for import.
 	queue_blocks: HashSet<B::Hash>,
-	/// The best block number that we are currently importing.
-	best_importing_number: NumberFor<B>,
+	/// The best block number that was successfully imported into the chain.
+	/// This can not decrease.
+	best_imported_number: NumberFor<B>,
 	/// Finality proof handler.
 	request_builder: Option<BoxFinalityProofRequestBuilder<B>>,
 	/// Fork sync targets.
@@ -299,12 +302,12 @@ impl<B: BlockT> ChainSync<B> {
 			blocks: BlockCollection::new(),
 			best_queued_hash: info.chain.best_hash,
 			best_queued_number: info.chain.best_number,
+			best_imported_number: info.chain.best_number,
 			extra_finality_proofs: ExtraRequests::new(),
 			extra_justifications: ExtraRequests::new(),
 			role,
 			required_block_attributes,
 			queue_blocks: Default::default(),
-			best_importing_number: Zero::zero(),
 			request_builder,
 			fork_targets: Default::default(),
 			is_idle: false,
@@ -347,23 +350,22 @@ impl<B: BlockT> ChainSync<B> {
 	/// Handle a new connected peer.
 	///
 	/// Call this method whenever we connect to a new peer.
-	pub fn new_peer(&mut self, who: PeerId, info: protocol::PeerInfo<B>) -> Result<Option<BlockRequest<B>>, BadPeer> {
+	pub fn new_peer(&mut self, who: PeerId, best_hash: B::Hash, best_number: NumberFor<B>)
+		-> Result<Option<BlockRequest<B>>, BadPeer>
+	{
 		// There is nothing sync can get from the node that has no blockchain data.
-		if !info.roles.is_full() {
-			return Ok(None)
-		}
-		match self.block_status(&info.best_hash) {
+		match self.block_status(&best_hash) {
 			Err(e) => {
 				debug!(target:"sync", "Error reading blockchain: {:?}", e);
 				Err(BadPeer(who, BLOCKCHAIN_STATUS_READ_ERROR_REPUTATION_CHANGE))
 			}
 			Ok(BlockStatus::KnownBad) => {
-				info!("New peer with known bad best block {} ({}).", info.best_hash, info.best_number);
+				info!("New peer with known bad best block {} ({}).", best_hash, best_number);
 				Err(BadPeer(who, i32::min_value()))
 			}
 			Ok(BlockStatus::Unknown) => {
-				if info.best_number.is_zero() {
-					info!("New peer with unknown genesis hash {} ({}).", info.best_hash, info.best_number);
+				if best_number.is_zero() {
+					info!("New peer with unknown genesis hash {} ({}).", best_hash, best_number);
 					return Err(BadPeer(who, i32::min_value()))
 				}
 				// If there are more than `MAJOR_SYNC_BLOCKS` in the import queue then we have
@@ -378,8 +380,8 @@ impl<B: BlockT> ChainSync<B> {
 					);
 					self.peers.insert(who, PeerSync {
 						common_number: self.best_queued_number,
-						best_hash: info.best_hash,
-						best_number: info.best_number,
+						best_hash,
+						best_number,
 						state: PeerSyncState::Available,
 						recently_announced: Default::default()
 					});
@@ -388,11 +390,11 @@ impl<B: BlockT> ChainSync<B> {
 
 				// If we are at genesis, just start downloading.
 				if self.best_queued_number.is_zero() {
-					debug!(target:"sync", "New peer with best hash {} ({}).", info.best_hash, info.best_number);
+					debug!(target:"sync", "New peer with best hash {} ({}).", best_hash, best_number);
 					self.peers.insert(who.clone(), PeerSync {
 						common_number: Zero::zero(),
-						best_hash: info.best_hash,
-						best_number: info.best_number,
+						best_hash,
+						best_number,
 						state: PeerSyncState::Available,
 						recently_announced: Default::default(),
 					});
@@ -400,18 +402,18 @@ impl<B: BlockT> ChainSync<B> {
 					return Ok(None)
 				}
 
-				let common_best = std::cmp::min(self.best_queued_number, info.best_number);
+				let common_best = std::cmp::min(self.best_queued_number, best_number);
 
 				debug!(target:"sync",
 					"New peer with unknown best hash {} ({}), searching for common ancestor.",
-					info.best_hash,
-					info.best_number
+					best_hash,
+					best_number
 				);
 
 				self.peers.insert(who, PeerSync {
 					common_number: Zero::zero(),
-					best_hash: info.best_hash,
-					best_number: info.best_number,
+					best_hash,
+					best_number,
 					state: PeerSyncState::AncestorSearch(
 						common_best,
 						AncestorSearchState::ExponentialBackoff(One::one())
@@ -423,11 +425,11 @@ impl<B: BlockT> ChainSync<B> {
 				Ok(Some(ancestry_request::<B>(common_best)))
 			}
 			Ok(BlockStatus::Queued) | Ok(BlockStatus::InChainWithState) | Ok(BlockStatus::InChainPruned) => {
-				debug!(target:"sync", "New peer with known best hash {} ({}).", info.best_hash, info.best_number);
+				debug!(target:"sync", "New peer with known best hash {} ({}).", best_hash, best_number);
 				self.peers.insert(who.clone(), PeerSync {
-					common_number: info.best_number,
-					best_hash: info.best_hash,
-					best_number: info.best_number,
+					common_number: best_number,
+					best_hash,
+					best_number,
 					state: PeerSyncState::Available,
 					recently_announced: Default::default(),
 				});
@@ -755,13 +757,7 @@ impl<B: BlockT> ChainSync<B> {
 			self.on_block_queued(h, n)
 		}
 
-		let new_best_importing_number = new_blocks.last()
-			.and_then(|b| b.header.as_ref().map(|h| *h.number()))
-			.unwrap_or_else(|| Zero::zero());
-
 		self.queue_blocks.extend(new_blocks.iter().map(|b| b.hash));
-
-		self.best_importing_number = std::cmp::max(new_best_importing_number, self.best_importing_number);
 
 		Ok(OnBlockData::Import(origin, new_blocks))
 	}
@@ -849,7 +845,6 @@ impl<B: BlockT> ChainSync<B> {
 		imported: usize,
 		count: usize,
 		results: Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>,
-		mut peer_info: impl FnMut(&PeerId) -> Option<protocol::PeerInfo<B>>
 	) -> impl Iterator<Item = Result<(PeerId, BlockRequest<B>), BadPeer>> + 'a {
 		trace!(target: "sync", "Imported {} of {}", imported, count);
 
@@ -897,41 +892,48 @@ impl<B: BlockT> ChainSync<B> {
 						trace!(target: "sync", "Block imported but requires finality proof {}: {:?}", number, hash);
 						self.request_finality_proof(&hash, number);
 					}
+
+					if number > self.best_imported_number {
+						self.best_imported_number = number;
+					}
 				},
 				Err(BlockImportError::IncompleteHeader(who)) => {
 					if let Some(peer) = who {
 						info!("Peer sent block with incomplete header to import");
 						output.push(Err(BadPeer(peer, INCOMPLETE_HEADER_REPUTATION_CHANGE)));
-						output.extend(self.restart(&mut peer_info));
+						output.extend(self.restart());
 					}
 				},
 				Err(BlockImportError::VerificationFailed(who, e)) => {
 					if let Some(peer) = who {
 						info!("Verification failed from peer: {}", e);
 						output.push(Err(BadPeer(peer, VERIFICATION_FAIL_REPUTATION_CHANGE)));
-						output.extend(self.restart(&mut peer_info));
+						output.extend(self.restart());
 					}
 				},
 				Err(BlockImportError::BadBlock(who)) => {
 					if let Some(peer) = who {
 						info!("Bad block");
 						output.push(Err(BadPeer(peer, BAD_BLOCK_REPUTATION_CHANGE)));
-						output.extend(self.restart(&mut peer_info));
+						output.extend(self.restart());
 					}
+				},
+				Err(BlockImportError::MissingState) => {
+					// This may happen if the chain we were requesting upon has been discarded
+					// in the meantime becasue other chain has been finalized.
+					// Don't mark it as bad as it still may be synced if explicitly requested.
+					trace!(target: "sync", "Obsolete block");
 				},
 				Err(BlockImportError::UnknownParent) |
 				Err(BlockImportError::Cancelled) |
 				Err(BlockImportError::Other(_)) => {
-					output.extend(self.restart(&mut peer_info));
+					output.extend(self.restart());
 				},
 			};
 		}
 
 		for hash in hashes {
 			self.queue_blocks.remove(&hash);
-		}
-		if has_error {
-			self.best_importing_number = Zero::zero()
 		}
 
 		self.is_idle = false;
@@ -1121,22 +1123,18 @@ impl<B: BlockT> ChainSync<B> {
 	}
 
 	/// Restart the sync process.
-	fn restart<'a, F>
-		(&'a mut self, mut peer_info: F) -> impl Iterator<Item = Result<(PeerId, BlockRequest<B>), BadPeer>> + 'a
-		where F: FnMut(&PeerId) -> Option<protocol::PeerInfo<B>> + 'a
+	fn restart<'a>(&'a mut self) -> impl Iterator<Item = Result<(PeerId, BlockRequest<B>), BadPeer>> + 'a
 	{
 		self.queue_blocks.clear();
-		self.best_importing_number = Zero::zero();
 		self.blocks.clear();
 		let info = self.client.info();
 		self.best_queued_hash = info.chain.best_hash;
-		self.best_queued_number = info.chain.best_number;
+		self.best_queued_number = std::cmp::max(info.chain.best_number, self.best_imported_number);
 		self.is_idle = false;
 		debug!(target:"sync", "Restarted with {} ({})", self.best_queued_number, self.best_queued_hash);
 		let old_peers = std::mem::replace(&mut self.peers, HashMap::new());
-		old_peers.into_iter().filter_map(move |(id, _)| {
-			let info = peer_info(&id)?;
-			match self.new_peer(id.clone(), info) {
+		old_peers.into_iter().filter_map(move |(id, p)| {
+			match self.new_peer(id.clone(), p.best_hash, p.best_number) {
 				Ok(None) => None,
 				Ok(Some(x)) => Some(Ok((id, x))),
 				Err(e) => Some(Err(e))
@@ -1254,6 +1252,7 @@ fn peer_block_request<B: BlockT>(
 		peer.best_number,
 		peer.common_number,
 		max_parallel_downloads,
+		MAX_DOWNLOAD_AHEAD,
 	) {
 		let request = message::generic::BlockRequest {
 			id: 0,
