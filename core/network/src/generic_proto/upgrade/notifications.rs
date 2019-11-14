@@ -34,9 +34,10 @@
 /// encouraged but not required to open a substream to A as well.
 ///
 
-use libp2p::core::{Negotiated, UpgradeInfo, InboundUpgrade, OutboundUpgrade, upgrade, upgrade::ProtocolName};
-use std::{borrow::Cow, iter};
 use futures::prelude::*;
+use libp2p::core::{Negotiated, UpgradeInfo, InboundUpgrade, OutboundUpgrade, upgrade, upgrade::ProtocolName};
+use log::error;
+use std::{borrow::Cow, iter};
 use tokio_io::{AsyncRead, AsyncWrite};
 
 /// Upgrade that accepts a substream, sends back a status message, then becomes a unidirectional
@@ -45,8 +46,6 @@ use tokio_io::{AsyncRead, AsyncWrite};
 pub struct NotificationsIn {
 	/// Protocol name to use when negotiating the substream.
 	protocol_name: Cow<'static, [u8]>,
-	/// Handshake message to send to the remote when they open a substream.
-	handshake_message: Vec<u8>,
 }
 
 /// Upgrade that opens a substream, waits for the remote to accept by sending back a status
@@ -72,12 +71,9 @@ pub struct NotificationsOutSubstream {
 
 impl NotificationsIn {
 	/// Builds a new potential upgrade.
-	// TODO: don't send back the handshake message; instead the user should be able to choose
-	// whether to accept or refuse the substream
-	pub fn new(proto_name: impl Into<Cow<'static, [u8]>>, handshake_msg: impl Into<Vec<u8>>) -> Self {
+	pub fn new(proto_name: impl Into<Cow<'static, [u8]>>) -> Self {
 		NotificationsIn {
 			protocol_name: proto_name.into(),
-			handshake_message: handshake_msg.into(),
 		}
 	}
 
@@ -85,33 +81,9 @@ impl NotificationsIn {
 	pub fn protocol_name(&self) -> &[u8] {
 		&self.protocol_name
 	}
-
-	/// Modifies the handshake message.
-	// TODO: remove
-	pub fn set_handshake_message(&mut self, message: impl Into<Vec<u8>>) {
-		self.handshake_message = message.into();
-	}
-}
-
-impl NotificationsOut {
-	/// Builds a new potential upgrade.
-	pub fn new(proto_name: impl Into<Cow<'static, [u8]>>) -> Self {
-		NotificationsOut {
-			protocol_name: proto_name.into(),
-		}
-	}
 }
 
 impl UpgradeInfo for NotificationsIn {
-	type Info = Cow<'static, [u8]>;
-	type InfoIter = iter::Once<Self::Info>;
-
-	fn protocol_info(&self) -> Self::InfoIter {
-		iter::once(self.protocol_name.clone())
-	}
-}
-
-impl UpgradeInfo for NotificationsOut {
 	type Info = Cow<'static, [u8]>;
 	type InfoIter = iter::Once<Self::Info>;
 
@@ -136,6 +108,36 @@ where TSubstream: AsyncRead + AsyncWrite + 'static,
 			socket,
 			handshake_sent: false,
 		})
+	}
+}
+
+impl<TSubstream> NotificationsInSubstream<TSubstream>
+where TSubstream: AsyncRead + AsyncWrite + 'static,
+{
+	/// Sends the handshake in order to inform the remote that we accept the substream.
+	pub fn send_handshake(&mut self, message: impl Into<Vec<u8>>) {
+		if self.handshake_sent {
+			error!("Tried to send handshake twice");
+			return;
+		}
+	}
+}
+
+impl NotificationsOut {
+	/// Builds a new potential upgrade.
+	pub fn new(proto_name: impl Into<Cow<'static, [u8]>>) -> Self {
+		NotificationsOut {
+			protocol_name: proto_name.into(),
+		}
+	}
+}
+
+impl UpgradeInfo for NotificationsOut {
+	type Info = Cow<'static, [u8]>;
+	type InfoIter = iter::Once<Self::Info>;
+
+	fn protocol_info(&self) -> Self::InfoIter {
+		iter::once(self.protocol_name.clone())
 	}
 }
 

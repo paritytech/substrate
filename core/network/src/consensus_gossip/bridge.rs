@@ -189,11 +189,6 @@ impl<B: BlockT> GossipEngine<B> {
 		let mut inner = &mut *inner;
 		inner.state_machine.send_message(&mut *inner.context, who, message);
 	}
-
-	// TODO: bad API?
-	pub async fn process() {
-
-	}
 }
 
 impl<B: BlockT> Clone for GossipEngine<B> {
@@ -211,7 +206,7 @@ struct ContextOverService<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 
 impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Context<B> for ContextOverService<B, S, H> {
 	fn report_peer(&mut self, who: PeerId, reputation: i32) {
-		unimplemented!() // self.peerset_handle.report_peer(who, reputation)
+		self.network_service.report_peer(who, reputation);
 	}
 
 	fn disconnect_peer(&mut self, who: PeerId) {

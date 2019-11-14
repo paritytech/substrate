@@ -45,9 +45,9 @@ pub struct NotifsInHandlerProto<TSubstream> {
 
 impl<TSubstream> NotifsInHandlerProto<TSubstream> {
 	/// Builds a new `NotifsInHandlerProto`.
-	pub fn new(proto_name: impl Into<Cow<'static, [u8]>>, handshake_msg: impl Into<Vec<u8>>) -> Self {
+	pub fn new(proto_name: impl Into<Cow<'static, [u8]>>) -> Self {
 		NotifsInHandlerProto {
-			in_protocol: NotificationsIn::new(proto_name, handshake_msg),
+			in_protocol: NotificationsIn::new(proto_name),
 			marker: PhantomData,
 		}
 	}

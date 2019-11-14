@@ -1069,8 +1069,11 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		handshake: impl Into<Vec<u8>>,
 	) {
 		let proto_name = proto_name.into();
-		self.protocol_name_by_engine.insert(engine_id, proto_name.clone());
-		self.behaviour.register_notif_protocol(proto_name, handshake);
+		if self.protocol_name_by_engine.insert(engine_id, proto_name.clone()).is_some() {
+			error!("Notifications protocol already registered: {:?}", proto_name);
+		} else {
+			self.behaviour.register_notif_protocol(proto_name, handshake);
+		}
 	}
 
 	/// Call when we must propagate ready extrinsics to peers.

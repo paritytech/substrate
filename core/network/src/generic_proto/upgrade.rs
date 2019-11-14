@@ -27,13 +27,9 @@ pub use self::notifications::{
 	NotificationsOut,
 	NotificationsOutSubstream
 };
-pub use self::request_response::RequestResponse;
-pub use self::responder::{Responder, ResponderResponse};
 pub use self::select::SelectUpgrade;
 
 mod collec;
 mod legacy;
 mod notifications;
-mod request_response;
-mod responder;
 mod select;
