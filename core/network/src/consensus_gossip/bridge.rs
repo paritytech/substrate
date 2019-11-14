@@ -41,9 +41,10 @@ impl<B: BlockT> GossipEngine<B> {
 		network_service: NetworkService<B, S, H>,
 		proto_name: impl Into<Cow<'static, [u8]>>,
 		engine_id: ConsensusEngineId,
+		validator: Arc<dyn Validator<B>>,
 	) -> Self where B: 'static, S: 'static, H: 'static {
-		let state_machine = ConsensusGossip::new();
-		let context = Box::new(ContextOverService {
+		let mut state_machine = ConsensusGossip::new();
+		let mut context = Box::new(ContextOverService {
 			network_service: network_service.clone(),
 			proto_name: proto_name.into(),
 		});
@@ -57,6 +58,8 @@ impl<B: BlockT> GossipEngine<B> {
 			}
 		});
 
+		state_machine.register_validator(&mut *context, engine_id, validator);
+
 		GossipEngine {
 			inner: Arc::new(Mutex::new(GossipEngineInner {
 				state_machine,
@@ -66,18 +69,8 @@ impl<B: BlockT> GossipEngine<B> {
 	}
 
 	/// Closes all notification streams.
-	pub fn abort(&mut self) {
+	pub fn abort(&self) {
 		self.inner.lock().state_machine.abort();
-	}
-
-	/// Register message validator for a message type.
-	pub fn register_validator(
-		&mut self,
-		protocol: &mut dyn Context<B>,
-		engine_id: ConsensusEngineId,
-		validator: Arc<dyn Validator<B>>
-	) {
-		unimplemented!()		// TODO:
 	}
 
 	/// Registers a message without propagating it to any peers. The message
@@ -86,7 +79,7 @@ impl<B: BlockT> GossipEngine<B> {
 	/// message is already expired it should be dropped on the next garbage
 	/// collection.
 	pub fn register_message(
-		&mut self,
+		&self,
 		topic: B::Hash,
 		message: ConsensusMessage,
 	) {
@@ -94,13 +87,14 @@ impl<B: BlockT> GossipEngine<B> {
 	}
 
 	/// Broadcast all messages with given topic.
-	pub fn broadcast_topic(&mut self, topic: B::Hash, force: bool) {
+	pub fn broadcast_topic(&self, topic: B::Hash, force: bool) {
 		let mut inner = self.inner.lock();
+		let mut inner = &mut *inner;
 		inner.state_machine.broadcast_topic(&mut *inner.context, topic, force);
 	}
 
 	/// Get data of valid, incoming messages for a topic (but might have expired meanwhile)
-	pub fn messages_for(&mut self, engine_id: ConsensusEngineId, topic: B::Hash)
+	pub fn messages_for(&self, engine_id: ConsensusEngineId, topic: B::Hash)
 		-> mpsc::UnboundedReceiver<TopicNotification>
 	{
 		self.inner.lock().state_machine.messages_for(engine_id, topic)
@@ -108,35 +102,38 @@ impl<B: BlockT> GossipEngine<B> {
 
 	/// Send all messages with given topic to a peer.
 	pub fn send_topic(
-		&mut self,
+		&self,
 		who: &PeerId,
 		topic: B::Hash,
 		engine_id: ConsensusEngineId,
 		force: bool
 	) {
 		let mut inner = self.inner.lock();
+		let mut inner = &mut *inner;
 		inner.state_machine.send_topic(&mut *inner.context, who, topic, engine_id, force)
 	}
 
 	/// Multicast a message to all peers.
 	pub fn multicast(
-		&mut self,
+		&self,
 		topic: B::Hash,
 		message: ConsensusMessage,
 		force: bool,
 	) {
 		let mut inner = self.inner.lock();
+		let mut inner = &mut *inner;
 		inner.state_machine.multicast(&mut *inner.context, topic, message, force)
 	}
 
 	/// Send addressed message to a peer. The message is not kept or multicast
 	/// later on.
 	pub fn send_message(
-		&mut self,
+		&self,
 		who: &PeerId,
 		message: ConsensusMessage,
 	) {
 		let mut inner = self.inner.lock();
+		let mut inner = &mut *inner;
 		inner.state_machine.send_message(&mut *inner.context, who, message);
 	}
 

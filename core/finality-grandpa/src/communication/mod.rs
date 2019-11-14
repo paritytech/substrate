@@ -152,9 +152,7 @@ pub(crate) fn global_topic<B: BlockT>(set_id: SetIdNumber) -> B::Hash {
 impl<B> Network<B> for GossipEngine<B> where
 	B: BlockT,
 {
-	type In = NetworkStream<
-		Box<dyn Stream<Item = network_gossip::TopicNotification, Error = ()> + Send + 'static>,
-	>;
+	type In = Box<dyn Stream<Item = network_gossip::TopicNotification, Error = ()> + Send + 'static>;
 
 	fn messages_for(&self, topic: B::Hash) -> Self::In {
 		let stream = self.messages_for(GRANDPA_ENGINE_ID, topic)
@@ -164,9 +162,7 @@ impl<B> Network<B> for GossipEngine<B> where
 	}
 
 	fn register_validator(&self, validator: Arc<dyn network_gossip::Validator<B>>) {
-		self.with_gossip(
-			move |gossip, context| gossip.register_validator(context, GRANDPA_ENGINE_ID, validator)
-		)
+		unimplemented!()
 	}
 
 	fn gossip_message(&self, topic: B::Hash, data: Vec<u8>, force: bool) {
@@ -175,9 +171,7 @@ impl<B> Network<B> for GossipEngine<B> where
 			data,
 		};
 
-		self.with_gossip(
-			move |gossip, ctx| gossip.multicast(ctx, topic, msg, force)
-		)
+		self.multicast(topic, msg, force)
 	}
 
 	fn register_gossip_message(&self, topic: B::Hash, data: Vec<u8>) {
@@ -186,7 +180,7 @@ impl<B> Network<B> for GossipEngine<B> where
 			data,
 		};
 
-		self.with_gossip(move |gossip, _| gossip.register_message(topic, msg))
+		self.register_message(topic, msg)
 	}
 
 	fn send_message(&self, who: Vec<network::PeerId>, data: Vec<u8>) {
@@ -195,62 +189,21 @@ impl<B> Network<B> for GossipEngine<B> where
 			data,
 		};
 
-		self.with_gossip(move |gossip, ctx| for who in &who {
-			gossip.send_message(ctx, who, msg.clone())
-		})
+		for who in &who {
+			self.send_message(who, msg.clone())
+		}
 	}
 
 	fn report(&self, who: network::PeerId, cost_benefit: i32) {
-		self.report_peer(who, cost_benefit)
+		// TODO: self.report_peer(who, cost_benefit)
 	}
 
 	fn announce(&self, block: B::Hash, associated_data: Vec<u8>) {
-		self.announce_block(block, associated_data)
+		// TODO: self.announce_block(block, associated_data)
 	}
 
 	fn set_sync_fork_request(&self, peers: Vec<network::PeerId>, hash: B::Hash, number: NumberFor<B>) {
-		NetworkService::set_sync_fork_request(self, peers, hash, number)
-	}
-}
-
-/// A stream used by NetworkBridge in its implementation of Network. Given a oneshot that eventually returns a channel
-/// which eventually returns messages, instead of:
-///
-/// 1. polling the oneshot until it returns a message channel
-///
-/// 2. polling the message channel for messages
-///
-/// `NetworkStream` combines the two steps into one, requiring a consumer to only poll `NetworkStream` to retrieve
-/// messages directly.
-pub enum NetworkStream<R> {
-	PollingOneshot(oneshot::Receiver<R>),
-	PollingTopicNotifications(R),
-}
-
-impl<R> Stream for NetworkStream<R>
-where
-	R: Stream<Item = network_gossip::TopicNotification, Error = ()>,
-{
-	type Item = R::Item;
-	type Error = ();
-
-	fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
-		match self {
-			NetworkStream::PollingOneshot(oneshot) => {
-				match oneshot.poll() {
-					Ok(futures::Async::Ready(mut stream)) => {
-						let poll_result = stream.poll();
-						*self = NetworkStream::PollingTopicNotifications(stream);
-						poll_result
-					},
-					Ok(futures::Async::NotReady) => Ok(futures::Async::NotReady),
-					Err(_) => Err(())
-				}
-			},
-			NetworkStream::PollingTopicNotifications(stream) => {
-				stream.poll()
-			},
-		}
+		// TODO: NetworkService::set_sync_fork_request(self, peers, hash, number)
 	}
 }
 
