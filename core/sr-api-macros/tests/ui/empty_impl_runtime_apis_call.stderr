@@ -1,5 +1,0 @@
-error: No api implementation given!
-  --> $DIR/empty_impl_runtime_apis_call.rs:18:1
-   |
-18 | impl_runtime_apis! {}
-   | ^^^^^^^^^^^^^^^^^^^^^

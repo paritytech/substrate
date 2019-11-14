@@ -68,13 +68,20 @@ const TICK_TIMEOUT: time::Duration = time::Duration::from_millis(1100);
 /// Interval at which we propagate exstrinsics;
 const PROPAGATE_TIMEOUT: time::Duration = time::Duration::from_millis(2900);
 
+/// Maximim number of known block hashes to keep for a peer.
+const MAX_KNOWN_BLOCKS: usize = 1024; // ~32kb per peer + LruHashSet overhead
+/// Maximim number of known extrinsic hashes to keep for a peer.
+const MAX_KNOWN_EXTRINSICS: usize = 4096; // ~128kb per peer + overhead
+
 /// Current protocol version.
-pub(crate) const CURRENT_VERSION: u32 = 4;
+pub(crate) const CURRENT_VERSION: u32 = 5;
 /// Lowest version we support
 pub(crate) const MIN_VERSION: u32 = 3;
 
 // Maximum allowed entries in `BlockResponse`
 const MAX_BLOCK_DATA_RESPONSE: u32 = 128;
+// Maximum allowed entries in `ConsensusBatch`
+const MAX_CONSENSUS_MESSAGES: usize = 256;
 /// When light node connects to the full node and the full node is behind light node
 /// for at least `LIGHT_MAXIMAL_BLOCKS_DIFFERENCE` blocks, we consider it unuseful
 /// and disconnect to free connection slot.
@@ -298,7 +305,7 @@ pub trait Context<B: BlockT> {
 	fn disconnect_peer(&mut self, who: PeerId);
 
 	/// Send a consensus message to a peer.
-	fn send_consensus(&mut self, who: PeerId, consensus: ConsensusMessage);
+	fn send_consensus(&mut self, who: PeerId, messages: Vec<ConsensusMessage>);
 
 	/// Send a chain-specific message to a peer.
 	fn send_chain_specific(&mut self, who: PeerId, message: Vec<u8>);
@@ -330,13 +337,33 @@ impl<'a, B: BlockT + 'a, H: ExHashT + 'a> Context<B> for ProtocolContext<'a, B, 
 		self.behaviour.disconnect_peer(&who)
 	}
 
-	fn send_consensus(&mut self, who: PeerId, consensus: ConsensusMessage) {
-		send_message::<B> (
-			self.behaviour,
-			&mut self.context_data.stats,
-			&who,
-			GenericMessage::Consensus(consensus)
-		)
+	fn send_consensus(&mut self, who: PeerId, messages: Vec<ConsensusMessage>) {
+		if self.context_data.peers.get(&who).map_or(false, |peer| peer.info.protocol_version > 4) {
+			let mut batch = Vec::new();
+			let len = messages.len();
+			for (index, message) in messages.into_iter().enumerate() {
+				batch.reserve(MAX_CONSENSUS_MESSAGES);
+				batch.push(message);
+				if batch.len() == MAX_CONSENSUS_MESSAGES || index == len - 1 {
+					send_message::<B> (
+						self.behaviour,
+						&mut self.context_data.stats,
+						&who,
+						GenericMessage::ConsensusBatch(std::mem::replace(&mut batch, Vec::new())),
+					)
+				}
+			}
+		} else {
+			// Backwards compatibility
+			for message in messages {
+				send_message::<B> (
+					self.behaviour,
+					&mut self.context_data.stats,
+					&who,
+					GenericMessage::Consensus(message)
+				)
+			}
+		}
 	}
 
 	fn send_chain_specific(&mut self, who: PeerId, message: Vec<u8>) {
@@ -362,12 +389,15 @@ struct ContextData<B: BlockT, H: ExHashT> {
 pub struct ProtocolConfig {
 	/// Assigned roles.
 	pub roles: Roles,
+	/// Maximum number of peers to ask the same blocks in parallel.
+	pub max_parallel_downloads: u32,
 }
 
 impl Default for ProtocolConfig {
 	fn default() -> ProtocolConfig {
 		ProtocolConfig {
 			roles: Roles::FULL,
+			max_parallel_downloads: 5,
 		}
 	}
 }
@@ -393,6 +423,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			&info,
 			finality_proof_request_builder,
 			block_announce_validator,
+			config.max_parallel_downloads,
 		);
 		let (peerset, peerset_handle) = peerset::Peerset::from_config(peerset_config);
 		let versions = &((MIN_VERSION as u8)..=(CURRENT_VERSION as u8)).collect::<Vec<u8>>();
@@ -594,13 +625,18 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			GenericMessage::RemoteReadChildRequest(request) =>
 				self.on_remote_read_child_request(who, request),
 			GenericMessage::Consensus(msg) => {
-				if self.context_data.peers.get(&who).map_or(false, |peer| peer.info.protocol_version > 2) {
-					self.consensus_gossip.on_incoming(
-						&mut ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle),
-						who,
-						msg,
-					);
-				}
+				self.consensus_gossip.on_incoming(
+					&mut ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle),
+					who,
+					vec![msg],
+				);
+			}
+			GenericMessage::ConsensusBatch(messages) => {
+				self.consensus_gossip.on_incoming(
+					&mut ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle),
+					who,
+					messages,
+				);
 			}
 			GenericMessage::ChainSpecific(msg) => self.specialization.on_message(
 				&mut ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle),
@@ -942,8 +978,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				}
 			}
 
-			let cache_limit = NonZeroUsize::new(1_000_000).expect("1_000_000 > 0; qed");
-
 			let info = match self.handshaking_peers.remove(&who) {
 				Some(_handshaking) => {
 					PeerInfo {
@@ -962,8 +996,10 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			let peer = Peer {
 				info,
 				block_request: None,
-				known_extrinsics: LruHashSet::new(cache_limit),
-				known_blocks: LruHashSet::new(cache_limit),
+				known_extrinsics: LruHashSet::new(NonZeroUsize::new(MAX_KNOWN_EXTRINSICS)
+					.expect("Constant is nonzero")),
+				known_blocks: LruHashSet::new(NonZeroUsize::new(MAX_KNOWN_BLOCKS)
+					.expect("Constant is nonzero")),
 				next_request_id: 0,
 				obsolete_requests: HashMap::new(),
 			};
@@ -978,12 +1014,14 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			behaviour: &mut self.behaviour,
 			peerset: self.peerset_handle.clone(),
 		}, who.clone(), status.roles, status.best_number);
-		match self.sync.new_peer(who.clone(), info) {
-			Ok(None) => (),
-			Ok(Some(req)) => self.send_request(&who, GenericMessage::BlockRequest(req)),
-			Err(sync::BadPeer(id, repu)) => {
-				self.behaviour.disconnect_peer(&id);
-				self.peerset_handle.report_peer(id, repu)
+		if info.roles.is_full() {
+			match self.sync.new_peer(who.clone(), info.best_hash, info.best_number) {
+				Ok(None) => (),
+				Ok(Some(req)) => self.send_request(&who, GenericMessage::BlockRequest(req)),
+				Err(sync::BadPeer(id, repu)) => {
+					self.behaviour.disconnect_peer(&id);
+					self.peerset_handle.report_peer(id, repu)
+				}
 			}
 		}
 		let mut context = ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle);
@@ -1310,12 +1348,10 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		count: usize,
 		results: Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>
 	) {
-		let peers = self.context_data.peers.clone();
 		let results = self.sync.on_blocks_processed(
 			imported,
 			count,
 			results,
-			|peer_id| peers.get(peer_id).map(|i| i.info.clone())
 		);
 		for result in results {
 			match result {

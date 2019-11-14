@@ -35,6 +35,7 @@ use base58::{FromBase58, ToBase58};
 use zeroize::Zeroize;
 #[doc(hidden)]
 pub use rstd::ops::Deref;
+use runtime_interface::pass_by::PassByInner;
 
 /// The root phrase for our publicly known keys.
 pub const DEV_PHRASE: &str = "bottom drive obey lake curtain smoke basket hold race lonely fit walk";
@@ -866,8 +867,10 @@ pub trait CryptoType {
 ///
 /// Values whose first character is `_` are reserved for private use and won't conflict with any
 /// public modules.
-#[derive(Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Encode, Decode)]
-#[derive(crate::RuntimeDebug)]
+#[derive(
+	Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Encode, Decode, PassByInner,
+	crate::RuntimeDebug
+)]
 pub struct KeyTypeId(pub [u8; 4]);
 
 impl From<u32> for KeyTypeId {

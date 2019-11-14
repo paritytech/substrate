@@ -247,7 +247,7 @@ fn sign<RA: RuntimeAdapter>(
 			let payload = (xt.function, extra.clone(), additional_signed);
 			let signature = payload.using_encoded(|b| {
 				if b.len() > 256 {
-					key.sign(&sr_io::blake2_256(b))
+					key.sign(&runtime_io::hashing::blake2_256(b))
 				} else {
 					key.sign(b)
 				}

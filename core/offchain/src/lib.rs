@@ -33,15 +33,11 @@
 
 #![warn(missing_docs)]
 
-use std::{
-	fmt,
-	marker::PhantomData,
-	sync::Arc,
-};
+use std::{fmt, marker::PhantomData, sync::Arc};
 
 use parking_lot::Mutex;
 use threadpool::ThreadPool;
-use client::runtime_api::ApiExt;
+use sr_api::ApiExt;
 use futures::future::Future;
 use log::{debug, warn};
 use network::NetworkStateInfo;
@@ -106,7 +102,7 @@ impl<Client, Storage, Block> OffchainWorkers<
 	) -> impl Future<Output = ()> where A: ChainApi<Block=Block> + 'static {
 		let runtime = self.client.runtime_api();
 		let at = BlockId::number(*number);
-		let has_api = runtime.has_api::<dyn OffchainWorkerApi<Block>>(&at);
+		let has_api = runtime.has_api::<dyn OffchainWorkerApi<Block, Error = ()>>(&at);
 		debug!("Checking offchain workers at {:?}: {:?}", at, has_api);
 
 		if has_api.unwrap_or(false) {

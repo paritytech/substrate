@@ -34,7 +34,7 @@ use client::{
 	error::Result as ClientResult,
 	well_known_cache_keys::{self, Id as CacheKeyId},
 };
-use client::block_builder::BlockBuilder;
+use block_builder::BlockBuilder;
 use client::backend::{AuxStore, Backend, Finalizer};
 use crate::config::Roles;
 use consensus::block_validation::DefaultBlockAnnounceValidator;

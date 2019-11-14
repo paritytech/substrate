@@ -10,7 +10,7 @@ default = ["rocksdb"]
 # a path to a database, an error will be produced at runtime.
 rocksdb = ["client_db/kvdb-rocksdb"]
 wasmtime = [
-    "substrate-executor/wasmtime",
+	"substrate-executor/wasmtime",
 ]
 
 [dependencies]
@@ -38,6 +38,8 @@ consensus_common = { package = "substrate-consensus-common", path = "../../core/
 network = { package = "substrate-network", path = "../../core/network" }
 chain-spec = { package = "substrate-chain-spec", path = "../chain-spec" }
 client = { package = "substrate-client", path = "../../core/client" }
+sr-api = { path = "../sr-api" }
+tx-pool-api = { package = "substrate-transaction-pool-runtime-api", path = "../transaction-pool/runtime-api" }
 client_db = { package = "substrate-client-db", path = "../../core/client/db" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 substrate-executor = { path = "../../core/executor" }

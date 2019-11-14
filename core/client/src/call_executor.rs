@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{sync::Arc, cmp::Ord, panic::UnwindSafe, result, cell::RefCell, rc::Rc};
+use std::{sync::Arc, cmp::Ord, panic::UnwindSafe, result, cell::RefCell};
 use codec::{Encode, Decode};
 use sr_primitives::{
 	generic::BlockId, traits::Block as BlockT, traits::NumberFor,
@@ -30,7 +30,7 @@ use primitives::{
 	traits::{CodeExecutor, KeystoreExt},
 };
 
-use crate::runtime_api::{ProofRecorder, InitializeBlock};
+use sr_api::{ProofRecorder, InitializeBlock};
 use crate::backend;
 use crate::error;
 
@@ -81,7 +81,7 @@ where
 		execution_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
 		side_effects_handler: Option<OffchainExt>,
-		proof_recorder: &Option<Rc<RefCell<ProofRecorder<B>>>>,
+		proof_recorder: &Option<ProofRecorder<B>>,
 		enable_keystore: bool,
 	) -> error::Result<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone;
 
@@ -241,7 +241,7 @@ where
 		execution_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
 		side_effects_handler: Option<OffchainExt>,
-		recorder: &Option<Rc<RefCell<ProofRecorder<Block>>>>,
+		recorder: &Option<ProofRecorder<Block>>,
 		enable_keystore: bool,
 	) -> Result<NativeOrEncoded<R>, error::Error> where ExecutionManager<EM>: Clone {
 		match initialize_block {

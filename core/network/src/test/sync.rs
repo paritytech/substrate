@@ -617,9 +617,9 @@ fn syncs_header_only_forks() {
 	net.peer(1).push_blocks(4, false);
 
 	net.block_until_sync(&mut runtime);
-	// Peer 1 won't sync the small fork because common block state is missing
+	// Peer 1 will sync the small fork even though common block state is missing
 	assert_eq!(9, net.peer(0).blocks_count());
-	assert_eq!(7, net.peer(1).blocks_count());
+	assert_eq!(9, net.peer(1).blocks_count());
 
 	// Request explicit header-only sync request for the ancient fork.
 	let first_peer_id = net.peer(0).id();
@@ -633,3 +633,30 @@ fn syncs_header_only_forks() {
 	})).unwrap();
 }
 
+#[test]
+fn does_not_sync_announced_old_best_block() {
+	let _ = ::env_logger::try_init();
+	let mut runtime = current_thread::Runtime::new().unwrap();
+	let mut net = TestNet::new(3);
+
+	let old_hash = net.peer(0).push_blocks(1, false);
+	let old_hash_with_parent = net.peer(0).push_blocks(1, false);
+	net.peer(0).push_blocks(18, true);
+	net.peer(1).push_blocks(20, true);
+
+	net.peer(0).announce_block(old_hash, Vec::new());
+	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| -> Result<_, ()> {
+		// poll once to import announcement
+		net.poll();
+		Ok(Async::Ready(()))
+	})).unwrap();
+	assert!(!net.peer(1).is_major_syncing());
+
+	net.peer(0).announce_block(old_hash_with_parent, Vec::new());
+	runtime.block_on(futures::future::poll_fn::<(), (), _>(|| -> Result<_, ()> {
+		// poll once to import announcement
+		net.poll();
+		Ok(Async::Ready(()))
+	})).unwrap();
+	assert!(!net.peer(1).is_major_syncing());
+}

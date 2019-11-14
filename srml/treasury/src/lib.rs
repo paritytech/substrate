@@ -337,7 +337,7 @@ impl<T: Trait> Module<T> {
 }
 
 impl<T: Trait> OnUnbalanced<NegativeImbalanceOf<T>> for Module<T> {
-	fn on_unbalanced(amount: NegativeImbalanceOf<T>) {
+	fn on_nonzero_unbalanced(amount: NegativeImbalanceOf<T>) {
 		let numeric_amount = amount.peek();
 
 		// Must resolve into existing but better to be safe.
@@ -579,7 +579,7 @@ mod tests {
 			<Treasury as OnFinalize<u64>>::on_finalize(2);
 			assert_eq!(Treasury::pot(), 100); // Pot hasn't changed
 
-			Balances::deposit_into_existing(&Treasury::account_id(), 100);
+			let _ = Balances::deposit_into_existing(&Treasury::account_id(), 100).unwrap();
 			<Treasury as OnFinalize<u64>>::on_finalize(4);
 			assert_eq!(Balances::free_balance(&3), 150); // Fund has been spent
 			assert_eq!(Treasury::pot(), 25); // Pot has finally changed

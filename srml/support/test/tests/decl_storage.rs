@@ -19,9 +19,8 @@
 #[allow(dead_code)]
 mod tests {
 	use support::metadata::*;
-	use support::metadata::StorageHasher;
-	use support::rstd::marker::PhantomData;
-	use support::codec::{Encode, Decode, EncodeLike};
+	use std::marker::PhantomData;
+	use codec::{Encode, Decode, EncodeLike};
 
 	support::decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}

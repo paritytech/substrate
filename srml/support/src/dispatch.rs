@@ -26,7 +26,7 @@ pub use srml_metadata::{
 pub use sr_primitives::{
 	weights::{
 		SimpleDispatchInfo, GetDispatchInfo, DispatchInfo, WeighData, ClassifyDispatch,
-		TransactionPriority
+		TransactionPriority, Weight, WeighBlock,
 	},
 	traits::{Dispatchable, DispatchResult, ModuleDispatchError},
 	DispatchError,
@@ -320,6 +320,7 @@ macro_rules! decl_module {
 			"`deposit_event` function is reserved and must follow the syntax: `$vis:vis fn deposit_event() = default;`"
 		);
 	};
+	// Add on_finalize, without a given weight.
 	(@normalize
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?>
@@ -343,7 +344,10 @@ macro_rules! decl_module {
 			{ $( $other_where_bounds )* }
 			{ $( $deposit_event )* }
 			{ $( $on_initialize )* }
-			{ fn on_finalize( $( $param_name : $param ),* ) { $( $impl )* } }
+			{
+				#[weight = $crate::dispatch::SimpleDispatchInfo::zero()]
+				fn on_finalize( $( $param_name : $param ),* ) { $( $impl )* }
+			}
 			{ $( $offchain )* }
 			{ $( $constants )* }
 			{ $( $error_type )* }
@@ -351,9 +355,48 @@ macro_rules! decl_module {
 			$($rest)*
 		);
 	};
+	// Add on_finalize, given weight.
 	(@normalize
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?>
+		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{ $( $other_where_bounds:tt )* }
+		{ $( $deposit_event:tt )* }
+		{ $( $on_initialize:tt )* }
+		{}
+		{ $( $offchain:tt )* }
+		{ $( $constants:tt )* }
+		{ $( $error_type:tt )* }
+		[ $( $dispatchables:tt )* ]
+		$(#[doc = $doc_attr:tt])*
+		#[weight = $weight:expr]
+		fn on_finalize( $( $param_name:ident : $param:ty ),* $(,)? ) { $( $impl:tt )* }
+		$($rest:tt)*
+	) => {
+		$crate::decl_module!(@normalize
+			$(#[$attr])*
+			pub struct $mod_type<$trait_instance: $trait_name$(<I>, I: $instantiable $(= $module_default_instance)?)?>
+			for enum $call_type where origin: $origin_type, system = $system
+			{ $( $other_where_bounds )* }
+			{ $( $deposit_event )* }
+			{ $( $on_initialize )* }
+			{
+				#[weight = $weight]
+				fn on_finalize( $( $param_name : $param ),* ) { $( $impl )* }
+			}
+			{ $( $offchain )* }
+			{ $( $constants )* }
+			{ $( $error_type )* }
+			[ $( $dispatchables )* ]
+			$($rest)*
+		);
+	};
+	// Add on_initialize, without a given weight.
+	(@normalize
+		$(#[$attr:meta])*
+		pub struct $mod_type:ident<
+			$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?
+		>
 		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
 		{ $( $other_where_bounds:tt )* }
 		{ $( $deposit_event:tt )* }
@@ -373,7 +416,48 @@ macro_rules! decl_module {
 			for enum $call_type where origin: $origin_type, system = $system
 			{ $( $other_where_bounds )* }
 			{ $( $deposit_event )* }
-			{ fn on_initialize( $( $param_name : $param ),* ) { $( $impl )* } }
+			{
+				#[weight = $crate::dispatch::SimpleDispatchInfo::zero()]
+				fn on_initialize( $( $param_name : $param ),* ) { $( $impl )* }
+			}
+			{ $( $on_finalize )* }
+			{ $( $offchain )* }
+			{ $( $constants )* }
+			{ $( $error_type )* }
+			[ $( $dispatchables )* ]
+			$($rest)*
+		);
+	};
+	// Add on_initialize, given weight.
+	(@normalize
+		$(#[$attr:meta])*
+		pub struct $mod_type:ident<
+			$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?
+		>
+		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{ $( $other_where_bounds:tt )* }
+		{ $( $deposit_event:tt )* }
+		{}
+		{ $( $on_finalize:tt )* }
+		{ $( $offchain:tt )* }
+		{ $( $constants:tt )* }
+		{ $( $error_type:tt )* }
+		[ $( $dispatchables:tt )* ]
+		$(#[doc = $doc_attr:tt])*
+		#[weight = $weight:expr]
+		fn on_initialize( $( $param_name:ident : $param:ty ),* $(,)? ) { $( $impl:tt )* }
+		$($rest:tt)*
+	) => {
+		$crate::decl_module!(@normalize
+			$(#[$attr])*
+			pub struct $mod_type<$trait_instance: $trait_name$(<I>, I: $instantiable $(= $module_default_instance)?)?>
+			for enum $call_type where origin: $origin_type, system = $system
+			{ $( $other_where_bounds )* }
+			{ $( $deposit_event )* }
+			{
+				#[weight = $weight]
+				fn on_initialize( $( $param_name : $param ),* ) { $( $impl )* }
+			}
 			{ $( $on_finalize )* }
 			{ $( $offchain )* }
 			{ $( $constants )* }
@@ -770,6 +854,7 @@ macro_rules! decl_module {
 	(@impl_on_initialize
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
 		{ $( $other_where_bounds:tt )* }
+		#[weight = $weight:expr]
 		fn on_initialize() { $( $impl:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
@@ -783,6 +868,7 @@ macro_rules! decl_module {
 	(@impl_on_initialize
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
 		{ $( $other_where_bounds:tt )* }
+		#[weight = $weight:expr]
 		fn on_initialize($param:ident : $param_ty:ty) { $( $impl:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
@@ -806,6 +892,7 @@ macro_rules! decl_module {
 	(@impl_on_finalize
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
 		{ $( $other_where_bounds:tt )* }
+		#[weight = $weight:expr]
 		fn on_finalize() { $( $impl:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
@@ -819,6 +906,7 @@ macro_rules! decl_module {
 	(@impl_on_finalize
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
 		{ $( $other_where_bounds:tt )* }
+		#[weight = $weight:expr]
 		fn on_finalize($param:ident : $param_ty:ty) { $( $impl:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
@@ -837,6 +925,35 @@ macro_rules! decl_module {
 			$crate::sr_primitives::traits::OnFinalize<$trait_instance::BlockNumber>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
+		}
+	};
+
+	(@impl_block_hooks_weight
+		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
+		{ $( $other_where_bounds:tt )* }
+		@init $(
+			#[weight = $weight_initialize:expr]
+			fn on_initialize($( $param_initialize:ident : $param_ty_initialize:ty )*) { $( $impl_initialize:tt )* }
+		)?
+		@fin $(
+			#[weight = $weight_finalize:expr]
+			fn on_finalize($( $param_finalize:ident : $param_ty_finalize:ty )*) { $( $impl_finalize:tt )* }
+		)?
+	) => {
+		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
+		$crate::dispatch::WeighBlock<$trait_instance::BlockNumber> for $module<$trait_instance$(, $instance)?> where
+			$( $other_where_bounds )*
+		{
+			$(
+				fn on_initialize(n: $trait_instance::BlockNumber) -> $crate::dispatch::Weight {
+					<dyn $crate::dispatch::WeighData<$trait_instance::BlockNumber>>::weigh_data(&$weight_initialize, n)
+				}
+			)?
+			$(
+				fn on_finalize(n: $trait_instance::BlockNumber) -> $crate::dispatch::Weight {
+					<dyn $crate::dispatch::WeighData<$trait_instance::BlockNumber>>::weigh_data(&$weight_finalize, n)
+				}
+			)?
 		}
 	};
 
@@ -1081,6 +1198,14 @@ macro_rules! decl_module {
 			$mod_type<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?>;
 			{ $( $other_where_bounds )* }
 			$( $on_finalize )*
+		}
+
+		$crate::decl_module! {
+			@impl_block_hooks_weight
+			$mod_type<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?>;
+			{ $( $other_where_bounds )* }
+			@init $( $on_initialize )*
+			@fin $( $on_finalize )*
 		}
 
 		$crate::decl_module! {
@@ -1727,6 +1852,14 @@ mod tests {
 		}
 	}
 
+	struct BLockWeight;
+	impl<BlockNumber: Into<u32>> WeighData<BlockNumber> for BLockWeight {
+		fn weigh_data(&self, target: BlockNumber) -> Weight {
+			let target: u32 = target.into();
+			if target % 2 == 0 { 10 } else { 0 }
+		}
+	}
+
 	decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin, T::AccountId: From<u32> {
 			/// Hi, this is a comment.
@@ -1738,7 +1871,9 @@ mod tests {
 			fn aux_4(_origin, _data: i32) -> Result { unreachable!() }
 			fn aux_5(_origin, _data: i32, #[compact] _data2: u32,) -> Result { unreachable!() }
 
+			#[weight = SimpleDispatchInfo::FixedNormal(7)]
 			fn on_initialize(n: T::BlockNumber,) { if n.into() == 42 { panic!("on_initialize") } }
+			#[weight = BLockWeight]
 			fn on_finalize(n: T::BlockNumber) { if n.into() == 42 { panic!("on_finalize") } }
 			fn offchain_worker() {}
 
@@ -1898,5 +2033,17 @@ mod tests {
 			Call::<TraitImpl>::aux_3().get_dispatch_info(),
 			DispatchInfo { weight: 3, class: DispatchClass::Normal },
 		);
+	}
+
+	#[test]
+	fn weight_for_block_hooks() {
+		// independent of block number
+		assert_eq!(<Test as WeighBlock<u32>>::on_initialize(0), 7);
+		assert_eq!(<Test as WeighBlock<u32>>::on_initialize(10), 7);
+		assert_eq!(<Test as WeighBlock<u32>>::on_initialize(100), 7);
+
+		// dependent
+		assert_eq!(<Test as WeighBlock<u32>>::on_finalize(2), 10);
+		assert_eq!(<Test as WeighBlock<u32>>::on_finalize(3), 0);
 	}
 }

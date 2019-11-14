@@ -155,7 +155,8 @@ use codec::{Decode, Encode, HasCompact, Input, Output, Error};
 
 use sr_primitives::RuntimeDebug;
 use sr_primitives::traits::{
-	CheckedAdd, CheckedSub, MaybeSerializeDeserialize, Member, One, Saturating, SimpleArithmetic, Zero, Bounded
+	CheckedAdd, CheckedSub, MaybeSerializeDeserialize, Member, One, Saturating, SimpleArithmetic,
+	Zero, Bounded,
 };
 
 use rstd::prelude::*;
@@ -165,7 +166,7 @@ use support::{
 	decl_event, decl_module, decl_storage, ensure,
 	traits::{
 		Currency, ExistenceRequirement, Imbalance, LockIdentifier, LockableCurrency, ReservableCurrency,
-		SignedImbalance, UpdateBalanceOutcome, WithdrawReason, WithdrawReasons,
+		SignedImbalance, UpdateBalanceOutcome, WithdrawReason, WithdrawReasons, TryDrop,
 	},
 	Parameter, StorageMap,
 };
@@ -862,7 +863,9 @@ pub trait AssetIdProvider {
 // wrapping these imbalanes in a private module is necessary to ensure absolute privacy
 // of the inner member.
 mod imbalances {
-	use super::{result, AssetIdProvider, Imbalance, Saturating, StorageMap, Subtrait, Zero};
+	use super::{
+		result, AssetIdProvider, Imbalance, Saturating, StorageMap, Subtrait, Zero, TryDrop
+	};
 	use rstd::mem;
 
 	/// Opaque, move-only struct with private fields that serves as a token denoting that
@@ -896,6 +899,16 @@ mod imbalances {
 	{
 		pub fn new(amount: T::Balance) -> Self {
 			NegativeImbalance(amount, Default::default())
+		}
+	}
+
+	impl<T, U> TryDrop for PositiveImbalance<T, U>
+	where
+		T: Subtrait,
+		U: AssetIdProvider<AssetId = T::AssetId>,
+	{
+		fn try_drop(self) -> result::Result<(), Self> {
+			self.drop_zero()
 		}
 	}
 
@@ -945,6 +958,16 @@ mod imbalances {
 		}
 		fn peek(&self) -> T::Balance {
 			self.0.clone()
+		}
+	}
+
+	impl<T, U> TryDrop for NegativeImbalance<T, U>
+	where
+		T: Subtrait,
+		U: AssetIdProvider<AssetId = T::AssetId>,
+	{
+		fn try_drop(self) -> result::Result<(), Self> {
+			self.drop_zero()
 		}
 	}
 

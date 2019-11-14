@@ -19,25 +19,34 @@
 use runtime;
 use sr_primitives::traits::ProvideRuntimeApi;
 use generic_test_client::client;
-use generic_test_client::client::block_builder::api::BlockBuilder;
+
+use block_builder::BlockBuilderApi;
 
 /// Extension trait for test block builder.
 pub trait BlockBuilderExt {
 	/// Add transfer extrinsic to the block.
 	fn push_transfer(&mut self, transfer: runtime::Transfer) -> Result<(), client::error::Error>;
 	/// Add storage change extrinsic to the block.
-	fn push_storage_change(&mut self, key: Vec<u8>, value: Option<Vec<u8>>) -> Result<(), client::error::Error>;
+	fn push_storage_change(
+		&mut self,
+		key: Vec<u8>,
+		value: Option<Vec<u8>>,
+	) -> Result<(), client::error::Error>;
 }
 
-impl<'a, A> BlockBuilderExt for client::block_builder::BlockBuilder<'a, runtime::Block, A> where
-	A: ProvideRuntimeApi + client::blockchain::HeaderBackend<runtime::Block> + 'a,
-	A::Api: BlockBuilder<runtime::Block>
+impl<'a, A> BlockBuilderExt for block_builder::BlockBuilder<'a, runtime::Block, A> where
+	A: ProvideRuntimeApi + 'a,
+	A::Api: BlockBuilderApi<runtime::Block, Error = client::error::Error>,
 {
 	fn push_transfer(&mut self, transfer: runtime::Transfer) -> Result<(), client::error::Error> {
 		self.push(transfer.into_signed_tx())
 	}
 
-	fn push_storage_change(&mut self, key: Vec<u8>, value: Option<Vec<u8>>) -> Result<(), client::error::Error> {
+	fn push_storage_change(
+		&mut self,
+		key: Vec<u8>,
+		value: Option<Vec<u8>>,
+	) -> Result<(), client::error::Error> {
 		self.push(runtime::Extrinsic::StorageChange(key, value))
 	}
 }

@@ -14,10 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use runtime_io::with_storage;
 use support::storage::unhashed;
 use codec::Encode;
 use support::{StorageDoubleMap, StorageLinkedMap, StorageMap, StorageValue};
+use runtime_io::{TestExternalities, hashing};
 
 mod no_instance {
 	use codec::{Encode, Decode, EncodeLike};
@@ -87,141 +87,141 @@ mod instance {
 
 #[test]
 fn final_keys_no_instance() {
-	with_storage(&mut Default::default(), || {
+	TestExternalities::default().execute_with(|| {
 		no_instance::Value::put(1);
-		assert_eq!(unhashed::get::<u32>(&runtime_io::twox_128(b"FinalKeysNone Value")), Some(1u32));
+		assert_eq!(unhashed::get::<u32>(&hashing::twox_128(b"FinalKeysNone Value")), Some(1u32));
 
 		no_instance::Map::insert(1, 2);
 		let mut k = b"FinalKeysNone Map".to_vec();
 		k.extend(1u32.encode());
-		assert_eq!(unhashed::get::<u32>(&runtime_io::blake2_256(&k)), Some(2u32));
+		assert_eq!(unhashed::get::<u32>(&hashing::blake2_256(&k)), Some(2u32));
 
 		no_instance::Map2::insert(1, 2);
 		let mut k = b"FinalKeysNone Map2".to_vec();
 		k.extend(1u32.encode());
-		assert_eq!(unhashed::get::<u32>(&runtime_io::twox_128(&k)), Some(2u32));
+		assert_eq!(unhashed::get::<u32>(&hashing::twox_128(&k)), Some(2u32));
 
 		let head = b"head of FinalKeysNone LinkedMap".to_vec();
-		assert_eq!(unhashed::get::<u32>(&runtime_io::blake2_256(&head)), None);
+		assert_eq!(unhashed::get::<u32>(&hashing::blake2_256(&head)), None);
 
 		no_instance::LinkedMap::insert(1, 2);
 		let mut k = b"FinalKeysNone LinkedMap".to_vec();
 		k.extend(1u32.encode());
-		assert_eq!(unhashed::get::<u32>(&runtime_io::blake2_256(&k)), Some(2u32));
-		assert_eq!(unhashed::get::<u32>(&runtime_io::blake2_256(&head)), Some(1u32));
+		assert_eq!(unhashed::get::<u32>(&hashing::blake2_256(&k)), Some(2u32));
+		assert_eq!(unhashed::get::<u32>(&hashing::blake2_256(&head)), Some(1u32));
 
 		no_instance::LinkedMap2::insert(1, 2);
 		let mut k = b"FinalKeysNone LinkedMap2".to_vec();
 		k.extend(1u32.encode());
-		assert_eq!(unhashed::get::<u32>(&runtime_io::twox_128(&k)), Some(2u32));
+		assert_eq!(unhashed::get::<u32>(&hashing::twox_128(&k)), Some(2u32));
 
 		no_instance::DoubleMap::insert(&1, &2, &3);
 		let mut k = b"FinalKeysNone DoubleMap".to_vec();
 		k.extend(1u32.encode());
-		let mut k = runtime_io::blake2_256(&k).to_vec();
-		k.extend(&runtime_io::blake2_256(&2u32.encode()));
+		let mut k = hashing::blake2_256(&k).to_vec();
+		k.extend(&hashing::blake2_256(&2u32.encode()));
 		assert_eq!(unhashed::get::<u32>(&k), Some(3u32));
 
 		no_instance::DoubleMap2::insert(&1, &2, &3);
 		let mut k = b"FinalKeysNone DoubleMap2".to_vec();
 		k.extend(1u32.encode());
-		let mut k = runtime_io::twox_128(&k).to_vec();
-		k.extend(&runtime_io::blake2_128(&2u32.encode()));
+		let mut k = hashing::twox_128(&k).to_vec();
+		k.extend(&hashing::blake2_128(&2u32.encode()));
 		assert_eq!(unhashed::get::<u32>(&k), Some(3u32));
 	});
 }
 
 #[test]
 fn final_keys_default_instance() {
-	with_storage(&mut Default::default(), || {
+	TestExternalities::default().execute_with(|| {
 		<instance::Value<instance::DefaultInstance>>::put(1);
-		assert_eq!(unhashed::get::<u32>(&runtime_io::twox_128(b"FinalKeysSome Value")), Some(1u32));
+		assert_eq!(unhashed::get::<u32>(&hashing::twox_128(b"FinalKeysSome Value")), Some(1u32));
 
 		<instance::Map<instance::DefaultInstance>>::insert(1, 2);
 		let mut k = b"FinalKeysSome Map".to_vec();
 		k.extend(1u32.encode());
-		assert_eq!(unhashed::get::<u32>(&runtime_io::blake2_256(&k)), Some(2u32));
+		assert_eq!(unhashed::get::<u32>(&hashing::blake2_256(&k)), Some(2u32));
 
 		<instance::Map2<instance::DefaultInstance>>::insert(1, 2);
 		let mut k = b"FinalKeysSome Map2".to_vec();
 		k.extend(1u32.encode());
-		assert_eq!(unhashed::get::<u32>(&runtime_io::twox_128(&k)), Some(2u32));
+		assert_eq!(unhashed::get::<u32>(&hashing::twox_128(&k)), Some(2u32));
 
 		let head = b"head of FinalKeysSome LinkedMap".to_vec();
-		assert_eq!(unhashed::get::<u32>(&runtime_io::blake2_256(&head)), None);
+		assert_eq!(unhashed::get::<u32>(&hashing::blake2_256(&head)), None);
 
 		<instance::LinkedMap<instance::DefaultInstance>>::insert(1, 2);
 		let mut k = b"FinalKeysSome LinkedMap".to_vec();
 		k.extend(1u32.encode());
-		assert_eq!(unhashed::get::<u32>(&runtime_io::blake2_256(&k)), Some(2u32));
-		assert_eq!(unhashed::get::<u32>(&runtime_io::blake2_256(&head)), Some(1u32));
+		assert_eq!(unhashed::get::<u32>(&hashing::blake2_256(&k)), Some(2u32));
+		assert_eq!(unhashed::get::<u32>(&hashing::blake2_256(&head)), Some(1u32));
 
-<		instance::LinkedMap2<instance::DefaultInstance>>::insert(1, 2);
+		<instance::LinkedMap2<instance::DefaultInstance>>::insert(1, 2);
 		let mut k = b"FinalKeysSome LinkedMap2".to_vec();
 		k.extend(1u32.encode());
-		assert_eq!(unhashed::get::<u32>(&runtime_io::twox_128(&k)), Some(2u32));
+		assert_eq!(unhashed::get::<u32>(&hashing::twox_128(&k)), Some(2u32));
 
 		<instance::DoubleMap<instance::DefaultInstance>>::insert(&1, &2, &3);
 		let mut k = b"FinalKeysSome DoubleMap".to_vec();
 		k.extend(1u32.encode());
-		let mut k = runtime_io::blake2_256(&k).to_vec();
-		k.extend(&runtime_io::blake2_256(&2u32.encode()));
+		let mut k = hashing::blake2_256(&k).to_vec();
+		k.extend(&hashing::blake2_256(&2u32.encode()));
 		assert_eq!(unhashed::get::<u32>(&k), Some(3u32));
 
 		<instance::DoubleMap2<instance::DefaultInstance>>::insert(&1, &2, &3);
 		let mut k = b"FinalKeysSome DoubleMap2".to_vec();
 		k.extend(1u32.encode());
-		let mut k = runtime_io::twox_128(&k).to_vec();
-		k.extend(&runtime_io::blake2_128(&2u32.encode()));
+		let mut k = hashing::twox_128(&k).to_vec();
+		k.extend(&hashing::blake2_128(&2u32.encode()));
 		assert_eq!(unhashed::get::<u32>(&k), Some(3u32));
 	});
 }
 
 #[test]
 fn final_keys_instance_2() {
-	with_storage(&mut Default::default(), || {
+	TestExternalities::default().execute_with(|| {
 		<instance::Value<instance::Instance2>>::put(1);
 		assert_eq!(
-			unhashed::get::<u32>(&runtime_io::twox_128(b"Instance2FinalKeysSome Value")),
+			unhashed::get::<u32>(&hashing::twox_128(b"Instance2FinalKeysSome Value")),
 			Some(1u32)
 		);
 
 		<instance::Map<instance::Instance2>>::insert(1, 2);
 		let mut k = b"Instance2FinalKeysSome Map".to_vec();
 		k.extend(1u32.encode());
-		assert_eq!(unhashed::get::<u32>(&runtime_io::blake2_256(&k)), Some(2u32));
+		assert_eq!(unhashed::get::<u32>(&hashing::blake2_256(&k)), Some(2u32));
 
 		<instance::Map2<instance::Instance2>>::insert(1, 2);
 		let mut k = b"Instance2FinalKeysSome Map2".to_vec();
 		k.extend(1u32.encode());
-		assert_eq!(unhashed::get::<u32>(&runtime_io::twox_128(&k)), Some(2u32));
+		assert_eq!(unhashed::get::<u32>(&hashing::twox_128(&k)), Some(2u32));
 
 		let head = b"head of Instance2FinalKeysSome LinkedMap".to_vec();
-		assert_eq!(unhashed::get::<u32>(&runtime_io::blake2_256(&head)), None);
+		assert_eq!(unhashed::get::<u32>(&hashing::blake2_256(&head)), None);
 
 		<instance::LinkedMap<instance::Instance2>>::insert(1, 2);
 		let mut k = b"Instance2FinalKeysSome LinkedMap".to_vec();
 		k.extend(1u32.encode());
-		assert_eq!(unhashed::get::<u32>(&runtime_io::blake2_256(&k)), Some(2u32));
-		assert_eq!(unhashed::get::<u32>(&runtime_io::blake2_256(&head)), Some(1u32));
+		assert_eq!(unhashed::get::<u32>(&hashing::blake2_256(&k)), Some(2u32));
+		assert_eq!(unhashed::get::<u32>(&hashing::blake2_256(&head)), Some(1u32));
 
 		<instance::LinkedMap2<instance::Instance2>>::insert(1, 2);
 		let mut k = b"Instance2FinalKeysSome LinkedMap2".to_vec();
 		k.extend(1u32.encode());
-		assert_eq!(unhashed::get::<u32>(&runtime_io::twox_128(&k)), Some(2u32));
+		assert_eq!(unhashed::get::<u32>(&hashing::twox_128(&k)), Some(2u32));
 
 		<instance::DoubleMap<instance::Instance2>>::insert(&1, &2, &3);
 		let mut k = b"Instance2FinalKeysSome DoubleMap".to_vec();
 		k.extend(1u32.encode());
-		let mut k = runtime_io::blake2_256(&k).to_vec();
-		k.extend(&runtime_io::blake2_256(&2u32.encode()));
+		let mut k = hashing::blake2_256(&k).to_vec();
+		k.extend(&hashing::blake2_256(&2u32.encode()));
 		assert_eq!(unhashed::get::<u32>(&k), Some(3u32));
 
 		<instance::DoubleMap2<instance::Instance2>>::insert(&1, &2, &3);
 		let mut k = b"Instance2FinalKeysSome DoubleMap2".to_vec();
 		k.extend(1u32.encode());
-		let mut k = runtime_io::twox_128(&k).to_vec();
-		k.extend(&runtime_io::blake2_128(&2u32.encode()));
+		let mut k = hashing::twox_128(&k).to_vec();
+		k.extend(&hashing::blake2_128(&2u32.encode()));
 		assert_eq!(unhashed::get::<u32>(&k), Some(3u32));
 	});
 }

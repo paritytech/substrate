@@ -25,11 +25,8 @@ use parking_lot::Mutex;
 use futures03::{StreamExt as _, TryStreamExt as _};
 use tokio::runtime::current_thread;
 use keyring::Ed25519Keyring;
-use client::{
-	error::Result,
-	runtime_api::{Core, RuntimeVersion, ApiExt, StorageProof},
-	LongestChain,
-};
+use client::{error::Result, LongestChain};
+use sr_api::{Core, RuntimeVersion, ApiExt, StorageProof};
 use test_client::{self, runtime::BlockNumber};
 use consensus_common::{BlockOrigin, ForkChoiceStrategy, ImportedAux, BlockImportParams, ImportResult};
 use consensus_common::import_queue::{BoxBlockImport, BoxJustificationImport, BoxFinalityProofImport};
@@ -94,9 +91,9 @@ impl TestNetFactory for GrandpaTestNet {
 
 	fn default_config() -> ProtocolConfig {
 		// the authority role ensures gossip hits all nodes here.
-		ProtocolConfig {
-			roles: Roles::AUTHORITY,
-		}
+		let mut config = ProtocolConfig::default();
+		config.roles = Roles::AUTHORITY;
+		config
 	}
 
 	fn make_verifier(
@@ -244,6 +241,8 @@ impl Core<Block> for RuntimeApi {
 }
 
 impl ApiExt<Block> for RuntimeApi {
+	type Error = client::error::Error;
+
 	fn map_api_result<F: FnOnce(&Self) -> result::Result<R, E>, R, E>(
 		&self,
 		_: F

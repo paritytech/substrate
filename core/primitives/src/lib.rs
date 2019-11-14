@@ -38,9 +38,9 @@ use std::borrow::Cow;
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 #[cfg(feature = "std")]
-pub use serde;// << for macro
+pub use serde;
 #[doc(hidden)]
-pub use codec::{Encode, Decode};// << for macro
+pub use codec::{Encode, Decode};
 
 pub use substrate_debug_derive::RuntimeDebug;
 
@@ -50,7 +50,7 @@ pub use impl_serde::serialize as bytes;
 #[cfg(feature = "full_crypto")]
 pub mod hashing;
 #[cfg(feature = "full_crypto")]
-pub use hashing::{blake2_128, blake2_256, twox_64, twox_128, twox_256};
+pub use hashing::{blake2_128, blake2_256, twox_64, twox_128, twox_256, keccak_256};
 #[cfg(feature = "std")]
 pub mod hexdisplay;
 pub mod crypto;
@@ -236,7 +236,7 @@ pub trait TypeId {
 /// A log level matching the one from `log` crate.
 ///
 /// Used internally by `runtime_io::log` method.
-#[repr(u32)]
+#[derive(Encode, Decode, runtime_interface::pass_by::PassByEnum, Copy, Clone)]
 pub enum LogLevel {
 	/// `Error` log level.
 	Error = 1,

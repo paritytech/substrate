@@ -22,7 +22,10 @@ use hash_db::Hasher;
 use trie::{TrieConfiguration, default_child_trie_root};
 use trie::trie_types::Layout;
 use primitives::{
-	storage::{well_known_keys::is_child_storage_key, ChildStorageKey},
+	storage::{
+		well_known_keys::is_child_storage_key, ChildStorageKey, StorageOverlay,
+		ChildrenStorageOverlay
+	},
 	traits::Externalities, Blake2Hasher, hash::H256,
 };
 use log::warn;
@@ -30,16 +33,13 @@ use log::warn;
 /// Simple HashMap-based Externalities impl.
 #[derive(Debug)]
 pub struct BasicExternalities {
-	top: HashMap<Vec<u8>, Vec<u8>>,
-	children: HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>,
+	top: StorageOverlay,
+	children: ChildrenStorageOverlay,
 }
 
 impl BasicExternalities {
 	/// Create a new instance of `BasicExternalities`
-	pub fn new(
-		top: HashMap<Vec<u8>, Vec<u8>>,
-		children: HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>,
-	) -> Self {
+	pub fn new(top: StorageOverlay, children: ChildrenStorageOverlay) -> Self {
 		BasicExternalities {
 			top,
 			children,
@@ -57,6 +57,32 @@ impl BasicExternalities {
 		HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>,
 	) {
 		(self.top, self.children)
+	}
+
+	/// Execute the given closure `f` with the externalities set and initialized with `storage`.
+	///
+	/// Returns the result of the closure and updates `storage` with all changes.
+	pub fn execute_with_storage<R>(
+		storage: &mut (StorageOverlay, ChildrenStorageOverlay),
+		f: impl FnOnce() -> R,
+	) -> R {
+		let mut ext = Self {
+			top: storage.0.drain().collect(),
+			children: storage.1.drain().collect(),
+		};
+
+		let r = ext.execute_with(f);
+
+		*storage = ext.into_storages();
+
+		r
+	}
+
+	/// Execute the given closure while `self` is set as externalities.
+	///
+	/// Returns the result of the given closure.
+	pub fn execute_with<R>(&mut self, f: impl FnOnce() -> R) -> R {
+		externalities::set_and_run_with_externalities(self, f)
 	}
 }
 
