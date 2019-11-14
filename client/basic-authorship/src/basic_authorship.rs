@@ -55,7 +55,7 @@ where
 	RA: Send + Sync + 'static,
 	SubstrateClient<B, E, Block, RA>: ProvideRuntimeApi,
 	<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api:
-		BlockBuilderApi<Block, Error = client::error::Error>,
+		BlockBuilderApi<Block, Error = error::Error>,
 {
 	type Proposer = Proposer<Block, SubstrateClient<B, E, Block, RA>, A>;
 	type Error = error::Error;
@@ -103,7 +103,7 @@ where
 	RA: Send + Sync + 'static,
 	SubstrateClient<B, E, Block, RA>: ProvideRuntimeApi,
 	<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api:
-		BlockBuilderApi<Block, Error = client::error::Error>,
+		BlockBuilderApi<Block, Error = error::Error>,
 {
 	type Create = futures::future::Ready<Result<Block, error::Error>>;
 	type Error = error::Error;
@@ -128,7 +128,7 @@ impl<Block, B, E, RA, A> Proposer<Block, SubstrateClient<B, E, Block, RA>, A>	wh
 	RA: Send + Sync + 'static,
 	SubstrateClient<B, E, Block, RA>: ProvideRuntimeApi,
 	<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api:
-		BlockBuilderApi<Block, Error = client::error::Error>,
+		BlockBuilderApi<Block, Error = error::Error>,
 {
 	fn propose_with(
 		&self,

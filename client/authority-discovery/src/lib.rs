@@ -591,7 +591,7 @@ mod tests {
 			_: ExecutionContext,
 			_: Option<()>,
 			_: Vec<u8>,
-		) -> std::result::Result<NativeOrEncoded<Vec<AuthorityId>>, client::error::Error> {
+		) -> std::result::Result<NativeOrEncoded<Vec<AuthorityId>>, client_api::error::Error> {
 			return Ok(NativeOrEncoded::Native(self.authorities.clone()));
 		}
 	}
