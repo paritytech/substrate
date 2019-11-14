@@ -124,7 +124,8 @@ cli = [
 	"tokio",
 	"exit-future",
 	"ctrlc",
-	"substrate-service/rocksdb"
+	"substrate-service/rocksdb",
+	"node-executor/wasmi-errno",
 ]
 wasmtime = [
 	"cli",
