@@ -28,6 +28,7 @@ use rstd::convert::TryInto;
 use rstd::mem;
 use codec::{Decode, Encode};
 use sr_primitives::traits::{Bounded, SaturatedConversion};
+use support::storage::unhashed;
 
 /// The value returned from ext_call and ext_instantiate contract external functions if the call or
 /// instantiation traps. This value is chosen as if the execution does not trap, the return value
@@ -333,8 +334,8 @@ define_env!(Env, <E: Ext>,
 		Ok(())
 	},
 
-	// Retrieve the value at the given location from the storage and return 0.
-	// If there is no entry at the given location then this function will return 1 and
+	// Retrieve the value under the given key from the storage and return 0.
+	// If there is no entry under the given key then this function will return 1 and
 	// clear the scratch buffer.
 	//
 	// - key_ptr: pointer into the linear memory where the key
@@ -834,6 +835,29 @@ define_env!(Env, <E: Ext>,
 		ctx.scratch_buf.clear();
 		ctx.ext.block_number().encode_to(&mut ctx.scratch_buf);
 		Ok(())
+	},
+
+	// Retrieve the value at the under the given key from the **runtime** storage and return 0.
+	// If there is no entry under the given key then this function will return 1 and
+	// clear the scratch buffer.
+	//
+	// - key_ptr: the pointer into the linear memory where the requested value is placed.
+	// - key_len: the length of the key in bytes.
+	ext_get_runtime_storage(ctx, key_ptr: u32, key_len: u32) -> u32 => {
+		read_sandbox_memory_into_scratch(ctx, key_ptr, key_len)?;
+		let key_buf = mem::replace(&mut ctx.scratch_buf, Vec::new());
+
+		match unhashed::get_raw(&key_buf) {
+			Some(value_buf) => {
+				// The given value exists.
+				ctx.scratch_buf = value_buf;
+				Ok(0)
+			}
+			None => {
+				ctx.scratch_buf = Vec::new();
+				Ok(1)
+			}
+		}
 	},
 );
 
