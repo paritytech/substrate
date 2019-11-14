@@ -27,7 +27,7 @@
 //!
 //! The only global state is a counter of overlayed transaction layer.
 //! Committing or discarding a layer must use this counter.
-//!
+//! 
 //! # Local state
 //!
 //! Local state is either a committed state (this is a single first independant level
@@ -36,10 +36,10 @@
 use rstd::vec::Vec;
 use crate::PruneResult;
 
-/// Global states is a simple counter to the current overlay layer index.
+/// Global state is a simple counter to the current overlay layer index.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct States(usize);
-
+	
 impl Default for States {
 	fn default() -> Self {
 		// we default to 1 to be able to discard this transaction.
@@ -67,14 +67,14 @@ impl States {
 	/// 0 can be use only to apply transaction change, in
 	/// this case transaction need to be restored to a valid
 	/// state afterward.
-	pub fn ensure_running(&mut self) {
+	pub fn finalize_discard(&mut self) {
 		if self.0 == 0 {
 			self.0 = 1;
 		}
 	}
 
 	/// Discard prospective changes to state.
-	/// It does not reverts actual values.
+	/// It does not reverts actual values. 
 	/// A subsequent synchronisation of stored values is needed.
 	pub fn discard_prospective(&mut self) {
 		self.0 = 1;
@@ -164,7 +164,7 @@ impl States {
 	/// It does not reverts actual values.
 	/// A subsequent synchronisation of stored values is needed.
 	pub fn commit_transaction(&mut self) {
-		if self.0 > 0 {
+		if self.0 > 1 {
 			self.0 -= 1;
 		}
 	}
@@ -174,25 +174,19 @@ impl States {
 	/// Multiple discard can be applied at the same time.
 	/// Returns true if value is still needed.
 	pub fn apply_commit_transaction<V>(&self, value: &mut History<V>) -> PruneResult {
-		let target_overlay = if self.0 > 0 {
-			self.0
-		} else {
-			// `ensure_running` will put state back to one after
-			1
-		};
 		let mut new_value = None;
 		for i in (0 .. value.0.len()).rev() {
 			if let HistoricalValue {
 				value: _,
 				index: State::Transaction(ix),
 			} = value.0[i] {
-				if ix > target_overlay {
+				if ix > self.0 {
 					if let Some(v) = value.0.pop() {
 						if new_value.is_none() {
 							new_value = Some(v.value);
 						}
 					}
-				} else if ix == target_overlay && new_value.is_some() {
+				} else if ix == self.0 && new_value.is_some() {
 					let _ = value.0.pop();
 				} else { break }
 			} else { break }
@@ -200,7 +194,7 @@ impl States {
 		if let Some(new_value) = new_value {
 			value.0.push(HistoricalValue {
 				value: new_value,
-				index: State::Transaction(target_overlay),
+				index: State::Transaction(self.0),
 			});
 			return PruneResult::Changed;
 		}
@@ -226,7 +220,6 @@ impl State {
 		}
 	}
 }
-
 /// An entry at a given history height.
 pub type HistoricalValue<V> = crate::HistoricalValue<V, State>;
 

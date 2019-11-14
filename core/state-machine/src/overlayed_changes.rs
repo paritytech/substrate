@@ -157,7 +157,6 @@ impl OverlayedChangeSet {
 			m.retain(|_, h_value| states.apply_discard_prospective(h_value) != PruneResult::Cleared);
 			!m.is_empty()
 		});
-		self.states.ensure_running();
 	}
 
 	/// Commit prospective changes to state.
@@ -169,7 +168,6 @@ impl OverlayedChangeSet {
 			m.retain(|_, h_value| states.apply_commit_prospective(h_value) != PruneResult::Cleared);
 			!m.is_empty()
 		});
-		self.states.ensure_running();
 	}
 
 	/// Create a new transactional layer.
@@ -187,7 +185,7 @@ impl OverlayedChangeSet {
 			m.retain(|_, h_value| states.apply_discard_transaction(h_value) != PruneResult::Cleared);
 			!m.is_empty()
 		});
-		self.states.ensure_running();
+		self.states.finalize_discard();
 	}
 
 	/// Commit a transactional layer.
@@ -199,7 +197,6 @@ impl OverlayedChangeSet {
 			m.retain(|_, h_value| states.apply_commit_transaction(h_value) != PruneResult::Cleared);
 			!m.is_empty()
 		});
-		self.states.ensure_running();
 	}
 
 	/// Iterator over current state of a given overlay, including change trie information.

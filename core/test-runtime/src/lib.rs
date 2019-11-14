@@ -931,7 +931,7 @@ fn test_historical_data() {
 	}
 	states.discard_transaction();
 	states.apply_discard_transaction(&mut value);
-	states.ensure_running();
+	states.finalize_discard();
 	if value.get() != Some(&42) {
 		panic!("Got a wrong result accessing a one element data after a discard");
 	}
