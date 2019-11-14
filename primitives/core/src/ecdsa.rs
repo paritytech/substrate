@@ -190,6 +190,21 @@ impl rstd::convert::TryFrom<&[u8]> for Signature {
 	}
 }
 
+#[cfg(feature = "std")]
+impl Serialize for Signature {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
+		serializer.serialize_str(&hex::encode(self))
+	}
+}
+
+#[cfg(feature = "std")]
+impl<'de> Deserialize<'de> for Signature {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
+		Ok(Signature::from_slice(&hex::decode(&String::deserialize(deserializer)?)
+			.map_err(|e| de::Error::custom(format!("{:?}", e)))?))
+	}
+}
+
 impl Clone for Signature {
 	fn clone(&self) -> Self {
 		let mut r = [0u8; 65];
