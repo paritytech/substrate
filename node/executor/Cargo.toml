@@ -37,6 +37,9 @@ criterion = "0.3.0"
 wasmtime = [
     "substrate-executor/wasmtime",
 ]
+wasmi-errno = [
+	"substrate-executor/wasmi-errno",
+]
 stress-test = []
 
 [[bench]]
