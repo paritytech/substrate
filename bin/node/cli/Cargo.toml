@@ -57,6 +57,7 @@ substrate-rpc = { package = "substrate-rpc", path = "../../../client/rpc" }
 substrate-basic-authorship = { path = "../../../client/basic-authorship" }
 substrate-service = { path = "../../../client/service", default-features = false }
 substrate-telemetry = { package = "substrate-telemetry", path = "../../../client/telemetry" }
+authority-discovery = { package = "substrate-authority-discovery", path = "../../../client/authority-discovery"}
 
 # paint dependencies
 indices = { package = "paint-indices", path = "../../../paint/indices" }
@@ -67,7 +68,9 @@ system = { package = "paint-system", path = "../../../paint/system" }
 balances = { package = "paint-balances", path = "../../../paint/balances" }
 transaction-payment = { package = "paint-transaction-payment", path = "../../../paint/transaction-payment" }
 support = { package = "paint-support", path = "../../../paint/support", default-features = false }
-im_online = { package = "paint-im-online", path = "../../../paint/im-online", default-features = false }
+im_online = { package = "paint-im-online", path = "../../../paint/im-online", default-features = false }authority-discovery-primitives = { package = "substrate-authority-discovery-primitives", path = "../../../primitives/authority-discovery"}
+authority-discovery = { package = "paint-authority-discovery", path = "../../../paint/authority-discovery"}
+
 
 # node-specific dependencies
 node-runtime = { path = "../runtime" }
