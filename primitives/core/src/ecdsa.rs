@@ -172,7 +172,7 @@ impl rstd::hash::Hash for Public {
 	}
 }
 
-/// A signature (a 512-bit value).
+/// A signature (a 512-bit value, plus 8 bits for recovery ID).
 #[derive(Encode, Decode)]
 pub struct Signature([u8; 65]);
 
