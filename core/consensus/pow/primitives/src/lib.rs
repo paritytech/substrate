@@ -21,7 +21,6 @@
 use rstd::vec::Vec;
 use sr_primitives::ConsensusEngineId;
 use codec::Decode;
-use substrate_client::decl_runtime_apis;
 
 /// The `ConsensusEngineId` of PoW.
 pub const POW_ENGINE_ID: ConsensusEngineId = [b'p', b'o', b'w', b'_'];
@@ -48,7 +47,7 @@ impl TotalDifficulty for u128 {
 	}
 }
 
-decl_runtime_apis! {
+sr_api::decl_runtime_apis! {
 	/// API necessary for timestamp-based difficulty adjustment algorithms.
 	pub trait TimestampApi<Moment: Decode> {
 		/// Return the timestamp in the current block.

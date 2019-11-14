@@ -17,11 +17,9 @@
 //! Stuff to do with the runtime's storage.
 
 use rstd::prelude::*;
-use codec::{FullCodec, FullEncode, Encode, EncodeAppend, EncodeLike};
+use codec::{FullCodec, FullEncode, Encode, EncodeAppend, EncodeLike, Decode};
 use crate::traits::Len;
 
-#[macro_use]
-pub mod storage_items;
 pub mod unhashed;
 pub mod hashed;
 pub mod child;
@@ -33,17 +31,20 @@ pub mod generator;
 /// the transactional layer get reverted; otherwhise
 /// it is committed.
 pub fn with_transaction<R, E>(f: impl FnOnce() -> Result<R, E>) -> Result<R, E> {
-	runtime_io::storage_start_transaction();
+	runtime_io::storage::start_transaction();
 	let r = f();
 	if r.is_ok() {
-		runtime_io::storage_commit_transaction();
+		runtime_io::storage::commit_transaction();
 	} else {
-		runtime_io::storage_discard_transaction();
+		runtime_io::storage::discard_transaction();
 	}
 	r
 }
 
 /// A trait for working with macro-generated storage values under the substrate storage API.
+///
+/// Details on implementation can be found at
+/// [`generator::StorageValue`]
 pub trait StorageValue<T: FullCodec> {
 	/// The type that get/take return.
 	type Query;
@@ -56,6 +57,28 @@ pub trait StorageValue<T: FullCodec> {
 
 	/// Load the value from the provided storage instance.
 	fn get() -> Self::Query;
+
+	/// Translate a value from some previous type (`O`) to the current type.
+	///
+	/// `f: F` is the translation function.
+	///
+	/// Returns `Err` if the storage item could not be interpreted as the old type, and Ok, along
+	/// with the new value if it could.
+	///
+	/// NOTE: This operates from and to `Option<_>` types; no effort is made to respect the default
+	/// value of the original type.
+	///
+	/// # Warning
+	///
+	/// This function must be used with care, before being updated the storage still contains the
+	/// old type, thus other calls (such as `get`) will fail at decoding it.
+	///
+	/// # Usage
+	///
+	/// This would typically be called inside the module implementation of on_initialize, while
+	/// ensuring **no usage of this storage are made before the call to `on_initialize`**. (More
+	/// precisely prior initialized modules doesn't make use of this storage).
+	fn translate<O: Decode, F: FnOnce(Option<O>) -> Option<T>>(f: F) -> Result<Option<T>, ()>;
 
 	/// Store a value under this key into the provided storage instance.
 	fn put<Arg: EncodeLike<T>>(val: Arg);
@@ -107,6 +130,9 @@ pub trait StorageValue<T: FullCodec> {
 }
 
 /// A strongly-typed map in storage.
+///
+/// Details on implementation can be found at
+/// [`generator::StorageMap`]
 pub trait StorageMap<K: FullEncode, V: FullCodec> {
 	/// The type that get/take return.
 	type Query;
@@ -174,6 +200,9 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 /// A strongly-typed linked map in storage.
 ///
 /// Similar to `StorageMap` but allows to enumerate other elements and doesn't implement append.
+///
+/// Details on implementation can be found at
+/// [`generator::StorageLinkedMap`]
 pub trait StorageLinkedMap<K: FullCodec, V: FullCodec> {
 	/// The type that get/take return.
 	type Query;
@@ -217,12 +246,36 @@ pub trait StorageLinkedMap<K: FullCodec, V: FullCodec> {
 	/// function for this purpose.
 	fn decode_len<KeyArg: EncodeLike<K>>(key: KeyArg) -> Result<usize, &'static str>
 		where V: codec::DecodeLength + Len;
+
+	/// Translate the keys and values from some previous `(K2, V2)` to the current type.
+	///
+	/// `TK` translates keys from the old type, and `TV` translates values.
+	///
+	/// Returns `Err` if the map could not be interpreted as the old type, and Ok if it could.
+	/// The `Err` contains the first key which could not be migrated, or `None` if the
+	/// head of the list could not be read.
+	///
+	/// # Warning
+	///
+	/// This function must be used with care, before being updated the storage still contains the
+	/// old type, thus other calls (such as `get`) will fail at decoding it.
+	///
+	/// # Usage
+	///
+	/// This would typically be called inside the module implementation of on_initialize, while
+	/// ensuring **no usage of this storage are made before the call to `on_initialize`**. (More
+	/// precisely prior initialized modules doesn't make use of this storage).
+	fn translate<K2, V2, TK, TV>(translate_key: TK, translate_val: TV) -> Result<(), Option<K2>>
+		where K2: FullCodec + Clone, V2: Decode, TK: Fn(K2) -> K, TV: Fn(V2) -> V;
 }
 
 /// An implementation of a map with a two keys.
 ///
 /// It provides an important ability to efficiently remove all entries
 /// that have a common first key.
+///
+/// Details on implementation can be found at
+/// [`generator::StorageDoubleMap`]
 pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 	/// The type that get/take returns.
 	type Query;

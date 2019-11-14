@@ -86,6 +86,10 @@ use proc_macro::TokenStream;
 ///   * `head_key`: `"head of " ++ $module_prefix ++ " " ++ $storage_name`
 ///   * `Hasher`: $hash
 ///
+///   All key formatting logic can be accessed in a type-agnostic format via the
+///   [`KeyFormat`](../srml_support/storage/generator/trait.KeyFormat.html) trait, which
+///   is implemented for the storage linked map type as well.
+///
 /// * Double map: `Foo: double_map hasher($hash1) u32, $hash2(u32) => u32`: Implements the
 ///   [`StorageDoubleMap`](../srml_support/storage/trait.StorageDoubleMap.html) trait using the
 ///   [`StorageDoubleMap generator`](../srml_support/storage/generator/trait.StorageDoubleMap.html).

@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::legacy_proto::upgrade::{RegisteredProtocol, RegisteredProtocolEvent, RegisteredProtocolSubstream};
-use crate::protocol::message::Message;
+use bytes::BytesMut;
 use futures::prelude::*;
 use futures03::{compat::Compat, TryFutureExt as _};
 use futures_timer::Delay;
@@ -29,7 +29,6 @@ use libp2p::swarm::{
 	SubstreamProtocol,
 };
 use log::{debug, error};
-use sr_primitives::traits::Block as BlockT;
 use smallvec::{smallvec, SmallVec};
 use std::{borrow::Cow, error, fmt, io, marker::PhantomData, mem, time::Duration};
 use tokio_io::{AsyncRead, AsyncWrite};
@@ -88,21 +87,20 @@ use tokio_io::{AsyncRead, AsyncWrite};
 /// We consider that we are now "closed" if the remote closes all the existing substreams.
 /// Re-opening it can then be performed by closing all active substream and re-opening one.
 ///
-pub struct CustomProtoHandlerProto<B, TSubstream> {
+pub struct CustomProtoHandlerProto<TSubstream> {
 	/// Configuration for the protocol upgrade to negotiate.
-	protocol: RegisteredProtocol<B>,
+	protocol: RegisteredProtocol,
 
 	/// Marker to pin the generic type.
 	marker: PhantomData<TSubstream>,
 }
 
-impl<B, TSubstream> CustomProtoHandlerProto<B, TSubstream>
+impl<TSubstream> CustomProtoHandlerProto<TSubstream>
 where
 	TSubstream: AsyncRead + AsyncWrite,
-	B: BlockT,
 {
 	/// Builds a new `CustomProtoHandlerProto`.
-	pub fn new(protocol: RegisteredProtocol<B>) -> Self {
+	pub fn new(protocol: RegisteredProtocol) -> Self {
 		CustomProtoHandlerProto {
 			protocol,
 			marker: PhantomData,
@@ -110,14 +108,13 @@ where
 	}
 }
 
-impl<B, TSubstream> IntoProtocolsHandler for CustomProtoHandlerProto<B, TSubstream>
+impl<TSubstream> IntoProtocolsHandler for CustomProtoHandlerProto<TSubstream>
 where
 	TSubstream: AsyncRead + AsyncWrite,
-	B: BlockT,
 {
-	type Handler = CustomProtoHandler<B, TSubstream>;
+	type Handler = CustomProtoHandler<TSubstream>;
 
-	fn inbound_protocol(&self) -> RegisteredProtocol<B> {
+	fn inbound_protocol(&self) -> RegisteredProtocol {
 		self.protocol.clone()
 	}
 
@@ -136,12 +133,12 @@ where
 }
 
 /// The actual handler once the connection has been established.
-pub struct CustomProtoHandler<B: BlockT, TSubstream> {
+pub struct CustomProtoHandler<TSubstream> {
 	/// Configuration for the protocol upgrade to negotiate.
-	protocol: RegisteredProtocol<B>,
+	protocol: RegisteredProtocol,
 
 	/// State of the communications with the remote.
-	state: ProtocolState<B, TSubstream>,
+	state: ProtocolState<TSubstream>,
 
 	/// Identifier of the node we're talking to. Used only for logging purposes and shouldn't have
 	/// any influence on the behaviour.
@@ -155,15 +152,15 @@ pub struct CustomProtoHandler<B: BlockT, TSubstream> {
 	///
 	/// This queue must only ever be modified to insert elements at the back, or remove the first
 	/// element.
-	events_queue: SmallVec<[ProtocolsHandlerEvent<RegisteredProtocol<B>, (), CustomProtoHandlerOut<B>>; 16]>,
+	events_queue: SmallVec<[ProtocolsHandlerEvent<RegisteredProtocol, (), CustomProtoHandlerOut>; 16]>,
 }
 
 /// State of the handler.
-enum ProtocolState<B, TSubstream> {
+enum ProtocolState<TSubstream> {
 	/// Waiting for the behaviour to tell the handler whether it is enabled or disabled.
 	Init {
 		/// List of substreams opened by the remote but that haven't been processed yet.
-		substreams: SmallVec<[RegisteredProtocolSubstream<B, TSubstream>; 6]>,
+		substreams: SmallVec<[RegisteredProtocolSubstream<TSubstream>; 6]>,
 		/// Deadline after which the initialization is abnormally long.
 		init_deadline: Compat<Delay>,
 	},
@@ -179,9 +176,9 @@ enum ProtocolState<B, TSubstream> {
 	/// If we are in this state, we have sent a `CustomProtocolOpen` message to the outside.
 	Normal {
 		/// The substreams where bidirectional communications happen.
-		substreams: SmallVec<[RegisteredProtocolSubstream<B, TSubstream>; 4]>,
+		substreams: SmallVec<[RegisteredProtocolSubstream<TSubstream>; 4]>,
 		/// Contains substreams which are being shut down.
-		shutdown: SmallVec<[RegisteredProtocolSubstream<B, TSubstream>; 4]>,
+		shutdown: SmallVec<[RegisteredProtocolSubstream<TSubstream>; 4]>,
 	},
 
 	/// We are disabled. Contains substreams that are being closed.
@@ -189,7 +186,7 @@ enum ProtocolState<B, TSubstream> {
 	/// outside or we have never sent any `CustomProtocolOpen` in the first place.
 	Disabled {
 		/// List of substreams to shut down.
-		shutdown: SmallVec<[RegisteredProtocolSubstream<B, TSubstream>; 6]>,
+		shutdown: SmallVec<[RegisteredProtocolSubstream<TSubstream>; 6]>,
 
 		/// If true, we should reactivate the handler after all the substreams in `shutdown` have
 		/// been closed.
@@ -210,7 +207,7 @@ enum ProtocolState<B, TSubstream> {
 
 /// Event that can be received by a `CustomProtoHandler`.
 #[derive(Debug)]
-pub enum CustomProtoHandlerIn<B: BlockT> {
+pub enum CustomProtoHandlerIn {
 	/// The node should start using custom protocols.
 	Enable,
 
@@ -220,13 +217,13 @@ pub enum CustomProtoHandlerIn<B: BlockT> {
 	/// Sends a message through a custom protocol substream.
 	SendCustomMessage {
 		/// The message to send.
-		message: Message<B>,
+		message: Vec<u8>,
 	},
 }
 
 /// Event that can be emitted by a `CustomProtoHandler`.
 #[derive(Debug)]
-pub enum CustomProtoHandlerOut<B: BlockT> {
+pub enum CustomProtoHandlerOut {
 	/// Opened a custom protocol with the remote.
 	CustomProtocolOpen {
 		/// Version of the protocol that has been opened.
@@ -242,14 +239,14 @@ pub enum CustomProtoHandlerOut<B: BlockT> {
 	/// Receives a message on a custom protocol substream.
 	CustomMessage {
 		/// Message that has been received.
-		message: Message<B>,
+		message: BytesMut,
 	},
 
 	/// A substream to the remote is clogged. The send buffer is very large, and we should print
 	/// a diagnostic message and/or avoid sending more data.
 	Clogged {
 		/// Copy of the messages that are within the buffer, for further diagnostic.
-		messages: Vec<Message<B>>,
+		messages: Vec<Vec<u8>>,
 	},
 
 	/// An error has happened on the protocol level with this node.
@@ -261,10 +258,9 @@ pub enum CustomProtoHandlerOut<B: BlockT> {
 	},
 }
 
-impl<B, TSubstream> CustomProtoHandler<B, TSubstream>
+impl<TSubstream> CustomProtoHandler<TSubstream>
 where
 	TSubstream: AsyncRead + AsyncWrite,
-	B: BlockT,
 {
 	/// Enables the handler.
 	fn enable(&mut self) {
@@ -342,7 +338,7 @@ where
 	/// Polls the state for events. Optionally returns an event to produce.
 	#[must_use]
 	fn poll_state(&mut self)
-		-> Option<ProtocolsHandlerEvent<RegisteredProtocol<B>, (), CustomProtoHandlerOut<B>>> {
+		-> Option<ProtocolsHandlerEvent<RegisteredProtocol, (), CustomProtoHandlerOut>> {
 		match mem::replace(&mut self.state, ProtocolState::Poisoned) {
 			ProtocolState::Poisoned => {
 				error!(target: "sub-libp2p", "Handler with {:?} is in poisoned state",
@@ -471,7 +467,7 @@ where
 	/// Called by `inject_fully_negotiated_inbound` and `inject_fully_negotiated_outbound`.
 	fn inject_fully_negotiated(
 		&mut self,
-		mut substream: RegisteredProtocolSubstream<B, TSubstream>
+		mut substream: RegisteredProtocolSubstream<TSubstream>
 	) {
 		self.state = match mem::replace(&mut self.state, ProtocolState::Poisoned) {
 			ProtocolState::Poisoned => {
@@ -516,7 +512,7 @@ where
 	}
 
 	/// Sends a message to the remote.
-	fn send_message(&mut self, message: Message<B>) {
+	fn send_message(&mut self, message: Vec<u8>) {
 		match self.state {
 			ProtocolState::Normal { ref mut substreams, .. } =>
 				substreams[0].send_message(message),
@@ -527,14 +523,14 @@ where
 	}
 }
 
-impl<B, TSubstream> ProtocolsHandler for CustomProtoHandler<B, TSubstream>
-where TSubstream: AsyncRead + AsyncWrite, B: BlockT {
-	type InEvent = CustomProtoHandlerIn<B>;
-	type OutEvent = CustomProtoHandlerOut<B>;
+impl<TSubstream> ProtocolsHandler for CustomProtoHandler<TSubstream>
+where TSubstream: AsyncRead + AsyncWrite {
+	type InEvent = CustomProtoHandlerIn;
+	type OutEvent = CustomProtoHandlerOut;
 	type Substream = TSubstream;
 	type Error = ConnectionKillError;
-	type InboundProtocol = RegisteredProtocol<B>;
-	type OutboundProtocol = RegisteredProtocol<B>;
+	type InboundProtocol = RegisteredProtocol;
+	type OutboundProtocol = RegisteredProtocol;
 	type OutboundOpenInfo = ();
 
 	fn listen_protocol(&self) -> SubstreamProtocol<Self::InboundProtocol> {
@@ -556,7 +552,7 @@ where TSubstream: AsyncRead + AsyncWrite, B: BlockT {
 		self.inject_fully_negotiated(proto);
 	}
 
-	fn inject_event(&mut self, message: CustomProtoHandlerIn<B>) {
+	fn inject_event(&mut self, message: CustomProtoHandlerIn) {
 		match message {
 			CustomProtoHandlerIn::Disable => self.disable(),
 			CustomProtoHandlerIn::Enable => self.enable(),
@@ -613,7 +609,7 @@ where TSubstream: AsyncRead + AsyncWrite, B: BlockT {
 	}
 }
 
-impl<B: BlockT, TSubstream> fmt::Debug for CustomProtoHandler<B, TSubstream>
+impl<TSubstream> fmt::Debug for CustomProtoHandler<TSubstream>
 where
 	TSubstream: AsyncRead + AsyncWrite,
 {
@@ -625,9 +621,9 @@ where
 
 /// Given a list of substreams, tries to shut them down. The substreams that have been successfully
 /// shut down are removed from the list.
-fn shutdown_list<B, TSubstream>
-	(list: &mut SmallVec<impl smallvec::Array<Item = RegisteredProtocolSubstream<B, TSubstream>>>)
-where TSubstream: AsyncRead + AsyncWrite, B: BlockT {
+fn shutdown_list<TSubstream>
+	(list: &mut SmallVec<impl smallvec::Array<Item = RegisteredProtocolSubstream<TSubstream>>>)
+where TSubstream: AsyncRead + AsyncWrite {
 	'outer: for n in (0..list.len()).rev() {
 		let mut substream = list.swap_remove(n);
 		loop {

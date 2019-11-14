@@ -39,16 +39,17 @@ use consensus_common::import_queue::{
 	Verifier, BasicQueue, BoxBlockImport, BoxJustificationImport, BoxFinalityProofImport,
 };
 use client::{
-	block_builder::api::BlockBuilder as BlockBuilderApi, blockchain::ProvideCache,
-	runtime_api::ApiExt, error::Result as CResult, backend::AuxStore, BlockOf,
+	blockchain::ProvideCache, error::Result as CResult, backend::AuxStore, BlockOf,
 	well_known_cache_keys::{self, Id as CacheKeyId},
 };
+
+use block_builder_api::BlockBuilder as BlockBuilderApi;
 
 use sr_primitives::{generic::{BlockId, OpaqueDigestItemId}, Justification};
 use sr_primitives::traits::{Block as BlockT, Header, DigestItemFor, ProvideRuntimeApi, Zero, Member};
 
 use primitives::crypto::Pair;
-use inherents::{InherentDataProviders, InherentData, RuntimeString};
+use inherents::{InherentDataProviders, InherentData};
 
 use futures::prelude::*;
 use parking_lot::Mutex;
@@ -64,6 +65,8 @@ use slots::{CheckedHeader, SlotData, SlotWorker, SlotInfo, SlotCompatible};
 use slots::check_equivocation;
 
 use keystore::KeyStorePtr;
+
+use sr_api::ApiExt;
 
 pub use aura_primitives::*;
 pub use consensus_common::SyncOracle;
@@ -85,7 +88,7 @@ impl SlotDuration {
 		A: Codec,
 		B: BlockT,
 		C: AuxStore + ProvideRuntimeApi,
-		C::Api: AuraApi<B, A>,
+		C::Api: AuraApi<B, A, Error = client::error::Error>,
 	{
 		slots::SlotDuration::get_or_compute(client, |a, b| a.slot_duration(b)).map(Self)
 	}
@@ -267,6 +270,7 @@ impl<H, B, C, E, I, P, Error, SO> slots::SimpleSlotWorker<B> for AuraWorker<C, E
 				finalized: false,
 				auxiliary: Vec::new(),
 				fork_choice: ForkChoiceStrategy::LongestChain,
+				allow_missing_state: false,
 			}
 		})
 	}
@@ -331,7 +335,7 @@ enum Error<B: BlockT> {
 	TooFarInFuture,
 	Client(client::error::Error),
 	DataProvider(String),
-	Runtime(RuntimeString)
+	Runtime(String),
 }
 
 fn find_pre_digest<B: BlockT, P: Pair>(header: &B::Header) -> Result<u64, Error<B>>
@@ -437,7 +441,7 @@ impl<C, P, T> AuraVerifier<C, P, T>
 		inherent_data: InherentData,
 		timestamp_now: u64,
 	) -> Result<(), Error<B>>
-		where C: ProvideRuntimeApi, C::Api: BlockBuilderApi<B>
+		where C: ProvideRuntimeApi, C::Api: BlockBuilderApi<B, Error = client::error::Error>
 	{
 		const MAX_TIMESTAMP_DRIFT_SECS: u64 = 60;
 
@@ -470,7 +474,7 @@ impl<C, P, T> AuraVerifier<C, P, T>
 						thread::sleep(Duration::from_secs(diff));
 						Ok(())
 					},
-					Some(TIError::Other(e)) => Err(Error::Runtime(e)),
+					Some(TIError::Other(e)) => Err(Error::Runtime(e.into())),
 					None => Err(Error::DataProvider(
 						self.inherent_data_providers.error_to_string(&i, &e)
 					)),
@@ -484,7 +488,7 @@ impl<C, P, T> AuraVerifier<C, P, T>
 #[forbid(deprecated)]
 impl<B: BlockT, C, P, T> Verifier<B> for AuraVerifier<C, P, T> where
 	C: ProvideRuntimeApi + Send + Sync + client::backend::AuxStore + ProvideCache<B> + BlockOf,
-	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>>,
+	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>> + ApiExt<B, Error = client::error::Error>,
 	DigestItemFor<B>: CompatibleDigestItem<P>,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Send + Sync + Hash + Eq + Clone + Decode + Encode + Debug + 'static,
@@ -498,7 +502,9 @@ impl<B: BlockT, C, P, T> Verifier<B> for AuraVerifier<C, P, T> where
 		justification: Option<Justification>,
 		mut body: Option<Vec<B::Extrinsic>>,
 	) -> Result<(BlockImportParams<B>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
-		let mut inherent_data = self.inherent_data_providers.create_inherent_data().map_err(String::from)?;
+		let mut inherent_data = self.inherent_data_providers
+			.create_inherent_data()
+			.map_err(|e| e.into_string())?;
 		let (timestamp_now, slot_now, _) = AuraSlotCompatible.extract_timestamp_and_slot(&inherent_data)
 			.map_err(|e| format!("Could not extract timestamp and slot: {:?}", e))?;
 		let hash = header.hash();
@@ -529,7 +535,10 @@ impl<B: BlockT, C, P, T> Verifier<B> for AuraVerifier<C, P, T> where
 					// skip the inherents verification if the runtime API is old.
 					if self.client
 						.runtime_api()
-						.has_api_with::<dyn BlockBuilderApi<B>, _>(&BlockId::Hash(parent_hash), |v| v >= 2)
+						.has_api_with::<dyn BlockBuilderApi<B, Error = ()>, _>(
+							&BlockId::Hash(parent_hash),
+							|v| v >= 2,
+						)
 						.map_err(|e| format!("{:?}", e))?
 					{
 						self.check_inherents(
@@ -570,6 +579,7 @@ impl<B: BlockT, C, P, T> Verifier<B> for AuraVerifier<C, P, T> where
 					justification,
 					auxiliary: Vec::new(),
 					fork_choice: ForkChoiceStrategy::LongestChain,
+					allow_missing_state: false,
 				};
 
 				Ok((block_import_params, maybe_keys))
@@ -665,7 +675,7 @@ pub fn import_queue<B, C, P, T>(
 ) -> Result<AuraImportQueue<B>, consensus_common::Error> where
 	B: BlockT,
 	C: 'static + ProvideRuntimeApi + BlockOf + ProvideCache<B> + Send + Sync + AuxStore,
-	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>>,
+	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>> + ApiExt<B, Error = client::error::Error>,
 	DigestItemFor<B>: CompatibleDigestItem<P>,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Clone + Eq + Send + Sync + Hash + Debug + Encode + Decode,

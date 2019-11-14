@@ -16,8 +16,8 @@ system = { package = "srml-system", path = "../system", default-features = false
 [dev-dependencies]
 hex-literal = "0.2.1"
 primitives = { package = "substrate-primitives",  path = "../../core/primitives" }
-srml-indices = { path = "../indices" }
 balances = { package = "srml-balances", path = "../balances" }
+indices = { package = "srml-indices", path = "../indices" }
 transaction-payment = { package = "srml-transaction-payment", path = "../transaction-payment" }
 
 [features]

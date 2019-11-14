@@ -14,14 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{sync::Arc, cmp::Ord, panic::UnwindSafe, result, cell::RefCell, rc::Rc};
+use std::{sync::Arc, cmp::Ord, panic::UnwindSafe, result, cell::RefCell};
 use codec::{Encode, Decode};
 use sr_primitives::{
 	generic::BlockId, traits::Block as BlockT, traits::NumberFor,
 };
 use state_machine::{
 	self, OverlayedChanges, Ext, ExecutionManager, StateMachine, ExecutionStrategy,
-	backend::Backend as _, ChangesTrieTransaction,
+	backend::Backend as _, ChangesTrieTransaction, StorageProof,
 };
 use executor::{RuntimeVersion, RuntimeInfo, NativeVersion};
 use hash_db::Hasher;
@@ -30,7 +30,7 @@ use primitives::{
 	traits::{CodeExecutor, KeystoreExt},
 };
 
-use crate::runtime_api::{ProofRecorder, InitializeBlock};
+use sr_api::{ProofRecorder, InitializeBlock};
 use crate::backend;
 use crate::error;
 
@@ -81,7 +81,7 @@ where
 		execution_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
 		side_effects_handler: Option<OffchainExt>,
-		proof_recorder: &Option<Rc<RefCell<ProofRecorder<B>>>>,
+		proof_recorder: &Option<ProofRecorder<B>>,
 		enable_keystore: bool,
 	) -> error::Result<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone;
 
@@ -127,7 +127,7 @@ where
 		overlay: &mut OverlayedChanges,
 		method: &str,
 		call_data: &[u8]
-	) -> Result<(Vec<u8>, Vec<Vec<u8>>), error::Error> {
+	) -> Result<(Vec<u8>, StorageProof), error::Error> {
 		let trie_state = state.as_trie_backend()
 			.ok_or_else(||
 				Box::new(state_machine::ExecutionError::UnableToGenerateProof)
@@ -145,7 +145,7 @@ where
 		overlay: &mut OverlayedChanges,
 		method: &str,
 		call_data: &[u8]
-	) -> Result<(Vec<u8>, Vec<Vec<u8>>), error::Error>;
+	) -> Result<(Vec<u8>, StorageProof), error::Error>;
 
 	/// Get runtime version if supported.
 	fn native_runtime_version(&self) -> Option<&NativeVersion>;
@@ -241,7 +241,7 @@ where
 		execution_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
 		side_effects_handler: Option<OffchainExt>,
-		recorder: &Option<Rc<RefCell<ProofRecorder<Block>>>>,
+		recorder: &Option<ProofRecorder<Block>>,
 		enable_keystore: bool,
 	) -> Result<NativeOrEncoded<R>, error::Error> where ExecutionManager<EM>: Clone {
 		match initialize_block {
@@ -377,7 +377,7 @@ where
 		overlay: &mut OverlayedChanges,
 		method: &str,
 		call_data: &[u8]
-	) -> Result<(Vec<u8>, Vec<Vec<u8>>), error::Error> {
+	) -> Result<(Vec<u8>, StorageProof), error::Error> {
 		state_machine::prove_execution_on_trie_backend(
 			trie_state,
 			overlay,

@@ -15,12 +15,15 @@ runtime_io = { package = "sr-io", path = "../sr-io", default-features = false }
 log = { version = "0.4.8", optional = true }
 paste = "0.1.6"
 rand = { version = "0.7.2", optional = true }
-impl-trait-for-tuples = "0.1.2"
+impl-trait-for-tuples = "0.1.3"
+inherents = { package = "substrate-inherents", path = "../inherents", default-features = false }
 
 [dev-dependencies]
 serde_json = "1.0.41"
 rand = "0.7.2"
 substrate-offchain = { path = "../offchain" }
+support = { package = "srml-support", path = "../../srml/support" }
+system = { package = "srml-system", path = "../../srml/system" }
 
 [features]
 bench = []
@@ -35,4 +38,5 @@ std = [
 	"rstd/std",
 	"runtime_io/std",
 	"serde",
+	"inherents/std",
 ]

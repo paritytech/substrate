@@ -8,7 +8,8 @@ edition = "2018"
 
 [dependencies]
 bytes = "0.4.12"
-client = { package = "substrate-client", path = "../../core/client" }
+client = { package = "substrate-client", path = "../client" }
+sr-api = { path = "../sr-api" }
 fnv = "1.0.6"
 futures01 = { package = "futures", version = "0.1" }
 futures-preview = "0.3.0-alpha.19"
@@ -28,7 +29,7 @@ keystore = { package = "substrate-keystore", path = "../keystore" }
 
 [target.'cfg(not(target_os = "unknown"))'.dependencies]
 hyper = "0.12.35"
-hyper-tls = "0.3.2"
+hyper-rustls = "0.17.1"
 
 [dev-dependencies]
 env_logger = "0.7.0"

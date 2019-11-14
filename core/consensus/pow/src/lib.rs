@@ -33,10 +33,10 @@ use std::sync::Arc;
 use std::thread;
 use std::collections::HashMap;
 use client::{
-	BlockOf, blockchain::{HeaderBackend, ProvideCache},
-	block_builder::api::BlockBuilder as BlockBuilderApi, backend::AuxStore,
+	BlockOf, blockchain::{HeaderBackend, ProvideCache}, backend::AuxStore,
 	well_known_cache_keys::Id as CacheKeyId,
 };
+use block_builder_api::BlockBuilder as BlockBuilderApi;
 use sr_primitives::{Justification, RuntimeString};
 use sr_primitives::generic::{BlockId, Digest, DigestItem};
 use sr_primitives::traits::{Block as BlockT, Header as HeaderT, ProvideRuntimeApi};
@@ -75,7 +75,7 @@ pub enum Error<B: BlockT> {
 	#[display(fmt = "Error with block built on {:?}: {:?}", _0, _1)]
 	BlockBuiltError(B::Hash, ConsensusError),
 	#[display(fmt = "Creating inherents failed: {}", _0)]
-	CreateInherents(RuntimeString),
+	CreateInherents(inherents::Error),
 	#[display(fmt = "Checking inherents failed: {}", _0)]
 	CheckInherents(String),
 	Client(client::error::Error),
@@ -210,7 +210,7 @@ impl<B: BlockT<Hash=H256>, C, S, Algorithm> PowVerifier<B, C, S, Algorithm> {
 		inherent_data: InherentData,
 		timestamp_now: u64,
 	) -> Result<(), Error<B>> where
-		C: ProvideRuntimeApi, C::Api: BlockBuilderApi<B>
+		C: ProvideRuntimeApi, C::Api: BlockBuilderApi<B, Error = client::error::Error>
 	{
 		const MAX_TIMESTAMP_DRIFT_SECS: u64 = 60;
 
@@ -248,7 +248,7 @@ impl<B: BlockT<Hash=H256>, C, S, Algorithm> PowVerifier<B, C, S, Algorithm> {
 
 impl<B: BlockT<Hash=H256>, C, S, Algorithm> Verifier<B> for PowVerifier<B, C, S, Algorithm> where
 	C: ProvideRuntimeApi + Send + Sync + HeaderBackend<B> + AuxStore + ProvideCache<B> + BlockOf,
-	C::Api: BlockBuilderApi<B>,
+	C::Api: BlockBuilderApi<B, Error = client::error::Error>,
 	S: SelectChain<B>,
 	Algorithm: PowAlgorithm<B> + Send + Sync,
 {
@@ -260,8 +260,8 @@ impl<B: BlockT<Hash=H256>, C, S, Algorithm> Verifier<B> for PowVerifier<B, C, S,
 		mut body: Option<Vec<B::Extrinsic>>,
 	) -> Result<(BlockImportParams<B>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 		let inherent_data = self.inherent_data_providers
-			.create_inherent_data().map_err(String::from)?;
-		let timestamp_now = inherent_data.timestamp_inherent_data().map_err(String::from)?;
+			.create_inherent_data().map_err(|e| e.into_string())?;
+		let timestamp_now = inherent_data.timestamp_inherent_data().map_err(|e| e.into_string())?;
 
 		let best_hash = match self.select_chain.as_ref() {
 			Some(select_chain) => select_chain.best_chain()
@@ -304,6 +304,7 @@ impl<B: BlockT<Hash=H256>, C, S, Algorithm> Verifier<B> for PowVerifier<B, C, S,
 			justification,
 			auxiliary: vec![(key, Some(aux.encode()))],
 			fork_choice: ForkChoiceStrategy::Custom(aux.total_difficulty > best_aux.total_difficulty),
+			allow_missing_state: false,
 		};
 
 		Ok((import_block, None))
@@ -339,7 +340,7 @@ pub fn import_queue<B, C, S, Algorithm>(
 	B: BlockT<Hash=H256>,
 	C: ProvideRuntimeApi + HeaderBackend<B> + BlockOf + ProvideCache<B> + AuxStore,
 	C: Send + Sync + AuxStore + 'static,
-	C::Api: BlockBuilderApi<B>,
+	C::Api: BlockBuilderApi<B, Error = client::error::Error>,
 	Algorithm: PowAlgorithm<B> + Send + Sync + 'static,
 	S: SelectChain<B> + 'static,
 {
@@ -531,6 +532,7 @@ fn mine_loop<B: BlockT<Hash=H256>, C, Algorithm, E, SO, S>(
 			finalized: false,
 			auxiliary: vec![(key, Some(aux.encode()))],
 			fork_choice: ForkChoiceStrategy::Custom(true),
+			allow_missing_state: false,
 		};
 
 		block_import.import_block(import_block, HashMap::default())

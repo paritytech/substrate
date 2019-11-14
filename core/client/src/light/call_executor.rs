@@ -17,8 +17,7 @@
 //! Methods that light client could use to execute runtime calls.
 
 use std::{
-	collections::HashSet, sync::Arc, panic::UnwindSafe, result,
-	cell::RefCell, rc::Rc,
+	sync::Arc, panic::UnwindSafe, result, cell::RefCell,
 };
 
 use codec::{Encode, Decode};
@@ -31,11 +30,13 @@ use sr_primitives::{
 };
 use state_machine::{
 	self, Backend as StateBackend, OverlayedChanges, ExecutionStrategy, create_proof_check_backend,
-	execution_proof_check_on_trie_backend, ExecutionManager, ChangesTrieTransaction,
+	execution_proof_check_on_trie_backend, ExecutionManager, ChangesTrieTransaction, StorageProof,
+	merge_storage_proofs,
 };
 use hash_db::Hasher;
 
-use crate::runtime_api::{ProofRecorder, InitializeBlock};
+use sr_api::{ProofRecorder, InitializeBlock};
+
 use crate::backend::RemoteBackend;
 use crate::call_executor::CallExecutor;
 use crate::error::{Error as ClientError, Result as ClientResult};
@@ -109,7 +110,7 @@ impl<Block, B, Local> CallExecutor<Block, Blake2Hasher> for
 		_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
 		side_effects_handler: Option<OffchainExt>,
-		recorder: &Option<Rc<RefCell<ProofRecorder<Block>>>>,
+		recorder: &Option<ProofRecorder<Block>>,
 		enable_keystore: bool,
 	) -> ClientResult<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone {
 		// there's no actual way/need to specify native/wasm execution strategy on light node
@@ -179,7 +180,7 @@ impl<Block, B, Local> CallExecutor<Block, Blake2Hasher> for
 		_changes: &mut OverlayedChanges,
 		_method: &str,
 		_call_data: &[u8]
-	) -> ClientResult<(Vec<u8>, Vec<Vec<u8>>)> {
+	) -> ClientResult<(Vec<u8>, StorageProof)> {
 		Err(ClientError::NotAvailableOnLightClient)
 	}
 
@@ -198,7 +199,7 @@ pub fn prove_execution<Block, S, E>(
 	executor: &E,
 	method: &str,
 	call_data: &[u8],
-) -> ClientResult<(Vec<u8>, Vec<Vec<u8>>)>
+) -> ClientResult<(Vec<u8>, StorageProof)>
 	where
 		Block: BlockT<Hash=H256>,
 		S: StateBackend<Blake2Hasher>,
@@ -218,11 +219,7 @@ pub fn prove_execution<Block, S, E>(
 
 	// execute method + record execution proof
 	let (result, exec_proof) = executor.prove_at_trie_state(&trie_state, &mut changes, method, call_data)?;
-	let total_proof = init_proof.into_iter()
-		.chain(exec_proof.into_iter())
-		.collect::<HashSet<_>>()
-		.into_iter()
-		.collect();
+	let total_proof = merge_storage_proofs(vec![init_proof, exec_proof]);
 
 	Ok((result, total_proof))
 }
@@ -234,7 +231,7 @@ pub fn prove_execution<Block, S, E>(
 pub fn check_execution_proof<Header, E, H>(
 	executor: &E,
 	request: &RemoteCallRequest<Header>,
-	remote_proof: Vec<Vec<u8>>,
+	remote_proof: StorageProof,
 ) -> ClientResult<Vec<u8>>
 	where
 		Header: HeaderT,
@@ -258,7 +255,7 @@ pub fn check_execution_proof<Header, E, H>(
 fn check_execution_proof_with_make_header<Header, E, H, MakeNextHeader: Fn(&Header) -> Header>(
 	executor: &E,
 	request: &RemoteCallRequest<Header>,
-	remote_proof: Vec<Vec<u8>>,
+	remote_proof: StorageProof,
 	make_next_header: MakeNextHeader,
 ) -> ClientResult<Vec<u8>>
 	where
@@ -339,7 +336,7 @@ mod tests {
 			_execution_manager: ExecutionManager<EM>,
 			_native_call: Option<NC>,
 			_side_effects_handler: Option<OffchainExt>,
-			_proof_recorder: &Option<Rc<RefCell<ProofRecorder<Block>>>>,
+			_proof_recorder: &Option<ProofRecorder<Block>>,
 			_enable_keystore: bool,
 		) -> ClientResult<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone {
 			unreachable!()
@@ -382,7 +379,7 @@ mod tests {
 			_overlay: &mut OverlayedChanges,
 			_method: &str,
 			_call_data: &[u8]
-		) -> Result<(Vec<u8>, Vec<Vec<u8>>), ClientError> {
+		) -> Result<(Vec<u8>, StorageProof), ClientError> {
 			unreachable!()
 		}
 

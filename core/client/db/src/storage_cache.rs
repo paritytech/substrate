@@ -22,10 +22,12 @@ use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 use linked_hash_map::{LinkedHashMap, Entry};
 use hash_db::Hasher;
 use sr_primitives::traits::{Block as BlockT, Header};
+use primitives::hexdisplay::HexDisplay;
 use state_machine::{backend::Backend as StateBackend, TrieBackend};
 use log::trace;
 use super::{StorageCollection, ChildStorageCollection};
 use std::hash::Hash as StdHash;
+
 const STATE_CACHE_BLOCKS: usize = 12;
 
 type StorageKey = Vec<u8>;
@@ -153,22 +155,22 @@ impl<B: BlockT, H: Hasher> Cache<B, H> {
 	}
 
 	/// Synchronize the shared cache with the best block state.
+	///
 	/// This function updates the shared cache by removing entries
-	/// that are invalidated by chain reorganization. It should be
-	/// be called when chain reorg happens without importing a new block.
+	/// that are invalidated by chain reorganization. It should be called
+	/// externally when chain reorg happens without importing a new block.
 	pub fn sync(&mut self, enacted: &[B::Hash], retracted: &[B::Hash]) {
 		trace!("Syncing shared cache, enacted = {:?}, retracted = {:?}", enacted, retracted);
 
 		// Purge changes from re-enacted and retracted blocks.
-		// Filter out commiting block if any.
 		let mut clear = false;
 		for block in enacted {
 			clear = clear || {
-				if let Some(ref mut m) = self.modifications.iter_mut().find(|m| &m.hash == block) {
+				if let Some(m) = self.modifications.iter_mut().find(|m| &m.hash == block) {
 					trace!("Reverting enacted block {:?}", block);
 					m.is_canon = true;
 					for a in &m.storage {
-						trace!("Reverting enacted key {:?}", a);
+						trace!("Reverting enacted key {:?}", HexDisplay::from(a));
 						self.lru_storage.remove(a);
 					}
 					for a in &m.child_storage {
@@ -184,11 +186,11 @@ impl<B: BlockT, H: Hasher> Cache<B, H> {
 
 		for block in retracted {
 			clear = clear || {
-				if let Some(ref mut m) = self.modifications.iter_mut().find(|m| &m.hash == block) {
+				if let Some(m) = self.modifications.iter_mut().find(|m| &m.hash == block) {
 					trace!("Retracting block {:?}", block);
 					m.is_canon = false;
 					for a in &m.storage {
-						trace!("Retracted key {:?}", a);
+						trace!("Retracted key {:?}", HexDisplay::from(a));
 						self.lru_storage.remove(a);
 					}
 					for a in &m.child_storage {
@@ -252,11 +254,17 @@ struct BlockChanges<B: Header> {
 
 /// Cached values specific to a state.
 struct LocalCache<H: Hasher> {
-	/// Storage cache. `None` indicates that key is known to be missing.
+	/// Storage cache.
+	///
+	/// `None` indicates that key is known to be missing.
 	storage: HashMap<StorageKey, Option<StorageValue>>,
-	/// Storage hashes cache. `None` indicates that key is known to be missing.
+	/// Storage hashes cache.
+	///
+	/// `None` indicates that key is known to be missing.
 	hashes: HashMap<StorageKey, Option<H::Out>>,
-	/// Child storage cache. `None` indicates that key is known to be missing.
+	/// Child storage cache.
+	///
+	/// `None` indicates that key is known to be missing.
 	child_storage: HashMap<ChildStorageKey, Option<StorageValue>>,
 }
 
@@ -271,9 +279,11 @@ pub struct CacheChanges<H: Hasher, B: BlockT> {
 	pub parent_hash: Option<B::Hash>,
 }
 
-/// State abstraction.
+/// State cache abstraction.
+///
 /// Manages shared global state cache which reflects the canonical
 /// state as it is on the disk.
+///
 /// A instance of `CachingState` may be created as canonical or not.
 /// For canonical instances local cache is accumulated and applied
 /// in `sync_cache` along with the change overlay.
@@ -294,6 +304,7 @@ impl<H: Hasher, S: StateBackend<H>, B: BlockT> std::fmt::Debug for CachingState<
 impl<H: Hasher, B: BlockT> CacheChanges<H, B> {
 	/// Propagate local cache into the shared cache and synchronize
 	/// the shared cache with the best block state.
+	///
 	/// This function updates the shared cache by removing entries
 	/// that are invalidated by chain reorganization. `sync_cache`
 	/// should be called after the block has been committed and the
@@ -312,6 +323,7 @@ impl<H: Hasher, B: BlockT> CacheChanges<H, B> {
 		let is_best = is_best();
 		trace!("Syncing cache, id = (#{:?}, {:?}), parent={:?}, best={}", commit_number, commit_hash, self.parent_hash, is_best);
 		let cache = &mut *cache;
+		// Filter out commiting block if any.
 		let enacted: Vec<_> = enacted
 			.iter()
 			.filter(|h| commit_hash.as_ref().map_or(true, |p| *h != p))
@@ -369,7 +381,7 @@ impl<H: Hasher, B: BlockT> CacheChanges<H, B> {
 				modifications.insert(k);
 			}
 
-			// Save modified storage. These are ordered by the block number.
+			// Save modified storage. These are ordered by the block number in reverse.
 			let block_changes = BlockChanges {
 				storage: modifications,
 				child_storage: child_modifications,
@@ -380,7 +392,7 @@ impl<H: Hasher, B: BlockT> CacheChanges<H, B> {
 			};
 			let insert_at = cache.modifications.iter()
 				.enumerate()
-				.find(|&(_, m)| m.number < *number)
+				.find(|(_, m)| m.number < *number)
 				.map(|(i, _)| i);
 			trace!("Inserting modifications at {:?}", insert_at);
 			if let Some(insert_at) = insert_at {
@@ -416,25 +428,20 @@ impl<H: Hasher, S: StateBackend<H>, B: BlockT> CachingState<H, S, B> {
 		key: Option<&[u8]>,
 		child_key: Option<&ChildStorageKey>,
 		parent_hash: &Option<B::Hash>,
-		modifications:
-		&VecDeque<BlockChanges<B::Header>>
+		modifications: &VecDeque<BlockChanges<B::Header>>
 	) -> bool
 	{
 		let mut parent = match *parent_hash {
 			None => {
-				trace!("Cache lookup skipped for {:?}: no parent hash", key);
+				trace!("Cache lookup skipped for {:?}: no parent hash", key.as_ref().map(HexDisplay::from));
 				return false;
 			}
 			Some(ref parent) => parent,
 		};
-		if modifications.is_empty() {
-			trace!("Cache lookup allowed for {:?}", key);
-			return true;
-		}
-		// Ignore all storage modified in later blocks
+		// Ignore all storage entries modified in later blocks.
 		// Modifications contains block ordered by the number
 		// We search for our parent in that list first and then for
-		// all its parent until we hit the canonical block,
+		// all its parents until we hit the canonical block,
 		// checking against all the intermediate modifications.
 		for m in modifications {
 			if &m.hash == parent {
@@ -445,7 +452,7 @@ impl<H: Hasher, S: StateBackend<H>, B: BlockT> CachingState<H, S, B> {
 			}
 			if let Some(key) = key {
 				if m.storage.contains(key) {
-					trace!("Cache lookup skipped for {:?}: modified in a later block", key);
+					trace!("Cache lookup skipped for {:?}: modified in a later block", HexDisplay::from(&key));
 					return false;
 				}
 			}
@@ -456,7 +463,7 @@ impl<H: Hasher, S: StateBackend<H>, B: BlockT> CachingState<H, S, B> {
 				}
 			}
 		}
-		trace!("Cache lookup skipped for {:?}: parent hash is unknown", key);
+		trace!("Cache lookup skipped for {:?}: parent hash is unknown", key.as_ref().map(HexDisplay::from));
 		false
 	}
 
@@ -475,17 +482,17 @@ impl<H: Hasher, S: StateBackend<H>, B: BlockT> StateBackend<H> for CachingState<
 		let local_cache = self.cache.local_cache.upgradable_read();
 		// Note that local cache makes that lru is not refreshed
 		if let Some(entry) = local_cache.storage.get(key).cloned() {
-			trace!("Found in local cache: {:?}", key);
+			trace!("Found in local cache: {:?}", HexDisplay::from(&key));
 			return Ok(entry)
 		}
 		let mut cache = self.cache.shared_cache.lock();
 		if Self::is_allowed(Some(key), None, &self.cache.parent_hash, &cache.modifications) {
 			if let Some(entry) = cache.lru_storage.get(key).map(|a| a.clone()) {
-				trace!("Found in shared cache: {:?}", key);
+				trace!("Found in shared cache: {:?}", HexDisplay::from(&key));
 				return Ok(entry)
 			}
 		}
-		trace!("Cache miss: {:?}", key);
+		trace!("Cache miss: {:?}", HexDisplay::from(&key));
 		let value = self.state.storage(key)?;
 		RwLockUpgradableReadGuard::upgrade(local_cache).storage.insert(key.to_vec(), value.clone());
 		Ok(value)
@@ -494,19 +501,19 @@ impl<H: Hasher, S: StateBackend<H>, B: BlockT> StateBackend<H> for CachingState<
 	fn storage_hash(&self, key: &[u8]) -> Result<Option<H::Out>, Self::Error> {
 		let local_cache = self.cache.local_cache.upgradable_read();
 		if let Some(entry) = local_cache.hashes.get(key).cloned() {
-			trace!("Found hash in local cache: {:?}", key);
+			trace!("Found hash in local cache: {:?}", HexDisplay::from(&key));
 			return Ok(entry)
 		}
 		let mut cache = self.cache.shared_cache.lock();
 		if Self::is_allowed(Some(key), None, &self.cache.parent_hash, &cache.modifications) {
 			if let Some(entry) = cache.lru_hashes.get(key).map(|a| a.0.clone()) {
-				trace!("Found hash in shared cache: {:?}", key);
+				trace!("Found hash in shared cache: {:?}", HexDisplay::from(&key));
 				return Ok(entry)
 			}
 		}
-		trace!("Cache hash miss: {:?}", key);
+		trace!("Cache hash miss: {:?}", HexDisplay::from(&key));
 		let hash = self.state.storage_hash(key)?;
-		RwLockUpgradableReadGuard::upgrade(local_cache).hashes.insert(key.to_vec(), hash.clone());
+		RwLockUpgradableReadGuard::upgrade(local_cache).hashes.insert(key.to_vec(), hash);
 		Ok(hash)
 	}
 
@@ -538,16 +545,16 @@ impl<H: Hasher, S: StateBackend<H>, B: BlockT> StateBackend<H> for CachingState<
 		self.state.exists_child_storage(storage_key, key)
 	}
 
+	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], f: F) {
+		self.state.for_keys_in_child_storage(storage_key, f)
+	}
+
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
 		self.state.for_keys_with_prefix(prefix, f)
 	}
 
 	fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], f: F) {
 		self.state.for_key_values_with_prefix(prefix, f)
-	}
-
-	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], f: F) {
-		self.state.for_keys_in_child_storage(storage_key, f)
 	}
 
 	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(&self, storage_key: &[u8], prefix: &[u8], f: F) {
@@ -595,6 +602,7 @@ mod tests {
 	use primitives::Blake2Hasher;
 
 	type Block = RawBlock<ExtrinsicWrapper<u32>>;
+
 	#[test]
 	fn smoke() {
 		//init_log();
@@ -612,50 +620,110 @@ mod tests {
 
 		// blocks  [ 3a(c) 2a(c) 2b 1b 1a(c) 0 ]
 		// state   [ 5     5     4  3  2     2 ]
-		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(root_parent.clone()));
-		s.cache.sync_cache(&[], &[], vec![(key.clone(), Some(vec![2]))], vec![], Some(h0.clone()), Some(0), || true);
+		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(root_parent));
+		s.cache.sync_cache(&[], &[], vec![(key.clone(), Some(vec![2]))], vec![], Some(h0), Some(0), || true);
 
-		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h0.clone()));
-		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h1a.clone()), Some(1), || true);
+		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h0));
+		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h1a), Some(1), || true);
 
-		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h0.clone()));
-		s.cache.sync_cache(&[], &[], vec![(key.clone(), Some(vec![3]))], vec![], Some(h1b.clone()), Some(1), || false);
+		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h0));
+		s.cache.sync_cache(&[], &[], vec![(key.clone(), Some(vec![3]))], vec![], Some(h1b), Some(1), || false);
 
 		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h1b.clone()));
-		s.cache.sync_cache(&[], &[], vec![(key.clone(), Some(vec![4]))], vec![], Some(h2b.clone()), Some(2), || false);
+		s.cache.sync_cache(&[], &[], vec![(key.clone(), Some(vec![4]))], vec![], Some(h2b), Some(2), || false);
 
 		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h1a.clone()));
-		s.cache.sync_cache(&[], &[], vec![(key.clone(), Some(vec![5]))], vec![], Some(h2a.clone()), Some(2), || true);
+		s.cache.sync_cache(&[], &[], vec![(key.clone(), Some(vec![5]))], vec![], Some(h2a), Some(2), || true);
 
-		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h2a.clone()));
-		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h3a.clone()), Some(3), || true);
+		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h2a));
+		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h3a), Some(3), || true);
 
-		let s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h3a.clone()));
+		let s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h3a));
 		assert_eq!(s.storage(&key).unwrap().unwrap(), vec![5]);
 
-		let s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h1a.clone()));
+		let s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h1a));
 		assert!(s.storage(&key).unwrap().is_none());
 
-		let s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h2b.clone()));
+		let s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h2b));
 		assert!(s.storage(&key).unwrap().is_none());
 
-		let s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h1b.clone()));
+		let s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h1b));
 		assert!(s.storage(&key).unwrap().is_none());
 
 		// reorg to 3b
 		// blocks  [ 3b(c) 3a 2a 2b(c) 1b 1a 0 ]
-		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h2b.clone()));
+		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h2b));
 		s.cache.sync_cache(
-			&[h1b.clone(), h2b.clone(), h3b.clone()],
-			&[h1a.clone(), h2a.clone(), h3a.clone()],
+			&[h1b, h2b, h3b],
+			&[h1a, h2a, h3a],
 			vec![],
 			vec![],
-			Some(h3b.clone()),
+			Some(h3b),
 			Some(3),
 			|| true,
 		);
-		let s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h3a.clone()));
+		let s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h3a));
 		assert!(s.storage(&key).unwrap().is_none());
+	}
+
+	#[test]
+	fn simple_fork() {
+		let _ = ::env_logger::try_init();
+
+		let root_parent = H256::random();
+		let key = H256::random()[..].to_vec();
+		let h1 = H256::random();
+		let h2a = H256::random();
+		let h2b = H256::random();
+		let h3b = H256::random();
+
+		let shared = new_shared_cache::<Block, Blake2Hasher>(256*1024, (0,1));
+
+		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(root_parent));
+		s.cache.sync_cache(&[], &[], vec![(key.clone(), Some(vec![2]))], vec![], Some(h1), Some(1), || true);
+
+		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h1));
+		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h2a), Some(2), || true);
+
+		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h1));
+		s.cache.sync_cache(&[], &[], vec![(key.clone(), Some(vec![3]))], vec![], Some(h2b), Some(2), || false);
+
+		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h2b));
+		s.cache.sync_cache(&[], &[], vec![(key.clone(), Some(vec![3]))], vec![], Some(h3b), Some(2), || false);
+
+		let s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h2a));
+		assert_eq!(s.storage(&key).unwrap().unwrap(), vec![2]);
+	}
+
+	#[test]
+	fn double_fork() {
+		let root_parent = H256::random();
+		let key = H256::random()[..].to_vec();
+		let h1 = H256::random();
+		let h2a = H256::random();
+		let h2b = H256::random();
+		let h3a = H256::random();
+		let h3b = H256::random();
+
+		let shared = new_shared_cache::<Block, Blake2Hasher>(256*1024, (0,1));
+
+		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(root_parent));
+		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h1), Some(1), || true);
+
+		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h1));
+		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h2a), Some(2), || true);
+
+		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h2a));
+		s.cache.sync_cache(&[], &[], vec![(key.clone(), Some(vec![2]))], vec![], Some(h3a), Some(3), || true);
+
+		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h1));
+		s.cache.sync_cache(&[], &[], vec![], vec![], Some(h2b), Some(2), || false);
+
+		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h2b));
+		s.cache.sync_cache(&[], &[], vec![(key.clone(), Some(vec![3]))], vec![], Some(h3b), Some(3), || false);
+
+		let s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h3a));
+		assert_eq!(s.storage(&key).unwrap().unwrap(), vec![2]);
 	}
 
 	#[test]
@@ -664,7 +732,7 @@ mod tests {
 		let shared = new_shared_cache::<Block, Blake2Hasher>(109, ((109-36), 109));
 		let h0 = H256::random();
 
-		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(root_parent.clone()));
+		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(root_parent));
 
 		let key = H256::random()[..].to_vec();
 		let s_key = H256::random()[..].to_vec();
@@ -673,7 +741,7 @@ mod tests {
 			&[],
 			vec![(key.clone(), Some(vec![1, 2, 3]))],
 			vec![],
-			Some(h0.clone()),
+			Some(h0),
 			Some(0),
 			|| true,
 		);
@@ -686,7 +754,7 @@ mod tests {
 			&[],
 			vec![],
 			vec![(s_key.clone(), vec![(key.clone(), Some(vec![1, 2]))])],
-			Some(h0.clone()),
+			Some(h0),
 			Some(0),
 			|| true,
 		);
@@ -700,7 +768,7 @@ mod tests {
 		let shared = new_shared_cache::<Block, Blake2Hasher>(36*3, (2,3));
 		let h0 = H256::random();
 
-		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(root_parent.clone()));
+		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(root_parent));
 
 		let key = H256::random()[..].to_vec();
 		s.cache.sync_cache(
@@ -708,7 +776,7 @@ mod tests {
 			&[],
 			vec![(key.clone(), Some(vec![1, 2, 3, 4]))],
 			vec![],
-			Some(h0.clone()),
+			Some(h0),
 			Some(0),
 			|| true,
 		);
@@ -721,11 +789,592 @@ mod tests {
 			&[],
 			vec![(key.clone(), Some(vec![1, 2]))],
 			vec![],
-			Some(h0.clone()),
+			Some(h0),
 			Some(0),
 			|| true,
 		);
 		// 32 key, 2 byte size
 		assert_eq!(shared.lock().used_storage_cache_size(), 34 /* bytes */);
+	}
+
+	#[test]
+	fn fix_storage_mismatch_issue() {
+		let _ = ::env_logger::try_init();
+		let root_parent = H256::random();
+
+		let key = H256::random()[..].to_vec();
+
+		let h0 = H256::random();
+		let h1 = H256::random();
+
+		let shared = new_shared_cache::<Block, Blake2Hasher>(256*1024, (0, 1));
+		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(root_parent));
+		s.cache.sync_cache(&[], &[], vec![(key.clone(), Some(vec![2]))], vec![], Some(h0), Some(0), || true);
+
+		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h0));
+		s.cache.sync_cache(&[], &[], vec![(key.clone(), Some(vec![3]))], vec![], Some(h1), Some(1), || true);
+
+		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h1));
+		assert_eq!(s.storage(&key).unwrap(), Some(vec![3]));
+
+		// Restart (or unknown block?), clear caches.
+		{
+			let mut cache = s.cache.shared_cache.lock();
+			let cache = &mut *cache;
+			cache.lru_storage.clear();
+			cache.lru_hashes.clear();
+			cache.lru_child_storage.clear();
+			cache.modifications.clear();
+		}
+
+		// New value is written because of cache miss.
+		s.cache.local_cache.write().storage.insert(key.clone(), Some(vec![42]));
+
+		// New value is propagated.
+		s.cache.sync_cache(&[], &[], vec![], vec![], None, None, || true);
+
+		let s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h1));
+		assert_eq!(s.storage(&key).unwrap(), None);
+	}
+}
+
+#[cfg(test)]
+mod qc {
+	use std::collections::{HashMap, hash_map::Entry};
+
+	use quickcheck::{quickcheck, TestResult, Arbitrary};
+
+	use super::*;
+	use sr_primitives::testing::{H256, Block as RawBlock, ExtrinsicWrapper};
+	use state_machine::backend::InMemory;
+	use primitives::Blake2Hasher;
+
+	type Block = RawBlock<ExtrinsicWrapper<u32>>;
+
+	type KeySet = Vec<(Vec<u8>, Option<Vec<u8>>)>;
+
+	type KeyMap = HashMap<Vec<u8>, Option<Vec<u8>>>;
+
+	#[derive(Debug, Clone)]
+	struct Node {
+		hash: H256,
+		parent: H256,
+		state: KeyMap,
+		changes: KeySet,
+	}
+
+	impl Node {
+		fn new_next(&self, hash: H256, changes: KeySet) -> Self {
+			let mut state = self.state.clone();
+
+			for (k, v) in self.state.iter() { state.insert(k.clone(), v.clone()); }
+			for (k, v) in changes.clone().into_iter() { state.insert(k, v); }
+
+			Self {
+				hash,
+				parent: self.hash,
+				changes,
+				state,
+			}
+		}
+
+		fn new(hash: H256, parent: H256, changes: KeySet) -> Self {
+			let mut state = KeyMap::new();
+
+			for (k, v) in changes.clone().into_iter() { state.insert(k, v); }
+
+			Self {
+				hash,
+				parent,
+				state,
+				changes,
+			}
+		}
+
+		fn purge(&mut self, other_changes: &KeySet) {
+			for (k, _) in other_changes.iter() {
+				self.state.remove(k);
+			}
+		}
+	}
+
+	#[derive(Debug, Clone)]
+	enum Action {
+		Next { hash: H256, changes: KeySet },
+		Fork { depth: usize, hash: H256, changes: KeySet },
+		ReorgWithImport { depth: usize, hash: H256 },
+		FinalizationReorg { fork_depth: usize, depth: usize },
+	}
+
+	impl Arbitrary for Action {
+		fn arbitrary<G: quickcheck::Gen>(gen: &mut G) -> Self {
+			let path = gen.next_u32() as u8;
+			let mut buf = [0u8; 32];
+
+			match path {
+				0..=175 => {
+					gen.fill_bytes(&mut buf[..]);
+					Action::Next {
+						hash: H256::from(&buf),
+						changes: {
+							let mut set = Vec::new();
+							for _ in 0..gen.next_u32()/(64*256*256*256) {
+								set.push((vec![gen.next_u32() as u8], Some(vec![gen.next_u32() as u8])));
+							}
+							set
+						}
+					}
+				},
+				176..=220 => {
+					gen.fill_bytes(&mut buf[..]);
+					Action::Fork {
+						hash: H256::from(&buf),
+						depth: ((gen.next_u32() as u8) / 32) as usize,
+						changes: {
+							let mut set = Vec::new();
+							for _ in 0..gen.next_u32()/(64*256*256*256) {
+								set.push((vec![gen.next_u32() as u8], Some(vec![gen.next_u32() as u8])));
+							}
+							set
+						}
+					}
+				},
+				221..=240 => {
+					gen.fill_bytes(&mut buf[..]);
+					Action::ReorgWithImport {
+						hash: H256::from(&buf),
+						depth: ((gen.next_u32() as u8) / 32) as usize, // 0-7
+					}
+				},
+				_ => {
+					gen.fill_bytes(&mut buf[..]);
+					Action::FinalizationReorg {
+						fork_depth: ((gen.next_u32() as u8) / 32) as usize, // 0-7
+						depth: ((gen.next_u32() as u8) / 64) as usize, // 0-3
+					}
+				},
+			}
+		}
+	}
+
+	struct Mutator {
+		shared: SharedCache<Block, Blake2Hasher>,
+		canon: Vec<Node>,
+		forks: HashMap<H256, Vec<Node>>,
+	}
+
+	impl Mutator {
+		fn new_empty() -> Self {
+			let shared = new_shared_cache::<Block, Blake2Hasher>(256*1024, (0,1));
+
+			Self {
+				shared,
+				canon: vec![],
+				forks: HashMap::new(),
+			}
+		}
+
+		fn head_state(&self, hash: H256) -> CachingState<Blake2Hasher, InMemory<Blake2Hasher>, Block> {
+			CachingState::new(
+				InMemory::<Blake2Hasher>::default(),
+				self.shared.clone(),
+				Some(hash)
+			)
+		}
+
+		fn canon_head_state(&self) -> CachingState<Blake2Hasher, InMemory<Blake2Hasher>, Block> {
+			self.head_state(self.canon.last().expect("Expected to be one commit").hash)
+		}
+
+		fn mutate_static(&mut self, action: Action) -> CachingState<Blake2Hasher, InMemory<Blake2Hasher>, Block> {
+			self.mutate(action).expect("Expected to provide only valid actions to the mutate_static")
+		}
+
+		fn canon_len(&self) -> usize {
+			return self.canon.len();
+		}
+
+		fn head_storage_ref(&self) -> &KeyMap {
+			&self.canon.last().expect("Expected to be one commit").state
+		}
+
+		fn key_permutations() -> Vec<Vec<u8>> {
+			(0u8..255).map(|x| vec![x]).collect()
+		}
+
+		fn mutate(&mut self, action: Action) -> Result<CachingState<Blake2Hasher, InMemory<Blake2Hasher>, Block>, ()> {
+			let state = match action {
+				Action::Fork { depth, hash, changes } => {
+					let pos = self.canon.len() as isize - depth as isize;
+					if pos < 0 || self.canon.len() == 0 || pos >= (self.canon.len()-1) as isize
+					// no fork on top also, thus len-1
+					{
+						return Err(());
+					}
+
+					let pos = pos as usize;
+
+					let fork_at = self.canon[pos].hash;
+
+					let (total_h, parent) = match self.forks.entry(fork_at) {
+						Entry::Occupied(occupied) => {
+							let chain = occupied.into_mut();
+							let parent = chain.last().expect("No empty forks are ever created").clone();
+							let mut node = parent.new_next(hash, changes.clone());
+
+							for earlier in chain.iter() {
+								node.purge(&earlier.changes.clone());
+							}
+
+							chain.push(node);
+
+							(pos + chain.len(), parent.hash)
+						},
+						Entry::Vacant(vacant) => {
+							let canon_parent = &self.canon[pos];
+							vacant.insert(vec![canon_parent.new_next(hash, changes.clone())]);
+
+							(pos + 1, fork_at)
+						}
+					};
+
+					let mut state = CachingState::new(
+						InMemory::<Blake2Hasher>::default(),
+						self.shared.clone(),
+						Some(parent)
+					);
+
+					state.cache.sync_cache(
+						&[],
+						&[],
+						changes,
+						vec![],
+						Some(hash),
+						Some(total_h as u64),
+						|| false,
+					);
+
+					state
+				},
+				Action::Next { hash, changes } => {
+					let (next, parent_hash) = match self.canon.last() {
+						None => {
+							let parent_hash = H256::from(&[0u8; 32]);
+							(Node::new(hash, parent_hash, changes.clone()), parent_hash)
+						},
+						Some(parent) => {
+							(parent.new_next(hash, changes.clone()), parent.hash)
+						}
+					};
+
+					// delete cache entries for earlier
+					for node in self.canon.iter_mut() {
+						node.purge(&next.changes);
+						if let Some(fork) = self.forks.get_mut(&node.hash) {
+							for node in fork.iter_mut() {
+								node.purge(&next.changes);
+							}
+						}
+					}
+
+					let mut state = CachingState::new(
+						InMemory::<Blake2Hasher>::default(),
+						self.shared.clone(),
+						Some(parent_hash)
+					);
+
+					state.cache.sync_cache(
+						&[],
+						&[],
+						next.changes.clone(),
+						vec![],
+						Some(hash),
+						Some(self.canon.len() as u64 + 1),
+						|| true,
+					);
+
+					self.canon.push(next);
+
+					state
+				},
+				Action::ReorgWithImport { depth, hash } => {
+					let pos = self.canon.len() as isize - depth as isize;
+					if pos < 0 || pos+1 >= self.canon.len() as isize { return Err(()); }
+					let fork_at = self.canon[pos as usize].hash;
+					let pos = pos as usize;
+
+					match self.forks.get_mut(&fork_at) {
+						Some(chain) => {
+							let mut new_fork = self.canon.drain(pos+1..).collect::<Vec<Node>>();
+
+							let retracted: Vec<H256> = new_fork.iter().map(|node| node.hash).collect();
+							let enacted: Vec<H256> = chain.iter().map(|node| node.hash).collect();
+
+							std::mem::swap(chain, &mut new_fork);
+
+							let mut node = new_fork.last().map(
+								|node| node.new_next(hash, vec![])
+							).expect("No empty fork ever created!");
+
+							for invalidators in chain.iter().chain(new_fork.iter()) {
+								node.purge(&invalidators.changes);
+							}
+
+							self.canon.extend(new_fork.into_iter());
+
+							self.canon.push(node);
+
+							let mut state = CachingState::new(
+								InMemory::<Blake2Hasher>::default(),
+								self.shared.clone(),
+								Some(fork_at)
+							);
+
+							let height = pos as u64 + enacted.len() as u64 + 2;
+							state.cache.sync_cache(
+								&enacted[..],
+								&retracted[..],
+								vec![],
+								vec![],
+								Some(hash),
+								Some(height),
+								|| true,
+							);
+
+							state
+						}
+						None => {
+							return Err(()); // no reorg without a fork atm!
+						},
+					}
+				},
+				Action::FinalizationReorg { fork_depth, depth } => {
+					let pos = self.canon.len() as isize - fork_depth as isize;
+					if pos < 0 || pos+1 >= self.canon.len() as isize { return Err(()); }
+					let fork_at = self.canon[pos as usize].hash;
+					let pos = pos as usize;
+
+					match self.forks.get_mut(&fork_at) {
+						Some(fork_chain) => {
+							let sync_pos = fork_chain.len() as isize - fork_chain.len() as isize - depth as isize;
+							if sync_pos < 0 || sync_pos >= fork_chain.len() as isize { return Err (()); }
+							let sync_pos = sync_pos as usize;
+
+							let mut new_fork = self.canon.drain(pos+1..).collect::<Vec<Node>>();
+
+							let retracted: Vec<H256> = new_fork.iter().map(|node| node.hash).collect();
+							let enacted: Vec<H256> = fork_chain.iter().take(sync_pos+1).map(|node| node.hash).collect();
+
+							std::mem::swap(fork_chain, &mut new_fork);
+
+							self.shared.lock().sync(&retracted, &enacted);
+
+							self.head_state(
+								self.canon.last()
+								.expect("wasn't forking to emptiness so there shoud be one!")
+								.hash
+							)
+						},
+						None => {
+							return Err(()); // no reorg to nothing pls!
+						}
+					}
+
+				},
+			};
+
+			Ok(state)
+		}
+	}
+
+	#[test]
+	fn smoke() {
+		let key = H256::random()[..].to_vec();
+		let h0 = H256::random();
+		let h1a = H256::random();
+		let h1b = H256::random();
+		let h2a = H256::random();
+		let h2b = H256::random();
+		let h3a = H256::random();
+		let h3b = H256::random();
+
+		let mut mutator = Mutator::new_empty();
+		mutator.mutate_static(Action::Next { hash: h0, changes: vec![(key.clone(), Some(vec![2]))] });
+		mutator.mutate_static(Action::Next { hash: h1a, changes: vec![] });
+		mutator.mutate_static(Action::Fork { depth: 2, hash: h1b, changes: vec![(key.clone(), Some(vec![3]))] });
+		mutator.mutate_static(Action::Fork { depth: 2, hash: h2b, changes: vec![(key.clone(), Some(vec![4]))] });
+		mutator.mutate_static(Action::Next { hash: h2a, changes: vec![(key.clone(), Some(vec![5]))] });
+		mutator.mutate_static(Action::Next { hash: h3a, changes: vec![] });
+
+		assert_eq!(mutator.head_state(h3a).storage(&key).unwrap().expect("there should be a value"), vec![5]);
+		assert!(mutator.head_state(h1a).storage(&key).unwrap().is_none());
+		assert!(mutator.head_state(h2b).storage(&key).unwrap().is_none());
+		assert!(mutator.head_state(h1b).storage(&key).unwrap().is_none());
+
+		mutator.mutate_static(Action::ReorgWithImport { depth: 4, hash: h3b });
+		assert!(mutator.head_state(h3a).storage(&key).unwrap().is_none());
+	}
+
+	fn is_head_match(mutator: &Mutator) -> bool {
+		let head_state = mutator.canon_head_state();
+
+		for key in Mutator::key_permutations() {
+			match (head_state.storage(&key).unwrap(), mutator.head_storage_ref().get(&key)) {
+				(Some(x), Some(y)) => {
+					if Some(&x) != y.as_ref() {
+						eprintln!("{:?} != {:?}", x, y);
+						return false;
+					}
+				},
+				(None, Some(_y)) => {
+					// TODO: cache miss is not tracked atm
+				},
+				(Some(x), None) => {
+					eprintln!("{:?} != <missing>", x);
+					return false;
+				},
+				_ => continue,
+			}
+		}
+		true
+	}
+
+	fn is_canon_match(mutator: &Mutator) -> bool {
+		for node in mutator.canon.iter() {
+			let head_state = mutator.head_state(node.hash);
+			for key in Mutator::key_permutations() {
+				match (head_state.storage(&key).unwrap(), node.state.get(&key)) {
+					(Some(x), Some(y)) => {
+						if Some(&x) != y.as_ref() {
+							eprintln!("at [{}]: {:?} != {:?}", node.hash, x, y);
+							return false;
+						}
+					},
+					(None, Some(_y)) => {
+						// cache miss is not tracked atm
+					},
+					(Some(x), None) => {
+						eprintln!("at [{}]: {:?} != <missing>", node.hash, x);
+						return false;
+					},
+					_ => continue,
+				}
+			}
+		}
+		true
+	}
+
+	#[test]
+	fn reorg() {
+		let key = H256::random()[..].to_vec();
+		let h0 = H256::random();
+		let h1 = H256::random();
+		let h2 = H256::random();
+		let h1b = H256::random();
+		let h2b = H256::random();
+
+		let mut mutator = Mutator::new_empty();
+		mutator.mutate_static(Action::Next { hash: h0, changes: vec![] });
+		mutator.mutate_static(Action::Next { hash: h1, changes: vec![] });
+		mutator.mutate_static(Action::Next { hash: h2, changes: vec![(key.clone(), Some(vec![2]))] });
+		mutator.mutate_static(Action::Fork { depth: 2, hash: h1b, changes: vec![(key.clone(), Some(vec![3]))] });
+		mutator.mutate_static(Action::ReorgWithImport { depth: 2, hash: h2b });
+
+		assert!(is_head_match(&mutator))
+	}
+
+	fn key(k: u8) -> Vec<u8> { vec![k] }
+	fn val(v: u8) -> Option<Vec<u8>> { Some(vec![v]) }
+	fn keyval(k: u8, v: u8) -> KeySet { vec![(key(k), val(v))] }
+
+	#[test]
+	fn reorg2() {
+		let h0 = H256::random();
+		let h1a = H256::random();
+		let h1b = H256::random();
+		let h2b = H256::random();
+		let h2a = H256::random();
+		let h3a = H256::random();
+
+		let mut mutator = Mutator::new_empty();
+		mutator.mutate_static(Action::Next { hash: h0, changes: keyval(1, 1) });
+		mutator.mutate_static(Action::Next { hash: h1a, changes: keyval(1, 1) });
+		mutator.mutate_static(Action::Fork { depth: 2, hash: h1b, changes: keyval(2, 2 ) });
+
+		mutator.mutate_static(Action::Next { hash: h2a, changes: keyval(3, 3) });
+		mutator.mutate_static(Action::Next { hash: h3a, changes: keyval(4, 4) });
+		mutator.mutate_static(Action::ReorgWithImport { depth: 4, hash: h2b });
+
+		assert!(is_head_match(&mutator))
+	}
+
+	#[test]
+	fn fork2() {
+		let h1 = H256::random();
+		let h2a = H256::random();
+		let h2b = H256::random();
+		let h3a = H256::random();
+		let h3b = H256::random();
+
+		let mut mutator = Mutator::new_empty();
+		mutator.mutate_static(Action::Next { hash: h1, changes: vec![] });
+		mutator.mutate_static(Action::Next { hash: h2a, changes: vec![] });
+		mutator.mutate_static(Action::Next { hash: h3a, changes: keyval(1, 1) });
+
+		mutator.mutate_static(Action::Fork { depth: 2, hash: h2b, changes: vec![] });
+		mutator.mutate_static(Action::Fork { depth: 2, hash: h3b, changes: keyval(1, 2) });
+
+		assert!(is_head_match(&mutator))
+	}
+
+	#[test]
+	fn fork3() {
+		let h1 = H256::random();
+		let h2a = H256::random();
+		let h2b = H256::random();
+		let h3a = H256::random();
+
+		let mut mutator = Mutator::new_empty();
+		mutator.mutate_static(Action::Next { hash: h1, changes: keyval(1, 1) });
+		mutator.mutate_static(Action::Next { hash: h2a, changes: keyval(2, 2) });
+		mutator.mutate_static(Action::Next { hash: h3a, changes: keyval(3, 3) });
+
+		mutator.mutate_static(Action::Fork { depth: 2, hash: h2b, changes: keyval(1, 3) });
+
+		assert!(is_canon_match(&mutator))
+	}
+
+	quickcheck! {
+		fn head_complete(actions: Vec<Action>) -> TestResult {
+			let mut mutator = Mutator::new_empty();
+
+			for action in actions.into_iter() {
+				if let Err(_) = mutator.mutate(action) {
+					return TestResult::discard();
+				}
+			}
+
+			if mutator.canon_len() == 0 {
+				return TestResult::discard();
+			}
+
+			TestResult::from_bool(is_head_match(&mutator))
+		}
+
+		fn canon_complete(actions: Vec<Action>) -> TestResult {
+			let mut mutator = Mutator::new_empty();
+
+			for action in actions.into_iter() {
+				if let Err(_) = mutator.mutate(action) {
+					return TestResult::discard();
+				}
+			}
+
+			if mutator.canon_len() == 0 {
+				return TestResult::discard();
+			}
+
+			TestResult::from_bool(is_canon_match(&mutator))
+		}
 	}
 }

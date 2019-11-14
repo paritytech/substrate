@@ -25,7 +25,7 @@ use crate::{Balances, System, Authorship, MaximumBlockWeight, NegativeImbalance}
 
 pub struct Author;
 impl OnUnbalanced<NegativeImbalance> for Author {
-	fn on_unbalanced(amount: NegativeImbalance) {
+	fn on_nonzero_unbalanced(amount: NegativeImbalance) {
 		Balances::resolve_creating(&Authorship::author(), amount);
 	}
 }
@@ -61,7 +61,7 @@ impl<C: Get<Balance>> Convert<Weight, Balance> for LinearWeightToFee<C> {
 
 /// Update the given multiplier based on the following formula
 ///
-///   diff = (target_weight - previous_block_weight)
+///   diff = (previous_block_weight - target_weight)
 ///   v = 0.00004
 ///   next_weight = weight * (1 + (v . diff) + (v . diff)^2 / 2)
 ///
