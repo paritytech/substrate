@@ -836,7 +836,7 @@ define_env!(Env, <E: Ext>,
 		Ok(())
 	},
 
-	// Retrieve the value at the under the given key from the **runtime** storage and return 0.
+	// Retrieve the value under the given key from the **runtime** storage and return 0.
 	// If there is no entry under the given key then this function will return 1 and
 	// clear the scratch buffer.
 	//
