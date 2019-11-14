@@ -74,12 +74,14 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 		Self::initialize_keys(&keys);
 	}
 
-	fn on_new_session<'a, I: 'a>(_changed: bool, _authorities: I, next_authorities: I)
+	fn on_new_session<'a, I: 'a>(changed: bool, validators: I, _queued_validators: I)
 	where
 		I: Iterator<Item = (&'a T::AccountId, Self::Key)>,
 	{
 		// Remember who the authorities are for the new session.
-		Keys::put(next_authorities.map(|x| x.1).collect::<Vec<_>>());
+		if changed {
+			Keys::put(validators.map(|x| x.1).collect::<Vec<_>>());
+		}
 	}
 
 	fn on_disabled(_i: usize) {
@@ -238,10 +240,22 @@ mod tests {
 				AuthorityDiscovery::authorities()
 			);
 
+			// When `changed` set to false, the authority set should not be updated.
 			AuthorityDiscovery::on_new_session(
 				false,
-				first_authorities_and_account_ids.into_iter(),
+				second_authorities_and_account_ids.clone().into_iter(),
+				vec![].into_iter(),
+			);
+			assert_eq!(
+				first_authorities,
+				AuthorityDiscovery::authorities()
+			);
+
+			// When `changed` set to true, the authority set should be updated.
+			AuthorityDiscovery::on_new_session(
+				true,
 				second_authorities_and_account_ids.into_iter(),
+				vec![].into_iter(),
 			);
 			assert_eq!(
 				second_authorities,
