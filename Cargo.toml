@@ -99,6 +99,8 @@ members = [
 	"primitives/serializer",
 	"primitives/session",
 	"primitives/sr-api",
+	"primitives/sr-api/test",
+	"primitives/sr-api/proc-macro",
 	"primitives/sr-arithmetic",
 	"primitives/sr-io",
 	"primitives/sr-primitives",

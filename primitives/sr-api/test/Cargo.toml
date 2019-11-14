@@ -9,7 +9,7 @@ sr-api = { path = "../" }
 test-client = { package = "substrate-test-runtime-client", path = "../../../test/utils/runtime/client" }
 sr-version = { path = "../../sr-version" }
 sr-primitives = { path = "../../sr-primitives" }
-consensus_common = { package = "substrate-consensus-common", path = "../../../client/consensus/common" }
+consensus_common = { package = "substrate-consensus-common", path = "../../../primitives/consensus/common" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 state-machine = { package = "substrate-state-machine", path = "../../../primitives/state-machine" }
 trybuild = "1.0.17"

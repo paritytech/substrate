@@ -5026,6 +5026,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "sr-api-test"
+version = "2.0.0"
+dependencies = [
+ "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rustversion 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-api 2.0.0",
+ "sr-primitives 2.0.0",
+ "sr-version 2.0.0",
+ "substrate-consensus-common 2.0.0",
+ "substrate-state-machine 2.0.0",
+ "substrate-test-runtime-client 2.0.0",
+ "trybuild 1.0.17 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "sr-arithmetic"
 version = "2.0.0"
 dependencies = [
