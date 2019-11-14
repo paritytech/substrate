@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # The script is meant to check if the rules regarding packages
 # dependencies are satisfied.
