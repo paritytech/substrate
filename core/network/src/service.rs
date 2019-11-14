@@ -421,18 +421,17 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 		self.local_peer_id.clone()
 	}
 
-	/// Writes a message on an open gossiping channel. Has no effect if the gossiping channel with
-	/// this protocol name is closed.
+	/// Writes a message on an open notifications channel. Has no effect if the notifications
+	/// channel with this protocol name is closed.
 	///
 	/// > **Note**: The reason why this is a no-op in the situation where we have no channel is
 	/// >			that we don't guarantee message delivery anyway. Networking issues can cause
-	/// >			connections to drop at any time, and when it comes to messages delivery it
-	/// >			doesn't fundamentally make a difference to differentiate between the remote
-	/// >			voluntarily closing a substream or a network error preventing the message from
-	/// >			being delivered.
+	/// >			connections to drop at any time, and higher-level logic shouldn't differentiate
+	/// >			between the remote voluntarily closing a substream or a network error
+	/// >			preventing the message from being delivered.
 	///
 	/// The protocol name must be one of the elements of `extra_notif_protos` that was passed in
-	/// the configuration.
+	/// the configuration, or a protocol registered with `register_notif_protocol`.
 	pub fn write_notif(&self, target: PeerId, proto_name: impl Into<Vec<u8>>, message: impl Encode) {
 		let _ = self.to_worker.unbounded_send(ServerToWorkerMsg::WriteNotif {
 			target,

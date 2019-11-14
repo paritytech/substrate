@@ -19,12 +19,13 @@ use crate::protocol::message::generic::ConsensusMessage;
 use crate::protocol::specialization::NetworkSpecialization;
 use crate::consensus_gossip::state_machine::{ConsensusGossip, Validator, TopicNotification};
 use crate::service::{NetworkService, ExHashT};
+use crate::{Event, config::Roles};
 
 use futures03::{prelude::*, channel::mpsc, compat::Compat01As03};
 use libp2p::PeerId;
 use parking_lot::Mutex;
 use sr_primitives::{traits::{Block as BlockT, Header as HeaderT}, ConsensusEngineId};
-use std::{borrow::Cow, sync::Arc};
+use std::{borrow::Cow, sync::Arc, time::Duration};
 
 pub struct GossipEngine<B: BlockT> {
 	inner: Arc<Mutex<GossipEngineInner<B>>>,
@@ -43,29 +44,81 @@ impl<B: BlockT> GossipEngine<B> {
 		engine_id: ConsensusEngineId,
 		validator: Arc<dyn Validator<B>>,
 	) -> Self where B: 'static, S: 'static, H: 'static {
+		let proto_name = proto_name.into();
+
 		let mut state_machine = ConsensusGossip::new();
 		let mut context = Box::new(ContextOverService {
 			network_service: network_service.clone(),
-			proto_name: proto_name.into(),
-		});
-
-		async_std::task::spawn(async move {
-			let mut stream = Compat01As03::new(network_service.events_stream());
-			while let Some(event) = stream.next().await {
-				match event {
-					_ => unimplemented!()
-				}
-			}
+			proto_name: proto_name.clone(),
 		});
 
 		state_machine.register_validator(&mut *context, engine_id, validator);
 
-		GossipEngine {
-			inner: Arc::new(Mutex::new(GossipEngineInner {
-				state_machine,
-				context,
-			})),
-		}
+		let inner = Arc::new(Mutex::new(GossipEngineInner {
+			state_machine,
+			context,
+		}));
+
+		let gossip_engine = GossipEngine {
+			inner: inner.clone(),
+		};
+
+		async_std::task::spawn({
+			let inner = Arc::downgrade(&inner);
+			async move {
+				loop {
+					async_std::task::sleep(Duration::from_millis(1100)).await;
+					if let Some(inner) = inner.upgrade() {
+						let mut inner = inner.lock();
+						let mut inner = &mut *inner;
+						inner.state_machine.tick(&mut *inner.context);
+					} else {
+						break;
+					}
+				}
+			}
+		});
+
+		async_std::task::spawn(async move {
+			let mut stream = Compat01As03::new(network_service.events_stream());
+			while let Some(Ok(event)) = stream.next().await {
+				match event {
+					Event::NotifOpened { remote, proto_name } => {
+						if proto_name != proto_name {
+							continue;
+						}
+						let mut inner = inner.lock();
+						let mut inner = &mut *inner;
+						// TODO: for now we hard-code the roles to FULL; fix that
+						inner.state_machine.new_peer(&mut *inner.context, remote, Roles::FULL);
+					}
+					Event::NotifClosed { remote, proto_name } => {
+						if proto_name != proto_name {
+							continue;
+						}
+						let mut inner = inner.lock();
+						let mut inner = &mut *inner;
+						inner.state_machine.peer_disconnected(&mut *inner.context, remote);
+					},
+					Event::NotifMessages { remote, messages } => {
+						let mut inner = inner.lock();
+						let mut inner = &mut *inner;
+						inner.state_machine.on_incoming(
+							&mut *inner.context,
+							remote,
+							messages.into_iter()
+								.filter_map(|(proto, data)| if proto == proto_name {
+									Some(ConsensusMessage { engine_id, data })
+								} else { None })
+								.collect()
+						);
+					},
+					Event::Dht(_) => {}
+				}
+			}
+		});
+
+		gossip_engine
 	}
 
 	/// Closes all notification streams.
