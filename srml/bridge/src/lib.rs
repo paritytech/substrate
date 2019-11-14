@@ -49,25 +49,19 @@ use system::{ensure_signed};
 #[derive(Encode, Decode, Clone, PartialEq)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct BridgeInfo<T: Trait> {
-	last_finalized_block_number: T::BlockNumber,
-	last_finalized_block_hash: T::Hash,
-	last_finalized_state_root: T::Hash,
+	last_finalized_block_header: T::Header,
 	current_validator_set: Vec<(AuthorityId, AuthorityWeight)>,
 }
 
 impl<T: Trait> BridgeInfo<T> {
 	pub fn new(
-			block_number: &T::BlockNumber,
-			block_hash: &T::Hash,
-			state_root: &T::Hash,
+			block_header: T::Header,
 			validator_set: Vec<(AuthorityId, AuthorityWeight)>,
 		) -> Self
 	{
 		// I don't like how this is done, should come back to...
 		BridgeInfo {
-			last_finalized_block_number: *block_number,
-			last_finalized_block_hash: *block_hash,
-			last_finalized_state_root: *state_root,
+			last_finalized_block_header: block_header,
 			current_validator_set: validator_set,
 		}
 	}
@@ -99,13 +93,11 @@ decl_module! {
 			// NOTE: Will want to make this a governance issued call
 			let _sender = ensure_signed(origin)?;
 
-			let block_number = block_header.number();
-			let block_hash = block_header.hash();
 			let state_root = block_header.state_root();
 
 			Self::check_validator_set_proof(state_root, validator_set_proof, &validator_set)?;
 
-			let bridge_info = BridgeInfo::new(block_number, &block_hash, state_root, validator_set);
+			let bridge_info = BridgeInfo::new(block_header, validator_set);
 
 			let new_bridge_id = NumBridges::get() + 1;
 			<TrackedBridges<T>>::insert(new_bridge_id, bridge_info);
@@ -113,8 +105,26 @@ decl_module! {
 			NumBridges::put(new_bridge_id);
 		}
 
-		fn submit_finalized_headers(origin) {
+		fn submit_finalized_headers(
+			origin,
+			bridge_id: BridgeId,
+			header: T::Header,
+			ancestry_proof: Vec<T::Header>,
+			_grandpa_proof: StorageProof,
+		) {
 			let _sender = ensure_signed(origin)?;
+
+			// Check that the bridge exists
+			let mut bridge = <TrackedBridges<T>>::get(bridge_id).ok_or(Error::NoSuchBridgeExists)?;
+
+			// Check that the new header is a decendent of the old header
+			let last_header = bridge.last_finalized_block_header;
+			verify_ancestry(ancestry_proof, last_header.hash(), &header)?;
+
+			// Check that the header has been finalized
+
+			// Update last valid header seen by the bridge
+			bridge.last_finalized_block_header = header;
 		}
 	}
 }
@@ -128,6 +138,7 @@ decl_error! {
 		InvalidValidatorSetProof,
 		ValidatorSetMismatch,
 		InvalidAncestryProof,
+		NoSuchBridgeExists,
 	}
 }
 
@@ -163,7 +174,7 @@ impl<T: Trait> Module<T> {
 // is a chain of headers between (but not including) the `child`
 // and `ancestor`. This could be updated to use something like
 // Log2 Ancestors (#2053) in the future.
-fn verify_ancestry<H>(proof: Vec<H>, ancestor_hash: H::Hash, child: H) -> Result<(), Error>
+fn verify_ancestry<H>(proof: Vec<H>, ancestor_hash: H::Hash, child: &H) -> Result<(), Error>
 where
 	H: Header
 {
