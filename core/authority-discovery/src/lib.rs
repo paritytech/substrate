@@ -305,6 +305,8 @@ where
 			.retain(|peer_id, _addresses| current_authorities.contains(peer_id))
 	}
 
+	/// Retrieve all local authority discovery private keys that are within the current authority
+	/// set.
 	fn get_priv_keys_within_authority_set(&mut self) -> Result<Vec<AuthorityPair>> {
 		let keys = self.get_own_public_keys_within_authority_set()?
 			.into_iter()
@@ -318,6 +320,12 @@ where
 		Ok(keys)
 	}
 
+	/// Retrieve our public keys within the current authority set.
+	//
+	// A node might have multiple authority discovery keys within its keystore, e.g. an old one and
+	// one for the upcoming session. In addition it could be participating in the current authority
+	// set with two keys. The function does not return all of the local authority discovery public
+	// keys, but only the ones intersecting with the current authority set.
 	fn get_own_public_keys_within_authority_set(&mut self) -> Result<HashSet<AuthorityId>> {
 		let local_pub_keys = self.key_store
 			.read()
