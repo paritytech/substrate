@@ -26,7 +26,7 @@ use state_machine::{
 use executor::{RuntimeVersion, NativeVersion};
 use externalities::Extensions;
 use hash_db::Hasher;
-use primitives::{offchain::OffchainExt, Blake2Hasher, NativeOrEncoded};
+use primitives::{Blake2Hasher, NativeOrEncoded};
 
 use sr_api::{ProofRecorder, InitializeBlock};
 use crate::error;

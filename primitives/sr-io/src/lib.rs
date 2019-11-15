@@ -35,7 +35,10 @@ use rstd::ops::Deref;
 
 #[cfg(feature = "std")]
 use primitives::{
-	crypto::Pair, traits::KeystoreExt, offchain::OffchainExt, hexdisplay::HexDisplay,
+	crypto::Pair,
+	traits::KeystoreExt,
+	offchain::{OffchainExt, TransactionPoolExt},
+	hexdisplay::HexDisplay,
 	storage::ChildStorageKey,
 };
 
@@ -424,7 +427,7 @@ pub trait Offchain {
 	///
 	/// The transaction will end up in the pool.
 	fn submit_transaction(&mut self, data: Vec<u8>) -> Result<(), ()> {
-		self.extension::<OffchainExt>()
+		self.extension::<TransactionPoolExt>()
 			.expect("submit_transaction can be called only in the offchain worker context")
 			.submit_transaction(data)
 	}

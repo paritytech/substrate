@@ -667,7 +667,7 @@ pub trait TransactionPool {
 
 #[cfg(feature = "std")]
 externalities::decl_extension! {
-	pub struct TransactionPoolExt(Box<dyn TransactionPool>);
+	pub struct TransactionPoolExt(Box<dyn TransactionPool + Send>);
 }
 
 
