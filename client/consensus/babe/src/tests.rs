@@ -35,20 +35,14 @@ use sr_primitives::{generic::DigestItem, traits::{Block as BlockT, DigestFor}};
 use network::config::ProtocolConfig;
 use tokio::runtime::current_thread;
 use client_api::BlockchainEvents;
-use test_client;
+use test_client::TestClient;
 use log::debug;
 use std::{time::Duration, cell::RefCell};
+use client_api::StateBackendFor;
 
 type Item = DigestItem<Hash>;
 
 type Error = client::error::Error;
-
-type TestClient = client::Client<
-	test_client::Backend,
-	test_client::Executor,
-	TestBlock,
-	test_client::runtime::RuntimeApi,
->;
 
 #[derive(Copy, Clone, PartialEq)]
 enum Stage {
@@ -96,7 +90,9 @@ impl Environment<TestBlock> for DummyFactory {
 
 impl DummyProposer {
 	fn propose_with(&mut self, pre_digests: DigestFor<TestBlock>)
-		-> future::Ready<Result<Proposal<TestBlock>, Error>>
+		-> future::Ready<
+			Result<Proposal<TestBlock, StateBackendFor<test_client::Backend, TestBlock>>, Error>
+		>
 	{
 		use codec::Encode;
 		let block_builder = self.factory.client.new_block_at(
@@ -145,13 +141,14 @@ impl DummyProposer {
 		// mutate the block header according to the mutator.
 		(self.factory.mutator)(&mut block.header, Stage::PreSeal);
 
-		future::ready(Ok(Proposal { block, proof: None, transaction: () }))
+		future::ready(Ok(Proposal { block, proof: None, storage_changes: Default::default() }))
 	}
 }
 
 impl Proposer<TestBlock> for DummyProposer {
 	type Error = Error;
-	type Proposal = future::Ready<Result<Proposal<TestBlock>, Error>>;
+	type StateBackend = client_api::StateBackendFor<test_client::Backend, TestBlock>;
+	type Proposal = future::Ready<Result<Proposal<TestBlock, Self::StateBackend>, Error>>;
 
 	fn propose(
 		&mut self,

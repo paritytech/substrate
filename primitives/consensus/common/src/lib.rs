@@ -31,7 +31,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use sr_primitives::traits::{Block as BlockT, DigestFor};
+use sr_primitives::traits::{Block as BlockT, DigestFor, NumberFor, HasherFor};
 use futures::prelude::*;
 pub use inherents::InherentData;
 
@@ -48,10 +48,11 @@ const MAX_BLOCK_SIZE: usize = 4 * 1024 * 1024 + 512;
 
 pub use self::error::Error;
 pub use block_import::{
-	BlockImport, BlockOrigin, ForkChoiceStrategy, ImportedAux, BlockImportParams, BlockCheckParams, ImportResult,
-	JustificationImport, FinalityProofImport,
+	BlockImport, BlockOrigin, ForkChoiceStrategy, ImportedAux, BlockImportParams, BlockCheckParams,
+	ImportResult, JustificationImport, FinalityProofImport,
 };
 pub use select_chain::SelectChain;
+pub use state_machine::Backend as StateBackend;
 
 /// Block status.
 #[derive(Debug, PartialEq, Eq)]
@@ -81,13 +82,13 @@ pub trait Environment<B: BlockT> {
 }
 
 /// A proposal that is created by a [`Proposer`].
-pub struct Proposal<B> {
+pub struct Proposal<Block: BlockT, Backend: state_machine::Backend<HasherFor<Block>>> {
 	/// The block that was build.
-	pub block: B,
+	pub block: Block,
 	/// Optional proof that was recorded while building the block.
 	pub proof: Option<state_machine::StorageProof>,
-	/// The storage changes combined as transaction.
-	pub transaction: (),
+	/// The storage changes while building this block.
+	pub storage_changes: state_machine::StorageChanges<Backend, HasherFor<Block>, NumberFor<Block>>,
 }
 
 /// Logic for a proposer.
@@ -99,8 +100,11 @@ pub struct Proposal<B> {
 pub trait Proposer<B: BlockT> {
 	/// Error type which can occur when proposing or evaluating.
 	type Error: From<Error> + std::fmt::Debug + 'static;
+	/// State backend used to store the state for a block.
+	type StateBackend: state_machine::Backend<HasherFor<B>> + Send;
 	/// Future that resolves to a committed proposal with an optional proof.
-	type Proposal: Future<Output = Result<Proposal<B>, Self::Error>> + Send + Unpin + 'static;
+	type Proposal: Future<Output = Result<Proposal<B, Self::StateBackend>, Self::Error>> +
+		Send + Unpin + 'static;
 
 	/// Create a proposal.
 	///

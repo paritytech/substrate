@@ -68,8 +68,7 @@ use consensus_common::import_queue::{
 };
 use sr_primitives::{generic::{BlockId, OpaqueDigestItemId}, Justification};
 use sr_primitives::traits::{
-	Block as BlockT, Header, DigestItemFor, ProvideRuntimeApi,
-	Zero,
+	Block as BlockT, Header, DigestItemFor, ProvideRuntimeApi, Zero,
 };
 use keystore::KeyStorePtr;
 use parking_lot::Mutex;

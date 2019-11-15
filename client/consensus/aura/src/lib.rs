@@ -47,7 +47,9 @@ use client::{
 use block_builder_api::BlockBuilder as BlockBuilderApi;
 
 use sr_primitives::{generic::{BlockId, OpaqueDigestItemId}, Justification};
-use sr_primitives::traits::{Block as BlockT, Header, DigestItemFor, ProvideRuntimeApi, Zero, Member};
+use sr_primitives::traits::{
+	Block as BlockT, Header, DigestItemFor, ProvideRuntimeApi, Zero, Member, HasherFor,
+};
 
 use primitives::crypto::Pair;
 use inherents::{InherentDataProviders, InherentData};
@@ -149,8 +151,10 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, H>(
 	C: ProvideRuntimeApi + BlockOf + ProvideCache<B> + AuxStore + Send + Sync,
 	C::Api: AuraApi<B, AuthorityId<P>>,
 	SC: SelectChain<B>,
-	E: Environment<B, Error=Error> + Send + Sync + 'static,
-	E::Proposer: Proposer<B, Error=Error>,
+	E: Environment<B, Error = Error> + Send + Sync + 'static,
+	E::Proposer: Proposer<B, Error = Error>,
+	// Rust bug: https://github.com/rust-lang/rust/issues/24159
+	<E::Proposer as Proposer<B>>::StateBackend: consensus_common::StateBackend<HasherFor<B>>,
 	P: Pair + Send + Sync,
 	P::Public: Hash + Member + Encode + Decode,
 	P::Signature: Hash + Member + Encode + Decode,
@@ -196,8 +200,10 @@ impl<H, B, C, E, I, P, Error, SO> slots::SimpleSlotWorker<B> for AuraWorker<C, E
 	B: BlockT<Header=H>,
 	C: ProvideRuntimeApi + BlockOf + ProvideCache<B> + Sync,
 	C::Api: AuraApi<B, AuthorityId<P>>,
-	E: Environment<B, Error=Error>,
-	E::Proposer: Proposer<B, Error=Error>,
+	E: Environment<B, Error = Error>,
+	E::Proposer: Proposer<B, Error = Error>,
+	// Rust bug: https://github.com/rust-lang/rust/issues/24159
+	<E::Proposer as Proposer<B>>::StateBackend: consensus_common::StateBackend<HasherFor<B>>,
 	H: Header<Hash=B::Hash>,
 	I: BlockImport<B> + Send + Sync + 'static,
 	P: Pair + Send + Sync,
@@ -220,7 +226,11 @@ impl<H, B, C, E, I, P, Error, SO> slots::SimpleSlotWorker<B> for AuraWorker<C, E
 		self.block_import.clone()
 	}
 
-	fn epoch_data(&self, header: &B::Header, _slot_number: u64) -> Result<Self::EpochData, consensus_common::Error> {
+	fn epoch_data(
+		&self,
+		header: &B::Header,
+		_slot_number: u64,
+	) -> Result<Self::EpochData, consensus_common::Error> {
 		authorities(self.client.as_ref(), &BlockId::Hash(header.hash()))
 	}
 
@@ -242,7 +252,11 @@ impl<H, B, C, E, I, P, Error, SO> slots::SimpleSlotWorker<B> for AuraWorker<C, E
 		})
 	}
 
-	fn pre_digest_data(&self, slot_number: u64, _claim: &Self::Claim) -> Vec<sr_primitives::DigestItem<B::Hash>> {
+	fn pre_digest_data(
+		&self,
+		slot_number: u64,
+		_claim: &Self::Claim,
+	) -> Vec<sr_primitives::DigestItem<B::Hash>> {
 		vec![
 			<DigestItemFor<B> as CompatibleDigestItem<P>>::aura_pre_digest(slot_number),
 		]
@@ -295,13 +309,15 @@ impl<H, B: BlockT, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, 
 	C::Api: AuraApi<B, AuthorityId<P>>,
 	E: Environment<B, Error=Error> + Send + Sync,
 	E::Proposer: Proposer<B, Error=Error>,
+	// Rust bug: https://github.com/rust-lang/rust/issues/24159
+	<E::Proposer as Proposer<B>>::StateBackend: consensus_common::StateBackend<HasherFor<B>>,
 	H: Header<Hash=B::Hash>,
 	I: BlockImport<B> + Send + Sync + 'static,
 	P: Pair + Send + Sync,
 	P::Public: Member + Encode + Decode + Hash,
 	P::Signature: Member + Encode + Decode + Hash + Debug,
 	SO: SyncOracle + Send + Sync + Clone,
-	Error: ::std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
+	Error: std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
 {
 	type OnSlot = Pin<Box<dyn Future<Output = Result<(), consensus_common::Error>> + Send>>;
 
@@ -709,17 +725,10 @@ mod tests {
 	use tokio::runtime::current_thread;
 	use keyring::sr25519::Keyring;
 	use client::BlockchainEvents;
-	use test_client;
+	use test_client::TestClient;
 	use aura_primitives::sr25519::AuthorityPair;
 
 	type Error = client::error::Error;
-
-	type TestClient = client::Client<
-		test_client::Backend,
-		test_client::Executor,
-		TestBlock,
-		test_client::runtime::RuntimeApi
-	>;
 
 	struct DummyFactory(Arc<TestClient>);
 	struct DummyProposer(u64, Arc<TestClient>);
@@ -737,7 +746,8 @@ mod tests {
 
 	impl Proposer<TestBlock> for DummyProposer {
 		type Error = Error;
-		type Proposal = future::Ready<Result<Proposal<TestBlock>, Error>>;
+		type StateBackend = client_api::StateBackendFor<test_client::Backend, TestBlock>;
+		type Proposal = future::Ready<Result<Proposal<TestBlock, Self::StateBackend>, Error>>;
 
 		fn propose(
 			&mut self,
@@ -747,7 +757,12 @@ mod tests {
 			_: bool,
 		) -> Self::Proposal {
 			let r = self.1.new_block(digests).unwrap().bake().map_err(|e| e.into());
-			future::ready(r.map(|b| Proposal { block: b, proof: None, transaction: () }))
+
+			future::ready(r.map(|b| Proposal {
+				block: b,
+				proof: None,
+				storage_changes: Default::default(),
+			}))
 		}
 	}
 

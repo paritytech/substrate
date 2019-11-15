@@ -91,6 +91,19 @@ pub struct StorageChanges<B: Backend<H>, H: Hasher, N: BlockNumber> {
 	pub changes_trie_transaction: Option<ChangesTrieTransaction<H, N>>,
 }
 
+impl<B: Backend<H>, H: Hasher, N: BlockNumber> Default for StorageChanges<B, H, N>
+	where B::Transaction: Default,
+{
+	fn default() -> Self {
+		Self {
+			main_storage_changes: Default::default(),
+			child_storage_changes: Default::default(),
+			transaction: Default::default(),
+			changes_trie_transaction: None,
+		}
+	}
+}
+
 #[cfg(test)]
 impl FromIterator<(Vec<u8>, OverlayedValue)> for OverlayedChangeSet {
 	fn from_iter<T: IntoIterator<Item = (Vec<u8>, OverlayedValue)>>(iter: T) -> Self {
@@ -287,7 +300,7 @@ impl OverlayedChanges {
 		}
 
 		if let Some(child_committed) = self.committed.children.get(storage_key) {
-			// Then do the same with keys from commited changes.
+			// Then do the same with keys from committed changes.
 			// NOTE that we are making changes in the prospective change set.
 			for key in child_committed.keys() {
 				if key.starts_with(prefix) {
@@ -422,7 +435,6 @@ impl OverlayedChanges {
 				.chain(self.prospective.children.get(storage_key)
 					.into_iter()
 					.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), v.value.clone()))))));
-
 
 		// compute and memoize
 		let delta = self.committed.top.iter().map(|(k, v)| (k.clone(), v.value.clone()))

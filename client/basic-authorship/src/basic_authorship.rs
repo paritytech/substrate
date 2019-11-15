@@ -48,7 +48,7 @@ pub struct ProposerFactory<C, A> where A: txpool::ChainApi {
 impl<B, E, Block, RA, A> consensus_common::Environment<Block> for
 	ProposerFactory<SubstrateClient<B, E, Block, RA>, A>
 		where
-			A: txpool::ChainApi<Block=Block> + 'static,
+			A: txpool::ChainApi<Block = Block> + 'static,
 			B: client_api::backend::Backend<Block> + Send + Sync + 'static,
 			E: CallExecutor<Block> + Send + Sync + Clone + 'static,
 			Block: BlockT,
@@ -105,7 +105,8 @@ impl<B, E, Block, RA, A> consensus_common::Proposer<Block> for
 			<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api:
 				BlockBuilderApi<Block, Error = client::error::Error>,
 {
-	type Proposal = futures::future::Ready<Result<Proposal<Block>, error::Error>>;
+	type StateBackend = B::State;
+	type Proposal = futures::future::Ready<Result<Proposal<Block, B::State>, error::Error>>;
 	type Error = error::Error;
 
 	fn propose(
@@ -138,7 +139,7 @@ impl<Block, B, E, RA, A> Proposer<Block, SubstrateClient<B, E, Block, RA>, A>	wh
 		inherent_digests: DigestFor<Block>,
 		deadline: time::Instant,
 		record_proof: bool,
-	) -> Result<Proposal<Block>, error::Error> {
+	) -> Result<Proposal<Block, B::State>, error::Error> {
 		/// If the block is full we will attempt to push at most
 		/// this number of transactions before quitting for real.
 		/// It allows us to increase block utilization.
@@ -231,7 +232,7 @@ impl<Block, B, E, RA, A> Proposer<Block, SubstrateClient<B, E, Block, RA>, A>	wh
 			error!("Failed to evaluate authored block: {:?}", err);
 		}
 
-		Ok(Proposal { block, proof, transaction: () })
+		Ok(Proposal { block, proof, storage_changes: Default::default() })
 	}
 }
 

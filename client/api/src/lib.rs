@@ -37,7 +37,6 @@ pub use client::*;
 
 pub use state_machine::{StorageProof, ExecutionStrategy};
 
-
 /// Utility methods for the client.
 pub mod utils {
 	use super::HeaderBackend;

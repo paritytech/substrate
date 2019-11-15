@@ -35,7 +35,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	type Error: super::Error;
 
 	/// Storage changes to be applied if committing
-	type Transaction: Consolidate + Default;
+	type Transaction: Consolidate + Default + Send;
 
 	/// Type of trie backend storage.
 	type TrieBackendStorage: TrieBackendStorage<H>;

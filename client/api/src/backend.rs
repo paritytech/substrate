@@ -34,6 +34,9 @@ use crate::{
 use consensus::BlockOrigin;
 use parking_lot::Mutex;
 
+/// Extracts the state backend type for the given backend.
+pub type StateBackendFor<B, Block> = <B as Backend<Block>>::State;
+
 /// In memory array of storage values.
 pub type StorageCollection = Vec<(Vec<u8>, Option<Vec<u8>>)>;
 
@@ -227,7 +230,7 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 	/// Associated blockchain backend type.
 	type Blockchain: BlockchainBackend<Block>;
 	/// Associated state backend type.
-	type State: StateBackend<HasherFor<Block>>;
+	type State: StateBackend<HasherFor<Block>> + Send;
 	/// Changes trie storage.
 	type ChangesTrieStorage: PrunableStateChangesTrieStorage<Block>;
 	/// Offchain workers local storage.

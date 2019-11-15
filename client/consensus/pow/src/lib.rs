@@ -42,7 +42,6 @@ use sr_primitives::generic::{BlockId, Digest, DigestItem};
 use sr_primitives::traits::{Block as BlockT, Header as HeaderT, ProvideRuntimeApi};
 use paint_timestamp::{TimestampInherentData, InherentError as TIError};
 use pow_primitives::{Seal, TotalDifficulty, POW_ENGINE_ID};
-use primitives::H256;
 use inherents::{InherentDataProviders, InherentData};
 use consensus_common::{
 	BlockImportParams, BlockOrigin, ForkChoiceStrategy, SyncOracle, Environment, Proposer,
@@ -95,9 +94,8 @@ impl<B: BlockT> std::convert::From<Error<B>> for String {
 pub const POW_AUX_PREFIX: [u8; 4] = *b"PoW:";
 
 /// Get the auxiliary storage key used by engine to store total difficulty.
-fn aux_key(hash: &H256) -> Vec<u8> {
-	POW_AUX_PREFIX.iter().chain(&hash[..])
-		.cloned().collect::<Vec<_>>()
+fn aux_key<T: AsRef<[u8]>>(hash: &T) -> Vec<u8> {
+	POW_AUX_PREFIX.iter().chain(hash.as_ref()).copied().collect()
 }
 
 /// Auxiliary storage data for PoW.
@@ -113,12 +111,11 @@ impl<Difficulty> PowAux<Difficulty> where
 	Difficulty: Decode + Default,
 {
 	/// Read the auxiliary from client.
-	pub fn read<C: AuxStore, B: BlockT>(client: &C, hash: &H256) -> Result<Self, Error<B>> {
-		let key = aux_key(hash);
+	pub fn read<C: AuxStore, B: BlockT>(client: &C, hash: &B::Hash) -> Result<Self, Error<B>> {
+		let key = aux_key(&hash);
 
 		match client.get_aux(&key).map_err(Error::Client)? {
-			Some(bytes) => Self::decode(&mut &bytes[..])
-				.map_err(Error::Codec),
+			Some(bytes) => Self::decode(&mut &bytes[..]).map_err(Error::Codec),
 			None => Ok(Self::default()),
 		}
 	}
@@ -135,7 +132,7 @@ pub trait PowAlgorithm<B: BlockT> {
 	fn verify(
 		&self,
 		parent: &BlockId<B>,
-		pre_hash: &H256,
+		pre_hash: &B::Hash,
 		seal: &Seal,
 		difficulty: Self::Difficulty,
 	) -> Result<bool, Error<B>>;
@@ -143,14 +140,14 @@ pub trait PowAlgorithm<B: BlockT> {
 	fn mine(
 		&self,
 		parent: &BlockId<B>,
-		pre_hash: &H256,
+		pre_hash: &B::Hash,
 		difficulty: Self::Difficulty,
 		round: u32,
 	) -> Result<Option<Seal>, Error<B>>;
 }
 
 /// A verifier for PoW blocks.
-pub struct PowVerifier<B: BlockT<Hash=H256>, C, S, Algorithm> {
+pub struct PowVerifier<B: BlockT, C, S, Algorithm> {
 	client: Arc<C>,
 	algorithm: Algorithm,
 	inherent_data_providers: inherents::InherentDataProviders,
@@ -158,7 +155,7 @@ pub struct PowVerifier<B: BlockT<Hash=H256>, C, S, Algorithm> {
 	check_inherents_after: <<B as BlockT>::Header as HeaderT>::Number,
 }
 
-impl<B: BlockT<Hash=H256>, C, S, Algorithm> PowVerifier<B, C, S, Algorithm> {
+impl<B: BlockT, C, S, Algorithm> PowVerifier<B, C, S, Algorithm> {
 	pub fn new(
 		client: Arc<C>,
 		algorithm: Algorithm,
@@ -173,7 +170,7 @@ impl<B: BlockT<Hash=H256>, C, S, Algorithm> PowVerifier<B, C, S, Algorithm> {
 		&self,
 		mut header: B::Header,
 		parent_block_id: BlockId<B>,
-	) -> Result<(B::Header, Algorithm::Difficulty, DigestItem<H256>), Error<B>> where
+	) -> Result<(B::Header, Algorithm::Difficulty, DigestItem<B::Hash>), Error<B>> where
 		Algorithm: PowAlgorithm<B>,
 	{
 		let hash = header.hash();
@@ -247,7 +244,7 @@ impl<B: BlockT<Hash=H256>, C, S, Algorithm> PowVerifier<B, C, S, Algorithm> {
 	}
 }
 
-impl<B: BlockT<Hash=H256>, C, S, Algorithm> Verifier<B> for PowVerifier<B, C, S, Algorithm> where
+impl<B: BlockT, C, S, Algorithm> Verifier<B> for PowVerifier<B, C, S, Algorithm> where
 	C: ProvideRuntimeApi + Send + Sync + HeaderBackend<B> + AuxStore + ProvideCache<B> + BlockOf,
 	C::Api: BlockBuilderApi<B, Error = client_api::error::Error>,
 	S: SelectChain<B>,
@@ -338,7 +335,7 @@ pub fn import_queue<B, C, S, Algorithm>(
 	select_chain: Option<S>,
 	inherent_data_providers: InherentDataProviders,
 ) -> Result<PowImportQueue<B>, consensus_common::Error> where
-	B: BlockT<Hash=H256>,
+	B: BlockT,
 	C: ProvideRuntimeApi + HeaderBackend<B> + BlockOf + ProvideCache<B> + AuxStore,
 	C: Send + Sync + AuxStore + 'static,
 	C::Api: BlockBuilderApi<B, Error = client_api::error::Error>,
@@ -373,7 +370,7 @@ pub fn import_queue<B, C, S, Algorithm>(
 /// information, or just be a graffiti. `round` is for number of rounds the
 /// CPU miner runs each time. This parameter should be tweaked so that each
 /// mining round is within sub-second time.
-pub fn start_mine<B: BlockT<Hash=H256>, C, Algorithm, E, SO, S>(
+pub fn start_mine<B: BlockT, C, Algorithm, E, SO, S>(
 	mut block_import: BoxBlockImport<B>,
 	client: Arc<C>,
 	algorithm: Algorithm,
@@ -421,7 +418,7 @@ pub fn start_mine<B: BlockT<Hash=H256>, C, Algorithm, E, SO, S>(
 	});
 }
 
-fn mine_loop<B: BlockT<Hash=H256>, C, Algorithm, E, SO, S>(
+fn mine_loop<B: BlockT, C, Algorithm, E, SO, S>(
 	block_import: &mut BoxBlockImport<B>,
 	client: &C,
 	algorithm: &Algorithm,
