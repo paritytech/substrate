@@ -167,6 +167,7 @@ impl DefaultTestClientBuilderExt for TestClientBuilder<Executor, Backend> {
 
 /// A `test-runtime` extensions to `TestClientBuilder`.
 pub trait TestClientBuilderExt<B>: Sized {
+	/// Returns a mutable reference to the genesis parameters.
 	fn genesis_init_mut(&mut self) -> &mut GenesisParameters;
 
 	/// Enable or disable support for changes trie in genesis.

@@ -25,10 +25,8 @@ use jsonrpc_derive::rpc;
 use primitives::{H256, Bytes};
 use rpc_primitives::number;
 use serde::{Deserialize, Serialize};
-use sr_primitives::{
-	generic::BlockId,
-	traits::{Block as BlockT, ProvideRuntimeApi},
-};
+use sr_primitives::{generic::BlockId, traits::Block as BlockT};
+use sr_api::ProvideRuntimeApi;
 
 pub use self::gen_client::Client as ContractsClient;
 pub use paint_contracts_rpc_runtime_api::{
@@ -118,9 +116,7 @@ impl<C, Block, AccountId, Balance> ContractsApi<<Block as BlockT>::Hash, Account
 	for Contracts<C, Block>
 where
 	Block: BlockT,
-	C: Send + Sync + 'static,
-	C: ProvideRuntimeApi,
-	C: HeaderBackend<Block>,
+	C: Send + Sync + 'static + ProvideRuntimeApi<Block> + HeaderBackend<Block>,
 	C::Api: ContractsRuntimeApi<Block, AccountId, Balance>,
 	AccountId: Codec,
 	Balance: Codec,

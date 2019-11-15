@@ -24,6 +24,7 @@ primitives = { package = "substrate-primitives", path = "../../primitives/core" 
 prost = "0.5.0"
 serde_json = "1.0.41"
 sr-primitives = { path = "../../primitives/sr-primitives" }
+sr-api = { path = "../../primitives/sr-api" }
 
 [dev-dependencies]
 parking_lot = "0.9.0"

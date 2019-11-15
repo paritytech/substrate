@@ -39,7 +39,8 @@ use client_api::{
 use block_builder_api::BlockBuilder as BlockBuilderApi;
 use sr_primitives::{Justification, RuntimeString};
 use sr_primitives::generic::{BlockId, Digest, DigestItem};
-use sr_primitives::traits::{Block as BlockT, Header as HeaderT, ProvideRuntimeApi};
+use sr_primitives::traits::{Block as BlockT, Header as HeaderT};
+use sr_api::ProvideRuntimeApi;
 use paint_timestamp::{TimestampInherentData, InherentError as TIError};
 use pow_primitives::{Seal, TotalDifficulty, POW_ENGINE_ID};
 use inherents::{InherentDataProviders, InherentData};
@@ -208,7 +209,7 @@ impl<B: BlockT, C, S, Algorithm> PowVerifier<B, C, S, Algorithm> {
 		inherent_data: InherentData,
 		timestamp_now: u64,
 	) -> Result<(), Error<B>> where
-		C: ProvideRuntimeApi, C::Api: BlockBuilderApi<B, Error = client_api::error::Error>
+		C: ProvideRuntimeApi<B>, C::Api: BlockBuilderApi<B, Error = client_api::error::Error>
 	{
 		const MAX_TIMESTAMP_DRIFT_SECS: u64 = 60;
 
@@ -245,7 +246,7 @@ impl<B: BlockT, C, S, Algorithm> PowVerifier<B, C, S, Algorithm> {
 }
 
 impl<B: BlockT, C, S, Algorithm> Verifier<B> for PowVerifier<B, C, S, Algorithm> where
-	C: ProvideRuntimeApi + Send + Sync + HeaderBackend<B> + AuxStore + ProvideCache<B> + BlockOf,
+	C: ProvideRuntimeApi<B> + Send + Sync + HeaderBackend<B> + AuxStore + ProvideCache<B> + BlockOf,
 	C::Api: BlockBuilderApi<B, Error = client_api::error::Error>,
 	S: SelectChain<B>,
 	Algorithm: PowAlgorithm<B> + Send + Sync,
@@ -336,7 +337,7 @@ pub fn import_queue<B, C, S, Algorithm>(
 	inherent_data_providers: InherentDataProviders,
 ) -> Result<PowImportQueue<B>, consensus_common::Error> where
 	B: BlockT,
-	C: ProvideRuntimeApi + HeaderBackend<B> + BlockOf + ProvideCache<B> + AuxStore,
+	C: ProvideRuntimeApi<B> + HeaderBackend<B> + BlockOf + ProvideCache<B> + AuxStore,
 	C: Send + Sync + AuxStore + 'static,
 	C::Api: BlockBuilderApi<B, Error = client_api::error::Error>,
 	Algorithm: PowAlgorithm<B> + Send + Sync + 'static,

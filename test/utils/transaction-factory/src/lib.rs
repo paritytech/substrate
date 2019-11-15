@@ -28,18 +28,14 @@ use log::info;
 
 use client::Client;
 use block_builder_api::BlockBuilder;
-use sr_api::ConstructRuntimeApi;
+use sr_api::{ConstructRuntimeApi, ProvideRuntimeApi};
 use consensus_common::{
-	BlockOrigin, BlockImportParams, InherentData, ForkChoiceStrategy,
-	SelectChain
+	BlockOrigin, BlockImportParams, InherentData, ForkChoiceStrategy, SelectChain
 };
 use consensus_common::block_import::BlockImport;
 use codec::{Decode, Encode};
 use sr_primitives::generic::BlockId;
-use sr_primitives::traits::{
-	Block as BlockT, Header as HeaderT, ProvideRuntimeApi, SimpleArithmetic,
-	One, Zero,
-};
+use sr_primitives::traits::{Block as BlockT, Header as HeaderT, SimpleArithmetic, One, Zero};
 pub use crate::modes::Mode;
 
 pub mod modes;
@@ -102,8 +98,8 @@ where
 	Block: BlockT,
 	Exec: client::CallExecutor<Block> + Send + Sync + Clone,
 	Backend: client_api::backend::Backend<Block> + Send,
-	Client<Backend, Exec, Block, RtApi>: ProvideRuntimeApi,
-	<Client<Backend, Exec, Block, RtApi> as ProvideRuntimeApi>::Api:
+	Client<Backend, Exec, Block, RtApi>: ProvideRuntimeApi<Block>,
+	<Client<Backend, Exec, Block, RtApi> as ProvideRuntimeApi<Block>>::Api:
 		BlockBuilder<Block, Error = client::error::Error>,
 	RtApi: ConstructRuntimeApi<Block, Client<Backend, Exec, Block, RtApi>> + Send + Sync,
 	Sc: SelectChain<Block>,
@@ -161,9 +157,9 @@ where
 	Block: BlockT,
 	Exec: client::CallExecutor<Block> + Send + Sync + Clone,
 	Backend: client_api::backend::Backend<Block> + Send,
-	Client<Backend, Exec, Block, RtApi>: ProvideRuntimeApi,
+	Client<Backend, Exec, Block, RtApi>: ProvideRuntimeApi<Block>,
 	RtApi: ConstructRuntimeApi<Block, Client<Backend, Exec, Block, RtApi>> + Send + Sync,
-	<Client<Backend, Exec, Block, RtApi> as ProvideRuntimeApi>::Api:
+	<Client<Backend, Exec, Block, RtApi> as ProvideRuntimeApi<Block>>::Api:
 		BlockBuilder<Block, Error = client::error::Error>,
 	RA: RuntimeAdapter,
 {
@@ -187,8 +183,8 @@ fn import_block<Backend, Exec, Block, RtApi>(
 	Block: BlockT,
 	Exec: client::CallExecutor<Block> + Send + Sync + Clone,
 	Backend: client_api::backend::Backend<Block> + Send,
-	Client<Backend, Exec, Block, RtApi>: ProvideRuntimeApi,
-	<Client<Backend, Exec, Block, RtApi> as ProvideRuntimeApi>::Api:
+	Client<Backend, Exec, Block, RtApi>: ProvideRuntimeApi<Block>,
+	<Client<Backend, Exec, Block, RtApi> as ProvideRuntimeApi<Block>>::Api:
 		sr_api::Core<Block, Error = client::error::Error>,
 {
 	let import = BlockImportParams {

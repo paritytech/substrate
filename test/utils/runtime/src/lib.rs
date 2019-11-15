@@ -932,22 +932,20 @@ fn test_read_child_storage() {
 #[cfg(test)]
 mod tests {
 	use substrate_test_runtime_client::{
-		prelude::*,
-		consensus::BlockOrigin,
-		DefaultTestClientBuilderExt, TestClientBuilder,
+		prelude::*, consensus::BlockOrigin, DefaultTestClientBuilderExt, TestClientBuilder,
 		runtime::TestAPI,
 	};
-	use sr_primitives::{
-		generic::BlockId,
-		traits::ProvideRuntimeApi,
-	};
+	use sr_primitives::generic::BlockId;
+	use sr_api::ProvideRuntimeApi;
 	use primitives::storage::well_known_keys::HEAP_PAGES;
 	use state_machine::ExecutionStrategy;
 	use codec::Encode;
 
 	#[test]
 	fn returns_mutable_static() {
-		let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::AlwaysWasm).build();
+		let client = TestClientBuilder::new()
+			.set_execution_strategy(ExecutionStrategy::AlwaysWasm)
+			.build();
 		let runtime_api = client.runtime_api();
 		let block_id = BlockId::Number(client.info().chain.best_number);
 

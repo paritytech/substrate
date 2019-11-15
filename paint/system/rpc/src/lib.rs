@@ -66,9 +66,7 @@ impl<P: txpool::ChainApi, C, B> System<P, C, B> {
 
 impl<P, C, Block, AccountId, Index> SystemApi<AccountId, Index> for System<P, C, Block>
 where
-	C: traits::ProvideRuntimeApi,
-	C: HeaderBackend<Block>,
-	C: Send + Sync + 'static,
+	C: sr_api::ProvideRuntimeApi<Block> + HeaderBackend<Block> + Send + Sync + 'static,
 	C::Api: AccountNonceApi<Block, AccountId, Index>,
 	P: txpool::ChainApi + Sync + Send + 'static,
 	Block: traits::Block,

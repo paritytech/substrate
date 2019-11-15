@@ -22,10 +22,7 @@ use std::ops::Range;
 use futures03::{future, StreamExt as _, TryStreamExt as _};
 use log::warn;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
-use rpc::{
-	Result as RpcResult,
-	futures::{stream, Future, Sink, Stream, future::result},
-};
+use rpc::{Result as RpcResult, futures::{stream, Future, Sink, Stream, future::result}};
 
 use api::Subscriptions;
 use client_api::{backend::Backend, error::Result as ClientResult};
@@ -34,11 +31,10 @@ use primitives::{Bytes, storage::{well_known_keys, StorageKey, StorageData, Stor
 use runtime_version::RuntimeVersion;
 use state_machine::ExecutionStrategy;
 use sr_primitives::{
-	generic::BlockId,
-	traits::{Block as BlockT, Header, NumberFor, ProvideRuntimeApi, SaturatedConversion},
+	generic::BlockId, traits::{Block as BlockT, Header, NumberFor, SaturatedConversion},
 };
 
-use sr_api::Metadata;
+use sr_api::{Metadata, ProvideRuntimeApi};
 
 use super::{StateBackend, error::{FutureResult, Error, Result}, client_err};
 
@@ -226,8 +222,8 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 		B: Backend<Block> + Send + Sync + 'static,
 		E: CallExecutor<Block> + Send + Sync + 'static + Clone,
 		RA: Send + Sync + 'static,
-		Client<B, E, Block, RA>: ProvideRuntimeApi,
-		<Client<B, E, Block, RA> as ProvideRuntimeApi>::Api:
+		Client<B, E, Block, RA>: ProvideRuntimeApi<Block>,
+		<Client<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api:
 			Metadata<Block, Error = client::error::Error>,
 {
 	fn call(

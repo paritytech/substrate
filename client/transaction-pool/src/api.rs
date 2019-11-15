@@ -39,7 +39,7 @@ pub struct FullChainApi<T, Block> {
 
 impl<T, Block> FullChainApi<T, Block> where
 	Block: traits::Block,
-	T: traits::ProvideRuntimeApi + traits::BlockIdTo<Block> {
+	T: sr_api::ProvideRuntimeApi<Block> + traits::BlockIdTo<Block> {
 	/// Create new transaction pool logic.
 	pub fn new(client: Arc<T>) -> Self {
 		FullChainApi {
@@ -56,7 +56,7 @@ impl<T, Block> FullChainApi<T, Block> where
 
 impl<T, Block> txpool::ChainApi for FullChainApi<T, Block> where
 	Block: traits::Block,
-	T: traits::ProvideRuntimeApi + traits::BlockIdTo<Block> + 'static + Send + Sync,
+	T: sr_api::ProvideRuntimeApi<Block> + traits::BlockIdTo<Block> + 'static + Send + Sync,
 	T::Api: TaggedTransactionQueue<Block>,
 	sr_api::ApiErrorFor<T, Block>: Send,
 {

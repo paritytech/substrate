@@ -15,14 +15,15 @@ runtime-io = { package = "sr-io", path = "../../primitives/sr-io", default-featu
 [dev-dependencies]
 test-client = { package = "substrate-test-runtime-client", path = "../../test/utils/runtime/client" }
 sr-primitives = { path = "../../primitives/sr-primitives" }
+sr-api = { path = "../../primitives/sr-api" }
 
 [features]
 default = [ "std" ]
 std = [ "full_crypto", "primitives/std", "codec/std", "serde", "rstd/std", "runtime-io/std" ]
 
-# This feature enables all crypto primitives for `no_std` builds like microcontrollers 
-# or Intel SGX. 
+# This feature enables all crypto primitives for `no_std` builds like microcontrollers
+# or Intel SGX.
 # For the regular wasm runtime builds this should not be used.
 full_crypto = [
-    "primitives/full_crypto"
+	"primitives/full_crypto"
 ]

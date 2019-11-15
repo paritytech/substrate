@@ -57,12 +57,13 @@ impl RuntimePublic for Public {
 
 #[cfg(test)]
 mod tests {
-	use sr_primitives::{generic::BlockId, traits::ProvideRuntimeApi};
+	use sr_primitives::generic::BlockId;
 	use primitives::{testing::{KeyStore, SR25519}, crypto::Pair};
 	use test_client::{
 		TestClientBuilder, DefaultTestClientBuilderExt, TestClientBuilderExt,
 		runtime::{TestAPI, app_crypto::sr25519::{AppPair, AppPublic}},
 	};
+	use sr_api::ProvideRuntimeApi;
 
 	#[test]
 	fn sr25519_works_in_runtime() {

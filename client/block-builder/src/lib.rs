@@ -28,17 +28,14 @@ use codec::Encode;
 
 use sr_primitives::{
 	generic::BlockId,
-	traits::{
-		Header as HeaderT, Hash, Block as BlockT, HashFor, ProvideRuntimeApi, ApiRef, DigestFor,
-		NumberFor, One,
-	},
+	traits::{Header as HeaderT, Hash, Block as BlockT, HashFor, DigestFor, NumberFor, One},
 };
 
 use primitives::ExecutionContext;
 
 use state_machine::StorageProof;
 
-use sr_api::{Core, ApiExt, ApiErrorFor};
+use sr_api::{Core, ApiExt, ApiErrorFor, ApiRef, ProvideRuntimeApi};
 
 pub use runtime_api::BlockBuilder as BlockBuilderApi;
 
@@ -46,7 +43,7 @@ pub use runtime_api::BlockBuilder as BlockBuilderApi;
 pub struct ApplyExtrinsicFailed(pub sr_primitives::ApplyError);
 
 /// Utility for building new (valid) blocks from a stream of extrinsics.
-pub struct BlockBuilder<'a, Block: BlockT, A: ProvideRuntimeApi> {
+pub struct BlockBuilder<'a, Block: BlockT, A: ProvideRuntimeApi<Block>> {
 	header: Block::Header,
 	extrinsics: Vec<Block::Extrinsic>,
 	api: ApiRef<'a, A::Api>,
@@ -56,7 +53,7 @@ pub struct BlockBuilder<'a, Block: BlockT, A: ProvideRuntimeApi> {
 impl<'a, Block, A> BlockBuilder<'a, Block, A>
 where
 	Block: BlockT,
-	A: ProvideRuntimeApi + 'a,
+	A: ProvideRuntimeApi<Block> + 'a,
 	A::Api: BlockBuilderApi<Block>,
 	ApiErrorFor<A, Block>: From<ApplyExtrinsicFailed>,
 {

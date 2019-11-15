@@ -37,7 +37,8 @@ use futures_timer::Delay;
 use inherents::{InherentData, InherentDataProviders};
 use log::{debug, error, info, warn};
 use sr_primitives::generic::BlockId;
-use sr_primitives::traits::{ApiRef, Block as BlockT, Header, ProvideRuntimeApi};
+use sr_primitives::traits::{Block as BlockT, Header};
+use sr_api::{ProvideRuntimeApi, ApiRef};
 use std::{fmt::Debug, ops::Deref, pin::Pin, sync::Arc};
 use substrate_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
 use parking_lot::Mutex;
@@ -394,7 +395,7 @@ impl<T: Clone> SlotDuration<T> {
 	/// compile-time constant.
 	pub fn get_or_compute<B: BlockT, C, CB>(client: &C, cb: CB) -> client_api::error::Result<Self> where
 		C: client_api::backend::AuxStore,
-		C: ProvideRuntimeApi,
+		C: ProvideRuntimeApi<B>,
 		CB: FnOnce(ApiRef<C::Api>, &BlockId<B>) -> client_api::error::Result<T>,
 		T: SlotData + Encode + Decode + Debug,
 	{

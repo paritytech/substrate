@@ -67,9 +67,8 @@ use consensus_common::import_queue::{
 	BoxJustificationImport, BoxFinalityProofImport,
 };
 use sr_primitives::{generic::{BlockId, OpaqueDigestItemId}, Justification};
-use sr_primitives::traits::{
-	Block as BlockT, Header, DigestItemFor, ProvideRuntimeApi, Zero,
-};
+use sr_primitives::traits::{Block as BlockT, Header, DigestItemFor, Zero};
+use sr_api::ProvideRuntimeApi;
 use keystore::KeyStorePtr;
 use parking_lot::Mutex;
 use primitives::Pair;
@@ -204,7 +203,7 @@ impl Config {
 	/// Either fetch the slot duration from disk or compute it from the genesis
 	/// state.
 	pub fn get_or_compute<B: BlockT, C>(client: &C) -> ClientResult<Self> where
-		C: AuxStore + ProvideRuntimeApi, C::Api: BabeApi<B, Error = client_api::error::Error>,
+		C: AuxStore + ProvideRuntimeApi<B>, C::Api: BabeApi<B, Error = client_api::error::Error>,
 	{
 		trace!(target: "babe", "Getting slot duration");
 		match slots::SlotDuration::get_or_compute(client, |a, b| a.configuration(b)).map(Self) {
@@ -285,7 +284,7 @@ pub fn start_babe<B, C, SC, E, I, SO, Error>(BabeParams {
 	consensus_common::Error,
 > where
 	B: BlockT,
-	C: ProvideRuntimeApi + ProvideCache<B> + ProvideUncles<B> + BlockchainEvents<B>
+	C: ProvideRuntimeApi<B> + ProvideCache<B> + ProvideUncles<B> + BlockchainEvents<B>
 		+ HeaderBackend<B> + HeaderMetadata<B, Error = ClientError> + Send + Sync + 'static,
 	C::Api: BabeApi<B>,
 	SC: SelectChain<B> + 'static,
@@ -340,7 +339,10 @@ struct BabeWorker<B: BlockT, C, E, I, SO> {
 
 impl<B, C, E, I, Error, SO> slots::SimpleSlotWorker<B> for BabeWorker<B, C, E, I, SO> where
 	B: BlockT,
-	C: ProvideRuntimeApi + ProvideCache<B> + HeaderBackend<B> + HeaderMetadata<B, Error=ClientError>,
+	C: ProvideRuntimeApi<B> +
+		ProvideCache<B> +
+		HeaderBackend<B> +
+		HeaderMetadata<B, Error = ClientError>,
 	C::Api: BabeApi<B>,
 	E: Environment<B, Error = Error>,
 	E::Proposer: Proposer<B, Error = Error>,
@@ -456,7 +458,10 @@ impl<B, C, E, I, Error, SO> slots::SimpleSlotWorker<B> for BabeWorker<B, C, E, I
 
 impl<B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<B, C, E, I, SO> where
 	B: BlockT,
-	C: ProvideRuntimeApi + ProvideCache<B> + HeaderBackend<B> + HeaderMetadata<B, Error=ClientError> + Send + Sync,
+	C: ProvideRuntimeApi<B> +
+		ProvideCache<B> +
+		HeaderBackend<B> +
+		HeaderMetadata<B, Error = ClientError> + Send + Sync,
 	C::Api: BabeApi<B>,
 	E: Environment<B, Error=Error> + Send + Sync,
 	E::Proposer: Proposer<B, Error=Error>,
@@ -557,7 +562,9 @@ impl<B, E, Block: BlockT, RA, PRA> BabeVerifier<B, E, Block, RA, PRA> {
 		block_id: BlockId<Block>,
 		inherent_data: InherentData,
 	) -> Result<(), Error<Block>>
-		where PRA: ProvideRuntimeApi, PRA::Api: BlockBuilderApi<Block, Error = client_api::error::Error>
+		where
+			PRA: ProvideRuntimeApi<Block>,
+			PRA::Api: BlockBuilderApi<Block, Error = client_api::error::Error>
 	{
 		let inherent_res = self.api.runtime_api().check_inherents(
 			&block_id,
@@ -625,7 +632,7 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA
 	B: Backend<Block> + 'static,
 	E: CallExecutor<Block> + 'static + Clone + Send + Sync,
 	RA: Send + Sync,
-	PRA: ProvideRuntimeApi + Send + Sync + AuxStore + ProvideCache<Block>,
+	PRA: ProvideRuntimeApi<Block> + Send + Sync + AuxStore + ProvideCache<Block>,
 	PRA::Api: BlockBuilderApi<Block, Error = client_api::error::Error>
 		+ BabeApi<Block, Error = client_api::error::Error>,
 {
@@ -835,7 +842,7 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 	E: CallExecutor<Block> + 'static + Clone + Send + Sync,
 	Client<B, E, Block, RA>: AuxStore,
 	RA: Send + Sync,
-	PRA: ProvideRuntimeApi + ProvideCache<Block>,
+	PRA: ProvideRuntimeApi<Block> + ProvideCache<Block>,
 	PRA::Api: BabeApi<Block>,
 {
 	type Error = ConsensusError;
@@ -1146,7 +1153,7 @@ pub fn import_queue<B, E, Block: BlockT, I, RA, PRA>(
 	I: BlockImport<Block,Error=ConsensusError> + Send + Sync + 'static,
 	E: CallExecutor<Block> + Clone + Send + Sync + 'static,
 	RA: Send + Sync + 'static,
-	PRA: ProvideRuntimeApi + ProvideCache<Block> + Send + Sync + AuxStore + 'static,
+	PRA: ProvideRuntimeApi<Block> + ProvideCache<Block> + Send + Sync + AuxStore + 'static,
 	PRA::Api: BlockBuilderApi<Block> + BabeApi<Block> + ApiExt<Block, Error = client_api::error::Error>,
 {
 	register_babe_inherent_data_provider(&inherent_data_providers, babe_link.config.slot_duration)?;
@@ -1183,7 +1190,10 @@ pub mod test_helpers {
 		link: &BabeLink<B>,
 	) -> Option<BabePreDigest> where
 		B: BlockT,
-		C: ProvideRuntimeApi + ProvideCache<B> + HeaderBackend<B> + HeaderMetadata<B, Error=ClientError>,
+		C: ProvideRuntimeApi<B> +
+			ProvideCache<B> +
+			HeaderBackend<B> +
+			HeaderMetadata<B, Error = ClientError>,
 		C::Api: BabeApi<B>,
 	{
 		let epoch = link.epoch_changes.lock().epoch_for_child_of(

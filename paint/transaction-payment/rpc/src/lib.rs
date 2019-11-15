@@ -21,10 +21,8 @@ use codec::{Codec, Decode};
 use client::blockchain::HeaderBackend;
 use jsonrpc_core::{Error as RpcError, ErrorCode, Result};
 use jsonrpc_derive::rpc;
-use sr_primitives::{
-	generic::BlockId,
-	traits::{Block as BlockT, ProvideRuntimeApi},
-};
+use sr_primitives::{generic::BlockId, traits::Block as BlockT};
+use sr_api::ProvideRuntimeApi;
 use primitives::Bytes;
 use paint_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
 pub use paint_transaction_payment_rpc_runtime_api::TransactionPaymentApi as TransactionPaymentRuntimeApi;
@@ -74,9 +72,7 @@ impl<C, Block, Balance, Extrinsic> TransactionPaymentApi<<Block as BlockT>::Hash
 	for TransactionPayment<C, (Block, Extrinsic)>
 where
 	Block: BlockT,
-	C: Send + Sync + 'static,
-	C: ProvideRuntimeApi,
-	C: HeaderBackend<Block>,
+	C: Send + Sync + 'static + ProvideRuntimeApi<Block> + HeaderBackend<Block>,
 	C::Api: TransactionPaymentRuntimeApi<Block, Balance, Extrinsic>,
 	Balance: Codec,
 	Extrinsic: Codec + Send + Sync + 'static,

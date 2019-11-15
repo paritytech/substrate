@@ -37,12 +37,12 @@ use std::{fmt, marker::PhantomData, sync::Arc};
 
 use parking_lot::Mutex;
 use threadpool::ThreadPool;
-use sr_api::ApiExt;
+use sr_api::{ApiExt, ProvideRuntimeApi};
 use futures::future::Future;
 use log::{debug, warn};
 use network::NetworkStateInfo;
 use primitives::{offchain, ExecutionContext};
-use sr_primitives::{generic::BlockId, traits::{self, ProvideRuntimeApi}};
+use sr_primitives::{generic::BlockId, traits};
 use transaction_pool::txpool::{Pool, ChainApi};
 use client_api::{OffchainStorage};
 
@@ -88,7 +88,7 @@ impl<Client, Storage, Block> OffchainWorkers<
 	Block,
 > where
 	Block: traits::Block,
-	Client: ProvideRuntimeApi + Send + Sync + 'static,
+	Client: ProvideRuntimeApi<Block> + Send + Sync + 'static,
 	Client::Api: OffchainWorkerApi<Block>,
 	Storage: OffchainStorage + 'static,
 {

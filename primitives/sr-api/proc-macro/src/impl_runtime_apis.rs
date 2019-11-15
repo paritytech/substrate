@@ -269,9 +269,12 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 		unsafe impl<C: #crate_::CallRuntimeAt<#block>> Sync for RuntimeApiImpl<C> {}
 
 		#[cfg(any(feature = "std", test))]
-		impl<C: #crate_::CallRuntimeAt<#block>> #crate_::ApiExt<#block> for RuntimeApiImpl<C> {
+		impl<C: #crate_::CallRuntimeAt<#block>> #crate_::ApiErrorExt for RuntimeApiImpl<C> {
 			type Error = C::Error;
+		}
 
+		#[cfg(any(feature = "std", test))]
+		impl<C: #crate_::CallRuntimeAt<#block>> #crate_::ApiExt<#block> for RuntimeApiImpl<C> {
 			fn map_api_result<F: FnOnce(&Self) -> std::result::Result<R, E>, R, E>(
 				&self,
 				map_call: F

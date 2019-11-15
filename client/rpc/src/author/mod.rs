@@ -35,7 +35,8 @@ use api::Subscriptions;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use codec::{Encode, Decode};
 use primitives::{Bytes, traits::BareCryptoStorePtr};
-use sr_primitives::{generic, traits::{self, ProvideRuntimeApi}};
+use sr_primitives::{generic, traits};
+use sr_api::ProvideRuntimeApi;
 use transaction_pool::{
 	txpool::{
 		ChainApi as PoolChainApi,
@@ -88,8 +89,8 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 	P::Block: traits::Block,
 	P::Error: 'static,
 	RA: Send + Sync + 'static,
-	Client<B, E, P::Block, RA>: ProvideRuntimeApi,
-	<Client<B, E, P::Block, RA> as ProvideRuntimeApi>::Api:
+	Client<B, E, P::Block, RA>: ProvideRuntimeApi<P::Block>,
+	<Client<B, E, P::Block, RA> as ProvideRuntimeApi<P::Block>>::Api:
 		SessionKeys<P::Block, Error = ClientError>,
 {
 	type Metadata = crate::metadata::Metadata;

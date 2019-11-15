@@ -17,7 +17,7 @@
 //! Block Builder extensions for tests.
 
 use runtime;
-use sr_primitives::traits::ProvideRuntimeApi;
+use sr_api::ProvideRuntimeApi;
 use generic_test_client::client;
 
 use block_builder::BlockBuilderApi;
@@ -35,7 +35,7 @@ pub trait BlockBuilderExt {
 }
 
 impl<'a, A> BlockBuilderExt for block_builder::BlockBuilder<'a, runtime::Block, A> where
-	A: ProvideRuntimeApi + 'a,
+	A: ProvideRuntimeApi<runtime::Block> + 'a,
 	A::Api: BlockBuilderApi<runtime::Block, Error = client::error::Error>,
 {
 	fn push_transfer(&mut self, transfer: runtime::Transfer) -> Result<(), client::error::Error> {

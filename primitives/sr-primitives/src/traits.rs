@@ -908,54 +908,6 @@ pub trait Applyable: Sized + Send + Sync {
 	) -> crate::ApplyResult;
 }
 
-/// Auxiliary wrapper that holds an api instance and binds it to the given lifetime.
-pub struct ApiRef<'a, T>(T, rstd::marker::PhantomData<&'a ()>);
-
-impl<'a, T> ApiRef<'a, T> {
-	/// Consume this type and call the given closure with the inner.
-	///
-	/// # Attention
-	///
-	/// The inner type should be consumed as well and not used outside of this ref. This is the
-	/// reason why this function is `unsafe`.
-	pub unsafe fn consume_inner<R>(self, consume: impl FnOnce(T) -> R) -> R {
-		consume(self.0)
-	}
-}
-
-impl<'a, T> From<T> for ApiRef<'a, T> {
-	fn from(api: T) -> Self {
-		ApiRef(api, Default::default())
-	}
-}
-
-impl<'a, T> rstd::ops::Deref for ApiRef<'a, T> {
-	type Target = T;
-
-	fn deref(&self) -> &Self::Target {
-		&self.0
-	}
-}
-
-impl<'a, T> rstd::ops::DerefMut for ApiRef<'a, T> {
-	fn deref_mut(&mut self) -> &mut T {
-		&mut self.0
-	}
-}
-
-/// Something that provides a runtime api.
-pub trait ProvideRuntimeApi {
-	/// The concrete type that provides the api.
-	type Api;
-
-	/// Returns the runtime api.
-	/// The returned instance will keep track of modifications to the storage. Any successful
-	/// call to an api function, will `commit` its changes to an internal buffer. Otherwise,
-	/// the modifications will be `discarded`. The modifications will not be applied to the
-	/// storage, even on a `commit`.
-	fn runtime_api<'a>(&'a self) -> ApiRef<'a, Self::Api>;
-}
-
 /// A marker trait for something that knows the type of the runtime block.
 pub trait GetRuntimeBlockType {
 	/// The `RuntimeBlock` type.
@@ -966,14 +918,6 @@ pub trait GetRuntimeBlockType {
 pub trait GetNodeBlockType {
 	/// The `NodeBlock` type.
 	type NodeBlock: self::Block;
-}
-
-/// Something that provides information about a runtime api.
-pub trait RuntimeApiInfo {
-	/// The identifier of the runtime api.
-	const ID: [u8; 8];
-	/// The version of the runtime api.
-	const VERSION: u32;
 }
 
 /// Something that can validate unsigned extrinsics for the transaction pool.

@@ -30,11 +30,9 @@ use api::Subscriptions;
 use client::{Client, CallExecutor, light::{blockchain::RemoteBlockchain, fetcher::Fetcher}};
 use primitives::{Bytes, storage::{StorageKey, StorageData, StorageChangeSet}};
 use runtime_version::RuntimeVersion;
-use sr_primitives::{
-	traits::{Block as BlockT, ProvideRuntimeApi},
-};
+use sr_primitives::traits::Block as BlockT;
 
-use sr_api::Metadata;
+use sr_api::{Metadata, ProvideRuntimeApi};
 
 use self::error::{Error, FutureResult};
 
@@ -179,8 +177,8 @@ pub fn new_full<B, E, Block: BlockT, RA>(
 		B: client_api::backend::Backend<Block> + Send + Sync + 'static,
 		E: CallExecutor<Block> + Send + Sync + 'static + Clone,
 		RA: Send + Sync + 'static,
-		Client<B, E, Block, RA>: ProvideRuntimeApi,
-		<Client<B, E, Block, RA> as ProvideRuntimeApi>::Api:
+		Client<B, E, Block, RA>: ProvideRuntimeApi<Block>,
+		<Client<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api:
 			Metadata<Block, Error = client::error::Error>,
 {
 	State {

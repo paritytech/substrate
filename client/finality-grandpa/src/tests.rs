@@ -27,14 +27,14 @@ use tokio::runtime::current_thread;
 use keyring::Ed25519Keyring;
 use client::LongestChain;
 use client_api::error::Result;
-use sr_api::{Core, RuntimeVersion, ApiExt, StorageProof};
+use sr_api::{ApiRef, ApiErrorExt, Core, RuntimeVersion, ApiExt, StorageProof, ProvideRuntimeApi};
 use test_client::{self, runtime::BlockNumber};
 use consensus_common::{BlockOrigin, ForkChoiceStrategy, ImportedAux, BlockImportParams, ImportResult};
 use consensus_common::import_queue::{BoxBlockImport, BoxJustificationImport, BoxFinalityProofImport};
 use std::collections::{HashMap, HashSet};
 use std::result;
 use codec::Decode;
-use sr_primitives::traits::{ApiRef, ProvideRuntimeApi, Header as HeaderT, HasherFor};
+use sr_primitives::traits::{Header as HeaderT, HasherFor};
 use sr_primitives::generic::{BlockId, DigestItem};
 use primitives::{NativeOrEncoded, ExecutionContext, crypto::Public, H256};
 use fg_primitives::{GRANDPA_ENGINE_ID, AuthorityList, GrandpaApi};
@@ -201,7 +201,7 @@ pub(crate) struct RuntimeApi {
 	inner: TestApi,
 }
 
-impl ProvideRuntimeApi for TestApi {
+impl ProvideRuntimeApi<Block> for TestApi {
 	type Api = RuntimeApi;
 
 	fn runtime_api<'a>(&'a self) -> ApiRef<'a, Self::Api> {
@@ -241,9 +241,11 @@ impl Core<Block> for RuntimeApi {
 	}
 }
 
-impl ApiExt<Block> for RuntimeApi {
+impl ApiErrorExt for RuntimeApi {
 	type Error = client_api::error::Error;
+}
 
+impl ApiExt<Block> for RuntimeApi {
 	fn map_api_result<F: FnOnce(&Self) -> result::Result<R, E>, R, E>(
 		&self,
 		_: F

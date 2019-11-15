@@ -43,9 +43,9 @@ use std::sync::Arc;
 use log::info;
 use client::Client;
 use block_builder_api::BlockBuilder;
-use sr_api::ConstructRuntimeApi;
+use sr_api::{ConstructRuntimeApi, ProvideRuntimeApi};
 use sr_primitives::generic::BlockId;
-use sr_primitives::traits::{Block as BlockT, ProvideRuntimeApi, One, Zero};
+use sr_primitives::traits::{Block as BlockT, One, Zero};
 
 use crate::{RuntimeAdapter, create_block};
 
@@ -61,8 +61,8 @@ where
 	Block: BlockT,
 	Exec: client::CallExecutor<Block> + Send + Sync + Clone,
 	Backend: client_api::backend::Backend<Block> + Send,
-	Client<Backend, Exec, Block, RtApi>: ProvideRuntimeApi,
-	<Client<Backend, Exec, Block, RtApi> as ProvideRuntimeApi>::Api:
+	Client<Backend, Exec, Block, RtApi>: ProvideRuntimeApi<Block>,
+	<Client<Backend, Exec, Block, RtApi> as ProvideRuntimeApi<Block>>::Api:
 		BlockBuilder<Block, Error = client::error::Error>,
 	RtApi: ConstructRuntimeApi<Block, Client<Backend, Exec, Block, RtApi>> + Send + Sync,
 	RA: RuntimeAdapter,

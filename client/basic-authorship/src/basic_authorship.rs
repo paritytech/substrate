@@ -28,14 +28,13 @@ use inherents::InherentData;
 use log::{error, info, debug, trace};
 use primitives::ExecutionContext;
 use sr_primitives::{
-	traits::{
-		Block as BlockT, Hash as HashT, Header as HeaderT, ProvideRuntimeApi, DigestFor, BlakeTwo256
-	},
+	traits::{Block as BlockT, Hash as HashT, Header as HeaderT, DigestFor, BlakeTwo256},
 	generic::BlockId,
 };
 use transaction_pool::txpool::{self, Pool as TransactionPool};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 use block_builder::BlockBuilderApi;
+use sr_api::ProvideRuntimeApi;
 
 /// Proposer factory.
 pub struct ProposerFactory<C, A> where A: txpool::ChainApi {
@@ -53,8 +52,8 @@ impl<B, E, Block, RA, A> consensus_common::Environment<Block> for
 			E: CallExecutor<Block> + Send + Sync + Clone + 'static,
 			Block: BlockT,
 			RA: Send + Sync + 'static,
-			SubstrateClient<B, E, Block, RA>: ProvideRuntimeApi,
-			<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api:
+			SubstrateClient<B, E, Block, RA>: ProvideRuntimeApi<Block>,
+			<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api:
 				BlockBuilderApi<Block, Error = client::error::Error>,
 {
 	type Proposer = Proposer<Block, SubstrateClient<B, E, Block, RA>, A>;
@@ -101,8 +100,8 @@ impl<B, E, Block, RA, A> consensus_common::Proposer<Block> for
 			E: CallExecutor<Block> + Send + Sync + Clone + 'static,
 			Block: BlockT,
 			RA: Send + Sync + 'static,
-			SubstrateClient<B, E, Block, RA>: ProvideRuntimeApi,
-			<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api:
+			SubstrateClient<B, E, Block, RA>: ProvideRuntimeApi<Block>,
+			<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api:
 				BlockBuilderApi<Block, Error = client::error::Error>,
 {
 	type StateBackend = B::State;
@@ -129,8 +128,8 @@ impl<Block, B, E, RA, A> Proposer<Block, SubstrateClient<B, E, Block, RA>, A>	wh
 	E: CallExecutor<Block> + Send + Sync + Clone + 'static,
 	Block: BlockT,
 	RA: Send + Sync + 'static,
-	SubstrateClient<B, E, Block, RA>: ProvideRuntimeApi,
-	<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api:
+	SubstrateClient<B, E, Block, RA>: ProvideRuntimeApi<Block>,
+	<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api:
 		BlockBuilderApi<Block, Error = client::error::Error>,
 {
 	fn propose_with(

@@ -66,7 +66,8 @@ use primitives::crypto::{key_types, Pair};
 use primitives::traits::BareCryptoStorePtr;
 use prost::Message;
 use sr_primitives::generic::BlockId;
-use sr_primitives::traits::{Block as BlockT, ProvideRuntimeApi};
+use sr_primitives::traits::Block as BlockT;
+use sr_api::ProvideRuntimeApi;
 
 mod error;
 /// Dht payload schemas generated from Protobuf definitions via Prost crate in build.rs.
@@ -85,9 +86,8 @@ pub struct AuthorityDiscovery<Client, Network, Block>
 where
 	Block: BlockT + 'static,
 	Network: NetworkProvider,
-	Client: ProvideRuntimeApi + Send + Sync + 'static + HeaderBackend<Block>,
-	<Client as ProvideRuntimeApi>::Api: AuthorityDiscoveryApi<Block>,
-
+	Client: ProvideRuntimeApi<Block> + Send + Sync + 'static + HeaderBackend<Block>,
+	<Client as ProvideRuntimeApi<Block>>::Api: AuthorityDiscoveryApi<Block>,
 {
 	client: Arc<Client>,
 
@@ -115,8 +115,9 @@ impl<Client, Network, Block> AuthorityDiscovery<Client, Network, Block>
 where
 	Block: BlockT + Unpin + 'static,
 	Network: NetworkProvider,
-	Client: ProvideRuntimeApi + Send + Sync + 'static + HeaderBackend<Block>,
-	<Client as ProvideRuntimeApi>::Api: AuthorityDiscoveryApi<Block, Error = client_api::error::Error>,
+	Client: ProvideRuntimeApi<Block> + Send + Sync + 'static + HeaderBackend<Block>,
+	<Client as ProvideRuntimeApi<Block>>::Api:
+		AuthorityDiscoveryApi<Block, Error = client_api::error::Error>,
 	Self: Future<Output = ()>,
 {
 	/// Return a new authority discovery.
@@ -356,8 +357,9 @@ impl<Client, Network, Block> Future for AuthorityDiscovery<Client, Network, Bloc
 where
 	Block: BlockT + Unpin + 'static,
 	Network: NetworkProvider,
-	Client: ProvideRuntimeApi + Send + Sync + 'static + HeaderBackend<Block>,
-	<Client as ProvideRuntimeApi>::Api: AuthorityDiscoveryApi<Block, Error = client_api::error::Error>,
+	Client: ProvideRuntimeApi<Block> + Send + Sync + 'static + HeaderBackend<Block>,
+	<Client as ProvideRuntimeApi<Block>>::Api:
+		AuthorityDiscoveryApi<Block, Error = client_api::error::Error>,
 {
 	type Output = ();
 
@@ -458,13 +460,13 @@ fn hash_authority_id(id: &[u8]) -> Result<libp2p::kad::record::Key> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sr_api::{ApiExt, Core, RuntimeVersion, StorageProof};
+	use sr_api::{ApiRef, ApiErrorExt, ApiExt, Core, RuntimeVersion, StorageProof};
 	use futures::channel::mpsc::channel;
 	use futures::executor::block_on;
 	use futures::future::poll_fn;
 	use primitives::{ExecutionContext, NativeOrEncoded, testing::KeyStore};
 	use sr_primitives::traits::Zero;
-	use sr_primitives::traits::{ApiRef, Block as BlockT, NumberFor, ProvideRuntimeApi};
+	use sr_primitives::traits::NumberFor;
 	use std::sync::{Arc, Mutex};
 	use test_client::runtime::Block;
 
@@ -473,7 +475,7 @@ mod tests {
 		authorities: Vec<AuthorityId>,
 	}
 
-	impl ProvideRuntimeApi for TestApi {
+	impl ProvideRuntimeApi<Block> for TestApi {
 		type Api = RuntimeApi;
 
 		fn runtime_api<'a>(&'a self) -> ApiRef<'a, Self::Api> {
@@ -558,9 +560,11 @@ mod tests {
 		}
 	}
 
-	impl ApiExt<Block> for RuntimeApi {
+	impl ApiErrorExt for RuntimeApi {
 		type Error = client_api::error::Error;
+	}
 
+	impl ApiExt<Block> for RuntimeApi {
 		fn map_api_result<F: FnOnce(&Self) -> std::result::Result<R, E>, R, E>(
 			&self,
 			_: F,

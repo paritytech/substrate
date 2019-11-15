@@ -47,9 +47,8 @@ use client::{
 use block_builder_api::BlockBuilder as BlockBuilderApi;
 
 use sr_primitives::{generic::{BlockId, OpaqueDigestItemId}, Justification};
-use sr_primitives::traits::{
-	Block as BlockT, Header, DigestItemFor, ProvideRuntimeApi, Zero, Member, HasherFor,
-};
+use sr_primitives::traits::{Block as BlockT, Header, DigestItemFor, Zero, Member, HasherFor};
+use sr_api::ProvideRuntimeApi;
 
 use primitives::crypto::Pair;
 use inherents::{InherentDataProviders, InherentData};
@@ -90,7 +89,7 @@ impl SlotDuration {
 	where
 		A: Codec,
 		B: BlockT,
-		C: AuxStore + ProvideRuntimeApi,
+		C: AuxStore + ProvideRuntimeApi<B>,
 		C::Api: AuraApi<B, A, Error = client::error::Error>,
 	{
 		slots::SlotDuration::get_or_compute(client, |a, b| a.slot_duration(b)).map(Self)
@@ -148,7 +147,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, H>(
 	keystore: KeyStorePtr,
 ) -> Result<impl futures01::Future<Item = (), Error = ()>, consensus_common::Error> where
 	B: BlockT<Header=H>,
-	C: ProvideRuntimeApi + BlockOf + ProvideCache<B> + AuxStore + Send + Sync,
+	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + AuxStore + Send + Sync,
 	C::Api: AuraApi<B, AuthorityId<P>>,
 	SC: SelectChain<B>,
 	E: Environment<B, Error = Error> + Send + Sync + 'static,
@@ -198,7 +197,7 @@ struct AuraWorker<C, E, I, P, SO> {
 
 impl<H, B, C, E, I, P, Error, SO> slots::SimpleSlotWorker<B> for AuraWorker<C, E, I, P, SO> where
 	B: BlockT<Header=H>,
-	C: ProvideRuntimeApi + BlockOf + ProvideCache<B> + Sync,
+	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + Sync,
 	C::Api: AuraApi<B, AuthorityId<P>>,
 	E: Environment<B, Error = Error>,
 	E::Proposer: Proposer<B, Error = Error>,
@@ -305,7 +304,7 @@ impl<H, B, C, E, I, P, Error, SO> slots::SimpleSlotWorker<B> for AuraWorker<C, E
 
 impl<H, B: BlockT, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> where
 	B: BlockT<Header=H>,
-	C: ProvideRuntimeApi + BlockOf + ProvideCache<B> + Sync + Send,
+	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + Sync + Send,
 	C::Api: AuraApi<B, AuthorityId<P>>,
 	E: Environment<B, Error=Error> + Send + Sync,
 	E::Proposer: Proposer<B, Error=Error>,
@@ -455,7 +454,7 @@ impl<C, P, T> AuraVerifier<C, P, T>
 		inherent_data: InherentData,
 		timestamp_now: u64,
 	) -> Result<(), Error<B>>
-		where C: ProvideRuntimeApi, C::Api: BlockBuilderApi<B, Error = client::error::Error>
+		where C: ProvideRuntimeApi<B>, C::Api: BlockBuilderApi<B, Error = client::error::Error>
 	{
 		const MAX_TIMESTAMP_DRIFT_SECS: u64 = 60;
 
@@ -501,7 +500,12 @@ impl<C, P, T> AuraVerifier<C, P, T>
 
 #[forbid(deprecated)]
 impl<B: BlockT, C, P, T> Verifier<B> for AuraVerifier<C, P, T> where
-	C: ProvideRuntimeApi + Send + Sync + client_api::backend::AuxStore + ProvideCache<B> + BlockOf,
+	C: ProvideRuntimeApi<B> +
+		Send +
+		Sync +
+		client_api::backend::AuxStore +
+		ProvideCache<B> +
+		BlockOf,
 	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>> + ApiExt<B, Error = client::error::Error>,
 	DigestItemFor<B>: CompatibleDigestItem<P>,
 	P: Pair + Send + Sync + 'static,
@@ -612,7 +616,7 @@ impl<B: BlockT, C, P, T> Verifier<B> for AuraVerifier<C, P, T> where
 fn initialize_authorities_cache<A, B, C>(client: &C) -> Result<(), ConsensusError> where
 	A: Codec,
 	B: BlockT,
-	C: ProvideRuntimeApi + BlockOf + ProvideCache<B>,
+	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B>,
 	C::Api: AuraApi<B, A>,
 {
 	// no cache => no initialization
@@ -646,7 +650,7 @@ fn initialize_authorities_cache<A, B, C>(client: &C) -> Result<(), ConsensusErro
 fn authorities<A, B, C>(client: &C, at: &BlockId<B>) -> Result<Vec<A>, ConsensusError> where
 	A: Codec,
 	B: BlockT,
-	C: ProvideRuntimeApi + BlockOf + ProvideCache<B>,
+	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B>,
 	C::Api: AuraApi<B, A>,
 {
 	client
@@ -688,7 +692,7 @@ pub fn import_queue<B, C, P, T>(
 	transaction_pool: Option<Arc<T>>,
 ) -> Result<AuraImportQueue<B>, consensus_common::Error> where
 	B: BlockT,
-	C: 'static + ProvideRuntimeApi + BlockOf + ProvideCache<B> + Send + Sync + AuxStore,
+	C: 'static + ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + Send + Sync + AuxStore,
 	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>> + ApiExt<B, Error = client::error::Error>,
 	DigestItemFor<B>: CompatibleDigestItem<P>,
 	P: Pair + Send + Sync + 'static,

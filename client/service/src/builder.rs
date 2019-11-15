@@ -42,9 +42,9 @@ use parking_lot::{Mutex, RwLock};
 use rpc;
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{
-	Block as BlockT, Extrinsic, ProvideRuntimeApi, NumberFor, One, Zero, Header,
-	SaturatedConversion, HasherFor,
+	Block as BlockT, Extrinsic, NumberFor, One, Zero, Header, SaturatedConversion, HasherFor,
 };
+use sr_api::ProvideRuntimeApi;
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
 use std::{
 	io::{Read, Write, Seek},
@@ -762,8 +762,8 @@ ServiceBuilder<
 	TRpc,
 	TBackend,
 > where
-	Client<TBackend, TExec, TBl, TRtApi>: ProvideRuntimeApi,
-	<Client<TBackend, TExec, TBl, TRtApi> as ProvideRuntimeApi>::Api:
+	Client<TBackend, TExec, TBl, TRtApi>: ProvideRuntimeApi<TBl>,
+	<Client<TBackend, TExec, TBl, TRtApi> as ProvideRuntimeApi<TBl>>::Api:
 		sr_api::Metadata<TBl> +
 		offchain::OffchainWorkerApi<TBl> +
 		tx_pool_api::TaggedTransactionQueue<TBl> +
@@ -1170,8 +1170,8 @@ pub(crate) fn maintain_transaction_pool<Api, Backend, Block, Executor, PoolApi>(
 ) -> error::Result<Box<dyn Future<Item = (), Error = ()> + Send>> where
 	Block: BlockT,
 	Backend: 'static + client_api::backend::Backend<Block>,
-	Client<Backend, Executor, Block, Api>: ProvideRuntimeApi,
-	<Client<Backend, Executor, Block, Api> as ProvideRuntimeApi>::Api:
+	Client<Backend, Executor, Block, Api>: ProvideRuntimeApi<Block>,
+	<Client<Backend, Executor, Block, Api> as ProvideRuntimeApi<Block>>::Api:
 		tx_pool_api::TaggedTransactionQueue<Block>,
 	Executor: 'static + client::CallExecutor<Block>,
 	PoolApi: 'static + txpool::ChainApi<Hash = Block::Hash, Block = Block>,

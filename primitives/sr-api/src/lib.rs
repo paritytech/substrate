@@ -48,7 +48,7 @@ pub use primitives::to_substrate_wasm_fn_return_value;
 pub use sr_primitives::{
 	traits::{
 		Block as BlockT, GetNodeBlockType, GetRuntimeBlockType, HasherFor, NumberFor,
-		Header as HeaderT, ApiRef, RuntimeApiInfo, Hash as HashT,
+		Header as HeaderT, Hash as HashT,
 	},
 	generic::BlockId, transaction_validity::TransactionValidity,
 };
@@ -78,18 +78,23 @@ pub type ProofRecorder<B> = state_machine::ProofRecorder<
 #[cfg(feature = "std")]
 pub trait ConstructRuntimeApi<Block: BlockT, C: CallRuntimeAt<Block>> {
 	/// The actual runtime api that will be constructed.
-	type RuntimeApi;
+	type RuntimeApi: ApiExt<Block>;
 
 	/// Construct an instance of the runtime api.
 	fn construct_runtime_api<'a>(call: &'a C) -> ApiRef<'a, Self::RuntimeApi>;
 }
 
-/// An extension for the `RuntimeApi`.
+/// Extends the runtime api traits with an associated error type. This trait is given as super
+/// trait to every runtime api trait.
 #[cfg(feature = "std")]
-pub trait ApiExt<Block: BlockT> {
-	/// Error type used by the interface.
+pub trait ApiErrorExt {
+	/// Error type used by the runtime apis.
 	type Error: std::fmt::Debug + From<String>;
+}
 
+/// Extends the runtime api implementation with some common functionality.
+#[cfg(feature = "std")]
+pub trait ApiExt<Block: BlockT>: ApiErrorExt {
 	/// The given closure will be called with api instance. Inside the closure any api call is
 	/// allowed. After doing the api call, the closure is allowed to map the `Result` to a
 	/// different `Result` type. This can be important, as the internal data structure that keeps
@@ -105,7 +110,7 @@ pub trait ApiExt<Block: BlockT> {
 		&self,
 		at: &BlockId<Block>,
 	) -> Result<bool, Self::Error> where Self: Sized {
-		self.runtime_version_at(at).map(|v| v.has_api::<A>())
+		self.runtime_version_at(at).map(|v| v.has_api_with(&A::ID, |v| v == A::VERSION))
 	}
 
 	/// Check if the given api is implemented and the version passes a predicate.
@@ -114,7 +119,7 @@ pub trait ApiExt<Block: BlockT> {
 		at: &BlockId<Block>,
 		pred: P,
 	) -> Result<bool, Self::Error> where Self: Sized {
-		self.runtime_version_at(at).map(|v| v.has_api_with::<A, _>(pred))
+		self.runtime_version_at(at).map(|v| v.has_api_with(&A::ID, pred))
 	}
 
 	/// Returns the runtime version at the given block id.
@@ -195,11 +200,72 @@ pub trait CallRuntimeAt<Block: BlockT> {
 	fn runtime_version_at(&self, at: &BlockId<Block>) -> Result<RuntimeVersion, Self::Error>;
 }
 
+/// Auxiliary wrapper that holds an api instance and binds it to the given lifetime.
+#[cfg(feature = "std")]
+pub struct ApiRef<'a, T>(T, rstd::marker::PhantomData<&'a ()>);
+
+#[cfg(feature = "std")]
+impl<'a, T> ApiRef<'a, T> {
+	/// Consume this type and call the given closure with the inner.
+	///
+	/// # Attention
+	///
+	/// The inner type should be consumed as well and not used outside of this ref. This is the
+	/// reason why this function is `unsafe`.
+	pub unsafe fn consume_inner<R>(self, consume: impl FnOnce(T) -> R) -> R {
+		consume(self.0)
+	}
+}
+
+#[cfg(feature = "std")]
+impl<'a, T> From<T> for ApiRef<'a, T> {
+	fn from(api: T) -> Self {
+		ApiRef(api, Default::default())
+	}
+}
+
+#[cfg(feature = "std")]
+impl<'a, T> rstd::ops::Deref for ApiRef<'a, T> {
+	type Target = T;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
+
+#[cfg(feature = "std")]
+impl<'a, T> rstd::ops::DerefMut for ApiRef<'a, T> {
+	fn deref_mut(&mut self) -> &mut T {
+		&mut self.0
+	}
+}
+
+/// Something that provides a runtime api.
+#[cfg(feature = "std")]
+pub trait ProvideRuntimeApi<Block: BlockT> {
+	/// The concrete type that provides the api.
+	type Api: ApiExt<Block>;
+
+	/// Returns the runtime api.
+	/// The returned instance will keep track of modifications to the storage. Any successful
+	/// call to an api function, will `commit` its changes to an internal buffer. Otherwise,
+	/// the modifications will be `discarded`. The modifications will not be applied to the
+	/// storage, even on a `commit`.
+	fn runtime_api<'a>(&'a self) -> ApiRef<'a, Self::Api>;
+}
+
+/// Something that provides information about a runtime api.
+#[cfg(feature = "std")]
+pub trait RuntimeApiInfo {
+	/// The identifier of the runtime api.
+	const ID: [u8; 8];
+	/// The version of the runtime api.
+	const VERSION: u32;
+}
+
 /// Extracts the `Api::Error` for a type that provides a runtime api.
 #[cfg(feature = "std")]
-pub type ApiErrorFor<T, Block> = <
-	<T as sr_primitives::traits::ProvideRuntimeApi>::Api as ApiExt<Block>
->::Error;
+pub type ApiErrorFor<T, Block> = <<T as ProvideRuntimeApi<Block>>::Api as ApiErrorExt>::Error;
 
 decl_runtime_apis! {
 	/// The `Core` runtime api that every Substrate runtime needs to implement.

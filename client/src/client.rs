@@ -35,8 +35,8 @@ use sr_primitives::{
 	Justification, BuildStorage,
 	generic::{BlockId, SignedBlock, DigestItem},
 	traits::{
-		Block as BlockT, Header as HeaderT, Zero, NumberFor, HasherFor,
-		ApiRef, ProvideRuntimeApi, SaturatedConversion, One, DigestFor,
+		Block as BlockT, Header as HeaderT, Zero, NumberFor, HasherFor, SaturatedConversion, One,
+		DigestFor,
 	},
 };
 use state_machine::{
@@ -55,6 +55,7 @@ use header_metadata::{HeaderMetadata, CachedHeaderMetadata};
 
 use sr_api::{
 	CallRuntimeAt, ConstructRuntimeApi, Core as CoreApi, ProofRecorder, InitializeBlock, ApiExt,
+	ApiRef, ProvideRuntimeApi,
 };
 use block_builder::BlockBuilderApi;
 
@@ -666,8 +667,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	) -> error::Result<block_builder::BlockBuilder<Block, Self>> where
 		E: Clone + Send + Sync,
 		RA: Send + Sync,
-		Self: ProvideRuntimeApi,
-		<Self as ProvideRuntimeApi>::Api: BlockBuilderApi<Block, Error = Error>
+		Self: ProvideRuntimeApi<Block>,
+		<Self as ProvideRuntimeApi<Block>>::Api: BlockBuilderApi<Block, Error = Error>
 	{
 		let info = self.info();
 		block_builder::BlockBuilder::new(
@@ -692,8 +693,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	) -> error::Result<block_builder::BlockBuilder<Block, Self>> where
 		E: Clone + Send + Sync,
 		RA: Send + Sync,
-		Self: ProvideRuntimeApi,
-		<Self as ProvideRuntimeApi>::Api: BlockBuilderApi<Block, Error = Error>
+		Self: ProvideRuntimeApi<Block>,
+		<Self as ProvideRuntimeApi<Block>>::Api: BlockBuilderApi<Block, Error = Error>
 	{
 		block_builder::BlockBuilder::new(
 			self,
@@ -746,8 +747,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> error::Result<ImportResult> where
 		E: CallExecutor<Block> + Send + Sync + Clone,
-		Self: ProvideRuntimeApi,
-		<Self as ProvideRuntimeApi>::Api: CoreApi<Block, Error = Error>,
+		Self: ProvideRuntimeApi<Block>,
+		<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error>,
 	{
 		let BlockImportParams {
 			origin,
@@ -833,8 +834,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		enact_state: bool,
 	) -> error::Result<ImportResult> where
 		E: CallExecutor<Block> + Send + Sync + Clone,
-		Self: ProvideRuntimeApi,
-		<Self as ProvideRuntimeApi>::Api: CoreApi<Block, Error = Error>,
+		Self: ProvideRuntimeApi<Block>,
+		<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error>,
 	{
 		let parent_hash = import_headers.post().parent_hash().clone();
 		match self.backend.blockchain().status(BlockId::Hash(hash))? {
@@ -961,8 +962,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		)>
 	)>
 		where
-			Self: ProvideRuntimeApi,
-			<Self as ProvideRuntimeApi>::Api: CoreApi<Block, Error = Error>,
+			Self: ProvideRuntimeApi<Block>,
+			<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error>,
 	{
 		match transaction.state()? {
 			Some(transaction_state) => {
@@ -1332,7 +1333,7 @@ impl<B, E, Block, RA> ProvideCache<Block> for Client<B, E, Block, RA> where
 	}
 }
 
-impl<B, E, Block, RA> ProvideRuntimeApi for Client<B, E, Block, RA> where
+impl<B, E, Block, RA> ProvideRuntimeApi<Block> for Client<B, E, Block, RA> where
 	B: backend::Backend<Block>,
 	E: CallExecutor<Block> + Clone + Send + Sync,
 	Block: BlockT,
@@ -1414,8 +1415,8 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for &Client<B, E, Block, RA>
 	B: backend::Backend<Block>,
 	E: CallExecutor<Block> + Clone + Send + Sync,
 	Block: BlockT,
-	Client<B, E, Block, RA>: ProvideRuntimeApi,
-	<Client<B, E, Block, RA> as ProvideRuntimeApi>::Api: CoreApi<Block, Error = Error>,
+	Client<B, E, Block, RA>: ProvideRuntimeApi<Block>,
+	<Client<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error>,
 {
 	type Error = ConsensusError;
 
@@ -1490,8 +1491,8 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 	B: backend::Backend<Block>,
 	E: CallExecutor<Block> + Clone + Send + Sync,
 	Block: BlockT,
-	Self: ProvideRuntimeApi,
-	<Self as ProvideRuntimeApi>::Api: CoreApi<Block, Error = Error>,
+	Self: ProvideRuntimeApi<Block>,
+	<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error>,
 {
 	type Error = ConsensusError;
 
@@ -1693,8 +1694,8 @@ impl<B, E, Block, RA> backend::AuxStore for Client<B, E, Block, RA>
 		B: backend::Backend<Block>,
 		E: CallExecutor<Block>,
 		Block: BlockT,
-		Self: ProvideRuntimeApi,
-		<Self as ProvideRuntimeApi>::Api: CoreApi<Block, Error = Error>,
+		Self: ProvideRuntimeApi<Block>,
+		<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error>,
 {
 	/// Insert auxiliary data into key-value store.
 	fn insert_aux<
@@ -1723,8 +1724,8 @@ impl<B, E, Block, RA> backend::AuxStore for &Client<B, E, Block, RA>
 		B: backend::Backend<Block>,
 		E: CallExecutor<Block>,
 		Block: BlockT,
-		Client<B, E, Block, RA>: ProvideRuntimeApi,
-		<Client<B, E, Block, RA> as ProvideRuntimeApi>::Api: CoreApi<Block, Error = Error>,
+		Client<B, E, Block, RA>: ProvideRuntimeApi<Block>,
+		<Client<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error>,
 {
 	fn insert_aux<
 		'a,
