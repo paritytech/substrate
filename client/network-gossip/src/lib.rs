@@ -18,5 +18,48 @@ pub use self::bridge::GossipEngine;
 // TODO: remove
 pub use self::state_machine::*;
 
+use network::{specialization::NetworkSpecialization, Event, ExHashT, NetworkService, PeerId};
+use network::message::generic::ConsensusMessage;
+use sr_primitives::{traits::Block as BlockT, ConsensusEngineId};
+use std::borrow::Cow;
+
 mod bridge;
 mod state_machine;
+
+/// Abstraction over a network.
+pub trait Network {
+	/// Returns a stream of events representing what happens on the network.
+	fn events_stream(&self) -> Box<dyn futures01::Stream<Item = Event, Error = ()> + Send>;
+
+	/// Adjust the reputation of a node.
+	fn report_peer(&self, peer_id: PeerId, reputation: i32);
+
+	/// Force-disconnect a peer.
+	fn disconnect_peer(&mut self, who: PeerId);
+
+	/// Send a notification to a peer.
+	fn write_notif(&self, who: PeerId, proto_name: Cow<'static, [u8]>, engine_id: ConsensusEngineId, message: Vec<u8>);
+}
+
+impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Network for NetworkService<B, S, H> {
+	fn events_stream(&self) -> Box<dyn futures01::Stream<Item = Event, Error = ()> + Send> {
+		Box::new(NetworkService::events_stream(self))
+	}
+
+	fn report_peer(&self, peer_id: PeerId, reputation: i32) {
+		NetworkService::report_peer(self, peer_id, reputation);
+	}
+
+	fn disconnect_peer(&mut self, who: PeerId) {
+		unimplemented!()		// TODO:
+	}
+
+	fn write_notif(&self, who: PeerId, proto_name: Cow<'static, [u8]>, engine_id: ConsensusEngineId, message: Vec<u8>) {
+		let message = ConsensusMessage {
+			engine_id,
+			data: message,
+		};
+
+		NetworkService::write_notif(self, who, proto_name, message)
+	}
+}

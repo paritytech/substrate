@@ -9,6 +9,7 @@ edition = "2018"
 [dependencies]
 async-std = "1.0"
 log = "0.4.8"
+futures01 = { package = "futures", version = "0.1.29" }
 futures-preview = { version = "0.3.0-alpha.19", features = ["compat"] }
 futures-timer = "0.4.0"
 lru-cache = "0.1.2"

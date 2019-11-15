@@ -14,18 +14,17 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+use crate::Network;
 use crate::state_machine::{ConsensusGossip, Validator, TopicNotification};
 
 use network::Context;
 use network::message::generic::ConsensusMessage;
-use network::specialization::NetworkSpecialization;
-use network::{NetworkService, ExHashT};
 use network::{Event, config::Roles};
 
 use futures::{prelude::*, channel::mpsc, compat::Compat01As03};
 use libp2p::PeerId;
 use parking_lot::Mutex;
-use sr_primitives::{traits::{Block as BlockT, Header as HeaderT}, ConsensusEngineId};
+use sr_primitives::{traits::Block as BlockT, ConsensusEngineId};
 use std::{borrow::Cow, sync::Arc, time::Duration};
 
 pub struct GossipEngine<B: BlockT> {
@@ -39,17 +38,17 @@ struct GossipEngineInner<B: BlockT> {
 
 impl<B: BlockT> GossipEngine<B> {
 	/// Create a new instance.
-	pub fn new<S: NetworkSpecialization<B>, H: ExHashT>(
-		network_service: NetworkService<B, S, H>,
+	pub fn new<N: Network + Send + Clone + 'static>(
+		network: N,
 		proto_name: impl Into<Cow<'static, [u8]>>,
 		engine_id: ConsensusEngineId,
 		validator: Arc<dyn Validator<B>>,
-	) -> Self where B: 'static, S: 'static, H: 'static {
+	) -> Self where B: 'static {
 		let proto_name = proto_name.into();
 
 		let mut state_machine = ConsensusGossip::new();
 		let mut context = Box::new(ContextOverService {
-			network_service: network_service.clone(),
+			network: network.clone(),
 			proto_name: proto_name.clone(),
 		});
 
@@ -81,7 +80,7 @@ impl<B: BlockT> GossipEngine<B> {
 		});
 
 		async_std::task::spawn(async move {
-			let mut stream = Compat01As03::new(network_service.events_stream());
+			let mut stream = Compat01As03::new(network.events_stream());
 			while let Some(Ok(event)) = stream.next().await {
 				match event {
 					Event::NotifOpened { remote, proto_name } => {
@@ -200,24 +199,24 @@ impl<B: BlockT> Clone for GossipEngine<B> {
 	}
 }
 
-struct ContextOverService<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
-	network_service: NetworkService<B, S, H>,
+struct ContextOverService<N> {
+	network: N,
 	proto_name: Cow<'static, [u8]>,
 }
 
-impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Context<B> for ContextOverService<B, S, H> {
+impl<B: BlockT, N: Network> Context<B> for ContextOverService<N> {
 	fn report_peer(&mut self, who: PeerId, reputation: i32) {
-		self.network_service.report_peer(who, reputation);
+		self.network.report_peer(who, reputation);
 	}
 
 	fn disconnect_peer(&mut self, who: PeerId) {
-		unimplemented!() // self.behaviour.disconnect_peer(&who)
+		self.network.disconnect_peer(who)
 	}
 
 	fn send_consensus(&mut self, who: PeerId, messages: Vec<ConsensusMessage>) {
 		// TODO: send batch
 		for message in messages {
-			self.network_service.write_notif(who.clone(), self.proto_name.clone(), message);
+			self.network.write_notif(who.clone(), self.proto_name.clone(), message.engine_id, message.data);
 		}
 	}
 
