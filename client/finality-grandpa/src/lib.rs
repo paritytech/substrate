@@ -92,7 +92,7 @@ mod observer;
 mod until_imported;
 mod voting_rule;
 
-pub use communication::Network;
+pub use network_gossip::{GossipEngine, Network as AbstractNetwork};
 pub use finality_proof::FinalityProofProvider;
 pub use justification::GrandpaJustification;
 pub use light_import::light_block_import;
@@ -449,11 +449,11 @@ where
 	))
 }
 
-fn global_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
+fn global_communication<Block: BlockT<Hash=H256>, B, E, RA>(
 	set_id: SetId,
 	voters: &Arc<VoterSet<AuthorityId>>,
 	client: &Arc<Client<B, E, Block, RA>>,
-	network: &NetworkBridge<Block, N>,
+	network: &NetworkBridge<Block, GossipEngine<Block>>,
 	keystore: &Option<KeyStorePtr>,
 ) -> (
 	impl Stream<
@@ -467,7 +467,6 @@ fn global_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 ) where
 	B: Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
-	N: Network<Block>,
 	RA: Send + Sync,
 	NumberFor<Block>: BlockNumberOps,
 {
@@ -550,8 +549,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X>(
 	Block::Hash: Ord,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
-	N: Network<Block> + Send + Sync + 'static,
-	N::In: Send + 'static,
+	N: AbstractNetwork + Send + Sync + 'static,
 	SC: SelectChain<Block> + 'static,
 	VR: VotingRule<Block, Client<B, E, Block, RA>> + Clone + 'static,
 	NumberFor<Block>: BlockNumberOps,
@@ -577,7 +575,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X>(
 	} = link;
 
 	let (network, network_startup) = NetworkBridge::new(
-		network,
+		GossipEngine::new(network),
 		config.clone(),
 		persistent_data.set_state.clone(),
 		on_exit.clone(),
@@ -641,17 +639,15 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X>(
 
 /// Future that powers the voter.
 #[must_use]
-struct VoterWork<B, E, Block: BlockT, N: Network<Block>, RA, SC, VR> {
+struct VoterWork<B, E, Block: BlockT, RA, SC, VR> {
 	voter: Box<dyn Future<Item = (), Error = CommandOrError<Block::Hash, NumberFor<Block>>> + Send>,
-	env: Arc<Environment<B, E, Block, N, RA, SC, VR>>,
+	env: Arc<Environment<B, E, Block, GossipEngine<Block>, RA, SC, VR>>,
 	voter_commands_rx: mpsc::UnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
 }
 
-impl<B, E, Block, N, RA, SC, VR> VoterWork<B, E, Block, N, RA, SC, VR>
+impl<B, E, Block, RA, SC, VR> VoterWork<B, E, Block, RA, SC, VR>
 where
 	Block: BlockT<Hash=H256>,
-	N: Network<Block> + Sync,
-	N::In: Send + 'static,
 	NumberFor<Block>: BlockNumberOps,
 	RA: 'static + Send + Sync,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
@@ -662,7 +658,7 @@ where
 	fn new(
 		client: Arc<Client<B, E, Block, RA>>,
 		config: Config,
-		network: NetworkBridge<Block, N>,
+		network: NetworkBridge<Block, GossipEngine<Block>>,
 		select_chain: SC,
 		voting_rule: VR,
 		persistent_data: PersistentData<Block>,
@@ -822,11 +818,9 @@ where
 	}
 }
 
-impl<B, E, Block, N, RA, SC, VR> Future for VoterWork<B, E, Block, N, RA, SC, VR>
+impl<B, E, Block, RA, SC, VR> Future for VoterWork<B, E, Block, RA, SC, VR>
 where
 	Block: BlockT<Hash=H256>,
-	N: Network<Block> + Sync,
-	N::In: Send + 'static,
 	NumberFor<Block>: BlockNumberOps,
 	RA: 'static + Send + Sync,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
@@ -883,8 +877,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X>(
 	Block::Hash: Ord,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
-	N: Network<Block> + Send + Sync + 'static,
-	N::In: Send + 'static,
+	N: AbstractNetwork + Send + Sync + 'static,
 	SC: SelectChain<Block> + 'static,
 	NumberFor<Block>: BlockNumberOps,
 	DigestFor<Block>: Encode,
@@ -909,15 +902,14 @@ pub fn setup_disabled_grandpa<B, E, Block: BlockT<Hash=H256>, RA, N>(
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
 	RA: Send + Sync + 'static,
-	N: Network<Block> + Send + Sync + 'static,
-	N::In: Send + 'static,
+	N: AbstractNetwork + Send + Sync + 'static,
 {
 	register_finality_tracker_inherent_data_provider(
 		client,
 		inherent_data_providers,
 	)?;
 
-	network.register_validator(Arc::new(network_gossip::DiscardAll));
+	//network.register_validator(Arc::new(network_gossip::DiscardAll));
 
 	Ok(())
 }

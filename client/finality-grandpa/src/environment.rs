@@ -48,8 +48,9 @@ use sr_primitives::traits::{
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 
 use crate::{
-	CommandOrError, Commit, Config, Error, Network, Precommit, Prevote,
-	PrimaryPropose, SignedMessage, NewAuthoritySet, VoterCommand,
+	communication::Network,
+	CommandOrError, Commit, Config, Error, Precommit, Prevote, PrimaryPropose,
+	SignedMessage, NewAuthoritySet, VoterCommand,
 };
 
 use consensus_common::SelectChain;
