@@ -16,7 +16,7 @@
 
 //! Storage migrations for srml-staking.
 
-#[cfg(feature = "migrate")]
+#[cfg(any(test, feature = "migrate"))]
 mod inner {
 	use crate::{Store, Module, Trait};
 	use support::StorageLinkedMap;
@@ -72,7 +72,7 @@ mod inner {
 	}
 }
 
-#[cfg(not(feature = "migrate"))]
+#[cfg(not(any(test, feature = "migrate")))]
 mod inner {
 	pub(super) fn perform_migrations<T>() { }
 }

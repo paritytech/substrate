@@ -1201,8 +1201,6 @@ impl<T: Trait> Module<T> {
 
 	/// Chill a stash account.
 	fn chill_stash(stash: &T::AccountId) {
-		Self::ensure_storage_upgraded();
-
 		<Validators<T>>::remove(stash);
 		<Nominators<T>>::remove(stash);
 	}
@@ -1520,12 +1518,12 @@ impl<T: Trait> Module<T> {
 
 	/// Remove all associated data of a stash account from the staking system.
 	///
+	/// Assumes storage is upgraded before calling.
+	///
 	/// This is called :
 	/// - Immediately when an account's balance falls below existential deposit.
 	/// - after a `withdraw_unbond()` call that frees all of a stash's bonded balance.
 	fn kill_stash(stash: &T::AccountId) {
-		Self::ensure_storage_upgraded();
-
 		if let Some(controller) = <Bonded<T>>::take(stash) {
 			<Ledger<T>>::remove(&controller);
 		}
@@ -1605,6 +1603,7 @@ impl<T: Trait> OnSessionEnding<T::AccountId, Exposure<T::AccountId, BalanceOf<T>
 
 impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(stash: &T::AccountId) {
+		Self::ensure_storage_upgraded();
 		Self::kill_stash(stash);
 	}
 }
@@ -1670,6 +1669,8 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, session::historical::Identificati
 		slash_fraction: &[Perbill],
 		slash_session: SessionIndex,
 	) {
+		<Module<T>>::ensure_storage_upgraded();
+
 		let reward_proportion = SlashRewardFraction::get();
 
 		let era_now = Self::current_era();
@@ -1745,6 +1746,8 @@ impl<T, Reporter, Offender, R, O> ReportOffence<Reporter, Offender, O>
 	O: Offence<Offender>,
 {
 	fn report_offence(reporters: Vec<Reporter>, offence: O) {
+		<Module<T>>::ensure_storage_upgraded();
+
 		// disallow any slashing from before the current bonding period.
 		let offence_session = offence.session_index();
 		let bonded_eras = BondedEras::get();
