@@ -1,9 +1,0 @@
-[package]
-name = "substrate-wasm-interface"
-version = "2.0.0"
-authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
-
-[dependencies]
-wasmi = "0.5.1"
-impl-trait-for-tuples = "0.1.2"
