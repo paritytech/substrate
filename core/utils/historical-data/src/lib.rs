@@ -14,9 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Data storage containing multiple state for a value.
-//! This is use to store historical information for an item,
-//! and does have to include any proof.
+//! Data storage containing multiple states for a value.
+//! This is used to store historical information for an item.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -47,7 +46,7 @@ impl<V, I: Clone> HistoricalValue<V, I> {
 #[derive(PartialEq)]
 #[cfg_attr(any(test, feature = "test"), derive(Debug))]
 /// Results from cleaning a data with history.
-/// It should be use to update from the calling context,
+/// It should be used to update from the calling context,
 /// for instance remove this data from a map if it was cleared.
 pub enum CleaningResult {
 	Unchanged,

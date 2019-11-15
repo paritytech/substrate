@@ -53,14 +53,10 @@ pub struct OverlayedValue {
 
 /// Overlayed change set, keep history of values.
 ///
-/// This does not work by stacking hashmaps per transaction,
-/// but by storing history of a value instead.
-/// Value validity is given by a global indexed state history.
-/// When dropping or committing a transaction layer,
-/// full history for each values is kept until
-/// next garbage collection.
-/// Note that on mutable access terminal values corresponding
-/// to a deleted layer are also dropped.
+/// It stores hashmap containing a linear history of value.
+/// Update on commit and discard operation (prospective or
+/// overlay), are done in a synchronous manner by updating
+/// all keys of the hashmap.
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(test, derive(PartialEq))]
 pub struct OverlayedChangeSet {
@@ -89,15 +85,15 @@ impl FromIterator<(Vec<u8>, OverlayedValue)> for OverlayedChangeSet {
 /// Variant of `set` value that update extrinsics.
 /// It does remove latest dropped values.
 fn set_with_extrinsic_overlayed_value(
-	h_value: &mut History<OverlayedValue>,
+	history: &mut History<OverlayedValue>,
 	states: &States,
 	value: Option<Vec<u8>>,
 	extrinsic_index: Option<u32>,
 ) {
 	if let Some(extrinsic) = extrinsic_index {
-		set_with_extrinsic_inner_overlayed_value(h_value, states, value, extrinsic)
+		set_with_extrinsic_inner_overlayed_value(history, states, value, extrinsic)
 	} else {
-		h_value.set(states, OverlayedValue {
+		history.set(states, OverlayedValue {
 			value,
 			extrinsics: None,
 		})
@@ -105,13 +101,13 @@ fn set_with_extrinsic_overlayed_value(
 }
 
 fn set_with_extrinsic_inner_overlayed_value(
-	h_value: &mut History<OverlayedValue>,
+	history: &mut History<OverlayedValue>,
 	states: &States,
 	value: Option<Vec<u8>>,
 	extrinsic_index: u32,
 ) {
 	let state = states.as_state();
-	if let Some(current) = h_value.get_mut() {
+	if let Some(current) = history.get_mut() {
 		if current.index == state {
 			current.value.value = value;
 			current.value.extrinsics.get_or_insert_with(Default::default)
@@ -120,7 +116,7 @@ fn set_with_extrinsic_inner_overlayed_value(
 			let mut extrinsics = current.value.extrinsics.clone();
 			extrinsics.get_or_insert_with(Default::default)
 				.insert(extrinsic_index);
-			h_value.push_unchecked(HistoricalValue {
+			history.push_unchecked(HistoricalValue {
 				index: state,
 				value: OverlayedValue {
 					value,
@@ -132,7 +128,7 @@ fn set_with_extrinsic_inner_overlayed_value(
 		let mut extrinsics: Option<BTreeSet<u32>> = None;
 		extrinsics.get_or_insert_with(Default::default)
 			.insert(extrinsic_index);
-		h_value.push_unchecked(HistoricalValue {
+		history.push_unchecked(HistoricalValue {
 			index: state,
 			value: OverlayedValue {
 				value,
@@ -151,10 +147,9 @@ impl OverlayedChangeSet {
 	/// Discard prospective changes to state.
 	pub fn discard_prospective(&mut self) {
 		self.states.discard_prospective();
-		let states = &self.states;
-		self.top.retain(|_, h_value| states.apply_discard_prospective(h_value) != CleaningResult::Cleared);
+		self.top.retain(|_, history| States::apply_discard_prospective(history) != CleaningResult::Cleared);
 		self.children.retain(|_, m| {
-			m.retain(|_, h_value| states.apply_discard_prospective(h_value) != CleaningResult::Cleared);
+			m.retain(|_, history| States::apply_discard_prospective(history) != CleaningResult::Cleared);
 			!m.is_empty()
 		});
 	}
@@ -162,10 +157,9 @@ impl OverlayedChangeSet {
 	/// Commit prospective changes to state.
 	pub fn commit_prospective(&mut self) {
 		self.states.commit_prospective();
-		let states = &self.states;
-		self.top.retain(|_, h_value| states.apply_commit_prospective(h_value) != CleaningResult::Cleared);
+		self.top.retain(|_, history| States::apply_commit_prospective(history) != CleaningResult::Cleared);
 		self.children.retain(|_, m| {
-			m.retain(|_, h_value| states.apply_commit_prospective(h_value) != CleaningResult::Cleared);
+			m.retain(|_, history| States::apply_commit_prospective(history) != CleaningResult::Cleared);
 			!m.is_empty()
 		});
 	}
@@ -180,9 +174,9 @@ impl OverlayedChangeSet {
 	pub fn discard_transaction(&mut self) {
 		self.states.discard_transaction();
 		let states = &self.states;
-		self.top.retain(|_, h_value| states.apply_discard_transaction(h_value) != CleaningResult::Cleared);
+		self.top.retain(|_, history| states.apply_discard_transaction(history) != CleaningResult::Cleared);
 		self.children.retain(|_, m| {
-			m.retain(|_, h_value| states.apply_discard_transaction(h_value) != CleaningResult::Cleared);
+			m.retain(|_, history| states.apply_discard_transaction(history) != CleaningResult::Cleared);
 			!m.is_empty()
 		});
 		self.states.finalize_discard();
@@ -192,9 +186,9 @@ impl OverlayedChangeSet {
 	pub fn commit_transaction(&mut self) {
 		self.states.commit_transaction();
 		let states = &self.states;
-		self.top.retain(|_, h_value| states.apply_commit_transaction(h_value) != CleaningResult::Cleared);
+		self.top.retain(|_, history| states.apply_commit_transaction(history) != CleaningResult::Cleared);
 		self.children.retain(|_, m| {
-			m.retain(|_, h_value| states.apply_commit_transaction(h_value) != CleaningResult::Cleared);
+			m.retain(|_, history| states.apply_commit_transaction(history) != CleaningResult::Cleared);
 			!m.is_empty()
 		});
 	}

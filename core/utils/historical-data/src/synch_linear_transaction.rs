@@ -27,7 +27,7 @@
 //!
 //! The only global state is a counter of overlayed transaction layer.
 //! Committing or discarding a layer must use this counter.
-//! 
+//!
 //! # Local state
 //!
 //! Local state is either a committed state (this is a single first independant level
@@ -37,12 +37,12 @@ use crate::CleaningResult;
 
 /// Global state is a simple counter to the current overlay layer index.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct States(usize);
-	
+pub struct States { current_layer: usize }
+
 impl Default for States {
 	fn default() -> Self {
 		// we default to 1 to be able to discard this transaction.
-		States(1)
+		States { current_layer: 1 }
 	}
 }
 
@@ -50,15 +50,15 @@ impl States {
 
 	/// Get corresponding current state.
 	pub fn as_state(&self) -> State {
-		State::Transaction(self.0)
+		State::Transaction(self.current_layer)
 	}
 
 	/// Build any state for testing only.
 	#[cfg(any(test, feature = "test-helpers"))]
 	pub fn test_state(
-		current_layer_number: usize,
+		current_layer: usize,
 	) -> Self {
-		States(current_layer_number)
+		States { current_layer }
 	}
 
 	/// By default the current transaction is at least 1.
@@ -66,20 +66,20 @@ impl States {
 	/// this case transaction need to be restored to a valid
 	/// state afterward.
 	pub fn finalize_discard(&mut self) {
-		if self.0 == 0 {
-			self.0 = 1;
+		if self.current_layer == 0 {
+			self.current_layer = 1;
 		}
 	}
 
 	/// Discard prospective changes to state.
-	/// It does not reverts actual values. 
-	/// A subsequent synchronisation of stored values is needed.
+	/// It does not revert actual values.
+	/// A subsequent update of all related stored history is needed.
 	pub fn discard_prospective(&mut self) {
-		self.0 = 1;
+		self.current_layer = 1;
 	}
 
-	/// Update a value to a new prospective.
-	pub fn apply_discard_prospective<V>(&self, value: &mut History<V>) -> CleaningResult {
+	/// After a prospective was discarded, clear prospective history. 
+	pub fn apply_discard_prospective<V>(value: &mut History<V>) -> CleaningResult {
 		if value.0.len() == 0 {
 			return CleaningResult::Cleared;
 		}
@@ -95,14 +95,13 @@ impl States {
 	}
 
 	/// Commit prospective changes to state.
-	/// A subsequent synchronisation of stored values is needed.
+	/// A subsequent update of all related stored history is needed.
 	pub fn commit_prospective(&mut self) {
-		self.0 = 1;
+		self.current_layer = 1;
 	}
 
-	/// Update a value to a new prospective.
-	/// Multiple commit can be applied at the same time.
-	pub fn apply_commit_prospective<V>(&self, value: &mut History<V>) -> CleaningResult {
+	/// After a prospective was committed, commit pending value and clear existing history.
+	pub fn apply_commit_prospective<V>(value: &mut History<V>) -> CleaningResult {
 		if value.0.len() == 0 {
 			return CleaningResult::Cleared;
 		}
@@ -122,21 +121,20 @@ impl States {
 
 	/// Create a new transactional layer.
 	pub fn start_transaction(&mut self) {
-		self.0 += 1;
+		self.current_layer += 1;
 	}
 
 	/// Discard a transactional layer.
-	/// It does not reverts actual values.
-	/// A subsequent synchronisation of stored values is needed.
+	/// It does not revert actual values.
+	/// A subsequent update of all related stored history is needed.
 	pub fn discard_transaction(&mut self) {
-		if self.0 > 0 {
-			self.0 -= 1;
+		if self.current_layer > 0 {
+			self.current_layer -= 1;
 		}
 	}
 
 	/// Update a value to previous transaction.
 	/// Multiple discard can be applied at the same time.
-	/// Returns true if value is still needed.
 	pub fn apply_discard_transaction<V>(&self, value: &mut History<V>) -> CleaningResult {
 		let init_len = value.0.len();
 		for i in (0 .. value.0.len()).rev() {
@@ -144,7 +142,7 @@ impl States {
 				value: _,
 				index: State::Transaction(ix),
 			} = value.0[i] {
-				if ix > self.0 {
+				if ix > self.current_layer {
 					let _ = value.0.pop();
 				} else { break }
 			} else { break }
@@ -159,18 +157,17 @@ impl States {
 	}
 
 	/// Discard a transactional layer.
-	/// It does not reverts actual values.
-	/// A subsequent synchronisation of stored values is needed.
+	/// It does not revert actual values.
+	/// A subsequent update of all related stored history is needed.
 	pub fn commit_transaction(&mut self) {
-		if self.0 > 1 {
-			self.0 -= 1;
+		if self.current_layer > 1 {
+			self.current_layer -= 1;
 		}
 	}
 
 	/// Update a value to be the best historical value
 	/// after one or more `commit_transaction` calls.
 	/// Multiple discard can be applied at the same time.
-	/// Returns true if value is still needed.
 	pub fn apply_commit_transaction<V>(&self, value: &mut History<V>) -> CleaningResult {
 		let mut new_value = None;
 		for i in (0 .. value.0.len()).rev() {
@@ -178,13 +175,13 @@ impl States {
 				value: _,
 				index: State::Transaction(ix),
 			} = value.0[i] {
-				if ix > self.0 {
+				if ix > self.current_layer {
 					if let Some(v) = value.0.pop() {
 						if new_value.is_none() {
 							new_value = Some(v.value);
 						}
 					}
-				} else if ix == self.0 && new_value.is_some() {
+				} else if ix == self.current_layer && new_value.is_some() {
 					let _ = value.0.pop();
 				} else { break }
 			} else { break }
@@ -192,7 +189,7 @@ impl States {
 		if let Some(new_value) = new_value {
 			value.0.push(HistoricalValue {
 				value: new_value,
-				index: State::Transaction(self.0),
+				index: State::Transaction(self.current_layer),
 			});
 			return CleaningResult::Changed;
 		}
@@ -200,12 +197,15 @@ impl States {
 	}
 }
 
-/// Possible state for a historical value, committed
-/// is not touched by transactional action, transaction
-/// stored the transaction index of insertion.
+/// State for a historical value in a transaction
+/// synchronously managed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum State {
+	/// Committed, transactional action do not
+	/// change this state.
 	Committed,
+	/// Value in a transaction, contains the current
+	/// number of transaction at creation.
 	Transaction(usize),
 }
 
@@ -229,18 +229,18 @@ impl<V> History<V> {
 	/// Set a value, it uses a global state as parameter.
 	pub fn set(&mut self, states: &States, value: V) {
 		if let Some(v) = self.0.last_mut() {
-			debug_assert!(v.index.transaction_index().unwrap_or(0) <= states.0,
+			debug_assert!(v.index.transaction_index().unwrap_or(0) <= states.current_layer,
 				"History expects \
 				only new values at the latest state, some state has not \
 				synchronized properly");
-			if v.index.transaction_index() == Some(states.0) {
+			if v.index.transaction_index() == Some(states.current_layer) {
 				v.value = value;
 				return;
 			}
 		}
 		self.0.push(HistoricalValue {
 			value,
-			index: State::Transaction(states.0),
+			index: State::Transaction(states.current_layer),
 		});
 	}
 
@@ -249,7 +249,7 @@ impl<V> History<V> {
 		self.0.last().map(|h| &h.value)
 	}
 
-	/// Get latest value, consuming the historical data.
+	/// Extracts the latest value if there is one.
 	pub fn into_pending(mut self) -> Option<V> {
 		if let Some(v) = self.0.pop() {
 			Some(v.value)
@@ -294,6 +294,7 @@ impl<V> History<V> {
 		}
 	}
 
+	/// Extracts the committed value if there is one.
 	pub fn into_committed(mut self) -> Option<V> {
 		self.0.truncate(1);
 		if let Some(HistoricalValue {
