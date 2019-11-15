@@ -8,15 +8,15 @@ Substrate is a next-generation framework for blockchain innovation.
 
 == Trying it out
 
-Simply go to https://substrate.dev[substrate.dev] and follow the instructions as listed.
+Simply go to link:https://substrate.dev[substrate.dev] and follow the instructions as listed.
 
 == Contributions & Code of Conduct
 
-Please follow the contributions guidelines as outlined in docs/CONTRIBUTING.adoc[`docs/CONTRIBUTING.adoc`]. In all communications and contributions, this project follows the docs/CODE_OF_CONDUCT.adoc[Contributor Covenant Code of Conduct].
+Please follow the contributions guidelines as outlined in link:docs/CONTRIBUTING.adoc[`docs/CONTRIBUTING.adoc`]. In all communications and contributions, this project follows the link:docs/CODE_OF_CONDUCT.adoc[Contributor Covenant Code of Conduct].
 
 == Security
 
-The security policy and procedures can be found in docs/SECURITY.md[`docs/SECURITY.md`].
+The security policy and procedures can be found in link:docs/SECURITY.md[`docs/SECURITY.md`].
 
 == License
 
