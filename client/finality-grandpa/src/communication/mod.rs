@@ -30,13 +30,12 @@
 use std::sync::Arc;
 
 use futures::prelude::*;
-use futures::sync::{oneshot, mpsc};
+use futures::sync::mpsc;
 use futures03::stream::{StreamExt, TryStreamExt};
 use grandpa::Message::{Prevote, Precommit, PrimaryPropose};
 use grandpa::{voter, voter_set::VoterSet};
 use log::{debug, trace};
-use network::NetworkService;
-use network_gossip::{ConsensusMessage, GossipEngine};
+use network_gossip::GossipEngine;
 use codec::{Encode, Decode};
 use primitives::Pair;
 use sr_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, NumberFor};
@@ -166,31 +165,16 @@ impl<B> Network<B> for GossipEngine<B> where
 	}
 
 	fn gossip_message(&self, topic: B::Hash, data: Vec<u8>, force: bool) {
-		let msg = ConsensusMessage {
-			engine_id: GRANDPA_ENGINE_ID,
-			data,
-		};
-
-		self.multicast(topic, msg, force)
+		self.multicast(topic, GRANDPA_ENGINE_ID, data, force)
 	}
 
 	fn register_gossip_message(&self, topic: B::Hash, data: Vec<u8>) {
-		let msg = ConsensusMessage {
-			engine_id: GRANDPA_ENGINE_ID,
-			data,
-		};
-
-		self.register_message(topic, msg)
+		self.register_message(topic, GRANDPA_ENGINE_ID, data)
 	}
 
 	fn send_message(&self, who: Vec<network::PeerId>, data: Vec<u8>) {
-		let msg = ConsensusMessage {
-			engine_id: GRANDPA_ENGINE_ID,
-			data,
-		};
-
 		for who in &who {
-			self.send_message(who, msg.clone())
+			self.send_message(who, GRANDPA_ENGINE_ID, data.clone())
 		}
 	}
 

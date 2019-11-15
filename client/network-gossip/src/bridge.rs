@@ -134,8 +134,14 @@ impl<B: BlockT> GossipEngine<B> {
 	pub fn register_message(
 		&self,
 		topic: B::Hash,
-		message: ConsensusMessage,
+		engine_id: ConsensusEngineId,
+		message: Vec<u8>,
 	) {
+		let message = ConsensusMessage {
+			engine_id,
+			data: message,
+		};
+
 		self.inner.lock().state_machine.register_message(topic, message);
 	}
 
@@ -170,9 +176,15 @@ impl<B: BlockT> GossipEngine<B> {
 	pub fn multicast(
 		&self,
 		topic: B::Hash,
-		message: ConsensusMessage,
+		engine_id: ConsensusEngineId,
+		message: Vec<u8>,
 		force: bool,
 	) {
+		let message = ConsensusMessage {
+			engine_id,
+			data: message,
+		};
+
 		let mut inner = self.inner.lock();
 		let inner = &mut *inner;
 		inner.state_machine.multicast(&mut *inner.context, topic, message, force)
@@ -183,11 +195,15 @@ impl<B: BlockT> GossipEngine<B> {
 	pub fn send_message(
 		&self,
 		who: &PeerId,
-		message: ConsensusMessage,
+		engine_id: ConsensusEngineId,
+		message: Vec<u8>,
 	) {
 		let mut inner = self.inner.lock();
 		let inner = &mut *inner;
-		inner.state_machine.send_message(&mut *inner.context, who, message);
+		inner.state_machine.send_message(&mut *inner.context, who, ConsensusMessage {
+			engine_id,
+			data: message,
+		});
 	}
 }
 
