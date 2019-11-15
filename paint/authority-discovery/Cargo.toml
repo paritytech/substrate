@@ -12,7 +12,7 @@ primitives = { package = "substrate-primitives",  path = "../../primitives/core"
 rstd = { package = "sr-std", path = "../../primitives/sr-std", default-features = false }
 serde = { version = "1.0.101", optional = true }
 runtime-io = { package = "sr-io", path = "../../primitives/sr-io", default-features = false }
-session = { package = "paint-session", path = "../session", default-features = false }
+session = { package = "paint-session", path = "../session", default-features = false, features = [ "historical" ] }
 sr-primitives = { path = "../../primitives/sr-primitives", default-features = false }
 support = { package = "paint-support", path = "../support", default-features = false }
 system = { package = "paint-system", path = "../system", default-features = false }
