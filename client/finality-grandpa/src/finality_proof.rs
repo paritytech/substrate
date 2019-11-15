@@ -212,7 +212,7 @@ struct FinalityProofFragment<Header: HeaderT> {
 	pub justification: Vec<u8>,
 	/// The set of headers in the range (U; F] that we believe are unknown to the caller. Ordered.
 	pub unknown_headers: Vec<Header>,
-	/// Optional proof of execution of GRANDPA::authorities().
+	/// Optional proof of execution of GRANDPA::authorities() at the `block`.
 	pub authorities_proof: Option<StorageProof>,
 }
 
@@ -314,11 +314,10 @@ pub(crate) fn prove_finality<Block: BlockT<Hash=H256>, B: BlockchainBackend<Bloc
 
 		if let Some(justification) = blockchain.justification(current_id)? {
 			// check if the current block enacts new GRANDPA authorities set
-			let parent_id = BlockId::Number(current_number - One::one());
-			let new_authorities = authorities_provider.authorities(&parent_id)?;
+			let new_authorities = authorities_provider.authorities(&current_id)?;
 			let new_authorities_proof = if current_authorities != new_authorities {
 				current_authorities = new_authorities;
-				Some(authorities_provider.prove_authorities(&parent_id)?)
+				Some(authorities_provider.prove_authorities(&current_id)?)
 			} else {
 				None
 			};
@@ -506,11 +505,9 @@ fn check_finality_proof_fragment<Block: BlockT<Hash=H256>, B, J>(
 	if let Some(new_authorities_proof) = proof_fragment.authorities_proof {
 		// it is safe to query header here, because its non-finality proves that it can't be pruned
 		let header = blockchain.expect_header(BlockId::Hash(proof_fragment.block))?;
-		let parent_hash = *header.parent_hash();
-		let parent_header = blockchain.expect_header(BlockId::Hash(parent_hash))?;
 		current_authorities = authorities_provider.check_authorities_proof(
-			parent_hash,
-			parent_header,
+			proof_fragment.block,
+			header,
 			new_authorities_proof,
 		)?;
 
@@ -815,7 +812,7 @@ pub(crate) mod tests {
 		blockchain.insert(header(6).hash(), header(6), None, None, NewBlockState::Final).unwrap();
 		blockchain.insert(header(7).hash(), header(7), Some(just7.clone()), None, NewBlockState::Final).unwrap();
 
-		// when querying for finality of 6, we assume that the #6 is the last block known to the requester
+		// when querying for finality of 6, we assume that the #3 is the last block known to the requester
 		// => since we only have justification for #7, we provide #7
 		let proof_of_6: FinalityProof = Decode::decode(&mut &prove_finality::<_, _, TestJustification>(
 			&blockchain,
@@ -824,14 +821,14 @@ pub(crate) mod tests {
 					BlockId::Hash(h) if h == header(3).hash() => Ok(
 						vec![(AuthorityId::from_slice(&[3u8; 32]), 1u64)]
 					),
-					BlockId::Number(3) => Ok(vec![(AuthorityId::from_slice(&[3u8; 32]), 1u64)]),
-					BlockId::Number(4) => Ok(vec![(AuthorityId::from_slice(&[4u8; 32]), 1u64)]),
-					BlockId::Number(6) => Ok(vec![(AuthorityId::from_slice(&[6u8; 32]), 1u64)]),
+					BlockId::Number(4) => Ok(vec![(AuthorityId::from_slice(&[3u8; 32]), 1u64)]),
+					BlockId::Number(5) => Ok(vec![(AuthorityId::from_slice(&[5u8; 32]), 1u64)]),
+					BlockId::Number(7) => Ok(vec![(AuthorityId::from_slice(&[7u8; 32]), 1u64)]),
 					_ => unreachable!("no other authorities should be fetched: {:?}", block_id),
 				},
 				|block_id| match block_id {
-					BlockId::Number(4) => Ok(StorageProof::new(vec![vec![40]])),
-					BlockId::Number(6) => Ok(StorageProof::new(vec![vec![60]])),
+					BlockId::Number(5) => Ok(StorageProof::new(vec![vec![50]])),
+					BlockId::Number(7) => Ok(StorageProof::new(vec![vec![70]])),
 					_ => unreachable!("no other authorities should be proved: {:?}", block_id),
 				},
 			),
@@ -847,14 +844,14 @@ pub(crate) mod tests {
 				block: header(5).hash(),
 				justification: just5,
 				unknown_headers: Vec::new(),
-				authorities_proof: Some(StorageProof::new(vec![vec![40]])),
+				authorities_proof: Some(StorageProof::new(vec![vec![50]])),
 			},
 			// last fragment provides justification for #7 && unknown#7
 			FinalityProofFragment {
 				block: header(7).hash(),
 				justification: just7,
 				unknown_headers: vec![header(7)],
-				authorities_proof: Some(StorageProof::new(vec![vec![60]])),
+				authorities_proof: Some(StorageProof::new(vec![vec![70]])),
 			},
 		]);
 	}
