@@ -14,14 +14,15 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::protocol::Context;
-use crate::protocol::message::generic::ConsensusMessage;
-use crate::protocol::specialization::NetworkSpecialization;
-use crate::consensus_gossip::state_machine::{ConsensusGossip, Validator, TopicNotification};
-use crate::service::{NetworkService, ExHashT};
-use crate::{Event, config::Roles};
+use crate::state_machine::{ConsensusGossip, Validator, TopicNotification};
 
-use futures03::{prelude::*, channel::mpsc, compat::Compat01As03};
+use network::Context;
+use network::message::generic::ConsensusMessage;
+use network::specialization::NetworkSpecialization;
+use network::{NetworkService, ExHashT};
+use network::{Event, config::Roles};
+
+use futures::{prelude::*, channel::mpsc, compat::Compat01As03};
 use libp2p::PeerId;
 use parking_lot::Mutex;
 use sr_primitives::{traits::{Block as BlockT, Header as HeaderT}, ConsensusEngineId};
@@ -70,7 +71,7 @@ impl<B: BlockT> GossipEngine<B> {
 					async_std::task::sleep(Duration::from_millis(1100)).await;
 					if let Some(inner) = inner.upgrade() {
 						let mut inner = inner.lock();
-						let mut inner = &mut *inner;
+						let inner = &mut *inner;
 						inner.state_machine.tick(&mut *inner.context);
 					} else {
 						break;
@@ -88,7 +89,7 @@ impl<B: BlockT> GossipEngine<B> {
 							continue;
 						}
 						let mut inner = inner.lock();
-						let mut inner = &mut *inner;
+						let inner = &mut *inner;
 						// TODO: for now we hard-code the roles to FULL; fix that
 						inner.state_machine.new_peer(&mut *inner.context, remote, Roles::FULL);
 					}
@@ -97,12 +98,12 @@ impl<B: BlockT> GossipEngine<B> {
 							continue;
 						}
 						let mut inner = inner.lock();
-						let mut inner = &mut *inner;
+						let inner = &mut *inner;
 						inner.state_machine.peer_disconnected(&mut *inner.context, remote);
 					},
 					Event::NotifMessages { remote, messages } => {
 						let mut inner = inner.lock();
-						let mut inner = &mut *inner;
+						let inner = &mut *inner;
 						inner.state_machine.on_incoming(
 							&mut *inner.context,
 							remote,
@@ -142,7 +143,7 @@ impl<B: BlockT> GossipEngine<B> {
 	/// Broadcast all messages with given topic.
 	pub fn broadcast_topic(&self, topic: B::Hash, force: bool) {
 		let mut inner = self.inner.lock();
-		let mut inner = &mut *inner;
+		let inner = &mut *inner;
 		inner.state_machine.broadcast_topic(&mut *inner.context, topic, force);
 	}
 
@@ -162,7 +163,7 @@ impl<B: BlockT> GossipEngine<B> {
 		force: bool
 	) {
 		let mut inner = self.inner.lock();
-		let mut inner = &mut *inner;
+		let inner = &mut *inner;
 		inner.state_machine.send_topic(&mut *inner.context, who, topic, engine_id, force)
 	}
 
@@ -174,7 +175,7 @@ impl<B: BlockT> GossipEngine<B> {
 		force: bool,
 	) {
 		let mut inner = self.inner.lock();
-		let mut inner = &mut *inner;
+		let inner = &mut *inner;
 		inner.state_machine.multicast(&mut *inner.context, topic, message, force)
 	}
 
@@ -186,7 +187,7 @@ impl<B: BlockT> GossipEngine<B> {
 		message: ConsensusMessage,
 	) {
 		let mut inner = self.inner.lock();
-		let mut inner = &mut *inner;
+		let inner = &mut *inner;
 		inner.state_machine.send_message(&mut *inner.context, who, message);
 	}
 }

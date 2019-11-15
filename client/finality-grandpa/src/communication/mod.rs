@@ -35,7 +35,7 @@ use futures03::stream::{StreamExt, TryStreamExt};
 use grandpa::Message::{Prevote, Precommit, PrimaryPropose};
 use grandpa::{voter, voter_set::VoterSet};
 use log::{debug, trace};
-use network::{consensus_gossip as network_gossip, NetworkService};
+use network::NetworkService;
 use network_gossip::{ConsensusMessage, GossipEngine};
 use codec::{Encode, Decode};
 use primitives::Pair;

@@ -179,7 +179,6 @@ mod service;
 mod transport;
 
 pub mod config;
-pub mod consensus_gossip;
 pub mod error;
 
 #[cfg(any(test, feature = "test-helpers"))]

@@ -48,14 +48,14 @@ use std::sync::Arc;
 use std::iter;
 use std::time;
 use log::{trace, debug};
-use futures03::channel::mpsc;
+use futures::channel::mpsc;
 use lru_cache::LruCache;
 use libp2p::PeerId;
 use sr_primitives::traits::{Block as BlockT, Hash, HashFor};
 use sr_primitives::ConsensusEngineId;
-pub use crate::message::generic::{Message, ConsensusMessage};
-use crate::protocol::Context;
-use crate::config::Roles;
+pub use network::message::generic::{Message, ConsensusMessage};
+use network::Context;
+use network::config::Roles;
 
 // FIXME: Add additional spam/DoS attack protection: https://github.com/paritytech/substrate/issues/1115
 const KNOWN_MESSAGES_CACHE_SIZE: usize = 4096;
@@ -665,7 +665,7 @@ mod tests {
 	use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
 	use parking_lot::Mutex;
 	use sr_primitives::testing::{H256, Block as RawBlock, ExtrinsicWrapper};
-	use futures03::executor::block_on_stream;
+	use futures::executor::block_on_stream;
 
 	use super::*;
 

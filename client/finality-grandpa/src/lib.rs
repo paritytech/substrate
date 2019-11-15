@@ -917,7 +917,7 @@ pub fn setup_disabled_grandpa<B, E, Block: BlockT<Hash=H256>, RA, N>(
 		inherent_data_providers,
 	)?;
 
-	network.register_validator(Arc::new(network::consensus_gossip::DiscardAll));
+	network.register_validator(Arc::new(network_gossip::DiscardAll));
 
 	Ok(())
 }
