@@ -9,9 +9,9 @@ wasm-interface = { package = "substrate-wasm-interface", path = "../wasm-interfa
 rstd = { package = "sr-std", path = "../sr-std", default-features = false }
 substrate-runtime-interface-proc-macro = { path = "proc-macro" }
 externalities = { package = "substrate-externalities", path = "../externalities", optional = true }
-codec = { package = "parity-scale-codec", version = "1.0.6", default-features = false }
+codec = { package = "parity-scale-codec", version = "1.1.0", default-features = false }
 environmental = { version = "1.0.2", optional = true }
-static_assertions = "1.0.0"
+static_assertions = "1.1.0"
 primitive-types = { version = "0.6.1", default-features = false }
 
 [dev-dependencies]

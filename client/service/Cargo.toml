@@ -24,9 +24,9 @@ slog = { version = "2.5.2", features = ["nested-values"] }
 tokio-executor = "0.1.8"
 tokio-timer = "0.2.11"
 exit-future = "0.1.4"
-serde = "1.0.101"
+serde = "1.0.102"
 serde_json = "1.0.41"
-sysinfo = "0.9.5"
+sysinfo = "0.9.6"
 target_info = "0.1.0"
 keystore = { package = "substrate-keystore", path = "../keystore" }
 sr-io = { path = "../../primitives/sr-io" }
@@ -42,7 +42,7 @@ client = { package = "substrate-client", path = "../" }
 sr-api = { path = "../../primitives/sr-api" }
 tx-pool-api = { package = "substrate-transaction-pool-runtime-api", path = "../../primitives/transaction-pool/runtime-api" }
 client_db = { package = "substrate-client-db", path = "../db" }
-codec = { package = "parity-scale-codec", version = "1.0.0" }
+codec = { package = "parity-scale-codec", version = "1.1.0" }
 substrate-executor = { path = "../executor" }
 transaction_pool = { package = "substrate-transaction-pool", path = "../transaction-pool" }
 rpc-servers = { package = "substrate-rpc-servers", path = "../rpc-servers" }
@@ -59,4 +59,4 @@ node-runtime = { path = "../../bin/node/runtime" }
 babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../../primitives/consensus/babe" }
 grandpa = { package = "substrate-finality-grandpa", path = "../finality-grandpa" }
 grandpa-primitives = { package = "substrate-finality-grandpa-primitives", path = "../../primitives/finality-grandpa" }
-tokio = "0.1"
+tokio = "0.1.22"

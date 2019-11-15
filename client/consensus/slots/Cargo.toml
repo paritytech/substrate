@@ -7,7 +7,7 @@ edition = "2018"
 build = "build.rs"
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "1.0.0" }
+codec = { package = "parity-scale-codec", version = "1.1.0" }
 client-api = { package = "substrate-client-api", path = "../../api" }
 primitives = { package = "substrate-primitives", path = "../../../primitives/core" }
 sr-primitives = {  path = "../../../primitives/sr-primitives" }

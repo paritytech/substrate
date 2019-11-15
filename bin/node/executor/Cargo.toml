@@ -7,7 +7,7 @@ edition = "2018"
 
 [dependencies]
 trie-root = "0.15.2"
-codec = { package = "parity-scale-codec", version = "1.0.0" }
+codec = { package = "parity-scale-codec", version = "1.1.0" }
 runtime_io = { package = "sr-io", path = "../../../primitives/sr-io" }
 state_machine = { package = "substrate-state-machine", path = "../../../primitives/state-machine" }
 substrate-executor = { path = "../../../client/executor" }

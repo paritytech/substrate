@@ -10,7 +10,7 @@ test-client = { package = "substrate-test-runtime-client", path = "../../../test
 sr-version = { path = "../../sr-version" }
 sr-primitives = { path = "../../sr-primitives" }
 consensus_common = { package = "substrate-consensus-common", path = "../../../primitives/consensus/common" }
-codec = { package = "parity-scale-codec", version = "1.0.0" }
+codec = { package = "parity-scale-codec", version = "1.1.0" }
 state-machine = { package = "substrate-state-machine", path = "../../../primitives/state-machine" }
 trybuild = "1.0.17"
 rustversion = "1.0.0"

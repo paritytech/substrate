@@ -6,13 +6,13 @@ description = "BABE consensus algorithm for substrate"
 edition = "2018"
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.1.0", features = ["derive"] }
 babe_primitives = { package = "substrate-consensus-babe-primitives", path = "../../../primitives/consensus/babe" }
 primitives = { package = "substrate-primitives", path = "../../../primitives/core" }
 app-crypto = { package = "substrate-application-crypto", path = "../../../primitives/application-crypto" }
 num-bigint = "0.2.3"
 num-rational = "0.2.2"
-num-traits = "0.2.8"
+num-traits = "0.2.9"
 runtime-version = { package = "sr-version", path = "../../../primitives/sr-version" }
 runtime-io = { package = "sr-io", path = "../../../primitives/sr-io" }
 inherents = { package = "substrate-inherents", path = "../../../primitives/inherents" }
@@ -30,7 +30,7 @@ slots = { package = "substrate-consensus-slots", path = "../slots"  }
 sr-primitives = {  path = "../../../primitives/sr-primitives" }
 fork-tree = { path = "../../../utils/fork-tree" }
 futures-preview = { version = "0.3.0-alpha.19", features = ["compat"] }
-futures01 = { package = "futures", version = "0.1" }
+futures01 = { package = "futures", version = "0.1.29" }
 futures-timer = "0.4.0"
 parking_lot = "0.9.0"
 log = "0.4.8"
@@ -48,7 +48,7 @@ service = { package = "substrate-service", path = "../../service" }
 test-client = { package = "substrate-test-runtime-client", path = "../../../test/utils/runtime/client" }
 block-builder = { package = "substrate-block-builder", path = "../../block-builder" }
 tokio = "0.1.22"
-env_logger = "0.7.0"
+env_logger = "0.7.1"
 tempfile = "3.1.0"
 
 [features]

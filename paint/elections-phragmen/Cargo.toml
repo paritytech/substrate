@@ -5,7 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.1.0", default-features = false, features = ["derive"] }
 sr-primitives = { path = "../../primitives/sr-primitives", default-features = false }
 phragmen = { package = "substrate-phragmen", path = "../../primitives/phragmen", default-features = false }
 paint-support = { path = "../support", default-features = false }
@@ -17,7 +17,7 @@ runtime_io = { package = "sr-io", path = "../../primitives/sr-io" }
 hex-literal = "0.2.1"
 balances = { package = "paint-balances", path = "../balances" }
 primitives = { package = "substrate-primitives",  path = "../../primitives/core" }
-serde = { version = "1.0.101" }
+serde = "1.0.102"
 
 [features]
 default = ["std"]

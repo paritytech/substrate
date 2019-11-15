@@ -6,5 +6,5 @@ description = "Substrate panic handler."
 edition = "2018"
 
 [dependencies]
-backtrace = "0.3.38"
+backtrace = "0.3.40"
 log = "0.4.8"

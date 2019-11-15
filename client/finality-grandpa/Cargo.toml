@@ -13,7 +13,7 @@ parking_lot = "0.9.0"
 tokio-executor = "0.1.8"
 tokio-timer = "0.2.11"
 rand = "0.7.2"
-codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.1.0", features = ["derive"] }
 sr-primitives = {  path = "../../primitives/sr-primitives" }
 consensus_common = { package = "substrate-consensus-common", path = "../../primitives/consensus/common" }
 primitives = { package = "substrate-primitives",  path = "../../primitives/core" }
@@ -27,16 +27,16 @@ inherents = { package = "substrate-inherents", path = "../../primitives/inherent
 network = { package = "substrate-network", path = "../network" }
 paint-finality-tracker = { path = "../../paint/finality-tracker" }
 fg_primitives = { package = "substrate-finality-grandpa-primitives", path = "../../primitives/finality-grandpa" }
-grandpa = { package = "finality-grandpa", version = "0.9.0", features = ["derive-codec"] }
+grandpa = { package = "finality-grandpa", version = "0.9.1", features = ["derive-codec"] }
 
 [dev-dependencies]
-grandpa = { package = "finality-grandpa", version = "0.9.0", features = ["derive-codec", "test-helpers"] }
+grandpa = { package = "finality-grandpa", version = "0.9.1", features = ["derive-codec", "test-helpers"] }
 network = { package = "substrate-network", path = "../network", features = ["test-helpers"] }
 keyring = { package = "substrate-keyring", path = "../../primitives/keyring" }
 test-client = { package = "substrate-test-runtime-client", path = "../../test/utils/runtime/client"}
 babe_primitives = { package = "substrate-consensus-babe-primitives", path = "../../primitives/consensus/babe" }
 state_machine = { package = "substrate-state-machine", path = "../../primitives/state-machine" }
-env_logger = "0.7.0"
+env_logger = "0.7.1"
 tokio = "0.1.22"
 tempfile = "3.1.0"
 sr-api = { path = "../../primitives/sr-api" }

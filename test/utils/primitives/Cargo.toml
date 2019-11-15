@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 app-crypto = { package = "substrate-application-crypto", path = "../../../primitives/application-crypto", default-features = false }
-codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.1.0", default-features = false, features = ["derive"] }
 # aura-primitives = { package = "substrate-consensus-aura-primitives", path = "../../../primitives/consensus/aura", default-features = false }
 # babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../../../primitives/consensus/babe", default-features = false }
 # block-builder-api = { package = "substrate-block-builder-runtime-api", path = "../../../primitives/block-builder/runtime-api", default-features = false }
@@ -20,7 +20,7 @@ primitives = { package = "substrate-primitives", path = "../../../primitives/cor
 # runtime_io = { package = "sr-io", path = "../../../primitives/sr-io", default-features = false }
 # runtime_support = { package = "paint-support", path = "../../../paint/support", default-features = false }
 # runtime_version = { package = "sr-version", path = "../../../primitives/sr-version", default-features = false }
-serde = { version = "1.0.101", optional = true, features = ["derive"] }
+serde = { version = "1.0.102", optional = true, features = ["derive"] }
 # session = { package = "substrate-session", path = "../../../primitives/session", default-features = false }
 # sr-api = { path = "../../../primitives/sr-api", default-features = false }
 sr-primitives = {  path = "../../../primitives/sr-primitives", default-features = false }

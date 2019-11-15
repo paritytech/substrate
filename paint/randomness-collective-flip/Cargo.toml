@@ -5,8 +5,8 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-safe-mix = { version = "1.0", default-features = false }
-codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
+safe-mix = { version = "1.0.0", default-features = false }
+codec = { package = "parity-scale-codec", version = "1.1.0", default-features = false, features = ["derive"] }
 sr-primitives = { path = "../../primitives/sr-primitives", default-features = false }
 support = { package = "paint-support", path = "../support", default-features = false }
 system = { package = "paint-system", path = "../system", default-features = false }

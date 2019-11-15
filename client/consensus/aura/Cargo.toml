@@ -11,12 +11,12 @@ aura_primitives = { package = "substrate-consensus-aura-primitives", path = "../
 block-builder-api = { package = "substrate-block-builder-runtime-api", path = "../../../primitives/block-builder/runtime-api" }
 client = { package = "substrate-client", path = "../../" }
 client-api = { package = "substrate-client-api", path = "../../api" }
-codec = { package = "parity-scale-codec", version = "1.0.0" }
+codec = { package = "parity-scale-codec", version = "1.1.0" }
 consensus_common = { package = "substrate-consensus-common", path = "../../../primitives/consensus/common" }
 derive_more = "0.15.0"
 futures-preview = { version = "0.3.0-alpha.19", features = ["compat"] }
 futures-timer = "0.4.0"
-futures01 = { package = "futures", version = "0.1" }
+futures01 = { package = "futures", version = "0.1.29" }
 inherents = { package = "substrate-inherents", path = "../../../primitives/inherents" }
 keystore = { package = "substrate-keystore", path = "../../keystore" }
 log = "0.4.8"
@@ -37,5 +37,5 @@ network = { package = "substrate-network", path = "../../network", features = ["
 service = { package = "substrate-service", path = "../../service" }
 test-client = { package = "substrate-test-runtime-client", path = "../../../test/utils/runtime/client" }
 tokio = "0.1.22"
-env_logger = "0.7.0"
+env_logger = "0.7.1"
 tempfile = "3.1.0"

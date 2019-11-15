@@ -5,8 +5,8 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-serde = { version = "1.0.101", optional = true, features = ["derive"] }
-codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false }
+serde = { version = "1.0.102", optional = true, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.1.0", default-features = false }
 support = { package = "paint-support", path = "../support", default-features = false }
 system = { package = "paint-system", path = "../system", default-features = false }
 timestamp = { package = "paint-timestamp", path = "../timestamp", default-features = false }
@@ -15,10 +15,10 @@ primitives = { package = "substrate-primitives", path = "../../primitives/core",
 sr-primitives = { path = "../../primitives/sr-primitives", default-features = false }
 rstd = { package = "sr-std", path = "../../primitives/sr-std", default-features = false }
 runtime-io = { package = "sr-io", path = "../../primitives/sr-io", default-features = false }
-primitive-types = { version = "0.6", default-features = false, features = ["rlp"] }
-rlp = { version = "0.4", default-features = false }
-evm = { version = "0.14", default-features = false }
-sha3 = { version = "0.8", default-features = false }
+primitive-types = { version = "0.6.1", default-features = false, features = ["rlp"] }
+rlp = { version = "0.4.3", default-features = false }
+evm = { version = "0.14.0", default-features = false }
+sha3 = { version = "0.8.2", default-features = false }
 
 [features]
 default = ["std"]
