@@ -537,18 +537,10 @@ mod tests {
 	use crate::ext::Ext;
 	use super::*;
 
-<<<<<<< HEAD:core/state-machine/src/overlayed_changes.rs
-	fn strip_extrinsic_index(mut map: HashMap<Vec<u8>, OverlayedValue>) -> HashMap<Vec<u8>, OverlayedValue> {
+	fn strip_extrinsic_index(mut map: HashMap<Vec<u8>, OverlayedValue>)
+		-> HashMap<Vec<u8>, OverlayedValue> {
 		map.remove(&EXTRINSIC_INDEX.to_vec());
 		map
-=======
-	fn strip_extrinsic_index(map: &HashMap<Vec<u8>, OverlayedValue>)
-		-> HashMap<Vec<u8>, OverlayedValue>
-	{
-		let mut clone = map.clone();
-		clone.remove(&EXTRINSIC_INDEX.to_vec());
-		clone
->>>>>>> master:primitives/state-machine/src/overlayed_changes.rs
 	}
 
 	#[test]
@@ -704,15 +696,10 @@ mod tests {
 
 		assert_eq!(strip_extrinsic_index(overlay.changes.top_prospective()),
 			vec![
-<<<<<<< HEAD:core/state-machine/src/overlayed_changes.rs
-				(vec![1], OverlayedValue { value: Some(vec![8]), extrinsics: Some(vec![0, 2, 4].into_iter().collect()) }),
-				(vec![3], OverlayedValue { value: Some(vec![7]), extrinsics: Some(vec![1, 3].into_iter().collect()) }),
-=======
 				(vec![1], OverlayedValue { value: Some(vec![8]),
-				 extrinsics: Some(vec![4].into_iter().collect()) }),
+					extrinsics: Some(vec![0, 2, 4].into_iter().collect()) }),
 				(vec![3], OverlayedValue { value: Some(vec![7]),
-				 extrinsics: Some(vec![3].into_iter().collect()) }),
->>>>>>> master:primitives/state-machine/src/overlayed_changes.rs
+					extrinsics: Some(vec![1, 3].into_iter().collect()) }),
 			].into_iter().collect());
 
 		overlay.commit_prospective();

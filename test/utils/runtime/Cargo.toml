@@ -36,6 +36,7 @@ substrate-client = { path = "../../../client", optional = true }
 substrate-trie = { path = "../../../primitives/trie", default-features = false }
 transaction-pool-api = { package = "substrate-transaction-pool-runtime-api", path = "../../../primitives/transaction-pool/runtime-api", default-features = false }
 trie-db = { version = "0.15.2", default-features = false }
+historical-data = { path = "../../../utils/historical-data", default-features = false }
 
 [dev-dependencies]
 substrate-executor = { path = "../../../client/executor" }
@@ -80,4 +81,5 @@ std = [
 	"substrate-trie/std",
 	"transaction-pool-api/std",
 	"trie-db/std",
+	"historical-data/std",
 ]
