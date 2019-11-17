@@ -19,7 +19,7 @@
 #[cfg(any(test, feature = "migrate"))]
 mod inner {
 	use crate::{Store, Module, Trait};
-	use support::StorageLinkedMap;
+	use support::{StorageLinkedMap, StorageValue};
 
 	/// Indicator of a version of a storage layout.
 	pub type VersionNumber = u32;
@@ -41,7 +41,7 @@ mod inner {
 		let now = <Module<T>>::current_era();
 		let res = <Module<T> as Store>::Nominators::translate::<T::AccountId, Vec<T::AccountId>, _, _>(
 			|key| key,
-			|targets| super::Nominations {
+			|targets| crate::Nominations {
 				targets,
 				submitted_in: now,
 				suppressed: false,
@@ -57,7 +57,7 @@ mod inner {
 	}
 
 	pub(super) fn perform_migrations<T: Trait>() {
-		<Module<T> as MainStore>::StorageVersion::mutate(|version| {
+		<Module<T> as Store>::StorageVersion::mutate(|version| {
 			if *version < MIN_SUPPORTED_VERSION {
 				support::print("Cannot migrate staking storage because version is less than\
 					minimum.");
@@ -67,7 +67,7 @@ mod inner {
 
 			if *version == CURRENT_VERSION { return }
 
-			to_v1::run(version);
+			to_v1::<T>(version);
 		});
 	}
 }
