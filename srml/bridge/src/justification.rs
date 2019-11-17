@@ -14,7 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::collections::{HashMap, HashSet};
+// TODO: Use BTreeMap
+// use std::collections::{HashMap, HashSet};
 
 use client::{CallExecutor, Client};
 use client::backend::Backend;
@@ -22,13 +23,27 @@ use client::error::Error as ClientError;
 use codec::{Encode, Decode};
 use grandpa::voter_set::VoterSet;
 use grandpa::{Error as GrandpaError};
+// Might be able to get this from primitives re-export
+use rstd::collections::{
+	btree_map::BTreeMap,
+	btree_set::BTreeSet,
+};
 use sr_primitives::generic::BlockId;
+// use sr_primitives::sr_std;
+
 use sr_primitives::traits::{NumberFor, Block as BlockT, Header as HeaderT};
 use primitives::{H256, Blake2Hasher};
-use fg_primitives::AuthorityId;
 
-use crate::{Commit, Error};
-use crate::communication;
+// Actually, I don't think I can use Authority pair
+// It's cfg(std) in grandpa-primitives
+use fg_primitives::{AuthorityId, AuthorityPair, RoundNumber, SetId as SetIdNumber, AuthoritySignature};
+
+// Should I make this a part of fg_primitives?
+use fg::{Commit, Error, Message};
+
+// NOTE: Can't use this stuff
+// use crate::{Commit, Error};
+// use crate::communication;
 
 /// A GRANDPA justification for block finality, it includes a commit message and
 /// an ancestry proof including all headers routing all precommit target blocks
@@ -57,7 +72,8 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 		E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
 		RA: Send + Sync,
 	{
-		let mut votes_ancestries_hashes = HashSet::new();
+		// Can't use this HashSet
+		let mut votes_ancestries_hashes = BTreeSet::new();
 		let mut votes_ancestries = Vec::new();
 
 		let error = || {
@@ -133,9 +149,11 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 			}
 		}
 
-		let mut visited_hashes = HashSet::new();
+		// Jim says he would skip the stuff with `visited_hashes`
+		let mut visited_hashes = BTreeSet::new();
 		for signed in self.commit.precommits.iter() {
-			if let Err(_) = communication::check_message_sig::<Block>(
+			// NOTE: Rip this out, use sr_io primitives instead
+			if let Err(_) = check_message_sig::<Block>(
 				&grandpa::Message::Precommit(signed.precommit.clone()),
 				&signed.id,
 				&signed.signature,
@@ -183,12 +201,12 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 /// This is useful when validating commits, using the given set of headers to
 /// verify a valid ancestry route to the target commit block.
 struct AncestryChain<Block: BlockT> {
-	ancestry: HashMap<Block::Hash, Block::Header>,
+	ancestry: BTreeMap<Block::Hash, Block::Header>,
 }
 
 impl<Block: BlockT> AncestryChain<Block> {
 	fn new(ancestry: &[Block::Header]) -> AncestryChain<Block> {
-		let ancestry: HashMap<_, _> = ancestry
+		let ancestry: BTreeMap<_, _> = ancestry
 			.iter()
 			.cloned()
 			.map(|h: Block::Header| (h.hash(), h))
@@ -221,5 +239,28 @@ impl<Block: BlockT> grandpa::Chain<Block::Hash, NumberFor<Block>> for AncestryCh
 
 	fn best_chain_containing(&self, _block: Block::Hash) -> Option<(Block::Hash, NumberFor<Block>)> {
 		None
+	}
+}
+
+pub(crate) fn localized_payload<E: Encode>(round: RoundNumber, set_id: SetIdNumber, message: &E) -> Vec<u8> {
+	(message, round, set_id).encode()
+}
+
+// NOTE: Stolen from `communication/mod.rs`
+// check a message.
+fn check_message_sig<Block: BlockT>(
+	message: &Message<Block>,
+	id: &AuthorityId,
+	signature: &AuthoritySignature,
+	round: RoundNumber,
+	set_id: SetIdNumber,
+) -> Result<(), ()> {
+	let as_public = id.clone();
+	let encoded_raw = localized_payload(round, set_id, message);
+	if AuthorityPair::verify(signature, &encoded_raw, &as_public) {
+		Ok(())
+	} else {
+		// debug!(target: "afg", "Bad signature on message from {:?}", id);
+		Err(())
 	}
 }

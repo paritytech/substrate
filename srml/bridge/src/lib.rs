@@ -35,6 +35,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod storage_proof;
+mod justification;
 
 use crate::storage_proof::StorageProofChecker;
 use codec::{Encode, Decode};
