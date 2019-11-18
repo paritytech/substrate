@@ -22,7 +22,7 @@ use codec::{Encode, Decode};
 use crate::{
 	Perbill,
 	traits::{
-		SaturatedConversion, CheckedSub, CheckedAdd, Bounded, UniqueSaturatedInto, Saturating
+		SaturatedConversion, CheckedSub, CheckedAdd, CheckedDiv, Bounded, UniqueSaturatedInto, Saturating
 	}
 };
 
@@ -138,6 +138,21 @@ impl ops::Sub for Fixed64 {
 	}
 }
 
+/// Note that this is a standard, _potentially-panicking_, implementation. Use `CheckedDiv` trait
+/// for safe division.
+impl ops::Div for Fixed64 {
+	type Output = Self;
+
+	fn div(self, rhs: Self) -> Self::Output {
+		let (n, d) = if rhs.0 < 0 {
+			(-self.0, rhs.0.abs() as u64)
+		} else {
+			(self.0, rhs.0 as u64)
+		};
+		Fixed64::from_rational(n, d)
+	}
+}
+
 impl CheckedSub for Fixed64 {
 	fn checked_sub(&self, rhs: &Self) -> Option<Self> {
 		self.0.checked_sub(rhs.0).map(Self)
@@ -147,6 +162,16 @@ impl CheckedSub for Fixed64 {
 impl CheckedAdd for Fixed64 {
 	fn checked_add(&self, rhs: &Self) -> Option<Self> {
 		self.0.checked_add(rhs.0).map(Self)
+	}
+}
+
+impl CheckedDiv for Fixed64 {
+	fn checked_div(&self, rhs: &Self) -> Option<Self> {
+		if rhs.0 == 0 {
+			None
+		} else {
+			Some(*self / *rhs)
+		}
 	}
 }
 
@@ -240,5 +265,26 @@ mod tests {
 		saturating_mul_acc_test!(u32);
 		saturating_mul_acc_test!(u64);
 		saturating_mul_acc_test!(u128);
+	}
+
+	#[test]
+	fn div_works() {
+		let a = Fixed64::from_rational(12, 10);
+		let b = Fixed64::from_rational(1, 100);
+		assert_eq!(a / b, Fixed64::from_rational(120, 1));
+	}
+
+	#[test]
+	fn checked_div_zero() {
+		let a = Fixed64::from_rational(12, 10);
+		let b = Fixed64::from_natural(0);
+		assert_eq!(a.checked_div(&b), None);
+	}
+
+	#[test]
+	fn checked_div_non_zero() {
+		let a = Fixed64::from_rational(12, 10);
+		let b = Fixed64::from_rational(1, 100);
+		assert_eq!(a.checked_div(&b), Some(Fixed64::from_rational(120, 1)));
 	}
 }
