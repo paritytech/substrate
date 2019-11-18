@@ -364,7 +364,7 @@ decl_module! {
 				runners_with_stake.remove(index);
 				// slash bond
 				let (imbalance, _) = T::Currency::slash_reserved(&who, T::CandidacyBond::get());
-				T::KickedMember::on_unbalanced(imbalance);
+				T::LoserCandidate::on_unbalanced(imbalance);
 				// update storage.
 				<RunnersUp<T>>::put(runners_with_stake);
 				// safety guard to make sure we do only one arm. Better to read runners later.
@@ -1076,7 +1076,7 @@ mod tests {
 
 			assert_noop!(
 				Elections::submit_candidacy(Origin::signed(3)),
-				"runner cannot re-submit candidacy"
+				"runner cannot re-submit candidacy",
 			);
 		});
 	}
@@ -1087,7 +1087,7 @@ mod tests {
 			assert_eq!(Elections::candidates(), Vec::<u64>::new());
 			assert_noop!(
 				Elections::submit_candidacy(Origin::signed(7)),
-				"candidate does not have enough funds"
+				"candidate does not have enough funds",
 			);
 		});
 	}
@@ -1177,7 +1177,7 @@ mod tests {
 
 			assert_noop!(
 				Elections::vote(Origin::signed(2), vec![10, 20, 30], 20),
-				"cannot vote more than candidates"
+				"cannot vote more than candidates",
 			);
 		});
 	}
@@ -1190,7 +1190,7 @@ mod tests {
 
 			assert_noop!(
 				Elections::vote(Origin::signed(2), vec![4], 1),
-				"cannot vote with stake less than minimum balance"
+				"cannot vote with stake less than minimum balance",
 			);
 		})
 	}
@@ -1968,7 +1968,7 @@ mod tests {
 		ExtBuilder::default().build().execute_with(|| {
 			assert_noop!(
 				Elections::renounce_candidacy(Origin::signed(5)),
-				"origin is not a candidate, member or a runner."
+				"origin is not a candidate, member or a runner.",
 			);
 		})
 	}
