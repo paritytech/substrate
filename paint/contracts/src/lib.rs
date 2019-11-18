@@ -1152,8 +1152,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckBlockGasLimit<T> {
 				T::GasPayment::on_unbalanced(imbalance);
 			}
 
-			let next_weight = <system::Module<T>>::all_extrinsics_weight().saturating_add(spent_weight);
-			<system::Module<T>>::set_extrinsics_weight(next_weight);
+			<system::Module<T>>::register_extra_weight_unchecked(spent_weight);
 		}
 	}
 }
