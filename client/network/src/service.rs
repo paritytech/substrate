@@ -25,9 +25,10 @@
 //! The methods of the [`NetworkService`] are implemented by sending a message over a channel,
 //! which is then processed by [`NetworkWorker::poll`].
 
-use std::{collections::{HashMap, HashSet}, fs, marker::PhantomData, io, path::Path};
+use std::{borrow::Cow, collections::{HashMap, HashSet}, fs, marker::PhantomData, io, path::Path};
 use std::sync::{Arc, atomic::{AtomicBool, AtomicUsize, Ordering}};
 
+use codec::Encode;
 use consensus::import_queue::{ImportQueue, Link};
 use consensus::import_queue::{BlockImportResult, BlockImportError};
 use futures::{prelude::*, sync::mpsc};
@@ -45,8 +46,7 @@ use crate::{NetworkState, NetworkStateNotConnectedPeer, NetworkStatePeer};
 use crate::{transport, config::NonReservedPeerMode};
 use crate::config::{Params, TransportConfig};
 use crate::error::Error;
-use crate::protocol::{self, Protocol, Context, CustomMessageOutcome, PeerInfo};
-use crate::protocol::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
+use crate::protocol::{self, Protocol, Context, PeerInfo};
 use crate::protocol::{event::Event, light_dispatch::{AlwaysBadChecker, RequestData}};
 use crate::protocol::specialization::NetworkSpecialization;
 use crate::protocol::sync::SyncState;
@@ -193,7 +193,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 
 		let num_connected = Arc::new(AtomicUsize::new(0));
 		let is_major_syncing = Arc::new(AtomicBool::new(false));
-		let (protocol, peerset_handle) = Protocol::new(
+		let (mut protocol, peerset_handle) = Protocol::new(
 			protocol::ProtocolConfig {
 				roles: params.roles,
 				max_parallel_downloads: params.network_config.max_parallel_downloads,
@@ -209,6 +209,10 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 			peerset_config,
 			params.block_announce_validator
 		)?;
+
+		for (proto, engine_id) in params.network_config.extra_notif_protos {
+			protocol.register_notif_protocol(proto, engine_id, Vec::new());
+		}
 
 		// Build the swarm.
 		let (mut swarm, bandwidth) = {
@@ -276,6 +280,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 			import_queue: params.import_queue,
 			from_worker,
 			light_client_rqs: params.on_demand.and_then(|od| od.extract_receiver()),
+			events_streams: Vec::new(),
 		})
 	}
 
@@ -416,6 +421,57 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 		self.local_peer_id.clone()
 	}
 
+	/// Writes a message on an open notifications channel. Has no effect if the notifications
+	/// channel with this protocol name is closed.
+	///
+	/// > **Note**: The reason why this is a no-op in the situation where we have no channel is
+	/// >			that we don't guarantee message delivery anyway. Networking issues can cause
+	/// >			connections to drop at any time, and higher-level logic shouldn't differentiate
+	/// >			between the remote voluntarily closing a substream or a network error
+	/// >			preventing the message from being delivered.
+	///
+	/// The protocol name must be one of the elements of `extra_notif_protos` that was passed in
+	/// the configuration, or a protocol registered with `register_notif_protocol`.
+	pub fn write_notif(&self, target: PeerId, proto_name: impl Into<Vec<u8>>, message: impl Encode) {
+		let _ = self.to_worker.unbounded_send(ServerToWorkerMsg::WriteNotif {
+			target,
+			proto_name: proto_name.into(),
+			message: message.encode(),
+		});
+	}
+
+	/// Returns a stream containing the events that happen on the network.
+	///
+	/// If this method is called multiple times, the events are duplicated.
+	///
+	/// The stream never ends (unless the `NetworkWorker` gets shut down).
+	// Note: when transitioning to stable futures, remove the `Error` entirely
+	pub fn events_stream(&self) -> impl Stream<Item = Event, Error = ()> {
+		let (tx, rx) = mpsc::unbounded();
+		let _ = self.to_worker.unbounded_send(ServerToWorkerMsg::EventsStream(tx));
+		rx
+	}
+
+	/// Registers a new notifications protocol.
+	///
+	/// This has the same effect as having an extra entry in
+	/// [`NetworkConfiguration::extra_notif_protos`].
+	///
+	/// You are very strongly encouraged to call this method very early on. Any connection open
+	/// will retain the protocols that were registered then, and not any new one.
+	pub fn register_notif_protocol(
+		&self,
+		proto_name: impl Into<Cow<'static, [u8]>>,
+		engine_id: ConsensusEngineId,
+		handshake: impl Into<Vec<u8>>
+	) {
+		let _ = self.to_worker.unbounded_send(ServerToWorkerMsg::RegisterNotifProtocol {
+			proto_name: proto_name.into(),
+			engine_id,
+			handshake: handshake.into(),
+		});
+	}
+
 	/// You must call this when new transactons are imported by the transaction pool.
 	///
 	/// The latest transactions will be fetched from the `TransactionPool` that was passed at
@@ -430,21 +486,6 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	/// at least temporarily synced. This function forces such an announcement.
 	pub fn announce_block(&self, hash: B::Hash, data: Vec<u8>) {
 		let _ = self.to_worker.unbounded_send(ServerToWorkerMsg::AnnounceBlock(hash, data));
-	}
-
-	/// Send a consensus message through the gossip
-	pub fn gossip_consensus_message(
-		&self,
-		topic: B::Hash,
-		engine_id: ConsensusEngineId,
-		message: Vec<u8>,
-		recipient: GossipMessageRecipient,
-	) {
-		let _ = self
-			.to_worker
-			.unbounded_send(ServerToWorkerMsg::GossipConsensusMessage(
-				topic, engine_id, message, recipient,
-			));
 	}
 
 	/// Report a given peer as either beneficial (+) or costly (-) according to the
@@ -470,15 +511,6 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 		let _ = self
 			.to_worker
 			.unbounded_send(ServerToWorkerMsg::ExecuteWithSpec(Box::new(f)));
-	}
-
-	/// Execute a closure with the consensus gossip.
-	pub fn with_gossip<F>(&self, f: F)
-		where F: FnOnce(&mut ConsensusGossip<B>, &mut dyn Context<B>) + Send + 'static
-	{
-		let _ = self
-			.to_worker
-			.unbounded_send(ServerToWorkerMsg::ExecuteWithGossip(Box::new(f)));
 	}
 
 	/// Are we in the process of downloading the chain?
@@ -572,6 +604,21 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	}
 }
 
+impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Clone for NetworkService<B, S, H> {
+	fn clone(&self) -> Self {
+		NetworkService {
+			num_connected: self.num_connected.clone(),
+			external_addresses: self.external_addresses.clone(),
+			is_major_syncing: self.is_major_syncing.clone(),
+			local_peer_id: self.local_peer_id.clone(),
+			bandwidth: self.bandwidth.clone(),
+			peerset: self.peerset.clone(),
+			to_worker: self.to_worker.clone(),
+			_marker: self._marker.clone(),
+		}
+	}
+}
+
 impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> consensus::SyncOracle
 	for NetworkService<B, S, H>
 {
@@ -630,12 +677,21 @@ enum ServerToWorkerMsg<B: BlockT, S: NetworkSpecialization<B>> {
 	RequestJustification(B::Hash, NumberFor<B>),
 	AnnounceBlock(B::Hash, Vec<u8>),
 	ExecuteWithSpec(Box<dyn FnOnce(&mut S, &mut dyn Context<B>) + Send>),
-	ExecuteWithGossip(Box<dyn FnOnce(&mut ConsensusGossip<B>, &mut dyn Context<B>) + Send>),
-	GossipConsensusMessage(B::Hash, ConsensusEngineId, Vec<u8>, GossipMessageRecipient),
 	GetValue(record::Key),
 	PutValue(record::Key, Vec<u8>),
 	AddKnownAddress(PeerId, Multiaddr),
 	SyncFork(Vec<PeerId>, B::Hash, NumberFor<B>),
+	EventsStream(mpsc::UnboundedSender<Event>),
+	WriteNotif {
+		message: Vec<u8>,
+		proto_name: Vec<u8>,
+		target: PeerId,
+	},
+	RegisterNotifProtocol {
+		proto_name: Cow<'static, [u8]>,
+		engine_id: ConsensusEngineId,
+		handshake: Vec<u8>,
+	},
 }
 
 /// Main network worker. Must be polled in order for the network to advance.
@@ -659,6 +715,8 @@ pub struct NetworkWorker<B: BlockT + 'static, S: NetworkSpecialization<B>, H: Ex
 	from_worker: mpsc::UnboundedReceiver<ServerToWorkerMsg<B, S>>,
 	/// Receiver for queries from the light client that must be processed.
 	light_client_rqs: Option<mpsc::UnboundedReceiver<RequestData<B>>>,
+	/// Senders for events that happen on the network.
+	events_streams: Vec<mpsc::UnboundedSender<Event>>,
 }
 
 impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Stream for NetworkWorker<B, S, H> {
@@ -695,13 +753,6 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Stream for Ne
 					let (mut context, spec) = protocol.specialization_lock();
 					task(spec, &mut context);
 				},
-				ServerToWorkerMsg::ExecuteWithGossip(task) => {
-					let protocol = self.network_service.user_protocol_mut();
-					let (mut context, gossip) = protocol.consensus_gossip_lock();
-					task(gossip, &mut context);
-				}
-				ServerToWorkerMsg::GossipConsensusMessage(topic, engine_id, message, recipient) =>
-					self.network_service.user_protocol_mut().gossip_consensus_message(topic, engine_id, message, recipient),
 				ServerToWorkerMsg::AnnounceBlock(hash, data) =>
 					self.network_service.user_protocol_mut().announce_block(hash, data),
 				ServerToWorkerMsg::RequestJustification(hash, number) =>
@@ -716,6 +767,13 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Stream for Ne
 					self.network_service.add_known_address(peer_id, addr),
 				ServerToWorkerMsg::SyncFork(peer_ids, hash, number) =>
 					self.network_service.user_protocol_mut().set_sync_fork_request(peer_ids, &hash, number),
+				ServerToWorkerMsg::EventsStream(sender) =>
+					self.events_streams.push(sender),
+				ServerToWorkerMsg::WriteNotif { message, proto_name, target } =>
+					self.network_service.user_protocol_mut().write_notif(target, proto_name, message),
+				ServerToWorkerMsg::RegisterNotifProtocol { proto_name, engine_id, handshake } =>
+					self.network_service.user_protocol_mut()
+						.register_notif_protocol(proto_name, engine_id, handshake),
 			}
 		}
 
@@ -723,27 +781,24 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Stream for Ne
 			// Process the next action coming from the network.
 			let poll_value = self.network_service.poll();
 
-			let outcome = match poll_value {
+			match poll_value {
 				Ok(Async::NotReady) => break,
-				Ok(Async::Ready(Some(BehaviourOut::SubstrateAction(outcome)))) => outcome,
-				Ok(Async::Ready(Some(BehaviourOut::Dht(ev)))) =>
-					return Ok(Async::Ready(Some(Event::Dht(ev)))),
-				Ok(Async::Ready(None)) => CustomMessageOutcome::None,
+				Ok(Async::Ready(Some(BehaviourOut::BlockImport(origin, blocks)))) =>
+					self.import_queue.import_blocks(origin, blocks),
+				Ok(Async::Ready(Some(BehaviourOut::JustificationImport(origin, hash, nb, justification)))) =>
+					self.import_queue.import_justification(origin, hash, nb, justification),
+				Ok(Async::Ready(Some(BehaviourOut::FinalityProofImport(origin, hash, nb, proof)))) =>
+					self.import_queue.import_finality_proof(origin, hash, nb, proof),
+				Ok(Async::Ready(Some(BehaviourOut::Event(ev)))) => {
+					self.events_streams.retain(|sender| sender.unbounded_send(ev.clone()).is_ok());
+					return Ok(Async::Ready(Some(ev)));
+				},
+				Ok(Async::Ready(None)) => {},
 				Err(err) => {
 					error!(target: "sync", "Error in the network: {:?}", err);
 					return Err(err)
 				}
 			};
-
-			match outcome {
-				CustomMessageOutcome::BlockImport(origin, blocks) =>
-					self.import_queue.import_blocks(origin, blocks),
-				CustomMessageOutcome::JustificationImport(origin, hash, nb, justification) =>
-					self.import_queue.import_justification(origin, hash, nb, justification),
-				CustomMessageOutcome::FinalityProofImport(origin, hash, nb, proof) =>
-					self.import_queue.import_finality_proof(origin, hash, nb, proof),
-				CustomMessageOutcome::None => {}
-			}
 		}
 
 		// Update the variables shared with the `NetworkService`.

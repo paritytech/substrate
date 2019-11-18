@@ -18,7 +18,6 @@
 
 use futures::sync::mpsc;
 use futures::prelude::*;
-use network::consensus_gossip as network_gossip;
 use network::test::{Block, Hash};
 use network_gossip::Validator;
 use tokio::runtime::current_thread;
@@ -111,7 +110,7 @@ impl network_gossip::ValidatorContext<Block> for TestNetwork {
 }
 
 struct Tester {
-	net_handle: super::NetworkBridge<Block, TestNetwork>,
+	net_handle: super::NetworkBridge<Block>,
 	gossip_validator: Arc<GossipValidator<Block>>,
 	events: mpsc::UnboundedReceiver<Event>,
 }

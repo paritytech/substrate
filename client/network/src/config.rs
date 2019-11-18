@@ -27,12 +27,12 @@ use crate::on_demand_layer::OnDemand;
 use crate::service::{ExHashT, TransactionPool};
 use bitflags::bitflags;
 use consensus::{block_validation::BlockAnnounceValidator, import_queue::ImportQueue};
-use sr_primitives::traits::{Block as BlockT};
+use sr_primitives::{ConsensusEngineId, traits::{Block as BlockT}};
 use libp2p::identity::{Keypair, ed25519};
 use libp2p::wasm_ext;
 use libp2p::{PeerId, Multiaddr, multiaddr};
 use core::{fmt, iter};
-use std::{error::Error, fs, io::{self, Write}, net::Ipv4Addr, path::{Path, PathBuf}, sync::Arc};
+use std::{borrow::Cow, error::Error, fs, io::{self, Write}, net::Ipv4Addr, path::{Path, PathBuf}, sync::Arc};
 use zeroize::Zeroize;
 
 /// Network initialization parameters.
@@ -261,6 +261,12 @@ pub struct NetworkConfiguration {
 	pub node_name: String,
 	/// Configuration for the transport layer.
 	pub transport: TransportConfig,
+	/// Extra protocol names for the gossiping scheme, plus a legacy consensus engine ID for
+	/// backwards-compatibility.
+	///
+	/// If a remote tries to open a substream with one of these protocol names, we know that it is
+	/// a gossiping protocol that requires a handshake message.
+	pub extra_notif_protos: Vec<(Cow<'static, [u8]>, ConsensusEngineId)>,
 	/// Maximum number of peers to ask the same blocks in parallel.
 	pub max_parallel_downloads: u32,
 }
@@ -285,6 +291,7 @@ impl Default for NetworkConfiguration {
 				allow_private_ipv4: true,
 				wasm_external_transport: None,
 			},
+			extra_notif_protos: Vec::new(),
 			max_parallel_downloads: 5,
 		}
 	}

@@ -30,6 +30,7 @@ members = [
 	"client/header-metadata",
 	"client/keystore",
 	"client/network",
+	"client/network-gossip",
 	"client/offchain",
 	"client/rpc-servers",
 	"client/rpc",

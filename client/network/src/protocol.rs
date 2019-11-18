@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{DiscoveryNetBehaviour, config::ProtocolId};
-use crate::legacy_proto::{LegacyProto, LegacyProtoOut};
+use crate::generic_proto::{GenericProto, GenericProtoOut};
 use bytes::BytesMut;
 use futures::prelude::*;
 use futures03::{StreamExt as _, TryStreamExt as _};
@@ -37,7 +37,6 @@ use sr_primitives::traits::{
 use sr_arithmetic::traits::SaturatedConversion;
 use message::{BlockAnnounce, BlockAttributes, Direction, FromBlock, Message, RequestId};
 use message::generic::{Message as GenericMessage, ConsensusMessage};
-use consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
 use light_dispatch::{LightDispatch, LightDispatchNetwork, RequestData};
 use specialization::NetworkSpecialization;
 use sync::{ChainSync, SyncState};
@@ -47,7 +46,7 @@ use rustc_hex::ToHex;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use std::fmt::Write;
-use std::{cmp, num::NonZeroUsize, time};
+use std::{borrow::Cow, cmp, num::NonZeroUsize, time};
 use log::{trace, debug, warn, error};
 use crate::chain::{Client, FinalityProofProvider};
 use client_api::{FetchChecker, ChangesProof, StorageProof};
@@ -55,7 +54,6 @@ use crate::error;
 use util::LruHashSet;
 
 mod util;
-pub mod consensus_gossip;
 pub mod message;
 pub mod event;
 pub mod light_dispatch;
@@ -117,17 +115,18 @@ pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 	genesis_hash: B::Hash,
 	sync: ChainSync<B>,
 	specialization: S,
-	consensus_gossip: ConsensusGossip<B>,
 	context_data: ContextData<B, H>,
 	// Connected peers pending Status message.
 	handshaking_peers: HashMap<PeerId, HandshakingPeer>,
+	/// For each legacy gossiping engine ID, the corresponding new protocol name.
+	protocol_name_by_engine: HashMap<ConsensusEngineId, Cow<'static, [u8]>>,
 	/// Used to report reputation changes.
 	peerset_handle: peerset::PeersetHandle,
 	transaction_pool: Arc<dyn TransactionPool<H, B>>,
 	/// When asked for a proof of finality, we use this struct to build one.
 	finality_proof_provider: Option<Arc<dyn FinalityProofProvider<B>>>,
 	/// Handles opening the unique substream and sending and receiving raw messages.
-	behaviour: LegacyProto<Substream<StreamMuxerBox>>,
+	behaviour: GenericProto<Substream<StreamMuxerBox>>,
 }
 
 #[derive(Default)]
@@ -174,7 +173,7 @@ pub struct PeerInfo<B: BlockT> {
 }
 
 struct LightDispatchIn<'a> {
-	behaviour: &'a mut LegacyProto<Substream<StreamMuxerBox>>,
+	behaviour: &'a mut GenericProto<Substream<StreamMuxerBox>>,
 	peerset: peerset::PeersetHandle,
 }
 
@@ -193,7 +192,7 @@ impl<'a, B: BlockT> LightDispatchNetwork<B> for LightDispatchIn<'a> {
 			block,
 		});
 
-		self.behaviour.send_packet(who, message.encode())
+		self.behaviour.send_packet(who, None, message.encode())
 	}
 
 	fn send_read_request(
@@ -209,7 +208,7 @@ impl<'a, B: BlockT> LightDispatchNetwork<B> for LightDispatchIn<'a> {
 			keys,
 		});
 
-		self.behaviour.send_packet(who, message.encode())
+		self.behaviour.send_packet(who, None, message.encode())
 	}
 
 	fn send_read_child_request(
@@ -227,7 +226,7 @@ impl<'a, B: BlockT> LightDispatchNetwork<B> for LightDispatchIn<'a> {
 			keys,
 		});
 
-		self.behaviour.send_packet(who, message.encode())
+		self.behaviour.send_packet(who, None, message.encode())
 	}
 
 	fn send_call_request(
@@ -245,7 +244,7 @@ impl<'a, B: BlockT> LightDispatchNetwork<B> for LightDispatchIn<'a> {
 			data,
 		});
 
-		self.behaviour.send_packet(who, message.encode())
+		self.behaviour.send_packet(who, None, message.encode())
 	}
 
 	fn send_changes_request(
@@ -269,7 +268,7 @@ impl<'a, B: BlockT> LightDispatchNetwork<B> for LightDispatchIn<'a> {
 			key,
 		});
 
-		self.behaviour.send_packet(who, message.encode())
+		self.behaviour.send_packet(who, None, message.encode())
 	}
 
 	fn send_body_request(
@@ -291,7 +290,7 @@ impl<'a, B: BlockT> LightDispatchNetwork<B> for LightDispatchIn<'a> {
 			max,
 		});
 
-		self.behaviour.send_packet(who, message.encode())
+		self.behaviour.send_packet(who, None, message.encode())
 	}
 }
 
@@ -313,7 +312,7 @@ pub trait Context<B: BlockT> {
 
 /// Protocol context.
 struct ProtocolContext<'a, B: 'a + BlockT, H: 'a + ExHashT> {
-	behaviour: &'a mut LegacyProto<Substream<StreamMuxerBox>>,
+	behaviour: &'a mut GenericProto<Substream<StreamMuxerBox>>,
 	context_data: &'a mut ContextData<B, H>,
 	peerset_handle: &'a peerset::PeersetHandle,
 }
@@ -321,7 +320,7 @@ struct ProtocolContext<'a, B: 'a + BlockT, H: 'a + ExHashT> {
 impl<'a, B: BlockT + 'a, H: 'a + ExHashT> ProtocolContext<'a, B, H> {
 	fn new(
 		context_data: &'a mut ContextData<B, H>,
-		behaviour: &'a mut LegacyProto<Substream<StreamMuxerBox>>,
+		behaviour: &'a mut GenericProto<Substream<StreamMuxerBox>>,
 		peerset_handle: &'a peerset::PeersetHandle,
 	) -> Self {
 		ProtocolContext { context_data, peerset_handle, behaviour }
@@ -427,7 +426,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		);
 		let (peerset, peerset_handle) = peerset::Peerset::from_config(peerset_config);
 		let versions = &((MIN_VERSION as u8)..=(CURRENT_VERSION as u8)).collect::<Vec<u8>>();
-		let behaviour = LegacyProto::new(protocol_id, versions, peerset);
+		let behaviour = GenericProto::new(protocol_id, versions, peerset);
 
 		let protocol = Protocol {
 			tick_timeout: Box::new(futures_timer::Interval::new(TICK_TIMEOUT).map(|v| Ok::<_, ()>(v)).compat()),
@@ -442,7 +441,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			genesis_hash: info.chain.genesis_hash,
 			sync,
 			specialization,
-			consensus_gossip: ConsensusGossip::new(),
+			protocol_name_by_engine: HashMap::new(),
 			handshaking_peers: HashMap::new(),
 			transaction_pool,
 			finality_proof_provider,
@@ -625,18 +624,35 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			GenericMessage::RemoteReadChildRequest(request) =>
 				self.on_remote_read_child_request(who, request),
 			GenericMessage::Consensus(msg) => {
-				self.consensus_gossip.on_incoming(
-					&mut ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle),
-					who,
-					vec![msg],
-				);
+				let outcome = if let Some(proto_name) = self.protocol_name_by_engine.get(&msg.engine_id) {
+					// TODO: what if not open? check if open?
+					CustomMessageOutcome::NotifMessages {
+						remote: who.clone(),
+						messages: vec![(proto_name.clone(), msg.data.clone())],
+					}
+				} else {
+					CustomMessageOutcome::None
+				};
+
+				return outcome;
 			}
 			GenericMessage::ConsensusBatch(messages) => {
-				self.consensus_gossip.on_incoming(
-					&mut ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle),
-					who,
-					messages,
-				);
+				let outcome_messages = messages
+					.iter()
+					.filter_map(|msg| {
+						if let Some(proto_name) = self.protocol_name_by_engine.get(&msg.engine_id) {
+							// TODO: what if not open? check if open?
+							Some((proto_name.clone(), msg.data.clone()))
+						} else {
+							None
+						}
+					})
+					.collect::<Vec<_>>();
+
+				return CustomMessageOutcome::NotifMessages {
+					remote: who,
+					messages: outcome_messages,
+				};
 			}
 			GenericMessage::ChainSpecific(msg) => self.specialization.on_message(
 				&mut ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle),
@@ -667,40 +683,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		);
 	}
 
-	/// Locks `self` and returns a context plus the `ConsensusGossip` struct.
-	pub fn consensus_gossip_lock<'a>(
-		&'a mut self,
-	) -> (impl Context<B> + 'a, &'a mut ConsensusGossip<B>) {
-		let context = ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle);
-		(context, &mut self.consensus_gossip)
-	}
-
 	/// Locks `self` and returns a context plus the network specialization.
 	pub fn specialization_lock<'a>(
 		&'a mut self,
 	) -> (impl Context<B> + 'a, &'a mut S) {
 		let context = ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle);
 		(context, &mut self.specialization)
-	}
-
-	/// Gossip a consensus message to the network.
-	pub fn gossip_consensus_message(
-		&mut self,
-		topic: B::Hash,
-		engine_id: ConsensusEngineId,
-		message: Vec<u8>,
-		recipient: GossipMessageRecipient,
-	) {
-		let mut context = ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle);
-		let message = ConsensusMessage { data: message, engine_id };
-		match recipient {
-			GossipMessageRecipient::BroadcastToAll =>
-				self.consensus_gossip.multicast(&mut context, topic, message, true),
-			GossipMessageRecipient::BroadcastNew =>
-				self.consensus_gossip.multicast(&mut context, topic, message, false),
-			GossipMessageRecipient::Peer(who) =>
-				self.send_message(&who, GenericMessage::Consensus(message)),
-		}
 	}
 
 	/// Called when a new peer is connected
@@ -720,9 +708,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		};
 		if let Some(peer_data) = removed {
 			let mut context = ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle);
-			if peer_data.info.protocol_version > 2 {
-				self.consensus_gossip.peer_disconnected(&mut context, peer.clone());
-			}
 			self.sync.peer_disconnected(peer.clone());
 			self.specialization.on_disconnect(&mut context, peer.clone());
 			self.light_dispatch.on_disconnect(LightDispatchIn {
@@ -885,9 +870,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	///
 	/// > **Note**: This method normally doesn't have to be called except for testing purposes.
 	pub fn tick(&mut self) {
-		self.consensus_gossip.tick(
-			&mut ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle)
-		);
 		self.maintain_peers();
 		self.light_dispatch.maintain_peers(LightDispatchIn {
 			behaviour: &mut self.behaviour,
@@ -1025,9 +1007,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			}
 		}
 		let mut context = ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle);
-		if protocol_version > 2 {
-			self.consensus_gossip.new_peer(&mut context, who.clone(), status.roles);
-		}
 		self.specialization.on_connect(&mut context, who, status);
 	}
 
@@ -1064,6 +1043,36 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					t,
 				);
 			}
+		}
+	}
+
+	/// Send a notification to the given peer we're connected to.
+	///
+	/// Doesn't do anything if we're not connected to that peer.
+	pub fn write_notif(
+		&mut self,
+		target: PeerId,
+		proto_name: impl Into<Cow<'static, [u8]>>,
+		message: impl Into<Vec<u8>>
+	) {
+		self.behaviour.send_packet(&target, Some(proto_name.into()), message)
+	}
+
+	/// Registers a new notifications protocol.
+	///
+	/// You are very strongly encouraged to call this method very early on. Any connection open
+	/// will retain the protocols that were registered then, and not any new one.
+	pub fn register_notif_protocol(
+		&mut self,
+		proto_name: impl Into<Cow<'static, [u8]>>,
+		engine_id: ConsensusEngineId,
+		handshake: impl Into<Vec<u8>>,
+	) {
+		let proto_name = proto_name.into();
+		if self.protocol_name_by_engine.insert(engine_id, proto_name.clone()).is_some() {
+			error!("Notifications protocol already registered: {:?}", proto_name);
+		} else {
+			self.behaviour.register_notif_protocol(proto_name, handshake);
 		}
 	}
 
@@ -1700,11 +1709,16 @@ pub enum CustomMessageOutcome<B: BlockT> {
 	BlockImport(BlockOrigin, Vec<IncomingBlock<B>>),
 	JustificationImport(Origin, B::Hash, NumberFor<B>, Justification),
 	FinalityProofImport(Origin, B::Hash, NumberFor<B>, Vec<u8>),
+	/// Notif protocols have been opened with the remote.
+	NotifOpened { remote: PeerId, proto_names: Vec<Cow<'static, [u8]>> },
+	/// Notif protocols have been closed with the remote.
+	NotifClosed { remote: PeerId, proto_names: Vec<Cow<'static, [u8]>> },
+	NotifMessages { remote: PeerId, messages: Vec<(Cow<'static, [u8]>, Vec<u8>)> },
 	None,
 }
 
 fn send_request<B: BlockT, H: ExHashT>(
-	behaviour: &mut LegacyProto<Substream<StreamMuxerBox>>,
+	behaviour: &mut GenericProto<Substream<StreamMuxerBox>>,
 	stats: &mut HashMap<&'static str, PacketStats>,
 	peers: &mut HashMap<PeerId, Peer<B, H>>,
 	who: &PeerId,
@@ -1725,7 +1739,7 @@ fn send_request<B: BlockT, H: ExHashT>(
 }
 
 fn send_message<B: BlockT>(
-	behaviour: &mut LegacyProto<Substream<StreamMuxerBox>>,
+	behaviour: &mut GenericProto<Substream<StreamMuxerBox>>,
 	stats: &mut HashMap<&'static str, PacketStats>,
 	who: &PeerId,
 	message: Message<B>,
@@ -1734,12 +1748,12 @@ fn send_message<B: BlockT>(
 	let mut stats = stats.entry(message.id()).or_default();
 	stats.bytes_out += encoded.len() as u64;
 	stats.count_out += 1;
-	behaviour.send_packet(who, encoded);
+	behaviour.send_packet(who, None, encoded);
 }
 
 impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> NetworkBehaviour for
 Protocol<B, S, H> {
-	type ProtocolsHandler = <LegacyProto<Substream<StreamMuxerBox>> as NetworkBehaviour>::ProtocolsHandler;
+	type ProtocolsHandler = <GenericProto<Substream<StreamMuxerBox>> as NetworkBehaviour>::ProtocolsHandler;
 	type OutEvent = CustomMessageOutcome<B>;
 
 	fn new_handler(&mut self) -> Self::ProtocolsHandler {
@@ -1824,21 +1838,28 @@ Protocol<B, S, H> {
 		};
 
 		let outcome = match event {
-			LegacyProtoOut::CustomProtocolOpen { peer_id, version, .. } => {
-				debug_assert!(
-					version <= CURRENT_VERSION as u8
-					&& version >= MIN_VERSION as u8
-				);
-				self.on_peer_connected(peer_id);
-				CustomMessageOutcome::None
+			GenericProtoOut::CustomProtocolOpen { peer_id, .. } => {
+				self.on_peer_connected(peer_id.clone());
+				CustomMessageOutcome::NotifOpened {
+					remote: peer_id,
+					proto_names: self.behaviour.notif_protocols_names()
+						.map(|n| From::from(n.to_owned()))
+						.collect(),
+				}
 			}
-			LegacyProtoOut::CustomProtocolClosed { peer_id, .. } => {
-				self.on_peer_disconnected(peer_id);
-				CustomMessageOutcome::None
+			GenericProtoOut::CustomProtocolClosed { peer_id, .. } => {
+				self.on_peer_disconnected(peer_id.clone());
+				CustomMessageOutcome::NotifClosed {
+					remote: peer_id,
+					proto_names: self.behaviour.notif_protocols_names()
+						.map(|n| From::from(n.to_owned()))
+						.collect(),
+				}
 			},
-			LegacyProtoOut::CustomMessage { peer_id, message } =>
+			GenericProtoOut::CustomMessage { peer_id, message } =>
+				// TODO: NotifMessages
 				self.on_custom_message(peer_id, message),
-			LegacyProtoOut::Clogged { peer_id, messages } => {
+			GenericProtoOut::Clogged { peer_id, messages } => {
 				debug!(target: "sync", "{} clogging messages:", messages.len());
 				for msg in messages.into_iter().take(5) {
 					let message: Option<Message<B>> = Decode::decode(&mut &msg[..]).ok();

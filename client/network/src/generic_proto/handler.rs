@@ -14,9 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-pub use self::behaviour::{LegacyProto, LegacyProtoOut};
+pub use self::group::{NotifsHandlerProto, NotifsHandler, NotifsHandlerIn, NotifsHandlerOut};
 
-mod behaviour;
-mod handler;
-mod upgrade;
-mod tests;
+mod group;
+mod legacy;
+mod notif_in;
+mod notif_out;

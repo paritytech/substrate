@@ -30,13 +30,12 @@
 use std::sync::Arc;
 
 use futures::prelude::*;
-use futures::sync::{oneshot, mpsc};
-use futures03::stream::{StreamExt, TryStreamExt};
+use futures::sync::mpsc;
+use futures03::{compat::Compat, stream::{StreamExt, TryStreamExt}};
 use grandpa::Message::{Prevote, Precommit, PrimaryPropose};
 use grandpa::{voter, voter_set::VoterSet};
 use log::{debug, trace};
-use network::{consensus_gossip as network_gossip, NetworkService};
-use network_gossip::ConsensusMessage;
+use network_gossip::{GossipEngine, Network as AbstractNetwork};
 use codec::{Encode, Decode};
 use primitives::Pair;
 use sr_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, NumberFor};
@@ -149,141 +148,62 @@ pub(crate) fn global_topic<B: BlockT>(set_id: SetIdNumber) -> B::Hash {
 	<<B::Header as HeaderT>::Hashing as HashT>::hash(format!("{}-GLOBAL", set_id).as_bytes())
 }
 
-impl<B, S, H> Network<B> for Arc<NetworkService<B, S, H>> where
+impl<B> Network<B> for GossipEngine<B> where
 	B: BlockT,
-	S: network::specialization::NetworkSpecialization<B>,
-	H: network::ExHashT,
 {
-	type In = NetworkStream<
-		Box<dyn Stream<Item = network_gossip::TopicNotification, Error = ()> + Send + 'static>,
-	>;
+	type In = Box<dyn Stream<Item = network_gossip::TopicNotification, Error = ()> + Send + 'static>;
 
 	fn messages_for(&self, topic: B::Hash) -> Self::In {
-		// Given that one can only communicate with the Substrate network via the `NetworkService` via message-passing,
-		// and given that methods on the network consensus gossip are not exposed but only reachable by passing a
-		// closure into `with_gossip` on the `NetworkService` this function needs to make use of the `NetworkStream`
-		// construction.
-		//
-		// We create a oneshot channel and pass the sender within a closure to the network. At some point in the future
-		// the network passes the message channel back through the oneshot channel. But the consumer of this function
-		// expects a stream, not a stream within a oneshot. This complexity is abstracted within `NetworkStream`,
-		// waiting for the oneshot to resolve and from there on acting like a normal message channel.
-		let (tx, rx) = oneshot::channel();
-		self.with_gossip(move |gossip, _| {
-			let inner_rx: Box<dyn Stream<Item = _, Error = ()> + Send> = Box::new(gossip
-				.messages_for(GRANDPA_ENGINE_ID, topic)
-				.map(|x| Ok(x))
-				.compat()
-			);
-			let _ = tx.send(inner_rx);
-		});
-		NetworkStream::PollingOneshot(rx)
+		let stream = self.messages_for(GRANDPA_ENGINE_ID, topic)
+			.map(|x| Ok(x))
+			.compat();
+		Box::new(stream)
 	}
 
 	fn register_validator(&self, validator: Arc<dyn network_gossip::Validator<B>>) {
-		self.with_gossip(
-			move |gossip, context| gossip.register_validator(context, GRANDPA_ENGINE_ID, validator)
-		)
+		unimplemented!()
 	}
 
 	fn gossip_message(&self, topic: B::Hash, data: Vec<u8>, force: bool) {
-		let msg = ConsensusMessage {
-			engine_id: GRANDPA_ENGINE_ID,
-			data,
-		};
-
-		self.with_gossip(
-			move |gossip, ctx| gossip.multicast(ctx, topic, msg, force)
-		)
+		self.multicast(topic, GRANDPA_ENGINE_ID, data, force)
 	}
 
 	fn register_gossip_message(&self, topic: B::Hash, data: Vec<u8>) {
-		let msg = ConsensusMessage {
-			engine_id: GRANDPA_ENGINE_ID,
-			data,
-		};
-
-		self.with_gossip(move |gossip, _| gossip.register_message(topic, msg))
+		self.register_message(topic, GRANDPA_ENGINE_ID, data)
 	}
 
 	fn send_message(&self, who: Vec<network::PeerId>, data: Vec<u8>) {
-		let msg = ConsensusMessage {
-			engine_id: GRANDPA_ENGINE_ID,
-			data,
-		};
-
-		self.with_gossip(move |gossip, ctx| for who in &who {
-			gossip.send_message(ctx, who, msg.clone())
-		})
+		for who in &who {
+			self.send_message(who, GRANDPA_ENGINE_ID, data.clone())
+		}
 	}
 
 	fn report(&self, who: network::PeerId, cost_benefit: i32) {
-		self.report_peer(who, cost_benefit)
+		// TODO: self.report_peer(who, cost_benefit)
 	}
 
 	fn announce(&self, block: B::Hash, associated_data: Vec<u8>) {
-		self.announce_block(block, associated_data)
+		// TODO: self.announce_block(block, associated_data)
 	}
 
 	fn set_sync_fork_request(&self, peers: Vec<network::PeerId>, hash: B::Hash, number: NumberFor<B>) {
-		NetworkService::set_sync_fork_request(self, peers, hash, number)
-	}
-}
-
-/// A stream used by NetworkBridge in its implementation of Network. Given a oneshot that eventually returns a channel
-/// which eventually returns messages, instead of:
-///
-/// 1. polling the oneshot until it returns a message channel
-///
-/// 2. polling the message channel for messages
-///
-/// `NetworkStream` combines the two steps into one, requiring a consumer to only poll `NetworkStream` to retrieve
-/// messages directly.
-pub enum NetworkStream<R> {
-	PollingOneshot(oneshot::Receiver<R>),
-	PollingTopicNotifications(R),
-}
-
-impl<R> Stream for NetworkStream<R>
-where
-	R: Stream<Item = network_gossip::TopicNotification, Error = ()>,
-{
-	type Item = R::Item;
-	type Error = ();
-
-	fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
-		match self {
-			NetworkStream::PollingOneshot(oneshot) => {
-				match oneshot.poll() {
-					Ok(futures::Async::Ready(mut stream)) => {
-						let poll_result = stream.poll();
-						*self = NetworkStream::PollingTopicNotifications(stream);
-						poll_result
-					},
-					Ok(futures::Async::NotReady) => Ok(futures::Async::NotReady),
-					Err(_) => Err(())
-				}
-			},
-			NetworkStream::PollingTopicNotifications(stream) => {
-				stream.poll()
-			},
-		}
+		// TODO: NetworkService::set_sync_fork_request(self, peers, hash, number)
 	}
 }
 
 /// Bridge between the underlying network service, gossiping consensus messages and Grandpa
-pub(crate) struct NetworkBridge<B: BlockT, N: Network<B>> {
-	service: N,
+pub(crate) struct NetworkBridge<B: BlockT> {
+	service: GossipEngine<B>,
 	validator: Arc<GossipValidator<B>>,
 	neighbor_sender: periodic::NeighborPacketSender<B>,
 }
 
-impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
+impl<B: BlockT> NetworkBridge<B> {
 	/// Create a new NetworkBridge to the given NetworkService. Returns the service
 	/// handle and a future that must be polled to completion to finish startup.
 	/// On creation it will register previous rounds' votes with the gossip
 	/// service taken from the VoterSetState.
-	pub(crate) fn new(
+	pub(crate) fn new<N: AbstractNetwork + Clone + Send + 'static>(
 		service: N,
 		config: crate::Config,
 		set_state: crate::environment::SharedVoterSetState<B>,
@@ -299,7 +219,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		);
 
 		let validator = Arc::new(validator);
-		service.register_validator(validator.clone());
+		let service = GossipEngine::new(service, &b"/sub/grandpa"[..], GRANDPA_ENGINE_ID, validator.clone());
 
 		{
 			// register all previous votes with the gossip service so that they're
@@ -407,7 +327,8 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		});
 
 		let topic = round_topic::<B>(round.0, set_id.0);
-		let incoming = self.service.messages_for(topic)
+		let incoming = Compat::new(self.service.messages_for(GRANDPA_ENGINE_ID, topic)
+			.map(|item| Ok::<_, ()>(item)))
 			.filter_map(|notification| {
 				let decoded = GossipMessage::<B>::decode(&mut &notification.message[..]);
 				if let Err(ref e) = decoded {
@@ -460,7 +381,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 			.map_err(|()| Error::Network(format!("Failed to receive message on unbounded stream")));
 
 		let (tx, out_rx) = mpsc::unbounded();
-		let outgoing = OutgoingMessages::<B, N> {
+		let outgoing = OutgoingMessages::<B, GossipEngine<B>> {
 			round: round.0,
 			set_id: set_id.0,
 			network: self.service.clone(),
@@ -507,7 +428,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 			self.neighbor_sender.clone(),
 		);
 
-		let outgoing = CommitsOut::<B, N>::new(
+		let outgoing = CommitsOut::<B, GossipEngine<B>>::new(
 			self.service.clone(),
 			set_id.0,
 			is_voter,
@@ -665,7 +586,7 @@ fn incoming_global<B: BlockT, N: Network<B>>(
 		.map_err(|()| Error::Network(format!("Failed to receive message on unbounded stream")))
 }
 
-impl<B: BlockT, N: Network<B>> Clone for NetworkBridge<B, N> {
+impl<B: BlockT> Clone for NetworkBridge<B> {
 	fn clone(&self) -> Self {
 		NetworkBridge {
 			service: self.service.clone(),

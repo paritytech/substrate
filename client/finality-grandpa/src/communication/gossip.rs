@@ -83,7 +83,7 @@
 //! We only send polite messages to peers,
 
 use sr_primitives::traits::{NumberFor, Block as BlockT, Zero};
-use network::consensus_gossip::{self as network_gossip, MessageIntent, ValidatorContext};
+use network_gossip::{self, MessageIntent, ValidatorContext};
 use network::{config::Roles, PeerId};
 use codec::{Encode, Decode};
 use fg_primitives::AuthorityId;
