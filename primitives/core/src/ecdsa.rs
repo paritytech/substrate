@@ -528,6 +528,7 @@ mod test {
 	use super::*;
 	use hex_literal::hex;
 	use crate::crypto::DEV_PHRASE;
+	use serde_json;
 
 	#[test]
 	fn default_phrase_should_be_used() {
@@ -639,5 +640,28 @@ mod test {
 		println!("Correct: {}", s);
 		let cmp = Public::from_ss58check(&s).unwrap();
 		assert_eq!(cmp, public);
+	}
+
+	#[test]
+	fn signature_serialization_works() {
+		let pair = Pair::from_seed(b"12345678901234567890123456789012");
+		let message = b"Something important";
+		let signature = pair.sign(&message[..]);
+		let serialized_signature = serde_json::to_string(&signature).unwrap();
+		// Signature is 65 bytes, so 130 chars + 2 quote chars
+		assert_eq!(serialized_signature.len(), 132);
+		let signature = serde_json::from_str(&serialized_signature).unwrap();
+		assert!(Pair::verify(&signature, &message[..], &pair.public()));
+	}
+
+	#[test]
+	fn signature_serialization_doesnt_panic() {
+		fn deserialize_signature(text: &str) -> Result<Signature, serde_json::error::Error> {
+			Ok(serde_json::from_str(text)?)
+		}
+		assert!(deserialize_signature("Not valid json.").is_err());
+		assert!(deserialize_signature("\"Not an actual signature.\"").is_err());
+		// Poorly-sized
+		assert!(deserialize_signature("\"abc123\"").is_err());
 	}
 }
