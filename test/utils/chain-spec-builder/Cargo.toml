@@ -1,0 +1,14 @@
+[package]
+name = "chain-spec-builder"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+build = "build.rs"
+
+[dependencies]
+ansi_term = "0.12.1"
+keystore = { package = "substrate-keystore", path = "../../../client/keystore" }
+node-cli = { path = "../../../bin/node/cli" }
+primitives = { package = "substrate-primitives",  path = "../../../primitives/core" }
+rand = "0.7.2"
+structopt = "0.3.3"
