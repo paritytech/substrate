@@ -41,7 +41,8 @@ const DEFAULT_HEAP_PAGES: u64 = 1024;
 pub(crate) fn safe_call<F, U>(f: F) -> Result<U>
 	where F: UnwindSafe + FnOnce() -> U
 {
-	// Substrate uses custom panic hook that terminates process on panic. Disable termination for the native call.
+	// Substrate uses custom panic hook that terminates process on panic. Disable
+	// termination for the native call.
 	let _guard = panic_handler::AbortGuard::force_unwind();
 	std::panic::catch_unwind(f).map_err(|_| Error::Runtime)
 }
@@ -59,6 +60,10 @@ pub fn with_native_environment<F, U>(ext: &mut dyn Externalities, f: F) -> Resul
 ///
 /// By dispatching we mean that we execute a runtime function specified by it's name.
 pub trait NativeExecutionDispatch: Send + Sync {
+	/// Host functions for custom runtime interfaces that should be callable from within the runtime
+	/// besides the default Substrate runtime interfaces.
+	type ExtendHostFunctions: HostFunctions;
+
 	/// Dispatch a method in the runtime.
 	///
 	/// If the method with the specified name doesn't exist then `Err` is returned.
@@ -98,6 +103,9 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 		host_functions.extend(
 			crate::deprecated_host_interface::SubstrateExternals::host_functions(),
 		);
+
+		// Add the custom host functions provided by the user.
+		host_functions.extend(D::ExtendHostFunctions::host_functions());
 
 		NativeExecutor {
 			_dummy: Default::default(),
@@ -259,17 +267,65 @@ impl<D: NativeExecutionDispatch> CodeExecutor for NativeExecutor<D> {
 }
 
 /// Implements a `NativeExecutionDispatch` for provided parameters.
+///
+/// # Example
+///
+/// ```
+/// substrate_executor::native_executor_instance!(
+///     pub MyExecutor,
+///     test_runtime::api::dispatch,
+///     test_runtime::native_version,
+/// );
+/// ```
+///
+/// # With custom host functions
+///
+/// When you want to use custom runtime interfaces from within your runtime, you need to make the
+/// executor aware of the host functions for these interfaces.
+///
+/// ```
+/// # use runtime_interface::runtime_interface;
+///
+/// #[runtime_interface]
+/// trait MyInterface {
+///     fn say_hello_world(data: &str) {
+///         println!("Hello world from: {}", data);
+///     }
+/// }
+///
+/// substrate_executor::native_executor_instance!(
+///     pub MyExecutor,
+///     test_runtime::api::dispatch,
+///     test_runtime::native_version,
+///     my_interface::HostFunctions,
+/// );
+/// ```
+///
+/// When you have multiple interfaces, you can give the host functions as a tuple e.g.:
+/// `(my_interface::HostFunctions, my_interface2::HostFunctions)`
+///
 #[macro_export]
 macro_rules! native_executor_instance {
 	( $pub:vis $name:ident, $dispatcher:path, $version:path $(,)?) => {
-		/// A unit struct which implements `NativeExecutionDispatch` feeding in the hard-coded runtime.
+		/// A unit struct which implements `NativeExecutionDispatch` feeding in the
+		/// hard-coded runtime.
 		$pub struct $name;
-		$crate::native_executor_instance!(IMPL $name, $dispatcher, $version);
+		$crate::native_executor_instance!(IMPL $name, $dispatcher, $version, ());
 	};
-	(IMPL $name:ident, $dispatcher:path, $version:path) => {
+	( $pub:vis $name:ident, $dispatcher:path, $version:path, $custom_host_functions:ty $(,)?) => {
+		/// A unit struct which implements `NativeExecutionDispatch` feeding in the
+		/// hard-coded runtime.
+		$pub struct $name;
+		$crate::native_executor_instance!(
+			IMPL $name, $dispatcher, $version, $custom_host_functions
+		);
+	};
+	(IMPL $name:ident, $dispatcher:path, $version:path, $custom_host_functions:ty) => {
 		impl $crate::NativeExecutionDispatch for $name {
+			type ExtendHostFunctions = $custom_host_functions;
+
 			fn dispatch(
-				ext: &mut $crate::Externalities,
+				ext: &mut dyn $crate::Externalities,
 				method: &str,
 				data: &[u8]
 			) -> $crate::error::Result<Vec<u8>> {
@@ -281,5 +337,36 @@ macro_rules! native_executor_instance {
 				$version()
 			}
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use runtime_interface::runtime_interface;
+
+	#[runtime_interface]
+	trait MyInterface {
+		fn say_hello_world(data: &str) {
+			println!("Hello world from: {}", data);
+		}
+	}
+
+	native_executor_instance!(
+		pub MyExecutor,
+		test_runtime::api::dispatch,
+		test_runtime::native_version,
+		(my_interface::HostFunctions, my_interface::HostFunctions),
+	);
+
+	#[test]
+	fn native_executor_registers_custom_interface() {
+		let executor = NativeExecutor::<MyExecutor>::new(WasmExecutionMethod::Interpreted, None);
+		my_interface::HostFunctions::host_functions().iter().for_each(|function| {
+			assert_eq!(
+				executor.host_functions.iter().filter(|f| f == &function).count(),
+				2,
+			);
+		});
 	}
 }
