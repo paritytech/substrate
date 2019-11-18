@@ -95,12 +95,26 @@ pub struct VersionInfo {
 	pub support_url: &'static str,
 }
 
+/// Trigger exit signal
+pub trait TriggerExit {
+	type Signal: Send + 'static;
+	fn trigger_exit(&self, signal: Self::Signal);
+}
+
+pub struct DefaultTriggerExit;
+impl TriggerExit for DefaultTriggerExit {
+	type Signal = ();
+	fn trigger_exit(&self, signal: Self::Signal){}
+}
+
 /// Something that can be converted into an exit signal.
 pub trait IntoExit {
+
+	type TriggerExit : TriggerExit + Send + 'static;
 	/// Exit signal type.
-	type Exit: Future<Item=(),Error=()> + Send + 'static;
+	type Exit: Future<Item=<Self::TriggerExit as TriggerExit>::Signal, Error=()> + Send + 'static;
 	/// Convert into exit signal.
-	fn into_exit(self) -> Self::Exit;
+	fn into_exit(self) -> (Self::Exit, Self::TriggerExit);
 }
 
 fn get_chain_key(cli: &SharedParams) -> String {
@@ -607,7 +621,7 @@ where
 	};
 
 	service::chain_ops::export_blocks::<F, _, _>(
-		config, exit.into_exit(), file, As::sa(from), to.map(As::sa), json
+		config, exit.into_exit().0, file, As::sa(from), to.map(As::sa), json
 	).map_err(Into::into)
 }
 
@@ -629,7 +643,7 @@ where
 		None => Box::new(stdin()),
 	};
 
-	service::chain_ops::import_blocks::<F, _, _>(config, exit.into_exit(), file).map_err(Into::into)
+	service::chain_ops::import_blocks::<F, _, _>(config, exit.into_exit().0, file).map_err(Into::into)
 }
 
 fn revert_chain<F, S>(

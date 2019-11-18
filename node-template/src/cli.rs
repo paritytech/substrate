@@ -3,7 +3,7 @@ use futures::{future, Future, sync::oneshot};
 use std::cell::RefCell;
 use tokio::runtime::Runtime;
 pub use substrate_cli::{VersionInfo, IntoExit, error};
-use substrate_cli::{informant, parse_and_execute, NoCustom};
+use substrate_cli::{informant, parse_and_execute, NoCustom, TriggerExit, DefaultTriggerExit};
 use substrate_service::{ServiceFactory, Roles as ServiceRoles};
 use crate::chain_spec;
 use std::ops::Deref;
@@ -64,7 +64,7 @@ fn run_until_exit<T, C, E>(
 	let executor = runtime.executor();
 	informant::start(&service, exit.clone(), executor.clone());
 
-	let _ = runtime.block_on(e.into_exit());
+	let _ = runtime.block_on(e.into_exit().0);
 	exit_send.fire();
 
 	// we eagerly drop the service so that the internal exit future is fired,
@@ -77,8 +77,9 @@ fn run_until_exit<T, C, E>(
 // handles ctrl-c
 pub struct Exit;
 impl IntoExit for Exit {
-	type Exit = future::MapErr<oneshot::Receiver<()>, fn(oneshot::Canceled) -> ()>;
-	fn into_exit(self) -> Self::Exit {
+	type TriggerExit = DefaultTriggerExit;
+	type Exit = future::MapErr<oneshot::Receiver<<Self::TriggerExit as TriggerExit>::Signal>, fn(oneshot::Canceled) -> ()>;
+	fn into_exit(self) -> (Self::Exit, Self::TriggerExit) {
 		// can't use signal directly here because CtrlC takes only `Fn`.
 		let (exit_send, exit) = oneshot::channel();
 
@@ -89,6 +90,6 @@ impl IntoExit for Exit {
 			}
 		}).expect("Error setting Ctrl-C handler");
 
-		exit.map_err(drop)
+		(exit.map_err(drop), DefaultTriggerExit)
 	}
 }

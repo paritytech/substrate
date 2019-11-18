@@ -25,7 +25,7 @@ mod service;
 
 use tokio::prelude::Future;
 use tokio::runtime::{Builder as RuntimeBuilder, Runtime};
-pub use cli::{VersionInfo, IntoExit, NoCustom};
+pub use cli::{VersionInfo, IntoExit, NoCustom, DefaultTriggerExit, TriggerExit};
 use substrate_service::{ServiceFactory, Roles as ServiceRoles};
 use std::ops::Deref;
 use log::info;
@@ -121,7 +121,7 @@ fn run_until_exit<T, C, E>(
 	let executor = runtime.executor();
 	cli::informant::start(&service, exit.clone(), executor.clone());
 
-	let _ = runtime.block_on(e.into_exit());
+	let _ = runtime.block_on(e.into_exit().0);
 	exit_send.fire();
 
 	// we eagerly drop the service so that the internal exit future is fired,

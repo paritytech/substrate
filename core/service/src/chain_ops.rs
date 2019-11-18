@@ -43,7 +43,7 @@ pub fn export_blocks<F, E, W>(
 ) -> error::Result<()>
 	where
 	F: ServiceFactory,
-	E: Future<Item=(),Error=()> + Send + 'static,
+	E: Future<Error=()> + Send + 'static,
 	W: Write,
 {
 	let client = new_client::<F>(&config)?;
@@ -123,7 +123,7 @@ pub fn import_blocks<F, E, R>(
 	exit: E,
 	mut input: R
 ) -> error::Result<()>
-	where F: ServiceFactory, E: Future<Item=(),Error=()> + Send + 'static, R: Read,
+	where F: ServiceFactory, E: Future<Error=()> + Send + 'static, R: Read,
 {
 	let client = new_client::<F>(&config)?;
 	// FIXME #1134 this shouldn't need a mutable config.

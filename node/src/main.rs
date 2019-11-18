@@ -27,8 +27,9 @@ use std::cell::RefCell;
 // handles ctrl-c
 struct Exit;
 impl cli::IntoExit for Exit {
-	type Exit = future::MapErr<oneshot::Receiver<()>, fn(oneshot::Canceled) -> ()>;
-	fn into_exit(self) -> Self::Exit {
+	type TriggerExit = cli::DefaultTriggerExit;
+	type Exit = future::MapErr<oneshot::Receiver<<Self::TriggerExit as cli::TriggerExit>::Signal>, fn(oneshot::Canceled) -> ()>;
+	fn into_exit(self) -> (Self::Exit, Self::TriggerExit) {
 		// can't use signal directly here because CtrlC takes only `Fn`.
 		let (exit_send, exit) = oneshot::channel();
 
@@ -39,7 +40,7 @@ impl cli::IntoExit for Exit {
 			}
 		}).expect("Error setting Ctrl-C handler");
 
-		exit.map_err(drop)
+		(exit.map_err(drop), cli::DefaultTriggerExit)
 	}
 }
 
