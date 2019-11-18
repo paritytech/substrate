@@ -333,8 +333,8 @@ define_env!(Env, <E: Ext>,
 		Ok(())
 	},
 
-	// Retrieve the value at the given location from the storage and return 0.
-	// If there is no entry at the given location then this function will return 1 and
+	// Retrieve the value under the given key from the storage and return 0.
+	// If there is no entry under the given key then this function will return 1 and
 	// clear the scratch buffer.
 	//
 	// - key_ptr: pointer into the linear memory where the key
@@ -834,6 +834,32 @@ define_env!(Env, <E: Ext>,
 		ctx.scratch_buf.clear();
 		ctx.ext.block_number().encode_to(&mut ctx.scratch_buf);
 		Ok(())
+	},
+
+	// Retrieve the value under the given key from the **runtime** storage and return 0.
+	// If there is no entry under the given key then this function will return 1 and
+	// clear the scratch buffer.
+	//
+	// - key_ptr: the pointer into the linear memory where the requested value is placed.
+	// - key_len: the length of the key in bytes.
+	ext_get_runtime_storage(ctx, key_ptr: u32, key_len: u32) -> u32 => {
+		// Steal the scratch buffer so that we hopefully save an allocation for the `key_buf`.
+		read_sandbox_memory_into_scratch(ctx, key_ptr, key_len)?;
+		let key_buf = mem::replace(&mut ctx.scratch_buf, Vec::new());
+
+		match ctx.ext.get_runtime_storage(&key_buf) {
+			Some(value_buf) => {
+				// The given value exists.
+				ctx.scratch_buf = value_buf;
+				Ok(0)
+			}
+			None => {
+				// Put back the `key_buf` and allow its allocation to be reused.
+				ctx.scratch_buf = key_buf;
+				ctx.scratch_buf.clear();
+				Ok(1)
+			}
+		}
 	},
 );
 

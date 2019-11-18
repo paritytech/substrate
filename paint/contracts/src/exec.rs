@@ -22,7 +22,10 @@ use crate::rent;
 
 use rstd::prelude::*;
 use sr_primitives::traits::{Bounded, CheckedAdd, CheckedSub, Zero};
-use support::traits::{WithdrawReason, Currency, Time, Randomness};
+use support::{
+	storage::unhashed,
+	traits::{WithdrawReason, Currency, Time, Randomness},
+};
 
 pub type AccountIdOf<T> = <T as system::Trait>::AccountId;
 pub type CallOf<T> = <T as Trait>::Call;
@@ -175,6 +178,11 @@ pub trait Ext {
 
 	/// Returns the maximum allowed size of a storage item.
 	fn max_value_size(&self) -> u32;
+
+	/// Returns the value of runtime under the given key.
+	///
+	/// Returns `None` if the value doesn't exist.
+	fn get_runtime_storage(&self, key: &[u8]) -> Option<Vec<u8>>;
 }
 
 /// Loader is a companion of the `Vm` trait. It loads an appropriate abstract
@@ -784,6 +792,10 @@ where
 
 	fn max_value_size(&self) -> u32 {
 		self.ctx.config.max_value_size
+	}
+
+	fn get_runtime_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
+		unhashed::get_raw(&key)
 	}
 }
 
