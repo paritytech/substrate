@@ -504,7 +504,10 @@ fn check_finality_proof_fragment<Block: BlockT<Hash=H256>, B, J>(
 
 	// and now verify new authorities proof (if provided)
 	if let Some(new_authorities_proof) = proof_fragment.authorities_proof {
-		// it is safe to query header here, because its non-finality proves that it can't be pruned
+		// the proof is either generated using known header and it is safe to query header
+		// here, because its non-finality proves that it can't be pruned
+		// or it is generated using last unknown header (because it is the one who has
+		// justification => we only generate proofs for headers with justifications)
 		let header = match proof_fragment.unknown_headers.iter().rev().next().cloned() {
 			Some(header) => header,
 			None => blockchain.expect_header(BlockId::Hash(proof_fragment.block))?,
@@ -617,7 +620,7 @@ pub(crate) mod tests {
 	}
 
 	#[derive(Debug, PartialEq, Encode, Decode)]
-	pub struct TestJustification(pub bool, pub Option<(u64, Vec<(AuthorityId, u64)>)>, pub Vec<u8>);
+	pub struct TestJustification(pub bool, pub Option<(u64, AuthorityList)>, pub Vec<u8>);
 
 	impl ProvableJustification<Header> for TestJustification {
 		fn verify(&self, set_id: u64, authorities: &[(AuthorityId, u64)]) -> ClientResult<()> {
