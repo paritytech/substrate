@@ -388,7 +388,7 @@ impl<TSubstream> GenericProto<TSubstream> {
 			return;
 		}
 
-		trace!(target: "sub-libp2p", "External API => Packet for {:?}", target);
+		trace!(target: "sub-libp2p", "External API => Packet for {:?} with protocol {:?}", target, proto_name);
 		trace!(target: "sub-libp2p", "Handler({:?}) <= Packet", target);
 		self.events.push(NetworkBehaviourAction::SendEvent {
 			peer_id: target.clone(),

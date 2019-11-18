@@ -131,11 +131,12 @@ impl<TSubstream> NotificationsInSubstream<TSubstream>
 where TSubstream: AsyncRead + AsyncWrite + 'static,
 {
 	/// Sends the handshake in order to inform the remote that we accept the substream.
+	// TODO: doesn't seem to work if `message` is empty
 	pub fn send_handshake(&mut self, message: impl Into<Vec<u8>>) {
 		match self.handshake {
 			NotificationsInSubstreamHandshake::NotSent => {}
 			_ => {
-				error!("Tried to send handshake twice");
+				error!(target: "sub-libp2p", "Tried to send handshake twice");
 				return;
 			}
 		}

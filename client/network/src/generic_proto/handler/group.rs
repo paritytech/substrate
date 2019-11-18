@@ -63,8 +63,20 @@ pub struct NotifsHandler<TSubstream> {
 	/// Handler for backwards-compatibility.
 	legacy: LegacyProtoHandler<TSubstream>,
 
-	/// True if the handler is in the enabled state.
-	enabled: bool,
+	/// State of this handler.
+	enabled: EnabledState,
+
+	/// If we receive inbound substream requests while in initialization mode,
+	/// we push the corresponding index here and process them when the handler
+	/// gets enabled/disabled.
+	pending_in: Vec<usize>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum EnabledState {
+	Initial,
+	Enabled,
+	Disabled,
 }
 
 impl<TSubstream> IntoProtocolsHandler for NotifsHandlerProto<TSubstream>
@@ -92,7 +104,8 @@ where
 				.map(|p| p.into_handler(remote_peer_id, connected_point))
 				.collect(),
 			legacy: self.legacy.into_handler(remote_peer_id, connected_point),
-			enabled: false,
+			enabled: EnabledState::Initial,
+			pending_in: Vec::new(),
 		}
 	}
 }
@@ -164,7 +177,7 @@ impl<TSubstream> NotifsHandlerProto<TSubstream> {
 		let list = list.into();
 
 		NotifsHandlerProto {
-			in_handlers: list.clone().into_iter().map(|(p, msg)| NotifsInHandlerProto::new(p, msg)).collect(),
+			in_handlers: list.clone().into_iter().map(|(p, _)| NotifsInHandlerProto::new(p)).collect(),
 			out_handlers: list.clone().into_iter().map(|(p, _)| NotifsOutHandlerProto::new(p)).collect(),
 			legacy: LegacyProtoHandlerProto::new(legacy),
 		}
@@ -225,17 +238,23 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static {
 	fn inject_event(&mut self, message: NotifsHandlerIn) {
 		match message {
 			NotifsHandlerIn::Enable => {
-				self.enabled = true;
+				self.enabled = EnabledState::Enabled;
 				self.legacy.inject_event(LegacyProtoHandlerIn::Enable);
 				for handler in &mut self.out_handlers {
 					handler.inject_event(NotifsOutHandlerIn::Enable);
 				}
+				for num in self.pending_in.drain(..) {
+					self.in_handlers[num].inject_event(NotifsInHandlerIn::Accept(vec![1]));		// TODO: message
+				}
 			},
 			NotifsHandlerIn::Disable => {
-				self.enabled = false;
+				self.enabled = EnabledState::Disabled;
 				self.legacy.inject_event(LegacyProtoHandlerIn::Disable);
 				for handler in &mut self.out_handlers {
 					handler.inject_event(NotifsOutHandlerIn::Disable);
+				}
+				for num in self.pending_in.drain(..) {
+					self.in_handlers[num].inject_event(NotifsInHandlerIn::Refuse);
 				}
 			},
 			NotifsHandlerIn::Send { proto_name, message } => {
@@ -338,10 +357,12 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static {
 					ProtocolsHandlerEvent::OutboundSubstreamRequest { protocol, info: () } =>
 						error!("Incoming substream handler tried to open a substream"),
 					ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::OpenRequest) =>
-						if self.enabled {
-							handler.inject_event(NotifsInHandlerIn::Accept(Vec::new()));		// TODO: message
-						} else {
-							handler.inject_event(NotifsInHandlerIn::Refuse);
+						match self.enabled {
+							EnabledState::Initial => self.pending_in.push(handler_num),
+							EnabledState::Enabled =>
+								handler.inject_event(NotifsInHandlerIn::Accept(vec![1, 2, 3, 4])),		// TODO: message
+							EnabledState::Disabled =>
+								handler.inject_event(NotifsInHandlerIn::Refuse),
 						},
 					ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::Closed) => {},
 					ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::Notif(message)) => {
@@ -363,7 +384,9 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static {
 							protocol: protocol.map_upgrade(EitherUpgrade::A),
 							info: Some(handler_num),
 						})),
-					ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Open { handshake }) => {},		// TODO:
+					ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Open { handshake }) => {
+						log::error!("Opened substream, YAYYYYYYYY; handshake = {:?}", handshake);
+					},		// TODO:
 					ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Closed) => {},		// TODO:
 					ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Refused) => {},		// TODO:
 				}
