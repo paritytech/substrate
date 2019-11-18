@@ -565,6 +565,10 @@ mod tests {
 	}
 
 	impl ApiExt<Block> for RuntimeApi {
+		type StateBackend = <
+			test_client::Backend as client_api::backend::Backend<Block>
+		>::State;
+
 		fn map_api_result<F: FnOnce(&Self) -> std::result::Result<R, E>, R, E>(
 			&self,
 			_: F,
@@ -588,18 +592,16 @@ mod tests {
 		}
 
 		fn into_storage_changes<
-			B: sr_api::Backend<sr_api::HasherFor<Block>>,
 			T: sr_api::ChangesTrieStorage<sr_api::HasherFor<Block>, sr_api::NumberFor<Block>>
 		>(
 			self,
-			_: &B,
+			_: &Self::StateBackend,
 			_: Option<&T>,
 			_: <Block as sr_api::BlockT>::Hash,
 		) -> std::result::Result<
-			sr_api::StorageChanges<B, sr_api::HasherFor<Block>, sr_api::NumberFor<Block>>,
+			sr_api::StorageChanges<Self::StateBackend, sr_api::HasherFor<Block>, sr_api::NumberFor<Block>>,
 			String
 		> where
-			<Block as sr_api::BlockT>::Hash: Ord + 'static,
 			Self: Sized
 		{
 			unimplemented!("Not required for testing!")

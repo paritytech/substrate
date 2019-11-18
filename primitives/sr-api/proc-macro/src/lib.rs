@@ -41,16 +41,13 @@ mod utils;
 /// `RUNTIME_API_VERSIONS` is generated. This constant should be used to instantiate the `apis`
 /// field of `RuntimeVersion`.
 ///
-/// The macro expects `type NodeBlock = NodeBlockType;` as first input. This is required to work
-/// around some bugs in the rust compiler. (https://github.com/rust-lang/rust/issues/24159)
-///
 /// # Example
 ///
 /// ```rust
 /// use sr_version::create_runtime_str;
 /// #
-/// # use sr_primitives::traits::GetNodeBlockType;
-/// # use test_client::runtime::{Block, Header};
+/// # use sr_primitives::traits::{GetNodeBlockType, Block as BlockT};
+/// # use test_client::runtime::Block;
 /// #
 /// # /// The declaration of the `Runtime` type and the implementation of the `GetNodeBlockType`
 /// # /// trait are done by the `construct_runtime!` macro in a real runtime.
@@ -74,20 +71,12 @@ mod utils;
 ///
 /// /// All runtime api implementations need to be done in one call of the macro!
 /// sr_api::impl_runtime_apis! {
-///     /// The block type that is used by the node.
-///     /// This is an hack to workaround the following rust bug:
-///     /// https://github.com/rust-lang/rust/issues/24159
-///     ///
-///     /// Be aware that this type alias is only used as input for the macro and is not forwarded
-///     /// to the compiler.
-///     type NodeBlock = Block;
-///
 /// #   impl sr_api::Core<Block> for Runtime {
 /// #       fn version() -> sr_version::RuntimeVersion {
 /// #           unimplemented!()
 /// #       }
 /// #       fn execute_block(_block: Block) {}
-/// #       fn initialize_block(_header: &Header) {}
+/// #       fn initialize_block(_header: &<Block as BlockT>::Header) {}
 /// #   }
 ///
 ///     impl self::Balance<Block> for Runtime {

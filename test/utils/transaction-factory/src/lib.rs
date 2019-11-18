@@ -100,7 +100,8 @@ where
 	Backend: client_api::backend::Backend<Block> + Send,
 	Client<Backend, Exec, Block, RtApi>: ProvideRuntimeApi<Block>,
 	<Client<Backend, Exec, Block, RtApi> as ProvideRuntimeApi<Block>>::Api:
-		BlockBuilder<Block, Error = client::error::Error>,
+		BlockBuilder<Block, Error = client::error::Error> +
+		sr_api::ApiExt<Block, StateBackend = Backend::State>,
 	RtApi: ConstructRuntimeApi<Block, Client<Backend, Exec, Block, RtApi>> + Send + Sync,
 	Sc: SelectChain<Block>,
 	RA: RuntimeAdapter<Block = Block>,
@@ -185,7 +186,8 @@ fn import_block<Backend, Exec, Block, RtApi>(
 	Backend: client_api::backend::Backend<Block> + Send,
 	Client<Backend, Exec, Block, RtApi>: ProvideRuntimeApi<Block>,
 	<Client<Backend, Exec, Block, RtApi> as ProvideRuntimeApi<Block>>::Api:
-		sr_api::Core<Block, Error = client::error::Error>,
+		sr_api::Core<Block, Error = client::error::Error> +
+		sr_api::ApiExt<Block, StateBackend = Backend::State>,
 {
 	let import = BlockImportParams {
 		origin: BlockOrigin::File,

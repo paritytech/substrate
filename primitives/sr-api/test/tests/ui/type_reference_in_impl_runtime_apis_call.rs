@@ -22,7 +22,7 @@ sr_api::impl_runtime_apis! {
 	}
 
 	impl sr_api::Core<Block> for Runtime {
-		fn version() -> runtime_api::RuntimeVersion {
+		fn version() -> sr_api::RuntimeVersion {
 			unimplemented!()
 		}
 		fn execute_block(_: Block) {

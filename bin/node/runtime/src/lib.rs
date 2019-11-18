@@ -562,11 +562,6 @@ pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Call, SignedExt
 pub type Executive = executive::Executive<Runtime, Block, system::ChainContext<Runtime>, Runtime, AllModules>;
 
 impl_runtime_apis! {
-	/// The block type used by the node.
-	/// This is an hack to workaround the following rust bug:
-	/// https://github.com/rust-lang/rust/issues/24159
-	type NodeBlock = node_primitives::Block;
-
 	impl sr_api::Core<Block> for Runtime {
 		fn version() -> RuntimeVersion {
 			VERSION

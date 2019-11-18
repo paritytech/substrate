@@ -768,7 +768,8 @@ ServiceBuilder<
 		offchain::OffchainWorkerApi<TBl> +
 		tx_pool_api::TaggedTransactionQueue<TBl> +
 		session::SessionKeys<TBl> +
-		sr_api::ApiExt<TBl, Error = client::error::Error>,
+		sr_api::ApiErrorExt<Error = client::error::Error> +
+		sr_api::ApiExt<TBl, StateBackend = TBackend::State>,
 	TBl: BlockT,
 	TRtApi: 'static + Send + Sync,
 	TCfg: Default,

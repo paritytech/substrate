@@ -40,7 +40,7 @@ use sr_primitives::{
 	},
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
-		GetNodeBlockType, GetRuntimeBlockType, Verify, IdentityLookup,
+		GetNodeBlockType, GetRuntimeBlockType, Verify, IdentityLookup, NumberFor,
 	},
 };
 use runtime_version::RuntimeVersion;
@@ -457,8 +457,6 @@ static mut MUTABLE_STATIC: u64 = 32;
 cfg_if! {
 	if #[cfg(feature = "std")] {
 		impl_runtime_apis! {
-			type NodeBlock = Block;
-
 			impl sr_api::Core<Block> for Runtime {
 				fn version() -> RuntimeVersion {
 					version()
@@ -624,7 +622,7 @@ cfg_if! {
 			}
 
 			impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
-				fn offchain_worker(block: u64) {
+				fn offchain_worker(block: NumberFor<Block>) {
 					let ex = Extrinsic::IncludeData(block.encode());
 					runtime_io::offchain::submit_transaction(ex.encode()).unwrap();
 				}
@@ -644,8 +642,6 @@ cfg_if! {
 		}
 	} else {
 		impl_runtime_apis! {
-			type NodeBlock = Block;
-
 			impl sr_api::Core<Block> for Runtime {
 				fn version() -> RuntimeVersion {
 					version()
@@ -842,7 +838,7 @@ cfg_if! {
 			}
 
 			impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
-				fn offchain_worker(block: u64) {
+				fn offchain_worker(block: NumberFor<Block>) {
 					let ex = Extrinsic::IncludeData(block.encode());
 					runtime_io::offchain::submit_transaction(ex.encode()).unwrap()
 				}
