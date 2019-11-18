@@ -334,6 +334,7 @@ decl_module! {
 		///   Similar to [`remove_voter`], if replacement runners exists, they are immediately used.
 		///   Otherwise, a new election is started immediately.
 		// TODO: maybe don't re-run phragmen since it is expensive.
+		#[weight = SimpleDispatchInfo::FixedOperational(2_000_000)]
 		fn denounce_candidacy(origin) {
 			let who = ensure_signed(origin)?;
 
