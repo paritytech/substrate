@@ -34,11 +34,14 @@
 /// encouraged but not required to open a substream to A as well.
 ///
 
+use bytes::BytesMut;
 use futures::prelude::*;
 use libp2p::core::{Negotiated, UpgradeInfo, InboundUpgrade, OutboundUpgrade, upgrade, upgrade::ProtocolName};
+use libp2p::tokio_codec::Framed;
 use log::error;
-use std::{borrow::Cow, iter};
+use std::{borrow::Cow, io, iter, mem};
 use tokio_io::{AsyncRead, AsyncWrite};
+use unsigned_varint::codec::UviBytes;
 
 /// Upgrade that accepts a substream, sends back a status message, then becomes a unidirectional
 /// stream of messages.
@@ -61,8 +64,20 @@ pub struct NotificationsOut {
 /// When creating, this struct starts in a state in which we must first send back a handshake
 /// message to the remote. No message will come before this has been done.
 pub struct NotificationsInSubstream<TSubstream> {
-	socket: Negotiated<TSubstream>,
-	handshake_sent: bool,
+	socket: Framed<Negotiated<TSubstream>, UviBytes<Vec<u8>>>,
+	handshake: NotificationsInSubstreamHandshake,
+}
+
+/// State of the handshake sending back process.
+enum NotificationsInSubstreamHandshake {
+	/// Waiting for the user to give us the handshake message.
+	NotSent,
+	/// User gave us the handshake message. Trying to push it in the socket.
+	PendingSend(Vec<u8>),
+	/// Handshake message was pushed in the socket. Still need to flush.
+	PollComplete,
+	/// Handshake message successfully sent.
+	Sent,
 }
 
 pub struct NotificationsOutSubstream {
@@ -105,8 +120,8 @@ where TSubstream: AsyncRead + AsyncWrite + 'static,
 		_: Self::Info,
 	) -> Self::Future {
 		futures::future::ok(NotificationsInSubstream {
-			socket,
-			handshake_sent: false,
+			socket: Framed::new(socket, UviBytes::default()),
+			handshake: NotificationsInSubstreamHandshake::NotSent,
 		})
 	}
 }
@@ -116,10 +131,15 @@ where TSubstream: AsyncRead + AsyncWrite + 'static,
 {
 	/// Sends the handshake in order to inform the remote that we accept the substream.
 	pub fn send_handshake(&mut self, message: impl Into<Vec<u8>>) {
-		if self.handshake_sent {
-			error!("Tried to send handshake twice");
-			return;
+		match self.handshake {
+			NotificationsInSubstreamHandshake::NotSent => {}
+			_ => {
+				error!("Tried to send handshake twice");
+				return;
+			}
 		}
+
+		self.handshake = NotificationsInSubstreamHandshake::PendingSend(message.into());
 	}
 }
 
@@ -154,5 +174,38 @@ where TSubstream: AsyncRead + AsyncWrite + 'static,
 		proto_name: Self::Info,
 	) -> Self::Future {
 		unimplemented!()
+	}
+}
+
+impl<TSubstream> Stream for NotificationsInSubstream<TSubstream>
+where TSubstream: AsyncRead + AsyncWrite + 'static,
+{
+	type Item = BytesMut;
+	type Error = io::Error;
+
+	fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
+		// This `Stream` implementation first tries to send back the handshake if necessary.
+		loop {
+			match mem::replace(&mut self.handshake, NotificationsInSubstreamHandshake::Sent) {
+				NotificationsInSubstreamHandshake::Sent =>
+					return self.socket.poll(),
+				NotificationsInSubstreamHandshake::NotSent =>
+					return Ok(Async::NotReady),
+				NotificationsInSubstreamHandshake::PendingSend(msg) =>
+					match self.socket.start_send(msg)? {
+						AsyncSink::Ready =>
+							self.handshake = NotificationsInSubstreamHandshake::PollComplete,
+						AsyncSink::NotReady(msg) =>
+							self.handshake = NotificationsInSubstreamHandshake::PendingSend(msg),
+					},
+				NotificationsInSubstreamHandshake::PollComplete =>
+					match self.socket.poll_complete()? {
+						Async::Ready(()) =>
+							self.handshake = NotificationsInSubstreamHandshake::Sent,
+						Async::NotReady =>
+							self.handshake = NotificationsInSubstreamHandshake::PollComplete,
+					},
+			}
+		}
 	}
 }

@@ -39,6 +39,16 @@ pub trait Network {
 
 	/// Send a notification to a peer.
 	fn write_notif(&self, who: PeerId, proto_name: Cow<'static, [u8]>, engine_id: ConsensusEngineId, message: Vec<u8>);
+
+	/// Registers a notifications protocol.
+	///
+	/// See the documentation of [`NetworkService:register_notif_protocol`] for more information.
+	fn register_notif_protocol(
+		&self,
+		proto_name: impl Into<Cow<'static, [u8]>>,
+		engine_id: ConsensusEngineId,
+		handshake: impl Into<Vec<u8>>
+	);
 }
 
 impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Network for Arc<NetworkService<B, S, H>> {
@@ -61,5 +71,14 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Network for Arc<Network
 		};
 
 		NetworkService::write_notif(self, who, proto_name, message)
+	}
+
+	fn register_notif_protocol(
+		&self,
+		proto_name: impl Into<Cow<'static, [u8]>>,
+		engine_id: ConsensusEngineId,
+		handshake: impl Into<Vec<u8>>
+	) {
+		NetworkService::register_notif_protocol(self, proto_name, engine_id, handshake)
 	}
 }

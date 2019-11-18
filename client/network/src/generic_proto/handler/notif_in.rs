@@ -15,6 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::generic_proto::upgrade::{NotificationsIn, NotificationsInSubstream};
+use bytes::BytesMut;
 use futures::prelude::*;
 use libp2p::core::{ConnectedPoint, PeerId, Endpoint};
 use libp2p::core::upgrade::{DeniedUpgrade, InboundUpgrade, OutboundUpgrade};
@@ -39,15 +40,22 @@ pub struct NotifsInHandlerProto<TSubstream> {
 	/// Configuration for the protocol upgrade to negotiate.
 	in_protocol: NotificationsIn,
 
+	/// Message to send back to the remote if they open a substream.
+	handshake_message: Vec<u8>,
+
 	/// Marker to pin the generic type.
 	marker: PhantomData<TSubstream>,
 }
 
 impl<TSubstream> NotifsInHandlerProto<TSubstream> {
 	/// Builds a new `NotifsInHandlerProto`.
-	pub fn new(proto_name: impl Into<Cow<'static, [u8]>>) -> Self {
+	pub fn new(
+		proto_name: impl Into<Cow<'static, [u8]>>,
+		handshake_message: impl Into<Vec<u8>>
+	) -> Self {
 		NotifsInHandlerProto {
 			in_protocol: NotificationsIn::new(proto_name),
+			handshake_message: handshake_message.into(),
 			marker: PhantomData,
 		}
 	}
@@ -66,6 +74,7 @@ where
 	fn into_handler(self, remote_peer_id: &PeerId, connected_point: &ConnectedPoint) -> Self::Handler {
 		NotifsInHandler {
 			in_protocol: self.in_protocol,
+			handshake_message: self.handshake_message,
 			substream: None,
 			pending_accept_refuses: 0,
 			endpoint: connected_point.to_endpoint(),
@@ -79,6 +88,9 @@ where
 pub struct NotifsInHandler<TSubstream> {
 	/// Configuration for the protocol upgrade to negotiate for inbound substreams.
 	in_protocol: NotificationsIn,
+
+	/// Message to send back to the remote if they open a substream.
+	handshake_message: Vec<u8>,
 
 	/// Identifier of the node we're talking to. Used only for logging purposes and shouldn't have
 	/// any influence on the behaviour.
@@ -134,7 +146,7 @@ pub enum NotifsInHandlerOut {
 	/// Received a message on the notifications substream.
 	///
 	/// Can only happen after an `Accept` and before a `Closed`.
-	Notif(Vec<u8>),
+	Notif(BytesMut),
 }
 
 impl<TSubstream> NotifsInHandler<TSubstream> {
@@ -160,13 +172,14 @@ where TSubstream: AsyncRead + AsyncWrite + 'static {
 
 	fn inject_fully_negotiated_inbound(
 		&mut self,
-		proto: <Self::InboundProtocol as InboundUpgrade<TSubstream>>::Output
+		mut proto: <Self::InboundProtocol as InboundUpgrade<TSubstream>>::Output
 	) {
 		if self.substream.is_some() {
 			warn!(target: "sub-libp2p", "Received duplicate inbound substream");
 			return;
 		}
 
+		proto.send_handshake(self.handshake_message.clone());
 		self.substream = Some(proto);
 		self.events_queue.push(ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::OpenRequest));
 		self.pending_accept_refuses += 1;
@@ -235,6 +248,15 @@ where TSubstream: AsyncRead + AsyncWrite + 'static {
 		if !self.events_queue.is_empty() {
 			let event = self.events_queue.remove(0);
 			return Ok(Async::Ready(event))
+		}
+
+		if let Some(substream) = self.substream.as_mut() {
+			match substream.poll() {
+				Ok(Async::Ready(Some(msg))) =>
+					return Ok(Async::Ready(ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::Notif(msg)))),
+				Ok(Async::NotReady) => {},
+				Ok(Async::Ready(None)) | Err(_) => return Err(ConnectionKillError),		// TODO: ?
+			}
 		}
 
 		Ok(Async::NotReady)

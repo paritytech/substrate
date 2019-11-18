@@ -52,6 +52,7 @@ impl<B: BlockT> GossipEngine<B> {
 			proto_name: proto_name.clone(),
 		});
 
+		network.register_notif_protocol(proto_name.clone(), engine_id, Vec::new());
 		state_machine.register_validator(&mut *context, engine_id, validator);
 
 		let inner = Arc::new(Mutex::new(GossipEngineInner {

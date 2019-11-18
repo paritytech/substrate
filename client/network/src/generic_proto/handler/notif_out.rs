@@ -243,6 +243,7 @@ where TSubstream: AsyncRead + AsyncWrite + 'static {
 			NotifsOutHandlerIn::Enable => {
 				match mem::replace(&mut self.state, State::Poisoned) {
 					State::Disabled => {
+						log::error!("Enabling handler");
 						self.events_queue.push(ProtocolsHandlerEvent::OutboundSubstreamRequest {
 							protocol: SubstreamProtocol::new(NotificationsOut::new(self.proto_name.clone()))
 								.with_timeout(Duration::from_secs(30)),		// TODO: proper timeout config
