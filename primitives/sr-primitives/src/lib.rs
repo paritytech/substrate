@@ -350,12 +350,6 @@ impl From<ed25519::Signature> for AnySignature {
 #[cfg_attr(feature = "std", derive(Serialize))]
 /// Reason why an extrinsic couldn't be included into a block.
 pub enum InclusionError {
-	/// General error to do with the permissions of the sender.
-	NoPermission,
-
-	/// General error to do with the state of the system in general.
-	BadState,
-
 	/// Any error to do with the transaction validity.
 	Validity(transaction_validity::TransactionValidityError),
 }
@@ -365,7 +359,6 @@ impl InclusionError {
 	pub fn exhausted_resources(&self) -> bool {
 		match self {
 			Self::Validity(e) => e.exhausted_resources(),
-			_ => false,
 		}
 	}
 }
@@ -373,8 +366,6 @@ impl InclusionError {
 impl From<InclusionError> for &'static str {
 	fn from(err: InclusionError) -> &'static str {
 		match err {
-			InclusionError::NoPermission => "Transaction does not have required permissions",
-			InclusionError::BadState => "System state currently prevents this transaction",
 			InclusionError::Validity(v) => v.into(),
 		}
 	}
