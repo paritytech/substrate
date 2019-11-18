@@ -35,7 +35,6 @@ use sr_primitives::{
 use transaction_factory::RuntimeAdapter;
 use transaction_factory::modes::Mode;
 use inherents::InherentData;
-use timestamp;
 use sp_timestamp;
 use finality_tracker;
 

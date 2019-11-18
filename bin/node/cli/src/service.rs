@@ -370,7 +370,7 @@ mod tests {
 		traits::Verify,
 		OpaqueExtrinsic,
 	};
-	use timestamp;
+	use sp_timestamp;
 	use finality_tracker;
 	use keyring::AccountKeyring;
 	use substrate_service::{AbstractService, Roles};
@@ -498,7 +498,7 @@ mod tests {
 				// even though there's only one authority some slots might be empty,
 				// so we must keep trying the next slots until we can claim one.
 				let babe_pre_digest = loop {
-					inherent_data.replace_data(timestamp::INHERENT_IDENTIFIER, &(slot_num * SLOT_DURATION));
+					inherent_data.replace_data(sp_timestamp::INHERENT_IDENTIFIER, &(slot_num * SLOT_DURATION));
 					if let Some(babe_pre_digest) = babe::test_helpers::claim_slot(
 						slot_num,
 						&parent_header,
