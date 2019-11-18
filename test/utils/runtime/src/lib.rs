@@ -910,12 +910,14 @@ fn test_read_storage() {
 
 fn test_read_child_storage() {
 	const CHILD_KEY: &[u8] = b":child_storage:default:read_child_storage";
+	const UNIQUE_ID: &[u8] = b":unique_id";
 	const KEY: &[u8] = b":read_child_storage";
-	runtime_io::storage::child_set(CHILD_KEY, KEY, b"test");
+	runtime_io::storage::child_set(CHILD_KEY, UNIQUE_ID, KEY, b"test");
 
 	let mut v = [0u8; 4];
 	let r = runtime_io::storage::child_read(
 		CHILD_KEY,
+		UNIQUE_ID,
 		KEY,
 		&mut v,
 		0
@@ -924,7 +926,7 @@ fn test_read_child_storage() {
 	assert_eq!(&v, b"test");
 
 	let mut v = [0u8; 4];
-	let r = runtime_io::storage::child_read(CHILD_KEY, KEY, &mut v, 8);
+	let r = runtime_io::storage::child_read(CHILD_KEY, UNIQUE_ID, KEY, &mut v, 8);
 	assert_eq!(r, Some(4));
 	assert_eq!(&v, &[0, 0, 0, 0]);
 }

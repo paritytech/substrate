@@ -25,6 +25,7 @@ use trie::{
 	TrieMut, MemoryDB, child_trie_root, default_child_trie_root, TrieConfiguration,
 	trie_types::{TrieDBMut, Layout},
 };
+use primitives::storage::{ChildInfo, OwnedChildInfo};
 
 /// A state backend is used to read state data and can have changes committed
 /// to it.
@@ -49,11 +50,21 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	}
 
 	/// Get keyed child storage or None if there is nothing associated.
-	fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
+	fn child_storage(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		key: &[u8],
+	) -> Result<Option<Vec<u8>>, Self::Error>;
 
 	/// Get child keyed storage value hash or None if there is nothing associated.
-	fn child_storage_hash(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<H::Out>, Self::Error> {
-		self.child_storage(storage_key, key).map(|v| v.map(|v| H::hash(&v)))
+	fn child_storage_hash(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		key: &[u8],
+	) -> Result<Option<H::Out>, Self::Error> {
+		self.child_storage(storage_key, child_info, key).map(|v| v.map(|v| H::hash(&v)))
 	}
 
 	/// true if a key exists in storage.
@@ -62,12 +73,22 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	}
 
 	/// true if a key exists in child storage.
-	fn exists_child_storage(&self, storage_key: &[u8], key: &[u8]) -> Result<bool, Self::Error> {
-		Ok(self.child_storage(storage_key, key)?.is_some())
+	fn exists_child_storage(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		key: &[u8],
+	) -> Result<bool, Self::Error> {
+		Ok(self.child_storage(storage_key, child_info, key)?.is_some())
 	}
 
 	/// Retrieve all entries keys of child storage and call `f` for each of those keys.
-	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], f: F);
+	fn for_keys_in_child_storage<F: FnMut(&[u8])>(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		f: F,
+	);
 
 	/// Retrieve all entries keys which start with the given prefix and
 	/// call `f` for each of those keys.
@@ -82,7 +103,13 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 
 	/// Retrieve all child entries keys which start with the given prefix and
 	/// call `f` for each of those keys.
-	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(&self, storage_key: &[u8], prefix: &[u8], f: F);
+	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		prefix: &[u8],
+		f: F,
+	);
 
 	/// Calculate the storage root, with given delta over what is already stored in
 	/// the backend, and produce a "transaction" that can be used to commit.
@@ -95,7 +122,12 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	/// Calculate the child storage root, with given delta over what is already stored in
 	/// the backend, and produce a "transaction" that can be used to commit. The second argument
 	/// is true if child storage root equals default storage root.
-	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (Vec<u8>, bool, Self::Transaction)
+	fn child_storage_root<I>(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		delta: I,
+	) -> (Vec<u8>, bool, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		H::Out: Ord;
@@ -111,9 +143,14 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	}
 
 	/// Get all keys of child storage with given prefix
-	fn child_keys(&self, child_storage_key: &[u8], prefix: &[u8]) -> Vec<Vec<u8>> {
+	fn child_keys(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		prefix: &[u8],
+	) -> Vec<Vec<u8>> {
 		let mut all = Vec::new();
-		self.for_child_keys_with_prefix(child_storage_key, prefix, |k| all.push(k.to_vec()));
+		self.for_child_keys_with_prefix(storage_key, child_info, prefix, |k| all.push(k.to_vec()));
 		all
 	}
 
@@ -133,15 +170,15 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	where
 		I1: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		I2i: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
-		I2: IntoIterator<Item=(Vec<u8>, I2i)>,
+		I2: IntoIterator<Item=(Vec<u8>, I2i, OwnedChildInfo)>,
 		<H as Hasher>::Out: Ord,
 	{
 		let mut txs: Self::Transaction = Default::default();
 		let mut child_roots: Vec<_> = Default::default();
 		// child first
-		for (storage_key, child_delta) in child_deltas {
+		for (storage_key, child_delta, child_info) in child_deltas {
 			let (child_root, empty, child_txs) =
-				self.child_storage_root(&storage_key[..], child_delta);
+				self.child_storage_root(&storage_key[..], child_info.as_ref(), child_delta);
 			txs.consolidate(child_txs);
 			if empty {
 				child_roots.push((storage_key, None));
@@ -166,20 +203,36 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 		(*self).storage(key)
 	}
 
-	fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		(*self).child_storage(storage_key, key)
+	fn child_storage(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		key: &[u8],
+	) -> Result<Option<Vec<u8>>, Self::Error> {
+		(*self).child_storage(storage_key, child_info, key)
 	}
 
-	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], f: F) {
-		(*self).for_keys_in_child_storage(storage_key, f)
+	fn for_keys_in_child_storage<F: FnMut(&[u8])>(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		f: F,
+	) {
+		(*self).for_keys_in_child_storage(storage_key, child_info, f)
 	}
 
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
 		(*self).for_keys_with_prefix(prefix, f)
 	}
 
-	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(&self, storage_key: &[u8], prefix: &[u8], f: F) {
-		(*self).for_child_keys_with_prefix(storage_key, prefix, f)
+	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		prefix: &[u8],
+		f: F,
+	) {
+		(*self).for_child_keys_with_prefix(storage_key, child_info, prefix, f)
 	}
 
 	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
@@ -190,12 +243,17 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 		(*self).storage_root(delta)
 	}
 
-	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (Vec<u8>, bool, Self::Transaction)
+	fn child_storage_root<I>(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		delta: I,
+	) -> (Vec<u8>, bool, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		H::Out: Ord,
 	{
-		(*self).child_storage_root(storage_key, delta)
+		(*self).child_storage_root(storage_key, child_info, delta)
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
@@ -219,7 +277,10 @@ impl Consolidate for () {
 	}
 }
 
-impl Consolidate for Vec<(Option<Vec<u8>>, Vec<u8>, Option<Vec<u8>>)> {
+impl Consolidate for Vec<(
+		Option<(Vec<u8>, OwnedChildInfo)>,
+		Vec<(Vec<u8>, Option<Vec<u8>>)>,
+	)> {
 	fn consolidate(&mut self, mut other: Self) {
 		self.append(&mut other);
 	}
@@ -249,7 +310,7 @@ impl error::Error for Void {
 /// In-memory backend. Fully recomputes tries each time `as_trie_backend` is called but useful for
 /// tests and proof checking.
 pub struct InMemory<H: Hasher> {
-	inner: HashMap<Option<Vec<u8>>, HashMap<Vec<u8>, Vec<u8>>>,
+	inner: HashMap<Option<(Vec<u8>, OwnedChildInfo)>, HashMap<Vec<u8>, Vec<u8>>>,
 	// This field is only needed for returning reference in `as_trie_backend`.
 	trie: Option<TrieBackend<MemoryDB<H>, H>>,
 	_hasher: PhantomData<H>,
@@ -291,19 +352,21 @@ impl<H: Hasher> InMemory<H> {
 	/// Copy the state, with applied updates
 	pub fn update(&self, changes: <Self as Backend<H>>::Transaction) -> Self {
 		let mut inner: HashMap<_, _> = self.inner.clone();
-		for (storage_key, key, val) in changes {
-			match val {
-				Some(v) => { inner.entry(storage_key).or_default().insert(key, v); },
-				None => { inner.entry(storage_key).or_default().remove(&key); },
+		for (child_info, key_values) in changes {
+			let mut entry = inner.entry(child_info).or_default();
+			for (key, val) in key_values {
+				match val {
+					Some(v) => { entry.insert(key, v); },
+					None => { entry.remove(&key); },
+				}
 			}
 		}
-
 		inner.into()
 	}
 }
 
-impl<H: Hasher> From<HashMap<Option<Vec<u8>>, HashMap<Vec<u8>, Vec<u8>>>> for InMemory<H> {
-	fn from(inner: HashMap<Option<Vec<u8>>, HashMap<Vec<u8>, Vec<u8>>>) -> Self {
+impl<H: Hasher> From<HashMap<Option<(Vec<u8>, OwnedChildInfo)>, HashMap<Vec<u8>, Vec<u8>>>> for InMemory<H> {
+	fn from(inner: HashMap<Option<(Vec<u8>, OwnedChildInfo)>, HashMap<Vec<u8>, Vec<u8>>>) -> Self {
 		InMemory {
 			inner: inner,
 			trie: None,
@@ -314,14 +377,14 @@ impl<H: Hasher> From<HashMap<Option<Vec<u8>>, HashMap<Vec<u8>, Vec<u8>>>> for In
 
 impl<H: Hasher> From<(
 		HashMap<Vec<u8>, Vec<u8>>,
-		HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>,
+		HashMap<Vec<u8>, (HashMap<Vec<u8>, Vec<u8>>, OwnedChildInfo)>,
 )> for InMemory<H> {
 	fn from(inners: (
 		HashMap<Vec<u8>, Vec<u8>>,
-		HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>,
+		HashMap<Vec<u8>, (HashMap<Vec<u8>, Vec<u8>>, OwnedChildInfo)>,
 	)) -> Self {
-		let mut inner: HashMap<Option<Vec<u8>>, HashMap<Vec<u8>, Vec<u8>>>
-			= inners.1.into_iter().map(|(k, v)| (Some(k), v)).collect();
+		let mut inner: HashMap<Option<(Vec<u8>, OwnedChildInfo)>, HashMap<Vec<u8>, Vec<u8>>>
+			= inners.1.into_iter().map(|(k, (v, ci))| (Some((k, ci)), v)).collect();
 		inner.insert(None, inners.0);
 		InMemory {
 			inner: inner,
@@ -343,12 +406,18 @@ impl<H: Hasher> From<HashMap<Vec<u8>, Vec<u8>>> for InMemory<H> {
 	}
 }
 
-impl<H: Hasher> From<Vec<(Option<Vec<u8>>, Vec<u8>, Option<Vec<u8>>)>> for InMemory<H> {
-	fn from(inner: Vec<(Option<Vec<u8>>, Vec<u8>, Option<Vec<u8>>)>) -> Self {
-		let mut expanded: HashMap<Option<Vec<u8>>, HashMap<Vec<u8>, Vec<u8>>> = HashMap::new();
-		for (child_key, key, value) in inner {
-			if let Some(value) = value {
-				expanded.entry(child_key).or_default().insert(key, value);
+impl<H: Hasher> From<Vec<(Option<(Vec<u8>, OwnedChildInfo)>, Vec<(Vec<u8>, Option<Vec<u8>>)>)>>
+	for InMemory<H> {
+	fn from(
+		inner: Vec<(Option<(Vec<u8>, OwnedChildInfo)>, Vec<(Vec<u8>, Option<Vec<u8>>)>)>,
+	) -> Self {
+		let mut expanded: HashMap<Option<(Vec<u8>, OwnedChildInfo)>, HashMap<Vec<u8>, Vec<u8>>> = HashMap::new();
+		for (child_info, key_values) in inner {
+			let mut entry = expanded.entry(child_info).or_default();
+			for (key, value) in key_values {
+				if let Some(value) = value {
+					entry.insert(key, value);
+				}
 			}
 		}
 		expanded.into()
@@ -357,22 +426,33 @@ impl<H: Hasher> From<Vec<(Option<Vec<u8>>, Vec<u8>, Option<Vec<u8>>)>> for InMem
 
 impl<H: Hasher> InMemory<H> {
 	/// child storage key iterator
-	pub fn child_storage_keys(&self) -> impl Iterator<Item=&[u8]> {
-		self.inner.iter().filter_map(|item| item.0.as_ref().map(|v|&v[..]))
+	pub fn child_storage_keys(&self) -> impl Iterator<Item=(&[u8], ChildInfo)> {
+		self.inner.iter().filter_map(|item|
+			item.0.as_ref().map(|v|(&v.0[..], v.1.as_ref()))
+		)
 	}
 }
 
 impl<H: Hasher> Backend<H> for InMemory<H> {
 	type Error = Void;
-	type Transaction = Vec<(Option<Vec<u8>>, Vec<u8>, Option<Vec<u8>>)>;
+	type Transaction = Vec<(
+		Option<(Vec<u8>, OwnedChildInfo)>,
+		Vec<(Vec<u8>, Option<Vec<u8>>)>,
+	)>;
 	type TrieBackendStorage = MemoryDB<H>;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		Ok(self.inner.get(&None).and_then(|map| map.get(key).map(Clone::clone)))
 	}
 
-	fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		Ok(self.inner.get(&Some(storage_key.to_vec())).and_then(|map| map.get(key).map(Clone::clone)))
+	fn child_storage(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		key: &[u8],
+	) -> Result<Option<Vec<u8>>, Self::Error> {
+		Ok(self.inner.get(&Some((storage_key.to_vec(), child_info.to_owned())))
+			.and_then(|map| map.get(key).map(Clone::clone)))
 	}
 
 	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {
@@ -388,12 +468,24 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 			.for_each(|(k, v)| f(k, v)));
 	}
 
-	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], mut f: F) {
-		self.inner.get(&Some(storage_key.to_vec())).map(|map| map.keys().for_each(|k| f(&k)));
+	fn for_keys_in_child_storage<F: FnMut(&[u8])>(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		mut f: F,
+	) {
+		self.inner.get(&Some((storage_key.to_vec(), child_info.to_owned())))
+			.map(|map| map.keys().for_each(|k| f(&k)));
 	}
 
-	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(&self, storage_key: &[u8], prefix: &[u8], f: F) {
-		self.inner.get(&Some(storage_key.to_vec()))
+	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		prefix: &[u8],
+		f: F,
+	) {
+		self.inner.get(&Some((storage_key.to_vec(), child_info.to_owned())))
 			.map(|map| map.keys().filter(|key| key.starts_with(prefix)).map(|k| &**k).for_each(f));
 	}
 
@@ -413,19 +505,26 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 			.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))
 		);
 
-		let full_transaction = transaction.into_iter().map(|(k, v)| (None, k, v)).collect();
+		let full_transaction = transaction.into_iter().collect();
 
-		(root, full_transaction)
+		(root, vec![(None, full_transaction)])
 	}
 
-	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (Vec<u8>, bool, Self::Transaction)
+	fn child_storage_root<I>(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		delta: I,
+	) -> (Vec<u8>, bool, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		H::Out: Ord
 	{
 		let storage_key = storage_key.to_vec();
+		let child_info = Some((storage_key.clone(), child_info.to_owned()));
 
-		let existing_pairs = self.inner.get(&Some(storage_key.clone()))
+		
+		let existing_pairs = self.inner.get(&child_info)
 			.into_iter()
 			.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), Some(v.clone()))));
 
@@ -438,11 +537,11 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 				.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))
 		);
 
-		let full_transaction = transaction.into_iter().map(|(k, v)| (Some(storage_key.clone()), k, v)).collect();
+		let full_transaction = transaction.into_iter().collect();
 
 		let is_default = root == default_child_trie_root::<Layout<H>>(&storage_key);
 
-		(root, is_default, full_transaction)
+		(root, is_default, vec![(child_info, full_transaction)])
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
@@ -459,8 +558,13 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 			.collect()
 	}
 
-	fn child_keys(&self, storage_key: &[u8], prefix: &[u8]) -> Vec<Vec<u8>> {
-		self.inner.get(&Some(storage_key.to_vec()))
+	fn child_keys(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		prefix: &[u8],
+	) -> Vec<Vec<u8>> {
+		self.inner.get(&Some((storage_key.to_vec(), child_info.to_owned())))
 			.into_iter()
 			.flat_map(|map| map.keys().filter(|k| k.starts_with(prefix)).cloned())
 			.collect()
@@ -470,8 +574,8 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 		let mut mdb = MemoryDB::default();
 		let mut new_child_roots = Vec::new();
 		let mut root_map = None;
-		for (storage_key, map) in &self.inner {
-			if let Some(storage_key) = storage_key.as_ref() {
+		for (child_info, map) in &self.inner {
+			if let Some((storage_key, child_info)) = child_info.as_ref() {
 				let ch = insert_into_memory_db::<H, _>(&mut mdb, map.clone().into_iter())?;
 				new_child_roots.push((storage_key.clone(), ch.as_ref().into()));
 			} else {

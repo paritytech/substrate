@@ -21,7 +21,7 @@ use std::iter::FromIterator;
 use std::collections::{HashMap, BTreeSet};
 use codec::Decode;
 use crate::changes_trie::{NO_EXTRINSIC_INDEX, Configuration as ChangesTrieConfig};
-use primitives::storage::well_known_keys::EXTRINSIC_INDEX;
+use primitives::storage::{well_known_keys::EXTRINSIC_INDEX, OwnedChildInfo};
 
 /// The overlayed changes to state to be queried on top of the backend.
 ///
@@ -56,7 +56,7 @@ pub struct OverlayedChangeSet {
 	/// Top level storage changes.
 	pub top: HashMap<Vec<u8>, OverlayedValue>,
 	/// Child storage changes.
-	pub children: HashMap<Vec<u8>, HashMap<Vec<u8>, OverlayedValue>>,
+	pub children: HashMap<Vec<u8>, (HashMap<Vec<u8>, OverlayedValue>, OwnedChildInfo)>,
 }
 
 #[cfg(test)]
@@ -285,10 +285,12 @@ impl OverlayedChanges {
 						.extend(prospective_extrinsics);
 				}
 			}
-			for (storage_key, mut map) in self.prospective.children.drain() {
-				let map_dest = self.committed.children.entry(storage_key).or_default();
+			for (storage_key, (mut map, child_info)) in self.prospective.children.drain() {
+				let child_content = self.committed.children.entry(storage_key)
+					.or_insert_with(|| (Default::default(), child_info));
+				// No update to child info at this point (will be needed for deletion).
 				for (key, val) in map.drain() {
-					let entry = map_dest.entry(key).or_default();
+					let entry = child_content.0.entry(key).or_default();
 					entry.value = val.value;
 
 					if let Some(prospective_extrinsics) = val.extrinsics {
@@ -306,12 +308,12 @@ impl OverlayedChanges {
 	/// Will panic if there are any uncommitted prospective changes.
 	pub fn into_committed(self) -> (
 		impl Iterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
-		impl Iterator<Item=(Vec<u8>, impl Iterator<Item=(Vec<u8>, Option<Vec<u8>>)>)>,
+		impl Iterator<Item=(Vec<u8>, (impl Iterator<Item=(Vec<u8>, Option<Vec<u8>>)>, OwnedChildInfo))>,
 	){
 		assert!(self.prospective.is_empty());
 		(self.committed.top.into_iter().map(|(k, v)| (k, v.value)),
 			self.committed.children.into_iter()
-				.map(|(sk, v)| (sk, v.into_iter().map(|(k, v)| (k, v.value)))))
+				.map(|(sk, (v, ci))| (sk, (v.into_iter().map(|(k, v)| (k, v.value)), ci))))
 	}
 
 	/// Inserts storage entry responsible for current extrinsic index.
@@ -338,6 +340,18 @@ impl OverlayedChanges {
 					.unwrap_or(NO_EXTRINSIC_INDEX)),
 			false => None,
 		}
+	}
+
+	/// Get child info for a storage key.
+	/// Take the latest value so prospective first.
+	pub fn child_info(&self, storage_key: &[u8]) -> Option<&OwnedChildInfo> {
+		if let Some((_, ci)) = self.prospective.children.get(storage_key) {
+			return Some(&ci);
+		}
+		if let Some((_, ci)) = self.committed.children.get(storage_key) {
+			return Some(&ci);
+		}
+		None
 	}
 }
 

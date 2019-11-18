@@ -23,7 +23,7 @@ use log::{warn, trace};
 use hash_db::Hasher;
 use codec::{Decode, Encode};
 use primitives::{
-	storage::well_known_keys, NativeOrEncoded, NeverNativeValue, offchain::OffchainExt,
+	storage::{well_known_keys, ChildInfo}, NativeOrEncoded, NeverNativeValue, offchain::OffchainExt,
 	traits::{KeystoreExt, CodeExecutor}, hexdisplay::HexDisplay, hash::H256,
 };
 use overlayed_changes::OverlayedChangeSet;
@@ -576,6 +576,7 @@ where
 pub fn prove_child_read<B, H, I>(
 	mut backend: B,
 	storage_key: &[u8],
+	child_info: ChildInfo,
 	keys: I,
 ) -> Result<StorageProof, Box<dyn Error>>
 where
@@ -587,7 +588,7 @@ where
 {
 	let trie_backend = backend.as_trie_backend()
 		.ok_or_else(|| Box::new(ExecutionError::UnableToGenerateProof) as Box<dyn Error>)?;
-	prove_child_read_on_trie_backend(trie_backend, storage_key, keys)
+	prove_child_read_on_trie_backend(trie_backend, storage_key, child_info, keys)
 }
 
 /// Generate storage read proof on pre-created trie backend.
@@ -615,6 +616,7 @@ where
 pub fn prove_child_read_on_trie_backend<S, H, I>(
 	trie_backend: &TrieBackend<S, H>,
 	storage_key: &[u8],
+	child_info: ChildInfo,
 	keys: I,
 ) -> Result<StorageProof, Box<dyn Error>>
 where
@@ -627,7 +629,7 @@ where
 	let proving_backend = proving_backend::ProvingBackend::<_, H>::new(trie_backend);
 	for key in keys.into_iter() {
 		proving_backend
-			.child_storage(storage_key, key.as_ref())
+			.child_storage(storage_key, child_info, key.as_ref())
 			.map_err(|e| Box::new(e) as Box<dyn Error>)?;
 	}
 	Ok(proving_backend.extract_proof())
@@ -702,7 +704,9 @@ where
 	H: Hasher,
 	H::Out: Ord,
 {
-	proving_backend.child_storage(storage_key, key).map_err(|e| Box::new(e) as Box<dyn Error>)
+	// Not a prefixed memory db, using empty unique id and include root resolution.
+	proving_backend.child_storage(storage_key, ChildInfo::new_default(&[], None), key)
+		.map_err(|e| Box::new(e) as Box<dyn Error>)
 }
 
 /// Sets overlayed changes' changes trie configuration. Returns error if configuration
@@ -763,6 +767,8 @@ mod tests {
 		native_succeeds: bool,
 		fallback_succeeds: bool,
 	}
+
+	const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_1", None);
 
 	impl CodeExecutor for DummyCodeExecutor {
 		type Error = u8;

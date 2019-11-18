@@ -89,16 +89,21 @@ pub trait Storage {
 	}
 
 	/// Returns the data for `key` in the child storage or `None` if the key can not be found.
-	fn child_get(&self, child_storage_key: &[u8], key: &[u8]) -> Option<Vec<u8>> {
+	/// A key collision free unique id is required as parameter.
+	fn child_get(
+		&self,
+		child_storage_key: &[u8],
+		unique_id: &[u8],
+		key: &[u8],
+	) -> Option<Vec<u8>> {
 		let storage_key = child_storage_key_or_panic(child_storage_key);
-		self.child_storage(storage_key, key).map(|s| s.to_vec())
+		self.child_storage(storage_key, unique_id, key).map(|s| s.to_vec())
 	}
 
 	/// Get `key` from storage, placing the value into `value_out` and return the number of
 	/// bytes that the entry in storage has beyond the offset or `None` if the storage entry
 	/// doesn't exist at all.
-	/// If `value_out` length is smaller than the returned length, only `value_out` length bytes
-	/// are copied into `value_out`.
+	/// A key collision free unique id is required as parameter.
 	fn read(&self, key: &[u8], value_out: &mut [u8], value_offset: u32) -> Option<u32> {
 		self.storage(key).map(|value| {
 			let value_offset = value_offset as usize;
@@ -112,17 +117,19 @@ pub trait Storage {
 	/// Get `key` from child storage, placing the value into `value_out` and return the number
 	/// of bytes that the entry in storage has beyond the offset or `None` if the storage entry
 	/// doesn't exist at all.
+	/// A key collision free unique id is required as parameter.
 	/// If `value_out` length is smaller than the returned length, only `value_out` length bytes
 	/// are copied into `value_out`.
 	fn child_read(
 		&self,
 		child_storage_key: &[u8],
+		unique_id: &[u8],
 		key: &[u8],
 		value_out: &mut [u8],
 		value_offset: u32,
 	) -> Option<u32> {
 		let storage_key = child_storage_key_or_panic(child_storage_key);
-		self.child_storage(storage_key, key)
+		self.child_storage(storage_key, unique_id, key)
 			.map(|value| {
 				let value_offset = value_offset as usize;
 				let data = &value[value_offset.min(value.len())..];
@@ -138,9 +145,16 @@ pub trait Storage {
 	}
 
 	/// Set `key` to `value` in the child storage denoted by `child_storage_key`.
-	fn child_set(&mut self, child_storage_key: &[u8], key: &[u8], value: &[u8]) {
+	/// A key collision free unique id is required as parameter.
+	fn child_set(
+		&mut self,
+		child_storage_key: &[u8],
+		unique_id: &[u8],
+		key: &[u8],
+		value: &[u8],
+	) {
 		let storage_key = child_storage_key_or_panic(child_storage_key);
-		self.set_child_storage(storage_key, key.to_vec(), value.to_vec());
+		self.set_child_storage(storage_key, unique_id, key.to_vec(), value.to_vec());
 	}
 
 	/// Clear the storage of the given `key` and its value.
@@ -149,15 +163,24 @@ pub trait Storage {
 	}
 
 	/// Clear the given child storage of the given `key` and its value.
-	fn child_clear(&mut self, child_storage_key: &[u8], key: &[u8]) {
+	fn child_clear(
+		&mut self,
+		child_storage_key: &[u8],
+		unique_id: &[u8],
+		key: &[u8],
+	) {
 		let storage_key = child_storage_key_or_panic(child_storage_key);
-		self.clear_child_storage(storage_key, key);
+		self.clear_child_storage(storage_key, unique_id, key);
 	}
 
 	/// Clear an entire child storage.
-	fn child_storage_kill(&mut self, child_storage_key: &[u8]) {
+	fn child_storage_kill(
+		&mut self,
+		child_storage_key: &[u8],
+		unique_id: &[u8],
+	) {
 		let storage_key = child_storage_key_or_panic(child_storage_key);
-		self.kill_child_storage(storage_key);
+		self.kill_child_storage(storage_key, unique_id);
 	}
 
 	/// Check whether the given `key` exists in storage.
@@ -166,9 +189,14 @@ pub trait Storage {
 	}
 
 	/// Check whether the given `key` exists in storage.
-	fn child_exists(&self, child_storage_key: &[u8], key: &[u8]) -> bool {
+	fn child_exists(
+		&self,
+		child_storage_key: &[u8],
+		unique_id: &[u8],
+		key: &[u8],
+	) -> bool {
 		let storage_key = child_storage_key_or_panic(child_storage_key);
-		self.exists_child_storage(storage_key, key)
+		self.exists_child_storage(storage_key, unique_id, key)
 	}
 
 	/// Clear the storage of each key-value pair where the key starts with the given `prefix`.
@@ -177,9 +205,14 @@ pub trait Storage {
 	}
 
 	/// Clear the child storage of each key-value pair where the key starts with the given `prefix`.
-	fn child_clear_prefix(&mut self, child_storage_key: &[u8], prefix: &[u8]) {
+	fn child_clear_prefix(
+		&mut self,
+		child_storage_key: &[u8],
+		unique_id: &[u8],
+		prefix: &[u8],
+	) {
 		let storage_key = child_storage_key_or_panic(child_storage_key);
-		self.clear_child_prefix(storage_key, prefix);
+		self.clear_child_prefix(storage_key, unique_id, prefix);
 	}
 
 	/// "Commit" all existing operations and compute the resulting storage root.
@@ -188,9 +221,13 @@ pub trait Storage {
 	}
 
 	/// "Commit" all existing operations and compute the resulting child storage root.
-	fn child_root(&mut self, child_storage_key: &[u8]) -> Vec<u8> {
+	fn child_root(
+		&mut self,
+		child_storage_key: &[u8],
+		unique_id: &[u8],
+	) -> Vec<u8> {
 		let storage_key = child_storage_key_or_panic(child_storage_key);
-		self.child_storage_root(storage_key)
+		self.child_storage_root(storage_key, unique_id)
 	}
 
 	/// "Commit" all existing operations and get the resulting storage change root.

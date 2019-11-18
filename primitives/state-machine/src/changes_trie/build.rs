@@ -132,10 +132,15 @@ fn prepare_extrinsics_input_inner<'a, B, H, Number>(
 		H: Hasher,
 		Number: BlockNumber,
 {
-	let (committed, prospective) = if let Some(sk) = storage_key.as_ref() {
-		(changes.committed.children.get(sk), changes.prospective.children.get(sk))
+	let (committed, prospective, child_info) = if let Some(sk) = storage_key.as_ref() {
+		let child_info = changes.child_info(sk).cloned();
+		(
+			changes.committed.children.get(sk).map(|c| &c.0),
+			changes.prospective.children.get(sk).map(|c| &c.0),
+			child_info,
+		)
 	} else {
-		(Some(&changes.committed.top), Some(&changes.prospective.top))
+		(Some(&changes.committed.top), Some(&changes.prospective.top), None)
 	};
 	committed.iter().flat_map(|c| c.iter())
 		.chain(prospective.iter().flat_map(|c| c.iter()))
@@ -147,8 +152,11 @@ fn prepare_extrinsics_input_inner<'a, B, H, Number>(
 					// AND are not in storage at the beginning of operation
 					if let Some(sk) = storage_key.as_ref() {
 						if !changes.child_storage(sk, k).map(|v| v.is_some()).unwrap_or_default() {
-							if !backend.exists_child_storage(sk, k).map_err(|e| format!("{}", e))? {
-								return Ok(map);
+							if let Some(child_info) = child_info.as_ref() { 
+								if !backend.exists_child_storage(sk, child_info.as_ref(), k)
+									.map_err(|e| format!("{}", e))? {
+									return Ok(map);
+								}
 							}
 						}
 					} else {

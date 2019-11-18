@@ -156,3 +156,83 @@ impl<'a> ChildStorageKey<'a> {
 		self.storage_key.into_owned()
 	}
 }
+
+/// Information related to a child trie query.
+pub enum ChildInfo<'a> {
+	Default(ChildTrie<'a>),
+}
+
+/// Owned version of ChildInfo
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "std", derive(PartialEq, Eq, Hash, PartialOrd, Ord))]
+pub enum OwnedChildInfo {
+	Default(OwnedChildTrie),
+}
+
+impl<'a> ChildInfo<'a> {
+	/// Instantiate info for a default child trie.
+	pub const fn new_default(unique_id: &'a[u8], root: Option<&'a[u8]>) -> Self {
+		ChildInfo::Default(ChildTrie {
+			unique_id,
+			root,
+		})
+	}
+
+	/// Create owned child info.
+	pub fn to_owned(&self) -> OwnedChildInfo {
+		match self {
+			ChildInfo::Default(ChildTrie { unique_id, root })
+				=> OwnedChildInfo::Default(OwnedChildTrie {
+					unique_id: unique_id.to_vec(),
+					root: root.as_ref().map(|s| s.to_vec()),
+				}),
+		}
+	}
+
+}
+
+impl OwnedChildInfo {
+	/// Instantiate info for a default child trie.
+	pub fn new_default(unique_id: Vec<u8>, root: Option<Vec<u8>>) -> Self {
+		OwnedChildInfo::Default(OwnedChildTrie {
+			unique_id,
+			root,
+		})
+	}
+
+	/// Get reference to child info.
+	pub fn as_ref(&self) -> ChildInfo {
+		match self {
+			OwnedChildInfo::Default(OwnedChildTrie { unique_id, root })
+				=> ChildInfo::Default(ChildTrie {
+					unique_id: unique_id.as_slice(),
+					root: root.as_ref().map(Vec::as_slice),
+				}),
+		}
+	}
+}
+
+/// A child trie of default type.
+/// It share its trie node storage with any kind of key,
+/// and its unique id needs to be collision free (eg strong
+/// crypto hash).
+pub struct ChildTrie<'a> {
+	/// If root was fetch it can be memoïzed in this field
+	/// to avoid querying it explicitly.
+	pub root: Option<&'a[u8]>,
+
+	/// Unique id must but unique and free of any possible key collision.
+	pub unique_id: &'a[u8],
+}
+
+/// Owned version of default child trie.
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "std", derive(PartialEq, Eq, Hash, PartialOrd, Ord))]
+pub struct OwnedChildTrie {
+	/// If root was fetch it can be memoïzed in this field
+	/// to avoid querying it explicitly.
+	pub root: Option<Vec<u8>>,
+
+	/// Unique id must but unique and free of any possible key collision.
+	pub unique_id: Vec<u8>,
+}

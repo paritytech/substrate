@@ -594,12 +594,14 @@ impl StorageApi for () {
 		}
 	}
 
-	fn child_storage(storage_key: &[u8], key: &[u8]) -> Option<Vec<u8>> {
+	fn child_storage(storage_key: &[u8], unique_id: &[u8], key: &[u8]) -> Option<Vec<u8>> {
 		let mut length: u32 = 0;
 		unsafe {
 			let ptr = ext_get_allocated_child_storage.get()(
 				storage_key.as_ptr(),
 				storage_key.len() as u32,
+				unique_id.as_ptr(),
+				unique_id.len() as u32,
 				key.as_ptr(),
 				key.len() as u32,
 				&mut length
@@ -623,10 +625,17 @@ impl StorageApi for () {
 		}
 	}
 
-	fn read_child_storage(storage_key: &[u8], key: &[u8], value_out: &mut [u8], value_offset: usize) -> Option<usize> {
+	fn read_child_storage(
+		storage_key: &[u8],
+		unique_id: &[u8],
+		key: &[u8],
+		value_out: &mut [u8],
+		value_offset: usize,
+	) -> Option<usize> {
 		unsafe {
 			match ext_get_child_storage_into.get()(
 				storage_key.as_ptr(), storage_key.len() as u32,
+				unique_id.as_ptr(), unique_id.len() as u32,
 				key.as_ptr(), key.len() as u32,
 				value_out.as_mut_ptr(), value_out.len() as u32,
 				value_offset as u32
@@ -646,10 +655,11 @@ impl StorageApi for () {
 		}
 	}
 
-	fn set_child_storage(storage_key: &[u8], key: &[u8], value: &[u8]) {
+	fn set_child_storage(storage_key: &[u8], unique_id: &[u8], key: &[u8], value: &[u8]) {
 		unsafe {
 			ext_set_child_storage.get()(
 				storage_key.as_ptr(), storage_key.len() as u32,
+				unique_id.as_ptr(), unique_id.len() as u32,
 				key.as_ptr(), key.len() as u32,
 				value.as_ptr(), value.len() as u32
 			);
@@ -664,10 +674,11 @@ impl StorageApi for () {
 		}
 	}
 
-	fn clear_child_storage(storage_key: &[u8], key: &[u8]) {
+	fn clear_child_storage(storage_key: &[u8], unique_id: &[u8], key: &[u8]) {
 		unsafe {
 			ext_clear_child_storage.get()(
 				storage_key.as_ptr(), storage_key.len() as u32,
+				unique_id.as_ptr(), unique_id.len() as u32,
 				key.as_ptr(), key.len() as u32
 			);
 		}
@@ -681,10 +692,11 @@ impl StorageApi for () {
 		}
 	}
 
-	fn exists_child_storage(storage_key: &[u8], key: &[u8]) -> bool {
+	fn exists_child_storage(storage_key: &[u8], unique_id: &[u8], key: &[u8]) -> bool {
 		unsafe {
 			ext_exists_child_storage.get()(
 				storage_key.as_ptr(), storage_key.len() as u32,
+				unique_id.as_ptr(), unique_id.len() as u32,
 				key.as_ptr(), key.len() as u32
 			) != 0
 		}
@@ -699,20 +711,23 @@ impl StorageApi for () {
 		}
 	}
 
-	fn clear_child_prefix(storage_key: &[u8], prefix: &[u8]) {
+	fn clear_child_prefix(storage_key: &[u8], unique_id: &[u8], prefix: &[u8]) {
 		unsafe {
 			ext_clear_child_prefix.get()(
 				storage_key.as_ptr(), storage_key.len() as u32,
+				unique_id.as_ptr(), unique_id.len() as u32,
 				prefix.as_ptr(), prefix.len() as u32
 			);
 		}
 	}
 
-	fn kill_child_storage(storage_key: &[u8]) {
+	fn kill_child_storage(storage_key: &[u8], unique_id) {
 		unsafe {
 			ext_kill_child_storage.get()(
 				storage_key.as_ptr(),
-				storage_key.len() as u32
+				storage_key.len() as u32,
+				unique_id.as_ptr(),
+				unique_id.len() as u32,
 			);
 		}
 	}
@@ -725,12 +740,14 @@ impl StorageApi for () {
 		result
 	}
 
-	fn child_storage_root(storage_key: &[u8]) -> Vec<u8> {
+	fn child_storage_root(storage_key: &[u8], unique_id: &[u8]) -> Vec<u8> {
 		let mut length: u32 = 0;
 		unsafe {
 			let ptr = ext_child_storage_root.get()(
 				storage_key.as_ptr(),
 				storage_key.len() as u32,
+				unique_id.as_ptr(),
+				unique_id.len() as u32,
 				&mut length
 			);
 			from_raw_parts(ptr, length).expect("ext_child_storage_root never returns u32::max_value; qed")

@@ -128,7 +128,7 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 		trie_id: Option<&TrieId>,
 		location: &StorageKey
 	) -> Option<Vec<u8>> {
-		trie_id.and_then(|id| child::get_raw(id, &blake2_256(location)))
+		trie_id.and_then(|id| child::get_raw(id, crate::trie_unique_id(&id[..]), &blake2_256(location)))
 	}
 	fn get_code_hash(&self, account: &T::AccountId) -> Option<CodeHash<T>> {
 		<ContractInfoOf<T>>::get(account).and_then(|i| i.as_alive().map(|i| i.code_hash))
@@ -173,13 +173,13 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 					(false, Some(info), _) => info,
 					// Existing contract is being removed.
 					(true, Some(info), None) => {
-						child::kill_storage(&info.trie_id);
+						child::kill_storage(&info.trie_id, info.child_trie_unique_id());
 						<ContractInfoOf<T>>::remove(&address);
 						continue;
 					}
 					// Existing contract is being replaced by a new one.
 					(true, Some(info), Some(code_hash)) => {
-						child::kill_storage(&info.trie_id);
+						child::kill_storage(&info.trie_id, info.child_trie_unique_id());
 						AliveContractInfo::<T> {
 							code_hash,
 							storage_size: T::StorageSizeOffset::get(),
@@ -217,14 +217,18 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 				}
 
 				for (k, v) in changed.storage.into_iter() {
-					if let Some(value) = child::get_raw(&new_info.trie_id[..], &blake2_256(&k)) {
+					if let Some(value) = child::get_raw(
+						&new_info.trie_id[..],
+						new_info.child_trie_unique_id(),
+						&blake2_256(&k),
+					) {
 						new_info.storage_size -= value.len() as u32;
 					}
 					if let Some(value) = v {
 						new_info.storage_size += value.len() as u32;
-						child::put_raw(&new_info.trie_id[..], &blake2_256(&k), &value[..]);
+						child::put_raw(&new_info.trie_id[..], new_info.child_trie_unique_id(), &blake2_256(&k), &value[..]);
 					} else {
-						child::kill(&new_info.trie_id[..], &blake2_256(&k));
+						child::kill(&new_info.trie_id[..], new_info.child_trie_unique_id(), &blake2_256(&k));
 					}
 				}
 

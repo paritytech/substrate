@@ -24,7 +24,7 @@ use trie::trie_types::Layout;
 use primitives::{
 	storage::{
 		well_known_keys::is_child_storage_key, ChildStorageKey, StorageOverlay,
-		ChildrenStorageOverlay
+		ChildrenStorageOverlay, ChildInfo,
 	},
 	traits::Externalities, Blake2Hasher, hash::H256,
 };
@@ -130,20 +130,40 @@ impl Externalities for BasicExternalities {
 		self.storage_hash(key)
 	}
 
-	fn child_storage(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<Vec<u8>> {
+	fn child_storage(
+		&self,
+		storage_key: ChildStorageKey,
+		child_info: ChildInfo,
+		key: &[u8],
+	) -> Option<Vec<u8>> {
 		self.children.get(storage_key.as_ref()).and_then(|child| child.get(key)).cloned()
 	}
 
-	fn child_storage_hash(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<H256> {
-		self.child_storage(storage_key, key).map(|v| Blake2Hasher::hash(&v))
+	fn child_storage_hash(
+		&self,
+		storage_key: ChildStorageKey,
+		child_info: ChildInfo,
+		key: &[u8],
+	) -> Option<H256> {
+		self.child_storage(storage_key, child_info, key).map(|v| Blake2Hasher::hash(&v))
 	}
 
-	fn original_child_storage_hash(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<H256> {
-		self.child_storage_hash(storage_key, key)
+	fn original_child_storage_hash(
+		&self,
+		storage_key: ChildStorageKey,
+		child_info: ChildInfo,
+		key: &[u8],
+	) -> Option<H256> {
+		self.child_storage_hash(storage_key, child_info, key)
 	}
 
-	fn original_child_storage(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<Vec<u8>> {
-		Externalities::child_storage(self, storage_key, key)
+	fn original_child_storage(
+		&self,
+		storage_key: ChildStorageKey,
+		child_info: ChildInfo,
+		key: &[u8],
+	) -> Option<Vec<u8>> {
+		Externalities::child_storage(self, storage_key, child_info, key)
 	}
 
 	fn place_storage(&mut self, key: Vec<u8>, maybe_value: Option<Vec<u8>>) {
@@ -161,6 +181,7 @@ impl Externalities for BasicExternalities {
 	fn place_child_storage(
 		&mut self,
 		storage_key: ChildStorageKey,
+		child_info: ChildInfo,
 		key: Vec<u8>,
 		value: Option<Vec<u8>>,
 	) {
@@ -172,7 +193,11 @@ impl Externalities for BasicExternalities {
 		}
 	}
 
-	fn kill_child_storage(&mut self, storage_key: ChildStorageKey) {
+	fn kill_child_storage(
+		&mut self,
+		storage_key: ChildStorageKey,
+		child_info: ChildInfo,
+	) {
 		self.children.remove(storage_key.as_ref());
 	}
 
@@ -188,7 +213,12 @@ impl Externalities for BasicExternalities {
 		self.top.retain(|key, _| !key.starts_with(prefix));
 	}
 
-	fn clear_child_prefix(&mut self, storage_key: ChildStorageKey, prefix: &[u8]) {
+	fn clear_child_prefix(
+		&mut self,
+		storage_key: ChildStorageKey,
+		child_info: ChildInfo,
+		prefix: &[u8],
+	) {
 		if let Some(child) = self.children.get_mut(storage_key.as_ref()) {
 			child.retain(|key, _| !key.starts_with(prefix));
 		}
@@ -198,15 +228,15 @@ impl Externalities for BasicExternalities {
 
 	fn storage_root(&mut self) -> H256 {
 		let mut top = self.top.clone();
-		let keys: Vec<_> = self.children.keys().map(|k| k.to_vec()).collect();
 		// Single child trie implementation currently allows using the same child
 		// empty root for all child trie. Using null storage key until multiple
 		// type of child trie support.
 		let empty_hash = default_child_trie_root::<Layout<Blake2Hasher>>(&[]);
-		for storage_key in keys {
+		for (storage_key, (_values, child_info)) in self.children.iter() {
 			let child_root = self.child_storage_root(
 				ChildStorageKey::from_slice(storage_key.as_slice())
 					.expect("Map only feed by valid keys; qed"),
+				Some(&child_info[..]),
 			);
 			if &empty_hash[..] == &child_root[..] {
 				top.remove(&storage_key);
@@ -218,11 +248,16 @@ impl Externalities for BasicExternalities {
 		Layout::<Blake2Hasher>::trie_root(self.top.clone())
 	}
 
-	fn child_storage_root(&mut self, storage_key: ChildStorageKey) -> Vec<u8> {
+	fn child_storage_root(
+		&mut self,
+		storage_key: ChildStorageKey,
+		child_info: ChildInfo,
+	) -> Vec<u8> {
 		if let Some(child) = self.children.get(storage_key.as_ref()) {
 			let delta = child.clone().into_iter().map(|(k, v)| (k, Some(v)));
 
-			InMemory::<Blake2Hasher>::default().child_storage_root(storage_key.as_ref(), delta).0
+			InMemory::<Blake2Hasher>::default()
+				.child_storage_root(storage_key.as_ref(), child_info, delta).0
 		} else {
 			default_child_trie_root::<Layout<Blake2Hasher>>(storage_key.as_ref())
 		}

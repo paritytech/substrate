@@ -17,7 +17,7 @@
 use primitives::{
 	blake2_128, blake2_256, twox_128, twox_256, twox_64, ed25519, Blake2Hasher, sr25519, Pair, H256,
 	traits::KeystoreExt, storage::ChildStorageKey, hexdisplay::HexDisplay, Hasher,
-	offchain::{self, OffchainExt},
+	offchain::{self, OffchainExt}, storage::OwnedChildInfo,
 };
 // Switch to this after PoC-3
 // pub use primitives::BlakeHasher;
@@ -60,10 +60,14 @@ impl StorageApi for () {
 		})).expect("read_storage cannot be called outside of an Externalities-provided environment.")
 	}
 
-	fn child_storage(storage_key: &[u8], key: &[u8]) -> Option<Vec<u8>> {
+	fn child_storage(
+		storage_key: &[u8],
+		unique_id: &[u8],
+		key: &[u8],
+	) -> Option<Vec<u8>> {
 		with_externalities(|ext| {
 			let storage_key = child_storage_key_or_panic(storage_key);
-			ext.child_storage(storage_key, key).map(|s| s.to_vec())
+			ext.child_storage(storage_key, unique_id, key).map(|s| s.to_vec())
 		})
 		.expect("storage cannot be called outside of an Externalities-provided environment.")
 	}
@@ -76,13 +80,14 @@ impl StorageApi for () {
 
 	fn read_child_storage(
 		storage_key: &[u8],
+		unique_id: &[u8],
 		key: &[u8],
 		value_out: &mut [u8],
 		value_offset: usize,
 	) -> Option<usize> {
 		with_externalities(|ext| {
 			let storage_key = child_storage_key_or_panic(storage_key);
-			ext.child_storage(storage_key, key)
+			ext.child_storage(storage_key, unique_id, key)
 				.map(|value| {
 					let data = &value[value_offset.min(value.len())..];
 					let written = std::cmp::min(data.len(), value_out.len());
@@ -93,10 +98,15 @@ impl StorageApi for () {
 		.expect("read_child_storage cannot be called outside of an Externalities-provided environment.")
 	}
 
-	fn set_child_storage(storage_key: &[u8], key: &[u8], value: &[u8]) {
+	fn set_child_storage(
+		storage_key: &[u8],
+		unique_id: &[u8],
+		key: &[u8],
+		value: &[u8],
+	) {
 		with_externalities(|ext| {
 			let storage_key = child_storage_key_or_panic(storage_key);
-			ext.set_child_storage(storage_key, key.to_vec(), value.to_vec())
+			ext.set_child_storage(storage_key, unique_id, key.to_vec(), value.to_vec())
 		});
 	}
 
@@ -106,17 +116,17 @@ impl StorageApi for () {
 		);
 	}
 
-	fn clear_child_storage(storage_key: &[u8], key: &[u8]) {
+	fn clear_child_storage(storage_key: &[u8], key: &[u8], unique_id: &[u8]) {
 		with_externalities(|ext| {
 			let storage_key = child_storage_key_or_panic(storage_key);
-			ext.clear_child_storage(storage_key, key)
+			ext.clear_child_storage(storage_key, unique_id, key)
 		});
 	}
 
-	fn kill_child_storage(storage_key: &[u8]) {
+	fn kill_child_storage(storage_key: &[u8], unique_id: &[u8]) {
 		with_externalities(|ext| {
 			let storage_key = child_storage_key_or_panic(storage_key);
-			ext.kill_child_storage(storage_key)
+			ext.kill_child_storage(storage_key, unique_id)
 		});
 	}
 
@@ -126,10 +136,10 @@ impl StorageApi for () {
 		).unwrap_or(false)
 	}
 
-	fn exists_child_storage(storage_key: &[u8], key: &[u8]) -> bool {
+	fn exists_child_storage(storage_key: &[u8], unique_id: &[u8], key: &[u8]) -> bool {
 		with_externalities(|ext| {
 			let storage_key = child_storage_key_or_panic(storage_key);
-			ext.exists_child_storage(storage_key, key)
+			ext.exists_child_storage(storage_key, unique_id, key)
 		}).unwrap_or(false)
 	}
 
@@ -137,10 +147,10 @@ impl StorageApi for () {
 		with_externalities(|ext| ext.clear_prefix(prefix));
 	}
 
-	fn clear_child_prefix(storage_key: &[u8], prefix: &[u8]) {
+	fn clear_child_prefix(storage_key: &[u8], unique_id: &[u8], prefix: &[u8]) {
 		with_externalities(|ext| {
 			let storage_key = child_storage_key_or_panic(storage_key);
-			ext.clear_child_prefix(storage_key, prefix)
+			ext.clear_child_prefix(storage_key, unique_id, prefix)
 		});
 	}
 
@@ -150,10 +160,10 @@ impl StorageApi for () {
 		).unwrap_or(H256::zero()).into()
 	}
 
-	fn child_storage_root(storage_key: &[u8]) -> Vec<u8> {
+	fn child_storage_root(storage_key: &[u8], unique_id: &[u8]) -> Vec<u8> {
 		with_externalities(|ext| {
 			let storage_key = child_storage_key_or_panic(storage_key);
-			ext.child_storage_root(storage_key)
+			ext.child_storage_root(storage_key, unique_id)
 		}).expect("child_storage_root cannot be called outside of an Externalities-provided environment.")
 	}
 
@@ -469,8 +479,9 @@ impl Api for () {}
 /// A set of key value pairs for storage.
 pub type StorageOverlay = HashMap<Vec<u8>, Vec<u8>>;
 
-/// A set of key value pairs for children storage;
-pub type ChildrenStorageOverlay = HashMap<Vec<u8>, StorageOverlay>;
+/// Sets of key value pairs for children storage, stored at parent key location,
+/// with an associated unique id.
+pub type ChildrenStorageOverlay = HashMap<Vec<u8>, (StorageOverlay, OwnedChildInfo)>;
 
 /// Execute the given closure with global functions available whose functionality routes into
 /// externalities that draw from and populate `storage` and `children_storage`.
