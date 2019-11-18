@@ -1,0 +1,39 @@
+[package]
+name = "paint-im-online"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
+app-crypto = { package = "substrate-application-crypto", path = "../../primitives/application-crypto", default-features = false }
+authorship = { package = "paint-authorship", path = "../authorship", default-features = false }
+codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
+primitives = { package="substrate-primitives", path = "../../primitives/core", default-features = false }
+rstd = { package = "sr-std", path = "../../primitives/sr-std", default-features = false }
+serde = { version = "1.0.101", optional = true }
+session = { package = "paint-session", path = "../session", default-features = false }
+runtime-io = { package = "sr-io", path = "../../primitives/sr-io", default-features = false }
+sr-primitives = { path = "../../primitives/sr-primitives", default-features = false }
+sr-staking-primitives = { path = "../../primitives/sr-staking-primitives", default-features = false }
+support = { package = "paint-support", path = "../support", default-features = false }
+system = { package = "paint-system", path = "../system", default-features = false }
+
+[dev-dependencies]
+offchain = { package = "substrate-offchain", path = "../../client/offchain" }
+
+[features]
+default = ["std", "session/historical"]
+std = [
+	"app-crypto/std",
+	"authorship/std",
+	"codec/std",
+	"primitives/std",
+	"rstd/std",
+	"serde",
+	"session/std",
+	"runtime-io/std",
+	"sr-primitives/std",
+	"sr-staking-primitives/std",
+	"support/std",
+	"system/std",
+]

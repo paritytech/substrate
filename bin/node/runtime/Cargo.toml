@@ -1,0 +1,122 @@
+[package]
+name = "node-runtime"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+build = "build.rs"
+
+[dependencies]
+# third-party dependencies
+codec = { package = "parity-scale-codec", version = "1.0.6", default-features = false, features = ["derive"] }
+integer-sqrt = { version = "0.1.2" }
+safe-mix = { version = "1.0", default-features = false }
+rustc-hex = { version = "2.0", optional = true }
+serde = { version = "1.0.102", optional = true }
+
+# primitives
+authority-discovery-primitives = { package = "substrate-authority-discovery-primitives", path = "../../../primitives/authority-discovery", default-features = false }
+babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../../../primitives/consensus/babe", default-features = false }
+block-builder-api = { package = "substrate-block-builder-runtime-api", path = "../../../primitives/block-builder/runtime-api", default-features = false}
+inherents = { package = "substrate-inherents", path = "../../../primitives/inherents", default-features = false }
+node-primitives = { path = "../primitives", default-features = false }
+offchain-primitives = { package = "substrate-offchain-primitives", path = "../../../primitives/offchain", default-features = false }
+primitives = { package = "substrate-primitives",  path = "../../../primitives/core", default-features = false }
+rstd = { package = "sr-std", path = "../../../primitives/sr-std", default-features = false }
+sr-api = { path = "../../../primitives/sr-api", default-features = false }
+sr-primitives = { path = "../../../primitives/sr-primitives", default-features = false }
+sr-staking-primitives = { path = "../../../primitives/sr-staking-primitives", default-features = false }
+substrate-keyring = { path = "../../../primitives/keyring", optional = true }
+substrate-session = { path = "../../../primitives/session", default-features = false }
+tx-pool-api = { package = "substrate-transaction-pool-runtime-api", path = "../../../primitives/transaction-pool/runtime-api", default-features = false }
+version = { package = "sr-version", path = "../../../primitives/sr-version", default-features = false }
+
+# paint dependencies
+authority-discovery = { package = "paint-authority-discovery", path = "../../../paint/authority-discovery", default-features = false }
+authorship = { package = "paint-authorship", path = "../../../paint/authorship", default-features = false }
+babe = { package = "paint-babe", path = "../../../paint/babe", default-features = false }
+balances = { package = "paint-balances", path = "../../../paint/balances", default-features = false }
+collective = { package = "paint-collective", path = "../../../paint/collective", default-features = false }
+contracts = { package = "paint-contracts", path = "../../../paint/contracts", default-features = false }
+contracts-rpc-runtime-api = { package = "paint-contracts-rpc-runtime-api", path = "../../../paint/contracts/rpc/runtime-api/", default-features = false }
+democracy = { package = "paint-democracy", path = "../../../paint/democracy", default-features = false }
+elections-phragmen = { package = "paint-elections-phragmen", path = "../../../paint/elections-phragmen", default-features = false }
+executive = { package = "paint-executive", path = "../../../paint/executive", default-features = false }
+finality-tracker = { package = "paint-finality-tracker", path = "../../../paint/finality-tracker", default-features = false }
+grandpa = { package = "paint-grandpa", path = "../../../paint/grandpa", default-features = false }
+im-online = { package = "paint-im-online", path = "../../../paint/im-online", default-features = false }
+indices = { package = "paint-indices", path = "../../../paint/indices", default-features = false }
+membership = { package = "paint-membership", path = "../../../paint/membership", default-features = false }
+nicks = { package = "paint-nicks", path = "../../../paint/nicks", default-features = false }
+offences = { package = "paint-offences", path = "../../../paint/offences", default-features = false }
+randomness-collective-flip = { package = "paint-randomness-collective-flip", path = "../../../paint/randomness-collective-flip", default-features = false }
+session = { package = "paint-session", path = "../../../paint/session", default-features = false, features = ["historical"] }
+staking = { package = "paint-staking", path = "../../../paint/staking", default-features = false }
+paint-staking-reward-curve = { path = "../../../paint/staking/reward-curve"}
+sudo = { package = "paint-sudo", path = "../../../paint/sudo", default-features = false }
+support = { package = "paint-support", path = "../../../paint/support", default-features = false }
+system = { package = "paint-system", path = "../../../paint/system", default-features = false }
+system-rpc-runtime-api = { package = "paint-system-rpc-runtime-api", path = "../../../paint/system/rpc/runtime-api/", default-features = false }
+timestamp = { package = "paint-timestamp", path = "../../../paint/timestamp", default-features = false }
+treasury = { package = "paint-treasury", path = "../../../paint/treasury", default-features = false }
+utility = { package = "paint-utility", path = "../../../paint/utility", default-features = false }
+transaction-payment = { package = "paint-transaction-payment", path = "../../../paint/transaction-payment", default-features = false }
+transaction-payment-rpc-runtime-api = { package = "paint-transaction-payment-rpc-runtime-api", path = "../../../paint/transaction-payment/rpc/runtime-api/", default-features = false }
+
+[build-dependencies]
+wasm-builder-runner = { package = "substrate-wasm-builder-runner", path = "../../../client/utils/wasm-builder-runner", version = "1.0.4" }
+
+[dev-dependencies]
+runtime_io = { package = "sr-io", path = "../../../primitives/sr-io" }
+
+[features]
+default = ["std"]
+std = [
+	"authority-discovery-primitives/std",
+	"authority-discovery/std",
+	"authorship/std",
+	"babe-primitives/std",
+	"babe/std",
+	"balances/std",
+	"block-builder-api/std",
+	"codec/std",
+	"collective/std",
+	"contracts-rpc-runtime-api/std",
+	"contracts/std",
+	"democracy/std",
+	"elections-phragmen/std",
+	"executive/std",
+	"finality-tracker/std",
+	"grandpa/std",
+	"im-online/std",
+	"indices/std",
+	"inherents/std",
+	"membership/std",
+	"nicks/std",
+	"node-primitives/std",
+	"offchain-primitives/std",
+	"offences/std",
+	"primitives/std",
+	"randomness-collective-flip/std",
+	"rstd/std",
+	"rustc-hex",
+	"safe-mix/std",
+	"serde",
+	"session/std",
+	"sr-api/std",
+	"sr-primitives/std",
+	"sr-staking-primitives/std",
+	"staking/std",
+	"substrate-keyring",
+	"substrate-session/std",
+	"sudo/std",
+	"support/std",
+	"system-rpc-runtime-api/std",
+	"system/std",
+	"timestamp/std",
+	"transaction-payment-rpc-runtime-api/std",
+	"transaction-payment/std",
+	"treasury/std",
+	"tx-pool-api/std",
+	"utility/std",
+	"version/std",
+]
