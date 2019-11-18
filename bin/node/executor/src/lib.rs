@@ -297,6 +297,10 @@ mod tests {
 		ext
 	}
 
+	/// Construct a fake block.
+	///
+	/// `extrinsics` must be a list of valid extrinsics, i.e. none of the extrinsics for example
+	/// can report `ExhaustResources`. Otherwise, this function panics.
 	fn construct_block(
 		env: &mut TestExternalities<Blake2Hasher>,
 		number: BlockNumber,
@@ -332,13 +336,17 @@ mod tests {
 		).0.unwrap();
 
 		for i in extrinsics.iter() {
-			executor_call::<NeverNativeValue, fn() -> _>(
+			let r = executor_call::<NeverNativeValue, fn() -> _>(
 				env,
 				"BlockBuilder_apply_extrinsic",
 				&i.encode(),
 				true,
 				None,
-			).0.unwrap();
+			).0.expect("execution failed").into_encoded();
+			match ApplyResult::decode(&mut &r[..]).expect("apply result deserialization failed") {
+				Ok(_) => {},
+				Err(e) => panic!("panic while applying extrinsic: {:?}", e),
+			}
 		}
 
 		let header = match executor_call::<NeverNativeValue, fn() -> _>(
