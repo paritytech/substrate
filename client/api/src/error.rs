@@ -18,7 +18,7 @@
 
 use std::{self, error, result};
 use state_machine;
-use sr_primitives::ApplyError;
+use sr_primitives::InclusionError;
 use consensus;
 use derive_more::{Display, From};
 
@@ -38,8 +38,8 @@ pub enum Error {
 	#[display(fmt = "UnknownBlock: {}", _0)]
 	UnknownBlock(String),
 	/// Applying extrinsic error.
-	#[display(fmt = "Extrinsic error: {:?}", _0)]
-	ApplyExtrinsicFailed(ApplyError),
+	#[display(fmt = "Extrinsic inclusion error: {:?}", _0)]
+	ApplyExtrinsicFailed(InclusionError),
 	/// Execution error.
 	#[display(fmt = "Execution: {}", _0)]
 	Execution(Box<dyn state_machine::Error>),

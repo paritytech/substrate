@@ -25,7 +25,7 @@ use runtime_io::{
 use runtime_support::storage;
 use runtime_support::{decl_storage, decl_module};
 use sr_primitives::{
-	traits::{Hash as HashT, BlakeTwo256, Header as _}, generic, ApplyError, InclusionOutcome,
+	traits::{Hash as HashT, BlakeTwo256, Header as _}, generic, InclusionError, InclusionOutcome,
 	transaction_validity::{TransactionValidity, ValidTransaction, InvalidTransaction},
 };
 use codec::{KeyedVec, Encode};
@@ -246,7 +246,7 @@ pub fn finalize_block() -> Header {
 }
 
 #[inline(always)]
-fn check_signature(utx: &Extrinsic) -> Result<(), ApplyError> {
+fn check_signature(utx: &Extrinsic) -> Result<(), InclusionError> {
 	use sr_primitives::traits::BlindCheckable;
 	utx.clone().check().map_err(|_| InvalidTransaction::BadProof.into()).map(|_| ())
 }

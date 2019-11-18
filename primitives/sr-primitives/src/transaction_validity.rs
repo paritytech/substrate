@@ -146,14 +146,14 @@ impl From<UnknownTransaction> for TransactionValidityError {
 	}
 }
 
-impl From<InvalidTransaction> for crate::ApplyError {
-	fn from(invalid: InvalidTransaction) -> crate::ApplyError {
+impl From<InvalidTransaction> for crate::InclusionError {
+	fn from(invalid: InvalidTransaction) -> crate::InclusionError {
 		TransactionValidityError::from(invalid).into()
 	}
 }
 
-impl From<UnknownTransaction> for crate::ApplyError {
-	fn from(unknown: UnknownTransaction) -> crate::ApplyError {
+impl From<UnknownTransaction> for crate::InclusionError {
+	fn from(unknown: UnknownTransaction) -> crate::InclusionError {
 		TransactionValidityError::from(unknown).into()
 	}
 }

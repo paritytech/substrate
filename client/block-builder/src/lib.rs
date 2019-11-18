@@ -43,7 +43,7 @@ use sr_api::{Core, ApiExt, ApiErrorFor};
 pub use runtime_api::BlockBuilder as BlockBuilderApi;
 
 /// Error when the runtime failed to apply an extrinsic.
-pub struct ApplyExtrinsicFailed(pub sr_primitives::ApplyError);
+pub struct ApplyExtrinsicFailed(pub sr_primitives::InclusionError);
 
 /// Utility for building new (valid) blocks from a stream of extrinsics.
 pub struct BlockBuilder<'a, Block: BlockT, A: ProvideRuntimeApi> {

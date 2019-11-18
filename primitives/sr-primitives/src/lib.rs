@@ -348,8 +348,8 @@ impl From<ed25519::Signature> for AnySignature {
 
 #[derive(Eq, PartialEq, Clone, Copy, Decode, Encode, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize))]
-/// Reason why an extrinsic couldn't be applied (i.e. invalid extrinsic).
-pub enum ApplyError {
+/// Reason why an extrinsic couldn't be included into a block.
+pub enum InclusionError {
 	/// General error to do with the permissions of the sender.
 	NoPermission,
 
@@ -360,7 +360,7 @@ pub enum ApplyError {
 	Validity(transaction_validity::TransactionValidityError),
 }
 
-impl ApplyError {
+impl InclusionError {
 	/// Returns if the reason for the error was block resource exhaustion.
 	pub fn exhausted_resources(&self) -> bool {
 		match self {
@@ -370,46 +370,27 @@ impl ApplyError {
 	}
 }
 
-impl From<ApplyError> for &'static str {
-	fn from(err: ApplyError) -> &'static str {
+impl From<InclusionError> for &'static str {
+	fn from(err: InclusionError) -> &'static str {
 		match err {
-			ApplyError::NoPermission => "Transaction does not have required permissions",
-			ApplyError::BadState => "System state currently prevents this transaction",
-			ApplyError::Validity(v) => v.into(),
+			InclusionError::NoPermission => "Transaction does not have required permissions",
+			InclusionError::BadState => "System state currently prevents this transaction",
+			InclusionError::Validity(v) => v.into(),
 		}
 	}
 }
 
-impl From<transaction_validity::TransactionValidityError> for ApplyError {
+impl From<transaction_validity::TransactionValidityError> for InclusionError {
 	fn from(err: transaction_validity::TransactionValidityError) -> Self {
-		ApplyError::Validity(err)
+		InclusionError::Validity(err)
 	}
 }
-
-/// The outcome of applying a transaction.
-pub type ApplyOutcome = Result<(), DispatchError>;
 
 impl From<DispatchError> for ApplyOutcome {
 	fn from(err: DispatchError) -> Self {
 		Err(err)
 	}
 }
-
-/// The outcome of inclusion of an extrinsic into a block.
-///
-/// This type is typically used in the context of `BlockBuilder` to signal that the extrinsic
-/// in question cannot be included. It is fair to say that a valid block doesn't contain any
-/// extrinsic that would have had a negative inclusion outcome. On successful inclusion this type
-/// supplies the result of the extrinsic dispatch.
-///
-/// Examples of reasons preventing inclusion in a block:
-/// - More block weight is required to process the extrinsic than is left in the block being built.
-///   This doesn't neccessarily mean that the extrinsic is invalid, since it can still be
-///   included in the next block if it has enough spare weight available.
-/// - The sender doesn't have enough funds to pay the transaction inclusion fee. Including such
-///   a transaction in the block doesn't make sense.
-/// - The extrinsic supplied a bad signature. This transaction won't become valid ever.
-pub type InclusionOutcome = Result<ApplyOutcome, ApplyError>;
 
 #[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize))]
@@ -463,6 +444,25 @@ impl From<&'static str> for DispatchError {
 		DispatchError::new(None, 0, Some(err))
 	}
 }
+
+/// The outcome of applying a transaction.
+pub type ApplyOutcome = Result<(), DispatchError>;
+
+/// The outcome of inclusion of an extrinsic into a block.
+///
+/// This type is typically used in the context of `BlockBuilder` to signal that the extrinsic
+/// in question cannot be included. It is fair to say that a valid block doesn't contain any
+/// extrinsic that would have had a negative inclusion outcome. On successful inclusion this type
+/// supplies the result of the extrinsic dispatch.
+///
+/// Examples of reasons preventing inclusion in a block:
+/// - More block weight is required to process the extrinsic than is left in the block being built.
+///   This doesn't neccessarily mean that the extrinsic is invalid, since it can still be
+///   included in the next block if it has enough spare weight available.
+/// - The sender doesn't have enough funds to pay the transaction inclusion fee. Including such
+///   a transaction in the block doesn't make sense.
+/// - The extrinsic supplied a bad signature. This transaction won't become valid ever.
+pub type InclusionOutcome = Result<ApplyOutcome, InclusionError>;
 
 /// Verify a signature on an encoded value in a lazy manner. This can be
 /// an optimization if the signature scheme has an "unsigned" escape hash.

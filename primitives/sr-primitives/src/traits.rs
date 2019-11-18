@@ -750,7 +750,7 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 		call: &Self::Call,
 		info: DispatchInfo,
 		len: usize,
-	) -> Result<Self::Pre, crate::ApplyError> {
+	) -> Result<Self::Pre, crate::InclusionError> {
 		self.validate(who, call, info, len)
 			.map(|_| Self::Pre::default())
 			.map_err(Into::into)
@@ -784,7 +784,7 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 		call: &Self::Call,
 		info: DispatchInfo,
 		len: usize,
-	) -> Result<Self::Pre, crate::ApplyError> {
+	) -> Result<Self::Pre, crate::InclusionError> {
 		Self::validate_unsigned(call, info, len)
 			.map(|_| Self::Pre::default())
 			.map_err(Into::into)
@@ -830,7 +830,7 @@ impl<AccountId, Call> SignedExtension for Tuple {
 	}
 
 	fn pre_dispatch(self, who: &Self::AccountId, call: &Self::Call, info: DispatchInfo, len: usize)
-		-> Result<Self::Pre, crate::ApplyError>
+		-> Result<Self::Pre, crate::InclusionError>
 	{
 		Ok(for_tuples!( ( #( Tuple.pre_dispatch(who, call, info, len)? ),* ) ))
 	}
@@ -849,7 +849,7 @@ impl<AccountId, Call> SignedExtension for Tuple {
 		call: &Self::Call,
 		info: DispatchInfo,
 		len: usize,
-	) -> Result<Self::Pre, crate::ApplyError> {
+	) -> Result<Self::Pre, crate::InclusionError> {
 		Ok(for_tuples!( ( #( Tuple::pre_dispatch_unsigned(call, info, len)? ),* ) ))
 	}
 
@@ -983,7 +983,7 @@ pub trait ValidateUnsigned {
 	/// this function again to make sure we never include an invalid transaction.
 	///
 	/// Changes made to storage WILL be persisted if the call returns `Ok`.
-	fn pre_dispatch(call: &Self::Call) -> Result<(), crate::ApplyError> {
+	fn pre_dispatch(call: &Self::Call) -> Result<(), crate::InclusionError> {
 		Self::validate_unsigned(call)
 			.map(|_| ())
 			.map_err(Into::into)
