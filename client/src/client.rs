@@ -748,7 +748,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	) -> error::Result<ImportResult> where
 		E: CallExecutor<Block> + Send + Sync + Clone,
 		Self: ProvideRuntimeApi<Block>,
-		<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error>,
+		<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error> +
+			ApiExt<Block, StateBackend = B::State>,
 	{
 		let BlockImportParams {
 			origin,
@@ -835,7 +836,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	) -> error::Result<ImportResult> where
 		E: CallExecutor<Block> + Send + Sync + Clone,
 		Self: ProvideRuntimeApi<Block>,
-		<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error>,
+		<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error> +
+				ApiExt<Block, StateBackend = B::State>,
 	{
 		let parent_hash = import_headers.post().parent_hash().clone();
 		match self.backend.blockchain().status(BlockId::Hash(hash))? {
@@ -963,7 +965,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	)>
 		where
 			Self: ProvideRuntimeApi<Block>,
-			<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error>,
+			<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error> +
+				ApiExt<Block, StateBackend = B::State>,
 	{
 		match transaction.state()? {
 			Some(transaction_state) => {
@@ -1352,6 +1355,7 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 	Block: BlockT,
 {
 	type Error = Error;
+	type StateBackend = B::State;
 
 	fn call_api_at<
 		'a,
@@ -1416,7 +1420,8 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for &Client<B, E, Block, RA>
 	E: CallExecutor<Block> + Clone + Send + Sync,
 	Block: BlockT,
 	Client<B, E, Block, RA>: ProvideRuntimeApi<Block>,
-	<Client<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error>,
+	<Client<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error> +
+		ApiExt<Block, StateBackend = B::State>,
 {
 	type Error = ConsensusError;
 
@@ -1492,7 +1497,8 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 	E: CallExecutor<Block> + Clone + Send + Sync,
 	Block: BlockT,
 	Self: ProvideRuntimeApi<Block>,
-	<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error>,
+	<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error> +
+		ApiExt<Block, StateBackend = B::State>,
 {
 	type Error = ConsensusError;
 

@@ -19,12 +19,11 @@
 use std::{collections::HashMap, any::{Any, TypeId}};
 use hash_db::Hasher;
 use crate::{
-	backend::{InMemory, Backend}, OverlayedChanges,
+	backend::{InMemory, Backend}, OverlayedChanges, StorageTransactionCache, ext::Ext,
 	changes_trie::{
 		InMemoryStorage as ChangesTrieInMemoryStorage,
 		BlockNumber as ChangesTrieBlockNumber,
 	},
-	ext::Ext,
 };
 use primitives::{
 	storage::{
@@ -40,6 +39,7 @@ type StorageTuple = (HashMap<Vec<u8>, Vec<u8>>, HashMap<Vec<u8>, HashMap<Vec<u8>
 /// Simple HashMap-based Externalities impl.
 pub struct TestExternalities<H: Hasher=Blake2Hasher, N: ChangesTrieBlockNumber=u64> {
 	overlay: OverlayedChanges,
+	storage_transaction_cache: StorageTransactionCache<InMemory<H>, H, N>,
 	backend: InMemory<H>,
 	changes_trie_storage: ChangesTrieInMemoryStorage<H, N>,
 	extensions: Extensions,
@@ -53,6 +53,7 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 	pub fn ext(&mut self) -> Ext<H, N, InMemory<H>, ChangesTrieInMemoryStorage<H, N>> {
 		Ext::new(
 			&mut self.overlay,
+			&mut self.storage_transaction_cache,
 			&self.backend,
 			Some(&self.changes_trie_storage),
 			Some(&mut self.extensions),
@@ -90,6 +91,7 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 			changes_trie_storage: ChangesTrieInMemoryStorage::new(),
 			backend: backend.into(),
 			extensions: Default::default(),
+			storage_transaction_cache: Default::default(),
 		}
 	}
 

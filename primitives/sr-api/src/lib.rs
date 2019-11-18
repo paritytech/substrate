@@ -33,7 +33,7 @@
 #[doc(hidden)]
 #[cfg(feature = "std")]
 pub use state_machine::{
-	OverlayedChanges, StorageProof, Backend, StorageChanges, ChangesTrieStorage,
+	OverlayedChanges, StorageProof, Backend as StateBackend, StorageChanges, ChangesTrieStorage,
 };
 #[doc(hidden)]
 #[cfg(feature = "std")]
@@ -68,11 +68,16 @@ use std::{panic::UnwindSafe, cell::RefCell};
 
 pub use sr_api_proc_macro::{decl_runtime_apis, impl_runtime_apis};
 
-#[cfg(feature = "std")]
 /// A type that records all accessed trie nodes and generates a proof out of it.
+#[cfg(feature = "std")]
 pub type ProofRecorder<B> = state_machine::ProofRecorder<
 	<<<B as BlockT>::Header as HeaderT>::Hashing as HashT>::Hasher
 >;
+
+/// A type that is used as cache for the storage transactions.
+#[cfg(feature = "std")]
+pub type StorageTransactionCache<Block, Backend> =
+	state_machine::StorageTransactionCache<Backend, HasherFor<Block>, NumberFor<Block>>;
 
 /// Something that can be constructed to a runtime api.
 #[cfg(feature = "std")]
@@ -95,6 +100,9 @@ pub trait ApiErrorExt {
 /// Extends the runtime api implementation with some common functionality.
 #[cfg(feature = "std")]
 pub trait ApiExt<Block: BlockT>: ApiErrorExt {
+	/// The state backend that is used to store the block states.
+	type StateBackend: StateBackend<HasherFor<Block>>;
+
 	/// The given closure will be called with api instance. Inside the closure any api call is
 	/// allowed. After doing the api call, the closure is allowed to map the `Result` to a
 	/// different `Result` type. This can be important, as the internal data structure that keeps
@@ -137,16 +145,13 @@ pub trait ApiExt<Block: BlockT>: ApiErrorExt {
 
 	/// Convert the api object into the storage changes that were done while executing runtime
 	/// api functions.
-	fn into_storage_changes<
-		B: Backend<HasherFor<Block>>, T: ChangesTrieStorage<HasherFor<Block>, NumberFor<Block>>
-	>(
+	fn into_storage_changes<T: ChangesTrieStorage<HasherFor<Block>, NumberFor<Block>>>(
 		self,
-		backend: &B,
+		backend: &Self::StateBackend,
 		changes_trie_storage: Option<&T>,
 		parent_hash: Block::Hash,
-	) -> Result<StorageChanges<B, HasherFor<Block>, NumberFor<Block>>, String>
+	) -> Result<StorageChanges<Self::StateBackend, HasherFor<Block>, NumberFor<Block>>, String>
 		where
-			Block::Hash: Ord + 'static,
 			Self: Sized;
 }
 
@@ -173,8 +178,11 @@ pub enum InitializeBlock<'a, Block: BlockT> {
 /// Something that can call into the runtime at a given block.
 #[cfg(feature = "std")]
 pub trait CallRuntimeAt<Block: BlockT> {
-	/// Error type used by the interface.
+	/// Error type used by the implementation.
 	type Error: std::fmt::Debug + From<String>;
+
+	/// The state backend that is used to store the block states.
+	type StateBackend: StateBackend<HasherFor<Block>>;
 
 	/// Calls the given api function with the given encoded arguments at the given block and returns
 	/// the encoded result.

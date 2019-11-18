@@ -100,7 +100,7 @@ pub struct Proposal<Block: BlockT, Backend: state_machine::Backend<HasherFor<Blo
 pub trait Proposer<B: BlockT> {
 	/// Error type which can occur when proposing or evaluating.
 	type Error: From<Error> + std::fmt::Debug + 'static;
-	/// State backend used to store the state for a block.
+	/// The state backend that is used to store the block states.
 	type StateBackend: state_machine::Backend<HasherFor<B>> + Send;
 	/// Future that resolves to a committed proposal with an optional proof.
 	type Proposal: Future<Output = Result<Proposal<B, Self::StateBackend>, Self::Error>> +

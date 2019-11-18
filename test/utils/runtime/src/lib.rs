@@ -457,6 +457,8 @@ static mut MUTABLE_STATIC: u64 = 32;
 cfg_if! {
 	if #[cfg(feature = "std")] {
 		impl_runtime_apis! {
+			type NodeBlock = Block;
+
 			impl sr_api::Core<Block> for Runtime {
 				fn version() -> RuntimeVersion {
 					version()
@@ -642,6 +644,8 @@ cfg_if! {
 		}
 	} else {
 		impl_runtime_apis! {
+			type NodeBlock = Block;
+
 			impl sr_api::Core<Block> for Runtime {
 				fn version() -> RuntimeVersion {
 					version()

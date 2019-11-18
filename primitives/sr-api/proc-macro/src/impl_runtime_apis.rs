@@ -26,9 +26,9 @@ use proc_macro2::{Span, TokenStream};
 use quote::quote;
 
 use syn::{
-	spanned::Spanned, parse_macro_input, Ident, Type, ItemImpl, Path, Signature,
-	ImplItem, parse::{Parse, ParseStream, Result, Error}, PathArguments, GenericArgument, TypePath,
-	fold::{self, Fold}, parse_quote
+	spanned::Spanned, parse_macro_input, Ident, Type, ItemImpl, Path, Signature, token,
+	ImplItem, parse::{Parse, ParseStream, Result, Error, discouraged::Speculative}, PathArguments,
+	GenericArgument, TypePath, fold::{self, Fold}, parse_quote, custom_keyword, Attribute,
 };
 
 use std::{collections::HashSet, iter};
@@ -36,20 +36,45 @@ use std::{collections::HashSet, iter};
 /// Unique identifier used to make the hidden includes unique for this macro.
 const HIDDEN_INCLUDES_ID: &str = "IMPL_RUNTIME_APIS";
 
+custom_keyword!(NodeBlock);
+
 /// The structure used for parsing the runtime api implementations.
 struct RuntimeApiImpls {
+	node_block_ty: Type,
 	impls: Vec<ItemImpl>,
 }
 
 impl Parse for RuntimeApiImpls {
 	fn parse(input: ParseStream) -> Result<Self> {
+		let input_fork = input.fork();
+		Attribute::parse_outer(&input_fork)?;
+
+		// We need to get the `NodeBlock` type to work around the following bug:
+		// https://github.com/rust-lang/rust/issues/24159
+		// Otherwise we could just extract it from `Runtime` by using `GetNodeBlockType`.
+		if !input_fork.peek(token::Type) || !input_fork.peek2(NodeBlock) ||
+			!input_fork.peek3(token::Eq)
+		{
+			return Err(Error::new(
+				Span::call_site(),
+				"Expected `type NodeBlock =` as first input of the macro!",
+			))
+		}
+
+		input.advance_to(&input_fork);
+		input.parse::<token::Type>()?;
+		input.parse::<NodeBlock>()?;
+		input.parse::<token::Eq>()?;
+		let node_block_ty = input.parse()?;
+		input.parse::<token::Semi>()?;
+
 		let mut impls = Vec::new();
 
 		while !input.is_empty() {
 			impls.push(ItemImpl::parse(input)?);
 		}
 
-		Ok(Self { impls })
+		Ok(Self { node_block_ty, impls })
 	}
 }
 
@@ -222,41 +247,26 @@ fn generate_wasm_interface(impls: &[ItemImpl]) -> Result<TokenStream> {
 	Ok(quote!( #( #impl_calls )* ))
 }
 
-fn generate_block_and_block_id_ty(
-	runtime: &Type,
-	trait_: &'static str,
-	assoc_type: &'static str,
-) -> (TokenStream, TokenStream) {
+fn generate_runtime_api_base_structures(block: &Type) -> Result<TokenStream> {
 	let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
-	let trait_ = Ident::new(trait_, Span::call_site());
-	let assoc_type = Ident::new(assoc_type, Span::call_site());
-
-	let block = quote!( <#runtime as #crate_::#trait_>::#assoc_type );
 	let block_id = quote!( #crate_::BlockId<#block> );
-
-	(block, block_id)
-}
-
-fn generate_node_block_and_block_id_ty(runtime: &Type) -> (TokenStream, TokenStream) {
-	generate_block_and_block_id_ty(runtime, "GetNodeBlockType", "NodeBlock")
-}
-
-fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStream> {
-	let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
-	let runtime = &impls.get(0).ok_or_else(||
-		Error::new(Span::call_site(), "No api implementation given!")
-	)?.self_ty;
-	let (block, block_id) = generate_node_block_and_block_id_ty(runtime);
 
 	Ok(quote!(
 		pub struct RuntimeApi {}
 		/// Implements all runtime apis for the client side.
 		#[cfg(any(feature = "std", test))]
-		pub struct RuntimeApiImpl<C: #crate_::CallRuntimeAt<#block> + 'static> {
+		pub struct RuntimeApiImpl<C: #crate_::CallRuntimeAt<#block> + 'static>
+			where
+				// Rust bug: https://github.com/rust-lang/rust/issues/24159
+				C::StateBackend: #crate_::StateBackend<#crate_::HasherFor<#block>>,
+		{
 			call: &'static C,
 			commit_on_success: std::cell::RefCell<bool>,
 			initialized_block: std::cell::RefCell<Option<#block_id>>,
 			changes: std::cell::RefCell<#crate_::OverlayedChanges>,
+			storage_transaction_cache: std::cell::RefCell<
+				#crate_::StorageTransactionCache<Block, C::StateBackend>
+			>,
 			recorder: Option<#crate_::ProofRecorder<#block>>,
 		}
 
@@ -264,17 +274,36 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 		// `ApiRef` object and `ApiRef` also has an associated lifetime. This lifetimes makes it
 		// impossible to move `RuntimeApi` into another thread.
 		#[cfg(any(feature = "std", test))]
-		unsafe impl<C: #crate_::CallRuntimeAt<#block>> Send for RuntimeApiImpl<C> {}
-		#[cfg(any(feature = "std", test))]
-		unsafe impl<C: #crate_::CallRuntimeAt<#block>> Sync for RuntimeApiImpl<C> {}
+		unsafe impl<C: #crate_::CallRuntimeAt<#block>> Send for RuntimeApiImpl<C>
+			where
+				// Rust bug: https://github.com/rust-lang/rust/issues/24159
+				C::StateBackend: #crate_::StateBackend<#crate_::HasherFor<#block>>,
+		{}
 
 		#[cfg(any(feature = "std", test))]
-		impl<C: #crate_::CallRuntimeAt<#block>> #crate_::ApiErrorExt for RuntimeApiImpl<C> {
+		unsafe impl<C: #crate_::CallRuntimeAt<#block>> Sync for RuntimeApiImpl<C>
+			where
+				// Rust bug: https://github.com/rust-lang/rust/issues/24159
+				C::StateBackend: #crate_::StateBackend<#crate_::HasherFor<#block>>,
+		{}
+
+		#[cfg(any(feature = "std", test))]
+		impl<C: #crate_::CallRuntimeAt<#block>> #crate_::ApiErrorExt for RuntimeApiImpl<C>
+			where
+				// Rust bug: https://github.com/rust-lang/rust/issues/24159
+				C::StateBackend: #crate_::StateBackend<#crate_::HasherFor<#block>>,
+		{
 			type Error = C::Error;
 		}
 
 		#[cfg(any(feature = "std", test))]
-		impl<C: #crate_::CallRuntimeAt<#block>> #crate_::ApiExt<#block> for RuntimeApiImpl<C> {
+		impl<C: #crate_::CallRuntimeAt<#block>> #crate_::ApiExt<#block> for RuntimeApiImpl<C>
+			where
+				// Rust bug: https://github.com/rust-lang/rust/issues/24159
+				C::StateBackend: #crate_::StateBackend<#crate_::HasherFor<#block>>,
+		{
+			type StateBackend = C::StateBackend;
+
 			fn map_api_result<F: FnOnce(&Self) -> std::result::Result<R, E>, R, E>(
 				&self,
 				map_call: F
@@ -312,24 +341,25 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 			}
 
 			fn into_storage_changes<
-				B: #crate_::Backend<#crate_::HasherFor<#block>>,
 				T: #crate_::ChangesTrieStorage<#crate_::HasherFor<#block>, #crate_::NumberFor<#block>>
 			>(
 				self,
-				backend: &B,
+				backend: &Self::StateBackend,
 				changes_trie_storage: Option<&T>,
 				parent_hash: <#block as #crate_::BlockT>::Hash,
 			) -> std::result::Result<
-				#crate_::StorageChanges<B, #crate_::HasherFor<#block>, #crate_::NumberFor<#block>>,
+				#crate_::StorageChanges<
+					Self::StateBackend,
+					#crate_::HasherFor<#block>,
+					#crate_::NumberFor<#block>
+				>,
 				String
-			> where
-				<#block as #crate_::BlockT>::Hash: Ord + 'static,
-				Self: Sized,
-			{
+			> where Self: Sized {
 				self.changes.into_inner().into_storage_changes(
 					backend,
 					changes_trie_storage,
 					parent_hash,
+					self.storage_transaction_cache.into_inner(),
 				)
 			}
 		}
@@ -337,6 +367,9 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 		#[cfg(any(feature = "std", test))]
 		impl<C: #crate_::CallRuntimeAt<#block> + 'static> #crate_::ConstructRuntimeApi<#block, C>
 			for RuntimeApi
+				where
+					// Rust bug: https://github.com/rust-lang/rust/issues/24159
+					C::StateBackend: #crate_::StateBackend<#crate_::HasherFor<Block>>,
 		{
 			type RuntimeApi = RuntimeApiImpl<C>;
 
@@ -349,12 +382,17 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 					initialized_block: None.into(),
 					changes: Default::default(),
 					recorder: Default::default(),
+					storage_transaction_cache: Default::default(),
 				}.into()
 			}
 		}
 
 		#[cfg(any(feature = "std", test))]
-		impl<C: #crate_::CallRuntimeAt<#block>> RuntimeApiImpl<C> {
+		impl<C: #crate_::CallRuntimeAt<#block>> RuntimeApiImpl<C>
+			where
+				// Rust bug: https://github.com/rust-lang/rust/issues/24159
+				C::StateBackend: #crate_::StateBackend<#crate_::HasherFor<Block>>,
+		{
 			fn call_api_at<
 				R: #crate_::Encode + #crate_::Decode + PartialEq,
 				F: FnOnce(
@@ -438,7 +476,7 @@ fn generate_api_impl_for_runtime(impls: &[ItemImpl]) -> Result<TokenStream> {
 /// `impl Api for Runtime` with `impl Api for RuntimeApi` and replace the method implementations
 /// with code that calls into the runtime.
 struct ApiRuntimeImplToApiRuntimeApiImpl<'a> {
-	node_block: &'a TokenStream,
+	node_block: &'a Type,
 	runtime_block: &'a TypePath,
 	node_block_id: &'a TokenStream,
 	runtime_mod_path: &'a Path,
@@ -560,6 +598,13 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 			parse_quote!( RuntimeApiImplCall: #crate_::CallRuntimeAt<#block> + 'static )
 		);
 
+		input.generics.make_where_clause().predicates.push(
+			parse_quote! {
+				RuntimeApiImplCall::StateBackend:
+					#crate_::StateBackend<#crate_::HasherFor<#block>>
+			}
+		);
+
 		// The implementation for the `RuntimeApiImpl` is only required when compiling with
 		// the feature `std` or `test`.
 		input.attrs.push(parse_quote!( #[cfg(any(feature = "std", test))] ));
@@ -569,8 +614,11 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 }
 
 /// Generate the implementations of the runtime apis for the `RuntimeApi` type.
-fn generate_api_impl_for_runtime_api(impls: &[ItemImpl]) -> Result<TokenStream> {
+fn generate_api_impl_for_runtime_api(impls: &[ItemImpl], node_block: &Type) -> Result<TokenStream> {
 	let mut result = Vec::with_capacity(impls.len());
+
+	let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
+	let node_block_id = quote!( #crate_::BlockId<#node_block> );
 
 	for impl_ in impls {
 		let impl_trait_path = extract_impl_trait(&impl_)?;
@@ -580,7 +628,6 @@ fn generate_api_impl_for_runtime_api(impls: &[ItemImpl]) -> Result<TokenStream> 
 			.ok_or_else(|| Error::new(impl_trait_path.span(), "Empty trait path not possible!"))?
 			.clone();
 		let runtime_block = extract_runtime_block_ident(impl_trait_path)?;
-		let (node_block, node_block_id) = generate_node_block_and_block_id_ty(&impl_.self_ty);
 		let runtime_type = &impl_.self_ty;
 		let mut runtime_mod_path = extend_with_runtime_decl_path(impl_trait_path.clone());
 		// remove the trait to get just the module path
@@ -650,17 +697,21 @@ fn generate_runtime_api_versions(impls: &[ItemImpl]) -> Result<TokenStream> {
 /// The implementation of the `impl_runtime_apis!` macro.
 pub fn impl_runtime_apis_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 	// Parse all impl blocks
-	let RuntimeApiImpls { impls: api_impls } = parse_macro_input!(input as RuntimeApiImpls);
+	let RuntimeApiImpls { node_block_ty, impls: api_impls } = parse_macro_input!(
+		input as RuntimeApiImpls
+	);
 
 	let dispatch_impl = unwrap_or_error(generate_dispatch_function(&api_impls));
 	let api_impls_for_runtime = unwrap_or_error(generate_api_impl_for_runtime(&api_impls));
-	let base_runtime_api = unwrap_or_error(generate_runtime_api_base_structures(&api_impls));
+	let base_runtime_api = unwrap_or_error(generate_runtime_api_base_structures(&node_block_ty));
 	let hidden_includes = generate_hidden_includes(HIDDEN_INCLUDES_ID);
 	let runtime_api_versions = unwrap_or_error(generate_runtime_api_versions(&api_impls));
 	let wasm_interface = unwrap_or_error(generate_wasm_interface(&api_impls));
-	let api_impls_for_runtime_api = unwrap_or_error(generate_api_impl_for_runtime_api(&api_impls));
+	let api_impls_for_runtime_api = unwrap_or_error(
+		generate_api_impl_for_runtime_api(&api_impls, &node_block_ty)
+	);
 
-	quote!(
+	let res = quote!(
 		#hidden_includes
 
 		#base_runtime_api
@@ -678,5 +729,9 @@ pub fn impl_runtime_apis_impl(input: proc_macro::TokenStream) -> proc_macro::Tok
 
 			#wasm_interface
 		}
-	).into()
+	);
+
+	println!("{}", res);
+
+	res.into()
 }

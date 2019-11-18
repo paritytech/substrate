@@ -23,11 +23,11 @@ use std::{
 use codec::{Encode, Decode};
 use primitives::{offchain::OffchainExt, convert_hash, NativeOrEncoded, traits::CodeExecutor};
 use sr_primitives::{
-	generic::BlockId, traits::{One, Block as BlockT, Header as HeaderT, NumberFor, HasherFor},
+	generic::BlockId, traits::{One, Block as BlockT, Header as HeaderT, HasherFor},
 };
 use state_machine::{
 	self, Backend as StateBackend, OverlayedChanges, ExecutionStrategy, create_proof_check_backend,
-	execution_proof_check_on_trie_backend, ExecutionManager, ChangesTrieTransaction, StorageProof,
+	execution_proof_check_on_trie_backend, ExecutionManager, StorageProof,
 	merge_storage_proofs,
 };
 use hash_db::Hasher;
@@ -147,30 +147,6 @@ impl<Block, B, Local> CallExecutor<Block> for
 			true => self.local.runtime_version(id),
 			false => Err(ClientError::NotAvailableOnLightClient),
 		}
-	}
-
-	fn call_at_state<
-		S: StateBackend<HasherFor<Block>>,
-		FF: FnOnce(
-			Result<NativeOrEncoded<R>, Self::Error>,
-			Result<NativeOrEncoded<R>, Self::Error>
-		) -> Result<NativeOrEncoded<R>, Self::Error>,
-		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
-	>(&self,
-		_state: &S,
-		_changes: &mut OverlayedChanges,
-		_method: &str,
-		_call_data: &[u8],
-		_manager: ExecutionManager<FF>,
-		_native_call: Option<NC>,
-		_side_effects_handler: Option<OffchainExt>,
-	) -> ClientResult<(
-		NativeOrEncoded<R>,
-		(S::Transaction, Block::Hash),
-		Option<ChangesTrieTransaction<HasherFor<Block>, NumberFor<Block>>>,
-	)> {
-		Err(ClientError::NotAvailableOnLightClient)
 	}
 
 	fn prove_at_trie_state<S: state_machine::TrieBackendStorage<HasherFor<Block>>>(
@@ -344,33 +320,6 @@ mod tests {
 		}
 
 		fn runtime_version(&self, _id: &BlockId<Block>) -> Result<RuntimeVersion, ClientError> {
-			unreachable!()
-		}
-
-		fn call_at_state<
-			S: state_machine::Backend<HasherFor<Block>>,
-			F: FnOnce(
-				Result<NativeOrEncoded<R>, Self::Error>,
-				Result<NativeOrEncoded<R>, Self::Error>
-			) -> Result<NativeOrEncoded<R>, Self::Error>,
-			R: Encode + Decode + PartialEq,
-			NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
-		>(&self,
-			_state: &S,
-			_overlay: &mut OverlayedChanges,
-			_method: &str,
-			_call_data: &[u8],
-			_manager: ExecutionManager<F>,
-			_native_call: Option<NC>,
-			_side_effects_handler: Option<OffchainExt>,
-		) -> Result<
-			(
-				NativeOrEncoded<R>,
-				(S::Transaction, <Block as BlockT>::Hash),
-				Option<ChangesTrieTransaction<HasherFor<Block>, NumberFor<Block>>>,
-			),
-			ClientError,
-		> {
 			unreachable!()
 		}
 

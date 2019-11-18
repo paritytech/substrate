@@ -16,11 +16,8 @@
 
 use std::{panic::UnwindSafe, result, cell::RefCell};
 use codec::{Encode, Decode};
-use sr_primitives::{generic::BlockId, traits::Block as BlockT, traits::{HasherFor, NumberFor}};
-use state_machine::{
-	self, OverlayedChanges, ExecutionManager, ExecutionStrategy,
-	ChangesTrieTransaction, StorageProof,
-};
+use sr_primitives::{generic::BlockId, traits::Block as BlockT, traits::HasherFor};
+use state_machine::{self, OverlayedChanges, ExecutionManager, ExecutionStrategy, StorageProof};
 use executor::{RuntimeVersion, NativeVersion};
 use primitives::{offchain::OffchainExt, NativeOrEncoded};
 
@@ -80,34 +77,6 @@ where
 	///
 	/// No changes are made.
 	fn runtime_version(&self, id: &BlockId<B>) -> Result<RuntimeVersion, error::Error>;
-
-	/// Execute a call to a contract on top of given state.
-	///
-	/// No changes are made.
-	fn call_at_state<
-		S: state_machine::Backend<HasherFor<B>>,
-		F: FnOnce(
-			Result<NativeOrEncoded<R>, Self::Error>,
-			Result<NativeOrEncoded<R>, Self::Error>,
-		) -> Result<NativeOrEncoded<R>, Self::Error>,
-		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
-	>(&self,
-		state: &S,
-		overlay: &mut OverlayedChanges,
-		method: &str,
-		call_data: &[u8],
-		manager: ExecutionManager<F>,
-		native_call: Option<NC>,
-		side_effects_handler: Option<OffchainExt>,
-	) -> Result<
-		(
-			NativeOrEncoded<R>,
-			(S::Transaction, B::Hash),
-			Option<ChangesTrieTransaction<HasherFor<B>, NumberFor<B>>>
-		),
-		error::Error,
-	>;
 
 	/// Execute a call to a contract on top of given state, gathering execution proof.
 	///

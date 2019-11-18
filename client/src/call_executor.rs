@@ -17,11 +17,11 @@
 use std::{sync::Arc, panic::UnwindSafe, result, cell::RefCell};
 use codec::{Encode, Decode};
 use sr_primitives::{
-	generic::BlockId, traits::{Block as BlockT, NumberFor, HasherFor},
+	generic::BlockId, traits::{Block as BlockT, HasherFor},
 };
 use state_machine::{
-	self, OverlayedChanges, Ext, ExecutionManager, StateMachine, ExecutionStrategy,
-	backend::Backend as _, ChangesTrieTransaction, StorageProof,
+	self, OverlayedChanges, StorageTransactionCache, Ext, ExecutionManager, StateMachine,
+	ExecutionStrategy, backend::Backend as _, StorageProof,
 };
 use executor::{RuntimeVersion, RuntimeInfo, NativeVersion};
 use primitives::{
@@ -96,10 +96,8 @@ where
 			self.keystore.clone().map(KeystoreExt),
 		).execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
 			strategy.get_manager(),
-			false,
 			None,
-		)
-		.map(|(result, _, _)| result)?;
+		)?;
 		self.backend.destroy_state(state)?;
 		Ok(return_data.into_encoded())
 	}
@@ -169,10 +167,8 @@ where
 				)
 				.execute_using_consensus_failure_handler(
 					execution_manager,
-					false,
 					native_call,
 				)
-				.map(|(result, _, _)| result)
 				.map_err(Into::into)
 			}
 			None => StateMachine::new(
@@ -187,10 +183,8 @@ where
 			)
 			.execute_using_consensus_failure_handler(
 				execution_manager,
-				false,
 				native_call,
 			)
-			.map(|(result, _, _)| result)
 		}?;
 		self.backend.destroy_state(state)?;
 		Ok(result)
@@ -199,9 +193,11 @@ where
 	fn runtime_version(&self, id: &BlockId<Block>) -> error::Result<RuntimeVersion> {
 		let mut overlay = OverlayedChanges::default();
 		let state = self.backend.state_at(*id)?;
+		let mut cache = StorageTransactionCache::default();
 
 		let mut ext = Ext::new(
 			&mut overlay,
+			&mut cache,
 			&state,
 			self.backend.changes_trie_storage(),
 			None,
@@ -209,49 +205,6 @@ where
 		let version = self.executor.runtime_version(&mut ext);
 		self.backend.destroy_state(state)?;
 		version.ok_or(error::Error::VersionInvalid.into())
-	}
-
-	fn call_at_state<
-		S: state_machine::Backend<HasherFor<Block>>,
-		F: FnOnce(
-			Result<NativeOrEncoded<R>, Self::Error>,
-			Result<NativeOrEncoded<R>, Self::Error>,
-		) -> Result<NativeOrEncoded<R>, Self::Error>,
-		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
-	>(&self,
-		state: &S,
-		changes: &mut OverlayedChanges,
-		method: &str,
-		call_data: &[u8],
-		manager: ExecutionManager<F>,
-		native_call: Option<NC>,
-		side_effects_handler: Option<OffchainExt>,
-	) -> error::Result<(
-		NativeOrEncoded<R>,
-		(S::Transaction, Block::Hash),
-		Option<ChangesTrieTransaction<HasherFor<Block>, NumberFor<Block>>>,
-	)> {
-		StateMachine::new(
-			state,
-			self.backend.changes_trie_storage(),
-			side_effects_handler,
-			changes,
-			&self.executor,
-			method,
-			call_data,
-			self.keystore.clone().map(KeystoreExt),
-		).execute_using_consensus_failure_handler(
-			manager,
-			true,
-			native_call,
-		)
-		.map(|(result, storage_tx, changes_tx)| (
-			result,
-			storage_tx.expect("storage_tx is always computed when compute_tx is true; qed"),
-			changes_tx,
-		))
-		.map_err(Into::into)
 	}
 
 	fn prove_at_trie_state<S: state_machine::TrieBackendStorage<HasherFor<Block>>>(

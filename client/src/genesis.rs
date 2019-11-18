@@ -118,7 +118,7 @@ mod tests {
 			).unwrap();
 		}
 
-		let (ret_data, _, _) = StateMachine::new(
+		let ret_data = StateMachine::new(
 			backend,
 			Some(&InMemoryChangesTrieStorage::<_, u64>::new()),
 			None,

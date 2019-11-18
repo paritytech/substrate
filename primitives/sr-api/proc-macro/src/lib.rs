@@ -41,6 +41,9 @@ mod utils;
 /// `RUNTIME_API_VERSIONS` is generated. This constant should be used to instantiate the `apis`
 /// field of `RuntimeVersion`.
 ///
+/// The macro expects `type NodeBlock = NodeBlockType;` as first input. This is required to work
+/// around some bugs in the rust compiler. (https://github.com/rust-lang/rust/issues/24159)
+///
 /// # Example
 ///
 /// ```rust
@@ -71,6 +74,14 @@ mod utils;
 ///
 /// /// All runtime api implementations need to be done in one call of the macro!
 /// sr_api::impl_runtime_apis! {
+///     /// The block type that is used by the node.
+///     /// This is an hack to workaround the following rust bug:
+///     /// https://github.com/rust-lang/rust/issues/24159
+///     ///
+///     /// Be aware that this type alias is only used as input for the macro and is not forwarded
+///     /// to the compiler.
+///     type NodeBlock = Block;
+///
 /// #   impl sr_api::Core<Block> for Runtime {
 /// #       fn version() -> sr_version::RuntimeVersion {
 /// #           unimplemented!()

@@ -18,6 +18,7 @@ use proc_macro2::{TokenStream, Span};
 
 use syn::{
 	Result, Ident, Signature, parse_quote, Type, Pat, spanned::Spanned, FnArg, Error, token::And,
+	ReturnType,
 };
 
 use quote::quote;
@@ -81,10 +82,10 @@ pub fn generate_method_runtime_api_impl_name(trait_: &Ident, method: &Ident) -> 
 }
 
 /// Get the type of a `syn::ReturnType`.
-pub fn return_type_extract_type(rt: &syn::ReturnType) -> Type {
+pub fn return_type_extract_type(rt: &ReturnType) -> Type {
 	match rt {
-		syn::ReturnType::Default => parse_quote!( () ),
-		syn::ReturnType::Type(_, ref ty) => *ty.clone(),
+		ReturnType::Default => parse_quote!( () ),
+		ReturnType::Type(_, ref ty) => *ty.clone(),
 	}
 }
 
