@@ -1,0 +1,40 @@
+[package]
+name = "sr-io"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
+codec = { package = "parity-scale-codec", version = "1.0.6", default-features = false }
+hash-db = { version = "0.15.2", default-features = false }
+primitives = { package = "substrate-primitives", path = "../core", default-features = false }
+rstd = { package = "sr-std", path = "../sr-std", default-features = false }
+libsecp256k1 = { version = "0.3.0", optional = true }
+substrate-state-machine = { path = "../../primitives/state-machine", optional = true }
+runtime-interface = { package = "substrate-runtime-interface", path = "../runtime-interface", default-features = false }
+trie = { package = "substrate-trie", path = "../../primitives/trie", optional = true }
+externalities = { package = "substrate-externalities", path = "../externalities", optional = true }
+log = { version = "0.4.8", optional = true }
+
+[features]
+default = ["std"]
+std = [
+	"primitives/std",
+	"codec/std",
+	"rstd/std",
+	"hash-db/std",
+	"trie",
+	"substrate-state-machine",
+	"libsecp256k1",
+	"runtime-interface/std",
+	"externalities",
+	"log",
+]
+
+# These two features are used for `no_std` builds for the environments which already provides
+# `#[panic_handler]`, `#[alloc_error_handler]` and `#[global_allocator]`.
+#
+# For the regular wasm runtime builds those are not used.
+disable_panic_handler = []
+disable_oom = []
+disable_allocator = []

@@ -1,0 +1,141 @@
+[package]
+name = "node-cli"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+description = "Substrate node implementation in Rust."
+build = "build.rs"
+edition = "2018"
+default-run = "substrate"
+
+[badges]
+travis-ci = { repository = "paritytech/substrate", branch = "master" }
+maintenance = { status = "actively-developed" }
+is-it-maintained-issue-resolution = { repository = "paritytech/substrate" }
+is-it-maintained-open-issues = { repository = "paritytech/substrate" }
+
+[[bin]]
+name = "substrate"
+path = "bin/main.rs"
+required-features = ["cli"]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# third-party dependencies
+codec = { package = "parity-scale-codec", version = "1.0.6" }
+serde = { version = "1.0.102", features = [ "derive" ] }
+futures = "0.1.29"
+futures03 = { package = "futures-preview", version = "0.3.0-alpha.19", features = ["compat"] }
+hex-literal = "0.2.1"
+jsonrpc-core = "14.0.3"
+log = "0.4.8"
+rand = "0.7.2"
+structopt = "0.3.3"
+
+# primitives
+authority-discovery-primitives = { package = "substrate-authority-discovery-primitives", path = "../../../primitives/authority-discovery"}
+babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../../../primitives/consensus/babe" }
+grandpa_primitives = { package = "substrate-finality-grandpa-primitives", path = "../../../primitives/finality-grandpa" }
+primitives = { package = "substrate-primitives", path = "../../../primitives/core" }
+sr-primitives = { path = "../../../primitives/sr-primitives" }
+
+# core dependencies
+runtime-io = { package = "sr-io", path = "../../../primitives/sr-io" }
+client-api = { package = "substrate-client-api", path = "../../../client/api" }
+client = { package = "substrate-client", path = "../../../client/" }
+inherents = { package = "substrate-inherents", path = "../../../primitives/inherents" }
+chain-spec = { package = "substrate-chain-spec", path = "../../../client/chain-spec" }
+transaction_pool = { package = "substrate-transaction-pool", path = "../../../client/transaction-pool" }
+network = { package = "substrate-network", path = "../../../client/network" }
+babe = { package = "substrate-consensus-babe", path = "../../../client/consensus/babe" }
+grandpa = { package = "substrate-finality-grandpa", path = "../../../client/finality-grandpa" }
+keyring = { package = "substrate-keyring", path = "../../../primitives/keyring" }
+client_db = { package = "substrate-client-db", path = "../../../client/db", default-features = false }
+offchain = { package = "substrate-offchain", path = "../../../client/offchain" }
+substrate-rpc = { package = "substrate-rpc", path = "../../../client/rpc" }
+substrate-basic-authorship = { path = "../../../client/basic-authorship" }
+substrate-service = { path = "../../../client/service", default-features = false }
+substrate-telemetry = { package = "substrate-telemetry", path = "../../../client/telemetry" }
+authority-discovery = { package = "substrate-authority-discovery", path = "../../../client/authority-discovery"}
+
+# paint dependencies
+indices = { package = "paint-indices", path = "../../../paint/indices" }
+timestamp = { package = "paint-timestamp", path = "../../../paint/timestamp", default-features = false }
+finality_tracker = { package = "paint-finality-tracker", path = "../../../paint/finality-tracker", default-features = false }
+contracts = { package = "paint-contracts", path = "../../../paint/contracts" }
+system = { package = "paint-system", path = "../../../paint/system" }
+balances = { package = "paint-balances", path = "../../../paint/balances" }
+transaction-payment = { package = "paint-transaction-payment", path = "../../../paint/transaction-payment" }
+support = { package = "paint-support", path = "../../../paint/support", default-features = false }
+im_online = { package = "paint-im-online", path = "../../../paint/im-online", default-features = false }
+sr-authority-discovery = { package = "paint-authority-discovery", path = "../../../paint/authority-discovery"}
+
+
+# node-specific dependencies
+node-runtime = { path = "../runtime" }
+node-rpc = { path = "../rpc" }
+node-primitives = { path = "../primitives" }
+node-executor = { path = "../executor" }
+
+# CLI-specific dependencies
+tokio = { version = "0.1.22", optional = true }
+exit-future = { version = "0.1.4", optional = true }
+substrate-cli = { path = "../../../client/cli", optional = true }
+transaction-factory = { path = "../../../test/utils/transaction-factory", optional = true }
+ctrlc = { version = "3.1.3", features = ["termination"], optional = true }
+
+# WASM-specific dependencies
+libp2p = { version = "0.13.0", default-features = false, optional = true }
+clear_on_drop = { version = "0.2.3", features = ["no_cc"], optional = true }	# Imported just for the `no_cc` feature
+console_error_panic_hook = { version = "0.1.1", optional = true }
+console_log = { version = "0.1.2", optional = true }
+js-sys = { version = "0.3.22", optional = true }
+wasm-bindgen = { version = "0.2.45", optional = true }
+wasm-bindgen-futures = { version = "0.3.22", optional = true }
+kvdb-memorydb = { git = "https://github.com/paritytech/parity-common", rev="b0317f649ab2c665b7987b8475878fc4d2e1f81d", optional = true }
+rand6 = { package = "rand", version = "0.6", features = ["wasm-bindgen"], optional = true }	# Imported just for the `wasm-bindgen` feature
+
+[dev-dependencies]
+keystore = { package = "substrate-keystore", path = "../../../client/keystore" }
+babe = { package = "substrate-consensus-babe", path = "../../../client/consensus/babe", features = ["test-helpers"] }
+consensus-common = { package = "substrate-consensus-common", path = "../../../primitives/consensus/common" }
+service-test = { package = "substrate-service-test", path = "../../../client/service/test" }
+futures03 = { package = "futures-preview", version = "0.3.0-alpha.19" }
+tempfile = "3.1.0"
+
+[build-dependencies]
+substrate-cli = { package = "substrate-cli", path = "../../../client/cli" }
+build-script-utils = { package = "substrate-build-script-utils", path = "../../../utils/build-script-utils" }
+structopt = "0.3.3"
+vergen = "3.0.4"
+
+[features]
+default = ["cli"]
+browser = [
+	"clear_on_drop",
+	"console_error_panic_hook",
+	"console_log",
+	"js-sys",
+	"libp2p",
+	"wasm-bindgen",
+	"wasm-bindgen-futures",
+	"kvdb-memorydb",
+	"rand/wasm-bindgen",
+	"rand6"
+]
+cli = [
+	"substrate-cli",
+	"transaction-factory",
+	"tokio",
+	"exit-future",
+	"ctrlc",
+	"substrate-service/rocksdb",
+	"node-executor/wasmi-errno",
+]
+wasmtime = [
+	"cli",
+	"node-executor/wasmtime",
+	"substrate-cli/wasmtime",
+	"substrate-service/wasmtime",
+]
