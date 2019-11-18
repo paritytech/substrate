@@ -58,7 +58,7 @@
 //!   - **Runner-up**: Runners-up are the best candidates immediately after the winners. The number
 //!     of runners_up to keep is configurable. Runners-up are used, in order that they are elected,
 //!     as replacements when a candidate is kicked by `[remove_member]`, or when an active member
-//!     denounces their candidacy. Runners are automatically counted as a candidate for the next
+//!     renounces their candidacy. Runners are automatically counted as a candidate for the next
 //!     election. Runners-up do not get their bond back unless if they make it into the member set
 //!     somehow.
 //!   - **Loser**: Any of the candidate who are not a winner are left as losers. A loser might be an
@@ -320,7 +320,7 @@ decl_module! {
 			<Candidates<T>>::mutate(|c| c.insert(index, who));
 		}
 
-		/// Denounce one's intention to be a candidate for the next election round. 3 potential
+		/// Renounce one's intention to be a candidate for the next election round. 3 potential
 		/// outcomes exist:
 		/// - `origin` is a candidate and not elected in any set. In this case, the bond is
 		///   unreserved, returned and origin is removed as a candidate.
@@ -335,7 +335,7 @@ decl_module! {
 		///   Otherwise, a new election is started immediately.
 		// TODO: maybe don't re-run phragmen since it is expensive.
 		#[weight = SimpleDispatchInfo::FixedOperational(2_000_000)]
-		fn denounce_candidacy(origin) {
+		fn renounce_candidacy(origin) {
 			let who = ensure_signed(origin)?;
 
 			// NOTE: this function attempts the 3 arms and fails if none are matched. Unlike other
@@ -347,7 +347,7 @@ decl_module! {
 
 			if let Ok(had_replacement) = Self::remove_and_replace_member(&who) {
 				T::Currency::unreserve(&who, T::CandidacyBond::get());
-				Self::deposit_event(RawEvent::MemberDenounced(who.clone()));
+				Self::deposit_event(RawEvent::MemberRenounced(who.clone()));
 
 				if !had_replacement {
 					Self::do_phragmen();
@@ -439,8 +439,8 @@ decl_event!(
 		/// A member has been removed. This should always be followed by either `NewTerm` ot
 		/// `EmptyTerm`.
 		MemberKicked(AccountId),
-		/// A member has been denounced their candidacy.
-		MemberDenounced(AccountId),
+		/// A member has renounced their candidacy.
+		MemberRenounced(AccountId),
 		/// A voter (first element) was reported (byt the second element) with the the report being
 		/// successful or not (third element).
 		VoterReported(AccountId, AccountId, bool),
@@ -1840,7 +1840,7 @@ mod tests {
 
 			assert_ok!(Elections::submit_candidacy(Origin::signed(2)));
 			assert_ok!(Elections::submit_candidacy(Origin::signed(4)));
-			assert_ok!(Elections::denounce_candidacy(Origin::signed(3)));
+			assert_ok!(Elections::renounce_candidacy(Origin::signed(3)));
 
 			assert_eq!(Elections::candidates(), vec![2, 4, 5]);
 		})
@@ -1867,7 +1867,7 @@ mod tests {
 	}
 
 	#[test]
-	fn can_denounce_candidacy_member_with_runners() {
+	fn can_renounce_candidacy_member_with_runners() {
 		ExtBuilder::default().desired_runners_up(2).build().execute_with(|| {
 			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
 			assert_ok!(Elections::submit_candidacy(Origin::signed(4)));
@@ -1885,7 +1885,7 @@ mod tests {
 			assert_eq!(Elections::members_ids(), vec![4, 5]);
 			assert_eq!(Elections::runners_up_ids(), vec![2, 3]);
 
-			assert_ok!(Elections::denounce_candidacy(Origin::signed(4)));
+			assert_ok!(Elections::renounce_candidacy(Origin::signed(4)));
 			assert_eq!(balances(&4), (38, 2)); // 2 is voting bond.
 
 			assert_eq!(Elections::members_ids(), vec![3, 5]);
@@ -1895,7 +1895,7 @@ mod tests {
 	}
 
 	#[test]
-	fn can_denounce_candidacy_member_without_runners() {
+	fn can_renounce_candidacy_member_without_runners() {
 		ExtBuilder::default().desired_runners_up(2).build().execute_with(|| {
 			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
 			assert_ok!(Elections::submit_candidacy(Origin::signed(4)));
@@ -1915,7 +1915,7 @@ mod tests {
 			assert_eq!(Elections::runners_up_ids(), vec![]);
 			assert_eq!(Elections::candidates(), vec![2, 3]);
 
-			assert_ok!(Elections::denounce_candidacy(Origin::signed(4)));
+			assert_ok!(Elections::renounce_candidacy(Origin::signed(4)));
 			assert_eq!(balances(&4), (38, 2)); // 2 is voting bond.
 
 			assert_eq!(Elections::members_ids(), vec![3, 5]);
@@ -1924,7 +1924,7 @@ mod tests {
 	}
 
 	#[test]
-	fn can_denounce_candidacy_runner() {
+	fn can_renounce_candidacy_runner() {
 		ExtBuilder::default().desired_runners_up(2).build().execute_with(|| {
 			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
 			assert_ok!(Elections::submit_candidacy(Origin::signed(4)));
@@ -1942,7 +1942,7 @@ mod tests {
 			assert_eq!(Elections::members_ids(), vec![4, 5]);
 			assert_eq!(Elections::runners_up_ids(), vec![2, 3]);
 
-			assert_ok!(Elections::denounce_candidacy(Origin::signed(3)));
+			assert_ok!(Elections::renounce_candidacy(Origin::signed(3)));
 			assert_eq!(balances(&3), (25, 2)); // 2 is voting bond.
 
 			assert_eq!(Elections::members_ids(), vec![4, 5]);
@@ -1951,23 +1951,23 @@ mod tests {
 	}
 
 	#[test]
-	fn can_denounce_candidacy_candidate() {
+	fn can_renounce_candidacy_candidate() {
 		ExtBuilder::default().build().execute_with(|| {
 			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
 			assert_eq!(balances(&5), (47, 3));
 			assert_eq!(Elections::candidates(), vec![5]);
 
-			assert_ok!(Elections::denounce_candidacy(Origin::signed(5)));
+			assert_ok!(Elections::renounce_candidacy(Origin::signed(5)));
 			assert_eq!(balances(&5), (50, 0));
 			assert_eq!(Elections::candidates(), vec![]);
 		})
 	}
 
 	#[test]
-	fn wrong_denounce_candidacy_should_fail() {
+	fn wrong_renounce_candidacy_should_fail() {
 		ExtBuilder::default().build().execute_with(|| {
 			assert_noop!(
-				Elections::denounce_candidacy(Origin::signed(5)),
+				Elections::renounce_candidacy(Origin::signed(5)),
 				"origin is not a candidate, member or a runner."
 			);
 		})
