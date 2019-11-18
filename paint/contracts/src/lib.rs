@@ -1055,6 +1055,7 @@ impl<T: Trait + Send + Sync> CheckBlockGasLimit<T> {
 					.unwrap_or(1.into());
 				<GasPrice<T>>::put(gas_price);
 
+				// TODO: Remove this.
 				if true {
 					runtime_io::print_num(gas_weight_limit.try_into().unwrap_or(0) as u64);
 					runtime_io::print_num(fee.try_into().unwrap_or(0) as u64);
