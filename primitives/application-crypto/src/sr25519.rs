@@ -24,6 +24,7 @@ pub use primitives::sr25519::*;
 
 mod app {
 	use primitives::testing::SR25519;
+	use rstd::vec::Vec;
 	crate::app_crypto!(super, SR25519);
 
 	impl crate::traits::BoundToRuntimeAppPublic for Public {
