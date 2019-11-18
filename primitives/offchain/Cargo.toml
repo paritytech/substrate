@@ -1,0 +1,18 @@
+[package]
+description = "Substrate offchain workers primitives"
+name = "substrate-offchain-primitives"
+version = "2.0.0"
+license = "GPL-3.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
+sr-api = { path = "../sr-api", default-features = false }
+sr-primitives = {  path = "../sr-primitives", default-features = false }
+
+[features]
+default = ["std"]
+std = [
+	"sr-api/std",
+	"sr-primitives/std"
+]
