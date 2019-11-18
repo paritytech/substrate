@@ -19,7 +19,6 @@ inherents = { package = "substrate-inherents", path = "../../../primitives/inher
 sp-timestamp = { path = "../../../primitives/timestamp" }
 substrate-telemetry = { path = "../../telemetry" }
 keystore = { package = "substrate-keystore", path = "../../keystore" }
-paint-babe = { path = "../../../paint/babe" }
 client-api = { package = "substrate-client-api", path = "../../api" }
 client = { package = "substrate-client", path = "../../" }
 sr-api = { path = "../../../primitives/sr-api" }
