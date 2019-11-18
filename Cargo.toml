@@ -99,6 +99,7 @@ members = [
 	"primitives/core/debug-derive",
 	"primitives/core/storage",
 	"primitives/externalities",
+	"primitives/finality-tracker",
 	"primitives/finality-grandpa",
 	"primitives/inherents",
 	"primitives/keyring",

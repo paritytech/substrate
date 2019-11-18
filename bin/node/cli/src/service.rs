@@ -371,7 +371,7 @@ mod tests {
 		OpaqueExtrinsic,
 	};
 	use sp_timestamp;
-	use finality_tracker;
+	use sp_finality_tracker;
 	use keyring::AccountKeyring;
 	use substrate_service::{AbstractService, Roles};
 	use crate::service::new_full;
@@ -484,7 +484,7 @@ mod tests {
 				let mut inherent_data = inherent_data_providers
 					.create_inherent_data()
 					.expect("Creates inherent data.");
-				inherent_data.replace_data(finality_tracker::INHERENT_IDENTIFIER, &1u64);
+				inherent_data.replace_data(sp_finality_tracker::INHERENT_IDENTIFIER, &1u64);
 
 				let parent_id = BlockId::number(service.client().info().chain.best_number);
 				let parent_header = service.client().header(&parent_id).unwrap().unwrap();
