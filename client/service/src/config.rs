@@ -98,6 +98,8 @@ pub struct Configuration<C, G, E = NoExtension> {
 	///
 	/// Should only be set when `node` is running development mode.
 	pub dev_key_seed: Option<String>,
+	/// Instrumentation targets
+	pub instrumentation_targets: Option<String>,
 }
 
 /// Configuration of the database of the client.
@@ -156,6 +158,7 @@ impl<C, G, E> Configuration<C, G, E> where
 			disable_grandpa: false,
 			keystore_password: None,
 			dev_key_seed: None,
+			instrumentation_targets: Default::default(),
 		};
 		configuration.network.boot_nodes = configuration.chain_spec.boot_nodes().to_vec();
 

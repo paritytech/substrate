@@ -198,6 +198,7 @@ fn node_config<G, E: Clone> (
 		force_authoring: false,
 		disable_grandpa: false,
 		dev_key_seed: key_seed,
+		instrumentation_targets: None,
 	}
 }
 

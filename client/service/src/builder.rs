@@ -35,7 +35,7 @@ use futures03::{
 	StreamExt as _, TryStreamExt as _,
 };
 use keystore::{Store as Keystore};
-use log::{info, warn};
+use log::{info, warn, error};
 use network::{FinalityProofProvider, OnDemand, NetworkService, NetworkStateInfo, DhtEvent};
 use network::{config::BoxFinalityProofRequestBuilder, specialization::NetworkSpecialization};
 use parking_lot::{Mutex, RwLock};
@@ -1133,6 +1133,17 @@ ServiceBuilder<
 				.then(|_| Ok(()))));
 			telemetry
 		});
+
+		// Instrumentation
+		if let Some(instrumentation_targets) = config.instrumentation_targets.as_ref() {
+			let subscriber = instrumentation::ProfilingSubscriber::new(
+				instrumentation::Receiver::Telemetry, instrumentation_targets
+			);
+			match tracing::subscriber::set_global_default(subscriber) {
+				Ok(_) => (),
+				Err(e) => error!(target: "instrumentation", "Unable to set global default subscriber {}", e),
+			}
+		}
 
 		Ok(Service {
 			client,

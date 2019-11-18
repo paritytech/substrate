@@ -491,6 +491,10 @@ pub struct RunCmd {
 	#[structopt(long = "force-authoring")]
 	pub force_authoring: bool,
 
+	/// Comma separated list of targets for instrumentation, requires telemetry
+	#[structopt(long = "instrumentation-targets")]
+	pub instrumentation_targets: Option<String>,
+
 	/// Specify custom keystore path.
 	#[structopt(long = "keystore-path", value_name = "PATH", parse(from_os_str))]
 	pub keystore_path: Option<PathBuf>,
