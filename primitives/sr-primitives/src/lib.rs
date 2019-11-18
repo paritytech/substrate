@@ -395,8 +395,21 @@ impl From<DispatchError> for ApplyOutcome {
 	}
 }
 
-/// Result from attempt to apply an extrinsic.
-pub type ApplyResult = Result<ApplyOutcome, ApplyError>;
+/// The outcome of inclusion of an extrinsic into a block.
+///
+/// This type is typically used in the context of `BlockBuilder` to signal that the extrinsic
+/// in question cannot be included. It is fair to say that a valid block doesn't contain any
+/// extrinsic that would have had a negative inclusion outcome. On successful inclusion this type
+/// supplies the result of the extrinsic dispatch.
+///
+/// Examples of reasons preventing inclusion in a block:
+/// - More block weight is required to process the extrinsic than is left in the block being built.
+///   This doesn't neccessarily mean that the extrinsic is invalid, since it can still be
+///   included in the next block if it has enough spare weight available.
+/// - The sender doesn't have enough funds to pay the transaction inclusion fee. Including such
+///   a transaction in the block doesn't make sense.
+/// - The extrinsic supplied a bad signature. This transaction won't become valid ever.
+pub type InclusionOutcome = Result<ApplyOutcome, ApplyError>;
 
 #[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize))]

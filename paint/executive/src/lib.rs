@@ -78,7 +78,7 @@
 
 use rstd::{prelude::*, marker::PhantomData};
 use sr_primitives::{
-	generic::Digest, ApplyResult,
+	generic::Digest, InclusionOutcome,
 	weights::{GetDispatchInfo, WeighBlock},
 	traits::{
 		self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalize, OnInitialize,
@@ -227,7 +227,7 @@ where
 	/// Apply extrinsic outside of the block execution function.
 	/// This doesn't attempt to validate anything regarding the block, but it builds a list of uxt
 	/// hashes.
-	pub fn apply_extrinsic(uxt: Block::Extrinsic) -> ApplyResult {
+	pub fn apply_extrinsic(uxt: Block::Extrinsic) -> InclusionOutcome {
 		let encoded = uxt.encode();
 		let encoded_len = encoded.len();
 		Self::apply_extrinsic_with_len(uxt, encoded_len, Some(encoded))
@@ -248,7 +248,7 @@ where
 		uxt: Block::Extrinsic,
 		encoded_len: usize,
 		to_note: Option<Vec<u8>>,
-	) -> ApplyResult {
+	) -> InclusionOutcome {
 		// Verify that the signature is good.
 		let xt = uxt.check(&Default::default())?;
 

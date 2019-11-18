@@ -25,7 +25,7 @@ use runtime_io::{
 use runtime_support::storage;
 use runtime_support::{decl_storage, decl_module};
 use sr_primitives::{
-	traits::{Hash as HashT, BlakeTwo256, Header as _}, generic, ApplyError, ApplyResult,
+	traits::{Hash as HashT, BlakeTwo256, Header as _}, generic, ApplyError, InclusionOutcome,
 	transaction_validity::{TransactionValidity, ValidTransaction, InvalidTransaction},
 };
 use codec::{KeyedVec, Encode};
@@ -204,7 +204,7 @@ pub fn validate_transaction(utx: Extrinsic) -> TransactionValidity {
 
 /// Execute a transaction outside of the block execution function.
 /// This doesn't attempt to validate anything regarding the block.
-pub fn execute_transaction(utx: Extrinsic) -> ApplyResult {
+pub fn execute_transaction(utx: Extrinsic) -> InclusionOutcome {
 	let extrinsic_index: u32 = storage::unhashed::get(well_known_keys::EXTRINSIC_INDEX).unwrap();
 	let result = execute_transaction_backend(&utx);
 	ExtrinsicData::insert(extrinsic_index, utx.encode());
@@ -251,7 +251,7 @@ fn check_signature(utx: &Extrinsic) -> Result<(), ApplyError> {
 	utx.clone().check().map_err(|_| InvalidTransaction::BadProof.into()).map(|_| ())
 }
 
-fn execute_transaction_backend(utx: &Extrinsic) -> ApplyResult {
+fn execute_transaction_backend(utx: &Extrinsic) -> InclusionOutcome {
 	check_signature(utx)?;
 	match utx {
 		Extrinsic::Transfer(ref transfer, _) => execute_transfer_backend(transfer),
@@ -261,7 +261,7 @@ fn execute_transaction_backend(utx: &Extrinsic) -> ApplyResult {
 	}
 }
 
-fn execute_transfer_backend(tx: &Transfer) -> ApplyResult {
+fn execute_transfer_backend(tx: &Transfer) -> InclusionOutcome {
 	// check nonce
 	let nonce_key = tx.from.to_keyed_vec(NONCE_OF);
 	let expected_nonce: u64 = storage::hashed::get_or(&blake2_256, &nonce_key, 0);
@@ -287,12 +287,12 @@ fn execute_transfer_backend(tx: &Transfer) -> ApplyResult {
 	Ok(Ok(()))
 }
 
-fn execute_new_authorities_backend(new_authorities: &[AuthorityId]) -> ApplyResult {
+fn execute_new_authorities_backend(new_authorities: &[AuthorityId]) -> InclusionOutcome {
 	NewAuthorities::put(new_authorities.to_vec());
 	Ok(Ok(()))
 }
 
-fn execute_storage_change(key: &[u8], value: Option<&[u8]>) -> ApplyResult {
+fn execute_storage_change(key: &[u8], value: Option<&[u8]>) -> InclusionOutcome {
 	match value {
 		Some(value) => storage::unhashed::put_raw(key, value),
 		None => storage::unhashed::kill(key),
