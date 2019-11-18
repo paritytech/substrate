@@ -200,8 +200,10 @@ impl Serialize for Signature {
 #[cfg(feature = "std")]
 impl<'de> Deserialize<'de> for Signature {
 	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
-		Ok(Signature::from_slice(&hex::decode(&String::deserialize(deserializer)?)
-			.map_err(|e| de::Error::custom(format!("{:?}", e)))?))
+		let signature_hex = hex::decode(&String::deserialize(deserializer)?)
+			.map_err(|e| de::Error::custom(format!("{:?}", e)))?;
+		Ok(Signature::try_from(signature_hex.as_ref())
+			.map_err(|e| de::Error::custom(format!("{:?}", e)))?)
 	}
 }
 
