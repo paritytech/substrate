@@ -20,6 +20,7 @@
 mod inner {
 	use crate::{Store, Module, Trait};
 	use support::{StorageLinkedMap, StorageValue};
+	use rstd::vec::Vec;
 
 	/// Indicator of a version of a storage layout.
 	pub type VersionNumber = u32;
