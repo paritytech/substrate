@@ -651,7 +651,7 @@ impl<TSubstream> DiscoveryNetBehaviour for GenericProto<TSubstream> {
 
 impl<TSubstream> NetworkBehaviour for GenericProto<TSubstream>
 where
-	TSubstream: AsyncRead + AsyncWrite + 'static,
+	TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 {
 	type ProtocolsHandler = NotifsHandlerProto<TSubstream>;
 	type OutEvent = GenericProtoOut;

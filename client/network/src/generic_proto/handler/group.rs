@@ -24,7 +24,7 @@ use bytes::BytesMut;
 use futures::prelude::*;
 use libp2p::core::{ConnectedPoint, PeerId};
 use libp2p::core::either::{EitherError, EitherOutput};
-use libp2p::core::upgrade::{EitherUpgrade, ReadOneError, UpgradeError, InboundUpgrade, OutboundUpgrade};
+use libp2p::core::upgrade::{EitherUpgrade, UpgradeError, InboundUpgrade, OutboundUpgrade};
 use libp2p::swarm::{
 	ProtocolsHandler, ProtocolsHandlerEvent,
 	IntoProtocolsHandler,
@@ -69,7 +69,7 @@ pub struct NotifsHandler<TSubstream> {
 
 impl<TSubstream> IntoProtocolsHandler for NotifsHandlerProto<TSubstream>
 where
-	TSubstream: AsyncRead + AsyncWrite + 'static,
+	TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 {
 	type Handler = NotifsHandler<TSubstream>;
 
@@ -172,7 +172,7 @@ impl<TSubstream> NotifsHandlerProto<TSubstream> {
 }
 
 impl<TSubstream> ProtocolsHandler for NotifsHandler<TSubstream>
-where TSubstream: AsyncRead + AsyncWrite + 'static {
+where TSubstream: AsyncRead + AsyncWrite + Send + 'static {
 	type InEvent = NotifsHandlerIn;
 	type OutEvent = NotifsHandlerOut;
 	type Substream = TSubstream;
@@ -242,6 +242,7 @@ where TSubstream: AsyncRead + AsyncWrite + 'static {
 				if let Some(proto_name) = proto_name {
 					for handler in &mut self.out_handlers {
 						if handler.is_open() && handler.protocol_name() == &proto_name[..] {
+							log::error!("Message sent using new protocol");
 							handler.inject_event(NotifsOutHandlerIn::Send(message));
 							return;
 						}
@@ -256,8 +257,9 @@ where TSubstream: AsyncRead + AsyncWrite + 'static {
 	fn inject_dial_upgrade_error(
 		&mut self,
 		num: Option<usize>,
-		err: ProtocolsHandlerUpgrErr<EitherError<ReadOneError, io::Error>>
+		err: ProtocolsHandlerUpgrErr<EitherError<io::Error, io::Error>>
 	) {
+		log::error!("Dial upgrade error: {:?}", err);
 		match (err, num) {
 			(ProtocolsHandlerUpgrErr::Timeout, Some(num)) =>
 				self.out_handlers[num].inject_dial_upgrade_error(
@@ -361,9 +363,9 @@ where TSubstream: AsyncRead + AsyncWrite + 'static {
 							protocol: protocol.map_upgrade(EitherUpgrade::A),
 							info: Some(handler_num),
 						})),
-					ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Open { handshake }) => unimplemented!(),
-					ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Closed) => unimplemented!(),
-					ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Refused) => unimplemented!(),
+					ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Open { handshake }) => {},		// TODO:
+					ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Closed) => {},		// TODO:
+					ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Refused) => {},		// TODO:
 				}
 			}
 		}

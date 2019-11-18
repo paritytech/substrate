@@ -15,9 +15,10 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::generic_proto::upgrade::{NotificationsOut, NotificationsOutSubstream};
+use bytes::BytesMut;
 use futures::prelude::*;
 use libp2p::core::{ConnectedPoint, PeerId, Endpoint};
-use libp2p::core::upgrade::{ReadOneError, DeniedUpgrade, InboundUpgrade, OutboundUpgrade};
+use libp2p::core::upgrade::{DeniedUpgrade, InboundUpgrade, OutboundUpgrade};
 use libp2p::swarm::{
 	ProtocolsHandler, ProtocolsHandlerEvent,
 	IntoProtocolsHandler,
@@ -27,7 +28,7 @@ use libp2p::swarm::{
 };
 use log::error;
 use smallvec::SmallVec;
-use std::{borrow::Cow, fmt, marker::PhantomData, mem, time::Duration};
+use std::{borrow::Cow, fmt, io, marker::PhantomData, mem, time::Duration};
 use tokio_io::{AsyncRead, AsyncWrite};
 
 /// Implements the `IntoProtocolsHandler` trait of libp2p.
@@ -58,7 +59,7 @@ impl<TSubstream> NotifsOutHandlerProto<TSubstream> {
 
 impl<TSubstream> IntoProtocolsHandler for NotifsOutHandlerProto<TSubstream>
 where
-	TSubstream: AsyncRead + AsyncWrite + 'static,
+	TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 {
 	type Handler = NotifsOutHandler<TSubstream>;
 
@@ -73,7 +74,6 @@ where
 			remote_peer_id: remote_peer_id.clone(),
 			state: State::Disabled,
 			events_queue: SmallVec::new(),
-			marker: PhantomData,
 		}
 	}
 }
@@ -101,26 +101,23 @@ pub struct NotifsOutHandler<TSubstream> {
 	endpoint: Endpoint,
 
 	/// Relationship with the node we're connected to.
-	state: State,
+	state: State<TSubstream>,
 
 	/// Queue of events to send to the outside.
 	///
 	/// This queue must only ever be modified to insert elements at the back, or remove the first
 	/// element.
 	events_queue: SmallVec<[ProtocolsHandlerEvent<NotificationsOut, (), NotifsOutHandlerOut>; 16]>,
-
-	/// Marker to pin the generic type.
-	marker: PhantomData<TSubstream>,
 }
 
 /// Our relationship with the node we're connected to.
-enum State {
+enum State<TSubstream> {
 	/// The handler is disabled and idle. No substream is open.
 	Disabled,
 
 	/// The handler is disabled. A substream is open and needs to be closed.
 	// TODO: needed?
-	DisabledOpen(NotificationsOutSubstream),
+	DisabledOpen(NotificationsOutSubstream<TSubstream>),
 
 	/// The handler is disabled but we are still trying to open a substream with the remote.
 	///
@@ -135,7 +132,7 @@ enum State {
 	Refused,
 
 	/// The handler is enabled and substream is open.
-	Open(NotificationsOutSubstream),
+	Open(NotificationsOutSubstream<TSubstream>),
 
 	/// Poisoned state. Shouldn't be found in the wild.
 	Poisoned,
@@ -164,7 +161,7 @@ pub enum NotifsOutHandlerOut {
 	/// The notifications substream has been accepted by the remote.
 	Open {
 		/// Handshake message sent by the remote after we opened the substream.
-		handshake: Vec<u8>,
+		handshake: BytesMut,
 	},
 
 	/// The notifications substream has been closed by the remote.
@@ -197,7 +194,7 @@ impl<TSubstream> NotifsOutHandler<TSubstream> {
 }
 
 impl<TSubstream> ProtocolsHandler for NotifsOutHandler<TSubstream>
-where TSubstream: AsyncRead + AsyncWrite + 'static {
+where TSubstream: AsyncRead + AsyncWrite + Send + 'static {
 	type InEvent = NotifsOutHandlerIn;
 	type OutEvent = NotifsOutHandlerOut;
 	type Substream = TSubstream;
@@ -243,10 +240,9 @@ where TSubstream: AsyncRead + AsyncWrite + 'static {
 			NotifsOutHandlerIn::Enable => {
 				match mem::replace(&mut self.state, State::Poisoned) {
 					State::Disabled => {
-						log::error!("Enabling handler");
 						self.events_queue.push(ProtocolsHandlerEvent::OutboundSubstreamRequest {
 							protocol: SubstreamProtocol::new(NotificationsOut::new(self.proto_name.clone()))
-								.with_timeout(Duration::from_secs(30)),		// TODO: proper timeout config
+								.with_timeout(Duration::from_secs(10)),		// TODO: proper timeout config
 							info: (),
 						});
 						self.state = State::Opening;
@@ -277,7 +273,7 @@ where TSubstream: AsyncRead + AsyncWrite + 'static {
 		}
 	}
 
-	fn inject_dial_upgrade_error(&mut self, _: (), err: ProtocolsHandlerUpgrErr<ReadOneError>) {
+	fn inject_dial_upgrade_error(&mut self, _: (), err: ProtocolsHandlerUpgrErr<io::Error>) {
 		match mem::replace(&mut self.state, State::Poisoned) {
 			State::Disabled => {},
 			State::DisabledOpen(_) | State::Refused | State::Open(_) =>

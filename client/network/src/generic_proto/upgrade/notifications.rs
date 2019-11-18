@@ -36,7 +36,7 @@
 
 use bytes::BytesMut;
 use futures::prelude::*;
-use libp2p::core::{Negotiated, UpgradeInfo, InboundUpgrade, OutboundUpgrade, upgrade, upgrade::ProtocolName};
+use libp2p::core::{Negotiated, UpgradeInfo, InboundUpgrade, OutboundUpgrade, upgrade};
 use libp2p::tokio_codec::Framed;
 use log::error;
 use std::{borrow::Cow, io, iter, mem};
@@ -75,13 +75,14 @@ enum NotificationsInSubstreamHandshake {
 	/// User gave us the handshake message. Trying to push it in the socket.
 	PendingSend(Vec<u8>),
 	/// Handshake message was pushed in the socket. Still need to flush.
-	PollComplete,
+	Close,
 	/// Handshake message successfully sent.
 	Sent,
 }
 
-pub struct NotificationsOutSubstream {
-
+/// A substream for outgoing notification messages.
+pub struct NotificationsOutSubstream<TSubstream> {
+	socket: Framed<Negotiated<TSubstream>, UviBytes<Vec<u8>>>,
 }
 
 impl NotificationsIn {
@@ -143,6 +144,39 @@ where TSubstream: AsyncRead + AsyncWrite + 'static,
 	}
 }
 
+impl<TSubstream> Stream for NotificationsInSubstream<TSubstream>
+where TSubstream: AsyncRead + AsyncWrite + 'static,
+{
+	type Item = BytesMut;
+	type Error = io::Error;
+
+	fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
+		// This `Stream` implementation first tries to send back the handshake if necessary.
+		loop {
+			match mem::replace(&mut self.handshake, NotificationsInSubstreamHandshake::Sent) {
+				NotificationsInSubstreamHandshake::Sent =>
+					return self.socket.poll(),
+				NotificationsInSubstreamHandshake::NotSent =>
+					return Ok(Async::NotReady),
+				NotificationsInSubstreamHandshake::PendingSend(msg) =>
+					match self.socket.start_send(msg)? {
+						AsyncSink::Ready =>
+							self.handshake = NotificationsInSubstreamHandshake::Close,
+						AsyncSink::NotReady(msg) =>
+							self.handshake = NotificationsInSubstreamHandshake::PendingSend(msg),
+					},
+				NotificationsInSubstreamHandshake::Close =>
+					match self.socket.poll_complete()? {		// TODO: close()
+						Async::Ready(()) =>
+							self.handshake = NotificationsInSubstreamHandshake::Sent,
+						Async::NotReady =>
+							self.handshake = NotificationsInSubstreamHandshake::Close,
+					},
+			}
+		}
+	}
+}
+
 impl NotificationsOut {
 	/// Builds a new potential upgrade.
 	pub fn new(proto_name: impl Into<Cow<'static, [u8]>>) -> Self {
@@ -162,50 +196,45 @@ impl UpgradeInfo for NotificationsOut {
 }
 
 impl<TSubstream> OutboundUpgrade<TSubstream> for NotificationsOut
-where TSubstream: AsyncRead + AsyncWrite + 'static,
+where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 {
-	type Output = (Vec<u8>, NotificationsOutSubstream);
+	type Output = (BytesMut, NotificationsOutSubstream<TSubstream>);
 	type Future = Box<dyn Future<Item = Self::Output, Error = Self::Error> + Send>;
-	type Error = upgrade::ReadOneError;
+	type Error = io::Error;
 
 	fn upgrade_outbound(
 		self,
 		socket: Negotiated<TSubstream>,
 		proto_name: Self::Info,
 	) -> Self::Future {
-		unimplemented!()
+		Box::new(Framed::new(socket, UviBytes::default())
+			.into_future()
+			.map_err(|(err, _)| err)
+			.and_then(|(handshake, socket)| {
+				if let Some(handshake) = handshake {
+					Ok((handshake, NotificationsOutSubstream { socket }))
+				} else {
+					Err(io::Error::from(io::ErrorKind::UnexpectedEof))
+				}
+			}))
 	}
 }
 
-impl<TSubstream> Stream for NotificationsInSubstream<TSubstream>
+impl<TSubstream> Sink for NotificationsOutSubstream<TSubstream>
 where TSubstream: AsyncRead + AsyncWrite + 'static,
 {
-	type Item = BytesMut;
-	type Error = io::Error;
+	type SinkItem = Vec<u8>;
+	type SinkError = io::Error;
 
-	fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
-		// This `Stream` implementation first tries to send back the handshake if necessary.
-		loop {
-			match mem::replace(&mut self.handshake, NotificationsInSubstreamHandshake::Sent) {
-				NotificationsInSubstreamHandshake::Sent =>
-					return self.socket.poll(),
-				NotificationsInSubstreamHandshake::NotSent =>
-					return Ok(Async::NotReady),
-				NotificationsInSubstreamHandshake::PendingSend(msg) =>
-					match self.socket.start_send(msg)? {
-						AsyncSink::Ready =>
-							self.handshake = NotificationsInSubstreamHandshake::PollComplete,
-						AsyncSink::NotReady(msg) =>
-							self.handshake = NotificationsInSubstreamHandshake::PendingSend(msg),
-					},
-				NotificationsInSubstreamHandshake::PollComplete =>
-					match self.socket.poll_complete()? {
-						Async::Ready(()) =>
-							self.handshake = NotificationsInSubstreamHandshake::Sent,
-						Async::NotReady =>
-							self.handshake = NotificationsInSubstreamHandshake::PollComplete,
-					},
-			}
-		}
+	fn start_send(&mut self, item: Self::SinkItem) -> StartSend<Self::SinkItem, Self::SinkError> {
+		self.socket.start_send(item)
+	}
+
+	fn poll_complete(&mut self) -> Poll<(), Self::SinkError> {
+		self.socket.poll_complete()
+	}
+
+	fn close(&mut self) -> Poll<(), Self::SinkError> {
+		self.socket.close()
 	}
 }
