@@ -20,8 +20,8 @@ use parse::{ModuleDeclaration, ModulePart, RuntimeDefinition, WhereSection};
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::quote;
-use srml_support_procedural_tools::syn_ext as ext;
-use srml_support_procedural_tools::{generate_crate_access, generate_hidden_includes};
+use paint_support_procedural_tools::syn_ext as ext;
+use paint_support_procedural_tools::{generate_crate_access, generate_hidden_includes};
 use syn::{Ident, Result};
 
 pub fn construct_runtime(input: TokenStream) -> TokenStream {
@@ -61,8 +61,8 @@ fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream
             )),
         };
     let hidden_crate_name = "construct_runtime";
-    let scrate = generate_crate_access(&hidden_crate_name, "srml-support");
-    let scrate_decl = generate_hidden_includes(&hidden_crate_name, "srml-support");
+    let scrate = generate_crate_access(&hidden_crate_name, "paint-support");
+    let scrate_decl = generate_hidden_includes(&hidden_crate_name, "paint-support");
 
     let all_but_system_modules = modules.iter().filter(|module| module.name != "System");
 

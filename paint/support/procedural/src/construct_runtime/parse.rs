@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use proc_macro2::Span;
-use srml_support_procedural_tools::syn_ext as ext;
+use paint_support_procedural_tools::syn_ext as ext;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use syn::{
     parse::{Parse, ParseStream},
