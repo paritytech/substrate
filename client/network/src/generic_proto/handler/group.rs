@@ -384,9 +384,7 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static {
 							protocol: protocol.map_upgrade(EitherUpgrade::A),
 							info: Some(handler_num),
 						})),
-					ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Open { handshake }) => {
-						log::error!("Opened substream, YAYYYYYYYY; handshake = {:?}", handshake);
-					},		// TODO:
+					ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Open { handshake }) => {},		// TODO:
 					ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Closed) => {},		// TODO:
 					ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Refused) => {},		// TODO:
 				}

@@ -274,6 +274,11 @@ impl<TSubstream> GenericProto<TSubstream> {
 		self.notif_protocols.push((proto_name.into(), handshake.into()));
 	}
 
+	/// Returns a list of all the notification protocols that have been registered.
+	pub fn notif_protocols_names(&self) -> impl ExactSizeIterator<Item = &[u8]> {
+		self.notif_protocols.iter().map(|(n, _)| &**n)
+	}
+
 	/// Returns the list of all the peers we have an open channel to.
 	pub fn open_peers<'a>(&'a self) -> impl Iterator<Item = &'a PeerId> + 'a {
 		self.peers.iter().filter(|(_, state)| state.is_open()).map(|(id, _)| id)

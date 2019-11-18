@@ -1709,8 +1709,10 @@ pub enum CustomMessageOutcome<B: BlockT> {
 	BlockImport(BlockOrigin, Vec<IncomingBlock<B>>),
 	JustificationImport(Origin, B::Hash, NumberFor<B>, Justification),
 	FinalityProofImport(Origin, B::Hash, NumberFor<B>, Vec<u8>),
-	NotifOpened { remote: PeerId, proto_name: Cow<'static, [u8]> },
-	NotifClosed { remote: PeerId, proto_name: Cow<'static, [u8]> },
+	/// Notif protocols have been opened with the remote.
+	NotifOpened { remote: PeerId, proto_names: Vec<Cow<'static, [u8]>> },
+	/// Notif protocols have been closed with the remote.
+	NotifClosed { remote: PeerId, proto_names: Vec<Cow<'static, [u8]>> },
 	NotifMessages { remote: PeerId, messages: Vec<(Cow<'static, [u8]>, Vec<u8>)> },
 	None,
 }
@@ -1837,14 +1839,25 @@ Protocol<B, S, H> {
 
 		let outcome = match event {
 			GenericProtoOut::CustomProtocolOpen { peer_id, .. } => {
-				self.on_peer_connected(peer_id);
-				CustomMessageOutcome::None
+				self.on_peer_connected(peer_id.clone());
+				CustomMessageOutcome::NotifOpened {
+					remote: peer_id,
+					proto_names: self.behaviour.notif_protocols_names()
+						.map(|n| From::from(n.to_owned()))
+						.collect(),
+				}
 			}
 			GenericProtoOut::CustomProtocolClosed { peer_id, .. } => {
-				self.on_peer_disconnected(peer_id);
-				CustomMessageOutcome::None
+				self.on_peer_disconnected(peer_id.clone());
+				CustomMessageOutcome::NotifClosed {
+					remote: peer_id,
+					proto_names: self.behaviour.notif_protocols_names()
+						.map(|n| From::from(n.to_owned()))
+						.collect(),
+				}
 			},
 			GenericProtoOut::CustomMessage { peer_id, message } =>
+				// TODO: NotifMessages
 				self.on_custom_message(peer_id, message),
 			GenericProtoOut::Clogged { peer_id, messages } => {
 				debug!(target: "sync", "{} clogging messages:", messages.len());
