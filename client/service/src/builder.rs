@@ -193,7 +193,7 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 				},
 			};
 
-			let extensions = client::ExecutionExtensions::new(
+			let extensions = client_api::execution_extensions::ExecutionExtensions::new(
 				config.execution_strategies.clone(),
 				Some(keystore.clone()),
 			);
@@ -921,8 +921,8 @@ ServiceBuilder<
 					}
 
 					let offchain = offchain.as_ref().and_then(|o| o.upgrade());
-					if let (Some(txpool), Some(offchain)) = (txpool, offchain) {
-						let future = offchain.on_block_imported(&number, &txpool, network_state_info.clone(), is_validator)
+					if let Some(offchain) = offchain {
+						let future = offchain.on_block_imported(&number, network_state_info.clone(), is_validator)
 							.map(|()| Ok(()));
 						let _ = to_spawn_tx_.unbounded_send(Box::new(Compat::new(future)));
 					}

@@ -69,14 +69,14 @@ pub use client_api::{
 	},
 	client::{
 		ImportNotifications, FinalityNotification, FinalityNotifications, BlockImportNotification,
-		ClientInfo, BlockchainEvents, BlockBody, ProvideUncles, ExecutionStrategies, ForkBlocks,
+		ClientInfo, BlockchainEvents, BlockBody, ProvideUncles, ForkBlocks,
 		BlockOf,
 	},
-	execution_extensions::ExecutionExtensions,
+	execution_extensions::{ExecutionExtensions, ExecutionStrategies},
 	notifications::{StorageNotifications, StorageEventStream},
 	error::Error,
 	error,
-	CallExecutor
+	CallExecutor,
 };
 
 use crate::{
@@ -174,7 +174,8 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 		B: backend::LocalBackend<Block, Blake2Hasher>
 {
 	let call_executor = LocalCallExecutor::new(backend.clone(), executor);
-	Client::new(backend, call_executor, build_genesis_storage, Default::default(), Default::default())
+	let extensions = ExecutionExtensions::new(Default::default(), keystore);
+	Client::new(backend, call_executor, build_genesis_storage, Default::default(), extensions)
 }
 
 impl<B, E, Block, RA> BlockOf for Client<B, E, Block, RA> where

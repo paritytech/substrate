@@ -18,7 +18,7 @@
 
 use runtime;
 use sr_primitives::traits::ProvideRuntimeApi;
-use generic_test_client::client;
+use generic_test_client::client_api as client;
 
 use block_builder::BlockBuilderApi;
 

@@ -5914,7 +5914,6 @@ dependencies = [
  "substrate-offchain-primitives 2.0.0",
  "substrate-primitives 2.0.0",
  "substrate-test-runtime-client 2.0.0",
- "substrate-transaction-pool 2.0.0",
  "threadpool 1.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio 0.1.22 (registry+https://github.com/rust-lang/crates.io-index)",
 ]

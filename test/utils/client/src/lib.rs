@@ -20,7 +20,11 @@
 
 pub mod client_ext;
 
-pub use client::{ExecutionStrategies, ExecutionExtensions, blockchain, self};
+pub use client_api::{
+	blockchain,
+	execution_extensions::{ExecutionStrategies, ExecutionExtensions},
+	self,
+};
 pub use client_db::{Backend, self};
 pub use client_ext::ClientExt;
 pub use consensus;

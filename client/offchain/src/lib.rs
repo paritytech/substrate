@@ -43,7 +43,6 @@ use log::{debug, warn};
 use network::NetworkStateInfo;
 use primitives::{offchain, ExecutionContext};
 use sr_primitives::{generic::BlockId, traits::{self, ProvideRuntimeApi}};
-use transaction_pool::txpool::{Pool, ChainApi};
 use client_api::{OffchainStorage};
 
 mod api;
@@ -94,13 +93,12 @@ impl<Client, Storage, Block> OffchainWorkers<
 {
 	/// Start the offchain workers after given block.
 	#[must_use]
-	pub fn on_block_imported<A>(
+	pub fn on_block_imported(
 		&self,
 		number: &<Block::Header as traits::Header>::Number,
-		pool: &Arc<Pool<A>>,
 		network_state: Arc<dyn NetworkStateInfo + Send + Sync>,
 		is_validator: bool,
-	) -> impl Future<Output = ()> where A: ChainApi<Block=Block> + 'static {
+	) -> impl Future<Output = ()> {
 		let runtime = self.client.runtime_api();
 		let at = BlockId::number(*number);
 		let has_api = runtime.has_api::<dyn OffchainWorkerApi<Block, Error = ()>>(&at);
@@ -108,9 +106,7 @@ impl<Client, Storage, Block> OffchainWorkers<
 
 		if has_api.unwrap_or(false) {
 			let (api, runner) = api::AsyncApi::new(
-				pool.clone(),
 				self.db.clone(),
-				at.clone(),
 				network_state.clone(),
 				is_validator,
 			);
@@ -166,12 +162,13 @@ mod tests {
 		}
 	}
 
+
+	// TODO [ToDr] Move this test somewhere higher level.
 	#[test]
 	fn should_call_into_runtime_and_produce_extrinsic() {
 		// given
 		let _ = env_logger::try_init();
 		let client = Arc::new(test_client::new());
-		let pool = Arc::new(Pool::new(Default::default(), transaction_pool::FullChainApi::new(client.clone())));
 		let db = client_db::offchain::LocalStorage::new_test();
 		let network_state = Arc::new(MockNetworkStateInfo());
 

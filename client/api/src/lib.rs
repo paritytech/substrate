@@ -15,6 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Substrate client interfaces.
+#![warn(missing_docs)]
 
 pub mod backend;
 pub mod blockchain;

@@ -39,11 +39,12 @@ use std::path::PathBuf;
 use std::io;
 use std::collections::{HashMap, HashSet};
 
+use client_api::ForkBlocks;
 use client_api::backend::NewBlockState;
-use client_api::blockchain::{well_known_cache_keys, HeaderBackend};
-use client_api::{ForkBlocks, ExecutionStrategies};
 use client_api::backend::{StorageCollection, ChildStorageCollection};
+use client_api::blockchain::{well_known_cache_keys, HeaderBackend};
 use client_api::error::{Result as ClientResult, Error as ClientError};
+use client_api::execution_extensions::ExecutionExtensions;
 use codec::{Decode, Encode};
 use hash_db::{Hasher, Prefix};
 use kvdb::{KeyValueDB, DBTransaction};
