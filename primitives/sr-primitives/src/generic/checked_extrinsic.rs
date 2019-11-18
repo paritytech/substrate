@@ -22,7 +22,6 @@ use crate::traits::{
 };
 #[allow(deprecated)]
 use crate::traits::ValidateUnsigned;
-use crate::weights::{GetDispatchInfo, DispatchInfo};
 use crate::transaction_validity::TransactionValidity;
 
 /// Definition of something that the external world might want to say; its
@@ -38,16 +37,18 @@ pub struct CheckedExtrinsic<AccountId, Call, Extra> {
 	pub function: Call,
 }
 
-impl<AccountId, Call, Extra, Origin> traits::Applyable for
+impl<AccountId, Call, Extra, Origin, Info> traits::Applyable for
 	CheckedExtrinsic<AccountId, Call, Extra>
 where
 	AccountId: Member + MaybeDisplay,
 	Call: Member + Dispatchable<Origin=Origin>,
-	Extra: SignedExtension<AccountId=AccountId, Call=Call>,
+	Extra: SignedExtension<AccountId=AccountId, Call=Call, Info=Info>,
 	Origin: From<Option<AccountId>>,
+	Info: Copy,
 {
 	type AccountId = AccountId;
 	type Call = Call;
+	type Info = Info;
 
 	fn sender(&self) -> Option<&Self::AccountId> {
 		self.signed.as_ref().map(|x| &x.0)
@@ -56,7 +57,7 @@ where
 	#[allow(deprecated)] // Allow ValidateUnsigned
 	fn validate<U: ValidateUnsigned<Call = Self::Call>>(
 		&self,
-		info: DispatchInfo,
+		info: Self::Info,
 		len: usize,
 	) -> TransactionValidity {
 		if let Some((ref id, ref extra)) = self.signed {
@@ -71,7 +72,7 @@ where
 	#[allow(deprecated)] // Allow ValidateUnsigned
 	fn apply<U: ValidateUnsigned<Call=Self::Call>>(
 		self,
-		info: DispatchInfo,
+		info: Self::Info,
 		len: usize,
 	) -> crate::ApplyResult {
 		let (maybe_who, pre) = if let Some((id, extra)) = self.signed {
@@ -85,14 +86,5 @@ where
 		let res = self.function.dispatch(Origin::from(maybe_who));
 		Extra::post_dispatch(pre, info, len);
 		Ok(res.map_err(Into::into))
-	}
-}
-
-impl<AccountId, Call, Extra> GetDispatchInfo for CheckedExtrinsic<AccountId, Call, Extra>
-where
-	Call: GetDispatchInfo,
-{
-	fn get_dispatch_info(&self) -> DispatchInfo {
-		self.function.get_dispatch_info()
 	}
 }

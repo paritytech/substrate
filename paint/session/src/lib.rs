@@ -122,7 +122,7 @@
 use rstd::{prelude::*, marker::PhantomData, ops::{Sub, Rem}};
 use codec::Decode;
 use sr_primitives::{KeyTypeId, Perbill, RuntimeAppPublic, BoundToRuntimeAppPublic};
-use sr_primitives::weights::SimpleDispatchInfo;
+use support::weights::SimpleDispatchInfo;
 use sr_primitives::traits::{Convert, Zero, Member, OpaqueKeys};
 use sr_staking_primitives::SessionIndex;
 use support::{dispatch::Result, ConsensusEngineId, decl_module, decl_event, decl_storage};

@@ -39,11 +39,12 @@
 use serde::{Serialize, Deserialize};
 use impl_trait_for_tuples::impl_for_tuples;
 use codec::{Encode, Decode};
-use arithmetic::traits::{Bounded, Zero};
-use crate::RuntimeDebug;
+use sr_arithmetic::traits::{Bounded, Zero};
+use sr_primitives::{RuntimeDebug, traits::SignedExtension}
+;
 
 /// Re-export priority as type
-pub use crate::transaction_validity::TransactionPriority;
+pub use sr_primitives::transaction_validity::TransactionPriority;
 
 /// Numeric range of a transaction weight.
 pub type Weight = u32;
@@ -218,3 +219,39 @@ impl SimpleDispatchInfo {
 		Self::FixedNormal(0)
 	}
 }
+
+/// Implementation for unchecked extrinsic.
+impl<Address, Call, Signature, Extra> GetDispatchInfo
+	for sr_primitives::generic::UncheckedExtrinsic<Address, Call, Signature, Extra>
+where
+	Call: GetDispatchInfo,
+	Extra: SignedExtension,
+{
+	fn get_dispatch_info(&self) -> DispatchInfo {
+		self.function.get_dispatch_info()
+	}
+}
+
+/// Implementation for checked extrinsic.
+impl<AccountId, Call, Extra> GetDispatchInfo
+	for sr_primitives::generic::CheckedExtrinsic<AccountId, Call, Extra>
+where
+	Call: GetDispatchInfo,
+{
+	fn get_dispatch_info(&self) -> DispatchInfo {
+		self.function.get_dispatch_info()
+	}
+}
+
+/// Implementation for test extrinsic.
+#[cfg(feature = "std")]
+impl<Call: Encode, Extra: Encode> GetDispatchInfo for sr_primitives::testing::TestXt<Call, Extra> {
+	fn get_dispatch_info(&self) -> DispatchInfo {
+		// for testing: weight == size.
+		DispatchInfo {
+			weight: self.encode().len() as _,
+			..Default::default()
+		}
+	}
+}
+

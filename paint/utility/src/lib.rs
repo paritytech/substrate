@@ -21,9 +21,9 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use rstd::prelude::*;
-use support::{decl_module, decl_event, Parameter};
+use support::{decl_module, decl_event, Parameter, weights::SimpleDispatchInfo};
 use system::ensure_root;
-use sr_primitives::{traits::Dispatchable, weights::SimpleDispatchInfo, DispatchError};
+use sr_primitives::{traits::Dispatchable, DispatchError};
 
 /// Configuration trait.
 pub trait Trait: system::Trait {

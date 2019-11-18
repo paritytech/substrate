@@ -28,10 +28,10 @@ use sr_primitives::{
 	RuntimeDebug,
 	print,
 	traits::{Zero, One, StaticLookup, Bounded, Saturating},
-	weights::SimpleDispatchInfo,
 };
 use support::{
 	dispatch::Result, decl_storage, decl_event, ensure, decl_module,
+	weights::SimpleDispatchInfo,
 	traits::{
 		Currency, ExistenceRequirement, Get, LockableCurrency, LockIdentifier,
 		OnUnbalanced, ReservableCurrency, WithdrawReason, WithdrawReasons, ChangeMembers

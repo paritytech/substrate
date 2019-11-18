@@ -19,7 +19,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use rstd::prelude::*;
-use sr_primitives::weights::{Weight, DispatchClass};
+use support::weights::{Weight, DispatchClass};
 use codec::{Encode, Codec, Decode};
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
