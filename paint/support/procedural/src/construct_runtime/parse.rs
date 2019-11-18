@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use proc_macro2::Span;
 use paint_support_procedural_tools::syn_ext as ext;
+use proc_macro2::Span;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use syn::{
     parse::{Parse, ParseStream},

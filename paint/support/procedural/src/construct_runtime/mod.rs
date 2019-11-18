@@ -16,12 +16,12 @@
 
 mod parse;
 
+use paint_support_procedural_tools::syn_ext as ext;
+use paint_support_procedural_tools::{generate_crate_access, generate_hidden_includes};
 use parse::{ModuleDeclaration, ModulePart, RuntimeDefinition, WhereSection};
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::quote;
-use paint_support_procedural_tools::syn_ext as ext;
-use paint_support_procedural_tools::{generate_crate_access, generate_hidden_includes};
 use syn::{Ident, Result};
 
 pub fn construct_runtime(input: TokenStream) -> TokenStream {
