@@ -377,7 +377,7 @@ impl From<transaction_validity::TransactionValidityError> for InclusionError {
 	}
 }
 
-impl From<DispatchError> for ApplyOutcome {
+impl From<DispatchError> for DispatchOutcome {
 	fn from(err: DispatchError) -> Self {
 		Err(err)
 	}
@@ -436,8 +436,10 @@ impl From<&'static str> for DispatchError {
 	}
 }
 
-/// The outcome of applying a transaction.
-pub type ApplyOutcome = Result<(), DispatchError>;
+/// This type specifies the outcome of dispatching a call to a module.
+///
+/// In case of failure an error specific to the module is returned.
+pub type DispatchOutcome = Result<(), DispatchError>;
 
 /// The outcome of inclusion of an extrinsic into a block.
 ///
@@ -453,7 +455,7 @@ pub type ApplyOutcome = Result<(), DispatchError>;
 /// - The sender doesn't have enough funds to pay the transaction inclusion fee. Including such
 ///   a transaction in the block doesn't make sense.
 /// - The extrinsic supplied a bad signature. This transaction won't become valid ever.
-pub type InclusionOutcome = Result<ApplyOutcome, InclusionError>;
+pub type InclusionOutcome = Result<DispatchOutcome, InclusionError>;
 
 /// Verify a signature on an encoded value in a lazy manner. This can be
 /// an optimization if the signature scheme has an "unsigned" escape hash.

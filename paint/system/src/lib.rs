@@ -98,7 +98,7 @@ use rstd::fmt::Debug;
 use sr_version::RuntimeVersion;
 use sr_primitives::{
 	RuntimeDebug,
-	generic::{self, Era}, Perbill, InclusionError, ApplyOutcome, DispatchError,
+	generic::{self, Era}, Perbill, InclusionError, DispatchOutcome, DispatchError,
 	weights::{Weight, DispatchInfo, DispatchClass, SimpleDispatchInfo},
 	transaction_validity::{
 		ValidTransaction, TransactionPriority, TransactionLongevity, TransactionValidityError,
@@ -752,9 +752,9 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// To be called immediately after an extrinsic has been applied.
-	pub fn note_applied_extrinsic(r: &ApplyOutcome, _encoded_len: u32) {
+	pub fn note_applied_extrinsic(outcome: &DispatchOutcome, _encoded_len: u32) {
 		Self::deposit_event(
-			match r {
+			match outcome {
 				Ok(()) => Event::ExtrinsicSuccess,
 				Err(err) => Event::ExtrinsicFailed(err.clone()),
 			}
