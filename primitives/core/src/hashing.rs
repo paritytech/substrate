@@ -19,9 +19,11 @@
 use blake2_rfc;
 use tiny_keccak::{Hasher, Keccak};
 use twox_hash;
+use tracing::{span, Level};
 
 /// Do a Blake2 512-bit hash and place result in `dest`.
 pub fn blake2_512_into(data: &[u8], dest: &mut [u8; 64]) {
+	let _ = span!(Level::TRACE, "blake2_512_into").enter();
 	dest.copy_from_slice(blake2_rfc::blake2b::blake2b(64, &[], data).as_bytes());
 }
 

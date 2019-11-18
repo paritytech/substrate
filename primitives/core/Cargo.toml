@@ -37,6 +37,7 @@ substrate-debug-derive = { version = "2.0.0", path = "./debug-derive" }
 externalities = { package = "substrate-externalities", path = "../externalities", optional = true }
 primitives-storage = { package = "substrate-primitives-storage", path = "storage", default-features = false }
 runtime-interface = { package = "substrate-runtime-interface", path = "../runtime-interface", default-features = false }
+tracing = "0.1.2"
 
 [dev-dependencies]
 substrate-serializer = { path = "../serializer" }

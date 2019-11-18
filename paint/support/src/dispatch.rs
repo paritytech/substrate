@@ -23,6 +23,7 @@ pub use paint_metadata::{
 	FunctionMetadata, DecodeDifferent, DecodeDifferentArray, FunctionArgumentMetadata,
 	ModuleConstantMetadata, DefaultByte, DefaultByteGetter, ModuleErrorMetadata, ErrorMetadata
 };
+
 pub use sr_primitives::{
 	weights::{
 		SimpleDispatchInfo, GetDispatchInfo, DispatchInfo, WeighData, ClassifyDispatch,
@@ -861,7 +862,17 @@ macro_rules! decl_module {
 			$crate::sr_primitives::traits::OnInitialize<$trait_instance::BlockNumber>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
-			fn on_initialize(_block_number_not_used: $trait_instance::BlockNumber) { $( $impl )* }
+			fn on_initialize(_block_number_not_used: $trait_instance::BlockNumber) {
+				#[cfg(feature = "std")]
+				{
+					use $crate::tracing;
+					let span = tracing::span!(tracing::Level::INFO, stringify!($name));
+					let _enter = span.enter();
+					$( $impl )*
+				}
+				#[cfg(not(feature = "std"))]
+				{ $( $impl )* }
+			}
 		}
 	};
 
@@ -875,7 +886,17 @@ macro_rules! decl_module {
 			$crate::sr_primitives::traits::OnInitialize<$trait_instance::BlockNumber>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
-			fn on_initialize($param: $param_ty) { $( $impl )* }
+			fn on_initialize($param: $param_ty) {
+				#[cfg(feature = "std")]
+				{
+					use $crate::tracing;
+					let span = tracing::span!(tracing::Level::INFO, stringify!($name));
+					let _enter = span.enter();
+					{ $( $impl )* }
+				}
+				#[cfg(not(feature = "std"))]
+				{ $( $impl )* }
+			}
 		}
 	};
 
@@ -899,7 +920,17 @@ macro_rules! decl_module {
 			$crate::sr_primitives::traits::OnFinalize<$trait_instance::BlockNumber>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
-			fn on_finalize(_block_number_not_used: $trait_instance::BlockNumber) { $( $impl )* }
+			fn on_finalize(_block_number_not_used: $trait_instance::BlockNumber) {
+				#[cfg(feature = "std")]
+				{
+					use $crate::tracing;
+					let span = tracing::span!(tracing::Level::INFO, stringify!($name));
+					let _enter = span.enter();
+					$( $impl )*
+				}
+				#[cfg(not(feature = "std"))]
+				{ $( $impl )* }
+			}
 		}
 	};
 
@@ -913,7 +944,17 @@ macro_rules! decl_module {
 			$crate::sr_primitives::traits::OnFinalize<$trait_instance::BlockNumber>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
-			fn on_finalize($param: $param_ty) { $( $impl )* }
+			fn on_finalize($param: $param_ty) {
+				#[cfg(feature = "std")]
+				{
+					use $crate::tracing;
+					let span = tracing::span!(tracing::Level::INFO, stringify!($name));
+					let _enter = span.enter();
+					$( $impl )*
+				}
+				#[cfg(not(feature = "std"))]
+				{ $( $impl )* }
+			}
 		}
 	};
 
@@ -1009,9 +1050,19 @@ macro_rules! decl_module {
 		$vis fn $name(
 			$origin: $origin_ty $(, $param: $param_ty )*
 		) -> $crate::dispatch::DispatchResult<$error_type> {
-			{ $( $impl )* }
-			// May be unreachable.
-			Ok(())
+			#[cfg(feature = "std")]
+			{
+				use $crate::tracing;
+				let span = tracing::span!(tracing::Level::INFO, stringify!($name));
+				let _enter = span.enter();
+				let result: $crate::dispatch::DispatchResult<$error_type> = (move || { { $( $impl )* } Ok(()) })();
+				result
+			}
+			#[cfg(not(feature = "std"))]
+			return {
+				{ $( $impl )* }
+				Ok(())
+			};
 		}
 	};
 
@@ -1028,7 +1079,18 @@ macro_rules! decl_module {
 	) => {
 		$(#[doc = $doc_attr])*
 		$vis fn $name($origin: $origin_ty $(, $param: $param_ty )* ) -> $result {
-			$( $impl )*
+			#[cfg(feature = "std")]
+			{
+				use $crate::tracing;
+				let span = tracing::span!(tracing::Level::INFO, stringify!($name));
+				let _enter = span.enter();
+				let result: $result = (move || { $( $impl )* })();
+				result
+			}
+			#[cfg(not(feature = "std"))]
+			return {
+				$( $impl )*
+			};
 		}
 	};
 

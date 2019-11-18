@@ -23,6 +23,8 @@ extern crate self as paint_support;
 
 #[macro_use]
 extern crate bitmask;
+#[cfg(feature = "std")]
+pub extern crate tracing;
 
 #[cfg(feature = "std")]
 pub use serde;
@@ -42,6 +44,7 @@ pub use state_machine::BasicExternalities;
 pub use runtime_io::storage::root as storage_root;
 #[doc(hidden)]
 pub use sr_primitives::RuntimeDebug;
+
 
 #[macro_use]
 pub mod debug;
