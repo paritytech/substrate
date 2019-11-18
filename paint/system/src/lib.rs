@@ -320,8 +320,6 @@ decl_event!(
 decl_error! {
 	/// Error for the System module
 	pub enum Error {
-		BadSignature,
-		BlockFull,
 		RequireSignedOrigin,
 		RequireRootOrigin,
 		RequireNoOrigin,
