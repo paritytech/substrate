@@ -1031,17 +1031,19 @@ impl<T: Trait + Send + Sync> CheckBlockGasLimit<T> {
 		match *call {
 			Call::claim_surcharge(_, _) | Call::update_schedule(_) | Call::put_code(_) => Ok(None),
 			Call::call(_, _, gas_limit, _) | Call::instantiate(_, gas_limit, _, _) => {
-				// Compute how much block weight this transaction can take up in case if it
-				// depleted devoted gas to zero.
-				// We are achieving this by obtain the the available amount of weight left in
-				// the current block and discard this transaction if it can potentially overrun the
-				// available amount.
+				// Compute how much block weight this transaction can take at its limit, i.e.
+				// if this transaction depleted all provided gas to zero.
 				let gas_weight_limit = gas_limit
 					.try_into()
 					.map_err(|_| InvalidTransaction::ExhaustsResources)?;
 				let weight_available = <T as system::Trait>::MaximumBlockWeight::get()
 					.saturating_sub(<system::Module<T>>::all_extrinsics_weight());
 				if gas_weight_limit > weight_available {
+					// We discard the transaction if the requested limit exceeds the available
+					// amount of weight in the current block.
+					//
+					// Note that this transaction is left out only from the current block and txq
+					// might attempt to include this transaction again.
 					return Err(InvalidTransaction::ExhaustsResources.into());
 				}
 
@@ -1054,13 +1056,6 @@ impl<T: Trait + Send + Sync> CheckBlockGasLimit<T> {
 					.checked_div(&<BalanceOf<T>>::from(gas_weight_limit))
 					.unwrap_or(1.into());
 				<GasPrice<T>>::put(gas_price);
-
-				// TODO: Remove this.
-				if true {
-					runtime_io::print_num(gas_weight_limit.try_into().unwrap_or(0) as u64);
-					runtime_io::print_num(fee.try_into().unwrap_or(0) as u64);
-					runtime_io::print_num(gas_price.try_into().unwrap_or(0) as u64);
-				}
 
 				let imbalance = match T::Currency::withdraw(
 					who,
