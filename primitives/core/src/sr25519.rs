@@ -93,11 +93,11 @@ impl AsMut<[u8]> for Public {
 }
 
 impl Deref for Public {
-    type Target = [u8];
+	type Target = [u8];
 
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
 }
 
 impl From<Public> for [u8; 32] {
@@ -114,11 +114,11 @@ impl From<Public> for H256 {
 
 #[cfg(feature = "std")]
 impl std::str::FromStr for Public {
-    type Err = crate::crypto::PublicError;
+	type Err = crate::crypto::PublicError;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Self::from_ss58check(s)
-    }
+	fn from_str(s: &str) -> Result<Self, Self::Err> {
+		Self::from_ss58check(s)
+	}
 }
 
 impl rstd::convert::TryFrom<&[u8]> for Public {
