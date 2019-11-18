@@ -36,6 +36,7 @@ use transaction_factory::RuntimeAdapter;
 use transaction_factory::modes::Mode;
 use inherents::InherentData;
 use timestamp;
+use sp_timestamp;
 use finality_tracker;
 
 type AccountPublic = <Signature as Verify>::Signer;
@@ -160,7 +161,7 @@ impl RuntimeAdapter for FactoryState<Number> {
 		let timestamp = (self.block_no as u64 + 1) * MinimumPeriod::get();
 
 		let mut inherent = InherentData::new();
-		inherent.put_data(timestamp::INHERENT_IDENTIFIER, &timestamp)
+		inherent.put_data(sp_timestamp::INHERENT_IDENTIFIER, &timestamp)
 			.expect("Failed putting timestamp inherent");
 		inherent.put_data(finality_tracker::INHERENT_IDENTIFIER, &self.block_no)
 			.expect("Failed putting finalized number inherent");

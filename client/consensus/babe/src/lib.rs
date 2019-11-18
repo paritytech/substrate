@@ -80,10 +80,8 @@ use consensus_common::{
 	self, BlockImport, Environment, Proposer, BlockCheckParams,
 	ForkChoiceStrategy, BlockImportParams, BlockOrigin, Error as ConsensusError,
 };
-use paint_babe::{
-	BabeInherentData,
-	timestamp::{TimestampInherentData, InherentType as TimestampInherent}
-};
+use paint_babe::BabeInherentData;
+use sp_timestamp::{TimestampInherentData, InherentType as TimestampInherent};
 use consensus_common::SelectChain;
 use consensus_common::import_queue::{Verifier, BasicQueue, CacheKeyId};
 use client_api::{

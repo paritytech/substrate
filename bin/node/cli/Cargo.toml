@@ -39,6 +39,7 @@ babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../
 grandpa_primitives = { package = "substrate-finality-grandpa-primitives", path = "../../../primitives/finality-grandpa" }
 primitives = { package = "substrate-primitives", path = "../../../primitives/core" }
 sr-primitives = { path = "../../../primitives/sr-primitives" }
+sp-timestamp = { path = "../../../primitives/timestamp", default-features = false }
 
 # core dependencies
 runtime-io = { package = "sr-io", path = "../../../primitives/sr-io" }

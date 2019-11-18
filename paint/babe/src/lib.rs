@@ -21,10 +21,11 @@
 #![forbid(unused_must_use, unsafe_code, unused_variables, unused_must_use)]
 #![deny(unused_imports)]
 pub use timestamp;
+use sp_timestamp;
 
 use rstd::{result, prelude::*};
 use support::{decl_storage, decl_module, traits::FindAuthor, traits::Get};
-use timestamp::OnTimestampSet;
+use sp_timestamp::OnTimestampSet;
 use sr_primitives::{generic::DigestItem, ConsensusEngineId, Perbill};
 use sr_primitives::traits::{IsMember, SaturatedConversion, Saturating, RandomnessBeacon};
 use sr_staking_primitives::{
@@ -32,7 +33,7 @@ use sr_staking_primitives::{
 	offence::{Offence, Kind},
 };
 #[cfg(feature = "std")]
-use timestamp::TimestampInherentData;
+use sp_timestamp::TimestampInherentData;
 use codec::{Encode, Decode};
 use inherents::{InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
@@ -95,9 +96,9 @@ impl ProvideInherentData for InherentDataProvider {
 		&self,
 		providers: &InherentDataProviders,
 	) -> result::Result<(), inherents::Error> {
-		if !providers.has_provider(&timestamp::INHERENT_IDENTIFIER) {
+		if !providers.has_provider(&sp_timestamp::INHERENT_IDENTIFIER) {
 			// Add the timestamp inherent data provider, as we require it.
-			providers.register_provider(timestamp::InherentDataProvider)
+			providers.register_provider(sp_timestamp::InherentDataProvider)
 		} else {
 			Ok(())
 		}
