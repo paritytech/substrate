@@ -110,7 +110,7 @@ impl network_gossip::ValidatorContext<Block> for TestNetwork {
 }
 
 struct Tester {
-	net_handle: super::NetworkBridge<Block, TestNetwork>,
+	net_handle: super::NetworkBridge<Block>,
 	gossip_validator: Arc<GossipValidator<Block>>,
 	events: mpsc::UnboundedReceiver<Event>,
 }

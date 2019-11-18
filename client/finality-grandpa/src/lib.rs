@@ -278,9 +278,8 @@ pub(crate) trait BlockSyncRequester<Block: BlockT> {
 	fn set_sync_fork_request(&self, peers: Vec<network::PeerId>, hash: Block::Hash, number: NumberFor<Block>);
 }
 
-impl<Block, N> BlockSyncRequester<Block> for NetworkBridge<Block, N> where
+impl<Block> BlockSyncRequester<Block> for NetworkBridge<Block> where
 	Block: BlockT,
-	N: communication::Network<Block>,
 {
 	fn set_sync_fork_request(&self, peers: Vec<network::PeerId>, hash: Block::Hash, number: NumberFor<Block>) {
 		NetworkBridge::set_sync_fork_request(self, peers, hash, number)
@@ -453,7 +452,7 @@ fn global_communication<Block: BlockT<Hash=H256>, B, E, RA>(
 	set_id: SetId,
 	voters: &Arc<VoterSet<AuthorityId>>,
 	client: &Arc<Client<B, E, Block, RA>>,
-	network: &NetworkBridge<Block, GossipEngine<Block>>,
+	network: &NetworkBridge<Block>,
 	keystore: &Option<KeyStorePtr>,
 ) -> (
 	impl Stream<
@@ -549,7 +548,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X>(
 	Block::Hash: Ord,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
-	N: AbstractNetwork + Send + Sync + 'static,
+	N: AbstractNetwork + Send + Clone + 'static,
 	SC: SelectChain<Block> + 'static,
 	VR: VotingRule<Block, Client<B, E, Block, RA>> + Clone + 'static,
 	NumberFor<Block>: BlockNumberOps,
@@ -575,7 +574,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X>(
 	} = link;
 
 	let (network, network_startup) = NetworkBridge::new(
-		GossipEngine::new(network),
+		network,
 		config.clone(),
 		persistent_data.set_state.clone(),
 		on_exit.clone(),
@@ -641,7 +640,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X>(
 #[must_use]
 struct VoterWork<B, E, Block: BlockT, RA, SC, VR> {
 	voter: Box<dyn Future<Item = (), Error = CommandOrError<Block::Hash, NumberFor<Block>>> + Send>,
-	env: Arc<Environment<B, E, Block, GossipEngine<Block>, RA, SC, VR>>,
+	env: Arc<Environment<B, E, Block, RA, SC, VR>>,
 	voter_commands_rx: mpsc::UnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
 }
 
@@ -658,7 +657,7 @@ where
 	fn new(
 		client: Arc<Client<B, E, Block, RA>>,
 		config: Config,
-		network: NetworkBridge<Block, GossipEngine<Block>>,
+		network: NetworkBridge<Block>,
 		select_chain: SC,
 		voting_rule: VR,
 		persistent_data: PersistentData<Block>,
@@ -877,7 +876,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X>(
 	Block::Hash: Ord,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
-	N: AbstractNetwork + Send + Sync + 'static,
+	N: AbstractNetwork + Send + Clone + 'static,
 	SC: SelectChain<Block> + 'static,
 	NumberFor<Block>: BlockNumberOps,
 	DigestFor<Block>: Encode,

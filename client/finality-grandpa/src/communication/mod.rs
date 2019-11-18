@@ -31,11 +31,11 @@ use std::sync::Arc;
 
 use futures::prelude::*;
 use futures::sync::mpsc;
-use futures03::stream::{StreamExt, TryStreamExt};
+use futures03::{compat::Compat, stream::{StreamExt, TryStreamExt}};
 use grandpa::Message::{Prevote, Precommit, PrimaryPropose};
 use grandpa::{voter, voter_set::VoterSet};
 use log::{debug, trace};
-use network_gossip::GossipEngine;
+use network_gossip::{GossipEngine, Network as AbstractNetwork};
 use codec::{Encode, Decode};
 use primitives::Pair;
 use sr_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, NumberFor};
@@ -192,18 +192,18 @@ impl<B> Network<B> for GossipEngine<B> where
 }
 
 /// Bridge between the underlying network service, gossiping consensus messages and Grandpa
-pub(crate) struct NetworkBridge<B: BlockT, N: Network<B>> {
-	service: N,
+pub(crate) struct NetworkBridge<B: BlockT> {
+	service: GossipEngine<B>,
 	validator: Arc<GossipValidator<B>>,
 	neighbor_sender: periodic::NeighborPacketSender<B>,
 }
 
-impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
+impl<B: BlockT> NetworkBridge<B> {
 	/// Create a new NetworkBridge to the given NetworkService. Returns the service
 	/// handle and a future that must be polled to completion to finish startup.
 	/// On creation it will register previous rounds' votes with the gossip
 	/// service taken from the VoterSetState.
-	pub(crate) fn new(
+	pub(crate) fn new<N: AbstractNetwork + Clone + Send + 'static>(
 		service: N,
 		config: crate::Config,
 		set_state: crate::environment::SharedVoterSetState<B>,
@@ -219,7 +219,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		);
 
 		let validator = Arc::new(validator);
-		service.register_validator(validator.clone());
+		let service = GossipEngine::new(service, &b"/sub/grandpa"[..], GRANDPA_ENGINE_ID, validator.clone());
 
 		{
 			// register all previous votes with the gossip service so that they're
@@ -327,7 +327,8 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		});
 
 		let topic = round_topic::<B>(round.0, set_id.0);
-		let incoming = self.service.messages_for(topic)
+		let incoming = Compat::new(self.service.messages_for(GRANDPA_ENGINE_ID, topic)
+			.map(|item| Ok::<_, ()>(item)))
 			.filter_map(|notification| {
 				let decoded = GossipMessage::<B>::decode(&mut &notification.message[..]);
 				if let Err(ref e) = decoded {
@@ -380,7 +381,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 			.map_err(|()| Error::Network(format!("Failed to receive message on unbounded stream")));
 
 		let (tx, out_rx) = mpsc::unbounded();
-		let outgoing = OutgoingMessages::<B, N> {
+		let outgoing = OutgoingMessages::<B, GossipEngine<B>> {
 			round: round.0,
 			set_id: set_id.0,
 			network: self.service.clone(),
@@ -427,7 +428,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 			self.neighbor_sender.clone(),
 		);
 
-		let outgoing = CommitsOut::<B, N>::new(
+		let outgoing = CommitsOut::<B, GossipEngine<B>>::new(
 			self.service.clone(),
 			set_id.0,
 			is_voter,
@@ -585,7 +586,7 @@ fn incoming_global<B: BlockT, N: Network<B>>(
 		.map_err(|()| Error::Network(format!("Failed to receive message on unbounded stream")))
 }
 
-impl<B: BlockT, N: Network<B>> Clone for NetworkBridge<B, N> {
+impl<B: BlockT> Clone for NetworkBridge<B> {
 	fn clone(&self) -> Self {
 		NetworkBridge {
 			service: self.service.clone(),

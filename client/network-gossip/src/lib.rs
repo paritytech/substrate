@@ -21,7 +21,7 @@ pub use self::state_machine::*;
 use network::{specialization::NetworkSpecialization, Event, ExHashT, NetworkService, PeerId};
 use network::message::generic::ConsensusMessage;
 use sr_primitives::{traits::Block as BlockT, ConsensusEngineId};
-use std::borrow::Cow;
+use std::{borrow::Cow, sync::Arc};
 
 mod bridge;
 mod state_machine;
@@ -41,7 +41,7 @@ pub trait Network {
 	fn write_notif(&self, who: PeerId, proto_name: Cow<'static, [u8]>, engine_id: ConsensusEngineId, message: Vec<u8>);
 }
 
-impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Network for NetworkService<B, S, H> {
+impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Network for Arc<NetworkService<B, S, H>> {
 	fn events_stream(&self) -> Box<dyn futures01::Stream<Item = Event, Error = ()> + Send> {
 		Box::new(NetworkService::events_stream(self))
 	}
