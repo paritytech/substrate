@@ -55,6 +55,8 @@ mod inner {
 				support::print("Staking::Nominators map reinitialized");
 			}
 		}
+
+		support::print("Finished migrating Staking storage to v1.");
 	}
 
 	pub(super) fn perform_migrations<T: Trait>() {

@@ -50,7 +50,7 @@ nicks = { package = "paint-nicks", path = "../../../paint/nicks", default-featur
 offences = { package = "paint-offences", path = "../../../paint/offences", default-features = false }
 randomness-collective-flip = { package = "paint-randomness-collective-flip", path = "../../../paint/randomness-collective-flip", default-features = false }
 session = { package = "paint-session", path = "../../../paint/session", default-features = false, features = ["historical"] }
-staking = { package = "paint-staking", path = "../../../paint/staking", default-features = false }
+staking = { package = "paint-staking", path = "../../../paint/staking", default-features = false, features = ["migrate"] }
 paint-staking-reward-curve = { path = "../../../paint/staking/reward-curve"}
 sudo = { package = "paint-sudo", path = "../../../paint/sudo", default-features = false }
 support = { package = "paint-support", path = "../../../paint/support", default-features = false }
