@@ -264,6 +264,11 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 	/// The type that get/take returns.
 	type Query;
 
+	fn hashed_key_for<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> Vec<u8>
+	where
+		KArg1: EncodeLike<K1>,
+		KArg2: EncodeLike<K2>;
+
 	fn exists<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> bool
 	where
 		KArg1: EncodeLike<K1>,

@@ -172,7 +172,7 @@ impl rstd::hash::Hash for Public {
 	}
 }
 
-/// A signature (a 512-bit value).
+/// A signature (a 512-bit value, plus 8 bits for recovery ID).
 #[derive(Encode, Decode)]
 pub struct Signature([u8; 65]);
 
@@ -187,6 +187,23 @@ impl rstd::convert::TryFrom<&[u8]> for Signature {
 		} else {
 			Err(())
 		}
+	}
+}
+
+#[cfg(feature = "std")]
+impl Serialize for Signature {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
+		serializer.serialize_str(&hex::encode(self))
+	}
+}
+
+#[cfg(feature = "std")]
+impl<'de> Deserialize<'de> for Signature {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
+		let signature_hex = hex::decode(&String::deserialize(deserializer)?)
+			.map_err(|e| de::Error::custom(format!("{:?}", e)))?;
+		Ok(Signature::try_from(signature_hex.as_ref())
+			.map_err(|e| de::Error::custom(format!("{:?}", e)))?)
 	}
 }
 
@@ -257,6 +274,16 @@ impl Signature {
 	/// you are certain that the array actually is a signature. GIGO!
 	pub fn from_raw(data: [u8; 65]) -> Signature {
 		Signature(data)
+	}
+
+	/// A new instance from the given slice that should be 65 bytes long.
+	///
+	/// NOTE: No checking goes on to ensure this is a real signature. Only use it if
+	/// you are certain that the array actually is a signature. GIGO!
+	pub fn from_slice(data: &[u8]) -> Self {
+		let mut r = [0u8; 65];
+		r.copy_from_slice(data);
+		Signature(r)
 	}
 
 	/// Recover the public key from this signature and a message.
@@ -501,6 +528,7 @@ mod test {
 	use super::*;
 	use hex_literal::hex;
 	use crate::crypto::DEV_PHRASE;
+	use serde_json;
 
 	#[test]
 	fn default_phrase_should_be_used() {
@@ -612,5 +640,28 @@ mod test {
 		println!("Correct: {}", s);
 		let cmp = Public::from_ss58check(&s).unwrap();
 		assert_eq!(cmp, public);
+	}
+
+	#[test]
+	fn signature_serialization_works() {
+		let pair = Pair::from_seed(b"12345678901234567890123456789012");
+		let message = b"Something important";
+		let signature = pair.sign(&message[..]);
+		let serialized_signature = serde_json::to_string(&signature).unwrap();
+		// Signature is 65 bytes, so 130 chars + 2 quote chars
+		assert_eq!(serialized_signature.len(), 132);
+		let signature = serde_json::from_str(&serialized_signature).unwrap();
+		assert!(Pair::verify(&signature, &message[..], &pair.public()));
+	}
+
+	#[test]
+	fn signature_serialization_doesnt_panic() {
+		fn deserialize_signature(text: &str) -> Result<Signature, serde_json::error::Error> {
+			Ok(serde_json::from_str(text)?)
+		}
+		assert!(deserialize_signature("Not valid json.").is_err());
+		assert!(deserialize_signature("\"Not an actual signature.\"").is_err());
+		// Poorly-sized
+		assert!(deserialize_signature("\"abc123\"").is_err());
 	}
 }

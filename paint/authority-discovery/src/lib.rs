@@ -198,12 +198,6 @@ mod tests {
 			.map(AuthorityId::from)
 			.collect();
 
-		// Needed for `session::OneSessionHandler::on_new_session`.
-		let first_authorities_and_account_ids: Vec<(&AuthorityId, AuthorityId)> = first_authorities.clone()
-			.into_iter()
-			.map(|id| (&account_id, id))
-			.collect();
-
 		let second_authorities: Vec<AuthorityId> = vec![2, 3].into_iter()
 			.map(|i| AuthorityPair::from_seed_slice(vec![i; 32].as_ref()).unwrap().public())
 			.map(AuthorityId::from)
@@ -235,10 +229,7 @@ mod tests {
 			AuthorityDiscovery::on_genesis_session(
 				first_authorities.iter().map(|id| (id, id.clone()))
 			);
-			assert_eq!(
-				first_authorities,
-				AuthorityDiscovery::authorities()
-			);
+			assert_eq!(first_authorities, AuthorityDiscovery::authorities());
 
 			// When `changed` set to false, the authority set should not be updated.
 			AuthorityDiscovery::on_new_session(
@@ -246,10 +237,7 @@ mod tests {
 				second_authorities_and_account_ids.clone().into_iter(),
 				vec![].into_iter(),
 			);
-			assert_eq!(
-				first_authorities,
-				AuthorityDiscovery::authorities()
-			);
+			assert_eq!(first_authorities, AuthorityDiscovery::authorities());
 
 			// When `changed` set to true, the authority set should be updated.
 			AuthorityDiscovery::on_new_session(
@@ -257,10 +245,7 @@ mod tests {
 				second_authorities_and_account_ids.into_iter(),
 				vec![].into_iter(),
 			);
-			assert_eq!(
-				second_authorities,
-				AuthorityDiscovery::authorities()
-			);
+			assert_eq!(second_authorities, AuthorityDiscovery::authorities());
 		});
 	}
 }
