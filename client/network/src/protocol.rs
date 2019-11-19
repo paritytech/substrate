@@ -120,6 +120,8 @@ pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 	handshaking_peers: HashMap<PeerId, HandshakingPeer>,
 	/// For each legacy gossiping engine ID, the corresponding new protocol name.
 	protocol_name_by_engine: HashMap<ConsensusEngineId, Cow<'static, [u8]>>,
+	/// For each protocol name, the legacy gossiping engine ID.
+	protocol_engine_by_name: HashMap<Cow<'static, [u8]>, ConsensusEngineId>,
 	/// Used to report reputation changes.
 	peerset_handle: peerset::PeersetHandle,
 	transaction_pool: Arc<dyn TransactionPool<H, B>>,
@@ -192,7 +194,7 @@ impl<'a, B: BlockT> LightDispatchNetwork<B> for LightDispatchIn<'a> {
 			block,
 		});
 
-		self.behaviour.send_packet(who, None, message.encode())
+		self.behaviour.send_packet(who, message.encode())
 	}
 
 	fn send_read_request(
@@ -208,7 +210,7 @@ impl<'a, B: BlockT> LightDispatchNetwork<B> for LightDispatchIn<'a> {
 			keys,
 		});
 
-		self.behaviour.send_packet(who, None, message.encode())
+		self.behaviour.send_packet(who, message.encode())
 	}
 
 	fn send_read_child_request(
@@ -226,7 +228,7 @@ impl<'a, B: BlockT> LightDispatchNetwork<B> for LightDispatchIn<'a> {
 			keys,
 		});
 
-		self.behaviour.send_packet(who, None, message.encode())
+		self.behaviour.send_packet(who, message.encode())
 	}
 
 	fn send_call_request(
@@ -244,7 +246,7 @@ impl<'a, B: BlockT> LightDispatchNetwork<B> for LightDispatchIn<'a> {
 			data,
 		});
 
-		self.behaviour.send_packet(who, None, message.encode())
+		self.behaviour.send_packet(who, message.encode())
 	}
 
 	fn send_changes_request(
@@ -268,7 +270,7 @@ impl<'a, B: BlockT> LightDispatchNetwork<B> for LightDispatchIn<'a> {
 			key,
 		});
 
-		self.behaviour.send_packet(who, None, message.encode())
+		self.behaviour.send_packet(who, message.encode())
 	}
 
 	fn send_body_request(
@@ -290,7 +292,7 @@ impl<'a, B: BlockT> LightDispatchNetwork<B> for LightDispatchIn<'a> {
 			max,
 		});
 
-		self.behaviour.send_packet(who, None, message.encode())
+		self.behaviour.send_packet(who, message.encode())
 	}
 }
 
@@ -337,6 +339,8 @@ impl<'a, B: BlockT + 'a, H: ExHashT + 'a> Context<B> for ProtocolContext<'a, B, 
 	}
 
 	fn send_consensus(&mut self, who: PeerId, messages: Vec<ConsensusMessage>) {
+		panic!();		// TODO: shouldn't be reached
+
 		if self.context_data.peers.get(&who).map_or(false, |peer| peer.info.protocol_version > 4) {
 			let mut batch = Vec::new();
 			let len = messages.len();
@@ -442,6 +446,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			sync,
 			specialization,
 			protocol_name_by_engine: HashMap::new(),
+			protocol_engine_by_name: HashMap::new(),
 			handshaking_peers: HashMap::new(),
 			transaction_pool,
 			finality_proof_provider,
@@ -626,6 +631,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			GenericMessage::Consensus(msg) => {
 				let outcome = if let Some(proto_name) = self.protocol_name_by_engine.get(&msg.engine_id) {
 					// TODO: what if not open? check if open?
+					panic!("notif message!");
 					CustomMessageOutcome::NotifMessages {
 						remote: who.clone(),
 						messages: vec![(proto_name.clone(), msg.data.clone())],
@@ -641,6 +647,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					.iter()
 					.filter_map(|msg| {
 						if let Some(proto_name) = self.protocol_name_by_engine.get(&msg.engine_id) {
+							panic!("notif message!");
 							// TODO: what if not open? check if open?
 							Some((proto_name.clone(), msg.data.clone()))
 						} else {
@@ -1055,7 +1062,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		proto_name: impl Into<Cow<'static, [u8]>>,
 		message: impl Into<Vec<u8>>
 	) {
-		self.behaviour.send_packet(&target, Some(proto_name.into()), message)
+		let proto_name = proto_name.into();
+		if let Some(engine_id) = self.protocol_engine_by_name.get(&proto_name) {
+			self.behaviour.write_notif(&target, proto_name, *engine_id, message);
+		} else {
+			error!(target: "sub-libp2p", "Sending a notification with a protocol that wasn't registered");
+		}
 	}
 
 	/// Registers a new notifications protocol.
@@ -1070,9 +1082,10 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	) {
 		let proto_name = proto_name.into();
 		if self.protocol_name_by_engine.insert(engine_id, proto_name.clone()).is_some() {
-			error!("Notifications protocol already registered: {:?}", proto_name);
+			error!(target: "sub-libp2p", "Notifications protocol already registered: {:?}", proto_name);
 		} else {
-			self.behaviour.register_notif_protocol(proto_name, handshake);
+			self.behaviour.register_notif_protocol(proto_name.clone(), handshake);
+			self.protocol_engine_by_name.insert(proto_name, engine_id);
 		}
 	}
 
@@ -1748,7 +1761,7 @@ fn send_message<B: BlockT>(
 	let mut stats = stats.entry(message.id()).or_default();
 	stats.bytes_out += encoded.len() as u64;
 	stats.count_out += 1;
-	behaviour.send_packet(who, None, encoded);
+	behaviour.send_packet(who, encoded);
 }
 
 impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> NetworkBehaviour for
@@ -1857,7 +1870,6 @@ Protocol<B, S, H> {
 				}
 			},
 			GenericProtoOut::CustomMessage { peer_id, message } =>
-				// TODO: NotifMessages
 				self.on_custom_message(peer_id, message),
 			GenericProtoOut::Clogged { peer_id, messages } => {
 				debug!(target: "sync", "{} clogging messages:", messages.len());

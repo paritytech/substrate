@@ -26,6 +26,7 @@ use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters};
 use log::{debug, error, trace, warn};
 use rand::distributions::{Distribution as _, Uniform};
 use smallvec::SmallVec;
+use sr_primitives::ConsensusEngineId;
 use std::{borrow::Cow, collections::hash_map::Entry, cmp, error, marker::PhantomData, mem, pin::Pin};
 use std::time::{Duration, Instant};
 use tokio_io::{AsyncRead, AsyncWrite};
@@ -386,20 +387,49 @@ impl<TSubstream> GenericProto<TSubstream> {
 	pub fn send_packet(
 		&mut self,
 		target: &PeerId,
-		proto_name: Option<Cow<'static, [u8]>>,
 		message: impl Into<Vec<u8>>,
 	) {
 		if !self.is_open(target) {
 			return;
 		}
 
-		trace!(target: "sub-libp2p", "External API => Packet for {:?} with protocol {:?}", target, proto_name);
+		trace!(target: "sub-libp2p", "External API => Packet for {:?}", target);
 		trace!(target: "sub-libp2p", "Handler({:?}) <= Packet", target);
+
 		self.events.push(NetworkBehaviourAction::SendEvent {
 			peer_id: target.clone(),
 			event: NotifsHandlerIn::Send {
 				message: message.into(),
-				proto_name: proto_name.map(Into::into),
+			},
+		});
+	}
+
+	/// Sends a notification to a peer.
+	///
+	/// Has no effect if the custom protocol is not open with the given peer.
+	///
+	/// Also note that even we have a valid open substream, it may in fact be already closed
+	/// without us knowing, in which case the packet will not be received.
+	pub fn write_notif(
+		&mut self,
+		target: &PeerId,
+		proto_name: Cow<'static, [u8]>,
+		engine_id: ConsensusEngineId,
+		message: impl Into<Vec<u8>>,
+	) {
+		if !self.is_open(target) {
+			return;
+		}
+
+		trace!(target: "sub-libp2p", "External API => Notification for {:?} with protocol {:?}", target, proto_name);
+		trace!(target: "sub-libp2p", "Handler({:?}) <= Packet", target);
+
+		self.events.push(NetworkBehaviourAction::SendEvent {
+			peer_id: target.clone(),
+			event: NotifsHandlerIn::SendNotif {
+				message: message.into(),
+				proto_name,
+				engine_id,
 			},
 		});
 	}

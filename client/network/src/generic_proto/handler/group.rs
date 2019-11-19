@@ -20,7 +20,9 @@ use crate::generic_proto::{
 	handler::notif_out::{NotifsOutHandlerProto, NotifsOutHandler, NotifsOutHandlerIn, NotifsOutHandlerOut},
 	upgrade::{NotificationsIn, NotificationsOut, RegisteredProtocol, SelectUpgrade, UpgradeCollec},
 };
+use crate::protocol::message::generic::ConsensusMessage;
 use bytes::BytesMut;
+use codec::Encode as _;
 use futures::prelude::*;
 use libp2p::core::{ConnectedPoint, PeerId};
 use libp2p::core::either::{EitherError, EitherOutput};
@@ -33,6 +35,7 @@ use libp2p::swarm::{
 	SubstreamProtocol,
 };
 use log::error;
+use sr_primitives::ConsensusEngineId;
 use std::{borrow::Cow, error, io};
 use tokio_io::{AsyncRead, AsyncWrite};
 
@@ -119,13 +122,22 @@ pub enum NotifsHandlerIn {
 	/// The node should stop using custom protocols.
 	Disable,
 
-	/// Sends a message through a custom protocol substream.
+	/// Sends a message through the custom protocol substream.
 	Send {
-		/// Name of the protocol for the message, or `None` to force the legacy protocol.
+		/// The message to send.
+		message: Vec<u8>,
+	},
+
+	/// Sends a notifications message.
+	SendNotif {
+		/// Name of the protocol for the message.
 		///
-		/// If `Some`, must match one of the registered protocols. For backwards-compatibility
-		/// reasons, if the remote doesn't support this protocol, we use the legacy substream.
-		proto_name: Option<Cow<'static, [u8]>>,
+		/// Must match one of the registered protocols. For backwards-compatibility reasons, if
+		/// the remote doesn't support this protocol, we use the legacy substream.
+		proto_name: Cow<'static, [u8]>,
+
+		/// For legacy reasons, the name to use if we send the message on the legacy substream.
+		engine_id: ConsensusEngineId,
 
 		/// The message to send.
 		message: Vec<u8>,
@@ -257,17 +269,22 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static {
 					self.in_handlers[num].inject_event(NotifsInHandlerIn::Refuse);
 				}
 			},
-			NotifsHandlerIn::Send { proto_name, message } => {
-				if let Some(proto_name) = proto_name {
-					for handler in &mut self.out_handlers {
-						if handler.is_open() && handler.protocol_name() == &proto_name[..] {
-							handler.inject_event(NotifsOutHandlerIn::Send(message));
-							return;
-						}
+			NotifsHandlerIn::Send { message } =>
+				self.legacy.inject_event(LegacyProtoHandlerIn::SendCustomMessage { message }),
+			NotifsHandlerIn::SendNotif { message, engine_id, proto_name } => {
+				for handler in &mut self.out_handlers {
+					if handler.is_open() && handler.protocol_name() == &proto_name[..] {
+						handler.inject_event(NotifsOutHandlerIn::Send(message));
+						return;
 					}
 				}
 
-				self.legacy.inject_event(LegacyProtoHandlerIn::SendCustomMessage { message });
+				let message = ConsensusMessage {
+					engine_id,
+					data: message,
+				};
+
+				self.legacy.inject_event(LegacyProtoHandlerIn::SendCustomMessage { message: message.encode() });
 			},
 		}
 	}
