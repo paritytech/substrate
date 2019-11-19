@@ -144,6 +144,10 @@ impl ops::Div for Fixed64 {
 	type Output = Self;
 
 	fn div(self, rhs: Self) -> Self::Output {
+		if rhs.0 == 0 {
+			let zero = 0;
+			return Fixed64::from_parts( self.0 / zero);
+		}
 		let (n, d) = if rhs.0 < 0 {
 			(-self.0, rhs.0.abs() as u64)
 		} else {
@@ -299,10 +303,11 @@ mod tests {
 	}
 
 	#[test]
+	#[should_panic(expected = "attempt to divide by zero")]
 	fn div_zero() {
 		let a = Fixed64::from_rational(12, 10);
 		let b = Fixed64::from_natural(0);
-		assert_eq!(a / b, Fixed64::from_rational(1200000000, 0));
+		let _ = a / b;
 	}
 
 	#[test]
