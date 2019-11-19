@@ -26,8 +26,8 @@ use sr_primitives::{
 	traits::{Block as BlockT, ProvideRuntimeApi},
 };
 use primitives::Bytes;
-use paint_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
-pub use paint_transaction_payment_rpc_runtime_api::TransactionPaymentApi as TransactionPaymentRuntimeApi;
+use palette_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
+pub use palette_transaction_payment_rpc_runtime_api::TransactionPaymentApi as TransactionPaymentRuntimeApi;
 pub use self::gen_client::Client as TransactionPaymentClient;
 
 #[rpc]

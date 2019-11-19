@@ -27,7 +27,7 @@ runtime_version = { package = "sr-version", path = "../../../primitives/sr-versi
 slots = { package = "substrate-consensus-slots", path = "../slots" }
 sr-api = { path = "../../../primitives/sr-api" }
 sr-primitives = {  path = "../../../primitives/sr-primitives" }
-paint-aura = { path = "../../../palette/aura" }
+palette-aura = { path = "../../../palette/aura" }
 substrate-telemetry = { path = "../../telemetry" }
 
 [dev-dependencies]

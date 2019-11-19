@@ -25,7 +25,7 @@ mod instance_trait;
 mod genesis_config;
 
 use quote::quote;
-use paint_support_procedural_tools::{
+use palette_support_procedural_tools::{
 	generate_crate_access, generate_hidden_includes, syn_ext as ext
 };
 
@@ -403,8 +403,8 @@ pub fn decl_storage_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStr
 	let hidden_crate_name = def_ext.hidden_crate.as_ref().map(|i| i.to_string())
 		.unwrap_or_else(|| "decl_storage".to_string());
 
-	let scrate = generate_crate_access(&hidden_crate_name, "paint-support");
-	let scrate_decl = generate_hidden_includes(&hidden_crate_name, "paint-support");
+	let scrate = generate_crate_access(&hidden_crate_name, "palette-support");
+	let scrate_decl = generate_hidden_includes(&hidden_crate_name, "palette-support");
 
 	let store_trait = store_trait::decl_and_impl(&def_ext);
 	let getters = getters::impl_getters(&scrate, &def_ext);

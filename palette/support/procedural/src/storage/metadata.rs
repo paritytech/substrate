@@ -16,7 +16,7 @@
 
 //! Implementation of `storage_metadata` on module structure, used by construct_runtime.
 
-use paint_support_procedural_tools::clean_type_string;
+use palette_support_procedural_tools::clean_type_string;
 use proc_macro2::TokenStream;
 use quote::quote;
 use super::{DeclStorageDefExt, StorageLineDefExt, StorageLineTypeDef};

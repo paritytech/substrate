@@ -1,5 +1,5 @@
 [package]
-name = "paint-staking"
+name = "palette-staking"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
@@ -14,16 +14,16 @@ phragmen = { package = "substrate-phragmen", path = "../../primitives/phragmen",
 runtime-io ={ package = "sr-io", path = "../../primitives/sr-io", default-features = false }
 sr-primitives = { path = "../../primitives/sr-primitives", default-features = false }
 sr-staking-primitives = { path = "../../primitives/sr-staking-primitives", default-features = false }
-support = { package = "paint-support", path = "../support", default-features = false }
-system = { package = "paint-system", path = "../system", default-features = false }
-session = { package = "paint-session", path = "../session", default-features = false, features = ["historical"] }
-authorship = { package = "paint-authorship", path = "../authorship", default-features = false }
+support = { package = "palette-support", path = "../support", default-features = false }
+system = { package = "palette-system", path = "../system", default-features = false }
+session = { package = "palette-session", path = "../session", default-features = false, features = ["historical"] }
+authorship = { package = "palette-authorship", path = "../authorship", default-features = false }
 
 [dev-dependencies]
 primitives = { package = "substrate-primitives",  path = "../../primitives/core" }
-balances = { package = "paint-balances", path = "../balances" }
-timestamp = { package = "paint-timestamp", path = "../timestamp" }
-paint-staking-reward-curve = { path = "../staking/reward-curve"}
+balances = { package = "palette-balances", path = "../balances" }
+timestamp = { package = "palette-timestamp", path = "../timestamp" }
+palette-staking-reward-curve = { path = "../staking/reward-curve"}
 
 [features]
 equalize = []
