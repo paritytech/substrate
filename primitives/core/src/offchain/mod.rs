@@ -701,6 +701,15 @@ externalities::decl_extension! {
 	pub struct TransactionPoolExt(Box<dyn TransactionPool + Send>);
 }
 
+#[cfg(feature = "std")]
+impl TransactionPoolExt {
+	/// Create a new instance of `TransactionPoolExt`.
+	pub fn new<O: TransactionPool + Send + 'static>(pool: O) -> Self {
+		Self(Box::new(pool))
+	}
+}
+
+
 #[cfg(test)]
 mod tests {
 	use super::*;

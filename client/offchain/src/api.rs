@@ -21,7 +21,7 @@ use std::{
 	thread::sleep,
 };
 
-use client_api::OffchainStorage;
+use primitives::offchain::OffchainStorage;
 use futures::Future;
 use log::error;
 use network::{PeerId, Multiaddr, NetworkStateInfo};

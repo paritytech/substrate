@@ -5086,7 +5086,6 @@ dependencies = [
  "sr-std 2.0.0",
  "substrate-application-crypto 2.0.0",
  "substrate-inherents 2.0.0",
- "substrate-offchain 2.0.0",
  "substrate-primitives 2.0.0",
 ]
 

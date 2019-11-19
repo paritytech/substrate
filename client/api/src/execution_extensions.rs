@@ -14,6 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+//! Execution extensions for runtime calls.
+//!
+//! This module is responsible for defining the execution
+//! strategy for the runtime calls and provide the right `Externalities`
+//! extensions to support APIs for particular execution context & capabilities.
+
 use std::sync::{Weak, Arc};
 use codec::Decode;
 use primitives::{
@@ -57,6 +63,11 @@ impl Default for ExecutionStrategies {
 	}
 }
 
+/// A producer of execution extensions for offchain calls.
+///
+/// This crate aggregates extensions available for the offchain calls
+/// and is responsbile to produce a right `Extensions` object
+/// for each call, based on required `Capabilities`.
 pub struct ExecutionExtensions<Block: traits::Block> {
 	strategies: ExecutionStrategies,
 	keystore: Option<BareCryptoStorePtr>,
@@ -74,6 +85,7 @@ impl<Block: traits::Block> Default for ExecutionExtensions<Block> {
 }
 
 impl<Block: traits::Block> ExecutionExtensions<Block> {
+	/// Create new `ExecutionExtensions` given a `keystore` and `ExecutionStrategies`.
 	pub fn new(
 		strategies: ExecutionStrategies,
 		keystore: Option<BareCryptoStorePtr>,
@@ -87,10 +99,20 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 		&self.strategies
 	}
 
+	/// Register transaction pool extension.
+	///
+	/// To break retain cycle between `Client` and `TransactionPool` we require this
+	/// extension to be a `Weak` reference.
+	/// That's also the reason why it's being registered lazily instead of
+	/// during initialisation.
 	pub fn register_transaction_pool(&self, pool: Weak<dyn TransactionPool<Block>>) {
 		*self.transaction_pool.write() = Some(pool);
 	}
 
+	/// Create `ExecutionManager` and `Extensions` for given offchain call.
+	///
+	/// Based on the execution context and capabilities it produces
+	/// the right manager and extensions object to support desired set of APIs.
 	pub fn manager_and_extensions<E: std::fmt::Debug, R: codec::Codec>(
 		&self,
 		at: &BlockId<Block>,
@@ -141,6 +163,7 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 	}
 }
 
+/// A wrapper type to pass `BlockId` to the actual transaction pool.
 struct TransactionPoolAdapter<Block: traits::Block> {
 	at: BlockId<Block>,
 	pool: Arc<dyn TransactionPool<Block>>,

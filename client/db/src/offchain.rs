@@ -117,7 +117,7 @@ impl primitives::offchain::OffchainStorage for LocalStorage {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use client_api::OffchainStorage;
+	use primitives::offchain::OffchainStorage;
 
 	#[test]
 	fn should_compare_and_set_and_clear_the_locks_map() {

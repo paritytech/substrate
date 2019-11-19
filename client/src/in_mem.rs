@@ -811,7 +811,7 @@ pub fn check_genesis_storage(top: &StorageOverlay, children: &ChildrenStorageOve
 
 #[cfg(test)]
 mod tests {
-	use client_api::offchain::{OffchainStorage, InMemOffchainStorage};
+	use primitives::offchain::{OffchainStorage, storage::InMemOffchainStorage};
 	use std::sync::Arc;
 	use test_client;
 	use primitives::Blake2Hasher;

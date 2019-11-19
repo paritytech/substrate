@@ -41,9 +41,8 @@ use sr_api::ApiExt;
 use futures::future::Future;
 use log::{debug, warn};
 use network::NetworkStateInfo;
-use primitives::{offchain, ExecutionContext};
+use primitives::{offchain::{self, OffchainStorage}, ExecutionContext};
 use sr_primitives::{generic::BlockId, traits::{self, ProvideRuntimeApi}};
-use client_api::OffchainStorage;
 
 mod api;
 
