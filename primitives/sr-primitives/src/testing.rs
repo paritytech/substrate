@@ -327,13 +327,13 @@ impl<Call: Codec + Sync + Send, Extra> traits::Extrinsic for TestXt<Call, Extra>
 
 impl<Origin, Call, Extra, Info> Applyable for TestXt<Call, Extra> where
 	Call: 'static + Sized + Send + Sync + Clone + Eq + Codec + Debug + Dispatchable<Origin=Origin>,
-	Extra: SignedExtension<AccountId=u64, Call=Call, Info=Info>,
+	Extra: SignedExtension<AccountId=u64, Call=Call, DispatchInfo=Info>,
 	Origin: From<Option<u64>>,
-	Info: Copy,
+	Info: Clone,
 {
 	type AccountId = u64;
 	type Call = Call;
-	type Info = Info;
+	type DispatchInfo = Info;
 
 	fn sender(&self) -> Option<&Self::AccountId> { self.0.as_ref().map(|x| &x.0) }
 
@@ -341,7 +341,7 @@ impl<Origin, Call, Extra, Info> Applyable for TestXt<Call, Extra> where
 	#[allow(deprecated)] // Allow ValidateUnsigned
 	fn validate<U: ValidateUnsigned<Call=Self::Call>>(
 		&self,
-		_info: Self::Info,
+		_info: Self::DispatchInfo,
 		_len: usize,
 	) -> TransactionValidity {
 		Ok(Default::default())
@@ -352,7 +352,7 @@ impl<Origin, Call, Extra, Info> Applyable for TestXt<Call, Extra> where
 	#[allow(deprecated)] // Allow ValidateUnsigned
 	fn apply<U: ValidateUnsigned<Call=Self::Call>>(
 		self,
-		info: Self::Info,
+		info: Self::DispatchInfo,
 		len: usize,
 	) -> ApplyResult {
 		let maybe_who = if let Some((who, extra)) = self.0 {

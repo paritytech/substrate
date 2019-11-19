@@ -148,7 +148,7 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> {
 	///      transactions can have a tip.
 	fn compute_fee(
 		len: u32,
-		info: <Self as SignedExtension>::Info,
+		info: <Self as SignedExtension>::DispatchInfo,
 		tip: BalanceOf<T>,
 	) -> BalanceOf<T>
 	where
@@ -196,7 +196,7 @@ impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T>
 	type AccountId = T::AccountId;
 	type Call = T::Call;
 	type AdditionalSigned = ();
-	type Info = DispatchInfo;
+	type DispatchInfo = DispatchInfo;
 	type Pre = ();
 	fn additional_signed(&self) -> rstd::result::Result<(), TransactionValidityError> { Ok(()) }
 
@@ -204,7 +204,7 @@ impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T>
 		&self,
 		who: &Self::AccountId,
 		_call: &Self::Call,
-		info: Self::Info,
+		info: Self::DispatchInfo,
 		len: usize,
 	) -> TransactionValidity {
 		// pay any fees.

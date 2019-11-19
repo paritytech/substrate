@@ -319,7 +319,7 @@ mod tests {
 		type AccountId = u64;
 		type Call = ();
 		type AdditionalSigned = ();
-		type Info = ();
+		type DispatchInfo = ();
 		type Pre = ();
 
 		fn additional_signed(&self) -> rstd::result::Result<(), TransactionValidityError> { Ok(()) }

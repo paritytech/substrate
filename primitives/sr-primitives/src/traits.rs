@@ -712,8 +712,10 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 	/// The type that encodes information that can be passed from pre_dispatch to post-dispatch.
 	type Pre: Default;
 
-	/// An opaque set of information attached to the transaction.
-	type Info: Copy;
+	/// An opaque set of information attached to the transaction. This could be constructed anywhere
+	/// down the line in a runtime. The current substrate runtime uses a struct with the same name
+	/// to represent the dispatch class and weight.
+	type DispatchInfo: Clone;
 
 	/// Construct any additional data that should be in the signed payload of the transaction. Can
 	/// also perform any pre-signature-verification checks and return an error if needed.
@@ -732,7 +734,7 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 		&self,
 		_who: &Self::AccountId,
 		_call: &Self::Call,
-		_info: Self::Info,
+		_info: Self::DispatchInfo,
 		_len: usize,
 	) -> TransactionValidity {
 		Ok(ValidTransaction::default())
@@ -750,10 +752,10 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 		self,
 		who: &Self::AccountId,
 		call: &Self::Call,
-		info: Self::Info,
+		info: Self::DispatchInfo,
 		len: usize,
 	) -> Result<Self::Pre, crate::ApplyError> {
-		self.validate(who, call, info, len)
+		self.validate(who, call, info.clone(), len)
 			.map(|_| Self::Pre::default())
 			.map_err(Into::into)
 	}
@@ -768,7 +770,7 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 	/// Make sure to perform the same checks in `pre_dispatch_unsigned` function.
 	fn validate_unsigned(
 		_call: &Self::Call,
-		_info: Self::Info,
+		_info: Self::DispatchInfo,
 		_len: usize,
 	) -> TransactionValidity {
 		Ok(ValidTransaction::default())
@@ -784,16 +786,16 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 	/// perform the same validation as in `validate_unsigned`.
 	fn pre_dispatch_unsigned(
 		call: &Self::Call,
-		info: Self::Info,
+		info: Self::DispatchInfo,
 		len: usize,
 	) -> Result<Self::Pre, crate::ApplyError> {
-		Self::validate_unsigned(call, info, len)
+		Self::validate_unsigned(call, info.clone(), len)
 			.map(|_| Self::Pre::default())
 			.map_err(Into::into)
 	}
 
 	/// Do any post-flight stuff for a transaction.
-	fn post_dispatch(_pre: Self::Pre, _info: Self::Info, _len: usize) { }
+	fn post_dispatch(_pre: Self::Pre, _info: Self::DispatchInfo, _len: usize) { }
 }
 
 /// An error that is returned by a dispatchable function of a module.
@@ -808,11 +810,11 @@ pub trait ModuleDispatchError {
 }
 
 #[impl_for_tuples(1, 12)]
-impl<AccountId, Call, Info: Copy> SignedExtension for Tuple {
-	for_tuples!( where #( Tuple: SignedExtension<AccountId=AccountId, Call=Call, Info=Info> )* );
+impl<AccountId, Call, Info: Clone> SignedExtension for Tuple {
+	for_tuples!( where #( Tuple: SignedExtension<AccountId=AccountId, Call=Call, DispatchInfo=Info> )* );
 	type AccountId = AccountId;
 	type Call = Call;
-	type Info = Info;
+	type DispatchInfo = Info;
 	for_tuples!( type AdditionalSigned = ( #( Tuple::AdditionalSigned ),* ); );
 	for_tuples!( type Pre = ( #( Tuple::Pre ),* ); );
 
@@ -824,44 +826,44 @@ impl<AccountId, Call, Info: Copy> SignedExtension for Tuple {
 		&self,
 		who: &Self::AccountId,
 		call: &Self::Call,
-		info: Self::Info,
+		info: Self::DispatchInfo,
 		len: usize,
 	) -> TransactionValidity {
 		let valid = ValidTransaction::default();
-		for_tuples!( #( let valid = valid.combine_with(Tuple.validate(who, call, info, len)?); )* );
+		for_tuples!( #( let valid = valid.combine_with(Tuple.validate(who, call, info.clone(), len)?); )* );
 		Ok(valid)
 	}
 
-	fn pre_dispatch(self, who: &Self::AccountId, call: &Self::Call, info: Self::Info, len: usize)
+	fn pre_dispatch(self, who: &Self::AccountId, call: &Self::Call, info: Self::DispatchInfo, len: usize)
 		-> Result<Self::Pre, crate::ApplyError>
 	{
-		Ok(for_tuples!( ( #( Tuple.pre_dispatch(who, call, info, len)? ),* ) ))
+		Ok(for_tuples!( ( #( Tuple.pre_dispatch(who, call, info.clone(), len)? ),* ) ))
 	}
 
 	fn validate_unsigned(
 		call: &Self::Call,
-		info: Self::Info,
+		info: Self::DispatchInfo,
 		len: usize,
 	) -> TransactionValidity {
 		let valid = ValidTransaction::default();
-		for_tuples!( #( let valid = valid.combine_with(Tuple::validate_unsigned(call, info, len)?); )* );
+		for_tuples!( #( let valid = valid.combine_with(Tuple::validate_unsigned(call, info.clone(), len)?); )* );
 		Ok(valid)
 	}
 
 	fn pre_dispatch_unsigned(
 		call: &Self::Call,
-		info: Self::Info,
+		info: Self::DispatchInfo,
 		len: usize,
 	) -> Result<Self::Pre, crate::ApplyError> {
-		Ok(for_tuples!( ( #( Tuple::pre_dispatch_unsigned(call, info, len)? ),* ) ))
+		Ok(for_tuples!( ( #( Tuple::pre_dispatch_unsigned(call, info.clone(), len)? ),* ) ))
 	}
 
 	fn post_dispatch(
 		pre: Self::Pre,
-		info: Self::Info,
+		info: Self::DispatchInfo,
 		len: usize,
 	) {
-		for_tuples!( #( Tuple::post_dispatch(pre.Tuple, info, len); )* )
+		for_tuples!( #( Tuple::post_dispatch(pre.Tuple, info.clone(), len); )* )
 	}
 }
 
@@ -872,7 +874,7 @@ impl SignedExtension for () {
 	type AdditionalSigned = ();
 	type Call = ();
 	type Pre = ();
-	type Info = ();
+	type DispatchInfo = ();
 	fn additional_signed(&self) -> rstd::result::Result<(), TransactionValidityError> { Ok(()) }
 }
 
@@ -890,7 +892,7 @@ pub trait Applyable: Sized + Send + Sync {
 	type Call;
 
 	/// An opaque set of information attached to the transaction.
-	type Info: Copy;
+	type DispatchInfo: Clone;
 
 	/// Returns a reference to the sender if any.
 	fn sender(&self) -> Option<&Self::AccountId>;
@@ -899,7 +901,7 @@ pub trait Applyable: Sized + Send + Sync {
 	#[allow(deprecated)] // Allow ValidateUnsigned
 	fn validate<V: ValidateUnsigned<Call=Self::Call>>(
 		&self,
-		info: Self::Info,
+		info: Self::DispatchInfo,
 		len: usize,
 	) -> TransactionValidity;
 
@@ -908,7 +910,7 @@ pub trait Applyable: Sized + Send + Sync {
 	#[allow(deprecated)] // Allow ValidateUnsigned
 	fn apply<V: ValidateUnsigned<Call=Self::Call>>(
 		self,
-		info: Self::Info,
+		info: Self::DispatchInfo,
 		len: usize,
 	) -> crate::ApplyResult;
 }

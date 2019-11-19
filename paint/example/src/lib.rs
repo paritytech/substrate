@@ -604,7 +604,7 @@ impl<T: Trait + Send + Sync> SignedExtension for WatchDummy<T> {
 	// other modules.
 	type Call = Call<T>;
 	type AdditionalSigned = ();
-	type Info = DispatchInfo;
+	type DispatchInfo = DispatchInfo;
 	type Pre = ();
 
 	fn additional_signed(&self) -> rstd::result::Result<(), TransactionValidityError> { Ok(()) }
@@ -613,7 +613,7 @@ impl<T: Trait + Send + Sync> SignedExtension for WatchDummy<T> {
 		&self,
 		_who: &Self::AccountId,
 		call: &Self::Call,
-		_info: Self::Info,
+		_info: Self::DispatchInfo,
 		len: usize,
 	) -> TransactionValidity {
 		// if the transaction is too big, just drop it.

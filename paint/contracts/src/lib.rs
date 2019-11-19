@@ -1034,7 +1034,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckBlockGasLimit<T> {
 	type AccountId = T::AccountId;
 	type Call = <T as Trait>::Call;
 	type AdditionalSigned = ();
-	type Info = DispatchInfo;
+	type DispatchInfo = DispatchInfo;
 	type Pre = ();
 
 	fn additional_signed(&self) -> rstd::result::Result<(), TransactionValidityError> { Ok(()) }
@@ -1043,7 +1043,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckBlockGasLimit<T> {
 		&self,
 		_: &Self::AccountId,
 		call: &Self::Call,
-		_: Self::Info,
+		_: Self::DispatchInfo,
 		_: usize,
 	) -> TransactionValidity {
 		let call = match call.is_sub_type() {

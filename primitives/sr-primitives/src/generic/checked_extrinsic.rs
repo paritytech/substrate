@@ -42,13 +42,13 @@ impl<AccountId, Call, Extra, Origin, Info> traits::Applyable for
 where
 	AccountId: Member + MaybeDisplay,
 	Call: Member + Dispatchable<Origin=Origin>,
-	Extra: SignedExtension<AccountId=AccountId, Call=Call, Info=Info>,
+	Extra: SignedExtension<AccountId=AccountId, Call=Call, DispatchInfo=Info>,
 	Origin: From<Option<AccountId>>,
-	Info: Copy,
+	Info: Clone,
 {
 	type AccountId = AccountId;
 	type Call = Call;
-	type Info = Info;
+	type DispatchInfo = Info;
 
 	fn sender(&self) -> Option<&Self::AccountId> {
 		self.signed.as_ref().map(|x| &x.0)
@@ -57,11 +57,11 @@ where
 	#[allow(deprecated)] // Allow ValidateUnsigned
 	fn validate<U: ValidateUnsigned<Call = Self::Call>>(
 		&self,
-		info: Self::Info,
+		info: Self::DispatchInfo,
 		len: usize,
 	) -> TransactionValidity {
 		if let Some((ref id, ref extra)) = self.signed {
-			Extra::validate(extra, id, &self.function, info, len)
+			Extra::validate(extra, id, &self.function, info.clone(), len)
 		} else {
 			let valid = Extra::validate_unsigned(&self.function, info, len)?;
 			let unsigned_validation = U::validate_unsigned(&self.function)?;
@@ -72,19 +72,19 @@ where
 	#[allow(deprecated)] // Allow ValidateUnsigned
 	fn apply<U: ValidateUnsigned<Call=Self::Call>>(
 		self,
-		info: Self::Info,
+		info: Self::DispatchInfo,
 		len: usize,
 	) -> crate::ApplyResult {
 		let (maybe_who, pre) = if let Some((id, extra)) = self.signed {
-			let pre = Extra::pre_dispatch(extra, &id, &self.function, info, len)?;
+			let pre = Extra::pre_dispatch(extra, &id, &self.function, info.clone(), len)?;
 			(Some(id), pre)
 		} else {
-			let pre = Extra::pre_dispatch_unsigned(&self.function, info, len)?;
+			let pre = Extra::pre_dispatch_unsigned(&self.function, info.clone(), len)?;
 			U::pre_dispatch(&self.function)?;
 			(None, pre)
 		};
 		let res = self.function.dispatch(Origin::from(maybe_who));
-		Extra::post_dispatch(pre, info, len);
+		Extra::post_dispatch(pre, info.clone(), len);
 		Ok(res.map_err(Into::into))
 	}
 }
