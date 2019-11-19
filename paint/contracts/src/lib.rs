@@ -117,7 +117,7 @@ use sr_primitives::{
 	RuntimeDebug,
 	traits::{
 		Hash, StaticLookup, Zero, MaybeSerializeDeserialize, Member, SignedExtension, Convert,
-		CheckedDiv,
+		CheckedDiv, UniqueSaturatedInto,
 	},
 	weights::{DispatchInfo, Weight},
 	transaction_validity::{
@@ -1021,8 +1021,6 @@ impl<T: Trait + Send + Sync> CheckBlockGasLimit<T> {
 		who: &T::AccountId,
 		call: &<T as Trait>::Call,
 	) -> rstd::result::Result<Option<DynamicWeightData<T::AccountId, NegativeImbalanceOf<T>>>, TransactionValidityError> {
-		use rstd::convert::TryInto;
-
 		let call = match call.is_sub_type() {
 			Some(call) => call,
 			None => return Ok(None),
@@ -1033,11 +1031,9 @@ impl<T: Trait + Send + Sync> CheckBlockGasLimit<T> {
 			Call::call(_, _, gas_limit, _) | Call::instantiate(_, gas_limit, _, _) => {
 				// Compute how much block weight this transaction can take at its limit, i.e.
 				// if this transaction depleted all provided gas to zero.
-				let gas_weight_limit = gas_limit
-					.try_into()
-					.map_err(|_| InvalidTransaction::ExhaustsResources)?;
+				let gas_weight_limit = Weight::from(gas_limit);
 				let weight_available = <T as system::Trait>::MaximumBlockWeight::get()
-					.saturating_sub(<system::Module<T>>::all_extrinsics_weight());
+					.saturating_sub(<system::Module<T>>::all_extrinsics_weight()).into();
 				if gas_weight_limit > weight_available {
 					// We discard the transaction if the requested limit exceeds the available
 					// amount of weight in the current block.
@@ -1052,9 +1048,16 @@ impl<T: Trait + Send + Sync> CheckBlockGasLimit<T> {
 				let fee = T::WeightToFee::convert(gas_weight_limit);
 
 				// Compute and store the effective price per unit of gas.
-				let gas_price = fee
-					.checked_div(&<BalanceOf<T>>::from(gas_weight_limit))
-					.unwrap_or(1.into());
+				let gas_price = {
+					let divisor = gas_weight_limit.unique_saturated_into();
+					fee
+						.checked_div(&divisor)
+						.unwrap_or(1.into())
+				};
+
+				// gas_weight_limit is Gas/Weight which is u64
+				// fee is balance.
+				// GasPrice has to be Balance
 				<GasPrice<T>>::put(gas_price);
 
 				let imbalance = match T::Currency::withdraw(

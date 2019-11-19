@@ -102,7 +102,7 @@ pub type DealWithFees = SplitTwoWays<
 
 parameter_types! {
 	pub const BlockHashCount: BlockNumber = 250;
-	pub const MaximumBlockWeight: Weight = 1_000_000_000;
+	pub const MaximumBlockWeight: Weight = 1_000_000_000_000;
 	pub const MaximumBlockLength: u32 = 5 * 1024 * 1024;
 	pub const Version: RuntimeVersion = VERSION;
 	pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);

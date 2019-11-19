@@ -46,7 +46,7 @@ use crate::RuntimeDebug;
 pub use crate::transaction_validity::TransactionPriority;
 
 /// Numeric range of a transaction weight.
-pub type Weight = u32;
+pub type Weight = u64;
 
 /// Means of weighing some particular kind of data (`T`).
 pub trait WeighData<T> {
