@@ -22,7 +22,7 @@
 //!
 //! Monitor performance throughout the codebase via the creation of `Span`s.
 //! A span is set in the following way:
-//! ```
+//! ```no_run
 //! let span = tracing::span!(tracing::Level::INFO, "my_span_name");
 //!	let _enter = span.enter();
 //! ```
