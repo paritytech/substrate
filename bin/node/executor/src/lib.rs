@@ -41,9 +41,9 @@ mod tests {
 		traits::{CodeExecutor, Externalities}, storage::well_known_keys,
 	};
 	use sr_primitives::{
-		Fixed64,
+		Fixed64, weights::{GetDispatchInfo, DispatchInfo, DispatchClass},
 		traits::{Header as HeaderT, Hash as HashT, Convert}, ApplyResult,
-		transaction_validity::InvalidTransaction, weights::GetDispatchInfo,
+		transaction_validity::InvalidTransaction,
 	};
 	use contracts::ContractAddressFor;
 	use substrate_executor::{NativeExecutor, WasmExecutionMethod};
@@ -463,7 +463,9 @@ mod tests {
 			let events = vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: Event::system(system::Event::ExtrinsicSuccess),
+					event: Event::system(system::Event::ExtrinsicSuccess(
+						DispatchInfo { weight: 10000, class: DispatchClass::Operational }
+					)),
 					topics: vec![],
 				},
 				EventRecord {
@@ -483,7 +485,9 @@ mod tests {
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
-					event: Event::system(system::Event::ExtrinsicSuccess),
+					event: Event::system(system::Event::ExtrinsicSuccess(
+						DispatchInfo { weight: 1000000, class: DispatchClass::Normal }
+					)),
 					topics: vec![],
 				},
 			];
@@ -512,7 +516,9 @@ mod tests {
 			let events = vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: Event::system(system::Event::ExtrinsicSuccess),
+					event: Event::system(system::Event::ExtrinsicSuccess(
+						DispatchInfo { weight: 10000, class: DispatchClass::Operational }
+					)),
 					topics: vec![],
 				},
 				EventRecord {
@@ -534,7 +540,9 @@ mod tests {
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
-					event: Event::system(system::Event::ExtrinsicSuccess),
+					event: Event::system(system::Event::ExtrinsicSuccess(
+						DispatchInfo { weight: 1000000, class: DispatchClass::Normal }
+					)),
 					topics: vec![],
 				},
 				EventRecord {
@@ -556,7 +564,9 @@ mod tests {
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(2),
-					event: Event::system(system::Event::ExtrinsicSuccess),
+					event: Event::system(system::Event::ExtrinsicSuccess(
+						DispatchInfo { weight: 1000000, class: DispatchClass::Normal }
+					)),
 					topics: vec![],
 				},
 			];

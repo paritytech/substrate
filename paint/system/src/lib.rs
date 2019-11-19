@@ -1165,8 +1165,8 @@ mod tests {
 	impl From<Event> for u16 {
 		fn from(e: Event) -> u16 {
 			match e {
-				Event::ExtrinsicSuccess => 100,
-				Event::ExtrinsicFailed(_) => 101,
+				Event::ExtrinsicSuccess(..) => 100,
+				Event::ExtrinsicFailed(..) => 101,
 			}
 		}
 	}
