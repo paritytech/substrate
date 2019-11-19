@@ -40,14 +40,17 @@ use serde::{Serialize, Deserialize};
 use impl_trait_for_tuples::impl_for_tuples;
 use codec::{Encode, Decode};
 use sr_arithmetic::traits::{Bounded, Zero};
-use sr_primitives::{RuntimeDebug, traits::SignedExtension}
-;
+use sr_primitives::{
+	RuntimeDebug,
+	traits::SignedExtension,
+	generic::{CheckedExtrinsic, UncheckedExtrinsic},
+};
 
 /// Re-export priority as type
 pub use sr_primitives::transaction_validity::TransactionPriority;
 
 /// Numeric range of a transaction weight.
-pub type Weight = u32;
+pub type Weight = u64;
 
 /// Means of weighing some particular kind of data (`T`).
 pub trait WeighData<T> {
@@ -222,7 +225,7 @@ impl SimpleDispatchInfo {
 
 /// Implementation for unchecked extrinsic.
 impl<Address, Call, Signature, Extra> GetDispatchInfo
-	for sr_primitives::generic::UncheckedExtrinsic<Address, Call, Signature, Extra>
+	for UncheckedExtrinsic<Address, Call, Signature, Extra>
 where
 	Call: GetDispatchInfo,
 	Extra: SignedExtension,
@@ -234,7 +237,7 @@ where
 
 /// Implementation for checked extrinsic.
 impl<AccountId, Call, Extra> GetDispatchInfo
-	for sr_primitives::generic::CheckedExtrinsic<AccountId, Call, Extra>
+	for CheckedExtrinsic<AccountId, Call, Extra>
 where
 	Call: GetDispatchInfo,
 {
