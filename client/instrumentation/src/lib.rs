@@ -13,6 +13,24 @@
 
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+
+//! Instrumentation implementation for substrate.
+//!
+//! This crate is unstable and the API and usage may change.
+//!
+//! # Usage
+//!
+//! Monitor performance throughout the codebase via the creation of `Span`s.
+//! A span is set in the following way:
+//! ```
+//! let span = tracing::span!(tracing::Level::INFO, "my_span_name");
+//!	let _enter = span.enter();
+//! ```
+//! To begin timing, a span must be entered. When the span is dropped, the execution time
+//! is recorded and details sent to the `Receiver` which defines how to process it.
+//!
+//! Currently we provide a single `Telemetry` variant for `Receiver`
+
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use parking_lot::Mutex;
@@ -20,6 +38,7 @@ use tracing_core::{event::Event, Level, metadata::Metadata, span::{Attributes, I
 
 use substrate_telemetry::{telemetry, SUBSTRATE_INFO};
 
+/// Used to configure how to receive the metrics
 pub enum Receiver {
 	Telemetry,
 }
@@ -34,6 +53,7 @@ struct SpanDatum {
 	overall_time: u64,
 }
 
+/// Responsible for assigning ids to new spans, which are not re-used.
 pub struct ProfilingSubscriber {
 	next_id: AtomicU64,
 	clock: quanta::Clock,
@@ -43,6 +63,9 @@ pub struct ProfilingSubscriber {
 }
 
 impl ProfilingSubscriber {
+	/// Takes a `Receiver` and a comma separated list of targets,
+	/// either with a level "paint=trace"
+	/// or without "paint".
 	pub fn new(receiver: Receiver, targets: &String) -> Self {
 		let targets: Vec<_> = targets.split(',').map(|s| parse_target(s)).collect();
 		ProfilingSubscriber {
@@ -60,12 +83,12 @@ impl ProfilingSubscriber {
 fn parse_target(s: &str) -> (String, Level) {
 	match s.find("=") {
 		Some(i) => {
-			let a = s[0..i].to_string();
+			let target = s[0..i].to_string();
 			if s.len() > i {
-				let l = s[i + 1..s.len()].parse::<Level>().unwrap_or(Level::TRACE);
-				(a, l)
+				let level = s[i + 1..s.len()].parse::<Level>().unwrap_or(Level::TRACE);
+				(target, level)
 			} else {
-				(a, Level::TRACE)
+				(target, Level::TRACE)
 			}
 		}
 		None => (s.to_string(), Level::TRACE)
@@ -74,8 +97,8 @@ fn parse_target(s: &str) -> (String, Level) {
 
 impl Subscriber for ProfilingSubscriber {
 	fn enabled(&self, metadata: &Metadata<'_>) -> bool {
-		for x in &self.targets {
-			if metadata.target().starts_with(x.0.as_str()) && metadata.level() <= &x.1 {
+		for t in &self.targets {
+			if metadata.target().starts_with(t.0.as_str()) && metadata.level() <= &t.1 {
 				log::debug!("Enabled target: {}, level: {}", metadata.target(), metadata.level());
 				return true;
 			} else {

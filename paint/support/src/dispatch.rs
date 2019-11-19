@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -866,7 +866,7 @@ macro_rules! decl_module {
 				#[cfg(feature = "std")]
 				{
 					use $crate::tracing;
-					let span = tracing::span!(tracing::Level::INFO, stringify!($name));
+					let span = tracing::span!(tracing::Level::INFO, "on_initialize");
 					let _enter = span.enter();
 					$( $impl )*
 				}
@@ -890,7 +890,7 @@ macro_rules! decl_module {
 				#[cfg(feature = "std")]
 				{
 					use $crate::tracing;
-					let span = tracing::span!(tracing::Level::INFO, stringify!($name));
+					let span = tracing::span!(tracing::Level::INFO, "on_initialize");
 					let _enter = span.enter();
 					{ $( $impl )* }
 				}
@@ -924,7 +924,7 @@ macro_rules! decl_module {
 				#[cfg(feature = "std")]
 				{
 					use $crate::tracing;
-					let span = tracing::span!(tracing::Level::INFO, stringify!($name));
+					let span = tracing::span!(tracing::Level::INFO, "on_finalize");
 					let _enter = span.enter();
 					$( $impl )*
 				}
@@ -948,7 +948,7 @@ macro_rules! decl_module {
 				#[cfg(feature = "std")]
 				{
 					use $crate::tracing;
-					let span = tracing::span!(tracing::Level::INFO, stringify!($name));
+					let span = tracing::span!(tracing::Level::INFO, "on_finalize");
 					let _enter = span.enter();
 					$( $impl )*
 				}
@@ -1055,14 +1055,13 @@ macro_rules! decl_module {
 				use $crate::tracing;
 				let span = tracing::span!(tracing::Level::INFO, stringify!($name));
 				let _enter = span.enter();
-				let result: $crate::dispatch::DispatchResult<$error_type> = (move || { { $( $impl )* } Ok(()) })();
-				result
+				{ { $( $impl )* } Ok(()) }
 			}
 			#[cfg(not(feature = "std"))]
-			return {
+			{
 				{ $( $impl )* }
 				Ok(())
-			};
+			}
 		}
 	};
 
@@ -1084,13 +1083,10 @@ macro_rules! decl_module {
 				use $crate::tracing;
 				let span = tracing::span!(tracing::Level::INFO, stringify!($name));
 				let _enter = span.enter();
-				let result: $result = (move || { $( $impl )* })();
-				result
+				{ $( $impl )* }
 			}
 			#[cfg(not(feature = "std"))]
-			return {
-				$( $impl )*
-			};
+			{ $( $impl )* }
 		}
 	};
 
