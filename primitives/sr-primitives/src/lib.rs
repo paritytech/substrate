@@ -408,14 +408,24 @@ impl From<&'static str> for DispatchError {
 /// This type specifies the outcome of dispatching a call to a module.
 ///
 /// In case of failure an error specific to the module is returned.
+///
+/// Failure of the module call dispatching doesn't invalidate the extrinsic and it is still included
+/// in the block, therefore all state changes performed by the dispatched call are still persisted.
+///
+/// For example, if the dispatching of an extrinsic involves inclusion fee payment then these
+/// changes are going to be preserved even if the call dispatched failed.
 pub type DispatchOutcome = Result<(), DispatchError>;
 
 /// The result of applying of an extrinsic.
 ///
 /// This type is typically used in the context of `BlockBuilder` to signal that the extrinsic
-/// in question cannot be included. It is fair to say that a valid block doesn't contain any
-/// extrinsic that would have had a negative inclusion outcome. On successful inclusion this type
-/// supplies the result of the extrinsic dispatch.
+/// in question cannot be included.
+///
+/// A block containing extrinsics that have a negative inclusion outcome is invalid. A negative
+/// result can only occur during the block production, where such extrinsics are detected and
+/// removed from the block that is being created and the transaction pool.
+///
+/// To rehash: every extrinsic in a valid block must return a positive `ApplyExtrinsicResult`.
 ///
 /// Examples of reasons preventing inclusion in a block:
 /// - More block weight is required to process the extrinsic than is left in the block being built.
