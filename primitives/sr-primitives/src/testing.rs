@@ -25,7 +25,7 @@ use crate::traits::{
 };
 #[allow(deprecated)]
 use crate::traits::ValidateUnsigned;
-use crate::{generic, KeyTypeId, InclusionOutcome};
+use crate::{generic, KeyTypeId, ApplyExtrinsicResult};
 use crate::weights::{GetDispatchInfo, DispatchInfo};
 pub use primitives::{H256, sr25519};
 use primitives::{crypto::{CryptoType, Dummy, key_types, Public}, U256};
@@ -353,7 +353,7 @@ impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 		self,
 		info: DispatchInfo,
 		len: usize,
-	) -> InclusionOutcome {
+	) -> ApplyExtrinsicResult {
 		let maybe_who = if let Some((who, extra)) = self.0 {
 			Extra::pre_dispatch(extra, &who, &self.1, info, len)?;
 			Some(who)

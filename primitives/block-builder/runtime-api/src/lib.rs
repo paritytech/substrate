@@ -18,7 +18,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sr_primitives::{traits::Block as BlockT, InclusionOutcome};
+use sr_primitives::{traits::Block as BlockT, ApplyExtrinsicResult};
 
 use inherents::{InherentData, CheckInherentsResult};
 
@@ -30,7 +30,7 @@ sr_api::decl_runtime_apis! {
 		///
 		/// Returns an inclusion outcome which specifies if this extrinsic should be included in
 		/// this block or not.
-		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> InclusionOutcome;
+		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyExtrinsicResult;
 		/// Finish the current block.
 		#[renamed("finalise_block", 3)]
 		fn finalize_block() -> <Block as BlockT>::Header;

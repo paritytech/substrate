@@ -410,7 +410,7 @@ impl From<&'static str> for DispatchError {
 /// In case of failure an error specific to the module is returned.
 pub type DispatchOutcome = Result<(), DispatchError>;
 
-/// The outcome of inclusion of an extrinsic into a block.
+/// The result of applying of an extrinsic.
 ///
 /// This type is typically used in the context of `BlockBuilder` to signal that the extrinsic
 /// in question cannot be included. It is fair to say that a valid block doesn't contain any
@@ -424,7 +424,7 @@ pub type DispatchOutcome = Result<(), DispatchError>;
 /// - The sender doesn't have enough funds to pay the transaction inclusion fee. Including such
 ///   a transaction in the block doesn't make sense.
 /// - The extrinsic supplied a bad signature. This transaction won't become valid ever.
-pub type InclusionOutcome = Result<DispatchOutcome, transaction_validity::TransactionValidityError>;
+pub type ApplyExtrinsicResult = Result<DispatchOutcome, transaction_validity::TransactionValidityError>;
 
 /// Verify a signature on an encoded value in a lazy manner. This can be
 /// an optimization if the signature scheme has an "unsigned" escape hash.

@@ -11,7 +11,7 @@ include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 use rstd::prelude::*;
 use primitives::OpaqueMetadata;
 use sr_primitives::{
-	InclusionOutcome, transaction_validity::TransactionValidity, generic, create_runtime_str,
+	ApplyExtrinsicResult, transaction_validity::TransactionValidity, generic, create_runtime_str,
 	impl_opaque_keys, MultiSignature
 };
 use sr_primitives::traits::{
@@ -301,7 +301,7 @@ impl_runtime_apis! {
 	}
 
 	impl block_builder_api::BlockBuilder<Block> for Runtime {
-		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> InclusionOutcome {
+		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyExtrinsicResult {
 			Executive::apply_extrinsic(extrinsic)
 		}
 

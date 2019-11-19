@@ -42,7 +42,7 @@ mod tests {
 	};
 	use sr_primitives::{
 		Fixed64,
-		traits::{Header as HeaderT, Hash as HashT, Convert}, InclusionOutcome,
+		traits::{Header as HeaderT, Hash as HashT, Convert}, ApplyExtrinsicResult,
 		transaction_validity::InvalidTransaction, weights::GetDispatchInfo,
 	};
 	use contracts::ContractAddressFor;
@@ -170,7 +170,7 @@ mod tests {
 			true,
 			None,
 		).0.unwrap();
-		let r = InclusionOutcome::decode(&mut &v.as_encoded()[..]).unwrap();
+		let r = ApplyExtrinsicResult::decode(&mut &v.as_encoded()[..]).unwrap();
 		assert_eq!(r, Err(InvalidTransaction::Payment.into()));
 	}
 
@@ -206,7 +206,7 @@ mod tests {
 			true,
 			None,
 		).0.unwrap();
-		let r = InclusionOutcome::decode(&mut &v.as_encoded()[..]).unwrap();
+		let r = ApplyExtrinsicResult::decode(&mut &v.as_encoded()[..]).unwrap();
 		assert_eq!(r, Err(InvalidTransaction::Payment.into()));
 	}
 
@@ -841,7 +841,7 @@ mod tests {
 			false,
 			None,
 		).0.unwrap().into_encoded();
-		let r = InclusionOutcome::decode(&mut &r[..]).unwrap();
+		let r = ApplyExtrinsicResult::decode(&mut &r[..]).unwrap();
 		assert_eq!(r, Err(InvalidTransaction::Payment.into()));
 	}
 
@@ -874,7 +874,7 @@ mod tests {
 			false,
 			None,
 		).0.unwrap().into_encoded();
-		InclusionOutcome::decode(&mut &r[..])
+		ApplyExtrinsicResult::decode(&mut &r[..])
 			.unwrap()
 			.expect("Extrinsic could be applied")
 			.expect("Extrinsic did not fail");

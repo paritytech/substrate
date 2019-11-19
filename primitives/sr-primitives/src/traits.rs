@@ -903,7 +903,7 @@ pub trait Applyable: Sized + Send + Sync {
 		self,
 		info: DispatchInfo,
 		len: usize,
-	) -> crate::InclusionOutcome;
+	) -> crate::ApplyExtrinsicResult;
 }
 
 /// Auxiliary wrapper that holds an api instance and binds it to the given lifetime.
