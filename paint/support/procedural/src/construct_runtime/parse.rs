@@ -59,7 +59,7 @@ pub struct WhereSection {
 
 impl Parse for WhereSection {
     fn parse(input: ParseStream) -> Result<Self> {
-        let _: Token![where] = input.parse()?;
+        input.parse::<token::Where>()?;
         let mut seen_keys = HashSet::new();
         let mut definitions = HashMap::new();
         while !input.peek(token::Brace) {
