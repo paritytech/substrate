@@ -11,6 +11,9 @@ codec = { package = "parity-scale-codec", version = "1.0.6", default-features = 
 rstd = { package = "sr-std", path = "../../../../primitives/sr-std", default-features = false }
 sr-primitives = { path = "../../../../primitives/sr-primitives", default-features = false }
 
+[dev-dependencies]
+serde_json = { version = "1.0.41", features = ["arbitrary_precision"] }
+
 [features]
 default = ["std"]
 std = [
