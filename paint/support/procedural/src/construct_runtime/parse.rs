@@ -16,7 +16,7 @@
 
 use paint_support_procedural_tools::syn_ext as ext;
 use proc_macro2::Span;
-use std::collections::BTreeMap;
+use std::collections::HashSet;
 use syn::{
     parse::{Parse, ParseStream},
     spanned::Spanned,
@@ -155,15 +155,83 @@ impl Parse for ModuleDeclaration {
             Some(input.parse()?)
         } else {
             None
-        };
-        Ok(Self {
+		};
+		let parsed = Self {
             name,
             module,
             instance,
             details,
-        })
+		};
+		if let Some(ref details) = parsed.details {
+			let parts = &details.content.inner;
+			let mut resolved = HashSet::new();
+			let has_default = parts.into_iter().any(|m| m.is_default());
+			for entry in parts {
+				match entry {
+					ModuleEntry::Part(part) if has_default => {
+						if part.is_included_in_default() {
+							let msg = format!("`{}` is already included in `default`. Either remove `default` or remove `{}`", part.name, part.name);
+							return Err(Error::new(part.name.span(), msg));
+						}
+					}
+					ModuleEntry::Part(part) => {
+						if !resolved.insert(part.name.clone()) {
+							let msg = format!("`{}` was already declared before. Please remove the duplicate declaration", part.name);
+							return Err(Error::new(part.name.span(), msg));
+						}
+					}
+					_ => {}
+				}
+			}
+		}
+        Ok(parsed)
     }
 }
+
+impl ModuleDeclaration {
+    /// Get resolved module parts, i.e. after expanding `default` keyword
+    /// or empty declaration
+    pub fn module_parts(&self) -> Vec<ModulePart> {
+        if let Some(ref details) = self.details {
+            details
+                .content
+                .inner
+                .iter()
+                .flat_map(|entry| match entry {
+                    ModuleEntry::Default(ref token) => Self::default_modules(token.span()),
+                    ModuleEntry::Part(ref part) => vec![part.clone()],
+                })
+                .collect()
+        } else {
+            Self::default_modules(self.module.span())
+        }
+	}
+
+	pub fn find_part(&self, name: &str) -> Option<ModulePart> {
+        self
+            .module_parts()
+            .into_iter()
+            .find(|part| part.name == name)
+	}
+
+	pub fn exists_part(&self, name: &str) -> bool {
+		self.find_part(name).is_some()
+	}
+
+    fn default_modules(span: Span) -> Vec<ModulePart> {
+        let mut res: Vec<_> = ["Module", "Call", "Storage"]
+            .into_iter()
+            .map(|name| ModulePart::with_name(name, span))
+            .collect();
+        res.extend(
+            ["Event", "Config"]
+                .into_iter()
+                .map(|name| ModulePart::with_generics(name, span)),
+        );
+        res
+    }
+}
+
 
 #[derive(Debug)]
 pub enum ModuleEntry {
@@ -182,6 +250,15 @@ impl Parse for ModuleEntry {
             Err(lookahead.error())
         }
     }
+}
+
+impl ModuleEntry {
+	pub fn is_default(&self) -> bool {
+		match self {
+			ModuleEntry::Default(_) => true,
+			_ => false,
+		}
+	}
 }
 
 #[derive(Debug, Clone)]
@@ -247,89 +324,45 @@ impl ModulePart {
     pub fn format_names(names: Vec<&'static str>) -> String {
         let res: Vec<_> = names.into_iter().map(|s| format!("`{}`", s)).collect();
         res.join(", ")
-    }
-}
-
-impl ModuleDeclaration {
-    /// Get resolved module parts, i.e. after expanding `default` keyword
-    /// or empty declaration
-    pub fn module_parts(&self) -> Vec<ModulePart> {
-        if let Some(ref details) = self.details {
-            let uniq: BTreeMap<_, _> = details
-                .content
-                .inner
-                .iter()
-                .flat_map(|entry| match entry {
-                    ModuleEntry::Default(ref token) => Self::default_modules(token.span()),
-                    ModuleEntry::Part(ref part) => vec![part.clone()],
-                })
-                .map(|part| (part.name.to_string(), part))
-                .collect();
-            uniq.into_iter().map(|(_, v)| v).collect()
-        } else {
-            Self::default_modules(self.module.span())
-        }
 	}
 
-	pub fn find_part(&self, name: &str) -> Option<ModulePart> {
-        self
-            .module_parts()
-            .into_iter()
-            .find(|part| part.name == name)
+	pub fn is_included_in_default(&self) -> bool {
+		["Module", "Call", "Storage", "Event", "Config"].into_iter().any(|name| self.name == name )
 	}
 
-	pub fn exists_part(&self, name: &str) -> bool {
-		self.find_part(name).is_some()
+	/// Plain module name like `Event` or `Call`, etc.
+	pub fn with_name(name: &str, span: Span) -> Self {
+		let name = Ident::new(name, span);
+		Self {
+			name,
+			generics: syn::Generics {
+				lt_token: None,
+				gt_token: None,
+				where_clause: None,
+				..Default::default()
+			},
+			args: None,
+		}
 	}
 
-    fn default_modules(span: Span) -> Vec<ModulePart> {
-        let mut res: Vec<_> = ["Module", "Call", "Storage"]
-            .into_iter()
-            .map(|name| ModulePart::with_name(name, span))
-            .collect();
-        res.extend(
-            ["Event", "Config"]
-                .into_iter()
-                .map(|name| ModulePart::with_generics(name, span)),
-        );
-        res
-    }
-}
-
-impl ModulePart {
-    /// Plain module name like `Event` or `Call`, etc.
-    pub fn with_name(name: &str, span: Span) -> Self {
-        let name = Ident::new(name, span);
-        Self {
-            name,
-            generics: syn::Generics {
-                lt_token: None,
-                gt_token: None,
-                where_clause: None,
-                ..Default::default()
-            },
-            args: None,
-        }
-    }
-
-    /// Module name with generic like `Event<T>` or `Call<T>`, etc.
-    pub fn with_generics(name: &str, span: Span) -> Self {
-        let name = Ident::new(name, span);
-        let typ = Ident::new("T", span);
-        let generic_param = syn::GenericParam::Type(typ.into());
-        let generic_params = vec![generic_param].into_iter().collect();
-        let generics = syn::Generics {
-            lt_token: Some(syn::token::Lt { spans: [span] }),
-            params: generic_params,
-            gt_token: Some(syn::token::Gt { spans: [span] }),
-            where_clause: None,
-        };
-        Self {
-            name,
-            generics,
-            args: None,
-        }
-    }
+	/// Module name with generic like `Event<T>` or `Call<T>`, etc.
+	pub fn with_generics(name: &str, span: Span) -> Self {
+		let name = Ident::new(name, span);
+		let typ = Ident::new("T", span);
+		let generic_param = syn::GenericParam::Type(typ.into());
+		let generic_params = vec![generic_param].into_iter().collect();
+		let generics = syn::Generics {
+			lt_token: Some(syn::token::Lt { spans: [span] }),
+			params: generic_params,
+			gt_token: Some(syn::token::Gt { spans: [span] }),
+			where_clause: None,
+		};
+		Self {
+			name,
+			generics,
+			args: None,
+		}
+	}
 }
 
 fn remove_kind(input: ParseStream, kind: WhereKind, definitions: &mut Vec<WhereDefinition>) -> Result<WhereDefinition> {
