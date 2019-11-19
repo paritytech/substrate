@@ -26,7 +26,7 @@ use syn::{Ident, Result};
 
 pub fn construct_runtime(input: TokenStream) -> TokenStream {
     let definition = syn::parse_macro_input!(input as RuntimeDefinition);
-    match construct_runtime_parsed(definition) {
+    construct_runtime_parsed(definition).unwrap_or_else(|e| e.to_compile_error()).into()
         Ok(stream) => stream.into(),
         Err(e) => e.to_compile_error().into(),
     }
