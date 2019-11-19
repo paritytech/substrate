@@ -386,7 +386,6 @@ fn find_module_entry<'a>(
     module_declaration: &'a ModuleDeclaration,
     name: &'a Ident,
 ) -> Option<ModulePart> {
-    let name_str = name.to_string();
     let parts = module_declaration.module_parts();
-    parts.into_iter().find(|part| part.name == name_str)
+    parts.into_iter().find(|part| *name == part.name)
 }

@@ -20,7 +20,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use syn::{
     parse::{Parse, ParseStream},
     spanned::Spanned,
-    token, Ident, Result, Token,
+    token, Ident, Result, Token, Error
 };
 
 mod keyword {
@@ -63,7 +63,14 @@ impl Parse for WhereSection {
         let mut seen_keys = HashSet::new();
         let mut definitions = HashMap::new();
         while !input.peek(token::Brace) {
-            let WhereDefinition { kind, value } = WhereDefinition::parse(input, &mut seen_keys)?;
+			let WhereDefinition { kind, value } = input.parse()?;
+			if !seen_keys.insert(kind) {
+				let msg = format!(
+					"`{}` was declared above. Please use exactly one delcataion for `{}`.",
+					kind, kind
+				);
+				return Err(Error::new(kind.span(), msg));
+			}
             definitions.insert(kind, value);
             if !input.peek(Token![,]) {
                 if !input.peek(token::Brace) {
@@ -71,12 +78,12 @@ impl Parse for WhereSection {
                 }
                 break;
             }
-            let _: Token![,] = input.parse()?;
+            input.parse::<Token![,]>()?;
         }
         let expected_seen_keys: HashSet<_> = vec![
-            WhereKind::Block,
-            WhereKind::NodeBlock,
-            WhereKind::UncheckedExtrinsic,
+            WhereKind::Block(Default::default()),
+            WhereKind::NodeBlock(Default::default()),
+            WhereKind::UncheckedExtrinsic(Default::default()),
         ]
         .into_iter()
         .collect();
@@ -90,56 +97,81 @@ impl Parse for WhereSection {
         }
         Ok(Self {
             block: definitions
-                .remove(&WhereKind::Block)
+                .remove(&WhereKind::Block(Default::default()))
                 .expect("Definitions is guaranteed to have this key; qed"),
             node_block: definitions
-                .remove(&WhereKind::NodeBlock)
+                .remove(&WhereKind::NodeBlock(Default::default()))
                 .expect("Definitions is guaranteed to have this key; qed"),
             unchecked_extrinsic: definitions
-                .remove(&WhereKind::UncheckedExtrinsic)
+                .remove(&WhereKind::UncheckedExtrinsic(Default::default()))
                 .expect("Definitions is guaranteed to have this key; qed"),
         })
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum WhereKind {
-    Block,
-    NodeBlock,
-    UncheckedExtrinsic,
+    Block(keyword::Block),
+    NodeBlock(keyword::NodeBlock),
+    UncheckedExtrinsic(keyword::UncheckedExtrinsic),
+}
+
+impl std::cmp::PartialEq<WhereKind> for WhereKind {
+	fn eq(&self, other: &WhereKind) -> bool {
+		match (self, other) {
+			(WhereKind::Block(_), WhereKind::Block(_)) => true,
+			(WhereKind::NodeBlock(_), WhereKind::NodeBlock(_)) => true,
+			(WhereKind::UncheckedExtrinsic(_), WhereKind::UncheckedExtrinsic(_)) => true,
+			_ => false,
+		}
+	}
+}
+
+impl std::cmp::Eq for
+
+impl std::hash::Hash for WhereKind {
+    fn hash<H>(&self, state: &mut H)
+    where
+		H: std::hash::Hasher
+	{
+		state.write_u32(self as u32)
+	}
+}
+
+impl std::fmt::Display for WhereKind {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+		let name = match self {
+			WhereKind::Block(_) => "Block",
+			WhereKind::NodeBlock(_) => "NodeBlock",
+			WhereKind::UncheckedExtrinsic(_) => "UncheckedExtrinsic",
+		};
+		write!(f, "{}", name)
+	}
+}
+
+impl Parse for WhereKind {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let lookahead = input.lookahead1();
+        if lookahead.peek(keyword::Block) {
+            WhereKind::Block(input.parse()?)
+        } else if lookahead.peek(keyword::NodeBlock) {
+            WhereKind::NodeBlock(input.parse()?)
+        } else if lookahead.peek(keyword::UncheckedExtrinsic) {
+			WhereKind::UncheckedExtrinsic(input.parse()?)
+		} else {
+            Err(lookahead.error())
+        }
+	}
 }
 
 impl WhereKind {
-    pub fn parse(input: ParseStream, seen_keys: &mut HashSet<WhereKind>) -> Result<Self> {
-        let lookahead = input.lookahead1();
-        if lookahead.peek(keyword::Block) {
-            WhereKind::Block.parse_concrete::<keyword::Block>(input, seen_keys)
-        } else if lookahead.peek(keyword::NodeBlock) {
-            WhereKind::NodeBlock.parse_concrete::<keyword::NodeBlock>(input, seen_keys)
-        } else if lookahead.peek(keyword::UncheckedExtrinsic) {
-            WhereKind::UncheckedExtrinsic
-                .parse_concrete::<keyword::UncheckedExtrinsic>(input, seen_keys)
-        } else {
-            Err(lookahead.error())
-        }
-    }
-
-    fn parse_concrete<KW: Parse>(
-        &self,
-        input: ParseStream,
-        seen_keys: &mut HashSet<WhereKind>,
-    ) -> Result<Self> {
-        if seen_keys.contains(self) {
-            let msg = format!(
-                "`{:?}` was declared above. Please use exactly one delcataion for `{:?}`.",
-                self, self
-            );
-            return Err(input.error(msg));
-        }
-        seen_keys.insert(*self);
-        let _: KW = input.parse()?;
-        Ok(*self)
-    }
+	pub fn span(&self) -> Span {
+		match self {
+			WhereKind::Block(x) => x.span(),
+			WhereKind::NodeBlock(x) => x.span(),
+			WhereKind::UncheckedExtrinsic(x) => x.span(),
+		}
+	}
 }
 
 #[derive(Debug)]
@@ -148,16 +180,16 @@ pub struct WhereDefinition {
     pub value: syn::TypePath,
 }
 
-impl WhereDefinition {
-    fn parse(input: ParseStream, seen_keys: &mut HashSet<WhereKind>) -> Result<Self> {
-        Ok(Self {
-            kind: WhereKind::parse(input, seen_keys)?,
+impl Parse for WhereDefinition {
+    fn parse(input: ParseStream) -> Result<Self> {
+		Ok(Self {
+            kind: WhereKind::parse(input)?,
             value: {
                 let _: Token![=] = input.parse()?;
                 input.parse()?
             },
         })
-    }
+	}
 }
 
 #[derive(Debug)]
