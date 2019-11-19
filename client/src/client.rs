@@ -17,8 +17,8 @@
 //! Substrate Client
 
 use std::{
-	marker::PhantomData, collections::{HashSet, BTreeMap, HashMap}, sync::Arc,
-	panic::UnwindSafe, result, cell::RefCell,
+	marker::PhantomData, collections::{HashSet, BTreeMap, HashMap}, sync::Arc, panic::UnwindSafe,
+	result,
 };
 use log::{info, trace, warn};
 use futures03::channel::mpsc;
@@ -43,7 +43,7 @@ use state_machine::{
 	DBValue, Backend as StateBackend, ChangesTrieAnchorBlockId,
 	prove_read, prove_child_read, ChangesTrieRootsStorage, ChangesTrieStorage,
 	ChangesTrieTransaction, ChangesTrieConfigurationRange, key_changes, key_changes_proof,
-	OverlayedChanges, StorageProof, merge_storage_proofs,
+	StorageProof, merge_storage_proofs,
 };
 use executor::{RuntimeVersion, RuntimeInfo};
 use consensus::{
@@ -54,8 +54,8 @@ use consensus::{
 use header_metadata::{HeaderMetadata, CachedHeaderMetadata};
 
 use sr_api::{
-	CallRuntimeAt, ConstructRuntimeApi, Core as CoreApi, ProofRecorder, InitializeBlock, ApiExt,
-	ApiRef, ProvideRuntimeApi,
+	CallApiAt, ConstructRuntimeApi, Core as CoreApi, ApiExt, ApiRef, ProvideRuntimeApi,
+	CallApiAtParams,
 };
 use block_builder::BlockBuilderApi;
 
@@ -1349,7 +1349,7 @@ impl<B, E, Block, RA> ProvideRuntimeApi<Block> for Client<B, E, Block, RA> where
 	}
 }
 
-impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
+impl<B, E, Block, RA> CallApiAt<Block> for Client<B, E, Block, RA> where
 	B: backend::Backend<Block>,
 	E: CallExecutor<Block> + Clone + Send + Sync,
 	Block: BlockT,
@@ -1364,17 +1364,9 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 		C: CoreApi<Block, Error = Error>,
 	>(
 		&self,
-		core_api: &C,
-		at: &BlockId<Block>,
-		function: &'static str,
-		args: Vec<u8>,
-		changes: &RefCell<OverlayedChanges>,
-		initialize_block: InitializeBlock<'a, Block>,
-		native_call: Option<NC>,
-		context: ExecutionContext,
-		recorder: &Option<ProofRecorder<Block>>,
+		params: CallApiAtParams<'a, Block, C, NC, B::State>,
 	) -> error::Result<NativeOrEncoded<R>> {
-		let strategy = match context {
+		let strategy = match params.context {
 			ExecutionContext::BlockConstruction => &self.execution_strategies.block_construction,
 			ExecutionContext::Syncing => &self.execution_strategies.syncing,
 			ExecutionContext::Importing => &self.execution_strategies.importing,
@@ -1385,24 +1377,28 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 
 		let manager = strategy.get_manager();
 
-		let capabilities = context.capabilities();
-		let offchain_extensions = if let ExecutionContext::OffchainCall(Some(ext)) = context {
+		let capabilities = params.context.capabilities();
+		let offchain_extensions = if let ExecutionContext::OffchainCall(Some(ext)) = params.context {
 			Some(OffchainExt::new(offchain::LimitedExternalities::new(capabilities, ext.0)))
 		} else {
 			None
 		};
 
+		let core_api = params.core_api;
+		let at = params.at;
+
 		self.executor.contextual_call::<_, fn(_,_) -> _,_,_>(
 			|| core_api.initialize_block(at, &self.prepare_environment_block(at)?),
 			at,
-			function,
-			&args,
-			changes,
-			initialize_block,
+			params.function,
+			&params.arguments,
+			params.overlayed_changes,
+			Some(params.storage_transaction_cache),
+			params.initialize_block,
 			manager,
-			native_call,
+			params.native_call,
 			offchain_extensions,
-			recorder,
+			params.recorder,
 			capabilities.has(offchain::Capability::Keystore),
 		)
 	}

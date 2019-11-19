@@ -26,7 +26,7 @@
 //! functionality that every runtime needs to export.
 //!
 //! Besides the macros and the [`Core`] runtime api, this crates provides the [`Metadata`] runtime
-//! api, the [`ApiExt`] trait, the [`CallRuntimeAt`] trait and the [`ConstructRuntimeApi`] trait.
+//! api, the [`ApiExt`] trait, the [`CallApiAt`] trait and the [`ConstructRuntimeApi`] trait.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -81,7 +81,7 @@ pub type StorageTransactionCache<Block, Backend> =
 
 /// Something that can be constructed to a runtime api.
 #[cfg(feature = "std")]
-pub trait ConstructRuntimeApi<Block: BlockT, C: CallRuntimeAt<Block>> {
+pub trait ConstructRuntimeApi<Block: BlockT, C: CallApiAt<Block>> {
 	/// The actual runtime api that will be constructed.
 	type RuntimeApi: ApiExt<Block>;
 
@@ -175,9 +175,38 @@ pub enum InitializeBlock<'a, Block: BlockT> {
 	Do(&'a RefCell<Option<BlockId<Block>>>),
 }
 
-/// Something that can call into the runtime at a given block.
+/// Parameters for [`CallApiAt::call_api_at`].
 #[cfg(feature = "std")]
-pub trait CallRuntimeAt<Block: BlockT> {
+pub struct CallApiAtParams<'a, Block: BlockT, C, NC, Backend: StateBackend<HasherFor<Block>>> {
+	/// A reference to something that implements the [`Core`] api.
+	pub core_api: &'a C,
+	/// The block id that determines the state that should be setup when calling the function.
+	pub at: &'a BlockId<Block>,
+	/// The name of the function that should be called.
+	pub function: &'static str,
+	/// An optional native call that calls the `function`. This is an optimization to call into a
+	/// native runtime without requiring to encode/decode the parameters. The native runtime can
+	/// still be called when this value is `None`, we then just fallback to encoding/decoding the
+	/// parameters.
+	pub native_call: Option<NC>,
+	/// The encoded arguments of the function.
+	pub arguments: Vec<u8>,
+	/// The overlayed changes that are on top of the state.
+	pub overlayed_changes: &'a RefCell<OverlayedChanges>,
+	/// The cache for storage transactions.
+	pub storage_transaction_cache: &'a RefCell<StorageTransactionCache<Block, Backend>>,
+	/// Determines if the function requires that `initialize_block` should be called before calling
+	/// the actual function.
+	pub initialize_block: InitializeBlock<'a, Block>,
+	/// The context this function is executed in.
+	pub context: ExecutionContext,
+	/// The optional proof recorder for recording storage accesses.
+	pub recorder: &'a Option<ProofRecorder<Block>>,
+}
+
+/// Something that can call into the an api at a given block.
+#[cfg(feature = "std")]
+pub trait CallApiAt<Block: BlockT> {
 	/// Error type used by the implementation.
 	type Error: std::fmt::Debug + From<String>;
 
@@ -193,15 +222,7 @@ pub trait CallRuntimeAt<Block: BlockT> {
 		C: Core<Block, Error = Self::Error>,
 	>(
 		&self,
-		core_api: &C,
-		at: &BlockId<Block>,
-		function: &'static str,
-		args: Vec<u8>,
-		changes: &RefCell<OverlayedChanges>,
-		initialize_block: InitializeBlock<'a, Block>,
-		native_call: Option<NC>,
-		context: ExecutionContext,
-		recorder: &Option<ProofRecorder<Block>>,
+		params: CallApiAtParams<'a, Block, C, NC, Self::StateBackend>,
 	) -> Result<NativeOrEncoded<R>, Self::Error>;
 
 	/// Returns the runtime version at the given block.

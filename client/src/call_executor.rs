@@ -16,9 +16,7 @@
 
 use std::{sync::Arc, panic::UnwindSafe, result, cell::RefCell};
 use codec::{Encode, Decode};
-use sr_primitives::{
-	generic::BlockId, traits::{Block as BlockT, HasherFor},
-};
+use sr_primitives::{generic::BlockId, traits::{Block as BlockT, HasherFor, NumberFor}};
 use state_machine::{
 	self, OverlayedChanges, StorageTransactionCache, Ext, ExecutionManager, StateMachine,
 	ExecutionStrategy, backend::Backend as _, StorageProof,
@@ -75,6 +73,8 @@ where
 {
 	type Error = E::Error;
 
+	type Backend = B;
+
 	fn call(
 		&self,
 		id: &BlockId<Block>,
@@ -118,6 +118,9 @@ where
 		method: &str,
 		call_data: &[u8],
 		changes: &RefCell<OverlayedChanges>,
+		storage_transaction_cache: &RefCell<
+			StorageTransactionCache<B::State, HasherFor<Block>, NumberFor<Block>>
+		>,
 		initialize_block: InitializeBlock<'a, Block>,
 		execution_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
@@ -165,11 +168,8 @@ where
 					call_data,
 					keystore,
 				)
-				.execute_using_consensus_failure_handler(
-					execution_manager,
-					native_call,
-				)
-				.map_err(Into::into)
+				.with_storage_transaction_cache(&mut *storage_transaction_cache.borrow_mut())
+				.execute_using_consensus_failure_handler(execution_manager, native_call)
 			}
 			None => StateMachine::new(
 				&state,
@@ -181,10 +181,8 @@ where
 				call_data,
 				keystore,
 			)
-			.execute_using_consensus_failure_handler(
-				execution_manager,
-				native_call,
-			)
+			.with_storage_transaction_cache(&mut *storage_transaction_cache.borrow_mut())
+			.execute_using_consensus_failure_handler(execution_manager, native_call)
 		}?;
 		self.backend.destroy_state(state)?;
 		Ok(result)

@@ -234,7 +234,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 		pub struct RuntimeApi {}
 		/// Implements all runtime apis for the client side.
 		#[cfg(any(feature = "std", test))]
-		pub struct RuntimeApiImpl<Block: #crate_::BlockT, C: #crate_::CallRuntimeAt<Block> + 'static>
+		pub struct RuntimeApiImpl<Block: #crate_::BlockT, C: #crate_::CallApiAt<Block> + 'static>
 			where
 				// Rust bug: https://github.com/rust-lang/rust/issues/24159
 				C::StateBackend: #crate_::StateBackend<#crate_::HasherFor<Block>>,
@@ -253,7 +253,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 		// `ApiRef` object and `ApiRef` also has an associated lifetime. This lifetimes makes it
 		// impossible to move `RuntimeApi` into another thread.
 		#[cfg(any(feature = "std", test))]
-		unsafe impl<Block: #crate_::BlockT, C: #crate_::CallRuntimeAt<Block>> Send
+		unsafe impl<Block: #crate_::BlockT, C: #crate_::CallApiAt<Block>> Send
 			for RuntimeApiImpl<Block, C>
 				where
 					// Rust bug: https://github.com/rust-lang/rust/issues/24159
@@ -261,7 +261,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 		{}
 
 		#[cfg(any(feature = "std", test))]
-		unsafe impl<Block: #crate_::BlockT, C: #crate_::CallRuntimeAt<Block>> Sync
+		unsafe impl<Block: #crate_::BlockT, C: #crate_::CallApiAt<Block>> Sync
 			for RuntimeApiImpl<Block, C>
 				where
 					// Rust bug: https://github.com/rust-lang/rust/issues/24159
@@ -269,7 +269,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 		{}
 
 		#[cfg(any(feature = "std", test))]
-		impl<Block: #crate_::BlockT, C: #crate_::CallRuntimeAt<Block>> #crate_::ApiErrorExt
+		impl<Block: #crate_::BlockT, C: #crate_::CallApiAt<Block>> #crate_::ApiErrorExt
 			for RuntimeApiImpl<Block, C>
 				where
 					// Rust bug: https://github.com/rust-lang/rust/issues/24159
@@ -279,7 +279,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 		}
 
 		#[cfg(any(feature = "std", test))]
-		impl<Block: #crate_::BlockT, C: #crate_::CallRuntimeAt<Block>> #crate_::ApiExt<Block> for
+		impl<Block: #crate_::BlockT, C: #crate_::CallApiAt<Block>> #crate_::ApiExt<Block> for
 			RuntimeApiImpl<Block, C>
 				where
 					// Rust bug: https://github.com/rust-lang/rust/issues/24159
@@ -351,7 +351,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 		impl<Block: #crate_::BlockT, C> #crate_::ConstructRuntimeApi<Block, C>
 			for RuntimeApi
 				where
-					C: #crate_::CallRuntimeAt<Block> + 'static,
+					C: #crate_::CallApiAt<Block> + 'static,
 					// Rust bug: https://github.com/rust-lang/rust/issues/24159
 					C::StateBackend: #crate_::StateBackend<#crate_::HasherFor<Block>>,
 		{
@@ -372,7 +372,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 		}
 
 		#[cfg(any(feature = "std", test))]
-		impl<Block: #crate_::BlockT, C: #crate_::CallRuntimeAt<Block>> RuntimeApiImpl<Block, C>
+		impl<Block: #crate_::BlockT, C: #crate_::CallApiAt<Block>> RuntimeApiImpl<Block, C>
 			where
 				// Rust bug: https://github.com/rust-lang/rust/issues/24159
 				C::StateBackend: #crate_::StateBackend<#crate_::HasherFor<Block>>,
@@ -383,6 +383,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 					&C,
 					&Self,
 					&std::cell::RefCell<#crate_::OverlayedChanges>,
+					&std::cell::RefCell<#crate_::StorageTransactionCache<Block, C::StateBackend>>,
 					&std::cell::RefCell<Option<#crate_::BlockId<Block>>>,
 					&Option<#crate_::ProofRecorder<Block>>,
 				) -> std::result::Result<#crate_::NativeOrEncoded<R>, E>,
@@ -395,6 +396,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 					&self.call,
 					self,
 					&self.changes,
+					&self.storage_transaction_cache,
 					&self.initialized_block,
 					&self.recorder,
 				);
@@ -537,13 +539,21 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 					#error
 
 					self.call_api_at(
-						|call_runtime_at, core_api, changes, initialized_block, recorder| {
+						|
+							call_runtime_at,
+							core_api,
+							changes,
+							storage_transaction_cache,
+							initialized_block,
+							recorder
+						| {
 							#runtime_mod_path #call_api_at_call(
 								call_runtime_at,
 								core_api,
 								at,
 								params_encoded,
 								changes,
+								storage_transaction_cache,
 								initialized_block,
 								params.map(|p| {
 									#runtime_mod_path #native_call_generator_ident ::
@@ -587,7 +597,7 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 			)
 		);
 		input.generics.params.push(
-			parse_quote!( RuntimeApiImplCall: #crate_::CallRuntimeAt<__SR_API_BLOCK__> + 'static )
+			parse_quote!( RuntimeApiImplCall: #crate_::CallApiAt<__SR_API_BLOCK__> + 'static )
 		);
 
 		let where_clause = input.generics.make_where_clause();

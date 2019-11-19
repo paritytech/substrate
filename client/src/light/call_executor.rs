@@ -23,12 +23,12 @@ use std::{
 use codec::{Encode, Decode};
 use primitives::{offchain::OffchainExt, convert_hash, NativeOrEncoded, traits::CodeExecutor};
 use sr_primitives::{
-	generic::BlockId, traits::{One, Block as BlockT, Header as HeaderT, HasherFor},
+	generic::BlockId, traits::{One, Block as BlockT, Header as HeaderT, HasherFor, NumberFor},
 };
 use state_machine::{
 	self, Backend as StateBackend, OverlayedChanges, ExecutionStrategy, create_proof_check_backend,
 	execution_proof_check_on_trie_backend, ExecutionManager, StorageProof,
-	merge_storage_proofs,
+	merge_storage_proofs, StorageTransactionCache,
 };
 use hash_db::Hasher;
 
@@ -75,6 +75,8 @@ impl<Block, B, Local> CallExecutor<Block> for
 {
 	type Error = ClientError;
 
+	type Backend = B;
+
 	fn call(
 		&self,
 		id: &BlockId<Block>,
@@ -105,6 +107,9 @@ impl<Block, B, Local> CallExecutor<Block> for
 		method: &str,
 		call_data: &[u8],
 		changes: &RefCell<OverlayedChanges>,
+		storage_transaction_cache: &RefCell<
+			StorageTransactionCache<B::State, HasherFor<Block>, NumberFor<Block>>
+		>,
 		initialize_block: InitializeBlock<'a, Block>,
 		_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
@@ -131,6 +136,7 @@ impl<Block, B, Local> CallExecutor<Block> for
 				method,
 				call_data,
 				changes,
+				storage_transaction_cache,
 				initialize_block,
 				ExecutionManager::NativeWhenPossible,
 				native_call,
@@ -181,7 +187,10 @@ pub fn prove_execution<Block, S, E>(
 		E: CallExecutor<Block>,
 {
 	let trie_state = state.as_trie_backend()
-		.ok_or_else(|| Box::new(state_machine::ExecutionError::UnableToGenerateProof) as Box<dyn state_machine::Error>)?;
+		.ok_or_else(||
+			Box::new(state_machine::ExecutionError::UnableToGenerateProof) as
+				Box<dyn state_machine::Error>
+		)?;
 
 	// prepare execution environment + record preparation proof
 	let mut changes = Default::default();
@@ -193,7 +202,12 @@ pub fn prove_execution<Block, S, E>(
 	)?;
 
 	// execute method + record execution proof
-	let (result, exec_proof) = executor.prove_at_trie_state(&trie_state, &mut changes, method, call_data)?;
+	let (result, exec_proof) = executor.prove_at_trie_state(
+		&trie_state,
+		&mut changes,
+		method,
+		call_data,
+	)?;
 	let total_proof = merge_storage_proofs(vec![init_proof, exec_proof]);
 
 	Ok((result, total_proof))
@@ -282,6 +296,8 @@ mod tests {
 	impl CallExecutor<Block> for DummyCallExecutor {
 		type Error = ClientError;
 
+		type Backend = test_client::Backend;
+
 		fn call(
 			&self,
 			_id: &BlockId<Block>,
@@ -309,6 +325,13 @@ mod tests {
 			_method: &str,
 			_call_data: &[u8],
 			_changes: &RefCell<OverlayedChanges>,
+			_storage_transaction_cache: &RefCell<
+				StorageTransactionCache<
+					<Self::Backend as client_api::backend::Backend<Block>>::State,
+					HasherFor<Block>,
+					NumberFor<Block>
+				>
+			>,
 			_initialize_block: InitializeBlock<'a, Block>,
 			_execution_manager: ExecutionManager<EM>,
 			_native_call: Option<NC>,

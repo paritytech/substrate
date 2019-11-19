@@ -399,7 +399,7 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 				R: #crate_::Encode + #crate_::Decode + PartialEq,
 				NC: FnOnce() -> std::result::Result<R, String> + std::panic::UnwindSafe,
 				Block: #crate_::BlockT,
-				T: #crate_::CallRuntimeAt<Block>,
+				T: #crate_::CallApiAt<Block>,
 				C: #crate_::Core<Block, Error = T::Error>,
 			>(
 				call_runtime_at: &T,
@@ -407,6 +407,9 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 				at: &#crate_::BlockId<Block>,
 				args: Vec<u8>,
 				changes: &std::cell::RefCell<#crate_::OverlayedChanges>,
+				storage_transaction_cache: &std::cell::RefCell<
+					#crate_::StorageTransactionCache<Block, T::StateBackend>
+				>,
 				initialized_block: &std::cell::RefCell<Option<#crate_::BlockId<Block>>>,
 				native_call: Option<NC>,
 				context: #crate_::ExecutionContext,
@@ -426,34 +429,40 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 					if version.apis.iter().any(|(s, v)| {
 						s == &ID && *v < #versions
 					}) {
-						let ret = call_runtime_at.call_api_at::<R, fn() -> _, _>(
+						let params = #crate_::CallApiAtParams::<_, _, fn() -> _, _> {
 							core_api,
 							at,
-							#old_names,
-							args,
-							changes,
+							function: #old_names,
+							native_call: None,
+							arguments: args,
+							overlayed_changes: changes,
+							storage_transaction_cache,
 							initialize_block,
-							None,
 							context,
 							recorder,
-						)?;
+						};
+
+						let ret = call_runtime_at.call_api_at(params)?;
 
 						update_initialized_block();
-						return Ok(ret);
+						return Ok(ret)
 					}
 				)*
 
-				let ret = call_runtime_at.call_api_at(
+				let params = #crate_::CallApiAtParams {
 					core_api,
 					at,
-					#trait_fn_name,
-					args,
-					changes,
-					initialize_block,
+					function: #trait_fn_name,
 					native_call,
+					arguments: args,
+					overlayed_changes: changes,
+					storage_transaction_cache,
+					initialize_block,
 					context,
 					recorder,
-				)?;
+				};
+
+				let ret = call_runtime_at.call_api_at(params)?;
 
 				update_initialized_block();
 				Ok(ret)

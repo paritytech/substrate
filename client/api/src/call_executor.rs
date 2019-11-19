@@ -16,8 +16,11 @@
 
 use std::{panic::UnwindSafe, result, cell::RefCell};
 use codec::{Encode, Decode};
-use sr_primitives::{generic::BlockId, traits::Block as BlockT, traits::HasherFor};
-use state_machine::{self, OverlayedChanges, ExecutionManager, ExecutionStrategy, StorageProof};
+use sr_primitives::{generic::BlockId, traits::{Block as BlockT, HasherFor, NumberFor}};
+use state_machine::{
+	self, OverlayedChanges, ExecutionManager, ExecutionStrategy, StorageProof,
+	StorageTransactionCache,
+};
 use executor::{RuntimeVersion, NativeVersion};
 use primitives::{offchain::OffchainExt, NativeOrEncoded};
 
@@ -25,12 +28,12 @@ use sr_api::{ProofRecorder, InitializeBlock};
 use crate::error;
 
 /// Method call executor.
-pub trait CallExecutor<B>
-where
-	B: BlockT,
-{
+pub trait CallExecutor<B: BlockT> {
 	/// Externalities error type.
 	type Error: state_machine::Error;
+
+	/// The backend used by the node.
+	type Backend: crate::backend::Backend<B>;
 
 	/// Execute a call to a contract on top of state in a block of given hash.
 	///
@@ -65,6 +68,12 @@ where
 		method: &str,
 		call_data: &[u8],
 		changes: &RefCell<OverlayedChanges>,
+		storage_transaction_cache: &RefCell<
+			StorageTransactionCache<
+				<Self::Backend as crate::backend::Backend<B>>::State,
+				HasherFor<B>,
+				NumberFor<B>>
+		>,
 		initialize_block: InitializeBlock<'a, B>,
 		execution_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,

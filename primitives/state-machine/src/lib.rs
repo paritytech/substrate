@@ -225,6 +225,19 @@ impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec> where
 		}
 	}
 
+	/// Use given `cache` as storage transaction cache.
+	///
+	/// The cache will be used to cache storage transactions that can be build while executing a
+	/// function in the runtime. For example, when calculating the storage root a transaction is
+	/// build that will be cached.
+	pub fn with_storage_transaction_cache(
+		mut self,
+		cache: &'a mut StorageTransactionCache<B, H, N>,
+	) -> Self {
+		self.storage_transaction_cache = Some(cache);
+		self
+	}
+
 	/// Execute a call using the given state backend, overlayed changes, and call executor.
 	///
 	/// On an error, no prospective changes are written to the overlay.

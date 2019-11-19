@@ -21,9 +21,10 @@ use std::ops::Deref;
 use std::sync::Arc;
 use log::{debug, warn};
 use hash_db::{self, Hasher, EMPTY_PREFIX, Prefix};
-use trie::{Trie, MemoryDB, PrefixedMemoryDB, DBValue,
-	default_child_trie_root, read_trie_value, read_child_trie_value,
-	for_keys_in_child_trie};
+use trie::{
+	Trie, MemoryDB, PrefixedMemoryDB, DBValue, default_child_trie_root, read_trie_value,
+	read_child_trie_value, for_keys_in_child_trie,
+};
 use trie::trie_types::{TrieDB, TrieError, Layout};
 use crate::backend::Consolidate;
 
@@ -138,7 +139,6 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> {
 		self.keys_values_with_prefix_inner(&self.root, prefix, |k, _v| f(k))
 	}
 
-
 	fn keys_values_with_prefix_inner<F: FnMut(&[u8], &[u8])>(
 		&self,
 		root: &H::Out,
@@ -179,7 +179,6 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> {
 	pub fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], f: F) {
 		self.keys_values_with_prefix_inner(&self.root, prefix, f)
 	}
-
 }
 
 pub(crate) struct Ephemeral<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
