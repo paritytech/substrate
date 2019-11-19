@@ -21,3 +21,4 @@ rls*.log
 *.orig
 *.rej
 **/wip/*.stderr
+.local

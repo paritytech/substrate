@@ -1,0 +1,48 @@
+[package]
+name = "node-executor"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+description = "Substrate node implementation in Rust."
+edition = "2018"
+
+[dependencies]
+trie-root = "0.15.2"
+codec = { package = "parity-scale-codec", version = "1.0.0" }
+runtime_io = { package = "sr-io", path = "../../../primitives/sr-io" }
+state_machine = { package = "substrate-state-machine", path = "../../../primitives/state-machine" }
+substrate-executor = { path = "../../../client/executor" }
+primitives = { package = "substrate-primitives", path = "../../../primitives/core" }
+trie = { package = "substrate-trie", path = "../../../primitives/trie" }
+node-primitives = { path = "../primitives" }
+node-runtime = { path = "../runtime" }
+
+[dev-dependencies]
+node-testing = { path = "../testing" }
+test-client = { package = "substrate-test-client", path = "../../../test/utils/client" }
+sr-primitives = { path = "../../../primitives/sr-primitives" }
+runtime_support = { package = "paint-support", path = "../../../paint/support" }
+balances = { package = "paint-balances", path = "../../../paint/balances" }
+transaction-payment = { package = "paint-transaction-payment", path = "../../../paint/transaction-payment" }
+session = { package = "paint-session", path = "../../../paint/session" }
+system = { package = "paint-system", path = "../../../paint/system" }
+timestamp = { package = "paint-timestamp", path = "../../../paint/timestamp" }
+treasury = { package = "paint-treasury", path = "../../../paint/treasury" }
+contracts = { package = "paint-contracts", path = "../../../paint/contracts" }
+grandpa = { package = "paint-grandpa", path = "../../../paint/grandpa" }
+indices = { package = "paint-indices", path = "../../../paint/indices" }
+wabt = "0.9.2"
+criterion = "0.3.0"
+
+[features]
+wasmtime = [
+    "substrate-executor/wasmtime",
+]
+wasmi-errno = [
+	"substrate-executor/wasmi-errno",
+]
+stress-test = []
+
+[[bench]]
+name = "bench"
+harness = false
+
