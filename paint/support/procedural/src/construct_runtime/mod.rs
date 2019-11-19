@@ -338,16 +338,10 @@ fn decl_all_modules<'a>(
         names.push(&module_declaration.name);
     }
     // Make nested tuple structure like (((Babe, Consensus), Grandpa), ...)
-    let all_modules = if names.len() < 2 {
-        quote!(#(#names),*)
-    } else {
-        let name0 = names[0];
-        let name1 = names[1];
-        names
-            .iter()
-            .skip(2)
-            .fold(quote!((#name0, #name1)), |acc, name| quote!((#acc, #name)))
-    };
+    let all_modules = names.iter().fold(TokenStream2::default(), |combined, name| {
+		quote!((#name, #combined))
+	});
+
     quote!(
         pub type System = system::Module<#runtime>;
         #types
