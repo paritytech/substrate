@@ -98,7 +98,7 @@ use rstd::fmt::Debug;
 use sr_version::RuntimeVersion;
 use sr_primitives::{
 	RuntimeDebug,
-	generic::{self, Era}, Perbill, InclusionError, DispatchOutcome, DispatchError,
+	generic::{self, Era}, Perbill, DispatchOutcome, DispatchError,
 	weights::{Weight, DispatchInfo, DispatchClass, SimpleDispatchInfo},
 	transaction_validity::{
 		ValidTransaction, TransactionPriority, TransactionLongevity, TransactionValidityError,
@@ -857,7 +857,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 		_call: &Self::Call,
 		info: DispatchInfo,
 		len: usize,
-	) -> Result<(), InclusionError> {
+	) -> Result<(), TransactionValidityError> {
 		let next_len = Self::check_block_length(info, len)?;
 		AllExtrinsicsLen::put(next_len);
 		let next_weight = Self::check_weight(info)?;
@@ -936,7 +936,7 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 		_call: &Self::Call,
 		_info: DispatchInfo,
 		_len: usize,
-	) -> Result<(), InclusionError> {
+	) -> Result<(), TransactionValidityError> {
 		let expected = <AccountNonce<T>>::get(who);
 		if self.0 != expected {
 			return Err(

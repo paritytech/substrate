@@ -18,7 +18,7 @@
 
 use std::{self, error, result};
 use state_machine;
-use sr_primitives::InclusionError;
+use sr_primitives::transaction_validity::TransactionValidityError;
 use consensus;
 use derive_more::{Display, From};
 
@@ -37,9 +37,9 @@ pub enum Error {
 	/// Unknown block.
 	#[display(fmt = "UnknownBlock: {}", _0)]
 	UnknownBlock(String),
-	/// Applying extrinsic error.
-	#[display(fmt = "Extrinsic inclusion error: {:?}", _0)]
-	ApplyExtrinsicFailed(InclusionError),
+	/// The `apply_extrinsic` is not valid due to the given `TransactionValidityError`.
+	#[display(fmt = "Extrinsic is not valid: {:?}", _0)]
+	ApplyExtrinsicFailed(TransactionValidityError),
 	/// Execution error.
 	#[display(fmt = "Execution: {}", _0)]
 	Execution(Box<dyn state_machine::Error>),

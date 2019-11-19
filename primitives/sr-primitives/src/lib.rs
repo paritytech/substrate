@@ -346,37 +346,6 @@ impl From<ed25519::Signature> for AnySignature {
 	}
 }
 
-#[derive(Eq, PartialEq, Clone, Copy, Decode, Encode, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize))]
-/// Reason why an extrinsic must not be included in a block.
-pub enum InclusionError {
-	/// Any error to do with the transaction validity.
-	Validity(transaction_validity::TransactionValidityError),
-}
-
-impl InclusionError {
-	/// Returns if the reason for the error was block resource exhaustion.
-	pub fn exhausted_resources(&self) -> bool {
-		match self {
-			Self::Validity(e) => e.exhausted_resources(),
-		}
-	}
-}
-
-impl From<InclusionError> for &'static str {
-	fn from(err: InclusionError) -> &'static str {
-		match err {
-			InclusionError::Validity(v) => v.into(),
-		}
-	}
-}
-
-impl From<transaction_validity::TransactionValidityError> for InclusionError {
-	fn from(err: transaction_validity::TransactionValidityError) -> Self {
-		InclusionError::Validity(err)
-	}
-}
-
 impl From<DispatchError> for DispatchOutcome {
 	fn from(err: DispatchError) -> Self {
 		Err(err)
@@ -455,7 +424,7 @@ pub type DispatchOutcome = Result<(), DispatchError>;
 /// - The sender doesn't have enough funds to pay the transaction inclusion fee. Including such
 ///   a transaction in the block doesn't make sense.
 /// - The extrinsic supplied a bad signature. This transaction won't become valid ever.
-pub type InclusionOutcome = Result<DispatchOutcome, InclusionError>;
+pub type InclusionOutcome = Result<DispatchOutcome, transaction_validity::TransactionValidityError>;
 
 /// Verify a signature on an encoded value in a lazy manner. This can be
 /// an optimization if the signature scheme has an "unsigned" escape hash.

@@ -318,7 +318,7 @@ mod tests {
 	use sr_primitives::{
 		generic::Era, Perbill, DispatchError, weights::Weight, testing::{Digest, Header, Block},
 		traits::{Bounded, Header as HeaderT, BlakeTwo256, IdentityLookup, ConvertInto},
-		transaction_validity::{InvalidTransaction, UnknownTransaction}, InclusionError,
+		transaction_validity::{InvalidTransaction, UnknownTransaction, TransactionValidityError},
 	};
 	use support::{
 		impl_outer_event, impl_outer_origin, parameter_types, impl_outer_dispatch,
@@ -443,7 +443,7 @@ mod tests {
 	impl ValidateUnsigned for Runtime {
 		type Call = Call;
 
-		fn pre_dispatch(_call: &Self::Call) -> Result<(), InclusionError> {
+		fn pre_dispatch(_call: &Self::Call) -> Result<(), TransactionValidityError> {
 			Ok(())
 		}
 
@@ -696,7 +696,7 @@ mod tests {
 				} else {
 					assert_eq!(
 						Executive::apply_extrinsic(xt),
-						Err(InclusionError::Validity(InvalidTransaction::Payment.into())),
+						Err(InvalidTransaction::Payment.into()),
 					);
 					assert_eq!(<balances::Module<Runtime>>::total_balance(&1), 111);
 				}
