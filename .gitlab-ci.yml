@@ -78,7 +78,7 @@ check-runtime:
     GITLAB_API:                    "https://gitlab.parity.io/api/v4"
     GITHUB_API_PROJECT:            "parity%2Finfrastructure%2Fgithub-api"
   script:
-    - ./scripts/gitlab/check_runtime.sh
+    - ./.maintain/gitlab/check_runtime.sh
   allow_failure:                   true
 
 
@@ -89,7 +89,7 @@ check-line-width:
   only:
     - /^[0-9]+$/
   script:
-    - ./scripts/gitlab/check_line_width.sh
+    - ./.maintain/gitlab/check_line_width.sh
   allow_failure:                   true
 
 
@@ -117,7 +117,7 @@ cargo-check-subkey:
   except:
     - /^v[0-9]+\.[0-9]+.*$/        # i.e. v1.0, v2.1rc1
   script:
-    - cd ./subkey
+    - cd ./bin/subkey
     - BUILD_DUMMY_WASM_BINARY=1 time cargo check --release
     - sccache -s
 
@@ -145,8 +145,17 @@ test-linux-stable:                 &test-linux
     paths:
       - ${CI_COMMIT_SHORT_SHA}_warnings.log
 
+test-dependency-rules:             &test-linux
+  stage:                           test
+  <<:                              *docker-env
+  allow_failure:                   true
+  except:
+    variables:
+      - $DEPLOY_TAG
+  script:
+    - .maintain/ensure-deps.sh
 
-test-srml-staking:                 &test-srml-staking
+test-paint-staking:                 &test-paint-staking
   stage:                           test
   <<:                              *docker-env
   variables:
@@ -158,7 +167,7 @@ test-srml-staking:                 &test-srml-staking
     variables:
       - $DEPLOY_TAG
   script:
-    - cd srml/staking/
+    - cd paint/staking/
     - WASM_BUILD_NO_COLOR=1 time cargo test --release --verbose --no-default-features --features std
     - sccache -s
 
@@ -174,7 +183,7 @@ test-wasmtime:                 &test-wasmtime
     variables:
       - $DEPLOY_TAG
   script:
-    - cd core/executor
+    - cd client/executor
     - WASM_BUILD_NO_COLOR=1 time cargo test --release --verbose --features wasmtime
     - sccache -s
 
@@ -219,7 +228,7 @@ check-web-wasm:
     - time cargo web build -p substrate-consensus-common
     - time cargo web build -p substrate-telemetry
     # Note: the command below is a bit weird because several Cargo issues prevent us from compiling the node in a more straight-forward way.
-    - time cargo build --manifest-path=node/cli/Cargo.toml --no-default-features --features "browser" --target=wasm32-unknown-unknown
+    - time cargo build --manifest-path=bin/node/cli/Cargo.toml --no-default-features --features "browser" --target=wasm32-unknown-unknown
     - sccache -s
 
 node-exits:
@@ -228,7 +237,7 @@ node-exits:
   except:
     - /^v[0-9]+\.[0-9]+.*$/        # i.e. v1.0, v2.1rc1
   script:
-    - ./ci/check_for_exit.sh
+    - ./.maintain/check_for_exit.sh
 
 
 test-full-crypto-feature:          &test-full-crypto-feature
@@ -243,7 +252,7 @@ test-full-crypto-feature:          &test-full-crypto-feature
     variables:
       - $DEPLOY_TAG
   script:
-    - cd core/primitives/
+    - cd primitives/core/
     - time cargo +nightly build --verbose --no-default-features --features full_crypto
     - cd ../application-crypto
     - time cargo +nightly build --verbose --no-default-features --features full_crypto
@@ -274,8 +283,8 @@ build-linux-substrate:
       fi
     - sha256sum ./artifacts/substrate/substrate | tee ./artifacts/substrate/substrate.sha256
     - printf '\n# building node-template\n\n'
-    - ./scripts/node-template-release.sh ./artifacts/substrate/substrate-node-template.tar.gz
-    - cp -r scripts/docker/substrate.Dockerfile ./artifacts/substrate/
+    - ./.maintain/node-template-release.sh ./artifacts/substrate/substrate-node-template.tar.gz
+    - cp -r .maintain/docker/substrate.Dockerfile ./artifacts/substrate/
     - sccache -s
 
 build-linux-subkey:
@@ -298,7 +307,7 @@ build-linux-subkey:
         sed -n -r 's/^subkey ([0-9.]+.*)/\1/p' |
           tee ./artifacts/subkey/VERSION;
     - sha256sum ./artifacts/subkey/subkey | tee ./artifacts/subkey/subkey.sha256
-    - cp -r scripts/docker/subkey.Dockerfile ./artifacts/subkey/
+    - cp -r .maintain/docker/subkey.Dockerfile ./artifacts/subkey/
     - sccache -s
 
 build-rust-doc-release:
@@ -314,7 +323,7 @@ build-rust-doc-release:
   <<:                              *build-only
   script:
     - rm -f ./crate-docs/index.html # use it as an indicator if the job succeeds
-    - BUILD_DUMMY_WASM_BINARY=1 RUSTDOCFLAGS="--html-in-header $(pwd)/rustdoc-header.html" time cargo +nightly doc --release --all --verbose
+    - BUILD_DUMMY_WASM_BINARY=1 RUSTDOCFLAGS="--html-in-header $(pwd).maintain/rustdoc-header.html" time cargo +nightly doc --release --all --verbose
     - cp -R ./target/doc ./crate-docs
     - echo "<meta http-equiv=refresh content=0;url=substrate_service/index.html>" > ./crate-docs/index.html
     - sccache -s
@@ -533,10 +542,10 @@ publish-gh-doc:
     - echo "Substrate version = ${DEPLOY_TAG}"
     # or use helm to render the template
     - helm template
-      --values ./scripts/kubernetes/values.yaml
+      --values ./.maintain/kubernetes/values.yaml
       --set image.tag=${DEPLOY_TAG}
       --set validator.keys=${VALIDATOR_KEYS}
-      ./scripts/kubernetes | kubectl apply -f - --dry-run=false
+      ./.maintain/kubernetes | kubectl apply -f - --dry-run=false
     - echo "# substrate namespace ${KUBE_NAMESPACE}"
     - kubectl -n ${KUBE_NAMESPACE} get all
     - echo "# substrate's nodes' external ip addresses:"
@@ -598,16 +607,16 @@ deploy-ue1-tag:
 validator 1 4:
   <<:                              *validator-deploy
   script:
-    - ./scripts/flamingfir-deploy.sh flamingfir-validator1
+    - ./.maintain/flamingfir-deploy.sh flamingfir-validator1
 validator 2 4:
   <<:                              *validator-deploy
   script:
-    - ./scripts/flamingfir-deploy.sh flamingfir-validator2
+    - ./.maintain/flamingfir-deploy.sh flamingfir-validator2
 validator 3 4:
   <<:                              *validator-deploy
   script:
-    - ./scripts/flamingfir-deploy.sh flamingfir-validator3
+    - ./.maintain/flamingfir-deploy.sh flamingfir-validator3
 validator 4 4:
   <<:                              *validator-deploy
   script:
-    - ./scripts/flamingfir-deploy.sh flamingfir-validator4
+    - ./.maintain/flamingfir-deploy.sh flamingfir-validator4

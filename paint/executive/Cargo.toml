@@ -1,0 +1,33 @@
+[package]
+name = "paint-executive"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
+serde = { version = "1.0.101", optional = true }
+codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
+rstd = { package = "sr-std", path = "../../primitives/sr-std", default-features = false }
+runtime-io ={ package = "sr-io", path = "../../primitives/sr-io", default-features = false }
+sr-primitives = { path = "../../primitives/sr-primitives", default-features = false }
+support = { package = "paint-support", path = "../support", default-features = false }
+system = { package = "paint-system", path = "../system", default-features = false }
+
+[dev-dependencies]
+hex-literal = "0.2.1"
+primitives = { package = "substrate-primitives",  path = "../../primitives/core" }
+paint-indices = { path = "../indices" }
+balances = { package = "paint-balances", path = "../balances" }
+transaction-payment = { package = "paint-transaction-payment", path = "../transaction-payment" }
+
+[features]
+default = ["std"]
+std = [
+	"rstd/std",
+	"support/std",
+	"serde",
+	"codec/std",
+	"sr-primitives/std",
+	"runtime-io/std",
+	"system/std",
+]

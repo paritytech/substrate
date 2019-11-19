@@ -1,0 +1,14 @@
+[package]
+name = "substrate-state-db"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
+parking_lot = "0.9.0"
+log = "0.4.8"
+primitives = { package = "substrate-primitives", path = "../../primitives/core" }
+codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
+
+[dev-dependencies]
+env_logger = "0.7.0"
