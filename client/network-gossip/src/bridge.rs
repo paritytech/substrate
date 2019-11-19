@@ -24,11 +24,12 @@ use network::{Event, config::Roles};
 use futures::{prelude::*, channel::mpsc, compat::Compat01As03};
 use libp2p::PeerId;
 use parking_lot::Mutex;
-use sr_primitives::{traits::Block as BlockT, ConsensusEngineId};
+use sr_primitives::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
 use std::{borrow::Cow, sync::Arc, time::Duration};
 
 pub struct GossipEngine<B: BlockT> {
 	inner: Arc<Mutex<GossipEngineInner<B>>>,
+	engine_id: ConsensusEngineId,
 }
 
 struct GossipEngineInner<B: BlockT> {
@@ -62,6 +63,7 @@ impl<B: BlockT> GossipEngine<B> {
 
 		let gossip_engine = GossipEngine {
 			inner: inner.clone(),
+			engine_id,
 		};
 
 		async_std::task::spawn({
@@ -127,19 +129,22 @@ impl<B: BlockT> GossipEngine<B> {
 		self.inner.lock().state_machine.abort();
 	}
 
+	pub fn report(&self, who: PeerId, reputation: i32) {
+		self.inner.lock().context.report_peer(who, reputation);
+	}
+
 	/// Registers a message without propagating it to any peers. The message
 	/// becomes available to new peers or when the service is asked to GossipEngine
 	/// the message's topic. No validation is performed on the message, if the
 	/// message is already expired it should be dropped on the next garbage
 	/// collection.
-	pub fn register_message(
+	pub fn register_gossip_message(
 		&self,
 		topic: B::Hash,
-		engine_id: ConsensusEngineId,
 		message: Vec<u8>,
 	) {
 		let message = ConsensusMessage {
-			engine_id,
+			engine_id: self.engine_id,
 			data: message,
 		};
 
@@ -154,10 +159,10 @@ impl<B: BlockT> GossipEngine<B> {
 	}
 
 	/// Get data of valid, incoming messages for a topic (but might have expired meanwhile)
-	pub fn messages_for(&self, engine_id: ConsensusEngineId, topic: B::Hash)
+	pub fn messages_for(&self, topic: B::Hash)
 		-> mpsc::UnboundedReceiver<TopicNotification>
 	{
-		self.inner.lock().state_machine.messages_for(engine_id, topic)
+		self.inner.lock().state_machine.messages_for(self.engine_id, topic)
 	}
 
 	/// Send all messages with given topic to a peer.
@@ -165,24 +170,22 @@ impl<B: BlockT> GossipEngine<B> {
 		&self,
 		who: &PeerId,
 		topic: B::Hash,
-		engine_id: ConsensusEngineId,
 		force: bool
 	) {
 		let mut inner = self.inner.lock();
 		let inner = &mut *inner;
-		inner.state_machine.send_topic(&mut *inner.context, who, topic, engine_id, force)
+		inner.state_machine.send_topic(&mut *inner.context, who, topic, self.engine_id, force)
 	}
 
 	/// Multicast a message to all peers.
-	pub fn multicast(
+	pub fn gossip_message(
 		&self,
 		topic: B::Hash,
-		engine_id: ConsensusEngineId,
 		message: Vec<u8>,
 		force: bool,
 	) {
 		let message = ConsensusMessage {
-			engine_id,
+			engine_id: self.engine_id,
 			data: message,
 		};
 
@@ -191,27 +194,34 @@ impl<B: BlockT> GossipEngine<B> {
 		inner.state_machine.multicast(&mut *inner.context, topic, message, force)
 	}
 
-	/// Send addressed message to a peer. The message is not kept or multicast
+	/// Send addressed message to the given peers. The message is not kept or multicast
 	/// later on.
-	pub fn send_message(
-		&self,
-		who: &PeerId,
-		engine_id: ConsensusEngineId,
-		message: Vec<u8>,
-	) {
+	pub fn send_message(&self, who: Vec<network::PeerId>, data: Vec<u8>) {
 		let mut inner = self.inner.lock();
 		let inner = &mut *inner;
-		inner.state_machine.send_message(&mut *inner.context, who, ConsensusMessage {
-			engine_id,
-			data: message,
-		});
+
+		for who in &who {
+			inner.state_machine.send_message(&mut *inner.context, who, ConsensusMessage {
+				engine_id: self.engine_id,
+				data: data.clone(),
+			});
+		}
+	}
+
+	pub fn announce(&self, block: B::Hash, associated_data: Vec<u8>) {
+		// TODO: self.announce_block(block, associated_data)
+	}
+
+	pub fn set_sync_fork_request(&self, peers: Vec<network::PeerId>, hash: B::Hash, number: NumberFor<B>) {
+		// TODO: NetworkService::set_sync_fork_request(self, peers, hash, number)
 	}
 }
 
 impl<B: BlockT> Clone for GossipEngine<B> {
 	fn clone(&self) -> Self {
 		GossipEngine {
-			inner: self.inner.clone()
+			inner: self.inner.clone(),
+			engine_id: self.engine_id.clone(),
 		}
 	}
 }

@@ -31,7 +31,7 @@ use std::sync::Arc;
 
 use futures::prelude::*;
 use futures::sync::mpsc;
-use futures03::{compat::Compat, stream::{StreamExt, TryStreamExt}};
+use futures03::{compat::Compat, stream::StreamExt};
 use grandpa::Message::{Prevote, Precommit, PrimaryPropose};
 use grandpa::{voter, voter_set::VoterSet};
 use log::{debug, trace};
@@ -103,49 +103,6 @@ pub(crate) fn round_topic<B: BlockT>(round: RoundNumber, set_id: SetIdNumber) ->
 pub(crate) fn global_topic<B: BlockT>(set_id: SetIdNumber) -> B::Hash {
 	<<B::Header as HeaderT>::Hashing as HashT>::hash(format!("{}-GLOBAL", set_id).as_bytes())
 }
-
-/*impl<B> Network<B> for GossipEngine<B> where
-	B: BlockT,
-{
-	type In = ;
-
-	fn messages_for(&self, topic: B::Hash) -> Box<dyn Stream<Item = network_gossip::TopicNotification, Error = ()> + Send + 'static> {
-		let stream = self.messages_for(GRANDPA_ENGINE_ID, topic)
-			.map(|x| Ok(x))
-			.compat();
-		Box::new(stream)
-	}
-
-	fn register_validator(&self, validator: Arc<dyn network_gossip::Validator<B>>) {
-		unimplemented!()
-	}
-
-	fn gossip_message(&self, topic: B::Hash, data: Vec<u8>, force: bool) {
-		self.multicast(topic, GRANDPA_ENGINE_ID, data, force)
-	}
-
-	fn register_gossip_message(&self, topic: B::Hash, data: Vec<u8>) {
-		self.register_message(topic, GRANDPA_ENGINE_ID, data)
-	}
-
-	fn send_message(&self, who: Vec<network::PeerId>, data: Vec<u8>) {
-		for who in &who {
-			self.send_message(who, GRANDPA_ENGINE_ID, data.clone())
-		}
-	}
-
-	fn report(&self, who: network::PeerId, cost_benefit: i32) {
-		// TODO: self.report_peer(who, cost_benefit)
-	}
-
-	fn announce(&self, block: B::Hash, associated_data: Vec<u8>) {
-		// TODO: self.announce_block(block, associated_data)
-	}
-
-	fn set_sync_fork_request(&self, peers: Vec<network::PeerId>, hash: B::Hash, number: NumberFor<B>) {
-		// TODO: NetworkService::set_sync_fork_request(self, peers, hash, number)
-	}
-}*/
 
 /// Bridge between the underlying network service, gossiping consensus messages and Grandpa
 pub(crate) struct NetworkBridge<B: BlockT> {
@@ -283,7 +240,7 @@ impl<B: BlockT> NetworkBridge<B> {
 		});
 
 		let topic = round_topic::<B>(round.0, set_id.0);
-		let incoming = Compat::new(self.service.messages_for(GRANDPA_ENGINE_ID, topic)
+		let incoming = Compat::new(self.service.messages_for(topic)
 			.map(|item| Ok::<_, ()>(item)))
 			.filter_map(|notification| {
 				let decoded = GossipMessage::<B>::decode(&mut &notification.message[..]);
@@ -337,7 +294,7 @@ impl<B: BlockT> NetworkBridge<B> {
 			.map_err(|()| Error::Network(format!("Failed to receive message on unbounded stream")));
 
 		let (tx, out_rx) = mpsc::unbounded();
-		let outgoing = OutgoingMessages::<B, GossipEngine<B>> {
+		let outgoing = OutgoingMessages::<B> {
 			round: round.0,
 			set_id: set_id.0,
 			network: self.service.clone(),
@@ -518,8 +475,8 @@ fn incoming_global<B: BlockT>(
 		Some(voter::CommunicationIn::CatchUp(msg.message, cb))
 	};
 
-	service.messages_for(GRANDPA_ENGINE_ID, topic)
-		.map(|m| Ok::<_, ()>(m))
+	Compat::new(service.messages_for(topic)
+		.map(|m| Ok::<_, ()>(m)))
 		.filter_map(|notification| {
 			// this could be optimized by decoding piecewise.
 			let decoded = GossipMessage::<B>::decode(&mut &notification.message[..]);
