@@ -20,7 +20,8 @@ use std::collections::HashMap;
 use runtime_io::hashing::{blake2_256, twox_128};
 use super::{AuthorityId, AccountId, WASM_BINARY, system};
 use codec::{Encode, KeyedVec, Joiner};
-use primitives::{ChangesTrieConfiguration, map, storage::well_known_keys};
+use primitives::{ChangesTrieConfiguration, map};
+use primitives::storage::{well_known_keys, OwnedChildInfo};
 use sr_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
 
 /// Configuration of a general Substrate test genesis block.
@@ -31,7 +32,7 @@ pub struct GenesisConfig {
 	heap_pages_override: Option<u64>,
 	/// Additional storage key pairs that will be added to the genesis map.
 	extra_storage: HashMap<Vec<u8>, Vec<u8>>,
-	child_extra_storage: HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>,
+	child_extra_storage: HashMap<Vec<u8>, (HashMap<Vec<u8>, Vec<u8>>, OwnedChildInfo)>,
 }
 
 impl GenesisConfig {
@@ -42,7 +43,7 @@ impl GenesisConfig {
 		balance: u64,
 		heap_pages_override: Option<u64>,
 		extra_storage: HashMap<Vec<u8>, Vec<u8>>,
-		child_extra_storage: HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>,
+		child_extra_storage: HashMap<Vec<u8>, (HashMap<Vec<u8>, Vec<u8>>, OwnedChildInfo)>,
 	) -> Self {
 		GenesisConfig {
 			changes_trie_config: match support_changes_trie {
@@ -59,7 +60,7 @@ impl GenesisConfig {
 
 	pub fn genesis_map(&self) -> (
 		HashMap<Vec<u8>, Vec<u8>>,
-		HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>,
+		HashMap<Vec<u8>, (HashMap<Vec<u8>, Vec<u8>>, OwnedChildInfo)>,
 	) {
 		let wasm_runtime = WASM_BINARY.to_vec();
 		let mut map: HashMap<Vec<u8>, Vec<u8>> = self.balances.iter()
@@ -93,17 +94,19 @@ impl GenesisConfig {
 pub fn insert_genesis_block(
 	storage: &mut (
 		HashMap<Vec<u8>, Vec<u8>>,
-		HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>,
+		HashMap<Vec<u8>, (HashMap<Vec<u8>, Vec<u8>>, OwnedChildInfo)>,
 	)
 ) -> primitives::hash::H256 {
-	let child_roots = storage.1.iter().map(|(sk, child_map)| {
+	let child_roots = storage.1.iter().map(|(sk, child_content)| {
 		let state_root = <<<crate::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
-			child_map.clone().into_iter().collect(),
+			child_content.0.clone().into_iter().collect(),
 		);
 		(sk.clone(), state_root.encode())
 	});
+	// add child roots to storage
+	storage.0.extend(child_roots);
 	let state_root = <<<crate::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
-		storage.0.clone().into_iter().chain(child_roots).collect()
+		storage.0.clone().into_iter().collect()
 	);
 	let block: crate::Block = substrate_client::genesis::construct_genesis_block(state_root);
 	let genesis_hash = block.header.hash();

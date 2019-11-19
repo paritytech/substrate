@@ -22,7 +22,7 @@ use std::fs::File;
 use std::path::PathBuf;
 use std::rc::Rc;
 use serde::{Serialize, Deserialize};
-use primitives::storage::{StorageKey, StorageData};
+use primitives::storage::{StorageKey, StorageData, ChildInfo};
 use sr_primitives::{BuildStorage, StorageOverlay, ChildrenStorageOverlay};
 use serde_json as json;
 use crate::RuntimeGenesis;
@@ -76,10 +76,17 @@ impl<'a, G: RuntimeGenesis, E> BuildStorage for &'a ChainSpec<G, E> {
 			Genesis::Runtime(gc) => gc.build_storage(),
 			Genesis::Raw(map, children_map) => Ok((
 				map.into_iter().map(|(k, v)| (k.0, v.0)).collect(),
-				children_map.into_iter().map(|(sk, map)| (
-					sk.0,
-					map.into_iter().map(|(k, v)| (k.0, v.0)).collect(),
-				)).collect(),
+				children_map.into_iter().map(|(sk, child_content)| {
+					let child_info = ChildInfo::resolve_child_info( 
+						child_content.2,
+						child_content.1.as_slice(),
+					).expect("chainspec contains correct content").to_owned();
+					(
+						sk.0,
+						(child_content.0.into_iter().map(|(k, v)| (k.0, v.0)).collect(),
+							child_info),
+					)
+				}).collect(),
 			)),
 		}
 	}
@@ -99,7 +106,7 @@ enum Genesis<G> {
 	Runtime(G),
 	Raw(
 		HashMap<StorageKey, StorageData>,
-		HashMap<StorageKey, HashMap<StorageKey, StorageData>>,
+		HashMap<StorageKey, (HashMap<StorageKey, StorageData>, Vec<u8>, u32)>,
 	),
 }
 
@@ -259,12 +266,18 @@ impl<G: RuntimeGenesis, E: serde::Serialize> ChainSpec<G, E> {
 					.map(|(k, v)| (StorageKey(k), StorageData(v)))
 					.collect();
 				let children = storage.1.into_iter()
-					.map(|(sk, child)| (
+					.map(|(sk, child)| {
+						let (info, ci_type) = child.1.as_ref().info();
+						(
 							StorageKey(sk),
-							child.into_iter()
-								.map(|(k, v)| (StorageKey(k), StorageData(v)))
-								.collect(),
-					))
+							(
+								child.0.into_iter()
+									.map(|(k, v)| (StorageKey(k), StorageData(v))) 
+									.collect(),
+								info,
+								ci_type,
+							),
+					)})
 					.collect();
 
 				Genesis::Raw(top, children)

@@ -21,7 +21,7 @@ use std::iter::FromIterator;
 use std::collections::{HashMap, BTreeSet};
 use codec::Decode;
 use crate::changes_trie::{NO_EXTRINSIC_INDEX, Configuration as ChangesTrieConfig};
-use primitives::storage::{well_known_keys::EXTRINSIC_INDEX, OwnedChildInfo};
+use primitives::storage::{well_known_keys::EXTRINSIC_INDEX, OwnedChildInfo, ChildInfo};
 
 /// The overlayed changes to state to be queried on top of the backend.
 ///
@@ -118,13 +118,13 @@ impl OverlayedChanges {
 	/// value has been set.
 	pub fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Option<Option<&[u8]>> {
 		if let Some(map) = self.prospective.children.get(storage_key) {
-			if let Some(val) = map.get(key) {
+			if let Some(val) = map.0.get(key) {
 				return Some(val.value.as_ref().map(AsRef::as_ref));
 			}
 		}
 
 		if let Some(map) = self.committed.children.get(storage_key) {
-			if let Some(val) = map.get(key) {
+			if let Some(val) = map.0.get(key) {
 				return Some(val.value.as_ref().map(AsRef::as_ref));
 			}
 		}
@@ -149,10 +149,17 @@ impl OverlayedChanges {
 	/// Inserts the given key-value pair into the prospective child change set.
 	///
 	/// `None` can be used to delete a value specified by the given key.
-	pub(crate) fn set_child_storage(&mut self, storage_key: Vec<u8>, key: Vec<u8>, val: Option<Vec<u8>>) {
+	pub(crate) fn set_child_storage(
+		&mut self,
+		storage_key: Vec<u8>,
+		child_info: ChildInfo,
+		key: Vec<u8>,
+		val: Option<Vec<u8>>,
+	) {
 		let extrinsic_index = self.extrinsic_index();
-		let map_entry = self.prospective.children.entry(storage_key).or_default();
-		let entry = map_entry.entry(key).or_default();
+		let map_entry = self.prospective.children.entry(storage_key)
+			.or_insert_with(|| (Default::default(), child_info.to_owned()));
+		let entry = map_entry.0.entry(key).or_default();
 		entry.value = val;
 
 		if let Some(extrinsic) = extrinsic_index {
@@ -167,11 +174,16 @@ impl OverlayedChanges {
 	/// change set, and still can be reverted by [`discard_prospective`].
 	///
 	/// [`discard_prospective`]: #method.discard_prospective
-	pub(crate) fn clear_child_storage(&mut self, storage_key: &[u8]) {
+	pub(crate) fn clear_child_storage(
+		&mut self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+	) {
 		let extrinsic_index = self.extrinsic_index();
-		let map_entry = self.prospective.children.entry(storage_key.to_vec()).or_default();
+		let map_entry = self.prospective.children.entry(storage_key.to_vec())
+			.or_insert_with(|| (Default::default(), child_info.to_owned()));
 
-		map_entry.values_mut().for_each(|e| {
+		map_entry.0.values_mut().for_each(|e| {
 			if let Some(extrinsic) = extrinsic_index {
 				e.extrinsics.get_or_insert_with(Default::default)
 					.insert(extrinsic);
@@ -180,10 +192,10 @@ impl OverlayedChanges {
 			e.value = None;
 		});
 
-		if let Some(committed_map) = self.committed.children.get(storage_key) {
+		if let Some((committed_map, _child_info)) = self.committed.children.get(storage_key) {
 			for (key, value) in committed_map.iter() {
-				if !map_entry.contains_key(key) {
-					map_entry.insert(key.clone(), OverlayedValue {
+				if !map_entry.0.contains_key(key) {
+					map_entry.0.insert(key.clone(), OverlayedValue {
 						value: None,
 						extrinsics: extrinsic_index.map(|i| {
 							let mut e = value.extrinsics.clone()
@@ -234,11 +246,17 @@ impl OverlayedChanges {
 		}
 	}
 
-	pub(crate) fn clear_child_prefix(&mut self, storage_key: &[u8], prefix: &[u8]) {
+	pub(crate) fn clear_child_prefix(
+		&mut self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		prefix: &[u8],
+	) {
 		let extrinsic_index = self.extrinsic_index();
-		let map_entry = self.prospective.children.entry(storage_key.to_vec()).or_default();
+		let map_entry = self.prospective.children.entry(storage_key.to_vec())
+			.or_insert_with(|| (Default::default(), child_info.to_owned()));
 
-		for (key, entry) in map_entry.iter_mut() {
+		for (key, entry) in map_entry.0.iter_mut() {
 			if key.starts_with(prefix) {
 				entry.value = None;
 
@@ -249,12 +267,12 @@ impl OverlayedChanges {
 			}
 		}
 
-		if let Some(child_committed) = self.committed.children.get(storage_key) {
+		if let Some((child_committed, _child_info)) = self.committed.children.get(storage_key) {
 			// Then do the same with keys from commited changes.
 			// NOTE that we are making changes in the prospective change set.
 			for key in child_committed.keys() {
 				if key.starts_with(prefix) {
-					let entry = map_entry.entry(key.clone()).or_default();
+					let entry = map_entry.0.entry(key.clone()).or_default();
 					entry.value = None;
 
 					if let Some(extrinsic) = extrinsic_index {

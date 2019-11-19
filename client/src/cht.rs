@@ -98,9 +98,9 @@ pub fn build_proof<Header, Hasher, BlocksI, HashesI>(
 {
 	let transaction = build_pairs::<Header, _>(cht_size, cht_num, hashes)?
 		.into_iter()
-		.map(|(k, v)| (None, k, Some(v)))
+		.map(|(k, v)| (k, Some(v)))
 		.collect::<Vec<_>>();
-	let mut storage = InMemoryState::<Hasher>::default().update(transaction);
+	let mut storage = InMemoryState::<Hasher>::default().update(vec![(None, transaction)]);
 	let trie_storage = storage.as_trie_backend()
 		.expect("InMemoryState::as_trie_backend always returns Some; qed");
 	prove_read_on_trie_backend(

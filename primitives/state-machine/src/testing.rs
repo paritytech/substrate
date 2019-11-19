@@ -16,10 +16,10 @@
 
 //! Test implementation for Externalities.
 
-use std::{collections::HashMap, any::{Any, TypeId}};
+use std::any::{Any, TypeId};
 use hash_db::Hasher;
 use crate::{
-	backend::{InMemory, Backend}, OverlayedChanges,
+	backend::{InMemory, Backend, StorageTuple}, OverlayedChanges,
 	changes_trie::{
 		InMemoryStorage as ChangesTrieInMemoryStorage,
 		BlockNumber as ChangesTrieBlockNumber,
@@ -34,8 +34,6 @@ use primitives::{
 };
 use codec::Encode;
 use externalities::{Extensions, Extension};
-
-type StorageTuple = (HashMap<Vec<u8>, Vec<u8>>, HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>);
 
 /// Simple HashMap-based Externalities impl.
 pub struct TestExternalities<H: Hasher<Out=H256>=Blake2Hasher, N: ChangesTrieBlockNumber=u64> {
@@ -77,22 +75,17 @@ impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 		storage.0.insert(HEAP_PAGES.to_vec(), 8u64.encode());
 		storage.0.insert(CODE.to_vec(), code.to_vec());
 
-		let backend: HashMap<_, _> = storage.1.into_iter()
-			.map(|(keyspace, map)| (Some(keyspace), map))
-			.chain(Some((None, storage.0)).into_iter())
-			.collect();
-
 		TestExternalities {
 			overlay,
 			changes_trie_storage: ChangesTrieInMemoryStorage::new(),
-			backend: backend.into(),
+			backend: storage.into(),
 			extensions: Default::default(),
 		}
 	}
 
 	/// Insert key/value into backend
 	pub fn insert(&mut self, k: Vec<u8>, v: Vec<u8>) {
-		self.backend = self.backend.update(vec![(None, k, Some(v))]);
+		self.backend = self.backend.update(vec![(None, vec![(k, Some(v))])]);
 	}
 
 	/// Registers the given extension for this instance.
@@ -107,19 +100,23 @@ impl<H: Hasher<Out=H256>, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 
 	/// Return a new backend with all pending value.
 	pub fn commit_all(&self) -> InMemory<H> {
-		let top = self.overlay.committed.top.clone().into_iter()
+		let top: Vec<_> = self.overlay.committed.top.clone().into_iter()
 			.chain(self.overlay.prospective.top.clone().into_iter())
-			.map(|(k, v)| (None, k, v.value));
+			.map(|(k, v)| (k, v.value)).collect();
+		let mut transaction = vec![(None, top)];
 
-		let children = self.overlay.committed.children.clone().into_iter()
+		self.overlay.committed.children.clone().into_iter()
 			.chain(self.overlay.prospective.children.clone().into_iter())
-			.flat_map(|(keyspace, map)| {
-				map.into_iter()
-					.map(|(k, v)| (Some(keyspace.clone()), k, v.value))
-					.collect::<Vec<_>>()
+			.for_each(|(keyspace, (map, child_info))| {
+				transaction.push((
+					Some((keyspace, child_info)),
+					map.into_iter()
+						.map(|(k, v)| (k, v.value))
+						.collect::<Vec<_>>(),
+				))
 			});
 
-		self.backend.update(top.chain(children).collect())
+		self.backend.update(transaction)
 	}
 
 	/// Execute the given closure while `self` is set as externalities.

@@ -255,7 +255,7 @@ where
 	fn child_storage_hash(
 		&self,
 		storage_key: ChildStorageKey,
-		child_info: ChildInfo,
+		_child_info: ChildInfo,
 		key: &[u8],
 	) -> Option<H256> {
 		let _guard = panic_handler::AbortGuard::force_abort();
@@ -388,7 +388,7 @@ where
 		let _guard = panic_handler::AbortGuard::force_abort();
 
 		self.mark_dirty();
-		self.overlay.set_child_storage(storage_key.into_owned(), key, value);
+		self.overlay.set_child_storage(storage_key.into_owned(), child_info, key, value);
 	}
 
 	fn kill_child_storage(
@@ -403,9 +403,9 @@ where
 		let _guard = panic_handler::AbortGuard::force_abort();
 
 		self.mark_dirty();
-		self.overlay.clear_child_storage(storage_key.as_ref());
+		self.overlay.clear_child_storage(storage_key.as_ref(), child_info);
 		self.backend.for_keys_in_child_storage(storage_key.as_ref(), child_info, |key| {
-			self.overlay.set_child_storage(storage_key.as_ref().to_vec(), key.to_vec(), None);
+			self.overlay.set_child_storage(storage_key.as_ref().to_vec(), child_info, key.to_vec(), None);
 		});
 	}
 
@@ -441,9 +441,9 @@ where
 		let _guard = panic_handler::AbortGuard::force_abort();
 
 		self.mark_dirty();
-		self.overlay.clear_child_prefix(storage_key.as_ref(), prefix);
+		self.overlay.clear_child_prefix(storage_key.as_ref(), child_info, prefix);
 		self.backend.for_child_keys_with_prefix(storage_key.as_ref(), child_info, prefix, |key| {
-			self.overlay.set_child_storage(storage_key.as_ref().to_vec(), key.to_vec(), None);
+			self.overlay.set_child_storage(storage_key.as_ref().to_vec(), child_info, key.to_vec(), None);
 		});
 	}
 

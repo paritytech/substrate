@@ -37,7 +37,7 @@ pub use state_machine::ExecutionStrategy;
 use std::sync::Arc;
 use std::collections::HashMap;
 use hash_db::Hasher;
-use primitives::storage::well_known_keys;
+use primitives::storage::{well_known_keys, OwnedChildInfo, ChildInfo};
 use sr_primitives::traits::Block as BlockT;
 use client::LocalCallExecutor;
 
@@ -63,7 +63,7 @@ impl GenesisInit for () {
 pub struct TestClientBuilder<Executor, Backend, G: GenesisInit> {
 	execution_strategies: ExecutionStrategies,
 	genesis_init: G,
-	child_storage_extension: HashMap<Vec<u8>, Vec<(Vec<u8>, Vec<u8>)>>,
+	child_storage_extension: HashMap<Vec<u8>, (Vec<(Vec<u8>, Vec<u8>)>, OwnedChildInfo)>,
 	backend: Arc<Backend>,
 	_executor: std::marker::PhantomData<Executor>,
 	keystore: Option<BareCryptoStorePtr>,
@@ -135,10 +135,12 @@ impl<Executor, Backend, G: GenesisInit> TestClientBuilder<Executor, Backend, G> 
 		mut self,
 		key: impl AsRef<[u8]>,
 		child_key: impl AsRef<[u8]>,
+		child_info: ChildInfo,
 		value: impl AsRef<[u8]>,
 	) -> Self {
-		let entry = self.child_storage_extension.entry(key.as_ref().to_vec()).or_insert_with(Vec::new);
-		entry.push((child_key.as_ref().to_vec(), value.as_ref().to_vec()));
+		let entry = self.child_storage_extension.entry(key.as_ref().to_vec())
+			.or_insert_with(|| (Vec::new(), child_info.to_owned()));
+		entry.0.push((child_key.as_ref().to_vec(), value.as_ref().to_vec()));
 		self
 	}
 
@@ -179,10 +181,10 @@ impl<Executor, Backend, G: GenesisInit> TestClientBuilder<Executor, Backend, G> 
 			let mut storage = self.genesis_init.genesis_storage();
 
 			// Add some child storage keys.
-			for (key, value) in self.child_storage_extension {
+			for (key, child_content) in self.child_storage_extension {
 				storage.1.insert(
 					well_known_keys::CHILD_STORAGE_KEY_PREFIX.iter().cloned().chain(key).collect(),
-					value.into_iter().collect(),
+					(child_content.0.into_iter().collect(), child_content.1),
 				);
 			}
 

@@ -27,6 +27,12 @@ use trie::{
 };
 use primitives::storage::{ChildInfo, OwnedChildInfo};
 
+
+pub(crate) type StorageTuple = (
+	HashMap<Vec<u8>, Vec<u8>>,
+	HashMap<Vec<u8>, (HashMap<Vec<u8>, Vec<u8>>, OwnedChildInfo)>,
+);
+
 /// A state backend is used to read state data and can have changes committed
 /// to it.
 ///
@@ -353,7 +359,7 @@ impl<H: Hasher> InMemory<H> {
 	pub fn update(&self, changes: <Self as Backend<H>>::Transaction) -> Self {
 		let mut inner: HashMap<_, _> = self.inner.clone();
 		for (child_info, key_values) in changes {
-			let mut entry = inner.entry(child_info).or_default();
+			let entry = inner.entry(child_info).or_default();
 			for (key, val) in key_values {
 				match val {
 					Some(v) => { entry.insert(key, v); },
@@ -375,14 +381,8 @@ impl<H: Hasher> From<HashMap<Option<(Vec<u8>, OwnedChildInfo)>, HashMap<Vec<u8>,
 	}
 }
 
-impl<H: Hasher> From<(
-		HashMap<Vec<u8>, Vec<u8>>,
-		HashMap<Vec<u8>, (HashMap<Vec<u8>, Vec<u8>>, OwnedChildInfo)>,
-)> for InMemory<H> {
-	fn from(inners: (
-		HashMap<Vec<u8>, Vec<u8>>,
-		HashMap<Vec<u8>, (HashMap<Vec<u8>, Vec<u8>>, OwnedChildInfo)>,
-	)) -> Self {
+impl<H: Hasher> From<StorageTuple> for InMemory<H> {
+	fn from(inners: StorageTuple) -> Self {
 		let mut inner: HashMap<Option<(Vec<u8>, OwnedChildInfo)>, HashMap<Vec<u8>, Vec<u8>>>
 			= inners.1.into_iter().map(|(k, (v, ci))| (Some((k, ci)), v)).collect();
 		inner.insert(None, inners.0);
@@ -413,7 +413,7 @@ impl<H: Hasher> From<Vec<(Option<(Vec<u8>, OwnedChildInfo)>, Vec<(Vec<u8>, Optio
 	) -> Self {
 		let mut expanded: HashMap<Option<(Vec<u8>, OwnedChildInfo)>, HashMap<Vec<u8>, Vec<u8>>> = HashMap::new();
 		for (child_info, key_values) in inner {
-			let mut entry = expanded.entry(child_info).or_default();
+			let entry = expanded.entry(child_info).or_default();
 			for (key, value) in key_values {
 				if let Some(value) = value {
 					entry.insert(key, value);
@@ -575,7 +575,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 		let mut new_child_roots = Vec::new();
 		let mut root_map = None;
 		for (child_info, map) in &self.inner {
-			if let Some((storage_key, child_info)) = child_info.as_ref() {
+			if let Some((storage_key, _child_info)) = child_info.as_ref() {
 				let ch = insert_into_memory_db::<H, _>(&mut mdb, map.clone().into_iter())?;
 				new_child_roots.push((storage_key.clone(), ch.as_ref().into()));
 			} else {
@@ -620,16 +620,21 @@ pub(crate) fn insert_into_memory_db<H, I>(mdb: &mut MemoryDB<H>, input: I) -> Op
 #[cfg(test)]
 mod tests {
 	use super::*;
-
+	
 	/// Assert in memory backend with only child trie keys works as trie backend.
 	#[test]
 	fn in_memory_with_child_trie_only() {
 		let storage = InMemory::<primitives::Blake2Hasher>::default();
+		let child_info = OwnedChildInfo::new_default(b"unique_id_1".to_vec(), None);
 		let mut storage = storage.update(
-			vec![(Some(b"1".to_vec()), b"2".to_vec(), Some(b"3".to_vec()))]
+			vec![(
+				Some((b"1".to_vec(), child_info.clone())),
+				vec![(b"2".to_vec(), Some(b"3".to_vec()))]
+			)]
 		);
 		let trie_backend = storage.as_trie_backend().unwrap();
-		assert_eq!(trie_backend.child_storage(b"1", b"2").unwrap(), Some(b"3".to_vec()));
+		assert_eq!(trie_backend.child_storage(b"1", child_info.as_ref(), b"2").unwrap(),
+			Some(b"3".to_vec()));
 		assert!(trie_backend.storage(b"1").unwrap().is_some());
 	}
 }

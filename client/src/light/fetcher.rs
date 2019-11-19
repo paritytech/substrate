@@ -343,10 +343,13 @@ pub mod tests {
 	use crate::light::fetcher::{FetchChecker, LightDataChecker, RemoteHeaderRequest};
 	use crate::light::blockchain::tests::{DummyStorage, DummyBlockchain};
 	use primitives::{blake2_256, Blake2Hasher, H256};
-	use primitives::storage::{well_known_keys, StorageKey};
+	use primitives::storage::{well_known_keys, StorageKey, ChildInfo};
 	use sr_primitives::generic::BlockId;
 	use state_machine::Backend;
 	use super::*;
+
+	const CHILD_UUID_1: &'static [u8] = b"unique_id_1";
+	const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::new_default(CHILD_UUID_1, None);
 
 	type TestChecker = LightDataChecker<
 		NativeExecutor<test_client::LocalExecutor>,
@@ -398,7 +401,7 @@ pub mod tests {
 		use test_client::TestClientBuilderExt;
 		// prepare remote client
 		let remote_client = test_client::TestClientBuilder::new()
-			.add_extra_child_storage(b":child_storage:default:child1".to_vec(), b"key1".to_vec(), b"value1".to_vec())
+			.add_extra_child_storage(b":child_storage:default:child1".to_vec(), CHILD_INFO_1, b"key1".to_vec(), b"value1".to_vec())
 			.build();
 		let remote_block_id = BlockId::Number(0);
 		let remote_block_hash = remote_client.block_hash(0).unwrap().unwrap();
@@ -410,12 +413,14 @@ pub mod tests {
 		let child_value = remote_client.child_storage(
 			&remote_block_id,
 			&StorageKey(b":child_storage:default:child1".to_vec()),
+			CHILD_INFO_1,
 			&StorageKey(b"key1".to_vec()),
 		).unwrap().unwrap().0;
 		assert_eq!(b"value1"[..], child_value[..]);
 		let remote_read_proof = remote_client.read_child_proof(
 			&remote_block_id,
 			b":child_storage:default:child1",
+			CHILD_INFO_1,
 			&[b"key1"],
 		).unwrap();
 
@@ -496,6 +501,7 @@ pub mod tests {
 				block: remote_block_header.hash(),
 				header: remote_block_header,
 				storage_key: b":child_storage:default:child1".to_vec(),
+				unique_id: CHILD_UUID_1.to_vec(),
 				keys: vec![b"key1".to_vec()],
 				retry_count: None,
 			},

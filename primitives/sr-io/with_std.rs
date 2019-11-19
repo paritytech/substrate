@@ -16,8 +16,8 @@
 
 use primitives::{
 	blake2_128, blake2_256, twox_128, twox_256, twox_64, ed25519, Blake2Hasher, sr25519, Pair, H256,
-	traits::KeystoreExt, storage::ChildStorageKey, hexdisplay::HexDisplay, Hasher,
-	offchain::{self, OffchainExt}, storage::OwnedChildInfo,
+	traits::KeystoreExt, hexdisplay::HexDisplay, Hasher, offchain::{self, OffchainExt},
+	storage::{ChildStorageKey, OwnedChildInfo, StorageOverlay, ChildrenStorageOverlay},
 };
 // Switch to this after PoC-3
 // pub use primitives::BlakeHasher;
@@ -475,13 +475,6 @@ impl OffchainApi for () {
 }
 
 impl Api for () {}
-
-/// A set of key value pairs for storage.
-pub type StorageOverlay = HashMap<Vec<u8>, Vec<u8>>;
-
-/// Sets of key value pairs for children storage, stored at parent key location,
-/// with an associated unique id.
-pub type ChildrenStorageOverlay = HashMap<Vec<u8>, (StorageOverlay, OwnedChildInfo)>;
 
 /// Execute the given closure with global functions available whose functionality routes into
 /// externalities that draw from and populate `storage` and `children_storage`.

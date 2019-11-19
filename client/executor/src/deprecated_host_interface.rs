@@ -20,7 +20,7 @@ use codec::Encode;
 use std::{convert::TryFrom, str};
 use primitives::{
 	blake2_128, blake2_256, twox_64, twox_128, twox_256, ed25519, sr25519, keccak_256, Blake2Hasher, Pair,
-	crypto::KeyTypeId, offchain,
+	crypto::KeyTypeId, offchain, storage::ChildType,
 };
 use trie::{TrieConfiguration, trie_types::Layout};
 use wasm_interface::{
@@ -232,7 +232,14 @@ impl_wasm_host_interface! {
 			let value = context.read_memory(value_data, value_len)
 				.map_err(|_| "Invalid attempt to determine value in ext_set_child_storage")?;
 
-			Ok(runtime_io::storage::child_set(&storage_key, &key, &value))
+			// This can only work with archive mode.
+			Ok(runtime_io::storage::child_set(
+				&storage_key,
+				&[],
+				ChildType::CryptoUniqueId as u32,
+				&key,
+				&value,
+			))
 		}
 
 		ext_clear_child_storage(
@@ -246,7 +253,13 @@ impl_wasm_host_interface! {
 			let key = context.read_memory(key_data, key_len)
 				.map_err(|_| "Invalid attempt to determine key in ext_clear_child_storage")?;
 
-			Ok(runtime_io::storage::child_clear(&storage_key, &key))
+			// This can only work with archive mode.
+			Ok(runtime_io::storage::child_clear(
+				&storage_key,
+				&[],
+				ChildType::CryptoUniqueId as u32,
+				&key,
+			))
 		}
 
 		ext_clear_storage(key_data: Pointer<u8>, key_len: WordSize) {
@@ -272,7 +285,13 @@ impl_wasm_host_interface! {
 			let key = context.read_memory(key_data, key_len)
 				.map_err(|_| "Invalid attempt to determine key in ext_exists_child_storage")?;
 
-			Ok(if runtime_io::storage::child_exists(&storage_key, &key) { 1 } else { 0 })
+			// This can only work with archive mode.
+			Ok(if runtime_io::storage::child_exists(
+				&storage_key,
+				&[],
+				ChildType::CryptoUniqueId as u32,
+				&key,
+			) { 1 } else { 0 })
 		}
 
 		ext_clear_prefix(prefix_data: Pointer<u8>, prefix_len: WordSize) {
@@ -291,13 +310,24 @@ impl_wasm_host_interface! {
 				.map_err(|_| "Invalid attempt to determine storage_key in ext_clear_child_prefix")?;
 			let prefix = context.read_memory(prefix_data, prefix_len)
 				.map_err(|_| "Invalid attempt to determine prefix in ext_clear_child_prefix")?;
-			Ok(runtime_io::storage::child_clear_prefix(&storage_key, &prefix))
+			// This can only work with archive mode.
+			Ok(runtime_io::storage::child_clear_prefix(
+				&storage_key,
+				&[],
+				ChildType::CryptoUniqueId as u32,
+				&prefix,
+			))
 		}
 
 		ext_kill_child_storage(storage_key_data: Pointer<u8>, storage_key_len: WordSize) {
 			let storage_key = context.read_memory(storage_key_data, storage_key_len)
 				.map_err(|_| "Invalid attempt to determine storage_key in ext_kill_child_storage")?;
-			Ok(runtime_io::storage::child_storage_kill(&storage_key))
+			// This can only work with archive mode.
+			Ok(runtime_io::storage::child_storage_kill(
+				&storage_key,
+				&[],
+				ChildType::CryptoUniqueId as u32,
+			))
 		}
 
 		ext_get_allocated_storage(
@@ -334,7 +364,13 @@ impl_wasm_host_interface! {
 			let key = context.read_memory(key_data, key_len)
 				.map_err(|_| "Invalid attempt to determine key in ext_get_allocated_child_storage")?;
 
-			if let Some(value) = runtime_io::storage::child_get(&storage_key, &key) {
+			// This can only work with archive mode.
+			if let Some(value) = runtime_io::storage::child_get(
+				&storage_key,
+				&[],
+				ChildType::CryptoUniqueId as u32,
+				&key,
+			) {
 				let offset = context.allocate_memory(value.len() as u32)?;
 				context.write_memory(offset, &value)
 					.map_err(|_| "Invalid attempt to set memory in ext_get_allocated_child_storage")?;
@@ -383,7 +419,13 @@ impl_wasm_host_interface! {
 			let key = context.read_memory(key_data, key_len)
 				.map_err(|_| "Invalid attempt to get key in ext_get_child_storage_into")?;
 
-			if let Some(value) = runtime_io::storage::child_get(&storage_key, &key) {
+			// This can only work with archive mode.
+			if let Some(value) = runtime_io::storage::child_get(
+				&storage_key,
+				&[],
+				ChildType::CryptoUniqueId as u32,
+				&key,
+			) {
 				let data = &value[value.len().min(value_offset as usize)..];
 				let written = std::cmp::min(value_len as usize, data.len());
 				context.write_memory(value_data, &data[..written])
@@ -406,7 +448,12 @@ impl_wasm_host_interface! {
 		) -> Pointer<u8> {
 			let storage_key = context.read_memory(storage_key_data, storage_key_len)
 				.map_err(|_| "Invalid attempt to determine storage_key in ext_child_storage_root")?;
-			let value = runtime_io::storage::child_root(&storage_key);
+			// This can only work with archive mode.
+			let value = runtime_io::storage::child_root(
+				&storage_key,
+				&[],
+				ChildType::CryptoUniqueId as u32,
+			);
 
 			let offset = context.allocate_memory(value.len() as u32)?;
 			context.write_memory(offset, &value)

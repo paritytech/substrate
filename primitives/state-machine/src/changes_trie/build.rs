@@ -339,11 +339,15 @@ mod test {
 	use codec::Encode;
 	use primitives::Blake2Hasher;
 	use primitives::storage::well_known_keys::{EXTRINSIC_INDEX};
+	use primitives::storage::ChildInfo;
 	use crate::backend::InMemory;
 	use crate::changes_trie::{RootsStorage, Configuration, storage::InMemoryStorage};
 	use crate::changes_trie::build_cache::{IncompleteCacheAction, IncompleteCachedBuildData};
 	use crate::overlayed_changes::{OverlayedValue, OverlayedChangeSet};
 	use super::*;
+
+	const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_1", None);
+	const CHILD_INFO_2: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_2", None);
 
 	fn prepare_for_build(zero: u64) -> (
 		InMemory<Blake2Hasher>,
@@ -423,18 +427,18 @@ mod test {
 				}),
 			].into_iter().collect(),
 				children: vec![
-					(child_trie_key1.clone(), vec![
+					(child_trie_key1.clone(), (vec![
 						(vec![100], OverlayedValue {
 							value: Some(vec![200]),
 							extrinsics: Some(vec![0, 2].into_iter().collect())
 						})
-					].into_iter().collect()),
-					(child_trie_key2, vec![
+					].into_iter().collect(), CHILD_INFO_1.to_owned())),
+					(child_trie_key2, (vec![
 						(vec![100], OverlayedValue {
 							value: Some(vec![200]),
 							extrinsics: Some(vec![0, 2].into_iter().collect())
 						})
-					].into_iter().collect()),
+					].into_iter().collect(), CHILD_INFO_2.to_owned())),
 				].into_iter().collect()
 			},
 			committed: OverlayedChangeSet { top: vec![
@@ -452,12 +456,12 @@ mod test {
 				}),
 			].into_iter().collect(),
 				children: vec![
-					(child_trie_key1, vec![
+					(child_trie_key1, (vec![
 						(vec![100], OverlayedValue {
 							value: Some(vec![202]),
 							extrinsics: Some(vec![3].into_iter().collect())
 						})
-					].into_iter().collect()),
+					].into_iter().collect(), CHILD_INFO_1.to_owned())),
 				].into_iter().collect(),
 			},
 			changes_trie_config: Some(config.clone()),

@@ -43,7 +43,12 @@ pub fn get<T: Decode + Sized>(
 	unique_id: Option<&[u8]>,
 	key: &[u8],
 ) -> Option<T> {
-	runtime_io::storage::child_get(storage_key, unique_id.expect(SOME), key).map(|v| {
+	runtime_io::storage::child_get(
+		storage_key,
+		unique_id.expect(SOME),
+		primitives::storage::ChildType::CryptoUniqueId as u32,
+		key,
+	).map(|v| {
 		Decode::decode(&mut &v[..]).expect("storage is not null, therefore must be a valid type")
 	})
 }
@@ -88,7 +93,13 @@ pub fn put<T: Encode>(
 	value: &T,
 ) {
 	value.using_encoded(|slice|
-		runtime_io::storage::child_set(storage_key, unique_id.expect(SOME), key, slice)
+		runtime_io::storage::child_set(
+			storage_key,
+			unique_id.expect(SOME),
+			primitives::storage::ChildType::CryptoUniqueId as u32,
+			key,
+			slice,
+		)
 	);
 }
 
@@ -144,7 +155,9 @@ pub fn exists(
 	key: &[u8],
 ) -> bool {
 	runtime_io::storage::child_read(
-		storage_key, unique_id.expect(SOME), key, &mut [0;0][..], 0,
+		storage_key, unique_id.expect(SOME),
+		primitives::storage::ChildType::CryptoUniqueId as u32,
+		key, &mut [0;0][..], 0,
 	).is_some()
 }
 
@@ -153,7 +166,11 @@ pub fn kill_storage(
 	storage_key: &[u8],
 	unique_id: Option<&[u8]>,
 ) {
-	runtime_io::storage::child_storage_kill(storage_key, unique_id.expect(SOME))
+	runtime_io::storage::child_storage_kill(
+		storage_key,
+		unique_id.expect(SOME),
+		primitives::storage::ChildType::CryptoUniqueId as u32,
+	)
 }
 
 /// Ensure `key` has no explicit entry in storage.
@@ -162,7 +179,12 @@ pub fn kill(
 	unique_id: Option<&[u8]>,
 	key: &[u8],
 ) {
-	runtime_io::storage::child_clear(storage_key, unique_id.expect(SOME), key);
+	runtime_io::storage::child_clear(
+		storage_key,
+		unique_id.expect(SOME),
+		primitives::storage::ChildType::CryptoUniqueId as u32,
+		key,
+	);
 }
 
 /// Get a Vec of bytes from storage.
@@ -171,7 +193,12 @@ pub fn get_raw(
 	unique_id: Option<&[u8]>,
 	key: &[u8],
 ) -> Option<Vec<u8>> {
-	runtime_io::storage::child_get(storage_key, unique_id.expect(SOME), key)
+	runtime_io::storage::child_get(
+		storage_key,
+		unique_id.expect(SOME),
+		primitives::storage::ChildType::CryptoUniqueId as u32,
+		key,
+	)
 }
 
 /// Put a raw byte slice into storage.
@@ -181,7 +208,13 @@ pub fn put_raw(
 	key: &[u8],
 	value: &[u8],
 ) {
-	runtime_io::storage::child_set(storage_key, unique_id.expect(SOME), key, value)
+	runtime_io::storage::child_set(
+		storage_key,
+		unique_id.expect(SOME),
+		primitives::storage::ChildType::CryptoUniqueId as u32,
+		key,
+		value,
+	)
 }
 
 /// Calculate current child root value.
@@ -189,5 +222,9 @@ pub fn child_root(
 	storage_key: &[u8],
 	unique_id: Option<&[u8]>,
 ) -> Vec<u8> {
-	runtime_io::storage::child_root(storage_key,	unique_id.expect(SOME))
+	runtime_io::storage::child_root(
+		storage_key,
+		unique_id.expect(SOME),
+		primitives::storage::ChildType::CryptoUniqueId as u32,
+	)
 }

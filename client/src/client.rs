@@ -27,7 +27,7 @@ use codec::{Encode, Decode};
 use hash_db::{Hasher, Prefix};
 use primitives::{
 	Blake2Hasher, H256, ChangesTrieConfiguration, convert_hash, NeverNativeValue, ExecutionContext,
-	NativeOrEncoded, storage::{StorageKey, StorageData, well_known_keys},
+	NativeOrEncoded, storage::{StorageKey, StorageData, well_known_keys, ChildInfo},
 	offchain::{OffchainExt, self}, traits::CodeExecutor,
 };
 use substrate_telemetry::{telemetry, SUBSTRATE_INFO};
@@ -265,10 +265,11 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		&self,
 		id: &BlockId<Block>,
 		child_storage_key: &StorageKey,
+		child_info: ChildInfo,
 		key_prefix: &StorageKey
 	) -> error::Result<Vec<StorageKey>> {
 		let keys = self.state_at(id)?
-			.child_keys(&child_storage_key.0, &key_prefix.0)
+			.child_keys(&child_storage_key.0, child_info, &key_prefix.0)
 			.into_iter()
 			.map(StorageKey)
 			.collect();
@@ -279,11 +280,13 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	pub fn child_storage(
 		&self,
 		id: &BlockId<Block>,
-		child_storage_key: &StorageKey,
+		storage_key: &StorageKey,
+		child_info: ChildInfo,
 		key: &StorageKey
 	) -> error::Result<Option<StorageData>> {
 		Ok(self.state_at(id)?
-			.child_storage(&child_storage_key.0, &key.0).map_err(|e| error::Error::from_state(Box::new(e)))?
+			.child_storage(&storage_key.0, child_info, &key.0)
+			.map_err(|e| error::Error::from_state(Box::new(e)))?
 			.map(StorageData))
 	}
 
@@ -291,11 +294,13 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	pub fn child_storage_hash(
 		&self,
 		id: &BlockId<Block>,
-		child_storage_key: &StorageKey,
+		storage_key: &StorageKey,
+		child_info: ChildInfo,
 		key: &StorageKey
 	) -> error::Result<Option<Block::Hash>> {
 		Ok(self.state_at(id)?
-			.child_storage_hash(&child_storage_key.0, &key.0).map_err(|e| error::Error::from_state(Box::new(e)))?
+			.child_storage_hash(&storage_key.0, child_info, &key.0)
+			.map_err(|e| error::Error::from_state(Box::new(e)))?
 		)
 	}
 
@@ -332,13 +337,14 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		&self,
 		id: &BlockId<Block>,
 		storage_key: &[u8],
+		child_info: ChildInfo,
 		keys: I,
 	) -> error::Result<StorageProof> where
 		I: IntoIterator,
 		I::Item: AsRef<[u8]>,
 	{
 		self.state_at(id)
-			.and_then(|state| prove_child_read(state, storage_key, keys)
+			.and_then(|state| prove_child_read(state, storage_key, child_info, keys)
 				.map_err(Into::into))
 	}
 
@@ -1004,7 +1010,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				overlay.commit_prospective();
 
 				let (top, children) = overlay.into_committed();
-				let children = children.map(|(sk, it)| (sk, it.collect())).collect();
+				let children = children.map(|(sk, it)| (sk, it.0.collect())).collect();
 				if import_headers.post().state_root() != &storage_update.1 {
 					return Err(error::Error::InvalidStateRoot);
 				}

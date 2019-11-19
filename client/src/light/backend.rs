@@ -21,6 +21,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use parking_lot::{RwLock, Mutex};
 
+use primitives::storage::{ChildInfo, OwnedChildInfo};
 use sr_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
 use state_machine::{Backend as StateBackend, TrieBackend, backend::InMemory as InMemoryState, ChangesTrieTransaction};
 use sr_primitives::traits::{Block as BlockT, NumberFor, Zero, Header};
@@ -284,18 +285,17 @@ where
 		check_genesis_storage(&top, &children)?;
 
 		// this is only called when genesis block is imported => shouldn't be performance bottleneck
-		let mut storage: HashMap<Option<Vec<u8>>, StorageOverlay> = HashMap::new();
+		let mut storage: HashMap<Option<(Vec<u8>, OwnedChildInfo)>, StorageOverlay> = HashMap::new();
 		storage.insert(None, top);
 
 		// create a list of children keys to re-compute roots for
-		let child_delta = children.keys()
-			.cloned()
-			.map(|storage_key| (storage_key, None))
+		let child_delta = children.iter()
+			.map(|(storage_key, (_m, child_info))| (storage_key.clone(), None, child_info.clone()))
 			.collect::<Vec<_>>();
 
 		// make sure to persist the child storage
-		for (child_key, child_storage) in children {
-			storage.insert(Some(child_key), child_storage);
+		for (child_key, (child_storage, child_info)) in children {
+			storage.insert(Some((child_key, child_info)), child_storage);
 		}
 
 		let storage_update: InMemoryState<H> = storage.into();
@@ -357,10 +357,15 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 		}
 	}
 
-	fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
+	fn child_storage(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		key: &[u8],
+	) -> ClientResult<Option<Vec<u8>>> {
 		match *self {
 			GenesisOrUnavailableState::Genesis(ref state) =>
-				Ok(state.child_storage(storage_key, key).expect(IN_MEMORY_EXPECT_PROOF)),
+				Ok(state.child_storage(storage_key, child_info, key).expect(IN_MEMORY_EXPECT_PROOF)),
 			GenesisOrUnavailableState::Unavailable => Err(ClientError::NotAvailableOnLightClient),
 		}
 	}
@@ -379,10 +384,15 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 		}
 	}
 
-
-	fn for_keys_in_child_storage<A: FnMut(&[u8])>(&self, storage_key: &[u8], action: A) {
+	fn for_keys_in_child_storage<A: FnMut(&[u8])>(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		action: A,
+	) {
 		match *self {
-			GenesisOrUnavailableState::Genesis(ref state) => state.for_keys_in_child_storage(storage_key, action),
+			GenesisOrUnavailableState::Genesis(ref state) =>
+				state.for_keys_in_child_storage(storage_key, child_info, action),
 			GenesisOrUnavailableState::Unavailable => (),
 		}
 	}
@@ -390,12 +400,13 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 	fn for_child_keys_with_prefix<A: FnMut(&[u8])>(
 		&self,
 		storage_key: &[u8],
+		child_info: ChildInfo,
 		prefix: &[u8],
 		action: A,
 	) {
 		match *self {
 			GenesisOrUnavailableState::Genesis(ref state) =>
-				state.for_child_keys_with_prefix(storage_key, prefix, action),
+				state.for_child_keys_with_prefix(storage_key, child_info, prefix, action),
 			GenesisOrUnavailableState::Unavailable => (),
 		}
 	}
@@ -411,13 +422,18 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 		}
 	}
 
-	fn child_storage_root<I>(&self, key: &[u8], delta: I) -> (Vec<u8>, bool, Self::Transaction)
+	fn child_storage_root<I>(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		delta: I,
+	) -> (Vec<u8>, bool, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
 		match *self {
 			GenesisOrUnavailableState::Genesis(ref state) => {
-				let (root, is_equal, _) = state.child_storage_root(key, delta);
+				let (root, is_equal, _) = state.child_storage_root(storage_key, child_info, delta);
 				(root, is_equal, ())
 			},
 			GenesisOrUnavailableState::Unavailable => (H::Out::default().as_ref().to_vec(), true, ()),

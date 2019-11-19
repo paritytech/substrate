@@ -510,8 +510,8 @@ where
 		check_genesis_storage(&top, &children)?;
 
 		let child_delta = children.into_iter()
-			.map(|(storage_key, child_overlay)|
-				(storage_key, child_overlay.into_iter().map(|(k, v)| (k, Some(v)))));
+			.map(|(storage_key, child_content)|
+				(storage_key, child_content.0.into_iter().map(|(k, v)| (k, Some(v))), child_content.1));
 
 		let (root, transaction) = self.old_state.full_storage_root(
 			top.into_iter().map(|(k, v)| (k, Some(v))),

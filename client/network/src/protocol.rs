@@ -23,7 +23,7 @@ use libp2p::{Multiaddr, PeerId};
 use libp2p::core::{ConnectedPoint, nodes::Substream, muxing::StreamMuxerBox};
 use libp2p::swarm::{ProtocolsHandler, IntoProtocolsHandler};
 use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters};
-use primitives::storage::StorageKey;
+use primitives::storage::{StorageKey, ChildInfo};
 use consensus::{
 	BlockOrigin,
 	block_validation::BlockAnnounceValidator,
@@ -218,12 +218,14 @@ impl<'a, B: BlockT> LightDispatchNetwork<B> for LightDispatchIn<'a> {
 		id: RequestId,
 		block: <B as BlockT>::Hash,
 		storage_key: Vec<u8>,
+		unique_id: Vec<u8>,
 		keys: Vec<Vec<u8>>,
 	) {
 		let message: Message<B> = message::generic::Message::RemoteReadChildRequest(message::RemoteReadChildRequest {
 			id,
 			block,
 			storage_key,
+			unique_id,
 			keys,
 		});
 
@@ -1463,6 +1465,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		let proof = match self.context_data.chain.read_child_proof(
 			&request.block,
 			&request.storage_key,
+			ChildInfo::new_default(&request.unique_id[..], None),
 			&request.keys,
 		) {
 			Ok(proof) => proof,

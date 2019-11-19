@@ -368,6 +368,8 @@ pub mod generic {
 		pub block: H,
 		/// Child Storage key.
 		pub storage_key: Vec<u8>,
+		/// Child trie associated unique id.
+		pub unique_id: Vec<u8>,
 		/// Storage key.
 		pub keys: Vec<Vec<u8>>,
 	}

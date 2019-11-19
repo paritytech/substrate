@@ -29,6 +29,7 @@ pub use generic_test_client::*;
 pub use runtime;
 
 use primitives::sr25519;
+use primitives::storage::{ChildInfo, OwnedChildInfo};
 use runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
 use sr_primitives::traits::{Block as BlockT, Header as HeaderT, Hash as HashT};
 
@@ -90,7 +91,7 @@ pub struct GenesisParameters {
 	support_changes_trie: bool,
 	heap_pages_override: Option<u64>,
 	extra_storage: HashMap<Vec<u8>, Vec<u8>>,
-	child_extra_storage: HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>,
+	child_extra_storage: HashMap<Vec<u8>, (HashMap<Vec<u8>, Vec<u8>>, OwnedChildInfo)>,
 }
 
 impl GenesisParameters {
@@ -122,7 +123,7 @@ impl generic_test_client::GenesisInit for GenesisParameters {
 
 		let child_roots = storage.1.iter().map(|(sk, child_map)| {
 			let state_root = <<<runtime::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
-				child_map.clone().into_iter().collect()
+				child_map.0.clone().into_iter().collect()
 			);
 			(sk.clone(), state_root.encode())
 		});
@@ -181,6 +182,7 @@ pub trait TestClientBuilderExt<B>: Sized {
 	fn add_extra_child_storage<SK: Into<Vec<u8>>, K: Into<Vec<u8>>, V: Into<Vec<u8>>>(
 		self,
 		storage_key: SK,
+		child_info: ChildInfo,
 		key: K,
 		value: V,
 	) -> Self;
@@ -227,6 +229,7 @@ impl<B> TestClientBuilderExt<B> for TestClientBuilder<
 	fn add_extra_child_storage<SK: Into<Vec<u8>>, K: Into<Vec<u8>>, V: Into<Vec<u8>>>(
 		mut self,
 		storage_key: SK,
+		child_info: ChildInfo,
 		key: K,
 		value: V,
 	) -> Self {
@@ -236,8 +239,8 @@ impl<B> TestClientBuilderExt<B> for TestClientBuilder<
 		assert!(!key.is_empty());
 		self.genesis_init_mut().child_extra_storage
 			.entry(storage_key)
-			.or_insert_with(Default::default)
-			.insert(key, value.into());
+			.or_insert_with(|| (Default::default(), child_info.to_owned()))
+			.0.insert(key, value.into());
 		self
 	}
 

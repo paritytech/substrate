@@ -46,7 +46,10 @@ pub type StorageOverlay = std::collections::HashMap<Vec<u8>, Vec<u8>>;
 
 /// A set of key value pairs for children storage;
 #[cfg(feature = "std")]
-pub type ChildrenStorageOverlay = std::collections::HashMap<Vec<u8>, StorageOverlay>;
+pub type ChildrenStorageOverlay = std::collections::HashMap<
+	Vec<u8>,
+	(StorageOverlay, OwnedChildInfo),
+>;
 
 /// Storage change set
 #[derive(RuntimeDebug)]
@@ -157,6 +160,7 @@ impl<'a> ChildStorageKey<'a> {
 	}
 }
 
+#[derive(Clone, Copy)]
 /// Information related to a child trie query.
 pub enum ChildInfo<'a> {
 	Default(ChildTrie<'a>),
@@ -189,6 +193,48 @@ impl<'a> ChildInfo<'a> {
 		}
 	}
 
+	/// Create child info from a linear byte encoded value and a type. 
+	pub fn resolve_child_info(child_type: u32, data: &'a[u8]) -> Option<Self> {
+		match child_type {
+			x if x == ChildType::CryptoUniqueId as u32 => Some(ChildInfo::new_default(data, None)),
+			x if x == ChildType::CryptoUniqueIdRoot32Api as u32 => if data.len() >= 32 {
+				Some(ChildInfo::new_default(&data[32..], Some(&data[..32])))
+			} else { None },
+			_ => None,
+		}
+	}
+
+	/// Return a single byte vector containing child info content and this child info type.
+	/// This can be use as input for `resolve_child_info`.
+	pub fn info(&self) -> (Vec<u8>, u32) {
+		match self {
+			ChildInfo::Default(ChildTrie {
+				root,
+				unique_id,
+			}) => {
+				if let Some(root) = root {
+					if root.len() == 32 {
+						let mut buf = root.to_vec();
+						buf.extend_from_slice(unique_id);
+						return (buf, ChildType::CryptoUniqueIdRoot32Api as u32);
+					}
+				}
+				(unique_id.to_vec(), ChildType::CryptoUniqueId as u32)
+			},
+		}
+	}
+
+}
+
+/// Type of child, this can be different child usage
+/// of api variant, it is not strictly speaking different
+/// child kind.
+#[repr(u32)]
+pub enum ChildType {
+	/// Default, it uses a cryptographic strong unique id as input.
+	CryptoUniqueId = 1,
+	/// Default, but with root send when querying. Root is a 32 byte hash.
+	CryptoUniqueIdRoot32Api = 2,
 }
 
 impl OwnedChildInfo {
@@ -216,6 +262,7 @@ impl OwnedChildInfo {
 /// It share its trie node storage with any kind of key,
 /// and its unique id needs to be collision free (eg strong
 /// crypto hash).
+#[derive(Clone, Copy)]
 pub struct ChildTrie<'a> {
 	/// If root was fetch it can be memoïzed in this field
 	/// to avoid querying it explicitly.

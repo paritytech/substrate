@@ -36,7 +36,7 @@ use rstd::ops::Deref;
 #[cfg(feature = "std")]
 use primitives::{
 	crypto::Pair, traits::KeystoreExt, offchain::OffchainExt, hexdisplay::HexDisplay,
-	storage::ChildStorageKey,
+	storage::ChildStorageKey, storage::ChildInfo,
 };
 
 use primitives::{
@@ -93,11 +93,14 @@ pub trait Storage {
 	fn child_get(
 		&self,
 		child_storage_key: &[u8],
-		unique_id: &[u8],
+		child_definition: &[u8],
+		child_type: u32,
 		key: &[u8],
 	) -> Option<Vec<u8>> {
 		let storage_key = child_storage_key_or_panic(child_storage_key);
-		self.child_storage(storage_key, unique_id, key).map(|s| s.to_vec())
+		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
+			.expect("Invalid child definition");
+		self.child_storage(storage_key, child_info, key).map(|s| s.to_vec())
 	}
 
 	/// Get `key` from storage, placing the value into `value_out` and return the number of
@@ -123,13 +126,16 @@ pub trait Storage {
 	fn child_read(
 		&self,
 		child_storage_key: &[u8],
-		unique_id: &[u8],
+		child_definition: &[u8],
+		child_type: u32,
 		key: &[u8],
 		value_out: &mut [u8],
 		value_offset: u32,
 	) -> Option<u32> {
 		let storage_key = child_storage_key_or_panic(child_storage_key);
-		self.child_storage(storage_key, unique_id, key)
+		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
+			.expect("Invalid child definition");
+		self.child_storage(storage_key, child_info, key)
 			.map(|value| {
 				let value_offset = value_offset as usize;
 				let data = &value[value_offset.min(value.len())..];
@@ -149,12 +155,15 @@ pub trait Storage {
 	fn child_set(
 		&mut self,
 		child_storage_key: &[u8],
-		unique_id: &[u8],
+		child_definition: &[u8],
+		child_type: u32,
 		key: &[u8],
 		value: &[u8],
 	) {
 		let storage_key = child_storage_key_or_panic(child_storage_key);
-		self.set_child_storage(storage_key, unique_id, key.to_vec(), value.to_vec());
+		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
+			.expect("Invalid child definition");
+		self.set_child_storage(storage_key, child_info, key.to_vec(), value.to_vec());
 	}
 
 	/// Clear the storage of the given `key` and its value.
@@ -166,21 +175,27 @@ pub trait Storage {
 	fn child_clear(
 		&mut self,
 		child_storage_key: &[u8],
-		unique_id: &[u8],
+		child_definition: &[u8],
+		child_type: u32,
 		key: &[u8],
 	) {
 		let storage_key = child_storage_key_or_panic(child_storage_key);
-		self.clear_child_storage(storage_key, unique_id, key);
+		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
+			.expect("Invalid child definition");
+		self.clear_child_storage(storage_key, child_info, key);
 	}
 
 	/// Clear an entire child storage.
 	fn child_storage_kill(
 		&mut self,
 		child_storage_key: &[u8],
-		unique_id: &[u8],
+		child_definition: &[u8],
+		child_type: u32,
 	) {
 		let storage_key = child_storage_key_or_panic(child_storage_key);
-		self.kill_child_storage(storage_key, unique_id);
+		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
+			.expect("Invalid child definition");
+		self.kill_child_storage(storage_key, child_info);
 	}
 
 	/// Check whether the given `key` exists in storage.
@@ -192,11 +207,14 @@ pub trait Storage {
 	fn child_exists(
 		&self,
 		child_storage_key: &[u8],
-		unique_id: &[u8],
+		child_definition: &[u8],
+		child_type: u32,
 		key: &[u8],
 	) -> bool {
 		let storage_key = child_storage_key_or_panic(child_storage_key);
-		self.exists_child_storage(storage_key, unique_id, key)
+		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
+			.expect("Invalid child definition");
+		self.exists_child_storage(storage_key, child_info, key)
 	}
 
 	/// Clear the storage of each key-value pair where the key starts with the given `prefix`.
@@ -208,11 +226,14 @@ pub trait Storage {
 	fn child_clear_prefix(
 		&mut self,
 		child_storage_key: &[u8],
-		unique_id: &[u8],
+		child_definition: &[u8],
+		child_type: u32,
 		prefix: &[u8],
 	) {
 		let storage_key = child_storage_key_or_panic(child_storage_key);
-		self.clear_child_prefix(storage_key, unique_id, prefix);
+		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
+			.expect("Invalid child definition");
+		self.clear_child_prefix(storage_key, child_info, prefix);
 	}
 
 	/// "Commit" all existing operations and compute the resulting storage root.
@@ -224,10 +245,13 @@ pub trait Storage {
 	fn child_root(
 		&mut self,
 		child_storage_key: &[u8],
-		unique_id: &[u8],
+		child_definition: &[u8],
+		child_type: u32,
 	) -> Vec<u8> {
 		let storage_key = child_storage_key_or_panic(child_storage_key);
-		self.child_storage_root(storage_key, unique_id)
+		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
+			.expect("Invalid child definition");
+		self.child_storage_root(storage_key, child_info)
 	}
 
 	/// "Commit" all existing operations and get the resulting storage change root.

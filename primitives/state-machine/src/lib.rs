@@ -629,7 +629,7 @@ where
 	let proving_backend = proving_backend::ProvingBackend::<_, H>::new(trie_backend);
 	for key in keys.into_iter() {
 		proving_backend
-			.child_storage(storage_key, child_info, key.as_ref())
+			.child_storage(storage_key, child_info.clone(), key.as_ref())
 			.map_err(|e| Box::new(e) as Box<dyn Error>)?;
 	}
 	Ok(proving_backend.extract_proof())
@@ -1007,22 +1007,26 @@ mod tests {
 
 		ext.set_child_storage(
 			ChildStorageKey::from_slice(b":child_storage:default:testchild").unwrap(),
+			CHILD_INFO_1,
 			b"abc".to_vec(),
 			b"def".to_vec()
 		);
 		assert_eq!(
 			ext.child_storage(
 				ChildStorageKey::from_slice(b":child_storage:default:testchild").unwrap(),
+				CHILD_INFO_1,
 				b"abc"
 			),
 			Some(b"def".to_vec())
 		);
 		ext.kill_child_storage(
-			ChildStorageKey::from_slice(b":child_storage:default:testchild").unwrap()
+			ChildStorageKey::from_slice(b":child_storage:default:testchild").unwrap(),
+			CHILD_INFO_1,
 		);
 		assert_eq!(
 			ext.child_storage(
 				ChildStorageKey::from_slice(b":child_storage:default:testchild").unwrap(),
+				CHILD_INFO_1,
 				b"abc"
 			),
 			None
@@ -1058,6 +1062,7 @@ mod tests {
 		let remote_proof = prove_child_read(
 			remote_backend,
 			b":child_storage:default:sub1",
+			CHILD_INFO_1,
 			&[b"value3"],
 		).unwrap();
 		let local_result1 = read_child_proof_check::<Blake2Hasher, _>(

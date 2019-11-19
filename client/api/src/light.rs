@@ -26,7 +26,7 @@ use sr_primitives::{
     },
     generic::BlockId
 };
-use primitives::{ChangesTrieConfiguration};
+use primitives::ChangesTrieConfiguration;
 use state_machine::StorageProof;
 use header_metadata::HeaderMetadata;
 use crate::{
@@ -86,6 +86,8 @@ pub struct RemoteReadChildRequest<Header: HeaderT> {
 	pub header: Header,
 	/// Storage key for child.
 	pub storage_key: Vec<u8>,
+	/// Child trie associated unique id.
+	pub unique_id: Vec<u8>,
 	/// Child storage key to read.
 	pub keys: Vec<Vec<u8>>,
 	/// Number of times to retry request. None means that default RETRY_COUNT is used.
