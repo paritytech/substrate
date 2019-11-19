@@ -63,5 +63,8 @@ mod tests {
 			serde_json::to_string(&info).unwrap(),
 			r#"{"weight":5,"class":"normal","partialFee":1000000}"#,
 		);
+
+		// should not panic
+		serde_json::to_value(&info).unwrap();
 	}
 }
