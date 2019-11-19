@@ -215,19 +215,15 @@ fn decl_runtime_metadata<'a>(
 ) -> TokenStream2 {
     let modules_tokens = module_declarations
         .filter_map(|module_declaration| {
-            let parts = module_declaration.module_parts();
-            let parts_len = parts.len();
-            let filtered_names: Vec<_> = parts
-                .into_iter()
-                .filter(|part| part.name != "Module")
-                .map(|part| part.name.clone())
-                .collect();
-            // Theres no `Module` entry
-            if filtered_names.len() == parts_len {
-                None
-            } else {
-                Some((module_declaration, filtered_names))
-            }
+			module_declaration.find_part("Module").map(|_| {
+				let filtered_names: Vec<_> = module_declaration
+					.module_parts()
+					.into_iter()
+					.filter(|part| part.name != "Module")
+					.map(|part| part.name.clone())
+					.collect();
+				(module_declaration, filtered_names)
+			})
         })
         .map(|(module_declaration, filtered_names)| {
             let module = &module_declaration.module;
