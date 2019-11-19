@@ -182,13 +182,21 @@ impl Parse for ModuleDeclaration {
                 match entry {
                     ModuleEntry::Part(part) if has_default => {
                         if part.is_included_in_default() {
-                            let msg = format!("`{}` is already included in `default`. Either remove `default` or remove `{}`", part.name, part.name);
+							let msg =
+								format!(
+									"`{}` is already included in `default`. Either remove `default` or remove `{}`",
+									part.name,
+									part.name
+								);
                             return Err(Error::new(part.name.span(), msg));
                         }
                     }
                     ModuleEntry::Part(part) => {
                         if !resolved.insert(part.name.clone()) {
-                            let msg = format!("`{}` was already declared before. Please remove the duplicate declaration", part.name);
+                            let msg = format!(
+								"`{}` was already declared before. Please remove the duplicate declaration",
+								part.name
+							);
                             return Err(Error::new(part.name.span(), msg));
                         }
                     }
