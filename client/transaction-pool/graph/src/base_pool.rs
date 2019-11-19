@@ -83,8 +83,7 @@ pub struct PruneStatus<Hash, Ex> {
 }
 
 /// Immutable transaction
-#[cfg_attr(test, derive(Clone))]
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Clone)]
 pub struct Transaction<Hash, Extrinsic> {
 	/// Raw extrinsic representing that transaction.
 	pub data: Extrinsic,

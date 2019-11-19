@@ -38,7 +38,7 @@ use sr_primitives::{
 use crate::validated_pool::{ValidatedPool, ValidatedTransaction};
 
 /// Modification notification event stream type;
-pub type EventStream = mpsc::UnboundedReceiver<()>;
+pub type EventStream<B> = mpsc::UnboundedReceiver<base::Transaction<ExHash<B>, ExtrinsicFor<B>>>;
 
 /// Extrinsic hash type for a pool.
 pub type ExHash<A> = <A as ChainApi>::Hash;
@@ -280,7 +280,7 @@ impl<B: ChainApi> Pool<B> {
 	}
 
 	/// Return an event stream of transactions imported to the pool.
-	pub fn import_notification_stream(&self) -> EventStream {
+	pub fn import_notification_stream(&self) -> EventStream<B> {
 		self.validated_pool.import_notification_stream()
 	}
 
