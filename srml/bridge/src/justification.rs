@@ -26,13 +26,12 @@ use rstd::collections::{
 	btree_map::BTreeMap,
 	btree_set::BTreeSet,
 };
+
+use sr_primitives::app_crypto::RuntimeAppPublic;
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{NumberFor, Block as BlockT, Header as HeaderT};
-use runtime_io;
 use primitives::{H256, Blake2Hasher};
 
-// NOTE: Actually, I don't think I can use Authority pair
-// It's cfg(std) in grandpa-primitives
 use fg_primitives::{AuthorityId, RoundNumber, SetId as SetIdNumber, AuthoritySignature};
 
 // Should I make this a part of fg_primitives?
@@ -252,8 +251,8 @@ fn check_message_sig<Block: BlockT>(
 ) -> Result<(), ()> {
 	let as_public = id.clone();
 	let encoded_raw = localized_payload(round, set_id, message);
-	if runtime_io::crypto::ed25519_verify(signature, &encoded_raw, &as_public.into()) {
-	// if AuthorityPair::verify(signature, &encoded_raw, &as_public) {
+	// Since `app::Public` implements `RuntimeAppPublic` we can call `verify()`
+	if as_public.verify(&encoded_raw, signature) {
 		Ok(())
 	} else {
 		// debug!(target: "afg", "Bad signature on message from {:?}", id);
