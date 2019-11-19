@@ -44,6 +44,7 @@ pretty_assertions = "0.6.1"
 hex-literal = "0.2.1"
 rand = "0.7.2"
 criterion = "0.2.11"
+serde_json = "1.0"
 
 [[bench]]
 name = "bench"

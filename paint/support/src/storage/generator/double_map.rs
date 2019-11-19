@@ -89,6 +89,14 @@ where
 {
 	type Query = G::Query;
 
+	fn hashed_key_for<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> Vec<u8>
+	where
+		KArg1: EncodeLike<K1>,
+		KArg2: EncodeLike<K2>,
+	{
+		Self::storage_double_map_final_key(k1, k2)
+	}
+
 	fn exists<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> bool
 	where
 		KArg1: EncodeLike<K1>,
