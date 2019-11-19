@@ -67,7 +67,7 @@ use prost::Message;
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{Block as BlockT, ProvideRuntimeApi};
 
-type Interval = Box<dyn Stream<Item = ()> + Unpin>;
+type Interval = Box<dyn Stream<Item = ()> + Unpin + Send + Sync>;
 
 mod error;
 /// Dht payload schemas generated from Protobuf definitions via Prost crate in build.rs.
