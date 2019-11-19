@@ -31,7 +31,9 @@
 //!
 //! Currently we provide a single `Telemetry` variant for `Receiver`
 
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{Duration, Instant};
 
 use parking_lot::Mutex;
 use tracing_core::{event::Event, Level, metadata::Metadata, span::{Attributes, Id, Record}, subscriber::Subscriber};
@@ -43,23 +45,22 @@ pub enum Receiver {
 	Telemetry,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct SpanDatum {
 	id: u64,
 	name: &'static str,
 	target: String,
 	line: u32,
-	start_time: u64,
-	overall_time: u64,
+	start_time: Instant,
+	overall_time: Duration,
 }
 
 /// Responsible for assigning ids to new spans, which are not re-used.
 pub struct ProfilingSubscriber {
 	next_id: AtomicU64,
-	clock: quanta::Clock,
 	targets: Vec<(String, Level)>,
 	receiver: Receiver,
-	span_data: Mutex<Vec<SpanDatum>>,
+	span_data: Mutex<HashMap<u64, SpanDatum>>,
 }
 
 impl ProfilingSubscriber {
@@ -70,10 +71,9 @@ impl ProfilingSubscriber {
 		let targets: Vec<_> = targets.split(',').map(|s| parse_target(s)).collect();
 		ProfilingSubscriber {
 			next_id: AtomicU64::new(1),
-			clock: quanta::Clock::new(),
 			targets,
 			receiver,
-			span_data: Mutex::new(Vec::new()),
+			span_data: Mutex::new(HashMap::new()),
 		}
 	}
 }
@@ -111,13 +111,14 @@ impl Subscriber for ProfilingSubscriber {
 	fn new_span(&self, attrs: &Attributes<'_>) -> Id {
 		let id = self.next_id.fetch_add(1, Ordering::Relaxed);
 		let span_datum = SpanDatum {
-			id: id as u64,
+			id: id,
 			name: attrs.metadata().name(),
 			target: attrs.metadata().target().to_string(),
 			line: attrs.metadata().line().unwrap_or(0),
-			..Default::default()
+			start_time: Instant::now(),
+			overall_time: Duration::from_nanos(0),
 		};
-		self.span_data.lock().push(span_datum);
+		self.span_data.lock().insert(id, span_datum);
 		Id::from_u64(id)
 	}
 
@@ -128,30 +129,28 @@ impl Subscriber for ProfilingSubscriber {
 	fn event(&self, _event: &Event<'_>) {}
 
 	fn enter(&self, span: &Id) {
-		let start_time = self.clock.now();
-		let mut sd = self.span_data.lock();
-		if let Ok(idx) = sd.binary_search_by_key(&span.into_u64(), |s| s.id) {
-			sd[idx].start_time = start_time;
+		let mut span_data = self.span_data.lock();
+		let start_time = Instant::now();
+		if let Some(mut s) = span_data.get_mut(&span.into_u64()) {
+			s.start_time = start_time;
 		} else {
 			log::warn!("Tried to enter span {:?} that has already been closed!", span);
 		}
 	}
 
 	fn exit(&self, span: &Id) {
-		let end_time = self.clock.now();
-		{
-			let mut sd = self.span_data.lock();
-			if let Ok(idx) = sd.binary_search_by_key(&span.into_u64(), |s| s.id) {
-				sd[idx].overall_time = end_time - sd[idx].start_time + sd[idx].overall_time;
-			} else { return; }
+		let mut span_data = self.span_data.lock();
+		let end_time = Instant::now();
+		if let Some(mut s) = span_data.get_mut(&span.into_u64()) {
+			s.overall_time = end_time - s.start_time + s.overall_time;
 		}
 	}
 
 	fn try_close(&self, span: Id) -> bool {
-		let mut sd = self.span_data.lock();
-		if let Ok(idx) = sd.binary_search_by_key(&span.into_u64(), |s| s.id) {
-			self.send_span(sd.remove(idx));
-		}
+		let mut span_data = self.span_data.lock();
+		if let Some(data) = span_data.remove(&span.into_u64()) {
+			self.send_span(data);
+		};
 		true
 	}
 }
@@ -169,6 +168,6 @@ fn send_telemetry(span_datum: SpanDatum) {
 		"name" => span_datum.name,
 		"target" => span_datum.target,
 		"line" => span_datum.line,
-		"time" => span_datum.overall_time,
+		"time" => span_datum.overall_time.as_nanos(),
 	);
 }
