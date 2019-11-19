@@ -73,7 +73,7 @@ pub use aura_primitives::{
 	ConsensusLog, AuraApi, AURA_ENGINE_ID,
 	inherents::{
 		InherentType as AuraInherent,
-		AuraInherentData,
+		AuraInherentData, INHERENT_IDENTIFIER, InherentDataProvider,
 	},
 };
 pub use consensus_common::SyncOracle;
@@ -660,9 +660,9 @@ fn register_aura_inherent_data_provider(
 	inherent_data_providers: &InherentDataProviders,
 	slot_duration: u64,
 ) -> Result<(), consensus_common::Error> {
-	if !inherent_data_providers.has_provider(&aura_primitives::inherents::INHERENT_IDENTIFIER) {
+	if !inherent_data_providers.has_provider(&INHERENT_IDENTIFIER) {
 		inherent_data_providers
-			.register_provider(aura_primitives::inherents::InherentDataProvider::new(slot_duration))
+			.register_provider(InherentDataProvider::new(slot_duration))
 			.map_err(Into::into)
 			.map_err(consensus_common::Error::InherentData)
 	} else {
