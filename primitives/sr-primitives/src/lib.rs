@@ -348,7 +348,7 @@ impl From<ed25519::Signature> for AnySignature {
 
 #[derive(Eq, PartialEq, Clone, Copy, Decode, Encode, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize))]
-/// Reason why an extrinsic couldn't be included into a block.
+/// Reason why an extrinsic must not be included in a block.
 pub enum InclusionError {
 	/// Any error to do with the transaction validity.
 	Validity(transaction_validity::TransactionValidityError),
