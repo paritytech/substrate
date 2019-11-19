@@ -26,7 +26,9 @@ use syn::{Ident, Result};
 
 pub fn construct_runtime(input: TokenStream) -> TokenStream {
     let definition = syn::parse_macro_input!(input as RuntimeDefinition);
-    construct_runtime_parsed(definition).unwrap_or_else(|e| e.to_compile_error()).into()
+    construct_runtime_parsed(definition)
+        .unwrap_or_else(|e| e.to_compile_error())
+        .into()
 }
 
 fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream2> {
@@ -123,9 +125,7 @@ fn decl_validate_unsigned<'a>(
     scrate: &'a TokenStream2,
 ) -> TokenStream2 {
     let modules_tokens = module_declarations
-        .filter(|module_declaration| {
-            module_declaration.exists_part("ValidateUnsigned")
-        })
+        .filter(|module_declaration| module_declaration.exists_part("ValidateUnsigned"))
         .map(|module_declaration| &module_declaration.name);
     quote!(
         #scrate::impl_outer_validate_unsigned!(
@@ -170,14 +170,15 @@ fn decl_outer_config<'a>(
 ) -> TokenStream2 {
     let modules_tokens = module_declarations
         .filter_map(|module_declaration| {
-			module_declaration
-				.find_part("Config")
-                .map(|part| {
-					let transformed_generics: Vec<_> = part.generics.params.iter()
+            module_declaration.find_part("Config").map(|part| {
+                let transformed_generics: Vec<_> = part
+                    .generics
+                    .params
+                    .iter()
                     .map(|param| quote!(<#param>))
                     .collect();
-					(module_declaration, transformed_generics)
-				})
+                (module_declaration, transformed_generics)
+            })
         })
         .map(|(module_declaration, generics)| {
             let module = &module_declaration.module;
@@ -207,15 +208,15 @@ fn decl_runtime_metadata<'a>(
 ) -> TokenStream2 {
     let modules_tokens = module_declarations
         .filter_map(|module_declaration| {
-			module_declaration.find_part("Module").map(|_| {
-				let filtered_names: Vec<_> = module_declaration
-					.module_parts()
-					.into_iter()
-					.filter(|part| part.name != "Module")
-					.map(|part| part.name.clone())
-					.collect();
-				(module_declaration, filtered_names)
-			})
+            module_declaration.find_part("Module").map(|_| {
+                let filtered_names: Vec<_> = module_declaration
+                    .module_parts()
+                    .into_iter()
+                    .filter(|part| part.name != "Module")
+                    .map(|part| part.name.clone())
+                    .collect();
+                (module_declaration, filtered_names)
+            })
         })
         .map(|(module_declaration, filtered_names)| {
             let module = &module_declaration.module;
@@ -241,9 +242,7 @@ fn decl_outer_dispatch<'a>(
     scrate: &'a TokenStream2,
 ) -> TokenStream2 {
     let modules_tokens = module_declarations
-        .filter(|module_declaration| {
-			module_declaration.exists_part("Call")
-        })
+        .filter(|module_declaration| module_declaration.exists_part("Call"))
         .map(|module_declaration| {
             let module = &module_declaration.module;
             let name = &module_declaration.name;
@@ -330,9 +329,10 @@ fn decl_all_modules<'a>(
         names.push(&module_declaration.name);
     }
     // Make nested tuple structure like (((Babe, Consensus), Grandpa), ...)
-    let all_modules = names.iter().fold(TokenStream2::default(), |combined, name| {
-		quote!((#name, #combined))
-	});
+    let all_modules = names.iter().fold(
+        TokenStream2::default(),
+        |combined, name| quote!((#name, #combined)),
+    );
 
     quote!(
         pub type System = system::Module<#runtime>;

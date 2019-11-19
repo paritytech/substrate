@@ -20,7 +20,7 @@ use std::collections::HashSet;
 use syn::{
     parse::{Parse, ParseStream},
     spanned::Spanned,
-    token, Ident, Result, Token, Error
+    token, Error, Ident, Result, Token,
 };
 
 mod keyword {
@@ -62,7 +62,7 @@ impl Parse for WhereSection {
         input.parse::<token::Where>()?;
         let mut definitions = Vec::new();
         while !input.peek(token::Brace) {
-			let definition: WhereDefinition = input.parse()?;
+            let definition: WhereDefinition = input.parse()?;
             definitions.push(definition);
             if !input.peek(Token![,]) {
                 if !input.peek(token::Brace) {
@@ -72,21 +72,27 @@ impl Parse for WhereSection {
             }
             input.parse::<Token![,]>()?;
         }
-		let block = remove_kind(input, WhereKind::Block, &mut definitions)?.value;
-		let node_block = remove_kind(input, WhereKind::NodeBlock, &mut definitions)?.value;
-		let unchecked_extrinsic = remove_kind(input, WhereKind::UncheckedExtrinsic, &mut definitions)?.value;
-		if let Some(WhereDefinition {ref kind_span, ref kind, ..}) = definitions.first() {
-			let msg = format!(
-				"`{:?}` was declared above. Please use exactly one delcataion for `{:?}`.",
-				kind, kind
-			);
-			return Err(Error::new(*kind_span, msg));
-	}
+        let block = remove_kind(input, WhereKind::Block, &mut definitions)?.value;
+        let node_block = remove_kind(input, WhereKind::NodeBlock, &mut definitions)?.value;
+        let unchecked_extrinsic =
+            remove_kind(input, WhereKind::UncheckedExtrinsic, &mut definitions)?.value;
+        if let Some(WhereDefinition {
+            ref kind_span,
+            ref kind,
+            ..
+        }) = definitions.first()
+        {
+            let msg = format!(
+                "`{:?}` was declared above. Please use exactly one delcataion for `{:?}`.",
+                kind, kind
+            );
+            return Err(Error::new(*kind_span, msg));
+        }
         Ok(Self {
             block,
             node_block,
-			unchecked_extrinsic,
-		})
+            unchecked_extrinsic,
+        })
     }
 }
 
@@ -99,33 +105,39 @@ pub enum WhereKind {
 
 #[derive(Debug)]
 pub struct WhereDefinition {
-	pub kind_span: Span,
-	pub kind: WhereKind,
+    pub kind_span: Span,
+    pub kind: WhereKind,
     pub value: syn::TypePath,
 }
 
 impl Parse for WhereDefinition {
     fn parse(input: ParseStream) -> Result<Self> {
-		let lookahead = input.lookahead1();
+        let lookahead = input.lookahead1();
         let (kind_span, kind) = if lookahead.peek(keyword::Block) {
             (input.parse::<keyword::Block>()?.span(), WhereKind::Block)
         } else if lookahead.peek(keyword::NodeBlock) {
-            (input.parse::<keyword::NodeBlock>()?.span(), WhereKind::NodeBlock)
+            (
+                input.parse::<keyword::NodeBlock>()?.span(),
+                WhereKind::NodeBlock,
+            )
         } else if lookahead.peek(keyword::UncheckedExtrinsic) {
-			(input.parse::<keyword::UncheckedExtrinsic>()?.span(), WhereKind::UncheckedExtrinsic)
-		} else {
-            return Err(lookahead.error())
-		};
+            (
+                input.parse::<keyword::UncheckedExtrinsic>()?.span(),
+                WhereKind::UncheckedExtrinsic,
+            )
+        } else {
+            return Err(lookahead.error());
+        };
 
-		Ok(Self {
-			kind_span,
+        Ok(Self {
+            kind_span,
             kind,
             value: {
                 let _: Token![=] = input.parse()?;
                 input.parse()?
             },
         })
-	}
+    }
 }
 
 #[derive(Debug)]
@@ -155,35 +167,35 @@ impl Parse for ModuleDeclaration {
             Some(input.parse()?)
         } else {
             None
-		};
-		let parsed = Self {
+        };
+        let parsed = Self {
             name,
             module,
             instance,
             details,
-		};
-		if let Some(ref details) = parsed.details {
-			let parts = &details.content.inner;
-			let mut resolved = HashSet::new();
-			let has_default = parts.into_iter().any(|m| m.is_default());
-			for entry in parts {
-				match entry {
-					ModuleEntry::Part(part) if has_default => {
-						if part.is_included_in_default() {
-							let msg = format!("`{}` is already included in `default`. Either remove `default` or remove `{}`", part.name, part.name);
-							return Err(Error::new(part.name.span(), msg));
-						}
-					}
-					ModuleEntry::Part(part) => {
-						if !resolved.insert(part.name.clone()) {
-							let msg = format!("`{}` was already declared before. Please remove the duplicate declaration", part.name);
-							return Err(Error::new(part.name.span(), msg));
-						}
-					}
-					_ => {}
-				}
-			}
-		}
+        };
+        if let Some(ref details) = parsed.details {
+            let parts = &details.content.inner;
+            let mut resolved = HashSet::new();
+            let has_default = parts.into_iter().any(|m| m.is_default());
+            for entry in parts {
+                match entry {
+                    ModuleEntry::Part(part) if has_default => {
+                        if part.is_included_in_default() {
+                            let msg = format!("`{}` is already included in `default`. Either remove `default` or remove `{}`", part.name, part.name);
+                            return Err(Error::new(part.name.span(), msg));
+                        }
+                    }
+                    ModuleEntry::Part(part) => {
+                        if !resolved.insert(part.name.clone()) {
+                            let msg = format!("`{}` was already declared before. Please remove the duplicate declaration", part.name);
+                            return Err(Error::new(part.name.span(), msg));
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
         Ok(parsed)
     }
 }
@@ -205,18 +217,17 @@ impl ModuleDeclaration {
         } else {
             Self::default_modules(self.module.span())
         }
-	}
+    }
 
-	pub fn find_part(&self, name: &str) -> Option<ModulePart> {
-        self
-            .module_parts()
+    pub fn find_part(&self, name: &str) -> Option<ModulePart> {
+        self.module_parts()
             .into_iter()
             .find(|part| part.name == name)
-	}
+    }
 
-	pub fn exists_part(&self, name: &str) -> bool {
-		self.find_part(name).is_some()
-	}
+    pub fn exists_part(&self, name: &str) -> bool {
+        self.find_part(name).is_some()
+    }
 
     fn default_modules(span: Span) -> Vec<ModulePart> {
         let mut res: Vec<_> = ["Module", "Call", "Storage"]
@@ -231,7 +242,6 @@ impl ModuleDeclaration {
         res
     }
 }
-
 
 #[derive(Debug)]
 pub enum ModuleEntry {
@@ -253,12 +263,12 @@ impl Parse for ModuleEntry {
 }
 
 impl ModuleEntry {
-	pub fn is_default(&self) -> bool {
-		match self {
-			ModuleEntry::Default(_) => true,
-			_ => false,
-		}
-	}
+    pub fn is_default(&self) -> bool {
+        match self {
+            ModuleEntry::Default(_) => true,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -324,55 +334,61 @@ impl ModulePart {
     pub fn format_names(names: Vec<&'static str>) -> String {
         let res: Vec<_> = names.into_iter().map(|s| format!("`{}`", s)).collect();
         res.join(", ")
-	}
+    }
 
-	pub fn is_included_in_default(&self) -> bool {
-		["Module", "Call", "Storage", "Event", "Config"].into_iter().any(|name| self.name == name )
-	}
+    pub fn is_included_in_default(&self) -> bool {
+        ["Module", "Call", "Storage", "Event", "Config"]
+            .into_iter()
+            .any(|name| self.name == name)
+    }
 
-	/// Plain module name like `Event` or `Call`, etc.
-	pub fn with_name(name: &str, span: Span) -> Self {
-		let name = Ident::new(name, span);
-		Self {
-			name,
-			generics: syn::Generics {
-				lt_token: None,
-				gt_token: None,
-				where_clause: None,
-				..Default::default()
-			},
-			args: None,
-		}
-	}
+    /// Plain module name like `Event` or `Call`, etc.
+    pub fn with_name(name: &str, span: Span) -> Self {
+        let name = Ident::new(name, span);
+        Self {
+            name,
+            generics: syn::Generics {
+                lt_token: None,
+                gt_token: None,
+                where_clause: None,
+                ..Default::default()
+            },
+            args: None,
+        }
+    }
 
-	/// Module name with generic like `Event<T>` or `Call<T>`, etc.
-	pub fn with_generics(name: &str, span: Span) -> Self {
-		let name = Ident::new(name, span);
-		let typ = Ident::new("T", span);
-		let generic_param = syn::GenericParam::Type(typ.into());
-		let generic_params = vec![generic_param].into_iter().collect();
-		let generics = syn::Generics {
-			lt_token: Some(syn::token::Lt { spans: [span] }),
-			params: generic_params,
-			gt_token: Some(syn::token::Gt { spans: [span] }),
-			where_clause: None,
-		};
-		Self {
-			name,
-			generics,
-			args: None,
-		}
-	}
+    /// Module name with generic like `Event<T>` or `Call<T>`, etc.
+    pub fn with_generics(name: &str, span: Span) -> Self {
+        let name = Ident::new(name, span);
+        let typ = Ident::new("T", span);
+        let generic_param = syn::GenericParam::Type(typ.into());
+        let generic_params = vec![generic_param].into_iter().collect();
+        let generics = syn::Generics {
+            lt_token: Some(syn::token::Lt { spans: [span] }),
+            params: generic_params,
+            gt_token: Some(syn::token::Gt { spans: [span] }),
+            where_clause: None,
+        };
+        Self {
+            name,
+            generics,
+            args: None,
+        }
+    }
 }
 
-fn remove_kind(input: ParseStream, kind: WhereKind, definitions: &mut Vec<WhereDefinition>) -> Result<WhereDefinition> {
+fn remove_kind(
+    input: ParseStream,
+    kind: WhereKind,
+    definitions: &mut Vec<WhereDefinition>,
+) -> Result<WhereDefinition> {
     if let Some(pos) = definitions.iter().position(|d| d.kind == kind) {
-		Ok(definitions.remove(pos))
-	} else {
-		let msg = format!(
-			"Missing associated type for `{:?}`. Add `{:?}` = ... to where section.",
-			kind, kind
-		);
-		Err(input.error(msg))
-	}
+        Ok(definitions.remove(pos))
+    } else {
+        let msg = format!(
+            "Missing associated type for `{:?}`. Add `{:?}` = ... to where section.",
+            kind, kind
+        );
+        Err(input.error(msg))
+    }
 }
