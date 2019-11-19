@@ -273,6 +273,15 @@ fn should_query_storage() {
 			Some(genesis_hash),
 		);
 
+		assert_eq!(
+			result.wait().map_err(|e| e.to_string()),
+			Err(Error::InvalidBlockRange {
+				from: format!("1 ({:?})", block1_hash),
+				to: format!("0 ({:?})", genesis_hash),
+				details: "from number > to number".to_owned(),
+			}).map_err(|e| e.to_string())
+		);
+
 		let random_hash1 = H256::random();
 		let random_hash2 = H256::random();
 
@@ -305,7 +314,7 @@ fn should_query_storage() {
 				from: format!("{:?}", random_hash1),
 				to: format!("{:?}", Some(genesis_hash)),
 				details: format!("UnknownBlock: header not found in db: {}", random_hash1),
-			}).map_err(|e| e.to_string())
+			}).map_err(|e| e.to_string()),
 		);
 
 		// Invalid first hash with None.
@@ -315,7 +324,14 @@ fn should_query_storage() {
 			None,
 		);
 
-		// assert_eq!(result.wait().unwrap(), expected);
+		assert_eq!(
+			result.wait().map_err(|e| e.to_string()),
+			Err(Error::InvalidBlockRange {
+				from: format!("{:?}", random_hash1),
+				to: format!("{:?}", Some(block2_hash)), // Best block hash.
+				details: format!("UnknownBlock: header not found in db: {}", random_hash1),
+			}).map_err(|e| e.to_string()),
+		);
 
 		// Both hashes invalid.
 		let result = api.query_storage(
@@ -324,7 +340,14 @@ fn should_query_storage() {
 			Some(random_hash2),
 		);
 
-		// assert_eq!(result.wait().unwrap(), expected);
+		assert_eq!(
+			result.wait().map_err(|e| e.to_string()),
+			Err(Error::InvalidBlockRange {
+				from: format!("{:?}", random_hash1), // First hash not found.
+				to: format!("{:?}", Some(random_hash2)),
+				details: format!("UnknownBlock: header not found in db: {}", random_hash1),
+			}).map_err(|e| e.to_string()),
+		);
 	}
 
 	run_tests(Arc::new(test_client::new()));

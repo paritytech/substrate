@@ -29,7 +29,8 @@ use rpc::{
 
 use api::Subscriptions;
 use client::{
-	Client, CallExecutor, BlockchainEvents, backend::Backend, error::Result as ClientResult,
+	Client, CallExecutor, BlockchainEvents, backend::Backend,
+	error::Result as ClientResult, error::Error as ClientError,
 };
 use primitives::{
 	H256, Blake2Hasher, Bytes, storage::{well_known_keys, StorageKey, StorageData, StorageChangeSet},
@@ -90,12 +91,11 @@ impl<B, E, Block: BlockT, RA> FullState<B, E, Block, RA>
 		from: Block::Hash,
 		to: Option<Block::Hash>
 	) -> Result<QueryStorageRange<Block>> {
-		let to = self.block_or_best(to)
-			.map_err(|e| invalid_block::<Block>(from, to, e.to_string()))?;
-		let from_meta = self.client.header_metadata(from)
-			.map_err(|e| invalid_block::<Block>(from, Some(to), e.to_string()))?;
-		let to_meta = self.client.header_metadata(to)
-			.map_err(|e| invalid_block::<Block>(from, Some(to), e.to_string()))?;
+		let to = self.block_or_best(to).map_err(|e| invalid_block::<Block>(from, to, e.to_string()))?;
+
+		let invalid_block_err = |e: ClientError| invalid_block::<Block>(from, Some(to), e.to_string());
+		let from_meta = self.client.header_metadata(from).map_err(invalid_block_err)?;
+		let to_meta = self.client.header_metadata(to).map_err(invalid_block_err)?;
 
 		if from_meta.number > to_meta.number {
 			return Err(invalid_block_range(&from_meta, &to_meta, "from number > to number".to_owned()))
@@ -496,7 +496,7 @@ fn invalid_block_range<B: BlockT>(
 	to: &CachedHeaderMetadata<B>,
 	details: String,
 ) -> Error {
-	let to_string = |h: &CachedHeaderMetadata<B>| format!("{} ({})", h.number, h.hash);
+	let to_string = |h: &CachedHeaderMetadata<B>| format!("{} ({:?})", h.number, h.hash);
 
 	Error::InvalidBlockRange {
 		from: to_string(from),
