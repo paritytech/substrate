@@ -35,7 +35,7 @@ use futures03::{compat::Compat, stream::StreamExt};
 use grandpa::Message::{Prevote, Precommit, PrimaryPropose};
 use grandpa::{voter, voter_set::VoterSet};
 use log::{debug, trace};
-use network_gossip::{GossipEngine, Network as AbstractNetwork};
+use network_gossip::{GossipEngine, Network};
 use codec::{Encode, Decode};
 use primitives::Pair;
 use sr_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, NumberFor};
@@ -116,7 +116,7 @@ impl<B: BlockT> NetworkBridge<B> {
 	/// handle and a future that must be polled to completion to finish startup.
 	/// On creation it will register previous rounds' votes with the gossip
 	/// service taken from the VoterSetState.
-	pub(crate) fn new<N: AbstractNetwork + Clone + Send + 'static>(
+	pub(crate) fn new<N: Network + Clone + Send + 'static>(
 		service: N,
 		config: crate::Config,
 		set_state: crate::environment::SharedVoterSetState<B>,

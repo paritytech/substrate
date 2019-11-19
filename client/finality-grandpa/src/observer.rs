@@ -23,7 +23,7 @@ use grandpa::{
 	BlockNumberOps, Error as GrandpaError, voter, voter_set::VoterSet
 };
 use log::{debug, info, warn};
-use network_gossip::Network as AbstractNetwork;
+use network_gossip::Network;
 
 use consensus_common::SelectChain;
 use client_api::{CallExecutor, backend::Backend};
@@ -160,7 +160,7 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, SC>(
 ) -> ::client_api::error::Result<impl Future<Item=(),Error=()> + Send + 'static> where
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
-	N: AbstractNetwork + Send + Clone + 'static,
+	N: Network + Send + Clone + 'static,
 	SC: SelectChain<Block> + 'static,
 	NumberFor<Block>: BlockNumberOps,
 	RA: Send + Sync + 'static,

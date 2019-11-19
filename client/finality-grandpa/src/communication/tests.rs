@@ -103,7 +103,7 @@ impl network_gossip::ValidatorContext<Block> for TestNetwork {
 	fn broadcast_message(&mut self, _: Hash, _: Vec<u8>, _: bool) {	}
 
 	fn send_message(&mut self, who: &network::PeerId, data: Vec<u8>) {
-		<Self as super::Network<Block>>::send_message(self, vec![who.clone()], data);
+		//<Self as super::Network<Block>>::send_message(self, vec![who.clone()], data);
 	}
 
 	fn send_topic(&mut self, _: &network::PeerId, _: Hash, _: bool) { }
