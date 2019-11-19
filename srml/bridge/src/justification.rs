@@ -14,36 +14,29 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-// TODO: Use BTreeMap
-// use std::collections::{HashMap, HashSet};
-
 use client::{CallExecutor, Client};
 use client::backend::Backend;
 use client::error::Error as ClientError;
 use codec::{Encode, Decode};
 use grandpa::voter_set::VoterSet;
 use grandpa::{Error as GrandpaError};
+
 // Might be able to get this from primitives re-export
 use rstd::collections::{
 	btree_map::BTreeMap,
 	btree_set::BTreeSet,
 };
 use sr_primitives::generic::BlockId;
-// use sr_primitives::sr_std;
-
 use sr_primitives::traits::{NumberFor, Block as BlockT, Header as HeaderT};
+use runtime_io;
 use primitives::{H256, Blake2Hasher};
 
-// Actually, I don't think I can use Authority pair
+// NOTE: Actually, I don't think I can use Authority pair
 // It's cfg(std) in grandpa-primitives
-use fg_primitives::{AuthorityId, AuthorityPair, RoundNumber, SetId as SetIdNumber, AuthoritySignature};
+use fg_primitives::{AuthorityId, RoundNumber, SetId as SetIdNumber, AuthoritySignature};
 
 // Should I make this a part of fg_primitives?
 use fg::{Commit, Error, Message};
-
-// NOTE: Can't use this stuff
-// use crate::{Commit, Error};
-// use crate::communication;
 
 /// A GRANDPA justification for block finality, it includes a commit message and
 /// an ancestry proof including all headers routing all precommit target blocks
@@ -200,23 +193,25 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 /// A utility trait implementing `grandpa::Chain` using a given set of headers.
 /// This is useful when validating commits, using the given set of headers to
 /// verify a valid ancestry route to the target commit block.
-struct AncestryChain<Block: BlockT> {
-	ancestry: BTreeMap<Block::Hash, Block::Header>,
+// Since keys in a BTreeMap need to implement `Ord` we can't use Block::Hash directly.
+// We need to turn the Hash into a slice of u8, which does implement Ord.
+struct AncestryChain<'a, Block: BlockT> {
+	ancestry: BTreeMap<&'a [u8], Block::Header>,
 }
 
-impl<Block: BlockT> AncestryChain<Block> {
+impl<Block: BlockT> AncestryChain<'_, Block> {
 	fn new(ancestry: &[Block::Header]) -> AncestryChain<Block> {
 		let ancestry: BTreeMap<_, _> = ancestry
 			.iter()
 			.cloned()
-			.map(|h: Block::Header| (h.hash(), h))
+			.map(|h: Block::Header| (h.hash().as_ref(), h))
 			.collect();
 
 		AncestryChain { ancestry }
 	}
 }
 
-impl<Block: BlockT> grandpa::Chain<Block::Hash, NumberFor<Block>> for AncestryChain<Block> where
+impl<Block: BlockT> grandpa::Chain<Block::Hash, NumberFor<Block>> for AncestryChain<'_, Block> where
 	NumberFor<Block>: grandpa::BlockNumberOps
 {
 	fn ancestry(&self, base: Block::Hash, block: Block::Hash) -> Result<Vec<Block::Hash>, GrandpaError> {
@@ -224,7 +219,7 @@ impl<Block: BlockT> grandpa::Chain<Block::Hash, NumberFor<Block>> for AncestryCh
 		let mut current_hash = block;
 		loop {
 			if current_hash == base { break; }
-			match self.ancestry.get(&current_hash) {
+			match self.ancestry.get(current_hash.as_ref()) {
 				Some(current_header) => {
 					current_hash = *current_header.parent_hash();
 					route.push(current_hash);
@@ -257,7 +252,8 @@ fn check_message_sig<Block: BlockT>(
 ) -> Result<(), ()> {
 	let as_public = id.clone();
 	let encoded_raw = localized_payload(round, set_id, message);
-	if AuthorityPair::verify(signature, &encoded_raw, &as_public) {
+	if runtime_io::crypto::ed25519_verify(signature, &encoded_raw, &as_public.into()) {
+	// if AuthorityPair::verify(signature, &encoded_raw, &as_public) {
 		Ok(())
 	} else {
 		// debug!(target: "afg", "Bad signature on message from {:?}", id);
