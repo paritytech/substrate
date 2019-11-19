@@ -48,11 +48,11 @@ use std::iter::FromIterator;
 use std::marker::PhantomData;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::time::{Duration};
+use std::time::{Duration, Instant};
 
 use futures::task::{Context, Poll};
-use futures::{Future, Stream, StreamExt};
-use async_std::stream::{interval, Interval};
+use futures::{Future, FutureExt, Stream, StreamExt};
+use futures_timer::Delay;
 
 use authority_discovery_primitives::{AuthorityDiscoveryApi, AuthorityId, AuthoritySignature, AuthorityPair};
 use client_api::blockchain::HeaderBackend;
@@ -66,6 +66,8 @@ use primitives::traits::BareCryptoStorePtr;
 use prost::Message;
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{Block as BlockT, ProvideRuntimeApi};
+
+type Interval = Box<dyn Stream<Item = ()> + Unpin>;
 
 mod error;
 /// Dht payload schemas generated from Protobuf definitions via Prost crate in build.rs.
@@ -128,11 +130,17 @@ where
 		// Kademlia's default time-to-live for Dht records is 36h, republishing records every 24h. Given that a node
 		// could restart at any point in time, one can not depend on the republishing process, thus publishing own
 		// external addresses should happen on an interval < 36h.
-		let publish_interval = interval(Duration::from_secs(12 * 60 * 60));
+		let publish_interval = interval_at(
+			Instant::now() + LIBP2P_KADEMLIA_BOOTSTRAP_TIME,
+			Duration::from_secs(12 * 60 * 60),
+		);
 
 		// External addresses of other authorities can change at any given point in time. The interval on which to query
 		// for external addresses of other authorities is a trade off between efficiency and performance.
-		let query_interval = interval(Duration::from_secs(10 * 60));
+		let query_interval = interval_at(
+			Instant::now() + LIBP2P_KADEMLIA_BOOTSTRAP_TIME,
+			Duration::from_secs(10 * 60),
+		);
 
 		let address_cache = HashMap::new();
 
@@ -446,6 +454,19 @@ fn hash_authority_id(id: &[u8]) -> Result<libp2p::kad::record::Key> {
 	libp2p::multihash::encode(libp2p::multihash::Hash::SHA2256, id)
 		.map(|k| libp2p::kad::record::Key::new(&k))
 		.map_err(Error::HashingAuthorityId)
+}
+
+fn interval_at(start: Instant, duration: Duration) -> Interval {
+	let stream = futures::stream::unfold((), move |_| {
+		let wait_time = start.saturating_duration_since(Instant::now());
+
+		futures::future::join(
+			Delay::new(wait_time),
+			Delay::new(duration)
+		).map(|_| Some(((), ())))
+	}).map(drop);
+
+	Box::new(stream)
 }
 
 #[cfg(test)]
