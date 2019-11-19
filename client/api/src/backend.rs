@@ -19,6 +19,7 @@
 use std::sync::Arc;
 use std::collections::HashMap;
 use primitives::ChangesTrieConfiguration;
+use primitives::offchain::OffchainStorage;
 use sr_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
 use sr_primitives::traits::{Block as BlockT, NumberFor};
 use state_machine::backend::Backend as StateBackend;
@@ -27,7 +28,6 @@ use crate::{
 	blockchain::{
 		Backend as BlockchainBackend, well_known_cache_keys
 	},
-	offchain::OffchainStorage,
 	error,
 	light::RemoteBlockchain,
 };

@@ -56,7 +56,7 @@ impl LocalStorage {
 	}
 }
 
-impl client_api::OffchainStorage for LocalStorage {
+impl primitives::offchain::OffchainStorage for LocalStorage {
 	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) {
 		let key: Vec<u8> = prefix.iter().chain(key).cloned().collect();
 		let mut tx = self.db.transaction();

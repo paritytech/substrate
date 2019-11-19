@@ -285,7 +285,11 @@ fn should_not_send_a_report_if_already_online() {
 
 	let mut ext = new_test_ext();
 	let (offchain, state) = TestOffchainExt::new();
+	let (pool, pool_state) = TestTransactionPoolExt::new();
 	ext.register_extension(OffchainExt::new(offchain));
+	ext.register_extension(primitives::offchain::TransactionPoolExt(
+		Box::new(pool as _)
+	));
 
 	ext.execute_with(|| {
 		advance_session();

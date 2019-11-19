@@ -23,6 +23,31 @@ use runtime_interface::pass_by::{PassByCodec, PassByInner, PassByEnum};
 
 pub use crate::crypto::KeyTypeId;
 
+#[cfg(feature = "std")]
+pub mod storage;
+#[cfg(feature = "std")]
+pub mod testing;
+
+/// Offchain workers local storage.
+pub trait OffchainStorage: Clone + Send + Sync {
+	/// Persist a value in storage under given key and prefix.
+	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]);
+
+	/// Retrieve a value from storage under given key and prefix.
+	fn get(&self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>>;
+
+	/// Replace the value in storage if given old_value matches the current one.
+	///
+	/// Returns `true` if the value has been set and false otherwise.
+	fn compare_and_set(
+		&mut self,
+		prefix: &[u8],
+		key: &[u8],
+		old_value: Option<&[u8]>,
+		new_value: &[u8],
+	) -> bool;
+}
+
 /// A type of supported crypto.
 #[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, RuntimeDebug, PassByEnum)]
 #[repr(C)]
@@ -657,6 +682,11 @@ impl OffchainExt {
 	}
 }
 
+/// Abstraction over transaction pool.
+///
+/// This trait is currently used within the `ExternalitiesExtension`
+/// to provide offchain calls with access to the transaction pool without
+/// tight coupling with any pool implementation.
 #[cfg(feature = "std")]
 pub trait TransactionPool {
 	/// Submit transaction.
@@ -667,9 +697,9 @@ pub trait TransactionPool {
 
 #[cfg(feature = "std")]
 externalities::decl_extension! {
+	/// An externalities extension to submit transactions to the pool.
 	pub struct TransactionPoolExt(Box<dyn TransactionPool + Send>);
 }
-
 
 #[cfg(test)]
 mod tests {

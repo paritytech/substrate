@@ -31,10 +31,11 @@ hyper = "0.12.35"
 hyper-rustls = "0.17.1"
 
 [dev-dependencies]
-env_logger = "0.7.0"
 client-db = { package = "substrate-client-db", path = "../db/", default-features = true }
+env_logger = "0.7.0"
 test-client = { package = "substrate-test-runtime-client", path = "../../test/utils/runtime/client" }
 tokio = "0.1.22"
+transaction_pool = { package = "substrate-transaction-pool", path = "../transaction-pool" }
 
 [features]
 default = []

@@ -25,7 +25,6 @@ pub mod error;
 pub mod execution_extensions;
 pub mod light;
 pub mod notifications;
-pub mod offchain;
 
 // TODO: avoid re-exports
 pub use backend::*;
@@ -35,7 +34,6 @@ pub use client::*;
 pub use error::*;
 pub use light::*;
 pub use notifications::*;
-pub use offchain::*;
 
 pub use state_machine::{StorageProof, ExecutionStrategy};
 

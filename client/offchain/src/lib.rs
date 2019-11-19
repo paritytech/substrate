@@ -43,11 +43,9 @@ use log::{debug, warn};
 use network::NetworkStateInfo;
 use primitives::{offchain, ExecutionContext};
 use sr_primitives::{generic::BlockId, traits::{self, ProvideRuntimeApi}};
-use client_api::{OffchainStorage};
+use client_api::OffchainStorage;
 
 mod api;
-
-pub mod testing;
 
 pub use offchain_primitives::{OffchainWorkerApi, STORAGE_PREFIX};
 
@@ -149,6 +147,8 @@ impl<Client, Storage, Block> OffchainWorkers<
 mod tests {
 	use super::*;
 	use network::{Multiaddr, PeerId};
+	use std::sync::Arc;
+	use transaction_pool::txpool::Pool;
 
 	struct MockNetworkStateInfo();
 
@@ -162,19 +162,23 @@ mod tests {
 		}
 	}
 
-
-	// TODO [ToDr] Move this test somewhere higher level.
 	#[test]
 	fn should_call_into_runtime_and_produce_extrinsic() {
 		// given
 		let _ = env_logger::try_init();
 		let client = Arc::new(test_client::new());
+		let pool = Arc::new(Pool::new(
+				Default::default(),
+				transaction_pool::FullChainApi::new(client.clone())
+		));
+		client.execution_extensions()
+			.register_transaction_pool(Arc::downgrade(&pool.clone()) as _);
 		let db = client_db::offchain::LocalStorage::new_test();
 		let network_state = Arc::new(MockNetworkStateInfo());
 
 		// when
 		let offchain = OffchainWorkers::new(client, db);
-		futures::executor::block_on(offchain.on_block_imported(&0u64, &pool, network_state, false));
+		futures::executor::block_on(offchain.on_block_imported(&0u64, network_state, false));
 
 		// then
 		assert_eq!(pool.status().ready, 1);

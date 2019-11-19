@@ -300,7 +300,6 @@ mod tests {
 	fn offchain_api() -> (Api<LocalStorage>, AsyncApi) {
 		let _ = env_logger::try_init();
 		let db = LocalStorage::new_test();
-		let client = Arc::new(test_client::new());
 		let mock = Arc::new(MockNetworkStateInfo());
 
 		AsyncApi::new(
