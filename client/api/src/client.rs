@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+//! A set of APIs supported by the client along with their primitives.
+
 use std::collections::HashMap;
 use futures03::channel::mpsc;
 use primitives::storage::StorageKey;
