@@ -170,22 +170,14 @@ fn decl_outer_config<'a>(
 ) -> TokenStream2 {
     let modules_tokens = module_declarations
         .filter_map(|module_declaration| {
-            let generics: Vec<_> = module_declaration
-                .module_parts()
-                .into_iter()
-                .filter(|part| part.name == "Config")
-                .map(|part| part.generics)
-                .collect();
-            if generics.len() == 0 {
-                None
-            } else {
-                let transformed_generics: Vec<_> = generics[0]
-                    .params
-                    .iter()
+			module_declaration
+				.find_part("Config")
+                .map(|part| {
+					let transformed_generics: Vec<_> = part.generics.params.iter()
                     .map(|param| quote!(<#param>))
                     .collect();
-                Some((module_declaration, transformed_generics))
-            }
+					(module_declaration, transformed_generics)
+				})
         })
         .map(|(module_declaration, generics)| {
             let module = &module_declaration.module;
