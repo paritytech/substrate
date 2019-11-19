@@ -75,7 +75,7 @@ macro_rules! app_crypto {
 #[macro_export]
 macro_rules! app_crypto {
 	($module:ident, $key_type:expr) => {
-		use rstd::vec::Vec;
+		use $crate::rstd::vec::Vec;
 		$crate::app_crypto_public_not_full_crypto!($module::Public, $key_type);
 		$crate::app_crypto_public_common!($module::Public, $module::Signature, $key_type);
 		$crate::app_crypto_signature_not_full_crypto!($module::Signature, $key_type);
