@@ -25,6 +25,7 @@ balances = { package = "pallet-balances", path = "../balances" }
 timestamp = { package = "pallet-timestamp", path = "../timestamp" }
 pallet-staking-reward-curve = { path = "../staking/reward-curve"}
 substrate-test-utils = { path = "../../test/utils" }
+pretty_assertions = "0.6.1"
 
 [features]
 equalize = []
