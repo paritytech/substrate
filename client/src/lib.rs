@@ -63,7 +63,6 @@
 //! 	LocalCallExecutor::new(
 //! 		backend.clone(),
 //! 		NativeExecutor::<LocalExecutor>::new(WasmExecutionMethod::Interpreted, None),
-//! 		None,
 //!		),
 //! 	// This parameter provides the storage for the chain genesis.
 //! 	<(StorageOverlay, ChildrenStorageOverlay)>::default(),
