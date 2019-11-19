@@ -360,6 +360,7 @@ impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec> where
 		if !was_native || result.is_ok() {
 			(result, storage_delta, changes_delta)
 		} else {
+			self.overlay.discard_prospective();
 			let (wasm_result, _, wasm_storage_delta, wasm_changes_delta) = self.execute_aux(
 				compute_tx,
 				false,
