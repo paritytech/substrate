@@ -269,7 +269,18 @@ impl ModuleDeclaration {
         } else {
             Self::default_modules(self.module.span())
         }
-    }
+	}
+
+	pub fn find_part(&self, name: &str) -> Option<ModulePart> {
+        self
+            .module_parts()
+            .into_iter()
+            .find(|part| part.name == name)
+	}
+
+	pub fn exists_part(&self, name: &str) -> bool {
+		self.find_part(name).is_some()
+	}
 
     fn default_modules(span: Span) -> Vec<ModulePart> {
         let mut res: Vec<_> = ["Module", "Call", "Storage"]

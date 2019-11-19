@@ -18,7 +18,7 @@ mod parse;
 
 use paint_support_procedural_tools::syn_ext as ext;
 use paint_support_procedural_tools::{generate_crate_access, generate_hidden_includes};
-use parse::{ModuleDeclaration, ModulePart, RuntimeDefinition, WhereSection};
+use parse::{ModuleDeclaration, RuntimeDefinition, WhereSection};
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::quote;
@@ -27,9 +27,6 @@ use syn::{Ident, Result};
 pub fn construct_runtime(input: TokenStream) -> TokenStream {
     let definition = syn::parse_macro_input!(input as RuntimeDefinition);
     construct_runtime_parsed(definition).unwrap_or_else(|e| e.to_compile_error()).into()
-        Ok(stream) => stream.into(),
-        Err(e) => e.to_compile_error().into(),
-    }
 }
 
 fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream2> {
@@ -127,10 +124,7 @@ fn decl_validate_unsigned<'a>(
 ) -> TokenStream2 {
     let modules_tokens = module_declarations
         .filter(|module_declaration| {
-            module_declaration
-                .module_parts()
-                .into_iter()
-                .any(|part| part.name == "ValidateUnsigned")
+            module_declaration.exists_part("ValidateUnsigned")
         })
         .map(|module_declaration| &module_declaration.name);
     quote!(
@@ -149,11 +143,7 @@ fn decl_outer_inherent<'a>(
     scrate: &'a TokenStream2,
 ) -> TokenStream2 {
     let modules_tokens = module_declarations.filter_map(|module_declaration| {
-        let maybe_config_part = module_declaration
-            .module_parts()
-            .into_iter()
-            .filter(|part| part.name == "Inherent")
-            .next();
+        let maybe_config_part = module_declaration.find_part("Inherent");
         maybe_config_part.map(|config_part| {
             let arg = config_part
                 .args
@@ -264,11 +254,7 @@ fn decl_outer_dispatch<'a>(
 ) -> TokenStream2 {
     let modules_tokens = module_declarations
         .filter(|module_declaration| {
-            find_module_entry(
-                module_declaration,
-                &Ident::new("Call", module_declaration.name.span()),
-            )
-            .is_some()
+			module_declaration.exists_part("Call")
         })
         .map(|module_declaration| {
             let module = &module_declaration.module;
@@ -300,8 +286,7 @@ fn decl_outer_event_or_origin<'a>(
     let mut modules_tokens = TokenStream2::new();
     let kind_str = format!("{:?}", kind);
     for module_declaration in module_declarations {
-        let kind_ident = Ident::new(kind_str.as_str(), module_declaration.name.span());
-        match find_module_entry(module_declaration, &kind_ident) {
+        match module_declaration.find_part(&kind_str) {
             Some(module_entry) => {
                 let module = &module_declaration.module;
                 let instance = module_declaration.instance.as_ref();
@@ -380,12 +365,4 @@ fn find_system_module<'a>(
     module_declarations
         .find(|decl| decl.name == "System")
         .map(|decl| &decl.module)
-}
-
-fn find_module_entry<'a>(
-    module_declaration: &'a ModuleDeclaration,
-    name: &'a Ident,
-) -> Option<ModulePart> {
-    let parts = module_declaration.module_parts();
-    parts.into_iter().find(|part| *name == part.name)
 }
