@@ -223,7 +223,7 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 
 /// Construct a runtime, with the given name and the given modules.
 ///
-/// The parameters here are specific types for `Block`, `NodeBlock`, and `InherentData`
+/// The parameters here are specific types for `Block`, `NodeBlock`, and `UncheckedExtrinsic`
 /// and the modules that are used by the runtime.
 /// `Block` is the block type that is used in the runtime and `NodeBlock` is the block type
 /// that is used in the node. For instance they can differ in the extrinsics type.
