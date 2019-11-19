@@ -428,7 +428,8 @@ pub trait Offchain {
 	/// The transaction will end up in the pool.
 	fn submit_transaction(&mut self, data: Vec<u8>) -> Result<(), ()> {
 		self.extension::<TransactionPoolExt>()
-			.expect("submit_transaction can be called only in the offchain worker context")
+			.expect("submit_transaction can be called only in the offchain call context with
+				TransactionPool capabilities enabled")
 			.submit_transaction(data)
 	}
 

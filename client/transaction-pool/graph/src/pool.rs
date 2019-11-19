@@ -394,19 +394,20 @@ impl<A: ChainApi> sr_primitives::offchain::TransactionPool<A::Block> for Pool<A>
 		at: &BlockId<A::Block>,
 		extrinsic: <A::Block as sr_primitives::traits::Block>::Extrinsic,
 	) -> Result<(), ()> {
-		let result = futures::executor::block_on(
-			self.submit_one(&at, extrinsic)
+		log::debug!(
+			target: "txpool",
+			"(offchain call) Submitting a transaction to the pool: {:?}",
+			extrinsic
 		);
 
-		result
-			.map(|_| ())
-			.map_err(|e| {
-				log::warn!(
-					target: "txpool",
-					"(offchain call) Error submitting a transaction to the pool: {:?}",
-					e
-				)
-			})
+		let result = futures::executor::block_on(self.submit_one(&at, extrinsic));
+
+		result.map(|_| ())
+			.map_err(|e| log::warn!(
+				target: "txpool",
+				"(offchain call) Error submitting a transaction to the pool: {:?}",
+				e
+			))
 	}
 }
 
