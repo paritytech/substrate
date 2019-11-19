@@ -556,9 +556,9 @@ mod tests {
 
 		// then
 		let mut it = futures::executor::block_on_stream(stream);
-		assert_eq!(it.next(), Some(()));
-		assert_eq!(it.next(), Some(()));
-		assert_eq!(it.next(), None);
+		assert!(it.next().is_some());
+		assert!(it.next().is_some());
+		assert!(it.next().is_none());
 	}
 
 	#[test]
