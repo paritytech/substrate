@@ -270,8 +270,39 @@ mod tests {
 	#[test]
 	fn div_works() {
 		let a = Fixed64::from_rational(12, 10);
+		let b = Fixed64::from_rational(10, 1);
+		assert_eq!(a / b, Fixed64::from_rational(12, 100));
+
+		let a = Fixed64::from_rational(12, 10);
 		let b = Fixed64::from_rational(1, 100);
 		assert_eq!(a / b, Fixed64::from_rational(120, 1));
+
+		let a = Fixed64::from_rational(12, 100);
+		let b = Fixed64::from_rational(10, 1);
+		assert_eq!(a / b, Fixed64::from_rational(12, 1000));
+
+		let a = Fixed64::from_rational(12, 100);
+		let b = Fixed64::from_rational(1, 100);
+		assert_eq!(a / b, Fixed64::from_rational(12, 1));
+
+		let a = Fixed64::from_rational(-12, 10);
+		let b = Fixed64::from_rational(10, 1);
+		assert_eq!(a / b, Fixed64::from_rational(-12, 100));
+
+		let a = Fixed64::from_rational(12, 10);
+		let b = Fixed64::from_rational(-10, 1);
+		assert_eq!(a / b, Fixed64::from_rational(-12, 100));
+
+		let a = Fixed64::from_rational(-12, 10);
+		let b = Fixed64::from_rational(-10, 1);
+		assert_eq!(a / b, Fixed64::from_rational(12, 100));
+	}
+
+	#[test]
+	fn div_zero() {
+		let a = Fixed64::from_rational(12, 10);
+		let b = Fixed64::from_natural(0);
+		assert_eq!(a / b, Fixed64::from_rational(1200000000, 0));
 	}
 
 	#[test]
