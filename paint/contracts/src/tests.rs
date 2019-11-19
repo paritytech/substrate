@@ -2412,7 +2412,7 @@ fn get_runtime_storage() {
 			0x14144020u32.to_le_bytes().to_vec().as_ref()
 		);
 
-		assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm));
+		assert_ok!(Contract::put_code(Origin::signed(ALICE), wasm));
 		assert_ok!(Contract::instantiate(
 			Origin::signed(ALICE),
 			100,
