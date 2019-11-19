@@ -1062,18 +1062,6 @@ impl_wasm_host_interface! {
 				}
 			})
 		}
-
-		ext_storage_start_transaction() {
-			Ok(runtime_io::storage::start_transaction())
-		}
-
-		ext_storage_discard_transaction() {
-			Ok(runtime_io::storage::discard_transaction())
-		}
-
-		ext_storage_commit_transaction() {
-			Ok(runtime_io::storage::commit_transaction())
-		}
 	}
 }
 
