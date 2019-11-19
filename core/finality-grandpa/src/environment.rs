@@ -846,6 +846,7 @@ where
 				already_completed.votes.extend(
 					historical_votes.seen().iter().skip(n_existing_votes).cloned()
 				);
+				already_completed.state = state;
 			}
 
 			let set_state = VoterSetState::<Block>::Live {
