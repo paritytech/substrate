@@ -16,7 +16,7 @@
 
 use paint_support_procedural_tools::syn_ext as ext;
 use proc_macro2::Span;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::BTreeMap;
 use syn::{
     parse::{Parse, ParseStream},
     spanned::Spanned,
@@ -60,18 +60,10 @@ pub struct WhereSection {
 impl Parse for WhereSection {
     fn parse(input: ParseStream) -> Result<Self> {
         input.parse::<token::Where>()?;
-        let mut seen_keys = HashSet::new();
-        let mut definitions = HashMap::new();
+        let mut definitions = Vec::new();
         while !input.peek(token::Brace) {
-			let WhereDefinition { kind_span, kind, value } = input.parse()?;
-			if !seen_keys.insert(kind) {
-				let msg = format!(
-					"`{:?}` was declared above. Please use exactly one delcataion for `{:?}`.",
-					kind, kind
-				);
-				return Err(Error::new(kind_span, msg));
-			}
-            definitions.insert(kind, value);
+			let definition: WhereDefinition = input.parse()?;
+            definitions.push(definition);
             if !input.peek(Token![,]) {
                 if !input.peek(token::Brace) {
                     return Err(input.error("Expected `,` or `{`"));
@@ -80,32 +72,21 @@ impl Parse for WhereSection {
             }
             input.parse::<Token![,]>()?;
         }
-        let expected_seen_keys: HashSet<_> = vec![
-            WhereKind::Block,
-            WhereKind::NodeBlock,
-            WhereKind::UncheckedExtrinsic,
-        ]
-        .into_iter()
-        .collect();
-        let diff: Vec<_> = expected_seen_keys.difference(&seen_keys).collect();
-        if diff.len() > 0 {
-            let msg = format!(
-                "Missing associated type for `{:?}`. Add `{:?}` = ... to where section.",
-                diff[0], diff[0]
-            );
-            return Err(input.error(msg));
-        }
+		let block = remove_kind(input, WhereKind::Block, &mut definitions)?.value;
+		let node_block = remove_kind(input, WhereKind::NodeBlock, &mut definitions)?.value;
+		let unchecked_extrinsic = remove_kind(input, WhereKind::UncheckedExtrinsic, &mut definitions)?.value;
+		if let Some(WhereDefinition {ref kind_span, ref kind, ..}) = definitions.first() {
+			let msg = format!(
+				"`{:?}` was declared above. Please use exactly one delcataion for `{:?}`.",
+				kind, kind
+			);
+			return Err(Error::new(*kind_span, msg));
+	}
         Ok(Self {
-            block: definitions
-                .remove(&WhereKind::Block)
-                .expect("Definitions is guaranteed to have this key; qed"),
-            node_block: definitions
-                .remove(&WhereKind::NodeBlock)
-                .expect("Definitions is guaranteed to have this key; qed"),
-            unchecked_extrinsic: definitions
-                .remove(&WhereKind::UncheckedExtrinsic)
-                .expect("Definitions is guaranteed to have this key; qed"),
-        })
+            block,
+            node_block,
+			unchecked_extrinsic,
+		})
     }
 }
 
@@ -338,4 +319,16 @@ impl ModulePart {
             args: None,
         }
     }
+}
+
+fn remove_kind(input: ParseStream, kind: WhereKind, definitions: &mut Vec<WhereDefinition>) -> Result<WhereDefinition> {
+    if let Some(pos) = definitions.iter().position(|d| d.kind == kind) {
+		Ok(definitions.remove(pos))
+	} else {
+		let msg = format!(
+			"Missing associated type for `{:?}`. Add `{:?}` = ... to where section.",
+			kind, kind
+		);
+		Err(input.error(msg))
+	}
 }
