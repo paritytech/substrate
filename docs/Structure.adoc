@@ -47,7 +47,7 @@ In the client you can find a set of crates to construct the outer substrate-node
 ** all crates that go on chain, must be `[no_std]`
 ** must not (dev-)depend on anything in `/client`
 
-PALETTE, the Parity Application Interface for Network-wide Transitions, is a set of modules implementing specific transition functions and features one (might) want to have in their runtime.
+PALETTE is a set of modules implementing specific transition functions and features one (might) want to have in their runtime.
 
 === integration tests
 
