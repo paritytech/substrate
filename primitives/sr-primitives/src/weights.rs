@@ -110,6 +110,16 @@ impl Default for DispatchClass {
 	}
 }
 
+impl From<u8> for DispatchClass {
+	fn from(x: u8) -> Self {
+		match x {
+			0 => DispatchClass::Normal,
+			1 => DispatchClass::Operational,
+			_ => panic!("Reserved for other dispatch classes."),
+		}
+	}
+}
+
 impl From<SimpleDispatchInfo> for DispatchClass {
 	fn from(tx: SimpleDispatchInfo) -> Self {
 		match tx {
@@ -219,3 +229,25 @@ impl SimpleDispatchInfo {
 		Self::FixedNormal(0)
 	}
 }
+
+pub struct FunctionOf<F, Class>(pub F, pub Class);
+
+impl<Args, F, Class> WeighData<Args> for FunctionOf<F, Class>
+where
+	F : Fn(Args) -> Weight
+{
+	fn weigh_data(&self, args: Args) -> Weight {
+		(self.0)(args)
+	}
+}
+
+impl<Args, F, Class> ClassifyDispatch<Args> for FunctionOf<F, Class>
+where
+	Class: Into<DispatchClass> + Clone,
+{
+	fn classify_dispatch(&self, _: Args) -> DispatchClass {
+		self.1.clone().into()
+	}
+}
+
+// TODO: test these stuff with a dedicated `decl_module`. Needs relocating to support first. #4124
