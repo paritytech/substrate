@@ -45,7 +45,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-pub use timestamp;
+use paint_timestamp;
 
 use rstd::{result, prelude::*};
 use codec::{Encode, Decode};
@@ -57,90 +57,17 @@ use sr_primitives::{
 	RuntimeAppPublic,
 	traits::{SaturatedConversion, Saturating, Zero, Member, IsMember}, generic::DigestItem,
 };
-use timestamp::OnTimestampSet;
-#[cfg(feature = "std")]
-use timestamp::TimestampInherentData;
+use sp_timestamp::OnTimestampSet;
 use inherents::{InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
-#[cfg(feature = "std")]
-use inherents::{InherentDataProviders, ProvideInherentData};
-use substrate_consensus_aura_primitives::{AURA_ENGINE_ID, ConsensusLog, AuthorityIndex};
+use substrate_consensus_aura_primitives::{
+	AURA_ENGINE_ID, ConsensusLog, AuthorityIndex,
+	inherents::{INHERENT_IDENTIFIER, AuraInherentData},
+};
 
 mod mock;
 mod tests;
 
-/// The Aura inherent identifier.
-pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"auraslot";
-
-/// The type of the Aura inherent.
-pub type InherentType = u64;
-
-/// Auxiliary trait to extract Aura inherent data.
-pub trait AuraInherentData {
-	/// Get aura inherent data.
-	fn aura_inherent_data(&self) -> result::Result<InherentType, inherents::Error>;
-	/// Replace aura inherent data.
-	fn aura_replace_inherent_data(&mut self, new: InherentType);
-}
-
-impl AuraInherentData for InherentData {
-	fn aura_inherent_data(&self) -> result::Result<InherentType, inherents::Error> {
-		self.get_data(&INHERENT_IDENTIFIER)
-			.and_then(|r| r.ok_or_else(|| "Aura inherent data not found".into()))
-	}
-
-	fn aura_replace_inherent_data(&mut self, new: InherentType) {
-		self.replace_data(INHERENT_IDENTIFIER, &new);
-	}
-}
-
-/// Provides the slot duration inherent data for `Aura`.
-#[cfg(feature = "std")]
-pub struct InherentDataProvider {
-	slot_duration: u64,
-}
-
-#[cfg(feature = "std")]
-impl InherentDataProvider {
-	pub fn new(slot_duration: u64) -> Self {
-		Self {
-			slot_duration
-		}
-	}
-}
-
-#[cfg(feature = "std")]
-impl ProvideInherentData for InherentDataProvider {
-	fn on_register(
-		&self,
-		providers: &InherentDataProviders,
-	) -> result::Result<(), inherents::Error> {
-		if !providers.has_provider(&timestamp::INHERENT_IDENTIFIER) {
-			// Add the timestamp inherent data provider, as we require it.
-			providers.register_provider(timestamp::InherentDataProvider)
-		} else {
-			Ok(())
-		}
-	}
-
-	fn inherent_identifier(&self) -> &'static inherents::InherentIdentifier {
-		&INHERENT_IDENTIFIER
-	}
-
-	fn provide_inherent_data(
-		&self,
-		inherent_data: &mut InherentData,
-	) -> result::Result<(), inherents::Error> {
-		let timestamp = inherent_data.timestamp_inherent_data()?;
-		let slot_num = timestamp / self.slot_duration;
-		inherent_data.put_data(INHERENT_IDENTIFIER, &slot_num)
-	}
-
-	fn error_to_string(&self, error: &[u8]) -> Option<String> {
-		inherents::Error::decode(&mut &error[..]).map(|e| e.into_string()).ok()
-	}
-}
-
-pub trait Trait: timestamp::Trait {
+pub trait Trait: paint_timestamp::Trait {
 	/// The identifier type for an authority.
 	type AuthorityId: Member + Parameter + RuntimeAppPublic + Default;
 }
@@ -249,7 +176,7 @@ impl<T: Trait> Module<T> {
 	pub fn slot_duration() -> T::Moment {
 		// we double the minimum block-period so each author can always propose within
 		// the majority of its slot.
-		<T as timestamp::Trait>::MinimumPeriod::get().saturating_mul(2.into())
+		<T as paint_timestamp::Trait>::MinimumPeriod::get().saturating_mul(2.into())
 	}
 
 	fn on_timestamp_set(now: T::Moment, slot_duration: T::Moment) {
@@ -278,7 +205,7 @@ impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
 }
 
 impl<T: Trait> ProvideInherent for Module<T> {
-	type Call = timestamp::Call<T>;
+	type Call = paint_timestamp::Call<T>;
 	type Error = MakeFatalError<inherents::Error>;
 	const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
@@ -289,7 +216,7 @@ impl<T: Trait> ProvideInherent for Module<T> {
 	/// Verify the validity of the inherent using the timestamp.
 	fn check_inherent(call: &Self::Call, data: &InherentData) -> result::Result<(), Self::Error> {
 		let timestamp = match call {
-			timestamp::Call::set(ref timestamp) => timestamp.clone(),
+			paint_timestamp::Call::set(ref timestamp) => timestamp.clone(),
 			_ => return Ok(()),
 		};
 
