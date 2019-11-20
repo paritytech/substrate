@@ -189,28 +189,57 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 	}
 }
 
+use core::cmp::{Ord, Ordering};
+
+#[derive(Eq)]
+struct BlockHashKey<Block: BlockT>(Block::Hash);
+
+impl<Block: BlockT> BlockHashKey<Block> {
+	fn new(hash: Block::Hash) -> Self {
+		Self(hash)
+	}
+}
+
+impl<Block: BlockT> Ord for BlockHashKey<Block> {
+	fn cmp(&self, other: &Self) -> Ordering {
+		self.0.as_ref().cmp(other.0.as_ref())
+	}
+}
+
+impl<Block: BlockT> PartialOrd for BlockHashKey<Block> {
+	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+		Some(self.0.as_ref().cmp(other.0.as_ref()))
+	}
+}
+
+impl<Block: BlockT> PartialEq for BlockHashKey<Block> {
+	fn eq(&self, other: &Self) -> bool {
+		self.0.as_ref() == other.0.as_ref()
+	}
+}
+
 /// A utility trait implementing `grandpa::Chain` using a given set of headers.
 /// This is useful when validating commits, using the given set of headers to
 /// verify a valid ancestry route to the target commit block.
 // Since keys in a BTreeMap need to implement `Ord` we can't use Block::Hash directly.
 // We need to turn the Hash into a slice of u8, which does implement Ord.
-struct AncestryChain<'a, Block: BlockT> {
-	ancestry: BTreeMap<&'a [u8], Block::Header>,
+struct AncestryChain<Block: BlockT> {
+	ancestry: BTreeMap<BlockHashKey<Block>, Block::Header>,
 }
 
-impl<Block: BlockT> AncestryChain<'_, Block> {
+impl<Block: BlockT> AncestryChain<Block> {
 	fn new(ancestry: &[Block::Header]) -> AncestryChain<Block> {
 		let ancestry: BTreeMap<_, _> = ancestry
 			.iter()
 			.cloned()
-			.map(|h: Block::Header| (h.hash().as_ref(), h))
+			.map(|h: Block::Header| (BlockHashKey::new(h.hash()), h))
 			.collect();
 
 		AncestryChain { ancestry }
 	}
 }
 
-impl<Block: BlockT> grandpa::Chain<Block::Hash, NumberFor<Block>> for AncestryChain<'_, Block> where
+impl<Block: BlockT> grandpa::Chain<Block::Hash, NumberFor<Block>> for AncestryChain<Block> where
 	NumberFor<Block>: grandpa::BlockNumberOps
 {
 	fn ancestry(&self, base: Block::Hash, block: Block::Hash) -> Result<Vec<Block::Hash>, GrandpaError> {
@@ -218,7 +247,9 @@ impl<Block: BlockT> grandpa::Chain<Block::Hash, NumberFor<Block>> for AncestryCh
 		let mut current_hash = block;
 		loop {
 			if current_hash == base { break; }
-			match self.ancestry.get(current_hash.as_ref()) {
+
+			let key = BlockHashKey::new(current_hash);
+			match self.ancestry.get(&key) {
 				Some(current_header) => {
 					current_hash = *current_header.parent_hash();
 					route.push(current_hash);
