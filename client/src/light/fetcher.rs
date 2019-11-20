@@ -400,8 +400,12 @@ pub mod tests {
 		use test_client::TestClientBuilderExt;
 		// prepare remote client
 		let remote_client = test_client::TestClientBuilder::new()
-			.add_extra_child_storage(b":child_storage:default:child1".to_vec(), CHILD_INFO_1, b"key1".to_vec(), b"value1".to_vec())
-			.build();
+			.add_extra_child_storage(
+				b":child_storage:default:child1".to_vec(),
+				CHILD_INFO_1,
+				b"key1".to_vec(),
+				b"value1".to_vec(),
+			).build();
 		let remote_block_id = BlockId::Number(0);
 		let remote_block_hash = remote_client.block_hash(0).unwrap().unwrap();
 		let mut remote_block_header = remote_client.header(&remote_block_id).unwrap().unwrap();

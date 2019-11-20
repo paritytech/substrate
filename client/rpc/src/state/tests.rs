@@ -84,21 +84,40 @@ fn should_return_child_storage() {
 		.build());
 	let genesis_hash = client.genesis_hash();
 	let client = new_full(client, Subscriptions::new(Arc::new(core.executor())));
-	let child_key = StorageKey(well_known_keys::CHILD_STORAGE_KEY_PREFIX.iter().chain(b"test").cloned().collect());
+	let child_key = StorageKey(
+		well_known_keys::CHILD_STORAGE_KEY_PREFIX.iter().chain(b"test").cloned().collect()
+	);
 	let key = StorageKey(b"key".to_vec());
 
 
 	assert_matches!(
-		client.child_storage(child_key.clone(), child_info.clone(), child_type, key.clone(), Some(genesis_hash).into()).wait(),
+		client.child_storage(
+			child_key.clone(),
+			child_info.clone(),
+			child_type,
+			key.clone(),
+			Some(genesis_hash).into(),
+		).wait(),
 		Ok(Some(StorageData(ref d))) if d[0] == 42 && d.len() == 1
 	);
 	assert_matches!(
-		client.child_storage_hash(child_key.clone(), child_info.clone(), child_type, key.clone(), Some(genesis_hash).into())
-			.wait().map(|x| x.is_some()),
+		client.child_storage_hash(
+			child_key.clone(),
+			child_info.clone(),
+			child_type,
+			key.clone(),
+			Some(genesis_hash).into(),
+		).wait().map(|x| x.is_some()),
 		Ok(true)
 	);
 	assert_matches!(
-		client.child_storage_size(child_key.clone(), child_info.clone(), child_type, key.clone(), None).wait(),
+		client.child_storage_size(
+			child_key.clone(),
+			child_info.clone(),
+			child_type,
+			key.clone(),
+			None,
+		).wait(),
 		Ok(Some(1))
 	);
 }
