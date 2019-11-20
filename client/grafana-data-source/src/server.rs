@@ -19,7 +19,7 @@ use hyper::{Body, Request, Response, header, service::{service_fn, make_service_
 use chrono::{Duration, Utc};
 use futures_util::{FutureExt, future::{Future, select, Either}};
 use futures_timer::Delay;
-use crate::{METRICS, util, types::{Target, Query, TimeseriesData}, networking::Incoming};
+use crate::{METRICS, util, types::{Target, Query, TimeseriesData}};
 
 #[derive(Debug, derive_more::Display)]
 enum Error {
@@ -98,6 +98,7 @@ async fn map_request_to_response<Req, Res, T>(req: Request<Body>, transformation
 #[derive(Clone)]
 pub struct Executor;
 
+#[cfg(not(target_os = "unknown"))]
 impl<T> tokio_executor::TypedExecutor<T> for Executor
 	where
 		T: Future + Send + 'static,
@@ -110,7 +111,10 @@ impl<T> tokio_executor::TypedExecutor<T> for Executor
 }
 
 /// Start the data source server.
+#[cfg(not(target_os = "unknown"))]
 pub async fn run_server(address: std::net::SocketAddr) -> Result<(), hyper::Error> {
+	use crate::networking::Incoming;
+
 	let listener = async_std::net::TcpListener::bind(&address).await.unwrap();
 
 	let service = make_service_fn(|_| {
@@ -133,6 +137,11 @@ pub async fn run_server(address: std::net::SocketAddr) -> Result<(), hyper::Erro
 	};
 
 	result
+}
+
+#[cfg(target_os = "unknown")]
+pub async fn run_server(_: std::net::SocketAddr) -> Result<(), hyper::Error> {
+	Ok(())
 }
 
 /// Periodically remove old metrics.

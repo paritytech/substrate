@@ -30,6 +30,7 @@ use parking_lot::RwLock;
 mod types;
 mod server;
 mod util;
+#[cfg(not(target_os = "unknown"))]
 mod networking;
 
 pub use server::run_server;
