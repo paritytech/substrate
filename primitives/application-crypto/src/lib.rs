@@ -141,7 +141,7 @@ macro_rules! app_crypto_pair {
 				<$pair>::verify_weak(sig, message, pubkey)
 			}
 			fn public(&self) -> Self::Public { Public(self.0.public()) }
-			fn to_raw_vec(&self) -> Vec<u8> { self.0.to_raw_vec() }
+			fn to_raw_vec(&self) -> $crate::Vec<u8> { self.0.to_raw_vec() }
 		}
 
 		impl $crate::AppKey for Pair {

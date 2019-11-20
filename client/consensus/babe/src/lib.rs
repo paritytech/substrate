@@ -58,7 +58,10 @@
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
-pub use babe_primitives::*;
+pub use babe_primitives::{
+	BabeApi, ConsensusLog, BABE_ENGINE_ID, BabePreDigest, SlotNumber, BabeConfiguration,
+	CompatibleDigestItem,
+};
 pub use consensus_common::SyncOracle;
 use std::{collections::HashMap, sync::Arc, u64, pin::Pin, time::{Instant, Duration}};
 use babe_primitives;
@@ -80,10 +83,8 @@ use consensus_common::{
 	self, BlockImport, Environment, Proposer, BlockCheckParams,
 	ForkChoiceStrategy, BlockImportParams, BlockOrigin, Error as ConsensusError,
 };
-use paint_babe::{
-	BabeInherentData,
-	timestamp::{TimestampInherentData, InherentType as TimestampInherent}
-};
+use babe_primitives::inherents::BabeInherentData;
+use sp_timestamp::{TimestampInherentData, InherentType as TimestampInherent};
 use consensus_common::SelectChain;
 use consensus_common::import_queue::{Verifier, BasicQueue, CacheKeyId};
 use client_api::{
@@ -771,9 +772,9 @@ fn register_babe_inherent_data_provider(
 	slot_duration: u64,
 ) -> Result<(), consensus_common::Error> {
 	debug!(target: "babe", "Registering");
-	if !inherent_data_providers.has_provider(&paint_babe::INHERENT_IDENTIFIER) {
+	if !inherent_data_providers.has_provider(&babe_primitives::inherents::INHERENT_IDENTIFIER) {
 		inherent_data_providers
-			.register_provider(paint_babe::InherentDataProvider::new(slot_duration))
+			.register_provider(babe_primitives::inherents::InherentDataProvider::new(slot_duration))
 			.map_err(Into::into)
 			.map_err(consensus_common::Error::InherentData)
 	} else {

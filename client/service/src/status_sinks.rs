@@ -113,14 +113,14 @@ mod tests {
 	use std::time::Duration;
 
 	#[test]
-	fn basic_usage() {
+	fn works() {
+		// We're not testing that the `StatusSink` properly enforces an order in the intervals, as
+		// this easily causes test failures on busy CPUs.
+
 		let mut status_sinks = StatusSinks::new();
 
-		let (tx1, rx1) = mpsc::unbounded();
-		status_sinks.push(Duration::from_millis(200), tx1);
-
-		let (tx2, rx2) = mpsc::unbounded();
-		status_sinks.push(Duration::from_millis(500), tx2);
+		let (tx, rx) = mpsc::unbounded();
+		status_sinks.push(Duration::from_millis(100), tx);
 
 		let mut runtime = tokio::runtime::Runtime::new().unwrap();
 
@@ -130,15 +130,15 @@ mod tests {
 			Ok(Async::NotReady)
 		}));
 
-		let done = rx1
+		let done = rx
 			.into_future()
 			.and_then(|(item, rest)| {
 				assert_eq!(item, Some(6));
 				rest.into_future()
 			})
-			.and_then(|(item, _)| {
+			.and_then(|(item, rest)| {
 				assert_eq!(item, Some(7));
-				rx2.into_future()
+				rest.into_future()
 			})
 			.map(|(item, _)| {
 				assert_eq!(item, Some(8));

@@ -636,9 +636,8 @@ pub trait ServiceBuilderImport {
 	/// Starts the process of importing blocks.
 	fn import_blocks(
 		self,
-		exit: impl Future<Item=(),Error=()> + Send + 'static,
-		input: impl Read + Seek,
-	) -> Result<Box<dyn Future<Item = (), Error = ()> + Send>, Error>;
+		input: impl Read + Seek + Send + 'static,
+	) -> Box<dyn Future<Item = (), Error = Error> + Send>;
 }
 
 /// Implemented on `ServiceBuilder`. Allows exporting blocks once you have given all the required
@@ -649,13 +648,12 @@ pub trait ServiceBuilderExport {
 
 	/// Performs the blocks export.
 	fn export_blocks(
-		&self,
-		exit: impl Future<Item=(),Error=()> + Send + 'static,
-		output: impl Write,
+		self,
+		output: impl Write + 'static,
 		from: NumberFor<Self::Block>,
 		to: Option<NumberFor<Self::Block>>,
 		json: bool
-	) -> Result<(), Error>;
+	) -> Box<dyn Future<Item = (), Error = Error>>;
 }
 
 /// Implemented on `ServiceBuilder`. Allows reverting the chain once you have given all the
@@ -687,13 +685,11 @@ impl<
 {
 	fn import_blocks(
 		self,
-		exit: impl Future<Item=(),Error=()> + Send + 'static,
-		input: impl Read + Seek,
-	) -> Result<Box<dyn Future<Item = (), Error = ()> + Send>, Error> {
+		input: impl Read + Seek + Send + 'static,
+	) -> Box<dyn Future<Item = (), Error = Error> + Send> {
 		let client = self.client;
 		let mut queue = self.import_queue;
-		import_blocks!(TBl, client, queue, exit, input)
-			.map(|f| Box::new(f) as Box<_>)
+		Box::new(import_blocks!(TBl, client, queue, input).compat())
 	}
 }
 
@@ -703,20 +699,20 @@ impl<TBl, TRtApi, TCfg, TGen, TCSExt, TBackend, TExec, TFchr, TSc, TImpQu, TFprb
 where
 	TBl: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
 	TBackend: 'static + client_api::backend::Backend<TBl, Blake2Hasher> + Send,
-	TExec: 'static + client::CallExecutor<TBl, Blake2Hasher> + Send + Sync + Clone
+	TExec: 'static + client::CallExecutor<TBl, Blake2Hasher> + Send + Sync + Clone,
+	TRtApi: 'static + Send + Sync,
 {
 	type Block = TBl;
 
 	fn export_blocks(
-		&self,
-		exit: impl Future<Item=(),Error=()> + Send + 'static,
-		mut output: impl Write,
+		self,
+		mut output: impl Write + 'static,
 		from: NumberFor<TBl>,
 		to: Option<NumberFor<TBl>>,
 		json: bool
-	) -> Result<(), Error> {
-		let client = &self.client;
-		export_blocks!(client, exit, output, from, to, json)
+	) -> Box<dyn Future<Item = (), Error = Error>> {
+		let client = self.client;
+		Box::new(export_blocks!(client, output, from, to, json).compat())
 	}
 }
 
