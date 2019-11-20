@@ -16,9 +16,9 @@ num-traits = "0.2.8"
 runtime-version = { package = "sr-version", path = "../../../primitives/sr-version" }
 runtime-io = { package = "sr-io", path = "../../../primitives/sr-io" }
 inherents = { package = "substrate-inherents", path = "../../../primitives/inherents" }
+sp-timestamp = { path = "../../../primitives/timestamp" }
 substrate-telemetry = { path = "../../telemetry" }
 keystore = { package = "substrate-keystore", path = "../../keystore" }
-paint-babe = { path = "../../../paint/babe" }
 client-api = { package = "substrate-client-api", path = "../../api" }
 client = { package = "substrate-client", path = "../../" }
 sr-api = { path = "../../../primitives/sr-api" }

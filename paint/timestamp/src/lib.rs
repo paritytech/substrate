@@ -91,11 +91,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use rstd::{result, cmp};
-use codec::Encode;
-#[cfg(feature = "std")]
-use codec::Decode;
-#[cfg(feature = "std")]
-use inherents::ProvideInherentData;
+use inherents::{ProvideInherent, InherentData, InherentIdentifier};
 use support::{Parameter, decl_storage, decl_module};
 use support::traits::{Time, Get};
 use sr_primitives::{
@@ -106,93 +102,10 @@ use sr_primitives::{
 };
 use sr_primitives::weights::SimpleDispatchInfo;
 use system::ensure_none;
-use inherents::{InherentIdentifier, ProvideInherent, IsFatalError, InherentData};
-
-/// The identifier for the `timestamp` inherent.
-pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"timstap0";
-/// The type of the inherent.
-pub type InherentType = u64;
-
-/// Errors that can occur while checking the timestamp inherent.
-#[derive(Encode, sr_primitives::RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Decode))]
-pub enum InherentError {
-	/// The timestamp is valid in the future.
-	/// This is a non-fatal-error and will not stop checking the inherents.
-	ValidAtTimestamp(InherentType),
-	/// Some other error.
-	Other(RuntimeString),
-}
-
-impl IsFatalError for InherentError {
-	fn is_fatal_error(&self) -> bool {
-		match self {
-			InherentError::ValidAtTimestamp(_) => false,
-			InherentError::Other(_) => true,
-		}
-	}
-}
-
-impl InherentError {
-	/// Try to create an instance ouf of the given identifier and data.
-	#[cfg(feature = "std")]
-	pub fn try_from(id: &InherentIdentifier, data: &[u8]) -> Option<Self> {
-		if id == &INHERENT_IDENTIFIER {
-			<InherentError as codec::Decode>::decode(&mut &data[..]).ok()
-		} else {
-			None
-		}
-	}
-}
-
-/// Auxiliary trait to extract timestamp inherent data.
-pub trait TimestampInherentData {
-	/// Get timestamp inherent data.
-	fn timestamp_inherent_data(&self) -> Result<InherentType, inherents::Error>;
-}
-
-impl TimestampInherentData for InherentData {
-	fn timestamp_inherent_data(&self) -> Result<InherentType, inherents::Error> {
-		self.get_data(&INHERENT_IDENTIFIER)
-			.and_then(|r| r.ok_or_else(|| "Timestamp inherent data not found".into()))
-	}
-}
-
-#[cfg(feature = "std")]
-pub struct InherentDataProvider;
-
-#[cfg(feature = "std")]
-impl ProvideInherentData for InherentDataProvider {
-	fn inherent_identifier(&self) -> &'static InherentIdentifier {
-		&INHERENT_IDENTIFIER
-	}
-
-	fn provide_inherent_data(
-		&self,
-		inherent_data: &mut InherentData,
-	) -> Result<(), inherents::Error> {
-		use std::time::SystemTime;
-
-		let now = SystemTime::now();
-		now.duration_since(SystemTime::UNIX_EPOCH)
-			.map_err(|_| {
-				"Current time is before unix epoch".into()
-			}).and_then(|d| {
-				let duration: InherentType = d.as_millis() as u64;
-				inherent_data.put_data(INHERENT_IDENTIFIER, &duration)
-			})
-	}
-
-	fn error_to_string(&self, error: &[u8]) -> Option<String> {
-		InherentError::try_from(&INHERENT_IDENTIFIER, error).map(|e| format!("{:?}", e))
-	}
-}
-
-/// A trait which is called when the timestamp is set.
-#[impl_trait_for_tuples::impl_for_tuples(30)]
-pub trait OnTimestampSet<Moment> {
-	fn on_timestamp_set(moment: Moment);
-}
+use sp_timestamp::{
+	InherentError, INHERENT_IDENTIFIER, InherentType,
+	OnTimestampSet,
+};
 
 /// The module configuration trait
 pub trait Trait: system::Trait {

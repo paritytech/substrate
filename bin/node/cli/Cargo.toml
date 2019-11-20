@@ -39,6 +39,7 @@ babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../
 grandpa_primitives = { package = "substrate-finality-grandpa-primitives", path = "../../../primitives/finality-grandpa" }
 primitives = { package = "substrate-primitives", path = "../../../primitives/core" }
 sr-primitives = { path = "../../../primitives/sr-primitives" }
+sp-timestamp = { path = "../../../primitives/timestamp", default-features = false }
 
 # core dependencies
 runtime-io = { package = "sr-io", path = "../../../primitives/sr-io" }
@@ -62,7 +63,7 @@ authority-discovery = { package = "substrate-authority-discovery", path = "../..
 # paint dependencies
 indices = { package = "paint-indices", path = "../../../paint/indices" }
 timestamp = { package = "paint-timestamp", path = "../../../paint/timestamp", default-features = false }
-finality_tracker = { package = "paint-finality-tracker", path = "../../../paint/finality-tracker", default-features = false }
+sp-finality-tracker = { path = "../../../primitives/finality-tracker", default-features = false }
 contracts = { package = "paint-contracts", path = "../../../paint/contracts" }
 system = { package = "paint-system", path = "../../../paint/system" }
 balances = { package = "paint-balances", path = "../../../paint/balances" }
@@ -70,7 +71,6 @@ transaction-payment = { package = "paint-transaction-payment", path = "../../../
 support = { package = "paint-support", path = "../../../paint/support", default-features = false }
 im_online = { package = "paint-im-online", path = "../../../paint/im-online", default-features = false }
 sr-authority-discovery = { package = "paint-authority-discovery", path = "../../../paint/authority-discovery"}
-
 
 # node-specific dependencies
 node-runtime = { path = "../runtime" }

@@ -387,7 +387,7 @@ impl<'a> ParseAndPrepareExport<'a> {
 			Some(filename) => Box::new(File::create(filename)?),
 			None => Box::new(stdout()),
 		};
-		
+
 		// Note: while we would like the user to handle the exit themselves, we handle it here
 		// for backwards compatibility reasons.
 		let (exit_send, exit_recv) = std::sync::mpsc::channel();

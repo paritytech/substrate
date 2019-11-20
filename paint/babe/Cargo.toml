@@ -15,6 +15,7 @@ sr-staking-primitives = { path = "../../primitives/sr-staking-primitives", defau
 support = { package = "paint-support", path = "../support", default-features = false }
 system = { package = "paint-system", path = "../system", default-features = false }
 timestamp = { package = "paint-timestamp", path = "../timestamp", default-features = false }
+sp-timestamp = { path = "../../primitives/timestamp", default-features = false }
 session = { package = "paint-session", path = "../session", default-features = false }
 babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../../primitives/consensus/babe", default-features = false }
 runtime-io ={ package = "sr-io", path = "../../primitives/sr-io", default-features = false }
@@ -37,6 +38,7 @@ std = [
 	"sr-staking-primitives/std",
 	"system/std",
 	"timestamp/std",
+	"sp-timestamp/std",
 	"inherents/std",
 	"babe-primitives/std",
 	"session/std",
