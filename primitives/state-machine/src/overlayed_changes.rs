@@ -339,6 +339,31 @@ impl OverlayedChanges {
 			false => None,
 		}
 	}
+
+	/// Returns the next (in lexicographic order) storage key in the overlayed alongside its value.
+	/// If no value is next then `None` is returned.
+	pub fn next_storage_key_change(&self, key: &[u8]) -> Option<(&[u8], &OverlayedValue)> {
+		// TODO TODO: this implementation is not efficient. Cost: O(n) with n the size of overlay.
+
+		let next_prospective_key = self.prospective.top.iter()
+			.filter(|(k, _)| &k[..] > key)
+			.min_by(|&(k1, _), &(k2, _)| k1.cmp(k2))
+			.map(|(k, v)| (&k[..], v));
+
+		let next_committed_key = self.committed.top.iter()
+			.filter(|(k, _)| &k[..] > key)
+			.min_by(|&(k1, _), &(k2, _)| k1.cmp(k2))
+			.map(|(k, v)| (&k[..], v));
+
+		match (next_committed_key, next_prospective_key) {
+			// Committed is strictly less than prospective
+			(Some(committed_key), Some(prospective_key)) if committed_key.0 < prospective_key.0 =>
+				Some(committed_key),
+			(committed_key, None) => committed_key,
+			// Prospective key is less or equal to committed or committed doesn't exist
+			(_, prospective_key) => prospective_key,
+		}
+	}
 }
 
 #[cfg(test)]
@@ -542,5 +567,42 @@ mod tests {
 
 		assert_eq!(overlay.prospective,
 			Default::default());
+	}
+
+	#[test]
+	fn next_storage_key_change_works() {
+		let mut overlay = OverlayedChanges::default();
+		overlay.set_storage(vec![20], Some(vec![20]));
+		overlay.set_storage(vec![30], Some(vec![30]));
+		overlay.set_storage(vec![40], Some(vec![40]));
+		overlay.commit_prospective();
+		overlay.set_storage(vec![10], Some(vec![10]));
+		overlay.set_storage(vec![30], None);
+
+		// next_prospective < next_committed
+		let next_to_5 = overlay.next_storage_key_change(&[5]).unwrap();
+		assert_eq!(next_to_5.0.to_vec(), vec![10]);
+		assert_eq!(next_to_5.1.value, Some(vec![10]));
+
+		// next_committed < next_prospective
+		let next_to_10 = overlay.next_storage_key_change(&[10]).unwrap();
+		assert_eq!(next_to_10.0.to_vec(), vec![20]);
+		assert_eq!(next_to_10.1.value, Some(vec![20]));
+
+		// next_committed == next_prospective
+		let next_to_20 = overlay.next_storage_key_change(&[20]).unwrap();
+		assert_eq!(next_to_20.0.to_vec(), vec![30]);
+		assert_eq!(next_to_20.1.value, None);
+
+		// next_committed, no next_prospective
+		let next_to_30 = overlay.next_storage_key_change(&[30]).unwrap();
+		assert_eq!(next_to_30.0.to_vec(), vec![40]);
+		assert_eq!(next_to_30.1.value, Some(vec![40]));
+
+		overlay.set_storage(vec![50], Some(vec![50]));
+		// next_prospective, no next_committed
+		let next_to_40 = overlay.next_storage_key_change(&[40]).unwrap();
+		assert_eq!(next_to_40.0.to_vec(), vec![50]);
+		assert_eq!(next_to_40.1.value, Some(vec![50]));
 	}
 }

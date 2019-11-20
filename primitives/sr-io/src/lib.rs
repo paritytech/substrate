@@ -210,6 +210,11 @@ pub trait Storage {
 	fn blake2_256_ordered_trie_root(input: Vec<Vec<u8>>) -> H256 {
 		Layout::<primitives::Blake2Hasher>::ordered_trie_root(input)
 	}
+
+	/// Get the next key in storage after the given one in lexicographic order.
+	fn next_key(&mut self, key: &[u8]) -> Option<Vec<u8>> {
+		self.next_storage_key(&key)
+	}
 }
 
 /// Interface that provides miscellaneous functions for communicating between the runtime and the node.

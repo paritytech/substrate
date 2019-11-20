@@ -544,6 +544,11 @@ impl<H: Hasher, S: StateBackend<H>, B: BlockT> StateBackend<H> for CachingState<
 		self.state.exists_child_storage(storage_key, key)
 	}
 
+	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		// TODO TODO: cache
+		self.state.next_storage_key(key)
+	}
+
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], f: F) {
 		self.state.for_keys_in_child_storage(storage_key, f)
 	}

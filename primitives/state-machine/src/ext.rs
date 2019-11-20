@@ -330,6 +330,22 @@ where
 		result
 	}
 
+	fn next_storage_key(&self, key: &[u8]) -> Option<Vec<u8>> {
+		// TODO TODO: cache next_backend_key with a cache: `Option<(Vec<u8>, Vec<u8>)>`
+		let next_backend_key = self.backend.next_storage_key(key).expect(EXT_NOT_ALLOWED_TO_FAIL);
+		let next_overlay_key_change = self.overlay.next_storage_key_change(key);
+
+		match (next_backend_key, next_overlay_key_change) {
+			(Some(backend_key), Some(overlay_key)) if &backend_key[..] < overlay_key.0 => Some(backend_key),
+			(backend_key, None) => backend_key,
+			(_, Some(overlay_key)) => if overlay_key.1.value.is_some() {
+				Some(overlay_key.0.to_vec())
+			} else {
+				self.next_storage_key(&overlay_key.0[..])
+			},
+		}
+	}
+
 	fn place_storage(&mut self, key: Vec<u8>, value: Option<Vec<u8>>) {
 		trace!(target: "state-trace", "{:04x}: Put {}={:?}",
 			self.id,
@@ -602,5 +618,38 @@ mod tests {
 			ext.storage_changes_root(Default::default()).unwrap(),
 			Some(hex!("96f5aae4690e7302737b6f9b7f8567d5bbb9eac1c315f80101235a92d9ec27f4").into()),
 		);
+	}
+
+	#[test]
+	fn next_storage_key_works() {
+		let mut overlay = OverlayedChanges::default();
+		overlay.set_storage(vec![20], None);
+		overlay.set_storage(vec![30], Some(vec![31]));
+		let backend = vec![
+			(None, vec![10], Some(vec![10])),
+			(None, vec![20], Some(vec![20])),
+			(None, vec![40], Some(vec![40])),
+		].into();
+
+		let ext = TestExt::new(&mut overlay, &backend, None, None);
+
+		// next_backend < next_overlay
+		assert_eq!(ext.next_storage_key(&[5]), Some(vec![10]));
+
+		// next_backend == next_overlay but next_overlay is a delete
+		assert_eq!(ext.next_storage_key(&[10]), Some(vec![30]));
+
+		// next_overlay < next_backend
+		assert_eq!(ext.next_storage_key(&[20]), Some(vec![30]));
+
+		// next_backend exist but next_overlay doesn't exist
+		assert_eq!(ext.next_storage_key(&[30]), Some(vec![40]));
+
+		drop(ext);
+		overlay.set_storage(vec![50], Some(vec![50]));
+		let ext = TestExt::new(&mut overlay, &backend, None, None);
+
+		// next_overlay exist but next_backend doesn't exist
+		assert_eq!(ext.next_storage_key(&[40]), Some(vec![50]));
 	}
 }

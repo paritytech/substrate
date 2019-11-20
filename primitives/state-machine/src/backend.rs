@@ -66,6 +66,9 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 		Ok(self.child_storage(storage_key, key)?.is_some())
 	}
 
+	/// Return the next key in storage in lexicographic order or `None` if there is no value.
+	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
+
 	/// Retrieve all entries keys of child storage and call `f` for each of those keys.
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], f: F);
 
@@ -168,6 +171,10 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 
 	fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		(*self).child_storage(storage_key, key)
+	}
+
+	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		(*self).next_storage_key(key)
 	}
 
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], f: F) {
@@ -377,6 +384,12 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 
 	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {
 		Ok(self.inner.get(&None).map(|map| map.get(key).is_some()).unwrap_or(false))
+	}
+
+	/// Next storage key is not optimised in InMemory
+	// TODO TODO: should we optimize this ?
+	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		Ok(self.inner.get(&None).and_then(|map| map.keys().filter(|k| &k[..] > key).min().cloned()))
 	}
 
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
