@@ -17,7 +17,9 @@ runtime-io ={ package = "sr-io", path = "../../primitives/sr-io", default-featur
 support = { package = "paint-support", path = "../support", default-features = false }
 substrate-consensus-aura-primitives = { path = "../../primitives/consensus/aura", default-features = false}
 system = { package = "paint-system", path = "../system", default-features = false }
-timestamp = { package = "paint-timestamp", path = "../timestamp", default-features = false }
+sp-timestamp = { package = "sp-timestamp", path = "../../primitives/timestamp", default-features = false }
+paint-timestamp = { package = "paint-timestamp", path = "../timestamp", default-features = false }
+
 
 [dev-dependencies]
 lazy_static = "1.4.0"
@@ -37,5 +39,6 @@ std = [
 	"support/std",
 	"substrate-consensus-aura-primitives/std",
 	"system/std",
-	"timestamp/std",
+	"sp-timestamp/std",
+	"paint-timestamp/std",
 ]
