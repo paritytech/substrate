@@ -93,6 +93,7 @@ std = [
 	"externalities",
 	"primitives-storage/std",
 	"runtime-interface/std",
+	"zeroize/alloc"
 ]
 
 # This feature enables all crypto primitives for `no_std` builds like microcontrollers
