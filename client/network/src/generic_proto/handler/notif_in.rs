@@ -66,13 +66,11 @@ where
 		self.in_protocol.clone()
 	}
 
-	fn into_handler(self, remote_peer_id: &PeerId, connected_point: &ConnectedPoint) -> Self::Handler {
+	fn into_handler(self, _: &PeerId, _: &ConnectedPoint) -> Self::Handler {
 		NotifsInHandler {
 			in_protocol: self.in_protocol,
 			substream: None,
 			pending_accept_refuses: 0,
-			endpoint: connected_point.to_endpoint(),
-			remote_peer_id: remote_peer_id.clone(),
 			events_queue: SmallVec::new(),
 		}
 	}
@@ -82,16 +80,6 @@ where
 pub struct NotifsInHandler<TSubstream> {
 	/// Configuration for the protocol upgrade to negotiate for inbound substreams.
 	in_protocol: NotificationsIn,
-
-	/// Identifier of the node we're talking to. Used only for logging purposes and shouldn't have
-	/// any influence on the behaviour.
-	// TODO: remove?
-	remote_peer_id: PeerId,
-
-	/// Whether we are the connection dialer or listener. Used only for logging purposes and
-	/// shouldn't have any influence on the behaviour.
-	// TODO: remove?
-	endpoint: Endpoint,
 
 	/// Substream that is open with the remote.
 	substream: Option<NotificationsInSubstream<TSubstream>>,

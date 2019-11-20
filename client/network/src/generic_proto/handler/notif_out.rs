@@ -28,8 +28,16 @@ use libp2p::swarm::{
 };
 use log::error;
 use smallvec::SmallVec;
-use std::{borrow::Cow, fmt, io, marker::PhantomData, mem, time::Duration};
+use std::{borrow::Cow, fmt, io, marker::PhantomData, mem, time::Duration, time::Instant};
 use tokio_io::{AsyncRead, AsyncWrite};
+
+/// Maximum duration to open a substream and receive the handshake message. After that, we
+/// consider that we failed to open the substream.
+const OPEN_TIMEOUT: Duration = Duration::from_secs(10);
+/// After successfully establishing a connection with the remote, we keep the connection open for
+/// at least this amount of time in order to give the rest of the code the chance to notify us to
+/// open substreams.
+const INITIAL_KEEPALIVE_TIME: Duration = Duration::from_secs(5);
 
 /// Implements the `IntoProtocolsHandler` trait of libp2p.
 ///
@@ -67,11 +75,10 @@ where
 		DeniedUpgrade
 	}
 
-	fn into_handler(self, remote_peer_id: &PeerId, connected_point: &ConnectedPoint) -> Self::Handler {
+	fn into_handler(self, _: &PeerId, _: &ConnectedPoint) -> Self::Handler {
 		NotifsOutHandler {
 			proto_name: self.proto_name,
-			endpoint: connected_point.to_endpoint(),
-			remote_peer_id: remote_peer_id.clone(),
+			when_connection_open: Instant::now(),
 			state: State::Disabled,
 			events_queue: SmallVec::new(),
 		}
@@ -90,18 +97,11 @@ pub struct NotifsOutHandler<TSubstream> {
 	/// Name of the protocol to negotiate.
 	proto_name: Cow<'static, [u8]>,
 
-	/// Identifier of the node we're talking to. Used only for logging purposes and shouldn't have
-	/// any influence on the behaviour.
-	// TODO: remove?
-	remote_peer_id: PeerId,
-
-	/// Whether we are the connection dialer or listener. Used only for logging purposes and
-	/// shouldn't have any influence on the behaviour.
-	// TODO: remove?
-	endpoint: Endpoint,
-
 	/// Relationship with the node we're connected to.
 	state: State<TSubstream>,
+
+	/// When the connection with the remote has been successfully established.
+	when_connection_open: Instant,
 
 	/// Queue of events to send to the outside.
 	///
@@ -116,7 +116,6 @@ enum State<TSubstream> {
 	Disabled,
 
 	/// The handler is disabled. A substream is open and needs to be closed.
-	// TODO: needed?
 	DisabledOpen(NotificationsOutSubstream<TSubstream>),
 
 	/// The handler is disabled but we are still trying to open a substream with the remote.
@@ -151,7 +150,6 @@ pub enum NotifsOutHandlerIn {
 	/// Sends a message on the notifications substream. Ignored if the substream isn't open.
 	///
 	/// It is only valid to send this if the handler has been enabled.
-	// TODO: is ignoring the correct way to do this?
 	Send(Vec<u8>),
 }
 
@@ -169,7 +167,7 @@ pub enum NotifsOutHandlerOut {
 
 	/// We tried to open a notifications substream, but the remote refused it.
 	///
-	/// The handler is still enabled and will try again in a few seconds.
+	/// Can only happen if we're in a closed state.
 	Refused,
 }
 
@@ -242,7 +240,7 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static {
 					State::Disabled => {
 						self.events_queue.push(ProtocolsHandlerEvent::OutboundSubstreamRequest {
 							protocol: SubstreamProtocol::new(NotificationsOut::new(self.proto_name.clone()))
-								.with_timeout(Duration::from_secs(10)),		// TODO: proper timeout config
+								.with_timeout(OPEN_TIMEOUT),
 							info: (),
 						});
 						self.state = State::Opening;
@@ -277,14 +275,23 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static {
 			State::Disabled => {},
 			State::DisabledOpen(_) | State::Refused | State::Open(_) =>
 				error!("State mismatch in NotificationsOut"),
-			State::Opening => self.state = State::Refused,
+			State::Opening => {
+				self.state = State::Refused;
+				let ev = NotifsOutHandlerOut::Refused;
+				self.events_queue.push(ProtocolsHandlerEvent::Custom(ev));
+			},
 			State::DisabledOpening => self.state = State::Disabled,
 			State::Poisoned => error!("Notifications handler in a poisoned state"),
 		}
 	}
 
 	fn connection_keep_alive(&self) -> KeepAlive {
-		KeepAlive::Yes // TODO: depends on state
+		match self.state {
+			State::Disabled | State::DisabledOpen(_) | State::DisabledOpening =>
+				KeepAlive::Until(self.when_connection_open + INITIAL_KEEPALIVE_TIME),
+			State::Opening | State::Open(_) => KeepAlive::Yes,
+			State::Refused | State::Poisoned => KeepAlive::No,
+		}
 	}
 
 	fn poll(
@@ -300,9 +307,27 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static {
 		}
 
 		match &mut self.state {
-			State::Open(sub) | State::DisabledOpen(sub) => match sub.process() {
+			State::Open(sub) => match sub.process() {
 				Ok(()) => {},
-				Err(err) => {},		// TODO: ?
+				Err(err) => {
+					// We try to re-open a substream.
+					self.state = State::Opening;
+					self.events_queue.push(ProtocolsHandlerEvent::OutboundSubstreamRequest {
+						protocol: SubstreamProtocol::new(NotificationsOut::new(self.proto_name.clone()))
+							.with_timeout(OPEN_TIMEOUT),
+						info: (),
+					});
+					let ev = NotifsOutHandlerOut::Closed;
+					return Ok(Async::Ready(ProtocolsHandlerEvent::Custom(ev)));
+				}
+			},
+			State::DisabledOpen(sub) => match sub.process() {
+				Ok(()) => {},
+				Err(_) => {
+					self.state = State::Disabled;
+					let ev = NotifsOutHandlerOut::Closed;
+					return Ok(Async::Ready(ProtocolsHandlerEvent::Custom(ev)));
+				},
 			},
 			_ => {}
 		}
