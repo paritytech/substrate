@@ -36,15 +36,37 @@ use sr_primitives::{
 };
 
 use primitives::ExecutionContext;
-
 use state_machine::StorageProof;
-
 use sr_api::{Core, ApiExt, ApiErrorFor};
+
+#[allow(deprecated)]
+use runtime_api::compatability_v3;
 
 pub use runtime_api::BlockBuilder as BlockBuilderApi;
 
 /// Error when the runtime failed to apply an extrinsic.
-pub struct ApplyExtrinsicFailed(pub TransactionValidityError);
+pub enum ApplyExtrinsicFailed {
+	/// The transaction cannot be included into the current block.
+	///
+	/// This doesn't necessary mean that the transaction itself is invalid, but it might be just
+	/// unappliable onto the current block.
+	Validity(TransactionValidityError),
+	/// This is used for miscelanious errors that can be represented by string and not handleable.
+	///
+	/// This will become obsolete with complete migration to v4 APIs.
+	Msg(String),
+}
+
+#[allow(deprecated)]
+impl From<compatability_v3::ApplyError> for ApplyExtrinsicFailed {
+	fn from(e: compatability_v3::ApplyError) -> Self {
+		use self::compatability_v3::ApplyError::*;
+		match e {
+			Validity(tx_validity) => Self::Validity(tx_validity),
+			e => Self::Msg(format!("Apply extrinsic failed: {:?}", e)),
+		}
+	}
+}
 
 /// Utility for building new (valid) blocks from a stream of extrinsics.
 pub struct BlockBuilder<'a, Block: BlockT, A: ProvideRuntimeApi> {
@@ -108,21 +130,43 @@ where
 		let block_id = &self.block_id;
 		let extrinsics = &mut self.extrinsics;
 
-		self.api.map_api_result(|api| {
-			match api.apply_extrinsic_with_context(
-				block_id,
-				ExecutionContext::BlockConstruction,
-				xt.clone()
-			)? {
-				Ok(_) => {
-					extrinsics.push(xt);
-					Ok(())
-				}
-				Err(e) => {
-					Err(ApplyExtrinsicFailed(e))?
-				}
-			}
-		})
+		if self
+            .api
+            .has_api_with::<dyn BlockBuilderApi<Block, Error = ApiErrorFor<A, Block>>, _>(
+                block_id,
+                |version| version < 4,
+            )?
+        {
+            // Run compatibility fallback for v3.
+            self.api.map_api_result(|api| {
+				#[allow(deprecated)]
+                match api.apply_extrinsic_before_version_4_with_context(
+                    block_id,
+                    ExecutionContext::BlockConstruction,
+                    xt.clone(),
+                )? {
+                    Ok(_) => {
+                        extrinsics.push(xt);
+                        Ok(())
+                    }
+                    Err(e) => Err(ApplyExtrinsicFailed::from(e))?,
+                }
+            })
+        } else {
+            self.api.map_api_result(|api| {
+                match api.apply_extrinsic_with_context(
+                    block_id,
+                    ExecutionContext::BlockConstruction,
+                    xt.clone(),
+                )? {
+                    Ok(_) => {
+                        extrinsics.push(xt);
+                        Ok(())
+                    }
+                    Err(tx_validity) => Err(ApplyExtrinsicFailed::Validity(tx_validity))?,
+                }
+            })
+        }
 	}
 
 	/// Consume the builder to return a valid `Block` containing all pushed extrinsics.

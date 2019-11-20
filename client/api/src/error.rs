@@ -126,7 +126,12 @@ impl<'a> From<&'a str> for Error {
 
 impl From<block_builder::ApplyExtrinsicFailed> for Error {
 	fn from(err: block_builder::ApplyExtrinsicFailed) -> Self {
-		Self::ApplyExtrinsicFailed(err.0)
+		use block_builder::ApplyExtrinsicFailed;
+		match err {
+			ApplyExtrinsicFailed::Validity(tx_validity) => Self::ApplyExtrinsicFailed(tx_validity),
+			ApplyExtrinsicFailed::Msg(msg) => Self::Msg(msg),
+		}
+
 	}
 }
 
