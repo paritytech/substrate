@@ -272,7 +272,7 @@ You can run all the tests if you like:
 [source, shell]
 cargo test --all
 
-Or just run the tests of a specific package (i.e. `cargo test -p palette-assets`)
+Or just run the tests of a specific package (i.e. `cargo test -p pallet-assets`)
 
 You can start a development chain with:
 
@@ -446,9 +446,9 @@ substrate-trie
 sr-api, sr-io, sr-primitives, sr-sandbox, sr-std, sr-version
 * Substrate Runtime Module Library (SRML)
 [source, shell]
-palette-assets, palette-balances, palette-consensus, palette-contracts, palette-council, palette-democracy, palette-example,
-palette-executive, palette-metadata, palette-session, palette-staking, palette-support, palette-system, palette-timestamp,
-palette-treasury
+pallet-assets, pallet-balances, palette-consensus, pallet-contracts, palette-council, pallet-democracy, pallet-example,
+palette-executive, palette-metadata, pallet-session, pallet-staking, palette-support, palette-system, pallet-timestamp,
+pallet-treasury
 * Node
 [source, shell]
 node-cli, node-consensus, node-executor, node-network, node-primitives, node-runtime

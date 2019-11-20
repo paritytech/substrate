@@ -148,7 +148,7 @@ impl<T: Clone> offence::Offence<T> for Offence<T> {
 	}
 
 	fn session_index(&self) -> SessionIndex {
-		// session index is not used by the palette-offences directly, but rather it exists only for
+		// session index is not used by the pallet-offences directly, but rather it exists only for
 		// filtering historical reports.
 		unimplemented!()
 	}

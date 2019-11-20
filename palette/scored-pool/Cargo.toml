@@ -1,5 +1,5 @@
 [package]
-name = "palette-scored-pool"
+name = "pallet-scored-pool"
 version = "1.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
@@ -14,7 +14,7 @@ support = { package = "palette-support", path = "../support", default-features =
 system = { package = "palette-system", path = "../system", default-features = false }
 
 [dev-dependencies]
-balances = { package = "palette-balances", path = "../balances" }
+balances = { package = "pallet-balances", path = "../balances" }
 primitives = { package = "substrate-primitives",  path = "../../primitives/core" }
 
 [features]

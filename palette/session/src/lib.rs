@@ -100,10 +100,10 @@
 //!
 //! ### Example from the SRML
 //!
-//! The [Staking module](../palette_staking/index.html) uses the Session module to get the validator set.
+//! The [Staking module](../pallet_staking/index.html) uses the Session module to get the validator set.
 //!
 //! ```
-//! use palette_session as session;
+//! use pallet_session as session;
 //! # fn not_executed<T: session::Trait>() {
 //!
 //! let validators = <session::Module<T>>::validators();
@@ -114,8 +114,8 @@
 //! ## Related Modules
 //!
 //! - [Consensus](../palette_consensus/index.html)
-//! - [Staking](../palette_staking/index.html)
-//! - [Timestamp](../palette_timestamp/index.html)
+//! - [Staking](../pallet_staking/index.html)
+//! - [Timestamp](../pallet_timestamp/index.html)
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -358,7 +358,7 @@ pub trait Trait: system::Trait {
 	/// The fraction of validators set that is safe to be disabled.
 	///
 	/// After the threshold is reached `disabled` method starts to return true,
-	/// which in combination with `palette_staking` forces a new era.
+	/// which in combination with `pallet_staking` forces a new era.
 	type DisabledValidatorsThreshold: Get<Perbill>;
 
 	/// Select initial validators.

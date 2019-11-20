@@ -20,7 +20,7 @@
 //! The Example: A simple example of a runtime module demonstrating
 //! concepts, APIs and structures common to most runtime modules.
 //!
-//! Run `cargo doc --package palette-example --open` to view this module's documentation.
+//! Run `cargo doc --package pallet-example --open` to view this module's documentation.
 //!
 //! ### Documentation Guidelines:
 //!

@@ -44,7 +44,7 @@
 //! ```
 //! use support::{decl_module, dispatch::Result};
 //! use system::ensure_signed;
-//! use palette_im_online::{self as im_online};
+//! use pallet_im_online::{self as im_online};
 //!
 //! pub trait Trait: im_online::Trait {}
 //!
@@ -62,7 +62,7 @@
 //!
 //! ## Dependencies
 //!
-//! This module depends on the [Session module](../palette_session/index.html).
+//! This module depends on the [Session module](../pallet_session/index.html).
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]

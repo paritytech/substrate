@@ -16,9 +16,9 @@ system = { package = "palette-system", path = "../system", default-features = fa
 [dev-dependencies]
 hex-literal = "0.2.1"
 primitives = { package = "substrate-primitives",  path = "../../primitives/core" }
-palette-indices = { path = "../indices" }
-balances = { package = "palette-balances", path = "../balances" }
-transaction-payment = { package = "palette-transaction-payment", path = "../transaction-payment" }
+pallet-indices = { path = "../indices" }
+balances = { package = "pallet-balances", path = "../balances" }
+transaction-payment = { package = "pallet-transaction-payment", path = "../transaction-payment" }
 
 [features]
 default = ["std"]

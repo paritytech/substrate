@@ -376,7 +376,7 @@ impl palette_system::Trait for Runtime {
 	type Version = ();
 }
 
-impl palette_timestamp::Trait for Runtime {
+impl pallet_timestamp::Trait for Runtime {
 	/// A timestamp: milliseconds since the unix epoch.
 	type Moment = u64;
 	type OnTimestampSet = ();
@@ -388,13 +388,13 @@ parameter_types! {
 	pub const ExpectedBlockTime: u64 = 10_000;
 }
 
-impl palette_babe::Trait for Runtime {
+impl pallet_babe::Trait for Runtime {
 	type EpochDuration = EpochDuration;
 	type ExpectedBlockTime = ExpectedBlockTime;
 	// there is no actual runtime in this test-runtime, so testing crates
 	// are manually adding the digests. normally in this situation you'd use
-	// palette_babe::SameAuthoritiesForever.
-	type EpochChangeTrigger = palette_babe::ExternalTrigger;
+	// pallet_babe::SameAuthoritiesForever.
+	type EpochChangeTrigger = pallet_babe::ExternalTrigger;
 }
 
 /// Adds one to the given input and returns the final result.
@@ -615,7 +615,7 @@ cfg_if! {
 						c: (3, 10),
 						genesis_authorities: system::authorities()
 							.into_iter().map(|x|(x, 1)).collect(),
-						randomness: <palette_babe::Module<Runtime>>::randomness(),
+						randomness: <pallet_babe::Module<Runtime>>::randomness(),
 						secondary_slots: true,
 					}
 				}
@@ -831,7 +831,7 @@ cfg_if! {
 						c: (3, 10),
 						genesis_authorities: system::authorities()
 							.into_iter().map(|x|(x, 1)).collect(),
-						randomness: <palette_babe::Module<Runtime>>::randomness(),
+						randomness: <pallet_babe::Module<Runtime>>::randomness(),
 						secondary_slots: true,
 					}
 				}

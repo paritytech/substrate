@@ -1,5 +1,5 @@
 [package]
-name = "palette-collective"
+name = "pallet-collective"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
@@ -17,7 +17,7 @@ system = { package = "palette-system", path = "../system", default-features = fa
 
 [dev-dependencies]
 hex-literal = "0.2.1"
-balances = { package = "palette-balances", path = "../balances" }
+balances = { package = "pallet-balances", path = "../balances" }
 
 [features]
 default = ["std"]
