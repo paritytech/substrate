@@ -18,7 +18,7 @@
 
 use bytes::BytesMut;
 use futures::{prelude::*, compat::{Future01CompatExt as _, Compat01As03}};
-use futures_timer::Delay;
+use wasm_timer::Delay;
 use libp2p::Multiaddr;
 use libp2p::core::transport::Transport;
 use log::{trace, debug, warn, error};

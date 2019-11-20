@@ -337,11 +337,12 @@ impl<A: ChainApi> AsyncApi<A> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use std::{convert::{TryFrom, TryInto}, time::SystemTime};
+	use std::convert::{TryFrom, TryInto};
 	use sr_primitives::traits::Zero;
 	use client_db::offchain::LocalStorage;
 	use network::PeerId;
 	use test_client::runtime::Block;
+	use wasm_timer::SystemTime;
 
 	struct MockNetworkStateInfo();
 

@@ -33,7 +33,7 @@ pub use aux_schema::{check_equivocation, MAX_SLOT_CAPACITY, PRUNING_BOUND};
 use codec::{Decode, Encode};
 use consensus_common::{BlockImport, Proposer, SyncOracle, SelectChain};
 use futures::{prelude::*, future::{self, Either}};
-use futures_timer::Delay;
+use wasm_timer::Delay;
 use inherents::{InherentData, InherentDataProviders};
 use log::{debug, error, info, warn};
 use sr_primitives::generic::BlockId;

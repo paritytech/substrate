@@ -162,7 +162,23 @@ impl TelemetryWorker {
 		// Turn the message into JSON.
 		let serialized = {
 			let mut out = Vec::new();
-			slog_json::Json::default(&mut out).log(record, values).map_err(|_| ())?;
+			// We use a custom builder instead of `Json::default`, otherwise `slog_json` tries
+			// to fetch the current time using the `time` crate, which fails in the browser.
+			slog_json::Json::new(&mut out)
+				.add_key_value(slog::o!(
+					"ts" => slog::PushFnValue(move |_ : &slog::Record, ser| {
+						// Note: this is a hack
+						ser.emit("2019-05-06T16:39:57+02:00".to_string())
+					}),
+					"level" => slog::FnValue(move |rinfo : &slog::Record| {
+						rinfo.level().as_short_str()
+					}),
+					"msg" => slog::PushFnValue(move |record : &slog::Record, ser| {
+						ser.emit(record.msg())
+					}),
+				))
+				.build()
+				.log(record, values).map_err(|_| ())?;
 			out
 		};
 

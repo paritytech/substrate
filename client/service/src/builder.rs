@@ -48,8 +48,9 @@ use sr_primitives::traits::{
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
 use std::{
 	io::{Read, Write, Seek},
-	marker::PhantomData, sync::Arc, sync::atomic::AtomicBool, time::SystemTime
+	marker::PhantomData, sync::Arc, sync::atomic::AtomicBool
 };
+use wasm_timer::SystemTime;
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use tel::{telemetry, SUBSTRATE_INFO};
 use transaction_pool::txpool::{self, ChainApi, Pool as TransactionPool};

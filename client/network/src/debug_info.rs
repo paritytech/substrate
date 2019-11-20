@@ -25,9 +25,9 @@ use libp2p::identify::{Identify, IdentifyEvent, IdentifyInfo};
 use libp2p::ping::{Ping, PingConfig, PingEvent, PingSuccess};
 use log::{debug, trace, error};
 use std::collections::hash_map::Entry;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use tokio_io::{AsyncRead, AsyncWrite};
-use futures_timer::Interval;
+use wasm_timer::{Interval, Instant};
 
 /// Time after we disconnect from a node before we purge its information from the cache.
 const CACHE_EXPIRE: Duration = Duration::from_secs(10 * 60);
@@ -72,11 +72,18 @@ impl<TSubstream> DebugInfoBehaviour<TSubstream> {
 			Identify::new(proto_version, user_agent, local_public_key.clone())
 		};
 
+		fn interval(duration: std::time::Duration) -> impl futures03::Stream<Item=()> + Unpin {
+			use futures03::prelude::*;
+			stream::unfold((), move |_| {
+				wasm_timer::Delay::new(duration).map(|_| Some(((), ())))
+			}).map(drop)
+		}
+
 		DebugInfoBehaviour {
 			ping: Ping::new(PingConfig::new()),
 			identify,
 			nodes_info: FnvHashMap::default(),
-			garbage_collect: Box::new(Interval::new(GARBAGE_COLLECT_INTERVAL).map(|()| Ok(())).compat()),
+			garbage_collect: Box::new(interval(GARBAGE_COLLECT_INTERVAL).map(|()| Ok(())).compat()),
 		}
 	}
 

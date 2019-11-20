@@ -76,7 +76,7 @@ where
 			parent_id: id,
 			parent_number: *parent_header.number(),
 			transaction_pool: self.transaction_pool.clone(),
-			now: Box::new(time::Instant::now),
+			now: Box::new(wasm_timer::Instant::now),
 		};
 
 		Ok(proposer)
@@ -90,7 +90,7 @@ pub struct Proposer<Block: BlockT, C, A: txpool::ChainApi> {
 	parent_id: BlockId<Block>,
 	parent_number: <<Block as BlockT>::Header as HeaderT>::Number,
 	transaction_pool: Arc<TransactionPool<A>>,
-	now: Box<dyn Fn() -> time::Instant>,
+	now: Box<dyn Fn() -> wasm_timer::Instant>,
 }
 
 impl<B, E, Block, RA, A> consensus_common::Proposer<Block> for
@@ -134,7 +134,7 @@ impl<Block, B, E, RA, A> Proposer<Block, SubstrateClient<B, E, Block, RA>, A>	wh
 		&self,
 		inherent_data: InherentData,
 		inherent_digests: DigestFor<Block>,
-		deadline: time::Instant,
+		deadline: wasm_timer::Instant,
 	) -> Result<Block, error::Error> {
 		/// If the block is full we will attempt to push at most
 		/// this number of transactions before quitting for real.
@@ -266,7 +266,7 @@ mod tests {
 		).unwrap();
 
 		// when
-		let cell = RefCell::new(time::Instant::now());
+		let cell = RefCell::new(wasm_timer::Instant::now());
 		proposer.now = Box::new(move || {
 			let new = *cell.borrow() + time::Duration::from_secs(2);
 			cell.replace(new)

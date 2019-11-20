@@ -24,7 +24,7 @@ use libp2p::swarm::{Swarm, ProtocolsHandler, IntoProtocolsHandler};
 use libp2p::swarm::{PollParameters, NetworkBehaviour, NetworkBehaviourAction};
 use libp2p::{PeerId, Multiaddr, Transport};
 use rand::seq::SliceRandom;
-use std::{io, time::Duration, time::Instant};
+use std::{io, time::Duration, wasm_timer::Instant};
 use crate::message::Message;
 use crate::legacy_proto::{LegacyProto, LegacyProtoOut};
 use test_client::runtime::Block;

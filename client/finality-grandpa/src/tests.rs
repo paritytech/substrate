@@ -1525,7 +1525,7 @@ fn voter_catches_up_to_latest_round_when_behind() {
 
 			runtime.spawn(voter).unwrap();
 
-			let start_time = std::time::Instant::now();
+			let start_time = wasm_timer::Instant::now();
 			let timeout = Duration::from_secs(5 * 60);
 			let wait_for_catch_up = futures::future::poll_fn(move || {
 				// The voter will start at round 1 and since everyone else is

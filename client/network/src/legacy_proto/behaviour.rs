@@ -27,8 +27,9 @@ use log::{debug, error, trace, warn};
 use rand::distributions::{Distribution as _, Uniform};
 use smallvec::SmallVec;
 use std::{borrow::Cow, collections::hash_map::Entry, cmp, error, marker::PhantomData, mem, pin::Pin};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use tokio_io::{AsyncRead, AsyncWrite};
+use wasm_timer::Instant;
 
 /// Network behaviour that handles opening substreams for custom protocols with other nodes.
 ///
@@ -103,7 +104,7 @@ enum PeerState {
 	/// The peerset requested that we connect to this peer. We are not connected to this node.
 	PendingRequest {
 		/// When to actually start dialing.
-		timer: Compat<futures_timer::Delay>,
+		timer: Compat<wasm_timer::Delay>,
 		/// When the `timer` will trigger.
 		timer_deadline: Instant,
 	},
@@ -135,7 +136,7 @@ enum PeerState {
 		/// state mismatch.
 		open: bool,
 		/// When to enable this remote.
-		timer: Compat<futures_timer::Delay>,
+		timer: Compat<wasm_timer::Delay>,
 		/// When the `timer` will trigger.
 		timer_deadline: Instant,
 	},
@@ -388,7 +389,7 @@ impl<TSubstream> LegacyProto<TSubstream> {
 				debug!(target: "sub-libp2p", "PSM => Connect({:?}): Will start to connect at \
 					until {:?}", occ_entry.key(), until);
 				*occ_entry.into_mut() = PeerState::PendingRequest {
-					timer: futures_timer::Delay::new_at(until.clone()).compat(),
+					timer: wasm_timer::Delay::new_at(until.clone()).compat(),
 					timer_deadline: until.clone(),
 				};
 			},
@@ -407,7 +408,7 @@ impl<TSubstream> LegacyProto<TSubstream> {
 				*occ_entry.into_mut() = PeerState::DisabledPendingEnable {
 					connected_point: connected_point.clone(),
 					open,
-					timer: futures_timer::Delay::new_at(banned.clone()).compat(),
+					timer: wasm_timer::Delay::new_at(banned.clone()).compat(),
 					timer_deadline: banned.clone(),
 				};
 			},

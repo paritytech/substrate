@@ -15,7 +15,7 @@ codec = { package = "parity-scale-codec", version = "1.0.0" }
 consensus_common = { package = "substrate-consensus-common", path = "../../../primitives/consensus/common" }
 derive_more = "0.15.0"
 futures-preview = { version = "0.3.0-alpha.19", features = ["compat"] }
-futures-timer = "0.4.0"
+wasm-timer = "0.2"
 futures01 = { package = "futures", version = "0.1" }
 inherents = { package = "substrate-inherents", path = "../../../primitives/inherents" }
 keystore = { package = "substrate-keystore", path = "../../keystore" }

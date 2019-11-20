@@ -46,7 +46,7 @@
 //!
 
 use futures::prelude::*;
-use futures_timer::Delay;
+use wasm_timer::Delay;
 use futures03::{compat::Compat, TryFutureExt as _};
 use libp2p::core::{ConnectedPoint, Multiaddr, PeerId, PublicKey};
 use libp2p::swarm::{ProtocolsHandler, NetworkBehaviour, NetworkBehaviourAction, PollParameters};

@@ -21,7 +21,8 @@
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
-use std::time::{Instant, Duration};
+use std::time::Duration;
+use wasm_timer::Instant;
 use log::{trace, info};
 use futures::sync::oneshot::{Sender as OneShotSender};
 use linked_hash_map::{Entry, LinkedHashMap};
@@ -674,7 +675,7 @@ impl<Block: BlockT> RequestData<Block> {
 pub mod tests {
 	use std::collections::{HashMap, HashSet};
 	use std::sync::Arc;
-	use std::time::Instant;
+	use wasm_timer::Instant;
 	use futures::{Future, sync::oneshot};
 	use sr_primitives::traits::{Block as BlockT, NumberFor, Header as HeaderT};
 	use client_api::{error::{Error as ClientError, Result as ClientResult}};

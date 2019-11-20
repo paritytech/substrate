@@ -16,13 +16,13 @@
 
 //! Periodic rebroadcast of neighbor packets.
 
-use std::time::{Instant, Duration};
+use std::time::Duration;
 
 use codec::Encode;
 use futures::prelude::*;
 use futures::sync::mpsc;
 use log::{debug, warn};
-use tokio_timer::Delay;
+use wasm_timer::{Delay, Instant};
 
 use network::PeerId;
 use sr_primitives::traits::{NumberFor, Block as BlockT};

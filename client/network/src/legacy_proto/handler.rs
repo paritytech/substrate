@@ -18,7 +18,7 @@ use crate::legacy_proto::upgrade::{RegisteredProtocol, RegisteredProtocolEvent, 
 use bytes::BytesMut;
 use futures::prelude::*;
 use futures03::{compat::Compat, TryFutureExt as _};
-use futures_timer::Delay;
+use wasm_timer::Delay;
 use libp2p::core::{ConnectedPoint, PeerId, Endpoint};
 use libp2p::core::upgrade::{InboundUpgrade, OutboundUpgrade};
 use libp2p::swarm::{
