@@ -433,7 +433,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	/// The protocol name must be one of the elements of `extra_notif_protos` that was passed in
 	/// the configuration, or a protocol registered with `register_notif_protocol`.
 	pub fn write_notification(&self, target: PeerId, proto_name: impl Into<Vec<u8>>, message: impl Encode) {
-		let _ = self.to_worker.unbounded_send(ServerToWorkerMsg::WriteNotif {
+		let _ = self.to_worker.unbounded_send(ServerToWorkerMsg::WriteNotification {
 			target,
 			proto_name: proto_name.into(),
 			message: message.encode(),
@@ -682,7 +682,7 @@ enum ServerToWorkerMsg<B: BlockT, S: NetworkSpecialization<B>> {
 	AddKnownAddress(PeerId, Multiaddr),
 	SyncFork(Vec<PeerId>, B::Hash, NumberFor<B>),
 	EventsStream(mpsc::UnboundedSender<Event>),
-	WriteNotif {
+	WriteNotification {
 		message: Vec<u8>,
 		proto_name: Vec<u8>,
 		target: PeerId,
@@ -769,7 +769,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Stream for Ne
 					self.network_service.user_protocol_mut().set_sync_fork_request(peer_ids, &hash, number),
 				ServerToWorkerMsg::EventsStream(sender) =>
 					self.events_streams.push(sender),
-				ServerToWorkerMsg::WriteNotif { message, proto_name, target } =>
+				ServerToWorkerMsg::WriteNotification { message, proto_name, target } =>
 					self.network_service.user_protocol_mut().write_notification(target, proto_name, message),
 				ServerToWorkerMsg::RegisterNotifProtocol { proto_name, engine_id, handshake } =>
 					self.network_service.user_protocol_mut()
