@@ -232,10 +232,16 @@ pub mod tests {
 	use trie::{TrieMut, PrefixedMemoryDB, trie_types::TrieDBMut};
 	use super::*;
 
+	const CHILD_KEY_1: &[u8] = b":child_storage:default:sub1";
+
+	const CHILD_UUID_1: &[u8] = b"unique_id_1";
+	const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::new_default(CHILD_UUID_1, None);
+
 	fn test_db() -> (PrefixedMemoryDB<Blake2Hasher>, H256) {
 		let mut root = H256::default();
 		let mut mdb = PrefixedMemoryDB::<Blake2Hasher>::default();
 		{
+			// TODO EMCH let mut mdb = KeySpacedDBMut::new(&mut mdb, Some(&keyspace1));
 			let mut trie = TrieDBMut::new(&mut mdb, &mut root);
 			trie.insert(b"value3", &[142]).expect("insert failed");
 			trie.insert(b"value4", &[124]).expect("insert failed");
@@ -245,7 +251,7 @@ pub mod tests {
 			let mut sub_root = Vec::new();
 			root.encode_to(&mut sub_root);
 			let mut trie = TrieDBMut::new(&mut mdb, &mut root);
-			trie.insert(b":child_storage:default:sub1", &sub_root).expect("insert failed");
+			trie.insert(CHILD_KEY_1, &sub_root[..]).expect("insert failed");
 			trie.insert(b"key", b"value").expect("insert failed");
 			trie.insert(b"value1", &[42]).expect("insert failed");
 			trie.insert(b"value2", &[24]).expect("insert failed");
@@ -265,6 +271,15 @@ pub mod tests {
 	#[test]
 	fn read_from_storage_returns_some() {
 		assert_eq!(test_trie().storage(b"key").unwrap(), Some(b"value".to_vec()));
+	}
+
+	#[test]
+	fn read_from_child_storage_returns_some() {
+		let test_trie = test_trie();
+		assert_eq!(
+			test_trie.child_storage(CHILD_KEY_1, CHILD_INFO_1, b"value3").unwrap(),
+			Some(vec![142u8]),
+		);
 	}
 
 	#[test]
