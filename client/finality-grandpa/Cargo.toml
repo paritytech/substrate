@@ -26,7 +26,7 @@ header-metadata = { package = "substrate-header-metadata", path = "../header-met
 inherents = { package = "substrate-inherents", path = "../../primitives/inherents" }
 network = { package = "substrate-network", path = "../network" }
 network-gossip = { package = "substrate-network-gossip", path = "../network-gossip" }
-paint-finality-tracker = { path = "../../paint/finality-tracker" }
+sp-finality-tracker = { path = "../../primitives/finality-tracker" }
 fg_primitives = { package = "substrate-finality-grandpa-primitives", path = "../../primitives/finality-grandpa" }
 grandpa = { package = "finality-grandpa", version = "0.9.0", features = ["derive-codec"] }
 

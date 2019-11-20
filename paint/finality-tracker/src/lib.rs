@@ -21,64 +21,10 @@
 use inherents::{InherentIdentifier, ProvideInherent, InherentData, MakeFatalError};
 use sr_primitives::traits::{One, Zero, SaturatedConversion};
 use rstd::{prelude::*, result, cmp, vec};
-use codec::Decode;
 use support::{decl_module, decl_storage};
 use support::traits::Get;
 use paint_system::{ensure_none, Trait as SystemTrait};
-
-#[cfg(feature = "std")]
-use codec::Encode;
-
-/// The identifier for the `finalnum` inherent.
-pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"finalnum";
-
-/// Auxiliary trait to extract finalized inherent data.
-pub trait FinalizedInherentData<N: Decode> {
-	/// Get finalized inherent data.
-	fn finalized_number(&self) -> Result<N, inherents::Error>;
-}
-
-impl<N: Decode> FinalizedInherentData<N> for InherentData {
-	fn finalized_number(&self) -> Result<N, inherents::Error> {
-		self.get_data(&INHERENT_IDENTIFIER)
-			.and_then(|r| r.ok_or_else(|| "Finalized number inherent data not found".into()))
-	}
-}
-
-/// Provider for inherent data.
-#[cfg(feature = "std")]
-pub struct InherentDataProvider<F, N> {
-	inner: F,
-	_marker: std::marker::PhantomData<N>,
-}
-
-#[cfg(feature = "std")]
-impl<F, N> InherentDataProvider<F, N> {
-	pub fn new(final_oracle: F) -> Self {
-		InherentDataProvider { inner: final_oracle, _marker: Default::default() }
-	}
-}
-
-#[cfg(feature = "std")]
-impl<F, N: Encode> inherents::ProvideInherentData for InherentDataProvider<F, N>
-	where F: Fn() -> Result<N, inherents::Error>
-{
-	fn inherent_identifier(&self) -> &'static InherentIdentifier {
-		&INHERENT_IDENTIFIER
-	}
-
-	fn provide_inherent_data(
-		&self,
-		inherent_data: &mut InherentData,
-	) -> Result<(), inherents::Error> {
-		(self.inner)()
-			.and_then(|n| inherent_data.put_data(INHERENT_IDENTIFIER, &n))
-	}
-
-	fn error_to_string(&self, _error: &[u8]) -> Option<String> {
-		Some(format!("no further information"))
-	}
-}
+use sp_finality_tracker::{INHERENT_IDENTIFIER, FinalizedInherentData};
 
 pub const DEFAULT_WINDOW_SIZE: u32 = 101;
 pub const DEFAULT_REPORT_LATENCY: u32 = 1000;

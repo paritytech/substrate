@@ -760,3 +760,14 @@ fn transfer_keep_alive_works() {
 		assert_eq!(Balances::total_balance(&2), 0);
 	});
 }
+
+#[test]
+#[should_panic="the balance of any account should always be more than existential deposit."]
+fn cannot_set_genesis_value_below_ed() {
+	mock::EXISTENTIAL_DEPOSIT.with(|v| *v.borrow_mut() = 11);
+	let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+	let _ = GenesisConfig::<Runtime> {
+		balances: vec![(1, 10)],
+		vesting: vec![],
+	}.assimilate_storage(&mut t).unwrap();
+}

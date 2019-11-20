@@ -56,10 +56,10 @@ use futures::prelude::*;
 use parking_lot::Mutex;
 use log::{debug, info, trace};
 
-use paint_aura::{
-	InherentType as AuraInherent, AuraInherentData,
-	timestamp::{TimestampInherentData, InherentType as TimestampInherent, InherentError as TIError}
+use sp_timestamp::{
+	TimestampInherentData, InherentType as TimestampInherent, InherentError as TIError
 };
+
 use substrate_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_INFO};
 
 use slots::{CheckedHeader, SlotData, SlotWorker, SlotInfo, SlotCompatible};
@@ -69,7 +69,13 @@ use keystore::KeyStorePtr;
 
 use sr_api::ApiExt;
 
-pub use aura_primitives::*;
+pub use aura_primitives::{
+	ConsensusLog, AuraApi, AURA_ENGINE_ID,
+	inherents::{
+		InherentType as AuraInherent,
+		AuraInherentData, INHERENT_IDENTIFIER, InherentDataProvider,
+	},
+};
 pub use consensus_common::SyncOracle;
 pub use digest::CompatibleDigestItem;
 
@@ -654,9 +660,9 @@ fn register_aura_inherent_data_provider(
 	inherent_data_providers: &InherentDataProviders,
 	slot_duration: u64,
 ) -> Result<(), consensus_common::Error> {
-	if !inherent_data_providers.has_provider(&paint_aura::INHERENT_IDENTIFIER) {
+	if !inherent_data_providers.has_provider(&INHERENT_IDENTIFIER) {
 		inherent_data_providers
-			.register_provider(paint_aura::InherentDataProvider::new(slot_duration))
+			.register_provider(InherentDataProvider::new(slot_duration))
 			.map_err(Into::into)
 			.map_err(consensus_common::Error::InherentData)
 	} else {
