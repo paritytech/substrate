@@ -62,6 +62,7 @@ use app_dirs::{AppInfo, AppDataType};
 use log::info;
 use lazy_static::lazy_static;
 use futures::{Future, FutureExt, TryFutureExt};
+use futures01::{Async, Future as _};
 use substrate_telemetry::TelemetryEndpoints;
 
 /// default sub directory to store network config
@@ -386,12 +387,28 @@ impl<'a> ParseAndPrepareExport<'a> {
 			Some(filename) => Box::new(File::create(filename)?),
 			None => Box::new(stdout()),
 		};
-
+		
+		// Note: while we would like the user to handle the exit themselves, we handle it here
+		// for backwards compatibility reasons.
+		let (exit_send, exit_recv) = std::sync::mpsc::channel();
 		let exit = exit.into_exit()
-			.map(|_| Ok(()))
+			.map(|_| Ok::<_, ()>(()))
 			.compat();
+		std::thread::spawn(move || {
+			let _ = exit.wait();
+			let _ = exit_send.send(());
+		});
 
-		builder(config)?.export_blocks(exit, file, from.into(), to.map(Into::into), json)?;
+		let mut export_fut = builder(config)?.export_blocks(file, from.into(), to.map(Into::into), json);
+		let fut = futures01::future::poll_fn(|| {
+			if exit_recv.try_recv().is_ok() {
+				return Ok(Async::Ready(()));
+			}
+			export_fut.poll()
+		});
+
+		let mut runtime = tokio::runtime::current_thread::Runtime::new().unwrap();
+		runtime.block_on(fut)?;
 		Ok(())
 	}
 }
@@ -426,7 +443,7 @@ impl<'a> ParseAndPrepareImport<'a> {
 			..Default::default()
 		};
 
-		let file: Box<dyn ReadPlusSeek> = match self.params.input {
+		let file: Box<dyn ReadPlusSeek + Send> = match self.params.input {
 			Some(filename) => Box::new(File::open(filename)?),
 			None => {
 				let mut buffer = Vec::new();
@@ -435,12 +452,27 @@ impl<'a> ParseAndPrepareImport<'a> {
 			},
 		};
 
+		// Note: while we would like the user to handle the exit themselves, we handle it here
+		// for backwards compatibility reasons.
+		let (exit_send, exit_recv) = std::sync::mpsc::channel();
 		let exit = exit.into_exit()
-			.map(|_| Ok(()))
+			.map(|_| Ok::<_, ()>(()))
 			.compat();
+		std::thread::spawn(move || {
+			let _ = exit.wait();
+			let _ = exit_send.send(());
+		});
 
-		let fut = builder(config)?.import_blocks(exit, file)?;
-		tokio::run(fut);
+		let mut import_fut = builder(config)?.import_blocks(file);
+		let fut = futures01::future::poll_fn(|| {
+			if exit_recv.try_recv().is_ok() {
+				return Ok(Async::Ready(()));
+			}
+			import_fut.poll()
+		});
+
+		let mut runtime = tokio::runtime::current_thread::Runtime::new().unwrap();
+		runtime.block_on(fut)?;
 		Ok(())
 	}
 }

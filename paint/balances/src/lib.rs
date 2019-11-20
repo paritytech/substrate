@@ -42,13 +42,25 @@
 //! - **Total Issuance:** The total number of units in existence in a system.
 //! - **Reaping an account:** The act of removing an account by resetting its nonce. Happens after its balance is set
 //! to zero.
-//! - **Free Balance:** The portion of a balance that is not reserved. The free balance is the only balance that matters
-//! for most operations. When this balance falls below the existential deposit, most functionality of the account is
-//! removed. When both it and the reserved balance are deleted, then the account is said to be dead.
-//! - **Reserved Balance:** Reserved balance still belongs to the account holder, but is suspended. Reserved balance
-//! can still be slashed, but only after all the free balance has been slashed. If the reserved balance falls below the
-//! existential deposit then it and any related functionality will be deleted. When both it and the free balance are
-//! deleted, then the account is said to be dead.
+//! - **Free Balance:** The portion of a balance that is not reserved. The free balance is the only
+//!   balance that matters for most operations. When this balance falls below the existential
+//!   deposit, most functionality of the account is removed. When both it and the reserved balance
+//!   are deleted, then the account is said to be dead.
+//!
+//!   No account should ever have a free balance that is strictly between 0 and the existential
+//!   deposit (exclusive). If this ever happens, it indicates either a bug in this module or an
+//!   erroneous raw mutation of storage.
+//!
+//! - **Reserved Balance:** Reserved balance still belongs to the account holder, but is suspended.
+//!   Reserved balance can still be slashed, but only after all the free balance has been slashed.
+//!   If the reserved balance falls below the existential deposit, it and any related functionality
+//!   will be deleted. When both it and the free balance are deleted, then the account is said to
+//!   be dead.
+//!
+//!   No account should ever have a reserved balance that is strictly between 0 and the existential
+//!   deposit (exclusive). If this ever happens, it indicates either a bug in this module or an
+//!   erroneous raw mutation of storage.
+//!
 //! - **Imbalance:** A condition when some funds were credited or debited without equal and opposite accounting
 //! (i.e. a difference between total issuance and account balances). Functions that result in an imbalance will
 //! return an object of the `Imbalance` trait that can be managed within your runtime logic. (If an imbalance is
