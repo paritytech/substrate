@@ -494,6 +494,13 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 		self.peerset.report_peer(who, cost_benefit);
 	}
 
+	/// Disconnect from a node as soon as possible.
+	///
+	/// This triggers the same effects as if the connection had closed itself spontaneously.
+	pub fn disconnect_peer(&self, who: PeerId) {
+		let _ = self.to_worker.unbounded_send(ServerToWorkerMsg::DisconnectPeer(who));
+	}
+
 	/// Request a justification for the given block from the network.
 	///
 	/// On success, the justification will be passed to the import queue that was part at
@@ -692,6 +699,7 @@ enum ServerToWorkerMsg<B: BlockT, S: NetworkSpecialization<B>> {
 		engine_id: ConsensusEngineId,
 		handshake: Vec<u8>,
 	},
+	DisconnectPeer(PeerId),
 }
 
 /// Main network worker. Must be polled in order for the network to advance.
@@ -774,6 +782,8 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Stream for Ne
 				ServerToWorkerMsg::RegisterNotifProtocol { proto_name, engine_id, handshake } =>
 					self.network_service.user_protocol_mut()
 						.register_notif_protocol(proto_name, engine_id, handshake),
+				ServerToWorkerMsg::DisconnectPeer(who) =>
+					self.network_service.user_protocol_mut().disconnect_peer(&who),
 			}
 		}
 

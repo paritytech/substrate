@@ -35,7 +35,7 @@ pub trait Network {
 	fn report_peer(&self, peer_id: PeerId, reputation: i32);
 
 	/// Force-disconnect a peer.
-	fn disconnect_peer(&mut self, who: PeerId);
+	fn disconnect_peer(&self, who: PeerId);
 
 	/// Send a notification to a peer.
 	fn write_notification(&self, who: PeerId, proto_name: Cow<'static, [u8]>, engine_id: ConsensusEngineId, message: Vec<u8>);
@@ -60,8 +60,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Network for Arc<Network
 		NetworkService::report_peer(self, peer_id, reputation);
 	}
 
-	fn disconnect_peer(&mut self, who: PeerId) {
-		unimplemented!()		// TODO:
+	fn disconnect_peer(&self, who: PeerId) {
+		NetworkService::disconnect_peer(self, who)
 	}
 
 	fn write_notification(&self, who: PeerId, proto_name: Cow<'static, [u8]>, engine_id: ConsensusEngineId, message: Vec<u8>) {
