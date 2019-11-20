@@ -29,7 +29,7 @@ use codec::{Decode, Encode, IoReader};
 use consensus_common::import_queue::ImportQueue;
 use futures::{prelude::*, sync::mpsc};
 use futures03::{
-	compat::*,
+	compat::{Compat, Future01CompatExt},
 	future::ready,
 	FutureExt as _, TryFutureExt as _,
 	StreamExt as _, TryStreamExt as _,
