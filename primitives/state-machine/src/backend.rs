@@ -576,6 +576,8 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 		let mut root_map = None;
 		for (child_info, map) in &self.inner {
 			if let Some((storage_key, _child_info)) = child_info.as_ref() {
+				// no need to use child_info at this point because we use a MemoryDB for
+				// proof (with PrefixedMemoryDB it would be needed).
 				let ch = insert_into_memory_db::<H, _>(&mut mdb, map.clone().into_iter())?;
 				new_child_roots.push((storage_key.clone(), ch.as_ref().into()));
 			} else {

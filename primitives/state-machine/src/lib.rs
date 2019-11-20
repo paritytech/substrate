@@ -1143,8 +1143,7 @@ mod tests {
 				println!("test duplicate for {:?} {:?}", k, value);
 			}
 		}
-		// TODO EMCH revert this condition when implemented!!!
-		assert!(duplicate);
+		assert!(!duplicate);
 	}
 
 	#[test]

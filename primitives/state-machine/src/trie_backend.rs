@@ -78,10 +78,10 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 	fn child_storage(
 		&self,
 		storage_key: &[u8],
-		_child_info: ChildInfo,
+		child_info: ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.essence.child_storage(storage_key, key)
+		self.essence.child_storage(storage_key, child_info, key)
 	}
 
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
@@ -95,10 +95,10 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(
 		&self,
 		storage_key: &[u8],
-		_child_info: ChildInfo,
+		child_info: ChildInfo,
 		f: F,
 	) {
-		self.essence.for_keys_in_child_storage(storage_key, f)
+		self.essence.for_keys_in_child_storage(storage_key, child_info, f)
 	}
 
 	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
@@ -179,7 +179,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 	fn child_storage_root<I>(
 		&self,
 		storage_key: &[u8],
-		_child_info: ChildInfo,
+		child_info: ChildInfo,
 		delta: I,
 	) -> (Vec<u8>, bool, Self::Transaction)
 	where
@@ -205,6 +205,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 
 			match child_delta_trie_root::<Layout<H>, _, _, _, _>(
 				storage_key,
+				child_info.keyspace(),
 				&mut eph,
 				root.clone(),
 				delta
@@ -229,7 +230,7 @@ pub mod tests {
 	use std::collections::HashSet;
 	use primitives::{Blake2Hasher, H256};
 	use codec::Encode;
-	use trie::{TrieMut, PrefixedMemoryDB, trie_types::TrieDBMut};
+	use trie::{TrieMut, PrefixedMemoryDB, trie_types::TrieDBMut, KeySpacedDBMut};
 	use super::*;
 
 	const CHILD_KEY_1: &[u8] = b":child_storage:default:sub1";
@@ -241,7 +242,7 @@ pub mod tests {
 		let mut root = H256::default();
 		let mut mdb = PrefixedMemoryDB::<Blake2Hasher>::default();
 		{
-			// TODO EMCH let mut mdb = KeySpacedDBMut::new(&mut mdb, Some(&keyspace1));
+			let mut mdb = KeySpacedDBMut::new(&mut mdb, CHILD_UUID_1);
 			let mut trie = TrieDBMut::new(&mut mdb, &mut root);
 			trie.insert(b"value3", &[142]).expect("insert failed");
 			trie.insert(b"value4", &[124]).expect("insert failed");

@@ -26,6 +26,7 @@ use trie::{Trie, MemoryDB, PrefixedMemoryDB, DBValue,
 	for_keys_in_child_trie};
 use trie::trie_types::{TrieDB, TrieError, Layout};
 use crate::backend::Consolidate;
+use primitives::storage::ChildInfo;
 
 /// Patricia trie-based storage trait.
 pub trait Storage<H: Hasher>: Send + Sync {
@@ -77,7 +78,12 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> {
 	}
 
 	/// Get the value of child storage at given key.
-	pub fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, String> {
+	pub fn child_storage(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		key: &[u8],
+	) -> Result<Option<Vec<u8>>, String> {
 		let root = self.storage(storage_key)?
 			.unwrap_or(default_child_trie_root::<Layout<H>>(storage_key));
 
@@ -89,11 +95,17 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> {
 
 		let map_e = |e| format!("Trie lookup error: {}", e);
 
-		read_child_trie_value::<Layout<H>, _>(storage_key, &eph, &root, key).map_err(map_e)
+		read_child_trie_value::<Layout<H>, _>(storage_key, child_info.keyspace(), &eph, &root, key)
+			.map_err(map_e)
 	}
 
 	/// Retrieve all entries keys of child storage and call `f` for each of those keys.
-	pub fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], f: F) {
+	pub fn for_keys_in_child_storage<F: FnMut(&[u8])>(
+		&self,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		f: F,
+	) {
 		let root = match self.storage(storage_key) {
 			Ok(v) => v.unwrap_or(default_child_trie_root::<Layout<H>>(storage_key)),
 			Err(e) => {
@@ -110,6 +122,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> {
 
 		if let Err(e) = for_keys_in_child_trie::<Layout<H>, _, Ephemeral<S, H>>(
 			storage_key,
+			child_info.keyspace(),
 			&eph,
 			&root,
 			f,

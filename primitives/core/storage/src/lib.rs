@@ -224,6 +224,15 @@ impl<'a> ChildInfo<'a> {
 		}
 	}
 
+	/// Return byte sequence (keyspace) that can be use for underlying db to isolate keys.
+	pub fn keyspace(&self) -> &[u8] {
+		match self {
+			ChildInfo::Default(ChildTrie {
+				root: _root,
+				unique_id,
+			}) => &unique_id[..],
+		}
+	}
 }
 
 /// Type of child, this can be different child usage

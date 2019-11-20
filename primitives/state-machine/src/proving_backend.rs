@@ -143,6 +143,7 @@ impl<'a, S, H> ProvingBackendRecorder<'a, S, H>
 	pub fn child_storage(
 		&mut self,
 		storage_key: &[u8],
+		child_info: ChildInfo,
 		key: &[u8]
 	) -> Result<Option<Vec<u8>>, String> {
 		let root = self.storage(storage_key)?
@@ -158,6 +159,7 @@ impl<'a, S, H> ProvingBackendRecorder<'a, S, H>
 
 		read_child_trie_value_with::<Layout<H>, _, _>(
 			storage_key,
+			child_info.keyspace(),
 			&eph,
 			&root,
 			key,
