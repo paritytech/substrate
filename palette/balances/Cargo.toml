@@ -1,5 +1,5 @@
 [package]
-name = "palette-balances"
+name = "pallet-balances"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
@@ -17,7 +17,7 @@ system = { package = "palette-system", path = "../system", default-features = fa
 [dev-dependencies]
 runtime-io = { package = "sr-io", path = "../../primitives/sr-io" }
 primitives = { package = "substrate-primitives",  path = "../../primitives/core" }
-transaction-payment = { package = "palette-transaction-payment", path = "../transaction-payment" }
+transaction-payment = { package = "pallet-transaction-payment", path = "../transaction-payment" }
 
 [features]
 default = ["std"]

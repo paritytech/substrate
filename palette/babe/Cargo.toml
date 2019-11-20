@@ -1,5 +1,5 @@
 [package]
-name = "palette-babe"
+name = "pallet-babe"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
@@ -14,8 +14,8 @@ sr-primitives = { path = "../../primitives/sr-primitives", default-features = fa
 sr-staking-primitives = { path = "../../primitives/sr-staking-primitives", default-features = false }
 support = { package = "palette-support", path = "../support", default-features = false }
 system = { package = "palette-system", path = "../system", default-features = false }
-timestamp = { package = "palette-timestamp", path = "../timestamp", default-features = false }
-session = { package = "palette-session", path = "../session", default-features = false }
+timestamp = { package = "pallet-timestamp", path = "../timestamp", default-features = false }
+session = { package = "pallet-session", path = "../session", default-features = false }
 babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../../primitives/consensus/babe", default-features = false }
 runtime-io ={ package = "sr-io", path = "../../primitives/sr-io", default-features = false }
 

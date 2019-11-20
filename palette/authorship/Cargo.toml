@@ -1,5 +1,5 @@
 [package]
-name = "palette-authorship"
+name = "pallet-authorship"
 version = "0.1.0"
 description = "Block and Uncle Author tracking for the SRML"
 authors = ["Parity Technologies <admin@parity.io>"]

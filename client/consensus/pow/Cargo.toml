@@ -11,7 +11,7 @@ primitives = { package = "substrate-primitives", path = "../../../primitives/cor
 sr-primitives = { path = "../../../primitives/sr-primitives" }
 client-api = { package = "substrate-client-api", path = "../../api" }
 block-builder-api = { package = "substrate-block-builder-runtime-api", path = "../../../primitives/block-builder/runtime-api" }
-palette-timestamp = { path = "../../../palette/timestamp" }
+pallet-timestamp = { path = "../../../palette/timestamp" }
 inherents = { package = "substrate-inherents", path = "../../../primitives/inherents" }
 pow-primitives = { package = "substrate-consensus-pow-primitives", path = "../../../primitives/consensus/pow" }
 consensus-common = { package = "substrate-consensus-common", path = "../../../primitives/consensus/common" }

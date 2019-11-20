@@ -42,14 +42,14 @@ pub fn create<C, P, M>(client: Arc<C>, pool: Arc<Pool<P>>) -> jsonrpc_core::IoHa
 	C: client::blockchain::HeaderBackend<Block>,
 	C: Send + Sync + 'static,
 	C::Api: palette_system_rpc::AccountNonceApi<Block, AccountId, Index>,
-	C::Api: palette_contracts_rpc::ContractsRuntimeApi<Block, AccountId, Balance>,
-	C::Api: palette_transaction_payment_rpc::TransactionPaymentRuntimeApi<Block, Balance, UncheckedExtrinsic>,
+	C::Api: pallet_contracts_rpc::ContractsRuntimeApi<Block, AccountId, Balance>,
+	C::Api: pallet_transaction_payment_rpc::TransactionPaymentRuntimeApi<Block, Balance, UncheckedExtrinsic>,
 	P: ChainApi + Sync + Send + 'static,
 	M: jsonrpc_core::Metadata + Default,
 {
 	use palette_system_rpc::{System, SystemApi};
-	use palette_contracts_rpc::{Contracts, ContractsApi};
-	use palette_transaction_payment_rpc::{TransactionPayment, TransactionPaymentApi};
+	use pallet_contracts_rpc::{Contracts, ContractsApi};
+	use pallet_transaction_payment_rpc::{TransactionPayment, TransactionPaymentApi};
 
 	let mut io = jsonrpc_core::IoHandler::default();
 	io.extend_with(

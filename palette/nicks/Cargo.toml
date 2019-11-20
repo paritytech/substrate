@@ -1,5 +1,5 @@
 [package]
-name = "palette-nicks"
+name = "pallet-nicks"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
@@ -15,7 +15,7 @@ system = { package = "palette-system", path = "../system", default-features = fa
 
 [dev-dependencies]
 primitives = { package = "substrate-primitives",  path = "../../primitives/core" }
-balances = { package = "palette-balances", path = "../balances", default-features = false }
+balances = { package = "pallet-balances", path = "../balances", default-features = false }
 
 [features]
 default = ["std"]

@@ -31,7 +31,7 @@ use sr_primitives::{
 };
 
 pub use self::gen_client::Client as ContractsClient;
-pub use palette_contracts_rpc_runtime_api::{
+pub use pallet_contracts_rpc_runtime_api::{
 	self as runtime_api, ContractExecResult, ContractsApi as ContractsRuntimeApi, GetStorageResult,
 };
 

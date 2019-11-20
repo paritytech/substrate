@@ -140,7 +140,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// ## Multiple Module Instances Example
 ///
 /// A Substrate module can be built such that multiple instances of the same module can be used within a single
-/// runtime. For example, the [Balances module](../palette_balances/index.html) can be added multiple times to your
+/// runtime. For example, the [Balances module](../pallet_balances/index.html) can be added multiple times to your
 /// runtime in order to support multiple, independent currencies for your blockchain. Here is an example of how
 /// you would declare such a module using the `decl_module!` macro:
 ///

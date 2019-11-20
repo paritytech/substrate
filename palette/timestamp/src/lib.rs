@@ -62,7 +62,7 @@
 //!
 //! ```
 //! use support::{decl_module, dispatch::Result};
-//! # use palette_timestamp as timestamp;
+//! # use pallet_timestamp as timestamp;
 //! use system::ensure_signed;
 //!
 //! pub trait Trait: timestamp::Trait {}
@@ -86,7 +86,7 @@
 //!
 //! ## Related Modules
 //!
-//! * [Session](../palette_session/index.html)
+//! * [Session](../pallet_session/index.html)
 
 #![cfg_attr(not(feature = "std"), no_std)]
 

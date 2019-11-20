@@ -84,7 +84,7 @@
 //!
 //! ## Related Modules
 //!
-//! * [Balances](../palette_balances/index.html)
+//! * [Balances](../pallet_balances/index.html)
 
 #![cfg_attr(not(feature = "std"), no_std)]
 

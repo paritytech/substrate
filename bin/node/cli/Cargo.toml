@@ -60,16 +60,16 @@ substrate-telemetry = { package = "substrate-telemetry", path = "../../../client
 authority-discovery = { package = "substrate-authority-discovery", path = "../../../client/authority-discovery"}
 
 # palette dependencies
-indices = { package = "palette-indices", path = "../../../palette/indices" }
-timestamp = { package = "palette-timestamp", path = "../../../palette/timestamp", default-features = false }
-finality_tracker = { package = "palette-finality-tracker", path = "../../../palette/finality-tracker", default-features = false }
-contracts = { package = "palette-contracts", path = "../../../palette/contracts" }
+indices = { package = "pallet-indices", path = "../../../palette/indices" }
+timestamp = { package = "pallet-timestamp", path = "../../../palette/timestamp", default-features = false }
+finality_tracker = { package = "pallet-finality-tracker", path = "../../../palette/finality-tracker", default-features = false }
+contracts = { package = "pallet-contracts", path = "../../../palette/contracts" }
 system = { package = "palette-system", path = "../../../palette/system" }
-balances = { package = "palette-balances", path = "../../../palette/balances" }
-transaction-payment = { package = "palette-transaction-payment", path = "../../../palette/transaction-payment" }
+balances = { package = "pallet-balances", path = "../../../palette/balances" }
+transaction-payment = { package = "pallet-transaction-payment", path = "../../../palette/transaction-payment" }
 support = { package = "palette-support", path = "../../../palette/support", default-features = false }
-im_online = { package = "palette-im-online", path = "../../../palette/im-online", default-features = false }
-sr-authority-discovery = { package = "palette-authority-discovery", path = "../../../palette/authority-discovery"}
+im_online = { package = "pallet-im-online", path = "../../../palette/im-online", default-features = false }
+sr-authority-discovery = { package = "pallet-authority-discovery", path = "../../../palette/authority-discovery"}
 
 
 # node-specific dependencies

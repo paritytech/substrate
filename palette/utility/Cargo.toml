@@ -15,7 +15,7 @@ runtime-io = { package = "sr-io", path = "../../primitives/sr-io", default-featu
 
 [dev-dependencies]
 primitives = { package = "substrate-primitives",  path = "../../primitives/core" }
-balances = { package = "palette-balances", path = "../balances" }
+balances = { package = "pallet-balances", path = "../balances" }
 
 [features]
 default = ["std"]

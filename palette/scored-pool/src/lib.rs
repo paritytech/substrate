@@ -55,7 +55,7 @@
 //! ```
 //! use support::{decl_module, dispatch::Result};
 //! use system::ensure_signed;
-//! use palette_scored_pool::{self as scored_pool};
+//! use pallet_scored_pool::{self as scored_pool};
 //!
 //! pub trait Trait: scored_pool::Trait {}
 //!

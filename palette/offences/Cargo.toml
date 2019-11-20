@@ -1,11 +1,11 @@
 [package]
-name = "palette-offences"
+name = "pallet-offences"
 version = "1.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-balances = { package = "palette-balances", path = "../balances", default-features = false }
+balances = { package = "pallet-balances", path = "../balances", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 rstd = { package = "sr-std", path = "../../primitives/sr-std", default-features = false }
 serde = { version = "1.0.101", optional = true }

@@ -18,7 +18,7 @@ runtime-io = { package = "sr-io", path = "../../../primitives/sr-io" }
 inherents = { package = "substrate-inherents", path = "../../../primitives/inherents" }
 substrate-telemetry = { path = "../../telemetry" }
 keystore = { package = "substrate-keystore", path = "../../keystore" }
-palette-babe = { path = "../../../palette/babe" }
+pallet-babe = { path = "../../../palette/babe" }
 client-api = { package = "substrate-client-api", path = "../../api" }
 client = { package = "substrate-client", path = "../../" }
 sr-api = { path = "../../../primitives/sr-api" }
