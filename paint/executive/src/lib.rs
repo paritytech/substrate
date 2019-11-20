@@ -119,7 +119,9 @@ impl<
 > ExecuteBlock<Block> for Executive<System, Block, Context, UnsignedValidator, AllModules>
 where
 Block::Extrinsic: Checkable<Context> + Codec,
-	CheckedOf<Block::Extrinsic, Context>: Applyable<AccountId=System::AccountId, DispatchInfo=DispatchInfo> + GetDispatchInfo,
+	CheckedOf<Block::Extrinsic, Context>:
+		Applyable<AccountId=System::AccountId, DispatchInfo=DispatchInfo> +
+		GetDispatchInfo,
 	CallOf<Block::Extrinsic, Context>: Dispatchable,
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
 	UnsignedValidator: ValidateUnsigned<Call=CallOf<Block::Extrinsic, Context>>,
@@ -143,7 +145,9 @@ impl<
 > Executive<System, Block, Context, UnsignedValidator, AllModules>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
-	CheckedOf<Block::Extrinsic, Context>: Applyable<AccountId=System::AccountId, DispatchInfo=DispatchInfo> + GetDispatchInfo,
+	CheckedOf<Block::Extrinsic, Context>:
+		Applyable<AccountId=System::AccountId, DispatchInfo=DispatchInfo> +
+		GetDispatchInfo,
 	CallOf<Block::Extrinsic, Context>: Dispatchable,
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
 	UnsignedValidator: ValidateUnsigned<Call=CallOf<Block::Extrinsic, Context>>,
