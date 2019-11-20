@@ -324,16 +324,12 @@ decl_module! {
 		/// outcomes exist:
 		/// - `origin` is a candidate and not elected in any set. In this case, the bond is
 		///   unreserved, returned and origin is removed as a candidate.
-		/// - `origin` is a current runner up. In this case, the bond is taken and origin is removed
-		///   as a runner, consequently not being a candidate for the next round anymore. Indeed, a
-		///   runner up should generally avoid calling this function unless if they want a quick
-		///   exit out of the system. Otherwise, staying a runner and hoping to be elected down the
-		///   road makes more sense.
+		/// - `origin` is a current runner up. In this case, the bond is unreserved, returned and
+		///   origin is removed as a runner.
 		/// - `origin` is a current member. In this case, the bond is unreserved and origin is
 		///   removed as a member, consequently not being a candidate for the next round anymore.
 		///   Similar to [`remove_voter`], if replacement runners exists, they are immediately used.
 		///   Otherwise, a new election is started immediately.
-		// TODO: maybe don't re-run phragmen since it is expensive.
 		#[weight = SimpleDispatchInfo::FixedOperational(2_000_000)]
 		fn renounce_candidacy(origin) {
 			let who = ensure_signed(origin)?;
@@ -348,10 +344,6 @@ decl_module! {
 			if let Ok(had_replacement) = Self::remove_and_replace_member(&who) {
 				T::Currency::unreserve(&who, T::CandidacyBond::get());
 				Self::deposit_event(RawEvent::MemberRenounced(who.clone()));
-
-				if !had_replacement {
-					Self::do_phragmen();
-				}
 
 				// safety guard to make sure we do only one arm. Better to read runners later.
 				return Ok(());
@@ -615,14 +607,12 @@ impl<T: Trait> Module<T> {
 		let mut candidates = Self::candidates();
 		// candidates who explicitly called `submit_candidacy`. Only these folks are at the risk of
 		// losing their bond.
-		let mut exposed_candidates = candidates.clone();
+		let exposed_candidates = candidates.clone();
 		// current members are always a candidate for the next round as well.
 		// this is guaranteed to not create any duplicates.
 		candidates.append(&mut Self::members_ids());
 		// previous runners_up are also always candidates for the next round.
 		candidates.append(&mut Self::runners_up_ids());
-		// and exposed to being an outgoing in case they are no longer elected.
-		exposed_candidates.append(&mut Self::runners_up_ids());
 
 		let voters_and_votes = <VotesOf<T>>::enumerate()
 			.map(|(v, i)| (v, i))
@@ -636,8 +626,10 @@ impl<T: Trait> Module<T> {
 		);
 
 		let mut to_release_bond: Vec<T::AccountId> = Vec::with_capacity(desired_seats);
-		let old_members = <Members<T>>::take();
 		if let Some(phragmen_result) = maybe_phragmen_result {
+			let old_members = <Members<T>>::take();
+			let old_runners = <RunnersUp<T>>::take();
+
 			// filter out those who had literally no votes at all.
 			// AUDIT/NOTE: the need to do this is because all candidates, even those who have no
 			// vote are still considered by phragmen and when good candidates are scarce, then these
@@ -672,22 +664,28 @@ impl<T: Trait> Module<T> {
 			// split new set into winners and runner ups.
 			let split_point = desired_seats.min(new_set_with_stake.len());
 			let mut new_members = (&new_set_with_stake[..split_point]).to_vec();
-			let runners_up = &new_set_with_stake[split_point..]
+			let new_members_ids = new_members
+				.iter()
+				.map(|(m, _)| m.clone())
+				.collect::<Vec<T::AccountId>>();
+			let new_runners_up = &new_set_with_stake[split_point..]
 				.into_iter()
 				.cloned()
 				.rev()
 				.collect::<Vec<(T::AccountId, BalanceOf<T>)>>();
+			let new_runners_up_ids = new_runners_up
+				.iter()
+				.map(|(r, _)| r.clone())
+				.collect::<Vec<T::AccountId>>();
 
+
+			// save the runners as-is. They are sorted based on desirability.
 			// sort and save the members.
 			new_members.sort();
-			<Members<T>>::put(&new_members);
-
-			// save the runners as-is
-			<RunnersUp<T>>::put(runners_up);
 
 			// report member changes. We compute diff because we need the outgoing list.
 			let (incoming, outgoing) = T::ChangeMembers::compute_members_diff(
-				&Self::members_ids(),
+				&new_members_ids,
 				&old_members.into_iter().map(|(m, _)| m).collect::<Vec<T::AccountId>>(),
 			);
 			T::ChangeMembers::change_members_sorted(
@@ -700,18 +698,31 @@ impl<T: Trait> Module<T> {
 			// exist. They must get their bond back.
 			to_release_bond = outgoing.to_vec();
 
+			// compute the outgoing of runners up as well and append them to the
+			{
+				let (_, outgoing) = T::ChangeMembers::compute_members_diff(
+					&new_runners_up_ids,
+					&old_runners.into_iter().map(|(r, _)| r).collect::<Vec<T::AccountId>>(),
+				);
+				to_release_bond.extend(outgoing);
+			}
+
 			// Burn loser bond. members list is sorted. O(NLogM) (N candidates, M members)
 			// runner up list is not sorted. O(K*N) given K runner ups. Overall: O(NLogM + N*K)
 			exposed_candidates.into_iter().for_each(|c| {
 				// any candidate who is not a member and not a runner up.
 				if new_members.binary_search_by_key(&c, |(m, _)| m.clone()).is_err()
-					&& !Self::runners_up_ids().contains(&c)
+					&& !new_runners_up_ids.contains(&c)
 				{
 					let (imbalance, _) = T::Currency::slash_reserved(&c, T::CandidacyBond::get());
 					T::LoserCandidate::on_unbalanced(imbalance);
 				}
 			});
-			Self::deposit_event(RawEvent::NewTerm(new_members.to_vec()));
+
+			<Members<T>>::put(&new_members);
+			<RunnersUp<T>>::put(new_runners_up);
+
+			Self::deposit_event(RawEvent::NewTerm(new_members.clone().to_vec()));
 		} else {
 			Self::deposit_event(RawEvent::EmptyTerm);
 		}
@@ -1534,7 +1545,7 @@ mod tests {
 	}
 
 	#[test]
-	fn runners_up_lose_bond_once_outgoing() {
+	fn runners_up_do_not_lose_bond_once_outgoing() {
 		ExtBuilder::default().desired_runners_up(1).build().execute_with(|| {
 			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
 			assert_ok!(Elections::submit_candidacy(Origin::signed(4)));
@@ -1560,7 +1571,8 @@ mod tests {
 
 			assert_eq!(Elections::runners_up_ids(), vec![3]);
 			assert_eq!(balances(&3), (25, 5));
-			assert_eq!(balances(&2), (15, 2));
+			// 3 is returned. only voting bond remains.
+			assert_eq!(balances(&2), (18, 2));
 		});
 	}
 
@@ -1918,8 +1930,11 @@ mod tests {
 			assert_ok!(Elections::renounce_candidacy(Origin::signed(4)));
 			assert_eq!(balances(&4), (38, 2)); // 2 is voting bond.
 
-			assert_eq!(Elections::members_ids(), vec![3, 5]);
-			assert_eq!(Elections::runners_up_ids(), vec![2]);
+			// no replacement
+			assert_eq!(Elections::members_ids(), vec![5]);
+			assert_eq!(Elections::runners_up_ids(), vec![]);
+			// still candidate
+			assert_eq!(Elections::candidates(), vec![2, 3]);
 		})
 	}
 
