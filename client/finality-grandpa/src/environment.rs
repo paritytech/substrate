@@ -506,7 +506,7 @@ where
 					.restrict_vote(&*self.client, &base_header, &best_header, target_header)
 					.filter(|(_, restricted_number)| {
 						// we can only restrict votes within the interval [base, target]
-						restricted_number > base_header.number() &&
+						restricted_number >= base_header.number() &&
 							restricted_number < target_header.number()
 					})
 					.or(Some((target_header.hash(), *target_header.number())))
