@@ -340,7 +340,7 @@ pub trait Trait: system::Trait {
 	/// A stable ID for a validator.
 	type ValidatorId: Member + Parameter;
 
-	/// A conversion to validator ID to account ID.
+	/// A conversion from account ID to validator ID.
 	type ValidatorIdOf: Convert<Self::AccountId, Option<Self::ValidatorId>>;
 
 	/// Indicator for when to end the session.
