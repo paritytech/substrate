@@ -23,7 +23,7 @@ use crate::trie_backend::TrieBackend;
 use crate::trie_backend_essence::TrieBackendStorage;
 use trie::{
 	TrieMut, MemoryDB, child_trie_root, default_child_trie_root, TrieConfiguration,
-	trie_types::{TrieDBMut, Layout},
+	trie_types::{TrieDBMut, Layout}, DBValue,
 };
 
 /// A state backend is used to read state data and can have changes committed
@@ -35,10 +35,10 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	type Error: super::Error;
 
 	/// Storage changes to be applied if committing
-	type Transaction: Consolidate + Default + Send;
+	type Transaction: hash_db::HashDB<H, DBValue> + Consolidate + Default + Send;
 
 	/// Type of trie backend storage.
-	type TrieBackendStorage: TrieBackendStorage<H>;
+	type TrieBackendStorage: TrieBackendStorage<H, Overlay = Self::Transaction>;
 
 	/// Get keyed storage or None if there is nothing associated.
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
@@ -251,7 +251,7 @@ impl error::Error for Void {
 pub struct InMemory<H: Hasher> {
 	inner: HashMap<Option<Vec<u8>>, HashMap<Vec<u8>, Vec<u8>>>,
 	// This field is only needed for returning reference in `as_trie_backend`.
-	trie: Option<TrieBackend<MemoryDB<H>, H>>,
+	trie: Option<TrieBackend<InMemoryTransaction<H>, H>>,
 	_hasher: PhantomData<H>,
 }
 
@@ -289,9 +289,9 @@ impl<H: Hasher> PartialEq for InMemory<H> {
 
 impl<H: Hasher> InMemory<H> {
 	/// Copy the state, with applied updates
-	pub fn update(&self, changes: <Self as Backend<H>>::Transaction) -> Self {
+	pub fn update<T: Into<<Self as Backend<H>>::Transaction>>(&self, changes: T) -> Self {
 		let mut inner: HashMap<_, _> = self.inner.clone();
-		for (storage_key, key, val) in changes {
+		for (storage_key, key, val) in changes.into().transaction {
 			match val {
 				Some(v) => { inner.entry(storage_key).or_default().insert(key, v); },
 				None => { inner.entry(storage_key).or_default().remove(&key); },
@@ -309,6 +309,12 @@ impl<H: Hasher> From<HashMap<Option<Vec<u8>>, HashMap<Vec<u8>, Vec<u8>>>> for In
 			trie: None,
 			_hasher: PhantomData,
 		}
+	}
+}
+
+impl<H: Hasher> From<InMemoryTransaction<H>> for InMemory<H> {
+	fn from(transaction: InMemoryTransaction<H>) -> Self {
+		transaction.transaction.into()
 	}
 }
 
@@ -362,10 +368,81 @@ impl<H: Hasher> InMemory<H> {
 	}
 }
 
+pub struct InMemoryTransaction<H: Hasher> {
+	transaction: Vec<(Option<Vec<u8>>, Vec<u8>, Option<Vec<u8>>)>,
+	db: MemoryDB<H>,
+}
+
+impl<H: Hasher> Default for InMemoryTransaction<H> {
+	fn default() -> Self {
+		Self {
+			transaction: Default::default(),
+			db: Default::default(),
+		}
+	}
+}
+
+impl<H: Hasher> hash_db::AsHashDB<H, DBValue> for InMemoryTransaction<H> {
+	fn as_hash_db(&self) -> &dyn hash_db::HashDB<H, DBValue> {
+		self
+	}
+
+	fn as_hash_db_mut<'a>(&'a mut self) -> &'a mut (dyn hash_db::HashDB<H, DBValue> + 'a) {
+		self
+	}
+}
+
+impl<H: Hasher> hash_db::HashDB<H, DBValue> for InMemoryTransaction<H> {
+	fn get(&self, key: &H::Out, prefix: hash_db::Prefix) -> Option<DBValue> {
+		hash_db::HashDB::get(&self.db, key, prefix)
+	}
+
+	fn contains(&self, key: &H::Out, prefix: hash_db::Prefix) -> bool {
+		self.db.contains(key, prefix)
+	}
+
+	fn insert(&mut self, prefix: hash_db::Prefix, value: &[u8]) -> H::Out {
+		unimplemented!("`insert()` is not supported for `InMemoryTransaction`")
+	}
+
+	fn emplace(&mut self, key: H::Out, prefix: hash_db::Prefix, value: DBValue) {
+		unimplemented!("`emplace()` is not supported for `InMemoryTransaction`")
+	}
+
+	fn remove(&mut self, key: &H::Out, prefix: hash_db::Prefix) {
+		unimplemented!("`remove()` is not supported for `InMemoryTransaction`")
+	}
+}
+
+impl<H: Hasher> Consolidate for InMemoryTransaction<H> {
+	fn consolidate(&mut self, other: Self) {
+		self.transaction.consolidate(other.transaction)
+	}
+}
+
+impl<H: Hasher> TrieBackendStorage<H> for InMemoryTransaction<H> {
+	type Overlay = Self;
+
+	fn get(&self, key: &H::Out, prefix: hash_db::Prefix) -> Result<Option<DBValue>, String> {
+		self.db.get(key, prefix)
+	}
+}
+
+impl<H: Hasher, I: IntoIterator<Item = (Option<Vec<u8>>, Vec<u8>, Option<Vec<u8>>)>> From<I>
+	for InMemoryTransaction<H>
+{
+	fn from(iter: I) -> Self {
+		Self {
+			transaction: iter.into_iter().collect(),
+			db: Default::default(),
+		}
+	}
+}
+
 impl<H: Hasher> Backend<H> for InMemory<H> {
 	type Error = Void;
-	type Transaction = Vec<(Option<Vec<u8>>, Vec<u8>, Option<Vec<u8>>)>;
-	type TrieBackendStorage = MemoryDB<H>;
+	type Transaction = InMemoryTransaction<H>;
+	type TrieBackendStorage = InMemoryTransaction<H>;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		Ok(self.inner.get(&None).and_then(|map| map.get(key).map(Clone::clone)))
@@ -414,9 +491,11 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 			.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))
 		);
 
-		let full_transaction = transaction.into_iter().map(|(k, v)| (None, k, v)).collect();
+		let transaction = transaction.into_iter().map(|(k, v)| (None, k, v)).collect();
 
-		(root, full_transaction)
+		let transaction = InMemoryTransaction { transaction, db: Default::default() };
+
+		(root, transaction)
 	}
 
 	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (Vec<u8>, bool, Self::Transaction)
@@ -439,11 +518,15 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 				.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))
 		);
 
-		let full_transaction = transaction.into_iter().map(|(k, v)| (Some(storage_key.clone()), k, v)).collect();
+		let transaction = transaction.into_iter()
+			.map(|(k, v)| (Some(storage_key.clone()), k, v))
+			.collect();
+
+		let transaction = InMemoryTransaction { transaction, db: Default::default() };
 
 		let is_default = root == default_child_trie_root::<Layout<H>>(&storage_key);
 
-		(root, is_default, full_transaction)
+		(root, is_default, transaction)
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
@@ -489,7 +572,10 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 				new_child_roots.into_iter(),
 			)?,
 		};
-		self.trie = Some(TrieBackend::new(mdb, root));
+
+		let storage = InMemoryTransaction { transaction: Default::default(), db: mdb };
+
+		self.trie = Some(TrieBackend::new(storage, root));
 		self.trie.as_ref()
 	}
 }

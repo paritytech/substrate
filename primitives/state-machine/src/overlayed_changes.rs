@@ -74,7 +74,7 @@ pub struct OverlayedChangeSet {
 ///
 /// This contains all the changes to the storage and transactions to apply theses changes to the
 /// backend.
-pub struct StorageChanges<B: Backend<H>, H: Hasher, N: BlockNumber> {
+pub struct StorageChanges<Transaction, H: Hasher, N: BlockNumber> {
 	/// All changes to the main storage.
 	///
 	/// A value of `None` means that it was deleted.
@@ -84,7 +84,7 @@ pub struct StorageChanges<B: Backend<H>, H: Hasher, N: BlockNumber> {
 	/// A transaction for the backend that contains all changes from
 	/// [`main_storage_changes`](Self::main_storage_changes) and from
 	/// [`child_storage_changes`](Self::child_storage_changes).
-	pub transaction: B::Transaction,
+	pub transaction: Transaction,
 	/// The storage root after applying the transaction.
 	pub transaction_storage_root: H::Out,
 	/// Contains the transaction for the backend for the changes trie.
@@ -96,9 +96,9 @@ pub struct StorageChanges<B: Backend<H>, H: Hasher, N: BlockNumber> {
 /// The storage transaction are calculated as part of the `storage_root` and
 /// `changes_trie_storage_root`. These transactions can be reused for importing the block into the
 /// storage. So, we cache them to not require a recomputation of those transactions.
-pub struct StorageTransactionCache<B: Backend<H>, H: Hasher, N: BlockNumber> {
+pub struct StorageTransactionCache<Transaction, H: Hasher, N: BlockNumber> {
 	/// Contains the changes for the main and the child storages as one transaction.
-	pub(crate) transaction: Option<B::Transaction>,
+	pub(crate) transaction: Option<Transaction>,
 	/// The storage root after applying the transaction.
 	pub(crate) transaction_storage_root: Option<H::Out>,
 	/// Contains the changes trie transaction.
@@ -107,14 +107,14 @@ pub struct StorageTransactionCache<B: Backend<H>, H: Hasher, N: BlockNumber> {
 	pub(crate) changes_trie_transaction_storage_root: Option<Option<H::Out>>,
 }
 
-impl<B: Backend<H>, H: Hasher, N: BlockNumber> StorageTransactionCache<B, H, N> {
+impl<Transaction, H: Hasher, N: BlockNumber> StorageTransactionCache<Transaction, H, N> {
 	/// Reset the cached transactions.
 	pub fn reset(&mut self) {
 		*self = Self::default();
 	}
 }
 
-impl<B: Backend<H>, H: Hasher, N: BlockNumber> Default for StorageTransactionCache<B, H, N> {
+impl<Transaction, H: Hasher, N: BlockNumber> Default for StorageTransactionCache<Transaction, H, N> {
 	fn default() -> Self {
 		Self {
 			transaction: None,
@@ -125,9 +125,7 @@ impl<B: Backend<H>, H: Hasher, N: BlockNumber> Default for StorageTransactionCac
 	}
 }
 
-impl<B: Backend<H>, H: Hasher, N: BlockNumber> Default for StorageChanges<B, H, N>
-	where B::Transaction: Default,
-{
+impl<Transaction: Default, H: Hasher, N: BlockNumber> Default for StorageChanges<Transaction, H, N> {
 	fn default() -> Self {
 		Self {
 			main_storage_changes: Default::default(),
@@ -409,8 +407,8 @@ impl OverlayedChanges {
 		backend: &B,
 		changes_trie_storage: Option<&T>,
 		parent_hash: H::Out,
-		mut cache: StorageTransactionCache<B, H, N>,
-	) -> Result<StorageChanges<B, H, N>, String> where H::Out: Ord + 'static {
+		mut cache: StorageTransactionCache<B::Transaction, H, N>,
+	) -> Result<StorageChanges<B::Transaction, H, N>, String> where H::Out: Ord + 'static {
 		// If the transaction does not exist, we generate it.
 		if cache.transaction.is_none() {
 			self.storage_root(backend, &mut cache);
@@ -478,7 +476,7 @@ impl OverlayedChanges {
 	pub fn storage_root<H: Hasher, N: BlockNumber, B: Backend<H>>(
 		&self,
 		backend: &B,
-		cache: &mut StorageTransactionCache<B, H, N>,
+		cache: &mut StorageTransactionCache<B::Transaction, H, N>,
 	) -> H::Out
 		where H::Out: Ord
 	{
@@ -517,7 +515,7 @@ impl OverlayedChanges {
 		changes_trie_storage: Option<&T>,
 		parent_hash: H::Out,
 		panic_on_storage_error: bool,
-		cache: &mut StorageTransactionCache<B, H, N>,
+		cache: &mut StorageTransactionCache<B::Transaction, H, N>,
 	) -> Result<Option<H::Out>, ()> where H::Out: Ord + 'static {
 		build_changes_trie::<_, T, H, N>(
 			backend,

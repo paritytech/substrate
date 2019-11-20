@@ -77,7 +77,9 @@ pub type ProofRecorder<B> = state_machine::ProofRecorder<
 /// A type that is used as cache for the storage transactions.
 #[cfg(feature = "std")]
 pub type StorageTransactionCache<Block, Backend> =
-	state_machine::StorageTransactionCache<Backend, HasherFor<Block>, NumberFor<Block>>;
+	state_machine::StorageTransactionCache<
+		<Backend as StateBackend<HasherFor<Block>>>::Transaction, HasherFor<Block>, NumberFor<Block>
+	>;
 
 /// Something that can be constructed to a runtime api.
 #[cfg(feature = "std")]
@@ -150,7 +152,7 @@ pub trait ApiExt<Block: BlockT>: ApiErrorExt {
 		backend: &Self::StateBackend,
 		changes_trie_storage: Option<&T>,
 		parent_hash: Block::Hash,
-	) -> Result<StorageChanges<Self::StateBackend, HasherFor<Block>, NumberFor<Block>>, String>
+	) -> Result<StorageChanges<<Self::StateBackend as StateBackend<HasherFor<Block>>>::Transaction, HasherFor<Block>, NumberFor<Block>>, String>
 		where
 			Self: Sized;
 }

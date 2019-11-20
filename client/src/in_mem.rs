@@ -517,11 +517,12 @@ impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperatio
 
 		let child_delta = children.into_iter()
 			.map(|(storage_key, child_overlay)|
-				(storage_key, child_overlay.into_iter().map(|(k, v)| (k, Some(v)))));
+				(storage_key, child_overlay.into_iter().map(|(k, v)| (k, Some(v))))
+			);
 
 		let (root, transaction) = self.old_state.full_storage_root(
 			top.into_iter().map(|(k, v)| (k, Some(v))),
-			child_delta
+			child_delta,
 		);
 
 		self.new_state = Some(InMemory::from(transaction));

@@ -152,8 +152,6 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, H>(
 	SC: SelectChain<B>,
 	E: Environment<B, Error = Error> + Send + Sync + 'static,
 	E::Proposer: Proposer<B, Error = Error>,
-	// Rust bug: https://github.com/rust-lang/rust/issues/24159
-	<E::Proposer as Proposer<B>>::StateBackend: consensus_common::StateBackend<HasherFor<B>>,
 	P: Pair + Send + Sync,
 	P::Public: Hash + Member + Encode + Decode,
 	P::Signature: Hash + Member + Encode + Decode,
@@ -201,8 +199,6 @@ impl<H, B, C, E, I, P, Error, SO> slots::SimpleSlotWorker<B> for AuraWorker<C, E
 	C::Api: AuraApi<B, AuthorityId<P>>,
 	E: Environment<B, Error = Error>,
 	E::Proposer: Proposer<B, Error = Error>,
-	// Rust bug: https://github.com/rust-lang/rust/issues/24159
-	<E::Proposer as Proposer<B>>::StateBackend: consensus_common::StateBackend<HasherFor<B>>,
 	H: Header<Hash=B::Hash>,
 	I: BlockImport<B> + Send + Sync + 'static,
 	P: Pair + Send + Sync,
@@ -308,8 +304,6 @@ impl<H, B: BlockT, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, 
 	C::Api: AuraApi<B, AuthorityId<P>>,
 	E: Environment<B, Error=Error> + Send + Sync,
 	E::Proposer: Proposer<B, Error=Error>,
-	// Rust bug: https://github.com/rust-lang/rust/issues/24159
-	<E::Proposer as Proposer<B>>::StateBackend: consensus_common::StateBackend<HasherFor<B>>,
 	H: Header<Hash=B::Hash>,
 	I: BlockImport<B> + Send + Sync + 'static,
 	P: Pair + Send + Sync,
@@ -750,8 +744,8 @@ mod tests {
 
 	impl Proposer<TestBlock> for DummyProposer {
 		type Error = Error;
-		type StateBackend = client_api::StateBackendFor<test_client::Backend, TestBlock>;
-		type Proposal = future::Ready<Result<Proposal<TestBlock, Self::StateBackend>, Error>>;
+		type BackendTransaction = client_api::TransactionFor<TestBlock, test_client::Backend>;
+		type Proposal = future::Ready<Result<Proposal<TestBlock, Self::BackendTransaction>, Error>>;
 
 		fn propose(
 			&mut self,

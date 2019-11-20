@@ -17,14 +17,11 @@
 use std::{panic::UnwindSafe, result, cell::RefCell};
 use codec::{Encode, Decode};
 use sr_primitives::{generic::BlockId, traits::{Block as BlockT, HasherFor, NumberFor}};
-use state_machine::{
-	self, OverlayedChanges, ExecutionManager, ExecutionStrategy, StorageProof,
-	StorageTransactionCache,
-};
+use state_machine::{self, OverlayedChanges, ExecutionManager, ExecutionStrategy, StorageProof};
 use executor::{RuntimeVersion, NativeVersion};
 use primitives::{offchain::OffchainExt, NativeOrEncoded};
 
-use sr_api::{ProofRecorder, InitializeBlock};
+use sr_api::{ProofRecorder, InitializeBlock, StorageTransactionCache};
 use crate::error;
 
 /// Method call executor.
@@ -68,12 +65,9 @@ pub trait CallExecutor<B: BlockT> {
 		method: &str,
 		call_data: &[u8],
 		changes: &RefCell<OverlayedChanges>,
-		storage_transaction_cache: &RefCell<
-			StorageTransactionCache<
-				<Self::Backend as crate::backend::Backend<B>>::State,
-				HasherFor<B>,
-				NumberFor<B>>
-		>,
+		storage_transaction_cache: Option<&RefCell<
+			StorageTransactionCache<B, <Self::Backend as crate::backend::Backend<B>>::State>,
+		>>,
 		initialize_block: InitializeBlock<'a, B>,
 		execution_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,

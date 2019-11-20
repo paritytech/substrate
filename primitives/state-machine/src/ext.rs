@@ -83,7 +83,7 @@ pub struct Ext<'a, H, N, B, T>
 	/// The storage backend to read from.
 	backend: &'a B,
 	/// The cache for the storage transactions.
-	storage_transaction_cache: &'a mut StorageTransactionCache<B, H, N>,
+	storage_transaction_cache: &'a mut StorageTransactionCache<B::Transaction, H, N>,
 	/// Changes trie storage to read from.
 	changes_trie_storage: Option<&'a T>,
 	/// Pseudo-unique id used for tracing.
@@ -106,7 +106,7 @@ where
 	/// Create a new `Ext` from overlayed changes and read-only backend
 	pub fn new(
 		overlay: &'a mut OverlayedChanges,
-		storage_transaction_cache: &'a mut StorageTransactionCache<B, H, N>,
+		storage_transaction_cache: &'a mut StorageTransactionCache<B::Transaction, H, N>,
 		backend: &'a B,
 		changes_trie_storage: Option<&'a T>,
 		extensions: Option<&'a mut Extensions>,

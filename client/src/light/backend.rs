@@ -23,7 +23,8 @@ use parking_lot::{RwLock, Mutex};
 
 use sr_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
 use state_machine::{
-	Backend as StateBackend, TrieBackend, backend::InMemory as InMemoryState, ChangesTrieTransaction
+	Backend as StateBackend, TrieBackend, backend::InMemory as InMemoryState,
+	ChangesTrieTransaction, backend::InMemoryTransaction,
 };
 use sr_primitives::traits::{Block as BlockT, NumberFor, Zero, Header, HasherFor};
 use crate::in_mem::{self, check_genesis_storage};
@@ -360,8 +361,8 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 		H::Out: Ord,
 {
 	type Error = ClientError;
-	type Transaction = ();
-	type TrieBackendStorage = MemoryDB<H>;
+	type Transaction = InMemoryTransaction<H>;
+	type TrieBackendStorage = InMemoryTransaction<H>;
 
 	fn storage(&self, key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
 		match *self {
@@ -420,8 +421,8 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 	{
 		match *self {
 			GenesisOrUnavailableState::Genesis(ref state) =>
-				(state.storage_root(delta).0, ()),
-			GenesisOrUnavailableState::Unavailable => (H::Out::default(), ()),
+				state.storage_root(delta),
+			GenesisOrUnavailableState::Unavailable => Default::default(),
 		}
 	}
 
@@ -430,11 +431,12 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
 		match *self {
-			GenesisOrUnavailableState::Genesis(ref state) => {
-				let (root, is_equal, _) = state.child_storage_root(key, delta);
-				(root, is_equal, ())
-			},
-			GenesisOrUnavailableState::Unavailable => (H::Out::default().as_ref().to_vec(), true, ()),
+			GenesisOrUnavailableState::Genesis(ref state) => state.child_storage_root(key, delta),
+			GenesisOrUnavailableState::Unavailable => (
+				H::Out::default().as_ref().to_vec(),
+				true,
+				Default::default(),
+			),
 		}
 	}
 

@@ -28,11 +28,11 @@ use sr_primitives::{
 use state_machine::{
 	self, Backend as StateBackend, OverlayedChanges, ExecutionStrategy, create_proof_check_backend,
 	execution_proof_check_on_trie_backend, ExecutionManager, StorageProof,
-	merge_storage_proofs, StorageTransactionCache,
+	merge_storage_proofs,
 };
 use hash_db::Hasher;
 
-use sr_api::{ProofRecorder, InitializeBlock};
+use sr_api::{ProofRecorder, InitializeBlock, StorageTransactionCache};
 
 use client_api::{
 	backend::RemoteBackend,
@@ -107,9 +107,7 @@ impl<Block, B, Local> CallExecutor<Block> for
 		method: &str,
 		call_data: &[u8],
 		changes: &RefCell<OverlayedChanges>,
-		storage_transaction_cache: &RefCell<
-			StorageTransactionCache<B::State, HasherFor<Block>, NumberFor<Block>>
-		>,
+		storage_transaction_cache: Option<&RefCell<StorageTransactionCache<Block, B::State>>>,
 		initialize_block: InitializeBlock<'a, Block>,
 		_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
@@ -136,7 +134,7 @@ impl<Block, B, Local> CallExecutor<Block> for
 				method,
 				call_data,
 				changes,
-				storage_transaction_cache,
+				None,
 				initialize_block,
 				ExecutionManager::NativeWhenPossible,
 				native_call,
@@ -325,13 +323,12 @@ mod tests {
 			_method: &str,
 			_call_data: &[u8],
 			_changes: &RefCell<OverlayedChanges>,
-			_storage_transaction_cache: &RefCell<
+			_storage_transaction_cache: Option<&RefCell<
 				StorageTransactionCache<
+					Block,
 					<Self::Backend as client_api::backend::Backend<Block>>::State,
-					HasherFor<Block>,
-					NumberFor<Block>
 				>
-			>,
+			>>,
 			_initialize_block: InitializeBlock<'a, Block>,
 			_execution_manager: ExecutionManager<EM>,
 			_native_call: Option<NC>,

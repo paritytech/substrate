@@ -39,7 +39,9 @@ type StorageTuple = (HashMap<Vec<u8>, Vec<u8>>, HashMap<Vec<u8>, HashMap<Vec<u8>
 /// Simple HashMap-based Externalities impl.
 pub struct TestExternalities<H: Hasher=Blake2Hasher, N: ChangesTrieBlockNumber=u64> {
 	overlay: OverlayedChanges,
-	storage_transaction_cache: StorageTransactionCache<InMemory<H>, H, N>,
+	storage_transaction_cache: StorageTransactionCache<
+		<InMemory<H> as Backend<H>>::Transaction, H, N
+	>,
 	backend: InMemory<H>,
 	changes_trie_storage: ChangesTrieInMemoryStorage<H, N>,
 	extensions: Extensions,
@@ -124,7 +126,7 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 					.collect::<Vec<_>>()
 			});
 
-		self.backend.update(top.chain(children).collect())
+		self.backend.update(top.chain(children))
 	}
 
 	/// Execute the given closure while `self` is set as externalities.

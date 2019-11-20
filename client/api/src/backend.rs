@@ -315,6 +315,11 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 	fn get_import_lock(&self) -> &Mutex<()>;
 }
 
+/// Get the transaction type of a backend.
+pub type TransactionFor<Block, B> = <
+	<B as Backend<Block>>::State as StateBackend<HasherFor<Block>>
+>::Transaction;
+
 /// Changes trie storage that supports pruning.
 pub trait PrunableStateChangesTrieStorage<Block: BlockT>:
 	StateChangesTrieStorage<HasherFor<Block>, NumberFor<Block>>

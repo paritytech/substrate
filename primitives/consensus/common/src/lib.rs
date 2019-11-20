@@ -82,13 +82,13 @@ pub trait Environment<B: BlockT> {
 }
 
 /// A proposal that is created by a [`Proposer`].
-pub struct Proposal<Block: BlockT, Backend: state_machine::Backend<HasherFor<Block>>> {
+pub struct Proposal<Block: BlockT, Transaction> {
 	/// The block that was build.
 	pub block: Block,
 	/// Optional proof that was recorded while building the block.
 	pub proof: Option<state_machine::StorageProof>,
 	/// The storage changes while building this block.
-	pub storage_changes: state_machine::StorageChanges<Backend, HasherFor<Block>, NumberFor<Block>>,
+	pub storage_changes: state_machine::StorageChanges<Transaction, HasherFor<Block>, NumberFor<Block>>,
 }
 
 /// Logic for a proposer.
@@ -100,10 +100,10 @@ pub struct Proposal<Block: BlockT, Backend: state_machine::Backend<HasherFor<Blo
 pub trait Proposer<B: BlockT> {
 	/// Error type which can occur when proposing or evaluating.
 	type Error: From<Error> + std::fmt::Debug + 'static;
-	/// The state backend that is used to store the block states.
-	type StateBackend: state_machine::Backend<HasherFor<B>> + Send;
+	/// The transaction type used by the backend.
+	type BackendTransaction: Default + Send;
 	/// Future that resolves to a committed proposal with an optional proof.
-	type Proposal: Future<Output = Result<Proposal<B, Self::StateBackend>, Self::Error>> +
+	type Proposal: Future<Output = Result<Proposal<B, Self::BackendTransaction>, Self::Error>> +
 		Send + Unpin + 'static;
 
 	/// Create a proposal.

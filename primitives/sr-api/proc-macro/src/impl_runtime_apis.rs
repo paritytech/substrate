@@ -332,7 +332,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 				parent_hash: Block::Hash,
 			) -> std::result::Result<
 				#crate_::StorageChanges<
-					Self::StateBackend,
+					<Self::StateBackend as #crate_::StateBackend<#crate_::HasherFor<Block>>>::Transaction,
 					#crate_::HasherFor<Block>,
 					#crate_::NumberFor<Block>
 				>,

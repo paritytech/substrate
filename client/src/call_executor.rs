@@ -18,7 +18,7 @@ use std::{sync::Arc, panic::UnwindSafe, result, cell::RefCell};
 use codec::{Encode, Decode};
 use sr_primitives::{generic::BlockId, traits::{Block as BlockT, HasherFor, NumberFor}};
 use state_machine::{
-	self, OverlayedChanges, StorageTransactionCache, Ext, ExecutionManager, StateMachine,
+	self, OverlayedChanges, Ext, ExecutionManager, StateMachine,
 	ExecutionStrategy, backend::Backend as _, StorageProof,
 };
 use executor::{RuntimeVersion, RuntimeInfo, NativeVersion};
@@ -27,7 +27,7 @@ use primitives::{
 	traits::{CodeExecutor, KeystoreExt},
 };
 
-use sr_api::{ProofRecorder, InitializeBlock};
+use sr_api::{ProofRecorder, InitializeBlock, StorageTransactionCache};
 use client_api::{
 	error, backend, call_executor::CallExecutor,
 };
@@ -118,9 +118,9 @@ where
 		method: &str,
 		call_data: &[u8],
 		changes: &RefCell<OverlayedChanges>,
-		storage_transaction_cache: &RefCell<
-			StorageTransactionCache<B::State, HasherFor<Block>, NumberFor<Block>>
-		>,
+		storage_transaction_cache: Option<&RefCell<
+			StorageTransactionCache<Block, B::State>
+		>>,
 		initialize_block: InitializeBlock<'a, Block>,
 		execution_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
@@ -145,6 +145,8 @@ where
 
 		let mut state = self.backend.state_at(*at)?;
 
+		let mut storage_transaction_cache = storage_transaction_cache.map(|c| c.borrow_mut());
+
 		let result = match recorder {
 			Some(recorder) => {
 				let trie_state = state.as_trie_backend()
@@ -155,7 +157,7 @@ where
 
 				let backend = state_machine::ProvingBackend::new_with_recorder(
 					trie_state,
-					recorder.clone()
+					recorder.clone(),
 				);
 
 				StateMachine::new(
@@ -168,7 +170,7 @@ where
 					call_data,
 					keystore,
 				)
-				.with_storage_transaction_cache(&mut *storage_transaction_cache.borrow_mut())
+				.with_storage_transaction_cache(storage_transaction_cache.as_mut().map(|c| &mut **c))
 				.execute_using_consensus_failure_handler(execution_manager, native_call)
 			}
 			None => StateMachine::new(
@@ -181,7 +183,7 @@ where
 				call_data,
 				keystore,
 			)
-			.with_storage_transaction_cache(&mut *storage_transaction_cache.borrow_mut())
+			.with_storage_transaction_cache(storage_transaction_cache.as_mut().map(|c| &mut **c))
 			.execute_using_consensus_failure_handler(execution_manager, native_call)
 		}?;
 		self.backend.destroy_state(state)?;
@@ -191,7 +193,7 @@ where
 	fn runtime_version(&self, id: &BlockId<Block>) -> error::Result<RuntimeVersion> {
 		let mut overlay = OverlayedChanges::default();
 		let state = self.backend.state_at(*id)?;
-		let mut cache = StorageTransactionCache::default();
+		let mut cache = StorageTransactionCache::<Block, B::State>::default();
 
 		let mut ext = Ext::new(
 			&mut overlay,

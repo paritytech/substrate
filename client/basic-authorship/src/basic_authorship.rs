@@ -20,7 +20,7 @@
 //
 
 use std::{time, sync::Arc};
-use client_api::{error, CallExecutor};
+use client_api::{error, CallExecutor, backend};
 use client::Client as SubstrateClient;
 use codec::Decode;
 use consensus_common::{evaluation, Proposal};
@@ -48,7 +48,7 @@ impl<B, E, Block, RA, A> consensus_common::Environment<Block> for
 	ProposerFactory<SubstrateClient<B, E, Block, RA>, A>
 		where
 			A: txpool::ChainApi<Block = Block> + 'static,
-			B: client_api::backend::Backend<Block> + Send + Sync + 'static,
+			B: backend::Backend<Block> + Send + Sync + 'static,
 			E: CallExecutor<Block> + Send + Sync + Clone + 'static,
 			Block: BlockT,
 			RA: Send + Sync + 'static,
@@ -96,7 +96,7 @@ impl<B, E, Block, RA, A> consensus_common::Proposer<Block> for
 	Proposer<Block, SubstrateClient<B, E, Block, RA>, A>
 		where
 			A: txpool::ChainApi<Block=Block>,
-			B: client_api::backend::Backend<Block> + Send + Sync + 'static,
+			B: backend::Backend<Block> + Send + Sync + 'static,
 			E: CallExecutor<Block> + Send + Sync + Clone + 'static,
 			Block: BlockT,
 			RA: Send + Sync + 'static,
@@ -104,8 +104,8 @@ impl<B, E, Block, RA, A> consensus_common::Proposer<Block> for
 			<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api:
 				BlockBuilderApi<Block, Error = client::error::Error>,
 {
-	type StateBackend = B::State;
-	type Proposal = futures::future::Ready<Result<Proposal<Block, B::State>, error::Error>>;
+	type BackendTransaction = backend::TransactionFor<Block, B>;
+	type Proposal = futures::future::Ready<Result<Proposal<Block, Self::BackendTransaction>, error::Error>>;
 	type Error = error::Error;
 
 	fn propose(
@@ -138,7 +138,7 @@ impl<Block, B, E, RA, A> Proposer<Block, SubstrateClient<B, E, Block, RA>, A>	wh
 		inherent_digests: DigestFor<Block>,
 		deadline: time::Instant,
 		record_proof: bool,
-	) -> Result<Proposal<Block, B::State>, error::Error> {
+	) -> Result<Proposal<Block, backend::TransactionFor<Block, B>>, error::Error> {
 		/// If the block is full we will attempt to push at most
 		/// this number of transactions before quitting for real.
 		/// It allows us to increase block utilization.

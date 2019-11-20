@@ -134,7 +134,7 @@ impl<'a, S, H> ProvingBackendRecorder<'a, S, H>
 			&eph,
 			self.backend.root(),
 			key,
-			&mut *self.proof_recorder
+			&mut *self.proof_recorder,
 		).map_err(map_e)
 	}
 
@@ -231,7 +231,9 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
 	}
 }
 
-impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> TrieBackendStorage<H> for ProofRecorderBackend<'a, S, H> {
+impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> TrieBackendStorage<H>
+	for ProofRecorderBackend<'a, S, H>
+{
 	type Overlay = S::Overlay;
 
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
@@ -244,7 +246,9 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> TrieBackendStorage<H> fo
 	}
 }
 
-impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> std::fmt::Debug for ProvingBackend<'a, S, H> {
+impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> std::fmt::Debug
+	for ProvingBackend<'a, S, H>
+{
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "ProvingBackend")
 	}
@@ -258,7 +262,7 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 {
 	type Error = String;
 	type Transaction = S::Overlay;
-	type TrieBackendStorage = PrefixedMemoryDB<H>;
+	type TrieBackendStorage = S;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.0.storage(key)

@@ -180,7 +180,7 @@ pub struct StateMachine<'a, B, H, N, T, Exec>
 	extensions: Extensions,
 	changes_trie_storage: Option<&'a T>,
 	_marker: PhantomData<(H, N)>,
-	storage_transaction_cache: Option<&'a mut StorageTransactionCache<B, H, N>>,
+	storage_transaction_cache: Option<&'a mut StorageTransactionCache<B::Transaction, H, N>>,
 }
 
 impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec> where
@@ -232,9 +232,9 @@ impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec> where
 	/// build that will be cached.
 	pub fn with_storage_transaction_cache(
 		mut self,
-		cache: &'a mut StorageTransactionCache<B, H, N>,
+		cache: Option<&'a mut StorageTransactionCache<B::Transaction, H, N>>,
 	) -> Self {
-		self.storage_transaction_cache = Some(cache);
+		self.storage_transaction_cache = cache;
 		self
 	}
 

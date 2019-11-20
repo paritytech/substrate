@@ -91,7 +91,10 @@ impl Environment<TestBlock> for DummyFactory {
 impl DummyProposer {
 	fn propose_with(&mut self, pre_digests: DigestFor<TestBlock>)
 		-> future::Ready<
-			Result<Proposal<TestBlock, StateBackendFor<test_client::Backend, TestBlock>>, Error>
+			Result<
+				Proposal<TestBlock, client_api::TransactionFor<TestBlock, test_client::Backend>>,
+				Error
+			>
 		>
 	{
 		use codec::Encode;
@@ -147,8 +150,8 @@ impl DummyProposer {
 
 impl Proposer<TestBlock> for DummyProposer {
 	type Error = Error;
-	type StateBackend = client_api::StateBackendFor<test_client::Backend, TestBlock>;
-	type Proposal = future::Ready<Result<Proposal<TestBlock, Self::StateBackend>, Error>>;
+	type BackendTransaction = client_api::TransactionFor<TestBlock, test_client::Backend>;
+	type Proposal = future::Ready<Result<Proposal<TestBlock, Self::BackendTransaction>, Error>>;
 
 	fn propose(
 		&mut self,

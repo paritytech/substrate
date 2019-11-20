@@ -915,7 +915,7 @@ impl<Block: BlockT> Backend<Block> {
 			let mut op = inmem.begin_operation().unwrap();
 			op.set_block_data(header, body, justification, new_block_state).unwrap();
 			op.update_db_storage(
-				state.into_iter().map(|(k, v)| (None, k, Some(v))).collect(),
+				state.into_iter().map(|(k, v)| (None, k, Some(v))).into(),
 			).unwrap();
 			inmem.commit_operation(op).unwrap();
 		}

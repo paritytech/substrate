@@ -1338,7 +1338,7 @@ impl<B, E, Block, RA> ProvideCache<Block> for Client<B, E, Block, RA> where
 
 impl<B, E, Block, RA> ProvideRuntimeApi<Block> for Client<B, E, Block, RA> where
 	B: backend::Backend<Block>,
-	E: CallExecutor<Block> + Clone + Send + Sync,
+	E: CallExecutor<Block, Backend = B> + Clone + Send + Sync,
 	Block: BlockT,
 	RA: ConstructRuntimeApi<Block, Self>,
 {
@@ -1351,7 +1351,7 @@ impl<B, E, Block, RA> ProvideRuntimeApi<Block> for Client<B, E, Block, RA> where
 
 impl<B, E, Block, RA> CallApiAt<Block> for Client<B, E, Block, RA> where
 	B: backend::Backend<Block>,
-	E: CallExecutor<Block> + Clone + Send + Sync,
+	E: CallExecutor<Block, Backend = B> + Clone + Send + Sync,
 	Block: BlockT,
 {
 	type Error = Error;
