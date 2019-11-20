@@ -40,7 +40,7 @@ use block_builder_api::BlockBuilder as BlockBuilderApi;
 use sr_primitives::{Justification, RuntimeString};
 use sr_primitives::generic::{BlockId, Digest, DigestItem};
 use sr_primitives::traits::{Block as BlockT, Header as HeaderT, ProvideRuntimeApi};
-use paint_timestamp::{TimestampInherentData, InherentError as TIError};
+use sp_timestamp::{TimestampInherentData, InherentError as TIError};
 use pow_primitives::{Seal, TotalDifficulty, POW_ENGINE_ID};
 use primitives::H256;
 use inherents::{InherentDataProviders, InherentData};
@@ -316,9 +316,9 @@ impl<B: BlockT<Hash=H256>, C, S, Algorithm> Verifier<B> for PowVerifier<B, C, S,
 pub fn register_pow_inherent_data_provider(
 	inherent_data_providers: &InherentDataProviders,
 ) -> Result<(), consensus_common::Error> {
-	if !inherent_data_providers.has_provider(&paint_timestamp::INHERENT_IDENTIFIER) {
+	if !inherent_data_providers.has_provider(&sp_timestamp::INHERENT_IDENTIFIER) {
 		inherent_data_providers
-			.register_provider(paint_timestamp::InherentDataProvider)
+			.register_provider(sp_timestamp::InherentDataProvider)
 			.map_err(Into::into)
 			.map_err(consensus_common::Error::InherentData)
 	} else {

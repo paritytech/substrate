@@ -2701,7 +2701,6 @@ dependencies = [
  "paint-authority-discovery 0.1.0",
  "paint-balances 2.0.0",
  "paint-contracts 2.0.0",
- "paint-finality-tracker 2.0.0",
  "paint-im-online 0.1.0",
  "paint-indices 2.0.0",
  "paint-support 2.0.0",
@@ -2712,6 +2711,8 @@ dependencies = [
  "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-finality-tracker 2.0.0",
+ "sp-timestamp 2.0.0",
  "sr-io 2.0.0",
  "sr-primitives 2.0.0",
  "structopt 0.3.4 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3134,6 +3135,7 @@ dependencies = [
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-timestamp 2.0.0",
  "sr-io 2.0.0",
  "sr-primitives 2.0.0",
  "sr-std 2.0.0",
@@ -3169,6 +3171,7 @@ dependencies = [
  "paint-support 2.0.0",
  "paint-system 2.0.0",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-authorship 2.0.0",
  "sr-io 2.0.0",
  "sr-primitives 2.0.0",
  "sr-std 2.0.0",
@@ -3189,6 +3192,7 @@ dependencies = [
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-timestamp 2.0.0",
  "sr-io 2.0.0",
  "sr-primitives 2.0.0",
  "sr-staking-primitives 2.0.0",
@@ -3398,6 +3402,7 @@ dependencies = [
  "paint-system 2.0.0",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-finality-tracker 2.0.0",
  "sr-io 2.0.0",
  "sr-primitives 2.0.0",
  "sr-std 2.0.0",
@@ -3765,6 +3770,7 @@ dependencies = [
  "paint-system 2.0.0",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-timestamp 2.0.0",
  "sr-io 2.0.0",
  "sr-primitives 2.0.0",
  "sr-std 2.0.0",
@@ -4992,6 +4998,36 @@ version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
+name = "sp-authorship"
+version = "2.0.0"
+dependencies = [
+ "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-std 2.0.0",
+ "substrate-inherents 2.0.0",
+]
+
+[[package]]
+name = "sp-finality-tracker"
+version = "2.0.0"
+dependencies = [
+ "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-std 2.0.0",
+ "substrate-inherents 2.0.0",
+]
+
+[[package]]
+name = "sp-timestamp"
+version = "2.0.0"
+dependencies = [
+ "impl-trait-for-tuples 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-api 2.0.0",
+ "sr-primitives 2.0.0",
+ "sr-std 2.0.0",
+ "substrate-inherents 2.0.0",
+]
+
+[[package]]
 name = "spin"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5504,9 +5540,9 @@ dependencies = [
  "futures-preview 0.3.0-alpha.19 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures-timer 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "paint-aura 2.0.0",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-timestamp 2.0.0",
  "sr-api 2.0.0",
  "sr-io 2.0.0",
  "sr-primitives 2.0.0",
@@ -5536,10 +5572,12 @@ name = "substrate-consensus-aura-primitives"
 version = "2.0.0"
 dependencies = [
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-timestamp 2.0.0",
  "sr-api 2.0.0",
  "sr-primitives 2.0.0",
  "sr-std 2.0.0",
  "substrate-application-crypto 2.0.0",
+ "substrate-inherents 2.0.0",
 ]
 
 [[package]]
@@ -5557,12 +5595,12 @@ dependencies = [
  "num-bigint 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "num-rational 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "num-traits 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "paint-babe 2.0.0",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "pdqselect 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "schnorrkel 0.8.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-timestamp 2.0.0",
  "sr-api 2.0.0",
  "sr-io 2.0.0",
  "sr-primitives 2.0.0",
@@ -5596,11 +5634,13 @@ version = "2.0.0"
 dependencies = [
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "schnorrkel 0.8.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-timestamp 2.0.0",
  "sr-api 2.0.0",
  "sr-primitives 2.0.0",
  "sr-std 2.0.0",
  "substrate-application-crypto 2.0.0",
  "substrate-consensus-slots 2.0.0",
+ "substrate-inherents 2.0.0",
 ]
 
 [[package]]
@@ -5629,8 +5669,8 @@ dependencies = [
  "derive_more 0.15.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures-preview 0.3.0-alpha.19 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "paint-timestamp 2.0.0",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-timestamp 2.0.0",
  "sr-primitives 2.0.0",
  "substrate-block-builder-runtime-api 2.0.0",
  "substrate-client-api 2.0.0",
@@ -5674,7 +5714,7 @@ name = "substrate-consensus-uncles"
 version = "2.0.0"
 dependencies = [
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "paint-authorship 0.1.0",
+ "sp-authorship 2.0.0",
  "sr-primitives 2.0.0",
  "substrate-client-api 2.0.0",
  "substrate-consensus-common 2.0.0",
@@ -5750,11 +5790,11 @@ dependencies = [
  "futures 0.1.29 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures-preview 0.3.0-alpha.19 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "paint-finality-tracker 2.0.0",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.41 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-finality-tracker 2.0.0",
  "sr-api 2.0.0",
  "sr-primitives 2.0.0",
  "substrate-client 2.0.0",

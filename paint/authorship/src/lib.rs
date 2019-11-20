@@ -30,57 +30,9 @@ use system::ensure_none;
 use sr_primitives::traits::{Header as HeaderT, One, Zero};
 use sr_primitives::weights::SimpleDispatchInfo;
 use inherents::{InherentIdentifier, ProvideInherent, InherentData, MakeFatalError};
-
-/// The identifier for the `uncles` inherent.
-pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"uncles00";
-
-/// Auxiliary trait to extract uncles inherent data.
-pub trait UnclesInherentData<H: Decode> {
-	/// Get uncles.
-	fn uncles(&self) -> Result<Vec<H>, inherents::Error>;
-}
-
-impl<H: Decode> UnclesInherentData<H> for InherentData {
-	fn uncles(&self) -> Result<Vec<H>, inherents::Error> {
-		Ok(self.get_data(&INHERENT_IDENTIFIER)?.unwrap_or_default())
-	}
-}
-
-/// Provider for inherent data.
-#[cfg(feature = "std")]
-pub struct InherentDataProvider<F, H> {
-	inner: F,
-	_marker: std::marker::PhantomData<H>,
-}
-
-#[cfg(feature = "std")]
-impl<F, H> InherentDataProvider<F, H> {
-	pub fn new(uncles_oracle: F) -> Self {
-		InherentDataProvider { inner: uncles_oracle, _marker: Default::default() }
-	}
-}
-
-#[cfg(feature = "std")]
-impl<F, H: Encode + std::fmt::Debug> inherents::ProvideInherentData for InherentDataProvider<F, H>
-where F: Fn() -> Vec<H>
-{
-	fn inherent_identifier(&self) -> &'static InherentIdentifier {
-		&INHERENT_IDENTIFIER
-	}
-
-	fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), inherents::Error> {
-		let uncles = (self.inner)();
-		if !uncles.is_empty() {
-			inherent_data.put_data(INHERENT_IDENTIFIER, &uncles)
-		} else {
-			Ok(())
-		}
-	}
-
-	fn error_to_string(&self, _error: &[u8]) -> Option<String> {
-		Some(format!("no further information"))
-	}
-}
+use sp_authorship::{
+	INHERENT_IDENTIFIER, UnclesInherentData,
+};
 
 pub trait Trait: system::Trait {
 	/// Find the author of a block.
