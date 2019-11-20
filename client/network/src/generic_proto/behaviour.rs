@@ -426,7 +426,7 @@ impl<TSubstream> GenericProto<TSubstream> {
 
 		self.events.push(NetworkBehaviourAction::SendEvent {
 			peer_id: target.clone(),
-			event: NotifsHandlerIn::SendNotif {
+			event: NotifsHandlerIn::SendNotification {
 				message: message.into(),
 				proto_name,
 				engine_id,

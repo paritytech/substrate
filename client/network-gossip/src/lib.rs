@@ -38,7 +38,7 @@ pub trait Network {
 	fn disconnect_peer(&mut self, who: PeerId);
 
 	/// Send a notification to a peer.
-	fn write_notif(&self, who: PeerId, proto_name: Cow<'static, [u8]>, engine_id: ConsensusEngineId, message: Vec<u8>);
+	fn write_notification(&self, who: PeerId, proto_name: Cow<'static, [u8]>, engine_id: ConsensusEngineId, message: Vec<u8>);
 
 	/// Registers a notifications protocol.
 	///
@@ -64,13 +64,13 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Network for Arc<Network
 		unimplemented!()		// TODO:
 	}
 
-	fn write_notif(&self, who: PeerId, proto_name: Cow<'static, [u8]>, engine_id: ConsensusEngineId, message: Vec<u8>) {
+	fn write_notification(&self, who: PeerId, proto_name: Cow<'static, [u8]>, engine_id: ConsensusEngineId, message: Vec<u8>) {
 		let message = ConsensusMessage {
 			engine_id,
 			data: message,
 		};
 
-		NetworkService::write_notif(self, who, proto_name, message)
+		NetworkService::write_notification(self, who, proto_name, message)
 	}
 
 	fn register_notif_protocol(

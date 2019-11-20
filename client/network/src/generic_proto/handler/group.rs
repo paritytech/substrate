@@ -129,7 +129,7 @@ pub enum NotifsHandlerIn {
 	},
 
 	/// Sends a notifications message.
-	SendNotif {
+	SendNotification {
 		/// Name of the protocol for the message.
 		///
 		/// Must match one of the registered protocols. For backwards-compatibility reasons, if
@@ -271,7 +271,7 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static {
 			},
 			NotifsHandlerIn::Send { message } =>
 				self.legacy.inject_event(LegacyProtoHandlerIn::SendCustomMessage { message }),
-			NotifsHandlerIn::SendNotif { message, engine_id, proto_name } => {
+			NotifsHandlerIn::SendNotification { message, engine_id, proto_name } => {
 				for handler in &mut self.out_handlers {
 					if handler.is_open() && handler.protocol_name() == &proto_name[..] {
 						handler.inject_event(NotifsOutHandlerIn::Send(message));

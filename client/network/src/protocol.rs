@@ -1056,7 +1056,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// Send a notification to the given peer we're connected to.
 	///
 	/// Doesn't do anything if we're not connected to that peer.
-	pub fn write_notif(
+	pub fn write_notification(
 		&mut self,
 		target: PeerId,
 		proto_name: impl Into<Cow<'static, [u8]>>,

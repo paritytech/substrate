@@ -243,7 +243,7 @@ impl<B: BlockT, N: Network> Context<B> for ContextOverService<N> {
 	fn send_consensus(&mut self, who: PeerId, messages: Vec<ConsensusMessage>) {
 		// TODO: send batch
 		for message in messages {
-			self.network.write_notif(who.clone(), self.proto_name.clone(), message.engine_id, message.data);
+			self.network.write_notification(who.clone(), self.proto_name.clone(), message.engine_id, message.data);
 		}
 	}
 
