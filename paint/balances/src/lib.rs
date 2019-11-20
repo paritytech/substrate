@@ -375,7 +375,7 @@ decl_storage! {
 		build(|config: &GenesisConfig<T, I>| {
 			for (_, balance) in &config.balances {
 				assert!(
-					*balance > <T as Trait<I>>::ExistentialDeposit::get(),
+					*balance >= <T as Trait<I>>::ExistentialDeposit::get(),
 					"the balance of any account should always be more than existential deposit.",
 				)
 			}
