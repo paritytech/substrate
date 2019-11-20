@@ -10,7 +10,7 @@ node-runtime = { version = "*", path = "../node/runtime" }
 node-primitives = { version = "*", path = "../node/primitives" }
 sr-primitives = { version = "*", path = "../../primitives/sr-primitives" }
 rand = "0.7.2"
-clap = { version = "2.33.0", features = ["yaml"] }
+clap = "2.33.0"
 tiny-bip39 = "0.6.2"
 rustc-hex = "2.0.1"
 substrate-bip39 = "0.3.1"
