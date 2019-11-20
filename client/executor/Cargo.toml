@@ -28,9 +28,9 @@ cranelift-entity = { version = "0.50", optional = true }
 cranelift-frontend = { version = "0.50", optional = true }
 cranelift-native = { version = "0.50", optional = true }
 cranelift-wasm = { version = "0.50", optional = true }
-wasmtime-environ = { version = "0.7", optional = true }
-wasmtime-jit = { version = "0.7", optional = true }
-wasmtime-runtime = { version = "0.7", optional = true }
+wasmtime-environ = { version = "0.8", optional = true }
+wasmtime-jit = { version = "0.8", optional = true }
+wasmtime-runtime = { version = "0.8", optional = true }
 
 [dev-dependencies]
 assert_matches = "1.3.0"
