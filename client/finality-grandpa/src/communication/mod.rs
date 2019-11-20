@@ -60,6 +60,7 @@ mod periodic;
 #[cfg(test)]
 mod tests;
 
+pub const GRANDPA_PROTOCOL_NAME: &'static [u8] = b"/sub/grandpa";
 pub use fg_primitives::GRANDPA_ENGINE_ID;
 
 // cost scalars for reporting peers.
@@ -104,6 +105,11 @@ pub(crate) fn global_topic<B: BlockT>(set_id: SetIdNumber) -> B::Hash {
 	<<B::Header as HeaderT>::Hashing as HashT>::hash(format!("{}-GLOBAL", set_id).as_bytes())
 }
 
+/// Registers the notifications protocol towards the network.
+pub(crate) fn register_dummy_protocol<N: Network>(network: N) {
+	network.register_notif_protocol(GRANDPA_PROTOCOL_NAME, GRANDPA_ENGINE_ID, Vec::new());
+}
+
 /// Bridge between the underlying network service, gossiping consensus messages and Grandpa
 pub(crate) struct NetworkBridge<B: BlockT> {
 	service: GossipEngine<B>,
@@ -132,7 +138,7 @@ impl<B: BlockT> NetworkBridge<B> {
 		);
 
 		let validator = Arc::new(validator);
-		let service = GossipEngine::new(service, &b"/sub/grandpa"[..], GRANDPA_ENGINE_ID, validator.clone());
+		let service = GossipEngine::new(service, GRANDPA_PROTOCOL_NAME, GRANDPA_ENGINE_ID, validator.clone());
 
 		{
 			// register all previous votes with the gossip service so that they're

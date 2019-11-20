@@ -908,8 +908,7 @@ pub fn setup_disabled_grandpa<B, E, Block: BlockT<Hash=H256>, RA, N>(
 		inherent_data_providers,
 	)?;
 
-	// TODO: figure out before merging
-	//network.register_validator(Arc::new(network_gossip::DiscardAll));
+	communication::register_dummy_protocol(network);
 
 	Ok(())
 }
