@@ -17,9 +17,9 @@
 use serde::{Serialize, de::DeserializeOwned};
 use hyper::{Body, Request, Response, header, service::{service_fn, make_service_fn}, Server};
 use chrono::{Duration, Utc};
-use futures_util::{TryStreamExt, FutureExt, future::{select, Either}};
+use futures_util::{FutureExt, future::{Future, select, Either}};
 use futures_timer::Delay;
-use crate::{METRICS, util, types::{Target, Query, TimeseriesData}};
+use crate::{METRICS, util, types::{Target, Query, TimeseriesData}, networking::Incoming};
 
 #[derive(Debug, derive_more::Display)]
 enum Error {
@@ -77,6 +77,8 @@ async fn map_request_to_response<Req, Res, T>(req: Request<Body>, transformation
 		Res: Serialize,
 		T: Fn(Req) -> Res + Send + Sync + 'static
 {
+	use futures_util_alpha::TryStreamExt;
+
 	let body = req.into_body()
 		.try_concat()
 		.await
@@ -92,25 +94,45 @@ async fn map_request_to_response<Req, Res, T>(req: Request<Body>, transformation
 		.map_err(Error::Http)
 }
 
+/// Given that we're not using hyper's tokio feature, we need to define out own executor.
+#[derive(Clone)]
+pub struct Executor;
+
+impl<T> tokio_executor::TypedExecutor<T> for Executor
+	where
+		T: Future + Send + 'static,
+		T::Output: Send + 'static,
+{
+	fn spawn(&mut self, future: T) -> Result<(), tokio_executor::SpawnError> {
+		async_std::task::spawn(future);
+		Ok(())
+	}
+}
+
 /// Start the data source server.
 pub async fn run_server(address: std::net::SocketAddr) -> Result<(), hyper::Error> {
+	let listener = async_std::net::TcpListener::bind(&address).await.unwrap();
+
 	let service = make_service_fn(|_| {
 		async {
 			Ok::<_, Error>(service_fn(api_response))
 		}
 	});
 
-	let server = Server::bind(&address)
+	let server = Server::builder(Incoming(listener.incoming()))
+		.executor(Executor)
 		.serve(service)
 		.boxed();
 
 	let clean = clean_up(Duration::days(1), Duration::weeks(1))
 		.boxed();
 
-	match select(server, clean).await {
+	let result = match select(server, clean).await {
 		Either::Left((result, _)) => result,
 		Either::Right(_) => Ok(())
-	}
+	};
+
+	result
 }
 
 /// Periodically remove old metrics.
