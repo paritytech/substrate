@@ -13,6 +13,8 @@ schnorrkel = { version = "0.8.5", features = ["preaudit_deprecated"], optional =
 slots = { package = "substrate-consensus-slots", path = "../../../client/consensus/slots", optional = true }
 sr-api = { path = "../../sr-api", default-features = false }
 sr-primitives = {  path = "../../sr-primitives", default-features = false }
+sp-inherents = { package = "substrate-inherents", path = "../../inherents", default-features = false }
+sp-timestamp = { path = "../../timestamp", default-features = false }
 
 [features]
 default = ["std"]
@@ -24,4 +26,6 @@ std = [
 	"slots",
 	"sr-api/std",
 	"sr-primitives/std",
+	"sp-inherents/std",
+	"sp-timestamp/std",
 ]
