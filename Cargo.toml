@@ -42,7 +42,7 @@ members = [
 	"client/transaction-pool/graph",
 	"client/utils/wasm-builder-runner",
 	"client/grafana-data-source",
-    "client/grafana-data-source/test",
+	"client/grafana-data-source/test",
 	"paint/assets",
 	"paint/aura",
 	"paint/authority-discovery",
