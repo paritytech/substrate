@@ -70,7 +70,7 @@ use primitives::{H256, Blake2Hasher, Pair};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG, CONSENSUS_WARN};
 use serde_json;
 
-use paint_finality_tracker;
+use sp_finality_tracker;
 
 use grandpa::Error as GrandpaError;
 use grandpa::{voter, BlockNumberOps, voter_set::VoterSet};
@@ -505,9 +505,9 @@ fn register_finality_tracker_inherent_data_provider<B, E, Block: BlockT<Hash=H25
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
 	RA: Send + Sync + 'static,
 {
-	if !inherent_data_providers.has_provider(&paint_finality_tracker::INHERENT_IDENTIFIER) {
+	if !inherent_data_providers.has_provider(&sp_finality_tracker::INHERENT_IDENTIFIER) {
 		inherent_data_providers
-			.register_provider(paint_finality_tracker::InherentDataProvider::new(move || {
+			.register_provider(sp_finality_tracker::InherentDataProvider::new(move || {
 				#[allow(deprecated)]
 				{
 					let info = client.info().chain;

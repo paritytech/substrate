@@ -21,25 +21,23 @@
 #![forbid(unused_must_use, unsafe_code, unused_variables, unused_must_use)]
 #![deny(unused_imports)]
 pub use timestamp;
+use sp_timestamp;
 
 use rstd::{result, prelude::*};
 use support::{decl_storage, decl_module, traits::FindAuthor, traits::Get};
-use timestamp::OnTimestampSet;
+use sp_timestamp::OnTimestampSet;
 use sr_primitives::{generic::DigestItem, ConsensusEngineId, Perbill};
 use sr_primitives::traits::{IsMember, SaturatedConversion, Saturating, RandomnessBeacon};
 use sr_staking_primitives::{
 	SessionIndex,
 	offence::{Offence, Kind},
 };
-#[cfg(feature = "std")]
-use timestamp::TimestampInherentData;
+
 use codec::{Encode, Decode};
 use inherents::{InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
-#[cfg(feature = "std")]
-use inherents::{InherentDataProviders, ProvideInherentData};
 use babe_primitives::{
 	BABE_ENGINE_ID, ConsensusLog, BabeAuthorityWeight, NextEpochDescriptor, RawBabePreDigest,
-	SlotNumber,
+	SlotNumber, inherents::{INHERENT_IDENTIFIER, BabeInherentData}
 };
 pub use babe_primitives::{AuthorityId, VRF_OUTPUT_LENGTH, PUBLIC_KEY_LENGTH};
 
@@ -48,78 +46,6 @@ mod tests;
 
 #[cfg(all(feature = "std", test))]
 mod mock;
-
-/// The BABE inherent identifier.
-pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"babeslot";
-
-/// The type of the BABE inherent.
-pub type InherentType = u64;
-/// Auxiliary trait to extract BABE inherent data.
-pub trait BabeInherentData {
-	/// Get BABE inherent data.
-	fn babe_inherent_data(&self) -> result::Result<InherentType, inherents::Error>;
-	/// Replace BABE inherent data.
-	fn babe_replace_inherent_data(&mut self, new: InherentType);
-}
-
-impl BabeInherentData for InherentData {
-	fn babe_inherent_data(&self) -> result::Result<InherentType, inherents::Error> {
-		self.get_data(&INHERENT_IDENTIFIER)
-			.and_then(|r| r.ok_or_else(|| "BABE inherent data not found".into()))
-	}
-
-	fn babe_replace_inherent_data(&mut self, new: InherentType) {
-		self.replace_data(INHERENT_IDENTIFIER, &new);
-	}
-}
-
-/// Provides the slot duration inherent data for BABE.
-#[cfg(feature = "std")]
-pub struct InherentDataProvider {
-	slot_duration: u64,
-}
-
-#[cfg(feature = "std")]
-impl InherentDataProvider {
-	/// Constructs `Self`
-	pub fn new(slot_duration: u64) -> Self {
-		Self {
-			slot_duration
-		}
-	}
-}
-
-#[cfg(feature = "std")]
-impl ProvideInherentData for InherentDataProvider {
-	fn on_register(
-		&self,
-		providers: &InherentDataProviders,
-	) -> result::Result<(), inherents::Error> {
-		if !providers.has_provider(&timestamp::INHERENT_IDENTIFIER) {
-			// Add the timestamp inherent data provider, as we require it.
-			providers.register_provider(timestamp::InherentDataProvider)
-		} else {
-			Ok(())
-		}
-	}
-
-	fn inherent_identifier(&self) -> &'static inherents::InherentIdentifier {
-		&INHERENT_IDENTIFIER
-	}
-
-	fn provide_inherent_data(
-		&self,
-		inherent_data: &mut InherentData,
-	) -> result::Result<(), inherents::Error> {
-		let timestamp = inherent_data.timestamp_inherent_data()?;
-		let slot_number = timestamp / self.slot_duration;
-		inherent_data.put_data(INHERENT_IDENTIFIER, &slot_number)
-	}
-
-	fn error_to_string(&self, error: &[u8]) -> Option<String> {
-		inherents::Error::decode(&mut &error[..]).map(|e| e.into_string()).ok()
-	}
-}
 
 pub trait Trait: timestamp::Trait {
 	/// The amount of time, in slots, that each epoch should last.
