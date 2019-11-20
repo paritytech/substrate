@@ -230,9 +230,21 @@ impl<'a> ChildInfo<'a> {
 			ChildInfo::Default(ChildTrie {
 				root: _root,
 				unique_id,
-			}) => &unique_id[..],
+			}) => unique_id,
 		}
 	}
+
+	/// Return the child reference to state if it is already known.
+	/// For a child trie it is its root.
+	pub fn root(&self) -> Option<&[u8]> {
+		match self {
+			ChildInfo::Default(ChildTrie {
+				root,
+				unique_id: _unique_id,
+			}) => *root,
+		}
+	}
+
 }
 
 /// Type of child, this can be different child usage
