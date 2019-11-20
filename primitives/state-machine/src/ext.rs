@@ -330,6 +330,15 @@ where
 		result
 	}
 
+	fn next_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
+		// TODO: implement
+		self.backend.
+	}
+
+	fn next_child_storage(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<Vec<u8>> {
+		// TODO: implement
+	}
+
 	fn place_storage(&mut self, key: Vec<u8>, value: Option<Vec<u8>>) {
 		trace!(target: "state-trace", "{:04x}: Put {}={:?}",
 			self.id,
