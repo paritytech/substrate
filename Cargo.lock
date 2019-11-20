@@ -5760,6 +5760,7 @@ dependencies = [
  "substrate-runtime-test 2.0.0",
  "substrate-serializer 2.0.0",
  "substrate-state-machine 2.0.0",
+ "substrate-test-runtime 2.0.0",
  "substrate-trie 2.0.0",
  "substrate-wasm-interface 2.0.0",
  "test-case 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)",
