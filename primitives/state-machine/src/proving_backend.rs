@@ -455,7 +455,7 @@ mod tests {
 			(None, (0..64).map(|i| (vec![i], Some(vec![i]))).collect()),
 			(Some((own1.clone(), CHILD_INFO_1.to_owned())),
 				(28..65).map(|i| (vec![i], Some(vec![i]))).collect()),
-			(Some((own2.clone(), CHILD_INFO_1.to_owned())),
+			(Some((own2.clone(), CHILD_INFO_2.to_owned())),
 				(10..15).map(|i| (vec![i], Some(vec![i]))).collect()),
 		];
 		let in_memory = InMemory::<Blake2Hasher>::default();
