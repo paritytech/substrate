@@ -220,11 +220,8 @@ pub fn put_raw(
 /// Calculate current child root value.
 pub fn child_root(
 	storage_key: &[u8],
-	unique_id: Option<&[u8]>,
 ) -> Vec<u8> {
 	runtime_io::storage::child_root(
 		storage_key,
-		unique_id.expect(SOME),
-		primitives::storage::ChildType::CryptoUniqueId as u32,
 	)
 }

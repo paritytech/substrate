@@ -149,7 +149,6 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 		// Note: this operation is heavy.
 		let child_storage_root = child::child_root(
 			&contract.trie_id,
-			contract.child_trie_unique_id(),
 		);
 
 		let tombstone = <TombstoneContractInfo<T>>::new(

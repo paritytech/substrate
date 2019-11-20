@@ -491,11 +491,9 @@ where
 		root
 	}
 
-	// TODO EMCH seems like child_info parameter is useless here!!!
 	fn child_storage_root(
 		&mut self,
 		storage_key: ChildStorageKey,
-		_child_info: ChildInfo,
 	) -> Vec<u8> {
 		let _guard = panic_handler::AbortGuard::force_abort();
 		if self.storage_transaction.is_some() {

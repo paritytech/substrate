@@ -451,8 +451,6 @@ impl_wasm_host_interface! {
 			// This can only work with archive mode.
 			let value = runtime_io::storage::child_root(
 				&storage_key,
-				&[],
-				ChildType::CryptoUniqueId as u32,
 			);
 
 			let offset = context.allocate_memory(value.len() as u32)?;

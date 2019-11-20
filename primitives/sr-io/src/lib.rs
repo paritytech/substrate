@@ -245,13 +245,9 @@ pub trait Storage {
 	fn child_root(
 		&mut self,
 		child_storage_key: &[u8],
-		child_definition: &[u8],
-		child_type: u32,
 	) -> Vec<u8> {
 		let storage_key = child_storage_key_or_panic(child_storage_key);
-		let child_info = ChildInfo::resolve_child_info(child_type, child_definition)
-			.expect("Invalid child definition");
-		self.child_storage_root(storage_key, child_info)
+		self.child_storage_root(storage_key)
 	}
 
 	/// "Commit" all existing operations and get the resulting storage change root.

@@ -232,12 +232,9 @@ impl Externalities for BasicExternalities {
 		// type of child trie support.
 		let empty_hash = default_child_trie_root::<Layout<Blake2Hasher>>(&[]);
 		for storage_key in keys {
-			let child_info = self.children.get(storage_key.as_slice()).as_ref()
-				.expect("key fetch above").1.to_owned();
 			let child_root = self.child_storage_root(
 				ChildStorageKey::from_slice(storage_key.as_slice())
 					.expect("Map only feed by valid keys; qed"),
-				child_info.as_ref(),
 			);
 			if &empty_hash[..] == &child_root[..] {
 				top.remove(storage_key.as_slice());
@@ -252,7 +249,6 @@ impl Externalities for BasicExternalities {
 	fn child_storage_root(
 		&mut self,
 		storage_key: ChildStorageKey,
-		_child_info: ChildInfo,
 	) -> Vec<u8> {
 		if let Some(child) = self.children.get(storage_key.as_ref()) {
 			let delta = child.0.clone().into_iter().map(|(k, v)| (k, Some(v)));

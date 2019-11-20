@@ -170,7 +170,6 @@ pub trait Externalities: ExtensionStore {
 	fn child_storage_root(
 		&mut self,
 		storage_key: ChildStorageKey,
-		child_info: ChildInfo,
 	) -> Vec<u8>;
 
 	/// Get the change trie root of the current storage overlay at a block with given parent.

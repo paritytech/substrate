@@ -827,7 +827,6 @@ impl<T: Trait> Module<T> {
 			// is not this block as it has been checked earlier.
 			&child::child_root(
 				&origin_contract.trie_id,
-				origin_contract.child_trie_unique_id(),
 			)[..],
 				code_hash,
 		);
