@@ -709,7 +709,7 @@ mod tests {
 
 	#[test]
 	fn block_hooks_weight_is_stored() {
-		new_test_ext(0).execute_with(|| {
+		new_test_ext(1).execute_with(|| {
 
 			Executive::initialize_block(&Header::new_from_number(1));
 			// NOTE: might need updates over time if system and balance introduce new weights. For
