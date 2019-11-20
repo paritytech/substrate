@@ -463,12 +463,12 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 		&self,
 		proto_name: impl Into<Cow<'static, [u8]>>,
 		engine_id: ConsensusEngineId,
-		handshake: impl Into<Vec<u8>>
+		handshake_msg: impl Into<Vec<u8>>
 	) {
 		let _ = self.to_worker.unbounded_send(ServerToWorkerMsg::RegisterNotifProtocol {
 			proto_name: proto_name.into(),
 			engine_id,
-			handshake: handshake.into(),
+			handshake_msg: handshake_msg.into(),
 		});
 	}
 
@@ -697,7 +697,7 @@ enum ServerToWorkerMsg<B: BlockT, S: NetworkSpecialization<B>> {
 	RegisterNotifProtocol {
 		proto_name: Cow<'static, [u8]>,
 		engine_id: ConsensusEngineId,
-		handshake: Vec<u8>,
+		handshake_msg: Vec<u8>,
 	},
 	DisconnectPeer(PeerId),
 }
@@ -779,9 +779,9 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Stream for Ne
 					self.events_streams.push(sender),
 				ServerToWorkerMsg::WriteNotification { message, proto_name, target } =>
 					self.network_service.user_protocol_mut().write_notification(target, proto_name, message),
-				ServerToWorkerMsg::RegisterNotifProtocol { proto_name, engine_id, handshake } =>
+				ServerToWorkerMsg::RegisterNotifProtocol { proto_name, engine_id, handshake_msg } =>
 					self.network_service.user_protocol_mut()
-						.register_notif_protocol(proto_name, engine_id, handshake),
+						.register_notif_protocol(proto_name, engine_id, handshake_msg),
 				ServerToWorkerMsg::DisconnectPeer(who) =>
 					self.network_service.user_protocol_mut().disconnect_peer(&who),
 			}

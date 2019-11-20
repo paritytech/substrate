@@ -270,9 +270,9 @@ impl<TSubstream> GenericProto<TSubstream> {
 	pub fn register_notif_protocol(
 		&mut self,
 		proto_name: impl Into<Cow<'static, [u8]>>,
-		handshake: impl Into<Vec<u8>>
+		handshake_msg: impl Into<Vec<u8>>
 	) {
-		self.notif_protocols.push((proto_name.into(), handshake.into()));
+		self.notif_protocols.push((proto_name.into(), handshake_msg.into()));
 	}
 
 	/// Returns a list of all the notification protocols that have been registered.

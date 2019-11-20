@@ -1078,13 +1078,13 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		&mut self,
 		proto_name: impl Into<Cow<'static, [u8]>>,
 		engine_id: ConsensusEngineId,
-		handshake: impl Into<Vec<u8>>,
+		handshake_msg: impl Into<Vec<u8>>,
 	) {
 		let proto_name = proto_name.into();
 		if self.protocol_name_by_engine.insert(engine_id, proto_name.clone()).is_some() {
 			error!(target: "sub-libp2p", "Notifications protocol already registered: {:?}", proto_name);
 		} else {
-			self.behaviour.register_notif_protocol(proto_name.clone(), handshake);
+			self.behaviour.register_notif_protocol(proto_name.clone(), handshake_msg);
 			self.protocol_engine_by_name.insert(proto_name, engine_id);
 		}
 	}

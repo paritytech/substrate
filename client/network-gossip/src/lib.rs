@@ -47,7 +47,7 @@ pub trait Network {
 		&self,
 		proto_name: impl Into<Cow<'static, [u8]>>,
 		engine_id: ConsensusEngineId,
-		handshake: impl Into<Vec<u8>>
+		handshake_msg: impl Into<Vec<u8>>
 	);
 }
 
@@ -77,8 +77,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Network for Arc<Network
 		&self,
 		proto_name: impl Into<Cow<'static, [u8]>>,
 		engine_id: ConsensusEngineId,
-		handshake: impl Into<Vec<u8>>
+		handshake_msg: impl Into<Vec<u8>>
 	) {
-		NetworkService::register_notif_protocol(self, proto_name, engine_id, handshake)
+		NetworkService::register_notif_protocol(self, proto_name, engine_id, handshake_msg)
 	}
 }
