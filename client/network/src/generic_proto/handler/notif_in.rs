@@ -140,7 +140,7 @@ where TSubstream: AsyncRead + AsyncWrite + 'static {
 	type InEvent = NotifsInHandlerIn;
 	type OutEvent = NotifsInHandlerOut;
 	type Substream = TSubstream;
-	type Error = ConnectionKillError;
+	type Error = void::Void;
 	type InboundProtocol = NotificationsIn;
 	type OutboundProtocol = DeniedUpgrade;
 	type OutboundOpenInfo = ();
@@ -196,16 +196,7 @@ where TSubstream: AsyncRead + AsyncWrite + 'static {
 	}
 
 	fn inject_dial_upgrade_error(&mut self, _: (), err: ProtocolsHandlerUpgrErr<void::Void>) {
-		unimplemented!()		// TODO:
-		/*let is_severe = match err {
-			ProtocolsHandlerUpgrErr::Upgrade(_) => true,
-			_ => false,
-		};
-
-		self.events_queue.push(ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::ProtocolError {
-			is_severe,
-			error: Box::new(err),
-		}));*/
+		error!(target: "sub-libp2p", "Received dial upgrade error in inbound-only handler");
 	}
 
 	fn connection_keep_alive(&self) -> KeepAlive {
@@ -228,13 +219,15 @@ where TSubstream: AsyncRead + AsyncWrite + 'static {
 			return Ok(Async::Ready(event))
 		}
 
-		if let Some(substream) = self.substream.as_mut() {
-			match substream.poll() {
-				Ok(Async::Ready(Some(msg))) =>
-					return Ok(Async::Ready(ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::Notif(msg)))),
-				Ok(Async::NotReady) => {},
-				Ok(Async::Ready(None)) | Err(_) => return Err(ConnectionKillError),		// TODO: ?
-			}
+		match self.substream.as_mut().map(|s| s.poll()) {
+			None => {},
+			Some(Ok(Async::Ready(Some(msg)))) =>
+				return Ok(Async::Ready(ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::Notif(msg)))),
+			Some(Ok(Async::NotReady)) => {},
+			Some(Ok(Async::Ready(None))) | Some(Err(_)) => {
+				self.substream = None;
+				return Ok(Async::Ready(ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::Closed)));
+			},
 		}
 
 		Ok(Async::NotReady)
@@ -248,18 +241,5 @@ where
 	fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
 		f.debug_struct("NotifsInHandler")
 			.finish()
-	}
-}
-
-// TODO: remove
-#[derive(Debug)]
-pub struct ConnectionKillError;
-
-impl error::Error for ConnectionKillError {
-}
-
-impl fmt::Display for ConnectionKillError {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		unimplemented!()		// TODO:
 	}
 }
