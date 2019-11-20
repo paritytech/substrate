@@ -280,7 +280,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 			import_queue: params.import_queue,
 			from_worker,
 			light_client_rqs: params.on_demand.and_then(|od| od.extract_receiver()),
-			events_streams: Vec::new(),
+			event_streams: Vec::new(),
 		})
 	}
 
@@ -724,7 +724,7 @@ pub struct NetworkWorker<B: BlockT + 'static, S: NetworkSpecialization<B>, H: Ex
 	/// Receiver for queries from the light client that must be processed.
 	light_client_rqs: Option<mpsc::UnboundedReceiver<RequestData<B>>>,
 	/// Senders for events that happen on the network.
-	events_streams: Vec<mpsc::UnboundedSender<Event>>,
+	event_streams: Vec<mpsc::UnboundedSender<Event>>,
 }
 
 impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Stream for NetworkWorker<B, S, H> {
@@ -776,7 +776,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Stream for Ne
 				ServerToWorkerMsg::SyncFork(peer_ids, hash, number) =>
 					self.network_service.user_protocol_mut().set_sync_fork_request(peer_ids, &hash, number),
 				ServerToWorkerMsg::EventsStream(sender) =>
-					self.events_streams.push(sender),
+					self.event_streams.push(sender),
 				ServerToWorkerMsg::WriteNotification { message, proto_name, target } =>
 					self.network_service.user_protocol_mut().write_notification(target, proto_name, message),
 				ServerToWorkerMsg::RegisterNotifProtocol { proto_name, engine_id, handshake_msg } =>
@@ -800,7 +800,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Stream for Ne
 				Ok(Async::Ready(Some(BehaviourOut::FinalityProofImport(origin, hash, nb, proof)))) =>
 					self.import_queue.import_finality_proof(origin, hash, nb, proof),
 				Ok(Async::Ready(Some(BehaviourOut::Event(ev)))) => {
-					self.events_streams.retain(|sender| sender.unbounded_send(ev.clone()).is_ok());
+					self.event_streams.retain(|sender| sender.unbounded_send(ev.clone()).is_ok());
 					return Ok(Async::Ready(Some(ev)));
 				},
 				Ok(Async::Ready(None)) => {},
