@@ -8,7 +8,6 @@ edition = "2018"
 
 [dependencies]
 grafana-data-source = { path = ".." }
-futures-util = "0.3"
-tokio = "0.2.0-alpha.6"
+futures = "0.3"
+futures-timer = "2.0"
 rand = "0.7"
-ctrlc = "3.1"

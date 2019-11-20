@@ -15,37 +15,13 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use grafana_data_source::{run_server, record_metrics};
-use std::{
-	time::Duration, sync::atomic::{AtomicBool, Ordering}, task::{Context, Poll}, future::Future,
-	pin::Pin
-};
+use std::time::Duration;
 use rand::Rng;
-use futures_util::{FutureExt, future::select};
-use tokio::timer::delay_for;
-
-static EXIT: AtomicBool = AtomicBool::new(false);
-
-struct ExitFuture;
-
-impl Future for ExitFuture {
-	type Output = ();
-
-	fn poll(self: Pin<&mut Self>, _: &mut Context) -> Poll<Self::Output> {
-		let exit = EXIT.load(Ordering::Relaxed);
-
-		println!("Polling, got: {}", exit);
-
-		if exit {
-			Poll::Ready(())
-		} else {
-			Poll::Pending
-		}
-	}
-}
+use futures::{future::join, executor};
 
 async fn randomness() {
 	loop {
-		delay_for(Duration::from_secs(1)).await;
+		futures_timer::Delay::new(Duration::from_secs(1)).await;
 
 		let random = rand::thread_rng().gen_range(0.0, 1000.0);
 
@@ -56,23 +32,9 @@ async fn randomness() {
 	}
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-	ctrlc::set_handler(|| {
-		println!(" - Ctrl-C received");
-		EXIT.store(true, Ordering::Relaxed);
-	}).unwrap();
-
-	let address = "127.0.0.1:9955".parse().unwrap();
-
-	let server_future = run_server(address).boxed();
-
-	let randomness_future = randomness().boxed();
-
-	select(
-		select(randomness_future, server_future),
-		ExitFuture
-	).await;
-
-	Ok(())
+fn main() {
+	executor::block_on(join(
+		run_server("127.0.0.1:9955".parse().unwrap()),
+		randomness()
+	)).0.unwrap();
 }
