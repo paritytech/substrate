@@ -45,7 +45,7 @@
 //! a block author or a validator. The session keys of accounts are removed once their account balance is zero.
 //! - **Validator set session key configuration process:** Each session we iterate through the current
 //! set of validator account IDs to check if a session key was created for it in the previous session
-//! using `set_key`. If it was then we call `set_authority` from the [Consensus module](../paint_consensus/index.html)
+//! using `set_key`. If it was then we call `set_authority` from the [Consensus module](../palette_consensus/index.html)
 //! and pass it a set of session keys (each associated with an account ID) as the session keys for the new
 //! validator set. Lastly, if the session key of the current authority does not match any session keys stored under
 //! its validator index in the `AuthorityStorageVec` mapping, then we update the mapping with its session
@@ -100,10 +100,10 @@
 //!
 //! ### Example from the SRML
 //!
-//! The [Staking module](../paint_staking/index.html) uses the Session module to get the validator set.
+//! The [Staking module](../palette_staking/index.html) uses the Session module to get the validator set.
 //!
 //! ```
-//! use paint_session as session;
+//! use palette_session as session;
 //! # fn not_executed<T: session::Trait>() {
 //!
 //! let validators = <session::Module<T>>::validators();
@@ -113,9 +113,9 @@
 //!
 //! ## Related Modules
 //!
-//! - [Consensus](../paint_consensus/index.html)
-//! - [Staking](../paint_staking/index.html)
-//! - [Timestamp](../paint_timestamp/index.html)
+//! - [Consensus](../palette_consensus/index.html)
+//! - [Staking](../palette_staking/index.html)
+//! - [Timestamp](../palette_timestamp/index.html)
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -358,7 +358,7 @@ pub trait Trait: system::Trait {
 	/// The fraction of validators set that is safe to be disabled.
 	///
 	/// After the threshold is reached `disabled` method starts to return true,
-	/// which in combination with `paint_staking` forces a new era.
+	/// which in combination with `palette_staking` forces a new era.
 	type DisabledValidatorsThreshold: Get<Perbill>;
 
 	/// Select initial validators.

@@ -69,7 +69,7 @@
 //!
 //! ```
 //! use support::{decl_module, dispatch::Result};
-//! use paint_system::{self as system, ensure_signed};
+//! use palette_system::{self as system, ensure_signed};
 //!
 //! pub trait Trait: system::Trait {}
 //!

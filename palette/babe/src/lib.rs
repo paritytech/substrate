@@ -74,7 +74,7 @@ pub trait EpochChangeTrigger {
 }
 
 /// A type signifying to BABE that an external trigger
-/// for epoch changes (e.g. paint-session) is used.
+/// for epoch changes (e.g. palette-session) is used.
 pub struct ExternalTrigger;
 
 impl EpochChangeTrigger for ExternalTrigger {
@@ -316,7 +316,7 @@ impl<T: Trait> Module<T> {
 	/// and the caller is the only caller of this function.
 	///
 	/// Typically, this is not handled directly by the user, but by higher-level validator-set manager logic like
-	/// `paint-session`.
+	/// `palette-session`.
 	pub fn enact_epoch_change(
 		authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
 		next_authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-pub use paint_metadata::{
+pub use palette_metadata::{
 	DecodeDifferent, FnEncode, RuntimeMetadata, ModuleMetadata, RuntimeMetadataLastVersion,
 	DefaultByteGetter, RuntimeMetadataPrefixed, StorageEntryMetadata, StorageMetadata,
 	StorageEntryType, StorageEntryModifier, DefaultByte, StorageHasher, ModuleErrorMetadata
@@ -29,11 +29,11 @@ pub use paint_metadata::{
 ///#        type Origin;
 ///#        type BlockNumber;
 ///#    }
-///#    paint_support::decl_module! {
+///#    palette_support::decl_module! {
 ///#        pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 ///#    }
 ///#
-///#    paint_support::decl_storage! {
+///#    palette_support::decl_storage! {
 ///#        trait Store for Module<T: Trait> as TestStorage {}
 ///#    }
 ///# }
@@ -45,7 +45,7 @@ pub use paint_metadata::{
 ///# }
 ///
 /// struct Runtime;
-/// paint_support::impl_runtime_metadata! {
+/// palette_support::impl_runtime_metadata! {
 ///     for Runtime with modules
 ///         module0::Module as Module0 with,
 ///         module1::Module as Module1 with,
@@ -229,7 +229,7 @@ macro_rules! __runtime_modules_to_metadata_calls_storage {
 #[allow(dead_code)]
 mod tests {
 	use super::*;
-	use paint_metadata::{
+	use palette_metadata::{
 		EventMetadata, StorageEntryModifier, StorageEntryType, FunctionMetadata, StorageEntryMetadata,
 		ModuleMetadata, RuntimeMetadataPrefixed, DefaultByte, ModuleConstantMetadata, DefaultByteGetter,
 		ErrorMetadata,

@@ -20,7 +20,7 @@ use codec::Codec;
 use rstd::prelude::Vec;
 use runtime_io::hashing::{blake2_128, blake2_256, twox_64, twox_128, twox_256};
 
-// This trait must be kept coherent with paint-support-procedural HasherKind usage
+// This trait must be kept coherent with palette-support-procedural HasherKind usage
 pub trait Hashable: Sized {
 	fn blake2_128(&self) -> [u8; 16];
 	fn blake2_256(&self) -> [u8; 32];

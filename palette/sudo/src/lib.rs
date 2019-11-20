@@ -77,8 +77,8 @@
 //!
 //! ## Related Modules
 //!
-//! * [Consensus](../paint_consensus/index.html)
-//! * [Democracy](../paint_democracy/index.html)
+//! * [Consensus](../palette_consensus/index.html)
+//! * [Democracy](../palette_democracy/index.html)
 //!
 //! [`Call`]: ./enum.Call.html
 //! [`Trait`]: ./trait.Trait.html

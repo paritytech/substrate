@@ -31,9 +31,9 @@
 //!
 //! ## Related Modules
 //!
-//! - [Timestamp](../paint_timestamp/index.html): The Timestamp module is used in Aura to track
+//! - [Timestamp](../palette_timestamp/index.html): The Timestamp module is used in Aura to track
 //! consensus rounds (via `slots`).
-//! - [Consensus](../paint_consensus/index.html): The Consensus module does not relate directly to Aura,
+//! - [Consensus](../palette_consensus/index.html): The Consensus module does not relate directly to Aura,
 //!  but serves to manage offline reporting by implementing `ProvideInherent` in a similar way.
 //!
 //! ## References
@@ -45,7 +45,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use paint_timestamp;
+use palette_timestamp;
 
 use rstd::{result, prelude::*};
 use codec::{Encode, Decode};
@@ -67,7 +67,7 @@ use substrate_consensus_aura_primitives::{
 mod mock;
 mod tests;
 
-pub trait Trait: paint_timestamp::Trait {
+pub trait Trait: palette_timestamp::Trait {
 	/// The identifier type for an authority.
 	type AuthorityId: Member + Parameter + RuntimeAppPublic + Default;
 }
@@ -176,7 +176,7 @@ impl<T: Trait> Module<T> {
 	pub fn slot_duration() -> T::Moment {
 		// we double the minimum block-period so each author can always propose within
 		// the majority of its slot.
-		<T as paint_timestamp::Trait>::MinimumPeriod::get().saturating_mul(2.into())
+		<T as palette_timestamp::Trait>::MinimumPeriod::get().saturating_mul(2.into())
 	}
 
 	fn on_timestamp_set(now: T::Moment, slot_duration: T::Moment) {
@@ -205,7 +205,7 @@ impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
 }
 
 impl<T: Trait> ProvideInherent for Module<T> {
-	type Call = paint_timestamp::Call<T>;
+	type Call = palette_timestamp::Call<T>;
 	type Error = MakeFatalError<inherents::Error>;
 	const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
@@ -216,7 +216,7 @@ impl<T: Trait> ProvideInherent for Module<T> {
 	/// Verify the validity of the inherent using the timestamp.
 	fn check_inherent(call: &Self::Call, data: &InherentData) -> result::Result<(), Self::Error> {
 		let timestamp = match call {
-			paint_timestamp::Call::set(ref timestamp) => timestamp.clone(),
+			palette_timestamp::Call::set(ref timestamp) => timestamp.clone(),
 			_ => return Ok(()),
 		};
 

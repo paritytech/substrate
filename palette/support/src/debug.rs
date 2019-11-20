@@ -35,7 +35,7 @@
 //! that WASM debug formatting of structs will be empty.
 //!
 //! ```rust,no_run
-//!	use paint_support::debug;
+//!	use palette_support::debug;
 //!
 //! #[derive(primitives::RuntimeDebug)]
 //!	struct MyStruct {
@@ -66,7 +66,7 @@
 //! logs conditionally and strips out logs in WASM.
 //!
 //! ```rust,no_run
-//!	use paint_support::debug::native;
+//!	use palette_support::debug::native;
 //!
 //! #[derive(primitives::RuntimeDebug)]
 //!	struct MyStruct {
@@ -124,7 +124,7 @@ pub mod native {
 /// # Example
 ///
 /// ```
-/// paint_support::runtime_print!("my value is {}", 3);
+/// palette_support::runtime_print!("my value is {}", 3);
 /// ```
 #[macro_export]
 macro_rules! runtime_print {
