@@ -27,6 +27,7 @@ use serde::{Serialize, Deserialize};
 /// Some information related to a dispatchable that can be queried from the runtime.
 #[derive(Eq, PartialEq, Encode, Decode, Default)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 pub struct RuntimeDispatchInfo<Balance> {
 	/// Weight of this dispatch.
 	pub weight: Weight,
@@ -43,5 +44,27 @@ sr_api::decl_runtime_apis! {
 		Extrinsic: Codec,
 	{
 		fn query_info(uxt: Extrinsic, len: u32) -> RuntimeDispatchInfo<Balance>;
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn should_serialize_properly_with_u128() {
+		let info = RuntimeDispatchInfo {
+			weight: 5,
+			class: DispatchClass::Normal,
+			partial_fee: 1_000_000_u128,
+		};
+
+		assert_eq!(
+			serde_json::to_string(&info).unwrap(),
+			r#"{"weight":5,"class":"normal","partialFee":1000000}"#,
+		);
+
+		// should not panic
+		serde_json::to_value(&info).unwrap();
 	}
 }
