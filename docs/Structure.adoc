@@ -51,7 +51,7 @@ PALETTE is a set of modules that implement specific transition functions and fea
 
 _Pallets_ are individual modules within _Palette._ These are containers that host domain-specific logic. They have the `pallet-` prefix. For example, `pallet-staking` contains logic for staking tokens.
 
-There are a few crates with the `palette-` prefix. These do not contain domain-specific logic. Rather, they support Palette interfaces. These are:
+There are a few crates with the `palette-` prefix. These do not contain domain-specific logic. Rather, they are the main Palette support infrastructure. These are:
 
 - Executive
 - Metadata
