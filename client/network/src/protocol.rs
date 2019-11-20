@@ -218,14 +218,16 @@ impl<'a, B: BlockT> LightDispatchNetwork<B> for LightDispatchIn<'a> {
 		id: RequestId,
 		block: <B as BlockT>::Hash,
 		storage_key: Vec<u8>,
-		unique_id: Vec<u8>,
+		child_info: Vec<u8>,
+		child_type: u32,
 		keys: Vec<Vec<u8>>,
 	) {
 		let message: Message<B> = message::generic::Message::RemoteReadChildRequest(message::RemoteReadChildRequest {
 			id,
 			block,
 			storage_key,
-			unique_id,
+			child_info,
+			child_type,
 			keys,
 		});
 
@@ -1462,24 +1464,37 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 		trace!(target: "sync", "Remote read child request {} from {} ({} {} at {})",
 			request.id, who, request.storage_key.to_hex::<String>(), keys_str(), request.block);
-		let proof = match self.context_data.chain.read_child_proof(
-			&request.block,
-			&request.storage_key,
-			ChildInfo::new_default(&request.unique_id[..], None),
-			&request.keys,
-		) {
-			Ok(proof) => proof,
-			Err(error) => {
-				trace!(target: "sync", "Remote read child request {} from {} ({} {} at {}) failed with: {}",
-					request.id,
-					who,
-					request.storage_key.to_hex::<String>(),
-					keys_str(),
-					request.block,
-					error
-				);
-				StorageProof::empty()
+		let proof = if let Some(child_info) = ChildInfo::resolve_child_info(request.child_type, &request.child_info[..]) {
+			match self.context_data.chain.read_child_proof(
+				&request.block,
+				&request.storage_key,
+				child_info,
+				&request.keys,
+			) {
+				Ok(proof) => proof,
+				Err(error) => {
+					trace!(target: "sync", "Remote read child request {} from {} ({} {} at {}) failed with: {}",
+						request.id,
+						who,
+						request.storage_key.to_hex::<String>(),
+						keys_str(),
+						request.block,
+						error
+					);
+					StorageProof::empty()
+				}
 			}
+		} else {
+			trace!(target: "sync", "Remote read child request {} from {} ({} {} at {}) failed with: {}",
+				request.id,
+				who,
+				request.storage_key.to_hex::<String>(),
+				keys_str(),
+				request.block,
+				"invalid child info and type",
+			);
+
+			StorageProof::empty()
 		};
 		self.send_message(
 			&who,

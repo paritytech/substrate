@@ -29,8 +29,7 @@ use test_client::{
 	runtime,
 };
 
-const CHILD_UUID: &[u8] = b"unique_id";
-const CHILD_INFO: ChildInfo<'static> = ChildInfo::new_default(CHILD_UUID, None);
+const CHILD_INFO: ChildInfo<'static> = ChildInfo::new_default(b"unique_id", None);
 
 #[test]
 fn should_return_storage() {
@@ -48,7 +47,8 @@ fn should_return_storage() {
 	let client = new_full(Arc::new(client), Subscriptions::new(Arc::new(core.executor())));
 	let key = StorageKey(KEY.to_vec());
 	let storage_key = StorageKey(STORAGE_KEY.to_vec());
-	let unique_id = StorageKey(CHILD_UUID.to_vec());
+	let (child_info, child_type) = CHILD_INFO.info();
+	let child_info = StorageKey(child_info);
 
 	assert_eq!(
 		client.storage(key.clone(), Some(genesis_hash).into()).wait()
@@ -66,7 +66,7 @@ fn should_return_storage() {
 	);
 	assert_eq!(
 		core.block_on(
-			client.child_storage(storage_key, unique_id, key, Some(genesis_hash).into())
+			client.child_storage(storage_key, child_info, child_type, key, Some(genesis_hash).into())
 				.map(|x| x.map(|x| x.0.len()))
 		).unwrap().unwrap() as usize,
 		CHILD_VALUE.len(),
@@ -76,7 +76,8 @@ fn should_return_storage() {
 
 #[test]
 fn should_return_child_storage() {
-	let unique_id = StorageKey(CHILD_UUID.to_vec());
+	let (child_info, child_type) = CHILD_INFO.info();
+	let child_info = StorageKey(child_info);
 	let core = tokio::runtime::Runtime::new().unwrap();
 	let client = Arc::new(test_client::TestClientBuilder::new()
 		.add_child_storage("test", "key", CHILD_INFO, vec![42_u8])
@@ -88,16 +89,16 @@ fn should_return_child_storage() {
 
 
 	assert_matches!(
-		client.child_storage(child_key.clone(), unique_id.clone(), key.clone(), Some(genesis_hash).into()).wait(),
+		client.child_storage(child_key.clone(), child_info.clone(), child_type, key.clone(), Some(genesis_hash).into()).wait(),
 		Ok(Some(StorageData(ref d))) if d[0] == 42 && d.len() == 1
 	);
 	assert_matches!(
-		client.child_storage_hash(child_key.clone(), unique_id.clone(), key.clone(), Some(genesis_hash).into())
+		client.child_storage_hash(child_key.clone(), child_info.clone(), child_type, key.clone(), Some(genesis_hash).into())
 			.wait().map(|x| x.is_some()),
 		Ok(true)
 	);
 	assert_matches!(
-		client.child_storage_size(child_key.clone(), unique_id.clone(), key.clone(), None).wait(),
+		client.child_storage_size(child_key.clone(), child_info.clone(), child_type, key.clone(), None).wait(),
 		Ok(Some(1))
 	);
 }

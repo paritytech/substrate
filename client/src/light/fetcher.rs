@@ -348,8 +348,7 @@ pub mod tests {
 	use state_machine::Backend;
 	use super::*;
 
-	const CHILD_UUID_1: &'static [u8] = b"unique_id_1";
-	const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::new_default(CHILD_UUID_1, None);
+	const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_1", None);
 
 	type TestChecker = LightDataChecker<
 		NativeExecutor<test_client::LocalExecutor>,
@@ -496,12 +495,14 @@ pub mod tests {
 			remote_read_proof,
 			result,
 		) = prepare_for_read_child_proof_check();
+		let child_infos = CHILD_INFO_1.info();
 		assert_eq!((&local_checker as &dyn FetchChecker<Block>).check_read_child_proof(
 			&RemoteReadChildRequest::<Header> {
 				block: remote_block_header.hash(),
 				header: remote_block_header,
 				storage_key: b":child_storage:default:child1".to_vec(),
-				unique_id: CHILD_UUID_1.to_vec(),
+				child_info: child_infos.0,
+				child_type: child_infos.1,
 				keys: vec![b"key1".to_vec()],
 				retry_count: None,
 			},

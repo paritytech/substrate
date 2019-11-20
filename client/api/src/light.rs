@@ -86,8 +86,11 @@ pub struct RemoteReadChildRequest<Header: HeaderT> {
 	pub header: Header,
 	/// Storage key for child.
 	pub storage_key: Vec<u8>,
-	/// Child trie associated unique id.
-	pub unique_id: Vec<u8>,
+	/// Child trie encoded information
+	pub child_info: Vec<u8>,
+	/// Child type needed to resolve child info
+	/// and choose child implementation.
+	pub child_type: u32,
 	/// Child storage key to read.
 	pub keys: Vec<Vec<u8>>,
 	/// Number of times to retry request. None means that default RETRY_COUNT is used.
