@@ -32,7 +32,7 @@ impl_outer_origin!{
 }
 
 thread_local! {
-	static EXISTENTIAL_DEPOSIT: RefCell<u64> = RefCell::new(0);
+	pub(crate) static EXISTENTIAL_DEPOSIT: RefCell<u64> = RefCell::new(0);
 	static TRANSFER_FEE: RefCell<u64> = RefCell::new(0);
 	static CREATION_FEE: RefCell<u64> = RefCell::new(0);
 }
