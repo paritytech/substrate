@@ -338,35 +338,11 @@ impl<'a, B: BlockT + 'a, H: ExHashT + 'a> Context<B> for ProtocolContext<'a, B, 
 		self.behaviour.disconnect_peer(&who)
 	}
 
-	fn send_consensus(&mut self, who: PeerId, messages: Vec<ConsensusMessage>) {
-		panic!();		// TODO: shouldn't be reached
-
-		if self.context_data.peers.get(&who).map_or(false, |peer| peer.info.protocol_version > 4) {
-			let mut batch = Vec::new();
-			let len = messages.len();
-			for (index, message) in messages.into_iter().enumerate() {
-				batch.reserve(MAX_CONSENSUS_MESSAGES);
-				batch.push(message);
-				if batch.len() == MAX_CONSENSUS_MESSAGES || index == len - 1 {
-					send_message::<B> (
-						self.behaviour,
-						&mut self.context_data.stats,
-						&who,
-						GenericMessage::ConsensusBatch(std::mem::replace(&mut batch, Vec::new())),
-					)
-				}
-			}
-		} else {
-			// Backwards compatibility
-			for message in messages {
-				send_message::<B> (
-					self.behaviour,
-					&mut self.context_data.stats,
-					&who,
-					GenericMessage::Consensus(message)
-				)
-			}
-		}
+	fn send_consensus(&mut self, _: PeerId, _: Vec<ConsensusMessage>) {
+		error!(
+			target: "sub-libp2p",
+			"send_consensus has been called in a context where it shouldn't"
+		);
 	}
 
 	fn send_chain_specific(&mut self, who: PeerId, message: Vec<u8>) {

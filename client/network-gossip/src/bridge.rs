@@ -247,8 +247,11 @@ impl<B: BlockT, N: Network> Context<B> for ContextOverService<N> {
 		}
 	}
 
-	fn send_chain_specific(&mut self, who: PeerId, message: Vec<u8>) {
-		unreachable!()		// TODO: handle that
+	fn send_chain_specific(&mut self, _: PeerId, _: Vec<u8>) {
+		log::error!(
+			target: "sub-libp2p",
+			"send_chain_specific has been called in a context where it shouldn't"
+		);
 	}
 }
 
