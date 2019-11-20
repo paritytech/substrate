@@ -34,7 +34,7 @@ use client_api::{
 	utils::is_descendent_of,
 };
 use client::{
-	apply_aux, Client, 
+	apply_aux, Client,
 };
 use grandpa::{
 	BlockNumberOps, Equivocation, Error as GrandpaError, round::State as RoundState,
@@ -497,8 +497,18 @@ where
 				// note that we pass the original `best_header`, i.e. before the
 				// authority set limit filter, which can be considered a
 				// mandatory/implicit voting rule.
+				//
+				// we also make sure that the restricted vote is higher than the
+				// round base (i.e. last finalized), otherwise the value
+				// returned by the given voting rule is ignored and the original
+				// target is used instead.
 				self.voting_rule
 					.restrict_vote(&*self.client, &base_header, &best_header, target_header)
+					.filter(|(_, restricted_number)| {
+						// we can only restrict votes within the interval [base, target]
+						restricted_number > base_header.number() &&
+							restricted_number < target_header.number()
+					})
 					.or(Some((target_header.hash(), *target_header.number())))
 			},
 			Ok(None) => {

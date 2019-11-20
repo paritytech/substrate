@@ -41,9 +41,9 @@ pub trait AppKey: 'static + Send + Sync + Sized + CryptoType + Clone {
 }
 
 /// Type which implements Hash in std, not when no-std (std variant).
-#[cfg(feature = "std")]
+#[cfg(any(feature = "std", feature = "full_crypto"))]
 pub trait MaybeHash: rstd::hash::Hash {}
-#[cfg(feature = "std")]
+#[cfg(any(feature = "std", feature = "full_crypto"))]
 impl<T: rstd::hash::Hash> MaybeHash for T {}
 
 /// Type which implements Hash in std, not when no-std (no-std variant).
