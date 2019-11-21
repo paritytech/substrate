@@ -37,7 +37,8 @@ use sr_primitives::{RandomNumberGenerator, Percent, Perbill, ModuleId, RuntimeDe
 	EnsureOrigin, StaticLookup, AccountIdConversion, Saturating, Zero, IntegerSquareRoot,
 }};
 use support::{decl_error, decl_module, decl_storage, decl_event, dispatch::Result, traits::{
-	Currency, ReservableCurrency, Randomness, Get, ChangeMembers, ExistenceRequirement::KeepAlive
+	Currency, ReservableCurrency, Randomness, Get, ChangeMembers,
+	ExistenceRequirement::{KeepAlive, AllowDeath},
 }};
 use system::ensure_signed;
 
@@ -61,8 +62,13 @@ pub trait Trait: system::Trait {
 	/// The minimum amount of a deposit required for a bid to be made.
 	type CandidateDeposit: Get<BalanceOf<Self>>;
 
-	/// The amount that gets paid out to one of the right-thinking voters, at random.
-	type VoterTip: Get<BalanceOf<Self>>;
+	/// The proportion of the unpaid reward that gets deducted in the case that either a skeptic
+	/// doesn't vote or someone votes in the wrong way.
+	type WrongSideDeduction: Get<Percent>;
+
+	/// The number of times a member may vote the wrong way (or not at all, when they are a skeptic)
+	/// before they become suspended.
+	type MaxStrikes: Get<u32>;
 
 	/// The amount of incentive paid within each period. Doesn't include VoterTip.
 	type PeriodSpend: Get<BalanceOf<Self>>;
@@ -89,7 +95,7 @@ pub enum Vote {
 }
 
 /// Details of a payout given as a per-block linear "trickle".
-#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, Default)]
 pub struct Payout<Balance, BlockNumber> {
 	/// Total value of the payout.
 	value: Balance,
@@ -100,6 +106,9 @@ pub struct Payout<Balance, BlockNumber> {
 	/// Total value paid out so far.
 	paid: Balance,
 }
+
+/// Number of strikes that a member has against them.
+pub type StrikeCount = u32;
 
 // This module's storage items.
 decl_storage! {
@@ -127,6 +136,9 @@ decl_storage! {
 
 		/// Pending payouts.
 		Payouts: map T::AccountId => Option<Payout<BalanceOf<T>, T::BlockNumber>>;
+
+		/// The ongoing number of losing votes cast by the member.
+		Strikes: map T::AccountId => StrikeCount;
 	}
 }
 
@@ -198,7 +210,7 @@ decl_module! {
 				let progress = Perbill::from_rational_approximation(elapsed, payout.duration);
 				let new_paid = progress * payout.value;
 				let payment = new_paid.saturating_sub(payout.paid);
-				T::Currency::transfer(&Self::account_id(), &who, payment, KeepAlive)?;
+				T::Currency::transfer(&Self::payouts(), &who, payment, KeepAlive)?;
 
 				if payout.value == new_paid {
 					// once we've paid everything, remove the record
@@ -226,13 +238,20 @@ decl_error! {
 }
 
 decl_event! {
+	/// Events for this module.
 	pub enum Event<T> where
 		AccountId = <T as system::Trait>::AccountId,
 		Balance = BalanceOf<T>
 	{
+		/// A membership bid just happened. The given account is the candidate's ID and their offer
+		/// is the second.
 		Bid(AccountId, Balance),
+		/// A candidate was dropped (due to an excess of bids in the system).
 		AutoUnbid(AccountId),
+		/// A candidate was dropped (by their request).
 		Unbid(AccountId),
+		/// A group of candidates have been inducted. The batch's primary is the first value, the
+		/// batch in full is the second.
 		Inducted(AccountId, Vec<AccountId>),
 	}
 }
@@ -252,15 +271,20 @@ impl<T: Trait> Module<T> {
 
 		// we'll need a random seed here.
 		let mut rng = <RandomNumberGenerator<T::Hashing>>::new(T::Randomness::random(phrase));
-		// the current block
-		let now = <system::Module<T>>::block_number();
-		// and the duration of the locks of any payouts we might do
-		let duration = Self::lock_duration(members.len() as u32);
+
+		let payout = Payout {
+			begin: <system::Module<T>>::block_number(),
+			duration: Self::lock_duration(members.len() as u32),
+			.. Default::default()
+		};
 
 		let mut pot = <Pot<T>>::get();
 
 		let mut rewardees = Vec::new();
 		let mut total_approvals = 0;
+		let mut total_slash = <BalanceOf<T>>::zero();
+		let mut total_payouts = <BalanceOf<T>>::zero();
+
 		let accepted = candidates.into_iter().filter_map(|(value, c)| {
 			let mut approval_count = 0;
 			let votes = members.iter()
@@ -271,32 +295,53 @@ impl<T: Trait> Module<T> {
 
 			// collect together voters who voted the right way
 			let matching_vote = if accepted { Vote::Approve } else { Vote::Reject };
+			let mut bad_vote = |m: &T::AccountId| {
+				// voter voted wrong way (or was just a lazy skeptic) then reduce their payout
+				// and increase their strikes. after MaxStrikes then they go into suspension.
+				if let Some(mut payout) = <Payouts<T>>::get(m) {
+					let rest = payout.value.saturating_sub(payout.paid);
+					let slash = T::WrongSideDeduction::get() * rest;
+					payout.paid += slash;
+					<Payouts<T>>::insert(m, &payout);
+					total_slash += slash;
+				}
+				let strikes = <Strikes<T>>::mutate(m, |s| { *s += 1; *s });
+				if strikes >= T::MaxStrikes::get() {
+					Self::suspend_member(m);
+				}
+			};
 			rewardees.extend(votes.into_iter()
-				.filter_map(|(v, m)| if v == matching_vote { Some(m) } else { None })
+				.filter_map(|(v, m)| if v == matching_vote { Some(m) } else { bad_vote(m); None })
 				.cloned()
 			);
 
 			if accepted {
 				total_approvals += approval_count;
+				total_payouts += value;
 				members.push(c.clone());
-
-				// remove payout from pot and record payout of the candidate
-				pot = pot.saturating_sub(value);
-				<Payouts<T>>::insert(&c, Payout { value, begin: now, duration, paid: Zero::zero() });
+				<Payouts<T>>::insert(&c, Payout { value, .. payout });
 
 				Some((c, total_approvals))
 			} else {
-				// TODO: place on suspension, at risk of losing deposit.
-
+				Self::suspend_candidate(&c);
 				None
 			}
 		}).collect::<Vec<_>>();
 
 		// Reward one of the voters who voted the right way.
-		if let Some(winner) = rng.pick_item(&rewardees) {
-			// if we can't reward them, not much that can be done.
-			pot = pot.saturating_sub(T::VoterTip::get());
-			let _ = T::Currency::transfer(&Self::account_id(), winner, T::VoterTip::get(), KeepAlive);
+		if !total_slash.is_zero() {
+			if let Some(winner) = rng.pick_item(&rewardees) {
+				// if we can't reward them, not much that can be done.
+				Self::bump_payout(winner, total_slash);
+			}
+		}
+		if !total_payouts.is_zero() {
+			// remove payout from pot and shift needed funds to the payout account.
+			pot = pot.saturating_sub(total_payouts);
+
+			// this should never fail since we ensure the pot can afford the payouts in a previous
+			// block, but there's not much we can do to recover if it fails anyway.
+			let _ = T::Currency::transfer(&Self::account_id(), &Self::payouts(), total_payouts, AllowDeath);
 		}
 
 		// if at least one candidate was accepted...
@@ -318,21 +363,39 @@ impl<T: Trait> Module<T> {
 			Self::deposit_event(RawEvent::Inducted(primary, accounts));
 		}
 
-		// bump the pot
-		// TODO: only increment this is the funds are there.
-		pot += T::PeriodSpend::get();
+		// Bump the pot by at most PeriodSpend, but less if there's not very much left in our
+		// account.
+		let unaccounted = T::Currency::free_balance(&Self::account_id()).saturating_sub(pot);
+		pot += T::PeriodSpend::get().min(unaccounted / 2u8.into());
 
 		// setup the candidates for the new intake
-		let candidates = Self::take_selected(pot.saturating_sub(T::VoterTip::get()));
+		let candidates = Self::take_selected(pot);
 		<Candidates<T>>::put(&candidates);
 		// initialise skeptics
-		for skeptic in (0..members.len().integer_sqrt())
-			.map(|_| rng.pick_item(&members[..]).expect("exited early if members empty; qed"))
-			{
-				for (_, c) in candidates.iter() {
-					<Votes<T>>::insert(c, skeptic, Vote::Skeptic);
-				}
+		let pick_member = |_| rng.pick_item(&members[..]).expect("exited if members empty; qed");
+		for skeptic in (0..members.len().integer_sqrt()).map(pick_member) {
+			for (_, c) in candidates.iter() {
+				<Votes<T>>::insert(c, skeptic, Vote::Skeptic);
 			}
+		}
+	}
+
+	/// Bump the payout amount of `who`, if there is any; if not, then just transfer directly.
+	fn bump_payout(who: &T::AccountId, value: BalanceOf<T>) {
+		if let Some(mut payout) = <Payouts<T>>::get(who) {
+			payout.value += value;
+			<Payouts<T>>::insert(who, payout);
+		} else {
+			let _ = T::Currency::transfer(&Self::payouts(), who, value, KeepAlive);
+		}
+	}
+
+	fn suspend_member(who: &T::AccountId) {
+		unimplemented!();
+	}
+
+	fn suspend_candidate(who: &T::AccountId) {
+		unimplemented!();
 	}
 
 	/// The account ID of the treasury pot.
@@ -341,6 +404,14 @@ impl<T: Trait> Module<T> {
 	/// value and only call this once.
 	pub fn account_id() -> T::AccountId {
 		MODULE_ID.into_account()
+	}
+
+	/// The account ID of the payouts pot. This is where payouts are made from.
+	///
+	/// This actually does computation. If you need to keep using it, then make sure you cache the
+	/// value and only call this once.
+	pub fn payouts() -> T::AccountId {
+		MODULE_ID.into_sub_account(b"payouts")
 	}
 
 	/// Return the duration of the lock, in blocks, with the given number of members.

@@ -24,7 +24,7 @@ use primitives::H256;
 // The testing primitives are very useful for avoiding having to work with signatures
 // or public keys. `u64` is used as the `AccountId` and no `Signature`s are requried.
 use sr_primitives::{
-	Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header,
+	Percent, Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header,
 };
 use system::EnsureSignedBy;
 
@@ -39,7 +39,8 @@ impl_outer_origin! {
 pub struct Test;
 parameter_types! {
 	pub const CandidateDeposit: u64 = 25;
-	pub const VoterTip: u64 = 25;
+	pub const WrongSideDeduction: Percent = Percent::from_percent(5);
+	pub const MaxStrikes: u32 = 2;
 	pub const Period: u64 = 4;
 	pub const PeriodSpend: u64 = 100;
 	pub const MaxLockDuration: u64 = 100;
@@ -89,7 +90,8 @@ impl Trait for Test {
 	type Currency = balances::Module<Self>;
 	type Randomness = ();
 	type CandidateDeposit = CandidateDeposit;
-	type VoterTip = VoterTip;
+	type WrongSideDeduction = WrongSideDeduction;
+	type MaxStrikes = MaxStrikes;
 	type PeriodSpend = PeriodSpend;
 	type MembershipChanged = ();
 	type Period = Period;
