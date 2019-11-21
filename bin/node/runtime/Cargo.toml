@@ -30,37 +30,37 @@ substrate-session = { path = "../../../primitives/session", default-features = f
 tx-pool-api = { package = "substrate-transaction-pool-runtime-api", path = "../../../primitives/transaction-pool/runtime-api", default-features = false }
 version = { package = "sr-version", path = "../../../primitives/sr-version", default-features = false }
 
-# paint dependencies
-authority-discovery = { package = "paint-authority-discovery", path = "../../../paint/authority-discovery", default-features = false }
-authorship = { package = "paint-authorship", path = "../../../paint/authorship", default-features = false }
-babe = { package = "paint-babe", path = "../../../paint/babe", default-features = false }
-balances = { package = "paint-balances", path = "../../../paint/balances", default-features = false }
-collective = { package = "paint-collective", path = "../../../paint/collective", default-features = false }
-contracts = { package = "paint-contracts", path = "../../../paint/contracts", default-features = false }
-contracts-rpc-runtime-api = { package = "paint-contracts-rpc-runtime-api", path = "../../../paint/contracts/rpc/runtime-api/", default-features = false }
-democracy = { package = "paint-democracy", path = "../../../paint/democracy", default-features = false }
-elections-phragmen = { package = "paint-elections-phragmen", path = "../../../paint/elections-phragmen", default-features = false }
-executive = { package = "paint-executive", path = "../../../paint/executive", default-features = false }
-finality-tracker = { package = "paint-finality-tracker", path = "../../../paint/finality-tracker", default-features = false }
-grandpa = { package = "paint-grandpa", path = "../../../paint/grandpa", default-features = false }
-im-online = { package = "paint-im-online", path = "../../../paint/im-online", default-features = false }
-indices = { package = "paint-indices", path = "../../../paint/indices", default-features = false }
-membership = { package = "paint-membership", path = "../../../paint/membership", default-features = false }
-nicks = { package = "paint-nicks", path = "../../../paint/nicks", default-features = false }
-offences = { package = "paint-offences", path = "../../../paint/offences", default-features = false }
-randomness-collective-flip = { package = "paint-randomness-collective-flip", path = "../../../paint/randomness-collective-flip", default-features = false }
-session = { package = "paint-session", path = "../../../paint/session", default-features = false, features = ["historical"] }
-staking = { package = "paint-staking", path = "../../../paint/staking", default-features = false }
-paint-staking-reward-curve = { path = "../../../paint/staking/reward-curve"}
-sudo = { package = "paint-sudo", path = "../../../paint/sudo", default-features = false }
-support = { package = "paint-support", path = "../../../paint/support", default-features = false }
-system = { package = "paint-system", path = "../../../paint/system", default-features = false }
-system-rpc-runtime-api = { package = "paint-system-rpc-runtime-api", path = "../../../paint/system/rpc/runtime-api/", default-features = false }
-timestamp = { package = "paint-timestamp", path = "../../../paint/timestamp", default-features = false }
-treasury = { package = "paint-treasury", path = "../../../paint/treasury", default-features = false }
-utility = { package = "paint-utility", path = "../../../paint/utility", default-features = false }
-transaction-payment = { package = "paint-transaction-payment", path = "../../../paint/transaction-payment", default-features = false }
-transaction-payment-rpc-runtime-api = { package = "paint-transaction-payment-rpc-runtime-api", path = "../../../paint/transaction-payment/rpc/runtime-api/", default-features = false }
+# palette dependencies
+authority-discovery = { package = "pallet-authority-discovery", path = "../../../palette/authority-discovery", default-features = false }
+authorship = { package = "pallet-authorship", path = "../../../palette/authorship", default-features = false }
+babe = { package = "pallet-babe", path = "../../../palette/babe", default-features = false }
+balances = { package = "pallet-balances", path = "../../../palette/balances", default-features = false }
+collective = { package = "pallet-collective", path = "../../../palette/collective", default-features = false }
+contracts = { package = "pallet-contracts", path = "../../../palette/contracts", default-features = false }
+contracts-rpc-runtime-api = { package = "pallet-contracts-rpc-runtime-api", path = "../../../palette/contracts/rpc/runtime-api/", default-features = false }
+democracy = { package = "pallet-democracy", path = "../../../palette/democracy", default-features = false }
+elections-phragmen = { package = "pallet-elections-phragmen", path = "../../../palette/elections-phragmen", default-features = false }
+executive = { package = "palette-executive", path = "../../../palette/executive", default-features = false }
+finality-tracker = { package = "pallet-finality-tracker", path = "../../../palette/finality-tracker", default-features = false }
+grandpa = { package = "pallet-grandpa", path = "../../../palette/grandpa", default-features = false }
+im-online = { package = "pallet-im-online", path = "../../../palette/im-online", default-features = false }
+indices = { package = "pallet-indices", path = "../../../palette/indices", default-features = false }
+membership = { package = "pallet-membership", path = "../../../palette/membership", default-features = false }
+nicks = { package = "pallet-nicks", path = "../../../palette/nicks", default-features = false }
+offences = { package = "pallet-offences", path = "../../../palette/offences", default-features = false }
+randomness-collective-flip = { package = "pallet-randomness-collective-flip", path = "../../../palette/randomness-collective-flip", default-features = false }
+session = { package = "pallet-session", path = "../../../palette/session", default-features = false, features = ["historical"] }
+staking = { package = "pallet-staking", path = "../../../palette/staking", default-features = false }
+pallet-staking-reward-curve = { path = "../../../palette/staking/reward-curve"}
+sudo = { package = "pallet-sudo", path = "../../../palette/sudo", default-features = false }
+support = { package = "palette-support", path = "../../../palette/support", default-features = false }
+system = { package = "palette-system", path = "../../../palette/system", default-features = false }
+system-rpc-runtime-api = { package = "palette-system-rpc-runtime-api", path = "../../../palette/system/rpc/runtime-api/", default-features = false }
+timestamp = { package = "pallet-timestamp", path = "../../../palette/timestamp", default-features = false }
+treasury = { package = "pallet-treasury", path = "../../../palette/treasury", default-features = false }
+utility = { package = "palette-utility", path = "../../../palette/utility", default-features = false }
+transaction-payment = { package = "pallet-transaction-payment", path = "../../../palette/transaction-payment", default-features = false }
+transaction-payment-rpc-runtime-api = { package = "pallet-transaction-payment-rpc-runtime-api", path = "../../../palette/transaction-payment/rpc/runtime-api/", default-features = false }
 
 [build-dependencies]
 wasm-builder-runner = { package = "substrate-wasm-builder-runner", path = "../../../client/utils/wasm-builder-runner", version = "1.0.4" }
