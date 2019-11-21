@@ -2708,15 +2708,15 @@ dependencies = [
  "node-primitives 2.0.0",
  "node-rpc 2.0.0",
  "node-runtime 2.0.0",
- "paint-authority-discovery 0.1.0",
- "paint-balances 2.0.0",
- "paint-contracts 2.0.0",
- "paint-im-online 0.1.0",
- "paint-indices 2.0.0",
- "paint-support 2.0.0",
- "paint-system 2.0.0",
- "paint-timestamp 2.0.0",
- "paint-transaction-payment 2.0.0",
+ "palette-support 2.0.0",
+ "palette-system 2.0.0",
+ "pallet-authority-discovery 0.1.0",
+ "pallet-balances 2.0.0",
+ "pallet-contracts 2.0.0",
+ "pallet-im-online 0.1.0",
+ "pallet-indices 2.0.0",
+ "pallet-timestamp 2.0.0",
+ "pallet-transaction-payment 2.0.0",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2767,16 +2767,16 @@ dependencies = [
  "node-primitives 2.0.0",
  "node-runtime 2.0.0",
  "node-testing 2.0.0",
- "paint-balances 2.0.0",
- "paint-contracts 2.0.0",
- "paint-grandpa 2.0.0",
- "paint-indices 2.0.0",
- "paint-session 2.0.0",
- "paint-support 2.0.0",
- "paint-system 2.0.0",
- "paint-timestamp 2.0.0",
- "paint-transaction-payment 2.0.0",
- "paint-treasury 2.0.0",
+ "palette-support 2.0.0",
+ "palette-system 2.0.0",
+ "pallet-balances 2.0.0",
+ "pallet-contracts 2.0.0",
+ "pallet-grandpa 2.0.0",
+ "pallet-indices 2.0.0",
+ "pallet-session 2.0.0",
+ "pallet-timestamp 2.0.0",
+ "pallet-transaction-payment 2.0.0",
+ "pallet-treasury 2.0.0",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 2.0.0",
  "sr-primitives 2.0.0",
@@ -2806,9 +2806,9 @@ dependencies = [
  "jsonrpc-core 14.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "node-primitives 2.0.0",
  "node-runtime 2.0.0",
- "paint-contracts-rpc 2.0.0",
- "paint-system-rpc 2.0.0",
- "paint-transaction-payment-rpc 2.0.0",
+ "palette-system-rpc 2.0.0",
+ "pallet-contracts-rpc 2.0.0",
+ "pallet-transaction-payment-rpc 2.0.0",
  "sr-primitives 2.0.0",
  "substrate-client 2.0.0",
  "substrate-transaction-pool 2.0.0",
@@ -2833,36 +2833,36 @@ version = "2.0.0"
 dependencies = [
  "integer-sqrt 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "node-primitives 2.0.0",
- "paint-authority-discovery 0.1.0",
- "paint-authorship 0.1.0",
- "paint-babe 2.0.0",
- "paint-balances 2.0.0",
- "paint-collective 2.0.0",
- "paint-contracts 2.0.0",
- "paint-contracts-rpc-runtime-api 2.0.0",
- "paint-democracy 2.0.0",
- "paint-elections-phragmen 2.0.0",
- "paint-executive 2.0.0",
- "paint-finality-tracker 2.0.0",
- "paint-grandpa 2.0.0",
- "paint-im-online 0.1.0",
- "paint-indices 2.0.0",
- "paint-membership 2.0.0",
- "paint-nicks 2.0.0",
- "paint-offences 1.0.0",
- "paint-randomness-collective-flip 2.0.0",
- "paint-session 2.0.0",
- "paint-staking 2.0.0",
- "paint-staking-reward-curve 2.0.0",
- "paint-sudo 2.0.0",
- "paint-support 2.0.0",
- "paint-system 2.0.0",
- "paint-system-rpc-runtime-api 2.0.0",
- "paint-timestamp 2.0.0",
- "paint-transaction-payment 2.0.0",
- "paint-transaction-payment-rpc-runtime-api 2.0.0",
- "paint-treasury 2.0.0",
- "paint-utility 2.0.0",
+ "palette-executive 2.0.0",
+ "palette-support 2.0.0",
+ "palette-system 2.0.0",
+ "palette-system-rpc-runtime-api 2.0.0",
+ "palette-utility 2.0.0",
+ "pallet-authority-discovery 0.1.0",
+ "pallet-authorship 0.1.0",
+ "pallet-babe 2.0.0",
+ "pallet-balances 2.0.0",
+ "pallet-collective 2.0.0",
+ "pallet-contracts 2.0.0",
+ "pallet-contracts-rpc-runtime-api 2.0.0",
+ "pallet-democracy 2.0.0",
+ "pallet-elections-phragmen 2.0.0",
+ "pallet-finality-tracker 2.0.0",
+ "pallet-grandpa 2.0.0",
+ "pallet-im-online 0.1.0",
+ "pallet-indices 2.0.0",
+ "pallet-membership 2.0.0",
+ "pallet-nicks 2.0.0",
+ "pallet-offences 1.0.0",
+ "pallet-randomness-collective-flip 2.0.0",
+ "pallet-session 2.0.0",
+ "pallet-staking 2.0.0",
+ "pallet-staking-reward-curve 2.0.0",
+ "pallet-sudo 2.0.0",
+ "pallet-timestamp 2.0.0",
+ "pallet-transaction-payment 2.0.0",
+ "pallet-transaction-payment-rpc-runtime-api 2.0.0",
+ "pallet-treasury 2.0.0",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc-hex 2.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2922,17 +2922,17 @@ dependencies = [
 name = "node-template-runtime"
 version = "2.0.0"
 dependencies = [
- "paint-aura 2.0.0",
- "paint-balances 2.0.0",
- "paint-executive 2.0.0",
- "paint-grandpa 2.0.0",
- "paint-indices 2.0.0",
- "paint-randomness-collective-flip 2.0.0",
- "paint-sudo 2.0.0",
- "paint-support 2.0.0",
- "paint-system 2.0.0",
- "paint-timestamp 2.0.0",
- "paint-transaction-payment 2.0.0",
+ "palette-executive 2.0.0",
+ "palette-support 2.0.0",
+ "palette-system 2.0.0",
+ "pallet-aura 2.0.0",
+ "pallet-balances 2.0.0",
+ "pallet-grandpa 2.0.0",
+ "pallet-indices 2.0.0",
+ "pallet-randomness-collective-flip 2.0.0",
+ "pallet-sudo 2.0.0",
+ "pallet-timestamp 2.0.0",
+ "pallet-transaction-payment 2.0.0",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2958,17 +2958,17 @@ dependencies = [
  "node-executor 2.0.0",
  "node-primitives 2.0.0",
  "node-runtime 2.0.0",
- "paint-balances 2.0.0",
- "paint-contracts 2.0.0",
- "paint-grandpa 2.0.0",
- "paint-indices 2.0.0",
- "paint-session 2.0.0",
- "paint-staking 2.0.0",
- "paint-support 2.0.0",
- "paint-system 2.0.0",
- "paint-timestamp 2.0.0",
- "paint-transaction-payment 2.0.0",
- "paint-treasury 2.0.0",
+ "palette-support 2.0.0",
+ "palette-system 2.0.0",
+ "pallet-balances 2.0.0",
+ "pallet-contracts 2.0.0",
+ "pallet-grandpa 2.0.0",
+ "pallet-indices 2.0.0",
+ "pallet-session 2.0.0",
+ "pallet-staking 2.0.0",
+ "pallet-timestamp 2.0.0",
+ "pallet-transaction-payment 2.0.0",
+ "pallet-treasury 2.0.0",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 2.0.0",
  "sr-primitives 2.0.0",
@@ -3120,11 +3120,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "paint-assets"
+name = "palette-executive"
 version = "2.0.0"
 dependencies = [
- "paint-support 2.0.0",
- "paint-system 2.0.0",
+ "hex-literal 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "palette-support 2.0.0",
+ "palette-system 2.0.0",
+ "pallet-balances 2.0.0",
+ "pallet-indices 2.0.0",
+ "pallet-transaction-payment 2.0.0",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 2.0.0",
@@ -3134,14 +3138,183 @@ dependencies = [
 ]
 
 [[package]]
-name = "paint-aura"
+name = "palette-metadata"
+version = "2.0.0"
+dependencies = [
+ "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-std 2.0.0",
+ "substrate-primitives 2.0.0",
+]
+
+[[package]]
+name = "palette-support"
+version = "2.0.0"
+dependencies = [
+ "bitmask 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "impl-trait-for-tuples 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "once_cell 0.2.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "palette-metadata 2.0.0",
+ "palette-support-procedural 2.0.0",
+ "palette-system 2.0.0",
+ "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "paste 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pretty_assertions 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-io 2.0.0",
+ "sr-primitives 2.0.0",
+ "sr-std 2.0.0",
+ "substrate-inherents 2.0.0",
+ "substrate-primitives 2.0.0",
+ "substrate-state-machine 2.0.0",
+]
+
+[[package]]
+name = "palette-support-procedural"
+version = "2.0.0"
+dependencies = [
+ "palette-support-procedural-tools 2.0.0",
+ "proc-macro2 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "quote 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "syn 1.0.8 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "palette-support-procedural-tools"
+version = "2.0.0"
+dependencies = [
+ "palette-support-procedural-tools-derive 2.0.0",
+ "proc-macro-crate 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "proc-macro2 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "quote 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "syn 1.0.8 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "palette-support-procedural-tools-derive"
+version = "2.0.0"
+dependencies = [
+ "proc-macro2 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "quote 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "syn 1.0.8 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "palette-support-rpc"
+version = "2.0.0"
+dependencies = [
+ "futures 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "jsonrpc-client-transports 14.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "jsonrpc-core 14.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "palette-support 2.0.0",
+ "palette-system 2.0.0",
+ "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
+ "substrate-primitives-storage 2.0.0",
+ "substrate-rpc-api 2.0.0",
+ "tokio 0.1.22 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "palette-support-test"
+version = "2.0.0"
+dependencies = [
+ "palette-support 2.0.0",
+ "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pretty_assertions 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-io 2.0.0",
+ "sr-primitives 2.0.0",
+ "substrate-inherents 2.0.0",
+ "substrate-primitives 2.0.0",
+ "substrate-state-machine 2.0.0",
+ "trybuild 1.0.17 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "palette-system"
+version = "2.0.0"
+dependencies = [
+ "criterion 0.2.11 (registry+https://github.com/rust-lang/crates.io-index)",
+ "impl-trait-for-tuples 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "palette-support 2.0.0",
+ "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-io 2.0.0",
+ "sr-primitives 2.0.0",
+ "sr-std 2.0.0",
+ "sr-version 2.0.0",
+ "substrate-primitives 2.0.0",
+]
+
+[[package]]
+name = "palette-system-rpc"
+version = "2.0.0"
+dependencies = [
+ "env_logger 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures-preview 0.3.0-alpha.19 (registry+https://github.com/rust-lang/crates.io-index)",
+ "jsonrpc-core 14.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "jsonrpc-core-client 14.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "jsonrpc-derive 14.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "palette-system-rpc-runtime-api 2.0.0",
+ "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-primitives 2.0.0",
+ "substrate-client 2.0.0",
+ "substrate-primitives 2.0.0",
+ "substrate-test-runtime-client 2.0.0",
+ "substrate-transaction-pool 2.0.0",
+]
+
+[[package]]
+name = "palette-system-rpc-runtime-api"
+version = "2.0.0"
+dependencies = [
+ "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-api 2.0.0",
+]
+
+[[package]]
+name = "palette-utility"
+version = "2.0.0"
+dependencies = [
+ "palette-support 2.0.0",
+ "palette-system 2.0.0",
+ "pallet-balances 2.0.0",
+ "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-io 2.0.0",
+ "sr-primitives 2.0.0",
+ "sr-std 2.0.0",
+ "substrate-primitives 2.0.0",
+]
+
+[[package]]
+name = "pallet-assets"
+version = "2.0.0"
+dependencies = [
+ "palette-support 2.0.0",
+ "palette-system 2.0.0",
+ "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-io 2.0.0",
+ "sr-primitives 2.0.0",
+ "sr-std 2.0.0",
+ "substrate-primitives 2.0.0",
+]
+
+[[package]]
+name = "pallet-aura"
 version = "2.0.0"
 dependencies = [
  "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "paint-session 2.0.0",
- "paint-support 2.0.0",
- "paint-system 2.0.0",
- "paint-timestamp 2.0.0",
+ "palette-support 2.0.0",
+ "palette-system 2.0.0",
+ "pallet-session 2.0.0",
+ "pallet-timestamp 2.0.0",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3156,12 +3329,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "paint-authority-discovery"
+name = "pallet-authority-discovery"
 version = "0.1.0"
 dependencies = [
- "paint-session 2.0.0",
- "paint-support 2.0.0",
- "paint-system 2.0.0",
+ "palette-support 2.0.0",
+ "palette-system 2.0.0",
+ "pallet-session 2.0.0",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 2.0.0",
@@ -3174,12 +3347,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "paint-authorship"
+name = "pallet-authorship"
 version = "0.1.0"
 dependencies = [
  "impl-trait-for-tuples 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "paint-support 2.0.0",
- "paint-system 2.0.0",
+ "palette-support 2.0.0",
+ "palette-system 2.0.0",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-authorship 2.0.0",
  "sr-io 2.0.0",
@@ -3190,15 +3363,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "paint-babe"
+name = "pallet-babe"
 version = "2.0.0"
 dependencies = [
  "hex-literal 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "paint-session 2.0.0",
- "paint-support 2.0.0",
- "paint-system 2.0.0",
- "paint-timestamp 2.0.0",
+ "palette-support 2.0.0",
+ "palette-system 2.0.0",
+ "pallet-session 2.0.0",
+ "pallet-timestamp 2.0.0",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3215,12 +3388,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "paint-balances"
+name = "pallet-balances"
 version = "2.0.0"
 dependencies = [
- "paint-support 2.0.0",
- "paint-system 2.0.0",
- "paint-transaction-payment 2.0.0",
+ "palette-support 2.0.0",
+ "palette-system 2.0.0",
+ "pallet-transaction-payment 2.0.0",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3232,13 +3405,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "paint-collective"
+name = "pallet-collective"
 version = "2.0.0"
 dependencies = [
  "hex-literal 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "paint-balances 2.0.0",
- "paint-support 2.0.0",
- "paint-system 2.0.0",
+ "palette-support 2.0.0",
+ "palette-system 2.0.0",
+ "pallet-balances 2.0.0",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3249,17 +3422,17 @@ dependencies = [
 ]
 
 [[package]]
-name = "paint-contracts"
+name = "pallet-contracts"
 version = "2.0.0"
 dependencies = [
  "assert_matches 1.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex-literal 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "paint-balances 2.0.0",
- "paint-randomness-collective-flip 2.0.0",
- "paint-support 2.0.0",
- "paint-system 2.0.0",
- "paint-timestamp 2.0.0",
+ "palette-support 2.0.0",
+ "palette-system 2.0.0",
+ "pallet-balances 2.0.0",
+ "pallet-randomness-collective-flip 2.0.0",
+ "pallet-timestamp 2.0.0",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-wasm 0.40.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "pwasm-utils 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3274,13 +3447,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "paint-contracts-rpc"
+name = "pallet-contracts-rpc"
 version = "2.0.0"
 dependencies = [
  "jsonrpc-core 14.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "jsonrpc-core-client 14.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "jsonrpc-derive 14.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "paint-contracts-rpc-runtime-api 2.0.0",
+ "pallet-contracts-rpc-runtime-api 2.0.0",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 2.0.0",
@@ -3290,7 +3463,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "paint-contracts-rpc-runtime-api"
+name = "pallet-contracts-rpc-runtime-api"
 version = "2.0.0"
 dependencies = [
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3301,12 +3474,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "paint-democracy"
+name = "pallet-democracy"
 version = "2.0.0"
 dependencies = [
- "paint-balances 2.0.0",
- "paint-support 2.0.0",
- "paint-system 2.0.0",
+ "palette-support 2.0.0",
+ "palette-system 2.0.0",
+ "pallet-balances 2.0.0",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3317,13 +3490,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "paint-elections"
+name = "pallet-elections"
 version = "2.0.0"
 dependencies = [
  "hex-literal 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "paint-balances 2.0.0",
- "paint-support 2.0.0",
- "paint-system 2.0.0",
+ "palette-support 2.0.0",
+ "palette-system 2.0.0",
+ "pallet-balances 2.0.0",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3334,13 +3507,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "paint-elections-phragmen"
+name = "pallet-elections-phragmen"
 version = "2.0.0"
 dependencies = [
  "hex-literal 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "paint-balances 2.0.0",
- "paint-support 2.0.0",
- "paint-system 2.0.0",
+ "palette-support 2.0.0",
+ "palette-system 2.0.0",
+ "pallet-balances 2.0.0",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 2.0.0",
@@ -3351,14 +3524,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "paint-evm"
+name = "pallet-evm"
 version = "2.0.0"
 dependencies = [
  "evm 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "paint-balances 2.0.0",
- "paint-support 2.0.0",
- "paint-system 2.0.0",
- "paint-timestamp 2.0.0",
+ "palette-support 2.0.0",
+ "palette-system 2.0.0",
+ "pallet-balances 2.0.0",
+ "pallet-timestamp 2.0.0",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "primitive-types 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "rlp 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3371,12 +3544,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "paint-example"
+name = "pallet-example"
 version = "2.0.0"
 dependencies = [
- "paint-balances 2.0.0",
- "paint-support 2.0.0",
- "paint-system 2.0.0",
+ "palette-support 2.0.0",
+ "palette-system 2.0.0",
+ "pallet-balances 2.0.0",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 2.0.0",
@@ -3386,30 +3559,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "paint-executive"
-version = "2.0.0"
-dependencies = [
- "hex-literal 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "paint-balances 2.0.0",
- "paint-indices 2.0.0",
- "paint-support 2.0.0",
- "paint-system 2.0.0",
- "paint-transaction-payment 2.0.0",
- "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
- "sr-io 2.0.0",
- "sr-primitives 2.0.0",
- "sr-std 2.0.0",
- "substrate-primitives 2.0.0",
-]
-
-[[package]]
-name = "paint-finality-tracker"
+name = "pallet-finality-tracker"
 version = "2.0.0"
 dependencies = [
  "impl-trait-for-tuples 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "paint-support 2.0.0",
- "paint-system 2.0.0",
+ "palette-support 2.0.0",
+ "palette-system 2.0.0",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-finality-tracker 2.0.0",
@@ -3421,11 +3576,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "paint-generic-asset"
+name = "pallet-generic-asset"
 version = "2.0.0"
 dependencies = [
- "paint-support 2.0.0",
- "paint-system 2.0.0",
+ "palette-support 2.0.0",
+ "palette-system 2.0.0",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 2.0.0",
@@ -3435,13 +3590,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "paint-grandpa"
+name = "pallet-grandpa"
 version = "2.0.0"
 dependencies = [
- "paint-finality-tracker 2.0.0",
- "paint-session 2.0.0",
- "paint-support 2.0.0",
- "paint-system 2.0.0",
+ "palette-support 2.0.0",
+ "palette-system 2.0.0",
+ "pallet-finality-tracker 2.0.0",
+ "pallet-session 2.0.0",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 2.0.0",
@@ -3453,13 +3608,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "paint-im-online"
+name = "pallet-im-online"
 version = "0.1.0"
 dependencies = [
- "paint-authorship 0.1.0",
- "paint-session 2.0.0",
- "paint-support 2.0.0",
- "paint-system 2.0.0",
+ "palette-support 2.0.0",
+ "palette-system 2.0.0",
+ "pallet-authorship 0.1.0",
+ "pallet-session 2.0.0",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 2.0.0",
@@ -3472,11 +3627,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "paint-indices"
+name = "pallet-indices"
 version = "2.0.0"
 dependencies = [
- "paint-support 2.0.0",
- "paint-system 2.0.0",
+ "palette-support 2.0.0",
+ "palette-system 2.0.0",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "ref_thread_local 0.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3489,11 +3644,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "paint-membership"
+name = "pallet-membership"
 version = "2.0.0"
 dependencies = [
- "paint-support 2.0.0",
- "paint-system 2.0.0",
+ "palette-support 2.0.0",
+ "palette-system 2.0.0",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 2.0.0",
@@ -3503,22 +3658,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "paint-metadata"
+name = "pallet-nicks"
 version = "2.0.0"
 dependencies = [
- "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
- "sr-std 2.0.0",
- "substrate-primitives 2.0.0",
-]
-
-[[package]]
-name = "paint-nicks"
-version = "2.0.0"
-dependencies = [
- "paint-balances 2.0.0",
- "paint-support 2.0.0",
- "paint-system 2.0.0",
+ "palette-support 2.0.0",
+ "palette-system 2.0.0",
+ "pallet-balances 2.0.0",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 2.0.0",
@@ -3528,12 +3673,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "paint-offences"
+name = "pallet-offences"
 version = "1.0.0"
 dependencies = [
- "paint-balances 2.0.0",
- "paint-support 2.0.0",
- "paint-system 2.0.0",
+ "palette-support 2.0.0",
+ "palette-system 2.0.0",
+ "pallet-balances 2.0.0",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 2.0.0",
@@ -3544,11 +3689,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "paint-randomness-collective-flip"
+name = "pallet-randomness-collective-flip"
 version = "2.0.0"
 dependencies = [
- "paint-support 2.0.0",
- "paint-system 2.0.0",
+ "palette-support 2.0.0",
+ "palette-system 2.0.0",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 2.0.0",
@@ -3558,12 +3703,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "paint-scored-pool"
+name = "pallet-scored-pool"
 version = "1.0.0"
 dependencies = [
- "paint-balances 2.0.0",
- "paint-support 2.0.0",
- "paint-system 2.0.0",
+ "palette-support 2.0.0",
+ "palette-system 2.0.0",
+ "pallet-balances 2.0.0",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 2.0.0",
@@ -3573,14 +3718,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "paint-session"
+name = "pallet-session"
 version = "2.0.0"
 dependencies = [
  "impl-trait-for-tuples 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "paint-support 2.0.0",
- "paint-system 2.0.0",
- "paint-timestamp 2.0.0",
+ "palette-support 2.0.0",
+ "palette-system 2.0.0",
+ "pallet-timestamp 2.0.0",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3594,16 +3739,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "paint-staking"
+name = "pallet-staking"
 version = "2.0.0"
 dependencies = [
- "paint-authorship 0.1.0",
- "paint-balances 2.0.0",
- "paint-session 2.0.0",
- "paint-staking-reward-curve 2.0.0",
- "paint-support 2.0.0",
- "paint-system 2.0.0",
- "paint-timestamp 2.0.0",
+ "palette-support 2.0.0",
+ "palette-system 2.0.0",
+ "pallet-authorship 0.1.0",
+ "pallet-balances 2.0.0",
+ "pallet-session 2.0.0",
+ "pallet-staking-reward-curve 2.0.0",
+ "pallet-timestamp 2.0.0",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3617,7 +3762,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "paint-staking-reward-curve"
+name = "pallet-staking-reward-curve"
 version = "2.0.0"
 dependencies = [
  "proc-macro-crate 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3628,11 +3773,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "paint-sudo"
+name = "pallet-sudo"
 version = "2.0.0"
 dependencies = [
- "paint-support 2.0.0",
- "paint-system 2.0.0",
+ "palette-support 2.0.0",
+ "palette-system 2.0.0",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 2.0.0",
@@ -3642,142 +3787,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "paint-support"
-version = "2.0.0"
-dependencies = [
- "bitmask 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "impl-trait-for-tuples 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "once_cell 0.2.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "paint-metadata 2.0.0",
- "paint-support-procedural 2.0.0",
- "paint-system 2.0.0",
- "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "paste 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "pretty_assertions 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
- "sr-io 2.0.0",
- "sr-primitives 2.0.0",
- "sr-std 2.0.0",
- "substrate-inherents 2.0.0",
- "substrate-primitives 2.0.0",
- "substrate-state-machine 2.0.0",
-]
-
-[[package]]
-name = "paint-support-procedural"
-version = "2.0.0"
-dependencies = [
- "paint-support-procedural-tools 2.0.0",
- "proc-macro2 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "quote 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "syn 1.0.8 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "paint-support-procedural-tools"
-version = "2.0.0"
-dependencies = [
- "paint-support-procedural-tools-derive 2.0.0",
- "proc-macro-crate 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "proc-macro2 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "quote 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "syn 1.0.8 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "paint-support-procedural-tools-derive"
-version = "2.0.0"
-dependencies = [
- "proc-macro2 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "quote 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "syn 1.0.8 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "paint-support-rpc"
-version = "2.0.0"
-dependencies = [
- "futures 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "jsonrpc-client-transports 14.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "jsonrpc-core 14.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "paint-support 2.0.0",
- "paint-system 2.0.0",
- "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
- "substrate-primitives-storage 2.0.0",
- "substrate-rpc-api 2.0.0",
- "tokio 0.1.22 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "paint-support-test"
-version = "2.0.0"
-dependencies = [
- "paint-support 2.0.0",
- "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "pretty_assertions 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
- "sr-io 2.0.0",
- "sr-primitives 2.0.0",
- "substrate-inherents 2.0.0",
- "substrate-primitives 2.0.0",
- "substrate-state-machine 2.0.0",
- "trybuild 1.0.17 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "paint-system"
-version = "2.0.0"
-dependencies = [
- "criterion 0.2.11 (registry+https://github.com/rust-lang/crates.io-index)",
- "impl-trait-for-tuples 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "paint-support 2.0.0",
- "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
- "sr-io 2.0.0",
- "sr-primitives 2.0.0",
- "sr-std 2.0.0",
- "sr-version 2.0.0",
- "substrate-primitives 2.0.0",
-]
-
-[[package]]
-name = "paint-system-rpc"
-version = "2.0.0"
-dependencies = [
- "env_logger 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures-preview 0.3.0-alpha.19 (registry+https://github.com/rust-lang/crates.io-index)",
- "jsonrpc-core 14.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "jsonrpc-core-client 14.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "jsonrpc-derive 14.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "paint-system-rpc-runtime-api 2.0.0",
- "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
- "sr-primitives 2.0.0",
- "substrate-client 2.0.0",
- "substrate-primitives 2.0.0",
- "substrate-test-runtime-client 2.0.0",
- "substrate-transaction-pool 2.0.0",
-]
-
-[[package]]
-name = "paint-system-rpc-runtime-api"
-version = "2.0.0"
-dependencies = [
- "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "sr-api 2.0.0",
-]
-
-[[package]]
-name = "paint-timestamp"
+name = "pallet-timestamp"
 version = "2.0.0"
 dependencies = [
  "impl-trait-for-tuples 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "paint-support 2.0.0",
- "paint-system 2.0.0",
+ "palette-support 2.0.0",
+ "palette-system 2.0.0",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-timestamp 2.0.0",
@@ -3789,13 +3804,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "paint-transaction-payment"
+name = "pallet-transaction-payment"
 version = "2.0.0"
 dependencies = [
- "paint-balances 2.0.0",
- "paint-support 2.0.0",
- "paint-system 2.0.0",
- "paint-transaction-payment-rpc-runtime-api 2.0.0",
+ "palette-support 2.0.0",
+ "palette-system 2.0.0",
+ "pallet-balances 2.0.0",
+ "pallet-transaction-payment-rpc-runtime-api 2.0.0",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 2.0.0",
  "sr-primitives 2.0.0",
@@ -3804,13 +3819,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "paint-transaction-payment-rpc"
+name = "pallet-transaction-payment-rpc"
 version = "2.0.0"
 dependencies = [
  "jsonrpc-core 14.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "jsonrpc-core-client 14.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "jsonrpc-derive 14.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "paint-transaction-payment-rpc-runtime-api 2.0.0",
+ "pallet-transaction-payment-rpc-runtime-api 2.0.0",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 2.0.0",
@@ -3820,7 +3835,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "paint-transaction-payment-rpc-runtime-api"
+name = "pallet-transaction-payment-rpc-runtime-api"
 version = "2.0.0"
 dependencies = [
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3832,27 +3847,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "paint-treasury"
+name = "pallet-treasury"
 version = "2.0.0"
 dependencies = [
- "paint-balances 2.0.0",
- "paint-support 2.0.0",
- "paint-system 2.0.0",
- "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
- "sr-io 2.0.0",
- "sr-primitives 2.0.0",
- "sr-std 2.0.0",
- "substrate-primitives 2.0.0",
-]
-
-[[package]]
-name = "paint-utility"
-version = "2.0.0"
-dependencies = [
- "paint-balances 2.0.0",
- "paint-support 2.0.0",
- "paint-system 2.0.0",
+ "palette-support 2.0.0",
+ "palette-system 2.0.0",
+ "pallet-balances 2.0.0",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 2.0.0",
@@ -5264,9 +5264,9 @@ dependencies = [
  "hex-literal 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "node-primitives 2.0.0",
  "node-runtime 2.0.0",
- "paint-balances 2.0.0",
- "paint-system 2.0.0",
- "paint-transaction-payment 2.0.0",
+ "palette-system 2.0.0",
+ "pallet-balances 2.0.0",
+ "pallet-transaction-payment 2.0.0",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc-hex 2.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -6004,7 +6004,7 @@ dependencies = [
 name = "substrate-phragmen"
 version = "2.0.0"
 dependencies = [
- "paint-support 2.0.0",
+ "palette-support 2.0.0",
  "rand 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 2.0.0",
@@ -6373,12 +6373,12 @@ dependencies = [
  "cfg-if 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "memory-db 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "paint-babe 2.0.0",
- "paint-executive 2.0.0",
- "paint-support 2.0.0",
- "paint-system 2.0.0",
- "paint-system-rpc-runtime-api 2.0.0",
- "paint-timestamp 2.0.0",
+ "palette-executive 2.0.0",
+ "palette-support 2.0.0",
+ "palette-system 2.0.0",
+ "palette-system-rpc-runtime-api 2.0.0",
+ "pallet-babe 2.0.0",
+ "pallet-timestamp 2.0.0",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-api 2.0.0",
