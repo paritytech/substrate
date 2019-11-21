@@ -25,6 +25,7 @@ use log::warn;
 use client_api::ProvideUncles;
 use sr_primitives::traits::{Block as BlockT, Header};
 use std::sync::Arc;
+use sp_authorship;
 
 /// Maximum uncles generations we may provide to the runtime.
 const MAX_UNCLE_GENERATIONS: u32 = 8;
@@ -39,9 +40,9 @@ pub fn register_uncles_inherent_data_provider<B, C, SC>(
 	C: ProvideUncles<B> + Send + Sync + 'static,
 	SC: SelectChain<B> + 'static,
 {
-	if !inherent_data_providers.has_provider(&paint_authorship::INHERENT_IDENTIFIER) {
+	if !inherent_data_providers.has_provider(&sp_authorship::INHERENT_IDENTIFIER) {
 		inherent_data_providers
-			.register_provider(paint_authorship::InherentDataProvider::new(move || {
+			.register_provider(sp_authorship::InherentDataProvider::new(move || {
 				{
 					let chain_head = match select_chain.best_chain() {
 						Ok(x) => x,
