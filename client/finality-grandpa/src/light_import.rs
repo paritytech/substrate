@@ -687,7 +687,7 @@ pub mod tests {
 
 	#[test]
 	fn finality_proof_not_required_when_consensus_data_does_not_changes_and_correct_justification_provided() {
-		let justification = TestJustification(true, Vec::new()).encode();
+		let justification = TestJustification((0, vec![(AuthorityId::from_slice(&[1; 32]), 1)]), Vec::new()).encode();
 		assert_eq!(import_block(HashMap::new(), Some(justification)), ImportResult::Imported(ImportedAux {
 			clear_justification_requests: false,
 			needs_justification: false,
@@ -714,7 +714,7 @@ pub mod tests {
 
 	#[test]
 	fn finality_proof_required_when_consensus_data_changes_and_incorrect_justification_provided() {
-		let justification = TestJustification(false, Vec::new()).encode();
+		let justification = TestJustification((0, vec![]), Vec::new()).encode();
 		let mut cache = HashMap::new();
 		cache.insert(well_known_cache_keys::AUTHORITIES, vec![AuthorityId::from_slice(&[2; 32])].encode());
 		assert_eq!(

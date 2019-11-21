@@ -22,6 +22,8 @@ use codec::{Encode, Decode, Codec};
 use rstd::vec::Vec;
 use sr_primitives::ConsensusEngineId;
 
+pub mod inherents;
+
 pub mod sr25519 {
 	mod app_sr25519 {
 		use app_crypto::{app_crypto, key_types::AURA, sr25519};
