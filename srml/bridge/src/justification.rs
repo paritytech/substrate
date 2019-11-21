@@ -18,6 +18,9 @@ use client::{CallExecutor, Client};
 use client::backend::Backend;
 use client::error::Error as ClientError;
 use codec::{Encode, Decode};
+use core::cmp::{Ord, Ordering};
+use fg::{Commit, Error, Message}; // Q: Should I make any of these a part of fg_primitives?
+use fg_primitives::{AuthorityId, RoundNumber, SetId as SetIdNumber, AuthoritySignature};
 use grandpa::voter_set::VoterSet;
 use grandpa::{Error as GrandpaError};
 
@@ -31,11 +34,6 @@ use sr_primitives::app_crypto::RuntimeAppPublic;
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{NumberFor, Block as BlockT, Header as HeaderT};
 use primitives::{H256, Blake2Hasher};
-
-use fg_primitives::{AuthorityId, RoundNumber, SetId as SetIdNumber, AuthoritySignature};
-
-// Should I make this a part of fg_primitives?
-use fg::{Commit, Error, Message};
 
 /// A GRANDPA justification for block finality, it includes a commit message and
 /// an ancestry proof including all headers routing all precommit target blocks
@@ -64,7 +62,6 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 		E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
 		RA: Send + Sync,
 	{
-		// Can't use this HashSet
 		let mut votes_ancestries_hashes = BTreeSet::new();
 		let mut votes_ancestries = Vec::new();
 
@@ -97,6 +94,7 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 
 		Ok(GrandpaJustification { round, commit, votes_ancestries })
 	}
+
 
 	/// Decode a GRANDPA justification and validate the commit and the votes'
 	/// ancestry proofs finalize the given block.
@@ -141,10 +139,8 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 			}
 		}
 
-		// Jim says he would skip the stuff with `visited_hashes`
 		let mut visited_hashes = BTreeSet::new();
 		for signed in self.commit.precommits.iter() {
-			// NOTE: Rip this out, use sr_io primitives instead
 			if let Err(_) = check_message_sig::<Block>(
 				&grandpa::Message::Precommit(signed.precommit.clone()),
 				&signed.id,
@@ -189,8 +185,9 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 	}
 }
 
-use core::cmp::{Ord, Ordering};
-
+// Since keys in a `BTreeMap` need to implement `Ord` we can't use Block::Hash directly.
+// Instead we'll use a wrapper which implements `Ord` by leveraging the fact that
+// `Block::Hash` implements `AsRef<u8>`, which itself implements `Ord`
 #[derive(Eq)]
 struct BlockHashKey<Block: BlockT>(Block::Hash);
 
@@ -221,8 +218,6 @@ impl<Block: BlockT> PartialEq for BlockHashKey<Block> {
 /// A utility trait implementing `grandpa::Chain` using a given set of headers.
 /// This is useful when validating commits, using the given set of headers to
 /// verify a valid ancestry route to the target commit block.
-// Since keys in a BTreeMap need to implement `Ord` we can't use Block::Hash directly.
-// We need to turn the Hash into a slice of u8, which does implement Ord.
 struct AncestryChain<Block: BlockT> {
 	ancestry: BTreeMap<BlockHashKey<Block>, Block::Header>,
 }
@@ -271,8 +266,8 @@ pub(crate) fn localized_payload<E: Encode>(round: RoundNumber, set_id: SetIdNumb
 	(message, round, set_id).encode()
 }
 
-// NOTE: Stolen from `communication/mod.rs`
-// check a message.
+// Check the signature of a Grandpa message.
+// This was originally taken from `communication/mod.rs`
 fn check_message_sig<Block: BlockT>(
 	message: &Message<Block>,
 	id: &AuthorityId,
@@ -282,6 +277,7 @@ fn check_message_sig<Block: BlockT>(
 ) -> Result<(), ()> {
 	let as_public = id.clone();
 	let encoded_raw = localized_payload(round, set_id, message);
+
 	// Since `app::Public` implements `RuntimeAppPublic` we can call `verify()`
 	if as_public.verify(&encoded_raw, signature) {
 		Ok(())
