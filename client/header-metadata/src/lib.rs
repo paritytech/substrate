@@ -19,7 +19,7 @@
 
 use sr_primitives::traits::{Block as BlockT, NumberFor, Header};
 use parking_lot::RwLock;
-use lru_cache::LruCache;
+use lru::LruCache;
 
 /// Set to the expected max difference between `best` and `finalized` blocks at sync.
 const LRU_CACHE_SIZE: usize = 5_000;
@@ -243,16 +243,16 @@ impl<Block: BlockT> HeaderMetadata<Block> for HeaderMetadataCache<Block> {
 	type Error = String;
 
 	fn header_metadata(&self, hash: Block::Hash) -> Result<CachedHeaderMetadata<Block>, Self::Error> {
-		self.cache.write().get_mut(&hash).cloned()
+		self.cache.write().get(&hash).cloned()
 			.ok_or("header metadata not found in cache".to_owned())
 	}
 
 	fn insert_header_metadata(&self, hash: Block::Hash, metadata: CachedHeaderMetadata<Block>) {
-		self.cache.write().insert(hash, metadata);
+		self.cache.write().put(hash, metadata);
 	}
 
 	fn remove_header_metadata(&self, hash: Block::Hash) {
-		self.cache.write().remove(&hash);
+		self.cache.write().pop(&hash);
 	}
 }
 

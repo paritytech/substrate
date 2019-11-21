@@ -339,14 +339,14 @@ impl GetRuntimeBlockType for Runtime {
 }
 
 impl_outer_origin!{
-	pub enum Origin for Runtime where system = paint_system {}
+	pub enum Origin for Runtime where system = palette_system {}
 }
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
 pub struct Event;
 
-impl From<paint_system::Event> for Event {
-	fn from(_evt: paint_system::Event) -> Self {
+impl From<palette_system::Event> for Event {
+	fn from(_evt: palette_system::Event) -> Self {
 		unimplemented!("Not required in tests!")
 	}
 }
@@ -359,7 +359,7 @@ parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
 }
 
-impl paint_system::Trait for Runtime {
+impl palette_system::Trait for Runtime {
 	type Origin = Origin;
 	type Call = Extrinsic;
 	type Index = u64;
@@ -377,7 +377,7 @@ impl paint_system::Trait for Runtime {
 	type Version = ();
 }
 
-impl paint_timestamp::Trait for Runtime {
+impl pallet_timestamp::Trait for Runtime {
 	/// A timestamp: milliseconds since the unix epoch.
 	type Moment = u64;
 	type OnTimestampSet = ();
@@ -389,13 +389,13 @@ parameter_types! {
 	pub const ExpectedBlockTime: u64 = 10_000;
 }
 
-impl paint_babe::Trait for Runtime {
+impl pallet_babe::Trait for Runtime {
 	type EpochDuration = EpochDuration;
 	type ExpectedBlockTime = ExpectedBlockTime;
 	// there is no actual runtime in this test-runtime, so testing crates
 	// are manually adding the digests. normally in this situation you'd use
-	// paint_babe::SameAuthoritiesForever.
-	type EpochChangeTrigger = paint_babe::ExternalTrigger;
+	// pallet_babe::SameAuthoritiesForever.
+	type EpochChangeTrigger = pallet_babe::ExternalTrigger;
 }
 
 /// Adds one to the given input and returns the final result.
@@ -616,7 +616,7 @@ cfg_if! {
 						c: (3, 10),
 						genesis_authorities: system::authorities()
 							.into_iter().map(|x|(x, 1)).collect(),
-						randomness: <paint_babe::Module<Runtime>>::randomness(),
+						randomness: <pallet_babe::Module<Runtime>>::randomness(),
 						secondary_slots: true,
 					}
 				}
@@ -635,7 +635,7 @@ cfg_if! {
 				}
 			}
 
-			impl paint_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {
+			impl palette_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {
 				fn account_nonce(_account: AccountId) -> Index {
 					0
 				}
@@ -832,7 +832,7 @@ cfg_if! {
 						c: (3, 10),
 						genesis_authorities: system::authorities()
 							.into_iter().map(|x|(x, 1)).collect(),
-						randomness: <paint_babe::Module<Runtime>>::randomness(),
+						randomness: <pallet_babe::Module<Runtime>>::randomness(),
 						secondary_slots: true,
 					}
 				}
@@ -851,7 +851,7 @@ cfg_if! {
 				}
 			}
 
-			impl paint_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {
+			impl palette_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {
 				fn account_nonce(_account: AccountId) -> Index {
 					0
 				}

@@ -23,7 +23,7 @@ use chain_spec::{ChainSpec, RuntimeGenesis, Extension};
 #[macro_export]
 /// Export blocks
 macro_rules! export_blocks {
-($client:ident, $exit:ident, $output:ident, $from:ident, $to:ident, $json:ident) => {{
+($client:ident, $output:ident, $from:ident, $to:ident, $json:ident) => {{
 	let mut block = $from;
 
 	let last = match $to {
@@ -32,27 +32,31 @@ macro_rules! export_blocks {
 		None => $client.info().chain.best_number,
 	};
 
-	if last < block {
-		return Err("Invalid block range specified".into());
-	}
+	let mut wrote_header = false;
 
-	let (exit_send, exit_recv) = std::sync::mpsc::channel();
-	std::thread::spawn(move || {
-		let _ = $exit.wait();
-		let _ = exit_send.send(());
-	});
-	info!("Exporting blocks from #{} to #{}", block, last);
-	if !$json {
-		let last_: u64 = last.saturated_into::<u64>();
-		let block_: u64 = block.saturated_into::<u64>();
-		let len: u64 = last_ - block_ + 1;
-		$output.write_all(&len.encode())?;
-	}
-
-	loop {
-		if exit_recv.try_recv().is_ok() {
-			break;
+	// Exporting blocks is implemented as a future, because we want the operation to be
+	// interruptible.
+	//
+	// Every time we write a block to the output, the `Future` re-schedules itself and returns
+	// `Poll::Pending`.
+	// This makes it possible either to interleave other operations in-between the block exports,
+	// or to stop the operation completely.
+	futures03::future::poll_fn(move |cx| {
+		if last < block {
+			return std::task::Poll::Ready(Err("Invalid block range specified".into()));
 		}
+
+		if !wrote_header {
+			info!("Exporting blocks from #{} to #{}", block, last);
+			if !$json {
+				let last_: u64 = last.saturated_into::<u64>();
+				let block_: u64 = block.saturated_into::<u64>();
+				let len: u64 = last_ - block_ + 1;
+				$output.write_all(&len.encode())?;
+			}
+			wrote_header = true;
+		}
+
 		match $client.block(&BlockId::number(block))? {
 			Some(block) => {
 				if $json {
@@ -62,17 +66,21 @@ macro_rules! export_blocks {
 					$output.write_all(&block.encode())?;
 				}
 			},
-			None => break,
+			// Reached end of the chain.
+			None => return std::task::Poll::Ready(Ok(())),
 		}
 		if (block % 10000.into()).is_zero() {
 			info!("#{}", block);
 		}
 		if block == last {
-			break;
+			return std::task::Poll::Ready(Ok(()));
 		}
 		block += One::one();
-	}
-	Ok(())
+
+		// Re-schedule the task in order to continue the operation.
+		cx.waker().wake_by_ref();
+		std::task::Poll::Pending
+	})
 }}
 }
 
@@ -80,13 +88,12 @@ macro_rules! export_blocks {
 #[macro_export]
 /// Import blocks
 macro_rules! import_blocks {
-($block:ty, $client:ident, $queue:ident, $exit:ident, $input:ident) => {{
+($block:ty, $client:ident, $queue:ident, $input:ident) => {{
 	use consensus_common::import_queue::{IncomingBlock, Link, BlockImportError, BlockImportResult};
 	use consensus_common::BlockOrigin;
 	use network::message;
 	use sr_primitives::generic::SignedBlock;
 	use sr_primitives::traits::Block;
-	use futures03::TryFutureExt as _;
 
 	struct WaitLink {
 		imported_blocks: u64,
@@ -121,75 +128,88 @@ macro_rules! import_blocks {
 		}
 	}
 
-	let (exit_send, exit_recv) = std::sync::mpsc::channel();
-	std::thread::spawn(move || {
-		let _ = $exit.wait();
-		let _ = exit_send.send(());
-	});
-
 	let mut io_reader_input = IoReader($input);
-	let count: u64 = Decode::decode(&mut io_reader_input)
-		.map_err(|e| format!("Error reading file: {}", e))?;
-	info!("Importing {} blocks", count);
-	let mut block_count = 0;
-	for b in 0 .. count {
-		if exit_recv.try_recv().is_ok() {
-			break;
-		}
-		match SignedBlock::<$block>::decode(&mut io_reader_input) {
-			Ok(signed) => {
-				let (header, extrinsics) = signed.block.deconstruct();
-				let hash = header.hash();
-				let block  = message::BlockData::<$block> {
-					hash,
-					justification: signed.justification,
-					header: Some(header),
-					body: Some(extrinsics),
-					receipt: None,
-					message_queue: None
-				};
-				// import queue handles verification and importing it into the client
-				$queue.import_blocks(BlockOrigin::File, vec![
-					IncomingBlock::<$block> {
-						hash: block.hash,
-						header: block.header,
-						body: block.body,
-						justification: block.justification,
-						origin: None,
-						allow_missing_state: false,
-					}
-				]);
-			}
-			Err(e) => {
-				warn!("Error reading block data at {}: {}", b, e);
-				break;
-			}
-		}
-
-		block_count = b;
-		if b % 1000 == 0 && b != 0 {
-			info!("#{} blocks were added to the queue", b);
-		}
-	}
-
+	let mut count = None::<u64>;
+	let mut read_block_count = 0;
 	let mut link = WaitLink::new();
-	Ok(futures::future::poll_fn(move || {
-		if exit_recv.try_recv().is_ok() {
-			return Ok(Async::Ready(()));
+
+	// Importing blocks is implemented as a future, because we want the operation to be
+	// interruptible.
+	//
+	// Every time we read a block from the input or import a bunch of blocks from the import
+	// queue, the `Future` re-schedules itself and returns `Poll::Pending`.
+	// This makes it possible either to interleave other operations in-between the block imports,
+	// or to stop the operation completely.
+	futures03::future::poll_fn(move |cx| {
+		// Start by reading the number of blocks if not done so already.
+		let count = match count {
+			Some(c) => c,
+			None => {
+				let c: u64 = match Decode::decode(&mut io_reader_input) {
+					Ok(c) => c,
+					Err(err) => {
+						let err = format!("Error reading file: {}", err);
+						return std::task::Poll::Ready(Err(From::from(err)));
+					},
+				};
+				info!("Importing {} blocks", c);
+				count = Some(c);
+				c
+			}
+		};
+
+		// Read blocks from the input.
+		if read_block_count < count {
+			match SignedBlock::<$block>::decode(&mut io_reader_input) {
+				Ok(signed) => {
+					let (header, extrinsics) = signed.block.deconstruct();
+					let hash = header.hash();
+					let block  = message::BlockData::<$block> {
+						hash,
+						justification: signed.justification,
+						header: Some(header),
+						body: Some(extrinsics),
+						receipt: None,
+						message_queue: None
+					};
+					// import queue handles verification and importing it into the client
+					$queue.import_blocks(BlockOrigin::File, vec![
+						IncomingBlock::<$block> {
+							hash: block.hash,
+							header: block.header,
+							body: block.body,
+							justification: block.justification,
+							origin: None,
+							allow_missing_state: false,
+						}
+					]);
+				}
+				Err(e) => {
+					warn!("Error reading block data at {}: {}", read_block_count, e);
+					return std::task::Poll::Ready(Ok(()));
+				}
+			}
+
+			read_block_count += 1;
+			if read_block_count % 1000 == 0 {
+				info!("#{} blocks were added to the queue", read_block_count);
+			}
+
+			cx.waker().wake_by_ref();
+			return std::task::Poll::Pending;
 		}
 
 		let blocks_before = link.imported_blocks;
-		let _ = futures03::future::poll_fn(|cx| {
-			$queue.poll_actions(cx, &mut link);
-			std::task::Poll::Pending::<Result<(), ()>>
-		}).compat().poll();
+		$queue.poll_actions(cx, &mut link);
+
 		if link.has_error {
 			info!(
 				"Stopping after #{} blocks because of an error",
 				link.imported_blocks,
 			);
-			return Ok(Async::Ready(()));
+			return std::task::Poll::Ready(Ok(()));
 		}
+
 		if link.imported_blocks / 1000 != blocks_before / 1000 {
 			info!(
 				"#{} blocks were imported (#{} left)",
@@ -197,13 +217,16 @@ macro_rules! import_blocks {
 				count - link.imported_blocks
 			);
 		}
+
 		if link.imported_blocks >= count {
-			info!("Imported {} blocks. Best: #{}", block_count, $client.info().chain.best_number);
-			Ok(Async::Ready(()))
+			info!("Imported {} blocks. Best: #{}", read_block_count, $client.info().chain.best_number);
+			return std::task::Poll::Ready(Ok(()));
+
 		} else {
-			Ok(Async::NotReady)
+			// Polling the import queue will re-schedule the task when ready.
+			return std::task::Poll::Pending;
 		}
-	}))
+	})
 }}
 }
 
