@@ -32,8 +32,8 @@ use crate::traits::{Hash, TrailingZeroInput};
 /// use sr_primitives::RandomNumberGenerator;
 /// let random_seed = BlakeTwo256::hash(b"Sixty-nine");
 /// let mut rng = <RandomNumberGenerator<BlakeTwo256>>::new(random_seed);
-/// assert_eq!(rng.pick_u32(100), 47);
-/// assert_eq!(rng.pick_item(&[1, 2, 3]), Some(&2));
+/// assert_eq!(rng.pick_u32(100), 59);
+/// assert_eq!(rng.pick_item(&[1, 2, 3]), Some(&1));
 /// ```
 ///
 /// This can use any cryptographic `Hash` function as the means of entropy-extension, and avoids
