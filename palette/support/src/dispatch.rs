@@ -863,14 +863,12 @@ macro_rules! decl_module {
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn on_initialize(_block_number_not_used: $trait_instance::BlockNumber) {
-				#[cfg(feature = "std")]
-				{
+				use $crate::rstd::if_std;
+				if_std! {
 					use $crate::tracing;
 					let span = tracing::span!(tracing::Level::INFO, "on_initialize");
 					let _enter = span.enter();
-					$( $impl )*
 				}
-				#[cfg(not(feature = "std"))]
 				{ $( $impl )* }
 			}
 		}
@@ -887,14 +885,12 @@ macro_rules! decl_module {
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn on_initialize($param: $param_ty) {
-				#[cfg(feature = "std")]
-				{
+				use $crate::rstd::if_std;
+				if_std! {
 					use $crate::tracing;
 					let span = tracing::span!(tracing::Level::INFO, "on_initialize");
 					let _enter = span.enter();
-					{ $( $impl )* }
 				}
-				#[cfg(not(feature = "std"))]
 				{ $( $impl )* }
 			}
 		}
@@ -921,14 +917,12 @@ macro_rules! decl_module {
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn on_finalize(_block_number_not_used: $trait_instance::BlockNumber) {
-				#[cfg(feature = "std")]
-				{
+				use $crate::rstd::if_std;
+				if_std! {
 					use $crate::tracing;
 					let span = tracing::span!(tracing::Level::INFO, "on_finalize");
 					let _enter = span.enter();
-					$( $impl )*
 				}
-				#[cfg(not(feature = "std"))]
 				{ $( $impl )* }
 			}
 		}
@@ -945,14 +939,12 @@ macro_rules! decl_module {
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn on_finalize($param: $param_ty) {
-				#[cfg(feature = "std")]
-				{
+				use $crate::rstd::if_std;
+				if_std! {
 					use $crate::tracing;
 					let span = tracing::span!(tracing::Level::INFO, "on_finalize");
 					let _enter = span.enter();
-					$( $impl )*
 				}
-				#[cfg(not(feature = "std"))]
 				{ $( $impl )* }
 			}
 		}
@@ -1050,14 +1042,12 @@ macro_rules! decl_module {
 		$vis fn $name(
 			$origin: $origin_ty $(, $param: $param_ty )*
 		) -> $crate::dispatch::DispatchResult<$error_type> {
-			#[cfg(feature = "std")]
-			{
+			use $crate::rstd::if_std;
+			if_std! {
 				use $crate::tracing;
 				let span = tracing::span!(tracing::Level::INFO, stringify!($name));
 				let _enter = span.enter();
-				{ { $( $impl )* } Ok(()) }
 			}
-			#[cfg(not(feature = "std"))]
 			{
 				{ $( $impl )* }
 				Ok(())
@@ -1078,14 +1068,12 @@ macro_rules! decl_module {
 	) => {
 		$(#[doc = $doc_attr])*
 		$vis fn $name($origin: $origin_ty $(, $param: $param_ty )* ) -> $result {
-			#[cfg(feature = "std")]
-			{
+			use $crate::rstd::if_std;
+			if_std! {
 				use $crate::tracing;
 				let span = tracing::span!(tracing::Level::INFO, stringify!($name));
 				let _enter = span.enter();
-				{ $( $impl )* }
 			}
-			#[cfg(not(feature = "std"))]
 			{ $( $impl )* }
 		}
 	};
