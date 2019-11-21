@@ -47,6 +47,7 @@ type PositiveImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::
 type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
 
 const MODULE_ID: ModuleId = ModuleId(*b"py/socie");
+const MAX_BID_COUNT: usize = 1000;
 
 /// The module's configuration trait.
 pub trait Trait: system::Trait {
@@ -110,17 +111,44 @@ pub struct Payout<Balance, BlockNumber> {
 /// Number of strikes that a member has against them.
 pub type StrikeCount = u32;
 
+/// A vote by a member on a candidate application.
+#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
+pub enum BidKind<AccountId, Balance> {
+	/// The CandidateDeposit was paid for this bid.
+	Deposit,
+	/// A member vouched for this bid. The account should be reinstated into `Members` once the
+	/// bid is successful (or if it is rescinded prior to launch).
+	Vouch(AccountId, Balance),
+}
+
+impl<AccountId: PartialEq, Balance> BidKind<AccountId, Balance> {
+	fn check_voucher(&self, v: &AccountId) -> rstd::result::Result<(), &'static str> {
+		if let BidKind::Vouch(ref a, _) = self {
+			if a == v {
+				Ok(())
+			} else {
+				Err("incorrect identity")
+			}
+		} else {
+			Err("not vouched")
+		}
+	}
+}
+
 // This module's storage items.
 decl_storage! {
 	trait Store for Module<T: Trait> as Fratority {
 		/// The current bids.
-		Bids: Vec<(BalanceOf<T>, T::AccountId)>;
+		Bids: Vec<(BalanceOf<T>, T::AccountId, BidKind<T::AccountId, BalanceOf<T>>)>;
 
 		/// The current set of members, ordered.
 		Members get(fn members) config(): Vec<T::AccountId>;
 
+		/// Members currently vouching, stored ordered
+		Vouching: Vec<T::AccountId>;
+
 		/// The current set of candidates; bidders that are attempting to become members.
-		Candidates: Vec<(BalanceOf<T>, T::AccountId)>;
+		Candidates: Vec<(BalanceOf<T>, T::AccountId, BidKind<T::AccountId, BalanceOf<T>>)>;
 
 		/// Amount of our account balance that is specifically for the next round's bid(s).
 		Pot: BalanceOf<T>;
@@ -153,31 +181,45 @@ decl_module! {
 		/// Make a bid for entry.
 		///
 		/// Alters Bids (O(N) decode+encode, O(logN) search, <=2*O(N) write).
-		///
 		pub fn bid(origin, value: BalanceOf<T>) -> Result {
-			const MAX_BID_COUNT: usize = 1000;
-
 			let who = ensure_signed(origin)?;
-
 			T::Currency::reserve(&who, T::CandidateDeposit::get())?;
 
-			<Bids<T>>::mutate(|b| {
-				match b.binary_search_by(|x| x.0.cmp(&value)) {
-					Ok(pos) | Err(pos) => b.insert(pos, (value.clone(), who.clone())),
-				}
-				// Keep it reasonably small.
-				if b.len() > MAX_BID_COUNT {
-					let (_, popped) = b.pop().expect("b.len() > 1000; qed");
-					let _unreserved = T::Currency::unreserve(&popped, T::CandidateDeposit::get());
-					Self::deposit_event(RawEvent::AutoUnbid(popped));
-				}
-			});
-
+			Self::put_bid(who.clone(), value.clone(), BidKind::Deposit);
 			Self::deposit_event(RawEvent::Bid(who, value));
 			Ok(())
 		}
 
-		fn unbid(origin, pos: u32) -> Result {
+		/// Vouch for someone else.
+		pub fn vouch(origin, who: T::AccountId, value: BalanceOf<T>, tip: BalanceOf<T>) -> Result {
+			let voucher = ensure_signed(origin)?;
+			Self::ensure_member(&voucher)?;
+			Self::set_vouching(voucher.clone())?;
+
+			Self::put_bid(who.clone(), value.clone(), BidKind::Vouch(voucher.clone(), tip));
+			Self::deposit_event(RawEvent::Vouch(who, value, voucher));
+			Ok(())
+		}
+
+		/// Only works until the candidate is accepted.
+		pub fn unvouch(origin, pos: u32) -> Result {
+			let voucher = ensure_signed(origin)?;
+
+			let pos = pos as usize;
+			<Bids<T>>::mutate(|b|
+				if pos < b.len() {
+					b[pos].2.check_voucher(&voucher)?;
+					Self::unset_vouching(&voucher);
+					let who = b.remove(pos).1;
+					Self::deposit_event(RawEvent::Unvouch(who));
+					Ok(())
+				} else {
+					Err("bad position")
+				}
+			)
+		}
+
+		pub fn unbid(origin, pos: u32) -> Result {
 			let who = ensure_signed(origin)?;
 
 			let pos = pos as usize;
@@ -188,7 +230,6 @@ decl_module! {
 					Ok(())
 				} else {
 					Err("bad position")
-//					Err(Error::BadPositionHint)
 				}
 			)
 		}
@@ -246,10 +287,15 @@ decl_event! {
 		/// A membership bid just happened. The given account is the candidate's ID and their offer
 		/// is the second.
 		Bid(AccountId, Balance),
+		/// A membership bid just happened by vouching. The given account is the candidate's ID and
+		/// their offer is the second. The vouching party is the third.
+		Vouch(AccountId, Balance, AccountId),
 		/// A candidate was dropped (due to an excess of bids in the system).
 		AutoUnbid(AccountId),
 		/// A candidate was dropped (by their request).
 		Unbid(AccountId),
+		/// A candidate was dropped (by request of who vouched for them).
+		Unvouch(AccountId),
 		/// A group of candidates have been inducted. The batch's primary is the first value, the
 		/// batch in full is the second.
 		Inducted(AccountId, Vec<AccountId>),
@@ -257,6 +303,71 @@ decl_event! {
 }
 
 impl<T: Trait> Module<T> {
+	fn put_bid(who: T::AccountId, value: BalanceOf<T>, bid_kind: BidKind<T::AccountId, BalanceOf<T>>) {
+		<Bids<T>>::mutate(|bids| {
+			match bids.binary_search_by(|x| x.0.cmp(&value)) {
+				Ok(pos) | Err(pos) => bids.insert(pos, (value, who, bid_kind)),
+			}
+			// Keep it reasonably small.
+			if bids.len() > MAX_BID_COUNT {
+				let (_, popped, kind) = bids.pop().expect("b.len() > 1000; qed");
+				if let BidKind::Vouch(voucher, _) = kind {
+					Self::unset_vouching(&voucher);
+				}
+				let _unreserved = T::Currency::unreserve(&popped, T::CandidateDeposit::get());
+				Self::deposit_event(RawEvent::AutoUnbid(popped));
+			}
+		});
+	}
+
+	/// Remove a member from the members list.
+	fn remove_member(m: &T::AccountId) -> Result {
+		<Members<T>>::mutate(|members|
+			match members.binary_search(&m) {
+				Err(_) => Err("not a member"),
+				Ok(i) => {
+					members.remove(i);
+					T::MembershipChanged::change_members_sorted(&[], &[m.clone()], members);
+					Ok(())
+				}
+			}
+		)
+	}
+
+	/// Add a member to the vouching set.
+	fn set_vouching(v: T::AccountId) -> Result {
+		<Vouching<T>>::mutate(|vouchers|
+			match vouchers.binary_search(&v) {
+				Err(i) => {
+					vouchers.insert(i, v);
+					Ok(())
+				}
+				Ok(_) => Err("already vouching"),
+			}
+		)
+	}
+
+	/// Remove a member from the members list.
+	fn unset_vouching(v: &T::AccountId) -> Result {
+		<Vouching<T>>::mutate(|vouchers|
+			match vouchers.binary_search(&v) {
+				Err(_) => Err("not vouching"),
+				Ok(i) => {
+					vouchers.remove(i);
+					Ok(())
+				}
+			}
+		)
+	}
+
+	/// Remove a member from the members list.
+	fn ensure_member(m: &T::AccountId) -> Result {
+		<Members<T>>::get()
+			.binary_search(m)
+			.map_err(|_| "not a member")
+			.map(|_| ())
+	}
+
 	/// End the current period and begin a new one.
 	fn rotate_period() {
 		let phrase = b"fratority_rotation";
@@ -285,10 +396,10 @@ impl<T: Trait> Module<T> {
 		let mut total_slash = <BalanceOf<T>>::zero();
 		let mut total_payouts = <BalanceOf<T>>::zero();
 
-		let accepted = candidates.into_iter().filter_map(|(value, c)| {
+		let accepted = candidates.into_iter().filter_map(|(value, candidate, kind)| {
 			let mut approval_count = 0;
 			let votes = members.iter()
-				.filter_map(|m| <Votes<T>>::get(&c, m).map(|v| (v, m)))
+				.filter_map(|m| <Votes<T>>::get(&candidate, m).map(|v| (v, m)))
 				.inspect(|&(v, _)| if v == Vote::Approve { approval_count += 1 })
 				.collect::<Vec<_>>();
 			let accepted = rng.pick_item(&votes).map(|x| x.0) == Some(Vote::Approve);
@@ -318,12 +429,23 @@ impl<T: Trait> Module<T> {
 			if accepted {
 				total_approvals += approval_count;
 				total_payouts += value;
-				members.push(c.clone());
-				<Payouts<T>>::insert(&c, Payout { value, .. payout });
+				members.push(candidate.clone());
 
-				Some((c, total_approvals))
+				// only in the case that the bid is accepted do we unset the vouching status and
+				// transfer the tip over to the voucher.
+				let value = if let BidKind::Vouch(who, tip) = kind {
+					Self::bump_payout(&who, tip);
+					Self::unset_vouching(&who);
+					value.saturating_sub(tip)
+				} else {
+					value
+				};
+
+				<Payouts<T>>::insert(&candidate, Payout { value, .. payout });
+
+				Some((candidate, total_approvals))
 			} else {
-				Self::suspend_candidate(&c);
+				Self::suspend_candidate(&candidate);
 				None
 			}
 		}).collect::<Vec<_>>();
@@ -374,7 +496,7 @@ impl<T: Trait> Module<T> {
 		// initialise skeptics
 		let pick_member = |_| rng.pick_item(&members[..]).expect("exited if members empty; qed");
 		for skeptic in (0..members.len().integer_sqrt()).map(pick_member) {
-			for (_, c) in candidates.iter() {
+			for (_, c, _) in candidates.iter() {
 				<Votes<T>>::insert(c, skeptic, Vote::Skeptic);
 			}
 		}
@@ -426,16 +548,18 @@ impl<T: Trait> Module<T> {
 	/// Get a selection of bidding accounts such that the total bids is no greater than `Pot`.
 	///
 	/// May be empty.
-	pub fn take_selected(pot: BalanceOf<T>) -> Vec<(BalanceOf<T>, T::AccountId)> {
+	pub fn take_selected(pot: BalanceOf<T>)
+		-> Vec<(BalanceOf<T>, T::AccountId, BidKind<T::AccountId, BalanceOf<T>>)>
+	{
 		// No more than 10 will be returned.
 		const MAX_SELECTIONS: usize = 10;
 
 		// Get the number of left-most bidders whose bids add up to less than `pot`.
 		let mut bids = <Bids<T>>::get();
 		let taken = bids.iter()
-			.scan(<BalanceOf<T>>::zero(), |total, &(bid, ref who)| {
+			.scan(<BalanceOf<T>>::zero(), |total, &(bid, ref who, ref kind)| {
 				*total = total.saturating_add(bid);
-				Some((*total, who.clone()))
+				Some((*total, who.clone(), kind.clone()))
 			})
 			.take(MAX_SELECTIONS)
 			.take_while(|x| pot >= x.0)
