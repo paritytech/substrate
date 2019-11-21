@@ -69,6 +69,7 @@ members = [
 	"palette/randomness-collective-flip",
 	"palette/scored-pool",
 	"palette/session",
+	"palette/society",
 	"palette/staking",
 	"palette/staking/reward-curve",
 	"palette/sudo",

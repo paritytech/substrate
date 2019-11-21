@@ -3704,7 +3704,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-scored-pool"
-version = "1.0.0"
+version = "2.0.0"
 dependencies = [
  "palette-support 2.0.0",
  "palette-system 2.0.0",
@@ -3736,6 +3736,21 @@ dependencies = [
  "substrate-application-crypto 2.0.0",
  "substrate-primitives 2.0.0",
  "substrate-trie 2.0.0",
+]
+
+[[package]]
+name = "pallet-society"
+version = "2.0.0"
+dependencies = [
+ "palette-support 2.0.0",
+ "palette-system 2.0.0",
+ "pallet-balances 2.0.0",
+ "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-io 2.0.0",
+ "sr-primitives 2.0.0",
+ "sr-std 2.0.0",
+ "substrate-primitives 2.0.0",
 ]
 
 [[package]]
