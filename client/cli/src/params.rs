@@ -513,7 +513,7 @@ pub struct RunCmd {
 	#[structopt(long = "tracing-targets")]
 	pub tracing_targets: Option<String>,
 
-	/// Maximum number of kilobytes of all transactions stored in the pool.
+	/// Receiver to process tracing messages
 	#[structopt(
 		long = "tracing-receiver",
 		value_name = "RECEIVER",
