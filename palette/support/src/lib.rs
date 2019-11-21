@@ -45,7 +45,6 @@ pub use runtime_io::storage::root as storage_root;
 #[doc(hidden)]
 pub use sr_primitives::RuntimeDebug;
 
-
 #[macro_use]
 pub mod debug;
 #[macro_use]
