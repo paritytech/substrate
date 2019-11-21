@@ -14,13 +14,15 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! A simple random number generator that allows a stream of random numbers to be efficiently
+//! A simple pseudo random number generator that allows a stream of random numbers to be efficiently
 //! created from a single initial seed hash.
 
 use codec::{Encode, Decode};
 use crate::traits::{Hash, TrailingZeroInput};
 
-/// Random number streamer. This retains the state of the random number stream.
+/// Pseudo-random number streamer. This retains the state of the random number stream. It's as
+/// secure as the combination of the seed with which it is constructed and the hash function it uses
+/// to cycle elements.
 ///
 /// It can be saved and later reloaded using the Codec traits.
 ///
@@ -36,6 +38,10 @@ use crate::traits::{Hash, TrailingZeroInput};
 ///
 /// This can use any cryptographic `Hash` function as the means of entropy-extension, and avoids
 /// needless extensions of entropy.
+///
+/// If you're persisting it over blocks, be aware that the sequence will start to repeat. This won't
+/// be a practical issue unless you're using tiny hash types (e.g. 64-bit) and pulling hundred of
+/// megabytes of data from it.
 #[derive(Encode, Decode)]
 pub struct RandomNumberGenerator<Hashing: Hash> {
 	current: Hashing::Output,
@@ -56,18 +62,23 @@ impl<Hashing: Hash> RandomNumberGenerator<Hashing> {
 	/// Returns a number at least zero, at most `max`.
 	pub fn pick_u32(&mut self, max: u32) -> u32 {
 		let needed = (4 - max.leading_zeros() / 8) as usize;
-		if self.offset() + needed > self.current.as_ref().len() {
-			// rehash
-			self.current = Hashing::hash(self.current.as_ref());
-			self.offset = 0;
-		}
-		let data = &self.current.as_ref()[self.offset()..self.offset() + needed];
-		self.offset += needed as u32;
-		let raw = u32::decode(&mut TrailingZeroInput::new(data)).unwrap_or(0);
-		if max < u32::max_value() {
-			raw % (max + 1)
-		} else {
-			raw
+		let top = ((1 << (needed as u64 * 8)) / ((max + 1) as u64) * ((max + 1) as u64) - 1) as u32;
+		loop {
+			if self.offset() + needed > self.current.as_ref().len() {
+				// rehash
+				self.current = Hashing::hash(self.current.as_ref());
+				self.offset = 0;
+			}
+			let data = &self.current.as_ref()[self.offset()..self.offset() + needed];
+			self.offset += needed as u32;
+			let raw = u32::decode(&mut TrailingZeroInput::new(data)).unwrap_or(0);
+			if raw <= top {
+				if max < u32::max_value() {
+					break raw % (max + 1)
+				} else {
+					break raw
+				}
+			}
 		}
 	}
 
