@@ -34,7 +34,7 @@ use client_api::{
 	utils::is_descendent_of,
 };
 use client::{
-	apply_aux, Client, 
+	apply_aux, Client,
 };
 use grandpa::{
 	BlockNumberOps, Equivocation, Error as GrandpaError, round::State as RoundState,
@@ -832,9 +832,8 @@ where
 		);
 
 		self.update_voter_set_state(|voter_set_state| {
-			// NOTE: we don't use `with_current_round` here, it is possible that
-			// we are not currently tracking this round if it is a round we
-			// caught up to.
+			// NOTE: we don't use `with_current_round` here, because a concluded
+			// round is completed and cannot be current.
 			let (completed_rounds, current_rounds) =
 				if let VoterSetState::Live { completed_rounds, current_rounds } = voter_set_state {
 					(completed_rounds, current_rounds)
@@ -849,6 +848,9 @@ where
 				.iter_mut().find(|r| r.number == round)
 			{
 				let n_existing_votes = already_completed.votes.len();
+
+				// the interface of Environment guarantees that the previous `historical_votes`
+				// from `completable` is a prefix of what is passed to `concluded`.
 				already_completed.votes.extend(
 					historical_votes.seen().iter().skip(n_existing_votes).cloned()
 				);
