@@ -53,6 +53,7 @@ pub mod testing;
 pub mod traits;
 pub mod transaction_validity;
 pub mod weights;
+pub mod random_number_generator;
 
 /// Re-export these since they're only "kind of" generic.
 pub use generic::{DigestItem, Digest};
@@ -70,6 +71,8 @@ pub use arithmetic::{Perquintill, Perbill, Permill, Percent, Rational128, Fixed6
 pub use arithmetic::helpers_128bit;
 /// Re-export big_uint stuff.
 pub use arithmetic::biguint;
+
+pub use random_number_generator::RandomNumberGenerator;
 
 /// An abstraction over justification for a block's validity under a consensus algorithm.
 ///
