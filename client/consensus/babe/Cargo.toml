@@ -6,7 +6,7 @@ description = "BABE consensus algorithm for substrate"
 edition = "2018"
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.1.0", features = ["derive"] }
 babe_primitives = { package = "substrate-consensus-babe-primitives", path = "../../../primitives/consensus/babe" }
 primitives = { package = "substrate-primitives", path = "../../../primitives/core" }
 app-crypto = { package = "substrate-application-crypto", path = "../../../primitives/application-crypto" }

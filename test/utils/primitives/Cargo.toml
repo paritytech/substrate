@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 app-crypto = { package = "substrate-application-crypto", path = "../../../primitives/application-crypto", default-features = false }
-codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.1.0", default-features = false, features = ["derive"] }
 # aura-primitives = { package = "substrate-consensus-aura-primitives", path = "../../../primitives/consensus/aura", default-features = false }
 # babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../../../primitives/consensus/babe", default-features = false }
 # block-builder-api = { package = "substrate-block-builder-runtime-api", path = "../../../primitives/block-builder/runtime-api", default-features = false }

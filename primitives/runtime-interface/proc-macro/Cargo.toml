@@ -16,7 +16,7 @@ proc-macro-crate = "0.1.4"
 
 [dev-dependencies]
 runtime-interface = { package = "substrate-runtime-interface", path = ".." }
-codec = { package = "parity-scale-codec", version = "1.0.6", features = [ "derive" ] }
+codec = { package = "parity-scale-codec", version = "1.1.0", features = [ "derive" ] }
 externalities = { package = "substrate-externalities", path = "../../externalities" }
 rustversion = "1.0.0"
 trybuild = "1.0.17"

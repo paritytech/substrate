@@ -9,7 +9,7 @@ wasmi = { version = "0.6.2", optional = true }
 primitives = { package = "substrate-primitives", path = "../core", default-features = false }
 rstd = { package = "sr-std", path = "../sr-std", default-features = false }
 runtime-io = { package = "sr-io", path = "../sr-io", default-features = false }
-codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false }
+codec = { package = "parity-scale-codec", version = "1.1.0", default-features = false }
 
 [dev-dependencies]
 wabt = "0.9.2"

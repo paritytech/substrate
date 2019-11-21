@@ -8,7 +8,7 @@ edition = "2018"
 sr-api = { path = "../sr-api", default-features = false }
 rstd = { package = "sr-std", path = "../sr-std", default-features = false }
 sr-primitives = { path = "../sr-primitives", default-features = false }
-codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.1.0", default-features = false, features = ["derive"] }
 inherents = { package = "substrate-inherents", path = "../inherents", default-features = false }
 impl-trait-for-tuples = "0.1.3"
 

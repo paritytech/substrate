@@ -9,7 +9,7 @@ aura = { package = "pallet-aura", path = "../../../palette/aura", default-featur
 aura-primitives = { package = "substrate-consensus-aura-primitives", path = "../../../primitives/consensus/aura", default-features = false }
 balances = { package = "pallet-balances", path = "../../../palette/balances", default-features = false }
 block-builder-api = { package = "substrate-block-builder-runtime-api", path = "../../../primitives/block-builder/runtime-api", default-features = false}
-codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.1.0", default-features = false, features = ["derive"] }
 executive = { package = "palette-executive", path = "../../../palette/executive", default-features = false }
 grandpa = { package = "pallet-grandpa", path = "../../../palette/grandpa", default-features = false }
 indices = { package = "pallet-indices", path = "../../../palette/indices", default-features = false }

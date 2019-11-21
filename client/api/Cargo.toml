@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 block-builder = { package = "substrate-block-builder", path = "../block-builder" }
-codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.1.0", default-features = false, features = ["derive"] }
 consensus = { package = "substrate-consensus-common", path = "../../primitives/consensus/common" }
 derive_more = { version = "0.15.0" }
 executor = { package = "substrate-executor", path = "../executor" }

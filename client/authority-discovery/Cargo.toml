@@ -12,7 +12,7 @@ prost-build = "0.5.0"
 authority-discovery-primitives = { package = "substrate-authority-discovery-primitives", path = "../../primitives/authority-discovery" }
 bytes = "0.4.12"
 client-api = { package = "substrate-client-api", path = "../api" }
-codec = { package = "parity-scale-codec", default-features = false, version = "1.0.3" }
+codec = { package = "parity-scale-codec", default-features = false, version = "1.1.0" }
 derive_more = "0.15.0"
 futures-preview = "0.3.0-alpha.19"
 futures-timer = "0.4"
