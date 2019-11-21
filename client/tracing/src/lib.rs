@@ -24,7 +24,7 @@
 //! A span is set in the following way:
 //! ```
 //! let span = tracing::span!(tracing::Level::INFO, "my_span_name");
-//!	let _enter = span.enter();
+//! let _enter = span.enter();
 //! ```
 //! To begin timing, a span must be entered. When the span is dropped, the execution time
 //! is recorded and details sent to the `Receiver` which defines how to process it.
