@@ -235,10 +235,6 @@ impl StorageLineDefExt {
 				ext::type_contains_ident(&map.key, &def.module_runtime_generic)
 					|| ext::type_contains_ident(&map.value, &def.module_runtime_generic)
 			}
-			StorageLineTypeDef::LinkedMap(map) => {
-				ext::type_contains_ident(&map.key, &def.module_runtime_generic)
-					|| ext::type_contains_ident(&map.value, &def.module_runtime_generic)
-			}
 			StorageLineTypeDef::DoubleMap(map) => {
 				ext::type_contains_ident(&map.key1, &def.module_runtime_generic)
 					|| ext::type_contains_ident(&map.key2, &def.module_runtime_generic)
@@ -249,7 +245,6 @@ impl StorageLineDefExt {
 		let query_type = match &storage_def.storage_type {
 			StorageLineTypeDef::Simple(value) => value.clone(),
 			StorageLineTypeDef::Map(map) => map.value.clone(),
-			StorageLineTypeDef::LinkedMap(map) => map.value.clone(),
 			StorageLineTypeDef::DoubleMap(map) => map.value.clone(),
 		};
 		let is_option = ext::extract_type_option(&query_type).is_some();
@@ -289,11 +284,11 @@ impl StorageLineDefExt {
 			},
 			StorageLineTypeDef::Map(map) => {
 				let key = &map.key;
-				quote!( StorageMap<#key, #value_type> )
-			},
-			StorageLineTypeDef::LinkedMap(map) => {
-				let key = &map.key;
-				quote!( StorageLinkedMap<#key, #value_type> )
+				match map.kind {
+					MapKind::Map => quote!( StorageMap<#key, #value_type> ),
+					MapKind::LinkedMap => quote!( StorageLinkedMap<#key, #value_type> ),
+					MapKind::PrefixedMap => quote!( StorageMap<#key, #value_type> ),
+				}
 			},
 			StorageLineTypeDef::DoubleMap(map) => {
 				let key1 = &map.key1;
@@ -336,7 +331,6 @@ impl StorageLineDefExt {
 
 pub enum StorageLineTypeDef {
 	Map(MapDef),
-	LinkedMap(MapDef),
 	DoubleMap(DoubleMapDef),
 	Simple(syn::Type),
 }
@@ -346,6 +340,24 @@ pub struct MapDef {
 	pub key: syn::Type,
 	/// This is the query value not the inner value used in storage trait implementation.
 	pub value: syn::Type,
+	pub kind: MapKind,
+}
+
+#[derive(PartialEq, Eq)]
+pub enum MapKind {
+	Map,
+	LinkedMap,
+	PrefixedMap,
+}
+
+impl MapKind {
+	fn into_metadata(&self) -> proc_macro2::TokenStream {
+		match self {
+			MapKind::Map => quote!( StorageMapType::Map ),
+			MapKind::LinkedMap => quote!( StorageMapType::LinkedMap ),
+			MapKind::PrefixedMap => quote!( StorageMapType::PrefixedMap ),
+		}
+	}
 }
 
 pub struct DoubleMapDef {
@@ -418,7 +430,8 @@ pub fn decl_storage_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStr
 			StorageValue as _,
 			StorageMap as _,
 			StorageLinkedMap as _,
-			StorageDoubleMap as _
+			StorageDoubleMap as _,
+			StoragePrefixedMap as _,
 		};
 
 		#scrate_decl

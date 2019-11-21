@@ -16,11 +16,11 @@
 
 //! Implementation of storage structures and implementation of storage traits on them.
 
-use proc_macro2::TokenStream;
+use proc_macro2::{TokenStream, Ident, Span};
 use quote::quote;
 use super::{
-	DeclStorageDefExt, StorageLineTypeDef,
-	instance_trait::{PREFIX_FOR, HEAD_KEY_FOR},
+	DeclStorageDefExt, StorageLineTypeDef, MapKind,
+	instance_trait::{PREFIX_FOR, HEAD_KEY_FOR, INHERENT_INSTANCE_NAME},
 };
 
 fn from_optional_value_to_query(is_option: bool, default: &Option<syn::Expr>) -> TokenStream {
@@ -78,17 +78,19 @@ pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 		let from_optional_value_to_query =
 			from_optional_value_to_query(line.is_option, &line.default_value);
 
-		let final_prefix = if let Some(instance) = def.module_instance.as_ref() {
-			let instance = &instance.instance_generic;
+		// Contains accessor to instance, used to get prefixes
+		let instance_or_inherent = if let Some(instance) = def.module_instance.as_ref() {
+			instance.instance_generic.clone()
+		} else {
+			Ident::new(INHERENT_INSTANCE_NAME, Span::call_site())
+		};
+
+		let final_prefix = {
 			let const_name = syn::Ident::new(
 				&format!("{}{}", PREFIX_FOR, line.name.to_string()), proc_macro2::Span::call_site()
 			);
-			quote!( #instance::#const_name.as_bytes() )
-		} else {
-			let prefix = format!("{} {}", def.crate_name, line.name);
-			quote!( #prefix.as_bytes() )
+			quote!( #instance_or_inherent::#const_name.as_bytes() )
 		};
-
 
 		let storage_generator_trait = &line.storage_generator_trait;
 		let storage_struct = &line.storage_struct;
@@ -118,18 +120,15 @@ pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 					}
 				)
 			},
-			StorageLineTypeDef::Map(map) => {
+			StorageLineTypeDef::Map(map) if map.kind == MapKind::Map => {
 				let hasher = map.hasher.to_storage_hasher_struct();
+				let key = &map.key;
 				quote!(
 					impl<#impl_trait> #scrate::#storage_generator_trait for #storage_struct
 					#optional_storage_where_clause
 					{
 						type Query = #query_type;
-						type Hasher = #scrate::#hasher;
-
-						fn prefix() -> &'static [u8] {
-							#final_prefix
-						}
+						type FinalKey = <#scrate::#hasher as #scrate::StorageHasher>::Output;
 
 						fn from_optional_value_to_query(v: Option<#value_type>) -> Self::Query {
 							#from_optional_value_to_query
@@ -138,22 +137,87 @@ pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 						fn from_query_to_optional_value(v: Self::Query) -> Option<#value_type> {
 							#from_query_to_optional_value
 						}
+
+						fn storage_map_final_key<KeyArg>(key: KeyArg) -> Self::FinalKey
+							where KeyArg: #scrate::codec::EncodeLike<#key>
+						{
+							use #scrate::codec::Encode;
+							use #scrate::hash::StorageHasher;
+							use core::borrow::Borrow;
+
+							let mut final_key = #final_prefix.to_vec();
+							key.borrow().encode_to(&mut final_key);
+							#scrate::hash::#hasher::hash(&final_key)
+						}
 					}
 				)
 			},
-			StorageLineTypeDef::LinkedMap(map) => {
+			StorageLineTypeDef::Map(map) if map.kind == MapKind::PrefixedMap => {
+				let hasher = map.hasher.to_storage_hasher_struct();
+				let key = &map.key;
+				let storage_name = syn::LitStr::new(&line.name.to_string(), line.name.span());
+				quote!(
+					impl<#impl_trait> #scrate::storage::StoragePrefixedMap for #storage_struct
+					#optional_storage_where_clause
+					{
+						type Value = #value_type;
+						fn prefix() -> Vec<u8> {
+							use #scrate::hash::StorageHasher;
+
+							let module_prefix = #instance_or_inherent::PREFIX.as_bytes();
+							let hashed_module_prefix = #scrate::hash::Twox128::hash(module_prefix);
+							let storage_name = #storage_name.as_bytes();
+							let hashed_storage_name = #scrate::hash::Twox128::hash(storage_name);
+
+							let mut prefix = Vec::with_capacity(32);
+							prefix.extend_from_slice(&hashed_module_prefix[..]);
+							prefix.extend_from_slice(&hashed_storage_name[..]);
+							prefix
+						}
+					}
+
+					impl<#impl_trait> #scrate::#storage_generator_trait for #storage_struct
+					#optional_storage_where_clause
+					{
+						type Query = #query_type;
+						// TODO TODO: we know its size, we could make this an array.
+						type FinalKey = Vec<u8>;
+
+						fn from_optional_value_to_query(v: Option<#value_type>) -> Self::Query {
+							#from_optional_value_to_query
+						}
+
+						fn from_query_to_optional_value(v: Self::Query) -> Option<#value_type> {
+							#from_query_to_optional_value
+						}
+
+						fn storage_map_final_key<KeyArg>(key: KeyArg) -> Self::FinalKey
+							where KeyArg: #scrate::codec::EncodeLike<#key>
+						{
+							use #scrate::storage::StoragePrefixedMap;
+							use #scrate::codec::Encode;
+							use #scrate::hash::StorageHasher;
+							use core::borrow::Borrow;
+
+							let hashed_key = key.borrow()
+								.using_encoded(#scrate::hash::#hasher::hash);
+
+							let mut final_key = Self::prefix();
+							final_key.extend_from_slice(&hashed_key[..]);
+							final_key
+						}
+					}
+				)
+			},
+			StorageLineTypeDef::Map(map) if map.kind == MapKind::LinkedMap => {
 				let hasher = map.hasher.to_storage_hasher_struct();
 
 				// make sure to use different prefix for head and elements.
-				let head_key = if let Some(instance) = def.module_instance.as_ref() {
-					let instance = &instance.instance_generic;
+				let head_key = {
 					let const_name = syn::Ident::new(
 						&format!("{}{}", HEAD_KEY_FOR, line.name.to_string()), proc_macro2::Span::call_site()
 					);
-					quote!( #instance::#const_name.as_bytes() )
-				} else {
-					let prefix = format!("head of {} {}", def.crate_name, line.name);
-					quote!( #prefix.as_bytes() )
+					quote!( #instance_or_inherent::#const_name.as_bytes() )
 				};
 
 				quote!(
@@ -185,6 +249,9 @@ pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 						}
 					}
 				)
+			},
+			StorageLineTypeDef::Map(_) => {
+				unreachable!("All map variants has been matched above");
 			},
 			StorageLineTypeDef::DoubleMap(map) => {
 				let hasher1 = map.hasher1.to_storage_hasher_struct();

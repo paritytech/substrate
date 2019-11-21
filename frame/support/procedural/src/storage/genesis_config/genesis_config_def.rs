@@ -93,7 +93,7 @@ impl GenesisConfigDef {
 
 			let typ = match &line.storage_type {
 				StorageLineTypeDef::Simple(_) => (*value_type).clone(),
-				StorageLineTypeDef::Map(map) | StorageLineTypeDef::LinkedMap(map) => {
+				StorageLineTypeDef::Map(map) => {
 					let key = &map.key;
 					parse_quote!( Vec<(#key, #value_type)> )
 				},

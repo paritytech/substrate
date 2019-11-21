@@ -18,28 +18,15 @@
 use rstd::prelude::*;
 use rstd::borrow::Borrow;
 use codec::{FullCodec, FullEncode, Encode, EncodeLike, Ref, EncodeAppend};
-use crate::{storage::{self, unhashed}, hash::StorageHasher, traits::Len};
+use crate::{storage::{self, unhashed}, traits::Len};
 
 /// Generator for `StorageMap` used by `decl_storage`.
-///
-/// For each key value is stored at:
-/// ```nocompile
-/// Hasher(prefix ++ key)
-/// ```
-///
-/// # Warning
-///
-/// If the keys are not trusted (e.g. can be set by a user), a cryptographic `hasher` such as
-/// `blake2_256` must be used.  Otherwise, other values in storage can be compromised.
 pub trait StorageMap<K: FullEncode, V: FullCodec> {
 	/// The type that get/take returns.
 	type Query;
 
-	/// Hasher used to insert into storage.
-	type Hasher: StorageHasher;
-
-	/// Prefix used to prepend each key.
-	fn prefix() -> &'static [u8];
+	/// The type of the top storage keys used to store values.
+	type FinalKey: AsRef<[u8]>;
 
 	/// Convert an optional value retrieved from storage to the type queried.
 	fn from_optional_value_to_query(v: Option<V>) -> Self::Query;
@@ -48,14 +35,8 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 	fn from_query_to_optional_value(v: Self::Query) -> Option<V>;
 
 	/// Generate the full key used in top storage.
-	fn storage_map_final_key<KeyArg>(key: KeyArg) -> <Self::Hasher as StorageHasher>::Output
-	where
-		KeyArg: EncodeLike<K>,
-	{
-		let mut final_key = Self::prefix().to_vec();
-		key.borrow().encode_to(&mut final_key);
-		Self::Hasher::hash(&final_key)
-	}
+	fn storage_map_final_key<KeyArg>(key: KeyArg) -> Self::FinalKey
+		where KeyArg: EncodeLike<K>;
 }
 
 impl<K: FullEncode, V: FullCodec, G: StorageMap<K, V>> storage::StorageMap<K, V> for G {

@@ -217,7 +217,7 @@ mod tests {
 						hasher: StorageHasher::Blake2_256,
 						key: DecodeDifferent::Encode("u32"),
 						value: DecodeDifferent::Encode("String"),
-						is_linked: false,
+						kind: StorageMapType::Map,
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructMAPU32(PhantomData::<TraitImpl>))
@@ -231,7 +231,7 @@ mod tests {
 						hasher: StorageHasher::Blake2_256,
 						key: DecodeDifferent::Encode("u32"),
 						value: DecodeDifferent::Encode("String"),
-						is_linked: false,
+						kind: StorageMapType::Map,
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructPUBMAPU32(PhantomData::<TraitImpl>))
@@ -245,7 +245,7 @@ mod tests {
 						hasher: StorageHasher::Blake2_256,
 						key: DecodeDifferent::Encode("u32"),
 						value: DecodeDifferent::Encode("String"),
-						is_linked: false,
+						kind: StorageMapType::Map,
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructMAPU32MYDEF(PhantomData::<TraitImpl>))
@@ -259,7 +259,7 @@ mod tests {
 						hasher: StorageHasher::Blake2_256,
 						key: DecodeDifferent::Encode("u32"),
 						value: DecodeDifferent::Encode("String"),
-						is_linked: false,
+						kind: StorageMapType::Map,
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructPUBMAPU32MYDEF(PhantomData::<TraitImpl>))
@@ -273,7 +273,7 @@ mod tests {
 						hasher: StorageHasher::Blake2_256,
 						key: DecodeDifferent::Encode("u32"),
 						value: DecodeDifferent::Encode("String"),
-						is_linked: false,
+						kind: StorageMapType::Map,
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructGETMAPU32(PhantomData::<TraitImpl>))
@@ -287,7 +287,7 @@ mod tests {
 						hasher: StorageHasher::Blake2_256,
 						key: DecodeDifferent::Encode("u32"),
 						value: DecodeDifferent::Encode("String"),
-						is_linked: false,
+						kind: StorageMapType::Map,
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructPUBGETMAPU32(PhantomData::<TraitImpl>))
@@ -301,7 +301,7 @@ mod tests {
 						hasher: StorageHasher::Blake2_256,
 						key: DecodeDifferent::Encode("u32"),
 						value: DecodeDifferent::Encode("String"),
-						is_linked: false,
+						kind: StorageMapType::Map,
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructGETMAPU32MYDEF(PhantomData::<TraitImpl>))
@@ -315,7 +315,7 @@ mod tests {
 						hasher: StorageHasher::Blake2_256,
 						key: DecodeDifferent::Encode("u32"),
 						value: DecodeDifferent::Encode("String"),
-						is_linked: false,
+						kind: StorageMapType::Map,
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructPUBGETMAPU32MYDEF(PhantomData::<TraitImpl>))
@@ -329,7 +329,7 @@ mod tests {
 						hasher: StorageHasher::Blake2_256,
 						key: DecodeDifferent::Encode("u32"),
 						value: DecodeDifferent::Encode("String"),
-						is_linked: true,
+						kind: StorageMapType::LinkedMap,
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructLINKEDMAPU32(PhantomData::<TraitImpl>))
@@ -343,7 +343,7 @@ mod tests {
 						hasher: StorageHasher::Blake2_256,
 						key: DecodeDifferent::Encode("u32"),
 						value: DecodeDifferent::Encode("String"),
-						is_linked: true,
+						kind: StorageMapType::LinkedMap,
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructPUBLINKEDMAPU32MYDEF(PhantomData::<TraitImpl>))
@@ -357,7 +357,7 @@ mod tests {
 						hasher: StorageHasher::Blake2_256,
 						key: DecodeDifferent::Encode("u32"),
 						value: DecodeDifferent::Encode("String"),
-						is_linked: true,
+						kind: StorageMapType::LinkedMap,
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructGETLINKEDMAPU32(PhantomData::<TraitImpl>))
@@ -371,7 +371,7 @@ mod tests {
 						hasher: StorageHasher::Blake2_256,
 						key: DecodeDifferent::Encode("u32"),
 						value: DecodeDifferent::Encode("String"),
-						is_linked: true,
+						kind: StorageMapType::LinkedMap,
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructPUBGETLINKEDMAPU32MYDEF(PhantomData::<TraitImpl>))

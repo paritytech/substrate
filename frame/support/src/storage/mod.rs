@@ -16,7 +16,7 @@
 
 //! Stuff to do with the runtime's storage.
 
-use rstd::prelude::*;
+use rstd::{prelude::*, marker::PhantomData};
 use codec::{FullCodec, FullEncode, Encode, EncodeAppend, EncodeLike, Decode};
 use crate::traits::Len;
 
@@ -330,4 +330,57 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 		V: EncodeAppend<Item=Item>,
 		Items: IntoIterator<Item=EncodeLikeItem> + Clone + EncodeLike<V>,
 		Items::IntoIter: ExactSizeIterator;
+}
+
+/// Iterator for prefixed map.
+pub struct StoragePrefixedMapIterator<Value> {
+	prefix: Vec<u8>,
+	previous_key: Vec<u8>,
+	phantom_data: PhantomData<Value>,
+}
+
+impl<Value: Decode> Iterator for StoragePrefixedMapIterator<Value> {
+	type Item = Value;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		match runtime_io::storage::next_key(&self.previous_key) {
+			Some(next_key) if next_key.starts_with(&self.prefix[..]) => {
+				let value = unhashed::get(&next_key);
+
+				if value.is_none() {
+					runtime_print!(
+						"ERROR: returned next_key has no value:\nkey is {:?}\nnext_key is {:?}",
+						&self.previous_key, &next_key,
+					);
+				}
+
+				self.previous_key = next_key;
+
+				value
+			},
+			_ => None,
+		}
+	}
+}
+
+/// Trait for maps that is all key in storage with a specified prefix.
+///
+/// This is implemented by `prefixed_map` in `decl_storage`.
+pub trait StoragePrefixedMap {
+	type Value: Decode;
+
+	/// All key with this prefix must be the map.
+	fn prefix() -> Vec<u8>;
+
+	fn remove_all() {
+		runtime_io::storage::clear_prefix(&Self::prefix())
+	}
+
+	fn iter() -> StoragePrefixedMapIterator<Self::Value> {
+		StoragePrefixedMapIterator {
+			prefix: Self::prefix(),
+			previous_key: Self::prefix(),
+			phantom_data: Default::default(),
+		}
+	}
 }
