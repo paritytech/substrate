@@ -164,9 +164,9 @@ fn get_app<'a, 'b>() -> App<'a, 'b> {
 			-e, --ed25519 'Use Ed25519/BIP39 cryptography'
 			-k, --secp256k1 'Use SECP256k1/ECDSA/BIP39 cryptography'
 			-s, --sr25519 'Use Schnorr/Ristretto x25519/BIP39 cryptography'
-			-n, --network <network> 'Specify a network. One of substrate \
+			[network] -n, --network <network> 'Specify a network. One of substrate \
 									 (default), polkadot, kusama, or dothereum.'
-			-p, --password <password> 'The password for the key'
+			[password] -p, --password <password> 'The password for the key'
 		")
 		.subcommands(vec![
 			SubCommand::with_name("generate")
