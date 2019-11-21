@@ -10,7 +10,7 @@ jsonrpc-core = "14.0.3"
 node-primitives = { path = "../primitives" }
 node-runtime = { path = "../runtime" }
 sr-primitives = { path = "../../../primitives/sr-primitives" }
-paint-contracts-rpc = { path = "../../../paint/contracts/rpc/" }
-paint-transaction-payment-rpc = { path = "../../../paint/transaction-payment/rpc/" }
-paint-system-rpc = { path = "../../../paint/system/rpc/" }
+pallet-contracts-rpc = { path = "../../../palette/contracts/rpc/" }
+pallet-transaction-payment-rpc = { path = "../../../palette/transaction-payment/rpc/" }
+palette-system-rpc = { path = "../../../palette/system/rpc/" }
 transaction_pool = { package = "substrate-transaction-pool", path = "../../../client/transaction-pool" }

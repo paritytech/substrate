@@ -11,7 +11,7 @@ Substrate is split into multiple levels with increasing opinion and decreasing f
 
 * primitives
 * client
-* PAINT (formerly `srml`)
+* PALETTE (formerly `srml`)
 
 Putting all these components together we have:
 
@@ -35,21 +35,31 @@ In the lowest level, Substrate defines primitives, interfaces and traits to impl
 * _found in_: `/client`
 * _crates prefix_: `substrate-`
 * _constraints_:
-** crates may not (dev-)depend on any `paint-`-crates
+** crates may not (dev-)depend on any `palette-`-crates
 
 In the client you can find a set of crates to construct the outer substrate-node, implementing outer runtime interfaces, thus it depends on `runtime`. It provides the outer building blocks like transaction queue, networking layer, database backend, full* and light-client support.
 
-=== PAINT (formerly `srml`)
+=== PALETTE (formerly `srml`)
 
-* _found in_: `/paint`
-* _crates prefix_: `paint-`
+* _found in_: `/palette`
+* _crates prefix_: `palette-` and `pallet-`
 * _constraints_:
-** all crates that go on chain, must be `[no_std]`
+** all crates that go on chain must be `[no_std]`
 ** must not (dev-)depend on anything in `/client`
 
-PAINT, the Parity Application Interface for Network-wide Transitions, is a set of modules implementing specific transition functions and features one (might) want to have in their runtime.
+PALETTE is a set of modules that implement specific transition functions and features one might want to have in their runtime.
 
-=== integration tests
+_Pallets_ are individual modules within _Palette._ These are containers that host domain-specific logic. They have the `pallet-` prefix. For example, `pallet-staking` contains logic for staking tokens.
+
+There are a few crates with the `palette-` prefix. These do not contain domain-specific logic. Rather, they are the main Palette support infrastructure. These are:
+
+- Executive
+- Metadata
+- Support
+- System
+- Utility
+
+=== Integration Tests
 
 * _found in_: `/test`
 * _crates prefix_: `substrate-test`
@@ -69,7 +79,7 @@ We also provide some binaries pulling from the components creating full applicat
 
 * _found in_: `/bin/node`
 
-The default (testing) application pulling together our recommended setup of substrate-client with a wasm-contracts-supporting paint-runtime.  The node pulls it all together, constructs the (upgradable) runtime, and wires up the client around it. You can find an example client, which includes a full wasm-contracts chain in  `node`. This is also what is being built and run if you do `cargo run`.
+The default (testing) application pulling together our recommended setup of substrate-client with a wasm-contracts-supporting palette-runtime.  The node pulls it all together, constructs the (upgradable) runtime, and wires up the client around it. You can find an example client, which includes a full wasm-contracts chain in  `node`. This is also what is being built and run if you do `cargo run`.
 
 ==== Node Template
 
@@ -89,7 +99,7 @@ Subkey is a client library to generate keys and sign transactions to send to a s
 ....
 +---------------+       +----------------+
 |               |       |                |
-|    runtime    +<------+   paint        |
+|    runtime    +<------+   palette      |
 |               |       |                |
 +------+-----+--+       +-------------+--+
        ^     ^                        ^
