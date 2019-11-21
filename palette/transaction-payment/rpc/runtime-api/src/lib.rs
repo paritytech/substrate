@@ -52,11 +52,11 @@ mod tests {
 	use super::*;
 
 	#[test]
-	fn should_serialize_properly_with_u128() {
+	fn should_serialize_properly_with_u64() {
 		let info = RuntimeDispatchInfo {
 			weight: 5,
 			class: DispatchClass::Normal,
-			partial_fee: 1_000_000_u128,
+			partial_fee: 1_000_000_u64,
 		};
 
 		assert_eq!(
