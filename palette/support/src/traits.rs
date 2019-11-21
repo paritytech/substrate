@@ -25,6 +25,7 @@ use sr_primitives::{
 	ConsensusEngineId,
 	traits::{MaybeSerializeDeserialize, SimpleArithmetic, Saturating},
 };
+use sr_primitives::traits::TrailingZeroInput;
 
 /// Anything that can have a `::len()` method.
 pub trait Len {
@@ -742,5 +743,11 @@ pub trait Randomness<Output> {
 	/// from any other such seeds.
 	fn random_seed() -> Output {
 		Self::random(&[][..])
+	}
+}
+
+impl<Output: Decode + Default> Randomness<Output> for () {
+	fn random(subject: &[u8]) -> Output {
+		Output::decode(&mut TrailingZeroInput::new(subject)).unwrap_or_default()
 	}
 }

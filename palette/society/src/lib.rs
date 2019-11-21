@@ -33,9 +33,8 @@ mod tests;
 
 use rstd::prelude::*;
 use codec::{Encode, Decode};
-use sr_primitives::{Percent, Perbill, ModuleId, RuntimeDebug, traits::{
+use sr_primitives::{RandomNumberGenerator, Percent, Perbill, ModuleId, RuntimeDebug, traits::{
 	EnsureOrigin, StaticLookup, AccountIdConversion, Saturating, Zero, IntegerSquareRoot,
-	RandomNumberGenerator
 }};
 use support::{decl_error, decl_module, decl_storage, decl_event, dispatch::Result, traits::{
 	Currency, ReservableCurrency, Randomness, Get, ChangeMembers, ExistenceRequirement::KeepAlive
@@ -60,7 +59,7 @@ pub trait Trait: system::Trait {
 	type Randomness: Randomness<Self::Hash>;
 
 	/// The minimum amount of a deposit required for a bid to be made.
-	type BidDeposit: Get<BalanceOf<Self>>;
+	type CandidateDeposit: Get<BalanceOf<Self>>;
 
 	/// The amount that gets paid out to one of the right-thinking voters, at random.
 	type VoterTip: Get<BalanceOf<Self>>;
@@ -109,7 +108,7 @@ decl_storage! {
 		Bids: Vec<(BalanceOf<T>, T::AccountId)>;
 
 		/// The current set of members, ordered.
-		Members: Vec<T::AccountId>;
+		Members get(fn members) config(): Vec<T::AccountId>;
 
 		/// The current set of candidates; bidders that are attempting to become members.
 		Candidates: Vec<(BalanceOf<T>, T::AccountId)>;
@@ -148,7 +147,7 @@ decl_module! {
 
 			let who = ensure_signed(origin)?;
 
-			T::Currency::reserve(&who, T::BidDeposit::get())?;
+			T::Currency::reserve(&who, T::CandidateDeposit::get())?;
 
 			<Bids<T>>::mutate(|b| {
 				match b.binary_search_by(|x| x.0.cmp(&value)) {
@@ -157,7 +156,7 @@ decl_module! {
 				// Keep it reasonably small.
 				if b.len() > MAX_BID_COUNT {
 					let (_, popped) = b.pop().expect("b.len() > 1000; qed");
-					let _unreserved = T::Currency::unreserve(&popped, T::BidDeposit::get());
+					let _unreserved = T::Currency::unreserve(&popped, T::CandidateDeposit::get());
 					Self::deposit_event(RawEvent::AutoUnbid(popped));
 				}
 			});
@@ -268,7 +267,7 @@ impl<T: Trait> Module<T> {
 				.filter_map(|m| <Votes<T>>::get(&c, m).map(|v| (v, m)))
 				.inspect(|&(v, _)| if v == Vote::Approve { approval_count += 1 })
 				.collect::<Vec<_>>();
-			let accepted = rng.pick(&votes).map(|x| x.0) == Some(Vote::Approve);
+			let accepted = rng.pick_item(&votes).map(|x| x.0) == Some(Vote::Approve);
 
 			// collect together voters who voted the right way
 			let matching_vote = if accepted { Vote::Approve } else { Vote::Reject };
@@ -294,7 +293,7 @@ impl<T: Trait> Module<T> {
 		}).collect::<Vec<_>>();
 
 		// Reward one of the voters who voted the right way.
-		if let Some(winner) = rng.pick(&rewardees) {
+		if let Some(winner) = rng.pick_item(&rewardees) {
 			// if we can't reward them, not much that can be done.
 			pot = pot.saturating_sub(T::VoterTip::get());
 			let _ = T::Currency::transfer(&Self::account_id(), winner, T::VoterTip::get(), KeepAlive);
@@ -303,7 +302,7 @@ impl<T: Trait> Module<T> {
 		// if at least one candidate was accepted...
 		if !accepted.is_empty() {
 			// select one as primary, randomly chosen from the accepted, weighted by approvals.
-			let primary_point = rng.generate_usize(total_approvals - 1);
+			let primary_point = rng.pick_usize(total_approvals - 1);
 			let primary = accepted.iter().find(|e| e.1 > primary_point)
 				.expect("e.1 of final item == total_approvals; \
 					worst case find will always return that item; qed")
@@ -328,7 +327,7 @@ impl<T: Trait> Module<T> {
 		<Candidates<T>>::put(&candidates);
 		// initialise skeptics
 		for skeptic in (0..members.len().integer_sqrt())
-			.map(|_| rng.pick(&members[..]).expect("exited early if members empty; qed"))
+			.map(|_| rng.pick_item(&members[..]).expect("exited early if members empty; qed"))
 			{
 				for (_, c) in candidates.iter() {
 					<Votes<T>>::insert(c, skeptic, Vote::Skeptic);
@@ -377,71 +376,5 @@ impl<T: Trait> Module<T> {
 		}
 		bids.truncate(taken);
 		bids
-	}
-}
-
-/// tests for this module
-#[cfg(test)]
-mod tests {
-	use super::*;
-
-	use primitives::H256;
-	use support::{impl_outer_origin, assert_ok, parameter_types};
-	use sr_primitives::{
-		traits::{BlakeTwo256, IdentityLookup}, testing::Header, weights::Weight, Perbill,
-	};
-
-	impl_outer_origin! {
-		pub enum Origin for Test {}
-	}
-
-	// For testing the module, we construct most of a mock runtime. This means
-	// first constructing a configuration type (`Test`) which `impl`s each of the
-	// configuration traits of modules we want to use.
-	#[derive(Clone, Eq, PartialEq)]
-	pub struct Test;
-	parameter_types! {
-		pub const BlockHashCount: u64 = 250;
-		pub const MaximumBlockWeight: Weight = 1024;
-		pub const MaximumBlockLength: u32 = 2 * 1024;
-		pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
-	}
-	impl system::Trait for Test {
-		type Origin = Origin;
-		type Call = ();
-		type Index = u64;
-		type BlockNumber = u64;
-		type Hash = H256;
-		type Hashing = BlakeTwo256;
-		type AccountId = u64;
-		type Lookup = IdentityLookup<Self::AccountId>;
-		type Header = Header;
-		type Event = ();
-		type BlockHashCount = BlockHashCount;
-		type MaximumBlockWeight = MaximumBlockWeight;
-		type MaximumBlockLength = MaximumBlockLength;
-		type AvailableBlockRatio = AvailableBlockRatio;
-		type Version = ();
-	}
-	impl Trait for Test {
-		type Event = ();
-	}
-	type Fratority = Module<Test>;
-
-	// This function basically just builds a genesis storage key/value store according to
-	// our desired mockup.
-	fn new_test_ext() -> runtime_io::TestExternalities {
-		system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
-	}
-
-	#[test]
-	fn it_works_for_default_value() {
-		new_test_ext().execute_with(|| {
-			// Just a dummy test for the dummy funtion `do_something`
-			// calling the `do_something` function with a value 42
-			assert_ok!(Fratority::do_something(Origin::signed(1), 42));
-			// asserting that the stored value is equal to what we stored
-			assert_eq!(Fratority::something(), Some(42));
-		});
 	}
 }
