@@ -477,7 +477,7 @@ decl_module! {
 		/// - One extra DB entry.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(150_000)]
-		fn set_keys(origin, keys: T::Keys, proof: Vec<u8>) -> Result {
+		pub fn set_keys(origin, keys: T::Keys, proof: Vec<u8>) -> Result {
 			let who = ensure_signed(origin)?;
 
 			ensure!(keys.ownership_proof_is_valid(&proof), "invalid ownership proof");
@@ -662,7 +662,7 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	fn load_keys(v: &T::ValidatorId) -> Option<T::Keys> {
+	pub fn load_keys(v: &T::ValidatorId) -> Option<T::Keys> {
 		<NextKeys<T>>::get(DEDUP_KEY_PREFIX, v)
 	}
 
@@ -674,7 +674,7 @@ impl<T: Trait> Module<T> {
 		<NextKeys<T>>::insert(DEDUP_KEY_PREFIX, v, keys);
 	}
 
-	fn key_owner(id: KeyTypeId, key_data: &[u8]) -> Option<T::ValidatorId> {
+	pub fn key_owner(id: KeyTypeId, key_data: &[u8]) -> Option<T::ValidatorId> {
 		<KeyOwner<T>>::get(DEDUP_KEY_PREFIX, (id, key_data))
 	}
 
