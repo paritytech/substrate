@@ -106,7 +106,6 @@ pub trait Storage {
 	/// Get `key` from storage, placing the value into `value_out` and return the number of
 	/// bytes that the entry in storage has beyond the offset or `None` if the storage entry
 	/// doesn't exist at all.
-	/// A key collision free unique id is required as parameter.
 	fn read(&self, key: &[u8], value_out: &mut [u8], value_offset: u32) -> Option<u32> {
 		self.storage(key).map(|value| {
 			let value_offset = value_offset as usize;
@@ -120,7 +119,6 @@ pub trait Storage {
 	/// Get `key` from child storage, placing the value into `value_out` and return the number
 	/// of bytes that the entry in storage has beyond the offset or `None` if the storage entry
 	/// doesn't exist at all.
-	/// A key collision free unique id is required as parameter.
 	/// If `value_out` length is smaller than the returned length, only `value_out` length bytes
 	/// are copied into `value_out`.
 	fn child_read(
@@ -151,7 +149,6 @@ pub trait Storage {
 	}
 
 	/// Set `key` to `value` in the child storage denoted by `child_storage_key`.
-	/// A key collision free unique id is required as parameter.
 	fn child_set(
 		&mut self,
 		child_storage_key: &[u8],

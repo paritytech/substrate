@@ -469,9 +469,11 @@ where
 				self.overlay.committed.children.get(storage_key)
 					.into_iter()
 					.flat_map(|(map, _)| map.iter().map(|(k, v)| (k.clone(), v.value.clone())))
-					.chain(self.overlay.prospective.children.get(storage_key)
-						.into_iter()
-						.flat_map(|(map, _)| map.iter().map(|(k, v)| (k.clone(), v.value.clone())))),
+					.chain(
+						self.overlay.prospective.children.get(storage_key)
+							.into_iter()
+							.flat_map(|(map, _)| map.iter().map(|(k, v)| (k.clone(), v.value.clone())))
+					),
 				self.overlay.child_info(storage_key).cloned()
 					.expect("child info initialized in either committed or prospective"),
 			)
@@ -516,9 +518,11 @@ where
 					let delta = self.overlay.committed.children.get(storage_key)
 						.into_iter()
 						.flat_map(|(map, _)| map.clone().into_iter().map(|(k, v)| (k, v.value)))
-						.chain(self.overlay.prospective.children.get(storage_key)
+						.chain(
+							self.overlay.prospective.children.get(storage_key)
 								.into_iter()
-								.flat_map(|(map, _)| map.clone().into_iter().map(|(k, v)| (k, v.value))));
+								.flat_map(|(map, _)| map.clone().into_iter().map(|(k, v)| (k, v.value)))
+						);
 
 					self.backend.child_storage_root(storage_key, child_info.as_ref(), delta)
 				};

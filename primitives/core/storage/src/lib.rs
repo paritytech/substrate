@@ -161,12 +161,13 @@ impl<'a> ChildStorageKey<'a> {
 }
 
 #[derive(Clone, Copy)]
-/// Information related to a child trie query.
+/// Information related to a child state.
 pub enum ChildInfo<'a> {
 	Default(ChildTrie<'a>),
 }
 
-/// Owned version of ChildInfo
+/// Owned version of `ChildInfo`.
+/// To be use in persistence layers.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "std", derive(PartialEq, Eq, Hash, PartialOrd, Ord))]
 pub enum OwnedChildInfo {
@@ -174,7 +175,7 @@ pub enum OwnedChildInfo {
 }
 
 impl<'a> ChildInfo<'a> {
-	/// Instantiate info for a default child trie.
+	/// Instantiates information for a default child trie.
 	pub const fn new_default(unique_id: &'a[u8], root: Option<&'a[u8]>) -> Self {
 		ChildInfo::Default(ChildTrie {
 			unique_id,
@@ -182,7 +183,7 @@ impl<'a> ChildInfo<'a> {
 		})
 	}
 
-	/// Create owned child info.
+	/// Instantiates a owned version of this child info.
 	pub fn to_owned(&self) -> OwnedChildInfo {
 		match self {
 			ChildInfo::Default(ChildTrie { unique_id, root })
@@ -193,7 +194,7 @@ impl<'a> ChildInfo<'a> {
 		}
 	}
 
-	/// Create child info from a linear byte encoded value and a type. 
+	/// Create child info from a linear byte packed value and a given type. 
 	pub fn resolve_child_info(child_type: u32, data: &'a[u8]) -> Option<Self> {
 		match child_type {
 			x if x == ChildType::CryptoUniqueId as u32 => Some(ChildInfo::new_default(data, None)),
@@ -204,7 +205,7 @@ impl<'a> ChildInfo<'a> {
 		}
 	}
 
-	/// Return a single byte vector containing child info content and this child info type.
+	/// Return a single byte vector containing packed child info content and its child info type.
 	/// This can be use as input for `resolve_child_info`.
 	pub fn info(&self) -> (Vec<u8>, u32) {
 		match self {
@@ -224,7 +225,9 @@ impl<'a> ChildInfo<'a> {
 		}
 	}
 
-	/// Return byte sequence (keyspace) that can be use for underlying db to isolate keys.
+	/// Return byte sequence (keyspace) that can be use by underlying db to isolate keys.
+	/// This is a unique id of the child trie. The collision resistance of this value
+	/// depends on the type of child info use. For `ChildInfo::Default` it is and need to be.
 	pub fn keyspace(&self) -> &[u8] {
 		match self {
 			ChildInfo::Default(ChildTrie {
@@ -235,6 +238,8 @@ impl<'a> ChildInfo<'a> {
 	}
 
 	/// Return the child reference to state if it is already known.
+	/// If it returns `None` the information will need to be fetch by
+	/// the caller.
 	/// For a child trie it is its root.
 	pub fn root(&self) -> Option<&[u8]> {
 		match self {
@@ -247,19 +252,20 @@ impl<'a> ChildInfo<'a> {
 
 }
 
-/// Type of child, this can be different child usage
-/// of api variant, it is not strictly speaking different
-/// child kind.
+/// Type of child.
+/// It does not strictly define different child type, it can also
+/// be related to technical consideration or api variant.
 #[repr(u32)]
 pub enum ChildType {
 	/// Default, it uses a cryptographic strong unique id as input.
 	CryptoUniqueId = 1,
-	/// Default, but with root send when querying. Root is a 32 byte hash.
+	/// Default, but with a root registerd to skip root fetch when querying.
+	/// Root is a 32 byte hash.
 	CryptoUniqueIdRoot32Api = 2,
 }
 
 impl OwnedChildInfo {
-	/// Instantiate info for a default child trie.
+	/// Instantiates info for a default child trie.
 	pub fn new_default(unique_id: Vec<u8>, root: Option<Vec<u8>>) -> Self {
 		OwnedChildInfo::Default(OwnedChildTrie {
 			unique_id,
@@ -267,7 +273,7 @@ impl OwnedChildInfo {
 		})
 	}
 
-	/// Get reference to child info.
+	/// Get `ChildInfo` reference to this owned child info.
 	pub fn as_ref(&self) -> ChildInfo {
 		match self {
 			OwnedChildInfo::Default(OwnedChildTrie { unique_id, root })
@@ -280,6 +286,7 @@ impl OwnedChildInfo {
 }
 
 /// A child trie of default type.
+/// Default is the same implementation as the top trie.
 /// It share its trie node storage with any kind of key,
 /// and its unique id needs to be collision free (eg strong
 /// crypto hash).
@@ -289,18 +296,18 @@ pub struct ChildTrie<'a> {
 	/// to avoid querying it explicitly.
 	pub root: Option<&'a[u8]>,
 
-	/// Unique id must but unique and free of any possible key collision.
+	/// Unique id must but unique and free of any possible key collision
+	/// (depending on its storage behavior).
 	pub unique_id: &'a[u8],
 }
 
-/// Owned version of default child trie.
+/// Owned version of default child trie `ChildTrie`.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "std", derive(PartialEq, Eq, Hash, PartialOrd, Ord))]
 pub struct OwnedChildTrie {
-	/// If root was fetch it can be memoïzed in this field
-	/// to avoid querying it explicitly.
+	/// See `ChildTrie` reference field documentation.
 	pub root: Option<Vec<u8>>,
 
-	/// Unique id must but unique and free of any possible key collision.
+	/// See `ChildTrie` reference field documentation.
 	pub unique_id: Vec<u8>,
 }

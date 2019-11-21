@@ -27,7 +27,6 @@ use trie::{
 };
 use primitives::storage::{ChildInfo, OwnedChildInfo};
 
-
 pub(crate) type StorageTuple = (
 	HashMap<Vec<u8>, Vec<u8>>,
 	HashMap<Vec<u8>, (HashMap<Vec<u8>, Vec<u8>>, OwnedChildInfo)>,
@@ -622,7 +621,7 @@ pub(crate) fn insert_into_memory_db<H, I>(mdb: &mut MemoryDB<H>, input: I) -> Op
 #[cfg(test)]
 mod tests {
 	use super::*;
-	
+
 	/// Assert in memory backend with only child trie keys works as trie backend.
 	#[test]
 	fn in_memory_with_child_trie_only() {

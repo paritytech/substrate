@@ -20,17 +20,11 @@
 //! Note that `storage_key` must be unique and strong (strong in the sense of being long enough to
 //! avoid collision from a resistant hash function (which unique implies)).
 //!
-//! A key collision free unique id is required as parameter this is use to avoid key collision
+//! A **key collision free** unique id is required as parameter to avoid key collision
 //! between child tries.
 //! This unique id management and generation responsability is delegated to pallet module.
 //! In the future this id could be generated and stored out of chain state, and using None as a
 //! parameter will result into this mode of operation.
-//!
-//! To be able to live with managed unique id it is very important that pallet module uses real
-//! unique id. If pallet uses somehow weak id, care should be taken to not conflict to future scheme
-//! of managed unique id which will be compact SCALE encoded integer.
-//! Empty unique id is also a reserved value (will be use internally for managed unique id as a
-//! parameter in runtime io).
 // NOTE: could replace unhashed by having only one kind of storage (root being null storage key (storage_key can become Option<&[u8]>).
 
 use crate::rstd::prelude::*;
