@@ -40,22 +40,22 @@
 /primitives/rpc/ @tomusdrw
 
 # GRANDPA, BABE, consensus stuff
-/paint/babe/ @andresilva @DemiMarie-parity
-/paint/grandpa/ @andresilva @DemiMarie-parity
+/palette/babe/ @andresilva @DemiMarie-parity
+/palette/grandpa/ @andresilva @DemiMarie-parity
 /client/finality-grandpa/ @andresilva @DemiMarie-parity
 /client/consensus/babe/ @andresilva @DemiMarie-parity
 /client/consensus/slots/ @andresilva @DemiMarie-parity
 
 # Contracts
-/paint/contracts/ @pepyakin @thiolliere @jimpo
-/paint/contracts/src/wasm/runtime.rs @Robbepop
+/palette/contracts/ @pepyakin @thiolliere @jimpo
+/palette/contracts/src/wasm/runtime.rs @Robbepop
 
 # Inflation points
-/paint/staking/src/inflation.rs @thiolliere
+/palette/staking/src/inflation.rs @thiolliere
 
 # NPoS and Governance
-/paint/staking/ @kianenigma
-/paint/election/ @kianenigma
+/palette/staking/ @kianenigma
+/palette/election/ @kianenigma
 
 # End to end testing of substrate node
 /bin/node/executor/ @kianenigma
@@ -64,4 +64,4 @@
 /primitives/sr-primitives/src/weights.rs @kianenigma
 
 # Support crates
-/paint/support/ @thiolliere @kianenigma
+/palette/support/ @thiolliere @kianenigma

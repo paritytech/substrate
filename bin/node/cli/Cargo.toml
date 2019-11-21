@@ -60,17 +60,17 @@ substrate-service = { path = "../../../client/service", default-features = false
 substrate-telemetry = { package = "substrate-telemetry", path = "../../../client/telemetry" }
 authority-discovery = { package = "substrate-authority-discovery", path = "../../../client/authority-discovery"}
 
-# paint dependencies
-indices = { package = "paint-indices", path = "../../../paint/indices" }
-timestamp = { package = "paint-timestamp", path = "../../../paint/timestamp", default-features = false }
+# palette dependencies
+indices = { package = "pallet-indices", path = "../../../palette/indices" }
+timestamp = { package = "pallet-timestamp", path = "../../../palette/timestamp", default-features = false }
 sp-finality-tracker = { path = "../../../primitives/finality-tracker", default-features = false }
-contracts = { package = "paint-contracts", path = "../../../paint/contracts" }
-system = { package = "paint-system", path = "../../../paint/system" }
-balances = { package = "paint-balances", path = "../../../paint/balances" }
-transaction-payment = { package = "paint-transaction-payment", path = "../../../paint/transaction-payment" }
-support = { package = "paint-support", path = "../../../paint/support", default-features = false }
-im_online = { package = "paint-im-online", path = "../../../paint/im-online", default-features = false }
-sr-authority-discovery = { package = "paint-authority-discovery", path = "../../../paint/authority-discovery"}
+contracts = { package = "pallet-contracts", path = "../../../palette/contracts" }
+system = { package = "palette-system", path = "../../../palette/system" }
+balances = { package = "pallet-balances", path = "../../../palette/balances" }
+transaction-payment = { package = "pallet-transaction-payment", path = "../../../palette/transaction-payment" }
+support = { package = "palette-support", path = "../../../palette/support", default-features = false }
+im_online = { package = "pallet-im-online", path = "../../../palette/im-online", default-features = false }
+sr-authority-discovery = { package = "pallet-authority-discovery", path = "../../../palette/authority-discovery"}
 
 # node-specific dependencies
 node-runtime = { path = "../runtime" }

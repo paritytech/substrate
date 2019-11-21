@@ -78,7 +78,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
 	spec_version: 194,
-	impl_version: 195,
+	impl_version: 196,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -235,7 +235,7 @@ impl session::historical::Trait for Runtime {
 	type FullIdentificationOf = staking::ExposureOf<Runtime>;
 }
 
-paint_staking_reward_curve::build! {
+pallet_staking_reward_curve::build! {
 	const REWARD_CURVE: PiecewiseLinear<'static> = curve!(
 		min_inflation: 0_025_000,
 		max_inflation: 0_100_000,
