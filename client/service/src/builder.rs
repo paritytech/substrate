@@ -1135,13 +1135,13 @@ ServiceBuilder<
 		});
 
 		// Instrumentation
-		if let Some(instrumentation_targets) = config.instrumentation_targets.as_ref() {
-			let subscriber = instrumentation::ProfilingSubscriber::new(
-				instrumentation::Receiver::Telemetry, instrumentation_targets
+		if let Some(tracing_targets) = config.tracing_targets.as_ref() {
+			let subscriber = substrate_tracing::ProfilingSubscriber::new(
+				config.tracing_receiver, tracing_targets
 			);
 			match tracing::subscriber::set_global_default(subscriber) {
 				Ok(_) => (),
-				Err(e) => error!(target: "instrumentation", "Unable to set global default subscriber {}", e),
+				Err(e) => error!(target: "tracing", "Unable to set global default subscriber {}", e),
 			}
 		}
 

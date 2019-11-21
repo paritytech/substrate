@@ -22,7 +22,7 @@
 //!
 //! Monitor performance throughout the codebase via the creation of `Span`s.
 //! A span is set in the following way:
-//! ```ignore
+//! ```
 //! let span = tracing::span!(tracing::Level::INFO, "my_span_name");
 //!	let _enter = span.enter();
 //! ```
@@ -41,8 +41,18 @@ use tracing_core::{event::Event, Level, metadata::Metadata, span::{Attributes, I
 use substrate_telemetry::{telemetry, SUBSTRATE_INFO};
 
 /// Used to configure how to receive the metrics
-pub enum Receiver {
+#[derive(Debug, Clone)]
+pub enum TracingReceiver {
+	/// Output to logger
+	Log,
+	/// Output to telemetry
 	Telemetry,
+}
+
+impl Default for TracingReceiver {
+	fn default() -> Self {
+		Self::Log
+	}
 }
 
 #[derive(Debug)]
@@ -50,6 +60,7 @@ struct SpanDatum {
 	id: u64,
 	name: &'static str,
 	target: String,
+	level: Level,
 	line: u32,
 	start_time: Instant,
 	overall_time: Duration,
@@ -59,7 +70,7 @@ struct SpanDatum {
 pub struct ProfilingSubscriber {
 	next_id: AtomicU64,
 	targets: Vec<(String, Level)>,
-	receiver: Receiver,
+	receiver: TracingReceiver,
 	span_data: Mutex<HashMap<u64, SpanDatum>>,
 }
 
@@ -67,7 +78,7 @@ impl ProfilingSubscriber {
 	/// Takes a `Receiver` and a comma separated list of targets,
 	/// either with a level "paint=trace"
 	/// or without "paint".
-	pub fn new(receiver: Receiver, targets: &String) -> Self {
+	pub fn new(receiver: TracingReceiver, targets: &String) -> Self {
 		let targets: Vec<_> = targets.split(',').map(|s| parse_target(s)).collect();
 		ProfilingSubscriber {
 			next_id: AtomicU64::new(1),
@@ -114,6 +125,7 @@ impl Subscriber for ProfilingSubscriber {
 			id: id,
 			name: attrs.metadata().name(),
 			target: attrs.metadata().target().to_string(),
+			level: attrs.metadata().level().clone(),
 			line: attrs.metadata().line().unwrap_or(0),
 			start_time: Instant::now(),
 			overall_time: Duration::from_nanos(0),
@@ -158,13 +170,22 @@ impl Subscriber for ProfilingSubscriber {
 impl ProfilingSubscriber {
 	fn send_span(&self, span_datum: SpanDatum) {
 		match self.receiver {
-			Receiver::Telemetry => send_telemetry(span_datum),
+			TracingReceiver::Log => print_log(span_datum),
+			TracingReceiver::Telemetry => send_telemetry(span_datum),
 		}
 	}
 }
 
+fn print_log(span_datum: SpanDatum) {
+	let message = format!(
+		"Tracing: {} {}: {}, line: {}, time: {}ns",
+		span_datum.level, span_datum.target, span_datum.name, span_datum.line, span_datum.overall_time.as_nanos()
+	);
+	log::info!(target: "substrate_tracing", "{}", message);
+}
+
 fn send_telemetry(span_datum: SpanDatum) {
-	telemetry!(SUBSTRATE_INFO; "instrumentation.profiling";
+	telemetry!(SUBSTRATE_INFO; "tracing.profiling";
 		"name" => span_datum.name,
 		"target" => span_datum.target,
 		"line" => span_datum.line,
