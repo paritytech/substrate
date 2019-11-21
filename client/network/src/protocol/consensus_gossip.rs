@@ -49,7 +49,7 @@ use std::iter;
 use std::time;
 use log::{trace, debug};
 use futures03::channel::mpsc;
-use lru_cache::LruCache;
+use lru::LruCache;
 use libp2p::PeerId;
 use sr_primitives::traits::{Block as BlockT, Hash, HashFor};
 use sr_primitives::ConsensusEngineId;
@@ -354,7 +354,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 		message: ConsensusMessage,
 		sender: Option<PeerId>,
 	) {
-		if self.known_messages.insert(message_hash.clone(), ()).is_none() {
+		if self.known_messages.put(message_hash.clone(), ()).is_none() {
 			self.messages.push(MessageEntry {
 				message_hash,
 				topic,
@@ -447,8 +447,8 @@ impl<B: BlockT> ConsensusGossip<B> {
 		);
 
 		for (_, ref mut peer) in self.peers.iter_mut() {
-			peer.known_messages.retain(|h| known_messages.contains_key(h));
-			peer.filtered_messages.retain(|h, _| known_messages.contains_key(h));
+			peer.known_messages.retain(|h| known_messages.contains(h));
+			peer.filtered_messages.retain(|h, _| known_messages.contains(h));
 		}
 	}
 
@@ -486,7 +486,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 		for message in messages {
 			let message_hash = HashFor::<B>::hash(&message.data[..]);
 
-			if self.known_messages.contains_key(&message_hash) {
+			if self.known_messages.contains(&message_hash) {
 				trace!(target:"gossip", "Ignored already known message from {}", who);
 				protocol.report_peer(who.clone(), DUPLICATE_GOSSIP_REPUTATION_CHANGE);
 				continue;
@@ -673,7 +673,7 @@ mod tests {
 
 	macro_rules! push_msg {
 		($consensus:expr, $topic:expr, $hash: expr, $m:expr) => {
-			if $consensus.known_messages.insert($hash, ()).is_none() {
+			if $consensus.known_messages.put($hash, ()).is_none() {
 				$consensus.messages.push(MessageEntry {
 					message_hash: $hash,
 					topic: $topic,
@@ -728,8 +728,8 @@ mod tests {
 
 		push_msg!(consensus, prev_hash, m1_hash, m1);
 		push_msg!(consensus, best_hash, m2_hash, m2);
-		consensus.known_messages.insert(m1_hash, ());
-		consensus.known_messages.insert(m2_hash, ());
+		consensus.known_messages.put(m1_hash, ());
+		consensus.known_messages.put(m2_hash, ());
 
 		let test_engine_id = Default::default();
 		consensus.register_validator_internal(test_engine_id, Arc::new(AllowAll));
@@ -744,7 +744,7 @@ mod tests {
 		assert_eq!(consensus.messages.len(), 1);
 		// known messages are only pruned based on size.
 		assert_eq!(consensus.known_messages.len(), 2);
-		assert!(consensus.known_messages.contains_key(&m2_hash));
+		assert!(consensus.known_messages.contains(&m2_hash));
 	}
 
 	#[test]

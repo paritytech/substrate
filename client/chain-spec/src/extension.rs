@@ -289,7 +289,9 @@ mod tests {
 	fn forks_should_work_correctly() {
 		use super::Extension as _ ;
 
-		let ext: Ext2 = serde_json::from_str(r#"
+		// We first need to deserialize into a `Value` because of the following bug:
+		// https://github.com/serde-rs/json/issues/505
+		let ext_val: serde_json::Value = serde_json::from_str(r#"
 {
 	"test": 11,
 	"forkable": {
@@ -313,6 +315,8 @@ mod tests {
 	}
 }
 		"#).unwrap();
+
+		let ext: Ext2 = serde_json::from_value(ext_val).unwrap();
 
 		assert_eq!(ext.get::<Extension1>(), Some(&Extension1 {
 			test: 11
