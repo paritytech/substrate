@@ -22,7 +22,9 @@
 use cranelift_codegen::{Context, binemit, ir, isa};
 use cranelift_codegen::ir::{InstBuilder, StackSlotData, StackSlotKind, TrapCode};
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
+use cranelift_codegen::print_errors::pretty_error;
 use wasmtime_jit::{CodeMemory, Compiler};
+use wasmtime_environ::CompiledFunction;
 use wasmtime_runtime::{VMContext, VMFunctionBody};
 use wasm_interface::{Function, Value, ValueType};
 use std::{cmp, panic::{self, AssertUnwindSafe}, ptr};
@@ -279,10 +281,22 @@ pub fn make_trampoline(
 			&mut trap_sink,
 			&mut stackmap_sink,
 		)
-		.map_err(|e| WasmError::Instantiation(format!("failed to compile trampoline: {}", e)))?;
+		.map_err(|e| {
+			WasmError::Instantiation(format!(
+				"failed to compile trampoline: {}",
+				pretty_error(&context.func, Some(isa), e)
+			))
+		})?;
+
+	let mut unwind_info = Vec::new();
+	context.emit_unwind_info(isa, &mut unwind_info);
 
 	let func_ref = code_memory
-		.allocate_copy_of_byte_slice(&code_buf)
+		.allocate_for_function(&CompiledFunction {
+			body: code_buf,
+			jt_offsets: context.func.jt_offsets,
+			unwind_info,
+		})
 		.map_err(|e| WasmError::Instantiation(format!("failed to allocate code memory: {}", e)))?;
 
 	Ok(func_ref.as_ptr())
