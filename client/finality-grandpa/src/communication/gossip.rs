@@ -101,8 +101,8 @@ use std::collections::{HashMap, VecDeque};
 use std::time::{Duration, Instant};
 
 const REBROADCAST_AFTER: Duration = Duration::from_secs(60 * 5);
-const CATCH_UP_REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
-const CATCH_UP_PROCESS_TIMEOUT: Duration = Duration::from_secs(15);
+const CATCH_UP_REQUEST_TIMEOUT: Duration = Duration::from_secs(45);
+const CATCH_UP_PROCESS_TIMEOUT: Duration = Duration::from_secs(30);
 /// Maximum number of rounds we are behind a peer before issuing a
 /// catch up request.
 const CATCH_UP_THRESHOLD: u64 = 2;
