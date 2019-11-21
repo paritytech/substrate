@@ -19,7 +19,7 @@
 extern crate test;
 
 use bip39::{Language, Mnemonic, MnemonicType};
-use clap::{load_yaml, App, ArgMatches};
+use clap::{App, ArgMatches, SubCommand};
 use codec::{Decode, Encode};
 use hex_literal::hex;
 use node_primitives::{Balance, Hash, Index, AccountId, Signature};
@@ -155,11 +155,76 @@ impl PublicT for sr25519::Public { fn into_runtime(self) -> AccountPublic { self
 impl PublicT for ed25519::Public { fn into_runtime(self) -> AccountPublic { self.into() } }
 impl PublicT for ecdsa::Public { fn into_runtime(self) -> AccountPublic { self.into() } }
 
-fn main() {
-	let yaml = load_yaml!("cli.yml");
-	let matches = App::from_yaml(yaml)
+fn get_app<'a, 'b>() -> App<'a, 'b> {
+	App::new("subkey")
+		.author("Parity Team <admin@parity.io>")
+		.about("Utility for generating and restoring with Substrate keys")
 		.version(env!("CARGO_PKG_VERSION"))
-		.get_matches();
+		.args_from_usage("
+			-e, --ed25519 'Use Ed25519/BIP39 cryptography'
+			-k, --secp256k1 'Use SECP256k1/ECDSA/BIP39 cryptography'
+			-s, --sr25519 'Use Schnorr/Ristretto x25519/BIP39 cryptography'
+			[network] -n, --network <network> 'Specify a network. One of substrate \
+									 (default), polkadot, kusama, or dothereum.'
+			[password] -p, --password <password> 'The password for the key'
+		")
+		.subcommands(vec![
+			SubCommand::with_name("generate")
+				.about("Generate a random account")
+				.args_from_usage("[words] -w, --words <words> \
+						'The number of words in the phrase to generate. One of 12 \
+						(default), 15, 18, 21 and 24.'
+				"),
+			SubCommand::with_name("inspect")
+				.about("Gets a public key and a SS58 address from the provided Secret URI")
+				.args_from_usage("<uri> 'A Key URI to be inspected. May be a secret seed, \
+						secret URI (with derivation paths and password), SS58 or public URI.'
+				"),
+			SubCommand::with_name("sign")
+				.about("Sign a message, provided on STDIN, with a given (secret) key")
+				.args_from_usage("
+					-h, --hex 'The message on STDIN is hex-encoded data'
+					<suri> 'The secret key URI.'
+				"),
+			SubCommand::with_name("sign-transaction")
+				.about("Sign transaction from encoded Call. Returns a signed and encoded \
+						UncheckedMortalCompactExtrinsic as hex.")
+				.args_from_usage("
+					-c, --call <call> 'The call, hex-encoded.'
+					-n, --nonce <nonce> 'The nonce.'
+					-p, --password <password> 'The password for the key.'
+					-h, --prior-block-hash <prior-block-hash> 'The prior block hash, hex-encoded.'
+					-s, --suri <suri> 'The secret key URI.'
+				"),
+			SubCommand::with_name("transfer")
+				.about("Author and sign a Node balances::Transfer transaction with a given (secret) key")
+				.args_from_usage("
+					<genesis> -g, --genesis <genesis> 'The genesis hash or a recognised \
+											chain identifier (dev, elm, alex).'
+					<from> 'The signing secret key URI.'
+					<to> 'The destination account public key URI.'
+					<amount> 'The number of units to transfer.'
+					<index> 'The signing account's transaction index.'
+				"),
+			SubCommand::with_name("vanity")
+				.about("Generate a seed that provides a vanity address")
+				.args_from_usage("
+					-n, --number <number> 'Number of keys to generate'
+					<pattern> 'Desired pattern'
+				"),
+			SubCommand::with_name("verify")
+				.about("Verify a signature for a message, provided on STDIN, with a given \
+						(public or secret) key")
+				.args_from_usage("
+					-h, --hex 'The message on STDIN is hex-encoded data'
+					<sig> 'Signature, hex-encoded.'
+					<uri> 'The public or secret key URI.'
+				"),
+		])
+}
+
+fn main() {
+	let matches = get_app().get_matches();
 
 	if matches.is_present("ed25519") {
 		return execute::<Ed25519>(matches)
@@ -470,8 +535,7 @@ mod tests {
 		SignatureOf<CryptoType>: SignatureT,
 		PublicOf<CryptoType>: PublicT,
 	{
-		let yaml = load_yaml!("cli.yml");
-		let app = App::from_yaml(yaml);
+		let app = get_app();
 		let password = None;
 
 		// Generate public key and seed.
@@ -499,7 +563,7 @@ mod tests {
 		// Verify the previous signature.
 		let arg_vec = vec!["subkey", "verify", &signature[..], &public_key[..]];
 
-		let matches = App::from_yaml(yaml).get_matches_from(arg_vec);
+		let matches = get_app().get_matches_from(arg_vec);
 		let matches = matches.subcommand().1.unwrap();
 		assert!(do_verify::<CryptoType>(matches, message));
 	}
