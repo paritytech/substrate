@@ -341,7 +341,7 @@ decl_module! {
 			// know (soft proof) that they are always mutually exclusive. Hence, we try one, and
 			// only then decode more storage.
 
-			if let Ok(had_replacement) = Self::remove_and_replace_member(&who) {
+			if let Ok(_replacement) = Self::remove_and_replace_member(&who) {
 				T::Currency::unreserve(&who, T::CandidacyBond::get());
 				Self::deposit_event(RawEvent::MemberRenounced(who.clone()));
 
