@@ -23,7 +23,7 @@ use codec::Encode;
 use codec::Decode;
 #[cfg(feature = "std")]
 use inherents::ProvideInherentData;
-use inherents::{InherentIdentifier, ProvideInherent, IsFatalError, InherentData};
+use inherents::{InherentIdentifier, IsFatalError, InherentData};
 
 use sr_primitives::RuntimeString;
 

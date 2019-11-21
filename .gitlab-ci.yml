@@ -155,7 +155,7 @@ test-dependency-rules:             &test-linux
   script:
     - .maintain/ensure-deps.sh
 
-test-paint-staking:                 &test-paint-staking
+test-palette-staking:                 &test-palette-staking
   stage:                           test
   <<:                              *docker-env
   variables:
@@ -167,7 +167,7 @@ test-paint-staking:                 &test-paint-staking
     variables:
       - $DEPLOY_TAG
   script:
-    - cd paint/staking/
+    - cd palette/staking/
     - WASM_BUILD_NO_COLOR=1 time cargo test --release --verbose --no-default-features --features std
     - sccache -s
 
