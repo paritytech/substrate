@@ -15,9 +15,10 @@ serde = { version = "1.0.101", features = ["derive"] }
 sr-primitives = { path = "../../../primitives/sr-primitives" }
 palette-system-rpc-runtime-api = { path = "./runtime-api" }
 substrate-primitives = { path = "../../../primitives/core" }
-transaction_pool = { package = "substrate-transaction-pool", path = "../../../client/transaction-pool" }
+sp-transaction-graph = { path = "../../../primitives/transaction-pool/graph" }
 
 [dev-dependencies]
 test-client = { package = "substrate-test-runtime-client", path = "../../../test/utils/runtime/client" }
+sp-transaction-pool = { path = "../../../primitives/transaction-pool" }
 env_logger = "0.7.0"
 futures03 = { package = "futures-preview", version = "=0.3.0-alpha.19" }
