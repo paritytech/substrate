@@ -73,10 +73,10 @@ impl<Hashing: Hash> RandomNumberGenerator<Hashing> {
 			self.offset += needed as u32;
 			let raw = u32::decode(&mut TrailingZeroInput::new(data)).unwrap_or(0);
 			if raw <= top {
-				if max < u32::max_value() {
-					break raw % (max + 1)
+				break if max < u32::max_value() {
+					raw % (max + 1)
 				} else {
-					break raw
+					raw
 				}
 			}
 		}
