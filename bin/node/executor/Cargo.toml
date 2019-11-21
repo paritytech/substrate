@@ -20,16 +20,16 @@ node-runtime = { path = "../runtime" }
 node-testing = { path = "../testing" }
 test-client = { package = "substrate-test-client", path = "../../../test/utils/client" }
 sr-primitives = { path = "../../../primitives/sr-primitives" }
-runtime_support = { package = "paint-support", path = "../../../paint/support" }
-balances = { package = "paint-balances", path = "../../../paint/balances" }
-transaction-payment = { package = "paint-transaction-payment", path = "../../../paint/transaction-payment" }
-session = { package = "paint-session", path = "../../../paint/session" }
-system = { package = "paint-system", path = "../../../paint/system" }
-timestamp = { package = "paint-timestamp", path = "../../../paint/timestamp" }
-treasury = { package = "paint-treasury", path = "../../../paint/treasury" }
-contracts = { package = "paint-contracts", path = "../../../paint/contracts" }
-grandpa = { package = "paint-grandpa", path = "../../../paint/grandpa" }
-indices = { package = "paint-indices", path = "../../../paint/indices" }
+runtime_support = { package = "palette-support", path = "../../../palette/support" }
+balances = { package = "pallet-balances", path = "../../../palette/balances" }
+transaction-payment = { package = "pallet-transaction-payment", path = "../../../palette/transaction-payment" }
+session = { package = "pallet-session", path = "../../../palette/session" }
+system = { package = "palette-system", path = "../../../palette/system" }
+timestamp = { package = "pallet-timestamp", path = "../../../palette/timestamp" }
+treasury = { package = "pallet-treasury", path = "../../../palette/treasury" }
+contracts = { package = "pallet-contracts", path = "../../../palette/contracts" }
+grandpa = { package = "pallet-grandpa", path = "../../../palette/grandpa" }
+indices = { package = "pallet-indices", path = "../../../palette/indices" }
 wabt = "0.9.2"
 criterion = "0.3.0"
 
