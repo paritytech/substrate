@@ -45,7 +45,7 @@
 //! a block author or a validator. The session keys of accounts are removed once their account balance is zero.
 //! - **Validator set session key configuration process:** Each session we iterate through the current
 //! set of validator account IDs to check if a session key was created for it in the previous session
-//! using `set_key`. If it was then we call `set_authority` from the [Consensus module](../palette_consensus/index.html)
+//! using `set_key`. If it was then we call `set_authority` from the [Consensus module](../frame_consensus/index.html)
 //! and pass it a set of session keys (each associated with an account ID) as the session keys for the new
 //! validator set. Lastly, if the session key of the current authority does not match any session keys stored under
 //! its validator index in the `AuthorityStorageVec` mapping, then we update the mapping with its session
@@ -113,7 +113,7 @@
 //!
 //! ## Related Modules
 //!
-//! - [Consensus](../palette_consensus/index.html)
+//! - [Consensus](../frame_consensus/index.html)
 //! - [Staking](../pallet_staking/index.html)
 //! - [Timestamp](../pallet_timestamp/index.html)
 

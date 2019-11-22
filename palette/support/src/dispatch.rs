@@ -19,7 +19,7 @@
 
 pub use crate::rstd::{result, fmt, prelude::{Vec, Clone, Eq, PartialEq}, marker};
 pub use crate::codec::{Codec, EncodeLike, Decode, Encode, Input, Output, HasCompact, EncodeAsRef};
-pub use palette_metadata::{
+pub use frame_metadata::{
 	FunctionMetadata, DecodeDifferent, DecodeDifferentArray, FunctionArgumentMetadata,
 	ModuleConstantMetadata, DefaultByte, DefaultByteGetter, ModuleErrorMetadata, ErrorMetadata
 };
@@ -57,9 +57,9 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 ///
 /// ```
 /// # #[macro_use]
-/// # extern crate palette_support;
-/// # use palette_support::dispatch::Result;
-/// # use palette_system::{self as system, Trait, ensure_signed};
+/// # extern crate frame_support;
+/// # use frame_support::dispatch::Result;
+/// # use frame_system::{self as system, Trait, ensure_signed};
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 ///
@@ -97,9 +97,9 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 ///
 /// ```
 /// # #[macro_use]
-/// # extern crate palette_support;
-/// # use palette_support::dispatch::Result;
-/// # use palette_system::{self as system, Trait, ensure_signed};
+/// # extern crate frame_support;
+/// # use frame_support::dispatch::Result;
+/// # use frame_system::{self as system, Trait, ensure_signed};
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 ///
@@ -122,9 +122,9 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 ///
 /// ```
 /// # #[macro_use]
-/// # extern crate palette_support;
-/// # use palette_support::dispatch::Result;
-/// # use palette_system::{self as system, Trait, ensure_signed, ensure_root};
+/// # extern crate frame_support;
+/// # use frame_support::dispatch::Result;
+/// # use frame_system::{self as system, Trait, ensure_signed, ensure_root};
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 ///			fn my_privileged_function(origin) -> Result {
@@ -146,9 +146,9 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 ///
 /// ```
 /// # #[macro_use]
-/// # extern crate palette_support;
-/// # use palette_support::dispatch::Result;
-/// # use palette_system::{self as system, ensure_signed};
+/// # extern crate frame_support;
+/// # use frame_support::dispatch::Result;
+/// # use frame_system::{self as system, ensure_signed};
 /// # pub struct DefaultInstance;
 /// # pub trait Instance {}
 /// # impl Instance for DefaultInstance {}
@@ -174,9 +174,9 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 ///
 /// ```
 /// # #[macro_use]
-/// # extern crate palette_support;
-/// # use palette_support::dispatch::Result;
-/// # use palette_system::{self as system, ensure_signed};
+/// # extern crate frame_support;
+/// # use frame_support::dispatch::Result;
+/// # use frame_system::{self as system, ensure_signed};
 /// pub trait Trait: system::Trait where Self::AccountId: From<u32> {}
 ///
 /// decl_module! {
@@ -192,7 +192,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// The following are reserved function signatures:
 ///
 /// * `deposit_event`: Helper function for depositing an [event](https://docs.substrate.dev/docs/event-enum).
-/// The default behavior is to call `deposit_event` from the [System module](../palette_system/index.html).
+/// The default behavior is to call `deposit_event` from the [System module](../frame_system/index.html).
 /// However, you can write your own implementation for events in your runtime. To use the default behavior,
 /// add `fn deposit_event() = default;` to your `Module`.
 ///

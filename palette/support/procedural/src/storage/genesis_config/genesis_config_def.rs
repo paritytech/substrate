@@ -16,7 +16,7 @@
 
 //! Genesis config defintion.
 
-use palette_support_procedural_tools::syn_ext as ext;
+use frame_support_procedural_tools::syn_ext as ext;
 use proc_macro2::TokenStream;
 use syn::{spanned::Spanned, parse_quote};
 use quote::quote;

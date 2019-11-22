@@ -11,8 +11,8 @@ codec = { package = "parity-scale-codec", version = "1.0.0", default-features = 
 rstd = { package = "sr-std", path = "../../primitives/sr-std", default-features = false }
 sr-primitives = { path = "../../primitives/sr-primitives", default-features = false }
 sr-staking-primitives = { path = "../../primitives/sr-staking-primitives", default-features = false }
-support = { package = "palette-support", path = "../support", default-features = false }
-system = { package = "palette-system", path = "../system", default-features = false }
+support = { package = "frame-support", path = "../support", default-features = false }
+system = { package = "frame-system", path = "../system", default-features = false }
 timestamp = { package = "pallet-timestamp", path = "../timestamp", default-features = false }
 substrate-trie = { path = "../../primitives/trie", default-features = false, optional = true }
 runtime-io ={ package = "sr-io", path = "../../primitives/sr-io", default-features = false }

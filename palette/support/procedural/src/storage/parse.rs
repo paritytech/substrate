@@ -16,7 +16,7 @@
 
 //! Parsing of decl_storage input.
 
-use palette_support_procedural_tools::{ToTokens, Parse, syn_ext as ext};
+use frame_support_procedural_tools::{ToTokens, Parse, syn_ext as ext};
 use syn::{Ident, Token, spanned::Spanned};
 
 mod keyword {

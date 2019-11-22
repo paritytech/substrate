@@ -23,7 +23,7 @@
 //!
 //! The executive module is not a typical SRML module providing functionality around a specific feature.
 //! It is a cross-cutting framework component for the SRML. It works in conjunction with the
-//! [SRML System module](../palette_system/index.html) to perform these cross-cutting functions.
+//! [SRML System module](../frame_system/index.html) to perform these cross-cutting functions.
 //!
 //! The Executive module provides functions to:
 //!
@@ -51,7 +51,7 @@
 //!
 //! ```
 //! # use sr_primitives::generic;
-//! # use palette_executive as executive;
+//! # use frame_executive as executive;
 //! # pub struct UncheckedExtrinsic {};
 //! # pub struct Header {};
 //! # type Context = system::ChainContext<Runtime>;

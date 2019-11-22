@@ -16,7 +16,7 @@
 
 //! Builder logic definition used to build genesis storage.
 
-use palette_support_procedural_tools::syn_ext as ext;
+use frame_support_procedural_tools::syn_ext as ext;
 use proc_macro2::TokenStream;
 use syn::spanned::Spanned;
 use quote::{quote, quote_spanned};

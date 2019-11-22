@@ -1,5 +1,5 @@
 [package]
-name = "palette-support-procedural"
+name = "frame-support-procedural"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
@@ -8,7 +8,7 @@ edition = "2018"
 proc-macro = true
 
 [dependencies]
-palette-support-procedural-tools = { package = "palette-support-procedural-tools", path = "./tools" }
+frame-support-procedural-tools = { package = "frame-support-procedural-tools", path = "./tools" }
 
 proc-macro2 = "1.0.6"
 quote = "1.0.2"

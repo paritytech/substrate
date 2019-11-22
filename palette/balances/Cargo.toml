@@ -10,8 +10,8 @@ safe-mix = { version = "1.0.0", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 rstd = { package = "sr-std", path = "../../primitives/sr-std", default-features = false }
 sr-primitives = { path = "../../primitives/sr-primitives", default-features = false }
-support = { package = "palette-support", path = "../support", default-features = false }
-system = { package = "palette-system", path = "../system", default-features = false }
+support = { package = "frame-support", path = "../support", default-features = false }
+system = { package = "frame-system", path = "../system", default-features = false }
 
 [dev-dependencies]
 runtime-io = { package = "sr-io", path = "../../primitives/sr-io" }

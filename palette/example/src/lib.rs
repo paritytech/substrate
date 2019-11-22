@@ -49,8 +49,8 @@
 //!
 //! ### Documentation Template:<br>
 //!
-//! Copy and paste this template from palette/example/src/lib.rs into file
-//! `palette/<INSERT_CUSTOM_MODULE_NAME>/src/lib.rs` of your own custom module and complete it.
+//! Copy and paste this template from frame/example/src/lib.rs into file
+//! `frame/<INSERT_CUSTOM_MODULE_NAME>/src/lib.rs` of your own custom module and complete it.
 //! <details><p><pre>
 //! // Add heading with custom module name
 //!

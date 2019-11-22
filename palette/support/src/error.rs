@@ -18,7 +18,7 @@
 
 #[doc(hidden)]
 pub use sr_primitives::traits::LookupError;
-pub use palette_metadata::{ModuleErrorMetadata, ErrorMetadata, DecodeDifferent};
+pub use frame_metadata::{ModuleErrorMetadata, ErrorMetadata, DecodeDifferent};
 
 /// Declare an error type for a runtime module.
 ///
@@ -31,7 +31,7 @@ pub use palette_metadata::{ModuleErrorMetadata, ErrorMetadata, DecodeDifferent};
 /// # Usage
 ///
 /// ```
-/// # use palette_support::decl_error;
+/// # use frame_support::decl_error;
 /// decl_error! {
 ///     /// Errors that can occur in my module.
 ///     pub enum MyError {

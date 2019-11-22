@@ -33,7 +33,7 @@
 //!
 //! - [Timestamp](../pallet_timestamp/index.html): The Timestamp module is used in Aura to track
 //! consensus rounds (via `slots`).
-//! - [Consensus](../palette_consensus/index.html): The Consensus module does not relate directly to Aura,
+//! - [Consensus](../frame_consensus/index.html): The Consensus module does not relate directly to Aura,
 //!  but serves to manage offline reporting by implementing `ProvideInherent` in a similar way.
 //!
 //! ## References

@@ -53,16 +53,16 @@ use proc_macro::TokenStream;
 /// Basic storage consists of a name and a type; supported types are:
 ///
 /// * Value: `Foo: type`: Implements the
-///   [`StorageValue`](../palette_support/storage/trait.StorageValue.html) trait using the
-///   [`StorageValue generator`](../palette_support/storage/generator/trait.StorageValue.html).
+///   [`StorageValue`](../frame_support/storage/trait.StorageValue.html) trait using the
+///   [`StorageValue generator`](../frame_support/storage/generator/trait.StorageValue.html).
 ///   The generator `unhashed_key` is `$module_prefix ++ " " ++ $storage_name`
 ///
 /// * Map: `Foo: map hasher($hash) type => type`: Implements the
-///   [`StorageMap`](../palette_support/storage/trait.StorageMap.html) trait using the
-///   [`StorageMap generator`](../palette_support/storage/generator/trait.StorageMap.html).
+///   [`StorageMap`](../frame_support/storage/trait.StorageMap.html) trait using the
+///   [`StorageMap generator`](../frame_support/storage/generator/trait.StorageMap.html).
 ///
 ///   `$hash` representing a choice of hashing algorithms available in the
-///   [`Hashable`](../palette_support/trait.Hashable.html) trait.
+///   [`Hashable`](../frame_support/trait.Hashable.html) trait.
 ///
 ///   `hasher($hash)` is optional and its default is `blake2_256`. One should use another hasher
 ///   with care, see generator documentation.
@@ -72,11 +72,11 @@ use proc_macro::TokenStream;
 ///   * `Hasher`: $hash
 ///
 /// * Linked map: `Foo: linked_map hasher($hash) type => type`: Implements the
-///   [`StorageLinkedMap`](../palette_support/storage/trait.StorageLinkedMap.html) trait using the
-///   [`StorageLinkedMap generator`](../palette_support/storage/generator/trait.StorageLinkedMap.html).
+///   [`StorageLinkedMap`](../frame_support/storage/trait.StorageLinkedMap.html) trait using the
+///   [`StorageLinkedMap generator`](../frame_support/storage/generator/trait.StorageLinkedMap.html).
 ///
 ///   `$hash` representing a choice of hashing algorithms available in the
-///   [`Hashable`](../palette_support/trait.Hashable.html) trait.
+///   [`Hashable`](../frame_support/trait.Hashable.html) trait.
 ///
 ///   `hasher($hash)` is optional and its default is `blake2_256`. One should use another hasher
 ///   with care, see generator documentation.
@@ -91,11 +91,11 @@ use proc_macro::TokenStream;
 ///   is implemented for the storage linked map type as well.
 ///
 /// * Double map: `Foo: double_map hasher($hash1) u32, $hash2(u32) => u32`: Implements the
-///   [`StorageDoubleMap`](../palette_support/storage/trait.StorageDoubleMap.html) trait using the
-///   [`StorageDoubleMap generator`](../palette_support/storage/generator/trait.StorageDoubleMap.html).
+///   [`StorageDoubleMap`](../frame_support/storage/trait.StorageDoubleMap.html) trait using the
+///   [`StorageDoubleMap generator`](../frame_support/storage/generator/trait.StorageDoubleMap.html).
 ///
 ///   `$hash1` and `$hash2` representing choices of hashing algorithms available in the
-///   [`Hashable`](../palette_support/trait.Hashable.html) trait. They must be choosen with care, see
+///   [`Hashable`](../frame_support/trait.Hashable.html) trait. They must be choosen with care, see
 ///   generator documentation.
 ///
 ///   `hasher($hash)` is optional and its default is `blake2_256`.

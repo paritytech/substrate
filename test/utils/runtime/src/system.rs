@@ -29,7 +29,7 @@ use sr_primitives::{
 	transaction_validity::{TransactionValidity, ValidTransaction, InvalidTransaction},
 };
 use codec::{KeyedVec, Encode};
-use palette_system::Trait;
+use frame_system::Trait;
 use crate::{
 	AccountId, BlockNumber, Extrinsic, Transfer, H256 as Hash, Block, Header, Digest, AuthorityId
 };

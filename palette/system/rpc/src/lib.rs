@@ -29,7 +29,7 @@ use sr_primitives::{
 use substrate_primitives::hexdisplay::HexDisplay;
 use transaction_pool::txpool::{self, Pool};
 
-pub use palette_system_rpc_runtime_api::AccountNonceApi;
+pub use frame_system_rpc_runtime_api::AccountNonceApi;
 pub use self::gen_client::Client as SystemClient;
 
 /// System RPC methods.

@@ -446,8 +446,8 @@ substrate-trie
 sr-api, sr-io, sr-primitives, sr-sandbox, sr-std, sr-version
 * Substrate Runtime Module Library (SRML)
 [source, shell]
-pallet-assets, pallet-balances, palette-consensus, pallet-contracts, palette-council, pallet-democracy, pallet-example,
-palette-executive, palette-metadata, pallet-session, pallet-staking, palette-support, palette-system, pallet-timestamp,
+pallet-assets, pallet-balances, frame-consensus, pallet-contracts, frame-council, pallet-democracy, pallet-example,
+frame-executive, frame-metadata, pallet-session, pallet-staking, frame-support, frame-system, pallet-timestamp,
 pallet-treasury
 * Node
 [source, shell]

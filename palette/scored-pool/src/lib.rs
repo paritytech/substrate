@@ -77,7 +77,7 @@
 //!
 //! ## Dependencies
 //!
-//! This module depends on the [System module](../palette_system/index.html).
+//! This module depends on the [System module](../frame_system/index.html).
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]

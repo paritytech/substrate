@@ -75,16 +75,16 @@
 //! The Balances module provides implementations for the following traits. If these traits provide the functionality
 //! that you need, then you can avoid coupling with the Balances module.
 //!
-//! - [`Currency`](../palette_support/traits/trait.Currency.html): Functions for dealing with a
+//! - [`Currency`](../frame_support/traits/trait.Currency.html): Functions for dealing with a
 //! fungible assets system.
-//! - [`ReservableCurrency`](../palette_support/traits/trait.ReservableCurrency.html):
+//! - [`ReservableCurrency`](../frame_support/traits/trait.ReservableCurrency.html):
 //! Functions for dealing with assets that can be reserved from an account.
-//! - [`LockableCurrency`](../palette_support/traits/trait.LockableCurrency.html): Functions for
+//! - [`LockableCurrency`](../frame_support/traits/trait.LockableCurrency.html): Functions for
 //! dealing with accounts that allow liquidity restrictions.
-//! - [`Imbalance`](../palette_support/traits/trait.Imbalance.html): Functions for handling
+//! - [`Imbalance`](../frame_support/traits/trait.Imbalance.html): Functions for handling
 //! imbalances between total issuance in the system and account balances. Must be used when a function
 //! creates new funds (e.g. a reward) or destroys some funds (e.g. a system fee).
-//! - [`IsDeadAccount`](../palette_system/trait.IsDeadAccount.html): Determiner to say whether a
+//! - [`IsDeadAccount`](../frame_system/trait.IsDeadAccount.html): Determiner to say whether a
 //! given account is unused.
 //!
 //! ## Interface
