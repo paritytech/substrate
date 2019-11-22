@@ -23,6 +23,8 @@ extern crate self as frame_support;
 
 #[macro_use]
 extern crate bitmask;
+#[cfg(feature = "std")]
+pub extern crate tracing;
 
 #[cfg(feature = "std")]
 pub use serde;

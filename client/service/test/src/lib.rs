@@ -198,6 +198,8 @@ fn node_config<G, E: Clone> (
 		force_authoring: false,
 		disable_grandpa: false,
 		dev_key_seed: key_seed,
+		tracing_targets: None,
+		tracing_receiver: Default::default(),
 	}
 }
 

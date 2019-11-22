@@ -28,6 +28,7 @@ members = [
 	"client/executor/runtime-test",
 	"client/finality-grandpa",
 	"client/header-metadata",
+	"client/tracing",
 	"client/keystore",
 	"client/network",
 	"client/offchain",

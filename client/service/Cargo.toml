@@ -50,6 +50,8 @@ rpc = { package = "substrate-rpc", path = "../rpc" }
 tel = { package = "substrate-telemetry", path = "../telemetry" }
 offchain = { package = "substrate-offchain", path = "../offchain" }
 parity-multiaddr = { package = "parity-multiaddr", version = "0.5.0" }
+substrate-tracing = { package = "substrate-tracing", path = "../tracing" }
+tracing = "0.1.10"
 
 [dev-dependencies]
 substrate-test-runtime-client = { path = "../../test/utils/runtime/client" }

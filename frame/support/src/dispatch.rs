@@ -861,7 +861,15 @@ macro_rules! decl_module {
 			$crate::sr_primitives::traits::OnInitialize<$trait_instance::BlockNumber>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
-			fn on_initialize(_block_number_not_used: $trait_instance::BlockNumber) { $( $impl )* }
+			fn on_initialize(_block_number_not_used: $trait_instance::BlockNumber) {
+				use $crate::rstd::if_std;
+				if_std! {
+					use $crate::tracing;
+					let span = tracing::span!(tracing::Level::INFO, "on_initialize");
+					let _enter = span.enter();
+				}
+				{ $( $impl )* }
+			}
 		}
 	};
 
@@ -875,7 +883,15 @@ macro_rules! decl_module {
 			$crate::sr_primitives::traits::OnInitialize<$trait_instance::BlockNumber>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
-			fn on_initialize($param: $param_ty) { $( $impl )* }
+			fn on_initialize($param: $param_ty) {
+				use $crate::rstd::if_std;
+				if_std! {
+					use $crate::tracing;
+					let span = tracing::span!(tracing::Level::INFO, "on_initialize");
+					let _enter = span.enter();
+				}
+				{ $( $impl )* }
+			}
 		}
 	};
 
@@ -899,7 +915,15 @@ macro_rules! decl_module {
 			$crate::sr_primitives::traits::OnFinalize<$trait_instance::BlockNumber>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
-			fn on_finalize(_block_number_not_used: $trait_instance::BlockNumber) { $( $impl )* }
+			fn on_finalize(_block_number_not_used: $trait_instance::BlockNumber) {
+				use $crate::rstd::if_std;
+				if_std! {
+					use $crate::tracing;
+					let span = tracing::span!(tracing::Level::INFO, "on_finalize");
+					let _enter = span.enter();
+				}
+				{ $( $impl )* }
+			}
 		}
 	};
 
@@ -913,7 +937,15 @@ macro_rules! decl_module {
 			$crate::sr_primitives::traits::OnFinalize<$trait_instance::BlockNumber>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
-			fn on_finalize($param: $param_ty) { $( $impl )* }
+			fn on_finalize($param: $param_ty) {
+				use $crate::rstd::if_std;
+				if_std! {
+					use $crate::tracing;
+					let span = tracing::span!(tracing::Level::INFO, "on_finalize");
+					let _enter = span.enter();
+				}
+				{ $( $impl )* }
+			}
 		}
 	};
 
@@ -1009,9 +1041,16 @@ macro_rules! decl_module {
 		$vis fn $name(
 			$origin: $origin_ty $(, $param: $param_ty )*
 		) -> $crate::dispatch::DispatchResult<$error_type> {
-			{ $( $impl )* }
-			// May be unreachable.
-			Ok(())
+			use $crate::rstd::if_std;
+			if_std! {
+				use $crate::tracing;
+				let span = tracing::span!(tracing::Level::INFO, stringify!($name));
+				let _enter = span.enter();
+			}
+			{
+				{ $( $impl )* }
+				Ok(())
+			}
 		}
 	};
 
@@ -1028,7 +1067,13 @@ macro_rules! decl_module {
 	) => {
 		$(#[doc = $doc_attr])*
 		$vis fn $name($origin: $origin_ty $(, $param: $param_ty )* ) -> $result {
-			$( $impl )*
+			use $crate::rstd::if_std;
+			if_std! {
+				use $crate::tracing;
+				let span = tracing::span!(tracing::Level::INFO, stringify!($name));
+				let _enter = span.enter();
+			}
+			{ $( $impl )* }
 		}
 	};
 

@@ -205,7 +205,6 @@ where
 	);
 
 	panic_handler::set(version.support_url, &full_version);
-
 	let matches = CoreParams::<CC, RP>::clap()
 		.name(version.executable_name)
 		.author(version.author)
@@ -216,7 +215,6 @@ where
 		.setting(AppSettings::SubcommandsNegateReqs)
 		.get_matches_from(args);
 	let cli_args = CoreParams::<CC, RP>::from_clap(&matches);
-
 	init_logger(cli_args.get_log_filter().as_ref().map(|v| v.as_ref()).unwrap_or(""));
 	fdlimit::raise_fd_limit();
 
@@ -846,6 +844,9 @@ where
 		config.telemetry_endpoints = Some(TelemetryEndpoints::new(cli.telemetry_endpoints));
 	}
 
+	config.tracing_targets = cli.tracing_targets.into();
+	config.tracing_receiver = cli.tracing_receiver.into();
+
 	// Imply forced authoring on --dev
 	config.force_authoring = cli.shared_params.dev || cli.force_authoring;
 
@@ -901,6 +902,8 @@ fn init_logger(pattern: &str) {
 	builder.filter(Some("ws"), log::LevelFilter::Off);
 	builder.filter(Some("hyper"), log::LevelFilter::Warn);
 	builder.filter(Some("cranelift_wasm"), log::LevelFilter::Warn);
+	// Always log the special target `substrate_tracing`, overrides global level
+	builder.filter(Some("substrate_tracing"), log::LevelFilter::Info);
 	// Enable info for others.
 	builder.filter(None, log::LevelFilter::Info);
 
