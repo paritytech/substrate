@@ -76,7 +76,8 @@ pub trait WeighBlock<BlockNumber> {
 	fn on_finalize(_: BlockNumber) -> Weight { Zero::zero() }
 }
 
-/// Indicates if dispatch function should pay fees or not. If set to false, the block resource limits are applied, yet no fee is deducted. 
+/// Indicates if dispatch function should pay fees or not.
+/// If set to false, the block resource limits are applied, yet no fee is deducted.
 pub trait PaysFee {
 	fn pays_fee(&self) -> bool {
 		true
