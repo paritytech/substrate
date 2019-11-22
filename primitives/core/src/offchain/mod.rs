@@ -23,6 +23,31 @@ use runtime_interface::pass_by::{PassByCodec, PassByInner, PassByEnum};
 
 pub use crate::crypto::KeyTypeId;
 
+#[cfg(feature = "std")]
+pub mod storage;
+#[cfg(feature = "std")]
+pub mod testing;
+
+/// Offchain workers local storage.
+pub trait OffchainStorage: Clone + Send + Sync {
+	/// Persist a value in storage under given key and prefix.
+	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]);
+
+	/// Retrieve a value from storage under given key and prefix.
+	fn get(&self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>>;
+
+	/// Replace the value in storage if given old_value matches the current one.
+	///
+	/// Returns `true` if the value has been set and false otherwise.
+	fn compare_and_set(
+		&mut self,
+		prefix: &[u8],
+		key: &[u8],
+		old_value: Option<&[u8]>,
+		new_value: &[u8],
+	) -> bool;
+}
+
 /// A type of supported crypto.
 #[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, RuntimeDebug, PassByEnum)]
 #[repr(C)]
@@ -296,10 +321,6 @@ pub trait Externalities: Send {
 	/// Even if this function returns `true`, it does not mean that any keys are configured
 	/// and that the validator is registered in the chain.
 	fn is_validator(&self) -> bool;
-	/// Submit transaction.
-	///
-	/// The transaction will end up in the pool and be propagated to others.
-	fn submit_transaction(&mut self, extrinsic: Vec<u8>) -> Result<(), ()>;
 
 	/// Returns information about the local node's network state.
 	fn network_state(&self) -> Result<OpaqueNetworkState, ()>;
@@ -466,10 +487,6 @@ impl<T: Externalities + ?Sized> Externalities for Box<T> {
 		(& **self).is_validator()
 	}
 
-	fn submit_transaction(&mut self, ex: Vec<u8>) -> Result<(), ()> {
-		(&mut **self).submit_transaction(ex)
-	}
-
 	fn network_state(&self) -> Result<OpaqueNetworkState, ()> {
 		(& **self).network_state()
 	}
@@ -569,11 +586,6 @@ impl<T: Externalities> Externalities for LimitedExternalities<T> {
 		self.externalities.is_validator()
 	}
 
-	fn submit_transaction(&mut self, ex: Vec<u8>) -> Result<(), ()> {
-		self.check(Capability::TransactionPool, "submit_transaction");
-		self.externalities.submit_transaction(ex)
-	}
-
 	fn network_state(&self) -> Result<OpaqueNetworkState, ()> {
 		self.check(Capability::NetworkState, "network_state");
 		self.externalities.network_state()
@@ -669,6 +681,34 @@ impl OffchainExt {
 		Self(Box::new(offchain))
 	}
 }
+
+/// Abstraction over transaction pool.
+///
+/// This trait is currently used within the `ExternalitiesExtension`
+/// to provide offchain calls with access to the transaction pool without
+/// tight coupling with any pool implementation.
+#[cfg(feature = "std")]
+pub trait TransactionPool {
+	/// Submit transaction.
+	///
+	/// The transaction will end up in the pool and be propagated to others.
+	fn submit_transaction(&mut self, extrinsic: Vec<u8>) -> Result<(), ()>;
+}
+
+#[cfg(feature = "std")]
+externalities::decl_extension! {
+	/// An externalities extension to submit transactions to the pool.
+	pub struct TransactionPoolExt(Box<dyn TransactionPool + Send>);
+}
+
+#[cfg(feature = "std")]
+impl TransactionPoolExt {
+	/// Create a new instance of `TransactionPoolExt`.
+	pub fn new<O: TransactionPool + Send + 'static>(pool: O) -> Self {
+		Self(Box::new(pool))
+	}
+}
+
 
 #[cfg(test)]
 mod tests {

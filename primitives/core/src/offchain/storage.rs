@@ -14,27 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+//! In-memory implementation of offchain workers database.
+
 use std::collections::hash_map::{HashMap, Entry};
-
-/// Offchain workers local storage.
-pub trait OffchainStorage: Clone + Send + Sync {
-	/// Persist a value in storage under given key and prefix.
-	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]);
-
-	/// Retrieve a value from storage under given key and prefix.
-	fn get(&self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>>;
-
-	/// Replace the value in storage if given old_value matches the current one.
-	///
-	/// Returns `true` if the value has been set and false otherwise.
-	fn compare_and_set(
-		&mut self,
-		prefix: &[u8],
-		key: &[u8],
-		old_value: Option<&[u8]>,
-		new_value: &[u8],
-	) -> bool;
-}
+use crate::offchain::OffchainStorage;
 
 /// In-memory storage for offchain workers.
 #[derive(Debug, Clone, Default)]

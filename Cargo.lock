@@ -3783,7 +3783,6 @@ dependencies = [
  "sr-staking-primitives 2.0.0",
  "sr-std 2.0.0",
  "substrate-application-crypto 2.0.0",
- "substrate-offchain 2.0.0",
  "substrate-primitives 2.0.0",
 ]
 
@@ -5354,7 +5353,6 @@ dependencies = [
  "sr-std 2.0.0",
  "substrate-application-crypto 2.0.0",
  "substrate-inherents 2.0.0",
- "substrate-offchain 2.0.0",
  "substrate-primitives 2.0.0",
 ]
 
@@ -5682,6 +5680,7 @@ dependencies = [
  "substrate-client-db 2.0.0",
  "substrate-consensus-common 2.0.0",
  "substrate-executor 2.0.0",
+ "substrate-externalities 2.0.0",
  "substrate-header-metadata 2.0.0",
  "substrate-inherents 2.0.0",
  "substrate-keyring 2.0.0",
@@ -5717,6 +5716,7 @@ dependencies = [
  "substrate-client-db 2.0.0",
  "substrate-consensus-common 2.0.0",
  "substrate-executor 2.0.0",
+ "substrate-externalities 2.0.0",
  "substrate-header-metadata 2.0.0",
  "substrate-inherents 2.0.0",
  "substrate-keyring 2.0.0",

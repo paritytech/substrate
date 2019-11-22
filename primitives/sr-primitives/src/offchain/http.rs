@@ -516,8 +516,10 @@ impl<'a> HeadersIterator<'a> {
 mod tests {
 	use super::*;
 	use runtime_io::TestExternalities;
-	use substrate_offchain::testing;
-	use primitives::offchain::OffchainExt;
+	use primitives::offchain::{
+		OffchainExt,
+		testing,
+	};
 
 	#[test]
 	fn should_send_a_basic_request_and_get_response() {
