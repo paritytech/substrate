@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Combines [sp_rpc_api::state::StateClient] with [palette_support::storage::generator] traits
+//! Combines [sc_rpc_api::state::StateClient] with [palette_support::storage::generator] traits
 //! to provide strongly typed chain state queries over rpc.
 
 #![warn(missing_docs)]
@@ -28,7 +28,7 @@ use palette_support::storage::generator::{
 	StorageDoubleMap, StorageLinkedMap, StorageMap, StorageValue
 };
 use substrate_primitives_storage::{StorageData, StorageKey};
-use sp_rpc_api::state::StateClient;
+use sc_rpc_api::state::StateClient;
 
 /// A typed query on chain state usable from an RPC client.
 ///
@@ -42,7 +42,7 @@ use sp_rpc_api::state::StateClient;
 /// # use palette_support::{decl_storage, decl_module};
 /// # use palette_support_rpc::StorageQuery;
 /// # use palette_system::Trait;
-/// # use sp_rpc_api::state::StateClient;
+/// # use sc_rpc_api::state::StateClient;
 /// #
 /// # // Hash would normally be <TestRuntime as palette_system::Trait>::Hash, but we don't have
 /// # // palette_system::Trait implemented for TestRuntime. Here we just pretend.

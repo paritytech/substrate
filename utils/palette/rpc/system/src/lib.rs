@@ -27,7 +27,7 @@ use sr_primitives::{
 	traits,
 };
 use substrate_primitives::hexdisplay::HexDisplay;
-use sp_transaction_graph::{self, ChainApi, Pool};
+use sc_transaction_graph::{self, ChainApi, Pool};
 
 pub use palette_system_rpc_runtime_api::AccountNonceApi;
 pub use self::gen_client::Client as SystemClient;

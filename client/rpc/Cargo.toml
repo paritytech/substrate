@@ -5,7 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-api = { package = "substrate-palette-rpc-support", path = "../../utils/palette/rpc/support" }
+api = { package = "sc-rpc-api", path = "./api" }
 client-api = { package = "substrate-client-api", path = "../api" }
 client = { package = "substrate-client", path = "../" }
 sr-api = { path = "../../primitives/sr-api" }
