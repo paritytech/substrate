@@ -17,7 +17,7 @@ impl-serde = { version = "0.2.3", optional = true }
 wasmi = { version = "0.6.2", optional = true }
 hash-db = { version = "0.15.2", default-features = false }
 hash256-std-hasher = { version = "0.15.2", default-features = false }
-ed25519-dalek = { version = "0.9.1",  default-features = false, features = ["u64_backend"], optional = true }
+ed25519-dalek = { version = "0.9.1", default-features = false, features = ["u64_backend"], optional = true }
 base58 = { version = "0.1.0", optional = true }
 blake2-rfc = { version = "0.2.18", default-features = false, optional = true }
 schnorrkel = { version = "0.8.5", features = ["preaudit_deprecated"], default-features = false, optional = true }

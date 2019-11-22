@@ -16,8 +16,6 @@
 
 //! Tests for the module.
 
-#![cfg(test)]
-
 use super::*;
 use mock::{Balances, ExtBuilder, Runtime, System, info_from_weight, CALL};
 use sr_primitives::traits::SignedExtension;
