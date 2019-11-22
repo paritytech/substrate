@@ -311,9 +311,9 @@ decl_event!(
 	/// Event for the System module.
 	pub enum Event {
 		/// An extrinsic completed successfully.
-		ExtrinsicSuccess,
+		ExtrinsicSuccess(DispatchInfo),
 		/// An extrinsic failed.
-		ExtrinsicFailed(DispatchError),
+		ExtrinsicFailed(DispatchError, DispatchInfo),
 	}
 );
 
@@ -754,11 +754,11 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// To be called immediately after an extrinsic has been applied.
-	pub fn note_applied_extrinsic(r: &ApplyOutcome, _encoded_len: u32) {
+	pub fn note_applied_extrinsic(r: &ApplyOutcome, _encoded_len: u32, info: DispatchInfo) {
 		Self::deposit_event(
 			match r {
-				Ok(()) => Event::ExtrinsicSuccess,
-				Err(err) => Event::ExtrinsicFailed(err.clone()),
+				Ok(()) => Event::ExtrinsicSuccess(info),
+				Err(err) => Event::ExtrinsicFailed(err.clone(), info),
 			}
 		);
 
@@ -1175,8 +1175,8 @@ mod tests {
 	impl From<Event> for u16 {
 		fn from(e: Event) -> u16 {
 			match e {
-				Event::ExtrinsicSuccess => 100,
-				Event::ExtrinsicFailed(_) => 101,
+				Event::ExtrinsicSuccess(..) => 100,
+				Event::ExtrinsicFailed(..) => 101,
 			}
 		}
 	}
@@ -1224,8 +1224,8 @@ mod tests {
 
 			System::initialize(&2, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
 			System::deposit_event(42u16);
-			System::note_applied_extrinsic(&Ok(()), 0);
-			System::note_applied_extrinsic(&Err(DispatchError::new(Some(1), 2, None)), 0);
+			System::note_applied_extrinsic(&Ok(()), 0, Default::default());
+			System::note_applied_extrinsic(&Err(DispatchError::new(Some(1), 2, None)), 0, Default::default());
 			System::note_finished_extrinsics();
 			System::deposit_event(3u16);
 			System::finalize();
