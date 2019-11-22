@@ -33,6 +33,7 @@ members = [
 	"client/peerset",
 	"client/rpc-servers",
 	"client/rpc",
+	"client/rpc/api",
 	"client/service",
 	"client/service/test",
 	"client/state-db",
@@ -73,7 +74,6 @@ members = [
 	"palette/support/procedural",
 	"palette/support/procedural/tools",
 	"palette/support/procedural/tools/derive",
-	"palette/support/rpc",
 	"palette/support/test",
 	"palette/system",
 	"palette/system/rpc",
@@ -105,7 +105,6 @@ members = [
 	"primitives/panic-handler",
 	"primitives/phragmen",
 	"primitives/rpc",
-	"primitives/rpc/api",
 	"primitives/runtime-interface",
 	"primitives/runtime-interface/proc-macro",
 	"primitives/runtime-interface/test-wasm",
@@ -136,6 +135,7 @@ members = [
 	"test/utils/transaction-factory",
 	"utils/build-script-utils",
 	"utils/fork-tree",
+	"utils/palette/rpc",
 	"utils/wasm-builder",
 ]
 
