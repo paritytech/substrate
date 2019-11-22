@@ -28,7 +28,7 @@ use support::{dispatch::Result, decl_module, decl_storage, decl_event};
 use support::traits::{Currency, WithdrawReason, ExistenceRequirement};
 use system::ensure_signed;
 use sr_primitives::ModuleId;
-use sr_primitives::weights::SimpleDispatchInfo;
+use support::weights::SimpleDispatchInfo;
 use sr_primitives::traits::{UniqueSaturatedInto, AccountIdConversion};
 use primitives::{U256, H256, H160};
 use evm::{ExitReason, ExitSucceed, ExitError};
