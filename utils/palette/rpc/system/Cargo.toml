@@ -15,10 +15,10 @@ sr-primitives = { path = "../../../../primitives/sr-primitives" }
 palette-system-rpc-runtime-api = { path = "../../../../palette/system/rpc/runtime-api" }
 substrate-primitives = { path = "../../../../primitives/core" }
 sp-blockchain = { path = "../../../../primitives/blockchain" }
-sp-transaction-graph = { path = "../../../../primitives/transaction-pool/graph" }
+sc-transaction-graph = { path = "../../../../client/transaction-pool/graph" }
 
 [dev-dependencies]
 test-client = { package = "substrate-test-runtime-client", path = "../../../../test/utils/runtime/client" }
-sp-transaction-pool = { path = "../../../../primitives/transaction-pool" }
+sc-transaction-pool = { path = "../../../../client/transaction-pool" }
 env_logger = "0.7.0"
 futures = "0.3.1"

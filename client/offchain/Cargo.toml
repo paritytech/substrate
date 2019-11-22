@@ -23,7 +23,7 @@ parking_lot = "0.9.0"
 primitives = { package = "substrate-primitives", path = "../../primitives/core" }
 rand = "0.7.2"
 sr-primitives = { path = "../../primitives/sr-primitives" }
-transaction_pool = { package = "sp-transaction-pool", path = "../../primitives/transaction-pool" }
+transaction_pool = { package = "sc-transaction-pool", path = "../../client/transaction-pool" }
 network = { package = "substrate-network", path = "../network" }
 keystore = { package = "substrate-keystore", path = "../keystore" }
 

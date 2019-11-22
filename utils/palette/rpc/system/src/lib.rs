@@ -118,7 +118,7 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sp_transaction_pool;
+	use sc_transaction_pool;
 
 	use futures::executor::block_on;
 	use test_client::{
@@ -131,7 +131,7 @@ mod tests {
 		// given
 		let _ = env_logger::try_init();
 		let client = Arc::new(test_client::new());
-		let pool = Arc::new(Pool::new(Default::default(), sp_transaction_pool::FullChainApi::new(client.clone())));
+		let pool = Arc::new(Pool::new(Default::default(), sc_transaction_pool::FullChainApi::new(client.clone())));
 
 		let new_transaction = |nonce: u64| {
 			let t = Transfer {
