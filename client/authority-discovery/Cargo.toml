@@ -21,6 +21,7 @@ libp2p = { version = "0.13.0", default-features = false, features = ["secp256k1"
 log = "0.4.8"
 network = { package = "substrate-network", path = "../network" }
 primitives = { package = "substrate-primitives", path = "../../primitives/core" }
+sp-blockchain = { path = "../../primitives/blockchain" }
 prost = "0.5.0"
 serde_json = "1.0.41"
 sr-primitives = { path = "../../primitives/sr-primitives" }

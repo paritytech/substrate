@@ -40,9 +40,9 @@ use rpc::{
 
 use api::Subscriptions;
 use client_api::backend::Backend;
+use sp_blockchain::Error as ClientError;
 use client::{
-	BlockchainEvents, Client, CallExecutor, 
-	error::Error as ClientError,
+	BlockchainEvents, Client, CallExecutor,
 	light::{
 		blockchain::{future_header, RemoteBlockchain},
 		fetcher::{Fetcher, RemoteCallRequest, RemoteReadRequest, RemoteReadChildRequest},

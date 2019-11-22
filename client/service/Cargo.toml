@@ -31,6 +31,7 @@ target_info = "0.1.0"
 keystore = { package = "substrate-keystore", path = "../keystore" }
 sr-io = { path = "../../primitives/sr-io" }
 sr-primitives = { path = "../../primitives/sr-primitives" }
+sp-blockchain = { path = "../../primitives/blockchain" }
 primitives = { package = "substrate-primitives", path = "../../primitives/core" }
 session = { package = "substrate-session", path = "../../primitives/session" }
 app-crypto = { package = "substrate-application-crypto", path = "../../primitives/application-crypto" }

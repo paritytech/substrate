@@ -27,7 +27,7 @@ fork-tree = { path = "../../utils/fork-tree" }
 consensus = { package = "substrate-consensus-common", path = "../../primitives/consensus/common" }
 client = { package = "substrate-client", path = "../" }
 client-api = { package = "substrate-client-api", path = "../api" }
-header_metadata = { package = "substrate-header-metadata", path = "../header-metadata" }
+sp-blockchain = { path = "../../primitives/blockchain" }
 sr-primitives = { path = "../../primitives/sr-primitives" }
 sr-arithmetic = { path = "../../primitives/sr-arithmetic" }
 primitives = { package = "substrate-primitives", path = "../../primitives/core" }

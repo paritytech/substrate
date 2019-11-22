@@ -17,10 +17,11 @@
 //! Substrate client possible errors.
 
 use std::{self, error, result};
-use state_machine;
+use sp_state_machine;
 use sr_primitives::ApplyError;
-use consensus;
+use sp_consensus;
 use derive_more::{Display, From};
+use parity_scale_codec::Error as CodecError;
 
 /// Client Result type alias
 pub type Result<T> = result::Result<T, Error>;
@@ -30,7 +31,7 @@ pub type Result<T> = result::Result<T, Error>;
 pub enum Error {
 	/// Consensus Error
 	#[display(fmt = "Consensus: {}", _0)]
-	Consensus(consensus::Error),
+	Consensus(sp_consensus::Error),
 	/// Backend error.
 	#[display(fmt = "Backend error: {}", _0)]
 	Backend(String),
@@ -42,7 +43,7 @@ pub enum Error {
 	ApplyExtrinsicFailed(ApplyError),
 	/// Execution error.
 	#[display(fmt = "Execution: {}", _0)]
-	Execution(Box<dyn state_machine::Error>),
+	Execution(Box<dyn sp_state_machine::Error>),
 	/// Blockchain error.
 	#[display(fmt = "Blockchain: {}", _0)]
 	Blockchain(Box<Error>),
@@ -75,7 +76,7 @@ pub enum Error {
 	RemoteFetchFailed,
 	/// Error decoding call result.
 	#[display(fmt = "Error decoding call result of {}: {}", _0, _1)]
-	CallResultDecode(&'static str, codec::Error),
+	CallResultDecode(&'static str, CodecError),
 	/// Error converting a parameter between runtime and node.
 	#[display(fmt = "Error converting `{}` between runtime and node", _0)]
 	RuntimeParamConversion(String),
@@ -124,12 +125,6 @@ impl<'a> From<&'a str> for Error {
 	}
 }
 
-impl From<block_builder::ApplyExtrinsicFailed> for Error {
-	fn from(err: block_builder::ApplyExtrinsicFailed) -> Self {
-		Self::ApplyExtrinsicFailed(err.0)
-	}
-}
-
 impl Error {
 	/// Chain a blockchain error.
 	pub fn from_blockchain(e: Box<Error>) -> Self {
@@ -137,7 +132,7 @@ impl Error {
 	}
 
 	/// Chain a state error.
-	pub fn from_state(e: Box<dyn state_machine::Error>) -> Self {
+	pub fn from_state(e: Box<dyn sp_state_machine::Error>) -> Self {
 		Error::Execution(e)
 	}
 }

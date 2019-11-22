@@ -23,7 +23,7 @@ executor = { package = "substrate-executor", path = "../executor" }
 state_db = { package = "substrate-state-db", path = "../state-db" }
 trie = { package = "substrate-trie", path = "../../primitives/trie" }
 consensus_common = { package = "substrate-consensus-common", path = "../../primitives/consensus/common" }
-header_metadata = { package = "substrate-header-metadata", path = "../header-metadata" }
+sp-blockchain = { path = "../../primitives/blockchain" }
 
 [dev-dependencies]
 substrate-keyring = { path = "../../primitives/keyring" }

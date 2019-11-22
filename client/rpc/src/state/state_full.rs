@@ -28,7 +28,8 @@ use rpc::{
 };
 
 use api::Subscriptions;
-use client_api::{backend::Backend, error::Result as ClientResult};
+use client_api::backend::Backend;
+use sp_blockchain::Result as ClientResult;
 use client::{
 	Client, CallExecutor, BlockchainEvents, 
 };
@@ -232,7 +233,7 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 		RA: Send + Sync + 'static,
 		Client<B, E, Block, RA>: ProvideRuntimeApi,
 		<Client<B, E, Block, RA> as ProvideRuntimeApi>::Api:
-			Metadata<Block, Error = client::error::Error>,
+			Metadata<Block, Error = sp_blockchain::Error>,
 {
 	fn call(
 		&self,

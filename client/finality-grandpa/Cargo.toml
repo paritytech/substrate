@@ -22,8 +22,8 @@ keystore = { package = "substrate-keystore", path = "../keystore" }
 serde_json = "1.0.41"
 client-api = { package = "substrate-client-api", path = "../api" }
 client = { package = "substrate-client", path = "../" }
-header-metadata = { package = "substrate-header-metadata", path = "../header-metadata" }
 inherents = { package = "substrate-inherents", path = "../../primitives/inherents" }
+sp-blockchain = { path = "../../primitives/blockchain" }
 network = { package = "substrate-network", path = "../network" }
 sp-finality-tracker = { path = "../../primitives/finality-tracker" }
 fg_primitives = { package = "substrate-finality-grandpa-primitives", path = "../../primitives/finality-grandpa" }

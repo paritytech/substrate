@@ -41,7 +41,7 @@ use std::{time::Duration, cell::RefCell};
 
 type Item = DigestItem<Hash>;
 
-type Error = client::error::Error;
+type Error = sp_blockchain::Error;
 
 type TestClient = client::Client<
 	test_client::Backend,

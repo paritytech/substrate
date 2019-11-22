@@ -53,6 +53,7 @@ use std::{
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use tel::{telemetry, SUBSTRATE_INFO};
 use transaction_pool::txpool::{self, ChainApi, Pool as TransactionPool};
+use sp_blockchain;
 
 /// Aggregator for the components required to build a service.
 ///
@@ -759,7 +760,7 @@ ServiceBuilder<
 		offchain::OffchainWorkerApi<TBl> +
 		tx_pool_api::TaggedTransactionQueue<TBl> +
 		session::SessionKeys<TBl> +
-		sr_api::ApiExt<TBl, Error = client::error::Error>,
+		sr_api::ApiExt<TBl, Error = sp_blockchain::Error>,
 	TBl: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
 	TRtApi: 'static + Send + Sync,
 	TCfg: Default,

@@ -25,6 +25,7 @@ use sr_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenSto
 use state_machine::{Backend as StateBackend, TrieBackend, backend::InMemory as InMemoryState, ChangesTrieTransaction};
 use sr_primitives::traits::{Block as BlockT, NumberFor, Zero, Header};
 use crate::in_mem::{self, check_genesis_storage};
+use sp_blockchain::{ Error as ClientError, Result as ClientResult };
 use client_api::{
 	backend::{
 		AuxStore, Backend as ClientBackend, BlockImportOperation, RemoteBackend, NewBlockState,
@@ -32,9 +33,6 @@ use client_api::{
 	},
 	blockchain::{
 		HeaderBackend as BlockchainHeaderBackend, well_known_cache_keys,
-	},
-	error::{
-		Error as ClientError, Result as ClientResult
 	},
 	light::Storage as BlockchainStorage,
 	InMemOffchainStorage,

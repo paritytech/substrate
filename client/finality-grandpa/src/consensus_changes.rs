@@ -47,11 +47,11 @@ impl<H: Copy + PartialEq, N: Copy + Ord> ConsensusChanges<H, N> {
 
 	/// Finalize all pending consensus changes that are finalized by given block.
 	/// Returns true if there any changes were finalized.
-	pub(crate) fn finalize<F: Fn(N) -> ::client_api::error::Result<Option<H>>>(
+	pub(crate) fn finalize<F: Fn(N) -> ::sp_blockchain::Result<Option<H>>>(
 		&mut self,
 		block: (N, H),
 		canonical_at_height: F,
-	) -> ::client_api::error::Result<(bool, bool)> {
+	) -> ::sp_blockchain::Result<(bool, bool)> {
 		let (split_idx, has_finalized_changes) = self.pending_changes.iter()
 			.enumerate()
 			.take_while(|(_, &(at_height, _))| at_height <= block.0)

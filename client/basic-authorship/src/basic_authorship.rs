@@ -20,7 +20,8 @@
 //
 
 use std::{time, sync::Arc};
-use client_api::{error, CallExecutor};
+use client_api::CallExecutor;
+use sp_blockchain;
 use client::Client as SubstrateClient;
 use codec::Decode;
 use consensus_common::{evaluation};
@@ -55,15 +56,15 @@ where
 	RA: Send + Sync + 'static,
 	SubstrateClient<B, E, Block, RA>: ProvideRuntimeApi,
 	<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api:
-		BlockBuilderApi<Block, Error = error::Error>,
+		BlockBuilderApi<Block, Error = sp_blockchain::Error>,
 {
 	type Proposer = Proposer<Block, SubstrateClient<B, E, Block, RA>, A>;
-	type Error = error::Error;
+	type Error = sp_blockchain::Error;
 
 	fn init(
 		&mut self,
 		parent_header: &<Block as BlockT>::Header,
-	) -> Result<Self::Proposer, error::Error> {
+	) -> Result<Self::Proposer, sp_blockchain::Error> {
 		let parent_hash = parent_header.hash();
 
 		let id = BlockId::hash(parent_hash);
@@ -103,10 +104,10 @@ where
 	RA: Send + Sync + 'static,
 	SubstrateClient<B, E, Block, RA>: ProvideRuntimeApi,
 	<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api:
-		BlockBuilderApi<Block, Error = error::Error>,
+		BlockBuilderApi<Block, Error = sp_blockchain::Error>,
 {
-	type Create = futures::future::Ready<Result<Block, error::Error>>;
-	type Error = error::Error;
+	type Create = futures::future::Ready<Result<Block, sp_blockchain::Error>>;
+	type Error = sp_blockchain::Error;
 
 	fn propose(
 		&mut self,
@@ -128,14 +129,14 @@ impl<Block, B, E, RA, A> Proposer<Block, SubstrateClient<B, E, Block, RA>, A>	wh
 	RA: Send + Sync + 'static,
 	SubstrateClient<B, E, Block, RA>: ProvideRuntimeApi,
 	<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api:
-		BlockBuilderApi<Block, Error = error::Error>,
+		BlockBuilderApi<Block, Error = sp_blockchain::Error>,
 {
 	fn propose_with(
 		&self,
 		inherent_data: InherentData,
 		inherent_digests: DigestFor<Block>,
 		deadline: time::Instant,
-	) -> Result<Block, error::Error> {
+	) -> Result<Block, sp_blockchain::Error> {
 		/// If the block is full we will attempt to push at most
 		/// this number of transactions before quitting for real.
 		/// It allows us to increase block utilization.
@@ -173,7 +174,7 @@ impl<Block, B, E, RA, A> Proposer<Block, SubstrateClient<B, E, Block, RA>, A>	wh
 				Ok(()) => {
 					debug!("[{:?}] Pushed to the block.", pending.hash);
 				}
-				Err(error::Error::ApplyExtrinsicFailed(e)) if e.exhausted_resources() => {
+				Err(sp_blockchain::Error::ApplyExtrinsicFailed(e)) if e.exhausted_resources() => {
 					if is_first {
 						debug!("[{:?}] Invalid transaction: FullBlock on empty block", pending.hash);
 						unqueue_invalid.push(pending.hash.clone());

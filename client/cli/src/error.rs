@@ -31,7 +31,7 @@ pub enum Error {
 	/// Service error
 	Service(service::Error),
 	/// Client error
-	Client(client_api::error::Error),
+	Client(sp_blockchain::Error),
 	/// Input error
 	Input(String),
 	/// Invalid listen multiaddress

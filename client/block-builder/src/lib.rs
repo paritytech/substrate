@@ -17,7 +17,7 @@
 //! Substrate block builder
 //!
 //! This crate provides the [`BlockBuilder`] utility and the corresponding runtime api
-//! [`BlockBuilder`](api::BlockBuilder).
+//! [`BlockBuilder`](api::BlockBuilder).Error
 //!
 //! The block builder utility is used in the node as an abstraction over the runtime api to
 //! initialize a block, to push extrinsics and to finalize a block.
@@ -33,7 +33,7 @@ use sr_primitives::{
 		NumberFor, One,
 	},
 };
-
+use sp_blockchain::Error;
 use primitives::ExecutionContext;
 
 use state_machine::StorageProof;
@@ -41,9 +41,6 @@ use state_machine::StorageProof;
 use sr_api::{Core, ApiExt, ApiErrorFor};
 
 pub use runtime_api::BlockBuilder as BlockBuilderApi;
-
-/// Error when the runtime failed to apply an extrinsic.
-pub struct ApplyExtrinsicFailed(pub sr_primitives::ApplyError);
 
 /// Utility for building new (valid) blocks from a stream of extrinsics.
 pub struct BlockBuilder<'a, Block: BlockT, A: ProvideRuntimeApi> {
@@ -58,7 +55,7 @@ where
 	Block: BlockT,
 	A: ProvideRuntimeApi + 'a,
 	A::Api: BlockBuilderApi<Block>,
-	ApiErrorFor<A, Block>: From<ApplyExtrinsicFailed>,
+	ApiErrorFor<A, Block>: From<Error>,
 {
 	/// Create a new instance of builder based on the given `parent_hash` and `parent_number`.
 	///
@@ -118,7 +115,7 @@ where
 					Ok(())
 				}
 				Err(e) => {
-					Err(ApplyExtrinsicFailed(e))?
+					Err(Error::ApplyExtrinsicFailed(e))?
 				}
 			}
 		})
