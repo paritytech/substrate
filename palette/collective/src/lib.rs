@@ -27,7 +27,7 @@ use rstd::{prelude::*, result};
 use primitives::u32_trait::Value as U32;
 use sr_primitives::RuntimeDebug;
 use sr_primitives::traits::{Hash, EnsureOrigin};
-use sr_primitives::weights::SimpleDispatchInfo;
+use support::weights::SimpleDispatchInfo;
 use support::{
 	dispatch::{Dispatchable, Parameter}, codec::{Encode, Decode},
 	traits::{ChangeMembers, InitializeMembers}, decl_module, decl_event,

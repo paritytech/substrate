@@ -13,8 +13,7 @@ kvdb = { git = "https://github.com/paritytech/parity-common", rev="b0317f649ab2c
 derive_more = { version = "0.15.0" }
 executor = { package = "substrate-executor", path = "executor" }
 fnv = { version = "1.0.6" }
-futures = { version = "0.1.29" }
-futures03 = { package = "futures-preview", version = "0.3.0-alpha.19", features = ["compat"] }
+futures = { version = "0.3.1", features = ["compat"] }
 hash-db = { version = "0.15.2" }
 header-metadata = { package = "substrate-header-metadata", path = "header-metadata" }
 hex-literal = { version = "0.2.1" }
@@ -38,4 +37,3 @@ client-db = { package = "substrate-client-db", path = "./db", features = ["kvdb-
 test-client = { package = "substrate-test-runtime-client", path = "../test/utils/runtime/client" }
 kvdb-memorydb = { git = "https://github.com/paritytech/parity-common", rev="b0317f649ab2c665b7987b8475878fc4d2e1f81d" }
 panic-handler = { package = "substrate-panic-handler", path = "../primitives/panic-handler" }
-

@@ -20,7 +20,7 @@ use network::{self, PeerId};
 use network::config::Roles;
 use test_client::runtime::Block;
 use assert_matches::assert_matches;
-use futures03::{prelude::*, channel::mpsc};
+use futures::{prelude::*, channel::mpsc};
 use std::thread;
 
 struct Status {
@@ -46,7 +46,7 @@ fn api<T: Into<Option<Status>>>(sync: T) -> System<Block> {
 	let should_have_peers = !status.is_dev;
 	let (tx, rx) = mpsc::unbounded();
 	thread::spawn(move || {
-		futures03::executor::block_on(rx.for_each(move |request| {
+		futures::executor::block_on(rx.for_each(move |request| {
 			match request {
 				Request::Health(sender) => {
 					let _ = sender.send(Health {

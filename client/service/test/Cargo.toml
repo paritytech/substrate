@@ -11,7 +11,7 @@ futures = "0.1.29"
 log = "0.4.8"
 env_logger = "0.7.0"
 fdlimit = "0.1.1"
-futures03 = { package = "futures-preview", version = "=0.3.0-alpha.19", features = ["compat"] }
+futures03 = { package = "futures", version = "0.3.1", features = ["compat"] }
 service = { package = "substrate-service", path = "../../service", default-features = false }
 network = { package = "substrate-network", path = "../../network" }
 consensus = { package = "substrate-consensus-common", path = "../../../primitives/consensus/common" }

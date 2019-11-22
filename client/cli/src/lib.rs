@@ -61,8 +61,8 @@ pub use traits::{GetLogFilter, AugmentClap};
 use app_dirs::{AppInfo, AppDataType};
 use log::info;
 use lazy_static::lazy_static;
-
-use futures::{Async, Future};
+use futures::{Future, FutureExt, TryFutureExt};
+use futures01::{Async, Future as _};
 use substrate_telemetry::TelemetryEndpoints;
 
 /// default sub directory to store network config
@@ -102,7 +102,7 @@ pub struct VersionInfo {
 /// Something that can be converted into an exit signal.
 pub trait IntoExit {
 	/// Exit signal type.
-	type Exit: Future<Item=(),Error=()> + Send + 'static;
+	type Exit: Future<Output=()> + Unpin + Send + 'static;
 	/// Convert into exit signal.
 	fn into_exit(self) -> Self::Exit;
 }
@@ -391,14 +391,16 @@ impl<'a> ParseAndPrepareExport<'a> {
 		// Note: while we would like the user to handle the exit themselves, we handle it here
 		// for backwards compatibility reasons.
 		let (exit_send, exit_recv) = std::sync::mpsc::channel();
-		let exit = exit.into_exit();
+		let exit = exit.into_exit()
+			.map(|_| Ok::<_, ()>(()))
+			.compat();
 		std::thread::spawn(move || {
 			let _ = exit.wait();
 			let _ = exit_send.send(());
 		});
 
 		let mut export_fut = builder(config)?.export_blocks(file, from.into(), to.map(Into::into), json);
-		let fut = futures::future::poll_fn(|| {
+		let fut = futures01::future::poll_fn(|| {
 			if exit_recv.try_recv().is_ok() {
 				return Ok(Async::Ready(()));
 			}
@@ -453,14 +455,16 @@ impl<'a> ParseAndPrepareImport<'a> {
 		// Note: while we would like the user to handle the exit themselves, we handle it here
 		// for backwards compatibility reasons.
 		let (exit_send, exit_recv) = std::sync::mpsc::channel();
-		let exit = exit.into_exit();
+		let exit = exit.into_exit()
+			.map(|_| Ok::<_, ()>(()))
+			.compat();
 		std::thread::spawn(move || {
 			let _ = exit.wait();
 			let _ = exit_send.send(());
 		});
 
 		let mut import_fut = builder(config)?.import_blocks(file);
-		let fut = futures::future::poll_fn(|| {
+		let fut = futures01::future::poll_fn(|| {
 			if exit_recv.try_recv().is_ok() {
 				return Ok(Async::Ready(()));
 			}

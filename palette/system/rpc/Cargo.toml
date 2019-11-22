@@ -20,4 +20,4 @@ transaction_pool = { package = "substrate-transaction-pool", path = "../../../cl
 [dev-dependencies]
 test-client = { package = "substrate-test-runtime-client", path = "../../../test/utils/runtime/client" }
 env_logger = "0.7.0"
-futures03 = { package = "futures-preview", version = "=0.3.0-alpha.19" }
+futures = "0.3.1"
