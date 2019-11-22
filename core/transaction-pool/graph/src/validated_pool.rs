@@ -36,7 +36,7 @@ use sr_primitives::{
 	traits::{self, SaturatedConversion},
 	transaction_validity::TransactionTag as Tag,
 };
-use txpoolapi::{error, PoolStatus};
+use txpool_api::{error, PoolStatus};
 
 use crate::base_pool::PruneStatus;
 use crate::pool::{EventStream, Options, ChainApi, BlockHash, ExHash, ExtrinsicFor, TransactionFor};
@@ -199,7 +199,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 		#[derive(Debug, Clone, Copy, PartialEq)]
 		enum Status { Future, Ready, Failed, Dropped };
 
-		let (initial_statuses, final_statuses) = {
+		let (mut initial_statuses, final_statuses) = {
 			let mut pool = self.pool.write();
 
 			// remove all passed transactions from the ready/future queues
@@ -299,7 +299,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 		// and now let's notify listeners about status changes
 		let mut listener = self.listener.write();
 		for (hash, final_status) in final_statuses {
-			let initial_status = initial_statuses.get(&hash).cloned();
+			let initial_status = initial_statuses.remove(&hash);
 			if initial_status.is_none() || Some(final_status) != initial_status {
 				match final_status {
 					Status::Future => listener.future(&hash),

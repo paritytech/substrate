@@ -34,7 +34,7 @@ use std::sync::Arc;
 use node_primitives::{Block, AccountId, Index, Balance};
 use node_runtime::UncheckedExtrinsic;
 use sr_primitives::traits::ProvideRuntimeApi;
-use txpoolapi::TransactionPool;
+use txpool_api::TransactionPool;
 
 /// Instantiate all RPC extensions for full node.
 pub fn create_full<C, P, M>(client: Arc<C>, pool: Arc<P>) -> jsonrpc_core::IoHandler<M> where

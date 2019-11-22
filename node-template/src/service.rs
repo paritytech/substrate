@@ -43,7 +43,7 @@ macro_rules! new_full_start {
 				let pool_api = txpool::FullChainApi::new(client.clone());
 				let pool = txpool::BasicPool::new(config, pool_api);
 				let maintainer = txpool::FullBasicPoolMaintainer::new(pool.pool().clone(), client);
-				let maintainable_pool = txpoolapi::MaintainableTransactionPool::new(pool, maintainer);
+				let maintainable_pool = txpool_api::MaintainableTransactionPool::new(pool, maintainer);
 				Ok(maintainable_pool)
 			})?
 			.with_import_queue(|_config, client, mut select_chain, transaction_pool| {
@@ -199,7 +199,7 @@ pub fn new_light<C: Send + Default + 'static>(config: Configuration<C, GenesisCo
 			let pool_api = txpool::LightChainApi::new(client.clone(), fetcher.clone());
 			let pool = txpool::BasicPool::new(config, pool_api);
 			let maintainer = txpool::LightBasicPoolMaintainer::with_defaults(pool.pool().clone(), client, fetcher);
-			let maintainable_pool = txpoolapi::MaintainableTransactionPool::new(pool, maintainer);
+			let maintainable_pool = txpool_api::MaintainableTransactionPool::new(pool, maintainer);
 			Ok(maintainable_pool)
 		})?
 		.with_import_queue_and_fprb(|_config, client, backend, fetcher, _select_chain, _tx_pool| {

@@ -37,7 +37,7 @@ use sr_primitives::{
 	generic::BlockId,
 	traits::Block as BlockT,
 };
-use txpoolapi::{
+use txpool_api::{
 	TransactionPool, PoolStatus, ImportNotificationStream,
 	TxHash, TransactionFor, TransactionStatusStreamFor,
 };

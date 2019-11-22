@@ -59,7 +59,7 @@ pub use self::builder::{
 };
 pub use config::{Configuration, Roles, PruningMode};
 pub use chain_spec::{ChainSpec, Properties, RuntimeGenesis, Extension as ChainSpecExtension};
-pub use txpoolapi::{TransactionPool, TransactionPoolMaintainer, InPoolTransaction, IntoPoolError};
+pub use txpool_api::{TransactionPool, TransactionPoolMaintainer, InPoolTransaction, IntoPoolError};
 pub use txpool::txpool::Options as TransactionPoolOptions;
 pub use client::FinalityNotifications;
 pub use rpc::Metadata as RpcMetadata;
@@ -587,7 +587,7 @@ where
 	Pool: TransactionPool<Block=B, Hash=H, Error=E>,
 	B: BlockT,
 	H: std::hash::Hash + Eq + sr_primitives::traits::Member + sr_primitives::traits::MaybeSerialize,
-	E: IntoPoolError + From<txpoolapi::error::Error>,
+	E: IntoPoolError + From<txpool_api::error::Error>,
 {
 	pool.ready()
 		.filter(|t| t.is_propagateable())
@@ -606,7 +606,7 @@ where
 	Pool: 'static + TransactionPool<Block=B, Hash=H, Error=E>,
 	B: BlockT,
 	H: std::hash::Hash + Eq + sr_primitives::traits::Member + sr_primitives::traits::MaybeSerialize,
-	E: 'static + IntoPoolError + From<txpoolapi::error::Error>,
+	E: 'static + IntoPoolError + From<txpool_api::error::Error>,
 {
 	fn transactions(&self) -> Vec<(H, <B as BlockT>::Extrinsic)> {
 		transactions_to_propagate(&*self.pool)
@@ -639,7 +639,7 @@ where
 						match import_result {
 							Ok(_) => report_handle.report_peer(who, reputation_change_good),
 							Err(e) => match e.into_pool_error() {
-								Ok(txpoolapi::error::Error::AlreadyImported(_)) => (),
+								Ok(txpool_api::error::Error::AlreadyImported(_)) => (),
 								Ok(e) => {
 									report_handle.report_peer(who, reputation_change_bad);
 									debug!("Error adding transaction to the pool: {:?}", e)

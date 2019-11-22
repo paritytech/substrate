@@ -35,7 +35,7 @@ use sr_primitives::{
 	generic::BlockId,
 	traits::{Block as BlockT, Extrinsic, Header, NumberFor, ProvideRuntimeApi, SimpleArithmetic},
 };
-use txpoolapi::TransactionPoolMaintainer;
+use txpool_api::TransactionPoolMaintainer;
 use tx_runtime_api::TaggedTransactionQueue;
 
 use txpool::{self, ChainApi};
@@ -347,7 +347,7 @@ mod tests {
 	use futures::executor::block_on;
 	use codec::Encode;
 	use test_client::{prelude::*, runtime::{Block, Transfer}, consensus::{BlockOrigin, SelectChain}};
-	use txpoolapi::PoolStatus;
+	use txpool_api::PoolStatus;
 	use crate::api::{FullChainApi, LightChainApi};
 
 	#[test]

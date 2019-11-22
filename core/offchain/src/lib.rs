@@ -43,7 +43,7 @@ use log::{debug, warn};
 use network::NetworkStateInfo;
 use primitives::{offchain, ExecutionContext};
 use sr_primitives::{generic::BlockId, traits::{self, ProvideRuntimeApi}};
-use txpoolapi::TransactionPool;
+use txpool_api::TransactionPool;
 
 mod api;
 
@@ -153,7 +153,7 @@ mod tests {
 	use super::*;
 	use network::{Multiaddr, PeerId};
 	use txpool::{BasicPool, FullChainApi};
-	use txpoolapi::InPoolTransaction;
+	use txpool_api::InPoolTransaction;
 
 	struct MockNetworkStateInfo();
 

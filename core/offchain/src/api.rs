@@ -32,7 +32,7 @@ use primitives::offchain::{
 };
 pub use offchain_primitives::STORAGE_PREFIX;
 use sr_primitives::{generic::BlockId, traits::{self, Extrinsic}};
-use txpoolapi::TransactionPool;
+use txpool_api::TransactionPool;
 
 #[cfg(not(target_os = "unknown"))]
 mod http;

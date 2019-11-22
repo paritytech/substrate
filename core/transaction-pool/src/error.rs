@@ -23,7 +23,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug, derive_more::Display, derive_more::From)]
 pub enum Error {
 	/// Pool error.
-	Pool(txpoolapi::error::Error),
+	Pool(txpool_api::error::Error),
 	/// Client error.
 	Client(client::error::Error),
 	/// Error while converting a `BlockId`.
@@ -43,8 +43,8 @@ impl std::error::Error for Error {
 	}
 }
 
-impl txpoolapi::IntoPoolError for Error {
-	fn into_pool_error(self) -> std::result::Result<txpoolapi::error::Error, Self> {
+impl txpool_api::IntoPoolError for Error {
+	fn into_pool_error(self) -> std::result::Result<txpool_api::error::Error, Self> {
 		match self {
 			Error::Pool(e) => Ok(e),
 			e => Err(e),

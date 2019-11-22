@@ -34,7 +34,7 @@ use sr_primitives::transaction_validity::{
 	TransactionLongevity as Longevity,
 	TransactionPriority as Priority,
 };
-use txpoolapi::{error, PoolStatus, InPoolTransaction};
+use txpool_api::{error, PoolStatus, InPoolTransaction};
 
 use crate::future::{FutureTransactions, WaitingTransaction};
 use crate::ready::ReadyTransactions;

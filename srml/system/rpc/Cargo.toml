@@ -16,7 +16,7 @@ serde = { version = "1.0.101", features = ["derive"] }
 sr-primitives = { path = "../../../core/sr-primitives" }
 srml-system-rpc-runtime-api = { path = "./runtime-api" }
 substrate-primitives = { path = "../../../core/primitives" }
-txpoolapi = { package = "substrate-transaction-pool-api", path = "../../../core/transaction-pool/api" }
+txpool-api = { package = "substrate-transaction-pool-api", path = "../../../core/transaction-pool/api" }
 
 [dev-dependencies]
 test-client = { package = "substrate-test-runtime-client", path = "../../../core/test-runtime/client" }

@@ -22,7 +22,7 @@ pub mod hash;
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use primitives::Bytes;
-use txpoolapi::TransactionStatus;
+use txpool_api::TransactionStatus;
 use self::error::{FutureResult, Result};
 
 pub use self::gen_client::Client as AuthorClient;

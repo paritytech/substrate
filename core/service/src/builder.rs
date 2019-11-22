@@ -50,7 +50,7 @@ use std::{
 };
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use tel::{telemetry, SUBSTRATE_INFO};
-use txpoolapi::{TransactionPool, TransactionPoolMaintainer};
+use txpool_api::{TransactionPool, TransactionPoolMaintainer};
 
 /// Aggregator for the components required to build a service.
 ///

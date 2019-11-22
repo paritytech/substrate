@@ -34,7 +34,7 @@ use sr_primitives::{
 	traits::{self, SaturatedConversion},
 	transaction_validity::{TransactionValidity, TransactionTag as Tag, TransactionValidityError},
 };
-use txpoolapi::{error, PoolStatus};
+use txpool_api::{error, PoolStatus};
 
 use crate::validated_pool::{ValidatedPool, ValidatedTransaction};
 
@@ -437,7 +437,7 @@ mod tests {
 	use parking_lot::Mutex;
 	use futures::executor::block_on;
 	use super::*;
-	use txpoolapi::TransactionStatus;
+	use txpool_api::TransactionStatus;
 	use sr_primitives::transaction_validity::{ValidTransaction, InvalidTransaction};
 	use codec::Encode;
 	use test_runtime::{Block, Extrinsic, Transfer, H256, AccountId};

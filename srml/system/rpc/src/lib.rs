@@ -36,7 +36,7 @@ use sr_primitives::{
 	traits,
 };
 use substrate_primitives::hexdisplay::HexDisplay;
-use txpoolapi::{TransactionPool, InPoolTransaction};
+use txpool_api::{TransactionPool, InPoolTransaction};
 
 pub use srml_system_rpc_runtime_api::AccountNonceApi;
 pub use self::gen_client::Client as SystemClient;

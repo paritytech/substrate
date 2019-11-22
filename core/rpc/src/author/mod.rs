@@ -36,7 +36,7 @@ use codec::{Encode, Decode};
 use primitives::{Bytes, Blake2Hasher, H256, traits::BareCryptoStorePtr};
 use sr_api::ConstructRuntimeApi;
 use sr_primitives::{generic, traits::{self, ProvideRuntimeApi}};
-use txpoolapi::{
+use txpool_api::{
 	TransactionPool, InPoolTransaction, TransactionStatus,
 	BlockHash, TxHash, TransactionFor, IntoPoolError,
 };

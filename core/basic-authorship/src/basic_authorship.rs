@@ -32,7 +32,7 @@ use sr_primitives::{
 	},
 	generic::BlockId,
 };
-use txpoolapi::{TransactionPool, InPoolTransaction};
+use txpool_api::{TransactionPool, InPoolTransaction};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 use block_builder::BlockBuilderApi;
 

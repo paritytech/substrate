@@ -13,4 +13,4 @@ sr-primitives = { path = "../../core/sr-primitives" }
 srml-contracts-rpc = { path = "../../srml/contracts/rpc/" }
 srml-transaction-payment-rpc = { path = "../../srml/transaction-payment/rpc/" }
 srml-system-rpc = { path = "../../srml/system/rpc/" }
-txpoolapi = { package = "substrate-transaction-pool-api", path = "../../core/transaction-pool/api" }
+txpool-api = { package = "substrate-transaction-pool-api", path = "../../core/transaction-pool/api" }
