@@ -33,7 +33,7 @@ sr-arithmetic = { path = "../../primitives/sr-arithmetic" }
 primitives = { package = "substrate-primitives", path = "../../primitives/core" }
 block-builder = { package = "substrate-block-builder", path = "../block-builder" }
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
-peerset = { package = "substrate-peerset", path = "../../primitives/peerset" }
+peerset = { package = "substrate-peerset", path = "../peerset" }
 serde = { version = "1.0.101", features = ["derive"] }
 serde_json = "1.0.41"
 slog = { version = "2.5.2", features = ["nested-values"] }
