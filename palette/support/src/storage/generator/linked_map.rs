@@ -164,9 +164,18 @@ where
 
 		let (val, linkage): (V, Linkage<K>) = {
 			let next_full_key = F::storage_linked_map_final_key(self.prefix, &next);
-			read_with_linkage::<K, V>(next_full_key.as_ref())
-				.expect("previous/next only contains existing entries;
-						we enumerate using next; entry exists; qed")
+			match read_with_linkage::<K, V>(next_full_key.as_ref()) {
+				Some(value) => value,
+				None => {
+					// TODO #3700: error should be handleable.
+					runtime_print!(
+						"ERROR: Corrupted state: linked map head_key={:?}: \
+						next value doesn't exist at {:?}",
+						F::head_key(), next_full_key.as_ref(),
+					);
+					return None
+				}
+			}
 		};
 
 		self.next = linkage.next;
@@ -193,22 +202,34 @@ where
 
 	if let Some(prev_key) = prev_key {
 		// Retrieve previous element and update `next`
-		let mut res = read_with_linkage::<K, V>(prev_key.as_ref())
-			.expect("Linkage is updated in case entry is removed;
-					it always points to existing keys; qed");
-		res.1.next = linkage.next;
-		unhashed::put(prev_key.as_ref(), &res);
+		if let Some(mut res) = read_with_linkage::<K, V>(prev_key.as_ref()) {
+			res.1.next = linkage.next;
+			unhashed::put(prev_key.as_ref(), &res);
+		} else {
+			// TODO #3700: error should be handleable.
+			runtime_print!(
+				"ERROR: Corrupted state: linked map head_key={:?}: \
+				previous value doesn't exist at {:?}",
+				F::head_key(), prev_key,
+			);
+		}
 	} else {
 		// we were first so let's update the head
 		write_head::<&K, K, F>(linkage.next.as_ref());
 	}
 	if let Some(next_key) = next_key {
 		// Update previous of next element
-		let mut res = read_with_linkage::<K, V>(next_key.as_ref())
-			.expect("Linkage is updated in case entry is removed;
-					it always points to existing keys; qed");
-		res.1.previous = linkage.previous;
-		unhashed::put(next_key.as_ref(), &res);
+		if let Some(mut res) = read_with_linkage::<K, V>(next_key.as_ref()) {
+			res.1.previous = linkage.previous;
+			unhashed::put(next_key.as_ref(), &res);
+		} else {
+			// TODO #3700: error should be handleable.
+			runtime_print!(
+				"ERROR: Corrupted state: linked map head_key={:?}: \
+				next value doesn't exist at {:?}",
+				F::head_key(), next_key,
+			);
+		}
 	}
 }
 
@@ -235,16 +256,25 @@ where
 		// update previous head predecessor
 		{
 			let head_key = F::storage_linked_map_final_key(prefix, &head);
-			let (data, linkage) = read_with_linkage::<K, V>(head_key.as_ref())
-				.expect("head is set when first element is inserted
-						and unset when last element is removed;
-						if head is Some then it points to existing key; qed");
-			let new_linkage = EncodeLikeLinkage::<_, _, K> {
-				previous: Some(Ref::from(&key)),
-				next: linkage.next.as_ref(),
-				phantom: Default::default(),
-			};
-			unhashed::put(head_key.as_ref(), &(data, new_linkage));
+			if let Some((data, linkage)) = read_with_linkage::<K, V>(head_key.as_ref()) {
+				let new_linkage = EncodeLikeLinkage::<_, _, K> {
+					previous: Some(Ref::from(&key)),
+					next: linkage.next.as_ref(),
+					phantom: Default::default(),
+				};
+				unhashed::put(head_key.as_ref(), &(data, new_linkage));
+			} else {
+				// TODO #3700: error should be handleable.
+				runtime_print!(
+					"ERROR: Corrupted state: linked map head_key={:?}: \
+					head value doesn't exist at {:?}",
+					F::head_key(), head_key.as_ref(),
+				);
+				// Thus we consider we are first - update the head and produce empty linkage
+
+				write_head::<_, _, F>(Some(key));
+				return Linkage::default();
+			}
 		}
 		// update to current head
 		write_head::<_, _, F>(Some(key));
