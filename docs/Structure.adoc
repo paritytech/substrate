@@ -99,7 +99,7 @@ Subkey is a client library to generate keys and sign transactions to send to a s
 ....
 +---------------+       +----------------+
 |               |       |                |
-|    runtime    +<------+   frame      |
+|    runtime    +<------+   frame        |
 |               |       |                |
 +------+-----+--+       +-------------+--+
        ^     ^                        ^
