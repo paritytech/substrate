@@ -1,5 +1,5 @@
 [package]
-name = "substrate-palette-rpc"
+name = "substrate-palette-rpc-support"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>", "Andrew Dirksen <andrew@dirksen.com>"]
 edition = "2018"
@@ -10,10 +10,10 @@ jsonrpc-client-transports = "14"
 jsonrpc-core = "14"
 parity-scale-codec = "1"
 serde = "1"
-palette-support = { path = "../../../palette/support" }
-substrate-primitives-storage = { path = "../../../primitives/core/storage" }
-sc-rpc-api = { path = "../../../client/rpc/api" }
+palette-support = { path = "../../../../palette/support" }
+substrate-primitives-storage = { path = "../../../../primitives/core/storage" }
+sc-rpc-api = { path = "../../../../client/rpc/api" }
 
 [dev-dependencies]
-palette-system = { path = "../../../palette/system" }
+palette-system = { path = "../../../../palette/system" }
 tokio = "0.1"

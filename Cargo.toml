@@ -135,7 +135,7 @@ members = [
 	"test/utils/transaction-factory",
 	"utils/build-script-utils",
 	"utils/fork-tree",
-	"utils/palette/rpc",
+	"utils/palette/rpc/support",
 	"utils/wasm-builder",
 ]
 

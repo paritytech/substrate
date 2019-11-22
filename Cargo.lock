@@ -6044,7 +6044,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "substrate-palette-rpc"
+name = "substrate-palette-rpc-support"
 version = "2.0.0"
 dependencies = [
  "futures 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -6169,7 +6169,7 @@ dependencies = [
  "substrate-executor 2.0.0",
  "substrate-keystore 2.0.0",
  "substrate-network 2.0.0",
- "substrate-palette-rpc 2.0.0",
+ "substrate-palette-rpc-support 2.0.0",
  "substrate-primitives 2.0.0",
  "substrate-rpc-primitives 2.0.0",
  "substrate-session 2.0.0",
