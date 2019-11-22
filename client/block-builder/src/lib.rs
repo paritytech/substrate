@@ -131,42 +131,42 @@ where
 		let extrinsics = &mut self.extrinsics;
 
 		if self
-            .api
-            .has_api_with::<dyn BlockBuilderApi<Block, Error = ApiErrorFor<A, Block>>, _>(
-                block_id,
-                |version| version < 4,
-            )?
-        {
-            // Run compatibility fallback for v3.
-            self.api.map_api_result(|api| {
+			.api
+			.has_api_with::<dyn BlockBuilderApi<Block, Error = ApiErrorFor<A, Block>>, _>(
+				block_id,
+				|version| version < 4,
+			)?
+		{
+			// Run compatibility fallback for v3.
+			self.api.map_api_result(|api| {
 				#[allow(deprecated)]
-                match api.apply_extrinsic_before_version_4_with_context(
-                    block_id,
-                    ExecutionContext::BlockConstruction,
-                    xt.clone(),
-                )? {
-                    Ok(_) => {
-                        extrinsics.push(xt);
-                        Ok(())
-                    }
-                    Err(e) => Err(ApplyExtrinsicFailed::from(e))?,
-                }
-            })
-        } else {
-            self.api.map_api_result(|api| {
-                match api.apply_extrinsic_with_context(
-                    block_id,
-                    ExecutionContext::BlockConstruction,
-                    xt.clone(),
-                )? {
-                    Ok(_) => {
-                        extrinsics.push(xt);
-                        Ok(())
-                    }
-                    Err(tx_validity) => Err(ApplyExtrinsicFailed::Validity(tx_validity))?,
-                }
-            })
-        }
+				match api.apply_extrinsic_before_version_4_with_context(
+					block_id,
+					ExecutionContext::BlockConstruction,
+					xt.clone(),
+				)? {
+					Ok(_) => {
+						extrinsics.push(xt);
+						Ok(())
+					}
+					Err(e) => Err(ApplyExtrinsicFailed::from(e))?,
+				}
+			})
+		} else {
+			self.api.map_api_result(|api| {
+				match api.apply_extrinsic_with_context(
+					block_id,
+					ExecutionContext::BlockConstruction,
+					xt.clone(),
+				)? {
+					Ok(_) => {
+						extrinsics.push(xt);
+						Ok(())
+					}
+					Err(tx_validity) => Err(ApplyExtrinsicFailed::Validity(tx_validity))?,
+				}
+			})
+		}
 	}
 
 	/// Consume the builder to return a valid `Block` containing all pushed extrinsics.
