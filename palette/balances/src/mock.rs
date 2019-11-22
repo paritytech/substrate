@@ -16,12 +16,12 @@
 
 //! Test utilities
 
-use sr_primitives::{Perbill, traits::{ConvertInto, IdentityLookup}, testing::Header,
-	weights::{DispatchInfo, Weight}};
+use sr_primitives::{Perbill, traits::{ConvertInto, IdentityLookup}, testing::Header};
 use primitives::H256;
 use runtime_io;
 use support::{impl_outer_origin, parameter_types};
 use support::traits::Get;
+use support::weights::{Weight, DispatchInfo};
 use std::cell::RefCell;
 use crate::{GenesisConfig, Module, Trait};
 

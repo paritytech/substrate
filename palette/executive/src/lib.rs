@@ -77,9 +77,9 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use rstd::{prelude::*, marker::PhantomData};
+use support::weights::{GetDispatchInfo, WeighBlock, DispatchInfo};
 use sr_primitives::{
 	generic::Digest, ApplyResult,
-	weights::{GetDispatchInfo, WeighBlock},
 	traits::{
 		self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalize, OnInitialize,
 		NumberFor, Block as BlockT, OffchainWorker, Dispatchable,
@@ -119,7 +119,9 @@ impl<
 > ExecuteBlock<Block> for Executive<System, Block, Context, UnsignedValidator, AllModules>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
-	CheckedOf<Block::Extrinsic, Context>: Applyable<AccountId=System::AccountId> + GetDispatchInfo,
+	CheckedOf<Block::Extrinsic, Context>:
+		Applyable<AccountId=System::AccountId, DispatchInfo=DispatchInfo> +
+		GetDispatchInfo,
 	CallOf<Block::Extrinsic, Context>: Dispatchable,
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
 	UnsignedValidator: ValidateUnsigned<Call=CallOf<Block::Extrinsic, Context>>,
@@ -143,7 +145,9 @@ impl<
 > Executive<System, Block, Context, UnsignedValidator, AllModules>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
-	CheckedOf<Block::Extrinsic, Context>: Applyable<AccountId=System::AccountId> + GetDispatchInfo,
+	CheckedOf<Block::Extrinsic, Context>:
+		Applyable<AccountId=System::AccountId, DispatchInfo=DispatchInfo> +
+		GetDispatchInfo,
 	CallOf<Block::Extrinsic, Context>: Dispatchable,
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
 	UnsignedValidator: ValidateUnsigned<Call=CallOf<Block::Extrinsic, Context>>,
@@ -316,12 +320,13 @@ mod tests {
 	use super::*;
 	use primitives::H256;
 	use sr_primitives::{
-		generic::Era, Perbill, DispatchError, weights::Weight, testing::{Digest, Header, Block},
+		generic::Era, Perbill, DispatchError, testing::{Digest, Header, Block},
 		traits::{Bounded, Header as HeaderT, BlakeTwo256, IdentityLookup, ConvertInto},
 		transaction_validity::{InvalidTransaction, UnknownTransaction}, ApplyError,
 	};
 	use support::{
 		impl_outer_event, impl_outer_origin, parameter_types, impl_outer_dispatch,
+		weights::Weight,
 		traits::{Currency, LockIdentifier, LockableCurrency, WithdrawReasons, WithdrawReason},
 	};
 	use system::{Call as SystemCall, ChainContext};
@@ -329,7 +334,7 @@ mod tests {
 	use hex_literal::hex;
 
 	mod custom {
-		use sr_primitives::weights::SimpleDispatchInfo;
+		use support::weights::SimpleDispatchInfo;
 
 		pub trait Trait: system::Trait {}
 
