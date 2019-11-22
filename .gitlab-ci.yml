@@ -296,7 +296,7 @@ build-linux-subkey:
     variables:
       - $DEPLOY_TAG
   script:
-    - cd ./subkey
+    - cd ./bin/subkey
     - BUILD_DUMMY_WASM_BINARY=1 time cargo build --release --verbose
     - cd -
     - sccache -s
@@ -323,7 +323,7 @@ build-rust-doc-release:
   <<:                              *build-only
   script:
     - rm -f ./crate-docs/index.html # use it as an indicator if the job succeeds
-    - BUILD_DUMMY_WASM_BINARY=1 RUSTDOCFLAGS="--html-in-header $(pwd).maintain/rustdoc-header.html" time cargo +nightly doc --release --all --verbose
+    - BUILD_DUMMY_WASM_BINARY=1 RUSTDOCFLAGS="--html-in-header $(pwd)/.maintain/rustdoc-header.html" time cargo +nightly doc --release --all --verbose
     - cp -R ./target/doc ./crate-docs
     - echo "<meta http-equiv=refresh content=0;url=substrate_service/index.html>" > ./crate-docs/index.html
     - sccache -s
