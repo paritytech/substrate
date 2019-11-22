@@ -279,7 +279,10 @@ impl<B: ChainApi> Pool<B> {
 			)))
 	}
 
-	/// Return an event stream of transactions imported to the pool.
+	/// Return an event stream of notifications for when transactions are imported to the pool.
+	/// 
+	/// Consumers of this stream should use the `ready` method to actually get the
+	/// pending transactions in the right order.
 	pub fn import_notification_stream(&self) -> EventStream {
 		self.validated_pool.import_notification_stream()
 	}
