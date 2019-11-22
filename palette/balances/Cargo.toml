@@ -14,9 +14,9 @@ support = { package = "palette-support", path = "../support", default-features =
 system = { package = "palette-system", path = "../system", default-features = false }
 
 [dev-dependencies]
-runtime-io = { package = "sr-io", path = "../../primitives/sr-io", default-features = false }
-primitives = { package = "substrate-primitives", path = "../../primitives/core", default-features = false }
-transaction-payment = { package = "pallet-transaction-payment", path = "../transaction-payment", default-features = false }
+runtime-io = { package = "sr-io", path = "../../primitives/sr-io" }
+primitives = { package = "substrate-primitives", path = "../../primitives/core" }
+transaction-payment = { package = "pallet-transaction-payment", path = "../transaction-payment" }
 
 [features]
 default = ["std"]
@@ -28,7 +28,4 @@ std = [
 	"support/std",
 	"sr-primitives/std",
 	"system/std",
-	"runtime-io/std",
-	"primitives/std",
-	"transaction-payment/std",
 ]
