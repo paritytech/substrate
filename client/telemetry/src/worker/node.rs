@@ -76,6 +76,9 @@ pub enum NodeEvent<TSinkErr> {
 pub enum ConnectionError<TSinkErr> {
 	/// The connection timed-out.
 	Timeout,
+	/// Reading from the socket returned and end-of-file, indicating that the socket has been
+	/// closed.
+	Closed,
 	/// The sink errored.
 	Sink(TSinkErr),
 }
@@ -273,7 +276,10 @@ where TTrans::Output: Sink<BytesMut, Error = TSinkErr>
 			Poll::Ready(Some(Err(err))) => {
 				return Poll::Ready(Err(ConnectionError::Sink(err)))
 			},
-			Poll::Pending | Poll::Ready(None) => {},
+			Poll::Ready(None) => {
+				return Poll::Ready(Err(ConnectionError::Closed))
+			},
+			Poll::Pending => {},
 		}
 
 		Poll::Pending
