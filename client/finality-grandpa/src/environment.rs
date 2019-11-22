@@ -798,7 +798,7 @@ where
 			let mut completed_rounds = completed_rounds.clone();
 
 			// TODO: Future integration will store the prevote and precommit index. See #2611.
-			let votes = historical_votes.seen().clone();
+			let votes = historical_votes.seen().to_vec();
 
 			completed_rounds.push(CompletedRound {
 				number: round,
@@ -815,6 +815,61 @@ where
 			let set_state = VoterSetState::<Block>::Live {
 				completed_rounds,
 				current_rounds,
+			};
+
+			crate::aux_schema::write_voter_set_state(&*self.client, &set_state)?;
+
+			Ok(Some(set_state))
+		})?;
+
+		Ok(())
+	}
+
+	fn concluded(
+		&self,
+		round: RoundNumber,
+		state: RoundState<Block::Hash, NumberFor<Block>>,
+		_base: (Block::Hash, NumberFor<Block>),
+		historical_votes: &HistoricalVotes<Block>,
+	) -> Result<(), Self::Error> {
+		debug!(
+			target: "afg", "Voter {} concluded round {} in set {}. Estimate = {:?}, Finalized in round = {:?}",
+			self.config.name(),
+			round,
+			self.set_id,
+			state.estimate.as_ref().map(|e| e.1),
+			state.finalized.as_ref().map(|e| e.1),
+		);
+
+		self.update_voter_set_state(|voter_set_state| {
+			// NOTE: we don't use `with_current_round` here, because a concluded
+			// round is completed and cannot be current.
+			let (completed_rounds, current_rounds) =
+				if let VoterSetState::Live { completed_rounds, current_rounds } = voter_set_state {
+					(completed_rounds, current_rounds)
+				} else {
+					let msg = "Voter acting while in paused state.";
+					return Err(Error::Safety(msg.to_string()));
+				};
+
+			let mut completed_rounds = completed_rounds.clone();
+
+			if let Some(already_completed) = completed_rounds.rounds
+				.iter_mut().find(|r| r.number == round)
+			{
+				let n_existing_votes = already_completed.votes.len();
+
+				// the interface of Environment guarantees that the previous `historical_votes`
+				// from `completable` is a prefix of what is passed to `concluded`.
+				already_completed.votes.extend(
+					historical_votes.seen().iter().skip(n_existing_votes).cloned()
+				);
+				already_completed.state = state;
+			}
+
+			let set_state = VoterSetState::<Block>::Live {
+				completed_rounds,
+				current_rounds: current_rounds.clone(),
 			};
 
 			crate::aux_schema::write_voter_set_state(&*self.client, &set_state)?;
