@@ -29,7 +29,7 @@
 //! To begin timing, a span must be entered. When the span is dropped, the execution time
 //! is recorded and details sent to the `Receiver` which defines how to process it.
 //!
-//! Currently we provide a single `Telemetry` variant for `Receiver`
+//! Currently we provide `Log` (default) and `Telemetry` variants for `Receiver`
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -178,8 +178,12 @@ impl ProfilingSubscriber {
 
 fn print_log(span_datum: SpanDatum) {
 	let message = format!(
-		"Tracing: {} {}: {}, line: {}, time: {}ns",
-		span_datum.level, span_datum.target, span_datum.name, span_datum.line, span_datum.overall_time.as_nanos()
+		"Tracing: {} {}: {}, line: {}, time: {} ns",
+		span_datum.level,
+		span_datum.target,
+		span_datum.name,
+		span_datum.line,
+		span_datum.overall_time.as_nanos()
 	);
 	log::info!(target: "substrate_tracing", "{}", message);
 }

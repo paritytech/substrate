@@ -510,7 +510,7 @@ pub struct RunCmd {
 	pub force_authoring: bool,
 
 	/// Comma separated list of targets for tracing
-	#[structopt(long = "tracing-targets")]
+	#[structopt(long = "tracing-targets", value_name = "TARGETS")]
 	pub tracing_targets: Option<String>,
 
 	/// Receiver to process tracing messages
