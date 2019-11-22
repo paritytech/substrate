@@ -52,7 +52,6 @@ pub mod offchain;
 pub mod testing;
 pub mod traits;
 pub mod transaction_validity;
-pub mod weights;
 pub mod random_number_generator;
 
 /// Re-export these since they're only "kind of" generic.

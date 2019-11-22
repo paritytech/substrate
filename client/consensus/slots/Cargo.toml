@@ -14,8 +14,8 @@ sr-primitives = {  path = "../../../primitives/sr-primitives" }
 substrate-telemetry = { path = "../../telemetry" }
 consensus_common = { package = "substrate-consensus-common", path = "../../../primitives/consensus/common" }
 inherents = { package = "substrate-inherents", path = "../../../primitives/inherents" }
-futures-preview = "0.3.0-alpha.19"
-futures-timer = "0.4.0"
+futures = "0.3.1"
+futures-timer = "2.0"
 parking_lot = "0.9.0"
 log = "0.4.8"
 

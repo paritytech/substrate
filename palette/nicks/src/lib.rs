@@ -40,12 +40,12 @@
 
 use rstd::prelude::*;
 use sr_primitives::{
-	traits::{StaticLookup, EnsureOrigin, Zero}, weights::SimpleDispatchInfo
+	traits::{StaticLookup, EnsureOrigin, Zero}
 };
 use support::{
-	decl_module, decl_event, decl_storage, ensure, traits::{
-		Currency, ReservableCurrency, OnUnbalanced, Get
-	},
+	decl_module, decl_event, decl_storage, ensure,
+	traits::{Currency, ReservableCurrency, OnUnbalanced, Get},
+	weights::SimpleDispatchInfo,
 };
 use system::{ensure_signed, ensure_root};
 

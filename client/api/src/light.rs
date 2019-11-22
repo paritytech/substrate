@@ -286,7 +286,7 @@ pub trait RemoteBlockchain<Block: BlockT>: Send + Sync {
 
 #[cfg(test)]
 pub mod tests {
-	use futures03::future::Ready;
+	use futures::future::Ready;
 	use parking_lot::Mutex;
     use crate::error::Error as ClientError;
     use test_primitives::{Block, Header, Extrinsic};
@@ -298,7 +298,7 @@ pub mod tests {
 	where
 		E: std::convert::From<&'static str>,
 	{
-		futures03::future::ready(Err("Not implemented on test node".into()))
+		futures::future::ready(Err("Not implemented on test node".into()))
 	}
 
 	impl Fetcher<Block> for OkCallFetcher {
@@ -321,7 +321,7 @@ pub mod tests {
 		}
 
 		fn remote_call(&self, _request: RemoteCallRequest<Header>) -> Self::RemoteCallResult {
-			futures03::future::ready(Ok((*self.lock()).clone()))
+			futures::future::ready(Ok((*self.lock()).clone()))
 		}
 
 		fn remote_changes(&self, _request: RemoteChangesRequest<Header>) -> Self::RemoteChangesResult {
