@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 derive_more = "0.15.0"
-futures-preview = "0.3.0-alpha.19"
+futures = "0.3.1"
 log = "0.4.8"
 parking_lot = "0.9.0"
 serde = { version = "1.0.101", features = ["derive"] }

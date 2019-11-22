@@ -16,6 +16,7 @@
 
 use crate::{DiscoveryNetBehaviour, config::ProtocolId};
 use crate::legacy_proto::{LegacyProto, LegacyProtoOut};
+use crate::utils::interval;
 use bytes::BytesMut;
 use futures::prelude::*;
 use futures03::{StreamExt as _, TryStreamExt as _};
@@ -430,8 +431,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		let behaviour = LegacyProto::new(protocol_id, versions, peerset);
 
 		let protocol = Protocol {
-			tick_timeout: Box::new(futures_timer::Interval::new(TICK_TIMEOUT).map(|v| Ok::<_, ()>(v)).compat()),
-			propagate_timeout: Box::new(futures_timer::Interval::new(PROPAGATE_TIMEOUT).map(|v| Ok::<_, ()>(v)).compat()),
+			tick_timeout: Box::new(interval(TICK_TIMEOUT).map(|v| Ok::<_, ()>(v)).compat()),
+			propagate_timeout: Box::new(interval(PROPAGATE_TIMEOUT).map(|v| Ok::<_, ()>(v)).compat()),
 			config,
 			context_data: ContextData {
 				peers: HashMap::new(),

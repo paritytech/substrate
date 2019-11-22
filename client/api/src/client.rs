@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::collections::HashMap;
-use futures03::channel::mpsc;
+use futures::channel::mpsc;
 use primitives::storage::StorageKey;
 use state_machine::ExecutionStrategy;
 use sr_primitives::{

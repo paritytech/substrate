@@ -8,7 +8,6 @@ edition = "2018"
 serde = { version = "1.0.101", optional = true }
 safe-mix = { version = "1.0.0", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-substrate-keyring = { path = "../../primitives/keyring", optional = true }
 rstd = { package = "sr-std", path = "../../primitives/sr-std", default-features = false }
 sr-primitives = { path = "../../primitives/sr-primitives", default-features = false }
 support = { package = "palette-support", path = "../support", default-features = false }
@@ -16,7 +15,7 @@ system = { package = "palette-system", path = "../system", default-features = fa
 
 [dev-dependencies]
 runtime-io = { package = "sr-io", path = "../../primitives/sr-io" }
-primitives = { package = "substrate-primitives",  path = "../../primitives/core" }
+primitives = { package = "substrate-primitives", path = "../../primitives/core" }
 transaction-payment = { package = "pallet-transaction-payment", path = "../transaction-payment" }
 
 [features]
@@ -24,7 +23,6 @@ default = ["std"]
 std = [
 	"serde",
 	"safe-mix/std",
-	"substrate-keyring",
 	"codec/std",
 	"rstd/std",
 	"support/std",

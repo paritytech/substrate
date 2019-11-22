@@ -120,7 +120,7 @@ mod tests {
 	use super::*;
 	use sp_transaction_pool;
 
-	use futures03::executor::block_on;
+	use futures::executor::block_on;
 	use test_client::{
 		runtime::Transfer,
 		AccountKeyring,

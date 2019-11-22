@@ -23,11 +23,11 @@ pub use palette_metadata::{
 	FunctionMetadata, DecodeDifferent, DecodeDifferentArray, FunctionArgumentMetadata,
 	ModuleConstantMetadata, DefaultByte, DefaultByteGetter, ModuleErrorMetadata, ErrorMetadata
 };
+pub use crate::weights::{
+	SimpleDispatchInfo, GetDispatchInfo, DispatchInfo, WeighData, ClassifyDispatch,
+	TransactionPriority, Weight, WeighBlock,
+};
 pub use sr_primitives::{
-	weights::{
-		SimpleDispatchInfo, GetDispatchInfo, DispatchInfo, WeighData, ClassifyDispatch,
-		TransactionPriority, Weight, WeighBlock,
-	},
 	traits::{Dispatchable, DispatchResult, ModuleDispatchError},
 	DispatchError,
 };
@@ -1832,7 +1832,7 @@ macro_rules! __check_reserved_fn_name {
 mod tests {
 	use super::*;
 	use crate::sr_primitives::traits::{OnInitialize, OnFinalize};
-	use sr_primitives::weights::{DispatchInfo, DispatchClass};
+	use crate::weights::{DispatchInfo, DispatchClass};
 
 	pub trait Trait: system::Trait + Sized where Self::AccountId: From<u32> {
 		type Origin;

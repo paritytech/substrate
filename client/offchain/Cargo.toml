@@ -12,8 +12,8 @@ client-api = { package = "substrate-client-api", path = "../api" }
 sr-api = { path = "../../primitives/sr-api" }
 fnv = "1.0.6"
 futures01 = { package = "futures", version = "0.1" }
-futures-preview = "0.3.0-alpha.19"
-futures-timer = "0.4.0"
+futures = "0.3.1"
+futures-timer = "2.0"
 log = "0.4.8"
 threadpool = "1.7"
 num_cpus = "1.10"

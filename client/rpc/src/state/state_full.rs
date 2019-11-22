@@ -19,7 +19,7 @@
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use std::ops::Range;
-use futures03::{future, StreamExt as _, TryStreamExt as _};
+use futures::{future, StreamExt as _, TryStreamExt as _};
 use log::warn;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use rpc::{

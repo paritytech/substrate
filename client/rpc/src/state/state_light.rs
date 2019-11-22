@@ -21,7 +21,7 @@ use std::{
 	collections::{HashSet, HashMap, hash_map::Entry},
 };
 use codec::Decode;
-use futures03::{
+use futures::{
 	future::{ready, Either},
 	channel::oneshot::{channel, Sender},
 	FutureExt, TryFutureExt,
@@ -753,7 +753,7 @@ mod tests {
 
 	#[test]
 	fn maybe_share_remote_request_shares_request() {
-		type UnreachableFuture = futures03::future::Ready<Result<u32, Error>>;
+		type UnreachableFuture = futures::future::Ready<Result<u32, Error>>;
 
 		let shared_requests = SimpleSubscriptions::default();
 
