@@ -16,8 +16,6 @@
 
 //! Test utilities
 
-#![cfg(test)]
-
 use sr_primitives::{Perbill, traits::{ConvertInto, IdentityLookup}, testing::Header,
 	weights::{DispatchInfo, Weight}};
 use primitives::H256;
