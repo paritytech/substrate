@@ -29,7 +29,7 @@ use support::{
 	weights::SimpleDispatchInfo,
 };
 use system::ensure_root;
-use sr_primitives::{traits::EnsureOrigin};
+use sr_primitives::traits::EnsureOrigin;
 
 pub trait Trait<I=DefaultInstance>: system::Trait {
 	/// The overarching event type.
