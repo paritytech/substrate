@@ -1,0 +1,48 @@
+[package]
+name = "node-executor"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+description = "Substrate node implementation in Rust."
+edition = "2018"
+
+[dependencies]
+trie-root = "0.15.2"
+codec = { package = "parity-scale-codec", version = "1.0.0" }
+runtime_io = { package = "sr-io", path = "../../../primitives/sr-io" }
+state_machine = { package = "substrate-state-machine", path = "../../../primitives/state-machine" }
+substrate-executor = { path = "../../../client/executor" }
+primitives = { package = "substrate-primitives", path = "../../../primitives/core" }
+trie = { package = "substrate-trie", path = "../../../primitives/trie" }
+node-primitives = { path = "../primitives" }
+node-runtime = { path = "../runtime" }
+
+[dev-dependencies]
+node-testing = { path = "../testing" }
+test-client = { package = "substrate-test-client", path = "../../../test/utils/client" }
+sr-primitives = { path = "../../../primitives/sr-primitives" }
+runtime_support = { package = "palette-support", path = "../../../palette/support" }
+balances = { package = "pallet-balances", path = "../../../palette/balances" }
+transaction-payment = { package = "pallet-transaction-payment", path = "../../../palette/transaction-payment" }
+session = { package = "pallet-session", path = "../../../palette/session" }
+system = { package = "palette-system", path = "../../../palette/system" }
+timestamp = { package = "pallet-timestamp", path = "../../../palette/timestamp" }
+treasury = { package = "pallet-treasury", path = "../../../palette/treasury" }
+contracts = { package = "pallet-contracts", path = "../../../palette/contracts" }
+grandpa = { package = "pallet-grandpa", path = "../../../palette/grandpa" }
+indices = { package = "pallet-indices", path = "../../../palette/indices" }
+wabt = "0.9.2"
+criterion = "0.3.0"
+
+[features]
+wasmtime = [
+    "substrate-executor/wasmtime",
+]
+wasmi-errno = [
+	"substrate-executor/wasmi-errno",
+]
+stress-test = []
+
+[[bench]]
+name = "bench"
+harness = false
+
