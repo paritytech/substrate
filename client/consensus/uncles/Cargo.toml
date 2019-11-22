@@ -9,7 +9,7 @@ edition = "2018"
 client-api = { package = "substrate-client-api", path = "../../api" }
 primitives = { package = "substrate-primitives", path = "../../../primitives/core" }
 sr-primitives = {  path = "../../../primitives/sr-primitives" }
-paint-authorship = {  path = "../../../paint/authorship" }
+sp-authorship = {  path = "../../../primitives/authorship" }
 consensus_common = { package = "substrate-consensus-common", path = "../../../primitives/consensus/common" }
 inherents = { package = "substrate-inherents", path = "../../../primitives/inherents" }
 log = "0.4.8"

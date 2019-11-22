@@ -20,6 +20,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod digest;
+pub mod inherents;
 
 use codec::{Encode, Decode};
 use rstd::vec::Vec;
