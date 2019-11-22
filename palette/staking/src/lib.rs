@@ -108,6 +108,8 @@
 //! determined, a value is deducted from the balance of the validator and all the nominators who
 //! voted for this validator (values are deducted from the _stash_ account of the slashed entity).
 //!
+//! Slashing logic is further described in the documentation of the `slashing` module.
+//!
 //! Similar to slashing, rewards are also shared among a validator and its associated nominators.
 //! Yet, the reward funds are not always transferred to the stash account and can be configured.
 //! See [Reward Calculation](#reward-calculation) for more details.

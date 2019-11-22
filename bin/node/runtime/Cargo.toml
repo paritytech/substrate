@@ -40,7 +40,7 @@ contracts = { package = "pallet-contracts", path = "../../../palette/contracts",
 contracts-rpc-runtime-api = { package = "pallet-contracts-rpc-runtime-api", path = "../../../palette/contracts/rpc/runtime-api/", default-features = false }
 democracy = { package = "pallet-democracy", path = "../../../palette/democracy", default-features = false }
 elections-phragmen = { package = "pallet-elections-phragmen", path = "../../../palette/elections-phragmen", default-features = false }
-executive = { package = "pallet-executive", path = "../../../palette/executive", default-features = false }
+executive = { package = "palette-executive", path = "../../../palette/executive", default-features = false }
 finality-tracker = { package = "pallet-finality-tracker", path = "../../../palette/finality-tracker", default-features = false }
 grandpa = { package = "pallet-grandpa", path = "../../../palette/grandpa", default-features = false }
 im-online = { package = "pallet-im-online", path = "../../../palette/im-online", default-features = false }
@@ -51,14 +51,14 @@ offences = { package = "pallet-offences", path = "../../../palette/offences", de
 randomness-collective-flip = { package = "pallet-randomness-collective-flip", path = "../../../palette/randomness-collective-flip", default-features = false }
 session = { package = "pallet-session", path = "../../../palette/session", default-features = false, features = ["historical"] }
 staking = { package = "pallet-staking", path = "../../../palette/staking", default-features = false, features = ["migrate"] }
-paint-staking-reward-curve = { path = "../../../palette/staking/reward-curve"}
+pallet-staking-reward-curve = { path = "../../../palette/staking/reward-curve"}
 sudo = { package = "pallet-sudo", path = "../../../palette/sudo", default-features = false }
-support = { package = "pallet-support", path = "../../../palette/support", default-features = false }
-system = { package = "pallet-system", path = "../../../palette/system", default-features = false }
-system-rpc-runtime-api = { package = "pallet-system-rpc-runtime-api", path = "../../../palette/system/rpc/runtime-api/", default-features = false }
+support = { package = "palette-support", path = "../../../palette/support", default-features = false }
+system = { package = "palette-system", path = "../../../palette/system", default-features = false }
+system-rpc-runtime-api = { package = "palette-system-rpc-runtime-api", path = "../../../palette/system/rpc/runtime-api/", default-features = false }
 timestamp = { package = "pallet-timestamp", path = "../../../palette/timestamp", default-features = false }
 treasury = { package = "pallet-treasury", path = "../../../palette/treasury", default-features = false }
-utility = { package = "pallet-utility", path = "../../../palette/utility", default-features = false }
+utility = { package = "palette-utility", path = "../../../palette/utility", default-features = false }
 transaction-payment = { package = "pallet-transaction-payment", path = "../../../palette/transaction-payment", default-features = false }
 transaction-payment-rpc-runtime-api = { package = "pallet-transaction-payment-rpc-runtime-api", path = "../../../palette/transaction-payment/rpc/runtime-api/", default-features = false }
 
