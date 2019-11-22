@@ -12,7 +12,7 @@ parity-scale-codec = "1"
 serde = "1"
 palette-support = { path = "../" }
 substrate-primitives-storage = { path = "../../../primitives/core/storage" }
-substrate-rpc-api = { path = "../../../client/rpc/api" }
+sp-rpc-api = { path = "../../../primitives/rpc/api" }
 
 [dev-dependencies]
 palette-system = { path = "../../system" }
