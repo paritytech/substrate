@@ -53,18 +53,20 @@
 //! Candidates also reserve a bond as they submit candidacy. A candidate cannot take their candidacy
 //! back. A candidate can end up in one of the below situations:
 //!   - **Winner**: A winner is kept as a _member_. They must still have a bond in reserve and they
-//!     are automatically counted as a candidate for the next election. If a candidate becomes a
-//!     member, they will get their bond back once they are leaving the member set (for any reason).
+//!     are automatically counted as a candidate for the next election.
 //!   - **Runner-up**: Runners-up are the best candidates immediately after the winners. The number
 //!     of runners_up to keep is configurable. Runners-up are used, in order that they are elected,
 //!     as replacements when a candidate is kicked by `[remove_member]`, or when an active member
 //!     renounces their candidacy. Runners are automatically counted as a candidate for the next
-//!     election. Runners-up do not get their bond back unless if they make it into the member set
-//!     somehow.
+//!     election.
 //!   - **Loser**: Any of the candidate who are not a winner are left as losers. A loser might be an
-//!		_outgoing member_, meaning that they are an active member who failed to keep their spot. In
-//!		this case, the outgoing member will get their bond back. Otherwise, the bond is slashed from
-//!		the loser candidate.
+//!     _outgoing member or runner_, meaning that they are an active member who failed to keep their
+//!     spot. An outgoing will always lose their bond.
+//!
+//! ##### Renouncing candidacy.
+//!
+//! All candidates, elected or not, can renounce their candidacy. A call to [`renounce_candidacy`]
+//! will always cause the candidacy bond to be refunded.
 //!
 //! Note that with the members being the default candidates for the next round and votes persisting
 //! in storage, the election system is entirely stable given no further input. This means that if
