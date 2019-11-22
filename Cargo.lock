@@ -2785,12 +2785,12 @@ dependencies = [
  "jsonrpc-core 14.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "node-primitives 2.0.0",
  "node-runtime 2.0.0",
- "palette-system-rpc 2.0.0",
  "pallet-contracts-rpc 2.0.0",
  "pallet-transaction-payment-rpc 2.0.0",
  "sp-transaction-pool 2.0.0",
  "sr-primitives 2.0.0",
  "substrate-client 2.0.0",
+ "substrate-palette-rpc-system 2.0.0",
 ]
 
 [[package]]
@@ -3211,27 +3211,6 @@ dependencies = [
  "sr-std 2.0.0",
  "sr-version 2.0.0",
  "substrate-primitives 2.0.0",
-]
-
-[[package]]
-name = "palette-system-rpc"
-version = "2.0.0"
-dependencies = [
- "env_logger 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "jsonrpc-core 14.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "jsonrpc-core-client 14.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "jsonrpc-derive 14.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "palette-system-rpc-runtime-api 2.0.0",
- "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
- "sp-blockchain 2.0.0",
- "sp-transaction-graph 2.0.0",
- "sp-transaction-pool 2.0.0",
- "sr-primitives 2.0.0",
- "substrate-primitives 2.0.0",
- "substrate-test-runtime-client 2.0.0",
 ]
 
 [[package]]
@@ -6057,6 +6036,27 @@ dependencies = [
  "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-primitives-storage 2.0.0",
  "tokio 0.1.22 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "substrate-palette-rpc-system"
+version = "2.0.0"
+dependencies = [
+ "env_logger 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "jsonrpc-core 14.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "jsonrpc-core-client 14.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "jsonrpc-derive 14.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "palette-system-rpc-runtime-api 2.0.0",
+ "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-blockchain 2.0.0",
+ "sp-transaction-graph 2.0.0",
+ "sp-transaction-pool 2.0.0",
+ "sr-primitives 2.0.0",
+ "substrate-primitives 2.0.0",
+ "substrate-test-runtime-client 2.0.0",
 ]
 
 [[package]]

@@ -76,7 +76,6 @@ members = [
 	"palette/support/procedural/tools/derive",
 	"palette/support/test",
 	"palette/system",
-	"palette/system/rpc",
 	"palette/system/rpc/runtime-api",
 	"palette/timestamp",
 	"palette/transaction-payment",
@@ -136,6 +135,7 @@ members = [
 	"utils/build-script-utils",
 	"utils/fork-tree",
 	"utils/palette/rpc/support",
+	"utils/palette/rpc/system",
 	"utils/wasm-builder",
 ]
 
