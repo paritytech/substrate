@@ -99,7 +99,6 @@ use sr_version::RuntimeVersion;
 use sr_primitives::{
 	RuntimeDebug,
 	generic::{self, Era}, Perbill, DispatchOutcome, DispatchError,
-	weights::{Weight, DispatchInfo, DispatchClass, SimpleDispatchInfo},
 	transaction_validity::{
 		ValidTransaction, TransactionPriority, TransactionLongevity, TransactionValidityError,
 		InvalidTransaction, TransactionValidity,
@@ -115,6 +114,7 @@ use primitives::storage::well_known_keys;
 use support::{
 	decl_module, decl_event, decl_storage, decl_error, storage, Parameter,
 	traits::{Contains, Get},
+	weights::{Weight, DispatchInfo, DispatchClass, SimpleDispatchInfo},
 };
 use codec::{Encode, Decode};
 
@@ -311,9 +311,9 @@ decl_event!(
 	/// Event for the System module.
 	pub enum Event {
 		/// An extrinsic completed successfully.
-		ExtrinsicSuccess,
+		ExtrinsicSuccess(DispatchInfo),
 		/// An extrinsic failed.
-		ExtrinsicFailed(DispatchError),
+		ExtrinsicFailed(DispatchError, DispatchInfo),
 	}
 );
 
@@ -752,11 +752,11 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// To be called immediately after an extrinsic has been applied.
-	pub fn note_applied_extrinsic(outcome: &DispatchOutcome, _encoded_len: u32) {
+	pub fn note_applied_extrinsic(r: &DispatchOutcome, _encoded_len: u32, info: DispatchInfo) {
 		Self::deposit_event(
-			match outcome {
-				Ok(()) => Event::ExtrinsicSuccess,
-				Err(err) => Event::ExtrinsicFailed(err.clone()),
+			match r {
+				Ok(()) => Event::ExtrinsicSuccess(info),
+				Err(err) => Event::ExtrinsicFailed(err.clone(), info),
 			}
 		);
 
@@ -800,7 +800,9 @@ impl<T: Trait + Send + Sync> CheckWeight<T> {
 	/// Checks if the current extrinsic can fit into the block with respect to block weight limits.
 	///
 	/// Upon successes, it returns the new block weight as a `Result`.
-	fn check_weight(info: DispatchInfo) -> Result<Weight, TransactionValidityError> {
+	fn check_weight(
+		info: <Self as SignedExtension>::DispatchInfo,
+	) -> Result<Weight, TransactionValidityError> {
 		let current_weight = Module::<T>::all_extrinsics_weight();
 		let maximum_weight = T::MaximumBlockWeight::get();
 		let limit = Self::get_dispatch_limit_ratio(info.class) * maximum_weight;
@@ -816,7 +818,10 @@ impl<T: Trait + Send + Sync> CheckWeight<T> {
 	/// Checks if the current extrinsic can fit into the block with respect to block length limits.
 	///
 	/// Upon successes, it returns the new block length as a `Result`.
-	fn check_block_length(info: DispatchInfo, len: usize) -> Result<u32, TransactionValidityError> {
+	fn check_block_length(
+		info: <Self as SignedExtension>::DispatchInfo,
+		len: usize,
+	) -> Result<u32, TransactionValidityError> {
 		let current_len = Module::<T>::all_extrinsics_len();
 		let maximum_len = T::MaximumBlockLength::get();
 		let limit = Self::get_dispatch_limit_ratio(info.class) * maximum_len;
@@ -830,7 +835,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> {
 	}
 
 	/// get the priority of an extrinsic denoted by `info`.
-	fn get_priority(info: DispatchInfo) -> TransactionPriority {
+	fn get_priority(info: <Self as SignedExtension>::DispatchInfo) -> TransactionPriority {
 		match info.class {
 			DispatchClass::Normal => info.weight.into(),
 			DispatchClass::Operational => Bounded::max_value()
@@ -847,6 +852,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 	type AccountId = T::AccountId;
 	type Call = T::Call;
 	type AdditionalSigned = ();
+	type DispatchInfo = DispatchInfo;
 	type Pre = ();
 
 	fn additional_signed(&self) -> rstd::result::Result<(), TransactionValidityError> { Ok(()) }
@@ -855,7 +861,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 		self,
 		_who: &Self::AccountId,
 		_call: &Self::Call,
-		info: DispatchInfo,
+		info: Self::DispatchInfo,
 		len: usize,
 	) -> Result<(), TransactionValidityError> {
 		let next_len = Self::check_block_length(info, len)?;
@@ -869,7 +875,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 		&self,
 		_who: &Self::AccountId,
 		_call: &Self::Call,
-		info: DispatchInfo,
+		info: Self::DispatchInfo,
 		len: usize,
 	) -> TransactionValidity {
 		// There is no point in writing to storage here since changes are discarded. This basically
@@ -926,6 +932,7 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 	type AccountId = T::AccountId;
 	type Call = T::Call;
 	type AdditionalSigned = ();
+	type DispatchInfo = DispatchInfo;
 	type Pre = ();
 
 	fn additional_signed(&self) -> rstd::result::Result<(), TransactionValidityError> { Ok(()) }
@@ -934,7 +941,7 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 		self,
 		who: &Self::AccountId,
 		_call: &Self::Call,
-		_info: DispatchInfo,
+		_info: Self::DispatchInfo,
 		_len: usize,
 	) -> Result<(), TransactionValidityError> {
 		let expected = <AccountNonce<T>>::get(who);
@@ -956,7 +963,7 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 		&self,
 		who: &Self::AccountId,
 		_call: &Self::Call,
-		info: DispatchInfo,
+		info: Self::DispatchInfo,
 		_len: usize,
 	) -> TransactionValidity {
 		// check index
@@ -1009,13 +1016,14 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckEra<T> {
 	type AccountId = T::AccountId;
 	type Call = T::Call;
 	type AdditionalSigned = T::Hash;
+	type DispatchInfo = DispatchInfo;
 	type Pre = ();
 
 	fn validate(
 		&self,
 		_who: &Self::AccountId,
 		_call: &Self::Call,
-		_info: DispatchInfo,
+		_info: Self::DispatchInfo,
 		_len: usize,
 	) -> TransactionValidity {
 		let current_u64 = <Module<T>>::block_number().saturated_into::<u64>();
@@ -1064,6 +1072,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckGenesis<T> {
 	type AccountId = T::AccountId;
 	type Call = <T as Trait>::Call;
 	type AdditionalSigned = T::Hash;
+	type DispatchInfo = DispatchInfo;
 	type Pre = ();
 
 	fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
@@ -1098,6 +1107,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckVersion<T> {
 	type AccountId = T::AccountId;
 	type Call = <T as Trait>::Call;
 	type AdditionalSigned = u32;
+	type DispatchInfo = DispatchInfo;
 	type Pre = ();
 
 	fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
@@ -1163,8 +1173,8 @@ mod tests {
 	impl From<Event> for u16 {
 		fn from(e: Event) -> u16 {
 			match e {
-				Event::ExtrinsicSuccess => 100,
-				Event::ExtrinsicFailed(_) => 101,
+				Event::ExtrinsicSuccess(..) => 100,
+				Event::ExtrinsicFailed(..) => 101,
 			}
 		}
 	}
@@ -1212,8 +1222,8 @@ mod tests {
 
 			System::initialize(&2, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
 			System::deposit_event(42u16);
-			System::note_applied_extrinsic(&Ok(()), 0);
-			System::note_applied_extrinsic(&Err(DispatchError::new(Some(1), 2, None)), 0);
+			System::note_applied_extrinsic(&Ok(()), 0, Default::default());
+			System::note_applied_extrinsic(&Err(DispatchError::new(Some(1), 2, None)), 0, Default::default());
 			System::note_finished_extrinsics();
 			System::deposit_event(3u16);
 			System::finalize();

@@ -254,12 +254,14 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use rstd::marker::PhantomData;
-use support::{dispatch::Result, decl_module, decl_storage, decl_event};
+use support::{
+	dispatch::Result, decl_module, decl_storage, decl_event,
+	weights::{SimpleDispatchInfo, DispatchInfo, DispatchClass, ClassifyDispatch, WeighData, Weight},
+};
 use system::{ensure_signed, ensure_root};
 use codec::{Encode, Decode};
 use sr_primitives::{
 	traits::{SignedExtension, Bounded, SaturatedConversion},
-	weights::{SimpleDispatchInfo, DispatchInfo, DispatchClass, ClassifyDispatch, WeighData, Weight},
 	transaction_validity::{
 		ValidTransaction, TransactionValidityError, InvalidTransaction, TransactionValidity,
 	},
@@ -602,6 +604,7 @@ impl<T: Trait + Send + Sync> SignedExtension for WatchDummy<T> {
 	// other modules.
 	type Call = Call<T>;
 	type AdditionalSigned = ();
+	type DispatchInfo = DispatchInfo;
 	type Pre = ();
 
 	fn additional_signed(&self) -> rstd::result::Result<(), TransactionValidityError> { Ok(()) }
@@ -610,7 +613,7 @@ impl<T: Trait + Send + Sync> SignedExtension for WatchDummy<T> {
 		&self,
 		_who: &Self::AccountId,
 		call: &Self::Call,
-		_info: DispatchInfo,
+		_info: Self::DispatchInfo,
 		len: usize,
 	) -> TransactionValidity {
 		// if the transaction is too big, just drop it.
@@ -636,12 +639,12 @@ impl<T: Trait + Send + Sync> SignedExtension for WatchDummy<T> {
 mod tests {
 	use super::*;
 
-	use support::{assert_ok, impl_outer_origin, parameter_types};
+	use support::{assert_ok, impl_outer_origin, parameter_types, weights::GetDispatchInfo};
 	use primitives::H256;
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
 	use sr_primitives::{
-		Perbill, weights::GetDispatchInfo, testing::Header,
+		Perbill, testing::Header,
 		traits::{BlakeTwo256, OnInitialize, OnFinalize, IdentityLookup},
 	};
 

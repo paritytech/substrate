@@ -22,7 +22,6 @@ use codec::{Decode, Encode, EncodeLike, Input, Error};
 use crate::{
 	traits::{self, Member, MaybeDisplay, SignedExtension, Checkable, Extrinsic, IdentifyAccount},
 	generic::CheckedExtrinsic, transaction_validity::{TransactionValidityError, InvalidTransaction},
-	weights::{GetDispatchInfo, DispatchInfo},
 };
 
 const TRANSACTION_VERSION: u8 = 4;
@@ -280,17 +279,6 @@ where
 	}
 }
 
-impl<Address, Call, Signature, Extra> GetDispatchInfo
-	for UncheckedExtrinsic<Address, Call, Signature, Extra>
-where
-	Call: GetDispatchInfo,
-	Extra: SignedExtension,
-{
-	fn get_dispatch_info(&self) -> DispatchInfo {
-		self.function.get_dispatch_info()
-	}
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -331,6 +319,7 @@ mod tests {
 		type AccountId = u64;
 		type Call = ();
 		type AdditionalSigned = ();
+		type DispatchInfo = ();
 		type Pre = ();
 
 		fn additional_signed(&self) -> rstd::result::Result<(), TransactionValidityError> { Ok(()) }

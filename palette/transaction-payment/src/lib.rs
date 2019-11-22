@@ -36,6 +36,7 @@ use codec::{Encode, Decode};
 use support::{
 	decl_storage, decl_module,
 	traits::{Currency, Get, OnUnbalanced, ExistenceRequirement, WithdrawReason},
+	weights::{Weight, DispatchInfo, GetDispatchInfo},
 };
 use sr_primitives::{
 	Fixed64,
@@ -44,7 +45,6 @@ use sr_primitives::{
 		TransactionValidity,
 	},
 	traits::{Zero, Saturating, SignedExtension, SaturatedConversion, Convert},
-	weights::{Weight, DispatchInfo, GetDispatchInfo},
 };
 use transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
 
@@ -56,7 +56,7 @@ type NegativeImbalanceOf<T> =
 
 pub trait Trait: system::Trait {
 	/// The currency type in which fees will be paid.
-	type Currency: Currency<Self::AccountId>;
+	type Currency: Currency<Self::AccountId> + Send + Sync;
 
 	/// Handler for the unbalanced reduction when taking transaction fees.
 	type OnTransactionPayment: OnUnbalanced<NegativeImbalanceOf<Self>>;
@@ -113,7 +113,9 @@ impl<T: Trait> Module<T> {
 		unchecked_extrinsic: Extrinsic,
 		len: u32,
 	) -> RuntimeDispatchInfo<BalanceOf<T>>
-		where T: Send + Sync,
+	where
+		T: Send + Sync,
+		BalanceOf<T>: Send + Sync,
 	{
 		let dispatch_info = <Extrinsic as GetDispatchInfo>::get_dispatch_info(&unchecked_extrinsic);
 
@@ -144,7 +146,14 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> {
 	///      and the time it consumes.
 	///   - (optional) _tip_: if included in the transaction, it will be added on top. Only signed
 	///      transactions can have a tip.
-	fn compute_fee(len: u32, info: DispatchInfo, tip: BalanceOf<T>) -> BalanceOf<T> {
+	fn compute_fee(
+		len: u32,
+		info: <Self as SignedExtension>::DispatchInfo,
+		tip: BalanceOf<T>,
+	) -> BalanceOf<T>
+	where
+		BalanceOf<T>: Sync + Send,
+	{
 		let len_fee = if info.pay_length_fee() {
 			let len = <BalanceOf<T>>::from(len);
 			let base = T::TransactionBaseFee::get();
@@ -187,6 +196,7 @@ impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T>
 	type AccountId = T::AccountId;
 	type Call = T::Call;
 	type AdditionalSigned = ();
+	type DispatchInfo = DispatchInfo;
 	type Pre = ();
 	fn additional_signed(&self) -> rstd::result::Result<(), TransactionValidityError> { Ok(()) }
 
@@ -194,7 +204,7 @@ impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T>
 		&self,
 		who: &Self::AccountId,
 		_call: &Self::Call,
-		info: DispatchInfo,
+		info: Self::DispatchInfo,
 		len: usize,
 	) -> TransactionValidity {
 		// pay any fees.
@@ -227,13 +237,15 @@ impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T>
 mod tests {
 	use super::*;
 	use codec::Encode;
-	use support::{parameter_types, impl_outer_origin, impl_outer_dispatch};
+	use support::{
+		parameter_types, impl_outer_origin, impl_outer_dispatch,
+		weights::{DispatchClass, DispatchInfo, GetDispatchInfo, Weight},
+	};
 	use primitives::H256;
 	use sr_primitives::{
 		Perbill,
 		testing::{Header, TestXt},
 		traits::{BlakeTwo256, IdentityLookup, Extrinsic},
-		weights::{DispatchClass, DispatchInfo, GetDispatchInfo},
 	};
 	use balances::Call as BalancesCall;
 	use rstd::cell::RefCell;
@@ -424,8 +436,6 @@ mod tests {
 			.build()
 			.execute_with(||
 		{
-			use sr_primitives::weights::Weight;
-
 			// maximum weight possible
 			assert!(
 				ChargeTransactionPayment::<Runtime>::from(0)

@@ -34,16 +34,19 @@ mod tests {
 	use super::Executor;
 	use {balances, contracts, indices, system, timestamp};
 	use codec::{Encode, Decode, Joiner};
-	use runtime_support::{Hashable, StorageValue, StorageMap, traits::Currency};
+	use runtime_support::{
+		Hashable, StorageValue, StorageMap,
+		traits::Currency,
+		weights::{GetDispatchInfo, DispatchInfo, DispatchClass},
+	};
 	use state_machine::TestExternalities as CoreTestExternalities;
 	use primitives::{
 		Blake2Hasher, NeverNativeValue, NativeOrEncoded, map,
 		traits::{CodeExecutor, Externalities}, storage::well_known_keys,
 	};
 	use sr_primitives::{
-		Fixed64,
-		traits::{Header as HeaderT, Hash as HashT, Convert}, ApplyExtrinsicResult,
-		transaction_validity::InvalidTransaction, weights::GetDispatchInfo,
+		Fixed64, traits::{Header as HeaderT, Hash as HashT, Convert}, ApplyExtrinsicResult,
+		transaction_validity::InvalidTransaction,
 	};
 	use contracts::ContractAddressFor;
 	use substrate_executor::{NativeExecutor, WasmExecutionMethod};
@@ -463,7 +466,9 @@ mod tests {
 			let events = vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: Event::system(system::Event::ExtrinsicSuccess),
+					event: Event::system(system::Event::ExtrinsicSuccess(
+						DispatchInfo { weight: 10000, class: DispatchClass::Operational }
+					)),
 					topics: vec![],
 				},
 				EventRecord {
@@ -483,7 +488,9 @@ mod tests {
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
-					event: Event::system(system::Event::ExtrinsicSuccess),
+					event: Event::system(system::Event::ExtrinsicSuccess(
+						DispatchInfo { weight: 1000000, class: DispatchClass::Normal }
+					)),
 					topics: vec![],
 				},
 			];
@@ -512,7 +519,9 @@ mod tests {
 			let events = vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: Event::system(system::Event::ExtrinsicSuccess),
+					event: Event::system(system::Event::ExtrinsicSuccess(
+						DispatchInfo { weight: 10000, class: DispatchClass::Operational }
+					)),
 					topics: vec![],
 				},
 				EventRecord {
@@ -534,7 +543,9 @@ mod tests {
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
-					event: Event::system(system::Event::ExtrinsicSuccess),
+					event: Event::system(system::Event::ExtrinsicSuccess(
+						DispatchInfo { weight: 1000000, class: DispatchClass::Normal }
+					)),
 					topics: vec![],
 				},
 				EventRecord {
@@ -556,7 +567,9 @@ mod tests {
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(2),
-					event: Event::system(system::Event::ExtrinsicSuccess),
+					event: Event::system(system::Event::ExtrinsicSuccess(
+						DispatchInfo { weight: 1000000, class: DispatchClass::Normal }
+					)),
 					topics: vec![],
 				},
 			];

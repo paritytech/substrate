@@ -28,7 +28,7 @@ use support::dispatch::Result as DispatchResult;
 use codec::{Encode, Decode};
 use system::ensure_none;
 use sr_primitives::traits::{Header as HeaderT, One, Zero};
-use sr_primitives::weights::SimpleDispatchInfo;
+use support::weights::SimpleDispatchInfo;
 use inherents::{InherentIdentifier, ProvideInherent, InherentData, MakeFatalError};
 use sp_authorship::{
 	INHERENT_IDENTIFIER, UnclesInherentData,

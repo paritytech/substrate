@@ -17,7 +17,6 @@ use sr_primitives::{
 use sr_primitives::traits::{
 	NumberFor, BlakeTwo256, Block as BlockT, StaticLookup, Verify, ConvertInto, IdentifyAccount
 };
-use sr_primitives::weights::Weight;
 use sr_api::impl_runtime_apis;
 use aura_primitives::sr25519::AuthorityId as AuraId;
 use grandpa::AuthorityList as GrandpaAuthorityList;
@@ -32,7 +31,11 @@ pub use sr_primitives::BuildStorage;
 pub use timestamp::Call as TimestampCall;
 pub use balances::Call as BalancesCall;
 pub use sr_primitives::{Permill, Perbill};
-pub use support::{StorageValue, construct_runtime, parameter_types, traits::Randomness};
+pub use support::{
+	StorageValue, construct_runtime, parameter_types,
+	traits::Randomness,
+	weights::Weight,
+};
 
 /// An index to a block.
 pub type BlockNumber = u32;
