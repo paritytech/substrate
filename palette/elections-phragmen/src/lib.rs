@@ -82,8 +82,8 @@
 
 use rstd::prelude::*;
 use sr_primitives::{print, traits::{Zero, StaticLookup, Bounded, Convert}};
-use sr_primitives::weights::SimpleDispatchInfo;
-use palette_support::{
+use support::weights::SimpleDispatchInfo;
+use support::{
 	decl_storage, decl_event, ensure, decl_module, dispatch,
 	traits::{
 		Currency, Get, LockableCurrency, LockIdentifier, ReservableCurrency, WithdrawReasons,
@@ -743,7 +743,7 @@ impl<T: Trait> Module<T> {
 mod tests {
 	use super::*;
 	use std::cell::RefCell;
-	use palette_support::{assert_ok, assert_noop, parameter_types, assert_eq_uvec};
+	use support::{assert_ok, assert_noop, parameter_types, assert_eq_uvec};
 	use primitives::H256;
 	use sr_primitives::{
 		Perbill, testing::Header, BuildStorage,
@@ -859,7 +859,7 @@ mod tests {
 	pub type Block = sr_primitives::generic::Block<Header, UncheckedExtrinsic>;
 	pub type UncheckedExtrinsic = sr_primitives::generic::UncheckedExtrinsic<u32, u64, Call, ()>;
 
-	palette_support::construct_runtime!(
+	support::construct_runtime!(
 		pub enum Test where
 			Block = Block,
 			NodeBlock = Block,
@@ -934,6 +934,30 @@ mod tests {
 		let lock = Balances::locks(who)[0].clone();
 		assert_eq!(lock.id, MODULE_ID);
 		lock.amount
+	}
+
+	#[test]
+	fn temp_migration_works() {
+		ExtBuilder::default().build().execute_with(|| {
+			use support::storage::unhashed;
+			use codec::Encode;
+
+			let old_members = vec![1u64, 2];
+			let old_runners = vec![3u64];
+
+			let members_key = <Members<Test>>::hashed_key();
+			let runners_key = <RunnersUp<Test>>::hashed_key();
+
+			unhashed::put_raw(&members_key, &old_members.encode()[..]);
+			unhashed::put_raw(&runners_key, &old_runners.encode()[..]);
+
+			assert_eq!(DidMigrate::get(), false);
+			<Elections as OnInitialize<u64>>::on_initialize(1);
+			assert_eq!(DidMigrate::get(), true);
+
+			assert_eq!(Elections::members(), vec![(1, 0), (2, 0)]);
+			assert_eq!(Elections::runners_up(), vec![(3, 0)]);
+		});
 	}
 
 	#[test]

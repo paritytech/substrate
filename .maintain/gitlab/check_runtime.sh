@@ -1,7 +1,7 @@
 #!/bin/sh
 #
 #
-# check for any changes in the node/src/runtime, palette/ and core/sr_* trees. if
+# check for any changes in the node/src/runtime, palette/ and primitives/sr_* trees. if
 # there are any changes found, it should mark the PR breaksconsensus and
 # "auto-fail" the PR if there isn't a change in the runtime/src/lib.rs file 
 # that alters the version.
@@ -12,9 +12,7 @@ set -e # fail on any error
 # give some context
 git log --graph --oneline --decorate=short -n 10
 
-
-RUNTIME="node/runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.compact.wasm"
-VERSIONS_FILE="node/runtime/src/lib.rs"
+VERSIONS_FILE="bin/node/runtime/src/lib.rs"
 
 github_label () {
 	echo
@@ -29,10 +27,9 @@ github_label () {
 
 
 
-
 # check if the wasm sources changed
 if ! git diff --name-only origin/master...${CI_COMMIT_SHA} \
-	| grep -q -e '^node/src/runtime' -e '^palette/' -e '^core/sr-' | grep -v -e '^core/sr-arithmetic/fuzzer'
+	| grep -q -e '^bin/node/src/runtime' -e '^palette/' -e '^primitives/sr-' | grep -v -e '^primitives/sr-arithmetic/fuzzer'
 then
 	cat <<-EOT
 	
@@ -66,7 +63,7 @@ then
 		changes to the runtime sources and changes in the spec version.
 	
 		spec_version: ${sub_spec_version} -> ${add_spec_version}
-	
+
 	EOT
 	exit 0
 
@@ -101,9 +98,9 @@ else
 	If they do change logic, bump 'spec_version' and rebuild wasm.
 
 	source file directories:
-	- node/src/runtime
+	- bin/node/src/runtime
 	- palette
-	- core/sr-*
+	- primitives/sr-*
 
 	versions file: ${VERSIONS_FILE}
 

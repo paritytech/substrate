@@ -23,12 +23,12 @@ use rstd::{result, convert::TryFrom};
 use sr_primitives::{
 	RuntimeDebug,
 	traits::{Zero, Bounded, CheckedMul, CheckedDiv, EnsureOrigin, Hash, Dispatchable},
-	weights::SimpleDispatchInfo,
 };
 use codec::{Ref, Encode, Decode, Input, Output, Error};
 use support::{
 	decl_module, decl_storage, decl_event, ensure,
 	Parameter,
+	weights::SimpleDispatchInfo,
 	traits::{
 		Currency, ReservableCurrency, LockableCurrency, WithdrawReason, LockIdentifier, Get,
 		OnFreeBalanceZero
