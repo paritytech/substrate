@@ -11,7 +11,7 @@ Substrate is split into multiple levels with increasing opinion and decreasing f
 
 * primitives
 * client
-* PALETTE (formerly `srml`)
+* FRAME (formerly `srml`)
 
 Putting all these components together we have:
 
@@ -39,7 +39,7 @@ In the lowest level, Substrate defines primitives, interfaces and traits to impl
 
 In the client you can find a set of crates to construct the outer substrate-node, implementing outer runtime interfaces, thus it depends on `runtime`. It provides the outer building blocks like transaction queue, networking layer, database backend, full* and light-client support.
 
-=== PALETTE (formerly `srml`)
+=== FRAME (formerly `srml`)
 
 * _found in_: `/frame`
 * _crates prefix_: `frame-` and `pallet-`
@@ -47,11 +47,11 @@ In the client you can find a set of crates to construct the outer substrate-node
 ** all crates that go on chain must be `[no_std]`
 ** must not (dev-)depend on anything in `/client`
 
-PALETTE is a set of modules that implement specific transition functions and features one might want to have in their runtime.
+FRAME is a set of modules that implement specific transition functions and features one might want to have in their runtime.
 
-_Pallets_ are individual modules within _Palette._ These are containers that host domain-specific logic. They have the `pallet-` prefix. For example, `pallet-staking` contains logic for staking tokens.
+_Pallets_ are individual modules within _FRAME._ These are containers that host domain-specific logic. They have the `pallet-` prefix. For example, `pallet-staking` contains logic for staking tokens.
 
-There are a few crates with the `frame-` prefix. These do not contain domain-specific logic. Rather, they are the main Palette support infrastructure. These are:
+There are a few crates with the `frame-` prefix. These do not contain domain-specific logic. Rather, they are the main FRAME support infrastructure. These are:
 
 - Executive
 - Metadata
