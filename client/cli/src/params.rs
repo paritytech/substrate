@@ -404,6 +404,12 @@ pub struct RunCmd {
 	#[structopt(long = "ws-external")]
 	pub ws_external: bool,
 
+	/// Listen to all Grafana data source interfaces.
+	///
+	/// Default is local.
+	#[structopt(long = "grafana-external")]
+	pub grafana_external: bool,
+
 	/// Specify HTTP RPC server TCP port.
 	#[structopt(long = "rpc-port", value_name = "PORT")]
 	pub rpc_port: Option<u16>,
@@ -425,6 +431,10 @@ pub struct RunCmd {
 	/// default is to allow all origins.
 	#[structopt(long = "rpc-cors", value_name = "ORIGINS", parse(try_from_str = parse_cors))]
 	pub rpc_cors: Option<Cors>,
+
+	/// Specify Grafana data source server TCP Port.
+	#[structopt(long = "grafana-port", value_name = "PORT")]
+	pub grafana_port: Option<u16>,
 
 	/// Specify the state pruning mode, a number of blocks to keep or 'archive'.
 	///
