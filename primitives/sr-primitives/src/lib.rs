@@ -70,8 +70,6 @@ pub use arithmetic::helpers_128bit;
 /// Re-export big_uint stuff.
 pub use arithmetic::biguint;
 
-pub use random_number_generator::RandomNumberGenerator;
-
 /// An abstraction over justification for a block's validity under a consensus algorithm.
 ///
 /// Essentially a finality proof. The exact formulation will vary between consensus

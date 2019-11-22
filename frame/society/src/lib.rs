@@ -31,10 +31,12 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+use rand_chacha::{rand_core::{RngCore, SeedableRng}, ChaChaRng};
 use rstd::prelude::*;
 use codec::{Encode, Decode};
-use sr_primitives::{RandomNumberGenerator, Percent, Perbill, ModuleId, RuntimeDebug, traits::{
+use sr_primitives::{Percent, Perbill, ModuleId, RuntimeDebug, traits::{
 	EnsureOrigin, StaticLookup, AccountIdConversion, Saturating, Zero, IntegerSquareRoot,
+	TrailingZeroInput,
 }};
 use support::{decl_error, decl_module, decl_storage, decl_event, dispatch::Result, traits::{
 	Currency, ReservableCurrency, Randomness, Get, ChangeMembers,
@@ -302,6 +304,21 @@ decl_event! {
 	}
 }
 
+/// Pick an item at pseudo-random from the slice, given the `rng`. `None` iff the slice is empty.
+fn pick_item<'a, R: RngCore, T>(rng: &mut R, items: &'a [T]) -> Option<&'a T> {
+	if items.is_empty() {
+		None
+	} else {
+		Some(&items[pick_usize(rng, items.len() - 1)])
+	}
+}
+
+/// Pick a new PRN, in the range [0, `max`] (inclusive).
+fn pick_usize<'a, R: RngCore>(rng: &mut R, max: usize) -> usize {
+
+	(rng.next_u32() % (max as u32 + 1)) as usize
+}
+
 impl<T: Trait> Module<T> {
 	fn put_bid(who: T::AccountId, value: BalanceOf<T>, bid_kind: BidKind<T::AccountId, BalanceOf<T>>) {
 		<Bids<T>>::mutate(|bids| {
@@ -381,7 +398,11 @@ impl<T: Trait> Module<T> {
 		members.reserve(candidates.len());
 
 		// we'll need a random seed here.
-		let mut rng = <RandomNumberGenerator<T::Hashing>>::new(T::Randomness::random(phrase));
+		let seed = T::Randomness::random(phrase);
+		// seed needs to be guaranteed to be 32 bytes.
+		let seed = <[u8; 32]>::decode(&mut TrailingZeroInput::new(seed.as_ref()))
+			.expect("input is padded with zeroes; qed");
+		let mut rng = ChaChaRng::from_seed(seed);
 
 		let payout = Payout {
 			begin: <system::Module<T>>::block_number(),
@@ -402,7 +423,7 @@ impl<T: Trait> Module<T> {
 				.filter_map(|m| <Votes<T>>::get(&candidate, m).map(|v| (v, m)))
 				.inspect(|&(v, _)| if v == Vote::Approve { approval_count += 1 })
 				.collect::<Vec<_>>();
-			let accepted = rng.pick_item(&votes).map(|x| x.0) == Some(Vote::Approve);
+			let accepted = pick_item(&mut rng, &votes).map(|x| x.0) == Some(Vote::Approve);
 
 			// collect together voters who voted the right way
 			let matching_vote = if accepted { Vote::Approve } else { Vote::Reject };
@@ -452,7 +473,7 @@ impl<T: Trait> Module<T> {
 
 		// Reward one of the voters who voted the right way.
 		if !total_slash.is_zero() {
-			if let Some(winner) = rng.pick_item(&rewardees) {
+			if let Some(winner) = pick_item(&mut rng, &rewardees) {
 				// if we can't reward them, not much that can be done.
 				Self::bump_payout(winner, total_slash);
 			}
@@ -469,7 +490,7 @@ impl<T: Trait> Module<T> {
 		// if at least one candidate was accepted...
 		if !accepted.is_empty() {
 			// select one as primary, randomly chosen from the accepted, weighted by approvals.
-			let primary_point = rng.pick_usize(total_approvals - 1);
+			let primary_point = pick_usize(&mut rng, total_approvals - 1);
 			let primary = accepted.iter().find(|e| e.1 > primary_point)
 				.expect("e.1 of final item == total_approvals; \
 					worst case find will always return that item; qed")
@@ -494,7 +515,7 @@ impl<T: Trait> Module<T> {
 		let candidates = Self::take_selected(pot);
 		<Candidates<T>>::put(&candidates);
 		// initialise skeptics
-		let pick_member = |_| rng.pick_item(&members[..]).expect("exited if members empty; qed");
+		let pick_member = |_| pick_item(&mut rng, &members[..]).expect("exited if members empty; qed");
 		for skeptic in (0..members.len().integer_sqrt()).map(pick_member) {
 			for (_, c, _) in candidates.iter() {
 				<Votes<T>>::insert(c, skeptic, Vote::Skeptic);
