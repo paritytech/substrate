@@ -37,7 +37,7 @@ mod tests {
 	use runtime_support::{
 		Hashable, StorageValue, StorageMap,
 		traits::Currency,
-		weights::GetDispatchInfo,
+		weights::{GetDispatchInfo, DispatchInfo, DispatchClass},
 	};
 	use state_machine::TestExternalities as CoreTestExternalities;
 	use primitives::{
@@ -45,8 +45,7 @@ mod tests {
 		traits::{CodeExecutor, Externalities}, storage::well_known_keys,
 	};
 	use sr_primitives::{
-		Fixed64, weights::{GetDispatchInfo, DispatchInfo, DispatchClass},
-		traits::{Header as HeaderT, Hash as HashT, Convert}, ApplyResult,
+		Fixed64, traits::{Header as HeaderT, Hash as HashT, Convert}, ApplyResult,
 		transaction_validity::InvalidTransaction,
 	};
 	use contracts::ContractAddressFor;
