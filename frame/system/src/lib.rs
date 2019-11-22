@@ -98,7 +98,7 @@ use rstd::fmt::Debug;
 use sr_version::RuntimeVersion;
 use sr_primitives::{
 	RuntimeDebug,
-	generic::{self, Era}, Perbill, ApplyError, ApplyOutcome, DispatchError,
+	generic::{self, Era}, Perbill, DispatchOutcome, DispatchError,
 	transaction_validity::{
 		ValidTransaction, TransactionPriority, TransactionLongevity, TransactionValidityError,
 		InvalidTransaction, TransactionValidity,
@@ -320,8 +320,6 @@ decl_event!(
 decl_error! {
 	/// Error for the System module
 	pub enum Error {
-		BadSignature,
-		BlockFull,
 		RequireSignedOrigin,
 		RequireRootOrigin,
 		RequireNoOrigin,
@@ -754,7 +752,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// To be called immediately after an extrinsic has been applied.
-	pub fn note_applied_extrinsic(r: &ApplyOutcome, _encoded_len: u32, info: DispatchInfo) {
+	pub fn note_applied_extrinsic(r: &DispatchOutcome, _encoded_len: u32, info: DispatchInfo) {
 		Self::deposit_event(
 			match r {
 				Ok(()) => Event::ExtrinsicSuccess(info),
@@ -865,7 +863,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 		_call: &Self::Call,
 		info: Self::DispatchInfo,
 		len: usize,
-	) -> Result<(), ApplyError> {
+	) -> Result<(), TransactionValidityError> {
 		let next_len = Self::check_block_length(info, len)?;
 		AllExtrinsicsLen::put(next_len);
 		let next_weight = Self::check_weight(info)?;
@@ -945,7 +943,7 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 		_call: &Self::Call,
 		_info: Self::DispatchInfo,
 		_len: usize,
-	) -> Result<(), ApplyError> {
+	) -> Result<(), TransactionValidityError> {
 		let expected = <AccountNonce<T>>::get(who);
 		if self.0 != expected {
 			return Err(

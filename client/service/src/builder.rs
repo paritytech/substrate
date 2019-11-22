@@ -195,13 +195,17 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 				},
 			};
 
+			let extensions = client_api::execution_extensions::ExecutionExtensions::new(
+				config.execution_strategies.clone(),
+				Some(keystore.clone()),
+			);
+
 			client_db::new_client(
 				db_config,
 				executor,
 				&config.chain_spec,
 				fork_blocks,
-				config.execution_strategies.clone(),
-				Some(keystore.clone()),
+				extensions,
 			)?
 		};
 
@@ -831,6 +835,10 @@ ServiceBuilder<
 			"best" => ?chain_info.best_hash
 		);
 
+		// make transaction pool available for off-chain runtime calls.
+		client.execution_extensions()
+			.register_transaction_pool(Arc::downgrade(&transaction_pool) as _);
+
 		let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {
 			imports_external_transactions: !config.roles.is_light(),
 			pool: transaction_pool.clone(),
@@ -911,8 +919,8 @@ ServiceBuilder<
 					}
 
 					let offchain = offchain.as_ref().and_then(|o| o.upgrade());
-					if let (Some(txpool), Some(offchain)) = (txpool, offchain) {
-						let future = offchain.on_block_imported(&number, &txpool, network_state_info.clone(), is_validator)
+					if let Some(offchain) = offchain {
+						let future = offchain.on_block_imported(&number, network_state_info.clone(), is_validator)
 							.map(|()| Ok(()));
 						let _ = to_spawn_tx_.unbounded_send(Box::new(Compat::new(future)));
 					}

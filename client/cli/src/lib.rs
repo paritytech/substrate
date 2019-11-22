@@ -26,7 +26,7 @@ mod execution_strategy;
 pub mod error;
 pub mod informant;
 
-use client_api::ExecutionStrategies;
+use client_api::execution_extensions::ExecutionStrategies;
 use service::{
 	config::{Configuration, DatabaseConfig},
 	ServiceBuilderExport, ServiceBuilderImport, ServiceBuilderRevert,

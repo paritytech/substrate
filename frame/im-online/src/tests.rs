@@ -20,8 +20,12 @@
 
 use super::*;
 use crate::mock::*;
-use offchain::testing::TestOffchainExt;
-use primitives::offchain::{OpaquePeerId, OffchainExt};
+use primitives::offchain::{
+	OpaquePeerId,
+	OffchainExt,
+	TransactionPoolExt,
+	testing::{TestOffchainExt, TestTransactionPoolExt},
+};
 use support::{dispatch, assert_noop};
 use sr_primitives::testing::UintAuthorityId;
 
@@ -183,8 +187,10 @@ fn late_heartbeat_should_fail() {
 #[test]
 fn should_generate_heartbeats() {
 	let mut ext = new_test_ext();
-	let (offchain, state) = TestOffchainExt::new();
+	let (offchain, _state) = TestOffchainExt::new();
+	let (pool, state) = TestTransactionPoolExt::new();
 	ext.register_extension(OffchainExt::new(offchain));
+	ext.register_extension(TransactionPoolExt::new(pool));
 
 	ext.execute_with(|| {
 		// given
@@ -284,8 +290,10 @@ fn should_not_send_a_report_if_already_online() {
 	use authorship::EventHandler;
 
 	let mut ext = new_test_ext();
-	let (offchain, state) = TestOffchainExt::new();
+	let (offchain, _state) = TestOffchainExt::new();
+	let (pool, pool_state) = TestTransactionPoolExt::new();
 	ext.register_extension(OffchainExt::new(offchain));
+	ext.register_extension(TransactionPoolExt::new(pool));
 
 	ext.execute_with(|| {
 		advance_session();
@@ -304,9 +312,9 @@ fn should_not_send_a_report_if_already_online() {
 		ImOnline::offchain(4);
 
 		// then
-		let transaction = state.write().transactions.pop().unwrap();
+		let transaction = pool_state.write().transactions.pop().unwrap();
 		// All validators have `0` as their session key, but we should only produce 1 hearbeat.
-		assert_eq!(state.read().transactions.len(), 0);
+		assert_eq!(pool_state.read().transactions.len(), 0);
 		// check stuff about the transaction.
 		let ex: Extrinsic = Decode::decode(&mut &*transaction).unwrap();
 		let heartbeat = match ex.1 {

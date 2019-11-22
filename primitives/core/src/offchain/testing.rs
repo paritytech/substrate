@@ -14,23 +14,28 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Offchain Externalities implementation for tests.
+//! Utilities for offchain calls testing.
+//!
+//! Namely all ExecutionExtensions that allow mocking
+//! the extra APIs.
 
 use std::{
 	collections::BTreeMap,
 	sync::Arc,
 };
-use client_api::{OffchainStorage, InMemOffchainStorage};
-use parking_lot::RwLock;
-use primitives::offchain::{
+use crate::offchain::{
 	self,
+	storage::InMemOffchainStorage,
 	HttpError,
 	HttpRequestId as RequestId,
 	HttpRequestStatus as RequestStatus,
 	Timestamp,
 	StorageKind,
 	OpaqueNetworkState,
+	TransactionPool,
+	OffchainStorage,
 };
+use parking_lot::RwLock;
 
 /// Pending request.
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -59,7 +64,7 @@ pub struct PendingRequest {
 ///
 /// This can be used in tests to respond or assert stuff about interactions.
 #[derive(Debug, Default)]
-pub struct State {
+pub struct OffchainState {
 	/// A list of pending requests.
 	pub requests: BTreeMap<RequestId, PendingRequest>,
 	expected_requests: BTreeMap<RequestId, PendingRequest>,
@@ -67,11 +72,9 @@ pub struct State {
 	pub persistent_storage: InMemOffchainStorage,
 	/// Local storage
 	pub local_storage: InMemOffchainStorage,
-	/// A vector of transactions submitted from the runtime.
-	pub transactions: Vec<Vec<u8>>,
 }
 
-impl State {
+impl OffchainState {
 	/// Asserts that pending request has been submitted and fills it's response.
 	pub fn fulfill_pending_request(
 		&mut self,
@@ -117,7 +120,7 @@ impl State {
 	}
 }
 
-impl Drop for State {
+impl Drop for OffchainState {
 	fn drop(&mut self) {
 		// If we panic! while we are already in a panic, the test dies with an illegal instruction.
 		if !self.expected_requests.is_empty() && !std::thread::panicking() {
@@ -128,11 +131,11 @@ impl Drop for State {
 
 /// Implementation of offchain externalities used for tests.
 #[derive(Clone, Default, Debug)]
-pub struct TestOffchainExt(pub Arc<RwLock<State>>);
+pub struct TestOffchainExt(pub Arc<RwLock<OffchainState>>);
 
 impl TestOffchainExt {
 	/// Create new `TestOffchainExt` and a reference to the internal state.
-	pub fn new() -> (Self, Arc<RwLock<State>>) {
+	pub fn new() -> (Self, Arc<RwLock<OffchainState>>) {
 		let ext = Self::default();
 		let state = ext.0.clone();
 		(ext, state)
@@ -142,12 +145,6 @@ impl TestOffchainExt {
 impl offchain::Externalities for TestOffchainExt {
 	fn is_validator(&self) -> bool {
 		unimplemented!("not needed in tests so far")
-	}
-
-	fn submit_transaction(&mut self, ex: Vec<u8>) -> Result<(), ()> {
-		let mut state = self.0.write();
-		state.transactions.push(ex);
-		Ok(())
 	}
 
 	fn network_state(&self) -> Result<OpaqueNetworkState, ()> {
@@ -303,5 +300,40 @@ impl offchain::Externalities for TestOffchainExt {
 		} else {
 			Err(HttpError::IoError)
 		}
+	}
+}
+
+/// The internal state of the fake transaction pool.
+#[derive(Default)]
+pub struct PoolState {
+	/// A vector of transactions submitted from the runtime.
+	pub transactions: Vec<Vec<u8>>,
+}
+
+/// Implementation of transaction pool used for test.
+///
+/// Note that this implementation does not verify correctness
+/// of sent extrinsics. It's meant to be used in contexts
+/// where an actual runtime is not known.
+///
+/// It's advised to write integration tests that include the
+/// actual transaction pool to make sure the produced
+/// transactions are valid.
+#[derive(Default)]
+pub struct TestTransactionPoolExt(Arc<RwLock<PoolState>>);
+
+impl TestTransactionPoolExt {
+	/// Create new `TestTransactionPoolExt` and a reference to the internal state.
+	pub fn new() -> (Self, Arc<RwLock<PoolState>>) {
+		let ext = Self::default();
+		let state = ext.0.clone();
+		(ext, state)
+	}
+}
+
+impl TransactionPool for TestTransactionPoolExt {
+	fn submit_transaction(&mut self, extrinsic: Vec<u8>) -> Result<(), ()> {
+		self.0.write().transactions.push(extrinsic);
+		Ok(())
 	}
 }

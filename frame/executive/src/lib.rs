@@ -79,7 +79,7 @@
 use rstd::{prelude::*, marker::PhantomData};
 use support::weights::{GetDispatchInfo, WeighBlock, DispatchInfo};
 use sr_primitives::{
-	generic::Digest, ApplyResult,
+	generic::Digest, ApplyExtrinsicResult,
 	traits::{
 		self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalize, OnInitialize,
 		NumberFor, Block as BlockT, OffchainWorker, Dispatchable,
@@ -229,9 +229,10 @@ where
 	}
 
 	/// Apply extrinsic outside of the block execution function.
+	///
 	/// This doesn't attempt to validate anything regarding the block, but it builds a list of uxt
 	/// hashes.
-	pub fn apply_extrinsic(uxt: Block::Extrinsic) -> ApplyResult {
+	pub fn apply_extrinsic(uxt: Block::Extrinsic) -> ApplyExtrinsicResult {
 		let encoded = uxt.encode();
 		let encoded_len = encoded.len();
 		Self::apply_extrinsic_with_len(uxt, encoded_len, Some(encoded))
@@ -252,7 +253,7 @@ where
 		uxt: Block::Extrinsic,
 		encoded_len: usize,
 		to_note: Option<Vec<u8>>,
-	) -> ApplyResult {
+	) -> ApplyExtrinsicResult {
 		// Verify that the signature is good.
 		let xt = uxt.check(&Default::default())?;
 
@@ -322,7 +323,7 @@ mod tests {
 	use sr_primitives::{
 		generic::Era, Perbill, DispatchError, testing::{Digest, Header, Block},
 		traits::{Bounded, Header as HeaderT, BlakeTwo256, IdentityLookup, ConvertInto},
-		transaction_validity::{InvalidTransaction, UnknownTransaction}, ApplyError,
+		transaction_validity::{InvalidTransaction, UnknownTransaction, TransactionValidityError},
 	};
 	use support::{
 		impl_outer_event, impl_outer_origin, parameter_types, impl_outer_dispatch,
@@ -448,7 +449,7 @@ mod tests {
 	impl ValidateUnsigned for Runtime {
 		type Call = Call;
 
-		fn pre_dispatch(_call: &Self::Call) -> Result<(), ApplyError> {
+		fn pre_dispatch(_call: &Self::Call) -> Result<(), TransactionValidityError> {
 			Ok(())
 		}
 
@@ -701,7 +702,7 @@ mod tests {
 				} else {
 					assert_eq!(
 						Executive::apply_extrinsic(xt),
-						Err(ApplyError::Validity(InvalidTransaction::Payment.into())),
+						Err(InvalidTransaction::Payment.into()),
 					);
 					assert_eq!(<balances::Module<Runtime>>::total_balance(&1), 111);
 				}

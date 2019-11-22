@@ -18,9 +18,9 @@
 #[allow(deprecated)]
 pub use crate::sr_primitives::traits::ValidateUnsigned;
 #[doc(hidden)]
-pub use crate::sr_primitives::transaction_validity::{TransactionValidity, UnknownTransaction};
-#[doc(hidden)]
-pub use crate::sr_primitives::ApplyError;
+pub use crate::sr_primitives::transaction_validity::{
+	TransactionValidity, UnknownTransaction, TransactionValidityError,
+};
 
 
 /// Implement `ValidateUnsigned` for `Runtime`.
@@ -70,7 +70,7 @@ macro_rules! impl_outer_validate_unsigned {
 		impl $crate::unsigned::ValidateUnsigned for $runtime {
 			type Call = Call;
 
-			fn pre_dispatch(call: &Self::Call) -> Result<(), $crate::unsigned::ApplyError> {
+			fn pre_dispatch(call: &Self::Call) -> Result<(), $crate::unsigned::TransactionValidityError> {
 				#[allow(unreachable_patterns)]
 				match call {
 					$( Call::$module(inner_call) => $module::pre_dispatch(inner_call), )*
