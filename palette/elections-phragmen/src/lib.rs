@@ -79,8 +79,8 @@
 use rstd::prelude::*;
 use codec::Decode;
 use sr_primitives::{print, traits::{Zero, StaticLookup, Bounded, Convert}};
-use sr_primitives::weights::SimpleDispatchInfo;
-use palette_support::{
+use support::weights::SimpleDispatchInfo;
+use support::{
 	decl_storage, decl_event, ensure, decl_module, dispatch,
 	storage::unhashed,
 	traits::{
@@ -667,7 +667,7 @@ impl<T: Trait> Module<T> {
 mod tests {
 	use super::*;
 	use std::cell::RefCell;
-	use palette_support::{assert_ok, assert_noop, parameter_types, assert_eq_uvec};
+	use support::{assert_ok, assert_noop, parameter_types, assert_eq_uvec};
 	use primitives::H256;
 	use sr_primitives::{
 		Perbill, testing::Header, BuildStorage,
@@ -783,7 +783,7 @@ mod tests {
 	pub type Block = sr_primitives::generic::Block<Header, UncheckedExtrinsic>;
 	pub type UncheckedExtrinsic = sr_primitives::generic::UncheckedExtrinsic<u32, u64, Call, ()>;
 
-	palette_support::construct_runtime!(
+	support::construct_runtime!(
 		pub enum Test where
 			Block = Block,
 			NodeBlock = Block,
@@ -863,7 +863,7 @@ mod tests {
 	#[test]
 	fn temp_migration_works() {
 		ExtBuilder::default().build().execute_with(|| {
-			use palette_support::storage::unhashed;
+			use support::storage::unhashed;
 			use codec::Encode;
 
 			let old_members = vec![1u64, 2];

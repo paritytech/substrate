@@ -114,7 +114,6 @@ use codec::{Codec, Encode, Decode};
 use runtime_io::hashing::blake2_256;
 use sr_primitives::{
 	traits::{Hash, StaticLookup, Zero, MaybeSerializeDeserialize, Member, SignedExtension},
-	weights::DispatchInfo,
 	transaction_validity::{
 		ValidTransaction, InvalidTransaction, TransactionValidity, TransactionValidityError,
 	},
@@ -123,7 +122,8 @@ use sr_primitives::{
 use support::dispatch::{Result, Dispatchable};
 use support::{
 	Parameter, decl_module, decl_event, decl_storage, storage::child,
-	parameter_types, IsSubType
+	parameter_types, IsSubType,
+	weights::DispatchInfo,
 };
 use support::traits::{OnFreeBalanceZero, OnUnbalanced, Currency, Get, Time, Randomness};
 use system::{ensure_signed, RawOrigin, ensure_root};
@@ -1034,6 +1034,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckBlockGasLimit<T> {
 	type AccountId = T::AccountId;
 	type Call = <T as Trait>::Call;
 	type AdditionalSigned = ();
+	type DispatchInfo = DispatchInfo;
 	type Pre = ();
 
 	fn additional_signed(&self) -> rstd::result::Result<(), TransactionValidityError> { Ok(()) }
@@ -1042,7 +1043,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckBlockGasLimit<T> {
 		&self,
 		_: &Self::AccountId,
 		call: &Self::Call,
-		_: DispatchInfo,
+		_: Self::DispatchInfo,
 		_: usize,
 	) -> TransactionValidity {
 		let call = match call.is_sub_type() {
