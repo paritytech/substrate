@@ -11,7 +11,7 @@ sr-primitives = { path = "../../primitives/sr-primitives", default-features = fa
 
 [dev-dependencies]
 runtime-io ={ package = "sr-io", path = "../../primitives/sr-io" }
-support = { package = "palette-support", path = "../../palette/support" }
+support = { package = "frame-support", path = "../../frame/support" }
 rand = "0.7.2"
 
 [features]
