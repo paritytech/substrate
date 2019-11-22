@@ -100,7 +100,7 @@ use sr_primitives::{
 		SimpleArithmetic, Zero, SaturatedConversion, Scale
 	}
 };
-use sr_primitives::weights::SimpleDispatchInfo;
+use support::weights::SimpleDispatchInfo;
 use system::ensure_none;
 use sp_timestamp::{
 	InherentError, INHERENT_IDENTIFIER, InherentType,

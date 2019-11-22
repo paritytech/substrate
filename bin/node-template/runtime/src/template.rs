@@ -70,9 +70,9 @@ mod tests {
 	use super::*;
 
 	use primitives::H256;
-	use support::{impl_outer_origin, assert_ok, parameter_types};
+	use support::{impl_outer_origin, assert_ok, parameter_types, weights::Weight};
 	use sr_primitives::{
-		traits::{BlakeTwo256, IdentityLookup}, testing::Header, weights::Weight, Perbill,
+		traits::{BlakeTwo256, IdentityLookup}, testing::Header, Perbill,
 	};
 
 	impl_outer_origin! {

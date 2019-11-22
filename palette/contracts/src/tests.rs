@@ -30,12 +30,12 @@ use codec::{Decode, Encode, KeyedVec};
 use sr_primitives::{
 	Perbill, BuildStorage, transaction_validity::{InvalidTransaction, ValidTransaction},
 	traits::{BlakeTwo256, Hash, IdentityLookup, SignedExtension},
-	weights::{DispatchInfo, DispatchClass},
 	testing::{Digest, DigestItem, Header, UintAuthorityId, H256},
 };
 use support::{
 	assert_ok, assert_err, impl_outer_dispatch, impl_outer_event, impl_outer_origin, parameter_types,
 	storage::child, StorageMap, StorageValue, traits::{Currency, Get},
+	weights::{DispatchInfo, DispatchClass},
 };
 use std::{cell::RefCell, sync::atomic::{AtomicUsize, Ordering}};
 use primitives::storage::well_known_keys;
