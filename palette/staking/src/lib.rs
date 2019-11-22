@@ -255,6 +255,7 @@ use rstd::{prelude::*, result};
 use codec::{HasCompact, Encode, Decode};
 use support::{
 	decl_module, decl_event, decl_storage, ensure,
+	weights::SimpleDispatchInfo,
 	traits::{
 		Currency, OnFreeBalanceZero, LockIdentifier, LockableCurrency,
 		WithdrawReasons, OnUnbalanced, Imbalance, Get, Time
@@ -265,7 +266,6 @@ use sr_primitives::{
 	Perbill,
 	RuntimeDebug,
 	curve::PiecewiseLinear,
-	weights::SimpleDispatchInfo,
 	traits::{
 		Convert, Zero, One, StaticLookup, CheckedSub, Saturating, Bounded, SaturatedConversion,
 	}

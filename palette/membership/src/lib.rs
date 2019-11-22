@@ -24,10 +24,12 @@
 
 use rstd::prelude::*;
 use support::{
-	decl_module, decl_storage, decl_event, traits::{ChangeMembers, InitializeMembers},
+	decl_module, decl_storage, decl_event,
+	traits::{ChangeMembers, InitializeMembers},
+	weights::SimpleDispatchInfo,
 };
 use system::ensure_root;
-use sr_primitives::{traits::EnsureOrigin, weights::SimpleDispatchInfo};
+use sr_primitives::traits::EnsureOrigin;
 
 pub trait Trait<I=DefaultInstance>: system::Trait {
 	/// The overarching event type.
