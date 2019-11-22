@@ -259,7 +259,7 @@ use system::{ensure_signed, ensure_root};
 use codec::{Encode, Decode};
 use sr_primitives::{
 	traits::{SignedExtension, Bounded, SaturatedConversion},
-	weights::{SimpleDispatchInfo, DispatchInfo, DispatchClass, ClassifyDispatch, WeighData, Weight},
+	weights::{SimpleDispatchInfo, DispatchInfo, DispatchClass, ClassifyDispatch, WeighData, Weight, PaysFee},
 	transaction_validity::{
 		ValidTransaction, TransactionValidityError, InvalidTransaction, TransactionValidity,
 	},
@@ -296,6 +296,12 @@ impl<T: balances::Trait> ClassifyDispatch<(&BalanceOf<T>,)> for WeightForSetDumm
 		} else {
 			DispatchClass::Normal
 		}
+	}
+}
+
+impl<T: balances::Trait> PaysFee for WeightForSetDummy<T> {
+	fn pays_fee(&self) -> bool {
+		true
 	}
 }
 

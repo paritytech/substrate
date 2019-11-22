@@ -2329,7 +2329,7 @@ fn cannot_self_destruct_in_constructor() {
 #[test]
 fn check_block_gas_limit_works() {
 	ExtBuilder::default().block_gas_limit(50).build().execute_with(|| {
-		let info = DispatchInfo { weight: 100, class: DispatchClass::Normal };
+		let info = DispatchInfo { weight: 100, class: DispatchClass::Normal, pays_fee: true };
 		let check = CheckBlockGasLimit::<Test>(Default::default());
 		let call: Call = crate::Call::put_code(1000, vec![]).into();
 

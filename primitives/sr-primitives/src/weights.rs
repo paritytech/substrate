@@ -72,6 +72,13 @@ pub trait WeighBlock<BlockNumber> {
 	fn on_finalize(_: BlockNumber) -> Weight { Zero::zero() }
 }
 
+pub trait PaysFee {
+	/// Indicates if dispatch function should pays fee.
+	fn pays_fee(&self) -> bool {
+		true
+	}
+}
+
 /// Maybe I can do something to remove the duplicate code here.
 #[impl_for_tuples(30)]
 impl<BlockNumber: Copy> WeighBlock<BlockNumber> for SingleModule {
@@ -132,17 +139,8 @@ pub struct DispatchInfo {
 	pub weight: Weight,
 	/// Class of this transaction.
 	pub class: DispatchClass,
-}
-
-impl DispatchInfo {
-	/// Determine if this dispatch should pay the base length-related fee or not.
-	pub fn pay_length_fee(&self) -> bool {
-		match self.class {
-			DispatchClass::Normal => true,
-			// For now we assume all operational transactions don't pay the length fee.
-			DispatchClass::Operational => false,
-		}
-	}
+	/// Does this transaction pays fee.
+	pub pays_fee: bool,
 }
 
 /// A `Dispatchable` function (aka transaction) that can carry some static information along with
@@ -203,6 +201,20 @@ impl<T> WeighData<T> for SimpleDispatchInfo {
 impl<T> ClassifyDispatch<T> for SimpleDispatchInfo {
 	fn classify_dispatch(&self, _: T) -> DispatchClass {
 		DispatchClass::from(*self)
+	}
+}
+
+impl PaysFee for SimpleDispatchInfo {
+	fn pays_fee(&self) -> bool {
+		match self {
+			SimpleDispatchInfo::FixedNormal(_) => true,
+			SimpleDispatchInfo::MaxNormal => true,
+			SimpleDispatchInfo::FreeNormal => false,
+
+			SimpleDispatchInfo::FixedOperational(_) => true,
+			SimpleDispatchInfo::MaxOperational => true,
+			SimpleDispatchInfo::FreeOperational => false,
+		}
 	}
 }
 

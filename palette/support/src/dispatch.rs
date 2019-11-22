@@ -26,7 +26,7 @@ pub use palette_metadata::{
 pub use sr_primitives::{
 	weights::{
 		SimpleDispatchInfo, GetDispatchInfo, DispatchInfo, WeighData, ClassifyDispatch,
-		TransactionPriority, Weight, WeighBlock,
+		TransactionPriority, Weight, WeighBlock, PaysFee,
 	},
 	traits::{Dispatchable, DispatchResult, ModuleDispatchError},
 	DispatchError,
@@ -1276,7 +1276,10 @@ macro_rules! decl_module {
 							&$weight,
 							($( $param_name, )*)
 						);
-						return $crate::dispatch::DispatchInfo { weight, class };
+						let pays_fee = <dyn $crate::dispatch::PaysFee>::pays_fee(
+							&$weight
+						);
+						return $crate::dispatch::DispatchInfo { weight, class, pays_fee };
 					}
 					if let $call_type::__PhantomItem(_, _) = self { unreachable!("__PhantomItem should never be used.") }
 				)*
@@ -1292,7 +1295,10 @@ macro_rules! decl_module {
 					&$crate::dispatch::SimpleDispatchInfo::default(),
 					()
 				);
-				$crate::dispatch::DispatchInfo { weight, class }
+				let pays_fee = <dyn $crate::dispatch::PaysFee>::pays_fee(
+					&$crate::dispatch::SimpleDispatchInfo::default()
+				);
+				$crate::dispatch::DispatchInfo { weight, class, pays_fee }
 
 			}
 		}
@@ -2021,17 +2027,17 @@ mod tests {
 		// operational.
 		assert_eq!(
 			Call::<TraitImpl>::operational().get_dispatch_info(),
-			DispatchInfo { weight: 5, class: DispatchClass::Operational },
+			DispatchInfo { weight: 5, class: DispatchClass::Operational, pays_fee: true },
 		);
 		// default weight.
 		assert_eq!(
 			Call::<TraitImpl>::aux_0().get_dispatch_info(),
-			DispatchInfo { weight: 10_000, class: DispatchClass::Normal },
+			DispatchInfo { weight: 10_000, class: DispatchClass::Normal, pays_fee: true },
 		);
 		// custom basic
 		assert_eq!(
 			Call::<TraitImpl>::aux_3().get_dispatch_info(),
-			DispatchInfo { weight: 3, class: DispatchClass::Normal },
+			DispatchInfo { weight: 3, class: DispatchClass::Normal, pays_fee: true },
 		);
 	}
 
