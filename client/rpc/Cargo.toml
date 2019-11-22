@@ -16,7 +16,7 @@ log = "0.4.8"
 primitives = { package = "substrate-primitives", path = "../../primitives/core" }
 rpc = { package = "jsonrpc-core", version = "14.0.3" }
 runtime_version = { package = "sr-version", path = "../../primitives/sr-version" }
-serde_json = { version = "1.0.41", features = ["arbitrary_precision"] }
+serde_json = "1.0.41"
 session = { package = "substrate-session", path = "../../primitives/session" }
 sr-primitives = { path = "../../primitives/sr-primitives" }
 rpc-primitives = { package = "substrate-rpc-primitives", path = "../../primitives/rpc" }
