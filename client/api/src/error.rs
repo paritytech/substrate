@@ -18,7 +18,7 @@
 
 use std::{self, error, result};
 use state_machine;
-use sr_primitives::ApplyError;
+use sr_primitives::transaction_validity::TransactionValidityError;
 use consensus;
 use derive_more::{Display, From};
 
@@ -37,9 +37,9 @@ pub enum Error {
 	/// Unknown block.
 	#[display(fmt = "UnknownBlock: {}", _0)]
 	UnknownBlock(String),
-	/// Applying extrinsic error.
-	#[display(fmt = "Extrinsic error: {:?}", _0)]
-	ApplyExtrinsicFailed(ApplyError),
+	/// The `apply_extrinsic` is not valid due to the given `TransactionValidityError`.
+	#[display(fmt = "Extrinsic is not valid: {:?}", _0)]
+	ApplyExtrinsicFailed(TransactionValidityError),
 	/// Execution error.
 	#[display(fmt = "Execution: {}", _0)]
 	Execution(Box<dyn state_machine::Error>),
@@ -126,7 +126,12 @@ impl<'a> From<&'a str> for Error {
 
 impl From<block_builder::ApplyExtrinsicFailed> for Error {
 	fn from(err: block_builder::ApplyExtrinsicFailed) -> Self {
-		Self::ApplyExtrinsicFailed(err.0)
+		use block_builder::ApplyExtrinsicFailed;
+		match err {
+			ApplyExtrinsicFailed::Validity(tx_validity) => Self::ApplyExtrinsicFailed(tx_validity),
+			ApplyExtrinsicFailed::Msg(msg) => Self::Msg(msg),
+		}
+
 	}
 }
 

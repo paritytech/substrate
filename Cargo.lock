@@ -5586,6 +5586,7 @@ dependencies = [
 name = "substrate-block-builder-runtime-api"
 version = "2.0.0"
 dependencies = [
+ "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-api 2.0.0",
  "sr-primitives 2.0.0",
  "sr-std 2.0.0",
