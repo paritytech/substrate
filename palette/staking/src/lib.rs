@@ -272,7 +272,7 @@ use sr_primitives::{
 	curve::PiecewiseLinear,
 	traits::{
 		Convert, Zero, One, StaticLookup, CheckedSub, Saturating, Bounded, SaturatedConversion,
-		SimpleArithmetic,
+		SimpleArithmetic, EnsureOrigin,
 	}
 };
 use sr_staking_primitives::{
@@ -604,6 +604,9 @@ pub trait Trait: system::Trait {
 	/// should be less than the bonding duration. Set to 0 if slashes should be
 	/// applied immediately, without opportunity for intervention.
 	type SlashDeferDuration: Get<EraIndex>;
+
+	/// The origin which can cancel a deferred slash. Root can always do this.
+	type SlashCancelOrigin: EnsureOrigin<Self::Origin>;
 
 	/// Interface for interacting with a session module.
 	type SessionInterface: self::SessionInterface<Self::AccountId>;
@@ -1146,7 +1149,8 @@ decl_module! {
 			ForceEra::put(Forcing::ForceAlways);
 		}
 
-		/// Cancel enactment of a deferred slash. Can only be called by the root origin,
+		/// Cancel enactment of a deferred slash. Can be called by either the root origin or
+		/// the `T::SlashCancelOrigin`.
 		/// passing the era and indices of the slashes for that era to kill.
 		///
 		/// # <weight>
@@ -1154,7 +1158,10 @@ decl_module! {
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FreeOperational]
 		fn cancel_deferred_slash(origin, era: EraIndex, slash_indices: Vec<u32>) {
-			ensure_root(origin)?;
+			T::SlashCancelOrigin::try_origin(origin)
+				.map(|_| ())
+				.or_else(ensure_root)
+				.map_err(|_| "bad origin")?;
 
 			let mut slash_indices = slash_indices;
 			slash_indices.sort_unstable();
