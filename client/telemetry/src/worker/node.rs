@@ -254,11 +254,7 @@ where TTrans::Output: Sink<BytesMut, Error = TSinkErr>
 		if let Some(timeout) = self.timeout.as_mut() {
 			match Future::poll(Pin::new(timeout), cx) {
 				Poll::Pending => {},
-				Poll::Ready(Err(err)) => {
-					self.timeout = None;
-					warn!(target: "telemetry", "Connection timeout error for {} {:?}", my_addr, err);
-				}
-				Poll::Ready(Ok(_)) => {
+				Poll::Ready(()) => {
 					self.timeout = None;
 					return Poll::Ready(Err(ConnectionError::Timeout))
 				}
