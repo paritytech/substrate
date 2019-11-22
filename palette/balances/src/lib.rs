@@ -181,7 +181,9 @@ use sr_primitives::{
 };
 use system::{IsDeadAccount, OnNewAccount, ensure_signed, ensure_root};
 
+#[cfg(test)]
 mod mock;
+#[cfg(test)]
 mod tests;
 
 pub use self::imbalances::{PositiveImbalance, NegativeImbalance};

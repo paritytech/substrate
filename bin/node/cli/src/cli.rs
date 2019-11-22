@@ -185,23 +185,34 @@ where
 	T: AbstractService,
 	E: IntoExit,
 {
-	let (exit_send, exit) = exit_future::signal();
+	use futures::{FutureExt, TryFutureExt, channel::oneshot, future::select, compat::Future01CompatExt};
+
+	let (exit_send, exit) = oneshot::channel();
 
 	let informant = substrate_cli::informant::build(&service);
-	runtime.executor().spawn(exit.until(informant).map(|_| ()));
+
+	let future = select(informant, exit)
+		.map(|_| Ok(()))
+		.compat();
+
+	runtime.executor().spawn(future);
 
 	// we eagerly drop the service so that the internal exit future is fired,
 	// but we need to keep holding a reference to the global telemetry guard
 	let _telemetry = service.telemetry();
 
 	let service_res = {
-		let exit = e.into_exit().map_err(|_| error::Error::Other("Exit future failed.".into()));
-		let service = service.map_err(|err| error::Error::Service(err));
-		let select = service.select(exit).map(|_| ()).map_err(|(err, _)| err);
+		let exit = e.into_exit();
+		let service = service
+			.map_err(|err| error::Error::Service(err))
+			.compat();
+		let select = select(service, exit)
+			.map(|_| Ok(()))
+			.compat();
 		runtime.block_on(select)
 	};
 
-	exit_send.fire();
+	let _ = exit_send.send(());
 
 	// TODO [andre]: timeout this future #1318
 	let _ = runtime.shutdown_on_idle().wait();

@@ -21,7 +21,7 @@ use std::{
 	panic::UnwindSafe, result, cell::RefCell,
 };
 use log::{info, trace, warn};
-use futures03::channel::mpsc;
+use futures::channel::mpsc;
 use parking_lot::{Mutex, RwLock};
 use codec::{Encode, Decode};
 use hash_db::{Hasher, Prefix};
