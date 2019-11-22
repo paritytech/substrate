@@ -61,23 +61,17 @@ use system::Trait;
 
 const RANDOM_MATERIAL_LEN: u32 = 81;
 
-fn block_number_to_index<T: Trait>(block_number: T::BlockNumber) -> usize {
+fn block_number_to_index<T: Trait>(block_number: T::BlockNumber) -> T::BlockNumber {
 	// on_initialize is called on the first block after genesis
-	let index = (block_number - 1.into()) % RANDOM_MATERIAL_LEN.into();
-	index.try_into().ok().expect("Something % 81 is always smaller than usize; qed")
+	(block_number - 1.into()) % RANDOM_MATERIAL_LEN.into()
 }
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn on_initialize(block_number: T::BlockNumber) {
 			let parent_hash = <system::Module<T>>::parent_hash();
-
-			<RandomMaterial<T>>::mutate(|ref mut values| if values.len() < RANDOM_MATERIAL_LEN as usize {
-				values.push(parent_hash)
-			} else {
-				let index = block_number_to_index::<T>(block_number);
-				values[index] = parent_hash;
-			});
+			let index = block_number_to_index::<T>(block_number);
+			<RandomMaterial<T>>::insert(index, parent_hash);
 		}
 	}
 }
@@ -87,7 +81,7 @@ decl_storage! {
 		/// Series of block headers from the last 81 blocks that acts as random seed material. This
 		/// is arranged as a ring buffer with `block_number % 81` being the index into the `Vec` of
 		/// the oldest hash.
-		RandomMaterial get(fn random_material): Vec<T::Hash>;
+		RandomMaterial get(fn random_material): linked_map T::BlockNumber => T::Hash;
 	}
 }
 
@@ -130,15 +124,16 @@ impl<T: Trait> Randomness<T::Hash> for Module<T> {
 	/// and mean that all bits of the resulting value are entirely manipulatable by the author of
 	/// the parent block, who can determine the value of `parent_hash`.
 	fn random(subject: &[u8]) -> T::Hash {
-		let block_number = <system::Module<T>>::block_number();
-		let index = block_number_to_index::<T>(block_number);
+		let hash_series: Vec<(T::BlockNumber, T::Hash)> = <RandomMaterial<T>>::enumerate().collect();
 
-		let hash_series = <RandomMaterial<T>>::get();
 		if !hash_series.is_empty() {
+			let block_number = <system::Module<T>>::block_number();
+			let index = block_number_to_index::<T>(block_number);
+
 			// Always the case after block 1 is initialised.
 			hash_series.iter()
 				.cycle()
-				.skip(index)
+				.skip(index.try_into().ok().unwrap())
 				.take(RANDOM_MATERIAL_LEN as usize)
 				.enumerate()
 				.map(|(i, h)| (i as i8, subject, h).using_encoded(T::Hashing::hash))
@@ -192,7 +187,6 @@ mod tests {
 
 	type System = system::Module<Test>;
 	type CollectiveFlip = Module<Test>;
-
 	fn new_test_ext() -> runtime_io::TestExternalities {
 		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		t.into()
@@ -201,7 +195,7 @@ mod tests {
 	#[test]
 	fn test_block_number_to_index() {
 		for i in 1 .. 1000 {
-			assert_eq!((i - 1) as usize % 81, block_number_to_index::<Test>(i));
+			assert_eq!((i - 1) % 81, block_number_to_index::<Test>(i));
 		}
 	}
 
@@ -225,10 +219,10 @@ mod tests {
 
 			setup_blocks(38);
 
-			let random_material = CollectiveFlip::random_material();
+			let random_material = CollectiveFlip::random_material(0);
 
-			assert_eq!(random_material.len(), 38);
-			assert_eq!(random_material[0], genesis_hash);
+			// assert_eq!(random_material.len(), 38);
+			assert_eq!(random_material, genesis_hash);
 		});
 	}
 
@@ -239,11 +233,12 @@ mod tests {
 
 			setup_blocks(81);
 
-			let random_material = CollectiveFlip::random_material();
+			let random_material_0 = CollectiveFlip::random_material(0);
+			let random_material_1 = CollectiveFlip::random_material(1);
 
-			assert_eq!(random_material.len(), 81);
-			assert_ne!(random_material[0], random_material[1]);
-			assert_eq!(random_material[0], genesis_hash);
+			// assert_eq!(random_material.len(), 81);
+			assert_ne!(random_material_0, random_material_1);
+			assert_eq!(random_material_0, genesis_hash);
 		});
 	}
 
@@ -254,11 +249,12 @@ mod tests {
 
 			setup_blocks(162);
 
-			let random_material = CollectiveFlip::random_material();
+			let random_material_0 = CollectiveFlip::random_material(0);
+			let random_material_1 = CollectiveFlip::random_material(1);
 
-			assert_eq!(random_material.len(), 81);
-			assert_ne!(random_material[0], random_material[1]);
-			assert_ne!(random_material[0], genesis_hash);
+		// 	assert_eq!(random_material.len(), 81);
+			assert_ne!(random_material_0, random_material_1);
+			assert_ne!(random_material_0, genesis_hash);
 		});
 	}
 
@@ -274,7 +270,7 @@ mod tests {
 			let random = CollectiveFlip::random_seed();
 
 			assert_ne!(random, H256::zero());
-			assert!(!CollectiveFlip::random_material().contains(&random));
+			// assert!(!CollectiveFlip::random_material().contains(&random));
 		});
 	}
 }
