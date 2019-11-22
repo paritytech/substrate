@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+//! A method call executor interface.
+
 use std::{cmp::Ord, panic::UnwindSafe, result, cell::RefCell};
 use codec::{Encode, Decode};
 use sr_primitives::{
@@ -24,8 +26,9 @@ use state_machine::{
 	ChangesTrieTransaction, StorageProof,
 };
 use executor::{RuntimeVersion, NativeVersion};
+use externalities::Extensions;
 use hash_db::Hasher;
-use primitives::{offchain::OffchainExt, Blake2Hasher, NativeOrEncoded};
+use primitives::{Blake2Hasher, NativeOrEncoded};
 
 use sr_api::{ProofRecorder, InitializeBlock};
 use crate::error;
@@ -49,7 +52,7 @@ where
 		method: &str,
 		call_data: &[u8],
 		strategy: ExecutionStrategy,
-		side_effects_handler: Option<OffchainExt>,
+		extensions: Option<Extensions>,
 	) -> Result<Vec<u8>, error::Error>;
 
 	/// Execute a contextual call on top of state in a block of a given hash.
@@ -76,9 +79,8 @@ where
 		initialize_block: InitializeBlock<'a, B>,
 		execution_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
-		side_effects_handler: Option<OffchainExt>,
 		proof_recorder: &Option<ProofRecorder<B>>,
-		enable_keystore: bool,
+		extensions: Option<Extensions>,
 	) -> error::Result<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone;
 
 	/// Extract RuntimeVersion of given block
@@ -104,7 +106,7 @@ where
 		call_data: &[u8],
 		manager: ExecutionManager<F>,
 		native_call: Option<NC>,
-		side_effects_handler: Option<OffchainExt>,
+		extensions: Option<Extensions>,
 	) -> Result<
 		(
 			NativeOrEncoded<R>,

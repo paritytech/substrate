@@ -754,7 +754,7 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 		call: &Self::Call,
 		info: Self::DispatchInfo,
 		len: usize,
-	) -> Result<Self::Pre, crate::ApplyError> {
+	) -> Result<Self::Pre, TransactionValidityError> {
 		self.validate(who, call, info.clone(), len)
 			.map(|_| Self::Pre::default())
 			.map_err(Into::into)
@@ -788,7 +788,7 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 		call: &Self::Call,
 		info: Self::DispatchInfo,
 		len: usize,
-	) -> Result<Self::Pre, crate::ApplyError> {
+	) -> Result<Self::Pre, TransactionValidityError> {
 		Self::validate_unsigned(call, info.clone(), len)
 			.map(|_| Self::Pre::default())
 			.map_err(Into::into)
@@ -835,7 +835,7 @@ impl<AccountId, Call, Info: Clone> SignedExtension for Tuple {
 	}
 
 	fn pre_dispatch(self, who: &Self::AccountId, call: &Self::Call, info: Self::DispatchInfo, len: usize)
-		-> Result<Self::Pre, crate::ApplyError>
+		-> Result<Self::Pre, TransactionValidityError>
 	{
 		Ok(for_tuples!( ( #( Tuple.pre_dispatch(who, call, info.clone(), len)? ),* ) ))
 	}
@@ -854,7 +854,7 @@ impl<AccountId, Call, Info: Clone> SignedExtension for Tuple {
 		call: &Self::Call,
 		info: Self::DispatchInfo,
 		len: usize,
-	) -> Result<Self::Pre, crate::ApplyError> {
+	) -> Result<Self::Pre, TransactionValidityError> {
 		Ok(for_tuples!( ( #( Tuple::pre_dispatch_unsigned(call, info.clone(), len)? ),* ) ))
 	}
 
@@ -912,7 +912,7 @@ pub trait Applyable: Sized + Send + Sync {
 		self,
 		info: Self::DispatchInfo,
 		len: usize,
-	) -> crate::ApplyResult;
+	) -> crate::ApplyExtrinsicResult;
 }
 
 /// Auxiliary wrapper that holds an api instance and binds it to the given lifetime.
@@ -992,7 +992,7 @@ pub trait ValidateUnsigned {
 	/// this function again to make sure we never include an invalid transaction.
 	///
 	/// Changes made to storage WILL be persisted if the call returns `Ok`.
-	fn pre_dispatch(call: &Self::Call) -> Result<(), crate::ApplyError> {
+	fn pre_dispatch(call: &Self::Call) -> Result<(), TransactionValidityError> {
 		Self::validate_unsigned(call)
 			.map(|_| ())
 			.map_err(Into::into)
