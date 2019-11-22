@@ -269,7 +269,7 @@ where
 		let dispatch_info = xt.get_dispatch_info();
 		let r = Applyable::apply::<UnsignedValidator>(xt, dispatch_info, encoded_len)?;
 
-		<system::Module<System>>::note_applied_extrinsic(&r, encoded_len as u32);
+		<system::Module<System>>::note_applied_extrinsic(&r, encoded_len as u32, dispatch_info);
 
 		Ok(r)
 	}
