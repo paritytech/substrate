@@ -17,7 +17,7 @@
 //! Contains the `Node` struct, which handles communications with a single telemetry endpoint.
 
 use bytes::BytesMut;
-use futures::{prelude::*, compat::{Future01CompatExt as _, Compat01As03}};
+use futures::prelude::*;
 use futures_timer::Delay;
 use libp2p::Multiaddr;
 use libp2p::core::transport::Transport;
@@ -42,7 +42,7 @@ enum NodeSocket<TTrans: Transport> {
 	/// We're connected to the node. This is the normal state.
 	Connected(NodeSocketConnected<TTrans>),
 	/// We are currently dialing the node.
-	Dialing(Compat01As03<TTrans::Dial>),
+	Dialing(TTrans::Dial),
 	/// A new connection should be started as soon as possible.
 	ReconnectNow,
 	/// Waiting before attempting to dial again.
@@ -163,7 +163,7 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 				NodeSocket::ReconnectNow => match self.transport.clone().dial(self.addr.clone()) {
 					Ok(d) => {
 						debug!(target: "telemetry", "Started dialing {}", self.addr);
-						socket = NodeSocket::Dialing(d.compat());
+						socket = NodeSocket::Dialing(d);
 					}
 					Err(err) => {
 						warn!(target: "telemetry", "Error while dialing {}: {:?}", self.addr, err);
@@ -212,10 +212,13 @@ where TTrans::Output: Sink<BytesMut, Error = TSinkErr>
 	) -> Poll<Result<futures::never::Never, ConnectionError<TSinkErr>>> {
 
 		while let Some(item) = self.pending.pop_front() {
-			if let Poll::Ready(_) = Sink::poll_ready(Pin::new(&mut self.sink), cx) {
+			if let Poll::Ready(result) = Sink::poll_ready(Pin::new(&mut self.sink), cx) {
+				if let Err(err) = result {
+					return Poll::Ready(Err(ConnectionError::Sink(err)))
+				}
+
 				let item_len = item.len();
 				if let Err(err) = Sink::start_send(Pin::new(&mut self.sink), item) {
-					self.timeout = None;
 					return Poll::Ready(Err(ConnectionError::Sink(err)))
 				}
 				trace!(

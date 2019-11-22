@@ -18,8 +18,9 @@
 
 pub use client::ExecutionStrategies;
 pub use client_db::{kvdb::KeyValueDB, PruningMode};
-pub use network::config::{ExtTransport, NetworkConfiguration, Roles};
+pub use network::config::{NetworkConfiguration, Roles};
 pub use substrate_executor::WasmExecutionMethod;
+pub use tel::ExtTransport;
 
 use std::{path::PathBuf, net::SocketAddr, sync::Arc};
 use transaction_pool;
