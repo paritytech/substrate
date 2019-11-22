@@ -39,11 +39,15 @@
 use serde::{Serialize, Deserialize};
 use impl_trait_for_tuples::impl_for_tuples;
 use codec::{Encode, Decode};
-use arithmetic::traits::{Bounded, Zero};
-use crate::RuntimeDebug;
+use sr_arithmetic::traits::{Bounded, Zero};
+use sr_primitives::{
+	RuntimeDebug,
+	traits::SignedExtension,
+	generic::{CheckedExtrinsic, UncheckedExtrinsic},
+};
 
 /// Re-export priority as type
-pub use crate::transaction_validity::TransactionPriority;
+pub use sr_primitives::transaction_validity::TransactionPriority;
 
 /// Numeric range of a transaction weight.
 pub type Weight = u32;
@@ -230,7 +234,8 @@ impl SimpleDispatchInfo {
 	}
 }
 
-/// A struct to represent a weight which is a function of the input arguments.
+/// A struct to represent a weight which is a function of the input arguments. The given closure's
+/// arguments must match the dispatch's argument types, given as a tuple.
 pub struct FunctionOf<F, Class>(pub F, pub Class);
 
 impl<Args, F, Class> WeighData<Args> for FunctionOf<F, Class>
@@ -251,4 +256,76 @@ where
 	}
 }
 
-// TODO: test these stuff with a dedicated `decl_module`. Needs relocating to support first. #4124
+/// Implementation for unchecked extrinsic.
+impl<Address, Call, Signature, Extra> GetDispatchInfo
+	for UncheckedExtrinsic<Address, Call, Signature, Extra>
+where
+	Call: GetDispatchInfo,
+	Extra: SignedExtension,
+{
+	fn get_dispatch_info(&self) -> DispatchInfo {
+		self.function.get_dispatch_info()
+	}
+}
+
+/// Implementation for checked extrinsic.
+impl<AccountId, Call, Extra> GetDispatchInfo
+	for CheckedExtrinsic<AccountId, Call, Extra>
+where
+	Call: GetDispatchInfo,
+{
+	fn get_dispatch_info(&self) -> DispatchInfo {
+		self.function.get_dispatch_info()
+	}
+}
+
+/// Implementation for test extrinsic.
+#[cfg(feature = "std")]
+impl<Call: Encode, Extra: Encode> GetDispatchInfo for sr_primitives::testing::TestXt<Call, Extra> {
+	fn get_dispatch_info(&self) -> DispatchInfo {
+		// for testing: weight == size.
+		DispatchInfo {
+			weight: self.encode().len() as _,
+			..Default::default()
+		}
+	}
+}
+
+#[cfg(test)]
+#[allow(dead_code)]
+mod tests {
+	use crate::decl_module;
+	use super::*;
+
+	pub trait Trait {
+		type Origin;
+		type Balance;
+		type BlockNumber;
+	}
+
+	pub struct TraitImpl {}
+
+	impl Trait for TraitImpl {
+		type Origin = u32;
+		type BlockNumber = u32;
+		type Balance = u32;
+	}
+
+	decl_module! {
+		pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+			// no arguments, fixed weight
+			#[weight = SimpleDispatchInfo::FixedNormal(1000)]
+			fn some_function(_origin) { unimplemented!(); }
+
+			// weight = a x 10 + b
+			#[weight = FunctionOf(|args: (&u32, &u32)| args.0 * 10 + args.1, 0u8)]
+			fn some_other_function(_origin, _a: u32, _b: u32) { unimplemented!(); }
+		}
+	}
+
+	#[test]
+	fn weights_are_correct() {
+		assert_eq!(Call::<TraitImpl>::some_other_function(10, 20).get_dispatch_info().weight, 120);
+		assert_eq!(Call::<TraitImpl>::some_function().get_dispatch_info().weight, 1000);
+	}
+}
