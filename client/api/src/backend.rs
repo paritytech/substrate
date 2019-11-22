@@ -19,6 +19,7 @@
 use std::sync::Arc;
 use std::collections::HashMap;
 use primitives::ChangesTrieConfiguration;
+use primitives::offchain::OffchainStorage;
 use sr_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
 use sr_primitives::traits::{Block as BlockT, NumberFor};
 use state_machine::backend::Backend as StateBackend;
@@ -27,7 +28,6 @@ use crate::{
 	blockchain::{
 		Backend as BlockchainBackend, well_known_cache_keys
 	},
-	offchain::OffchainStorage,
 	error,
 	light::RemoteBlockchain,
 };
@@ -41,12 +41,22 @@ pub type StorageCollection = Vec<(Vec<u8>, Option<Vec<u8>>)>;
 /// In memory arrays of storage values for multiple child tries.
 pub type ChildStorageCollection = Vec<(Vec<u8>, StorageCollection)>;
 
+/// Import operation summary.
+///
+/// Contains information about the block that just got imported,
+/// including storage changes, reorged blocks, etc.
 pub struct ImportSummary<Block: BlockT> {
+	/// Block hash of the imported block.
 	pub hash: Block::Hash,
+	/// Import origin.
 	pub origin: BlockOrigin,
+	/// Header of the imported block.
 	pub header: Block::Header,
+	/// Is this block a new best block.
 	pub is_new_best: bool,
+	/// Optional storage changes.
 	pub storage_changes: Option<(StorageCollection, ChildStorageCollection)>,
+	/// Blocks that got retracted because of this one got imported.
 	pub retracted: Vec<Block::Hash>,
 }
 
@@ -56,8 +66,11 @@ pub struct ClientImportOperation<
 	H: Hasher<Out=Block::Hash>,
 	B: Backend<Block, H>,
 > {
+	/// DB Operation.
 	pub op: B::BlockImportOperation,
+	/// Summary of imported block.
 	pub notify_imported: Option<ImportSummary<Block>>,
+	/// A list of hashes of blocks that got finalized.
 	pub notify_finalized: Vec<Block::Hash>,
 }
 

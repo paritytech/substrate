@@ -21,8 +21,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use parking_lot::{RwLock, Mutex};
 
-use sr_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
 use state_machine::{Backend as StateBackend, TrieBackend, backend::InMemory as InMemoryState, ChangesTrieTransaction};
+use primitives::offchain::storage::InMemOffchainStorage;
+use sr_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
 use sr_primitives::traits::{Block as BlockT, NumberFor, Zero, Header};
 use crate::in_mem::{self, check_genesis_storage};
 use client_api::{
@@ -37,9 +38,8 @@ use client_api::{
 		Error as ClientError, Result as ClientResult
 	},
 	light::Storage as BlockchainStorage,
-	InMemOffchainStorage,
 };
-use crate::light::blockchain::{Blockchain};
+use crate::light::blockchain::Blockchain;
 use hash_db::Hasher;
 use trie::MemoryDB;
 
