@@ -74,7 +74,7 @@ where
 		self,
 		info: Self::DispatchInfo,
 		len: usize,
-	) -> crate::ApplyResult {
+	) -> crate::ApplyExtrinsicResult {
 		let (maybe_who, pre) = if let Some((id, extra)) = self.signed {
 			let pre = Extra::pre_dispatch(extra, &id, &self.function, info.clone(), len)?;
 			(Some(id), pre)
