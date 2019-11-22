@@ -230,6 +230,7 @@ impl SimpleDispatchInfo {
 	}
 }
 
+/// A struct to represent a weight which is a function of the input arguments.
 pub struct FunctionOf<F, Class>(pub F, pub Class);
 
 impl<Args, F, Class> WeighData<Args> for FunctionOf<F, Class>
