@@ -346,57 +346,11 @@ impl From<ed25519::Signature> for AnySignature {
 	}
 }
 
-#[derive(Eq, PartialEq, Clone, Copy, Decode, Encode, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize))]
-/// Reason why an extrinsic couldn't be applied (i.e. invalid extrinsic).
-pub enum ApplyError {
-	/// General error to do with the permissions of the sender.
-	NoPermission,
-
-	/// General error to do with the state of the system in general.
-	BadState,
-
-	/// Any error to do with the transaction validity.
-	Validity(transaction_validity::TransactionValidityError),
-}
-
-impl ApplyError {
-	/// Returns if the reason for the error was block resource exhaustion.
-	pub fn exhausted_resources(&self) -> bool {
-		match self {
-			Self::Validity(e) => e.exhausted_resources(),
-			_ => false,
-		}
-	}
-}
-
-impl From<ApplyError> for &'static str {
-	fn from(err: ApplyError) -> &'static str {
-		match err {
-			ApplyError::NoPermission => "Transaction does not have required permissions",
-			ApplyError::BadState => "System state currently prevents this transaction",
-			ApplyError::Validity(v) => v.into(),
-		}
-	}
-}
-
-impl From<transaction_validity::TransactionValidityError> for ApplyError {
-	fn from(err: transaction_validity::TransactionValidityError) -> Self {
-		ApplyError::Validity(err)
-	}
-}
-
-/// The outcome of applying a transaction.
-pub type ApplyOutcome = Result<(), DispatchError>;
-
-impl From<DispatchError> for ApplyOutcome {
+impl From<DispatchError> for DispatchOutcome {
 	fn from(err: DispatchError) -> Self {
 		Err(err)
 	}
 }
-
-/// Result from attempt to apply an extrinsic.
-pub type ApplyResult = Result<ApplyOutcome, ApplyError>;
 
 #[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize))]
@@ -450,6 +404,37 @@ impl From<&'static str> for DispatchError {
 		DispatchError::new(None, 0, Some(err))
 	}
 }
+
+/// This type specifies the outcome of dispatching a call to a module.
+///
+/// In case of failure an error specific to the module is returned.
+///
+/// Failure of the module call dispatching doesn't invalidate the extrinsic and it is still included
+/// in the block, therefore all state changes performed by the dispatched call are still persisted.
+///
+/// For example, if the dispatching of an extrinsic involves inclusion fee payment then these
+/// changes are going to be preserved even if the call dispatched failed.
+pub type DispatchOutcome = Result<(), DispatchError>;
+
+/// The result of applying of an extrinsic.
+///
+/// This type is typically used in the context of `BlockBuilder` to signal that the extrinsic
+/// in question cannot be included.
+///
+/// A block containing extrinsics that have a negative inclusion outcome is invalid. A negative
+/// result can only occur during the block production, where such extrinsics are detected and
+/// removed from the block that is being created and the transaction pool.
+///
+/// To rehash: every extrinsic in a valid block must return a positive `ApplyExtrinsicResult`.
+///
+/// Examples of reasons preventing inclusion in a block:
+/// - More block weight is required to process the extrinsic than is left in the block being built.
+///   This doesn't neccessarily mean that the extrinsic is invalid, since it can still be
+///   included in the next block if it has enough spare weight available.
+/// - The sender doesn't have enough funds to pay the transaction inclusion fee. Including such
+///   a transaction in the block doesn't make sense.
+/// - The extrinsic supplied a bad signature. This transaction won't become valid ever.
+pub type ApplyExtrinsicResult = Result<DispatchOutcome, transaction_validity::TransactionValidityError>;
 
 /// Verify a signature on an encoded value in a lazy manner. This can be
 /// an optimization if the signature scheme has an "unsigned" escape hash.

@@ -18,9 +18,6 @@ sr-staking-primitives = { path = "../../primitives/sr-staking-primitives", defau
 support = { package = "palette-support", path = "../support", default-features = false }
 system = { package = "palette-system", path = "../system", default-features = false }
 
-[dev-dependencies]
-offchain = { package = "substrate-offchain", path = "../../client/offchain" }
-
 [features]
 default = ["std", "session/historical"]
 std = [

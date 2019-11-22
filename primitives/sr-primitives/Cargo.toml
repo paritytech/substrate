@@ -21,7 +21,6 @@ inherents = { package = "substrate-inherents", path = "../inherents", default-fe
 [dev-dependencies]
 serde_json = "1.0.41"
 rand = "0.7.2"
-substrate-offchain = { path = "../../client/offchain" }
 
 [features]
 bench = []

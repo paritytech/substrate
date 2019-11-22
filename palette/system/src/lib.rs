@@ -98,7 +98,7 @@ use rstd::fmt::Debug;
 use sr_version::RuntimeVersion;
 use sr_primitives::{
 	RuntimeDebug,
-	generic::{self, Era}, Perbill, ApplyError, ApplyOutcome, DispatchError,
+	generic::{self, Era}, Perbill, DispatchOutcome, DispatchError,
 	transaction_validity::{
 		ValidTransaction, TransactionPriority, TransactionLongevity, TransactionValidityError,
 		InvalidTransaction, TransactionValidity,
@@ -311,17 +311,15 @@ decl_event!(
 	/// Event for the System module.
 	pub enum Event {
 		/// An extrinsic completed successfully.
-		ExtrinsicSuccess,
+		ExtrinsicSuccess(DispatchInfo),
 		/// An extrinsic failed.
-		ExtrinsicFailed(DispatchError),
+		ExtrinsicFailed(DispatchError, DispatchInfo),
 	}
 );
 
 decl_error! {
 	/// Error for the System module
 	pub enum Error {
-		BadSignature,
-		BlockFull,
 		RequireSignedOrigin,
 		RequireRootOrigin,
 		RequireNoOrigin,
@@ -754,11 +752,11 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// To be called immediately after an extrinsic has been applied.
-	pub fn note_applied_extrinsic(r: &ApplyOutcome, _encoded_len: u32) {
+	pub fn note_applied_extrinsic(r: &DispatchOutcome, _encoded_len: u32, info: DispatchInfo) {
 		Self::deposit_event(
 			match r {
-				Ok(()) => Event::ExtrinsicSuccess,
-				Err(err) => Event::ExtrinsicFailed(err.clone()),
+				Ok(()) => Event::ExtrinsicSuccess(info),
+				Err(err) => Event::ExtrinsicFailed(err.clone(), info),
 			}
 		);
 
@@ -865,7 +863,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 		_call: &Self::Call,
 		info: Self::DispatchInfo,
 		len: usize,
-	) -> Result<(), ApplyError> {
+	) -> Result<(), TransactionValidityError> {
 		let next_len = Self::check_block_length(info, len)?;
 		AllExtrinsicsLen::put(next_len);
 		let next_weight = Self::check_weight(info)?;
@@ -945,7 +943,7 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 		_call: &Self::Call,
 		_info: Self::DispatchInfo,
 		_len: usize,
-	) -> Result<(), ApplyError> {
+	) -> Result<(), TransactionValidityError> {
 		let expected = <AccountNonce<T>>::get(who);
 		if self.0 != expected {
 			return Err(
@@ -1175,8 +1173,8 @@ mod tests {
 	impl From<Event> for u16 {
 		fn from(e: Event) -> u16 {
 			match e {
-				Event::ExtrinsicSuccess => 100,
-				Event::ExtrinsicFailed(_) => 101,
+				Event::ExtrinsicSuccess(..) => 100,
+				Event::ExtrinsicFailed(..) => 101,
 			}
 		}
 	}
@@ -1224,8 +1222,8 @@ mod tests {
 
 			System::initialize(&2, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
 			System::deposit_event(42u16);
-			System::note_applied_extrinsic(&Ok(()), 0);
-			System::note_applied_extrinsic(&Err(DispatchError::new(Some(1), 2, None)), 0);
+			System::note_applied_extrinsic(&Ok(()), 0, Default::default());
+			System::note_applied_extrinsic(&Err(DispatchError::new(Some(1), 2, None)), 0, Default::default());
 			System::note_finished_extrinsics();
 			System::deposit_event(3u16);
 			System::finalize();
