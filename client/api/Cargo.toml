@@ -11,8 +11,7 @@ consensus = { package = "substrate-consensus-common", path = "../../primitives/c
 derive_more = { version = "0.15.0" }
 executor = { package = "substrate-executor", path = "../executor" }
 fnv = { version = "1.0.6" }
-futures = { version = "0.1.29" }
-futures03 = { package = "futures-preview", version = "0.3.0-alpha.19", features = ["compat"] }
+futures = { version = "0.3.1" }
 hash-db = { version = "0.15.2", default-features = false }
 header-metadata = { package = "substrate-header-metadata", path = "../header-metadata" }
 hex-literal = { version = "0.2.1" }

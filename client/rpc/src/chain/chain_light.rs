@@ -17,7 +17,7 @@
 //! Blockchain API backend for light nodes.
 
 use std::sync::Arc;
-use futures03::{future::ready, FutureExt, TryFutureExt};
+use futures::{future::ready, FutureExt, TryFutureExt};
 use rpc::futures::future::{result, Future, Either};
 
 use api::Subscriptions;
