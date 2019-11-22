@@ -76,8 +76,8 @@ pub trait WeighBlock<BlockNumber> {
 	fn on_finalize(_: BlockNumber) -> Weight { Zero::zero() }
 }
 
+/// Indicates if dispatch function should pay fees or not. If set to false, the block resource limits are applied, yet no fee is deducted. 
 pub trait PaysFee {
-	/// Indicates if dispatch function should pays fee.
 	fn pays_fee(&self) -> bool {
 		true
 	}
@@ -270,4 +270,3 @@ impl<Call: Encode, Extra: Encode> GetDispatchInfo for sr_primitives::testing::Te
 		}
 	}
 }
-
