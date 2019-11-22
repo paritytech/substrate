@@ -219,14 +219,14 @@ check-web-wasm:
   script:
     # WASM support is in progress. As more and more crates support WASM, we
     # should add entries here. See https://github.com/paritytech/substrate/issues/2416
-    - time cargo web build -p sr-io
-    - time cargo web build -p sr-primitives
-    - time cargo web build -p sr-std
-    - time cargo web build -p substrate-client
-    - time cargo web build -p substrate-consensus-aura
-    - time cargo web build -p substrate-consensus-babe
-    - time cargo web build -p substrate-consensus-common
-    - time cargo web build -p substrate-telemetry
+    - time cargo build --target=wasm32-unknown-unknown -p sr-io
+    - time cargo build --target=wasm32-unknown-unknown -p sr-primitives
+    - time cargo build --target=wasm32-unknown-unknown -p sr-std
+    - time cargo build --target=wasm32-unknown-unknown -p substrate-client
+    - time cargo build --target=wasm32-unknown-unknown -p substrate-consensus-aura
+    - time cargo build --target=wasm32-unknown-unknown -p substrate-consensus-babe
+    - time cargo build --target=wasm32-unknown-unknown -p substrate-consensus-common
+    - time cargo build --target=wasm32-unknown-unknown -p substrate-telemetry
     # Note: the command below is a bit weird because several Cargo issues prevent us from compiling the node in a more straight-forward way.
     - time cargo build --manifest-path=bin/node/cli/Cargo.toml --no-default-features --features "browser" --target=wasm32-unknown-unknown
     - sccache -s

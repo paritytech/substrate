@@ -192,12 +192,10 @@ pub trait SimpleSlotWorker<B: BlockT> {
 				remaining_duration,
 			).map_err(|e| consensus_common::Error::ClientImport(format!("{:?}", e))),
 			Delay::new(remaining_duration)
-				.map_err(consensus_common::Error::FaultyTimer)
 		).map(|v| match v {
 			futures::future::Either::Left((b, _)) => b.map(|b| (b, claim)),
-			futures::future::Either::Right((Ok(_), _)) =>
+			futures::future::Either::Right(_) =>
 				Err(consensus_common::Error::ClientImport("Timeout in the Slots proposer".into())),
-			futures::future::Either::Right((Err(err), _)) => Err(err),
 		});
 
 		let block_import_params_maker = self.block_import_params();
