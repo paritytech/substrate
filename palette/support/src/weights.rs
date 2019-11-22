@@ -114,6 +114,7 @@ impl Default for DispatchClass {
 	}
 }
 
+// Utility implementation to provide numbers instead of the full enum.
 impl From<u8> for DispatchClass {
 	fn from(x: u8) -> Self {
 		match x {
@@ -315,17 +316,33 @@ mod tests {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 			// no arguments, fixed weight
 			#[weight = SimpleDispatchInfo::FixedNormal(1000)]
-			fn some_function(_origin) { unimplemented!(); }
+			fn f0(_origin) { unimplemented!(); }
 
 			// weight = a x 10 + b
-			#[weight = FunctionOf(|args: (&u32, &u32)| args.0 * 10 + args.1, 0u8)]
-			fn some_other_function(_origin, _a: u32, _b: u32) { unimplemented!(); }
+			#[weight = FunctionOf(|args: (&u32, &u32)| args.0 * 10 + args.1, DispatchClass::Normal)]
+			fn f11(_origin, _a: u32, _eb: u32) { unimplemented!(); }
+
+			#[weight = FunctionOf(|_: (&u32, &u32)| 0, 1u8)]
+			fn f12(_origin, _a: u32, _eb: u32) { unimplemented!(); }
 		}
 	}
 
 	#[test]
 	fn weights_are_correct() {
-		assert_eq!(Call::<TraitImpl>::some_other_function(10, 20).get_dispatch_info().weight, 120);
-		assert_eq!(Call::<TraitImpl>::some_function().get_dispatch_info().weight, 1000);
+		assert_eq!(Call::<TraitImpl>::f11(10, 20).get_dispatch_info().weight, 120);
+		assert_eq!(Call::<TraitImpl>::f11(10, 20).get_dispatch_info().class, DispatchClass::Normal);
+		assert_eq!(Call::<TraitImpl>::f0().get_dispatch_info().weight, 1000);
+	}
+
+	#[test]
+	fn can_use_number_as_class() {
+		assert_eq!(
+			Call::<TraitImpl>::f11(0, 0).get_dispatch_info().class,
+			DispatchClass::Normal,
+		);
+		assert_eq!(
+			Call::<TraitImpl>::f12(0, 0).get_dispatch_info().class,
+			DispatchClass::Operational,
+		);
 	}
 }

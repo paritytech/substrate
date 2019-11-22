@@ -484,15 +484,6 @@ decl_module! {
 			Ok(())
 		}
 
-		// TODO: this stuff will move to a new test.
-		#[weight = sr_primitives::weights::FunctionOf(
-			|args: (&u32, &T::AccountId, &BalanceOf<T>)| (args.0 + 100) as Weight,
-			1u8,
-		)]
-		fn blah(origin, _a: u32, _b: T::AccountId, _c: BalanceOf<T>) {
-			let _ = ensure_signed(origin);
-		}
-
 		/// A privileged call; in this case it resets our dummy value to something new.
 		// Implementation of a privileged call. The `origin` parameter is ROOT because
 		// it's not (directly) from an extrinsic, but rather the system as a whole has decided
@@ -786,10 +777,5 @@ mod tests {
 		let custom_call = <Call<Test>>::set_dummy(20);
 		let info = custom_call.get_dispatch_info();
 		assert_eq!(info.weight, 2000);
-
-		// must have arg.0 + 100
-		let custom_call = <Call<Test>>::blah(20u32, 1, 1);
-		let info = custom_call.get_dispatch_info();
-		assert_eq!(info.weight, 120);
 	}
 }
