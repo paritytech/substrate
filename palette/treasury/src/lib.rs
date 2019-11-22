@@ -69,7 +69,7 @@ use sr_primitives::{Permill, ModuleId};
 use sr_primitives::traits::{
 	Zero, EnsureOrigin, StaticLookup, AccountIdConversion, Saturating
 };
-use sr_primitives::weights::SimpleDispatchInfo;
+use support::weights::SimpleDispatchInfo;
 use codec::{Encode, Decode};
 use system::ensure_signed;
 

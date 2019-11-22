@@ -26,7 +26,6 @@ use crate::traits::{
 #[allow(deprecated)]
 use crate::traits::ValidateUnsigned;
 use crate::{generic, KeyTypeId, ApplyResult};
-use crate::weights::{GetDispatchInfo, DispatchInfo};
 pub use primitives::{H256, sr25519};
 use primitives::{crypto::{CryptoType, Dummy, key_types, Public}, U256};
 use crate::transaction_validity::{TransactionValidity, TransactionValidityError};
@@ -326,13 +325,15 @@ impl<Call: Codec + Sync + Send, Extra> traits::Extrinsic for TestXt<Call, Extra>
 	}
 }
 
-impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
+impl<Origin, Call, Extra, Info> Applyable for TestXt<Call, Extra> where
 	Call: 'static + Sized + Send + Sync + Clone + Eq + Codec + Debug + Dispatchable<Origin=Origin>,
-	Extra: SignedExtension<AccountId=u64, Call=Call>,
+	Extra: SignedExtension<AccountId=u64, Call=Call, DispatchInfo=Info>,
 	Origin: From<Option<u64>>,
+	Info: Clone,
 {
 	type AccountId = u64;
 	type Call = Call;
+	type DispatchInfo = Info;
 
 	fn sender(&self) -> Option<&Self::AccountId> { self.0.as_ref().map(|x| &x.0) }
 
@@ -340,7 +341,7 @@ impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 	#[allow(deprecated)] // Allow ValidateUnsigned
 	fn validate<U: ValidateUnsigned<Call=Self::Call>>(
 		&self,
-		_info: DispatchInfo,
+		_info: Self::DispatchInfo,
 		_len: usize,
 	) -> TransactionValidity {
 		Ok(Default::default())
@@ -351,7 +352,7 @@ impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 	#[allow(deprecated)] // Allow ValidateUnsigned
 	fn apply<U: ValidateUnsigned<Call=Self::Call>>(
 		self,
-		info: DispatchInfo,
+		info: Self::DispatchInfo,
 		len: usize,
 	) -> ApplyResult {
 		let maybe_who = if let Some((who, extra)) = self.0 {
@@ -363,15 +364,5 @@ impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 		};
 
 		Ok(self.1.dispatch(maybe_who.into()).map_err(Into::into))
-	}
-}
-
-impl<Call: Encode, Extra: Encode> GetDispatchInfo for TestXt<Call, Extra> {
-	fn get_dispatch_info(&self) -> DispatchInfo {
-		// for testing: weight == size.
-		DispatchInfo {
-			weight: self.encode().len() as _,
-			..Default::default()
-		}
 	}
 }

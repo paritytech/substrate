@@ -34,7 +34,11 @@ mod tests {
 	use super::Executor;
 	use {balances, contracts, indices, system, timestamp};
 	use codec::{Encode, Decode, Joiner};
-	use runtime_support::{Hashable, StorageValue, StorageMap, traits::Currency};
+	use runtime_support::{
+		Hashable, StorageValue, StorageMap,
+		traits::Currency,
+		weights::GetDispatchInfo,
+	};
 	use state_machine::TestExternalities as CoreTestExternalities;
 	use primitives::{
 		Blake2Hasher, NeverNativeValue, NativeOrEncoded, map,
@@ -43,7 +47,7 @@ mod tests {
 	use sr_primitives::{
 		Fixed64,
 		traits::{Header as HeaderT, Hash as HashT, Convert}, ApplyResult,
-		transaction_validity::InvalidTransaction, weights::GetDispatchInfo,
+		transaction_validity::InvalidTransaction,
 	};
 	use contracts::ContractAddressFor;
 	use substrate_executor::{NativeExecutor, WasmExecutionMethod};
