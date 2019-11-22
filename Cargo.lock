@@ -3278,10 +3278,10 @@ dependencies = [
  "palette-system-rpc-runtime-api 2.0.0",
  "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-blockchain 2.0.0",
  "sp-transaction-graph 2.0.0",
  "sp-transaction-pool 2.0.0",
  "sr-primitives 2.0.0",
- "substrate-client 2.0.0",
  "substrate-primitives 2.0.0",
  "substrate-test-runtime-client 2.0.0",
 ]
@@ -3473,8 +3473,8 @@ dependencies = [
  "pallet-contracts-rpc-runtime-api 2.0.0",
  "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-blockchain 2.0.0",
  "sr-primitives 2.0.0",
- "substrate-client 2.0.0",
  "substrate-primitives 2.0.0",
  "substrate-rpc-primitives 2.0.0",
 ]
@@ -3845,8 +3845,8 @@ dependencies = [
  "pallet-transaction-payment-rpc-runtime-api 2.0.0",
  "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-blockchain 2.0.0",
  "sr-primitives 2.0.0",
- "substrate-client 2.0.0",
  "substrate-primitives 2.0.0",
  "substrate-rpc-primitives 2.0.0",
 ]

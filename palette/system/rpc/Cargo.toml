@@ -5,7 +5,6 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-client = { package = "substrate-client", path = "../../../client/" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 jsonrpc-core = "14.0.3"
 jsonrpc-core-client = "14.0.3"
@@ -15,6 +14,7 @@ serde = { version = "1.0.101", features = ["derive"] }
 sr-primitives = { path = "../../../primitives/sr-primitives" }
 palette-system-rpc-runtime-api = { path = "./runtime-api" }
 substrate-primitives = { path = "../../../primitives/core" }
+sp-blockchain = { path = "../../../primitives/blockchain" }
 sp-transaction-graph = { path = "../../../primitives/transaction-pool/graph" }
 
 [dev-dependencies]

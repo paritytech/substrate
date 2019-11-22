@@ -16,7 +16,6 @@
 
 //! Errors that can occur during the service operation.
 
-use client;
 use network;
 use keystore;
 use consensus_common;
