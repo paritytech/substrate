@@ -34,7 +34,7 @@ use substrate_trie::trie_types::{TrieDB, TrieDBMut};
 
 use sr_api::{decl_runtime_apis, impl_runtime_apis};
 use sr_primitives::{
-	ApplyResult, create_runtime_str, Perbill, impl_opaque_keys,
+	ApplyExtrinsicResult, create_runtime_str, Perbill, impl_opaque_keys,
 	transaction_validity::{
 		TransactionValidity, ValidTransaction, TransactionValidityError, InvalidTransaction,
 	},
@@ -494,7 +494,7 @@ cfg_if! {
 			}
 
 			impl block_builder_api::BlockBuilder<Block> for Runtime {
-				fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyResult {
+				fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyExtrinsicResult {
 					system::execute_transaction(extrinsic)
 				}
 
@@ -679,7 +679,7 @@ cfg_if! {
 			}
 
 			impl block_builder_api::BlockBuilder<Block> for Runtime {
-				fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyResult {
+				fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyExtrinsicResult {
 					system::execute_transaction(extrinsic)
 				}
 
