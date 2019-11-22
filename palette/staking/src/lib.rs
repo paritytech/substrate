@@ -1171,8 +1171,8 @@ decl_module! {
 				let index = index as usize;
 
 				// if `index` is not duplicate, `removed` must be <= index.
-				if removed > index { return Err("duplicate index") }
-				if index >= unapplied.len() { return Err("slash record index out of bounds") }
+				ensure!(removed <= index, "duplicate index");
+				ensure!(index < unapplied.len(), "slash record index out of bounds");
 
 				unapplied.remove(index);
 			}
