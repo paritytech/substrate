@@ -169,6 +169,7 @@ use support::{
 		WithdrawReason, WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
 		Imbalance, SignedImbalance, ReservableCurrency, Get,
 	},
+	weights::SimpleDispatchInfo,
 	dispatch::Result,
 };
 use sr_primitives::{
@@ -177,11 +178,12 @@ use sr_primitives::{
 		Zero, SimpleArithmetic, StaticLookup, Member, CheckedAdd, CheckedSub, MaybeSerializeDeserialize,
 		Saturating, Bounded,
 	},
-	weights::SimpleDispatchInfo,
 };
 use system::{IsDeadAccount, OnNewAccount, ensure_signed, ensure_root};
 
+#[cfg(test)]
 mod mock;
+#[cfg(test)]
 mod tests;
 
 pub use self::imbalances::{PositiveImbalance, NegativeImbalance};
