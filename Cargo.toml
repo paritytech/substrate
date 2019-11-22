@@ -142,3 +142,7 @@ members = [
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"
+
+# Remove when we have fixed the linking error in Polkadot
+[patch.crates-io]
+zstd-sys = { git = "https://github.com/bkchr/zstd-rs.git", branch = "bkchr-export-include-paths2" }
