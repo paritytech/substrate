@@ -1143,7 +1143,7 @@ ServiceBuilder<
 			telemetry
 		});
 
-    // Grafana data source
+		// Grafana data source
 		if let Some(port) = config.grafana_port {
 			let future = select(
 				grafana_data_source::run_server(port).boxed(),
