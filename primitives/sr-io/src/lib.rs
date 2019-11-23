@@ -743,7 +743,7 @@ mod allocator_impl {
 pub fn panic(info: &core::panic::PanicInfo) -> ! {
 	unsafe {
 		let message = rstd::alloc::format!("{}", info);
-		misc::print_utf8(message.as_bytes());
+		logging::log(LogLevel::Error, "runtime", message.as_bytes());
 		core::intrinsics::abort()
 	}
 }
@@ -751,10 +751,8 @@ pub fn panic(info: &core::panic::PanicInfo) -> ! {
 #[cfg(all(not(feature = "disable_oom"), not(feature = "std")))]
 #[alloc_error_handler]
 pub extern fn oom(_: core::alloc::Layout) -> ! {
-	static OOM_MSG: &str = "Runtime memory exhausted. Aborting";
-
 	unsafe {
-		misc::print_utf8(OOM_MSG.as_bytes());
+		logging::log(LogLevel::Error, "runtime", b"Runtime memory exhausted. Aborting");
 		core::intrinsics::abort();
 	}
 }
