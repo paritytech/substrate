@@ -1660,6 +1660,19 @@ fn grandpa_environment_respects_voting_rules() {
 		).unwrap().1,
 		19,
 	);
+
+	// we finalize block 20 with block 20 being the best block
+	peer.client().finalize_block(BlockId::Number(20), None, false).unwrap();
+
+	// even though the default environment will always try to not vote on the
+	// best block, there's a hard rule that we can't cast any votes lower than
+	// the given base (#20).
+	assert_eq!(
+		default_env.best_chain_containing(
+			peer.client().info().chain.finalized_hash
+		).unwrap().1,
+		20,
+	);
 }
 
 #[test]

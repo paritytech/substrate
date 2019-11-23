@@ -24,7 +24,7 @@ Substrate is designed for use in one of three ways:
 
 **1. Trivial**: By running the Substrate binary `substrate` and configuring it with a genesis block that includes the current demonstration runtime. In this case, you just build Substrate, configure a JSON file, and launch your own blockchain. This affords you the least amount of customizability, primarily allowing you to change the genesis parameters of the various included runtime modules such as balances, staking, block-period, fees, and governance.
 
-**2. Modular**: By hacking together modules from the Substrate Runtime Module Library (SRML) into a new runtime and possibly altering or reconfiguring the Substrate client's block authoring logic. This affords you a very large amount of freedom over your blockchain's logic, letting you change datatypes, add or remove modules, and crucially, add your own modules. Much can be changed without touching the block authoring logic (since it is generic). If this is the case, then the existing Substrate binary can be used for block authoring and syncing. If the block authoring logic needs to be tweaked, then a new, altered block authoring binary must be built as a separate project and used by validators. This is how the Polkadot relay chain is built and should suffice for almost all circumstances in the near to mid-term.
+**2. Modular**: By hacking together pallets built with Substrate FRAME into a new runtime and possibly altering or reconfiguring the Substrate client's block authoring logic. This affords you a very large amount of freedom over your blockchain's logic, letting you change datatypes, add or remove modules, and crucially, add your own modules. Much can be changed without touching the block authoring logic (since it is generic). If this is the case, then the existing Substrate binary can be used for block authoring and syncing. If the block authoring logic needs to be tweaked, then a new, altered block authoring binary must be built as a separate project and used by validators. This is how the Polkadot relay chain is built and should suffice for almost all circumstances in the near to mid-term.
 
 **3. Generic**: The entire SRML can be ignored and the entire runtime designed and implemented from scratch. If desired, this can be done in a language other than Rust, provided it can target WebAssembly. If the runtime can be made compatible with the existing client's block authoring logic, then you can simply construct a new genesis block from your Wasm blob and launch your chain with the existing Rust-based Substrate client. If not, then you'll need to alter the client's block authoring logic accordingly. This is probably a useless option for most projects right now, but provides complete flexibility allowing for a long-term, far-reaching upgrade path for the Substrate paradigm.
 
@@ -43,9 +43,9 @@ Extrinsics in Substrate are pieces of information from "the outside world" that 
 
 Inherents, meanwhile, are not passed on the network and are not signed. They represent data which describes the environment but which cannot call upon anything to prove it such as a signature. Rather they are assumed to be "true" simply because a sufficiently large number of validators have agreed on them being reasonable.
 
-To give an example, there is the timestamp inherent, which sets the current timestamp of the block. This is not a fixed part of Substrate, but does come as part of the Substrate Runtime Module Library to be used as desired. No signature could fundamentally prove that a block were authored at a given time in quite the same way that a signature can "prove" the desire to spend some particular funds. Rather, it is the business of each validator to ensure that they believe the timestamp is set to something reasonable before they agree that the block candidate is valid.
+To give an example, there is the timestamp inherent, which sets the current timestamp of the block. This is not a fixed part of Substrate, but does come as part of FRAME to be used as desired. No signature could fundamentally prove that a block were authored at a given time in quite the same way that a signature can "prove" the desire to spend some particular funds. Rather, it is the business of each validator to ensure that they believe the timestamp is set to something reasonable before they agree that the block candidate is valid.
 
-Other examples include the parachain-heads extrinsic in Polkadot and the "note-missed-proposal" extrinsic used in the Substrate Runtime Module Library to determine and punish or deactivate offline validators.
+Other examples include the parachain-heads extrinsic in Polkadot and the "note-missed-proposal" extrinsic used in FRAME to determine and punish or deactivate offline validators.
 
 
 === Runtime and API
@@ -78,7 +78,7 @@ impl_runtime_apis! {
 
 === Inherent Extrinsics
 
-The Substrate Runtime Module Library includes functionality for timestamps and slashing. If used, these rely on "trusted" external information being passed in via inherent extrinsics. The Substrate reference block authoring client software will expect to be able to call into the runtime API with collated data (in the case of the reference Substrate authoring client, this is merely the current timestamp and which nodes were offline) in order to return the appropriate extrinsics ready for inclusion. If new inherent extrinsic types and data are to be used in a modified runtime, then it is this function (and its argument type) that would change.
+Substrate FRAME includes functionality for timestamps and slashing. If used, these rely on "trusted" external information being passed in via inherent extrinsics. The Substrate reference block authoring client software will expect to be able to call into the runtime API with collated data (in the case of the reference Substrate authoring client, this is merely the current timestamp and which nodes were offline) in order to return the appropriate extrinsics ready for inclusion. If new inherent extrinsic types and data are to be used in a modified runtime, then it is this function (and its argument type) that would change.
 
 === Block-authoring Logic
 
@@ -444,11 +444,13 @@ substrate-trie
 * Substrate Runtime
 [source, shell]
 sr-api, sr-io, sr-primitives, sr-sandbox, sr-std, sr-version
-* Substrate Runtime Module Library (SRML)
+* FRAME Core
 [source, shell]
-pallet-assets, pallet-balances, palette-consensus, pallet-contracts, palette-council, pallet-democracy, pallet-example,
-palette-executive, palette-metadata, pallet-session, pallet-staking, palette-support, palette-system, pallet-timestamp,
-pallet-treasury
+frame-metadata, frame-support, frame-system
+* FRAME Pallets
+[source, shell]
+pallet-assets, pallet-balances, pallet-consensus, pallet-contracts, pallet-council, pallet-democracy, pallet-example,
+frame-executive,  pallet-session, pallet-staking, pallet-timestamp, pallet-treasury
 * Node
 [source, shell]
 node-cli, node-consensus, node-executor, node-network, node-primitives, node-runtime

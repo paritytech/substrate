@@ -1,0 +1,28 @@
+[package]
+name = "pallet-generic-asset"
+version = "2.0.0"
+authors = ["Centrality Developers <support@centrality.ai>"]
+edition = "2018"
+
+[dependencies]
+serde = { version = "1.0.101", optional = true }
+codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
+rstd = { package = "sr-std", path = "../../primitives/sr-std", default-features = false }
+sr-primitives = { path = "../../primitives/sr-primitives", default-features = false }
+support = { package = "frame-support", path = "../support", default-features = false }
+system = { package = "frame-system", path = "../system", default-features = false }
+
+[dev-dependencies]
+runtime-io ={ package = "sr-io", path = "../../primitives/sr-io" }
+primitives = { package = "substrate-primitives",  path = "../../primitives/core" }
+
+[features]
+default = ["std"]
+std =[
+    "serde/std",
+    "codec/std",
+    "rstd/std",
+    "sr-primitives/std",
+    "support/std",
+    "system/std",
+]

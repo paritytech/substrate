@@ -6,19 +6,19 @@
 # [top-lvl-dir]<[crate-name-prefix]
 
 # For instance no crate within `./client` directory
-# is allowed to import any crate with a directory path containing `palette`.
-# Such rule is just: `client<palette`.
+# is allowed to import any crate with a directory path containing `frame`.
+# Such rule is just: `client<frame`.
 
 # The script should be run from the main repo directory!
 
 set -u
 
 PLEASE_DONT=(
-	"client<palette"
+	"client<frame"
 	"client<node"
-	"palette<node"
-	"palette<client"
-	"primitives<palette"
+	"frame<node"
+	"frame<client"
+	"primitives<frame"
 	"primitives<client"
 )
 
