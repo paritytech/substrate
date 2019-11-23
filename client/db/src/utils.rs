@@ -216,7 +216,7 @@ pub fn open_database(
 
 			if let Some(cache_size) = cache_size {
 				let state_col_budget = (*cache_size as f64 * 0.7) as usize;
-				let other_col_budget = state_col_budget - cache_size;
+				let other_col_budget = cache_size - state_col_budget;
 
 				let mut memory_budget = std::collections::HashMap::new();
 				for i in 0..NUM_COLUMNS {
