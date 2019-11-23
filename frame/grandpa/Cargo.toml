@@ -1,0 +1,38 @@
+[package]
+name = "pallet-grandpa"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
+serde = { version = "1.0.101", optional = true, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
+primitives = { package = "substrate-primitives",  path = "../../primitives/core", default-features = false }
+substrate-finality-grandpa-primitives = { path = "../../primitives/finality-grandpa", default-features = false }
+rstd = { package = "sr-std", path = "../../primitives/sr-std", default-features = false }
+sr-primitives = { path = "../../primitives/sr-primitives", default-features = false }
+sr-staking-primitives = { path = "../../primitives/sr-staking-primitives", default-features = false }
+support = { package = "frame-support", path = "../support", default-features = false }
+system = { package = "frame-system", path = "../system", default-features = false }
+session = { package = "pallet-session", path = "../session", default-features = false }
+finality-tracker = { package = "pallet-finality-tracker", path = "../finality-tracker", default-features = false }
+
+[dev-dependencies]
+runtime-io ={ package = "sr-io", path = "../../primitives/sr-io" }
+
+[features]
+default = ["std"]
+std = [
+	"serde",
+	"codec/std",
+	"primitives/std",
+	"substrate-finality-grandpa-primitives/std",
+	"rstd/std",
+	"support/std",
+	"sr-primitives/std",
+	"sr-staking-primitives/std",
+	"system/std",
+	"session/std",
+	"finality-tracker/std",
+]
+migrate-authorities = []
