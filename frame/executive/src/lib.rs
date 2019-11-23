@@ -393,7 +393,7 @@ mod tests {
 	pub struct Runtime;
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
-		pub const MaximumBlockWeight: u32 = 1024;
+		pub const MaximumBlockWeight: Weight = 1024;
 		pub const MaximumBlockLength: u32 = 2 * 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
@@ -641,7 +641,7 @@ mod tests {
 			assert!(Executive::apply_extrinsic(x2.clone()).unwrap().is_ok());
 
 			// default weight for `TestXt` == encoded length.
-			assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), (3 * len) as u32);
+			assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), (3 * len) as Weight);
 			assert_eq!(<system::Module<Runtime>>::all_extrinsics_len(), 3 * len);
 
 			let _ = <system::Module<Runtime>>::finalize();

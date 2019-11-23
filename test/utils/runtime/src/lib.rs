@@ -47,7 +47,7 @@ use runtime_version::RuntimeVersion;
 pub use primitives::{hash::H256};
 #[cfg(any(feature = "std", test))]
 use runtime_version::NativeVersion;
-use runtime_support::{impl_outer_origin, parameter_types};
+use runtime_support::{impl_outer_origin, parameter_types, weights::Weight};
 use inherents::{CheckInherentsResult, InherentData};
 use cfg_if::cfg_if;
 
@@ -353,7 +353,7 @@ impl From<frame_system::Event> for Event {
 parameter_types! {
 	pub const BlockHashCount: BlockNumber = 250;
 	pub const MinimumPeriod: u64 = 5;
-	pub const MaximumBlockWeight: u32 = 4 * 1024 * 1024;
+	pub const MaximumBlockWeight: Weight = 4 * 1024 * 1024;
 	pub const MaximumBlockLength: u32 = 4 * 1024 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
 }

@@ -972,7 +972,8 @@ mod tests {
 	use super::*;
 	use support::{
 		impl_outer_origin, impl_outer_dispatch, assert_noop, assert_ok, parameter_types,
-		traits::Contains
+		traits::Contains,
+		weights::Weight,
 	};
 	use primitives::H256;
 	use sr_primitives::{traits::{BlakeTwo256, IdentityLookup, Bounded}, testing::Header, Perbill};
@@ -1000,7 +1001,7 @@ mod tests {
 	pub struct Test;
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
-		pub const MaximumBlockWeight: u32 = 1024;
+		pub const MaximumBlockWeight: Weight = 1024;
 		pub const MaximumBlockLength: u32 = 2 * 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}

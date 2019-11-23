@@ -50,7 +50,7 @@ use sr_primitives::{
 pub use sr_primitives::transaction_validity::TransactionPriority;
 
 /// Numeric range of a transaction weight.
-pub type Weight = u32;
+pub type Weight = u64;
 
 /// Means of weighing some particular kind of data (`T`).
 pub trait WeighData<T> {
