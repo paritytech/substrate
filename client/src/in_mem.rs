@@ -20,6 +20,9 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use parking_lot::{RwLock, Mutex};
 use primitives::{ChangesTrieConfiguration, storage::well_known_keys};
+use primitives::offchain::storage::{
+	InMemOffchainStorage as OffchainStorage
+};
 use sr_primitives::generic::{BlockId, DigestItem};
 use sr_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, NumberFor};
 use sr_primitives::{Justification, StorageOverlay, ChildrenStorageOverlay};
@@ -35,9 +38,6 @@ use client_api::{
 	blockchain::{
 		self, BlockStatus, HeaderBackend, well_known_cache_keys::Id as CacheKeyId
 	},
-	offchain::{
-		InMemOffchainStorage as OffchainStorage
-	}
 };
 use crate::leaves::LeafSet;
 
@@ -811,7 +811,7 @@ pub fn check_genesis_storage(top: &StorageOverlay, children: &ChildrenStorageOve
 
 #[cfg(test)]
 mod tests {
-	use client_api::offchain::{OffchainStorage, InMemOffchainStorage};
+	use primitives::offchain::{OffchainStorage, storage::InMemOffchainStorage};
 	use std::sync::Arc;
 	use test_client;
 	use primitives::Blake2Hasher;

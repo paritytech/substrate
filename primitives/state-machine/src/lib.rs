@@ -23,7 +23,7 @@ use log::{warn, trace};
 use hash_db::Hasher;
 use codec::{Decode, Encode};
 use primitives::{
-	storage::well_known_keys, NativeOrEncoded, NeverNativeValue, offchain::OffchainExt,
+	storage::well_known_keys, NativeOrEncoded, NeverNativeValue,
 	traits::{KeystoreExt, CodeExecutor}, hexdisplay::HexDisplay, hash::H256,
 };
 use overlayed_changes::OverlayedChangeSet;
@@ -68,7 +68,8 @@ pub use error::{Error, ExecutionError};
 
 type CallResult<R, E> = Result<NativeOrEncoded<R>, E>;
 
-type DefaultHandler<R, E> = fn(CallResult<R, E>, CallResult<R, E>) -> CallResult<R, E>;
+/// Default handler of the execution manager.
+pub type DefaultHandler<R, E> = fn(CallResult<R, E>, CallResult<R, E>) -> CallResult<R, E>;
 
 /// Type of changes trie transaction.
 pub type ChangesTrieTransaction<H, N> = (
@@ -185,23 +186,12 @@ impl<'a, B, H, N, T, Exec> StateMachine<'a, B, H, N, T, Exec> where
 	pub fn new(
 		backend: &'a B,
 		changes_trie_storage: Option<&'a T>,
-		offchain_ext: Option<OffchainExt>,
 		overlay: &'a mut OverlayedChanges,
 		exec: &'a Exec,
 		method: &'a str,
 		call_data: &'a [u8],
-		keystore: Option<KeystoreExt>,
+		extensions: Extensions,
 	) -> Self {
-		let mut extensions = Extensions::new();
-
-		if let Some(keystore) = keystore {
-			extensions.register(keystore);
-		}
-
-		if let Some(offchain) = offchain_ext {
-			extensions.register(offchain);
-		}
-
 		Self {
 			backend,
 			exec,
@@ -497,8 +487,12 @@ where
 	Exec: CodeExecutor,
 {
 	let proving_backend = proving_backend::ProvingBackend::new(trie_backend);
+	let mut extensions = Extensions::new();
+	if let Some(keystore) = keystore {
+		extensions.register(keystore);
+	}
 	let mut sm = StateMachine::<_, H, _, InMemoryChangesTrieStorage<H, u64>, Exec>::new(
-		&proving_backend, None, None, overlay, exec, method, call_data, keystore,
+		&proving_backend, None, overlay, exec, method, call_data, extensions,
 	);
 
 	let (result, _, _) = sm.execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
@@ -542,8 +536,12 @@ where
 	H: Hasher<Out=H256>,
 	Exec: CodeExecutor,
 {
+	let mut extensions = Extensions::new();
+	if let Some(keystore) = keystore {
+		extensions.register(keystore);
+	}
 	let mut sm = StateMachine::<_, H, _, InMemoryChangesTrieStorage<H, u64>, Exec>::new(
-		trie_backend, None, None, overlay, exec, method, call_data, keystore,
+		trie_backend, None, overlay, exec, method, call_data, extensions,
 	);
 
 	sm.execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
@@ -820,7 +818,6 @@ mod tests {
 		let mut state_machine = StateMachine::new(
 			&backend,
 			Some(&changes_trie_storage),
-			None,
 			&mut overlayed_changes,
 			&DummyCodeExecutor {
 				change_changes_trie_config: false,
@@ -830,7 +827,7 @@ mod tests {
 			},
 			"test",
 			&[],
-			None,
+			Default::default(),
 		);
 
 		assert_eq!(
@@ -849,7 +846,6 @@ mod tests {
 		let mut state_machine = StateMachine::new(
 			&backend,
 			Some(&changes_trie_storage),
-			None,
 			&mut overlayed_changes,
 			&DummyCodeExecutor {
 				change_changes_trie_config: false,
@@ -859,7 +855,7 @@ mod tests {
 			},
 			"test",
 			&[],
-			None,
+			Default::default(),
 		);
 
 		assert_eq!(state_machine.execute(ExecutionStrategy::NativeElseWasm).unwrap().0, vec![66]);
@@ -875,7 +871,6 @@ mod tests {
 		let mut state_machine = StateMachine::new(
 			&backend,
 			Some(&changes_trie_storage),
-			None,
 			&mut overlayed_changes,
 			&DummyCodeExecutor {
 				change_changes_trie_config: false,
@@ -885,7 +880,7 @@ mod tests {
 			},
 			"test",
 			&[],
-			None,
+			Default::default(),
 		);
 
 		assert!(
@@ -1085,7 +1080,6 @@ mod tests {
 		let mut state_machine = StateMachine::new(
 			&backend,
 			Some(&changes_trie_storage),
-			None,
 			&mut overlayed_changes,
 			&DummyCodeExecutor {
 				change_changes_trie_config: true,
@@ -1095,7 +1089,7 @@ mod tests {
 			},
 			"test",
 			&[],
-			None,
+			Default::default(),
 		);
 
 		assert!(state_machine.execute(ExecutionStrategy::NativeWhenPossible).is_err());
@@ -1110,7 +1104,6 @@ mod tests {
 		let mut state_machine = StateMachine::new(
 			&backend,
 			Some(&changes_trie_storage),
-			None,
 			&mut overlayed_changes,
 			&DummyCodeExecutor {
 				change_changes_trie_config: true,
@@ -1120,7 +1113,7 @@ mod tests {
 			},
 			"test",
 			&[],
-			None,
+			Default::default(),
 		);
 
 		assert!(state_machine.execute(ExecutionStrategy::NativeElseWasm).is_err());

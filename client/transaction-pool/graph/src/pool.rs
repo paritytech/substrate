@@ -391,6 +391,29 @@ impl<B: ChainApi> Clone for Pool<B> {
 	}
 }
 
+impl<A: ChainApi> sr_primitives::offchain::TransactionPool<A::Block> for Pool<A> {
+	fn submit_at(
+		&self,
+		at: &BlockId<A::Block>,
+		extrinsic: <A::Block as sr_primitives::traits::Block>::Extrinsic,
+	) -> Result<(), ()> {
+		log::debug!(
+			target: "txpool",
+			"(offchain call) Submitting a transaction to the pool: {:?}",
+			extrinsic
+		);
+
+		let result = futures::executor::block_on(self.submit_one(&at, extrinsic));
+
+		result.map(|_| ())
+			.map_err(|e| log::warn!(
+				target: "txpool",
+				"(offchain call) Error submitting a transaction to the pool: {:?}",
+				e
+			))
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use std::{
