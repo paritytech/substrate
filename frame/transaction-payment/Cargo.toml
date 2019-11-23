@@ -1,0 +1,29 @@
+[package]
+name = "pallet-transaction-payment"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
+codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
+rstd = { package = "sr-std", path = "../../primitives/sr-std", default-features = false }
+sr-primitives = { path = "../../primitives/sr-primitives", default-features = false }
+support = { package = "frame-support", path = "../support", default-features = false }
+system = { package = "frame-system", path = "../system", default-features = false }
+transaction-payment-rpc-runtime-api = { package = "pallet-transaction-payment-rpc-runtime-api", path = "./rpc/runtime-api", default-features = false }
+
+[dev-dependencies]
+runtime-io = { package = "sr-io", path = "../../primitives/sr-io" }
+primitives = { package = "substrate-primitives",  path = "../../primitives/core" }
+balances = { package = "pallet-balances", path = "../balances" }
+
+[features]
+default = ["std"]
+std = [
+	"codec/std",
+	"rstd/std",
+	"sr-primitives/std",
+	"support/std",
+	"system/std",
+	"transaction-payment-rpc-runtime-api/std"
+]

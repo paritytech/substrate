@@ -93,12 +93,11 @@ mod tests {
 		StateMachine::new(
 			backend,
 			Some(&InMemoryChangesTrieStorage::<_, u64>::new()),
-			None,
 			&mut overlay,
 			&executor(),
 			"Core_initialize_block",
 			&header.encode(),
-			None,
+			Default::default(),
 		).execute(
 			ExecutionStrategy::NativeElseWasm,
 		).unwrap();
@@ -107,12 +106,11 @@ mod tests {
 			StateMachine::new(
 				backend,
 				Some(&InMemoryChangesTrieStorage::<_, u64>::new()),
-				None,
 				&mut overlay,
 				&executor(),
 				"BlockBuilder_apply_extrinsic",
 				&tx.encode(),
-				None,
+				Default::default(),
 			).execute(
 				ExecutionStrategy::NativeElseWasm,
 			).unwrap();
@@ -121,12 +119,11 @@ mod tests {
 		let (ret_data, _, _) = StateMachine::new(
 			backend,
 			Some(&InMemoryChangesTrieStorage::<_, u64>::new()),
-			None,
 			&mut overlay,
 			&executor(),
 			"BlockBuilder_finalize_block",
 			&[],
-			None,
+			Default::default(),
 		).execute(
 			ExecutionStrategy::NativeElseWasm,
 		).unwrap();
@@ -169,12 +166,11 @@ mod tests {
 		let _ = StateMachine::new(
 			&backend,
 			Some(&InMemoryChangesTrieStorage::<_, u64>::new()),
-			None,
 			&mut overlay,
 			&executor(),
 			"Core_execute_block",
 			&b1data,
-			None,
+			Default::default(),
 		).execute(
 			ExecutionStrategy::NativeElseWasm,
 		).unwrap();
@@ -199,12 +195,11 @@ mod tests {
 		let _ = StateMachine::new(
 			&backend,
 			Some(&InMemoryChangesTrieStorage::<_, u64>::new()),
-			None,
 			&mut overlay,
 			&executor(),
 			"Core_execute_block",
 			&b1data,
-			None,
+			Default::default(),
 		).execute(
 			ExecutionStrategy::AlwaysWasm,
 		).unwrap();
@@ -229,12 +224,11 @@ mod tests {
 		let r = StateMachine::new(
 			&backend,
 			Some(&InMemoryChangesTrieStorage::<_, u64>::new()),
-			None,
 			&mut overlay,
 			&executor(),
 			"Core_execute_block",
 			&b1data,
-			None,
+			Default::default(),
 		).execute(
 			ExecutionStrategy::NativeElseWasm,
 		);

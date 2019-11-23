@@ -22,15 +22,16 @@
 
 use rstd::prelude::*;
 use support::{
-	construct_runtime, parameter_types, traits::{SplitTwoWays, Currency, Randomness}
+	construct_runtime, parameter_types,
+	weights::Weight,
+	traits::{SplitTwoWays, Currency, Randomness},
 };
 use primitives::u32_trait::{_1, _2, _3, _4};
 use node_primitives::{AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, Moment, Signature};
 use sr_api::impl_runtime_apis;
-use sr_primitives::{Permill, Perbill, ApplyResult, impl_opaque_keys, generic, create_runtime_str};
+use sr_primitives::{Permill, Perbill, ApplyExtrinsicResult, impl_opaque_keys, generic, create_runtime_str};
 use sr_primitives::curve::PiecewiseLinear;
 use sr_primitives::transaction_validity::TransactionValidity;
-use sr_primitives::weights::Weight;
 use sr_primitives::traits::{
 	self, BlakeTwo256, Block as BlockT, NumberFor, StaticLookup, SaturatedConversion,
 	OpaqueKeys,
@@ -77,8 +78,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to equal spec_version. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 194,
-	impl_version: 195,
+	spec_version: 195,
+	impl_version: 196,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -235,7 +236,7 @@ impl session::historical::Trait for Runtime {
 	type FullIdentificationOf = staking::ExposureOf<Runtime>;
 }
 
-paint_staking_reward_curve::build! {
+pallet_staking_reward_curve::build! {
 	const REWARD_CURVE: PiecewiseLinear<'static> = curve!(
 		min_inflation: 0_025_000,
 		max_inflation: 0_100_000,
@@ -472,7 +473,7 @@ impl system::offchain::CreateTransaction<Runtime, UncheckedExtrinsic> for Runtim
 	type Public = <Signature as traits::Verify>::Signer;
 	type Signature = Signature;
 
-	fn create_transaction<F: system::offchain::Signer<Self::Public, Self::Signature>>(
+	fn create_transaction<TSigner: system::offchain::Signer<Self::Public, Self::Signature>>(
 		call: Call,
 		public: Self::Public,
 		account: AccountId,
@@ -491,7 +492,7 @@ impl system::offchain::CreateTransaction<Runtime, UncheckedExtrinsic> for Runtim
 			Default::default(),
 		);
 		let raw_payload = SignedPayload::new(call, extra).ok()?;
-		let signature = F::sign(public, &raw_payload)?;
+		let signature = TSigner::sign(public, &raw_payload)?;
 		let address = Indices::unlookup(account);
 		let (call, extra, _) = raw_payload.deconstruct();
 		Some((call, (address, signature, extra)))
@@ -583,7 +584,7 @@ impl_runtime_apis! {
 	}
 
 	impl block_builder_api::BlockBuilder<Block> for Runtime {
-		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyResult {
+		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyExtrinsicResult {
 			Executive::apply_extrinsic(extrinsic)
 		}
 
@@ -732,7 +733,7 @@ mod tests {
 
 	#[test]
 	fn block_hooks_weight_should_not_exceed_limits() {
-		use sr_primitives::weights::WeighBlock;
+		use support::weights::WeighBlock;
 		let check_for_block = |b| {
 			let block_hooks_weight =
 				<AllModules as WeighBlock<BlockNumber>>::on_initialize(b) +

@@ -18,7 +18,11 @@
 
 use crate::{crypto::KeyTypeId, ed25519, sr25519};
 
-use std::{fmt::{Debug, Display}, panic::UnwindSafe};
+use std::{
+	fmt::{Debug, Display},
+	panic::UnwindSafe,
+	sync::Arc,
+};
 
 pub use externalities::{Externalities, ExternalitiesExt};
 
@@ -68,7 +72,7 @@ pub trait BareCryptoStore: Send + Sync {
 }
 
 /// A pointer to the key store.
-pub type BareCryptoStorePtr = std::sync::Arc<parking_lot::RwLock<dyn BareCryptoStore>>;
+pub type BareCryptoStorePtr = Arc<parking_lot::RwLock<dyn BareCryptoStore>>;
 
 externalities::decl_extension! {
 	/// The keystore extension to register/retrieve from the externalities.

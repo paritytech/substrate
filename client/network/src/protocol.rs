@@ -16,6 +16,7 @@
 
 use crate::{DiscoveryNetBehaviour, config::ProtocolId};
 use crate::legacy_proto::{LegacyProto, LegacyProtoOut};
+use crate::utils::interval;
 use bytes::BytesMut;
 use futures::prelude::*;
 use futures03::{StreamExt as _, TryStreamExt as _};
@@ -44,11 +45,11 @@ use sync::{ChainSync, SyncState};
 use crate::service::{TransactionPool, ExHashT};
 use crate::config::{BoxFinalityProofRequestBuilder, Roles};
 use rustc_hex::ToHex;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
 use std::fmt::Write;
 use std::{cmp, num::NonZeroUsize, time};
-use log::{trace, debug, warn, error};
+use log::{log, Level, trace, debug, warn, error};
 use crate::chain::{Client, FinalityProofProvider};
 use client_api::{FetchChecker, ChangesProof, StorageProof};
 use crate::error;
@@ -119,6 +120,9 @@ pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 	specialization: S,
 	consensus_gossip: ConsensusGossip<B>,
 	context_data: ContextData<B, H>,
+	/// List of nodes for which we perform additional logging because they are important for the
+	/// user.
+	important_peers: HashSet<PeerId>,
 	// Connected peers pending Status message.
 	handshaking_peers: HashMap<PeerId, HandshakingPeer>,
 	/// Used to report reputation changes.
@@ -425,13 +429,23 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			block_announce_validator,
 			config.max_parallel_downloads,
 		);
+
+		let important_peers = {
+			let mut imp_p = HashSet::new();
+			for reserved in &peerset_config.reserved_nodes {
+				imp_p.insert(reserved.clone());
+			}
+			imp_p.shrink_to_fit();
+			imp_p
+		};
+
 		let (peerset, peerset_handle) = peerset::Peerset::from_config(peerset_config);
 		let versions = &((MIN_VERSION as u8)..=(CURRENT_VERSION as u8)).collect::<Vec<u8>>();
 		let behaviour = LegacyProto::new(protocol_id, versions, peerset);
 
 		let protocol = Protocol {
-			tick_timeout: Box::new(futures_timer::Interval::new(TICK_TIMEOUT).map(|v| Ok::<_, ()>(v)).compat()),
-			propagate_timeout: Box::new(futures_timer::Interval::new(PROPAGATE_TIMEOUT).map(|v| Ok::<_, ()>(v)).compat()),
+			tick_timeout: Box::new(interval(TICK_TIMEOUT).map(|v| Ok::<_, ()>(v)).compat()),
+			propagate_timeout: Box::new(interval(PROPAGATE_TIMEOUT).map(|v| Ok::<_, ()>(v)).compat()),
 			config,
 			context_data: ContextData {
 				peers: HashMap::new(),
@@ -444,6 +458,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			specialization,
 			consensus_gossip: ConsensusGossip::new(),
 			handshaking_peers: HashMap::new(),
+			important_peers,
 			transaction_pool,
 			finality_proof_provider,
 			peerset_handle: peerset_handle.clone(),
@@ -712,7 +727,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 	/// Called by peer when it is disconnecting
 	pub fn on_peer_disconnected(&mut self, peer: PeerId) {
-		trace!(target: "sync", "Disconnecting {}", peer);
+		if self.important_peers.contains(&peer) {
+			warn!(target: "sync", "Reserved peer {} disconnected", peer);
+		} else {
+			trace!(target: "sync", "{} disconnected", peer);
+		}
+
 		// lock all the the peer lists so that add/remove peer events are in order
 		let removed = {
 			self.handshaking_peers.remove(&peer);
@@ -901,17 +921,29 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		{
 			for (who, peer) in self.context_data.peers.iter() {
 				if peer.block_request.as_ref().map_or(false, |(t, _)| (tick - *t).as_secs() > REQUEST_TIMEOUT_SEC) {
-					trace!(target: "sync", "Request timeout {}", who);
+					log!(
+						target: "sync",
+						if self.important_peers.contains(&who) { Level::Warn } else { Level::Trace },
+						"Request timeout {}", who
+					);
 					aborting.push(who.clone());
 				} else if peer.obsolete_requests.values().any(|t| (tick - *t).as_secs() > REQUEST_TIMEOUT_SEC) {
-					trace!(target: "sync", "Obsolete timeout {}", who);
+					log!(
+						target: "sync",
+						if self.important_peers.contains(&who) { Level::Warn } else { Level::Trace },
+						"Obsolete timeout {}", who
+					);
 					aborting.push(who.clone());
 				}
 			}
 			for (who, _) in self.handshaking_peers.iter()
 				.filter(|(_, handshaking)| (tick - handshaking.timestamp).as_secs() > REQUEST_TIMEOUT_SEC)
 			{
-				trace!(target: "sync", "Handshake timeout {}", who);
+				log!(
+					target: "sync",
+					if self.important_peers.contains(&who) { Level::Warn } else { Level::Trace },
+					"Handshake timeout {}", who
+				);
 				aborting.push(who.clone());
 			}
 		}
@@ -930,13 +962,18 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		trace!(target: "sync", "New peer {} {:?}", who, status);
 		let protocol_version = {
 			if self.context_data.peers.contains_key(&who) {
-				debug!("Unexpected status packet from {}", who);
+				log!(
+					target: "sync",
+					if self.important_peers.contains(&who) { Level::Warn } else { Level::Debug },
+					"Unexpected status packet from {}", who
+				);
 				self.peerset_handle.report_peer(who, UNEXPECTED_STATUS_REPUTATION_CHANGE);
 				return;
 			}
 			if status.genesis_hash != self.genesis_hash {
-				trace!(
-					target: "protocol",
+				log!(
+					target: "sync",
+					if self.important_peers.contains(&who) { Level::Warn } else { Level::Trace },
 					"Peer is on different chain (our genesis: {} theirs: {})",
 					self.genesis_hash, status.genesis_hash
 				);
@@ -945,7 +982,11 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				return;
 			}
 			if status.version < MIN_VERSION && CURRENT_VERSION < status.min_supported_version {
-				trace!(target: "protocol", "Peer {:?} using unsupported protocol version {}", who, status.version);
+				log!(
+					target: "sync",
+					if self.important_peers.contains(&who) { Level::Warn } else { Level::Trace },
+					"Peer {:?} using unsupported protocol version {}", who, status.version
+				);
 				self.peerset_handle.report_peer(who.clone(), i32::min_value());
 				self.behaviour.disconnect_peer(&who);
 				return;

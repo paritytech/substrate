@@ -18,16 +18,46 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sr_primitives::{traits::Block as BlockT, ApplyResult};
+use sr_primitives::{traits::Block as BlockT, ApplyExtrinsicResult};
 
 use inherents::{InherentData, CheckInherentsResult};
 
+/// Definitions for supporting the older version of API: v3
+///
+/// These definitions are taken from the 2c58e30246a029b53d51e5b24c31974ac539ee8b git revision.
+#[deprecated(note = "These definitions here are only for compatibility reasons")]
+pub mod compatability_v3 {
+	use sr_primitives::{DispatchOutcome, transaction_validity};
+	use codec::{Encode, Decode};
+
+	#[derive(Eq, PartialEq, Clone, Copy, Decode, Encode, Debug)]
+	pub enum ApplyError {
+		NoPermission,
+		BadState,
+		Validity(transaction_validity::TransactionValidityError),
+	}
+
+	// `ApplyOutcome` was renamed to `DispatchOutcome` with the layout preserved.
+	pub type ApplyResult = Result<DispatchOutcome, ApplyError>;
+}
+
 sr_api::decl_runtime_apis! {
 	/// The `BlockBuilder` api trait that provides the required functionality for building a block.
-	#[api_version(3)]
+	#[api_version(4)]
 	pub trait BlockBuilder {
-		/// Apply the given extrinsics.
-		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyResult;
+		/// Compatibility version of `apply_extrinsic` for v3.
+		///
+		/// Only the return type is changed.
+		#[changed_in(4)]
+		#[allow(deprecated)]
+		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic)
+			-> self::compatability_v3::ApplyResult;
+
+		/// Apply the given extrinsic.
+		///
+		/// Returns an inclusion outcome which specifies if this extrinsic is included in
+		/// this block or not.
+		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyExtrinsicResult;
 		/// Finish the current block.
 		#[renamed("finalise_block", 3)]
 		fn finalize_block() -> <Block as BlockT>::Header;
