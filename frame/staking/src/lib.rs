@@ -1172,6 +1172,10 @@ decl_module! {
 
 				// if `index` is not duplicate, `removed` must be <= index.
 				ensure!(removed <= index, "duplicate index");
+
+				// all prior removals were from before this index, since the
+				// list is sorted.
+				let index = index - removed;
 				ensure!(index < unapplied.len(), "slash record index out of bounds");
 
 				unapplied.remove(index);

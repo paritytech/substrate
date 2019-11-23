@@ -2470,3 +2470,53 @@ fn remove_deferred() {
 		assert_eq!(Balances::free_balance(&101), 2000 - actual_slash);
 	})
 }
+
+#[test]
+fn remove_multi_deferred() {
+	ExtBuilder::default().slash_defer_duration(2).build().execute_with(|| {
+		start_era(1);
+
+		assert_eq!(Balances::free_balance(&11), 1000);
+
+		let exposure = Staking::stakers(&11);
+		assert_eq!(Balances::free_balance(&101), 2000);
+
+		on_offence_now(
+			&[
+				OffenceDetails {
+					offender: (11, exposure.clone()),
+					reporters: vec![],
+				},
+			],
+			&[Perbill::from_percent(10)],
+		);
+
+		on_offence_now(
+			&[
+				OffenceDetails {
+					offender: (21, Staking::stakers(&21)),
+					reporters: vec![],
+				}
+			],
+			&[Perbill::from_percent(10)],
+		);
+
+
+		on_offence_now(
+			&[
+				OffenceDetails {
+					offender: (11, exposure.clone()),
+					reporters: vec![],
+				},
+			],
+			&[Perbill::from_percent(25)],
+		);
+
+		assert_eq!(<Staking as Store>::UnappliedSlashes::get(&1).len(), 3);
+		Staking::cancel_deferred_slash(Origin::ROOT, 1, vec![0, 2]).unwrap();
+
+		let slashes = <Staking as Store>::UnappliedSlashes::get(&1);
+		assert_eq!(slashes.len(), 1);
+		assert_eq!(slashes[0].validator, 21);
+	})
+}
