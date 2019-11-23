@@ -13,4 +13,4 @@ sr-primitives = { path = "../../../primitives/sr-primitives" }
 pallet-contracts-rpc = { path = "../../../palette/contracts/rpc/" }
 pallet-transaction-payment-rpc = { path = "../../../palette/transaction-payment/rpc/" }
 palette-system-rpc = { path = "../../../palette/system/rpc/" }
-transaction_pool = { package = "substrate-transaction-pool", path = "../../../client/transaction-pool" }
+txpool-api = { package = "substrate-transaction-pool-api", path = "../../../primitives/transaction-pool/api" }

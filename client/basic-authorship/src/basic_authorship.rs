@@ -96,13 +96,8 @@ pub struct Proposer<Block: BlockT, C, A: TransactionPool> {
 impl<B, E, Block, RA, A> consensus_common::Proposer<Block> for
 Proposer<Block, SubstrateClient<B, E, Block, RA>, A>
 where
-<<<<<<< HEAD:core/basic-authorship/src/basic_authorship.rs
 	A: TransactionPool<Block=Block>,
-	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-=======
-	A: txpool::ChainApi<Block=Block>,
 	B: client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
->>>>>>> master:client/basic-authorship/src/basic_authorship.rs
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
 	Block: BlockT<Hash=H256>,
 	RA: Send + Sync + 'static,
@@ -126,13 +121,8 @@ where
 }
 
 impl<Block, B, E, RA, A> Proposer<Block, SubstrateClient<B, E, Block, RA>, A>	where
-<<<<<<< HEAD:core/basic-authorship/src/basic_authorship.rs
 	A: TransactionPool<Block=Block>,
-	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-=======
-	A: txpool::ChainApi<Block=Block>,
 	B: client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
->>>>>>> master:client/basic-authorship/src/basic_authorship.rs
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
 	Block: BlockT<Hash=H256>,
 	RA: Send + Sync + 'static,

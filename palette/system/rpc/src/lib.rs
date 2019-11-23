@@ -30,7 +30,7 @@ use jsonrpc_core::{
 	futures::future::{result, Future},
 };
 use jsonrpc_derive::rpc;
-use futures03::future::{ready, TryFutureExt};
+use futures::future::{ready, TryFutureExt};
 use sr_primitives::{
 	generic::BlockId,
 	traits,

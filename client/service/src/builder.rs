@@ -30,6 +30,7 @@ use consensus_common::import_queue::ImportQueue;
 use futures::{prelude::*, sync::mpsc};
 use futures03::{
 	compat::Compat,
+	TryFutureExt,
 	FutureExt,
 	StreamExt, TryStreamExt,
 };
@@ -923,7 +924,6 @@ ServiceBuilder<
 					let txpool = txpool.upgrade();
 
 					if let Some(txpool) = txpool.as_ref() {
-						use futures03::TryFutureExt;
 						let future = txpool.maintain(
 							&BlockId::hash(notification.hash),
 							&notification.retracted,

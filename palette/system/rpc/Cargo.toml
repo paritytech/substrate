@@ -7,14 +7,14 @@ edition = "2018"
 [dependencies]
 client = { package = "substrate-client", path = "../../../client/" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
-futures03 = { package = "futures-preview", version = "=0.3.0-alpha.19" }
+futures = "0.3.1"
 jsonrpc-core = "14.0.3"
 jsonrpc-core-client = "14.0.3"
 jsonrpc-derive = "14.0.3"
 log = "0.4.8"
+palette-system-rpc-runtime-api = { path = "./runtime-api" }
 serde = { version = "1.0.101", features = ["derive"] }
 sr-primitives = { path = "../../../primitives/sr-primitives" }
-palette-system-rpc-runtime-api = { path = "./runtime-api" }
 substrate-primitives = { path = "../../../primitives/core" }
 txpool-api = { package = "substrate-transaction-pool-api", path = "../../../primitives/transaction-pool/api" }
 

@@ -44,7 +44,8 @@ tx-pool-api = { package = "substrate-transaction-pool-runtime-api", path = "../.
 client_db = { package = "substrate-client-db", path = "../db" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 substrate-executor = { path = "../executor" }
-transaction_pool = { package = "substrate-transaction-pool", path = "../transaction-pool" }
+txpool = { package = "substrate-transaction-pool", path = "../transaction-pool" }
+txpool-api = { package = "substrate-transaction-pool-api", path = "../../primitives/transaction-pool/api" }
 rpc-servers = { package = "substrate-rpc-servers", path = "../rpc-servers" }
 rpc = { package = "substrate-rpc", path = "../rpc" }
 tel = { package = "substrate-telemetry", path = "../telemetry" }

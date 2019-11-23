@@ -20,7 +20,6 @@
 mod tests;
 
 use std::{sync::Arc, convert::TryInto};
-use futures::future::{FutureExt, TryFutureExt};
 use log::warn;
 
 use client::Client;
@@ -30,7 +29,8 @@ use rpc::futures::{
 	Sink, Future,
 	future::result,
 };
-use futures::{StreamExt as _, compat::Compat, future::ready};
+use futures::{StreamExt as _, compat::Compat};
+use futures::future::{ready, FutureExt, TryFutureExt};
 use api::Subscriptions;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use codec::{Encode, Decode};
@@ -76,9 +76,10 @@ impl<B, E, P, Block: traits::Block, RA> Author<B, E, P, Block, RA> {
 	}
 }
 
-impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> where
-	B: client_api::backend::Backend<<P as PoolChainApi>::Block, Blake2Hasher> + Send + Sync + 'static,
-	E: client_api::CallExecutor<<P as PoolChainApi>::Block, Blake2Hasher> + Send + Sync + 'static,
+impl<B, E, P, Block, RA> AuthorApi<Block::Hash, Block::Hash> for Author<B, E, P, Block, RA> where
+	Block: traits::Block<Hash=H256>,
+	B: client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
+	E: client_api::CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync + 'static,
 	P: TransactionPool<Block=Block, Hash=Block::Hash> + Sync + Send + 'static,
 	RA: ConstructRuntimeApi<Block, Client<B, E, Block, RA>> + Send + Sync + 'static,
 	Client<B, E, Block, RA>: ProvideRuntimeApi,

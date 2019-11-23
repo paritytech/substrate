@@ -259,7 +259,7 @@ impl<B> TestClientBuilderExt<B> for TestClientBuilder<
 type MaybeFetcherCallback<Req, Resp> = Option<Box<dyn Fn(Req) -> Result<Resp, client::error::Error> + Send + Sync>>;
 
 /// Type of fetcher future result.
-type FetcherFutureResult<Resp> = futures03::future::Ready<Result<Resp, client::error::Error>>;
+type FetcherFutureResult<Resp> = futures::future::Ready<Result<Resp, client::error::Error>>;
 
 /// Implementation of light client fetcher used in tests.
 #[derive(Default)]
@@ -313,7 +313,7 @@ impl Fetcher<runtime::Block> for LightFetcher {
 
 	fn remote_call(&self, req: RemoteCallRequest<runtime::Header>) -> Self::RemoteCallResult {
 		match self.call {
-			Some(ref call) => futures03::future::ready(call(req)),
+			Some(ref call) => futures::future::ready(call(req)),
 			None => unimplemented!(),
 		}
 	}
@@ -324,7 +324,7 @@ impl Fetcher<runtime::Block> for LightFetcher {
 
 	fn remote_body(&self, req: RemoteBodyRequest<runtime::Header>) -> Self::RemoteBodyResult {
 		match self.body {
-			Some(ref body) => futures03::future::ready(body(req)),
+			Some(ref body) => futures::future::ready(body(req)),
 			None => unimplemented!(),
 		}
 	}

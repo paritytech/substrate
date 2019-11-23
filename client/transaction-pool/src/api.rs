@@ -16,38 +16,15 @@
 
 //! Chain api required for the transaction pool.
 
-/*use std::{
-	sync::Arc,
-	marker::{PhantomData, Unpin},
-};
-use futures::{
-	future::{ready, Future, FutureExt, Ready},
-};
-use client::{
-	error::Error as ClientError,
-	runtime_api::TaggedTransactionQueue,
-	blockchain::HeaderBackend,
-	light::fetcher::{Fetcher, RemoteCallRequest},
-};
-use codec::{Decode, Encode};
-use txpool;
-use primitives::{
-	H256,
-	Blake2Hasher,
-	Hasher,
-};
-use sr_primitives::{
-	generic::BlockId,
-	traits::{self, Block as BlockT},
-	transaction_validity::TransactionValidity,
-};
-
-use crate::error;*/
 use std::{marker::PhantomData, pin::Pin, sync::Arc};
 use codec::{Decode, Encode};
 use futures::{channel::oneshot, executor::{ThreadPool, ThreadPoolBuilder}, future::{Future, FutureExt, ready}};
 
-use client::{error::Error as ClientError, blockchain::HeaderBackend, light::fetcher::{Fetcher, RemoteCallRequest}};
+use client_api::{
+	error::Error as ClientError,
+	blockchain::HeaderBackend,
+	light::{Fetcher, RemoteCallRequest}
+};
 use primitives::{H256, Blake2Hasher, Hasher};
 use sr_primitives::{generic::BlockId, traits::{self, Block as BlockT}, transaction_validity::TransactionValidity};
 use tx_runtime_api::TaggedTransactionQueue;

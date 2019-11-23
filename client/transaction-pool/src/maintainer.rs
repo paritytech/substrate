@@ -26,9 +26,10 @@ use futures::{
 use log::warn;
 use parking_lot::Mutex;
 
-use client::{
-	Client,
-	light::fetcher::{Fetcher, RemoteBodyRequest},
+use client::Client;
+use client_api::{
+	CallExecutor,
+	light::{Fetcher, RemoteBodyRequest},
 };
 use primitives::{Blake2Hasher, H256};
 use sr_primitives::{
@@ -65,10 +66,10 @@ for
 	FullBasicPoolMaintainer<Backend, Executor, Block, Api, PoolApi>
 where
 	Block: BlockT<Hash = H256>,
-	Backend: 'static + client::backend::Backend<Block, Blake2Hasher>,
+	Backend: 'static + client_api::backend::Backend<Block, Blake2Hasher>,
 	Client<Backend, Executor, Block, Api>: ProvideRuntimeApi,
 	<Client<Backend, Executor, Block, Api> as ProvideRuntimeApi>::Api: TaggedTransactionQueue<Block>,
-	Executor: 'static + Send + Sync + client::CallExecutor<Block, Blake2Hasher>,
+	Executor: 'static + Send + Sync + CallExecutor<Block, Blake2Hasher>,
 	Api: 'static + Send + Sync,
 	PoolApi: 'static + ChainApi<Block = Block, Hash = H256>,
 {
@@ -140,10 +141,10 @@ pub struct LightBasicPoolMaintainer<Backend, Executor, Block: BlockT, Api, PoolA
 impl<Backend, Executor, Block, Api, PoolApi, F> LightBasicPoolMaintainer<Backend, Executor, Block, Api, PoolApi, F>
 	where
 		Block: BlockT<Hash = H256>,
-		Backend: 'static + client::backend::Backend<Block, Blake2Hasher>,
+		Backend: 'static + client_api::backend::Backend<Block, Blake2Hasher>,
 		Client<Backend, Executor, Block, Api>: ProvideRuntimeApi,
 		<Client<Backend, Executor, Block, Api> as ProvideRuntimeApi>::Api: TaggedTransactionQueue<Block>,
-		Executor: 'static + Send + Sync + client::CallExecutor<Block, Blake2Hasher>,
+		Executor: 'static + Send + Sync + CallExecutor<Block, Blake2Hasher>,
 		Api: 'static + Send + Sync,
 		PoolApi: 'static + ChainApi<Block = Block, Hash = H256>,
 		F: Fetcher<Block> + 'static,
@@ -250,10 +251,10 @@ for
 	LightBasicPoolMaintainer<Backend, Executor, Block, Api, PoolApi, F>
 where
 	Block: BlockT<Hash = <Blake2Hasher as primitives::Hasher>::Out>,
-	Backend: 'static + client::backend::Backend<Block, Blake2Hasher>,
+	Backend: 'static + client_api::backend::Backend<Block, Blake2Hasher>,
 	Client<Backend, Executor, Block, Api>: ProvideRuntimeApi,
 	<Client<Backend, Executor, Block, Api> as ProvideRuntimeApi>::Api: TaggedTransactionQueue<Block>,
-	Executor: 'static + Send + Sync + client::CallExecutor<Block, Blake2Hasher>,
+	Executor: 'static + Send + Sync + CallExecutor<Block, Blake2Hasher>,
 	Api: 'static + Send + Sync,
 	PoolApi: 'static + ChainApi<Block = Block, Hash = H256>,
 	F: Fetcher<Block> + 'static,
@@ -272,7 +273,7 @@ where
 			return Box::new(ready(()));
 		}
 		let header = self.client.header(id)
-			.and_then(|h| h.ok_or(client::error::Error::UnknownBlock(format!("{}", id))));
+			.and_then(|h| h.ok_or(client_api::error::Error::UnknownBlock(format!("{}", id))));
 		let header = match header {
 			Ok(header) => header,
 			Err(err) => {

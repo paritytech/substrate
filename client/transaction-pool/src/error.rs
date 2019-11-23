@@ -25,7 +25,7 @@ pub enum Error {
 	/// Pool error.
 	Pool(txpool_api::error::Error),
 	/// Client error.
-	Client(client::error::Error),
+	Client(client_api::error::Error),
 	/// Error while converting a `BlockId`.
 	BlockIdConversion(String),
 	/// Error while calling the runtime api.
