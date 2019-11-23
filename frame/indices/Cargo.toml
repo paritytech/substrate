@@ -1,0 +1,35 @@
+[package]
+name = "pallet-indices"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
+serde = { version = "1.0.101", optional = true }
+safe-mix = { version = "1.0.0", default-features = false }
+codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
+substrate-keyring = { path = "../../primitives/keyring", optional = true }
+rstd = { package = "sr-std", path = "../../primitives/sr-std", default-features = false }
+runtime-io = { package = "sr-io", path = "../../primitives/sr-io", default-features = false }
+sr-primitives = { path = "../../primitives/sr-primitives", default-features = false }
+primitives = { package = "substrate-primitives",  path = "../../primitives/core", default-features = false }
+support = { package = "frame-support", path = "../support", default-features = false }
+system = { package = "frame-system", path = "../system", default-features = false }
+
+[dev-dependencies]
+ref_thread_local = "0.0.0"
+
+[features]
+default = ["std"]
+std = [
+	"serde",
+	"safe-mix/std",
+	"substrate-keyring",
+	"codec/std",
+	"primitives/std",
+	"rstd/std",
+	"runtime-io/std",
+	"support/std",
+	"sr-primitives/std",
+	"system/std",
+]

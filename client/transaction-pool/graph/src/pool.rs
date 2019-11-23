@@ -279,7 +279,10 @@ impl<B: ChainApi> Pool<B> {
 			)))
 	}
 
-	/// Return an event stream of transactions imported to the pool.
+	/// Return an event stream of notifications for when transactions are imported to the pool.
+	/// 
+	/// Consumers of this stream should use the `ready` method to actually get the
+	/// pending transactions in the right order.
 	pub fn import_notification_stream(&self) -> EventStream {
 		self.validated_pool.import_notification_stream()
 	}
@@ -385,6 +388,29 @@ impl<B: ChainApi> Clone for Pool<B> {
 		Self {
 			validated_pool: self.validated_pool.clone(),
 		}
+	}
+}
+
+impl<A: ChainApi> sr_primitives::offchain::TransactionPool<A::Block> for Pool<A> {
+	fn submit_at(
+		&self,
+		at: &BlockId<A::Block>,
+		extrinsic: <A::Block as sr_primitives::traits::Block>::Extrinsic,
+	) -> Result<(), ()> {
+		log::debug!(
+			target: "txpool",
+			"(offchain call) Submitting a transaction to the pool: {:?}",
+			extrinsic
+		);
+
+		let result = futures::executor::block_on(self.submit_one(&at, extrinsic));
+
+		result.map(|_| ())
+			.map_err(|e| log::warn!(
+				target: "txpool",
+				"(offchain call) Error submitting a transaction to the pool: {:?}",
+				e
+			))
 	}
 }
 

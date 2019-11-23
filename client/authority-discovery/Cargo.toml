@@ -14,8 +14,8 @@ bytes = "0.4.12"
 client-api = { package = "substrate-client-api", path = "../api" }
 codec = { package = "parity-scale-codec", default-features = false, version = "1.0.3" }
 derive_more = "0.15.0"
-futures-preview = "0.3.0-alpha.19"
-futures-timer = "0.4"
+futures = "0.3.1"
+futures-timer = "2.0"
 keystore = { package = "substrate-keystore", path = "../keystore" }
 libp2p = { version = "0.13.0", default-features = false, features = ["secp256k1", "libp2p-websocket"] }
 log = "0.4.8"

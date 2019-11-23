@@ -6,7 +6,7 @@
 
 
 /// For more guidance on Substrate modules, see the example module
-/// https://github.com/paritytech/substrate/blob/master/palette/example/src/lib.rs
+/// https://github.com/paritytech/substrate/blob/master/frame/example/src/lib.rs
 
 use support::{decl_module, decl_storage, decl_event, dispatch::Result};
 use system::ensure_signed;
@@ -70,9 +70,9 @@ mod tests {
 	use super::*;
 
 	use primitives::H256;
-	use support::{impl_outer_origin, assert_ok, parameter_types};
+	use support::{impl_outer_origin, assert_ok, parameter_types, weights::Weight};
 	use sr_primitives::{
-		traits::{BlakeTwo256, IdentityLookup}, testing::Header, weights::Weight, Perbill,
+		traits::{BlakeTwo256, IdentityLookup}, testing::Header, Perbill,
 	};
 
 	impl_outer_origin! {

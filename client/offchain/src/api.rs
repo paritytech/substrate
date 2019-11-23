@@ -21,9 +21,9 @@ use std::{
 	thread::sleep,
 };
 
-use client_api::OffchainStorage;
-use futures::{StreamExt as _, Future, FutureExt as _, future, channel::mpsc};
-use log::{info, debug, warn, error};
+use primitives::offchain::OffchainStorage;
+use futures::Future;
+use log::error;
 use network::{PeerId, Multiaddr, NetworkStateInfo};
 use codec::{Encode, Decode};
 use primitives::offchain::{
@@ -31,8 +31,6 @@ use primitives::offchain::{
 	OpaqueNetworkState, OpaquePeerId, OpaqueMultiaddr, StorageKind,
 };
 pub use offchain_primitives::STORAGE_PREFIX;
-use sr_primitives::{generic::BlockId, traits::{self, Extrinsic}};
-use transaction_pool::txpool::{Pool, ChainApi};
 
 #[cfg(not(target_os = "unknown"))]
 mod http;
@@ -44,19 +42,14 @@ mod http_dummy;
 
 mod timestamp;
 
-/// A message between the offchain extension and the processing thread.
-enum ExtMessage {
-	SubmitExtrinsic(Vec<u8>),
-}
-
 /// Asynchronous offchain API.
 ///
 /// NOTE this is done to prevent recursive calls into the runtime (which are not supported currently).
-pub(crate) struct Api<Storage, Block: traits::Block> {
-	sender: mpsc::UnboundedSender<ExtMessage>,
+pub(crate) struct Api<Storage> {
+	/// Offchain Workers database.
 	db: Storage,
+	/// A NetworkState provider.
 	network_state: Arc<dyn NetworkStateInfo + Send + Sync>,
-	_at: BlockId<Block>,
 	/// Is this node a potential validator?
 	is_validator: bool,
 	/// Everything HTTP-related is handled by a different struct.
@@ -73,20 +66,9 @@ fn unavailable_yet<R: Default>(name: &str) -> R {
 
 const LOCAL_DB: &str = "LOCAL (fork-aware) DB";
 
-impl<Storage, Block> OffchainExt for Api<Storage, Block>
-where
-	Storage: OffchainStorage,
-	Block: traits::Block,
-{
+impl<Storage: OffchainStorage> OffchainExt for Api<Storage> {
 	fn is_validator(&self) -> bool {
 		self.is_validator
-	}
-
-	fn submit_transaction(&mut self, ext: Vec<u8>) -> Result<(), ()> {
-		self.sender
-			.unbounded_send(ExtMessage::SubmitExtrinsic(ext))
-			.map(|_| ())
-			.map_err(|_| ())
 	}
 
 	fn network_state(&self) -> Result<OpaqueNetworkState, ()> {
@@ -260,40 +242,28 @@ impl TryFrom<OpaqueNetworkState> for NetworkState {
 /// Offchain extensions implementation API
 ///
 /// This is the asynchronous processing part of the API.
-pub(crate) struct AsyncApi<A: ChainApi> {
-	receiver: Option<mpsc::UnboundedReceiver<ExtMessage>>,
-	transaction_pool: Arc<Pool<A>>,
-	at: BlockId<A::Block>,
+pub(crate) struct AsyncApi {
 	/// Everything HTTP-related is handled by a different struct.
 	http: Option<http::HttpWorker>,
 }
 
-impl<A: ChainApi> AsyncApi<A> {
+impl AsyncApi {
 	/// Creates new Offchain extensions API implementation  an the asynchronous processing part.
 	pub fn new<S: OffchainStorage>(
-		transaction_pool: Arc<Pool<A>>,
 		db: S,
-		at: BlockId<A::Block>,
 		network_state: Arc<dyn NetworkStateInfo + Send + Sync>,
 		is_validator: bool,
-	) -> (Api<S, A::Block>, AsyncApi<A>) {
-		let (sender, rx) = mpsc::unbounded();
-
+	) -> (Api<S>, AsyncApi) {
 		let (http_api, http_worker) = http::http();
 
 		let api = Api {
-			sender,
 			db,
 			network_state,
-			_at: at,
 			is_validator,
 			http: http_api,
 		};
 
 		let async_api = AsyncApi {
-			receiver: Some(rx),
-			transaction_pool,
-			at,
 			http: Some(http_worker),
 		};
 
@@ -302,35 +272,9 @@ impl<A: ChainApi> AsyncApi<A> {
 
 	/// Run a processing task for the API
 	pub fn process(mut self) -> impl Future<Output = ()> {
-		let receiver = self.receiver.take().expect("Take invoked only once.");
 		let http = self.http.take().expect("Take invoked only once.");
 
-		let extrinsics = receiver.for_each(move |msg| {
-			match msg {
-				ExtMessage::SubmitExtrinsic(ext) => self.submit_extrinsic(ext),
-			}
-		});
-
-		future::join(extrinsics, http)
-			.map(|((), ())| ())
-	}
-
-	fn submit_extrinsic(&mut self, ext: Vec<u8>) -> impl Future<Output = ()> {
-		let xt = match <A::Block as traits::Block>::Extrinsic::decode(&mut &*ext) {
-			Ok(xt) => xt,
-			Err(e) => {
-				warn!("Unable to decode extrinsic: {:?}: {}", ext, e.what());
-				return future::Either::Left(future::ready(()))
-			},
-		};
-
-		info!("Submitting transaction to the pool: {:?} (isSigned: {:?})", xt, xt.is_signed());
-		future::Either::Right(self.transaction_pool
-			.submit_one(&self.at, xt.clone())
-			.map(|result| match result {
-				Ok(hash) => { debug!("[{:?}] Offchain transaction added to the pool.", hash); },
-				Err(e) => { warn!("Couldn't submit offchain transaction: {:?}", e); },
-			}))
+		http
 	}
 }
 
@@ -338,10 +282,8 @@ impl<A: ChainApi> AsyncApi<A> {
 mod tests {
 	use super::*;
 	use std::{convert::{TryFrom, TryInto}, time::SystemTime};
-	use sr_primitives::traits::Zero;
 	use client_db::offchain::LocalStorage;
 	use network::PeerId;
-	use test_client::runtime::Block;
 
 	struct MockNetworkStateInfo();
 
@@ -355,19 +297,13 @@ mod tests {
 		}
 	}
 
-	fn offchain_api() -> (Api<LocalStorage, Block>, AsyncApi<impl ChainApi>) {
+	fn offchain_api() -> (Api<LocalStorage>, AsyncApi) {
 		let _ = env_logger::try_init();
 		let db = LocalStorage::new_test();
-		let client = Arc::new(test_client::new());
-		let pool = Arc::new(
-			Pool::new(Default::default(), transaction_pool::FullChainApi::new(client.clone()))
-		);
-
 		let mock = Arc::new(MockNetworkStateInfo());
+
 		AsyncApi::new(
-			pool,
 			db,
-			BlockId::Number(Zero::zero()),
 			mock,
 			false,
 		)
