@@ -26,6 +26,8 @@ use rstd::vec::Vec;
 use schnorrkel::{signing_context, ExpansionMode, Keypair, SecretKey, MiniSecretKey, PublicKey,
 	derive::{Derivation, ChainCode, CHAIN_CODE_LENGTH}
 };
+#[cfg(feature = "full_crypto")]
+use core::convert::TryFrom;
 #[cfg(feature = "std")]
 use substrate_bip39::mini_secret_from_entropy;
 #[cfg(feature = "std")]
@@ -91,11 +93,11 @@ impl AsMut<[u8]> for Public {
 }
 
 impl Deref for Public {
-    type Target = [u8];
+	type Target = [u8];
 
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
 }
 
 impl From<Public> for [u8; 32] {
@@ -112,11 +114,11 @@ impl From<Public> for H256 {
 
 #[cfg(feature = "std")]
 impl std::str::FromStr for Public {
-    type Err = crate::crypto::PublicError;
+	type Err = crate::crypto::PublicError;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Self::from_ss58check(s)
-    }
+	fn from_str(s: &str) -> Result<Self, Self::Err> {
+		Self::from_ss58check(s)
+	}
 }
 
 impl rstd::convert::TryFrom<&[u8]> for Public {
@@ -197,6 +199,23 @@ impl rstd::convert::TryFrom<&[u8]> for Signature {
 		} else {
 			Err(())
 		}
+	}
+}
+
+#[cfg(feature = "std")]
+impl Serialize for Signature {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
+		serializer.serialize_str(&hex::encode(self))
+	}
+}
+
+#[cfg(feature = "std")]
+impl<'de> Deserialize<'de> for Signature {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
+		let signature_hex = hex::decode(&String::deserialize(deserializer)?)
+			.map_err(|e| de::Error::custom(format!("{:?}", e)))?;
+		Ok(Signature::try_from(signature_hex.as_ref())
+			.map_err(|e| de::Error::custom(format!("{:?}", e)))?)
 	}
 }
 
@@ -606,6 +625,7 @@ mod test {
 	use super::*;
 	use crate::crypto::{Ss58Codec, DEV_PHRASE, DEV_ADDRESS};
 	use hex_literal::hex;
+	use serde_json;
 
 	#[test]
 	fn default_phrase_should_be_used() {
@@ -747,5 +767,28 @@ mod test {
 			"28a854d54903e056f89581c691c1f7d2ff39f8f896c9e9c22475e60902cc2b3547199e0e91fa32902028f2ca2355e8cdd16cfe19ba5e8b658c94aa80f3b81a00"
 		));
 		assert!(Pair::verify(&js_signature, b"SUBSTRATE", &public));
+	}
+
+	#[test]
+	fn signature_serialization_works() {
+		let pair = Pair::from_seed(b"12345678901234567890123456789012");
+		let message = b"Something important";
+		let signature = pair.sign(&message[..]);
+		let serialized_signature = serde_json::to_string(&signature).unwrap();
+		// Signature is 64 bytes, so 128 chars + 2 quote chars
+		assert_eq!(serialized_signature.len(), 130);
+		let signature = serde_json::from_str(&serialized_signature).unwrap();
+		assert!(Pair::verify(&signature, &message[..], &pair.public()));
+	}
+
+	#[test]
+	fn signature_serialization_doesnt_panic() {
+		fn deserialize_signature(text: &str) -> Result<Signature, serde_json::error::Error> {
+			Ok(serde_json::from_str(text)?)
+		}
+		assert!(deserialize_signature("Not valid json.").is_err());
+		assert!(deserialize_signature("\"Not an actual signature.\"").is_err());
+		// Poorly-sized
+		assert!(deserialize_signature("\"abc123\"").is_err());
 	}
 }

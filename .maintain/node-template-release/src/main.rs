@@ -88,7 +88,7 @@ fn replace_path_dependencies_with_git(cargo_toml_path: &Path, commit_id: &str, c
 	// remove `Cargo.toml`
 	cargo_toml_path.pop();
 
-	for table in &["dependencies", "build-dependencies"] {
+	for &table in &["dependencies", "build-dependencies"] {
 		let mut dependencies: toml::value::Table = match cargo_toml
 			.remove(table)
 			.and_then(|v| v.try_into().ok()) {
