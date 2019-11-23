@@ -98,7 +98,11 @@ pub struct RefTrackingState<Block: BlockT> {
 }
 
 impl<B: BlockT> RefTrackingState<B> {
-	fn new(state: DbState, storage: Arc<StorageDb<B>>, parent_hash: Option<B::Hash>) -> RefTrackingState<B> {
+	fn new(
+		state: DbState,
+		storage: Arc<StorageDb<B>>,
+		parent_hash: Option<B::Hash>,
+	) -> RefTrackingState<B> {
 		RefTrackingState {
 			state,
 			parent_hash,

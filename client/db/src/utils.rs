@@ -213,8 +213,24 @@ pub fn open_database(
 		#[cfg(feature = "kvdb-rocksdb")]
 		DatabaseSettingsSrc::Path { path, cache_size } => {
 			let mut db_config = DatabaseConfig::with_columns(Some(NUM_COLUMNS));
-			db_config.memory_budget = *cache_size;
-			let path = path.to_str().ok_or_else(|| client::error::Error::Backend("Invalid database path".into()))?;
+
+			if let Some(cache_size) = cache_size {
+				let state_col_budget = (*cache_size as f64 * 0.7) as usize;
+				let other_col_budget = cache_size - state_col_budget;
+
+				let mut memory_budget = std::collections::HashMap::new();
+				for i in 0..NUM_COLUMNS {
+					if Some(i) == crate::columns::STATE {
+						memory_budget.insert(Some(i), state_col_budget);
+					} else {
+						memory_budget.insert(Some(i), other_col_budget);
+					}
+				}
+
+				db_config.memory_budget = memory_budget;
+			}
+			let path = path.to_str()
+				.ok_or_else(|| client::error::Error::Backend("Invalid database path".into()))?;
 			Arc::new(Database::open(&db_config, &path).map_err(db_err)?)
 		},
 		#[cfg(not(feature = "kvdb-rocksdb"))]
