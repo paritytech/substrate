@@ -16,7 +16,7 @@ wasmtime = [
 [dependencies]
 derive_more = "0.15.0"
 futures = "0.1.29"
-futures03 = { package = "futures-preview", version = "0.3.0-alpha.19", features = ["compat"] }
+futures03 = { package = "futures", version = "0.3.1", features = ["compat"] }
 parking_lot = "0.9.0"
 lazy_static = "1.4.0"
 log = "0.4.8"
@@ -50,6 +50,9 @@ rpc = { package = "substrate-rpc", path = "../rpc" }
 tel = { package = "substrate-telemetry", path = "../telemetry" }
 offchain = { package = "substrate-offchain", path = "../offchain" }
 parity-multiaddr = { package = "parity-multiaddr", version = "0.5.0" }
+grafana-data-source = { path = "../grafana-data-source" }
+substrate-tracing = { package = "substrate-tracing", path = "../tracing" }
+tracing = "0.1.10"
 
 [dev-dependencies]
 substrate-test-runtime-client = { path = "../../test/utils/runtime/client" }

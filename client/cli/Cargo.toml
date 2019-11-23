@@ -17,10 +17,9 @@ ansi_term = "0.12.1"
 lazy_static = "1.4.0"
 app_dirs = "1.2.1"
 tokio = "0.1.22"
-futures = "0.1.29"
-futures03 = { package = "futures-preview", version = "=0.3.0-alpha.19", features = ["compat"] }
+futures = { version = "0.3.1", features = ["compat"] }
+futures01 = "0.1.29"
 fdlimit = "0.1.1"
-exit-future = "0.1.4"
 serde_json = "1.0.41"
 panic-handler = { package = "substrate-panic-handler", path = "../../primitives/panic-handler" }
 client-api = { package = "substrate-client-api", path = "../api" }
@@ -35,6 +34,7 @@ keyring = { package = "substrate-keyring", path = "../../primitives/keyring" }
 names = "0.11.0"
 structopt = "0.3.3"
 rpassword = "4.0.1"
+substrate-tracing = { package = "substrate-tracing", path = "../tracing" }
 
 [dev-dependencies]
 tempdir = "0.3.7"

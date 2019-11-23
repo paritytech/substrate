@@ -259,6 +259,24 @@ pub struct TransactionPoolParams {
 	pub pool_kbytes: usize,
 }
 
+arg_enum! {
+	#[allow(missing_docs)]
+	#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+	pub enum TracingReceiver {
+		Log,
+		Telemetry,
+	}
+}
+
+impl Into<substrate_tracing::TracingReceiver> for TracingReceiver {
+	fn into(self) -> substrate_tracing::TracingReceiver {
+		match self {
+			TracingReceiver::Log => substrate_tracing::TracingReceiver::Log,
+			TracingReceiver::Telemetry => substrate_tracing::TracingReceiver::Telemetry,
+		}
+	}
+}
+
 /// Execution strategies parameters.
 #[derive(Debug, StructOpt, Clone)]
 pub struct ExecutionStrategies {
@@ -386,6 +404,12 @@ pub struct RunCmd {
 	#[structopt(long = "ws-external")]
 	pub ws_external: bool,
 
+	/// Listen to all Grafana data source interfaces.
+	///
+	/// Default is local.
+	#[structopt(long = "grafana-external")]
+	pub grafana_external: bool,
+
 	/// Specify HTTP RPC server TCP port.
 	#[structopt(long = "rpc-port", value_name = "PORT")]
 	pub rpc_port: Option<u16>,
@@ -407,6 +431,10 @@ pub struct RunCmd {
 	/// default is to allow all origins.
 	#[structopt(long = "rpc-cors", value_name = "ORIGINS", parse(try_from_str = parse_cors))]
 	pub rpc_cors: Option<Cors>,
+
+	/// Specify Grafana data source server TCP Port.
+	#[structopt(long = "grafana-port", value_name = "PORT")]
+	pub grafana_port: Option<u16>,
 
 	/// Specify the state pruning mode, a number of blocks to keep or 'archive'.
 	///
@@ -490,6 +518,20 @@ pub struct RunCmd {
 	/// Enable authoring even when offline.
 	#[structopt(long = "force-authoring")]
 	pub force_authoring: bool,
+
+	/// Comma separated list of targets for tracing
+	#[structopt(long = "tracing-targets", value_name = "TARGETS")]
+	pub tracing_targets: Option<String>,
+
+	/// Receiver to process tracing messages
+	#[structopt(
+		long = "tracing-receiver",
+		value_name = "RECEIVER",
+		possible_values = &TracingReceiver::variants(),
+		case_insensitive = true,
+		default_value = "Log"
+	)]
+	pub tracing_receiver: TracingReceiver,
 
 	/// Specify custom keystore path.
 	#[structopt(long = "keystore-path", value_name = "PATH", parse(from_os_str))]

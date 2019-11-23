@@ -5,18 +5,18 @@ authors = ["Anonymous"]
 edition = "2018"
 
 [dependencies]
-aura = { package = "pallet-aura", path = "../../../palette/aura", default-features = false }
+aura = { package = "pallet-aura", path = "../../../frame/aura", default-features = false }
 aura-primitives = { package = "substrate-consensus-aura-primitives", path = "../../../primitives/consensus/aura", default-features = false }
-balances = { package = "pallet-balances", path = "../../../palette/balances", default-features = false }
+balances = { package = "pallet-balances", path = "../../../frame/balances", default-features = false }
 block-builder-api = { package = "substrate-block-builder-runtime-api", path = "../../../primitives/block-builder/runtime-api", default-features = false}
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-executive = { package = "palette-executive", path = "../../../palette/executive", default-features = false }
-grandpa = { package = "pallet-grandpa", path = "../../../palette/grandpa", default-features = false }
-indices = { package = "pallet-indices", path = "../../../palette/indices", default-features = false }
+executive = { package = "frame-executive", path = "../../../frame/executive", default-features = false }
+grandpa = { package = "pallet-grandpa", path = "../../../frame/grandpa", default-features = false }
+indices = { package = "pallet-indices", path = "../../../frame/indices", default-features = false }
 inherents = { package = "substrate-inherents", path = "../../../primitives/inherents", default-features = false}
 offchain-primitives = { package = "substrate-offchain-primitives", path = "../../../primitives/offchain", default-features = false }
 primitives = { package = "substrate-primitives", path = "../../../primitives/core", default-features = false }
-randomness-collective-flip = { package = "pallet-randomness-collective-flip", path = "../../../palette/randomness-collective-flip", default-features = false }
+randomness-collective-flip = { package = "pallet-randomness-collective-flip", path = "../../../frame/randomness-collective-flip", default-features = false }
 rstd = { package = "sr-std", path = "../../../primitives/sr-std", default-features = false }
 runtime-io = { package = "sr-io", path = "../../../primitives/sr-io", default-features = false }
 safe-mix = { version = "1.0.0", default-features = false }
@@ -24,11 +24,11 @@ serde = { version = "1.0.101", optional = true, features = ["derive"] }
 sr-api = { path = "../../../primitives/sr-api", default-features = false }
 sr-primitives = { path = "../../../primitives/sr-primitives", default-features = false }
 substrate-session = { path = "../../../primitives/session", default-features = false }
-sudo = { package = "pallet-sudo", path = "../../../palette/sudo", default-features = false }
-support = { package = "palette-support", path = "../../../palette/support", default-features = false }
-system = { package = "palette-system", path = "../../../palette/system", default-features = false }
-timestamp = { package = "pallet-timestamp", path = "../../../palette/timestamp", default-features = false }
-transaction-payment = { package = "pallet-transaction-payment", path = "../../../palette/transaction-payment", default-features = false }
+sudo = { package = "pallet-sudo", path = "../../../frame/sudo", default-features = false }
+support = { package = "frame-support", path = "../../../frame/support", default-features = false }
+system = { package = "frame-system", path = "../../../frame/system", default-features = false }
+timestamp = { package = "pallet-timestamp", path = "../../../frame/timestamp", default-features = false }
+transaction-payment = { package = "pallet-transaction-payment", path = "../../../frame/transaction-payment", default-features = false }
 tx-pool-api = { package = "substrate-transaction-pool-runtime-api", path = "../../../primitives/transaction-pool/runtime-api", default-features = false }
 version = { package = "sr-version", path = "../../../primitives/sr-version", default-features = false }
 
