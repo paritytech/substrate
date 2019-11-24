@@ -400,7 +400,7 @@ mod tests {
 
 	/// create a transaction info struct from weight. Handy to avoid building the whole struct.
 	pub fn info_from_weight(w: Weight) -> DispatchInfo {
-		DispatchInfo { weight: w, ..Default::default() }
+		DispatchInfo { weight: w, pays_fee: true, ..Default::default() }
 	}
 
 	#[test]
@@ -479,7 +479,7 @@ mod tests {
 			let free_transaction = DispatchInfo {
 				weight: 0,
 				class: DispatchClass::Normal,
-				pays_fee: false,
+				pays_fee: true,
 			};
 			assert!(
 				ChargeTransactionPayment::<Runtime>::from(0)

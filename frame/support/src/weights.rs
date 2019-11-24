@@ -213,7 +213,7 @@ impl PaysFee for SimpleDispatchInfo {
 		match self {
 			SimpleDispatchInfo::FixedNormal(_) => true,
 			SimpleDispatchInfo::MaxNormal => true,
-			SimpleDispatchInfo::FreeNormal => false,
+			SimpleDispatchInfo::FreeNormal => true,
 
 			SimpleDispatchInfo::FixedOperational(_) => true,
 			SimpleDispatchInfo::MaxOperational => true,
