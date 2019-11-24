@@ -266,6 +266,7 @@ impl<Call: Encode, Extra: Encode> GetDispatchInfo for sr_primitives::testing::Te
 		// for testing: weight == size.
 		DispatchInfo {
 			weight: self.encode().len() as _,
+			pays_fee: true,
 			..Default::default()
 		}
 	}
