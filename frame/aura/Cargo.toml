@@ -1,0 +1,44 @@
+[package]
+name = "pallet-aura"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
+app-crypto = { package = "substrate-application-crypto",  path = "../../primitives/application-crypto", default-features = false }
+codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
+inherents = { package = "substrate-inherents", path = "../../primitives/inherents", default-features = false }
+primitives = { package = "substrate-primitives",  path = "../../primitives/core", default-features = false }
+rstd = { package = "sr-std", path = "../../primitives/sr-std", default-features = false }
+serde = { version = "1.0.101", optional = true }
+session = { package = "pallet-session", path = "../session", default-features = false }
+sr-primitives = { path = "../../primitives/sr-primitives", default-features = false }
+runtime-io ={ package = "sr-io", path = "../../primitives/sr-io", default-features = false }
+support = { package = "frame-support", path = "../support", default-features = false }
+substrate-consensus-aura-primitives = { path = "../../primitives/consensus/aura", default-features = false}
+system = { package = "frame-system", path = "../system", default-features = false }
+sp-timestamp = { package = "sp-timestamp", path = "../../primitives/timestamp", default-features = false }
+pallet-timestamp = { package = "pallet-timestamp", path = "../timestamp", default-features = false }
+
+
+[dev-dependencies]
+lazy_static = "1.4.0"
+parking_lot = "0.9.0"
+
+[features]
+default = ["std"]
+std = [
+	"app-crypto/std",
+	"codec/std",
+	"inherents/std",
+	"runtime-io/std",
+	"primitives/std",
+	"rstd/std",
+	"serde",
+	"sr-primitives/std",
+	"support/std",
+	"substrate-consensus-aura-primitives/std",
+	"system/std",
+	"sp-timestamp/std",
+	"pallet-timestamp/std",
+]
