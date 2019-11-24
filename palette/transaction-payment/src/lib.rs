@@ -479,7 +479,7 @@ mod tests {
 			let free_transaction = DispatchInfo {
 				weight: 0,
 				class: DispatchClass::Normal,
-				pays_fee: false
+				pays_fee: false,
 			};
 			assert!(
 				ChargeTransactionPayment::<Runtime>::from(0)
@@ -543,5 +543,4 @@ mod tests {
 		});
 	}
 }
-
 

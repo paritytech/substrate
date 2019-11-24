@@ -144,7 +144,7 @@ pub struct DispatchInfo {
 	pub weight: Weight,
 	/// Class of this transaction.
 	pub class: DispatchClass,
-	/// Does this transaction pays fee.
+	/// Does this transaction pay fees.
 	pub pays_fee: bool,
 }
 
