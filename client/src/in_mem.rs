@@ -18,7 +18,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use parking_lot::{RwLock, Mutex};
+use parking_lot::RwLock;
 use primitives::{ChangesTrieConfiguration, storage::well_known_keys};
 use primitives::offchain::storage::{
 	InMemOffchainStorage as OffchainStorage
@@ -562,7 +562,7 @@ where
 	states: RwLock<HashMap<Block::Hash, InMemory<H>>>,
 	changes_trie_storage: ChangesTrieStorage<Block, H>,
 	blockchain: Blockchain<Block>,
-	import_lock: Mutex<()>,
+	import_lock: RwLock<()>,
 }
 
 impl<Block, H> Backend<Block, H>
@@ -712,7 +712,7 @@ where
 		Ok(Zero::zero())
 	}
 
-	fn get_import_lock(&self) -> &Mutex<()> {
+	fn get_import_lock(&self) -> &RwLock<()> {
 		&self.import_lock
 	}
 }
