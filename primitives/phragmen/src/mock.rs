@@ -276,7 +276,7 @@ pub(crate) fn do_equalize_float<A>(
 
 	elected_edges.sort_unstable_by(|x, y|
 		support_map.get(&x.0)
-			.and_then(|x| support_map.get(&y.0).map(|y| x.total.partial_cmp(&y.total)))
+			.and_then(|x| support_map.get(&y.0).and_then(|y| x.total.partial_cmp(&y.total)))
 			.unwrap_or(rstd::cmp::Ordering::Equal)
 	);
 
