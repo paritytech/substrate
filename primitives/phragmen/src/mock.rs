@@ -274,17 +274,10 @@ pub(crate) fn do_equalize_float<A>(
 		e.1 = 0.0;
 	});
 
-	// todo: rewrite.
 	elected_edges.sort_unstable_by(|x, y|
-		if let Some(x) = support_map.get(&x.0) {
-			if let Some(y) = support_map.get(&y.0) {
-				x.total.partial_cmp(&y.total).unwrap_or(rstd::cmp::Ordering::Equal)
-			} else {
-				rstd::cmp::Ordering::Equal
-			}
-		} else {
-			rstd::cmp::Ordering::Equal
-		}
+		support_map.get(&x.0)
+			.and_then(|x| support_map.get(&y.0).and_then(|y| x.total.partial_cmp(&y.total)))
+			.unwrap_or(rstd::cmp::Ordering::Equal)
 	);
 
 	let mut cumulative_stake = 0.0;
