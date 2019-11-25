@@ -709,7 +709,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		Err: From<sp_blockchain::Error>,
 	{
 		let inner = || {
-			let _import_lock = self.backend.get_import_lock().lock();
+			let _import_lock = self.backend.get_import_lock().write();
 
 			let mut op = ClientImportOperation {
 				op: self.backend.begin_operation()?,

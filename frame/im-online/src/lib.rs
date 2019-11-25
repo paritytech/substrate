@@ -131,7 +131,7 @@ pub mod ed25519 {
 
 /// The local storage database key under which the worker progress status
 /// is tracked.
-const DB_KEY: &[u8] = b"frame/im-online-worker-status";
+const DB_KEY: &[u8] = b"parity/im-online-worker-status";
 
 /// It's important to persist the worker state, since e.g. the
 /// server could be restarted while starting the gossip process, but before

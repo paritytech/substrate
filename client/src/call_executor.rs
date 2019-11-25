@@ -94,7 +94,10 @@ where
 			None,
 		)
 		.map(|(result, _, _)| result)?;
-		self.backend.destroy_state(state)?;
+		{
+			let _lock = self.backend.get_import_lock().read();
+			self.backend.destroy_state(state)?;
+		}
 		Ok(return_data.into_encoded())
 	}
 
@@ -177,7 +180,10 @@ where
 			)
 			.map(|(result, _, _)| result)
 		}?;
-		self.backend.destroy_state(state)?;
+		{
+			let _lock = self.backend.get_import_lock().read();
+			self.backend.destroy_state(state)?;
+		}
 		Ok(result)
 	}
 
@@ -192,7 +198,10 @@ where
 			None,
 		);
 		let version = self.executor.runtime_version(&mut ext);
-		self.backend.destroy_state(state)?;
+		{
+			let _lock = self.backend.get_import_lock().read();
+			self.backend.destroy_state(state)?;
+		}
 		version.ok_or(sp_blockchain::Error::VersionInvalid.into())
 	}
 
