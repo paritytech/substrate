@@ -146,8 +146,7 @@ pub trait AbstractService: 'static + Future<Item = (), Error = Error> +
 	type SelectChain: consensus_common::SelectChain<Self::Block>;
 	/// Transaction pool.
 	type TransactionPool: TransactionPool<Block = Self::Block>
-		+ TransactionPoolMaintainer<Block = Self::Block>
-		+ sr_primitives::offchain::TransactionPool<Self::Block>;
+		+ TransactionPoolMaintainer<Block = Self::Block>;
 	/// Network specialization.
 	type NetworkSpecialization: NetworkSpecialization<Self::Block>;
 
@@ -211,8 +210,7 @@ where
 	TRtApi: 'static + Send + Sync,
 	TSc: consensus_common::SelectChain<TBl> + 'static + Clone + Send,
 	TExPool: 'static + TransactionPool<Block = TBl>
-		+ TransactionPoolMaintainer<Block = TBl>
-		+ sr_primitives::offchain::TransactionPool<TBl>,
+		+ TransactionPoolMaintainer<Block = TBl>,
 	TOc: 'static + Send + Sync,
 	TNetSpec: NetworkSpecialization<TBl>,
 {

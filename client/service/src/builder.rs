@@ -801,8 +801,7 @@ ServiceBuilder<
 	TNetP: NetworkSpecialization<TBl>,
 	TExPool: 'static
 		+ TransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash>
-		+ TransactionPoolMaintainer<Block=TBl, Hash = <TBl as BlockT>::Hash>
-		+ sr_primitives::offchain::TransactionPool<TBl>,
+		+ TransactionPoolMaintainer<Block=TBl, Hash = <TBl as BlockT>::Hash>,
 	TRpc: rpc::RpcExtension<rpc::Metadata> + Clone,
 {
 	/// Builds the service.

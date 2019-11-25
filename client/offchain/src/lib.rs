@@ -165,7 +165,7 @@ mod tests {
 
 	struct TestPool(BasicPool<FullChainApi<test_client::TestClient, Block>, Block>);
 
-	impl sr_primitives::offchain::TransactionPool<Block> for TestPool {
+	impl txpool_api::OffchainSubmitTransaction<Block> for TestPool {
 		fn submit_at(
 			&self,
 			at: &BlockId<Block>,

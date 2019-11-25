@@ -128,7 +128,10 @@ pub trait TransactionPool: Send + Sync {
 	/// Transaction hash type.
 	type Hash: Hash + Eq + Member + Serialize;
 	/// In-pool transaction type.
-	type InPoolTransaction: InPoolTransaction<Transaction = TransactionFor<Self>, Hash = TxHash<Self>>;
+	type InPoolTransaction: InPoolTransaction<
+		Transaction = TransactionFor<Self>,
+		Hash = TxHash<Self>
+	>;
 	/// Error type.
 	type Error: From<error::Error> + IntoPoolError;
 
@@ -137,14 +140,20 @@ pub trait TransactionPool: Send + Sync {
 		&self,
 		at: &BlockId<Self::Block>,
 		xts: impl IntoIterator<Item=TransactionFor<Self>> + 'static,
-	) -> Box<dyn Future<Output=Result<Vec<Result<TxHash<Self>, Self::Error>>, Self::Error>> + Send + Unpin>;
+	) -> Box<dyn Future<Output=Result<
+		Vec<Result<TxHash<Self>, Self::Error>>,
+		Self::Error
+	>> + Send + Unpin>;
 
 	/// Returns a future that imports one unverified transaction to the pool.
 	fn submit_one(
 		&self,
 		at: &BlockId<Self::Block>,
 		xt: TransactionFor<Self>,
-	) -> Box<dyn Future<Output=Result<TxHash<Self>, Self::Error>> + Send + Unpin>;
+	) -> Box<dyn Future<Output=Result<
+		TxHash<Self>,
+		Self::Error
+	>> + Send + Unpin>;
 
 	/// Returns a future that import a single transaction and starts to watch their progress in the pool.
 	fn submit_and_watch(
@@ -170,6 +179,47 @@ pub trait TransactionPool: Send + Sync {
 
 	/// Notify the pool about transactions broadcast.
 	fn on_broadcasted(&self, propagations: HashMap<TxHash<Self>, Vec<String>>);
+}
+
+/// An abstraction for transaction pool.
+///
+/// This trait is used by offchain calls to be able to submit transactions.
+/// The main use case is for offchain workers, to feed back the results of computations,
+/// but since the transaction pool access is a separate `ExternalitiesExtension` it can
+/// be also used in context of other offchain calls. For one may generate and submit
+/// a transaction for some misbehavior reports (say equivocation).
+pub trait OffchainSubmitTransaction<Block: BlockT>: Send + Sync {
+	/// Submit transaction.
+	///
+	/// The transaction will end up in the pool and be propagated to others.
+	fn submit_at(
+		&self,
+		at: &BlockId<Block>,
+		extrinsic: Block::Extrinsic,
+	) -> Result<(), ()>;
+}
+
+impl<TPool: TransactionPool> OffchainSubmitTransaction<TPool::Block> for TPool {
+	fn submit_at(
+		&self,
+		at: &BlockId<TPool::Block>,
+		extrinsic: <TPool::Block as BlockT>::Extrinsic,
+	) -> Result<(), ()> {
+		log::debug!(
+			target: "txpool",
+			"(offchain call) Submitting a transaction to the pool: {:?}",
+			extrinsic
+		);
+
+		let result = futures::executor::block_on(self.submit_one(&at, extrinsic));
+
+		result.map(|_| ())
+			.map_err(|e| log::warn!(
+				target: "txpool",
+				"(offchain call) Error submitting a transaction to the pool: {:?}",
+				e
+			))
+	}
 }
 
 /// Transaction pool maintainer interface.
@@ -274,34 +324,5 @@ impl<Pool, Maintainer> TransactionPoolMaintainer for MaintainableTransactionPool
 		retracted: &[Self::Hash],
 	) -> Box<dyn Future<Output=()> + Send + Unpin> {
 		self.maintainer.maintain(id, retracted)
-	}
-}
-
-impl<Pool, Maintainer> sr_primitives::offchain::TransactionPool<Pool::Block>
-	for
-		MaintainableTransactionPool<Pool, Maintainer>
-	where
-		Pool: TransactionPool,
-		Maintainer: Send + Sync,
-{
-	fn submit_at(
-		&self,
-		at: &BlockId<Pool::Block>,
-		extrinsic: <Pool::Block as sr_primitives::traits::Block>::Extrinsic,
-	) -> Result<(), ()> {
-		log::debug!(
-			target: "txpool",
-			"(offchain call) Submitting a transaction to the pool: {:?}",
-			extrinsic
-		);
-
-		let result = futures::executor::block_on(self.submit_one(&at, extrinsic));
-
-		result.map(|_| ())
-			.map_err(|e| log::warn!(
-				target: "txpool",
-				"(offchain call) Error submitting a transaction to the pool: {:?}",
-				e
-			))
 	}
 }
