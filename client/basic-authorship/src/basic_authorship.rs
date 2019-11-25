@@ -48,7 +48,7 @@ pub struct ProposerFactory<C, A> where A: txpool::ChainApi {
 impl<B, E, Block, RA, A> consensus_common::Environment<Block> for
 ProposerFactory<SubstrateClient<B, E, Block, RA>, A>
 where
-	A: txpool::ChainApi<Block=Block>,
+	A: txpool::ChainApi<Block=Block> + 'static,
 	B: client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
 	Block: BlockT<Hash=H256>,
@@ -71,12 +71,14 @@ where
 		info!("Starting consensus session on top of parent {:?}", parent_hash);
 
 		let proposer = Proposer {
-			client: self.client.clone(),
-			parent_hash,
-			parent_id: id,
-			parent_number: *parent_header.number(),
-			transaction_pool: self.transaction_pool.clone(),
-			now: Box::new(time::Instant::now),
+			inner: Arc::new(ProposerInner {
+				client: self.client.clone(),
+				parent_hash,
+				parent_id: id,
+				parent_number: *parent_header.number(),
+				transaction_pool: self.transaction_pool.clone(),
+				now: time::Instant::now,
+			}),
 		};
 
 		Ok(proposer)
@@ -85,18 +87,23 @@ where
 
 /// The proposer logic.
 pub struct Proposer<Block: BlockT, C, A: txpool::ChainApi> {
+	inner: Arc<ProposerInner<Block, C, A>>,
+}
+
+/// Proposer inner, to wrap parameters under Arc.
+struct ProposerInner<Block: BlockT, C, A: txpool::ChainApi> {
 	client: Arc<C>,
 	parent_hash: <Block as BlockT>::Hash,
 	parent_id: BlockId<Block>,
 	parent_number: <<Block as BlockT>::Header as HeaderT>::Number,
 	transaction_pool: Arc<TransactionPool<A>>,
-	now: Box<dyn Fn() -> time::Instant>,
+	now: fn() -> time::Instant,
 }
 
 impl<B, E, Block, RA, A> consensus_common::Proposer<Block> for
 Proposer<Block, SubstrateClient<B, E, Block, RA>, A>
 where
-	A: txpool::ChainApi<Block=Block>,
+	A: txpool::ChainApi<Block=Block> + 'static,
 	B: client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
 	Block: BlockT<Hash=H256>,
@@ -105,7 +112,7 @@ where
 	<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api:
 		BlockBuilderApi<Block, Error = error::Error>,
 {
-	type Create = futures::future::Ready<Result<Block, error::Error>>;
+	type Create = tokio_executor::blocking::Blocking<Result<Block, error::Error>>;
 	type Error = error::Error;
 
 	fn propose(
@@ -115,13 +122,16 @@ where
 		max_duration: time::Duration,
 	) -> Self::Create {
 		// leave some time for evaluation and block finalization (33%)
-		let deadline = (self.now)() + max_duration - max_duration / 3;
-		futures::future::ready(self.propose_with(inherent_data, inherent_digests, deadline))
+		let inner = self.inner.clone();
+		tokio_executor::blocking::run(move || {
+			let deadline = (inner.now)() + max_duration - max_duration / 3;
+			inner.propose_with(inherent_data, inherent_digests, deadline)
+		})
 	}
 }
 
-impl<Block, B, E, RA, A> Proposer<Block, SubstrateClient<B, E, Block, RA>, A>	where
-	A: txpool::ChainApi<Block=Block>,
+impl<Block, B, E, RA, A> ProposerInner<Block, SubstrateClient<B, E, Block, RA>, A> where
+	A: txpool::ChainApi<Block=Block> + 'static,
 	B: client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
 	Block: BlockT<Hash=H256>,
