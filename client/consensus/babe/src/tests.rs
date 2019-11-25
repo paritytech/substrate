@@ -404,6 +404,7 @@ fn run_one_test(
 			force_authoring: false,
 			babe_link: data.link.clone(),
 			keystore,
+			can_author_with: consensus_common::AlwaysCanAuthor,
 		}).expect("Starts babe"));
 	}
 

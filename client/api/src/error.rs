@@ -50,8 +50,8 @@ pub enum Error {
 	#[display(fmt = "Current state of blockchain has invalid authorities set")]
 	InvalidAuthoritiesSet,
 	/// Could not get runtime version.
-	#[display(fmt = "On-chain runtime does not specify version")]
-	VersionInvalid,
+	#[display(fmt = "Failed to get runtime version: {}", _0)]
+	VersionInvalid(String),
 	/// Genesis config is invalid.
 	#[display(fmt = "Genesis config provided is invalid")]
 	GenesisInvalid,
