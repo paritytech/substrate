@@ -69,6 +69,11 @@ impl Database {
 	}
 
 	pub fn truncate(&mut self, new_base_timestamp: i64) -> Result<(), Error> {
+		// Ensure that the new base is older.
+		if self.base_timestamp >= new_base_timestamp {
+			return Ok(());
+		}
+
 		// If the old base timestamp was too long ago, the
 		let delta = u32::try_from(new_base_timestamp - self.base_timestamp)
 			.map_err(Error::Timestamp)?;
@@ -81,11 +86,13 @@ impl Database {
 				.skip(index)
 				.map(|dp| {
 					let mut dp = dp.clone();
-					dp.delta_timestamp += delta;
+					dp.delta_timestamp -= delta;
 					dp
 				})
 				.collect();
 		}
+
+		self.base_timestamp = new_base_timestamp;
 
 		Ok(())
 	}

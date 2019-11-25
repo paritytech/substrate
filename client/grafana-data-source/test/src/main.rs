@@ -25,10 +25,14 @@ async fn randomness() {
 
 		let random = rand::thread_rng().gen_range(0.0, 1000.0);
 
-		record_metrics!(
+		let result = record_metrics!(
 			"random data" => random,
 			"random^2" => random * random
 		);
+
+		if let Err(error) = result {
+			eprintln!("{}", error);
+		}
 	}
 }
 
