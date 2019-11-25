@@ -23,6 +23,7 @@
 extern crate proc_macro;
 
 mod storage;
+mod construct_runtime;
 
 use proc_macro::TokenStream;
 
@@ -218,4 +219,64 @@ use proc_macro::TokenStream;
 #[proc_macro]
 pub fn decl_storage(input: TokenStream) -> TokenStream {
 	storage::decl_storage_impl(input)
+}
+
+/// Construct a runtime, with the given name and the given modules.
+///
+/// The parameters here are specific types for `Block`, `NodeBlock`, and `UncheckedExtrinsic`
+/// and the modules that are used by the runtime.
+/// `Block` is the block type that is used in the runtime and `NodeBlock` is the block type
+/// that is used in the node. For instance they can differ in the extrinsics type.
+///
+/// # Example:
+///
+/// ```nocompile
+/// construct_runtime!(
+///     pub enum Runtime where
+///         Block = Block,
+///         NodeBlock = runtime::Block,
+///         UncheckedExtrinsic = UncheckedExtrinsic
+///     {
+///         System: system,
+///         Test: test::{default},
+///         Test2: test_with_long_module::{Module},
+///
+///         // Module with instances
+///         Test3_Instance1: test3::<Instance1>::{Module, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>},
+///         Test3_DefaultInstance: test3::{Module, Call, Storage, Event<T>, Config<T>, Origin<T>},
+///     }
+/// )
+/// ```
+///
+/// The module `System: system` will expand to `System: system::{Module, Call, Storage, Event<T>, Config<T>}`.
+/// The identifier `System` is the name of the module and the lower case identifier `system` is the
+/// name of the Rust module/crate for this Substrate module.
+///
+/// The module `Test: test::{default}` will expand to
+/// `Test: test::{Module, Call, Storage, Event<T>, Config<T>}`.
+///
+/// The module `Test2: test_with_long_module::{Module}` will expand to
+/// `Test2: test_with_long_module::{Module}`.
+///
+/// We provide support for the following types in a module:
+///
+/// - `Module`
+/// - `Call`
+/// - `Storage`
+/// - `Event` or `Event<T>` (if the event is generic)
+/// - `Origin` or `Origin<T>` (if the origin is generic)
+/// - `Config` or `Config<T>` (if the config is generic)
+/// - `Inherent ( $(CALL),* )` - If the module provides/can check inherents. The optional parameter
+///                             is for modules that use a `Call` from a different module as
+///                             inherent.
+/// - `ValidateUnsigned`      - If the module validates unsigned extrinsics.
+///
+/// # Note
+///
+/// The population of the genesis storage depends on the order of modules. So, if one of your
+/// modules depends on another module, the module that is depended upon needs to come before
+/// the module depending on it.
+#[proc_macro]
+pub fn construct_runtime(input: TokenStream) -> TokenStream {
+	construct_runtime::construct_runtime(input)
 }
