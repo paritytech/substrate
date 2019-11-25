@@ -1531,7 +1531,6 @@ impl<Block> client_api::backend::Backend<Block, Blake2Hasher> for Backend<Block>
 
 	fn destroy_state(&self, state: Self::State) -> ClientResult<()> {
 		if let Some(hash) = state.cache.parent_hash.clone() {
-			let _ = self.import_lock.read();
 			let is_best = self.blockchain.meta.read().best_hash == hash;
 			state.release().sync_cache(&[], &[], vec![], vec![], None, None, is_best);
 		}
