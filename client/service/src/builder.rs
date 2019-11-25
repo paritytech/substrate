@@ -1001,7 +1001,7 @@ ServiceBuilder<
 				"bandwidth_upload" => bandwidth_upload,
 				"used_state_cache_size" => used_state_cache_size,
 			);
-			record_metrics!(
+			let _ = record_metrics!(
 				"peers" => num_peers,
 				"height" => best_number,
 				"txcount" => txpool_status.ready,
