@@ -713,7 +713,7 @@ impl_runtime_apis! {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use system::offchain::SubmitSignedTransaction;
+	use system::offchain::{SignAndSubmitTransaction, SubmitSignedTransaction};
 
 	#[test]
 	fn validate_bounds() {
@@ -724,7 +724,7 @@ mod tests {
 			>,
 		{}
 
-		fn is_sign_and_submit_transaction<T>(_arg: T) where
+		fn is_sign_and_submit_transaction<T>() where
 			T: SignAndSubmitTransaction<
 				Runtime,
 				Call,
