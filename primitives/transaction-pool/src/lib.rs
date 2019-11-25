@@ -16,6 +16,8 @@
 
 //! Transaction pool types.
 
+#![warn(missing_docs)]
+
 pub mod error;
 
 pub use error::IntoPoolError;
@@ -33,7 +35,6 @@ use futures::{
 	channel::mpsc,
 };
 use serde::{Deserialize, Serialize};
-
 use sr_primitives::{
 	generic::BlockId,
 	traits::{Block as BlockT, Member},
