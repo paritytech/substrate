@@ -36,56 +36,66 @@ use node_runtime::UncheckedExtrinsic;
 use sr_primitives::traits::ProvideRuntimeApi;
 use txpool_api::TransactionPool;
 
-/// Instantiate all RPC extensions for full node.
-pub fn create_full<C, P, M>(client: Arc<C>, pool: Arc<P>) -> jsonrpc_core::IoHandler<M> where
+/// Light client extra dependencies.
+pub struct LightDeps<F> {
+	/// Remote access to the blockchain (async).
+	pub remote_blockchain: Arc<dyn client::light::blockchain::RemoteBlockchain<Block>>,
+	/// Fetcher instance.
+	pub fetcher: Arc<F>,
+}
+
+impl<F> LightDeps<F> {
+	/// Create empty `LightDeps` with given `F` type.
+	///
+	/// This is a convenience method to be used in the service builder,
+	/// to make sure the type of the `LightDeps<F>` is matching.
+	pub fn none(_: Option<Arc<F>>) -> Option<Self> {
+		None
+	}
+}
+
+/// Instantiate all RPC extensions.
+///
+/// If you provide `LightDeps`, the system is configured for light client.
+pub fn create<C, P, M, F>(
+	client: Arc<C>,
+	pool: Arc<P>,
+	light_deps: Option<LightDeps<F>>,
+) -> jsonrpc_core::IoHandler<M> where
 	C: ProvideRuntimeApi,
 	C: client::blockchain::HeaderBackend<Block>,
 	C: Send + Sync + 'static,
 	C::Api: frame_system_rpc::AccountNonceApi<Block, AccountId, Index>,
 	C::Api: pallet_contracts_rpc::ContractsRuntimeApi<Block, AccountId, Balance>,
 	C::Api: pallet_transaction_payment_rpc::TransactionPaymentRuntimeApi<Block, Balance, UncheckedExtrinsic>,
+	F: client::light::fetcher::Fetcher<Block> + 'static,
 	P: TransactionPool + 'static,
 	M: jsonrpc_core::Metadata + Default,
 {
-	use frame_system_rpc::{FullSystem, SystemApi};
-
+	use frame_system_rpc::{FullSystem, LightSystem, SystemApi};
 	use pallet_contracts_rpc::{Contracts, ContractsApi};
 	use pallet_transaction_payment_rpc::{TransactionPayment, TransactionPaymentApi};
 
 	let mut io = jsonrpc_core::IoHandler::default();
-	io.extend_with(
-		SystemApi::to_delegate(FullSystem::new(client.clone(), pool))
-	);
-	io.extend_with(
-		ContractsApi::to_delegate(Contracts::new(client.clone()))
-	);
-	io.extend_with(
-		TransactionPaymentApi::to_delegate(TransactionPayment::new(client))
-	);
-	io
-}
 
-/// Instantiate all RPC extensions for light node.
-pub fn create_light<C, P, M, F>(
-	client: Arc<C>,
-	remote_blockchain: Arc<dyn client::light::blockchain::RemoteBlockchain<Block>>,
-	fetcher: Arc<F>,
-	pool: Arc<P>,
-) -> jsonrpc_core::IoHandler<M>
-	where
-		C: ProvideRuntimeApi,
-		C: client::blockchain::HeaderBackend<Block>,
-		C: Send + Sync + 'static,
-		C::Api: frame_system_rpc::AccountNonceApi<Block, AccountId, Index>,
-		P: TransactionPool + 'static,
-		M: jsonrpc_core::Metadata + Default,
-		F: client::light::fetcher::Fetcher<Block> + 'static,
-{
-	use frame_system_rpc::{LightSystem, SystemApi};
+	if let Some(LightDeps { remote_blockchain, fetcher }) = light_deps {
+		io.extend_with(
+			SystemApi::<AccountId, Index>::to_delegate(LightSystem::new(client, remote_blockchain, fetcher, pool))
+		);
+	} else {
+		io.extend_with(
+			SystemApi::to_delegate(FullSystem::new(client.clone(), pool))
+		);
 
-	let mut io = jsonrpc_core::IoHandler::default();
-	io.extend_with(
-		SystemApi::<AccountId, Index>::to_delegate(LightSystem::new(client, remote_blockchain, fetcher, pool))
-	);
+		// Making synchronous calls in light client freezes the browser currently,
+		// more context: https://github.com/paritytech/substrate/pull/3480
+		// These RPCs should use an asynchronous caller instead.
+		io.extend_with(
+			ContractsApi::to_delegate(Contracts::new(client.clone()))
+		);
+		io.extend_with(
+			TransactionPaymentApi::to_delegate(TransactionPayment::new(client))
+		);
+	}
 	io
 }

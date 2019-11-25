@@ -99,8 +99,8 @@ macro_rules! new_full_start {
 				import_setup = Some((block_import, grandpa_link, babe_link));
 				Ok(import_queue)
 			})?
-			.with_rpc_extensions(|client, pool, _backend, _fetcher, _remote_blockchain| -> Result<RpcExtension, _> {
-				Ok(node_rpc::create_full(client, pool))
+			.with_rpc_extensions(|client, pool, _backend, fetcher, _remote_blockchain| -> Result<RpcExtension, _> {
+				Ok(node_rpc::create(client, pool, node_rpc::LightDeps::none(fetcher)))
 			})?;
 
 		(builder, import_setup, inherent_data_providers)
@@ -372,7 +372,9 @@ pub fn new_light<C: Send + Default + 'static>(config: NodeConfiguration<C>)
 				.ok_or_else(|| "Trying to start node RPC without active fetcher")?;
 			let remote_blockchain = remote_blockchain
 				.ok_or_else(|| "Trying to start node RPC without active remote blockchain")?;
-			Ok(node_rpc::create_light(client, remote_blockchain, fetcher, pool))
+
+			let light_deps = node_rpc::LightDeps { remote_blockchain, fetcher };
+			Ok(node_rpc::create(client, pool, Some(light_deps)))
 		})?
 		.build()?;
 
