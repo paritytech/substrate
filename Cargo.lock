@@ -3655,6 +3655,7 @@ dependencies = [
  "sr-std 2.0.0",
  "substrate-phragmen 2.0.0",
  "substrate-primitives 2.0.0",
+ "substrate-test-utils 2.0.0",
 ]
 
 [[package]]
@@ -3892,6 +3893,7 @@ dependencies = [
  "substrate-keyring 2.0.0",
  "substrate-phragmen 2.0.0",
  "substrate-primitives 2.0.0",
+ "substrate-test-utils 2.0.0",
 ]
 
 [[package]]
@@ -6271,12 +6273,12 @@ dependencies = [
 name = "substrate-phragmen"
 version = "2.0.0"
 dependencies = [
- "frame-support 2.0.0",
  "rand 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 2.0.0",
  "sr-primitives 2.0.0",
  "sr-std 2.0.0",
+ "substrate-test-utils 2.0.0",
 ]
 
 [[package]]
@@ -6672,6 +6674,10 @@ dependencies = [
  "substrate-test-client 2.0.0",
  "substrate-test-runtime 2.0.0",
 ]
+
+[[package]]
+name = "substrate-test-utils"
+version = "2.0.0"
 
 [[package]]
 name = "substrate-tracing"
