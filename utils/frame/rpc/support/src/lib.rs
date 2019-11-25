@@ -40,7 +40,7 @@ use sc_rpc_api::state::StateClient;
 /// # use jsonrpc_client_transports::transports::http;
 /// # use parity_scale_codec::Encode;
 /// # use frame_support::{decl_storage, decl_module};
-/// # use frame_support_rpc::StorageQuery;
+/// # use substrate_frame_rpc_support::StorageQuery;
 /// # use frame_system::Trait;
 /// # use sc_rpc_api::state::StateClient;
 /// #
