@@ -1,0 +1,123 @@
+// Copyright 2019 Parity Technologies (UK) Ltd.
+// This file is part of Substrate.
+
+// Substrate is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// Substrate is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+
+use std::collections::HashMap;
+use std::convert::TryFrom;
+use crate::Error;
+
+pub struct Database {
+	base_timestamp: i64,
+	storage: HashMap<&'static str, Vec<Datapoint>>
+}
+
+impl Database {
+	pub fn new() -> Self {
+		Self {
+			base_timestamp: now_millis(),
+			storage: HashMap::new()
+		}
+	}
+
+	pub fn keys_starting_with<'a>(&'a self, base: &'a str) -> impl Iterator<Item = &'static str> + 'a {
+		self.storage.keys().filter(move |key| key.starts_with(base)).cloned()
+	}
+
+	pub fn datapoints_between(&self, key: &str, from: i64, to: i64, max_datapoints: usize) -> Option<Vec<(f32, i64)>> {
+		self.storage.get(key)
+			.map(|vec| {
+				let from = find_index(vec, self.base_timestamp, from);
+				let to = find_index(vec, self.base_timestamp, to);
+				let slice = &vec[from .. to];
+
+				if max_datapoints == 0 {
+					Vec::new()
+				} else if max_datapoints >= slice.len() {
+					// Just convert the slice as-is
+					slice.iter()
+						.map(|dp| dp.make_absolute(self.base_timestamp))
+						.collect()
+				} else {
+					// We have more datapoints than we need, so we need to skip some
+					(0 .. max_datapoints - 1)
+						.map(|i| &slice[i * slice.len() / (max_datapoints - 1)])
+						.chain(slice.last())
+						.map(|dp| dp.make_absolute(self.base_timestamp))
+						.collect()
+				}
+			})
+	}
+
+	pub fn push(&mut self, key: &'static str, value: f32) -> Result<(), Error> {
+		self.storage.entry(key)
+			.or_insert_with(Vec::new)
+			.push(Datapoint::new(self.base_timestamp, value)?);
+
+		Ok(())
+	}
+
+	pub fn truncate(&mut self, new_base_timestamp: i64) -> Result<(), Error> {
+		// If the old base timestamp was too long ago, the
+		let delta = u32::try_from(new_base_timestamp - self.base_timestamp)
+			.map_err(Error::Timestamp)?;
+
+		for metric in self.storage.values_mut() {
+			// Find the index of the oldest allowed timestamp and cut out all those before it.
+			let index = find_index(&metric, self.base_timestamp, new_base_timestamp);
+
+			*metric = metric.iter()
+				.skip(index)
+				.map(|dp| {
+					let mut dp = dp.clone();
+					dp.delta_timestamp += delta;
+					dp
+				})
+				.collect();
+		}
+
+		Ok(())
+	}
+}
+
+#[derive(Clone)]
+struct Datapoint {
+	delta_timestamp: u32,
+	value: f32
+}
+
+impl Datapoint {
+	fn new(base_timestamp: i64, value: f32) -> Result<Self, Error> {
+		Ok(Self {
+			delta_timestamp: u32::try_from(now_millis() - base_timestamp)
+				.map_err(Error::Timestamp)?,
+			value
+		})
+	}
+
+	fn make_absolute(&self, base_timestamp: i64) -> (f32, i64) {
+		(self.value, base_timestamp + self.delta_timestamp as i64)
+	}
+}
+
+fn find_index(slice: &[Datapoint], base_timestamp: i64, timestamp: i64) -> usize {
+	slice.binary_search_by_key(&timestamp, |datapoint| {
+		base_timestamp + datapoint.delta_timestamp as i64
+	}).unwrap_or_else(|index| index)
+}
+
+/// Get the current unix timestamp in milliseconds.
+fn now_millis() -> i64 {
+	chrono::Utc::now().timestamp_millis()
+}
