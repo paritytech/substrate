@@ -17,7 +17,6 @@
 //! A consensus proposer for "basic" chains which use the primitive inherent-data.
 
 // FIXME #1021 move this into substrate-consensus-common
-//
 
 use std::{time, sync::Arc};
 use client_api::{error, CallExecutor};
@@ -45,6 +44,43 @@ pub struct ProposerFactory<C, A> where A: txpool::ChainApi {
 	pub transaction_pool: Arc<TransactionPool<A>>,
 }
 
+impl<B, E, Block, RA, A> ProposerFactory<SubstrateClient<B, E, Block, RA>, A>
+where
+	A: txpool::ChainApi<Block=Block> + 'static,
+	B: client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
+	Block: BlockT<Hash=H256>,
+	RA: Send + Sync + 'static,
+	SubstrateClient<B, E, Block, RA>: ProvideRuntimeApi,
+	<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api:
+		BlockBuilderApi<Block, Error = error::Error>,
+{
+	pub fn init_with_now(
+		&mut self,
+		parent_header: &<Block as BlockT>::Header,
+		now: Box<dyn Fn() -> time::Instant + Send + Sync>,
+	) -> Result<Proposer<Block, SubstrateClient<B, E, Block, RA>, A>, error::Error> {
+		let parent_hash = parent_header.hash();
+
+		let id = BlockId::hash(parent_hash);
+
+		info!("Starting consensus session on top of parent {:?}", parent_hash);
+
+		let proposer = Proposer {
+			inner: Arc::new(ProposerInner {
+				client: self.client.clone(),
+				parent_hash,
+				parent_id: id,
+				parent_number: *parent_header.number(),
+				transaction_pool: self.transaction_pool.clone(),
+				now,
+			}),
+		};
+
+		Ok(proposer)
+	}
+}
+
 impl<B, E, Block, RA, A> consensus_common::Environment<Block> for
 ProposerFactory<SubstrateClient<B, E, Block, RA>, A>
 where
@@ -64,24 +100,7 @@ where
 		&mut self,
 		parent_header: &<Block as BlockT>::Header,
 	) -> Result<Self::Proposer, error::Error> {
-		let parent_hash = parent_header.hash();
-
-		let id = BlockId::hash(parent_hash);
-
-		info!("Starting consensus session on top of parent {:?}", parent_hash);
-
-		let proposer = Proposer {
-			inner: Arc::new(ProposerInner {
-				client: self.client.clone(),
-				parent_hash,
-				parent_id: id,
-				parent_number: *parent_header.number(),
-				transaction_pool: self.transaction_pool.clone(),
-				now: time::Instant::now,
-			}),
-		};
-
-		Ok(proposer)
+		self.init_with_now(parent_header, Box::new(time::Instant::now))
 	}
 }
 
@@ -97,7 +116,7 @@ struct ProposerInner<Block: BlockT, C, A: txpool::ChainApi> {
 	parent_id: BlockId<Block>,
 	parent_number: <<Block as BlockT>::Header as HeaderT>::Number,
 	transaction_pool: Arc<TransactionPool<A>>,
-	now: fn() -> time::Instant,
+	now: Box<dyn Fn() -> time::Instant + Send + Sync>,
 }
 
 impl<B, E, Block, RA, A> consensus_common::Proposer<Block> for
@@ -242,8 +261,8 @@ impl<Block, B, E, RA, A> ProposerInner<Block, SubstrateClient<B, E, Block, RA>, 
 mod tests {
 	use super::*;
 
-	use std::cell::RefCell;
-	use consensus_common::{Environment, Proposer};
+	use parking_lot::Mutex;
+	use consensus_common::Proposer;
 	use test_client::{self, runtime::{Extrinsic, Transfer}, AccountKeyring};
 
 	fn extrinsic(nonce: u64) -> Extrinsic {
@@ -271,16 +290,19 @@ mod tests {
 			transaction_pool: txpool.clone(),
 		};
 
-		let mut proposer = proposer_factory.init(
+		let cell = Mutex::new(time::Instant::now());
+		let mut proposer = proposer_factory.init_with_now(
 			&client.header(&BlockId::number(0)).unwrap().unwrap(),
+			Box::new(move || {
+				let mut value = cell.lock();
+				let old = *value;
+				let new = old + time::Duration::from_secs(2);
+				*value = new;
+				old
+			})
 		).unwrap();
 
 		// when
-		let cell = RefCell::new(time::Instant::now());
-		proposer.now = Box::new(move || {
-			let new = *cell.borrow() + time::Duration::from_secs(2);
-			cell.replace(new)
-		});
 		let deadline = time::Duration::from_secs(3);
 		let block = futures::executor::block_on(proposer.propose(Default::default(), Default::default(), deadline))
 			.unwrap();
