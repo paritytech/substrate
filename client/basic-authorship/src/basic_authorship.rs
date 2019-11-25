@@ -121,9 +121,9 @@ where
 		inherent_digests: DigestFor<Block>,
 		max_duration: time::Duration,
 	) -> Self::Create {
-		// leave some time for evaluation and block finalization (33%)
 		let inner = self.inner.clone();
 		tokio_executor::blocking::run(move || {
+			// leave some time for evaluation and block finalization (33%)
 			let deadline = (inner.now)() + max_duration - max_duration / 3;
 			inner.propose_with(inherent_data, inherent_digests, deadline)
 		})
