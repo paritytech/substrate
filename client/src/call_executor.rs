@@ -97,7 +97,7 @@ where
 		)
 		.map(|(result, _, _)| result)?;
 		{
-			let _ = self.backend.get_import_lock().read();
+			let _lock = self.backend.get_import_lock().read();
 			self.backend.destroy_state(state)?;
 		}
 		Ok(return_data.into_encoded())
@@ -183,7 +183,7 @@ where
 			.map(|(result, _, _)| result)
 		}?;
 		{
-			let _ = self.backend.get_import_lock().read();
+			let _lock = self.backend.get_import_lock().read();
 			self.backend.destroy_state(state)?;
 		}
 		Ok(result)
@@ -201,7 +201,7 @@ where
 		);
 		let version = self.executor.runtime_version(&mut ext);
 		{
-			let _ = self.backend.get_import_lock().read();
+			let _lock = self.backend.get_import_lock().read();
 			self.backend.destroy_state(state)?;
 		}
 		version.ok_or(error::Error::VersionInvalid.into())
