@@ -24,7 +24,7 @@ use hash_db::Hasher;
 use codec::{Decode, Encode};
 use primitives::{
 	storage::well_known_keys, NativeOrEncoded, NeverNativeValue,
-	traits::{KeystoreExt, CodeExecutor}, hexdisplay::HexDisplay, hash::H256,
+	traits::CodeExecutor, hexdisplay::HexDisplay, hash::H256,
 };
 use overlayed_changes::OverlayedChangeSet;
 use externalities::Extensions;
@@ -902,7 +902,6 @@ mod tests {
 			&executor,
 			"test",
 			&[],
-			None,
 		).unwrap();
 
 		// check proof locally
@@ -913,7 +912,6 @@ mod tests {
 			&executor,
 			"test",
 			&[],
-			None,
 		).unwrap();
 
 		// check that both results are correct
