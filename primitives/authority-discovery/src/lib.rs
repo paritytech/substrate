@@ -1,0 +1,47 @@
+// Copyright 2019 Parity Technologies (UK) Ltd.
+// This file is part of Substrate.
+
+// Substrate is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// Substrate is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+
+//! Runtime Api to help discover authorities.
+
+#![cfg_attr(not(feature = "std"), no_std)]
+
+use rstd::vec::Vec;
+
+mod app {
+	use app_crypto::{app_crypto, key_types::AUTHORITY_DISCOVERY, sr25519};
+	app_crypto!(sr25519, AUTHORITY_DISCOVERY);
+}
+
+/// An authority discovery authority keypair.
+#[cfg(feature = "std")]
+pub type AuthorityPair = app::Pair;
+
+/// An authority discovery authority identifier.
+pub type AuthorityId = app::Public;
+
+/// An authority discovery authority signature.
+pub type AuthoritySignature = app::Signature;
+
+sr_api::decl_runtime_apis! {
+	/// The authority discovery api.
+	///
+	/// This api is used by the `core/authority-discovery` module to retrieve identifiers
+	/// of the current authority set.
+	pub trait AuthorityDiscoveryApi {
+		/// Retrieve authority identifiers of the current authority set.
+		fn authorities() -> Vec<AuthorityId>;
+	}
+}

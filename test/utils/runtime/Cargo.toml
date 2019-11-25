@@ -1,0 +1,83 @@
+[package]
+name = "substrate-test-runtime"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+build = "build.rs"
+
+[dependencies]
+app-crypto = { package = "substrate-application-crypto", path = "../../../primitives/application-crypto", default-features = false }
+aura-primitives = { package = "substrate-consensus-aura-primitives", path = "../../../primitives/consensus/aura", default-features = false }
+babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../../../primitives/consensus/babe", default-features = false }
+block-builder-api = { package = "substrate-block-builder-runtime-api", path = "../../../primitives/block-builder/runtime-api", default-features = false }
+cfg-if = "0.1.10"
+codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
+executive = { package = "frame-executive", path = "../../../frame/executive", default-features = false }
+inherents = { package = "substrate-inherents", path = "../../../primitives/inherents", default-features = false }
+keyring = { package = "substrate-keyring", path = "../../../primitives/keyring", optional = true }
+log = { version = "0.4.8", optional = true }
+memory-db = { version = "0.15.2", default-features = false }
+offchain-primitives = { package = "substrate-offchain-primitives", path = "../../../primitives/offchain", default-features = false}
+primitives = { package = "substrate-primitives", path = "../../../primitives/core", default-features = false }
+rstd = { package = "sr-std", path = "../../../primitives/sr-std", default-features = false }
+runtime-interface = { package = "substrate-runtime-interface", path = "../../../primitives/runtime-interface", default-features = false}
+runtime_io = { package = "sr-io", path = "../../../primitives/sr-io", default-features = false }
+runtime_support = { package = "frame-support", path = "../../../frame/support", default-features = false }
+runtime_version = { package = "sr-version", path = "../../../primitives/sr-version", default-features = false }
+serde = { version = "1.0.101", optional = true, features = ["derive"] }
+session = { package = "substrate-session", path = "../../../primitives/session", default-features = false }
+sr-api = { path = "../../../primitives/sr-api", default-features = false }
+sr-primitives = {  path = "../../../primitives/sr-primitives", default-features = false }
+pallet-babe = { path = "../../../frame/babe", default-features = false }
+frame-system = { path = "../../../frame/system", default-features = false }
+frame-system-rpc-runtime-api = { path = "../../../frame/system/rpc/runtime-api", default-features = false }
+pallet-timestamp = { path = "../../../frame/timestamp", default-features = false }
+substrate-client = { path = "../../../client", optional = true }
+substrate-trie = { path = "../../../primitives/trie", default-features = false }
+transaction-pool-api = { package = "substrate-transaction-pool-runtime-api", path = "../../../primitives/transaction-pool/runtime-api", default-features = false }
+trie-db = { version = "0.16.0", default-features = false }
+
+[dev-dependencies]
+substrate-executor = { path = "../../../client/executor" }
+substrate-test-runtime-client = { path = "./client" }
+state_machine = { package = "substrate-state-machine", path = "../../../primitives/state-machine" }
+
+[build-dependencies]
+wasm-builder-runner = { package = "substrate-wasm-builder-runner", path = "../../../client/utils/wasm-builder-runner", version = "1.0.4" }
+
+[features]
+default = [
+	"std",
+]
+std = [
+	"app-crypto/std",
+	"aura-primitives/std",
+	"babe-primitives/std",
+	"block-builder-api/std",
+	"codec/std",
+	"executive/std",
+	"inherents/std",
+	"keyring",
+	"log",
+	"memory-db/std",
+	"offchain-primitives/std",
+	"primitives/std",
+	"primitives/std",
+	"rstd/std",
+	"runtime-interface/std",
+	"runtime_io/std",
+	"runtime_support/std",
+	"runtime_version/std",
+	"serde",
+	"session/std",
+	"sr-api/std",
+	"sr-primitives/std",
+	"pallet-babe/std",
+	"frame-system-rpc-runtime-api/std",
+	"frame-system/std",
+	"pallet-timestamp/std",
+	"substrate-client",
+	"substrate-trie/std",
+	"transaction-pool-api/std",
+	"trie-db/std",
+]

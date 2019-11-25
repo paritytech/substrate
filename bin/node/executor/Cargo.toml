@@ -1,0 +1,48 @@
+[package]
+name = "node-executor"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+description = "Substrate node implementation in Rust."
+edition = "2018"
+
+[dependencies]
+trie-root = "0.15.2"
+codec = { package = "parity-scale-codec", version = "1.0.0" }
+runtime_io = { package = "sr-io", path = "../../../primitives/sr-io" }
+state_machine = { package = "substrate-state-machine", path = "../../../primitives/state-machine" }
+substrate-executor = { path = "../../../client/executor" }
+primitives = { package = "substrate-primitives", path = "../../../primitives/core" }
+trie = { package = "substrate-trie", path = "../../../primitives/trie" }
+node-primitives = { path = "../primitives" }
+node-runtime = { path = "../runtime" }
+
+[dev-dependencies]
+node-testing = { path = "../testing" }
+test-client = { package = "substrate-test-client", path = "../../../test/utils/client" }
+sr-primitives = { path = "../../../primitives/sr-primitives" }
+runtime_support = { package = "frame-support", path = "../../../frame/support" }
+balances = { package = "pallet-balances", path = "../../../frame/balances" }
+transaction-payment = { package = "pallet-transaction-payment", path = "../../../frame/transaction-payment" }
+session = { package = "pallet-session", path = "../../../frame/session" }
+system = { package = "frame-system", path = "../../../frame/system" }
+timestamp = { package = "pallet-timestamp", path = "../../../frame/timestamp" }
+treasury = { package = "pallet-treasury", path = "../../../frame/treasury" }
+contracts = { package = "pallet-contracts", path = "../../../frame/contracts" }
+grandpa = { package = "pallet-grandpa", path = "../../../frame/grandpa" }
+indices = { package = "pallet-indices", path = "../../../frame/indices" }
+wabt = "0.9.2"
+criterion = "0.3.0"
+
+[features]
+wasmtime = [
+    "substrate-executor/wasmtime",
+]
+wasmi-errno = [
+	"substrate-executor/wasmi-errno",
+]
+stress-test = []
+
+[[bench]]
+name = "bench"
+harness = false
+

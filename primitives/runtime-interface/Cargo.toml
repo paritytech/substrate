@@ -1,0 +1,41 @@
+[package]
+name = "substrate-runtime-interface"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
+wasm-interface = { package = "substrate-wasm-interface", path = "../wasm-interface", optional = true }
+rstd = { package = "sr-std", path = "../sr-std", default-features = false }
+substrate-runtime-interface-proc-macro = { path = "proc-macro" }
+externalities = { package = "substrate-externalities", path = "../externalities", optional = true }
+codec = { package = "parity-scale-codec", version = "1.0.6", default-features = false }
+environmental = { version = "1.0.2", optional = true }
+static_assertions = "1.0.0"
+primitive-types = { version = "0.6.1", default-features = false }
+
+[dev-dependencies]
+executor = { package = "substrate-executor", path = "../../client/executor" }
+test-wasm = { package = "substrate-runtime-interface-test-wasm", path = "test-wasm" }
+state_machine = { package = "substrate-state-machine", path = "../../primitives/state-machine"  }
+primitives = { package = "substrate-primitives", path = "../core" }
+runtime-io = { package = "sr-io", path = "../sr-io" }
+
+[features]
+default = [ "std" ]
+std = [
+	"wasm-interface",
+	"rstd/std",
+	"codec/std",
+	"externalities",
+	"environmental",
+	"primitive-types/std",
+]
+
+# ATTENTION
+#
+# Only use when you know what you are doing.
+#
+# Disables static assertions in `impls.rs` that checks the word size. To prevent any footgun, the
+# check is changed into a runtime check.
+disable_target_static_assertions = []
