@@ -27,7 +27,7 @@ use client_api::{
 };
 use primitives::{H256, Blake2Hasher, Hasher};
 use sr_primitives::{generic::BlockId, traits::{self, Block as BlockT}, transaction_validity::TransactionValidity};
-use tx_runtime_api::TaggedTransactionQueue;
+use txpool_runtime_api::TaggedTransactionQueue;
 
 use crate::error::{self, Error};
 

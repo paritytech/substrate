@@ -13,9 +13,9 @@ parking_lot = "0.9.0"
 primitives = { package = "substrate-primitives",  path = "../../primitives/core" }
 sr-api = { path = "../../primitives/sr-api" }
 sr-primitives = { path = "../../primitives/sr-primitives" }
-tx-runtime-api = { package = "substrate-transaction-pool-runtime-api", path = "../../primitives/transaction-pool/runtime-api" }
 txpool = { package = "substrate-transaction-graph", path = "./graph" }
 txpool-api = { package = "substrate-transaction-pool-api", path = "../../primitives/transaction-pool" }
+txpool-runtime-api = { package = "substrate-transaction-pool-runtime-api", path = "../../primitives/transaction-pool/runtime-api" }
 client-api = { package = "substrate-client-api", path = "../api" }
 # TODO [ToDr] USe traits instead?
 client = { package = "substrate-client", path = "../" }

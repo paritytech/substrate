@@ -37,7 +37,7 @@ use sr_primitives::{
 	traits::{Block as BlockT, Extrinsic, Header, NumberFor, ProvideRuntimeApi, SimpleArithmetic},
 };
 use txpool_api::TransactionPoolMaintainer;
-use tx_runtime_api::TaggedTransactionQueue;
+use txpool_runtime_api::TaggedTransactionQueue;
 
 use txpool::{self, ChainApi};
 

@@ -786,7 +786,7 @@ ServiceBuilder<
 	<Client<TBackend, TExec, TBl, TRtApi> as ProvideRuntimeApi>::Api:
 		sr_api::Metadata<TBl> +
 		offchain::OffchainWorkerApi<TBl> +
-		tx_pool_api::TaggedTransactionQueue<TBl> +
+		txpool_runtime_api::TaggedTransactionQueue<TBl> +
 		session::SessionKeys<TBl> +
 		sr_api::ApiExt<TBl, Error = client::error::Error>,
 	TBl: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
@@ -1186,7 +1186,7 @@ ServiceBuilder<
 
 			let _ = to_spawn_tx.unbounded_send(Box::new(future));
     }
-    
+
 		// Instrumentation
 		if let Some(tracing_targets) = config.tracing_targets.as_ref() {
 			let subscriber = substrate_tracing::ProfilingSubscriber::new(
