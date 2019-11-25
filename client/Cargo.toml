@@ -19,7 +19,7 @@ header-metadata = { package = "substrate-header-metadata", path = "header-metada
 hex-literal = { version = "0.2.1" }
 inherents = { package = "substrate-inherents", path = "../primitives/inherents" }
 keyring = { package = "substrate-keyring", path = "../primitives/keyring" }
-kvdb = { git = "https://github.com/paritytech/parity-common", rev="b0317f649ab2c665b7987b8475878fc4d2e1f81d" }
+kvdb = { git = "https://github.com/paritytech/parity-common", rev="03a2ba08f47f4af4219280e660a1ea92cb8896bd" }
 log = { version = "0.4.8" }
 parking_lot = { version = "0.9.0" }
 primitives = { package = "substrate-primitives", path = "../primitives/core" }
@@ -36,5 +36,5 @@ env_logger = "0.7.0"
 tempfile = "3.1.0"
 client-db = { package = "substrate-client-db", path = "./db", features = ["kvdb-rocksdb"] }
 test-client = { package = "substrate-test-runtime-client", path = "../test/utils/runtime/client" }
-kvdb-memorydb = { git = "https://github.com/paritytech/parity-common", rev="b0317f649ab2c665b7987b8475878fc4d2e1f81d" }
+kvdb-memorydb = { git = "https://github.com/paritytech/parity-common", rev="03a2ba08f47f4af4219280e660a1ea92cb8896bd" }
 panic-handler = { package = "substrate-panic-handler", path = "../primitives/panic-handler" }
