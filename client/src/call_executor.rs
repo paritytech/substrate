@@ -262,9 +262,6 @@ where
 			&self.executor,
 			method,
 			call_data,
-			// Passing `None` here, since we don't really want to prove anything
-			// about our local keys.
-			None,
 		)
 		.map_err(Into::into)
 	}
