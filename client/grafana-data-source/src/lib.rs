@@ -46,7 +46,7 @@ lazy_static! {
 macro_rules! record_metrics(
 	($($key:expr => $value:expr),*) => {
 		$crate::record_metrics_slice(&[
-			$( ($key, $value), )*
+			$( ($key, $value as f32), )*
 		]);
 	}
 );
