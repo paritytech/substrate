@@ -14,10 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+//! A set of APIs supported by the client along with their primitives.
+
 use std::collections::HashMap;
 use futures::channel::mpsc;
 use primitives::storage::StorageKey;
-use state_machine::ExecutionStrategy;
 use sr_primitives::{
     traits::{Block as BlockT, NumberFor},
     generic::BlockId
@@ -38,33 +39,6 @@ pub type FinalityNotifications<Block> = mpsc::UnboundedReceiver<FinalityNotifica
 ///
 /// This may be used as chain spec extension to filter out known, unwanted forks.
 pub type ForkBlocks<Block> = Option<HashMap<NumberFor<Block>, <Block as BlockT>::Hash>>;
-
-/// Execution strategies settings.
-#[derive(Debug, Clone)]
-pub struct ExecutionStrategies {
-	/// Execution strategy used when syncing.
-	pub syncing: ExecutionStrategy,
-	/// Execution strategy used when importing blocks.
-	pub importing: ExecutionStrategy,
-	/// Execution strategy used when constructing blocks.
-	pub block_construction: ExecutionStrategy,
-	/// Execution strategy used for offchain workers.
-	pub offchain_worker: ExecutionStrategy,
-	/// Execution strategy used in other cases.
-	pub other: ExecutionStrategy,
-}
-
-impl Default for ExecutionStrategies {
-	fn default() -> ExecutionStrategies {
-		ExecutionStrategies {
-			syncing: ExecutionStrategy::NativeElseWasm,
-			importing: ExecutionStrategy::NativeElseWasm,
-			block_construction: ExecutionStrategy::AlwaysWasm,
-			offchain_worker: ExecutionStrategy::NativeWhenPossible,
-			other: ExecutionStrategy::NativeElseWasm,
-		}
-	}
-}
 
 /// Figure out the block type for a given type (for now, just a `Client`).
 pub trait BlockOf {

@@ -24,12 +24,12 @@ use state_machine::{
 	backend::Backend as _, ChangesTrieTransaction, StorageProof,
 };
 use executor::{RuntimeVersion, RuntimeInfo, NativeVersion};
+use externalities::Extensions;
 use hash_db::Hasher;
 use primitives::{
-	offchain::OffchainExt, H256, Blake2Hasher, NativeOrEncoded, NeverNativeValue,
-	traits::{CodeExecutor, KeystoreExt},
+	H256, Blake2Hasher, NativeOrEncoded, NeverNativeValue,
+	traits::CodeExecutor,
 };
-
 use sr_api::{ProofRecorder, InitializeBlock};
 use client_api::{backend, call_executor::CallExecutor};
 
@@ -38,7 +38,6 @@ use client_api::{backend, call_executor::CallExecutor};
 pub struct LocalCallExecutor<B, E> {
 	backend: Arc<B>,
 	executor: E,
-	keystore: Option<primitives::traits::BareCryptoStorePtr>,
 }
 
 impl<B, E> LocalCallExecutor<B, E> {
@@ -46,12 +45,10 @@ impl<B, E> LocalCallExecutor<B, E> {
 	pub fn new(
 		backend: Arc<B>,
 		executor: E,
-		keystore: Option<primitives::traits::BareCryptoStorePtr>,
 	) -> Self {
 		LocalCallExecutor {
 			backend,
 			executor,
-			keystore,
 		}
 	}
 }
@@ -61,7 +58,6 @@ impl<B, E> Clone for LocalCallExecutor<B, E> where E: Clone {
 		LocalCallExecutor {
 			backend: self.backend.clone(),
 			executor: self.executor.clone(),
-			keystore: self.keystore.clone(),
 		}
 	}
 }
@@ -80,19 +76,18 @@ where
 		method: &str,
 		call_data: &[u8],
 		strategy: ExecutionStrategy,
-		side_effects_handler: Option<OffchainExt>,
+		extensions: Option<Extensions>,
 	) -> sp_blockchain::Result<Vec<u8>> {
 		let mut changes = OverlayedChanges::default();
 		let state = self.backend.state_at(*id)?;
 		let return_data = StateMachine::new(
 			&state,
 			self.backend.changes_trie_storage(),
-			side_effects_handler,
 			&mut changes,
 			&self.executor,
 			method,
 			call_data,
-			self.keystore.clone().map(KeystoreExt),
+			extensions.unwrap_or_default(),
 		).execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
 			strategy.get_manager(),
 			false,
@@ -122,9 +117,8 @@ where
 		initialize_block: InitializeBlock<'a, Block>,
 		execution_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
-		side_effects_handler: Option<OffchainExt>,
 		recorder: &Option<ProofRecorder<Block>>,
-		enable_keystore: bool,
+		extensions: Option<Extensions>,
 	) -> Result<NativeOrEncoded<R>, sp_blockchain::Error> where ExecutionManager<EM>: Clone {
 		match initialize_block {
 			InitializeBlock::Do(ref init_block)
@@ -134,12 +128,6 @@ where
 			// We don't need to initialize the runtime at a block.
 			_ => {},
 		}
-
-		let keystore = if enable_keystore {
-			self.keystore.clone().map(KeystoreExt)
-		} else {
-			None
-		};
 
 		let mut state = self.backend.state_at(*at)?;
 
@@ -159,12 +147,11 @@ where
 				StateMachine::new(
 					&backend,
 					self.backend.changes_trie_storage(),
-					side_effects_handler,
 					&mut *changes.borrow_mut(),
 					&self.executor,
 					method,
 					call_data,
-					keystore,
+					extensions.unwrap_or_default(),
 				)
 				.execute_using_consensus_failure_handler(
 					execution_manager,
@@ -177,12 +164,11 @@ where
 			None => StateMachine::new(
 				&state,
 				self.backend.changes_trie_storage(),
-				side_effects_handler,
 				&mut *changes.borrow_mut(),
 				&self.executor,
 				method,
 				call_data,
-				keystore,
+				extensions.unwrap_or_default(),
 			)
 			.execute_using_consensus_failure_handler(
 				execution_manager,
@@ -225,7 +211,7 @@ where
 		call_data: &[u8],
 		manager: ExecutionManager<F>,
 		native_call: Option<NC>,
-		side_effects_handler: Option<OffchainExt>,
+		extensions: Option<Extensions>,
 	) -> sp_blockchain::Result<(
 		NativeOrEncoded<R>,
 		(S::Transaction, <Blake2Hasher as Hasher>::Out),
@@ -234,12 +220,11 @@ where
 		StateMachine::new(
 			state,
 			self.backend.changes_trie_storage(),
-			side_effects_handler,
 			changes,
 			&self.executor,
 			method,
 			call_data,
-			self.keystore.clone().map(KeystoreExt),
+			extensions.unwrap_or_default(),
 		).execute_using_consensus_failure_handler(
 			manager,
 			true,
@@ -266,7 +251,9 @@ where
 			&self.executor,
 			method,
 			call_data,
-			self.keystore.clone().map(KeystoreExt),
+			// Passing `None` here, since we don't really want to prove anything
+			// about our local keys.
+			None,
 		)
 		.map_err(Into::into)
 	}

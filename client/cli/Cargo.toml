@@ -34,6 +34,7 @@ keyring = { package = "substrate-keyring", path = "../../primitives/keyring" }
 names = "0.11.0"
 structopt = "0.3.3"
 rpassword = "4.0.1"
+substrate-tracing = { package = "substrate-tracing", path = "../tracing" }
 
 [dev-dependencies]
 tempdir = "0.3.7"

@@ -18,13 +18,32 @@
 
 use std::{self, error, result};
 use sp_state_machine;
-use sr_primitives::ApplyError;
+use sr_primitives::transaction_validity::TransactionValidityError;
+#[allow(deprecated)]
+use sp_block_builder_runtime_api::compatability_v3;
 use sp_consensus;
 use derive_more::{Display, From};
 use parity_scale_codec::Error as CodecError;
 
 /// Client Result type alias
 pub type Result<T> = result::Result<T, Error>;
+
+
+/// Error when the runtime failed to apply an extrinsic.
+#[derive(Debug, Display)]
+pub enum ApplyExtrinsicFailed {
+	/// The transaction cannot be included into the current block.
+	///
+	/// This doesn't necessary mean that the transaction itself is invalid, but it might be just
+	/// unappliable onto the current block.
+	#[display(fmt = "Extrinsic is not valid: {:?}", _0)]
+	Validity(TransactionValidityError),
+	/// This is used for miscelanious errors that can be represented by string and not handleable.
+	///
+	/// This will become obsolete with complete migration to v4 APIs.
+	#[display(fmt = "Extrinsic failed: {:?}", _0)]
+	Msg(String),
+}
 
 /// Substrate Client error
 #[derive(Debug, Display, From)]
@@ -38,9 +57,9 @@ pub enum Error {
 	/// Unknown block.
 	#[display(fmt = "UnknownBlock: {}", _0)]
 	UnknownBlock(String),
-	/// Applying extrinsic error.
-	#[display(fmt = "Extrinsic error: {:?}", _0)]
-	ApplyExtrinsicFailed(ApplyError),
+	/// The `apply_extrinsic` is not valid due to the given `TransactionValidityError`.
+	#[display(fmt = "{:?}", _0)]
+	ApplyExtrinsicFailed(ApplyExtrinsicFailed),
 	/// Execution error.
 	#[display(fmt = "Execution: {}", _0)]
 	Execution(Box<dyn sp_state_machine::Error>),
@@ -122,6 +141,17 @@ impl From<String> for Error {
 impl<'a> From<&'a str> for Error {
 	fn from(s: &'a str) -> Self {
 		Error::Msg(s.into())
+	}
+}
+
+#[allow(deprecated)]
+impl From<compatability_v3::ApplyError> for ApplyExtrinsicFailed {
+	fn from(e: compatability_v3::ApplyError) -> Self {
+		use self::compatability_v3::ApplyError::*;
+		match e {
+			Validity(tx_validity) => Self::Validity(tx_validity),
+			e => Self::Msg(format!("Apply extrinsic failed: {:?}", e)),
+		}
 	}
 }
 

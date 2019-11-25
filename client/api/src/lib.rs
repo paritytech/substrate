@@ -15,22 +15,22 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Substrate client interfaces.
+#![warn(missing_docs)]
 
-// TODO: make internal
 pub mod backend;
-pub mod light;
-pub mod notifications;
 pub mod call_executor;
 pub mod client;
-pub mod offchain;
+pub mod execution_extensions;
+pub mod light;
+pub mod notifications;
 
 pub use sp_blockchain as blockchain;
 pub use backend::*;
-pub use light::*;
 pub use notifications::*;
 pub use call_executor::*;
-pub use offchain::*;
 pub use client::*;
+pub use light::*;
+pub use notifications::*;
 
 pub use state_machine::{StorageProof, ExecutionStrategy};
 
