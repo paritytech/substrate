@@ -94,12 +94,12 @@ impl<Public, Signature, TAnyAppPublic> Signer<Public, Signature> for TAnyAppPubl
 	}
 }
 
-/// Retrieves a public key type for given `SubmitSignedTransaction`.
+/// Retrieves a public key type for given `SignAndSubmitTransaction`.
 pub type PublicOf<T, Call, X> =
 <
-	<X as SubmitSignedTransaction<T, Call>>::CreateTransaction
+	<X as SignAndSubmitTransaction<T, Call>>::CreateTransaction
 	as
-	CreateTransaction<T, <X as SubmitSignedTransaction<T, Call>>::Extrinsic>
+	CreateTransaction<T, <X as SignAndSubmitTransaction<T, Call>>::Extrinsic>
 >::Public;
 
 /// A trait to sign and submit transactions in offchain calls.
@@ -107,7 +107,7 @@ pub type PublicOf<T, Call, X> =
 /// NOTE: Most likely you should not implement this trait yourself.
 /// There is an implementation for `TransactionSubmitter` type, which
 /// you should use.
-pub trait SubmitSignedTransaction<T: crate::Trait, Call> {
+pub trait SignAndSubmitTransaction<T: crate::Trait, Call> {
 	/// Unchecked extrinsic type.
 	type Extrinsic: ExtrinsicT<Call=Call> + codec::Encode;
 
@@ -168,9 +168,9 @@ pub trait SubmitUnsignedTransaction<T: crate::Trait, Call> {
 /// NOTE: Most likely you should not implement this trait yourself.
 /// There is an implementation for `TransactionSubmitter` type, which
 /// you should use.
-pub trait SigningAccountFinder<T: crate::Trait, Call> {
-	/// A `SubmitSignedTransaction` implementation.
-	type SubmitTransaction: SubmitSignedTransaction<T, Call>;
+pub trait SubmitSignedTransaction<T: crate::Trait, Call> {
+	/// A `SignAndSubmitTransaction` implementation.
+	type SignAndSubmit: SignAndSubmitTransaction<T, Call>;
 
 	/// Find local keys that match given list of accounts.
 	///
@@ -181,7 +181,7 @@ pub trait SigningAccountFinder<T: crate::Trait, Call> {
 	/// Such accounts can later be used to sign a payload or send signed transactions.
 	fn find_local_keys(accounts: impl IntoIterator<Item = T::AccountId>) -> Vec<(
 		T::AccountId,
-		PublicOf<T, Call, Self::SubmitTransaction>,
+		PublicOf<T, Call, Self::SignAndSubmit>,
 	)>;
 
 	/// Create and submit signed transactions from supported accounts.
@@ -201,7 +201,7 @@ pub trait SigningAccountFinder<T: crate::Trait, Call> {
 			let call = call.clone().into();
 			(
 				account,
-				Self::SubmitTransaction::sign_and_submit(call, pub_key)
+				Self::SignAndSubmit::sign_and_submit(call, pub_key)
 			)
 		}).collect()
 	}
@@ -211,9 +211,9 @@ pub trait SigningAccountFinder<T: crate::Trait, Call> {
 /// A default type used to submit transactions to the pool.
 ///
 /// This is passed into each runtime as an opaque associated type that can have either of:
-/// - [`SubmitSignedTransaction`]
+/// - [`SignAndSubmitTransaction`]
 /// - [`SubmitUnsignedTransaction`]
-/// - [`SigningAccountFinder`]
+/// - [`SubmitSignedTransaction`]
 /// and used accordingly.
 ///
 /// This struct should be constructed by providing the following generic parameters:
@@ -237,7 +237,7 @@ impl<S, C, E> Default for TransactionSubmitter<S, C, E> {
 }
 
 /// A blanket implementation to simplify creation of transaction signer & submitter in the runtime.
-impl<T, E, S, C, Call> SubmitSignedTransaction<T, Call> for TransactionSubmitter<S, C, E> where
+impl<T, E, S, C, Call> SignAndSubmitTransaction<T, Call> for TransactionSubmitter<S, C, E> where
 	T: crate::Trait,
 	C: CreateTransaction<T, E>,
 	S: Signer<<C as CreateTransaction<T, E>>::Public, <C as CreateTransaction<T, E>>::Signature>,
@@ -257,35 +257,28 @@ impl<T, E, S, C, Call> SubmitUnsignedTransaction<T, Call> for TransactionSubmitt
 }
 
 /// A blanket implementation to support local keystore of application-crypto types.
-impl<T, C, E, S, Call> SigningAccountFinder<T, Call> for TransactionSubmitter<S, C, E> where
+impl<T, C, E, S, Call> SubmitSignedTransaction<T, Call> for TransactionSubmitter<S, C, E> where
 	T: crate::Trait,
 	C: CreateTransaction<T, E>,
 	E: ExtrinsicT<Call=Call> + codec::Encode,
 	S: Signer<<C as CreateTransaction<T, E>>::Public, <C as CreateTransaction<T, E>>::Signature>,
-	S: RuntimeAppPublic
-		+ AppPublic
-		// TODO remove AppPublic?
-		+ Into<<S as AppPublic>::Generic>
-		+ From<<S as AppPublic>::Generic>,
+	// Make sure we can unwrap the app crypto key.
+	S: RuntimeAppPublic + AppPublic + Into<<S as AppPublic>::Generic>,
+	// Make sure we can convert from wrapped crypto to public key (e.g. `MultiSigner`)
 	S::Generic: Into<PublicOf<T, Call, Self>>,
-	PublicOf<T, Call, Self>: TryInto<<S as AppPublic>::Generic>,
-	<S as RuntimeAppPublic>::Signature: AppSignature,
-	// <C as CreateTransaction<T, E>>::Signature: From<
-	// 	<<S as RuntimeAppPublic>::Signature as app_crypto::AppSignature>::Generic
-	// >,
-	<<TransactionSubmitter<S, C, E> as SubmitSignedTransaction<T, Call>>::CreateTransaction as CreateTransaction<T, <TransactionSubmitter<S, C, E> as SubmitSignedTransaction<T, Call>>::Extrinsic>>::Signature: From<<<S as RuntimeAppPublic>::Signature as app_crypto::AppSignature>::Generic>,
-	Self: SubmitSignedTransaction<T, Call, Signer = S>,
+	// For simplicity we require the same trait to implement `SignAndSubmitTransaction` too.
+	Self: SignAndSubmitTransaction<T, Call, Signer = S, Extrinsic = E, CreateTransaction = C>,
 {
-	type SubmitTransaction = Self;
+	type SignAndSubmit = Self;
 
 	fn find_local_keys(accounts: impl IntoIterator<Item = T::AccountId>) -> Vec<(
 		T::AccountId,
-		PublicOf<T, Call, Self::SubmitTransaction>,
+		PublicOf<T, Call, Self::SignAndSubmit>,
 	)> {
 		// Convert app-specific keys into generic ones.
 		let local_keys = S::all().into_iter().map(|app_key| {
 			app_key.into()
-		}).collect::<Vec<<S as app_crypto::AppPublic>::Generic>>();
+		}).collect::<Vec<<S as AppPublic>::Generic>>();
 
 		// lookup accountids for the pub keys.
 		let mut local_accounts = local_keys.clone().into_iter().map(|pub_key| {

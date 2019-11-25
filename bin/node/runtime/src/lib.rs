@@ -715,20 +715,27 @@ mod tests {
 	use super::*;
 	use system::offchain::SubmitSignedTransaction;
 
-	fn is_submit_signed_transaction<T>(_arg: T) where
-		T: SubmitSignedTransaction<
-			Runtime,
-			Call,
-			Extrinsic=UncheckedExtrinsic,
-			CreateTransaction=Runtime,
-			Signer=ImOnlineId,
-		>,
-	{}
-
 	#[test]
 	fn validate_bounds() {
-		let x = SubmitTransaction::default();
-		is_submit_signed_transaction(x);
+		fn is_submit_signed_transaction<T>() where
+			T: SubmitSignedTransaction<
+				Runtime,
+				Call,
+			>,
+		{}
+
+		fn is_sign_and_submit_transaction<T>(_arg: T) where
+			T: SignAndSubmitTransaction<
+				Runtime,
+				Call,
+				Extrinsic=UncheckedExtrinsic,
+				CreateTransaction=Runtime,
+				Signer=ImOnlineId,
+			>,
+		{}
+
+		is_submit_signed_transaction::<SubmitTransaction>();
+		is_sign_and_submit_transaction::<SubmitTransaction>();
 	}
 
 	#[test]
