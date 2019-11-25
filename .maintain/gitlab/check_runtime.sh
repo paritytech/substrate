@@ -1,7 +1,7 @@
 #!/bin/sh
 #
 #
-# check for any changes in the node/src/runtime, palette/ and primitives/sr_* trees. if
+# check for any changes in the node/src/runtime, frame/ and primitives/sr_* trees. if
 # there are any changes found, it should mark the PR breaksconsensus and
 # "auto-fail" the PR if there isn't a change in the runtime/src/lib.rs file 
 # that alters the version.
@@ -29,7 +29,7 @@ github_label () {
 
 # check if the wasm sources changed
 if ! git diff --name-only origin/master...${CI_COMMIT_SHA} \
-	| grep -q -e '^bin/node/src/runtime' -e '^palette/' -e '^primitives/sr-' | grep -v -e '^primitives/sr-arithmetic/fuzzer'
+	| grep -q -e '^bin/node/src/runtime' -e '^frame/' -e '^primitives/sr-' | grep -v -e '^primitives/sr-arithmetic/fuzzer'
 then
 	cat <<-EOT
 	
@@ -99,7 +99,7 @@ else
 
 	source file directories:
 	- bin/node/src/runtime
-	- palette
+	- frame
 	- primitives/sr-*
 
 	versions file: ${VERSIONS_FILE}

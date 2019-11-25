@@ -130,3 +130,30 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 		self.pool.on_broadcasted(propagations)
 	}
 }
+
+impl<PoolApi, Block> sr_primitives::offchain::TransactionPool<Block> for BasicPool<PoolApi, Block>
+	where
+		Block: BlockT,
+		PoolApi: 'static + txpool::ChainApi<Block=Block, Hash=Block::Hash, Error=error::Error>,
+{
+	fn submit_at(
+		&self,
+		at: &BlockId<Block>,
+		extrinsic: <Block as sr_primitives::traits::Block>::Extrinsic,
+	) -> Result<(), ()> {
+		log::debug!(
+			target: "txpool",
+			"(offchain call) Submitting a transaction to the pool: {:?}",
+			extrinsic
+		);
+
+		let result = futures::executor::block_on(self.submit_one(&at, extrinsic));
+
+		result.map(|_| ())
+			.map_err(|e| log::warn!(
+				target: "txpool",
+				"(offchain call) Error submitting a transaction to the pool: {:?}",
+				e
+			))
+	}
+}

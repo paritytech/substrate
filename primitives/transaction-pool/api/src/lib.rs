@@ -275,3 +275,32 @@ impl<Pool, Maintainer> TransactionPoolMaintainer for MaintainableTransactionPool
 		self.maintainer.maintain(id, retracted)
 	}
 }
+
+impl<Pool, Maintainer> sr_primitives::offchain::TransactionPool<Pool::Block>
+	for
+		MaintainableTransactionPool<Pool, Maintainer>
+	where
+		Pool: TransactionPool,
+		Maintainer: Send + Sync,
+{
+	fn submit_at(
+		&self,
+		at: &BlockId<Pool::Block>,
+		extrinsic: <Pool::Block as sr_primitives::traits::Block>::Extrinsic,
+	) -> Result<(), ()> {
+		log::debug!(
+			target: "txpool",
+			"(offchain call) Submitting a transaction to the pool: {:?}",
+			extrinsic
+		);
+
+		let result = futures::executor::block_on(self.submit_one(&at, extrinsic));
+
+		result.map(|_| ())
+			.map_err(|e| log::warn!(
+				target: "txpool",
+				"(offchain call) Error submitting a transaction to the pool: {:?}",
+				e
+			))
+	}
+}

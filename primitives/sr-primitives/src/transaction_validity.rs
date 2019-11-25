@@ -146,18 +146,6 @@ impl From<UnknownTransaction> for TransactionValidityError {
 	}
 }
 
-impl From<InvalidTransaction> for crate::ApplyError {
-	fn from(invalid: InvalidTransaction) -> crate::ApplyError {
-		TransactionValidityError::from(invalid).into()
-	}
-}
-
-impl From<UnknownTransaction> for crate::ApplyError {
-	fn from(unknown: UnknownTransaction) -> crate::ApplyError {
-		TransactionValidityError::from(unknown).into()
-	}
-}
-
 /// Information on a transaction's validity and, if valid, on how it relates to other transactions.
 pub type TransactionValidity = Result<ValidTransaction, TransactionValidityError>;
 

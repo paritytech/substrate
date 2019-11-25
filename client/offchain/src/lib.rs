@@ -41,14 +41,10 @@ use sr_api::ApiExt;
 use futures::future::Future;
 use log::{debug, warn};
 use network::NetworkStateInfo;
-use primitives::{offchain, ExecutionContext};
+use primitives::{offchain::{self, OffchainStorage}, ExecutionContext};
 use sr_primitives::{generic::BlockId, traits::{self, ProvideRuntimeApi}};
-use txpool_api::TransactionPool;
-use client_api::OffchainStorage;
 
 mod api;
-
-pub mod testing;
 
 pub use offchain_primitives::{OffchainWorkerApi, STORAGE_PREFIX};
 
@@ -94,13 +90,12 @@ impl<Client, Storage, Block> OffchainWorkers<
 {
 	/// Start the offchain workers after given block.
 	#[must_use]
-	pub fn on_block_imported<P>(
+	pub fn on_block_imported(
 		&self,
 		number: &<Block::Header as traits::Header>::Number,
-		pool: &Arc<P>,
 		network_state: Arc<dyn NetworkStateInfo + Send + Sync>,
 		is_validator: bool,
-	) -> impl Future<Output = ()> where P: TransactionPool<Block=Block> + 'static {
+	) -> impl Future<Output = ()> {
 		let runtime = self.client.runtime_api();
 		let at = BlockId::number(*number);
 		let has_api = runtime.has_api::<dyn OffchainWorkerApi<Block, Error = ()>>(&at);
@@ -108,9 +103,7 @@ impl<Client, Storage, Block> OffchainWorkers<
 
 		if has_api.unwrap_or(false) {
 			let (api, runner) = api::AsyncApi::new(
-				pool.clone(),
 				self.db.clone(),
-				at.clone(),
 				network_state.clone(),
 				is_validator,
 			);
@@ -152,9 +145,10 @@ impl<Client, Storage, Block> OffchainWorkers<
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use std::sync::Arc;
 	use network::{Multiaddr, PeerId};
 	use txpool::{BasicPool, FullChainApi};
-	use txpool_api::InPoolTransaction;
+	use txpool_api::{TransactionPool, InPoolTransaction};
 
 	struct MockNetworkStateInfo();
 
@@ -174,12 +168,14 @@ mod tests {
 		let _ = env_logger::try_init();
 		let client = Arc::new(test_client::new());
 		let pool = Arc::new(BasicPool::new(Default::default(), FullChainApi::new(client.clone())));
+		client.execution_extensions()
+			.register_transaction_pool(Arc::downgrade(&pool.clone()) as _);
 		let db = client_db::offchain::LocalStorage::new_test();
 		let network_state = Arc::new(MockNetworkStateInfo());
 
 		// when
 		let offchain = OffchainWorkers::new(client, db);
-		futures::executor::block_on(offchain.on_block_imported(&0u64, &pool, network_state, false));
+		futures::executor::block_on(offchain.on_block_imported(&0u64, network_state, false));
 
 		// then
 		assert_eq!(pool.status().ready, 1);

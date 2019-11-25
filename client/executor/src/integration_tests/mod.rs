@@ -19,12 +19,12 @@ mod sandbox;
 use codec::{Encode, Decode};
 use hex_literal::hex;
 use primitives::{
-	Blake2Hasher, blake2_128, blake2_256, ed25519, sr25519, map, Pair, offchain::OffchainExt,
+	Blake2Hasher, blake2_128, blake2_256, ed25519, sr25519, map, Pair,
+	offchain::{OffchainExt, testing},
 	traits::Externalities,
 };
 use runtime_test::WASM_BINARY;
 use state_machine::TestExternalities as CoreTestExternalities;
-use substrate_offchain::testing;
 use test_case::test_case;
 use trie::{TrieConfiguration, trie_types::Layout};
 
@@ -401,7 +401,7 @@ fn ordered_trie_root_should_work(wasm_method: WasmExecutionMethod) {
 #[test_case(WasmExecutionMethod::Interpreted)]
 #[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
 fn offchain_local_storage_should_work(wasm_method: WasmExecutionMethod) {
-	use client_api::OffchainStorage;
+	use primitives::offchain::OffchainStorage;
 
 	let mut ext = TestExternalities::default();
 	let (offchain, state) = testing::TestOffchainExt::new();

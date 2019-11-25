@@ -29,10 +29,10 @@ use codec::{Decode, Encode, IoReader};
 use consensus_common::import_queue::ImportQueue;
 use futures::{prelude::*, sync::mpsc};
 use futures03::{
-	compat::Compat,
-	TryFutureExt,
-	FutureExt,
-	StreamExt, TryStreamExt,
+	compat::{Compat, Future01CompatExt},
+	FutureExt as _, TryFutureExt as _,
+	StreamExt as _, TryStreamExt as _,
+	future::{select, Either}
 };
 use keystore::{Store as Keystore};
 use log::{info, warn, error};
@@ -55,6 +55,7 @@ use std::{
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use tel::{telemetry, SUBSTRATE_INFO};
 use txpool_api::{TransactionPool, TransactionPoolMaintainer};
+use grafana_data_source::{self, record_metrics};
 
 /// Aggregator for the components required to build a service.
 ///
@@ -195,13 +196,17 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 				},
 			};
 
+			let extensions = client_api::execution_extensions::ExecutionExtensions::new(
+				config.execution_strategies.clone(),
+				Some(keystore.clone()),
+			);
+
 			client_db::new_client(
 				db_config,
 				executor,
 				&config.chain_spec,
 				fork_blocks,
-				config.execution_strategies.clone(),
-				Some(keystore.clone()),
+				extensions,
 			)?
 		};
 
@@ -796,7 +801,8 @@ ServiceBuilder<
 	TNetP: NetworkSpecialization<TBl>,
 	TExPool: 'static
 		+ TransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash>
-		+ TransactionPoolMaintainer<Block=TBl, Hash = <TBl as BlockT>::Hash>,
+		+ TransactionPoolMaintainer<Block=TBl, Hash = <TBl as BlockT>::Hash>
+		+ sr_primitives::offchain::TransactionPool<TBl>,
 	TRpc: rpc::RpcExtension<rpc::Metadata> + Clone,
 {
 	/// Builds the service.
@@ -854,6 +860,10 @@ ServiceBuilder<
 			"height" => chain_info.best_number.saturated_into::<u64>(),
 			"best" => ?chain_info.best_hash
 		);
+
+		// make transaction pool available for off-chain runtime calls.
+		client.execution_extensions()
+			.register_transaction_pool(Arc::downgrade(&transaction_pool) as _);
 
 		let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {
 			imports_external_transactions: !config.roles.is_light(),
@@ -932,8 +942,8 @@ ServiceBuilder<
 					}
 
 					let offchain = offchain.as_ref().and_then(|o| o.upgrade());
-					if let (Some(txpool), Some(offchain)) = (txpool, offchain) {
-						let future = offchain.on_block_imported(&number, &txpool, network_state_info.clone(), is_validator)
+					if let Some(offchain) = offchain {
+						let future = offchain.on_block_imported(&number, network_state_info.clone(), is_validator)
 							.map(|()| Ok(()));
 						let _ = to_spawn_tx_.unbounded_send(Box::new(Compat::new(future)));
 					}
@@ -1013,6 +1023,17 @@ ServiceBuilder<
 				"bandwidth_download" => bandwidth_download,
 				"bandwidth_upload" => bandwidth_upload,
 				"used_state_cache_size" => used_state_cache_size,
+			);
+			record_metrics!(
+				"peers" => num_peers,
+				"height" => best_number,
+				"txcount" => txpool_status.ready,
+				"cpu" => cpu_usage,
+				"memory" => memory,
+				"finalized_height" => finalized_number,
+				"bandwidth_download" => bandwidth_download,
+				"bandwidth_upload" => bandwidth_upload,
+				"used_state_cache_size" => used_state_cache_size
 			);
 
 			Ok(())
@@ -1153,6 +1174,19 @@ ServiceBuilder<
 			telemetry
 		});
 
+		// Grafana data source
+		if let Some(port) = config.grafana_port {
+			let future = select(
+				grafana_data_source::run_server(port).boxed(),
+				exit.clone().compat()
+			).map(|either| match either {
+				Either::Left((result, _)) => result.map_err(|_| ()),
+				Either::Right(_) => Ok(())
+			}).compat();
+
+			let _ = to_spawn_tx.unbounded_send(Box::new(future));
+    }
+    
 		// Instrumentation
 		if let Some(tracing_targets) = config.tracing_targets.as_ref() {
 			let subscriber = substrate_tracing::ProfilingSubscriber::new(

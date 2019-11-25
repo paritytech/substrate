@@ -41,13 +41,14 @@ pub fn create_full<C, P, M>(client: Arc<C>, pool: Arc<P>) -> jsonrpc_core::IoHan
 	C: ProvideRuntimeApi,
 	C: client::blockchain::HeaderBackend<Block>,
 	C: Send + Sync + 'static,
-	C::Api: palette_system_rpc::AccountNonceApi<Block, AccountId, Index>,
+	C::Api: frame_system_rpc::AccountNonceApi<Block, AccountId, Index>,
 	C::Api: pallet_contracts_rpc::ContractsRuntimeApi<Block, AccountId, Balance>,
 	C::Api: pallet_transaction_payment_rpc::TransactionPaymentRuntimeApi<Block, Balance, UncheckedExtrinsic>,
 	P: TransactionPool + 'static,
 	M: jsonrpc_core::Metadata + Default,
 {
-	use palette_system_rpc::{FullSystem, SystemApi};
+	use frame_system_rpc::{FullSystem, SystemApi};
+
 	use pallet_contracts_rpc::{Contracts, ContractsApi};
 	use pallet_transaction_payment_rpc::{TransactionPayment, TransactionPaymentApi};
 
@@ -75,12 +76,12 @@ pub fn create_light<C, P, M, F>(
 		C: ProvideRuntimeApi,
 		C: client::blockchain::HeaderBackend<Block>,
 		C: Send + Sync + 'static,
-		C::Api: palette_system_rpc::AccountNonceApi<Block, AccountId, Index>,
+		C::Api: frame_system_rpc::AccountNonceApi<Block, AccountId, Index>,
 		P: TransactionPool + 'static,
 		M: jsonrpc_core::Metadata + Default,
 		F: client::light::fetcher::Fetcher<Block> + 'static,
 {
-	use palette_system_rpc::{LightSystem, SystemApi};
+	use frame_system_rpc::{LightSystem, SystemApi};
 
 	let mut io = jsonrpc_core::IoHandler::default();
 	io.extend_with(

@@ -26,7 +26,7 @@ mod execution_strategy;
 pub mod error;
 pub mod informant;
 
-use client_api::ExecutionStrategies;
+use client_api::execution_extensions::ExecutionStrategies;
 use service::{
 	config::{Configuration, DatabaseConfig},
 	ServiceBuilderExport, ServiceBuilderImport, ServiceBuilderRevert,
@@ -818,9 +818,13 @@ where
 
 	let rpc_interface: &str = if cli.rpc_external { "0.0.0.0" } else { "127.0.0.1" };
 	let ws_interface: &str = if cli.ws_external { "0.0.0.0" } else { "127.0.0.1" };
+	let grafana_interface: &str = if cli.grafana_external { "0.0.0.0" } else { "127.0.0.1" };
 
 	config.rpc_http = Some(parse_address(&format!("{}:{}", rpc_interface, 9933), cli.rpc_port)?);
 	config.rpc_ws = Some(parse_address(&format!("{}:{}", ws_interface, 9944), cli.ws_port)?);
+	config.grafana_port = Some(
+		parse_address(&format!("{}:{}", grafana_interface, 9955), cli.grafana_port)?
+	);
 
 	config.rpc_ws_max_connections = cli.ws_max_connections;
 	config.rpc_cors = cli.rpc_cors.unwrap_or_else(|| if is_dev {
