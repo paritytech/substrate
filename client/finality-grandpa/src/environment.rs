@@ -865,6 +865,7 @@ where
 					historical_votes.seen().iter().skip(n_existing_votes).cloned()
 				);
 				already_completed.state = state;
+				crate::aux_schema::write_concluded_round(&*self.client, &already_completed);
 			}
 
 			let set_state = VoterSetState::<Block>::Live {
