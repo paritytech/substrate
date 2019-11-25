@@ -788,7 +788,7 @@ pub struct Backend<Block: BlockT> {
 	blockchain: BlockchainDb<Block>,
 	canonicalization_delay: u64,
 	shared_cache: SharedCache<Block, Blake2Hasher>,
-	import_lock: Mutex<()>,
+	import_lock: RwLock<()>,
 	is_archive: bool,
 }
 
@@ -1251,7 +1251,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 				operation.child_storage_updates,
 				Some(hash),
 				Some(number),
-				|| is_best,
+				is_best,
 			);
 		}
 
@@ -1531,13 +1531,13 @@ impl<Block> client_api::backend::Backend<Block, Blake2Hasher> for Backend<Block>
 
 	fn destroy_state(&self, state: Self::State) -> ClientResult<()> {
 		if let Some(hash) = state.cache.parent_hash.clone() {
-			let is_best = || self.blockchain.meta.read().best_hash == hash;
+			let is_best = self.blockchain.meta.read().best_hash == hash;
 			state.release().sync_cache(&[], &[], vec![], vec![], None, None, is_best);
 		}
 		Ok(())
 	}
 
-	fn get_import_lock(&self) -> &Mutex<()> {
+	fn get_import_lock(&self) -> &RwLock<()> {
 		&self.import_lock
 	}
 }
