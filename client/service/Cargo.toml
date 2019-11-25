@@ -57,9 +57,6 @@ tracing = "0.1.10"
 
 [dev-dependencies]
 substrate-test-runtime-client = { path = "../../test/utils/runtime/client" }
-node-executor = { path = "../../bin/node/executor" }
-node-primitives = { path = "../../bin/node/primitives" }
-node-runtime = { path = "../../bin/node/runtime" }
 babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../../primitives/consensus/babe" }
 grandpa = { package = "substrate-finality-grandpa", path = "../finality-grandpa" }
 grandpa-primitives = { package = "substrate-finality-grandpa-primitives", path = "../../primitives/finality-grandpa" }
