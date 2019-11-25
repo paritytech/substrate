@@ -26,7 +26,7 @@ substrate-executor = { path = "../../client/executor" }
 substrate-service = { path = "../../client/service" }
 inherents = { package = "substrate-inherents", path = "../../primitives/inherents" }
 txpool = { package = "substrate-transaction-pool", path = "../../client/transaction-pool" }
-txpool-api = { package = "substrate-transaction-pool-api", path = "../../primitives/transaction-pool/api" }
+txpool-api = { package = "substrate-transaction-pool-api", path = "../../primitives/transaction-pool" }
 network = { package = "substrate-network", path = "../../client/network" }
 aura = { package = "substrate-consensus-aura", path = "../../client/consensus/aura" }
 aura-primitives = { package = "substrate-consensus-aura-primitives", path = "../../primitives/consensus/aura" }

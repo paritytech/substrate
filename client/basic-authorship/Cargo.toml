@@ -15,7 +15,7 @@ client-api = { package = "substrate-client-api", path = "../api" }
 consensus_common = { package = "substrate-consensus-common", path = "../../primitives/consensus/common" }
 inherents = { package = "substrate-inherents", path = "../../primitives/inherents" }
 substrate-telemetry = { path = "../telemetry" }
-txpool-api = { package = "substrate-transaction-pool-api", path = "../../primitives/transaction-pool/api" }
+txpool-api = { package = "substrate-transaction-pool-api", path = "../../primitives/transaction-pool" }
 block-builder = { package = "substrate-block-builder", path = "../block-builder" }
 
 [dev-dependencies]

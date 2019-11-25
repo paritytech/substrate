@@ -23,7 +23,7 @@ rpc-primitives = { package = "substrate-rpc-primitives", path = "../../primitive
 state_machine = { package = "substrate-state-machine", path = "../../primitives/state-machine" }
 substrate-executor = { path = "../executor" }
 substrate-keystore = { path = "../keystore" }
-txpool-api = { package = "substrate-transaction-pool-api", path = "../../primitives/transaction-pool/api" }
+txpool-api = { package = "substrate-transaction-pool-api", path = "../../primitives/transaction-pool" }
 hash-db = { version = "0.15.2", default-features = false }
 parking_lot = { version = "0.9.0" }
 

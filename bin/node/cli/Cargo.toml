@@ -48,7 +48,7 @@ client = { package = "substrate-client", path = "../../../client/" }
 inherents = { package = "substrate-inherents", path = "../../../primitives/inherents" }
 chain-spec = { package = "substrate-chain-spec", path = "../../../client/chain-spec" }
 txpool = { package = "substrate-transaction-pool", path = "../../../client/transaction-pool" }
-txpool-api = { package = "substrate-transaction-pool-api", path = "../../../primitives/transaction-pool/api" }
+txpool-api = { package = "substrate-transaction-pool-api", path = "../../../primitives/transaction-pool" }
 network = { package = "substrate-network", path = "../../../client/network" }
 babe = { package = "substrate-consensus-babe", path = "../../../client/consensus/babe" }
 grandpa = { package = "substrate-finality-grandpa", path = "../../../client/finality-grandpa" }
