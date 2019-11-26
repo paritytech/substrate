@@ -733,7 +733,7 @@ where
 
 	config.database = DatabaseConfig::Path {
 		path: config.in_chain_config_dir(DEFAULT_DB_CONFIG_PATH).expect("We provided a base_path."),
-		cache_size: cli.database_cache_size,
+		cache_size: Some(cli.database_cache_size),
 	};
 	config.state_cache_size = cli.state_cache_size;
 
