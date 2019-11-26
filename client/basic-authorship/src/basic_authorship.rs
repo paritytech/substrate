@@ -92,15 +92,15 @@ where
 	RA: Send + Sync + 'static,
 	SubstrateClient<B, E, Block, RA>: ProvideRuntimeApi,
 	<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api:
-		BlockBuilderApi<Block, Error = error::Error>,
+		BlockBuilderApi<Block, Error = sp_blockchain::Error>,
 {
 	type Proposer = Proposer<Block, SubstrateClient<B, E, Block, RA>, A>;
-	type Error = error::Error;
+	type Error = sp_blockchain::Error;
 
 	fn init(
 		&mut self,
 		parent_header: &<Block as BlockT>::Header,
-	) -> Result<Self::Proposer, error::Error> {
+	) -> Result<Self::Proposer, sp_blockchain::Error> {
 		self.init_with_now(parent_header, Box::new(time::Instant::now))
 	}
 }
