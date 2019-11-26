@@ -33,9 +33,11 @@ pub enum Error {
 	Consensus(consensus::Error),
 	/// Backend error.
 	#[display(fmt = "Backend error: {}", _0)]
+	#[from(ignore)]
 	Backend(String),
 	/// Unknown block.
 	#[display(fmt = "UnknownBlock: {}", _0)]
+	#[from(ignore)]
 	UnknownBlock(String),
 	/// The `apply_extrinsic` is not valid due to the given `TransactionValidityError`.
 	#[display(fmt = "Extrinsic is not valid: {:?}", _0)]
@@ -60,6 +62,7 @@ pub enum Error {
 	JustificationDecode,
 	/// Justification for header is correctly encoded, but invalid.
 	#[display(fmt = "bad justification for header: {}", _0)]
+	#[from(ignore)]
 	BadJustification(String),
 	/// Not available on light client.
 	#[display(fmt = "This method is not currently available when running in light client mode")]
@@ -78,15 +81,18 @@ pub enum Error {
 	CallResultDecode(&'static str, codec::Error),
 	/// Error converting a parameter between runtime and node.
 	#[display(fmt = "Error converting `{}` between runtime and node", _0)]
+	#[from(ignore)]
 	RuntimeParamConversion(String),
 	/// Changes tries are not supported.
 	#[display(fmt = "Changes tries are not supported by the runtime")]
 	ChangesTriesNotSupported,
 	/// Key changes query has failed.
 	#[display(fmt = "Failed to check changes proof: {}", _0)]
+	#[from(ignore)]
 	ChangesTrieAccessFailed(String),
 	/// Last finalized block not parent of current.
 	#[display(fmt = "Did not finalize blocks in sequential order.")]
+	#[from(ignore)]
 	NonSequentialFinalization(String),
 	/// Safety violation: new best block not descendent of last finalized.
 	#[display(fmt = "Potential long-range attack: block not in finalized chain.")]
@@ -99,6 +105,7 @@ pub enum Error {
 	InvalidStateRoot,
 	/// A convenience variant for String
 	#[display(fmt = "{}", _0)]
+	#[from(ignore)]
 	Msg(String),
 }
 

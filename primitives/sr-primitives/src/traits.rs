@@ -1026,7 +1026,14 @@ pub trait OpaqueKeys: Clone {
 }
 
 /// Input that adds infinite number of zero after wrapped input.
-struct TrailingZeroInput<'a>(&'a [u8]);
+pub struct TrailingZeroInput<'a>(&'a [u8]);
+
+impl<'a> TrailingZeroInput<'a> {
+	/// Create a new instance from the given byte array.
+	pub fn new(data: &'a [u8]) -> Self {
+		Self(data)
+	}
+}
 
 impl<'a> codec::Input for TrailingZeroInput<'a> {
 	fn remaining_len(&mut self) -> Result<Option<usize>, codec::Error> {
