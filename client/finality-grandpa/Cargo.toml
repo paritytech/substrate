@@ -27,10 +27,10 @@ inherents = { package = "substrate-inherents", path = "../../primitives/inherent
 network = { package = "substrate-network", path = "../network" }
 sp-finality-tracker = { path = "../../primitives/finality-tracker" }
 fg_primitives = { package = "substrate-finality-grandpa-primitives", path = "../../primitives/finality-grandpa" }
-grandpa = { package = "finality-grandpa", version = "0.10.0", features = ["derive-codec"] }
+grandpa = { package = "finality-grandpa", version = "0.10.1", features = ["derive-codec"] }
 
 [dev-dependencies]
-grandpa = { package = "finality-grandpa", version = "0.10.0", features = ["derive-codec", "test-helpers"] }
+grandpa = { package = "finality-grandpa", version = "0.10.1", features = ["derive-codec", "test-helpers"] }
 network = { package = "substrate-network", path = "../network", features = ["test-helpers"] }
 keyring = { package = "substrate-keyring", path = "../../primitives/keyring" }
 test-client = { package = "substrate-test-runtime-client", path = "../../test/utils/runtime/client"}
