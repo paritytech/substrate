@@ -17,7 +17,7 @@
 //! Basic implementation for Externalities.
 
 use std::{collections::HashMap, any::{TypeId, Any}, iter::FromIterator};
-use crate::backend::{Backend, InMemory};
+use crate::{backend::Backend, InMemoryBackend};
 use hash_db::Hasher;
 use trie::{TrieConfiguration, default_child_trie_root};
 use trie::trie_types::Layout;
@@ -222,7 +222,8 @@ impl Externalities for BasicExternalities {
 		if let Some(child) = self.children.get(storage_key.as_ref()) {
 			let delta = child.clone().into_iter().map(|(k, v)| (k, Some(v)));
 
-			InMemory::<Blake2Hasher>::default().child_storage_root(storage_key.as_ref(), delta).0
+			InMemoryBackend::<Blake2Hasher>::default()
+				.child_storage_root(storage_key.as_ref(), delta).0
 		} else {
 			default_child_trie_root::<Layout<Blake2Hasher>>(storage_key.as_ref())
 		}

@@ -876,7 +876,7 @@ impl<Block: BlockT> Backend<Block> {
 		})
 	}
 
-	/// Returns in-memory blockchain that contains the same set of blocks that the self.
+	/// Returns in-memory blockchain that contains the same set of blocks as self.
 	#[cfg(feature = "test-helpers")]
 	pub fn as_in_memory(&self) -> InMemoryBackend<Block> {
 		use client_api::backend::{Backend as ClientBackend, BlockImportOperation};
@@ -914,9 +914,7 @@ impl<Block: BlockT> Backend<Block> {
 			};
 			let mut op = inmem.begin_operation().unwrap();
 			op.set_block_data(header, body, justification, new_block_state).unwrap();
-			op.update_db_storage(
-				state.into_iter().map(|(k, v)| (None, k, Some(v))).into(),
-			).unwrap();
+			op.update_db_storage(state.into_iter().map(|(k, v)| (None, k, Some(v))).collect::<Vec<_>>().into()).unwrap();
 			inmem.commit_operation(op).unwrap();
 		}
 

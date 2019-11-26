@@ -170,7 +170,7 @@ where
 					call_data,
 					keystore,
 				)
-				.with_storage_transaction_cache(storage_transaction_cache.as_mut().map(|c| &mut **c))
+				// .with_storage_transaction_cache(storage_transaction_cache.as_mut().map(|c| &mut **c))
 				.execute_using_consensus_failure_handler(execution_manager, native_call)
 			}
 			None => StateMachine::new(

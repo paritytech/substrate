@@ -23,8 +23,7 @@ use parking_lot::{RwLock, Mutex};
 
 use sr_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
 use state_machine::{
-	Backend as StateBackend, TrieBackend, backend::InMemory as InMemoryState,
-	ChangesTrieTransaction, backend::InMemoryTransaction,
+	Backend as StateBackend, TrieBackend, InMemoryBackend, ChangesTrieTransaction,
 };
 use sr_primitives::traits::{Block as BlockT, NumberFor, Zero, Header, HasherFor};
 use crate::in_mem::{self, check_genesis_storage};
@@ -51,7 +50,7 @@ const IN_MEMORY_EXPECT_PROOF: &str = "InMemory state backend has Void error type
 /// Light client backend.
 pub struct Backend<S, H: Hasher> {
 	blockchain: Arc<Blockchain<S>>,
-	genesis_state: RwLock<Option<InMemoryState<H>>>,
+	genesis_state: RwLock<Option<InMemoryBackend<H>>>,
 	import_lock: Mutex<()>,
 }
 
@@ -63,14 +62,14 @@ pub struct ImportOperation<Block: BlockT, S> {
 	aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	finalized_blocks: Vec<BlockId<Block>>,
 	set_head: Option<BlockId<Block>>,
-	storage_update: Option<InMemoryState<HasherFor<Block>>>,
+	storage_update: Option<InMemoryBackend<HasherFor<Block>>>,
 	_phantom: std::marker::PhantomData<S>,
 }
 
 /// Either in-memory genesis state, or locally-unavailable state.
 pub enum GenesisOrUnavailableState<H: Hasher> {
 	/// Genesis state - storage values are stored in-memory.
-	Genesis(InMemoryState<H>),
+	Genesis(InMemoryBackend<H>),
 	/// We know that state exists, but all calls will fail with error, because it
 	/// isn't locally available.
 	Unavailable,
@@ -313,7 +312,7 @@ impl<S, Block> BlockImportOperation<Block> for ImportOperation<Block, S>
 			storage.insert(Some(child_key), child_storage);
 		}
 
-		let storage_update = InMemoryState::from(storage);
+		let storage_update = InMemoryBackend::from(storage);
 		let (storage_root, _) = storage_update.full_storage_root(std::iter::empty(), child_delta);
 		self.storage_update = Some(storage_update);
 
@@ -361,8 +360,8 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 		H::Out: Ord,
 {
 	type Error = ClientError;
-	type Transaction = InMemoryTransaction<H>;
-	type TrieBackendStorage = InMemoryTransaction<H>;
+	type Transaction = <InMemoryBackend<H> as StateBackend<H>>::Transaction;
+	type TrieBackendStorage = <InMemoryBackend<H> as StateBackend<H>>::TrieBackendStorage;
 
 	fn storage(&self, key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
 		match *self {

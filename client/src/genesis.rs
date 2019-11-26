@@ -46,8 +46,8 @@ mod tests {
 	use executor::native_executor_instance;
 	use state_machine::{
 		StateMachine, OverlayedChanges, ExecutionStrategy, InMemoryChangesTrieStorage,
+		InMemoryBackend,
 	};
-	use state_machine::backend::InMemory;
 	use test_client::{
 		runtime::genesismap::{GenesisConfig, insert_genesis_block},
 		runtime::{Hash, Transfer, Block, BlockNumber, Header, Digest},
@@ -59,7 +59,7 @@ mod tests {
 	native_executor_instance!(
 		Executor,
 		test_client::runtime::api::dispatch,
-		test_client::runtime::native_version
+		test_client::runtime::native_version,
 	);
 
 	fn executor() -> executor::NativeExecutor<Executor> {
@@ -67,7 +67,7 @@ mod tests {
 	}
 
 	fn construct_block(
-		backend: &InMemory<Blake2Hasher>,
+		backend: &InMemoryBackend<Blake2Hasher>,
 		number: BlockNumber,
 		parent_hash: Hash,
 		state_root: Hash,
@@ -135,7 +135,7 @@ mod tests {
 		(vec![].and(&Block { header, extrinsics: transactions }), hash)
 	}
 
-	fn block1(genesis_hash: Hash, backend: &InMemory<Blake2Hasher>) -> (Vec<u8>, Hash) {
+	fn block1(genesis_hash: Hash, backend: &InMemoryBackend<Blake2Hasher>) -> (Vec<u8>, Hash) {
 		construct_block(
 			backend,
 			1,
@@ -162,7 +162,7 @@ mod tests {
 		).genesis_map();
 		let genesis_hash = insert_genesis_block(&mut storage);
 
-		let backend = InMemory::from(storage);
+		let backend = InMemoryBackend::from(storage);
 		let (b1data, _b1hash) = block1(genesis_hash, &backend);
 
 		let mut overlay = OverlayedChanges::default();
@@ -192,7 +192,7 @@ mod tests {
 		).genesis_map();
 		let genesis_hash = insert_genesis_block(&mut storage);
 
-		let backend = InMemory::from(storage);
+		let backend = InMemoryBackend::from(storage);
 		let (b1data, _b1hash) = block1(genesis_hash, &backend);
 
 		let mut overlay = OverlayedChanges::default();
@@ -222,7 +222,7 @@ mod tests {
 		).genesis_map();
 		let genesis_hash = insert_genesis_block(&mut storage);
 
-		let backend = InMemory::from(storage);
+		let backend = InMemoryBackend::from(storage);
 		let (b1data, _b1hash) = block1(genesis_hash, &backend);
 
 		let mut overlay = OverlayedChanges::default();

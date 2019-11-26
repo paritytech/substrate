@@ -503,10 +503,10 @@ mod tests {
 		changes_trie::{
 			Configuration as ChangesTrieConfiguration,
 			InMemoryStorage as InMemoryChangesTrieStorage,
-		}, backend::InMemory, overlayed_changes::OverlayedValue,
+		}, InMemoryBackend, overlayed_changes::OverlayedValue,
 	};
 
-	type TestBackend = InMemory<Blake2Hasher>;
+	type TestBackend = InMemoryBackend<Blake2Hasher>;
 	type TestChangesTrieStorage = InMemoryChangesTrieStorage<Blake2Hasher, u64>;
 	type TestExt<'a> = Ext<'a, Blake2Hasher, u64, TestBackend, TestChangesTrieStorage>;
 

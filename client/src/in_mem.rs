@@ -23,8 +23,10 @@ use primitives::{ChangesTrieConfiguration, storage::well_known_keys};
 use sr_primitives::generic::{BlockId, DigestItem};
 use sr_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, NumberFor, HasherFor};
 use sr_primitives::{Justification, StorageOverlay, ChildrenStorageOverlay};
-use state_machine::backend::{Backend as StateBackend, InMemory};
-use state_machine::{self, InMemoryChangesTrieStorage, ChangesTrieAnchorBlockId, ChangesTrieTransaction};
+use state_machine::{
+	self, InMemoryChangesTrieStorage, ChangesTrieAnchorBlockId, ChangesTrieTransaction,
+	backend::Backend as StateBackend, InMemoryBackend,
+};
 use hash_db::Prefix;
 use trie::MemoryDB;
 use header_metadata::{CachedHeaderMetadata, HeaderMetadata};
@@ -456,8 +458,8 @@ impl<Block: BlockT> client_api::light::Storage<Block> for Blockchain<Block>
 pub struct BlockImportOperation<Block: BlockT> {
 	pending_block: Option<PendingBlock<Block>>,
 	pending_cache: HashMap<CacheKeyId, Vec<u8>>,
-	old_state: InMemory<HasherFor<Block>>,
-	new_state: Option<InMemory<HasherFor<Block>>>,
+	old_state: InMemoryBackend<HasherFor<Block>>,
+	new_state: Option<InMemoryBackend<HasherFor<Block>>>,
 	changes_trie_update: Option<MemoryDB<HasherFor<Block>>>,
 	aux: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	finalized_blocks: Vec<(BlockId<Block>, Option<Justification>)>,
@@ -467,7 +469,7 @@ pub struct BlockImportOperation<Block: BlockT> {
 impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperation<Block> where
 	Block::Hash: Ord,
 {
-	type State = InMemory<HasherFor<Block>>;
+	type State = InMemoryBackend<HasherFor<Block>>;
 
 	fn state(&self) -> error::Result<Option<&Self::State>> {
 		Ok(Some(&self.old_state))
@@ -494,7 +496,7 @@ impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperatio
 
 	fn update_db_storage(
 		&mut self,
-		update: <InMemory<HasherFor<Block>> as StateBackend<HasherFor<Block>>>::Transaction,
+		update: <InMemoryBackend<HasherFor<Block>> as StateBackend<HasherFor<Block>>>::Transaction,
 	) -> error::Result<()> {
 		self.new_state = Some(self.old_state.update(update));
 		Ok(())
@@ -525,7 +527,7 @@ impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperatio
 			child_delta,
 		);
 
-		self.new_state = Some(InMemory::from(transaction));
+		self.new_state = Some(InMemoryBackend::from(transaction));
 		Ok(root)
 	}
 
@@ -565,7 +567,7 @@ impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperatio
 /// > **Warning**: Doesn't support all the features necessary for a proper database. Only use this
 /// > struct for testing purposes. Do **NOT** use in production.
 pub struct Backend<Block: BlockT> where Block::Hash: Ord {
-	states: RwLock<HashMap<Block::Hash, InMemory<HasherFor<Block>>>>,
+	states: RwLock<HashMap<Block::Hash, InMemoryBackend<HasherFor<Block>>>>,
 	changes_trie_storage: ChangesTrieStorage<Block>,
 	blockchain: Blockchain<Block>,
 	import_lock: Mutex<()>,
@@ -602,7 +604,7 @@ impl<Block: BlockT> backend::AuxStore for Backend<Block> where Block::Hash: Ord 
 impl<Block: BlockT> backend::Backend<Block> for Backend<Block> where Block::Hash: Ord {
 	type BlockImportOperation = BlockImportOperation<Block>;
 	type Blockchain = Blockchain<Block>;
-	type State = InMemory<HasherFor<Block>>;
+	type State = InMemoryBackend<HasherFor<Block>>;
 	type ChangesTrieStorage = ChangesTrieStorage<Block>;
 	type OffchainStorage = OffchainStorage;
 
@@ -620,7 +622,11 @@ impl<Block: BlockT> backend::Backend<Block> for Backend<Block> where Block::Hash
 		})
 	}
 
-	fn begin_state_operation(&self, operation: &mut Self::BlockImportOperation, block: BlockId<Block>) -> error::Result<()> {
+	fn begin_state_operation(
+		&self,
+		operation: &mut Self::BlockImportOperation,
+		block: BlockId<Block>,
+	) -> error::Result<()> {
 		operation.old_state = self.state_at(block)?;
 		Ok(())
 	}
@@ -665,7 +671,11 @@ impl<Block: BlockT> backend::Backend<Block> for Backend<Block> where Block::Hash
 		Ok(())
 	}
 
-	fn finalize_block(&self, block: BlockId<Block>, justification: Option<Justification>) -> error::Result<()> {
+	fn finalize_block(
+		&self,
+		block: BlockId<Block>,
+		justification: Option<Justification>,
+	) -> error::Result<()> {
 		self.blockchain.finalize_header(block, justification)
 	}
 

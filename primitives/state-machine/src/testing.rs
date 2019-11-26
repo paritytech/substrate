@@ -19,7 +19,7 @@
 use std::{collections::HashMap, any::{Any, TypeId}};
 use hash_db::Hasher;
 use crate::{
-	backend::{InMemory, Backend}, OverlayedChanges, StorageTransactionCache, ext::Ext,
+	backend::Backend, OverlayedChanges, StorageTransactionCache, ext::Ext, InMemoryBackend,
 	changes_trie::{
 		InMemoryStorage as ChangesTrieInMemoryStorage,
 		BlockNumber as ChangesTrieBlockNumber,
@@ -40,9 +40,9 @@ type StorageTuple = (HashMap<Vec<u8>, Vec<u8>>, HashMap<Vec<u8>, HashMap<Vec<u8>
 pub struct TestExternalities<H: Hasher=Blake2Hasher, N: ChangesTrieBlockNumber=u64> {
 	overlay: OverlayedChanges,
 	storage_transaction_cache: StorageTransactionCache<
-		<InMemory<H> as Backend<H>>::Transaction, H, N
+		<InMemoryBackend<H> as Backend<H>>::Transaction, H, N
 	>,
-	backend: InMemory<H>,
+	backend: InMemoryBackend<H>,
 	changes_trie_storage: ChangesTrieInMemoryStorage<H, N>,
 	extensions: Extensions,
 }
@@ -52,7 +52,7 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 		H::Out: Ord + 'static + codec::Codec
 {
 	/// Get externalities implementation.
-	pub fn ext(&mut self) -> Ext<H, N, InMemory<H>, ChangesTrieInMemoryStorage<H, N>> {
+	pub fn ext(&mut self) -> Ext<H, N, InMemoryBackend<H>, ChangesTrieInMemoryStorage<H, N>> {
 		Ext::new(
 			&mut self.overlay,
 			&mut self.storage_transaction_cache,
@@ -113,7 +113,7 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 	}
 
 	/// Return a new backend with all pending value.
-	pub fn commit_all(&self) -> InMemory<H> {
+	pub fn commit_all(&self) -> InMemoryBackend<H> {
 		let top = self.overlay.committed.top.clone().into_iter()
 			.chain(self.overlay.prospective.top.clone().into_iter())
 			.map(|(k, v)| (None, k, v.value));

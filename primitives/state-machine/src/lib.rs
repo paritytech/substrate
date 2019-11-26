@@ -30,6 +30,7 @@ use overlayed_changes::OverlayedChangeSet;
 use externalities::Extensions;
 
 pub mod backend;
+mod in_memory_backend;
 mod changes_trie;
 mod error;
 mod ext;
@@ -66,6 +67,7 @@ pub use proving_backend::{
 pub use trie_backend_essence::{TrieBackendStorage, Storage};
 pub use trie_backend::TrieBackend;
 pub use error::{Error, ExecutionError};
+pub use in_memory_backend::InMemory as InMemoryBackend;
 
 type CallResult<R, E> = Result<NativeOrEncoded<R>, E>;
 
@@ -735,7 +737,6 @@ mod tests {
 	use codec::Encode;
 	use overlayed_changes::OverlayedValue;
 	use super::*;
-	use super::backend::InMemory;
 	use super::ext::Ext;
 	use super::changes_trie::{
 		InMemoryStorage as InMemoryChangesTrieStorage,
@@ -931,7 +932,7 @@ mod tests {
 			b"abc".to_vec() => b"2".to_vec(),
 			b"bbb".to_vec() => b"3".to_vec()
 		];
-		let mut state = InMemory::<Blake2Hasher>::from(initial);
+		let mut state = InMemoryBackend::<Blake2Hasher>::from(initial);
 		let backend = state.as_trie_backend().unwrap();
 		let mut overlay = OverlayedChanges {
 			committed: map![
@@ -975,7 +976,7 @@ mod tests {
 
 	#[test]
 	fn set_child_storage_works() {
-		let mut state = InMemory::<Blake2Hasher>::default();
+		let mut state = InMemoryBackend::<Blake2Hasher>::default();
 		let backend = state.as_trie_backend().unwrap();
 		let changes_trie_storage = InMemoryChangesTrieStorage::<Blake2Hasher, u64>::new();
 		let mut overlay = OverlayedChanges::default();
