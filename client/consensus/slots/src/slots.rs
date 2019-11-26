@@ -137,7 +137,7 @@ impl<SC: SlotCompatible + Unpin> Stream for Slots<SC> {
 			if let Some(ref mut inner_delay) = self.inner_delay {
 				match Future::poll(Pin::new(inner_delay), cx) {
 					Poll::Pending => return Poll::Pending,
-					Poll::Ready(()) => {}
+					Poll::Ready(_) => {}
 				}
 			}
 
