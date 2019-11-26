@@ -24,7 +24,7 @@ MUST_NOT=(
 
 # ONLY DISPLAYED, script still succeeds
 PLEASE_DONT=(
-	"primitives crates must not depend on anything in /client"
+	"primitives crates should not depend on anything in /client"
 )
 
 VIOLATIONS=()
