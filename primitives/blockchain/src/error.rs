@@ -17,20 +17,40 @@
 //! Substrate client possible errors.
 
 use std::{self, error, result};
-use state_machine;
+use sp_state_machine;
 use sr_primitives::transaction_validity::TransactionValidityError;
-use consensus;
+#[allow(deprecated)]
+use sp_block_builder_runtime_api::compatability_v3;
+use sp_consensus;
 use derive_more::{Display, From};
+use parity_scale_codec::Error as CodecError;
 
 /// Client Result type alias
 pub type Result<T> = result::Result<T, Error>;
+
+
+/// Error when the runtime failed to apply an extrinsic.
+#[derive(Debug, Display)]
+pub enum ApplyExtrinsicFailed {
+	/// The transaction cannot be included into the current block.
+	///
+	/// This doesn't necessary mean that the transaction itself is invalid, but it might be just
+	/// unappliable onto the current block.
+	#[display(fmt = "Extrinsic is not valid: {:?}", _0)]
+	Validity(TransactionValidityError),
+	/// This is used for miscelanious errors that can be represented by string and not handleable.
+	///
+	/// This will become obsolete with complete migration to v4 APIs.
+	#[display(fmt = "Extrinsic failed: {:?}", _0)]
+	Msg(String),
+}
 
 /// Substrate Client error
 #[derive(Debug, Display, From)]
 pub enum Error {
 	/// Consensus Error
 	#[display(fmt = "Consensus: {}", _0)]
-	Consensus(consensus::Error),
+	Consensus(sp_consensus::Error),
 	/// Backend error.
 	#[display(fmt = "Backend error: {}", _0)]
 	#[from(ignore)]
@@ -40,11 +60,11 @@ pub enum Error {
 	#[from(ignore)]
 	UnknownBlock(String),
 	/// The `apply_extrinsic` is not valid due to the given `TransactionValidityError`.
-	#[display(fmt = "Extrinsic is not valid: {:?}", _0)]
-	ApplyExtrinsicFailed(TransactionValidityError),
+	#[display(fmt = "{:?}", _0)]
+	ApplyExtrinsicFailed(ApplyExtrinsicFailed),
 	/// Execution error.
 	#[display(fmt = "Execution: {}", _0)]
-	Execution(Box<dyn state_machine::Error>),
+	Execution(Box<dyn sp_state_machine::Error>),
 	/// Blockchain error.
 	#[display(fmt = "Blockchain: {}", _0)]
 	Blockchain(Box<Error>),
@@ -78,7 +98,7 @@ pub enum Error {
 	RemoteFetchFailed,
 	/// Error decoding call result.
 	#[display(fmt = "Error decoding call result of {}: {}", _0, _1)]
-	CallResultDecode(&'static str, codec::Error),
+	CallResultDecode(&'static str, CodecError),
 	/// Error converting a parameter between runtime and node.
 	#[display(fmt = "Error converting `{}` between runtime and node", _0)]
 	#[from(ignore)]
@@ -131,14 +151,14 @@ impl<'a> From<&'a str> for Error {
 	}
 }
 
-impl From<block_builder::ApplyExtrinsicFailed> for Error {
-	fn from(err: block_builder::ApplyExtrinsicFailed) -> Self {
-		use block_builder::ApplyExtrinsicFailed;
-		match err {
-			ApplyExtrinsicFailed::Validity(tx_validity) => Self::ApplyExtrinsicFailed(tx_validity),
-			ApplyExtrinsicFailed::Msg(msg) => Self::Msg(msg),
+#[allow(deprecated)]
+impl From<compatability_v3::ApplyError> for ApplyExtrinsicFailed {
+	fn from(e: compatability_v3::ApplyError) -> Self {
+		use self::compatability_v3::ApplyError::*;
+		match e {
+			Validity(tx_validity) => Self::Validity(tx_validity),
+			e => Self::Msg(format!("Apply extrinsic failed: {:?}", e)),
 		}
-
 	}
 }
 
@@ -149,7 +169,7 @@ impl Error {
 	}
 
 	/// Chain a state error.
-	pub fn from_state(e: Box<dyn state_machine::Error>) -> Self {
+	pub fn from_state(e: Box<dyn sp_state_machine::Error>) -> Self {
 		Error::Execution(e)
 	}
 }

@@ -14,7 +14,7 @@ externalities = { package = "substrate-externalities", path = "../../primitives/
 fnv = { version = "1.0.6" }
 futures = { version = "0.3.1" }
 hash-db = { version = "0.15.2", default-features = false }
-header-metadata = { package = "substrate-header-metadata", path = "../header-metadata" }
+sp-blockchain = { path = "../../primitives/blockchain" }
 hex-literal = { version = "0.2.1" }
 inherents = { package = "substrate-inherents", path = "../../primitives/inherents", default-features = false }
 keyring = { package = "substrate-keyring", path = "../../primitives/keyring" }

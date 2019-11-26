@@ -23,7 +23,7 @@ client-api = { package = "substrate-client-api", path = "../../api" }
 client = { package = "substrate-client", path = "../../" }
 sr-api = { path = "../../../primitives/sr-api" }
 block-builder-api = { package = "substrate-block-builder-runtime-api", path = "../../../primitives/block-builder/runtime-api" }
-header-metadata = { package = "substrate-header-metadata", path = "../../header-metadata" }
+sp-blockchain = { path = "../../../primitives/blockchain" }
 consensus-common = { package = "substrate-consensus-common", path = "../../../primitives/consensus/common" }
 uncles = { package = "substrate-consensus-uncles", path = "../uncles" }
 slots = { package = "substrate-consensus-slots", path = "../slots"  }

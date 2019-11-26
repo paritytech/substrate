@@ -148,7 +148,6 @@ test-linux-stable:                 &test-linux
 test-dependency-rules:             &test-linux
   stage:                           test
   <<:                              *docker-env
-  allow_failure:                   true
   except:
     variables:
       - $DEPLOY_TAG

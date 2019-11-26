@@ -288,6 +288,6 @@ fn subscribe_headers<B, E, Block, RA, F, G, S, ERR>(
 	});
 }
 
-fn client_err(err: client::error::Error) -> Error {
+fn client_err(err: sp_blockchain::Error) -> Error {
 	Error::Client(Box::new(err))
 }

@@ -23,7 +23,7 @@ fdlimit = "0.1.1"
 serde_json = "1.0.41"
 panic-handler = { package = "substrate-panic-handler", path = "../../primitives/panic-handler" }
 client-api = { package = "substrate-client-api", path = "../api" }
-header-metadata = { package = "substrate-header-metadata", path = "../header-metadata" }
+sp-blockchain = { path = "../../primitives/blockchain" }
 network = { package = "substrate-network", path = "../network" }
 sr-primitives = { path = "../../primitives/sr-primitives" }
 primitives = { package = "substrate-primitives", path = "../../primitives/core" }

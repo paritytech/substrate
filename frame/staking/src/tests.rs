@@ -20,7 +20,8 @@ use super::*;
 use mock::*;
 use sr_primitives::{assert_eq_error_rate, traits::OnInitialize};
 use sr_staking_primitives::offence::{OffenceDetails, OnOffenceHandler};
-use support::{assert_ok, assert_noop, assert_eq_uvec, traits::{Currency, ReservableCurrency}};
+use support::{assert_ok, assert_noop, traits::{Currency, ReservableCurrency}};
+use substrate_test_utils::assert_eq_uvec;
 
 #[test]
 fn force_unstake_works() {

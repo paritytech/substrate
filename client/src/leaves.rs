@@ -21,7 +21,7 @@ use std::cmp::Reverse;
 use kvdb::{KeyValueDB, DBTransaction};
 use sr_primitives::traits::SimpleArithmetic;
 use codec::{Encode, Decode};
-use client_api::error;
+use sp_blockchain::{Error, Result};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct LeafSetItem<H, N> {
@@ -77,7 +77,7 @@ impl<H, N> LeafSet<H, N> where
 	}
 
 	/// Read the leaf list from the DB, using given prefix for keys.
-	pub fn read_from_db(db: &dyn KeyValueDB, column: Option<u32>, prefix: &[u8]) -> error::Result<Self> {
+	pub fn read_from_db(db: &dyn KeyValueDB, column: Option<u32>, prefix: &[u8]) -> Result<Self> {
 		let mut storage = BTreeMap::new();
 
 		for (key, value) in db.iter_from_prefix(column, prefix) {
@@ -85,11 +85,11 @@ impl<H, N> LeafSet<H, N> where
 			let raw_hash = &mut &key[prefix.len()..];
 			let hash = match Decode::decode(raw_hash) {
 				Ok(hash) => hash,
-				Err(_) => return Err(error::Error::Backend("Error decoding hash".into())),
+				Err(_) => return Err(Error::Backend("Error decoding hash".into())),
 			};
 			let number = match Decode::decode(&mut &value[..]) {
 				Ok(number) => number,
-				Err(_) => return Err(error::Error::Backend("Error decoding number".into())),
+				Err(_) => return Err(Error::Backend("Error decoding number".into())),
 			};
 			storage.entry(Reverse(number)).or_insert_with(Vec::new).push(hash);
 		}

@@ -8,6 +8,7 @@ edition = "2018"
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
 primitives = { package = "substrate-primitives", path = "../../../primitives/core" }
+sp-blockchain = { path = "../../../primitives/blockchain" }
 sr-primitives = { path = "../../../primitives/sr-primitives" }
 client-api = { package = "substrate-client-api", path = "../../api" }
 block-builder-api = { package = "substrate-block-builder-runtime-api", path = "../../../primitives/block-builder/runtime-api" }
