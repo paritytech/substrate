@@ -25,8 +25,10 @@ pub enum Error {
 	/// Pool error.
 	Pool(txpool::error::Error),
 	/// Error while converting a `BlockId`.
+	#[from(ignore)]
 	BlockIdConversion(String),
 	/// Error while calling the runtime api.
+	#[from(ignore)]
 	RuntimeApi(String),
 }
 
