@@ -27,7 +27,7 @@ use primitives::U256;
 /// or we attempt to parse given hex value.
 /// We do that for consistency with the returned type, default generic header
 /// serializes block number as hex to avoid overflows in JavaScript.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 #[serde(untagged)]
 pub enum NumberOrHex<Number> {
 	/// The original header number type of block.
@@ -70,5 +70,20 @@ impl From<u64> for NumberOrHex<u64> {
 impl<Number> From<U256> for NumberOrHex<Number> {
 	fn from(n: U256) -> Self {
 		NumberOrHex::Hex(n)
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::assert_deser;
+
+	#[test]
+	fn should_serialize_and_deserialize() {
+		assert_deser(r#""0x1234""#, NumberOrHex::<u128>::Hex(0x1234.into()));
+		assert_deser(r#""0x0""#, NumberOrHex::<u64>::Hex(0.into()));
+		assert_deser(r#"5"#, NumberOrHex::Number(5_u64));
+		assert_deser(r#"10000"#, NumberOrHex::Number(10000_u32));
+		assert_deser(r#"0"#, NumberOrHex::Number(0_u16));
 	}
 }
