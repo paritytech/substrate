@@ -33,7 +33,7 @@ use crate::{
 };
 use consensus::BlockOrigin;
 use hash_db::Hasher;
-use parking_lot::Mutex;
+use parking_lot::RwLock;
 
 /// In memory array of storage values.
 pub type StorageCollection = Vec<(Vec<u8>, Option<Vec<u8>>)>;
@@ -310,7 +310,7 @@ pub trait Backend<Block, H>: AuxStore + Send + Sync where
 	/// the using components should acquire and hold the lock whenever they do
 	/// something that the import of a block would interfere with, e.g. importing
 	/// a new block or calculating the best head.
-	fn get_import_lock(&self) -> &Mutex<()>;
+	fn get_import_lock(&self) -> &RwLock<()>;
 }
 
 /// Changes trie storage that supports pruning.
