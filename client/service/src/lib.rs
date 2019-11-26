@@ -31,7 +31,6 @@ use std::io;
 use std::marker::PhantomData;
 use std::net::SocketAddr;
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 use futures::sync::mpsc;
 use parking_lot::Mutex;
@@ -85,9 +84,11 @@ pub struct Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
 	exit: exit_future::Exit,
 	/// A signal that makes the exit future above resolve, fired on service drop.
 	signal: Option<Signal>,
-	/// Set to `true` when a spawned essential task has failed. The next time
+	/// Send a signal when a spawned essential task has concluded. The next time
 	/// the service future is polled it should complete with an error.
-	essential_failed: Arc<AtomicBool>,
+	essential_failed_tx: mpsc::UnboundedSender<()>,
+	/// A receiver for spawned essential-tasks concluding.
+	essential_failed_rx: mpsc::UnboundedReceiver<()>,
 	/// Sender for futures that must be spawned as background tasks.
 	to_spawn_tx: mpsc::UnboundedSender<Box<dyn Future<Item = (), Error = ()> + Send>>,
 	/// Receiver for futures that must be spawned as background tasks.
@@ -239,12 +240,12 @@ where
 	}
 
 	fn spawn_essential_task(&self, task: impl Future<Item = (), Error = ()> + Send + 'static) {
-		let essential_failed = self.essential_failed.clone();
+		let essential_failed = self.essential_failed_tx.clone();
 		let essential_task = std::panic::AssertUnwindSafe(task)
 			.catch_unwind()
 			.then(move |_| {
 				error!("Essential task failed. Shutting down service.");
-				essential_failed.store(true, Ordering::Relaxed);
+				let _ = essential_failed.send(());
 				Ok(())
 			});
 		let task = essential_task.select(self.on_exit()).then(|_| Ok(()));
@@ -297,8 +298,13 @@ impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Future for
 	type Error = Error;
 
 	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-		if self.essential_failed.load(Ordering::Relaxed) {
-			return Err(Error::Other("Essential task failed.".into()));
+		match self.essential_failed_rx.poll() {
+			Ok(Async::NotReady) => {},
+			Ok(Async::Ready(_)) | Err(_) => {
+				// Ready(None) should not be possible since we hold a live
+				// sender.
+				return Err(Error::Other("Essential task failed.".into()));
+			}
 		}
 
 		while let Ok(Async::Ready(Some(task_to_spawn))) = self.to_spawn_rx.poll() {
