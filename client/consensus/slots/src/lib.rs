@@ -122,6 +122,19 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		let (timestamp, slot_number, slot_duration) =
 			(slot_info.timestamp, slot_info.number, slot_info.duration);
 
+		{
+			let slot_now = SignedDuration::default().slot_now(slot_duration);
+			if slot_now > slot_number {
+				// if this is behind, return.
+					debug!(target: self.logging_target(),
+					"Skipping proposal slot {} since our current view is {}",
+					slot_number, slot_now,
+				);
+
+				return Box::pin(future::ready(Ok(())));
+			}
+		}
+
 		let epoch_data = match self.epoch_data(&chain_head, slot_number) {
 			Ok(epoch_data) => epoch_data,
 			Err(err) => {
