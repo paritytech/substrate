@@ -33,11 +33,13 @@ pub enum Error {
 	/// Client error
 	Client(client_api::error::Error),
 	/// Input error
+	#[from(ignore)]
 	Input(String),
 	/// Invalid listen multiaddress
 	#[display(fmt="Invalid listen multiaddress")]
 	InvalidListenMultiaddress,
 	/// Other uncategorized error.
+	#[from(ignore)]
 	Other(String),
 }
 

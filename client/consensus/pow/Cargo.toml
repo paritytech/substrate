@@ -17,4 +17,4 @@ consensus-common = { package = "substrate-consensus-common", path = "../../../pr
 log = "0.4.8"
 futures = { version = "0.3.1", features = ["compat"] }
 sp-timestamp = {  path = "../../../primitives/timestamp" }
-derive_more = "0.15.0"
+derive_more = "0.99.2"

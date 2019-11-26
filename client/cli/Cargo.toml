@@ -7,7 +7,7 @@ edition = "2018"
 
 [dependencies]
 clap = "2.33.0"
-derive_more = "0.15.0"
+derive_more = "0.99.2"
 env_logger = "0.7.0"
 log = "0.4.8"
 atty = "0.2.13"
