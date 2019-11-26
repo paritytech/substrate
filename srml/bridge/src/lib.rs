@@ -37,10 +37,17 @@
 mod storage_proof;
 mod justification;
 
+use crate::justification::GrandpaJustification;
 use crate::storage_proof::StorageProofChecker;
+
+use core::iter::FromIterator;
 use codec::{Encode, Decode};
-use fg_primitives::{AuthorityId, AuthorityWeight};
-use sr_primitives::traits::Header;
+use fg_primitives::{AuthorityId, AuthorityWeight, AuthorityList};
+use grandpa::voter_set::VoterSet; // TODO: Check for `no_std`
+use primitives::H256;
+use num::AsPrimitive;
+use sr_primitives::Justification;
+use sr_primitives::traits::{Block as BlockT, Header, NumberFor};
 use state_machine::StorageProof;
 use support::{
 	decl_error, decl_module, decl_storage,
@@ -51,16 +58,15 @@ use system::{ensure_signed};
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct BridgeInfo<T: Trait> {
 	last_finalized_block_header: T::Header,
-	current_validator_set: Vec<(AuthorityId, AuthorityWeight)>,
+	current_validator_set: AuthorityList,
 }
 
 impl<T: Trait> BridgeInfo<T> {
 	pub fn new(
 			block_header: T::Header,
-			validator_set: Vec<(AuthorityId, AuthorityWeight)>,
+			validator_set: AuthorityList,
 		) -> Self
 	{
-		// I don't like how this is done, should come back to...
 		BridgeInfo {
 			last_finalized_block_header: block_header,
 			current_validator_set: validator_set,
@@ -70,7 +76,10 @@ impl<T: Trait> BridgeInfo<T> {
 
 type BridgeId = u64;
 
-pub trait Trait: system::Trait {}
+pub trait Trait: system::Trait {
+	// Type checker isn't happy with this :(
+	type Block: BlockT<Hash=H256> + AsPrimitive<usize>;
+}
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Bridge {
@@ -88,7 +97,7 @@ decl_module! {
 		fn initialize_bridge(
 			origin,
 			block_header: T::Header,
-			validator_set: Vec<(AuthorityId, AuthorityWeight)>,
+			validator_set: AuthorityList,
 			validator_set_proof: StorageProof,
 		) {
 			// NOTE: Will want to make this a governance issued call
@@ -111,6 +120,7 @@ decl_module! {
 			bridge_id: BridgeId,
 			header: T::Header,
 			ancestry_proof: Vec<T::Header>,
+			validator_set: AuthorityList,
 			_grandpa_proof: StorageProof,
 		) {
 			let _sender = ensure_signed(origin)?;
@@ -122,7 +132,19 @@ decl_module! {
 			let last_header = bridge.last_finalized_block_header;
 			verify_ancestry(ancestry_proof, last_header.hash(), &header)?;
 
+			// Type checker isn't happy with this :(
+			let block_hash = header.hash();
+			let block_num = header.number();
+
 			// Check that the header has been finalized
+			let voter_set = VoterSet::from_iter(validator_set);
+			let v = verify_grandpa_proof::<T::Block>(
+				vec![], // Use this though -> justification: Justification,
+				block_hash,
+				block_num,
+				0,
+				&voter_set,
+			);
 
 			// Update last valid header seen by the bridge
 			bridge.last_finalized_block_header = header;
@@ -195,6 +217,28 @@ where
 	}
 
 	Err(Error::InvalidAncestryProof)
+}
+
+// NOTE: Currently looking at `import::import_justification()` as a reference
+fn verify_grandpa_proof<B>(
+	justification: Justification,
+	hash: B::Hash,
+	number: NumberFor<B>,
+	set_id: u64,
+	voters: &VoterSet<AuthorityId>,
+) -> Result<(), Error>
+where
+	B: BlockT<Hash=H256>,
+	NumberFor<B>: grandpa::BlockNumberOps,
+{
+	let grandpa_justification = GrandpaJustification::<B>::decode_and_verify_finalizes(
+		&justification,
+		(hash, number),
+		set_id,
+		voters,
+	).unwrap();
+
+	Ok(())
 }
 
 #[cfg(test)]
