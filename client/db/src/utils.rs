@@ -215,8 +215,8 @@ pub fn open_database(
 			let mut db_config = DatabaseConfig::with_columns(Some(NUM_COLUMNS));
 
 			if let Some(cache_size) = cache_size {
-				let state_col_budget = (*cache_size as f64 * 0.7) as usize;
-				let other_col_budget = cache_size - state_col_budget;
+				let state_col_budget = (*cache_size as f64 * 0.9) as usize;
+				let other_col_budget = (cache_size - state_col_budget) / (NUM_COLUMNS as usize - 1);
 
 				let mut memory_budget = std::collections::HashMap::new();
 				for i in 0..NUM_COLUMNS {
