@@ -114,7 +114,7 @@ impl<Block, B, Local> CallExecutor<Block, Blake2Hasher> for
 		_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
 		recorder: &Option<ProofRecorder<Block>>,
-        extensions: Option<Extensions>,
+		extensions: Option<Extensions>,
 	) -> ClientResult<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone {
 		// there's no actual way/need to specify native/wasm execution strategy on light node
 		// => we can safely ignore passed values
@@ -278,7 +278,6 @@ fn check_execution_proof_with_make_header<Header, E, H, MakeNextHeader: Fn(&Head
 		executor,
 		"Core_initialize_block",
 		&next_header.encode(),
-		None,
 	)?;
 
 	// execute method
@@ -288,7 +287,6 @@ fn check_execution_proof_with_make_header<Header, E, H, MakeNextHeader: Fn(&Head
 		executor,
 		&request.method,
 		&request.call_data,
-		None,
 	).map_err(Into::into)
 }
 

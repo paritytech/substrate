@@ -323,7 +323,7 @@ mod tests {
 	type Layout = super::Layout<Blake2Hasher>;
 
 	fn hashed_null_node<T: TrieConfiguration>() -> TrieHash<T> {
-		<T::Codec as NodeCodecT>::hashed_null_node()
+		<T::Codec as NodeCodecT<_>>::hashed_null_node()
 	}
 
 	fn check_equivalent<T: TrieConfiguration>(input: &Vec<(&[u8], &[u8])>) {

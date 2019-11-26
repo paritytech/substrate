@@ -1,0 +1,5 @@
+error: expected `:`
+ --> $DIR/invalid_token_after_name.rs:9:10
+  |
+9 |         system ?
+  |                ^
