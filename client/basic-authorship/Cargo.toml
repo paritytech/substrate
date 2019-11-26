@@ -17,6 +17,8 @@ inherents = { package = "substrate-inherents", path = "../../primitives/inherent
 substrate-telemetry = { path = "../telemetry" }
 transaction_pool = { package = "substrate-transaction-pool", path = "../transaction-pool" }
 block-builder = { package = "substrate-block-builder", path = "../block-builder" }
+tokio-executor = { version = "0.2.0-alpha.6", features = ["blocking"] }
 
 [dev-dependencies]
 test-client = { package = "substrate-test-runtime-client", path = "../../test/utils/runtime/client" }
+parking_lot = "0.9"
