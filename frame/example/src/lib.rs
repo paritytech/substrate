@@ -256,7 +256,7 @@
 use rstd::marker::PhantomData;
 use support::{
 	dispatch::Result, decl_module, decl_storage, decl_event,
-	weights::{SimpleDispatchInfo, DispatchInfo, DispatchClass, ClassifyDispatch, WeighData, Weight},
+	weights::{SimpleDispatchInfo, DispatchInfo, DispatchClass, ClassifyDispatch, WeighData, Weight, PaysFee},
 };
 use system::{ensure_signed, ensure_root};
 use codec::{Encode, Decode};
@@ -298,6 +298,12 @@ impl<T: balances::Trait> ClassifyDispatch<(&BalanceOf<T>,)> for WeightForSetDumm
 		} else {
 			DispatchClass::Normal
 		}
+	}
+}
+
+impl<T: balances::Trait> PaysFee for WeightForSetDummy<T> {
+	fn pays_fee(&self) -> bool {
+		true
 	}
 }
 

@@ -241,13 +241,14 @@ where
 
 	fn spawn_essential_task(&self, task: impl Future<Item = (), Error = ()> + Send + 'static) {
 		let essential_failed = self.essential_failed_tx.clone();
-		let essential_task = task.map_err(move |_| {
-			error!("Essential task failed. Shutting down service.");
-			let _ = essential_failed.send(());
-		});
-		let task = essential_task.select(
-			self.on_exit().map_err(|_| println!("received exit notice on essential task"))
-		).then(|_| Ok(()));
+		let essential_task = std::panic::AssertUnwindSafe(task)
+			.catch_unwind()
+			.then(move |_| {
+				error!("Essential task failed. Shutting down service.");
+				let _ = essential_failed.send(());
+				Ok(())
+			});
+		let task = essential_task.select(self.on_exit()).then(|_| Ok(()));
 
 		let _ = self.to_spawn_tx.unbounded_send(Box::new(task));
 	}

@@ -43,7 +43,7 @@ impl LocalStorage {
 	/// Create new offchain storage for tests (backed by memorydb)
 	#[cfg(any(test, feature = "test-helpers"))]
 	pub fn new_test() -> Self {
-		let db = Arc::new(::kvdb_memorydb::create(crate::utils::NUM_COLUMNS));
+		let db = Arc::new(kvdb_memorydb::create(crate::utils::NUM_COLUMNS));
 		Self::new(db as _)
 	}
 
