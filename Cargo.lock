@@ -6578,6 +6578,7 @@ dependencies = [
 name = "substrate-tracing"
 version = "2.0.0"
 dependencies = [
+ "grafana-data-source 2.0.0",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-telemetry 2.0.0",
