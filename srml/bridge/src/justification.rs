@@ -14,12 +14,16 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+//! A module for creating a verifying the GRANDPA justifications. A justification
+//! can be thought of as a finality proof. GRANDPA justifications consist
+//! of a commit message plus an ancestry proof for pre-commits.
+
 use client::{CallExecutor, Client};
 use client::backend::Backend;
 use client::error::Error as ClientError;
 use codec::{Encode, Decode};
 use core::cmp::{Ord, Ordering};
-use fg::{Commit, Error, Message}; // Q: Should I make any of these a part of fg_primitives?
+use fg::{Commit, Error, Message};
 use fg_primitives::{AuthorityId, RoundNumber, SetId as SetIdNumber, AuthoritySignature};
 use grandpa::voter_set::VoterSet;
 use grandpa::{Error as GrandpaError};
@@ -46,7 +50,7 @@ use primitives::{H256, Blake2Hasher};
 #[derive(Encode, Decode)]
 pub struct GrandpaJustification<Block: BlockT> {
 	round: u64,
-	pub(crate) commit: Commit<Block>,
+	commit: Commit<Block>,
 	votes_ancestries: Vec<Block::Header>,
 }
 
@@ -183,6 +187,11 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 
 		Ok(())
 	}
+
+	/// Get the current commit message from the GRANDPA justification
+	pub(crate) fn get_commit(&self) -> Commit<Block> {
+		self.commit
+	}
 }
 
 // Since keys in a `BTreeMap` need to implement `Ord` we can't use Block::Hash directly.
@@ -278,7 +287,6 @@ fn check_message_sig<Block: BlockT>(
 	let as_public = id.clone();
 	let encoded_raw = localized_payload(round, set_id, message);
 
-	// Since `app::Public` implements `RuntimeAppPublic` we can call `verify()`
 	if as_public.verify(&encoded_raw, signature) {
 		Ok(())
 	} else {
