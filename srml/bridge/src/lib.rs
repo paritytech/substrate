@@ -76,13 +76,16 @@ impl<T: Trait> BridgeInfo<T> {
 
 type BridgeId = u64;
 
-pub trait Trait: system::Trait {
+pub trait Trait: system::Trait<Hash=H256> {
 	// Type checker isn't happy with this :(
-	type Block: BlockT<Hash=H256> + AsPrimitive<usize>;
+	type Block: BlockT<Hash=H256, Header=Self::Header>;
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Bridge {
+	trait Store for Module<T: Trait> as Bridge
+		where
+			NumberFor<T::Block>: AsPrimitive<usize>
+	{
 		/// The number of current bridges managed by the module.
 		pub NumBridges get(num_bridges) config(): BridgeId;
 
@@ -93,7 +96,11 @@ decl_storage! {
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Trait> for enum Call
+		where
+			origin: T::Origin,
+			NumberFor<T::Block>: AsPrimitive<usize>
+	{
 		fn initialize_bridge(
 			origin,
 			block_header: T::Header,
@@ -134,7 +141,7 @@ decl_module! {
 
 			// Type checker isn't happy with this :(
 			let block_hash = header.hash();
-			let block_num = header.number();
+			let block_num = *header.number();
 
 			// Check that the header has been finalized
 			let voter_set = VoterSet::from_iter(validator_set);
@@ -165,7 +172,10 @@ decl_error! {
 	}
 }
 
-impl<T: Trait> Module<T> {
+impl<T: Trait> Module<T>
+	where
+		NumberFor<T::Block>: AsPrimitive<usize>
+{
 	fn check_validator_set_proof(
 		state_root: &T::Hash,
 		proof: StorageProof,

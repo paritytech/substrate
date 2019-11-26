@@ -190,7 +190,7 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 
 	/// Get the current commit message from the GRANDPA justification
 	pub(crate) fn get_commit(&self) -> Commit<Block> {
-		self.commit
+		self.commit.clone()
 	}
 }
 
