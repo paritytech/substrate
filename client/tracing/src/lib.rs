@@ -202,5 +202,6 @@ fn send_telemetry(span_datum: SpanDatum) {
 }
 
 fn send_grafana(span_datum: SpanDatum) {
-	record_metrics!(span_datum.target => span_datum.overall_time.as_nanos());
+	let name = format!("{}::{}", span_datum.target, span_datum.name);
+	record_metrics!(name => span_datum.overall_time.as_nanos());
 }
