@@ -265,6 +265,7 @@ arg_enum! {
 	pub enum TracingReceiver {
 		Log,
 		Telemetry,
+		Grafana,
 	}
 }
 
@@ -273,6 +274,7 @@ impl Into<substrate_tracing::TracingReceiver> for TracingReceiver {
 		match self {
 			TracingReceiver::Log => substrate_tracing::TracingReceiver::Log,
 			TracingReceiver::Telemetry => substrate_tracing::TracingReceiver::Telemetry,
+			TracingReceiver::Grafana => substrate_tracing::TracingReceiver::Grafana,
 		}
 	}
 }
