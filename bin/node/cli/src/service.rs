@@ -110,9 +110,9 @@ macro_rules! new_full_start {
 /// concrete types instead.
 macro_rules! new_full {
 	($config:expr, $with_startup_data: expr) => {{
-		use futures::sync::mpsc;
+		use futures01::sync::mpsc;
 		use network::DhtEvent;
-		use futures03::{
+		use futures::{
 			compat::Stream01CompatExt,
 			stream::StreamExt,
 			future::{FutureExt, TryFutureExt},
@@ -515,7 +515,7 @@ mod tests {
 				digest.push(<DigestItem as CompatibleDigestItem>::babe_pre_digest(babe_pre_digest));
 
 				let mut proposer = proposer_factory.init(&parent_header).unwrap();
-				let new_block = futures03::executor::block_on(proposer.propose(
+				let new_block = futures::executor::block_on(proposer.propose(
 					inherent_data,
 					digest,
 					std::time::Duration::from_secs(1),

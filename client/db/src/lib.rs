@@ -39,11 +39,12 @@ use std::path::PathBuf;
 use std::io;
 use std::collections::{HashMap, HashSet};
 
+use client_api::ForkBlocks;
 use client_api::backend::NewBlockState;
-use client_api::blockchain::{well_known_cache_keys, HeaderBackend};
-use client_api::{ForkBlocks, ExecutionStrategies};
 use client_api::backend::{StorageCollection, ChildStorageCollection};
+use client_api::blockchain::{well_known_cache_keys, HeaderBackend};
 use client_api::error::{Result as ClientResult, Error as ClientError};
+use client_api::execution_extensions::ExecutionExtensions;
 use codec::{Decode, Encode};
 use hash_db::{Hasher, Prefix};
 use kvdb::{KeyValueDB, DBTransaction};
@@ -97,7 +98,11 @@ pub struct RefTrackingState<Block: BlockT> {
 }
 
 impl<B: BlockT> RefTrackingState<B> {
-	fn new(state: DbState, storage: Arc<StorageDb<B>>, parent_hash: Option<B::Hash>) -> RefTrackingState<B> {
+	fn new(
+		state: DbState,
+		storage: Arc<StorageDb<B>>,
+		parent_hash: Option<B::Hash>,
+	) -> RefTrackingState<B> {
 		RefTrackingState {
 			state,
 			parent_hash,
@@ -224,8 +229,7 @@ pub fn new_client<E, S, Block, RA>(
 	executor: E,
 	genesis_storage: S,
 	fork_blocks: ForkBlocks<Block>,
-	execution_strategies: ExecutionStrategies,
-	keystore: Option<primitives::traits::BareCryptoStorePtr>,
+	execution_extensions: ExecutionExtensions<Block>,
 ) -> Result<(
 		client::Client<
 			Backend<Block>,
@@ -243,9 +247,9 @@ pub fn new_client<E, S, Block, RA>(
 		S: BuildStorage,
 {
 	let backend = Arc::new(Backend::new(settings, CANONICALIZATION_DELAY)?);
-	let executor = client::LocalCallExecutor::new(backend.clone(), executor, keystore);
+	let executor = client::LocalCallExecutor::new(backend.clone(), executor);
 	Ok((
-		client::Client::new(backend.clone(), executor, genesis_storage, fork_blocks, execution_strategies)?,
+		client::Client::new(backend.clone(), executor, genesis_storage, fork_blocks, execution_extensions)?,
 		backend,
 	))
 }
@@ -784,7 +788,7 @@ pub struct Backend<Block: BlockT> {
 	blockchain: BlockchainDb<Block>,
 	canonicalization_delay: u64,
 	shared_cache: SharedCache<Block, Blake2Hasher>,
-	import_lock: Mutex<()>,
+	import_lock: RwLock<()>,
 	is_archive: bool,
 }
 
@@ -1247,7 +1251,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 				operation.child_storage_updates,
 				Some(hash),
 				Some(number),
-				|| is_best,
+				is_best,
 			);
 		}
 
@@ -1527,13 +1531,13 @@ impl<Block> client_api::backend::Backend<Block, Blake2Hasher> for Backend<Block>
 
 	fn destroy_state(&self, state: Self::State) -> ClientResult<()> {
 		if let Some(hash) = state.cache.parent_hash.clone() {
-			let is_best = || self.blockchain.meta.read().best_hash == hash;
+			let is_best = self.blockchain.meta.read().best_hash == hash;
 			state.release().sync_cache(&[], &[], vec![], vec![], None, None, is_best);
 		}
 		Ok(())
 	}
 
-	fn get_import_lock(&self) -> &Mutex<()> {
+	fn get_import_lock(&self) -> &RwLock<()> {
 		&self.import_lock
 	}
 }

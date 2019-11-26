@@ -35,7 +35,10 @@ use rstd::ops::Deref;
 
 #[cfg(feature = "std")]
 use primitives::{
-	crypto::Pair, traits::KeystoreExt, offchain::OffchainExt, hexdisplay::HexDisplay,
+	crypto::Pair,
+	traits::KeystoreExt,
+	offchain::{OffchainExt, TransactionPoolExt},
+	hexdisplay::HexDisplay,
 	storage::ChildStorageKey,
 };
 
@@ -424,8 +427,9 @@ pub trait Offchain {
 	///
 	/// The transaction will end up in the pool.
 	fn submit_transaction(&mut self, data: Vec<u8>) -> Result<(), ()> {
-		self.extension::<OffchainExt>()
-			.expect("submit_transaction can be called only in the offchain worker context")
+		self.extension::<TransactionPoolExt>()
+			.expect("submit_transaction can be called only in the offchain call context with
+				TransactionPool capabilities enabled")
 			.submit_transaction(data)
 	}
 
@@ -739,7 +743,7 @@ mod allocator_impl {
 pub fn panic(info: &core::panic::PanicInfo) -> ! {
 	unsafe {
 		let message = rstd::alloc::format!("{}", info);
-		misc::print_utf8(message.as_bytes());
+		logging::log(LogLevel::Error, "runtime", message.as_bytes());
 		core::intrinsics::abort()
 	}
 }
@@ -747,10 +751,8 @@ pub fn panic(info: &core::panic::PanicInfo) -> ! {
 #[cfg(all(not(feature = "disable_oom"), not(feature = "std")))]
 #[alloc_error_handler]
 pub extern fn oom(_: core::alloc::Layout) -> ! {
-	static OOM_MSG: &str = "Runtime memory exhausted. Aborting";
-
 	unsafe {
-		misc::print_utf8(OOM_MSG.as_bytes());
+		logging::log(LogLevel::Error, "runtime", b"Runtime memory exhausted. Aborting");
 		core::intrinsics::abort();
 	}
 }

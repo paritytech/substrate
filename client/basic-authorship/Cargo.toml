@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 log = "0.4.8"
-futures-preview = "0.3.0-alpha.19"
+futures = "0.3.1"
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 sr-primitives = { path = "../../primitives/sr-primitives" }
 primitives = { package = "substrate-primitives", path = "../../primitives/core" }

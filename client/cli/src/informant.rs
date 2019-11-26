@@ -17,8 +17,7 @@
 //! Console informant. Prints sync progress and block events. Runs on the calling thread.
 
 use client_api::BlockchainEvents;
-use futures::{Future, Stream};
-use futures03::{StreamExt as _, TryStreamExt as _};
+use futures::{StreamExt, TryStreamExt, FutureExt, future, compat::Stream01CompatExt};
 use log::{info, warn};
 use sr_primitives::traits::Header;
 use service::AbstractService;
@@ -27,17 +26,18 @@ use std::time::Duration;
 mod display;
 
 /// Creates an informant in the form of a `Future` that must be polled regularly.
-pub fn build(service: &impl AbstractService) -> impl Future<Item = (), Error = ()> {
+pub fn build(service: &impl AbstractService) -> impl futures::Future<Output = ()> {
 	let client = service.client();
 
 	let mut display = display::InformantDisplay::new();
 
 	let display_notifications = service
 		.network_status(Duration::from_millis(5000))
-		.for_each(move |(net_status, _)| {
+		.compat()
+		.try_for_each(move |(net_status, _)| {
 			let info = client.info();
 			display.display(&info, net_status);
-			Ok(())
+			future::ok(())
 		});
 
 	let client = service.client();
@@ -46,7 +46,7 @@ pub fn build(service: &impl AbstractService) -> impl Future<Item = (), Error = (
 		Some((info.chain.best_number, info.chain.best_hash))
 	};
 
-	let display_block_import = client.import_notification_stream().map(|v| Ok::<_, ()>(v)).compat().for_each(move |n| {
+	let display_block_import = client.import_notification_stream().for_each(move |n| {
 		// detect and log reorganizations.
 		if let Some((ref last_num, ref last_hash)) = last_best {
 			if n.header.parent_hash() != last_hash && n.is_new_best  {
@@ -74,9 +74,11 @@ pub fn build(service: &impl AbstractService) -> impl Future<Item = (), Error = (
 		}
 
 		info!(target: "substrate", "Imported #{} ({})", n.header.number(), n.hash);
-		Ok(())
+		future::ready(())
 	});
 
-	display_notifications.join(display_block_import)
-		.map(|((), ())| ())
+	future::join(
+		display_notifications,
+		display_block_import
+	).map(|_| ())
 }
