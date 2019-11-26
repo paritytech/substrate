@@ -38,7 +38,7 @@ schnorrkel = { version = "0.8.5", features = ["preaudit_deprecated"] }
 rand = "0.7.2"
 merlin = "1.2.1"
 pdqselect = "0.1.0"
-derive_more = "0.15.0"
+derive_more = "0.99.2"
 
 [dev-dependencies]
 keyring = { package = "substrate-keyring", path = "../../../primitives/keyring" }

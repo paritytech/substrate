@@ -31,11 +31,13 @@ pub enum Error {
 	/// Client error
 	Client(sp_blockchain::Error),
 	/// Input error
+	#[from(ignore)]
 	Input(String),
 	/// Invalid listen multiaddress
 	#[display(fmt="Invalid listen multiaddress")]
 	InvalidListenMultiaddress,
 	/// Other uncategorized error.
+	#[from(ignore)]
 	Other(String),
 }
 

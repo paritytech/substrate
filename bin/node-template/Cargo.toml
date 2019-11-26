@@ -10,7 +10,6 @@ name = "node-template"
 path = "src/main.rs"
 
 [dependencies]
-derive_more = "0.15.0"
 futures = "0.3.1"
 futures01 = { package = "futures", version = "0.1.29" }
 ctrlc = { version = "3.1.3", features = ["termination"] }

@@ -39,6 +39,7 @@ use parking_lot::Mutex;
 use tracing_core::{event::Event, Level, metadata::Metadata, span::{Attributes, Id, Record}, subscriber::Subscriber};
 
 use substrate_telemetry::{telemetry, SUBSTRATE_INFO};
+use grafana_data_source::{self, record_metrics};
 
 /// Used to configure how to receive the metrics
 #[derive(Debug, Clone)]
@@ -47,6 +48,8 @@ pub enum TracingReceiver {
 	Log,
 	/// Output to telemetry
 	Telemetry,
+	/// Output to Grafana,
+	Grafana,
 }
 
 impl Default for TracingReceiver {
@@ -59,7 +62,7 @@ impl Default for TracingReceiver {
 struct SpanDatum {
 	id: u64,
 	name: &'static str,
-	target: String,
+	target: &'static str,
 	level: Level,
 	line: u32,
 	start_time: Instant,
@@ -124,7 +127,7 @@ impl Subscriber for ProfilingSubscriber {
 		let span_datum = SpanDatum {
 			id: id,
 			name: attrs.metadata().name(),
-			target: attrs.metadata().target().to_string(),
+			target: attrs.metadata().target(),
 			level: attrs.metadata().level().clone(),
 			line: attrs.metadata().line().unwrap_or(0),
 			start_time: Instant::now(),
@@ -172,6 +175,7 @@ impl ProfilingSubscriber {
 		match self.receiver {
 			TracingReceiver::Log => print_log(span_datum),
 			TracingReceiver::Telemetry => send_telemetry(span_datum),
+			TracingReceiver::Grafana => send_grafana(span_datum),
 		}
 	}
 }
@@ -195,4 +199,8 @@ fn send_telemetry(span_datum: SpanDatum) {
 		"line" => span_datum.line,
 		"time" => span_datum.overall_time.as_nanos(),
 	);
+}
+
+fn send_grafana(span_datum: SpanDatum) {
+	record_metrics!(span_datum.target => span_datum.overall_time.as_nanos());
 }
