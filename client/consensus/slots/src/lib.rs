@@ -126,7 +126,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			let slot_now = SignedDuration::default().slot_now(slot_duration);
 			if slot_now > slot_number {
 				// if this is behind, return.
-					debug!(target: self.logging_target(),
+				debug!(target: self.logging_target(),
 					"Skipping proposal slot {} since our current view is {}",
 					slot_number, slot_now,
 				);
