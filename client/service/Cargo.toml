@@ -31,6 +31,7 @@ target_info = "0.1.0"
 keystore = { package = "substrate-keystore", path = "../keystore" }
 sr-io = { path = "../../primitives/sr-io" }
 sr-primitives = { path = "../../primitives/sr-primitives" }
+sp-blockchain = { path = "../../primitives/blockchain" }
 primitives = { package = "substrate-primitives", path = "../../primitives/core" }
 session = { package = "substrate-session", path = "../../primitives/session" }
 app-crypto = { package = "substrate-application-crypto", path = "../../primitives/application-crypto" }
@@ -44,7 +45,7 @@ tx-pool-api = { package = "substrate-transaction-pool-runtime-api", path = "../.
 client_db = { package = "substrate-client-db", path = "../db" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 substrate-executor = { path = "../executor" }
-transaction_pool = { package = "substrate-transaction-pool", path = "../transaction-pool" }
+transaction_pool = { package = "sc-transaction-pool", path = "../../client/transaction-pool" }
 rpc-servers = { package = "substrate-rpc-servers", path = "../rpc-servers" }
 rpc = { package = "substrate-rpc", path = "../rpc" }
 tel = { package = "substrate-telemetry", path = "../telemetry" }
@@ -56,9 +57,6 @@ tracing = "0.1.10"
 
 [dev-dependencies]
 substrate-test-runtime-client = { path = "../../test/utils/runtime/client" }
-node-executor = { path = "../../bin/node/executor" }
-node-primitives = { path = "../../bin/node/primitives" }
-node-runtime = { path = "../../bin/node/runtime" }
 babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../../primitives/consensus/babe" }
 grandpa = { package = "substrate-finality-grandpa", path = "../finality-grandpa" }
 grandpa-primitives = { package = "substrate-finality-grandpa-primitives", path = "../../primitives/finality-grandpa" }

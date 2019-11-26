@@ -19,7 +19,7 @@
 use std::sync::Arc;
 
 use codec::{self, Codec, Encode};
-use client::blockchain::HeaderBackend;
+use sp_blockchain::HeaderBackend;
 use jsonrpc_core::{Result, Error, ErrorCode};
 use jsonrpc_derive::rpc;
 use sr_primitives::{
@@ -27,7 +27,7 @@ use sr_primitives::{
 	traits,
 };
 use substrate_primitives::hexdisplay::HexDisplay;
-use transaction_pool::txpool::{self, Pool};
+use sc_transaction_graph::{self, ChainApi, Pool};
 
 pub use frame_system_rpc_runtime_api::AccountNonceApi;
 pub use self::gen_client::Client as SystemClient;
@@ -47,13 +47,13 @@ pub trait SystemApi<AccountId, Index> {
 const RUNTIME_ERROR: i64 = 1;
 
 /// An implementation of System-specific RPC methods.
-pub struct System<P: txpool::ChainApi, C, B> {
+pub struct System<P: ChainApi, C, B> {
 	client: Arc<C>,
 	pool: Arc<Pool<P>>,
 	_marker: std::marker::PhantomData<B>,
 }
 
-impl<P: txpool::ChainApi, C, B> System<P, C, B> {
+impl<P: ChainApi, C, B> System<P, C, B> {
 	/// Create new `System` given client and transaction pool.
 	pub fn new(client: Arc<C>, pool: Arc<Pool<P>>) -> Self {
 		System {
@@ -70,7 +70,7 @@ where
 	C: HeaderBackend<Block>,
 	C: Send + Sync + 'static,
 	C::Api: AccountNonceApi<Block, AccountId, Index>,
-	P: txpool::ChainApi + Sync + Send + 'static,
+	P: ChainApi + Sync + Send + 'static,
 	Block: traits::Block,
 	AccountId: Clone + std::fmt::Display + Codec,
 	Index: Clone + std::fmt::Display + Codec + traits::SimpleArithmetic,
@@ -118,6 +118,7 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use sc_transaction_pool;
 
 	use futures::executor::block_on;
 	use test_client::{
@@ -130,7 +131,7 @@ mod tests {
 		// given
 		let _ = env_logger::try_init();
 		let client = Arc::new(test_client::new());
-		let pool = Arc::new(Pool::new(Default::default(), transaction_pool::FullChainApi::new(client.clone())));
+		let pool = Arc::new(Pool::new(Default::default(), sc_transaction_pool::FullChainApi::new(client.clone())));
 
 		let new_transaction = |nonce: u64| {
 			let t = Transfer {

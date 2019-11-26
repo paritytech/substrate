@@ -10,12 +10,13 @@ futures = "0.3.1"
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 sr-primitives = { path = "../../primitives/sr-primitives" }
 primitives = { package = "substrate-primitives", path = "../../primitives/core" }
+sp-blockchain = { path = "../../primitives/blockchain" }
 client = { package = "substrate-client", path = "../" }
 client-api = { package = "substrate-client-api", path = "../api" }
 consensus_common = { package = "substrate-consensus-common", path = "../../primitives/consensus/common" }
 inherents = { package = "substrate-inherents", path = "../../primitives/inherents" }
 substrate-telemetry = { path = "../telemetry" }
-transaction_pool = { package = "substrate-transaction-pool", path = "../transaction-pool" }
+transaction_pool = { package = "sc-transaction-pool", path = "../../client/transaction-pool" }
 block-builder = { package = "substrate-block-builder", path = "../block-builder" }
 tokio-executor = { version = "0.2.0-alpha.6", features = ["blocking"] }
 

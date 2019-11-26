@@ -38,9 +38,10 @@ use hash_db::Hasher;
 
 use sr_api::{ProofRecorder, InitializeBlock};
 
+use sp_blockchain::{Error as ClientError, Result as ClientResult};
+
 use client_api::{
 	backend::RemoteBackend,
-	error::{Error as ClientError, Result as ClientResult},
 	light::RemoteCallRequest,
 	call_executor::CallExecutor
 };
@@ -450,7 +451,7 @@ mod tests {
 				),
 			);
 			match execution_result {
-				Err(client_api::error::Error::Execution(_)) => (),
+				Err(sp_blockchain::Error::Execution(_)) => (),
 				_ => panic!("Unexpected execution result: {:?}", execution_result),
 			}
 		}

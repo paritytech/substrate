@@ -22,6 +22,7 @@ keystore = { package = "substrate-keystore", path = "../../keystore" }
 log = "0.4.8"
 parking_lot = "0.9.0"
 primitives = { package = "substrate-primitives", path = "../../../primitives/core" }
+sp-blockchain = { path = "../../../primitives/blockchain" }
 runtime_io = { package = "sr-io", path = "../../../primitives/sr-io" }
 runtime_version = { package = "sr-version", path = "../../../primitives/sr-version" }
 slots = { package = "substrate-consensus-slots", path = "../slots" }

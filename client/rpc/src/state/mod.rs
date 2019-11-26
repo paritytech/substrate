@@ -184,7 +184,7 @@ pub fn new_full<B, E, Block: BlockT, RA>(
 		RA: Send + Sync + 'static,
 		Client<B, E, Block, RA>: ProvideRuntimeApi,
 		<Client<B, E, Block, RA> as ProvideRuntimeApi>::Api:
-			Metadata<Block, Error = client::error::Error>,
+			Metadata<Block, Error = sp_blockchain::Error>,
 {
 	State {
 		backend: Box::new(self::state_full::FullState::new(client, subscriptions)),
@@ -332,6 +332,6 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA>
 	}
 }
 
-fn client_err(err: client::error::Error) -> Error {
+fn client_err(err: sp_blockchain::Error) -> Error {
 	Error::Client(Box::new(err))
 }

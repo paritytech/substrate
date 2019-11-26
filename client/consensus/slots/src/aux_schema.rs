@@ -18,7 +18,7 @@
 
 use codec::{Encode, Decode};
 use client_api::backend::AuxStore;
-use client_api::error::{Result as ClientResult, Error as ClientError};
+use sp_blockchain::{Result as ClientResult, Error as ClientError};
 use sr_primitives::traits::Header;
 
 const SLOT_HEADER_MAP_KEY: &[u8] = b"slot_header_map";

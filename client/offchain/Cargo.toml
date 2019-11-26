@@ -35,7 +35,7 @@ client-db = { package = "substrate-client-db", path = "../db/", default-features
 env_logger = "0.7.0"
 test-client = { package = "substrate-test-runtime-client", path = "../../test/utils/runtime/client" }
 tokio = "0.1.22"
-transaction_pool = { package = "substrate-transaction-pool", path = "../transaction-pool" }
+transaction_pool = { package = "sc-transaction-pool", path = "../../client/transaction-pool" }
 
 [features]
 default = []

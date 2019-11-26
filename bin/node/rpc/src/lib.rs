@@ -41,13 +41,13 @@ pub fn create<C, P, M>(client: Arc<C>, pool: Arc<Pool<P>>) -> jsonrpc_core::IoHa
 	C: ProvideRuntimeApi,
 	C: client::blockchain::HeaderBackend<Block>,
 	C: Send + Sync + 'static,
-	C::Api: frame_system_rpc::AccountNonceApi<Block, AccountId, Index>,
+	C::Api: substrate_frame_rpc_system::AccountNonceApi<Block, AccountId, Index>,
 	C::Api: pallet_contracts_rpc::ContractsRuntimeApi<Block, AccountId, Balance>,
 	C::Api: pallet_transaction_payment_rpc::TransactionPaymentRuntimeApi<Block, Balance, UncheckedExtrinsic>,
 	P: ChainApi + Sync + Send + 'static,
 	M: jsonrpc_core::Metadata + Default,
 {
-	use frame_system_rpc::{System, SystemApi};
+	use substrate_frame_rpc_system::{System, SystemApi};
 	use pallet_contracts_rpc::{Contracts, ContractsApi};
 	use pallet_transaction_payment_rpc::{TransactionPayment, TransactionPaymentApi};
 

@@ -21,12 +21,13 @@ libp2p = { version = "0.13.0", default-features = false, features = ["secp256k1"
 log = "0.4.8"
 network = { package = "substrate-network", path = "../network" }
 primitives = { package = "substrate-primitives", path = "../../primitives/core" }
+sp-blockchain = { path = "../../primitives/blockchain" }
 prost = "0.5.0"
 serde_json = "1.0.41"
 sr-primitives = { path = "../../primitives/sr-primitives" }
 
 [dev-dependencies]
 parking_lot = "0.9.0"
-peerset = { package = "substrate-peerset", path = "../../primitives/peerset" }
+peerset = { package = "substrate-peerset", path = "../peerset" }
 test-client = { package = "substrate-test-runtime-client", path = "../../test/utils/runtime/client" }
 sr-api = { path = "../../primitives/sr-api" }

@@ -22,7 +22,7 @@ use std::sync::Arc;
 use futures::{prelude::*, sync::mpsc, sync::oneshot};
 use futures03::compat::{Compat01As03, Future01CompatExt as _};
 use parking_lot::Mutex;
-use client_api::error::Error as ClientError;
+use sp_blockchain::Error as ClientError;
 use client_api::{Fetcher, FetchChecker, RemoteHeaderRequest,
 	RemoteCallRequest, RemoteReadRequest, RemoteChangesRequest,
 	RemoteReadChildRequest, RemoteBodyRequest};

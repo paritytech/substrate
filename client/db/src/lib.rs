@@ -39,12 +39,13 @@ use std::path::PathBuf;
 use std::io;
 use std::collections::{HashMap, HashSet};
 
-use client_api::ForkBlocks;
+use client_api::{execution_extensions::ExecutionExtensions, ForkBlocks};
 use client_api::backend::NewBlockState;
 use client_api::backend::{StorageCollection, ChildStorageCollection};
-use client_api::blockchain::{well_known_cache_keys, HeaderBackend};
-use client_api::error::{Result as ClientResult, Error as ClientError};
-use client_api::execution_extensions::ExecutionExtensions;
+use sp_blockchain::{
+	Result as ClientResult, Error as ClientError,
+	well_known_cache_keys, HeaderBackend,
+};
 use codec::{Decode, Encode};
 use hash_db::{Hasher, Prefix};
 use kvdb::{KeyValueDB, DBTransaction};
@@ -67,7 +68,7 @@ use state_machine::{
 use crate::utils::{Meta, db_err, meta_keys, read_db, read_meta};
 use client::leaves::{LeafSet, FinalizationDisplaced};
 use state_db::StateDb;
-use header_metadata::{CachedHeaderMetadata, HeaderMetadata, HeaderMetadataCache};
+use sp_blockchain::{CachedHeaderMetadata, HeaderMetadata, HeaderMetadataCache};
 use crate::storage_cache::{CachingState, SharedCache, new_shared_cache};
 use log::{trace, debug, warn};
 pub use state_db::PruningMode;
@@ -239,7 +240,7 @@ pub fn new_client<E, S, Block, RA>(
 		>,
 		Arc<Backend<Block>>,
 	),
-	client::error::Error,
+	sp_blockchain::Error,
 >
 	where
 		Block: BlockT<Hash=H256>,
@@ -381,7 +382,7 @@ impl<Block: BlockT> client::blockchain::Backend<Block> for BlockchainDb<Block> {
 		match read_db(&*self.db, columns::KEY_LOOKUP, columns::BODY, id)? {
 			Some(body) => match Decode::decode(&mut &body[..]) {
 				Ok(body) => Ok(Some(body)),
-				Err(err) => return Err(client::error::Error::Backend(
+				Err(err) => return Err(sp_blockchain::Error::Backend(
 					format!("Error decoding body: {}", err)
 				)),
 			}
@@ -393,7 +394,7 @@ impl<Block: BlockT> client::blockchain::Backend<Block> for BlockchainDb<Block> {
 		match read_db(&*self.db, columns::KEY_LOOKUP, columns::JUSTIFICATION, id)? {
 			Some(justification) => match Decode::decode(&mut &justification[..]) {
 				Ok(justification) => Ok(Some(justification)),
-				Err(err) => return Err(client::error::Error::Backend(
+				Err(err) => return Err(sp_blockchain::Error::Backend(
 					format!("Error decoding justification: {}", err)
 				)),
 			}
@@ -425,7 +426,7 @@ impl<Block: BlockT> client::blockchain::ProvideCache<Block> for BlockchainDb<Blo
 }
 
 impl<Block: BlockT> HeaderMetadata<Block> for BlockchainDb<Block> {
-	type Error = client::error::Error;
+	type Error = sp_blockchain::Error;
 
 	fn header_metadata(&self, hash: Block::Hash) -> Result<CachedHeaderMetadata<Block>, Self::Error> {
 		self.header_metadata_cache.header_metadata(hash).or_else(|_| {
@@ -517,12 +518,12 @@ impl<Block> client_api::backend::BlockImportOperation<Block, Blake2Hasher>
 	) -> ClientResult<H256> {
 
 		if top.iter().any(|(k, _)| well_known_keys::is_child_storage_key(k)) {
-			return Err(client::error::Error::GenesisInvalid.into());
+			return Err(sp_blockchain::Error::GenesisInvalid.into());
 		}
 
 		for child_key in children.keys() {
 			if !well_known_keys::is_child_storage_key(&child_key) {
-				return Err(client::error::Error::GenesisInvalid.into());
+				return Err(sp_blockchain::Error::GenesisInvalid.into());
 			}
 		}
 
@@ -823,7 +824,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 		let is_archive_pruning = config.pruning.is_archive();
 		let blockchain = BlockchainDb::new(db.clone())?;
 		let meta = blockchain.meta.clone();
-		let map_e = |e: state_db::Error<io::Error>| ::client::error::Error::from(format!("State database error: {:?}", e));
+		let map_e = |e: state_db::Error<io::Error>| ::sp_blockchain::Error::from(format!("State database error: {:?}", e));
 		let state_db: StateDb<_, _> = StateDb::new(config.pruning.clone(), &StateMetaDb(&*db)).map_err(map_e)?;
 		let storage_db = StorageDb {
 			db: db.clone(),
@@ -948,7 +949,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 
 		// cannot find tree route with empty DB.
 		if meta.best_hash != Default::default() {
-			let tree_route = header_metadata::tree_route(
+			let tree_route = sp_blockchain::tree_route(
 				&self.blockchain,
 				meta.best_hash,
 				route_to,
@@ -963,7 +964,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 						(&r.number, &r.hash)
 					);
 
-					return Err(::client::error::Error::NotInFinalizedChain.into());
+					return Err(::sp_blockchain::Error::NotInFinalizedChain.into());
 				}
 
 				retracted.push(r.hash.clone());
@@ -1005,7 +1006,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 	) -> ClientResult<()> {
 		let last_finalized = last_finalized.unwrap_or_else(|| self.blockchain.meta.read().finalized_hash);
 		if *header.parent_hash() != last_finalized {
-			return Err(::client::error::Error::NonSequentialFinalization(
+			return Err(::sp_blockchain::Error::NonSequentialFinalization(
 				format!("Last finalized {:?} not parent of {:?}", last_finalized, header.hash()),
 			).into());
 		}
@@ -1068,7 +1069,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 
 			trace!(target: "db", "Canonicalize block #{} ({:?})", new_canonical, hash);
 			let commit = self.storage.state_db.canonicalize_block(&hash)
-				.map_err(|e: state_db::Error<io::Error>| client::error::Error::from(format!("State database error: {:?}", e)))?;
+				.map_err(|e: state_db::Error<io::Error>| sp_blockchain::Error::from(format!("State database error: {:?}", e)))?;
 			apply_state_commit(transaction, commit);
 		};
 
@@ -1152,7 +1153,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 				}
 				let number_u64 = number.saturated_into::<u64>();
 				let commit = self.storage.state_db.insert_block(&hash, number_u64, &pending_block.header.parent_hash(), changeset)
-					.map_err(|e: state_db::Error<io::Error>| client::error::Error::from(format!("State database error: {:?}", e)))?;
+					.map_err(|e: state_db::Error<io::Error>| sp_blockchain::Error::from(format!("State database error: {:?}", e)))?;
 				apply_state_commit(&mut transaction, commit);
 
 				// Check if need to finalize. Genesis is always finalized instantly.
@@ -1217,7 +1218,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 				meta_updates.push((hash, *number, true, false));
 				Some((enacted, retracted))
 			} else {
-				return Err(client::error::Error::UnknownBlock(format!("Cannot set head {:?}", set_head)))
+				return Err(sp_blockchain::Error::UnknownBlock(format!("Cannot set head {:?}", set_head)))
 			}
 		} else {
 			None
@@ -1288,7 +1289,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 			transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, &lookup_key);
 
 			let commit = self.storage.state_db.canonicalize_block(&f_hash)
-				.map_err(|e: state_db::Error<io::Error>| client::error::Error::from(format!("State database error: {:?}", e)))?;
+				.map_err(|e: state_db::Error<io::Error>| sp_blockchain::Error::from(format!("State database error: {:?}", e)))?;
 			apply_state_commit(transaction, commit);
 
 			let changes_trie_config = self.changes_trie_config(parent_hash)?;
@@ -1451,12 +1452,12 @@ impl<Block> client_api::backend::Backend<Block, Blake2Hasher> for Backend<Block>
 				Some(commit) => {
 					apply_state_commit(&mut transaction, commit);
 					let removed = self.blockchain.header(BlockId::Number(best))?.ok_or_else(
-						|| client::error::Error::UnknownBlock(
+						|| sp_blockchain::Error::UnknownBlock(
 							format!("Error reverting to {}. Block hash not found.", best)))?;
 
 					best -= One::one();	// prev block
 					let hash = self.blockchain.hash(best)?.ok_or_else(
-						|| client::error::Error::UnknownBlock(
+						|| sp_blockchain::Error::UnknownBlock(
 							format!("Error reverting to {}. Block hash not found.", best)))?;
 					let key = utils::number_and_hash_to_lookup_key(best.clone(), &hash)?;
 					transaction.put(columns::META, meta_keys::BEST_BLOCK, &key);
@@ -1500,7 +1501,7 @@ impl<Block> client_api::backend::Backend<Block, Blake2Hasher> for Backend<Block>
 			Ok(Some(ref hdr)) => {
 				let hash = hdr.hash();
 				if !self.have_state_at(&hash, *hdr.number()) {
-					return Err(client::error::Error::UnknownBlock(format!("State already discarded for {:?}", block)))
+					return Err(sp_blockchain::Error::UnknownBlock(format!("State already discarded for {:?}", block)))
 				}
 				if let Ok(()) = self.storage.state_db.pin(&hash) {
 					let root = H256::from_slice(hdr.state_root().as_ref());
@@ -1508,10 +1509,10 @@ impl<Block> client_api::backend::Backend<Block, Blake2Hasher> for Backend<Block>
 					let state = RefTrackingState::new(db_state, self.storage.clone(), Some(hash.clone()));
 					Ok(CachingState::new(state, self.shared_cache.clone(), Some(hash)))
 				} else {
-					Err(client::error::Error::UnknownBlock(format!("State already discarded for {:?}", block)))
+					Err(sp_blockchain::Error::UnknownBlock(format!("State already discarded for {:?}", block)))
 				}
 			},
-			Ok(None) => Err(client::error::Error::UnknownBlock(format!("Unknown state for block {:?}", block))),
+			Ok(None) => Err(sp_blockchain::Error::UnknownBlock(format!("Unknown state for block {:?}", block))),
 			Err(e) => Err(e),
 		}
 	}
@@ -1561,7 +1562,7 @@ mod tests {
 	use sr_primitives::testing::{Header, Block as RawBlock, ExtrinsicWrapper};
 	use sr_primitives::traits::{Hash, BlakeTwo256};
 	use state_machine::{TrieMut, TrieDBMut, ChangesTrieRootsStorage, ChangesTrieStorage};
-	use header_metadata::{lowest_common_ancestor, tree_route};
+	use sp_blockchain::{lowest_common_ancestor, tree_route};
 
 	use test_client;
 
