@@ -44,7 +44,7 @@ pub trait Externalities: ExtensionStore {
 
 	/// Get child storage value hash. This may be optimized for large values.
 	///
-	/// Returns an `Option` that holds the raw hash.
+	/// Returns an `Option` that holds the SCALE encoded hash.
 	fn child_storage_hash(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<Vec<u8>>;
 
 	/// Read original runtime storage, ignoring any overlayed changes.
