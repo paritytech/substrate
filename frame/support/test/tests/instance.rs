@@ -472,14 +472,3 @@ fn test_instance_storage_metadata() {
 	let metadata = Module2_2::storage_metadata();
 	pretty_assertions::assert_eq!(EXPECTED_METADATA, metadata);
 }
-
-#[test]
-fn instance_prefix_is_prefix_of_entries() {
-	use module2::Instance;
-
-	let prefix = module2::Instance2::PREFIX;
-	assert!(module2::Instance2::PREFIX_FOR_Value.starts_with(prefix));
-	assert!(module2::Instance2::PREFIX_FOR_Map.starts_with(prefix));
-	assert!(module2::Instance2::PREFIX_FOR_LinkedMap.starts_with(prefix));
-	assert!(module2::Instance2::PREFIX_FOR_DoubleMap.starts_with(prefix));
-}
