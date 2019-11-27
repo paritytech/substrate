@@ -467,7 +467,7 @@ mod tests {
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
 					event: Event::system(system::Event::ExtrinsicSuccess(
-						DispatchInfo { weight: 10000, class: DispatchClass::Operational }
+						DispatchInfo { weight: 10000, class: DispatchClass::Operational, pays_fee: true }
 					)),
 					topics: vec![],
 				},
@@ -489,7 +489,7 @@ mod tests {
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
 					event: Event::system(system::Event::ExtrinsicSuccess(
-						DispatchInfo { weight: 1000000, class: DispatchClass::Normal }
+						DispatchInfo { weight: 1000000, class: DispatchClass::Normal, pays_fee: true }
 					)),
 					topics: vec![],
 				},
@@ -520,7 +520,7 @@ mod tests {
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
 					event: Event::system(system::Event::ExtrinsicSuccess(
-						DispatchInfo { weight: 10000, class: DispatchClass::Operational }
+						DispatchInfo { weight: 10000, class: DispatchClass::Operational, pays_fee: true }
 					)),
 					topics: vec![],
 				},
@@ -544,7 +544,7 @@ mod tests {
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
 					event: Event::system(system::Event::ExtrinsicSuccess(
-						DispatchInfo { weight: 1000000, class: DispatchClass::Normal }
+						DispatchInfo { weight: 1000000, class: DispatchClass::Normal, pays_fee: true }
 					)),
 					topics: vec![],
 				},
@@ -568,7 +568,7 @@ mod tests {
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(2),
 					event: Event::system(system::Event::ExtrinsicSuccess(
-						DispatchInfo { weight: 1000000, class: DispatchClass::Normal }
+						DispatchInfo { weight: 1000000, class: DispatchClass::Normal, pays_fee: true }
 					)),
 					topics: vec![],
 				},

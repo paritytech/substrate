@@ -20,7 +20,7 @@ use std::fmt::Debug;
 use std::sync::Arc;
 use codec::{Encode, Decode};
 use client_api::backend::AuxStore;
-use client_api::error::{Result as ClientResult, Error as ClientError};
+use sp_blockchain::{Result as ClientResult, Error as ClientError};
 use fork_tree::ForkTree;
 use grandpa::round::State as RoundState;
 use sr_primitives::traits::{Block as BlockT, NumberFor};

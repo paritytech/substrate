@@ -76,6 +76,14 @@ pub trait WeighBlock<BlockNumber> {
 	fn on_finalize(_: BlockNumber) -> Weight { Zero::zero() }
 }
 
+/// Indicates if dispatch function should pay fees or not.
+/// If set to false, the block resource limits are applied, yet no fee is deducted.
+pub trait PaysFee {
+	fn pays_fee(&self) -> bool {
+		true
+	}
+}
+
 /// Maybe I can do something to remove the duplicate code here.
 #[impl_for_tuples(30)]
 impl<BlockNumber: Copy> WeighBlock<BlockNumber> for SingleModule {
@@ -135,17 +143,8 @@ pub struct DispatchInfo {
 	pub weight: Weight,
 	/// Class of this transaction.
 	pub class: DispatchClass,
-}
-
-impl DispatchInfo {
-	/// Determine if this dispatch should pay the base length-related fee or not.
-	pub fn pay_length_fee(&self) -> bool {
-		match self.class {
-			DispatchClass::Normal => true,
-			// For now we assume all operational transactions don't pay the length fee.
-			DispatchClass::Operational => false,
-		}
-	}
+	/// Does this transaction pay fees.
+	pub pays_fee: bool,
 }
 
 /// A `Dispatchable` function (aka transaction) that can carry some static information along with
@@ -209,6 +208,20 @@ impl<T> ClassifyDispatch<T> for SimpleDispatchInfo {
 	}
 }
 
+impl PaysFee for SimpleDispatchInfo {
+	fn pays_fee(&self) -> bool {
+		match self {
+			SimpleDispatchInfo::FixedNormal(_) => true,
+			SimpleDispatchInfo::MaxNormal => true,
+			SimpleDispatchInfo::FreeNormal => true,
+
+			SimpleDispatchInfo::FixedOperational(_) => true,
+			SimpleDispatchInfo::MaxOperational => true,
+			SimpleDispatchInfo::FreeOperational => false,
+		}
+	}
+}
+
 impl Default for SimpleDispatchInfo {
 	fn default() -> Self {
 		// Default weight of all transactions.
@@ -253,8 +266,8 @@ impl<Call: Encode, Extra: Encode> GetDispatchInfo for sr_primitives::testing::Te
 		// for testing: weight == size.
 		DispatchInfo {
 			weight: self.encode().len() as _,
+			pays_fee: true,
 			..Default::default()
 		}
 	}
 }
-

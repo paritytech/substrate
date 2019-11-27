@@ -22,7 +22,7 @@ use jsonrpc_core::Result as RpcResult;
 use jsonrpc_core::futures::Future;
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
-use rpc_primitives::number;
+use rpc_primitives::{number::NumberOrHex, list::ListOrValue};
 use self::error::{FutureResult, Result};
 
 pub use self::gen_client::Client as ChainClient;
@@ -45,7 +45,10 @@ pub trait ChainApi<Number, Hash, Header, SignedBlock> {
 	///
 	/// By default returns latest block hash.
 	#[rpc(name = "chain_getBlockHash", alias("chain_getHead"))]
-	fn block_hash(&self, hash: Option<number::NumberOrHex<Number>>) -> Result<Option<Hash>>;
+	fn block_hash(
+		&self,
+		hash: Option<ListOrValue<NumberOrHex<Number>>>,
+	) -> Result<ListOrValue<Option<Hash>>>;
 
 	/// Get hash of the last finalized block in the canon chain.
 	#[rpc(name = "chain_getFinalizedHead", alias("chain_getFinalisedHead"))]
@@ -67,7 +70,11 @@ pub trait ChainApi<Number, Hash, Header, SignedBlock> {
 		name = "chain_unsubscribeNewHeads",
 		alias("unsubscribe_newHead", "chain_unsubscribeNewHead")
 	)]
-	fn unsubscribe_new_heads(&self, metadata: Option<Self::Metadata>, id: SubscriptionId) -> RpcResult<bool>;
+	fn unsubscribe_new_heads(
+		&self,
+		metadata: Option<Self::Metadata>,
+		id: SubscriptionId,
+	) -> RpcResult<bool>;
 
 	/// New head subscription
 	#[pubsub(
@@ -85,5 +92,9 @@ pub trait ChainApi<Number, Hash, Header, SignedBlock> {
 		name = "chain_unsubscribeFinalizedHeads",
 		alias("chain_unsubscribeFinalisedHeads")
 	)]
-	fn unsubscribe_finalized_heads(&self, metadata: Option<Self::Metadata>, id: SubscriptionId) -> RpcResult<bool>;
+	fn unsubscribe_finalized_heads(
+		&self,
+		metadata: Option<Self::Metadata>,
+		id: SubscriptionId,
+	) -> RpcResult<bool>;
 }
