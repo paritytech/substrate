@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, Criterion, BenchmarkId, Throughput, black_box};
 
 use pallet_contracts::{
 	self as contracts,
@@ -244,11 +244,15 @@ fn test_flipper(c: &mut Criterion) {
 		let _ = Balances::deposit_creating(&ALICE, 1_000_000_000_000);
 
 		for (name, bytes) in WASMS {
-			group.throughput(criterion::Throughput::Bytes(bytes.len() as u64));
+			group.throughput(Throughput::Bytes(bytes.len() as u64));
 
-			group.bench_function(criterion::BenchmarkId::from_parameter(name), |b| {
+			group.bench_function(BenchmarkId::from_parameter(name), |b| {
 				b.iter(|| {
-					assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, bytes.to_vec()));
+					assert_ok!(Contract::put_code(
+						Origin::signed(ALICE),
+						100_000,
+						black_box(bytes.to_vec())
+					));
 				})
 			});
 		}
