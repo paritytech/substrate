@@ -277,10 +277,7 @@ type ConcreteTransactionPool = txpool_api::MaintainableTransactionPool<
 		ConcreteBlock
 	>,
 	txpool::FullBasicPoolMaintainer<
-		ConcreteBackend,
-		LocalCallExecutor<Backend<ConcreteBlock>, NativeExecutor<node_executor::Executor>>,
-		ConcreteBlock,
-		node_runtime::RuntimeApi,
+		ConcreteClient,
 		txpool::FullChainApi<ConcreteClient, Block>
 	>
 >;

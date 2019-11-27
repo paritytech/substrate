@@ -26,9 +26,8 @@ use futures::{
 use log::warn;
 use parking_lot::Mutex;
 
-use client::Client;
 use client_api::{
-	CallExecutor,
+	client::BlockBody,
 	light::{Fetcher, RemoteBodyRequest},
 };
 use primitives::{Blake2Hasher, H256};
@@ -36,42 +35,36 @@ use sr_primitives::{
 	generic::BlockId,
 	traits::{Block as BlockT, Extrinsic, Header, NumberFor, ProvideRuntimeApi, SimpleArithmetic},
 };
+use sp_blockchain::HeaderBackend;
 use txpool_api::TransactionPoolMaintainer;
 use txpool_runtime_api::TaggedTransactionQueue;
 
 use txpool::{self, ChainApi};
 
 /// Basic transaction pool maintainer for full clients.
-pub struct FullBasicPoolMaintainer<Backend, Executor, Block: BlockT, Api, PoolApi: ChainApi> {
+pub struct FullBasicPoolMaintainer<Client, PoolApi: ChainApi> {
 	pool: Arc<txpool::Pool<PoolApi>>,
-	client: Arc<Client<Backend, Executor, Block, Api>>,
+	client: Arc<Client>,
 }
 
-impl<Backend, Executor, Block, Api, PoolApi> FullBasicPoolMaintainer<Backend, Executor, Block, Api, PoolApi>
-	where
-		Block: BlockT,
-		PoolApi: ChainApi,
-{
+impl<Client, PoolApi: ChainApi> FullBasicPoolMaintainer<Client, PoolApi> {
 	/// Create new basic full pool maintainer.
 	pub fn new(
 		pool: Arc<txpool::Pool<PoolApi>>,
-		client: Arc<Client<Backend, Executor, Block, Api>>,
+		client: Arc<Client>,
 	) -> Self {
 		FullBasicPoolMaintainer { pool, client }
 	}
 }
 
-impl<Backend, Executor, Block: BlockT, Api, PoolApi> TransactionPoolMaintainer
+impl<Block, Client, PoolApi> TransactionPoolMaintainer
 for
-	FullBasicPoolMaintainer<Backend, Executor, Block, Api, PoolApi>
+	FullBasicPoolMaintainer<Client, PoolApi>
 where
-	Block: BlockT<Hash = H256>,
-	Backend: 'static + client_api::backend::Backend<Block, Blake2Hasher>,
-	Client<Backend, Executor, Block, Api>: ProvideRuntimeApi,
-	<Client<Backend, Executor, Block, Api> as ProvideRuntimeApi>::Api: TaggedTransactionQueue<Block>,
-	Executor: 'static + Send + Sync + CallExecutor<Block, Blake2Hasher>,
-	Api: 'static + Send + Sync,
-	PoolApi: 'static + ChainApi<Block = Block, Hash = H256>,
+	Block: BlockT<Hash = <Blake2Hasher as primitives::Hasher>::Out>,
+	Client: ProvideRuntimeApi + HeaderBackend<Block> + BlockBody<Block> + 'static,
+	Client::Api: TaggedTransactionQueue<Block>,
+	PoolApi: ChainApi<Block = Block, Hash = H256> + 'static,
 {
 	type Block = Block;
 	type Hash = Block::Hash;
@@ -84,8 +77,8 @@ where
 		// Put transactions from retracted blocks back into the pool.
 		let client_copy = self.client.clone();
 		let retracted_transactions = retracted.to_vec().into_iter()
-			.filter_map(move |hash| client_copy.block(&BlockId::hash(hash)).ok().unwrap_or(None))
-			.flat_map(|block| block.block.deconstruct().1.into_iter())
+			.filter_map(move |hash| client_copy.block_body(&BlockId::hash(hash)).ok().unwrap_or(None))
+			.flat_map(|block| block.into_iter())
 			.filter(|tx| tx.is_signed().unwrap_or(false));
 		let resubmit_future = self.pool
 			.submit_at(id, retracted_transactions, true)
@@ -102,12 +95,12 @@ where
 			return Box::new(resubmit_future)
 		}
 
-		let block = self.client.block(id);
+		let block = (self.client.header(*id), self.client.block_body(id));
 		match block {
-			Ok(Some(block)) => {
-				let parent_id = BlockId::hash(*block.block.header().parent_hash());
+			(Ok(Some(header)), Ok(Some(extrinsics))) => {
+				let parent_id = BlockId::hash(*header.parent_hash());
 				let prune_future = self.pool
-					.prune(id, &parent_id, block.block.extrinsics())
+					.prune(id, &parent_id, &extrinsics)
 					.then(|prune_result| ready(match prune_result {
 						Ok(_) => (),
 						Err(e) => {
@@ -118,9 +111,9 @@ where
 
 				Box::new(resubmit_future.then(|_| prune_future))
 			},
-			Ok(None) => Box::new(resubmit_future),
-			Err(err) => {
-				warn!("Error reading block body: {:?}", err);
+			(Ok(_), Ok(_)) => Box::new(resubmit_future),
+			err => {
+				warn!("Error reading block: {:?}", err);
 				Box::new(resubmit_future)
 			},
 		}
@@ -128,9 +121,9 @@ where
 }
 
 /// Basic transaction pool maintainer for light clients.
-pub struct LightBasicPoolMaintainer<Backend, Executor, Block: BlockT, Api, PoolApi: ChainApi, F> {
+pub struct LightBasicPoolMaintainer<Block: BlockT, Client, PoolApi: ChainApi, F> {
 	pool: Arc<txpool::Pool<PoolApi>>,
-	client: Arc<Client<Backend, Executor, Block, Api>>,
+	client: Arc<Client>,
 	fetcher: Arc<F>,
 	revalidate_time_period: Option<std::time::Duration>,
 	revalidate_block_period: Option<NumberFor<Block>>,
@@ -138,15 +131,12 @@ pub struct LightBasicPoolMaintainer<Backend, Executor, Block: BlockT, Api, PoolA
 	_phantom: PhantomData<Block>,
 }
 
-impl<Backend, Executor, Block, Api, PoolApi, F> LightBasicPoolMaintainer<Backend, Executor, Block, Api, PoolApi, F>
+impl<Block, Client, PoolApi, F> LightBasicPoolMaintainer<Block, Client, PoolApi, F>
 	where
-		Block: BlockT<Hash = H256>,
-		Backend: 'static + client_api::backend::Backend<Block, Blake2Hasher>,
-		Client<Backend, Executor, Block, Api>: ProvideRuntimeApi,
-		<Client<Backend, Executor, Block, Api> as ProvideRuntimeApi>::Api: TaggedTransactionQueue<Block>,
-		Executor: 'static + Send + Sync + CallExecutor<Block, Blake2Hasher>,
-		Api: 'static + Send + Sync,
-		PoolApi: 'static + ChainApi<Block = Block, Hash = H256>,
+		Block: BlockT<Hash = <Blake2Hasher as primitives::Hasher>::Out>,
+		Client: ProvideRuntimeApi + HeaderBackend<Block> + BlockBody<Block> + 'static,
+		Client::Api: TaggedTransactionQueue<Block>,
+		PoolApi: ChainApi<Block = Block, Hash = H256> + 'static,
 		F: Fetcher<Block> + 'static,
 {
 	/// Create light pool maintainer with default constants.
@@ -155,7 +145,7 @@ impl<Backend, Executor, Block, Api, PoolApi, F> LightBasicPoolMaintainer<Backend
 	/// (whatever happens first).
 	pub fn with_defaults(
 		pool: Arc<txpool::Pool<PoolApi>>,
-		client: Arc<Client<Backend, Executor, Block, Api>>,
+		client: Arc<Client>,
 		fetcher: Arc<F>,
 	) -> Self {
 		Self::new(
@@ -170,7 +160,7 @@ impl<Backend, Executor, Block, Api, PoolApi, F> LightBasicPoolMaintainer<Backend
 	/// Create light pool maintainer with passed constants.
 	pub fn new(
 		pool: Arc<txpool::Pool<PoolApi>>,
-		client: Arc<Client<Backend, Executor, Block, Api>>,
+		client: Arc<Client>,
 		fetcher: Arc<F>,
 		revalidate_time_period: Option<std::time::Duration>,
 		revalidate_block_period: Option<NumberFor<Block>>,
@@ -246,17 +236,14 @@ impl<Backend, Executor, Block, Api, PoolApi, F> LightBasicPoolMaintainer<Backend
 	}
 }
 
-impl<Backend, Executor, Block, Api, PoolApi, F> TransactionPoolMaintainer
+impl<Block, Client, PoolApi, F> TransactionPoolMaintainer
 for
-	LightBasicPoolMaintainer<Backend, Executor, Block, Api, PoolApi, F>
+	LightBasicPoolMaintainer<Block, Client, PoolApi, F>
 where
 	Block: BlockT<Hash = <Blake2Hasher as primitives::Hasher>::Out>,
-	Backend: 'static + client_api::backend::Backend<Block, Blake2Hasher>,
-	Client<Backend, Executor, Block, Api>: ProvideRuntimeApi,
-	<Client<Backend, Executor, Block, Api> as ProvideRuntimeApi>::Api: TaggedTransactionQueue<Block>,
-	Executor: 'static + Send + Sync + CallExecutor<Block, Blake2Hasher>,
-	Api: 'static + Send + Sync,
-	PoolApi: 'static + ChainApi<Block = Block, Hash = H256>,
+	Client: ProvideRuntimeApi + HeaderBackend<Block> + BlockBody<Block> + 'static,
+	Client::Api: TaggedTransactionQueue<Block>,
+	PoolApi: ChainApi<Block = Block, Hash = H256> + 'static,
 	F: Fetcher<Block> + 'static,
 {
 	type Block = Block;
@@ -272,7 +259,7 @@ where
 			self.revalidation_status.lock().clear();
 			return Box::new(ready(()));
 		}
-		let header = self.client.header(id)
+		let header = self.client.header(*id)
 			.and_then(|h| h.ok_or(sp_blockchain::Error::UnknownBlock(format!("{}", id))));
 		let header = match header {
 			Ok(header) => header,

@@ -4899,7 +4899,6 @@ dependencies = [
  "sp-transaction-pool-runtime-api 2.0.0",
  "sr-api 2.0.0",
  "sr-primitives 2.0.0",
- "substrate-client 2.0.0",
  "substrate-client-api 2.0.0",
  "substrate-keyring 2.0.0",
  "substrate-primitives 2.0.0",
