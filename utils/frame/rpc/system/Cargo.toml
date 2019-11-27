@@ -1,0 +1,24 @@
+[package]
+name = "substrate-frame-rpc-system"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
+codec = { package = "parity-scale-codec", version = "1.0.0" }
+jsonrpc-core = "14.0.3"
+jsonrpc-core-client = "14.0.3"
+jsonrpc-derive = "14.0.3"
+log = "0.4.8"
+serde = { version = "1.0.101", features = ["derive"] }
+sr-primitives = { path = "../../../../primitives/sr-primitives" }
+frame-system-rpc-runtime-api = { path = "../../../../frame/system/rpc/runtime-api" }
+substrate-primitives = { path = "../../../../primitives/core" }
+sp-blockchain = { path = "../../../../primitives/blockchain" }
+sc-transaction-graph = { path = "../../../../client/transaction-pool/graph" }
+
+[dev-dependencies]
+test-client = { package = "substrate-test-runtime-client", path = "../../../../test/utils/runtime/client" }
+sc-transaction-pool = { path = "../../../../client/transaction-pool" }
+env_logger = "0.7.0"
+futures = "0.3.1"

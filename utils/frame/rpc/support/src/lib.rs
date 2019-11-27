@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Combines [substrate_rpc_api::state::StateClient] with [frame_support::storage::generator] traits
+//! Combines [sc_rpc_api::state::StateClient] with [frame_support::storage::generator] traits
 //! to provide strongly typed chain state queries over rpc.
 
 #![warn(missing_docs)]
@@ -28,7 +28,7 @@ use frame_support::storage::generator::{
 	StorageDoubleMap, StorageLinkedMap, StorageMap, StorageValue
 };
 use substrate_primitives_storage::{StorageData, StorageKey};
-use substrate_rpc_api::state::StateClient;
+use sc_rpc_api::state::StateClient;
 
 /// A typed query on chain state usable from an RPC client.
 ///
@@ -40,9 +40,9 @@ use substrate_rpc_api::state::StateClient;
 /// # use jsonrpc_client_transports::transports::http;
 /// # use parity_scale_codec::Encode;
 /// # use frame_support::{decl_storage, decl_module};
-/// # use frame_support_rpc::StorageQuery;
+/// # use substrate_frame_rpc_support::StorageQuery;
 /// # use frame_system::Trait;
-/// # use substrate_rpc_api::state::StateClient;
+/// # use sc_rpc_api::state::StateClient;
 /// #
 /// # // Hash would normally be <TestRuntime as frame_system::Trait>::Hash, but we don't have
 /// # // frame_system::Trait implemented for TestRuntime. Here we just pretend.

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use client_api::error::Error as ClientError;
+use sp_blockchain::Error as ClientError;
 use crate::protocol::sync::{PeerSync, PeerSyncState};
 use fork_tree::ForkTree;
 use libp2p::PeerId;
@@ -283,7 +283,7 @@ impl<'a, B: BlockT> Matcher<'a, B> {
 #[cfg(test)]
 mod tests {
 	use crate::protocol::sync::PeerSync;
-	use client_api::error::Error as ClientError;
+	use sp_blockchain::Error as ClientError;
 	use quickcheck::{Arbitrary, Gen, QuickCheck, StdThreadGen};
 	use rand::Rng;
 	use std::collections::{HashMap, HashSet};
