@@ -38,10 +38,12 @@ use consensus_common::{self, BlockImport, Environment, Proposer,
 use consensus_common::import_queue::{
 	Verifier, BasicQueue, BoxBlockImport, BoxJustificationImport, BoxFinalityProofImport,
 };
-use client_api::{ error::Result as CResult, backend::AuxStore };
+use client_api::backend::AuxStore;
 use client::{
-	blockchain::ProvideCache, BlockOf,
-	well_known_cache_keys::{self, Id as CacheKeyId},
+	blockchain::ProvideCache, BlockOf
+};
+use sp_blockchain::{
+	Result as CResult, well_known_cache_keys::{self, Id as CacheKeyId},
 };
 
 use block_builder_api::BlockBuilder as BlockBuilderApi;
@@ -55,6 +57,7 @@ use inherents::{InherentDataProviders, InherentData};
 use futures::prelude::*;
 use parking_lot::Mutex;
 use log::{debug, info, trace};
+use sp_blockchain;
 
 use sp_timestamp::{
 	TimestampInherentData, InherentType as TimestampInherent, InherentError as TIError
@@ -95,7 +98,7 @@ impl SlotDuration {
 		A: Codec,
 		B: BlockT,
 		C: AuxStore + ProvideRuntimeApi,
-		C::Api: AuraApi<B, A, Error = client::error::Error>,
+		C::Api: AuraApi<B, A, Error = sp_blockchain::Error>,
 	{
 		slots::SlotDuration::get_or_compute(client, |a, b| a.slot_duration(b)).map(Self)
 	}
@@ -340,7 +343,7 @@ enum Error<B: BlockT> {
 	BadSignature(B::Hash),
 	#[display(fmt = "Rejecting block too far in future")]
 	TooFarInFuture,
-	Client(client::error::Error),
+	Client(sp_blockchain::Error),
 	DataProvider(String),
 	Runtime(String),
 }
@@ -448,7 +451,7 @@ impl<C, P, T> AuraVerifier<C, P, T>
 		inherent_data: InherentData,
 		timestamp_now: u64,
 	) -> Result<(), Error<B>>
-		where C: ProvideRuntimeApi, C::Api: BlockBuilderApi<B, Error = client::error::Error>
+		where C: ProvideRuntimeApi, C::Api: BlockBuilderApi<B, Error = sp_blockchain::Error>
 	{
 		const MAX_TIMESTAMP_DRIFT_SECS: u64 = 60;
 
@@ -495,7 +498,7 @@ impl<C, P, T> AuraVerifier<C, P, T>
 #[forbid(deprecated)]
 impl<B: BlockT, C, P, T> Verifier<B> for AuraVerifier<C, P, T> where
 	C: ProvideRuntimeApi + Send + Sync + client_api::backend::AuxStore + ProvideCache<B> + BlockOf,
-	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>> + ApiExt<B, Error = client::error::Error>,
+	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>> + ApiExt<B, Error = sp_blockchain::Error>,
 	DigestItemFor<B>: CompatibleDigestItem<P>,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Send + Sync + Hash + Eq + Clone + Decode + Encode + Debug + 'static,
@@ -682,7 +685,7 @@ pub fn import_queue<B, C, P, T>(
 ) -> Result<AuraImportQueue<B>, consensus_common::Error> where
 	B: BlockT,
 	C: 'static + ProvideRuntimeApi + BlockOf + ProvideCache<B> + Send + Sync + AuxStore,
-	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>> + ApiExt<B, Error = client::error::Error>,
+	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>> + ApiExt<B, Error = sp_blockchain::Error>,
 	DigestItemFor<B>: CompatibleDigestItem<P>,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Clone + Eq + Send + Sync + Hash + Debug + Encode + Decode,
@@ -721,7 +724,7 @@ mod tests {
 	use test_client;
 	use aura_primitives::sr25519::AuthorityPair;
 
-	type Error = client::error::Error;
+	type Error = sp_blockchain::Error;
 
 	type TestClient = client::Client<
 		test_client::Backend,

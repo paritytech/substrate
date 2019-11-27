@@ -17,7 +17,7 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 
 use futures::executor::block_on;
-use substrate_transaction_graph::*;
+use sc_transaction_graph::*;
 use sr_primitives::transaction_validity::{ValidTransaction, InvalidTransaction};
 use codec::Encode;
 use test_runtime::{Block, Extrinsic, Transfer, H256, AccountId};

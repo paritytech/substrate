@@ -18,7 +18,7 @@
 
 use std::sync::Arc;
 
-use client::blockchain::HeaderBackend;
+use sp_blockchain::HeaderBackend;
 use codec::Codec;
 use jsonrpc_core::{Error, ErrorCode, Result};
 use jsonrpc_derive::rpc;
@@ -46,7 +46,7 @@ const CONTRACT_IS_A_TOMBSTONE: i64 = 3;
 ///
 /// Based on W3F research spreadsheet:
 /// https://docs.google.com/spreadsheets/d/1h0RqncdqiWI4KgxO0z9JIpZEJESXjX_ZCK6LFX6veDo/view
-const GAS_PER_SECOND: u64 = 1e9;
+const GAS_PER_SECOND: u64 = 1_000_000_000;
 
 /// A private newtype for converting `GetStorageError` into an RPC error.
 struct GetStorageError(runtime_api::GetStorageError);

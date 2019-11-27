@@ -31,9 +31,7 @@ use primitives::{
 	traits::CodeExecutor,
 };
 use sr_api::{ProofRecorder, InitializeBlock};
-use client_api::{
-	error, backend, call_executor::CallExecutor,
-};
+use client_api::{backend, call_executor::CallExecutor};
 
 /// Call executor that executes methods locally, querying all required
 /// data from local backend.
@@ -79,7 +77,7 @@ where
 		call_data: &[u8],
 		strategy: ExecutionStrategy,
 		extensions: Option<Extensions>,
-	) -> error::Result<Vec<u8>> {
+	) -> sp_blockchain::Result<Vec<u8>> {
 		let mut changes = OverlayedChanges::default();
 		let state = self.backend.state_at(*id)?;
 		let return_data = StateMachine::new(
@@ -105,7 +103,7 @@ where
 
 	fn contextual_call<
 		'a,
-		IB: Fn() -> error::Result<()>,
+		IB: Fn() -> sp_blockchain::Result<()>,
 		EM: Fn(
 			Result<NativeOrEncoded<R>, Self::Error>,
 			Result<NativeOrEncoded<R>, Self::Error>
@@ -124,7 +122,7 @@ where
 		native_call: Option<NC>,
 		recorder: &Option<ProofRecorder<Block>>,
 		extensions: Option<Extensions>,
-	) -> Result<NativeOrEncoded<R>, error::Error> where ExecutionManager<EM>: Clone {
+	) -> Result<NativeOrEncoded<R>, sp_blockchain::Error> where ExecutionManager<EM>: Clone {
 		match initialize_block {
 			InitializeBlock::Do(ref init_block)
 				if init_block.borrow().as_ref().map(|id| id != at).unwrap_or(true) => {
@@ -189,7 +187,7 @@ where
 		Ok(result)
 	}
 
-	fn runtime_version(&self, id: &BlockId<Block>) -> error::Result<RuntimeVersion> {
+	fn runtime_version(&self, id: &BlockId<Block>) -> sp_blockchain::Result<RuntimeVersion> {
 		let mut overlay = OverlayedChanges::default();
 		let state = self.backend.state_at(*id)?;
 
@@ -204,7 +202,7 @@ where
 			let _lock = self.backend.get_import_lock().read();
 			self.backend.destroy_state(state)?;
 		}
-		version.ok_or(error::Error::VersionInvalid.into())
+		version.ok_or(sp_blockchain::Error::VersionInvalid.into())
 	}
 
 	fn call_at_state<
@@ -223,7 +221,7 @@ where
 		manager: ExecutionManager<F>,
 		native_call: Option<NC>,
 		extensions: Option<Extensions>,
-	) -> error::Result<(
+	) -> sp_blockchain::Result<(
 		NativeOrEncoded<R>,
 		(S::Transaction, <Blake2Hasher as Hasher>::Out),
 		Option<ChangesTrieTransaction<Blake2Hasher, NumberFor<Block>>>,
@@ -255,7 +253,7 @@ where
 		overlay: &mut OverlayedChanges,
 		method: &str,
 		call_data: &[u8]
-	) -> Result<(Vec<u8>, StorageProof), error::Error> {
+	) -> Result<(Vec<u8>, StorageProof), sp_blockchain::Error> {
 		state_machine::prove_execution_on_trie_backend(
 			trie_state,
 			overlay,

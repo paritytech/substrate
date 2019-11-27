@@ -37,12 +37,15 @@ pub enum Error {
 	#[cfg(feature = "wasmtime")]
 	Wasmtime(ActionError),
 	/// Error in the API. Parameter is an error message.
+	#[from(ignore)]
 	ApiError(String),
 	/// Method is not found
 	#[display(fmt="Method not found: '{}'", _0)]
+	#[from(ignore)]
 	MethodNotFound(String),
 	/// Code is invalid (expected single byte)
 	#[display(fmt="Invalid Code: {}", _0)]
+	#[from(ignore)]
 	InvalidCode(String),
 	/// Could not get runtime version.
 	#[display(fmt="On-chain runtime does not specify version")]
@@ -70,6 +73,7 @@ pub enum Error {
 	#[display(fmt="The runtime has the `start` function")]
 	RuntimeHasStartFn,
 	/// Some other error occurred
+	#[from(ignore)]
 	Other(String),
 	/// Some error occurred in the allocator
 	#[display(fmt="Error in allocator: {}", _0)]
