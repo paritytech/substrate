@@ -3158,6 +3158,7 @@ dependencies = [
  "sr-staking-primitives 2.0.0",
  "sr-std 2.0.0",
  "sr-version 2.0.0",
+ "substrate-application-crypto 2.0.0",
  "substrate-authority-discovery-primitives 2.0.0",
  "substrate-block-builder-runtime-api 2.0.0",
  "substrate-consensus-babe-primitives 2.0.0",

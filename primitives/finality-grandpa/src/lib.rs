@@ -167,8 +167,7 @@ impl<N: Codec> ConsensusLog<N> {
 }
 
 // FIXME: rename to equivocation proof ?
-#[cfg_attr(feature = "std", derive(Debug))]
-#[derive(Clone, Decode, Encode, PartialEq)]
+#[derive(Clone, Decode, Debug, Encode, PartialEq)]
 pub struct EquivocationReport<H, N> {
 	set_id: SetId,
 	equivocation: Equivocation<H, N>,
@@ -198,8 +197,7 @@ impl<H, N> EquivocationReport<H, N> {
 	}
 }
 
-#[cfg_attr(feature = "std", derive(Debug))]
-#[derive(Clone, Decode, Encode, PartialEq)]
+#[derive(Clone, Debug, Decode, Encode, PartialEq)]
 pub enum Equivocation<H, N> {
 	Prevote(
 		grandpa::Equivocation<

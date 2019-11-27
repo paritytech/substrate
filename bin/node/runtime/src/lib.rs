@@ -27,25 +27,26 @@ use support::{
 	traits::{SplitTwoWays, Currency, Randomness},
 };
 use primitives::u32_trait::{_1, _2, _3, _4};
-<<<<<<< HEAD:node/runtime/src/lib.rs
-use node_primitives::{
-	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index,
-	Moment, Signature,
-};
-use babe_primitives::{AuthorityId as BabeId, AuthoritySignature as BabeSignature};
-use grandpa::fg_primitives;
-use client::{
-	block_builder::api::{self as block_builder_api, InherentData, CheckInherentsResult},
-	runtime_api as client_api, impl_runtime_apis
-};
+// <<<<<<< HEAD:node/runtime/src/lib.rs
+// use node_primitives::{
+// 	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index,
+// 	Moment, Signature,
+// };
+// use babe_primitives::{AuthorityId as BabeId, AuthoritySignature as BabeSignature};
+// use grandpa::fg_primitives;
+// use client::{
+// 	block_builder::api::{self as block_builder_api, InherentData, CheckInherentsResult},
+// 	runtime_api as client_api, impl_runtime_apis
+// };
 use sr_primitives::{
-	ApplyResult, KeyTypeId, Perbill, Permill, impl_opaque_keys, generic, create_runtime_str, key_types,
+	create_runtime_str, impl_opaque_keys, generic,
+	ApplyExtrinsicResult, KeyTypeId, Perbill, Permill,
 };
-=======
+// =======
 use node_primitives::{AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, Moment, Signature};
 use sr_api::impl_runtime_apis;
-use sr_primitives::{Permill, Perbill, ApplyExtrinsicResult, impl_opaque_keys, generic, create_runtime_str};
->>>>>>> master:bin/node/runtime/src/lib.rs
+// use sr_primitives::{Permill, Perbill, ApplyExtrinsicResult, impl_opaque_keys, generic, create_runtime_str};
+// >>>>>>> master:bin/node/runtime/src/lib.rs
 use sr_primitives::curve::PiecewiseLinear;
 use sr_primitives::transaction_validity::TransactionValidity;
 use sr_primitives::traits::{
@@ -56,13 +57,13 @@ use version::RuntimeVersion;
 #[cfg(any(feature = "std", test))]
 use version::NativeVersion;
 use primitives::OpaqueMetadata;
-<<<<<<< HEAD:node/runtime/src/lib.rs
+// <<<<<<< HEAD:node/runtime/src/lib.rs
 use session::historical;
-use grandpa::{AuthorityId as GrandpaId, AuthorityWeight as GrandpaWeight};
-=======
+// use grandpa::{AuthorityId as GrandpaId, AuthorityWeight as GrandpaWeight};
+// =======
 use grandpa::AuthorityList as GrandpaAuthorityList;
 use grandpa::fg_primitives;
->>>>>>> master:bin/node/runtime/src/lib.rs
+// >>>>>>> master:bin/node/runtime/src/lib.rs
 use im_online::sr25519::{AuthorityId as ImOnlineId};
 use authority_discovery_primitives::AuthorityId as AuthorityDiscoveryId;
 use transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
@@ -457,14 +458,9 @@ impl offences::Trait for Runtime {
 	type OnOffenceHandler = Staking;
 }
 
-<<<<<<< HEAD:node/runtime/src/lib.rs
-impl authority_discovery::Trait for Runtime {
-	type AuthorityId = BabeId;
-}
-=======
 impl authority_discovery::Trait for Runtime {}
->>>>>>> master:bin/node/runtime/src/lib.rs
 
+// move to own crate
 pub mod report {
 	pub mod app {
 		use app_crypto::{app_crypto, sr25519, KeyTypeId};
@@ -472,9 +468,11 @@ pub mod report {
 		pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"rprt");
 		app_crypto!(sr25519, KEY_TYPE);
 
-		impl From<Signature> for node_primitives::Signature {
-			fn from(sig: Signature) -> Self {
-				sr25519::Signature::from(sig).into()
+		impl sr_primitives::traits::IdentifyAccount for Public {
+			type AccountId = sr_primitives::AccountId32;
+
+			fn into_account(self) -> Self::AccountId {
+				sr_primitives::MultiSigner::from(self.0).into_account()
 			}
 		}
 	}
@@ -708,36 +706,8 @@ impl_runtime_apis! {
 	}
 
 	impl authority_discovery_primitives::AuthorityDiscoveryApi<Block> for Runtime {
-<<<<<<< HEAD:node/runtime/src/lib.rs
-		fn authorities() -> Vec<EncodedAuthorityId> {
-			AuthorityDiscovery::authorities().into_iter()
-				.map(|id| id.encode())
-				.map(EncodedAuthorityId)
-				.collect()
-		}
-
-		fn sign(payload: &Vec<u8>) -> Option<(EncodedSignature, EncodedAuthorityId)> {
-			AuthorityDiscovery::sign(payload).map(|(sig, id)| {
-				(EncodedSignature(sig.encode()), EncodedAuthorityId(id.encode()))
-			})
-		}
-
-		fn verify(payload: &Vec<u8>, signature: &EncodedSignature, authority_id: &EncodedAuthorityId) -> bool {
-			let signature = match BabeSignature::decode(&mut &signature.0[..]) {
-				Ok(s) => s,
-				_ => return false,
-			};
-
-			let authority_id = match BabeId::decode(&mut &authority_id.0[..]) {
-				Ok(id) => id,
-				_ => return false,
-			};
-
-			AuthorityDiscovery::verify(payload, signature, authority_id)
-=======
 		fn authorities() -> Vec<AuthorityDiscoveryId> {
 			AuthorityDiscovery::authorities()
->>>>>>> master:bin/node/runtime/src/lib.rs
 		}
 	}
 

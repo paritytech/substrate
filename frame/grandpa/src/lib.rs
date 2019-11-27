@@ -43,7 +43,7 @@ use support::{
 };
 use sr_primitives::{
 	generic::{DigestItem, OpaqueDigestItemId},
-	traits::Zero,
+	traits::{IdentifyAccount, Zero},
 	KeyTypeId, Perbill,
 // =======
 // use support::{decl_event, decl_storage, decl_module, dispatch::Result, storage};
@@ -105,7 +105,7 @@ pub trait Trait: system::Trait {
 	/// Key type to use when signing equivocation report transactions, must be
 	/// convertible to and from an account id since that's what we need to use
 	/// to sign transactions.
-	type ReportKeyType: RuntimeAppPublic + From<Self::AccountId> + Into<Self::AccountId> + Clone;
+	type ReportKeyType: RuntimeAppPublic + IdentifyAccount<AccountId = Self::AccountId>;
 }
 
 type KeyOwnerProof<T> =
@@ -506,10 +506,9 @@ impl<T: Trait> Module<T> {
 			);
 
 			// FIXME: placeholder to reduce unused warnings
-			let key = std::mem::MaybeUninit::uninit();
 			let ext = T::SubmitTransaction::sign_and_submit(
 				call,
-				unsafe { key.assume_init() },
+				unimplemented!(),
 			).ok();
 
 			// early exit after successful extrinsic creation
