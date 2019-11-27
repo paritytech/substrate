@@ -265,6 +265,7 @@ arg_enum! {
 	pub enum TracingReceiver {
 		Log,
 		Telemetry,
+		Grafana,
 	}
 }
 
@@ -273,6 +274,7 @@ impl Into<substrate_tracing::TracingReceiver> for TracingReceiver {
 		match self {
 			TracingReceiver::Log => substrate_tracing::TracingReceiver::Log,
 			TracingReceiver::Telemetry => substrate_tracing::TracingReceiver::Telemetry,
+			TracingReceiver::Grafana => substrate_tracing::TracingReceiver::Grafana,
 		}
 	}
 }
@@ -385,8 +387,8 @@ pub struct RunCmd {
 	pub light: bool,
 
 	/// Limit the memory the database cache can use.
-	#[structopt(long = "db-cache", value_name = "MiB")]
-	pub database_cache_size: Option<u32>,
+	#[structopt(long = "db-cache", value_name = "MiB", default_value = "1024")]
+	pub database_cache_size: u32,
 
 	/// Specify the state cache size.
 	#[structopt(long = "state-cache-size", value_name = "Bytes", default_value = "67108864")]

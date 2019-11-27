@@ -33,12 +33,10 @@ use state_machine::{
 	read_child_proof_check,
 };
 pub use state_machine::StorageProof;
+use sp_blockchain::{Error as ClientError, Result as ClientResult};
 
 use crate::cht;
 pub use client_api::{
-	error::{
-		Error as ClientError, Result as ClientResult
-	},
 	light::{
 		RemoteCallRequest, RemoteHeaderRequest, RemoteReadRequest, RemoteReadChildRequest,
 		RemoteChangesRequest, ChangesProof, RemoteBodyRequest, Fetcher, FetchChecker,
@@ -329,10 +327,8 @@ pub mod tests {
 	use codec::Decode;
 	use crate::client::tests::prepare_client_with_key_changes;
 	use executor::{NativeExecutor, WasmExecutionMethod};
-	use client_api::{
-		backend::NewBlockState,
-		error::Error as ClientError,
-	};
+	use sp_blockchain::Error as ClientError;
+	use client_api::backend::NewBlockState;
 	use test_client::{
 		self, ClientExt, blockchain::HeaderBackend, AccountKeyring,
 		runtime::{self, Hash, Block, Header, Extrinsic}

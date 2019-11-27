@@ -8,5 +8,4 @@ edition = "2018"
 primitives = { package = "substrate-primitives",  path = "../core" }
 sr-primitives = { path = "../sr-primitives" }
 lazy_static = "1.4.0"
-strum = "0.15.0"
-strum_macros = "0.15.0"
+strum = { version = "0.16.0", features = ["derive"] }

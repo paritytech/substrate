@@ -25,7 +25,7 @@ use std::time::{Instant, Duration};
 use log::{trace, info};
 use futures::sync::oneshot::{Sender as OneShotSender};
 use linked_hash_map::{Entry, LinkedHashMap};
-use client_api::error::Error as ClientError;
+use sp_blockchain::Error as ClientError;
 use client_api::{FetchChecker, RemoteHeaderRequest,
 	RemoteCallRequest, RemoteReadRequest, RemoteChangesRequest, ChangesProof,
 	RemoteReadChildRequest, RemoteBodyRequest, StorageProof};
@@ -677,7 +677,7 @@ pub mod tests {
 	use std::time::Instant;
 	use futures::{Future, sync::oneshot};
 	use sr_primitives::traits::{Block as BlockT, NumberFor, Header as HeaderT};
-	use client_api::{error::{Error as ClientError, Result as ClientResult}};
+	use sp_blockchain::{Error as ClientError, Result as ClientResult};
 	use client_api::{FetchChecker, RemoteHeaderRequest,
 		ChangesProof, RemoteCallRequest, RemoteReadRequest,
 		RemoteReadChildRequest, RemoteChangesRequest, RemoteBodyRequest};

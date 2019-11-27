@@ -31,7 +31,7 @@ use hash_db::Hasher;
 use primitives::{Blake2Hasher, NativeOrEncoded};
 
 use sr_api::{ProofRecorder, InitializeBlock};
-use crate::error;
+use sp_blockchain;
 
 /// Method call executor.
 pub trait CallExecutor<B, H>
@@ -53,7 +53,7 @@ where
 		call_data: &[u8],
 		strategy: ExecutionStrategy,
 		extensions: Option<Extensions>,
-	) -> Result<Vec<u8>, error::Error>;
+	) -> Result<Vec<u8>, sp_blockchain::Error>;
 
 	/// Execute a contextual call on top of state in a block of a given hash.
 	///
@@ -62,7 +62,7 @@ where
 	/// of the execution context.
 	fn contextual_call<
 		'a,
-		IB: Fn() -> error::Result<()>,
+		IB: Fn() -> sp_blockchain::Result<()>,
 		EM: Fn(
 			Result<NativeOrEncoded<R>, Self::Error>,
 			Result<NativeOrEncoded<R>, Self::Error>
@@ -81,12 +81,12 @@ where
 		native_call: Option<NC>,
 		proof_recorder: &Option<ProofRecorder<B>>,
 		extensions: Option<Extensions>,
-	) -> error::Result<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone;
+	) -> sp_blockchain::Result<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone;
 
 	/// Extract RuntimeVersion of given block
 	///
 	/// No changes are made.
-	fn runtime_version(&self, id: &BlockId<B>) -> Result<RuntimeVersion, error::Error>;
+	fn runtime_version(&self, id: &BlockId<B>) -> Result<RuntimeVersion, sp_blockchain::Error>;
 
 	/// Execute a call to a contract on top of given state.
 	///
@@ -113,7 +113,7 @@ where
 			(S::Transaction, H::Out),
 			Option<ChangesTrieTransaction<Blake2Hasher, NumberFor<B>>>
 		),
-		error::Error,
+		sp_blockchain::Error,
 	>;
 
 	/// Execute a call to a contract on top of given state, gathering execution proof.
@@ -125,7 +125,7 @@ where
 		overlay: &mut OverlayedChanges,
 		method: &str,
 		call_data: &[u8]
-	) -> Result<(Vec<u8>, StorageProof), error::Error> {
+	) -> Result<(Vec<u8>, StorageProof), sp_blockchain::Error> {
 		let trie_state = state.as_trie_backend()
 			.ok_or_else(||
 				Box::new(state_machine::ExecutionError::UnableToGenerateProof)
@@ -143,7 +143,7 @@ where
 		overlay: &mut OverlayedChanges,
 		method: &str,
 		call_data: &[u8]
-	) -> Result<(Vec<u8>, StorageProof), error::Error>;
+	) -> Result<(Vec<u8>, StorageProof), sp_blockchain::Error>;
 
 	/// Get runtime version if supported.
 	fn native_runtime_version(&self) -> Option<&NativeVersion>;

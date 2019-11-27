@@ -19,13 +19,14 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use parking_lot::{RwLock, Mutex};
+use parking_lot::RwLock;
 
 use state_machine::{Backend as StateBackend, TrieBackend, backend::InMemory as InMemoryState, ChangesTrieTransaction};
 use primitives::offchain::storage::InMemOffchainStorage;
 use sr_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
 use sr_primitives::traits::{Block as BlockT, NumberFor, Zero, Header};
 use crate::in_mem::{self, check_genesis_storage};
+use sp_blockchain::{ Error as ClientError, Result as ClientResult };
 use client_api::{
 	backend::{
 		AuxStore, Backend as ClientBackend, BlockImportOperation, RemoteBackend, NewBlockState,
@@ -33,9 +34,6 @@ use client_api::{
 	},
 	blockchain::{
 		HeaderBackend as BlockchainHeaderBackend, well_known_cache_keys,
-	},
-	error::{
-		Error as ClientError, Result as ClientResult
 	},
 	light::Storage as BlockchainStorage,
 };
@@ -49,7 +47,7 @@ const IN_MEMORY_EXPECT_PROOF: &str = "InMemory state backend has Void error type
 pub struct Backend<S, H: Hasher> {
 	blockchain: Arc<Blockchain<S>>,
 	genesis_state: RwLock<Option<InMemoryState<H>>>,
-	import_lock: Mutex<()>,
+	import_lock: RwLock<()>,
 }
 
 /// Light block (header and justification) import operation.
@@ -216,7 +214,7 @@ impl<S, Block, H> ClientBackend<Block, H> for Backend<S, H> where
 		Err(ClientError::NotAvailableOnLightClient)
 	}
 
-	fn get_import_lock(&self) -> &Mutex<()> {
+	fn get_import_lock(&self) -> &RwLock<()> {
 		&self.import_lock
 	}
 }

@@ -6,7 +6,7 @@ description = "Common utilities for substrate consensus"
 edition = "2018"
 
 [dependencies]
-derive_more = "0.15.0"
+derive_more = "0.99.2"
 libp2p = { version = "0.13.0", default-features = false }
 log = "0.4.8"
 primitives = { package = "substrate-primitives", path= "../../core" }

@@ -56,7 +56,7 @@ pub trait ClientExt<Block: BlockT>: Sized {
 		&self,
 		id: BlockId<Block>,
 		justification: Option<Justification>,
-	) -> client::error::Result<()>;
+	) -> sp_blockchain::Result<()>;
 
 	/// Returns hash of the genesis block.
 	fn genesis_hash(&self) -> <Block as BlockT>::Hash;
@@ -152,7 +152,7 @@ impl<B, E, RA, Block> ClientExt<Block> for Client<B, E, Block, RA>
 		&self,
 		id: BlockId<Block>,
 		justification: Option<Justification>,
-	) -> client::error::Result<()> {
+	) -> sp_blockchain::Result<()> {
 		Finalizer::finalize_block(self, id, justification, true)
 	}
 

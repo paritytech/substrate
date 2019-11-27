@@ -36,7 +36,7 @@ mod networking;
 pub use server::run_server;
 pub use util::now_millis;
 
-type Metrics = HashMap<&'static str, Vec<(f32, i64)>>;
+type Metrics = HashMap<String, Vec<(f32, i64)>>;
 
 lazy_static! {
 	/// The `RwLock` wrapping the metrics. Not intended to be used directly.
