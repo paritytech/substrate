@@ -743,7 +743,8 @@ impl<T: Trait> Module<T> {
 mod tests {
 	use super::*;
 	use std::cell::RefCell;
-	use support::{assert_ok, assert_noop, parameter_types, assert_eq_uvec};
+	use support::{assert_ok, assert_noop, parameter_types};
+	use substrate_test_utils::assert_eq_uvec;
 	use primitives::H256;
 	use sr_primitives::{
 		Perbill, testing::Header, BuildStorage,

@@ -27,7 +27,7 @@ use consensus::BlockOrigin;
 
 use crate::blockchain::Info;
 use crate::notifications::StorageEventStream;
-use crate::error;
+use sp_blockchain;
 
 /// Type that implements `futures::Stream` of block import events.
 pub type ImportNotifications<Block> = mpsc::UnboundedReceiver<BlockImportNotification<Block>>;
@@ -63,7 +63,7 @@ pub trait BlockchainEvents<Block: BlockT> {
 		&self,
 		filter_keys: Option<&[StorageKey]>,
 		child_filter_keys: Option<&[(StorageKey, Option<Vec<StorageKey>>)]>,
-	) -> error::Result<StorageEventStream<Block::Hash>>;
+	) -> sp_blockchain::Result<StorageEventStream<Block::Hash>>;
 }
 
 /// Fetch block body by ID.
@@ -71,14 +71,14 @@ pub trait BlockBody<Block: BlockT> {
 	/// Get block body by ID. Returns `None` if the body is not stored.
 	fn block_body(&self,
 		id: &BlockId<Block>
-	) -> error::Result<Option<Vec<<Block as BlockT>::Extrinsic>>>;
+	) -> sp_blockchain::Result<Option<Vec<<Block as BlockT>::Extrinsic>>>;
 }
 
 /// Provide a list of potential uncle headers for a given block.
 pub trait ProvideUncles<Block: BlockT> {
 	/// Gets the uncles of the block with `target_hash` going back `max_generation` ancestors.
 	fn uncles(&self, target_hash: Block::Hash, max_generation: NumberFor<Block>)
-		-> error::Result<Vec<Block::Header>>;
+		-> sp_blockchain::Result<Vec<Block::Header>>;
 }
 
 /// Client info

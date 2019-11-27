@@ -16,7 +16,7 @@
 
 //! List-cache storage entries.
 
-use client_api::error::Result as ClientResult;
+use sp_blockchain::Result as ClientResult;
 use sr_primitives::traits::{Block as BlockT, NumberFor};
 use codec::{Encode, Decode};
 

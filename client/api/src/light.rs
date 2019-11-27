@@ -28,16 +28,11 @@ use sr_primitives::{
 };
 use primitives::{ChangesTrieConfiguration};
 use state_machine::StorageProof;
-use header_metadata::HeaderMetadata;
-use crate::{
-	backend::{
-		AuxStore, NewBlockState,
-	},
-    blockchain::{
-        well_known_cache_keys, HeaderBackend, Cache as BlockchainCache,
-    },
-    error::{ Error as ClientError, Result as ClientResult },
+use sp_blockchain::{
+	HeaderMetadata, well_known_cache_keys, HeaderBackend, Cache as BlockchainCache,
+	Error as ClientError, Result as ClientResult,
 };
+use crate::backend::{ AuxStore, NewBlockState };
 /// Remote call request.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct RemoteCallRequest<Header: HeaderT> {
@@ -288,7 +283,7 @@ pub trait RemoteBlockchain<Block: BlockT>: Send + Sync {
 pub mod tests {
 	use futures::future::Ready;
 	use parking_lot::Mutex;
-    use crate::error::Error as ClientError;
+    use sp_blockchain::Error as ClientError;
     use test_primitives::{Block, Header, Extrinsic};
 	use super::*;
 

@@ -58,8 +58,6 @@ mod origin;
 #[macro_use]
 pub mod metadata;
 #[macro_use]
-mod runtime;
-#[macro_use]
 pub mod inherent;
 #[macro_use]
 pub mod unsigned;
@@ -116,7 +114,7 @@ macro_rules! parameter_types {
 }
 
 #[doc(inline)]
-pub use frame_support_procedural::decl_storage;
+pub use frame_support_procedural::{decl_storage, construct_runtime};
 
 /// Return Err of the expression: `return Err($expression);`.
 ///
@@ -184,47 +182,6 @@ macro_rules! assert_ok {
 	};
 	( $x:expr, $y:expr $(,)? ) => {
 		assert_eq!($x, Ok($y));
-	}
-}
-
-/// Panic when the vectors are different, without taking the order into account.
-///
-/// # Examples
-///
-/// ```rust
-/// #[macro_use]
-/// # extern crate frame_support;
-/// # use frame_support::{assert_eq_uvec};
-/// # fn main() {
-/// assert_eq_uvec!(vec![1,2], vec![2,1]);
-/// # }
-/// ```
-///
-/// ```rust,should_panic
-/// #[macro_use]
-/// # extern crate frame_support;
-/// # use frame_support::{assert_eq_uvec};
-/// # fn main() {
-/// assert_eq_uvec!(vec![1,2,3], vec![2,1]);
-/// # }
-/// ```
-#[macro_export]
-#[cfg(feature = "std")]
-macro_rules! assert_eq_uvec {
-	( $x:expr, $y:expr ) => {
-		$crate::__assert_eq_uvec!($x, $y);
-		$crate::__assert_eq_uvec!($y, $x);
-	}
-}
-
-#[macro_export]
-#[doc(hidden)]
-#[cfg(feature = "std")]
-macro_rules! __assert_eq_uvec {
-	( $x:expr, $y:expr ) => {
-		$x.iter().for_each(|e| {
-			if !$y.contains(e) { panic!(format!("vectors not equal: {:?} != {:?}", $x, $y)); }
-		});
 	}
 }
 

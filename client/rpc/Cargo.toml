@@ -5,7 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-api = { package = "substrate-rpc-api", path = "./api" }
+api = { package = "sc-rpc-api", path = "./api" }
 client-api = { package = "substrate-client-api", path = "../api" }
 client = { package = "substrate-client", path = "../" }
 sr-api = { path = "../../primitives/sr-api" }
@@ -23,7 +23,8 @@ rpc-primitives = { package = "substrate-rpc-primitives", path = "../../primitive
 state_machine = { package = "substrate-state-machine", path = "../../primitives/state-machine" }
 substrate-executor = { path = "../executor" }
 substrate-keystore = { path = "../keystore" }
-transaction_pool = { package = "substrate-transaction-pool", path = "../transaction-pool" }
+transaction_pool = { package = "sc-transaction-pool", path = "../../client/transaction-pool" }
+sp-blockchain = { path = "../../primitives/blockchain" }
 hash-db = { version = "0.15.2", default-features = false }
 parking_lot = { version = "0.9.0" }
 
