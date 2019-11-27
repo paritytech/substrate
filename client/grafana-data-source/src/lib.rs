@@ -71,4 +71,13 @@ pub enum Error {
 	Timestamp(TryFromIntError),
 }
 
-impl std::error::Error for Error {}
+impl std::error::Error for Error {
+	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+		match self {
+			Error::Hyper(error) => Some(error),
+			Error::Serde(error) => Some(error),
+			Error::Http(error) => Some(error),
+			Error::Timestamp(error) => Some(error)
+		}
+	}
+}
