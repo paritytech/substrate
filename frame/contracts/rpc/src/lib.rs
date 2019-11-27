@@ -39,7 +39,16 @@ const RUNTIME_ERROR: i64 = 1;
 const CONTRACT_DOESNT_EXIST: i64 = 2;
 const CONTRACT_IS_A_TOMBSTONE: i64 = 3;
 
-// A private newtype for converting `GetStorageError` into an RPC error.
+/// A rough estimate of how much gas a decent hardware consumes per second,
+/// using native execution.
+/// This value is used to set the upper bound for maximal contract calls to
+/// prevent blocking the RPC for too long.
+///
+/// Based on W3F research spreadsheet:
+/// https://docs.google.com/spreadsheets/d/1h0RqncdqiWI4KgxO0z9JIpZEJESXjX_ZCK6LFX6veDo/view
+const GAS_PER_SECOND: u64 = 1_000_000_000;
+
+/// A private newtype for converting `GetStorageError` into an RPC error.
 struct GetStorageError(runtime_api::GetStorageError);
 impl From<GetStorageError> for Error {
 	fn from(e: GetStorageError) -> Error {
@@ -147,6 +156,19 @@ where
 			message: e,
 			data: None,
 		})?;
+
+		let max_gas_limit = 5 * GAS_PER_SECOND;
+		if gas_limit > max_gas_limit {
+			return Err(Error {
+				code: ErrorCode::InvalidParams,
+				message: format!(
+					"Requested gas limit is greater than maximum allowed: {} > {}",
+					gas_limit,
+					max_gas_limit
+				),
+				data: None,
+			});
+		}
 
 		let exec_result = api
 			.call(&at, origin, dest, value, gas_limit, input_data.to_vec())
