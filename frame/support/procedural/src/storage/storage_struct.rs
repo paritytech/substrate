@@ -85,7 +85,7 @@ pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 			Ident::new(INHERENT_INSTANCE_NAME, Span::call_site())
 		};
 
-		let storage_name_str= syn::LitStr::new(&line.name.to_string(), line.name.span());
+		let storage_name_str = syn::LitStr::new(&line.name.to_string(), line.name.span());
 
 		let storage_generator_trait = &line.storage_generator_trait;
 		let storage_struct = &line.storage_struct;
