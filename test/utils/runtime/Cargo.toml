@@ -35,7 +35,7 @@ pallet-timestamp = { path = "../../../frame/timestamp", default-features = false
 substrate-client = { path = "../../../client", optional = true }
 substrate-trie = { path = "../../../primitives/trie", default-features = false }
 transaction-pool-api = { package = "substrate-transaction-pool-runtime-api", path = "../../../primitives/transaction-pool/runtime-api", default-features = false }
-trie-db = { version = "0.15.2", default-features = false }
+trie-db = { version = "0.16.0", default-features = false }
 
 [dev-dependencies]
 substrate-executor = { path = "../../../client/executor" }
