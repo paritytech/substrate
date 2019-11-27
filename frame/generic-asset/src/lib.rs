@@ -95,9 +95,10 @@
 //! This will emit the `Transferred` event.
 //! - `reserve`: Moves an amount from free balance to reserved balance.
 //! - `unreserve`: Move up to an amount from reserved balance to free balance. This function cannot fail.
+//! - `mint_free`: Mint to an account's free balance.
+//! - `burn_free`: Burn an account's free balance.
 //! - `slash`: Deduct up to an amount from the combined balance of `who`, preferring to deduct from the
 //!	free balance. This function cannot fail.
-//! - `reward`: Add up to an amount to the free balance of an account.
 //! - `slash_reserved`: Deduct up to an amount from reserved balance of an account. This function cannot fail.
 //! - `repatriate_reserved`: Move up to an amount from reserved balance of an account to free balance of another
 //! account.
@@ -109,7 +110,7 @@
 //!
 //! The following examples show how to use the Generic Asset module in your custom module.
 //!
-//! ### Examples from the PRML
+//! ### Examples from the SRML
 //!
 //! The Fees module uses the `Currency` trait to handle fee charge/refund, and its types inherit from `Currency`:
 //!
@@ -378,51 +379,19 @@ decl_module! {
 		/// Mints an asset, increases its total issuance.
 		/// The origin must have `mint` permissions.
 		fn mint(origin, #[compact] asset_id: T::AssetId, to: T::AccountId, amount: T::Balance) -> Result {
-			let origin = ensure_signed(origin)?;
-			if Self::check_permission(&asset_id, &origin, &PermissionType::Mint) {
-				let original_free_balance = Self::free_balance(&asset_id, &to);
-				let current_total_issuance = <TotalIssuance<T>>::get(asset_id);
-				let new_total_issuance = current_total_issuance.checked_add(&amount)
-					.ok_or_else(|| "total_issuance got overflow after minting.")?;
-				let value = original_free_balance.checked_add(&amount)
-					.ok_or_else(|| "free balance got overflow after minting.")?;
-
-				<TotalIssuance<T>>::insert(asset_id, new_total_issuance);
-				Self::set_free_balance(&asset_id, &to, value);
-
-				Self::deposit_event(RawEvent::Minted(asset_id, to, amount));
-
-				Ok(())
-			} else {
-				Err("The origin does not have permission to mint an asset.")
-			}
+			let who = ensure_signed(origin)?;
+			Self::mint_free(&asset_id, &who, &to, &amount)?;
+			Self::deposit_event(RawEvent::Minted(asset_id, to, amount));
+			Ok(())
 		}
 
 		/// Burns an asset, decreases its total issuance.
-		///
 		/// The `origin` must have `burn` permissions.
 		fn burn(origin, #[compact] asset_id: T::AssetId, to: T::AccountId, amount: T::Balance) -> Result {
-			let origin = ensure_signed(origin)?;
-
-			if Self::check_permission(&asset_id, &origin, &PermissionType::Burn) {
-				let original_free_balance = Self::free_balance(&asset_id, &to);
-
-				let current_total_issuance = <TotalIssuance<T>>::get(asset_id);
-				let new_total_issuance = current_total_issuance.checked_sub(&amount)
-					.ok_or_else(|| "total_issuance got underflow after burning")?;
-				let value = original_free_balance.checked_sub(&amount)
-					.ok_or_else(|| "free_balance got underflow after burning")?;
-
-				<TotalIssuance<T>>::insert(asset_id, new_total_issuance);
-
-				Self::set_free_balance(&asset_id, &to, value);
-
-				Self::deposit_event(RawEvent::Burned(asset_id, to, amount));
-
-				Ok(())
-			} else {
-				Err("The origin does not have permission to burn an asset.")
-			}
+			let who = ensure_signed(origin)?;
+			Self::burn_free(&asset_id, &who, &to, &amount)?;
+			Self::deposit_event(RawEvent::Burned(asset_id, to, amount));
+			Ok(())
 		}
 
 		/// Can be used to create reserved tokens.
@@ -522,6 +491,53 @@ impl<T: Trait> Module<T> {
 	/// Get an account's reserved balance of an asset kind.
 	pub fn reserved_balance(asset_id: &T::AssetId, who: &T::AccountId) -> T::Balance {
 		<ReservedBalance<T>>::get(asset_id, who)
+	}
+
+	/// Mint to an account's free balance, without event
+	pub fn mint_free(
+		asset_id: &T::AssetId,
+		who: &T::AccountId,
+		to: &T::AccountId,
+		amount: &T::Balance,
+	) -> Result {
+		if Self::check_permission(asset_id, who, &PermissionType::Mint) {
+			let original_free_balance = Self::free_balance(&asset_id, &to);
+			let current_total_issuance = <TotalIssuance<T>>::get(asset_id);
+			let new_total_issuance = current_total_issuance.checked_add(&amount)
+				.ok_or_else(|| "total_issuance got overflow after minting.")?;
+			let value = original_free_balance.checked_add(&amount)
+				.ok_or_else(|| "free balance got overflow after minting.")?;
+
+			<TotalIssuance<T>>::insert(asset_id, new_total_issuance);
+			Self::set_free_balance(&asset_id, &to, value);
+			Ok(())
+		} else {
+			Err("The origin does not have permission to mint an asset.")
+		}
+	}
+
+	/// Burn an account's free balance, without event
+	pub fn burn_free(
+		asset_id: &T::AssetId,
+		who: &T::AccountId,
+		to: &T::AccountId,
+		amount: &T::Balance,
+	) -> Result {
+		if Self::check_permission(asset_id, who, &PermissionType::Burn) {
+			let original_free_balance = Self::free_balance(asset_id, to);
+
+			let current_total_issuance = <TotalIssuance<T>>::get(asset_id);
+			let new_total_issuance = current_total_issuance.checked_sub(amount)
+				.ok_or_else(|| "total_issuance got underflow after burning")?;
+			let value = original_free_balance.checked_sub(amount)
+				.ok_or_else(|| "free_balance got underflow after burning")?;
+
+			<TotalIssuance<T>>::insert(asset_id, new_total_issuance);
+			Self::set_free_balance(asset_id, to, value);
+			Ok(())
+		} else {
+			Err("The origin does not have permission to burn an asset.")
+		}
 	}
 
 	/// Creates an asset.
@@ -640,7 +656,7 @@ impl<T: Trait> Module<T> {
 	/// then `Some(remaining)` will be returned. Full completion is given by `None`.
 	/// NOTE: LOW-LEVEL: This will not attempt to maintain total issuance. It is expected that
 	/// the caller will do this.
-	fn slash(asset_id: &T::AssetId, who: &T::AccountId, amount: T::Balance) -> Option<T::Balance> {
+	pub fn slash(asset_id: &T::AssetId, who: &T::AccountId, amount: T::Balance) -> Option<T::Balance> {
 		let free_balance = Self::free_balance(asset_id, who);
 		let free_slash = rstd::cmp::min(free_balance, amount);
 		let new_free_balance = free_balance - free_slash;
@@ -658,7 +674,7 @@ impl<T: Trait> Module<T> {
 	/// is less than `amount`, then a non-zero second item will be returned.
 	/// NOTE: LOW-LEVEL: This will not attempt to maintain total issuance. It is expected that
 	/// the caller will do this.
-	fn slash_reserved(asset_id: &T::AssetId, who: &T::AccountId, amount: T::Balance) -> Option<T::Balance> {
+	pub fn slash_reserved(asset_id: &T::AssetId, who: &T::AccountId, amount: T::Balance) -> Option<T::Balance> {
 		let original_reserve_balance = Self::reserved_balance(asset_id, who);
 		let slash = rstd::cmp::min(original_reserve_balance, amount);
 		let new_reserve_balance = original_reserve_balance - slash;
@@ -677,7 +693,7 @@ impl<T: Trait> Module<T> {
 	/// the `remaining` would be returned, else `Zero::zero()`.
 	/// NOTE: LOW-LEVEL: This will not attempt to maintain total issuance. It is expected that
 	/// the caller will do this.
-	fn repatriate_reserved(
+	pub fn repatriate_reserved(
 		asset_id: &T::AssetId,
 		who: &T::AccountId,
 		beneficiary: &T::AccountId,
