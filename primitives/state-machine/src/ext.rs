@@ -331,24 +331,17 @@ where
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Option<Vec<u8>> {
-		// Get next backend key
+		// TODO TODO: cache next_backend_key with a cache: `Option<(Vec<u8>, Vec<u8>)>`
 		let next_backend_key = self.backend.next_storage_key(key).expect(EXT_NOT_ALLOWED_TO_FAIL);
-
-		// Get next change from overlay, this includes deletetion.
 		let next_overlay_key_change = self.overlay.next_storage_key_change(key);
 
 		match (next_backend_key, next_overlay_key_change) {
-			// Return backend one if strictly less than overlay one
 			(Some(backend_key), Some(overlay_key)) if &backend_key[..] < overlay_key.0 => Some(backend_key),
-			// Return backend one if no overlay one
 			(backend_key, None) => backend_key,
-			// Overlay is less or equal to backend.
-			(_, Some(overlay_key)) => {
-				if overlay_key.1.value.is_some() {
-					Some(overlay_key.0.to_vec())
-				} else {
-					self.next_storage_key(&overlay_key.0[..])
-				}
+			(_, Some(overlay_key)) => if overlay_key.1.value.is_some() {
+				Some(overlay_key.0.to_vec())
+			} else {
+				self.next_storage_key(&overlay_key.0[..])
 			},
 		}
 	}
