@@ -57,7 +57,7 @@ macro_rules! record_metrics(
 pub fn record_metrics_slice(metrics: &[(&'static str, f32)]) -> Result<(), Error> {
 	let mut database = crate::DATABASE.write();
 
-	for (key, value) in metrics.iter() {
+	for &(key, value) in metrics.iter() {
 		database.push(key, value)?;
 	}
 
