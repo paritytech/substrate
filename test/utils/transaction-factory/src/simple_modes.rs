@@ -59,7 +59,7 @@ where
 	Backend: client_api::backend::Backend<Block, Blake2Hasher> + Send,
 	Client<Backend, Exec, Block, RtApi>: ProvideRuntimeApi,
 	<Client<Backend, Exec, Block, RtApi> as ProvideRuntimeApi>::Api:
-		BlockBuilder<Block, Error = client::error::Error>,
+		BlockBuilder<Block, Error = sp_blockchain::Error>,
 	RtApi: ConstructRuntimeApi<Block, Client<Backend, Exec, Block, RtApi>> + Send + Sync,
 	RA: RuntimeAdapter,
 {

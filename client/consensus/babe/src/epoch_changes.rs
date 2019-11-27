@@ -25,12 +25,8 @@ use fork_tree::ForkTree;
 use parking_lot::{Mutex, MutexGuard};
 use sr_primitives::traits::{Block as BlockT, NumberFor, One, Zero};
 use codec::{Encode, Decode};
-use client_api::{
-	error::Error as ClientError,
-	utils::is_descendent_of,
-	blockchain::HeaderBackend
-};
-use header_metadata::HeaderMetadata;
+use client_api::utils::is_descendent_of;
+use sp_blockchain::{HeaderMetadata, HeaderBackend, Error as ClientError};
 use primitives::H256;
 use std::ops::Add;
 

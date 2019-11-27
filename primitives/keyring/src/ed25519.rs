@@ -23,7 +23,7 @@ pub use primitives::ed25519;
 use sr_primitives::AccountId32;
 
 /// Set of test accounts.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum_macros::Display, strum_macros::EnumIter)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::Display, strum::EnumIter)]
 pub enum Keyring {
 	Alice,
 	Bob,

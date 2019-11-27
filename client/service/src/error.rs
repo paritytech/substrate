@@ -16,10 +16,10 @@
 
 //! Errors that can occur during the service operation.
 
-use client;
 use network;
 use keystore;
 use consensus_common;
+use sp_blockchain;
 
 /// Service Result typedef.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -28,7 +28,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug, derive_more::Display, derive_more::From)]
 pub enum Error {
 	/// Client error.
-	Client(client::error::Error),
+	Client(sp_blockchain::Error),
 	/// IO error.
 	Io(std::io::Error),
 	/// Consensus error.

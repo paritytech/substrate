@@ -24,7 +24,7 @@ use sr_primitives::Justification;
 use log::warn;
 use parking_lot::RwLock;
 
-use header_metadata::HeaderMetadata;
+use crate::header_metadata::HeaderMetadata;
 
 use crate::error::{Error, Result};
 
@@ -262,7 +262,7 @@ pub enum BlockStatus {
 /// A list of all well known keys in the blockchain cache.
 pub mod well_known_cache_keys {
 	/// The type representing cache keys.
-	pub type Id = consensus::import_queue::CacheKeyId;
+	pub type Id = sp_consensus::import_queue::CacheKeyId;
 
 	/// A list of authorities.
 	pub const AUTHORITIES: Id = *b"auth";

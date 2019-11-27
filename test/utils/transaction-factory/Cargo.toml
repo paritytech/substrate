@@ -16,4 +16,5 @@ primitives = { package = "substrate-primitives", path = "../../../primitives/cor
 sr-api = { path = "../../../primitives/sr-api" }
 sr-primitives = { path = "../../../primitives/sr-primitives" }
 substrate-service = { path = "../../../client/service" }
+sp-blockchain = { path = "../../../primitives/blockchain" }
 

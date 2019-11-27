@@ -122,6 +122,19 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		let (timestamp, slot_number, slot_duration) =
 			(slot_info.timestamp, slot_info.number, slot_info.duration);
 
+		{
+			let slot_now = SignedDuration::default().slot_now(slot_duration);
+			if slot_now > slot_number {
+				// if this is behind, return.
+				debug!(target: self.logging_target(),
+					"Skipping proposal slot {} since our current view is {}",
+					slot_number, slot_now,
+				);
+
+				return Box::pin(future::ready(Ok(())));
+			}
+		}
+
 		let epoch_data = match self.epoch_data(&chain_head, slot_number) {
 			Ok(epoch_data) => epoch_data,
 			Err(err) => {
@@ -402,17 +415,17 @@ impl<T: Clone> SlotDuration<T> {
 	///
 	/// `slot_key` is marked as `'static`, as it should really be a
 	/// compile-time constant.
-	pub fn get_or_compute<B: BlockT, C, CB>(client: &C, cb: CB) -> client_api::error::Result<Self> where
+	pub fn get_or_compute<B: BlockT, C, CB>(client: &C, cb: CB) -> sp_blockchain::Result<Self> where
 		C: client_api::backend::AuxStore,
 		C: ProvideRuntimeApi,
-		CB: FnOnce(ApiRef<C::Api>, &BlockId<B>) -> client_api::error::Result<T>,
+		CB: FnOnce(ApiRef<C::Api>, &BlockId<B>) -> sp_blockchain::Result<T>,
 		T: SlotData + Encode + Decode + Debug,
 	{
 		match client.get_aux(T::SLOT_KEY)? {
 			Some(v) => <T as codec::Decode>::decode(&mut &v[..])
 				.map(SlotDuration)
 				.map_err(|_| {
-					client_api::error::Error::Backend({
+					sp_blockchain::Error::Backend({
 						error!(target: "slots", "slot duration kept in invalid format");
 						"slot duration kept in invalid format".to_string()
 					})

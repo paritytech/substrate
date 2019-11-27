@@ -1,0 +1,5 @@
+error: `Call` is not allowed to have generics. Only the following modules are allowed to have generics: `Event`, `Origin`, `Config`.
+  --> $DIR/generics_in_invalid_module.rs:10:36
+   |
+10 |         Balance: balances::<Instance1>::{Call<T>, Origin<T>},
+   |                                          ^^^^

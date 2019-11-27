@@ -59,6 +59,11 @@ macro_rules! groups_impl {
 			}
 		}
 
+		impl <P: Clone> Clone for $name<P> {
+			fn clone(&self) -> Self {
+				Self { token: self.token.clone(), content: self.content.clone() }
+			}
+		}
 	}
 }
 
@@ -72,11 +77,11 @@ pub struct PunctuatedInner<P,T,V> {
 	pub variant: V,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct NoTrailing;
 
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Trailing;
 
 pub type Punctuated<P,T> = PunctuatedInner<P,T,NoTrailing>;
@@ -104,6 +109,12 @@ impl<P: Parse, T: Parse> Parse for PunctuatedInner<P,T,NoTrailing> {
 impl<P: ToTokens, T: ToTokens, V> ToTokens for PunctuatedInner<P,T,V> {
 	fn to_tokens(&self, tokens: &mut TokenStream) {
 		self.inner.to_tokens(tokens)
+	}
+}
+
+impl <P: Clone, T: Clone, V: Clone> Clone for PunctuatedInner<P, T, V> {
+	fn clone(&self) -> Self {
+		Self { inner: self.inner.clone(), variant: self.variant.clone() }
 	}
 }
 
@@ -174,6 +185,14 @@ impl<P: ToTokens> ToTokens for Opt<P> {
 	fn to_tokens(&self, tokens: &mut TokenStream) {
 		if let Some(ref p) = self.inner {
 			p.to_tokens(tokens);
+		}
+	}
+}
+
+impl <P: Clone> Clone for Opt<P> {
+	fn clone(&self) -> Self {
+		Self {
+			inner: self.inner.clone()
 		}
 	}
 }

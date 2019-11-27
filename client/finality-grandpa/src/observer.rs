@@ -156,7 +156,7 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, SC>(
 	link: LinkHalf<B, E, Block, RA, SC>,
 	network: N,
 	on_exit: impl Future<Item=(),Error=()> + Clone + Send + 'static,
-) -> ::client_api::error::Result<impl Future<Item=(),Error=()> + Send + 'static> where
+) -> ::sp_blockchain::Result<impl Future<Item=(),Error=()> + Send + 'static> where
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
 	N: Network<Block> + Send + Sync + 'static,
