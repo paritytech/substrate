@@ -502,7 +502,11 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use tempdir::TempDir;
+	use tempfile::TempDir;
+
+	fn tempdir_with_prefix(prefix: &str) -> TempDir {
+		tempfile::Builder::new().prefix(prefix).tempdir().unwrap()
+	}
 
 	fn secret_bytes(kp: &Keypair) -> Vec<u8> {
 		match kp {
@@ -514,7 +518,7 @@ mod tests {
 
 	#[test]
 	fn test_secret_file() {
-		let tmp = TempDir::new("x").unwrap();
+		let tmp = tempdir_with_prefix("x");
 		std::fs::remove_dir(tmp.path()).unwrap(); // should be recreated
 		let file = tmp.path().join("x").to_path_buf();
 		let kp1 = NodeKeyConfig::Ed25519(Secret::File(file.clone())).into_keypair().unwrap();

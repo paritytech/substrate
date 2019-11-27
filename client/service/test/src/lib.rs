@@ -22,7 +22,7 @@ use std::net::Ipv4Addr;
 use std::time::Duration;
 use log::info;
 use futures::{Future, Stream, Poll};
-use tempdir::TempDir;
+use tempfile::TempDir;
 use tokio::{runtime::Runtime, prelude::FutureExt};
 use tokio::timer::Interval;
 use service::{
@@ -289,6 +289,10 @@ impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 	}
 }
 
+fn tempdir_with_prefix(prefix: &str) -> TempDir {
+	tempfile::Builder::new().prefix(prefix).tempdir().expect("Error creating test dir")
+}
+
 pub fn connectivity<G, E, Fb, F, Lb, L>(
 	spec: ChainSpec<G, E>,
 	full_builder: Fb,
@@ -313,7 +317,7 @@ pub fn connectivity<G, E, Fb, F, Lb, L>(
 	};
 
 	{
-		let temp = TempDir::new("substrate-connectivity-test").expect("Error creating test dir");
+		let temp = tempdir_with_prefix("substrate-connectivity-test");
 		let runtime = {
 			let mut network = TestNet::new(
 				&temp,
@@ -351,7 +355,7 @@ pub fn connectivity<G, E, Fb, F, Lb, L>(
 		temp.close().expect("Error removing temp dir");
 	}
 	{
-		let temp = TempDir::new("substrate-connectivity-test").expect("Error creating test dir");
+		let temp = tempdir_with_prefix("substrate-connectivity-test");
 		{
 			let mut network = TestNet::new(
 				&temp,
@@ -413,7 +417,7 @@ pub fn sync<G, E, Fb, F, Lb, L, B, ExF, U>(
 	// FIXME: BABE light client support is currently not working.
 	const NUM_LIGHT_NODES: usize = 10;
 	const NUM_BLOCKS: usize = 512;
-	let temp = TempDir::new("substrate-sync-test").expect("Error creating test dir");
+	let temp = tempdir_with_prefix("substrate-sync-test");
 	let mut network = TestNet::new(
 		&temp,
 		spec.clone(),
@@ -478,7 +482,7 @@ pub fn consensus<G, E, Fb, F, Lb, L>(
 	const NUM_FULL_NODES: usize = 10;
 	const NUM_LIGHT_NODES: usize = 10;
 	const NUM_BLOCKS: usize = 10; // 10 * 2 sec block production time = ~20 seconds
-	let temp = TempDir::new("substrate-conensus-test").expect("Error creating test dir");
+	let temp = tempdir_with_prefix("substrate-conensus-test");
 	let mut network = TestNet::new(
 		&temp,
 		spec.clone(),

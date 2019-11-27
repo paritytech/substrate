@@ -5,7 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-tempdir = "0.3.7"
+tempfile = "3.1.0"
 tokio = "0.1.22"
 futures = "0.1.29"
 log = "0.4.8"

@@ -969,7 +969,6 @@ fn kill_color(s: &str) -> String {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use tempdir::TempDir;
 	use network::config::identity::ed25519;
 
 	#[test]
@@ -1018,7 +1017,7 @@ mod tests {
 		fn secret_file(net_config_dir: Option<String>) -> error::Result<()> {
 			NodeKeyType::variants().into_iter().try_for_each(|t| {
 				let node_key_type = NodeKeyType::from_str(t).unwrap();
-				let tmp = TempDir::new("alice")?;
+				let tmp = tempfile::Builder::new().prefix("alice").tempdir()?;
 				let file = tmp.path().join(format!("{}_mysecret", t)).to_path_buf();
 				let params = NodeKeyParams {
 					node_key_type,
