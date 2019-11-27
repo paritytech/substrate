@@ -5986,7 +5986,6 @@ name = "substrate-externalities"
 version = "2.0.0"
 dependencies = [
  "environmental 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "primitive-types 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-std 2.0.0",
  "substrate-primitives-storage 2.0.0",
 ]

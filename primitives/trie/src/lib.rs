@@ -167,39 +167,45 @@ pub fn read_trie_value_with<
 }
 
 /// Determine the default child trie root.
-pub fn default_child_trie_root<L: TrieConfiguration>(_storage_key: &[u8]) -> Vec<u8> {
-	L::trie_root::<_, Vec<u8>, Vec<u8>>(core::iter::empty()).as_ref().iter().cloned().collect()
+pub fn default_child_trie_root<L: TrieConfiguration>(
+	_storage_key: &[u8],
+) -> <L::Hash as Hasher>::Out {
+	L::trie_root::<_, Vec<u8>, Vec<u8>>(core::iter::empty())
 }
 
 /// Determine a child trie root given its ordered contents, closed form. H is the default hasher,
 /// but a generic implementation may ignore this type parameter and use other hashers.
-pub fn child_trie_root<L: TrieConfiguration, I, A, B>(_storage_key: &[u8], input: I) -> Vec<u8>
+pub fn child_trie_root<L: TrieConfiguration, I, A, B>(
+	_storage_key: &[u8],
+	input: I,
+) -> <L::Hash as Hasher>::Out
 	where
 		I: IntoIterator<Item = (A, B)>,
 		A: AsRef<[u8]> + Ord,
 		B: AsRef<[u8]>,
 {
-	L::trie_root(input).as_ref().iter().cloned().collect()
+	L::trie_root(input)
 }
 
 /// Determine a child trie root given a hash DB and delta values. H is the default hasher,
 /// but a generic implementation may ignore this type parameter and use other hashers.
-pub fn child_delta_trie_root<L: TrieConfiguration, I, A, B, DB>(
+pub fn child_delta_trie_root<L: TrieConfiguration, I, A, B, DB, RD>(
 	_storage_key: &[u8],
 	db: &mut DB,
-	root_vec: Vec<u8>,
-	delta: I
-) -> Result<Vec<u8>, Box<TrieError<L>>>
+	root_data: RD,
+	delta: I,
+) -> Result<<L::Hash as Hasher>::Out, Box<TrieError<L>>>
 	where
 		I: IntoIterator<Item = (A, Option<B>)>,
 		A: AsRef<[u8]> + Ord,
 		B: AsRef<[u8]>,
+		RD: AsRef<[u8]>,
 		DB: hash_db::HashDB<L::Hash, trie_db::DBValue>
 			+ hash_db::PlainDB<TrieHash<L>, trie_db::DBValue>,
 {
 	let mut root = TrieHash::<L>::default();
 	// root is fetched from DB, not writable by runtime, so it's always valid.
-	root.as_mut().copy_from_slice(&root_vec);
+	root.as_mut().copy_from_slice(root_data.as_ref());
 
 	{
 		let mut trie = TrieDBMut::<L>::from_existing(&mut *db, &mut root)?;
@@ -212,7 +218,7 @@ pub fn child_delta_trie_root<L: TrieConfiguration, I, A, B, DB>(
 		}
 	}
 
-	Ok(root.as_ref().to_vec())
+	Ok(root)
 }
 
 /// Call `f` for all keys in a child trie.
