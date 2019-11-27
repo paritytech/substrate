@@ -273,7 +273,7 @@ where
 			return Box::new(ready(()));
 		}
 		let header = self.client.header(id)
-			.and_then(|h| h.ok_or(client_api::error::Error::UnknownBlock(format!("{}", id))));
+			.and_then(|h| h.ok_or(sp_blockchain::Error::UnknownBlock(format!("{}", id))));
 		let header = match header {
 			Ok(header) => header,
 			Err(err) => {
@@ -460,18 +460,21 @@ mod tests {
 
 	#[test]
 	fn should_revalidate_transactions_at_light_pool() {
+		use std::sync::atomic;
+		use sr_primitives::transaction_validity::*;
+
 		let build_fetcher = || {
-			let validated = Arc::new(std::sync::atomic::AtomicBool::new(false));
+			let validated = Arc::new(atomic::AtomicBool::new(false));
 			Arc::new(test_client::new_light_fetcher()
 				.with_remote_body(Some(Box::new(move |_| Ok(vec![]))))
 				.with_remote_call(Some(Box::new(move |_| {
-					let is_inserted = validated.swap(true, std::sync::atomic::Ordering::SeqCst);
-					let validity: sr_primitives::transaction_validity::TransactionValidity = if is_inserted {
-						Err(sr_primitives::transaction_validity::TransactionValidityError::Invalid(
-							sr_primitives::transaction_validity::InvalidTransaction::Custom(0)
+					let is_inserted = validated.swap(true, atomic::Ordering::SeqCst);
+					let validity: TransactionValidity = if is_inserted {
+						Err(TransactionValidityError::Invalid(
+							InvalidTransaction::Custom(0)
 						))
 					} else {
-						Ok(sr_primitives::transaction_validity::ValidTransaction {
+						Ok(ValidTransaction {
 							priority: 0,
 							requires: Vec::new(),
 							provides: vec![vec![42]],

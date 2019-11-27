@@ -47,7 +47,7 @@ pub struct ProposerFactory<C, A> where A: TransactionPool {
 
 impl<B, E, Block, RA, A> ProposerFactory<SubstrateClient<B, E, Block, RA>, A>
 where
-	A: TransactionPool<Block=Block>,
+	A: TransactionPool<Block=Block> + 'static,
 	B: client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
 	Block: BlockT<Hash=H256>,
@@ -85,7 +85,7 @@ where
 impl<B, E, Block, RA, A> consensus_common::Environment<Block> for
 ProposerFactory<SubstrateClient<B, E, Block, RA>, A>
 where
-	A: txpool::ChainApi<Block=Block> + 'static,
+	A: TransactionPool<Block=Block> + 'static,
 	B: client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
 	Block: BlockT<Hash=H256>,
@@ -111,7 +111,7 @@ pub struct Proposer<Block: BlockT, C, A: TransactionPool> {
 }
 
 /// Proposer inner, to wrap parameters under Arc.
-struct ProposerInner<Block: BlockT, C, A: txpool::ChainApi> {
+struct ProposerInner<Block: BlockT, C, A: TransactionPool> {
 	client: Arc<C>,
 	parent_hash: <Block as BlockT>::Hash,
 	parent_id: BlockId<Block>,
@@ -123,7 +123,7 @@ struct ProposerInner<Block: BlockT, C, A: txpool::ChainApi> {
 impl<B, E, Block, RA, A> consensus_common::Proposer<Block> for
 Proposer<Block, SubstrateClient<B, E, Block, RA>, A>
 where
-	A: TransactionPool<Block=Block>,
+	A: TransactionPool<Block=Block> + 'static,
 	B: client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
 	Block: BlockT<Hash=H256>,
@@ -151,7 +151,7 @@ where
 }
 
 impl<Block, B, E, RA, A> ProposerInner<Block, SubstrateClient<B, E, Block, RA>, A> where
-	A: TransactionPool<Block=Block>,
+	A: TransactionPool<Block=Block> + 'static,
 	B: client_api::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
 	Block: BlockT<Hash=H256>,

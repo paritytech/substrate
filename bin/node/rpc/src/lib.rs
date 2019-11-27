@@ -72,7 +72,7 @@ pub fn create<C, P, M, F>(
 	P: TransactionPool + 'static,
 	M: jsonrpc_core::Metadata + Default,
 {
-	use substrate_frame_system_rpc::{FullSystem, LightSystem, SystemApi};
+	use substrate_frame_rpc_system::{FullSystem, LightSystem, SystemApi};
 	use pallet_contracts_rpc::{Contracts, ContractsApi};
 	use pallet_transaction_payment_rpc::{TransactionPayment, TransactionPaymentApi};
 

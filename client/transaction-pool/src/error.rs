@@ -24,8 +24,8 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub enum Error {
 	/// Pool error.
 	Pool(txpool_api::error::Error),
-	/// Client error.
-	Client(client_api::error::Error),
+	/// Blockchain error.
+	Blockchain(sp_blockchain::Error),
 	/// Error while converting a `BlockId`.
 	#[from(ignore)]
 	BlockIdConversion(String),
@@ -38,7 +38,7 @@ impl std::error::Error for Error {
 	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
 		match self {
 			Error::Pool(ref err) => Some(err),
-			Error::Client(ref err) => Some(err),
+			Error::Blockchain(ref err) => Some(err),
 			Error::BlockIdConversion(_) => None,
 			Error::RuntimeApi(_) => None,
 		}

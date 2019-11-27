@@ -20,7 +20,6 @@ use std::sync::Arc;
 
 use codec::{self, Codec, Decode, Encode};
 use client::{
-	error::Error as ClientError,
 	light::blockchain::{future_header, RemoteBlockchain},
 	light::fetcher::{Fetcher, RemoteCallRequest},
 };
@@ -30,7 +29,10 @@ use jsonrpc_core::{
 };
 use jsonrpc_derive::rpc;
 use futures::future::{ready, TryFutureExt};
-use sp_blockchain::HeaderBackend;
+use sp_blockchain::{
+	HeaderBackend,
+	Error as ClientError
+};
 use sr_primitives::{
 	generic::BlockId,
 	traits,
@@ -220,7 +222,6 @@ fn adjust_nonce<P, AccountId, Index>(
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sc_transaction_pool;
 
 	use futures::executor::block_on;
 	use test_client::{

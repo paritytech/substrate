@@ -256,10 +256,10 @@ impl<B> TestClientBuilderExt<B> for TestClientBuilder<
 }
 
 /// Type of optional fetch callback.
-type MaybeFetcherCallback<Req, Resp> = Option<Box<dyn Fn(Req) -> Result<Resp, client::error::Error> + Send + Sync>>;
+type MaybeFetcherCallback<Req, Resp> = Option<Box<dyn Fn(Req) -> Result<Resp, sp_blockchain::Error> + Send + Sync>>;
 
 /// Type of fetcher future result.
-type FetcherFutureResult<Resp> = futures::future::Ready<Result<Resp, client::error::Error>>;
+type FetcherFutureResult<Resp> = futures::future::Ready<Result<Resp, sp_blockchain::Error>>;
 
 /// Implementation of light client fetcher used in tests.
 #[derive(Default)]

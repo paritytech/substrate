@@ -21,7 +21,6 @@ use codec::{Decode, Encode};
 use futures::{channel::oneshot, executor::{ThreadPool, ThreadPoolBuilder}, future::{Future, FutureExt, ready}};
 
 use client_api::{
-	error::Error as ClientError,
 	blockchain::HeaderBackend,
 	light::{Fetcher, RemoteCallRequest}
 };
@@ -166,10 +165,12 @@ impl<T, F, Block> txpool::ChainApi for LightChainApi<T, F, Block> where
 		});
 		let remote_validation_request = remote_validation_request.then(move |result| {
 			let result: error::Result<TransactionValidity> = result
+				.map_err(Into::into)
 				.and_then(|result| Decode::decode(&mut &result[..])
-					.map_err(|e| ClientError::CallResultDecode("Error decoding tx validation result", e))
-				)
-				.map_err(Into::into);
+					.map_err(|e| Error::RuntimeApi(
+						format!("Error decoding tx validation result: {:?}", e)
+					))
+				);
 			ready(result)
 		});
 
