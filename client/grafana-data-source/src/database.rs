@@ -82,12 +82,11 @@ impl Database {
 			// Find the index of the oldest allowed timestamp and cut out all those before it.
 			let index = find_index(&metric, self.base_timestamp, new_base_timestamp);
 
-			*metric = metric.iter()
+			*metric = metric.iter_mut()
 				.skip(index)
 				.map(|dp| {
-					let mut dp = dp.clone();
 					dp.delta_timestamp -= delta;
-					dp
+					*dp
 				})
 				.collect();
 		}
@@ -98,7 +97,7 @@ impl Database {
 	}
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 struct Datapoint {
 	delta_timestamp: u32,
 	value: f32

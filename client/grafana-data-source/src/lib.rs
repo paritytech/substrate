@@ -23,6 +23,8 @@
 //! [Grafana]: https://grafana.com/
 //! [`grafana-json-data-source`]: https://github.com/simPod/grafana-json-datasource
 
+#[warn(missing_docs)]
+
 use lazy_static::lazy_static;
 use parking_lot::RwLock;
 
@@ -51,11 +53,11 @@ macro_rules! record_metrics(
 	}
 );
 
-/// Write metrics to `METRICS` as a slice.
+/// Write metrics to `METRICS` as a slice. Intended to be only used via `record_metrics!`.
 pub fn record_metrics_slice(metrics: &[(&'static str, f32)]) -> Result<(), Error> {
 	let mut database = crate::DATABASE.write();
 
-	for &(key, value) in metrics {
+	for (key, value) in metrics.iter() {
 		database.push(key, value)?;
 	}
 
