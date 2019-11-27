@@ -764,6 +764,8 @@ decl_storage! {
 					}, _ => Ok(())
 				};
 			}
+
+			StorageVersion::put(migration::CURRENT_VERSION);
 		});
 	}
 }

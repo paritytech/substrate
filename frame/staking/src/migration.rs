@@ -16,20 +16,21 @@
 
 //! Storage migrations for srml-staking.
 
+/// Indicator of a version of a storage layout.
+pub type VersionNumber = u32;
+
+// the current expected version of the storage
+pub const CURRENT_VERSION: VersionNumber = 1;
+
 #[cfg(any(test, feature = "migrate"))]
 mod inner {
 	use crate::{Store, Module, Trait};
 	use support::{StorageLinkedMap, StorageValue};
 	use rstd::vec::Vec;
-
-	/// Indicator of a version of a storage layout.
-	pub type VersionNumber = u32;
+	use super::{CURRENT_VERSION, VersionNumber};
 
 	// the minimum supported version of the migration logic.
 	const MIN_SUPPORTED_VERSION: VersionNumber = 0;
-
-	// the current expected version of the storage
-	const CURRENT_VERSION: VersionNumber = 1;
 
 	// migrate storage from v0 to v1.
 	//
