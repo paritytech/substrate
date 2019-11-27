@@ -39,7 +39,7 @@ fn test_unresponsiveness_slash_fraction() {
 
 	assert_eq!(
 		UnresponsivenessOffence::<()>::slash_fraction(5, 50),
-		Perbill::zero(), // 0.6%
+		Perbill::zero(), // 0%
 	);
 
 	assert_eq!(
