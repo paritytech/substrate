@@ -69,18 +69,12 @@ macro_rules! new_full_start {
 			.with_import_queue(|_config, client, mut select_chain, _transaction_pool| {
 				let select_chain = select_chain.take()
 					.ok_or_else(|| substrate_service::Error::SelectChainRequired)?;
-// <<<<<<< HEAD:node/cli/src/service.rs
-				let (grandpa_block_import, grandpa_link) =
-					grandpa::block_import::<_, _, _, node_runtime::RuntimeApi, _, _>(
-						client.clone(), client.clone(), select_chain
-					)?;
-// =======
-// 				let (grandpa_block_import, grandpa_link) = grandpa::block_import(
-// 					client.clone(),
-// 					&*client,
-// 					select_chain,
-// 				)?;
-// >>>>>>> master:bin/node/cli/src/service.rs
+				let (grandpa_block_import, grandpa_link) = grandpa::block_import(
+					client.clone(),
+					client.clone(),
+					&*client,
+					select_chain,
+				)?;
 				let justification_import = grandpa_block_import.clone();
 
 				let (block_import, babe_link) = babe::block_import(

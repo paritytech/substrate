@@ -23,11 +23,7 @@ use codec::{FullCodec, Codec, Encode, Decode};
 use primitives::u32_trait::Value as U32;
 use sr_primitives::{
 	ConsensusEngineId,
-// <<<<<<< HEAD:srml/support/src/traits.rs
-// 	traits::{MaybeDebug, MaybeSerializeDebug, SimpleArithmetic, Saturating},
-// =======
 	traits::{MaybeSerializeDeserialize, SimpleArithmetic, Saturating},
-// >>>>>>> master:frame/support/src/traits.rs
 };
 
 /// Anything that can have a `::len()` method.

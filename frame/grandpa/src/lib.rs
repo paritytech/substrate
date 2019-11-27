@@ -34,7 +34,6 @@ use rstd::prelude::*;
 
 use app_crypto::{key_types::GRANDPA, RuntimeAppPublic};
 use codec::{self as codec, Encode, Decode, Error};
-// <<<<<<< HEAD:srml/grandpa/src/lib.rs
 use support::{
 	decl_event, decl_storage, decl_module, storage,
 	dispatch::Result,
@@ -45,33 +44,20 @@ use sr_primitives::{
 	generic::{DigestItem, OpaqueDigestItemId},
 	traits::{IdentifyAccount, Zero},
 	KeyTypeId, Perbill,
-// =======
-// use support::{decl_event, decl_storage, decl_module, dispatch::Result, storage};
-// use sr_primitives::{
-// 	generic::{DigestItem, OpaqueDigestItemId}, traits::Zero, Perbill,
-// >>>>>>> master:frame/grandpa/src/lib.rs
 };
 use sr_staking_primitives::{
 	SessionIndex,
 	offence::{Kind, Offence, ReportOffence},
 };
-// use fg_primitives::{
-// 	GRANDPA_ENGINE_ID,
-// };
-// <<<<<<< HEAD:srml/grandpa/src/lib.rs
-// pub use fg_primitives::{AuthorityId, AuthorityWeight};
 use system::{
 	ensure_signed, DigestOf,
 	offchain::SubmitSignedTransaction,
 };
-// =======
 use fg_primitives::{
 	GRANDPA_AUTHORITIES_KEY, GRANDPA_ENGINE_ID,
 	ConsensusLog, EquivocationReport, RoundNumber, SetId, ScheduledChange,
 };
 pub use fg_primitives::{AuthorityId, AuthorityList, AuthorityWeight, VersionedAuthorityList};
-// use system::{ensure_signed, DigestOf};
-// >>>>>>> master:frame/grandpa/src/lib.rs
 
 mod mock;
 mod tests;

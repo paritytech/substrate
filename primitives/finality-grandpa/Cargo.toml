@@ -5,43 +5,26 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-# <<<<<<< HEAD:core/finality-grandpa/primitives/Cargo.toml
-# app-crypto = { package = "substrate-application-crypto", path = "../../application-crypto", default-features = false }
-# codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 grandpa = { package = "finality-grandpa", version = "0.10.1", default-features = false, features = ["derive-codec"] }
-# log = { version = "0.4.8", optional = true }
 primitives = { package = "substrate-primitives", path = "../../primitives/core", optional = true }
-# rstd = { package = "sr-std", path = "../../sr-std", default-features = false }
-# serde = { version = "1.0.101", optional = true, features = ["derive"] }
-# sr-primitives = { path = "../../sr-primitives", default-features = false }
-# =======
 app-crypto = { package = "substrate-application-crypto", path = "../application-crypto", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 rstd = { package = "sr-std", path = "../sr-std", default-features = false }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
 sr-api = { path = "../sr-api", default-features = false }
 sr-primitives = { path = "../sr-primitives", default-features = false }
-# >>>>>>> master:primitives/finality-grandpa/Cargo.toml
 log = { version = "0.4.8", optional = true }
 
 [features]
 default = ["std"]
 std = [
 	"app-crypto/std",
-# <<<<<<< HEAD:core/finality-grandpa/primitives/Cargo.toml
-	# "client/std",
-# 	"codec/std",
 	"grandpa/std",
-# 	"log",
 	"primitives",
-# 	"rstd/std",
-# 	"serde",
-# =======
 	"codec/std",
 	"rstd/std",
 	"serde",
 	"sr-api/std",
-# >>>>>>> master:primitives/finality-grandpa/Cargo.toml
 	"sr-primitives/std",
 	"log",
 ]

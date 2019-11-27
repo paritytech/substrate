@@ -61,13 +61,10 @@ use crate::consensus_changes::SharedConsensusChanges;
 use crate::justification::GrandpaJustification;
 use crate::until_imported::UntilVoteTargetImported;
 use crate::voting_rule::VotingRule;
-// <<<<<<< HEAD:core/finality-grandpa/src/environment.rs
 use fg_primitives::{
 	AuthorityId, AuthoritySignature, Equivocation, EquivocationReport,
 	GrandpaApi, RoundNumber, SetId,
 };
-// use fg_primitives::{AuthorityId, AuthoritySignature, SetId, RoundNumber};
-// >>>>>>> master:client/finality-grandpa/src/environment.rs
 
 type HistoricalVotes<Block> = grandpa::HistoricalVotes<
 	<Block as BlockT>::Hash,
@@ -383,14 +380,9 @@ impl<Block: BlockT> SharedVoterSetState<Block> {
 }
 
 /// The environment we run GRANDPA in.
-// <<<<<<< HEAD:core/finality-grandpa/src/environment.rs
 pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA, PRA, SC, VR> {
 	pub(crate) client: Arc<Client<B, E, Block, RA>>,
 	pub(crate) api: Arc<PRA>,
-// =======
-// pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA, SC, VR> {
-// 	pub(crate) client: Arc<Client<B, E, Block, RA>>,
-// >>>>>>> master:client/finality-grandpa/src/environment.rs
 	pub(crate) select_chain: SC,
 	pub(crate) voters: Arc<VoterSet<AuthorityId>>,
 	pub(crate) config: Config,
@@ -402,11 +394,7 @@ pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA, PRA, S
 	pub(crate) voting_rule: VR,
 }
 
-// <<<<<<< HEAD:core/finality-grandpa/src/environment.rs
 impl<B, E, Block: BlockT, N: Network<Block>, PRA, RA, SC, VR> Environment<B, E, Block, N, RA, PRA, SC, VR> {
-// =======
-// impl<B, E, Block: BlockT, N: Network<Block>, RA, SC, VR> Environment<B, E, Block, N, RA, SC, VR> {
-// >>>>>>> master:client/finality-grandpa/src/environment.rs
 	/// Updates the voter set state using the given closure. The write lock is
 	/// held during evaluation of the closure and the environment's voter set
 	/// state is set to its result if successful.
@@ -422,15 +410,9 @@ impl<B, E, Block: BlockT, N: Network<Block>, PRA, RA, SC, VR> Environment<B, E, 
 	}
 }
 
-// <<<<<<< HEAD:core/finality-grandpa/src/environment.rs
 impl<Block: BlockT<Hash=H256>, B, E, N, RA, PRA, SC, VR>
 	grandpa::Chain<Block::Hash, NumberFor<Block>>
 for Environment<B, E, Block, N, RA, PRA, SC, VR>
-// =======
-// impl<Block: BlockT<Hash=H256>, B, E, N, RA, SC, VR>
-// 	grandpa::Chain<Block::Hash, NumberFor<Block>>
-// for Environment<B, E, Block, N, RA, SC, VR>
-// >>>>>>> master:client/finality-grandpa/src/environment.rs
 where
 	Block: 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
@@ -579,15 +561,9 @@ pub(crate) fn ancestry<B, Block: BlockT<Hash=H256>, E, RA>(
 	Ok(tree_route.retracted().iter().skip(1).map(|e| e.hash).collect())
 }
 
-// <<<<<<< HEAD:core/finality-grandpa/src/environment.rs
 impl<B, E, Block: BlockT<Hash=H256>, N, RA, PRA, SC, VR>
 	voter::Environment<Block::Hash, NumberFor<Block>>
 for Environment<B, E, Block, N, RA, PRA, SC, VR>
-// =======
-// impl<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR>
-// 	voter::Environment<Block::Hash, NumberFor<Block>>
-// for Environment<B, E, Block, N, RA, SC, VR>
-// >>>>>>> master:client/finality-grandpa/src/environment.rs
 where
 	Block: 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,

@@ -23,14 +23,8 @@ use rstd::vec::Vec;
 use sr_primitives::KeyTypeId;
 use sr_staking_primitives::SessionIndex;
 
-// #[cfg(feature = "std")]
-// <<<<<<< HEAD:core/session/src/lib.rs
-// use primitives::{H256, Blake2Hasher};
 #[cfg(feature = "std")]
-// use sr_primitives::traits::{ProvideRuntimeApi, Block as BlockT};
-// =======
 use sr_primitives::{generic::BlockId, traits::{ProvideRuntimeApi, Block as BlockT}};
-// >>>>>>> master:primitives/session/src/lib.rs
 
 sr_api::decl_runtime_apis! {
 	/// Session keys runtime api.

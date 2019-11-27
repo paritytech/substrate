@@ -23,13 +23,10 @@ extern crate alloc;
 
 #[cfg(feature = "std")]
 use serde::Serialize;
-// <<<<<<< HEAD:core/finality-grandpa/primitives/src/lib.rs
 
-// =======
 use codec::{Encode, Decode, Input, Codec};
 use sr_primitives::{ConsensusEngineId, RuntimeDebug, traits::NumberFor};
 use rstd::borrow::Cow;
-// >>>>>>> master:primitives/finality-grandpa/src/lib.rs
 use rstd::vec::Vec;
 
 #[cfg(feature = "std")]
@@ -425,16 +422,7 @@ sr_api::decl_runtime_apis! {
 		/// When called at block B, it will return the set of authorities that should be
 		/// used to finalize descendants of this block (B+1, B+2, ...). The block B itself
 		/// is finalized by the authorities from block B-1.
-// <<<<<<< HEAD:core/finality-grandpa/primitives/src/lib.rs
-// 		fn grandpa_authorities() -> Vec<(AuthorityId, AuthorityWeight)>;
-
-// 		fn submit_report_equivocation_extrinsic(
-// 			equivocation_report: EquivocationReport<Block::Hash, NumberFor<Block>>,
-// 			key_owner_proof: Vec<u8>,
-// 		) -> Option<()>;
-// =======
 		fn grandpa_authorities() -> AuthorityList;
-// >>>>>>> master:primitives/finality-grandpa/src/lib.rs
 
 		fn submit_report_equivocation_extrinsic(
 			equivocation_report: EquivocationReport<Block::Hash, NumberFor<Block>>,

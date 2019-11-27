@@ -676,13 +676,10 @@ impl<B: BlockT, N: Network<B>> Clone for NetworkBridge<B, N> {
 	}
 }
 
-// <<<<<<< HEAD:core/finality-grandpa/src/communication/mod.rs
-// =======
 pub(crate) fn localized_payload<E: Encode>(round: RoundNumber, set_id: SetIdNumber, message: &E) -> Vec<u8> {
 	(message, round, set_id).encode()
 }
 
-// >>>>>>> master:client/finality-grandpa/src/communication/mod.rs
 /// Type-safe wrapper around a round number.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Encode, Decode)]
 pub struct Round(pub RoundNumber);

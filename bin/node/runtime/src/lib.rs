@@ -27,26 +27,12 @@ use support::{
 	traits::{SplitTwoWays, Currency, Randomness},
 };
 use primitives::u32_trait::{_1, _2, _3, _4};
-// <<<<<<< HEAD:node/runtime/src/lib.rs
-// use node_primitives::{
-// 	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index,
-// 	Moment, Signature,
-// };
-// use babe_primitives::{AuthorityId as BabeId, AuthoritySignature as BabeSignature};
-// use grandpa::fg_primitives;
-// use client::{
-// 	block_builder::api::{self as block_builder_api, InherentData, CheckInherentsResult},
-// 	runtime_api as client_api, impl_runtime_apis
-// };
 use sr_primitives::{
 	create_runtime_str, impl_opaque_keys, generic,
 	ApplyExtrinsicResult, KeyTypeId, Perbill, Permill,
 };
-// =======
 use node_primitives::{AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, Moment, Signature};
 use sr_api::impl_runtime_apis;
-// use sr_primitives::{Permill, Perbill, ApplyExtrinsicResult, impl_opaque_keys, generic, create_runtime_str};
-// >>>>>>> master:bin/node/runtime/src/lib.rs
 use sr_primitives::curve::PiecewiseLinear;
 use sr_primitives::transaction_validity::TransactionValidity;
 use sr_primitives::traits::{
@@ -57,13 +43,9 @@ use version::RuntimeVersion;
 #[cfg(any(feature = "std", test))]
 use version::NativeVersion;
 use primitives::OpaqueMetadata;
-// <<<<<<< HEAD:node/runtime/src/lib.rs
 use session::historical;
-// use grandpa::{AuthorityId as GrandpaId, AuthorityWeight as GrandpaWeight};
-// =======
 use grandpa::AuthorityList as GrandpaAuthorityList;
 use grandpa::fg_primitives;
-// >>>>>>> master:bin/node/runtime/src/lib.rs
 use im_online::sr25519::{AuthorityId as ImOnlineId};
 use authority_discovery_primitives::AuthorityId as AuthorityDiscoveryId;
 use transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
