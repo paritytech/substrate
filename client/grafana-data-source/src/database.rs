@@ -24,6 +24,7 @@ pub struct Database {
 }
 
 impl Database {
+	/// Create a new Database.
 	pub fn new() -> Self {
 		Self {
 			base_timestamp: now_millis(),
@@ -31,10 +32,12 @@ impl Database {
 		}
 	}
 
+	/// Produce an iterator for keys starting with a base string.
 	pub fn keys_starting_with<'a>(&'a self, base: &'a str) -> impl Iterator<Item = &'static str> + 'a {
 		self.storage.keys().filter(move |key| key.starts_with(base)).cloned()
 	}
 
+	/// Select `max_datapoints` datapoints that have been added between `from` and `to`.
 	pub fn datapoints_between(&self, key: &str, from: i64, to: i64, max_datapoints: usize) -> Option<Vec<(f32, i64)>> {
 		self.storage.get(key)
 			.map(|vec| {
@@ -60,6 +63,8 @@ impl Database {
 			})
 	}
 
+	/// Push a new datapoint. Will error if the base timestamp hasn't been updated in `2^32`
+	/// milliseconds (49 days).
 	pub fn push(&mut self, key: &'static str, value: f32) -> Result<(), Error> {
 		self.storage.entry(key)
 			.or_insert_with(Vec::new)
@@ -68,6 +73,8 @@ impl Database {
 		Ok(())
 	}
 
+	/// Set a new base timestamp, and remove metrics older than this new timestamp. Errors if the
+	/// difference between timestamps is greater than `2^32` milliseconds (49 days).
 	pub fn truncate(&mut self, new_base_timestamp: i64) -> Result<(), Error> {
 		// Ensure that the new base is older.
 		if self.base_timestamp >= new_base_timestamp {
