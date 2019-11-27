@@ -1,0 +1,55 @@
+[package]
+name = "substrate-consensus-babe"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+description = "BABE consensus algorithm for substrate"
+edition = "2018"
+
+[dependencies]
+codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
+babe_primitives = { package = "substrate-consensus-babe-primitives", path = "../../../primitives/consensus/babe" }
+primitives = { package = "substrate-primitives", path = "../../../primitives/core" }
+app-crypto = { package = "substrate-application-crypto", path = "../../../primitives/application-crypto" }
+num-bigint = "0.2.3"
+num-rational = "0.2.2"
+num-traits = "0.2.8"
+runtime-version = { package = "sr-version", path = "../../../primitives/sr-version" }
+runtime-io = { package = "sr-io", path = "../../../primitives/sr-io" }
+inherents = { package = "substrate-inherents", path = "../../../primitives/inherents" }
+sp-timestamp = { path = "../../../primitives/timestamp" }
+substrate-telemetry = { path = "../../telemetry" }
+keystore = { package = "substrate-keystore", path = "../../keystore" }
+client-api = { package = "substrate-client-api", path = "../../api" }
+client = { package = "substrate-client", path = "../../" }
+sr-api = { path = "../../../primitives/sr-api" }
+block-builder-api = { package = "substrate-block-builder-runtime-api", path = "../../../primitives/block-builder/runtime-api" }
+sp-blockchain = { path = "../../../primitives/blockchain" }
+consensus-common = { package = "substrate-consensus-common", path = "../../../primitives/consensus/common" }
+uncles = { package = "substrate-consensus-uncles", path = "../uncles" }
+slots = { package = "substrate-consensus-slots", path = "../slots"  }
+sr-primitives = {  path = "../../../primitives/sr-primitives" }
+fork-tree = { path = "../../../utils/fork-tree" }
+futures = { version = "0.3.1", features = ["compat"] }
+futures01 = { package = "futures", version = "0.1" }
+futures-timer = "0.4.0"
+parking_lot = "0.9.0"
+log = "0.4.8"
+schnorrkel = { version = "0.8.5", features = ["preaudit_deprecated"] }
+rand = "0.7.2"
+merlin = "1.2.1"
+pdqselect = "0.1.0"
+derive_more = "0.99.2"
+
+[dev-dependencies]
+keyring = { package = "substrate-keyring", path = "../../../primitives/keyring" }
+substrate-executor = { path = "../../executor" }
+network = { package = "substrate-network", path = "../../network", features = ["test-helpers"]}
+service = { package = "substrate-service", path = "../../service" }
+test-client = { package = "substrate-test-runtime-client", path = "../../../test/utils/runtime/client" }
+block-builder = { package = "substrate-block-builder", path = "../../block-builder" }
+tokio = "0.1.22"
+env_logger = "0.7.0"
+tempfile = "3.1.0"
+
+[features]
+test-helpers = []

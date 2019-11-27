@@ -1,0 +1,40 @@
+[package]
+name = "substrate-client"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
+block-builder = { package = "substrate-block-builder", path = "block-builder" }
+client-api = { package = "substrate-client-api", path = "api" }
+codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
+consensus = { package = "substrate-consensus-common", path = "../primitives/consensus/common" }
+derive_more = { version = "0.99.2" }
+executor = { package = "substrate-executor", path = "executor" }
+externalities = { package = "substrate-externalities", path = "../primitives/externalities" }
+fnv = { version = "1.0.6" }
+futures = { version = "0.3.1", features = ["compat"] }
+hash-db = { version = "0.15.2" }
+hex-literal = { version = "0.2.1" }
+inherents = { package = "substrate-inherents", path = "../primitives/inherents" }
+keyring = { package = "substrate-keyring", path = "../primitives/keyring" }
+kvdb = { git = "https://github.com/paritytech/parity-common", rev="03a2ba08f47f4af4219280e660a1ea92cb8896bd" }
+log = { version = "0.4.8" }
+parking_lot = { version = "0.9.0" }
+primitives = { package = "substrate-primitives", path = "../primitives/core" }
+rstd = { package = "sr-std", path = "../primitives/sr-std" }
+runtime-version = { package = "sr-version", path = "../primitives/sr-version" }
+sr-api = { path = "../primitives/sr-api" }
+sr-primitives = { path = "../primitives/sr-primitives" }
+sp-blockchain = { path = "../primitives/blockchain" }
+state-machine = { package = "substrate-state-machine", path = "../primitives/state-machine" }
+substrate-telemetry = { path = "telemetry" }
+trie = { package = "substrate-trie", path = "../primitives/trie" }
+
+[dev-dependencies]
+env_logger = "0.7.0"
+tempfile = "3.1.0"
+client-db = { package = "substrate-client-db", path = "./db", features = ["kvdb-rocksdb"] }
+test-client = { package = "substrate-test-runtime-client", path = "../test/utils/runtime/client" }
+kvdb-memorydb = { git = "https://github.com/paritytech/parity-common", rev="03a2ba08f47f4af4219280e660a1ea92cb8896bd" }
+panic-handler = { package = "substrate-panic-handler", path = "../primitives/panic-handler" }

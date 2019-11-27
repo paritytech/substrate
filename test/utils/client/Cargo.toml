@@ -1,0 +1,20 @@
+[package]
+name = "substrate-test-client"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
+client-api = { package = "substrate-client-api", path = "../../../client/api" }
+client = { package = "substrate-client", path = "../../../client/" }
+client-db = { package = "substrate-client-db", path = "../../../client//db", features = ["test-helpers"] }
+consensus = { package = "substrate-consensus-common", path = "../../../primitives/consensus/common" }
+executor = { package = "substrate-executor", path = "../../../client/executor" }
+futures = "0.3.1"
+hash-db = "0.15.2"
+keyring = { package = "substrate-keyring", path = "../../../primitives/keyring" }
+codec = { package = "parity-scale-codec", version = "1.0.0" }
+primitives = { package = "substrate-primitives", path = "../../../primitives/core" }
+sr-primitives = {  path = "../../../primitives/sr-primitives" }
+sp-blockchain = {  path = "../../../primitives/blockchain" }
+state_machine = { package = "substrate-state-machine", path = "../../../primitives/state-machine" }

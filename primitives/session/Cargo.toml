@@ -1,0 +1,34 @@
+[package]
+name = "substrate-session"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
+# <<<<<<< HEAD:core/session/Cargo.toml
+# client = { package = "substrate-client", path = "../client", default-features = false }
+codec = { package = "parity-scale-codec", version = "1.0.6", default-features = false, features = ["derive"] }
+# primitives = { package = "substrate-primitives", path = "../primitives", optional = true }
+# rstd = { package = "sr-std", path = "../sr-std", default-features = false }
+# sr-primitives = { path = "../sr-primitives", default-features = false }
+sr-staking-primitives = { path = "../sr-staking-primitives", default-features = false }
+
+# [features]
+# default = ["std"]
+# std = [
+# 	"client/std",
+# 	"codec/std",
+# 	"primitives/std",
+# 	"rstd/std",
+# 	"sr-primitives/std",
+# 	,
+# ]
+# =======
+sr-api = { path = "../sr-api", default-features = false }
+rstd = { package = "sr-std", path = "../sr-std", default-features = false }
+sr-primitives = { path = "../sr-primitives", default-features = false }
+
+[features]
+default = [ "std" ]
+std = [ "sr-api/std", "rstd/std", "sr-primitives/std", "sr-staking-primitives/std" ]
+# >>>>>>> master:primitives/session/Cargo.toml

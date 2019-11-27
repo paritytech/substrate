@@ -1,0 +1,20 @@
+[package]
+name = "transaction-factory"
+version = "0.0.1"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
+block-builder-api = { package = "substrate-block-builder-runtime-api", path = "../../../primitives/block-builder/runtime-api" }
+cli = { package = "substrate-cli", path = "../../../client/cli" }
+client-api = { package = "substrate-client-api", path = "../../../client/api" }
+client = { package = "substrate-client", path = "../../../client" }
+codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
+consensus_common = { package = "substrate-consensus-common", path = "../../../primitives/consensus/common" }
+log = "0.4.8"
+primitives = { package = "substrate-primitives", path = "../../../primitives/core" }
+sr-api = { path = "../../../primitives/sr-api" }
+sr-primitives = { path = "../../../primitives/sr-primitives" }
+substrate-service = { path = "../../../client/service" }
+sp-blockchain = { path = "../../../primitives/blockchain" }
+

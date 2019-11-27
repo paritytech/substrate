@@ -1,0 +1,25 @@
+[package]
+name = "substrate-telemetry"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+description = "Telemetry utils"
+edition = "2018"
+
+[dependencies]
+bytes = "0.4.12"
+parking_lot = "0.9.0"
+futures01 = { package = "futures", version = "0.1" }
+futures = { version = "0.3.1", features = ["compat"] }
+futures-timer = "2.0.0"
+libp2p = { version = "0.13.0", default-features = false, features = ["libp2p-websocket"] }
+log = "0.4.8"
+rand = "0.7.2"
+serde = { version = "1.0.101", features = ["derive"] }
+slog = { version = "2.5.2", features = ["nested-values"] }
+# TODO: we're using slog-async just to be able to clone records; See https://github.com/slog-rs/slog/issues/221,
+# https://github.com/paritytech/substrate/issues/2823 and https://github.com/paritytech/substrate/issues/3260
+slog-async = { git = "https://github.com/paritytech/slog-async", features = ["nested-values"] }
+slog-json = { version = "2.3.0", features = ["nested-values"] }
+slog-scope = "4.1.2"
+tokio-io = "0.1.12"
+void = "1.0.2"

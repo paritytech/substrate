@@ -1,0 +1,41 @@
+[package]
+name = "substrate-client-api"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
+block-builder = { package = "substrate-block-builder", path = "../block-builder" }
+codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
+consensus = { package = "substrate-consensus-common", path = "../../primitives/consensus/common" }
+derive_more = { version = "0.99.2" }
+executor = { package = "substrate-executor", path = "../executor" }
+externalities = { package = "substrate-externalities", path = "../../primitives/externalities" }
+fnv = { version = "1.0.6" }
+futures = { version = "0.3.1" }
+hash-db = { version = "0.15.2", default-features = false }
+sp-blockchain = { path = "../../primitives/blockchain" }
+hex-literal = { version = "0.2.1" }
+inherents = { package = "substrate-inherents", path = "../../primitives/inherents", default-features = false }
+keyring = { package = "substrate-keyring", path = "../../primitives/keyring" }
+kvdb = { git = "https://github.com/paritytech/parity-common", rev="03a2ba08f47f4af4219280e660a1ea92cb8896bd" }
+log = { version = "0.4.8" }
+parking_lot = { version = "0.9.0" }
+primitives = { package = "substrate-primitives", path = "../../primitives/core", default-features = false }
+rstd = { package = "sr-std", path = "../../primitives/sr-std", default-features = false }
+runtime-version = { package = "sr-version", path = "../../primitives/sr-version", default-features = false }
+sr-api = { path = "../../primitives/sr-api" }
+sr-primitives = { path = "../../primitives/sr-primitives", default-features = false }
+state-machine = { package = "substrate-state-machine", path = "../../primitives/state-machine" }
+substrate-telemetry = { path = "../telemetry" }
+trie = { package = "substrate-trie", path = "../../primitives/trie" }
+
+[dev-dependencies]
+env_logger = "0.7.0"
+tempfile = "3.1.0"
+client-db = { package = "substrate-client-db", path = ".././db", features = ["kvdb-rocksdb"] }
+test-primitives = { package = "substrate-test-primitives", path = "../../test/utils/primitives" }
+test-client = { package = "substrate-test-runtime-client", path = "../../test/utils/runtime/client" }
+kvdb-memorydb = { git = "https://github.com/paritytech/parity-common", rev="03a2ba08f47f4af4219280e660a1ea92cb8896bd" }
+panic-handler = { package = "substrate-panic-handler", path = "../../primitives/panic-handler" }
+

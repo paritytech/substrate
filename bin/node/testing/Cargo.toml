@@ -1,0 +1,31 @@
+[package]
+name = "node-testing"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+description = "Test utilities for Substrate node."
+edition = "2018"
+
+[dependencies]
+balances = { package = "pallet-balances", path = "../../../frame/balances" }
+client = { package = "substrate-client", path = "../../../client/" }
+codec = { package = "parity-scale-codec", version = "1.0.0" }
+contracts = { package = "pallet-contracts", path = "../../../frame/contracts" }
+grandpa = { package = "pallet-grandpa", path = "../../../frame/grandpa" }
+indices = { package = "pallet-indices", path = "../../../frame/indices" }
+keyring = { package = "substrate-keyring", path = "../../../primitives/keyring" }
+node-executor = { path = "../executor" }
+node-primitives = { path = "../primitives" }
+node-runtime = { path = "../runtime" }
+primitives = { package = "substrate-primitives", path = "../../../primitives/core" }
+runtime-io = { package = "sr-io", path = "../../../primitives/sr-io" }
+runtime_support = { package = "frame-support", path = "../../../frame/support" }
+session = { package = "pallet-session", path = "../../../frame/session" }
+sr-primitives = { path = "../../../primitives/sr-primitives" }
+staking = { package = "pallet-staking", path = "../../../frame/staking" }
+substrate-executor = { path = "../../../client/executor" }
+system = { package = "frame-system", path = "../../../frame/system" }
+test-client = { package = "substrate-test-client", path = "../../../test/utils/client" }
+timestamp = { package = "pallet-timestamp", path = "../../../frame/timestamp" }
+transaction-payment = { package = "pallet-transaction-payment", path = "../../../frame/transaction-payment" }
+treasury = { package = "pallet-treasury", path = "../../../frame/treasury" }
+wabt = "0.9.2"

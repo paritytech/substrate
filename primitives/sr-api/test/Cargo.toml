@@ -1,0 +1,22 @@
+[package]
+name = "sr-api-test"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
+sr-api = { path = "../" }
+test-client = { package = "substrate-test-runtime-client", path = "../../../test/utils/runtime/client" }
+sr-version = { path = "../../sr-version" }
+sr-primitives = { path = "../../sr-primitives" }
+sp-blockchain = { path = "../../blockchain" }
+consensus_common = { package = "substrate-consensus-common", path = "../../../primitives/consensus/common" }
+codec = { package = "parity-scale-codec", version = "1.0.0" }
+state-machine = { package = "substrate-state-machine", path = "../../../primitives/state-machine" }
+trybuild = "1.0.17"
+rustversion = "1.0.0"
+
+# We only need this to generate the correct code.
+[features]
+default = [ "std" ]
+std = []

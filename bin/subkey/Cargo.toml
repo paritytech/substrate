@@ -1,0 +1,25 @@
+[package]
+name = "subkey"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
+primitives = { package = "substrate-primitives",  version = "*", path = "../../primitives/core" }
+node-runtime = { version = "*", path = "../node/runtime" }
+node-primitives = { version = "*", path = "../node/primitives" }
+sr-primitives = { version = "*", path = "../../primitives/sr-primitives" }
+rand = "0.7.2"
+clap = "2.33.0"
+tiny-bip39 = "0.6.2"
+rustc-hex = "2.0.1"
+substrate-bip39 = "0.3.1"
+hex = "0.3.2"
+hex-literal = "0.2.1"
+codec = { package = "parity-scale-codec", version = "1.0.0" }
+system = { package = "frame-system", path = "../../frame/system" }
+balances = { package = "pallet-balances", path = "../../frame/balances" }
+transaction-payment = { package = "pallet-transaction-payment", path = "../../frame/transaction-payment" }
+
+[features]
+bench = []

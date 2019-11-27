@@ -1,0 +1,15 @@
+[package]
+name = "substrate-consensus-uncles"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+description = "Generic uncle inclusion utilities for consensus"
+edition = "2018"
+
+[dependencies]
+client-api = { package = "substrate-client-api", path = "../../api" }
+primitives = { package = "substrate-primitives", path = "../../../primitives/core" }
+sr-primitives = {  path = "../../../primitives/sr-primitives" }
+sp-authorship = {  path = "../../../primitives/authorship" }
+consensus_common = { package = "substrate-consensus-common", path = "../../../primitives/consensus/common" }
+inherents = { package = "substrate-inherents", path = "../../../primitives/inherents" }
+log = "0.4.8"

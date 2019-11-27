@@ -1,0 +1,38 @@
+[package]
+name = "substrate-rpc"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
+api = { package = "sc-rpc-api", path = "./api" }
+client-api = { package = "substrate-client-api", path = "../api" }
+client = { package = "substrate-client", path = "../" }
+sr-api = { path = "../../primitives/sr-api" }
+codec = { package = "parity-scale-codec", version = "1.0.0" }
+futures = { version = "0.3.1", features = ["compat"] }
+jsonrpc-pubsub = "14.0.3"
+log = "0.4.8"
+primitives = { package = "substrate-primitives", path = "../../primitives/core" }
+rpc = { package = "jsonrpc-core", version = "14.0.3" }
+runtime_version = { package = "sr-version", path = "../../primitives/sr-version" }
+serde_json = "1.0.41"
+session = { package = "substrate-session", path = "../../primitives/session" }
+sr-primitives = { path = "../../primitives/sr-primitives" }
+rpc-primitives = { package = "substrate-rpc-primitives", path = "../../primitives/rpc" }
+state_machine = { package = "substrate-state-machine", path = "../../primitives/state-machine" }
+substrate-executor = { path = "../executor" }
+substrate-keystore = { path = "../keystore" }
+transaction_pool = { package = "sc-transaction-pool", path = "../../client/transaction-pool" }
+sp-blockchain = { path = "../../primitives/blockchain" }
+hash-db = { version = "0.15.2", default-features = false }
+parking_lot = { version = "0.9.0" }
+
+[dev-dependencies]
+assert_matches = "1.3.0"
+futures01 = { package = "futures", version = "0.1.29" }
+network = { package = "substrate-network", path = "../network" }
+rustc-hex = "2.0.1"
+sr-io = { path = "../../primitives/sr-io" }
+test-client = { package = "substrate-test-runtime-client", path = "../../test/utils/runtime/client" }
+tokio = "0.1.22"

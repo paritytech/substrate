@@ -1,0 +1,36 @@
+[package]
+name = "substrate-client-db"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
+parking_lot = "0.9.0"
+log = "0.4.8"
+kvdb = { git = "https://github.com/paritytech/parity-common", rev="03a2ba08f47f4af4219280e660a1ea92cb8896bd" }
+# FIXME replace with release as soon as our rocksdb changes are released upstream https://github.com/paritytech/parity-common/issues/88
+kvdb-rocksdb = { git = "https://github.com/paritytech/parity-common", rev="03a2ba08f47f4af4219280e660a1ea92cb8896bd", optional = true }
+kvdb-memorydb = { git = "https://github.com/paritytech/parity-common", rev="03a2ba08f47f4af4219280e660a1ea92cb8896bd" }
+linked-hash-map = "0.5.2"
+hash-db = "0.15.2"
+client-api = { package = "substrate-client-api", path = "../api" }
+primitives = { package = "substrate-primitives", path = "../../primitives/core" }
+sr-primitives = {  path = "../../primitives/sr-primitives" }
+client = { package = "substrate-client", path = "../" }
+state-machine = { package = "substrate-state-machine", path = "../../primitives/state-machine" }
+codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
+executor = { package = "substrate-executor", path = "../executor" }
+state_db = { package = "substrate-state-db", path = "../state-db" }
+trie = { package = "substrate-trie", path = "../../primitives/trie" }
+consensus_common = { package = "substrate-consensus-common", path = "../../primitives/consensus/common" }
+sp-blockchain = { path = "../../primitives/blockchain" }
+
+[dev-dependencies]
+substrate-keyring = { path = "../../primitives/keyring" }
+test-client = { package = "substrate-test-runtime-client", path = "../../test/utils/runtime/client" }
+env_logger = "0.7.0"
+quickcheck = "0.8"
+
+[features]
+default = []
+test-helpers = []

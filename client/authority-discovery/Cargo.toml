@@ -1,0 +1,33 @@
+[package]
+name = "substrate-authority-discovery"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+build = "build.rs"
+
+[build-dependencies]
+prost-build = "0.5.0"
+
+[dependencies]
+authority-discovery-primitives = { package = "substrate-authority-discovery-primitives", path = "../../primitives/authority-discovery" }
+bytes = "0.4.12"
+client-api = { package = "substrate-client-api", path = "../api" }
+codec = { package = "parity-scale-codec", default-features = false, version = "1.0.3" }
+derive_more = "0.99.2"
+futures = "0.3.1"
+futures-timer = "2.0"
+keystore = { package = "substrate-keystore", path = "../keystore" }
+libp2p = { version = "0.13.0", default-features = false, features = ["secp256k1", "libp2p-websocket"] }
+log = "0.4.8"
+network = { package = "substrate-network", path = "../network" }
+primitives = { package = "substrate-primitives", path = "../../primitives/core" }
+sp-blockchain = { path = "../../primitives/blockchain" }
+prost = "0.5.0"
+serde_json = "1.0.41"
+sr-primitives = { path = "../../primitives/sr-primitives" }
+
+[dev-dependencies]
+parking_lot = "0.9.0"
+peerset = { package = "substrate-peerset", path = "../peerset" }
+test-client = { package = "substrate-test-runtime-client", path = "../../test/utils/runtime/client" }
+sr-api = { path = "../../primitives/sr-api" }

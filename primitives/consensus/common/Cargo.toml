@@ -1,0 +1,26 @@
+[package]
+name = "substrate-consensus-common"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+description = "Common utilities for substrate consensus"
+edition = "2018"
+
+[dependencies]
+derive_more = "0.99.2"
+libp2p = { version = "0.13.0", default-features = false }
+log = "0.4.8"
+primitives = { package = "substrate-primitives", path= "../../core" }
+inherents = { package = "substrate-inherents", path = "../../inherents" }
+futures = { version = "0.3.1", features = ["thread-pool"] }
+futures-timer = "0.4.0"
+rstd = { package = "sr-std", path = "../../sr-std" }
+runtime_version = { package = "sr-version", path = "../../sr-version" }
+sr-primitives = {  path = "../../sr-primitives" }
+codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
+parking_lot = "0.9.0"
+
+[dev-dependencies]
+test-client = { package = "substrate-test-runtime-client", path = "../../../test/utils/runtime/client" }
+
+[features]
+default = []
