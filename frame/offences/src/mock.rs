@@ -46,6 +46,7 @@ impl<Reporter, Offender> offence::OnOffenceHandler<Reporter, Offender> for OnOff
 	fn on_offence(
 		_offenders: &[OffenceDetails<Reporter, Offender>],
 		slash_fraction: &[Perbill],
+		_offence_session: SessionIndex,
 	) {
 		ON_OFFENCE_PERBILL.with(|f| {
 			*f.borrow_mut() = slash_fraction.to_vec();
@@ -148,9 +149,7 @@ impl<T: Clone> offence::Offence<T> for Offence<T> {
 	}
 
 	fn session_index(&self) -> SessionIndex {
-		// session index is not used by the pallet-offences directly, but rather it exists only for
-		// filtering historical reports.
-		unimplemented!()
+		1
 	}
 
 	fn slash_fraction(
