@@ -10,7 +10,6 @@ name = "node-template"
 path = "src/main.rs"
 
 [dependencies]
-derive_more = "0.15.0"
 futures = "0.3.1"
 futures01 = { package = "futures", version = "0.1.29" }
 ctrlc = { version = "3.1.3", features = ["termination"] }
@@ -25,8 +24,8 @@ primitives = { package = "substrate-primitives", path = "../../primitives/core" 
 substrate-executor = { path = "../../client/executor" }
 substrate-service = { path = "../../client/service" }
 inherents = { package = "substrate-inherents", path = "../../primitives/inherents" }
-txpool = { package = "substrate-transaction-pool", path = "../../client/transaction-pool" }
-txpool-api = { package = "substrate-transaction-pool-api", path = "../../primitives/transaction-pool" }
+txpool = { package = "sc-transaction-pool", path = "../../client/transaction-pool" }
+txpool-api = { package = "sp-transaction-pool-api", path = "../../primitives/transaction-pool" }
 network = { package = "substrate-network", path = "../../client/network" }
 aura = { package = "substrate-consensus-aura", path = "../../client/consensus/aura" }
 aura-primitives = { package = "substrate-consensus-aura-primitives", path = "../../primitives/consensus/aura" }

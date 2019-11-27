@@ -12,5 +12,5 @@ node-runtime = { path = "../runtime" }
 sr-primitives = { path = "../../../primitives/sr-primitives" }
 pallet-contracts-rpc = { path = "../../../frame/contracts/rpc/" }
 pallet-transaction-payment-rpc = { path = "../../../frame/transaction-payment/rpc/" }
-frame-system-rpc = { path = "../../../frame/system/rpc/" }
-txpool-api = { package = "substrate-transaction-pool-api", path = "../../../primitives/transaction-pool" }
+substrate-frame-rpc-system = { path = "../../../utils/frame/rpc/system" }
+txpool-api = { package = "sp-transaction-pool-api", path = "../../../primitives/transaction-pool" }

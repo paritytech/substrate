@@ -7,6 +7,7 @@ edition = "2018"
 [dependencies]
 state-machine = { package = "substrate-state-machine", path = "../../primitives/state-machine" }
 sr-primitives = { path = "../../primitives/sr-primitives" }
+sp-blockchain = { path = "../../primitives/blockchain" }
 primitives = { package = "substrate-primitives", path = "../../primitives/core" }
 codec = { package = "parity-scale-codec", version = "1.0.6", features = ["derive"] }
 runtime_api = { package = "substrate-block-builder-runtime-api", path = "../../primitives/block-builder/runtime-api" }

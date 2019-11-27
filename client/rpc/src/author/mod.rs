@@ -23,7 +23,7 @@ use std::{sync::Arc, convert::TryInto};
 use log::warn;
 
 use client::Client;
-use client_api::error::Error as ClientError;
+use sp_blockchain::Error as ClientError;
 
 use rpc::futures::{
 	Sink, Future,

@@ -50,11 +50,12 @@ use sr_primitives::traits::{
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
 use std::{
 	io::{Read, Write, Seek},
-	marker::PhantomData, sync::Arc, sync::atomic::AtomicBool, time::SystemTime
+	marker::PhantomData, sync::Arc, time::SystemTime
 };
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use tel::{telemetry, SUBSTRATE_INFO};
 use txpool_api::{TransactionPool, TransactionPoolMaintainer};
+use sp_blockchain;
 use grafana_data_source::{self, record_metrics};
 
 /// Aggregator for the components required to build a service.
@@ -788,7 +789,7 @@ ServiceBuilder<
 		offchain::OffchainWorkerApi<TBl> +
 		txpool_runtime_api::TaggedTransactionQueue<TBl> +
 		session::SessionKeys<TBl> +
-		sr_api::ApiExt<TBl, Error = client::error::Error>,
+		sr_api::ApiExt<TBl, Error = sp_blockchain::Error>,
 	TBl: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
 	TRtApi: ConstructRuntimeApi<TBl, Client<TBackend, TExec, TBl, TRtApi>> + 'static + Send + Sync,
 	TCfg: Default,
@@ -847,6 +848,9 @@ ServiceBuilder<
 		// List of asynchronous tasks to spawn. We collect them, then spawn them all at once.
 		let (to_spawn_tx, to_spawn_rx) =
 			mpsc::unbounded::<Box<dyn Future<Item = (), Error = ()> + Send>>();
+
+		// A side-channel for essential tasks to communicate shutdown.
+		let (essential_failed_tx, essential_failed_rx) = mpsc::unbounded();
 
 		let import_queue = Box::new(import_queue);
 		let chain_info = client.info().chain;
@@ -1024,15 +1028,15 @@ ServiceBuilder<
 				"used_state_cache_size" => used_state_cache_size,
 			);
 			record_metrics!(
-				"peers" => num_peers,
-				"height" => best_number,
-				"txcount" => txpool_status.ready,
-				"cpu" => cpu_usage,
-				"memory" => memory,
-				"finalized_height" => finalized_number,
-				"bandwidth_download" => bandwidth_download,
-				"bandwidth_upload" => bandwidth_upload,
-				"used_state_cache_size" => used_state_cache_size
+				"peers".to_owned() => num_peers,
+				"height".to_owned() => best_number,
+				"txcount".to_owned() => txpool_status.ready,
+				"cpu".to_owned() => cpu_usage,
+				"memory".to_owned() => memory,
+				"finalized_height".to_owned() => finalized_number,
+				"bandwidth_download".to_owned() => bandwidth_download,
+				"bandwidth_upload".to_owned() => bandwidth_upload,
+				"used_state_cache_size".to_owned() => used_state_cache_size
 			);
 
 			Ok(())
@@ -1205,7 +1209,8 @@ ServiceBuilder<
 			transaction_pool,
 			exit,
 			signal: Some(signal),
-			essential_failed: Arc::new(AtomicBool::new(false)),
+			essential_failed_tx,
+			essential_failed_rx,
 			to_spawn_tx,
 			to_spawn_rx,
 			to_poll: Vec::new(),

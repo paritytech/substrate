@@ -27,8 +27,10 @@ pub enum Error {
 	/// Client error.
 	Client(client_api::error::Error),
 	/// Error while converting a `BlockId`.
+	#[from(ignore)]
 	BlockIdConversion(String),
 	/// Error while calling the runtime api.
+	#[from(ignore)]
 	RuntimeApi(String),
 }
 

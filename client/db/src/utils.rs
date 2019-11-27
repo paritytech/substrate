@@ -25,7 +25,6 @@ use kvdb::{KeyValueDB, DBTransaction};
 use kvdb_rocksdb::{Database, DatabaseConfig};
 use log::debug;
 
-use client;
 use codec::Decode;
 use trie::DBValue;
 use sr_primitives::generic::BlockId;
@@ -82,9 +81,9 @@ pub type NumberIndexKey = [u8; 4];
 ///
 /// In the current database schema, this kind of key is only used for
 /// lookups into an index, NOT for storing header data or others.
-pub fn number_index_key<N: TryInto<u32>>(n: N) -> client::error::Result<NumberIndexKey> {
+pub fn number_index_key<N: TryInto<u32>>(n: N) -> sp_blockchain::Result<NumberIndexKey> {
 	let n = n.try_into().map_err(|_|
-		client::error::Error::Backend("Block number cannot be converted to u32".into())
+		sp_blockchain::Error::Backend("Block number cannot be converted to u32".into())
 	)?;
 
 	Ok([
@@ -100,7 +99,7 @@ pub fn number_index_key<N: TryInto<u32>>(n: N) -> client::error::Result<NumberIn
 pub fn number_and_hash_to_lookup_key<N, H>(
 	number: N,
 	hash: H,
-) -> client::error::Result<Vec<u8>>	where
+) -> sp_blockchain::Result<Vec<u8>>	where
 	N: TryInto<u32>,
 	H: AsRef<[u8]>,
 {
@@ -111,11 +110,11 @@ pub fn number_and_hash_to_lookup_key<N, H>(
 
 /// Convert block lookup key into block number.
 /// all block lookup keys start with the block number.
-pub fn lookup_key_to_number<N>(key: &[u8]) -> client::error::Result<N> where
+pub fn lookup_key_to_number<N>(key: &[u8]) -> sp_blockchain::Result<N> where
 	N: From<u32>
 {
 	if key.len() < 4 {
-		return Err(client::error::Error::Backend("Invalid block key".into()));
+		return Err(sp_blockchain::Error::Backend("Invalid block key".into()));
 	}
 	Ok((key[0] as u32) << 24
 		| (key[1] as u32) << 16
@@ -128,7 +127,7 @@ pub fn remove_number_to_key_mapping<N: TryInto<u32>>(
 	transaction: &mut DBTransaction,
 	key_lookup_col: Option<u32>,
 	number: N,
-) -> client::error::Result<()> {
+) -> sp_blockchain::Result<()> {
 	transaction.delete(key_lookup_col, number_index_key(number)?.as_ref());
 	Ok(())
 }
@@ -139,7 +138,7 @@ pub fn remove_key_mappings<N: TryInto<u32>, H: AsRef<[u8]>>(
 	key_lookup_col: Option<u32>,
 	number: N,
 	hash: H,
-) -> client::error::Result<()> {
+) -> sp_blockchain::Result<()> {
 	remove_number_to_key_mapping(transaction, key_lookup_col, number)?;
 	transaction.delete(key_lookup_col, hash.as_ref());
 	Ok(())
@@ -152,7 +151,7 @@ pub fn insert_number_to_key_mapping<N: TryInto<u32> + Clone, H: AsRef<[u8]>>(
 	key_lookup_col: Option<u32>,
 	number: N,
 	hash: H,
-) -> client::error::Result<()> {
+) -> sp_blockchain::Result<()> {
 	transaction.put_vec(
 		key_lookup_col,
 		number_index_key(number.clone())?.as_ref(),
@@ -167,7 +166,7 @@ pub fn insert_hash_to_key_mapping<N: TryInto<u32>, H: AsRef<[u8]> + Clone>(
 	key_lookup_col: Option<u32>,
 	number: N,
 	hash: H,
-) -> client::error::Result<()> {
+) -> sp_blockchain::Result<()> {
 	transaction.put_vec(
 		key_lookup_col,
 		hash.clone().as_ref(),
@@ -183,7 +182,7 @@ pub fn block_id_to_lookup_key<Block>(
 	db: &dyn KeyValueDB,
 	key_lookup_col: Option<u32>,
 	id: BlockId<Block>
-) -> Result<Option<Vec<u8>>, client::error::Error> where
+) -> Result<Option<Vec<u8>>, sp_blockchain::Error> where
 	Block: BlockT,
 	::sr_primitives::traits::NumberFor<Block>: UniqueSaturatedFrom<u64> + UniqueSaturatedInto<u64>,
 {
@@ -199,8 +198,8 @@ pub fn block_id_to_lookup_key<Block>(
 }
 
 /// Maps database error to client error
-pub fn db_err(err: io::Error) -> client::error::Error {
-	client::error::Error::Backend(format!("{}", err))
+pub fn db_err(err: io::Error) -> sp_blockchain::Error {
+	sp_blockchain::Error::Backend(format!("{}", err))
 }
 
 /// Open RocksDB database.
@@ -208,7 +207,7 @@ pub fn open_database(
 	config: &DatabaseSettings,
 	col_meta: Option<u32>,
 	db_type: &str
-) -> client::error::Result<Arc<dyn KeyValueDB>> {
+) -> sp_blockchain::Result<Arc<dyn KeyValueDB>> {
 	let db: Arc<dyn KeyValueDB> = match &config.source {
 		#[cfg(feature = "kvdb-rocksdb")]
 		DatabaseSettingsSrc::Path { path, cache_size } => {
@@ -230,13 +229,13 @@ pub fn open_database(
 				db_config.memory_budget = memory_budget;
 			}
 			let path = path.to_str()
-				.ok_or_else(|| client::error::Error::Backend("Invalid database path".into()))?;
+				.ok_or_else(|| sp_blockchain::Error::Backend("Invalid database path".into()))?;
 			Arc::new(Database::open(&db_config, &path).map_err(db_err)?)
 		},
 		#[cfg(not(feature = "kvdb-rocksdb"))]
 		DatabaseSettingsSrc::Path { .. } => {
 			let msg = "Try to open RocksDB database with RocksDB disabled".into();
-			return Err(client::error::Error::Backend(msg));
+			return Err(sp_blockchain::Error::Backend(msg));
 		},
 		DatabaseSettingsSrc::Custom(db) => db.clone(),
 	};
@@ -245,7 +244,7 @@ pub fn open_database(
 	match db.get(col_meta, meta_keys::TYPE).map_err(db_err)? {
 		Some(stored_type) => {
 			if db_type.as_bytes() != &*stored_type {
-				return Err(client::error::Error::Backend(
+				return Err(sp_blockchain::Error::Backend(
 					format!("Unexpected database type. Expected: {}", db_type)).into());
 			}
 		},
@@ -265,7 +264,7 @@ pub fn read_db<Block>(
 	col_index: Option<u32>,
 	col: Option<u32>,
 	id: BlockId<Block>
-) -> client::error::Result<Option<DBValue>>
+) -> sp_blockchain::Result<Option<DBValue>>
 	where
 		Block: BlockT,
 {
@@ -281,12 +280,12 @@ pub fn read_header<Block: BlockT>(
 	col_index: Option<u32>,
 	col: Option<u32>,
 	id: BlockId<Block>,
-) -> client::error::Result<Option<Block::Header>> {
+) -> sp_blockchain::Result<Option<Block::Header>> {
 	match read_db(db, col_index, col, id)? {
 		Some(header) => match Block::Header::decode(&mut &header[..]) {
 			Ok(header) => Ok(Some(header)),
 			Err(_) => return Err(
-				client::error::Error::Backend("Error decoding header".into())
+				sp_blockchain::Error::Backend("Error decoding header".into())
 			),
 		}
 		None => Ok(None),
@@ -299,15 +298,15 @@ pub fn require_header<Block: BlockT>(
 	col_index: Option<u32>,
 	col: Option<u32>,
 	id: BlockId<Block>,
-) -> client::error::Result<Block::Header> {
+) -> sp_blockchain::Result<Block::Header> {
 	read_header(db, col_index, col, id)
-		.and_then(|header| header.ok_or_else(|| client::error::Error::UnknownBlock(format!("{}", id))))
+		.and_then(|header| header.ok_or_else(|| sp_blockchain::Error::UnknownBlock(format!("{}", id))))
 }
 
 /// Read meta from the database.
 pub fn read_meta<Block>(db: &dyn KeyValueDB, col_meta: Option<u32>, col_header: Option<u32>) -> Result<
 	Meta<<<Block as BlockT>::Header as HeaderT>::Number, Block::Hash>,
-	client::error::Error,
+	sp_blockchain::Error,
 >
 	where
 		Block: BlockT,
@@ -315,7 +314,7 @@ pub fn read_meta<Block>(db: &dyn KeyValueDB, col_meta: Option<u32>, col_header: 
 	let genesis_hash: Block::Hash = match db.get(col_meta, meta_keys::GENESIS_HASH).map_err(db_err)? {
 		Some(h) => match Decode::decode(&mut &h[..]) {
 			Ok(h) => h,
-			Err(err) => return Err(client::error::Error::Backend(
+			Err(err) => return Err(sp_blockchain::Error::Backend(
 				format!("Error decoding genesis hash: {}", err)
 			)),
 		},
@@ -328,7 +327,7 @@ pub fn read_meta<Block>(db: &dyn KeyValueDB, col_meta: Option<u32>, col_header: 
 		}),
 	};
 
-	let load_meta_block = |desc, key| -> Result<_, client::error::Error> {
+	let load_meta_block = |desc, key| -> Result<_, sp_blockchain::Error> {
 		if let Some(Some(header)) = db.get(col_meta, key).and_then(|id|
 			match id {
 				Some(id) => db.get(col_header, &id).map(|h| h.map(|b| Block::Header::decode(&mut &b[..]).ok())),

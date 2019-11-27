@@ -65,14 +65,14 @@ pub fn create<C, P, M, F>(
 	C: ProvideRuntimeApi,
 	C: client::blockchain::HeaderBackend<Block>,
 	C: Send + Sync + 'static,
-	C::Api: frame_system_rpc::AccountNonceApi<Block, AccountId, Index>,
+	C::Api: substrate_frame_rpc_system::AccountNonceApi<Block, AccountId, Index>,
 	C::Api: pallet_contracts_rpc::ContractsRuntimeApi<Block, AccountId, Balance>,
 	C::Api: pallet_transaction_payment_rpc::TransactionPaymentRuntimeApi<Block, Balance, UncheckedExtrinsic>,
 	F: client::light::fetcher::Fetcher<Block> + 'static,
 	P: TransactionPool + 'static,
 	M: jsonrpc_core::Metadata + Default,
 {
-	use frame_system_rpc::{FullSystem, LightSystem, SystemApi};
+	use substrate_frame_system_rpc::{FullSystem, LightSystem, SystemApi};
 	use pallet_contracts_rpc::{Contracts, ContractsApi};
 	use pallet_transaction_payment_rpc::{TransactionPayment, TransactionPaymentApi};
 
