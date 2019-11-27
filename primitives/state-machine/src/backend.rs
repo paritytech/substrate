@@ -16,15 +16,11 @@
 
 //! State machine backends. These manage the code and storage of contracts.
 
-use std::{fmt, cmp::Ord, collections::HashMap, marker::PhantomData};
 use log::warn;
 use hash_db::Hasher;
 use crate::trie_backend::TrieBackend;
 use crate::trie_backend_essence::TrieBackendStorage;
-use trie::{
-	TrieMut, MemoryDB, default_child_trie_root, TrieConfiguration, trie_types::{TrieDBMut, Layout},
-	DBValue,
-};
+use trie::{TrieMut, MemoryDB, trie_types::TrieDBMut};
 
 /// A state backend is used to read state data and can have changes committed
 /// to it.

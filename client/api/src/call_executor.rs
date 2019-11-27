@@ -16,7 +16,7 @@
 
 use std::{panic::UnwindSafe, result, cell::RefCell};
 use codec::{Encode, Decode};
-use sr_primitives::{generic::BlockId, traits::{Block as BlockT, HasherFor, NumberFor}};
+use sr_primitives::{generic::BlockId, traits::{Block as BlockT, HasherFor}};
 use state_machine::{self, OverlayedChanges, ExecutionManager, ExecutionStrategy, StorageProof};
 use executor::{RuntimeVersion, NativeVersion};
 use primitives::{offchain::OffchainExt, NativeOrEncoded};

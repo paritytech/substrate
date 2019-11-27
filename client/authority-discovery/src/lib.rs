@@ -598,11 +598,9 @@ mod tests {
 			_: &Self::StateBackend,
 			_: Option<&T>,
 			_: <Block as sr_api::BlockT>::Hash,
-		) -> std::result::Result<
-			sr_api::StorageChanges<Self::StateBackend, sr_api::HasherFor<Block>, sr_api::NumberFor<Block>>,
-			String
-		> where
-			Self: Sized
+		) -> std::result::Result<sr_api::StorageChanges<Self::StateBackend, Block>, String>
+			where
+				Self: Sized
 		{
 			unimplemented!("Not required for testing!")
 		}

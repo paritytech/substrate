@@ -22,8 +22,8 @@ use codec::{Decode, Encode};
 use log::debug;
 use hash_db::{Hasher, HashDB, EMPTY_PREFIX, Prefix};
 use trie::{
-	MemoryDB, PrefixedMemoryDB, default_child_trie_root,
-	read_trie_value_with, read_child_trie_value_with, record_all_keys
+	MemoryDB, default_child_trie_root, read_trie_value_with, read_child_trie_value_with,
+	record_all_keys
 };
 pub use trie::Recorder;
 pub use trie::trie_types::{Layout, TrieError};
@@ -353,6 +353,7 @@ mod tests {
 	use super::*;
 	use primitives::{Blake2Hasher, storage::ChildStorageKey};
 	use crate::proving_backend::create_proof_check_backend;
+	use trie::PrefixedMemoryDB;
 
 	fn test_proving<'a>(
 		trie_backend: &'a TrieBackend<PrefixedMemoryDB<Blake2Hasher>,Blake2Hasher>,

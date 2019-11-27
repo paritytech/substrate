@@ -331,11 +331,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 				changes_trie_storage: Option<&T>,
 				parent_hash: Block::Hash,
 			) -> std::result::Result<
-				#crate_::StorageChanges<
-					<Self::StateBackend as #crate_::StateBackend<#crate_::HasherFor<Block>>>::Transaction,
-					#crate_::HasherFor<Block>,
-					#crate_::NumberFor<Block>
-				>,
+				#crate_::StorageChanges<Self::StateBackend, Block>,
 				String
 			> where Self: Sized {
 				self.changes.into_inner().into_storage_changes(

@@ -868,15 +868,19 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				// ensure parent block is finalized to maintain invariant that
 				// finality is called sequentially.
 				if finalized {
-					self.apply_finality_with_block_hash(operation, parent_hash, None, info.best_hash, make_notifications)?;
+					self.apply_finality_with_block_hash(
+						operation,
+						parent_hash,
+						None,
+						info.best_hash,
+						make_notifications,
+					)?;
 				}
 
 				// FIXME #1232: correct path logic for when to execute this function
 				let (storage_update, changes_update, storage_changes) = self.block_execution(
 					&operation.op,
 					&import_headers,
-					origin,
-					hash,
 					&body,
 				)?;
 
@@ -919,7 +923,13 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			Vec::default()
 		};
 
-		trace!("Imported {}, (#{}), best={}, origin={:?}", hash, import_headers.post().number(), is_new_best, origin);
+		trace!(
+			"Imported {}, (#{}), best={}, origin={:?}",
+			hash,
+			import_headers.post().number(),
+			is_new_best,
+			origin,
+		);
 
 		operation.op.set_block_data(
 			import_headers.post().clone(),
@@ -952,8 +962,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		&self,
 		transaction: &B::BlockImportOperation,
 		import_headers: &PrePostHeader<Block::Header>,
-		origin: BlockOrigin,
-		hash: Block::Hash,
 		body: &[Block::Extrinsic],
 	) -> error::Result<(
 		Option<StorageUpdate<B, Block>>,
@@ -983,11 +991,18 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 					))?
 				};
 
-				// if import_headers.post().state_root() != &storage_update.1 {
-				// 	return Err(error::Error::InvalidStateRoot);
-				// }
-
-				Ok((Some(storage_changes.transaction), Some(storage_changes.changes_trie_transaction), Some((storage_changes.main_storage_changes, storage_changes.child_storage_changes))))
+				if import_headers.post().state_root() != &storage_changes.transaction_storage_root {
+					Err(error::Error::InvalidStateRoot)
+				} else {
+					Ok((
+						Some(storage_changes.transaction),
+						Some(storage_changes.changes_trie_transaction),
+						Some((
+							storage_changes.main_storage_changes,
+							storage_changes.child_storage_changes
+						))
+					))
+				}
 			},
 			None => Ok((None, None, None))
 		}

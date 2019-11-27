@@ -188,7 +188,7 @@ pub fn child_delta_trie_root<L: TrieConfiguration, I, A, B, DB>(
 	_storage_key: &[u8],
 	db: &mut DB,
 	root_vec: Vec<u8>,
-	delta: I
+	delta: I,
 ) -> Result<Vec<u8>, Box<TrieError<L>>>
 	where
 		I: IntoIterator<Item = (A, Option<B>)>,

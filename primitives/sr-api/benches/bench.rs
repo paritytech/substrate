@@ -19,8 +19,9 @@ use test_client::{
 	DefaultTestClientBuilderExt, TestClientBuilder,
 	TestClientBuilderExt, runtime::TestAPI,
 };
-use sr_primitives::{generic::BlockId, traits::ProvideRuntimeApi};
+use sr_primitives::generic::BlockId;
 use state_machine::ExecutionStrategy;
+use sr_api::ProvideRuntimeApi;
 
 fn sr_api_benchmark(c: &mut Criterion) {
 	c.bench_function("add one with same runtime api", |b| {

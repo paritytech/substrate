@@ -16,15 +16,11 @@
 
 //! State machine in memory backend.
 
-use crate::{
-	trie_backend::TrieBackend, trie_backend_essence::TrieBackendStorage,
-	backend::{Backend, insert_into_memory_db},
-};
+use crate::{trie_backend::TrieBackend, backend::{Backend, insert_into_memory_db}};
 use std::{error, fmt, collections::HashMap, marker::PhantomData};
 use hash_db::Hasher;
 use trie::{
-	TrieMut, MemoryDB, child_trie_root, default_child_trie_root, TrieConfiguration,
-	trie_types::Layout,
+	MemoryDB, child_trie_root, default_child_trie_root, TrieConfiguration, trie_types::Layout,
 };
 
 /// Error impossible.

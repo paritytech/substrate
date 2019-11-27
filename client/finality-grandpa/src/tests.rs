@@ -38,10 +38,12 @@ use sr_primitives::traits::{Header as HeaderT, HasherFor};
 use sr_primitives::generic::{BlockId, DigestItem};
 use primitives::{NativeOrEncoded, ExecutionContext, crypto::Public, H256};
 use fg_primitives::{GRANDPA_ENGINE_ID, AuthorityList, GrandpaApi};
-use state_machine::{backend::InMemory, prove_read, read_proof_check};
+use state_machine::{InMemoryBackend, prove_read, read_proof_check};
 
 use authorities::AuthoritySet;
-use finality_proof::{FinalityProofProvider, AuthoritySetForFinalityProver, AuthoritySetForFinalityChecker};
+use finality_proof::{
+	FinalityProofProvider, AuthoritySetForFinalityProver, AuthoritySetForFinalityChecker,
+};
 use consensus_changes::ConsensusChanges;
 
 type PeerData =
@@ -276,11 +278,8 @@ impl ApiExt<Block> for RuntimeApi {
 		_: &Self::StateBackend,
 		_: Option<&T>,
 		_: <Block as sr_api::BlockT>::Hash,
-	) -> std::result::Result<
-		sr_api::StorageChanges<Self::StateBackend, sr_api::HasherFor<Block>, sr_api::NumberFor<Block>>,
-		String
-	> where
-		Self: Sized
+	) -> std::result::Result<sr_api::StorageChanges<Self::StateBackend, Block>, String>
+		where Self: Sized
 	{
 		unimplemented!("Not required for testing!")
 	}
@@ -311,7 +310,7 @@ impl AuthoritySetForFinalityProver<Block> for TestApi {
 
 	fn prove_authorities(&self, block: &BlockId<Block>) -> Result<StorageProof> {
 		let authorities = self.authorities(block)?;
-		let backend = <InMemory<HasherFor<Block>>>::from(vec![
+		let backend = <InMemoryBackend<HasherFor<Block>>>::from(vec![
 			(None, b"authorities".to_vec(), Some(authorities.encode()))
 		]);
 		let proof = prove_read(backend, vec![b"authorities"])

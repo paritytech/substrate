@@ -22,9 +22,7 @@ use std::{
 
 use codec::{Encode, Decode};
 use primitives::{offchain::OffchainExt, convert_hash, NativeOrEncoded, traits::CodeExecutor};
-use sr_primitives::{
-	generic::BlockId, traits::{One, Block as BlockT, Header as HeaderT, HasherFor, NumberFor},
-};
+use sr_primitives::{generic::BlockId, traits::{One, Block as BlockT, Header as HeaderT, HasherFor}};
 use state_machine::{
 	self, Backend as StateBackend, OverlayedChanges, ExecutionStrategy, create_proof_check_backend,
 	execution_proof_check_on_trie_backend, ExecutionManager, StorageProof,
@@ -107,7 +105,7 @@ impl<Block, B, Local> CallExecutor<Block> for
 		method: &str,
 		call_data: &[u8],
 		changes: &RefCell<OverlayedChanges>,
-		storage_transaction_cache: Option<&RefCell<StorageTransactionCache<Block, B::State>>>,
+		_: Option<&RefCell<StorageTransactionCache<Block, B::State>>>,
 		initialize_block: InitializeBlock<'a, Block>,
 		_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,

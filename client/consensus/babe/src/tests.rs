@@ -38,7 +38,6 @@ use client_api::BlockchainEvents;
 use test_client::TestClient;
 use log::debug;
 use std::{time::Duration, cell::RefCell};
-use client_api::StateBackendFor;
 
 type Item = DigestItem<Hash>;
 

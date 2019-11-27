@@ -43,7 +43,6 @@ use client_api::{
 };
 use crate::light::blockchain::{Blockchain};
 use hash_db::Hasher;
-use trie::MemoryDB;
 
 const IN_MEMORY_EXPECT_PROOF: &str = "InMemory state backend has Void error type and always succeeds; qed";
 

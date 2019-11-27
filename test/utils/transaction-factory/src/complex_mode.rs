@@ -59,7 +59,7 @@ pub fn next<RA, Backend, Exec, Block, RtApi>(
 ) -> Option<Block>
 where
 	Block: BlockT,
-	Exec: client::CallExecutor<Block> + Send + Sync + Clone,
+	Exec: client::CallExecutor<Block, Backend = Backend> + Send + Sync + Clone,
 	Backend: client_api::backend::Backend<Block> + Send,
 	Client<Backend, Exec, Block, RtApi>: ProvideRuntimeApi<Block>,
 	<Client<Backend, Exec, Block, RtApi> as ProvideRuntimeApi<Block>>::Api:

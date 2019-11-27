@@ -33,7 +33,7 @@
 #[doc(hidden)]
 #[cfg(feature = "std")]
 pub use state_machine::{
-	OverlayedChanges, StorageProof, Backend as StateBackend, StorageChanges, ChangesTrieStorage,
+	OverlayedChanges, StorageProof, Backend as StateBackend, ChangesTrieStorage,
 };
 #[doc(hidden)]
 #[cfg(feature = "std")]
@@ -79,6 +79,14 @@ pub type ProofRecorder<B> = state_machine::ProofRecorder<
 pub type StorageTransactionCache<Block, Backend> =
 	state_machine::StorageTransactionCache<
 		<Backend as StateBackend<HasherFor<Block>>>::Transaction, HasherFor<Block>, NumberFor<Block>
+	>;
+
+#[cfg(feature = "std")]
+pub type StorageChanges<SBackend, Block> =
+	state_machine::StorageChanges<
+		<SBackend as StateBackend<HasherFor<Block>>>::Transaction,
+		HasherFor<Block>,
+		NumberFor<Block>
 	>;
 
 /// Something that can be constructed to a runtime api.
@@ -152,9 +160,7 @@ pub trait ApiExt<Block: BlockT>: ApiErrorExt {
 		backend: &Self::StateBackend,
 		changes_trie_storage: Option<&T>,
 		parent_hash: Block::Hash,
-	) -> Result<StorageChanges<<Self::StateBackend as StateBackend<HasherFor<Block>>>::Transaction, HasherFor<Block>, NumberFor<Block>>, String>
-		where
-			Self: Sized;
+	) -> Result<StorageChanges<Self::StateBackend, Block>, String> where Self: Sized;
 }
 
 /// Before calling any runtime api function, the runtime need to be initialized
@@ -272,7 +278,7 @@ impl<'a, T> rstd::ops::DerefMut for ApiRef<'a, T> {
 }
 
 /// Something that provides a runtime api.
-#[cfg(feature = "std")]
+#[cfg(any(feature = "std"))]
 pub trait ProvideRuntimeApi<Block: BlockT> {
 	/// The concrete type that provides the api.
 	type Api: ApiExt<Block>;

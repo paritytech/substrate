@@ -47,7 +47,7 @@ use client::{
 use block_builder_api::BlockBuilder as BlockBuilderApi;
 
 use sr_primitives::{generic::{BlockId, OpaqueDigestItemId}, Justification};
-use sr_primitives::traits::{Block as BlockT, Header, DigestItemFor, Zero, Member, HasherFor};
+use sr_primitives::traits::{Block as BlockT, Header, DigestItemFor, Zero, Member};
 use sr_api::ProvideRuntimeApi;
 
 use primitives::crypto::Pair;
