@@ -157,7 +157,7 @@ where
 			data: None,
 		})?;
 
-		let max_gas_limit = 10 * GAS_PER_SECOND;
+		let max_gas_limit = 5 * GAS_PER_SECOND;
 		if gas_limit > max_gas_limit {
 			return Err(Error {
 				code: ErrorCode::InvalidParams,
