@@ -50,7 +50,7 @@ nicks = { package = "pallet-nicks", path = "../../../frame/nicks", default-featu
 offences = { package = "pallet-offences", path = "../../../frame/offences", default-features = false }
 randomness-collective-flip = { package = "pallet-randomness-collective-flip", path = "../../../frame/randomness-collective-flip", default-features = false }
 session = { package = "pallet-session", path = "../../../frame/session", default-features = false, features = ["historical"] }
-staking = { package = "pallet-staking", path = "../../../frame/staking", default-features = false }
+staking = { package = "pallet-staking", path = "../../../frame/staking", default-features = false, features = ["migrate"] }
 pallet-staking-reward-curve = { path = "../../../frame/staking/reward-curve"}
 sudo = { package = "pallet-sudo", path = "../../../frame/sudo", default-features = false }
 support = { package = "frame-support", path = "../../../frame/support", default-features = false }
