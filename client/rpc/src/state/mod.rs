@@ -354,6 +354,6 @@ fn client_err(err: sp_blockchain::Error) -> Error {
 
 const CHILD_RESOLUTION_ERROR: &str = "Unexpected child info and type";
 
-fn child_resolution_error() -> client::error::Error {
-	client::error::Error::Msg(CHILD_RESOLUTION_ERROR.to_string())
+fn child_resolution_error() -> sp_blockchain::Error {
+	sp_blockchain::Error::Msg(CHILD_RESOLUTION_ERROR.to_string())
 }
