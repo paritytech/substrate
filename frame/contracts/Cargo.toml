@@ -26,6 +26,7 @@ balances = { package = "pallet-balances", path = "../balances" }
 hex = "0.3.2"
 timestamp = { package = "pallet-timestamp", path = "../timestamp" }
 randomness-collective-flip = { package = "pallet-randomness-collective-flip", path = "../randomness-collective-flip" }
+criterion = "0.3"
 
 [features]
 default = ["std"]
@@ -43,3 +44,8 @@ std = [
 	"pwasm-utils/std",
 	"wasmi-validation/std",
 ]
+
+[[bench]]
+name = "bench"
+harness = false
+
