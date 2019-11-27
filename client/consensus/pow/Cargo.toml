@@ -8,6 +8,7 @@ edition = "2018"
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
 primitives = { package = "substrate-primitives", path = "../../../primitives/core" }
+sp-blockchain = { path = "../../../primitives/blockchain" }
 sr-primitives = { path = "../../../primitives/sr-primitives" }
 client-api = { package = "substrate-client-api", path = "../../api" }
 block-builder-api = { package = "substrate-block-builder-runtime-api", path = "../../../primitives/block-builder/runtime-api" }
@@ -17,4 +18,4 @@ consensus-common = { package = "substrate-consensus-common", path = "../../../pr
 log = "0.4.8"
 futures = { version = "0.3.1", features = ["compat"] }
 sp-timestamp = {  path = "../../../primitives/timestamp" }
-derive_more = "0.15.0"
+derive_more = "0.99.2"

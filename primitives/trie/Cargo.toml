@@ -21,7 +21,7 @@ memory-db = { version = "0.15.2", default-features = false }
 primitives = { package = "substrate-primitives",  path = "../core", default-features = false }
 
 [dev-dependencies]
-trie-bench = "0.16.3"
+trie-bench = "0.17.0"
 trie-standardmap = "0.15.2"
 criterion = "0.2.11"
 hex-literal = "0.2.1"

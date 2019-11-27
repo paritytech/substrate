@@ -5,7 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-derive_more = "0.15.0"
+derive_more = "0.99.2"
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 runtime_io = { package = "sr-io", path = "../../primitives/sr-io" }
 primitives = { package = "substrate-primitives", path = "../../primitives/core" }

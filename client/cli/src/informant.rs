@@ -50,7 +50,7 @@ pub fn build(service: &impl AbstractService) -> impl futures::Future<Output = ()
 		// detect and log reorganizations.
 		if let Some((ref last_num, ref last_hash)) = last_best {
 			if n.header.parent_hash() != last_hash && n.is_new_best  {
-				let maybe_ancestor = header_metadata::lowest_common_ancestor(
+				let maybe_ancestor = sp_blockchain::lowest_common_ancestor(
 					&*client,
 					last_hash.clone(),
 					n.hash,
