@@ -124,7 +124,7 @@ pub fn twox_256(data: &[u8]) -> [u8; 32] {
 	r
 }
 
-/// Do a keccak 256 hash and return result.
+/// Do a keccak 256-bit hash and return result.
 pub fn keccak_256(data: &[u8]) -> [u8; 32] {
 	let mut keccak = Keccak::v256();
 	keccak.update(data);
@@ -133,7 +133,7 @@ pub fn keccak_256(data: &[u8]) -> [u8; 32] {
 	output
 }
 
-/// Do a sha2 256 hash and return result.
+/// Do a sha2 256-bit hash and return result.
 pub fn sha2_256(data: &[u8]) -> [u8; 32] {
 	let mut hasher = Sha256::new();
 	hasher.input(data);
