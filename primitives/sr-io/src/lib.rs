@@ -384,6 +384,11 @@ pub trait Hashing {
 		primitives::hashing::keccak_256(data)
 	}
 
+	/// Conduct a 256-bit Sha2 hash.
+	fn sha2_256(data: &[u8]) -> [u8; 32] {
+		primitives::hashing::sha2_256(data)
+	}
+
 	/// Conduct a 128-bit Blake2 hash.
 	fn blake2_128(data: &[u8]) -> [u8; 16] {
 		primitives::hashing::blake2_128(data)
