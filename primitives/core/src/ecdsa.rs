@@ -344,12 +344,12 @@ impl Public {
 	///
 	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
 	/// you are certain that the array actually is a pubkey. GIGO!
-    pub fn from_full(data: [u8; 65]) -> Self {
-        let raw_key = &data[1..];
-        let mut key = [0u8; 64];
-        key.copy_from_slice(raw_key);
-        Public(key)
-    }
+	pub fn from_full(data: [u8; 65]) -> Self {
+		let raw_key = &data[1..];
+		let mut key = [0u8; 64];
+		key.copy_from_slice(raw_key);
+		Public(key)
+	}
 
 	/// Return a slice filled with raw data.
 	pub fn as_array_ref(&self) -> &[u8; 64] {
