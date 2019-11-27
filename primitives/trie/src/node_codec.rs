@@ -17,147 +17,105 @@
 //! `NodeCodec` implementation for Substrate's trie format.
 
 use rstd::marker::PhantomData;
-use rstd::ops::Range;
 use rstd::vec::Vec;
 use rstd::borrow::Borrow;
-use codec::{Encode, Decode, Input, Compact};
+use codec::{Encode, Decode, Compact};
 use hash_db::Hasher;
-use trie_db::{self, node::{NibbleSlicePlan, NodePlan, NodeHandlePlan}, ChildReference,
+use trie_db::{self, NibbleSlice, node::Node, ChildReference,
 	nibble_ops, Partial, NodeCodec as NodeCodecT};
 use crate::error::Error;
 use crate::trie_constants;
 use super::{node_header::{NodeHeader, NodeKind}};
 
-/// Helper struct for trie node decoder. This implements `codec::Input` on a byte slice, while
-/// tracking the absolute position. This is similar to `std::io::Cursor` but does not implement
-/// `Read` and `io` is not in `rstd`.
-struct ByteSliceInput<'a> {
-	data: &'a [u8],
-	offset: usize,
-}
-
-impl<'a> ByteSliceInput<'a> {
-	fn new(data: &'a [u8]) -> Self {
-		ByteSliceInput {
-			data,
-			offset: 0,
-		}
+fn take<'a>(input: &mut &'a[u8], count: usize) -> Option<&'a[u8]> {
+	if input.len() < count {
+		return None
 	}
-
-	fn take(&mut self, count: usize) -> Result<Range<usize>, codec::Error> {
-		if self.offset + count > self.data.len() {
-			return Err("out of data".into());
-		}
-
-		let range = self.offset..(self.offset + count);
-		self.offset += count;
-		Ok(range)
-	}
-}
-
-impl<'a> Input for ByteSliceInput<'a> {
-	fn remaining_len(&mut self) -> Result<Option<usize>, codec::Error> {
-		let remaining = if self.offset <= self.data.len() {
-			Some(self.data.len() - self.offset)
-		} else {
-			None
-		};
-		Ok(remaining)
-	}
-
-	fn read(&mut self, into: &mut [u8]) -> Result<(), codec::Error> {
-		let range = self.take(into.len())?;
-		into.copy_from_slice(&self.data[range]);
-		Ok(())
-	}
-
-	fn read_byte(&mut self) -> Result<u8, codec::Error> {
-		if self.offset + 1 > self.data.len() {
-			return Err("out of data".into());
-		}
-
-		let byte = self.data[self.offset];
-		self.offset += 1;
-		Ok(byte)
-	}
+	let r = &(*input)[..count];
+	*input = &(*input)[count..];
+	Some(r)
 }
 
 /// Concrete implementation of a `NodeCodec` with Parity Codec encoding, generic over the `Hasher`
 #[derive(Default, Clone)]
 pub struct NodeCodec<H>(PhantomData<H>);
 
-impl<H: Hasher> NodeCodecT for NodeCodec<H> {
+impl<H: Hasher> NodeCodecT<H> for NodeCodec<H> {
 	type Error = Error;
-	type HashOut = H::Out;
 
 	fn hashed_null_node() -> <H as Hasher>::Out {
-		H::hash(<Self as NodeCodecT>::empty_node())
+		H::hash(<Self as NodeCodecT<_>>::empty_node())
 	}
 
-	fn decode_plan(data: &[u8]) -> rstd::result::Result<NodePlan, Self::Error> {
-		let mut input = ByteSliceInput::new(data);
-		match NodeHeader::decode(&mut input)? {
-			NodeHeader::Null => Ok(NodePlan::Empty),
+	fn decode(data: &[u8]) -> rstd::result::Result<Node, Self::Error> {
+		let input = &mut &*data;
+		let head = NodeHeader::decode(input)?;
+		match head {
+			NodeHeader::Null => Ok(Node::Empty),
 			NodeHeader::Branch(has_value, nibble_count) => {
 				let padding = nibble_count % nibble_ops::NIBBLE_PER_BYTE != 0;
 				// check that the padding is valid (if any)
-				if padding && nibble_ops::pad_left(data[input.offset]) != 0 {
+				if padding && nibble_ops::pad_left(input[0]) != 0 {
 					return Err(Error::BadFormat);
 				}
-				let partial = input.take(
+				let nibble_data = take(
+					input,
 					(nibble_count + (nibble_ops::NIBBLE_PER_BYTE - 1)) / nibble_ops::NIBBLE_PER_BYTE,
-				)?;
-				let partial_padding = nibble_ops::number_padding(nibble_count);
-				let bitmap_range = input.take(BITMAP_LENGTH)?;
-				let bitmap = Bitmap::decode(&data[bitmap_range])?;
+				).ok_or(Error::BadFormat)?;
+				let nibble_slice = NibbleSlice::new_offset(
+					nibble_data,
+					nibble_ops::number_padding(nibble_count),
+				);
+				let bitmap_slice = take(input, BITMAP_LENGTH).ok_or(Error::BadFormat)?;
+				let bitmap = Bitmap::decode(&bitmap_slice[..])?;
 				let value = if has_value {
-					let count = <Compact<u32>>::decode(&mut input)?.0 as usize;
-					Some(input.take(count)?)
+					let count = <Compact<u32>>::decode(input)?.0 as usize;
+					Some(take(input, count).ok_or(Error::BadFormat)?)
 				} else {
 					None
 				};
-				let mut children = [
-					None, None, None, None, None, None, None, None,
-					None, None, None, None, None, None, None, None,
-				];
+				let mut children = [None; 16];
+
 				for i in 0..nibble_ops::NIBBLE_LENGTH {
 					if bitmap.value_at(i) {
-						let count = <Compact<u32>>::decode(&mut input)?.0 as usize;
-						let range = input.take(count)?;
-						children[i] = Some(if count == H::LENGTH {
-							NodeHandlePlan::Hash(range)
-						} else {
-							NodeHandlePlan::Inline(range)
-						});
+						let count = <Compact<u32>>::decode(input)?.0 as usize;
+						children[i] = Some(take(input, count).ok_or(Error::BadFormat)?);
 					}
 				}
-				Ok(NodePlan::NibbledBranch {
-					partial: NibbleSlicePlan::new(partial, partial_padding),
-					value,
-					children,
-				})
+				Ok(Node::NibbledBranch(nibble_slice, children, value))
 			}
 			NodeHeader::Leaf(nibble_count) => {
 				let padding = nibble_count % nibble_ops::NIBBLE_PER_BYTE != 0;
 				// check that the padding is valid (if any)
-				if padding && nibble_ops::pad_left(data[input.offset]) != 0 {
+				if padding && nibble_ops::pad_left(input[0]) != 0 {
 					return Err(Error::BadFormat);
 				}
-				let partial = input.take(
+				let nibble_data = take(
+					input,
 					(nibble_count + (nibble_ops::NIBBLE_PER_BYTE - 1)) / nibble_ops::NIBBLE_PER_BYTE,
-				)?;
-				let partial_padding = nibble_ops::number_padding(nibble_count);
-				let count = <Compact<u32>>::decode(&mut input)?.0 as usize;
-				Ok(NodePlan::Leaf {
-					partial: NibbleSlicePlan::new(partial, partial_padding),
-					value: input.take(count)?,
-				})
+				).ok_or(Error::BadFormat)?;
+				let nibble_slice = NibbleSlice::new_offset(
+					nibble_data,
+					nibble_ops::number_padding(nibble_count),
+				);
+				let count = <Compact<u32>>::decode(input)?.0 as usize;
+				Ok(Node::Leaf(nibble_slice, take(input, count).ok_or(Error::BadFormat)?))
 			}
 		}
 	}
 
+	fn try_decode_hash(data: &[u8]) -> Option<<H as Hasher>::Out> {
+		if data.len() == H::LENGTH {
+			let mut r = <H as Hasher>::Out::default();
+			r.as_mut().copy_from_slice(data);
+			Some(r)
+		} else {
+			None
+		}
+	}
+
 	fn is_empty_node(data: &[u8]) -> bool {
-		data == <Self as NodeCodecT>::empty_node()
+		data == <Self as NodeCodecT<_>>::empty_node()
 	}
 
 	fn empty_node() -> &'static [u8] {

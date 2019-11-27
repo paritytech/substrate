@@ -44,8 +44,8 @@ use parking_lot::RwLock;
 use std::{sync::Arc, format};
 
 /// An error that can occur within the inherent data system.
-#[derive(Debug, Encode, Decode, derive_more::Display)]
 #[cfg(feature = "std")]
+#[derive(Debug, Encode, Decode, derive_more::Display)]
 pub struct Error(String);
 
 #[cfg(feature = "std")]

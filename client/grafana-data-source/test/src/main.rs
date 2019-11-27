@@ -27,7 +27,7 @@ async fn randomness() {
 
 		let result = record_metrics!(
 			"random data" => random,
-			"random^2" => random * random
+			"random^2" => random * random,
 		);
 
 		if let Err(error) = result {

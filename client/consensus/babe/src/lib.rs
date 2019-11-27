@@ -90,8 +90,6 @@ use consensus_common::import_queue::{Verifier, BasicQueue, CacheKeyId};
 use client_api::{
 	backend::{AuxStore, Backend},
 	call_executor::CallExecutor,
-	error::{Result as ClientResult, Error as ClientError},
-	blockchain::{self, HeaderBackend, ProvideCache},
 	BlockchainEvents, ProvideUncles,
 };
 use client::Client;
@@ -103,7 +101,10 @@ use futures::prelude::*;
 use log::{warn, debug, info, trace};
 use slots::{SlotWorker, SlotData, SlotInfo, SlotCompatible};
 use epoch_changes::descendent_query;
-use header_metadata::HeaderMetadata;
+use sp_blockchain::{
+	Result as ClientResult, Error as ClientError,
+	HeaderBackend, ProvideCache, HeaderMetadata
+};
 use schnorrkel::SignatureError;
 
 use sr_api::ApiExt;
@@ -157,11 +158,11 @@ enum Error<B: BlockT> {
 	#[display(fmt = "VRF verification failed: {:?}", _0)]
 	VRFVerificationFailed(SignatureError),
 	#[display(fmt = "Could not fetch parent header: {:?}", _0)]
-	FetchParentHeader(client_api::error::Error),
+	FetchParentHeader(sp_blockchain::Error),
 	#[display(fmt = "Expected epoch change to happen at {:?}, s{}", _0, _1)]
 	ExpectedEpochChange(B::Hash, u64),
 	#[display(fmt = "Could not look up epoch: {:?}", _0)]
-	CouldNotLookUpEpoch(Box<fork_tree::Error<client_api::error::Error>>),
+	CouldNotLookUpEpoch(Box<fork_tree::Error<sp_blockchain::Error>>),
 	#[display(fmt = "Block {} is not valid under any epoch.", _0)]
 	BlockNotValid(B::Hash),
 	#[display(fmt = "Unexpected epoch change")]
@@ -170,9 +171,9 @@ enum Error<B: BlockT> {
 	ParentBlockNoAssociatedWeight(B::Hash),
 	#[display(fmt = "Checking inherents failed: {}", _0)]
 	CheckInherents(String),
-	Client(client_api::error::Error),
+	Client(sp_blockchain::Error),
 	Runtime(inherents::Error),
-	ForkTree(Box<fork_tree::Error<client_api::error::Error>>),
+	ForkTree(Box<fork_tree::Error<sp_blockchain::Error>>),
 }
 
 impl<B: BlockT> std::convert::From<Error<B>> for String {
@@ -206,7 +207,7 @@ impl Config {
 	/// Either fetch the slot duration from disk or compute it from the genesis
 	/// state.
 	pub fn get_or_compute<B: BlockT, C>(client: &C) -> ClientResult<Self> where
-		C: AuxStore + ProvideRuntimeApi, C::Api: BabeApi<B, Error = client_api::error::Error>,
+		C: AuxStore + ProvideRuntimeApi, C::Api: BabeApi<B, Error = sp_blockchain::Error>,
 	{
 		trace!(target: "babe", "Getting slot duration");
 		match slots::SlotDuration::get_or_compute(client, |a, b| a.configuration(b)).map(Self) {
@@ -558,7 +559,7 @@ impl<B, E, Block: BlockT, RA, PRA> BabeVerifier<B, E, Block, RA, PRA> {
 		block_id: BlockId<Block>,
 		inherent_data: InherentData,
 	) -> Result<(), Error<Block>>
-		where PRA: ProvideRuntimeApi, PRA::Api: BlockBuilderApi<Block, Error = client_api::error::Error>
+		where PRA: ProvideRuntimeApi, PRA::Api: BlockBuilderApi<Block, Error = sp_blockchain::Error>
 	{
 		let inherent_res = self.api.runtime_api().check_inherents(
 			&block_id,
@@ -627,8 +628,8 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA
 	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 	RA: Send + Sync,
 	PRA: ProvideRuntimeApi + Send + Sync + AuxStore + ProvideCache<Block>,
-	PRA::Api: BlockBuilderApi<Block, Error = client_api::error::Error>
-		+ BabeApi<Block, Error = client_api::error::Error>,
+	PRA::Api: BlockBuilderApi<Block, Error = sp_blockchain::Error>
+		+ BabeApi<Block, Error = sp_blockchain::Error>,
 {
 	fn verify(
 		&mut self,
@@ -851,8 +852,8 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 		// early exit if block already in chain, otherwise the check for
 		// epoch changes will error when trying to re-import an epoch change
 		match self.client.status(BlockId::Hash(hash)) {
-			Ok(blockchain::BlockStatus::InChain) => return Ok(ImportResult::AlreadyInChain),
-			Ok(blockchain::BlockStatus::Unknown) => {},
+			Ok(sp_blockchain::BlockStatus::InChain) => return Ok(ImportResult::AlreadyInChain),
+			Ok(sp_blockchain::BlockStatus::Unknown) => {},
 			Err(e) => return Err(ConsensusError::ClientImport(e.to_string())),
 		}
 
@@ -907,7 +908,7 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 				slot_number,
 				|slot| self.config.genesis_epoch(slot),
 			)
-				.map_err(|e: fork_tree::Error<client_api::error::Error>| ConsensusError::ChainLookup(
+				.map_err(|e: fork_tree::Error<sp_blockchain::Error>| ConsensusError::ChainLookup(
 					babe_err(Error::<Block>::CouldNotLookUpEpoch(Box::new(e))).into()
 				))?
 				.ok_or_else(|| ConsensusError::ClientImport(
@@ -1146,7 +1147,7 @@ pub fn import_queue<B, E, Block: BlockT<Hash=H256>, I, RA, PRA>(
 	E: CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync + 'static,
 	RA: Send + Sync + 'static,
 	PRA: ProvideRuntimeApi + ProvideCache<Block> + Send + Sync + AuxStore + 'static,
-	PRA::Api: BlockBuilderApi<Block> + BabeApi<Block> + ApiExt<Block, Error = client_api::error::Error>,
+	PRA::Api: BlockBuilderApi<Block> + BabeApi<Block> + ApiExt<Block, Error = sp_blockchain::Error>,
 {
 	register_babe_inherent_data_provider(&inherent_data_providers, babe_link.config.slot_duration)?;
 

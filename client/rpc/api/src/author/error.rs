@@ -30,12 +30,14 @@ pub type FutureResult<T> = Box<dyn rpc::futures::Future<Item = T, Error = Error>
 pub enum Error {
 	/// Client error.
 	#[display(fmt="Client error: {}", _0)]
+	#[from(ignore)]
 	Client(Box<dyn std::error::Error + Send>),
 	/// Transaction pool error,
 	#[display(fmt="Transaction pool error: {}", _0)]
 	Pool(txpool::error::Error),
 	/// Verification error
 	#[display(fmt="Extrinsic verification error: {}", _0)]
+	#[from(ignore)]
 	Verification(Box<dyn std::error::Error + Send>),
 	/// Incorrect extrinsic format.
 	#[display(fmt="Invalid extrinsic format: {}", _0)]

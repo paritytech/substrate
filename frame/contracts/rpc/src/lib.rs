@@ -18,7 +18,7 @@
 
 use std::sync::Arc;
 
-use client::blockchain::HeaderBackend;
+use sp_blockchain::HeaderBackend;
 use codec::Codec;
 use jsonrpc_core::{Error, ErrorCode, Result};
 use jsonrpc_derive::rpc;

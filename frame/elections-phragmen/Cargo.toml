@@ -17,6 +17,7 @@ runtime_io = { package = "sr-io", path = "../../primitives/sr-io" }
 hex-literal = "0.2.1"
 balances = { package = "pallet-balances", path = "../balances" }
 primitives = { package = "substrate-primitives",  path = "../../primitives/core" }
+substrate-test-utils = { path = "../../test/utils" }
 serde = { version = "1.0.101" }
 
 [features]

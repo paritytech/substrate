@@ -49,11 +49,12 @@ use sr_primitives::traits::{
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
 use std::{
 	io::{Read, Write, Seek},
-	marker::PhantomData, sync::Arc, sync::atomic::AtomicBool, time::SystemTime
+	marker::PhantomData, sync::Arc, time::SystemTime
 };
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use tel::{telemetry, SUBSTRATE_INFO};
 use transaction_pool::txpool::{self, ChainApi, Pool as TransactionPool};
+use sp_blockchain;
 use grafana_data_source::{self, record_metrics};
 
 /// Aggregator for the components required to build a service.
@@ -765,7 +766,7 @@ ServiceBuilder<
 		offchain::OffchainWorkerApi<TBl> +
 		tx_pool_api::TaggedTransactionQueue<TBl> +
 		session::SessionKeys<TBl> +
-		sr_api::ApiExt<TBl, Error = client::error::Error>,
+		sr_api::ApiExt<TBl, Error = sp_blockchain::Error>,
 	TBl: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
 	TRtApi: 'static + Send + Sync,
 	TCfg: Default,
@@ -822,6 +823,9 @@ ServiceBuilder<
 		// List of asynchronous tasks to spawn. We collect them, then spawn them all at once.
 		let (to_spawn_tx, to_spawn_rx) =
 			mpsc::unbounded::<Box<dyn Future<Item = (), Error = ()> + Send>>();
+
+		// A side-channel for essential tasks to communicate shutdown.
+		let (essential_failed_tx, essential_failed_rx) = mpsc::unbounded();
 
 		let import_queue = Box::new(import_queue);
 		let chain_info = client.info().chain;
@@ -1010,7 +1014,7 @@ ServiceBuilder<
 				"finalized_height" => finalized_number,
 				"bandwidth_download" => bandwidth_download,
 				"bandwidth_upload" => bandwidth_upload,
-				"used_state_cache_size" => used_state_cache_size
+				"used_state_cache_size" => used_state_cache_size,
 			);
 
 			Ok(())
@@ -1163,7 +1167,7 @@ ServiceBuilder<
 
 			let _ = to_spawn_tx.unbounded_send(Box::new(future));
     }
-    
+
 		// Instrumentation
 		if let Some(tracing_targets) = config.tracing_targets.as_ref() {
 			let subscriber = substrate_tracing::ProfilingSubscriber::new(
@@ -1183,7 +1187,8 @@ ServiceBuilder<
 			transaction_pool,
 			exit,
 			signal: Some(signal),
-			essential_failed: Arc::new(AtomicBool::new(false)),
+			essential_failed_tx,
+			essential_failed_rx,
 			to_spawn_tx,
 			to_spawn_rx,
 			to_poll: Vec::new(),
