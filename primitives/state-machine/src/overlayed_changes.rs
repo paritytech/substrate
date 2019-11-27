@@ -18,10 +18,11 @@
 
 #[cfg(test)]
 use std::iter::FromIterator;
-use std::collections::{HashMap, BTreeSet};
+use std::collections::{HashMap, BTreeMap, BTreeSet};
 use codec::Decode;
 use crate::changes_trie::{NO_EXTRINSIC_INDEX, Configuration as ChangesTrieConfig};
 use primitives::storage::well_known_keys::EXTRINSIC_INDEX;
+use std::{mem, ops};
 
 /// The overlayed changes to state to be queried on top of the backend.
 ///
@@ -54,9 +55,9 @@ pub struct OverlayedValue {
 #[cfg_attr(test, derive(PartialEq))]
 pub struct OverlayedChangeSet {
 	/// Top level storage changes.
-	pub top: HashMap<Vec<u8>, OverlayedValue>,
+	pub top: BTreeMap<Vec<u8>, OverlayedValue>,
 	/// Child storage changes.
-	pub children: HashMap<Vec<u8>, HashMap<Vec<u8>, OverlayedValue>>,
+	pub children: HashMap<Vec<u8>, BTreeMap<Vec<u8>, OverlayedValue>>,
 }
 
 #[cfg(test)]
@@ -274,9 +275,10 @@ impl OverlayedChanges {
 	/// Commit prospective changes to state.
 	pub fn commit_prospective(&mut self) {
 		if self.committed.is_empty() {
-			::std::mem::swap(&mut self.prospective, &mut self.committed);
+			mem::swap(&mut self.prospective, &mut self.committed);
 		} else {
-			for (key, val) in self.prospective.top.drain() {
+			let top_to_commit = mem::replace(&mut self.prospective.top, BTreeMap::new());
+			for (key, val) in top_to_commit.into_iter() {
 				let entry = self.committed.top.entry(key).or_default();
 				entry.value = val.value;
 
@@ -285,9 +287,9 @@ impl OverlayedChanges {
 						.extend(prospective_extrinsics);
 				}
 			}
-			for (storage_key, mut map) in self.prospective.children.drain() {
+			for (storage_key, map) in self.prospective.children.drain() {
 				let map_dest = self.committed.children.entry(storage_key).or_default();
-				for (key, val) in map.drain() {
+				for (key, val) in map.into_iter() {
 					let entry = map_dest.entry(key).or_default();
 					entry.value = val.value;
 
@@ -343,16 +345,16 @@ impl OverlayedChanges {
 	/// Returns the next (in lexicographic order) storage key in the overlayed alongside its value.
 	/// If no value is next then `None` is returned.
 	pub fn next_storage_key_change(&self, key: &[u8]) -> Option<(&[u8], &OverlayedValue)> {
-		// TODO TODO: this implementation is not efficient. Cost: O(n) with n the size of overlay.
+		let range = (ops::Bound::Excluded(key), ops::Bound::Unbounded);
 
-		let next_prospective_key = self.prospective.top.iter()
-			.filter(|(k, _)| &k[..] > key)
-			.min_by(|&(k1, _), &(k2, _)| k1.cmp(k2))
+		let next_prospective_key = self.prospective.top
+			.range::<[u8], _>(range)
+			.next()
 			.map(|(k, v)| (&k[..], v));
 
-		let next_committed_key = self.committed.top.iter()
-			.filter(|(k, _)| &k[..] > key)
-			.min_by(|&(k1, _), &(k2, _)| k1.cmp(k2))
+		let next_committed_key = self.committed.top
+			.range::<[u8], _>(range)
+			.next()
 			.map(|(k, v)| (&k[..], v));
 
 		match (next_committed_key, next_prospective_key) {
@@ -384,8 +386,8 @@ mod tests {
 	use crate::ext::Ext;
 	use super::*;
 
-	fn strip_extrinsic_index(map: &HashMap<Vec<u8>, OverlayedValue>)
-		-> HashMap<Vec<u8>, OverlayedValue>
+	fn strip_extrinsic_index(map: &BTreeMap<Vec<u8>, OverlayedValue>)
+		-> BTreeMap<Vec<u8>, OverlayedValue>
 	{
 		let mut clone = map.clone();
 		clone.remove(&EXTRINSIC_INDEX.to_vec());
