@@ -48,14 +48,14 @@ use std::sync::Arc;
 use std::iter;
 use std::time;
 use log::{trace, debug};
-use futures03::channel::mpsc;
+use futures::channel::mpsc;
 use lru::LruCache;
 use libp2p::PeerId;
 use sr_primitives::traits::{Block as BlockT, Hash, HashFor};
 use sr_primitives::ConsensusEngineId;
-pub use crate::message::generic::{Message, ConsensusMessage};
-use crate::protocol::Context;
-use crate::config::Roles;
+pub use network::message::generic::{Message, ConsensusMessage};
+use network::Context;
+use network::config::Roles;
 
 // FIXME: Add additional spam/DoS attack protection: https://github.com/paritytech/substrate/issues/1115
 const KNOWN_MESSAGES_CACHE_SIZE: usize = 4096;
@@ -186,7 +186,7 @@ fn propagate<'a, B: BlockT, I>(
 	validators: &HashMap<ConsensusEngineId, Arc<dyn Validator<B>>>,
 )
 	// (msg_hash, topic, message)
-	where I: Clone + IntoIterator<Item=(&'a B::Hash, &'a B::Hash, &'a ConsensusMessage)>,  
+	where I: Clone + IntoIterator<Item=(&'a B::Hash, &'a B::Hash, &'a ConsensusMessage)>,
 {
 	let mut check_fns = HashMap::new();
 	let mut message_allowed = move |who: &PeerId, intent: MessageIntent, topic: &B::Hash, message: &ConsensusMessage| {
@@ -633,7 +633,7 @@ impl<B: BlockT> Validator<B> for DiscardAll {
 mod tests {
 	use std::sync::Arc;
 	use sr_primitives::testing::{H256, Block as RawBlock, ExtrinsicWrapper};
-	use futures03::executor::block_on_stream;
+	use futures::executor::block_on_stream;
 
 	use super::*;
 

@@ -159,8 +159,7 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, SC>(
 ) -> ::sp_blockchain::Result<impl Future<Item=(),Error=()> + Send + 'static> where
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
-	N: Network<Block> + Send + Sync + 'static,
-	N::In: Send + 'static,
+	N: Network<Block> + Send + Clone + 'static,
 	SC: SelectChain<Block> + 'static,
 	NumberFor<Block>: BlockNumberOps,
 	RA: Send + Sync + 'static,
@@ -200,20 +199,18 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, SC>(
 
 /// Future that powers the observer.
 #[must_use]
-struct ObserverWork<B: BlockT<Hash=H256>, N: Network<B>, E, Backend, RA> {
+struct ObserverWork<B: BlockT<Hash=H256>, E, Backend, RA> {
 	observer: Box<dyn Future<Item = (), Error = CommandOrError<B::Hash, NumberFor<B>>> + Send>,
 	client: Arc<Client<Backend, E, B, RA>>,
-	network: NetworkBridge<B, N>,
+	network: NetworkBridge<B>,
 	persistent_data: PersistentData<B>,
 	keystore: Option<keystore::KeyStorePtr>,
 	voter_commands_rx: mpsc::UnboundedReceiver<VoterCommand<B::Hash, NumberFor<B>>>,
 }
 
-impl<B, N, E, Bk, RA> ObserverWork<B, N, E, Bk, RA>
+impl<B, E, Bk, RA> ObserverWork<B, E, Bk, RA>
 where
 	B: BlockT<Hash=H256>,
-	N: Network<B>,
-	N::In: Send + 'static,
 	NumberFor<B>: BlockNumberOps,
 	RA: 'static + Send + Sync,
 	E: CallExecutor<B, Blake2Hasher> + Send + Sync + 'static,
@@ -221,7 +218,7 @@ where
 {
 	fn new(
 		client: Arc<Client<Bk, E, B, RA>>,
-		network: NetworkBridge<B, N>,
+		network: NetworkBridge<B>,
 		persistent_data: PersistentData<B>,
 		keystore: Option<keystore::KeyStorePtr>,
 		voter_commands_rx: mpsc::UnboundedReceiver<VoterCommand<B::Hash, NumberFor<B>>>,
@@ -325,11 +322,9 @@ where
 	}
 }
 
-impl<B, N, E, Bk, RA> Future for ObserverWork<B, N, E, Bk, RA>
+impl<B, E, Bk, RA> Future for ObserverWork<B, E, Bk, RA>
 where
 	B: BlockT<Hash=H256>,
-	N: Network<B>,
-	N::In: Send + 'static,
 	NumberFor<B>: BlockNumberOps,
 	RA: 'static + Send + Sync,
 	E: CallExecutor<B, Blake2Hasher> + Send + Sync + 'static,

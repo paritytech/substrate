@@ -18,14 +18,13 @@
 
 use futures::sync::mpsc;
 use futures::prelude::*;
-use network::consensus_gossip as network_gossip;
-use network::test::{Block, Hash};
+use network::{PeerId, test::{Block, Hash}};
 use network_gossip::Validator;
 use tokio::runtime::current_thread;
 use std::sync::Arc;
 use keyring::Ed25519Keyring;
 use codec::Encode;
-use sr_primitives::traits::NumberFor;
+use sr_primitives::{ConsensusEngineId, traits::NumberFor};
 
 use crate::environment::SharedVoterSetState;
 use fg_primitives::AuthorityList;
@@ -46,10 +45,25 @@ struct TestNetwork {
 	sender: mpsc::UnboundedSender<Event>,
 }
 
-impl super::Network<Block> for TestNetwork {
-	type In = mpsc::UnboundedReceiver<network_gossip::TopicNotification>;
+impl network_gossip::Network<Block> for TestNetwork {
+	fn event_stream(&self) -> Box<dyn futures::Stream<Item = Event, Error = ()> + Send> {
+		let (tx, rx) = mpsc::unbounded();
+		Box::new(rx)
+	}
 
-	/// Get a stream of messages for a specific gossip topic.
+	fn report_peer(&self, who: network::PeerId, cost_benefit: i32) {
+		let _ = self.sender.unbounded_send(Event::Report(who, cost_benefit));
+	}
+
+	fn disconnect_peer(&self, _: PeerId) {}
+
+	fn write_notification(&self, who: PeerId, engine_id: ConsensusEngineId, message: Vec<u8>) {
+
+	}
+
+	fn register_notifications_protocol(&self, _: ConsensusEngineId) {}
+
+	/*/// Get a stream of messages for a specific gossip topic.
 	fn messages_for(&self, topic: Hash) -> Self::In {
 		let (tx, rx) = mpsc::unbounded();
 		let _ = self.sender.unbounded_send(Event::MessagesFor(topic, tx));
@@ -82,19 +96,12 @@ impl super::Network<Block> for TestNetwork {
 	fn register_gossip_message(&self, _topic: Hash, _data: Vec<u8>) {
 		// NOTE: only required to restore previous state on startup
 		//       not required for tests currently
-	}
+	}*/
 
-	/// Report a peer's cost or benefit after some action.
-	fn report(&self, who: network::PeerId, cost_benefit: i32) {
-		let _ = self.sender.unbounded_send(Event::Report(who, cost_benefit));
-	}
-
-	/// Inform peers that a block with given hash should be downloaded.
 	fn announce(&self, block: Hash, _associated_data: Vec<u8>) {
 		let _ = self.sender.unbounded_send(Event::Announce(block));
 	}
 
-	/// Notify the sync service to try syncing the given chain.
 	fn set_sync_fork_request(&self, _peers: Vec<network::PeerId>, _hash: Hash, _number: NumberFor<Block>) {}
 }
 
@@ -111,7 +118,7 @@ impl network_gossip::ValidatorContext<Block> for TestNetwork {
 }
 
 struct Tester {
-	net_handle: super::NetworkBridge<Block, TestNetwork>,
+	net_handle: super::NetworkBridge<Block>,
 	gossip_validator: Arc<GossipValidator<Block>>,
 	events: mpsc::UnboundedReceiver<Event>,
 }

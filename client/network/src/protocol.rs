@@ -17,7 +17,7 @@
 use crate::{DiscoveryNetBehaviour, config::ProtocolId};
 use crate::legacy_proto::{LegacyProto, LegacyProtoOut};
 use crate::utils::interval;
-use bytes::BytesMut;
+use bytes::{Bytes, BytesMut};
 use futures::prelude::*;
 use futures03::{StreamExt as _, TryStreamExt as _};
 use libp2p::{Multiaddr, PeerId};
@@ -38,7 +38,6 @@ use sr_primitives::traits::{
 use sr_arithmetic::traits::SaturatedConversion;
 use message::{BlockAnnounce, BlockAttributes, Direction, FromBlock, Message, RequestId};
 use message::generic::{Message as GenericMessage, ConsensusMessage};
-use consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
 use light_dispatch::{LightDispatch, LightDispatchNetwork, RequestData};
 use specialization::NetworkSpecialization;
 use sync::{ChainSync, SyncState};
@@ -56,7 +55,6 @@ use crate::error;
 use util::LruHashSet;
 
 mod util;
-pub mod consensus_gossip;
 pub mod message;
 pub mod event;
 pub mod light_dispatch;
@@ -118,7 +116,6 @@ pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 	genesis_hash: B::Hash,
 	sync: ChainSync<B>,
 	specialization: S,
-	consensus_gossip: ConsensusGossip<B>,
 	context_data: ContextData<B, H>,
 	/// List of nodes for which we perform additional logging because they are important for the
 	/// user.
@@ -132,6 +129,8 @@ pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 	finality_proof_provider: Option<Arc<dyn FinalityProofProvider<B>>>,
 	/// Handles opening the unique substream and sending and receiving raw messages.
 	behaviour: LegacyProto<Substream<StreamMuxerBox>>,
+	/// List of notification protocols that have been registered.
+	registered_notif_protocols: HashSet<ConsensusEngineId>,
 }
 
 #[derive(Default)]
@@ -456,13 +455,13 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			genesis_hash: info.chain.genesis_hash,
 			sync,
 			specialization,
-			consensus_gossip: ConsensusGossip::new(),
 			handshaking_peers: HashMap::new(),
 			important_peers,
 			transaction_pool,
 			finality_proof_provider,
 			peerset_handle: peerset_handle.clone(),
 			behaviour,
+			registered_notif_protocols: HashSet::new(),
 		};
 
 		Ok((protocol, peerset_handle))
@@ -639,20 +638,38 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				return self.on_finality_proof_response(who, response),
 			GenericMessage::RemoteReadChildRequest(request) =>
 				self.on_remote_read_child_request(who, request),
-			GenericMessage::Consensus(msg) => {
-				self.consensus_gossip.on_incoming(
-					&mut ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle),
-					who,
-					vec![msg],
-				);
-			}
+			GenericMessage::Consensus(msg) =>
+				return if self.registered_notif_protocols.contains(&msg.engine_id) {
+					CustomMessageOutcome::NotifMessages {
+						remote: who.clone(),
+						messages: vec![(msg.engine_id, From::from(msg.data))],
+					}
+				} else {
+					warn!(target: "sync", "Received message on non-registered protocol: {:?}", msg.engine_id);
+					CustomMessageOutcome::None
+				},
 			GenericMessage::ConsensusBatch(messages) => {
-				self.consensus_gossip.on_incoming(
-					&mut ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle),
-					who,
-					messages,
-				);
-			}
+				let messages = messages
+					.into_iter()
+					.filter_map(|msg| {
+						if self.registered_notif_protocols.contains(&msg.engine_id) {
+							Some((msg.engine_id, From::from(msg.data)))
+						} else {
+							warn!(target: "sync", "Received message on non-registered protocol: {:?}", msg.engine_id);
+							None
+						}
+					})
+					.collect::<Vec<_>>();
+
+				return if !messages.is_empty() {
+					CustomMessageOutcome::NotifMessages {
+						remote: who.clone(),
+						messages,
+					}
+				} else {
+					CustomMessageOutcome::None
+				};
+			},
 			GenericMessage::ChainSpecific(msg) => self.specialization.on_message(
 				&mut ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle),
 				who,
@@ -682,40 +699,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		);
 	}
 
-	/// Locks `self` and returns a context plus the `ConsensusGossip` struct.
-	pub fn consensus_gossip_lock<'a>(
-		&'a mut self,
-	) -> (impl Context<B> + 'a, &'a mut ConsensusGossip<B>) {
-		let context = ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle);
-		(context, &mut self.consensus_gossip)
-	}
-
 	/// Locks `self` and returns a context plus the network specialization.
 	pub fn specialization_lock<'a>(
 		&'a mut self,
 	) -> (impl Context<B> + 'a, &'a mut S) {
 		let context = ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle);
 		(context, &mut self.specialization)
-	}
-
-	/// Gossip a consensus message to the network.
-	pub fn gossip_consensus_message(
-		&mut self,
-		topic: B::Hash,
-		engine_id: ConsensusEngineId,
-		message: Vec<u8>,
-		recipient: GossipMessageRecipient,
-	) {
-		let mut context = ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle);
-		let message = ConsensusMessage { data: message, engine_id };
-		match recipient {
-			GossipMessageRecipient::BroadcastToAll =>
-				self.consensus_gossip.multicast(&mut context, topic, message, true),
-			GossipMessageRecipient::BroadcastNew =>
-				self.consensus_gossip.multicast(&mut context, topic, message, false),
-			GossipMessageRecipient::Peer(who) =>
-				self.send_message(&who, GenericMessage::Consensus(message)),
-		}
 	}
 
 	/// Called when a new peer is connected
@@ -738,11 +727,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			self.handshaking_peers.remove(&peer);
 			self.context_data.peers.remove(&peer)
 		};
-		if let Some(peer_data) = removed {
+		if let Some(_peer_data) = removed {
 			let mut context = ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle);
-			if peer_data.info.protocol_version > 2 {
-				self.consensus_gossip.peer_disconnected(&mut context, peer.clone());
-			}
 			self.sync.peer_disconnected(peer.clone());
 			self.specialization.on_disconnect(&mut context, peer.clone());
 			self.light_dispatch.on_disconnect(LightDispatchIn {
@@ -905,9 +891,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	///
 	/// > **Note**: This method normally doesn't have to be called except for testing purposes.
 	pub fn tick(&mut self) {
-		self.consensus_gossip.tick(
-			&mut ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle)
-		);
 		self.maintain_peers();
 		self.light_dispatch.maintain_peers(LightDispatchIn {
 			behaviour: &mut self.behaviour,
@@ -960,7 +943,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// Called by peer to report status
 	fn on_status_message(&mut self, who: PeerId, status: message::Status<B>) {
 		trace!(target: "sync", "New peer {} {:?}", who, status);
-		let protocol_version = {
+		let _protocol_version = {
 			if self.context_data.peers.contains_key(&who) {
 				log!(
 					target: "sync",
@@ -1066,10 +1049,54 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			}
 		}
 		let mut context = ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle);
-		if protocol_version > 2 {
-			self.consensus_gossip.new_peer(&mut context, who.clone(), status.roles);
-		}
 		self.specialization.on_connect(&mut context, who, status);
+	}
+
+	/// Send a notification to the given peer we're connected to.
+	///
+	/// Doesn't do anything if we don't have a notifications substream for that protocol with that
+	/// peer.
+	pub fn write_notification(
+		&mut self,
+		target: PeerId,
+		engine_id: ConsensusEngineId,
+		message: impl Into<Vec<u8>>
+	) {
+		if !self.registered_notif_protocols.contains(&engine_id) {
+			error!(
+				target: "sub-libp2p",
+				"Sending a notification with a protocol that wasn't registered: {:?}",
+				engine_id
+			);
+		}
+
+		self.send_message(&target, GenericMessage::Consensus(ConsensusMessage {
+			engine_id,
+			data: message.into(),
+		}));
+	}
+
+	/// Registers a new notifications protocol.
+	///
+	/// You are very strongly encouraged to call this method very early on. Any connection open
+	/// will retain the protocols that were registered then, and not any new one.
+	pub fn register_notifications_protocol(
+		&mut self,
+		engine_id: ConsensusEngineId,
+	) -> Vec<event::Event> {
+		if !self.registered_notif_protocols.insert(engine_id) {
+			error!(target: "sub-libp2p", "Notifications protocol already registered: {:?}", engine_id);
+		}
+
+		// Registering a protocol while we already have open connections isn't great, but for now
+		// we handle it by notifying that we opened channels with everyone.
+		self.behaviour.open_peers()
+			.map(|peer|
+				event::Event::NotifOpened {
+					remote: peer.clone(),
+					engine_id,
+				})
+			.collect()
 	}
 
 	/// Called when peer sends us new extrinsics
@@ -1741,6 +1768,12 @@ pub enum CustomMessageOutcome<B: BlockT> {
 	BlockImport(BlockOrigin, Vec<IncomingBlock<B>>),
 	JustificationImport(Origin, B::Hash, NumberFor<B>, Justification),
 	FinalityProofImport(Origin, B::Hash, NumberFor<B>, Vec<u8>),
+	/// Notifications protocols have been opened with a remote.
+	NotifOpened { remote: PeerId, protocols: Vec<ConsensusEngineId> },
+	/// Notifications protocols have been closed with a remote.
+	NotifClosed { remote: PeerId, protocols: Vec<ConsensusEngineId> },
+	/// Messages have been received on one or more notifications protocols.
+	NotifMessages { remote: PeerId, messages: Vec<(ConsensusEngineId, Bytes)> },
 	None,
 }
 
@@ -1870,12 +1903,20 @@ Protocol<B, S, H> {
 					version <= CURRENT_VERSION as u8
 					&& version >= MIN_VERSION as u8
 				);
-				self.on_peer_connected(peer_id);
-				CustomMessageOutcome::None
+				self.on_peer_connected(peer_id.clone());
+				// Notify all the notification protocols as open.
+				CustomMessageOutcome::NotifOpened {
+					remote: peer_id,
+					protocols: self.registered_notif_protocols.iter().cloned().collect(),
+				}
 			}
 			LegacyProtoOut::CustomProtocolClosed { peer_id, .. } => {
-				self.on_peer_disconnected(peer_id);
-				CustomMessageOutcome::None
+				self.on_peer_disconnected(peer_id.clone());
+				// Notify all the notification protocols as closed.
+				CustomMessageOutcome::NotifClosed {
+					remote: peer_id,
+					protocols: self.registered_notif_protocols.iter().cloned().collect(),
+				}
 			},
 			LegacyProtoOut::CustomMessage { peer_id, message } =>
 				self.on_custom_message(peer_id, message),

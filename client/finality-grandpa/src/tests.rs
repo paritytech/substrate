@@ -499,6 +499,8 @@ fn finalize_3_voters_1_full_observer() {
 
 	let mut keystore_paths = Vec::new();
 
+	let mut voters = Vec::new();
+
 	for (peer_id, local_key) in all_peers.enumerate() {
 		let (client, net_service, link) = {
 			let net = net.lock();
@@ -540,8 +542,11 @@ fn finalize_3_voters_1_full_observer() {
 			telemetry_on_connect: None,
 			voting_rule: (),
 		};
-		let voter = run_grandpa_voter(grandpa_params).expect("all in order with client and network");
 
+		voters.push(run_grandpa_voter(grandpa_params).expect("all in order with client and network"));
+	}
+
+	for voter in voters {
 		runtime.spawn(voter);
 	}
 

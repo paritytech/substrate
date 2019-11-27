@@ -25,6 +25,7 @@ client = { package = "substrate-client", path = "../" }
 inherents = { package = "substrate-inherents", path = "../../primitives/inherents" }
 sp-blockchain = { path = "../../primitives/blockchain" }
 network = { package = "substrate-network", path = "../network" }
+network-gossip = { package = "substrate-network-gossip", path = "../network-gossip" }
 sp-finality-tracker = { path = "../../primitives/finality-tracker" }
 fg_primitives = { package = "substrate-finality-grandpa-primitives", path = "../../primitives/finality-grandpa" }
 grandpa = { package = "finality-grandpa", version = "0.10.1", features = ["derive-codec"] }
