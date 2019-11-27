@@ -137,7 +137,6 @@ use proc_macro::TokenStream;
 ///   The generator is implemented with:
 ///   * `module_prefix`: $module_prefix
 ///   * `storage_prefix`: storage_name
-///   * `Hasher`: $hash
 ///   * `Hasher1`: $hash1
 ///   * `Hasher2`: $hash2
 ///
