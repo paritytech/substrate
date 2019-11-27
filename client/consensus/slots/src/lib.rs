@@ -124,8 +124,12 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	}
 
 	/// Remaining duration for proposing. None means unlimited.
-	fn proposing_remaining_duration(&self, _slot_info: &SlotInfo) -> Option<Duration> {
-		None
+	fn proposing_remaining_duration(
+		&self,
+		_head: &B::Header,
+		slot_info: &SlotInfo
+	) -> Option<Duration> {
+		Some(self.slot_remaining_duration(slot_info))
 	}
 
 	/// Implements the `on_slot` functionality from `SlotWorker`.
@@ -208,7 +212,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		};
 
 		let slot_remaining_duration = self.slot_remaining_duration(&slot_info);
-		let proposing_remaining_duration = self.proposing_remaining_duration(&slot_info);
+		let proposing_remaining_duration = self.proposing_remaining_duration(&chain_head, &slot_info);
 		let logs = self.pre_digest_data(slot_number, &claim);
 
 		// deadline our production to approx. the end of the slot
