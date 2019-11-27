@@ -266,6 +266,11 @@ struct LocalCache<H: Hasher> {
 	///
 	/// `None` indicates that key is known to be missing.
 	child_storage: HashMap<ChildStorageKey, Option<StorageValue>>,
+	/// Next key cache.
+	///
+	/// It stores the tuple `(Key, OptionNextKey)`
+	/// with `OptionNextKey = backend.next_storage_key(Key)`.
+	next_key: Option<(Vec<u8>, Option<Vec<u8>>)>,
 }
 
 /// Cache changes.
@@ -415,6 +420,7 @@ impl<H: Hasher, S: StateBackend<H>, B: BlockT> CachingState<H, S, B> {
 					storage: Default::default(),
 					hashes: Default::default(),
 					child_storage: Default::default(),
+					next_key: Default::default(),
 				}),
 				parent_hash: parent_hash,
 			},
@@ -545,8 +551,25 @@ impl<H: Hasher, S: StateBackend<H>, B: BlockT> StateBackend<H> for CachingState<
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		// TODO TODO: cache
-		self.state.next_storage_key(key)
+		let local_cache = self.cache.local_cache.upgradable_read();
+		
+		if let Some((cached_key, cached_next_key)) = local_cache.next_key.as_ref() {
+			let key_after_cache = cached_next_key
+				.as_ref()
+				.map(|cached_next_key| key >= &cached_next_key[..])
+				.unwrap_or(false);
+
+			let key_before_cache = key < &cached_key[..];
+
+			if !key_after_cache && !key_before_cache {
+				return Ok(cached_next_key.clone());
+			}
+		}
+
+		let next_key = self.state.next_storage_key(key)?;
+		let next_key_cache = Some((key.to_vec(), next_key.clone()));
+		RwLockUpgradableReadGuard::upgrade(local_cache).next_key = next_key_cache;
+		Ok(next_key)
 	}
 
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], f: F) {
