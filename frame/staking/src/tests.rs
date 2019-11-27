@@ -2520,3 +2520,10 @@ fn remove_multi_deferred() {
 		assert_eq!(slashes[0].validator, 21);
 	})
 }
+
+#[test]
+fn version_initialized() {
+	ExtBuilder::default().build().execute_with(|| {
+		assert_eq!(<Staking as Store>::StorageVersion::get(), crate::migration::CURRENT_VERSION);
+	});
+}
