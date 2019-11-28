@@ -91,8 +91,17 @@ pub trait Storage {
 		self.storage(key).map(|s| s.to_vec())
 	}
 
-	/// Returns the data for `key` in the child storage or `None` if the key can not be found.
-	/// A key collision free unique id is required as parameter.
+	/// All Child api uses :
+	/// - A `child_storage_key` to define the anchor point for the child proof
+	/// (commonly the location where the child root is stored in its parent trie).
+	/// - A `child_storage_types` to identify the kind of the child type and how its
+	/// `child definition` parameter is encoded.
+	/// - A `child_definition_parameter` which is the additional information required
+	/// to use the child trie. For instance defaults child tries requires this to
+	/// contain a collision free unique id.
+	///
+	/// This function specifically returns the data for `key` in the child storage or `None`
+	/// if the key can not be found.
 	fn child_get(
 		&self,
 		child_storage_key: &[u8],
@@ -109,6 +118,8 @@ pub trait Storage {
 	/// Get `key` from storage, placing the value into `value_out` and return the number of
 	/// bytes that the entry in storage has beyond the offset or `None` if the storage entry
 	/// doesn't exist at all.
+	/// If `value_out` length is smaller than the returned length, only `value_out` length bytes
+	/// are copied into `value_out`.
 	fn read(&self, key: &[u8], value_out: &mut [u8], value_offset: u32) -> Option<u32> {
 		self.storage(key).map(|value| {
 			let value_offset = value_offset as usize;
@@ -124,6 +135,8 @@ pub trait Storage {
 	/// doesn't exist at all.
 	/// If `value_out` length is smaller than the returned length, only `value_out` length bytes
 	/// are copied into `value_out`.
+	///
+	/// See `child_get` for common child api parameters.
 	fn child_read(
 		&self,
 		child_storage_key: &[u8],
@@ -152,6 +165,8 @@ pub trait Storage {
 	}
 
 	/// Set `key` to `value` in the child storage denoted by `child_storage_key`.
+	///
+	/// See `child_get` for common child api parameters.
 	fn child_set(
 		&mut self,
 		child_storage_key: &[u8],
@@ -172,6 +187,8 @@ pub trait Storage {
 	}
 
 	/// Clear the given child storage of the given `key` and its value.
+	///
+	/// See `child_get` for common child api parameters.
 	fn child_clear(
 		&mut self,
 		child_storage_key: &[u8],
@@ -186,6 +203,8 @@ pub trait Storage {
 	}
 
 	/// Clear an entire child storage.
+	///
+	/// See `child_get` for common child api parameters.
 	fn child_storage_kill(
 		&mut self,
 		child_storage_key: &[u8],
@@ -204,6 +223,8 @@ pub trait Storage {
 	}
 
 	/// Check whether the given `key` exists in storage.
+	///
+	/// See `child_get` for common child api parameters.
 	fn child_exists(
 		&self,
 		child_storage_key: &[u8],
@@ -223,6 +244,8 @@ pub trait Storage {
 	}
 
 	/// Clear the child storage of each key-value pair where the key starts with the given `prefix`.
+	///
+	/// See `child_get` for common child api parameters.
 	fn child_clear_prefix(
 		&mut self,
 		child_storage_key: &[u8],
@@ -250,6 +273,8 @@ pub trait Storage {
 	/// The hashing algorithm is defined by the `Block`.
 	///
 	/// Returns the SCALE encoded hash.
+	///
+	/// See `child_get` for common child api parameters.
 	fn child_root(
 		&mut self,
 		child_storage_key: &[u8],
