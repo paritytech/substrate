@@ -129,6 +129,7 @@ impl SerdeValue for Visitor {
 	fn as_serde(&self) -> &dyn erased_serde::Serialize {
 		self
 	}
+
 	fn to_sendable(&self) -> Box<dyn SerdeValue + Send + 'static> {
 		Box::new(self.clone())
 	}
