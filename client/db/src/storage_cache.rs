@@ -545,7 +545,6 @@ impl<H: Hasher, S: StateBackend<H>, B: BlockT> StateBackend<H> for CachingState<
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		// TODO TODO: cache
 		self.state.next_storage_key(key)
 	}
 
