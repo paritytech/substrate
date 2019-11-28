@@ -116,7 +116,7 @@ pub enum RunError {
 	/// Propagated hyper server error.
 	Hyper(hyper::Error),
 	/// Initial bind IO error.
-	Io(async_std::io::Error),
+	Io(std::io::Error),
 }
 
 impl std::error::Error for RunError {
