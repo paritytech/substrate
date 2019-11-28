@@ -164,7 +164,7 @@ impl<N: Codec> ConsensusLog<N> {
 }
 
 // FIXME: rename to equivocation proof ?
-#[derive(Clone, Decode, Debug, Encode, PartialEq)]
+#[derive(Clone, Debug, Decode, Encode, PartialEq)]
 pub struct EquivocationReport<H, N> {
 	set_id: SetId,
 	equivocation: Equivocation<H, N>,

@@ -468,15 +468,16 @@ pub mod report {
 
 use report::ReporterId;
 
-type SubmitReportTransaction = TransactionSubmitter<ReporterId, Runtime, UncheckedExtrinsic>;
-
 impl grandpa::Trait for Runtime {
 	type Event = Event;
 	type Call = Call;
-	type KeyOwnerProofSystem = Historical;
-	type SubmitTransaction = SubmitReportTransaction;
-	type ReportEquivocation = Offences;
-	type ReportKeyType = ReporterId;
+	// type HandleEquivocation = ();
+	type HandleEquivocation = grandpa::EquivocationHandler<
+		Historical,
+		TransactionSubmitter<ReporterId, Runtime, UncheckedExtrinsic>,
+		Offences,
+		ReporterId,
+	>;
 }
 
 parameter_types! {
