@@ -262,17 +262,19 @@ impl ProfilingSubscriber {
 
 fn print_log(span_datum: SpanDatum) {
 	if span_datum.values.0.is_empty() {
-		log::info!("TRACING: {} {}: {}, time: {}",
+		log::info!("TRACING: {} {}: {}, line: {}, time: {}",
 			span_datum.level,
 			span_datum.target,
 			span_datum.name,
+			span_datum.line,
 			span_datum.overall_time.as_nanos(),
 		);
 	} else {
-		log::info!("TRACING: {} {}: {}, time: {}, {}",
+		log::info!("TRACING: {} {}: {}, line: {}, time: {}, {}",
 			span_datum.level,
 			span_datum.target,
 			span_datum.name,
+			span_datum.line,
 			span_datum.overall_time.as_nanos(),
 			span_datum.values
 		);
