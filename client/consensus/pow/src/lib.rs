@@ -472,7 +472,7 @@ fn mine_loop<B: BlockT<Hash=H256>, C, Algorithm, E, SO, S, CAW>(
 				"Skipping proposal `can_author_with` returned `false`. \
 				Probably a node update is required!"
 			);
-			std::thread::sleep(std::time::Duration::new(1, 0));
+			std::thread::sleep(std::time::Duration::from_secs(1));
 			continue 'outer
 		}
 
