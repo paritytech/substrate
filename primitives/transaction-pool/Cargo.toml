@@ -1,0 +1,14 @@
+[package]
+name = "sp-transaction-pool-api"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
+derive_more = "0.15.0"
+futures = "0.3.1"
+log = "0.4.8"
+serde = { version = "1.0.101", features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.0.0" }
+primitives = { package = "substrate-primitives",  path = "../core" }
+sr-primitives = { path = "../sr-primitives" }

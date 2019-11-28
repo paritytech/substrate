@@ -34,7 +34,7 @@ frame-system-rpc-runtime-api = { path = "../../../frame/system/rpc/runtime-api",
 pallet-timestamp = { path = "../../../frame/timestamp", default-features = false }
 substrate-client = { path = "../../../client", optional = true }
 substrate-trie = { path = "../../../primitives/trie", default-features = false }
-transaction-pool-api = { package = "substrate-transaction-pool-runtime-api", path = "../../../primitives/transaction-pool/runtime-api", default-features = false }
+txpool-runtime-api = { package = "sp-transaction-pool-runtime-api", path = "../../../primitives/transaction-pool/runtime-api", default-features = false }
 trie-db = { version = "0.16.0", default-features = false }
 
 [dev-dependencies]
@@ -78,6 +78,6 @@ std = [
 	"pallet-timestamp/std",
 	"substrate-client",
 	"substrate-trie/std",
-	"transaction-pool-api/std",
+	"txpool-runtime-api/std",
 	"trie-db/std",
 ]

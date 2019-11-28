@@ -92,7 +92,7 @@ impl<H: hash::Hash + traits::Member + Serialize, H2: Clone + fmt::Debug> Listene
 
 	/// Transaction was removed as invalid.
 	pub fn invalid(&mut self, tx: &H) {
-		warn!(target: "transaction-pool", "Extrinsic invalid: {:?}", tx);
+		warn!(target: "txpool", "Extrinsic invalid: {:?}", tx);
 		self.fire(tx, |watcher| watcher.invalid());
 	}
 

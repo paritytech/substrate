@@ -917,6 +917,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "derive_more"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "proc-macro2 0.4.30 (registry+https://github.com/rust-lang/crates.io-index)",
+ "quote 0.6.13 (registry+https://github.com/rust-lang/crates.io-index)",
+ "regex 1.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rustc_version 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "syn 0.15.44 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "derive_more"
 version = "0.99.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
@@ -3009,6 +3022,7 @@ dependencies = [
  "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-finality-tracker 2.0.0",
  "sp-timestamp 2.0.0",
+ "sp-transaction-pool-api 2.0.0",
  "sr-io 2.0.0",
  "sr-primitives 2.0.0",
  "structopt 0.3.4 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3093,7 +3107,7 @@ dependencies = [
  "node-runtime 2.0.0",
  "pallet-contracts-rpc 2.0.0",
  "pallet-transaction-payment-rpc 2.0.0",
- "sc-transaction-pool 2.0.0",
+ "sp-transaction-pool-api 2.0.0",
  "sr-primitives 2.0.0",
  "substrate-client 2.0.0",
  "substrate-frame-rpc-system 2.0.0",
@@ -3152,6 +3166,7 @@ dependencies = [
  "rustc-hex 2.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-transaction-pool-runtime-api 2.0.0",
  "sr-api 2.0.0",
  "sr-io 2.0.0",
  "sr-primitives 2.0.0",
@@ -3166,7 +3181,6 @@ dependencies = [
  "substrate-offchain-primitives 2.0.0",
  "substrate-primitives 2.0.0",
  "substrate-session 2.0.0",
- "substrate-transaction-pool-runtime-api 2.0.0",
  "substrate-wasm-builder-runner 1.0.4",
 ]
 
@@ -3182,6 +3196,7 @@ dependencies = [
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sc-transaction-pool 2.0.0",
+ "sp-transaction-pool-api 2.0.0",
  "sr-io 2.0.0",
  "sr-primitives 2.0.0",
  "substrate-basic-authorship 2.0.0",
@@ -3220,6 +3235,7 @@ dependencies = [
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-transaction-pool-runtime-api 2.0.0",
  "sr-api 2.0.0",
  "sr-io 2.0.0",
  "sr-primitives 2.0.0",
@@ -3231,7 +3247,6 @@ dependencies = [
  "substrate-offchain-primitives 2.0.0",
  "substrate-primitives 2.0.0",
  "substrate-session 2.0.0",
- "substrate-transaction-pool-runtime-api 2.0.0",
  "substrate-wasm-builder-runner 1.0.4",
 ]
 
@@ -4842,9 +4857,9 @@ dependencies = [
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "sc-transaction-graph 2.0.0",
  "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.41 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-transaction-pool-api 2.0.0",
  "sr-version 2.0.0",
  "substrate-primitives 2.0.0",
  "substrate-rpc-primitives 2.0.0",
@@ -4863,6 +4878,7 @@ dependencies = [
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-transaction-pool-api 2.0.0",
  "sr-primitives 2.0.0",
  "substrate-primitives 2.0.0",
  "substrate-test-runtime 2.0.0",
@@ -4878,12 +4894,15 @@ dependencies = [
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sc-transaction-graph 2.0.0",
+ "sp-blockchain 2.0.0",
+ "sp-transaction-pool-api 2.0.0",
+ "sp-transaction-pool-runtime-api 2.0.0",
  "sr-api 2.0.0",
  "sr-primitives 2.0.0",
+ "substrate-client-api 2.0.0",
  "substrate-keyring 2.0.0",
  "substrate-primitives 2.0.0",
  "substrate-test-runtime-client 2.0.0",
- "substrate-transaction-pool-runtime-api 2.0.0",
 ]
 
 [[package]]
@@ -5226,6 +5245,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "sp-transaction-pool-api"
+version = "2.0.0"
+dependencies = [
+ "derive_more 0.15.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-primitives 2.0.0",
+ "substrate-primitives 2.0.0",
+]
+
+[[package]]
+name = "sp-transaction-pool-runtime-api"
+version = "2.0.0"
+dependencies = [
+ "sr-api 2.0.0",
+ "sr-primitives 2.0.0",
+ "substrate-primitives 2.0.0",
+]
+
+[[package]]
 name = "spin"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5524,6 +5565,7 @@ dependencies = [
  "parking_lot 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sc-transaction-pool 2.0.0",
  "sp-blockchain 2.0.0",
+ "sp-transaction-pool-api 2.0.0",
  "sr-primitives 2.0.0",
  "substrate-block-builder 2.0.0",
  "substrate-client 2.0.0",
@@ -5688,6 +5730,7 @@ dependencies = [
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-blockchain 2.0.0",
+ "sp-transaction-pool-api 2.0.0",
  "sr-api 2.0.0",
  "sr-primitives 2.0.0",
  "sr-std 2.0.0",
@@ -6067,11 +6110,12 @@ dependencies = [
  "jsonrpc-derive 14.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "sc-transaction-graph 2.0.0",
  "sc-transaction-pool 2.0.0",
  "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-blockchain 2.0.0",
+ "sp-transaction-pool-api 2.0.0",
  "sr-primitives 2.0.0",
+ "substrate-client 2.0.0",
  "substrate-primitives 2.0.0",
  "substrate-test-runtime-client 2.0.0",
 ]
@@ -6182,6 +6226,7 @@ dependencies = [
  "parking_lot 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "sc-transaction-pool 2.0.0",
+ "sp-transaction-pool-api 2.0.0",
  "sr-api 2.0.0",
  "sr-primitives 2.0.0",
  "substrate-client-api 2.0.0",
@@ -6305,6 +6350,7 @@ dependencies = [
  "sc-transaction-pool 2.0.0",
  "serde_json 1.0.41 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-blockchain 2.0.0",
+ "sp-transaction-pool-api 2.0.0",
  "sr-api 2.0.0",
  "sr-io 2.0.0",
  "sr-primitives 2.0.0",
@@ -6430,6 +6476,8 @@ dependencies = [
  "serde_json 1.0.41 (registry+https://github.com/rust-lang/crates.io-index)",
  "slog 2.5.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-blockchain 2.0.0",
+ "sp-transaction-pool-api 2.0.0",
+ "sp-transaction-pool-runtime-api 2.0.0",
  "sr-api 2.0.0",
  "sr-io 2.0.0",
  "sr-primitives 2.0.0",
@@ -6453,7 +6501,6 @@ dependencies = [
  "substrate-telemetry 2.0.0",
  "substrate-test-runtime-client 2.0.0",
  "substrate-tracing 2.0.0",
- "substrate-transaction-pool-runtime-api 2.0.0",
  "sysinfo 0.9.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "target_info 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio 0.1.22 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -6471,6 +6518,7 @@ dependencies = [
  "futures 0.1.29 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-transaction-pool-api 2.0.0",
  "sr-primitives 2.0.0",
  "substrate-client 2.0.0",
  "substrate-consensus-common 2.0.0",
@@ -6586,6 +6634,7 @@ dependencies = [
  "pallet-timestamp 2.0.0",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-transaction-pool-runtime-api 2.0.0",
  "sr-api 2.0.0",
  "sr-io 2.0.0",
  "sr-primitives 2.0.0",
@@ -6605,7 +6654,6 @@ dependencies = [
  "substrate-session 2.0.0",
  "substrate-state-machine 2.0.0",
  "substrate-test-runtime-client 2.0.0",
- "substrate-transaction-pool-runtime-api 2.0.0",
  "substrate-trie 2.0.0",
  "substrate-wasm-builder-runner 1.0.4",
  "trie-db 0.16.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -6615,6 +6663,7 @@ dependencies = [
 name = "substrate-test-runtime-client"
 version = "2.0.0"
 dependencies = [
+ "futures 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-scale-codec 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-blockchain 2.0.0",
  "sr-primitives 2.0.0",
@@ -6640,15 +6689,6 @@ dependencies = [
  "substrate-telemetry 2.0.0",
  "tracing 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing-core 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "substrate-transaction-pool-runtime-api"
-version = "2.0.0"
-dependencies = [
- "sr-api 2.0.0",
- "sr-primitives 2.0.0",
- "substrate-primitives 2.0.0",
 ]
 
 [[package]]
@@ -8044,6 +8084,7 @@ dependencies = [
 "checksum cuckoofilter 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)" = "8dd43f7cfaffe0a386636a10baea2ee05cc50df3b77bea4a456c9572a939bf1f"
 "checksum curve25519-dalek 1.2.3 (registry+https://github.com/rust-lang/crates.io-index)" = "8b7dcd30ba50cdf88b55b033456138b7c0ac4afdc436d82e1b79f370f24cc66d"
 "checksum data-encoding 2.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "f4f47ca1860a761136924ddd2422ba77b2ea54fe8cc75b9040804a0d9d32ad97"
+"checksum derive_more 0.15.0 (registry+https://github.com/rust-lang/crates.io-index)" = "7a141330240c921ec6d074a3e188a7c7ef95668bb95e7d44fa0e5778ec2a7afe"
 "checksum derive_more 0.99.2 (registry+https://github.com/rust-lang/crates.io-index)" = "2159be042979966de68315bce7034bb000c775f22e3e834e1c52ff78f041cae8"
 "checksum difference 2.0.0 (registry+https://github.com/rust-lang/crates.io-index)" = "524cbf6897b527295dff137cec09ecf3a05f4fddffd7dfcd1585403449e74198"
 "checksum digest 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)" = "f3d0c8c8752312f9713efd397ff63acb9f85585afbf179282e720e7704954dd5"
