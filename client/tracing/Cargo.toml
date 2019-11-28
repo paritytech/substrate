@@ -13,7 +13,6 @@ serde = "1.0.101"
 serde_json = "1.0.41"
 slog = { version = "2.5.2", features = ["nested-values"] }
 tracing-core = "0.1.7"
-tracing-serde = "0.1.0"
 
 substrate-telemetry = { path = "../telemetry" }
 grafana-data-source = { path = "../grafana-data-source" }

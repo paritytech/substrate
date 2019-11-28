@@ -44,13 +44,14 @@ use std::time::{Duration, Instant};
 use parking_lot::Mutex;
 use serde::ser::{Serialize, Serializer, SerializeMap};
 use slog::{SerdeValue, Value};
-use tracing_core::{event::Event,
-				   field::{Visit, Field},
-				   Level,
-				   metadata::Metadata,
-				   span::{Attributes, Id, Record},
-				   subscriber::Subscriber};
-use tracing_serde::AsSerde;
+use tracing_core::{
+	event::Event,
+	field::{Visit, Field},
+	Level,
+	metadata::Metadata,
+	span::{Attributes, Id, Record},
+	subscriber::Subscriber
+};
 
 use grafana_data_source::{self, record_metrics};
 use substrate_telemetry::{telemetry, SUBSTRATE_INFO};
@@ -105,8 +106,7 @@ impl Visit for Visitor {
 	}
 }
 
-impl Serialize for Visitor
-{
+impl Serialize for Visitor {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 		where
 			S: Serializer,
@@ -138,10 +138,10 @@ impl SerdeValue for Visitor {
 impl Value for Visitor {
 	fn serialize(
 		&self,
-		_record: &::slog::Record,
-		key: ::slog::Key,
+		_record: &slog::Record,
+		key: slog::Key,
 		ser: &mut dyn slog::Serializer,
-	) -> ::slog::Result {
+	) -> slog::Result {
 		ser.emit_serde(key, self)
 	}
 }
@@ -158,7 +158,7 @@ impl ProfilingSubscriber {
 	/// Takes a `Receiver` and a comma separated list of targets,
 	/// either with a level: "pallet=trace"
 	/// or without: "pallet".
-	pub fn new(receiver: TracingReceiver, targets: &String) -> Self {
+	pub fn new(receiver: TracingReceiver, targets: &str) -> Self {
 		let targets: Vec<_> = targets.split(',').map(|s| parse_target(s)).collect();
 		ProfilingSubscriber {
 			next_id: AtomicU64::new(1),
@@ -172,7 +172,7 @@ impl ProfilingSubscriber {
 // Default to TRACE if no level given or unable to parse Level
 // We do not support a global `Level` currently
 fn parse_target(s: &str) -> (String, Level) {
-	match s.find("=") {
+	match s.find('=') {
 		Some(i) => {
 			let target = s[0..i].to_string();
 			if s.len() > i {
@@ -204,7 +204,7 @@ impl Subscriber for ProfilingSubscriber {
 		let mut values = Visitor(Vec::new());
 		attrs.record(&mut values);
 		let span_datum = SpanDatum {
-			id: id,
+			id,
 			name: attrs.metadata().name(),
 			target: attrs.metadata().target(),
 			level: attrs.metadata().level().clone(),
@@ -261,18 +261,22 @@ impl ProfilingSubscriber {
 }
 
 fn print_log(span_datum: SpanDatum) {
-	let mut message = format!(
-		"Tracing: {} {}: {}, line: {}, time: {} ns",
-		span_datum.level,
-		span_datum.target,
-		span_datum.name,
-		span_datum.line,
-		span_datum.overall_time.as_nanos(),
-	);
-	if !span_datum.values.0.is_empty() {
-		message = format!("{}, values: {}", message, span_datum.values);
+	if span_datum.values.0.is_empty() {
+		log::info!("TRACING: {} {}: {}, time: {}",
+			span_datum.level,
+			span_datum.target,
+			span_datum.name,
+			span_datum.overall_time.as_nanos(),
+		);
+	} else {
+		log::info!("TRACING: {} {}: {}, time: {}, {}",
+			span_datum.level,
+			span_datum.target,
+			span_datum.name,
+			span_datum.overall_time.as_nanos(),
+			span_datum.values
+		);
 	}
-	log::info!(target: "substrate_tracing", "{}", message);
 }
 
 fn send_telemetry(span_datum: SpanDatum) {
