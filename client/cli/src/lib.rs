@@ -43,7 +43,7 @@ use primitives::H256;
 
 use std::{
 	io::{Write, Read, Seek, Cursor, stdin, stdout, ErrorKind}, iter, fs::{self, File},
-	net::{Ipv4Addr, SocketAddr}, path::{Path, PathBuf}, str::FromStr,
+	net::{Ipv4Addr, SocketAddr}, path::{Path, PathBuf}, str::FromStr, pin::Pin, task::Poll,
 };
 
 use names::{Generator, Name};
@@ -61,8 +61,7 @@ pub use traits::{GetLogFilter, AugmentClap};
 use app_dirs::{AppInfo, AppDataType};
 use log::info;
 use lazy_static::lazy_static;
-use futures::{Future, FutureExt, TryFutureExt};
-use futures01::{Async, Future as _};
+use futures::Future;
 use substrate_telemetry::TelemetryEndpoints;
 
 /// default sub directory to store network config
@@ -389,23 +388,21 @@ impl<'a> ParseAndPrepareExport<'a> {
 		// Note: while we would like the user to handle the exit themselves, we handle it here
 		// for backwards compatibility reasons.
 		let (exit_send, exit_recv) = std::sync::mpsc::channel();
-		let exit = exit.into_exit()
-			.map(|_| Ok::<_, ()>(()))
-			.compat();
+		let exit = exit.into_exit();
 		std::thread::spawn(move || {
-			let _ = exit.wait();
+			futures::executor::block_on(exit);
 			let _ = exit_send.send(());
 		});
 
 		let mut export_fut = builder(config)?.export_blocks(file, from.into(), to.map(Into::into), json);
-		let fut = futures01::future::poll_fn(|| {
+		let fut = futures::future::poll_fn(|cx| {
 			if exit_recv.try_recv().is_ok() {
-				return Ok(Async::Ready(()));
+				return Poll::Ready(Ok(()));
 			}
-			export_fut.poll()
+			Pin::new(&mut export_fut).poll(cx)
 		});
 
-		let mut runtime = tokio::runtime::current_thread::Runtime::new().unwrap();
+		let mut runtime = tokio::runtime::Runtime::new().unwrap();
 		runtime.block_on(fut)?;
 		Ok(())
 	}
@@ -453,23 +450,21 @@ impl<'a> ParseAndPrepareImport<'a> {
 		// Note: while we would like the user to handle the exit themselves, we handle it here
 		// for backwards compatibility reasons.
 		let (exit_send, exit_recv) = std::sync::mpsc::channel();
-		let exit = exit.into_exit()
-			.map(|_| Ok::<_, ()>(()))
-			.compat();
+		let exit = exit.into_exit();
 		std::thread::spawn(move || {
-			let _ = exit.wait();
+			futures::executor::block_on(exit);
 			let _ = exit_send.send(());
 		});
 
 		let mut import_fut = builder(config)?.import_blocks(file);
-		let fut = futures01::future::poll_fn(|| {
+		let fut = futures::future::poll_fn(|cx| {
 			if exit_recv.try_recv().is_ok() {
-				return Ok(Async::Ready(()));
+				return Poll::Ready(Ok(()));
 			}
-			import_fut.poll()
+			Pin::new(&mut import_fut).poll(cx)
 		});
 
-		let mut runtime = tokio::runtime::current_thread::Runtime::new().unwrap();
+		let mut runtime = tokio::runtime::Runtime::new().unwrap();
 		runtime.block_on(fut)?;
 		Ok(())
 	}

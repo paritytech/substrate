@@ -21,4 +21,4 @@ futures-timer = "2.0"
 derive_more = "0.99"
 
 [target.'cfg(not(target_os = "unknown"))'.dependencies]
-async-std = { version = "1.0.1", features = ["unstable"] }
+async-std = { version = "1.2.0", features = ["unstable"] }

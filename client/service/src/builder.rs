@@ -667,7 +667,7 @@ pub trait ServiceBuilderImport {
 	fn import_blocks(
 		self,
 		input: impl Read + Seek + Send + 'static,
-	) -> Box<dyn Future<Item = (), Error = Error> + Send>;
+	) -> Box<dyn futures03::Future<Output = Result<(), Error>> + Send + Unpin>;
 }
 
 /// Implemented on `ServiceBuilder`. Allows exporting blocks once you have given all the required
@@ -683,7 +683,7 @@ pub trait ServiceBuilderExport {
 		from: NumberFor<Self::Block>,
 		to: Option<NumberFor<Self::Block>>,
 		json: bool
-	) -> Box<dyn Future<Item = (), Error = Error>>;
+	) -> Box<dyn futures03::Future<Output = Result<(), Error>> + Unpin>;
 }
 
 /// Implemented on `ServiceBuilder`. Allows reverting the chain once you have given all the
@@ -716,10 +716,10 @@ impl<
 	fn import_blocks(
 		self,
 		input: impl Read + Seek + Send + 'static,
-	) -> Box<dyn Future<Item = (), Error = Error> + Send> {
+	) -> Box<dyn futures03::Future<Output = Result<(), Error>> + Send + Unpin> {
 		let client = self.client;
 		let mut queue = self.import_queue;
-		Box::new(import_blocks!(TBl, client, queue, input).compat())
+		Box::new(import_blocks!(TBl, client, queue, input))
 	}
 }
 
@@ -740,9 +740,9 @@ where
 		from: NumberFor<TBl>,
 		to: Option<NumberFor<TBl>>,
 		json: bool
-	) -> Box<dyn Future<Item = (), Error = Error>> {
+	) -> Box<dyn futures03::Future<Output = Result<(), Error>> + Unpin> {
 		let client = self.client;
-		Box::new(export_blocks!(client, output, from, to, json).compat())
+		Box::new(export_blocks!(client, output, from, to, json))
 	}
 }
 
