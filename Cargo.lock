@@ -3548,6 +3548,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-contracts-benchmark-wasm"
+version = "2.0.0"
+dependencies = [
+ "pallet-contracts 2.0.0",
+ "sr-io 2.0.0",
+ "sr-std 2.0.0",
+ "substrate-primitives 2.0.0",
+ "substrate-runtime-interface 2.0.0",
+ "substrate-wasm-builder-runner 1.0.4",
+]
+
+[[package]]
 name = "pallet-contracts-rpc"
 version = "2.0.0"
 dependencies = [
