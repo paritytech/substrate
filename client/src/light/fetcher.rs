@@ -70,7 +70,7 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>> LightDataChecker<E, H, B, S> {
 	) -> ClientResult<Vec<(NumberFor<B>, u32)>>
 		where
 			H: Hasher,
-			H::Out: Ord,
+			H::Out: Ord + codec::Codec,
 	{
 		// since we need roots of all changes tries for the range begin..max
 		// => remote node can't use max block greater that one that we have passed
@@ -148,7 +148,7 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>> LightDataChecker<E, H, B, S> {
 	) -> ClientResult<()>
 		where
 			H: Hasher,
-			H::Out: Ord,
+			H::Out: Ord + codec::Codec,
 	{
 		// all the checks are sharing the same storage
 		let storage = create_proof_check_backend_storage(remote_roots_proof);

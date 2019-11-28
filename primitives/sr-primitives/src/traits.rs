@@ -384,12 +384,6 @@ pub trait Hash: 'static + MaybeSerializeDeserialize + Debug + Clone + Eq + Parti
 
 	/// The Patricia tree root of the given mapping.
 	fn trie_root(input: Vec<(Vec<u8>, Vec<u8>)>) -> Self::Output;
-
-	/// Acquire the global storage root.
-	fn storage_root() -> Self::Output;
-
-	/// Acquire the global storage changes root.
-	fn storage_changes_root(parent_hash: Self::Output) -> Option<Self::Output>;
 }
 
 /// Blake2-256 Hash implementation.
@@ -405,19 +399,11 @@ impl Hash for BlakeTwo256 {
 	}
 
 	fn trie_root(input: Vec<(Vec<u8>, Vec<u8>)>) -> Self::Output {
-		runtime_io::storage::blake2_256_trie_root(input)
+		runtime_io::trie::blake2_256_root(input)
 	}
 
 	fn ordered_trie_root(input: Vec<Vec<u8>>) -> Self::Output {
-		runtime_io::storage::blake2_256_ordered_trie_root(input)
-	}
-
-	fn storage_root() -> Self::Output {
-		runtime_io::storage::root().into()
-	}
-
-	fn storage_changes_root(parent_hash: Self::Output) -> Option<Self::Output> {
-		runtime_io::storage::changes_root(parent_hash.into()).map(Into::into)
+		runtime_io::trie::blake2_256_ordered_root(input)
 	}
 }
 
