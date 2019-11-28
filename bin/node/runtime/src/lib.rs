@@ -724,7 +724,7 @@ mod tests {
 	use system::offchain::{SignAndSubmitTransaction, SubmitSignedTransaction};
 
 	#[test]
-	fn validate_bounds() {
+	fn validate_transaction_submitter_bounds() {
 		fn is_submit_signed_transaction<T>() where
 			T: SubmitSignedTransaction<
 				Runtime,
