@@ -762,7 +762,7 @@ where
 		Some(s) => {
 			if role == service::Roles::AUTHORITY && !cli.unsafe_pruning {
 				return Err(error::Error::Input(
-						"Validators should run with state pruning disabled (i.e. archive). \
+					"Validators should run with state pruning disabled (i.e. archive). \
 					You can ignore this check with `--unsafe-pruning`.".to_string()
 				));
 			}
