@@ -54,7 +54,6 @@ use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_transaction_pool::{TransactionPool, TransactionPoolMaintainer};
 use sc_prometheus::prometheus_gauge;
-
 use sp_blockchain;
 use grafana_data_source::{self, record_metrics};
 
@@ -1115,11 +1114,18 @@ ServiceBuilder<
 				.then(|_| Ok(()))));
 			telemetry
 		});
+<<<<<<< HEAD
 		// prometheus init
 		match config.prometheus_endpoint {
 			None => (),
 			Some(x) => {
 				let _prometheus = sc_prometheus::init_prometheus(x);
+=======
+		match config.prometheus_endpoint {
+			None => (),
+			Some(x) => {
+				let _prometheus = promet::init_prometheus(x);
+>>>>>>> dea83cf58... Refactor rebase master prometheus_v0.3
 			}
 		}
 		// Grafana data source
