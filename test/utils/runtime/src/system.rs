@@ -30,7 +30,7 @@ use sr_primitives::{
 		TransactionValidity, ValidTransaction, InvalidTransaction, TransactionValidityError,
 	},
 };
-use codec::{KeyedVec, Encode};
+use codec::{KeyedVec, Encode, Decode};
 use frame_system::Trait;
 use crate::{
 	AccountId, BlockNumber, Extrinsic, Transfer, H256 as Hash, Block, Header, Digest, AuthorityId
@@ -139,20 +139,26 @@ fn execute_block_with_state_root_handler(
 	});
 
 	let o_new_authorities = <NewAuthorities>::take();
+	let storage_root = Hash::decode(&mut &storage_root()[..])
+		.expect("`storage_root` is a valid hash");
 
 	if let Mode::Overwrite = mode {
-		header.state_root = storage_root().into();
+		header.state_root = storage_root;
 	} else {
 		// check storage root.
-		let storage_root = storage_root().into();
 		info_expect_equal_hash(&storage_root, &header.state_root);
 		assert!(storage_root == header.state_root, "Storage root must match that calculated.");
 	}
 
 	// check digest
 	let digest = &mut header.digest;
-	if let Some(storage_changes_root) = storage_changes_root(header.parent_hash.into()) {
-		digest.push(generic::DigestItem::ChangesTrieRoot(storage_changes_root.into()));
+	if let Some(storage_changes_root) = storage_changes_root(&header.parent_hash.encode()) {
+		digest.push(
+			generic::DigestItem::ChangesTrieRoot(
+				Hash::decode(&mut &storage_changes_root[..])
+					.expect("`storage_changes_root` is a valid hash")
+			)
+		);
 	}
 	if let Some(new_authorities) = o_new_authorities {
 		digest.push(generic::DigestItem::Consensus(*b"aura", new_authorities.encode()));
@@ -226,8 +232,10 @@ pub fn finalize_block() -> Header {
 	let o_new_authorities = <NewAuthorities>::take();
 	// This MUST come after all changes to storage are done. Otherwise we will fail the
 	// “Storage root does not match that calculated” assertion.
-	let storage_root = BlakeTwo256::storage_root();
-	let storage_changes_root = BlakeTwo256::storage_changes_root(parent_hash);
+	let storage_root = Hash::decode(&mut &storage_root()[..])
+		.expect("`storage_root` is a valid hash");
+	let storage_changes_root = storage_changes_root(&parent_hash.encode())
+		.map(|r| Hash::decode(&mut &r[..]).expect("`storage_changes_root` is a valid hash"));
 
 	if let Some(storage_changes_root) = storage_changes_root {
 		digest.push(generic::DigestItem::ChangesTrieRoot(storage_changes_root));

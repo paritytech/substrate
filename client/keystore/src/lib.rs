@@ -317,12 +317,12 @@ impl BareCryptoStore for Store {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use tempdir::TempDir;
+	use tempfile::TempDir;
 	use primitives::{testing::{SR25519}, crypto::{Ss58Codec}};
 
 	#[test]
 	fn basic_store() {
-		let temp_dir = TempDir::new("keystore").unwrap();
+		let temp_dir = TempDir::new().unwrap();
 		let store = Store::open(temp_dir.path(), None).unwrap();
 
 		assert!(store.read().public_keys::<ed25519::AppPublic>().unwrap().is_empty());
@@ -337,7 +337,7 @@ mod tests {
 
 	#[test]
 	fn test_insert_ephemeral_from_seed() {
-		let temp_dir = TempDir::new("keystore").unwrap();
+		let temp_dir = TempDir::new().unwrap();
 		let store = Store::open(temp_dir.path(), None).unwrap();
 
 		let pair: ed25519::AppPair = store
@@ -358,7 +358,7 @@ mod tests {
 	#[test]
 	fn password_being_used() {
 		let password = String::from("password");
-		let temp_dir = TempDir::new("keystore").unwrap();
+		let temp_dir = TempDir::new().unwrap();
 		let store = Store::open(temp_dir.path(), Some(password.clone().into())).unwrap();
 
 		let pair: ed25519::AppPair = store.write().generate().unwrap();
@@ -380,7 +380,7 @@ mod tests {
 
 	#[test]
 	fn public_keys_are_returned() {
-		let temp_dir = TempDir::new("keystore").unwrap();
+		let temp_dir = TempDir::new().unwrap();
 		let store = Store::open(temp_dir.path(), None).unwrap();
 
 		let mut public_keys = Vec::new();
@@ -403,7 +403,7 @@ mod tests {
 
 	#[test]
 	fn store_unknown_and_extract_it() {
-		let temp_dir = TempDir::new("keystore").unwrap();
+		let temp_dir = TempDir::new().unwrap();
 		let store = Store::open(temp_dir.path(), None).unwrap();
 
 		let secret_uri = "//Alice";

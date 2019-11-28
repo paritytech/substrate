@@ -439,7 +439,7 @@ substrate-executor, substrate-finality-grandpa, substrate-keyring, substrate-key
 substrate-network-libp2p, substrate-primitives, substrate-rpc, substrate-rpc-servers,
 substrate-serializer, substrate-service, substrate-service-test, substrate-state-db,
 substrate-state-machine, substrate-telemetry, substrate-test-client,
-substrate-test-runtime, substrate-transaction-graph, substrate-transaction-pool,
+substrate-test-runtime, substrate-transaction-graph, sp-transaction-pool,
 substrate-trie
 * Substrate Runtime
 [source, shell]

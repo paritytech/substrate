@@ -21,16 +21,19 @@ use crate::{storage::{self, unhashed}, hash::{Twox128, StorageHasher}, traits::L
 
 /// Generator for `StorageValue` used by `decl_storage`.
 ///
-/// Value is stored at:
+/// By default value is stored at:
 /// ```nocompile
-/// Twox128(unhashed_key)
+/// Twox128(module_prefix) ++ Twox128(storage_prefix)
 /// ```
 pub trait StorageValue<T: FullCodec> {
 	/// The type that get/take returns.
 	type Query;
 
-	/// Unhashed key used in storage
-	fn unhashed_key() -> &'static [u8];
+	/// Module prefix. Used for generating final key.
+	fn module_prefix() -> &'static [u8];
+
+	/// Storage prefix. Used for generating final key.
+	fn storage_prefix() -> &'static [u8];
 
 	/// Convert an optional value retrieved from storage to the type queried.
 	fn from_optional_value_to_query(v: Option<T>) -> Self::Query;
@@ -39,15 +42,18 @@ pub trait StorageValue<T: FullCodec> {
 	fn from_query_to_optional_value(v: Self::Query) -> Option<T>;
 
 	/// Generate the full key used in top storage.
-	fn storage_value_final_key() -> [u8; 16] {
-		Twox128::hash(Self::unhashed_key())
+	fn storage_value_final_key() -> [u8; 32] {
+		let mut final_key = [0u8; 32];
+		final_key[0..16].copy_from_slice(&Twox128::hash(Self::module_prefix()));
+		final_key[16..32].copy_from_slice(&Twox128::hash(Self::storage_prefix()));
+		final_key
 	}
 }
 
 impl<T: FullCodec, G: StorageValue<T>> storage::StorageValue<T> for G {
 	type Query = G::Query;
 
-	fn hashed_key() -> [u8; 16] {
+	fn hashed_key() -> [u8; 32] {
 		Self::storage_value_final_key()
 	}
 
