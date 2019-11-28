@@ -37,7 +37,7 @@ rpassword = "4.0.1"
 substrate-tracing = { package = "substrate-tracing", path = "../tracing" }
 
 [dev-dependencies]
-tempdir = "0.3.7"
+tempfile = "3.1.0"
 
 [features]
 wasmtime = [
