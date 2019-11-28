@@ -28,8 +28,8 @@ use sr_primitives::traits::Member;
 use sr_primitives::transaction_validity::{
 	TransactionTag as Tag,
 };
+use txpool_api::error;
 
-use crate::error;
 use crate::future::WaitingTransaction;
 use crate::base_pool::Transaction;
 
@@ -433,6 +433,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 	}
 }
 
+/// Iterator of ready transactions ordered by priority.
 pub struct BestIterator<Hash, Ex> {
 	all: Arc<RwLock<HashMap<Hash, ReadyTx<Hash, Ex>>>>,
 	awaiting: HashMap<Hash, (usize, TransactionRef<Hash, Ex>)>,

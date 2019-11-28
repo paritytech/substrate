@@ -232,6 +232,42 @@ fn blake2_128_should_work(wasm_method: WasmExecutionMethod) {
 
 #[test_case(WasmExecutionMethod::Interpreted)]
 #[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+fn sha2_256_should_work(wasm_method: WasmExecutionMethod) {
+	let mut ext = TestExternalities::default();
+	let mut ext = ext.ext();
+	let test_code = WASM_BINARY;
+	assert_eq!(
+		call_in_wasm(
+			"test_sha2_256",
+			&[0],
+			wasm_method,
+			&mut ext,
+			&test_code[..],
+			8,
+		)
+		.unwrap(),
+		hex!("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+			.to_vec()
+			.encode(),
+	);
+	assert_eq!(
+		call_in_wasm(
+			"test_sha2_256",
+			&b"Hello world!".to_vec().encode(),
+			wasm_method,
+			&mut ext,
+			&test_code[..],
+			8,
+		)
+		.unwrap(),
+		hex!("c0535e4be2b79ffd93291305436bf889314e4a3faec05ecffcbb7df31ad9e51a")
+			.to_vec()
+			.encode(),
+	);
+}
+
+#[test_case(WasmExecutionMethod::Interpreted)]
+#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
 fn twox_256_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();

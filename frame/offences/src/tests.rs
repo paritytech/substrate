@@ -23,6 +23,7 @@ use crate::mock::{
 	Offences, System, Offence, TestEvent, KIND, new_test_ext, with_on_offence_fractions,
 	offence_reports,
 };
+use sr_primitives::Perbill;
 use system::{EventRecord, Phase};
 
 #[test]
@@ -44,38 +45,6 @@ fn should_report_an_authority_and_trigger_on_offence() {
 		// then
 		with_on_offence_fractions(|f| {
 			assert_eq!(f.clone(), vec![Perbill::from_percent(25)]);
-		});
-	});
-}
-
-#[test]
-fn should_calculate_the_fraction_correctly() {
-	new_test_ext().execute_with(|| {
-		// given
-		let time_slot = 42;
-		assert_eq!(offence_reports(KIND, time_slot), vec![]);
-		let offence1 = Offence {
-			validator_set_count: 5,
-			time_slot,
-			offenders: vec![5],
-		};
-		let offence2 = Offence {
-			validator_set_count: 5,
-			time_slot,
-			offenders: vec![4],
-		};
-
-		// when
-		Offences::report_offence(vec![], offence1);
-		with_on_offence_fractions(|f| {
-			assert_eq!(f.clone(), vec![Perbill::from_percent(25)]);
-		});
-
-		Offences::report_offence(vec![], offence2);
-
-		// then
-		with_on_offence_fractions(|f| {
-			assert_eq!(f.clone(), vec![Perbill::from_percent(15), Perbill::from_percent(45)]);
 		});
 	});
 }

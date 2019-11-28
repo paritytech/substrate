@@ -425,7 +425,7 @@ impl_wasm_host_interface! {
 			context.read_memory_into(parent_hash_data, &mut parent_hash[..])
 				.map_err(|_| "Invalid attempt to get parent_hash in ext_storage_changes_root")?;
 
-			if let Some(r) = runtime_io::storage::changes_root(parent_hash) {
+			if let Some(r) = runtime_io::storage::changes_root(&parent_hash) {
 				context.write_memory(result, &r[..])
 					.map_err(|_| "Invalid attempt to set memory in ext_storage_changes_root")?;
 				Ok(1)

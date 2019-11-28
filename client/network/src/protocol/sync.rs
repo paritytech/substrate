@@ -28,7 +28,8 @@
 //!
 
 use blocks::BlockCollection;
-use client_api::{ClientInfo, error::Error as ClientError};
+use client_api::ClientInfo;
+use sp_blockchain::Error as ClientError;
 use consensus::{BlockOrigin, BlockStatus,
 	block_validation::{BlockAnnounceValidator, Validation},
 	import_queue::{IncomingBlock, BlockImportResult, BlockImportError}
@@ -661,6 +662,7 @@ impl<B: BlockT> ChainSync<B> {
 									justification: block_data.block.justification,
 									origin: block_data.origin,
 									allow_missing_state: false,
+									import_existing: false,
 								}
 							}).collect()
 					}
@@ -674,6 +676,7 @@ impl<B: BlockT> ChainSync<B> {
 								justification: b.justification,
 								origin: Some(who.clone()),
 								allow_missing_state: true,
+								import_existing: false,
 							}
 						}).collect()
 					}

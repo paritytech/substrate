@@ -20,7 +20,7 @@
 
 use crate::mock::*;
 use crate::{elect, PhragmenResult};
-use support::assert_eq_uvec;
+use substrate_test_utils::assert_eq_uvec;
 use sr_primitives::Perbill;
 
 #[test]

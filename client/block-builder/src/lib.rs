@@ -17,7 +17,7 @@
 //! Substrate block builder
 //!
 //! This crate provides the [`BlockBuilder`] utility and the corresponding runtime api
-//! [`BlockBuilder`](api::BlockBuilder).
+//! [`BlockBuilder`](api::BlockBuilder).Error
 //!
 //! The block builder utility is used in the node as an abstraction over the runtime api to
 //! initialize a block, to push extrinsics and to finalize a block.
@@ -31,42 +31,15 @@ use sr_primitives::{
 	traits::{
 		Header as HeaderT, Hash, Block as BlockT, HashFor, ProvideRuntimeApi, ApiRef, DigestFor,
 		NumberFor, One,
-	},
-	transaction_validity::TransactionValidityError,
+	}
 };
-
+use sp_blockchain::{ApplyExtrinsicFailed, Error};
 use primitives::ExecutionContext;
 use state_machine::StorageProof;
 use sr_api::{Core, ApiExt, ApiErrorFor};
 
-#[allow(deprecated)]
-use runtime_api::compatability_v3;
-
 pub use runtime_api::BlockBuilder as BlockBuilderApi;
 
-/// Error when the runtime failed to apply an extrinsic.
-pub enum ApplyExtrinsicFailed {
-	/// The transaction cannot be included into the current block.
-	///
-	/// This doesn't necessary mean that the transaction itself is invalid, but it might be just
-	/// unappliable onto the current block.
-	Validity(TransactionValidityError),
-	/// This is used for miscelanious errors that can be represented by string and not handleable.
-	///
-	/// This will become obsolete with complete migration to v4 APIs.
-	Msg(String),
-}
-
-#[allow(deprecated)]
-impl From<compatability_v3::ApplyError> for ApplyExtrinsicFailed {
-	fn from(e: compatability_v3::ApplyError) -> Self {
-		use self::compatability_v3::ApplyError::*;
-		match e {
-			Validity(tx_validity) => Self::Validity(tx_validity),
-			e => Self::Msg(format!("Apply extrinsic failed: {:?}", e)),
-		}
-	}
-}
 
 /// Utility for building new (valid) blocks from a stream of extrinsics.
 pub struct BlockBuilder<'a, Block: BlockT, A: ProvideRuntimeApi> {
@@ -81,7 +54,7 @@ where
 	Block: BlockT,
 	A: ProvideRuntimeApi + 'a,
 	A::Api: BlockBuilderApi<Block>,
-	ApiErrorFor<A, Block>: From<ApplyExtrinsicFailed>,
+	ApiErrorFor<A, Block>: From<Error>,
 {
 	/// Create a new instance of builder based on the given `parent_hash` and `parent_number`.
 	///
@@ -149,7 +122,7 @@ where
 						extrinsics.push(xt);
 						Ok(())
 					}
-					Err(e) => Err(ApplyExtrinsicFailed::from(e))?,
+					Err(e) => Err(ApplyExtrinsicFailed::from(e).into())?,
 				}
 			})
 		} else {
@@ -163,7 +136,7 @@ where
 						extrinsics.push(xt);
 						Ok(())
 					}
-					Err(tx_validity) => Err(ApplyExtrinsicFailed::Validity(tx_validity))?,
+					Err(tx_validity) => Err(ApplyExtrinsicFailed::Validity(tx_validity).into())?,
 				}
 			})
 		}

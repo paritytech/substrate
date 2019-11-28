@@ -26,8 +26,8 @@ async fn randomness() {
 		let random = rand::thread_rng().gen_range(0.0, 1000.0);
 
 		record_metrics!(
-			"random data" => random,
-			"random^2" => random * random
+			"random data".to_owned() => random,
+			"random^2".to_owned() => random * random
 		);
 	}
 }

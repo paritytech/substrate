@@ -41,7 +41,7 @@ use std::{time::Duration, cell::RefCell};
 
 type Item = DigestItem<Hash>;
 
-type Error = client::error::Error;
+type Error = sp_blockchain::Error;
 
 type TestClient = client::Client<
 	test_client::Backend,
@@ -579,6 +579,7 @@ fn propose_and_import_block(
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::LongestChain,
 			allow_missing_state: false,
+			import_existing: false,
 		},
 		Default::default(),
 	).unwrap();

@@ -5,7 +5,6 @@ use std::time::Duration;
 use substrate_client::LongestChain;
 use runtime::{self, GenesisConfig, opaque::Block, RuntimeApi};
 use substrate_service::{error::{Error as ServiceError}, AbstractService, Configuration, ServiceBuilder};
-use transaction_pool::{self, txpool::{Pool as TransactionPool}};
 use inherents::InherentDataProviders;
 use network::{construct_simple_protocol};
 use substrate_executor::native_executor_instance;
@@ -41,9 +40,13 @@ macro_rules! new_full_start {
 			.with_select_chain(|_config, backend| {
 				Ok(substrate_client::LongestChain::new(backend.clone()))
 			})?
-			.with_transaction_pool(|config, client|
-				Ok(transaction_pool::txpool::Pool::new(config, transaction_pool::FullChainApi::new(client)))
-			)?
+			.with_transaction_pool(|config, client, _fetcher| {
+				let pool_api = txpool::FullChainApi::new(client.clone());
+				let pool = txpool::BasicPool::new(config, pool_api);
+				let maintainer = txpool::FullBasicPoolMaintainer::new(pool.pool().clone(), client);
+				let maintainable_pool = txpool_api::MaintainableTransactionPool::new(pool, maintainer);
+				Ok(maintainable_pool)
+			})?
 			.with_import_queue(|_config, client, mut select_chain, transaction_pool| {
 				let select_chain = select_chain.take()
 					.ok_or_else(|| substrate_service::Error::SelectChainRequired)?;
@@ -191,9 +194,15 @@ pub fn new_light<C: Send + Default + 'static>(config: Configuration<C, GenesisCo
 		.with_select_chain(|_config, backend| {
 			Ok(LongestChain::new(backend.clone()))
 		})?
-		.with_transaction_pool(|config, client|
-			Ok(TransactionPool::new(config, transaction_pool::FullChainApi::new(client)))
-		)?
+		.with_transaction_pool(|config, client, fetcher| {
+			let fetcher = fetcher
+				.ok_or_else(|| "Trying to start light transaction pool without active fetcher")?;
+			let pool_api = txpool::LightChainApi::new(client.clone(), fetcher.clone());
+			let pool = txpool::BasicPool::new(config, pool_api);
+			let maintainer = txpool::LightBasicPoolMaintainer::with_defaults(pool.pool().clone(), client, fetcher);
+			let maintainable_pool = txpool_api::MaintainableTransactionPool::new(pool, maintainer);
+			Ok(maintainable_pool)
+		})?
 		.with_import_queue_and_fprb(|_config, client, backend, fetcher, _select_chain, _tx_pool| {
 			let fetch_checker = fetcher
 				.map(|fetcher| fetcher.checker().clone())

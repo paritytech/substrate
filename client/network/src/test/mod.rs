@@ -27,12 +27,13 @@ use std::sync::Arc;
 use crate::config::build_multiaddr;
 use log::trace;
 use crate::chain::FinalityProofProvider;
+use sp_blockchain::{
+	Result as ClientResult, well_known_cache_keys::{self, Id as CacheKeyId},
+};
 use client_api::{
 	ClientInfo, BlockchainEvents, BlockImportNotification,
 	FinalityNotifications, ImportNotifications,
 	FinalityNotification,
-	error::Result as ClientResult,
-	well_known_cache_keys::{self, Id as CacheKeyId},
 	backend::{AuxStore, Backend, Finalizer}
 };
 use block_builder::BlockBuilder;
@@ -98,6 +99,7 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::LongestChain,
 			allow_missing_state: false,
+			import_existing: false,
 		}, maybe_keys))
 	}
 }

@@ -668,13 +668,17 @@ impl<T: Trait> Module<T> {
 			}
 		}
 
-		let storage_root = T::Hashing::storage_root();
-		let storage_changes_root = T::Hashing::storage_changes_root(parent_hash);
+		let storage_root = T::Hash::decode(&mut &runtime_io::storage::root()[..])
+			.expect("Node is configured to use the same hash; qed");
+		let storage_changes_root = runtime_io::storage::changes_root(&parent_hash.encode());
 
 		// we can't compute changes trie root earlier && put it to the Digest
 		// because it will include all currently existing temporaries.
 		if let Some(storage_changes_root) = storage_changes_root {
-			let item = generic::DigestItem::ChangesTrieRoot(storage_changes_root);
+			let item = generic::DigestItem::ChangesTrieRoot(
+				T::Hash::decode(&mut &storage_changes_root[..])
+					.expect("Node is configured to use the same hash; qed")
+			);
 			digest.push(item);
 		}
 
@@ -1413,7 +1417,7 @@ mod tests {
 	fn signed_ext_check_weight_works_operational_tx() {
 		new_test_ext().execute_with(|| {
 			let normal = DispatchInfo { weight: 100, ..Default::default() };
-			let op = DispatchInfo { weight: 100, class: DispatchClass::Operational };
+			let op = DispatchInfo { weight: 100, class: DispatchClass::Operational, pays_fee: true };
 			let len = 0_usize;
 			let normal_limit = normal_weight_limit();
 
@@ -1435,8 +1439,8 @@ mod tests {
 	#[test]
 	fn signed_ext_check_weight_priority_works() {
 		new_test_ext().execute_with(|| {
-			let normal = DispatchInfo { weight: 100, class: DispatchClass::Normal };
-			let op = DispatchInfo { weight: 100, class: DispatchClass::Operational };
+			let normal = DispatchInfo { weight: 100, class: DispatchClass::Normal, pays_fee: true };
+			let op = DispatchInfo { weight: 100, class: DispatchClass::Operational, pays_fee: true };
 			let len = 0_usize;
 
 			let priority = CheckWeight::<Test>(PhantomData)
@@ -1469,7 +1473,7 @@ mod tests {
 			reset_check_weight(normal, normal_limit + 1, true);
 
 			// Operational ones don't have this limit.
-			let op = DispatchInfo { weight: 0, class: DispatchClass::Operational };
+			let op = DispatchInfo { weight: 0, class: DispatchClass::Operational, pays_fee: true };
 			reset_check_weight(op, normal_limit, false);
 			reset_check_weight(op, normal_limit + 100, false);
 			reset_check_weight(op, 1024, false);
@@ -1496,7 +1500,7 @@ mod tests {
 	#[test]
 	fn signed_ext_check_era_should_change_longevity() {
 		new_test_ext().execute_with(|| {
-			let normal = DispatchInfo { weight: 100, class: DispatchClass::Normal };
+			let normal = DispatchInfo { weight: 100, class: DispatchClass::Normal, pays_fee: true };
 			let len = 0_usize;
 			let ext = (
 				CheckWeight::<Test>(PhantomData),

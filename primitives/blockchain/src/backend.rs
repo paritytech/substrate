@@ -22,9 +22,9 @@ use sr_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use sr_primitives::generic::BlockId;
 use sr_primitives::Justification;
 use log::warn;
-use parking_lot::Mutex;
+use parking_lot::RwLock;
 
-use header_metadata::HeaderMetadata;
+use crate::header_metadata::HeaderMetadata;
 
 use crate::error::{Error, Result};
 
@@ -109,7 +109,7 @@ pub trait Backend<Block: BlockT>: HeaderBackend<Block> + HeaderMetadata<Block, E
 		&self,
 		target_hash: Block::Hash,
 		maybe_max_number: Option<NumberFor<Block>>,
-		import_lock: &Mutex<()>,
+		import_lock: &RwLock<()>,
 	) -> Result<Option<Block::Hash>> {
 		let target_header = {
 			match self.header(BlockId::Hash(target_hash))? {
@@ -130,7 +130,7 @@ pub trait Backend<Block: BlockT>: HeaderBackend<Block> + HeaderMetadata<Block, E
 			// ensure no blocks are imported during this code block.
 			// an import could trigger a reorg which could change the canonical chain.
 			// we depend on the canonical chain staying the same during this code block.
-			let _import_guard = import_lock.lock();
+			let _import_guard = import_lock.read();
 
 			let info = self.info();
 
@@ -262,7 +262,7 @@ pub enum BlockStatus {
 /// A list of all well known keys in the blockchain cache.
 pub mod well_known_cache_keys {
 	/// The type representing cache keys.
-	pub type Id = consensus::import_queue::CacheKeyId;
+	pub type Id = sp_consensus::import_queue::CacheKeyId;
 
 	/// A list of authorities.
 	pub const AUTHORITIES: Id = *b"auth";

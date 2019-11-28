@@ -25,6 +25,7 @@ use trie::{
 	TrieMut, MemoryDB, child_trie_root, default_child_trie_root, TrieConfiguration,
 	trie_types::{TrieDBMut, Layout},
 };
+use codec::{Encode, Codec};
 
 /// A state backend is used to read state data and can have changes committed
 /// to it.
@@ -95,7 +96,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	/// Calculate the child storage root, with given delta over what is already stored in
 	/// the backend, and produce a "transaction" that can be used to commit. The second argument
 	/// is true if child storage root equals default storage root.
-	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (Vec<u8>, bool, Self::Transaction)
+	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (H::Out, bool, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		H::Out: Ord;
@@ -134,7 +135,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 		I1: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		I2i: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		I2: IntoIterator<Item=(Vec<u8>, I2i)>,
-		<H as Hasher>::Out: Ord,
+		H::Out: Ord + Encode,
 	{
 		let mut txs: Self::Transaction = Default::default();
 		let mut child_roots: Vec<_> = Default::default();
@@ -146,7 +147,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 			if empty {
 				child_roots.push((storage_key, None));
 			} else {
-				child_roots.push((storage_key, Some(child_root)));
+				child_roots.push((storage_key, Some(child_root.encode())));
 			}
 		}
 		let (root, parent_txs) = self.storage_root(
@@ -190,7 +191,7 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 		(*self).storage_root(delta)
 	}
 
-	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (Vec<u8>, bool, Self::Transaction)
+	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (H::Out, bool, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		H::Out: Ord,
@@ -287,7 +288,7 @@ impl<H: Hasher> PartialEq for InMemory<H> {
 	}
 }
 
-impl<H: Hasher> InMemory<H> {
+impl<H: Hasher> InMemory<H> where H::Out: Codec {
 	/// Copy the state, with applied updates
 	pub fn update(&self, changes: <Self as Backend<H>>::Transaction) -> Self {
 		let mut inner: HashMap<_, _> = self.inner.clone();
@@ -362,7 +363,7 @@ impl<H: Hasher> InMemory<H> {
 	}
 }
 
-impl<H: Hasher> Backend<H> for InMemory<H> {
+impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 	type Error = Void;
 	type Transaction = Vec<(Option<Vec<u8>>, Vec<u8>, Option<Vec<u8>>)>;
 	type TrieBackendStorage = MemoryDB<H>;
@@ -418,7 +419,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 		(root, full_transaction)
 	}
 
-	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (Vec<u8>, bool, Self::Transaction)
+	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (H::Out, bool, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		H::Out: Ord
