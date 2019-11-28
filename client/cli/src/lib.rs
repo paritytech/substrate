@@ -738,7 +738,8 @@ fn fill_config_keystore_password<C, G, E>(
 	Ok(())
 }
 
-fn fill_shared_config<C, G, E>(config: &mut Configuration<C, G, E>, cli: &SharedParams, role: service::Roles)
+/// Put common CLI params into `config` object.
+pub fn fill_shared_config<C, G, E>(config: &mut Configuration<C, G, E>, cli: &SharedParams, role: service::Roles)
 	-> error::Result<()>
 where
 	C: Default,

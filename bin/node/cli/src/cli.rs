@@ -25,7 +25,6 @@ use substrate_cli::{display_role, parse_and_prepare, AugmentClap, GetLogFilter, 
 use crate::{service, ChainSpec, load_spec};
 use crate::factory_impl::FactoryState;
 use transaction_factory::RuntimeAdapter;
-use client::ExecutionStrategies;
 
 /// Custom subcommands.
 #[derive(Clone, Debug, StructOpt)]
@@ -81,16 +80,6 @@ pub struct FactoryCmd {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
-
-	/// The means of execution used when calling into the runtime while importing blocks.
-	#[structopt(
-		long = "execution",
-		value_name = "STRATEGY",
-		possible_values = &ExecutionStrategyParam::variants(),
-		case_insensitive = true,
-		default_value = "NativeElseWasm"
-	)]
-	pub execution: ExecutionStrategyParam,
 }
 
 impl AugmentClap for FactoryCmd {
@@ -147,12 +136,8 @@ pub fn run<I, T, E>(args: I, exit: E, version: substrate_cli::VersionInfo) -> er
 				&cli_args.shared_params,
 				&version,
 			)?;
-			config.execution_strategies = ExecutionStrategies {
-				importing: cli_args.execution.into(),
-				block_construction: cli_args.execution.into(),
-				other: cli_args.execution.into(),
-				..Default::default()
-			};
+
+			substrate_cli::fill_shared_config(&mut config, &cli_args.shared_params, ServiceRoles::FULL)?;
 
 			match ChainSpec::from(config.chain_spec.id()) {
 				Some(ref c) if c == &ChainSpec::Development || c == &ChainSpec::LocalTestnet => {},
