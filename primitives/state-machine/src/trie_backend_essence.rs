@@ -27,6 +27,7 @@ use trie::{Trie, MemoryDB, PrefixedMemoryDB, DBValue,
 use trie::trie_types::{TrieDB, TrieError, Layout};
 use crate::backend::Consolidate;
 use primitives::storage::ChildInfo;
+use codec::Encode;
 
 /// Patricia trie-based storage trait.
 pub trait Storage<H: Hasher>: Send + Sync {
@@ -40,7 +41,7 @@ pub struct TrieBackendEssence<S: TrieBackendStorage<H>, H: Hasher> {
 	root: H::Out,
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> {
+impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out: Encode {
 	/// Create new trie-based backend.
 	pub fn new(storage: S, root: H::Out) -> Self {
 		TrieBackendEssence {
@@ -89,7 +90,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> {
 			root
 		} else {
 			fetched_root = self.storage(storage_key)?
-				.unwrap_or(default_child_trie_root::<Layout<H>>(storage_key));
+				.unwrap_or(default_child_trie_root::<Layout<H>>(storage_key).encode());
 			&fetched_root
 		};
 
@@ -117,7 +118,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> {
 			root
 		} else {
 			fetched_root = match self.storage(storage_key) {
-				Ok(v) => v.unwrap_or(default_child_trie_root::<Layout<H>>(storage_key)),
+				Ok(v) => v.unwrap_or(default_child_trie_root::<Layout<H>>(storage_key).encode()),
 				Err(e) => {
 					debug!(target: "trie", "Error while iterating child storage: {}", e);
 					return;
@@ -144,9 +145,14 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> {
 	}
 
 	/// Execute given closure for all keys starting with prefix.
-	pub fn for_child_keys_with_prefix<F: FnMut(&[u8])>(&self, storage_key: &[u8], prefix: &[u8], mut f: F) {
+	pub fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
+		&self,
+		storage_key: &[u8],
+		prefix: &[u8],
+		mut f: F,
+	) {
 		let root_vec = match self.storage(storage_key) {
-			Ok(v) => v.unwrap_or(default_child_trie_root::<Layout<H>>(storage_key)),
+			Ok(v) => v.unwrap_or(default_child_trie_root::<Layout<H>>(storage_key).encode()),
 			Err(e) => {
 				debug!(target: "trie", "Error while iterating child storage: {}", e);
 				return;

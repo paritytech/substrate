@@ -200,7 +200,7 @@ impl<B: BlockT> StateBackend<Blake2Hasher> for RefTrackingState<B> {
 		storage_key: &[u8],
 		child_info: ChildInfo,
 		delta: I,
-	) -> (Vec<u8>, bool, Self::Transaction)
+	) -> (H256, bool, Self::Transaction)
 		where
 			I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 	{
@@ -224,7 +224,9 @@ impl<B: BlockT> StateBackend<Blake2Hasher> for RefTrackingState<B> {
 		self.state.child_keys(storage_key, child_info, prefix)
 	}
 
-	fn as_trie_backend(&mut self) -> Option<&state_machine::TrieBackend<Self::TrieBackendStorage, Blake2Hasher>> {
+	fn as_trie_backend(
+		&mut self,
+	) -> Option<&state_machine::TrieBackend<Self::TrieBackendStorage, Blake2Hasher>> {
 		self.state.as_trie_backend()
 	}
 }

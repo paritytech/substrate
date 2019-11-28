@@ -25,6 +25,7 @@ use trie::{
 	TrieMut, MemoryDB, child_trie_root, default_child_trie_root, TrieConfiguration,
 	trie_types::{TrieDBMut, Layout},
 };
+use codec::{Encode, Codec};
 use primitives::storage::{ChildInfo, OwnedChildInfo};
 
 pub(crate) type StorageTuple = (
@@ -132,7 +133,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 		storage_key: &[u8],
 		child_info: ChildInfo,
 		delta: I,
-	) -> (Vec<u8>, bool, Self::Transaction)
+	) -> (H::Out, bool, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		H::Out: Ord;
@@ -176,7 +177,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 		I1: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		I2i: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		I2: IntoIterator<Item=(Vec<u8>, I2i, OwnedChildInfo)>,
-		<H as Hasher>::Out: Ord,
+		H::Out: Ord + Encode,
 	{
 		let mut txs: Self::Transaction = Default::default();
 		let mut child_roots: Vec<_> = Default::default();
@@ -188,7 +189,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 			if empty {
 				child_roots.push((storage_key, None));
 			} else {
-				child_roots.push((storage_key, Some(child_root)));
+				child_roots.push((storage_key, Some(child_root.encode())));
 			}
 		}
 		let (root, parent_txs) = self.storage_root(
@@ -253,7 +254,7 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 		storage_key: &[u8],
 		child_info: ChildInfo,
 		delta: I,
-	) -> (Vec<u8>, bool, Self::Transaction)
+	) -> (H::Out, bool, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		H::Out: Ord,
@@ -353,7 +354,7 @@ impl<H: Hasher> PartialEq for InMemory<H> {
 	}
 }
 
-impl<H: Hasher> InMemory<H> {
+impl<H: Hasher> InMemory<H> where H::Out: Codec {
 	/// Copy the state, with applied updates
 	pub fn update(&self, changes: <Self as Backend<H>>::Transaction) -> Self {
 		let mut inner: HashMap<_, _> = self.inner.clone();
@@ -432,7 +433,7 @@ impl<H: Hasher> InMemory<H> {
 	}
 }
 
-impl<H: Hasher> Backend<H> for InMemory<H> {
+impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 	type Error = Void;
 	type Transaction = Vec<(
 		Option<(Vec<u8>, OwnedChildInfo)>,
@@ -514,7 +515,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 		storage_key: &[u8],
 		child_info: ChildInfo,
 		delta: I,
-	) -> (Vec<u8>, bool, Self::Transaction)
+	) -> (H::Out, bool, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		H::Out: Ord

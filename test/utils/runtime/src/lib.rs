@@ -478,7 +478,7 @@ cfg_if! {
 				}
 			}
 
-			impl transaction_pool_api::TaggedTransactionQueue<Block> for Runtime {
+			impl txpool_runtime_api::TaggedTransactionQueue<Block> for Runtime {
 				fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 					if let Extrinsic::IncludeData(data) = utx {
 						return Ok(ValidTransaction {
@@ -663,7 +663,7 @@ cfg_if! {
 				}
 			}
 
-			impl transaction_pool_api::TaggedTransactionQueue<Block> for Runtime {
+			impl txpool_runtime_api::TaggedTransactionQueue<Block> for Runtime {
 				fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 					if let Extrinsic::IncludeData(data) = utx {
 						return Ok(ValidTransaction{

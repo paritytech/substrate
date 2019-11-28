@@ -26,9 +26,10 @@ use primitives::{
 		well_known_keys::is_child_storage_key, ChildStorageKey, StorageOverlay,
 		ChildInfo, ChildrenStorageOverlay,
 	},
-	traits::Externalities, Blake2Hasher, hash::H256,
+	traits::Externalities, Blake2Hasher,
 };
 use log::warn;
+use codec::Encode;
 
 /// Simple HashMap-based Externalities impl.
 #[derive(Debug)]
@@ -115,15 +116,15 @@ impl Externalities for BasicExternalities {
 		self.top.get(key).cloned()
 	}
 
-	fn storage_hash(&self, key: &[u8]) -> Option<H256> {
-		self.storage(key).map(|v| Blake2Hasher::hash(&v))
+	fn storage_hash(&self, key: &[u8]) -> Option<Vec<u8>> {
+		self.storage(key).map(|v| Blake2Hasher::hash(&v).encode())
 	}
 
 	fn original_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
 		self.storage(key)
 	}
 
-	fn original_storage_hash(&self, key: &[u8]) -> Option<H256> {
+	fn original_storage_hash(&self, key: &[u8]) -> Option<Vec<u8>> {
 		self.storage_hash(key)
 	}
 
@@ -141,8 +142,8 @@ impl Externalities for BasicExternalities {
 		storage_key: ChildStorageKey,
 		child_info: ChildInfo,
 		key: &[u8],
-	) -> Option<H256> {
-		self.child_storage(storage_key, child_info, key).map(|v| Blake2Hasher::hash(&v))
+	) -> Option<Vec<u8>> {
+		self.child_storage(storage_key, child_info, key).map(|v| Blake2Hasher::hash(&v).encode())
 	}
 
 	fn original_child_storage_hash(
@@ -150,7 +151,7 @@ impl Externalities for BasicExternalities {
 		storage_key: ChildStorageKey,
 		child_info: ChildInfo,
 		key: &[u8],
-	) -> Option<H256> {
+	) -> Option<Vec<u8>> {
 		self.child_storage_hash(storage_key, child_info, key)
 	}
 
@@ -224,7 +225,7 @@ impl Externalities for BasicExternalities {
 
 	fn chain_id(&self) -> u64 { 42 }
 
-	fn storage_root(&mut self) -> H256 {
+	fn storage_root(&mut self) -> Vec<u8> {
 		let mut top = self.top.clone();
 		let keys: Vec<_> = self.children.keys().map(|k| k.to_vec()).collect();
 		// Single child trie implementation currently allows using the same child
@@ -243,7 +244,7 @@ impl Externalities for BasicExternalities {
 			}
 		}
 
-		Layout::<Blake2Hasher>::trie_root(self.top.clone())
+		Layout::<Blake2Hasher>::trie_root(self.top.clone()).as_ref().into()
 	}
 
 	fn child_storage_root(
@@ -257,10 +258,10 @@ impl Externalities for BasicExternalities {
 				.child_storage_root(storage_key.as_ref(), child.1.as_ref(), delta).0
 		} else {
 			default_child_trie_root::<Layout<Blake2Hasher>>(storage_key.as_ref())
-		}
+		}.encode()
 	}
 
-	fn storage_changes_root(&mut self, _parent: H256) -> Result<Option<H256>, ()> {
+	fn storage_changes_root(&mut self, _parent: &[u8]) -> Result<Option<Vec<u8>>, ()> {
 		Ok(None)
 	}
 }
@@ -275,7 +276,7 @@ impl externalities::ExtensionStore for BasicExternalities {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use primitives::{H256, map};
+	use primitives::map;
 	use primitives::storage::well_known_keys::CODE;
 	use hex_literal::hex;
 
@@ -289,7 +290,7 @@ mod tests {
 		ext.set_storage(b"dogglesworth".to_vec(), b"cat".to_vec());
 		const ROOT: [u8; 32] = hex!("39245109cef3758c2eed2ccba8d9b370a917850af3824bc8348d505df2c298fa");
 
-		assert_eq!(ext.storage_root(), H256::from(ROOT));
+		assert_eq!(&ext.storage_root()[..], &ROOT);
 	}
 
 	#[test]

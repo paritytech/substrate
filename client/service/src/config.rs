@@ -22,7 +22,7 @@ pub use network::config::{ExtTransport, NetworkConfiguration, Roles};
 pub use substrate_executor::WasmExecutionMethod;
 
 use std::{path::PathBuf, net::SocketAddr, sync::Arc};
-use transaction_pool;
+pub use txpool::txpool::Options as TransactionPoolOptions;
 use chain_spec::{ChainSpec, RuntimeGenesis, Extension, NoExtension};
 use primitives::crypto::Protected;
 use target_info::Target;
@@ -40,7 +40,7 @@ pub struct Configuration<C, G, E = NoExtension> {
 	/// Node roles.
 	pub roles: Roles,
 	/// Extrinsic pool configuration.
-	pub transaction_pool: transaction_pool::txpool::Options,
+	pub transaction_pool: TransactionPoolOptions,
 	/// Network configuration.
 	pub network: NetworkConfiguration,
 	/// Path to the base configuration directory.

@@ -22,7 +22,9 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 
 use primitives::storage::{ChildInfo, OwnedChildInfo};
-use state_machine::{Backend as StateBackend, TrieBackend, backend::InMemory as InMemoryState, ChangesTrieTransaction};
+use state_machine::{
+	Backend as StateBackend, TrieBackend, backend::InMemory as InMemoryState, ChangesTrieTransaction
+};
 use primitives::offchain::storage::InMemOffchainStorage;
 use sr_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
 use sr_primitives::traits::{Block as BlockT, NumberFor, Zero, Header};
@@ -341,7 +343,7 @@ impl<H: Hasher> std::fmt::Debug for GenesisOrUnavailableState<H> {
 
 impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 	where
-		H::Out: Ord,
+		H::Out: Ord + codec::Codec,
 {
 	type Error = ClientError;
 	type Transaction = ();
@@ -425,7 +427,7 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 		storage_key: &[u8],
 		child_info: ChildInfo,
 		delta: I,
-	) -> (Vec<u8>, bool, Self::Transaction)
+	) -> (H::Out, bool, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
@@ -434,7 +436,7 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 				let (root, is_equal, _) = state.child_storage_root(storage_key, child_info, delta);
 				(root, is_equal, ())
 			},
-			GenesisOrUnavailableState::Unavailable => (H::Out::default().as_ref().to_vec(), true, ()),
+			GenesisOrUnavailableState::Unavailable => (H::Out::default(), true, ()),
 		}
 	}
 

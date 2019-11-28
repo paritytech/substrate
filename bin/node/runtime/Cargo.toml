@@ -27,7 +27,7 @@ sr-primitives = { path = "../../../primitives/sr-primitives", default-features =
 sr-staking-primitives = { path = "../../../primitives/sr-staking-primitives", default-features = false }
 substrate-keyring = { path = "../../../primitives/keyring", optional = true }
 substrate-session = { path = "../../../primitives/session", default-features = false }
-tx-pool-api = { package = "substrate-transaction-pool-runtime-api", path = "../../../primitives/transaction-pool/runtime-api", default-features = false }
+txpool-runtime-api = { package = "sp-transaction-pool-runtime-api", path = "../../../primitives/transaction-pool/runtime-api", default-features = false }
 version = { package = "sr-version", path = "../../../primitives/sr-version", default-features = false }
 
 # frame dependencies
@@ -116,7 +116,7 @@ std = [
 	"transaction-payment-rpc-runtime-api/std",
 	"transaction-payment/std",
 	"treasury/std",
-	"tx-pool-api/std",
+	"txpool-runtime-api/std",
 	"utility/std",
 	"version/std",
 ]

@@ -659,6 +659,7 @@ pub mod tests {
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::LongestChain,
 			allow_missing_state: true,
+			import_existing: false,
 		};
 		do_import_block::<_, _, _, TestJustification>(
 			&client,

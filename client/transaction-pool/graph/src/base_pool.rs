@@ -34,8 +34,8 @@ use sr_primitives::transaction_validity::{
 	TransactionLongevity as Longevity,
 	TransactionPriority as Priority,
 };
+use txpool_api::{error, PoolStatus, InPoolTransaction};
 
-use crate::error;
 use crate::future::{FutureTransactions, WaitingTransaction};
 use crate::ready::ReadyTransactions;
 
@@ -104,10 +104,62 @@ pub struct Transaction<Hash, Extrinsic> {
 	pub propagate: bool,
 }
 
-impl<Hash, Extrinsic> Transaction<Hash, Extrinsic> {
-	/// Returns `true` if the transaction should be propagated to other peers.
-	pub fn is_propagateable(&self) -> bool {
+impl<Hash, Extrinsic> AsRef<Extrinsic> for Transaction<Hash, Extrinsic> {
+	fn as_ref(&self) -> &Extrinsic {
+		&self.data
+	}
+}
+
+impl<Hash, Extrinsic> InPoolTransaction for Transaction<Hash, Extrinsic> {
+	type Transaction = Extrinsic;
+	type Hash = Hash;
+
+	fn data(&self) -> &Extrinsic {
+		&self.data
+	}
+
+	fn hash(&self) -> &Hash {
+		&self.hash
+	}
+
+	fn priority(&self) -> &Priority {
+		&self.priority
+	}
+
+	fn longevity(&self) ->&Longevity {
+		&self.valid_till
+	}
+
+	fn requires(&self) -> &[Tag] {
+		&self.requires
+	}
+
+	fn provides(&self) -> &[Tag] {
+		&self.provides
+	}
+
+	fn is_propagateable(&self) -> bool {
 		self.propagate
+	}
+}
+
+impl<Hash: Clone, Extrinsic: Clone> Transaction<Hash, Extrinsic> {
+	/// Explicit transaction clone.
+	///
+	/// Transaction should be cloned only if absolutely necessary && we want
+	/// every reason to be commented. That's why we `Transaction` is not `Clone`,
+	/// but there's explicit `duplicate` method.
+	pub fn duplicate(&self) -> Self {
+		Transaction {
+			data: self.data.clone(),
+			bytes: self.bytes.clone(),
+			hash: self.hash.clone(),
+			priority: self.priority.clone(),
+			valid_till: self.valid_till.clone(),
+			requires: self.requires.clone(),
+			provides: self.provides.clone(),
+			propagate: self.propagate,
+		}
 	}
 }
 
@@ -159,6 +211,7 @@ const RECENTLY_PRUNED_TAGS: usize = 2;
 /// required tags.
 #[derive(Debug)]
 pub struct BasePool<Hash: hash::Hash + Eq, Ex> {
+	reject_future_transactions: bool,
 	future: FutureTransactions<Hash, Ex>,
 	ready: ReadyTransactions<Hash, Ex>,
 	/// Store recently pruned tags (for last two invocations).
@@ -169,18 +222,37 @@ pub struct BasePool<Hash: hash::Hash + Eq, Ex> {
 	recently_pruned_index: usize,
 }
 
-impl<Hash: hash::Hash + Eq, Ex> Default for BasePool<Hash, Ex> {
+impl<Hash: hash::Hash + Member + Serialize, Ex: std::fmt::Debug> Default for BasePool<Hash, Ex> {
 	fn default() -> Self {
+		Self::new(false)
+	}
+}
+
+impl<Hash: hash::Hash + Member + Serialize, Ex: std::fmt::Debug> BasePool<Hash, Ex> {
+	/// Create new pool given reject_future_transactions flag.
+	pub fn new(reject_future_transactions: bool) -> Self {
 		BasePool {
+			reject_future_transactions,
 			future: Default::default(),
 			ready: Default::default(),
 			recently_pruned: Default::default(),
 			recently_pruned_index: 0,
 		}
 	}
-}
 
-impl<Hash: hash::Hash + Member + Serialize, Ex: ::std::fmt::Debug> BasePool<Hash, Ex> {
+	/// Temporary enables future transactions, runs closure and then restores
+	/// `reject_future_transactions` flag back to previous value.
+	///
+	/// The closure accepts the mutable reference to the pool and original value
+	/// of the `reject_future_transactions` flag.
+	pub(crate) fn with_futures_enabled<T>(&mut self, closure: impl FnOnce(&mut Self, bool) -> T) -> T {
+		let previous = self.reject_future_transactions;
+		self.reject_future_transactions = false;
+		let return_value = closure(self, previous);
+		self.reject_future_transactions = previous;
+		return_value
+	}
+
 	/// Imports transaction to the pool.
 	///
 	/// The pool consists of two parts: Future and Ready.
@@ -206,6 +278,10 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: ::std::fmt::Debug> BasePool<Hash
 
 		// If all tags are not satisfied import to future.
 		if !tx.is_ready() {
+			if self.reject_future_transactions {
+				return Err(error::Error::RejectedFutureTransaction);
+			}
+
 			let hash = tx.transaction.hash.clone();
 			self.future.import(tx);
 			return Ok(Imported::Future { hash });
@@ -370,6 +446,11 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: ::std::fmt::Debug> BasePool<Hash
 		removed
 	}
 
+	/// Removes and returns all transactions from the future queue.
+	pub fn clear_future(&mut self) -> Vec<Arc<Transaction<Hash, Ex>>> {
+		self.future.clear()
+	}
+
 	/// Prunes transactions that provide given list of tags.
 	///
 	/// This will cause all transactions that provide these tags to be removed from the pool,
@@ -385,7 +466,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: ::std::fmt::Debug> BasePool<Hash
 
 		for tag in tags {
 			// make sure to promote any future transactions that could be unlocked
-			to_import.append(&mut self.future.satisfy_tags(::std::iter::once(&tag)));
+			to_import.append(&mut self.future.satisfy_tags(std::iter::once(&tag)));
 			// and actually prune transactions in ready queue
 			pruned.append(&mut self.ready.prune_tags(tag.clone()));
 			// store the tags for next submission
@@ -413,33 +494,13 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: ::std::fmt::Debug> BasePool<Hash
 	}
 
 	/// Get pool status.
-	pub fn status(&self) -> Status {
-		Status {
+	pub fn status(&self) -> PoolStatus {
+		PoolStatus {
 			ready: self.ready.len(),
 			ready_bytes: self.ready.bytes(),
 			future: self.future.len(),
 			future_bytes: self.future.bytes(),
 		}
-	}
-}
-
-/// Pool status
-#[derive(Debug)]
-pub struct Status {
-	/// Number of transactions in the ready queue.
-	pub ready: usize,
-	/// Sum of bytes of ready transaction encodings.
-	pub ready_bytes: usize,
-	/// Number of transactions in the future queue.
-	pub future: usize,
-	/// Sum of bytes of ready transaction encodings.
-	pub future_bytes: usize,
-}
-
-impl Status {
-	/// Returns true if the are no transactions in the pool.
-	pub fn is_empty(&self) -> bool {
-		self.ready == 0 && self.future == 0
 	}
 }
 
@@ -971,5 +1032,86 @@ requires: [03,02], provides: [04], data: [4]}".to_owned()
 				provides: vec![vec![4]],
 				propagate: false,
 		}.is_propagateable(), false);
+	}
+
+	#[test]
+	fn should_reject_future_transactions() {
+		// given
+		let mut pool = pool();
+
+		// when
+		pool.reject_future_transactions = true;
+
+		// then
+		let err = pool.import(Transaction {
+			data: vec![5u8],
+			bytes: 1,
+			hash: 5,
+			priority: 5u64,
+			valid_till: 64u64,
+			requires: vec![vec![0]],
+			provides: vec![],
+			propagate: true,
+		});
+
+		if let Err(error::Error::RejectedFutureTransaction) = err {
+		} else {
+			assert!(false, "Invalid error kind: {:?}", err);
+		}
+	}
+
+	#[test]
+	fn should_clear_future_queue() {
+		// given
+		let mut pool = pool();
+
+		// when
+		pool.import(Transaction {
+			data: vec![5u8],
+			bytes: 1,
+			hash: 5,
+			priority: 5u64,
+			valid_till: 64u64,
+			requires: vec![vec![0]],
+			provides: vec![],
+			propagate: true,
+		}).unwrap();
+
+		// then
+		assert_eq!(pool.future.len(), 1);
+
+		// and then when
+		assert_eq!(pool.clear_future().len(), 1);
+
+		// then
+		assert_eq!(pool.future.len(), 0);
+	}
+
+	#[test]
+	fn should_accept_future_transactions_when_explcitly_asked_to() {
+		// given
+		let mut pool = pool();
+		pool.reject_future_transactions = true;
+
+		// when
+		let flag_value = pool.with_futures_enabled(|pool, flag| {
+			pool.import(Transaction {
+				data: vec![5u8],
+				bytes: 1,
+				hash: 5,
+				priority: 5u64,
+				valid_till: 64u64,
+				requires: vec![vec![0]],
+				provides: vec![],
+				propagate: true,
+			}).unwrap();
+
+			flag
+		});
+
+		// then
+		assert_eq!(flag_value, true);
+		assert_eq!(pool.reject_future_transactions, true);
+		assert_eq!(pool.future.len(), 1);
 	}
 }

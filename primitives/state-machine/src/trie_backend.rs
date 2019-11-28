@@ -23,13 +23,14 @@ use trie::trie_types::{TrieDB, TrieError, Layout};
 use crate::trie_backend_essence::{TrieBackendEssence, TrieBackendStorage, Ephemeral};
 use crate::Backend;
 use primitives::storage::ChildInfo;
+use codec::{Codec, Decode};
 
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
 pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher> {
 	essence: TrieBackendEssence<S, H>,
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> {
+impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> where H::Out: Codec {
 	/// Create new trie-based backend.
 	pub fn new(storage: S, root: H::Out) -> Self {
 		TrieBackend {
@@ -65,7 +66,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> std::fmt::Debug for TrieBackend<S, H> 
 }
 
 impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
-	H::Out: Ord,
+	H::Out: Ord + Codec,
 {
 	type Error = String;
 	type Transaction = S::Overlay;
@@ -181,16 +182,17 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		storage_key: &[u8],
 		child_info: ChildInfo,
 		delta: I,
-	) -> (Vec<u8>, bool, Self::Transaction)
+	) -> (H::Out, bool, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
-		H::Out: Ord
+		H::Out: Ord,
 	{
 		let default_root = default_child_trie_root::<Layout<H>>(storage_key);
 
 		let mut write_overlay = S::Overlay::default();
 		let mut root = match self.storage(storage_key) {
-			Ok(value) => value.unwrap_or(default_root.clone()),
+			Ok(value) =>
+				value.and_then(|r| Decode::decode(&mut &r[..]).ok()).unwrap_or(default_root.clone()),
 			Err(e) => {
 				warn!(target: "trie", "Failed to read child storage root: {}", e);
 				default_root.clone()
@@ -203,11 +205,11 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 				&mut write_overlay,
 			);
 
-			match child_delta_trie_root::<Layout<H>, _, _, _, _>(
+			match child_delta_trie_root::<Layout<H>, _, _, _, _, _>(
 				storage_key,
 				child_info.keyspace(),
 				&mut eph,
-				root.clone(),
+				root,
 				delta
 			) {
 				Ok(ret) => root = ret,

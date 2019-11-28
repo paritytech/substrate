@@ -18,7 +18,7 @@
 
 use std::sync::Arc;
 use parking_lot::RwLock;
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, Codec};
 use log::debug;
 use hash_db::{Hasher, HashDB, EMPTY_PREFIX, Prefix};
 use trie::{
@@ -120,6 +120,7 @@ impl<'a, S, H> ProvingBackendRecorder<'a, S, H>
 	where
 		S: TrieBackendStorage<H>,
 		H: Hasher,
+		H::Out: Codec,
 {
 	/// Produce proof for a key query.
 	pub fn storage(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
@@ -147,6 +148,7 @@ impl<'a, S, H> ProvingBackendRecorder<'a, S, H>
 		key: &[u8]
 	) -> Result<Option<Vec<u8>>, String> {
 		let root = self.storage(storage_key)?
+			.and_then(|r| Decode::decode(&mut &r[..]).ok())
 			.unwrap_or(default_child_trie_root::<Layout<H>>(storage_key));
 
 		let mut read_overlay = S::Overlay::default();
@@ -161,7 +163,7 @@ impl<'a, S, H> ProvingBackendRecorder<'a, S, H>
 			storage_key,
 			child_info.keyspace(),
 			&eph,
-			&root,
+			&root.as_ref(),
 			key,
 			&mut *self.proof_recorder
 		).map_err(map_e)
@@ -202,7 +204,9 @@ pub struct ProofRecorderBackend<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hashe
 	proof_recorder: ProofRecorder<H>,
 }
 
-impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H> {
+impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
+	where H::Out: Codec
+{
 	/// Create new proving backend.
 	pub fn new(backend: &'a TrieBackend<S, H>) -> Self {
 		let proof_recorder = Default::default();
@@ -257,7 +261,7 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 	where
 		S: 'a + TrieBackendStorage<H>,
 		H: 'a + Hasher,
-		H::Out: Ord,
+		H::Out: Ord + Codec,
 {
 	type Error = String;
 	type Transaction = S::Overlay;
@@ -331,7 +335,7 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		storage_key: &[u8],
 		child_info: ChildInfo,
 		delta: I,
-	) -> (Vec<u8>, bool, Self::Transaction)
+	) -> (H::Out, bool, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		H::Out: Ord
@@ -347,6 +351,7 @@ pub fn create_proof_check_backend<H>(
 ) -> Result<TrieBackend<MemoryDB<H>, H>, Box<dyn Error>>
 where
 	H: Hasher,
+	H::Out: Codec,
 {
 	let db = create_proof_check_backend_storage(proof);
 
