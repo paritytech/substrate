@@ -6,9 +6,14 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
+erased-serde = "0.3.9"
 log = { version = "0.4.8" }
 parking_lot = "0.9.0"
+serde = "1"
+serde_json = "1"
+slog = { version = "2.5.2", features = ["nested-values"] }
 tracing-core = "0.1.7"
+tracing-serde = "0.1.0"
 
 substrate-telemetry = { path = "../telemetry" }
 grafana-data-source = { path = "../grafana-data-source" }
