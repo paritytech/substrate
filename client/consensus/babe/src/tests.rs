@@ -104,7 +104,7 @@ impl DummyProposer {
 		).unwrap();
 
 		let mut block = match block_builder.bake().map_err(|e| e.into()) {
-			Ok(b) => b,
+			Ok(b) => b.0,
 			Err(e) => return future::ready(Err(e)),
 		};
 
@@ -325,8 +325,8 @@ impl TestNetFactory for BabeTestNet {
 fn rejects_empty_block() {
 	env_logger::try_init().unwrap();
 	let mut net = BabeTestNet::new(3);
-	let block_builder = |builder: BlockBuilder<_, _>| {
-		builder.bake().unwrap()
+	let block_builder = |builder: BlockBuilder<_, _, _>| {
+		builder.bake().unwrap().0
 	};
 	net.mut_peers(|peer| {
 		peer[0].generate_blocks(1, BlockOrigin::NetworkInitialSync, block_builder);

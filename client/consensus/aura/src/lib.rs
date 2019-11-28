@@ -757,9 +757,9 @@ mod tests {
 			let r = self.1.new_block(digests).unwrap().bake().map_err(|e| e.into());
 
 			future::ready(r.map(|b| Proposal {
-				block: b,
-				proof: None,
-				storage_changes: Default::default(),
+				block: b.0,
+				proof: b.2,
+				storage_changes: b.1,
 			}))
 		}
 	}

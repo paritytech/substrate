@@ -33,29 +33,28 @@ use sr_primitives::{
 
 use primitives::ExecutionContext;
 
-use state_machine::StorageProof;
-
-use sr_api::{Core, ApiExt, ApiErrorFor, ApiRef, ProvideRuntimeApi};
+use sr_api::{Core, ApiExt, ApiErrorFor, ApiRef, ProvideRuntimeApi, StorageChanges, StorageProof};
 
 pub use runtime_api::BlockBuilder as BlockBuilderApi;
 
-/// Error when the runtime failed to apply an extrinsic.
-pub struct ApplyExtrinsicFailed(pub sr_primitives::ApplyError);
+use client_api::{error::Error, backend};
 
 /// Utility for building new (valid) blocks from a stream of extrinsics.
-pub struct BlockBuilder<'a, Block: BlockT, A: ProvideRuntimeApi<Block>> {
-	header: Block::Header,
+pub struct BlockBuilder<'a, Block: BlockT, A: ProvideRuntimeApi<Block>, B> {
 	extrinsics: Vec<Block::Extrinsic>,
 	api: ApiRef<'a, A::Api>,
 	block_id: BlockId<Block>,
+	parent_hash: Block::Hash,
+	backend: &'a B,
 }
 
-impl<'a, Block, A> BlockBuilder<'a, Block, A>
+impl<'a, Block, A, B> BlockBuilder<'a, Block, A, B>
 where
 	Block: BlockT,
 	A: ProvideRuntimeApi<Block> + 'a,
-	A::Api: BlockBuilderApi<Block>,
-	ApiErrorFor<A, Block>: From<ApplyExtrinsicFailed>,
+	A::Api: BlockBuilderApi<Block, Error = Error> +
+		ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>,
+	B: backend::Backend<Block>,
 {
 	/// Create a new instance of builder based on the given `parent_hash` and `parent_number`.
 	///
@@ -68,6 +67,7 @@ where
 		parent_number: NumberFor<Block>,
 		proof_recording: bool,
 		inherent_digests: DigestFor<Block>,
+		backend: &'a B,
 	) -> Result<Self, ApiErrorFor<A, Block>> {
 		let header = <<Block as BlockT>::Header as HeaderT>::new(
 			parent_number + One::one(),
@@ -90,10 +90,11 @@ where
 		)?;
 
 		Ok(Self {
-			header,
+			parent_hash,
 			extrinsics: Vec::new(),
 			api,
 			block_id,
+			backend,
 		})
 	}
 
@@ -115,44 +116,49 @@ where
 					Ok(())
 				}
 				Err(e) => {
-					Err(ApplyExtrinsicFailed(e))?
+					Err(Error::ApplyExtrinsicFailed(e))?
 				}
 			}
 		})
 	}
 
-	/// Consume the builder to return a valid `Block` containing all pushed extrinsics.
-	pub fn bake(mut self) -> Result<Block, ApiErrorFor<A, Block>> {
-		self.bake_impl()?;
-		Ok(<Block as BlockT>::new(self.header, self.extrinsics))
-	}
-
-	fn bake_impl(&mut self) -> Result<(), ApiErrorFor<A, Block>> {
-		self.header = self.api.finalize_block_with_context(
+	/// Consume the builder to "bake" a valid `Block` containing all pushed extrinsics.
+	///
+	/// Returns the build `Block`, the changes to the storage and an optional `StorageProof`.
+	/// The storage proof will be `Some(_)` when proof recording was enabled.
+	pub fn bake(mut self) -> Result<
+		(
+			Block,
+			StorageChanges<backend::StateBackendFor<B, Block>, Block>,
+			Option<StorageProof>
+		),
+		ApiErrorFor<A, Block>
+	> {
+		let header = self.api.finalize_block_with_context(
 			&self.block_id, ExecutionContext::BlockConstruction
 		)?;
 
 		debug_assert_eq!(
-			self.header.extrinsics_root().clone(),
+			header.extrinsics_root().clone(),
 			HashFor::<Block>::ordered_trie_root(
 				self.extrinsics.iter().map(Encode::encode).collect(),
 			),
 		);
 
-		Ok(())
-	}
-
-	/// Consume the builder to return a valid `Block` containing all pushed extrinsics
-	/// and the generated proof.
-	///
-	/// The proof will be `Some(_)`, if proof recording was enabled while creating
-	/// the block builder.
-	pub fn bake_and_extract_proof(mut self)
-		-> Result<(Block, Option<StorageProof>), ApiErrorFor<A, Block>>
-	{
-		self.bake_impl()?;
-
 		let proof = self.api.extract_proof();
-		Ok((<Block as BlockT>::new(self.header, self.extrinsics), proof))
+
+		let state = self.backend.state_at(self.block_id)?;
+		let changes_trie_storage = self.backend.changes_trie_storage();
+		let parent_hash = self.parent_hash;
+
+		// The unsafe is required because the consume requires that we drop/consume the inner api
+		// (what we do here).
+		let storage_changes = unsafe {
+			self.api.consume_inner(|a|
+				a.into_storage_changes(&state, changes_trie_storage, parent_hash)
+			)
+		};
+
+		Ok((<Block as BlockT>::new(header, self.extrinsics), storage_changes?, proof))
 	}
 }

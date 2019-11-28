@@ -278,7 +278,7 @@ impl<'a, T> rstd::ops::DerefMut for ApiRef<'a, T> {
 }
 
 /// Something that provides a runtime api.
-#[cfg(any(feature = "std"))]
+#[cfg(feature = "std")]
 pub trait ProvideRuntimeApi<Block: BlockT> {
 	/// The concrete type that provides the api.
 	type Api: ApiExt<Block>;

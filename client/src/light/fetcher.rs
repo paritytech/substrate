@@ -441,7 +441,7 @@ pub mod tests {
 		let mut remote_client = test_client::new();
 		let mut local_headers_hashes = Vec::new();
 		for i in 0..4 {
-			let block = remote_client.new_block(Default::default()).unwrap().bake().unwrap();
+			let block = remote_client.new_block(Default::default()).unwrap().bake().unwrap().0;
 			remote_client.import(BlockOrigin::Own, block).unwrap();
 			local_headers_hashes.push(
 				remote_client.block_hash(i + 1)

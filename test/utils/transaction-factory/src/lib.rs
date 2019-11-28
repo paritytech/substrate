@@ -28,7 +28,7 @@ use log::info;
 
 use client::Client;
 use block_builder_api::BlockBuilder;
-use sr_api::{ConstructRuntimeApi, ProvideRuntimeApi};
+use sr_api::{ConstructRuntimeApi, ProvideRuntimeApi, ApiExt};
 use consensus_common::{
 	BlockOrigin, BlockImportParams, InherentData, ForkChoiceStrategy, SelectChain
 };
@@ -101,7 +101,7 @@ where
 	Client<Backend, Exec, Block, RtApi>: ProvideRuntimeApi<Block>,
 	<Client<Backend, Exec, Block, RtApi> as ProvideRuntimeApi<Block>>::Api:
 		BlockBuilder<Block, Error = client::error::Error> +
-		sr_api::ApiExt<Block, StateBackend = Backend::State>,
+		ApiExt<Block, StateBackend = Backend::State>,
 	RtApi: ConstructRuntimeApi<Block, Client<Backend, Exec, Block, RtApi>> + Send + Sync,
 	Sc: SelectChain<Block>,
 	RA: RuntimeAdapter<Block = Block>,
@@ -161,7 +161,8 @@ where
 	Client<Backend, Exec, Block, RtApi>: ProvideRuntimeApi<Block>,
 	RtApi: ConstructRuntimeApi<Block, Client<Backend, Exec, Block, RtApi>> + Send + Sync,
 	<Client<Backend, Exec, Block, RtApi> as ProvideRuntimeApi<Block>>::Api:
-		BlockBuilder<Block, Error = client::error::Error>,
+		BlockBuilder<Block, Error = client::error::Error> +
+		ApiExt<Block, StateBackend = Backend::State>,
 	RA: RuntimeAdapter,
 {
 	let mut block = client.new_block(Default::default()).expect("Failed to create new block");
@@ -174,7 +175,7 @@ where
 		block.push(inherent).expect("Failed ...");
 	}
 
-	block.bake().expect("Failed to bake block")
+	block.bake().expect("Failed to bake block").0
 }
 
 fn import_block<Backend, Exec, Block, RtApi>(
@@ -187,7 +188,7 @@ fn import_block<Backend, Exec, Block, RtApi>(
 	Client<Backend, Exec, Block, RtApi>: ProvideRuntimeApi<Block>,
 	<Client<Backend, Exec, Block, RtApi> as ProvideRuntimeApi<Block>>::Api:
 		sr_api::Core<Block, Error = client::error::Error> +
-		sr_api::ApiExt<Block, StateBackend = Backend::State>,
+		ApiExt<Block, StateBackend = Backend::State>,
 {
 	let import = BlockImportParams {
 		origin: BlockOrigin::File,

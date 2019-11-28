@@ -175,7 +175,7 @@ fn record_proof_works() {
 		.new_block_at(&block_id, Default::default(), true)
 		.expect("Creates block builder");
 	builder.push(transaction.clone()).unwrap();
-	let (block, proof) = builder.bake_and_extract_proof().expect("Bake block");
+	let (block, _, proof) = builder.bake().expect("Bake block");
 
 	let backend = create_proof_check_backend::<<<Header as HeaderT>::Hashing as HashT>::Hasher>(
 		storage_root,

@@ -432,7 +432,7 @@ mod tests {
 			digest.push(sr_primitives::generic::DigestItem::Other::<H256>(i.to_le_bytes().to_vec()));
 			remote_client.import_justified(
 				BlockOrigin::Own,
-				remote_client.new_block(digest).unwrap().bake().unwrap(),
+				remote_client.new_block(digest).unwrap().bake().unwrap().0,
 				Default::default(),
 			).unwrap();
 		}

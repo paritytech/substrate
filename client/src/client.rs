@@ -664,11 +664,12 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	pub fn new_block(
 		&self,
 		inherent_digests: DigestFor<Block>,
-	) -> error::Result<block_builder::BlockBuilder<Block, Self>> where
+	) -> error::Result<block_builder::BlockBuilder<Block, Self, B>> where
 		E: Clone + Send + Sync,
 		RA: Send + Sync,
 		Self: ProvideRuntimeApi<Block>,
-		<Self as ProvideRuntimeApi<Block>>::Api: BlockBuilderApi<Block, Error = Error>
+		<Self as ProvideRuntimeApi<Block>>::Api: BlockBuilderApi<Block, Error = Error> +
+			ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>
 	{
 		let info = self.info();
 		block_builder::BlockBuilder::new(
@@ -677,6 +678,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			info.chain.best_number,
 			false,
 			inherent_digests,
+			&self.backend,
 		)
 	}
 
@@ -690,11 +692,12 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		parent: &BlockId<Block>,
 		inherent_digests: DigestFor<Block>,
 		enable_proof_recording: bool,
-	) -> error::Result<block_builder::BlockBuilder<Block, Self>> where
+	) -> error::Result<block_builder::BlockBuilder<Block, Self, B>> where
 		E: Clone + Send + Sync,
 		RA: Send + Sync,
 		Self: ProvideRuntimeApi<Block>,
-		<Self as ProvideRuntimeApi<Block>>::Api: BlockBuilderApi<Block, Error = Error>
+		<Self as ProvideRuntimeApi<Block>>::Api: BlockBuilderApi<Block, Error = Error> +
+			ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>
 	{
 		block_builder::BlockBuilder::new(
 			self,
@@ -702,6 +705,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			self.expect_block_number_from_id(parent)?,
 			enable_proof_recording,
 			inherent_digests,
+			&self.backend
 		)
 	}
 
@@ -1837,7 +1841,7 @@ pub(crate) mod tests {
 					nonce: *nonces.entry(from).and_modify(|n| { *n = *n + 1 }).or_default(),
 				}).unwrap();
 			}
-			let block = builder.bake().unwrap();
+			let block = builder.bake().unwrap().0;
 			remote_client.import(BlockOrigin::Own, block).unwrap();
 
 			let header = remote_client.header(&BlockId::Number(i as u64 + 1)).unwrap().unwrap();
@@ -1904,7 +1908,7 @@ pub(crate) mod tests {
 	fn block_builder_works_with_no_transactions() {
 		let mut client = test_client::new();
 
-		let block = client.new_block(Default::default()).unwrap().bake().unwrap();
+		let block = client.new_block(Default::default()).unwrap().bake().unwrap().0;
 
 		client.import(BlockOrigin::Own, block).unwrap();
 
@@ -1924,7 +1928,7 @@ pub(crate) mod tests {
 			nonce: 0,
 		}).unwrap();
 
-		let block = builder.bake().unwrap();
+		let block = builder.bake().unwrap().0;
 		client.import(BlockOrigin::Own, block).unwrap();
 
 		assert_eq!(client.info().chain.best_number, 1);
@@ -1970,7 +1974,7 @@ pub(crate) mod tests {
 			}).is_err()
 		);
 
-		let block = builder.bake().unwrap();
+		let block = builder.bake().unwrap().0;
 		client.import(BlockOrigin::Own, block).unwrap();
 
 		assert_eq!(client.info().chain.best_number, 1);
@@ -2003,7 +2007,7 @@ pub(crate) mod tests {
 
 		let (client, longest_chain_select) = TestClientBuilder::new().build_with_longest_chain();
 
-		let uninserted_block = client.new_block(Default::default()).unwrap().bake().unwrap();
+		let uninserted_block = client.new_block(Default::default()).unwrap().bake().unwrap().0;
 
 		assert_eq!(
 			None,
@@ -2018,11 +2022,11 @@ pub(crate) mod tests {
 		let mut client = test_client::new();
 
 		// G -> A1
-		let a1 = client.new_block(Default::default()).unwrap().bake().unwrap();
+		let a1 = client.new_block(Default::default()).unwrap().bake().unwrap().0;
 		client.import(BlockOrigin::Own, a1.clone()).unwrap();
 
 		// A1 -> A2
-		let a2 = client.new_block(Default::default()).unwrap().bake().unwrap();
+		let a2 = client.new_block(Default::default()).unwrap().bake().unwrap().0;
 		client.import(BlockOrigin::Own, a2.clone()).unwrap();
 		let v: Vec<H256> = Vec::new();
 		assert_eq!(v, client.uncles(a2.hash(), 3).unwrap());
@@ -2038,7 +2042,7 @@ pub(crate) mod tests {
 		let mut client = test_client::new();
 
 		// G -> A1
-		let a1 = client.new_block(Default::default()).unwrap().bake().unwrap();
+		let a1 = client.new_block(Default::default()).unwrap().bake().unwrap().0;
 		client.import(BlockOrigin::Own, a1.clone()).unwrap();
 
 		// A1 -> A2
@@ -2046,7 +2050,7 @@ pub(crate) mod tests {
 			&BlockId::Hash(a1.hash()),
 			Default::default(),
 			false,
-		).unwrap().bake().unwrap();
+		).unwrap().bake().unwrap().0;
 		client.import(BlockOrigin::Own, a2.clone()).unwrap();
 
 		// A2 -> A3
@@ -2054,7 +2058,7 @@ pub(crate) mod tests {
 			&BlockId::Hash(a2.hash()),
 			Default::default(),
 			false,
-		).unwrap().bake().unwrap();
+		).unwrap().bake().unwrap().0;
 		client.import(BlockOrigin::Own, a3.clone()).unwrap();
 
 		// A3 -> A4
@@ -2062,7 +2066,7 @@ pub(crate) mod tests {
 			&BlockId::Hash(a3.hash()),
 			Default::default(),
 			false,
-		).unwrap().bake().unwrap();
+		).unwrap().bake().unwrap().0;
 		client.import(BlockOrigin::Own, a4.clone()).unwrap();
 
 		// A4 -> A5
@@ -2070,7 +2074,7 @@ pub(crate) mod tests {
 			&BlockId::Hash(a4.hash()),
 			Default::default(),
 			false,
-		).unwrap().bake().unwrap();
+		).unwrap().bake().unwrap().0;
 		client.import(BlockOrigin::Own, a5.clone()).unwrap();
 
 		// A1 -> B2
@@ -2086,7 +2090,7 @@ pub(crate) mod tests {
 			amount: 41,
 			nonce: 0,
 		}).unwrap();
-		let b2 = builder.bake().unwrap();
+		let b2 = builder.bake().unwrap().0;
 		client.import(BlockOrigin::Own, b2.clone()).unwrap();
 
 		// B2 -> B3
@@ -2094,7 +2098,7 @@ pub(crate) mod tests {
 			&BlockId::Hash(b2.hash()),
 			Default::default(),
 			false,
-		).unwrap().bake().unwrap();
+		).unwrap().bake().unwrap().0;
 		client.import(BlockOrigin::Own, b3.clone()).unwrap();
 
 		// B3 -> B4
@@ -2102,7 +2106,7 @@ pub(crate) mod tests {
 			&BlockId::Hash(b3.hash()),
 			Default::default(),
 			false,
-		).unwrap().bake().unwrap();
+		).unwrap().bake().unwrap().0;
 		client.import(BlockOrigin::Own, b4.clone()).unwrap();
 
 		// // B2 -> C3
@@ -2118,7 +2122,7 @@ pub(crate) mod tests {
 			amount: 1,
 			nonce: 1,
 		}).unwrap();
-		let c3 = builder.bake().unwrap();
+		let c3 = builder.bake().unwrap().0;
 		client.import(BlockOrigin::Own, c3.clone()).unwrap();
 
 		// A1 -> D2
@@ -2134,7 +2138,7 @@ pub(crate) mod tests {
 			amount: 1,
 			nonce: 0,
 		}).unwrap();
-		let d2 = builder.bake().unwrap();
+		let d2 = builder.bake().unwrap().0;
 		client.import(BlockOrigin::Own, d2.clone()).unwrap();
 
 		let genesis_hash = client.info().chain.genesis_hash;
@@ -2166,11 +2170,11 @@ pub(crate) mod tests {
 		let (mut client, longest_chain_select) = TestClientBuilder::new().build_with_longest_chain();
 
 		// G -> A1
-		let a1 = client.new_block(Default::default()).unwrap().bake().unwrap();
+		let a1 = client.new_block(Default::default()).unwrap().bake().unwrap().0;
 		client.import(BlockOrigin::Own, a1.clone()).unwrap();
 
 		// A1 -> A2
-		let a2 = client.new_block(Default::default()).unwrap().bake().unwrap();
+		let a2 = client.new_block(Default::default()).unwrap().bake().unwrap().0;
 		client.import(BlockOrigin::Own, a2.clone()).unwrap();
 
 		let genesis_hash = client.info().chain.genesis_hash;
@@ -2190,7 +2194,7 @@ pub(crate) mod tests {
 		let (mut client, longest_chain_select) = TestClientBuilder::new().build_with_longest_chain();
 
 		// G -> A1
-		let a1 = client.new_block(Default::default()).unwrap().bake().unwrap();
+		let a1 = client.new_block(Default::default()).unwrap().bake().unwrap().0;
 		client.import(BlockOrigin::Own, a1.clone()).unwrap();
 
 		// A1 -> A2
@@ -2198,7 +2202,7 @@ pub(crate) mod tests {
 			&BlockId::Hash(a1.hash()),
 			Default::default(),
 			false,
-		).unwrap().bake().unwrap();
+		).unwrap().bake().unwrap().0;
 		client.import(BlockOrigin::Own, a2.clone()).unwrap();
 
 		// A2 -> A3
@@ -2206,7 +2210,7 @@ pub(crate) mod tests {
 			&BlockId::Hash(a2.hash()),
 			Default::default(),
 			false,
-		).unwrap().bake().unwrap();
+		).unwrap().bake().unwrap().0;
 		client.import(BlockOrigin::Own, a3.clone()).unwrap();
 
 		// A3 -> A4
@@ -2214,7 +2218,7 @@ pub(crate) mod tests {
 			&BlockId::Hash(a3.hash()),
 			Default::default(),
 			false,
-		).unwrap().bake().unwrap();
+		).unwrap().bake().unwrap().0;
 		client.import(BlockOrigin::Own, a4.clone()).unwrap();
 
 		// A4 -> A5
@@ -2222,7 +2226,7 @@ pub(crate) mod tests {
 			&BlockId::Hash(a4.hash()),
 			Default::default(),
 			false,
-		).unwrap().bake().unwrap();
+		).unwrap().bake().unwrap().0;
 		client.import(BlockOrigin::Own, a5.clone()).unwrap();
 
 		// A1 -> B2
@@ -2238,7 +2242,7 @@ pub(crate) mod tests {
 			amount: 41,
 			nonce: 0,
 		}).unwrap();
-		let b2 = builder.bake().unwrap();
+		let b2 = builder.bake().unwrap().0;
 		client.import(BlockOrigin::Own, b2.clone()).unwrap();
 
 		// B2 -> B3
@@ -2246,7 +2250,7 @@ pub(crate) mod tests {
 			&BlockId::Hash(b2.hash()),
 			Default::default(),
 			false,
-		).unwrap().bake().unwrap();
+		).unwrap().bake().unwrap().0;
 		client.import(BlockOrigin::Own, b3.clone()).unwrap();
 
 		// B3 -> B4
@@ -2254,7 +2258,7 @@ pub(crate) mod tests {
 			&BlockId::Hash(b3.hash()),
 			Default::default(),
 			false,
-		).unwrap().bake().unwrap();
+		).unwrap().bake().unwrap().0;
 		client.import(BlockOrigin::Own, b4.clone()).unwrap();
 
 		// // B2 -> C3
@@ -2270,7 +2274,7 @@ pub(crate) mod tests {
 			amount: 1,
 			nonce: 1,
 		}).unwrap();
-		let c3 = builder.bake().unwrap();
+		let c3 = builder.bake().unwrap().0;
 		client.import(BlockOrigin::Own, c3.clone()).unwrap();
 
 		// A1 -> D2
@@ -2286,7 +2290,7 @@ pub(crate) mod tests {
 			amount: 1,
 			nonce: 0,
 		}).unwrap();
-		let d2 = builder.bake().unwrap();
+		let d2 = builder.bake().unwrap().0;
 		client.import(BlockOrigin::Own, d2.clone()).unwrap();
 
 		assert_eq!(client.info().chain.best_hash, a5.hash());
@@ -2510,11 +2514,11 @@ pub(crate) mod tests {
 		let (mut client, longest_chain_select) = TestClientBuilder::new().build_with_longest_chain();
 
 		// G -> A1
-		let a1 = client.new_block(Default::default()).unwrap().bake().unwrap();
+		let a1 = client.new_block(Default::default()).unwrap().bake().unwrap().0;
 		client.import(BlockOrigin::Own, a1.clone()).unwrap();
 
 		// A1 -> A2
-		let a2 = client.new_block(Default::default()).unwrap().bake().unwrap();
+		let a2 = client.new_block(Default::default()).unwrap().bake().unwrap().0;
 		client.import(BlockOrigin::Own, a2.clone()).unwrap();
 
 		let genesis_hash = client.info().chain.genesis_hash;
@@ -2547,7 +2551,7 @@ pub(crate) mod tests {
 		let mut client = test_client::new();
 
 		// G -> A1
-		let a1 = client.new_block(Default::default()).unwrap().bake().unwrap();
+		let a1 = client.new_block(Default::default()).unwrap().bake().unwrap().0;
 		client.import(BlockOrigin::Own, a1.clone()).unwrap();
 
 		// A1 -> A2
@@ -2555,7 +2559,7 @@ pub(crate) mod tests {
 			&BlockId::Hash(a1.hash()),
 			Default::default(),
 			false,
-		).unwrap().bake().unwrap();
+		).unwrap().bake().unwrap().0;
 		client.import(BlockOrigin::Own, a2.clone()).unwrap();
 
 		// A2 -> A3
@@ -2564,7 +2568,7 @@ pub(crate) mod tests {
 			&BlockId::Hash(a2.hash()),
 			Default::default(),
 			false,
-		).unwrap().bake().unwrap();
+		).unwrap().bake().unwrap().0;
 		client.import_justified(BlockOrigin::Own, a3.clone(), justification.clone()).unwrap();
 
 		assert_eq!(
@@ -2599,14 +2603,14 @@ pub(crate) mod tests {
 			&BlockId::Number(0),
 			Default::default(),
 			false,
-		).unwrap().bake().unwrap();
+		).unwrap().bake().unwrap().0;
 		client.import(BlockOrigin::Own, a1.clone()).unwrap();
 
 		let a2 = client.new_block_at(
 			&BlockId::Hash(a1.hash()),
 			Default::default(),
 			false,
-		).unwrap().bake().unwrap();
+		).unwrap().bake().unwrap().0;
 		client.import(BlockOrigin::Own, a2.clone()).unwrap();
 
 		let mut b1 = client.new_block_at(
@@ -2622,7 +2626,7 @@ pub(crate) mod tests {
 			nonce: 0,
 		}).unwrap();
 		// create but don't import B1 just yet
-		let b1 = b1.bake().unwrap();
+		let b1 = b1.bake().unwrap().0;
 
 		// A2 is the current best since it's the longest chain
 		assert_eq!(
@@ -2657,14 +2661,14 @@ pub(crate) mod tests {
 			&BlockId::Number(0),
 			Default::default(),
 			false,
-		).unwrap().bake().unwrap();
+		).unwrap().bake().unwrap().0;
 		client.import(BlockOrigin::Own, a1.clone()).unwrap();
 
 		let a2 = client.new_block_at(
 			&BlockId::Hash(a1.hash()),
 			Default::default(),
 			false,
-		).unwrap().bake().unwrap();
+		).unwrap().bake().unwrap().0;
 		client.import(BlockOrigin::Own, a2.clone()).unwrap();
 
 		let mut b1 = client.new_block_at(
@@ -2679,14 +2683,14 @@ pub(crate) mod tests {
 			amount: 1,
 			nonce: 0,
 		}).unwrap();
-		let b1 = b1.bake().unwrap();
+		let b1 = b1.bake().unwrap().0;
 		client.import(BlockOrigin::Own, b1.clone()).unwrap();
 
 		let b2 = client.new_block_at(
 			&BlockId::Hash(b1.hash()),
 			Default::default(),
 			false,
-		).unwrap().bake().unwrap();
+		).unwrap().bake().unwrap().0;
 		client.import(BlockOrigin::Own, b2.clone()).unwrap();
 
 		// A2 is the current best since it's the longest chain
@@ -2724,7 +2728,7 @@ pub(crate) mod tests {
 			&BlockId::Hash(b2.hash()),
 			Default::default(),
 			false,
-		).unwrap().bake().unwrap();
+		).unwrap().bake().unwrap().0;
 		client.import(BlockOrigin::Own, b3.clone()).unwrap();
 
 		assert_eq!(
@@ -2767,7 +2771,7 @@ pub(crate) mod tests {
 			amount: 10,
 			nonce: 0,
 		}).unwrap();
-		let a1 = a1.bake().unwrap();
+		let a1 = a1.bake().unwrap().0;
 		client.import(BlockOrigin::Own, a1.clone()).unwrap();
 
 		let mut b1 = client.new_block_at(
@@ -2781,7 +2785,7 @@ pub(crate) mod tests {
 			amount: 50,
 			nonce: 0,
 		}).unwrap();
-		let b1 = b1.bake().unwrap();
+		let b1 = b1.bake().unwrap().0;
 		// Reorg to B1
 		client.import_as_best(BlockOrigin::Own, b1.clone()).unwrap();
 
@@ -2797,7 +2801,7 @@ pub(crate) mod tests {
 			amount: 10,
 			nonce: 1,
 		}).unwrap();
-		let a2 = a2.bake().unwrap();
+		let a2 = a2.bake().unwrap().0;
 		// Re-org to A2
 		client.import_as_best(BlockOrigin::Own, a2).unwrap();
 		assert_eq!(980, current_balance(&client));
@@ -2835,14 +2839,14 @@ pub(crate) mod tests {
 			&BlockId::Number(0),
 			Default::default(),
 			false,
-		).unwrap().bake().unwrap();
+		).unwrap().bake().unwrap().0;
 		client.import(BlockOrigin::Own, a1.clone()).unwrap();
 
 		let a2 = client.new_block_at(
 			&BlockId::Hash(a1.hash()),
 			Default::default(),
 			false,
-		).unwrap().bake().unwrap();
+		).unwrap().bake().unwrap().0;
 		client.import(BlockOrigin::Own, a2.clone()).unwrap();
 
 		let mut b1 = client.new_block_at(&BlockId::Number(0), Default::default(), false).unwrap();
@@ -2854,11 +2858,11 @@ pub(crate) mod tests {
 			amount: 1,
 			nonce: 0,
 		}).unwrap();
-		let b1 = b1.bake().unwrap();
+		let b1 = b1.bake().unwrap().0;
 		client.import(BlockOrigin::Own, b1.clone()).unwrap();
 
 		let b2 = client.new_block_at(&BlockId::Hash(b1.hash()), Default::default(), false)
-			.unwrap().bake().unwrap();
+			.unwrap().bake().unwrap().0;
 		client.import(BlockOrigin::Own, b2.clone()).unwrap();
 
 		// we will finalize A2 which should make it impossible to import a new
@@ -2866,7 +2870,7 @@ pub(crate) mod tests {
 		ClientExt::finalize_block(&client, BlockId::Hash(a2.hash()), None).unwrap();
 
 		let b3 = client.new_block_at(&BlockId::Hash(b2.hash()), Default::default(), false)
-			.unwrap().bake().unwrap();
+			.unwrap().bake().unwrap().0;
 
 		let import_err = client.import(BlockOrigin::Own, b3).err().unwrap();
 		let expected_err = ConsensusError::ClientImport(
@@ -2889,7 +2893,7 @@ pub(crate) mod tests {
 			amount: 2,
 			nonce: 0,
 		}).unwrap();
-		let c1 = c1.bake().unwrap();
+		let c1 = c1.bake().unwrap().0;
 
 		let import_err = client.import(BlockOrigin::Own, c1).err().unwrap();
 		let expected_err = ConsensusError::ClientImport(
@@ -2925,7 +2929,7 @@ pub(crate) mod tests {
 		let mut client = TestClientBuilder::with_backend(backend).build();
 
 		let a1 = client.new_block_at(&BlockId::Number(0), Default::default(), false)
-			.unwrap().bake().unwrap();
+			.unwrap().bake().unwrap().0;
 
 		let mut b1 = client.new_block_at(&BlockId::Number(0), Default::default(), false).unwrap();
 
@@ -2936,7 +2940,7 @@ pub(crate) mod tests {
 			amount: 1,
 			nonce: 0,
 		}).unwrap();
-		let b1 = b1.bake().unwrap();
+		let b1 = b1.bake().unwrap().0;
 
 		let check_block_a1 = BlockCheckParams {
 			hash: a1.hash().clone(),
@@ -2954,7 +2958,7 @@ pub(crate) mod tests {
 		assert_eq!(client.block_status(&BlockId::hash(check_block_a1.hash)).unwrap(), BlockStatus::InChainWithState);
 
 		let a2 = client.new_block_at(&BlockId::Hash(a1.hash()), Default::default(), false)
-			.unwrap().bake().unwrap();
+			.unwrap().bake().unwrap().0;
 		client.import_as_final(BlockOrigin::Own, a2.clone()).unwrap();
 
 		let check_block_a2 = BlockCheckParams {
@@ -2970,7 +2974,7 @@ pub(crate) mod tests {
 		assert_eq!(client.block_status(&BlockId::hash(check_block_a2.hash)).unwrap(), BlockStatus::InChainWithState);
 
 		let a3 = client.new_block_at(&BlockId::Hash(a2.hash()), Default::default(), false)
-			.unwrap().bake().unwrap();
+			.unwrap().bake().unwrap().0;
 
 		client.import_as_final(BlockOrigin::Own, a3.clone()).unwrap();
 		let check_block_a3 = BlockCheckParams {

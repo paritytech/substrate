@@ -17,8 +17,10 @@
 //! Block Builder extensions for tests.
 
 use runtime;
-use sr_api::ProvideRuntimeApi;
+use sr_api::{ApiExt, ProvideRuntimeApi};
 use generic_test_client::client;
+use client_api::backend;
+use sr_primitives::traits::HasherFor;
 
 use block_builder::BlockBuilderApi;
 
@@ -34,9 +36,13 @@ pub trait BlockBuilderExt {
 	) -> Result<(), client::error::Error>;
 }
 
-impl<'a, A> BlockBuilderExt for block_builder::BlockBuilder<'a, runtime::Block, A> where
+impl<'a, A, B> BlockBuilderExt for block_builder::BlockBuilder<'a, runtime::Block, A, B> where
 	A: ProvideRuntimeApi<runtime::Block> + 'a,
-	A::Api: BlockBuilderApi<runtime::Block, Error = client::error::Error>,
+	A::Api: BlockBuilderApi<runtime::Block, Error = client::error::Error> +
+		ApiExt<runtime::Block, StateBackend = backend::StateBackendFor<B, runtime::Block>>,
+	B: backend::Backend<runtime::Block>,
+	// Rust bug: https://github.com/rust-lang/rust/issues/24159
+	backend::StateBackendFor<B, runtime::Block>: state_machine::Backend<HasherFor<runtime::Block>>,
 {
 	fn push_transfer(&mut self, transfer: runtime::Transfer) -> Result<(), client::error::Error> {
 		self.push(transfer.into_signed_tx())

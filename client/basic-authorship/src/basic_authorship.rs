@@ -34,7 +34,7 @@ use sr_primitives::{
 use transaction_pool::txpool::{self, Pool as TransactionPool};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 use block_builder::BlockBuilderApi;
-use sr_api::ProvideRuntimeApi;
+use sr_api::{ProvideRuntimeApi, ApiExt};
 
 /// Proposer factory.
 pub struct ProposerFactory<C, A> where A: txpool::ChainApi {
@@ -54,7 +54,8 @@ impl<B, E, Block, RA, A> consensus_common::Environment<Block> for
 			RA: Send + Sync + 'static,
 			SubstrateClient<B, E, Block, RA>: ProvideRuntimeApi<Block>,
 			<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api:
-				BlockBuilderApi<Block, Error = client::error::Error>,
+				BlockBuilderApi<Block, Error = client::error::Error> +
+				ApiExt<Block, StateBackend = client_api::backend::StateBackendFor<B, Block>>,
 {
 	type Proposer = Proposer<Block, SubstrateClient<B, E, Block, RA>, A>;
 	type Error = error::Error;
@@ -102,7 +103,8 @@ impl<B, E, Block, RA, A> consensus_common::Proposer<Block> for
 			RA: Send + Sync + 'static,
 			SubstrateClient<B, E, Block, RA>: ProvideRuntimeApi<Block>,
 			<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api:
-				BlockBuilderApi<Block, Error = client::error::Error>,
+				BlockBuilderApi<Block, Error = client::error::Error> +
+				ApiExt<Block, StateBackend = client_api::backend::StateBackendFor<B, Block>>,
 {
 	type BackendTransaction = backend::TransactionFor<Block, B>;
 	type Proposal = futures::future::Ready<Result<Proposal<Block, Self::BackendTransaction>, error::Error>>;
@@ -130,7 +132,8 @@ impl<Block, B, E, RA, A> Proposer<Block, SubstrateClient<B, E, Block, RA>, A>	wh
 	RA: Send + Sync + 'static,
 	SubstrateClient<B, E, Block, RA>: ProvideRuntimeApi<Block>,
 	<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api:
-		BlockBuilderApi<Block, Error = client::error::Error>,
+		BlockBuilderApi<Block, Error = client::error::Error> +
+		ApiExt<Block, StateBackend = client_api::backend::StateBackendFor<B, Block>>,
 {
 	fn propose_with(
 		&self,
@@ -171,7 +174,10 @@ impl<Block, B, E, RA, A> Proposer<Block, SubstrateClient<B, E, Block, RA>, A>	wh
 		debug!("Attempting to push transactions from the pool.");
 		for pending in pending_iterator {
 			if (self.now)() > deadline {
-				debug!("Consensus deadline reached when pushing block transactions, proceeding with proposing.");
+				debug!(
+					"Consensus deadline reached when pushing block transactions, \
+					proceeding with proposing."
+				);
 				break;
 			}
 
@@ -206,7 +212,7 @@ impl<Block, B, E, RA, A> Proposer<Block, SubstrateClient<B, E, Block, RA>, A>	wh
 
 		self.transaction_pool.remove_invalid(&unqueue_invalid);
 
-		let (block, proof) = block_builder.bake_and_extract_proof()?;
+		let (block, storage_changes, proof) = block_builder.bake()?;
 
 		info!("Prepared block for proposing at {} [hash: {:?}; parent_hash: {}; extrinsics: [{}]]",
 			block.header().number(),
@@ -231,7 +237,7 @@ impl<Block, B, E, RA, A> Proposer<Block, SubstrateClient<B, E, Block, RA>, A>	wh
 			error!("Failed to evaluate authored block: {:?}", err);
 		}
 
-		Ok(Proposal { block, proof, storage_changes: Default::default() })
+		Ok(Proposal { block, proof, storage_changes })
 	}
 }
 

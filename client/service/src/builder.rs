@@ -1245,7 +1245,7 @@ mod tests {
 		// import the block
 		let mut builder = client.new_block(Default::default()).unwrap();
 		builder.push(transaction.clone()).unwrap();
-		let block = builder.bake().unwrap();
+		let block = builder.bake().unwrap().0;
 		let id = BlockId::hash(block.header().hash());
 		client.import(BlockOrigin::Own, block).unwrap();
 
@@ -1285,7 +1285,7 @@ mod tests {
 		// import the block
 		let mut builder = client.new_block(Default::default()).unwrap();
 		builder.push(transaction.clone()).unwrap();
-		let block = builder.bake().unwrap();
+		let block = builder.bake().unwrap().0;
 		let block1_hash = block.header().hash();
 		let id = BlockId::hash(block1_hash.clone());
 		client.import(BlockOrigin::Own, block).unwrap();
@@ -1309,7 +1309,7 @@ mod tests {
 			Default::default(),
 			false,
 		).unwrap();
-		let block = builder.bake().unwrap();
+		let block = builder.bake().unwrap().0;
 		let id = BlockId::hash(block.header().hash());
 		client.import(BlockOrigin::Own, block).unwrap();
 
