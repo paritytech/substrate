@@ -67,7 +67,7 @@ pub trait Trait: system::Trait {
 
 	/// The proportion of the unpaid reward that gets deducted in the case that either a skeptic
 	/// doesn't vote or someone votes in the wrong way.
-	type WrongSideDeduction: Get<Percent>;
+	type WrongSideDeduction: Get<BalanceOf<Self>>;
 
 	/// The number of times a member may vote the wrong way (or not at all, when they are a skeptic)
 	/// before they become suspended.
@@ -164,8 +164,8 @@ decl_storage! {
 			twox_64_concat(T::AccountId)
 		=> Option<Vote>;
 
-		/// Pending payouts.
-		Payouts: map T::AccountId => Option<Payout<BalanceOf<T>, T::BlockNumber>>;
+		/// Pending payouts; ordered by block number, with the amount that should be paid out.
+		Payouts: map T::AccountId => Vec<(T::BlockNumber, BalanceOf<T>)>;
 
 		/// The ongoing number of losing votes cast by the member.
 		Strikes: map T::AccountId => StrikeCount;
@@ -244,22 +244,20 @@ decl_module! {
 			<Votes<T>>::insert(candidate, voter, vote);
 		}
 
+		/// Transfer the first matured payment and remove it from the records.
 		pub fn payout(origin) {
 			let who = ensure_signed(origin)?;
 
-			if let Some(payout) = <Payouts<T>>::get(&who) {
-				let now = <system::Module<T>>::block_number();
-				let elapsed = now.saturating_sub(payout.begin).min(payout.duration);
-				let progress = Perbill::from_rational_approximation(elapsed, payout.duration);
-				let new_paid = progress * payout.value;
-				let payment = new_paid.saturating_sub(payout.paid);
-				T::Currency::transfer(&Self::payouts(), &who, payment, KeepAlive)?;
-
-				if payout.value == new_paid {
-					// once we've paid everything, remove the record
-					<Payouts<T>>::remove(who);
-				} else {
-					<Payouts<T>>::insert(who, Payout { paid: new_paid, .. payout });
+			let mut payouts = <Payouts<T>>::get(&who);
+			if let Some((when, amount)) = payouts.first() {
+				if when <= <system::Module<T>>::block_number() {
+					T::Currency::transfer(&Self::payouts(), &who, amount, KeepAlive)?;
+					payouts.remove(0);
+					if payouts.is_empty() {
+						<Payouts<T>>::remove(&who);
+					} else {
+						<Payouts<T>>::insert(&who, payouts);
+					}
 				}
 			}
 		}
@@ -430,13 +428,7 @@ impl<T: Trait> Module<T> {
 			let mut bad_vote = |m: &T::AccountId| {
 				// voter voted wrong way (or was just a lazy skeptic) then reduce their payout
 				// and increase their strikes. after MaxStrikes then they go into suspension.
-				if let Some(mut payout) = <Payouts<T>>::get(m) {
-					let rest = payout.value.saturating_sub(payout.paid);
-					let slash = T::WrongSideDeduction::get() * rest;
-					payout.paid += slash;
-					<Payouts<T>>::insert(m, &payout);
-					total_slash += slash;
-				}
+				Self::slash_payout(m, T::WrongSideDeduction::get());
 				let strikes = <Strikes<T>>::mutate(m, |s| { *s += 1; *s });
 				if strikes >= T::MaxStrikes::get() {
 					Self::suspend_member(m);
@@ -520,6 +512,23 @@ impl<T: Trait> Module<T> {
 			for (_, c, _) in candidates.iter() {
 				<Votes<T>>::insert(c, skeptic, Vote::Skeptic);
 			}
+		}
+	}
+
+	/// Attempt to slash the payout of some member. Return the payout block number most in the
+	/// future along with the total amount deducted.
+	fn slash_payout(who: &T::AccountId, value: BalanceOf<T>) -> (T::BlockNumber, BalanceOf<T>) {
+		if let Some(mut payouts) = <Payouts<T>>::get(m) {
+			let mut slashed = <BalanceOf<T>>::zero();
+			let mut dropped = 0;
+			for (when, amount) in payouts.iter() {
+				
+			}
+			let rest = payout.value.saturating_sub(payout.paid);
+			let slash = T::WrongSideDeduction::get() * rest;
+			payout.paid += slash;
+			<Payouts<T>>::insert(m, &payout);
+			total_slash += slash;
 		}
 	}
 
