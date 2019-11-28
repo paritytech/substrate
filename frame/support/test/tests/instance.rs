@@ -21,7 +21,7 @@ use support::{
 	Parameter, traits::Get, parameter_types,
 	metadata::{
 		DecodeDifferent, StorageMetadata, StorageEntryModifier, StorageEntryType, DefaultByteGetter,
-		StorageEntryMetadata, StorageHasher, StorageMapType,
+		StorageEntryMetadata, StorageHasher,
 	},
 	StorageValue, StorageMap, StorageLinkedMap, StorageDoubleMap,
 };
@@ -415,7 +415,7 @@ const EXPECTED_METADATA: StorageMetadata = StorageMetadata {
 					hasher: StorageHasher::Blake2_256,
 					key: DecodeDifferent::Encode("u64"),
 					value: DecodeDifferent::Encode("u64"),
-					kind: StorageMapType::Map,
+					is_linked: false,
 				},
 				default: DecodeDifferent::Encode(
 					DefaultByteGetter(
@@ -433,7 +433,7 @@ const EXPECTED_METADATA: StorageMetadata = StorageMetadata {
 					hasher: StorageHasher::Blake2_256,
 					key: DecodeDifferent::Encode("u64"),
 					value: DecodeDifferent::Encode("Vec<u8>"),
-					kind: StorageMapType::LinkedMap,
+					is_linked: true,
 				},
 				default: DecodeDifferent::Encode(
 					DefaultByteGetter(

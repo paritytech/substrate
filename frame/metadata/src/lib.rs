@@ -278,15 +278,6 @@ pub enum StorageHasher {
 	Twox64Concat,
 }
 
-/// A storage map type.
-#[derive(Clone, PartialEq, Eq, Encode, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Decode, Serialize))]
-pub enum StorageMapType {
-	Map,
-	LinkedMap,
-	PrefixedMap,
-}
-
 /// A storage entry type.
 #[derive(Clone, PartialEq, Eq, Encode, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Decode, Serialize))]
@@ -296,7 +287,7 @@ pub enum StorageEntryType {
 		hasher: StorageHasher,
 		key: DecodeDifferentStr,
 		value: DecodeDifferentStr,
-		kind: StorageMapType,
+		is_linked: bool,
 	},
 	DoubleMap {
 		hasher: StorageHasher,
@@ -351,10 +342,8 @@ pub enum RuntimeMetadata {
 	V6(RuntimeMetadataDeprecated),
 	/// Version 7 for runtime metadata. No longer used.
 	V7(RuntimeMetadataDeprecated),
-	/// Version 8 for runtime metadata. No longer used.
-	V8(RuntimeMetadataDeprecated),
-	/// Version 9 for runtime metadata.
-	V9(RuntimeMetadataV9),
+	/// Version 8 for runtime metadata.
+	V8(RuntimeMetadataV8),
 }
 
 /// Enum that should fail.
@@ -378,12 +367,12 @@ impl Decode for RuntimeMetadataDeprecated {
 /// The metadata of a runtime.
 #[derive(Eq, Encode, PartialEq, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Decode, Serialize))]
-pub struct RuntimeMetadataV9 {
+pub struct RuntimeMetadataV8 {
 	pub modules: DecodeDifferentArray<ModuleMetadata>,
 }
 
 /// The latest version of the metadata.
-pub type RuntimeMetadataLastVersion = RuntimeMetadataV9;
+pub type RuntimeMetadataLastVersion = RuntimeMetadataV8;
 
 /// All metadata about an runtime module.
 #[derive(Clone, PartialEq, Eq, Encode, RuntimeDebug)]
@@ -408,6 +397,6 @@ impl Into<primitives::OpaqueMetadata> for RuntimeMetadataPrefixed {
 
 impl Into<RuntimeMetadataPrefixed> for RuntimeMetadataLastVersion {
 	fn into(self) -> RuntimeMetadataPrefixed {
-		RuntimeMetadataPrefixed(META_RESERVED, RuntimeMetadata::V9(self))
+		RuntimeMetadataPrefixed(META_RESERVED, RuntimeMetadata::V8(self))
 	}
 }

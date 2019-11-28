@@ -66,27 +66,11 @@ use proc_macro::TokenStream;
 ///   [`Hashable`](../frame_support/trait.Hashable.html) trait.
 ///
 ///   `hasher($hash)` is optional and its default is `blake2_256`. One should use another hasher
-///   with care.
+///   with care, see generator documentation.
 ///
-///   The generator is implemented so the value is inserted in the trie at:
-///   ```nocompile
-///   $hash($module_prefix ++ " " ++ $storage_name ++ encode($key))
-///   ```
-///
-/// * PrefixedMap: `Foo: prefixed_map hasher($hash) type => type`: Implements the
-///   [`StorageMap`](../palette_support/storage/trait.StorageMap.html) trait using the
-///   [`StorageMap generator`](../palette_support/storage/generator/trait.StorageMap.html).
-///
-///   `$hash` representing a choice of hashing algorithms available in the
-///   [`Hashable`](../palette_support/trait.Hashable.html) trait.
-///
-///   `hasher($hash)` is optional and its default is `blake2_256`. One should use another hasher
-///   with care.
-///
-///   The generator is implemented so the value is inserted in the trie at:
-///   ```nocompile
-///   twox_128($module_prefix)++twox_128($storage_name)++$hash(encode($key))
-///   ```
+///   The generator is implemented with:
+///   * `prefix`: `$module_prefix ++ " " ++ $storage_name`
+///   * `Hasher`: $hash
 ///
 /// * Linked map: `Foo: linked_map hasher($hash) type => type`: Implements the
 ///   [`StorageLinkedMap`](../frame_support/storage/trait.StorageLinkedMap.html) trait using the

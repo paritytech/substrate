@@ -16,26 +16,22 @@
 
 //! Implementation of the trait instance and the instance structures implementing it.
 //! (For not instantiable traits there is still the inherent instance implemented).
-//!
-//! The instance trait defines the prefix to be used by storages.
 
 use proc_macro2::{TokenStream, Span};
 use quote::quote;
-use super::{DeclStorageDefExt, StorageLineTypeDef, MapKind, MapDef};
+use super::{DeclStorageDefExt, StorageLineTypeDef};
 
 const NUMBER_OF_INSTANCE: usize = 16;
-pub(crate) const INHERENT_INSTANCE_NAME: &str = "__InherentHiddenInstance";
+const INHERENT_INSTANCE_NAME: &str = "__InherentHiddenInstance";
 pub(crate) const DEFAULT_INSTANTIABLE_TRAIT_NAME: &str = "__GeneratedInstantiable";
 
 // prefix for consts in trait Instance
 pub(crate) const PREFIX_FOR: &str = "PREFIX_FOR_";
-// prefix for the consts for the head of a linkedmap
 pub(crate) const HEAD_KEY_FOR: &str = "HEAD_KEY_FOR_";
 
 // Used to generate the const:
 // `const $name: &'static str = $value_prefix ++ instance_prefix ++ $value_suffix`
 struct InstanceConstDef {
-	// The name of the const.
 	name: syn::Ident,
 	value_prefix: String,
 	value_suffix: String,
@@ -54,11 +50,6 @@ pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 	let mut const_defs = vec![];
 
 	for line in def.storage_lines.iter() {
-		// Do not generate additional const for prefixed map
-		if let StorageLineTypeDef::Map(MapDef { kind: MapKind::PrefixedMap, .. }) = line.storage_type {
-			continue;
-		}
-
 		let storage_prefix = format!("{} {}", def.crate_name, line.name);
 
 		let const_name = syn::Ident::new(
@@ -70,7 +61,7 @@ pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 			value_suffix: storage_prefix.clone(),
 		});
 
-		if let StorageLineTypeDef::Map(MapDef { kind: MapKind::LinkedMap, .. }) = line.storage_type {
+		if let StorageLineTypeDef::LinkedMap(_) = line.storage_type {
 			let const_name = syn::Ident::new(
 				&format!("{}{}", HEAD_KEY_FOR, line.name.to_string()), proc_macro2::Span::call_site()
 			);
@@ -158,7 +149,7 @@ fn create_instance_trait(
 		/// Defines storage prefixes, they must be unique.
 		#optional_hide
 		pub trait #instance_trait: 'static {
-			/// The module prefix used by any storage entry of an instance.
+			/// The prefix used by any storage entry of an instance.
 			const PREFIX: &'static str;
 			#const_impls
 		}

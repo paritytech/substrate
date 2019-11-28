@@ -38,9 +38,6 @@ mod no_instance {
 			pub Map: map u32 => u32;
 			pub Map2: map hasher(twox_128) u32 => u32;
 
-			pub PrefixedMap: prefixed_map u32 => u32;
-			pub PrefixedMap2: prefixed_map hasher(twox_128) u32 => u32;
-
 			pub LinkedMap: linked_map u32 => u32;
 			pub LinkedMap2: linked_map hasher(twox_128) u32 => u32;
 
@@ -70,9 +67,6 @@ mod instance {
 
 			pub Map: map u32 => u32;
 			pub Map2: map hasher(twox_128) u32 => u32;
-
-			pub PrefixedMap: prefixed_map u32 => u32;
-			pub PrefixedMap2: prefixed_map hasher(twox_128) u32 => u32;
 
 			pub LinkedMap: linked_map u32 => u32;
 			pub LinkedMap2: linked_map hasher(twox_128) u32 => u32;
@@ -106,18 +100,6 @@ fn final_keys_no_instance() {
 		let mut k = b"FinalKeysNone Map2".to_vec();
 		k.extend(1u32.encode());
 		assert_eq!(unhashed::get::<u32>(&hashing::twox_128(&k)), Some(2u32));
-
-		no_instance::PrefixedMap::insert(1, 2);
-		let mut k = hashing::twox_128(b"FinalKeysNone").to_vec();
-		k.extend(hashing::twox_128(b"PrefixedMap").iter());
-		k.extend(1u32.using_encoded(hashing::blake2_256).iter());
-		assert_eq!(unhashed::get::<u32>(&k), Some(2u32));
-
-		no_instance::PrefixedMap2::insert(1, 2);
-		let mut k = hashing::twox_128(b"FinalKeysNone").to_vec();
-		k.extend(hashing::twox_128(b"PrefixedMap2").iter());
-		k.extend(1u32.using_encoded(hashing::twox_128).iter());
-		assert_eq!(unhashed::get::<u32>(&k), Some(2u32));
 
 		let head = b"head of FinalKeysNone LinkedMap".to_vec();
 		assert_eq!(unhashed::get::<u32>(&hashing::blake2_256(&head)), None);
@@ -164,18 +146,6 @@ fn final_keys_default_instance() {
 		let mut k = b"FinalKeysSome Map2".to_vec();
 		k.extend(1u32.encode());
 		assert_eq!(unhashed::get::<u32>(&hashing::twox_128(&k)), Some(2u32));
-
-		<instance::PrefixedMap<instance::DefaultInstance>>::insert(1, 2);
-		let mut k = hashing::twox_128(b"FinalKeysSome").to_vec();
-		k.extend(hashing::twox_128(b"PrefixedMap").iter());
-		k.extend(1u32.using_encoded(hashing::blake2_256).iter());
-		assert_eq!(unhashed::get::<u32>(&k), Some(2u32));
-
-		<instance::PrefixedMap2<instance::DefaultInstance>>::insert(1, 2);
-		let mut k = hashing::twox_128(b"FinalKeysSome").to_vec();
-		k.extend(hashing::twox_128(b"PrefixedMap2").iter());
-		k.extend(1u32.using_encoded(hashing::twox_128).iter());
-		assert_eq!(unhashed::get::<u32>(&k), Some(2u32));
 
 		let head = b"head of FinalKeysSome LinkedMap".to_vec();
 		assert_eq!(unhashed::get::<u32>(&hashing::blake2_256(&head)), None);
@@ -225,18 +195,6 @@ fn final_keys_instance_2() {
 		let mut k = b"Instance2FinalKeysSome Map2".to_vec();
 		k.extend(1u32.encode());
 		assert_eq!(unhashed::get::<u32>(&hashing::twox_128(&k)), Some(2u32));
-
-		<instance::PrefixedMap<instance::Instance2>>::insert(1, 2);
-		let mut k = hashing::twox_128(b"Instance2FinalKeysSome").to_vec();
-		k.extend(hashing::twox_128(b"PrefixedMap").iter());
-		k.extend(1u32.using_encoded(hashing::blake2_256).iter());
-		assert_eq!(unhashed::get::<u32>(&k), Some(2u32));
-
-		<instance::PrefixedMap2<instance::Instance2>>::insert(1, 2);
-		let mut k = hashing::twox_128(b"Instance2FinalKeysSome").to_vec();
-		k.extend(hashing::twox_128(b"PrefixedMap2").iter());
-		k.extend(1u32.using_encoded(hashing::twox_128).iter());
-		assert_eq!(unhashed::get::<u32>(&k), Some(2u32));
 
 		let head = b"head of Instance2FinalKeysSome LinkedMap".to_vec();
 		assert_eq!(unhashed::get::<u32>(&hashing::blake2_256(&head)), None);
