@@ -445,7 +445,7 @@ impl TraitPair for Pair {
 	fn from_seed_slice(seed_slice: &[u8]) -> Result<Pair, SecretStringError> {
 		let secret = ed25519_dalek::SecretKey::from_bytes(seed_slice)
 			.map_err(|_| SecretStringError::InvalidSeedLength)?;
-		let public = ed25519_dalek::PublicKey::from(secret.expand::<sha2::Sha512>());
+		let public = ed25519_dalek::PublicKey::from(&secret);
 		Ok(Pair(ed25519_dalek::Keypair { secret, public }))
 	}
 
@@ -474,7 +474,7 @@ impl TraitPair for Pair {
 
 	/// Sign a message.
 	fn sign(&self, message: &[u8]) -> Signature {
-		let r = self.0.sign::<sha2::Sha512>(message).to_bytes();
+		let r = self.0.sign(message).to_bytes();
 		Signature::from_raw(r)
 	}
 
@@ -498,7 +498,7 @@ impl TraitPair for Pair {
 			Err(_) => return false
 		};
 
-		match public_key.verify::<sha2::Sha512>(message.as_ref(), &sig) {
+		match public_key.verify(message.as_ref(), &sig) {
 			Ok(_) => true,
 			_ => false,
 		}

@@ -16,27 +16,4 @@
 
 //! A collection of higher lever helpers for offchain calls.
 
-use crate::{
-	traits,
-	generic::BlockId,
-};
-
 pub mod http;
-
-/// An abstraction for transaction pool.
-///
-/// This trait is used by offchain calls to be able to submit transactions.
-/// The main use case is for offchain workers, to feed back the results of computations,
-/// but since the transaction pool access is a separate `ExternalitiesExtension` it can
-/// be also used in context of other offchain calls. For one may generate and submit
-/// a transaction for some misbehavior reports (say equivocation).
-pub trait TransactionPool<Block: traits::Block>: Send + Sync {
-	/// Submit transaction.
-	///
-	/// The transaction will end up in the pool and be propagated to others.
-	fn submit_at(
-		&self,
-		at: &BlockId<Block>,
-		extrinsic: Block::Extrinsic,
-	) -> Result<(), ()>;
-}

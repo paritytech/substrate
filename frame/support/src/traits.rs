@@ -26,6 +26,8 @@ use sr_primitives::{
 	traits::{MaybeSerializeDeserialize, SimpleArithmetic, Saturating},
 };
 
+use crate::dispatch::Parameter;
+
 /// Anything that can have a `::len()` method.
 pub trait Len {
 	/// Return the length of data type.
@@ -622,7 +624,7 @@ bitmask! {
 }
 
 pub trait Time {
-	type Moment: SimpleArithmetic + FullCodec + Clone + Default + Copy;
+	type Moment: SimpleArithmetic + Parameter + Default + Copy;
 
 	fn now() -> Self::Moment;
 }

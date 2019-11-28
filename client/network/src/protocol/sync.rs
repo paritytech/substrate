@@ -662,6 +662,7 @@ impl<B: BlockT> ChainSync<B> {
 									justification: block_data.block.justification,
 									origin: block_data.origin,
 									allow_missing_state: false,
+									import_existing: false,
 								}
 							}).collect()
 					}
@@ -675,6 +676,7 @@ impl<B: BlockT> ChainSync<B> {
 								justification: b.justification,
 								origin: Some(who.clone()),
 								allow_missing_state: true,
+								import_existing: false,
 							}
 						}).collect()
 					}

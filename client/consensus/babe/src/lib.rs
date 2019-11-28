@@ -442,6 +442,7 @@ impl<B, C, E, I, Error, SO> slots::SimpleSlotWorker<B> for BabeWorker<B, C, E, I
 				// https://github.com/paritytech/substrate/issues/3623
 				fork_choice: ForkChoiceStrategy::LongestChain,
 				allow_missing_state: false,
+				import_existing: false,
 			}
 		})
 	}
@@ -458,6 +459,32 @@ impl<B, C, E, I, Error, SO> slots::SimpleSlotWorker<B> for BabeWorker<B, C, E, I
 		self.env.init(block).map_err(|e| {
 			consensus_common::Error::ClientImport(format!("{:?}", e))
 		})
+	}
+
+	fn proposing_remaining_duration(
+		&self,
+		head: &B::Header,
+		slot_info: &SlotInfo
+	) -> Option<std::time::Duration> {
+		// never give more than 20 times more lenience.
+		const BACKOFF_CAP: u64 = 20;
+
+		let slot_remaining = self.slot_remaining_duration(slot_info);
+		let parent_slot = match find_pre_digest::<B>(head) {
+			Err(_) => return Some(slot_remaining),
+			Ok(d) => d.slot_number(),
+		};
+
+		// we allow a lenience of the number of slots since the head of the
+		// chain was produced, minus 1 (since there is always a difference of at least 1)
+		//
+		// linear back-off.
+		// in normal cases we only attempt to issue blocks up to the end of the slot.
+		// when the chain has been stalled for a few slots, we give more lenience.
+		let slot_lenience = slot_info.number.saturating_sub(parent_slot + 1);
+		let slot_lenience = std::cmp::min(slot_lenience, BACKOFF_CAP);
+		let slot_lenience = Duration::from_secs(slot_lenience * slot_info.duration);
+		Some(slot_lenience + slot_remaining)
 	}
 }
 
@@ -755,6 +782,7 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA
 					// https://github.com/paritytech/substrate/issues/3623
 					fork_choice: ForkChoiceStrategy::LongestChain,
 					allow_missing_state: false,
+					import_existing: false,
 				};
 
 				Ok((block_import_params, Default::default()))
