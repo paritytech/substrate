@@ -479,10 +479,6 @@ where
 		config.keys.push(key);
 	}
 
-	if cli.shared_params.dev {
-		config.keys.push("//Alice".into());
-	}
-
 	if let Some(account) = cli.keyring.account {
 		config.keys.push(format!("//{}", account));
 	}
