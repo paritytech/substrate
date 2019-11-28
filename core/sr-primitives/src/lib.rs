@@ -58,6 +58,8 @@ pub const BLOCK_FULL: &str = "block size limit is reached";
 
 /// Justification type.
 pub type Justification = Vec<u8>;
+/// ForeignProof type
+pub type Proof = Vec<u8>;
 
 use traits::{Verify, Lazy};
 

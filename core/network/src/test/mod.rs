@@ -66,6 +66,7 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 		origin: BlockOrigin,
 		header: B::Header,
 		justification: Option<Justification>,
+		proof: Option<Proof>,
 		body: Option<Vec<B::Extrinsic>>
 	) -> Result<(ImportBlock<B>, Option<Vec<AuthorityIdFor<B>>>), String> {
 		let new_authorities = header.digest().log(DigestItem::as_authorities_change)
@@ -77,6 +78,7 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 			body,
 			finalized: self.0,
 			justification,
+			proof,
 			post_digests: vec![],
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::LongestChain,
@@ -503,6 +505,7 @@ impl<D, S: NetworkSpecialization<Block> + Clone> Peer<D, S> {
 					header: Some(header),
 					body: Some(block.extrinsics),
 					justification: None,
+					proof: None,
 				}],
 			);
 
@@ -851,7 +854,7 @@ impl JustificationImport<Block> for ForceFinalized {
 		_number: NumberFor<Block>,
 		justification: Justification,
 	) -> Result<(), Self::Error> {
-		self.0.finalize_block(BlockId::Hash(hash), Some(justification), true)
+		self.0.finalize_block(BlockId::Hash(hash), Some(justification), None, true)
 			.map_err(|_| ConsensusErrorKind::InvalidJustification.into())
 	}
 }

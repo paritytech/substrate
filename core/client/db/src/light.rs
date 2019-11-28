@@ -30,7 +30,7 @@ use client::error::{ErrorKind as ClientErrorKind, Result as ClientResult};
 use client::light::blockchain::Storage as LightBlockchainStorage;
 use parity_codec::{Decode, Encode};
 use primitives::Blake2Hasher;
-use runtime_primitives::generic::BlockId;
+use runtime_primitives::{generic::BlockId, Proof};
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT,
 	Zero, One, As, NumberFor, Digest, DigestItem};
 use consensus_common::well_known_cache_keys;
@@ -47,6 +47,7 @@ pub(crate) mod columns {
 	pub const CACHE: Option<u32> = Some(3);
 	pub const CHT: Option<u32> = Some(4);
 	pub const AUX: Option<u32> = Some(5);
+	pub const PROOF: Option<u32> = Some(6);
 }
 
 /// Prefix for headers CHT.
@@ -374,6 +375,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 		cache_at: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 		leaf_state: NewBlockState,
 		aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
+		proof: Option<Proof>,
 	) -> ClientResult<()> {
 		let mut finalization_displaced_leaves = None;
 		let mut transaction = DBTransaction::new();
@@ -403,6 +405,10 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 			hash,
 		);
 		transaction.put(columns::HEADER, &lookup_key, &header.encode());
+
+		if let Some(proof) = proof {
+			transaction.put(columns::PROOF, &lookup_key, &proof.encode())
+		}
 
 		let is_genesis = number.is_zero();
 		if is_genesis {
@@ -478,14 +484,6 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 		}
 	}
 
-	fn header_cht_root(&self, cht_size: u64, block: NumberFor<Block>) -> ClientResult<Block::Hash> {
-		self.read_cht_root(HEADER_CHT_PREFIX, cht_size, block)
-	}
-
-	fn changes_trie_cht_root(&self, cht_size: u64, block: NumberFor<Block>) -> ClientResult<Block::Hash> {
-		self.read_cht_root(CHANGES_TRIE_CHT_PREFIX, cht_size, block)
-	}
-
 	fn finalize_header(&self, id: BlockId<Block>) -> ClientResult<()> {
 		if let Some(header) = self.header(id)? {
 			let mut displaced = None;
@@ -522,8 +520,28 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 		Ok(self.meta.read().finalized_hash.clone())
 	}
 
+	fn header_cht_root(&self, cht_size: u64, block: NumberFor<Block>) -> ClientResult<Block::Hash> {
+		self.read_cht_root(HEADER_CHT_PREFIX, cht_size, block)
+	}
+
+	fn changes_trie_cht_root(&self, cht_size: u64, block: NumberFor<Block>) -> ClientResult<Block::Hash> {
+		self.read_cht_root(CHANGES_TRIE_CHT_PREFIX, cht_size, block)
+	}
+
 	fn cache(&self) -> Option<Arc<BlockchainCache<Block>>> {
 		Some(self.cache.clone())
+	}
+
+	fn proof(&self, id: &BlockId<Block>) -> Option<Proof> {
+		let res = read_db(&*self.db, columns::KEY_LOOKUP, columns::PROOF, *id);
+		if res.is_ok() {
+			match res.unwrap() {
+				Some(proof) => Decode::decode(&mut &proof[..]),
+				None => None
+			}
+		} else {
+			None
+		}
 	}
 }
 

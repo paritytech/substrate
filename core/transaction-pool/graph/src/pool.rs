@@ -152,7 +152,7 @@ impl<B: ChainApi> Pool<B> {
 			})
 			.map(|tx| {
 				info!(target:"pool", "import a tx to pool");
-				let imported = self.pool.write().import(tx?)?;
+				let imported = self.pool.write().import(tx?, true)?;
 
 				if let base::Imported::Ready { .. } = imported {
 					self.import_notification_sinks.lock().retain(|sink| sink.unbounded_send(()).is_ok());
@@ -170,6 +170,56 @@ impl<B: ChainApi> Pool<B> {
 			Ok(ref hash) if removed.contains(hash) => Err(error::Error::from(error::ErrorKind::ImmediatelyDropped).into()),
 			other => other,
 		}).collect())
+	}
+
+	/// Submit relay extrinsic.
+	pub fn submit_relay_extrinsic(&self, at: &BlockId<B::Block>, xt: ExtrinsicFor<B>, has_spv: bool) -> Result<ExHash<B>, B::Error> {
+		let block_number = self.api.block_id_to_number(at)?
+			.ok_or_else(|| error::ErrorKind::Msg(format!("Invalid block id: {:?}", at)).into())?;
+		let (hash, bytes) = self.api.hash_and_length(&xt);
+		if self.rotator.is_banned(&hash) {
+			bail!(error::Error::from(error::ErrorKind::TemporarilyBanned))
+		}
+		let tx = match self.api.validate_transaction(at, xt.clone())? {
+			TransactionValidity::Valid { priority, requires, provides, longevity } => {
+				Ok(base::Transaction {
+					data: xt,
+					bytes,
+					hash,
+					priority,
+					requires,
+					provides,
+					valid_till: block_number.as_().saturating_add(longevity),
+				})
+			},
+			TransactionValidity::Invalid(e) => {
+				bail!(error::Error::from(error::ErrorKind::InvalidTransaction(e)))
+			},
+			TransactionValidity::Unknown(e) => {
+				self.listener.write().invalid(&hash);
+				bail!(error::Error::from(error::ErrorKind::UnknownTransactionValidity(e)))
+			},
+		};
+		info!(target:"pool", "import a relay tx to pool");
+		let imported = self.pool.write().import(tx?, has_spv)?;
+
+		if let base::Imported::Ready { .. } = imported {
+			self.import_notification_sinks.lock().retain(|sink| sink.unbounded_send(()).is_ok());
+		}
+
+		let mut listener = self.listener.write();
+		fire_events(&mut *listener, &imported);
+		let hash = imported.hash().clone();
+		let removed = self.enforce_limits();
+		if removed.contains(&hash) {
+			return Err(error::Error::from(error::ErrorKind::ImmediatelyDropped).into())
+		}
+		Ok(hash)
+	}
+
+	/// Enforce spv.
+	pub fn enforce_spv(&self, shard: u16, number: u64, hash: Vec<u8>, parent: Vec<u8>) {
+		self.pool.write().enforce_spv(shard, number, hash, parent);
 	}
 
 	fn enforce_limits(&self) -> HashSet<ExHash<B>> {

@@ -534,8 +534,8 @@ mod tests {
 		let hash0 = header0.hash();
 		let header1 = test_client::runtime::Header::new(1, def, def, hash0, Default::default());
 		let hash1 = header1.hash();
-		backend.blockchain().insert(hash0, header0, None, None, NewBlockState::Final).unwrap();
-		backend.blockchain().insert(hash1, header1, None, None, NewBlockState::Final).unwrap();
+		backend.blockchain().insert(hash0, header0, None, None, None, NewBlockState::Final).unwrap();
+		backend.blockchain().insert(hash1, header1, None, None, None, NewBlockState::Final).unwrap();
 
 		let local_executor = RemoteCallExecutor::new(Arc::new(backend.blockchain().clone()), Arc::new(OkCallFetcher::new(vec![1])));
 		let remote_executor = RemoteCallExecutor::new(Arc::new(backend.blockchain().clone()), Arc::new(OkCallFetcher::new(vec![2])));

@@ -80,6 +80,8 @@ bitflags! {
 		const MESSAGE_QUEUE = 0b00001000;
 		/// Include a justification for the block.
 		const JUSTIFICATION = 0b00010000;
+		/// Include a proof for the block.
+		const PROOF = 0b0010_0000;
 	}
 }
 
@@ -126,7 +128,7 @@ pub struct RemoteReadResponse {
 pub mod generic {
 	use parity_codec::{Encode, Decode};
 	use network_libp2p::CustomMessage;
-	use runtime_primitives::Justification;
+	use runtime_primitives::{Justification, Proof};
 	use crate::config::Roles;
 	use super::{
 		BlockAttributes, RemoteCallResponse, RemoteReadResponse,
@@ -156,6 +158,8 @@ pub mod generic {
 		pub message_queue: Option<Vec<u8>>,
 		/// Justification if requested.
 		pub justification: Option<Justification>,
+		/// ForeignProof if requested.
+		pub proof: Option<Proof>,
 	}
 
 	/// Identifies starting point of a block sequence.

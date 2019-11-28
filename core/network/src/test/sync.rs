@@ -224,9 +224,9 @@ fn sync_justifications() {
 	assert_eq!(net.peer(1).client().justification(&BlockId::Number(10)).unwrap(), None);
 
 	// we finalize block #10, #15 and #20 for peer 0 with a justification
-	net.peer(0).client().finalize_block(BlockId::Number(10), Some(Vec::new()), true).unwrap();
-	net.peer(0).client().finalize_block(BlockId::Number(15), Some(Vec::new()), true).unwrap();
-	net.peer(0).client().finalize_block(BlockId::Number(20), Some(Vec::new()), true).unwrap();
+	net.peer(0).client().finalize_block(BlockId::Number(10), Some(Vec::new()), None, true).unwrap();
+	net.peer(0).client().finalize_block(BlockId::Number(15), Some(Vec::new()), None, true).unwrap();
+	net.peer(0).client().finalize_block(BlockId::Number(20), Some(Vec::new()), None, true).unwrap();
 
 	let h1 = net.peer(1).client().header(&BlockId::Number(10)).unwrap().unwrap();
 	let h2 = net.peer(1).client().header(&BlockId::Number(15)).unwrap().unwrap();
@@ -259,7 +259,7 @@ fn sync_justifications_across_forks() {
 	// for both and finalize the small fork instead.
 	net.sync();
 
-	net.peer(0).client().finalize_block(BlockId::Hash(f1_best), Some(Vec::new()), true).unwrap();
+	net.peer(0).client().finalize_block(BlockId::Hash(f1_best), Some(Vec::new()), None, true).unwrap();
 
 	net.peer(1).request_justification(&f1_best, 10);
 	net.peer(1).request_justification(&f2_best, 11);

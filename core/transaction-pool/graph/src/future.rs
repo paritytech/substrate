@@ -26,7 +26,7 @@ use substrate_primitives::hexdisplay::HexDisplay;
 use sr_primitives::transaction_validity::{
 	TransactionTag as Tag,
 };
-use parity_codec::Decode;
+use parity_codec::{Decode, Encode};
 use parity_codec::Compact;
 
 use crate::base_pool::Transaction;
@@ -45,6 +45,7 @@ pub struct WaitingTransaction<Hash, Ex> {
 	pub missing_tags: HashSet<Tag>,
 	/// Time of import to the Future Queue.
 	pub imported_at: time::Instant,
+	pub has_spv: bool,
 }
 
 impl<Hash: fmt::Debug, Ex: fmt::Debug> fmt::Debug for WaitingTransaction<Hash, Ex> {
@@ -70,6 +71,7 @@ impl<Hash, Ex> Clone for WaitingTransaction<Hash, Ex> {
 			transaction: self.transaction.clone(),
 			missing_tags: self.missing_tags.clone(),
 			imported_at: self.imported_at.clone(),
+			has_spv: self.has_spv,
 		}
 	}
 }
@@ -83,6 +85,7 @@ impl<Hash, Ex> WaitingTransaction<Hash, Ex> {
 		transaction: Transaction<Hash, Ex>,
 		provided: &HashMap<Tag, Hash>,
 		recently_pruned: &[HashSet<Tag>],
+		has_spv: bool,
 	) -> Self {
 		let missing_tags = transaction.requires
 			.iter()
@@ -99,6 +102,7 @@ impl<Hash, Ex> WaitingTransaction<Hash, Ex> {
 			transaction: Arc::new(transaction),
 			missing_tags,
 			imported_at: time::Instant::now(),
+			has_spv,
 		}
 	}
 
@@ -109,7 +113,7 @@ impl<Hash, Ex> WaitingTransaction<Hash, Ex> {
 
 	/// Returns true if transaction has all requirements satisfied.
 	pub fn is_ready(&self) -> bool {
-		self.missing_tags.is_empty()
+		self.missing_tags.is_empty() && self.has_spv
 	}
 }
 
@@ -217,8 +221,9 @@ impl<Hash: hash::Hash + Eq + Clone, Ex> FutureTransactions<Hash, Ex> {
 
 		became_ready
 	}
+
 	/// get tag by parent hash
-    fn get_parent_tag(& self, tag: &RelayTag) -> Option<(&Tag, RelayTag)>{
+    fn get_parent_tag(&self, tag: &RelayTag) -> Option<(&Tag, RelayTag)>{
         for k in self.wanted_tags.keys(){
             if let Some(r_t) = Decode::decode(&mut (*k).as_slice()) {
                 let r_t: RelayTag = r_t;
@@ -229,6 +234,32 @@ impl<Hash: hash::Hash + Eq + Clone, Ex> FutureTransactions<Hash, Ex> {
         }
         None
     }
+
+	/// block has spv.
+	/// shard: shard number.
+	/// number: block height.
+	/// hash: block hash.
+	/// parent: block's parent hash.
+	pub fn enforce_spv(&mut self, shard: u16, number: u64, hash: Vec<u8>, parent: Vec<u8>) {
+		let mut ext_tags = vec![];
+		let r_t: RelayTag = (Compact(shard), Compact(number), hash, parent);
+		ext_tags.push(r_t.encode());
+		let mut p_t = self.get_parent_tag(&r_t);
+		while p_t.is_some() {
+			if let Some((t, r_t)) = p_t {
+				ext_tags.push((*t).clone());
+				p_t = self.get_parent_tag(&r_t);
+			}
+		}
+		for tag in ext_tags {
+			if let Some(hashes) = self.wanted_tags.get(&tag) {
+				for hash in hashes {
+					let tx = self.waiting.get_mut(&hash).expect(WAITING_PROOF);
+					tx.has_spv = true;
+				}
+			}
+		}
+	}
 
 	/// Remove provided tags in future vector
 	/// now just for relay transfer

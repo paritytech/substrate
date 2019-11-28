@@ -36,7 +36,7 @@ use std::thread;
 use runtime_primitives::traits::{
 	AuthorityIdFor, Block as BlockT, Header as HeaderT, NumberFor
 };
-use runtime_primitives::Justification;
+use runtime_primitives::{Justification, Proof};
 
 use crate::error::Error as ConsensusError;
 use parity_codec::alloc::collections::hash_map::HashMap;
@@ -63,6 +63,8 @@ pub struct IncomingBlock<B: BlockT> {
 	pub justification: Option<Justification>,
 	/// The peer, we received this from
 	pub origin: Option<Origin>,
+	/// ForeignProof if requested.
+	pub proof: Option<Proof>,
 }
 
 /// Verify a justification of a block
@@ -75,6 +77,7 @@ pub trait Verifier<B: BlockT>: Send + Sync + Sized {
 		origin: BlockOrigin,
 		header: B::Header,
 		justification: Option<Justification>,
+		proof: Option<Proof>,
 		body: Option<Vec<B::Extrinsic>>,
 	) -> Result<(ImportBlock<B>, Option<Vec<AuthorityIdFor<B>>>), String>;
 }
@@ -549,9 +552,9 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>>(
 ) -> Result<BlockImportResult<NumberFor<B>>, BlockImportError> {
 	let peer = block.origin;
 
-	let (header, justification) = match (block.header, block.justification) {
-		(Some(header), justification) => (header, justification),
-		(None, _) => {
+	let (header, justification, proof) = match (block.header, block.justification, block.proof) {
+		(Some(header), justification, proof) => (header, justification, proof),
+		(None, _, _) => {
 			if let Some(ref peer) = peer {
 				debug!(target: "sync", "Header {} was not provided by {} ", block.hash, peer);
 			} else {
@@ -592,7 +595,7 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>>(
 		r @ _ => return Ok(r), // Any other successfull result means that the block is already imported.
 	}
 
-	let (import_block, new_authorities) = verifier.verify(block_origin, header, justification, block.body)
+	let (import_block, new_authorities) = verifier.verify(block_origin, header, justification, proof, block.body)
 		.map_err(|msg| {
 			if let Some(ref peer) = peer {
 				trace!(target: "sync", "Verifying {}({}) from {} failed: {}", number, hash, peer, msg);

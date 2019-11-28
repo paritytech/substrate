@@ -155,7 +155,8 @@ pub fn import_blocks<F, E, R>(
 				header: Some(header),
 				body: Some(extrinsics),
 				receipt: None,
-				message_queue: None
+				message_queue: None,
+				proof: None,
 			};
 			// import queue handles verification and importing it into the client
 			queue.import_blocks(BlockOrigin::File, vec![
@@ -165,6 +166,7 @@ pub fn import_blocks<F, E, R>(
 					body: block.body,
 					justification: block.justification,
 					origin: None,
+					proof: None,
 				}
 			]);
 		} else {

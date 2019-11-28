@@ -19,7 +19,7 @@
 use std::collections::HashMap;
 use crate::error;
 use primitives::ChangesTrieConfiguration;
-use runtime_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
+use runtime_primitives::{generic::BlockId, Justification, Proof, StorageOverlay, ChildrenStorageOverlay};
 use runtime_primitives::traits::{Block as BlockT, NumberFor};
 use state_machine::backend::Backend as StateBackend;
 use state_machine::ChangesTrieStorage as StateChangesTrieStorage;
@@ -72,6 +72,7 @@ pub trait BlockImportOperation<Block, H> where
 		header: Block::Header,
 		body: Option<Vec<Block::Extrinsic>>,
 		justification: Option<Justification>,
+		proof: Option<Proof>,
 		state: NewBlockState,
 	) -> error::Result<()>;
 
@@ -89,7 +90,7 @@ pub trait BlockImportOperation<Block, H> where
 	fn insert_aux<I>(&mut self, ops: I) -> error::Result<()>
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>;
 	/// Mark a block as finalized.
-	fn mark_finalized(&mut self, id: BlockId<Block>, justification: Option<Justification>) -> error::Result<()>;
+	fn mark_finalized(&mut self, id: BlockId<Block>, justification: Option<Justification>, proof: Option<Proof>) -> error::Result<()>;
 	/// Mark a block as new head. If both block import and set head are specified, set head overrides block import's best block rule.
 	fn mark_head(&mut self, id: BlockId<Block>) -> error::Result<()>;
 }
@@ -138,7 +139,7 @@ pub trait Backend<Block, H>: AuxStore + Send + Sync where
 	fn commit_operation(&self, transaction: Self::BlockImportOperation) -> error::Result<()>;
 	/// Finalize block with given Id. This should only be called if the parent of the given
 	/// block has been finalized.
-	fn finalize_block(&self, block: BlockId<Block>, justification: Option<Justification>) -> error::Result<()>;
+	fn finalize_block(&self, block: BlockId<Block>, justification: Option<Justification>, proof: Option<Proof>) -> error::Result<()>;
 	/// Returns reference to blockchain backend.
 	fn blockchain(&self) -> &Self::Blockchain;
 	/// Returns reference to changes trie storage.

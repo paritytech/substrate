@@ -17,7 +17,7 @@
 //! Block import helpers.
 
 use runtime_primitives::traits::{Block as BlockT, DigestItemFor, Header as HeaderT, NumberFor};
-use runtime_primitives::Justification;
+use runtime_primitives::{Justification, Proof};
 use std::borrow::Cow;
 use std::collections::HashMap;
 use crate::well_known_cache_keys;
@@ -108,6 +108,8 @@ pub struct ImportBlock<Block: BlockT> {
 	pub header: Block::Header,
 	/// Justification provided for this block from the outside.
 	pub justification: Option<Justification>,
+	/// proof provided for foreign chain.
+	pub proof: Option<Proof>,
 	/// Digest items that have been added after the runtime for external
 	/// work, like a consensus signature.
 	pub post_digests: Vec<DigestItemFor<Block>>,

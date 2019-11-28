@@ -39,7 +39,7 @@ use client::block_builder::api::BlockBuilder as BlockBuilderApi;
 use client::blockchain::ProvideCache;
 use client::runtime_api::{ApiExt, Core as CoreApi};
 use aura_primitives::AURA_ENGINE_ID;
-use runtime_primitives::{generic, generic::BlockId, Justification};
+use runtime_primitives::{generic, generic::BlockId, Justification, Proof};
 use runtime_primitives::traits::{
 	Block, Header, Digest, DigestItemFor, DigestItem, ProvideRuntimeApi, AuthorityIdFor,
 };
@@ -400,6 +400,7 @@ impl<B: Block, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, S
 						origin: BlockOrigin::Own,
 						header,
 						justification: None,
+						proof: None,
 						post_digests: vec![item],
 						body: Some(body),
 						finalized: false,
@@ -589,6 +590,7 @@ impl<B: Block, C, E, P> Verifier<B> for AuraVerifier<C, E, P> where
 		origin: BlockOrigin,
 		header: B::Header,
 		justification: Option<Justification>,
+		proof: Option<Proof>,
 		mut body: Option<Vec<B::Extrinsic>>,
 	) -> Result<(ImportBlock<B>, Option<Vec<AuthorityId<P>>>), String> {
 		let mut inherent_data = self.inherent_data_providers.create_inherent_data().map_err(String::from)?;
@@ -655,6 +657,7 @@ impl<B: Block, C, E, P> Verifier<B> for AuraVerifier<C, E, P> where
 					body,
 					finalized: false,
 					justification,
+					proof,
 					auxiliary: Vec::new(),
 					fork_choice: ForkChoiceStrategy::LongestChain,
 				};

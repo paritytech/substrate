@@ -182,6 +182,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: ::std::fmt::Debug> BasePool<Hash
 	pub fn import(
 		&mut self,
 		tx: Transaction<Hash, Ex>,
+		has_spv: bool,
 	) -> error::Result<Imported<Hash, Ex>> {
 		if self.future.contains(&tx.hash) || self.ready.contains(&tx.hash) {
 			bail!(error::ErrorKind::AlreadyImported(Box::new(tx.hash.clone())))
@@ -191,12 +192,13 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: ::std::fmt::Debug> BasePool<Hash
 			tx,
 			self.ready.provided_tags(),
 			&self.recently_pruned,
+			has_spv,
 		);
 		trace!(target: "txpool", "[{:?}] {:?}", tx.transaction.hash, tx);
 		debug!(target: "txpool", "[{:?}] Importing to {}", tx.transaction.hash, if tx.is_ready() { "ready" } else { "future" });
 
-		// If all tags are not satisfied import to future.
-		if !tx.is_ready() {
+		// If doesn't have spv or all tags are not satisfied import to future.
+		if !has_spv || !tx.is_ready() {
 			let hash = tx.transaction.hash.clone();
 			self.future.import(tx);
 			return Ok(Imported::Future { hash });
@@ -433,6 +435,11 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: ::std::fmt::Debug> BasePool<Hash
 				},
 			}
 		}
+	}
+
+	/// Enforce spv.
+	pub fn enforce_spv(&mut self, shard: u16, number: u64, hash: Vec<u8>, parent: Vec<u8>) {
+		self.future.enforce_spv(shard, number, hash, parent);
 	}
 }
 

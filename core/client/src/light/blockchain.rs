@@ -21,7 +21,7 @@ use std::{sync::{Weak, Arc}, collections::HashMap};
 use futures::{Future, IntoFuture};
 use parking_lot::Mutex;
 
-use runtime_primitives::{Justification, generic::BlockId};
+use runtime_primitives::{Justification, generic::BlockId, Proof};
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero};
 use consensus::well_known_cache_keys;
 
@@ -44,6 +44,7 @@ pub trait Storage<Block: BlockT>: AuxStore + BlockchainHeaderBackend<Block> {
 		cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 		state: NewBlockState,
 		aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
+		proof: Option<Proof>,
 	) -> ClientResult<()>;
 
 	/// Set an existing block as new best block.
@@ -63,6 +64,9 @@ pub trait Storage<Block: BlockT>: AuxStore + BlockchainHeaderBackend<Block> {
 
 	/// Get storage cache.
 	fn cache(&self) -> Option<Arc<BlockchainCache<Block>>>;
+
+	/// Get proof of block.
+	fn proof(&self, id: &BlockId<Block>) -> Option<Proof>;
 }
 
 /// Light client blockchain.
@@ -151,6 +155,10 @@ impl<S, F, Block> BlockchainBackend<Block> for Blockchain<S, F> where Block: Blo
 
 	fn justification(&self, _id: BlockId<Block>) -> ClientResult<Option<Justification>> {
 		Ok(None)
+	}
+
+	fn proof(&self, id: BlockId<Block>) -> ClientResult<Option<Proof>> {
+		Ok(self.storage.proof(&id))
 	}
 
 	fn last_finalized(&self) -> ClientResult<Block::Hash> {
@@ -256,6 +264,7 @@ pub mod tests {
 			_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 			_state: NewBlockState,
 			_aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
+			_proof: Option<Proof>
 		) -> ClientResult<()> {
 			Ok(())
 		}
@@ -288,5 +297,7 @@ pub mod tests {
 		fn cache(&self) -> Option<Arc<BlockchainCache<Block>>> {
 			None
 		}
+
+		fn proof(&self, id: &BlockId<Block>) -> Option<Proof> { None }
 	}
 }

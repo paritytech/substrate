@@ -54,6 +54,7 @@ impl<B, E, RA> TestClient for Client<B, E, runtime::Block, RA>
 			origin,
 			header: block.header,
 			justification: None,
+			proof: None,
 			post_digests: vec![],
 			body: Some(block.extrinsics),
 			finalized: false,
@@ -71,6 +72,7 @@ impl<B, E, RA> TestClient for Client<B, E, runtime::Block, RA>
 			origin,
 			header: block.header,
 			justification: Some(justification),
+			proof: None,
 			post_digests: vec![],
 			body: Some(block.extrinsics),
 			finalized: true,
@@ -82,7 +84,7 @@ impl<B, E, RA> TestClient for Client<B, E, runtime::Block, RA>
 	}
 
 	fn finalize_block(&self, id: BlockId<runtime::Block>, justification: Option<Justification>) -> client::error::Result<()> {
-		self.finalize_block(id, justification, true)
+		self.finalize_block(id, justification, None, true)
 	}
 
 	fn genesis_hash(&self) -> runtime::Hash {

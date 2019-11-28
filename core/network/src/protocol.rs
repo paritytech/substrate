@@ -646,6 +646,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				receipt: None,
 				message_queue: None,
 				justification,
+				proof: None,
 			};
 			blocks.push(block_data);
 			match request.direction {
@@ -687,6 +688,13 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		// justifications are imported asynchronously (#1482)
 		if request.fields == message::BlockAttributes::JUSTIFICATION {
 			self.sync.on_block_justification_data(
+				&mut ProtocolContext::new(&mut self.context_data, &self.network_chan),
+				peer,
+				request,
+				response,
+			);
+		} else if request.fields == message::BlockAttributes::PROOF {
+			self.sync.on_block_proof_data(
 				&mut ProtocolContext::new(&mut self.context_data, &self.network_chan),
 				peer,
 				request,
