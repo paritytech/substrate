@@ -42,7 +42,7 @@ use crate::storage_proof::StorageProofChecker;
 
 use core::iter::FromIterator;
 use codec::{Encode, Decode};
-use fg_primitives::{AuthorityId, AuthorityWeight, AuthorityList};
+use fg_primitives::{AuthorityId, AuthorityWeight, AuthorityList, SetId};
 use grandpa::voter_set::VoterSet; // TODO: Check for `no_std`
 use primitives::H256;
 use num::AsPrimitive;
@@ -77,7 +77,6 @@ impl<T: Trait> BridgeInfo<T> {
 type BridgeId = u64;
 
 pub trait Trait: system::Trait<Hash=H256> {
-	// Type checker isn't happy with this :(
 	type Block: BlockT<Hash=H256, Header=Self::Header>;
 }
 
@@ -128,7 +127,7 @@ decl_module! {
 			header: T::Header,
 			ancestry_proof: Vec<T::Header>,
 			validator_set: AuthorityList,
-			_grandpa_proof: StorageProof,
+			grandpa_proof: Justification,
 		) {
 			let _sender = ensure_signed(origin)?;
 
@@ -139,19 +138,18 @@ decl_module! {
 			let last_header = bridge.last_finalized_block_header;
 			verify_ancestry(ancestry_proof, last_header.hash(), &header)?;
 
-			// Type checker isn't happy with this :(
 			let block_hash = header.hash();
 			let block_num = *header.number();
 
 			// Check that the header has been finalized
 			let voter_set = VoterSet::from_iter(validator_set);
-			let v = verify_grandpa_proof::<T::Block>(
-				vec![], // Use this though -> justification: Justification,
+			verify_grandpa_proof::<T::Block>(
+				grandpa_proof,
 				block_hash,
 				block_num,
-				0,
+				0, // TODO: Use an actual set id
 				&voter_set,
-			);
+			)?;
 
 			// Update last valid header seen by the bridge
 			bridge.last_finalized_block_header = header;
@@ -169,6 +167,7 @@ decl_error! {
 		ValidatorSetMismatch,
 		InvalidAncestryProof,
 		NoSuchBridgeExists,
+		InvalidFinalityProof,
 	}
 }
 
@@ -241,14 +240,19 @@ where
 	B: BlockT<Hash=H256>,
 	NumberFor<B>: grandpa::BlockNumberOps,
 {
-	let grandpa_justification = GrandpaJustification::<B>::decode_and_verify_finalizes(
+	// We don't really care about the justification, as long as it's valid
+	let j = GrandpaJustification::<B>::decode_and_verify_finalizes(
 		&justification,
 		(hash, number),
 		set_id,
 		voters,
-	).unwrap();
+	);
 
-	Ok(())
+	// Uh, there's got to be a nicer way of doing this...
+	match j {
+		Err(_e) => Err(Error::InvalidFinalityProof),
+		Ok(_) => Ok(()),
+	}
 }
 
 #[cfg(test)]
@@ -257,7 +261,13 @@ mod tests {
 
 	use primitives::{Blake2Hasher, H256, Public};
 	use sr_primitives::{
-		Perbill, traits::{Header as HeaderT, IdentityLookup}, testing::Header, generic::Digest,
+		Perbill,
+		traits::{
+			Header as HeaderT,
+			IdentityLookup
+		},
+		testing::{Block, Header, TestXt},
+		generic::Digest,
 	};
 	use support::{assert_ok, assert_err, impl_outer_origin, parameter_types};
 
@@ -300,7 +310,9 @@ mod tests {
 		type Version = ();
 	}
 
-	impl Trait for Test {}
+	impl Trait for Test {
+		type Block = Block<TestXt<(), ()>>;
+	}
 
 	fn new_test_ext() -> runtime_io::TestExternalities {
 		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
@@ -385,7 +397,7 @@ mod tests {
 			assert_ok!(
 				MockBridge::initialize_bridge(
 					Origin::signed(1),
-					test_header,
+					test_header.clone(),
 					authorities.clone(),
 					proof,
 			));
@@ -393,10 +405,8 @@ mod tests {
 			assert_eq!(
 				MockBridge::tracked_bridges(1),
 				Some(BridgeInfo {
-					last_finalized_block_number: 42,
-					last_finalized_block_hash: test_hash,
-					last_finalized_state_root: root,
-					current_validator_set: authorities.clone(),
+					last_finalized_block_header: test_header,
+					current_validator_set: authorities,
 				}));
 
 			assert_eq!(MockBridge::num_bridges(), 1);
@@ -440,7 +450,7 @@ mod tests {
 		let mut proof = build_header_chain(ancestor.clone(), 10);
 		let child = proof.remove(0);
 
-		assert_ok!(verify_ancestry(proof, ancestor.hash(), child));
+		assert_ok!(verify_ancestry(proof, ancestor.hash(), &child));
 	}
 
 	#[test]
@@ -466,7 +476,7 @@ mod tests {
 		};
 
 		assert_err!(
-			verify_ancestry(proof, fake_ancestor.hash(), child),
+			verify_ancestry(proof, fake_ancestor.hash(), &child),
 			Error::InvalidAncestryProof
 		);
 	}
@@ -496,7 +506,7 @@ mod tests {
 		invalid_proof.insert(5, fake_ancestor);
 
 		assert_err!(
-			verify_ancestry(invalid_proof, ancestor.hash(), child),
+			verify_ancestry(invalid_proof, ancestor.hash(), &child),
 			Error::InvalidAncestryProof
 		);
 	}
