@@ -108,8 +108,7 @@ impl Visit for Visitor {
 
 impl Serialize for Visitor {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-		where
-			S: Serializer,
+		where S: Serializer,
 	{
 		let mut map = serializer.serialize_map(Some(self.0.len()))?;
 		for (k, v) in &self.0 {
