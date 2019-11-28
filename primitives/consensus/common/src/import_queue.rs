@@ -65,6 +65,8 @@ pub struct IncomingBlock<B: BlockT> {
 	pub origin: Option<Origin>,
 	/// Allow importing the block skipping state verification if parent state is missing.
 	pub allow_missing_state: bool,
+	/// Re-validate existing block.
+	pub import_existing: bool,
 }
 
 /// Type of keys in the blockchain cache that consensus module could use for its needs.
@@ -230,6 +232,7 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>>(
 		number,
 		parent_hash,
 		allow_missing_state: block.allow_missing_state,
+		import_existing: block.import_existing,
 	}))? {
 		BlockImportResult::ImportedUnknown { .. } => (),
 		r => return Ok(r), // Any other successful result means that the block is already imported.

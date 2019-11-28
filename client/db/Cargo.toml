@@ -29,7 +29,7 @@ sp-blockchain = { path = "../../primitives/blockchain" }
 substrate-keyring = { path = "../../primitives/keyring" }
 test-client = { package = "substrate-test-runtime-client", path = "../../test/utils/runtime/client" }
 env_logger = "0.7.0"
-quickcheck = "0.8"
+quickcheck = "0.9"
 
 [features]
 default = []

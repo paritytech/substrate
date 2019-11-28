@@ -379,7 +379,7 @@ impl From<Option<Vec<u8>>> for OverlayedValue {
 mod tests {
 	use hex_literal::hex;
 	use primitives::{
-		Blake2Hasher, H256, traits::Externalities, storage::well_known_keys::EXTRINSIC_INDEX,
+		Blake2Hasher, traits::Externalities, storage::well_known_keys::EXTRINSIC_INDEX,
 	};
 	use crate::backend::InMemory;
 	use crate::changes_trie::InMemoryStorage as InMemoryChangesTrieStorage;
@@ -453,7 +453,7 @@ mod tests {
 		);
 		const ROOT: [u8; 32] = hex!("39245109cef3758c2eed2ccba8d9b370a917850af3824bc8348d505df2c298fa");
 
-		assert_eq!(ext.storage_root(), H256::from(ROOT));
+		assert_eq!(&ext.storage_root()[..], &ROOT);
 	}
 
 	#[test]

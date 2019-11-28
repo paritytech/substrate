@@ -14,7 +14,7 @@ serializer = { package = "substrate-serializer", path = "../../primitives/serial
 runtime_version = { package = "sr-version", path = "../../primitives/sr-version" }
 panic-handler = { package = "substrate-panic-handler", path = "../../primitives/panic-handler" }
 wasmi = "0.6.2"
-parity-wasm = "0.40.3"
+parity-wasm = "0.41.0"
 lazy_static = "1.4.0"
 wasm-interface = { package = "substrate-wasm-interface", path = "../../primitives/wasm-interface" }
 runtime-interface = { package = "substrate-runtime-interface", path = "../../primitives/runtime-interface" }

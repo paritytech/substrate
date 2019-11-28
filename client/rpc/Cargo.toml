@@ -23,7 +23,7 @@ rpc-primitives = { package = "substrate-rpc-primitives", path = "../../primitive
 state_machine = { package = "substrate-state-machine", path = "../../primitives/state-machine" }
 substrate-executor = { path = "../executor" }
 substrate-keystore = { path = "../keystore" }
-transaction_pool = { package = "sc-transaction-pool", path = "../../client/transaction-pool" }
+txpool-api = { package = "sp-transaction-pool-api", path = "../../primitives/transaction-pool" }
 sp-blockchain = { path = "../../primitives/blockchain" }
 hash-db = { version = "0.15.2", default-features = false }
 parking_lot = { version = "0.9.0" }
@@ -36,3 +36,4 @@ rustc-hex = "2.0.1"
 sr-io = { path = "../../primitives/sr-io" }
 test-client = { package = "substrate-test-runtime-client", path = "../../test/utils/runtime/client" }
 tokio = "0.1.22"
+txpool = { package = "sc-transaction-pool", path = "../transaction-pool" }

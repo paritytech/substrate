@@ -21,11 +21,9 @@ pub mod hash;
 
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
-use primitives::{
-	Bytes
-};
+use primitives::Bytes;
+use txpool_api::TransactionStatus;
 use self::error::{FutureResult, Result};
-use txpool::watcher::Status;
 
 pub use self::gen_client::Client as AuthorClient;
 
@@ -69,7 +67,7 @@ pub trait AuthorApi<Hash, BlockHash> {
 	)]
 	fn watch_extrinsic(&self,
 		metadata: Self::Metadata,
-		subscriber: Subscriber<Status<Hash, BlockHash>>,
+		subscriber: Subscriber<TransactionStatus<Hash, BlockHash>>,
 		bytes: Bytes
 	);
 

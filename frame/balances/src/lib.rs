@@ -986,6 +986,7 @@ where
 	) -> (Self::NegativeImbalance, Self::Balance) {
 		let free_balance = Self::free_balance(who);
 		let free_slash = cmp::min(free_balance, value);
+
 		Self::set_free_balance(who, free_balance - free_slash);
 		let remaining_slash = value - free_slash;
 		// NOTE: `slash()` prefers free balance, but assumes that reserve balance can be drawn
