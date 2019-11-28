@@ -52,7 +52,7 @@ use std::{
 };
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
-use sp_transaction_pool::{TransactionPool, TransactionPoolMaintainer};
+use promet::prometheus_gauge;
 use sp_blockchain;
 use grafana_data_source::{self, record_metrics};
 
@@ -954,6 +954,17 @@ ServiceBuilder<
 				"bandwidth_upload" => bandwidth_upload,
 				"used_state_cache_size" => used_state_cache_size,
 			);
+			prometheus_gauge!(
+				MEMPOOL_SIZE => used_state_cache_size as u64,
+				NODE_MEMORY => memory as u64,
+				NODE_CPU => cpu_usage as u64,
+				TX_COUNT => txpool_status.ready as u64,
+				FINALITY_HEIGHT => finalized_number as u64,
+				BEST_HEIGHT => best_number as u64,
+				P2P_PEERS_NUM => num_peers as u64,
+				P2P_NODE_DOWNLOAD => net_status.average_download_per_sec as u64,
+				P2P_NODE_UPLOAD => net_status.average_upload_per_sec as u64
+			  );
 			let _ = record_metrics!(
 				"peers" => num_peers,
 				"height" => best_number,
@@ -964,8 +975,7 @@ ServiceBuilder<
 				"bandwidth_download" => bandwidth_download,
 				"bandwidth_upload" => bandwidth_upload,
 				"used_state_cache_size" => used_state_cache_size,
-			);
-
+			  );
 			Ok(())
 		}).select(exit.clone().map(Ok).compat()).then(|_| Ok(()));
 		let _ = to_spawn_tx.unbounded_send(Box::new(tel_task));
@@ -1103,7 +1113,12 @@ ServiceBuilder<
 				.then(|_| Ok(()))));
 			telemetry
 		});
-
+		match config.prometheus_endpoint {
+			None => (),
+			Some(x) => {
+				let _prometheus = promet::init_prometheus(x);
+			}
+		}
 		// Grafana data source
 		if let Some(port) = config.grafana_port {
 			let future = select(
