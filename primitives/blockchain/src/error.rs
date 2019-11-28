@@ -28,7 +28,6 @@ use parity_scale_codec::Error as CodecError;
 /// Client Result type alias
 pub type Result<T> = result::Result<T, Error>;
 
-
 /// Error when the runtime failed to apply an extrinsic.
 #[derive(Debug, Display)]
 pub enum ApplyExtrinsicFailed {
@@ -73,6 +72,7 @@ pub enum Error {
 	InvalidAuthoritiesSet,
 	/// Could not get runtime version.
 	#[display(fmt = "Failed to get runtime version: {}", _0)]
+	#[from(ignore)]
 	VersionInvalid(String),
 	/// Genesis config is invalid.
 	#[display(fmt = "Genesis config provided is invalid")]
@@ -125,7 +125,6 @@ pub enum Error {
 	InvalidStateRoot,
 	/// A convenience variant for String
 	#[display(fmt = "{}", _0)]
-	#[from(ignore)]
 	Msg(String),
 }
 
@@ -136,12 +135,6 @@ impl error::Error for Error {
 			Error::Blockchain(e) => Some(e),
 			_ => None,
 		}
-	}
-}
-
-impl From<String> for Error {
-	fn from(s: String) -> Self {
-		Error::Msg(s)
 	}
 }
 
