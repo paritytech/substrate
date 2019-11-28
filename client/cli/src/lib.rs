@@ -29,7 +29,7 @@ pub mod informant;
 use client_api::execution_extensions::ExecutionStrategies;
 use service::{
 	config::{Configuration, DatabaseConfig},
-	ServiceBuilderExport, ServiceBuilderImport, ServiceBuilderRevert,
+	ServiceBuilderCommand,
 	RuntimeGenesis, ChainSpecExtension, PruningMode, ChainSpec,
 };
 use network::{
@@ -54,7 +54,7 @@ pub use structopt::clap::App;
 use params::{
 	RunCmd, PurgeChainCmd, RevertCmd, ImportBlocksCmd, ExportBlocksCmd, BuildSpecCmd,
 	NetworkConfigurationParams, MergeParameters, TransactionPoolParams,
-	NodeKeyParams, NodeKeyType, Cors,
+	NodeKeyParams, NodeKeyType, Cors, CheckBlockCmd,
 };
 pub use params::{NoCustom, CoreParams, SharedParams, ExecutionStrategy as ExecutionStrategyParam};
 pub use traits::{GetLogFilter, AugmentClap};
@@ -64,6 +64,8 @@ use lazy_static::lazy_static;
 use futures::{Future, FutureExt, TryFutureExt};
 use futures01::{Async, Future as _};
 use substrate_telemetry::TelemetryEndpoints;
+use sr_primitives::generic::BlockId;
+use sr_primitives::traits::Block as BlockT;
 
 /// default sub directory to store network config
 const DEFAULT_NETWORK_CONFIG_PATH : &'static str = "network";
@@ -231,6 +233,9 @@ where
 		params::CoreParams::ImportBlocks(params) => ParseAndPrepare::ImportBlocks(
 			ParseAndPrepareImport { params, version }
 		),
+		params::CoreParams::CheckBlock(params) => ParseAndPrepare::CheckBlock(
+			CheckBlock { params, version }
+		),
 		params::CoreParams::PurgeChain(params) => ParseAndPrepare::PurgeChain(
 			ParseAndPreparePurge { params, version }
 		),
@@ -263,6 +268,8 @@ pub enum ParseAndPrepare<'a, CC, RP> {
 	ExportBlocks(ParseAndPrepareExport<'a>),
 	/// Command ready to import the chain.
 	ImportBlocks(ParseAndPrepareImport<'a>),
+	/// Command to check a block.
+	CheckBlock(CheckBlock<'a>),
 	/// Command ready to purge the chain.
 	PurgeChain(ParseAndPreparePurge<'a>),
 	/// Command ready to revert the chain.
@@ -366,7 +373,7 @@ impl<'a> ParseAndPrepareExport<'a> {
 	) -> error::Result<()>
 	where S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
 		F: FnOnce(Configuration<C, G, E>) -> Result<B, error::Error>,
-		B: ServiceBuilderExport,
+		B: ServiceBuilderCommand,
 		C: Default,
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
@@ -427,19 +434,13 @@ impl<'a> ParseAndPrepareImport<'a> {
 	) -> error::Result<()>
 	where S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
 		F: FnOnce(Configuration<C, G, E>) -> Result<B, error::Error>,
-		B: ServiceBuilderImport,
+		B: ServiceBuilderCommand,
 		C: Default,
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
 		Exit: IntoExit
 	{
-		let mut config = create_config_with_db_path(spec_factory, &self.params.shared_params, self.version)?;
-		config.wasm_method = self.params.wasm_method.into();
-		config.execution_strategies = ExecutionStrategies {
-			importing: self.params.execution.into(),
-			other: self.params.execution.into(),
-			..Default::default()
-		};
+		let config = create_config_with_db_path(spec_factory, &self.params.shared_params, self.version)?;
 
 		let file: Box<dyn ReadPlusSeek + Send> = match self.params.input {
 			Some(filename) => Box::new(File::open(filename)?),
@@ -461,7 +462,7 @@ impl<'a> ParseAndPrepareImport<'a> {
 			let _ = exit_send.send(());
 		});
 
-		let mut import_fut = builder(config)?.import_blocks(file);
+		let mut import_fut = builder(config)?.import_blocks(file, false);
 		let fut = futures01::future::poll_fn(|| {
 			if exit_recv.try_recv().is_ok() {
 				return Ok(Async::Ready(()));
@@ -471,6 +472,49 @@ impl<'a> ParseAndPrepareImport<'a> {
 
 		let mut runtime = tokio::runtime::current_thread::Runtime::new().unwrap();
 		runtime.block_on(fut)?;
+		Ok(())
+	}
+}
+
+/// Command to check a block.
+pub struct CheckBlock<'a> {
+	params: CheckBlockCmd,
+	version: &'a VersionInfo,
+}
+
+impl<'a> CheckBlock<'a> {
+	/// Runs the command and imports to the chain.
+	pub fn run_with_builder<C, G, E, F, B, S, Exit>(
+		self,
+		builder: F,
+		spec_factory: S,
+		_exit: Exit,
+	) -> error::Result<()>
+		where S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
+			F: FnOnce(Configuration<C, G, E>) -> Result<B, error::Error>,
+			B: ServiceBuilderCommand,
+			<<B as ServiceBuilderCommand>::Block as BlockT>::Hash: FromStr,
+			C: Default,
+			G: RuntimeGenesis,
+			E: ChainSpecExtension,
+			Exit: IntoExit
+	{
+		let config = create_config_with_db_path(spec_factory, &self.params.shared_params, self.version)?;
+
+		let input = if self.params.input.starts_with("0x") { &self.params.input[2..] } else { &self.params.input[..] };
+		let block_id = match FromStr::from_str(input) {
+			Ok(hash) => BlockId::hash(hash),
+			Err(_) => match self.params.input.parse::<u32>() {
+				Ok(n) => BlockId::number((n as u32).into()),
+				Err(_) => return Err(error::Error::Input("Invalid hash or number specified".into())),
+			}
+		};
+
+		let start = std::time::Instant::now();
+		let check = builder(config)?.check_block(block_id);
+		let mut runtime = tokio::runtime::current_thread::Runtime::new().unwrap();
+		runtime.block_on(check)?;
+		println!("Completed in {} ms.", start.elapsed().as_millis());
 		Ok(())
 	}
 }
@@ -548,7 +592,7 @@ impl<'a> ParseAndPrepareRevert<'a> {
 	) -> error::Result<()> where
 		S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
 		F: FnOnce(Configuration<C, G, E>) -> Result<B, error::Error>,
-		B: ServiceBuilderRevert,
+		B: ServiceBuilderCommand,
 		C: Default,
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
@@ -694,6 +738,55 @@ fn fill_config_keystore_password<C, G, E>(
 	Ok(())
 }
 
+fn fill_shared_config<C, G, E>(config: &mut Configuration<C, G, E>, cli: &SharedParams, role: service::Roles)
+	-> error::Result<()>
+where
+	C: Default,
+	G: RuntimeGenesis,
+	E: ChainSpecExtension,
+{
+	config.database = DatabaseConfig::Path {
+		path: config.in_chain_config_dir(DEFAULT_DB_CONFIG_PATH).expect("We provided a base_path."),
+		cache_size: Some(cli.database_cache_size),
+	};
+	config.state_cache_size = cli.state_cache_size;
+
+	// by default we disable pruning if the node is an authority (i.e.
+	// `ArchiveAll`), otherwise we keep state for the last 256 blocks. if the
+	// node is an authority and pruning is enabled explicitly, then we error
+	// unless `unsafe_pruning` is set.
+	config.pruning = match &cli.pruning {
+		Some(ref s) if s == "archive" => PruningMode::ArchiveAll,
+		None if role == service::Roles::AUTHORITY => PruningMode::ArchiveAll,
+		None => PruningMode::default(),
+		Some(s) => {
+			if role == service::Roles::AUTHORITY && !cli.unsafe_pruning {
+				return Err(error::Error::Input(
+					"Validators should run with state pruning disabled (i.e. archive). \
+					You can ignore this check with `--unsafe-pruning`.".to_string()
+				));
+			}
+
+			PruningMode::keep_blocks(s.parse()
+				.map_err(|_| error::Error::Input("Invalid pruning mode specified".to_string()))?
+			)
+		},
+	};
+
+	config.wasm_method = cli.wasm_method.into();
+
+	let exec = &cli.execution_strategies;
+	let exec_all_or = |strat: params::ExecutionStrategy| exec.execution.unwrap_or(strat).into();
+	config.execution_strategies = ExecutionStrategies {
+		syncing: exec_all_or(exec.execution_syncing),
+		importing: exec_all_or(exec.execution_import_block),
+		block_construction: exec_all_or(exec.execution_block_construction),
+		offchain_worker: exec_all_or(exec.execution_offchain_worker),
+		other: exec_all_or(exec.execution_other),
+	};
+	Ok(())
+}
+
 fn create_run_node_config<C, G, E, S>(
 	cli: RunCmd, spec_factory: S, impl_name: &'static str, version: &VersionInfo,
 ) -> error::Result<Configuration<C, G, E>>
@@ -708,6 +801,19 @@ where
 	let mut config = service::Configuration::default_with_spec_and_base_path(spec.clone(), Some(base_path));
 
 	fill_config_keystore_password(&mut config, &cli)?;
+
+	let is_dev = cli.shared_params.dev;
+	let is_authority = cli.validator || cli.sentry || is_dev || cli.keyring.account.is_some();
+	let role =
+		if cli.light {
+			service::Roles::LIGHT
+		} else if is_authority {
+			service::Roles::AUTHORITY
+		} else {
+			service::Roles::FULL
+		};
+
+	fill_shared_config(&mut config, &cli.shared_params, role)?;
 
 	config.impl_name = impl_name;
 	config.impl_commit = version.commit;
@@ -731,60 +837,8 @@ where
 
 	config.keystore_path = cli.keystore_path.or_else(|| config.in_chain_config_dir(DEFAULT_KEYSTORE_CONFIG_PATH));
 
-	config.database = DatabaseConfig::Path {
-		path: config.in_chain_config_dir(DEFAULT_DB_CONFIG_PATH).expect("We provided a base_path."),
-		cache_size: Some(cli.database_cache_size),
-	};
-	config.state_cache_size = cli.state_cache_size;
-
-	let is_dev = cli.shared_params.dev;
-	let is_authority = cli.validator || cli.sentry || is_dev || cli.keyring.account.is_some();
-
-	let role =
-		if cli.light {
-			service::Roles::LIGHT
-		} else if is_authority {
-			service::Roles::AUTHORITY
-		} else {
-			service::Roles::FULL
-		};
-
 	// set sentry mode (i.e. act as an authority but **never** actively participate)
 	config.sentry_mode = cli.sentry;
-
-	// by default we disable pruning if the node is an authority (i.e.
-	// `ArchiveAll`), otherwise we keep state for the last 256 blocks. if the
-	// node is an authority and pruning is enabled explicitly, then we error
-	// unless `unsafe_pruning` is set.
-	config.pruning = match cli.pruning {
-		Some(ref s) if s == "archive" => PruningMode::ArchiveAll,
-		None if role == service::Roles::AUTHORITY => PruningMode::ArchiveAll,
-		None => PruningMode::default(),
-		Some(s) => {
-			if role == service::Roles::AUTHORITY && !cli.unsafe_pruning {
-				return Err(error::Error::Input(
-					"Validators should run with state pruning disabled (i.e. archive). \
-					You can ignore this check with `--unsafe-pruning`.".to_string()
-				));
-			}
-
-			PruningMode::keep_blocks(s.parse()
-				.map_err(|_| error::Error::Input("Invalid pruning mode specified".to_string()))?
-			)
-		},
-	};
-
-	config.wasm_method = cli.wasm_method.into();
-
-	let exec = cli.execution_strategies;
-	let exec_all_or = |strat: params::ExecutionStrategy| exec.execution.unwrap_or(strat).into();
-	config.execution_strategies = ExecutionStrategies {
-		syncing: exec_all_or(exec.execution_syncing),
-		importing: exec_all_or(exec.execution_import_block),
-		block_construction: exec_all_or(exec.execution_block_construction),
-		offchain_worker: exec_all_or(exec.execution_offchain_worker),
-		other: exec_all_or(exec.execution_other),
-	};
 
 	config.offchain_worker = match (cli.offchain_worker, role) {
 		(params::OffchainWorkerEnabled::WhenValidating, service::Roles::AUTHORITY) => true,
@@ -871,11 +925,7 @@ where
 	let base_path = base_path(cli, version);
 
 	let mut config = service::Configuration::default_with_spec_and_base_path(spec.clone(), Some(base_path));
-	config.database = DatabaseConfig::Path {
-		path: config.in_chain_config_dir(DEFAULT_DB_CONFIG_PATH).expect("We provided a base_path."),
-		cache_size: None,
-	};
-
+	fill_shared_config(&mut config, &cli, service::Roles::FULL)?;
 	Ok(config)
 }
 
@@ -943,14 +993,15 @@ fn init_logger(pattern: &str) {
 			)
 		};
 
-		if !enable_color {
-			output = kill_color(output.as_ref());
-		}
-
 		if !isatty && record.level() <= log::Level::Info && atty::is(atty::Stream::Stdout) {
 			// duplicate INFO/WARN output to console
 			println!("{}", output);
 		}
+
+		if !enable_color {
+			output = kill_color(output.as_ref());
+		}
+
 		writeln!(buf, "{}", output)
 	});
 

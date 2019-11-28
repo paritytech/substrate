@@ -99,6 +99,7 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::LongestChain,
 			allow_missing_state: false,
+			import_existing: false,
 		}, maybe_keys))
 	}
 }
