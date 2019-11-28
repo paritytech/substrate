@@ -53,9 +53,7 @@ use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{NumberFor, Block as BlockT};
 
 pub use self::error::Error;
-pub use self::builder::{
-	ServiceBuilder, ServiceBuilderExport, ServiceBuilderImport, ServiceBuilderRevert,
-};
+pub use self::builder::{ServiceBuilder, ServiceBuilderCommand};
 pub use config::{Configuration, Roles, PruningMode};
 pub use chain_spec::{ChainSpec, Properties, RuntimeGenesis, Extension as ChainSpecExtension};
 pub use txpool_api::{TransactionPool, TransactionPoolMaintainer, InPoolTransaction, IntoPoolError};
