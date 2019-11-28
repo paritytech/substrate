@@ -36,5 +36,5 @@ env_logger = "0.7.0"
 tempfile = "3.1.0"
 client-db = { package = "substrate-client-db", path = "./db", features = ["kvdb-rocksdb"] }
 test-client = { package = "substrate-test-runtime-client", path = "../test/utils/runtime/client" }
-kvdb-memorydb = { git = "https://github.com/paritytech/parity-common", rev="898694798ee2d07f3b30d0da9fc8cbd6436b31e7" }
+kvdb-memorydb = "0.1.2"
 panic-handler = { package = "substrate-panic-handler", path = "../primitives/panic-handler" }
