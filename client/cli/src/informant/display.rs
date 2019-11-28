@@ -21,7 +21,7 @@ use sc_network::SyncState;
 use sp_runtime::traits::{Block as BlockT, CheckedDiv, NumberFor, Zero, Saturating};
 use sc_service::NetworkStatus;
 use std::{convert::{TryFrom, TryInto}, fmt, time};
-
+use sc_prometheus::prometheus_gauge;
 /// State of the informant display system.
 ///
 /// This is the system that handles the line that gets regularly printed and that looks something
@@ -63,7 +63,10 @@ impl<B: BlockT> InformantDisplay<B> {
 		let (status, target) = match (net_status.sync_state, net_status.best_seen_block) {
 			(SyncState::Idle, _) => ("Idle".into(), "".into()),
 			(SyncState::Downloading, None) => (format!("Syncing{}", speed), "".into()),
-			(SyncState::Downloading, Some(n)) => (format!("Syncing{}", speed), format!(", target=#{}", n)),
+			(SyncState::Downloading, Some(n)) => {
+				prometheus_gauge!(TARGET_NUM => n.saturated_into().try_into().unwrap());
+				(format!("Syncing{}", speed), format!(", target=#{}", n))
+			}
 		};
 
 		info!(
