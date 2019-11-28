@@ -440,6 +440,12 @@ pub struct RunCmd {
 	/// Use `--unsafe-ws-external` to suppress the warning if you understand the risks.
 	#[structopt(long = "ws-external")]
 	pub ws_external: bool,
+	/// Prometheus exporter TCP port.
+	#[structopt(long = "prometheus-port", value_name = "PORT")]
+	pub prometheus_port: Option<u16>,
+	/// Prometheus exporter IP addr.
+	#[structopt(long = "prometheus-addr", value_name = "Local IP address")]
+	pub prometheus_endpoint: Option<String>,
 
 	/// Listen to all Websocket interfaces.
 	///

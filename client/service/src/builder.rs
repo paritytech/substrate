@@ -51,7 +51,7 @@ use std::{
 };
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
-use sp_transaction_pool::{TransactionPool, TransactionPoolMaintainer};
+use promet::prometheus_gauge;
 use sp_blockchain;
 use grafana_data_source::{self, record_metrics};
 
@@ -975,6 +975,17 @@ ServiceBuilder<
 				"disk_read_per_sec" => info.usage.as_ref().map(|usage| usage.io.bytes_read).unwrap_or(0),
 				"disk_write_per_sec" => info.usage.as_ref().map(|usage| usage.io.bytes_written).unwrap_or(0),
 			);
+			prometheus_gauge!(
+				MEMPOOL_SIZE => used_state_cache_size as u64,
+				NODE_MEMORY => memory as u64,
+				NODE_CPU => cpu_usage as u64,
+				TX_COUNT => txpool_status.ready as u64,
+				FINALITY_HEIGHT => finalized_number as u64,
+				BEST_HEIGHT => best_number as u64,
+				P2P_PEERS_NUM => num_peers as u64,
+				P2P_NODE_DOWNLOAD => net_status.average_download_per_sec as u64,
+				P2P_NODE_UPLOAD => net_status.average_upload_per_sec as u64
+			  );
 			let _ = record_metrics!(
 				"peers" => num_peers,
 				"height" => best_number,
@@ -1126,7 +1137,12 @@ ServiceBuilder<
 				.then(|_| Ok(()))));
 			telemetry
 		});
-
+		match config.prometheus_endpoint {
+			None => (),
+			Some(x) => {
+				let _prometheus = promet::init_prometheus(x);
+			}
+		}
 		// Grafana data source
 		if let Some(port) = config.grafana_port {
 			let future = select(
