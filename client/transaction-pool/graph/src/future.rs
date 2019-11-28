@@ -227,6 +227,12 @@ impl<Hash: hash::Hash + Eq + Clone, Ex> FutureTransactions<Hash, Ex> {
 		self.waiting.values().map(|waiting| &*waiting.transaction)
 	}
 
+	/// Removes and returns all future transactions.
+	pub fn clear(&mut self) -> Vec<Arc<Transaction<Hash, Ex>>> {
+		self.wanted_tags.clear();
+		self.waiting.drain().map(|(_, tx)| tx.transaction).collect()
+	}
+
 	/// Returns number of transactions in the Future queue.
 	pub fn len(&self) -> usize {
 		self.waiting.len()

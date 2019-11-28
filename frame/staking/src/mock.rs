@@ -21,10 +21,10 @@ use sr_primitives::{Perbill, KeyTypeId};
 use sr_primitives::curve::PiecewiseLinear;
 use sr_primitives::traits::{IdentityLookup, Convert, OpaqueKeys, OnInitialize, SaturatedConversion};
 use sr_primitives::testing::{Header, UintAuthorityId};
-use sr_staking_primitives::SessionIndex;
+use sr_staking_primitives::{SessionIndex, offence::{OffenceDetails, OnOffenceHandler}};
 use primitives::{H256, crypto::key_types};
 use runtime_io;
-use support::{assert_ok, impl_outer_origin, parameter_types, StorageLinkedMap};
+use support::{assert_ok, impl_outer_origin, parameter_types, StorageLinkedMap, StorageValue};
 use support::traits::{Currency, Get, FindAuthor};
 use crate::{
 	EraIndex, GenesisConfig, Module, Trait, StakerStatus, ValidatorPrefs, RewardDestination,
@@ -48,6 +48,7 @@ impl Convert<u128, u64> for CurrencyToVoteHandler {
 thread_local! {
 	static SESSION: RefCell<(Vec<AccountId>, HashSet<AccountId>)> = RefCell::new(Default::default());
 	static EXISTENTIAL_DEPOSIT: RefCell<u64> = RefCell::new(0);
+	static SLASH_DEFER_DURATION: RefCell<EraIndex> = RefCell::new(0);
 }
 
 pub struct TestSessionHandler;
@@ -84,6 +85,13 @@ pub struct ExistentialDeposit;
 impl Get<u64> for ExistentialDeposit {
 	fn get() -> u64 {
 		EXISTENTIAL_DEPOSIT.with(|v| *v.borrow())
+	}
+}
+
+pub struct SlashDeferDuration;
+impl Get<EraIndex> for SlashDeferDuration {
+	fn get() -> EraIndex {
+		SLASH_DEFER_DURATION.with(|v| *v.borrow())
 	}
 }
 
@@ -202,6 +210,8 @@ impl Trait for Test {
 	type Slash = ();
 	type Reward = ();
 	type SessionsPerEra = SessionsPerEra;
+	type SlashDeferDuration = SlashDeferDuration;
+	type SlashCancelOrigin = system::EnsureRoot<Self::AccountId>;
 	type BondingDuration = BondingDuration;
 	type SessionInterface = Self;
 	type RewardCurve = RewardCurve;
@@ -213,6 +223,7 @@ pub struct ExtBuilder {
 	nominate: bool,
 	validator_count: u32,
 	minimum_validator_count: u32,
+	slash_defer_duration: EraIndex,
 	fair: bool,
 	num_validators: Option<u32>,
 	invulnerables: Vec<u64>,
@@ -226,6 +237,7 @@ impl Default for ExtBuilder {
 			nominate: true,
 			validator_count: 2,
 			minimum_validator_count: 0,
+			slash_defer_duration: 0,
 			fair: true,
 			num_validators: None,
 			invulnerables: vec![],
@@ -254,6 +266,10 @@ impl ExtBuilder {
 		self.minimum_validator_count = count;
 		self
 	}
+	pub fn slash_defer_duration(mut self, eras: EraIndex) -> Self {
+		self.slash_defer_duration = eras;
+		self
+	}
 	pub fn fair(mut self, is_fair: bool) -> Self {
 		self.fair = is_fair;
 		self
@@ -268,6 +284,7 @@ impl ExtBuilder {
 	}
 	pub fn set_associated_consts(&self) {
 		EXISTENTIAL_DEPOSIT.with(|v| *v.borrow_mut() = self.existential_deposit);
+		SLASH_DEFER_DURATION.with(|v| *v.borrow_mut() = self.slash_defer_duration);
 	}
 	pub fn build(self) -> runtime_io::TestExternalities {
 		self.set_associated_consts();
@@ -393,6 +410,14 @@ pub fn assert_is_stash(acc: u64) {
 	assert!(Staking::bonded(&acc).is_some(), "Not a stash.");
 }
 
+pub fn assert_ledger_consistent(stash: u64) {
+	assert_is_stash(stash);
+	let ledger = Staking::ledger(stash - 1).unwrap();
+
+	let real_total: Balance = ledger.unlocking.iter().fold(ledger.active, |a, c| a + c.value);
+	assert_eq!(real_total, ledger.total);
+}
+
 pub fn bond_validator(acc: u64, val: u64) {
 	// a = controller
 	// a + 1 = stash
@@ -450,4 +475,34 @@ pub fn reward_all_elected() {
 
 pub fn validator_controllers() -> Vec<AccountId> {
 	Session::validators().into_iter().map(|s| Staking::bonded(&s).expect("no controller for validator")).collect()
+}
+
+pub fn on_offence_in_era(
+	offenders: &[OffenceDetails<AccountId, session::historical::IdentificationTuple<Test>>],
+	slash_fraction: &[Perbill],
+	era: EraIndex,
+) {
+	let bonded_eras = crate::BondedEras::get();
+	for &(bonded_era, start_session) in bonded_eras.iter() {
+		if bonded_era == era {
+			Staking::on_offence(offenders, slash_fraction, start_session);
+			return
+		} else if bonded_era > era {
+			break
+		}
+	}
+
+	if Staking::current_era() == era {
+		Staking::on_offence(offenders, slash_fraction, Staking::current_era_start_session_index());
+	} else {
+		panic!("cannot slash in era {}", era);
+	}
+}
+
+pub fn on_offence_now(
+	offenders: &[OffenceDetails<AccountId, session::historical::IdentificationTuple<Test>>],
+	slash_fraction: &[Perbill],
+) {
+	let now = Staking::current_era();
+	on_offence_in_era(offenders, slash_fraction, now)
 }

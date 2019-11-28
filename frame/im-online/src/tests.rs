@@ -38,14 +38,19 @@ fn test_unresponsiveness_slash_fraction() {
 	);
 
 	assert_eq!(
-		UnresponsivenessOffence::<()>::slash_fraction(3, 50),
-		Perbill::from_parts(6000000), // 0.6%
+		UnresponsivenessOffence::<()>::slash_fraction(5, 50),
+		Perbill::zero(), // 0%
+	);
+
+	assert_eq!(
+		UnresponsivenessOffence::<()>::slash_fraction(7, 50),
+		Perbill::from_parts(4200000), // 0.42%
 	);
 
 	// One third offline should be punished around 5%.
 	assert_eq!(
 		UnresponsivenessOffence::<()>::slash_fraction(17, 50),
-		Perbill::from_parts(48000000), // 4.8%
+		Perbill::from_parts(46200000), // 4.62%
 	);
 }
 

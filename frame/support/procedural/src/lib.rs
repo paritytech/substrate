@@ -56,7 +56,15 @@ use proc_macro::TokenStream;
 /// * Value: `Foo: type`: Implements the
 ///   [`StorageValue`](../frame_support/storage/trait.StorageValue.html) trait using the
 ///   [`StorageValue generator`](../frame_support/storage/generator/trait.StorageValue.html).
-///   The generator `unhashed_key` is `$module_prefix ++ " " ++ $storage_name`
+///
+///   The generator is implemented with:
+///   * `module_prefix`: module_prefix
+///   * `storage_prefix`: storage_name
+///
+///   Thus the storage value is finally stored at:
+///   ```nocompile
+///   Twox128(module_prefix) ++ Twox128(storage_prefix)
+///   ```
 ///
 /// * Map: `Foo: map hasher($hash) type => type`: Implements the
 ///   [`StorageMap`](../frame_support/storage/trait.StorageMap.html) trait using the
@@ -69,8 +77,14 @@ use proc_macro::TokenStream;
 ///   with care, see generator documentation.
 ///
 ///   The generator is implemented with:
-///   * `prefix`: `$module_prefix ++ " " ++ $storage_name`
+///   * `module_prefix`: $module_prefix
+///   * `storage_prefix`: storage_name
 ///   * `Hasher`: $hash
+///
+///   Thus the keys are stored at:
+///   ```nocompile
+///   twox128(module_prefix) ++ twox128(storage_prefix) ++ hasher(encode(key))
+///   ```
 ///
 /// * Linked map: `Foo: linked_map hasher($hash) type => type`: Implements the
 ///   [`StorageLinkedMap`](../frame_support/storage/trait.StorageLinkedMap.html) trait using the
@@ -82,14 +96,24 @@ use proc_macro::TokenStream;
 ///   `hasher($hash)` is optional and its default is `blake2_256`. One should use another hasher
 ///   with care, see generator documentation.
 ///
-///   The generator is implemented with:
-///   * `prefix`: `$module_prefix ++ " " ++ $storage_name`
-///   * `head_key`: `"head of " ++ $module_prefix ++ " " ++ $storage_name`
-///   * `Hasher`: $hash
-///
 ///   All key formatting logic can be accessed in a type-agnostic format via the
 ///   [`KeyFormat`](../srml_support/storage/generator/trait.KeyFormat.html) trait, which
 ///   is implemented for the storage linked map type as well.
+///
+///   The generator key format is implemented with:
+///   * `module_prefix`: $module_prefix
+///   * `storage_prefix`: storage_name
+///   * `head_prefix`: `"HeadOf" ++ storage_name`
+///   * `Hasher`: $hash
+///
+///   Thus the keys are stored at:
+///   ```nocompile
+///   Twox128(module_prefix) ++ Twox128(storage_prefix) ++ Hasher(encode(key))
+///   ```
+///   and head is stored at:
+///   ```nocompile
+///   Twox128(module_prefix) ++ Twox128(head_prefix)
+///   ```
 ///
 /// * Double map: `Foo: double_map hasher($hash1) u32, $hash2(u32) => u32`: Implements the
 ///   [`StorageDoubleMap`](../frame_support/storage/trait.StorageDoubleMap.html) trait using the
@@ -111,9 +135,15 @@ use proc_macro::TokenStream;
 ///   Otherwise, other items in storage with the same first key can be compromised.
 ///
 ///   The generator is implemented with:
-///   * `key1_prefix`: `$module_prefix ++ " " ++ $storage_name`
+///   * `module_prefix`: $module_prefix
+///   * `storage_prefix`: storage_name
 ///   * `Hasher1`: $hash1
 ///   * `Hasher2`: $hash2
+///
+///   Thus keys are stored at:
+///   ```nocompile
+///   Twox128(module_prefix) ++ Twox128(storage_prefix) ++ Hasher1(encode(key1)) ++ Hasher2(encode(key2))
+///   ```
 ///
 /// Supported hashers (ordered from least to best security):
 ///
