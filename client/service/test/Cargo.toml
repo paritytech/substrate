@@ -18,3 +18,4 @@ consensus = { package = "substrate-consensus-common", path = "../../../primitive
 client = { package = "substrate-client", path = "../../" }
 sr-primitives = { path = "../../../primitives/sr-primitives" }
 primitives = { package = "substrate-primitives", path = "../../../primitives/core" }
+txpool-api = { package = "sp-transaction-pool-api", path = "../../../primitives/transaction-pool" }

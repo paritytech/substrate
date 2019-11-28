@@ -28,6 +28,7 @@
 
 # Transaction pool
 /client/transaction-pool/ @tomusdrw
+/primitives/transaction-pool/ @tomusdrw
 
 # Offchain
 /client/offchain/ @tomusdrw

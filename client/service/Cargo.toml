@@ -41,11 +41,12 @@ chain-spec = { package = "substrate-chain-spec", path = "../chain-spec" }
 client-api = { package = "substrate-client-api", path = "../api" }
 client = { package = "substrate-client", path = "../" }
 sr-api = { path = "../../primitives/sr-api" }
-tx-pool-api = { package = "substrate-transaction-pool-runtime-api", path = "../../primitives/transaction-pool/runtime-api" }
+txpool-runtime-api = { package = "sp-transaction-pool-runtime-api", path = "../../primitives/transaction-pool/runtime-api" }
 client_db = { package = "substrate-client-db", path = "../db" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 substrate-executor = { path = "../executor" }
-transaction_pool = { package = "sc-transaction-pool", path = "../../client/transaction-pool" }
+txpool = { package = "sc-transaction-pool", path = "../transaction-pool" }
+txpool-api = { package = "sp-transaction-pool-api", path = "../../primitives/transaction-pool" }
 rpc-servers = { package = "substrate-rpc-servers", path = "../rpc-servers" }
 rpc = { package = "substrate-rpc", path = "../rpc" }
 tel = { package = "substrate-telemetry", path = "../telemetry" }

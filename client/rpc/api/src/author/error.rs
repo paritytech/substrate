@@ -34,7 +34,7 @@ pub enum Error {
 	Client(Box<dyn std::error::Error + Send>),
 	/// Transaction pool error,
 	#[display(fmt="Transaction pool error: {}", _0)]
-	Pool(txpool::error::Error),
+	Pool(txpool_api::error::Error),
 	/// Verification error
 	#[display(fmt="Extrinsic verification error: {}", _0)]
 	#[from(ignore)]
@@ -93,7 +93,7 @@ const UNSUPPORTED_KEY_TYPE: i64 = POOL_INVALID_TX + 7;
 
 impl From<Error> for rpc::Error {
 	fn from(e: Error) -> Self {
-		use txpool::error::{Error as PoolError};
+		use txpool_api::error::{Error as PoolError};
 
 		match e {
 			Error::BadFormat(e) => rpc::Error {
