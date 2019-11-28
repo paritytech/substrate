@@ -83,6 +83,7 @@ impl<B, E, RA, Block> ClientExt<Block> for Client<B, E, Block, RA>
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::LongestChain,
 			allow_missing_state: false,
+			import_existing: false,
 		};
 
 		BlockImport::import_block(&mut (&*self), import, HashMap::new()).map(|_| ())
@@ -102,6 +103,7 @@ impl<B, E, RA, Block> ClientExt<Block> for Client<B, E, Block, RA>
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::Custom(true),
 			allow_missing_state: false,
+			import_existing: false,
 		};
 
 		BlockImport::import_block(&mut (&*self), import, HashMap::new()).map(|_| ())
@@ -121,6 +123,7 @@ impl<B, E, RA, Block> ClientExt<Block> for Client<B, E, Block, RA>
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::Custom(true),
 			allow_missing_state: false,
+			import_existing: false,
 		};
 
 		BlockImport::import_block(&mut (&*self), import, HashMap::new()).map(|_| ())
@@ -143,6 +146,7 @@ impl<B, E, RA, Block> ClientExt<Block> for Client<B, E, Block, RA>
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::LongestChain,
 			allow_missing_state: false,
+			import_existing: false,
 		};
 
 		BlockImport::import_block(&mut (&*self), import, HashMap::new()).map(|_| ())

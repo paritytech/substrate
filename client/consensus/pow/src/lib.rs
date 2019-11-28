@@ -304,6 +304,7 @@ impl<B: BlockT<Hash=H256>, C, S, Algorithm> Verifier<B> for PowVerifier<B, C, S,
 			auxiliary: vec![(key, Some(aux.encode()))],
 			fork_choice: ForkChoiceStrategy::Custom(aux.total_difficulty > best_aux.total_difficulty),
 			allow_missing_state: false,
+			import_existing: false,
 		};
 
 		Ok((import_block, None))
@@ -532,6 +533,7 @@ fn mine_loop<B: BlockT<Hash=H256>, C, Algorithm, E, SO, S>(
 			auxiliary: vec![(key, Some(aux.encode()))],
 			fork_choice: ForkChoiceStrategy::Custom(true),
 			allow_missing_state: false,
+			import_existing: false,
 		};
 
 		block_import.import_block(import_block, HashMap::default())

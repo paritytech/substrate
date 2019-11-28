@@ -436,6 +436,7 @@ impl<B, C, E, I, Error, SO> slots::SimpleSlotWorker<B> for BabeWorker<B, C, E, I
 				// https://github.com/paritytech/substrate/issues/3623
 				fork_choice: ForkChoiceStrategy::LongestChain,
 				allow_missing_state: false,
+				import_existing: false,
 			}
 		})
 	}
@@ -775,6 +776,7 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA
 					// https://github.com/paritytech/substrate/issues/3623
 					fork_choice: ForkChoiceStrategy::LongestChain,
 					allow_missing_state: false,
+					import_existing: false,
 				};
 
 				Ok((block_import_params, Default::default()))
