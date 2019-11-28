@@ -873,7 +873,7 @@ impl<CC, RP> StructOpt for CoreParams<CC, RP> where
 		)
 		.subcommand(
 			CheckBlockCmd::augment_clap(SubCommand::with_name("check-block"))
-			.about("Re-validate a known block.")
+				.about("Re-validate a known block.")
 		)
 		.subcommand(
 			RevertCmd::augment_clap(SubCommand::with_name("revert"))
