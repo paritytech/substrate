@@ -668,13 +668,17 @@ impl<T: Trait> Module<T> {
 			}
 		}
 
-		let storage_root = T::Hashing::storage_root();
-		let storage_changes_root = T::Hashing::storage_changes_root(parent_hash);
+		let storage_root = T::Hash::decode(&mut &runtime_io::storage::root()[..])
+			.expect("Node is configured to use the same hash; qed");
+		let storage_changes_root = runtime_io::storage::changes_root(&parent_hash.encode());
 
 		// we can't compute changes trie root earlier && put it to the Digest
 		// because it will include all currently existing temporaries.
 		if let Some(storage_changes_root) = storage_changes_root {
-			let item = generic::DigestItem::ChangesTrieRoot(storage_changes_root);
+			let item = generic::DigestItem::ChangesTrieRoot(
+				T::Hash::decode(&mut &storage_changes_root[..])
+					.expect("Node is configured to use the same hash; qed")
+			);
 			digest.push(item);
 		}
 

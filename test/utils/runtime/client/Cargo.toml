@@ -14,3 +14,4 @@ sp-blockchain = { path = "../../../../primitives/blockchain" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 client-api = { package = "substrate-client-api", path = "../../../../client/api" }
 client = { package = "substrate-client", path = "../../../../client/" }
+futures = "0.3.1"

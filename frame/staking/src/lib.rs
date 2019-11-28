@@ -108,6 +108,8 @@
 //! determined, a value is deducted from the balance of the validator and all the nominators who
 //! voted for this validator (values are deducted from the _stash_ account of the slashed entity).
 //!
+//! Slashing logic is further described in the documentation of the `slashing` module.
+//!
 //! Similar to slashing, rewards are also shared among a validator and its associated nominators.
 //! Yet, the reward funds are not always transferred to the stash account and can be configured.
 //! See [Reward Calculation](#reward-calculation) for more details.
@@ -248,6 +250,8 @@
 mod mock;
 #[cfg(test)]
 mod tests;
+mod migration;
+mod slashing;
 
 pub mod inflation;
 
@@ -268,6 +272,7 @@ use sr_primitives::{
 	curve::PiecewiseLinear,
 	traits::{
 		Convert, Zero, One, StaticLookup, CheckedSub, Saturating, Bounded, SaturatedConversion,
+		SimpleArithmetic, EnsureOrigin,
 	}
 };
 use sr_staking_primitives::{
@@ -278,7 +283,7 @@ use sr_staking_primitives::{
 use sr_primitives::{Serialize, Deserialize};
 use system::{ensure_signed, ensure_root};
 
-use phragmen::{elect, equalize, build_support_map, ExtendedBalance, PhragmenStakedAssignment};
+use phragmen::{ExtendedBalance, PhragmenStakedAssignment};
 
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
 const MAX_NOMINATIONS: usize = 16;
@@ -406,6 +411,74 @@ impl<
 			.collect();
 		Self { total, active: self.active, stash: self.stash, unlocking }
 	}
+
+}
+
+impl<AccountId, Balance> StakingLedger<AccountId, Balance> where
+	Balance: SimpleArithmetic + Saturating + Copy,
+{
+	/// Slash the validator for a given amount of balance. This can grow the value
+	/// of the slash in the case that the validator has less than `minimum_balance`
+	/// active funds. Returns the amount of funds actually slashed.
+	///
+	/// Slashes from `active` funds first, and then `unlocking`, starting with the
+	/// chunks that are closest to unlocking.
+	fn slash(
+		&mut self,
+		mut value: Balance,
+		minimum_balance: Balance,
+	) -> Balance {
+		let pre_total = self.total;
+		let total = &mut self.total;
+		let active = &mut self.active;
+
+		let slash_out_of = |
+			total_remaining: &mut Balance,
+			target: &mut Balance,
+			value: &mut Balance,
+		| {
+			let mut slash_from_target = (*value).min(*target);
+
+			if !slash_from_target.is_zero() {
+				*target -= slash_from_target;
+
+				// don't leave a dust balance in the staking system.
+				if *target <= minimum_balance {
+					slash_from_target += *target;
+					*value += rstd::mem::replace(target, Zero::zero());
+				}
+
+				*total_remaining = total_remaining.saturating_sub(slash_from_target);
+				*value -= slash_from_target;
+			}
+		};
+
+		slash_out_of(total, active, &mut value);
+
+		let i = self.unlocking.iter_mut()
+			.map(|chunk| {
+				slash_out_of(total, &mut chunk.value, &mut value);
+				chunk.value
+			})
+			.take_while(|value| value.is_zero()) // take all fully-consumed chunks out.
+			.count();
+
+		// kill all drained chunks.
+		let _ = self.unlocking.drain(..i);
+
+		pre_total.saturating_sub(*total)
+	}
+}
+
+/// A record of the nominations made by a specific account.
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+pub struct Nominations<AccountId> {
+	/// The targets of nomination.
+	pub targets: Vec<AccountId>,
+	/// The era the nominations were submitted.
+	pub submitted_in: EraIndex,
+	/// Whether the nominations have been suppressed.
+	pub suppressed: bool,
 }
 
 /// The amount of exposure (to slashing) than an individual nominator has.
@@ -431,12 +504,20 @@ pub struct Exposure<AccountId, Balance: HasCompact> {
 	pub others: Vec<IndividualExposure<AccountId, Balance>>,
 }
 
-/// A slashing event occurred, slashing a validator for a given amount of balance.
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, RuntimeDebug)]
-pub struct SlashJournalEntry<AccountId, Balance: HasCompact> {
-	who: AccountId,
-	amount: Balance,
-	own_slash: Balance, // the amount of `who`'s own exposure that was slashed
+/// A pending slash record. The value of the slash has been computed but not applied yet,
+/// rather deferred for several eras.
+#[derive(Encode, Decode, Default, RuntimeDebug)]
+pub struct UnappliedSlash<AccountId, Balance: HasCompact> {
+	/// The stash ID of the offending validator.
+	validator: AccountId,
+	/// The validator's own slash.
+	own: Balance,
+	/// All other slashed stakers and amounts.
+	others: Vec<(AccountId, Balance)>,
+	/// Reporters of the offence; bounty payout recipients.
+	reporters: Vec<AccountId>,
+	/// The amount of payout.
+	payout: Balance,
 }
 
 pub type BalanceOf<T> =
@@ -519,6 +600,14 @@ pub trait Trait: system::Trait {
 	/// Number of eras that staked funds must remain bonded for.
 	type BondingDuration: Get<EraIndex>;
 
+	/// Number of eras that slashes are deferred by, after computation. This
+	/// should be less than the bonding duration. Set to 0 if slashes should be
+	/// applied immediately, without opportunity for intervention.
+	type SlashDeferDuration: Get<EraIndex>;
+
+	/// The origin which can cancel a deferred slash. Root can always do this.
+	type SlashCancelOrigin: EnsureOrigin<Self::Origin>;
+
 	/// Interface for interacting with a session module.
 	type SessionInterface: self::SessionInterface<Self::AccountId>;
 
@@ -571,7 +660,10 @@ decl_storage! {
 		pub Validators get(fn validators): linked_map T::AccountId => ValidatorPrefs<BalanceOf<T>>;
 
 		/// The map from nominator stash key to the set of stash keys of all validators to nominate.
-		pub Nominators get(fn nominators): linked_map T::AccountId => Vec<T::AccountId>;
+		///
+		/// NOTE: is private so that we can ensure upgraded before all typical accesses.
+		/// Direct storage APIs can still bypass this protection.
+		Nominators get(fn nominators): linked_map T::AccountId => Option<Nominations<T::AccountId>>;
 
 		/// Nominators for a particular account that is in action right now. You can't iterate
 		/// through validators here, but you can find them in the Session module.
@@ -609,12 +701,38 @@ decl_storage! {
 		/// The rest of the slashed value is handled by the `Slash`.
 		pub SlashRewardFraction get(fn slash_reward_fraction) config(): Perbill;
 
+		/// The amount of currency given to reporters of a slash event which was
+		/// canceled by extraordinary circumstances (e.g. governance).
+		pub CanceledSlashPayout get(fn canceled_payout) config(): BalanceOf<T>;
+
+		/// All unapplied slashes that are queued for later.
+		pub UnappliedSlashes: map EraIndex => Vec<UnappliedSlash<T::AccountId, BalanceOf<T>>>;
+
 		/// A mapping from still-bonded eras to the first session index of that era.
 		BondedEras: Vec<(EraIndex, SessionIndex)>;
 
-		/// All slashes that have occurred in a given era.
-		EraSlashJournal get(fn era_slash_journal):
-			map EraIndex => Vec<SlashJournalEntry<T::AccountId, BalanceOf<T>>>;
+		/// All slashing events on validators, mapped by era to the highest slash proportion
+		/// and slash value of the era.
+		ValidatorSlashInEra:
+			double_map EraIndex, twox_128(T::AccountId) => Option<(Perbill, BalanceOf<T>)>;
+
+		/// All slashing events on nominators, mapped by era to the highest slash value of the era.
+		NominatorSlashInEra:
+			double_map EraIndex, twox_128(T::AccountId) => Option<BalanceOf<T>>;
+
+		/// Slashing spans for stash accounts.
+		SlashingSpans: map T::AccountId => Option<slashing::SlashingSpans>;
+
+		/// Records information about the maximum slash of a stash within a slashing span,
+		/// as well as how much reward has been paid out.
+		SpanSlash:
+			map (T::AccountId, slashing::SpanIndex) => slashing::SpanRecord<BalanceOf<T>>;
+
+		/// The earliest era for which we have a pending, unapplied slash.
+		EarliestUnappliedSlash: Option<EraIndex>;
+
+		/// The version of storage for upgrade.
+		StorageVersion: u32;
 	}
 	add_extra_genesis {
 		config(stakers):
@@ -646,6 +764,8 @@ decl_storage! {
 					}, _ => Ok(())
 				};
 			}
+
+			StorageVersion::put(migration::CURRENT_VERSION);
 		});
 	}
 }
@@ -672,6 +792,10 @@ decl_module! {
 		const BondingDuration: EraIndex = T::BondingDuration::get();
 
 		fn deposit_event() = default;
+
+		fn on_initialize() {
+			Self::ensure_storage_upgraded();
+		}
 
 		fn on_finalize() {
 			// Set the start of the first era.
@@ -859,6 +983,8 @@ decl_module! {
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(750_000)]
 		fn validate(origin, prefs: ValidatorPrefs<BalanceOf<T>>) {
+			Self::ensure_storage_upgraded();
+
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or("not a controller")?;
 			let stash = &ledger.stash;
@@ -879,6 +1005,8 @@ decl_module! {
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(750_000)]
 		fn nominate(origin, targets: Vec<<T::Lookup as StaticLookup>::Source>) {
+			Self::ensure_storage_upgraded();
+
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or("not a controller")?;
 			let stash = &ledger.stash;
@@ -888,8 +1016,14 @@ decl_module! {
 				.map(|t| T::Lookup::lookup(t))
 				.collect::<result::Result<Vec<T::AccountId>, _>>()?;
 
+			let nominations = Nominations {
+				targets,
+				submitted_in: Self::current_era(),
+				suppressed: false,
+			};
+
 			<Validators<T>>::remove(stash);
-			<Nominators<T>>::insert(stash, targets);
+			<Nominators<T>>::insert(stash, &nominations);
 		}
 
 		/// Declare no desire to either validate or nominate.
@@ -907,9 +1041,7 @@ decl_module! {
 		fn chill(origin) {
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or("not a controller")?;
-			let stash = &ledger.stash;
-			<Validators<T>>::remove(stash);
-			<Nominators<T>>::remove(stash);
+			Self::chill_stash(&ledger.stash);
 		}
 
 		/// (Re-)set the payment target for a controller.
@@ -1018,14 +1150,48 @@ decl_module! {
 			ensure_root(origin)?;
 			ForceEra::put(Forcing::ForceAlways);
 		}
+
+		/// Cancel enactment of a deferred slash. Can be called by either the root origin or
+		/// the `T::SlashCancelOrigin`.
+		/// passing the era and indices of the slashes for that era to kill.
+		///
+		/// # <weight>
+		/// - One storage write.
+		/// # </weight>
+		#[weight = SimpleDispatchInfo::FreeOperational]
+		fn cancel_deferred_slash(origin, era: EraIndex, slash_indices: Vec<u32>) {
+			T::SlashCancelOrigin::try_origin(origin)
+				.map(|_| ())
+				.or_else(ensure_root)
+				.map_err(|_| "bad origin")?;
+
+			let mut slash_indices = slash_indices;
+			slash_indices.sort_unstable();
+			let mut unapplied = <Self as Store>::UnappliedSlashes::get(&era);
+
+			for (removed, index) in slash_indices.into_iter().enumerate() {
+				let index = index as usize;
+
+				// if `index` is not duplicate, `removed` must be <= index.
+				ensure!(removed <= index, "duplicate index");
+
+				// all prior removals were from before this index, since the
+				// list is sorted.
+				let index = index - removed;
+				ensure!(index < unapplied.len(), "slash record index out of bounds");
+
+				unapplied.remove(index);
+			}
+
+			<Self as Store>::UnappliedSlashes::insert(&era, &unapplied);
+		}
 	}
 }
 
 impl<T: Trait> Module<T> {
 	// PUBLIC IMMUTABLES
 
-	/// The total balance that can be slashed from a validator controller account as of
-	/// right now.
+	/// The total balance that can be slashed from a stash account as of right now.
 	pub fn slashable_balance_of(stash: &T::AccountId) -> BalanceOf<T> {
 		Self::bonded(stash).and_then(Self::ledger).map(|l| l.active).unwrap_or_default()
 	}
@@ -1048,67 +1214,15 @@ impl<T: Trait> Module<T> {
 		<Ledger<T>>::insert(controller, ledger);
 	}
 
-	/// Slash a given validator by a specific amount with given (historical) exposure.
-	///
-	/// Removes the slash from the validator's balance by preference,
-	/// and reduces the nominators' balance if needed.
-	///
-	/// Returns the resulting `NegativeImbalance` to allow distributing the slashed amount and
-	/// pushes an entry onto the slash journal.
-	fn slash_validator(
-		stash: &T::AccountId,
-		slash: BalanceOf<T>,
-		exposure: &Exposure<T::AccountId, BalanceOf<T>>,
-		journal: &mut Vec<SlashJournalEntry<T::AccountId, BalanceOf<T>>>,
-	) -> NegativeImbalanceOf<T> {
-		// The amount we are actually going to slash (can't be bigger than the validator's total
-		// exposure)
-		let slash = slash.min(exposure.total);
+	/// Chill a stash account.
+	fn chill_stash(stash: &T::AccountId) {
+		<Validators<T>>::remove(stash);
+		<Nominators<T>>::remove(stash);
+	}
 
-		// limit what we'll slash of the stash's own to only what's in
-		// the exposure.
-		//
-		// note: this is fine only because we limit reports of the current era.
-		// otherwise, these funds may have already been slashed due to something
-		// reported from a prior era.
-		let already_slashed_own = journal.iter()
-			.filter(|entry| &entry.who == stash)
-			.map(|entry| entry.own_slash)
-			.fold(<BalanceOf<T>>::zero(), |a, c| a.saturating_add(c));
-
-		let own_remaining = exposure.own.saturating_sub(already_slashed_own);
-
-		// The amount we'll slash from the validator's stash directly.
-		let own_slash = own_remaining.min(slash);
-		let (mut imbalance, missing) = T::Currency::slash(stash, own_slash);
-		let own_slash = own_slash - missing;
-		// The amount remaining that we can't slash from the validator,
-		// that must be taken from the nominators.
-		let rest_slash = slash - own_slash;
-		if !rest_slash.is_zero() {
-			// The total to be slashed from the nominators.
-			let total = exposure.total - exposure.own;
-			if !total.is_zero() {
-				for i in exposure.others.iter() {
-					let per_u64 = Perbill::from_rational_approximation(i.value, total);
-					// best effort - not much that can be done on fail.
-					imbalance.subsume(T::Currency::slash(&i.who, per_u64 * rest_slash).0)
-				}
-			}
-		}
-
-		journal.push(SlashJournalEntry {
-			who: stash.clone(),
-			own_slash: own_slash.clone(),
-			amount: slash,
-		});
-
-		// trigger the event
-		Self::deposit_event(
-			RawEvent::Slash(stash.clone(), slash)
-		);
-
-		imbalance
+	/// Ensures storage is upgraded to most recent necessary state.
+	fn ensure_storage_upgraded() {
+		migration::perform_migrations::<T>();
 	}
 
 	/// Actually make a payment to a staker. This uses the currency's reward function
@@ -1229,41 +1343,61 @@ impl<T: Trait> Module<T> {
 		// Increment current era.
 		let current_era = CurrentEra::mutate(|s| { *s += 1; *s });
 
-		// prune journal for last era.
-		<EraSlashJournal<T>>::remove(current_era - 1);
-
 		CurrentEraStartSessionIndex::mutate(|v| {
 			*v = start_session_index;
 		});
 		let bonding_duration = T::BondingDuration::get();
 
-		if current_era > bonding_duration {
-			let first_kept = current_era - bonding_duration;
-			BondedEras::mutate(|bonded| {
-				bonded.push((current_era, start_session_index));
+		BondedEras::mutate(|bonded| {
+			bonded.push((current_era, start_session_index));
+
+			if current_era > bonding_duration {
+				let first_kept = current_era - bonding_duration;
 
 				// prune out everything that's from before the first-kept index.
 				let n_to_prune = bonded.iter()
 					.take_while(|&&(era_idx, _)| era_idx < first_kept)
 					.count();
 
-				bonded.drain(..n_to_prune);
+				// kill slashing metadata.
+				for (pruned_era, _) in bonded.drain(..n_to_prune) {
+					slashing::clear_era_metadata::<T>(pruned_era);
+				}
 
 				if let Some(&(_, first_session)) = bonded.first() {
 					T::SessionInterface::prune_historical_up_to(first_session);
 				}
-			})
-		}
+			}
+		});
 
 		// Reassign all Stakers.
 		let (_slot_stake, maybe_new_validators) = Self::select_validators();
+		Self::apply_unapplied_slashes(current_era);
 
 		maybe_new_validators
+	}
+
+	/// Apply previously-unapplied slashes on the beginning of a new era, after a delay.
+	fn apply_unapplied_slashes(current_era: EraIndex) {
+		let slash_defer_duration = T::SlashDeferDuration::get();
+		<Self as Store>::EarliestUnappliedSlash::mutate(|earliest| if let Some(ref mut earliest) = earliest {
+			let keep_from = current_era.saturating_sub(slash_defer_duration);
+			for era in (*earliest)..keep_from {
+				let era_slashes = <Self as Store>::UnappliedSlashes::take(&era);
+				for slash in era_slashes {
+					slashing::apply_slash::<T>(slash);
+				}
+			}
+
+			*earliest = (*earliest).max(keep_from)
+		})
 	}
 
 	/// Select a new validator set from the assembled stakers and their role preferences.
 	///
 	/// Returns the new `SlotStake` value and a set of newly selected _stash_ IDs.
+	///
+	/// Assumes storage is coherent with the declaration.
 	fn select_validators() -> (BalanceOf<T>, Option<Vec<T::AccountId>>) {
 		let mut all_nominators: Vec<(T::AccountId, Vec<T::AccountId>)> = Vec::new();
 		let all_validator_candidates_iter = <Validators<T>>::enumerate();
@@ -1272,9 +1406,24 @@ impl<T: Trait> Module<T> {
 			all_nominators.push(self_vote);
 			who
 		}).collect::<Vec<T::AccountId>>();
-		all_nominators.extend(<Nominators<T>>::enumerate());
 
-		let maybe_phragmen_result = elect::<_, _, _, T::CurrencyToVote>(
+		let nominator_votes = <Nominators<T>>::enumerate().map(|(nominator, nominations)| {
+			let Nominations { submitted_in, mut targets, suppressed: _ } = nominations;
+
+			// Filter out nomination targets which were nominated before the most recent
+			// slashing span.
+			targets.retain(|stash| {
+				<Self as Store>::SlashingSpans::get(&stash).map_or(
+					true,
+					|spans| submitted_in >= spans.last_start(),
+				)
+			});
+
+			(nominator, targets)
+		});
+		all_nominators.extend(nominator_votes);
+
+		let maybe_phragmen_result = phragmen::elect::<_, _, _, T::CurrencyToVote>(
 			Self::validator_count() as usize,
 			Self::minimum_validator_count().max(1) as usize,
 			all_validators,
@@ -1293,7 +1442,7 @@ impl<T: Trait> Module<T> {
 			let to_balance = |e: ExtendedBalance|
 				<T::CurrencyToVote as Convert<ExtendedBalance, BalanceOf<T>>>::convert(e);
 
-			let mut supports = build_support_map::<_, _, _, T::CurrencyToVote>(
+			let mut supports = phragmen::build_support_map::<_, _, _, T::CurrencyToVote>(
 				&elected_stashes,
 				&assignments,
 				Self::slashable_balance_of,
@@ -1324,7 +1473,7 @@ impl<T: Trait> Module<T> {
 
 				let tolerance = 0_u128;
 				let iterations = 2_usize;
-				equalize::<_, _, T::CurrencyToVote, _>(
+				phragmen::equalize::<_, _, T::CurrencyToVote, _>(
 					staked_assignments,
 					&mut supports,
 					tolerance,
@@ -1384,6 +1533,8 @@ impl<T: Trait> Module<T> {
 
 	/// Remove all associated data of a stash account from the staking system.
 	///
+	/// Assumes storage is upgraded before calling.
+	///
 	/// This is called :
 	/// - Immediately when an account's balance falls below existential deposit.
 	/// - after a `withdraw_unbond()` call that frees all of a stash's bonded balance.
@@ -1394,6 +1545,8 @@ impl<T: Trait> Module<T> {
 		<Payee<T>>::remove(stash);
 		<Validators<T>>::remove(stash);
 		<Nominators<T>>::remove(stash);
+
+		slashing::clear_stash_metadata::<T>(stash);
 	}
 
 	/// Add reward points to validators using their stash account ID.
@@ -1449,6 +1602,7 @@ impl<T: Trait> Module<T> {
 
 impl<T: Trait> session::OnSessionEnding<T::AccountId> for Module<T> {
 	fn on_session_ending(_ending: SessionIndex, start_session: SessionIndex) -> Option<Vec<T::AccountId>> {
+		Self::ensure_storage_upgraded();
 		Self::new_session(start_session - 1).map(|(new, _old)| new)
 	}
 }
@@ -1457,12 +1611,14 @@ impl<T: Trait> OnSessionEnding<T::AccountId, Exposure<T::AccountId, BalanceOf<T>
 	fn on_session_ending(_ending: SessionIndex, start_session: SessionIndex)
 		-> Option<(Vec<T::AccountId>, Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>)>
 	{
+		Self::ensure_storage_upgraded();
 		Self::new_session(start_session - 1)
 	}
 }
 
 impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(stash: &T::AccountId) {
+		Self::ensure_storage_upgraded();
 		Self::kill_stash(stash);
 	}
 }
@@ -1526,12 +1682,37 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, session::historical::Identificati
 	fn on_offence(
 		offenders: &[OffenceDetails<T::AccountId, session::historical::IdentificationTuple<T>>],
 		slash_fraction: &[Perbill],
+		slash_session: SessionIndex,
 	) {
-		let mut remaining_imbalance = <NegativeImbalanceOf<T>>::zero();
-		let slash_reward_fraction = SlashRewardFraction::get();
+		<Module<T>>::ensure_storage_upgraded();
+
+		let reward_proportion = SlashRewardFraction::get();
 
 		let era_now = Self::current_era();
-		let mut journal = Self::era_slash_journal(era_now);
+		let window_start = era_now.saturating_sub(T::BondingDuration::get());
+		let current_era_start_session = CurrentEraStartSessionIndex::get();
+
+		// fast path for current-era report - most likely.
+		let slash_era = if slash_session >= current_era_start_session {
+			era_now
+		} else {
+			let eras = BondedEras::get();
+
+			// reverse because it's more likely to find reports from recent eras.
+			match eras.iter().rev().filter(|&&(_, ref sesh)| sesh <= &slash_session).next() {
+				None => return, // before bonding period. defensive - should be filtered out.
+				Some(&(ref slash_era, _)) => *slash_era,
+			}
+		};
+
+		<Self as Store>::EarliestUnappliedSlash::mutate(|earliest| {
+			if earliest.is_none() {
+				*earliest = Some(era_now)
+			}
+		});
+
+		let slash_defer_duration = T::SlashDeferDuration::get();
+
 		for (details, slash_fraction) in offenders.iter().zip(slash_fraction) {
 			let stash = &details.offender.0;
 			let exposure = &details.offender.1;
@@ -1541,57 +1722,34 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, session::historical::Identificati
 				continue
 			}
 
-			// Auto deselect validator on any offence and force a new era if they haven't previously
-			// been deselected.
-			if <Validators<T>>::exists(stash) {
-				<Validators<T>>::remove(stash);
-				Self::ensure_new_era();
-			}
+			let unapplied = slashing::compute_slash::<T>(slashing::SlashParams {
+				stash,
+				slash: *slash_fraction,
+				exposure,
+				slash_era,
+				window_start,
+				now: era_now,
+				reward_proportion,
+			});
 
-			// calculate the amount to slash
-			let slash_exposure = exposure.total;
-			let amount = *slash_fraction * slash_exposure;
-			// in some cases `slash_fraction` can be just `0`,
-			// which means we are not slashing this time.
-			if amount.is_zero() {
-				continue;
-			}
-
-			// make sure to disable validator till the end of this session
-			if T::SessionInterface::disable_validator(stash).unwrap_or(false) {
-				// force a new era, to select a new validator set
-				Self::ensure_new_era();
-			}
-			// actually slash the validator
-			let slashed_amount = Self::slash_validator(stash, amount, exposure, &mut journal);
-
-			// distribute the rewards according to the slash
-			let slash_reward = slash_reward_fraction * slashed_amount.peek();
-			if !slash_reward.is_zero() && !details.reporters.is_empty() {
-				let (mut reward, rest) = slashed_amount.split(slash_reward);
-				// split the reward between reporters equally. Division cannot fail because
-				// we guarded against it in the enclosing if.
-				let per_reporter = reward.peek() / (details.reporters.len() as u32).into();
-				for reporter in &details.reporters {
-					let (reporter_reward, rest) = reward.split(per_reporter);
-					reward = rest;
-					T::Currency::resolve_creating(reporter, reporter_reward);
+			if let Some(mut unapplied) = unapplied {
+				unapplied.reporters = details.reporters.clone();
+				if slash_defer_duration == 0 {
+					// apply right away.
+					slashing::apply_slash::<T>(unapplied);
+				} else {
+					// defer to end of some `slash_defer_duration` from now.
+					<Self as Store>::UnappliedSlashes::mutate(
+						era_now,
+						move |for_later| for_later.push(unapplied),
+					);
 				}
-				// The rest goes to the treasury.
-				remaining_imbalance.subsume(reward);
-				remaining_imbalance.subsume(rest);
-			} else {
-				remaining_imbalance.subsume(slashed_amount);
 			}
 		}
-		<EraSlashJournal<T>>::insert(era_now, journal);
-
-		// Handle the rest of imbalances
-		T::Slash::on_unbalanced(remaining_imbalance);
 	}
 }
 
-/// Filter historical offences out and only allow those from the current era.
+/// Filter historical offences out and only allow those from the bonding period.
 pub struct FilterHistoricalOffences<T, R> {
 	_inner: rstd::marker::PhantomData<(T, R)>,
 }
@@ -1603,9 +1761,13 @@ impl<T, Reporter, Offender, R, O> ReportOffence<Reporter, Offender, O>
 	O: Offence<Offender>,
 {
 	fn report_offence(reporters: Vec<Reporter>, offence: O) {
-		// disallow any slashing from before the current era.
+		<Module<T>>::ensure_storage_upgraded();
+
+		// disallow any slashing from before the current bonding period.
 		let offence_session = offence.session_index();
-		if offence_session >= <Module<T>>::current_era_start_session_index() {
+		let bonded_eras = BondedEras::get();
+
+		if bonded_eras.first().filter(|(_, start)| offence_session >= *start).is_some() {
 			R::report_offence(reporters, offence)
 		} else {
 			<Module<T>>::deposit_event(
