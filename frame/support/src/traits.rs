@@ -26,6 +26,8 @@ use sr_primitives::{
 	traits::{MaybeSerializeDeserialize, SimpleArithmetic, Saturating},
 };
 
+use crate::dispatch::Parameter;
+
 /// Anything that can have a `::len()` method.
 pub trait Len {
 	/// Return the length of data type.
