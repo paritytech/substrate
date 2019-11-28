@@ -622,7 +622,7 @@ bitmask! {
 }
 
 pub trait Time {
-	type Moment: SimpleArithmetic + FullCodec + Clone + Default + Copy;
+	type Moment: SimpleArithmetic + FullCodec + Clone + Default + Copy + Debug;
 
 	fn now() -> Self::Moment;
 }
