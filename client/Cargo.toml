@@ -18,7 +18,7 @@ hash-db = { version = "0.15.2" }
 hex-literal = { version = "0.2.1" }
 inherents = { package = "substrate-inherents", path = "../primitives/inherents" }
 keyring = { package = "substrate-keyring", path = "../primitives/keyring" }
-kvdb = { git = "https://github.com/paritytech/parity-common", rev="898694798ee2d07f3b30d0da9fc8cbd6436b31e7" }
+kvdb = "0.1.1"
 log = { version = "0.4.8" }
 parking_lot = { version = "0.9.0" }
 primitives = { package = "substrate-primitives", path = "../primitives/core" }
