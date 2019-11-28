@@ -1,11 +1,15 @@
 #!/bin/bash
 
 function rust_rename() {
-    sed -i "s/$1/$2/g" `grep -Rl --include="*.rs" "$1" *` > /dev/null
+    sed -i "s/$1/$2/g" `grep -Rl --include="*.rs" --include="*.stderr" "$1" *` > /dev/null
 }
 
 function cargo_rename() {
     find . -name "Cargo.toml" -exec sed -i "s/\(^\|[^\/]\)$1/\1$2/g" {} \;
+}
+
+function rename_gitlabci() {
+    sed -i "s/$1/$2/g" .gitlab-ci.yml
 }
 
 function rename() {
@@ -15,6 +19,7 @@ function rename() {
     echo "Renaming $old to $new"
     # rename in Cargo.tomls
     cargo_rename $old $new
+    rename_gitlabci $old $new
     # and it appears, we have the same syntax in rust files
     rust_rename $old $new
     
