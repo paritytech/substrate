@@ -48,6 +48,9 @@ pub trait Callable<T> {
 // https://github.com/rust-lang/rust/issues/51331
 pub type CallableCallFor<A, T> = <A as Callable<T>>::Call;
 
+/// A type that can be used as a parameter in a dispatchable function.
+///
+/// When using `decl_module` all arguments for call functions must implement this trait.
 pub trait Parameter: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 

@@ -28,6 +28,7 @@ substrate-test-utils = { path = "../../test/utils" }
 
 [features]
 equalize = []
+migrate = []
 default = ["std", "equalize"]
 std = [
 	"serde",

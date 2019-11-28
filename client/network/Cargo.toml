@@ -57,7 +57,7 @@ quickcheck = "0.9.0"
 rand = "0.7.2"
 test-client = { package = "substrate-test-runtime-client", path = "../../test/utils/runtime/client" }
 test_runtime = { package = "substrate-test-runtime", path = "../../test/utils/runtime" }
-tempdir = "0.3.7"
+tempfile = "3.1.0"
 tokio = "0.1.22"
 
 [features]

@@ -49,7 +49,8 @@ runtime-io = { package = "sr-io", path = "../../../primitives/sr-io" }
 client-api = { package = "substrate-client-api", path = "../../../client/api" }
 client = { package = "substrate-client", path = "../../../client/" }
 chain-spec = { package = "substrate-chain-spec", path = "../../../client/chain-spec" }
-transaction_pool = { package = "sc-transaction-pool", path = "../../../client/transaction-pool" }
+txpool = { package = "sc-transaction-pool", path = "../../../client/transaction-pool" }
+txpool-api = { package = "sp-transaction-pool-api", path = "../../../primitives/transaction-pool" }
 network = { package = "substrate-network", path = "../../../client/network" }
 babe = { package = "substrate-consensus-babe", path = "../../../client/consensus/babe" }
 grandpa = { package = "substrate-finality-grandpa", path = "../../../client/finality-grandpa" }
