@@ -28,17 +28,15 @@
 use crate::rstd::prelude::*;
 use codec::{Codec, Encode, Decode};
 
-/// Unique id managed by the system is not implemented yet.
-const SOME: &'static str = "Managed child unique ids are not yet implemented";
 /// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
 pub fn get<T: Decode + Sized>(
 	storage_key: &[u8],
-	unique_id: Option<&[u8]>,
+	unique_id: &[u8],
 	key: &[u8],
 ) -> Option<T> {
 	runtime_io::storage::child_get(
 		storage_key,
-		unique_id.expect(SOME),
+		unique_id,
 		primitives::storage::ChildType::CryptoUniqueId as u32,
 		key,
 	).and_then(|v| {
@@ -54,7 +52,7 @@ pub fn get<T: Decode + Sized>(
 /// explicit entry.
 pub fn get_or_default<T: Decode + Sized + Default>(
 	storage_key: &[u8],
-	unique_id: Option<&[u8]>,
+	unique_id: &[u8],
 	key: &[u8],
 ) -> T {
 	get(storage_key, unique_id, key).unwrap_or_else(Default::default)
@@ -64,7 +62,7 @@ pub fn get_or_default<T: Decode + Sized + Default>(
 /// explicit entry.
 pub fn get_or<T: Decode + Sized>(
 	storage_key: &[u8],
-	unique_id: Option<&[u8]>,
+	unique_id: &[u8],
 	key: &[u8],
 	default_value: T,
 ) -> T {
@@ -75,7 +73,7 @@ pub fn get_or<T: Decode + Sized>(
 /// explicit entry.
 pub fn get_or_else<T: Decode + Sized, F: FnOnce() -> T>(
 	storage_key: &[u8],
-	unique_id: Option<&[u8]>,
+	unique_id: &[u8],
 	key: &[u8],
 	default_value: F,
 ) -> T {
@@ -85,14 +83,14 @@ pub fn get_or_else<T: Decode + Sized, F: FnOnce() -> T>(
 /// Put `value` in storage under `key`.
 pub fn put<T: Encode>(
 	storage_key: &[u8],
-	unique_id: Option<&[u8]>,
+	unique_id: &[u8],
 	key: &[u8],
 	value: &T,
 ) {
 	value.using_encoded(|slice|
 		runtime_io::storage::child_set(
 			storage_key,
-			unique_id.expect(SOME),
+			unique_id,
 			primitives::storage::ChildType::CryptoUniqueId as u32,
 			key,
 			slice,
@@ -103,7 +101,7 @@ pub fn put<T: Encode>(
 /// Remove `key` from storage, returning its value if it had an explicit entry or `None` otherwise.
 pub fn take<T: Decode + Sized>(
 	storage_key: &[u8],
-	unique_id: Option<&[u8]>,
+	unique_id: &[u8],
 	key: &[u8],
 ) -> Option<T> {
 	let r = get(storage_key, unique_id, key);
@@ -117,7 +115,7 @@ pub fn take<T: Decode + Sized>(
 /// the default for its type.
 pub fn take_or_default<T: Codec + Sized + Default>(
 	storage_key: &[u8],
-	unique_id: Option<&[u8]>,
+	unique_id: &[u8],
 	key: &[u8],
 ) -> T {
 	take(storage_key, unique_id, key).unwrap_or_else(Default::default)
@@ -127,7 +125,7 @@ pub fn take_or_default<T: Codec + Sized + Default>(
 /// explicit entry. Ensure there is no explicit entry on return.
 pub fn take_or<T: Codec + Sized>(
 	storage_key: &[u8],
-	unique_id: Option<&[u8]>,
+	unique_id: &[u8],
 	key: &[u8],
 	default_value: T,
 ) -> T {
@@ -138,7 +136,7 @@ pub fn take_or<T: Codec + Sized>(
 /// explicit entry. Ensure there is no explicit entry on return.
 pub fn take_or_else<T: Codec + Sized, F: FnOnce() -> T>(
 	storage_key: &[u8],
-	unique_id: Option<&[u8]>,
+	unique_id: &[u8],
 	key: &[u8],
 	default_value: F,
 ) -> T {
@@ -148,11 +146,11 @@ pub fn take_or_else<T: Codec + Sized, F: FnOnce() -> T>(
 /// Check to see if `key` has an explicit entry in storage.
 pub fn exists(
 	storage_key: &[u8],
-	unique_id: Option<&[u8]>,
+	unique_id: &[u8],
 	key: &[u8],
 ) -> bool {
 	runtime_io::storage::child_read(
-		storage_key, unique_id.expect(SOME),
+		storage_key, unique_id,
 		primitives::storage::ChildType::CryptoUniqueId as u32,
 		key, &mut [0;0][..], 0,
 	).is_some()
@@ -161,11 +159,11 @@ pub fn exists(
 /// Remove all `storage_key` key/values
 pub fn kill_storage(
 	storage_key: &[u8],
-	unique_id: Option<&[u8]>,
+	unique_id: &[u8],
 ) {
 	runtime_io::storage::child_storage_kill(
 		storage_key,
-		unique_id.expect(SOME),
+		unique_id,
 		primitives::storage::ChildType::CryptoUniqueId as u32,
 	)
 }
@@ -173,12 +171,12 @@ pub fn kill_storage(
 /// Ensure `key` has no explicit entry in storage.
 pub fn kill(
 	storage_key: &[u8],
-	unique_id: Option<&[u8]>,
+	unique_id: &[u8],
 	key: &[u8],
 ) {
 	runtime_io::storage::child_clear(
 		storage_key,
-		unique_id.expect(SOME),
+		unique_id,
 		primitives::storage::ChildType::CryptoUniqueId as u32,
 		key,
 	);
@@ -187,12 +185,12 @@ pub fn kill(
 /// Get a Vec of bytes from storage.
 pub fn get_raw(
 	storage_key: &[u8],
-	unique_id: Option<&[u8]>,
+	unique_id: &[u8],
 	key: &[u8],
 ) -> Option<Vec<u8>> {
 	runtime_io::storage::child_get(
 		storage_key,
-		unique_id.expect(SOME),
+		unique_id,
 		primitives::storage::ChildType::CryptoUniqueId as u32,
 		key,
 	)
@@ -201,13 +199,13 @@ pub fn get_raw(
 /// Put a raw byte slice into storage.
 pub fn put_raw(
 	storage_key: &[u8],
-	unique_id: Option<&[u8]>,
+	unique_id: &[u8],
 	key: &[u8],
 	value: &[u8],
 ) {
 	runtime_io::storage::child_set(
 		storage_key,
-		unique_id.expect(SOME),
+		unique_id,
 		primitives::storage::ChildType::CryptoUniqueId as u32,
 		key,
 		value,
