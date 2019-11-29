@@ -537,9 +537,15 @@ impl<'a> ParseAndPreparePurge<'a> {
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
 	{
-		let config = create_config_with_db_path::<(), _, _, _>(
+		let mut config = create_config_with_db_path::<(), _, _, _>(
 			spec_factory, &self.params.shared_params, self.version
 		)?;
+
+		config.database = DatabaseConfig::Path {
+			path: config.in_chain_config_dir(DEFAULT_DB_CONFIG_PATH).expect("We provided a base_path."),
+			cache_size: None,
+		};
+
 		let db_path = match config.database {
 			DatabaseConfig::Path { path, .. } => path,
 			_ => {
