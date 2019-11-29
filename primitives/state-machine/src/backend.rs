@@ -16,7 +16,7 @@
 
 //! State machine backends. These manage the code and storage of contracts.
 
-use std::{error, fmt, cmp::Ord, collections::HashMap, marker::PhantomData};
+use std::{error, fmt, cmp::Ord, collections::{HashMap, BTreeMap}, marker::PhantomData};
 use log::warn;
 use hash_db::Hasher;
 use crate::trie_backend::TrieBackend;
@@ -257,7 +257,7 @@ impl error::Error for Void {
 /// In-memory backend. Fully recomputes tries each time `as_trie_backend` is called but useful for
 /// tests and proof checking.
 pub struct InMemory<H: Hasher> {
-	inner: HashMap<Option<Vec<u8>>, HashMap<Vec<u8>, Vec<u8>>>,
+	inner: HashMap<Option<Vec<u8>>, BTreeMap<Vec<u8>, Vec<u8>>>,
 	// This field is only needed for returning reference in `as_trie_backend`.
 	trie: Option<TrieBackend<MemoryDB<H>, H>>,
 	_hasher: PhantomData<H>,
@@ -298,7 +298,7 @@ impl<H: Hasher> PartialEq for InMemory<H> {
 impl<H: Hasher> InMemory<H> where H::Out: Codec {
 	/// Copy the state, with applied updates
 	pub fn update(&self, changes: <Self as Backend<H>>::Transaction) -> Self {
-		let mut inner: HashMap<_, _> = self.inner.clone();
+		let mut inner = self.inner.clone();
 		for (storage_key, key, val) in changes {
 			match val {
 				Some(v) => { inner.entry(storage_key).or_default().insert(key, v); },
@@ -310,8 +310,8 @@ impl<H: Hasher> InMemory<H> where H::Out: Codec {
 	}
 }
 
-impl<H: Hasher> From<HashMap<Option<Vec<u8>>, HashMap<Vec<u8>, Vec<u8>>>> for InMemory<H> {
-	fn from(inner: HashMap<Option<Vec<u8>>, HashMap<Vec<u8>, Vec<u8>>>) -> Self {
+impl<H: Hasher> From<HashMap<Option<Vec<u8>>, BTreeMap<Vec<u8>, Vec<u8>>>> for InMemory<H> {
+	fn from(inner: HashMap<Option<Vec<u8>>, BTreeMap<Vec<u8>, Vec<u8>>>) -> Self {
 		InMemory {
 			inner: inner,
 			trie: None,
@@ -321,14 +321,14 @@ impl<H: Hasher> From<HashMap<Option<Vec<u8>>, HashMap<Vec<u8>, Vec<u8>>>> for In
 }
 
 impl<H: Hasher> From<(
-		HashMap<Vec<u8>, Vec<u8>>,
-		HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>,
+		BTreeMap<Vec<u8>, Vec<u8>>,
+		HashMap<Vec<u8>, BTreeMap<Vec<u8>, Vec<u8>>>,
 )> for InMemory<H> {
 	fn from(inners: (
-		HashMap<Vec<u8>, Vec<u8>>,
-		HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>,
+		BTreeMap<Vec<u8>, Vec<u8>>,
+		HashMap<Vec<u8>, BTreeMap<Vec<u8>, Vec<u8>>>,
 	)) -> Self {
-		let mut inner: HashMap<Option<Vec<u8>>, HashMap<Vec<u8>, Vec<u8>>>
+		let mut inner: HashMap<Option<Vec<u8>>, BTreeMap<Vec<u8>, Vec<u8>>>
 			= inners.1.into_iter().map(|(k, v)| (Some(k), v)).collect();
 		inner.insert(None, inners.0);
 		InMemory {
@@ -339,8 +339,8 @@ impl<H: Hasher> From<(
 	}
 }
 
-impl<H: Hasher> From<HashMap<Vec<u8>, Vec<u8>>> for InMemory<H> {
-	fn from(inner: HashMap<Vec<u8>, Vec<u8>>) -> Self {
+impl<H: Hasher> From<BTreeMap<Vec<u8>, Vec<u8>>> for InMemory<H> {
+	fn from(inner: BTreeMap<Vec<u8>, Vec<u8>>) -> Self {
 		let mut expanded = HashMap::new();
 		expanded.insert(None, inner);
 		InMemory {
@@ -353,7 +353,7 @@ impl<H: Hasher> From<HashMap<Vec<u8>, Vec<u8>>> for InMemory<H> {
 
 impl<H: Hasher> From<Vec<(Option<Vec<u8>>, Vec<u8>, Option<Vec<u8>>)>> for InMemory<H> {
 	fn from(inner: Vec<(Option<Vec<u8>>, Vec<u8>, Option<Vec<u8>>)>) -> Self {
-		let mut expanded: HashMap<Option<Vec<u8>>, HashMap<Vec<u8>, Vec<u8>>> = HashMap::new();
+		let mut expanded: HashMap<Option<Vec<u8>>, BTreeMap<Vec<u8>, Vec<u8>>> = HashMap::new();
 		for (child_key, key, value) in inner {
 			if let Some(value) = value {
 				expanded.entry(child_key).or_default().insert(key, value);

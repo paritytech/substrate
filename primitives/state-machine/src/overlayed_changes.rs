@@ -424,7 +424,7 @@ mod tests {
 
 	#[test]
 	fn overlayed_storage_root_works() {
-		let initial: HashMap<_, _> = vec![
+		let initial: BTreeMap<_, _> = vec![
 			(b"doe".to_vec(), b"reindeer".to_vec()),
 			(b"dog".to_vec(), b"puppyXXX".to_vec()),
 			(b"dogglesworth".to_vec(), b"catXXX".to_vec()),

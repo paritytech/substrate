@@ -23,7 +23,7 @@ pub mod trait_tests;
 mod block_builder_ext;
 
 use std::sync::Arc;
-use std::collections::HashMap;
+use std::collections::{HashMap, BTreeMap};
 pub use block_builder_ext::BlockBuilderExt;
 pub use generic_test_client::*;
 pub use runtime;
@@ -97,8 +97,8 @@ pub type LightExecutor = client::light::call_executor::GenesisCallExecutor<
 pub struct GenesisParameters {
 	support_changes_trie: bool,
 	heap_pages_override: Option<u64>,
-	extra_storage: HashMap<Vec<u8>, Vec<u8>>,
-	child_extra_storage: HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>,
+	extra_storage: BTreeMap<Vec<u8>, Vec<u8>>,
+	child_extra_storage: HashMap<Vec<u8>, BTreeMap<Vec<u8>, Vec<u8>>>,
 }
 
 impl GenesisParameters {
