@@ -31,7 +31,7 @@ use slots::Slots;
 pub use aux_schema::{check_equivocation, MAX_SLOT_CAPACITY, PRUNING_BOUND};
 
 use codec::{Decode, Encode};
-use consensus_common::{BlockImport, Proposer, SyncOracle, SelectChain};
+use consensus_common::{BlockImport, Proposer, SyncOracle, SelectChain, CanAuthorWith};
 use futures::{prelude::*, future::{self, Either}};
 use futures_timer::Delay;
 use inherents::{InherentData, InherentDataProviders};
@@ -304,22 +304,24 @@ pub trait SlotCompatible {
 ///
 /// Every time a new slot is triggered, `worker.on_slot` is called and the future it returns is
 /// polled until completion, unless we are major syncing.
-pub fn start_slot_worker<B, C, W, T, SO, SC>(
+pub fn start_slot_worker<B, C, W, T, SO, SC, CAW>(
 	slot_duration: SlotDuration<T>,
 	client: C,
 	mut worker: W,
 	mut sync_oracle: SO,
 	inherent_data_providers: InherentDataProviders,
 	timestamp_extractor: SC,
+	can_author_with: CAW,
 ) -> impl Future<Output = ()>
 where
 	B: BlockT,
-	C: SelectChain<B> + Clone,
+	C: SelectChain<B>,
 	W: SlotWorker<B>,
 	W::OnSlot: Unpin,
-	SO: SyncOracle + Send + Clone,
+	SO: SyncOracle + Send,
 	SC: SlotCompatible + Unpin,
 	T: SlotData + Clone,
+	CAW: CanAuthorWith<B> + Send,
 {
 	let SlotDuration(slot_duration) = slot_duration;
 
@@ -346,11 +348,23 @@ where
 				}
 			};
 
-			Either::Left(worker.on_slot(chain_head, slot_info).map_err(
-				|e| {
-					warn!(target: "slots", "Encountered consensus error: {:?}", e);
-				}).or_else(|_| future::ready(Ok(())))
-			)
+			if can_author_with.can_author_with(&BlockId::Hash(chain_head.hash())) {
+				Either::Left(
+					worker.on_slot(chain_head, slot_info)
+						.map_err(|e| {
+							warn!(target: "slots", "Encountered consensus error: {:?}", e);
+						})
+						.or_else(|_| future::ready(Ok(())))
+				)
+			} else {
+				warn!(
+					target: "slots",
+					"Unable to author block in slot {}. `can_author_with` returned `false`. \
+					Probably a node update is required!",
+					slot_num,
+				);
+				Either::Right(future::ready(Ok(())))
+			}
 		}).then(|res| {
 			if let Err(err) = res {
 				warn!(target: "slots", "Slots stream terminated with an error: {:?}", err);

@@ -169,6 +169,9 @@ macro_rules! new_full {
 			let select_chain = service.select_chain()
 				.ok_or(substrate_service::Error::SelectChainRequired)?;
 
+			let can_author_with =
+				consensus_common::CanAuthorWithNativeVersion::new(client.executor().clone());
+
 			let babe_config = babe::BabeParams {
 				keystore: service.keystore(),
 				client,
@@ -179,6 +182,7 @@ macro_rules! new_full {
 				inherent_data_providers: inherent_data_providers.clone(),
 				force_authoring,
 				babe_link,
+				can_author_with,
 			};
 
 			let babe = babe::start_babe(babe_config)?;
@@ -568,6 +572,7 @@ mod tests {
 					auxiliary: Vec::new(),
 					fork_choice: ForkChoiceStrategy::LongestChain,
 					allow_missing_state: false,
+					import_existing: false,
 				};
 
 				block_import.import_block(params, Default::default())

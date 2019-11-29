@@ -53,9 +53,7 @@ use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{NumberFor, Block as BlockT};
 
 pub use self::error::Error;
-pub use self::builder::{
-	ServiceBuilder, ServiceBuilderExport, ServiceBuilderImport, ServiceBuilderRevert,
-};
+pub use self::builder::{ServiceBuilder, ServiceBuilderCommand};
 pub use config::{Configuration, Roles, PruningMode};
 pub use chain_spec::{ChainSpec, Properties, RuntimeGenesis, Extension as ChainSpecExtension};
 pub use txpool_api::{TransactionPool, TransactionPoolMaintainer, InPoolTransaction, IntoPoolError};
@@ -524,7 +522,7 @@ fn start_rpc_servers<C, G, E, H: FnMut() -> rpc_servers::RpcHandler<rpc::Metadat
 				.or_else(|e| match e.kind() {
 					io::ErrorKind::AddrInUse |
 					io::ErrorKind::PermissionDenied => {
-						warn!("Unable to bind server to {}. Trying random port.", address);
+						warn!("Unable to bind RPC server to {}. Trying random port.", address);
 						address.set_port(0);
 						start(&address)
 					},
