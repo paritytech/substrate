@@ -31,7 +31,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use sr_primitives::traits::{Block as BlockT, DigestFor};
+use sr_primitives::{traits::{Block as BlockT, DigestFor}, generic::BlockId};
 use futures::prelude::*;
 pub use inherents::InherentData;
 
@@ -123,13 +123,59 @@ impl SyncOracle for NoNetwork {
 	fn is_offline(&mut self) -> bool { false }
 }
 
-impl<T> SyncOracle for Arc<T>
-where T: ?Sized, for<'r> &'r T: SyncOracle
-{
+impl<T> SyncOracle for Arc<T> where T: ?Sized, for<'r> &'r T: SyncOracle {
 	fn is_major_syncing(&mut self) -> bool {
 		<&T>::is_major_syncing(&mut &**self)
 	}
+
 	fn is_offline(&mut self) -> bool {
 		<&T>::is_offline(&mut &**self)
+	}
+}
+
+/// Checks if the current active native block authoring implementation can author with the runtime
+/// at the given block.
+pub trait CanAuthorWith<Block: BlockT> {
+	/// See trait docs for more information.
+	fn can_author_with(&self, at: &BlockId<Block>) -> bool;
+}
+
+/// Checks if the node can author blocks by using
+/// [`NativeVersion::can_author_with`](runtime_version::NativeVersion::can_author_with).
+pub struct CanAuthorWithNativeVersion<T>(T);
+
+impl<T> CanAuthorWithNativeVersion<T> {
+	/// Creates a new instance of `Self`.
+	pub fn new(inner: T) -> Self {
+		Self(inner)
+	}
+}
+
+impl<T: runtime_version::GetRuntimeVersion<Block>, Block: BlockT> CanAuthorWith<Block>
+	for CanAuthorWithNativeVersion<T>
+{
+	fn can_author_with(&self, at: &BlockId<Block>) -> bool {
+		match self.0.runtime_version(at) {
+			Ok(version) => self.0.native_version().can_author_with(&version),
+			Err(e) => {
+				error!(
+					target: "CanAuthorWithNativeVersion",
+					"Failed to get runtime version at `{}` and will disable authoring. Error: {}",
+					at,
+					e,
+				);
+
+				false
+			}
+		}
+	}
+}
+
+/// Returns always `true` for `can_author_with`. This is useful for tests.
+pub struct AlwaysCanAuthor;
+
+impl<Block: BlockT> CanAuthorWith<Block> for AlwaysCanAuthor {
+	fn can_author_with(&self, _: &BlockId<Block>) -> bool {
+		true
 	}
 }

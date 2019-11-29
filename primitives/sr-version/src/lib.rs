@@ -33,6 +33,9 @@ use codec::Decode;
 use sr_primitives::RuntimeString;
 pub use sr_primitives::create_runtime_str;
 
+#[cfg(feature = "std")]
+use sr_primitives::{traits::Block as BlockT, generic::BlockId};
+
 /// The identity of a particular API interface that the runtime might provide.
 pub type ApiId = [u8; 8];
 
@@ -162,6 +165,27 @@ impl NativeVersion {
 		self.runtime_version.spec_name == other.spec_name &&
 			(self.runtime_version.authoring_version == other.authoring_version ||
 			self.can_author_with.contains(&other.authoring_version))
+	}
+}
+
+/// Something that can provide the runtime version at a given block and the native runtime version.
+#[cfg(feature = "std")]
+pub trait GetRuntimeVersion<Block: BlockT> {
+	/// Returns the version of the native runtime.
+	fn native_version(&self) -> &NativeVersion;
+
+	/// Returns the version of runtime at the given block.
+	fn runtime_version(&self, at: &BlockId<Block>) -> Result<RuntimeVersion, String>;
+}
+
+#[cfg(feature = "std")]
+impl<T: GetRuntimeVersion<Block>, Block: BlockT> GetRuntimeVersion<Block> for std::sync::Arc<T> {
+	fn native_version(&self) -> &NativeVersion {
+		(&**self).native_version()
+	}
+
+	fn runtime_version(&self, at: &BlockId<Block>) -> Result<RuntimeVersion, String> {
+		(&**self).runtime_version(at)
 	}
 }
 

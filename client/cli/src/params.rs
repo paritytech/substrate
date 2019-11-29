@@ -109,7 +109,11 @@ pub struct SharedParams {
 	/// Sets a custom logging filter.
 	#[structopt(short = "l", long = "log", value_name = "LOG_PATTERN")]
 	pub log: Option<String>,
+}
 
+/// Parameters for block import.
+#[derive(Debug, StructOpt, Clone)]
+pub struct ImportParams {
 	/// Specify the state pruning mode, a number of blocks to keep or 'archive'.
 	///
 	/// Default is to keep all block states if the node is running as a
@@ -507,6 +511,10 @@ pub struct RunCmd {
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
+	pub import_params: ImportParams,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
 	pub network_config: NetworkConfigurationParams,
 
 	#[allow(missing_docs)]
@@ -764,6 +772,10 @@ pub struct ImportBlocksCmd {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub import_params: ImportParams,
 }
 
 impl_get_log_filter!(ImportBlocksCmd);
@@ -784,6 +796,10 @@ pub struct CheckBlockCmd {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub import_params: ImportParams,
 }
 
 impl_get_log_filter!(CheckBlockCmd);
