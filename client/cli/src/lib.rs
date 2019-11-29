@@ -56,7 +56,7 @@ use params::{
 	NetworkConfigurationParams, MergeParameters, TransactionPoolParams,
 	NodeKeyParams, NodeKeyType, Cors, CheckBlockCmd,
 };
-pub use params::{NoCustom, CoreParams, SharedParams, ExecutionStrategy as ExecutionStrategyParam};
+pub use params::{NoCustom, CoreParams, SharedParams, ImportParams, ExecutionStrategy};
 pub use traits::{GetLogFilter, AugmentClap};
 use app_dirs::{AppInfo, AppDataType};
 use log::info;
@@ -440,7 +440,8 @@ impl<'a> ParseAndPrepareImport<'a> {
 		E: ChainSpecExtension,
 		Exit: IntoExit
 	{
-		let config = create_config_with_db_path(spec_factory, &self.params.shared_params, self.version)?;
+		let mut config = create_config_with_db_path(spec_factory, &self.params.shared_params, self.version)?;
+		fill_import_params(&mut config, &self.params.import_params, service::Roles::FULL)?;
 
 		let file: Box<dyn ReadPlusSeek + Send> = match self.params.input {
 			Some(filename) => Box::new(File::open(filename)?),
@@ -499,7 +500,8 @@ impl<'a> CheckBlock<'a> {
 			E: ChainSpecExtension,
 			Exit: IntoExit
 	{
-		let config = create_config_with_db_path(spec_factory, &self.params.shared_params, self.version)?;
+		let mut config = create_config_with_db_path(spec_factory, &self.params.shared_params, self.version)?;
+		fill_import_params(&mut config, &self.params.import_params, service::Roles::FULL)?;
 
 		let input = if self.params.input.starts_with("0x") { &self.params.input[2..] } else { &self.params.input[..] };
 		let block_id = match FromStr::from_str(input) {
@@ -738,7 +740,8 @@ fn fill_config_keystore_password<C, G, E>(
 	Ok(())
 }
 
-fn fill_shared_config<C, G, E>(config: &mut Configuration<C, G, E>, cli: &SharedParams, role: service::Roles)
+/// Put block import CLI params into `config` object.
+pub fn fill_import_params<C, G, E>(config: &mut Configuration<C, G, E>, cli: &ImportParams, role: service::Roles)
 	-> error::Result<()>
 where
 	C: Default,
@@ -776,7 +779,7 @@ where
 	config.wasm_method = cli.wasm_method.into();
 
 	let exec = &cli.execution_strategies;
-	let exec_all_or = |strat: params::ExecutionStrategy| exec.execution.unwrap_or(strat).into();
+	let exec_all_or = |strat: ExecutionStrategy| exec.execution.unwrap_or(strat).into();
 	config.execution_strategies = ExecutionStrategies {
 		syncing: exec_all_or(exec.execution_syncing),
 		importing: exec_all_or(exec.execution_import_block),
@@ -813,7 +816,7 @@ where
 			service::Roles::FULL
 		};
 
-	fill_shared_config(&mut config, &cli.shared_params, role)?;
+	fill_import_params(&mut config, &cli.import_params, role)?;
 
 	config.impl_name = impl_name;
 	config.impl_commit = version.commit;
@@ -924,8 +927,7 @@ where
 	let spec = load_spec(cli, spec_factory)?;
 	let base_path = base_path(cli, version);
 
-	let mut config = service::Configuration::default_with_spec_and_base_path(spec.clone(), Some(base_path));
-	fill_shared_config(&mut config, &cli, service::Roles::FULL)?;
+	let config = service::Configuration::default_with_spec_and_base_path(spec.clone(), Some(base_path));
 	Ok(config)
 }
 

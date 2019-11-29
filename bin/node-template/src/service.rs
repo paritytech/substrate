@@ -111,7 +111,10 @@ pub fn new_full<C: Send + Default + 'static>(config: Configuration<C, GenesisCon
 		let select_chain = service.select_chain()
 			.ok_or(ServiceError::SelectChainRequired)?;
 
-		let aura = aura::start_aura::<_, _, _, _, _, AuraPair, _, _, _>(
+		let can_author_with =
+			consensus_common::CanAuthorWithNativeVersion::new(client.executor().clone());
+
+		let aura = aura::start_aura::<_, _, _, _, _, AuraPair, _, _, _, _>(
 			aura::SlotDuration::get_or_compute(&*client)?,
 			client,
 			select_chain,
@@ -121,6 +124,7 @@ pub fn new_full<C: Send + Default + 'static>(config: Configuration<C, GenesisCon
 			inherent_data_providers.clone(),
 			force_authoring,
 			service.keystore(),
+			can_author_with,
 		)?;
 
 		// the AURA authoring task is considered essential, i.e. if it

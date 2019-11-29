@@ -187,7 +187,7 @@
 //! The validator and its nominator split their reward as following:
 //!
 //! The validator can declare an amount, named
-//! [`validator_payment`](./struct.ValidatorPrefs.html#structfield.validator_payment), that does not
+//! [`commission`](./struct.ValidatorPrefs.html#structfield.commission), that does not
 //! get shared with the nominators at each reward payout through its
 //! [`ValidatorPrefs`](./struct.ValidatorPrefs.html). This value gets deducted from the total reward
 //! that is paid to the validator and its nominators. The remaining portion is split among the
@@ -347,19 +347,19 @@ impl Default for RewardDestination {
 	}
 }
 
-/// Preference of what happens on a slash event.
+/// Preference of what happens regarding validation.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub struct ValidatorPrefs<Balance: HasCompact> {
+pub struct ValidatorPrefs {
 	/// Reward that validator takes up-front; only the rest is split between themselves and
 	/// nominators.
 	#[codec(compact)]
-	pub validator_payment: Balance,
+	pub commission: Perbill,
 }
 
-impl<B: Default + HasCompact + Copy> Default for ValidatorPrefs<B> {
+impl Default for ValidatorPrefs {
 	fn default() -> Self {
 		ValidatorPrefs {
-			validator_payment: Default::default(),
+			commission: Default::default(),
 		}
 	}
 }
@@ -657,7 +657,7 @@ decl_storage! {
 		pub Payee get(fn payee): map T::AccountId => RewardDestination;
 
 		/// The map from (wannabe) validator stash key to the preferences of that validator.
-		pub Validators get(fn validators): linked_map T::AccountId => ValidatorPrefs<BalanceOf<T>>;
+		pub Validators get(fn validators): linked_map T::AccountId => ValidatorPrefs;
 
 		/// The map from nominator stash key to the set of stash keys of all validators to nominate.
 		///
@@ -982,7 +982,7 @@ decl_module! {
 		/// - Writes are limited to the `origin` account key.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(750_000)]
-		fn validate(origin, prefs: ValidatorPrefs<BalanceOf<T>>) {
+		fn validate(origin, prefs: ValidatorPrefs) {
 			Self::ensure_storage_upgraded();
 
 			let controller = ensure_signed(origin)?;
@@ -1252,8 +1252,8 @@ impl<T: Trait> Module<T> {
 	/// nominators' balance, pro-rata based on their exposure, after having removed the validator's
 	/// pre-payout cut.
 	fn reward_validator(stash: &T::AccountId, reward: BalanceOf<T>) -> PositiveImbalanceOf<T> {
-		let off_the_table = reward.min(Self::validators(stash).validator_payment);
-		let reward = reward - off_the_table;
+		let off_the_table = Self::validators(stash).commission * reward;
+		let reward = reward.saturating_sub(off_the_table);
 		let mut imbalance = <PositiveImbalanceOf<T>>::zero();
 		let validator_cut = if reward.is_zero() {
 			Zero::zero()

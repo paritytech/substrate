@@ -44,7 +44,7 @@ use primitives::H256;
 use inherents::{InherentDataProviders, InherentData};
 use consensus_common::{
 	BlockImportParams, BlockOrigin, ForkChoiceStrategy, SyncOracle, Environment, Proposer,
-	SelectChain, Error as ConsensusError
+	SelectChain, Error as ConsensusError, CanAuthorWith,
 };
 use consensus_common::import_queue::{BoxBlockImport, BasicQueue, Verifier};
 use codec::{Encode, Decode};
@@ -372,7 +372,7 @@ pub fn import_queue<B, C, S, Algorithm>(
 /// information, or just be a graffiti. `round` is for number of rounds the
 /// CPU miner runs each time. This parameter should be tweaked so that each
 /// mining round is within sub-second time.
-pub fn start_mine<B: BlockT<Hash=H256>, C, Algorithm, E, SO, S>(
+pub fn start_mine<B: BlockT<Hash=H256>, C, Algorithm, E, SO, S, CAW>(
 	mut block_import: BoxBlockImport<B>,
 	client: Arc<C>,
 	algorithm: Algorithm,
@@ -383,6 +383,7 @@ pub fn start_mine<B: BlockT<Hash=H256>, C, Algorithm, E, SO, S>(
 	build_time: std::time::Duration,
 	select_chain: Option<S>,
 	inherent_data_providers: inherents::InherentDataProviders,
+	can_author_with: CAW,
 ) where
 	C: HeaderBackend<B> + AuxStore + 'static,
 	Algorithm: PowAlgorithm<B> + Send + Sync + 'static,
@@ -390,6 +391,7 @@ pub fn start_mine<B: BlockT<Hash=H256>, C, Algorithm, E, SO, S>(
 	E::Error: std::fmt::Debug,
 	SO: SyncOracle + Send + Sync + 'static,
 	S: SelectChain<B> + 'static,
+	CAW: CanAuthorWith<B> + Send + 'static,
 {
 	if let Err(_) = register_pow_inherent_data_provider(&inherent_data_providers) {
 		warn!("Registering inherent data provider for timestamp failed");
@@ -407,7 +409,8 @@ pub fn start_mine<B: BlockT<Hash=H256>, C, Algorithm, E, SO, S>(
 				&mut sync_oracle,
 				build_time.clone(),
 				select_chain.as_ref(),
-				&inherent_data_providers
+				&inherent_data_providers,
+				&can_author_with,
 			) {
 				Ok(()) => (),
 				Err(e) => error!(
@@ -420,7 +423,7 @@ pub fn start_mine<B: BlockT<Hash=H256>, C, Algorithm, E, SO, S>(
 	});
 }
 
-fn mine_loop<B: BlockT<Hash=H256>, C, Algorithm, E, SO, S>(
+fn mine_loop<B: BlockT<Hash=H256>, C, Algorithm, E, SO, S, CAW>(
 	block_import: &mut BoxBlockImport<B>,
 	client: &C,
 	algorithm: &Algorithm,
@@ -431,6 +434,7 @@ fn mine_loop<B: BlockT<Hash=H256>, C, Algorithm, E, SO, S>(
 	build_time: std::time::Duration,
 	select_chain: Option<&S>,
 	inherent_data_providers: &inherents::InherentDataProviders,
+	can_author_with: &CAW,
 ) -> Result<(), Error<B>> where
 	C: HeaderBackend<B> + AuxStore,
 	Algorithm: PowAlgorithm<B>,
@@ -438,6 +442,7 @@ fn mine_loop<B: BlockT<Hash=H256>, C, Algorithm, E, SO, S>(
 	E::Error: std::fmt::Debug,
 	SO: SyncOracle,
 	S: SelectChain<B>,
+	CAW: CanAuthorWith<B>,
 {
 	'outer: loop {
 		if sync_oracle.is_major_syncing() {
@@ -461,6 +466,17 @@ fn mine_loop<B: BlockT<Hash=H256>, C, Algorithm, E, SO, S>(
 				(hash, header)
 			},
 		};
+
+		if can_author_with.can_author_with(&BlockId::Hash(best_hash)) {
+			debug!(
+				target: "pow",
+				"Skipping proposal `can_author_with` returned `false`. \
+				Probably a node update is required!"
+			);
+			std::thread::sleep(std::time::Duration::from_secs(1));
+			continue 'outer
+		}
+
 		let mut aux = PowAux::read(client, &best_hash)?;
 		let mut proposer = env.init(&best_header)
 			.map_err(|e| Error::Environment(format!("{:?}", e)))?;
