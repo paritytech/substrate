@@ -159,7 +159,6 @@ impl OverlayedChanges {
 		let extrinsic_index = self.extrinsic_index();
 		let map_entry = self.prospective.children.entry(storage_key)
 			.or_insert_with(|| (Default::default(), child_info.to_owned()));
-		debug_assert!(map_entry.1 == child_info, "No child change implemented");
 		let entry = map_entry.0.entry(key).or_default();
 		entry.value = val;
 
