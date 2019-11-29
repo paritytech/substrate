@@ -23,7 +23,7 @@
 //! [Grafana]: https://grafana.com/
 //! [`grafana-json-data-source`]: https://github.com/simPod/grafana-json-datasource
 
-#[warn(missing_docs)]
+#![warn(missing_docs)]
 
 use lazy_static::lazy_static;
 use parking_lot::RwLock;
