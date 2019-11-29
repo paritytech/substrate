@@ -14,10 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-pub use substrate_cli::error;
+pub use substrate_cli::VersionInfo;
 use tokio::prelude::Future;
 use tokio::runtime::{Builder as RuntimeBuilder, Runtime};
-pub use substrate_cli::{VersionInfo, IntoExit, NoCustom, SharedParams, ExecutionStrategyParam};
+use substrate_cli::{IntoExit, NoCustom, SharedParams, ImportParams, error};
 use substrate_service::{AbstractService, Roles as ServiceRoles, Configuration};
 use log::info;
 use structopt::{StructOpt, clap::App};
@@ -25,7 +25,6 @@ use substrate_cli::{display_role, parse_and_prepare, AugmentClap, GetLogFilter, 
 use crate::{service, ChainSpec, load_spec};
 use crate::factory_impl::FactoryState;
 use transaction_factory::RuntimeAdapter;
-use client::ExecutionStrategies;
 
 /// Custom subcommands.
 #[derive(Clone, Debug, StructOpt)]
@@ -82,15 +81,9 @@ pub struct FactoryCmd {
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
 
-	/// The means of execution used when calling into the runtime while importing blocks.
-	#[structopt(
-		long = "execution",
-		value_name = "STRATEGY",
-		possible_values = &ExecutionStrategyParam::variants(),
-		case_insensitive = true,
-		default_value = "NativeElseWasm"
-	)]
-	pub execution: ExecutionStrategyParam,
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub import_params: ImportParams,
 }
 
 impl AugmentClap for FactoryCmd {
@@ -147,12 +140,8 @@ pub fn run<I, T, E>(args: I, exit: E, version: substrate_cli::VersionInfo) -> er
 				&cli_args.shared_params,
 				&version,
 			)?;
-			config.execution_strategies = ExecutionStrategies {
-				importing: cli_args.execution.into(),
-				block_construction: cli_args.execution.into(),
-				other: cli_args.execution.into(),
-				..Default::default()
-			};
+
+			substrate_cli::fill_import_params(&mut config, &cli_args.import_params, ServiceRoles::FULL)?;
 
 			match ChainSpec::from(config.chain_spec.id()) {
 				Some(ref c) if c == &ChainSpec::Development || c == &ChainSpec::LocalTestnet => {},
