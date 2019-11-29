@@ -61,6 +61,7 @@ substrate-basic-authorship = { path = "../../../client/basic-authorship" }
 substrate-service = { path = "../../../client/service", default-features = false }
 substrate-telemetry = { package = "substrate-telemetry", path = "../../../client/telemetry" }
 authority-discovery = { package = "substrate-authority-discovery", path = "../../../client/authority-discovery"}
+consensus-common = { package = "substrate-consensus-common", path = "../../../primitives/consensus/common" }
 
 # frame dependencies
 indices = { package = "pallet-indices", path = "../../../frame/indices" }
@@ -93,13 +94,12 @@ console_log = { version = "0.1.2", optional = true }
 js-sys = { version = "0.3.22", optional = true }
 wasm-bindgen = { version = "0.2.45", optional = true }
 wasm-bindgen-futures = { version = "0.3.22", optional = true }
-kvdb-memorydb = { git = "https://github.com/paritytech/parity-common", rev="03a2ba08f47f4af4219280e660a1ea92cb8896bd", optional = true }
+kvdb-memorydb = { version = "0.1.1", optional = true }
 rand6 = { package = "rand", version = "0.6", features = ["wasm-bindgen"], optional = true }	# Imported just for the `wasm-bindgen` feature
 
 [dev-dependencies]
 keystore = { package = "substrate-keystore", path = "../../../client/keystore" }
 babe = { package = "substrate-consensus-babe", path = "../../../client/consensus/babe", features = ["test-helpers"] }
-consensus-common = { package = "substrate-consensus-common", path = "../../../primitives/consensus/common" }
 service-test = { package = "substrate-service-test", path = "../../../client/service/test" }
 futures = "0.3.1"
 tempfile = "3.1.0"
