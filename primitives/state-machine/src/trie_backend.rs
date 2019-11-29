@@ -105,11 +105,11 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
 		&self,
 		storage_key: &[u8],
-		_child_info: ChildInfo,
+		child_info: ChildInfo,
 		prefix: &[u8],
 		f: F,
 	) {
-		self.essence.for_child_keys_with_prefix(storage_key, prefix, f)
+		self.essence.for_child_keys_with_prefix(storage_key, child_info, prefix, f)
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {

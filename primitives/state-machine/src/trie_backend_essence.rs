@@ -23,7 +23,7 @@ use log::{debug, warn};
 use hash_db::{self, Hasher, EMPTY_PREFIX, Prefix};
 use trie::{Trie, MemoryDB, PrefixedMemoryDB, DBValue,
 	default_child_trie_root, read_trie_value, read_child_trie_value,
-	for_keys_in_child_trie};
+	for_keys_in_child_trie, KeySpacedDB};
 use trie::trie_types::{TrieDB, TrieError, Layout};
 use crate::backend::Consolidate;
 use primitives::storage::ChildInfo;
@@ -148,25 +148,32 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 	pub fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
 		&self,
 		storage_key: &[u8],
+		child_info: ChildInfo,
 		prefix: &[u8],
 		mut f: F,
 	) {
-		let root_vec = match self.storage(storage_key) {
-			Ok(v) => v.unwrap_or(default_child_trie_root::<Layout<H>>(storage_key).encode()),
-			Err(e) => {
-				debug!(target: "trie", "Error while iterating child storage: {}", e);
-				return;
-			}
+		let fetched_root;
+		let root_vec = if let Some(root) = child_info.root() {
+			root
+		} else {
+			fetched_root = match self.storage(storage_key) {
+				Ok(v) => v.unwrap_or(default_child_trie_root::<Layout<H>>(storage_key).encode()),
+				Err(e) => {
+					debug!(target: "trie", "Error while iterating child storage with prefix: {}", e);
+					return;
+				}
+			};
+			&fetched_root
 		};
+
 		let mut root = H::Out::default();
 		root.as_mut().copy_from_slice(&root_vec);
-
-		self.keys_values_with_prefix_inner(&root, prefix, |k, _v| f(k))
+		self.keys_values_with_prefix_inner(&root, prefix, |k, _v| f(k), Some(child_info))
 	}
 
 	/// Execute given closure for all keys starting with prefix.
 	pub fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], mut f: F) {
-		self.keys_values_with_prefix_inner(&self.root, prefix, |k, _v| f(k))
+		self.keys_values_with_prefix_inner(&self.root, prefix, |k, _v| f(k), None)
 	}
 
 
@@ -175,15 +182,16 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		root: &H::Out,
 		prefix: &[u8],
 		mut f: F,
+		child_info: Option<ChildInfo>,
 	) {
 		let mut read_overlay = S::Overlay::default();
 		let eph = Ephemeral {
 			storage: &self.storage,
 			overlay: &mut read_overlay,
 		};
-
-		let mut iter = move || -> Result<(), Box<TrieError<H::Out>>> {
-			let trie = TrieDB::<H>::new(&eph, root)?;
+	
+		let mut iter = move |db| -> Result<(), Box<TrieError<H::Out>>> {
+			let trie = TrieDB::<H>::new(db, root)?;
 			let mut iter = trie.iter()?;
 
 			iter.seek(prefix)?;
@@ -201,14 +209,20 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 			Ok(())
 		};
 
-		if let Err(e) = iter() {
+		let result = if let Some(child_info) = child_info {
+			let db = KeySpacedDB::new(&eph, child_info.keyspace());
+			iter(&db)
+		} else {
+			iter(&eph)
+		};
+		if let Err(e) = result {
 			debug!(target: "trie", "Error while iterating by prefix: {}", e);
 		}
 	}
 
 	/// Execute given closure for all key and values starting with prefix.
 	pub fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], f: F) {
-		self.keys_values_with_prefix_inner(&self.root, prefix, f)
+		self.keys_values_with_prefix_inner(&self.root, prefix, f, None)
 	}
 
 }
