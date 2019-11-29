@@ -50,7 +50,7 @@ pub trait StorageValue<T: FullCodec> {
 	type Query;
 
 	/// Get the storage key.
-	fn hashed_key() -> [u8; 16];
+	fn hashed_key() -> [u8; 32];
 
 	/// Does the value (explicitly) exist in storage?
 	fn exists() -> bool;

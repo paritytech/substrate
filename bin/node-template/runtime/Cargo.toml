@@ -29,7 +29,7 @@ support = { package = "frame-support", path = "../../../frame/support", default-
 system = { package = "frame-system", path = "../../../frame/system", default-features = false }
 timestamp = { package = "pallet-timestamp", path = "../../../frame/timestamp", default-features = false }
 transaction-payment = { package = "pallet-transaction-payment", path = "../../../frame/transaction-payment", default-features = false }
-tx-pool-api = { package = "substrate-transaction-pool-runtime-api", path = "../../../primitives/transaction-pool/runtime-api", default-features = false }
+txpool-runtime-api = { package = "sp-transaction-pool-runtime-api", path = "../../../primitives/transaction-pool/runtime-api", default-features = false }
 version = { package = "sr-version", path = "../../../primitives/sr-version", default-features = false }
 
 [build-dependencies]
@@ -62,6 +62,6 @@ std = [
 	"system/std",
 	"timestamp/std",
 	"transaction-payment/std",
-	"tx-pool-api/std",
+	"txpool-runtime-api/std",
 	"version/std",
 ]
