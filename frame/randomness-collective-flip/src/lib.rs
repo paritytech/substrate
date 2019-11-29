@@ -156,7 +156,7 @@ mod tests {
 	use sr_primitives::{
 		Perbill, traits::{BlakeTwo256, OnInitialize, Header as _, IdentityLookup}, testing::Header,
 	};
-	use support::{impl_outer_origin, parameter_types, traits::Randomness};
+	use support::{impl_outer_origin, parameter_types, weights::Weight, traits::Randomness};
 
 	#[derive(Clone, PartialEq, Eq)]
 	pub struct Test;
@@ -167,7 +167,7 @@ mod tests {
 
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
-		pub const MaximumBlockWeight: u32 = 1024;
+		pub const MaximumBlockWeight: Weight = 1024;
 		pub const MaximumBlockLength: u32 = 2 * 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}

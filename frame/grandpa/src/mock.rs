@@ -20,7 +20,7 @@
 
 use sr_primitives::{Perbill, DigestItem, traits::IdentityLookup, testing::{Header, UintAuthorityId}};
 use runtime_io;
-use support::{impl_outer_origin, impl_outer_event, parameter_types};
+use support::{impl_outer_origin, impl_outer_event, parameter_types, weights::Weight};
 use primitives::H256;
 use codec::{Encode, Decode};
 use crate::{AuthorityId, AuthorityList, GenesisConfig, Trait, Module, ConsensusLog};
@@ -43,7 +43,7 @@ impl Trait for Test {
 }
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
-	pub const MaximumBlockWeight: u32 = 1024;
+	pub const MaximumBlockWeight: Weight = 1024;
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
