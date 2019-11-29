@@ -30,6 +30,7 @@ sp-blockchain = { path = "../primitives/blockchain" }
 state-machine = { package = "substrate-state-machine", path = "../primitives/state-machine" }
 substrate-telemetry = { path = "telemetry" }
 trie = { package = "substrate-trie", path = "../primitives/trie" }
+tracing = "0.1.10"
 
 [dev-dependencies]
 env_logger = "0.7.0"
