@@ -406,7 +406,7 @@ pub(crate) fn write_voter_set_state<Block: BlockT, B: AuxStore>(
 	)
 }
 
-/// Write completed round.
+/// Write concluded round.
 pub(crate) fn write_concluded_round<Block: BlockT, B: AuxStore>(
 	backend: &B,
 	round_data: &CompletedRound<Block>,
