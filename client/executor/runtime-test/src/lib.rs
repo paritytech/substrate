@@ -10,7 +10,7 @@ use rstd::{vec::Vec, vec};
 
 #[cfg(not(feature = "std"))]
 use runtime_io::{
-	storage, hashing::{blake2_128, blake2_256, twox_128, twox_256},
+	storage, hashing::{blake2_128, blake2_256, sha2_256, twox_128, twox_256},
 	crypto::{ed25519_verify, sr25519_verify},
 };
 #[cfg(not(feature = "std"))]
@@ -58,6 +58,10 @@ primitives::wasm_export_functions! {
 
 	fn test_blake2_128(input: Vec<u8>) -> Vec<u8> {
 		blake2_128(&input).to_vec()
+	}
+
+	fn test_sha2_256(input: Vec<u8>) -> Vec<u8> {
+		sha2_256(&input).to_vec()
 	}
 
 	fn test_twox_256(input: Vec<u8>) -> Vec<u8> {

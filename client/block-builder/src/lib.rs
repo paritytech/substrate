@@ -17,7 +17,7 @@
 //! Substrate block builder
 //!
 //! This crate provides the [`BlockBuilder`] utility and the corresponding runtime api
-//! [`BlockBuilder`](api::BlockBuilder).
+//! [`BlockBuilder`](api::BlockBuilder).Error
 //!
 //! The block builder utility is used in the node as an abstraction over the runtime api to
 //! initialize a block, to push extrinsics and to finalize a block.
@@ -31,19 +31,15 @@ use sr_primitives::{
 	traits::{
 		Header as HeaderT, Hash, Block as BlockT, HashFor, ProvideRuntimeApi, ApiRef, DigestFor,
 		NumberFor, One,
-	},
+	}
 };
-
+use sp_blockchain::{ApplyExtrinsicFailed, Error};
 use primitives::ExecutionContext;
-
 use state_machine::StorageProof;
-
 use sr_api::{Core, ApiExt, ApiErrorFor};
 
 pub use runtime_api::BlockBuilder as BlockBuilderApi;
 
-/// Error when the runtime failed to apply an extrinsic.
-pub struct ApplyExtrinsicFailed(pub sr_primitives::ApplyError);
 
 /// Utility for building new (valid) blocks from a stream of extrinsics.
 pub struct BlockBuilder<'a, Block: BlockT, A: ProvideRuntimeApi> {
@@ -58,7 +54,7 @@ where
 	Block: BlockT,
 	A: ProvideRuntimeApi + 'a,
 	A::Api: BlockBuilderApi<Block>,
-	ApiErrorFor<A, Block>: From<ApplyExtrinsicFailed>,
+	ApiErrorFor<A, Block>: From<Error>,
 {
 	/// Create a new instance of builder based on the given `parent_hash` and `parent_number`.
 	///
@@ -107,21 +103,43 @@ where
 		let block_id = &self.block_id;
 		let extrinsics = &mut self.extrinsics;
 
-		self.api.map_api_result(|api| {
-			match api.apply_extrinsic_with_context(
+		if self
+			.api
+			.has_api_with::<dyn BlockBuilderApi<Block, Error = ApiErrorFor<A, Block>>, _>(
 				block_id,
-				ExecutionContext::BlockConstruction,
-				xt.clone()
-			)? {
-				Ok(_) => {
-					extrinsics.push(xt);
-					Ok(())
+				|version| version < 4,
+			)?
+		{
+			// Run compatibility fallback for v3.
+			self.api.map_api_result(|api| {
+				#[allow(deprecated)]
+				match api.apply_extrinsic_before_version_4_with_context(
+					block_id,
+					ExecutionContext::BlockConstruction,
+					xt.clone(),
+				)? {
+					Ok(_) => {
+						extrinsics.push(xt);
+						Ok(())
+					}
+					Err(e) => Err(ApplyExtrinsicFailed::from(e).into())?,
 				}
-				Err(e) => {
-					Err(ApplyExtrinsicFailed(e))?
+			})
+		} else {
+			self.api.map_api_result(|api| {
+				match api.apply_extrinsic_with_context(
+					block_id,
+					ExecutionContext::BlockConstruction,
+					xt.clone(),
+				)? {
+					Ok(_) => {
+						extrinsics.push(xt);
+						Ok(())
+					}
+					Err(tx_validity) => Err(ApplyExtrinsicFailed::Validity(tx_validity).into())?,
 				}
-			}
-		})
+			})
+		}
 	}
 
 	/// Consume the builder to return a valid `Block` containing all pushed extrinsics.

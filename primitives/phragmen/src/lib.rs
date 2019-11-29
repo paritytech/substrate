@@ -38,7 +38,9 @@ use sr_primitives::RuntimeDebug;
 use sr_primitives::{helpers_128bit::multiply_by_rational, Perbill, Rational128};
 use sr_primitives::traits::{Zero, Convert, Member, SimpleArithmetic, Saturating, Bounded};
 
+#[cfg(test)]
 mod mock;
+#[cfg(test)]
 mod tests;
 
 /// A type in which performing operations on balances and stakes of candidates and voters are safe.

@@ -25,11 +25,13 @@ use runtime_io::{
 use runtime_support::storage;
 use runtime_support::{decl_storage, decl_module};
 use sr_primitives::{
-	traits::{Hash as HashT, BlakeTwo256, Header as _}, generic, ApplyError, ApplyResult,
-	transaction_validity::{TransactionValidity, ValidTransaction, InvalidTransaction},
+	traits::{Hash as HashT, BlakeTwo256, Header as _}, generic, ApplyExtrinsicResult,
+	transaction_validity::{
+		TransactionValidity, ValidTransaction, InvalidTransaction, TransactionValidityError,
+	},
 };
-use codec::{KeyedVec, Encode};
-use palette_system::Trait;
+use codec::{KeyedVec, Encode, Decode};
+use frame_system::Trait;
 use crate::{
 	AccountId, BlockNumber, Extrinsic, Transfer, H256 as Hash, Block, Header, Digest, AuthorityId
 };
@@ -137,20 +139,26 @@ fn execute_block_with_state_root_handler(
 	});
 
 	let o_new_authorities = <NewAuthorities>::take();
+	let storage_root = Hash::decode(&mut &storage_root()[..])
+		.expect("`storage_root` is a valid hash");
 
 	if let Mode::Overwrite = mode {
-		header.state_root = storage_root().into();
+		header.state_root = storage_root;
 	} else {
 		// check storage root.
-		let storage_root = storage_root().into();
 		info_expect_equal_hash(&storage_root, &header.state_root);
 		assert!(storage_root == header.state_root, "Storage root must match that calculated.");
 	}
 
 	// check digest
 	let digest = &mut header.digest;
-	if let Some(storage_changes_root) = storage_changes_root(header.parent_hash.into()) {
-		digest.push(generic::DigestItem::ChangesTrieRoot(storage_changes_root.into()));
+	if let Some(storage_changes_root) = storage_changes_root(&header.parent_hash.encode()) {
+		digest.push(
+			generic::DigestItem::ChangesTrieRoot(
+				Hash::decode(&mut &storage_changes_root[..])
+					.expect("`storage_changes_root` is a valid hash")
+			)
+		);
 	}
 	if let Some(new_authorities) = o_new_authorities {
 		digest.push(generic::DigestItem::Consensus(*b"aura", new_authorities.encode()));
@@ -204,7 +212,7 @@ pub fn validate_transaction(utx: Extrinsic) -> TransactionValidity {
 
 /// Execute a transaction outside of the block execution function.
 /// This doesn't attempt to validate anything regarding the block.
-pub fn execute_transaction(utx: Extrinsic) -> ApplyResult {
+pub fn execute_transaction(utx: Extrinsic) -> ApplyExtrinsicResult {
 	let extrinsic_index: u32 = storage::unhashed::get(well_known_keys::EXTRINSIC_INDEX).unwrap();
 	let result = execute_transaction_backend(&utx);
 	ExtrinsicData::insert(extrinsic_index, utx.encode());
@@ -224,8 +232,10 @@ pub fn finalize_block() -> Header {
 	let o_new_authorities = <NewAuthorities>::take();
 	// This MUST come after all changes to storage are done. Otherwise we will fail the
 	// “Storage root does not match that calculated” assertion.
-	let storage_root = BlakeTwo256::storage_root();
-	let storage_changes_root = BlakeTwo256::storage_changes_root(parent_hash);
+	let storage_root = Hash::decode(&mut &storage_root()[..])
+		.expect("`storage_root` is a valid hash");
+	let storage_changes_root = storage_changes_root(&parent_hash.encode())
+		.map(|r| Hash::decode(&mut &r[..]).expect("`storage_changes_root` is a valid hash"));
 
 	if let Some(storage_changes_root) = storage_changes_root {
 		digest.push(generic::DigestItem::ChangesTrieRoot(storage_changes_root));
@@ -246,12 +256,12 @@ pub fn finalize_block() -> Header {
 }
 
 #[inline(always)]
-fn check_signature(utx: &Extrinsic) -> Result<(), ApplyError> {
+fn check_signature(utx: &Extrinsic) -> Result<(), TransactionValidityError> {
 	use sr_primitives::traits::BlindCheckable;
 	utx.clone().check().map_err(|_| InvalidTransaction::BadProof.into()).map(|_| ())
 }
 
-fn execute_transaction_backend(utx: &Extrinsic) -> ApplyResult {
+fn execute_transaction_backend(utx: &Extrinsic) -> ApplyExtrinsicResult {
 	check_signature(utx)?;
 	match utx {
 		Extrinsic::Transfer(ref transfer, _) => execute_transfer_backend(transfer),
@@ -261,7 +271,7 @@ fn execute_transaction_backend(utx: &Extrinsic) -> ApplyResult {
 	}
 }
 
-fn execute_transfer_backend(tx: &Transfer) -> ApplyResult {
+fn execute_transfer_backend(tx: &Transfer) -> ApplyExtrinsicResult {
 	// check nonce
 	let nonce_key = tx.from.to_keyed_vec(NONCE_OF);
 	let expected_nonce: u64 = storage::hashed::get_or(&blake2_256, &nonce_key, 0);
@@ -287,12 +297,12 @@ fn execute_transfer_backend(tx: &Transfer) -> ApplyResult {
 	Ok(Ok(()))
 }
 
-fn execute_new_authorities_backend(new_authorities: &[AuthorityId]) -> ApplyResult {
+fn execute_new_authorities_backend(new_authorities: &[AuthorityId]) -> ApplyExtrinsicResult {
 	NewAuthorities::put(new_authorities.to_vec());
 	Ok(Ok(()))
 }
 
-fn execute_storage_change(key: &[u8], value: Option<&[u8]>) -> ApplyResult {
+fn execute_storage_change(key: &[u8], value: Option<&[u8]>) -> ApplyExtrinsicResult {
 	match value {
 		Some(value) => storage::unhashed::put_raw(key, value),
 		None => storage::unhashed::kill(key),

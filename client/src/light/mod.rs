@@ -27,11 +27,11 @@ use executor::RuntimeInfo;
 use primitives::{H256, Blake2Hasher, traits::CodeExecutor};
 use sr_primitives::BuildStorage;
 use sr_primitives::traits::Block as BlockT;
+use sp_blockchain::Result as ClientResult;
 
 use crate::call_executor::LocalCallExecutor;
 use crate::client::Client;
 use client_api::{
-	error::Result as ClientResult,
 	light::Storage as BlockchainStorage,
 };
 use crate::light::backend::Backend;
@@ -68,7 +68,7 @@ pub fn new_light<B, S, GS, RA, E>(
 		GS: BuildStorage,
 		E: CodeExecutor + RuntimeInfo,
 {
-	let local_executor = LocalCallExecutor::new(backend.clone(), code_executor, None);
+	let local_executor = LocalCallExecutor::new(backend.clone(), code_executor);
 	let executor = GenesisCallExecutor::new(backend.clone(), local_executor);
 	Client::new(backend, executor, genesis_storage, Default::default(), Default::default())
 }

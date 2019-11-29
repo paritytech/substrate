@@ -18,7 +18,8 @@ use sr_api::{RuntimeApiInfo, decl_runtime_apis, impl_runtime_apis};
 
 use sr_primitives::{traits::{GetNodeBlockType, Block as BlockT}, generic::BlockId};
 
-use test_client::{client::error::Result, runtime::Block};
+use test_client::runtime::Block;
+use sp_blockchain::Result;
 
 /// The declaration of the `Runtime` type and the implementation of the `GetNodeBlockType`
 /// trait are done by the `construct_runtime!` macro in a real runtime.

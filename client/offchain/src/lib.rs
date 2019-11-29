@@ -41,14 +41,10 @@ use sr_api::ApiExt;
 use futures::future::Future;
 use log::{debug, warn};
 use network::NetworkStateInfo;
-use primitives::{offchain, ExecutionContext};
+use primitives::{offchain::{self, OffchainStorage}, ExecutionContext};
 use sr_primitives::{generic::BlockId, traits::{self, ProvideRuntimeApi}};
-use transaction_pool::txpool::{Pool, ChainApi};
-use client_api::{OffchainStorage};
 
 mod api;
-
-pub mod testing;
 
 pub use offchain_primitives::{OffchainWorkerApi, STORAGE_PREFIX};
 
@@ -94,13 +90,12 @@ impl<Client, Storage, Block> OffchainWorkers<
 {
 	/// Start the offchain workers after given block.
 	#[must_use]
-	pub fn on_block_imported<A>(
+	pub fn on_block_imported(
 		&self,
 		number: &<Block::Header as traits::Header>::Number,
-		pool: &Arc<Pool<A>>,
 		network_state: Arc<dyn NetworkStateInfo + Send + Sync>,
 		is_validator: bool,
-	) -> impl Future<Output = ()> where A: ChainApi<Block=Block> + 'static {
+	) -> impl Future<Output = ()> {
 		let runtime = self.client.runtime_api();
 		let at = BlockId::number(*number);
 		let has_api = runtime.has_api::<dyn OffchainWorkerApi<Block, Error = ()>>(&at);
@@ -108,9 +103,7 @@ impl<Client, Storage, Block> OffchainWorkers<
 
 		if has_api.unwrap_or(false) {
 			let (api, runner) = api::AsyncApi::new(
-				pool.clone(),
 				self.db.clone(),
-				at.clone(),
 				network_state.clone(),
 				is_validator,
 			);
@@ -152,7 +145,11 @@ impl<Client, Storage, Block> OffchainWorkers<
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use std::sync::Arc;
 	use network::{Multiaddr, PeerId};
+	use test_client::runtime::Block;
+	use txpool::{BasicPool, FullChainApi};
+	use txpool_api::{TransactionPool, InPoolTransaction};
 
 	struct MockNetworkStateInfo();
 
@@ -166,21 +163,37 @@ mod tests {
 		}
 	}
 
+	struct TestPool(BasicPool<FullChainApi<test_client::TestClient, Block>, Block>);
+
+	impl txpool_api::OffchainSubmitTransaction<Block> for TestPool {
+		fn submit_at(
+			&self,
+			at: &BlockId<Block>,
+			extrinsic: <Block as sr_primitives::traits::Block>::Extrinsic,
+		) -> Result<(), ()> {
+			futures::executor::block_on(self.0.submit_one(&at, extrinsic))
+				.map(|_| ())
+				.map_err(|_| ())
+		}
+	}
+
 	#[test]
 	fn should_call_into_runtime_and_produce_extrinsic() {
 		// given
 		let _ = env_logger::try_init();
 		let client = Arc::new(test_client::new());
-		let pool = Arc::new(Pool::new(Default::default(), transaction_pool::FullChainApi::new(client.clone())));
+		let pool = Arc::new(TestPool(BasicPool::new(Default::default(), FullChainApi::new(client.clone()))));
+		client.execution_extensions()
+			.register_transaction_pool(Arc::downgrade(&pool.clone()) as _);
 		let db = client_db::offchain::LocalStorage::new_test();
 		let network_state = Arc::new(MockNetworkStateInfo());
 
 		// when
 		let offchain = OffchainWorkers::new(client, db);
-		futures::executor::block_on(offchain.on_block_imported(&0u64, &pool, network_state, false));
+		futures::executor::block_on(offchain.on_block_imported(&0u64, network_state, false));
 
 		// then
-		assert_eq!(pool.status().ready, 1);
-		assert_eq!(pool.ready().next().unwrap().is_propagateable(), false);
+		assert_eq!(pool.0.status().ready, 1);
+		assert_eq!(pool.0.ready().next().unwrap().is_propagateable(), false);
 	}
 }

@@ -15,34 +15,29 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Substrate client interfaces.
+#![warn(missing_docs)]
 
-// TODO: make internal
-pub mod error;
 pub mod backend;
-pub mod blockchain;
-pub mod light;
-pub mod notifications;
 pub mod call_executor;
 pub mod client;
-pub mod offchain;
+pub mod execution_extensions;
+pub mod light;
+pub mod notifications;
 
-pub use error::*;
+pub use sp_blockchain as blockchain;
 pub use backend::*;
-pub use blockchain::*;
-pub use light::*;
 pub use notifications::*;
 pub use call_executor::*;
-pub use offchain::*;
 pub use client::*;
+pub use light::*;
+pub use notifications::*;
 
 pub use state_machine::{StorageProof, ExecutionStrategy};
 
 
 /// Utility methods for the client.
 pub mod utils {
-    use super::HeaderBackend;
-    use header_metadata::HeaderMetadata;
-	use crate::error;
+    use sp_blockchain::{HeaderBackend, HeaderMetadata, Error};
     use primitives::H256;
 	use sr_primitives::traits::{Block as BlockT};
 	use std::borrow::Borrow;
@@ -56,8 +51,8 @@ pub mod utils {
 	pub fn is_descendent_of<'a, Block: BlockT<Hash=H256>, T, H: Borrow<H256> + 'a>(
 		client: &'a T,
 		current: Option<(H, H)>,
-	) -> impl Fn(&H256, &H256) -> Result<bool, error::Error> + 'a
-		where T: HeaderBackend<Block> + HeaderMetadata<Block, Error=error::Error>,
+	) -> impl Fn(&H256, &H256) -> Result<bool, Error> + 'a
+		where T: HeaderBackend<Block> + HeaderMetadata<Block, Error=Error>,
 	{
 		move |base, hash| {
 			if base == hash { return Ok(false); }
@@ -76,7 +71,7 @@ pub mod utils {
 				}
 			}
 
-			let ancestor = header_metadata::lowest_common_ancestor(client, *hash, *base)?;
+			let ancestor = sp_blockchain::lowest_common_ancestor(client, *hash, *base)?;
 
 			Ok(ancestor.hash == *base)
 		}

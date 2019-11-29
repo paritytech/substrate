@@ -384,12 +384,6 @@ pub trait Hash: 'static + MaybeSerializeDeserialize + Debug + Clone + Eq + Parti
 
 	/// The Patricia tree root of the given mapping.
 	fn trie_root(input: Vec<(Vec<u8>, Vec<u8>)>) -> Self::Output;
-
-	/// Acquire the global storage root.
-	fn storage_root() -> Self::Output;
-
-	/// Acquire the global storage changes root.
-	fn storage_changes_root(parent_hash: Self::Output) -> Option<Self::Output>;
 }
 
 /// Blake2-256 Hash implementation.
@@ -405,19 +399,11 @@ impl Hash for BlakeTwo256 {
 	}
 
 	fn trie_root(input: Vec<(Vec<u8>, Vec<u8>)>) -> Self::Output {
-		runtime_io::storage::blake2_256_trie_root(input)
+		runtime_io::trie::blake2_256_root(input)
 	}
 
 	fn ordered_trie_root(input: Vec<Vec<u8>>) -> Self::Output {
-		runtime_io::storage::blake2_256_ordered_trie_root(input)
-	}
-
-	fn storage_root() -> Self::Output {
-		runtime_io::storage::root().into()
-	}
-
-	fn storage_changes_root(parent_hash: Self::Output) -> Option<Self::Output> {
-		runtime_io::storage::changes_root(parent_hash.into()).map(Into::into)
+		runtime_io::trie::blake2_256_ordered_root(input)
 	}
 }
 
@@ -754,7 +740,7 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 		call: &Self::Call,
 		info: Self::DispatchInfo,
 		len: usize,
-	) -> Result<Self::Pre, crate::ApplyError> {
+	) -> Result<Self::Pre, TransactionValidityError> {
 		self.validate(who, call, info.clone(), len)
 			.map(|_| Self::Pre::default())
 			.map_err(Into::into)
@@ -788,7 +774,7 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 		call: &Self::Call,
 		info: Self::DispatchInfo,
 		len: usize,
-	) -> Result<Self::Pre, crate::ApplyError> {
+	) -> Result<Self::Pre, TransactionValidityError> {
 		Self::validate_unsigned(call, info.clone(), len)
 			.map(|_| Self::Pre::default())
 			.map_err(Into::into)
@@ -835,7 +821,7 @@ impl<AccountId, Call, Info: Clone> SignedExtension for Tuple {
 	}
 
 	fn pre_dispatch(self, who: &Self::AccountId, call: &Self::Call, info: Self::DispatchInfo, len: usize)
-		-> Result<Self::Pre, crate::ApplyError>
+		-> Result<Self::Pre, TransactionValidityError>
 	{
 		Ok(for_tuples!( ( #( Tuple.pre_dispatch(who, call, info.clone(), len)? ),* ) ))
 	}
@@ -854,7 +840,7 @@ impl<AccountId, Call, Info: Clone> SignedExtension for Tuple {
 		call: &Self::Call,
 		info: Self::DispatchInfo,
 		len: usize,
-	) -> Result<Self::Pre, crate::ApplyError> {
+	) -> Result<Self::Pre, TransactionValidityError> {
 		Ok(for_tuples!( ( #( Tuple::pre_dispatch_unsigned(call, info.clone(), len)? ),* ) ))
 	}
 
@@ -912,7 +898,7 @@ pub trait Applyable: Sized + Send + Sync {
 		self,
 		info: Self::DispatchInfo,
 		len: usize,
-	) -> crate::ApplyResult;
+	) -> crate::ApplyExtrinsicResult;
 }
 
 /// Auxiliary wrapper that holds an api instance and binds it to the given lifetime.
@@ -992,7 +978,7 @@ pub trait ValidateUnsigned {
 	/// this function again to make sure we never include an invalid transaction.
 	///
 	/// Changes made to storage WILL be persisted if the call returns `Ok`.
-	fn pre_dispatch(call: &Self::Call) -> Result<(), crate::ApplyError> {
+	fn pre_dispatch(call: &Self::Call) -> Result<(), TransactionValidityError> {
 		Self::validate_unsigned(call)
 			.map(|_| ())
 			.map_err(Into::into)
@@ -1026,7 +1012,14 @@ pub trait OpaqueKeys: Clone {
 }
 
 /// Input that adds infinite number of zero after wrapped input.
-struct TrailingZeroInput<'a>(&'a [u8]);
+pub struct TrailingZeroInput<'a>(&'a [u8]);
+
+impl<'a> TrailingZeroInput<'a> {
+	/// Create a new instance from the given byte array.
+	pub fn new(data: &'a [u8]) -> Self {
+		Self(data)
+	}
+}
 
 impl<'a> codec::Input for TrailingZeroInput<'a> {
 	fn remaining_len(&mut self) -> Result<Option<usize>, codec::Error> {

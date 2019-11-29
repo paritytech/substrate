@@ -45,7 +45,7 @@ mod tests {
 		traits::{CodeExecutor, Externalities}, storage::well_known_keys,
 	};
 	use sr_primitives::{
-		Fixed64, traits::{Header as HeaderT, Hash as HashT, Convert}, ApplyResult,
+		Fixed64, traits::{Header as HeaderT, Hash as HashT, Convert}, ApplyExtrinsicResult,
 		transaction_validity::InvalidTransaction,
 	};
 	use contracts::ContractAddressFor;
@@ -173,7 +173,7 @@ mod tests {
 			true,
 			None,
 		).0.unwrap();
-		let r = ApplyResult::decode(&mut &v.as_encoded()[..]).unwrap();
+		let r = ApplyExtrinsicResult::decode(&mut &v.as_encoded()[..]).unwrap();
 		assert_eq!(r, Err(InvalidTransaction::Payment.into()));
 	}
 
@@ -209,7 +209,7 @@ mod tests {
 			true,
 			None,
 		).0.unwrap();
-		let r = ApplyResult::decode(&mut &v.as_encoded()[..]).unwrap();
+		let r = ApplyExtrinsicResult::decode(&mut &v.as_encoded()[..]).unwrap();
 		assert_eq!(r, Err(InvalidTransaction::Payment.into()));
 	}
 
@@ -467,7 +467,7 @@ mod tests {
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
 					event: Event::system(system::Event::ExtrinsicSuccess(
-						DispatchInfo { weight: 10000, class: DispatchClass::Operational }
+						DispatchInfo { weight: 10000, class: DispatchClass::Operational, pays_fee: true }
 					)),
 					topics: vec![],
 				},
@@ -489,7 +489,7 @@ mod tests {
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
 					event: Event::system(system::Event::ExtrinsicSuccess(
-						DispatchInfo { weight: 1000000, class: DispatchClass::Normal }
+						DispatchInfo { weight: 1000000, class: DispatchClass::Normal, pays_fee: true }
 					)),
 					topics: vec![],
 				},
@@ -520,7 +520,7 @@ mod tests {
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
 					event: Event::system(system::Event::ExtrinsicSuccess(
-						DispatchInfo { weight: 10000, class: DispatchClass::Operational }
+						DispatchInfo { weight: 10000, class: DispatchClass::Operational, pays_fee: true }
 					)),
 					topics: vec![],
 				},
@@ -544,7 +544,7 @@ mod tests {
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
 					event: Event::system(system::Event::ExtrinsicSuccess(
-						DispatchInfo { weight: 1000000, class: DispatchClass::Normal }
+						DispatchInfo { weight: 1000000, class: DispatchClass::Normal, pays_fee: true }
 					)),
 					topics: vec![],
 				},
@@ -568,7 +568,7 @@ mod tests {
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(2),
 					event: Event::system(system::Event::ExtrinsicSuccess(
-						DispatchInfo { weight: 1000000, class: DispatchClass::Normal }
+						DispatchInfo { weight: 1000000, class: DispatchClass::Normal, pays_fee: true }
 					)),
 					topics: vec![],
 				},
@@ -854,7 +854,7 @@ mod tests {
 			false,
 			None,
 		).0.unwrap().into_encoded();
-		let r = ApplyResult::decode(&mut &r[..]).unwrap();
+		let r = ApplyExtrinsicResult::decode(&mut &r[..]).unwrap();
 		assert_eq!(r, Err(InvalidTransaction::Payment.into()));
 	}
 
@@ -887,7 +887,7 @@ mod tests {
 			false,
 			None,
 		).0.unwrap().into_encoded();
-		ApplyResult::decode(&mut &r[..])
+		ApplyExtrinsicResult::decode(&mut &r[..])
 			.unwrap()
 			.expect("Extrinsic could be applied")
 			.expect("Extrinsic did not fail");
@@ -913,7 +913,7 @@ mod tests {
 			None,
 		).0.unwrap();
 
-		assert!(t.ext().storage_changes_root(GENESIS_HASH.into()).unwrap().is_some());
+		assert!(t.ext().storage_changes_root(&GENESIS_HASH.encode()).unwrap().is_some());
 	}
 
 	#[test]
@@ -929,7 +929,7 @@ mod tests {
 			None,
 		).0.unwrap();
 
-		assert!(t.ext().storage_changes_root(GENESIS_HASH.into()).unwrap().is_some());
+		assert!(t.ext().storage_changes_root(&GENESIS_HASH.encode()).unwrap().is_some());
 	}
 
 	#[test]

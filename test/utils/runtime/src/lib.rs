@@ -34,7 +34,7 @@ use substrate_trie::trie_types::{TrieDB, TrieDBMut};
 
 use sr_api::{decl_runtime_apis, impl_runtime_apis};
 use sr_primitives::{
-	ApplyResult, create_runtime_str, Perbill, impl_opaque_keys,
+	ApplyExtrinsicResult, create_runtime_str, Perbill, impl_opaque_keys,
 	transaction_validity::{
 		TransactionValidity, ValidTransaction, TransactionValidityError, InvalidTransaction,
 	},
@@ -338,14 +338,14 @@ impl GetRuntimeBlockType for Runtime {
 }
 
 impl_outer_origin!{
-	pub enum Origin for Runtime where system = palette_system {}
+	pub enum Origin for Runtime where system = frame_system {}
 }
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
 pub struct Event;
 
-impl From<palette_system::Event> for Event {
-	fn from(_evt: palette_system::Event) -> Self {
+impl From<frame_system::Event> for Event {
+	fn from(_evt: frame_system::Event) -> Self {
 		unimplemented!("Not required in tests!")
 	}
 }
@@ -358,7 +358,7 @@ parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
 }
 
-impl palette_system::Trait for Runtime {
+impl frame_system::Trait for Runtime {
 	type Origin = Origin;
 	type Call = Extrinsic;
 	type Index = u64;
@@ -477,7 +477,7 @@ cfg_if! {
 				}
 			}
 
-			impl transaction_pool_api::TaggedTransactionQueue<Block> for Runtime {
+			impl txpool_runtime_api::TaggedTransactionQueue<Block> for Runtime {
 				fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 					if let Extrinsic::IncludeData(data) = utx {
 						return Ok(ValidTransaction {
@@ -494,7 +494,7 @@ cfg_if! {
 			}
 
 			impl block_builder_api::BlockBuilder<Block> for Runtime {
-				fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyResult {
+				fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyExtrinsicResult {
 					system::execute_transaction(extrinsic)
 				}
 
@@ -634,7 +634,7 @@ cfg_if! {
 				}
 			}
 
-			impl palette_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {
+			impl frame_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {
 				fn account_nonce(_account: AccountId) -> Index {
 					0
 				}
@@ -662,7 +662,7 @@ cfg_if! {
 				}
 			}
 
-			impl transaction_pool_api::TaggedTransactionQueue<Block> for Runtime {
+			impl txpool_runtime_api::TaggedTransactionQueue<Block> for Runtime {
 				fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 					if let Extrinsic::IncludeData(data) = utx {
 						return Ok(ValidTransaction{
@@ -679,7 +679,7 @@ cfg_if! {
 			}
 
 			impl block_builder_api::BlockBuilder<Block> for Runtime {
-				fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyResult {
+				fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyExtrinsicResult {
 					system::execute_transaction(extrinsic)
 				}
 
@@ -850,7 +850,7 @@ cfg_if! {
 				}
 			}
 
-			impl palette_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {
+			impl frame_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {
 				fn account_nonce(_account: AccountId) -> Index {
 					0
 				}

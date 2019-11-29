@@ -19,6 +19,7 @@
 use std::sync::Arc;
 use std::collections::HashMap;
 use primitives::ChangesTrieConfiguration;
+use primitives::offchain::OffchainStorage;
 use sr_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
 use sr_primitives::traits::{Block as BlockT, NumberFor};
 use state_machine::backend::Backend as StateBackend;
@@ -27,13 +28,12 @@ use crate::{
 	blockchain::{
 		Backend as BlockchainBackend, well_known_cache_keys
 	},
-	offchain::OffchainStorage,
-	error,
 	light::RemoteBlockchain,
 };
+use sp_blockchain;
 use consensus::BlockOrigin;
 use hash_db::Hasher;
-use parking_lot::Mutex;
+use parking_lot::RwLock;
 
 /// In memory array of storage values.
 pub type StorageCollection = Vec<(Vec<u8>, Option<Vec<u8>>)>;
@@ -41,12 +41,22 @@ pub type StorageCollection = Vec<(Vec<u8>, Option<Vec<u8>>)>;
 /// In memory arrays of storage values for multiple child tries.
 pub type ChildStorageCollection = Vec<(Vec<u8>, StorageCollection)>;
 
+/// Import operation summary.
+///
+/// Contains information about the block that just got imported,
+/// including storage changes, reorged blocks, etc.
 pub struct ImportSummary<Block: BlockT> {
+	/// Block hash of the imported block.
 	pub hash: Block::Hash,
+	/// Import origin.
 	pub origin: BlockOrigin,
+	/// Header of the imported block.
 	pub header: Block::Header,
+	/// Is this block a new best block.
 	pub is_new_best: bool,
+	/// Optional storage changes.
 	pub storage_changes: Option<(StorageCollection, ChildStorageCollection)>,
+	/// Blocks that got retracted because of this one got imported.
 	pub retracted: Vec<Block::Hash>,
 }
 
@@ -56,8 +66,11 @@ pub struct ClientImportOperation<
 	H: Hasher<Out=Block::Hash>,
 	B: Backend<Block, H>,
 > {
+	/// DB Operation.
 	pub op: B::BlockImportOperation,
+	/// Summary of imported block.
 	pub notify_imported: Option<ImportSummary<Block>>,
+	/// A list of hashes of blocks that got finalized.
 	pub notify_finalized: Vec<Block::Hash>,
 }
 
@@ -103,7 +116,7 @@ pub trait BlockImportOperation<Block, H> where
 	/// Returns pending state.
 	///
 	/// Returns None for backends with locally-unavailable state data.
-	fn state(&self) -> error::Result<Option<&Self::State>>;
+	fn state(&self) -> sp_blockchain::Result<Option<&Self::State>>;
 
 	/// Append block data to the transaction.
 	fn set_block_data(
@@ -112,37 +125,37 @@ pub trait BlockImportOperation<Block, H> where
 		body: Option<Vec<Block::Extrinsic>>,
 		justification: Option<Justification>,
 		state: NewBlockState,
-	) -> error::Result<()>;
+	) -> sp_blockchain::Result<()>;
 
 	/// Update cached data.
 	fn update_cache(&mut self, cache: HashMap<well_known_cache_keys::Id, Vec<u8>>);
 
 	/// Inject storage data into the database.
-	fn update_db_storage(&mut self, update: <Self::State as StateBackend<H>>::Transaction) -> error::Result<()>;
+	fn update_db_storage(&mut self, update: <Self::State as StateBackend<H>>::Transaction) -> sp_blockchain::Result<()>;
 
 	/// Inject storage data into the database replacing any existing data.
-	fn reset_storage(&mut self, top: StorageOverlay, children: ChildrenStorageOverlay) -> error::Result<H::Out>;
+	fn reset_storage(&mut self, top: StorageOverlay, children: ChildrenStorageOverlay) -> sp_blockchain::Result<H::Out>;
 
 	/// Set storage changes.
 	fn update_storage(
 		&mut self,
 		update: StorageCollection,
 		child_update: ChildStorageCollection,
-	) -> error::Result<()>;
+	) -> sp_blockchain::Result<()>;
 
 	/// Inject changes trie data into the database.
-	fn update_changes_trie(&mut self, update: ChangesTrieTransaction<H, NumberFor<Block>>) -> error::Result<()>;
+	fn update_changes_trie(&mut self, update: ChangesTrieTransaction<H, NumberFor<Block>>) -> sp_blockchain::Result<()>;
 
 	/// Insert auxiliary keys.
 	///
 	/// Values are `None` if should be deleted.
-	fn insert_aux<I>(&mut self, ops: I) -> error::Result<()>
+	fn insert_aux<I>(&mut self, ops: I) -> sp_blockchain::Result<()>
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>;
 
 	/// Mark a block as finalized.
-	fn mark_finalized(&mut self, id: BlockId<Block>, justification: Option<Justification>) -> error::Result<()>;
+	fn mark_finalized(&mut self, id: BlockId<Block>, justification: Option<Justification>) -> sp_blockchain::Result<()>;
 	/// Mark a block as new head. If both block import and set head are specified, set head overrides block import's best block rule.
-	fn mark_head(&mut self, id: BlockId<Block>) -> error::Result<()>;
+	fn mark_head(&mut self, id: BlockId<Block>) -> sp_blockchain::Result<()>;
 }
 
 /// Finalize Facilities
@@ -162,7 +175,7 @@ pub trait Finalizer<Block: BlockT, H: Hasher<Out=Block::Hash>, B: Backend<Block,
 		id: BlockId<Block>,
 		justification: Option<Justification>,
 		notify: bool,
-	) -> error::Result<()>;
+	) -> sp_blockchain::Result<()>;
 
 
 	/// Finalize a block.
@@ -183,7 +196,7 @@ pub trait Finalizer<Block: BlockT, H: Hasher<Out=Block::Hash>, B: Backend<Block,
 		id: BlockId<Block>,
 		justification: Option<Justification>,
 		notify: bool,
-	) -> error::Result<()>;
+	) -> sp_blockchain::Result<()>;
 
 }
 
@@ -198,10 +211,10 @@ pub trait AuxStore {
 		'c: 'a,
 		I: IntoIterator<Item=&'a(&'c [u8], &'c [u8])>,
 		D: IntoIterator<Item=&'a &'b [u8]>,
-	>(&self, insert: I, delete: D) -> error::Result<()>;
+	>(&self, insert: I, delete: D) -> sp_blockchain::Result<()>;
 
 	/// Query auxiliary data from key-value store.
-	fn get_aux(&self, key: &[u8]) -> error::Result<Option<Vec<u8>>>;
+	fn get_aux(&self, key: &[u8]) -> sp_blockchain::Result<Option<Vec<u8>>>;
 }
 
 /// Client backend.
@@ -232,18 +245,18 @@ pub trait Backend<Block, H>: AuxStore + Send + Sync where
 	/// Begin a new block insertion transaction with given parent block id.
 	///
 	/// When constructing the genesis, this is called with all-zero hash.
-	fn begin_operation(&self) -> error::Result<Self::BlockImportOperation>;
+	fn begin_operation(&self) -> sp_blockchain::Result<Self::BlockImportOperation>;
 
 	/// Note an operation to contain state transition.
-	fn begin_state_operation(&self, operation: &mut Self::BlockImportOperation, block: BlockId<Block>) -> error::Result<()>;
+	fn begin_state_operation(&self, operation: &mut Self::BlockImportOperation, block: BlockId<Block>) -> sp_blockchain::Result<()>;
 
 	/// Commit block insertion.
-	fn commit_operation(&self, transaction: Self::BlockImportOperation) -> error::Result<()>;
+	fn commit_operation(&self, transaction: Self::BlockImportOperation) -> sp_blockchain::Result<()>;
 
 	/// Finalize block with given Id.
 	///
 	/// This should only be called if the parent of the given block has been finalized.
-	fn finalize_block(&self, block: BlockId<Block>, justification: Option<Justification>) -> error::Result<()>;
+	fn finalize_block(&self, block: BlockId<Block>, justification: Option<Justification>) -> sp_blockchain::Result<()>;
 
 	/// Returns reference to blockchain backend.
 	fn blockchain(&self) -> &Self::Blockchain;
@@ -263,17 +276,17 @@ pub trait Backend<Block, H>: AuxStore + Send + Sync where
 	}
 
 	/// Returns state backend with post-state of given block.
-	fn state_at(&self, block: BlockId<Block>) -> error::Result<Self::State>;
+	fn state_at(&self, block: BlockId<Block>) -> sp_blockchain::Result<Self::State>;
 
 	/// Destroy state and save any useful data, such as cache.
-	fn destroy_state(&self, _state: Self::State) -> error::Result<()> {
+	fn destroy_state(&self, _state: Self::State) -> sp_blockchain::Result<()> {
 		Ok(())
 	}
 
 	/// Attempts to revert the chain by `n` blocks.
 	///
 	/// Returns the number of blocks that were successfully reverted.
-	fn revert(&self, n: NumberFor<Block>) -> error::Result<NumberFor<Block>>;
+	fn revert(&self, n: NumberFor<Block>) -> sp_blockchain::Result<NumberFor<Block>>;
 
 	/// Insert auxiliary data into key-value store.
 	fn insert_aux<
@@ -282,12 +295,12 @@ pub trait Backend<Block, H>: AuxStore + Send + Sync where
 		'c: 'a,
 		I: IntoIterator<Item=&'a(&'c [u8], &'c [u8])>,
 		D: IntoIterator<Item=&'a &'b [u8]>,
-	>(&self, insert: I, delete: D) -> error::Result<()>
+	>(&self, insert: I, delete: D) -> sp_blockchain::Result<()>
 	{
 		AuxStore::insert_aux(self, insert, delete)
 	}
 	/// Query auxiliary data from key-value store.
-	fn get_aux(&self, key: &[u8]) -> error::Result<Option<Vec<u8>>> {
+	fn get_aux(&self, key: &[u8]) -> sp_blockchain::Result<Option<Vec<u8>>> {
 		AuxStore::get_aux(self, key)
 	}
 
@@ -297,7 +310,7 @@ pub trait Backend<Block, H>: AuxStore + Send + Sync where
 	/// the using components should acquire and hold the lock whenever they do
 	/// something that the import of a block would interfere with, e.g. importing
 	/// a new block or calculating the best head.
-	fn get_import_lock(&self) -> &Mutex<()>;
+	fn get_import_lock(&self) -> &RwLock<()>;
 }
 
 /// Changes trie storage that supports pruning.

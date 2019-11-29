@@ -7,7 +7,7 @@ edition = "2018"
 
 [dependencies]
 clap = "2.33.0"
-derive_more = "0.15.0"
+derive_more = "0.99.2"
 env_logger = "0.7.0"
 log = "0.4.8"
 atty = "0.2.13"
@@ -23,7 +23,7 @@ fdlimit = "0.1.1"
 serde_json = "1.0.41"
 panic-handler = { package = "substrate-panic-handler", path = "../../primitives/panic-handler" }
 client-api = { package = "substrate-client-api", path = "../api" }
-header-metadata = { package = "substrate-header-metadata", path = "../header-metadata" }
+sp-blockchain = { path = "../../primitives/blockchain" }
 network = { package = "substrate-network", path = "../network" }
 sr-primitives = { path = "../../primitives/sr-primitives" }
 primitives = { package = "substrate-primitives", path = "../../primitives/core" }
@@ -34,9 +34,10 @@ keyring = { package = "substrate-keyring", path = "../../primitives/keyring" }
 names = "0.11.0"
 structopt = "0.3.3"
 rpassword = "4.0.1"
+substrate-tracing = { package = "substrate-tracing", path = "../tracing" }
 
 [dev-dependencies]
-tempdir = "0.3.7"
+tempfile = "3.1.0"
 
 [features]
 wasmtime = [
