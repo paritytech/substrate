@@ -154,6 +154,9 @@ impl BuildStorage for (StorageOverlay, ChildrenStorageOverlay) {
 			let k = k.clone();
 			if let Some(map) = storage.1.get_mut(&k) {
 				map.0.extend(other_map.0.iter().map(|(k, v)| (k.clone(), v.clone())));
+				if !map.1.try_update(other_map.1.as_ref()) {
+					return Err("Incompatible child info update".to_string());
+				}
 			} else {
 				storage.1.insert(k, other_map.clone());
 			}

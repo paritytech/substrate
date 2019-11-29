@@ -159,6 +159,9 @@ impl OverlayedChanges {
 		let extrinsic_index = self.extrinsic_index();
 		let map_entry = self.prospective.children.entry(storage_key)
 			.or_insert_with(|| (Default::default(), child_info.to_owned()));
+		let updatable = map_entry.1.try_update(child_info);
+		debug_assert!(updatable);
+
 		let entry = map_entry.0.entry(key).or_default();
 		entry.value = val;
 
@@ -182,6 +185,8 @@ impl OverlayedChanges {
 		let extrinsic_index = self.extrinsic_index();
 		let map_entry = self.prospective.children.entry(storage_key.to_vec())
 			.or_insert_with(|| (Default::default(), child_info.to_owned()));
+		let updatable = map_entry.1.try_update(child_info);
+		debug_assert!(updatable);
 
 		map_entry.0.values_mut().for_each(|e| {
 			if let Some(extrinsic) = extrinsic_index {
@@ -255,6 +260,8 @@ impl OverlayedChanges {
 		let extrinsic_index = self.extrinsic_index();
 		let map_entry = self.prospective.children.entry(storage_key.to_vec())
 			.or_insert_with(|| (Default::default(), child_info.to_owned()));
+		let updatable = map_entry.1.try_update(child_info);
+		debug_assert!(updatable);
 
 		for (key, entry) in map_entry.0.iter_mut() {
 			if key.starts_with(prefix) {

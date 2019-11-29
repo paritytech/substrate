@@ -273,6 +273,14 @@ impl OwnedChildInfo {
 		})
 	}
 
+	/// Try to update with another instance, return false if both instance
+	/// are not compatible.
+	pub fn try_update(&mut self, other: ChildInfo) -> bool {
+		match self {
+			OwnedChildInfo::Default(owned_child_trie) => owned_child_trie.try_update(other),
+		}
+	}
+
 	/// Get `ChildInfo` reference to this owned child info.
 	pub fn as_ref(&self) -> ChildInfo {
 		match self {
@@ -310,4 +318,23 @@ pub struct OwnedChildTrie {
 
 	/// See `ChildTrie` reference field documentation.
 	pub unique_id: Vec<u8>,
+}
+
+impl OwnedChildTrie {
+	/// Try to update with another instance, return false if both instance
+	/// are not compatible.
+	fn try_update(&mut self, other: ChildInfo) -> bool {
+		match other {
+			ChildInfo::Default(other) => {
+				if self.unique_id != other.unique_id {
+					return false;
+				}
+				if self.root.is_none() {
+					self.root = other.root.as_ref().map(|s| s.to_vec());
+				}
+				debug_assert!(self.root.as_ref().map(|v| v.as_slice()) == other.root);
+			},
+		}
+		true
+	}
 }

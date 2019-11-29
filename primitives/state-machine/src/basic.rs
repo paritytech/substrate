@@ -240,7 +240,7 @@ impl Externalities for BasicExternalities {
 			if &empty_hash[..] == &child_root[..] {
 				top.remove(storage_key.as_slice());
 			} else {
-				top.insert(storage_key.clone(), child_root);
+				top.insert(storage_key, child_root);
 			}
 		}
 
