@@ -1753,9 +1753,10 @@ where
 }
 
 impl<BE, E, B, RA> consensus::block_validation::Chain<B> for Client<BE, E, B, RA>
-	where BE: backend::Backend<B, Blake2Hasher>,
-		  E: CallExecutor<B, Blake2Hasher>,
-		  B: BlockT<Hash = H256>
+	where
+		BE: backend::Backend<B, Blake2Hasher>,
+		E: CallExecutor<B, Blake2Hasher>,
+		B: BlockT<Hash = H256>
 {
 	fn block_status(&self, id: &BlockId<B>) -> Result<BlockStatus, Box<dyn std::error::Error + Send>> {
 		Client::block_status(self, id).map_err(|e| Box::new(e) as Box<_>)

@@ -61,6 +61,7 @@ substrate-basic-authorship = { path = "../../../client/basic-authorship" }
 substrate-service = { path = "../../../client/service", default-features = false }
 substrate-telemetry = { package = "substrate-telemetry", path = "../../../client/telemetry" }
 authority-discovery = { package = "substrate-authority-discovery", path = "../../../client/authority-discovery"}
+consensus-common = { package = "substrate-consensus-common", path = "../../../primitives/consensus/common" }
 
 # frame dependencies
 indices = { package = "pallet-indices", path = "../../../frame/indices" }
@@ -99,7 +100,6 @@ rand6 = { package = "rand", version = "0.6", features = ["wasm-bindgen"], option
 [dev-dependencies]
 keystore = { package = "substrate-keystore", path = "../../../client/keystore" }
 babe = { package = "substrate-consensus-babe", path = "../../../client/consensus/babe", features = ["test-helpers"] }
-consensus-common = { package = "substrate-consensus-common", path = "../../../primitives/consensus/common" }
 service-test = { package = "substrate-service-test", path = "../../../client/service/test" }
 futures = "0.3.1"
 tempfile = "3.1.0"

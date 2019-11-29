@@ -63,10 +63,10 @@ impl<B, E> Clone for LocalCallExecutor<B, E> where E: Clone {
 }
 
 impl<B, E, Block> CallExecutor<Block, Blake2Hasher> for LocalCallExecutor<B, E>
-where
-	B: backend::Backend<Block, Blake2Hasher>,
-	E: CodeExecutor + RuntimeInfo,
-	Block: BlockT<Hash=H256>,
+	where
+		B: backend::Backend<Block, Blake2Hasher>,
+		E: CodeExecutor + RuntimeInfo,
+		Block: BlockT<Hash=H256>,
 {
 	type Error = E::Error;
 
@@ -202,7 +202,7 @@ where
 			let _lock = self.backend.get_import_lock().read();
 			self.backend.destroy_state(state)?;
 		}
-		version.ok_or(sp_blockchain::Error::VersionInvalid.into())
+		version.map_err(|e| sp_blockchain::Error::VersionInvalid(format!("{:?}", e)).into())
 	}
 
 	fn call_at_state<
@@ -266,5 +266,23 @@ where
 
 	fn native_runtime_version(&self) -> Option<&NativeVersion> {
 		Some(self.executor.native_version())
+	}
+}
+
+impl<B, E, Block> runtime_version::GetRuntimeVersion<Block> for LocalCallExecutor<B, E>
+	where
+		B: backend::Backend<Block, Blake2Hasher>,
+		E: CodeExecutor + RuntimeInfo,
+		Block: BlockT<Hash=H256>,
+{
+	fn native_version(&self) -> &runtime_version::NativeVersion {
+		self.executor.native_version()
+	}
+
+	fn runtime_version(
+		&self,
+		at: &BlockId<Block>,
+	) -> Result<runtime_version::RuntimeVersion, String> {
+		CallExecutor::runtime_version(self, at).map_err(|e| format!("{:?}", e))
 	}
 }

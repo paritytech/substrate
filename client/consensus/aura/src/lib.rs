@@ -31,9 +31,9 @@
 use std::{sync::Arc, time::Duration, thread, marker::PhantomData, hash::Hash, fmt::Debug, pin::Pin};
 
 use codec::{Encode, Decode, Codec};
-use consensus_common::{self, BlockImport, Environment, Proposer,
-	ForkChoiceStrategy, BlockImportParams, BlockOrigin, Error as ConsensusError,
-	SelectChain,
+use consensus_common::{
+	self, BlockImport, Environment, Proposer, CanAuthorWith, ForkChoiceStrategy, BlockImportParams,
+	BlockOrigin, Error as ConsensusError, SelectChain,
 };
 use consensus_common::import_queue::{
 	Verifier, BasicQueue, BoxBlockImport, BoxJustificationImport, BoxFinalityProofImport,
@@ -143,7 +143,7 @@ impl SlotCompatible for AuraSlotCompatible {
 }
 
 /// Start the aura worker. The returned future should be run in a futures executor.
-pub fn start_aura<B, C, SC, E, I, P, SO, Error, H>(
+pub fn start_aura<B, C, SC, E, I, P, SO, CAW, Error, H>(
 	slot_duration: SlotDuration,
 	client: Arc<C>,
 	select_chain: SC,
@@ -153,6 +153,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, H>(
 	inherent_data_providers: InherentDataProviders,
 	force_authoring: bool,
 	keystore: KeyStorePtr,
+	can_author_with: CAW,
 ) -> Result<impl futures01::Future<Item = (), Error = ()>, consensus_common::Error> where
 	B: BlockT<Header=H>,
 	C: ProvideRuntimeApi + BlockOf + ProvideCache<B> + AuxStore + Send + Sync,
@@ -168,6 +169,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, H>(
 	I: BlockImport<B> + Send + Sync + 'static,
 	Error: ::std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
 	SO: SyncOracle + Send + Sync + Clone,
+	CAW: CanAuthorWith<B> + Send,
 {
 	let worker = AuraWorker {
 		client: client.clone(),
@@ -182,13 +184,14 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, H>(
 		&inherent_data_providers,
 		slot_duration.0.slot_duration()
 	)?;
-	Ok(slots::start_slot_worker::<_, _, _, _, _, AuraSlotCompatible>(
+	Ok(slots::start_slot_worker::<_, _, _, _, _, AuraSlotCompatible, _>(
 		slot_duration.0,
 		select_chain,
 		worker,
 		sync_oracle,
 		inherent_data_providers,
 		AuraSlotCompatible,
+		can_author_with,
 	).map(|()| Ok::<(), ()>(())).compat())
 }
 
@@ -864,7 +867,7 @@ mod tests {
 				&inherent_data_providers, slot_duration.get()
 			).expect("Registers aura inherent data provider");
 
-			let aura = start_aura::<_, _, _, _, _, AuthorityPair, _, _, _>(
+			let aura = start_aura::<_, _, _, _, _, AuthorityPair, _, _, _, _>(
 				slot_duration,
 				client.clone(),
 				select_chain,
@@ -874,6 +877,7 @@ mod tests {
 				inherent_data_providers,
 				false,
 				keystore,
+				consensus_common::AlwaysCanAuthor,
 			).expect("Starts aura");
 
 			runtime.spawn(aura);
