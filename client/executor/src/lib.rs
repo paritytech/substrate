@@ -87,10 +87,7 @@ pub trait RuntimeInfo {
 	fn native_version(&self) -> &NativeVersion;
 
 	/// Extract RuntimeVersion of given :code block
-	fn runtime_version<E: Externalities> (
-		&self,
-		ext: &mut E,
-	) -> Option<RuntimeVersion>;
+	fn runtime_version<E: Externalities> (&self, ext: &mut E) -> error::Result<RuntimeVersion>;
 }
 
 #[cfg(test)]

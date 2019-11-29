@@ -22,7 +22,7 @@ use parking_lot::RwLock;
 use kvdb::{KeyValueDB, DBTransaction};
 
 use client_api::blockchain::{well_known_cache_keys::{self, Id as CacheKeyId}, Cache as BlockchainCache};
-use client_api::error::Result as ClientResult;
+use sp_blockchain::Result as ClientResult;
 use codec::{Encode, Decode};
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero};
@@ -211,7 +211,7 @@ impl<'a, Block: BlockT> DbCacheTransaction<'a, Block> {
 			.cloned()
 			.collect::<Vec<_>>();
 
-		let mut insert_op = |name: CacheKeyId, value: Option<Vec<u8>>| -> Result<(), client_api::error::Error> {
+		let mut insert_op = |name: CacheKeyId, value: Option<Vec<u8>>| -> Result<(), sp_blockchain::Error> {
 			let cache = self.cache.get_cache(name);
 			let op = cache.on_block_insert(
 				&mut self::list_storage::DbStorageTransaction::new(

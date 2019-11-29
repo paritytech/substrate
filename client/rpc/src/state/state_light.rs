@@ -40,9 +40,9 @@ use rpc::{
 
 use api::Subscriptions;
 use client_api::backend::Backend;
+use sp_blockchain::Error as ClientError;
 use client::{
-	BlockchainEvents, Client, CallExecutor, 
-	error::Error as ClientError,
+	BlockchainEvents, Client, CallExecutor,
 	light::{
 		blockchain::{future_header, RemoteBlockchain},
 		fetcher::{Fetcher, RemoteCallRequest, RemoteReadRequest, RemoteReadChildRequest},
@@ -547,7 +547,8 @@ fn runtime_version<Block: BlockT, F: Fetcher<Block>>(
 		Bytes(Vec::new()),
 	)
 	.then(|version| ready(version.and_then(|version|
-		Decode::decode(&mut &version.0[..]).map_err(|_| client_err(ClientError::VersionInvalid))
+		Decode::decode(&mut &version.0[..])
+			.map_err(|e| client_err(ClientError::VersionInvalid(e.what().into())))
 	)))
 }
 
@@ -696,7 +697,7 @@ fn ignore_error<F, T>(future: F) -> impl std::future::Future<Output=Result<Optio
 	future.then(|result| ready(match result {
 		Ok(result) => Ok(Some(result)),
 		Err(()) => Ok(None),
-	}))	
+	}))
 }
 
 #[cfg(test)]

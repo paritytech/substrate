@@ -2,14 +2,11 @@
 **/*.rs.bk
 *.swp
 .wasm-binaries
-polkadot/runtime/wasm/target/
-core/executor/wasm/target/
-core/test-runtime/wasm/target/
 pwasm-alloc/target/
 pwasm-libc/target/
 pwasm-alloc/Cargo.lock
 pwasm-libc/Cargo.lock
-node/runtime/wasm/target/
+bin/node/runtime/wasm/target/
 **/._*
 **/.criterion/
 .vscode

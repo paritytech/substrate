@@ -43,7 +43,7 @@ use std::collections::{BTreeSet, BTreeMap};
 
 use log::warn;
 
-use client_api::error::{Error as ClientError, Result as ClientResult};
+use sp_blockchain::{Error as ClientError, Result as ClientResult};
 use sr_primitives::traits::{
 	Block as BlockT, NumberFor, Zero, Bounded, CheckedSub
 };

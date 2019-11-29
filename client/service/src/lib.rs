@@ -31,7 +31,6 @@ use std::io;
 use std::marker::PhantomData;
 use std::net::SocketAddr;
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 use futures::sync::mpsc;
 use parking_lot::Mutex;
@@ -54,12 +53,11 @@ use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{NumberFor, Block as BlockT};
 
 pub use self::error::Error;
-pub use self::builder::{ServiceBuilder, ServiceBuilderExport, ServiceBuilderImport, ServiceBuilderRevert};
+pub use self::builder::{ServiceBuilder, ServiceBuilderCommand};
 pub use config::{Configuration, Roles, PruningMode};
 pub use chain_spec::{ChainSpec, Properties, RuntimeGenesis, Extension as ChainSpecExtension};
-pub use transaction_pool::txpool::{
-	self, Pool as TransactionPool, Options as TransactionPoolOptions, ChainApi, IntoPoolError
-};
+pub use txpool_api::{TransactionPool, TransactionPoolMaintainer, InPoolTransaction, IntoPoolError};
+pub use txpool::txpool::Options as TransactionPoolOptions;
 pub use client::FinalityNotifications;
 pub use rpc::Metadata as RpcMetadata;
 #[doc(hidden)]
@@ -85,9 +83,11 @@ pub struct Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
 	exit: exit_future::Exit,
 	/// A signal that makes the exit future above resolve, fired on service drop.
 	signal: Option<Signal>,
-	/// Set to `true` when a spawned essential task has failed. The next time
+	/// Send a signal when a spawned essential task has concluded. The next time
 	/// the service future is polled it should complete with an error.
-	essential_failed: Arc<AtomicBool>,
+	essential_failed_tx: mpsc::UnboundedSender<()>,
+	/// A receiver for spawned essential-tasks concluding.
+	essential_failed_rx: mpsc::UnboundedReceiver<()>,
 	/// Sender for futures that must be spawned as background tasks.
 	to_spawn_tx: mpsc::UnboundedSender<Box<dyn Future<Item = (), Error = ()> + Send>>,
 	/// Receiver for futures that must be spawned as background tasks.
@@ -143,8 +143,9 @@ pub trait AbstractService: 'static + Future<Item = (), Error = Error> +
 	type RuntimeApi: Send + Sync;
 	/// Chain selection algorithm.
 	type SelectChain: consensus_common::SelectChain<Self::Block>;
-	/// API of the transaction pool.
-	type TransactionPoolApi: ChainApi<Block = Self::Block>;
+	/// Transaction pool.
+	type TransactionPool: TransactionPool<Block = Self::Block>
+		+ TransactionPoolMaintainer<Block = Self::Block>;
 	/// Network specialization.
 	type NetworkSpecialization: NetworkSpecialization<Self::Block>;
 
@@ -192,22 +193,23 @@ pub trait AbstractService: 'static + Future<Item = (), Error = Error> +
 	fn network_status(&self, interval: Duration) -> mpsc::UnboundedReceiver<(NetworkStatus<Self::Block>, NetworkState)>;
 
 	/// Get shared transaction pool instance.
-	fn transaction_pool(&self) -> Arc<TransactionPool<Self::TransactionPoolApi>>;
+	fn transaction_pool(&self) -> Arc<Self::TransactionPool>;
 
 	/// Get a handle to a future that will resolve on exit.
 	fn on_exit(&self) -> ::exit_future::Exit;
 }
 
-impl<TBl, TBackend, TExec, TRtApi, TSc, TNetSpec, TExPoolApi, TOc> AbstractService for
+impl<TBl, TBackend, TExec, TRtApi, TSc, TNetSpec, TExPool, TOc> AbstractService for
 	Service<TBl, Client<TBackend, TExec, TBl, TRtApi>, TSc, NetworkStatus<TBl>,
-		NetworkService<TBl, TNetSpec, H256>, TransactionPool<TExPoolApi>, TOc>
+		NetworkService<TBl, TNetSpec, H256>, TExPool, TOc>
 where
 	TBl: BlockT<Hash = H256>,
 	TBackend: 'static + client_api::backend::Backend<TBl, Blake2Hasher>,
 	TExec: 'static + client::CallExecutor<TBl, Blake2Hasher> + Send + Sync + Clone,
 	TRtApi: 'static + Send + Sync,
 	TSc: consensus_common::SelectChain<TBl> + 'static + Clone + Send,
-	TExPoolApi: 'static + ChainApi<Block = TBl>,
+	TExPool: 'static + TransactionPool<Block = TBl>
+		+ TransactionPoolMaintainer<Block = TBl>,
 	TOc: 'static + Send + Sync,
 	TNetSpec: NetworkSpecialization<TBl>,
 {
@@ -216,7 +218,7 @@ where
 	type CallExecutor = TExec;
 	type RuntimeApi = TRtApi;
 	type SelectChain = TSc;
-	type TransactionPoolApi = TExPoolApi;
+	type TransactionPool = TExPool;
 	type NetworkSpecialization = TNetSpec;
 
 	fn telemetry_on_connect_stream(&self) -> mpsc::UnboundedReceiver<()> {
@@ -239,11 +241,14 @@ where
 	}
 
 	fn spawn_essential_task(&self, task: impl Future<Item = (), Error = ()> + Send + 'static) {
-		let essential_failed = self.essential_failed.clone();
-		let essential_task = task.map_err(move |_| {
-			error!("Essential task failed. Shutting down service.");
-			essential_failed.store(true, Ordering::Relaxed);
-		});
+		let essential_failed = self.essential_failed_tx.clone();
+		let essential_task = std::panic::AssertUnwindSafe(task)
+			.catch_unwind()
+			.then(move |_| {
+				error!("Essential task failed. Shutting down service.");
+				let _ = essential_failed.send(());
+				Ok(())
+			});
 		let task = essential_task.select(self.on_exit()).then(|_| Ok(()));
 
 		let _ = self.to_spawn_tx.unbounded_send(Box::new(task));
@@ -278,7 +283,7 @@ where
 		stream
 	}
 
-	fn transaction_pool(&self) -> Arc<TransactionPool<Self::TransactionPoolApi>> {
+	fn transaction_pool(&self) -> Arc<Self::TransactionPool> {
 		self.transaction_pool.clone()
 	}
 
@@ -294,8 +299,13 @@ impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Future for
 	type Error = Error;
 
 	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-		if self.essential_failed.load(Ordering::Relaxed) {
-			return Err(Error::Other("Essential task failed.".into()));
+		match self.essential_failed_rx.poll() {
+			Ok(Async::NotReady) => {},
+			Ok(Async::Ready(_)) | Err(_) => {
+				// Ready(None) should not be possible since we hold a live
+				// sender.
+				return Err(Error::Other("Essential task failed.".into()));
+			}
 		}
 
 		while let Ok(Async::Ready(Some(task_to_spawn))) = self.to_spawn_rx.poll() {
@@ -512,7 +522,7 @@ fn start_rpc_servers<C, G, E, H: FnMut() -> rpc_servers::RpcHandler<rpc::Metadat
 				.or_else(|e| match e.kind() {
 					io::ErrorKind::AddrInUse |
 					io::ErrorKind::PermissionDenied => {
-						warn!("Unable to bind server to {}. Trying random port.", address);
+						warn!("Unable to bind RPC server to {}. Trying random port.", address);
 						address.set_port(0);
 						start(&address)
 					},
@@ -580,35 +590,35 @@ pub struct TransactionPoolAdapter<C, P> {
 /// Get transactions for propagation.
 ///
 /// Function extracted to simplify the test and prevent creating `ServiceFactory`.
-fn transactions_to_propagate<PoolApi, B, H, E>(pool: &TransactionPool<PoolApi>)
+fn transactions_to_propagate<Pool, B, H, E>(pool: &Pool)
 	-> Vec<(H, B::Extrinsic)>
 where
-	PoolApi: ChainApi<Block=B, Hash=H, Error=E>,
+	Pool: TransactionPool<Block=B, Hash=H, Error=E>,
 	B: BlockT,
 	H: std::hash::Hash + Eq + sr_primitives::traits::Member + sr_primitives::traits::MaybeSerialize,
-	E: txpool::error::IntoPoolError + From<txpool::error::Error>,
+	E: IntoPoolError + From<txpool_api::error::Error>,
 {
 	pool.ready()
 		.filter(|t| t.is_propagateable())
 		.map(|t| {
-			let hash = t.hash.clone();
-			let ex: B::Extrinsic = t.data.clone();
+			let hash = t.hash().clone();
+			let ex: B::Extrinsic = t.data().clone();
 			(hash, ex)
 		})
 		.collect()
 }
 
-impl<B, H, C, PoolApi, E> network::TransactionPool<H, B> for
-	TransactionPoolAdapter<C, TransactionPool<PoolApi>>
+impl<B, H, C, Pool, E> network::TransactionPool<H, B> for
+	TransactionPoolAdapter<C, Pool>
 where
 	C: network::ClientHandle<B> + Send + Sync,
-	PoolApi: 'static + ChainApi<Block=B, Hash=H, Error=E>,
+	Pool: 'static + TransactionPool<Block=B, Hash=H, Error=E>,
 	B: BlockT,
 	H: std::hash::Hash + Eq + sr_primitives::traits::Member + sr_primitives::traits::MaybeSerialize,
-	E: txpool::error::IntoPoolError + From<txpool::error::Error>,
+	E: 'static + IntoPoolError + From<txpool_api::error::Error>,
 {
 	fn transactions(&self) -> Vec<(H, <B as BlockT>::Extrinsic)> {
-		transactions_to_propagate(&self.pool)
+		transactions_to_propagate(&*self.pool)
 	}
 
 	fn hash_of(&self, transaction: &B::Extrinsic) -> H {
@@ -638,7 +648,7 @@ where
 						match import_result {
 							Ok(_) => report_handle.report_peer(who, reputation_change_good),
 							Err(e) => match e.into_pool_error() {
-								Ok(txpool::error::Error::AlreadyImported(_)) => (),
+								Ok(txpool_api::error::Error::AlreadyImported(_)) => (),
 								Ok(e) => {
 									report_handle.report_peer(who, reputation_change_bad);
 									debug!("Error adding transaction to the pool: {:?}", e)
@@ -670,16 +680,14 @@ mod tests {
 	use consensus_common::SelectChain;
 	use sr_primitives::traits::BlindCheckable;
 	use substrate_test_runtime_client::{prelude::*, runtime::{Extrinsic, Transfer}};
+	use txpool::{BasicPool, FullChainApi};
 
 	#[test]
 	fn should_not_propagate_transactions_that_are_marked_as_such() {
 		// given
 		let (client, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
 		let client = Arc::new(client);
-		let pool = Arc::new(TransactionPool::new(
-			Default::default(),
-			transaction_pool::FullChainApi::new(client.clone())
-		));
+		let pool = Arc::new(BasicPool::new(Default::default(), FullChainApi::new(client.clone())));
 		let best = longest_chain.best_chain().unwrap();
 		let transaction = Transfer {
 			amount: 5,
@@ -692,7 +700,7 @@ mod tests {
 		assert_eq!(pool.status().ready, 2);
 
 		// when
-		let transactions = transactions_to_propagate(&pool);
+		let transactions = transactions_to_propagate(&*pool);
 
 		// then
 		assert_eq!(transactions.len(), 1);

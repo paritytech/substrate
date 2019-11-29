@@ -24,13 +24,13 @@ use codec::{Decode, Encode};
 use futures::prelude::*;
 use tokio_timer::Delay;
 use parking_lot::RwLock;
+use sp_blockchain::{HeaderBackend, Error as ClientError};
 
 use client_api::{
-	HeaderBackend, BlockchainEvents,
+	BlockchainEvents,
 	backend::{Backend},
 	Finalizer,
 	call_executor::CallExecutor,
-	error::Error as ClientError,
 	utils::is_descendent_of,
 };
 use client::{
@@ -534,7 +534,7 @@ pub(crate) fn ancestry<B, Block: BlockT<Hash=H256>, E, RA>(
 {
 	if base == block { return Err(GrandpaError::NotDescendent) }
 
-	let tree_route_res = header_metadata::tree_route(client, block, base);
+	let tree_route_res = sp_blockchain::tree_route(client, block, base);
 
 	let tree_route = match tree_route_res {
 		Ok(tree_route) => tree_route,
