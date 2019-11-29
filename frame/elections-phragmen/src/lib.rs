@@ -743,7 +743,7 @@ impl<T: Trait> Module<T> {
 mod tests {
 	use super::*;
 	use std::cell::RefCell;
-	use support::{assert_ok, assert_noop, parameter_types};
+	use support::{assert_ok, assert_noop, parameter_types, weights::Weight};
 	use substrate_test_utils::assert_eq_uvec;
 	use primitives::H256;
 	use sr_primitives::{
@@ -754,7 +754,7 @@ mod tests {
 
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
-		pub const MaximumBlockWeight: u32 = 1024;
+		pub const MaximumBlockWeight: Weight = 1024;
 		pub const MaximumBlockLength: u32 = 2 * 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
