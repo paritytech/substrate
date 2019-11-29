@@ -25,7 +25,7 @@ use codec::{Decode, Encode};
 
 use primitives::{NativeOrEncoded, traits::{CodeExecutor, Externalities}};
 
-use log::{trace, warn};
+use log::trace;
 
 use std::{result, cell::RefCell, panic::{UnwindSafe, AssertUnwindSafe}};
 
@@ -181,14 +181,8 @@ impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 	fn runtime_version<E: Externalities>(
 		&self,
 		ext: &mut E,
-	) -> Option<RuntimeVersion> {
-		match self.with_runtime(ext, |_runtime, version, _ext| Ok(Ok(version.clone()))) {
-			Ok(version) => Some(version),
-			Err(e) => {
-				warn!(target: "executor", "Failed to fetch runtime: {:?}", e);
-				None
-			}
-		}
+	) -> Result<RuntimeVersion> {
+		self.with_runtime(ext, |_runtime, version, _ext| Ok(Ok(version.clone())))
 	}
 }
 

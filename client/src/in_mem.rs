@@ -18,7 +18,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use parking_lot::{RwLock, Mutex};
+use parking_lot::RwLock;
 use primitives::storage::well_known_keys;
 use primitives::offchain::storage::{
 	InMemOffchainStorage as OffchainStorage
@@ -26,16 +26,12 @@ use primitives::offchain::storage::{
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, NumberFor};
 use sr_primitives::{Justification, StorageOverlay, ChildrenStorageOverlay};
-use state_machine::{
-	backend::{Backend as StateBackend, InMemory},
-	ChangesTrieTransaction,
-};
-
+use state_machine::backend::{Backend as StateBackend, InMemory};
+use state_machine::{self, ChangesTrieTransaction};
 use hash_db::Hasher;
-use header_metadata::{CachedHeaderMetadata, HeaderMetadata};
+use sp_blockchain::{CachedHeaderMetadata, HeaderMetadata};
 
 use client_api::{
-	error,
 	backend::{self, NewBlockState, StorageCollection, ChildStorageCollection},
 	blockchain::{
 		self, BlockStatus, HeaderBackend, well_known_cache_keys::Id as CacheKeyId
@@ -160,7 +156,7 @@ impl<Block: BlockT> Blockchain<Block> {
 		justification: Option<Justification>,
 		body: Option<Vec<<Block as BlockT>::Extrinsic>>,
 		new_state: NewBlockState,
-	) -> client_api::error::Result<()> {
+	) -> sp_blockchain::Result<()> {
 		let number = header.number().clone();
 		if new_state.is_best() {
 			self.apply_head(&header)?;
@@ -210,16 +206,16 @@ impl<Block: BlockT> Blockchain<Block> {
 	}
 
 	/// Set an existing block as head.
-	pub fn set_head(&self, id: BlockId<Block>) -> error::Result<()> {
+	pub fn set_head(&self, id: BlockId<Block>) -> sp_blockchain::Result<()> {
 		let header = match self.header(id)? {
 			Some(h) => h,
-			None => return Err(error::Error::UnknownBlock(format!("{}", id))),
+			None => return Err(sp_blockchain::Error::UnknownBlock(format!("{}", id))),
 		};
 
 		self.apply_head(&header)
 	}
 
-	fn apply_head(&self, header: &<Block as BlockT>::Header) -> error::Result<()> {
+	fn apply_head(&self, header: &<Block as BlockT>::Header) -> sp_blockchain::Result<()> {
 		let hash = header.hash();
 		let number = header.number();
 
@@ -230,7 +226,7 @@ impl<Block: BlockT> Blockchain<Block> {
 			if &best_hash == header.parent_hash() {
 				None
 			} else {
-				let route = header_metadata::tree_route(self, best_hash, *header.parent_hash())?;
+				let route = sp_blockchain::tree_route(self, best_hash, *header.parent_hash())?;
 				Some(route)
 			}
 		};
@@ -257,10 +253,10 @@ impl<Block: BlockT> Blockchain<Block> {
 		Ok(())
 	}
 
-	fn finalize_header(&self, id: BlockId<Block>, justification: Option<Justification>) -> error::Result<()> {
+	fn finalize_header(&self, id: BlockId<Block>, justification: Option<Justification>) -> sp_blockchain::Result<()> {
 		let hash = match self.header(id)? {
 			Some(h) => h.hash(),
-			None => return Err(error::Error::UnknownBlock(format!("{}", id))),
+			None => return Err(sp_blockchain::Error::UnknownBlock(format!("{}", id))),
 		};
 
 		let mut storage = self.storage.write();
@@ -292,7 +288,7 @@ impl<Block: BlockT> Blockchain<Block> {
 }
 
 impl<Block: BlockT> HeaderBackend<Block> for Blockchain<Block> {
-	fn header(&self, id: BlockId<Block>) -> error::Result<Option<<Block as BlockT>::Header>> {
+	fn header(&self, id: BlockId<Block>) -> sp_blockchain::Result<Option<<Block as BlockT>::Header>> {
 		Ok(self.id(id).and_then(|hash| {
 			self.storage.read().blocks.get(&hash).map(|b| b.header().clone())
 		}))
@@ -309,28 +305,28 @@ impl<Block: BlockT> HeaderBackend<Block> for Blockchain<Block> {
 		}
 	}
 
-	fn status(&self, id: BlockId<Block>) -> error::Result<BlockStatus> {
+	fn status(&self, id: BlockId<Block>) -> sp_blockchain::Result<BlockStatus> {
 		match self.id(id).map_or(false, |hash| self.storage.read().blocks.contains_key(&hash)) {
 			true => Ok(BlockStatus::InChain),
 			false => Ok(BlockStatus::Unknown),
 		}
 	}
 
-	fn number(&self, hash: Block::Hash) -> error::Result<Option<NumberFor<Block>>> {
+	fn number(&self, hash: Block::Hash) -> sp_blockchain::Result<Option<NumberFor<Block>>> {
 		Ok(self.storage.read().blocks.get(&hash).map(|b| *b.header().number()))
 	}
 
-	fn hash(&self, number: <<Block as BlockT>::Header as HeaderT>::Number) -> error::Result<Option<Block::Hash>> {
+	fn hash(&self, number: <<Block as BlockT>::Header as HeaderT>::Number) -> sp_blockchain::Result<Option<Block::Hash>> {
 		Ok(self.id(BlockId::Number(number)))
 	}
 }
 
 impl<Block: BlockT> HeaderMetadata<Block> for Blockchain<Block> {
-	type Error = error::Error;
+	type Error = sp_blockchain::Error;
 
 	fn header_metadata(&self, hash: Block::Hash) -> Result<CachedHeaderMetadata<Block>, Self::Error> {
 		self.header(BlockId::hash(hash))?.map(|header| CachedHeaderMetadata::from(&header))
-			.ok_or(error::Error::UnknownBlock(format!("header not found: {}", hash)))
+			.ok_or(sp_blockchain::Error::UnknownBlock(format!("header not found: {}", hash)))
 	}
 
 	fn insert_header_metadata(&self, _hash: Block::Hash, _metadata: CachedHeaderMetadata<Block>) {
@@ -342,20 +338,20 @@ impl<Block: BlockT> HeaderMetadata<Block> for Blockchain<Block> {
 }
 
 impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
-	fn body(&self, id: BlockId<Block>) -> error::Result<Option<Vec<<Block as BlockT>::Extrinsic>>> {
+	fn body(&self, id: BlockId<Block>) -> sp_blockchain::Result<Option<Vec<<Block as BlockT>::Extrinsic>>> {
 		Ok(self.id(id).and_then(|hash| {
 			self.storage.read().blocks.get(&hash)
 				.and_then(|b| b.extrinsics().map(|x| x.to_vec()))
 		}))
 	}
 
-	fn justification(&self, id: BlockId<Block>) -> error::Result<Option<Justification>> {
+	fn justification(&self, id: BlockId<Block>) -> sp_blockchain::Result<Option<Justification>> {
 		Ok(self.id(id).and_then(|hash| self.storage.read().blocks.get(&hash).and_then(|b|
 			b.justification().map(|x| x.clone()))
 		))
 	}
 
-	fn last_finalized(&self) -> error::Result<Block::Hash> {
+	fn last_finalized(&self) -> sp_blockchain::Result<Block::Hash> {
 		Ok(self.storage.read().finalized_hash.clone())
 	}
 
@@ -363,11 +359,11 @@ impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
 		None
 	}
 
-	fn leaves(&self) -> error::Result<Vec<Block::Hash>> {
+	fn leaves(&self) -> sp_blockchain::Result<Vec<Block::Hash>> {
 		Ok(self.storage.read().leaves.hashes())
 	}
 
-	fn children(&self, _parent_hash: Block::Hash) -> error::Result<Vec<Block::Hash>> {
+	fn children(&self, _parent_hash: Block::Hash) -> sp_blockchain::Result<Vec<Block::Hash>> {
 		unimplemented!()
 	}
 }
@@ -385,7 +381,7 @@ impl<Block: BlockT> backend::AuxStore for Blockchain<Block> {
 		'c: 'a,
 		I: IntoIterator<Item=&'a(&'c [u8], &'c [u8])>,
 		D: IntoIterator<Item=&'a &'b [u8]>,
-	>(&self, insert: I, delete: D) -> error::Result<()> {
+	>(&self, insert: I, delete: D) -> sp_blockchain::Result<()> {
 		let mut storage = self.storage.write();
 		for (k, v) in insert {
 			storage.aux.insert(k.to_vec(), v.to_vec());
@@ -396,7 +392,7 @@ impl<Block: BlockT> backend::AuxStore for Blockchain<Block> {
 		Ok(())
 	}
 
-	fn get_aux(&self, key: &[u8]) -> error::Result<Option<Vec<u8>>> {
+	fn get_aux(&self, key: &[u8]) -> sp_blockchain::Result<Option<Vec<u8>>> {
 		Ok(self.storage.read().aux.get(key).cloned())
 	}
 }
@@ -411,7 +407,7 @@ impl<Block: BlockT> client_api::light::Storage<Block> for Blockchain<Block>
 		_cache: HashMap<CacheKeyId, Vec<u8>>,
 		state: NewBlockState,
 		aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
-	) -> error::Result<()> {
+	) -> sp_blockchain::Result<()> {
 		let hash = header.hash();
 		self.insert(hash, header, None, None, state)?;
 
@@ -419,15 +415,15 @@ impl<Block: BlockT> client_api::light::Storage<Block> for Blockchain<Block>
 		Ok(())
 	}
 
-	fn set_head(&self, id: BlockId<Block>) -> error::Result<()> {
+	fn set_head(&self, id: BlockId<Block>) -> sp_blockchain::Result<()> {
 		Blockchain::set_head(self, id)
 	}
 
-	fn last_finalized(&self) -> error::Result<Block::Hash> {
+	fn last_finalized(&self) -> sp_blockchain::Result<Block::Hash> {
 		Ok(self.storage.read().finalized_hash.clone())
 	}
 
-	fn finalize_header(&self, id: BlockId<Block>) -> error::Result<()> {
+	fn finalize_header(&self, id: BlockId<Block>) -> sp_blockchain::Result<()> {
 		Blockchain::finalize_header(self, id, None)
 	}
 
@@ -435,18 +431,18 @@ impl<Block: BlockT> client_api::light::Storage<Block> for Blockchain<Block>
 		&self,
 		_cht_size: NumberFor<Block>,
 		block: NumberFor<Block>,
-	) -> error::Result<Block::Hash> {
+	) -> sp_blockchain::Result<Block::Hash> {
 		self.storage.read().header_cht_roots.get(&block).cloned()
-			.ok_or_else(|| error::Error::Backend(format!("Header CHT for block {} not exists", block)))
+			.ok_or_else(|| sp_blockchain::Error::Backend(format!("Header CHT for block {} not exists", block)))
 	}
 
 	fn changes_trie_cht_root(
 		&self,
 		_cht_size: NumberFor<Block>,
 		block: NumberFor<Block>,
-	) -> error::Result<Block::Hash> {
+	) -> sp_blockchain::Result<Block::Hash> {
 		self.storage.read().changes_trie_cht_roots.get(&block).cloned()
-			.ok_or_else(|| error::Error::Backend(format!("Changes trie CHT for block {} not exists", block)))
+			.ok_or_else(|| sp_blockchain::Error::Backend(format!("Changes trie CHT for block {} not exists", block)))
 	}
 
 	fn cache(&self) -> Option<Arc<dyn blockchain::Cache<Block>>> {
@@ -474,7 +470,7 @@ where
 {
 	type State = InMemory<H>;
 
-	fn state(&self) -> error::Result<Option<&Self::State>> {
+	fn state(&self) -> sp_blockchain::Result<Option<&Self::State>> {
 		Ok(Some(&self.old_state))
 	}
 
@@ -484,7 +480,7 @@ where
 		body: Option<Vec<<Block as BlockT>::Extrinsic>>,
 		justification: Option<Justification>,
 		state: NewBlockState,
-	) -> error::Result<()> {
+	) -> sp_blockchain::Result<()> {
 		assert!(self.pending_block.is_none(), "Only one block per operation is allowed");
 		self.pending_block = Some(PendingBlock {
 			block: StoredBlock::new(header, body, justification),
@@ -497,12 +493,12 @@ where
 		self.pending_cache = cache;
 	}
 
-	fn update_db_storage(&mut self, update: <InMemory<H> as StateBackend<H>>::Transaction) -> error::Result<()> {
+	fn update_db_storage(&mut self, update: <InMemory<H> as StateBackend<H>>::Transaction) -> sp_blockchain::Result<()> {
 		self.new_state = Some(self.old_state.update(update));
 		Ok(())
 	}
 
-	fn reset_storage(&mut self, top: StorageOverlay, children: ChildrenStorageOverlay) -> error::Result<H::Out> {
+	fn reset_storage(&mut self, top: StorageOverlay, children: ChildrenStorageOverlay) -> sp_blockchain::Result<H::Out> {
 		check_genesis_storage(&top, &children)?;
 
 		let child_delta = children.into_iter()
@@ -521,11 +517,11 @@ where
 	fn update_changes_trie(
 		&mut self,
 		_update: ChangesTrieTransaction<H, NumberFor<Block>>,
-	) -> error::Result<()> {
+	) -> sp_blockchain::Result<()> {
 		Ok(())
 	}
 
-	fn insert_aux<I>(&mut self, ops: I) -> error::Result<()>
+	fn insert_aux<I>(&mut self, ops: I) -> sp_blockchain::Result<()>
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
 		self.aux.append(&mut ops.into_iter().collect());
@@ -536,16 +532,16 @@ where
 		&mut self,
 		_update: StorageCollection,
 		_child_update: ChildStorageCollection,
-	) -> error::Result<()> {
+	) -> sp_blockchain::Result<()> {
 		Ok(())
 	}
 
-	fn mark_finalized(&mut self, block: BlockId<Block>, justification: Option<Justification>) -> error::Result<()> {
+	fn mark_finalized(&mut self, block: BlockId<Block>, justification: Option<Justification>) -> sp_blockchain::Result<()> {
 		self.finalized_blocks.push((block, justification));
 		Ok(())
 	}
 
-	fn mark_head(&mut self, block: BlockId<Block>) -> error::Result<()> {
+	fn mark_head(&mut self, block: BlockId<Block>) -> sp_blockchain::Result<()> {
 		assert!(self.pending_block.is_none(), "Only one set block per operation is allowed");
 		self.set_head = Some(block);
 		Ok(())
@@ -564,7 +560,7 @@ where
 {
 	states: RwLock<HashMap<Block::Hash, InMemory<H>>>,
 	blockchain: Blockchain<Block>,
-	import_lock: Mutex<()>,
+	import_lock: RwLock<()>,
 }
 
 impl<Block, H> Backend<Block, H>
@@ -595,11 +591,11 @@ where
 		'c: 'a,
 		I: IntoIterator<Item=&'a(&'c [u8], &'c [u8])>,
 		D: IntoIterator<Item=&'a &'b [u8]>,
-	>(&self, insert: I, delete: D) -> error::Result<()> {
+	>(&self, insert: I, delete: D) -> sp_blockchain::Result<()> {
 		self.blockchain.insert_aux(insert, delete)
 	}
 
-	fn get_aux(&self, key: &[u8]) -> error::Result<Option<Vec<u8>>> {
+	fn get_aux(&self, key: &[u8]) -> sp_blockchain::Result<Option<Vec<u8>>> {
 		self.blockchain.get_aux(key)
 	}
 }
@@ -615,7 +611,7 @@ where
 	type State = InMemory<H>;
 	type OffchainStorage = OffchainStorage;
 
-	fn begin_operation(&self) -> error::Result<Self::BlockImportOperation> {
+	fn begin_operation(&self) -> sp_blockchain::Result<Self::BlockImportOperation> {
 		let old_state = self.state_at(BlockId::Hash(Default::default()))?;
 		Ok(BlockImportOperation {
 			pending_block: None,
@@ -628,12 +624,12 @@ where
 		})
 	}
 
-	fn begin_state_operation(&self, operation: &mut Self::BlockImportOperation, block: BlockId<Block>) -> error::Result<()> {
+	fn begin_state_operation(&self, operation: &mut Self::BlockImportOperation, block: BlockId<Block>) -> sp_blockchain::Result<()> {
 		operation.old_state = self.state_at(block)?;
 		Ok(())
 	}
 
-	fn commit_operation(&self, operation: Self::BlockImportOperation) -> error::Result<()> {
+	fn commit_operation(&self, operation: Self::BlockImportOperation) -> sp_blockchain::Result<()> {
 		if !operation.finalized_blocks.is_empty() {
 			for (block, justification) in operation.finalized_blocks {
 				self.blockchain.finalize_header(block, justification)?;
@@ -662,7 +658,7 @@ where
 		Ok(())
 	}
 
-	fn finalize_block(&self, block: BlockId<Block>, justification: Option<Justification>) -> error::Result<()> {
+	fn finalize_block(&self, block: BlockId<Block>, justification: Option<Justification>) -> sp_blockchain::Result<()> {
 		self.blockchain.finalize_header(block, justification)
 	}
 
@@ -682,7 +678,7 @@ where
 		None
 	}
 
-	fn state_at(&self, block: BlockId<Block>) -> error::Result<Self::State> {
+	fn state_at(&self, block: BlockId<Block>) -> sp_blockchain::Result<Self::State> {
 		match block {
 			BlockId::Hash(h) if h == Default::default() => {
 				return Ok(Self::State::default());
@@ -692,15 +688,15 @@ where
 
 		match self.blockchain.id(block).and_then(|id| self.states.read().get(&id).cloned()) {
 			Some(state) => Ok(state),
-			None => Err(error::Error::UnknownBlock(format!("{}", block))),
+			None => Err(sp_blockchain::Error::UnknownBlock(format!("{}", block))),
 		}
 	}
 
-	fn revert(&self, _n: NumberFor<Block>) -> error::Result<NumberFor<Block>> {
+	fn revert(&self, _n: NumberFor<Block>) -> sp_blockchain::Result<NumberFor<Block>> {
 		Ok(Zero::zero())
 	}
 
-	fn get_import_lock(&self) -> &Mutex<()> {
+	fn get_import_lock(&self) -> &RwLock<()> {
 		&self.import_lock
 	}
 }
@@ -730,13 +726,13 @@ where
 }
 
 /// Check that genesis storage is valid.
-pub fn check_genesis_storage(top: &StorageOverlay, children: &ChildrenStorageOverlay) -> error::Result<()> {
+pub fn check_genesis_storage(top: &StorageOverlay, children: &ChildrenStorageOverlay) -> sp_blockchain::Result<()> {
 	if top.iter().any(|(k, _)| well_known_keys::is_child_storage_key(k)) {
-		return Err(error::Error::GenesisInvalid.into());
+		return Err(sp_blockchain::Error::GenesisInvalid.into());
 	}
 
 	if children.keys().any(|child_key| !well_known_keys::is_child_storage_key(&child_key)) {
-		return Err(error::Error::GenesisInvalid.into());
+		return Err(sp_blockchain::Error::GenesisInvalid.into());
 	}
 
 	Ok(())

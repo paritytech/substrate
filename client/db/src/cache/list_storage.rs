@@ -20,7 +20,7 @@ use std::sync::Arc;
 
 use kvdb::{KeyValueDB, DBTransaction};
 
-use client_api::error::{Error as ClientError, Result as ClientResult};
+use sp_blockchain::{Error as ClientError, Result as ClientResult};
 use codec::{Encode, Decode};
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};

@@ -25,7 +25,7 @@ use crate::trie_backend_essence::TrieBackendEssence;
 use crate::changes_trie::{AnchorBlockId, Storage, BlockNumber};
 use crate::changes_trie::storage::TrieBackendAdapter;
 use crate::changes_trie::input::{ChildIndex, InputKey};
-use codec::Decode;
+use codec::{Decode, Codec};
 
 /// Prune obsolete changes tries. Pruning happens at the same block, where highest
 /// level digest is created. Pruning guarantees to save changes tries for last
@@ -37,7 +37,7 @@ pub fn prune<H: Hasher, Number: BlockNumber, F: FnMut(H::Out)>(
 	last: Number,
 	current_block: &AnchorBlockId<H::Out, Number>,
 	mut remove_trie_node: F,
-) {
+) where H::Out: Codec {
 	// delete changes trie for every block in range
 	let mut block = first;
 	loop {
@@ -90,7 +90,7 @@ fn prune_trie<H: Hasher, Number: BlockNumber, F: FnMut(H::Out)>(
 	storage: &dyn Storage<H, Number>,
 	root: H::Out,
 	remove_trie_node: &mut F,
-) {
+) where H::Out: Codec {
 
 	// enumerate all changes trie' keys, recording all nodes that have been 'touched'
 	// (effectively - all changes trie nodes)

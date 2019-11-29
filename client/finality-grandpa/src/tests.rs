@@ -26,7 +26,7 @@ use futures03::{StreamExt as _, TryStreamExt as _};
 use tokio::runtime::current_thread;
 use keyring::Ed25519Keyring;
 use client::LongestChain;
-use client_api::error::Result;
+use sp_blockchain::Result;
 use sr_api::{Core, RuntimeVersion, ApiExt, StorageProof};
 use test_client::{self, runtime::BlockNumber};
 use consensus_common::{BlockOrigin, ForkChoiceStrategy, ImportedAux, BlockImportParams, ImportResult};
@@ -242,7 +242,7 @@ impl Core<Block> for RuntimeApi {
 }
 
 impl ApiExt<Block> for RuntimeApi {
-	type Error = client_api::error::Error;
+	type Error = sp_blockchain::Error;
 
 	fn map_api_result<F: FnOnce(&Self) -> result::Result<R, E>, R, E>(
 		&self,
@@ -975,6 +975,7 @@ fn allows_reimporting_change_blocks() {
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::LongestChain,
 			allow_missing_state: false,
+			import_existing: false,
 		}
 	};
 
@@ -1028,6 +1029,7 @@ fn test_bad_justification() {
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::LongestChain,
 			allow_missing_state: false,
+			import_existing: false,
 		}
 	};
 
@@ -1738,6 +1740,7 @@ fn imports_justification_for_regular_blocks_on_import() {
 		auxiliary: Vec::new(),
 		fork_choice: ForkChoiceStrategy::LongestChain,
 		allow_missing_state: false,
+		import_existing: false,
 	};
 
 	assert_eq!(

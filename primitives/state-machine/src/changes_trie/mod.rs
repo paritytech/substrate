@@ -223,7 +223,7 @@ pub fn build_changes_trie<'a, B: Backend<H>, H: Hasher, Number: BlockNumber>(
 	parent_hash: H::Out,
 ) -> Result<Option<(MemoryDB<H>, H::Out, CacheAction<H::Out, Number>)>, ()>
 	where
-		H::Out: Ord + 'static,
+		H::Out: Ord + 'static + Encode,
 {
 	// when storage isn't provided, changes tries aren't created
 	let state = match state {

@@ -8,5 +8,5 @@ edition = "2018"
 frame-support-procedural-tools-derive = { package = "frame-support-procedural-tools-derive", path = "./derive" }
 proc-macro2 = "1.0.6"
 quote = "1.0.2"
-syn = { version = "1.0.7", features = ["full"] }
+syn = { version = "1.0.7", features = ["full", "visit"] }
 proc-macro-crate = "0.1.4"

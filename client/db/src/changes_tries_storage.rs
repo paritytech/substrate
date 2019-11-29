@@ -22,7 +22,7 @@ use hash_db::Prefix;
 use kvdb::{KeyValueDB, DBTransaction};
 use codec::{Decode, Encode};
 use parking_lot::RwLock;
-use client::error::{Error as ClientError, Result as ClientResult};
+use sp_blockchain::{Error as ClientError, Result as ClientResult};
 use trie::MemoryDB;
 use client_api::backend::{PrunableStateChangesTrieStorage, ChangesTrieConfigurationRange};
 use client::blockchain::{well_known_cache_keys, Cache as BlockchainCache};

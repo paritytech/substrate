@@ -193,6 +193,5 @@ fn record_proof_works() {
 		&executor,
 		"Core_execute_block",
 		&block.encode(),
-		None,
 	).expect("Executes block while using the proof backend");
 }
