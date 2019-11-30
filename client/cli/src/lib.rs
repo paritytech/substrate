@@ -741,17 +741,22 @@ fn fill_config_keystore_password<C, G, E>(
 }
 
 /// Put block import CLI params into `config` object.
-pub fn fill_import_params<C, G, E>(config: &mut Configuration<C, G, E>, cli: &ImportParams, role: service::Roles)
-	-> error::Result<()>
-where
-	C: Default,
-	G: RuntimeGenesis,
-	E: ChainSpecExtension,
+pub fn fill_import_params<C, G, E>(
+	config: &mut Configuration<C, G, E>,
+	cli: &ImportParams,
+	role: service::Roles,
+) -> error::Result<()>
+	where
+		C: Default,
+		G: RuntimeGenesis,
+		E: ChainSpecExtension,
 {
-	config.database = DatabaseConfig::Path {
-		path: config.in_chain_config_dir(DEFAULT_DB_CONFIG_PATH).expect("We provided a base_path."),
-		cache_size: Some(cli.database_cache_size),
-	};
+	match config.database {
+		DatabaseConfig::Path { ref mut cache_size, .. } =>
+			*cache_size = Some(cli.database_cache_size),
+		DatabaseConfig::Custom(_) => {},
+	}
+
 	config.state_cache_size = cli.state_cache_size;
 
 	// by default we disable pruning if the node is an authority (i.e.
@@ -927,7 +932,16 @@ where
 	let spec = load_spec(cli, spec_factory)?;
 	let base_path = base_path(cli, version);
 
-	let config = service::Configuration::default_with_spec_and_base_path(spec.clone(), Some(base_path));
+	let mut config = service::Configuration::default_with_spec_and_base_path(
+		spec.clone(),
+		Some(base_path),
+	);
+
+	config.database = DatabaseConfig::Path {
+		path: config.in_chain_config_dir(DEFAULT_DB_CONFIG_PATH).expect("We provided a base_path."),
+		cache_size: None,
+	};
+
 	Ok(config)
 }
 
