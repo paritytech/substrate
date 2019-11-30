@@ -5,7 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-log = "0.4"
+log = { version = "0.4", optional = true }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "1.0.6", default-features = false, features = ["derive"] }
 frame-metadata = { path = "../metadata", default-features = false }
@@ -30,6 +30,7 @@ frame-system = { path = "../system" }
 [features]
 default = ["std"]
 std = [
+	"log",
 	"tracing",
 	"once_cell",
 	"bitmask/std",
