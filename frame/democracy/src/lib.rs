@@ -242,7 +242,7 @@ pub trait Trait: system::Trait + Sized {
 pub struct ReferendumInfo<BlockNumber: Parameter, Hash: Parameter> {
 	/// When voting on this referendum will end.
 	end: BlockNumber,
-		/// The hash of the proposal being voted on.
+	/// The hash of the proposal being voted on.
 	proposal_hash: Hash,
 	/// The thresholding mechanism to determine whether it passed.
 	threshold: VoteThreshold,
