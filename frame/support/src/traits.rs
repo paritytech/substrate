@@ -610,14 +610,16 @@ pub trait VestingCurrency<AccountId>: Currency<AccountId> {
 	/// Get the amount that is currently being vested and cannot be transferred out of this account.
 	fn vesting_balance(who: &AccountId) -> Self::Balance;
 
-	/// Insert a vesting schedule for a given account.
-	/// Will overwrite any existing schedule.
-	fn insert_vesting_schedule(
+	/// Adds a vesting schedule to a given account.
+	///
+	/// If there already exists a vesting schedule for the given account, an `Err` is returned
+	/// and nothing is updated.
+	fn add_vesting_schedule(
 		who: &AccountId,
 		locked: Self::Balance,
 		per_block: Self::Balance,
 		starting_block: Self::Moment,
-	);
+	) -> result::Result<(), &'static str>;
 
 	/// Remove a vesting schedule for a given account.
 	fn remove_vesting_schedule(who: &AccountId);

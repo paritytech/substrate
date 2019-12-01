@@ -1212,20 +1212,26 @@ where
 		}
 	}
 
-	/// Insert a vesting schedule for a given account.
-	/// Will overwrite any existing schedule.
-	fn insert_vesting_schedule(
+	/// Adds a vesting schedule to a given account.
+	///
+	/// If there already exists a vesting schedule for the given account, an `Err` is returned
+	/// and nothing is updated.
+	fn add_vesting_schedule(
 		who: &T::AccountId,
 		locked: T::Balance,
 		per_block: T::Balance,
 		starting_block: T::BlockNumber
-	) {
+	) -> Result {
+		if <Vesting<T, I>>::exists(who) {
+			return Err("A vesting schedule already exists for this account.");
+		}
 		let vesting_schedule = VestingSchedule {
 			locked,
 			per_block,
 			starting_block
 		};
 		<Vesting<T, I>>::insert(who, vesting_schedule);
+		Ok(())
 	}
 
 	/// Remove a vesting schedule for a given account.
