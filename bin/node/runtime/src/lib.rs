@@ -308,6 +308,7 @@ impl democracy::Trait for Runtime {
 	type VetoOrigin = collective::EnsureMember<AccountId, TechnicalCollective>;
 	type CooloffPeriod = CooloffPeriod;
 	type PreimageByteDeposit = PreimageByteDeposit;
+	type Slash = Treasury;
 }
 
 type CouncilCollective = collective::Instance1;

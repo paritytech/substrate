@@ -31,7 +31,7 @@ use support::{
 	weights::SimpleDispatchInfo,
 	traits::{
 		Currency, ReservableCurrency, LockableCurrency, WithdrawReason, LockIdentifier, Get,
-		OnFreeBalanceZero
+		OnFreeBalanceZero, OnUnbalanced
 	}
 };
 use support::dispatch::Result;
@@ -174,6 +174,8 @@ impl Decode for Vote {
 }
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
+type NegativeImbalanceOf<T> =
+<<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
 
 pub trait Trait: system::Trait + Sized {
 	type Proposal: Parameter + Dispatchable<Origin=Self::Origin>;
@@ -230,6 +232,9 @@ pub trait Trait: system::Trait + Sized {
 
 	/// The amount of balance that must be deposited per byte of preimage stored.
 	type PreimageByteDeposit: Get<BalanceOf<Self>>;
+
+	/// Handler for the unbalanced reduction when slashing a preimage deposit.
+	type Slash: OnUnbalanced<NegativeImbalanceOf<Self>>;
 }
 
 /// Info regarding an ongoing referendum.
@@ -933,6 +938,7 @@ impl<T: Trait> Module<T> {
 
 				Ok(())
 			} else {
+				T::Slash::on_unbalanced(T::Currency::slash_reserved(&who, amount).0);
 				Self::deposit_event(RawEvent::PreimageInvalid(proposal_hash, index));
 				Err("invalid preimage")
 			}
@@ -1191,6 +1197,7 @@ mod tests {
 		type VetoOrigin = EnsureSignedBy<OneToFive, u64>;
 		type CooloffPeriod = CooloffPeriod;
 		type PreimageByteDeposit = PreimageByteDeposit;
+		type Slash = ();
 	}
 
 	fn new_test_ext() -> runtime_io::TestExternalities {
