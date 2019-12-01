@@ -602,6 +602,27 @@ pub trait LockableCurrency<AccountId>: Currency<AccountId> {
 	);
 }
 
+/// A currency whose accounts can have balances which vest over time.
+pub trait VestingCurrency<AccountId>: Currency<AccountId> {
+	/// The quantity used to denote time; usually just a `BlockNumber`.
+	type Moment;
+
+	/// Get the amount that is currently being vested and cannot be transferred out of this account.
+	fn vesting_balance(who: &AccountId) -> Self::Balance;
+
+	/// Insert a vesting schedule for a given account.
+	/// Will overwrite any existing schedule.
+	fn insert_vesting_schedule(
+		who: &AccountId,
+		locked: Self::Balance,
+		per_block: Self::Balance,
+		starting_block: Self::Moment,
+	);
+
+	/// Remove a vesting schedule for a given account.
+	fn remove_vesting_schedule(who: &AccountId);
+}
+
 bitmask! {
 	/// Reasons for moving funds out of an account.
 	#[derive(Encode, Decode)]

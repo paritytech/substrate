@@ -167,7 +167,7 @@ use support::{
 	traits::{
 		UpdateBalanceOutcome, Currency, OnFreeBalanceZero, OnUnbalanced, TryDrop,
 		WithdrawReason, WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
-		Imbalance, SignedImbalance, ReservableCurrency, Get,
+		Imbalance, SignedImbalance, ReservableCurrency, Get, VestingCurrency,
 	},
 	weights::SimpleDispatchInfo,
 	dispatch::Result,
@@ -510,19 +510,6 @@ decl_module! {
 }
 
 impl<T: Trait<I>, I: Instance> Module<T, I> {
-
-	// PUBLIC IMMUTABLES
-
-	/// Get the amount that is currently being vested and cannot be transferred out of this account.
-	pub fn vesting_balance(who: &T::AccountId) -> T::Balance {
-		if let Some(v) = Self::vesting(who) {
-			Self::free_balance(who)
-				.min(v.locked_at(<system::Module<T>>::block_number()))
-		} else {
-			Zero::zero()
-		}
-	}
-
 	// PRIVATE MUTABLES
 
 	/// Set the reserved balance of an account to some new value. Will enforce `ExistentialDeposit`
@@ -1206,6 +1193,44 @@ where
 				None
 			}).collect::<Vec<_>>();
 		<Locks<T, I>>::insert(who, locks);
+	}
+}
+
+impl<T: Trait<I>, I: Instance> VestingCurrency<T::AccountId> for Module<T, I>
+where
+	T::Balance: MaybeSerializeDeserialize + Debug
+{
+	type Moment = T::BlockNumber;
+
+	/// Get the amount that is currently being vested and cannot be transferred out of this account.
+	fn vesting_balance(who: &T::AccountId) -> T::Balance {
+		if let Some(v) = Self::vesting(who) {
+			Self::free_balance(who)
+				.min(v.locked_at(<system::Module<T>>::block_number()))
+		} else {
+			Zero::zero()
+		}
+	}
+
+	/// Insert a vesting schedule for a given account.
+	/// Will overwrite any existing schedule.
+	fn insert_vesting_schedule(
+		who: &T::AccountId,
+		locked: T::Balance,
+		per_block: T::Balance,
+		starting_block: T::BlockNumber
+	) {
+		let vesting_schedule = VestingSchedule {
+			locked,
+			per_block,
+			starting_block
+		};
+		<Vesting<T, I>>::insert(who, vesting_schedule);
+	}
+
+	/// Remove a vesting schedule for a given account.
+	fn remove_vesting_schedule(who: &T::AccountId) {
+		<Vesting<T, I>>::remove(who);
 	}
 }
 
