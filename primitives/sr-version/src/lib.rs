@@ -161,10 +161,30 @@ pub struct NativeVersion {
 #[cfg(feature = "std")]
 impl NativeVersion {
 	/// Check if this version matches other version for authoring blocks.
-	pub fn can_author_with(&self, other: &RuntimeVersion) -> bool {
-		self.runtime_version.spec_name == other.spec_name &&
-			(self.runtime_version.authoring_version == other.authoring_version ||
-			self.can_author_with.contains(&other.authoring_version))
+	///
+	/// # Return
+	///
+	/// - Returns `Ok(())` when authoring is supported.
+	/// - Returns `Err(_)` with a detailed error when authoring is not supported.
+	pub fn can_author_with(&self, other: &RuntimeVersion) -> Result<(), String> {
+		if self.runtime_version.spec_name != other.spec_name {
+			Err(format!(
+				"`spec_name` does not match `{}` vs `{}`",
+				self.runtime_version.spec_name,
+				other.spec_name,
+			))
+		} else if (self.runtime_version.authoring_version != other.authoring_version
+			&& !self.can_author_with.contains(&other.authoring_version))
+		{
+			Err(format!(
+				"`authoring_version` does not match `{version}` vs `{other_version}` and \
+				`can_author_with` not contains `{other_version}`",
+				version = self.runtime_version.authoring_version,
+				other_version = other.authoring_version,
+			))
+		} else {
+			Ok(())
+		}
 	}
 }
 

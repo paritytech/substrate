@@ -467,11 +467,12 @@ fn mine_loop<B: BlockT<Hash=H256>, C, Algorithm, E, SO, S, CAW>(
 			},
 		};
 
-		if can_author_with.can_author_with(&BlockId::Hash(best_hash)) {
-			debug!(
+		if let Err(err) = can_author_with.can_author_with(&BlockId::Hash(best_hash)) {
+			warn!(
 				target: "pow",
-				"Skipping proposal `can_author_with` returned `false`. \
-				Probably a node update is required!"
+				"Skipping proposal `can_author_with` returned: {} \
+				Probably a node update is required!",
+				err,
 			);
 			std::thread::sleep(std::time::Duration::from_secs(1));
 			continue 'outer
