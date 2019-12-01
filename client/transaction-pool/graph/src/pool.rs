@@ -283,7 +283,7 @@ impl<B: ChainApi> Pool<B> {
 		tags: impl IntoIterator<Item=Tag>,
 		known_imported_hashes: impl IntoIterator<Item=ExHash<B>> + Clone,
 	) -> impl Future<Output=Result<(), B::Error>> {
-		log::trace!(target: "txpool", "Pruning at {:?}", at);
+		log::debug!(target: "txpool", "Pruning at {:?}", at);
 		// Prune all transactions that provide given tags
 		let prune_status = match self.validated_pool.prune_tags(tags) {
 			Ok(prune_status) => prune_status,
@@ -317,7 +317,7 @@ impl<B: ChainApi> Pool<B> {
 	}
 
 	/// Return an event stream of notifications for when transactions are imported to the pool.
-	/// 
+	///
 	/// Consumers of this stream should use the `ready` method to actually get the
 	/// pending transactions in the right order.
 	pub fn import_notification_stream(&self) -> EventStream {
@@ -329,7 +329,7 @@ impl<B: ChainApi> Pool<B> {
 		self.validated_pool.on_broadcasted(propagated)
 	}
 
-	/// Remove from the pool.
+	/// Remove invalid transactions from the pool.
 	pub fn remove_invalid(&self, hashes: &[ExHash<B>]) -> Vec<TransactionFor<B>> {
 		self.validated_pool.remove_invalid(hashes)
 	}

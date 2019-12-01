@@ -215,9 +215,9 @@ impl<B: ChainApi> ValidatedPool<B> {
 				let hash = updated_transactions.keys().next().cloned().expect("transactions is not empty; qed");
 
 				// note we are not considering tx with hash invalid here - we just want
-				// to remove it along with dependent transactions and `remove_invalid()`
+				// to remove it along with dependent transactions and `remove_subtree()`
 				// does exactly what we need
-				let removed = pool.remove_invalid(&[hash.clone()]);
+				let removed = pool.remove_subtree(&[hash.clone()]);
 				for removed_tx in removed {
 					let removed_hash = removed_tx.hash.clone();
 					let updated_transaction = updated_transactions.remove(&removed_hash);
@@ -451,13 +451,23 @@ impl<B: ChainApi> ValidatedPool<B> {
 		}
 	}
 
-	/// Remove from the pool.
+	/// Remove a subtree of transactions from the pool and mark them invalid.
+	///
+	/// The transactions passed as an argument will be additionally banned
+	/// to prevent them from entering the pool right away.
+	/// Note this is not the case for the dependent transactions - those may
+	/// still be valid so we want to be able to re-import them.
 	pub fn remove_invalid(&self, hashes: &[ExHash<B>]) -> Vec<TransactionFor<B>> {
+		// early exit in case there is no invalid transactions.
+		if hashes.is_empty() {
+			return vec![]
+		}
+
 		// temporarily ban invalid transactions
 		debug!(target: "txpool", "Banning invalid transactions: {:?}", hashes);
 		self.rotator.ban(&time::Instant::now(), hashes.iter().cloned());
 
-		let invalid = self.pool.write().remove_invalid(hashes);
+		let invalid = self.pool.write().remove_subtree(hashes);
 
 		let mut listener = self.listener.write();
 		for tx in &invalid {
