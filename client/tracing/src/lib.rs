@@ -24,22 +24,37 @@
 //! A span is set in the following way:
 //! ```
 //! let span = tracing::span!(tracing::Level::INFO, "my_span_name");
-//! let _enter = span.enter();
+//! let _guard = span.enter();
 //! ```
 //! To begin timing, a span must be entered. When the span is dropped, the execution time
 //! is recorded and details sent to the `Receiver` which defines how to process it.
 //!
-//! Currently we provide `Log` (default) and `Telemetry` variants for `Receiver`
+//! It's possible to record values with each span in the following way:
+//! ```
+//! let span = tracing::span!(tracing::Level::INFO, "my_span_name", my_number = 10, a_key = "a value");
+//! let _guard = span.enter();
+//! ```
+//! Currently we provide `Log` (default), `Telemetry` and `Grafana` variants for `Receiver`
 
 use std::collections::HashMap;
+use std::fmt;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use parking_lot::Mutex;
-use tracing_core::{event::Event, Level, metadata::Metadata, span::{Attributes, Id, Record}, subscriber::Subscriber};
+use serde::ser::{Serialize, Serializer, SerializeMap};
+use slog::{SerdeValue, Value};
+use tracing_core::{
+	event::Event,
+	field::{Visit, Field},
+	Level,
+	metadata::Metadata,
+	span::{Attributes, Id, Record},
+	subscriber::Subscriber
+};
 
-use substrate_telemetry::{telemetry, SUBSTRATE_INFO};
 use grafana_data_source::{self, record_metrics};
+use substrate_telemetry::{telemetry, SUBSTRATE_INFO};
 
 /// Used to configure how to receive the metrics
 #[derive(Debug, Clone)]
@@ -48,7 +63,7 @@ pub enum TracingReceiver {
 	Log,
 	/// Output to telemetry
 	Telemetry,
-	/// Output to Grafana,
+	/// Output to Grafana
 	Grafana,
 }
 
@@ -67,6 +82,68 @@ struct SpanDatum {
 	line: u32,
 	start_time: Instant,
 	overall_time: Duration,
+	values: Visitor,
+}
+
+#[derive(Clone, Debug)]
+struct Visitor(Vec<(String, String)>);
+
+impl Visit for Visitor {
+	fn record_i64(&mut self, field: &Field, value: i64) {
+		self.record_debug(field, &value)
+	}
+
+	fn record_u64(&mut self, field: &Field, value: u64) {
+		self.record_debug(field, &value)
+	}
+
+	fn record_bool(&mut self, field: &Field, value: bool) {
+		self.record_debug(field, &value)
+	}
+
+	fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
+		self.0.push((field.name().to_string(), format!("{:?}",value)));
+	}
+}
+
+impl Serialize for Visitor {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+		where S: Serializer,
+	{
+		let mut map = serializer.serialize_map(Some(self.0.len()))?;
+		for (k, v) in &self.0 {
+			map.serialize_entry(k, v)?;
+		}
+		map.end()
+	}
+}
+
+impl fmt::Display for Visitor {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		let values = self.0.iter().map(|(k,v)| format!("{}={}",k,v)).collect::<Vec<String>>().join(", ");
+		write!(f, "{}", values)
+	}
+}
+
+impl SerdeValue for Visitor {
+	fn as_serde(&self) -> &dyn erased_serde::Serialize {
+		self
+	}
+
+	fn to_sendable(&self) -> Box<dyn SerdeValue + Send + 'static> {
+		Box::new(self.clone())
+	}
+}
+
+impl Value for Visitor {
+	fn serialize(
+		&self,
+		_record: &slog::Record,
+		key: slog::Key,
+		ser: &mut dyn slog::Serializer,
+	) -> slog::Result {
+		ser.emit_serde(key, self)
+	}
 }
 
 /// Responsible for assigning ids to new spans, which are not re-used.
@@ -79,9 +156,9 @@ pub struct ProfilingSubscriber {
 
 impl ProfilingSubscriber {
 	/// Takes a `Receiver` and a comma separated list of targets,
-	/// either with a level "paint=trace"
-	/// or without "paint".
-	pub fn new(receiver: TracingReceiver, targets: &String) -> Self {
+	/// either with a level: "pallet=trace"
+	/// or without: "pallet".
+	pub fn new(receiver: TracingReceiver, targets: &str) -> Self {
 		let targets: Vec<_> = targets.split(',').map(|s| parse_target(s)).collect();
 		ProfilingSubscriber {
 			next_id: AtomicU64::new(1),
@@ -95,7 +172,7 @@ impl ProfilingSubscriber {
 // Default to TRACE if no level given or unable to parse Level
 // We do not support a global `Level` currently
 fn parse_target(s: &str) -> (String, Level) {
-	match s.find("=") {
+	match s.find('=') {
 		Some(i) => {
 			let target = s[0..i].to_string();
 			if s.len() > i {
@@ -124,14 +201,17 @@ impl Subscriber for ProfilingSubscriber {
 
 	fn new_span(&self, attrs: &Attributes<'_>) -> Id {
 		let id = self.next_id.fetch_add(1, Ordering::Relaxed);
+		let mut values = Visitor(Vec::new());
+		attrs.record(&mut values);
 		let span_datum = SpanDatum {
-			id: id,
+			id,
 			name: attrs.metadata().name(),
 			target: attrs.metadata().target(),
 			level: attrs.metadata().level().clone(),
 			line: attrs.metadata().line().unwrap_or(0),
 			start_time: Instant::now(),
 			overall_time: Duration::from_nanos(0),
+			values,
 		};
 		self.span_data.lock().insert(id, span_datum);
 		Id::from_u64(id)
@@ -181,15 +261,24 @@ impl ProfilingSubscriber {
 }
 
 fn print_log(span_datum: SpanDatum) {
-	let message = format!(
-		"Tracing: {} {}: {}, line: {}, time: {} ns",
-		span_datum.level,
-		span_datum.target,
-		span_datum.name,
-		span_datum.line,
-		span_datum.overall_time.as_nanos()
-	);
-	log::info!(target: "substrate_tracing", "{}", message);
+	if span_datum.values.0.is_empty() {
+		log::info!("TRACING: {} {}: {}, line: {}, time: {}",
+			span_datum.level,
+			span_datum.target,
+			span_datum.name,
+			span_datum.line,
+			span_datum.overall_time.as_nanos(),
+		);
+	} else {
+		log::info!("TRACING: {} {}: {}, line: {}, time: {}, {}",
+			span_datum.level,
+			span_datum.target,
+			span_datum.name,
+			span_datum.line,
+			span_datum.overall_time.as_nanos(),
+			span_datum.values
+		);
+	}
 }
 
 fn send_telemetry(span_datum: SpanDatum) {
@@ -198,6 +287,7 @@ fn send_telemetry(span_datum: SpanDatum) {
 		"target" => span_datum.target,
 		"line" => span_datum.line,
 		"time" => span_datum.overall_time.as_nanos(),
+		"values" => span_datum.values
 	);
 }
 

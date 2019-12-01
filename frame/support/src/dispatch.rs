@@ -868,7 +868,7 @@ macro_rules! decl_module {
 				use $crate::rstd::if_std;
 				if_std! {
 					use $crate::tracing;
-					let span = tracing::span!(tracing::Level::INFO, "on_initialize");
+					let span = tracing::span!(tracing::Level::DEBUG, "on_initialize");
 					let _enter = span.enter();
 				}
 				{ $( $impl )* }
@@ -890,7 +890,7 @@ macro_rules! decl_module {
 				use $crate::rstd::if_std;
 				if_std! {
 					use $crate::tracing;
-					let span = tracing::span!(tracing::Level::INFO, "on_initialize");
+					let span = tracing::span!(tracing::Level::DEBUG, "on_initialize");
 					let _enter = span.enter();
 				}
 				{ $( $impl )* }
@@ -922,7 +922,7 @@ macro_rules! decl_module {
 				use $crate::rstd::if_std;
 				if_std! {
 					use $crate::tracing;
-					let span = tracing::span!(tracing::Level::INFO, "on_finalize");
+					let span = tracing::span!(tracing::Level::DEBUG, "on_finalize");
 					let _enter = span.enter();
 				}
 				{ $( $impl )* }
@@ -944,7 +944,7 @@ macro_rules! decl_module {
 				use $crate::rstd::if_std;
 				if_std! {
 					use $crate::tracing;
-					let span = tracing::span!(tracing::Level::INFO, "on_finalize");
+					let span = tracing::span!(tracing::Level::DEBUG, "on_finalize");
 					let _enter = span.enter();
 				}
 				{ $( $impl )* }
@@ -1047,7 +1047,7 @@ macro_rules! decl_module {
 			use $crate::rstd::if_std;
 			if_std! {
 				use $crate::tracing;
-				let span = tracing::span!(tracing::Level::INFO, stringify!($name));
+				let span = tracing::span!(tracing::Level::DEBUG, stringify!($name));
 				let _enter = span.enter();
 			}
 			{
@@ -1073,7 +1073,7 @@ macro_rules! decl_module {
 			use $crate::rstd::if_std;
 			if_std! {
 				use $crate::tracing;
-				let span = tracing::span!(tracing::Level::INFO, stringify!($name));
+				let span = tracing::span!(tracing::Level::DEBUG, stringify!($name));
 				let _enter = span.enter();
 			}
 			{ $( $impl )* }

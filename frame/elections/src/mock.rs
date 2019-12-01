@@ -21,7 +21,8 @@
 use std::cell::RefCell;
 use support::{
 	StorageValue, StorageMap, parameter_types, assert_ok,
-	traits::{Get, ChangeMembers, Currency}
+	traits::{Get, ChangeMembers, Currency},
+	weights::Weight,
 };
 use primitives::H256;
 use sr_primitives::{
@@ -32,7 +33,7 @@ use crate as elections;
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
-	pub const MaximumBlockWeight: u32 = 1024;
+	pub const MaximumBlockWeight: Weight = 1024;
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }

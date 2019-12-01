@@ -24,8 +24,11 @@ use sr_primitives::testing::{Header, UintAuthorityId};
 use sr_staking_primitives::{SessionIndex, offence::{OffenceDetails, OnOffenceHandler}};
 use primitives::{H256, crypto::key_types};
 use runtime_io;
-use support::{assert_ok, impl_outer_origin, parameter_types, StorageLinkedMap, StorageValue};
-use support::traits::{Currency, Get, FindAuthor};
+use support::{
+	assert_ok, impl_outer_origin, parameter_types, StorageLinkedMap, StorageValue,
+	traits::{Currency, Get, FindAuthor},
+	weights::Weight,
+};
 use crate::{
 	EraIndex, GenesisConfig, Module, Trait, StakerStatus, ValidatorPrefs, RewardDestination,
 	Nominators, inflation
@@ -114,7 +117,7 @@ impl FindAuthor<u64> for Author11 {
 pub struct Test;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
-	pub const MaximumBlockWeight: u32 = 1024;
+	pub const MaximumBlockWeight: Weight = 1024;
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
