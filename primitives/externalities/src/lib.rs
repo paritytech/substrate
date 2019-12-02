@@ -160,7 +160,6 @@ pub trait Externalities: ExtensionStore {
 
 	/// Commit a transactional layer. The changes stay attached to parent transaction layer.
 	fn storage_commit_transaction(&mut self);
-
 }
 
 /// Extension for the [`Externalities`] trait.

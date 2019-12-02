@@ -228,7 +228,6 @@ pub trait Storage {
 	fn commit_transaction(&mut self) {
 		self.storage_commit_transaction();
 	}
-
 }
 
 /// Interface that provides trie related functionality.
