@@ -36,4 +36,4 @@ rustc-hex = "2.0.1"
 sp-io = { path = "../../primitives/sr-io" }
 test-client = { package = "substrate-test-runtime-client", path = "../../test/utils/runtime/client" }
 tokio = "0.1.22"
-txpool = { package = "sc-tracing-pool", path = "../transaction-pool" }
+txpool = { package = "sc-transaction-pool", path = "../transaction-pool" }
