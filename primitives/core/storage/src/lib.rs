@@ -23,6 +23,7 @@ use serde::{Serialize, Deserialize};
 use substrate_debug_derive::RuntimeDebug;
 
 use rstd::{vec::Vec, borrow::Cow};
+use codec::{Encode, Decode};
 
 /// Storage key.
 #[derive(PartialEq, Eq, RuntimeDebug)]
@@ -178,7 +179,8 @@ impl<'a> ChildInfo<'a> {
 	/// Instantiates information for a default child trie.
 	pub const fn new_default(unique_id: &'a[u8]) -> Self {
 		ChildInfo::Default(ChildTrie {
-			root: 0,
+			offset: 0,
+			root_end: 0,
 			data: unique_id,
 		})
 	}
@@ -186,9 +188,10 @@ impl<'a> ChildInfo<'a> {
 	/// Instantiates a owned version of this child info.
 	pub fn to_owned(&self) -> OwnedChildInfo {
 		match self {
-			ChildInfo::Default(ChildTrie { data, root })
+			ChildInfo::Default(ChildTrie { data, root_end, offset })
 				=> OwnedChildInfo::Default(OwnedChildTrie {
-					root: *root,
+					offset: *offset,
+					root_end: *root_end,
 					data: data.to_vec(),
 				}),
 		}
@@ -198,12 +201,22 @@ impl<'a> ChildInfo<'a> {
 	pub fn resolve_child_info(child_type: u32, data: &'a[u8]) -> Option<Self> {
 		match child_type {
 			x if x == ChildType::CryptoUniqueId as u32 => Some(ChildInfo::new_default(data)),
-			x if x == ChildType::CryptoUniqueIdRoot32Api as u32 => if data.len() >= 32 {
-				Some(ChildInfo::Default(ChildTrie {
-					root: 32,
-					data,
-				}))
-			} else { None },
+			x if x == ChildType::CryptoUniqueIdRootApi as u32 => {
+				let data_cursor = &mut data.clone();
+				// u32 is considered enough for a root size.
+				let number: u32 = match Decode::decode(data_cursor) {
+					Ok(number) => number,
+					Err(_) => return None,
+				};
+				let offset = data.len() - data_cursor.len();
+				if data.len() >= number as usize {
+					Some(ChildInfo::Default(ChildTrie {
+						offset,
+						root_end: number as usize + offset,
+						data,
+					}))
+				} else { None }
+			},
 			_ => None,
 		}
 	}
@@ -213,13 +226,12 @@ impl<'a> ChildInfo<'a> {
 	pub fn info(&self) -> (&[u8], u32) {
 		match self {
 			ChildInfo::Default(ChildTrie {
-				root,
+				root_end,
 				data,
+				..
 			}) => {
-				if *root > 0 {
-					if *root == 32 {
-						return (data, ChildType::CryptoUniqueIdRoot32Api as u32);
-					}
+				if *root_end > 0 {
+					return (data, ChildType::CryptoUniqueIdRootApi as u32);
 				}
 				(data, ChildType::CryptoUniqueId as u32)
 			},
@@ -232,9 +244,10 @@ impl<'a> ChildInfo<'a> {
 	pub fn keyspace(&self) -> &[u8] {
 		match self {
 			ChildInfo::Default(ChildTrie {
-				root,
+				root_end,
 				data,
-			}) => &data[*root..],
+				..
+			}) => &data[*root_end..],
 		}
 	}
 
@@ -245,10 +258,11 @@ impl<'a> ChildInfo<'a> {
 	pub fn root(&self) -> Option<&[u8]> {
 		match self {
 			ChildInfo::Default(ChildTrie {
-				root,
+				root_end,
 				data,
-			}) => if *root > 0 {
-				Some(&data[..*root])
+				offset,
+			}) => if *root_end > 0 {
+				Some(&data[*offset..*root_end])
 			} else {
 				None
 			}
@@ -265,19 +279,27 @@ pub enum ChildType {
 	/// Default, it uses a cryptographic strong unique id as input.
 	CryptoUniqueId = 1,
 	/// Default, but with a root registerd to skip root fetch when querying.
-	/// Root is a 32 byte hash.
-	CryptoUniqueIdRoot32Api = 2,
+	/// Root is variable length, its length is SCALE encoded at the start.
+	CryptoUniqueIdRootApi = 2,
 }
 
 impl OwnedChildInfo {
 	/// Instantiates info for a default child trie.
 	pub fn new_default(mut unique_id: Vec<u8>, root: Option<Vec<u8>>) -> Self {
-		debug_assert!(root.as_ref().map(|r| r.len()).unwrap_or(32) == 32);
+		let (offset, root_end, encoded) = if let Some(mut root) = root {
+			let mut encoded = Encode::encode(&(root.len() as u32));
+			let offset = encoded.len();
+			encoded.append(&mut root);
+			(offset, encoded.len(), Some(encoded)) 
+		} else {
+			(0, 0, None)
+		};
 		OwnedChildInfo::Default(OwnedChildTrie {
-			root: root.as_ref().map(|r| r.len()).unwrap_or(0),
-			data: if let Some(mut root) = root {
-				root.append(&mut unique_id);
-				root
+			root_end,
+			offset,
+			data: if let Some(mut encoded) = encoded {
+				encoded.append(&mut unique_id);
+				encoded
 			} else {
 				unique_id
 			}
@@ -295,10 +317,11 @@ impl OwnedChildInfo {
 	/// Get `ChildInfo` reference to this owned child info.
 	pub fn as_ref(&self) -> ChildInfo {
 		match self {
-			OwnedChildInfo::Default(OwnedChildTrie { data, root })
+			OwnedChildInfo::Default(OwnedChildTrie { data, root_end, offset })
 				=> ChildInfo::Default(ChildTrie {
 					data: data.as_slice(),
-					root: *root,
+					root_end: *root_end,
+					offset: *offset,
 				}),
 		}
 	}
@@ -311,10 +334,12 @@ impl OwnedChildInfo {
 /// crypto hash).
 #[derive(Clone, Copy)]
 pub struct ChildTrie<'a> {
+	/// Encoded data offset (correspond to size of encoded size of root if any). 
+	offset: usize,
 	/// If root was fetch it can be memoïzed as first part of
 	/// the encoded data to avoid querying it explicitly.
-	/// This field keep trace of the stored root size.
-	root: usize,
+	/// This field keep trace of the position of the end of root.
+	root_end: usize,
 
 	/// Data containing unique id.
 	/// Unique id must but unique and free of any possible key collision
@@ -328,7 +353,10 @@ pub struct ChildTrie<'a> {
 #[cfg_attr(feature = "std", derive(PartialEq, Eq, Hash, PartialOrd, Ord))]
 pub struct OwnedChildTrie {
 	/// See `ChildTrie` reference field documentation.
-	root: usize,
+	offset: usize,
+
+	/// See `ChildTrie` reference field documentation.
+	root_end: usize,
 
 	/// See `ChildTrie` reference field documentation.
 	data: Vec<u8>,
@@ -340,17 +368,36 @@ impl OwnedChildTrie {
 	fn try_update(&mut self, other: ChildInfo) -> bool {
 		match other {
 			ChildInfo::Default(other) => {
-				if self.data[self.root..] != other.data[other.root..] {
+				if self.data[self.root_end..] != other.data[other.root_end..] {
 					return false;
 				}
-				if self.root == 0 {
-					self.root = other.root;
+				if self.root_end == 0 {
+					self.root_end = other.root_end;
 					self.data = other.data.to_vec();
 				} else {
-					debug_assert!(self.data[..self.root] == other.data[..other.root]);
+					debug_assert!(self.data[..self.root_end] == other.data[..other.root_end]);
 				}
 			},
 		}
 		true
 	}
+}
+
+#[test]
+fn test_encode() {
+	let root = vec![1; 297];
+	let unique_id = vec![2; 16];
+	let owned_child = OwnedChildInfo::new_default(unique_id.clone(), Some(root.clone()));
+	let child = owned_child.as_ref(); 
+	assert_eq!(child.keyspace(), &unique_id[..]);
+	assert_eq!(child.root(), Some(&root[..]));
+
+	let owned_child = OwnedChildInfo::new_default(unique_id.clone(), None);
+	let child = owned_child.as_ref(); 
+	assert_eq!(child.keyspace(), &unique_id[..]);
+	assert_eq!(child.root(), None);
+	
+	let child = ChildInfo::new_default(&unique_id[..]);
+	assert_eq!(child.keyspace(), &unique_id[..]);
+	assert_eq!(child.root(), None);
 }
