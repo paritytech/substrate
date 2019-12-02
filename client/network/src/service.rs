@@ -28,7 +28,6 @@
 use std::{collections::{HashMap, HashSet}, fs, marker::PhantomData, io, path::Path};
 use std::sync::{Arc, atomic::{AtomicBool, AtomicUsize, Ordering}};
 
-use codec::Encode;
 use consensus::import_queue::{ImportQueue, Link};
 use consensus::import_queue::{BlockImportResult, BlockImportError};
 use futures::{prelude::*, sync::mpsc};
@@ -428,11 +427,11 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	///
 	/// The protocol must have been registered with `register_notifications_protocol`.
 	///
-	pub fn write_notification(&self, target: PeerId, engine_id: ConsensusEngineId, message: impl Encode) {
+	pub fn write_notification(&self, target: PeerId, engine_id: ConsensusEngineId, message: Vec<u8>) {
 		let _ = self.to_worker.unbounded_send(ServerToWorkerMsg::WriteNotification {
 			target,
 			engine_id,
-			message: message.encode(),
+			message,
 		});
 	}
 
